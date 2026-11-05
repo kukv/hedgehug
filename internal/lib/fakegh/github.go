@@ -249,6 +249,13 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request, login string) {
 	}
 	owner, _ := body.Variables["owner"].(string)
 	name, _ := body.Variables["name"].(string)
+	if s.restricted[strings.ToLower(owner)] {
+		writeJSON(w, 200, map[string]any{
+			"data":   map[string]any{"rateLimit": s.rate, "repository": nil},
+			"errors": []map[string]any{{"type": "FORBIDDEN", "path": []string{"repository"}, "message": "Resource not accessible by integration"}},
+		})
+		return
+	}
 	x := s.find(owner + "/" + name)
 	if x == nil || perm(x, login) == "" {
 		writeJSON(w, 200, map[string]any{

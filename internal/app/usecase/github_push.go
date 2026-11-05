@@ -373,6 +373,9 @@ func writePushed(t *model.Task, done []*pushed) error {
 			if err := x.SetValues(p.synced); err != nil {
 				return err
 			}
+			if v, ok := p.synced["title"]; ok && len(v) == 1 {
+				x.Title = v[0]
+			}
 			if p.state != "" {
 				x.State, x.StateReason = p.state, nil
 				if p.reason != "" {

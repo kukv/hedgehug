@@ -152,6 +152,18 @@ func TestEventsAPIWrite(t *testing.T) {
 	}
 }
 
+func TestEventsAutomationWrite(t *testing.T) {
+	t.Parallel()
+	ts := startedServer(t)
+	es := ts.events()
+	es.next(t, "hello")
+	ts.call("POST", "/api/automations", map[string]any{"id": "a", "on": "pr.opened", "category": "done"}, 201, nil)
+	var e automationsChanged
+	if err := json.Unmarshal(es.next(t, "automations.changed"), &e); err != nil || e.Store != "me" {
+		t.Errorf("event = %+v, %v", e, err)
+	}
+}
+
 var (
 	hhOnce sync.Once
 	hhBin  string

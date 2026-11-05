@@ -244,7 +244,7 @@ func (c *Client) graphql(query string, vars map[string]any, out any) error {
 		case e.Type == "NOT_FOUND":
 			return fmt.Errorf("%w: %s", ErrNotFound, e.Message)
 		case e.Type == "FORBIDDEN":
-			return fmt.Errorf("%w: %s", ErrForbidden, e.Message)
+			return forbidden(e.Message)
 		case e.Type == "RATE_LIMITED":
 			reset := time.Now().Add(time.Minute)
 			if s, err := strconv.ParseInt(h.Get("X-RateLimit-Reset"), 10, 64); err == nil {

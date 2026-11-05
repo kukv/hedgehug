@@ -88,6 +88,9 @@ func issueRepo(ss *usecase.Session, e *index.Entry, in IssueInput) (string, erro
 		choice.Err = fmt.Errorf("%s has several repositories: %s; say which with --repo", e.ID, strings.Join(e.Repos, ", "))
 		return "", choice
 	}
+	if in.Dir == "" {
+		return "", usecase.NewErr(usecase.KindInvalid, "issue.repo_required", fmt.Errorf("%s has no repository: say which", e.ID))
+	}
 	code, err := openCode(in.Dir)
 	if err != nil {
 		return "", err
@@ -241,7 +244,7 @@ func linkPushed(t *model.Task, ref model.GitHubRef, vals model.IssueValues) erro
 	if err != nil {
 		return err
 	}
-	x := model.IssueState{Ref: ref.String(), State: "open"}
+	x := model.IssueState{Ref: ref.String(), Title: t.Title, State: "open"}
 	if v, ok := vals["status"]; ok {
 		state, reason := usecase.IssueState(v[0])
 		x.State = state

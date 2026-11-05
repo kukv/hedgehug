@@ -118,6 +118,12 @@ describe("ActivityPage", () => {
     expect(lastQuery(api)).toEqual({ limit: 100, workspace: "W1,W2", sync: "only" });
   });
 
+  it("the tab of people leaves out what GitHub and the rules wrote", async () => {
+    const { api } = setup([], { sync: "exclude" });
+    await waitFor(() => expect(api.GET).toHaveBeenCalled());
+    expect(lastQuery(api)).toEqual({ limit: 100, sync: "exclude", automation: "exclude" });
+  });
+
   it("shows a commit: the time, the author, the op, the subject, the ID and the trailers", async () => {
     setup([added]);
     const row = await screen.findByRole("listitem");

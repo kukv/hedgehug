@@ -60,6 +60,45 @@ func TestDue(t *testing.T) {
 	}
 }
 
+func TestNextAt(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	for name, c := range map[string]struct {
+		r    Repo
+		want time.Time
+	}{
+		"never":      {Repo{}, time.Time{}},
+		"read":       {Repo{LastFetch: now.Add(-time.Minute)}, now.Add(4 * time.Minute)},
+		"overdue":    {Repo{LastFetch: now.Add(-time.Hour)}, now.Add(-55 * time.Minute)},
+		"low":        {Repo{LastFetch: now.Add(-time.Minute), Limit: 10, Remaining: 0, ResetAt: now.Add(time.Hour)}, now.Add(14 * time.Minute)},
+		"held":       {Repo{NotBefore: now.Add(time.Minute)}, now.Add(time.Minute)},
+		"held, read": {Repo{LastFetch: now.Add(-4 * time.Minute), NotBefore: now.Add(30 * time.Minute)}, now.Add(30 * time.Minute)},
+		"clock back": {Repo{LastFetch: now.Add(time.Minute)}, time.Time{}},
+	} {
+		if got := c.r.NextAt(now); !got.Equal(c.want) {
+			t.Errorf("%s = %v, want %v", name, got, c.want)
+		}
+		if got := c.r.NextAt(now.Add(time.Second)); !got.Equal(c.want) {
+			t.Errorf("%s moved with the clock: %v", name, got)
+		}
+	}
+}
+
+func TestSlowedUntil(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	reset := now.Add(time.Hour)
+	if got := (Repo{Limit: 5000, Remaining: 4000, ResetAt: reset}).SlowedUntil(now); !got.IsZero() {
+		t.Errorf("plenty = %v", got)
+	}
+	if got := (Repo{Limit: 5000, Remaining: 499, ResetAt: reset}).SlowedUntil(now); !got.Equal(reset) {
+		t.Errorf("low = %v", got)
+	}
+	if got := (Repo{NotBefore: reset}).SlowedUntil(now); !got.Equal(reset) {
+		t.Errorf("held = %v", got)
+	}
+}
+
 func TestReadWrite(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)

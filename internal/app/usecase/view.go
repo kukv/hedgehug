@@ -36,6 +36,7 @@ type TaskView struct {
 	DeletedAt *time.Time     `json:"deleted_at"`
 	Problems  []Problem      `json:"problems"`
 	Broken    string         `json:"broken,omitempty"`
+	Links     []LinkView     `json:"links,omitempty" nullable:"false" doc:"The pull requests and issues linked, with what GitHub says of them"`
 
 	// Only in ls --tree --json and show --json.
 	Checklist *Count `json:"checklist,omitempty"`
@@ -110,6 +111,7 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 		DeletedAt: e.DeletedAt,
 		Problems:  []Problem{},
 		Broken:    e.Broken,
+		Links:     linkViews(e.Links, e.GitHub),
 
 		DisplayID: ix.DisplayID(e),
 	}

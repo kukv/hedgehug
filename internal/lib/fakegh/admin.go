@@ -78,6 +78,8 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			err = s.TagIssue(b.Repo, b.Number, b.Assignees, b.Labels, b.Milestone)
 		}
+	case "/_fakegh/restrict":
+		s.RestrictApp(b.Repo)
 	case "/_fakegh/label":
 		err = s.AddLabel(b.Repo, b.Title)
 	case "/_fakegh/milestone":
@@ -156,5 +158,10 @@ func (a Admin) AddMilestone(repo, title string) error {
 }
 
 // Pull calls /_fakegh/pr/<what> with b; Issue calls /_fakegh/issue/<what>.
+// RestrictApp makes GitHub answer as for a GitHub App not installed on owner.
+func (a Admin) RestrictApp(owner string) error {
+	return a.post("/_fakegh/restrict", AdminBody{Repo: owner})
+}
+
 func (a Admin) Pull(what string, b AdminBody) error  { return a.post("/_fakegh/pr/"+what, b) }
 func (a Admin) Issue(what string, b AdminBody) error { return a.post("/_fakegh/issue/"+what, b) }

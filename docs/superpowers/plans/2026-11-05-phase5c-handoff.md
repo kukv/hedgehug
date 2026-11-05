@@ -1,6 +1,6 @@
 # フェーズ 5c の引き継ぎ（2026-11-05 時点）
 
-5c（Issue 同期）は plan の Task 1〜10 を実装した。3 つのモードと `hh issue`・`hh gh import` が fakegh で動き、手編集の上書きが inbox に出る（`internal/app/cli/scenario/github_issue_test.go`）。
+5c（Issue 同期）は plan の Task 1〜10 を実装し、PR #66 で main にマージした。3 つのモードと `hh issue`・`hh gh import` が fakegh で動き、手編集の上書きが inbox に出る（`internal/app/cli/scenario/github_issue_test.go`）。
 
 ## plan から変えた点
 

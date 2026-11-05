@@ -56,6 +56,23 @@ func (s *Server) TagIssue(repo string, number int, assignees, labels []string, m
 	})
 }
 
+// RestrictApp makes GitHub answer as for a GitHub App not installed on owner.
+func (s *Server) RestrictApp(owner string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.restricted == nil {
+		s.restricted = map[string]bool{}
+	}
+	s.restricted[strings.ToLower(owner)] = true
+}
+
+// UnrestrictApp undoes RestrictApp.
+func (s *Server) UnrestrictApp(owner string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.restricted, strings.ToLower(owner))
+}
+
 // AddLabel adds a label to a repository.
 func (s *Server) AddLabel(repo, name string) error {
 	s.mu.Lock()

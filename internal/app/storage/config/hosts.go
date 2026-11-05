@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -208,6 +209,34 @@ func (c *Config) loadRewrites(seq *yaml.Node) error {
 		}
 		c.URLRewrites = append(c.URLRewrites, URLRewrite{From: from, To: to})
 	}
+	return nil
+}
+
+// SetRepoAccounts replaces repo_accounts, with the checks config.yaml is read
+// with; an empty list removes the key. Save writes it.
+func (c *Config) SetRepoAccounts(rules []RepoAccount) error {
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for _, r := range rules {
+		if r.Match == "" || r.Account == "" {
+			return errors.New("repo_accounts: want a match and an account")
+		}
+		if _, err := path.Match(r.Match, ""); err != nil {
+			return fmt.Errorf("repo_accounts: match %q: %w", r.Match, err)
+		}
+		if !c.hasAccount(r.Account) {
+			return fmt.Errorf("repo_accounts: account %q is not in accounts", r.Account)
+		}
+		it := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Style: yaml.FlowStyle}
+		setKey(it, "match", scalar(r.Match))
+		setKey(it, "account", scalar(r.Account))
+		seq.Content = append(seq.Content, it)
+	}
+	if len(rules) == 0 {
+		deleteKey(c.root(), "repo_accounts")
+	} else {
+		setKey(c.root(), "repo_accounts", seq)
+	}
+	c.RepoAccounts = slices.Clone(rules)
 	return nil
 }
 

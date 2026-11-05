@@ -362,7 +362,6 @@ func Show(ss *usecase.Session, arg string) (*usecase.ShowView, error) {
 			return nil, err
 		}
 		j.Body, j.Watchers, j.Repos, j.CreatedBy = t.Body, usecase.OrEmpty(t.Watchers), usecase.OrEmpty(t.Repos), t.CreatedBy
-		j.Links = usecase.LinkViewsOf(t)
 		cs, err := liveComments(s, e.ULID)
 		if err != nil {
 			return nil, err

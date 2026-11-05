@@ -45,17 +45,20 @@
 
 ```yaml
 links:
-  - {type: github_pr, ref: github.com/org-a/web/pull/123, sync: mirror}
+  - {type: github_pr, ref: github.com/org-a/web/pull/123, sync: mirror, via: branch}
   - {type: github_issue, ref: github.com/org-a/web/issues/45, sync: push, fields: [title, status]}
 gh:
   prs:
     - ref: github.com/org-a/web/pull/123
+      title: API クライアントを v2 へ
+      branch: hh/WEB-42-api-client-v2
       state: open
       review: pending
       checks: success
       merged_at: null
   issues:
     - ref: github.com/org-a/web/issues/45
+      title: Web の API クライアントを v2 に更新
       state: open
       state_reason: null
       synced: {title: Web の API クライアントを v2 に更新, status: open}
@@ -66,6 +69,8 @@ gh:
 | キー | 値 |
 |---|---|
 | `gh.prs[].ref`・`gh.issues[].ref` | リンクと同じ ref。配列の要素を見分ける（親設計に追加） |
+| `gh.prs[].title`・`gh.issues[].title` | GitHub のタイトル（5d-1 で追加。画面に出す） |
+| `gh.prs[].branch` | PR のブランチ（5d-1 で追加。画面に出す） |
 | `gh.prs[].state` | `open`・`draft`・`merged`・`closed` |
 | `gh.prs[].review` | `none`・`pending`・`approved`・`changes_requested`（`none` は親設計に追加） |
 | `gh.prs[].checks` | `success`・`failure`・`pending`。CI がない PR では書かない |
@@ -77,6 +82,8 @@ gh:
 `review` の `none` は、レビュー依頼がない状態を表す。`pending` と区別しないと `pr.review_requested` を判定できない。
 
 `review` は次の順で決める。GitHub の `reviewDecision` が `APPROVED`・`CHANGES_REQUESTED` ならそれ。必須レビューのない repo では `reviewDecision` が null になるので、それ以外のときは各レビュアーの最新のレビューを見て、`CHANGES_REQUESTED` があれば `changes_requested`、なければ `APPROVED` があれば `approved`。どちらもなく、レビュー依頼が1件以上あれば `pending`。ほかは `none`（`REVIEW_REQUIRED` で依頼が0件のときも `none`）。
+
+`links[].via` は自動リンクの決め手で、`branch`・`mark`（本文の `hedgehug:<ULID>`）・`id`（タイトル・本文の ID）・`comment`（コメント）のどれかである（5d-1 で追加）。人が付けたリンクと、5d-1 より前のリンクには書かない。リンクし直すと消す。
 
 `sync` の値は `mirror`・`push`・`link`・`off` である。PR の `sync` は常に `mirror` で、`off` だけに変えられる。
 
@@ -168,7 +175,7 @@ issue_fields:
 | 失敗 | 警告だけを出し、同期は成功のままにする |
 | author | `hedgehug-automation（実行したメンバー）` |
 | コミット | 1回の取得につき1つ。op は `gh-fetch`。`hh undo` の対象にしない。Issue の反映はその後のタスクごとのコミット（op は `gh-mirror`・`gh-push`）で、同じく `hh undo` の対象にしない |
-| アクティビティ | 5a〜5c の間は「同期」に入れる。5d-1 で「自動化」の絞り込みを作るときに移す |
+| アクティビティ | 5a〜5c の間は「同期」に入れた。5d-1 で「自動化」の絞り込み（`?automation=`）へ移した |
 
 GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL から求める（`/api/v3` を `/api/graphql` に置き換える。github.com は `/graphql`）。
 

@@ -333,6 +333,15 @@ describe("TaskCache marks", () => {
     expect(cache.live("C")?.label).toBe("CLI で更新 · 今");
   });
 
+  it("says automation for what GitHub and the rules wrote", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { cache, conn } = setup(() => ({}));
+    conn.emit("tasks.changed", { ...changed("shared", ["A"], "c1", "gh-fetch"), automated: true });
+    conn.emit("tasks.changed", { ...changed("shared", ["B"], "c2", "set"), automated: true });
+    expect(cache.live("A")?.label).toBe("自動化で更新 · 今");
+    expect(cache.live("B")?.label).toBe("自動化で更新 · 今");
+  });
+
   it("does not mark the commit this tab made, whether the event or the answer comes first", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { cache, conn } = setup(() => ({}));

@@ -34,6 +34,22 @@ func TestGHMergesPRsByRef(t *testing.T) {
 	}
 }
 
+func TestGHMergesTheTitleKeyByKey(t *testing.T) {
+	t.Parallel()
+	const ref = "github.com/o/r/pull/1"
+	item := func(title, state string) []string {
+		return []string{"gh:", "  prs:", "    - ref: " + ref, "      title: " + title, "      state: " + state, "      review: none", "      merged_at: null"}
+	}
+	base := task("2026-10-31T10:00:00Z", item("old", "open")...)
+	ours := task("2026-10-31T11:00:00Z", item("new", "open")...)
+	theirs := task("2026-10-31T12:00:00Z", item("old", "merged")...)
+	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
+	g, err := decoded(t, r.Data).GitHub()
+	if err != nil || len(g.PRs) != 1 || g.PRs[0].Title != "new" || g.PRs[0].State != "merged" {
+		t.Fatalf("prs = %+v, %v\n%s", g.PRs, err, r.Data)
+	}
+}
+
 func TestGHConflictTakesTheLaterAndTellsNobody(t *testing.T) {
 	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", prLines("open", "open")...)

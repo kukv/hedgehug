@@ -54,9 +54,8 @@ type ShowView struct {
 	Comments []CommentView    `json:"comments"`
 	Reverse  map[string][]Ref `json:"reverse"`
 	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
-	ReferencedBy []Ref      `json:"referenced_by"`
-	History      []LogView  `json:"history"`
-	Links        []LinkView `json:"links,omitempty" nullable:"false" doc:"The pull requests and issues linked, with what GitHub says of them"`
+	ReferencedBy []Ref     `json:"referenced_by"`
+	History      []LogView `json:"history"`
 
 	// For the text.
 	CreatedBy string         `json:"-"` // who created the task; empty when the file does not say
@@ -200,13 +199,18 @@ type LogTrailer struct {
 
 // LinkView is a link in use and what GitHub said of it when it was last read.
 type LinkView struct {
-	Type   string `json:"type" enum:"github_pr,github_issue"`
-	Ref    string `json:"ref"`
-	Label  string `json:"label" doc:"The ref as people write it: org-a/web#123"`
-	Sync   string `json:"sync" enum:"mirror,push,link"`
-	State  string `json:"state,omitempty" doc:"Empty until GitHub is read"`
-	Review string `json:"review,omitempty"`
-	Checks string `json:"checks,omitempty"`
+	Type  string `json:"type" enum:"github_pr,github_issue"`
+	Ref   string `json:"ref"`
+	Label string `json:"label" doc:"The ref as people write it: org-a/web#123"`
+	Sync  string `json:"sync" enum:"mirror,push,link"`
+	// Fields are the fields this link syncs, when it says so itself.
+	Fields []string `json:"fields,omitempty" nullable:"false"`
+	Via    string   `json:"via,omitempty" enum:"branch,mark,id,comment" doc:"What linked it automatically; absent for a link made by a person"`
+	Title  string   `json:"title,omitempty" doc:"The title on GitHub; empty until GitHub is read"`
+	Branch string   `json:"branch,omitempty" doc:"The branch of the pull request"`
+	State  string   `json:"state,omitempty" doc:"Empty until GitHub is read"`
+	Review string   `json:"review,omitempty"`
+	Checks string   `json:"checks,omitempty"`
 	// MergedAt is when GitHub merged the pull request.
 	MergedAt *time.Time `json:"merged_at,omitempty"`
 	// StateReason is why an issue closed: completed or not_planned.
@@ -217,24 +221,29 @@ type LinkView struct {
 // read shows the links without state.
 func LinkViewsOf(t *model.Task) []LinkView {
 	g, _ := t.GitHub()
+	return linkViews(t.Links, g)
+}
+
+func linkViews(links []model.Link, g model.GitHubState) []LinkView {
 	var out []LinkView
-	for _, l := range t.Links {
+	for _, l := range links {
 		if !l.Live() {
 			continue
 		}
-		v := LinkView{Type: l.Type, Ref: l.Ref, Label: l.Ref, Sync: l.Sync}
+		v := LinkView{Type: l.Type, Ref: l.Ref, Label: l.Ref, Sync: l.Sync, Fields: l.Fields, Via: l.Via}
 		if r, ok := model.ParseGitHubRef(l.Ref); ok {
 			v.Ref, v.Label = r.String(), r.Label()
 		}
 		ref := model.CanonRef(l.Ref)
 		for _, p := range g.PRs {
 			if model.CanonRef(p.Ref) == ref {
+				v.Title, v.Branch = p.Title, p.Branch
 				v.State, v.Review, v.Checks, v.MergedAt = p.State, p.Review, p.Checks, p.MergedAt
 			}
 		}
 		for _, x := range g.Issues {
 			if model.CanonRef(x.Ref) == ref {
-				v.State = x.State
+				v.Title, v.State = x.Title, x.State
 				if x.StateReason != nil {
 					v.StateReason = *x.StateReason
 				}

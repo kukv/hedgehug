@@ -40,6 +40,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{name}/token-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change where the token of an account comes from, to gh or env:<VAR> */
+        put: operations["set-account-token-source"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activity": {
         parameters: {
             query?: never;
@@ -91,6 +108,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/automations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the rules in the order they apply, as hh automation list */
+        get: operations["list-automations"];
+        put?: never;
+        /**
+         * Add a rule, as hh automation add
+         * @description The answer lists the rules of the store.
+         */
+        post: operations["add-automation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/automations/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read issue_fields, as hh automation fields */
+        get: operations["get-automation-fields"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change issue_fields, as hh automation fields with flags */
+        patch: operations["update-automation-fields"];
+        trace?: never;
+    };
+    "/api/automations/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count what each rule did in the last 7 days; a rule that did nothing is not listed */
+        get: operations["get-automation-stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/automations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a rule, and its id from every scoped disable, as hh automation rm
+         * @description The answer lists the rules of the store.
+         */
+        delete: operations["delete-automation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/automations/{id}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Turn a rule on or off, as hh automation enable and disable
+         * @description The answer lists the rules of the store, or those of the project given.
+         */
+        put: operations["set-automation-enabled"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/doctor": {
         parameters: {
             query?: never;
@@ -136,6 +249,40 @@ export interface paths {
         get: operations["events"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the reads of each repository go: of the store given, or of every store */
+        get: operations["get-github"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/github/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a task in mirror mode for each open issue with a label, as hh gh import */
+        post: operations["import-issues"];
         delete?: never;
         options?: never;
         head?: never;
@@ -273,6 +420,24 @@ export interface paths {
         put?: never;
         /** Remove, for good, what the confirmed plan lists, as hh purge after its question */
         post: operations["purge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/repo-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List repo_accounts of config.yaml, in the order they apply */
+        get: operations["get-repo-accounts"];
+        /** Replace repo_accounts of config.yaml */
+        put: operations["put-repo-accounts"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -596,6 +761,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open an issue for a task and link it in push mode, as hh issue */
+        post: operations["create-issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link a pull request or an issue, or change how an issue syncs, as hh link */
+        post: operations["link-task"];
+        /** Stop using a link, as hh unlink */
+        delete: operations["unlink-task"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/move": {
         parameters: {
             query?: never;
@@ -786,6 +986,10 @@ export interface components {
             /** @description Where the token comes from: gh or env:<VAR>; with none the account has no token. keychain and device are answered with 400 auth.token_source: a pasted token goes through PUT /api/accounts/{name}/token, and the device flow through POST /api/auth/device */
             token?: string;
         };
+        AccountSourceInputBody: {
+            /** @description Where the token comes from now: gh or env:<VAR> */
+            token: string;
+        };
         AccountTokenInputBody: {
             /** @description The host of a new account (github.com without it); for an account that exists it must be its host */
             host?: string;
@@ -828,6 +1032,11 @@ export interface components {
             removed: boolean;
             token?: string;
         };
+        AuthSourceResult: {
+            name: string;
+            /** @description Where the token comes from now */
+            token: string;
+        };
         AuthStatus: {
             error?: string;
             /** Format: date-time */
@@ -837,6 +1046,39 @@ export interface components {
             name: string;
             state: string;
             token?: string;
+        };
+        AutomationAddInputBody: {
+            /** @description The category whose default to set; not with status */
+            category?: string;
+            id: string;
+            /** @description The event, such as pr.merged */
+            on: string;
+            /** @description The project the rule is of; without it, the store's */
+            project?: string;
+            /** @description The status to set; not with category */
+            status?: string;
+            /** @description The condition, such as all_linked_prs_merged */
+            when?: string;
+        };
+        AutomationEnabledInputBody: {
+            enabled: boolean;
+            /** @description Turn it on or off in this project only (scoped disable) */
+            project?: string;
+        };
+        AutomationFieldsInputBody: {
+            /** @description The mode of a new issue link */
+            default_sync?: string;
+            /** @description Replaces the fields mirror mode syncs */
+            mirror?: string[];
+            /** @description Field to property; an empty value takes it off */
+            props?: {
+                [key: string]: string;
+            };
+            /** @description Replaces the fields push mode syncs */
+            push?: string[];
+        };
+        AutomationsChanged: {
+            store: string;
         };
         Candidate: {
             account?: string;
@@ -907,6 +1149,10 @@ export interface components {
             /** @description The workspace, by name or prefix */
             workspace?: string;
         };
+        CreateIssueInputBody: {
+            /** @description The repository, as [<host>/]owner/repo; without it, the one the task names. A task with none or several needs it */
+            repo?: string;
+        };
         DefaultView: {
             /** @description The default store; null when there is none */
             name: string | null;
@@ -952,6 +1198,14 @@ export interface components {
             /** @description The value at the given location */
             value?: unknown;
         };
+        FieldsView: {
+            default_sync: string;
+            mirror: string[];
+            props: {
+                [key: string]: string;
+            };
+            push: string[];
+        };
         Finding: {
             check: string;
             hint?: string;
@@ -967,6 +1221,86 @@ export interface components {
             title: string;
             ulid: string;
             value: unknown;
+        };
+        GitHubRepoView: {
+            /** @description The name of the account that reads it; absent when none can */
+            account?: string;
+            /** @description GitHub said the GitHub App is not installed where the repository is */
+            app_missing: boolean;
+            /**
+             * Format: date-time
+             * @description When it was last read, absent before the first read
+             */
+            last_fetch?: string;
+            /**
+             * Format: int64
+             * @description The rate limit, 0 before the first read
+             */
+            limit: number;
+            /**
+             * Format: date-time
+             * @description The first time it may be read again; absent or past means at the next sync
+             */
+            next_fetch?: string;
+            /** Format: int64 */
+            remaining: number;
+            /** @description <host>/<owner>/<repo> */
+            repo: string;
+            /** Format: date-time */
+            reset_at?: string;
+            /**
+             * Format: date-time
+             * @description While the reads are held back by the rate limit: when it recovers
+             */
+            slowed_until?: string;
+            store: string;
+            warnings: string[];
+        };
+        GitHubSummary: {
+            /**
+             * Format: int64
+             * @description The repositories the GitHub App is not installed for
+             */
+            app_missing: number;
+            /**
+             * Format: date-time
+             * @description The latest read of its repositories
+             */
+            last_fetch?: string;
+            /**
+             * Format: int64
+             * @description The rate limit of the repository with the least left
+             */
+            limit: number;
+            /**
+             * Format: date-time
+             * @description The first read to come
+             */
+            next_fetch?: string;
+            /** Format: int64 */
+            remaining: number;
+            /**
+             * Format: date-time
+             * @description While a read is held back by the rate limit: the last time it recovers
+             */
+            slowed_until?: string;
+            /**
+             * Format: int64
+             * @description The repositories with a warning
+             */
+            warnings: number;
+        };
+        GithubImportInputBody: {
+            /** @description Only count them */
+            dry_run?: boolean;
+            /** @description The label of the issues to take in */
+            label: string;
+            /** @description The task to put them under */
+            parent?: string;
+            /** @description The repository, as [<host>/]owner/repo */
+            repo: string;
+            /** @description The workspace; needed without parent when the store has several */
+            workspace?: string;
         };
         GroupView: {
             /** @description The value of the group; empty for the tasks with none */
@@ -994,10 +1328,35 @@ export interface components {
             new: string;
             old: string;
         };
+        ImportResult: {
+            /** Format: int64 */
+            count: number;
+            /** @description The ids of the tasks made */
+            created: string[];
+            dry_run: boolean;
+            repo: string;
+            /**
+             * Format: int64
+             * @description The issues that are linked already
+             */
+            skipped: number;
+            warnings: string[];
+        };
         IndexProblem: {
             code: string;
             field: string;
             message: string;
+        };
+        IssueWrite: {
+            /** @description The commit made; null when nothing changed */
+            commit: string | null;
+            /** @description What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it */
+            detached?: components["schemas"]["Detached"][] | null;
+            /** @description What restore at a commit has to say, as hh restore --at prints it */
+            note?: string;
+            ref: string;
+            task: components["schemas"]["TaskView"];
+            warnings: string[];
         };
         Item: {
             author: string;
@@ -1021,8 +1380,22 @@ export interface components {
             role: string;
             template?: string;
         };
+        LinkInputBody: {
+            /** @description The issue, as [<host>/]owner/repo#n; not with pr */
+            issue?: string;
+            /** @description The pull request, as [<host>/]owner/repo#n; not with issue */
+            pr?: string;
+            /**
+             * @description How an issue syncs; on an issue linked already it changes the mode. Without it, issue_fields.default_sync
+             * @enum {string}
+             */
+            sync?: "mirror" | "push" | "link";
+        };
         LinkView: {
+            /** @description The branch of the pull request */
+            branch?: string;
             checks?: string;
+            fields?: string[];
             /** @description The ref as people write it: org-a/web#123 */
             label: string;
             /** Format: date-time */
@@ -1034,8 +1407,15 @@ export interface components {
             state_reason?: string;
             /** @enum {string} */
             sync: "mirror" | "push" | "link";
+            /** @description The title on GitHub; empty until GitHub is read */
+            title?: string;
             /** @enum {string} */
             type: "github_pr" | "github_issue";
+            /**
+             * @description What linked it automatically; absent for a link made by a person
+             * @enum {string}
+             */
+            via?: "branch" | "mark" | "id" | "comment";
         };
         LogTrailer: {
             key: string;
@@ -1341,6 +1721,37 @@ export interface components {
             ulid: string;
             value: unknown;
         };
+        RepoAccountView: {
+            /** @description The name of the account */
+            account: string;
+            /** @description A pattern of repo IDs, as path.Match reads it; * is every repository */
+            match: string;
+        };
+        RepoAccountsBody: {
+            /** @description The rules in the order they apply: this list replaces the one there is */
+            rules: components["schemas"]["RepoAccountView"][];
+        };
+        RuleStat: {
+            /** Format: int64 */
+            applied: number;
+            /** @description Why it was last refused */
+            last_reason?: string;
+            /** Format: int64 */
+            rejected: number;
+            /** @description The tasks it was refused on, the latest first, each once */
+            rejected_tasks: components["schemas"]["Ref"][];
+            rule: string;
+        };
+        RuleView: {
+            category?: string;
+            disabled_in: components["schemas"]["Ref"][];
+            enabled: boolean;
+            id: string;
+            on: string;
+            project?: components["schemas"]["Ref"];
+            status?: string;
+            when?: string;
+        };
         SavedKanban: {
             columns: string;
             swimlane: string;
@@ -1533,6 +1944,7 @@ export interface components {
         };
         SyncStatus: {
             error?: string;
+            github?: components["schemas"]["GitHubSummary"];
             /**
              * Format: double
              * @description sync.interval of config.yaml, in seconds (fractions allowed)
@@ -1592,6 +2004,8 @@ export interface components {
             in_cycle?: boolean;
             kind: string;
             labels: string[] | null;
+            /** @description The pull requests and issues linked, with what GitHub says of them */
+            links?: components["schemas"]["LinkView"][];
             parent: string | null;
             problems: components["schemas"]["IndexProblem"][] | null;
             progress?: components["schemas"]["Count"];
@@ -1621,6 +2035,8 @@ export interface components {
         TasksChanged: {
             /** @description The Hedgehug-Author of the commit; empty when unknown */
             author: string;
+            /** @description GitHub or a rule wrote it, not a person */
+            automated: boolean;
             /** @description The commit of the change: HEAD, or one of the commits since the last look */
             commit: string;
             /** @description The Hedgehug-Op of the commit; empty for a commit made by hand */
@@ -1870,6 +2286,42 @@ export interface operations {
             };
         };
     };
+    "set-account-token-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the account in config.yaml */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountSourceInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSourceResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "list-activity": {
         parameters: {
             query?: {
@@ -1880,6 +2332,8 @@ export interface operations {
                 author?: string;
                 /** @description only: the merges and repairs of syncs; exclude: all but them */
                 sync?: "only" | "exclude";
+                /** @description only: what GitHub and the rules wrote, and the fetches that note a refused rule; exclude: all but them */
+                automation?: "only" | "exclude";
                 /** @description Only the commits of these workspaces (ULID, name or id prefix), comma-separated, as hh log --workspace */
                 workspace?: string;
             };
@@ -1960,6 +2414,250 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "list-automations": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description Only what applies in this project, with its scoped disable in enabled */
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-automation": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutomationAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "get-automation-fields": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "update-automation-fields": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutomationFieldsInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "get-automation-stats": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleStat"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "delete-automation": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The id of the rule */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "set-automation-enabled": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The id of the rule */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutomationEnabledInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleView"][] | null;
+                };
             };
             /** @description Error */
             default: {
@@ -2063,6 +2761,17 @@ export interface operations {
                         /** @description The retry time in milliseconds. */
                         retry?: number;
                     } | {
+                        data: components["schemas"]["AutomationsChanged"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "automations.changed";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
                         data: components["schemas"]["HelloEvent"];
                         /**
                          * @description The event name.
@@ -2140,6 +2849,74 @@ export interface operations {
                         /** @description The retry time in milliseconds. */
                         retry?: number;
                     })[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "get-github": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubRepoView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "import-issues": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GithubImportInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
                 };
             };
             /** @description Error */
@@ -2444,6 +3221,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PurgeResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "get-repo-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoAccountsBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "put-repo-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepoAccountsBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoAccountsBody"];
                 };
             };
             /** @description Error */
@@ -3341,6 +4180,123 @@ export interface operations {
                 id: string;
                 /** @description The commit to bring the task back to */
                 commit: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "create-issue": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssueInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "link-task": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "unlink-task": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The pull request, as [<host>/]owner/repo#n; not with issue */
+                pr?: string;
+                /** @description The issue, as [<host>/]owner/repo#n; not with pr */
+                issue?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
             };
             cookie?: never;
         };

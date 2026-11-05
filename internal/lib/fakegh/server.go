@@ -43,6 +43,8 @@ type Server struct {
 	rate    rateLimit
 
 	noIssueEdits bool // each PATCH of an issue fails
+
+	restricted map[string]bool // owners the GitHub App is not installed on, in lower case
 }
 
 // New makes a fake with the state st.

@@ -2,7 +2,10 @@ import { type Api, ApiError, type ShowView, type TaskView, unwrap } from "./api/
 import type { Connection, TasksChanged } from "./connection";
 import { callAll } from "./listeners";
 
-export type LiveMark = { label: "CLI で更新 · 今" | "同期で更新 · 今"; until: number };
+export type LiveMark = {
+  label: "CLI で更新 · 今" | "同期で更新 · 今" | "自動化で更新 · 今";
+  until: number;
+};
 export type ListQuery = { q: string; tree: boolean; store?: string };
 // context is true for a task the tree holds only as the ancestor of a task the
 // query found. It is a mark of this tree, not of the task: another query may
@@ -12,7 +15,7 @@ export type TreeNode = { ulid: string; children: TreeNode[]; context?: boolean }
 // How long a task stays marked as changed from outside.
 const MARK_MS = 10_000;
 // The ops that sync makes: a change by one of them came from a remote.
-const SYNC_OPS = new Set(["merge", "repair", "gh-fetch", "gh-mirror", "gh-push"]);
+const SYNC_OPS = new Set(["merge", "repair"]);
 // How many of the commits this tab made to remember.
 const OWN_COMMITS = 100;
 // What ShowView has on top of TaskView; the shared row of a task has none of it.
@@ -472,7 +475,11 @@ export class TaskCache {
     const removed = e.removed ?? [];
     const ulids = e.ulids ?? [];
     if (!this.own.has(e.commit)) {
-      const label = SYNC_OPS.has(e.op) ? "同期で更新 · 今" : "CLI で更新 · 今";
+      const label = e.automated
+        ? "自動化で更新 · 今"
+        : SYNC_OPS.has(e.op)
+          ? "同期で更新 · 今"
+          : "CLI で更新 · 今";
       for (const u of ulids) this.setMark(u, label, e.commit);
     }
     for (const u of [...ulids, ...removed]) this.lastChange.set(u, ++this.epoch);

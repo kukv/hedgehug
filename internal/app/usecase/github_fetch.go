@@ -82,11 +82,17 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		return err
 	}
 	targets := targetsOf(ix)
+	// What no task names any more is no longer read: its warning and its
+	// time would be told for ever.
+	gone := force == "" && dropGone(state, targets)
 	if len(targets) == 0 {
+		if gone {
+			return ghstate.Write(s, state)
+		}
 		return nil // no repository: nothing needs an account
 	}
 	now := ss.Now()
-	auto := map[model.ULID][]string{}
+	auto := map[model.ULID][]autoLink{}
 	// read is what each repository that was read now knows. It goes into the
 	// state only when what was found is written: a repository whose result
 	// was lost must be read again from its old time.
@@ -132,11 +138,12 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 			if errors.As(err, &limited) {
 				st.NotBefore = limited.Reset
 			}
+			st.AppMissing = errors.Is(err, github.ErrNotAccessible)
 			fail(github.Describe(err, acct.ID(), acct.Name, "read "+repo).Error())
 			continue
 		}
 		st.LastFetch, st.Limit, st.Remaining, st.ResetAt = now, rl.Limit, rl.Remaining, rl.ResetAt
-		st.LastTry, st.Warning = time.Time{}, ""
+		st.LastTry, st.Warning, st.AppMissing = time.Time{}, "", false
 		for _, p := range scanned {
 			if p.UpdatedAt.After(st.Since) {
 				st.Since = p.UpdatedAt // GitHub's own time: the clocks may differ
@@ -159,8 +166,8 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		rep.Warnings = append(rep.Warnings, found...)
 		st.Warning = strings.Join(found, "\n")
 		read[repo] = st
-		for u, refs := range autoLinks(ix, repo, scanned) {
-			auto[u] = append(auto[u], refs...)
+		for u, links := range autoLinks(ix, repo, scanned) {
+			auto[u] = append(auto[u], links...)
 		}
 	}
 	if len(got.pulls)+len(got.issues) == 0 {
@@ -218,8 +225,8 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 			a, err := apply(t, got, auto[u])
 			if err != nil {
 				rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
-				for _, ref := range auto[u] {
-					failed[repoOf(ref)] = append(failed[repoOf(ref)], u.String()+": "+err.Error())
+				for _, l := range auto[u] {
+					failed[repoOf(l.ref)] = append(failed[repoOf(l.ref)], u.String()+": "+err.Error())
 				}
 				for _, l := range t.Links {
 					failed[repoOf(l.Ref)] = append(failed[repoOf(l.Ref)], u.String()+": "+err.Error())
@@ -306,6 +313,19 @@ func targetsOf(ix *index.Index) map[string]*target {
 		slices.Sort(t.issues)
 	}
 	return out
+}
+
+// dropGone takes the repositories that are not targets out of state, and
+// reports whether there were any.
+func dropGone(state ghstate.State, targets map[string]*target) bool {
+	gone := false
+	for repo := range state.Repos {
+		if targets[repo] == nil {
+			delete(state.Repos, repo)
+			gone = true
+		}
+	}
+	return gone
 }
 
 // repoOf is the repo ID of a ref, as targetsOf keys it; "" for a ref that is
