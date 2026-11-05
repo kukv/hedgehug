@@ -532,20 +532,95 @@ func TestMoveBothSides(t *testing.T) {
 	}
 }
 
-func TestLockInOrder(t *testing.T) {
-	// 直列: パッケージ変数 afterLock の差し替え
+// LockInOrder takes the smallest ULID first: while a is held by another
+// process, LockInOrder(b, a) waits for a and has not taken b.
+func TestLockInOrderTakesTheSmallestFirst(t *testing.T) {
+	t.Parallel()
 	a, _ := newMoveStore(t, "a", "AAA", nil)
 	b, _ := newMoveStore(t, "b", "BBB", nil)
-	var order []string
-	afterLock = func(s *Store) { order = append(order, s.meta.Name) }
-	t.Cleanup(func() { afterLock = func(*Store) {} })
+	other, err := acquire(a.path(lockPath), time.Second) // another process holds a
+	if err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		l   *Locked
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		l, err := LockInOrder(b, a)
+		done <- result{l, err}
+	}()
+	select {
+	case r := <-done:
+		t.Fatalf("LockInOrder did not wait for a: %v", r.err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	// b is free: LockInOrder is waiting for a, and has not taken b first.
+	free, err := acquire(b.path(lockPath), 0)
+	if err != nil {
+		t.Fatalf("b is held while LockInOrder waits for a: %v", err)
+	}
+	if err := free.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if err := other.Release(); err != nil {
+		t.Fatal(err)
+	}
+	r := <-done
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	r.l.Release()
+}
+
+// Two callers that name the same stores in opposite orders, each with its own
+// handles, do not wait for each other for good.
+func TestLockInOrderDoesNotDeadlock(t *testing.T) {
+	t.Parallel()
+	a, _ := newMoveStore(t, "a", "AAA", nil)
+	b, _ := newMoveStore(t, "b", "BBB", nil)
+	a2, err := Open(a.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Open(b.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []*Store{a, b, a2, b2} {
+		s.lockWait = 2 * time.Second
+	}
+	for range 20 {
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		for _, ss := range [][]*Store{{a, b}, {b2, a2}} {
+			go func() {
+				<-start
+				l, err := LockInOrder(ss...)
+				if err == nil {
+					l.Release()
+				}
+				errs <- err
+			}()
+		}
+		close(start)
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatalf("LockInOrder: %v", err)
+			}
+		}
+	}
+}
+
+func TestLockInOrder(t *testing.T) {
+	t.Parallel()
+	a, _ := newMoveStore(t, "a", "AAA", nil)
+	b, _ := newMoveStore(t, "b", "BBB", nil)
 
 	l, err := LockInOrder(b, a, b)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !slices.Equal(order, []string{"a", "b"}) {
-		t.Errorf("locked in the order %v, want a then b", order)
 	}
 
 	// A writer without the hold waits for Release, in this process too.
