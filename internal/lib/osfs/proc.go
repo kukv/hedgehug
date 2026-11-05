@@ -18,10 +18,9 @@ func Command(name string, args ...string) *exec.Cmd {
 // it tests the permission bits for an execute bit instead of asking the
 // system, and does not handle a name with a slash or Windows. As in
 // exec.LookPath, a match in a relative directory (an empty entry is the
-// current directory) is not trusted: it is reported as an error wrapping
-// exec.ErrDot unless a later absolute entry holds the program.
+// current directory) is not trusted: the first match, if relative, is
+// returned with an error wrapping exec.ErrDot.
 func LookPath(name, path string) (string, error) {
-	var dotErr error
 	for _, dir := range filepath.SplitList(path) {
 		if dir == "" {
 			dir = "."
@@ -32,15 +31,9 @@ func LookPath(name, path string) (string, error) {
 			continue
 		}
 		if !filepath.IsAbs(p) {
-			if dotErr == nil {
-				dotErr = &exec.Error{Name: name, Err: exec.ErrDot}
-			}
-			continue
+			return p, &exec.Error{Name: name, Err: exec.ErrDot}
 		}
 		return p, nil
-	}
-	if dotErr != nil {
-		return "", dotErr
 	}
 	return "", &exec.Error{Name: name, Err: exec.ErrNotFound}
 }

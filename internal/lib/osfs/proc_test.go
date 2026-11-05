@@ -86,4 +86,8 @@ func TestLookPathRelativeEntry(t *testing.T) {
 			t.Errorf("LookPath(tool, %q) error = %v; want ErrDot", rel, err)
 		}
 	}
+	// The first match decides: a later absolute entry does not rescue it.
+	if _, err := LookPath("tool", ".:"+bin); !errors.Is(err, exec.ErrDot) {
+		t.Errorf("relative entry before an absolute one: error = %v; want ErrDot", err)
+	}
 }
