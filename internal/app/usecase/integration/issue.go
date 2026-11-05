@@ -88,6 +88,9 @@ func issueRepo(ss *usecase.Session, e *index.Entry, in IssueInput) (string, erro
 		choice.Err = fmt.Errorf("%s has several repositories: %s; say which with --repo", e.ID, strings.Join(e.Repos, ", "))
 		return "", choice
 	}
+	if in.Dir == "" {
+		return "", usecase.NewErr(usecase.KindInvalid, "issue.repo_required", fmt.Errorf("%s has no repository: say which", e.ID))
+	}
 	code, err := openCode(in.Dir)
 	if err != nil {
 		return "", err

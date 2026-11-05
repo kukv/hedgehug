@@ -172,6 +172,14 @@ func TestLinkClearsWhatGHHoldsOfTheRef(t *testing.T) {
 	}
 }
 
+func TestCreateIssueWithoutARepositoryToTell(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("a", nil)
+	_, err := integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{})
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "issue.repo_required")
+}
+
 func TestLinkAgainDropsWhatFoundIt(t *testing.T) {
 	t.Parallel()
 	const ref = "github.com/o/r/pull/1"

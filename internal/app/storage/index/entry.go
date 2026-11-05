@@ -27,9 +27,10 @@ type Entry struct {
 	Watchers  []string
 	Labels    []string
 	BlockedBy []model.ULID
-	Repos     []string     // the repositories of the task
-	Links     []model.Link // the links, those unlinked included
-	Props     []Prop       // in file order; queries read them by the schema's types
+	Repos     []string          // the repositories of the task
+	Links     []model.Link      // the links, those unlinked included
+	GitHub    model.GitHubState // what GitHub says of them, without synced
+	Props     []Prop            // in file order; queries read them by the schema's types
 	Created   time.Time
 	Updated   time.Time
 	DeletedAt *time.Time
@@ -103,6 +104,7 @@ func EntryOf(t *model.Task) *Entry {
 		BlockedBy: t.BlockedBy,
 		Repos:     t.Repos,
 		Links:     t.Links,
+		GitHub:    githubOf(t),
 		Created:   t.Created,
 		Updated:   t.Updated,
 		DeletedAt: t.DeletedAt,
@@ -115,6 +117,19 @@ func EntryOf(t *model.Task) *Entry {
 		e.Props = append(e.Props, Prop{Key: f.Key, Values: scalars(f.Value)})
 	}
 	return e
+}
+
+// githubOf is gh of t as the index keeps it: a gh that does not read is empty,
+// as it shows, and synced stays in the file.
+func githubOf(t *model.Task) model.GitHubState {
+	g, err := t.GitHub()
+	if err != nil {
+		return model.GitHubState{}
+	}
+	for i := range g.Issues {
+		g.Issues[i].Synced = nil
+	}
+	return g
 }
 
 // scalars returns the values of a property node: one for a scalar, one per
