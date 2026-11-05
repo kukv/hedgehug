@@ -100,13 +100,18 @@ func (r Rule) fits(u model.ULID, sc *schema.Schema) bool {
 	return true
 }
 
-// disableIn adds id to the scoped item of the project u, which is new with the
-// given where when there is none.
-func (f *File) disableIn(u model.ULID, where, id string) {
-	i := slices.IndexFunc(f.Scoped, func(s Scoped) bool {
+// scopedIndex is the index of the scoped item of the project u, or -1.
+func (f *File) scopedIndex(u model.ULID) int {
+	return slices.IndexFunc(f.Scoped, func(s Scoped) bool {
 		p, ok := projectOf(s.Where)
 		return ok && p == u
 	})
+}
+
+// disableIn adds id to the scoped item of the project u, which is new with the
+// given where when there is none.
+func (f *File) disableIn(u model.ULID, where, id string) {
+	i := f.scopedIndex(u)
 	if i < 0 {
 		f.Scoped = append(f.Scoped, Scoped{Where: where})
 		i = len(f.Scoped) - 1
@@ -117,8 +122,8 @@ func (f *File) disableIn(u model.ULID, where, id string) {
 }
 
 // Without returns f without the where rules and the scoped items of the
-// projects; a disable elsewhere that names a rule that went goes with it. f is
-// not changed.
+// projects; a disable elsewhere that names a rule that went, and that no rule
+// left has, goes with it. f is not changed.
 func (f *File) Without(projects []model.ULID) *File {
 	in := func(where string) bool {
 		u, ok := projectOf(where)
@@ -126,10 +131,51 @@ func (f *File) Without(projects []model.ULID) *File {
 	}
 	next := f.clone()
 	next.Scoped = slices.DeleteFunc(next.Scoped, func(s Scoped) bool { return in(s.Where) })
-	for _, r := range f.Rules {
-		if in(r.Where) {
-			_ = next.RemoveRule(r.ID) // the id is there: it comes from the same rules
+	next.Rules = slices.DeleteFunc(next.Rules, func(r Rule) bool { return in(r.Where) })
+	gone := func(id string) bool {
+		_, kept := next.Rule(id)
+		return !kept && slices.ContainsFunc(f.Rules, func(r Rule) bool { return r.ID == id && in(r.Where) })
+	}
+	for i := range next.Scoped {
+		next.Scoped[i].Disable = slices.DeleteFunc(slices.Clone(next.Scoped[i].Disable), gone)
+	}
+	next.dropEmptyScoped()
+	return next
+}
+
+// LeftOut is what of f applies to the projects and dst does not hold, in the
+// words of Carry: what a Carry that dst came from left out, when only the two
+// files are left to tell it.
+func (f *File) LeftOut(dst *File, projects []model.ULID) []string {
+	var out []string
+	add := func(line string) {
+		if !slices.Contains(out, line) {
+			out = append(out, line)
 		}
 	}
-	return next
+	for _, r := range f.Rules {
+		u, ok := projectOf(r.Where)
+		if !ok || !slices.Contains(projects, u) {
+			continue
+		}
+		if !slices.ContainsFunc(dst.Rules, func(d Rule) bool {
+			p, ok := projectOf(d.Where)
+			return d.ID == r.ID && ok && p == u
+		}) {
+			add("rule " + r.ID)
+		}
+	}
+	for _, s := range f.Scoped {
+		u, ok := projectOf(s.Where)
+		if !ok || !slices.Contains(projects, u) {
+			continue
+		}
+		i := dst.scopedIndex(u)
+		for _, id := range s.Disable {
+			if i < 0 || !slices.Contains(dst.Scoped[i].Disable, id) {
+				add("disable " + id)
+			}
+		}
+	}
+	return out
 }

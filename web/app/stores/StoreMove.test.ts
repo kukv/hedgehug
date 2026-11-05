@@ -489,6 +489,50 @@ describe("StoreMove", () => {
       expect(screen.getByRole("button", { name: "移動" })).toBeEnabled();
       expect(cli()).toHaveTextContent("hh mv REL-1 --store second --scoped carry --yes");
     });
+
+    it("stays on the screen when the plan refuses the choice, so that it can be changed", async () => {
+      const { routes } = setup({ plan: planOf({ scoped: scoped({ dropped: [] }) }) });
+      await pick("second");
+      const name = "プロジェクトの設定（表示と自動化）";
+      const group = await screen.findByRole("radiogroup", { name });
+
+      routes.plan.mockImplementationOnce(() =>
+        fail(422, "move.invalid", {
+          errors: [{ message: "the automations do not fit second" }],
+        }),
+      );
+      await fireEvent.click(within(group).getByRole("radio", { name: "持っていく" }));
+      await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
+      await screen.findByText(/ここには移せません/);
+
+      const after = screen.getByRole("radiogroup", { name });
+      expect(within(after).getByRole("radio", { name: "持っていく" })).toBeChecked();
+      expect(screen.getByRole("button", { name: "移動" })).toBeDisabled();
+
+      routes.plan.mockImplementation(() =>
+        ok(planOf({ scoped: scoped({ required: false, choice: "drop", dropped: [] }) })),
+      );
+      await fireEvent.click(within(after).getByRole("radio", { name: "持っていかない" }));
+      await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(3));
+      expect(routes.plan).toHaveBeenLastCalledWith({
+        params: { path: { id: "U1" } },
+        body: { to: "second", scoped: "drop" },
+      });
+      await waitFor(() => expect(screen.getByRole("button", { name: "移動" })).toBeEnabled());
+      expect(screen.getAllByRole("radiogroup", { name })).toHaveLength(1);
+      expect(screen.queryByText(/ここには移せません/)).toBeNull();
+    });
+
+    it("is not offered in the next Store on what the last one said", async () => {
+      const { routes } = setup({ plan: planOf({ scoped: scoped({ dropped: [] }) }) });
+      await pick("second");
+      const name = "プロジェクトの設定（表示と自動化）";
+      await screen.findByRole("radiogroup", { name });
+      routes.plan.mockImplementation(() => fail(422, "move.invalid", {}));
+      await pick("multi");
+      await waitFor(() => expect(routes.plan).toHaveBeenCalled());
+      expect(screen.queryByRole("radiogroup", { name })).toBeNull();
+    });
   });
 
   describe("the move", () => {

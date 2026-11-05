@@ -330,8 +330,8 @@ type moveWork struct {
 	carried                       bool // the choice was to carry, and there was something to choose
 	resumed                       bool // the destination has the tasks already (D12)
 	// carriedBefore: on a rerun, the destination holds a scoped entry or an
-	// automation of the projects, so the first run carried (its Dropped list
-	// is not known).
+	// automation of the projects, so the first run carried (what its Dropped
+	// list had of the scoped entries is not known).
 	carriedBefore bool
 }
 
@@ -507,13 +507,7 @@ func (j *moveJob) load() (*moveWork, error) {
 			}
 		}
 		if len(autoProjects) > 0 {
-			dst, err := readAutomations(j.dst, j.toName)
-			if err != nil {
-				return nil, err
-			}
-			w.carriedBefore = w.carriedBefore || slices.ContainsFunc(dst.Projects(), func(u model.ULID) bool {
-				return slices.Contains(autoProjects, u)
-			})
+			j.resumeAutomations(w, auto, autoProjects)
 		}
 		if e, ok := j.dstIx.Task(w.tasks[0].ULID); ok {
 			w.plan.Workspace, w.plan.Parent = j.placement(e.Workspace, e.Parent)
@@ -630,12 +624,35 @@ func (j *moveJob) labels(entries []*index.Entry, unlinked []store.Unlink) map[mo
 	return out
 }
 
+// resumeAutomations says what the first run did with the automations, from
+// what the two files hold now. A rerun does not write the destination, so a
+// file there that cannot be read is a warning: only the telling is lost. What
+// is missing there is left out only if the first run carried, which a carry
+// that left out everything shows only by the choice given again.
+func (j *moveJob) resumeAutomations(w *moveWork, src *automation.File, projects []model.ULID) {
+	dst, err := j.dst.Automations()
+	if err != nil {
+		if key := "automations of " + j.toName; !j.warned[key] {
+			j.warned[key] = true
+			j.from.AddWarning(fmt.Sprintf("%s of %s cannot be read; what the move left out is not told: %v", model.AutomationsPath, j.toName, err))
+		}
+		return
+	}
+	w.carriedBefore = w.carriedBefore || slices.ContainsFunc(dst.Projects(), func(u model.ULID) bool {
+		return slices.Contains(projects, u)
+	})
+	if w.carriedBefore || j.in.Scoped == "carry" {
+		w.plan.Scoped.Dropped = src.LeftOut(dst, projects)
+	}
+}
+
 // resumeCheck tells whether tasks are in the destination because a move from
-// this source began (D12): true when all are there, alive, and a move-in
-// commit of this source names exactly them; an error when only some are, or
-// when none of the history says why they are there.
+// this source began (D12): true when all are there, deleted only if they are
+// in the source too, and a move-in commit of this source names exactly them;
+// an error when only some are, or when none of the history says why they are
+// there.
 func (j *moveJob) resumeCheck(tasks []*model.Task) (bool, error) {
-	var present, alive int
+	var present, same int
 	var first model.ULID
 	for _, t := range tasks {
 		e, ok := j.dstIx.Task(t.ULID)
@@ -646,14 +663,14 @@ func (j *moveJob) resumeCheck(tasks []*model.Task) (bool, error) {
 			first = t.ULID
 		}
 		present++
-		if e.DeletedAt == nil {
-			alive++
+		if e.DeletedAt == nil || t.DeletedAt != nil {
+			same++
 		}
 	}
 	if present == 0 {
 		return false, nil
 	}
-	if alive == len(tasks) {
+	if same == len(tasks) {
 		done, err := j.moveInRecorded(tasks)
 		if err != nil {
 			return false, err

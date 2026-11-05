@@ -3,6 +3,7 @@
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
   import { useDisplayId } from "../svelte-store";
+  import MoveScopedChoice from "./MoveScopedChoice.svelte";
   import { unlinkedRows } from "./move-plan";
 
   // What the plan says will change: the ID, the parent, the references it cuts, the choice of the
@@ -50,39 +51,7 @@
 {/if}
 
 {#if plan.scoped}
-  <div class="part">
-    <div class="field" role="radiogroup" aria-labelledby="{uid}-scoped-lbl">
-      <span class="lbl" id="{uid}-scoped-lbl">プロジェクトの設定（表示と自動化）</span>
-      <label class="plain">
-        <input
-          type="radio"
-          name="{uid}-scoped"
-          checked={scoped === "carry"}
-          onchange={() => onscoped("carry")}
-        >
-        持っていく
-      </label>
-      <label class="plain">
-        <input
-          type="radio"
-          name="{uid}-scoped"
-          checked={scoped === "drop"}
-          onchange={() => onscoped("drop")}
-        >
-        持っていかない
-      </label>
-    </div>
-    {#if plan.scoped.dropped.length > 0}
-      <div class="dropped">
-        <span class="lbl">持っていくと外れるもの</span>
-        <ul>
-          {#each plan.scoped.dropped as d (d)}
-            <li>{d}</li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
-  </div>
+  <MoveScopedChoice dropped={plan.scoped.dropped} {scoped} {onscoped} />
 {/if}
 
 {#if plan.hidden.length > 0}
@@ -102,26 +71,10 @@
     font-family: var(--font-mono);
     font-size: var(--fs-12);
   }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-  }
-  .lbl {
-    color: var(--ink-2);
-    font-size: var(--fs-12);
-    font-weight: 600;
-  }
   .note {
     color: var(--muted);
     font-size: var(--fs-12);
     font-weight: 400;
-  }
-  .plain {
-    display: flex;
-    gap: var(--space-8);
-    align-items: center;
-    font-size: var(--fs-13);
   }
   .part {
     display: flex;
@@ -173,11 +126,6 @@
   }
   .on-task {
     color: var(--muted);
-  }
-  .dropped ul {
-    margin: var(--space-4) 0 0;
-    padding-left: var(--space-20);
-    font-size: var(--fs-13);
   }
   .warn {
     display: flex;

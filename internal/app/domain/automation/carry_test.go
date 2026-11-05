@@ -163,6 +163,48 @@ func TestWithout(t *testing.T) {
 	}
 }
 
+// A file may hold an id twice (Check reports it): only the rule of the project
+// goes, and a disable of the id stays while a rule has it.
+func TestWithoutKeepsARuleOfTheSameID(t *testing.T) {
+	t.Parallel()
+	p, q := model.NewULID(), model.NewULID()
+	f := decodeFile(t, "rules:\n"+
+		"- {id: x, where: '"+WherePrefix+p.String()+"', on: pr.opened, set: {status: todo}}\n"+
+		"- {id: x, where: '"+WherePrefix+q.String()+"', on: pr.merged, set: {status: done}}\n"+
+		"scoped:\n- {where: '"+WherePrefix+q.String()+"', disable: [x]}\n")
+	next := f.Without([]model.ULID{p})
+	if len(next.Rules) != 1 || next.Rules[0].Where != WherePrefix+q.String() {
+		t.Errorf("rules = %+v", next.Rules)
+	}
+	if len(next.Scoped) != 1 || !slices.Equal(next.Scoped[0].Disable, []string{"x"}) {
+		t.Errorf("scoped = %+v", next.Scoped)
+	}
+}
+
+// What is not in the destination is told as Carry told it, on a rerun that
+// cannot ask Carry any more; a rule of the same id elsewhere is another rule.
+func TestLeftOut(t *testing.T) {
+	t.Parallel()
+	p, other := model.NewULID(), model.NewULID()
+	where := WherePrefix + p.String()
+	src := decodeFile(t, "rules:\n"+
+		"- {id: global, on: pr.opened, set: {status: todo}}\n"+
+		"- {id: mine, where: '"+where+"', on: pr.opened, set: {status: todo}}\n"+
+		"- {id: taken, where: '"+where+"', on: pr.opened, set: {status: todo}}\n"+
+		"- {id: gone, where: '"+where+"', on: pr.opened, set: {status: todo}}\n"+
+		"- {id: else, where: '"+WherePrefix+other.String()+"', on: pr.opened, set: {status: todo}}\n"+
+		"scoped:\n- {where: '"+where+"', disable: [global, mine, gone]}\n"+
+		"- {where: '"+WherePrefix+other.String()+"', disable: [global]}\n")
+	dst := decodeFile(t, "rules:\n"+
+		"- {id: taken, on: pr.opened, set: {status: todo}}\n"+
+		"- {id: mine, where: '"+WherePrefix+strings.ToLower(p.String())+"', on: pr.opened, set: {status: todo}}\n"+
+		"scoped:\n- {where: '"+where+"', disable: [mine]}\n")
+	want := []string{"rule taken", "rule gone", "disable global", "disable gone"}
+	if got := src.LeftOut(dst, []model.ULID{p}); !slices.Equal(got, want) {
+		t.Errorf("LeftOut = %v, want %v", got, want)
+	}
+}
+
 func TestProjects(t *testing.T) {
 	t.Parallel()
 	p, q := model.NewULID(), model.NewULID()

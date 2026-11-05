@@ -39,15 +39,29 @@ func ruleIDs(a *automation.File) []string {
 	return out
 }
 
-// hasAutomationsFile reports whether the store name has automations.yaml.
-func hasAutomationsFile(t *testing.T, f *usecasetest.MoveFx, name string) bool {
+// destinationHasAutomations reports whether org-b has automations.yaml.
+func destinationHasAutomations(t *testing.T, f *usecasetest.MoveFx) bool {
 	t.Helper()
-	s, err := f.TS.ForStore(name).OpenStore()
+	s, err := f.TS.ForStore("org-b").OpenStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = os.Stat(filepath.Join(s.Dir(), model.AutomationsPath))
 	return err == nil
+}
+
+// automationsBytes is automations.yaml of the store name as it stands.
+func automationsBytes(t *testing.T, f *usecasetest.MoveFx, name string) string {
+	t.Helper()
+	s, err := f.TS.ForStore(name).OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(s.Dir(), model.AutomationsPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 // projectRules are a rule and a disable of the project moved, what fits
@@ -109,6 +123,9 @@ func TestMoveStoreCarriesAutomations(t *testing.T) {
 	if op, _ := f.Log(t, "org-b")[0].Trailer("Hedgehug-Op"); op != "move-in" {
 		t.Errorf("last op of the destination = %s", op)
 	}
+	if b := automationsBytes(t, f, "org-b"); !strings.Contains(b, "# ours") {
+		t.Errorf("the comment of the destination is gone:\n%s", b)
+	}
 }
 
 func TestMoveStoreDropsAutomations(t *testing.T) {
@@ -124,7 +141,7 @@ func TestMoveStoreDropsAutomations(t *testing.T) {
 	if res.Carried || len(res.Plan.Scoped.Dropped) != 0 {
 		t.Errorf("res = %+v, scoped %+v", res, res.Plan.Scoped)
 	}
-	if hasAutomationsFile(t, f, "org-b") {
+	if destinationHasAutomations(t, f) {
 		t.Error("the destination got automations.yaml")
 	}
 	src := automationsOf(t, f, "org-a")
@@ -142,7 +159,7 @@ func TestMoveStoreLeavesOtherAutomations(t *testing.T) {
 	if _, err := stores.MoveStore(f.TS.Session, f.In()); err != nil {
 		t.Fatal(err)
 	}
-	if hasAutomationsFile(t, f, "org-b") {
+	if destinationHasAutomations(t, f) {
 		t.Error("the destination got automations.yaml")
 	}
 	s, _ := f.TS.ForStore("org-a").OpenStore()
@@ -152,6 +169,32 @@ func TestMoveStoreLeavesOtherAutomations(t *testing.T) {
 	}
 	if string(b) != src {
 		t.Errorf("the source file changed:\n%s", b)
+	}
+}
+
+// A child of the project leaves the project behind: the rules stay where they
+// are, nothing is asked and neither file changes.
+func TestMoveStoreChildOfAProjectLeavesItsAutomations(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	src := "# theirs\n" + projectRules(f)
+	dst := "# ours\nrules:\n- {id: taken, on: pr.opened, set: {status: todo}}\n"
+	f.SetAutomations(t, "org-a", src)
+	f.SetAutomations(t, "org-b", dst)
+	in := f.In()
+	in.Arg = "API-3"
+	res, err := stores.MoveStore(f.TS.Session, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Plan.Scoped != nil || res.Carried {
+		t.Errorf("res = %+v, scoped %+v", res, res.Plan.Scoped)
+	}
+	if got := automationsBytes(t, f, "org-a"); got != src {
+		t.Errorf("the source file changed:\n%s", got)
+	}
+	if got := automationsBytes(t, f, "org-b"); got != dst {
+		t.Errorf("the destination file changed:\n%s", got)
 	}
 }
 
@@ -227,7 +270,7 @@ func TestMoveStoreCarriesNothingOfTheAutomations(t *testing.T) {
 	if !res.Carried || !slices.Equal(res.Plan.Scoped.Dropped, []string{"rule review"}) {
 		t.Errorf("res = %+v, scoped %+v", res, res.Plan.Scoped)
 	}
-	if hasAutomationsFile(t, f, "org-b") {
+	if destinationHasAutomations(t, f) {
 		t.Error("the destination got automations.yaml")
 	}
 	if a := automationsOf(t, f, "org-a"); len(a.Rules) != 0 {
@@ -240,6 +283,55 @@ func TestMoveStoreCarriesNothingOfTheAutomations(t *testing.T) {
 func TestMoveStoreCarriesTheRulesOfADeletedProject(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
+	deletedSubProject(t, f)
+	in := f.In()
+	in.Scoped = "carry"
+	if _, err := stores.MoveStore(f.TS.Session, in); err != nil {
+		t.Fatal(err)
+	}
+	if got := ruleIDs(automationsOf(t, f, "org-b")); !slices.Equal(got, []string{"sub"}) {
+		t.Errorf("destination rules = %v", got)
+	}
+}
+
+// A move with a task that was deleted before it stops between the stores: the
+// destination has the task deleted, as the source does, and the rerun ends it.
+func TestMoveStoreRerunWithADeletedTask(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	deletedSubProject(t, f)
+	in := f.In()
+	in.Scoped = "carry"
+	stopInTheSource(t, f, in)
+	res, err := stores.MoveStore(f.TS.Session, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Resumed || !res.Carried {
+		t.Errorf("res = %+v", res)
+	}
+	if got := ruleIDs(automationsOf(t, f, "org-a")); len(got) != 0 {
+		t.Errorf("source rules = %v", got)
+	}
+}
+
+// A task that is alive in the source and deleted in the destination is not
+// what a move left there.
+func TestMoveStoreRefusesATaskDeletedInTheDestination(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	stopInTheSource(t, f, f.In())
+	if _, err := tasks.Remove(f.TS.ForStore("org-b"), f.G.String()); err != nil {
+		t.Fatal(err)
+	}
+	_, err := stores.MoveStore(f.TS.Session, f.In())
+	usecasetest.MustCode(t, err, usecase.KindConflict, "move.exists")
+}
+
+// deletedSubProject gives org-a a project under API-2 with a rule, and deletes
+// it. Both stores allow a project there, so that it can move.
+func deletedSubProject(t *testing.T, f *usecasetest.MoveFx) {
+	t.Helper()
 	anywhere := func(sc *schema.Schema) {
 		for i := range sc.Kinds {
 			if sc.Kinds[i].Name == "project" {
@@ -265,14 +357,6 @@ func TestMoveStoreCarriesTheRulesOfADeletedProject(t *testing.T) {
 	f.SetAutomations(t, "org-a", "rules:\n- {id: sub, where: 'project:"+r.ULID.String()+"', on: pr.opened, set: {status: done}}\n")
 	if _, err := tasks.Remove(a, r.ULID.String()); err != nil {
 		t.Fatal(err)
-	}
-	in := f.In()
-	in.Scoped = "carry"
-	if _, err := stores.MoveStore(f.TS.Session, in); err != nil {
-		t.Fatal(err)
-	}
-	if got := ruleIDs(automationsOf(t, f, "org-b")); !slices.Equal(got, []string{"sub"}) {
-		t.Errorf("destination rules = %v", got)
 	}
 }
 
@@ -452,11 +536,94 @@ func TestMoveStoreRerunAfterADrop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Resumed || res.Carried {
-		t.Errorf("res = %+v", res)
+	if !res.Resumed || res.Carried || len(res.Plan.Scoped.Dropped) != 0 {
+		t.Errorf("res = %+v, scoped %+v", res, res.Plan.Scoped)
 	}
 	if a := automationsOf(t, f, "org-a"); len(a.Scoped) != 0 || !slices.Equal(ruleIDs(a), []string{"global", "other"}) {
 		t.Errorf("source = %v %+v", ruleIDs(a), a.Scoped)
+	}
+}
+
+// The rerun writes nothing into the destination, so a file there that cannot
+// be read does not stop it: it is told of once, and what it would say is left
+// unsaid.
+func TestMoveStoreRerunPastADestinationThatDoesNotDecode(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	f.SetAutomations(t, "org-a", projectRules(f))
+	in := f.In()
+	in.Scoped = "carry"
+	stopInTheSource(t, f, in)
+	f.SetAutomations(t, "org-b", "rules: [\n")
+	res, err := stores.MoveStore(f.TS.Session, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Resumed || len(res.Plan.Scoped.Dropped) != 0 {
+		t.Errorf("res = %+v, scoped %+v", res, res.Plan.Scoped)
+	}
+	if a := automationsOf(t, f, "org-a"); !slices.Equal(ruleIDs(a), []string{"global", "other"}) || len(a.Scoped) != 0 {
+		t.Errorf("source = %v %+v", ruleIDs(a), a.Scoped)
+	}
+	n := 0
+	for _, w := range f.TS.Warns {
+		if strings.Contains(w, model.AutomationsPath) && strings.Contains(w, "org-b") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d warnings; want 1 (all: %q)", n, f.TS.Warns)
+	}
+}
+
+// The rerun says what the first run left out: the source still has it and the
+// destination does not.
+func TestMoveStoreRerunTellsWhatWasLeftOut(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	f.SetSchema(t, func(sc *schema.Schema) {
+		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
+	})
+	f.SetAutomations(t, "org-a", projectRules(f))
+	f.SetAutomations(t, "org-b", "rules:\n- {id: taken, on: pr.opened, set: {status: todo}}\n")
+	in := f.In()
+	in.Scoped = "carry"
+	stopInTheSource(t, f, in)
+	res, err := stores.MoveStore(f.TS.Session, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"rule review", "rule taken", "disable global"}
+	if !res.Resumed || !slices.Equal(res.Plan.Scoped.Dropped, want) {
+		t.Errorf("res = %+v, dropped %v, want %v", res, res.Plan.Scoped.Dropped, want)
+	}
+}
+
+// A carry that left out everything has written nothing: the rerun of the same
+// command finishes the source and still says what was left out.
+func TestMoveStoreRerunOfACarryOfNothing(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	f.SetSchema(t, func(sc *schema.Schema) {
+		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
+	})
+	f.SetAutomations(t, "org-a", "rules:\n- {id: review, where: 'project:"+f.P.String()+"', on: pr.opened, set: {status: review}}\n")
+	in := f.In()
+	in.Scoped = "carry"
+	stopInTheSource(t, f, in)
+	hb := f.Head(t, "org-b")
+	res, err := stores.MoveStore(f.TS.Session, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Resumed || !slices.Equal(res.Plan.Scoped.Dropped, []string{"rule review"}) {
+		t.Errorf("res = %+v, scoped %+v", res, res.Plan.Scoped)
+	}
+	if f.Head(t, "org-b") != hb || destinationHasAutomations(t, f) {
+		t.Error("the destination was written")
+	}
+	if a := automationsOf(t, f, "org-a"); len(a.Rules) != 0 {
+		t.Errorf("source rules = %v", ruleIDs(a))
 	}
 }
 
