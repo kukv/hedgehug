@@ -64,21 +64,27 @@ func (r *Repo) DiffTrees(from, to plumbing.Hash, prefix string) ([]Change, error
 	return out, err
 }
 
-// ReadFile returns the content of path in tree. A missing path is
-// fs.ErrNotExist.
+// ReadFile returns the content of path in tree. A path that is not in the
+// tree is fs.ErrNotExist. A tree or blob that is in the tree but not in the
+// repository is an error that is not fs.ErrNotExist: go-git reports both as
+// a missing file.
 func (r *Repo) ReadFile(tree plumbing.Hash, path string) ([]byte, error) {
 	t, err := r.tree(tree)
 	if err != nil {
 		return nil, err
 	}
-	f, err := t.File(path)
-	if errors.Is(err, object.ErrFileNotFound) {
+	e, err := t.FindEntry(path)
+	if errors.Is(err, plumbing.ErrObjectNotFound) {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err != nil || !e.Mode.IsFile() {
 		return nil, fmt.Errorf("%s: %w", path, fs.ErrNotExist)
 	}
+	blob, err := r.r.BlobObject(e.Hash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	rd, err := f.Reader()
+	rd, err := blob.Reader()
 	if err != nil {
 		return nil, err
 	}
@@ -133,23 +139,39 @@ func (r *Repo) Files(tree plumbing.Hash, prefix string) iter.Seq2[string, error]
 				}
 			}
 		}
-		w := object.NewTreeWalker(t, true, nil)
-		defer w.Close()
-		for {
-			name, e, err := w.Next()
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			if err != nil {
-				yield("", err)
-				return
-			}
-			if name = dir + name; !e.Mode.IsFile() || !strings.HasPrefix(name, prefix) {
+		r.walkFiles(t, dir, prefix, yield)
+	}
+}
+
+// walkFiles yields the files below t, whose path is dir, that start with
+// prefix, in entry order. It does not enter a directory that no such file is
+// below. A directory whose tree cannot be read is yielded as an error and the
+// walk stops: object.TreeWalker would turn that error into the end of the
+// listing. It reports whether the caller wants more.
+func (r *Repo) walkFiles(t *object.Tree, dir, prefix string, yield func(string, error) bool) bool {
+	for _, e := range t.Entries {
+		name := dir + e.Name
+		if e.Mode == filemode.Dir {
+			// No file below it can start with prefix.
+			if d := name + "/"; !strings.HasPrefix(d, prefix) && !strings.HasPrefix(prefix, d) {
 				continue
 			}
-			if !yield(name, nil) {
-				return
+			sub, err := r.r.TreeObject(e.Hash)
+			if err != nil {
+				yield("", fmt.Errorf("%s: %w", name, err))
+				return false
 			}
+			if !r.walkFiles(sub, name+"/", prefix, yield) {
+				return false
+			}
+			continue
+		}
+		if !e.Mode.IsFile() || !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		if !yield(name, nil) {
+			return false
 		}
 	}
+	return true
 }
