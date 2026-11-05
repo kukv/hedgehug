@@ -70,17 +70,66 @@ func (r *Repo) commitStaged(c Commit) (plumbing.Hash, error) {
 			}
 		}
 	}
+	h, err := r.writeCommit(c, tree, parents)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return h, r.moveHead(h)
+}
+
+// writeCommit writes the commit c of tree with parents. It moves nothing.
+func (r *Repo) writeCommit(c Commit, tree plumbing.Hash, parents []plumbing.Hash) (plumbing.Hash, error) {
 	sig := object.Signature{Name: badSignature.ReplaceAllString(c.Author.Name, ""), Email: badSignature.ReplaceAllString(c.Author.Email, ""), When: c.When}
 	commit := &object.Commit{Author: sig, Committer: sig, Message: message(c), TreeHash: tree, ParentHashes: parents}
 	o := r.r.Storer.NewEncodedObject()
 	if err := commit.Encode(o); err != nil {
 		return plumbing.ZeroHash, err
 	}
-	h, err := r.r.Storer.SetEncodedObject(o)
+	return r.r.Storer.SetEncodedObject(o)
+}
+
+// CommitOn writes a commit on parent with files changed (nil removes a file)
+// and returns it. HEAD, the index and the work tree stay as they are, so the
+// commit is reachable from nothing until the caller moves main to it
+// (MoveMain). c.Paths and c.Parents are not used.
+func (r *Repo) CommitOn(parent plumbing.Hash, files map[string][]byte, c Commit) (plumbing.Hash, error) {
+	base, err := r.TreeOf(parent)
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	return h, r.moveHead(h)
+	edits := make(map[string]*index.Entry, len(files))
+	for p, data := range files {
+		if err := checkWorkPath(p); err != nil {
+			return plumbing.ZeroHash, err
+		}
+		if data == nil {
+			edits[p] = nil
+			continue
+		}
+		o := r.r.Storer.NewEncodedObject()
+		o.SetType(plumbing.BlobObject)
+		w, err := o.Writer()
+		if err != nil {
+			return plumbing.ZeroHash, err
+		}
+		_, err = w.Write(data)
+		if cerr := w.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			return plumbing.ZeroHash, err
+		}
+		h, err := r.r.Storer.SetEncodedObject(o)
+		if err != nil {
+			return plumbing.ZeroHash, err
+		}
+		edits[p] = &index.Entry{Hash: h, Mode: filemode.Regular}
+	}
+	tree, _, err := r.editTree(base, edits, true)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return r.writeCommit(c, tree, []plumbing.Hash{parent})
 }
 
 // badSignature is what git does not allow in a name or an email; go-git's
