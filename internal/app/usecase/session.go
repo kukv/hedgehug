@@ -741,6 +741,11 @@ func (ss *Session) RunSync(s *store.Store, opt replicate.Options, reported bool)
 	// opened again after it, so that they see them.
 	defer ss.DropMount()
 	err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
+		// A rebuild stopped in its apply phase while this store was open: the
+		// sync would push or merge on the old HEAD.
+		if store.RebuildPhaseIn(s.Dir()) == store.RebuildApply {
+			return &store.LeftoverError{Name: s.Meta().Name}
+		}
 		started := ss.Now()
 		if _, err := replicate.UpdateState(s, func(st *replicate.State) { st.LastAttempt = started }); err != nil {
 			return err

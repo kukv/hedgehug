@@ -306,3 +306,34 @@ func TestAWriteWaitsForTheRebuild(t *testing.T) {
 		t.Errorf("keep = %+v", got)
 	}
 }
+
+// A writer that opened the store before the rebuild is refused while the
+// rebuild is stopped in the apply phase: a commit on the old HEAD would stop
+// the rebuild from finishing.
+func TestAWriteIsRefusedWhileApplyIsStopped(t *testing.T) {
+	t.Parallel()
+	c := newCluster(t, 2)
+	// As another process would: a store of its own, opened before the rebuild.
+	other, err := store.Open(c.stores[1].Dir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = other.Repo().Close() }()
+	sc := newStoppedScene(t, c, false)
+	_, err = other.Update(c.op(1, "update", sc.other.ULID), func(tx *store.Tx) error {
+		x, err := tx.Task(sc.other.ULID)
+		if err != nil {
+			return err
+		}
+		x.Title = "late"
+		return tx.PutTask(x)
+	})
+	var left *store.LeftoverError
+	if !errors.As(err, &left) {
+		t.Fatalf("write during the apply phase = %v, want a LeftoverError", err)
+	}
+	if b, err := FinishRebuild(c.stores[1]); err != nil || b == nil {
+		t.Fatalf("FinishRebuild = %+v, %v", b, err)
+	}
+	checkRebuilt(t, c, sc)
+}

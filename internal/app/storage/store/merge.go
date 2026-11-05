@@ -34,6 +34,9 @@ func (s *Store) lockedAtHead(head plumbing.Hash, fn func() error) (err error) {
 			err = errors.Join(err, rerr)
 		}
 	}()
+	if RebuildPhaseIn(s.dir) == RebuildApply {
+		return &LeftoverError{Name: s.Meta().Name}
+	}
 	cur, err := s.repo.Head()
 	if err != nil {
 		return err
