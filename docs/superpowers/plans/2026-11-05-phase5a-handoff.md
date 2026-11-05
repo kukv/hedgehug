@@ -18,7 +18,7 @@
 - Task 7 `lib/github` の GraphQL クライアント、Task 8 `lib/fakegh` の PR・Issue・GraphQL（と `cmd/fakegh` の操作コマンド）
 - Task 9 `repo_accounts` でアカウントを選ぶ、Task 10 取得時刻を持つ `storage/ghstate`
 - Task 11 `hh link`・`hh unlink`（`usecase/integration/link.go`、`cli/link.go`）、Task 12 自動リンクと `gh` の更新
-- Task 13 取り込みと `hh sync`（`integration.Fetch`、`replication.SyncStore`、server の定期同期）、Task 14 `hh show` にリンクを出す
+- Task 13 取り込みと `hh sync`（`integration.Fetch`、`replication.SyncStore`、server の定期同期。構成見直しの回 6 で、取り込みは土台の `usecase.FetchGitHub` に移した）、Task 14 `hh show` にリンクを出す
 - Task 15 実 API の定期テスト（`internal/lib/github/live_test.go`、`.github/workflows/github-live.yaml`）
 - Task 16 通しのテスト `TestSyncBringsGitHubIntoTheTask`（`sync` で PR が入り、`show` と `has:pr` に出て、`unlink` で消える）、構成見直しの spec の修正、全体の検査
 - 全体の検査（2026-11-05、すべて通った）
@@ -77,10 +77,10 @@ plan の「この回で決めたこと」13 項目と、各 Task の本文に記
 2. 構成見直しの回 5（`cli/scenario` ができる回）のマージ後に、`phase5-design` を main へ rebase する。そのとき plan の冒頭の注意（パスと行番号をその時点のコードで確かめ直す）に従い、`internal/app/cli/github_scenario_test.go` を `internal/app/cli/scenario/github_test.go` に移せるか確かめる。移すときは `scenario` パッケージの補助に合わせる
 3. Step 5 の手の確認を行い、結果を書く。そのあと PR #61 に 5a の実装を足してレビューに出す
 4. 5b は、5a のマージ後の main から plan を切って書く。5b が使うものは次のとおり
-   - `integration.Fetch` の差分の取り方（`Since` 以降の PR と、リンク済みの PR・Issue を毎回すべて読む）。5b の「ルールの実行」は取り込みの後（spec の取り込みの順番の 5）に呼ぶ
+   - `usecase.FetchGitHub`（旧 `integration.Fetch`。構成見直しの回 6 で土台に移した。spec 決定 20）の差分の取り方（`Since` 以降の PR と、リンク済みの PR・Issue を毎回すべて読む）。5b の「ルールの実行」は取り込みの後（spec の取り込みの順番の 5）に呼ぶ。同期から呼ぶので土台に置く
    - `store.Op.Automated`（取り込み以外の自動化のコミットにも同じ author を使う）
    - `usecase/integration/link.go` の `defaultIssueSync`。いまは `link` 固定で、5b で `issue_fields.default_sync` を読む形に置き換える（plan の決定 4）
-   - `integration.apply` は、5b のイベント（`pr.opened` など）の判定に `gh` の取り込み前後の差分が要るので、`old` と `next`（取り込み前後の `GitHubState`）を返す形に変える。いまは変わったかどうかの `bool` だけを返す
+   - 土台の `apply`（`usecase/github_apply.go`、旧 `integration.apply`）は、5b のイベント（`pr.opened` など）の判定に `gh` の取り込み前後の差分が要るので、`old` と `next`（取り込み前後の `GitHubState`）を返す形に変える。いまは変わったかどうかの `bool` だけを返す
    - `hh unlink` は `gh` から要素を外すので、そのあと同じ PR を `hh link` し直すと `gh` に新しく入り、`pr.opened` が発火する（5b の spec のイベントの節に書いた）
    - `synced`・`state_reason`・`Link.Fields` は型とマージだけを入れてある。5b 以降が値を書く
 5. 5a の spec の項目（コマンド、取り込みの順番、自動リンク、fakegh、テスト）は、plan の「spec との対応」の表のとおり Task 1〜16 に割り当て済みで、5a で作ると決めたものに実装から漏れたものはない。残りは上の「未実施のこと」の2点だけ（検証用 Org の手の確認と、`github-live.yaml` の secret・PR）

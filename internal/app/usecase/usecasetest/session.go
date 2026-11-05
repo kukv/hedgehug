@@ -1238,6 +1238,20 @@ func FakeSession(t *testing.T, st fakegh.State, accounts string) (*Session, *fak
 	return ts, fake
 }
 
+// GitHubSession is a FakeSession that reads GitHub as the account me, alice,
+// who may write github.com/org-a/web. The fake's clock is the session's.
+func GitHubSession(t *testing.T) (*Session, *fakegh.Server) {
+	t.Helper()
+	ts, fake := FakeSession(t, fakegh.State{
+		Tokens: map[string]string{"t-alice": "alice"},
+		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "web", Perms: map[string]string{"alice": "write"}}},
+	}, "")
+	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	ts.Renew()
+	fake.SetNow(func() time.Time { return ts.Now() })
+	return ts, fake
+}
+
 func ConfigText(t *testing.T, ts *Session) string {
 	t.Helper()
 	_, p, err := ts.Config()

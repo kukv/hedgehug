@@ -14,7 +14,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/integration"
 )
 
 // Sync syncs the stores SyncTargets names and describes what each did. A
@@ -162,7 +161,7 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 // wrote; nil for a store with no remote. What fails here is a warning, as
 // the sync is done.
 func fetchGitHub(ss *usecase.Session, c *config.Config, e config.StoreEntry, r *usecase.SyncReport, push func() (replicate.Result, error)) {
-	f, err := integration.Fetch(ss, c, e)
+	f, err := usecase.FetchGitHub(ss, c, e)
 	r.GitHubUpdated = f.Committed
 	r.Warnings = append(r.Warnings, f.Warnings...)
 	if err != nil {
@@ -294,7 +293,7 @@ func BeforeCommand(ss *usecase.Session, report func(store, msg string)) {
 func fetchOnly(ss *usecase.Session, c *config.Config, done []config.StoreEntry) []config.StoreEntry {
 	var out []config.StoreEntry
 	for _, e := range c.Stores {
-		if len(e.Remotes) == 0 && !slices.ContainsFunc(done, func(d config.StoreEntry) bool { return d.Name == e.Name }) && integration.HasTargets(ss, e) {
+		if len(e.Remotes) == 0 && !slices.ContainsFunc(done, func(d config.StoreEntry) bool { return d.Name == e.Name }) && usecase.HasGitHubTargets(ss, e) {
 			out = append(out, e)
 		}
 	}

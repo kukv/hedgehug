@@ -74,7 +74,7 @@ func mkdirInStore(dir, path string) error {
 		if i == 0 {
 			continue // .hedgehug holds a tracked file: a live store has it
 		}
-		if err := os.Mkdir(cur, 0o750); err != nil && !errors.Is(err, fs.ErrExist) { //nolint:gosec // G703: paths are built from the store root
+		if err := osfs.Mkdir(cur, 0o750); err != nil && !errors.Is(err, fs.ErrExist) {
 			if errors.Is(err, fs.ErrNotExist) {
 				return ErrStoreGone
 			}

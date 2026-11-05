@@ -1,4 +1,4 @@
-package integration_test
+package usecase_test
 
 import (
 	"os"
@@ -17,7 +17,7 @@ import (
 // reaches gh, linking again finds it, and the view shows its state.
 func TestFetchTakesALinkWrittenInOtherLetters(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) {
 		x.Repos = []string{web}
 		x.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/Org-A/Web/pull/1", Sync: model.SyncMirror}}
@@ -47,7 +47,7 @@ func TestFetchTakesALinkWrittenInOtherLetters(t *testing.T) {
 // The view carries when a pull request was merged and why an issue closed.
 func TestLinkViewCarriesMergedAtAndStateReason(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) {
 		x.Repos = []string{web}
 		x.Links = []model.Link{
@@ -81,7 +81,7 @@ func TestLinkViewCarriesMergedAtAndStateReason(t *testing.T) {
 // so that it is not asked again at once.
 func TestFetchNotesAFailedReadWhenTheCommitFails(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	x := ts.AddTask("a", func(x *model.Task) { x.Repos = []string{"github.com/org-b/secret", web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestFetchNotesAFailedReadWhenTheCommitFails(t *testing.T) {
 		}
 		gitrepotest.CommitFiles(t, e.Path, "break", "Alice", "alice@example.com", ts.Now(), filepath.ToSlash(rel))
 	}
-	if _, err := integration.Fetch(ts.Session, c, e); err == nil {
+	if _, err := usecase.FetchGitHub(ts.Session, c, e); err == nil {
 		t.Fatal("the commit did not fail")
 	}
 	s, err := ts.ForStore("me").OpenStore()

@@ -115,35 +115,14 @@ linters:
             - "!$test"
             - "!**/internal/app/usecase/usecasetest/**"
           deny:
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/accounts
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/browse
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/comments
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/maintenance
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/notifications
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/replication
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/schemas
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/stores
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/tasks
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/views
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/watch
-              desc: 領域どうしは土台を通す（spec 2.3）
-            - pkg: github.com/kukv/hedgehug/internal/app/usecase/workspaces
+            # 前方一致なので、領域を足しても一覧を直さずに止まる。土台（末尾の / がない）は止めない。
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/
               desc: 領域どうしは土台を通す（spec 2.3）
     forbidigo:
       analyze-types: true
       forbid:
         # OS に触る呼び出しは internal/lib/osfs を通す（spec: OS の境界）。
-        - pattern: ^os\.(Rename|Remove|RemoveAll|ReadFile|WriteFile|OpenFile|MkdirAll)$
+        - pattern: ^os\.(Rename|Remove|RemoveAll|ReadFile|WriteFile|Open|OpenFile|CreateTemp|MkdirTemp|Mkdir|MkdirAll|Chmod)$
           msg: use the function of the same name in internal/lib/osfs
         - pattern: ^exec\.Command$
           msg: use osfs.Command

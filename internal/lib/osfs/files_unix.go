@@ -29,8 +29,26 @@ func OpenFile(path string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(path, flag, perm) //nolint:gosec // G304: callers build paths from a store or repository root
 }
 
+// Open opens the file at path for reading.
+func Open(path string) (*os.File, error) {
+	return os.Open(path) //nolint:gosec // G304: callers build paths from a store or repository root
+}
+
+// CreateTemp makes a new file in dir, named by pattern with a random part in
+// place of its last *, and opens it for reading and writing.
+func CreateTemp(dir, pattern string) (*os.File, error) { return os.CreateTemp(dir, pattern) }
+
+// MkdirTemp makes a new directory in dir, named as CreateTemp names a file.
+func MkdirTemp(dir, pattern string) (string, error) { return os.MkdirTemp(dir, pattern) }
+
+// Mkdir makes the directory path, with perm. Its parent must exist.
+func Mkdir(path string, perm os.FileMode) error { return os.Mkdir(path, perm) }
+
 // MkdirAll makes the directory path and the parents it lacks, with perm.
 func MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
+
+// Chmod sets the mode of the file at path.
+func Chmod(path string, mode os.FileMode) error { return os.Chmod(path, mode) }
 
 // SamePath reports whether a and b name the same file. On unix that is the
 // same string, as the callers have always compared them.

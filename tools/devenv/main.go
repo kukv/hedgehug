@@ -328,7 +328,7 @@ func initUser(dir, u, fakeghURL string) error {
 // in a directory under dir that it removes, and pushes to the bare repository
 // by its path, so that no rewrite is needed before config.yaml exists.
 func seedWeb(dir string) error {
-	work, err := os.MkdirTemp(dir, ".web-seed-")
+	work, err := osfs.MkdirTemp(dir, ".web-seed-")
 	if err != nil {
 		return err
 	}

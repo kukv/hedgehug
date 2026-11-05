@@ -1,11 +1,11 @@
-package integration_test
+package usecase_test
 
 import (
 	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/usecase/integration"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/github"
@@ -38,7 +38,7 @@ func TestAutoLinksFindTasks(t *testing.T) {
 		{Number: 3, Comments: []string{"hh:" + live.ULID.String()}},
 		{Number: 4, Body: "NOPE-1 " + goneID},
 	}
-	got := integration.AutoLinks(ix, "github.com/Org-A/Web", pulls)
+	got := usecase.AutoLinks(ix, "github.com/Org-A/Web", pulls)
 	ref := func(n int) string {
 		return model.GitHubRef{Repo: "github.com/org-a/web", Kind: model.LinkPR, Number: n}.String()
 	}
