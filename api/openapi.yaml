@@ -2157,6 +2157,20 @@ components:
         - enabled
         - disabled_in
       type: object
+    SavedGantt:
+      additionalProperties: false
+      properties:
+        end:
+          type: string
+        roadmap:
+          type: boolean
+        start:
+          type: string
+      required:
+        - start
+        - end
+        - roadmap
+      type: object
     SavedKanban:
       additionalProperties: false
       properties:
@@ -2191,6 +2205,8 @@ components:
     SavedView:
       additionalProperties: false
       properties:
+        gantt:
+          $ref: "#/components/schemas/SavedGantt"
         kanban:
           $ref: "#/components/schemas/SavedKanban"
         layout:
@@ -2207,6 +2223,7 @@ components:
         - query
         - table
         - kanban
+        - gantt
       type: object
     SchemaChanged:
       additionalProperties: false
@@ -3324,6 +3341,15 @@ components:
           items:
             type: string
           type: array
+        gantt_end:
+          description: The date property the bars end on
+          type: string
+        gantt_roadmap:
+          description: Show the kinds of the container role only
+          type: boolean
+        gantt_start:
+          description: The date property the bars start on
+          type: string
         group_by:
           type: string
         kanban_columns:
@@ -3339,6 +3365,7 @@ components:
             - tree
             - table
             - kanban
+            - gantt
           type: string
         name:
           description: The new name; a rename cannot come with settings
@@ -3356,6 +3383,15 @@ components:
           items:
             type: string
           type: array
+        gantt_end:
+          description: The date property the bars end on
+          type: string
+        gantt_roadmap:
+          description: Show the kinds of the container role only
+          type: boolean
+        gantt_start:
+          description: The date property the bars start on
+          type: string
         group_by:
           type: string
         kanban_columns:
@@ -3371,6 +3407,7 @@ components:
             - tree
             - table
             - kanban
+            - gantt
           type: string
         query:
           type: string

@@ -16,6 +16,11 @@
     "kanban": {
       "columns": "status",
       "swimlane": "none"
+    },
+    "gantt": {
+      "start": "start",
+      "end": "due",
+      "roadmap": false
     }
   },
   {
@@ -33,6 +38,11 @@
     "kanban": {
       "columns": "status",
       "swimlane": "none"
+    },
+    "gantt": {
+      "start": "start",
+      "end": "due",
+      "roadmap": false
     }
   }
 ]

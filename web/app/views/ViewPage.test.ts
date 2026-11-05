@@ -161,7 +161,7 @@ describe("ViewPage", () => {
     await fireEvent.click(tab("ツリー"));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
     expect(toasts.list[0]?.message).toBe(
-      "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
+      "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",
     );
     expect(tab("カンバン")).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("kanban")).toBeVisible();
@@ -232,7 +232,7 @@ describe("ViewPage", () => {
     const { views } = setup([viewEntry({ name: "weekly", layout: "tree", query: "kind:task" })]);
     await fireEvent.click(screen.getByRole("button", { name: "tree-set-sort" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
+      "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",
     );
     expect(screen.getByRole("button", { name: "ビューを更新" })).toBeDisabled();
     await fireEvent.click(screen.getByRole("button", { name: "ビューを更新" }));
@@ -289,7 +289,7 @@ describe("ViewPage", () => {
 
   it("保存したクエリに sort: があれば、ツリーのタブを無効にして理由を出す（細部 54）", async () => {
     const { views } = setup([viewEntry({ name: "weekly", layout: "table", query: "sort:title" })]);
-    const why = "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません";
+    const why = "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません";
     expect(tab("ツリー")).toHaveAttribute("aria-disabled", "true");
     expect(tab("ツリー")).toHaveAttribute("title", why);
     expect(tab("ツリー")).toHaveAccessibleDescription(why);

@@ -87,7 +87,10 @@ func TestViewSaveRefuses(t *testing.T) {
 		{"a/b", views.ViewChange{}, usecase.KindUsage, "view.bad_name"},
 		{"CON", views.ViewChange{}, usecase.KindUsage, "view.bad_name"},
 		{"release", views.ViewChange{}, usecase.KindConflict, "view.name_taken"},
-		{"x", views.ViewChange{Layout: ptr("gantt")}, usecase.KindUsage, "view.bad_value"},
+		{"x", views.ViewChange{Layout: ptr("timeline")}, usecase.KindUsage, "view.bad_value"},
+		{"x", views.ViewChange{Layout: ptr("gantt"), Query: ptr("sort:due")}, usecase.KindUsage, "view.tree_order"},
+		{"x", views.ViewChange{GanttStart: ptr("nope")}, usecase.KindInvalid, "view.bad_gantt_prop"},
+		{"x", views.ViewChange{GanttEnd: ptr("points")}, usecase.KindInvalid, "view.bad_gantt_prop"},
 		{"x", views.ViewChange{Layout: ptr("table"), GroupBy: ptr("owner")}, usecase.KindUsage, "view.bad_value"},
 		{"x", views.ViewChange{KanbanColumns: ptr("kind")}, usecase.KindUsage, "view.bad_value"},
 		{"x", views.ViewChange{Swimlane: ptr("label")}, usecase.KindUsage, "view.bad_value"},
@@ -331,10 +334,36 @@ func TestViewUpdateChecksTheViewThatResults(t *testing.T) {
 	}
 	_, err := views.ViewUpdate(ts.Session, "t", views.ViewChange{Layout: ptr("tree")})
 	usecasetest.WantErr(t, err, usecase.KindUsage, "view.tree_order")
-	_, err = views.ViewUpdate(ts.Session, "t", views.ViewChange{Layout: ptr("gantt")})
+	_, err = views.ViewUpdate(ts.Session, "t", views.ViewChange{Layout: ptr("timeline")})
 	usecasetest.WantErr(t, err, usecase.KindUsage, "view.bad_value")
 	_, err = views.ViewUpdate(ts.Session, "t", views.ViewChange{Query: ptr(`"abc`)})
 	usecasetest.WantErr(t, err, usecase.KindUsage, "query.invalid")
 	_, err = views.ViewUpdate(ts.Session, "t", views.ViewChange{Columns: ptr([]string{"id", "nope"})})
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "view.bad_column")
+}
+
+func TestViewSaveGantt(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	r, err := views.ViewSave(ts.Session, "plan", views.ViewChange{Layout: ptr("gantt")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := r.View.Gantt; g.Start != "start" || g.End != "due" || g.Roadmap {
+		t.Errorf("defaults = %+v", g)
+	}
+	r, err = views.ViewPatch(ts.Session, "plan", nil, views.ViewChange{Roadmap: ptr(true), GanttStart: ptr("due")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := r.View.Gantt; g.Start != "due" || g.End != "due" || !g.Roadmap {
+		t.Errorf("gantt = %+v", g)
+	}
+	got, err := views.ViewGet(ts.Session, "plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Gantt != r.View.Gantt {
+		t.Errorf("read back %+v, want %+v", got.Gantt, r.View.Gantt)
+	}
 }

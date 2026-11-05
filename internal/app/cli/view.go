@@ -19,7 +19,8 @@ func (a *app) viewCmd() *cobra.Command {
 			return usageErrorf("a subcommand is needed")
 		},
 	}
-	var layout, query, groupBy, kanbanColumns, swimlane string
+	var layout, query, groupBy, kanbanColumns, swimlane, ganttStart, ganttEnd string
+	var roadmap bool
 	var columns []string
 	var wip map[string]int
 	save := &cobra.Command{
@@ -36,6 +37,10 @@ func (a *app) viewCmd() *cobra.Command {
 			}
 			ch.Layout, ch.Query, ch.GroupBy = str("layout", &layout), str("query", &query), str("group-by", &groupBy)
 			ch.KanbanColumns, ch.Swimlane = str("kanban-columns", &kanbanColumns), str("swimlane", &swimlane)
+			ch.GanttStart, ch.GanttEnd = str("gantt-start", &ganttStart), str("gantt-end", &ganttEnd)
+			if c.Flags().Changed("roadmap") {
+				ch.Roadmap = &roadmap
+			}
 			if c.Flags().Changed("columns") {
 				ch.Columns = &columns
 			}
@@ -46,13 +51,16 @@ func (a *app) viewCmd() *cobra.Command {
 		},
 	}
 	f := save.Flags()
-	f.StringVar(&layout, "layout", "", "tree, kanban or table")
+	f.StringVar(&layout, "layout", "", "tree, kanban, table or gantt")
 	f.StringVar(&query, "query", "", "the query of the view")
 	f.StringSliceVar(&columns, "columns", nil, "the columns of the table, such as id,title,status,due")
 	f.StringVar(&groupBy, "group-by", "", "what the table groups by: none, parent, status, assignee or project")
 	f.StringVar(&kanbanColumns, "kanban-columns", "", "the columns of the kanban: status or category")
 	f.StringVar(&swimlane, "swimlane", "", "the rows of the kanban: none, assignee or project")
 	f.StringToIntVar(&wip, "wip", nil, "the limits of the kanban columns, such as in_progress=3; replaces the ones saved, and an empty value takes them off")
+	f.StringVar(&ganttStart, "gantt-start", "", "the date property the bars of the gantt start on")
+	f.StringVar(&ganttEnd, "gantt-end", "", "the date property the bars of the gantt end on")
+	f.BoolVar(&roadmap, "roadmap", false, "show the kinds of the container role only on the gantt")
 	cmd.AddCommand(save,
 		&cobra.Command{
 			Use:   "list",

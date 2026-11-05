@@ -19,13 +19,16 @@ type viewOutput struct{ Body views.ViewWrite }
 type viewSaveInput struct {
 	ViewParam
 	Body struct {
-		Layout        *string         `json:"layout,omitempty" enum:"tree,table,kanban"`
+		Layout        *string         `json:"layout,omitempty" enum:"tree,table,kanban,gantt"`
 		Query         *string         `json:"query,omitempty"`
 		GroupBy       *string         `json:"group_by,omitempty"`
 		KanbanColumns *string         `json:"kanban_columns,omitempty"`
 		Swimlane      *string         `json:"swimlane,omitempty"`
 		Columns       *[]string       `json:"columns,omitempty" doc:"The columns of the table"`
 		KanbanWIP     *map[string]int `json:"kanban_wip,omitempty" doc:"The limit of each column, by its name; replaces the limits, and an empty object takes them off"`
+		GanttStart    *string         `json:"gantt_start,omitempty" doc:"The date property the bars start on"`
+		GanttEnd      *string         `json:"gantt_end,omitempty" doc:"The date property the bars end on"`
+		GanttRoadmap  *bool           `json:"gantt_roadmap,omitempty" doc:"Show the kinds of the container role only"`
 	}
 }
 
@@ -33,13 +36,16 @@ type viewPatchInput struct {
 	ViewParam
 	Body struct {
 		Name          *string         `json:"name,omitempty" doc:"The new name; a rename cannot come with settings"`
-		Layout        *string         `json:"layout,omitempty" enum:"tree,table,kanban"`
+		Layout        *string         `json:"layout,omitempty" enum:"tree,table,kanban,gantt"`
 		Query         *string         `json:"query,omitempty"`
 		GroupBy       *string         `json:"group_by,omitempty"`
 		KanbanColumns *string         `json:"kanban_columns,omitempty"`
 		Swimlane      *string         `json:"swimlane,omitempty"`
 		Columns       *[]string       `json:"columns,omitempty" doc:"The columns of the table"`
 		KanbanWIP     *map[string]int `json:"kanban_wip,omitempty" doc:"The limit of each column, by its name; replaces the limits, and an empty object takes them off"`
+		GanttStart    *string         `json:"gantt_start,omitempty" doc:"The date property the bars start on"`
+		GanttEnd      *string         `json:"gantt_end,omitempty" doc:"The date property the bars end on"`
+		GanttRoadmap  *bool           `json:"gantt_roadmap,omitempty" doc:"Show the kinds of the container role only"`
 	}
 }
 
@@ -81,6 +87,7 @@ func (s *Server) registerViews() {
 		defer ss.Close()
 		r, err := views.ViewSave(ss, in.Name, views.ViewChange{
 			Layout: b.Layout, Query: b.Query, GroupBy: b.GroupBy, KanbanColumns: b.KanbanColumns, Swimlane: b.Swimlane, Columns: b.Columns, WIP: b.KanbanWIP,
+			GanttStart: b.GanttStart, GanttEnd: b.GanttEnd, Roadmap: b.GanttRoadmap,
 		})
 		if err != nil {
 			return nil, problemOf(err)
@@ -98,6 +105,7 @@ func (s *Server) registerViews() {
 		defer ss.Close()
 		r, err := views.ViewPatch(ss, in.Name, b.Name, views.ViewChange{
 			Layout: b.Layout, Query: b.Query, GroupBy: b.GroupBy, KanbanColumns: b.KanbanColumns, Swimlane: b.Swimlane, Columns: b.Columns, WIP: b.KanbanWIP,
+			GanttStart: b.GanttStart, GanttEnd: b.GanttEnd, Roadmap: b.GanttRoadmap,
 		})
 		if err != nil {
 			return nil, problemOf(err)

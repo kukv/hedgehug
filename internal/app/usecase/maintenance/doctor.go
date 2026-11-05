@@ -537,7 +537,8 @@ func checkViewNames(es []view.Entry) []usecase.Finding {
 	return out
 }
 
-// checkViewColumns finds the columns of views that the schema does not have.
+// checkViewColumns finds the columns of views that the schema does not have,
+// and the gantt properties that are not dates.
 func checkViewColumns(es []view.Entry, sc *schema.Schema) []usecase.Finding {
 	var out []usecase.Finding
 	for _, e := range es {
@@ -549,6 +550,13 @@ func checkViewColumns(es []view.Entry, sc *schema.Schema) []usecase.Finding {
 				Check: "view", Where: e.Rel,
 				Msg:  fmt.Sprintf("column %q is not a field or a property of the schema; the GUI skips it", c),
 				Hint: "change the columns with hedgehug view save " + e.Name + " --columns ...",
+			})
+		}
+		for _, p := range e.View.BadGanttProps(sc) {
+			out = append(out, usecase.Finding{
+				Check: "view", Where: e.Rel,
+				Msg:  fmt.Sprintf("gantt property %q is not a date of the schema; the GUI draws no bar from it", p),
+				Hint: "change it with hedgehug view save " + e.Name + " --gantt-start ... --gantt-end ...",
 			})
 		}
 	}

@@ -48,6 +48,15 @@ func TestViewCommands(t *testing.T) {
 	te.goldenRun("case", 1, "view", "save", "release")
 	te.goldenRun("no-sub", 2, "view")
 
+	var g views.ViewWrite
+	if err := json.Unmarshal([]byte(te.ok("view", "save", "plan", "--layout", "gantt", "--gantt-start", "due", "--gantt-end", "due", "--roadmap", "--json")), &g); err != nil {
+		t.Fatal(err)
+	}
+	if v := g.View; v.Layout != "gantt" || v.Gantt.Start != "due" || v.Gantt.End != "due" || !v.Gantt.Roadmap {
+		t.Errorf("save gantt --json = %+v", v)
+	}
+	te.goldenRun("gantt-not-a-date", 1, "view", "save", "plan", "--gantt-end", "points")
+
 	var w views.ViewWrite
 	if err := json.Unmarshal([]byte(te.ok("view", "save", "k", "--layout", "kanban", "--kanban-columns", "category", "--swimlane", "assignee", "--json")), &w); err != nil {
 		t.Fatal(err)

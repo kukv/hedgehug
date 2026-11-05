@@ -16,7 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
-// SavedTable and SavedKanban are the sections of a view, with defaults.
+// SavedTable, SavedKanban and SavedGantt are the sections of a view, with defaults.
 type SavedTable struct {
 	Columns []string `json:"columns"`
 	GroupBy string   `json:"group_by"`
@@ -28,6 +28,12 @@ type SavedKanban struct {
 	WIP      map[string]int `json:"wip,omitempty"`
 }
 
+type SavedGantt struct {
+	Start   string `json:"start"`
+	End     string `json:"end"`
+	Roadmap bool   `json:"roadmap"`
+}
+
 // SavedView is a saved view as --json prints it: every setting, with the
 // defaults of the ones the file leaves out.
 type SavedView struct {
@@ -36,6 +42,7 @@ type SavedView struct {
 	Query  string      `json:"query"`
 	Table  SavedTable  `json:"table"`
 	Kanban SavedKanban `json:"kanban"`
+	Gantt  SavedGantt  `json:"gantt"`
 }
 
 func SavedViewOf(v *view.View) SavedView {
@@ -43,6 +50,7 @@ func SavedViewOf(v *view.View) SavedView {
 		Name: v.Name, Layout: v.Layout, Query: v.Query,
 		Table:  SavedTable{Columns: v.TableColumns(), GroupBy: v.GroupBy()},
 		Kanban: SavedKanban{Columns: v.KanbanColumns(), Swimlane: v.Swimlane(), WIP: v.WIP()},
+		Gantt:  SavedGantt{Start: v.GanttStart(), End: v.GanttEnd(), Roadmap: v.Roadmap()},
 	}
 }
 
@@ -50,6 +58,8 @@ func SavedViewOf(v *view.View) SavedView {
 // its default in a new view).
 type ViewChange struct {
 	Layout, Query, GroupBy, KanbanColumns, Swimlane *string
+	GanttStart, GanttEnd                            *string
+	Roadmap                                         *bool
 	Columns                                         *[]string
 	WIP                                             *map[string]int // replaces the limits; empty takes them off
 }
@@ -219,6 +229,16 @@ func applyViewChange(v *view.View, ch ViewChange, s *store.Store) error {
 			}
 		}
 	}
+	if ch.GanttStart != nil || ch.GanttEnd != nil || ch.Roadmap != nil {
+		if v.Gantt == nil {
+			v.Gantt = &view.Gantt{}
+		}
+		set(&v.Gantt.Start, ch.GanttStart)
+		set(&v.Gantt.End, ch.GanttEnd)
+		if ch.Roadmap != nil {
+			v.Gantt.Roadmap = *ch.Roadmap
+		}
+	}
 	if ps := v.Problems(); len(ps) > 0 {
 		return usecase.NewErr(usecase.KindUsage, "view.bad_value", errors.New(strings.Join(ps, "; ")))
 	}
@@ -227,14 +247,19 @@ func applyViewChange(v *view.View, ch ViewChange, s *store.Store) error {
 			return usecase.NewErr(usecase.KindInvalid, "view.bad_column", fmt.Errorf("column %q is neither a field (%s) nor a property of the schema", miss[0], strings.Join(view.Builtins, ", ")), "column", miss[0])
 		}
 	}
-	if v.Layout == "tree" {
+	if ch.GanttStart != nil || ch.GanttEnd != nil {
+		if bad := v.BadGanttProps(s.Schema()); len(bad) > 0 {
+			return usecase.NewErr(usecase.KindInvalid, "view.bad_gantt_prop", fmt.Errorf("property %q is not a date of the schema", bad[0]), "prop", bad[0])
+		}
+	}
+	if v.Layout == "tree" || v.Layout == "gantt" {
 		q, err := usecase.ParseQuery(v.Query)
 		if err != nil {
 			return err
 		}
 		if usecase.HasTerm(q, "sort") || usecase.HasTerm(q, "group") {
 			//nolint:revive,staticcheck // the message is a sentence, as the CLI prints it
-			return usecase.NewErr(usecase.KindUsage, "view.tree_order", errors.New("a tree view orders tasks by rank; its query takes neither group: nor sort:"))
+			return usecase.NewErr(usecase.KindUsage, "view.tree_order", fmt.Errorf("a %s view orders tasks by rank; its query takes neither group: nor sort:", v.Layout))
 		}
 	}
 	return nil

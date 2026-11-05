@@ -164,7 +164,7 @@ describe("ViewSave", () => {
     setup({ draft: { ...table, layout: "tree", query: "kind:task sort:updated" } });
     await typeName("weekly");
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
+      "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",
     );
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   });

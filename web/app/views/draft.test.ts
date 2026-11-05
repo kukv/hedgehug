@@ -34,7 +34,7 @@ describe("summaryOf", () => {
 
 describe("treeOrderProblem", () => {
   it("ツリーで sort: か group: があれば、サーバーと同じ理由を返す", () => {
-    const why = "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません";
+    const why = "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません";
     expect(treeOrderProblem({ layout: "tree", query: "kind:task sort:updated" })).toBe(why);
     expect(treeOrderProblem({ layout: "tree", query: "group:status" })).toBe(why);
   });
