@@ -43,4 +43,7 @@ func TestLiveQueries(t *testing.T) {
 	if len(got.MissingPulls) != 1 || len(got.MissingIssues) != 1 {
 		t.Errorf("missing = %+v", got)
 	}
+	if _, _, err := c.OpenIssues(org, "hh-live", "hh-live"); err != nil {
+		t.Errorf("open issues: %v", err)
+	}
 }

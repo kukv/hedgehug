@@ -25,6 +25,11 @@ type AdminBody struct {
 	State    string   `json:"state,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
 	Request  bool     `json:"request,omitempty"`
+	// What fakegh issue edit sets. Nil or empty stays as it is; "-" takes the
+	// milestone off.
+	Assignees []string `json:"assignees,omitempty"`
+	Labels    []string `json:"labels,omitempty"`
+	Milestone string   `json:"milestone,omitempty"`
 }
 
 // admin serves /_fakegh/, what the fakegh command calls to change the state.
@@ -70,6 +75,13 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 		err = s.CloseIssue(b.Repo, b.Number, b.Reason)
 	case "/_fakegh/issue/edit":
 		err = s.EditIssue(b.Repo, b.Number, b.Title, b.Body)
+		if err == nil {
+			err = s.TagIssue(b.Repo, b.Number, b.Assignees, b.Labels, b.Milestone)
+		}
+	case "/_fakegh/label":
+		err = s.AddLabel(b.Repo, b.Title)
+	case "/_fakegh/milestone":
+		err = s.AddMilestone(b.Repo, b.Title)
 	default:
 		fail(w, http.StatusNotFound, "Not Found")
 		return
@@ -131,6 +143,16 @@ func (a Admin) AddToken(token, login string) error {
 // ExpireTokens makes the access tokens issued to login expired.
 func (a Admin) ExpireTokens(login string) error {
 	return a.post("/_fakegh/token/expire", AdminBody{Login: login})
+}
+
+// AddLabel adds a label to repo.
+func (a Admin) AddLabel(repo, name string) error {
+	return a.post("/_fakegh/label", AdminBody{Repo: repo, Title: name})
+}
+
+// AddMilestone adds a milestone to repo.
+func (a Admin) AddMilestone(repo, title string) error {
+	return a.post("/_fakegh/milestone", AdminBody{Repo: repo, Title: title})
 }
 
 // Pull calls /_fakegh/pr/<what> with b; Issue calls /_fakegh/issue/<what>.

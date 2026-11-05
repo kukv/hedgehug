@@ -32,6 +32,8 @@ type Repo struct {
 	Perms         map[string]string `json:"perms"` // login → read, write, admin or none
 	Pulls         []*Pull           `json:"pulls,omitempty"`
 	Issues        []*Issue          `json:"issues,omitempty"`
+	Labels        []string          `json:"labels,omitempty"`
+	Milestones    []string          `json:"milestones,omitempty"` // numbered from 1, in this order
 
 	id int // numbered once, when the server takes the repository in
 }
@@ -60,6 +62,9 @@ type Issue struct {
 	Body        string    `json:"body"`
 	State       string    `json:"state"`        // open, closed
 	StateReason string    `json:"state_reason"` // completed, not_planned
+	Assignees   []string  `json:"assignees,omitempty"`
+	Labels      []string  `json:"labels,omitempty"`
+	Milestone   string    `json:"milestone,omitempty"` // its title
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 

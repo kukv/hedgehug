@@ -48,9 +48,28 @@ var (
 			}}}},
 			"comments": {args: "first:100", kids: map[string]shape{"nodes": {kids: leaves("body")}}},
 		})}
-	issueShape = shape{kids: leaves("number", "state", "stateReason", "updatedAt")}
+	issueShape = shape{kids: with(
+		leaves("number", "title", "body", "state", "stateReason", "updatedAt"),
+		map[string]shape{
+			"assignees": {args: "first:100", kids: map[string]shape{"nodes": {kids: leaves("login")}}},
+			"labels":    {args: "first:100", kids: map[string]shape{"nodes": {kids: leaves("name")}}},
+			"milestone": {kids: leaves("title")},
+		})}
 
 	repositoryArgs = "owner:$owner,name:$name"
+
+	openIssuesShape = map[string]shape{
+		"rateLimit": rateLimitShape,
+		"repository": {args: repositoryArgs, kids: map[string]shape{
+			"issues": {
+				args: "first:100,after:$after,states:[OPEN],labels:[$label]",
+				kids: map[string]shape{
+					"pageInfo": {kids: leaves("hasNextPage", "endCursor")},
+					"nodes":    issueShape,
+				},
+			},
+		}},
+	}
 
 	scanShape = map[string]shape{
 		"rateLimit": rateLimitShape,
