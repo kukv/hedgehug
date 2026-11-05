@@ -13,6 +13,7 @@
   import { core } from "../context";
   import KanbanView from "../kanban/KanbanView.svelte";
   import { useReadOnlySentence } from "../read-only";
+  import SprintBurndown from "../reports/SprintBurndown.svelte";
   import { combine, NO_CANCELED, withoutTerm } from "../tree/filter";
   import Button from "../ui/Button.svelte";
   import { openPlanDialog } from "./dialogs-state.svelte";
@@ -70,7 +71,9 @@
       <div class="stat">
         <span>残り</span><b>{shown.end ? daysLeft(shown.end, new Date()) : "—"} 日</b>
       </div>
-      <div class="stat"><span>points</span><b>{ptLabel(shown.points)}</b></div>
+      {#key shown.ulid}
+        <SprintBurndown {entry} sprint={shown} />
+      {/key}
       <Button
         disabled={off !== null}
         why={off ?? undefined}

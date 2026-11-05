@@ -9,6 +9,9 @@ export function plansWritten(): void {
   written++;
 }
 
+/** Reads as a dependency: an effect that reads it runs again after a write of this tab. */
+export const plansWrittenCount = (): number => written;
+
 /**
  * The sprints and the releases of a workspace. Any commit of the Store reads them again: a commit
  * that changes neither a task nor the schema comes as tasks.changed, with no task in it. where is

@@ -10,6 +10,7 @@
   import ReleasesPage from "../planning/ReleasesPage.svelte";
   import SprintsPage from "../planning/SprintsPage.svelte";
   import { useReadOnlySentence } from "../read-only";
+  import ReportsPage from "../reports/ReportsPage.svelte";
   import { router, type WorkspaceTab } from "../router";
   import Empty from "../states/Empty.svelte";
   import StoreBands from "../states/StoreBands.svelte";
@@ -101,6 +102,8 @@
           <SprintsPage {entry} />
         {:else if tab === "releases"}
           <ReleasesPage {entry} />
+        {:else if tab === "reports"}
+          <ReportsPage {entry} />
         {:else}
           <WorkspaceSettings {entry} />
         {/if}

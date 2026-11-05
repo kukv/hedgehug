@@ -218,12 +218,15 @@
     return rows.slice(first, first + Math.ceil(viewHeight / ROW) + 10);
   });
 
-  // The chart opens at today.
-  let opened = false;
+  // The chart opens at today, and comes back to it with a new scale. The sprints are read after the
+  // tasks and may widen the chart to the left: what is on the screen stays there.
+  let anchor: { first: number; px: number } | null = null;
   $effect(() => {
-    if (opened || !scroller || rows.length === 0) return;
-    opened = true;
-    scroller.scrollLeft = Math.max(0, xOf(today) - 200);
+    if (!scroller || rows.length === 0) return;
+    const first = range.s;
+    if (anchor?.px !== px) scroller.scrollLeft = Math.max(0, xOf(today) - 200);
+    else if (anchor.first !== first) scroller.scrollLeft += (anchor.first - first) * px;
+    anchor = { first, px };
   });
 
   // --- moving a bar -----------------------------------------------------------------------------
