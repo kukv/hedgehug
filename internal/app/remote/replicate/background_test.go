@@ -30,17 +30,17 @@ func holdLocal(t *testing.T, s *store.Store, name string) (release func()) {
 func TestStartRespectsAutoSyncAndLock(t *testing.T) {
 	c := newCluster(t, 1)
 	calls := 0
-	defer SetSpawn(func(string, []string, string) error { calls++; return nil })()
-	_ = Start(c.stores[0], "s", func(k string) string { return map[string]string{"HEDGEHUG_AUTO_SYNC": "0"}[k] })
+	spawn := func(string, []string, string) error { calls++; return nil }
+	_ = Start(c.stores[0], "s", func(k string) string { return map[string]string{"HEDGEHUG_AUTO_SYNC": "0"}[k] }, spawn)
 	if calls != 0 {
 		t.Error("started with HEDGEHUG_AUTO_SYNC=0")
 	}
-	if err := Start(c.stores[0], "s", func(string) string { return "" }); err != nil || calls != 1 {
+	if err := Start(c.stores[0], "s", func(string) string { return "" }, spawn); err != nil || calls != 1 {
 		t.Errorf("calls = %d, err = %v", calls, err)
 	}
 	release := holdLocal(t, c.stores[0], "bg.lock") // as a waiting child would
 	defer release()
-	if err := Start(c.stores[0], "s", func(string) string { return "" }); err != nil || calls != 1 {
+	if err := Start(c.stores[0], "s", func(string) string { return "" }, spawn); err != nil || calls != 1 {
 		t.Errorf("started while another background sync waits: calls = %d, err = %v", calls, err)
 	}
 }
@@ -49,8 +49,8 @@ func TestStartGivesTheChildItsCommand(t *testing.T) {
 	c := newCluster(t, 1)
 	var args []string
 	var log string
-	defer SetSpawn(func(_ string, a []string, l string) error { args, log = a, l; return nil })()
-	if err := Start(c.stores[0], "work", func(string) string { return "" }); err != nil {
+	spawn := func(_ string, a []string, l string) error { args, log = a, l; return nil }
+	if err := Start(c.stores[0], "work", func(string) string { return "" }, spawn); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(args, " "); got != "sync --background --store work" {

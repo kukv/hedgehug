@@ -47,7 +47,7 @@ func TestNoAccountStartsNoBackgroundSync(t *testing.T) {
 	alice.now = alice.now.Add(time.Hour) // the store is due
 	alice.dropDefaultAccount()
 	started := 0
-	defer usecasetest.StubSpawn(func([]string) { started++ })()
+	alice.spawn = usecasetest.SpawnFunc(func([]string) { started++ })
 	alice.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	for _, args := range [][]string{{"auth", "status"}, {"help"}, {"ls", "--help"}} {
 		alice.run(args...)

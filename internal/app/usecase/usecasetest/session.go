@@ -103,6 +103,7 @@ func (ts *Session) Renew() {
 		BackgroundSync: o.BackgroundSync,
 		BeforeUpdate:   o.BeforeUpdate,
 		BeforeSwap:     o.BeforeSwap,
+		Spawn:          o.Spawn,
 		Keyring:        o.Keyring,
 		HTTPClient:     o.HTTPClient,
 		Run:            o.Run,
@@ -221,11 +222,10 @@ func (ts *Session) BeforeCommand(report func(store, msg string)) {
 	replication.BeforeCommand(ts.Session, report)
 }
 
-// StubSpawn replaces the start of the background sync with f, which gets the
-// arguments of the child, and returns the function that puts the old one
-// back. It is global: a test that uses it does not run in parallel.
-func StubSpawn(f func(args []string)) (restore func()) {
-	return replicate.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
+// SpawnFunc is a Spawn that starts no process: f gets the arguments of the
+// child. A Session or a CLI environment takes it as its Spawn.
+func SpawnFunc(f func(args []string)) replicate.Spawn {
+	return func(_ string, args []string, _ string) error { f(args); return nil }
 }
 
 // HasDefaultAccount reports whether config.yaml still has DefaultAccountYAML.

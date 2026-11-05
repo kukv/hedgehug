@@ -37,7 +37,8 @@ type testEnv struct {
 	tmp      string            // the directory of temporary files, set by editWith
 	dir      string            // the current directory of the runs; "" for none
 
-	beforeUpdate func() // Session.BeforeUpdate of the next runs; meanwhile sets it
+	beforeUpdate func()                                                 // Session.BeforeUpdate of the next runs; meanwhile sets it
+	spawn        func(name string, args []string, logPath string) error // what starts the background sync in the next runs; nil starts a process
 
 	ucOnce sync.Once
 	ucSess *usecasetest.Session
@@ -133,6 +134,7 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 		getwd:      func() (string, error) { return te.dir, nil },
 
 		beforeUpdate: te.beforeUpdate,
+		spawn:        te.spawn,
 	}
 	if args == nil {
 		args = []string{} // cobra reads os.Args, the flags of go test, for nil

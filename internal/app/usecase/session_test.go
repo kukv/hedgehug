@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
@@ -53,8 +52,7 @@ func TestResolveNotFoundIsKindNotFound(t *testing.T) {
 }
 
 // A write to a store with a remote starts the background sync once when the
-// session asks for it (BackgroundSync), and never when it does not. It does
-// not run in parallel: replicate.SetSpawn replaces what Start does for all.
+// session asks for it (BackgroundSync), and never when it does not.
 func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 	for _, tc := range []struct {
 		background bool
@@ -65,7 +63,7 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 		ts.BackgroundSync = tc.background
 		var started int
-		restore := replicate.SetSpawn(func(string, []string, string) error { started++; return nil })
+		ts.Spawn = usecasetest.SpawnFunc(func([]string) { started++ })
 		s, ix, err := ts.Open()
 		if err != nil {
 			t.Fatal(err)
@@ -74,7 +72,6 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		if _, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 			t.Fatal(err)
 		}
-		restore()
 		if started != tc.want {
 			t.Errorf("BackgroundSync=%v: the background sync started %d times; want %d", tc.background, started, tc.want)
 		}

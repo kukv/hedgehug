@@ -52,6 +52,9 @@ type Session struct {
 	// that store open, such as the GUI server's index, lets go of it.
 	// ForStore copies it. nil does nothing.
 	BeforeSwap func(path string)
+	// Spawn starts the background sync as a process; nil starts it detached.
+	// ForStore copies it.
+	Spawn      replicate.Spawn
 	Keyring    Keyring      // nil is the OS keychain
 	HTTPClient *http.Client // nil is a client with a 30-second timeout
 	// Progress is told how far the history index of a store has come while it
@@ -111,6 +114,7 @@ func (ss *Session) ForStore(name string) *Session {
 		BackgroundSync: ss.BackgroundSync,
 		BeforeUpdate:   ss.BeforeUpdate,
 		BeforeSwap:     ss.BeforeSwap,
+		Spawn:          ss.Spawn,
 		Keyring:        ss.Keyring,
 		HTTPClient:     ss.HTTPClient,
 		Run:            ss.Run,
@@ -561,7 +565,7 @@ func (ss *Session) MarkWritten(s *store.Store) {
 		return
 	}
 	if ss.BackgroundSync && len(e.Remotes) > 0 {
-		if err := replicate.Start(s, e.Name, ss.Getenv); err != nil {
+		if err := replicate.Start(s, e.Name, ss.Getenv, ss.Spawn); err != nil {
 			ss.AddWarning("the background sync did not start: " + err.Error())
 		}
 	}

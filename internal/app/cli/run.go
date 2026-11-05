@@ -30,10 +30,11 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
-	getwd          func() (string, error) // the current directory; nil means none, which skips the stages of hedgehug add that read it
-	beforeUpdate   func()                 // for tests: runs before each write; nil in the binary
-	keyring        usecase.Keyring        // nil is the OS keychain
-	httpClient     *http.Client           // nil is a client with a 30-second timeout
+	getwd          func() (string, error)                                 // the current directory; nil means none, which skips the stages of hedgehug add that read it
+	beforeUpdate   func()                                                 // for tests: runs before each write; nil in the binary
+	spawn          func(name string, args []string, logPath string) error // starts the background sync; nil starts it detached
+	keyring        usecase.Keyring                                        // nil is the OS keychain
+	httpClient     *http.Client                                           // nil is a client with a 30-second timeout
 	// run runs a command (gh) and gives its output; nil runs the command.
 	run func(name string, args ...string) (stdout, stderr []byte, err error)
 	// openURL opens a URL in the browser; nil means no browser can be opened.
@@ -77,6 +78,7 @@ func run(args []string, e *env) int {
 		Getenv:         e.getenv,
 		Now:            e.now,
 		BeforeUpdate:   e.beforeUpdate,
+		Spawn:          e.spawn,
 		Keyring:        e.keyring,
 		HTTPClient:     e.httpClient,
 		Run:            e.run,

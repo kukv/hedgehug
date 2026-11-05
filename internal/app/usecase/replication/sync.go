@@ -239,7 +239,7 @@ func BeforeCommand(ss *usecase.Session, report func(store, msg string)) {
 			report(e.Name, msg)
 		}
 		if st, err := replicate.ReadState(s); err == nil && replicate.Due(st, ss.Now(), cfg.Sync.Interval) {
-			_ = replicate.Start(s, e.Name, ss.Getenv) // starts a process of its own; it does not keep s
+			_ = replicate.Start(s, e.Name, ss.Getenv, ss.Spawn) // starts a process of its own; it does not keep s
 		}
 		_ = s.Repo().Close()
 	}
