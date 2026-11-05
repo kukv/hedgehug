@@ -8,11 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func TestCreateAndOpen(t *testing.T) {
@@ -103,26 +102,33 @@ func TestCreateLeavesMetaAlone(t *testing.T) {
 	}
 }
 
-func TestCreateCleansUpOnFailure(t *testing.T) {
-	boom := errors.New("commit failed")
-	newStoreHook = func(s *Store) {
-		s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, boom }
+// busyAfterInit is the clock of a Create that fails: Create asks for the time
+// once git init is done and before it writes a file, and the .git/index.lock
+// made then keeps its commit out, as a git run by hand would.
+func busyAfterInit(t *testing.T, dir string) func() time.Time {
+	return func() time.Time {
+		gitrepotest.HoldIndexLock(t, dir)
+		return time.Now()
 	}
-	t.Cleanup(func() { newStoreHook = func(*Store) {} })
+}
 
+func TestCreateCleansUpOnFailure(t *testing.T) {
+	t.Parallel()
 	t.Run("a directory Create made is removed", func(t *testing.T) {
+		t.Parallel()
 		dir := filepath.Join(t.TempDir(), "store")
-		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); !errors.Is(err, boom) {
-			t.Fatalf("err = %v, want %v", err, boom)
+		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", busyAfterInit(t, dir)); !errors.Is(err, gitrepo.ErrGitBusy) {
+			t.Fatalf("err = %v, want ErrGitBusy", err)
 		}
 		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
 			t.Errorf("Stat(dir) err = %v, want ErrNotExist", err)
 		}
 	})
 	t.Run("an empty directory is emptied again", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
-		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); !errors.Is(err, boom) {
-			t.Fatalf("err = %v, want %v", err, boom)
+		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", busyAfterInit(t, dir)); !errors.Is(err, gitrepo.ErrGitBusy) {
+			t.Fatalf("err = %v, want ErrGitBusy", err)
 		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -135,14 +141,11 @@ func TestCreateCleansUpOnFailure(t *testing.T) {
 }
 
 func TestCreateCanRetryAfterFailure(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "store")
-	newStoreHook = func(s *Store) {
-		s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("boom") }
-	}
-	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err == nil {
+	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", busyAfterInit(t, dir)); err == nil {
 		t.Fatal("Create with a failing commit succeeded")
 	}
-	newStoreHook = func(*Store) {}
 	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err != nil {
 		t.Errorf("retry: %v", err)
 	}

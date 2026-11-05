@@ -1,10 +1,30 @@
 package gitrepotest
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// HoldIndexLock creates .git/index.lock in the work tree dir, as a git run by
+// hand does, so that a commit there waits for it and then fails with
+// gitrepo.ErrGitBusy. release removes it; the cleanup of the test does too.
+func HoldIndexLock(t testing.TB, dir string) (release func()) {
+	t.Helper()
+	p := filepath.Join(dir, ".git", "index.lock")
+	if err := os.WriteFile(p, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release = func() {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(release)
+	return release
+}
 
 // LockObjects makes the objects directory of the bare repository dir, and
 // every directory in it, read-only, so that a push to it is denied and

@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func newTaskIn(ws *model.Workspace, title string) *model.Task {
@@ -202,9 +201,9 @@ func TestUpdateRestoresIDsOnFailure(t *testing.T) {
 	}
 
 	y := newTaskIn(ws, "y")
-	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("commit fails") }
-	if err := put(s, y); err == nil {
-		t.Fatal("the commit did not fail")
+	gitrepotest.HoldIndexLock(t, s.dir)
+	if err := put(s, y); !errors.Is(err, gitrepo.ErrGitBusy) {
+		t.Fatalf("put with index.lock = %v, want ErrGitBusy", err)
 	}
 	if y.ID != "" || y.FormerIDs != nil {
 		t.Errorf("after a failed commit: id = %s, former = %v", y.ID, y.FormerIDs)

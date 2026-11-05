@@ -8,11 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func newTask(title string) *model.Task {
@@ -175,8 +174,7 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	boom := errors.New("commit failed")
-	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, boom }
+	gitrepotest.HoldIndexLock(t, s.dir)
 	edited, err := s.Task(kept.ULID)
 	if err != nil {
 		t.Fatal(err)
@@ -189,8 +187,8 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 		}
 		return tx.PutTask(added)
 	})
-	if !errors.Is(err, boom) {
-		t.Fatalf("err = %v, want the commit error", err)
+	if !errors.Is(err, gitrepo.ErrGitBusy) {
+		t.Fatalf("err = %v, want ErrGitBusy", err)
 	}
 	after, err := os.ReadFile(s.path(model.TaskPath(kept.ULID)))
 	if err != nil || string(after) != string(before) {

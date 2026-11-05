@@ -493,7 +493,7 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	if err := s.apply(changes); err != nil {
 		return plumbing.ZeroHash, err
 	}
-	if h, err := s.commit(commit); err != nil {
+	if h, err := s.repo.Commit(commit); err != nil {
 		// The files written equal HEAD's, so there is nothing to undo.
 		if !errors.Is(err, gitrepo.ErrNothingToCommit) {
 			return plumbing.ZeroHash, errors.Join(err, s.rollback(changes))

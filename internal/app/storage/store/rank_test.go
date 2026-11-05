@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func rankTask(ws *model.Workspace, title string, r model.Rank) *model.Task {
@@ -124,19 +123,19 @@ func TestRerankIsRestoredWhenTheOperationFails(t *testing.T) {
 	a, b := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5")
 	a.ID, b.ID = "TST-1", "TST-2"
 	writeShared(t, s, a, b)
-	var rankAtCommit model.Rank
-	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) {
-		rankAtCommit = b.Rank
-		return plumbing.ZeroHash, errors.New("commit fails")
-	}
-	if err := put(s, b); err == nil {
-		t.Fatal("the commit did not fail")
-	}
-	if rankAtCommit == "a5" {
-		t.Error("b was not reranked in the operation")
+	release := gitrepotest.HoldIndexLock(t, s.dir)
+	if err := put(s, b); !errors.Is(err, gitrepo.ErrGitBusy) {
+		t.Fatalf("put with index.lock = %v, want ErrGitBusy", err)
 	}
 	if b.Rank != "a5" {
 		t.Errorf("b.Rank = %s after a failed write, want a5", b.Rank)
+	}
+	// The same write succeeds once git is done, and then b is reranked: the
+	// failed one had reranked it too, before it was put back.
+	release()
+	mustPut(t, s, b)
+	if b.Rank == "a5" {
+		t.Error("b was not reranked in the operation")
 	}
 }
 
@@ -163,20 +162,20 @@ func TestRerankIsRestoredForEveryTask(t *testing.T) {
 	d, e, f := rankTask(ws, "d", "a7"), rankTask(ws, "e", "a7"), rankTask(ws, "f", "a7")
 	a.ID, b.ID, c.ID, d.ID, e.ID, f.ID = "TST-1", "TST-2", "TST-3", "TST-4", "TST-5", "TST-6"
 	writeShared(t, s, a, b, c, d, e, f)
-	var aAtCommit, fAtCommit model.Rank
-	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) {
-		aAtCommit, fAtCommit = a.Rank, f.Rank
-		return plumbing.ZeroHash, errors.New("commit fails")
-	}
+	release := gitrepotest.HoldIndexLock(t, s.dir)
 	// a is first of the a5 group, f is last of the a7 group: both change.
-	if err := put(s, a, f); err == nil {
-		t.Fatal("the commit did not fail")
-	}
-	if aAtCommit == "a5" || fAtCommit == "a7" {
-		t.Errorf("ranks in the operation = %s, %s; want both reranked", aAtCommit, fAtCommit)
+	if err := put(s, a, f); !errors.Is(err, gitrepo.ErrGitBusy) {
+		t.Fatalf("put with index.lock = %v, want ErrGitBusy", err)
 	}
 	if a.Rank != "a5" || f.Rank != "a7" {
 		t.Errorf("ranks = %s, %s after a failed write, want a5, a7", a.Rank, f.Rank)
+	}
+	// The same write succeeds once git is done, and then both are reranked:
+	// the failed one had reranked them too, before it put them back.
+	release()
+	mustPut(t, s, a, f)
+	if a.Rank == "a5" || f.Rank == "a7" {
+		t.Errorf("ranks after the write = %s, %s; want both reranked", a.Rank, f.Rank)
 	}
 }
 

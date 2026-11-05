@@ -102,7 +102,7 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 			return err
 		}
 		var cerr error
-		if h, cerr = s.commit(c); cerr != nil {
+		if h, cerr = s.repo.Commit(c); cerr != nil {
 			return errors.Join(cerr, s.rollback(changes))
 		}
 		s.refreshSchema(rels)

@@ -13,8 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -59,7 +57,6 @@ type Store struct {
 	// Replaced by tests.
 	now      func() time.Time
 	lockWait time.Duration
-	commit   func(gitrepo.Commit) (plumbing.Hash, error)
 }
 
 func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.Schema) *Store {
@@ -69,14 +66,10 @@ func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.
 		meta:     meta,
 		now:      time.Now,
 		lockWait: lockWait,
-		commit:   repo.Commit,
 	}
 	s.schema.Store(sc)
 	return s
 }
-
-// newStoreHook lets tests change the store Create made before it writes.
-var newStoreHook = func(*Store) {}
 
 // Create makes a new store in dir, which must be missing or empty: a git
 // repository holding store.yaml, sc as schema.yaml (the default schema when
@@ -120,7 +113,6 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	}
 	s := newStore(dir, repo, &m, sc)
 	s.now = now
-	newStoreHook(s)
 
 	at := s.now().Truncate(time.Second)
 	w := *ws
@@ -163,7 +155,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if account != "" {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: account})
 	}
-	if _, err := s.commit(gitrepo.Commit{
+	if _, err := s.repo.Commit(gitrepo.Commit{
 		Paths:    paths,
 		Subject:  "hedgehug: init",
 		Trailers: trailers,
