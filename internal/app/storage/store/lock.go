@@ -18,7 +18,7 @@ var ErrLocked = osfs.ErrLocked
 // lockWait is how long a write waits for the lock, trying every lockPoll.
 const lockWait = 10 * time.Second
 
-var lockPoll = 50 * time.Millisecond
+const lockPoll = 50 * time.Millisecond
 
 // afterLockMiss is called each time acquire finds the lock taken, with the
 // lock file open; tests use it to know a waiter is blocked.
