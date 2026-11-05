@@ -70,17 +70,19 @@ describe("prefixProblem", () => {
 
 describe("removeBlocker", () => {
   it("lets an empty workspace go", () => {
-    expect(removeBlocker({ tasks: 0, deleted: 0 })).toBeNull();
+    expect(removeBlocker({ tasks: 0, deleted: 0, sprints: 0, releases: 0 })).toBeNull();
   });
 
   it("counts the deleted tasks, which still hold the workspace", () => {
-    expect(removeBlocker({ tasks: 24, deleted: 1 })).toBe(
+    expect(removeBlocker({ tasks: 24, deleted: 1, sprints: 0, releases: 0 })).toBe(
       "タスク 25 件（削除済み 1 件を含む）が残っているため削除できません。別のワークスペースへ移すか完全に削除すると消せます",
     );
-    expect(removeBlocker({ tasks: 2, deleted: 0 })).toBe(
+    expect(removeBlocker({ tasks: 2, deleted: 0, sprints: 0, releases: 0 })).toBe(
       "タスク 2 件が残っているため削除できません。別のワークスペースへ移すか完全に削除すると消せます",
     );
-    expect(removeBlocker({ tasks: 0, deleted: 3 })).toContain("タスク 3 件（削除済み 3 件を含む）");
+    expect(removeBlocker({ tasks: 0, deleted: 3, sprints: 0, releases: 0 })).toContain(
+      "タスク 3 件（削除済み 3 件を含む）",
+    );
   });
 });
 

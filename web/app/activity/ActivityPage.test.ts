@@ -30,6 +30,8 @@ const ws = (store: string, ulid: string, name: string, prefix: string): Workspac
   prefix,
   tasks: 0,
   deleted: 0,
+  sprints: 0,
+  releases: 0,
   prefixSet: "",
   projects: [],
 });

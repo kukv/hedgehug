@@ -110,9 +110,11 @@ export function requiredGap(
         if (!detail || empty(detail[name])) gap.elsewhere.push(name);
         break;
       case "sprint":
+        if (!t.sprint) gap.elsewhere.push(name);
+        break;
       case "releases":
       case "links":
-        gap.elsewhere.push(name);
+        if (empty(t[name])) gap.elsewhere.push(name);
         break;
       default: {
         if (!empty((t.props as Record<string, unknown> | undefined)?.[name])) break;

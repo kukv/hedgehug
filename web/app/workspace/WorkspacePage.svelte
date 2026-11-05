@@ -1,12 +1,20 @@
 <script lang="ts">
   import { core } from "../context";
+  import { openCreate } from "../create-state.svelte";
+  import Icon from "../icons/Icon.svelte";
   import ListTab from "../list/ListTab.svelte";
   import TreeTab from "../list/TreeTab.svelte";
+  import BacklogPage from "../planning/BacklogPage.svelte";
+  import { openPlanDialog } from "../planning/dialogs-state.svelte";
+  import ReleasesPage from "../planning/ReleasesPage.svelte";
+  import SprintsPage from "../planning/SprintsPage.svelte";
+  import { useReadOnlySentence } from "../read-only";
   import { router, type WorkspaceTab } from "../router";
   import Empty from "../states/Empty.svelte";
   import StoreBands from "../states/StoreBands.svelte";
   import { useSubscribe } from "../svelte-store";
   import { NO_CANCELED } from "../tree/filter";
+  import Button from "../ui/Button.svelte";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
   import WorkspaceOverview from "./WorkspaceOverview.svelte";
   import WorkspaceSettings from "./WorkspaceSettings.svelte";
@@ -25,6 +33,8 @@
   let query = $state(NO_CANCELED);
   // Spread, because Biome reads a prop called scope as the HTML attribute.
   const notFoundProps = $derived({ scope: "workspace" as const, name: ulid });
+  const offSentence = useReadOnlySentence(c.stores, () => store);
+  const off = $derived(offSentence.current);
 </script>
 
 {#if entry}
@@ -34,7 +44,40 @@
       <!-- The overview draws its own heading, which has the buttons that make a task or a project. -->
       <WorkspaceOverview {entry} />
     {:else}
-      <WorkspaceHeader {entry} {tab} />
+      <WorkspaceHeader {entry} {tab}>
+        {#snippet actions()}
+          {#if tab === "backlog" || tab === "sprints"}
+            <Button
+              size="sm"
+              disabled={off !== null}
+              why={off ?? undefined}
+              onclick={() => openPlanDialog({ kind: "sprint-add", entry })}
+            >
+              <Icon name="plus" size={14} />スプリント
+            </Button>
+          {/if}
+          {#if tab === "backlog"}
+            <Button
+              size="sm"
+              disabled={off !== null}
+              why={off ?? undefined}
+              onclick={() => openCreate({ kind: "task" })}
+            >
+              <Icon name="plus" size={14} />タスク
+            </Button>
+          {/if}
+          {#if tab === "releases"}
+            <Button
+              size="sm"
+              disabled={off !== null}
+              why={off ?? undefined}
+              onclick={() => openPlanDialog({ kind: "release-add", entry })}
+            >
+              <Icon name="plus" size={14} />リリース
+            </Button>
+          {/if}
+        {/snippet}
+      </WorkspaceHeader>
       <div class="body">
         {#if tab === "tree"}
           <TreeTab view={{ kind: "workspace", store, ulid }} {query} onquery={(q) => (query = q)} />
@@ -45,6 +88,12 @@
             {query}
             onquery={(q) => (query = q)}
           />
+        {:else if tab === "backlog"}
+          <BacklogPage {entry} />
+        {:else if tab === "sprints"}
+          <SprintsPage {entry} />
+        {:else if tab === "releases"}
+          <ReleasesPage {entry} />
         {:else}
           <WorkspaceSettings {entry} />
         {/if}

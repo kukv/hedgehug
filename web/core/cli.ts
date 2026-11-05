@@ -55,6 +55,8 @@ export function cliAdd(i: {
   workspace?: string;
   store?: string;
   kind?: string;
+  template?: string;
+  noTemplate?: boolean;
   body?: string;
   props?: Record<string, string>;
 }): string {
@@ -66,6 +68,8 @@ export function cliAdd(i: {
   if (i.after) a.push("--after", i.after);
   if (i.before) a.push("--before", i.before);
   if (i.kind) a.push("--kind", i.kind);
+  if (i.template) a.push("--template", i.template);
+  if (i.noTemplate) a.push("--no-template");
   if (i.body) a.push("--body", i.body);
   for (const [k, v] of Object.entries(i.props ?? {})) a.push("-p", `${k}=${v}`);
   return withPositionals(["add"], [i.title], a, true);
@@ -82,6 +86,13 @@ export function cliLs(q: string, tree: boolean, store?: string): string {
 // list (labels+ is labels+=x), an empty value clears.
 export function cliSet(id: string, assigns: Record<string, string>): string {
   return cliLine(["set", id, ...Object.entries(assigns).map(([k, v]) => `${k}=${v}`)]);
+}
+
+// cliSetQuery is hh set --query; --yes is there since the screen has asked already.
+export function cliSetQuery(q: string, assigns: Record<string, string>, store?: string): string {
+  const a: Arg[] = ["set", "--query", q, "--yes"];
+  if (store) a.push("--store", store);
+  return cliLine([...a, ...Object.entries(assigns).map(([k, v]) => `${k}=${v}`)]);
 }
 
 export function cliMv(
@@ -269,9 +280,88 @@ export function cliViewSave(i: { name: Arg; store?: string; body: ViewSaveBody }
   if (b.group_by !== undefined) a.push("--group-by", b.group_by);
   if (b.kanban_columns !== undefined) a.push("--kanban-columns", b.kanban_columns);
   if (b.swimlane !== undefined) a.push("--swimlane", b.swimlane);
+  if (b.kanban_wip !== undefined) {
+    const limits = Object.entries(b.kanban_wip).map(([k, v]) => `${k}=${v}`);
+    a.push("--wip", limits.join(","));
+  }
   if (i.store) a.push("--store", i.store);
   return withPositionals(["view", "save"], [i.name], a, true);
 }
+
+const scoped = (a: Arg[], store?: string, workspace?: string): Arg[] => [
+  ...a,
+  ...(workspace ? ["--workspace", workspace] : []),
+  ...(store ? ["--store", store] : []),
+];
+
+export function cliSprintAdd(i: {
+  name: Arg;
+  start?: string;
+  end?: string;
+  goal?: string;
+  workspace: string;
+  store: string;
+}): string {
+  const a: Arg[] = ["sprint", "add", i.name];
+  if (i.start) a.push("--start", i.start);
+  if (i.end) a.push("--end", i.end);
+  if (i.goal) a.push("--goal", i.goal);
+  return cliLine(scoped(a, i.store, i.workspace));
+}
+
+export function cliSprintSet(name: string, assigns: Record<string, string>, store: string): string {
+  const parts = Object.entries(assigns).map(([k, v]) => `${k}=${v}`);
+  return cliLine(scoped(["sprint", "set", name, ...parts], store));
+}
+
+export const cliSprintStart = (name: string, store: string): string =>
+  cliLine(scoped(["sprint", "start", name], store));
+
+export function cliSprintClose(name: string, to: string | undefined, store: string): string {
+  return cliLine(scoped(["sprint", "close", name, ...(to ? ["--to", to] : [])], store));
+}
+
+export const cliSprintRm = (name: string, store: string): string =>
+  cliLine(scoped(["sprint", "rm", name], store));
+
+export function cliReleaseAdd(i: {
+  name: Arg;
+  date?: string;
+  workspace: string;
+  store: string;
+}): string {
+  const a: Arg[] = ["release", "add", i.name];
+  if (i.date) a.push("--date", i.date);
+  return cliLine(scoped(a, i.store, i.workspace));
+}
+
+export function cliReleaseSet(
+  name: string,
+  assigns: Record<string, string>,
+  store: string,
+): string {
+  const parts = Object.entries(assigns).map(([k, v]) => `${k}=${v}`);
+  return cliLine(scoped(["release", "set", name, ...parts], store));
+}
+
+export const cliReleaseNotes = (name: string, store: string): string =>
+  cliLine(scoped(["release", "notes", name], store));
+
+export const cliReleaseRm = (name: string, store: string): string =>
+  cliLine(scoped(["release", "rm", name], store));
+
+export function cliWorklog(i: { id: string; time: Arg; note?: string; date?: string }): string {
+  const a: Arg[] = ["worklog", i.id, i.time];
+  if (i.note) a.push(i.note);
+  if (i.date) a.push("--date", i.date);
+  return cliLine(a);
+}
+
+export const cliTemplateRm = (name: string, store: string): string =>
+  cliLine(scoped(["template", "rm", name], store));
+
+export const cliTemplateEdit = (name: Arg, store: string): string =>
+  cliLine(scoped(["template", "edit", name], store));
 
 export function cliViewShow(name: string, store?: string): string {
   return withPositionals(["view", "show"], [name], store ? ["--store", store] : [], true);
@@ -361,6 +451,8 @@ export function cliScopeSet(i: {
   statuses?: string[];
   transitions?: Record<string, string[]>;
   required?: Record<string, string[]>;
+  templates?: string[];
+  templateDefaults?: Record<string, string>;
   store?: string;
 }): string {
   const lists = (flag: string, m: Record<string, string[]> | undefined): string[] => {
@@ -373,6 +465,12 @@ export function cliScopeSet(i: {
   const a: Arg[] = [...head];
   if (i.statuses) a.push("--statuses", i.statuses.join(","));
   a.push(...lists("--transition", i.transitions), ...lists("--required", i.required));
+  if (i.templates) a.push("--templates", i.templates.join(","));
+  if (i.templateDefaults) {
+    const entries = Object.entries(i.templateDefaults);
+    if (entries.length === 0) a.push("--template-default", "");
+    for (const [k, v] of entries) a.push("--template-default", `${k}=${v}`);
+  }
   if (a.length === head.length) a.push(new Placeholder("変更"));
   if (i.store) a.push("--store", i.store);
   return cliLine(a);

@@ -10,6 +10,7 @@
   import InboxPage from "./inbox/InboxPage.svelte";
   import MyTasks from "./my/MyTasks.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
+  import PlanDialogs from "./planning/PlanDialogs.svelte";
   import ProjectPage from "./project/ProjectPage.svelte";
   import { router } from "./router";
   import SettingsRoute from "./settings/SettingsRoute.svelte";
@@ -141,6 +142,7 @@
 <CreateHost />
 <WorkspaceDialogs />
 <ViewDialogs />
+<PlanDialogs />
 <CommandPalette />
 <Toasts />
 

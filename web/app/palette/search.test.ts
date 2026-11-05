@@ -266,6 +266,8 @@ const ws: WorkspaceEntry = {
   prefix: "REL",
   tasks: 24,
   deleted: 1,
+  sprints: 0,
+  releases: 0,
   prefixSet: "2026-10-29T12:00:00Z",
   projects: [task("P1", "project", null, { id: "REL-15", title: "リリース準備 v2.4" })],
 };

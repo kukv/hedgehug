@@ -11,6 +11,8 @@ export type ViewSaveBody = Schemas["ViewSaveInputBody"];
 export type KanbanSettings = {
   columns: "status" | "category";
   swimlane: "none" | "assignee" | "project";
+  // The limit of a column, by its key; left out when no column has one.
+  wip?: Record<string, number>;
 };
 export type TableSettings = {
   columns: string[];
@@ -49,6 +51,7 @@ export function draftOf(v: SavedView): ViewDraft {
       swimlane: SWIMLANES.includes(v.kanban.swimlane)
         ? (v.kanban.swimlane as KanbanSettings["swimlane"])
         : DEFAULT_KANBAN.swimlane,
+      ...(v.kanban.wip && Object.keys(v.kanban.wip).length > 0 ? { wip: { ...v.kanban.wip } } : {}),
     },
     table: {
       columns: columns.length > 0 ? [...columns] : [...DEFAULT_TABLE.columns],
@@ -68,8 +71,14 @@ export function saveBodyOf(d: ViewDraft): ViewSaveBody {
     group_by: d.table.groupBy,
     kanban_columns: d.kanban.columns,
     swimlane: d.kanban.swimlane,
+    ...(d.kanban.wip ? { kanban_wip: d.kanban.wip } : {}),
   };
 }
+
+const sameWip = (a: KanbanSettings["wip"] = {}, b: KanbanSettings["wip"] = {}): boolean => {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+};
 
 // sameDraft says whether a and b hold the same settings. The layout is left out: a screen changes it
 // at once (PATCH {layout}) and does not count it as an unsaved change.
@@ -78,6 +87,7 @@ export function sameDraft(a: ViewDraft, b: ViewDraft): boolean {
     a.query.trim() === b.query.trim() &&
     a.kanban.columns === b.kanban.columns &&
     a.kanban.swimlane === b.kanban.swimlane &&
+    sameWip(a.kanban.wip, b.kanban.wip) &&
     a.table.groupBy === b.table.groupBy &&
     a.table.columns.length === b.table.columns.length &&
     a.table.columns.every((c, i) => c === b.table.columns[i])
