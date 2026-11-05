@@ -4,10 +4,10 @@ import (
 	"testing"
 )
 
-// The session the server gives lets the poller go of a store before a sync
-// swaps a rebuilt one in (D26); the poller then opens the store again and
+// The session the server gives lets the poller go of a store before
+// doctor --fix rebuilds it (D26); the poller then opens the store again and
 // tells the clients that its tasks changed.
-func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
+func TestSessionBeforeRebuildReleasesTheStore(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
 	held := func() bool {
@@ -23,9 +23,9 @@ func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 		t.Fatal("the poller does not hold the store")
 	}
 
-	before := ts.srv.session("").BeforeSwap
+	before := ts.srv.session("").BeforeRebuild
 	if before == nil {
-		t.Fatal("the server's session has no BeforeSwap")
+		t.Fatal("the server's session has no BeforeRebuild")
 	}
 	before(ts.uc.StoreDir("me"))
 

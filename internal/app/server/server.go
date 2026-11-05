@@ -161,9 +161,9 @@ func (s *Server) session(storeName string) *usecase.Session {
 		StoreName:  storeName,
 		Warn:       func(m string) { s.logf("warning: %s", m) },
 		AfterWrite: func(string) { s.loop.Wake() },
-		// doctor --fix swaps a rebuilt store in (after a force push) and
+		// doctor --fix rebuilds a store (after a force push) and
 		// needs the files of the old one closed.
-		BeforeSwap: func(path string) { s.poller.Release(path) },
+		BeforeRebuild: func(path string) { s.poller.Release(path) },
 	}
 }
 

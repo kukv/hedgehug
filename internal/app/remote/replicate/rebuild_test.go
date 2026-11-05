@@ -17,16 +17,12 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
-// swap puts the rebuild b in the place of clone 1, as usecase does after it
-// released the locks, and opens the store again.
-func (c *cluster) swap(b *Rebuild) {
+// reopen opens clone 1 again, as usecase does after a rebuild.
+func (c *cluster) reopen() {
 	c.t.Helper()
 	dir := c.stores[1].Dir()
 	if err := c.stores[1].Repo().Close(); err != nil {
 		c.t.Fatal(err)
-	}
-	if err := Swap(dir, b); err != nil {
-		c.t.Fatalf("Swap: %v", err)
 	}
 	s, err := store.Open(dir)
 	if err != nil {
@@ -35,12 +31,12 @@ func (c *cluster) swap(b *Rebuild) {
 	c.stores[1] = s
 }
 
-// rebuild makes clone 1 again from origin, as doctor --fix does.
+// rebuild brings clone 1 onto the new history, as doctor --fix does.
 func (c *cluster) rebuild() *Rebuild {
 	c.t.Helper()
-	b, err := MakeRebuild(c.stores[1], c.opts[1])
+	b, err := RebuildStore(c.stores[1], c.opts[1])
 	if err != nil {
-		c.t.Fatalf("MakeRebuild: %v", err)
+		c.t.Fatalf("RebuildStore: %v", err)
 	}
 	if b == nil {
 		c.t.Fatal("origin follows the clone: there is nothing to rebuild")
@@ -100,18 +96,18 @@ func TestRebuildReplaysUnpushedChanges(t *testing.T) {
 	if sc.rb.Replayed != 4 {
 		t.Errorf("Replayed = %d, want 4", sc.rb.Replayed)
 	}
-	if !slices.Equal(sc.rb.Purged, []string{c.task(1, sc.gone.ULID).ID}) || sc.rb.PurgedTasks[0] != sc.gone.ULID {
+	if !slices.Equal(sc.rb.Purged, []string{sc.gone.ID}) || sc.rb.PurgedTasks[0] != sc.gone.ULID {
 		t.Errorf("Purged = %v %v", sc.rb.Purged, sc.rb.PurgedTasks)
 	}
 	if trackOf(t, c) == mustHead(t, c.stores[1]) {
 		t.Fatal("setup: the clone had no unpushed work")
 	}
-	c.swap(sc.rb)
-	if left, err := store.FindLeftover(c.stores[1].Dir()); err != nil || !left.None() {
-		t.Errorf("leftover = %+v, %v", left, err)
+	c.reopen()
+	if p := store.RebuildPhaseIn(c.stores[1].Dir()); p != store.RebuildNone {
+		t.Errorf("phase = %q", p)
 	}
 	if sc.rb.Kept == "" || !exists(t, sc.rb.Kept) {
-		t.Errorf("Kept = %q, want the old store beside the new one", sc.rb.Kept)
+		t.Errorf("Kept = %q, want a copy of the old store", sc.rb.Kept)
 	}
 	if got := c.task(1, sc.other.ULID); got == nil || got.Title != "other by b" {
 		t.Errorf("other = %+v", got)
@@ -171,7 +167,7 @@ func TestRebuildWithoutUnpushedChanges(t *testing.T) {
 	if sc.rb.Replayed != 0 || len(sc.rb.Purged) != 0 {
 		t.Errorf("rebuild = %+v", sc.rb)
 	}
-	c.swap(sc.rb)
+	c.reopen()
 	if got, want := mustHead(t, c.stores[1]), trackOf(t, c); got != want {
 		t.Errorf("HEAD = %s, want the head of origin %s", got, want)
 	}
@@ -194,7 +190,7 @@ func TestRebuildRemovesTheOldStoreWhenNothingWasDropped(t *testing.T) {
 	if sc.rb.Replayed != 1 || len(sc.rb.Purged) != 0 {
 		t.Fatalf("rebuild = %+v", sc.rb)
 	}
-	c.swap(sc.rb)
+	c.reopen()
 	if sc.rb.Kept != "" {
 		t.Errorf("Kept = %q, want none", sc.rb.Kept)
 	}
@@ -219,7 +215,7 @@ func TestRebuildKeepsATaskOnlyTheCloneHas(t *testing.T) {
 	if len(sc.rb.Purged) != 0 {
 		t.Errorf("Purged = %v", sc.rb.Purged)
 	}
-	c.swap(sc.rb)
+	c.reopen()
 	if c.task(1, mine.ULID) == nil {
 		t.Error("the clone's own task is lost")
 	}
@@ -248,7 +244,8 @@ func TestRebuildMergesConflicts(t *testing.T) {
 	if _, err := Run(c.stores[1], c.opts[1]); !errors.Is(err, ErrForcePush) {
 		t.Fatalf("sync = %v, want ErrForcePush", err)
 	}
-	c.swap(c.rebuild())
+	c.rebuild()
+	c.reopen()
 	got := c.task(1, other.ULID)
 	if got == nil || got.Title != "a" {
 		t.Fatalf("title = %+v, want the later edit, a", got)
@@ -270,9 +267,9 @@ func TestRebuildMergesConflicts(t *testing.T) {
 	}
 }
 
-// origin that follows the clone again needs no rebuild: MakeRebuild removes
-// force-push.json and makes nothing.
-func TestMakeRebuildWhenOriginFollowsAgain(t *testing.T) {
+// origin that follows the clone again needs no rebuild: RebuildStore removes
+// force-push.json and changes nothing.
+func TestRebuildStoreWhenOriginFollowsAgain(t *testing.T) {
 	t.Parallel()
 	c := newCluster(t, 2)
 	gone := c.addTask(0, "gone")
@@ -283,47 +280,15 @@ func TestMakeRebuildWhenOriginFollowsAgain(t *testing.T) {
 		t.Fatalf("sync = %v, want ErrForcePush", err)
 	}
 	gitrepotest.SetRemoteMain(t, c.remote, old.String())
-	b, err := MakeRebuild(c.stores[1], c.opts[1])
+	b, err := RebuildStore(c.stores[1], c.opts[1])
 	if err != nil || b != nil {
-		t.Fatalf("MakeRebuild = %+v, %v; want nothing", b, err)
+		t.Fatalf("RebuildStore = %+v, %v; want nothing", b, err)
 	}
 	if _, ok, err := ReadForcePush(c.stores[1]); err != nil || ok {
 		t.Errorf("force-push.json = %v, %v", ok, err)
 	}
-	if exists(t, c.stores[1].Dir()+newSuffix) {
-		t.Error("a rebuild is left beside the store")
-	}
-}
-
-// A write that lands between the rebuild and the swap stops the swap.
-func TestSwapStale(t *testing.T) {
-	t.Parallel()
-	c := newCluster(t, 2)
-	sc := newRewriteScene(t, c, func(*rewriteScene) {})
-	late := c.addTask(1, "late")
-	dir := c.stores[1].Dir()
-	if err := c.stores[1].Repo().Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := Swap(dir, sc.rb); !errors.Is(err, ErrRebuildStale) {
-		t.Fatalf("Swap = %v, want ErrRebuildStale", err)
-	}
-	if _, err := os.Stat(sc.rb.Dir); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("the rebuild is still there: %v", err)
-	}
-	s, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.stores[1] = s
-	// doctor --fix makes it again, and the late task is put back.
-	b := c.rebuild()
-	if b.Replayed != 1 {
-		t.Fatalf("second rebuild = %+v", b)
-	}
-	c.swap(b)
-	if c.task(1, late.ULID) == nil {
-		t.Error("the late task is lost")
+	if p := store.RebuildPhaseIn(c.stores[1].Dir()); p != store.RebuildNone {
+		t.Errorf("phase = %q", p)
 	}
 }
 
@@ -347,11 +312,11 @@ func TestRebuildRefusesUncommittedChanges(t *testing.T) {
 	if _, err := Run(c.stores[1], c.opts[1]); !errors.Is(err, ErrForcePush) {
 		t.Fatalf("Run = %v, want ErrForcePush", err)
 	}
-	if _, err := MakeRebuild(c.stores[1], c.opts[1]); !errors.Is(err, ErrDirty) || !errors.Is(err, ErrDirtyRebuild) {
-		t.Fatalf("MakeRebuild = %v, want ErrDirtyRebuild", err)
+	if _, err := RebuildStore(c.stores[1], c.opts[1]); !errors.Is(err, ErrDirty) || !errors.Is(err, ErrDirtyRebuild) {
+		t.Fatalf("RebuildStore = %v, want ErrDirtyRebuild", err)
 	}
-	if left, err := store.FindLeftover(c.stores[1].Dir()); err != nil || !left.None() {
-		t.Errorf("leftover = %+v, %v", left, err)
+	if p := store.RebuildPhaseIn(c.stores[1].Dir()); p != store.RebuildNone {
+		t.Errorf("phase = %q", p)
 	}
 }
 
@@ -362,156 +327,6 @@ func exists(t *testing.T, p string) bool {
 		t.Fatal(err)
 	}
 	return err == nil
-}
-
-// A swap that stopped after the old store was moved away is finished.
-func TestFinishLeftoverNoStore(t *testing.T) {
-	t.Parallel()
-	c := newCluster(t, 2)
-	sc := newRewriteScene(t, c, func(*rewriteScene) {})
-	dir := c.stores[1].Dir()
-	if err := c.stores[1].Repo().Close(); err != nil {
-		t.Fatal(err)
-	}
-	before := dir + ".before-rewrite-20260101T000000.000000000"
-	if err := os.Rename(dir, before); err != nil {
-		t.Fatal(err)
-	}
-	l, err := store.FindLeftover(dir)
-	if err != nil || l.New != sc.rb.Dir || !slices.Equal(l.Before, []string{before}) {
-		t.Fatalf("leftover = %+v, %v", l, err)
-	}
-	if _, err := store.Open(dir); err == nil {
-		t.Fatal("a store without a directory opens")
-	}
-	if _, err := FinishLeftoverKept(dir, l); err != nil {
-		t.Fatal(err)
-	}
-	if exists(t, before) || exists(t, l.New) {
-		t.Error("something is left")
-	}
-	if _, err := store.Open(dir); err != nil {
-		t.Errorf("the store does not open: %v", err)
-	}
-}
-
-// With the new store in place, the old one is removed; a rebuild never
-// swapped is removed; with only the old one left, it is put back.
-func TestFinishLeftoverOtherStates(t *testing.T) {
-	t.Parallel()
-	root := t.TempDir()
-	dir := filepath.Join(root, "s")
-	mk := func(p string) {
-		if err := os.MkdirAll(p, 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(p, "f"), []byte(filepath.Base(p)), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	mk(dir)
-	mk(dir + ".before-rewrite-1")
-	mk(dir + ".rewrite-new")
-	l, err := store.FindLeftover(dir)
-	if err != nil || l.None() {
-		t.Fatalf("leftover = %+v, %v", l, err)
-	}
-	if _, err := FinishLeftoverKept(dir, l); err != nil {
-		t.Fatal(err)
-	}
-	if l, err := store.FindLeftover(dir); err != nil || !l.None() || !exists(t, dir) {
-		t.Errorf("leftover = %+v, %v", l, err)
-	}
-	// only the old one: put back
-	if err := os.Rename(dir, dir+".before-rewrite-2"); err != nil {
-		t.Fatal(err)
-	}
-	l, _ = store.FindLeftover(dir)
-	if _, err := FinishLeftoverKept(dir, l); err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(filepath.Join(dir, "f"))
-	if err != nil || string(b) != "s" {
-		t.Errorf("the store = %q, %v", b, err)
-	}
-	if l, _ := store.FindLeftover(dir); !l.None() {
-		t.Errorf("leftover = %+v", l)
-	}
-}
-
-// The local files of an old store the swap did not carry over are brought
-// over before it goes; one that cannot be read keeps the old store.
-func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
-	t.Parallel()
-	root := t.TempDir()
-	dir := filepath.Join(root, "s")
-	before := dir + ".before-rewrite-1"
-	local := func(d string) string { return filepath.Join(d, ".hedgehug", "local") }
-	for _, d := range []string{dir, before} {
-		if err := os.MkdirAll(local(d), 0o750); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write := func(d, name, data string) {
-		if err := os.WriteFile(filepath.Join(local(d), name), []byte(data), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(before, "sync.json", "old")
-	write(before, "late.json", "late")
-	write(dir, "sync.json", "new")
-	l, err := store.FindLeftover(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := FinishLeftoverKept(dir, l); err != nil {
-		t.Fatal(err)
-	}
-	if b, err := os.ReadFile(filepath.Join(local(dir), "late.json")); err != nil || string(b) != "late" {
-		t.Errorf("late.json = %q, %v", b, err)
-	}
-	if b, err := os.ReadFile(filepath.Join(local(dir), "sync.json")); err != nil || string(b) != "new" {
-		t.Errorf("sync.json = %q, %v (the new store's file is kept)", b, err)
-	}
-	if exists(t, before) {
-		t.Error("the old store is left")
-	}
-
-	if os.Geteuid() == 0 {
-		t.Skip("a file that cannot be read needs a permission that is enforced")
-	}
-	if err := os.MkdirAll(local(before), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	write(before, "secret.json", "x")
-	if err := os.Chmod(filepath.Join(local(before), "secret.json"), 0); err != nil {
-		t.Fatal(err)
-	}
-	l, _ = store.FindLeftover(dir)
-	if _, err := FinishLeftoverKept(dir, l); err == nil {
-		t.Error("an unreadable local file did not fail")
-	}
-	if !exists(t, before) {
-		t.Error("the old store was removed although its files were not carried over")
-	}
-}
-
-// The neighbours of other names are not a leftover.
-func TestFindLeftoverIgnoresOtherNames(t *testing.T) {
-	t.Parallel()
-	root := t.TempDir()
-	dir := filepath.Join(root, "s")
-	for _, n := range []string{"s", "s2.rewrite-new", "s2.before-rewrite-1", "t.rewrite-new"} {
-		if err := os.MkdirAll(filepath.Join(root, n), 0o750); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if l, err := store.FindLeftover(dir); err != nil || !l.None() {
-		t.Errorf("leftover = %+v, %v", l, err)
-	}
-	if l, err := store.FindLeftover(filepath.Join(root, "missing", "s")); err != nil || !l.None() {
-		t.Errorf("leftover of a missing parent = %+v, %v", l, err)
-	}
 }
 
 // What was done on the new history after the force push is new to this
@@ -532,7 +347,8 @@ func TestRebuildInboxSeesWhatCameAfterTheRewrite(t *testing.T) {
 	if _, err := Run(c.stores[1], c.opts[1]); !errors.Is(err, ErrForcePush) {
 		t.Fatalf("sync = %v, want ErrForcePush", err)
 	}
-	c.swap(c.rebuild())
+	c.rebuild()
+	c.reopen()
 	c.sync(1) // the inbox catches up on the new history
 	items, err := inbox.Open(c.stores[1]).List(true)
 	if err != nil {

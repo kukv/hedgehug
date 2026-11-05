@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"strings"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // SyncReport is what a sync of one store did, as --json prints it.
@@ -57,31 +55,45 @@ func TimePtr(t time.Time) *time.Time {
 	return &t
 }
 
-// FinishRebuild completes a swap that stopped, or removes what a rebuild
-// left, for the store e, before it is opened. Nothing left is nothing done.
-// While the store is there, the leftover is touched only under sync.lock: a
-// rebuild holds it, so a rebuild in the making is not taken for a leftover.
-func (ss *Session) FinishRebuild(e config.StoreEntry) error {
-	l, err := store.FindLeftover(e.Path)
-	if err != nil || l.None() {
-		return err
+// ReleaseForRebuild lets go of what this session and the server hold of the
+// store at dir, before a rebuild changes its files.
+func (ss *Session) ReleaseForRebuild(dir string) {
+	if ss.BeforeRebuild != nil {
+		ss.BeforeRebuild(dir)
 	}
+	ss.CloseMounted(dir)
+	ss.DropMount()
+}
+
+// FinishRebuild finishes a rebuild of the store e that stopped, before it is
+// opened. Nothing left is nothing done. It works under sync.lock, which a
+// rebuild holds, so a rebuild in progress is not taken for one that stopped.
+func (ss *Session) FinishRebuild(e config.StoreEntry) error {
+	if store.RebuildPhaseIn(e.Path) == store.RebuildNone {
+		return nil
+	}
+	ss.ReleaseForRebuild(e.Path)
 	s, err := store.Open(e.Path)
 	if err != nil {
-		// No store (or a broken one) to lock: the swap is finished as it is.
-		if _, serr := osfs.Lstat(e.Path); errors.Is(serr, fs.ErrNotExist) {
-			return ss.finishLeftover(e, l)
-		}
-		return nil // the store's own problem; the sync tells of it
+		return err
 	}
 	defer func() { _ = s.Repo().Close() }()
-	return s.WithLocalLock("sync.lock", SyncLockWait, func() error {
-		l, err := store.FindLeftover(e.Path)
-		if err != nil || l.None() {
-			return err
-		}
-		return ss.finishLeftover(e, l)
+	var b *replicate.Rebuild
+	err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
+		var err error
+		b, err = replicate.FinishRebuild(s)
+		return err
 	})
+	if err != nil || b == nil {
+		return err
+	}
+	for _, w := range b.Warnings {
+		ss.AddWarning(e.Name + ": " + w)
+	}
+	if b.Kept != "" {
+		ss.AddWarning(fmt.Sprintf("the old store of %s, with changes that were not put back, is kept at %s", e.Name, b.Kept))
+	}
+	return nil
 }
 
 // SyncTargets are the stores an operation works on: the one StoreName
@@ -170,15 +182,6 @@ func DetachedName(s *store.Store, kind, value string) string {
 	}
 	b, _ := json.Marshal(name) // a string always encodes
 	return string(b)
-}
-
-// finishLeftover is replicate.FinishLeftoverKept, telling where an old store was kept.
-func (ss *Session) finishLeftover(e config.StoreEntry, l store.Leftover) error {
-	kept, err := replicate.FinishLeftoverKept(e.Path, l)
-	for _, p := range kept {
-		ss.AddWarning(fmt.Sprintf("the old store of %s, with changes that were not put back, is kept at %s", e.Name, p))
-	}
-	return err
 }
 
 // RepairDetail is the Detail of repaired, revived and prefix_duplicate.

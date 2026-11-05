@@ -102,7 +102,7 @@ func (ts *Session) Renew() {
 		AfterWrite:     o.AfterWrite,
 		BackgroundSync: o.BackgroundSync,
 		BeforeUpdate:   o.BeforeUpdate,
-		BeforeSwap:     o.BeforeSwap,
+		BeforeRebuild:  o.BeforeRebuild,
 		Spawn:          o.Spawn,
 		Keyring:        o.Keyring,
 		HTTPClient:     o.HTTPClient,

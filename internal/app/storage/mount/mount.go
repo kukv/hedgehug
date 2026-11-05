@@ -3,8 +3,6 @@
 package mount
 
 import (
-	"io/fs"
-	"path/filepath"
 	"strings"
 	gosync "sync"
 	"time"
@@ -134,9 +132,9 @@ type Skipped struct {
 type Set struct {
 	Stores  []*Mounted
 	Skipped []Skipped
-	// Unfinished are the stores that opened but have a rebuild after a
-	// history rewrite left beside them (store.LeftoverError). A store that
-	// did not open for want of its directory is in Skipped with the same
+	// Unfinished are the stores that opened with the last step of a rebuild
+	// after a history rewrite left to do (store.LeftoverError). A store whose
+	// rebuild stopped earlier does not open: it is in Skipped with the same
 	// error.
 	Unfinished []Skipped
 
@@ -167,23 +165,18 @@ func (s *Set) Unopened(sk Skipped) {
 // goes to Skipped with why.
 func Open(c *config.Config, opt Options) *Set {
 	set := &Set{unopened: opt.Unopened}
-	parents := map[string][]fs.DirEntry{} // read once for the stores in one directory
-	perr := map[string]error{}
 	for _, e := range c.Stores {
-		s, err := store.Open(e.Path)
-		parent := filepath.Dir(filepath.Clean(e.Path))
-		if _, ok := parents[parent]; !ok {
-			parents[parent], perr[parent] = store.ReadParent(e.Path)
+		phase := store.RebuildPhaseIn(e.Path)
+		if phase == store.RebuildApply {
+			set.Skipped = append(set.Skipped, Skipped{Name: e.Name, Err: &store.LeftoverError{Name: e.Name}})
+			continue
 		}
-		unfinished := perr[parent] == nil && !store.LeftoverIn(e.Path, parents[parent]).None()
+		s, err := store.Open(e.Path)
 		if err != nil {
-			if unfinished {
-				err = &store.LeftoverError{Name: e.Name}
-			}
 			set.Skipped = append(set.Skipped, Skipped{Name: e.Name, Err: err})
 			continue
 		}
-		if unfinished {
+		if phase == store.RebuildPrune {
 			set.Unfinished = append(set.Unfinished, Skipped{Name: e.Name, Err: &store.LeftoverError{Name: e.Name}})
 		}
 		if opt.Now != nil {

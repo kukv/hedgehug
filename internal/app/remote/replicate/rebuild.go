@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path/filepath"
-	"slices"
+	"path"
 	"strings"
 	"time"
 
@@ -21,22 +20,20 @@ import (
 )
 
 const (
-	newSuffix    = store.RewriteNewSuffix
-	staleMarker  = ".rebuild-stale" // in the rebuild: the old store is the one to keep
-	beforePrefix = store.BeforeRewritePrefix
-	// keptPrefix names the old store that Swap leaves beside the new one
-	// when the rebuild could not put back all its unpushed changes. It is
-	// not a leftover (FindLeftover does not see it): nothing removes it.
+	// keptPrefix names the copy of the old store left beside the store when
+	// the rebuild could not put back all its unpushed changes. Nothing
+	// removes it.
 	keptPrefix = ".kept-"
-	// keepMarker is a file in .hedgehug/local of the old store, written
-	// before the swap moves it away, that says it must be kept: whoever
-	// would remove a .before-rewrite- directory with it renames it to
-	// keptPrefix instead. It is not carried over to the new store.
-	keepMarker = "rebuild-keep"
+	// keptNew is the copy while it is written. It is removed when the next
+	// rebuild starts.
+	keptNew = ".kept-new"
+	// indexCache is the cache of the index, which names trees of the old
+	// history.
+	indexCache = "index"
 )
 
 // ErrDirtyRebuild means the store has changes that were not committed, which
-// the swap of a rebuild would drop. It is an ErrDirty.
+// the rebuild would drop. It is an ErrDirty.
 var ErrDirtyRebuild error = dirtyRebuildError{}
 
 type dirtyRebuildError struct{}
@@ -47,148 +44,280 @@ func (dirtyRebuildError) Error() string {
 
 func (dirtyRebuildError) Is(target error) bool { return target == ErrDirty }
 
-// ErrRebuildStale means the store changed while the rebuild was made, so it
-// was not swapped in; hedgehug doctor --fix makes it again.
-var ErrRebuildStale = errors.New("the store changed during the rebuild")
-
-// Rebuild is a clone made again from origin after a force push, ready to
-// take the place of the store.
+// Rebuild tells what RebuildStore or FinishRebuild did.
 type Rebuild struct {
-	Dir      string        // <path>.rewrite-new
-	OldHead  plumbing.Hash // HEAD of the store when it was made
-	Replayed int           // the unpushed changes (commits) put back
+	Replayed int // the unpushed changes (commits) put back
 	// Purged are the ids of the tasks whose unpushed changes were not put
 	// back, because the new history lacks the task (the ULID for one the
 	// old history has no id of), and PurgedTasks their ULIDs, in the same
 	// order.
 	Purged      []string
 	PurgedTasks []model.ULID
-	// Notices are the items put in the inbox of the rebuild; whoever swaps
-	// it in tells of them.
+	// Notices are the items put in the inbox.
 	Notices []inbox.Item
-	// Kept is where Swap left the old store; "" when it removed it. The old
-	// store is kept when Purged is not empty.
+	// Kept is the copy of the old store; "" when none was made. It is made
+	// when Purged is not empty.
 	Kept string
-	// Warnings are what failed after the swap was done, which Swap did not
-	// undo (the old store stays where it is).
+	// Warnings are what failed after the store was rebuilt: the removal of
+	// the old objects, which the next doctor --fix or sync tries again.
 	Warnings []string
-
-	seen map[string]stamp // the local files copyLocal copied
 }
 
-// MakeRebuild makes the clone again from origin, for hedgehug doctor --fix
-// after a sync stopped with ErrForcePush: origin is cloned beside the store
-// and the unpushed changes of the store are put back on it as one commit.
-// The store is as it was. When origin has become a history the store
-// follows again, it removes force-push.json and returns nil. The caller
-// holds sync.lock; the store lock is held here for the whole rebuild, and a
-// write that lands after it is let go is found by Swap.
-func MakeRebuild(s *store.Store, opt Options) (b *Rebuild, err error) {
-	if opt.Now == nil {
-		opt.Now = time.Now
+// rebuildRecord is .hedgehug/local/rebuild.json: what it takes to finish a
+// rebuild that stopped, without origin.
+type rebuildRecord struct {
+	Phase   store.RebuildPhase `json:"phase"`
+	OldHead string             `json:"old_head"` // HEAD before the rebuild
+	Target  string             `json:"target"`   // where main goes
+	Origin  string             `json:"origin"`   // the new head of origin
+	Mark    string             `json:"mark"`     // the commit the inbox goes on from
+	Items   []inbox.Item       `json:"items"`    // for the inbox; Add leaves out what it has
+	Kept    string             `json:"kept,omitempty"`
+}
+
+func writeRecord(s *store.Store, rec *rebuildRecord) error {
+	b, err := json.Marshal(rec)
+	if err != nil {
+		return err
 	}
-	r := s.Repo()
-	r.SetConn(opt.Conn)
+	return s.WriteLocal(store.RebuildFile, append(b, '\n'))
+}
+
+// readRecord reads rebuild.json; ok is false when there is none.
+func readRecord(s *store.Store) (rec *rebuildRecord, ok bool, err error) {
+	b, err := s.ReadLocal(store.RebuildFile)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	rec = &rebuildRecord{}
+	if err := json.Unmarshal(b, rec); err != nil {
+		return nil, false, fmt.Errorf("%s: %w", store.RebuildFile, err)
+	}
+	if rec.Phase != store.RebuildApply && rec.Phase != store.RebuildPrune {
+		return nil, false, fmt.Errorf("%s: unknown phase %q", store.RebuildFile, rec.Phase)
+	}
+	return rec, true, nil
+}
+
+// RebuildStore brings the store onto the new history of origin in its own
+// directory, for hedgehug doctor --fix after a sync stopped with ErrForcePush.
+// The unpushed changes are put back as one commit; a copy of the store is
+// kept when some cannot be. From the moment rebuild.json is written the store
+// only goes forward: what stops is finished by FinishRebuild. Before that the
+// store is as it was. When origin has become a history the store follows
+// again, it removes force-push.json and returns nil. The caller holds
+// sync.lock; the store lock is held here for the whole rebuild.
+func RebuildStore(s *store.Store, opt Options) (*Rebuild, error) {
 	held, err := store.LockInOrder(s)
 	if err != nil {
 		return nil, err
 	}
 	defer held.Release()
-	st, err := r.Status()
-	if err != nil {
+	rec, b, err := prepare(s, opt)
+	if err != nil || rec == nil {
 		return nil, err
 	}
+	if err := finish(s, rec, b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// prepare does all of a rebuild that leaves main as it is, up to the writing
+// of rebuild.json, under the store lock. rec is nil when origin follows the
+// store again.
+func prepare(s *store.Store, opt Options) (rec *rebuildRecord, b *Rebuild, err error) {
+	if opt.Now == nil {
+		opt.Now = time.Now
+	}
+	r := s.Repo()
+	r.SetConn(opt.Conn)
+	st, err := r.Status()
+	if err != nil {
+		return nil, nil, err
+	}
 	if len(st) > 0 {
-		// The swap would drop the changes that were not committed.
-		return nil, ErrDirtyRebuild
+		return nil, nil, ErrDirtyRebuild
 	}
 	oldHead, err := r.Head()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// What the store followed: the sync that found the force push put the
 	// tracking ref back.
 	tracked, err := r.RemoteHead("origin")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dir := s.Dir()
-	newDir := dir + newSuffix
-	// The store is here, so a rebuild left beside it is of a swap that
-	// never began.
-	if err := osfs.RemoveAll(newDir); err != nil {
-		return nil, err
+	if err := osfs.RemoveAll(dir + keptNew); err != nil {
+		return nil, nil, err
 	}
-	nr, err := gitrepo.CloneWith(opt.Remotes[0], newDir, opt.Conn)
-	if err != nil {
-		return nil, fmt.Errorf("rebuild after a force push: %w", err)
+	if err := r.SetRemotes(opt.Remotes); err != nil {
+		return nil, nil, err
 	}
-	defer func() {
-		_ = nr.Close()
-		if err != nil || b == nil {
-			_ = osfs.RemoveAll(newDir)
-		}
-	}()
-	if err = nr.SetRemotes(opt.Remotes); err != nil {
-		return nil, err
-	}
-	if err = nr.RegisterMergeDriver(); err != nil {
-		return nil, err
-	}
-	head, err := nr.Head()
-	if err != nil {
-		return nil, err
-	}
-	// The clone's head came after the last fetch, so the old repository may
-	// lack its objects; the replay reads both histories there.
-	if _, err = r.TreeOf(head); errors.Is(err, plumbing.ErrObjectNotFound) {
-		if _, err = r.Fetch("origin"); err == nil {
-			err = r.SetTracking("origin", tracked)
-		}
+	head, err := r.Fetch("origin")
+	if serr := r.SetTracking("origin", tracked); err == nil {
+		err = serr
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("rebuild after a force push: %w", err)
+	}
+	if head.IsZero() {
+		return nil, nil, errors.New("rebuild after a force push: origin is empty")
 	}
 	follows, err := r.IsAncestor(tracked, head)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if follows {
 		// origin went back to a history the store follows: the next sync
 		// takes it as usual.
-		return nil, s.RemoveLocal(forcePushFile)
+		return nil, nil, s.RemoveLocal(forcePushFile)
 	}
-	b = &Rebuild{Dir: newDir, OldHead: oldHead}
-	ns, err := store.Open(newDir)
+	b = &Rebuild{}
+	s.SetNow(opt.Now)
+	target, err := replay(s, tracked, oldHead, head, opt, b)
 	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = ns.Repo().Close() }()
-	ns.SetNow(opt.Now)
-	newHead, err := replay(r, ns, nr, tracked, oldHead, head, opt, b)
-	if err != nil {
-		return nil, err
-	}
-	if err = copyLocal(s, ns, b); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// The inbox goes on from where the new history has the commit it had
 	// followed: what came before is what it has told of, what comes after is
 	// new to it, and so is the replay commit.
 	mark, found, err := r.FindSameCommit(head, tracked)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !found {
 		mark = head
 	}
-	if err = inbox.Open(ns).SetMark(mark); err != nil {
+	items, err := rewriteItems(target, opt, b)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(b.Purged) > 0 {
+		if b.Kept, err = keepOldStore(dir); err != nil {
+			return nil, nil, err
+		}
+	}
+	rec = &rebuildRecord{
+		Phase: store.RebuildApply, OldHead: oldHead.String(), Target: target.String(),
+		Origin: head.String(), Mark: mark.String(), Items: items, Kept: b.Kept,
+	}
+	if err := writeRecord(s, rec); err != nil {
+		return nil, nil, err
+	}
+	return rec, b, nil
+}
+
+// FinishRebuild finishes a rebuild that stopped, from rebuild.json; it needs
+// no connection. It returns nil when there is none. The caller holds
+// sync.lock; the store lock is held here.
+func FinishRebuild(s *store.Store) (*Rebuild, error) {
+	held, err := store.LockInOrder(s)
+	if err != nil {
 		return nil, err
 	}
-	if b.Notices, err = tellRewrite(ns, newHead, opt, b); err != nil {
+	defer held.Release()
+	rec, ok, err := readRecord(s)
+	if err != nil || !ok {
+		return nil, err
+	}
+	b := &Rebuild{Kept: rec.Kept}
+	if err := finish(s, rec, b); err != nil {
 		return nil, err
 	}
 	return b, nil
+}
+
+// finish does what rebuild.json says is left. Every step may be run again.
+func finish(s *store.Store, rec *rebuildRecord, b *Rebuild) error {
+	if rec.Phase == store.RebuildApply {
+		if err := apply(s, rec, b); err != nil {
+			return fmt.Errorf("finish the rebuild: %w", err)
+		}
+		rec.Phase = store.RebuildPrune
+		if err := writeRecord(s, rec); err != nil {
+			return fmt.Errorf("finish the rebuild: %w", err)
+		}
+	}
+	r := s.Repo()
+	err := r.KeepMainRefs()
+	if err == nil {
+		err = r.PruneUnreachable()
+	}
+	if err == nil {
+		err = s.RemoveLocal(store.RebuildFile)
+	}
+	if err != nil {
+		// The store is whole: only what the history no longer has is left.
+		b.Warnings = append(b.Warnings, fmt.Sprintf("remove the objects of the old history: %v", err))
+	}
+	return nil
+}
+
+// apply makes the store the rebuilt one: the work tree, main and the
+// tracking ref, the inbox, and what was about the old history.
+func apply(s *store.Store, rec *rebuildRecord, b *Rebuild) error {
+	r := s.Repo()
+	from, to := plumbing.NewHash(rec.OldHead), plumbing.NewHash(rec.Target)
+	ft, err := r.TreeOf(from)
+	if err != nil {
+		return err
+	}
+	tt, err := r.TreeOf(to)
+	if err != nil {
+		return err
+	}
+	changes, err := r.DiffTrees(ft, tt, "")
+	if err != nil {
+		return err
+	}
+	paths := make([]string, len(changes))
+	for i, c := range changes {
+		paths[i] = c.Path
+	}
+	if err := r.MoveMain(from, to, paths); err != nil {
+		return err
+	}
+	if err := r.SetTracking("origin", plumbing.NewHash(rec.Origin)); err != nil {
+		return err
+	}
+	box := inbox.Open(s)
+	if err := box.SetMark(plumbing.NewHash(rec.Mark)); err != nil {
+		return err
+	}
+	if b.Notices, err = box.Add(rec.Items); err != nil {
+		return err
+	}
+	if err := s.RemoveLocal(indexCache); err != nil {
+		return err
+	}
+	return s.RemoveLocal(forcePushFile)
+}
+
+// skipKept leaves the locks out of the copy of the store: they are not its
+// content, and another process may have them open.
+func skipKept(rel string) bool {
+	name := path.Base(rel)
+	return strings.HasPrefix(rel, store.LocalDir+"/") && (name == "lock" || strings.HasSuffix(name, ".lock"))
+}
+
+// keepOldStore copies the store at dir to dir + keptPrefix + the time, and
+// returns where. It holds the changes the rebuild cannot put back.
+func keepOldStore(dir string) (string, error) {
+	tmp := dir + keptNew
+	if err := osfs.CopyTree(dir, tmp, skipKept); err != nil {
+		return "", fmt.Errorf("keep the old store: %w", err)
+	}
+	kept := dir + keptPrefix + time.Now().UTC().Format("20060102T150405.000000000")
+	if err := osfs.Rename(tmp, kept); err != nil {
+		return "", fmt.Errorf("keep the old store: %w", err)
+	}
+	return kept, nil
 }
 
 // taskOfPath is the task a file of the store belongs to: its own file, or a
@@ -207,10 +336,12 @@ func taskOfPath(p string) (model.ULID, bool) {
 }
 
 // replay puts the unpushed changes of oldHead back on head, the new head of
-// origin, as one commit in ns; it returns the head of ns then. The files of
+// origin, as one commit off main; it returns that commit, or head when there
+// is nothing to put back. The files of
 // the tasks the new history lacks are left out of the merge, and a task of
 // them that the unpushed commits changed goes to b.Purged.
-func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead, head plumbing.Hash, opt Options, b *Rebuild) (plumbing.Hash, error) {
+func replay(s *store.Store, tracked, oldHead, head plumbing.Hash, opt Options, b *Rebuild) (plumbing.Hash, error) {
+	r := s.Repo()
 	mine, err := r.Between(oldHead, tracked)
 	if err != nil {
 		return head, err
@@ -226,7 +357,7 @@ func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead
 	if base.IsZero() {
 		return head, fmt.Errorf("replay: %w", ErrUnrelated)
 	}
-	dropped, err := findDropped(r, nr, base, oldHead, head, b)
+	dropped, err := findDropped(r, base, oldHead, head, b)
 	if err != nil {
 		return head, err
 	}
@@ -243,7 +374,7 @@ func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead
 	}
 	// What the new history already has is no change.
 	for p, data := range m.files {
-		cur, err := nr.ReadAt(head, p)
+		cur, err := r.ReadAt(head, p)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return head, err
 		}
@@ -256,7 +387,7 @@ func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead
 		return head, nil
 	}
 	op := store.Op{Name: "replay", Detail: plural.Count(len(mine), "unpushed commit"), Author: opt.Author, Account: opt.Account, AllowEmpty: true}
-	return ns.CommitMerge(head, []plumbing.Hash{head}, m.files, op, m.trailers())
+	return s.CommitOn(head, m.files, op, m.trailers())
 }
 
 // findDropped puts in b the tasks that the commits from base to oldHead
@@ -264,7 +395,7 @@ func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead
 // lacks: the base has the task's file and the new head does not. A task
 // that only the unpushed commits have is not one of them. It returns them as
 // a set.
-func findDropped(r, nr *gitrepo.Repo, base, oldHead, head plumbing.Hash, b *Rebuild) (map[model.ULID]bool, error) {
+func findDropped(r *gitrepo.Repo, base, oldHead, head plumbing.Hash, b *Rebuild) (map[model.ULID]bool, error) {
 	bt, err := r.TreeOf(base)
 	if err != nil {
 		return nil, err
@@ -292,7 +423,7 @@ func findDropped(r, nr *gitrepo.Repo, base, oldHead, head plumbing.Hash, b *Rebu
 		if err != nil {
 			return nil, err
 		}
-		if _, err := nr.ReadAt(head, model.TaskPath(u)); err == nil {
+		if _, err := r.ReadAt(head, model.TaskPath(u)); err == nil {
 			continue
 		} else if !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
@@ -308,147 +439,9 @@ func findDropped(r, nr *gitrepo.Repo, base, oldHead, head plumbing.Hash, b *Rebu
 	return dropped, nil
 }
 
-// skipLocal says what a rebuild leaves behind of .hedgehug/local: the
-// locks, the index cache and what is about the old history. A name that
-// starts with a dot is the temporary file of a write in progress (the
-// atomic write names it so; LocalFiles skips it too), not a file of its
-// own.
-func skipLocal(name string) bool {
-	return name == "lock" || strings.HasSuffix(name, ".lock") || name == "index" || name == forcePushFile || name == keepMarker ||
-		strings.HasPrefix(name, ".")
-}
-
-// ownedLocal are the files the rebuild writes in its own way, so that the
-// copy made right before the swap leaves them alone.
-var ownedLocal = []string{"inbox-head"}
-
-// stamp tells whether a file changed: its size and time.
-type stamp struct {
-	size int64
-	mod  time.Time
-}
-
-// localFiles lists the files of .hedgehug/local of the store at dir that a
-// rebuild carries over, by their names relative to it, with their stamps.
-func localFiles(dir string) (map[string]stamp, error) {
-	src := filepath.Join(dir, filepath.FromSlash(store.LocalDir))
-	out := map[string]stamp{}
-	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if errors.Is(err, fs.ErrNotExist) && p == src {
-			return nil // a store with nothing local
-		}
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !d.Type().IsRegular() || skipLocal(d.Name()) {
-			return nil
-		}
-		info, err := d.Info()
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil // gone since the walk saw it
-		}
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		out[filepath.ToSlash(rel)] = stamp{info.Size(), info.ModTime()}
-		return nil
-	})
-	return out, err
-}
-
-// copyFile copies the local file name of the store at from to the one at to.
-func copyFile(from, to, name string) error {
-	data, err := osfs.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name)))
-	if err != nil {
-		return err
-	}
-	return store.WriteLocalIn(to, name, data)
-}
-
-// copyLocal copies .hedgehug/local of from to to (spec step 4), and keeps in
-// b the stamps of what it copied, for syncLocal.
-func copyLocal(from, to *store.Store, b *Rebuild) error {
-	files, err := localFiles(from.Dir())
-	if err != nil {
-		return err
-	}
-	for name := range files {
-		if err := copyFile(from.Dir(), to.Dir(), name); err != nil {
-			return err
-		}
-	}
-	b.seen = files
-	return nil
-}
-
-// syncLocal brings to the rebuild at b.Dir what changed in .hedgehug/local of
-// the store at dir since copyLocal: the sync writes sync.json and the inbox
-// after the rebuild was made, and a command may write there until the swap.
-// The inbox's items are joined line by line, so the notices of the rebuild
-// stay; the files the rebuild writes itself are left as they are.
-//
-// It copies from the store at from to the one at to, what differs from seen,
-// and returns the stamps it saw, for the next pass.
-func syncLocal(from, to string, seen map[string]stamp) (map[string]stamp, error) {
-	files, err := localFiles(from)
-	if err != nil {
-		return nil, err
-	}
-	for name, st := range files {
-		if seen[name] == st || slices.Contains(ownedLocal, name) {
-			continue
-		}
-		if name != "inbox.jsonl" {
-			if err := copyFile(from, to, name); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		old, err := osfs.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name))
-		if err != nil {
-			return nil, err
-		}
-		cur, err := osfs.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name))
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return nil, err
-		}
-		if err := store.WriteLocalIn(to, name, joinLines(cur, old)); err != nil {
-			return nil, err
-		}
-	}
-	return files, nil
-}
-
-// beforeRename runs between the last look at what changed in
-// .hedgehug/local and the first rename of the swap; tests write there.
-var beforeRename = func() {}
-
-// joinLines is cur with the lines of more it lacks added.
-func joinLines(cur, more []byte) []byte {
-	have := map[string]bool{}
-	for l := range strings.SplitSeq(string(cur), "\n") {
-		have[l] = true
-	}
-	out := cur
-	if len(out) > 0 && out[len(out)-1] != '\n' {
-		out = append(out, '\n')
-	}
-	for l := range strings.SplitSeq(string(more), "\n") {
-		if l != "" && !have[l] {
-			out = append(append(out, l...), '\n')
-		}
-	}
-	return out
-}
-
-// tellRewrite puts the notices of spec step 7 in the inbox of ns: they are
-// written before the swap, with the store, and go for nothing when it is
-// not swapped in.
-func tellRewrite(ns *store.Store, head plumbing.Hash, opt Options, b *Rebuild) ([]inbox.Item, error) {
+// rewriteItems are the notices of spec step 7 for the rebuild to the commit
+// head.
+func rewriteItems(head plumbing.Hash, opt Options, b *Rebuild) ([]inbox.Item, error) {
 	to := opt.Account
 	if to == "" && len(opt.Me) > 0 {
 		to = opt.Me[0]
@@ -465,253 +458,5 @@ func tellRewrite(ns *store.Store, head plumbing.Hash, opt Options, b *Rebuild) (
 	for i, u := range b.PurgedTasks {
 		items = append(items, inbox.Item{Kind: inbox.PurgedChange, Task: u, ID: b.Purged[i], Commit: head.String(), To: to, Time: now})
 	}
-	return inbox.Open(ns).Add(items)
+	return items, nil
 }
-
-// Swap puts b in the place of the store at dir (spec step 5): the old one
-// goes to <dir>.before-rewrite-<time>, the new one to dir, and the old one
-// is removed. The caller holds none of the store's locks and has closed
-// its git files. It checks first that the old one is as it was when b was
-// made (its HEAD is b.OldHead, nothing uncommitted); if not, it removes
-// b.Dir and returns ErrRebuildStale (it looks again after the first rename,
-// for a commit made in between, and puts the old store back if there is one);
-// then it brings over what changed in
-// .hedgehug/local since the copy (any other failure to look at the old
-// store leaves b.Dir, for FinishLeftoverKept). A rename that fails changes nothing
-// or puts the old store back; only when that fails too is a leftover
-// (FindLeftover) all there is. The removal of the old store may fail
-// without failing Swap; it is a leftover then. Swap leaves the old store at
-// b.Kept, beside the new one, when b.Purged is not empty (keptPrefix).
-func Swap(dir string, b *Rebuild) error {
-	if err := checkUnchanged(dir, b); err != nil {
-		if errors.Is(err, ErrRebuildStale) {
-			_ = osfs.RemoveAll(b.Dir)
-		}
-		return err
-	}
-	seen, err := syncLocal(dir, b.Dir, b.seen)
-	if err != nil {
-		return err
-	}
-	keep := len(b.Purged) > 0
-	if !keep {
-		// A mark left by a swap that died before its first rename is not
-		// this swap's: it would make the old store stay.
-		removeKeepMarker(dir)
-	}
-	beforeRename()
-	when := time.Now().UTC().Format("20060102T150405.000000000")
-	before := dir + beforePrefix + when
-	if keep {
-		// Written before the first rename, so that whoever finds the old
-		// store left behind knows it is not to be removed.
-		if err := store.WriteLocalIn(dir, keepMarker, []byte("the unpushed changes of this store were not all put back; keep it\n")); err != nil {
-			_ = osfs.RemoveAll(b.Dir)
-			return fmt.Errorf("swap the rebuilt store in: %w", err)
-		}
-	}
-	if err := osfs.Rename(dir, before); err != nil {
-		_ = osfs.RemoveAll(b.Dir)
-		removeKeepMarker(dir)
-		return fmt.Errorf("swap the rebuilt store in: %w", err)
-	}
-	// Nothing new can start in the old store now, but a command that took
-	// its lock in the gap since the check may have committed there; that
-	// commit would go with the old directory. If so, put it back; the next
-	// sync makes the rebuild again.
-	if err := checkUnchanged(before, b); err != nil {
-		var merr error
-		if errors.Is(err, ErrRebuildStale) {
-			// If the old store cannot be put back, FinishLeftoverKept must not
-			// put the rebuild in its place: it would drop that commit.
-			merr = osfs.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
-		}
-		if rerr := osfs.Rename(before, dir); rerr != nil {
-			// merr says that FinishLeftoverKept may not know the rebuild is stale.
-			return errors.Join(err, rerr, merr)
-		}
-		removeKeepMarker(dir)
-		if errors.Is(err, ErrRebuildStale) {
-			_ = osfs.RemoveAll(b.Dir)
-		}
-		return err
-	}
-	if err := osfs.Rename(b.Dir, dir); err != nil {
-		err = fmt.Errorf("swap the rebuilt store in: %w", err)
-		if rerr := osfs.Rename(before, dir); rerr != nil {
-			return errors.Join(err, rerr)
-		}
-		removeKeepMarker(dir)
-		_ = osfs.RemoveAll(b.Dir)
-		return err
-	}
-	// What was written to the old store in the gap since the look above is
-	// brought over now, from where it was moved to.
-	if _, err := syncLocal(before, dir, seen); err != nil {
-		// The rebuilt store is in place; the old one stays for a look.
-		b.Warnings = append(b.Warnings, fmt.Sprintf("carry over the local files of %s: %v", before, err))
-		if keep {
-			b.Kept = before
-		}
-		return nil
-	}
-	if !keep {
-		_ = osfs.RemoveAll(before)
-		return nil
-	}
-	kept := dir + keptPrefix + when
-	if err := osfs.Rename(before, kept); err != nil {
-		// It stays where it is, with the marker: nothing removes it.
-		b.Warnings = append(b.Warnings, fmt.Sprintf("rename the old store %s to %s: %v", before, kept, err))
-		b.Kept = before
-		return nil
-	}
-	b.Kept = kept
-	return nil
-}
-
-// removeKeepMarker removes the marker of a store that stays in its place.
-func removeKeepMarker(dir string) {
-	_ = osfs.Remove(filepath.Join(dir, filepath.FromSlash(store.LocalDir), keepMarker))
-}
-
-// checkUnchanged returns ErrRebuildStale unless the store at dir is as it
-// was when b was made.
-func checkUnchanged(dir string, b *Rebuild) error {
-	r, err := gitrepo.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = r.Close() }()
-	head, err := r.Head()
-	if err != nil {
-		return err
-	}
-	st, err := r.Status()
-	if err != nil {
-		return err
-	}
-	if head != b.OldHead || len(st) > 0 {
-		return ErrRebuildStale
-	}
-	return nil
-}
-
-// FinishLeftoverKept completes a swap that stopped, or removes what a rebuild
-// left. With no store at dir, the rebuilt one takes its place; with only an
-// old one left, it is put back. Then what remains beside the store goes. It
-// returns where it kept an old store that carries keepMarker: that one is
-// renamed to keptPrefix, not removed; when it cannot be, it stays and the
-// error names it.
-func FinishLeftoverKept(dir string, l store.Leftover) (kept []string, err error) {
-	keptPaths := &kept
-	err = finishLeftover(dir, l, keptPaths)
-	return kept, err
-}
-
-func finishLeftover(dir string, l store.Leftover, keptPaths *[]string) error {
-	if _, err := osfs.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
-		stale := false
-		if l.New != "" {
-			_, merr := osfs.Lstat(filepath.Join(l.New, staleMarker))
-			stale = merr == nil
-		}
-		switch {
-		case stale && len(l.Before) > 0:
-			// The rebuild was found stale and the old store could not be put
-			// back: it is put back now, and the rebuild goes with the rest.
-			last := l.Before[len(l.Before)-1]
-			if err := osfs.Rename(last, dir); err != nil {
-				return fmt.Errorf("finish the rebuild: %w", err)
-			}
-			removeKeepMarker(dir)
-			l.Before = l.Before[:len(l.Before)-1]
-		case l.New != "":
-			if err := osfs.Rename(l.New, dir); err != nil {
-				return fmt.Errorf("finish the rebuild: %w", err)
-			}
-			l.New = ""
-			// A marker with no old store to keep has nothing to say.
-			if err := osfs.Remove(filepath.Join(dir, staleMarker)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return fmt.Errorf("finish the rebuild: %w", err)
-			}
-		case len(l.Before) > 0:
-			last := l.Before[len(l.Before)-1]
-			if err := osfs.Rename(last, dir); err != nil {
-				return fmt.Errorf("finish the rebuild: %w", err)
-			}
-			removeKeepMarker(dir)
-			l.Before = l.Before[:len(l.Before)-1]
-		}
-	} else if err != nil {
-		return err
-	}
-	var errs []error
-	if l.New != "" {
-		errs = append(errs, osfs.RemoveAll(l.New))
-	}
-	for _, p := range l.Before {
-		// A swap that stopped may not have carried over the local files of
-		// the old store (sync.json, the inbox); what is missing is brought
-		// over first, and an old store that could not be read stays.
-		if err := carryMissing(p, dir); err != nil {
-			errs = append(errs, fmt.Errorf("carry over the local files of %s (it is left): %w", p, err))
-			continue
-		}
-		if _, err := osfs.Lstat(filepath.Join(p, filepath.FromSlash(store.LocalDir), keepMarker)); err == nil {
-			// The old store holds changes the rebuild did not put back: it
-			// is kept, never removed.
-			kept := dir + keptPrefix + strings.TrimPrefix(filepath.Base(p), filepath.Base(dir)+beforePrefix)
-			if err := osfs.Rename(p, kept); err != nil {
-				errs = append(errs, fmt.Errorf("the old store %s must be kept, and could not be renamed to %s (it is left): %w", p, kept, err))
-				continue
-			}
-			*keptPaths = append(*keptPaths, kept)
-			continue
-		}
-		errs = append(errs, osfs.RemoveAll(p))
-	}
-	return errors.Join(errs...)
-}
-
-// carryMissing brings the local files of the old store at from that the one
-// at to lacks, and the lines of the inbox it lacks.
-func carryMissing(from, to string) error {
-	files, err := localFiles(from)
-	if err != nil {
-		return err
-	}
-	for name := range files {
-		if slices.Contains(ownedLocal, name) {
-			continue
-		}
-		if name == "inbox.jsonl" {
-			old, err := osfs.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name))
-			if err != nil {
-				return err
-			}
-			cur, err := osfs.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name))
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return err
-			}
-			if err := store.WriteLocalIn(to, name, joinLines(cur, old)); err != nil {
-				return err
-			}
-			continue
-		}
-		_, err := osfs.Lstat(filepath.Join(to, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name)))
-		if err == nil {
-			continue
-		}
-		if !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-		if err := copyFile(from, to, name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Discard removes the clone of b, which will not be swapped in.
-func Discard(b *Rebuild) { _ = osfs.RemoveAll(b.Dir) }

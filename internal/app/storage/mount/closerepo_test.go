@@ -1,7 +1,6 @@
 package mount
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,36 +27,6 @@ func newStoresIn(t *testing.T, root string, names ...string) []config.StoreEntry
 		out = append(out, config.StoreEntry{Name: name, Path: dir})
 	}
 	return out
-}
-
-// Stores that share a directory read it once; each still gets its own
-// leftovers, and none gets those of a neighbour.
-func TestOpenStoresInOneDirectoryEachGetsItsOwnLeftover(t *testing.T) {
-	t.Parallel()
-	es := newStoresIn(t, t.TempDir(), "one", "two", "three", "onetwo")
-	// a rebuild beside "one", and an old store beside "two"; "three" and
-	// "onetwo" (whose name starts like "one") have none
-	if err := os.MkdirAll(es[0].Path+".rewrite-new", 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(es[1].Path+".before-rewrite-1", 0o750); err != nil {
-		t.Fatal(err)
-	}
-	set := openSet(t, es...)
-	if len(set.Stores) != 4 || len(set.Skipped) != 0 {
-		t.Fatalf("stores %d, skipped %+v", len(set.Stores), set.Skipped)
-	}
-	var left []string
-	for _, u := range set.Unfinished {
-		var le *store.LeftoverError
-		if !errors.As(u.Err, &le) || le.Name != u.Name {
-			t.Errorf("unfinished %+v", u)
-		}
-		left = append(left, u.Name)
-	}
-	if len(left) != 2 || left[0] != "one" || left[1] != "two" {
-		t.Errorf("Unfinished = %v, want one and two", left)
-	}
 }
 
 // After CloseRepo the store is not used any more, and a set opened again
