@@ -476,3 +476,26 @@ describe("ViewDirectory", () => {
     expect(names(dir)).toEqual(["s/new"]);
   });
 });
+
+describe("kanban.wip", () => {
+  const view = (wip?: Record<string, number>) => ({
+    name: "b",
+    layout: "kanban",
+    query: "",
+    table: { columns: ["id"], group_by: "none" },
+    kanban: { columns: "status", swimlane: "none", wip },
+  });
+  it("keeps the limits through the draft and the body of a save", () => {
+    const d = draftOf(view({ doing: 3 }));
+    expect(d.kanban.wip).toEqual({ doing: 3 });
+    expect(saveBodyOf(d).kanban_wip).toEqual({ doing: 3 });
+    expect(draftOf(view({})).kanban.wip).toBeUndefined();
+    expect(saveBodyOf(draftOf(view())).kanban_wip).toBeUndefined();
+  });
+  it("counts a change of a limit as unsaved", () => {
+    const d = draftOf(view({ doing: 3 }));
+    const with4 = { ...d, kanban: { ...d.kanban, wip: { doing: 4 } } };
+    expect(sameDraft(d, with4)).toBe(false);
+    expect(sameDraft(d, draftOf(view({ doing: 3 })))).toBe(true);
+  });
+});

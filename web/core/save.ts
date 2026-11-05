@@ -13,6 +13,8 @@ export type PatchField =
   | "labels"
   | "repos"
   | "blocked_by"
+  | "sprint"
+  | "releases"
   | "body"
   | `props.${string}`;
 

@@ -51,8 +51,8 @@ export function usePlans(where: () => { store: string; name: string }): {
     ])
       .then(([s, r]) => {
         if (!live) return;
-        sprints = s ?? [];
-        releases = r ?? [];
+        sprints = Array.isArray(s) ? s : [];
+        releases = Array.isArray(r) ? r : [];
         error = null;
         loaded = true;
       })

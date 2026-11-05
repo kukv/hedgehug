@@ -263,8 +263,15 @@ describe("SettingsSchema", () => {
       "/settings/schema/org-b%2Fops?tab=kinds",
       "/settings/schema/org-b%2Fops?tab=props",
       "/settings/schema/org-b%2Fops?tab=workflow",
+      "/settings/schema/org-b%2Fops?tab=templates",
     ]);
-    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, null, "page", null]);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([
+      null,
+      null,
+      "page",
+      null,
+      null,
+    ]);
     await fireEvent.click(links[3] as HTMLElement);
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
@@ -289,14 +296,13 @@ describe("SettingsSchema", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("does not offer what is not built: adding, deleting, colors, the YAML, the templates", async () => {
+  it("does not offer what is not built: adding, deleting, colors, the YAML", async () => {
     setup();
     await screen.findByRole("heading", { level: 2, name: "ステータス" });
-    for (const name of [/追加/, /削除/, /色/, /YAML を開く/, /テンプレート/, /保存/]) {
+    for (const name of [/追加/, /削除/, /色/, /YAML を開く/, /保存/]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
       expect(screen.queryByRole("link", { name })).toBeNull();
     }
-    expect(screen.queryByRole("heading", { name: /テンプレート/ })).toBeNull();
   });
 
   describe("reading again", () => {

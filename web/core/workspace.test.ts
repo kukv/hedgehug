@@ -73,6 +73,15 @@ describe("removeBlocker", () => {
     expect(removeBlocker({ tasks: 0, deleted: 0, sprints: 0, releases: 0 })).toBeNull();
   });
 
+  it("counts the sprints and the releases", () => {
+    expect(removeBlocker({ tasks: 3, deleted: 1, sprints: 2, releases: 1 })).toBe(
+      "タスク 4 件（削除済み 1 件を含む）、スプリント 2 件、リリース 1 件が残っているため削除できません。タスクを別のワークスペースへ移すか完全に削除し、スプリントとリリースを削除すると消せます",
+    );
+    expect(removeBlocker({ tasks: 0, deleted: 0, sprints: 1, releases: 0 })).toBe(
+      "スプリント 1 件が残っているため削除できません。スプリントを削除すると消せます",
+    );
+  });
+
   it("counts the deleted tasks, which still hold the workspace", () => {
     expect(removeBlocker({ tasks: 24, deleted: 1, sprints: 0, releases: 0 })).toBe(
       "タスク 25 件（削除済み 1 件を含む）が残っているため削除できません。別のワークスペースへ移すか完全に削除すると消せます",

@@ -9,10 +9,19 @@ export type Lists = Record<string, string[]>;
  * The override of a project as the screen edits it. statuses is empty while the project shows the
  * store's statuses; the others are only what the project adds to the store's.
  */
-export type ScopedDraft = { statuses: string[]; transitions: Lists; required: Lists };
+export type ScopedDraft = {
+  statuses: string[];
+  transitions: Lists;
+  required: Lists;
+  // The templates the project may use (none: all of them), and the default of each kind.
+  templates: string[];
+  templateDefaults: Record<string, string>;
+};
 
 /** The body of PUT /api/schema/scoped/{project}: only the parts that changed, each as a whole. */
-type ScopedBody = Partial<ScopedDraft>;
+type ScopedBody = Partial<Omit<ScopedDraft, "templateDefaults">> & {
+  template_defaults?: Record<string, string>;
+};
 
 // The built-in fields a workflow may require, besides the properties (internal/app/domain/schema requirableFields).
 const REQUIRABLE_BUILTINS = [
@@ -36,6 +45,8 @@ export function draftOf(def: ScopedDef | undefined): ScopedDraft {
     statuses: [...(def?.statuses ?? [])],
     transitions: listsOf(def?.workflow?.transitions),
     required: listsOf(def?.workflow?.required),
+    templates: [...(def?.templates?.only ?? [])],
+    templateDefaults: { ...(def?.templates?.default ?? {}) },
   };
 }
 
@@ -96,6 +107,9 @@ function sameLists(a: Lists, b: Lists): boolean {
   );
 }
 
+const sortedEntries = (m: Record<string, string>): [string, string][] =>
+  Object.entries(m).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
 /**
  * The body of the PUT that saves draft over saved: the parts that changed, each as the whole of
  * the draft's part. An empty part goes back to the store's. {} while nothing changed.
@@ -107,6 +121,13 @@ export function putBody(schema: SchemaView, saved: ScopedDraft, draft: ScopedDra
   }
   if (!sameLists(saved.transitions, draft.transitions)) body.transitions = draft.transitions;
   if (!sameLists(saved.required, draft.required)) body.required = draft.required;
+  if (!sameSet(saved.templates, draft.templates)) body.templates = draft.templates;
+  if (
+    JSON.stringify(sortedEntries(saved.templateDefaults)) !==
+    JSON.stringify(sortedEntries(draft.templateDefaults))
+  ) {
+    body.template_defaults = draft.templateDefaults;
+  }
   return body;
 }
 

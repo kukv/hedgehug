@@ -65,11 +65,22 @@ describe("WorkspaceHeader", () => {
     expect(getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
   });
 
-  it("ガント・バックログなど後のフェーズのタブは出さない", () => {
+  it("スプリントもリリースもなければ計画のタブは出さない", () => {
     const { queryByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "overview" });
     for (const name of ["ガント", "バックログ", "スプリント", "リリース", "レポート"]) {
       expect(queryByRole("link", { name })).toBeNull();
     }
+  });
+
+  it("スプリントかリリースがあれば計画のタブを出す", () => {
+    const { getByRole, queryByRole } = renderWithCore(WorkspaceHeader, {
+      entry: { ...entry, releases: 1 },
+      tab: "backlog",
+    });
+    expect(getByRole("link", { name: "バックログ" }).getAttribute("aria-current")).toBe("page");
+    expect(getByRole("link", { name: "スプリント" })).toBeTruthy();
+    expect(getByRole("link", { name: "リリース" })).toBeTruthy();
+    expect(queryByRole("link", { name: "ガント" })).toBeNull();
   });
 
   it("設定のタブのとき設定が今のタブ", () => {

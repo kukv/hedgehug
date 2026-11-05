@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BulkDialog from "./BulkDialog.svelte";
   import { closePlanDialog, planDialog } from "./dialogs-state.svelte";
   import PlanRemove from "./PlanRemove.svelte";
   import ReleaseForm from "./ReleaseForm.svelte";
@@ -33,6 +34,8 @@
       <ReleaseForm entry={d.entry} onclose={closePlanDialog} />
     {:else if d.kind === "release-edit"}
       <ReleaseForm entry={d.entry} release={d.release} onclose={closePlanDialog} />
+    {:else if d.kind === "bulk"}
+      <BulkDialog target={d.target} onclose={closePlanDialog} />
     {:else}
       <PlanRemove dialog={d} onclose={closePlanDialog} />
     {/if}

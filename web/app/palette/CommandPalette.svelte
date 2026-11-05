@@ -9,6 +9,7 @@
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
   import { closePalette, palette } from "../palette-state.svelte";
+  import { openPlanDialog } from "../planning/dialogs-state.svelte";
   import { readOnlyNow } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
@@ -48,7 +49,10 @@
   let input = $state("");
   let active = $state(0);
   let picking = $state<TaskView | null>(null);
-  let found = $state<{ groups: PaletteGroup[]; error: unknown }>({ groups: [], error: null });
+  let found = $state<{ groups: PaletteGroup[]; error: unknown; total?: number }>({
+    groups: [],
+    error: null,
+  });
   // The text `found` was computed for: what it says is true of that text only.
   let foundFor = $state("");
   let inputEl = $state<HTMLInputElement | null>(null);
@@ -177,6 +181,9 @@
       addWorkspace: () => openWorkspaceAdd(),
       // A query typed in the palette is saved as a table, which holds any query (a tree cannot sort).
       saveQuery: (query) => openViewSave({ draft: newDraft({ layout: "table", query }) }),
+      bulkQuery: (query) => openPlanDialog({ kind: "bulk", target: { query } }),
+      addSprint: () => openPlanDialog({ kind: "sprint-add", entry: planEntry() }),
+      addRelease: () => openPlanDialog({ kind: "release-add", entry: planEntry() }),
       views: c.views.list().filter((v) => storeShown(c.stores, v.store)),
       undo: () =>
         void runUndo(
@@ -247,6 +254,14 @@
     return items.length ? [{ name: `${did.current(t.store, t.id)} のステータス`, items }] : [];
   }
 
+  // The workspace the screen is about; undefined: the dialog asks for one.
+  function planEntry() {
+    const r = router.route;
+    if (r.name === "workspace") return c.stores.workspace(r.store, r.ulid);
+    const t = r.name === "task" || r.name === "project" ? c.cache.task(r.ulid) : undefined;
+    return t ? c.stores.workspace(t.store, t.workspace.ulid) : undefined;
+  }
+
   const groups = $derived.by<PaletteGroup[]>(() => {
     cacheRev.current;
     schemaRev.current;
@@ -256,7 +271,7 @@
     // A query that found tasks can be opened as a table or saved as a view.
     // Only for the text the search was made for: the one typed since is not checked yet.
     if (mode === "query" && !found.error && found.groups.length > 0 && foundFor === input.trim()) {
-      out.push(queryCommands(env, input.trim()));
+      out.push(queryCommands(env, input.trim(), found.total ?? 0));
     }
     const first = found.groups.flatMap((g) => g.items).find((i) => i.type === "task");
     if (mode === "id" && first?.type === "task") {

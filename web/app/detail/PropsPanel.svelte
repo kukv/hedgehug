@@ -3,6 +3,7 @@
   import type { PatchField } from "../../core/save";
   import { canParent, parentRule } from "../../core/schema";
   import { core } from "../context";
+  import { usePlans } from "../planning/plans.svelte";
   import { useSubscribe } from "../svelte-store";
   import Avatar from "../ui/Avatar.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -54,6 +55,15 @@
     (show.repos ?? []).length > 0 ||
       sc.current?.kinds?.find((k) => k.name === show.kind)?.role === "container",
   );
+
+  const plans = usePlans(() => ({ store: show.store, name: show.workspace.name }));
+  // A closed sprint takes no more tasks; a task in one still shows it.
+  const sprintOptions = $derived<Option[]>(
+    plans.sprints
+      .filter((s) => s.state !== "closed" || s.ulid === show.sprint?.ulid)
+      .map((s) => ({ value: s.ulid, label: s.name })),
+  );
+  const releaseNames = $derived((show.releases ?? []).map((r) => r.name ?? r.ulid));
 
   function edit(field: PatchField, value: unknown) {
     save.edit(show.ulid, show.store, field, value);
@@ -114,6 +124,31 @@
       value={show.labels ?? []}
       {readonly}
       onedit={(v) => edit("labels", v)}
+      oncommit={commit}
+    />
+  </dd>
+
+  <dt>スプリント</dt>
+  <dd>
+    <FieldInput
+      editor="select"
+      label="スプリント"
+      value={show.sprint?.ulid ?? ""}
+      options={sprintOptions}
+      {readonly}
+      onedit={(v) => edit("sprint", v ?? "")}
+      oncommit={commit}
+    />
+  </dd>
+
+  <dt>リリース</dt>
+  <dd>
+    <FieldInput
+      editor="chips"
+      label="リリース"
+      value={releaseNames}
+      {readonly}
+      onedit={(v) => edit("releases", v)}
       oncommit={commit}
     />
   </dd>

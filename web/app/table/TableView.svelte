@@ -20,6 +20,7 @@
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { openPlanDialog } from "../planning/dialogs-state.svelte";
   import { readOnlyNow, readOnlySentence } from "../read-only";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
@@ -503,6 +504,23 @@
   const labelOf = (id: string) => specs.find((s) => s.id === id)?.label ?? id;
   const groupMeta = (g: Extract<TableItem, { type: "group" }>) =>
     g.progress ? `${g.progress.done}/${g.progress.total} 完了` : "";
+
+  // The rows picked for a bulk update: not the selection of the app, which is one row. A row the
+  // filter took away is not picked any more.
+  let picked = $state<ReadonlySet<string>>(new Set());
+  const writable = $derived(
+    tasks.filter((t) => readOnlyNow(c.stores, t.store) === null).map((t) => t.ulid),
+  );
+  const pickedNow = $derived(writable.filter((u) => picked.has(u)));
+  function togglePick(ulid: string, on: boolean) {
+    const next = new Set(picked);
+    if (on) next.add(ulid);
+    else next.delete(ulid);
+    picked = next;
+  }
+  const pickAll = (on: boolean) => {
+    picked = new Set(on ? writable : []);
+  };
 </script>
 
 {#snippet controls()}
@@ -573,6 +591,14 @@
       onfocusout={(e) => focusOut(e, t)}
     >
       <td class="mark">
+        <input
+          class="pick"
+          type="checkbox"
+          aria-label="{did.current(t.store, t.id)} を選択"
+          checked={picked.has(t.ulid)}
+          disabled={locked !== null}
+          onchange={(e) => togglePick(t.ulid, e.currentTarget.checked)}
+        >
         {#if locked}
           <span id="{uid}-ro-{t.ulid}" class="sr">{readOnlySentence(locked)}</span>
         {/if}
@@ -624,6 +650,30 @@
     {actions}
   />
 
+  {#if pickedNow.length > 0}
+    <div class="bulk" role="toolbar" aria-label="選択したタスクの一括編集">
+      <span>{pickedNow.length} 件を選択</span>
+      <Button
+        size="sm"
+        onclick={() =>
+          openPlanDialog({
+            kind: "bulk",
+            target: { ulids: pickedNow, store: c.cache.task(pickedNow[0] ?? "")?.store },
+          })}
+      >
+        まとめて更新…
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="選択を解除"
+        onclick={() => (picked = new Set())}
+      >
+        解除
+      </Button>
+    </div>
+  {/if}
+
   <div class="body">
     <div class="scroller" bind:this={scroller}>
       <div class="inner" style:--cols={template} style:min-width="{minWidth}rem">
@@ -636,7 +686,17 @@
         >
           <thead>
             <tr class="head" aria-rowindex={1}>
-              <th class="hcell" scope="col"><span class="sr">保存の状態</span></th>
+              <th class="hcell" scope="col">
+                <span class="sr">保存の状態</span>
+                <input
+                  class="pick"
+                  type="checkbox"
+                  aria-label="すべて選択"
+                  checked={writable.length > 0 && pickedNow.length === writable.length}
+                  indeterminate={pickedNow.length > 0 && pickedNow.length < writable.length}
+                  onchange={(e) => pickAll(e.currentTarget.checked)}
+                >
+              </th>
               {#each headers as h (h.id)}
                 {@const dir = h.column.getIsSorted()}
                 <th
@@ -739,6 +799,16 @@
 {/if}
 
 <style>
+  .bulk {
+    display: flex;
+    gap: var(--space-10);
+    align-items: center;
+    padding: var(--space-6) var(--gutter);
+    background: var(--accent-weak);
+  }
+  .pick {
+    margin: 0;
+  }
   .table {
     box-sizing: border-box;
     display: flex;

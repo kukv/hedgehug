@@ -16,6 +16,7 @@
   import Tabs from "../ui/Tabs.svelte";
   import MigrateDialog, { type MigrateTarget } from "./MigrateDialog.svelte";
   import SchemaCheck from "./SchemaCheck.svelte";
+  import SettingsTemplates from "./SettingsTemplates.svelte";
 
   // The schema of a Store (its .hedgehug/schema.yaml), read: how many tasks use each definition, the
   // overrides of the projects, and what `schema check` finds. A name is changed or merged here (migrate);
@@ -120,6 +121,7 @@
         ["kinds", "種類", kinds.length],
         ["props", "プロパティと関連", propEntries.length],
         ["workflow", "ワークフロー", undefined],
+        ["templates", "テンプレート", undefined],
       ] as const
     ).map(([key, label, n]) => ({
       label,
@@ -271,6 +273,8 @@
           </tbody>
         </table>
       </section>
+    {:else if tab === "templates"}
+      <SettingsTemplates {store} {off} />
     {:else if tab === "kinds"}
       <section class="sec" aria-labelledby="{uid}-kinds">
         <h2 id="{uid}-kinds">種類</h2>
@@ -286,6 +290,7 @@
               <th scope="col">役割</th>
               <th scope="col">置ける親</th>
               <th scope="col">既定</th>
+              <th scope="col">既定のテンプレート</th>
               <th scope="col" class="num">タスク</th>
               <th scope="col"><span class="sr">操作</span></th>
             </tr>
@@ -302,6 +307,7 @@
                 <td>{k.role}</td>
                 <td>{parentsText(k.parents)}</td>
                 <td>{k.default ? "既定" : ""}</td>
+                <td>{k.template ?? ""}</td>
                 <td class="num">{count(usage?.kinds[k.name])}</td>
                 <td>
                   <div class="acts">

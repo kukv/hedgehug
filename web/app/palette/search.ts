@@ -104,7 +104,8 @@ export type SearchDeps = {
   storeNames?: () => string[];
 };
 
-export type SearchResult = { groups: PaletteGroup[]; error: unknown };
+// total is what a query found, which may be more than the items shown.
+export type SearchResult = { groups: PaletteGroup[]; error: unknown; total?: number };
 
 function isNotFound(e: unknown): boolean {
   return typeof e === "object" && e !== null && (e as { status?: number }).status === 404;
@@ -145,6 +146,7 @@ export async function searchTasks(
       const items = tasks.slice(0, MAX).map((t) => taskItem(t, d.hrefOf));
       return {
         groups: items.length ? [{ name: `クエリに一致 · ${tasks.length} 件`, items }] : [],
+        total: tasks.length,
         error: null,
       };
     }
@@ -183,6 +185,9 @@ export type CommandEnv = {
   addWorkspace: () => void;
   undo: () => void;
   saveQuery: (q: string) => void; // opens the dialog that saves the query as a view
+  bulkQuery: (q: string) => void; // opens the dialog that updates what the query finds
+  addSprint: () => void;
+  addRelease: () => void;
   workspaces: WorkspaceEntry[];
   views: ViewEntry[]; // the saved views of every store
   storeNames: string[]; // every mounted store, also one with no workspace
@@ -289,9 +294,9 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
 }
 
 // queryCommands are what the palette offers for the query that was typed: the screen of the
-// query as a table (nothing is saved), and the dialog that saves it as a view. The bulk update
-// of the matches the design shows is not made (phase 6).
-export function queryCommands(env: CommandEnv, q: string): PaletteGroup {
+// query as a table (nothing is saved), the dialog that saves it as a view, and the bulk update of
+// the n tasks it found.
+export function queryCommands(env: CommandEnv, q: string, n: number): PaletteGroup {
   const href = env.hrefs.query("table", q);
   return {
     name: "このクエリで",
@@ -310,6 +315,14 @@ export function queryCommands(env: CommandEnv, q: string): PaletteGroup {
         label: "ビューとして保存…",
         icon: "filter",
         run: () => env.saveQuery(q),
+      },
+      {
+        type: "command",
+        key: "query-bulk",
+        label: `一致する ${n} 件をまとめて更新…`,
+        icon: "plus",
+        note: "hh set --query",
+        run: () => env.bulkQuery(q),
       },
     ],
   };
@@ -352,6 +365,20 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     },
     {
       type: "command",
+      key: "cmd:sprint-add",
+      label: "スプリントを作る",
+      icon: "plus",
+      run: env.addSprint,
+    },
+    {
+      type: "command",
+      key: "cmd:release-add",
+      label: "リリースを作る",
+      icon: "plus",
+      run: env.addRelease,
+    },
+    {
+      type: "command",
       key: "cmd:workspace-add",
       label: "ワークスペースを追加",
       icon: "plus",
@@ -368,6 +395,8 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const writes: Record<string, boolean> = {
     "cmd:create-task": canCreate,
     "cmd:create-project": canCreate,
+    "cmd:sprint-add": canCreate,
+    "cmd:release-add": canCreate,
     "cmd:workspace-add": canAddWorkspace,
   };
 

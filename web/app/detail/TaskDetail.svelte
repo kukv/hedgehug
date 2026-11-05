@@ -34,6 +34,7 @@
   import { ancestorChain, type Crumb, collapseCrumbs, createLookup, crumbsSig } from "./lookup";
   import PropsPanel from "./PropsPanel.svelte";
   import Relations from "./Relations.svelte";
+  import Worklogs from "./Worklogs.svelte";
   import { isWatching } from "./watch";
 
   let { ulid }: { ulid: string } = $props();
@@ -380,6 +381,7 @@
           </section>
           <Checklist body={liveBody ?? s.body} readonly={locked} ontoggle={toggleCheck} />
           <Relations show={s} readonly={locked} />
+          <Worklogs show={s} readonly={locked} />
           <GitHubSection show={s} readonly={locked} />
           <Comments show={s} readonly={locked} />
           <History show={s} readonly={locked} />
