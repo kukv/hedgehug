@@ -166,6 +166,10 @@ func (c *compiler) term(t Term) (pred, error) {
 	switch t.Key {
 	case "status":
 		return c.status(t)
+	case "sprint":
+		return c.sprint(t)
+	case "release":
+		return c.matchText(t, c.releaseNames, nil)
 	case "kind":
 		t, err := c.known(t, func(v string) error {
 			if _, ok := c.sc.Kind(v); !ok {
@@ -280,6 +284,72 @@ func (c *compiler) matchBy(t Term, get func(*index.Entry) []string, check func(s
 		}
 		return false
 	}, nil
+}
+
+// sprint matches the sprint of a task: current for an active one, next for
+// the one index.NextSprint gives, and otherwise by name, like label:.
+func (c *compiler) sprint(t Term) (pred, error) {
+	current, next := false, false
+	named := t
+	named.Values = nil
+	for _, v := range t.Values {
+		switch v {
+		case "current":
+			current = true
+		case "next":
+			next = true
+		default:
+			named.Values = append(named.Values, v)
+		}
+	}
+	byName, err := c.matchText(named, c.sprintName, nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(e *index.Entry) bool {
+		if byName(e) {
+			return true
+		}
+		if e.Sprint == nil {
+			return false
+		}
+		sp, ok := c.ix.Sprint(*e.Sprint)
+		if !ok {
+			return false
+		}
+		if current && sp.State == model.SprintActive {
+			return true
+		}
+		if next {
+			n, ok := c.ix.NextSprint(e.Workspace)
+			return ok && n.ULID == sp.ULID
+		}
+		return false
+	}, nil
+}
+
+// sprintName is the name of the sprint of e. A sprint whose file is gone
+// gives its ULID, so that the task does not read as having no sprint.
+func (c *compiler) sprintName(e *index.Entry) []string {
+	if e.Sprint == nil {
+		return nil
+	}
+	if sp, ok := c.ix.Sprint(*e.Sprint); ok {
+		return []string{sp.Name}
+	}
+	return []string{e.Sprint.String()}
+}
+
+// releaseNames is sprintName for the releases of e.
+func (c *compiler) releaseNames(e *index.Entry) []string {
+	out := make([]string, len(e.Releases))
+	for i, u := range e.Releases {
+		out[i] = u.String()
+		if r, ok := c.ix.Release(u); ok {
+			out[i] = r.Name
+		}
+	}
+	return out
 }
 
 // status matches a status or a category, which stands for every status in
