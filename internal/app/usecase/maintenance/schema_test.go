@@ -135,6 +135,35 @@ func TestSchemaOverrideOfDeletedProject(t *testing.T) {
 	}
 }
 
+func TestSchemaAutomationProjects(t *testing.T) {
+	t.Parallel()
+	s, dir := newStore(t)
+	live := newTask("Live")
+	live.Kind = "project"
+	plain := newTask("Plain")
+	gone := newTask("Gone")
+	gone.Kind = "project"
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	gone.DeletedAt = &at
+	put(t, s, live, plain, gone)
+	rule := func(id string, p *model.Task) string {
+		return "- {id: " + id + ", where: 'project:" + p.ULID.String() + "', on: pr.opened, set: {status: todo}}\n"
+	}
+	writeFile(t, dir, model.AutomationsPath, "rules:\n"+rule("a", live)+rule("b", plain)+rule("c", gone))
+	fs, err := usecase.CheckSchema(s, mustOpen(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wheres []string
+	for _, f := range fs {
+		wheres = append(wheres, f.Check+" "+f.Where)
+	}
+	want := []string{"automation automations.yaml: rules[1].where", "automation automations.yaml: rules[2].where"}
+	if !slices.Equal(wheres, want) {
+		t.Errorf("findings = %v, want %v", wheres, want)
+	}
+}
+
 func TestSort(t *testing.T) {
 	t.Parallel()
 	fs := []usecase.Finding{{Check: "task", Where: "b"}, {Check: "template", Where: "z"}, {Check: "schema", Where: "y"}, {Check: "task", Where: "a"}, {Check: "override", Where: "q"}}
