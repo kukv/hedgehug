@@ -1,4 +1,4 @@
-package integration
+package usecase
 
 import (
 	"cmp"
@@ -15,7 +15,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
@@ -33,18 +32,18 @@ type target struct{ pulls, issues []int }
 // commit, followed by a commit for each task whose status the rules of
 // automations.yaml change. A repository that cannot be read is a warning: the
 // others go on. A read-only store is not fetched.
-func Fetch(ss *usecase.Session, c *config.Config, e config.StoreEntry) (FetchReport, error) {
+func Fetch(ss *Session, c *config.Config, e config.StoreEntry) (FetchReport, error) {
 	return fetchStore(ss, c, e, "")
 }
 
 // FetchRepo is Fetch of the one repository repo, a repo ID, whether it is due
 // or not. The other repositories of the store are left for their time.
-func FetchRepo(ss *usecase.Session, c *config.Config, e config.StoreEntry, repo string) (FetchReport, error) {
+func FetchRepo(ss *Session, c *config.Config, e config.StoreEntry, repo string) (FetchReport, error) {
 	return fetchStore(ss, c, e, strings.ToLower(repo))
 }
 
 // fetchStore is Fetch, or FetchRepo when force names a repository.
-func fetchStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, force string) (FetchReport, error) {
+func fetchStore(ss *Session, c *config.Config, e config.StoreEntry, force string) (FetchReport, error) {
 	ss = ss.ForStore(e.Name)
 	ss.BackgroundSync = false // the sync that called this pushes what it writes
 	var rep FetchReport
@@ -53,13 +52,13 @@ func fetchStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, forc
 		return rep, err
 	}
 	defer func() { _ = s.Repo().Close() }()
-	var ro *usecase.ReadOnlyError
+	var ro *ReadOnlyError
 	if err := ss.CheckWritable(s); errors.As(err, &ro) {
 		return rep, nil
 	} else if err != nil {
 		return rep, err
 	}
-	err = s.WithLocalLock("github.lock", usecase.SyncLockWait, func() error {
+	err = s.WithLocalLock("github.lock", SyncLockWait, func() error {
 		ix, err := ss.IndexOf(e.Name, s)
 		if err != nil {
 			return err
@@ -69,7 +68,7 @@ func fetchStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, forc
 	return rep, err
 }
 
-func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, rep *FetchReport) error {
+func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, rep *FetchReport) error {
 	state, err := ghstate.Read(s)
 	if err != nil {
 		return err
@@ -296,7 +295,7 @@ func repoOf(ref string) string {
 // HasTargets reports whether the tasks of the store e name a repository to
 // read: one in repos, or one a link in use points at. A store that does not
 // open has none.
-func HasTargets(ss *usecase.Session, e config.StoreEntry) bool {
+func HasTargets(ss *Session, e config.StoreEntry) bool {
 	ss = ss.ForStore(e.Name)
 	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {

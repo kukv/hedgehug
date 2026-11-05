@@ -1,4 +1,4 @@
-package integration_test
+package usecase_test
 
 import (
 	"net/http/httptest"
@@ -31,13 +31,13 @@ func withFake(t *testing.T) (*usecasetest.Session, *fakegh.Server) {
 	return ts, fake
 }
 
-func fetch(t *testing.T, ts *usecasetest.Session) integration.FetchReport {
+func fetch(t *testing.T, ts *usecasetest.Session) usecase.FetchReport {
 	t.Helper()
 	c, e, err := ts.Entry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := integration.Fetch(ts.Session, c, e)
+	r, err := usecase.Fetch(ts.Session, c, e)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestFetchOfAPullRequestAcrossStores(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r, err := integration.Fetch(ts.Session, c, e)
+		r, err := usecase.Fetch(ts.Session, c, e)
 		if err != nil || !r.Committed || len(r.Warnings) != 0 {
 			t.Fatalf("%s: report = %+v, %v", name, r, err)
 		}

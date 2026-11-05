@@ -1,5 +1,5 @@
-// Package integration ties tasks to pull requests and issues on GitHub:
-// the links, and reading GitHub's values into gh.
+// Package integration ties tasks to pull requests and issues on GitHub: the
+// links. Reading GitHub's values into gh is in package usecase.
 package integration
 
 import (

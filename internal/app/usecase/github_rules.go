@@ -1,4 +1,4 @@
-package integration
+package usecase
 
 import (
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
@@ -6,7 +6,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // taskChange is a status the rules gave a task.
@@ -40,7 +39,7 @@ func runRules(tx *store.Tx, rules *automation.File, ix *index.Index, sc *schema.
 // The transitions were checked rule by rule; the first status and the last
 // need not be a transition themselves. A status that cannot be written is a
 // warning: the fetch is done.
-func applyChanges(ss *usecase.Session, s *store.Store, held *store.Locked, changes []taskChange, rep *FetchReport) {
+func applyChanges(ss *Session, s *store.Store, held *store.Locked, changes []taskChange, rep *FetchReport) {
 	for _, c := range changes {
 		_, err := ss.UpdateCommit(s, store.Op{Name: "set", Task: c.ulid, Automated: true, SkipTransitions: true, Locked: held}, func(tx *store.Tx) error {
 			t, err := tx.Task(c.ulid)

@@ -28,3 +28,6 @@ func ResultIndexHas(r TaskResult, u model.ULID) bool {
 	_, ok := r.index.Task(u)
 	return ok
 }
+
+// AutoLinks lets the external test call autoLinks.
+var AutoLinks = autoLinks

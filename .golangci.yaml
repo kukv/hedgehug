@@ -123,6 +123,8 @@ linters:
               desc: 領域どうしは土台を通す（spec 2.3）
             - pkg: github.com/kukv/hedgehug/internal/app/usecase/comments
               desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/integration
+              desc: 領域どうしは土台を通す（spec 2.3）
             - pkg: github.com/kukv/hedgehug/internal/app/usecase/maintenance
               desc: 領域どうしは土台を通す（spec 2.3）
             - pkg: github.com/kukv/hedgehug/internal/app/usecase/notifications

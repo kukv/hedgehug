@@ -274,3 +274,20 @@ func TestUndoTakesBackLink(t *testing.T) {
 		t.Errorf("links after undoing unlink = %+v", l)
 	}
 }
+
+func taskIn(t *testing.T, ts *usecasetest.Session, store, id string) *model.Task {
+	t.Helper()
+	s, ix, err := ts.ForStore(store).Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := ts.Resolve(ix, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, err := s.Task(e.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return x
+}

@@ -4,7 +4,7 @@
 
 **Goal:** `automations.yaml` のルールで PR・Issue の変化からステータスを動かし、`hh start`・`hh pr` と合わせて、CLI だけで開発の開始から PR のマージまでを手動のステータス変更なしで回せるようにする（spec の 5b の完了条件）。
 
-**Architecture:** 形式・検査・イベント判定・ルール評価は I/O のない `domain/automation` に置く。`integration.Fetch` は取り込みのトランザクションの中でルールを評価し、拒否を取り込みのコミットの trailer に書き、採用した変更をストアのロックを持ったままタスクごとの `set` コミットにする。`hh start`・`hh pr` は `usecase/integration`、ルールの編集は新しい領域 `usecase/automations` に置く。コードの repo の操作は `lib/gitrepo/code.go`（go-git のみ）。
+**Architecture:** 形式・検査・イベント判定・ルール評価は I/O のない `domain/automation` に置く。`usecase.Fetch` は取り込みのトランザクションの中でルールを評価し、拒否を取り込みのコミットの trailer に書き、採用した変更をストアのロックを持ったままタスクごとの `set` コミットにする。`hh start`・`hh pr` は `usecase/integration`、ルールの編集は新しい領域 `usecase/automations` に置く。コードの repo の操作は `lib/gitrepo/code.go`（go-git のみ）。
 
 **Tech Stack:** Go、go-git、cobra、GitHub GraphQL・REST API、fakegh。
 
@@ -59,8 +59,8 @@ spec に書いていなかった細部を、コードを読んで次のとおり
 | `internal/app/domain/automation/check.go`（新規） | 検査 |
 | `internal/app/domain/automation/eval.go`（新規） | イベントの判定、ルールの評価、trailer の形 |
 | `internal/app/storage/store/automations.go`（新規） | `Store.Automations()` |
-| `internal/app/usecase/integration/fetch.go`・`apply.go` | ルールの実行、`FetchRepo` |
-| `internal/app/usecase/integration/rules.go`（新規） | 評価とタスクごとのコミット |
+| `internal/app/usecase/github_fetch.go`・`github_apply.go` | ルールの実行、`FetchRepo` |
+| `internal/app/usecase/github_rules.go`（新規） | 評価とタスクごとのコミット |
 | `internal/app/usecase/integration/link.go` | `issue_fields.default_sync` |
 | `internal/app/usecase/integration/start.go`・`pr.go`（新規） | `hh start`・`hh pr` |
 | `internal/app/usecase/automations/automations.go`（新規） | ルールの一覧と編集 |
@@ -268,7 +268,7 @@ func (f *File) Evaluate(in Input) Outcome {
 
 ### Task 5: 取り込みでルールを実行する
 
-**Files:** Modify: `usecase/integration/apply.go`、`fetch.go`、`export_test.go`。Create: `usecase/integration/rules.go`、`rules_test.go`
+**Files:** Modify: `usecase/github_apply.go`、`github_fetch.go`、`export_test.go`。Create: `usecase/github_rules.go`、`github_rules_test.go`
 
 `apply` の戻り値を次に変える。
 
@@ -546,7 +546,7 @@ func PullRequest(ss *usecase.Session, arg string, in PRInput) (PRResult, error)
 4. `ss.GitHubForRepo`・`ss.ConnForRepo`、`PushBranch`
 5. `OpenPullFor`。なければ `Repo` の `DefaultBranch` へ `CreatePull`
 6. リンク済みでなければ `op: link` でリンクする（`change` の中身を共有）
-7. `FetchRepo` の後、`Committed` なら `ss.MarkWritten(s)`。取り込みの失敗は `Warnings`
+7. `usecase.FetchRepo` の後、`Committed` なら `ss.MarkWritten(s)`。取り込みの失敗は `Warnings`
 
 エラーは `github.Describe` を通す。push の `ErrRejected` は `pr.rejected`、`ErrPushDenied` は `pr.denied`。
 

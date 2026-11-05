@@ -1,4 +1,4 @@
-package integration_test
+package usecase_test
 
 import (
 	"regexp"
@@ -399,7 +399,7 @@ func TestFetchNotesAFailedReadWhenTheLockIsHeld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := integration.Fetch(ts.Session, c, e); err == nil {
+	if _, err := usecase.Fetch(ts.Session, c, e); err == nil {
 		t.Fatal("the fetch did not fail")
 	}
 	st, err := ghstate.Read(other)
@@ -484,7 +484,7 @@ func TestFetchRepoReadsOneRepositoryNow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := integration.FetchRepo(ts.Session, c, e, "github.com/org-a/WEB")
+	r, err := usecase.FetchRepo(ts.Session, c, e, "github.com/org-a/WEB")
 	if err != nil || !r.Committed {
 		t.Fatalf("report = %+v, %v", r, err)
 	}

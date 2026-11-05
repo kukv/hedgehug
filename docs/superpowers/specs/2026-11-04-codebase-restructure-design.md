@@ -118,6 +118,7 @@ api/openapi.yaml            今のまま
 
 - session（Store を開く、書き手、1 操作 1 コミット）、errors、TaskView などの返す型（旧 view.go）、readonly、conn（GitHub への接続とアカウントの選択）、ResolveRef（旧 mount_ops.go）
 - mount から移す ID の解決、context から移す行き先の判断
+- GitHub の取り込み（`Fetch`・`FetchRepo`・`HasTargets`）、自動のリンク付け、ルールの実行（`github_*.go`）。replication の sync が呼ぶので、integration から下ろした
 - 領域をまたいで使うヘルパー（task.go の `NotDeleted`・`LiveParent`・`EndRank` など）。どれを下ろすかは plan で、領域をまたぐ呼び出しを洗い出して確定する
 
 | パッケージ | 旧 ops のファイル |
@@ -134,8 +135,8 @@ api/openapi.yaml            今のまま
 | accounts | auth |
 | maintenance | maintain の Doctor, purge, rebuild ＋ 旧 doctor |
 | watch | server の poll（回 4 で移す。決定 15） |
-| integration | フェーズ 5a で追加。GitHub の Issue・PR のリンク、取り込み、自動のリンク付け |
-| automations | フェーズ 5b で追加。`automations.yaml` のルールと `issue_fields` の一覧・編集（`hh automation`）。ルールの実行は取り込みの一部なので integration にある |
+| integration | フェーズ 5a で追加。GitHub の Issue・PR のリンク。取り込みと自動のリンク付けは replication も呼ぶので土台にある |
+| automations | フェーズ 5b で追加。`automations.yaml` のルールと `issue_fields` の一覧・編集（`hh automation`）。ルールの実行は取り込みの一部なので土台にある |
 
 領域どうしの import は、土台を通すのを基本にする。領域から別の領域を呼ぶ必要が出たら、その関数を土台に下ろす。
 
