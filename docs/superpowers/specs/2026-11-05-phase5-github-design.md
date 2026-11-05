@@ -35,7 +35,7 @@
 | `storage/ghstate`（新規） | repo ごとの最終取得時刻、走査の起点（`Since`）、失敗した試行の時刻と警告、レート制限の状態。`.hedgehug/local/github.json` に置く（Store の履歴には入らない） |
 | `usecase`（土台） | GitHub の取り込み（`Fetch`・`FetchRepo`・`HasTargets`）、自動リンク、ルールの実行。replication が取り込みを呼ぶので、領域でなく土台に置く |
 | `usecase/integration`（新規） | リンク、Issue 同期、`hh start`・`hh pr`・`hh issue`・`hh gh import` |
-| `usecase/automations`（新規） | ルールの実行と編集 |
+| `usecase/automations`（新規） | ルールの一覧と編集 |
 
 2つの新しい領域を足すので、構成見直しの spec の 2.3 の領域の数を 12 から 14 に直す。
 
@@ -180,6 +180,8 @@ GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL か�
 - タイトル・本文・コメント: `hedgehug:<ULID>`・`hh:<ULID>`
 - タイトル・本文・コメントの ID（`API-123` の形）: その repo を参照している Store の接頭辞に一致するものだけ。`former_ids` も含む
 
+本文の最終行（末尾の空白を除く）が `hedgehug:<ULID>` の PR は、タイトルと本文の ID と印を読まず、その印のタスクだけを紐付ける。`hh pr` はタスクのタイトルと本文を PR に写すので、そこで触れただけの別のタスクを紐付けないためである。ブランチ名とコメントは読む。
+
 コメントから付いた紐付けは、コメントが編集・削除されても外さない。
 
 ### fakegh
@@ -223,7 +225,7 @@ GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL か�
 - 同じ取得でルールが複数当たるときは、順に当てて途中の値から `ValidateTransition` する。拒否されたルールは記録して飛ばし、次のルールへ進む。コミットは最後に通った値へ1つで、trailer は最後に通ったルールを書く
 - `when: all_linked_prs_merged` は、`off` でない PR のリンクが1件以上あり、そのすべてが取り込み後の `gh.prs` で `merged` のとき成り立つ。`gh` にまだ入っていない PR と `closed` の PR は満たさない
 - ルールの評価は取り込みのコミットの中で行う。拒否をそのコミットの trailer に書くためである。ステータスのコミットまでストアのロックを持ち続ける
-- ステータスの変更はタスクごとに1コミットにする。op は `set`、author は `hedgehug-automation（実行したメンバー）`、trailer は `Hedgehug-Automation: <rule id> <event>`。`hh undo` は1件ずつ効く
+- ステータスの変更はタスクごとに1コミットにする。op は `set`、author は `hedgehug-automation（実行したメンバー）`、trailer は `Hedgehug-Automation: <rule id> <event>`。`hh undo` は1件ずつ効く。`hh undo` は元の値へ戻す操作なので、手動の変更も含めて、ワークフローの遷移と必須フィールドを問わない
 - 拒否は、取り込みのコミットの trailer に `Hedgehug-Automation-Rejected: <ULID> <rule id> <理由>` と書く
 
 ### 通知
@@ -239,7 +241,7 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 - すでに `doing` カテゴリのタスクは、ステータスを動かさない
 - すでにそのブランチにいるなら、ブランチの操作はしない
 - ブランチがあり別のブランチにいるなら、切り替えない。`git switch <ブランチ>` を案内し、担当者とステータスの更新だけ行う
-- `hh/<ID>` か `hh/<ID>-` で始まるブランチは、そのタスクのブランチとして扱う。タイトルを変えても2本目を作らない
+- `hh/<ID>` か `hh/<ID>-` で始まるブランチは、そのタスクのブランチとして扱う。タイトルを変えても2本目を作らない。`<ID>` には `former_ids` も含み、大文字と小文字は区別しない。`hh pr` も同じ見方をする
 - 担当者とステータスの更新は、1回の書き込みにする。`doing` への遷移が制約で拒否されたら、ブランチは残し、理由を出して終わる
 
 ### `hh pr`
@@ -250,7 +252,7 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 - push はコードの repo の `origin` へ、`repo_accounts` のアカウントで行う
 - PR の向き先は repo の既定のブランチ。タイトルと本文はタスクから作り、本文の末尾に `hedgehug:<ULID>` を入れる
 - `--draft` で draft にする
-- 作った PR をリンクし、5分の間隔によらずその repo を取り込む。ここで `pr.opened` が発火する
+- 作った PR をリンクし、remote のある Store は同期してから、5分の間隔によらずその repo を取り込む。ここで `pr.opened` が発火する。同期が失敗したら取り込みを飛ばして警告する。先に同期するのは `hh sync` と同じ理由で、別のメンバーが取り込み済みの変化を自分のものとして扱わないためである
 
 ### `hh automation`
 

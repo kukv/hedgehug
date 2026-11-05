@@ -50,7 +50,11 @@ spec に書いていなかった細部を、コードを読んで次のとおり
 | 19 | web の inbox | 5b では触らない。`describe` の既定の分岐が `種類: automation` と出す | タブと文言は spec の 5d-2 |
 | 20 | `hh mv --store` の選択 | `automations.yaml` に対象があるだけでも `--scoped` を求める。元の Store からは、持っていくときも捨てるときも消す | `schema.yaml` の `scoped` と同じ扱いにする |
 | 21 | `hh link --issue` と使えない `automations.yaml` | ファイルが読めないか `default_sync` が不正なら、`--sync` なしの指定は `automation.invalid` で失敗する。`--sync` の指定と `--pr` はファイルを読まないので通る | モードはタスクに残る値なので推測しない。決定 16 は同期を止めないための決まりで、利用者がその場で直せるこの操作には当てはめない |
-| 22 | `hh start` と古い slug のブランチ | `hh/<ID>` か `hh/<ID>-` で始まるブランチがあれば新しく作らない。そこにいれば何もせず、別のブランチにいれば `git switch` を案内する | タイトルを変えた後に打つと2本目ができ、`hh pr` が選べなくなる |
+| 22 | `hh start` と古い slug のブランチ | `hh/<ID>` か `hh/<ID>-` で始まるブランチがあれば新しく作らない。そこにいれば何もせず、別のブランチにいれば `git switch` を案内する。`<ID>` は今の ID と `former_ids` で、大文字と小文字を区別しない。`hh pr` も同じ照合を使う | タイトルやプレフィックスを変えた後に打つと2本目ができ、`hh pr` が選べなくなる。取り込みの `branchMark` と `Resolve` の見方に揃える |
+| 23 | `hh pr` の本文と自動リンク | PR 本文の最終行（末尾の空白を除く）が `hedgehug:<ULID>` なら、タイトルと本文の ID と印を走査せず、その印のタスクだけをリンクする。ブランチとコメントは今のまま走査する。短い形の `hh:<ULID>` は対象にしない | `hh pr` はタスクのタイトルと本文を写すので、触れただけの別のタスクにリンクが付いてルールが発火する。`hh pr` が書く形だけを印として特別に扱う |
+| 24 | `hh undo` の検証 | すべての操作の undo で `SkipTransitions`・`SkipRequired` を立てる | 遷移を制限したワークフローで undo が止まると、それより前の操作も取り消せなくなる。元の値へ戻す操作なので問わない |
+| 25 | `hh pr` の取り込みの前の同期 | remote のある Store は `FetchRepo` の前に同期する。失敗したら取り込みを飛ばして警告する | `FetchRepo` はその repo にリンクを持つ全タスクを読むので、未同期だと別のメンバーが取り込み済みの変化でルールが発火する |
+| 26 | 取り込みと inbox の開始点 | `gh-fetch` のコミットの前に `inbox.Start` を呼ぶ | remote のない Store は同期しないので、最初の `hh inbox` が HEAD から始まり、それまでの自動化の通知が失われる |
 
 ## File Structure
 
@@ -565,7 +569,7 @@ func PullRequest(ss *usecase.Session, arg string, in PRInput) (PRResult, error)
 3. コミットして `hh pr`: PR、`gh`、`in_progress`
 4. fakegh でレビュー依頼。`.hedgehug/local/github.json` の時刻を戻して `hh sync`: `review`
 5. マージ、同じく `hh sync`: `done`
-6. `hh inbox` に `automation` が3件。手動の `hh status` は一度も打たない
+6. `hh inbox` に `automation` が2件（`pr-review`・`pr-merged`。`pr-opened` は `hh start` で目的の値なので何もしない）。手動の `hh status` は一度も打たない
 
 - [ ] **Step 1:** `scenario` の補助を確かめて書く
 - [ ] **Step 2:** `go test ./internal/app/cli/scenario -run GitHub` を通し、`PATH` から git を外しても通ることを確かめる
