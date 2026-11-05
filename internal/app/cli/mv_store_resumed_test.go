@@ -3,27 +3,31 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 // unfinishedMove stops the move of AA-1 (with AA-2 under it) to bravo-long
-// after the destination was written: the source file of AA-2 cannot be read.
+// after the destination was written: the directory of the source file of
+// AA-2 cannot be written to, so the source cannot drop the file.
 func unfinishedMove(t *testing.T, te *testEnv) {
 	t.Helper()
 	if os.Geteuid() == 0 {
-		t.Skip("a file that cannot be read needs a permission that is enforced")
+		t.Skip("a directory that cannot be written to needs a permission that is enforced")
 	}
 	path, _ := te.storeTaskFile("alpha", "AA-2")
-	calls := 0
-	te.beforeUpdate = func() {
-		if calls++; calls == 2 { // the write into the source
-			_ = os.Chmod(path, 0)
-		}
+	dir := filepath.Dir(path)
+	fi, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, fi.Mode().Perm()) }) // so that the directory of the test can be removed
 	code, _, errs := te.run("mv", "AA-1", "--store", "bravo-long", "--yes")
-	te.beforeUpdate = nil
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := os.Chmod(dir, fi.Mode().Perm()); err != nil {
 		t.Fatal(err)
 	}
 	if code == 0 || !strings.Contains(errs, "moved into bravo-long; run the same command again") {

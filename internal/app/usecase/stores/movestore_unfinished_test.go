@@ -17,20 +17,22 @@ import (
 func TestMoveStoreUnfinishedByAnIOErrorIsAConflict(t *testing.T) {
 	t.Parallel()
 	if os.Geteuid() == 0 {
-		t.Skip("a file that cannot be read needs a permission that is enforced")
+		t.Skip("a directory that cannot be written to needs a permission that is enforced")
 	}
 	f := usecasetest.NewMoveFx(t)
 	as, _ := f.TS.ForStore("org-a").OpenStore()
-	gPath := filepath.Join(as.Dir(), filepath.FromSlash(model.TaskPath(f.G)))
-	calls := 0
-	f.TS.BeforeUpdate = func() {
-		if calls++; calls == 2 { // the write into the source
-			_ = os.Chmod(gPath, 0)
-		}
+	// The source cannot drop the file of G, so the move stops after the
+	// destination was written.
+	gDir := filepath.Dir(filepath.Join(as.Dir(), filepath.FromSlash(model.TaskPath(f.G))))
+	fi, err := os.Stat(gDir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, err := stores.MoveStore(f.TS.Session, f.In())
-	f.TS.BeforeUpdate = nil
-	_ = os.Chmod(gPath, 0o600)
+	if err := os.Chmod(gDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(gDir, fi.Mode().Perm()) }) // so that the directory of the test can be removed
+	_, err = stores.MoveStore(f.TS.Session, f.In())
 	usecasetest.MustCode(t, err, usecase.KindConflict, "move.unfinished")
 	if e := usecase.AsError(err); e == nil || e.Args["store"] != "org-b" {
 		t.Errorf("args = %v; want store org-b", e)
