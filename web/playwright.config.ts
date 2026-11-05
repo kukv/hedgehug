@@ -12,6 +12,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["list"], ["html", { open: "never" }]] : "list",
   use: {
     trace: "retain-on-failure",
+    // Playwright turns Chromium's sandbox off unless told otherwise.
+    launchOptions: { chromiumSandbox: true },
   },
   projects: [
     {
