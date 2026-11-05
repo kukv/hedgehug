@@ -1,0 +1,1 @@
+hedgehug: the change breaks automations.yaml: rules[2].on: "pr.nope" is not one of pr.opened, pr.review_requested, pr.merged, issue.closed

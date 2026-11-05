@@ -1,11 +1,13 @@
 package stores
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
@@ -76,14 +78,15 @@ func (p MovePlan) UnlinkLines() []string {
 	return out
 }
 
-// ScopedPlan is the scoped schema the tasks moved bring with them.
+// ScopedPlan is the scoped schema and the where rules of automations.yaml that
+// the tasks moved bring with them.
 type ScopedPlan struct {
-	Projects []*index.Entry // the projects of the move that have a scoped entry in the source
-	Dropped  []string       // D10, filled when carried: "status review", "template bug"...
+	Projects []*index.Entry // the projects of the move that have a scoped entry or an automation in the source
+	Dropped  []string       // D10, filled when carried: "status review", "template bug", "rule pr-opened"...
 }
 
-// Lines are the parts of the scoped schema the move leaves out when it goes
-// to the store to (D10), one line each.
+// Lines are the parts of the scoped schema and of the automations the move
+// leaves out when it goes to the store to (D10), one line each.
 func (sp *ScopedPlan) Lines(to string) []string {
 	if sp == nil {
 		return nil
@@ -96,6 +99,10 @@ func (sp *ScopedPlan) Lines(to string) []string {
 			out = append(out, fmt.Sprintf("scoped: dropped transitions from %q (no target in %s)", name, to))
 		case "required":
 			out = append(out, fmt.Sprintf("scoped: dropped the required fields of %q (none of them in %s)", name, to))
+		case "rule":
+			out = append(out, fmt.Sprintf("scoped: dropped rule %q (does not fit %s)", name, to))
+		case "disable":
+			out = append(out, fmt.Sprintf("scoped: dropped the disable of rule %q (no such rule in %s)", name, to))
 		default:
 			out = append(out, fmt.Sprintf("scoped: dropped %s %q (not in %s)", what, name, to))
 		}
@@ -223,7 +230,7 @@ func MoveStore(ss *usecase.Session, in MoveStoreInput) (MoveStoreResult, error) 
 		_, err := j.to.UpdateCommit(j.dst, store.Op{Name: "move-in", Task: root.ULID, Locked: l}, func(tx *store.Tx) error {
 			return tx.MoveIn(store.MoveIn{
 				From: j.src.Meta().ULID, Tasks: w.tasks, Workspace: w.workspace, Parent: w.parent,
-				Notes: w.notes, Unlinked: w.plan.Unlinked, Scoped: w.scopedIn,
+				Notes: w.notes, Unlinked: w.plan.Unlinked, Scoped: w.scopedIn, Automations: w.automationsIn,
 			})
 		})
 		if err != nil {
@@ -235,7 +242,7 @@ func MoveStore(ss *usecase.Session, in MoveStoreInput) (MoveStoreResult, error) 
 		ulids[i] = t.ULID
 	}
 	_, err = j.from.UpdateCommit(j.src, store.Op{Name: "move-out", Detail: root.ID + " " + root.Title, Locked: l}, func(tx *store.Tx) error {
-		return tx.MoveOut(store.MoveOut{To: j.dst.Meta().ULID, Tasks: ulids, Unlinked: w.plan.Unlinked, Scoped: w.scopedOut})
+		return tx.MoveOut(store.MoveOut{To: j.dst.Meta().ULID, Tasks: ulids, Unlinked: w.plan.Unlinked, Scoped: w.scopedOut, Automations: w.automationsOut})
 	})
 	if err != nil {
 		if w.resumed {
@@ -254,7 +261,7 @@ func MoveStore(ss *usecase.Session, in MoveStoreInput) (MoveStoreResult, error) 
 		}
 	}
 
-	res := MoveStoreResult{Plan: w.plan, Carried: len(w.scopedIn) > 0 || w.carriedBefore, Resumed: w.resumed}
+	res := MoveStoreResult{Plan: w.plan, Carried: w.carried || w.carriedBefore, Resumed: w.resumed}
 	for _, t := range w.tasks {
 		nt, err := j.dst.Task(t.ULID)
 		if err != nil {
@@ -303,9 +310,14 @@ type moveWork struct {
 	notes     map[string][]byte
 	scopedIn  []schema.Scoped // carried to the destination
 	scopedOut []string        // the wheres to take off the source
-	resumed   bool            // the destination has the tasks already (D12)
-	// carriedBefore: on a rerun, the destination holds a scoped entry of the
-	// projects, so the first run carried (its Dropped list is not known).
+	// automationsIn and automationsOut are the new automations.yaml of the
+	// destination and of the source; nil leaves the file.
+	automationsIn, automationsOut []byte
+	carried                       bool // the choice was to carry, and there was something to choose
+	resumed                       bool // the destination has the tasks already (D12)
+	// carriedBefore: on a rerun, the destination holds a scoped entry or an
+	// automation of the projects, so the first run carried (what its Dropped
+	// list had of the scoped entries is not known).
 	carriedBefore bool
 }
 
@@ -441,7 +453,28 @@ func (j *moveJob) load() (*moveWork, error) {
 		projects = append(projects, mustEntry(j.srcIx, u))
 		w.scopedOut = append(w.scopedOut, sp.Where)
 	}
-	if len(scoped) > 0 {
+	// What automations.yaml has for them. The source loses it on a rerun too,
+	// so it is worked out before the rerun is told apart.
+	auto, err := readAutomations(j.src, j.fromName)
+	if err != nil {
+		return nil, err
+	}
+	var autoProjects []model.ULID
+	for _, u := range auto.Projects() {
+		if !inM[u] {
+			continue
+		}
+		autoProjects = append(autoProjects, u)
+		if !slices.ContainsFunc(projects, func(e *index.Entry) bool { return e.ULID == u }) {
+			projects = append(projects, mustEntry(j.srcIx, u))
+		}
+	}
+	if len(autoProjects) > 0 {
+		if w.automationsOut, err = auto.Without(autoProjects).Encode(); err != nil {
+			return nil, err
+		}
+	}
+	if len(projects) > 0 {
 		w.plan.Scoped = &ScopedPlan{Projects: projects}
 		w.plan.ScopedChoice = j.in.Scoped
 	}
@@ -459,6 +492,9 @@ func (j *moveJob) load() (*moveWork, error) {
 				w.carriedBefore = true
 			}
 		}
+		if len(autoProjects) > 0 {
+			j.resumeAutomations(w, auto, autoProjects)
+		}
 		if e, ok := j.dstIx.Task(w.tasks[0].ULID); ok {
 			w.plan.Workspace, w.plan.Parent = j.placement(e.Workspace, e.Parent)
 		}
@@ -470,12 +506,12 @@ func (j *moveJob) load() (*moveWork, error) {
 		return nil, err
 	}
 	w.plan.Workspace, w.plan.Parent = j.placement(w.workspace, w.parent)
-	// Step 6: the scoped entries.
+	// Step 6: the scoped entries and the automations.
 	dest, err := CloneSchemaOf(j.dstIx.Schema())
 	if err != nil {
 		return nil, err
 	}
-	if len(scoped) > 0 {
+	if len(projects) > 0 {
 		switch j.in.Scoped {
 		case "":
 			if j.in.planOnly {
@@ -487,14 +523,21 @@ func (j *moveJob) load() (*moveWork, error) {
 				names[i] = j.nameOf(p)
 			}
 			ce.Args["projects"] = names
+			ce.Args["subject"] = scopedSubject(len(scoped) > 0, len(autoProjects) > 0)
 			return nil, ce
 		case "carry":
+			w.carried = true
 			if w.scopedIn, w.plan.Scoped.Dropped, err = j.carry(dest, scoped); err != nil {
 				return nil, err
 			}
 			for _, sp := range w.scopedIn {
 				dest.Scoped = slices.DeleteFunc(dest.Scoped, func(s schema.Scoped) bool { return s.Where == sp.Where })
 				dest.Scoped = append(dest.Scoped, sp)
+			}
+			if len(autoProjects) > 0 {
+				if err := j.carryAutomations(w, auto, autoProjects, dest); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -567,12 +610,35 @@ func (j *moveJob) labels(entries []*index.Entry, unlinked []store.Unlink) map[mo
 	return out
 }
 
+// resumeAutomations says what the first run did with the automations, from
+// what the two files hold now. A rerun does not write the destination, so a
+// file there that cannot be read is a warning: only the telling is lost. What
+// is missing there is left out only if the first run carried, which a carry
+// that left out everything shows only by the choice given again.
+func (j *moveJob) resumeAutomations(w *moveWork, src *automation.File, projects []model.ULID) {
+	dst, err := j.dst.Automations()
+	if err != nil {
+		if key := "automations of " + j.toName; !j.warned[key] {
+			j.warned[key] = true
+			j.from.AddWarning(fmt.Sprintf("%s of %s cannot be read; what the move left out is not told: %v", model.AutomationsPath, j.toName, err))
+		}
+		return
+	}
+	w.carriedBefore = w.carriedBefore || slices.ContainsFunc(dst.Projects(), func(u model.ULID) bool {
+		return slices.Contains(projects, u)
+	})
+	if w.carriedBefore || j.in.Scoped == "carry" {
+		w.plan.Scoped.Dropped = src.LeftOut(dst, projects)
+	}
+}
+
 // resumeCheck tells whether tasks are in the destination because a move from
-// this source began (D12): true when all are there, alive, and a move-in
-// commit of this source names exactly them; an error when only some are, or
-// when none of the history says why they are there.
+// this source began (D12): true when all are there, deleted only if they are
+// in the source too, and a move-in commit of this source names exactly them;
+// an error when only some are, or when none of the history says why they are
+// there.
 func (j *moveJob) resumeCheck(tasks []*model.Task) (bool, error) {
-	var present, alive int
+	var present, same int
 	var first model.ULID
 	for _, t := range tasks {
 		e, ok := j.dstIx.Task(t.ULID)
@@ -583,14 +649,14 @@ func (j *moveJob) resumeCheck(tasks []*model.Task) (bool, error) {
 			first = t.ULID
 		}
 		present++
-		if e.DeletedAt == nil {
-			alive++
+		if e.DeletedAt == nil || t.DeletedAt != nil {
+			same++
 		}
 	}
 	if present == 0 {
 		return false, nil
 	}
-	if alive == len(tasks) {
+	if same == len(tasks) {
 		done, err := j.moveInRecorded(tasks)
 		if err != nil {
 			return false, err
@@ -724,6 +790,71 @@ func (j *moveJob) carry(dest *schema.Schema, scoped []schema.Scoped) (carried []
 			"store", j.toName, "violations", lines)
 	}
 	return carried, dropped, nil
+}
+
+// carryAutomations cuts the automations of the projects down to what the
+// destination knows, with dest as its schema, and sets w.automationsIn. Only
+// the problems the move brings refuse it.
+func (j *moveJob) carryAutomations(w *moveWork, src *automation.File, projects []model.ULID, dest *schema.Schema) error {
+	cur, err := readAutomations(j.dst, j.toName)
+	if err != nil {
+		return err
+	}
+	next, dropped := cur.Carry(src, projects, dest)
+	w.plan.Scoped.Dropped = append(w.plan.Scoped.Dropped, dropped...)
+	// A project deleted goes with its parent and can be restored there.
+	isProject := func(u model.ULID) bool {
+		if slices.ContainsFunc(w.tasks, func(t *model.Task) bool { return t.ULID == u }) {
+			e, ok := j.srcIx.Task(u)
+			return ok && e.Kind == usecase.ProjectKind
+		}
+		e, ok := j.dstIx.Task(u)
+		return ok && e.DeletedAt == nil && e.Kind == usecase.ProjectKind
+	}
+	var lines []string
+	for _, p := range automation.Fresh(cur.Check(dest, isProject), next.Check(dest, isProject)) {
+		lines = append(lines, "  "+p.String())
+	}
+	if len(lines) > 0 {
+		return usecase.NewErr(usecase.KindInvalid, "move.invalid",
+			fmt.Errorf("the automations do not fit %s even after cutting them down; use --scoped drop:\n%s", j.toName, strings.Join(lines, "\n")),
+			"store", j.toName, "violations", lines)
+	}
+	before, err := cur.Encode()
+	if err != nil {
+		return err
+	}
+	after, err := next.Encode()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(before, after) {
+		w.automationsIn = after
+	}
+	return nil
+}
+
+// readAutomations reads automations.yaml of the store name. A move cannot tell
+// without it what the file holds for the tasks, so a file that cannot be read
+// stops the move.
+func readAutomations(s *store.Store, name string) (*automation.File, error) {
+	f, err := s.Automations()
+	if err != nil {
+		return nil, usecase.NewErr(usecase.KindInvalid, "automation.invalid",
+			fmt.Errorf("the move stops: %s of %s cannot be read: %w", model.AutomationsPath, name, err), "store", name)
+	}
+	return f, nil
+}
+
+// scopedSubject names what the --scoped choice is about.
+func scopedSubject(scoped, automations bool) string {
+	switch {
+	case scoped && automations:
+		return "scoped schema and automation rules"
+	case automations:
+		return "automation rules"
+	}
+	return "scoped schema"
 }
 
 // CloneSchemaOf copies sc deeply, through its file form.

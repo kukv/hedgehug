@@ -84,6 +84,39 @@ func TestSchemaCheckAndDoctorOnABrokenSchemaFile(t *testing.T) {
 	}
 }
 
+func TestSchemaCheckAndDoctorReportAutomations(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name, file, where string
+	}{
+		{"a rule that is wrong", "rules:\n- {id: a, on: pr.closed, set: {status: in_progress}}\n", "automations.yaml: rules[0].on"},
+		{"a file that does not decode", "rules: [\n", "automations.yaml"},
+	} {
+		ts := usecasetest.New(t)
+		_, e, _ := ts.Entry()
+		if err := os.WriteFile(filepath.Join(e.Path, "automations.yaml"), []byte(c.file), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		fs, err := schemas.SchemaCheck(ts.Session)
+		if err != nil || len(fs) != 1 || fs[0].Check != "automation" || fs[0].Where != c.where {
+			t.Errorf("%s: SchemaCheck = %+v, %v", c.name, fs, err)
+		}
+		rep, err := ts.DoctorOne(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []usecase.Finding
+		for _, f := range rep.Findings {
+			if f.Check == "automation" {
+				got = append(got, f)
+			}
+		}
+		if len(got) != 1 || got[0].Where != c.where {
+			t.Errorf("%s: Doctor automation findings = %+v", c.name, got)
+		}
+	}
+}
+
 func TestDoctorFindsABrokenTaskFile(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

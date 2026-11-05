@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -111,6 +112,61 @@ func TestStoreInitWorkspaceNameAndSchema(t *testing.T) {
 	}
 	if _, ok := s.Schema().Status("review"); !ok {
 		t.Error("the dev template has no review status")
+	}
+}
+
+func TestStoreInitWritesTheRulesInACommitOfOpInit(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	if _, err := stores.StoreInit(ts.Session, stores.StoreInitInput{Name: "team", Prefix: "TM", Schema: schema.Dev(), Automations: automation.DevRules()}); err != nil {
+		t.Fatal(err)
+	}
+	sub := &usecase.Session{Getenv: ts.Getenv, Now: ts.Now, StoreName: "team"}
+	s, err := sub.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := s.Automations()
+	if err != nil || len(f.Rules) != 4 {
+		t.Fatalf("Automations = %+v, %v", f, err)
+	}
+	head, err := s.Repo().Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err := s.Repo().LogFrom(head, 1)
+	if err != nil || len(log) != 1 {
+		t.Fatalf("log = %+v, %v", log, err)
+	}
+	if op, _ := log[0].Trailer("Hedgehug-Op"); op != "init" {
+		t.Errorf("newest commit op = %q, want init", op)
+	}
+}
+
+func TestStoreInitPushesTheRulesToTheRemote(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	bare := filepath.Join(t.TempDir(), "rules.git")
+	if err := gitrepo.InitBare(bare); err != nil {
+		t.Fatal(err)
+	}
+	in := stores.StoreInitInput{Name: "team", Prefix: "TM", Schema: schema.Dev(), Automations: automation.DevRules(), Remotes: []string{bare}}
+	if _, err := stores.StoreInit(ts.Session, in); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "clone")
+	r, err := gitrepo.Clone(bare, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	b, err := os.ReadFile(filepath.Join(dir, model.AutomationsPath)) //nolint:gosec // a file of the test clone
+	if err != nil {
+		t.Fatalf("the remote has no %s: %v", model.AutomationsPath, err)
+	}
+	f, err := automation.Decode(b)
+	if err != nil || len(f.Rules) != 4 {
+		t.Errorf("rules at the remote = %+v, %v", f, err)
 	}
 }
 

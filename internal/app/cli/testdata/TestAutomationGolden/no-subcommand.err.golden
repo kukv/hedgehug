@@ -1,0 +1,22 @@
+Usage:
+  hedgehug automation [flags]
+  hedgehug automation [command]
+
+Available Commands:
+  add         Add a rule
+  disable     Turn a rule off, or off in one project
+  enable      Turn a rule on, or back on in one project
+  fields      Show issue_fields, or change it
+  list        List the rules, with whether each is on
+  rm          Remove a rule
+
+Flags:
+  -h, --help   help for automation
+
+Global Flags:
+      --json           print JSON
+      --no-color       do not color the output
+      --store string   the store to work on, by name
+
+Use "hedgehug automation [command] --help" for more information about a command.
+hedgehug: a subcommand is needed

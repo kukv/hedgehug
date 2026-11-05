@@ -42,6 +42,9 @@ type Op struct {
 	// field of the new status is still checked, but only when the task had
 	// it before the write.
 	SkipTransitions bool
+	// SkipRequired skips the check of workflow.required, for an operation
+	// that puts a task back as it was, field by field.
+	SkipRequired bool
 	// Trailers and AllowEmpty are set from inside fn, by AddTrailer and
 	// AllowEmpty, because what they hold is read under the store lock.
 	Trailers   []gitrepo.Trailer

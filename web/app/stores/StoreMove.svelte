@@ -15,6 +15,7 @@
   import StoreBadge from "../ui/StoreBadge.svelte";
   import type { MoveStoreTask } from "../workspace/dialogs-state.svelte";
   import MovePlanSections from "./MovePlanSections.svelte";
+  import MoveScopedChoice from "./MoveScopedChoice.svelte";
   import { hiddenSentences, moveButton, parentSentence, violationView } from "./move-plan";
 
   let { task, onclose }: { task: MoveStoreTask; onclose: () => void } = $props();
@@ -43,6 +44,9 @@
   const named = $derived(spaces.length >= 2 ? workspace : "");
 
   let plan = $state.raw<Schemas["MovePlanView"] | null>(null);
+  // The last plan for this Store asked for the scoped choice. It stays while there is no plan, so
+  // that a choice the plan refuses can be changed.
+  let offered = $state(false);
   let planning = $state(false);
   let busy = $state(false);
   let failure = $state<{ message: string; lines: string[] } | null>(null);
@@ -105,6 +109,7 @@
       );
       if (n === seq) {
         plan = p;
+        offered = p.scoped !== undefined;
         announce = "移動の予定を更新しました";
       }
     } catch (e) {
@@ -123,6 +128,7 @@
     picked = "";
     parent = null;
     scoped = undefined; // what carrying leaves out depends on the Store
+    offered = false;
     void refresh();
   }
 
@@ -137,6 +143,7 @@
       picked = "";
       parent = null;
       scoped = undefined;
+      offered = false;
       void refresh(
         `${name} は移動先に選べなくなりました（閲覧のみになったか、なくなりました）。選び直してください`,
       );
@@ -303,6 +310,8 @@
 
     {#if plan && names}
       <MovePlanSections {plan} {names} {scoped} onscoped={pickScoped} />
+    {:else if offered}
+      <MoveScopedChoice dropped={[]} {scoped} onscoped={pickScoped} />
     {/if}
 
     <div class="failbox" tabindex="-1" bind:this={failBox}>

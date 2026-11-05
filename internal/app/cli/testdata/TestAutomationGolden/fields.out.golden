@@ -1,0 +1,4 @@
+default_sync: link
+push: title, body, status, assignees, labels
+mirror: title, status, assignees
+props: -

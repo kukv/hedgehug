@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/automations"
 	"github.com/kukv/hedgehug/internal/app/usecase/comments"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
@@ -100,6 +101,12 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		// Views that do not exist: the refusal comes before "not found".
 		{"ViewRemove", func() error { _, err := views.ViewRemove(ts.Session, "nope"); return err }},
 		{"ViewRename", func() error { _, err := views.ViewRename(ts.Session, "nope", "other"); return err }},
+		{"AutomationAdd", func() error {
+			return automations.Add(ts.Session, automations.AddInput{ID: "a", On: "pr.opened", Status: "done"})
+		}},
+		{"AutomationRemove", func() error { return automations.Remove(ts.Session, "a") }},
+		{"AutomationSetEnabled", func() error { return automations.SetEnabled(ts.Session, "a", "", false) }},
+		{"AutomationSetFields", func() error { return automations.SetFields(ts.Session, automations.FieldsInput{}) }},
 		{"UpdateCommit", func() error {
 			s, err := ts.OpenStore()
 			if err != nil {

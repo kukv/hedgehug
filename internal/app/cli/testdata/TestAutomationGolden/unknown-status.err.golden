@@ -1,0 +1,1 @@
+hedgehug: the change breaks automations.yaml: rules[2].set.status: status "nope" does not exist, or the project hides it

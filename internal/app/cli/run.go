@@ -32,7 +32,7 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
-	getwd          func() (string, error)                                 // the current directory; nil means none, which skips the stages of hedgehug add that read it
+	getwd          func() (string, error)                                 // the current directory; nil means none: hedgehug add skips the stages that read it, and start and pr are usage errors
 	beforeUpdate   func()                                                 // for tests: runs before each write; nil in the binary
 	spawn          func(name string, args []string, logPath string) error // starts the background sync; nil starts it detached
 	keyring        usecase.Keyring                                        // nil is the OS keychain

@@ -381,6 +381,8 @@ func TestInboxContent(t *testing.T) {
 		{"assigned", inbox.Item{Kind: inbox.Assigned, Author: "github.com/bob"}, "assigned by github.com/bob"},
 		{"watch of fields", inbox.Item{Kind: inbox.Watch, Detail: detail(`{"changed":["title","status"]}`), Author: "github.com/bob"}, "title, status changed by github.com/bob"},
 		{"watch of a comment", inbox.Item{Kind: inbox.Watch, Detail: detail(`{"comment":"x"}`)}, "new comment"},
+		{"automation", inbox.Item{Kind: inbox.Automation, Detail: detail(`{"rule":"merged","event":"pr.merged","status":"done"}`)}, "rule merged moved it to done (pr.merged)"},
+		{"automation rejected", inbox.Item{Kind: inbox.AutomationRejected, Detail: detail(`{"rule":"merged","reason":"points is required"}`)}, "rule merged did not move it: points is required"},
 		{"revived", inbox.Item{Kind: inbox.Revived}, "deleted by you, but changed on the other side, so it is back"},
 		{"repaired", inbox.Item{Kind: inbox.Repaired, Detail: detail(`{"kind":"id_prefix","value":"web"}`)}, `id_prefix (was "web")`},
 		{"unknown kind", inbox.Item{Kind: "other", Detail: detail(`{"a":1}`)}, `{"a":1}`},

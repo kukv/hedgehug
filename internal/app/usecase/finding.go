@@ -42,7 +42,7 @@ func (f Finding) Fails() bool { return f.Severity != SeverityInfo }
 func FindingsFail(fs []Finding) bool { return slices.ContainsFunc(fs, Finding.Fails) }
 
 // checkOrder is the order the findings come in.
-var checkOrder = []string{"schema", "template", "prop_name", "override", "task", "file", "view", "worktree", "merge_driver", "inbox", "git", "cross_store_ref", "duplicate_across_stores", "forward_target", "unexpected_force_push"}
+var checkOrder = []string{"schema", "template", "prop_name", "override", "automation", "task", "file", "view", "worktree", "merge_driver", "inbox", "git", "cross_store_ref", "duplicate_across_stores", "forward_target", "unexpected_force_push"}
 
 // SortFindings orders fs by the kind of check, then by where.
 func SortFindings(fs []Finding) {

@@ -21,7 +21,7 @@ func (a *app) linkCmd() *cobra.Command {
 		},
 	}
 	linkFlags(cmd, &in)
-	cmd.Flags().StringVar(&in.Sync, "sync", "", "how an issue syncs: mirror, push or link (default link)")
+	cmd.Flags().StringVar(&in.Sync, "sync", "", "how an issue syncs: mirror, push or link (default issue_fields.default_sync)")
 	return cmd
 }
 

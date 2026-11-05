@@ -8,6 +8,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -113,6 +114,99 @@ func TestUndoSkipsTheFetchOfGitHub(t *testing.T) {
 	}
 	if g, err := tk.GitHub(); err != nil || len(g.PRs) != 1 {
 		t.Errorf("gh after undo = %+v, %v; want the pr kept", g, err)
+	}
+}
+
+// setWorkflow writes a schema with the workflow w.
+func setWorkflow(t *testing.T, ts *usecasetest.Session, w schema.Workflow) {
+	t.Helper()
+	sc := schema.Default()
+	sc.Workflow = w
+	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
+}
+
+func statusOf(t *testing.T, ts *usecasetest.Session, id string) string {
+	t.Helper()
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := ts.Resolve(ix, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e.Status
+}
+
+// Undo puts the old value back, which is no move of the workflow: a limited
+// workflow does not stop it, nor what is older than it.
+func TestUndoGoesBackAgainstTheWorkflow(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
+	setWorkflow(t, ts, schema.Workflow{Transitions: schema.Lists{{Key: "in_progress", Values: []string{"done"}}}})
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.SetStatus(ts.Session, "ME-1", "in_progress"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Undo(ts.Session); err != nil {
+		t.Fatal(err)
+	}
+	if got := statusOf(t, ts, "ME-1"); got != "todo" {
+		t.Errorf("status after undo = %s", got)
+	}
+	if _, err := tasks.Undo(ts.Session); err != nil {
+		t.Fatalf("the older operation: %v", err)
+	}
+}
+
+// A field that became required after the task entered the status does not stop
+// the way back.
+func TestUndoGoesBackToAStatusThatLacksARequiredField(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	setWorkflow(t, ts, schema.Workflow{Required: schema.Lists{{Key: "todo", Values: []string{"estimate"}}}})
+	if _, err := tasks.SetStatus(ts.Session, "ME-1", "in_progress"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Undo(ts.Session); err != nil {
+		t.Fatal(err)
+	}
+	if got := statusOf(t, ts, "ME-1"); got != "todo" {
+		t.Errorf("status after undo = %s", got)
+	}
+}
+
+// The same, when the operation filled the field: undo takes the field away as
+// it puts the status back.
+func TestUndoTakesAwayARequiredFieldWithTheStatus(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	setWorkflow(t, ts, schema.Workflow{Required: schema.Lists{{Key: "todo", Values: []string{"estimate"}}}})
+	if _, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{
+		{Key: "status", Op: "=", Value: "in_progress"},
+		{Key: "estimate", Op: "=", Value: "1h"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Undo(ts.Session); err != nil {
+		t.Fatal(err)
+	}
+	if got := statusOf(t, ts, "ME-1"); got != "todo" {
+		t.Errorf("status after undo = %s", got)
 	}
 }
 

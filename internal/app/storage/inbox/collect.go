@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -45,6 +46,10 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 				c.overwritten(t.Value)
 			case "Hedgehug-Repaired":
 				err = c.repaired(t.Value)
+			case automation.TrailerApplied:
+				err = c.applied(t.Value)
+			case automation.TrailerRejected:
+				err = c.rejected(t.Value)
 			}
 			if err != nil {
 				return nil, err
@@ -108,7 +113,7 @@ func (c *commit) dropCoveredWatches() {
 	covered := func(w Item) bool {
 		return slices.ContainsFunc(c.items, func(x Item) bool {
 			// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); inbox does not import config, so strings.EqualFold, like config.SameAccount.
-			return (x.Kind == Assigned || x.Kind == Mention) && x.Task == w.Task && strings.EqualFold(x.To, w.To)
+			return (x.Kind == Assigned || x.Kind == Mention || x.Kind == Automation) && x.Task == w.Task && strings.EqualFold(x.To, w.To)
 		})
 	}
 	c.items = slices.DeleteFunc(c.items, func(it Item) bool { return it.Kind == Watch && covered(it) })
@@ -155,6 +160,63 @@ func splitTrailer(v string) (first, second, value, last string, ok bool) {
 		return "", "", "", "", false
 	}
 	return first, second, rest[:i], rest[i+1:], true
+}
+
+// applied reads `<rule> <event>` of the commit of a rule, which sets the
+// task in the Hedgehug-Task trailer. It tells the task's assignees and
+// watchers among me, the writer too: the commit is the rule's, not theirs.
+func (c *commit) applied(v string) error {
+	rule, event, ok := automation.ParseApplied(v)
+	task, hasTask := c.e.Trailer("Hedgehug-Task")
+	u, err := model.ParseULID(task)
+	if !ok || !hasTask || err != nil {
+		return nil
+	}
+	t, err := readTask(c.r, c.tree, u)
+	if err != nil || t == nil {
+		return err
+	}
+	detail := mustJSON(struct {
+		Rule   string `json:"rule"`
+		Event  string `json:"event"`
+		Status string `json:"status"`
+	}{rule, event, t.Status})
+	c.tell(t, Item{Kind: Automation, Task: u, Detail: detail})
+	return nil
+}
+
+// rejected reads `<ULID> <rule> <reason>` of a rule whose move the workflow
+// refused, and tells the task's assignees and watchers among me.
+func (c *commit) rejected(v string) error {
+	u, r, ok := automation.ParseRejected(v)
+	if !ok {
+		return nil
+	}
+	t, err := readTask(c.r, c.tree, u)
+	if err != nil || t == nil {
+		return err
+	}
+	detail := mustJSON(struct {
+		Rule   string `json:"rule"`
+		Reason string `json:"reason"`
+	}{r.Rule, r.Reason})
+	c.tell(t, Item{Kind: AutomationRejected, Task: u, Detail: detail})
+	return nil
+}
+
+// tell makes it for each account of me that is an assignee or a watcher
+// of t, once.
+func (c *commit) tell(t *model.Task, it Item) {
+	var to []string
+	for _, a := range slices.Concat(t.Assignees, t.Watchers) {
+		if who, ok := isMe(c.me, a); ok && !slices.ContainsFunc(to, func(o string) bool { return strings.EqualFold(o, who) }) {
+			to = append(to, who)
+		}
+	}
+	for _, who := range to {
+		it.To = who
+		c.addChange(it)
+	}
 }
 
 // overwritten reads `<path> <field> <JSON value> <author>`. A trailer that

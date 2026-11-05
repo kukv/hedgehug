@@ -1062,6 +1062,22 @@ func (f *MoveFx) SetSchema(t *testing.T, fn func(*schema.Schema)) {
 	}
 }
 
+// SetAutomations writes src as automations.yaml of the store name, in one
+// commit.
+func (f *MoveFx) SetAutomations(t *testing.T, name, src string) {
+	t.Helper()
+	ss := f.TS.ForStore(name)
+	s, err := ss.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ss.Update(s, store.Op{Name: "automation"}, func(tx *store.Tx) error {
+		return tx.PutFile(model.AutomationsPath, []byte(src))
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func MustCode(t *testing.T, err error, kind usecase.Kind, code string) {
 	t.Helper()
 	if e := usecase.AsError(err); err == nil || e.Kind != kind || e.Code != code {

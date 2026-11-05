@@ -504,3 +504,91 @@ func TestEmptyToken(t *testing.T) {
 		t.Errorf("no token = %d, want 401", res.StatusCode)
 	}
 }
+
+func TestRepoDefaultBranch(t *testing.T) {
+	t.Parallel()
+	st := seed()
+	st.Repos[0].DefaultBranch = "trunk"
+	srv := httptest.NewServer(New(st))
+	defer srv.Close()
+	for path, want := range map[string]string{"/repos/org-a/hh-shared": "trunk", "/repos/alice/notes": "main"} {
+		_, body := do(t, srv, "GET", path, "t-alice", "")
+		var r struct {
+			DefaultBranch string `json:"default_branch"`
+		}
+		if err := json.Unmarshal([]byte(body), &r); err != nil || r.DefaultBranch != want {
+			t.Errorf("%s default_branch = %q (%v), want %q", path, r.DefaultBranch, err, want)
+		}
+	}
+}
+
+func TestPullsCreateAndList(t *testing.T) {
+	t.Parallel()
+	s := New(seed())
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	const path = "/repos/org-a/hh-shared/pulls"
+
+	res, body := do(t, srv, "POST", path, "t-alice", `{"title":"T","body":"B","head":"hh/x","base":"main","draft":true}`)
+	if res.StatusCode != 201 {
+		t.Fatalf("create = %d %s", res.StatusCode, body)
+	}
+	var made struct {
+		Number int    `json:"number"`
+		State  string `json:"state"`
+		Draft  bool   `json:"draft"`
+		Head   struct {
+			Ref string `json:"ref"`
+		} `json:"head"`
+	}
+	if err := json.Unmarshal([]byte(body), &made); err != nil || made.Number != 1 || made.State != "open" || !made.Draft || made.Head.Ref != "hh/x" {
+		t.Errorf("created = %s", body)
+	}
+	r, _ := s.Repo("org-a/hh-shared")
+	if len(r.Pulls) != 1 || r.Pulls[0].Title != "T" || r.Pulls[0].Body != "B" || r.Pulls[0].Head != "hh/x" || r.Pulls[0].Base != "main" || !r.Pulls[0].Draft {
+		t.Errorf("state = %+v", r.Pulls)
+	}
+
+	// The same open head, and a missing field, are 422.
+	if res, _ := do(t, srv, "POST", path, "t-alice", `{"title":"T2","head":"hh/x","base":"main"}`); res.StatusCode != 422 {
+		t.Errorf("duplicate head = %d", res.StatusCode)
+	}
+	for _, b := range []string{`{"head":"h","base":"main"}`, `{"title":"t","base":"main"}`, `{"title":"t","head":"h"}`} {
+		if res, _ := do(t, srv, "POST", path, "t-alice", b); res.StatusCode != 422 {
+			t.Errorf("%s = %d, want 422", b, res.StatusCode)
+		}
+	}
+	// A reader may not create.
+	if res, _ := do(t, srv, "POST", path, "t-bob", `{"title":"t","head":"h2","base":"main"}`); res.StatusCode != 403 {
+		t.Errorf("by a reader = %d, want 403", res.StatusCode)
+	}
+
+	// A merged pull does not block the head; the list filters by head and state.
+	if err := s.changePull("org-a/hh-shared", 1, func(p *Pull) error { p.State = "merged"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := do(t, srv, "POST", path, "t-alice", `{"title":"again","head":"hh/x","base":"main"}`); res.StatusCode != 201 {
+		t.Errorf("head after merge = %d, want 201", res.StatusCode)
+	}
+	count := func(q string) int {
+		_, body := do(t, srv, "GET", path+q, "t-bob", "")
+		var out []map[string]any
+		if err := json.Unmarshal([]byte(body), &out); err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+		return len(out)
+	}
+	for q, want := range map[string]int{
+		"":                                   1, // open is the default
+		"?state=open":                        1,
+		"?state=closed":                      1, // merged is closed on GitHub
+		"?state=all":                         2,
+		"?state=open&head=org-a:hh/x":        1,
+		"?state=open&head=org-a:hh/none":     0,
+		"?state=open&head=someone-else:hh/x": 0,
+	} {
+		if got := count(q); got != want {
+			t.Errorf("list %q = %d, want %d", q, got, want)
+		}
+	}
+}

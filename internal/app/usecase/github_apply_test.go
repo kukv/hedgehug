@@ -19,16 +19,16 @@ func TestApplyWritesWhatChanged(t *testing.T) {
 	t.Parallel()
 	x := &model.Task{Links: []model.Link{{Type: model.LinkPR, Ref: prRef(1), Sync: model.SyncMirror}}}
 	got := fetched{pulls: map[string]github.Pull{prRef(1): {State: "open", Review: "pending", Checks: "success"}}}
-	changed, err := apply(x, got, nil)
-	if err != nil || !changed {
-		t.Fatalf("apply = %v, %v", changed, err)
+	a, err := apply(x, got, nil)
+	if err != nil || !a.Changed {
+		t.Fatalf("apply = %v, %v", a.Changed, err)
 	}
 	g, _ := x.GitHub()
 	if len(g.PRs) != 1 || g.PRs[0].Ref != prRef(1) || g.PRs[0].Review != "pending" {
 		t.Fatalf("prs = %+v", g.PRs)
 	}
-	if changed, err := apply(x, got, nil); err != nil || changed {
-		t.Errorf("the same values: %v, %v", changed, err)
+	if a, err := apply(x, got, nil); err != nil || a.Changed {
+		t.Errorf("the same values: %v, %v", a.Changed, err)
 	}
 }
 
@@ -38,8 +38,8 @@ func TestApplyKeepsWhatWasNotRead(t *testing.T) {
 	if err := x.SetGitHub(model.GitHubState{PRs: []model.PRState{{Ref: prRef(1), State: "open", Review: "none"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := apply(x, fetched{}, nil); err != nil || changed {
-		t.Fatalf("apply = %v, %v", changed, err)
+	if a, err := apply(x, fetched{}, nil); err != nil || a.Changed {
+		t.Fatalf("apply = %v, %v", a.Changed, err)
 	}
 }
 
@@ -49,10 +49,10 @@ func TestApplyDropsWhatIsNoLongerLinked(t *testing.T) {
 	if err := x.SetGitHub(model.GitHubState{PRs: []model.PRState{{Ref: prRef(1), State: "open", Review: "none"}}}); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := apply(x, fetched{}, nil)
+	a, err := apply(x, fetched{}, nil)
 	g, _ := x.GitHub()
-	if err != nil || !changed || len(g.PRs) != 0 {
-		t.Fatalf("apply = %v, %v, %+v", changed, err, g)
+	if err != nil || !a.Changed || len(g.PRs) != 0 {
+		t.Fatalf("apply = %v, %v, %+v", a.Changed, err, g)
 	}
 }
 
@@ -76,8 +76,8 @@ func TestApplyIssueKeepsSynced(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := fetched{issues: map[string]github.Issue{ref: {State: "closed", StateReason: "completed", UpdatedAt: time.Now()}}}
-	if changed, err := apply(d, got, nil); err != nil || !changed {
-		t.Fatalf("apply = %v, %v", changed, err)
+	if a, err := apply(d, got, nil); err != nil || !a.Changed {
+		t.Fatalf("apply = %v, %v", a.Changed, err)
 	}
 	g, _ := d.GitHub()
 	if g.Issues[0].State != "closed" || *g.Issues[0].StateReason != "completed" || g.Issues[0].Synced == nil {
@@ -87,7 +87,10 @@ func TestApplyIssueKeepsSynced(t *testing.T) {
 
 func TestTasksOfPull(t *testing.T) {
 	t.Parallel()
-	const u = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
+	const (
+		u = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
+		v = "01JBZ8K3QW7M2X9V4T6R5N8P0B"
+	)
 	for name, c := range map[string]struct {
 		p    github.Pull
 		want []string
@@ -105,6 +108,14 @@ func TestTasksOfPull(t *testing.T) {
 		"id twice":   {github.Pull{Title: "WEB-7", Body: "WEB-7, (WEB-8)"}, []string{"WEB-7", "WEB-8"}},
 		"prefix":     {github.Pull{Head: "hh/WEB-42x"}, nil},
 		"id range":   {github.Pull{Body: "WEB-1-2 WEB-3"}, []string{"WEB-3"}},
+		// hh pr ends the body with the mark of its task: what the title and the
+		// body say above it is the text of the task.
+		"last line":         {github.Pull{Title: "WEB-1", Body: "WEB-2 hh:" + v + "\n\nhedgehug:" + u}, []string{u}},
+		"last line, spaces": {github.Pull{Title: "WEB-1", Body: "WEB-2\r\n\r\nhedgehug:" + u + " \r\n\n"}, []string{u}},
+		"last line, others": {github.Pull{Head: "hh/WEB-42-a", Body: "WEB-2\n\nhedgehug:" + u, Comments: []string{"WEB-3 hh:" + v}}, []string{"WEB-42", u, v, "WEB-3"}},
+		"last line is text": {github.Pull{Title: "WEB-1", Body: "hedgehug:" + u + "\n\nWEB-2"}, []string{"WEB-1", u, "WEB-2"}},
+		"mark in a line":    {github.Pull{Body: "WEB-2\nsee hedgehug:" + u}, []string{u, "WEB-2"}},
+		"short mark last":   {github.Pull{Body: "WEB-2\nhh:" + u}, []string{u, "WEB-2"}},
 	} {
 		got := mentioned(c.p, []string{"WEB"})
 		if len(got) != len(c.want) {
@@ -132,7 +143,7 @@ func TestApplyMatchesRefsInAnyCase(t *testing.T) {
 	if err := x.SetGitHub(model.GitHubState{PRs: []model.PRState{{Ref: strings.ToUpper(prRef(1)), State: "open", Review: "none"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := apply(x, got, nil); err != nil || changed {
-		t.Errorf("a ref in another case: %v, %v", changed, err)
+	if a, err := apply(x, got, nil); err != nil || a.Changed {
+		t.Errorf("a ref in another case: %v, %v", a.Changed, err)
 	}
 }

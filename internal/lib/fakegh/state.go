@@ -23,13 +23,15 @@ type State struct {
 // Repo is a repository and who may do what with it. The owner of a user's
 // repository is its admin.
 type Repo struct {
-	Owner   string            `json:"owner"`
-	Name    string            `json:"name"`
-	Private bool              `json:"private"`
-	Topics  []string          `json:"topics"`
-	Perms   map[string]string `json:"perms"` // login → read, write, admin or none
-	Pulls   []*Pull           `json:"pulls,omitempty"`
-	Issues  []*Issue          `json:"issues,omitempty"`
+	Owner   string `json:"owner"`
+	Name    string `json:"name"`
+	Private bool   `json:"private"`
+	// DefaultBranch is the branch pull requests go to; main when empty.
+	DefaultBranch string            `json:"default_branch,omitempty"`
+	Topics        []string          `json:"topics"`
+	Perms         map[string]string `json:"perms"` // login → read, write, admin or none
+	Pulls         []*Pull           `json:"pulls,omitempty"`
+	Issues        []*Issue          `json:"issues,omitempty"`
 
 	id int // numbered once, when the server takes the repository in
 }
@@ -40,7 +42,8 @@ type Pull struct {
 	Title     string     `json:"title"`
 	Body      string     `json:"body"`
 	Head      string     `json:"head"`
-	State     string     `json:"state"` // open, closed, merged
+	Base      string     `json:"base,omitempty"` // the default branch when empty
+	State     string     `json:"state"`          // open, closed, merged
 	Draft     bool       `json:"draft"`
 	Review    string     `json:"review"`    // "", approved, changes_requested
 	Requested bool       `json:"requested"` // a review is asked for

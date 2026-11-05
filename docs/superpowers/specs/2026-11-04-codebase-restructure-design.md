@@ -71,6 +71,7 @@ internal/app/
     model/
     schema/
     merge/
+    automation/             フェーズ 5b で追加。automations.yaml の形式、検査、イベントの判定、ルールの評価（I/O を持たない）
   storage/
     store/                  旧 store ＋ force push 復旧の途中残りの検出（旧 sync の ReadParent・LeftoverIn・LeftoverError）
     index/
@@ -88,7 +89,7 @@ internal/app/
   usecase/                  土台（2.3）
     usecasetest/            usecase とその領域のテストの補助（決定 14）
     tasks/ comments/ browse/ views/ schemas/ workspaces/
-    stores/ replication/ notifications/ accounts/ maintenance/ watch/ integration/
+    stores/ replication/ notifications/ accounts/ maintenance/ watch/ integration/ automations/
   cli/                      旧 cmd/hedgehug の本体
     prompt/                 確認と選択の部品（4.4）
     scenario/               組み立てたバイナリを動かす通しのテスト（テストだけのパッケージ。5 節、決定 16）
@@ -116,12 +117,12 @@ api/openapi.yaml            今のまま
 
 ### 2.3 usecase の分け方
 
-直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 13 個（11 個に回 4 で watch を足し、フェーズ 5a で integration を足した。フェーズ 5b で automations を足して 14 個になる）。
+直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 14 個（11 個に回 4 で watch を足し、フェーズ 5a で integration、5b で automations を足した）。
 
 - session（Store を開く、書き手、1 操作 1 コミット）、errors、TaskView などの返す型（旧 view.go）、readonly、conn（GitHub への接続とアカウントの選択）、ResolveRef（旧 mount_ops.go）
 - mount から移す ID の解決、context から移す行き先の判断
 - 領域をまたいで使うヘルパー（task.go の `NotDeleted`・`LiveParent`・`EndRank` など）。どれを下ろすかは plan で、領域をまたぐ呼び出しを洗い出して確定する
-- 同期から呼ぶ GitHub の取り込み（`FetchGitHub`・`HasGitHubTargets`、自動リンク、gh への書き込み。決定 20）
+- 同期から呼ぶ GitHub の取り込み（`FetchGitHub`・`FetchGitHubRepo`・`HasGitHubTargets`、自動リンク、gh への書き込み、ルールの実行。決定 20）
 
 | パッケージ | 旧 ops のファイル |
 | --- | --- |
@@ -138,6 +139,7 @@ api/openapi.yaml            今のまま
 | maintenance | maintain の Doctor, purge, rebuild ＋ 旧 doctor |
 | watch | server の poll（回 4 で移す。決定 15） |
 | integration | フェーズ 5a で追加。GitHub の Issue・PR のリンクの付け外し（取り込みと自動のリンク付けは同期から呼ぶので土台。決定 20） |
+| automations | フェーズ 5b で追加。`automations.yaml` のルールと `issue_fields` の一覧・編集（`hh automation`）。ルールの実行は取り込みの一部なので土台にある |
 
 領域どうしの import は、土台を通すのを基本にする。領域から別の領域を呼ぶ必要が出たら、その関数を土台に下ろす。
 

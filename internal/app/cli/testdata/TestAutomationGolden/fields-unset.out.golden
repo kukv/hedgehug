@@ -1,0 +1,5 @@
+Changed issue_fields
+default_sync: mirror
+push: title, status
+mirror: -
+props: -

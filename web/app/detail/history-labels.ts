@@ -28,6 +28,7 @@ const labels: Record<string, string> = {
   replay: "同期で再適用",
   link: "リンク",
   unlink: "リンク解除",
+  start: "作業開始",
   "gh-fetch": "GitHub の取り込み",
 };
 

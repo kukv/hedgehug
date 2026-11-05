@@ -50,7 +50,7 @@ func (a *app) mvCmd() *cobra.Command {
 	f.StringVar(&parent, "parent", "", "the new parent")
 	f.BoolVar(&root, "root", false, "move to the top level")
 	f.StringVar(&to, "store", "", "move it with its subtree to this store, leaving a forward file behind")
-	f.StringVar(&scoped, "scoped", "", "with --store: carry or drop the scoped schema of a project moved")
+	f.StringVar(&scoped, "scoped", "", "with --store: carry or drop the scoped schema and the automations of a project moved")
 	f.BoolVar(&yes, "yes", false, "with --store: do not ask for confirmation")
 	f.StringVar(&before, "before", "", "put it just before this sibling")
 	f.StringVar(&after, "after", "", "put it just after this sibling")
@@ -107,7 +107,8 @@ func (a *app) mvStore(in stores.MoveStoreInput) error {
 			}
 		case e.Code == "choice.required" && e.Args["what"] == "--scoped":
 			projects, _ := e.Args["projects"].([]string)
-			if in.Scoped, err = a.askScoped(projects); err != nil {
+			subject, _ := e.Args["subject"].(string)
+			if in.Scoped, err = a.askScoped(subject, projects); err != nil {
 				return err
 			}
 		case e.Code == "confirm.required":
@@ -126,10 +127,11 @@ func (a *app) mvStore(in stores.MoveStoreInput) error {
 	return err
 }
 
-// askScoped asks whether the scoped schema of the projects moved goes along.
-func (a *app) askScoped(projects []string) (string, error) {
+// askScoped asks whether the subject, what the projects moved have of their
+// own, goes along.
+func (a *app) askScoped(subject string, projects []string) (string, error) {
 	return a.ask().Choose(prompt.Choose{
-		Question: "The scoped schema of " + strings.Join(projects, ", ") + " — ",
+		Question: "The " + subject + " of " + strings.Join(projects, ", ") + " — ",
 		Options:  []string{"carry", "drop"}, ByWord: true, Canceled: "Canceled",
 	})
 }

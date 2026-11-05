@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,6 +43,20 @@ func (c *counting) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	return http.DefaultTransport.RoundTrip(r)
 }
+
+// duringRead is a client that runs fn at the first request: while the fetch
+// reads GitHub and has not taken the store lock.
+func duringRead(fn func()) *http.Client {
+	var once sync.Once
+	return &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		once.Do(fn)
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 // GitHub's clock is behind this machine's: what was updated since the last
 // read is told by GitHub's own times.
@@ -169,8 +184,8 @@ func TestFetchReadsEveryPageOfTheScan(t *testing.T) {
 	}
 }
 
-// A write made while the fetch waits for the commit is kept: the fetch
-// changes links and gh of the task as the store has it then.
+// A write made while the fetch reads GitHub is kept: the fetch changes links
+// and gh of the task as the store has it when it writes.
 func TestFetchKeepsAWriteMadeDuringIt(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
@@ -178,8 +193,7 @@ func TestFetchKeepsAWriteMadeDuringIt(t *testing.T) {
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
 	}
-	ts.BeforeUpdate = func() {
-		ts.BeforeUpdate = nil
+	ts.HTTPClient = duringRead(func() {
 		ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
 			x, err := tx.Task(task.ULID)
 			if err != nil {
@@ -188,7 +202,7 @@ func TestFetchKeepsAWriteMadeDuringIt(t *testing.T) {
 			x.Title = "changed meanwhile"
 			return tx.PutTask(x)
 		})
-	}
+	})
 	if r := fetch(t, ts); !r.Committed {
 		t.Fatal("not committed")
 	}

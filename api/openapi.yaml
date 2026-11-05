@@ -811,7 +811,7 @@ components:
           description: The parent in the destination, when one was given; id is as the destination shows it
         scoped:
           $ref: "#/components/schemas/MoveScopedView"
-          description: Present when a project moved has a scoped schema
+          description: Present when a project moved has a scoped schema or automations of its own
         tasks:
           description: The root first, every parent before its children; id is as the source shows it
           items:
@@ -868,7 +868,7 @@ components:
             - drop
           type: string
         dropped:
-          description: What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind); empty unless carried
+          description: What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind, rule, disable); empty unless carried
           items:
             type: string
           type: array
@@ -886,7 +886,7 @@ components:
           description: "A task of that store to put the task under: an ID or a ULID"
           type: string
         scoped:
-          description: Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+          description: Whether the scoped schema and the automations of the projects moved go along; without it the plan says scoped.required, and the move is 400 choice.required
           enum:
             - carry
             - drop
@@ -910,7 +910,7 @@ components:
           description: "A task of that store to put the task under: an ID or a ULID"
           type: string
         scoped:
-          description: Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+          description: Whether the scoped schema and the automations of the projects moved go along; without it the plan says scoped.required, and the move is 400 choice.required
           enum:
             - carry
             - drop

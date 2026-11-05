@@ -54,7 +54,7 @@ func Patch(ss *usecase.Session, arg string, in PatchInput) (usecase.TaskResult, 
 				return err
 			}
 		}
-		watchNewAssignees(t, assignees)
+		usecase.WatchNewAssignees(t, assignees)
 		if in.Body != nil {
 			old := t.Body
 			t.Body = *in.Body

@@ -83,8 +83,30 @@ func CheckSchema(s *store.Store, ix *index.Index) ([]Finding, error) {
 			})
 		}
 	}
+	fs = append(fs, automationFindings(s, sc, ix)...)
 	SortFindings(fs)
 	return fs, nil
+}
+
+// automationFindings are the problems of automations.yaml. A file that does
+// not decode is one finding.
+func automationFindings(s *store.Store, sc *schema.Schema, ix *index.Index) []Finding {
+	f, err := s.Automations()
+	if err != nil {
+		return []Finding{{
+			Check: "automation", Where: model.AutomationsPath, Msg: err.Error(),
+			Hint: "restore " + model.AutomationsPath + " with `git restore " + model.AutomationsPath + "`, or fix it by hand and commit",
+		}}
+	}
+	isProject := func(u model.ULID) bool {
+		e, ok := ix.Task(u)
+		return ok && e.DeletedAt == nil && e.Kind == ProjectKind
+	}
+	var fs []Finding
+	for _, p := range f.Check(sc, isProject) {
+		fs = append(fs, Finding{Check: "automation", Where: model.AutomationsPath + ": " + p.Path, Msg: p.Msg})
+	}
+	return fs
 }
 
 // missingTemplates finds the templates that schema.yaml names and

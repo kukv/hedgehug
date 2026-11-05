@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
@@ -33,8 +34,11 @@ import (
 type StoreInitInput struct {
 	Name, Prefix, Workspace string
 	Schema                  *schema.Schema
-	Remotes                 []string
-	Account, Path           string
+	// Automations, when given, is written as automations.yaml right after
+	// the store is made, in a commit of op init.
+	Automations   *automation.File
+	Remotes       []string
+	Account, Path string
 }
 
 // StoreInitResult is the store StoreInit made.
@@ -113,6 +117,17 @@ func StoreInit(ss *usecase.Session, in StoreInitInput) (StoreInitResult, error) 
 	}
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
 		return StoreInitResult{}, undo(err)
+	}
+	if in.Automations != nil {
+		data, err := in.Automations.Encode()
+		if err != nil {
+			return StoreInitResult{}, undo(err)
+		}
+		if _, err := s.UpdateCommit(store.Op{Name: "init", Author: author, Account: accountID}, func(tx *store.Tx) error {
+			return tx.PutFile(model.AutomationsPath, data)
+		}); err != nil {
+			return StoreInitResult{}, undo(err)
+		}
 	}
 	var pushed []string
 	if len(in.Remotes) > 0 {

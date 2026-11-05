@@ -1,6 +1,6 @@
 # フェーズ 5a の引き継ぎ（2026-11-05 時点）
 
-5a（リンクと取り込み）の実装は Task 1〜16 を書き終えた。コミットはまだしていない。検証用 Org での手の確認（Task 16 の Step 5）も未実施。
+5a（リンクと取り込み）は PR #61 で main にマージした。検証用 Org での手の確認（Task 16 の Step 5）だけが未実施で、下の「未実施のこと」に残す。「いまの状態」と「次」の 1・2 は、マージの前の記録である。
 
 ## いまの状態
 
@@ -73,13 +73,13 @@ plan の「この回で決めたこと」13 項目と、各 Task の本文に記
 
 ## 次
 
-1. 利用者が内容を確認してコミットする。plan の各 Task の「コミットする」の手順は飛ばしてある。1つにまとめるか分けるかは利用者が決める
-2. 構成見直しの回 5（`cli/scenario` ができる回）のマージ後に、`phase5-design` を main へ rebase する。そのとき plan の冒頭の注意（パスと行番号をその時点のコードで確かめ直す）に従い、`internal/app/cli/github_scenario_test.go` を `internal/app/cli/scenario/github_test.go` に移せるか確かめる。移すときは `scenario` パッケージの補助に合わせる
+1. 完了。PR #61 でコミットしてマージした
+2. 完了。main へ rebase した。`internal/app/cli/github_scenario_test.go` は `newTestEnv` のプロセス内のテストなので `cli` に残す。`cli/scenario` はビルドしたバイナリを動かす場所で、5b の通しのテストはそちらに足す
 3. Step 5 の手の確認を行い、結果を書く。そのあと PR #61 に 5a の実装を足してレビューに出す
 4. 5b は、5a のマージ後の main から plan を切って書く。5b が使うものは次のとおり
    - `usecase.FetchGitHub`（旧 `integration.Fetch`。構成見直しの回 6 で土台に移した。spec 決定 20）の差分の取り方（`Since` 以降の PR と、リンク済みの PR・Issue を毎回すべて読む）。5b の「ルールの実行」は取り込みの後（spec の取り込みの順番の 5）に呼ぶ。同期から呼ぶので土台に置く
    - `store.Op.Automated`（取り込み以外の自動化のコミットにも同じ author を使う）
-   - `usecase/integration/link.go` の `defaultIssueSync`。いまは `link` 固定で、5b で `issue_fields.default_sync` を読む形に置き換える（plan の決定 4）
+   - `usecase/integration/link.go` の `defaultIssueSync`。いまは `link` 固定で、5b で `issue_fields.default_sync` を読む形に置き換える（plan の決定 4）。5b で置き換えた
    - 土台の `apply`（`usecase/github_apply.go`、旧 `integration.apply`）は、5b のイベント（`pr.opened` など）の判定に `gh` の取り込み前後の差分が要るので、`old` と `next`（取り込み前後の `GitHubState`）を返す形に変える。いまは変わったかどうかの `bool` だけを返す
    - `hh unlink` は `gh` から要素を外すので、そのあと同じ PR を `hh link` し直すと `gh` に新しく入り、`pr.opened` が発火する（5b の spec のイベントの節に書いた）
    - `synced`・`state_reason`・`Link.Fields` は型とマージだけを入れてある。5b 以降が値を書く

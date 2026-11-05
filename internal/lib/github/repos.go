@@ -10,9 +10,10 @@ type Repo struct {
 	Owner    struct {
 		Login string `json:"login"`
 	} `json:"owner"`
-	Private     bool     `json:"private"`
-	Topics      []string `json:"topics"`
-	Permissions struct {
+	Private       bool     `json:"private"`
+	DefaultBranch string   `json:"default_branch"`
+	Topics        []string `json:"topics"`
+	Permissions   struct {
 		Admin bool `json:"admin"`
 		Push  bool `json:"push"`
 		Pull  bool `json:"pull"`

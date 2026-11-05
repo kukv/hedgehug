@@ -190,6 +190,16 @@ func statusError(res *http.Response, data []byte) error {
 				return ErrExists
 			}
 		}
+		// The reason is in errors, not in message ("Validation Failed").
+		var why []string
+		for _, e := range msg.Errors {
+			if e.Message != "" {
+				why = append(why, e.Message)
+			}
+		}
+		if len(why) > 0 {
+			return fmt.Errorf("GitHub answered %d: %s: %s", res.StatusCode, msg.Message, strings.Join(why, "; "))
+		}
 	}
 	return fmt.Errorf("GitHub answered %d: %s", res.StatusCode, msg.Message)
 }

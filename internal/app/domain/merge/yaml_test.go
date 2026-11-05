@@ -193,6 +193,66 @@ func TestYAMLValuesAreWhatWhenIsAsked(t *testing.T) {
 	}
 }
 
+func TestAutomationsMerge(t *testing.T) {
+	t.Parallel()
+	const base = "rules:\n- id: pr-opened\n  on: pr.opened\n  set: {status: in_progress}\nissue_fields:\n  default_sync: link\n  push: [title, body]\n"
+	at := func(path []string, sec int64) func([]string) time.Time {
+		return func(p []string) time.Time {
+			if slices.Equal(p, path) {
+				return time.Unix(sec, 0)
+			}
+			return time.Time{}
+		}
+	}
+	side := func(data string, author string, path []string, sec int64) Side {
+		return Side{Data: []byte(data), Author: author, When: at(path, sec)}
+	}
+
+	t.Run("both sides add rules", func(t *testing.T) {
+		t.Parallel()
+		ours := base
+		ours = strings.Replace(ours, "issue_fields:", "- id: mine\n  on: pr.merged\n  set: {category: done}\nissue_fields:", 1)
+		theirs := strings.Replace(base, "issue_fields:", "- id: yours\n  on: issue.closed\n  set: {category: done}\nissue_fields:", 1)
+		r := mergeSym(t, model.AutomationsPath, Side{Data: []byte(base)}, Side{Data: []byte(ours), Author: "a"}, Side{Data: []byte(theirs), Author: "b"})
+		for _, id := range []string{"pr-opened", "mine", "yours"} {
+			if !strings.Contains(string(r.Data), "id: "+id+"\n") {
+				t.Errorf("lost %s:\n%s", id, r.Data)
+			}
+		}
+		if len(r.Overwritten) != 0 {
+			t.Errorf("overwritten = %v", r.Overwritten)
+		}
+	})
+
+	t.Run("the same rule's enabled collides and the newer side wins", func(t *testing.T) {
+		t.Parallel()
+		on := strings.Replace(base, "  set: {status: in_progress}\n", "  set: {status: in_progress}\n  enabled: true\n", 1)
+		off := strings.Replace(base, "  set: {status: in_progress}\n", "  set: {status: in_progress}\n  enabled: false\n", 1)
+		path := []string{"rules", "pr-opened", "enabled"}
+		r := mergeSym(t, model.AutomationsPath, Side{Data: []byte(base)}, side(off, "a", path, 2), side(on, "b", path, 1))
+		if !strings.Contains(string(r.Data), "enabled: false") {
+			t.Errorf("r =\n%s", r.Data)
+		}
+		want := []Overwritten{{Path: model.AutomationsPath, Field: "rules.pr-opened.enabled", Value: "true", Author: "b"}}
+		if len(r.Overwritten) != 1 || r.Overwritten[0].Path != want[0].Path || r.Overwritten[0].Author != want[0].Author {
+			t.Errorf("overwritten = %v", r.Overwritten)
+		}
+	})
+
+	t.Run("issue_fields merge by key", func(t *testing.T) {
+		t.Parallel()
+		ours := strings.Replace(base, "push: [title, body]", "push: [title, body, labels]", 1)
+		theirs := strings.Replace(base, "default_sync: link", "default_sync: mirror", 1)
+		r := mergeSym(t, model.AutomationsPath, Side{Data: []byte(base)}, Side{Data: []byte(ours), Author: "a"}, Side{Data: []byte(theirs), Author: "b"})
+		if !strings.Contains(string(r.Data), "default_sync: mirror") || !strings.Contains(string(r.Data), "push: [title, body, labels]") {
+			t.Errorf("r =\n%s", r.Data)
+		}
+		if len(r.Overwritten) != 0 {
+			t.Errorf("overwritten = %v", r.Overwritten)
+		}
+	})
+}
+
 func TestYAMLValuesOfBlankAndBroken(t *testing.T) {
 	t.Parallel()
 	if v, err := YAMLValues([]byte("# c\n")); err != nil || len(v) != 0 {

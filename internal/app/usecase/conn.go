@@ -107,6 +107,11 @@ func hostOf(u string) (string, bool) {
 // の通信).
 func (ss *Session) Conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
 	acct, ok := c.Writer(e)
+	return ss.connOf(c, acct, ok)
+}
+
+// connOf is Conn for the account acct; ok is false when there is none.
+func (ss *Session) connOf(c *config.Config, acct config.Account, ok bool) gitrepo.Conn {
 	return gitrepo.Conn{
 		Rewrite: c.Rewrite,
 		Auth: func(u string) (transport.AuthMethod, error) {
@@ -149,10 +154,10 @@ func (ss *Session) GitHub(c *config.Config, acct config.Account, host string) (*
 	return github.New(c.Host(host).GitHub(), tok, ss.HTTPClient), nil
 }
 
-// GitHubForRepo is a client for the repository id (<host>/<owner>/<repo>),
-// with the account repo_accounts picks, else the account of the store e,
-// else the only account. It returns the account too, for the messages.
-func (ss *Session) GitHubForRepo(c *config.Config, e config.StoreEntry, id string) (*github.Client, config.Account, error) {
+// AccountForRepo is the account for the repository id (<host>/<owner>/<repo>):
+// the one repo_accounts picks, else the account of the store e, else the only
+// account.
+func (ss *Session) AccountForRepo(c *config.Config, e config.StoreEntry, id string) (config.Account, error) {
 	host, _, _ := strings.Cut(id, "/")
 	name, ok := c.RepoAccountFor(id)
 	if !ok {
@@ -160,19 +165,41 @@ func (ss *Session) GitHubForRepo(c *config.Config, e config.StoreEntry, id strin
 	}
 	acct, ok, err := ss.PickAccount(c, name)
 	if err != nil {
-		return nil, config.Account{}, err
+		return config.Account{}, err
 	}
 	if !ok {
-		return nil, config.Account{}, NewErr(KindConflict, "account.none",
+		return config.Account{}, NewErr(KindConflict, "account.none",
 			fmt.Errorf("no account can read %s; set repo_accounts in config.yaml", id), "repo", id)
 	}
 	if !config.SameHost(acct.Host, host) {
-		return nil, config.Account{}, NewErr(KindInvalid, "account.host",
+		return config.Account{}, NewErr(KindInvalid, "account.host",
 			fmt.Errorf("account %s is of %s, so it cannot read %s; set repo_accounts in config.yaml", acct.Name, acct.Host, id),
 			"repo", id, "account", acct.Name)
 	}
+	return acct, nil
+}
+
+// GitHubForRepo is a client for the repository id (<host>/<owner>/<repo>),
+// with the account AccountForRepo picks. It returns the account too, for the
+// messages.
+func (ss *Session) GitHubForRepo(c *config.Config, e config.StoreEntry, id string) (*github.Client, config.Account, error) {
+	acct, err := ss.AccountForRepo(c, e, id)
+	if err != nil {
+		return nil, config.Account{}, err
+	}
+	host, _, _ := strings.Cut(id, "/")
 	cl, err := ss.GitHub(c, acct, host)
 	return cl, acct, err
+}
+
+// ConnForRepo is how the remote of the code repository id is reached: as Conn
+// does, with the account AccountForRepo picks.
+func (ss *Session) ConnForRepo(c *config.Config, e config.StoreEntry, id string) (gitrepo.Conn, config.Account, error) {
+	acct, err := ss.AccountForRepo(c, e, id)
+	if err != nil {
+		return gitrepo.Conn{}, config.Account{}, err
+	}
+	return ss.connOf(c, acct, true), acct, nil
 }
 
 // PickAccount is the account name names, or the only one when name is empty;

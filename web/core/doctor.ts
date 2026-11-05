@@ -11,6 +11,7 @@ const CHECKS: Record<string, string> = {
   template: "テンプレート",
   prop_name: "プロパティ名",
   override: "プロジェクトの設定",
+  automation: "自動化",
   task: "タスク",
   file: "ファイル",
   view: "ビュー",

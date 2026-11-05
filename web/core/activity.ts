@@ -15,6 +15,8 @@ const OP_LABELS: Readonly<Record<string, string>> = {
   dep: "依存の変更",
   link: "リンク",
   unlink: "リンクの解除",
+  start: "作業の開始",
+  automation: "自動化の変更",
   "gh-fetch": "GitHub の取り込み",
   watch: "ウォッチ",
   unwatch: "ウォッチの解除",

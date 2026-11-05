@@ -107,6 +107,7 @@ const messages: Record<string, Make> = {
   "move.exists": (a) => `${str(a, "ulid")} はすでに ${str(a, "store")} にあります`,
   "move.unfinished": (a) =>
     `${str(a, "store")} へは移しましたが、移動元の片付けが終わっていません。もう一度同じ移動をすると完了します`,
+  "automation.invalid": (_, e) => withDetail("automations.yaml に問題があります", e),
   "add.position": (_, e) => withDetail("この位置には作れません", e),
   "position.both": () => "前に置くか後ろに置くか、どちらか一方を指定してください",
   "dep.invalid": (_, e) => withDetail("ブロックの指定を変えられません", e),
@@ -282,7 +283,7 @@ const messages: Record<string, Make> = {
   // choices and confirmations (the CLI asks; the GUI picks first)
   "choice.required": (a) =>
     str(a, "what") === "--scoped"
-      ? `プロジェクト（${list(a, "projects")}）の表示の設定を持っていくか、持っていかないかを選んでください`
+      ? `プロジェクト（${list(a, "projects")}）の設定（表示と自動化）を持っていくか、持っていかないかを選んでください`
       : `${choiceNouns[str(a, "what")] ?? `${str(a, "what")} `}を選んでください（${list(a, "candidates")}）`,
   "confirm.required": (a) => `${str(a, "what")} には確認が必要です`,
 

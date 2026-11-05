@@ -41,6 +41,7 @@ describe("opLabel", () => {
       "replay",
       "link",
       "unlink",
+      "start",
       "gh-fetch",
     ];
     for (const op of ops) expect(opLabel(op), op).not.toBe(op);

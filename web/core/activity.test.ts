@@ -71,6 +71,8 @@ describe("opLabel", () => {
     expect(opLabel("replay")).toBe("同期のやり直し");
     expect(opLabel("link")).toBe("リンク");
     expect(opLabel("unlink")).toBe("リンクの解除");
+    expect(opLabel("start")).toBe("作業の開始");
+    expect(opLabel("automation")).toBe("自動化の変更");
     expect(opLabel("gh-fetch")).toBe("GitHub の取り込み");
     expect(opLabel("something-new")).toBe("something-new");
     expect(opLabel(null)).toBe("変更");

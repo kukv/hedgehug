@@ -89,6 +89,89 @@ func TestLinkIssueModes(t *testing.T) {
 	}
 }
 
+func TestLinkIssueDefaultModeIsTheFiles(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("a", nil)
+	ts.WriteAndCommit(model.AutomationsPath, "issue_fields:\n  default_sync: mirror\n")
+	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#2", Sync: "push"}); err != nil {
+		t.Fatal(err)
+	}
+	if l := linksOf(t, ts.Session, "ME-1"); l[0].Sync != model.SyncMirror || l[1].Sync != model.SyncPush {
+		t.Fatalf("links = %+v", l)
+	}
+	// Linking again without a mode is not a change to the default.
+	_, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#2"})
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "link.exists")
+}
+
+// The mode goes into the task, so it is not guessed from a file that cannot
+// be read. What does not need the file goes on.
+func TestLinkIssueWithAnUnusableFile(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		file string
+		code string
+	}{
+		"broken":        {file: "rules: 3\n", code: "automation.invalid"},
+		"unknown value": {file: "issue_fields:\n  default_sync: off\n", code: "automation.invalid"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ts := usecasetest.New(t)
+			ts.AddTask("a", nil)
+			ts.WriteAndCommit(model.AutomationsPath, c.file)
+			_, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1"})
+			usecasetest.MustCode(t, err, usecase.KindInvalid, c.code)
+			if l := linksOf(t, ts.Session, "ME-1"); len(l) != 0 {
+				t.Fatalf("links = %+v", l)
+			}
+			if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1", Sync: "link"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{PR: "o/r#2"}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// What gh holds of a ref goes when the link comes in or comes back on, and
+// stays when only the mode of a live link changes.
+func TestLinkClearsWhatGHHoldsOfTheRef(t *testing.T) {
+	t.Parallel()
+	const ref = "github.com/o/r/issues/1"
+	stale := model.GitHubState{Issues: []model.IssueState{{Ref: ref, State: "open"}}}
+	for name, c := range map[string]struct {
+		links []model.Link
+		items int
+	}{
+		"new":         {nil, 0},
+		"off":         {[]model.Link{{Type: model.LinkIssue, Ref: ref, Sync: model.SyncOff}}, 0},
+		"mode change": {[]model.Link{{Type: model.LinkIssue, Ref: ref, Sync: model.SyncLink}}, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ts := usecasetest.New(t)
+			ts.AddTask("a", func(x *model.Task) {
+				x.Links = c.links
+				if err := x.SetGitHub(stale); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1", Sync: "push"}); err != nil {
+				t.Fatal(err)
+			}
+			if g, _ := taskIn(t, ts, "me", "ME-1").GitHub(); len(g.Issues) != c.items {
+				t.Errorf("gh = %+v", g)
+			}
+		})
+	}
+}
+
 func TestLinkInputs(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
@@ -190,4 +273,21 @@ func TestUndoTakesBackLink(t *testing.T) {
 	if l := linksOf(t, ts.Session, "ME-1"); len(l) != 1 || l[0].Sync != model.SyncMirror {
 		t.Errorf("links after undoing unlink = %+v", l)
 	}
+}
+
+func taskIn(t *testing.T, ts *usecasetest.Session, store, id string) *model.Task {
+	t.Helper()
+	s, ix, err := ts.ForStore(store).Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := ts.Resolve(ix, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, err := s.Task(e.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return x
 }
