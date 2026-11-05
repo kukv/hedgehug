@@ -398,10 +398,17 @@ func TestRebuildStopsBeforeTheRecordWhenHeadIsOffMain(t *testing.T) {
 func TestRebuildStoreFinishesAStoppedRebuild(t *testing.T) {
 	t.Parallel()
 	c := newCluster(t, 2)
-	sc := newStoppedScene(t, c, false)
-	b, err := RebuildStore(c.stores[1], c.opts[1])
+	sc := newStoppedScene(t, c, true)
+	// A second prepare would stamp its commit an hour later and so give
+	// another target: only the record can lead to the first.
+	opt := c.opts[1]
+	opt.Now = func() time.Time { return time.Now().Add(time.Hour) }
+	b, err := RebuildStore(c.stores[1], opt)
 	if err != nil || b == nil {
 		t.Fatalf("RebuildStore = %+v, %v", b, err)
+	}
+	if b.Kept == "" || b.Kept != sc.b.Kept {
+		t.Errorf("Kept = %q, want the record's %q", b.Kept, sc.b.Kept)
 	}
 	checkRebuilt(t, c, sc)
 }
