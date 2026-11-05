@@ -149,7 +149,7 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 	if t.CreatedBy != "" {
 		usecase.AddWatchers(t, t.CreatedBy)
 	}
-	watchNewAssignees(t, nil)
+	usecase.WatchNewAssignees(t, nil)
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {
 		return usecase.TaskResult{}, err
@@ -188,7 +188,7 @@ func Set(ss *usecase.Session, arg string, assigns []usecase.Assign) (usecase.Tas
 				return err
 			}
 		}
-		watchNewAssignees(t, assignees)
+		usecase.WatchNewAssignees(t, assignees)
 		return tx.PutTask(t)
 	})
 	if err != nil {
@@ -343,14 +343,4 @@ func Watch(ss *usecase.Session, arg string, on bool) (usecase.TaskResult, error)
 		return usecase.TaskResult{}, err
 	}
 	return usecase.NewTaskResult(ix, e.ULID, hash), nil
-}
-
-// watchNewAssignees adds to the watchers of t the assignees it has now and
-// did not in before.
-func watchNewAssignees(t *model.Task, before []string) {
-	for _, as := range t.Assignees {
-		if !slices.ContainsFunc(before, func(b string) bool { return config.SameAccount(b, as) }) {
-			usecase.AddWatchers(t, as)
-		}
-	}
 }

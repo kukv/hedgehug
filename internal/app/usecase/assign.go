@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // Assign is one key=value of set and of add -p: = sets (an empty value
@@ -86,6 +87,16 @@ func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string
 		return NewErr(KindInvalid, "assign.unknown_key", fmt.Errorf("%s is not a field or a property of the schema", a.Key), "key", a.Key)
 	}
 	return setProp(t, p, a, resolve)
+}
+
+// WatchNewAssignees adds to the watchers of t the assignees it has now and
+// did not in before.
+func WatchNewAssignees(t *model.Task, before []string) {
+	for _, as := range t.Assignees {
+		if !slices.ContainsFunc(before, func(b string) bool { return config.SameAccount(b, as) }) {
+			AddWatchers(t, as)
+		}
+	}
 }
 
 func setScalar(dst *string, a Assign) error {
