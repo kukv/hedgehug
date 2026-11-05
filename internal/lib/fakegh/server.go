@@ -1,6 +1,7 @@
 package fakegh
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -276,8 +277,84 @@ func (s *Server) repoRoute(w http.ResponseWriter, r *http.Request, parts []strin
 			}
 		}
 		s.page(w, r, len(out), func(i int) any { return out[i] })
+	case r.Method == "POST" && len(parts) == 4 && parts[3] == "pulls":
+		s.createPull(w, r, x, login)
+	case r.Method == "GET" && len(parts) == 4 && parts[3] == "pulls":
+		s.listPulls(w, r, x)
 	default:
 		fail(w, http.StatusNotFound, "Not Found")
+	}
+}
+
+// unprocessable answers 422 as GitHub does, with message as the one error.
+func unprocessable(w http.ResponseWriter, message string) {
+	writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+		"message": "Validation Failed",
+		"errors":  []map[string]string{{"resource": "PullRequest", "code": "custom", "message": message}},
+	})
+}
+
+func (s *Server) createPull(w http.ResponseWriter, r *http.Request, x *Repo, login string) {
+	if rank(perm(x, login)) < rank("write") {
+		fail(w, http.StatusForbidden, "Resource not accessible by personal access token")
+		return
+	}
+	var body struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Head  string `json:"head"`
+		Base  string `json:"base"`
+		Draft bool   `json:"draft"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.Title == "" || body.Head == "" || body.Base == "" {
+		unprocessable(w, "title, head and base are required")
+		return
+	}
+	for _, p := range x.Pulls {
+		if p.State == "open" && p.Head == body.Head {
+			unprocessable(w, "A pull request already exists for "+x.Owner+":"+body.Head+".")
+			return
+		}
+	}
+	p := &Pull{Number: nextNumber(x), Title: body.Title, Body: body.Body, Head: body.Head, Base: body.Base, State: "open", Draft: body.Draft, UpdatedAt: s.now()}
+	x.Pulls = append(x.Pulls, p)
+	writeJSON(w, http.StatusCreated, pullREST(x, p))
+}
+
+// listPulls answers GET /pulls, filtered by state (open when missing; closed
+// includes merged, as on GitHub) and by head (owner:branch).
+func (s *Server) listPulls(w http.ResponseWriter, r *http.Request, x *Repo) {
+	state := cmp.Or(r.URL.Query().Get("state"), "open")
+	head := r.URL.Query().Get("head")
+	var out []*Pull
+	for _, p := range x.Pulls {
+		if state != "all" && (state == "open") != (p.State == "open") {
+			continue
+		}
+		if head != "" && head != x.Owner+":"+p.Head {
+			continue
+		}
+		out = append(out, p)
+	}
+	s.page(w, r, len(out), func(i int) any { return pullREST(x, out[i]) })
+}
+
+// pullREST is a pull request as the REST API gives it.
+func pullREST(x *Repo, p *Pull) map[string]any {
+	state := p.State
+	if state == "merged" {
+		state = "closed"
+	}
+	return map[string]any{
+		"number": p.Number, "title": p.Title, "body": p.Body, "state": state, "draft": p.Draft,
+		"merged":   p.State == "merged",
+		"html_url": "https://github.com/" + x.Owner + "/" + x.Name + "/pull/" + strconv.Itoa(p.Number),
+		"head":     map[string]any{"ref": p.Head},
+		"base":     map[string]any{"ref": cmp.Or(p.Base, x.DefaultBranch, "main")},
 	}
 }
 
@@ -315,12 +392,13 @@ func (s *Server) repoJSON(x *Repo, login string) map[string]any {
 	return map[string]any{
 		"id": x.id, "node_id": fmt.Sprintf("R_%d", x.id),
 		"name": x.Name, "full_name": x.Owner + "/" + x.Name,
-		"owner":       map[string]string{"login": x.Owner},
-		"private":     x.Private,
-		"html_url":    "https://github.com/" + x.Owner + "/" + x.Name,
-		"clone_url":   "https://github.com/" + x.Owner + "/" + x.Name + ".git",
-		"topics":      topics,
-		"permissions": map[string]bool{"admin": p == "admin", "push": rank(p) >= rank("write"), "pull": p != ""},
+		"owner":          map[string]string{"login": x.Owner},
+		"private":        x.Private,
+		"html_url":       "https://github.com/" + x.Owner + "/" + x.Name,
+		"clone_url":      "https://github.com/" + x.Owner + "/" + x.Name + ".git",
+		"topics":         topics,
+		"default_branch": cmp.Or(x.DefaultBranch, "main"),
+		"permissions":    map[string]bool{"admin": p == "admin", "push": rank(p) >= rank("write"), "pull": p != ""},
 	}
 }
 

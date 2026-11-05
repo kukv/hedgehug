@@ -349,3 +349,48 @@ func TestGitHubForRepoRejectsOtherHost(t *testing.T) {
 		t.Errorf("same host = %v, %v", cl, err)
 	}
 }
+
+func TestConnForRepoUsesRepoAccountsToken(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.Env["T_ME"] = "tok-me"
+	ts.Env["T_WORK"] = "tok-work"
+	ts.AppendConfig("accounts:\n" +
+		"  - {name: me, host: github.com, login: alice, token: \"env:T_ME\"}\n" +
+		"  - {name: work, host: github.com, login: bob, token: \"env:T_WORK\"}\n" +
+		"repo_accounts:\n  - {match: github.com/org-a/*, account: work}\n" +
+		"url_rewrites:\n  - {from: \"https://github.com/\", to: \"/srv/remotes/\"}\n")
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := config.StoreEntry{Account: "me"}
+	conn, acct, err := ts.ConnForRepo(c, e, "github.com/org-a/web")
+	if err != nil || acct.Name != "work" {
+		t.Fatalf("org-a = %+v, %v", acct, err)
+	}
+	if got := conn.Rewrite("https://github.com/org-a/web.git"); got != "/srv/remotes/org-a/web.git" {
+		t.Errorf("Rewrite = %q", got)
+	}
+	au, err := conn.Auth("https://github.com/org-a/web.git")
+	if b, ok := au.(*githttp.BasicAuth); err != nil || !ok || b.Password != "tok-work" {
+		t.Errorf("Auth = %#v, %v; want the work token", au, err)
+	}
+	if au, err := conn.Auth("git@github.com:org-a/web.git"); au != nil || err != nil {
+		t.Errorf("ssh Auth = %v, %v", au, err)
+	}
+	if _, err := conn.Auth("http://github.com/org-a/web.git"); err == nil || !strings.Contains(err.Error(), "plain http") {
+		t.Errorf("plain http Auth = %v; want a refusal", err)
+	}
+	conn, acct, err = ts.ConnForRepo(c, e, "github.com/org-b/ops")
+	if err != nil || acct.Name != "me" {
+		t.Fatalf("the store's account = %+v, %v", acct, err)
+	}
+	au, _ = conn.Auth("https://github.com/org-b/ops.git")
+	if b, ok := au.(*githttp.BasicAuth); !ok || b.Password != "tok-me" {
+		t.Errorf("store account Auth = %#v", au)
+	}
+	if _, _, err := ts.ConnForRepo(c, e, "ghe.example.com/o/r"); err == nil || !strings.Contains(err.Error(), "ghe.example.com/o/r") {
+		t.Errorf("other host = %v", err)
+	}
+}
