@@ -153,7 +153,7 @@ func SprintList(ss *usecase.Session, workspace, state string) ([]SprintView, err
 	if err != nil {
 		return nil, err
 	}
-	ws, err := pickWorkspace(ss, ix, workspace)
+	ws, err := usecase.PickWorkspace(ss, ix, workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func SprintSet(ss *usecase.Session, name, workspace string, assigns []usecase.As
 	if err != nil {
 		return SprintWrite{}, err
 	}
-	found, err := findSprint(ss, ix, name, workspace)
+	found, err := usecase.FindSprint(ss, ix, name, workspace)
 	if err != nil {
 		return SprintWrite{}, err
 	}
@@ -234,7 +234,7 @@ func SprintStart(ss *usecase.Session, name, workspace string) (SprintWrite, erro
 	if err != nil {
 		return SprintWrite{}, err
 	}
-	found, err := findSprint(ss, ix, name, workspace)
+	found, err := usecase.FindSprint(ss, ix, name, workspace)
 	if err != nil {
 		return SprintWrite{}, err
 	}
@@ -278,7 +278,7 @@ func SprintOpenTasks(ss *usecase.Session, name, workspace string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	sp, err := findSprint(ss, ix, name, workspace)
+	sp, err := usecase.FindSprint(ss, ix, name, workspace)
 	if err != nil {
 		return 0, err
 	}
@@ -332,7 +332,7 @@ func SprintClose(ss *usecase.Session, name, workspace, to string) (SprintWrite, 
 	if err != nil {
 		return SprintWrite{}, err
 	}
-	found, err := findSprint(ss, ix, name, workspace)
+	found, err := usecase.FindSprint(ss, ix, name, workspace)
 	if err != nil {
 		return SprintWrite{}, err
 	}
@@ -390,7 +390,7 @@ func SprintRemove(ss *usecase.Session, name, workspace string) (SprintWrite, err
 	if err != nil {
 		return SprintWrite{}, err
 	}
-	sp, err := findSprint(ss, ix, name, workspace)
+	sp, err := usecase.FindSprint(ss, ix, name, workspace)
 	if err != nil {
 		return SprintWrite{}, err
 	}

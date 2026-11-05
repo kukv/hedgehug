@@ -48,7 +48,7 @@ type sprintPatchInput struct {
 
 type sprintCloseInput struct {
 	PlanParam
-	Body struct {
+	Body *struct {
 		To string `json:"to,omitempty" doc:"Where the unfinished tasks go: next, backlog or the name of a sprint; may be left out when none is left"`
 	}
 }
@@ -184,7 +184,11 @@ func (s *Server) registerSprints() {
 	}, func(_ context.Context, in *sprintCloseInput) (*sprintOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		w, err := planning.SprintClose(ss, in.ID, in.Workspace, in.Body.To)
+		to := ""
+		if in.Body != nil {
+			to = in.Body.To
+		}
+		w, err := planning.SprintClose(ss, in.ID, in.Workspace, to)
 		if err != nil {
 			return nil, problemOf(err)
 		}

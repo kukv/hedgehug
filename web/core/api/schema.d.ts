@@ -497,6 +497,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/burndown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A sprint day by day, as hh report burndown */
+        get: operations["report-burndown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/cfd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A cumulative flow diagram, as hh report cfd */
+        get: operations["report-cfd"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/cycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cycle and lead time, as hh report cycle */
+        get: operations["report-cycle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estimates against the time logged, as hh report estimate */
+        get: operations["report-estimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/velocity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the closed sprints finished, as hh report velocity */
+        get: operations["report-velocity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schema": {
         parameters: {
             query?: never;
@@ -1340,6 +1425,42 @@ export interface components {
             message: string;
             task: components["schemas"]["BulkTask"];
         };
+        BurndownDay: {
+            /**
+             * Format: double
+             * @description What joined that day, after the sprint started
+             */
+            added: number;
+            date: string;
+            /** Format: double */
+            done: number;
+            /** Format: double */
+            remaining: number;
+            /**
+             * Format: double
+             * @description What the sprint holds at the end of the day
+             */
+            scope: number;
+        };
+        BurndownView: {
+            /** @description What the numbers are: points or count */
+            by: string;
+            days: components["schemas"]["BurndownDay"][] | null;
+            note?: string;
+            sprint: components["schemas"]["SprintRef"];
+        };
+        CFDDay: {
+            counts: {
+                [key: string]: number;
+            };
+            date: string;
+        };
+        CFDView: {
+            by: string;
+            /** @description The keys of counts in the order of the schema */
+            columns: string[] | null;
+            days: components["schemas"]["CFDDay"][] | null;
+        };
         Candidate: {
             account?: string;
             name: string;
@@ -1418,6 +1539,15 @@ export interface components {
             /** @description The repository, as [<host>/]owner/repo; without it, the one the task names. A task with none or several needs it */
             repo?: string;
         };
+        CycleView: {
+            /** @description From first entering doing to the last entering done */
+            cycle: components["schemas"]["TimeStats"];
+            /** @description From the creation to the last entering done */
+            lead: components["schemas"]["TimeStats"];
+            since: string;
+            until: string;
+            warnings?: string[] | null;
+        };
         DefaultView: {
             /** @description The default store; null when there is none */
             name: string | null;
@@ -1462,6 +1592,20 @@ export interface components {
             message?: string;
             /** @description The value at the given location */
             value?: unknown;
+        };
+        EstimateRow: {
+            actual?: string;
+            estimate?: string;
+            id: string;
+            title: string;
+            ulid: string;
+        };
+        EstimateView: {
+            /** @description The sum of the time logged */
+            actual: string;
+            /** @description The sum of the estimates */
+            estimate: string;
+            tasks: components["schemas"]["EstimateRow"][] | null;
         };
         FieldsView: {
             default_sync: string;
@@ -2201,6 +2345,15 @@ export interface components {
             /** @description YYYY-MM-DD; empty clears it */
             start?: string;
         };
+        SprintRef: {
+            /** @description The last day */
+            end?: string;
+            name: string;
+            /** @description The first day */
+            start?: string;
+            state: string;
+            ulid: string;
+        };
         SprintView: {
             /**
              * Format: int64
@@ -2470,6 +2623,13 @@ export interface components {
             };
             only?: string[] | null;
         };
+        TimeStats: {
+            /** Format: int64 */
+            count: number;
+            /** @description Such as 1h30m */
+            median: string;
+            p85: string;
+        };
         UndoKept: {
             author: string;
             field: string;
@@ -2494,6 +2654,18 @@ export interface components {
              * @description The items not read, in every store
              */
             count: number;
+        };
+        VelocityRow: {
+            /** Format: double */
+            points: number;
+            sprint: components["schemas"]["SprintRef"];
+            /** Format: int64 */
+            tasks: number;
+            /**
+             * Format: int64
+             * @description Those of the tasks with no points, which count as 0
+             */
+            unpointed: number;
         };
         ViewPatchInputBody: {
             /** @description The columns of the table */
@@ -3931,6 +4103,182 @@ export interface operations {
             };
         };
     };
+    "report-burndown": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The sprint; without it, the only active one */
+                sprint?: string;
+                workspace?: string;
+                /** @description points (default) or count */
+                by?: "points" | "count" | "";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BurndownView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "report-cfd": {
+        parameters: {
+            query?: {
+                /** @description category (default) or status */
+                by?: "category" | "status" | "";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CFDView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "report-cycle": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                workspace?: string;
+                /** @description The first day; without it, 30 days ago */
+                since?: string;
+                /** @description The last day; without it, today */
+                until?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "report-estimate": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                workspace?: string;
+                /** @description Only the tasks of this sprint */
+                sprint?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimateView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "report-velocity": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                workspace?: string;
+                /** @description How many sprints; 0 for 10 */
+                last?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityRow"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "get-schema": {
         parameters: {
             query?: {
@@ -4270,7 +4618,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["SprintCloseInputBody"];
             };
