@@ -49,8 +49,9 @@ func (f *File) Projects() []model.ULID {
 // schema of f with the scoped entries that come along, and what it left out,
 // one line each, without repeats: "rule <id>" for a where rule whose id f
 // has or whose status or category sc does not have for the project, "disable
-// <id>" for a disable whose rule f has not, with the rules carried. f is
-// not changed. The result may still fail Check; the caller checks.
+// <id>" for a disable whose rule f has not, with the rules carried, or whose
+// rule was left out (a rule of f with its id is another rule). f is not
+// changed. The result may still fail Check; the caller checks.
 func (f *File) Carry(src *File, projects []model.ULID, sc *schema.Schema) (next *File, dropped []string) {
 	next = f.clone()
 	drop := func(what, id string) {
@@ -75,7 +76,7 @@ func (f *File) Carry(src *File, projects []model.ULID, sc *schema.Schema) (next 
 			continue
 		}
 		for _, id := range s.Disable {
-			if _, ok := next.Rule(id); ok {
+			if _, ok := next.Rule(id); ok && !slices.Contains(dropped, "rule "+id) {
 				next.disableIn(u, s.Where, id)
 			} else {
 				drop("disable", id)

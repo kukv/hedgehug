@@ -38,7 +38,7 @@ func TestCarry(t *testing.T) {
 - {id: taken, where: '`+where+`', on: pr.opened, set: {status: done}}
 - {id: elsewhere, where: 'project:`+other.String()+`', on: pr.opened, set: {status: done}}
 scoped:
-- {where: '`+where+`', disable: [global, kept, no-status, base, gone]}
+- {where: '`+where+`', disable: [global, kept, no-status, base, gone, taken]}
 - {where: 'project:`+other.String()+`', disable: [global]}
 `)
 	dst := decodeFile(t, `# the rules of this store
@@ -61,7 +61,7 @@ issue_fields: {default_sync: mirror}
 	if len(next.Scoped) != 1 || next.Scoped[0].Where != where || !slices.Equal(next.Scoped[0].Disable, []string{"kept", "base"}) {
 		t.Errorf("scoped = %+v", next.Scoped)
 	}
-	want := []string{"rule no-status", "rule taken", "disable global", "disable no-status", "disable gone"}
+	want := []string{"rule no-status", "rule taken", "disable global", "disable no-status", "disable gone", "disable taken"}
 	if !slices.Equal(dropped, want) {
 		t.Errorf("dropped = %v, want %v", dropped, want)
 	}
