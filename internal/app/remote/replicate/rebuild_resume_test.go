@@ -3,6 +3,7 @@ package replicate
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -186,6 +187,17 @@ func TestRebuildRemovesTheOldHistory(t *testing.T) {
 	if err := r.Verify(); err != nil {
 		t.Errorf("Verify: %v", err)
 	}
+	// Real git reads what the prune left. The CI job without git has none.
+	gitBin, err := exec.LookPath("git")
+	if err != nil {
+		t.Log("git is not installed: git fsck is not run")
+		return
+	}
+	cmd := exec.Command(gitBin, "-C", c.stores[1].Dir(), "fsck", "--full", "--strict")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("git fsck: %v\n%s", err, out)
+	}
 }
 
 // With changes that cannot be put back, a copy of the store as it was is
@@ -196,7 +208,20 @@ func TestRebuildKeepsACopyOfTheOldStore(t *testing.T) {
 	if err := os.MkdirAll(c.stores[1].Dir()+keptNew, 0o750); err != nil {
 		t.Fatal(err)
 	}
+	// The temporary file of a write that another process has open is no part
+	// of the store either.
+	localDir := filepath.Join(c.stores[1].Dir(), filepath.FromSlash(store.LocalDir))
+	if err := os.MkdirAll(localDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	tmpName := ".sync.json.tmp-123"
+	if err := os.WriteFile(filepath.Join(localDir, tmpName), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	sc := newStoppedScene(t, c, true)
+	if exists(t, filepath.Join(sc.b.Kept, filepath.FromSlash(store.LocalDir), tmpName)) {
+		t.Error("a temporary file of .hedgehug/local was copied")
+	}
 	if !strings.HasPrefix(sc.b.Kept, c.stores[1].Dir()+keptPrefix) || sc.b.Kept == c.stores[1].Dir()+keptNew {
 		t.Fatalf("Kept = %q", sc.b.Kept)
 	}

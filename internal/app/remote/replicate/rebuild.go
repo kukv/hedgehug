@@ -302,11 +302,12 @@ func apply(s *store.Store, rec *rebuildRecord, b *Rebuild) error {
 	return s.RemoveLocal(forcePushFile)
 }
 
-// skipKept leaves the locks out of the copy of the store: they are not its
-// content, and another process may have them open.
+// skipKept leaves the locks and the temporary files of .hedgehug/local (their
+// names begin with a dot) out of the copy of the store: they are not its
+// content, and another process may have them open or remove them.
 func skipKept(rel string) bool {
 	name := path.Base(rel)
-	return strings.HasPrefix(rel, store.LocalDir+"/") && (name == "lock" || strings.HasSuffix(name, ".lock"))
+	return strings.HasPrefix(rel, store.LocalDir+"/") && (name == "lock" || strings.HasSuffix(name, ".lock") || strings.HasPrefix(name, "."))
 }
 
 // keepOldStore copies the store at dir to dir + keptPrefix + the time, and
