@@ -46,3 +46,27 @@ func TestStartDetached(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestLookPath(t *testing.T) {
+	t.Parallel()
+	bin, other := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tool"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for a program
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "plain"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := other + string(os.PathListSeparator) + bin
+	if got, err := LookPath("tool", path); err != nil || got != filepath.Join(bin, "tool") {
+		t.Errorf("LookPath(tool) = %q, %v; want the file in %s", got, err, bin)
+	}
+	if _, err := LookPath("plain", path); err == nil {
+		t.Error("a file that is not executable was found")
+	}
+	if _, err := LookPath("tool", other); err == nil {
+		t.Error("tool was found on a PATH that does not hold it")
+	}
+	if _, err := LookPath("tool", ""); err == nil {
+		t.Error("tool was found on an empty PATH")
+	}
+}

@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -30,9 +29,6 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
-// lookPath finds hedgehug on PATH; tests replace it.
-var lookPath = exec.LookPath
-
 // fileRoots are the directories of a store whose files doctor reads.
 var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases", "templates", "workspaces", "views"}
 
@@ -45,8 +41,9 @@ var indexCodes = []string{
 
 // Run checks the store in dir without opening it with store.Open, which
 // refuses a store whose schema.yaml is broken. The findings are sorted. The
-// error is for files that cannot be read at all.
-func Run(dir string) ([]usecase.Finding, error) {
+// error is for files that cannot be read at all. getenv gives PATH, on which
+// hedgehug is looked for.
+func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 	var out []usecase.Finding
 
 	// 1. store.yaml and schema.yaml.
@@ -126,7 +123,7 @@ func Run(dir string) ([]usecase.Finding, error) {
 			})
 		}
 	}
-	out = append(out, checkMergeDriver(dir, repo)...)
+	out = append(out, checkMergeDriver(dir, repo, getenv("PATH"))...)
 	out = append(out, checkInbox(dir)...)
 	if err := repo.Verify(); err != nil {
 		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "a git object cannot be read: " + err.Error()})
@@ -143,7 +140,7 @@ func Run(dir string) ([]usecase.Finding, error) {
 // checkMergeDriver finds a store whose .gitattributes send files to the
 // hedgehug merge driver while .git/config does not register it, or while
 // hedgehug cannot be found on PATH for git to run it.
-func checkMergeDriver(dir string, repo *gitrepo.Repo) []usecase.Finding {
+func checkMergeDriver(dir string, repo *gitrepo.Repo, path string) []usecase.Finding {
 	data, err := osfs.ReadFile(filepath.Join(dir, store.AttributesPath))
 	if err != nil || !slices.ContainsFunc(strings.Split(string(data), "\n"), func(l string) bool {
 		return !strings.HasPrefix(strings.TrimSpace(l), "#") && slices.Contains(strings.Fields(l), "merge=hedgehug")
@@ -162,7 +159,7 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo) []usecase.Finding {
 			Hint: "run hedgehug sync once",
 		}}
 	}
-	if _, err := lookPath("hedgehug"); err != nil {
+	if _, err := osfs.LookPath("hedgehug", path); err != nil {
 		return []usecase.Finding{{
 			Check: "merge_driver", Where: where,
 			Msg:  "hedgehug is not on PATH, so git cannot run the merge driver",

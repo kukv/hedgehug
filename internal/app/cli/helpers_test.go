@@ -110,8 +110,11 @@ func (te *testEnv) getenv(k string) string {
 	if v, ok := te.env[k]; ok {
 		return v
 	}
-	if k == "HEDGEHUG_AUTO_SYNC" {
+	switch k {
+	case "HEDGEHUG_AUTO_SYNC":
 		return "0"
+	case "PATH":
+		return os.Getenv("PATH") // TestMain put hedgehug on it, as doctor expects
 	}
 	return ""
 }

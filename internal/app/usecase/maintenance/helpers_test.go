@@ -42,9 +42,25 @@ func newBareStore(t *testing.T) string {
 	return dir
 }
 
-func init() {
-	// hedgehug is on PATH for every test but the ones that say otherwise.
-	lookPath = func(string) (string, error) { return "/bin/hedgehug", nil }
+// pathWith is a Getenv whose PATH is dir alone.
+func pathWith(dir string) func(string) string {
+	return func(k string) string {
+		if k == "PATH" {
+			return dir
+		}
+		return ""
+	}
+}
+
+// hedgehugOnPath is a Getenv whose PATH holds a hedgehug, as it does for
+// every test but the ones that say otherwise.
+func hedgehugOnPath(t *testing.T) func(string) string {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "hedgehug"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for the binary
+		t.Fatal(err)
+	}
+	return pathWith(bin)
 }
 
 // rewriteSchema writes schema.yaml as the default schema after edit changed
