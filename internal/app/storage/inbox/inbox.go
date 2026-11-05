@@ -32,6 +32,10 @@ const (
 	PrefixDuplicate Kind = "prefix_duplicate"
 	RewriteApplied  Kind = "rewrite_applied" // a history rewrite was taken in (D25)
 	PurgedChange    Kind = "purged_change"   // an unpushed change to a purged task was dropped (D25)
+	// Automation tells of a status a rule moved a task to, and
+	// AutomationRejected of a rule whose move the workflow refused.
+	Automation         Kind = "automation"
+	AutomationRejected Kind = "automation_rejected"
 )
 
 // Item is one notice.
@@ -53,7 +57,8 @@ type Item struct {
 	// {"old","new"}; repaired, revived and prefix_duplicate
 	// {"kind","workspace","value"} (workspace for a workspace's repair);
 	// watch {"changed":[...]} or {"comment"}; mention {"comment"} when a
-	// comment mentions.
+	// comment mentions; automation {"rule","event","status"};
+	// automation_rejected {"rule","reason"}.
 	Detail json.RawMessage `json:"detail,omitempty"`
 }
 
@@ -534,6 +539,9 @@ func key(it Item) string {
 		var d repairDetail
 		_ = json.Unmarshal(it.Detail, &d)
 		k = []any{it.Kind, it.Task.String(), it.Path, d.Kind, d.Workspace.String(), compact(d.Value)}
+	case AutomationRejected:
+		// A commit can carry several rules' rejections of one task.
+		k = []any{it.Kind, it.Commit, it.Task.String(), strings.ToLower(it.To), compact(it.Detail)}
 	default:
 		k = []any{it.Kind, it.Commit, it.Task.String(), strings.ToLower(it.To)}
 	}

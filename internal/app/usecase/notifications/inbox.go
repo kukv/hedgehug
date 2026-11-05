@@ -563,6 +563,14 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 			return strings.Join(d.Changed, ", ") + " changed" + by
 		}
 		return "new comment" + by
+	case inbox.Automation:
+		var d struct{ Rule, Event, Status string }
+		_ = json.Unmarshal(it.Detail, &d)
+		return fmt.Sprintf("rule %s moved it to %s (%s)", d.Rule, d.Status, d.Event)
+	case inbox.AutomationRejected:
+		var d struct{ Rule, Reason string }
+		_ = json.Unmarshal(it.Detail, &d)
+		return fmt.Sprintf("rule %s did not move it: %s", d.Rule, d.Reason)
 	case inbox.Revived:
 		return "deleted by you, but changed on the other side, so it is back"
 	case inbox.Repaired:
