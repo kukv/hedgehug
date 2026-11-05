@@ -2,7 +2,6 @@ package maintenance_test
 
 import (
 	"errors"
-	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 type forcePushFx struct {
 	ts, clone        *usecasetest.Session
 	remote           string
+	oldOrigin        string // the head of origin before it was rewritten
 	keep, gone, mine *model.Task
 }
 
@@ -61,7 +61,7 @@ func newForcePushFx(t *testing.T, editGone bool) *forcePushFx {
 			t.Fatal(err)
 		}
 	}
-	gitrepotest.RewriteRemote(t, f.remote, model.TaskPath(f.gone.ULID), path.Dir(model.CommentPath(f.gone.ULID, model.ULID{})))
+	f.oldOrigin, _ = gitrepotest.RewriteRemote(t, f.remote, model.TaskPath(f.gone.ULID), path.Dir(model.CommentPath(f.gone.ULID, model.ULID{})))
 	return f
 }
 
@@ -74,19 +74,33 @@ func (f *forcePushFx) path(t *testing.T) string {
 	return e.Path
 }
 
-// stoppedSwap leaves the clone's store as a swap that stopped after the old
-// store was moved away: no store at the path, the old one and a copy of it
-// as the rebuild beside it.
-func (f *forcePushFx) stoppedSwap(t *testing.T) (dir string) {
+// stoppedRebuild leaves the clone's store as a rebuild that stopped before it
+// changed anything: rebuild.json says main goes to the head of origin. The
+// sync brings the objects of the new history.
+func (f *forcePushFx) stoppedRebuild(t *testing.T) (dir string) {
 	t.Helper()
+	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
+		t.Fatalf("Sync = %v, want ErrForcePush", err)
+	}
 	dir = f.path(t)
-	if err := os.CopyFS(dir+".rewrite-new", os.DirFS(dir)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(dir, dir+".before-rewrite-20260101T000000.000000000"); err != nil {
-		t.Fatal(err)
-	}
+	h := originHead(t, f.remote).String()
+	f.writeRecord(t, dir, `{"phase":"apply","old_head":"`+gitrepotest.HeadHash(t, dir)+`","target":"`+h+`","origin":"`+h+`","mark":"`+h+`"}`)
 	return dir
+}
+
+func (f *forcePushFx) writeRecord(t *testing.T, dir, rec string) {
+	t.Helper()
+	p := filepath.Join(dir, filepath.FromSlash(store.LocalDir), store.RebuildFile)
+	if err := os.WriteFile(p, []byte(rec+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func noRebuild(t *testing.T, dir string) {
+	t.Helper()
+	if p := store.RebuildPhaseIn(dir); p != store.RebuildNone {
+		t.Errorf("phase = %q", p)
+	}
 }
 
 // forcePushFindings are the findings of r that tell of anything but the merge
@@ -152,18 +166,24 @@ func TestSyncStopsOnAForcePush(t *testing.T) {
 	}
 }
 
-// doctor --fix clones the store again: BeforeSwap is told first, the unpushed
-// work is put back except what was done to the task that is gone, the old
-// store is kept where the report says, and the next sync pushes the work.
-func TestDoctorFixClonesTheStoreAgain(t *testing.T) {
+// doctor --fix rebuilds the store: BeforeRebuild is told first, the unpushed
+// work is put back except what was done to the task that is gone, a copy of
+// the old store is kept where the report says, and the next sync pushes the
+// work.
+func TestDoctorFixRebuildsTheStore(t *testing.T) {
 	t.Parallel()
 	f := newForcePushFx(t, true)
 	dir := f.path(t)
 	var told []string
-	f.clone.BeforeSwap = func(p string) {
+	f.clone.BeforeRebuild = func(p string) {
 		told = append(told, p)
 		if _, err := os.Stat(p); err != nil {
-			t.Errorf("the store is gone before BeforeSwap: %v", err)
+			t.Errorf("the store is gone before BeforeRebuild: %v", err)
+		}
+		// Told right before the apply, with rebuild.json written: a poll does
+		// not open the store from now on.
+		if ph := store.RebuildPhaseIn(p); ph != store.RebuildApply {
+			t.Errorf("phase when BeforeRebuild is told = %q, want apply", ph)
 		}
 	}
 	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
@@ -181,14 +201,12 @@ func TestDoctorFixClonesTheStoreAgain(t *testing.T) {
 		t.Errorf("the old store is not at Kept: %v", err)
 	}
 	if !slices.Equal(told, []string{dir}) {
-		t.Errorf("BeforeSwap was told %v, want %s", told, dir)
+		t.Errorf("BeforeRebuild was told %v, want %s", told, dir)
 	}
 	if fs := forcePushFindings(rs[0]); len(fs) != 0 {
 		t.Errorf("findings after --fix: %+v", fs)
 	}
-	if left, err := store.FindLeftover(dir); err != nil || !left.None() {
-		t.Errorf("leftover = %+v, %v", left, err)
-	}
+	noRebuild(t, dir)
 	s, err := f.clone.OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +231,26 @@ func TestDoctorFixClonesTheStoreAgain(t *testing.T) {
 	}
 	if got, want := originHead(t, f.remote), mustHead(t, s); got != want {
 		t.Errorf("origin is at %s, the clone at %s", got, want)
+	}
+}
+
+// origin that follows the store again needs no rebuild, and nothing holding
+// the store is told to let go of it.
+func TestDoctorFixDoesNotReleaseWhenOriginFollowsAgain(t *testing.T) {
+	t.Parallel()
+	f := newForcePushFx(t, false)
+	var told []string
+	f.clone.BeforeRebuild = func(p string) { told = append(told, p) }
+	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
+		t.Fatalf("Sync = %v, want ErrForcePush", err)
+	}
+	gitrepotest.SetRemoteMain(t, f.remote, f.oldOrigin)
+	rs, err := maintenance.Doctor(f.clone.Session, true)
+	if err != nil || len(rs) != 1 || rs[0].Rebuilt != nil {
+		t.Fatalf("Doctor = %+v, %v; want no rebuild", rs, err)
+	}
+	if len(told) != 0 {
+		t.Errorf("BeforeRebuild was told %v", told)
 	}
 }
 
@@ -251,88 +289,47 @@ func TestDoctorFixDoesNotRebuildAStoreThatWasNotForcePushed(t *testing.T) {
 	}
 }
 
-// A write that lands between the rebuild and the swap stops the swap with a
-// warning and no rebuild; the next doctor --fix makes it again.
-func TestDoctorFixRebuildStaleIsAWarning(t *testing.T) {
+// A store whose rebuild stopped does not open, says why, and is finished by
+// the next sync.
+func TestSyncFinishesAStoppedRebuild(t *testing.T) {
 	t.Parallel()
 	f := newForcePushFx(t, true)
-	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
-		t.Fatalf("Sync = %v, want ErrForcePush", err)
-	}
-	var late *model.Task
-	f.clone.BeforeSwap = func(string) {
-		if late == nil {
-			late = f.clone.AddTask("late", nil)
-		}
-	}
-	f.clone.Warns = nil
-	rs, err := maintenance.Doctor(f.clone.Session, true)
-	if err != nil || len(rs) != 1 || rs[0].Rebuilt != nil {
-		t.Fatalf("Doctor = %+v, %v; want no rebuild", rs, err)
-	}
-	if !slices.ContainsFunc(f.clone.Warns, func(w string) bool { return strings.Contains(w, "run hedgehug doctor --fix again") }) {
-		t.Errorf("warnings = %q", f.clone.Warns)
-	}
-	if fs := forcePushFindings(rs[0]); len(fs) != 1 || fs[0].Check != "unexpected_force_push" {
-		t.Errorf("findings = %+v, want the force push still", fs)
-	}
-	if left, _ := store.FindLeftover(f.path(t)); !left.None() {
-		t.Errorf("leftover = %+v", left)
-	}
-	f.clone.BeforeSwap = nil
-	rs, err = maintenance.Doctor(f.clone.Session, true)
-	if err != nil || len(rs) != 1 || rs[0].Rebuilt == nil || rs[0].Rebuilt.Replayed != 3 {
-		t.Fatalf("second Doctor = %+v, %v; want a rebuild of 3 commits", rs, err)
-	}
-	s, err := f.clone.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, u := range []model.ULID{late.ULID, f.mine.ULID} {
-		if _, err := s.Task(u); err != nil {
-			t.Errorf("%s: %v", u, err)
-		}
-	}
-}
-
-// A store whose swap stopped does not open, says why, and is finished by the
-// next sync, which then finds the force push as usual.
-func TestSyncFinishesAStoppedSwap(t *testing.T) {
-	t.Parallel()
-	f := newForcePushFx(t, true)
-	dir := f.stoppedSwap(t)
-	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("the store is there: %v", err)
-	}
+	dir := f.stoppedRebuild(t)
 	f.clone.Warns = nil
 	_, err := f.clone.OpenStore()
 	var le *store.LeftoverError
 	if err == nil || !strings.Contains(err.Error(), store.LeftoverMessage("me")) || !errors.As(err, &le) {
 		t.Errorf("OpenStore = %v", err)
 	}
-	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
-		t.Fatalf("Sync = %v, want ErrForcePush after the swap is finished", err)
+	set, err := f.clone.Mount()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if left, _ := store.FindLeftover(dir); !left.None() {
-		t.Errorf("leftover = %+v", left)
+	if _, ok := set.Get("me"); ok {
+		t.Error("the store is mounted")
 	}
+	if _, err := replication.Sync(f.clone.Session, false, true); err != nil {
+		t.Fatalf("Sync = %v", err)
+	}
+	noRebuild(t, dir)
 	s, err := f.clone.OpenStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Task(f.mine.ULID); err != nil {
+	if _, err := s.Task(f.gone.ULID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the task that is gone = %v, want not found", err)
+	}
+	if _, err := s.Task(f.keep.ULID); err != nil {
 		t.Error(err)
 	}
 }
 
-// A store with a leftover beside it opens with a warning, once.
-func TestOpenStoreWarnsOfALeftover(t *testing.T) {
+// A store with only the old objects left to remove opens with a warning, once.
+func TestOpenStoreWarnsOfAnUnfinishedPrune(t *testing.T) {
 	t.Parallel()
 	f := newForcePushFx(t, true)
 	dir := f.path(t)
-	if err := os.MkdirAll(dir+".before-rewrite-1", 0o750); err != nil {
-		t.Fatal(err)
-	}
+	f.writeRecord(t, dir, `{"phase":"prune"}`)
 	f.clone.Warns = nil
 	for range 2 {
 		if _, err := f.clone.OpenStore(); err != nil {
@@ -356,42 +353,69 @@ func TestOpenStoreWarnsOfALeftover(t *testing.T) {
 	}
 }
 
-// doctor --fix finishes a swap that stopped, also when the store itself is
-// missing; doctor without --fix tells that the store does not open.
-func TestDoctorFixFinishesAStoppedSwap(t *testing.T) {
+// doctor --fix finishes a rebuild that stopped; doctor without --fix says the
+// store does not open, and looks at nothing in it.
+func TestDoctorFixFinishesAStoppedRebuild(t *testing.T) {
 	t.Parallel()
 	f := newForcePushFx(t, true)
-	dir := f.stoppedSwap(t)
-	rs, err := maintenance.Doctor(f.clone.Session, false)
-	if err != nil || len(rs) != 1 || !usecase.FindingsFail(rs[0].Findings) {
-		t.Fatalf("Doctor of a store that is not there = %+v, %v; want findings", rs, err)
+	dir := f.stoppedRebuild(t)
+	var le *store.LeftoverError
+	if _, err := maintenance.Doctor(f.clone.Session, false); !errors.As(err, &le) {
+		t.Fatalf("Doctor of a store that stopped = %v, want a LeftoverError", err)
 	}
 	if _, err := maintenance.Doctor(f.clone.Session, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Open(dir); err != nil {
+	noRebuild(t, dir)
+	if _, err := f.clone.OpenStore(); err != nil {
 		t.Errorf("the store does not open: %v", err)
-	}
-	if left, _ := store.FindLeftover(dir); !left.None() {
-		t.Errorf("leftover = %+v", left)
 	}
 }
 
-// With the store there, a leftover is removed: the old store of a finished
-// swap, and a rebuild never swapped in.
-func TestDoctorFixRemovesTheOldStore(t *testing.T) {
+// A file edited by hand since the rebuild stopped is not overwritten: doctor
+// --fix tells of it, and the store stays closed until it is put back.
+func TestDoctorFixStopsAtAFileEditedByHand(t *testing.T) {
 	t.Parallel()
 	f := newForcePushFx(t, true)
-	dir := f.path(t)
-	for _, suffix := range []string{".before-rewrite-1", ".rewrite-new"} {
-		if err := os.MkdirAll(filepath.Join(dir+suffix, "x"), 0o750); err != nil {
-			t.Fatal(err)
-		}
+	dir := f.stoppedRebuild(t)
+	p := filepath.Join(dir, filepath.FromSlash(model.TaskPath(f.gone.ULID)))
+	was, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("by hand\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rs, err := maintenance.Doctor(f.clone.Session, true)
+	if err != nil || len(rs) != 1 || !usecase.FindingsFail(rs[0].Findings) {
+		t.Fatalf("Doctor = %+v, %v; want a finding", rs, err)
+	}
+	if got, _ := os.ReadFile(p); string(got) != "by hand\n" {
+		t.Errorf("the file = %q", got)
+	}
+	if store.RebuildPhaseIn(dir) != store.RebuildApply {
+		t.Errorf("phase = %q", store.RebuildPhaseIn(dir))
+	}
+	if err := os.WriteFile(p, was, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := maintenance.Doctor(f.clone.Session, true); err != nil {
 		t.Fatal(err)
 	}
-	if left, _ := store.FindLeftover(dir); !left.None() {
-		t.Errorf("leftover = %+v", left)
+	noRebuild(t, dir)
+}
+
+// A rebuild.json that cannot be read keeps the store closed and is told of.
+func TestDoctorFixTellsOfABrokenRecord(t *testing.T) {
+	t.Parallel()
+	f := newForcePushFx(t, true)
+	dir := f.path(t)
+	f.writeRecord(t, dir, "not json")
+	if _, err := f.clone.OpenStore(); err == nil {
+		t.Error("the store opened")
+	}
+	rs, err := maintenance.Doctor(f.clone.Session, true)
+	if err != nil || len(rs) != 1 || !usecase.FindingsFail(rs[0].Findings) {
+		t.Fatalf("Doctor = %+v, %v; want a finding", rs, err)
 	}
 }

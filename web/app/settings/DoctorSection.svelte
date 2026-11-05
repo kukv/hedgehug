@@ -128,7 +128,7 @@
           n > 0
             ? `${n} 件を修復しました`
             : r.rebuilt
-              ? "Store を origin から clone し直しました"
+              ? "Store を origin の新しい履歴に揃えました"
               : "修復するものはありませんでした",
       });
       // 「修復…」 may be gone now: the focus goes to the result.
@@ -209,7 +209,7 @@
     <section class="result" aria-labelledby="{uid}-res" tabindex="-1" bind:this={resultEl}>
       <h4 id="{uid}-res">修復の結果</h4>
       {#if fixed.rebuilt}
-        <p class="line">origin から clone し直しました</p>
+        <p class="line">origin の新しい履歴に揃えました</p>
         <p class="line">送っていなかった {fixed.rebuilt.replayed} コミットを戻しました</p>
         {#if (fixed.rebuilt.dropped ?? []).length > 0}
           <p class="line">戻せなかったタスク: {(fixed.rebuilt.dropped ?? []).join(", ")}</p>
@@ -281,8 +281,8 @@
     <li>重なった ID</li>
   </ul>
   <p class="p">
-    force push の後は、origin から clone
-    し直し、送っていなかった変更を戻します。ほかの問題は直せないので、診断に残ります。
+    force push の後は、Store を origin
+    の新しい履歴に揃え、送っていなかった変更を戻します。ほかの問題は直せないので、診断に残ります。
   </p>
   {#snippet footer()}
     <Button onclick={closeDialog} disabled={fixing}>キャンセル</Button>

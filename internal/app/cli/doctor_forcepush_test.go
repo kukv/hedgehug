@@ -9,9 +9,9 @@ import (
 )
 
 // The whole round: origin is force pushed, hh sync stops and says why, hh
-// doctor tells of it, hh doctor --fix clones the store again with the
+// doctor tells of it, hh doctor --fix rebuilds the store with the
 // unpushed work put back, and the sync after it pushes that work.
-func TestDoctorFixClonesAForcePushedStoreAgain(t *testing.T) {
+func TestDoctorFixRebuildsAForcePushedStore(t *testing.T) {
 	t.Parallel()
 	alice, bob, remote := twoUsers(t)
 	bob.ok("add", "bobs")
@@ -27,7 +27,7 @@ func TestDoctorFixClonesAForcePushedStoreAgain(t *testing.T) {
 	}
 
 	out = bob.ok("doctor", "--fix")
-	if !strings.Contains(out, "Cloned org again from origin; put back 1 unpushed commit\n") || strings.Contains(out, "Could not put back") || !strings.Contains(out, "No problems") {
+	if !strings.Contains(out, "Rebuilt org on the history of origin; put back 1 unpushed commit\n") || strings.Contains(out, "Could not put back") || !strings.Contains(out, "No problems") {
 		t.Errorf("doctor --fix:\n%s", out)
 	}
 	if ls := bob.ok("ls"); !strings.Contains(ls, "bobs") || !strings.Contains(ls, "ORG-1") {
@@ -41,7 +41,7 @@ func TestDoctorFixClonesAForcePushedStoreAgain(t *testing.T) {
 		t.Errorf("alice's sync: exit %d, stderr %q", code, errs)
 	}
 	out = alice.ok("doctor", "--fix")
-	if !strings.Contains(out, "Cloned org again from origin; put back 0 unpushed commits\n") {
+	if !strings.Contains(out, "Rebuilt org on the history of origin; put back 0 unpushed commits\n") {
 		t.Errorf("alice's doctor --fix:\n%s", out)
 	}
 	alice.ok("sync")

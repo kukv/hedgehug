@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/format/idxfile"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
@@ -219,6 +220,164 @@ func (r *Repo) ConsolidateBelow(packCap int64) error {
 		}
 	}
 	return nil
+}
+
+// KeepMainRefs removes every reference but HEAD, refs/heads/main and
+// refs/remotes/origin/*, which is what a fresh clone has of a store.
+func (r *Repo) KeepMainRefs() error {
+	it, err := r.r.Storer.IterReferences()
+	if err != nil {
+		return err
+	}
+	defer it.Close()
+	var drop []plumbing.ReferenceName
+	err = it.ForEach(func(ref *plumbing.Reference) error {
+		n := ref.Name()
+		if n != plumbing.HEAD && n != mainRef && !strings.HasPrefix(n.String(), "refs/remotes/origin/") {
+			drop = append(drop, n)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, n := range drop {
+		if err := r.r.Storer.RemoveReference(n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reachable lists every object the references reach: commits, trees, blobs.
+func (r *Repo) reachable() ([]plumbing.Hash, error) {
+	it, err := r.r.Storer.IterReferences()
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	var todo []plumbing.Hash
+	err = it.ForEach(func(ref *plumbing.Reference) error {
+		if ref.Type() == plumbing.HashReference {
+			todo = append(todo, ref.Hash())
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	seen := map[plumbing.Hash]bool{}
+	var out []plumbing.Hash
+	add := func(h plumbing.Hash) bool {
+		if seen[h] {
+			return false
+		}
+		seen[h] = true
+		out = append(out, h)
+		return true
+	}
+	var tree func(h plumbing.Hash) error
+	tree = func(h plumbing.Hash) error {
+		if !add(h) {
+			return nil
+		}
+		t, err := r.r.TreeObject(h)
+		if err != nil {
+			return err
+		}
+		for _, e := range t.Entries {
+			switch e.Mode {
+			case filemode.Dir:
+				if err := tree(e.Hash); err != nil {
+					return err
+				}
+			case filemode.Submodule:
+			default:
+				add(e.Hash)
+			}
+		}
+		return nil
+	}
+	for len(todo) > 0 {
+		h := todo[len(todo)-1]
+		todo = todo[:len(todo)-1]
+		if !add(h) {
+			continue
+		}
+		c, err := r.r.CommitObject(h)
+		if err != nil {
+			return nil, err
+		}
+		if err := tree(c.TreeHash); err != nil {
+			return nil, err
+		}
+		todo = append(todo, c.ParentHashes...)
+	}
+	return out, nil
+}
+
+// PruneUnreachable leaves only what the references reach: it writes that as
+// one new pack, then removes every other pack and every loose object. Run it
+// after a history was rewritten, so that what the rewrite removed is gone
+// from the disk too, and after KeepMainRefs: the walk reads each reference as
+// a commit and does not follow a reference to a tag object, so one that is
+// left would not keep what it names. A file that cannot be removed (Windows,
+// open file) is an error; the others are removed, and running it again
+// finishes it.
+func (r *Repo) PruneUnreachable() error {
+	los, ok := r.r.Storer.(storer.LooseObjectStorer)
+	if !ok {
+		return errors.New("the object storage of the repository cannot be pruned")
+	}
+	objs, err := r.reachable()
+	if err != nil {
+		return err
+	}
+	var loose []plumbing.Hash
+	if err := los.ForEachObjectHash(func(h plumbing.Hash) error {
+		loose = append(loose, h)
+		return nil
+	}); err != nil {
+		return err
+	}
+	base, err := r.writePack(objs)
+	if err != nil {
+		return err
+	}
+	if ri, ok := r.r.Storer.(interface{ Reindex() }); ok {
+		ri.Reindex()
+	}
+	// The packs must not be open when they are removed (Windows).
+	if err := r.Close(); err != nil {
+		return err
+	}
+	files, err := filepath.Glob(filepath.Join(r.dir, ".git", "objects", "pack", "*"))
+	if err != nil {
+		return err
+	}
+	// The .idx first: a .pack alone is never read.
+	sort.Slice(files, func(i, j int) bool {
+		return strings.HasSuffix(files[i], ".idx") && !strings.HasSuffix(files[j], ".idx")
+	})
+	var errs []error
+	for _, f := range files {
+		if strings.TrimSuffix(f, filepath.Ext(f)) == base {
+			continue
+		}
+		_ = osfs.Chmod(f, 0o600)
+		if err := osfs.Remove(f); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	if ri, ok := r.r.Storer.(interface{ Reindex() }); ok {
+		ri.Reindex()
+	}
+	for _, h := range loose {
+		if err := los.DeleteLooseObject(h); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // afterPackWrite runs once writePack has written the temporary pack; tests

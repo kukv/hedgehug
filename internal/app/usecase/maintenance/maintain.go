@@ -56,8 +56,8 @@ func Doctor(ss *usecase.Session, fix bool) ([]DoctorReport, error) {
 		}
 		entries = []config.StoreEntry{e}
 	}
-	// A swap that stopped is finished first, so the store opens. A store a
-	// sync found force pushed is then cloned again, before the repairs: they
+	// A rebuild that stopped is finished first, so the store opens. A store a
+	// sync found force pushed is then rebuilt, before the repairs: they
 	// are made on the new history. One that fails is that store's finding;
 	// the others go on.
 	finishErr := map[string]error{}
@@ -168,9 +168,14 @@ func doctorStore(ss *usecase.Session, e config.StoreEntry, only bool, repaired [
 	if openErr == nil {
 		defer func() { _ = opened.Repo().Close() }()
 	}
-	fs, err := Run(e.Path, ss.Getenv)
-	if err != nil {
-		return DoctorReport{}, err
+	// A rebuild that stopped leaves a work tree part old, part new: what the
+	// checks would say of it means nothing.
+	var fs []usecase.Finding
+	if left := (*store.LeftoverError)(nil); !errors.As(openErr, &left) {
+		var err error
+		if fs, err = Run(e.Path, ss.Getenv); err != nil {
+			return DoctorReport{}, err
+		}
 	}
 	if openErr != nil && len(fs) == 0 {
 		if only {
@@ -200,22 +205,22 @@ func forcePushFinding(name string, s *store.Store) ([]usecase.Finding, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
-	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix clones the store again from origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
+	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix rebuilds the store on the history of origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
 }
 
 // withRebuildFailure tells, in the unexpected_force_push finding the store
-// already has, that cloning it again failed; a store without one gets a
+// already has, that rebuilding it failed; a store without one gets a
 // finding of its own. There is one finding of the force push either way.
 func withRebuildFailure(fs []usecase.Finding, name string, rerr error) []usecase.Finding {
 	const hint = "fix the cause and run hedgehug doctor --fix again"
 	for i := range fs {
 		if fs[i].Check == "unexpected_force_push" {
-			fs[i].Msg += "; cannot clone the store again: " + rerr.Error()
+			fs[i].Msg += "; cannot rebuild the store: " + rerr.Error()
 			fs[i].Hint = hint
 			return fs
 		}
 	}
-	return append(fs, usecase.Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot clone the store again: " + rerr.Error(), Hint: hint})
+	return append(fs, usecase.Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot rebuild the store: " + rerr.Error(), Hint: hint})
 }
 
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync

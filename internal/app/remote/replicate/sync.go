@@ -45,9 +45,14 @@ type Options struct {
 	Others     []OtherStore // the other stores in config, for prefix duplicates across stores
 	Conn       gitrepo.Conn // how the remotes are reached: url_rewrites and the token
 	BeforePush func()       // a test hook: another clone pushes here
-	Name       string       // the store's name in config, for the read-only error
-	GitHub     *GitHubRepo  // origin on GitHub; nil when it is not
-	Explicit   bool         // hh sync, not the background one: a push_denied is tried again
+	// BeforeApply is called by RebuildStore after rebuild.json is written and
+	// before the rebuild is applied, with the store lock and sync.lock held:
+	// whoever holds the store open lets go of it. It is not called when origin
+	// follows the store again.
+	BeforeApply func()
+	Name        string      // the store's name in config, for the read-only error
+	GitHub      *GitHubRepo // origin on GitHub; nil when it is not
+	Explicit    bool        // hh sync, not the background one: a push_denied is tried again
 
 	// Zero means the default for each of these.
 	RetryWait time.Duration // the first wait after a rejected push; it doubles (default 500ms)
@@ -178,24 +183,51 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	// A mirror that cannot be reached is left out, and told of as a
 	// warning; origin is the remote the sync is for.
 	down := map[string]error{}
+	// The mirrors a rebuild left held are not fetched from, merged or pushed
+	// to until they were rewritten as origin was.
+	var mirrors []string
+	if len(opt.Remotes) > 1 {
+		mirrors = opt.Remotes[1:]
+	}
+	held, err := syncHeld(s, mirrors)
+	if err != nil {
+		return res, err
+	}
 	for round := 0; ; round++ {
 		res.Pushed = nil // a rejected mirror makes another round; report the last one
 		var up []string
 		var tracked plumbing.Hash // origin before the fetch
 		for i, name := range r.Remotes() {
 			if i == 0 {
-				if tracked, err = r.RemoteHead(name); err != nil {
+				// A fetch that died before checkOrigin left the ref on what it
+				// fetched: start from what the ref was.
+				if tracked, err = beginFetch(s); err != nil {
 					return res, err
+				}
+			} else if i < len(opt.Remotes) && slices.Contains(held, opt.Remotes[i]) {
+				still, err := mirrorHeld(s, name, opt.Remotes[i], &held)
+				if err != nil {
+					down[name] = err
+					continue
+				}
+				if still {
+					down[name] = heldMessage(opt.Remotes[i])
+					continue
 				}
 			}
 			if _, err := r.Fetch(name); err != nil && i == 0 {
-				return res, err
+				return res, withEnd(err, endFetch(s))
 			} else if err != nil {
 				down[name] = err
 				continue
 			}
 			if i == 0 {
-				if err := checkOrigin(s, tracked, opt); err != nil {
+				err := checkOrigin(s, tracked, opt)
+				if err == nil || errors.Is(err, ErrForcePush) {
+					// checkOrigin has put the ref back if it had to.
+					err = withEnd(err, endFetch(s))
+				}
+				if err != nil {
 					return res, err
 				}
 			}

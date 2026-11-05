@@ -15,8 +15,8 @@ const forcePushFile = "force-push.json"
 
 // ErrForcePush means the history of origin is not one the store follows: it
 // was rewritten or reset. The store is as it was; hedgehug doctor --fix
-// clones it again.
-var ErrForcePush = errors.New("the history of origin differs from this store's; check origin, then run hedgehug doctor --fix to clone it again")
+// rebuilds it.
+var ErrForcePush = errors.New("the history of origin differs from this store's; check origin, then run hedgehug doctor --fix to rebuild the store on it")
 
 // ForcePush is force-push.json: the force push the last sync found.
 type ForcePush struct {

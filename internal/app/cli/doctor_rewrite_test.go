@@ -2,26 +2,28 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
-// A swap that stopped (the store moved away, the rebuilt one not yet in its
-// place) is finished by doctor --fix.
-func TestDoctorFixFinishesAStoppedRewriteSwap(t *testing.T) {
+// A rebuild that stopped is finished by doctor --fix; until then the store
+// does not open.
+func TestDoctorFixFinishesAStoppedRebuild(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Alpha")
 	dir := te.storeDir("me")
-	if err := os.CopyFS(dir+".rewrite-new", os.DirFS(dir)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(dir, dir+".before-rewrite-20260101T000000.000000000"); err != nil {
+	h := gitrepotest.HeadHash(t, dir)
+	rec := `{"phase":"apply","old_head":"` + h + `","target":"` + h + `","origin":"` + h + `","mark":"` + h + `"}`
+	if err := os.WriteFile(filepath.Join(dir, ".hedgehug", "local", "rebuild.json"), []byte(rec), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	if code, out, _ := te.run("doctor"); code == 0 || strings.Contains(out, "No problems") {
-		t.Errorf("doctor of a store that is not there: exit %d\n%s", code, out)
+		t.Errorf("doctor of a store that stopped: exit %d\n%s", code, out)
 	}
 	if code, out, stderr := te.run("doctor", "--fix"); code != 0 || !strings.Contains(out, "No problems") {
 		t.Errorf("--fix: exit %d\nstdout %s\nstderr %s", code, out, stderr)

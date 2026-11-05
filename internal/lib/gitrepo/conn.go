@@ -123,6 +123,48 @@ func RemoteEmpty(u string, c Conn) (bool, error) {
 	return len(refs) == 0, nil
 }
 
+// RemoteMain returns the commit refs/heads/main of the remote is at, asking
+// the remote without fetching anything; the zero hash when it has no main.
+func (r *Repo) RemoteMain(remote string) (plumbing.Hash, error) {
+	u, err := r.remoteURL(remote)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("list the refs of %s: %w", remote, err)
+	}
+	to, auth, err := r.conn.endpoint(u)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("list the refs of %s: %w", remote, err)
+	}
+	rm := git.NewRemote(memory.NewStorage(), &gitconfig.RemoteConfig{Name: remote, URLs: []string{to}})
+	refs, err := rm.List(&git.ListOptions{Auth: auth})
+	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
+		return plumbing.ZeroHash, nil
+	}
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("list the refs of %s: %w", remote, err)
+	}
+	for _, ref := range refs {
+		if ref.Name() == mainRef {
+			return ref.Hash(), nil
+		}
+	}
+	return plumbing.ZeroHash, nil
+}
+
+// HasCommit reports whether the repository has the commit h. It reads the
+// storage as it is on disk now, not through the handle r, which may remember
+// objects a prune has removed.
+func (r *Repo) HasCommit(h plumbing.Hash) (bool, error) {
+	fresh, err := git.PlainOpen(r.dir)
+	if err != nil {
+		return false, fmt.Errorf("open %s: %w", r.dir, err)
+	}
+	_, err = fresh.CommitObject(h)
+	if errors.Is(err, plumbing.ErrObjectNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // MainHasFile reports whether the tree of refs/heads/main of the repository at
 // dir, bare or not, has the file p. A repository without main has none. It
 // does not depend on HEAD, which a bare made by a plain git init --bare leaves

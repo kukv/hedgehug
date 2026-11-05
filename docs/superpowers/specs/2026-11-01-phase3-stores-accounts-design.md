@@ -561,6 +561,8 @@ moved_at: 2026-11-02T09:30:00Z   # 移動した時刻（RFC 3339、必須。な�
 
 ### 作り直しと未 push の変更の取り込み
 
+> 手順 2・4・5 とその補足のディレクトリの入れ替えは、`docs/superpowers/specs/2026-11-05-rebuild-in-place-design.md` で同じディレクトリ内で直す方式に置き換えた。
+
 1. Store のロックを取る。
 2. `<path>.rewrite-new` に origin を clone し、remotes と merge driver を設定する。
 3. 未 push のコミット（手元の HEAD が、手元で追っている origin より先にあるもの）があれば取り込む。base は手元で追っている origin、ours は手元の HEAD、theirs は新しい origin の先頭。ファイルの集合は3つのツリーの和で、ふだんの同期のマージ（`merge`）にかける。
@@ -604,7 +606,7 @@ moved_at: 2026-11-02T09:30:00Z   # 移動した時刻（RFC 3339、必須。な�
 | `duplicate_across_stores`: 同じ ULID の生きたタスクが2つ以上の Store にある | 警告 | 3c |
 | `forward_target`: 転送ファイルの `moved_to` がマウント中のどの Store でもない | 情報（マウントしていないだけのことがあるため） | 3c |
 | `unexpected_force_push`: origin が手元で追っている origin の子孫でなく、記録もない | エラー | 3c |
-| `rewrite_leftover`: `.rewrite-new`・`.before-rewrite-*` が残っている | 警告（`--fix` で入れ替えをやり直す） | 3c |
+| `rewrite_leftover`: `.rewrite-new`・`.before-rewrite-*` が残っている | 警告（`--fix` で入れ替えをやり直す） | 3c（2026-11-02 に検査を削除） |
 
 検査の結果は重さ（`error`・`warning`・`info`）を持つ。フェーズ2までの検査はすべて `error`。表示は `warning` と `info` の行にだけ重さを添え（`error` は今の表示のまま）、`--json` の各 finding に `severity` を足す。終了コード1は `error` か `warning` があるとき。`info` だけなら0（利用者の決定。2026-11-01）。
 

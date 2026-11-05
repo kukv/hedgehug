@@ -443,6 +443,11 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 			}
 		}()
 	}
+	// A rebuild stopped in its apply phase while this store was open: a
+	// commit on the old HEAD would stop it from finishing.
+	if RebuildPhaseIn(s.dir) == RebuildApply {
+		return plumbing.ZeroHash, &LeftoverError{Name: s.Meta().Name}
+	}
 
 	// Another Store or a sync may have changed schema.yaml since it was read.
 	cached, err := readDecode(s.dir, schemaPath, schema.Decode)

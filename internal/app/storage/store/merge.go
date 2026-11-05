@@ -34,6 +34,9 @@ func (s *Store) lockedAtHead(head plumbing.Hash, fn func() error) (err error) {
 			err = errors.Join(err, rerr)
 		}
 	}()
+	if RebuildPhaseIn(s.dir) == RebuildApply {
+		return &LeftoverError{Name: s.Meta().Name}
+	}
 	cur, err := s.repo.Head()
 	if err != nil {
 		return err
@@ -79,25 +82,7 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 			}
 			changes = append(changes, change{rel: rel, data: files[rel], old: old, existed: err == nil})
 		}
-		subject := "hedgehug: " + op.Name
-		if op.Detail != "" {
-			subject += " " + op.Detail
-		}
-		ts := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: op.Name}}
-		if op.Account != "" {
-			ts = append(ts, gitrepo.Trailer{Key: "Hedgehug-Author", Value: op.Account})
-		}
-		c := gitrepo.Commit{
-			Paths:    rels,
-			Parents:  parents,
-			Subject:  subject,
-			Trailers: append(ts, trailers...),
-			Author:   op.Author,
-			When:     s.now().Truncate(time.Second),
-			// The replay after a history rewrite records what lost, with no
-			// file changed.
-			AllowEmpty: op.AllowEmpty,
-		}
+		c := s.mergeCommit(rels, parents, op, trailers)
 		if err := s.apply(changes); err != nil {
 			return err
 		}
@@ -109,6 +94,39 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 		return nil
 	})
 	return h, err
+}
+
+// mergeCommit is the commit of a merge or a replay.
+func (s *Store) mergeCommit(rels []string, parents []plumbing.Hash, op Op, trailers []gitrepo.Trailer) gitrepo.Commit {
+	subject := "hedgehug: " + op.Name
+	if op.Detail != "" {
+		subject += " " + op.Detail
+	}
+	ts := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: op.Name}}
+	if op.Account != "" {
+		ts = append(ts, gitrepo.Trailer{Key: "Hedgehug-Author", Value: op.Account})
+	}
+	return gitrepo.Commit{
+		Paths:    rels,
+		Parents:  parents,
+		Subject:  subject,
+		Trailers: append(ts, trailers...),
+		Author:   op.Author,
+		When:     s.now().Truncate(time.Second),
+		// The replay after a history rewrite records what lost, with no
+		// file changed.
+		AllowEmpty: op.AllowEmpty,
+	}
+}
+
+// CommitOn writes a commit on parent with files changed (nil removes a file),
+// as CommitMerge words it. HEAD, the index and the work tree stay as they are:
+// it is for the replay after a history rewrite, which moves main later.
+func (s *Store) CommitOn(parent plumbing.Hash, files map[string][]byte, op Op, trailers []gitrepo.Trailer) (plumbing.Hash, error) {
+	if op.Name == "" {
+		return plumbing.ZeroHash, errors.New("the operation has no name")
+	}
+	return s.repo.CommitOn(parent, files, s.mergeCommit(nil, nil, op, trailers))
 }
 
 // FastForward moves HEAD to the commit to and writes paths from it, under the

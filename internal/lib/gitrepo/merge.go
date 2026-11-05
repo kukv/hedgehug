@@ -303,7 +303,28 @@ func blobAt(c *object.Commit, path string) (plumbing.Hash, error) {
 // is as in HEAD or already as in h. Otherwise it returns ErrWorkTreeChanged.
 // Every path is read from h before anything is written, so a commit or object
 // that is missing changes nothing either.
-func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
+func (r *Repo) FastForward(h plumbing.Hash, paths []string) error {
+	return r.moveMain(h, paths, func(data [][]byte, inTree []bool) error {
+		return r.checkFastForward(h, paths, data, inTree)
+	})
+}
+
+// MoveMain moves main from the commit from to the commit to, which need not
+// descend from it, and writes paths from to: the paths that differ between
+// the two. It is for a history that origin rewrote. HEAD must be on main, at
+// from or at to, and every path on disk as in from or as in to; otherwise it
+// returns ErrWorkTreeChanged, with nothing written. Running it again after it
+// stopped part of the way finishes it.
+func (r *Repo) MoveMain(from, to plumbing.Hash, paths []string) error {
+	return r.moveMain(to, paths, func(data [][]byte, inTree []bool) error {
+		return r.checkMoveMain(from, to, paths, data, inTree)
+	})
+}
+
+// moveMain writes paths from h to the work tree and the index, then points
+// main at h, once check, which is given the paths as in h, has passed. The
+// index is put back when it fails.
+func (r *Repo) moveMain(h plumbing.Hash, paths []string, check func(data [][]byte, inTree []bool) error) (err error) {
 	for _, p := range paths {
 		if err := checkWorkPath(p); err != nil {
 			return err
@@ -319,7 +340,7 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 		return err
 	}
 	if tree.IsZero() {
-		return errors.New("fast-forward to the zero commit")
+		return errors.New("move main to the zero commit")
 	}
 	data := make([][]byte, len(paths))
 	inTree := make([]bool, len(paths))
@@ -332,7 +353,7 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 			return err
 		}
 	}
-	if err := r.checkFastForward(h, paths, data, inTree); err != nil {
+	if err := check(data, inTree); err != nil {
 		return err
 	}
 	before, err := r.r.Storer.Index()
@@ -369,18 +390,27 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 
 var mainRef = plumbing.NewBranchReferenceName("main")
 
-// checkFastForward returns ErrWorkTreeChanged unless HEAD is a symbolic
-// reference to main, h descends from HEAD, and each path on disk is the same
-// as in HEAD or as in h, given by data and inTree (a path missing from both
-// is the same). A path already as in h is what a fast-forward that stopped
-// before moving the reference leaves; this one finishes it.
-func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
+// HeadOnMain returns ErrWorkTreeChanged unless HEAD is a symbolic reference
+// to main: a move of main would leave a HEAD elsewhere where it was.
+func (r *Repo) HeadOnMain() error {
 	ref, err := r.r.Storer.Reference(plumbing.HEAD)
 	if err != nil {
 		return err
 	}
 	if ref.Type() != plumbing.SymbolicReference || ref.Target() != mainRef {
 		return fmt.Errorf("%w: HEAD is not on main", ErrWorkTreeChanged)
+	}
+	return nil
+}
+
+// checkFastForward returns ErrWorkTreeChanged unless HEAD is a symbolic
+// reference to main, h descends from HEAD, and each path on disk is the same
+// as in HEAD or as in h, given by data and inTree (a path missing from both
+// is the same). A path already as in h is what a fast-forward that stopped
+// before moving the reference leaves; this one finishes it.
+func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
+	if err := r.HeadOnMain(); err != nil {
+		return err
 	}
 	head, err := r.Head()
 	if err != nil {
@@ -410,6 +440,40 @@ func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, 
 		}
 		if !same(got, onDisk, old, err == nil) {
 			return fmt.Errorf("%w: %s differs from HEAD", ErrWorkTreeChanged, p)
+		}
+	}
+	return nil
+}
+
+// checkMoveMain returns ErrWorkTreeChanged unless HEAD is a symbolic
+// reference to main at from or to, and each path on disk is as in from or as
+// in to, given by data and inTree.
+func (r *Repo) checkMoveMain(from, to plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
+	if err := r.HeadOnMain(); err != nil {
+		return err
+	}
+	head, err := r.Head()
+	if err != nil {
+		return err
+	}
+	if head != from && head != to {
+		return fmt.Errorf("%w: HEAD is at %s", ErrWorkTreeChanged, head)
+	}
+	for i, p := range paths {
+		got, err := osfs.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		onDisk := err == nil
+		if onDisk == inTree[i] && bytes.Equal(got, data[i]) {
+			continue
+		}
+		old, err := r.ReadAt(from, p)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if onDisk != (err == nil) || !bytes.Equal(got, old) {
+			return fmt.Errorf("%w: %s differs from both histories", ErrWorkTreeChanged, p)
 		}
 	}
 	return nil

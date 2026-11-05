@@ -231,5 +231,5 @@ plan `docs/superpowers/plans/2026-11-02-cli-acceptance-fixes.md` の各 Task 末
 
 - `undo` は `purge` のコミットを `undo.blocked`（`a purge cannot be undone`）で断る（今のコードは断っていなかった）。
 - 英語の複数形は葉のパッケージ `internal/plural`（`Count`・`Pick`）に置き、`cmd`・`ops` に加えて `doctor`・`store`・`sync` の文言も揃える。
-- `doctor --fix` の作り直し: 同期の中で入れ替える仕組みとミラーの force push を消す。戻せなかった変更があれば古い Store を `<path>.kept-<時刻>` に残す。作り直しは push せず次の同期に任せる。読み取り専用の Store も作り直す。
+- `doctor --fix` の作り直し: 同期の中で入れ替える仕組みとミラーの force push を消す。戻せなかった変更があれば古い Store を `<path>.kept-<時刻>` に残す。作り直しは push せず次の同期に任せる。読み取り専用の Store も作り直す。入れ替えの方式は `2026-11-05-rebuild-in-place-design.md` に置き換えた。
 - `store remove --json` の `purged` は `deleted` に改名する。アカウントが 2 つ以上で `--account` がないときの `store init`・`store add` は `choice.required` で拒否する。`DELETE /api/tasks/{id}?purge=true` の `purge` は無視して通常の削除にする。`purge --older-than` の境界は「以前」を含み、上限は `36500d`。

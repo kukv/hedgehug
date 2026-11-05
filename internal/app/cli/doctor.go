@@ -20,7 +20,7 @@ func (a *app) doctorCmd() *cobra.Command {
 		Args:  exactArgs(0),
 		RunE:  func(*cobra.Command, []string) error { return a.doctor(fix) },
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "repair parent cycles, children of deleted tasks, tasks in another workspace than their parent and ids that clash, in one commit; clone a store again from origin after a force push; then tell what is left")
+	cmd.Flags().BoolVar(&fix, "fix", false, "repair parent cycles, children of deleted tasks, tasks in another workspace than their parent and ids that clash, in one commit; rebuild a store on the history of origin after a force push; then tell what is left")
 	return cmd
 }
 
@@ -100,11 +100,11 @@ func (a *app) writeDoctor(r maintenance.DoctorReport, fix, heading, first bool) 
 	return a.writeFindings(r.Findings)
 }
 
-// writeRebuilt tells of a store that was cloned again from origin after a
-// force push, on lines of their own: what was put back, then, when some
+// writeRebuilt tells of a store that was rebuilt on the history of origin
+// after a force push, on lines of their own: what was put back, then, when some
 // changes could not be, where the old store is.
 func (a *app) writeRebuilt(store string, b *maintenance.Rebuilt) error {
-	if _, err := fmt.Fprintf(a.stdout, "Cloned %s again from origin; put back %s\n", store, plural.Count(b.Replayed, "unpushed commit")); err != nil {
+	if _, err := fmt.Fprintf(a.stdout, "Rebuilt %s on the history of origin; put back %s\n", store, plural.Count(b.Replayed, "unpushed commit")); err != nil {
 		return err
 	}
 	if len(b.Dropped) == 0 {

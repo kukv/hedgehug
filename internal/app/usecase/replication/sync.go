@@ -74,7 +74,7 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 		fetchGitHub(ss, c, e, &r, nil)
 		return r, nil
 	}
-	// A swap that stopped is finished first.
+	// A rebuild that stopped is finished first.
 	if err := ss.FinishRebuild(e); err != nil {
 		return r, err
 	}

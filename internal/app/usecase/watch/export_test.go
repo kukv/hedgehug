@@ -40,7 +40,7 @@ func HeldCount(w *Watcher) int {
 	return len(w.stores)
 }
 
-// Released is whether w marks the store named name as swapped for a rebuild.
+// Released is whether w marks the store named name as rebuilt.
 func Released(w *Watcher, name string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

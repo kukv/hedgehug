@@ -2,6 +2,7 @@ package watch_test
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync/atomic"
@@ -74,7 +75,7 @@ func TestPollBuildsTheHistoryIndex(t *testing.T) {
 }
 
 // Release cancels a build of the history index that is running and returns
-// once it ended, before the repository is closed and the directory swapped.
+// once it ended, before the repository is closed and the store rebuilt.
 func TestReleaseCancelsTheHistoryBuild(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t) // its watcher does not run: Poll is called by hand
@@ -104,6 +105,72 @@ func TestReleaseCancelsTheHistoryBuild(t *testing.T) {
 	case <-released:
 	case <-time.After(10 * time.Second):
 		t.Fatal("Release did not return while a build was running")
+	}
+}
+
+// A poll does not open a store while a rebuild is under way (rebuild.json),
+// whatever its phase: a pack it holds open would stop the prune. It opens
+// the store on the poll after the rebuild ended.
+func TestPollSkipsAStoreBeingRebuilt(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	_, e, err := f.session().Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := filepath.Join(e.Path, filepath.FromSlash(store.LocalDir), store.RebuildFile)
+	if err := os.MkdirAll(filepath.Dir(rec), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for _, phase := range []string{"apply", "prune"} {
+		if err := os.WriteFile(rec, []byte(`{"phase":"`+phase+`"}`+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		f.w.Poll(false)
+		if watch.Held(f.w, "me") {
+			t.Errorf("the poll opened the store in the %s phase", phase)
+		}
+	}
+	if err := os.Remove(rec); err != nil {
+		t.Fatal(err)
+	}
+	f.w.Poll(false)
+	if !watch.Held(f.w, "me") {
+		t.Error("the poll did not open the store after the rebuild")
+	}
+}
+
+// A store held while its rebuild stops in the apply phase gets no history
+// index built: its work tree is part old, part new.
+func TestPollBuildsNoHistoryInTheApplyPhase(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	var builds atomic.Int32
+	watch.SetOpenHistory(f.w, func(*store.Store, history.Options) (*history.History, error) {
+		builds.Add(1)
+		return nil, history.ErrCanceled
+	})
+	f.w.Poll(false) // the first sight of the store starts a build
+	testenv.WaitFor(t, "the first build", func() bool { return builds.Load() == 1 })
+	ss := f.sessionOf("me")
+	if _, err := tasks.Add(ss, tasks.AddInput{Title: "moves HEAD"}); err != nil {
+		t.Fatal(err)
+	}
+	_, e, err := ss.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := filepath.Join(e.Path, filepath.FromSlash(store.LocalDir), store.RebuildFile)
+	if err := os.MkdirAll(filepath.Dir(rec), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rec, []byte(`{"phase":"apply"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.w.Poll(false) // HEAD moved: a build would start
+	f.w.Wait()      // and has ended when this returns
+	if n := builds.Load(); n != 1 {
+		t.Errorf("builds = %d, want 1", n)
 	}
 }
 
@@ -248,6 +315,6 @@ func TestPollerReleaseForKeepsPollsOut(t *testing.T) {
 		t.Error("the poll after ReleaseFor did not open the store again")
 	}
 	if watch.Released(f.w, e.Name) {
-		t.Error("a store taken out for good is still marked as swapped")
+		t.Error("a store taken out for good is still marked as rebuilt")
 	}
 }

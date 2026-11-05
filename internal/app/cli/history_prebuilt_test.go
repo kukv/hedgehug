@@ -21,14 +21,14 @@ func TestStoreAddBuildsTheHistoryIndex(t *testing.T) {
 	requireHistoryAtHead(t, bob, "org")
 }
 
-// doctor --fix builds the history index of the store it cloned again.
+// doctor --fix builds the history index of the store it rebuilt.
 func TestDoctorFixBuildsTheHistoryIndex(t *testing.T) {
 	t.Parallel()
 	_, bob, remote := twoUsers(t)
 	bob.ok("add", "bobs")
 	gitrepotest.RewriteRemote(t, remote)
 	bob.run("sync")
-	if out := bob.ok("doctor", "--fix"); !strings.Contains(out, "Cloned org again") {
+	if out := bob.ok("doctor", "--fix"); !strings.Contains(out, "Rebuilt org on the history of origin") {
 		t.Fatalf("doctor --fix:\n%s", out)
 	}
 	requireHistoryAtHead(t, bob, "org")

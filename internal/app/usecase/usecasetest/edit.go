@@ -316,21 +316,13 @@ func (ts *Session) LocksFree(storeName string, names ...string) bool {
 	return true
 }
 
-// NoLeftover is nil when a rebuild left nothing beside the store at dir.
+// NoLeftover is nil when no rebuild of the store at dir is unfinished.
 func (ts *Session) NoLeftover(dir string) error {
-	left, err := store.FindLeftover(dir)
-	if err != nil {
-		return err
-	}
-	if !left.None() {
-		return &leftoverError{left}
+	if p := store.RebuildPhaseIn(dir); p != store.RebuildNone {
+		return fmt.Errorf("rebuild phase = %q", p)
 	}
 	return nil
 }
-
-type leftoverError struct{ left store.Leftover }
-
-func (e *leftoverError) Error() string { return fmt.Sprintf("leftover = %+v", e.left) }
 
 // HistoryAtHead fails the test unless the saved history index of the store
 // storeName is there and already at the newest commit: opening it again

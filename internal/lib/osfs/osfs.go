@@ -6,6 +6,7 @@
 package osfs
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -44,4 +45,49 @@ func WriteAtomicInDir(path string, data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// CopyTree copies the directory src to dst, which must not exist: its
+// directories, regular files and symbolic links, with their permissions;
+// the directories also get the owner's rwx, so that the copy can be written.
+// skip names what is left out, by its slash-separated path relative to src;
+// nil leaves out nothing.
+func CopyTree(src, dst string, skip func(rel string) bool) error {
+	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		if skip != nil && rel != "." && skip(filepath.ToSlash(rel)) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		to := filepath.Join(dst, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case d.IsDir():
+			return os.MkdirAll(to, info.Mode().Perm()|0o700)
+		case d.Type()&fs.ModeSymlink != 0:
+			link, err := os.Readlink(p)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, to) //nolint:gosec // G122: src is a store this process holds the lock of, not a tree an attacker can swap
+		case d.Type().IsRegular():
+			b, err := ReadFile(p)
+			if err != nil {
+				return err
+			}
+			return WriteFile(to, b, info.Mode().Perm())
+		}
+		return nil
+	})
 }

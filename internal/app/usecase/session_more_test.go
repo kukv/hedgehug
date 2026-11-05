@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -244,6 +245,40 @@ func TestUnpushedWithoutRemote(t *testing.T) {
 	n, err := usecase.Unpushed(s)
 	if err != nil || n != 1 {
 		t.Errorf("Unpushed = %d, %v; want 1 (the first commit), nil", n, err)
+	}
+}
+
+// A store that was open when a rebuild stopped in its apply phase is not
+// synced, and the sync leaves no mark in sync.json.
+func TestRunSyncRefusesAStoppedApply(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	s, _, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, e, err := ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt, err := ts.SyncOptions(c, e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteLocal(store.RebuildFile, []byte(`{"phase":"apply"}`+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	_, runErr := ts.RunSync(s, opt, true)
+	var left *store.LeftoverError
+	if !errors.As(runErr, &left) {
+		t.Fatalf("RunSync = %v, want a LeftoverError", runErr)
+	}
+	st, err := replicate.ReadState(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.LastAttempt.IsZero() {
+		t.Errorf("RunSync recorded an attempt: %v", st.LastAttempt)
 	}
 }
 

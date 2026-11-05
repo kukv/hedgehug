@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	gosync "sync"
 	"time"
@@ -47,11 +48,13 @@ type Session struct {
 	// index and before it writes, or write config.yaml after an operation
 	// read it and before it updates it, as another process could.
 	BeforeUpdate func()
-	// BeforeSwap is told the path of a store before doctor --fix swaps the
-	// directory of a rebuild in for it (after a force push): whoever holds
-	// that store open, such as the GUI server's index, lets go of it.
-	// ForStore copies it. nil does nothing.
-	BeforeSwap func(path string)
+	// BeforeRebuild is told the path of a store when doctor --fix is about to
+	// apply a rebuild to it (after a force push), with rebuild.json written
+	// and the store lock and sync.lock held: whoever holds that store open,
+	// such as the GUI server's index, lets go of it. It is not told when
+	// origin follows the store again, and must not wait for anything those
+	// locks guard. ForStore copies it. nil does nothing.
+	BeforeRebuild func(path string)
 	// Spawn starts the background sync as a process; nil starts it detached.
 	// ForStore copies it.
 	Spawn      replicate.Spawn
@@ -113,7 +116,7 @@ func (ss *Session) ForStore(name string) *Session {
 		AfterWrite:     ss.AfterWrite,
 		BackgroundSync: ss.BackgroundSync,
 		BeforeUpdate:   ss.BeforeUpdate,
-		BeforeSwap:     ss.BeforeSwap,
+		BeforeRebuild:  ss.BeforeRebuild,
 		Spawn:          ss.Spawn,
 		Keyring:        ss.Keyring,
 		HTTPClient:     ss.HTTPClient,
@@ -374,23 +377,35 @@ func (ss *Session) OpenStore() (*store.Store, error) {
 		return nil, err
 	}
 	s, err := ss.OpenStoreAt(e.Path)
-	left, lerr := store.FindLeftover(e.Path)
-	unfinished := lerr == nil && !left.None()
 	if err != nil {
-		if unfinished {
-			err = &store.LeftoverError{Name: e.Name}
-		}
 		return nil, OpenError(e.Name, err)
 	}
-	if unfinished {
+	if store.RebuildPhaseIn(e.Path) != store.RebuildNone {
 		ss.WarnOnce(e.Name, store.LeftoverMessage(e.Name))
 	}
 	return s, nil
 }
 
+// nameAt is the name config.yaml gives the store at dir, or else the name of
+// the directory.
+func (ss *Session) nameAt(dir string) string {
+	if c, _, err := ss.Config(); err == nil {
+		for _, e := range c.Stores {
+			if osfs.SamePath(e.Path, dir) {
+				return e.Name
+			}
+		}
+	}
+	return filepath.Base(dir)
+}
+
 // OpenStoreAt opens the store in dir with the clock of the session, so that
-// what it writes has the time ss.Now tells.
+// what it writes has the time ss.Now tells. A store whose rebuild stopped
+// part of the way does not open (store.LeftoverError).
 func (ss *Session) OpenStoreAt(dir string) (*store.Store, error) {
+	if store.RebuildPhaseIn(dir) == store.RebuildApply {
+		return nil, &store.LeftoverError{Name: ss.nameAt(dir)}
+	}
 	s, err := store.Open(dir)
 	if err != nil {
 		return nil, err
@@ -722,12 +737,17 @@ func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error)
 // by it; one made later has not. reported says that the one who ran it is
 // told of a failure, so the next command does not tell of it again. A
 // history of origin that differs from the store's stops it (ErrForcePush);
-// hedgehug doctor --fix clones the store again.
+// hedgehug doctor --fix rebuilds the store.
 func (ss *Session) RunSync(s *store.Store, opt replicate.Options, reported bool) (res replicate.Result, err error) {
 	// The sync writes objects through the handle s; the stores mounted are
 	// opened again after it, so that they see them.
 	defer ss.DropMount()
 	err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
+		// A rebuild stopped in its apply phase while this store was open: the
+		// sync would push or merge on the old HEAD.
+		if store.RebuildPhaseIn(s.Dir()) == store.RebuildApply {
+			return &store.LeftoverError{Name: s.Meta().Name}
+		}
 		started := ss.Now()
 		if _, err := replicate.UpdateState(s, func(st *replicate.State) { st.LastAttempt = started }); err != nil {
 			return err

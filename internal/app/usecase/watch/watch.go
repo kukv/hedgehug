@@ -102,7 +102,7 @@ type Watcher struct {
 
 	mu       sync.Mutex // the state below
 	stores   map[string]*polled
-	released map[string]bool // stores swapped for a rebuild, to tell the clients once
+	released map[string]bool // stores rebuilt, to tell the clients once
 	restored map[string]bool // stores let go for a removal that failed; opened again without a word
 	unread   int
 	looked   bool   // a poll has run
@@ -129,7 +129,7 @@ type polled struct {
 
 	// histBusy is true while a goroutine brings the history index of the
 	// store to HEAD; histDone is that goroutine's. Whoever lets go of the
-	// store (its directory may be swapped or removed) waits for histDone.
+	// store (its directory may be rebuilt or removed) waits for histDone.
 	histBusy   atomic.Bool
 	histDone   sync.WaitGroup
 	histCancel chan struct{} // closed to stop the build
@@ -148,7 +148,7 @@ func (st *polled) stopHistory() {
 }
 
 // Release lets go of the store at path, whose directory is about to be
-// swapped for a rebuild after a force push (D26): its index and its
+// rebuilt after a force push (D26): its index and its
 // repository files are closed, and the next poll opens the store again and
 // tells the clients that its tasks changed. It waits for a poll that is
 // reading, and cancels the build of the history index of the store and waits
@@ -194,7 +194,7 @@ func (w *Watcher) releaseLocked(path string) []string {
 // removal of the store: its directory goes) before any poll can look again,
 // so that no poll opens the store again while its config entry is still
 // there. When fn succeeds the store is gone for good, so it is no longer
-// marked as swapped for a rebuild (a store of that name that comes later is
+// marked as rebuilt (a store of that name that comes later is
 // new). When fn fails the store is still there: the next poll opens it again
 // without telling the clients anything (it is the same store, not a rebuilt
 // one). fn must not wait for a poll.
@@ -282,6 +282,12 @@ func (w *Watcher) pollLocked(publish bool) {
 		if st == nil || !osfs.SamePath(st.path, e.Path) {
 			// This session is not closed: the store it opens is kept in
 			// w.stores, and closed when it is dropped.
+			// A store being rebuilt is left alone, as one that does not open: a
+			// pack held open would stop the prune. It is opened on a poll after
+			// the rebuild, and released tells the clients then.
+			if store.RebuildPhaseIn(e.Path) != store.RebuildNone {
+				continue
+			}
 			s, err := w.session(e.Name).OpenStore()
 			if err != nil {
 				continue
@@ -298,13 +304,13 @@ func (w *Watcher) pollLocked(publish bool) {
 			st = newPolled(e.Path, s)
 			fresh = true
 			w.mu.Lock()
-			swapped := w.released[e.Name]
+			rebuilt := w.released[e.Name]
 			delete(w.released, e.Name)
 			restored := w.restored[e.Name]
 			delete(w.restored, e.Name)
 			scanned := w.scanned
 			w.mu.Unlock()
-			if (swapped || scanned) && !restored && publish {
+			if (rebuilt || scanned) && !restored && publish {
 				// The store was made again, or it appeared after the first look: the
 				// commits made before this look are not known (a page that made a
 				// task in a store just created would never be told), so the clients
@@ -498,6 +504,11 @@ func (w *Watcher) refresh(st *polled) {
 // concurrent use); it goes on, for a few rounds, until the index is at the
 // HEAD it sees when it ends. The index is a cache, so a failure is ignored.
 func (w *Watcher) buildHistory(st *polled) {
+	// A rebuild stopped in its apply phase while the store was held: its work
+	// tree is part old, part new, as mount.Open treats it.
+	if store.RebuildPhaseIn(st.path) == store.RebuildApply {
+		return
+	}
 	if !st.histBusy.CompareAndSwap(false, true) {
 		return
 	}
