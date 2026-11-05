@@ -117,6 +117,8 @@ linters:
           deny:
             - pkg: github.com/kukv/hedgehug/internal/app/usecase/accounts
               desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/automations
+              desc: 領域どうしは土台を通す（spec 2.3）
             - pkg: github.com/kukv/hedgehug/internal/app/usecase/browse
               desc: 領域どうしは土台を通す（spec 2.3）
             - pkg: github.com/kukv/hedgehug/internal/app/usecase/comments

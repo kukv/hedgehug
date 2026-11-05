@@ -69,6 +69,7 @@ internal/app/
     model/
     schema/
     merge/
+    automation/             フェーズ 5b で追加。automations.yaml の形式、検査、イベントの判定、ルールの評価（I/O を持たない）
   storage/
     store/                  旧 store ＋ force push 復旧の途中残りの検出（旧 sync の ReadParent・LeftoverIn・LeftoverError）
     index/
@@ -85,7 +86,7 @@ internal/app/
     auth/
   usecase/                  土台（2.3）
     tasks/ comments/ browse/ views/ schemas/ workspaces/
-    stores/ replication/ notifications/ accounts/ maintenance/ watch/ integration/
+    stores/ replication/ notifications/ accounts/ maintenance/ watch/ integration/ automations/
   cli/                      旧 cmd/hedgehug の本体
     prompt/                 確認と選択の部品（4.4）
     scenario/               組み立てたバイナリを動かす通しのテスト（テストだけのパッケージ。5 節、決定 16）
@@ -134,6 +135,7 @@ api/openapi.yaml            今のまま
 | maintenance | maintain の Doctor, purge, rebuild ＋ 旧 doctor |
 | watch | server の poll（回 4 で移す。決定 15） |
 | integration | フェーズ 5a で追加。GitHub の Issue・PR のリンク、取り込み、自動のリンク付け |
+| automations | フェーズ 5b で追加。`automations.yaml` のルールと `issue_fields` の一覧・編集（`hh automation`）。ルールの実行は取り込みの一部なので integration にある |
 
 領域どうしの import は、土台を通すのを基本にする。領域から別の領域を呼ぶ必要が出たら、その関数を土台に下ろす。
 

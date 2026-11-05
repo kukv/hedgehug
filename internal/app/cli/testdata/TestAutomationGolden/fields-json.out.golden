@@ -1,0 +1,15 @@
+{
+  "default_sync": "mirror",
+  "push": [
+    "title",
+    "status"
+  ],
+  "mirror": [
+    "title",
+    "status",
+    "assignees"
+  ],
+  "props": {
+    "milestone": "target"
+  }
+}
