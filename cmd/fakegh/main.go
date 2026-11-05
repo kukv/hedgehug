@@ -35,6 +35,7 @@ const (
   fakegh issue edit <owner/repo#n> [--title t] [--body b] [--assignee a]... [--label l]... [--milestone m]
   fakegh repo label <owner/repo> <name>
   fakegh repo milestone <owner/repo> <title>
+  fakegh repo restrict <owner>
   fakegh issue close <owner/repo#n> [--reason completed|not_planned]
 The commands but serve take --server (default http://127.0.0.1:7777).`
 	defaultServer = "http://127.0.0.1:7777"
@@ -128,6 +129,14 @@ func dispatch(args []string, stdout io.Writer) error {
 			return err
 		}
 		return admin(*server).AddRepo(pos[0], ts, *public)
+	case "repo restrict":
+		fs := flagSet("fakegh repo restrict")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		return admin(*server).RestrictApp(pos[0])
 	case "repo label", "repo milestone":
 		fs := flagSet("fakegh " + cmd)
 		server := fs.String("server", defaultServer, "the URL of the running fake")

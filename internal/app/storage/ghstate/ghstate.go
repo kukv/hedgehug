@@ -41,6 +41,9 @@ type Repo struct {
 	Remaining int       `json:"remaining"`
 	ResetAt   time.Time `json:"reset_at"`
 	NotBefore time.Time `json:"not_before,omitzero"` // GitHub refused: the rate limit is used up until then
+	// AppMissing says the last read was refused because the GitHub App is not
+	// installed where the repository is. A read that succeeds clears it.
+	AppMissing bool `json:"app_missing,omitempty"`
 }
 
 // State is the file, by repo ID.
@@ -53,22 +56,53 @@ type State struct {
 // rate limit the interval is three times as long, until the limit resets.
 // The file is only a cache, so a clock that went back, or a time further
 // ahead than maxAhead, is not trusted: the repository is read.
-func (r Repo) Due(now time.Time) bool {
-	if now.Before(r.NotBefore) && !r.NotBefore.After(now.Add(maxAhead)) {
-		return false
+func (r Repo) Due(now time.Time) bool { return !now.Before(r.NextAt(now)) }
+
+// NextAt is the first time the repository may be read, as Due sees it at now.
+// It is the zero time when nothing holds it back. It does not move with now
+// while the state stays, so that a watcher sees no change in it.
+func (r Repo) NextAt(now time.Time) time.Time {
+	var next time.Time
+	if r.held(now) {
+		next = r.NotBefore
 	}
 	last := r.LastFetch
 	if r.LastTry.After(last) {
 		last = r.LastTry
 	}
 	if last.IsZero() || last.After(now) {
-		return true
+		return next
 	}
 	wait := Interval
-	if r.Limit > 0 && r.Remaining*10 < r.Limit && now.Before(r.ResetAt) && !r.ResetAt.After(now.Add(maxAhead)) {
+	if r.low(now) {
 		wait *= slowFactor
 	}
-	return !now.Before(last.Add(wait))
+	if at := last.Add(wait); at.After(next) {
+		return at
+	}
+	return next
+}
+
+// held reports whether GitHub refused until a time still to come.
+func (r Repo) held(now time.Time) bool {
+	return now.Before(r.NotBefore) && !r.NotBefore.After(now.Add(maxAhead))
+}
+
+// low reports whether the rate limit runs low until a time still to come.
+func (r Repo) low(now time.Time) bool {
+	return r.Limit > 0 && r.Remaining*10 < r.Limit && now.Before(r.ResetAt) && !r.ResetAt.After(now.Add(maxAhead))
+}
+
+// SlowedUntil is when the rate limit recovers, while it holds reads back; the
+// zero time when it does not.
+func (r Repo) SlowedUntil(now time.Time) time.Time {
+	switch {
+	case r.held(now):
+		return r.NotBefore
+	case r.low(now):
+		return r.ResetAt
+	}
+	return time.Time{}
 }
 
 // Read reads the file of s. A missing or broken file is an empty state.

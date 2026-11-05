@@ -125,6 +125,12 @@ func TestGraphQLErrors(t *testing.T) {
 	if err := graphqlErr(t, `{"data":null,"errors":[{"type":"FORBIDDEN","message":"Resource not accessible by integration"}]}`); !errors.Is(err, ErrForbidden) {
 		t.Errorf("forbidden: %v", err)
 	}
+	if err := graphqlErr(t, `{"data":null,"errors":[{"type":"FORBIDDEN","message":"Resource not accessible by integration"}]}`); !errors.Is(err, ErrNotAccessible) {
+		t.Errorf("not accessible: %v", err)
+	}
+	if err := graphqlErr(t, `{"data":null,"errors":[{"type":"FORBIDDEN","message":"SSO required"}]}`); !errors.Is(err, ErrForbidden) || errors.Is(err, ErrNotAccessible) {
+		t.Errorf("other forbidden: %v", err)
+	}
 	var rl *RateLimitError
 	if err := graphqlErr(t, `{"data":null,"errors":[{"type":"RATE_LIMITED","message":"used up"}]}`); !errors.As(err, &rl) {
 		t.Errorf("rate limited: %v", err)

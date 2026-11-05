@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"go.yaml.in/yaml/v4"
@@ -152,6 +153,74 @@ func TestFetchWarnsAndGoesOn(t *testing.T) {
 	}
 	if !r.Committed {
 		t.Error("the repository that reads is not written")
+	}
+}
+
+func TestFetchNotesWhereTheAppIsNotInstalled(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
+	fake.RestrictApp("org-a")
+	if r := fetch(t, ts); len(r.Warnings) != 1 {
+		t.Fatalf("warnings = %q", r.Warnings)
+	}
+	vs, err := usecase.GitHubStatus(ts.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 || vs[0].Repo != web || !vs[0].AppMissing || len(vs[0].Warnings) != 1 || vs[0].NextFetch == nil || vs[0].Account == "" {
+		t.Fatalf("status = %+v", vs)
+	}
+	sts, err := usecase.SyncStatus(ts.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := sts[0].GitHub; g == nil || g.AppMissing != 1 || g.Warnings != 1 || g.LastFetch != nil {
+		t.Fatalf("summary = %+v", g)
+	}
+	fake.UnrestrictApp("org-a")
+	later(ts, 6*time.Minute)
+	fetch(t, ts)
+	if vs, _ := usecase.GitHubStatus(ts.Session); vs[0].AppMissing || len(vs[0].Warnings) != 0 || vs[0].LastFetch == nil {
+		t.Errorf("a read clears it: %+v", vs[0])
+	}
+}
+
+func TestGitHubStatusListsWhatWasNotReadYet(t *testing.T) {
+	t.Parallel()
+	ts, _ := usecasetest.GitHubSession(t)
+	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
+	vs, err := usecase.GitHubStatus(ts.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 || vs[0].LastFetch != nil || vs[0].NextFetch != nil {
+		t.Errorf("status = %+v", vs)
+	}
+	sts, err := usecase.SyncStatus(ts.Session)
+	if err != nil || sts[0].GitHub != nil {
+		t.Errorf("summary = %+v, %v", sts[0].GitHub, err)
+	}
+}
+
+func TestFetchForgetsTheRepositoryNoTaskNames(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	x := ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
+	fake.RestrictApp("org-a")
+	fetch(t, ts)
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ix.Task(x.ULID)
+	if _, err := tasks.Set(ts.Session, e.ID, []usecase.Assign{{Key: "repos", Op: "=", Value: ""}}); err != nil {
+		t.Fatal(err)
+	}
+	fetch(t, ts)
+	sts, err := usecase.SyncStatus(ts.Session)
+	if err != nil || sts[0].GitHub != nil {
+		t.Errorf("summary = %+v, %v", sts[0].GitHub, err)
 	}
 }
 
