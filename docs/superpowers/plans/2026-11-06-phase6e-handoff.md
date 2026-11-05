@@ -28,7 +28,7 @@
 | `hh worklog` / `ls` / `rm`（`--date` を含む） | タスク詳細の作業時間の欄 |
 | `hh template ls` / `show` / `edit` / `rm` | 設定のテンプレート |
 | `hh add --template` / `--no-template` | 作成ダイアログのテンプレートの欄 |
-| `hh add --sprint` / `--release` | 作成の後、タスク詳細の欄で入れる。作成ダイアログには欄がない |
+| `hh add --sprint` / `--release` | 作成の後、タスク詳細の欄かバックログで入れる（2 手で同じ結果になる。spec の 6d が作成ダイアログに求めるのはテンプレートの欄だけ） |
 | `hh schema scope set --templates` / `--template-default` | プロジェクトの設定 |
 | `hh set sprint=` / `releases=` | タスク詳細、バックログのドラッグとメニュー |
 | `hh set --query` | テーブルの一括編集、パレット |
