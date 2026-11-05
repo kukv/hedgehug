@@ -2,15 +2,18 @@
   import { onMount } from "svelte";
   import { unwrap } from "../../core/api/client";
   import { cliAuthLogout } from "../../core/cli";
+  import { missingByOwner } from "../../core/github";
   import { errorMessage } from "../../core/messages";
   import AccountAdd, { type AddSource } from "../accounts/AccountAdd.svelte";
   import { core } from "../context";
+  import { useAllGitHubRepos } from "../github.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
   import AccountCard, { type Relogin } from "./AccountCard.svelte";
+  import RepoAccounts from "./RepoAccounts.svelte";
 
   const c = core();
   const accounts = useSubscribe(c.accounts, () => ({
@@ -19,6 +22,7 @@
     error: c.accounts.error(),
   }));
   const stores = useSubscribe(c.stores, () => c.stores.stores());
+  const repos = useAllGitHubRepos();
 
   // The form that adds an account, or logs one in again with its name and host filled in. A new
   // key makes a form of its own for each opening.
@@ -113,6 +117,7 @@
           <AccountCard
             account={a}
             stores={usedBy(a.name)}
+            missing={missingByOwner(repos.current, a.name)}
             onrelogin={(how) => relogin(a.name, a.id, how)}
             onlogout={() => askLogout(a.name)}
           />
@@ -133,6 +138,10 @@
         }}
       />
     {/key}
+  {/if}
+
+  {#if accounts.current.list.length > 0}
+    <RepoAccounts />
   {/if}
 </div>
 

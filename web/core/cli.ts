@@ -138,8 +138,58 @@ export function cliLink(i: { id: string; kind: "pr" | "issue"; ref: Arg }): stri
   return cliLine(["link", i.id, `--${i.kind}`, i.ref]);
 }
 
-export function cliGhImport(i: { repo: Arg; label: Arg; parent: string }): string {
-  return cliLine(["gh", "import", i.repo, "--label", i.label, "--parent", i.parent]);
+export function cliGhImport(i: {
+  repo: Arg;
+  label: Arg;
+  parent?: string;
+  workspace?: string;
+}): string {
+  const a: Arg[] = ["gh", "import", i.repo, "--label", i.label];
+  if (i.parent) a.push("--parent", i.parent);
+  if (i.workspace) a.push("--workspace", i.workspace);
+  return cliLine(a);
+}
+
+export function cliIssue(id: string, repo?: Arg): string {
+  return cliLine(repo ? ["issue", id, "--repo", repo] : ["issue", id]);
+}
+
+const storeFlag = (store?: string): string[] => (store ? ["--store", store] : []);
+
+export function cliAutomationAdd(i: {
+  id: Arg;
+  on: string;
+  status?: string;
+  category?: string;
+  when?: string;
+  project?: string;
+  store?: string;
+}): string {
+  const a: Arg[] = ["automation", "add", "--id", i.id, "--on", i.on];
+  if (i.status) a.push("--status", i.status);
+  if (i.category) a.push("--category", i.category);
+  if (i.when) a.push("--when", i.when);
+  if (i.project) a.push("--project", i.project);
+  return cliLine([...a, ...storeFlag(i.store)]);
+}
+
+export function cliAutomationRm(id: string, store?: string): string {
+  return cliLine(["automation", "rm", id, ...storeFlag(store)]);
+}
+
+export function cliAutomationFields(i: {
+  defaultSync?: string;
+  push?: readonly string[];
+  mirror?: readonly string[];
+  prop?: string;
+  store?: string;
+}): string {
+  const a: string[] = ["automation", "fields"];
+  if (i.defaultSync) a.push("--default-sync", i.defaultSync);
+  if (i.push) a.push("--push", i.push.join(","));
+  if (i.mirror) a.push("--mirror", i.mirror.join(","));
+  if (i.prop) a.push("--prop", i.prop);
+  return cliLine([...a, ...storeFlag(i.store)]);
 }
 
 export function cliInbox(i: { all?: boolean; store?: string } = {}): string {

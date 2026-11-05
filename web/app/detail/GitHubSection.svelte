@@ -24,6 +24,7 @@
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import { copyText } from "../ui/clipboard";
+  import IssueCreateDialog from "./IssueCreateDialog.svelte";
   import LinkDialog from "./LinkDialog.svelte";
 
   // The pull requests and the issues of a task. It writes links only; 「PR を作る」 copies the
@@ -44,6 +45,7 @@
   });
 
   let linking = $state(false);
+  let opening = $state(false);
   let busy = $state(false);
 
   async function write(run: () => Promise<Schemas["TaskWrite"]>) {
@@ -96,6 +98,7 @@
     <span class="end">
       <Button size="sm" onclick={copyPr}>PR を作る</Button>
       {#if !readonly}
+        <Button size="sm" onclick={() => (opening = true)}>Issue を作る</Button>
         <Button size="sm" onclick={() => (linking = true)}>リンク</Button>
       {/if}
     </span>
@@ -163,6 +166,9 @@
 
 {#if linking}
   <LinkDialog task={show} onclose={() => (linking = false)} />
+{/if}
+{#if opening}
+  <IssueCreateDialog task={show} onclose={() => (opening = false)} />
 {/if}
 
 <style>

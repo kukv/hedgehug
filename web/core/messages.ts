@@ -108,6 +108,11 @@ const messages: Record<string, Make> = {
   "move.unfinished": (a) =>
     `${str(a, "store")} へは移しましたが、移動元の片付けが終わっていません。もう一度同じ移動をすると完了します`,
   "automation.invalid": (_, e) => withDetail("automations.yaml に問題があります", e),
+  "automation.exists": () => "その id のルールはすでにあります",
+  "automation.not_found": () => "そのルールはもうありません",
+  "automation.not_project": (a) => `${str(a, "id")} はプロジェクトではありません`,
+  "repo_accounts.invalid": (_, e) => withDetail("ルールに問題があります", e),
+  "issue.repo_required": () => "リポジトリを org/repo の形で指定してください",
   "link.invalid": () => "org/repo#123 の形で書いてください",
   "link.exists": (_, e) => withDetail("すでにリンクしています", e),
   "link.not_found": (_, e) => withDetail("そのリンクはありません", e),

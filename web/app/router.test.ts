@@ -66,6 +66,7 @@ describe("parseRoute", () => {
     ["/settings/general", { name: "settings", page: "general" }],
     ["/settings/general/extra", { name: "home" }],
     ["/settings/workspaces/shared", { name: "settings", page: "workspaces", store: "shared" }],
+    ["/settings/automations/shared", { name: "settings", page: "automations", store: "shared" }],
     [
       "/settings/workspaces/org-b%2Fops",
       { name: "settings", page: "workspaces", store: "org-b/ops" },

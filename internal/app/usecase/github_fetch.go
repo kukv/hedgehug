@@ -138,7 +138,10 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 			if errors.As(err, &limited) {
 				st.NotBefore = limited.Reset
 			}
-			st.AppMissing = errors.Is(err, github.ErrNotAccessible)
+			// GitHub refuses a public repository the App does not reach, and
+			// hides a private one.
+			st.AppMissing = errors.Is(err, github.ErrNotAccessible) ||
+				errors.Is(err, github.ErrNotFound) && cl.AppMissing(owner, name)
 			fail(github.Describe(err, acct.ID(), acct.Name, "read "+repo).Error())
 			continue
 		}

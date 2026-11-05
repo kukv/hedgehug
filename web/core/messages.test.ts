@@ -196,6 +196,20 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words the codes of the rules and repo_accounts", () => {
+    expect(errorMessage(err("automation.exists"))).toBe("その id のルールはすでにあります");
+    expect(errorMessage(err("automation.not_found"))).toBe("そのルールはもうありません");
+    expect(errorMessage(err("automation.not_project", { id: "REL-2" }))).toBe(
+      "REL-2 はプロジェクトではありません",
+    );
+    expect(errorMessage(err("repo_accounts.invalid", {}, "bad pattern"))).toBe(
+      "ルールに問題があります: bad pattern",
+    );
+    expect(errorMessage(err("issue.repo_required"))).toBe(
+      "リポジトリを org/repo の形で指定してください",
+    );
+  });
+
   it("lists what a schema violation broke", () => {
     const m = errorMessage(
       err("schema.violation", {

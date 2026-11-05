@@ -4,6 +4,7 @@
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
   import SettingsAccounts from "./SettingsAccounts.svelte";
+  import SettingsAutomations from "./SettingsAutomations.svelte";
   import SettingsGeneral from "./SettingsGeneral.svelte";
   import SettingsLayout from "./SettingsLayout.svelte";
   import SettingsSchema from "./SettingsSchema.svelte";
@@ -49,6 +50,10 @@
       <SettingsAccounts />
     {:else if page.page === "stores"}
       <SettingsStores />
+    {:else if page.page === "automations"}
+      {#key page.store}
+        <SettingsAutomations store={page.store} />
+      {/key}
     {:else if page.page === "schema"}
       <SettingsSchema store={page.store} tab={page.tab} />
     {:else}

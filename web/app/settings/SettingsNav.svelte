@@ -8,7 +8,7 @@
 
   let { page }: { page: SettingsPage } = $props();
 
-  const { api, stores } = core();
+  const { api, conn, stores } = core();
   const names = useSubscribe(stores, () => stores.stores().map((s) => s.name));
   // Every Store is listed, the hidden ones too; one that cannot be written says so.
   const options = useSubscribe(stores, () =>
@@ -46,7 +46,12 @@
   const generalHref = hrefOf({ name: "settings", page: "general" });
   const workspacesHref = $derived(hrefOf({ name: "settings", page: "workspaces", store }));
   const schemaHref = $derived(hrefOf({ name: "settings", page: "schema", store, tab: "statuses" }));
+  const automationsHref = $derived(hrefOf({ name: "settings", page: "automations", store }));
   const homeHref = hrefOf({ name: "home" });
+  // The repositories of all Stores the GitHub App is not installed for.
+  const appMissing = useSubscribe(conn, () =>
+    [...conn.sync.values()].reduce((n, s) => n + (s.github?.app_missing ?? 0), 0),
+  );
 
   function pick(next: string) {
     if ("store" in page) router.go(hrefOf({ name: "settings", ...page, store: next }));
@@ -71,6 +76,11 @@
       onclick={(e) => onLinkClick(e, accountsHref)}
     >
       <Icon name="people" size={14} />アカウントと認証
+      {#if appMissing.current > 0}
+        <span class="badge" title="GitHub App の警告 {appMissing.current} 件">
+          {appMissing.current}
+        </span>
+      {/if}
     </a>
     <a
       class="item"
@@ -122,6 +132,15 @@
         onclick={(e) => onLinkClick(e, schemaHref)}
       >
         <Icon name="checklist" size={14} />スキーマ
+      </a>
+      <a
+        class="item"
+        class:on={page.page === "automations"}
+        href={automationsHref}
+        aria-current={page.page === "automations" ? "page" : undefined}
+        onclick={(e) => onLinkClick(e, automationsHref)}
+      >
+        <Icon name="sync" size={14} />自動化と GitHub
       </a>
     {/if}
     <p class="note">
@@ -208,6 +227,15 @@
   .item.on:hover {
     background: var(--accent-weak);
     color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .badge {
+    margin-left: auto;
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-pill);
+    background: var(--warning-weak);
+    color: var(--warning);
+    font-size: var(--fs-11);
     font-weight: 600;
   }
   .note {

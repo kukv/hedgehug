@@ -22,6 +22,7 @@ type Mount = {
   error?: ApiError | null;
   stores?: { name: string; account?: string }[];
   del?: () => ReturnType<typeof ok> | ReturnType<typeof fail>;
+  github?: unknown[];
 };
 
 function mount(m: Mount = {}) {
@@ -42,10 +43,11 @@ function mount(m: Mount = {}) {
   };
   const api = {
     DELETE: vi.fn(() => (m.del ? m.del() : ok(undefined))),
+    GET: vi.fn((path: string) => ok(path === "/api/github" ? (m.github ?? []) : { rules: [] })),
     POST: vi.fn(),
-    PUT: vi.fn(),
+    PUT: vi.fn(() => ok({})),
   };
-  const conn = { on: () => () => {} };
+  const conn = { on: () => () => {}, sync: new Map(), subscribe: () => () => {} };
   renderWithCore(SettingsAccounts, {}, { accounts, stores, api, conn });
   return { accounts, stores, api, state, emit: e.emit };
 }
@@ -57,6 +59,39 @@ beforeEach(() => {
   history.replaceState(null, "", "/settings/accounts");
 });
 afterEach(() => cleanup());
+
+describe("SettingsAccounts: the GitHub App", () => {
+  const missing = {
+    store: "shared",
+    repo: "github.com/org-b/ops",
+    account: "a",
+    app_missing: true,
+  };
+
+  it("warns on the account that reads the repository, and links to the organization", async () => {
+    mount({ list: [acct("a")], github: [missing] });
+    const warn = await within(card("a")).findByRole("note");
+    expect(warn.textContent).toMatch(/org-b\/ops\s+に Hedgehug の GitHub App が入っていません/);
+    expect(within(warn).getByRole("link", { name: "管理者にインストールを依頼" })).toHaveAttribute(
+      "href",
+      "https://github.com/organizations/org-b/settings/installations",
+    );
+  });
+
+  it("switches to the token of gh", async () => {
+    const { api, accounts } = mount({ list: [acct("a")], github: [missing] });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "gh のトークンで代わりに使う" }),
+    );
+    await waitFor(() =>
+      expect(api.PUT).toHaveBeenCalledWith("/api/accounts/{name}/token-source", {
+        params: { path: { name: "a" } },
+        body: { token: "gh" },
+      }),
+    );
+    await waitFor(() => expect(accounts.reload).toHaveBeenCalled());
+  });
+});
 
 describe("SettingsAccounts: the list", () => {
   it("keeps the heading and the lead, and reads the accounts when it opens", () => {
@@ -168,7 +203,6 @@ describe("SettingsAccounts: the list", () => {
   it("has no delete and no account of the GitHub App", () => {
     mount({ list: [acct("a")] });
     expect(screen.queryByText(/削除/)).toBeNull();
-    expect(screen.queryByText(/GitHub 連携/)).toBeNull();
     expect(screen.queryByText(/GitHub App/)).toBeNull();
   });
 });

@@ -66,6 +66,35 @@ func (s *Server) RestrictApp(owner string) {
 	s.restricted[strings.ToLower(owner)] = true
 }
 
+// UninstallApp makes GitHub hide the repositories of owner, as it does from
+// the token of a GitHub App that is not installed there when they are private.
+func (s *Server) UninstallApp(owner string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.uninstalled == nil {
+		s.uninstalled = map[string]bool{}
+	}
+	s.uninstalled[strings.ToLower(owner)] = true
+}
+
+// installations are the owners login can read, with the App on all of their
+// repositories.
+func (s *Server) installations(login string) []map[string]any {
+	seen := map[string]bool{}
+	out := []map[string]any{}
+	for _, x := range s.st.Repos {
+		owner := strings.ToLower(x.Owner)
+		if perm(x, login) == "" || seen[owner] || s.uninstalled[owner] || s.restricted[owner] {
+			continue
+		}
+		seen[owner] = true
+		out = append(out, map[string]any{
+			"id": len(seen), "account": map[string]string{"login": owner}, "repository_selection": "all",
+		})
+	}
+	return out
+}
+
 // UnrestrictApp undoes RestrictApp.
 func (s *Server) UnrestrictApp(owner string) {
 	s.mu.Lock()

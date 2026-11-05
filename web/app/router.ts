@@ -14,6 +14,7 @@ export type SettingsPage =
   | { page: "accounts" }
   | { page: "stores" }
   | { page: "workspaces"; store: string }
+  | { page: "automations"; store: string }
   | { page: "schema"; store: string; tab: SchemaTab };
 
 // "" is every commit; exclude is the ones of people, only the ones of syncs, automation the ones of
@@ -88,8 +89,13 @@ function matchRoute(pathname: string, search: string): Route | null {
   if (head === "settings" && seg.length === 2 && (a === "accounts" || a === "stores")) {
     return { name: "settings", page: a };
   }
-  if (head === "settings" && seg.length === 3 && (a === "workspaces" || a === "schema") && b) {
-    if (a === "workspaces") return { name: "settings", page: a, store: b };
+  if (
+    head === "settings" &&
+    seg.length === 3 &&
+    (a === "workspaces" || a === "automations" || a === "schema") &&
+    b
+  ) {
+    if (a !== "schema") return { name: "settings", page: a, store: b };
     const tab = new URLSearchParams(search).get("tab") ?? "";
     return {
       name: "settings",
@@ -145,7 +151,7 @@ export function hrefOf(r: Route): string {
       if (r.page === "general" || r.page === "accounts" || r.page === "stores") {
         return `/settings/${r.page}`;
       }
-      if (r.page === "workspaces") return `/settings/workspaces/${encodeURIComponent(r.store)}`;
+      if (r.page !== "schema") return `/settings/${r.page}/${encodeURIComponent(r.store)}`;
       return `/settings/schema/${encodeURIComponent(r.store)}${r.tab === "statuses" ? "" : `?tab=${r.tab}`}`;
   }
 }

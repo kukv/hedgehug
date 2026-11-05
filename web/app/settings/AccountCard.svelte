@@ -12,19 +12,22 @@
 
 <script lang="ts">
   import { type Account, envVar, source } from "../../core/accounts";
+  import type { MissingApp } from "../../core/github";
   import Icon from "../icons/Icon.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import Menu, { type MenuItem } from "../ui/Menu.svelte";
+  import AppWarning from "./AppWarning.svelte";
 
   // One account: who it is, whether its token works, where the token comes from, and which Stores
   // use it. The menu has what Hedgehug can do with the token it keeps.
   type Props = {
     account: Account;
     stores: string[];
+    missing?: MissingApp[];
     onrelogin: (how: Relogin) => void;
     onlogout: () => void;
   };
-  let { account, stores, onrelogin, onlogout }: Props = $props();
+  let { account, stores, missing = [], onrelogin, onlogout }: Props = $props();
 
   // id is <host>/<login>, as config.yaml has them.
   const host = $derived(
@@ -134,6 +137,10 @@
       <dd>{stores.length > 0 ? stores.join(" · ") : "なし"}</dd>
     </div>
   </dl>
+
+  {#each missing as m (m.owner)}
+    <AppWarning name={account.name} missing={m} canSwitch={kind !== "gh"} />
+  {/each}
 </article>
 
 {#if open}

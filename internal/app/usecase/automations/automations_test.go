@@ -149,6 +149,18 @@ func TestRemoveAndNotFound(t *testing.T) {
 	}
 }
 
+func TestAStoreWithoutRulesListsNone(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	rs, err := automations.List(ts.Session, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs == nil || len(rs) != 0 {
+		t.Fatalf("rules = %#v, want an empty list", rs)
+	}
+}
+
 func TestEnableDisableAndTheListInAProject(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
