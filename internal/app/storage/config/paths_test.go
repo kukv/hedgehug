@@ -10,7 +10,6 @@ func envOf(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
-// 直列: パッケージ変数 goos の差し替え
 func TestResolve(t *testing.T) {
 	h := filepath.Join(t.TempDir(), "home")
 	hh := filepath.Join(t.TempDir(), "hh")
@@ -55,10 +54,7 @@ func TestResolve(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			old := goos
-			goos = tc.goos
-			defer func() { goos = old }()
-			p, err := Resolve(envOf(tc.env))
+			p, err := resolve(tc.goos, envOf(tc.env))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -75,12 +71,8 @@ func TestResolve(t *testing.T) {
 	}
 }
 
-// 直列: パッケージ変数 goos の差し替え
 func TestResolveNeedsHome(t *testing.T) {
-	old := goos
-	goos = "linux"
-	defer func() { goos = old }()
-	if _, err := Resolve(envOf(nil)); err == nil {
+	if _, err := resolve("linux", envOf(nil)); err == nil {
 		t.Error("Resolve with no HOME succeeded")
 	}
 }

@@ -16,9 +16,6 @@ type PrefixUse struct {
 	Workspace *model.Workspace
 }
 
-// openStore opens a store for PrefixUses; tests count the calls.
-var openStore = Open
-
 // PrefixUses opens each of stores once and returns its workspaces whose id
 // prefix is one of prefixes, ignoring case, in the order of stores. A store
 // that does not open is given to skipped, when it is not nil, and left
@@ -26,7 +23,7 @@ var openStore = Open
 func PrefixUses(stores []NamedStore, prefixes []string, skipped func(name string, err error)) []PrefixUse {
 	var out []PrefixUse
 	for _, e := range stores {
-		s, err := openStore(e.Path)
+		s, err := Open(e.Path)
 		if err != nil {
 			if skipped != nil {
 				skipped(e.Name, err)

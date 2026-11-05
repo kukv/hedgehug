@@ -4,7 +4,7 @@
 
 **Goal:** `automations.yaml` のルールで PR・Issue の変化からステータスを動かし、`hh start`・`hh pr` と合わせて、CLI だけで開発の開始から PR のマージまでを手動のステータス変更なしで回せるようにする（spec の 5b の完了条件）。
 
-**Architecture:** 形式・検査・イベント判定・ルール評価は I/O のない `domain/automation` に置く。`usecase.Fetch` は取り込みのトランザクションの中でルールを評価し、拒否を取り込みのコミットの trailer に書き、採用した変更をストアのロックを持ったままタスクごとの `set` コミットにする。`hh start`・`hh pr` は `usecase/integration`、ルールの編集は新しい領域 `usecase/automations` に置く。コードの repo の操作は `lib/gitrepo/code.go`（go-git のみ）。
+**Architecture:** 形式・検査・イベント判定・ルール評価は I/O のない `domain/automation` に置く。`usecase.FetchGitHub` は取り込みのトランザクションの中でルールを評価し、拒否を取り込みのコミットの trailer に書き、採用した変更をストアのロックを持ったままタスクごとの `set` コミットにする。`hh start`・`hh pr` は `usecase/integration`、ルールの編集は新しい領域 `usecase/automations` に置く。コードの repo の操作は `lib/gitrepo/code.go`（go-git のみ）。
 
 **Tech Stack:** Go、go-git、cobra、GitHub GraphQL・REST API、fakegh。
 
@@ -53,7 +53,7 @@ spec に書いていなかった細部を、コードを読んで次のとおり
 | 22 | `hh start` と古い slug のブランチ | `hh/<ID>` か `hh/<ID>-` で始まるブランチがあれば新しく作らない。そこにいれば何もせず、別のブランチにいれば `git switch` を案内する。`<ID>` は今の ID と `former_ids` で、大文字と小文字を区別しない。`hh pr` も同じ照合を使う | タイトルやプレフィックスを変えた後に打つと2本目ができ、`hh pr` が選べなくなる。取り込みの `branchMark` と `Resolve` の見方に揃える |
 | 23 | `hh pr` の本文と自動リンク | PR 本文の最終行（末尾の空白を除く）が `hedgehug:<ULID>` なら、タイトルと本文の ID と印を走査せず、その印のタスクだけをリンクする。ブランチとコメントは今のまま走査する。短い形の `hh:<ULID>` は対象にしない | `hh pr` はタスクのタイトルと本文を写すので、触れただけの別のタスクにリンクが付いてルールが発火する。`hh pr` が書く形だけを印として特別に扱う |
 | 24 | `hh undo` の検証 | すべての操作の undo で `SkipTransitions`・`SkipRequired` を立てる | 遷移を制限したワークフローで undo が止まると、それより前の操作も取り消せなくなる。元の値へ戻す操作なので問わない |
-| 25 | `hh pr` の取り込みの前の同期 | remote のある Store は `FetchRepo` の前に同期する。失敗したら取り込みを飛ばして警告する | `FetchRepo` はその repo にリンクを持つ全タスクを読むので、未同期だと別のメンバーが取り込み済みの変化でルールが発火する |
+| 25 | `hh pr` の取り込みの前の同期 | remote のある Store は `FetchGitHubRepo` の前に同期する。失敗したら取り込みを飛ばして警告する | `FetchGitHubRepo` はその repo にリンクを持つ全タスクを読むので、未同期だと別のメンバーが取り込み済みの変化でルールが発火する |
 | 26 | 取り込みと inbox の開始点 | `gh-fetch` のコミットの前に `inbox.Start` を呼ぶ | remote のない Store は同期しないので、最初の `hh inbox` が HEAD から始まり、それまでの自動化の通知が失われる |
 
 ## File Structure
@@ -64,7 +64,7 @@ spec に書いていなかった細部を、コードを読んで次のとおり
 | `internal/app/domain/automation/check.go`（新規） | 検査 |
 | `internal/app/domain/automation/eval.go`（新規） | イベントの判定、ルールの評価、trailer の形 |
 | `internal/app/storage/store/automations.go`（新規） | `Store.Automations()` |
-| `internal/app/usecase/github_fetch.go`・`github_apply.go` | ルールの実行、`FetchRepo` |
+| `internal/app/usecase/github_fetch.go`・`github_apply.go` | ルールの実行、`FetchGitHubRepo` |
 | `internal/app/usecase/github_rules.go`（新規） | 評価とタスクごとのコミット |
 | `internal/app/usecase/integration/link.go` | `issue_fields.default_sync` |
 | `internal/app/usecase/integration/start.go`・`pr.go`（新規） | `hh start`・`hh pr` |
@@ -336,7 +336,7 @@ func applyChanges(ss *usecase.Session, s *store.Store, held *store.Locked, chang
 
 `FetchRepo(ss, c, e, repo)` を足す。`fetchLocked` に `force string` を渡し、その repo だけ `Due` を見ず、ほかの repo は読まない。
 
-- [ ] **Step 1:** fakegh でテストを書く。`pr.opened` で `in_progress`、レビュー依頼で `review`（`dev` のスキーマ）、すべてのマージで `done`・1つ残るとそのまま、拒否で trailer が取り込みのコミットに付きステータスが動かない、`set` のコミットの author・op・trailer、`hh undo` が `set` を1件戻し次の取得で再発火しない、別のクローンが書いた `gh` を同期しても発火しない（2つの Session）、人が戻した後の取得で再発火しない、削除済みのタスク、`hh unlink`→`hh link`→取得で `pr.opened`、壊れた `automations.yaml` で取り込みが成功し警告が出る、`FetchRepo` が間隔を無視し他の repo を読まない
+- [ ] **Step 1:** fakegh でテストを書く。`pr.opened` で `in_progress`、レビュー依頼で `review`（`dev` のスキーマ）、すべてのマージで `done`・1つ残るとそのまま、拒否で trailer が取り込みのコミットに付きステータスが動かない、`set` のコミットの author・op・trailer、`hh undo` が `set` を1件戻し次の取得で再発火しない、別のクローンが書いた `gh` を同期しても発火しない（2つの Session）、人が戻した後の取得で再発火しない、削除済みのタスク、`hh unlink`→`hh link`→取得で `pr.opened`、壊れた `automations.yaml` で取り込みが成功し警告が出る、`FetchGitHubRepo` が間隔を無視し他の repo を読まない
 - [ ] **Step 2:** 失敗を確かめる
 - [ ] **Step 3:** 実装する。`ix.Refresh` の呼び出しと `Locked` が `tx` の中の処理と噛み合うことを `go test -race ./internal/app/usecase/...` で確かめる
 - [ ] **Step 4:** テストを通してコミットする

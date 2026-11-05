@@ -3,7 +3,6 @@ package maintenance
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -33,7 +32,7 @@ func writeFile(t *testing.T, dir, rel, content string) {
 
 func run(t *testing.T, dir string) []usecase.Finding {
 	t.Helper()
-	fs, err := Run(dir)
+	fs, err := Run(dir, hedgehugOnPath(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,11 +455,13 @@ func TestMergeDriverChecks(t *testing.T) {
 
 	dir = newBareStore(t)
 	registerDriver(t, dir, gitrepo.MergeDriver)
-	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
-	if fs := run(t, dir); !hasFinding(fs, "merge_driver", "hedgehug is not on PATH") {
+	fs, err := Run(dir, pathWith(t.TempDir())) // a PATH with no hedgehug
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasFinding(fs, "merge_driver", "hedgehug is not on PATH") {
 		t.Errorf("findings = %+v", fs)
 	}
-	lookPath = func(string) (string, error) { return "/bin/hedgehug", nil }
 	for _, f := range run(t, dir) {
 		if f.Check == "merge_driver" {
 			t.Errorf("registered and on PATH: %+v", f)
@@ -694,7 +695,7 @@ func TestDoctorViews(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	fs, err := Run(dir)
+	fs, err := Run(dir, hedgehugOnPath(t))
 	if err != nil {
 		t.Fatal(err)
 	}

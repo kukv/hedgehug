@@ -1,7 +1,6 @@
 package index
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -192,24 +191,20 @@ func TestSiblingULIDsTreatsAMissingParentAsTheTopLevel(t *testing.T) {
 // Refresh reports the error, and the index opened again is the one a full
 // rebuild makes.
 func TestFailedUpdateThenOpenEqualsARebuild(t *testing.T) {
-	s, _ := newStore(t)
+	t.Parallel()
+	s, dir := newStore(t)
 	a, b := newTask("a"), newTask("b")
 	put(t, s, a, b)
 	ix := mustOpen(t, s)
 	a.Title, b.Title = "a2", "b2"
 	b.Body = "@bob #TST-1\n"
 	put(t, s, a, b)
-	putComment(t, s, a.ULID, newComment("github.com/x", "@carol\n"))
+	c := newComment("github.com/x", "@carol\n")
+	putComment(t, s, a.ULID, c)
 
-	readHook = func(p string) error {
-		if strings.HasPrefix(p, "comments/") {
-			return errors.New("read failed")
-		}
-		return nil
-	}
-	t.Cleanup(func() { readHook = nil })
+	restore := hideObjectAt(t, dir, model.CommentPath(a.ULID, c.ULID))
 	err := ix.Refresh()
-	readHook = nil
+	restore()
 	if err == nil {
 		t.Fatal("Refresh succeeded with a failed read")
 	}

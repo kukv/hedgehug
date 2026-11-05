@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -232,7 +231,7 @@ func prepareRemotes(ss *usecase.Session, c *config.Config, e config.StoreEntry, 
 	for _, u := range e.Remotes {
 		to := c.Rewrite(u)
 		if p, ok := gitrepo.LocalPath(to); ok {
-			if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) { //nolint:gosec // G703: p is a remote written by the person who runs this
+			if _, err := osfs.Stat(p); errors.Is(err, fs.ErrNotExist) { //nolint:gosec // G703: p is a remote written by the person who runs this
 				if err := gitrepo.InitBare(p); err != nil {
 					return m, errors.Join(err, m.undo())
 				}
@@ -378,7 +377,7 @@ func StoreAdd(ss *usecase.Session, name string, remotes []string, path, account 
 		}
 	}
 	e.Path = dir
-	_, statErr := os.Lstat(dir)
+	_, statErr := osfs.Lstat(dir)
 	existed := statErr == nil
 	// A failed clone removes what it made itself.
 	cloned, err := gitrepo.CloneWith(remotes[0], dir, ss.Conn(c, e))
@@ -481,7 +480,7 @@ func clearDir(dir string, existed bool) error {
 	if !existed {
 		return osfs.RemoveAll(dir)
 	}
-	entries, err := os.ReadDir(dir)
+	entries, err := osfs.ReadDir(dir)
 	if err != nil {
 		return err
 	}
@@ -610,7 +609,7 @@ func StoreRemove(ss *usecase.Session, name string, keep bool) (StoreRemoveResult
 	deleting := false
 	var closeRepo func()
 	if !keep {
-		if _, serr := os.Stat(e.Path); !errors.Is(serr, fs.ErrNotExist) {
+		if _, serr := osfs.Stat(e.Path); !errors.Is(serr, fs.ErrNotExist) {
 			release, closer, err := lockToDelete(ss, e)
 			if err != nil {
 				return StoreRemoveResult{}, err

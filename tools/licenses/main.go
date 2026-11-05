@@ -94,7 +94,7 @@ func run(w io.Writer, extra []string) error {
 
 // section writes the license files at the root of dir under a heading.
 func section(b *strings.Builder, title, dir string) error {
-	entries, err := os.ReadDir(dir)
+	entries, err := osfs.ReadDir(dir)
 	if err != nil {
 		return err
 	}

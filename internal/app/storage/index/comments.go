@@ -72,9 +72,6 @@ func (ix *Index) readNotes(tree plumbing.Hash, prefixes []string, want func(mode
 
 // readNotesUnder reads into n the files under one prefix, as readNotes does.
 func (ix *Index) readNotesUnder(tree plumbing.Hash, prefix string, want func(model.ULID) bool, n notes) error {
-	if listHook != nil {
-		listHook(prefix)
-	}
 	for p, err := range ix.repo.Files(tree, prefix) {
 		if err != nil {
 			return err

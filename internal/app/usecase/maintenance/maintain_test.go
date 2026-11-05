@@ -29,8 +29,8 @@ func newCheckedSession(t *testing.T) *usecasetest.Session {
 	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for the binary
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	ts := usecasetest.New(t)
+	ts.Env["PATH"] = bin
 	s, err := ts.OpenStore()
 	if err != nil {
 		t.Fatal(err)

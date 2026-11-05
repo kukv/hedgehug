@@ -20,11 +20,11 @@ import (
 
 // newMoveStore makes a store with the id prefix prefix and the schema sc
 // (the default when nil). Stores made later have larger ULIDs.
-func newMoveStore(t *testing.T, name, prefix string, sc *schema.Schema) (*Store, *model.Workspace) {
+func newMoveStore(t *testing.T, name, prefix string, sc *schema.Schema, opts ...Option) (*Store, *model.Workspace) {
 	t.Helper()
 	ws := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix}
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: name}
-	s, err := Create(filepath.Join(t.TempDir(), name), meta, sc, ws, testAuthor, "", time.Now)
+	s, err := Create(filepath.Join(t.TempDir(), name), meta, sc, ws, testAuthor, "", time.Now, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,26 +532,104 @@ func TestMoveBothSides(t *testing.T) {
 	}
 }
 
-func TestLockInOrder(t *testing.T) {
-	// 直列: パッケージ変数 afterLock の差し替え
+// LockInOrder takes the smallest ULID first: while a is held by another
+// process, LockInOrder(b, a) waits for a and has not taken b.
+func TestLockInOrderTakesTheSmallestFirst(t *testing.T) {
+	t.Parallel()
 	a, _ := newMoveStore(t, "a", "AAA", nil)
 	b, _ := newMoveStore(t, "b", "BBB", nil)
-	var order []string
-	afterLock = func(s *Store) { order = append(order, s.meta.Name) }
-	t.Cleanup(func() { afterLock = func(*Store) {} })
+	other, err := acquire(a.path(lockPath), time.Second) // another process holds a
+	if err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		l   *Locked
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		l, err := LockInOrder(b, a)
+		done <- result{l, err}
+	}()
+	select {
+	case r := <-done:
+		t.Fatalf("LockInOrder did not wait for a: %v", r.err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	// b is free: LockInOrder is waiting for a, and has not taken b first.
+	free, err := acquire(b.path(lockPath), 0)
+	if err != nil {
+		t.Fatalf("b is held while LockInOrder waits for a: %v", err)
+	}
+	if err := free.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if err := other.Release(); err != nil {
+		t.Fatal(err)
+	}
+	r := <-done
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	r.l.Release()
+}
+
+// Two callers that name the same stores in opposite orders, each with its own
+// handles, do not wait for each other for good.
+func TestLockInOrderDoesNotDeadlock(t *testing.T) {
+	t.Parallel()
+	wait := WithLockWait(2 * time.Second)
+	a, _ := newMoveStore(t, "a", "AAA", nil, wait)
+	b, _ := newMoveStore(t, "b", "BBB", nil, wait)
+	a2, err := Open(a.dir, wait)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Open(b.dir, wait)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 20 {
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		for _, ss := range [][]*Store{{a, b}, {b2, a2}} {
+			go func() {
+				<-start
+				l, err := LockInOrder(ss...)
+				if err == nil {
+					l.Release()
+				}
+				errs <- err
+			}()
+		}
+		close(start)
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatalf("LockInOrder: %v", err)
+			}
+		}
+	}
+}
+
+func TestLockInOrder(t *testing.T) {
+	t.Parallel()
+	a, _ := newMoveStore(t, "a", "AAA", nil, WithLockWait(20*time.Millisecond))
+	b, _ := newMoveStore(t, "b", "BBB", nil)
 
 	l, err := LockInOrder(b, a, b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(order, []string{"a", "b"}) {
-		t.Errorf("locked in the order %v, want a then b", order)
-	}
 
-	// A writer without the hold waits for Release, in this process too.
+	// A writer without the hold waits for Release, in this process too. It
+	// is a handle that waits longer than a does.
+	waiter, err := Open(a.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := a.Update(Op{Name: "x", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("a.txt", []byte("x")) })
+		_, err := waiter.Update(Op{Name: "x", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("a.txt", []byte("x")) })
 		done <- err
 	}()
 	select {
@@ -582,7 +660,6 @@ func TestLockInOrder(t *testing.T) {
 	}
 	// An Op that still names the released Locked takes the file lock too:
 	// with another holder on it, it waits and fails.
-	a.lockWait = 20 * time.Millisecond
 	other, err := acquire(a.path(lockPath), time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -596,8 +673,7 @@ func TestLockInOrder(t *testing.T) {
 func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
 	t.Parallel()
 	a, _ := newMoveStore(t, "a", "AAA", nil)
-	b, _ := newMoveStore(t, "b", "BBB", nil)
-	b.lockWait = 10 * time.Millisecond
+	b, _ := newMoveStore(t, "b", "BBB", nil, WithLockWait(10*time.Millisecond))
 	other, err := acquire(b.path(lockPath), time.Second) // another process holds b
 	if err != nil {
 		t.Fatal(err)

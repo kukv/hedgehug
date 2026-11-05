@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -89,7 +88,7 @@ func (a *app) ui(port int, noOpen bool) error {
 	}
 	defer removeOwnUIJSON(file, info.Token)
 
-	ctx, stop := a.uiContextOrSignals()
+	ctx, stop := a.uiContext()
 	defer stop()
 	srv.Start(ctx)
 	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
@@ -122,15 +121,6 @@ func (a *app) warnBrowser(err error) {
 	if err != nil {
 		_, _ = fmt.Fprintln(a.stderr, "warning: the browser did not open:", err)
 	}
-}
-
-// uiContextOrSignals is the context hh ui runs until: the test's, or one
-// that Ctrl-C (Ctrl-Break on Windows) and SIGTERM end.
-func (a *app) uiContextOrSignals() (context.Context, context.CancelFunc) {
-	if a.uiContext != nil {
-		return a.uiContext()
-	}
-	return signal.NotifyContext(context.Background(), osfs.StopSignals()...)
 }
 
 // readRunningUI reads ui.json and reports whether the server it names answers.

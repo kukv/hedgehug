@@ -50,7 +50,7 @@ func newPREnv(t *testing.T, repo fakegh.Repo) *prEnv {
 		Repos:  []*fakegh.Repo{&repo},
 	}, "")
 	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
-	ts.ForgetWriter()
+	ts.Renew()
 	fake.SetNow(func() time.Time { return ts.Now() })
 	remotes := t.TempDir()
 	bare := filepath.Join(remotes, "org-a", "web.git")
@@ -264,7 +264,7 @@ func TestPullRequestByHandLinksTheIdsOfItsBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := usecase.Fetch(x.ts.Session, c, e); err != nil {
+	if _, err := usecase.FetchGitHub(x.ts.Session, c, e); err != nil {
 		t.Fatal(err)
 	}
 	if l := taskOf(t, x.ts.Session).Links; len(l) != 1 {
@@ -315,7 +315,7 @@ func TestPullRequestWithNoAccount(t *testing.T) {
 	x.ts.AddTask("a", nil)
 	addBranch(t, x.dir, "hh/ME-1-a")
 	x.ts.DropAccounts()
-	x.ts.ForgetWriter()
+	x.ts.Renew()
 	_, err := integration.PullRequest(x.ts.Session, "ME-1", integration.PRInput{Dir: x.dir})
 	if !errors.Is(err, usecase.ErrNoAccounts) {
 		t.Fatalf("err = %v", err)
@@ -548,7 +548,7 @@ func TestPullRequestUsesTheAccountOfTheRepository(t *testing.T) {
 		"  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
 		"  - {name: work, host: github.com, login: bob, token: \"env:HH_TOKEN_BOB\"}\n" +
 		"repo_accounts:\n  - {match: github.com/org-a/*, account: work}\n")
-	ts.ForgetWriter()
+	ts.Renew()
 	ts.AddTask("a", nil)
 	dir := codeRepo(t)
 	setOrigin(t, dir, originURL)
@@ -583,7 +583,7 @@ func TestPullRequestPushDenied(t *testing.T) {
 		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "web", Perms: map[string]string{"alice": "write"}}},
 	}, "")
 	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
-	ts.ForgetWriter()
+	ts.Renew()
 	ts.AddTask("a", nil)
 	dir := codeRepo(t)
 	setOrigin(t, dir, originURL)
@@ -689,7 +689,7 @@ func TestPullRequestStartsTheSyncOfTheFetch(t *testing.T) {
 	x.ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 	x.ts.BackgroundSync = true
 	started := 0
-	defer usecasetest.StubSpawn(func([]string) { started++ })()
+	x.ts.Spawn = usecasetest.SpawnFunc(func([]string) { started++ })
 	r := x.pr(t)
 	if !r.Created {
 		t.Fatalf("result = %+v", r)

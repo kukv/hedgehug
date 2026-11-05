@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,24 +25,21 @@ func (r *Repo) LooseObjects() (int, error) {
 // PackCap is the size from which a pack is left as it is.
 const PackCap = 64 << 20
 
-// packCap is PackCap; tests lower it.
-var packCap int64 = PackCap
-
-// smallPack is a pack below packCap, by the path of its .idx.
+// smallPack is a pack below a cap, by the path of its .idx.
 type smallPack struct {
 	idx  string
 	size int64
 }
 
 // smallPacks lists the packs below packCap, the smallest first.
-func (r *Repo) smallPacks() ([]smallPack, error) {
+func (r *Repo) smallPacks(packCap int64) ([]smallPack, error) {
 	idxs, err := filepath.Glob(filepath.Join(r.dir, ".git", "objects", "pack", "pack-*.idx"))
 	if err != nil {
 		return nil, err
 	}
 	var out []smallPack
 	for _, ix := range idxs {
-		fi, err := os.Stat(strings.TrimSuffix(ix, ".idx") + ".pack")
+		fi, err := osfs.Stat(strings.TrimSuffix(ix, ".idx") + ".pack")
 		if errors.Is(err, fs.ErrNotExist) {
 			continue // being removed
 		}
@@ -65,7 +61,12 @@ func (r *Repo) smallPacks() ([]smallPack, error) {
 
 // SmallPacks counts the packs smaller than PackCap.
 func (r *Repo) SmallPacks() (int, error) {
-	ps, err := r.smallPacks()
+	return r.SmallPacksBelow(PackCap)
+}
+
+// SmallPacksBelow counts the packs smaller than packCap.
+func (r *Repo) SmallPacksBelow(packCap int64) (int, error) {
+	ps, err := r.smallPacks(packCap)
 	return len(ps), err
 }
 
@@ -88,7 +89,7 @@ func pickGeometric(sizes []int64) int {
 
 // packObjects lists the objects of the pack whose index is at idxPath.
 func packObjects(idxPath string) ([]plumbing.Hash, error) {
-	f, err := os.Open(idxPath) //nolint:gosec // G304: a pack of this repository
+	f, err := osfs.Open(idxPath)
 	if err != nil {
 		return nil, err
 	}
@@ -124,11 +125,18 @@ func packObjects(idxPath string) ([]plumbing.Hash, error) {
 // made are removed. An old pack that cannot be removed (Windows, open file)
 // is left for a later Consolidate.
 func (r *Repo) Consolidate() error {
+	return r.ConsolidateBelow(PackCap)
+}
+
+// ConsolidateBelow is Consolidate with packCap in place of PackCap: packs of
+// packCap or more are left as they are, and one run merges about packCap at
+// most.
+func (r *Repo) ConsolidateBelow(packCap int64) error {
 	los, ok := r.r.Storer.(storer.LooseObjectStorer)
 	if !ok {
 		return errors.New("the object storage of the repository cannot be consolidated")
 	}
-	packs, err := r.smallPacks()
+	packs, err := r.smallPacks(packCap)
 	if err != nil {
 		return err
 	}
@@ -238,7 +246,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 			}
 		}
 	}()
-	pack, err := os.CreateTemp(dir, "tmp_hh_pack_*")
+	pack, err := osfs.CreateTemp(dir, "tmp_hh_pack_*")
 	if err != nil {
 		return "", err
 	}
@@ -260,7 +268,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 	if err != nil {
 		return "", err
 	}
-	ix, err := os.CreateTemp(dir, "tmp_hh_idx_*")
+	ix, err := osfs.CreateTemp(dir, "tmp_hh_idx_*")
 	if err != nil {
 		return "", err
 	}
@@ -276,7 +284,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 		return "", err
 	}
 	base = filepath.Join(dir, "pack-"+sum.String())
-	if _, serr := os.Stat(base + ".idx"); serr == nil {
+	if _, serr := osfs.Stat(base + ".idx"); serr == nil {
 		// The same pack is already there; packs are named by their content.
 		for _, t := range tmps {
 			_ = osfs.Remove(t)
@@ -288,7 +296,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 	// Read-only for everyone, as git writes them, so that the other users of
 	// a shared repository can read them.
 	for _, t := range tmps {
-		if err := os.Chmod(t, packMode); err != nil {
+		if err := osfs.Chmod(t, packMode); err != nil {
 			return "", err
 		}
 	}
@@ -308,13 +316,13 @@ const packMode = 0o444
 // removeReadOnly removes a file writePack made, which may be read-only by
 // then; Windows does not remove a read-only file.
 func removeReadOnly(p string) {
-	_ = os.Chmod(p, 0o600)
+	_ = osfs.Chmod(p, 0o600)
 	_ = osfs.Remove(p)
 }
 
 // indexPack reads the pack at path and returns its index.
 func indexPack(path string) (*idxfile.MemoryIndex, error) {
-	f, err := os.Open(path) //nolint:gosec // G304: a temporary file writePack made
+	f, err := osfs.Open(path)
 	if err != nil {
 		return nil, err
 	}

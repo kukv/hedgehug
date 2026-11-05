@@ -27,7 +27,7 @@ func TestFinishLeftoverRemovesAMarkerWithoutAnOldStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "f")); err != nil || string(b) != "new" {
@@ -39,7 +39,7 @@ func TestFinishLeftoverRemovesAMarkerWithoutAnOldStore(t *testing.T) {
 }
 
 // A rebuild found stale whose old store could not be put back is not put in
-// its place by FinishLeftover (that would drop the commit of the gap): the
+// its place by FinishLeftoverKept (that would drop the commit of the gap): the
 // old store is, and the rebuild goes.
 func TestFinishLeftoverKeepsTheOldStoreOfAStaleRebuild(t *testing.T) {
 	t.Parallel()
@@ -61,7 +61,7 @@ func TestFinishLeftoverKeepsTheOldStoreOfAStaleRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "f"))

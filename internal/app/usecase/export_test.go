@@ -22,12 +22,13 @@ func (ss *Session) GithubRepoOf(a0 *config.Config, a1 config.StoreEntry) *replic
 
 var ProjectOf = projectOf
 
+// AutoLinks lets github_autolink_test.go call autoLinks. That test needs
+// usecasetest, which imports this package: it is an external test.
+var AutoLinks = autoLinks
+
 // ResultIndexHas reports whether the index the result holds, as it is before
 // View refreshes it, has the task u.
 func ResultIndexHas(r TaskResult, u model.ULID) bool {
 	_, ok := r.index.Task(u)
 	return ok
 }
-
-// AutoLinks lets the external test call autoLinks.
-var AutoLinks = autoLinks

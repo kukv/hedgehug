@@ -2,7 +2,6 @@ package gitrepo
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -39,7 +38,7 @@ func (s *cachedStorage) SetReference(ref *plumbing.Reference) error {
 		return err
 	}
 	// The temporary file is outside refs/, where go-git lists references.
-	f, err := os.CreateTemp(s.gitDir, "hh-ref-*.tmp")
+	f, err := osfs.CreateTemp(s.gitDir, "hh-ref-*.tmp")
 	if err != nil {
 		return err
 	}

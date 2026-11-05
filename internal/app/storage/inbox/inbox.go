@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 type Kind string
@@ -95,7 +95,7 @@ func Open(s *store.Store) *Box { return &Box{s: s} }
 func (b *Box) Stamp() string {
 	var sb strings.Builder
 	for _, name := range []string{itemsFile, readFile, markFile} {
-		st, err := os.Stat(b.s.LocalPath(name))
+		st, err := osfs.Stat(b.s.LocalPath(name))
 		if err != nil {
 			sb.WriteString("-;")
 			continue
@@ -332,17 +332,11 @@ func (b *Box) Item(ulid model.ULID) (Item, bool, error) {
 	return Item{}, false, nil
 }
 
-// Import adds the merge driver's records in .hedgehug/local/overwritten/
+// importRecords adds the merge driver's records in .hedgehug/local/overwritten/
 // and removes the files. The records whose author is not one of me are
 // removed too: the driver writes every value that lost, whoever wrote it.
-// A record that does not decode is left in place, with a warning.
-func (b *Box) Import(me []string) error {
-	return b.locked(func() error {
-		_, err := b.importRecords(me)
-		return err
-	})
-}
-
+// A record that does not decode is left in place, with a warning. The caller
+// holds the inbox lock.
 func (b *Box) importRecords(me []string) ([]Item, error) {
 	names, err := b.s.LocalFiles(recordsDir)
 	if err != nil {

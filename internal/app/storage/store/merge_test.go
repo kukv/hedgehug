@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func TestCommitMerge(t *testing.T) {
@@ -94,9 +95,9 @@ func TestCommitMergeRollsBack(t *testing.T) {
 	}
 	head, _ := s.repo.Head()
 	files := map[string][]byte{"notes/old.md": nil, "notes/new.md": []byte("n\n")}
-	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("boom") }
-	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, files, Op{Name: "merge", Author: testAuthor}, nil); err == nil || errors.Is(err, gitrepo.ErrWorkTreeChanged) {
-		t.Fatalf("a failed commit was not reported: %v", err)
+	gitrepotest.HoldIndexLock(t, s.dir)
+	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, files, Op{Name: "merge", Author: testAuthor}, nil); !errors.Is(err, gitrepo.ErrGitBusy) {
+		t.Fatalf("CommitMerge with index.lock = %v, want ErrGitBusy", err)
 	}
 	if b, err := os.ReadFile(s.path("notes/old.md")); err != nil || string(b) != "old\n" {
 		t.Errorf("old.md = %q, %v", b, err)

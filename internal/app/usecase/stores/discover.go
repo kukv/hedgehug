@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/giturl"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -210,11 +210,11 @@ func discoverFrom(ss *usecase.Session, c *config.Config, dir, account string) ([
 // isBare reports whether p has the HEAD file and the objects and refs
 // directories of a bare repository.
 func isBare(p string) bool {
-	if fi, err := os.Stat(filepath.Join(p, "HEAD")); err != nil || fi.IsDir() { //nolint:gosec // G703: p is a directory under the --from the person gave
+	if fi, err := osfs.Stat(filepath.Join(p, "HEAD")); err != nil || fi.IsDir() { //nolint:gosec // G703: p is a directory under the --from the person gave
 		return false
 	}
 	for _, d := range []string{"objects", "refs"} {
-		if fi, err := os.Stat(filepath.Join(p, d)); err != nil || !fi.IsDir() { //nolint:gosec // G703: p is a directory under the --from the person gave
+		if fi, err := osfs.Stat(filepath.Join(p, d)); err != nil || !fi.IsDir() { //nolint:gosec // G703: p is a directory under the --from the person gave
 			return false
 		}
 	}

@@ -94,7 +94,7 @@ func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) 
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	l, err := acquireStore(s.dir, s.path(LocalDir+"/"+name), wait)
+	l, err := acquireStore(s.dir, s.path(LocalDir+"/"+name), wait, nil)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (s *Store) LocalFiles(dir string) ([]string, error) {
 	if err := validLocalName(dir); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(s.path(LocalDir + "/" + dir))
+	entries, err := osfs.ReadDir(s.path(LocalDir + "/" + dir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

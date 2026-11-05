@@ -8,9 +8,6 @@ import (
 	"runtime"
 )
 
-// goos is runtime.GOOS; tests replace it.
-var goos = runtime.GOOS
-
 // Paths is where the settings and the stores are, as absolute paths.
 type Paths struct {
 	Home       string // the user's home directory
@@ -24,6 +21,11 @@ type Paths struct {
 // its own, then the defaults of the OS. Relative values are ignored, as the
 // XDG spec says.
 func Resolve(getenv func(string) string) (Paths, error) {
+	return resolve(runtime.GOOS, getenv)
+}
+
+// resolve is Resolve for the OS named goos (a runtime.GOOS value).
+func resolve(goos string, getenv func(string) string) (Paths, error) {
 	h, err := home(getenv)
 	if err != nil {
 		return Paths{}, err
@@ -37,7 +39,7 @@ func Resolve(getenv func(string) string) (Paths, error) {
 	}
 	cfg := abs(getenv("XDG_CONFIG_HOME"))
 	if cfg == "" {
-		cfg = defaultConfigDir(h)
+		cfg = defaultConfigDir(goos, h)
 	}
 	data := abs(getenv("XDG_DATA_HOME"))
 	if data == "" {
@@ -58,7 +60,7 @@ func home(getenv func(string) string) (string, error) {
 	return h, nil
 }
 
-func defaultConfigDir(home string) string {
+func defaultConfigDir(goos, home string) string {
 	if goos == "darwin" {
 		return filepath.Join(home, "Library", "Application Support")
 	}

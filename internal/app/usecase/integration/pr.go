@@ -245,7 +245,7 @@ func PullRequest(ss *usecase.Session, arg string, in PRInput) (PRResult, error) 
 			return out, nil
 		}
 	}
-	rep, err := usecase.FetchRepo(ss, c, se, repo.id)
+	rep, err := usecase.FetchGitHubRepo(ss, c, se, repo.id)
 	if err != nil {
 		out.Warnings = append(out.Warnings, err.Error())
 	}

@@ -86,8 +86,8 @@ func TestOptionsKeychain(t *testing.T) {
 	}
 }
 
-// 直列: パッケージ変数 lockWait の差し替え
 func TestWithLock(t *testing.T) {
+	t.Parallel()
 	if err := WithLock(Options{}, func() error { return nil }); err == nil || !strings.Contains(err.Error(), "LockFile") {
 		t.Errorf("no lock file = %v", err)
 	}
@@ -100,12 +100,9 @@ func TestWithLock(t *testing.T) {
 	if err := WithLock(Options{LockFile: lock}, func() error { return want }); !errors.Is(err, want) {
 		t.Errorf("WithLock = %v, want fn's error", err)
 	}
-	old := lockWait
-	lockWait = 5 * time.Millisecond
-	t.Cleanup(func() { lockWait = old })
 	var busy error
 	if err := osfs.WithFileLock(lock, time.Second, func() error {
-		busy = WithLock(Options{LockFile: lock}, func() error { return nil })
+		busy = WithLock(Options{LockFile: lock, LockWait: 5 * time.Millisecond}, func() error { return nil })
 		return nil
 	}); err != nil {
 		t.Fatal(err)

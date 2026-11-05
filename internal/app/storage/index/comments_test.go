@@ -3,6 +3,7 @@ package index
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -138,29 +139,32 @@ func TestMentionsFollowTheirFiles(t *testing.T) {
 
 // An update lists and reads the comments and worklog entries of the tasks
 // it touches only, under their own directories.
+//
+// The test takes the objects b has out of the object database, so that a read
+// of one fails: the comment file, the directory of its comments and the task
+// file. The update succeeds only when it reads none of them. It is run by
+// Open on a second handle on the store, from the cache the first one wrote,
+// because a handle keeps the objects it has read.
 func TestUpdateReadsOnlyTheNotesOfTheTouchedTask(t *testing.T) {
-	s, _ := newStore(t)
+	t.Parallel()
+	s, dir := newStore(t)
 	a, b := newTask("a"), newTask("b")
 	put(t, s, a, b)
-	putComment(t, s, b.ULID, newComment("github.com/x", "@bob\n"))
-	ix := mustOpen(t, s)
+	bc := newComment("github.com/x", "@bob\n")
+	putComment(t, s, b.ULID, bc)
+	mustOpen(t, s) // writes the cache
 	putComment(t, s, a.ULID, newComment("github.com/x", "@alice\n"))
 
-	var listed, read []string
-	listHook = func(prefix string) { listed = append(listed, prefix) }
-	readHook = func(p string) error { read = append(read, p); return nil }
-	t.Cleanup(func() { listHook, readHook = nil, nil })
-	if err := ix.Refresh(); err != nil {
+	hideObjectAt(t, dir, model.CommentPath(b.ULID, bc.ULID))
+	hideObjectAt(t, dir, path.Dir(model.CommentPath(b.ULID, bc.ULID)))
+	hideObjectAt(t, dir, model.TaskPath(b.ULID))
+	s2, err := store.Open(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	listHook, readHook = nil, nil
-	if want := noteDirs(a.ULID); !slices.Equal(listed, want) {
-		t.Errorf("listed %v, want %v", listed, want)
-	}
-	for _, p := range read {
-		if task, _, err := model.ParseCommentPath(p); err == nil && task != a.ULID || p == model.TaskPath(b.ULID) {
-			t.Errorf("read %s, of a task the update did not touch", p)
-		}
+	ix, err := Open(s2)
+	if err != nil {
+		t.Fatalf("the update read a file of a task it did not touch: %v", err)
 	}
 	if e, _ := ix.Task(a.ULID); !slices.Equal(e.Mentions, []string{"alice"}) || len(e.Comments) != 1 {
 		t.Errorf("a = %s", dump([]*Entry{e}))

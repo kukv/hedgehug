@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	gogit "github.com/go-git/go-git/v5"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -129,4 +131,48 @@ func titles(es []*Entry) []string {
 		out[i] = e.Title
 	}
 	return out
+}
+
+// hideObjectAt moves the loose object of the file or directory at rel in
+// HEAD of the repository in dir out of the object database, so that a read
+// of it fails with plumbing.ErrObjectNotFound. restore puts it back; the
+// cleanup of the test does too. The test fails when the object is not loose:
+// the objects of a test store are, until something packs them.
+func hideObjectAt(t *testing.T, dir, rel string) (restore func()) {
+	t.Helper()
+	r, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := r.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := r.CommitObject(head.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := c.Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := tree.FindEntry(rel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := e.Hash.String()
+	loose := filepath.Join(dir, ".git", "objects", h[:2], h[2:])
+	hidden := loose + ".hidden"
+	if err := os.Rename(loose, hidden); err != nil {
+		t.Fatalf("%s is not a loose object: %v", rel, err)
+	}
+	restore = func() {
+		if _, err := os.Stat(hidden); err == nil {
+			if err := os.Rename(hidden, loose); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	t.Cleanup(restore)
+	return restore
 }

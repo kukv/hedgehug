@@ -11,7 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
-	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"go.yaml.in/yaml/v4"
@@ -19,25 +18,13 @@ import (
 
 const web = "github.com/org-a/web"
 
-func withFake(t *testing.T) (*usecasetest.Session, *fakegh.Server) {
-	t.Helper()
-	ts, fake := usecasetest.FakeSession(t, fakegh.State{
-		Tokens: map[string]string{"t-alice": "alice"},
-		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "web", Perms: map[string]string{"alice": "write"}}},
-	}, "")
-	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
-	ts.ForgetWriter()
-	fake.SetNow(func() time.Time { return ts.Now() })
-	return ts, fake
-}
-
-func fetch(t *testing.T, ts *usecasetest.Session) usecase.FetchReport {
+func fetch(t *testing.T, ts *usecasetest.Session) usecase.GitHubFetchReport {
 	t.Helper()
 	c, e, err := ts.Entry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := usecase.Fetch(ts.Session, c, e)
+	r, err := usecase.FetchGitHub(ts.Session, c, e)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +38,7 @@ func later(ts *usecasetest.Session, d time.Duration) {
 
 func TestFetchLinksByBranchAndWritesState(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	n, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false)
 	if err != nil {
@@ -76,7 +63,7 @@ func TestFetchLinksByBranchAndWritesState(t *testing.T) {
 
 func TestFetchKeepsTheInterval(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{PR: "org-a/web#1"}); err != nil {
 		t.Fatal(err)
@@ -109,7 +96,7 @@ func TestFetchKeepsTheInterval(t *testing.T) {
 
 func TestFetchSlowsDownNearTheRateLimit(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	fake.SetRateLimit(10, 5000, ts.Now().Add(time.Hour))
 	fetch(t, ts)
@@ -128,7 +115,7 @@ func TestFetchSlowsDownNearTheRateLimit(t *testing.T) {
 
 func TestFetchDoesNotLinkBackWhatWasUnlinked(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -151,7 +138,7 @@ func TestFetchDoesNotLinkBackWhatWasUnlinked(t *testing.T) {
 
 func TestFetchWarnsAndGoesOn(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{"github.com/org-b/secret", web} })
 	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "org-a/web#7"}); err != nil {
 		t.Fatal(err)
@@ -170,7 +157,7 @@ func TestFetchWarnsAndGoesOn(t *testing.T) {
 
 func TestFetchSkipsAReadOnlyStore(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -181,50 +168,11 @@ func TestFetchSkipsAReadOnlyStore(t *testing.T) {
 	}
 }
 
-func TestSyncReadsGitHubAndPushes(t *testing.T) {
-	t.Parallel()
-	ts, fake := withFake(t)
-	usecasetest.AddBareRemote(t, ts)
-	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
-	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
-		t.Fatal(err)
-	}
-	r, err := replication.SyncOne(ts.Session)
-	if err != nil || r.Err != nil {
-		t.Fatalf("sync: %v, %v", err, r.Err)
-	}
-	s, err := ts.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n, err := usecase.Unpushed(s); err != nil || n != 0 {
-		t.Fatalf("unpushed = %d, %v", n, err)
-	}
-	if len(taskIn(t, ts, "me", "ME-1").Links) != 1 {
-		t.Error("not linked")
-	}
-}
-
-func TestSyncOfAStoreWithoutARemoteReadsGitHub(t *testing.T) {
-	t.Parallel()
-	ts, fake := withFake(t)
-	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
-	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := replication.SyncOne(ts.Session); err != nil {
-		t.Fatal(err)
-	}
-	if len(taskIn(t, ts, "me", "ME-1").Links) != 1 {
-		t.Error("not linked")
-	}
-}
-
 // A member who reads what another one wrote already has nothing to write.
 // The state of this machine is lost, as on a clone of its own.
 func TestFetchOfTheSameValueWritesNothing(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -239,16 +187,6 @@ func TestFetchOfTheSameValueWritesNothing(t *testing.T) {
 	}
 	if r := fetch(t, ts); r.Committed {
 		t.Error("wrote the same value again")
-	}
-}
-
-func TestSyncOfATaskWithNoRepositoryNeedsNoAccount(t *testing.T) {
-	t.Parallel()
-	ts := usecasetest.New(t)
-	ts.DropAccounts()
-	r, err := replication.SyncOne(ts.Session)
-	if err != nil || len(r.Warnings) != 0 {
-		t.Fatalf("sync = %+v, %v", r, err)
 	}
 }
 
@@ -268,7 +206,7 @@ func lastFetch(t *testing.T, ts *usecasetest.Session, store, repo string) time.T
 // The time moves only for the repository that was read.
 func TestFetchAdvancesTheTimeOnlyOfWhatWasRead(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{"github.com/org-b/secret", web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -286,7 +224,7 @@ func TestFetchAdvancesTheTimeOnlyOfWhatWasRead(t *testing.T) {
 // marked as read, so that the automatic link is not lost with the time.
 func TestFetchKeepsTheTimeWhenATaskCannotBeWritten(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) {
 		x.Repos = []string{web}
 		x.GH = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "text"}
@@ -347,7 +285,7 @@ func TestFetchOfAPullRequestAcrossStores(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r, err := usecase.Fetch(ts.Session, c, e)
+		r, err := usecase.FetchGitHub(ts.Session, c, e)
 		if err != nil || !r.Committed || len(r.Warnings) != 0 {
 			t.Fatalf("%s: report = %+v, %v", name, r, err)
 		}

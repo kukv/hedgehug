@@ -86,7 +86,7 @@ func wantApplied(t *testing.T, ts *usecasetest.Session, trailer string) {
 
 func TestRulesFollowAPullRequest(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	x := ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -129,7 +129,7 @@ func TestRulesFollowAPullRequest(t *testing.T) {
 // the first hh inbox still tells of what the rules did before it.
 func TestTheFirstInboxOfAStoreWithNoRemoteTellsOfTheRules(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) {
 		x.Repos = []string{web}
@@ -150,7 +150,7 @@ func TestTheFirstInboxOfAStoreWithNoRemoteTellsOfTheRules(t *testing.T) {
 
 func TestRulesWaitForEveryLinkedPullRequest(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	for _, b := range []string{"hh/ME-1-a", "hh/ME-1-b"} {
@@ -175,7 +175,7 @@ func TestRulesWaitForEveryLinkedPullRequest(t *testing.T) {
 
 func TestRuleRefusedIsOnTheFetchCommit(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, func(sc *schema.Schema, _ *automation.File) {
 		sc.Workflow.Required = schema.Lists{{Key: "in_progress", Values: []string{"estimate"}}}
 	})
@@ -205,7 +205,7 @@ func TestRuleRefusedIsOnTheFetchCommit(t *testing.T) {
 // the status has its own commit.
 func TestRuleAfterARefusedOne(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, func(sc *schema.Schema, f *automation.File) {
 		sc.Workflow.Required = schema.Lists{{Key: "in_progress", Values: []string{"estimate"}}}
 		f.Rules = append(f.Rules, automation.Rule{ID: "hold", On: automation.PROpened, Set: automation.Set{Status: "waiting"}, Enabled: true})
@@ -224,7 +224,7 @@ func TestRuleAfterARefusedOne(t *testing.T) {
 
 func TestRulesOfAProject(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	p := ts.AddTask("p", func(x *model.Task) { x.Kind = "project" })
 	ts.AddTask("in", func(x *model.Task) { x.Parent, x.Repos = &p.ULID, []string{web} })
 	ts.AddTask("out", func(x *model.Task) { x.Repos = []string{web} })
@@ -247,7 +247,7 @@ func TestRulesOfAProject(t *testing.T) {
 
 func TestUndoTakesBackOneRuleAndItDoesNotFireAgain(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -274,7 +274,7 @@ func TestUndoTakesBackOneRuleAndItDoesNotFireAgain(t *testing.T) {
 
 func TestRuleDoesNotFireAgainAfterAPersonMovedTheTaskBack(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -294,7 +294,7 @@ func TestRuleDoesNotFireAgainAfterAPersonMovedTheTaskBack(t *testing.T) {
 
 func TestRulesLeaveADeletedTask(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddDeleted("a", ts.Now(), func(x *model.Task) {
 		x.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/org-a/web/pull/1", Sync: model.SyncMirror}}
@@ -313,7 +313,7 @@ func TestRulesLeaveADeletedTask(t *testing.T) {
 // is worked out from the store as the lock finds it.
 func TestRulesLeaveATaskDeletedDuringTheRead(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	x := ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	ts.AddTask("b", func(x *model.Task) { x.Repos = []string{web} })
@@ -345,7 +345,7 @@ func TestRulesLeaveATaskDeletedDuringTheRead(t *testing.T) {
 // The rules see what a person wrote while GitHub was read.
 func TestRulesSeeAWriteMadeDuringTheRead(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	x := ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -372,7 +372,7 @@ func TestRulesSeeAWriteMadeDuringTheRead(t *testing.T) {
 // while GitHub is read.
 func TestFetchHoldsTheStoreLockOnlyToWrite(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -403,7 +403,7 @@ func TestFetchHoldsTheStoreLockOnlyToWrite(t *testing.T) {
 // and what was read is read again.
 func TestFetchNotesAFailedReadWhenTheLockIsHeld(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{"github.com/org-b/secret", web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -424,7 +424,7 @@ func TestFetchNotesAFailedReadWhenTheLockIsHeld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := usecase.Fetch(ts.Session, c, e); err == nil {
+	if _, err := usecase.FetchGitHub(ts.Session, c, e); err == nil {
 		t.Fatal("the fetch did not fail")
 	}
 	st, err := ghstate.Read(other)
@@ -441,7 +441,7 @@ func TestFetchNotesAFailedReadWhenTheLockIsHeld(t *testing.T) {
 
 func TestUnlinkAndLinkAgainFireAgain(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -469,7 +469,7 @@ func TestUnlinkAndLinkAgainFireAgain(t *testing.T) {
 
 func TestABrokenAutomationsFileIsAWarning(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	ts.WriteAndCommit(model.AutomationsPath, "rules: 3\n")
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
@@ -488,7 +488,7 @@ func TestABrokenAutomationsFileIsAWarning(t *testing.T) {
 func TestFetchRepoReadsOneRepositoryNow(t *testing.T) {
 	t.Parallel()
 	const api = "github.com/org-a/api"
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	if err := fake.AddRepo("org-a/api", nil, false); err != nil {
 		t.Fatal(err)
 	}
@@ -509,7 +509,7 @@ func TestFetchRepoReadsOneRepositoryNow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := usecase.FetchRepo(ts.Session, c, e, "github.com/org-a/WEB")
+	r, err := usecase.FetchGitHubRepo(ts.Session, c, e, "github.com/org-a/WEB")
 	if err != nil || !r.Committed {
 		t.Fatalf("report = %+v, %v", r, err)
 	}
@@ -533,7 +533,7 @@ func TestFetchRepoReadsOneRepositoryNow(t *testing.T) {
 // What the rules write goes out with the sync that fetched.
 func TestSyncPushesWhatTheRulesWrote(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	usecasetest.AddBareRemote(t, ts)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
@@ -560,7 +560,7 @@ var hostsRE = regexp.MustCompile(`(?m)^hosts:\n(?:  - .*\n)+`)
 // value of gh arrives with the sync, so there is no change to see.
 func TestRuleDoesNotFireOnWhatAnotherCloneWrote(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	remote := usecasetest.AddBareRemote(t, ts)
 	devStore(t, ts, nil)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
@@ -571,7 +571,7 @@ func TestRuleDoesNotFireOnWhatAnotherCloneWrote(t *testing.T) {
 	other.DropDefaultAccount()
 	other.AppendConfig(hostsRE.FindString(usecasetest.ConfigText(t, ts)) +
 		"accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
-	other.ForgetWriter()
+	other.Renew()
 
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
@@ -601,7 +601,7 @@ func TestRuleDoesNotFireOnWhatAnotherCloneWrote(t *testing.T) {
 // same, and it does not fire again.
 func TestUndoOfARuleAgainstTheWorkflow(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, func(sc *schema.Schema, _ *automation.File) {
 		sc.Workflow.Transitions = schema.Lists{{Key: "in_progress", Values: []string{"done"}}}
 	})
@@ -621,7 +621,7 @@ func TestUndoOfARuleAgainstTheWorkflow(t *testing.T) {
 // there: linking again is still a new item, and the rule fires.
 func TestLinkAgainAfterUndoFiresAgain(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	devStore(t, ts, nil)
 	ts.AddTask("a", nil)
 	if _, err := fake.OpenPull("org-a/web", "other", "A", "", false); err != nil {

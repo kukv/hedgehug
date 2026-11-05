@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func newTaskIn(ws *model.Workspace, title string) *model.Task {
@@ -141,14 +140,13 @@ func TestIDNumbersHook(t *testing.T) {
 
 func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
 	t.Parallel()
-	s := newTestStore(t)
+	// the test checks that no ID is given twice, not how long a writer waits
+	s := newTestStore(t, WithLockWait(time.Minute))
 	ws := testWorkspace(t, s)
-	other, err := Open(s.dir) // a second handle: only the file lock serializes them
+	other, err := Open(s.dir, WithLockWait(time.Minute)) // a second handle: only the file lock serializes them
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the test checks that no ID is given twice, not how long a writer waits
-	s.lockWait, other.lockWait = time.Minute, time.Minute
 	var wg sync.WaitGroup
 	tasks := make([]*model.Task, 20)
 	for i := range tasks {
@@ -202,9 +200,9 @@ func TestUpdateRestoresIDsOnFailure(t *testing.T) {
 	}
 
 	y := newTaskIn(ws, "y")
-	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("commit fails") }
-	if err := put(s, y); err == nil {
-		t.Fatal("the commit did not fail")
+	gitrepotest.HoldIndexLock(t, s.dir)
+	if err := put(s, y); !errors.Is(err, gitrepo.ErrGitBusy) {
+		t.Fatalf("put with index.lock = %v, want ErrGitBusy", err)
 	}
 	if y.ID != "" || y.FormerIDs != nil {
 		t.Errorf("after a failed commit: id = %s, former = %v", y.ID, y.FormerIDs)

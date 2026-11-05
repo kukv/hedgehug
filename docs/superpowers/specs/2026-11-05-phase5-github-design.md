@@ -33,8 +33,8 @@
 | `lib/gitrepo` | HEAD から作るブランチの作成、作業中のブランチの読み取り、コード repo の push |
 | `lib/fakegh`・`cmd/fakegh` | PR・Issue・レビュー・checks、GraphQL、操作用のコマンド |
 | `storage/ghstate`（新規） | repo ごとの最終取得時刻、走査の起点（`Since`）、失敗した試行の時刻と警告、レート制限の状態。`.hedgehug/local/github.json` に置く（Store の履歴には入らない） |
-| `usecase`（土台） | GitHub の取り込み（`Fetch`・`FetchRepo`・`HasTargets`）、自動リンク、ルールの実行。replication が取り込みを呼ぶので、領域でなく土台に置く |
-| `usecase/integration`（新規） | リンク、Issue 同期、`hh start`・`hh pr`・`hh issue`・`hh gh import` |
+| `usecase`（土台） | 同期（`replication`）から呼ぶもの: 取り込み（`FetchGitHub`）、自動リンク、取り込みの順番の 5 のルールの実行と Issue 同期のモードの反映（5b・5c）。領域どうしは import しないため（構成見直しの spec 決定 20。2026-11-05 利用者が決定） |
+| `usecase/integration`（新規） | リンクの付け外し、`hh start`・`hh pr`・`hh issue`・`hh gh import` |
 | `usecase/automations`（新規） | ルールの一覧と編集 |
 
 2つの新しい領域を足すので、構成見直しの spec の 2.3 の領域の数を 12 から 14 に直す。

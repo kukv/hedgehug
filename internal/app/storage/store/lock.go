@@ -3,7 +3,6 @@ package store
 import (
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,24 +17,13 @@ var ErrLocked = osfs.ErrLocked
 // lockWait is how long a write waits for the lock, trying every lockPoll.
 const lockWait = 10 * time.Second
 
-var lockPoll = 50 * time.Millisecond
-
-// afterLockMiss is called each time acquire finds the lock taken, with the
-// lock file open; tests use it to know a waiter is blocked.
-var afterLockMiss = func() {}
-
-func acquire(path string, wait time.Duration) (*osfs.Lock, error) {
-	path = filepath.Clean(path)
-	if err := osfs.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return nil, err
-	}
-	return lockFile(path, wait)
-}
+const lockPoll = 50 * time.Millisecond
 
 // lockFile takes the lock on the file at path, made when missing, in a
-// directory that exists.
-func lockFile(path string, wait time.Duration) (*osfs.Lock, error) {
-	return osfs.LockFile(path, wait, lockPoll, func() { afterLockMiss() })
+// directory that exists. onMiss, when set, is called each time the lock is
+// found taken, with the lock file open.
+func lockFile(path string, wait time.Duration, onMiss func()) (*osfs.Lock, error) {
+	return osfs.LockFile(path, wait, lockPoll, onMiss)
 }
 
 // ErrStoreGone means the directory of the store was removed or replaced (by
@@ -43,19 +31,20 @@ func lockFile(path string, wait time.Duration) (*osfs.Lock, error) {
 // waited for.
 var ErrStoreGone = errors.New("the store directory was removed or replaced; run the command again")
 
-// acquireStore takes the lock file at path in the store at dir. It creates no
-// directory above .hedgehug/local, so a store removed meanwhile is not made
-// again, and fails with ErrStoreGone when the store is removed while the lock
-// is waited for: the lock file is then not the file at path any more, and a
-// write would land in a deleted store.
-func acquireStore(dir, path string, wait time.Duration) (*osfs.Lock, error) {
+// acquireStore takes the lock file at path in the store at dir. onMiss, when
+// set, is called each time the lock is found taken. It creates no directory
+// above .hedgehug/local, so a store removed meanwhile is not made again, and
+// fails with ErrStoreGone when the store is removed while the lock is waited
+// for: the lock file is then not the file at path any more, and a write would
+// land in a deleted store.
+func acquireStore(dir, path string, wait time.Duration, onMiss func()) (*osfs.Lock, error) {
 	if !storeHere(dir) {
 		return nil, ErrStoreGone
 	}
 	if err := mkdirInStore(dir, path); err != nil {
 		return nil, err
 	}
-	l, err := lockFile(filepath.Clean(path), wait)
+	l, err := lockFile(filepath.Clean(path), wait, onMiss)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, ErrStoreGone
 	}
@@ -84,7 +73,7 @@ func mkdirInStore(dir, path string) error {
 		if i == 0 {
 			continue // .hedgehug holds a tracked file: a live store has it
 		}
-		if err := os.Mkdir(cur, 0o750); err != nil && !errors.Is(err, fs.ErrExist) { //nolint:gosec // G703: paths are built from the store root
+		if err := osfs.Mkdir(cur, 0o750); err != nil && !errors.Is(err, fs.ErrExist) {
 			if errors.Is(err, fs.ErrNotExist) {
 				return ErrStoreGone
 			}
@@ -95,6 +84,6 @@ func mkdirInStore(dir, path string) error {
 }
 
 func storeHere(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, ".git"))
+	_, err := osfs.Stat(filepath.Join(dir, ".git"))
 	return err == nil
 }

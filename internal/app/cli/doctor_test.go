@@ -144,14 +144,12 @@ func TestDoctorFixTakesNoArguments(t *testing.T) {
 
 func TestDoctorMergeDriverAndInbox(t *testing.T) {
 	te := newStoreEnv(t)
-	// Not parallel: PATH is the process's. TestMain put hedgehug on it.
-	path := os.Getenv("PATH")
-	t.Setenv("PATH", "")
+	te.env["PATH"] = "" // TestMain put hedgehug on the PATH of the process
 	code, out, _ := te.run("doctor")
 	if code != 1 || !strings.Contains(out, "hedgehug is not on PATH") {
 		t.Errorf("exit %d\n%s", code, out)
 	}
-	t.Setenv("PATH", path)
+	delete(te.env, "PATH")
 	rec := filepath.Join(te.storeDir("me"), ".hedgehug", "local", "overwritten", "01JC1111111111111111111111.json")
 	if err := os.MkdirAll(filepath.Dir(rec), 0o750); err != nil {
 		t.Fatal(err)

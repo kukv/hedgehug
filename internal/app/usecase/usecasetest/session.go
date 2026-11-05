@@ -86,6 +86,31 @@ func (ts *Session) AppendDefaultAccount() {
 	}
 }
 
+// Renew replaces the session with a new one that has the same outside world
+// (Getenv, Now, the hooks and the rest of the exported fields), as a new run
+// of the command starts: the writer, the tokens and the stores mounted are
+// read again. The helpers that change config.yaml call it; call it after a
+// change made by hand, or for a session that has not cached anything.
+func (ts *Session) Renew() {
+	o := ts.Session
+	ts.Session = &usecase.Session{
+		Getenv:         o.Getenv,
+		Now:            o.Now,
+		Loc:            o.Loc,
+		StoreName:      o.StoreName,
+		Warn:           o.Warn,
+		AfterWrite:     o.AfterWrite,
+		BackgroundSync: o.BackgroundSync,
+		BeforeUpdate:   o.BeforeUpdate,
+		BeforeSwap:     o.BeforeSwap,
+		Spawn:          o.Spawn,
+		Keyring:        o.Keyring,
+		HTTPClient:     o.HTTPClient,
+		Run:            o.Run,
+		Progress:       o.Progress,
+	}
+}
+
 // DropDefaultAccount removes DefaultAccountYAML, and the stores' reference to
 // it, for the tests that have no account or set up their own.
 func (ts *Session) DropDefaultAccount() {
@@ -102,7 +127,7 @@ func (ts *Session) DropDefaultAccount() {
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 // NameAccountOfStores gives the stores that have no account the account name,
@@ -143,7 +168,7 @@ func (ts *Session) NameAccountOfStores(name string) {
 	if err := os.WriteFile(p, out, 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 // FirstAccountName is the name: of the first account in the accounts: text.
@@ -188,7 +213,7 @@ func (ts *Session) DropAccounts() {
 	if err := os.WriteFile(p, out, 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 // BeforeCommand is replication.BeforeCommand for the session.
@@ -197,11 +222,10 @@ func (ts *Session) BeforeCommand(report func(store, msg string)) {
 	replication.BeforeCommand(ts.Session, report)
 }
 
-// StubSpawn replaces the start of the background sync with f, which gets the
-// arguments of the child, and returns the function that puts the old one
-// back. It is global: a test that uses it does not run in parallel.
-func StubSpawn(f func(args []string)) (restore func()) {
-	return replicate.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
+// SpawnFunc is a Spawn that starts no process: f gets the arguments of the
+// child. A Session or a CLI environment takes it as its Spawn.
+func SpawnFunc(f func(args []string)) replicate.Spawn {
+	return func(_ string, args []string, _ string) error { f(args); return nil }
 }
 
 // HasDefaultAccount reports whether config.yaml still has DefaultAccountYAML.
@@ -782,7 +806,7 @@ func (ts *Session) AsAccount(login string) {
 	if err := os.WriteFile(p.ConfigFile, []byte(text), 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 func (ts *Session) SetMembers(m replicate.Members) {
@@ -894,6 +918,7 @@ func (ts *Session) DeleteTask(id string) {
 func (ts *Session) UseAccount() {
 	ts.T.Helper()
 	ts.AppendConfig("accounts:\n  - name: alice\n    host: github.com\n    login: alice\n")
+	ts.Renew()
 }
 
 // WantErr checks that err has the kind and the code.
@@ -1229,6 +1254,20 @@ func FakeSession(t *testing.T, st fakegh.State, accounts string) (*Session, *fak
 	return ts, fake
 }
 
+// GitHubSession is a FakeSession that reads GitHub as the account me, alice,
+// who may write github.com/org-a/web. The fake's clock is the session's.
+func GitHubSession(t *testing.T) (*Session, *fakegh.Server) {
+	t.Helper()
+	ts, fake := FakeSession(t, fakegh.State{
+		Tokens: map[string]string{"t-alice": "alice"},
+		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "web", Perms: map[string]string{"alice": "write"}}},
+	}, "")
+	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	ts.Renew()
+	fake.SetNow(func() time.Time { return ts.Now() })
+	return ts, fake
+}
+
 func ConfigText(t *testing.T, ts *Session) string {
 	t.Helper()
 	_, p, err := ts.Config()
@@ -1256,6 +1295,33 @@ func StoreDirOf(t *testing.T, ts *Session, name string) string {
 		t.Fatal(err)
 	}
 	return filepath.Join(p.StoresDir, name)
+}
+
+// FreezeConfig sets the modification time of config.yaml to the past and
+// returns the check that the file was not written since: its time and its
+// bytes are what they were. what says what must not have written it.
+func (ts *Session) FreezeConfig(what string) (unchanged func()) {
+	ts.T.Helper()
+	p := filepath.Join(ts.Env["HEDGEHUG_HOME"], "config.yaml")
+	old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(p, old, old); err != nil {
+		ts.T.Fatal(err)
+	}
+	before, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	return func() {
+		ts.T.Helper()
+		if fi, err := os.Stat(p); err != nil {
+			ts.T.Error(err)
+		} else if !fi.ModTime().Equal(old) {
+			ts.T.Errorf("config.yaml was written by %s: modified %v", what, fi.ModTime())
+		}
+		if after, _ := os.ReadFile(p); string(after) != string(before) { //nolint:gosec // the config of the test
+			ts.T.Errorf("config.yaml changed by %s:\n%s", what, after)
+		}
+	}
 }
 
 // HookConfigWrite makes ts write config.yaml through another Config, right

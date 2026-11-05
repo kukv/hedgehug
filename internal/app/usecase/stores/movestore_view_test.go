@@ -47,20 +47,6 @@ func TestMoveConfirmationHoldsOnlyTheView(t *testing.T) {
 	}
 }
 
-// PrepareMoveStore is the entry for a caller that asks in its own way: it
-// returns the same view.
-func TestPrepareMoveStoreReturnsTheView(t *testing.T) {
-	t.Parallel()
-	f := usecasetest.NewMoveFx(t)
-	v, err := stores.PrepareMoveStore(f.TS.Session, f.In())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v.From != "org-a" || v.To != "org-b" || len(v.Tasks) != 3 || v.Tasks[0].ULID != f.P {
-		t.Errorf("view = %+v", v)
-	}
-}
-
 // The words for what a scoped schema loses are usecase's, for every client.
 func TestScopedPlanLines(t *testing.T) {
 	t.Parallel()

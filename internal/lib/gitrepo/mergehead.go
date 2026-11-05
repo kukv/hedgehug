@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,7 +16,7 @@ import (
 // where a .git file (a linked work tree, a submodule) points.
 func (r *Repo) gitDir() (string, error) {
 	dot := filepath.Join(r.dir, ".git")
-	fi, err := os.Stat(dot)
+	fi, err := osfs.Stat(dot)
 	if err != nil {
 		return "", err
 	}

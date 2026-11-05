@@ -85,7 +85,7 @@ func TestMovePlanGUIViewParentAndProps(t *testing.T) {
 }
 
 // A scoped choice that is not given is no error for the plan the GUI shows
-// first; PrepareMoveStore (the CLI's entry) still asks for it.
+// first; MoveStore (the CLI's entry) still asks for it.
 func TestMovePlanScopedChoice(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
@@ -96,7 +96,7 @@ func TestMovePlanScopedChoice(t *testing.T) {
 			Statuses: []string{"backlog", "todo", "review", "in_progress", "done", "canceled"},
 		}}
 	})
-	_, err := stores.PrepareMoveStore(f.TS.Session, f.In())
+	_, err := planViewOf(f.TS.Session, f.In())
 	usecasetest.MustCode(t, err, usecase.KindUsage, "choice.required")
 
 	v, err := stores.PrepareMovePlan(f.TS.Session, f.In())

@@ -2,11 +2,10 @@ package gitrepo
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 
-	"github.com/go-git/go-billy/v5/osfs"
+	billyosfs "github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/protocol/packp"
@@ -15,6 +14,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/client"
 	"github.com/go-git/go-git/v5/plumbing/transport/server"
 	"github.com/go-git/go-git/v5/storage/filesystem"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // go-git's file transport runs git-upload-pack and git-receive-pack. Hedgehug
@@ -63,10 +64,10 @@ func (fileLoader) Load(ep *transport.Endpoint) (storer.Storer, error) {
 	if !isDir(filepath.Join(p, "objects")) {
 		return nil, transport.ErrRepositoryNotFound
 	}
-	return newCachedStorage(filesystem.NewStorage(osfs.New(p), cache.NewObjectLRUDefault())), nil
+	return newCachedStorage(filesystem.NewStorage(billyosfs.New(p), cache.NewObjectLRUDefault())), nil
 }
 
 func isDir(p string) bool {
-	fi, err := os.Stat(p)
+	fi, err := osfs.Stat(p)
 	return err == nil && fi.IsDir()
 }

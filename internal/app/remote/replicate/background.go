@@ -46,9 +46,14 @@ func Due(st State, now time.Time, interval time.Duration) bool {
 	return !st.PendingSince.IsZero() || now.Sub(st.LastSuccess) >= interval
 }
 
+// Spawn starts the process name with args detached from this one, with its
+// stderr appended to the file at logPath.
+type Spawn func(name string, args []string, logPath string) error
+
 // Start starts "hedgehug sync --background --store <name>" detached, unless
-// HEDGEHUG_AUTO_SYNC=0 or another background sync holds bg.lock.
-func Start(s *store.Store, name string, getenv func(string) string) error {
+// HEDGEHUG_AUTO_SYNC=0 or another background sync holds bg.lock. spawn starts
+// the process; nil starts it as a process of its own, detached.
+func Start(s *store.Store, name string, getenv func(string) string, spawn Spawn) error {
 	if getenv("HEDGEHUG_AUTO_SYNC") == "0" {
 		return nil
 	}
@@ -65,23 +70,14 @@ func Start(s *store.Store, name string, getenv func(string) string) error {
 	if err != nil {
 		return err
 	}
+	if spawn == nil {
+		spawn = spawnDetached
+	}
 	return spawn(exe, []string{"sync", "--background", "--store", name}, logPath(s))
 }
 
 func logPath(s *store.Store) string {
 	return filepath.Join(s.Dir(), ".hedgehug", "local", logName)
-}
-
-// spawn starts the process detached from this one; tests replace it.
-var spawn = spawnDetached
-
-// SetSpawn replaces how Start starts the child, and returns the function
-// that puts the old one back. It is for tests only, so that they never
-// start a process.
-func SetSpawn(f func(name string, args []string, logPath string) error) (restore func()) {
-	old := spawn
-	spawn = f
-	return func() { spawn = old }
 }
 
 // Background is the body of sync --background: wait for push_interval after
@@ -178,7 +174,7 @@ func (b *BoundedLog) Write(p []byte) (int, error) {
 // trimLog keeps the last half of a log over logMax. It rewrites the file in
 // place, so that a child that has it open for appending goes on writing to it.
 func trimLog(path string) error {
-	fi, err := os.Stat(path)
+	fi, err := osfs.Stat(path)
 	if errors.Is(err, os.ErrNotExist) || (err == nil && fi.Size() <= logMax) {
 		return nil
 	}

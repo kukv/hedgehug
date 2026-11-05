@@ -123,13 +123,11 @@ func TestSyncAllReportsFailedStore(t *testing.T) {
 	}
 }
 
-// The tests of BeforeCommand do not run in parallel: StubSpawn replaces what
-// replicate.Start does for all.
 func TestBeforeCommandStartsNothingWithoutRemote(t *testing.T) {
 	ts := usecasetest.New(t)
 	ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 	var started int
-	defer usecasetest.StubSpawn(func([]string) { started++ })()
+	ts.Spawn = usecasetest.SpawnFunc(func([]string) { started++ })
 	ts.BeforeCommand(func(string, string) { t.Error("reported") })
 	if started != 0 {
 		t.Errorf("started %d syncs for a store without a remote", started)
@@ -145,7 +143,7 @@ func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	var started []string
-	defer usecasetest.StubSpawn(func(args []string) { started = append(started, args[len(args)-1]) })()
+	ts.Spawn = usecasetest.SpawnFunc(func(args []string) { started = append(started, args[len(args)-1]) })
 	var reports []string
 	report := func(st, msg string) { reports = append(reports, st+"|"+msg) }
 

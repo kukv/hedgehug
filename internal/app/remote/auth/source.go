@@ -33,9 +33,10 @@ type Options struct {
 	Run      func(name string, args ...string) (stdout, stderr []byte, err error) // nil runs the command
 	Keyring  Keyring                                                              // nil is the OS keychain
 	Now      func() time.Time
-	Host     config.Host  // of the account, for the device flow
-	HTTP     *http.Client // nil is a client with a 30-second timeout
-	LockFile string       // auth.lock; a refresh holds it
+	Host     config.Host   // of the account, for the device flow
+	HTTP     *http.Client  // nil is a client with a 30-second timeout
+	LockFile string        // auth.lock; a refresh holds it
+	LockWait time.Duration // how long a refresh waits for the lock; zero means the default, 30 seconds
 	Sleep    func(time.Duration)
 	Context  context.Context // nil is never canceled; the device flow's wait ends with ErrCanceled when it ends
 }
@@ -47,6 +48,13 @@ func (o Options) Keychain() Keyring {
 		return OSKeyring()
 	}
 	return o.Keyring
+}
+
+func (o Options) lockWait() time.Duration {
+	if o.LockWait != 0 {
+		return o.LockWait
+	}
+	return defaultLockWait
 }
 
 func (o Options) now() time.Time {

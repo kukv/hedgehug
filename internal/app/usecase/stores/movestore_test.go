@@ -23,6 +23,21 @@ import (
 // argsOf are the Args of err, which has been checked to be an *Error.
 func argsOf(err error) map[string]any { return usecase.AsError(err).Args }
 
+// planViewOf is the plan of a move as the confirmation shows it: what the
+// CLI and the server get from MoveStore when the move is not confirmed. An
+// error from the checks before the confirmation is returned as it is.
+func planViewOf(ss *usecase.Session, in stores.MoveStoreInput) (stores.MoveView, error) {
+	in.Yes = false
+	_, err := stores.MoveStore(ss, in)
+	if err == nil {
+		return stores.MoveView{}, errors.New("MoveStore without Yes must ask for confirmation, but succeeded")
+	}
+	if v, ok := argsOf(err)["plan"].(stores.MoveView); ok {
+		return v, nil
+	}
+	return stores.MoveView{}, err
+}
+
 func TestMoveStore(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
@@ -449,7 +464,7 @@ func TestMoveStoreSameStoreAndReadOnly(t *testing.T) {
 		hs, hd := f.Head(t, "org-a"), f.Head(t, "org-b")
 		_, err = stores.MoveStore(f.TS.Session, f.In())
 		usecasetest.MustCode(t, err, usecase.KindConflict, "store.read_only")
-		_, err = stores.PrepareMoveStore(f.TS.Session, f.In())
+		_, err = planViewOf(f.TS.Session, f.In())
 		usecasetest.MustCode(t, err, usecase.KindConflict, "store.read_only")
 		if f.Head(t, "org-a") != hs || f.Head(t, "org-b") != hd {
 			t.Errorf("%s read-only: a store was written", name)
@@ -508,7 +523,7 @@ func TestMoveStoreBothWaysAtOnce(t *testing.T) {
 func TestMoveStoreHidden(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
-	p, err := stores.PrepareMoveStore(f.TS.Session, f.In())
+	p, err := planViewOf(f.TS.Session, f.In())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,12 +544,12 @@ func TestMoveStoreHidden(t *testing.T) {
 		}
 	}
 	set("org-a", "github.com/alice", "github.com/bob", "github.com/Carol")
-	p, _ = stores.PrepareMoveStore(f.TS.Session, f.In())
+	p, _ = planViewOf(f.TS.Session, f.In())
 	if p.Hidden != nil {
 		t.Errorf("hidden = %v when the destination's list is unknown", p.Hidden)
 	}
 	set("org-b", "github.com/alice", "github.com/carol")
-	p, err = stores.PrepareMoveStore(f.TS.Session, f.In())
+	p, err = planViewOf(f.TS.Session, f.In())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,7 +578,7 @@ func TestMoveStoreUnlinksSprintAndReleases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := stores.PrepareMoveStore(f.TS.Session, f.In())
+	p, err := planViewOf(f.TS.Session, f.In())
 	if err != nil {
 		t.Fatal(err)
 	}

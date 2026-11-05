@@ -39,7 +39,7 @@ func runRules(tx *store.Tx, rules *automation.File, ix *index.Index, sc *schema.
 // The transitions were checked rule by rule; the first status and the last
 // need not be a transition themselves. A status that cannot be written is a
 // warning: the fetch is done.
-func applyChanges(ss *Session, s *store.Store, held *store.Locked, changes []taskChange, rep *FetchReport) {
+func applyChanges(ss *Session, s *store.Store, held *store.Locked, changes []taskChange, rep *GitHubFetchReport) {
 	for _, c := range changes {
 		_, err := ss.UpdateCommit(s, store.Op{Name: "set", Task: c.ulid, Automated: true, SkipTransitions: true, Locked: held}, func(tx *store.Tx) error {
 			t, err := tx.Task(c.ulid)

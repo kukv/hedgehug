@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 // noGit empties PATH so that a call to the git binary fails the test.
@@ -114,10 +115,21 @@ func TestPushSendsTheCommitItRead(t *testing.T) {
 	a, _ := cloneTwo(t, remote)
 	commitFiles(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
 	sent, _ := a.r.Head()
-	beforePush = func() { commitFiles(t, a.r, a.dir, map[string]string{"y.md": "during\n"}) }
-	defer func() { beforePush = func() {} }()
+	// Push reads HEAD, then asks Conn for the auth: a commit made there is one
+	// made while the push starts.
+	pushing := true
+	a.r.SetConn(Conn{Auth: func(string) (transport.AuthMethod, error) {
+		if pushing { // the Fetch below asks for the auth too
+			commitFiles(t, a.r, a.dir, map[string]string{"y.md": "during\n"})
+		}
+		return nil, nil
+	}})
 	if err := a.r.Push("origin"); err != nil {
 		t.Fatal(err)
+	}
+	pushing = false
+	if now, _ := a.r.Head(); now == sent {
+		t.Fatal("no commit was made while the push started")
 	}
 	if got, _ := a.r.RemoteHead("origin"); got != sent {
 		t.Errorf("RemoteHead = %s, want the pushed %s", got, sent)

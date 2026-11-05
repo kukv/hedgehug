@@ -40,7 +40,7 @@ func (a *app) editFile(name string, content []byte) (path string, edited []byte,
 	if _, err := a.editor(); err != nil {
 		return "", nil, err
 	}
-	f, err := os.CreateTemp("", "hedgehug-"+name+"-*.md")
+	f, err := osfs.CreateTemp("", "hedgehug-"+name+"-*.md")
 	if err != nil {
 		return "", nil, err
 	}

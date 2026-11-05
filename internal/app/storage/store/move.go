@@ -165,10 +165,6 @@ func (l *Locked) holds(s *Store) bool {
 	return l != nil && !l.released.Load() && slices.Contains(l.stores, s)
 }
 
-// afterLock is called with each store after LockInOrder took its lock;
-// tests use it to see the order.
-var afterLock = func(*Store) {}
-
 // LockInOrder takes the store lock of each of ss, smallest ULID first. A
 // store given twice (the same *Store, or two with one ULID) is locked once,
 // through the first handle given; the caller passes that handle in Op.Locked.
@@ -184,14 +180,13 @@ func LockInOrder(ss ...*Store) (*Locked, error) {
 	})
 	l := &Locked{}
 	for _, s := range uniq {
-		fl, err := acquireStore(s.dir, s.path(lockPath), s.lockWait)
+		fl, err := acquireStore(s.dir, s.path(lockPath), s.lockWait, nil)
 		if err != nil {
 			l.Release()
 			return nil, fmt.Errorf("lock %s: %w", s.meta.Name, err)
 		}
 		l.stores = append(l.stores, s)
 		l.locks = append(l.locks, fl)
-		afterLock(s)
 	}
 	return l, nil
 }

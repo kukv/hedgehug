@@ -19,8 +19,8 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
-// FetchReport is what a fetch did.
-type FetchReport struct {
+// GitHubFetchReport is what a fetch did.
+type GitHubFetchReport struct {
 	Committed bool
 	Warnings  []string
 }
@@ -28,26 +28,27 @@ type FetchReport struct {
 // target is what a repository is read for.
 type target struct{ pulls, issues []int }
 
-// Fetch reads the repositories of the store e that are due, links the pull
+// FetchGitHub reads the repositories of the store e that are due, links the pull
 // requests that point at a task, and writes what GitHub says to gh, as one
 // commit, followed by a commit for each task whose status the rules of
 // automations.yaml change. A repository that cannot be read is a warning: the
 // others go on. A read-only store is not fetched.
-func Fetch(ss *Session, c *config.Config, e config.StoreEntry) (FetchReport, error) {
+func FetchGitHub(ss *Session, c *config.Config, e config.StoreEntry) (GitHubFetchReport, error) {
 	return fetchStore(ss, c, e, "")
 }
 
-// FetchRepo is Fetch of the one repository repo, a repo ID, whether it is due
-// or not. The other repositories of the store are left for their time.
-func FetchRepo(ss *Session, c *config.Config, e config.StoreEntry, repo string) (FetchReport, error) {
+// FetchGitHubRepo is FetchGitHub of the one repository repo, a repo ID, whether
+// it is due or not. The other repositories of the store are left for their
+// time.
+func FetchGitHubRepo(ss *Session, c *config.Config, e config.StoreEntry, repo string) (GitHubFetchReport, error) {
 	return fetchStore(ss, c, e, strings.ToLower(repo))
 }
 
-// fetchStore is Fetch, or FetchRepo when force names a repository.
-func fetchStore(ss *Session, c *config.Config, e config.StoreEntry, force string) (FetchReport, error) {
+// fetchStore is FetchGitHub, or FetchGitHubRepo when force names a repository.
+func fetchStore(ss *Session, c *config.Config, e config.StoreEntry, force string) (GitHubFetchReport, error) {
 	ss = ss.ForStore(e.Name)
 	ss.BackgroundSync = false // the sync that called this pushes what it writes
-	var rep FetchReport
+	var rep GitHubFetchReport
 	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return rep, err
@@ -69,7 +70,7 @@ func fetchStore(ss *Session, c *config.Config, e config.StoreEntry, force string
 	return rep, err
 }
 
-func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, rep *FetchReport) error {
+func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, rep *GitHubFetchReport) error {
 	state, err := ghstate.Read(s)
 	if err != nil {
 		return err
@@ -300,10 +301,10 @@ func repoOf(ref string) string {
 	return strings.ToLower(r.Repo)
 }
 
-// HasTargets reports whether the tasks of the store e name a repository to
+// HasGitHubTargets reports whether the tasks of the store e name a repository to
 // read: one in repos, or one a link in use points at. A store that does not
 // open has none.
-func HasTargets(ss *Session, e config.StoreEntry) bool {
+func HasGitHubTargets(ss *Session, e config.StoreEntry) bool {
 	ss = ss.ForStore(e.Name)
 	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {

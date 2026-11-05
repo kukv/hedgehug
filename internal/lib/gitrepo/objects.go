@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,6 +14,8 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // baseCacheBytes is how much of the objects that deltas were made from is
@@ -91,7 +92,7 @@ func (o *objectReader) has(h plumbing.Hash) (bool, error) {
 			return p != nil, err
 		}
 		if !again {
-			_, err := os.Stat(loosePath(o.dir, h))
+			_, err := osfs.Stat(loosePath(o.dir, h))
 			if err == nil {
 				return true, nil
 			}
@@ -131,7 +132,7 @@ func (o *objectReader) list(again bool) ([]*pack, error) {
 	if o.listed && !again {
 		return o.packs, nil
 	}
-	des, err := os.ReadDir(filepath.Join(o.dir, "pack"))
+	des, err := osfs.ReadDir(filepath.Join(o.dir, "pack"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
@@ -245,7 +246,7 @@ func loosePath(dir string, h plumbing.Hash) string {
 // readLoose reads the loose object h; an error wrapping fs.ErrNotExist means
 // there is none.
 func readLoose(dir string, h plumbing.Hash) (plumbing.ObjectType, []byte, error) {
-	f, err := os.Open(loosePath(dir, h)) //nolint:gosec // G304: an object file of the repository
+	f, err := osfs.Open(loosePath(dir, h))
 	if err != nil {
 		return plumbing.InvalidObject, nil, err
 	}
