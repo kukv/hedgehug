@@ -23,8 +23,8 @@ var (
 	// ErrNotAccessible is an ErrForbidden that says the GitHub App is not
 	// installed where the repository is.
 	ErrNotAccessible = fmt.Errorf("%w: %s", ErrForbidden, notAccessible)
-	ErrNotFound     = errors.New("GitHub has no such thing, or it is not visible to the token (404)")
-	ErrExists       = errors.New("a repository of that name exists")
+	ErrNotFound      = errors.New("GitHub has no such thing, or it is not visible to the token (404)")
+	ErrExists        = errors.New("a repository of that name exists")
 )
 
 // RateLimitError means the rate limit is used up until Reset.
