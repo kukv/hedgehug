@@ -179,6 +179,7 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		return errors.Join(err, ghstate.Write(s, state)) // as for a commit that failed, below
 	}
 	rules, err := s.Automations()
+	usable := err == nil // which fields sync is not known without it: nothing does
 	if err != nil {
 		rep.Warnings = append(rep.Warnings, err.Error())
 		rules = automation.Default() // the fetch goes on, without rules
@@ -225,10 +226,12 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 				}
 				continue
 			}
-			x, _ := ix.Task(u) // chosen from ix above
-			plan, err := planMirror(t, got, rules, s.Schema().For(ix.Ancestors(x)))
-			if err != nil {
-				rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
+			var plan *mirrorPlan
+			if usable {
+				x, _ := ix.Task(u) // chosen from ix above
+				if plan, err = planMirror(t, got, rules, s.Schema().For(ix.Ancestors(x))); err != nil {
+					rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
+				}
 			}
 			if plan != nil {
 				plans = append(plans, plan)

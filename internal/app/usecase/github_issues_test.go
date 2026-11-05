@@ -398,6 +398,41 @@ func TestAnIssueThatIsGoneKeepsItsFields(t *testing.T) {
 	}
 }
 
+// Without automations.yaml it is not known which fields sync: neither mode
+// writes, and the fetch is done.
+func TestAnUnusableFileStopsTheSyncOfIssues(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	m := issueTask(t, ts, fake, model.SyncMirror)
+	ts.AddTask("b", func(x *model.Task) { x.Repos = []string{web} })
+	p, err := fake.OpenIssue("org-a/web", "b", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integration.Link(ts.Session, "ME-2", integration.LinkInput{Issue: "org-a/web#" + itoa(p), Sync: model.SyncPush}); err != nil {
+		t.Fatal(err)
+	}
+	refetch(t, ts)
+	if err := fake.EditIssue("org-a/web", m, "theirs", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Set(ts.Session, "ME-2", assign(t, "title=mine")); err != nil {
+		t.Fatal(err)
+	}
+	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		return tx.PutFile(model.AutomationsPath, []byte("rules: [\n"))
+	})
+	if w := refetch(t, ts); len(w) == 0 {
+		t.Error("no warning")
+	}
+	if got := taskIn(t, ts, "me", "ME-1").Title; got != "a" {
+		t.Errorf("mirrored: %s", got)
+	}
+	if got := onGitHub(t, fake, p).Title; got != "b" {
+		t.Errorf("pushed: %s", got)
+	}
+}
+
 func TestLinkModeTouchesNothing(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
