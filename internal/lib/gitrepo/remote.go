@@ -140,10 +140,6 @@ func (r *Repo) RemoteHead(remote string) (plumbing.Hash, error) {
 	return ref.Hash(), nil
 }
 
-// beforePush runs once Push has read the commit it sends; tests replace it to
-// commit meanwhile.
-var beforePush = func() {}
-
 // Push sends main to the remote as a fast-forward. It returns ErrRejected when
 // the remote is not an ancestor of main, and nil when there is nothing to send.
 // The commit main is at when Push starts is sent, and becomes
@@ -174,7 +170,6 @@ func (r *Repo) Push(remote string) error {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
 	defer func() { _ = p.Close() }()
-	beforePush()
 	err = p.r.Push(&git.PushOptions{
 		RemoteName: remote,
 		RemoteURL:  to,

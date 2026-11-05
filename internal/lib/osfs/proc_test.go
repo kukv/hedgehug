@@ -1,8 +1,10 @@
 package osfs
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -44,5 +46,48 @@ func TestStartDetached(t *testing.T) {
 			t.Fatalf("the log has %q, want the child's stderr", b)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestLookPath(t *testing.T) {
+	t.Parallel()
+	bin, other := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tool"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for a program
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "plain"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := other + string(os.PathListSeparator) + bin
+	if got, err := LookPath("tool", path); err != nil || got != filepath.Join(bin, "tool") {
+		t.Errorf("LookPath(tool) = %q, %v; want the file in %s", got, err, bin)
+	}
+	if _, err := LookPath("plain", path); err == nil {
+		t.Error("a file that is not executable was found")
+	}
+	if _, err := LookPath("tool", other); err == nil {
+		t.Error("tool was found on a PATH that does not hold it")
+	}
+	if _, err := LookPath("tool", ""); err == nil {
+		t.Error("tool was found on an empty PATH")
+	}
+}
+
+// Serial: it changes the working directory.
+func TestLookPathRelativeEntry(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tool"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for a program
+		t.Fatal(err)
+	}
+	t.Chdir(bin)
+	// A relative entry is refused, as exec.LookPath refuses it (ErrDot).
+	for _, rel := range []string{":", "."} {
+		if _, err := LookPath("tool", rel); !errors.Is(err, exec.ErrDot) {
+			t.Errorf("LookPath(tool, %q) error = %v; want ErrDot", rel, err)
+		}
+	}
+	// The first match decides: a later absolute entry does not rescue it.
+	if _, err := LookPath("tool", ".:"+bin); !errors.Is(err, exec.ErrDot) {
+		t.Errorf("relative entry before an absolute one: error = %v; want ErrDot", err)
 	}
 }

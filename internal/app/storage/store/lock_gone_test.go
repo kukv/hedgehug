@@ -28,7 +28,7 @@ func TestAcquireStoreOfADirectoryThatIsGone(t *testing.T) {
 	if err := os.RemoveAll(dir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := acquireStore(dir, lock, time.Second); !errors.Is(err, ErrStoreGone) {
+	if _, err := acquireStore(dir, lock, time.Second, nil); !errors.Is(err, ErrStoreGone) {
 		t.Fatalf("err = %v; want ErrStoreGone", err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
@@ -36,23 +36,20 @@ func TestAcquireStoreOfADirectoryThatIsGone(t *testing.T) {
 	}
 }
 
-// Serial: it replaces the package variable afterLockMiss.
-//
 // A writer that waits for the lock while the store is removed does not get
 // the lock of the file that is gone.
 func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
 	dir, lock := fakeStoreDir(t)
-	held, err := acquireStore(dir, lock, time.Second)
+	held, err := acquireStore(dir, lock, time.Second, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	blocked := make(chan struct{})
 	var once sync.Once
-	afterLockMiss = func() { once.Do(func() { close(blocked) }) }
-	t.Cleanup(func() { afterLockMiss = func() {} })
+	onMiss := func() { once.Do(func() { close(blocked) }) }
 	errc := make(chan error, 1)
 	go func() {
-		l, err := acquireStore(dir, lock, 5*time.Second)
+		l, err := acquireStore(dir, lock, 5*time.Second, onMiss)
 		if err == nil {
 			_ = l.Release()
 		}
@@ -78,7 +75,7 @@ func TestAcquireStoreMakesNoDirectoryOfARemovedStore(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(dir, ".hedgehug")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := acquireStore(dir, lock, time.Second); !errors.Is(err, ErrStoreGone) {
+	if _, err := acquireStore(dir, lock, time.Second, nil); !errors.Is(err, ErrStoreGone) {
 		t.Fatalf("err = %v; want ErrStoreGone", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".hedgehug")); !os.IsNotExist(err) {
@@ -108,7 +105,7 @@ func TestWriteLocalMakesNoDirectoryOfARemovedStore(t *testing.T) {
 func TestAcquireStoreHappyPath(t *testing.T) {
 	t.Parallel()
 	dir, lock := fakeStoreDir(t)
-	l, err := acquireStore(dir, lock, time.Second)
+	l, err := acquireStore(dir, lock, time.Second, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

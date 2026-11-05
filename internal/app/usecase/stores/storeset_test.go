@@ -58,19 +58,20 @@ func TestStoreSetWritesNothingWhenUnchanged(t *testing.T) {
 	if _, err := stores.StoreSet(ts.Session, "org-a", &teal, nil); err != nil {
 		t.Fatal(err)
 	}
-	ts.BeforeUpdate = func() { t.Error("config.yaml is updated for the same values") }
+	unchanged := ts.FreezeConfig("a call with the same values")
 	if v, err := stores.StoreSet(ts.Session, "org-a", &teal, &no); err != nil || v.Color != "teal" || v.Hidden {
 		t.Errorf("same values: %+v, %v", v, err)
 	}
 	if _, err := stores.StoreSet(ts.Session, "org-a", nil, nil); err != nil {
 		t.Errorf("nothing given: %v", err)
 	}
+	unchanged()
 }
 
 func TestStoreSetErrors(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
-	ts.BeforeUpdate = func() { t.Error("a refused call updates config.yaml") }
+	unchanged := ts.FreezeConfig("a refused call")
 	red, grey, teal := "red", "grey", "teal"
 
 	_, err := stores.StoreSet(ts.Session, "org-a", &red, nil)
@@ -90,6 +91,7 @@ func TestStoreSetErrors(t *testing.T) {
 	if e := usecase.AsError(err); e.Args["name"] != "nope" || len(e.Args["candidates"].([]string)) != 2 {
 		t.Errorf("args = %v", e.Args)
 	}
+	unchanged()
 }
 
 func TestStoreViewReadOnly(t *testing.T) {

@@ -314,3 +314,120 @@ func TestFilesMissingSubtreeObject(t *testing.T) {
 		}
 	}
 }
+
+// A directory below the prefix whose tree object is gone is an error, not a
+// listing that stops there.
+func TestFilesMissingTreeBelowPrefix(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := commitFiles(t, r, dir, map[string]string{"tasks/x/a.md": "a", "tasks/y/b.md": "b", "tasks/z.md": "z"})
+	tr, err := r.tree(head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := tr.FindEntry("tasks/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isLoose(dir, e.Hash) {
+		t.Fatal("the tree object of tasks/x is not loose")
+	}
+	removeLoose(t, filepath.Join(dir, ".git"), e.Hash)
+	r, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failed bool
+	var gotErr error
+	var got []string
+	for p, err := range r.Files(head, "tasks/") {
+		if err != nil {
+			failed = true
+			gotErr = err
+			continue
+		}
+		got = append(got, p)
+	}
+	if !failed {
+		t.Errorf("Files(tasks/) gave no error with the tree object of tasks/x gone; listed %v", got)
+	}
+	if !errors.Is(gotErr, plumbing.ErrObjectNotFound) && (gotErr == nil || !strings.Contains(gotErr.Error(), "tasks/x")) {
+		t.Errorf("Files(tasks/) error = %v, want ErrObjectNotFound or one naming tasks/x", gotErr)
+	}
+}
+
+// A blob that is in the tree but not in the repository is an error, not a
+// missing file.
+func TestReadFileMissingBlobObject(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := commitFiles(t, r, dir, map[string]string{"tasks/x/a.md": "a", "tasks/b.md": "b"})
+	tr, err := r.tree(head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := tr.FindEntry("tasks/x/a.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isLoose(dir, e.Hash) {
+		t.Fatal("the blob of tasks/x/a.md is not loose")
+	}
+	removeLoose(t, filepath.Join(dir, ".git"), e.Hash)
+	r, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadFile(head, "tasks/x/a.md"); err == nil || errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ReadFile of a path whose blob is gone: err = %v, want an error that is not fs.ErrNotExist", err)
+	}
+	if b, err := r.ReadFile(head, "tasks/b.md"); err != nil || string(b) != "b" {
+		t.Errorf("ReadFile of another file = %q, %v", b, err)
+	}
+	if _, err := r.ReadFile(head, "tasks/nope.md"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ReadFile of a missing path: err = %v, want fs.ErrNotExist", err)
+	}
+}
+
+// A directory on the path whose tree object is gone is an error, not a
+// missing file.
+func TestReadFileMissingTreeObject(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := commitFiles(t, r, dir, map[string]string{"dir/file": "a", "tasks/b.md": "b"})
+	tr, err := r.tree(head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := tr.FindEntry("dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isLoose(dir, e.Hash) {
+		t.Fatal("the tree object of dir is not loose")
+	}
+	removeLoose(t, filepath.Join(dir, ".git"), e.Hash)
+	r, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.ReadFile(head, "dir/file")
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ReadFile with the tree object of dir gone: err = %v, want an error that is not fs.ErrNotExist", err)
+	}
+	if !errors.Is(err, plumbing.ErrObjectNotFound) {
+		t.Errorf("ReadFile with the tree object of dir gone: err = %v, want plumbing.ErrObjectNotFound", err)
+	}
+}

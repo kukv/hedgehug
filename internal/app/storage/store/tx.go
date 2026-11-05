@@ -496,7 +496,7 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	if err := s.apply(changes); err != nil {
 		return plumbing.ZeroHash, err
 	}
-	if h, err := s.commit(commit); err != nil {
+	if h, err := s.repo.Commit(commit); err != nil {
 		// The files written equal HEAD's, so there is nothing to undo.
 		if !errors.Is(err, gitrepo.ErrNothingToCommit) {
 			return plumbing.ZeroHash, errors.Join(err, s.rollback(changes))
@@ -521,7 +521,7 @@ func (s *Store) lockStore() (*osfs.Lock, error) {
 	deadline := time.Now().Add(s.lockWait)
 	for {
 		s.mu.Lock()
-		l, err := acquireStore(s.dir, s.path(lockPath), 0)
+		l, err := acquireStore(s.dir, s.path(lockPath), 0, nil)
 		if err == nil {
 			return l, nil
 		}

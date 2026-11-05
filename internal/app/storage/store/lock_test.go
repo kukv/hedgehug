@@ -9,7 +9,19 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
+
+// acquire takes the lock file at path as another process does: it makes the
+// directories above it and waits up to wait.
+func acquire(path string, wait time.Duration) (*osfs.Lock, error) {
+	path = filepath.Clean(path)
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, err
+	}
+	return lockFile(path, wait, nil)
+}
 
 func TestLockExcludes(t *testing.T) {
 	t.Parallel()

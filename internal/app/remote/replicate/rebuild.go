@@ -478,7 +478,7 @@ func tellRewrite(ns *store.Store, head plumbing.Hash, opt Options, b *Rebuild) (
 // for a commit made in between, and puts the old store back if there is one);
 // then it brings over what changed in
 // .hedgehug/local since the copy (any other failure to look at the old
-// store leaves b.Dir, for FinishLeftover). A rename that fails changes nothing
+// store leaves b.Dir, for FinishLeftoverKept). A rename that fails changes nothing
 // or puts the old store back; only when that fails too is a leftover
 // (FindLeftover) all there is. The removal of the old store may fail
 // without failing Swap; it is a leftover then. Swap leaves the old store at
@@ -523,12 +523,12 @@ func Swap(dir string, b *Rebuild) error {
 	if err := checkUnchanged(before, b); err != nil {
 		var merr error
 		if errors.Is(err, ErrRebuildStale) {
-			// If the old store cannot be put back, FinishLeftover must not
+			// If the old store cannot be put back, FinishLeftoverKept must not
 			// put the rebuild in its place: it would drop that commit.
 			merr = osfs.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
 		}
 		if rerr := osfs.Rename(before, dir); rerr != nil {
-			// merr says that FinishLeftover may not know the rebuild is stale.
+			// merr says that FinishLeftoverKept may not know the rebuild is stale.
 			return errors.Join(err, rerr, merr)
 		}
 		removeKeepMarker(dir)
@@ -598,17 +598,12 @@ func checkUnchanged(dir string, b *Rebuild) error {
 	return nil
 }
 
-// FinishLeftover completes a swap that stopped, or removes what a rebuild
+// FinishLeftoverKept completes a swap that stopped, or removes what a rebuild
 // left. With no store at dir, the rebuilt one takes its place; with only an
-// old one left, it is put back. Then what remains beside the store goes.
-func FinishLeftover(dir string, l store.Leftover) error {
-	_, err := FinishLeftoverKept(dir, l)
-	return err
-}
-
-// FinishLeftoverKept is FinishLeftover that also returns where it kept an
-// old store that carries keepMarker: that one is renamed to keptPrefix, not
-// removed; when it cannot be, it stays and the error names it.
+// old one left, it is put back. Then what remains beside the store goes. It
+// returns where it kept an old store that carries keepMarker: that one is
+// renamed to keptPrefix, not removed; when it cannot be, it stays and the
+// error names it.
 func FinishLeftoverKept(dir string, l store.Leftover) (kept []string, err error) {
 	keptPaths := &kept
 	err = finishLeftover(dir, l, keptPaths)

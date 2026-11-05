@@ -32,6 +32,15 @@ func (c *clone) op(name string, task model.ULID) store.Op {
 	return store.Op{Name: name, Task: task, Author: gitrepo.Signature{Name: login, Email: login + "@x"}, Account: c.acct}
 }
 
+// Import adds the merge driver's records to the inbox under the inbox lock,
+// as Collect does, and drops what it imported.
+func (b *Box) Import(me []string) error {
+	return b.locked(func() error {
+		_, err := b.importRecords(me)
+		return err
+	})
+}
+
 // twoClones makes a store written by github.com/a, pushed to a bare remote,
 // and a clone of it written by github.com/b.
 func twoClones(t *testing.T) (*clone, *clone) {

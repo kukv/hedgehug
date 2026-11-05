@@ -16,21 +16,8 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-// readHook, when set, is called before each read of a file; an error it
-// returns fails the read. Tests set it.
-var readHook func(p string) error
-
-// listHook, when set, is called with each prefix whose comment and worklog
-// files are listed. Tests set it.
-var listHook func(prefix string)
-
 // read reads the file p of tree.
 func (ix *Index) read(tree plumbing.Hash, p string) ([]byte, error) {
-	if readHook != nil {
-		if err := readHook(p); err != nil {
-			return nil, err
-		}
-	}
 	return ix.repo.ReadFile(tree, p)
 }
 

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
@@ -53,8 +52,7 @@ func TestResolveNotFoundIsKindNotFound(t *testing.T) {
 }
 
 // A write to a store with a remote starts the background sync once when the
-// session asks for it (BackgroundSync), and never when it does not. It does
-// not run in parallel: replicate.SetSpawn replaces what Start does for all.
+// session asks for it (BackgroundSync), and never when it does not.
 func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 	for _, tc := range []struct {
 		background bool
@@ -65,7 +63,7 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 		ts.BackgroundSync = tc.background
 		var started int
-		restore := replicate.SetSpawn(func(string, []string, string) error { started++; return nil })
+		ts.Spawn = usecasetest.SpawnFunc(func([]string) { started++ })
 		s, ix, err := ts.Open()
 		if err != nil {
 			t.Fatal(err)
@@ -74,7 +72,6 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		if _, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 			t.Fatal(err)
 		}
-		restore()
 		if started != tc.want {
 			t.Errorf("BackgroundSync=%v: the background sync started %d times; want %d", tc.background, started, tc.want)
 		}
@@ -88,7 +85,7 @@ func TestSessionConcurrentOperations(t *testing.T) {
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "seed"}); err != nil {
 		t.Fatal(err)
 	}
-	ts.ForgetWriter() // the first of the goroutines reads the writer again
+	ts.Renew() // the first of the goroutines reads the writer again
 	ops := []func() error{
 		func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); return err },
 		func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "b"}); return err },
@@ -217,5 +214,57 @@ func TestSessionUpdateCommitAndBeforeUpdate(t *testing.T) {
 	}
 	if before != 1 {
 		t.Errorf("BeforeUpdate called after it was cleared: %d", before)
+	}
+}
+
+// TestRenewCopiesEveryExportedField fails when a field is added to Session
+// and usecasetest's Renew does not carry it to the new session.
+func TestRenewCopiesEveryExportedField(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	v := reflect.ValueOf(ts.Session).Elem()
+	for i := range v.NumField() {
+		f, sf := v.Field(i), v.Type().Field(i)
+		if !sf.IsExported() || !f.IsZero() {
+			continue // what New set stays as it is
+		}
+		switch f.Kind() {
+		case reflect.Func:
+			f.Set(reflect.MakeFunc(f.Type(), func([]reflect.Value) []reflect.Value {
+				out := make([]reflect.Value, f.Type().NumOut())
+				for j := range out {
+					out[j] = reflect.Zero(f.Type().Out(j))
+				}
+				return out
+			}))
+		case reflect.String:
+			f.SetString("x")
+		case reflect.Bool:
+			f.SetBool(true)
+		case reflect.Pointer:
+			f.Set(reflect.New(f.Type().Elem()))
+		case reflect.Interface:
+			f.Set(reflect.ValueOf(&fakeKeyring{}))
+		default:
+			t.Fatalf("Session.%s is a %s; teach this test to set it", sf.Name, f.Kind())
+		}
+	}
+	old := ts.Session
+	ts.Renew()
+	if ts.Session == old {
+		t.Fatal("Renew kept the old session")
+	}
+	got := reflect.ValueOf(ts.Session).Elem()
+	for i := range got.NumField() {
+		sf := got.Type().Field(i)
+		if !sf.IsExported() {
+			continue
+		}
+		if got.Field(i).IsZero() {
+			t.Errorf("Renew does not copy Session.%s", sf.Name)
+		}
+		if got.Field(i).Kind() == reflect.Pointer && got.Field(i).Pointer() != v.Field(i).Pointer() {
+			t.Errorf("Renew does not share Session.%s", sf.Name)
+		}
 	}
 }

@@ -162,7 +162,7 @@ func TestUseShowWarnsOfAProjectThatIsGone(t *testing.T) {
 				t.Fatal(err)
 			}
 			gone(t, ts, id)
-			ts.ForgetMounts() // the stores are opened again, as a new run does
+			ts.Renew() // the stores are opened again, as a new run does
 			r, err := stores.UseShow(ts.Session)
 			if err != nil || r.Project != nil || r.Store != "" {
 				t.Errorf("UseShow = %+v, %v; want none", r, err)

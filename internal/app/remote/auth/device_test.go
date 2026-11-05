@@ -405,17 +405,14 @@ func TestDeviceRefreshNeedsClientID(t *testing.T) {
 	}
 }
 
-// 直列: パッケージ変数 lockWait の差し替え
 func TestDeviceRefreshLockBusy(t *testing.T) {
-	old := lockWait
-	lockWait = 5 * time.Millisecond
-	t.Cleanup(func() { lockWait = old })
+	t.Parallel()
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
 	k := newMem()
 	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now}, k)
 	lock := filepath.Join(t.TempDir(), "auth.lock")
-	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1", ClientID: "Iv23x"}, Now: func() time.Time { return now }, LockFile: lock}
+	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1", ClientID: "Iv23x"}, Now: func() time.Time { return now }, LockFile: lock, LockWait: 5 * time.Millisecond}
 	var err error
 	if lerr := osfs.WithFileLock(lock, time.Second, func() error {
 		_, err = Token(a, opt)

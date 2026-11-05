@@ -26,17 +26,14 @@ func (r *Repo) LooseObjects() (int, error) {
 // PackCap is the size from which a pack is left as it is.
 const PackCap = 64 << 20
 
-// packCap is PackCap; tests lower it.
-var packCap int64 = PackCap
-
-// smallPack is a pack below packCap, by the path of its .idx.
+// smallPack is a pack below a cap, by the path of its .idx.
 type smallPack struct {
 	idx  string
 	size int64
 }
 
 // smallPacks lists the packs below packCap, the smallest first.
-func (r *Repo) smallPacks() ([]smallPack, error) {
+func (r *Repo) smallPacks(packCap int64) ([]smallPack, error) {
 	idxs, err := filepath.Glob(filepath.Join(r.dir, ".git", "objects", "pack", "pack-*.idx"))
 	if err != nil {
 		return nil, err
@@ -65,7 +62,12 @@ func (r *Repo) smallPacks() ([]smallPack, error) {
 
 // SmallPacks counts the packs smaller than PackCap.
 func (r *Repo) SmallPacks() (int, error) {
-	ps, err := r.smallPacks()
+	return r.SmallPacksBelow(PackCap)
+}
+
+// SmallPacksBelow counts the packs smaller than packCap.
+func (r *Repo) SmallPacksBelow(packCap int64) (int, error) {
+	ps, err := r.smallPacks(packCap)
 	return len(ps), err
 }
 
@@ -124,11 +126,18 @@ func packObjects(idxPath string) ([]plumbing.Hash, error) {
 // made are removed. An old pack that cannot be removed (Windows, open file)
 // is left for a later Consolidate.
 func (r *Repo) Consolidate() error {
+	return r.ConsolidateBelow(PackCap)
+}
+
+// ConsolidateBelow is Consolidate with packCap in place of PackCap: packs of
+// packCap or more are left as they are, and one run merges about packCap at
+// most.
+func (r *Repo) ConsolidateBelow(packCap int64) error {
 	los, ok := r.r.Storer.(storer.LooseObjectStorer)
 	if !ok {
 		return errors.New("the object storage of the repository cannot be consolidated")
 	}
-	packs, err := r.smallPacks()
+	packs, err := r.smallPacks(packCap)
 	if err != nil {
 		return err
 	}

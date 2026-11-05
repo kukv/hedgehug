@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func TestAuthLoginNewAccountByDevice(t *testing.T) {
@@ -152,20 +154,34 @@ func TestAuthLoginOtherLoginWritesNothing(t *testing.T) {
 	}
 }
 
-// breakConfig makes the next config update fail: config.yaml is not YAML
-// when the update reads it.
+// breakConfig makes the config updates fail: the directory of config.yaml
+// cannot be written to, so the file cannot be replaced. The lock file of the
+// directory is made first, so that the login still gets to the keychain.
 func breakConfig(t *testing.T, ts *usecasetest.Session) {
 	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("a directory that cannot be written to needs a permission that is enforced")
+	}
 	_, p, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts.BeforeUpdate = func() {
-		if err := os.WriteFile(p.ConfigFile, []byte("accounts: [\n"), 0o600); err != nil {
-			t.Error(err)
-		}
-		ts.BeforeUpdate = nil
+	lock, err := osfs.LockFile(ts.LockFile(), 0, 0, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if err := lock.Release(); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(p.ConfigFile)
+	fi, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, fi.Mode().Perm()) }) // so that the directory of the test can be removed
 }
 
 // A login that cannot write config.yaml puts the keychain back: to the old
@@ -381,11 +397,9 @@ func TestStoreDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(p.ConfigFile)
-	ts.BeforeUpdate = func() { t.Error("config.yaml is updated for the same name") }
 	if name, err := stores.StoreDefault(ts.Session, "me"); err != nil || name != "me" {
 		t.Errorf("same = %q, %v", name, err)
 	}
-	ts.BeforeUpdate = nil
 	if fi, _ := os.Stat(p.ConfigFile); !fi.ModTime().Equal(old) {
 		t.Errorf("modified: %v", fi.ModTime())
 	}

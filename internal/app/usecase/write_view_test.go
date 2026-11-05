@@ -95,7 +95,6 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		t.Errorf("WorkspaceAdd = %+v, %v; want Commit = HEAD", ws, err)
 	}
 	ts.UseAccount()
-	ts.ForgetWriter()
 	if _, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "z"}}); err != nil {
 		t.Fatal(err)
 	}

@@ -163,24 +163,10 @@ type MoveStoreResult struct {
 	Resumed bool // step 7 was done before; only step 8 ran (D12)
 }
 
-// PrepareMoveStore does steps 1 to 4 and 6's checks, and returns the plan to
-// confirm as the confirmation shows it (the entry for the GUI). A task the destination schema refuses is KindInvalid, move.invalid,
-// with one line per task and violation. A scoped entry that applies and no
-// in.Scoped is choice.required.
-func PrepareMoveStore(ss *usecase.Session, in MoveStoreInput) (MoveView, error) {
-	j, err := openMove(ss, in)
-	if err != nil {
-		return MoveView{}, err
-	}
-	w, err := j.load()
-	if err != nil {
-		return MoveView{}, err
-	}
-	return w.plan.View(), nil
-}
-
-// PrepareMovePlan is PrepareMoveStore for the GUI: the plan as GUIView shows
-// it. A scoped entry that applies and no in.Scoped is no error: the plan says
+// PrepareMovePlan does steps 1 to 4 and 6's checks for the GUI, and returns
+// the plan as GUIView shows it. A task the destination schema refuses is
+// KindInvalid, move.invalid, with one line per task and violation. A scoped
+// entry that applies and no in.Scoped is no error: the plan says
 // scoped.required, and is made as if the entry were not carried.
 func PrepareMovePlan(ss *usecase.Session, in MoveStoreInput) (MovePlanView, error) {
 	in.planOnly = true

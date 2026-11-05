@@ -384,7 +384,7 @@ func TestFinishLeftoverNoStore(t *testing.T) {
 	if _, err := store.Open(dir); err == nil {
 		t.Fatal("a store without a directory opens")
 	}
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	if exists(t, before) || exists(t, l.New) {
@@ -416,7 +416,7 @@ func TestFinishLeftoverOtherStates(t *testing.T) {
 	if err != nil || l.None() {
 		t.Fatalf("leftover = %+v, %v", l, err)
 	}
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	if l, err := store.FindLeftover(dir); err != nil || !l.None() || !exists(t, dir) {
@@ -427,7 +427,7 @@ func TestFinishLeftoverOtherStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	l, _ = store.FindLeftover(dir)
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "f"))
@@ -464,7 +464,7 @@ func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Join(local(dir), "late.json")); err != nil || string(b) != "late" {
@@ -488,7 +488,7 @@ func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	l, _ = store.FindLeftover(dir)
-	if err := FinishLeftover(dir, l); err == nil {
+	if _, err := FinishLeftoverKept(dir, l); err == nil {
 		t.Error("an unreadable local file did not fail")
 	}
 	if !exists(t, before) {

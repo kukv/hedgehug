@@ -97,20 +97,19 @@ func TestSetupReadsAttributes(t *testing.T) {
 	}
 }
 
+// A clean store reads the workspaces alone: a task file that cannot be read
+// does not stop the sync, as it would if the repair read every file.
 func TestCleanStoreSkipsFullRepair(t *testing.T) {
 	c := newCluster(t, 1)
-	n := 0
-	replace(t, &onFullRepair, func() { n++ })
 	a := c.addTask(0, "a")
 	c.sync(0)
-	if n != 0 {
-		t.Errorf("a clean store read every file %d times", n)
-	}
 	b := c.addTask(0, "b")
 	c.set(0, b.ULID, func(t *model.Task) { t.ID = a.ID })
-	if r := c.sync(0); n != 1 || len(r.Repaired) != 1 {
-		t.Errorf("full repairs %d, repaired %+v", n, r.Repaired)
+	if r := c.sync(0); len(r.Repaired) != 1 {
+		t.Errorf("repaired %+v", r.Repaired)
 	}
+	c.hideFile(0, model.TaskPath(a.ULID))
+	c.sync(0)
 }
 
 func TestHeadMovedCapped(t *testing.T) {
@@ -136,14 +135,15 @@ func TestHeadMovedCapped(t *testing.T) {
 // file.
 func TestPrefixDuplicateInHeadBeforeSync(t *testing.T) {
 	c := newCluster(t, 1)
-	n := 0
-	replace(t, &onFullRepair, func() { n++ })
+	x := c.addTask(0, "x")
+	c.sync(0) // the index of HEAD is built; a later sync reads what changed
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "WEB", Created: time.Now(), PrefixSet: time.Now()}
 	b, err := w.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.putFile(0, model.WorkspacePath(w.ULID), string(b))
+	c.hideFile(0, model.TaskPath(x.ULID)) // a task file that cannot be read
 	for i := range 2 {
 		r := c.sync(0)
 		if !slices.ContainsFunc(r.Repaired, func(x merge.Repaired) bool {
@@ -151,9 +151,6 @@ func TestPrefixDuplicateInHeadBeforeSync(t *testing.T) {
 		}) {
 			t.Errorf("sync %d: repaired = %+v", i, r.Repaired)
 		}
-	}
-	if n != 0 {
-		t.Errorf("read every file %d times", n)
 	}
 }
 
@@ -219,7 +216,7 @@ func TestPushRoundsRunOut(t *testing.T) {
 
 func TestConsolidateByLooseObjects(t *testing.T) {
 	c := newCluster(t, 1)
-	replace(t, &repackAt, 0)
+	c.opts[0].RepackAt = 1 // consolidate with more than one loose object
 	c.addTask(0, "a")
 	r := c.sync(0)
 	if n, err := c.stores[0].Repo().LooseObjects(); err != nil || n != 0 || len(r.Warnings) != 0 {
@@ -229,22 +226,24 @@ func TestConsolidateByLooseObjects(t *testing.T) {
 
 func TestConsolidateByPackCount(t *testing.T) {
 	c := newCluster(t, 1)
-	replace(t, &repackAt, 0)
+	c.opts[0].RepackAt = 1 // consolidate with more than one loose object
 	c.addTask(0, "a")
 	c.sync(0)
-	if n, err := c.stores[0].Repo().SmallPacks(); err != nil || n == 0 {
-		t.Fatalf("packs %d, %v", n, err)
+	c.addTask(0, "b")
+	c.sync(0) // the loose objects of b make a second pack; the first is left
+	if n, err := c.stores[0].Repo().SmallPacks(); err != nil || n != 2 {
+		t.Fatalf("packs %d, %v; want 2", n, err)
 	}
 	// few loose objects, and as many packs as the limit: nothing happens
-	replace(t, &repackAt, 1<<20)
-	replace(t, &packsAt, 1<<20)
-	c.addTask(0, "b")
+	c.opts[0].RepackAt = 1 << 20
+	c.opts[0].PacksAt = 1 << 20
+	c.addTask(0, "c")
 	c.sync(0)
 	if n, _ := c.stores[0].Repo().LooseObjects(); n == 0 {
 		t.Fatal("consolidated below both limits")
 	}
 	// more packs than the limit
-	replace(t, &packsAt, 0)
+	c.opts[0].PacksAt = 1
 	r := c.sync(0)
 	if n, err := c.stores[0].Repo().LooseObjects(); err != nil || n != 0 || len(r.Warnings) != 0 {
 		t.Errorf("loose objects %d, %v; warnings %v", n, err, r.Warnings)

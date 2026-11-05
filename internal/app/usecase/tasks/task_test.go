@@ -218,8 +218,7 @@ func TestWatchAddsAndRemovesMe(t *testing.T) {
 		t.Fatalf("Watch without an account: kind %v, err %v; want KindConflict account.none", usecase.KindOf(err), err)
 	}
 
-	ts.UseAccount()
-	ts.ForgetWriter() // the writer is read once per session; read it again
+	ts.UseAccount() // a new session: the writer is read again
 	watchers := func() []string {
 		t.Helper()
 		_, ix, err := ts.Open()
@@ -410,7 +409,6 @@ func TestWriterHost(t *testing.T) {
 		t.Errorf("WriterHost without an account = %q, %v", h, err)
 	}
 	ts.UseAccount()
-	ts.ForgetWriter()
 	if h, err := ts.WriterHost(); err != nil || h != "github.com" {
 		t.Errorf("WriterHost = %q, %v; want github.com", h, err)
 	}

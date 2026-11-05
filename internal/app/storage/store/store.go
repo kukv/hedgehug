@@ -13,8 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -56,27 +54,36 @@ type Store struct {
 	idNumbers IDNumbers // counts id numbers for Update; nil reads every task
 	siblings  Siblings  // finds siblings for Update; nil reads every task
 
+	lockWait time.Duration // how long a write waits for the file lock
+
 	// Replaced by tests.
-	now      func() time.Time
-	lockWait time.Duration
-	commit   func(gitrepo.Commit) (plumbing.Hash, error)
+	now func() time.Time
 }
 
-func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.Schema) *Store {
+// Option changes how a store is opened or created.
+type Option func(*Store)
+
+// WithLockWait sets how long a write waits for the file lock held by another
+// process before it fails with ErrLocked; the default is 10 seconds. The
+// value is used as given: zero means not to wait.
+func WithLockWait(d time.Duration) Option {
+	return func(s *Store) { s.lockWait = d }
+}
+
+func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.Schema, opts ...Option) *Store {
 	s := &Store{
 		dir:      dir,
 		repo:     repo,
 		meta:     meta,
 		now:      time.Now,
 		lockWait: lockWait,
-		commit:   repo.Commit,
 	}
 	s.schema.Store(sc)
+	for _, o := range opts {
+		o(s)
+	}
 	return s
 }
-
-// newStoreHook lets tests change the store Create made before it writes.
-var newStoreHook = func(*Store) {}
 
 // Create makes a new store in dir, which must be missing or empty: a git
 // repository holding store.yaml, sc as schema.yaml (the default schema when
@@ -86,7 +93,7 @@ var newStoreHook = func(*Store) {}
 // Hedgehug-Author trailer of the commit. now tells the time of what it
 // writes, there and later.
 // When Create fails it removes what it made, so it can be run again.
-func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string, now func() time.Time) (_ *Store, err error) {
+func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string, now func() time.Time, opts ...Option) (_ *Store, err error) {
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
@@ -118,9 +125,8 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if sc == nil {
 		sc = schema.Default()
 	}
-	s := newStore(dir, repo, &m, sc)
+	s := newStore(dir, repo, &m, sc, opts...)
 	s.now = now
-	newStoreHook(s)
 
 	at := s.now().Truncate(time.Second)
 	w := *ws
@@ -163,7 +169,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if account != "" {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: account})
 	}
-	if _, err := s.commit(gitrepo.Commit{
+	if _, err := s.repo.Commit(gitrepo.Commit{
 		Paths:    paths,
 		Subject:  "hedgehug: init",
 		Trailers: trailers,
@@ -211,7 +217,7 @@ func undoCreate(dir string, made bool) error {
 // Open opens the store in dir. It reads store.yaml and schema.yaml now;
 // Meta returns what it read. Update reads schema.yaml again, and Schema
 // returns the schema read last.
-func Open(dir string) (*Store, error) {
+func Open(dir string, opts ...Option) (*Store, error) {
 	meta, err := readDecode(dir, model.StoreMetaPath, model.DecodeStoreMeta)
 	if err != nil {
 		return nil, err
@@ -224,7 +230,7 @@ func Open(dir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newStore(dir, repo, meta, sc), nil
+	return newStore(dir, repo, meta, sc, opts...), nil
 }
 
 // SetNow makes the store read the time from now, in place of time.Now, for

@@ -75,6 +75,7 @@ func (c *cluster) add(s *store.Store, i int) {
 	c.opts = append(c.opts, Options{
 		Remotes: []string{c.remote}, Author: gitrepo.Signature{Name: fmt.Sprint("u", i), Email: fmt.Sprintf("u%d@users.noreply.github.com", i)},
 		Account: acct, Me: []string{acct}, Now: time.Now,
+		RetryWait: time.Millisecond, // a rejected push is tried again at once
 	})
 }
 

@@ -75,9 +75,9 @@ func TestFinishLeftoverNeverRemovesAMarkedOldStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = FinishLeftover(dir, l)
+	_, err = FinishLeftoverKept(dir, l)
 	if err == nil || !strings.Contains(err.Error(), before) {
-		t.Fatalf("FinishLeftover = %v; want an error naming %s", err, before)
+		t.Fatalf("FinishLeftoverKept = %v; want an error naming %s", err, before)
 	}
 	if b, err := os.ReadFile(filepath.Join(before, "f")); err != nil || string(b) != "old" {
 		t.Errorf("the old store = %q, %v", b, err)
@@ -103,7 +103,7 @@ func TestFinishLeftoverPutsBackAMarkedOldStoreOfAStaleRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := FinishLeftover(dir, l); err != nil {
+	if _, err := FinishLeftoverKept(dir, l); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "f")); err != nil || string(b) != "old" {

@@ -168,7 +168,7 @@ func doctorStore(ss *usecase.Session, e config.StoreEntry, only bool, repaired [
 	if openErr == nil {
 		defer func() { _ = opened.Repo().Close() }()
 	}
-	fs, err := Run(e.Path)
+	fs, err := Run(e.Path, ss.Getenv)
 	if err != nil {
 		return DoctorReport{}, err
 	}
