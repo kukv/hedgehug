@@ -283,7 +283,7 @@ const messages: Record<string, Make> = {
   // choices and confirmations (the CLI asks; the GUI picks first)
   "choice.required": (a) =>
     str(a, "what") === "--scoped"
-      ? `プロジェクト（${list(a, "projects")}）の表示の設定を持っていくか、持っていかないかを選んでください`
+      ? `プロジェクト（${list(a, "projects")}）の設定（表示と自動化）を持っていくか、持っていかないかを選んでください`
       : `${choiceNouns[str(a, "what")] ?? `${str(a, "what")} `}を選んでください（${list(a, "candidates")}）`,
   "confirm.required": (a) => `${str(a, "what")} には確認が必要です`,
 

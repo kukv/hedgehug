@@ -118,7 +118,7 @@ describe("errorMessage", () => {
     expect(
       errorMessage(err("choice.required", { what: "--scoped", projects: ["API-2 P", "API-9 Q"] })),
     ).toBe(
-      "プロジェクト（API-2 P、API-9 Q）の表示の設定を持っていくか、持っていかないかを選んでください",
+      "プロジェクト（API-2 P、API-9 Q）の設定（表示と自動化）を持っていくか、持っていかないかを選んでください",
     );
     expect(
       errorMessage(err("choice.required", { what: "--account", candidates: ["alice", "bob"] })),

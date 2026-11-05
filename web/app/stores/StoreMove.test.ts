@@ -469,7 +469,9 @@ describe("StoreMove", () => {
     it("must be chosen before the move, and the choice is sent with the plan", async () => {
       const { routes } = setup({ plan: planOf({ scoped: scoped() }) });
       await pick("second");
-      const group = await screen.findByRole("radiogroup", { name: "プロジェクトの表示の設定" });
+      const group = await screen.findByRole("radiogroup", {
+        name: "プロジェクトの設定（表示と自動化）",
+      });
       expect(screen.getByRole("button", { name: "移動" })).toBeDisabled();
       expect(within(group).getByRole("radio", { name: "持っていく" })).not.toBeChecked();
       expect(within(group).getByRole("radio", { name: "持っていかない" })).not.toBeChecked();
@@ -522,7 +524,9 @@ describe("StoreMove", () => {
       await fireEvent.change(screen.getByRole("combobox", { name: "multi のワークスペース" }), {
         target: { value: "web" },
       });
-      const group = await screen.findByRole("radiogroup", { name: "プロジェクトの表示の設定" });
+      const group = await screen.findByRole("radiogroup", {
+        name: "プロジェクトの設定（表示と自動化）",
+      });
       await fireEvent.click(within(group).getByRole("radio", { name: "持っていかない" }));
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
       await fireEvent.click(screen.getByRole("button", { name: "移動" }));

@@ -52,7 +52,7 @@
 {#if plan.scoped}
   <div class="part">
     <div class="field" role="radiogroup" aria-labelledby="{uid}-scoped-lbl">
-      <span class="lbl" id="{uid}-scoped-lbl">プロジェクトの表示の設定</span>
+      <span class="lbl" id="{uid}-scoped-lbl">プロジェクトの設定（表示と自動化）</span>
       <label class="plain">
         <input
           type="radio"
