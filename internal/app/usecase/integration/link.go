@@ -87,6 +87,18 @@ func defaultIssueSync(s *store.Store) (string, error) {
 	return mode, nil
 }
 
+// dropGH takes what gh holds of ref off t. A link that comes in or goes away
+// starts over: undo leaves gh as it is, so the item of an old link may be there.
+func dropGH(t *model.Task, ref model.GitHubRef) error {
+	g, err := t.GitHub()
+	if err != nil {
+		return err
+	}
+	g.PRs = slices.DeleteFunc(g.PRs, func(p model.PRState) bool { return model.CanonRef(p.Ref) == ref.String() })
+	g.Issues = slices.DeleteFunc(g.Issues, func(x model.IssueState) bool { return model.CanonRef(x.Ref) == ref.String() })
+	return t.SetGitHub(g)
+}
+
 // Link links the task arg names. Linking again what is unlinked brings it
 // back; linking an issue again with another Sync changes its mode.
 func Link(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, error) {
@@ -98,14 +110,18 @@ func Link(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, er
 		i := slices.IndexFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() })
 		if i < 0 {
 			t.Links = append(slices.Clone(t.Links), model.Link{Type: ref.Kind, Ref: ref.String(), Sync: sync})
-			return nil
+			return dropGH(t, ref)
 		}
-		if t.Links[i].Live() && (in.Sync == "" || t.Links[i].Sync == sync) {
+		live := t.Links[i].Live()
+		if live && (in.Sync == "" || t.Links[i].Sync == sync) {
 			return usecase.NewErr(usecase.KindInvalid, "link.exists", fmt.Errorf("%s is linked already", ref.Label()))
 		}
 		t.Links = slices.Clone(t.Links)
 		t.Links[i].Sync = sync
-		return nil
+		if live {
+			return nil
+		}
+		return dropGH(t, ref)
 	})
 }
 
@@ -120,13 +136,7 @@ func Unlink(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, 
 		}
 		t.Links = slices.Clone(t.Links)
 		t.Links[i].Sync = model.SyncOff
-		g, err := t.GitHub()
-		if err != nil {
-			return err
-		}
-		g.PRs = slices.DeleteFunc(g.PRs, func(p model.PRState) bool { return model.CanonRef(p.Ref) == ref.String() })
-		g.Issues = slices.DeleteFunc(g.Issues, func(x model.IssueState) bool { return model.CanonRef(x.Ref) == ref.String() })
-		return t.SetGitHub(g)
+		return dropGH(t, ref)
 	})
 }
 

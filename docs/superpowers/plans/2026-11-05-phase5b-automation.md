@@ -49,6 +49,7 @@ spec に書いていなかった細部を、コードを読んで次のとおり
 | 18 | `5a の通しのテストの置き場所` | `internal/app/cli/github_scenario_test.go` は `cli` に残す | 中身は `newTestEnv` のプロセス内のテストで、`cli/scenario` はビルドしたバイナリを動かす場所。5b の通しのテストだけ `cli/scenario/github_test.go` に足す |
 | 19 | web の inbox | 5b では触らない。`describe` の既定の分岐が `種類: automation` と出す | タブと文言は spec の 5d-2 |
 | 20 | `hh mv --store` の選択 | `automations.yaml` に対象があるだけでも `--scoped` を求める。元の Store からは、持っていくときも捨てるときも消す | `schema.yaml` の `scoped` と同じ扱いにする |
+| 21 | `hh link --issue` と使えない `automations.yaml` | ファイルが読めないか `default_sync` が不正なら、`--sync` なしの指定は `automation.invalid` で失敗する。`--sync` の指定と `--pr` はファイルを読まないので通る | モードはタスクに残る値なので推測しない。決定 16 は同期を止めないための決まりで、利用者がその場で直せるこの操作には当てはめない |
 
 ## File Structure
 

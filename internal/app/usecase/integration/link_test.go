@@ -139,6 +139,39 @@ func TestLinkIssueWithAnUnusableFile(t *testing.T) {
 	}
 }
 
+// What gh holds of a ref goes when the link comes in or comes back on, and
+// stays when only the mode of a live link changes.
+func TestLinkClearsWhatGHHoldsOfTheRef(t *testing.T) {
+	t.Parallel()
+	const ref = "github.com/o/r/issues/1"
+	stale := model.GitHubState{Issues: []model.IssueState{{Ref: ref, State: "open"}}}
+	for name, c := range map[string]struct {
+		links []model.Link
+		items int
+	}{
+		"new":         {nil, 0},
+		"off":         {[]model.Link{{Type: model.LinkIssue, Ref: ref, Sync: model.SyncOff}}, 0},
+		"mode change": {[]model.Link{{Type: model.LinkIssue, Ref: ref, Sync: model.SyncLink}}, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ts := usecasetest.New(t)
+			ts.AddTask("a", func(x *model.Task) {
+				x.Links = c.links
+				if err := x.SetGitHub(stale); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1", Sync: "push"}); err != nil {
+				t.Fatal(err)
+			}
+			if g, _ := taskIn(t, ts, "me", "ME-1").GitHub(); len(g.Issues) != c.items {
+				t.Errorf("gh = %+v", g)
+			}
+		})
+	}
+}
+
 func TestLinkInputs(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

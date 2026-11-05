@@ -38,7 +38,9 @@ func Undo(ss *usecase.Session) (UndoResult, error) {
 		return UndoResult{}, usecase.NewErr(usecase.KindConflict, "account.none", errors.New("no account is set up; hedgehug undo needs one to find your operations; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)"))
 	}
 	var res UndoResult
-	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
+	// Old values go back, which is no move of the workflow, and the task was
+	// in that status without what it lacks.
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo", SkipTransitions: true, SkipRequired: true}, func(tx *store.Tx) error {
 		var err error
 		res, err = undoInTx(tx, s, ix, acct.ID())
 		var fe *forwardHitError

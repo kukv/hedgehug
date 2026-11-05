@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -93,6 +94,9 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 			oldE = sc.For(oldAncestors)
 		}
 		vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors), tx.op.SkipTransitions)
+		if tx.op.SkipRequired {
+			vs = slices.DeleteFunc(vs, func(v schema.Violation) bool { return v.Code == schema.CodeRequired })
+		}
 		wvs, err := tx.workspaceViolations(t)
 		if err != nil {
 			return err

@@ -134,11 +134,11 @@ issue_fields:
 | コマンド | 動き |
 |---|---|
 | `hh link <id> --pr org/repo#123` | `links` に足す |
-| `hh link <id> --issue org/repo#45 [--sync mirror\|push\|link]` | `links` に足す。既定は 5a では `link`、5b から `issue_fields.default_sync`。リンク済みならモードを変える |
+| `hh link <id> --issue org/repo#45 [--sync mirror\|push\|link]` | `links` に足す。既定は 5a では `link`、5b から `issue_fields.default_sync`。`automations.yaml` が読めないか `default_sync` が不正なら、`--sync` なしの指定は `automation.invalid` で失敗する。リンク済みならモードを変える |
 | `hh unlink <id> --pr ...`・`--issue ...` | `sync: off` にし、`gh` の要素を外す |
 | `hh show`・`--json` | リンクと `gh` を出す |
 
-`has:pr` は、`off` でない PR のリンクがあるタスクに一致する。`hh edit` は `gh` の変更を拒否する（`tasks.CheckEdit` に足す）。`gh` への書き込みの入口は取り込みだけにする。
+`has:pr` は、`off` でない PR のリンクがあるタスクに一致する。`hh edit` は `gh` の変更を拒否する（`tasks.CheckEdit` に足す）。`gh` の値を書くのは取り込みだけにする。`hh link`・`hh unlink` は要素を外すだけ。
 
 ### 取り込みの順番
 

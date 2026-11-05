@@ -571,3 +571,53 @@ func TestRuleDoesNotFireOnWhatAnotherCloneWrote(t *testing.T) {
 	}
 	wantStatus(t, other, "ME-1", "in_progress")
 }
+
+// A rule moved the task along a limited workflow: undo takes it back all the
+// same, and it does not fire again.
+func TestUndoOfARuleAgainstTheWorkflow(t *testing.T) {
+	t.Parallel()
+	ts, fake := withFake(t)
+	devStore(t, ts, func(sc *schema.Schema, _ *automation.File) {
+		sc.Workflow.Transitions = schema.Lists{{Key: "in_progress", Values: []string{"done"}}}
+	})
+	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
+	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
+		t.Fatal(err)
+	}
+	fetch(t, ts)
+	wantStatus(t, ts, "ME-1", "in_progress")
+	if _, err := tasks.Undo(ts.Session); err != nil {
+		t.Fatal(err)
+	}
+	wantStatus(t, ts, "ME-1", "todo")
+}
+
+// Undo leaves gh as it is, so the link that undo took away may leave its item
+// there: linking again is still a new item, and the rule fires.
+func TestLinkAgainAfterUndoFiresAgain(t *testing.T) {
+	t.Parallel()
+	ts, fake := withFake(t)
+	devStore(t, ts, nil)
+	ts.AddTask("a", nil)
+	if _, err := fake.OpenPull("org-a/web", "other", "A", "", false); err != nil {
+		t.Fatal(err)
+	}
+	pr := integration.LinkInput{PR: "org-a/web#1"}
+	if _, err := integration.Link(ts.Session, "ME-1", pr); err != nil {
+		t.Fatal(err)
+	}
+	fetch(t, ts)
+	wantStatus(t, ts, "ME-1", "in_progress")
+	for range 2 { // the rule, then the link
+		if _, err := tasks.Undo(ts.Session); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wantStatus(t, ts, "ME-1", "todo")
+	if _, err := integration.Link(ts.Session, "ME-1", pr); err != nil {
+		t.Fatal(err)
+	}
+	later(ts, 6*time.Minute)
+	fetch(t, ts)
+	wantStatus(t, ts, "ME-1", "in_progress")
+}
