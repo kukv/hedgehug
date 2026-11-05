@@ -180,7 +180,13 @@ test("the kanban and the table are tabs of a workspace and of a project", async 
 
   await hh.open(page, `/projects/${project.ulid}`);
   await expect(page.getByRole("heading", { level: 1, name: "Release" })).toBeVisible();
-  await expect(tabs(page).getByRole("link")).toHaveText(["ツリー", "カンバン", "テーブル", "設定"]);
+  await expect(tabs(page).getByRole("link")).toHaveText([
+    "概要",
+    "ツリー",
+    "カンバン",
+    "テーブル",
+    "設定",
+  ]);
   await expect(row(page, "Ship it")).toBeVisible();
   await tabs(page).getByRole("link", { name: "カンバン" }).click();
   await expect(page).toHaveURL(new RegExp(`/projects/${project.ulid}/kanban$`));

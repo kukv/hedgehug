@@ -707,6 +707,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    align-content: flex-start;
     gap: var(--space-8);
     min-width: 0;
     padding: 0 var(--space-4);

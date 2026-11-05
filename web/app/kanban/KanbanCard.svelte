@@ -1,4 +1,4 @@
-|| prChip(task.links) !== null<script lang="ts">
+<script lang="ts">
   import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { formatDate } from "../../core/format";

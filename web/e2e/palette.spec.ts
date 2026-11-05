@@ -29,7 +29,7 @@ test("Ctrl+Enter opens the task in a new tab that keeps the token", async ({ pag
   await page.keyboard.press("ControlOrMeta+k");
   const palette = page.getByRole("dialog", { name: "ID・検索・コマンド" });
   await palette.getByRole("combobox").fill(t.id);
-  await expect(palette.getByRole("option", { name: new RegExp(t.id) })).toBeVisible();
+  await expect(palette.getByRole("option", { name: new RegExp(`^${t.id}`) })).toBeVisible();
   const [popup] = await Promise.all([
     page.waitForEvent("popup"),
     page.keyboard.press("ControlOrMeta+Enter"),
