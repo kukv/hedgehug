@@ -11,8 +11,8 @@ describe("DeleteDialogs (variant delete)", () => {
 
   it("lists the descendants that go with it and deletes with an undo toast", async () => {
     const k = makeCore({ show });
-    k.api.GET.mockImplementation((_p: string, o: { params: { query: { q: string } } }) =>
-      o.params.query.q === "parent:U6"
+    k.api.listTasks.mockImplementation((o: { q: string }) =>
+      o.q === "parent:U6"
         ? ok({
             tasks: [
               taskView({ ulid: "A", id: "REL-9", title: "負荷試験" }),
@@ -21,8 +21,12 @@ describe("DeleteDialogs (variant delete)", () => {
           })
         : ok({ tasks: [] }),
     );
-    k.api.DELETE.mockImplementation(() => ok({ commit: "c1", tasks: [taskView({ ulid: "U6" })] }));
-    k.api.POST.mockImplementation(() => ok({ commit: "c2", tasks: [taskView({ ulid: "U6" })] }));
+    k.api.deleteTask.mockImplementation(() =>
+      ok({ commit: "c1", tasks: [taskView({ ulid: "U6" })] }),
+    );
+    k.api.restoreTask.mockImplementation(() =>
+      ok({ commit: "c2", tasks: [taskView({ ulid: "U6" })] }),
+    );
     mount(DeleteDialogs, { show, variant: "delete" }, k);
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     const dialog = await screen.findByRole("dialog");
@@ -33,14 +37,12 @@ describe("DeleteDialogs (variant delete)", () => {
     const t = toasts.list[0];
     expect(t?.message).toContain("リリース作業");
     await undoToast(t?.id ?? 0);
-    expect(k.api.POST).toHaveBeenCalledWith("/api/tasks/{id}/restore", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-    });
+    expect(k.api.restoreTask).toHaveBeenCalledWith("U6", { store: "shared" });
   });
 
   it("deletes a task without children with a plain button", async () => {
     const k = makeCore({ show });
-    k.api.GET.mockImplementation(() => ok({ tasks: [] }));
+    k.api.listTasks.mockImplementation(() => ok({ tasks: [] }));
     mount(DeleteDialogs, { show, variant: "delete" }, k);
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     const dialog = await screen.findByRole("dialog");
@@ -63,36 +65,34 @@ describe("DeleteDialogs (variant deleted)", () => {
 
   it("restores", async () => {
     const k = makeCore({ show: gone });
-    k.api.POST.mockImplementation(() => ok({ commit: "c1", tasks: [taskView({ ulid: "U6" })] }));
+    k.api.restoreTask.mockImplementation(() =>
+      ok({ commit: "c1", tasks: [taskView({ ulid: "U6" })] }),
+    );
     mount(DeleteDialogs, { show: gone, variant: "deleted" }, k);
     await fireEvent.click(screen.getByRole("button", { name: "復元" }));
-    await waitFor(() =>
-      expect(k.api.POST).toHaveBeenCalledWith("/api/tasks/{id}/restore", expect.anything()),
-    );
+    await waitFor(() => expect(k.api.restoreTask).toHaveBeenCalledWith("U6", expect.anything()));
     await waitFor(() => expect(toasts.list[0]?.message).toBe("REL-6 を復元しました"));
   });
 
   it("sends the restore once while it is running", async () => {
     const k = makeCore({ show: gone });
-    let done: (v: Awaited<ReturnType<typeof ok>>) => void = () => {};
-    k.api.POST.mockImplementation(
-      () => new Promise<Awaited<ReturnType<typeof ok>>>((r) => (done = r)),
-    );
+    let done: (v: unknown) => void = () => {};
+    k.api.restoreTask.mockImplementation(() => new Promise<unknown>((r) => (done = r)));
     mount(DeleteDialogs, { show: gone, variant: "deleted" }, k);
     const btn = screen.getByRole("button", { name: "復元" });
     await fireEvent.click(btn);
     expect(btn).toBeDisabled();
     await fireEvent.click(btn);
-    expect(k.api.POST).toHaveBeenCalledTimes(1);
-    done({ data: { commit: "c1", tasks: [] }, response: new Response() });
+    expect(k.api.restoreTask).toHaveBeenCalledTimes(1);
+    done({ commit: "c1", tasks: [] });
     await waitFor(() => expect(btn).toBeEnabled());
   });
 
   it("cannot close the delete confirmation while the deletion runs, so its error shows", async () => {
     const k = makeCore({ show });
-    k.api.GET.mockImplementation(() => ok({ tasks: [] }));
+    k.api.listTasks.mockImplementation(() => ok({ tasks: [] }));
     let release!: () => void;
-    k.api.DELETE.mockImplementation(
+    k.api.deleteTask.mockImplementation(
       () =>
         new Promise((r) => {
           release = () => r(fail(409, "store.read_only", { store: "shared" }));
@@ -115,7 +115,7 @@ describe("DeleteDialogs (variant deleted)", () => {
     const k = makeCore({ show });
     let first!: (v: unknown) => void;
     let n = 0;
-    k.api.GET.mockImplementation(() =>
+    k.api.listTasks.mockImplementation(() =>
       n++ === 0
         ? new Promise((r) => {
             first = r;

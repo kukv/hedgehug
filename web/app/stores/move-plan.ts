@@ -18,7 +18,7 @@ export function referenceKind(field: string): string {
 export type UnlinkRow = { key: string; kind: string; target: string; id: string };
 
 /** The references the move cuts, in the order of the plan: the kind, what it points to, the task it is on. */
-export function unlinkedRows(unlinked: Schemas["MoveUnlinkView"][]): UnlinkRow[] {
+export function unlinkedRows(unlinked: Schemas.MoveUnlinkView[]): UnlinkRow[] {
   return unlinked.map((u) => ({
     key: `${u.task.ulid} ${u.field} ${u.target.ulid}`,
     kind: referenceKind(u.field),

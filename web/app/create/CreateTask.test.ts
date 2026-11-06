@@ -25,7 +25,7 @@ function setup(opts: { onclose?: () => void; one?: boolean } = {}) {
     tasks: [parent],
     workspaces: opts.one ? [workspaces[0] as (typeof workspaces)[number]] : undefined,
   });
-  k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+  k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
   const onclose = opts.onclose ?? vi.fn();
   return { k, onclose, ...mount(CreateTask, { request: { kind: "task" }, onclose }, k) };
 }
@@ -55,10 +55,10 @@ describe("CreateTask", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(k.api.POST).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { store: "shared" } },
-      body: { title: "新しい作業", parent: "UP", kind: "task", status: "todo" },
-    });
+    expect(k.api.createTask).toHaveBeenCalledWith(
+      { title: "新しい作業", parent: "UP", kind: "task", status: "todo" },
+      { store: "shared" },
+    );
     expect(k.cache.applyWrite).toHaveBeenCalledWith({ task: created, commit: "c1" });
     expect(toasts.list[0]).toMatchObject({
       message: "REL-9 を作成しました · release",
@@ -83,7 +83,7 @@ describe("CreateTask", () => {
   it("creates under a task of a hidden Store, in the workspace of the parent", async () => {
     selection.set("UP");
     const k = makeCore({ tasks: [parent], hidden: ["shared"] });
-    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
     mount(CreateTask, { request: { kind: "task" }, onclose: vi.fn() }, k);
     expect(screen.getByText(/親と同じワークスペース/)).toBeInTheDocument();
     await typeTitle("新しい作業");
@@ -119,10 +119,10 @@ describe("CreateTask", () => {
     expect(screen.getByText(/ID は作成時に振ります/)).toHaveTextContent("shared（SH）");
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: Record<string, unknown> }];
-    expect(init.body).toMatchObject({ title: "x", workspace: "shared" });
-    expect(init.body).not.toHaveProperty("parent");
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    const [sent] = k.api.createTask.mock.calls[0] as [Record<string, unknown>];
+    expect(sent).toMatchObject({ title: "x", workspace: "shared" });
+    expect(sent).not.toHaveProperty("parent");
   });
 
   it("does not ask when there is only one workspace", () => {
@@ -137,9 +137,9 @@ describe("CreateTask", () => {
     typeInto(container, "メモ");
     await waitFor(() => expect(screen.getByRole("button", { name: "続けて作成" })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: "続けて作成" }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: { body: string } }];
-    expect(init.body.body).toBe("メモ");
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalledTimes(1));
+    const [sent] = k.api.createTask.mock.calls[0] as [{ body: string }];
+    expect(sent.body).toBe("メモ");
     await waitFor(() => expect(screen.getByRole("textbox", { name: "タイトル" })).toHaveValue(""));
     expect(viewOf(container).state.doc.toString()).toBe("");
     expect(onclose).not.toHaveBeenCalled();
@@ -152,9 +152,9 @@ describe("CreateTask", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     const title = screen.getByRole("textbox", { name: "タイトル" });
     await fireEvent.keyDown(title, { key: "Enter", isComposing: true });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
     await fireEvent.keyDown(title, { key: "Enter" });
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalledTimes(1));
   });
 
   it("creates with Ctrl+Enter anywhere in the dialog", async () => {
@@ -162,7 +162,7 @@ describe("CreateTask", () => {
     await typeTitle("x");
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalledTimes(1));
   });
 
   it("creates with Ctrl+Enter typed in the assignee field, with the assignee, once", async () => {
@@ -172,9 +172,9 @@ describe("CreateTask", () => {
     const assignee = screen.getByRole("textbox", { name: "担当者" });
     await fireEvent.input(assignee, { target: { value: "sato" } });
     await fireEvent.keyDown(assignee, { key: "Enter", ctrlKey: true });
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: object }];
-    expect(init.body).toMatchObject({ assignees: ["sato"] });
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalledTimes(1));
+    const [sent] = k.api.createTask.mock.calls[0] as [object];
+    expect(sent).toMatchObject({ assignees: ["sato"] });
   });
 
   it("does not create with Ctrl+Enter while an IME composes", async () => {
@@ -182,7 +182,7 @@ describe("CreateTask", () => {
     await typeTitle("x");
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, isComposing: true });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
   });
 
   it("creates with Ctrl+Enter in the body editor, once", async () => {
@@ -196,9 +196,9 @@ describe("CreateTask", () => {
       keyCode: 13,
       ctrlKey: true,
     });
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: { body: string } }];
-    expect(init.body.body).toBe("メモ");
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalledTimes(1));
+    const [sent] = k.api.createTask.mock.calls[0] as [{ body: string }];
+    expect(sent.body).toBe("メモ");
   });
 
   it("focuses the title as soon as the dialog opens with a parent", async () => {
@@ -241,14 +241,14 @@ describe("CreateTask", () => {
     await fireEvent.keyDown(assignee, { key: "Enter" });
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: object }];
-    expect(init.body).toMatchObject({ assignees: ["sato"], props: { priority: "high" } });
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    const [sent] = k.api.createTask.mock.calls[0] as [object];
+    expect(sent).toMatchObject({ assignees: ["sato"], props: { priority: "high" } });
   });
 
   it("shows the server's error in the dialog and stays open", async () => {
     const { k, onclose } = setup();
-    k.api.POST.mockImplementation(() => fail(422, "workspace.choose", { names: ["a", "b"] }));
+    k.api.createTask.mockImplementation(() => fail(422, "workspace.choose", { names: ["a", "b"] }));
     await typeTitle("x");
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
@@ -273,7 +273,7 @@ describe("CreateTask", () => {
   describe("the status of a column of the kanban", () => {
     async function createWith(request: Record<string, unknown>) {
       const k = makeCore({ tasks: [parent] });
-      k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+      k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
       mount(CreateTask, { request: { kind: "task", ...request }, onclose: vi.fn() }, k);
       await typeTitle("列から");
       await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
@@ -281,9 +281,9 @@ describe("CreateTask", () => {
         k,
         send: async () => {
           await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
-          await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-          const [, init] = k.api.POST.mock.calls[0] as [string, { body: Record<string, unknown> }];
-          return init.body;
+          await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+          const [sent] = k.api.createTask.mock.calls[0] as [Record<string, unknown>];
+          return sent;
         },
       };
     }
@@ -328,7 +328,7 @@ describe("CreateTask in a Store that cannot be written", () => {
 
   function open(list: typeof workspaces, readOnlyBy: Record<string, string>, request = {}) {
     const k = makeCore({ tasks: [parent], workspaces: list, readOnlyBy });
-    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
     return {
       k,
       ...mount(CreateTask, { request: { kind: "task", ...request }, onclose: vi.fn() }, k),
@@ -349,8 +349,8 @@ describe("CreateTask in a Store that cannot be written", () => {
     await typeTitle("x");
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    expect(k.api.createTask.mock.calls[0]?.[1]).toMatchObject({ store: "shared" });
   });
 
   it("cannot be sent when every Store is read-only, and says so", async () => {
@@ -361,7 +361,7 @@ describe("CreateTask in a Store that cannot be written", () => {
     expect(screen.getByText("書き込める Store がありません")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "続けて作成" })).toBeDisabled();
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
   });
 
   it("cannot put a task under a parent of a read-only Store", async () => {
@@ -376,7 +376,7 @@ describe("CreateTask in a Store that cannot be written", () => {
       screen.getByText("この Store は閲覧のみです（remote に書き込めません）"),
     ).toBeInTheDocument();
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
   });
 
   it("follows a Store that turns read-only after the dialog opened", async () => {

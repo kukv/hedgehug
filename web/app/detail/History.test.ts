@@ -29,12 +29,11 @@ const show = showView({
 });
 const then = showView({ ...show, title: "元の題", status: "todo" });
 
-// GET history answers the list, GET history/{commit} the task at that time.
+// getTaskHistory answers the list, showTaskAt the task at that time.
 function setup(readonly = false, at = then) {
   const k = makeCore({ show });
-  k.api.GET.mockImplementation((path: string) =>
-    path === "/api/tasks/{id}/history/{commit}" ? ok(at) : ok(logs),
-  );
+  k.api.getTaskHistory.mockImplementation(() => ok(logs));
+  k.api.showTaskAt.mockImplementation(() => ok(at));
   return { k, ...mount(History, { show, readonly }, k) };
 }
 
@@ -48,7 +47,7 @@ describe("History", () => {
       { key: "Hedgehug-Automation-Rejected", value: "U6 pr-merged points: required" },
       { key: "Hedgehug-Automation-Rejected", value: "U7 pr-merged about another task" },
     ];
-    k.api.GET.mockImplementation(() => ok([{ ...logs[0], trailers }]));
+    k.api.getTaskHistory.mockImplementation(() => ok([{ ...logs[0], trailers }]));
     mount(History, { show, readonly: false }, k);
     expect(
       await screen.findByText("自動化 · PR が開かれた · ルール pr-opened"),
@@ -62,9 +61,7 @@ describe("History", () => {
   it("loads the commits of the task, newest first, with the operation in Japanese", async () => {
     const { k } = setup();
     expect(await screen.findByText(/koki · 変更/)).toBeInTheDocument();
-    expect(k.api.GET).toHaveBeenCalledWith("/api/tasks/{id}/history", {
-      params: { path: { id: "U6" }, query: { store: "shared", limit: 50 } },
-    });
+    expect(k.api.getTaskHistory).toHaveBeenCalledWith("U6", { store: "shared", limit: 50 });
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent("Hedgehug-Op: set");
@@ -75,8 +72,7 @@ describe("History", () => {
   it("reads the log again when only a comment was saved (updated unchanged)", async () => {
     const { k, rerender } = setup();
     await screen.findByText(/koki · 変更/);
-    const calls = () =>
-      k.api.GET.mock.calls.filter((c: unknown[]) => c[0] === "/api/tasks/{id}/history").length;
+    const calls = () => k.api.getTaskHistory.mock.calls.length;
     expect(calls()).toBe(1);
     await rerender({ show: { ...show, comments: [{ ulid: "C1" }] }, readonly: false });
     await waitFor(() => expect(calls()).toBe(2));
@@ -90,14 +86,12 @@ describe("History", () => {
 
   it("lists what changes, then restores at the commit and shows the note of the response", async () => {
     const { k } = setup();
-    k.api.POST.mockImplementation(() =>
+    k.api.restoreTaskAt.mockImplementation(() =>
       ok({ task: taskView({ ulid: "U6" }), commit: "c9", note: "2 項目を戻しました" }),
     );
     await fireEvent.click(await screen.findByRole("button", { name: "この時点に戻す" }));
     const dialog = await screen.findByRole("dialog");
-    expect(k.api.GET).toHaveBeenCalledWith("/api/tasks/{id}/history/{commit}", {
-      params: { path: { id: "U6", commit: "aaaaaaa1" }, query: { store: "shared" } },
-    });
+    expect(k.api.showTaskAt).toHaveBeenCalledWith("U6", "aaaaaaa1", { store: "shared" });
     const table = await within(dialog).findByRole("table");
     expect(
       within(table).getByRole("row", { name: /タイトル.*今の題.*元の題/ }),
@@ -107,9 +101,7 @@ describe("History", () => {
     ).toBeInTheDocument();
     await fireEvent.click(within(dialog).getByRole("button", { name: "2 項目を戻す" }));
     await waitFor(() =>
-      expect(k.api.POST).toHaveBeenCalledWith("/api/tasks/{id}/history/{commit}/restore", {
-        params: { path: { id: "U6", commit: "aaaaaaa1" }, query: { store: "shared" } },
-      }),
+      expect(k.api.restoreTaskAt).toHaveBeenCalledWith("U6", "aaaaaaa1", { store: "shared" }),
     );
     expect(k.cache.applyWrite).toHaveBeenCalledWith({ task: expect.anything(), commit: "c9" });
     expect(toasts.list[0]?.message).toBe("2 項目を戻しました");
@@ -118,7 +110,7 @@ describe("History", () => {
   it("cannot close the restore confirmation while the restore runs, so its error shows", async () => {
     const { k } = setup();
     let release!: () => void;
-    k.api.POST.mockImplementation(
+    k.api.restoreTaskAt.mockImplementation(
       () =>
         new Promise((r) => {
           release = () => r(fail(409, "store.read_only", { store: "shared" }));
@@ -144,10 +136,8 @@ describe("History", () => {
 
   it("shows the error when the task did not exist at that time", async () => {
     const { k } = setup();
-    k.api.GET.mockImplementation((path: string) =>
-      path === "/api/tasks/{id}/history/{commit}"
-        ? fail(404, "restore_at.not_found", { at: "aaaaaaa1" })
-        : ok(logs),
+    k.api.showTaskAt.mockImplementation(() =>
+      fail(404, "restore_at.not_found", { at: "aaaaaaa1" }),
     );
     await fireEvent.click(await screen.findByRole("button", { name: "この時点に戻す" }));
     const dialog = await screen.findByRole("dialog");

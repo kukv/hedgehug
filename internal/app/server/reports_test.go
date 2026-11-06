@@ -36,6 +36,11 @@ func TestReportAPI(t *testing.T) {
 	if len(c.Columns) != 4 || len(c.Days) == 0 || c.Days[len(c.Days)-1].Counts["done"] != 1 {
 		t.Fatalf("cfd = %+v", c)
 	}
+	var spanned reports.CFDView
+	ts.call("GET", "/api/reports/cfd?since=2026-01-01&until=2026-01-03", nil, 200, &spanned)
+	if len(spanned.Days) != 3 || spanned.Days[0].Date != "2026-01-01" {
+		t.Fatalf("cfd of a span = %+v", spanned)
+	}
 	var cy reports.CycleView
 	ts.call("GET", "/api/reports/cycle", nil, 200, &cy)
 	if cy.Lead.Count != 1 {

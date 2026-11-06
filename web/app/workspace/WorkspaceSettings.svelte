@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliWorkspaceRename, cliWorkspaceRm, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
@@ -59,12 +58,7 @@
     failure = null;
     const from = saved;
     try {
-      const r = await unwrap(
-        api.PATCH("/api/workspaces/{id}", {
-          params: { path: { id: entry.ulid }, query: { store: entry.store } },
-          body: { name: draft },
-        }),
-      );
+      const r = await api.updateWorkspace(entry.ulid, { name: draft }, { store: entry.store });
       await stores.reload().catch(() => undefined);
       toast({ message: `ワークスペースの名前を ${from} から ${r.workspace.name} に変えました` });
     } catch (e) {

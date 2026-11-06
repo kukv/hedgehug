@@ -30,7 +30,7 @@
 </script>
 
 <script lang="ts">
-  import { ApiError, type Schemas, unwrap } from "../../core/api/client";
+  import { ApiError, type Schemas } from "../../core/api/client";
   import { cliAuthAdd, cliAuthLogin, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -65,7 +65,7 @@
   let failure = $state<string | null>(null);
 
   // The Device Flow that is running, and one that the server has but this screen cannot take over.
-  let flow = $state.raw<Schemas["DeviceStartBody"] | null>(null);
+  let flow = $state.raw<Schemas.DeviceStartBody | null>(null);
   let resumed = $state(false);
   let stale = $state<string | null>(null);
   // The accounts there were when the flow began: a login of one of them is a new login, not an addition.
@@ -103,7 +103,7 @@
   });
 
   async function remove(id: string): Promise<void> {
-    await unwrap(c.api.DELETE("/api/auth/device/{id}", { params: { path: { id } } }));
+    await c.api.cancelDeviceLogin(id);
   }
 
   // Stops the flow that is running. A failure does not matter: the flow is over or ends by itself.
@@ -141,11 +141,10 @@
     busy = true;
     known = new Set(c.accounts.accounts().map((a) => a.name));
     try {
-      const started = await unwrap(
-        c.api.POST("/api/auth/device", {
-          body: { name: trimmed.name || undefined, host: trimmed.host || undefined },
-        }),
-      );
+      const started = await c.api.startDeviceLogin({
+        name: trimmed.name || undefined,
+        host: trimmed.host || undefined,
+      });
       if (mine !== seq) {
         remove(started.id).catch(() => undefined);
         return;
@@ -216,12 +215,7 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        c.api.PUT("/api/accounts/{name}/token", {
-          params: { path: { name: trimmed.name } },
-          body,
-        }),
-      );
+      const r = await c.api.setAccountToken(trimmed.name, body);
       toast({
         message: r.uses
           ? `${r.account} は ${r.uses} からトークンを得るため、保存したものはありません`
@@ -241,16 +235,12 @@
     busy = true;
     failure = null;
     try {
-      await unwrap(
-        c.api.POST("/api/accounts", {
-          body: {
-            name: trimmed.name,
-            login: trimmed.login,
-            host: trimmed.host || undefined,
-            token: source === "gh" ? "gh" : source === "env" ? `env:${envName}` : undefined,
-          },
-        }),
-      );
+      await c.api.addAccount({
+        name: trimmed.name,
+        login: trimmed.login,
+        host: trimmed.host || undefined,
+        token: source === "gh" ? "gh" : source === "env" ? `env:${envName}` : undefined,
+      });
       toast({ message: `アカウント ${trimmed.name} を追加しました` });
       const account = trimmed.name;
       name = "";

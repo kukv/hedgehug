@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { ApiError, unwrap } from "../../core/api/client";
+  import { ApiError } from "../../core/api/client";
   import { cliPurge } from "../../core/cli";
   import { type PurgePlan, parsePurgeDays } from "../../core/doctor";
   import { errorMessage } from "../../core/messages";
@@ -68,9 +68,7 @@
     checking = true;
     failure = null;
     try {
-      const p = await unwrap(
-        c.api.GET("/api/purge", { params: { query: { older_than: `${d}d`, store: s } } }),
-      );
+      const p = await c.api.listPurge({ older_than: `${d}d`, store: s });
       if (mine !== seq) return;
       plan = p;
     } catch (e) {
@@ -95,12 +93,7 @@
     const mine = ++seq;
     purging = true;
     try {
-      const r = await unwrap(
-        c.api.POST("/api/purge", {
-          params: { query: { store: s } },
-          body: { older_than: `${d}d`, confirmed },
-        }),
-      );
+      const r = await c.api.purge({ older_than: `${d}d`, confirmed }, { store: s });
       if (mine !== seq) return;
       dialogOpen = false;
       plan = null;

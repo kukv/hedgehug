@@ -16,8 +16,8 @@ type Opts = {
 
 function setup(opts: Opts = {}) {
   const conn = new FakeConn();
-  const get = vi.fn((_path: string, init: { params: { query: { store: string } } }) => {
-    const r = opts.get?.(init.params.query.store);
+  const get = vi.fn((query: { store: string }) => {
+    const r = opts.get?.(query.store);
     return r !== undefined ? r : ok({ findings: opts.findings ?? [] });
   });
   const view = renderWithCore(
@@ -27,7 +27,7 @@ function setup(opts: Opts = {}) {
       many: opts.many ?? false,
       idOf: (ulid: string) => (ulid === "A" ? "REL-A" : undefined),
     },
-    { api: { GET: get }, conn },
+    { api: { checkSchema: get }, conn },
   );
   return { get, conn, ...view };
 }
@@ -40,9 +40,7 @@ describe("SchemaCheck", () => {
   it("asks for the check of the Store, and says the schema and the tasks agree when it finds nothing", async () => {
     const { get } = setup();
     expect(await screen.findByText("スキーマとタスクは合っています")).toBeVisible();
-    expect(get).toHaveBeenCalledWith("/api/schema/check", {
-      params: { query: { store: "shared" } },
-    });
+    expect(get).toHaveBeenCalledWith({ store: "shared" });
     expect(screen.getByRole("region", { name: "スキーマの検査" })).toBeVisible();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       "$ hh schema check",
@@ -151,9 +149,7 @@ describe("SchemaCheck", () => {
     });
     await screen.findByText("shared の指摘");
     await k.rerender({ store: "ops" });
-    expect(k.get).toHaveBeenLastCalledWith("/api/schema/check", {
-      params: { query: { store: "ops" } },
-    });
+    expect(k.get).toHaveBeenLastCalledWith({ store: "ops" });
     expect(screen.queryByText("shared の指摘")).toBeNull();
   });
 
@@ -172,7 +168,7 @@ describe("SchemaCheck", () => {
     const view = renderWithCore(
       SchemaCheck,
       { store: "shared", many: false, idOf: () => undefined },
-      { api: { GET: get }, conn },
+      { api: { checkSchema: get }, conn },
     );
     view.unmount();
     for (const off of offs) expect(off).toHaveBeenCalledTimes(1);

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliTemplateEdit, cliTemplateRm } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { Template } from "../../core/planning";
@@ -23,7 +22,8 @@
     const s = store;
     void rev;
     let live = true;
-    unwrap(api.GET("/api/templates", { params: { query: { store: s } } }))
+    api
+      .listTemplates({ store: s })
       .then((r) => {
         if (!live) return;
         list = r ?? [];
@@ -49,9 +49,7 @@
   async function show(name: string) {
     failure = null;
     try {
-      const f = await unwrap(
-        api.GET("/api/templates/{name}", { params: { path: { name }, query: { store } } }),
-      );
+      const f = await api.getTemplate(name, { store });
       open = f.name;
       content = f.content;
       saved = f.exists ? f.content : "";
@@ -67,12 +65,7 @@
     busy = true;
     failure = null;
     try {
-      await unwrap(
-        api.PUT("/api/templates/{name}", {
-          params: { path: { name: open }, query: { store } },
-          body: { content },
-        }),
-      );
+      await api.putTemplate(open, { content }, { store });
       saved = content;
       exists = true;
       rev++;
@@ -89,9 +82,7 @@
     busy = true;
     failure = null;
     try {
-      await unwrap(
-        api.DELETE("/api/templates/{name}", { params: { path: { name: open }, query: { store } } }),
-      );
+      await api.removeTemplate(open, { store });
       toast({ message: `テンプレート ${open} を削除しました` });
       open = null;
       rev++;

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliSprintStart } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { ptLabel, type Sprint } from "../../core/planning";
@@ -40,12 +39,12 @@
     if (invalid || busy) return;
     busy = true;
     failure = null;
-    const params = { path: { id: was.ulid }, query: { store: entry.store } };
+    const query = { store: entry.store };
     try {
       if (Object.keys(changes).length > 0) {
-        await unwrap(c.api.PATCH("/api/sprints/{id}", { params, body: changes }));
+        await c.api.updateSprint(was.ulid, changes, query);
       }
-      await unwrap(c.api.POST("/api/sprints/{id}/start", { params }));
+      await c.api.startSprint(was.ulid, query);
       plansWritten();
       toast({ message: `スプリント ${name.trim()} を開始しました` });
       onclose();

@@ -3,11 +3,11 @@
 import type { Schemas } from "./api/client";
 import { dayOf } from "./gantt";
 
-export type BurndownView = Schemas["BurndownView"];
-export type VelocityRow = Schemas["VelocityRow"];
-export type CFDView = Schemas["CFDView"];
-export type CycleView = Schemas["CycleView"];
-export type EstimateView = Schemas["EstimateView"];
+export type BurndownView = Schemas.BurndownView;
+export type VelocityRow = Schemas.VelocityRow;
+export type CFDView = Schemas.CFDView;
+export type CycleView = Schemas.CycleView;
+export type EstimateView = Schemas.EstimateView;
 
 const sum = (ns: readonly number[]): number => ns.reduce((a, b) => a + b, 0);
 

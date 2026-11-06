@@ -68,9 +68,10 @@ vi.mock("../workspace/dialogs-state.svelte", () => ({
   openStoreMove: h.moveStore,
 }));
 
+import { toApiError } from "../../core/api/client";
 import CommandPalette from "./CommandPalette.svelte";
 
-const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+const ok = (data: unknown) => Promise.resolve(data);
 const rel6 = task("U6", "task", null, {
   id: "REL-6",
   title: "Web の API クライアントを v2 に更新",
@@ -91,36 +92,28 @@ function setup(
     projects: [],
   };
   const api = {
-    GET: vi.fn(
-      async (
-        path: string,
-        opts: { params: { path?: { id: string }; query?: { store?: string; q?: string } } },
-      ) => {
-        if (path === "/api/tasks/{id}") {
-          const hit = ["sh-17", "shared:rel-6"].includes(opts.params.path?.id.toLowerCase() ?? "");
-          return hit
-            ? ok({ ...rel6, former_ids: ["SH-17"] })
-            : {
-                error: { type: "task.not_found", title: "NF", status: 404 },
-                response: new Response(null, { status: 404 }),
-              };
-        }
-        if (opts.params.query?.q?.startsWith("foo:")) {
-          return {
-            error: {
+    getTask: vi.fn((id: string, _query?: unknown) => {
+      const hit = ["sh-17", "shared:rel-6"].includes(id.toLowerCase());
+      return hit
+        ? ok({ ...rel6, former_ids: ["SH-17"] })
+        : Promise.reject(toApiError(404, { type: "task.not_found", title: "NF", status: 404 }));
+    }),
+    listTasks: vi.fn((params?: { store?: string; q?: string }) =>
+      params?.q?.startsWith("foo:")
+        ? Promise.reject(
+            toApiError(400, {
               type: "query.invalid",
               title: "Bad",
               status: 400,
               detail: "term 1 (foo:bar): unknown key",
-            },
-            response: new Response(null, { status: 400 }),
-          };
-        }
-        return ok({ tasks: found });
-      },
+            }),
+          )
+        : ok({ tasks: found }),
     ),
-    POST: vi.fn(async () => ok([])),
-    PATCH: vi.fn(async () => ok({ task: { ...rel6, status: "done" }, commit: "c1" })),
+    sync: vi.fn((_query?: unknown) => ok([])),
+    updateTask: vi.fn((_id?: string, _body?: unknown, _query?: unknown) =>
+      ok({ task: { ...rel6, status: "done" }, commit: "c1" }),
+    ),
   };
   h.core = {
     api,
@@ -221,7 +214,7 @@ describe("CommandPalette", () => {
     expect(await screen.findByText("今すぐ同期する")).toBeInTheDocument();
     expect(screen.getByText("コマンド", { selector: "[data-mode]" })).toBeInTheDocument();
     await fireEvent.keyDown(box(), { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalledWith("/api/sync"));
+    await waitFor(() => expect(api.sync).toHaveBeenCalledWith());
     expect(palette.open).toBe(false);
   });
 
@@ -328,8 +321,9 @@ describe("CommandPalette", () => {
       openPalette();
       await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "backend" } });
       await waitFor(() =>
-        expect(api.GET).toHaveBeenCalledWith("/api/tasks", {
-          params: { query: { q: '-store:backend "backend"', store: undefined } },
+        expect(api.listTasks).toHaveBeenCalledWith({
+          q: '-store:backend "backend"',
+          store: undefined,
         }),
       );
     });
@@ -350,9 +344,7 @@ describe("CommandPalette", () => {
         target: { value: "shared:REL-6" },
       });
       expect(await screen.findByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
-      expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", {
-        params: { path: { id: "shared:REL-6" } },
-      });
+      expect(api.getTask).toHaveBeenCalledWith("shared:REL-6");
       expect(screen.getByRole("combobox")).toBeInTheDocument();
       // the input is an ID, not a query
       expect(screen.getByText("ID", { selector: "*" })).toBeInTheDocument();
@@ -437,11 +429,8 @@ describe("CommandPalette", () => {
     expect(palette.open).toBe(true);
     expect(screen.getByText("ステータス", { selector: "[data-mode]" })).toBeInTheDocument();
     await fireEvent.click(await screen.findByRole("option", { name: /done/ }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-      body: { status: "done" },
-    });
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
+    expect(api.updateTask).toHaveBeenCalledWith("U6", { status: "done" }, { store: "shared" });
     expect(palette.open).toBe(false);
   });
 
@@ -628,7 +617,7 @@ describe("CommandPalette", () => {
     await fireEvent.keyDown(box(), { key: "Enter", isComposing: true });
     await fireEvent.keyDown(box(), { key: "Enter", keyCode: 229 });
     await fireEvent.keyDown(box(), { key: "Escape", isComposing: true });
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.sync).not.toHaveBeenCalled();
     expect(palette.open).toBe(true);
   });
 
@@ -659,7 +648,7 @@ describe("CommandPalette", () => {
   it("says which stores failed to sync, and does not start a second sync while one runs", async () => {
     const { api } = setup();
     let release: (v: unknown) => void = () => {};
-    api.POST.mockImplementation(
+    api.sync.mockImplementation(
       () =>
         new Promise((r) => {
           release = r;
@@ -672,7 +661,7 @@ describe("CommandPalette", () => {
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">同期" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
-    expect(api.POST).toHaveBeenCalledTimes(1);
+    expect(api.sync).toHaveBeenCalledTimes(1);
     release(
       ok([
         { store: "shared", ok: true },
@@ -769,18 +758,12 @@ describe("CommandPalette", () => {
 
   it("fetches the recent tasks the cache lacks and drops one that is gone", async () => {
     const { api } = setup();
-    const gone = {
-      error: { type: "task.not_found", title: "NF", status: 404 },
-      response: new Response(null, { status: 404 }),
-    };
     const u7 = task("U7", "task", null, { id: "REL-7", title: "あとから届く" });
-    api.GET.mockImplementation((async (
-      path: string,
-      opts: { params: { path?: { id: string } } },
-    ) => {
-      if (path === "/api/tasks/{id}") return opts.params.path?.id === "U7" ? ok(u7) : gone;
-      return ok({ tasks: [] });
-    }) as never);
+    api.getTask.mockImplementation((id: string) =>
+      id === "U7"
+        ? ok(u7)
+        : Promise.reject(toApiError(404, { type: "task.not_found", title: "NF", status: 404 })),
+    );
     const core = h.core as { cache: { task: (u: string) => unknown; prime: unknown } };
     const known = core.cache.task;
     const store = new Map<string, unknown>();
@@ -792,8 +775,8 @@ describe("CommandPalette", () => {
     render(CommandPalette);
     openPalette();
     expect(await screen.findByText("あとから届く")).toBeInTheDocument();
-    expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", { params: { path: { id: "U7" } } });
-    expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", { params: { path: { id: "U8" } } });
+    expect(api.getTask).toHaveBeenCalledWith("U7");
+    expect(api.getTask).toHaveBeenCalledWith("U8");
     await waitFor(() =>
       expect(JSON.parse(localStorage.getItem("hedgehug.recent") ?? "[]")).toEqual(["U6", "U7"]),
     );

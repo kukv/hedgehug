@@ -4,11 +4,11 @@
 import type { Schemas } from "./api/client";
 import { formatRelative, formatTime } from "./format";
 
-export type Link = Schemas["LinkView"];
-export type GitHubRepo = Schemas["GitHubRepoView"];
-export type Rule = Schemas["RuleView"];
-export type IssueFields = Schemas["FieldsView"];
-export type RuleStat = Schemas["RuleStat"];
+export type Link = Schemas.LinkView;
+export type GitHubRepo = Schemas.GitHubRepoView;
+export type Rule = Schemas.RuleView;
+export type IssueFields = Schemas.FieldsView;
+export type RuleStat = Schemas.RuleStat;
 
 export type PrTone = "open" | "draft" | "merged" | "fail" | "changes" | "closed" | "unread";
 export type PrState = { text: string; tone: PrTone };

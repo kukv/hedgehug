@@ -22,7 +22,7 @@ type reportVelocityInput struct {
 	Last      int    `query:"last" minimum:"0" doc:"How many sprints; 0 for 10"`
 }
 
-type reportSpanInput struct {
+type ReportSpanInput struct {
 	StoreParam
 	Workspace string `query:"workspace"`
 	Since     string `query:"since" doc:"The first day; without it, 30 days ago"`
@@ -30,7 +30,7 @@ type reportSpanInput struct {
 }
 
 type reportCFDInput struct {
-	reportSpanInput
+	ReportSpanInput
 	By string `query:"by" enum:"category,status," doc:"category (default) or status"`
 }
 
@@ -83,7 +83,7 @@ func (s *Server) registerReports() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "report-cycle", Method: http.MethodGet, Path: "/api/reports/cycle",
 		Summary: "Cycle and lead time, as hh report cycle", Tags: []string{"reports"},
-	}, func(_ context.Context, in *reportSpanInput) (*struct{ Body reports.CycleView }, error) {
+	}, func(_ context.Context, in *ReportSpanInput) (*struct{ Body reports.CycleView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
 		v, err := reports.Cycle(ss, in.Workspace, in.Since, in.Until)

@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Schemas } from "../../core/api/client";
-  import { unwrap } from "../../core/api/client";
   import { formatRelative } from "../../core/format";
   import { errorMessage } from "../../core/messages";
   import { readOnlyReason, type StoreTone } from "../../core/stores";
@@ -16,7 +15,7 @@
   // shows or hides it. The details hold what the Store is made of and the operations on it.
   // lastVisible is true when this is the only Store that is shown: its check stays on.
   type Props = {
-    store: Schemas["StoreItem"];
+    store: Schemas.StoreItem;
     lastVisible: boolean;
     onremove: () => void;
   };
@@ -73,9 +72,7 @@
   }
 
   const patch = (body: { color?: string; hidden?: boolean }) =>
-    write(() =>
-      unwrap(c.api.PATCH("/api/stores/{name}", { params: { path: { name: store.name } }, body })),
-    );
+    write(() => c.api.updateStore(store.name, body));
 
   function pick(color: string): void {
     picking = false;
@@ -83,9 +80,7 @@
   }
 
   async function makeDefault(): Promise<void> {
-    const done = await write(() =>
-      unwrap(c.api.PUT("/api/stores/default", { body: { name: store.name } })),
-    );
+    const done = await write(() => c.api.setDefaultStore({ name: store.name }));
     if (done) toast({ message: `既定の Store を ${store.name} にしました` });
   }
 </script>

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toApiError } from "../../core/api/client";
 import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import StoreBands from "./StoreBands.svelte";
@@ -58,9 +59,9 @@ describe("StoreBands", () => {
 
     function hiddenCore(patch: () => Promise<unknown>) {
       const reload = vi.fn(async () => {});
-      const PATCH = vi.fn(patch);
+      const updateStore = vi.fn(patch);
       const over = {
-        api: { PATCH },
+        api: { updateStore },
         stores: {
           readOnly: () => null,
           hidden: (s: string) => s === "second",
@@ -68,9 +69,9 @@ describe("StoreBands", () => {
           subscribe: () => () => {},
         },
       };
-      return { PATCH, reload, over };
+      return { updateStore, reload, over };
     }
-    const okPatch = async () => ({ data: {}, response: new Response(null, { status: 200 }) });
+    const okPatch = async () => ({});
 
     it("says the Store is hidden, with the button to show it", () => {
       const { over } = hiddenCore(okPatch);
@@ -91,23 +92,19 @@ describe("StoreBands", () => {
       expect(screen.queryByRole("status")).toBeNull();
     });
 
-    it("shows the Store: PATCH hidden false, then reload and the toast", async () => {
-      const { over, PATCH, reload } = hiddenCore(okPatch);
+    it("shows the Store: updateStore hidden false, then reload and the toast", async () => {
+      const { over, updateStore, reload } = hiddenCore(okPatch);
       renderWithCore(StoreBands, { store: "second" }, over);
       await fireEvent.click(screen.getByRole("button", { name: "表示する" }));
       await waitFor(() => expect(toasts.list[0]?.message).toBe("second を表示しました"));
-      expect(PATCH).toHaveBeenCalledWith("/api/stores/{name}", {
-        params: { path: { name: "second" } },
-        body: { hidden: false },
-      });
+      expect(updateStore).toHaveBeenCalledWith("second", { hidden: false });
       expect(reload).toHaveBeenCalled();
     });
 
     it("says why when the server refuses, and does not reload", async () => {
-      const { over, reload } = hiddenCore(async () => ({
-        error: { type: "store.not_found", title: "Not found", status: 404 },
-        response: new Response(null, { status: 404 }),
-      }));
+      const { over, reload } = hiddenCore(async () => {
+        throw toApiError(404, { type: "store.not_found", title: "Not found", status: 404 });
+      });
       renderWithCore(StoreBands, { store: "second" }, over);
       await fireEvent.click(screen.getByRole("button", { name: "表示する" }));
       await waitFor(() => expect(toasts.list).toHaveLength(1));

@@ -27,7 +27,7 @@ const spaces = [
 
 function setup(list = spaces) {
   const k = makeCore({ workspaces: list });
-  k.api.POST.mockImplementation(() => ok({ task: moved, commit: "c3", detached: null }));
+  k.api.moveTask.mockImplementation(() => ok({ task: moved, commit: "c3", detached: null }));
   const onclose = vi.fn();
   return { k, onclose, ...mount(WorkspaceMove, { task, onclose }, k) };
 }
@@ -82,10 +82,7 @@ describe("WorkspaceMove", () => {
     const { k, onclose } = setup();
     await fireEvent.click(screen.getByRole("button", { name: "移動" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(k.api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-      body: { workspace: "W2" },
-    });
+    expect(k.api.moveTask).toHaveBeenCalledWith("U6", { workspace: "W2" }, { store: "shared" });
     expect(k.cache.applyWrite).toHaveBeenCalledWith({ task: moved, commit: "c3" });
     expect(toasts.list[0]).toMatchObject({
       message: "REL-6 を shared に移しました（今の ID は SH-12）",
@@ -95,7 +92,7 @@ describe("WorkspaceMove", () => {
 
   it("names what the move took off the task", async () => {
     const { k, onclose } = setup();
-    k.api.POST.mockImplementation(() =>
+    k.api.moveTask.mockImplementation(() =>
       ok({
         task: moved,
         commit: "c3",
@@ -121,7 +118,7 @@ describe("WorkspaceMove", () => {
 
   it("keeps the dialog open and shows the words of the server when it refuses", async () => {
     const { k, onclose } = setup();
-    k.api.POST.mockImplementation(() => fail(400, "move.invalid", {}, "task is deleted"));
+    k.api.moveTask.mockImplementation(() => fail(400, "move.invalid", {}, "task is deleted"));
     await fireEvent.click(screen.getByRole("button", { name: "移動" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "ここには移せません: task is deleted",

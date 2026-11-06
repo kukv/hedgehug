@@ -1,4 +1,4 @@
-import { type Api, type TaskView, unwrap } from "./api/client";
+import type { Api, TaskView } from "./api/client";
 
 // taskSearchQuery is the query for the words typed in a search box (the #
 // completion, the command palette, the parent and blocker pickers): every
@@ -23,6 +23,6 @@ export async function searchTasks(
 ): Promise<TaskView[]> {
   const q = taskSearchQuery(text, opts.extra);
   if (q === "") return [];
-  const out = await unwrap(api.GET("/api/tasks", { params: { query: { q, store: opts.store } } }));
+  const out = await api.listTasks({ q, store: opts.store });
   return (out.tasks ?? []).slice(0, opts.limit ?? 8);
 }

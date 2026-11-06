@@ -1,4 +1,4 @@
-import { type Api, ApiError, type Schemas, unwrap } from "./api/client";
+import { type Api, ApiError, type Schemas } from "./api/client";
 import type { TaskCache } from "./cache";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
@@ -24,7 +24,7 @@ export type SaveState =
   | { kind: "saved"; pendingPush: boolean }
   | { kind: "error"; message: string };
 
-type Patch = Schemas["PatchInputBody"];
+type Patch = Schemas.PatchInputBody;
 
 const DELAY_MS = 2000;
 
@@ -204,12 +204,7 @@ export class SaveController {
     this.states.set(ulid, { kind: "saving" });
     this.notify();
     try {
-      const w = await unwrap(
-        this.api.PATCH("/api/tasks/{id}", {
-          params: { path: { id: ulid }, query: { store } },
-          body: patchOf(fields),
-        }),
-      );
+      const w = await this.api.updateTask(ulid, patchOf(fields), { store });
       for (const k of fields.keys()) this.rejected.get(ulid)?.delete(k);
       this.cache.applyWrite({ task: w.task, commit: w.commit });
       const body = fields.get("body");

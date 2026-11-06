@@ -68,13 +68,10 @@ function setup(
   let current = items;
   const conn = new FakeConn();
   const api = {
-    GET: vi.fn(() => (opts.getError ? Promise.reject(opts.getError) : ok(current))),
-    POST: vi.fn((path: string) =>
-      path.endsWith("/revert") ? ok({ task: { id: "REL-11" } }) : ok({ read: [] }),
-    ),
-    PATCH: vi.fn(() =>
-      Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) }),
-    ),
+    listNotifications: vi.fn(() => (opts.getError ? Promise.reject(opts.getError) : ok(current))),
+    revertNotification: vi.fn((_id?: string) => ok({ task: { id: "REL-11" } })),
+    readNotifications: vi.fn((_query?: unknown) => ok({ read: [] })),
+    updateNotification: vi.fn((_id?: string, _body?: unknown) => Promise.resolve(undefined)),
   };
   const names = opts.stores ?? ["shared"];
   const view = renderWithCore(
@@ -120,10 +117,8 @@ afterEach(() => cleanup());
 describe("InboxPage", () => {
   it("asks once for the items of every store, the read ones too", async () => {
     const { api } = setup([overwritten]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
-    expect(api.GET).toHaveBeenCalledWith("/api/notifications", {
-      params: { query: { all: true } },
-    });
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(1));
+    expect(api.listNotifications).toHaveBeenCalledWith({ all: true });
     expect(screen.getByRole("heading", { level: 1, name: "通知" })).toBeTruthy();
     expect(
       screen.getByText(
@@ -227,10 +222,7 @@ describe("InboxPage", () => {
     const link = await screen.findByRole("link", { name: "REL-4" });
     expect(link.getAttribute("href")).toBe("/tasks/U-REL-4");
     await fireEvent.click(link);
-    expect(api.PATCH).toHaveBeenCalledWith("/api/notifications/{id}", {
-      params: { path: { id: "N2" } },
-      body: { read: true },
-    });
+    expect(api.updateNotification).toHaveBeenCalledWith("N2", { read: true });
     expect(location.pathname).toBe("/tasks/U-REL-4");
   });
 
@@ -244,11 +236,8 @@ describe("InboxPage", () => {
       screen.getByRole("link", { name: "title of REL-30" }),
       new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true }),
     );
-    expect(api.PATCH).toHaveBeenCalledTimes(2);
-    expect(api.PATCH).toHaveBeenCalledWith("/api/notifications/{id}", {
-      params: { path: { id: "N2" } },
-      body: { read: true },
-    });
+    expect(api.updateNotification).toHaveBeenCalledTimes(2);
+    expect(api.updateNotification).toHaveBeenCalledWith("N2", { read: true });
     expect(location.pathname).toBe("/inbox");
   });
 
@@ -256,7 +245,7 @@ describe("InboxPage", () => {
     const { api } = setup([watched]);
     await fireEvent.click(await screen.findByRole("link", { name: "title of REL-13" }));
     expect(location.pathname).toBe("/tasks/U-REL-13");
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateNotification).not.toHaveBeenCalled();
   });
 
   it("an item of a workspace has no link to a task", async () => {
@@ -273,11 +262,8 @@ describe("InboxPage", () => {
   it("an unread item is marked read by its button", async () => {
     const { api } = setup([assigned]);
     await fireEvent.click(await screen.findByRole("button", { name: "既読にする" }));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/notifications/{id}", {
-      params: { path: { id: "N3" } },
-      body: { read: true },
-    });
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+    expect(api.updateNotification).toHaveBeenCalledWith("N3", { read: true });
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(2));
   });
 
   it("an overwritten item has the buttons of the canvas, and no plain 既読にする", async () => {
@@ -285,10 +271,7 @@ describe("InboxPage", () => {
     const row = await screen.findByRole("listitem");
     expect(within(row).queryByRole("button", { name: "既読にする" })).toBeNull();
     await fireEvent.click(within(row).getByRole("button", { name: "このままにする" }));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/notifications/{id}", {
-      params: { path: { id: "N1" } },
-      body: { read: true },
-    });
+    expect(api.updateNotification).toHaveBeenCalledWith("N1", { read: true });
   });
 
   it("a read item has no buttons", async () => {
@@ -300,16 +283,12 @@ describe("InboxPage", () => {
   it("reverts to my value, and says so", async () => {
     const { api } = setup([overwritten]);
     await fireEvent.click(await screen.findByRole("button", { name: "自分の値に戻す" }));
-    await waitFor(() =>
-      expect(api.POST).toHaveBeenCalledWith("/api/notifications/{id}/revert", {
-        params: { path: { id: "N1" } },
-      }),
-    );
+    await waitFor(() => expect(api.revertNotification).toHaveBeenCalledWith("N1"));
     await waitFor(() =>
       expect(toasts.list[0]?.message).toBe("REL-11 の points を自分の値に戻しました"),
     );
     expect(toasts.list[0]?.undo).toBeUndefined();
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(2));
   });
 
   it("cannot revert an overwrite in a read-only Store, and says why; the other items are not touched", async () => {
@@ -320,13 +299,13 @@ describe("InboxPage", () => {
     expect(b).toBeDisabled();
     expect(b).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
     b.click();
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.revertNotification).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "このままにする" })).toBeEnabled();
   });
 
   it("shows the words of the server when the revert is refused", async () => {
     const { api } = setup([overwritten]);
-    api.POST.mockImplementation(
+    api.revertNotification.mockImplementation(
       () => fail(404, "task.moved", { input: "REL-11", store: "backend", id: "PAY-3" }) as never,
     );
     await fireEvent.click(await screen.findByRole("button", { name: "自分の値に戻す" }));
@@ -337,8 +316,8 @@ describe("InboxPage", () => {
   it("marks everything read in one call without asking which Store", async () => {
     const { api } = setup([overwritten, mention]);
     await fireEvent.click(await screen.findByRole("button", { name: "すべて既読にする" }));
-    expect(api.POST).toHaveBeenCalledWith("/api/notifications/read", { body: { all: true } });
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+    expect(api.readNotifications).toHaveBeenCalledWith({ all: true });
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(2));
   });
 
   describe("focus", () => {
@@ -350,9 +329,9 @@ describe("InboxPage", () => {
       const button = await screen.findByRole("button", { name: "既読にする" });
       button.focus();
       set([{ ...assigned, read: true }]);
-      api.PATCH.mockImplementation(() => {
+      api.updateNotification.mockImplementation(() => {
         drop();
-        return Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) });
+        return Promise.resolve(undefined);
       });
       await fireEvent.click(button);
       await waitFor(() => expect(rowOf("REL-27")).toHaveFocus());
@@ -377,7 +356,7 @@ describe("InboxPage", () => {
         { ...mention, read: true },
         { ...assigned, read: true },
       ]);
-      api.POST.mockImplementation(() => {
+      api.readNotifications.mockImplementation(() => {
         drop();
         return ok({ read: [] });
       });
@@ -393,12 +372,12 @@ describe("InboxPage", () => {
       const button = await screen.findByRole("button", { name: "既読にする" });
       set([{ ...assigned, read: true }]);
       const tab = screen.getAllByRole("link", { name: /すべて/ })[0] as HTMLElement;
-      api.PATCH.mockImplementation(() => {
+      api.updateNotification.mockImplementation(() => {
         tab.focus();
-        return Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) });
+        return Promise.resolve(undefined);
       });
       await fireEvent.click(button);
-      await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(2));
       await new Promise((r) => setTimeout(r, 10));
       expect(tab).toHaveFocus();
     });
@@ -412,21 +391,21 @@ describe("InboxPage", () => {
 
   it("asks again when the unread count changes, at resync and at tasks.changed", async () => {
     const { api, conn } = setup([mention]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(1));
     conn.unread = 1;
     conn.changeSync({ store: "shared" } as never); // notifies the subscribers
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(2));
     conn.emit("resync");
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(3));
     conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(4));
   });
 
   it("shows the answer of the latest request when an older one arrives last", async () => {
     const { api, conn } = setup([]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(1));
     const pending: ((v: unknown) => void)[] = [];
-    api.GET.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
+    api.listNotifications.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
     conn.emit("resync");
     conn.emit("resync");
     await waitFor(() => expect(pending).toHaveLength(2));
@@ -441,18 +420,18 @@ describe("InboxPage", () => {
 
   it("stops listening to the connection when it is gone", async () => {
     const { api, conn, view } = setup([mention]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listNotifications).toHaveBeenCalledTimes(1));
     view.unmount();
     conn.emit("resync");
     conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
     await new Promise((r) => setTimeout(r, 10));
-    expect(api.GET).toHaveBeenCalledTimes(1);
+    expect(api.listNotifications).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the items it has when a reload fails, with the error above them", async () => {
     const { api, conn } = setup([mention]);
     await screen.findByText("title of REL-4");
-    api.GET.mockImplementation(() => Promise.reject(new Error("boom")) as never);
+    api.listNotifications.mockImplementation(() => Promise.reject(new Error("boom")) as never);
     conn.emit("resync");
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
     expect(screen.getByText("title of REL-4")).toBeTruthy();
@@ -461,16 +440,16 @@ describe("InboxPage", () => {
   it("does not read an item again while its request is on the way", async () => {
     const { api } = setup([mention]);
     let release: () => void = () => {};
-    api.PATCH.mockImplementation(
+    api.updateNotification.mockImplementation(
       () =>
         new Promise((r) => {
-          release = () => r({ data: undefined, response: new Response(null, { status: 204 }) });
+          release = () => r(undefined);
         }) as never,
     );
     const link = await screen.findByRole("link", { name: "REL-4" });
     await fireEvent.click(link);
     await fireEvent.click(link);
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    expect(api.updateNotification).toHaveBeenCalledTimes(1);
     release();
   });
 
@@ -500,17 +479,12 @@ describe("InboxPage", () => {
     function refusedSetup(rules: unknown[]) {
       const patched = { task: { ulid: "U-PAY-29" }, commit: "c9" };
       const api = {
-        GET: vi.fn((path: string) => {
-          if (path === "/api/automations") return ok(rules);
-          if (path === "/api/tasks/{id}") {
-            return ok(
-              taskView({ ulid: "U-PAY-29", id: "PAY-29", status: "todo", store: "shared" }),
-            );
-          }
-          return ok([refused]);
-        }),
-        PATCH: vi.fn(() => ok(patched)),
-        POST: vi.fn(),
+        listNotifications: vi.fn(() => ok([refused])),
+        listAutomations: vi.fn(() => ok(rules)),
+        getTask: vi.fn((_id?: string, _query?: unknown) =>
+          ok(taskView({ ulid: "U-PAY-29", id: "PAY-29", status: "todo", store: "shared" })),
+        ),
+        updateTask: vi.fn((_id?: string, _body?: unknown, _query?: unknown) => ok(patched)),
       };
       renderWithCore(
         InboxPage,
@@ -534,9 +508,10 @@ describe("InboxPage", () => {
       await fireEvent.input(within(dialog).getByRole("spinbutton"), { target: { value: "3" } });
       await fireEvent.click(within(dialog).getByRole("button", { name: /完了にする/ }));
       await waitFor(() =>
-        expect(api.PATCH).toHaveBeenCalledWith(
-          "/api/tasks/{id}",
-          expect.objectContaining({ body: { status: "done", props: { points: 3 } } }),
+        expect(api.updateTask).toHaveBeenCalledWith(
+          "U-PAY-29",
+          { status: "done", props: { points: 3 } },
+          { store: "shared" },
         ),
       );
     });

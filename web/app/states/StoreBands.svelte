@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
@@ -21,12 +20,7 @@
     if (busy) return;
     busy = true;
     try {
-      await unwrap(
-        c.api.PATCH("/api/stores/{name}", {
-          params: { path: { name: store } },
-          body: { hidden: false },
-        }),
-      );
+      await c.api.updateStore(store, { hidden: false });
       // The write is done; a failed reload must not read as a failed write (the SSE resync catches up).
       await c.stores.reload().catch(() => undefined);
       toast({ message: `${store} を表示しました` });

@@ -1,4 +1,4 @@
-import { type Api, unwrap } from "../../core/api/client";
+import type { Api } from "../../core/api/client";
 import { errorMessage } from "../../core/messages";
 import { toast } from "../toast.svelte";
 import { syncMessage } from "./sync-summary";
@@ -17,11 +17,7 @@ export async function runSync(api: Api, store?: string): Promise<void> {
   if (busy) return;
   busy = true;
   try {
-    const reports = await unwrap(
-      store === undefined
-        ? api.POST("/api/sync")
-        : api.POST("/api/sync", { params: { query: { store } } }),
-    );
+    const reports = await (store === undefined ? api.sync() : api.sync({ store }));
     toast({ message: syncMessage(reports) });
   } catch (e) {
     toast({ message: errorMessage(e) });

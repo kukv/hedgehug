@@ -35,11 +35,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # core/api/schema.d.ts は api/openapi.yaml から作る。古ければここで気付く。
+      # core/api/generated.ts は api/openapi.yaml から作る。古ければここで気付く。
       - name: Verify the API types are up to date
         run: |
           pnpm gen
-          git diff --exit-code -- core/api/schema.d.ts
+          git diff --exit-code -- core/api/generated.ts
 
       - name: Lint
         run: pnpm lint

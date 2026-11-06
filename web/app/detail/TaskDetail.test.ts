@@ -91,19 +91,15 @@ describe("TaskDetail", () => {
 
   it("toggles the watch: PUT when not watching, DELETE when watching, and the button follows", async () => {
     const { k } = setup();
-    k.api.PUT.mockImplementation(() => ok({ task: taskView({ ulid: U }), commit: "c1" }));
-    k.api.DELETE.mockImplementation(() => ok({ task: taskView({ ulid: U }), commit: "c2" }));
+    k.api.watchTask.mockImplementation(() => ok({ task: taskView({ ulid: U }), commit: "c1" }));
+    k.api.unwatchTask.mockImplementation(() => ok({ task: taskView({ ulid: U }), commit: "c2" }));
     await fireEvent.click(screen.getByRole("button", { name: "ウォッチ" }));
-    expect(k.api.PUT).toHaveBeenCalledWith("/api/tasks/{id}/watchers/me", {
-      params: { path: { id: U }, query: { store: "shared" } },
-    });
+    expect(k.api.watchTask).toHaveBeenCalledWith(U, { store: "shared" });
     await waitFor(() =>
       expect(k.cache.applyWrite).toHaveBeenCalledWith({ task: expect.anything(), commit: "c1" }),
     );
     await fireEvent.click(await screen.findByRole("button", { name: "ウォッチ中" }));
-    expect(k.api.DELETE).toHaveBeenCalledWith("/api/tasks/{id}/watchers/me", {
-      params: { path: { id: U }, query: { store: "shared" } },
-    });
+    expect(k.api.unwatchTask).toHaveBeenCalledWith(U, { store: "shared" });
   });
 
   it("knows it is watching from the watchers, written as host/login", () => {
@@ -113,7 +109,7 @@ describe("TaskDetail", () => {
 
   it("shows an error toast when the watch request fails", async () => {
     const { k } = setup();
-    k.api.PUT.mockImplementation(() => fail(409, "store.read_only", { store: "shared" }));
+    k.api.watchTask.mockImplementation(() => fail(409, "store.read_only", { store: "shared" }));
     await fireEvent.click(screen.getByRole("button", { name: "ウォッチ" }));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
   });
@@ -158,9 +154,8 @@ describe("TaskDetail", () => {
 
   it("rules out the kinds the parent cannot hold even when the cache lacks the parent", async () => {
     const k = makeCore({ show: base, account: "github.com/koki", tasks: [] });
-    k.api.GET.mockImplementation((path: string) =>
-      ok(path === "/api/github" ? [] : showView({ ...parent, kind: "task" })),
-    );
+    k.api.getGithub.mockImplementation(() => ok([]));
+    k.api.getTask.mockImplementation(() => ok(showView({ ...parent, kind: "task" })));
     mount(TaskDetail, { ulid: U }, k);
     await screen.findByText("API v2 への移行");
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));

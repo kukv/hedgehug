@@ -5043,6 +5043,32 @@ paths:
     get:
       operationId: report-cfd
       parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - explode: false
+          in: query
+          name: workspace
+          schema:
+            type: string
+        - description: The first day; without it, 30 days ago
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: The first day; without it, 30 days ago
+            type: string
+        - description: The last day; without it, today
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: The last day; without it, today
+            type: string
         - description: category (default) or status
           explode: false
           in: query

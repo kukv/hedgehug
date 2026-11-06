@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type Schemas, unwrap } from "../../core/api/client";
+  import type { Schemas } from "../../core/api/client";
   import { cliSetQuery } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { SchemaView } from "../../core/schema";
@@ -15,7 +15,7 @@
   type Props = { target: BulkTarget; onclose: () => void };
   let { target, onclose }: Props = $props();
 
-  type Body = Schemas["BulkInputBody"];
+  type Body = Schemas.BulkInputBody;
 
   const c = core();
   const uid = $props.id();
@@ -77,10 +77,10 @@
     ...change,
     dry_run,
   });
-  const params = $derived({ query: target.store ? { store: target.store } : {} });
+  const query = $derived(target.store ? { store: target.store } : {});
 
   // What the change would do, read again when it changes. An answer to an older change is dropped.
-  let preview = $state.raw<Schemas["BulkResult"] | null>(null);
+  let preview = $state.raw<Schemas.BulkResult | null>(null);
   let failure = $state<string | null>(null);
   $effect(() => {
     preview = null;
@@ -88,7 +88,8 @@
     const body = bodyOf(true);
     let live = true;
     const timer = setTimeout(() => {
-      unwrap(c.api.POST("/api/tasks/bulk", { params, body }))
+      c.api
+        .bulkUpdateTasks(body, query)
         .then((r) => {
           if (!live) return;
           preview = r;
@@ -116,7 +117,7 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(c.api.POST("/api/tasks/bulk", { params, body: bodyOf(false) }));
+      const r = await c.api.bulkUpdateTasks(bodyOf(false), query);
       const commits = r.commits ?? [];
       for (const x of commits) c.cache.noteOwnCommit(x.commit);
       const only = commits.length === 1 ? commits[0] : undefined;

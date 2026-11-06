@@ -9,7 +9,7 @@ function mount(
   del: () => unknown = () => ok({ name: "team", path: "/p", deleted: true }),
   remotes: string[] | null = ["ssh://example/r.repo"],
 ) {
-  const api = { DELETE: vi.fn(del) };
+  const api = { removeStore: vi.fn(del) };
   const reload = vi.fn(async () => {});
   const onclose = vi.fn();
   renderWithCore(
@@ -62,9 +62,7 @@ describe("StoreRemoveDialog", () => {
     const { api, reload, onclose } = mount();
     await fireEvent.click(submit());
     await waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "team" }, query: { keep: false } },
-    });
+    expect(api.removeStore).toHaveBeenCalledWith("team", { keep: false });
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toasts.list.map((t) => t.message)).toEqual(["team のマウントを解除しました"]);
   });
@@ -74,9 +72,7 @@ describe("StoreRemoveDialog", () => {
     await fireEvent.click(screen.getByRole("checkbox", { name: "ローカルのクローンも消す" }));
     await fireEvent.click(submit());
     await waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "team" }, query: { keep: true } },
-    });
+    expect(api.removeStore).toHaveBeenCalledWith("team", { keep: true });
   });
 
   it("stays on store.unpushed with the words, and offers to keep the clone", async () => {
@@ -95,9 +91,7 @@ describe("StoreRemoveDialog", () => {
 
     await fireEvent.click(screen.getByRole("button", { name: "クローンを残して解除" }));
     await waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenLastCalledWith("/api/stores/{name}", {
-      params: { path: { name: "team" }, query: { keep: true } },
-    });
+    expect(api.removeStore).toHaveBeenLastCalledWith("team", { keep: true });
     expect(toasts.list.map((t) => t.message)).toEqual(["team のマウントを解除しました"]);
   });
 
@@ -125,9 +119,7 @@ describe("StoreRemoveDialog", () => {
     await fireEvent.click(box);
     await fireEvent.click(submit());
     await waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "team" }, query: { keep: true } },
-    });
+    expect(api.removeStore).toHaveBeenCalledWith("team", { keep: true });
   });
 
   it("says a Store with no remote cannot delete its clone on 409, not to sync", async () => {

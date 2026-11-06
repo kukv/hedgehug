@@ -10,7 +10,7 @@ function setup(one = false) {
   const k = makeCore({
     workspaces: one ? [workspaces[0] as (typeof workspaces)[number]] : undefined,
   });
-  k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+  k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
   const onclose = vi.fn();
   return { k, onclose, ...mount(CreateProject, { request: { kind: "project" }, onclose }, k) };
 }
@@ -47,9 +47,8 @@ describe("CreateProject", () => {
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(k.api.POST).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { store: "shared" } },
-      body: {
+    expect(k.api.createTask).toHaveBeenCalledWith(
+      {
         title: "Web フロント刷新",
         kind: "project",
         workspace: "release",
@@ -57,7 +56,8 @@ describe("CreateProject", () => {
         repos: ["github.com/org-a/web"],
         props: { due: "2026-12-01" },
       },
-    });
+      { store: "shared" },
+    );
     expect(toasts.list[0]).toMatchObject({
       message: "REL-20 を作成しました · release",
       link: { label: "開く", href: "/projects/UPJ" },
@@ -76,9 +76,9 @@ describe("CreateProject", () => {
     const { k } = setup();
     await name("運用");
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: object }];
-    expect(init.body).not.toHaveProperty("repos");
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    const [sent] = k.api.createTask.mock.calls[0] as [object];
+    expect(sent).not.toHaveProperty("repos");
   });
 
   it("asks for the workspace when there are several", async () => {
@@ -86,9 +86,9 @@ describe("CreateProject", () => {
     await fireEvent.click(screen.getByRole("radio", { name: /shared（SH）/ }));
     await name("x");
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    const [, init] = k.api.POST.mock.calls[0] as [string, { body: { workspace: string } }];
-    expect(init.body.workspace).toBe("shared");
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    const [sent] = k.api.createTask.mock.calls[0] as [{ workspace: string }];
+    expect(sent.workspace).toBe("shared");
   });
 
   it("fixes the workspace when there is one", () => {
@@ -127,7 +127,7 @@ describe("CreateProject", () => {
     const { k } = setup();
     await name("p");
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, isComposing: true });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
     const e = new KeyboardEvent("keydown", {
       key: "Enter",
       ctrlKey: true,
@@ -136,9 +136,9 @@ describe("CreateProject", () => {
     });
     e.preventDefault();
     window.dispatchEvent(e);
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalledTimes(1));
   });
 
   it("does not create with Ctrl+Enter while the repository typed is invalid", async () => {
@@ -148,7 +148,7 @@ describe("CreateProject", () => {
     await fireEvent.input(repo, { target: { value: "not a repo" } });
     await fireEvent.keyDown(repo, { key: "Enter", ctrlKey: true });
     expect(screen.getByRole("alert")).toBeInTheDocument();
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
   });
 
   it("cannot be created without a name", () => {
@@ -174,7 +174,7 @@ describe("CreateProject in a Store that cannot be written", () => {
 
   function open(list: typeof workspaces, readOnlyBy: Record<string, string>) {
     const k = makeCore({ workspaces: list, readOnlyBy });
-    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
     return { k, ...mount(CreateProject, { request: { kind: "project" }, onclose: vi.fn() }, k) };
   }
 
@@ -186,13 +186,13 @@ describe("CreateProject in a Store that cannot be written", () => {
     expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
     await name("p");
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    expect(k.api.createTask.mock.calls[0]?.[1]).toMatchObject({ store: "shared" });
   });
 
   it("does not offer the workspace of a hidden Store, and starts from one that is shown", async () => {
     const k = makeCore({ workspaces: [vault, ...workspaces], hidden: ["vault"] });
-    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
     mount(CreateProject, { request: { kind: "project" }, onclose: vi.fn() }, k);
     expect(screen.queryByRole("radio", { name: /vault（VT）/ })).toBeNull();
     expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
@@ -206,6 +206,6 @@ describe("CreateProject in a Store that cannot be written", () => {
     expect(screen.getByRole("button", { name: "作成" })).toBeDisabled();
     expect(screen.getByText("書き込める Store がありません")).toBeInTheDocument();
     await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.createTask).not.toHaveBeenCalled();
   });
 });

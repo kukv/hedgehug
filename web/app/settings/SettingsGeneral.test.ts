@@ -45,7 +45,7 @@ function mount(statuses: SyncStatus[], names = statuses.map((s) => s.store)) {
     tone: () => "teal",
     subscribe: () => () => {},
   };
-  return renderWithCore(SettingsGeneral, {}, { conn, stores, api: { POST: vi.fn() } });
+  return renderWithCore(SettingsGeneral, {}, { conn, stores, api: {} });
 }
 
 beforeEach(() => {

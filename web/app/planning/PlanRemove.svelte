@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliReleaseRm, cliSprintRm } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -32,12 +31,11 @@
   async function remove() {
     busy = true;
     failure = null;
-    const params = { path: { id: plan.ulid }, query: { store } };
     try {
       if (dialog.kind === "sprint-rm") {
-        await unwrap(c.api.DELETE("/api/sprints/{id}", { params }));
+        await c.api.removeSprint(plan.ulid, { store });
       } else {
-        await unwrap(c.api.DELETE("/api/releases/{id}", { params }));
+        await c.api.removeRelease(plan.ulid, { store });
       }
       await c.stores.reload().catch(() => undefined);
       plansWritten();

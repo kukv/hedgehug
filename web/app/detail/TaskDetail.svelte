@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { type ShowView, unwrap } from "../../core/api/client";
+  import type { ShowView } from "../../core/api/client";
   import { cliLine, cliStart } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
   import { errorMessage } from "../../core/messages";
@@ -183,14 +183,11 @@
 
   async function toggleWatch() {
     if (!s) return;
-    const params = { params: { path: { id: s.ulid }, query: { store: s.store } } };
     const next = !watching;
     try {
-      const r = await unwrap(
-        next
-          ? api.PUT("/api/tasks/{id}/watchers/me", params)
-          : api.DELETE("/api/tasks/{id}/watchers/me", params),
-      );
+      const r = await (next
+        ? api.watchTask(s.ulid, { store: s.store })
+        : api.unwatchTask(s.ulid, { store: s.store }));
       cache.applyWrite({ task: r.task, commit: r.commit });
       watchOverride = next;
     } catch (e) {

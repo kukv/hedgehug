@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliAuthLogout } from "../../core/cli";
   import { missingByOwner } from "../../core/github";
   import { errorMessage } from "../../core/messages";
@@ -64,9 +63,7 @@
     leaveBusy = true;
     leaveFailure = null;
     try {
-      await unwrap(
-        c.api.DELETE("/api/accounts/{name}/token", { params: { path: { name: target.name } } }),
-      );
+      await c.api.removeAccountToken(target.name);
       leaving = null;
       toast({ message: `${target.name} からログアウトしました` });
       await Promise.all([c.accounts.reload(), c.stores.reload().catch(() => undefined)]);

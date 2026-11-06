@@ -14,7 +14,6 @@
 
 <script lang="ts">
   import { tick } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliSchemaMigrate, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -75,12 +74,7 @@
 
   async function dry(n: string, mine: number): Promise<void> {
     try {
-      const r = await unwrap(
-        c.api.POST("/api/schema/migrate", {
-          params: { query: { store } },
-          body: { ...body, new: n, dry_run: true },
-        }),
-      );
+      const r = await c.api.migrateSchema({ ...body, new: n, dry_run: true }, { store });
       if (mine !== seq) return;
       preview = { name: n, changed: (r.changed ?? []).length, skipped: (r.skipped ?? []).length };
     } catch (e) {
@@ -94,9 +88,7 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        c.api.POST("/api/schema/migrate", { params: { query: { store } }, body }),
-      );
+      const r = await c.api.migrateSchema(body, { store });
       await c.schema.reload(store);
       const skipped = (r.skipped ?? []).length;
       toast({

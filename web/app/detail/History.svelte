@@ -1,6 +1,6 @@
 <script lang="ts">
   import { automationOf, rejectionsOf } from "../../core/activity";
-  import { type Schemas, type ShowView, unwrap } from "../../core/api/client";
+  import type { Schemas, ShowView } from "../../core/api/client";
   import { cliRestoreAt } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
   import { eventLabel } from "../../core/github";
@@ -13,7 +13,7 @@
   import Dialog from "../ui/Dialog.svelte";
   import { opLabel } from "./history-labels";
 
-  type Log = Schemas["LogView"];
+  type Log = Schemas.LogView;
 
   let { show, readonly = false }: { show: ShowView; readonly?: boolean } = $props();
 
@@ -27,11 +27,7 @@
     // Any commit gives a new show (a comment does not move `updated`).
     void show;
     let live = true;
-    unwrap(
-      api.GET("/api/tasks/{id}/history", {
-        params: { path: { id: show.ulid }, query: { store: show.store, limit: 50 } },
-      }),
-    ).then(
+    api.getTaskHistory(show.ulid, { store: show.store, limit: 50 }).then(
       (r) => {
         if (live) {
           logs = r ?? [];
@@ -86,11 +82,7 @@
     busy = true;
     error = "";
     try {
-      const r = await unwrap(
-        api.POST("/api/tasks/{id}/history/{commit}/restore", {
-          params: { path: { id: show.ulid, commit: target.hash }, query: { store: show.store } },
-        }),
-      );
+      const r = await api.restoreTaskAt(show.ulid, target.hash, { store: show.store });
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({
         message:

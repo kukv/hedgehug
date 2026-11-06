@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { installUrl, type MissingApp } from "../../core/github";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -18,12 +17,7 @@
   async function useGh() {
     busy = true;
     try {
-      await unwrap(
-        c.api.PUT("/api/accounts/{name}/token-source", {
-          params: { path: { name } },
-          body: { token: "gh" },
-        }),
-      );
+      await c.api.setAccountTokenSource(name, { token: "gh" });
       toast({ message: `${name} は次の取得から gh のトークンを使います` });
       await c.accounts.reload();
     } catch (e) {

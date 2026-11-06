@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliSprintClose } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import {
@@ -66,12 +65,9 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        c.api.POST("/api/sprints/{id}/close", {
-          params: { path: { id: sprint.ulid }, query: { store: entry.store } },
-          body: value ? { to: value } : {},
-        }),
-      );
+      const r = await c.api.closeSprint(sprint.ulid, value ? { to: value } : {}, {
+        store: entry.store,
+      });
       plansWritten();
       const moved = r.moved
         ? ` · ${r.moved} 件を${r.to === "backlog" ? "バックログ" : r.to}へ`

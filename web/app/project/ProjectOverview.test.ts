@@ -33,8 +33,10 @@ const child = taskView({
 function setup(github: unknown[] = []) {
   const applyWrite = vi.fn();
   const api = {
-    GET: vi.fn(() => ok(github)),
-    PATCH: vi.fn(() => ok({ task: project, commit: "c1" })),
+    getGithub: vi.fn((_query?: unknown) => ok(github)),
+    updateTask: vi.fn((_id?: string, _body?: unknown, _query?: unknown) =>
+      ok({ task: project, commit: "c1" }),
+    ),
   };
   const none = () => () => {};
   renderWithCore(
@@ -97,10 +99,11 @@ describe("ProjectOverview", () => {
     await fireEvent.input(screen.getByLabelText("リポジトリ"), { target: { value: "org-a/ops" } });
     await fireEvent.click(screen.getByRole("button", { name: "追加する" }));
     await waitFor(() =>
-      expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-        params: { path: { id: "P1" }, query: { store: "shared" } },
-        body: { repos: ["github.com/org-a/web", "github.com/org-a/ops"] },
-      }),
+      expect(api.updateTask).toHaveBeenCalledWith(
+        "P1",
+        { repos: ["github.com/org-a/web", "github.com/org-a/ops"] },
+        { store: "shared" },
+      ),
     );
   });
 });

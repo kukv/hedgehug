@@ -3,10 +3,10 @@ import { callAll } from "./listeners";
 import { parseEventStream } from "./sse";
 
 export type ConnState = "connecting" | "open" | "reconnecting" | "down";
-export type HelloEvent = Schemas["HelloEvent"];
-export type TasksChanged = Schemas["TasksChanged"];
-export type SyncStatus = Schemas["SyncStatus"];
-export type AuthDeviceEvent = Schemas["AuthDeviceEvent"];
+export type HelloEvent = Schemas.HelloEvent;
+export type TasksChanged = Schemas.TasksChanged;
+export type SyncStatus = Schemas.SyncStatus;
+export type AuthDeviceEvent = Schemas.AuthDeviceEvent;
 
 // Seconds between the end of a connection (or a failed try) and the next
 // try: 1, 2, 4, then 5 for ever.
@@ -295,7 +295,7 @@ export class Connection {
     if (!this.clientId) return;
     const visible = (this.opts.doc?.visibilityState ?? "visible") === "visible";
     try {
-      await this.opts.api.PUT("/api/presence", { body: { client: this.clientId, visible } });
+      await this.opts.api.setPresence({ client: this.clientId, visible });
     } catch {
       // presence is a hint; a failure changes nothing for the user
     }

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import type { Sprint } from "../../core/planning";
   import { amountLabel, type BurndownView, burndownFacts } from "../../core/reports";
@@ -15,12 +14,7 @@
   const c = core();
   const report = useReport<BurndownView>(
     () => entry.store,
-    () =>
-      unwrap(
-        c.api.GET("/api/reports/burndown", {
-          params: { query: { store: entry.store, workspace: entry.name, sprint: sprint.name } },
-        }),
-      ),
+    () => c.api.reportBurndown({ store: entry.store, workspace: entry.name, sprint: sprint.name }),
   );
   const view = $derived(report.value);
   const facts = $derived(view ? burndownFacts(view) : null);

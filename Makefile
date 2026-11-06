@@ -23,7 +23,7 @@ build: web
 web-check:
 	cd web && pnpm install --frozen-lockfile
 	cd web && pnpm gen
-	git diff --exit-code -- web/core/api/schema.d.ts
+	git diff --exit-code -- web/core/api/generated.ts
 	cd web && pnpm lint && pnpm check && pnpm test
 
 # Build the binaries the browser tests run: hedgehug with the e2e tag (its keyring

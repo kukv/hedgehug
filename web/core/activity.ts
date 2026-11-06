@@ -5,7 +5,7 @@ import type { Schemas } from "./api/client";
 import { daysAgo, formatDate, pad } from "./format";
 import { type Applied, parseApplied, parseRejected, type Rejected } from "./github";
 
-export type Log = Schemas["LogView"];
+export type Log = Schemas.LogView;
 
 /** The words for every Hedgehug-Op that internal/app/usecase, internal/app/storage/store and internal/app/remote/replicate write. */
 const OP_LABELS: Readonly<Record<string, string>> = {

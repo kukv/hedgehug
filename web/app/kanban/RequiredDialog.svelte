@@ -20,7 +20,7 @@
     elsewhere: string[]; // the ones only the task detail can fill (requiredGap.elsewhere)
     schema: SchemaView;
     // Sends the status and the fields in one PATCH. A failure is thrown and shown here.
-    onsubmit: (body: Schemas["PatchInputBody"]) => Promise<void>;
+    onsubmit: (body: Schemas.PatchInputBody) => Promise<void>;
     onclose: () => void;
   };
   const did = useDisplayId(core().stores);
@@ -65,7 +65,7 @@
     if (!complete || elsewhere.length > 0 || busy) return;
     busy = true;
     error = "";
-    const body: Schemas["PatchInputBody"] = { status };
+    const body: Schemas.PatchInputBody = { status };
     if (fields.includes("assignees")) body.assignees = assignees;
     if (fields.includes("labels")) body.labels = labels;
     const sent = Object.fromEntries(

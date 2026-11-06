@@ -46,7 +46,7 @@ describe("Comments", () => {
 
   it("posts a comment, shows it at once and tells the cache the commit is its own", async () => {
     const { k, container } = setup();
-    k.api.POST.mockImplementation(() =>
+    k.api.addComment.mockImplementation(() =>
       ok({
         comment: {
           ulid: "C2",
@@ -59,10 +59,7 @@ describe("Comments", () => {
     );
     typeInto(container, "了解です");
     await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
-    expect(k.api.POST).toHaveBeenCalledWith("/api/tasks/{id}/comments", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-      body: { body: "了解です" },
-    });
+    expect(k.api.addComment).toHaveBeenCalledWith("U6", { body: "了解です" }, { store: "shared" });
     expect(await screen.findByText("了解です")).toBeInTheDocument();
     expect(k.cache.noteOwnCommit).toHaveBeenCalledWith("c1");
     await waitFor(() => expect(viewOf(container).state.doc.toString()).toBe(""));
@@ -75,38 +72,36 @@ describe("Comments", () => {
 
   it("offers the people for @ in the comment, from GET /api/people", async () => {
     const { k, container } = setup();
-    k.api.GET.mockImplementation(() => ok(["suzuki", "suzumura"]));
+    k.api.listPeople.mockImplementation(() => ok(["suzuki", "suzumura"]));
     const view = viewOf(container);
     view.dispatch({
       changes: { from: 0, insert: "@suz" },
       selection: { anchor: 4 },
       userEvent: "input.type",
     });
-    await vi.waitFor(() =>
-      expect(k.api.GET).toHaveBeenCalledWith("/api/people", {
-        params: { query: { store: "shared" } },
-      }),
-    );
+    await vi.waitFor(() => expect(k.api.listPeople).toHaveBeenCalledWith({ store: "shared" }));
   });
 
   it("edits a comment", async () => {
     const { k, container } = setup();
-    k.api.PATCH.mockImplementation(() =>
+    k.api.editComment.mockImplementation(() =>
       ok({ comment: { ...c1, body: "直しました" }, commit: "c2" }),
     );
     await fireEvent.click(screen.getByRole("button", { name: "編集" }));
     typeInto(container, "直しました", 0);
     await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
-    expect(k.api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}/comments/{cid}", {
-      params: { path: { id: "U6", cid: "C1" }, query: { store: "shared" } },
-      body: { body: "直しました" },
-    });
+    expect(k.api.editComment).toHaveBeenCalledWith(
+      "U6",
+      "C1",
+      { body: "直しました" },
+      { store: "shared" },
+    );
     expect(await screen.findByText("直しました")).toBeInTheDocument();
   });
 
   it("drops its overlay when the comments are read again, even if the task's updated did not change", async () => {
     const { k, container, rerender } = setup();
-    k.api.PATCH.mockImplementation(() =>
+    k.api.editComment.mockImplementation(() =>
       ok({ comment: { ...c1, body: "直しました" }, commit: "c2" }),
     );
     await fireEvent.click(screen.getByRole("button", { name: "編集" }));
@@ -123,7 +118,9 @@ describe("Comments", () => {
 
   it("shows comment.not_author under the comment when someone else's comment is edited", async () => {
     const { k } = setup();
-    k.api.PATCH.mockImplementation(() => fail(409, "comment.not_author", { author: "tanaka" }));
+    k.api.editComment.mockImplementation(() =>
+      fail(409, "comment.not_author", { author: "tanaka" }),
+    );
     await fireEvent.click(screen.getByRole("button", { name: "編集" }));
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
@@ -131,19 +128,17 @@ describe("Comments", () => {
 
   it("deletes a comment and says so", async () => {
     const { k } = setup();
-    k.api.DELETE.mockImplementation(() => ok({ comment: c1, commit: "c3" }));
+    k.api.removeComment.mockImplementation(() => ok({ comment: c1, commit: "c3" }));
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
     expect(
       within(dialog).getByText("このコメントを削除します。元に戻せません。"),
     ).toBeInTheDocument();
     expect(dialog).toHaveTextContent("hh comment rm C1");
-    expect(k.api.DELETE).not.toHaveBeenCalled();
+    expect(k.api.removeComment).not.toHaveBeenCalled();
     await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
-    await waitFor(() => expect(k.api.DELETE).toHaveBeenCalled());
-    expect(k.api.DELETE).toHaveBeenCalledWith("/api/tasks/{id}/comments/{cid}", {
-      params: { path: { id: "U6", cid: "C1" }, query: { store: "shared" } },
-    });
+    await waitFor(() => expect(k.api.removeComment).toHaveBeenCalled());
+    expect(k.api.removeComment).toHaveBeenCalledWith("U6", "C1", { store: "shared" });
     await waitFor(() =>
       expect(screen.queryByText("ガイドでは「カーソル」で統一します。")).toBeNull(),
     );
@@ -156,13 +151,15 @@ describe("Comments", () => {
     const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
     await fireEvent.click(within(dialog).getByRole("button", { name: "キャンセル" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(k.api.DELETE).not.toHaveBeenCalled();
+    expect(k.api.removeComment).not.toHaveBeenCalled();
     expect(screen.getByText("ガイドでは「カーソル」で統一します。")).toBeInTheDocument();
   });
 
   it("shows the error in the confirmation and keeps it open", async () => {
     const { k } = setup();
-    k.api.DELETE.mockImplementation(() => fail(409, "comment.not_author", { author: "tanaka" }));
+    k.api.removeComment.mockImplementation(() =>
+      fail(409, "comment.not_author", { author: "tanaka" }),
+    );
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
     await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
@@ -171,7 +168,7 @@ describe("Comments", () => {
 
   it("keeps what was written here when a read brings only the change of someone else", async () => {
     const { k, container, rerender } = setup();
-    k.api.PATCH.mockImplementation(() =>
+    k.api.editComment.mockImplementation(() =>
       ok({ comment: { ...c1, body: "直しました" }, commit: "c2" }),
     );
     await fireEvent.click(screen.getByRole("button", { name: "編集" }));
@@ -191,7 +188,7 @@ describe("Comments", () => {
 
   it("keeps a comment deleted here hidden until the read lacks it", async () => {
     const { k, rerender } = setup();
-    k.api.DELETE.mockImplementation(() => ok({ comment: c1, commit: "c5" }));
+    k.api.removeComment.mockImplementation(() => ok({ comment: c1, commit: "c5" }));
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
     await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
@@ -212,7 +209,7 @@ describe("Comments", () => {
       created: "2026-11-04T12:00:00Z",
       body: "自分の",
     };
-    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    k.api.addComment.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
     typeInto(container, "自分の", 0);
     await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
     expect(await screen.findByText("自分の")).toBeInTheDocument();
@@ -230,8 +227,8 @@ describe("Comments", () => {
       created: "2026-11-04T12:00:00Z",
       body: "自分の",
     };
-    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
-    k.api.PATCH.mockImplementation(() =>
+    k.api.addComment.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    k.api.editComment.mockImplementation(() =>
       ok({ comment: { ...mine, body: "直した自分の" }, commit: "c5" }),
     );
     typeInto(container, "自分の", 0);
@@ -255,9 +252,9 @@ describe("Comments", () => {
       created: "2026-11-04T12:00:00Z",
       body: "自分の",
     };
-    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    k.api.addComment.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
     let n = 0;
-    k.api.PATCH.mockImplementation(() =>
+    k.api.editComment.mockImplementation(() =>
       ok({ comment: { ...mine, body: n++ === 0 ? "直した1" : "直した2" }, commit: "c5" }),
     );
     typeInto(container, "自分の", 0);
@@ -285,9 +282,9 @@ describe("Comments", () => {
         body: "自分の",
       };
       const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
-      k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+      k.api.addComment.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
       let n = 0;
-      k.api.PATCH.mockImplementation(() =>
+      k.api.editComment.mockImplementation(() =>
         ok({ comment: { ...mine, body: texts[n++] }, commit: "c5" }),
       );
       typeInto(container, "自分の", 0);
@@ -322,11 +319,11 @@ describe("Comments", () => {
         body: "自分の",
       };
       const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
-      k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
-      k.api.PATCH.mockImplementation(() =>
+      k.api.addComment.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+      k.api.editComment.mockImplementation(() =>
         ok({ comment: { ...mine, body: "直した自分の" }, commit: "c5" }),
       );
-      k.api.DELETE.mockImplementation(() => ok({ comment: mine, commit: "c6" }));
+      k.api.removeComment.mockImplementation(() => ok({ comment: mine, commit: "c6" }));
       typeInto(container, "自分の", 0);
       await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
       let text = "自分の";
@@ -362,8 +359,8 @@ describe("Comments", () => {
       body: "自分の",
     };
     const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
-    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
-    k.api.DELETE.mockImplementation(() => ok({ comment: mine, commit: "c6" }));
+    k.api.addComment.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    k.api.removeComment.mockImplementation(() => ok({ comment: mine, commit: "c6" }));
     typeInto(container, "自分の", 0);
     await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
     expect(await screen.findByText("自分の")).toBeInTheDocument();
@@ -383,21 +380,21 @@ describe("Comments", () => {
 
   it("posts once when the key is pressed twice before the answer", async () => {
     const { k, container } = setup();
-    k.api.POST.mockImplementation(() => new Promise(() => {}));
+    k.api.addComment.mockImplementation(() => new Promise(() => {}));
     typeInto(container, "x", 0);
     const editor = viewOf(container, 0).contentDOM;
     const press = () =>
       fireEvent.keyDown(editor, { key: "Enter", code: "Enter", keyCode: 13, ctrlKey: true });
     await press();
     await press();
-    expect(k.api.POST).toHaveBeenCalledTimes(1);
+    expect(k.api.addComment).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "コメント" })).toBeDisabled();
   });
 
   it("cannot close the confirmation while the deletion runs, so its error is not lost", async () => {
     const { k } = setup();
     let release!: () => void;
-    k.api.DELETE.mockImplementation(
+    k.api.removeComment.mockImplementation(
       () =>
         new Promise((r) => {
           release = () => r(fail(409, "comment.not_author", { author: "tanaka" }));

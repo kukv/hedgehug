@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, type Snippet } from "svelte";
-  import { type ShowView, type TaskView, unwrap } from "../../core/api/client";
+  import type { ShowView, TaskView } from "../../core/api/client";
   import { cliLs, cliViewSave, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { SchemaView } from "../../core/schema";
@@ -292,9 +292,7 @@
   async function detailOf(t: TaskView): Promise<ShowView> {
     const have = c.cache.detail(t.ulid);
     if (have) return have;
-    return unwrap(
-      c.api.GET("/api/tasks/{id}", { params: { path: { id: t.ulid }, query: { store: t.store } } }),
-    );
+    return c.api.getTask(t.ulid, { store: t.store });
   }
 
   // The drops go one after another: a drop is decided on the card the drop before it left, so a card

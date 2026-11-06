@@ -8,7 +8,9 @@ const base = showView({ ulid: U, id: "REL-6", store: "shared", title: "t", paren
 
 function setup(over: Partial<typeof base> = {}) {
   const k = makeCore({ show: { ...base, ...over } });
-  k.api.GET.mockImplementation(() => ok([]));
+  k.api.getGithub.mockImplementation(() => ok([]));
+  k.api.getTaskHistory.mockImplementation(() => ok([]));
+  k.api.listPeople.mockImplementation(() => ok([]));
   return mount(TaskDetail, { ulid: U }, k);
 }
 

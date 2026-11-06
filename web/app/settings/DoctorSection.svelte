@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliDoctor } from "../../core/cli";
   import {
     type DoctorReport,
@@ -65,9 +64,7 @@
         const cached = c.cache.task(ulid)?.id;
         if (cached) return [ulid, cached];
         try {
-          const t = await unwrap(
-            c.api.GET("/api/tasks/{id}", { params: { path: { id: ulid }, query: { store: s } } }),
-          );
+          const t = await c.api.getTask(ulid, { store: s });
           return t.id ? [ulid, t.id] : null;
         } catch {
           return null;
@@ -82,7 +79,7 @@
     const mine = ++seq;
     loading = true;
     try {
-      const rs = await unwrap(c.api.GET("/api/doctor", { params: { query: { store: s } } }));
+      const rs = await c.api.doctor({ store: s });
       if (mine !== seq) return;
       const r = report_for(rs, s);
       if (!r) throw new Error(`${s} の診断の結果が返りませんでした`);
@@ -113,7 +110,7 @@
     const mine = ++seq;
     fixing = true;
     try {
-      const rs = await unwrap(c.api.POST("/api/doctor/fix", { params: { query: { store: s } } }));
+      const rs = await c.api.doctorFix({ store: s });
       if (mine !== seq) return;
       const r = report_for(rs, s);
       if (!r) throw new Error(`${s} の修復の結果が返りませんでした`);

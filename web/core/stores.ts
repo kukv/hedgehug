@@ -1,4 +1,4 @@
-import { type Api, ApiError, type Schemas, type TaskView, unwrap } from "./api/client";
+import { type Api, ApiError, type Schemas, type TaskView } from "./api/client";
 import type { TaskCache } from "./cache";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
@@ -82,8 +82,8 @@ export class StoreDirectory {
   private readonly api: Api;
   private readonly conn: Connection;
   private readonly cache: TaskCache;
-  private items: Schemas["StoreItem"][] = [];
-  private spaces = new Map<string, Schemas["WorkspaceView"][]>();
+  private items: Schemas.StoreItem[] = [];
+  private spaces = new Map<string, Schemas.WorkspaceView[]>();
   private isLoaded = false;
   private err: ApiError | null = null;
   private seq = 0;
@@ -120,7 +120,7 @@ export class StoreDirectory {
     });
   }
 
-  stores(): Schemas["StoreItem"][] {
+  stores(): Schemas.StoreItem[] {
     return this.items;
   }
 
@@ -193,9 +193,9 @@ export class StoreDirectory {
   // workspaces cannot be read keeps the ones it had.
   async reload(): Promise<void> {
     const seq = ++this.seq;
-    let items: Schemas["StoreItem"][];
+    let items: Schemas.StoreItem[];
     try {
-      items = (await unwrap(this.api.GET("/api/stores"))) ?? [];
+      items = (await this.api.listStores()) ?? [];
     } catch (e) {
       if (seq === this.seq) {
         this.err =
@@ -211,11 +211,9 @@ export class StoreDirectory {
       throw e;
     }
     const got = await Promise.all(
-      items.map(async (s): Promise<[string, Schemas["WorkspaceView"][]]> => {
+      items.map(async (s): Promise<[string, Schemas.WorkspaceView[]]> => {
         try {
-          const ws = await unwrap(
-            this.api.GET("/api/workspaces", { params: { query: { store: s.name } } }),
-          );
+          const ws = await this.api.listWorkspaces({ store: s.name });
           return [s.name, ws ?? []];
         } catch {
           return [s.name, this.spaces.get(s.name) ?? []];
@@ -225,7 +223,7 @@ export class StoreDirectory {
     if (seq !== this.seq) return; // a newer reload is on its way
     // last_success changes at each sync and nothing here shows it (the sync
     // card reads sync.state); the list stays as it was when nothing else changed
-    const sig = (xs: Schemas["StoreItem"][]) =>
+    const sig = (xs: Schemas.StoreItem[]) =>
       JSON.stringify(xs.map(({ last_success: _, ...rest }) => rest));
     const same = sig(items) === sig(this.items);
     const spaces = new Map(got);

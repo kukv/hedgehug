@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type Schemas, type ShowView, unwrap } from "../../core/api/client";
+  import type { Schemas, ShowView } from "../../core/api/client";
   import { cliWorklog, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { worklogLabel } from "../../core/planning";
@@ -23,15 +23,16 @@
       : new Set<string>(),
   );
 
-  let logs = $state.raw<Schemas["WorklogView"][]>([]);
+  let logs = $state.raw<Schemas.WorklogView[]>([]);
   let rev = $state(0);
   $effect(() => {
-    const params = { path: { id: show.ulid }, query: { store: show.store } };
+    const { ulid, store } = show;
     void show.worklog?.count;
     void show.updated;
     void rev;
     let live = true;
-    unwrap(api.GET("/api/tasks/{id}/worklogs", { params }))
+    api
+      .listWorklogs(ulid, { store })
       .then((r) => {
         if (live) logs = r ?? [];
       })
@@ -62,15 +63,14 @@
     busy = true;
     failure = null;
     try {
-      await unwrap(
-        api.POST("/api/tasks/{id}/worklogs", {
-          params: { path: { id: show.ulid }, query: { store: show.store } },
-          body: {
-            duration: time.trim(),
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(date ? { date } : {}),
-          },
-        }),
+      await api.addWorklog(
+        show.ulid,
+        {
+          duration: time.trim(),
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(date ? { date } : {}),
+        },
+        { store: show.store },
       );
       time = "";
       note = "";
@@ -85,11 +85,7 @@
 
   async function remove(log: string) {
     try {
-      await unwrap(
-        api.DELETE("/api/tasks/{id}/worklogs/{log}", {
-          params: { path: { id: show.ulid, log }, query: { store: show.store } },
-        }),
-      );
+      await api.removeWorklog(show.ulid, log, { store: show.store });
       rev++;
     } catch (e) {
       toast({ message: errorMessage(e) });

@@ -61,7 +61,7 @@ type Opts = {
   tasks?: TaskView[];
   findings?: Finding[];
   stores?: string[];
-  get?: (path: string, init: { params: { query: { store: string } } }) => unknown;
+  get?: (op: "listTasks" | "checkSchema", query: { store: string }) => unknown;
   post?: (body: Record<string, unknown>) => unknown;
   loadError?: Error;
   // the schema is not in yet and does not come
@@ -81,17 +81,16 @@ function setup(opts: Opts = {}) {
     // the cache holds the schema once it has read it
     held: opts.loadError === undefined && !opts.pending,
   };
-  const get = vi.fn((path: string, init: { params: { query: { store: string } } }) => {
-    if (opts.get) {
-      const r = opts.get(path, init);
-      if (r !== undefined) return r;
-    }
-    if (path === "/api/tasks") return ok({ tasks: opts.tasks ?? tasks });
-    if (path === "/api/schema/check") return ok({ findings: state.findings });
-    throw new Error(`unexpected GET ${path}`);
+  const listTasks = vi.fn((query: { store: string }) => {
+    const r = opts.get?.("listTasks", query);
+    return r !== undefined ? r : ok({ tasks: opts.tasks ?? tasks });
   });
-  const post = vi.fn((_p: string, init: { body: Record<string, unknown> }) =>
-    opts.post ? opts.post(init.body) : ok({ changed: [], skipped: [], commit: null }),
+  const checkSchema = vi.fn((query: { store: string }) => {
+    const r = opts.get?.("checkSchema", query);
+    return r !== undefined ? r : ok({ findings: state.findings });
+  });
+  const post = vi.fn((body: Record<string, unknown>, _query: { store: string }) =>
+    opts.post ? opts.post(body) : ok({ changed: [], skipped: [], commit: null }),
   );
   const reload = vi.fn(async () => {});
   const load = vi.fn(() =>
@@ -110,7 +109,7 @@ function setup(opts: Opts = {}) {
     SettingsSchema,
     { store: opts.store ?? "shared", tab: opts.tab ?? "statuses" },
     {
-      api: { GET: get, POST: post },
+      api: { listTasks, checkSchema, migrateSchema: post },
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
@@ -127,11 +126,8 @@ function setup(opts: Opts = {}) {
       },
     },
   );
-  return { get, post, reload, load, conn, cache, state, ...view };
+  return { listTasks, checkSchema, post, reload, load, conn, cache, state, ...view };
 }
-
-const calls = (get: ReturnType<typeof setup>["get"], path: string) =>
-  get.mock.calls.filter((c) => c[0] === path);
 
 const row = (name: string | RegExp) => screen.getByRole("row", { name });
 
@@ -160,12 +156,10 @@ describe("SettingsSchema", () => {
   });
 
   it("asks for the tasks and the check of the Store", async () => {
-    const { get } = setup({ store: "shared" });
-    await waitFor(() => expect(calls(get, "/api/tasks")).toHaveLength(1));
-    expect(calls(get, "/api/tasks")[0]?.[1]).toEqual({ params: { query: { store: "shared" } } });
-    expect(calls(get, "/api/schema/check")[0]?.[1]).toEqual({
-      params: { query: { store: "shared" } },
-    });
+    const { listTasks, checkSchema } = setup({ store: "shared" });
+    await waitFor(() => expect(listTasks.mock.calls).toHaveLength(1));
+    expect(listTasks.mock.calls[0]?.[0]).toEqual({ store: "shared" });
+    expect(checkSchema.mock.calls[0]?.[0]).toEqual({ store: "shared" });
   });
 
   it("lists the statuses with the category, the default and the number of tasks", async () => {
@@ -179,7 +173,7 @@ describe("SettingsSchema", () => {
   });
 
   it("shows a dash for the numbers until the tasks are read", async () => {
-    setup({ get: (path) => (path === "/api/tasks" ? new Promise(() => {}) : undefined) });
+    setup({ get: (op) => (op === "listTasks" ? new Promise(() => {}) : undefined) });
     await screen.findByRole("heading", { level: 2, name: "ステータス" });
     expect(within(row(/^todo/)).getByText("—")).toBeVisible();
   });
@@ -307,32 +301,32 @@ describe("SettingsSchema", () => {
 
   describe("reading again", () => {
     it("asks for the check at schema.changed of this Store, not of another", async () => {
-      const { get, conn } = setup();
-      await waitFor(() => expect(calls(get, "/api/schema/check")).toHaveLength(1));
+      const { listTasks, checkSchema, conn } = setup();
+      await waitFor(() => expect(checkSchema.mock.calls).toHaveLength(1));
       conn.emit("schema.changed", { store: "other" });
       conn.emit("schema.changed", { store: "shared" });
-      await waitFor(() => expect(calls(get, "/api/schema/check")).toHaveLength(2));
-      expect(calls(get, "/api/tasks")).toHaveLength(1);
+      await waitFor(() => expect(checkSchema.mock.calls).toHaveLength(2));
+      expect(listTasks.mock.calls).toHaveLength(1);
     });
 
     it("asks for both at tasks.changed of this Store, and at resync", async () => {
-      const { get, conn } = setup();
-      await waitFor(() => expect(calls(get, "/api/tasks")).toHaveLength(1));
+      const { listTasks, checkSchema, conn } = setup();
+      await waitFor(() => expect(listTasks.mock.calls).toHaveLength(1));
       conn.emit("tasks.changed", { store: "other", ulids: [], removed: [], commit: "c" });
-      expect(calls(get, "/api/tasks")).toHaveLength(1);
+      expect(listTasks.mock.calls).toHaveLength(1);
       conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [], commit: "c" });
-      await waitFor(() => expect(calls(get, "/api/tasks")).toHaveLength(2));
-      expect(calls(get, "/api/schema/check")).toHaveLength(2);
+      await waitFor(() => expect(listTasks.mock.calls).toHaveLength(2));
+      expect(checkSchema.mock.calls).toHaveLength(2);
       conn.emit("resync");
-      await waitFor(() => expect(calls(get, "/api/tasks")).toHaveLength(3));
-      expect(calls(get, "/api/schema/check")).toHaveLength(3);
+      await waitFor(() => expect(listTasks.mock.calls).toHaveLength(3));
+      expect(checkSchema.mock.calls).toHaveLength(3);
     });
 
     it("keeps the numbers it read and shows the failure above them when a reload fails", async () => {
       let n = 0;
       const { conn } = setup({
-        get: (path) => {
-          if (path === "/api/tasks" && ++n > 1) return fail(500, "internal", {}, "壊れました");
+        get: (op) => {
+          if (op === "listTasks" && ++n > 1) return fail(500, "internal", {}, "壊れました");
           return undefined;
         },
       });
@@ -345,8 +339,8 @@ describe("SettingsSchema", () => {
     it("takes the failure away once a reload succeeds", async () => {
       let n = 0;
       const { conn } = setup({
-        get: (path) =>
-          path === "/api/tasks" && ++n === 2 ? fail(500, "internal", {}, "壊れました") : undefined,
+        get: (op) =>
+          op === "listTasks" && ++n === 2 ? fail(500, "internal", {}, "壊れました") : undefined,
       });
       await screen.findByText("スキーマとタスクは合っています");
       conn.emit("resync");
@@ -359,8 +353,8 @@ describe("SettingsSchema", () => {
       const slow: { resolve?: (v: unknown) => void } = {};
       let n = 0;
       const { conn } = setup({
-        get: (path) => {
-          if (path !== "/api/tasks") return undefined;
+        get: (op) => {
+          if (op !== "listTasks") return undefined;
           n++;
           if (n === 2)
             return new Promise((r) => {
@@ -388,7 +382,10 @@ describe("SettingsSchema", () => {
         SettingsSchema,
         { store: "shared", tab: "statuses" },
         {
-          api: { GET: vi.fn(() => ok({ tasks: [], findings: [] })) },
+          api: {
+            listTasks: vi.fn(() => ok({ tasks: [], findings: [] })),
+            checkSchema: vi.fn(() => ok({ tasks: [], findings: [] })),
+          },
           conn,
           stores: {
             stores: () => [],
@@ -406,19 +403,13 @@ describe("SettingsSchema", () => {
 
     it("reads the other Store when the Store changes, and does not show the old numbers meanwhile", async () => {
       const k = setup({
-        get: (path, init) =>
-          path === "/api/tasks" && init.params.query.store === "ops"
-            ? new Promise(() => {})
-            : undefined,
+        get: (op, query) =>
+          op === "listTasks" && query.store === "ops" ? new Promise(() => {}) : undefined,
       });
       await waitFor(() => expect(within(row(/^todo/)).getByText("2")).toBeVisible());
       await k.rerender({ store: "ops" });
-      expect(calls(k.get, "/api/tasks").at(-1)?.[1]).toEqual({
-        params: { query: { store: "ops" } },
-      });
-      expect(calls(k.get, "/api/schema/check").at(-1)?.[1]).toEqual({
-        params: { query: { store: "ops" } },
-      });
+      expect(k.listTasks.mock.calls.at(-1)?.[0]).toEqual({ store: "ops" });
+      expect(k.checkSchema.mock.calls.at(-1)?.[0]).toEqual({ store: "ops" });
       // the numbers of the other Store are gone, and the ones of this Store are not in
       expect(within(row(/^todo/)).queryByText("2")).toBeNull();
       expect(within(row(/^todo/)).getByText("—")).toBeVisible();
@@ -522,14 +513,14 @@ describe("SettingsSchema", () => {
           post: (b) =>
             ok({ changed: [{ ulid: "B" }], skipped: [], commit: b.dry_run ? null : "c1" }),
         });
-        await waitFor(() => expect(calls(k.get, "/api/tasks")).toHaveLength(1));
+        await waitFor(() => expect(k.listTasks.mock.calls).toHaveLength(1));
         await renameTriage(k);
-        expect(k.post).toHaveBeenLastCalledWith("/api/schema/migrate", {
-          params: { query: { store: "shared" } },
-          body: { target: "status", old: "triage", new: "review" },
-        });
-        await waitFor(() => expect(calls(k.get, "/api/tasks")).toHaveLength(2));
-        expect(calls(k.get, "/api/schema/check")).toHaveLength(2);
+        expect(k.post).toHaveBeenLastCalledWith(
+          { target: "status", old: "triage", new: "review" },
+          { store: "shared" },
+        );
+        await waitFor(() => expect(k.listTasks.mock.calls).toHaveLength(2));
+        expect(k.checkSchema.mock.calls).toHaveLength(2);
       } finally {
         vi.useRealTimers();
       }

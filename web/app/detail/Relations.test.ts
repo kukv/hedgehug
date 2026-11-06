@@ -51,12 +51,9 @@ describe("Relations", () => {
 
   it("removes a blocker with a PATCH of the rest", async () => {
     const { k } = setup();
-    k.api.PATCH.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c1" }));
+    k.api.updateTask.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c1" }));
     await fireEvent.click(await screen.findByRole("button", { name: "REL-2 を外す" }));
-    expect(k.api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-      body: { blocked_by: [] },
-    });
+    expect(k.api.updateTask).toHaveBeenCalledWith("U6", { blocked_by: [] }, { store: "shared" });
     await waitFor(() =>
       expect(k.cache.applyWrite).toHaveBeenCalledWith({ task: expect.anything(), commit: "c1" }),
     );
@@ -64,15 +61,13 @@ describe("Relations", () => {
 
   it("disables the controls while a change is being written, so the next one cannot lose it", async () => {
     const { k } = setup();
-    let done: (v: Awaited<ReturnType<typeof ok>>) => void = () => {};
-    k.api.PATCH.mockImplementation(
-      () => new Promise<Awaited<ReturnType<typeof ok>>>((r) => (done = r)),
-    );
+    let done: (v: unknown) => void = () => {};
+    k.api.updateTask.mockImplementation(() => new Promise<unknown>((r) => (done = r)));
     const remove = await screen.findByRole("button", { name: "REL-2 を外す" });
     await fireEvent.click(remove);
     expect(remove).toBeDisabled();
     expect(screen.getByRole("button", { name: "関連を追加" })).toBeDisabled();
-    done({ data: { task: taskView({ ulid: "U6" }), commit: "c1" }, response: new Response() });
+    done({ task: taskView({ ulid: "U6" }), commit: "c1" });
     await waitFor(() => expect(remove).toBeEnabled());
   });
 
@@ -89,10 +84,10 @@ describe("Relations", () => {
 
   it("adds a relation: pick the kind, search, pick a task", async () => {
     const { k } = setup();
-    k.api.GET.mockImplementation(() =>
+    k.api.listTasks.mockImplementation(() =>
       ok({ tasks: [taskView({ ulid: "UN", id: "REL-9", title: "新しい関連" })] }),
     );
-    k.api.PATCH.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c2" }));
+    k.api.updateTask.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c2" }));
     await fireEvent.click(screen.getByRole("button", { name: "関連を追加" }));
     await fireEvent.click(screen.getByRole("button", { name: "関連の種類" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "関連" }));
@@ -101,19 +96,20 @@ describe("Relations", () => {
     });
     await fireEvent.click(await screen.findByRole("option", { name: /REL-9/ }));
     await waitFor(() =>
-      expect(k.api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-        params: { path: { id: "U6" }, query: { store: "shared" } },
-        body: { props: { relates: ["UN"] } },
-      }),
+      expect(k.api.updateTask).toHaveBeenCalledWith(
+        "U6",
+        { props: { relates: ["UN"] } },
+        { store: "shared" },
+      ),
     );
   });
 
   it("shows the server's error, such as ref.cross_store, in the section", async () => {
     const { k } = setup();
-    k.api.GET.mockImplementation(() =>
+    k.api.listTasks.mockImplementation(() =>
       ok({ tasks: [taskView({ ulid: "UN", id: "REL-9", title: "x" })] }),
     );
-    k.api.PATCH.mockImplementation(() =>
+    k.api.updateTask.mockImplementation(() =>
       fail(422, "ref.cross_store", { store: "other", id: "X-1" }),
     );
     await fireEvent.click(screen.getByRole("button", { name: "関連を追加" }));

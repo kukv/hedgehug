@@ -6,7 +6,7 @@ import { fail, ok } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
 import StoreDiscover from "./StoreDiscover.svelte";
 
-type Candidate = Schemas["Candidate"];
+type Candidate = Schemas.Candidate;
 
 const acct = (name: string, over: Partial<Account> = {}): Account => ({
   name,
@@ -34,10 +34,8 @@ type Mount = {
 };
 
 function mount(m: Mount = {}) {
-  const GET = vi.fn((_path: string, opts: { params: { query: Query } }) =>
-    m.get ? m.get(opts.params.query) : ok([]),
-  );
-  const POST = vi.fn((_path: string, _opts: unknown) =>
+  const discoverStores = vi.fn((query: Query) => (m.get ? m.get(query) : ok([])));
+  const mountStores = vi.fn((_body: unknown) =>
     m.post ? m.post() : ok({ mounted: [], failed: [] }),
   );
   const accounts = {
@@ -53,9 +51,9 @@ function mount(m: Mount = {}) {
   renderWithCore(
     StoreDiscover,
     { mountLabel: "マウント", onmounted },
-    { api: { GET, POST }, accounts, stores },
+    { api: { discoverStores, mountStores }, accounts, stores },
   );
-  return { GET, POST, accounts, stores, onmounted };
+  return { discoverStores, mountStores, accounts, stores, onmounted };
 }
 
 const type = (el: HTMLElement, value: string) => fireEvent.input(el, { target: { value } });
@@ -71,28 +69,28 @@ afterEach(() => cleanup());
 
 describe("StoreDiscover: the search on GitHub", () => {
   it("looks on its own when an account has a token", async () => {
-    const { GET } = mount({ get: () => ok([cand("hh-tasks", "org")]) });
+    const { discoverStores } = mount({ get: () => ok([cand("hh-tasks", "org")]) });
     await screen.findByText("org");
-    expect(GET).toHaveBeenCalledTimes(1);
-    expect(GET).toHaveBeenCalledWith("/api/stores/discover", { params: { query: {} } });
+    expect(discoverStores).toHaveBeenCalledTimes(1);
+    expect(discoverStores).toHaveBeenCalledWith({});
   });
 
   it("does not look when no account has a token, and offers the folder", async () => {
-    const { GET } = mount({
+    const { discoverStores } = mount({
       accounts: [acct("a", { token: undefined }), acct("b", { state: "error" })],
     });
     expect(
       await screen.findByText("GitHub で探すにはトークンのあるアカウントが要ります"),
     ).toBeTruthy();
-    expect(GET).not.toHaveBeenCalled();
+    expect(discoverStores).not.toHaveBeenCalled();
     expect(screen.getByLabelText("フォルダ")).toBeTruthy();
   });
 
   it("waits for the accounts to be read", async () => {
-    const { GET, accounts } = mount({ loaded: false });
+    const { discoverStores, accounts } = mount({ loaded: false });
     expect(accounts.load).toHaveBeenCalled();
     expect(screen.getByText("読み込み中…")).toBeTruthy();
-    expect(GET).not.toHaveBeenCalled();
+    expect(discoverStores).not.toHaveBeenCalled();
   });
 
   it("puts the candidates under their owner, with permission and a name to call them", async () => {
@@ -128,13 +126,13 @@ describe("StoreDiscover: the search on GitHub", () => {
 
   it("shows why it could not look, and looks again", async () => {
     let n = 0;
-    const { GET } = mount({
+    const { discoverStores } = mount({
       get: () => (n++ === 0 ? fail(502, "github.unavailable") : ok([cand("hh-a", "org")])),
     });
     await screen.findByRole("alert");
     await fireEvent.click(screen.getByRole("button", { name: "もう一度探す" }));
     await screen.findByText("org");
-    expect(GET).toHaveBeenCalledTimes(2);
+    expect(discoverStores).toHaveBeenCalledTimes(2);
   });
 
   it("shows the command at the foot", async () => {
@@ -146,7 +144,7 @@ describe("StoreDiscover: the search on GitHub", () => {
 
 describe("StoreDiscover: the search in a folder", () => {
   it("looks with from, and the command has it", async () => {
-    const { GET } = mount({
+    const { discoverStores } = mount({
       accounts: [acct("me", { token: undefined })],
       get: () => ok([cand("a", "x", { url: "/srv/r/a.git", account: undefined })]),
     });
@@ -154,13 +152,11 @@ describe("StoreDiscover: the search in a folder", () => {
     expect(cli()?.trim()).toBe("$ hh store discover --from /srv/r");
     await fireEvent.click(screen.getByRole("button", { name: "探す" }));
     await screen.findByText("/srv/r/a.git");
-    expect(GET).toHaveBeenCalledWith("/api/stores/discover", {
-      params: { query: { from: "/srv/r" } },
-    });
+    expect(discoverStores).toHaveBeenCalledWith({ from: "/srv/r" });
   });
 
   it("asks for the account when the server cannot tell, and looks again with it", async () => {
-    const { GET } = mount({
+    const { discoverStores } = mount({
       get: (q) =>
         q.from && !q.account
           ? fail(422, "choice.required", { what: "--account", candidates: ["a", "b"] })
@@ -177,9 +173,7 @@ describe("StoreDiscover: the search in a folder", () => {
     expect(cli()?.trim()).toBe("$ hh store discover --account b --from /srv/r");
     await fireEvent.click(screen.getByRole("button", { name: "探す" }));
     await screen.findByText("/srv/r/a.git");
-    expect(GET).toHaveBeenLastCalledWith("/api/stores/discover", {
-      params: { query: { account: "b", from: "/srv/r" } },
-    });
+    expect(discoverStores).toHaveBeenLastCalledWith({ account: "b", from: "/srv/r" });
   });
 });
 
@@ -187,7 +181,7 @@ describe("StoreDiscover: mounting", () => {
   const two = () => ok([cand("hh-a", "org"), cand("hh-b", "org")]);
 
   it("sends the chosen ones under the names in the fields", async () => {
-    const { POST, stores, onmounted } = mount({
+    const { mountStores, stores, onmounted } = mount({
       get: two,
       post: () => ok({ mounted: ["mine"], failed: [] }),
     });
@@ -195,10 +189,10 @@ describe("StoreDiscover: mounting", () => {
     await type(screen.getByLabelText("org/hh-a の呼び名"), " mine ");
     await fireEvent.click(screen.getByLabelText("org/hh-a を選ぶ"));
     await fireEvent.click(screen.getByRole("button", { name: "マウント" }));
-    await waitFor(() => expect(POST).toHaveBeenCalledTimes(1));
-    expect(POST).toHaveBeenCalledWith("/api/stores/mount", {
-      body: [{ name: "mine", url: "https://github.com/org/hh-a.git", account: "me" }],
-    });
+    await waitFor(() => expect(mountStores).toHaveBeenCalledTimes(1));
+    expect(mountStores).toHaveBeenCalledWith([
+      { name: "mine", url: "https://github.com/org/hh-a.git", account: "me" },
+    ]);
     await screen.findByText("マウントしました");
     expect(stores.reload).toHaveBeenCalledTimes(1);
     expect(onmounted).toHaveBeenCalledWith({
@@ -217,27 +211,27 @@ describe("StoreDiscover: mounting", () => {
   });
 
   it("does not send a candidate with an empty name, and says so on its row", async () => {
-    const { POST } = mount({ get: two, post: () => ok({ mounted: ["hh-b"], failed: [] }) });
+    const { mountStores } = mount({ get: two, post: () => ok({ mounted: ["hh-b"], failed: [] }) });
     await screen.findByText("org");
     await type(screen.getByLabelText("org/hh-a の呼び名"), "  ");
     await fireEvent.click(screen.getByLabelText("org/hh-a を選ぶ"));
     await fireEvent.click(screen.getByLabelText("org/hh-b を選ぶ"));
     await fireEvent.click(screen.getByRole("button", { name: "マウント" }));
-    await waitFor(() => expect(POST).toHaveBeenCalledTimes(1));
-    expect(POST.mock.calls[0]?.[1]).toEqual({
-      body: [{ name: "hh-b", url: "https://github.com/org/hh-b.git", account: "me" }],
-    });
+    await waitFor(() => expect(mountStores).toHaveBeenCalledTimes(1));
+    expect(mountStores.mock.calls[0]?.[0]).toEqual([
+      { name: "hh-b", url: "https://github.com/org/hh-b.git", account: "me" },
+    ]);
     expect(screen.getByText("名前を入れてください")).toBeTruthy();
   });
 
   it("does not call the server when the only chosen one has no name", async () => {
-    const { POST } = mount({ get: two });
+    const { mountStores } = mount({ get: two });
     await screen.findByText("org");
     await type(screen.getByLabelText("org/hh-a の呼び名"), "");
     await fireEvent.click(screen.getByLabelText("org/hh-a を選ぶ"));
     await fireEvent.click(screen.getByRole("button", { name: "マウント" }));
     expect(screen.getByText("名前を入れてください")).toBeTruthy();
-    expect(POST).not.toHaveBeenCalled();
+    expect(mountStores).not.toHaveBeenCalled();
   });
 
   it("puts a failure on its row and goes on with the others", async () => {
@@ -280,7 +274,7 @@ describe("StoreDiscover: mounting", () => {
 
 describe("StoreDiscover: rows that are not on the screen", () => {
   it("cannot mount a row chosen before a search that asks for the account", async () => {
-    const { POST } = mount({
+    const { mountStores } = mount({
       get: (q) =>
         q.from
           ? fail(422, "choice.required", { what: "--account", candidates: ["a", "b"] })
@@ -294,7 +288,7 @@ describe("StoreDiscover: rows that are not on the screen", () => {
     expect((screen.getByRole("button", { name: "マウント" }) as HTMLButtonElement).disabled).toBe(
       true,
     );
-    expect(POST).not.toHaveBeenCalled();
+    expect(mountStores).not.toHaveBeenCalled();
   });
 
   it("drops the answer of an older search that comes after a newer one", async () => {

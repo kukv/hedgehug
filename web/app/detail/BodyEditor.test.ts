@@ -64,11 +64,9 @@ describe("BodyEditor", () => {
     expect(viewOf(container).state.readOnly).toBe(true);
   });
 
-  it("offers the people for @ from GET /api/people", async () => {
+  it("offers the people for @ from listPeople", async () => {
     const k = makeCore();
-    k.api.GET.mockImplementation(() =>
-      Promise.resolve({ data: ["suzuki", "tanaka"], response: new Response() }),
-    );
+    k.api.listPeople.mockImplementation(() => Promise.resolve(["suzuki", "tanaka"]));
     const { container } = mount(BodyEditor, props({ value: "" }), k);
     const view = viewOf(container);
     // The completion starts 100ms after the typing (CodeMirror's activateOnTypingDelay). The clock
@@ -81,9 +79,7 @@ describe("BodyEditor", () => {
         userEvent: "input.type",
       });
       await vi.advanceTimersByTimeAsync(150);
-      expect(k.api.GET).toHaveBeenCalledWith("/api/people", {
-        params: { query: { store: "shared" } },
-      });
+      expect(k.api.listPeople).toHaveBeenCalledWith({ store: "shared" });
     } finally {
       vi.useRealTimers();
     }

@@ -1,4 +1,4 @@
-import { type Api, ApiError, type ShowView, unwrap } from "../../core/api/client";
+import { type Api, ApiError, type ShowView } from "../../core/api/client";
 
 const KEY = "hedgehug.recent";
 const MAX = 8;
@@ -60,7 +60,7 @@ export async function fetchMissing(
       .map(async (u) => {
         const since = d.epoch();
         try {
-          const show = await unwrap(d.api.GET("/api/tasks/{id}", { params: { path: { id: u } } }));
+          const show = await d.api.getTask(u);
           d.prime([show], since);
         } catch (e) {
           if (e instanceof ApiError && e.status === 404) forgetTask(u, storage);

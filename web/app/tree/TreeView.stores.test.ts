@@ -47,7 +47,7 @@ vi.mock("./dnd", async (orig) => {
 
 import TreeView from "./TreeView.svelte";
 
-const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+const ok = (data: unknown) => Promise.resolve(data);
 const row = (u: string) => h.rows.get(u) as Opts;
 const treeitem = (title: string) =>
   screen.getByText(title).closest('[role="treeitem"]') as HTMLElement;
@@ -114,7 +114,7 @@ function setup(
     dispose() {},
   }));
   const load = vi.fn(async (store: string) => (store === "beta" ? (betaSchema ?? schema) : schema));
-  const api = { POST: vi.fn(), PATCH: vi.fn() };
+  const api = { createTask: vi.fn(), moveTask: vi.fn(), updateTask: vi.fn() };
   h.core = {
     api,
     cache: {
@@ -294,7 +294,7 @@ describe("TreeView over every store", () => {
 
   it("adds a task below the selected row, in the store and workspace of that row", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(
+    api.createTask.mockResolvedValue(
       ok({ task: task("N1", "task", null, { store: "beta", workspace: wsOf.beta }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
@@ -306,10 +306,10 @@ describe("TreeView over every store", () => {
     await fireEvent.input(input, { target: { value: "新規" } });
     await fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
-      expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
-        params: { query: { store: "beta" } },
-        body: { title: "新規", kind: "task", workspace: "BBB", after: "B1" },
-      }),
+      expect(api.createTask).toHaveBeenCalledWith(
+        { title: "新規", kind: "task", workspace: "BBB", after: "B1" },
+        { store: "beta" },
+      ),
     );
   });
 
@@ -340,7 +340,7 @@ describe("TreeView over every store", () => {
 
   it("reads the keys from the schema of the store of the row", async () => {
     const { api } = setup({ betaSchema: "nodone" });
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("A2", "task", "A1", { store: "alpha", status: "done" }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
@@ -348,10 +348,7 @@ describe("TreeView over every store", () => {
     await fireEvent.click(a2);
     await fireEvent.keyDown(a2, { key: " " });
     await waitFor(() =>
-      expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-        params: { path: { id: "A2" }, query: { store: "alpha" } },
-        body: { status: "done" },
-      }),
+      expect(api.updateTask).toHaveBeenCalledWith("A2", { status: "done" }, { store: "alpha" }),
     );
     // The schema of beta has no status to complete with: the key says so, in the words of beta.
     const b1 = treeitem("beta one");
@@ -359,12 +356,12 @@ describe("TreeView over every store", () => {
     await fireEvent.keyDown(b1, { key: " " });
     await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
     expect(h.toast.mock.calls[0]?.[0].message).toContain("beta の schema.yaml");
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    expect(api.updateTask).toHaveBeenCalledTimes(1);
   });
 
   it("holds a key for the schema of its own store, not of another", async () => {
     const { api, loadBeta, load } = setup({ betaSchema: "none" });
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("B1", "task", null, { store: "beta", status: "done" }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
@@ -374,19 +371,16 @@ describe("TreeView over every store", () => {
     await fireEvent.click(b1);
     await fireEvent.keyDown(b1, { key: " " });
     // alpha's schema is read, beta's is not: the key waits.
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
     loadBeta();
     await waitFor(() =>
-      expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-        params: { path: { id: "B1" }, query: { store: "beta" } },
-        body: { status: "done" },
-      }),
+      expect(api.updateTask).toHaveBeenCalledWith("B1", { status: "done" }, { store: "beta" }),
     );
   });
 
   it("drops a held key when another row is selected before the schema arrives", async () => {
     const { api, loadBeta } = setup({ betaSchema: "none" });
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("A2", "task", "A1", { store: "alpha", status: "done" }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
@@ -397,12 +391,12 @@ describe("TreeView over every store", () => {
     loadBeta();
     await new Promise((r) => setTimeout(r, 30));
     // Neither the row it was pressed on (no longer selected) nor the selected one is completed.
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
   });
 
   it("makes the task of the foot input once the workspace has loaded", async () => {
     const { api, loadWorkspaces } = setup({ wsLate: true });
-    api.POST.mockResolvedValue(
+    api.createTask.mockResolvedValue(
       ok({
         task: task("N1", "task", null, { store: "alpha", workspace: wsOf.alpha }),
         commit: "c1",
@@ -415,10 +409,10 @@ describe("TreeView over every store", () => {
     await fireEvent.input(input, { target: { value: "新規" } });
     await fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
-      expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
-        params: { query: { store: "alpha" } },
-        body: expect.objectContaining({ title: "新規", workspace: "AAA" }),
-      }),
+      expect(api.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "新規", workspace: "AAA" }),
+        { store: "alpha" },
+      ),
     );
   });
 
@@ -441,7 +435,7 @@ describe("TreeView over every store", () => {
     row("A1").onDrop("B1", "child");
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("別の Store のタスクの下には置けません");
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.moveTask).not.toHaveBeenCalled();
   });
 
   it("refuses to drop a task between the tasks of another store", async () => {
@@ -450,21 +444,22 @@ describe("TreeView over every store", () => {
     row("B2").onDrop("A1", "before");
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("別の Store の並びには置けません");
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.moveTask).not.toHaveBeenCalled();
   });
 
   it("moves a task within its store as it does in a view of one", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(
+    api.moveTask.mockResolvedValue(
       ok({ task: task("B2", "task", null, { store: "beta" }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
     row("B1").onDrop("B2", "before");
     await waitFor(() =>
-      expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
-        params: { path: { id: "B2" }, query: { store: "beta" } },
-        body: { root: true, before: "B1" },
-      }),
+      expect(api.moveTask).toHaveBeenCalledWith(
+        "B2",
+        { root: true, before: "B1" },
+        { store: "beta" },
+      ),
     );
   });
 });

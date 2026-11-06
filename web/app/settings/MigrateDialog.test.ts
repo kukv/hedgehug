@@ -33,8 +33,8 @@ type Opts = {
 };
 
 function setup(opts: Opts = {}) {
-  const post = vi.fn((_path: string, init: { body: Body }) =>
-    (opts.post ?? ((b: Body) => ok(out(b.dry_run ? 3 : 3, 0, b.dry_run ? null : "c1"))))(init.body),
+  const post = vi.fn((body: Body, _query: { store: string }) =>
+    (opts.post ?? ((b: Body) => ok(out(b.dry_run ? 3 : 3, 0, b.dry_run ? null : "c1"))))(body),
   );
   const reload = vi.fn(async () => {});
   const onclose = vi.fn();
@@ -52,7 +52,7 @@ function setup(opts: Opts = {}) {
       onclose,
       ondone,
     },
-    { api: { POST: post }, schema: { reload, subscribe: () => () => {} } },
+    { api: { migrateSchema: post }, schema: { reload, subscribe: () => () => {} } },
   );
   return { post, reload, onclose, ondone, ...view };
 }
@@ -98,10 +98,10 @@ describe("MigrateDialog", () => {
     expect(post).not.toHaveBeenCalled();
     await settle();
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith("/api/schema/migrate", {
-      params: { query: { store: "shared" } },
-      body: { target: "status", old: "triage", new: "review", dry_run: true },
-    });
+    expect(post).toHaveBeenCalledWith(
+      { target: "status", old: "triage", new: "review", dry_run: true },
+      { store: "shared" },
+    );
     expect(screen.getByText("3 件のタスクが書き換わります")).toBeVisible();
     expect(screen.getByText("読み込めないため書き換えないタスク 2 件")).toBeVisible();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
@@ -178,7 +178,7 @@ describe("MigrateDialog", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
     await fireEvent.change(select, { target: { value: "todo" } });
     await settle();
-    expect(post.mock.calls[0]?.[1].body).toEqual({
+    expect(post.mock.calls[0]?.[0]).toEqual({
       target: "status",
       old: "triage",
       new: "todo",
@@ -198,7 +198,7 @@ describe("MigrateDialog", () => {
     expect(screen.getByRole("dialog", { name: "値「mid」の名前を変える" })).toBeVisible();
     await type("normal");
     await settle();
-    expect(post.mock.calls[0]?.[1].body).toEqual({
+    expect(post.mock.calls[0]?.[0]).toEqual({
       target: "value",
       prop: "priority",
       old: "mid",
@@ -218,10 +218,10 @@ describe("MigrateDialog", () => {
     await settle();
     await fireEvent.click(screen.getByRole("button", { name: "名前を変える" }));
     await vi.advanceTimersByTimeAsync(0);
-    expect(post).toHaveBeenLastCalledWith("/api/schema/migrate", {
-      params: { query: { store: "shared" } },
-      body: { target: "status", old: "triage", new: "review" },
-    });
+    expect(post).toHaveBeenLastCalledWith(
+      { target: "status", old: "triage", new: "review" },
+      { store: "shared" },
+    );
     expect(reload).toHaveBeenCalledWith("shared");
     expect(toasts.list[0]?.message).toBe(
       "3 件を書き換えました（読み込めないため書き換えなかったタスク 1 件）",

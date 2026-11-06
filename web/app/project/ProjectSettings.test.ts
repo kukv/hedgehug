@@ -65,11 +65,11 @@ function setup(opts: Opts = {}) {
   // reading the schema again after a write of ours: the cache tells what the Store holds now
   const reload = vi.fn(async () => cache.emit());
   const api = {
-    GET: vi.fn((path: string) =>
-      ok(path === "/api/automations" ? [] : { tasks: state.violations }),
-    ),
-    PUT: vi.fn((_path: string, init: { body: Record<string, unknown> }) => {
-      const b = init.body as {
+    listAutomations: vi.fn((_query?: unknown) => ok([])),
+    listTemplates: vi.fn((_query?: unknown) => ok([])),
+    listTasks: vi.fn((_query?: unknown) => ok({ tasks: state.violations })),
+    putScoped: vi.fn((_ulid: string, body: Record<string, unknown>, _query?: unknown) => {
+      const b = body as {
         statuses?: string[];
         transitions?: Record<string, string[]>;
         required?: Record<string, string[]>;
@@ -92,7 +92,7 @@ function setup(opts: Opts = {}) {
           : undefined;
       return ok(view());
     }),
-    DELETE: vi.fn(() => {
+    deleteScoped: vi.fn((_ulid?: string, _query?: unknown) => {
       state.scoped = undefined;
       return ok(view());
     }),
@@ -136,7 +136,7 @@ function setup(opts: Opts = {}) {
 }
 
 const save = () => screen.getByRole("button", { name: "保存" });
-const putBody = (api: { PUT: ReturnType<typeof vi.fn> }) => api.PUT.mock.lastCall?.[1].body;
+const putBody = (api: { putScoped: ReturnType<typeof vi.fn> }) => api.putScoped.mock.lastCall?.[1];
 
 beforeEach(() => {
   resetToasts();
@@ -212,8 +212,8 @@ describe("ProjectSettings", () => {
       expect(b).toHaveAttribute("title", sentence);
     }
     expect(screen.getByRole("button", { name: "Store と同じに戻す" })).toBeDisabled();
-    expect(api.PUT).not.toHaveBeenCalled();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    expect(api.putScoped).not.toHaveBeenCalled();
+    expect(api.deleteScoped).not.toHaveBeenCalled();
   });
 
   it("keeps save off while nothing changed", async () => {
@@ -228,11 +228,12 @@ describe("ProjectSettings", () => {
     await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
     expect(save()).toBeEnabled();
     await fireEvent.click(save());
-    await waitFor(() => expect(api.PUT).toHaveBeenCalledTimes(1));
-    expect(api.PUT).toHaveBeenCalledWith("/api/schema/scoped/{project}", {
-      params: { path: { project: "P1" }, query: { store: "shared" } },
-      body: { statuses: ["todo", "in_progress", "done", "canceled"] },
-    });
+    await waitFor(() => expect(api.putScoped).toHaveBeenCalledTimes(1));
+    expect(api.putScoped).toHaveBeenCalledWith(
+      "P1",
+      { statuses: ["todo", "in_progress", "done", "canceled"] },
+      { store: "shared" },
+    );
     await waitFor(() =>
       expect(toasts.list.map((t) => t.message)).toEqual(["プロジェクトの設定を保存しました"]),
     );
@@ -314,7 +315,7 @@ describe("ProjectSettings", () => {
 
   it("shows the words of a refusal and keeps what was edited", async () => {
     const { api } = setup();
-    api.PUT.mockImplementationOnce((() =>
+    api.putScoped.mockImplementationOnce((() =>
       fail(422, "scoped.invalid", { problems: ["scoped[0].statuses: ..."] })) as never);
     const group = await screen.findByRole("group", { name: "表示するステータス" });
     const waiting = within(group).getByRole("checkbox", { name: /待機中/ });
@@ -329,13 +330,13 @@ describe("ProjectSettings", () => {
   it("sends one request when save is pressed twice", async () => {
     const { api } = setup();
     let release: (v: unknown) => void = () => {};
-    api.PUT.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
+    api.putScoped.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
     const group = await screen.findByRole("group", { name: "表示するステータス" });
     await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
     await fireEvent.click(save());
     expect(save()).toBeDisabled();
     await fireEvent.click(save());
-    expect(api.PUT).toHaveBeenCalledTimes(1);
+    expect(api.putScoped).toHaveBeenCalledTimes(1);
     release(await ok({ commit: null, project: { ulid: "P1" } }));
     await waitFor(() => expect(save()).toBeDisabled());
   });
@@ -352,19 +353,17 @@ describe("ProjectSettings", () => {
     expect(
       within(dialog).getByRole("button", { name: "コマンドをコピー: hh schema scope rm REL-15" }),
     ).toBeTruthy();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    expect(api.deleteScoped).not.toHaveBeenCalled();
     await fireEvent.click(within(dialog).getByRole("button", { name: "やめる" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    expect(api.deleteScoped).not.toHaveBeenCalled();
 
     await fireEvent.click(reset);
     await fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", { name: "すべて戻す" }),
     );
-    await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenCalledWith("/api/schema/scoped/{project}", {
-      params: { path: { project: "P1" }, query: { store: "shared" } },
-    });
+    await waitFor(() => expect(api.deleteScoped).toHaveBeenCalledTimes(1));
+    expect(api.deleteScoped).toHaveBeenCalledWith("P1", { store: "shared" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(toasts.list.map((t) => t.message)).toEqual([
       "プロジェクトの設定を Store の値に戻しました",
@@ -453,7 +452,7 @@ describe("ProjectSettings", () => {
       // the next edit is made over the other person's override, and keeps it
       await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
       await fireEvent.click(save());
-      await waitFor(() => expect(api.PUT).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(api.putScoped).toHaveBeenCalledTimes(1));
       expect(putBody(api)).toEqual({ statuses: ["todo", "in_progress", "done", "canceled"] });
       expect(state.scoped?.workflow?.required).toEqual({ done: ["area"] });
     });
@@ -530,7 +529,7 @@ describe("ProjectSettings", () => {
       },
     });
     let release: (v: unknown) => void = () => {};
-    api.PUT.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
+    api.putScoped.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
     const group = await screen.findByRole("group", { name: "表示するステータス" });
     await waitFor(() =>
       expect(within(group).getByRole("checkbox", { name: /待機中/ })).not.toBeChecked(),
@@ -553,12 +552,12 @@ describe("ProjectSettings", () => {
       scoped: { where: "project:P1", statuses: ["todo", "in_progress", "done", "canceled"] },
     });
     let release: (v: unknown) => void = () => {};
-    api.DELETE.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
+    api.deleteScoped.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
     const reset = await screen.findByRole("button", { name: "すべて Store の値に戻す…" });
     await waitFor(() => expect(reset).toBeEnabled());
     await fireEvent.click(reset);
     await fireEvent.click(screen.getByRole("button", { name: "すべて戻す" }));
-    await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.deleteScoped).toHaveBeenCalledTimes(1));
     await fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.getByRole("dialog")).toBeTruthy();
     release(await ok({ commit: null, project: { ulid: "P1" } }));

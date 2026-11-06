@@ -1,4 +1,4 @@
-import { type Api, unwrap } from "./api/client";
+import type { Api } from "./api/client";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 
@@ -45,7 +45,8 @@ export class PeopleCache {
     if (running && running.version === version) return running.p;
     const seq = (this.seqs.get(store) ?? 0) + 1;
     this.seqs.set(store, seq);
-    const p = unwrap(this.api.GET("/api/people", { params: { query: { store } } }))
+    const p = this.api
+      .listPeople({ store })
       .then((list) => {
         const next = list ?? [];
         // An older fetch that ends after a newer one has started gives way to it.

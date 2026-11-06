@@ -12,8 +12,8 @@ const rules = [
 function setup() {
   const e = emitter();
   const api = {
-    GET: vi.fn(() => ok({ rules })),
-    PUT: vi.fn((_: string, o: { body: { rules: unknown[] } }) => ok(o.body)),
+    getRepoAccounts: vi.fn(() => ok({ rules })),
+    putRepoAccounts: vi.fn((body: { rules: unknown[] }) => ok(body)),
   };
   renderWithCore(
     RepoAccounts,
@@ -29,7 +29,7 @@ function setup() {
   return { api };
 }
 
-const put = (next: unknown[]) => ({ body: { rules: next } });
+const put = (next: unknown[]) => ({ rules: next });
 
 describe("RepoAccounts", () => {
   it("lists the rules in order", async () => {
@@ -44,7 +44,7 @@ describe("RepoAccounts", () => {
     const { api } = setup();
     await fireEvent.click(await screen.findByRole("button", { name: "上へ: *" }));
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith("/api/repo-accounts", put([rules[1], rules[0]])),
+      expect(api.putRepoAccounts).toHaveBeenCalledWith(put([rules[1], rules[0]])),
     );
     await waitFor(() => expect(screen.getByRole("button", { name: "上へ: *" })).toBeDisabled());
   });
@@ -52,9 +52,7 @@ describe("RepoAccounts", () => {
   it("removes a rule", async () => {
     const { api } = setup();
     await fireEvent.click(await screen.findByRole("button", { name: "削除: *" }));
-    await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith("/api/repo-accounts", put([rules[0]])),
-    );
+    await waitFor(() => expect(api.putRepoAccounts).toHaveBeenCalledWith(put([rules[0]])));
   });
 
   it("adds a rule at the end", async () => {
@@ -69,8 +67,7 @@ describe("RepoAccounts", () => {
     });
     await fireEvent.click(screen.getByRole("button", { name: "追加" }));
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith(
-        "/api/repo-accounts",
+      expect(api.putRepoAccounts).toHaveBeenCalledWith(
         put([...rules, { match: "github.com/org-b/*", account: "personal" }]),
       ),
     );

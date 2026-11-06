@@ -14,7 +14,7 @@
     scoped,
     onscoped,
   }: {
-    plan: Schemas["MovePlanView"];
+    plan: Schemas.MovePlanView;
     names: { id: string; parent: string; hidden: string[] };
     scoped: "carry" | "drop" | undefined;
     onscoped: (v: "carry" | "drop") => void;

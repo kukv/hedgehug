@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliStoreInit, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -82,17 +81,13 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        api.POST("/api/stores", {
-          body: {
-            name: name.trim(),
-            prefix,
-            workspace: workspace.trim() || undefined,
-            remotes,
-            account: choices && account ? account : undefined,
-          },
-        }),
-      );
+      const r = await api.initStore({
+        name: name.trim(),
+        prefix,
+        workspace: workspace.trim() || undefined,
+        remotes,
+        account: choices && account ? account : undefined,
+      });
       // The store exists now; a failed reload must not read as a failed create (the SSE resync catches up).
       await stores.reload().catch(() => undefined);
       toast({ message: `Store「${r.name}」を作りました` });

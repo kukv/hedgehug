@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ApiError, unwrap } from "../../core/api/client";
+  import { ApiError } from "../../core/api/client";
   import { cliStoreRemove } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -45,9 +45,7 @@
     busy = true;
     failure = null;
     try {
-      await unwrap(
-        c.api.DELETE("/api/stores/{name}", { params: { path: { name }, query: { keep } } }),
-      );
+      await c.api.removeStore(name, { keep });
       toast({ message: `${name} のマウントを解除しました` });
       // The Store is unmounted; a failed reload must not read as a failed removal.
       await c.stores.reload().catch(() => undefined);

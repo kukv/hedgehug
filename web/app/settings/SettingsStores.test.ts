@@ -6,7 +6,7 @@ import { renderWithCore } from "../test-utils";
 import { resetToasts } from "../toast.svelte";
 import SettingsStores from "./SettingsStores.svelte";
 
-type Item = Schemas["StoreItem"];
+type Item = Schemas.StoreItem;
 
 const item = (name: string, over: Partial<Item> = {}): Item => ({
   name,
@@ -40,10 +40,10 @@ function mount(m: Mount = {}) {
     subscribe: () => () => {},
   };
   const api = {
-    PATCH: vi.fn(() => ok({})),
-    PUT: vi.fn(() => ok({})),
-    POST: vi.fn(() => ok({})),
-    DELETE: vi.fn(() => ok({ name: "b", path: "/p", deleted: true })),
+    updateStore: vi.fn(() => ok({})),
+    setDefaultStore: vi.fn(() => ok({})),
+    addStore: vi.fn(() => ok({})),
+    removeStore: vi.fn(() => ok({ name: "b", path: "/p", deleted: true })),
   };
   const conn = { sync: new Map(), subscribe: () => () => {}, on: () => () => {} };
   renderWithCore(SettingsStores, {}, { stores, accounts, api, conn });
@@ -161,10 +161,8 @@ describe("SettingsStores: unmounting", () => {
     await fireEvent.click(within(card("b")).getByRole("button", { name: "マウントを解除…" }));
     const dialog = screen.getByRole("dialog", { name: "b のマウントを解除" });
     await fireEvent.click(within(dialog).getByRole("button", { name: "解除する" }));
-    await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "b" }, query: { keep: false } },
-    });
+    await waitFor(() => expect(api.removeStore).toHaveBeenCalledTimes(1));
+    expect(api.removeStore).toHaveBeenCalledWith("b", { keep: false });
     await waitFor(() => expect(stores.reload).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });

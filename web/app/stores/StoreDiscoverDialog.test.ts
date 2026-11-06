@@ -13,7 +13,7 @@ const found = ["hh-a", "hh-b"].map((name) => ({
 }));
 
 function mount(result: unknown) {
-  const api = { GET: vi.fn(() => ok(found)), POST: vi.fn(() => ok(result)) };
+  const api = { discoverStores: vi.fn(() => ok(found)), mountStores: vi.fn(() => ok(result)) };
   const accounts = {
     accounts: () => [
       { name: "me", id: "github.com/me", state: "ok", login: "me", token: "keychain" },

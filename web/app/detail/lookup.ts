@@ -1,4 +1,4 @@
-import { type Api, type TaskView, unwrap } from "../../core/api/client";
+import type { Api, TaskView } from "../../core/api/client";
 import type { TaskCache } from "../../core/cache";
 
 export type Crumb = {
@@ -40,11 +40,8 @@ export function createLookup(opts: {
     let p = inflight.get(key);
     if (!p) {
       const since = opts.cache.epochNow();
-      p = unwrap(
-        opts.api.GET("/api/tasks/{id}", {
-          params: { path: { id: key }, query: { store: opts.store } },
-        }),
-      )
+      p = opts.api
+        .getTask(key, { store: opts.store })
         .then(
           (show) => {
             // Held in the cache, the row is fetched again when the task changes.

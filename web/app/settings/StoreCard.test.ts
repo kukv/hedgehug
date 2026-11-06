@@ -7,7 +7,7 @@ import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import StoreCard from "./StoreCard.svelte";
 
-type Item = Schemas["StoreItem"];
+type Item = Schemas.StoreItem;
 
 const item = (over: Partial<Item> = {}): Item => ({
   name: "demo",
@@ -33,8 +33,8 @@ type Mount = {
 function mount(m: Mount = {}) {
   const store = m.store ?? item();
   const api = {
-    PATCH: vi.fn(() => (m.patch ? m.patch() : ok({ ...store }))),
-    PUT: vi.fn(() => (m.put ? m.put() : ok({ name: store.name }))),
+    updateStore: vi.fn(() => (m.patch ? m.patch() : ok({ ...store }))),
+    setDefaultStore: vi.fn(() => (m.put ? m.put() : ok({ name: store.name }))),
   };
   const stores = {
     stores: () => [store],
@@ -231,10 +231,7 @@ describe("StoreCard: the colour", () => {
     );
     await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /スカイ/ }));
     await waitFor(() => expect(stores.reload).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "demo" } },
-      body: { color: "sky" },
-    });
+    expect(api.updateStore).toHaveBeenCalledWith("demo", { color: "sky" });
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
@@ -244,11 +241,8 @@ describe("StoreCard: the colour", () => {
       screen.getByRole("button", { name: "demo の色を変える（このマシンだけ）" }),
     );
     await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /自動/ }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "demo" } },
-      body: { color: "" },
-    });
+    await waitFor(() => expect(api.updateStore).toHaveBeenCalledTimes(1));
+    expect(api.updateStore).toHaveBeenCalledWith("demo", { color: "" });
   });
 
   it("can be chosen with the keyboard", async () => {
@@ -259,7 +253,7 @@ describe("StoreCard: the colour", () => {
     const menu = screen.getByRole("menu");
     await fireEvent.keyDown(menu, { key: "ArrowDown" });
     await fireEvent.keyDown(menu, { key: "Enter" });
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.updateStore).toHaveBeenCalledTimes(1));
   });
 
   it("keeps the mark on the saved colour of a read-only Store", async () => {
@@ -290,10 +284,7 @@ describe("StoreCard: shown", () => {
     expect(box.checked).toBe(true);
     await fireEvent.click(box);
     await waitFor(() => expect(stores.reload).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "demo" } },
-      body: { hidden: true },
-    });
+    expect(api.updateStore).toHaveBeenCalledWith("demo", { hidden: true });
   });
 
   it("saves hidden: false when the check is put on", async () => {
@@ -301,11 +292,8 @@ describe("StoreCard: shown", () => {
     const box = within(card()).getByRole("checkbox", { name: "表示" }) as HTMLInputElement;
     expect(box.checked).toBe(false);
     await fireEvent.click(box);
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/stores/{name}", {
-      params: { path: { name: "demo" } },
-      body: { hidden: false },
-    });
+    await waitFor(() => expect(api.updateStore).toHaveBeenCalledTimes(1));
+    expect(api.updateStore).toHaveBeenCalledWith("demo", { hidden: false });
   });
 
   it("shows the server's value before the reload, and after a PATCH that is refused", async () => {
@@ -321,7 +309,7 @@ describe("StoreCard: shown", () => {
     expect(stores.reload).not.toHaveBeenCalled();
     release(fail(400, "store.set_args"));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    expect(api.updateStore).toHaveBeenCalledTimes(1);
     expect(box.checked).toBe(true);
     expect(stores.reload).not.toHaveBeenCalled();
   });
@@ -335,10 +323,10 @@ describe("StoreCard: shown", () => {
     const box = within(card()).getByRole("checkbox", { name: "表示" });
     await fireEvent.click(box);
     await fireEvent.click(box);
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    expect(api.updateStore).toHaveBeenCalledTimes(1);
     release(ok({}));
     await waitFor(() => expect(stores.reload).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    expect(api.updateStore).toHaveBeenCalledTimes(1);
   });
 
   it("disables the check of the last shown Store, with the reason", async () => {
@@ -347,7 +335,7 @@ describe("StoreCard: shown", () => {
     expect(box.disabled).toBe(true);
     expect(within(card()).getByText("すべての Store を非表示にはできません")).toBeTruthy();
     await fireEvent.click(box);
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateStore).not.toHaveBeenCalled();
   });
 
   it("leaves a hidden Store's check on even when only one is shown", () => {
@@ -394,7 +382,7 @@ describe("StoreCard: the details", () => {
     await fireEvent.click(toggle());
     await fireEvent.click(within(card()).getByRole("button", { name: "既定にする" }));
     await waitFor(() => expect(stores.reload).toHaveBeenCalledTimes(1));
-    expect(api.PUT).toHaveBeenCalledWith("/api/stores/default", { body: { name: "demo" } });
+    expect(api.setDefaultStore).toHaveBeenCalledWith({ name: "demo" });
     expect(toasts.list.map((t) => t.message)).toEqual(["既定の Store を demo にしました"]);
   });
 

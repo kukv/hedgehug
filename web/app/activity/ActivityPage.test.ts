@@ -65,7 +65,10 @@ function setup(items: Log[], opts: Opts = {}) {
   let current = items;
   const conn = new FakeConn();
   const api = {
-    GET: vi.fn(() => (opts.getError ? Promise.reject(opts.getError) : ok(current))),
+    listActivity: vi.fn((_query?: unknown) =>
+      opts.getError ? Promise.reject(opts.getError) : ok(current),
+    ),
+    getTask: vi.fn((_id?: string, _query?: unknown) => fail(404, "task.not_found")),
   };
   const names = opts.stores ?? ["shared"];
   const view = renderWithCore(
@@ -98,10 +101,8 @@ function setup(items: Log[], opts: Opts = {}) {
   };
 }
 
-const lastQuery = (api: { GET: ReturnType<typeof vi.fn> }) => {
-  const arg = api.GET.mock.lastCall?.[1] as { params: { query: Record<string, unknown> } };
-  return arg.params.query;
-};
+const lastQuery = (api: { listActivity: ReturnType<typeof vi.fn> }) =>
+  api.listActivity.mock.lastCall?.[0] as Record<string, unknown>;
 
 beforeEach(() => history.replaceState(null, "", "/activity"));
 afterEach(() => cleanup());
@@ -109,21 +110,21 @@ afterEach(() => cleanup());
 describe("ActivityPage", () => {
   it("asks once for every Store, 100 commits, with no filter", async () => {
     const { api } = setup([added]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
-    expect(api.GET).toHaveBeenCalledWith("/api/activity", { params: { query: { limit: 100 } } });
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(1));
+    expect(api.listActivity).toHaveBeenCalledWith({ limit: 100 });
     expect(screen.getByRole("heading", { level: 1, name: "アクティビティ" })).toBeTruthy();
     expect(screen.getByText("各 Store の git log · 誰がいつ何を変えたか")).toBeTruthy();
   });
 
   it("passes the filters of the address to the server", async () => {
     const { api } = setup([], { workspaces: "W1,W2", sync: "only" });
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(1));
     expect(lastQuery(api)).toEqual({ limit: 100, workspace: "W1,W2", sync: "only" });
   });
 
   it("the tab of automations asks for what GitHub and the rules wrote", async () => {
     const { api } = setup([], { sync: "automation" });
-    await waitFor(() => expect(api.GET).toHaveBeenCalled());
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalled());
     expect(lastQuery(api)).toEqual({ limit: 100, automation: "only" });
   });
 
@@ -151,7 +152,7 @@ describe("ActivityPage", () => {
 
   it("the tab of people leaves out what GitHub and the rules wrote", async () => {
     const { api } = setup([], { sync: "exclude" });
-    await waitFor(() => expect(api.GET).toHaveBeenCalled());
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalled());
     expect(lastQuery(api)).toEqual({ limit: 100, sync: "exclude", automation: "exclude" });
   });
 
@@ -212,7 +213,7 @@ describe("ActivityPage", () => {
 
   it("people and syncs go to the address, and ask again", async () => {
     const { api } = setup([added]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(1));
     await fireEvent.click(screen.getByRole("button", { name: "同期" }));
     expect(location.pathname + location.search).toBe("/activity?sync=only");
     await fireEvent.click(screen.getByRole("button", { name: "人" }));
@@ -279,7 +280,7 @@ describe("ActivityPage", () => {
     const more = await screen.findByRole("button", { name: "さらに読み込む" });
     expect(more).toBeEnabled();
     let release: (v: unknown) => void = () => {};
-    api.GET.mockImplementation(() => new Promise((r) => (release = r)) as never);
+    api.listActivity.mockImplementation(() => new Promise((r) => (release = r)) as never);
     await fireEvent.click(more);
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "さらに読み込む" })).toBeDisabled(),
@@ -305,7 +306,7 @@ describe("ActivityPage", () => {
       const more = await screen.findByRole("button", { name: "さらに読み込む" });
       more.focus();
       set(many(200));
-      api.GET.mockImplementation(() => {
+      api.listActivity.mockImplementation(() => {
         drop();
         return ok(many(200)) as never;
       });
@@ -318,7 +319,7 @@ describe("ActivityPage", () => {
       const { api } = setup(many(100));
       const more = await screen.findByRole("button", { name: "さらに読み込む" });
       more.focus();
-      api.GET.mockImplementation(() => {
+      api.listActivity.mockImplementation(() => {
         drop();
         return ok(many(150)) as never;
       });
@@ -333,7 +334,7 @@ describe("ActivityPage", () => {
       const { api } = setup(many(100));
       const more = await screen.findByRole("button", { name: "さらに読み込む" });
       const pending: ((v: unknown) => void)[] = [];
-      api.GET.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
+      api.listActivity.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
       await fireEvent.click(more);
       await waitFor(() => expect(pending).toHaveLength(1));
       // the filter changes: the limit goes back to 100 and the page asks again
@@ -354,7 +355,7 @@ describe("ActivityPage", () => {
       const { api } = setup(many(100));
       const more = await screen.findByRole("button", { name: "さらに読み込む" });
       more.focus();
-      api.GET.mockImplementation(() => {
+      api.listActivity.mockImplementation(() => {
         drop();
         return ok(many(100).slice(0, 99)) as never;
       });
@@ -390,7 +391,7 @@ describe("ActivityPage", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "さらに読み込む" }));
     await waitFor(() => expect(lastQuery(api).limit).toBe(200));
     await fireEvent.click(screen.getByRole("button", { name: "同期" }));
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(3));
     // the page is given its filters by the address, not by itself: the limit is the one thing it resets
     expect(lastQuery(api).limit).toBe(100);
   });
@@ -416,28 +417,28 @@ describe("ActivityPage", () => {
 
   it("asks again at tasks.changed and at resync", async () => {
     const { api, conn } = setup([added]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(1));
     conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(2));
     conn.emit("resync");
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(3));
   });
 
   it("stops asking when the screen is gone", async () => {
     const { api, conn, view } = setup([added]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(1));
     view.unmount();
     conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
     conn.emit("resync");
     await new Promise((r) => setTimeout(r, 10));
-    expect(api.GET).toHaveBeenCalledTimes(1);
+    expect(api.listActivity).toHaveBeenCalledTimes(1);
   });
 
   it("shows the answer of the latest request when an older one arrives last", async () => {
     const { api, conn } = setup([]);
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listActivity).toHaveBeenCalledTimes(1));
     const pending: ((v: unknown) => void)[] = [];
-    api.GET.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
+    api.listActivity.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
     conn.emit("resync");
     conn.emit("resync");
     await waitFor(() => expect(pending).toHaveLength(2));
@@ -452,7 +453,7 @@ describe("ActivityPage", () => {
   it("keeps the list and shows the error above it when a new request fails", async () => {
     const { api, conn } = setup([added]);
     await screen.findByText("add REL-1");
-    api.GET.mockImplementation((() => fail(500, "internal")) as never);
+    api.listActivity.mockImplementation((() => fail(500, "internal")) as never);
     conn.emit("resync");
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(screen.getByText("add REL-1")).toBeTruthy();

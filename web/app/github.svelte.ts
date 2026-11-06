@@ -1,4 +1,3 @@
-import { unwrap } from "../core/api/client";
 import type { GitHubRepo, IssueFields, Rule, RuleStat } from "../core/github";
 import { core } from "./context";
 import { useSubscribe } from "./svelte-store";
@@ -53,8 +52,7 @@ export function useGitHubRepos(store: () => string | undefined): {
       void sync.current;
       return store() ?? null;
     },
-    async (s) =>
-      (await unwrap(c.api.GET("/api/github", { params: { query: { store: s } } }))) ?? [],
+    async (s) => (await c.api.getGithub({ store: s })) ?? [],
   );
   return {
     get current() {
@@ -72,7 +70,7 @@ export function useAllGitHubRepos(): { readonly current: GitHubRepo[] } {
       void sync.current;
       return "all";
     },
-    async () => (await unwrap(c.api.GET("/api/github"))) ?? [],
+    async () => (await c.api.getGithub()) ?? [],
   );
   return {
     get current() {
@@ -111,7 +109,7 @@ export function useRules(
     async (k) => {
       const [s, p] = JSON.parse(k) as [string, string];
       const query = p === "" ? { store: s } : { store: s, project: p };
-      return (await unwrap(c.api.GET("/api/automations", { params: { query } }))) ?? [];
+      return (await c.api.listAutomations(query)) ?? [];
     },
   );
   followRules(store, r.reload);
@@ -125,7 +123,7 @@ export function useIssueFields(store: () => string | undefined): {
   const c = core();
   const r = useRead(
     () => store() ?? null,
-    (s) => unwrap(c.api.GET("/api/automations/fields", { params: { query: { store: s } } })),
+    (s) => c.api.getAutomationFields({ store: s }),
   );
   followRules(store, r.reload);
   return r;
@@ -140,9 +138,7 @@ export function useRuleStats(store: () => string): { readonly current: RuleStat[
       void sync.current;
       return store();
     },
-    async (s) =>
-      (await unwrap(c.api.GET("/api/automations/stats", { params: { query: { store: s } } }))) ??
-      [],
+    async (s) => (await c.api.getAutomationStats({ store: s })) ?? [],
   );
   followRules(store, r.reload);
   return {

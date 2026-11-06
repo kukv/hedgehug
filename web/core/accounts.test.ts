@@ -3,7 +3,7 @@ import { AccountsCache, envVar, source } from "./accounts";
 import type { Schemas } from "./api/client";
 import { FakeConn, fakeApi, problem, settle } from "./testing";
 
-type Auth = Schemas["AuthStatus"];
+type Auth = Schemas.AuthStatus;
 const acct = (name: string, extra: Partial<Auth> = {}): Auth => ({
   name,
   id: `github.com/${name}`,

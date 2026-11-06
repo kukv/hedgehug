@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { type Schemas, unwrap } from "../../core/api/client";
+  import type { Schemas } from "../../core/api/client";
   import { cliSchemaCheck } from "../../core/cli";
   import { groupFindings, type Severity, severityOf } from "../../core/doctor";
   import { errorMessage } from "../../core/messages";
@@ -18,7 +18,7 @@
     idOf,
   }: { store: string; many: boolean; idOf: (ulid: string) => string | undefined } = $props();
 
-  type Finding = Schemas["Finding"];
+  type Finding = Schemas.Finding;
 
   const c = core();
   const uid = $props.id();
@@ -32,7 +32,7 @@
   async function load(s: string): Promise<void> {
     const mine = ++seq;
     try {
-      const r = await unwrap(c.api.GET("/api/schema/check", { params: { query: { store: s } } }));
+      const r = await c.api.checkSchema({ store: s });
       if (mine !== seq) return;
       findings = r.findings ?? [];
       failure = null;

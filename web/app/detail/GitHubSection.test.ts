@@ -25,26 +25,25 @@ const issue: Link = {
   title: "Web を更新",
   state: "open",
 };
-const ok = (data: unknown) => Promise.resolve({ data, response: new Response() });
+const ok = (data: unknown) => Promise.resolve(data);
 const show = showView({ ulid: "U1", id: "REL-6", store: "shared", links: [issue, pr] });
 
 function setup(readonly = false) {
   const applyWrite = vi.fn();
   const api = {
-    GET: vi.fn((path: string) =>
-      ok(
-        path === "/api/github"
-          ? [
-              {
-                repo: "github.com/org-a/web",
-                last_fetch: new Date(Date.now() - 180_000).toISOString(),
-              },
-            ]
-          : { default_sync: "link", push: ["title", "body"], mirror: ["title"], props: {} },
-      ),
+    getGithub: vi.fn(() =>
+      ok([
+        {
+          repo: "github.com/org-a/web",
+          last_fetch: new Date(Date.now() - 180_000).toISOString(),
+        },
+      ]),
     ),
-    POST: vi.fn(() => ok({ task: show, commit: "c1" })),
-    DELETE: vi.fn(() => ok({ task: show, commit: "c2" })),
+    getAutomationFields: vi.fn(() =>
+      ok({ default_sync: "link", push: ["title", "body"], mirror: ["title"], props: {} }),
+    ),
+    linkTask: vi.fn(() => ok({ task: show, commit: "c1" })),
+    unlinkTask: vi.fn(() => ok({ task: show, commit: "c2" })),
   };
   renderWithCore(GitHubSection, { show, readonly }, { api, cache: { applyWrite } });
   return { api, applyWrite };
@@ -74,19 +73,18 @@ describe("GitHubSection", () => {
       target: { value: "mirror" },
     });
     await waitFor(() => expect(applyWrite).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/links", {
-      params: { path: { id: "U1" }, query: { store: "shared" } },
-      body: { issue: "org-a/web#45", sync: "mirror" },
-    });
+    expect(api.linkTask).toHaveBeenCalledWith(
+      "U1",
+      { issue: "org-a/web#45", sync: "mirror" },
+      { store: "shared" },
+    );
   });
 
   it("takes a link off", async () => {
     const { api, applyWrite } = setup();
     await fireEvent.click(screen.getByRole("button", { name: "リンクを外す: org-a/web#88" }));
     await waitFor(() => expect(applyWrite).toHaveBeenCalled());
-    expect(api.DELETE).toHaveBeenCalledWith("/api/tasks/{id}/links", {
-      params: { path: { id: "U1" }, query: { store: "shared", pr: "org-a/web#88" } },
-    });
+    expect(api.unlinkTask).toHaveBeenCalledWith("U1", { store: "shared", pr: "org-a/web#88" });
   });
 
   it("links a pull request from the dialog", async () => {
@@ -98,10 +96,7 @@ describe("GitHubSection", () => {
     screen.getByText(/hh link REL-6 --pr "org-a\/web#9"/);
     await fireEvent.click(screen.getByRole("button", { name: "リンクする" }));
     await waitFor(() => expect(applyWrite).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/links", {
-      params: { path: { id: "U1" }, query: { store: "shared" } },
-      body: { pr: "org-a/web#9" },
-    });
+    expect(api.linkTask).toHaveBeenCalledWith("U1", { pr: "org-a/web#9" }, { store: "shared" });
   });
 
   it("has no writes on a Store that only reads", () => {

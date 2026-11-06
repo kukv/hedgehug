@@ -17,7 +17,7 @@ const acct = (name: string): Account => ({
 const added = { name: "team", path: "/p", remotes: ["u"], hidden: false, default_store: false };
 
 function mount(m: { accounts?: Account[]; post?: () => unknown } = {}) {
-  const api = { POST: vi.fn(() => (m.post ? m.post() : ok(added))) };
+  const api = { addStore: vi.fn((_body: unknown) => (m.post ? m.post() : ok(added))) };
   const reload = vi.fn(async () => {});
   const accounts = {
     accounts: () => m.accounts ?? [],
@@ -92,7 +92,7 @@ describe("StoreAddDialog: adding", () => {
   it("sends nothing without a name or a URL, and says what is missing", async () => {
     const { api } = mount();
     await fireEvent.click(submit());
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.addStore).not.toHaveBeenCalled();
     expect(screen.getByText("名前を入れてください")).toBeTruthy();
     expect(screen.getByText("URL を入れてください")).toBeTruthy();
   });
@@ -103,8 +103,10 @@ describe("StoreAddDialog: adding", () => {
     await type(urlField(), "git@a:o/r.git\n\n  \n git@b:o/r.git \n");
     await fireEvent.click(submit());
     await waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(api.POST).toHaveBeenCalledWith("/api/stores/add", {
-      body: { name: "team", remotes: ["git@a:o/r.git", "git@b:o/r.git"], account: undefined },
+    expect(api.addStore).toHaveBeenCalledWith({
+      name: "team",
+      remotes: ["git@a:o/r.git", "git@b:o/r.git"],
+      account: undefined,
     });
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toasts.list.map((t) => t.message)).toEqual(["Store「team」を追加しました"]);
@@ -133,9 +135,11 @@ describe("StoreAddDialog: the account", () => {
     await type(nameField(), "team");
     await type(urlField(), "git@a:o/r.git");
     await fireEvent.click(submit());
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
-    expect((api.POST.mock.calls[0] as unknown[])[1]).toEqual({
-      body: { name: "team", remotes: ["git@a:o/r.git"], account: undefined },
+    await waitFor(() => expect(api.addStore).toHaveBeenCalledTimes(1));
+    expect(api.addStore.mock.calls[0]?.[0]).toEqual({
+      name: "team",
+      remotes: ["git@a:o/r.git"],
+      account: undefined,
     });
   });
 
@@ -151,9 +155,11 @@ describe("StoreAddDialog: the account", () => {
     await type(nameField(), "team");
     await type(urlField(), "git@a:o/r.git");
     await fireEvent.click(submit());
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
-    expect((api.POST.mock.calls[0] as unknown[])[1]).toEqual({
-      body: { name: "team", remotes: ["git@a:o/r.git"], account: undefined },
+    await waitFor(() => expect(api.addStore).toHaveBeenCalledTimes(1));
+    expect(api.addStore.mock.calls[0]?.[0]).toEqual({
+      name: "team",
+      remotes: ["git@a:o/r.git"],
+      account: undefined,
     });
   });
 
@@ -163,9 +169,11 @@ describe("StoreAddDialog: the account", () => {
     await type(nameField(), "team");
     await type(urlField(), "git@a:o/r.git");
     await fireEvent.click(submit());
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
-    expect((api.POST.mock.calls[0] as unknown[])[1]).toEqual({
-      body: { name: "team", remotes: ["git@a:o/r.git"], account: "home" },
+    await waitFor(() => expect(api.addStore).toHaveBeenCalledTimes(1));
+    expect(api.addStore.mock.calls[0]?.[0]).toEqual({
+      name: "team",
+      remotes: ["git@a:o/r.git"],
+      account: "home",
     });
   });
 
@@ -185,12 +193,14 @@ describe("StoreAddDialog: the account", () => {
       "work",
       "home",
     ]);
-    api.POST.mockImplementation(() => ok(added));
+    api.addStore.mockImplementation(() => ok(added));
     await fireEvent.change(select, { target: { value: "home" } });
     await fireEvent.click(submit());
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-    expect((api.POST.mock.calls[1] as unknown[])[1]).toEqual({
-      body: { name: "team", remotes: ["git@a:o/r.git"], account: "home" },
+    await waitFor(() => expect(api.addStore).toHaveBeenCalledTimes(2));
+    expect(api.addStore.mock.calls[1]?.[0]).toEqual({
+      name: "team",
+      remotes: ["git@a:o/r.git"],
+      account: "home",
     });
   });
 });

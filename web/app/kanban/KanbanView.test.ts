@@ -56,7 +56,7 @@ vi.mock("./dnd", () => ({
 
 import KanbanView from "./KanbanView.svelte";
 
-const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+const ok = (data: unknown) => Promise.resolve(data);
 
 const schema = {
   ...baseSchema,
@@ -98,10 +98,11 @@ function setup(o: Setup = {}) {
   const byUlid = new Map(tasks.map((t) => [t.ulid, t]));
   const none = () => () => {};
   const api = {
-    PATCH: vi.fn(() => ok({ task: byUlid.get("A"), commit: "c1" })),
-    GET: vi.fn((path: string) =>
-      ok(path === "/api/automations" ? [] : { watchers: o.watchers ?? [] }),
+    updateTask: vi.fn((_id?: string, _body?: unknown, _query?: unknown) =>
+      ok({ task: byUlid.get("A"), commit: "c1" }),
     ),
+    getTask: vi.fn((_id?: string, _query?: unknown) => ok({ watchers: o.watchers ?? [] })),
+    listAutomations: vi.fn(() => ok([])),
   };
   const schemas = o.schemas ?? { shared: schema };
   const stores = o.stores ?? ["shared"];
@@ -557,7 +558,7 @@ describe("KanbanView: a read-only Store", () => {
     cellFor("doing")?.onDrop({ ulid: "R", lane: "" });
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("remote に書き込めません");
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
   });
 
   it("keeps the plus while a Store can be written", async () => {
@@ -592,11 +593,8 @@ describe("KanbanView: dragging a card", () => {
   it("changes the status when the card is dropped on another column", async () => {
     const { api, apply } = await ready();
     cellFor("doing")?.onDrop(dragA);
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "A" }, query: { store: "shared" } },
-      body: { status: "doing" },
-    });
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
+    expect(api.updateTask).toHaveBeenCalledWith("A", { status: "doing" }, { store: "shared" });
     await waitFor(() =>
       expect(apply).toHaveBeenCalledWith({ task: expect.anything(), commit: "c1" }),
     );
@@ -606,7 +604,7 @@ describe("KanbanView: dragging a card", () => {
   it("does nothing for a drop on the column the card is in", async () => {
     const { api } = await ready();
     cellFor("todo")?.onDrop(dragA);
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
     expect(h.toast).not.toHaveBeenCalled();
   });
 
@@ -615,8 +613,8 @@ describe("KanbanView: dragging a card", () => {
     mountView({ settings: { columns: "category", swimlane: "none" } });
     await screen.findByText("調べる");
     cellFor("doing")?.onDrop(dragA);
-    await waitFor(() => expect(s.api.PATCH).toHaveBeenCalled());
-    expect((s.api.PATCH.mock.calls[0] as unknown as [string, { body: unknown }])[1].body).toEqual({
+    await waitFor(() => expect(s.api.updateTask).toHaveBeenCalled());
+    expect(s.api.updateTask.mock.calls[0]?.[1]).toEqual({
       status: "doing",
     });
   });
@@ -647,7 +645,7 @@ describe("KanbanView: dragging a card", () => {
     expect(h.toast).toHaveBeenCalledWith({
       message: expect.stringContaining("「完了」から「進行中」には移せません。"),
     });
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 
@@ -662,15 +660,15 @@ describe("KanbanView: dragging a card", () => {
     expect(h.toast).toHaveBeenCalledWith({
       message: expect.stringContaining("担当者の行をまたぐ移動はできません。"),
     });
-    expect(s.api.PATCH).not.toHaveBeenCalled();
+    expect(s.api.updateTask).not.toHaveBeenCalled();
     cellFor("doing", "gh/koki")?.onDrop({ ulid: "A", lane: "gh/koki" });
-    await waitFor(() => expect(s.api.PATCH).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(s.api.updateTask).toHaveBeenCalledTimes(1));
   });
 
   it("asks for the required field first and sends it with the status in one call", async () => {
     const { api } = await ready();
     cellFor("done")?.onDrop(dragA);
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
     expect(
       await screen.findByRole("dialog", { name: "REL-1 を完了にするには points が必要です" }),
     ).toBeInTheDocument();
@@ -678,11 +676,12 @@ describe("KanbanView: dragging a card", () => {
       target: { value: "5" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "完了にする" }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "A" }, query: { store: "shared" } },
-      body: { status: "done", props: { points: 5 } },
-    });
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalledTimes(1));
+    expect(api.updateTask).toHaveBeenCalledWith(
+      "A",
+      { status: "done", props: { points: 5 } },
+      { store: "shared" },
+    );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
@@ -690,23 +689,23 @@ describe("KanbanView: dragging a card", () => {
     const { api } = await ready();
     cellFor("done")?.onDrop(dragA);
     await fireEvent.click(await screen.findByRole("button", { name: "やめる" }));
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("does not ask when the task has the field already", async () => {
     const { api } = await ready();
     cellFor("done")?.onDrop({ ulid: "B", lane: "" });
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("shows the words of the server when the write is refused", async () => {
     const { api } = await ready();
     const { ApiError } = await import("../../core/api/client");
-    api.PATCH.mockImplementation(() => {
-      throw new ApiError({ status: 409, type: "store.locked" });
-    });
+    api.updateTask.mockImplementation(() =>
+      Promise.reject(new ApiError({ status: 409, type: "store.locked" })),
+    );
     cellFor("doing")?.onDrop(dragA);
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("書き込み中");
@@ -726,14 +725,14 @@ describe("KanbanView: dragging a card", () => {
     it("decides a second drop of the card only after the first has been written", async () => {
       const { api, apply } = await ready();
       const first = deferred<ReturnType<typeof ok>>();
-      api.PATCH.mockImplementationOnce(() => first.promise as never);
+      api.updateTask.mockImplementationOnce(() => first.promise as never);
       cellFor("doing")?.onDrop(dragA);
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(api.updateTask).toHaveBeenCalledTimes(1));
       cellFor("review")?.onDrop(dragA);
       await new Promise((r) => setTimeout(r, 20));
-      expect(api.PATCH).toHaveBeenCalledTimes(1);
+      expect(api.updateTask).toHaveBeenCalledTimes(1);
       first.resolve(ok({ task: { ulid: "A" }, commit: "c1" }));
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(api.updateTask).toHaveBeenCalledTimes(2));
       expect(apply).toHaveBeenCalledTimes(2);
     });
 
@@ -758,7 +757,7 @@ describe("KanbanView: dragging a card", () => {
       await waitFor(() => expect(h.toast).toHaveBeenCalled());
       expect(h.toast.mock.calls[0]?.[0].message).toContain("cache broke");
       cellFor("doing")?.onDrop(dragA);
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(api.updateTask).toHaveBeenCalledTimes(1));
     });
 
     it("drops the dialog of a drop another drop has come after", async () => {
@@ -766,12 +765,12 @@ describe("KanbanView: dragging a card", () => {
       mountView();
       await screen.findByText("調べる");
       const read = deferred<ReturnType<typeof ok>>();
-      s.api.GET.mockImplementationOnce(() => read.promise as never);
+      s.api.getTask.mockImplementationOnce(() => read.promise as never);
       cellFor("done")?.onDrop(dragA);
-      await waitFor(() => expect(s.api.GET).toHaveBeenCalled());
+      await waitFor(() => expect(s.api.getTask).toHaveBeenCalled());
       cellFor("review")?.onDrop({ ulid: "B", lane: "" });
       read.resolve(ok({ watchers: [] }));
-      await waitFor(() => expect(s.api.PATCH).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(s.api.updateTask).toHaveBeenCalledTimes(1));
       await new Promise((r) => setTimeout(r, 20));
       expect(screen.queryByRole("dialog")).toBeNull();
     });
@@ -781,22 +780,22 @@ describe("KanbanView: dragging a card", () => {
       const { unmount } = mountView();
       await screen.findByText("調べる");
       const read = deferred<ReturnType<typeof ok>>();
-      s.api.GET.mockImplementationOnce(() => read.promise as never);
+      s.api.getTask.mockImplementationOnce(() => read.promise as never);
       cellFor("done")?.onDrop(dragA);
-      await waitFor(() => expect(s.api.GET).toHaveBeenCalled());
+      await waitFor(() => expect(s.api.getTask).toHaveBeenCalled());
       unmount();
       read.resolve(ok({ watchers: [] }));
       await new Promise((r) => setTimeout(r, 20));
       expect(screen.queryByRole("dialog")).toBeNull();
-      expect(s.api.PATCH).not.toHaveBeenCalled();
+      expect(s.api.updateTask).not.toHaveBeenCalled();
     });
 
     it("does not toast a failure that comes after the board is gone", async () => {
       const { api, unmount } = await ready();
       const write = deferred<ReturnType<typeof ok>>();
-      api.PATCH.mockImplementationOnce(() => write.promise as never);
+      api.updateTask.mockImplementationOnce(() => write.promise as never);
       cellFor("doing")?.onDrop(dragA);
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+      await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
       unmount();
       write.reject(new Error("late"));
       await new Promise((r) => setTimeout(r, 20));
@@ -821,16 +820,14 @@ describe("KanbanView: dragging a card", () => {
         }),
       ).toBeInTheDocument();
       // the watchers were not on the list: the full task was read to know
-      expect(s.api.GET).toHaveBeenCalledWith("/api/tasks/{id}", {
-        params: { path: { id: "A" }, query: { store: "shared" } },
-      });
+      expect(s.api.getTask).toHaveBeenCalledWith("A", { store: "shared" });
       await fireEvent.input(screen.getByRole("spinbutton", { name: "points" }), {
         target: { value: "5" },
       });
       expect(screen.getByRole("button", { name: "完了にする" })).toBeDisabled();
       await fireEvent.click(screen.getAllByRole("link", { name: "詳細で入力" })[0] as HTMLElement);
       expect(h.go).toHaveBeenCalledWith("/task");
-      expect(s.api.PATCH).not.toHaveBeenCalled();
+      expect(s.api.updateTask).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     });
 
@@ -847,15 +844,15 @@ describe("KanbanView: dragging a card", () => {
     it("says why when the full task cannot be read, and sends nothing", async () => {
       const s = setup({ schemas: { shared: needy } });
       const { ApiError } = await import("../../core/api/client");
-      s.api.GET.mockImplementation(() => {
-        throw new ApiError({ status: 409, type: "store.locked" });
-      });
+      s.api.getTask.mockImplementation(() =>
+        Promise.reject(new ApiError({ status: 409, type: "store.locked" })),
+      );
       mountView();
       await screen.findByText("調べる");
       cellFor("done")?.onDrop(dragA);
       await waitFor(() => expect(h.toast).toHaveBeenCalled());
       expect(screen.queryByRole("dialog")).toBeNull();
-      expect(s.api.PATCH).not.toHaveBeenCalled();
+      expect(s.api.updateTask).not.toHaveBeenCalled();
     });
   });
 });

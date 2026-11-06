@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
   import { hrefOf, onLinkClick, router, type SettingsPage } from "../router";
@@ -19,7 +18,8 @@
   // The version is a footnote: when it cannot be read, the footnote is not shown.
   onMount(() => {
     let gone = false;
-    unwrap(api.GET("/api/health"))
+    api
+      .getHealth()
       .then((h) => {
         if (!gone) version = h.version;
       })

@@ -42,10 +42,11 @@ function mount(m: Mount = {}) {
     subscribe: () => () => {},
   };
   const api = {
-    DELETE: vi.fn(() => (m.del ? m.del() : ok(undefined))),
-    GET: vi.fn((path: string) => ok(path === "/api/github" ? (m.github ?? []) : { rules: [] })),
-    POST: vi.fn(),
-    PUT: vi.fn(() => ok({})),
+    removeAccountToken: vi.fn((_name: string) => (m.del ? m.del() : ok(undefined))),
+    getGithub: vi.fn(() => ok(m.github ?? [])),
+    getRepoAccounts: vi.fn(() => ok({ rules: [] })),
+    addAccount: vi.fn(),
+    setAccountTokenSource: vi.fn((_name: string, _body: unknown) => ok({})),
   };
   const conn = { on: () => () => {}, sync: new Map(), subscribe: () => () => {} };
   renderWithCore(SettingsAccounts, {}, { accounts, stores, api, conn });
@@ -84,10 +85,7 @@ describe("SettingsAccounts: the GitHub App", () => {
       await screen.findByRole("button", { name: "gh のトークンで代わりに使う" }),
     );
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith("/api/accounts/{name}/token-source", {
-        params: { path: { name: "a" } },
-        body: { token: "gh" },
-      }),
+      expect(api.setAccountTokenSource).toHaveBeenCalledWith("a", { token: "gh" }),
     );
     await waitFor(() => expect(accounts.reload).toHaveBeenCalled());
   });
@@ -296,7 +294,7 @@ describe("SettingsAccounts: log out", () => {
     );
     await fireEvent.click(d.getByRole("button", { name: "キャンセル" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    expect(api.removeAccountToken).not.toHaveBeenCalled();
   });
 
   it("deletes the token, says so and reads the accounts and the Stores again", async () => {
@@ -306,9 +304,7 @@ describe("SettingsAccounts: log out", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "ログアウト" }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(api.DELETE).toHaveBeenCalledWith("/api/accounts/{name}/token", {
-      params: { path: { name: "k" } },
-    });
+    expect(api.removeAccountToken).toHaveBeenCalledWith("k");
     expect(toasts.list.map((t) => t.message)).toEqual(["k からログアウトしました"]);
     expect(accounts.reload).toHaveBeenCalledTimes(1);
     expect(stores.reload).toHaveBeenCalledTimes(1);
@@ -340,7 +336,7 @@ describe("SettingsAccounts: the add form", () => {
 
   it("closes when an account was added", async () => {
     const { api } = mount({ list: [acct("a")] });
-    api.POST.mockImplementation(() => ok({}));
+    api.addAccount.mockImplementation(() => ok({}));
     await fireEvent.click(screen.getByRole("button", { name: "アカウントを追加" }));
     await fireEvent.click(screen.getByRole("radio", { name: "トークンなし" }));
     await fireEvent.input(screen.getByLabelText(/呼び名/), { target: { value: "bot" } });

@@ -33,10 +33,7 @@ vi.mock("./SettingsGeneral.svelte", () => ({
   },
 }));
 
-const health = (version: string) => ({
-  data: { pid: 1, version },
-  response: new Response(null, { status: 200 }),
-});
+const health = (version: string) => ({ pid: 1, version });
 
 function core(
   names: string[],
@@ -45,7 +42,7 @@ function core(
   readOnly: Record<string, string> = {},
 ) {
   return {
-    api: { GET: get },
+    api: { getHealth: get },
     stores: {
       stores: () => names.map((name) => ({ name, hidden: name === "hidden" })),
       readOnly: (name: string) => readOnly[name] ?? null,
@@ -302,7 +299,7 @@ describe("SettingsNav", () => {
         vi.fn(async () => Promise.reject(new Error("down"))),
       ),
     );
-    await vi.waitFor(() => expect(bad.core.api.GET).toHaveBeenCalled());
+    await vi.waitFor(() => expect(bad.core.api.getHealth).toHaveBeenCalled());
     expect(bad.queryByText(/^Hedgehug \d/)).toBeNull();
   });
 });

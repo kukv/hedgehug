@@ -1,9 +1,9 @@
 import type { Schemas } from "./api/client";
 import { repairedKnownText } from "./notifications";
 
-type Finding = Schemas["Finding"];
-export type DoctorReport = Schemas["DoctorReport"];
-export type PurgePlan = Schemas["PurgePlan"];
+type Finding = Schemas.Finding;
+export type DoctorReport = Schemas.DoctorReport;
+export type PurgePlan = Schemas.PurgePlan;
 
 // The Japanese of the values of Finding.check (internal/app/usecase/maintenance: checkOrder, and the workspace check).
 const CHECKS: Record<string, string> = {
