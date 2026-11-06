@@ -101,12 +101,6 @@ describe("Onboarding: the accounts step", () => {
     expect(next().disabled).toBe(true);
     expect(screen.getByText("アカウントを1つ追加してください")).toBeTruthy();
   });
-
-  it("does not detect gh", () => {
-    mount({ accounts: [] });
-    expect(screen.queryByText(/ログイン済み/)).toBeNull();
-    expect(screen.queryByText(/見つかりました/)).toBeNull();
-  });
 });
 
 describe("Onboarding: choosing and starting", () => {

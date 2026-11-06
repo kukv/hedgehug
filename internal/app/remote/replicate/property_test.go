@@ -3,7 +3,6 @@ package replicate
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"math/rand/v2"
@@ -29,7 +28,7 @@ import (
 // and no value lost.
 func TestPropertyConverges(t *testing.T) {
 	rounds, steps := 30, 40
-	if shortMode() {
+	if testing.Short() {
 		rounds, steps = 5, 20
 	}
 	for seed := int64(1); seed <= int64(rounds); seed++ {
@@ -82,7 +81,7 @@ func TestPropertyConverges(t *testing.T) {
 func TestPropertyConvergesStores(t *testing.T) {
 	t.Parallel()
 	rounds, steps := 30, 60
-	if shortMode() {
+	if testing.Short() {
 		rounds, steps = 5, 30
 	}
 	var moves, multi, backs, overwritten, parentMoved, refMoved, taskRefMoved atomic.Int64
@@ -90,7 +89,7 @@ func TestPropertyConvergesStores(t *testing.T) {
 		t.Logf("moves %d, moves of a task that had moved %d, moves back to a store with the forward %d, task files overwritten by a forward %d, parent_moved %d, ref_moved %d (task_ref %d)",
 			moves.Load(), multi.Load(), backs.Load(), overwritten.Load(), parentMoved.Load(), refMoved.Load(), taskRefMoved.Load())
 		// Each path is reached at least once over the seeds of a full run.
-		if shortMode() {
+		if testing.Short() {
 			return
 		}
 		for name, n := range map[string]int64{
@@ -198,13 +197,6 @@ func TestPropertyConvergesStores(t *testing.T) {
 			}
 		})
 	}
-}
-
-// shortMode reports -short. It reads the flag because the pattern of
-// TestNoShortIdentifiers matches the method of testing.
-func shortMode() bool {
-	f := flag.Lookup("test.short")
-	return f != nil && f.Value.String() == "true"
 }
 
 // settle syncs the clones in turn until a whole round changes no HEAD.

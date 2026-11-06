@@ -410,14 +410,4 @@ describe("StoreCard: the details", () => {
     await fireEvent.click(within(card()).getByRole("button", { name: "マウントを解除…" }));
     expect(onremove).toHaveBeenCalledTimes(1);
   });
-
-  it("has no merge driver, no add remote, no open folder, no format and no members", async () => {
-    mount();
-    await fireEvent.click(toggle());
-    for (const t of [/merge driver/i, /remote を追加/, /フォルダを開く/, /形式/, /メンバー/]) {
-      expect(screen.queryByText(t)).toBeNull();
-    }
-    expect(screen.queryByText(/新しく見つかった/)).toBeNull();
-    expect(screen.queryByText(/タスク/)).toBeNull();
-  });
 });

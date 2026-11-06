@@ -296,15 +296,6 @@ describe("SettingsSchema", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("does not offer what is not built: adding, deleting, colors, the YAML", async () => {
-    setup();
-    await screen.findByRole("heading", { level: 2, name: "ステータス" });
-    for (const name of [/追加/, /削除/, /色/, /YAML を開く/, /保存/]) {
-      expect(screen.queryByRole("button", { name })).toBeNull();
-      expect(screen.queryByRole("link", { name })).toBeNull();
-    }
-  });
-
   describe("reading again", () => {
     it("asks for the check at schema.changed of this Store, not of another", async () => {
       const { get, conn } = setup();

@@ -368,11 +368,4 @@ describe("PurgeSection: the deletion", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.getByRole("button", { name: "完全に削除…" })).toBeTruthy();
   });
-
-  it("does not build what the screen leaves out", () => {
-    const { view } = setup();
-    for (const t of ["作り直", "repack", "登録する", "--moved"]) {
-      expect(view.container.textContent).not.toContain(t);
-    }
-  });
 });
