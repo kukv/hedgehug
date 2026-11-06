@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import {
     cliReportBurndown,
     cliReportCfd,
@@ -56,24 +55,20 @@
     const name = sprint?.name;
     if (!name) return null;
     const query = { ...where, sprint: name, by };
-    return unwrap(c.api.GET("/api/reports/burndown", { params: { query } }));
+    return c.api.reportBurndown(query);
   });
   const velocity = useReport<VelocityRow[] | null>(storeName, () =>
-    unwrap(c.api.GET("/api/reports/velocity", { params: { query: { ...where, last } } })),
+    c.api.reportVelocity({ ...where, last }),
   );
   const flow = useReport<CFDView>(storeName, () =>
-    unwrap(
-      c.api.GET("/api/reports/cfd", {
-        params: { query: { ...where, since, until, by: flowBy } },
-      }),
-    ),
+    c.api.reportCfd({ ...where, since, until, by: flowBy }),
   );
   const cycle = useReport<CycleView>(storeName, () =>
-    unwrap(c.api.GET("/api/reports/cycle", { params: { query: { ...where, since, until } } })),
+    c.api.reportCycle({ ...where, since, until }),
   );
   const estimate = useReport<EstimateView>(storeName, () => {
     const query = estimateSprint === "" ? where : { ...where, sprint: estimateSprint };
-    return unwrap(c.api.GET("/api/reports/estimate", { params: { query } }));
+    return c.api.reportEstimate(query);
   });
 
   const burnFacts = $derived(burndown.value ? burndownFacts(burndown.value) : null);

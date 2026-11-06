@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { categoryOf } from "../../core/categories";
   import { cliReleaseNotes } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
@@ -92,11 +91,8 @@
     void tasks;
     if (!r) return;
     let live = true;
-    unwrap(
-      c.api.GET("/api/releases/{id}/notes", {
-        params: { path: { id: r.ulid }, query: { store: entry.store } },
-      }),
-    )
+    c.api
+      .getReleaseNotes(r.ulid, { store: entry.store })
       .then((v) => {
         if (!live) return;
         notes = v.notes;
@@ -112,12 +108,7 @@
 
   async function setState(r: Release, state: ReleaseState) {
     try {
-      await unwrap(
-        c.api.PATCH("/api/releases/{id}", {
-          params: { path: { id: r.ulid }, query: { store: entry.store } },
-          body: { state },
-        }),
-      );
+      await c.api.updateRelease(r.ulid, { state }, { store: entry.store });
       plansWritten();
       toast({ message: `リリース ${r.name} を ${state} にしました` });
     } catch (e) {

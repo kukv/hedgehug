@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliMv, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { detachedText } from "../../core/workspace";
@@ -54,12 +53,7 @@
     failure = null;
     const to = target;
     try {
-      const r = await unwrap(
-        api.POST("/api/tasks/{id}/move", {
-          params: { path: { id: task.ulid }, query: { store: task.store } },
-          body: { workspace: to.ulid },
-        }),
-      );
+      const r = await api.moveTask(task.ulid, { workspace: to.ulid }, { store: task.store });
       cache.applyWrite({ task: r.task, commit: r.commit });
       const lost = detachedText(r.detached, (id) => did.current(task.store, id));
       toast({

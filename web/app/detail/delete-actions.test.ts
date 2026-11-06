@@ -7,8 +7,8 @@ const t = { ulid: "U6", store: "shared" };
 describe("collectDescendants", () => {
   it("walks the children level by level", async () => {
     const k = makeCore();
-    k.api.GET.mockImplementation((_p: string, o: { params: { query: { q: string } } }) => {
-      const q = o.params.query.q;
+    k.api.listTasks.mockImplementation((o: { q: string }) => {
+      const q = o.q;
       if (q === "parent:U6")
         return ok({ tasks: [taskView({ ulid: "A" }), taskView({ ulid: "B" })] });
       if (q === "parent:A") return ok({ tasks: [taskView({ ulid: "C" })] });
@@ -22,11 +22,11 @@ describe("collectDescendants", () => {
 describe("deleteTask / restoreTask", () => {
   it("sends DELETE and puts the affected tasks into the cache", async () => {
     const k = makeCore();
-    k.api.DELETE.mockImplementation(() => ok({ commit: "c1", tasks: [taskView({ ulid: "U6" })] }));
+    k.api.deleteTask.mockImplementation(() =>
+      ok({ commit: "c1", tasks: [taskView({ ulid: "U6" })] }),
+    );
     await deleteTask({ api: k.api as never, cache: k.cache }, t);
-    expect(k.api.DELETE).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-    });
+    expect(k.api.deleteTask).toHaveBeenCalledWith("U6", { store: "shared" });
     expect(k.cache.applyWrite).toHaveBeenCalledWith({
       tasks: [expect.objectContaining({ ulid: "U6" })],
       commit: "c1",
@@ -34,11 +34,9 @@ describe("deleteTask / restoreTask", () => {
   });
   it("sends POST restore", async () => {
     const k = makeCore();
-    k.api.POST.mockImplementation(() => ok({ commit: "c2", tasks: [] }));
+    k.api.restoreTask.mockImplementation(() => ok({ commit: "c2", tasks: [] }));
     await restoreTask({ api: k.api as never, cache: k.cache }, t);
-    expect(k.api.POST).toHaveBeenCalledWith("/api/tasks/{id}/restore", {
-      params: { path: { id: "U6" }, query: { store: "shared" } },
-    });
+    expect(k.api.restoreTask).toHaveBeenCalledWith("U6", { store: "shared" });
     expect(k.cache.applyWrite).toHaveBeenCalledWith({ tasks: [], commit: "c2" });
   });
 });

@@ -22,7 +22,7 @@
 
 <script lang="ts">
   import { source } from "../../core/accounts";
-  import { ApiError, type Schemas, unwrap } from "../../core/api/client";
+  import { ApiError, type Schemas } from "../../core/api/client";
   import { cliStoreDiscover } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -37,7 +37,7 @@
   let { mountLabel, onmounted }: Props = $props();
 
   type Row = {
-    c: Schemas["Candidate"];
+    c: Schemas.Candidate;
     selected: boolean;
     nick: string;
     mounted: boolean;
@@ -115,7 +115,7 @@
     if (account) query.account = account;
     if (from) query.from = from;
     try {
-      const found = await unwrap(c.api.GET("/api/stores/discover", { params: { query } }));
+      const found = await c.api.discoverStores(query);
       if (mine !== seq) return;
       rows = (found ?? []).map((x) => ({
         c: x,
@@ -163,7 +163,7 @@
         url: r.c.url,
         account: r.c.account || undefined,
       }));
-      const res = await unwrap(c.api.POST("/api/stores/mount", { body }));
+      const res = await c.api.mountStores(body);
       const mounted = [...(res.mounted ?? [])];
       const failed = [...(res.failed ?? [])];
       const done: Mounted[] = [];

@@ -4,7 +4,7 @@ import type { Schemas } from "./api/client";
 import { daysAgo, formatDateTime, pad } from "./format";
 import { eventLabel, fieldLabel, refLabel } from "./github";
 
-export type Notification = Schemas["Notification"];
+export type Notification = Schemas.Notification;
 export type InboxTab =
   | "all"
   | "mention"

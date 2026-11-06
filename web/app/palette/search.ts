@@ -1,4 +1,4 @@
-import { type Api, type TaskView, unwrap } from "../../core/api/client";
+import type { Api, TaskView } from "../../core/api/client";
 import { cliStart, quoteArg } from "../../core/cli";
 import { searchTasks as findTasks } from "../../core/search";
 import type { WorkspaceEntry } from "../../core/stores";
@@ -136,11 +136,10 @@ export async function searchTasks(
   const without = hidden.map((s) => `-store:${quoteArg(s)}`).join(" ");
   try {
     if (mode === "query") {
-      const list = await unwrap(
-        d.api.GET("/api/tasks", {
-          params: { query: { q: [without, text].filter((t) => t !== "").join(" "), tree: false } },
-        }),
-      );
+      const list = await d.api.listTasks({
+        q: [without, text].filter((t) => t !== "").join(" "),
+        tree: false,
+      });
       const tasks = list.tasks ?? [];
       d.prime(tasks, since);
       const items = tasks.slice(0, MAX).map((t) => taskItem(t, d.hrefOf));
@@ -156,7 +155,7 @@ export async function searchTasks(
     const qualified = isStoreQualifiedId(text, d.storeNames?.() ?? []);
     if (qualified || ID.test(text) || ULID.test(text)) {
       try {
-        const s = await unwrap(d.api.GET("/api/tasks/{id}", { params: { path: { id: text } } }));
+        const s = await d.api.getTask(text);
         found.set(s.ulid, taskItem(s, d.hrefOf, matchNote(s, text)));
       } catch (e) {
         if (!isNotFound(e)) throw e;

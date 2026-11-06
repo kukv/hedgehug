@@ -1,4 +1,3 @@
-import { unwrap } from "../../core/api/client";
 import type { Release, Sprint } from "../../core/planning";
 import { core } from "../context";
 
@@ -58,10 +57,7 @@ export function usePlans(where: () => { store: string; name: string } | null): {
     const { store, name } = at;
     let live = true;
     const query = { store, workspace: name };
-    Promise.all([
-      unwrap(c.api.GET("/api/sprints", { params: { query } })),
-      unwrap(c.api.GET("/api/releases", { params: { query } })),
-    ])
+    Promise.all([c.api.listSprints(query), c.api.listReleases(query)])
       .then(([s, r]) => {
         if (!live) return;
         sprints = Array.isArray(s) ? s : [];

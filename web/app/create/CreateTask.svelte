@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { type TaskView, unwrap } from "../../core/api/client";
+  import type { TaskView } from "../../core/api/client";
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { type Template, usableTemplates } from "../../core/planning";
@@ -98,7 +98,8 @@
     const store = ws?.store;
     if (!store) return;
     let live = true;
-    unwrap(api.GET("/api/templates", { params: { query: { store } } }))
+    api
+      .listTemplates({ store })
       .then((r) => {
         if (live) templates = r ?? [];
       })
@@ -202,20 +203,18 @@
     error = "";
     try {
       const props = cleanProps();
-      const r = await unwrap(
-        api.POST("/api/tasks", {
-          params: { query: { store: ws.store } },
-          body: {
-            title: title.trim(),
-            ...(body.trim() === "" ? {} : { body }),
-            ...(parent ? { parent: parent.ulid } : { workspace: ws.name }),
-            kind,
-            status,
-            ...(template ? { template } : kindDefault ? { no_template: true } : {}),
-            ...(assignees.length > 0 ? { assignees } : {}),
-            ...(Object.keys(props).length > 0 ? { props } : {}),
-          },
-        }),
+      const r = await api.createTask(
+        {
+          title: title.trim(),
+          ...(body.trim() === "" ? {} : { body }),
+          ...(parent ? { parent: parent.ulid } : { workspace: ws.name }),
+          kind,
+          status,
+          ...(template ? { template } : kindDefault ? { no_template: true } : {}),
+          ...(assignees.length > 0 ? { assignees } : {}),
+          ...(Object.keys(props).length > 0 ? { props } : {}),
+        },
+        { store: ws.store },
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliWorkspaceRm } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
@@ -36,11 +35,7 @@
     failure = null;
     const gone = { ...w };
     try {
-      await unwrap(
-        api.DELETE("/api/workspaces/{id}", {
-          params: { path: { id: gone.ulid }, query: { store: gone.store } },
-        }),
-      );
+      await api.removeWorkspace(gone.ulid, { store: gone.store });
       await stores.reload().catch(() => undefined);
       // The screen of the workspace that is gone has nothing to show.
       const r = router.route;

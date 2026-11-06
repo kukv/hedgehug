@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { requiredNote, ruleTarget, ruleYaml, statLabel } from "../../core/automations";
   import { cliAutomationRm } from "../../core/cli";
   import type { Rule, RuleStat } from "../../core/github";
@@ -49,12 +48,7 @@
     const enabled = el.checked;
     busy = true;
     try {
-      await unwrap(
-        c.api.PUT("/api/automations/{id}/enabled", {
-          params: { path: { id: r.id }, query: { store } },
-          body: { enabled },
-        }),
-      );
+      await c.api.setAutomationEnabled(r.id, { enabled }, { store });
     } catch (e) {
       el.checked = r.enabled;
       toast({ message: errorMessage(e) });
@@ -69,11 +63,7 @@
     busy = true;
     removeError = "";
     try {
-      await unwrap(
-        c.api.DELETE("/api/automations/{id}", {
-          params: { path: { id: r.id }, query: { store } },
-        }),
-      );
+      await c.api.deleteAutomation(r.id, { store });
       removing = null;
     } catch (e) {
       removeError = errorMessage(e);

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { ISSUE_FIELDS, withField } from "../../core/automations";
   import { cliAutomationFields } from "../../core/cli";
   import { type IssueFields, SYNC_MODES } from "../../core/github";
@@ -42,7 +41,7 @@
   async function write(body: Change, undo: () => void) {
     busy = true;
     try {
-      await unwrap(c.api.PATCH("/api/automations/fields", { params: { query: { store } }, body }));
+      await c.api.updateAutomationFields(body, { store });
     } catch (e) {
       undo();
       toast({ message: errorMessage(e) });

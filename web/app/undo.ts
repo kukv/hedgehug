@@ -1,11 +1,11 @@
-import { type Schemas, unwrap } from "../core/api/client";
+import type { Schemas } from "../core/api/client";
 import { errorMessage } from "../core/messages";
 import type { AppCore } from "./context";
 import { opLabel } from "./detail/history-labels";
 import type { Route } from "./router";
 import { toast } from "./toast.svelte";
 
-type UndoWrite = Schemas["UndoWrite"];
+type UndoWrite = Schemas.UndoWrite;
 
 // undoMessage says what POST /api/undo did: the operation taken back, and what it kept because
 // others changed it after. commit is null when every field it changed had been changed since.
@@ -49,7 +49,7 @@ export async function runUndo(
   store?: string,
 ): Promise<void> {
   try {
-    const r = await unwrap(c.api.POST("/api/undo", { params: { query: { store } } }));
+    const r = await c.api.undo({ store });
     // The commit is this tab's own: its tasks.changed is not shown as a change from outside.
     c.cache.noteOwnCommit(r.commit);
     // The server tells views.changed from its poll, which misses a write taken back before it

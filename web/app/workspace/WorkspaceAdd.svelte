@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliWorkspaceAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { nameProblem, prefixProblem } from "../../core/workspace";
@@ -74,9 +73,7 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        api.POST("/api/workspaces", { params: { query: { store } }, body: { name, prefix } }),
-      );
+      const r = await api.addWorkspace({ name, prefix }, { store });
       // The workspace exists now; a failed reload must not read as a failed add (the SSE catches up).
       await stores.reload().catch(() => undefined);
       toast({

@@ -12,7 +12,7 @@
   import { getReorderDestinationIndex } from "@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index";
   import { onMount } from "svelte";
   import type { Attachment } from "svelte/attachments";
-  import { type Schemas, unwrap } from "../../core/api/client";
+  import type { Schemas } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { useSubscribe } from "../svelte-store";
@@ -21,7 +21,7 @@
 
   // repo_accounts of config.yaml. The order is what the rules mean, so each change sends the whole
   // list. The buttons do what the drag does, for the keyboard.
-  type Rule = Schemas["RepoAccountView"];
+  type Rule = Schemas.RepoAccountView;
 
   const c = core();
   const accounts = useSubscribe(c.accounts, () => c.accounts.accounts());
@@ -33,7 +33,8 @@
   let account = $state("");
 
   onMount(() => {
-    void unwrap(c.api.GET("/api/repo-accounts"))
+    void c.api
+      .getRepoAccounts()
       .then((r) => {
         rules = r.rules;
       })
@@ -43,7 +44,7 @@
   async function save(next: Rule[]): Promise<boolean> {
     busy = true;
     try {
-      const r = await unwrap(c.api.PUT("/api/repo-accounts", { body: { rules: next } }));
+      const r = await c.api.putRepoAccounts({ rules: next });
       rules = r.rules;
       return true;
     } catch (e) {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { type TaskView, unwrap } from "../../core/api/client";
+  import type { TaskView } from "../../core/api/client";
   import { CATEGORY_LABEL, type Category } from "../../core/categories";
   import { errorMessage } from "../../core/messages";
   import { schemaUsage } from "../../core/schema-usage";
@@ -70,7 +70,7 @@
   async function loadTasks(s: string): Promise<void> {
     const mine = ++tasksSeq;
     try {
-      const list = await unwrap(c.api.GET("/api/tasks", { params: { query: { store: s } } }));
+      const list = await c.api.listTasks({ store: s });
       if (mine !== tasksSeq) return;
       tasks = list.tasks ?? [];
       tasksFailure = null;

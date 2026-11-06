@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { type TaskView, unwrap } from "../../core/api/client";
+  import type { TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { violationQuery } from "../../core/scoped";
   import { core } from "../context";
@@ -22,9 +22,7 @@
   async function load(s: string): Promise<void> {
     const mine = ++seq;
     try {
-      const r = await unwrap(
-        c.api.GET("/api/tasks", { params: { query: { q: violationQuery(ulid), store: s } } }),
-      );
+      const r = await c.api.listTasks({ q: violationQuery(ulid), store: s });
       if (mine !== seq) return;
       violations = r.tasks ?? [];
       failure = null;

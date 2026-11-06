@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { canParent } from "../../core/schema";
@@ -121,18 +120,16 @@
       const props: Record<string, unknown> = {};
       if (start) props.start = start;
       if (due) props.due = due;
-      const r = await unwrap(
-        api.POST("/api/tasks", {
-          params: { query: { store: ws.store } },
-          body: {
-            title: title.trim(),
-            kind: projectKind,
-            workspace: ws.name,
-            ...(assignees.length > 0 ? { assignees } : {}),
-            ...(repos.length > 0 ? { repos } : {}),
-            ...(Object.keys(props).length > 0 ? { props } : {}),
-          },
-        }),
+      const r = await api.createTask(
+        {
+          title: title.trim(),
+          kind: projectKind,
+          workspace: ws.name,
+          ...(assignees.length > 0 ? { assignees } : {}),
+          ...(repos.length > 0 ? { repos } : {}),
+          ...(Object.keys(props).length > 0 ? { props } : {}),
+        },
+        { store: ws.store },
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({

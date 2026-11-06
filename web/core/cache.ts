@@ -1,4 +1,4 @@
-import { type Api, ApiError, type ShowView, type TaskView, unwrap } from "./api/client";
+import { type Api, ApiError, type ShowView, type TaskView } from "./api/client";
 import type { Connection, TasksChanged } from "./connection";
 import { callAll } from "./listeners";
 
@@ -89,7 +89,7 @@ function rowOf(v: object): TaskView {
   const o = { ...v } as Record<string, unknown>;
   for (const k of SHOW_ONLY) delete o[k];
   delete o.context;
-  return o as TaskView;
+  return o as unknown as TaskView;
 }
 
 // TaskCache keeps the tasks the screen shows, once each, by ULID. A list or
@@ -332,9 +332,7 @@ export class TaskCache {
     const since = this.epoch;
     const { q, tree, store } = s.query;
     try {
-      const out = await unwrap(
-        this.api.GET("/api/tasks", { params: { query: { q, tree, store } } }),
-      );
+      const out = await this.api.listTasks({ q, tree, store });
       if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : null; // a newer fetch is on its way
       if (tree) {
         const roots = reuseNodes(this.ingestTrees(out.roots ?? [], since), s.roots);
@@ -419,9 +417,7 @@ export class TaskCache {
     const seq = ++s.seq;
     const since = this.epoch;
     try {
-      const show = await unwrap(
-        this.api.GET("/api/tasks/{id}", { params: { path: { id: s.key } } }),
-      );
+      const show = await this.api.getTask(s.key);
       if (seq !== s.seq) return s.last; // a newer fetch is on its way
       const stale = this.wroteSince(show.ulid, since);
       const gone = this.gone(show.ulid, since);
@@ -577,9 +573,7 @@ export class TaskCache {
     this.rowSeqs.set(ulid, seq);
     store ??= this.rows.get(ulid)?.store;
     try {
-      const show = await unwrap(
-        this.api.GET("/api/tasks/{id}", { params: { path: { id: ulid }, query: { store } } }),
-      );
+      const show = await this.api.getTask(ulid, { store });
       if (seq !== this.rowSeqs.get(ulid)) return; // a newer fetch of this row is on its way
       this.rowSeqs.delete(ulid);
       if (this.changedSince(ulid, since)) this.refetchStale(ulid, store);

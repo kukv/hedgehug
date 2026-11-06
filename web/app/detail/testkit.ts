@@ -1,11 +1,17 @@
 import { EditorView } from "codemirror";
 import { type Component, flushSync } from "svelte";
-import { vi } from "vitest";
-import type { Schemas, ShowView, TaskView } from "../../core/api/client";
+import { type Mock, vi } from "vitest";
+import {
+  type Api,
+  type Schemas,
+  type ShowView,
+  type TaskView,
+  toApiError,
+} from "../../core/api/client";
 import type { WorkspaceEntry } from "../../core/stores";
 import { renderWithCore } from "../test-utils";
 
-export type SchemaView = Schemas["SchemaView"];
+export type SchemaView = Schemas.SchemaView;
 
 export const schemaView = {
   statuses: [
@@ -74,9 +80,9 @@ export function showView(over: Partial<ShowView> = {}): ShowView {
   } as ShowView;
 }
 
-/** What an Api call answers with on success (the shape unwrap reads). */
+/** What an Api call answers with on success. */
 export function ok<T>(data: T) {
-  return Promise.resolve({ data, response: new Response(null, { status: 200 }) });
+  return Promise.resolve(data);
 }
 
 /** What an Api call answers with when the server refuses (problem+json). */
@@ -86,10 +92,7 @@ export function fail(
   args: Record<string, unknown> = {},
   detail = "",
 ) {
-  return Promise.resolve({
-    error: { type, title: "", status, detail, args },
-    response: new Response(null, { status }),
-  });
+  return Promise.reject(toApiError(status, { type, title: "", status, detail, args }));
 }
 
 export const workspaces: WorkspaceEntry[] = [
@@ -153,7 +156,15 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     return () => listeners.delete(fn);
   };
   const ws = opts.workspaces ?? workspaces;
-  const api = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
+  // One vi.fn per operation, made when a test or a screen first asks for it; it never answers until a test says so.
+  const ops: Record<string, Mock> = {};
+  const api = new Proxy(ops, {
+    get: (t, p) => {
+      if (typeof p !== "string") return undefined;
+      if (!t[p]) t[p] = vi.fn(() => new Promise(() => {}));
+      return t[p];
+    },
+  }) as unknown as { [K in keyof Api]: Mock };
   const cache = {
     task: vi.fn((u: string) => tasks.find((t) => t.ulid === u)),
     detail: vi.fn(() => opts.show),

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TaskView } from "../../core/api/client";
+import { type TaskView, toApiError } from "../../core/api/client";
 import type { WorkspaceEntry } from "../../core/stores";
 import { task } from "../tree/fixtures";
 import {
@@ -59,11 +59,16 @@ describe("detectMode with store names", () => {
   });
 });
 
-const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
-const notFound = {
-  error: { type: "task.not_found", title: "Not Found", status: 404, detail: "not found" },
-  response: new Response(null, { status: 404 }),
-};
+const ok = (data: unknown) => Promise.resolve(data);
+const notFound = () =>
+  Promise.reject(
+    toApiError(404, {
+      type: "task.not_found",
+      title: "Not Found",
+      status: 404,
+      detail: "not found",
+    }),
+  );
 
 const rel6 = {
   ulid: "U6",
@@ -74,55 +79,48 @@ const rel6 = {
   former_ids: ["SH-17"],
 };
 
-function deps(over: { tasks?: TaskView[]; listError?: unknown } = {}) {
-  const GET = vi.fn(
-    async (
-      path: string,
-      opts: { params: { path?: { id: string }; query?: { store?: string; q?: string } } },
-    ) => {
-      if (path === "/api/tasks/{id}") {
-        const id = opts.params.path?.id.toLowerCase();
-        const hit = ["sh-17", "rel-6", "u6", "shared:rel-6"].includes(id ?? "");
-        return hit ? ok(rel6) : notFound;
-      }
-      if (over.listError) return over.listError;
-      return ok({ tasks: over.tasks ?? [] });
-    },
+function deps(over: { tasks?: TaskView[]; listError?: () => Promise<never> } = {}) {
+  const getTask = vi.fn((id: string) => {
+    const hit = ["sh-17", "rel-6", "u6", "shared:rel-6"].includes(id.toLowerCase());
+    return hit ? ok(rel6) : notFound();
+  });
+  const listTasks = vi.fn((_params?: { store?: string; q?: string; tree?: boolean }) =>
+    over.listError ? over.listError() : ok({ tasks: over.tasks ?? [] }),
   );
   const prime = vi.fn();
   const d: SearchDeps = {
-    api: { GET } as unknown as SearchDeps["api"],
+    api: { getTask, listTasks } as unknown as SearchDeps["api"],
     hrefOf: (u) => `/tasks/${u}`,
     epoch: () => 42,
     prime,
   };
-  return { d, GET, prime };
+  return { d, getTask, listTasks, prime };
 }
 
 describe("searchTasks: hidden Stores", () => {
-  const queries = (GET: ReturnType<typeof deps>["GET"]) =>
-    GET.mock.calls.flatMap((c) => {
-      const q = (c[1] as { params: { query?: { q?: string } } }).params.query?.q;
+  const queries = (listTasks: ReturnType<typeof deps>["listTasks"]) =>
+    listTasks.mock.calls.flatMap((c) => {
+      const q = c[0]?.q;
       return q === undefined ? [] : [q];
     });
 
   it("asks without them, for a text search and for a query, and still primes what came", async () => {
     const theirs = task("U2", "task", null, { id: "BE-2", title: "非表示", store: "backend" });
-    const { d, GET, prime } = deps({ tasks: [theirs] });
+    const { d, listTasks, prime } = deps({ tasks: [theirs] });
     const hidden = { ...d, hidden: () => ["backend", "org b/ops"] };
     await searchTasks(hidden, "表示", "id");
-    expect(queries(GET)).toEqual(['-store:backend -store:"org b/ops" "表示"']);
+    expect(queries(listTasks)).toEqual(['-store:backend -store:"org b/ops" "表示"']);
     expect(prime).toHaveBeenCalledWith([theirs], 42);
-    GET.mockClear();
+    listTasks.mockClear();
     await searchTasks(hidden, "kind:task", "query");
-    expect(queries(GET)).toEqual(['-store:backend -store:"org b/ops" kind:task']);
+    expect(queries(listTasks)).toEqual(['-store:backend -store:"org b/ops" kind:task']);
   });
 
   it("adds nothing to the query when no store is hidden", async () => {
-    const { d, GET } = deps();
+    const { d, listTasks } = deps();
     await searchTasks({ ...d, hidden: () => [] }, "表示", "id");
     await searchTasks(d, "kind:task", "query");
-    expect(queries(GET)).toEqual(['"表示"', "kind:task"]);
+    expect(queries(listTasks)).toEqual(['"表示"', "kind:task"]);
   });
 
   it("still opens the exact lookup of an ID, a former ID or a ULID of a hidden Store, like a URL", async () => {
@@ -137,16 +135,15 @@ describe("searchTasks: hidden Stores", () => {
 
 describe("searchTasks: <store>:<ID>", () => {
   it("looks the qualified ID up as it is, once, and does not search it as words", async () => {
-    const { d, GET } = deps();
+    const { d, getTask, listTasks } = deps();
     const r = await searchTasks(
       { ...d, storeNames: () => ["shared", "second"], hidden: () => ["shared"] },
       "shared:REL-6",
       "id",
     );
-    expect(GET).toHaveBeenCalledTimes(1);
-    expect(GET).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "shared:REL-6" } },
-    });
+    expect(getTask).toHaveBeenCalledTimes(1);
+    expect(getTask).toHaveBeenCalledWith("shared:REL-6");
+    expect(listTasks).not.toHaveBeenCalled();
     expect(r.groups[0]?.items[0]).toMatchObject({ ulid: "U6" });
   });
 
@@ -183,20 +180,18 @@ describe("searchTasks: ID and text", () => {
   });
 
   it("looks the ID up once, in every store, and ignores an ID nobody has", async () => {
-    const { d, GET } = deps();
+    const { d, getTask } = deps();
     const r = await searchTasks(d, "REL-99", "id");
     expect(r.error).toBeNull();
     expect(r.groups).toEqual([]);
-    expect(GET).toHaveBeenCalledWith("/api/tasks/{id}", { params: { path: { id: "REL-99" } } });
+    expect(getTask).toHaveBeenCalledWith("REL-99");
   });
 
   it("searches the words of the ID and title and adds what it finds to the cache", async () => {
     const found = [task("U9", "task", null, { id: "REL-9", title: "API v2 の移行ガイド" })];
-    const { d, GET, prime } = deps({ tasks: found });
+    const { d, listTasks, prime } = deps({ tasks: found });
     const r = await searchTasks(d, "api v2", "id");
-    expect(GET).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { q: '"api" "v2"', store: undefined } },
-    });
+    expect(listTasks).toHaveBeenCalledWith({ q: '"api" "v2"', store: undefined });
     expect(prime).toHaveBeenCalledWith(found, 42);
     expect(r.groups[0]?.items.map((i) => (i.type === "task" ? i.id : ""))).toEqual(["REL-9"]);
   });
@@ -212,9 +207,10 @@ describe("searchTasks: ID and text", () => {
   });
 
   it("returns nothing for an empty input and no group when nothing matches", async () => {
-    const { d, GET } = deps();
+    const { d, getTask, listTasks } = deps();
     expect(await searchTasks(d, "  ", "id")).toEqual({ groups: [], error: null });
-    expect(GET).not.toHaveBeenCalled();
+    expect(getTask).not.toHaveBeenCalled();
+    expect(listTasks).not.toHaveBeenCalled();
     expect((await searchTasks(d, "zzz", "id")).groups).toEqual([]);
   });
 
@@ -231,26 +227,24 @@ describe("searchTasks: ID and text", () => {
 describe("searchTasks: query", () => {
   it("passes the query as it is and names the group with the count", async () => {
     const found = [task("U1", "task", null), task("U2", "task", null)];
-    const { d, GET } = deps({ tasks: found });
+    const { d, listTasks } = deps({ tasks: found });
     const r = await searchTasks(d, "status:doing assignee:@me", "query");
-    expect(GET).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { q: "status:doing assignee:@me", tree: false } },
-    });
+    expect(listTasks).toHaveBeenCalledWith({ q: "status:doing assignee:@me", tree: false });
     expect(r.groups).toHaveLength(1);
     expect(r.groups[0]?.name).toBe("クエリに一致 · 2 件");
   });
 
   it("returns the error of a query that does not run", async () => {
     const { d } = deps({
-      listError: {
-        error: {
-          type: "query.invalid",
-          title: "Bad",
-          status: 400,
-          detail: "term 1 (foo:bar): unknown key",
-        },
-        response: new Response(null, { status: 400 }),
-      },
+      listError: () =>
+        Promise.reject(
+          toApiError(400, {
+            type: "query.invalid",
+            title: "Bad",
+            status: 400,
+            detail: "term 1 (foo:bar): unknown key",
+          }),
+        ),
     });
     const r = await searchTasks(d, "foo:bar", "query");
     expect(r.groups).toEqual([]);

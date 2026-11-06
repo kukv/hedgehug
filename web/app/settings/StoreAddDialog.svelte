@@ -18,7 +18,7 @@
 </script>
 
 <script lang="ts">
-  import { ApiError, unwrap } from "../../core/api/client";
+  import { ApiError } from "../../core/api/client";
   import { cliStoreAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -95,11 +95,11 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        c.api.POST("/api/stores/add", {
-          body: { name: name.trim(), remotes: list, account: account || undefined },
-        }),
-      );
+      const r = await c.api.addStore({
+        name: name.trim(),
+        remotes: list,
+        account: account || undefined,
+      });
       // The Store is mounted; a failed reload must not read as a failed add (the SSE resync catches up).
       await c.stores.reload().catch(() => undefined);
       toast({ message: `Store「${r.name}」を追加しました` });

@@ -12,7 +12,7 @@ const sandbox = entry({ ulid: "W3", name: "sandbox", prefix: "SBX", tasks: 0, de
 
 function setup(target = sandbox) {
   const k = makeCore({ workspaces: [entry(), target] });
-  k.api.DELETE.mockImplementation(() =>
+  k.api.removeWorkspace.mockImplementation(() =>
     ok(written({ ulid: "W3", name: "sandbox", id_prefix: "SBX" })),
   );
   const onclose = vi.fn();
@@ -34,9 +34,7 @@ describe("WorkspaceDelete", () => {
     );
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(k.api.DELETE).toHaveBeenCalledWith("/api/workspaces/{id}", {
-      params: { path: { id: "W3" }, query: { store: "shared" } },
-    });
+    expect(k.api.removeWorkspace).toHaveBeenCalledWith("W3", { store: "shared" });
     expect(k.stores.reload).toHaveBeenCalled();
     expect(toasts.list[0]?.message).toBe("ワークスペース sandbox を削除しました");
   });
@@ -79,7 +77,7 @@ describe("WorkspaceDelete", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "削除" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toBeDisabled();
-    expect(k.api.DELETE).not.toHaveBeenCalled();
+    expect(k.api.removeWorkspace).not.toHaveBeenCalled();
   });
 
   it("is blocked by a task that arrives while the dialog is open", async () => {
@@ -92,7 +90,7 @@ describe("WorkspaceDelete", () => {
 
   it("keeps the dialog open and shows the words of the server when it refuses (409 as a safety net)", async () => {
     const { k, onclose } = setup();
-    k.api.DELETE.mockImplementation(() => fail(409, "workspace.not_empty", { tasks: 2 }));
+    k.api.removeWorkspace.mockImplementation(() => fail(409, "workspace.not_empty", { tasks: 2 }));
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "ワークスペースにタスクが 2 件（削除済みを含む）残っています",

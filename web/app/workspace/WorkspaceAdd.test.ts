@@ -18,7 +18,7 @@ function setup(opts: { two?: boolean; store?: string } = {}) {
       ? [storeItem("shared", true), storeItem("backend")]
       : [storeItem("shared", true)]) as never,
   );
-  k.api.POST.mockImplementation(() =>
+  k.api.addWorkspace.mockImplementation(() =>
     ok(written({ ulid: "W9", name: "ops", id_prefix: "OPS" }, { commit: "c1" })),
   );
   const onclose = vi.fn();
@@ -49,10 +49,10 @@ describe("WorkspaceAdd", () => {
     );
     await fireEvent.click(screen.getByRole("button", { name: "追加" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(k.api.POST).toHaveBeenCalledWith("/api/workspaces", {
-      params: { query: { store: "shared" } },
-      body: { name: "ops", prefix: "OPS" },
-    });
+    expect(k.api.addWorkspace).toHaveBeenCalledWith(
+      { name: "ops", prefix: "OPS" },
+      { store: "shared" },
+    );
     expect(k.stores.reload).toHaveBeenCalled();
     expect(toasts.list[0]).toMatchObject({
       message: "ワークスペース ops（OPS）を shared に追加しました",
@@ -79,7 +79,7 @@ describe("WorkspaceAdd", () => {
       ),
     ).toBeInTheDocument();
     expect(add).toBeDisabled();
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.addWorkspace).not.toHaveBeenCalled();
   });
 
   it("shows the command with <名前> and cannot copy it until the fields are good", () => {
@@ -105,8 +105,8 @@ describe("WorkspaceAdd", () => {
     ).toBeInTheDocument();
     await fillIn("ops", "OPS");
     await fireEvent.click(screen.getByRole("button", { name: "追加" }));
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
-    expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
+    await waitFor(() => expect(k.api.addWorkspace).toHaveBeenCalled());
+    expect(k.api.addWorkspace.mock.calls[0]?.[1]).toMatchObject({ store: "shared" });
   });
 
   it("does not offer a hidden Store", () => {
@@ -127,7 +127,9 @@ describe("WorkspaceAdd", () => {
       readOnlyBy: { backend: "the remote cannot be written" },
     });
     k.stores.stores.mockReturnValue([storeItem("shared", true), storeItem("backend")] as never);
-    k.api.POST.mockImplementation(() => ok(written({ ulid: "W9", name: "ops", id_prefix: "OPS" })));
+    k.api.addWorkspace.mockImplementation(() =>
+      ok(written({ ulid: "W9", name: "ops", id_prefix: "OPS" })),
+    );
     mount(WorkspaceAdd, { store: "backend", onclose: vi.fn() }, k);
     const ro = screen.getByRole("radio", { name: /backend/ });
     expect(ro).toBeDisabled();
@@ -146,7 +148,7 @@ describe("WorkspaceAdd", () => {
     expect(screen.getByText("書き込める Store がありません（すべて閲覧のみです）")).toBeVisible();
     expect(screen.getByRole("button", { name: "追加" })).toBeDisabled();
     await fireEvent.keyDown(screen.getByRole("textbox", { name: "名前" }), { key: "Enter" });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.addWorkspace).not.toHaveBeenCalled();
   });
 
   it("starts with the default Store when none is asked for", () => {
@@ -156,7 +158,9 @@ describe("WorkspaceAdd", () => {
 
   it("keeps the dialog open and shows the words of the server when it refuses", async () => {
     const { k, onclose } = setup();
-    k.api.POST.mockImplementation(() => fail(409, "workspace.prefix_taken", { prefix: "OPS" }));
+    k.api.addWorkspace.mockImplementation(() =>
+      fail(409, "workspace.prefix_taken", { prefix: "OPS" }),
+    );
     await fillIn("ops", "OPS");
     await fireEvent.click(screen.getByRole("button", { name: "追加" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -172,9 +176,9 @@ describe("WorkspaceAdd", () => {
     const field = screen.getByRole("textbox", { name: "名前" });
     await fireEvent.keyDown(field, { key: "Enter", isComposing: true });
     await fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
-    expect(k.api.POST).not.toHaveBeenCalled();
+    expect(k.api.addWorkspace).not.toHaveBeenCalled();
     await fireEvent.keyDown(field, { key: "Enter" });
-    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(k.api.addWorkspace).toHaveBeenCalledTimes(1));
   });
 
   it("focuses the name as soon as the dialog opens", async () => {

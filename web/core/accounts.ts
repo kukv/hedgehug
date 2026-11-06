@@ -1,8 +1,8 @@
-import { type Api, ApiError, type Schemas, unwrap } from "./api/client";
+import { type Api, ApiError, type Schemas } from "./api/client";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 
-export type Account = Schemas["AuthStatus"];
+export type Account = Schemas.AuthStatus;
 export type AccountSource = "gh" | "env" | "keychain" | "device" | "none";
 
 // source is where the token of an account comes from: AuthStatus.token is
@@ -79,7 +79,7 @@ export class AccountsCache {
   private async read(seq: number): Promise<void> {
     let next: Account[];
     try {
-      next = (await unwrap(this.api.GET("/api/accounts"))) ?? [];
+      next = (await this.api.listAccounts()) ?? [];
     } catch (e) {
       if (seq !== this.seq) return;
       const err =

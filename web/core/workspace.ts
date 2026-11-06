@@ -73,7 +73,7 @@ export function removeBlocker(
 // detachedText says what a move took off the tasks (the sprint and the releases that are not of the
 // new workspace); "" when nothing.
 export function detachedText(
-  ds: Schemas["Detached"][] | null | undefined,
+  ds: Schemas.Detached[] | null | undefined,
   idOf: (id: string) => string = (id) => id,
 ): string {
   return (ds ?? [])

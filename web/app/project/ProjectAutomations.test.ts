@@ -17,12 +17,10 @@ const inProject = whole.map((r) => (r.id === "stopped" ? { ...r, enabled: false 
 function setup(off: string | null = null) {
   const e = emitter();
   const api = {
-    GET: vi.fn((_: string, o: { params: { query: { project?: string } } }) =>
-      ok(o.params.query.project ? inProject : whole),
-    ),
-    PUT: vi.fn(() => ok(inProject)),
-    DELETE: vi.fn(() => ok(whole)),
-    POST: vi.fn(() => ok(whole)),
+    listAutomations: vi.fn((query: { project?: string }) => ok(query.project ? inProject : whole)),
+    setAutomationEnabled: vi.fn((_id?: string, _body?: unknown, _query?: unknown) => ok(inProject)),
+    deleteAutomation: vi.fn((_id?: string, _query?: unknown) => ok(whole)),
+    addAutomation: vi.fn((_body?: unknown, _query?: unknown) => ok(whole)),
   };
   renderWithCore(
     ProjectAutomations,
@@ -47,10 +45,11 @@ describe("ProjectAutomations", () => {
       await screen.findByRole("checkbox", { name: "このプロジェクトで有効: running" }),
     );
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith("/api/automations/{id}/enabled", {
-        params: { path: { id: "running" }, query: { store: "shared" } },
-        body: { enabled: false, project: "P1" },
-      }),
+      expect(api.setAutomationEnabled).toHaveBeenCalledWith(
+        "running",
+        { enabled: false, project: "P1" },
+        { store: "shared" },
+      ),
     );
   });
 
@@ -60,9 +59,10 @@ describe("ProjectAutomations", () => {
       await screen.findByRole("checkbox", { name: "このプロジェクトで停止: stopped" }),
     );
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith(
-        "/api/automations/{id}/enabled",
-        expect.objectContaining({ body: { enabled: true, project: "P1" } }),
+      expect(api.setAutomationEnabled).toHaveBeenCalledWith(
+        "stopped",
+        { enabled: true, project: "P1" },
+        { store: "shared" },
       ),
     );
   });
@@ -79,13 +79,14 @@ describe("ProjectAutomations", () => {
     expect(mine.getByText("このプロジェクトだけ")).toBeTruthy();
     await fireEvent.click(mine.getByRole("checkbox"));
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith(
-        "/api/automations/{id}/enabled",
-        expect.objectContaining({ body: { enabled: false } }),
+      expect(api.setAutomationEnabled).toHaveBeenCalledWith(
+        "mine",
+        { enabled: false },
+        { store: "shared" },
       ),
     );
     await fireEvent.click(mine.getByRole("button", { name: "削除: mine" }));
-    await waitFor(() => expect(api.DELETE).toHaveBeenCalled());
+    await waitFor(() => expect(api.deleteAutomation).toHaveBeenCalled());
   });
 
   it("adds a rule of the project", async () => {
@@ -103,11 +104,9 @@ describe("ProjectAutomations", () => {
     expect(screen.getByRole("dialog").textContent).toContain("--project REL-1");
     await fireEvent.click(dialog.getByRole("button", { name: "追加" }));
     await waitFor(() =>
-      expect(api.POST).toHaveBeenCalledWith(
-        "/api/automations",
-        expect.objectContaining({
-          body: expect.objectContaining({ id: "r1", status: "waiting", project: "P1" }),
-        }),
+      expect(api.addAutomation).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "r1", status: "waiting", project: "P1" }),
+        { store: "shared" },
       ),
     );
   });

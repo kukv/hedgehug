@@ -22,15 +22,16 @@ function mount(
     initial?: { source?: AddSource; name?: string; host?: string };
     onclose?: () => void;
   } = {},
-  replies: { post?: (path: string) => Reply; put?: () => Reply; del?: () => Reply } = {},
+  replies: { start?: () => Reply; add?: () => Reply; put?: () => Reply; del?: () => Reply } = {},
   existing: string[] = [],
 ) {
   const api = {
-    POST: vi.fn((path: string) =>
-      replies.post ? replies.post(path) : path === "/api/auth/device" ? ok(started) : ok({}),
+    startDeviceLogin: vi.fn((_body: unknown) => (replies.start ? replies.start() : ok(started))),
+    addAccount: vi.fn((_body: unknown) => (replies.add ? replies.add() : ok({}))),
+    setAccountToken: vi.fn(() =>
+      replies.put ? replies.put() : ok({ account: "e2e", added: true, id: "x" }),
     ),
-    PUT: vi.fn(() => (replies.put ? replies.put() : ok({ account: "e2e", added: true, id: "x" }))),
-    DELETE: vi.fn(() => (replies.del ? replies.del() : ok(undefined))),
+    cancelDeviceLogin: vi.fn(() => (replies.del ? replies.del() : ok(undefined))),
   };
   const handlers = new Set<(e: AuthDeviceEvent) => void>();
   const conn = {
@@ -182,9 +183,7 @@ describe("AccountAdd: Device Flow", () => {
     const { api } = mount();
     await type(/呼び名/, "work");
     await fireEvent.click(button("GitHub でログイン"));
-    expect(api.POST).toHaveBeenCalledWith("/api/auth/device", {
-      body: { name: "work", host: "github.com" },
-    });
+    expect(api.startDeviceLogin).toHaveBeenCalledWith({ name: "work", host: "github.com" });
     expect(await screen.findByText("ABCD-1234")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "GitHub でログイン" })).toBeNull();
   });
@@ -192,9 +191,7 @@ describe("AccountAdd: Device Flow", () => {
   it("sends no name when it is empty", async () => {
     const { api } = mount();
     await fireEvent.click(button("GitHub でログイン"));
-    expect(api.POST).toHaveBeenCalledWith("/api/auth/device", {
-      body: { name: undefined, host: "github.com" },
-    });
+    expect(api.startDeviceLogin).toHaveBeenCalledWith({ name: undefined, host: "github.com" });
   });
 
   it("on done: toast, close, and read the accounts and the Stores again", async () => {
@@ -209,7 +206,7 @@ describe("AccountAdd: Device Flow", () => {
     expect(screen.queryByText("ABCD-1234")).toBeNull();
     // the flow is over: nothing to cancel
     cleanup();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    expect(api.cancelDeviceLogin).not.toHaveBeenCalled();
   });
 
   it("says logged in, not added, for an account that was there", async () => {
@@ -229,7 +226,7 @@ describe("AccountAdd: Device Flow", () => {
       "デバイスフローでログインできませんでした",
     );
     await fireEvent.click(button("やり直す"));
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.startDeviceLogin).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("ABCD-1234")).toBeTruthy();
   });
 
@@ -238,9 +235,7 @@ describe("AccountAdd: Device Flow", () => {
     await fireEvent.click(button("GitHub でログイン"));
     await screen.findByText("ABCD-1234");
     view.unmount();
-    expect(api.DELETE).toHaveBeenCalledWith("/api/auth/device/{id}", {
-      params: { path: { id: "F1" } },
-    });
+    expect(api.cancelDeviceLogin).toHaveBeenCalledWith("F1");
   });
 
   it("cancels the flow when another way is chosen, and ignores a failure of the cancel", async () => {
@@ -248,32 +243,30 @@ describe("AccountAdd: Device Flow", () => {
     await fireEvent.click(button("GitHub でログイン"));
     await screen.findByText("ABCD-1234");
     await fireEvent.click(radio("gh"));
-    expect(api.DELETE).toHaveBeenCalledTimes(1);
+    expect(api.cancelDeviceLogin).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("ABCD-1234")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("takes over a flow another screen started when the 409 has the code", async () => {
-    const { api } = mount({}, { post: () => fail(409, "auth.device_running", started) });
+    const { api } = mount({}, { start: () => fail(409, "auth.device_running", started) });
     await fireEvent.click(button("GitHub でログイン"));
     expect(await screen.findByText("ABCD-1234")).toBeTruthy();
     expect(screen.getByText("別の画面で始めたログインを続けます")).toBeTruthy();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    expect(api.cancelDeviceLogin).not.toHaveBeenCalled();
   });
 
   it("offers to stop and start again when the 409 has only the id", async () => {
     let n = 0;
     const { api } = mount(
       {},
-      { post: () => (n++ === 0 ? fail(409, "auth.device_running", { id: "OLD" }) : ok(started)) },
+      { start: () => (n++ === 0 ? fail(409, "auth.device_running", { id: "OLD" }) : ok(started)) },
     );
     await fireEvent.click(button("GitHub でログイン"));
     await fireEvent.click(await screen.findByRole("button", { name: "やめてやり直す" }));
-    expect(api.DELETE).toHaveBeenCalledWith("/api/auth/device/{id}", {
-      params: { path: { id: "OLD" } },
-    });
+    expect(api.cancelDeviceLogin).toHaveBeenCalledWith("OLD");
     expect(await screen.findByText("ABCD-1234")).toBeTruthy();
-    expect(api.POST).toHaveBeenCalledTimes(2);
+    expect(api.startDeviceLogin).toHaveBeenCalledTimes(2);
   });
 
   it("does not start again when the form goes while the old flow is being stopped", async () => {
@@ -285,7 +278,7 @@ describe("AccountAdd: Device Flow", () => {
     const { api, view } = mount(
       {},
       {
-        post: () => (n++ === 0 ? fail(409, "auth.device_running", { id: "OLD" }) : ok(started)),
+        start: () => (n++ === 0 ? fail(409, "auth.device_running", { id: "OLD" }) : ok(started)),
         del: () => pending.then(() => ok(undefined)) as ReturnType<typeof ok>,
       },
     );
@@ -294,11 +287,11 @@ describe("AccountAdd: Device Flow", () => {
     view.unmount();
     release();
     await vi.advanceTimersByTimeAsync(10);
-    expect(api.POST).toHaveBeenCalledTimes(1);
+    expect(api.startDeviceLogin).toHaveBeenCalledTimes(1);
   });
 
   it("shows the words of a refusal to start", async () => {
-    mount({}, { post: () => fail(422, "auth.client_id", { host: "github.com" }) });
+    mount({}, { start: () => fail(422, "auth.client_id", { host: "github.com" }) });
     await fireEvent.click(button("GitHub でログイン"));
     expect((await screen.findByRole("alert")).textContent).toContain("client_id");
   });
@@ -327,9 +320,9 @@ describe("AccountAdd: a pasted token", () => {
     await fill();
     await fireEvent.click(button("トークンを保存"));
     await waitFor(() => expect(ondone).toHaveBeenCalledWith("work"));
-    expect(api.PUT).toHaveBeenCalledWith("/api/accounts/{name}/token", {
-      params: { path: { name: "work" } },
-      body: { token: "ghp_secret", host: "github.com" },
+    expect(api.setAccountToken).toHaveBeenCalledWith("work", {
+      token: "ghp_secret",
+      host: "github.com",
     });
     expect(toastMessages()).toEqual(["アカウント work を追加しました"]);
     expect(accounts.reload).toHaveBeenCalled();
@@ -389,8 +382,11 @@ describe("AccountAdd: gh, an environment variable and no token", () => {
     await type("login", "bot");
     await fireEvent.click(button("追加する"));
     await waitFor(() => expect(ondone).toHaveBeenCalledWith("bot"));
-    expect(api.POST).toHaveBeenCalledWith("/api/accounts", {
-      body: { name: "bot", login: "bot", host: "github.com", token: undefined },
+    expect(api.addAccount).toHaveBeenCalledWith({
+      name: "bot",
+      login: "bot",
+      host: "github.com",
+      token: undefined,
     });
     expect(toastMessages()).toEqual(["アカウント bot を追加しました"]);
     expect(accounts.reload).toHaveBeenCalled();
@@ -402,8 +398,11 @@ describe("AccountAdd: gh, an environment variable and no token", () => {
     await type("login", "alice");
     await fireEvent.click(button("追加する"));
     await waitFor(() => expect(ondone).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/accounts", {
-      body: { name: "a", login: "alice", host: "github.com", token: "gh" },
+    expect(api.addAccount).toHaveBeenCalledWith({
+      name: "a",
+      login: "alice",
+      host: "github.com",
+      token: "gh",
     });
   });
 
@@ -421,15 +420,18 @@ describe("AccountAdd: gh, an environment variable and no token", () => {
     expect(field("変数名").getAttribute("aria-invalid")).toBeNull();
     await fireEvent.click(button("追加する"));
     await waitFor(() => expect(ondone).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/accounts", {
-      body: { name: "ci", login: "ci-bot", host: "github.com", token: "env:HH_TOKEN_2" },
+    expect(api.addAccount).toHaveBeenCalledWith({
+      name: "ci",
+      login: "ci-bot",
+      host: "github.com",
+      token: "env:HH_TOKEN_2",
     });
   });
 
   it("shows why the server refused", async () => {
     mount(
       { initial: { source: "none" } },
-      { post: () => fail(409, "account.exists", { account: "bot" }) },
+      { add: () => fail(409, "account.exists", { account: "bot" }) },
     );
     await type(/呼び名/, "bot");
     await type("login", "bot");

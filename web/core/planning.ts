@@ -2,9 +2,9 @@
 import type { Schemas, TaskView } from "./api/client";
 import type { WorkspaceEntry } from "./stores";
 
-export type Sprint = Schemas["SprintView"];
-export type Release = Schemas["ReleaseView"];
-export type Template = Schemas["TemplateView"];
+export type Sprint = Schemas.SprintView;
+export type Release = Schemas.ReleaseView;
+export type Template = Schemas.TemplateView;
 export type ReleaseState = "unreleased" | "released" | "archived";
 
 export const RELEASE_STATES: readonly ReleaseState[] = ["unreleased", "released", "archived"];

@@ -1,13 +1,9 @@
-import { type Api, type ShowView, unwrap } from "./api/client";
+import type { Api, ShowView } from "./api/client";
 
 // showAt is the task as it was at the commit (GET /api/tasks/{id}/history/
 // {commit}). The commit has no task: 404 restore_at.not_found.
 export function showAt(api: Api, id: string, commit: string, store?: string): Promise<ShowView> {
-  return unwrap(
-    api.GET("/api/tasks/{id}/history/{commit}", {
-      params: { path: { id, commit }, query: { store } },
-    }),
-  );
+  return api.showTaskAt(id, commit, { store });
 }
 
 export type RestoreChange = {

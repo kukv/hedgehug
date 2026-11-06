@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { ApiError, type Schemas, type TaskView, unwrap } from "../../core/api/client";
+  import { ApiError, type Schemas, type TaskView } from "../../core/api/client";
   import { cliMvStore, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -43,7 +43,7 @@
   // Only a Store with more than one workspace needs the name sent (and typed in the command).
   const named = $derived(spaces.length >= 2 ? workspace : "");
 
-  let plan = $state.raw<Schemas["MovePlanView"] | null>(null);
+  let plan = $state.raw<Schemas.MovePlanView | null>(null);
   // The last plan for this Store asked for the scoped choice. It stays while there is no plan, so
   // that a choice the plan refuses can be changed.
   let offered = $state(false);
@@ -101,12 +101,7 @@
     planning = true;
     announce = "移動の予定を取得しています…";
     try {
-      const p = await unwrap(
-        api.POST("/api/tasks/{id}/move-store/plan", {
-          params: { path: { id: task.ulid } },
-          body: fields,
-        }),
-      );
+      const p = await api.planMoveStore(task.ulid, fields);
       if (n === seq) {
         plan = p;
         offered = p.scoped !== undefined;
@@ -185,12 +180,7 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        api.POST("/api/tasks/{id}/move-store", {
-          params: { path: { id: task.ulid } },
-          body: { ...fields, confirmed: shown },
-        }),
-      );
+      const r = await api.moveStore(task.ulid, { ...fields, confirmed: shown });
       // The result has no commit to note: the trees are fetched again, the lists follow tasks.changed.
       await cache.refreshTrees().catch(() => undefined);
       const t = r.tasks.find((x) => x.ulid === task.ulid) ?? r.tasks[0];

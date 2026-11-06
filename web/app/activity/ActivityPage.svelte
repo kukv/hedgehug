@@ -9,7 +9,6 @@
     rejectionsOf,
     trailerLine,
   } from "../../core/activity";
-  import { unwrap } from "../../core/api/client";
   import { cliLog } from "../../core/cli";
   import { formatTime } from "../../core/format";
   import { eventLabel } from "../../core/github";
@@ -74,7 +73,7 @@
     if (sync === "exclude") query.automation = "exclude"; // the tab of what people did
     if (sync === "automation") query.automation = "only";
     try {
-      const list = await unwrap(c.api.GET("/api/activity", { params: { query } }));
+      const list = await c.api.listActivity(query);
       if (mine !== seq) return;
       items = list ?? [];
       shown = asked;

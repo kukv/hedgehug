@@ -12,7 +12,9 @@ const shared = entry({ ulid: "W2", name: "shared", prefix: "SH", tasks: 9, delet
 
 function setup(target = release) {
   const k = makeCore({ workspaces: [target, shared] });
-  k.api.PATCH.mockImplementation(() => ok(written({ name: "releases" }, { commit: "c1" })));
+  k.api.updateWorkspace.mockImplementation(() =>
+    ok(written({ name: "releases" }, { commit: "c1" })),
+  );
   return { k, ...mount(WorkspaceSettings, { entry: target }, k) };
 }
 
@@ -43,11 +45,12 @@ describe("WorkspaceSettings", () => {
       "hh workspace rename release releases --store shared",
     );
     await fireEvent.click(saveButton());
-    await waitFor(() => expect(k.api.PATCH).toHaveBeenCalled());
-    expect(k.api.PATCH).toHaveBeenCalledWith("/api/workspaces/{id}", {
-      params: { path: { id: "W1" }, query: { store: "shared" } },
-      body: { name: "releases" },
-    });
+    await waitFor(() => expect(k.api.updateWorkspace).toHaveBeenCalled());
+    expect(k.api.updateWorkspace).toHaveBeenCalledWith(
+      "W1",
+      { name: "releases" },
+      { store: "shared" },
+    );
     expect(k.stores.reload).toHaveBeenCalled();
     await waitFor(() =>
       expect(toasts.list[0]?.message).toBe(
@@ -74,7 +77,7 @@ describe("WorkspaceSettings", () => {
       expect(b).toHaveAccessibleDescription(sentence);
     }
     await fireEvent.keyDown(nameField(), { key: "Enter" });
-    expect(k.api.PATCH).not.toHaveBeenCalled();
+    expect(k.api.updateWorkspace).not.toHaveBeenCalled();
     expect(workspaceDialog.current).toBeNull();
   });
 
@@ -82,9 +85,9 @@ describe("WorkspaceSettings", () => {
     const { k } = setup();
     await fireEvent.input(nameField(), { target: { value: "releases" } });
     await fireEvent.keyDown(nameField(), { key: "Enter", isComposing: true });
-    expect(k.api.PATCH).not.toHaveBeenCalled();
+    expect(k.api.updateWorkspace).not.toHaveBeenCalled();
     await fireEvent.keyDown(nameField(), { key: "Enter" });
-    await waitFor(() => expect(k.api.PATCH).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(k.api.updateWorkspace).toHaveBeenCalledTimes(1));
   });
 
   it("refuses a name another workspace of the store has, in red, and cannot save", async () => {
@@ -95,7 +98,7 @@ describe("WorkspaceSettings", () => {
     expect(nameField()).toHaveAttribute("aria-invalid", "true");
     expect(saveButton()).toBeDisabled();
     await fireEvent.keyDown(nameField(), { key: "Enter" });
-    expect(k.api.PATCH).not.toHaveBeenCalled();
+    expect(k.api.updateWorkspace).not.toHaveBeenCalled();
     expect(screen.getAllByRole("button", { name: /コマンドをコピー/ })[0]).toBeDisabled();
   });
 
@@ -108,7 +111,7 @@ describe("WorkspaceSettings", () => {
 
   it("shows the words of the server when it refuses", async () => {
     const { k } = setup();
-    k.api.PATCH.mockImplementation(() =>
+    k.api.updateWorkspace.mockImplementation(() =>
       fail(409, "workspace.taken", {}, "a workspace named x exists"),
     );
     await fireEvent.input(nameField(), { target: { value: "x" } });

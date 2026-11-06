@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliInbox } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import {
@@ -56,9 +55,7 @@
   async function load(): Promise<void> {
     const mine = ++seq;
     try {
-      const list = await unwrap(
-        c.api.GET("/api/notifications", { params: { query: { all: true } } }),
-      );
+      const list = await c.api.listNotifications({ all: true });
       if (mine !== seq) return;
       items = list ?? [];
       failure = null;
@@ -142,26 +139,19 @@
 
   const read = (n: Notification) =>
     run(n.ulid, async () => {
-      await unwrap(
-        c.api.PATCH("/api/notifications/{id}", {
-          params: { path: { id: n.ulid } },
-          body: { read: true },
-        }),
-      );
+      await c.api.updateNotification(n.ulid, { read: true });
     });
 
   const readAll = () =>
     run("all", async () => {
-      await unwrap(c.api.POST("/api/notifications/read", { body: { all: true } }));
+      await c.api.readNotifications({ all: true });
     });
 
   const revert = (n: Notification) =>
     offOf(n) !== null
       ? undefined
       : run(n.ulid, async () => {
-          const r = await unwrap(
-            c.api.POST("/api/notifications/{id}/revert", { params: { path: { id: n.ulid } } }),
-          );
+          const r = await c.api.revertNotification(n.ulid);
           const id = did.current(n.store, taskOf(n)?.id || r.task.id);
           toast({ message: `${id} の ${overwrittenField(n)} を自分の値に戻しました` });
         });

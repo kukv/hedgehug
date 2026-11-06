@@ -1,9 +1,9 @@
-import { type Api, type Schemas, unwrap } from "./api/client";
+import type { Api, Schemas } from "./api/client";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 
-export type SchemaView = Schemas["SchemaView"];
-export type KindDef = Schemas["KindDef"];
+export type SchemaView = Schemas.SchemaView;
+export type KindDef = Schemas.KindDef;
 
 // The name that stands for "no parent" in the parents of a kind.
 const ROOT = "root";
@@ -54,7 +54,8 @@ export class SchemaCache {
     if (running) return running;
     const seq = (this.seqs.get(store) ?? 0) + 1;
     this.seqs.set(store, seq);
-    const p = unwrap(this.api.GET("/api/schema", { params: { query: { store } } }))
+    const p = this.api
+      .getSchema({ store })
       .then((s) => {
         // An older fetch that ends after a newer one has started gives way to it.
         if (this.seqs.get(store) !== seq) {

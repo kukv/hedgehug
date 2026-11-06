@@ -23,7 +23,7 @@ function mount(statuses: SyncStatus[], post = vi.fn(), props: { store?: string }
     start() {},
     stop() {},
   };
-  return { post, ...renderWithCore(SyncCard, props, { conn, api: { POST: post } }) };
+  return { post, ...renderWithCore(SyncCard, props, { conn, api: { sync: post } }) };
 }
 
 beforeEach(() => {
@@ -120,32 +120,29 @@ describe("SyncCard", () => {
     expect(getByText("5 コミット")).toBeTruthy();
   });
 
-  it("今すぐ同期で POST /api/sync を呼び、結果をトーストに出す", async () => {
-    const post = vi.fn().mockResolvedValue({
-      data: [
-        {
-          store: "a",
-          merges: 1,
-          pushed: [],
-          overwritten: [],
-          repaired: [],
-          invalid: [],
-          notices: [],
-          warnings: [],
-        },
-      ],
-      response: new Response(),
-    });
+  it("今すぐ同期で sync API を呼び、結果をトーストに出す", async () => {
+    const post = vi.fn().mockResolvedValue([
+      {
+        store: "a",
+        merges: 1,
+        pushed: [],
+        overwritten: [],
+        repaired: [],
+        invalid: [],
+        notices: [],
+        warnings: [],
+      },
+    ]);
     const { getByRole } = mount([status({ store: "a", unpushed: 0 })], post);
     await fireEvent.click(getByRole("button", { name: /今すぐ同期/ }));
     await vi.waitFor(() => expect(toasts.list).toHaveLength(1));
-    expect(post).toHaveBeenCalledWith("/api/sync");
+    expect(post).toHaveBeenCalledWith();
     expect(toasts.list[0]?.message).toBe("同期しました · マージ 1 件");
   });
 
   it("⇧⌘S（Linux は Ctrl+Shift+S）でも同期する", async () => {
     vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
-    const post = vi.fn().mockResolvedValue({ data: [], response: new Response() });
+    const post = vi.fn().mockResolvedValue([]);
     mount([status({ store: "a", unpushed: 0 })], post);
     await fireEvent.keyDown(window, { key: "S", ctrlKey: true, shiftKey: true });
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -165,11 +162,11 @@ describe("SyncCard", () => {
     const { getByRole } = mount([status({ store: "a", unpushed: 0 })], post);
     await fireEvent.click(getByRole("button", { name: /今すぐ同期/ }));
     expect((getByRole("button", { name: /同期中/ }) as HTMLButtonElement).disabled).toBe(true);
-    resolve({ data: [], response: new Response() });
+    resolve([]);
   });
 
   it("store を渡すと、その Store の状態だけを出し、同期もその Store だけにする", async () => {
-    const post = vi.fn().mockResolvedValue({ data: [], response: new Response() });
+    const post = vi.fn().mockResolvedValue([]);
     const { getByText, queryByText, getByRole } = mount(
       [
         status({ store: "a", unpushed: 0 }),
@@ -182,12 +179,12 @@ describe("SyncCard", () => {
     expect(queryByText("同期済み")).toBeNull();
     await fireEvent.click(getByRole("button", { name: /今すぐ同期/ }));
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-    expect(post).toHaveBeenCalledWith("/api/sync", { params: { query: { store: "b" } } });
+    expect(post).toHaveBeenCalledWith({ store: "b" });
   });
 
   it("store を渡したカードは ⇧⌘S を登録しない（画面の全体のキーは1つだけ）", async () => {
     vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
-    const post = vi.fn().mockResolvedValue({ data: [], response: new Response() });
+    const post = vi.fn().mockResolvedValue([]);
     mount([status({ store: "a", unpushed: 0 })], post, { store: "a" });
     await fireEvent.keyDown(window, { key: "S", ctrlKey: true, shiftKey: true });
     await Promise.resolve();

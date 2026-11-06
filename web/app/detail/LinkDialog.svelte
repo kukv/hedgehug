@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliLink, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -34,12 +33,9 @@
     busy = true;
     error = "";
     try {
-      const r = await unwrap(
-        api.POST("/api/tasks/{id}/links", {
-          params: { path: { id: task.ulid }, query: { store: task.store } },
-          body: kind === "pr" ? { pr: typed } : { issue: typed },
-        }),
-      );
+      const r = await api.linkTask(task.ulid, kind === "pr" ? { pr: typed } : { issue: typed }, {
+        store: task.store,
+      });
       cache.applyWrite({ task: r.task, commit: r.commit });
       onclose();
     } catch (err) {

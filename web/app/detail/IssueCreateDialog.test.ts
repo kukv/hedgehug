@@ -10,7 +10,7 @@ function setup(repos: string[], post = vi.fn(() => ok({ task: {}, commit: "c1", 
   renderWithCore(
     IssueCreateDialog,
     { task: { ulid: "T1", id: "REL-2", store: "shared", repos }, onclose },
-    { api: { POST: post }, cache: { applyWrite, subscribe: () => () => {} } },
+    { api: { createIssue: post }, cache: { applyWrite, subscribe: () => () => {} } },
   );
   return { post, onclose, applyWrite };
 }
@@ -22,10 +22,7 @@ describe("IssueCreateDialog", () => {
     expect(screen.getByRole("dialog").textContent).toContain("hh issue REL-2 --repo org-a/web");
     await fireEvent.click(screen.getByRole("button", { name: "作る" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith("/api/tasks/{id}/issue", {
-      params: { path: { id: "T1" }, query: { store: "shared" } },
-      body: { repo: "org-a/web" },
-    });
+    expect(post).toHaveBeenCalledWith("T1", { repo: "org-a/web" }, { store: "shared" });
     expect(applyWrite).toHaveBeenCalledWith({ task: {}, commit: "c1" });
   });
 

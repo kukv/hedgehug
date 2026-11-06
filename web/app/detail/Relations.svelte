@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type ShowView, type TaskView, unwrap } from "../../core/api/client";
+  import type { ShowView, TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import StatusIcon from "../icons/StatusIcon.svelte";
@@ -73,12 +73,7 @@
     busy = true;
     error = "";
     try {
-      const r = await unwrap(
-        api.PATCH("/api/tasks/{id}", {
-          params: { path: { id: show.ulid }, query: { store: show.store } },
-          body,
-        }),
-      );
+      const r = await api.updateTask(show.ulid, body, { store: show.store });
       cache.applyWrite({ task: r.task, commit: r.commit });
       return true;
     } catch (e) {

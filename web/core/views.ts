@@ -1,12 +1,12 @@
-import { type Api, ApiError, type Schemas, unwrap } from "./api/client";
+import { type Api, ApiError, type Schemas } from "./api/client";
 import type { TaskCache } from "./cache";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 import type { StoreDirectory, StoreTone } from "./stores";
 
 export type Layout = "tree" | "kanban" | "table" | "gantt";
-export type SavedView = Schemas["SavedView"];
-export type ViewSaveBody = Schemas["ViewSaveInputBody"];
+export type SavedView = Schemas.SavedView;
+export type ViewSaveBody = Schemas.ViewSaveInputBody;
 
 export type KanbanSettings = {
   columns: "status" | "category";
@@ -191,9 +191,7 @@ export class ViewDirectory {
 
   // save creates the view, or changes the settings body holds (PUT: what is not sent stays).
   async save(store: string, name: string, body: ViewSaveBody): Promise<SavedView> {
-    const r = await unwrap(
-      this.api.PUT("/api/views/{name}", { params: { path: { name }, query: { store } }, body }),
-    );
+    const r = await this.api.saveView(name, body, { store });
     this.cache.noteOwnCommit(r.commit);
     this.apply(store, (vs) => [...vs.filter((v) => v.name !== name), r.view]);
     return r.view;
@@ -217,27 +215,18 @@ export class ViewDirectory {
   }
 
   private patch(store: string, name: string, body: ViewSaveBody) {
-    return unwrap(
-      this.api.PATCH("/api/views/{name}", { params: { path: { name }, query: { store } }, body }),
-    );
+    return this.api.updateView(name, body, { store });
   }
 
   async rename(store: string, name: string, to: string): Promise<SavedView> {
-    const r = await unwrap(
-      this.api.PATCH("/api/views/{name}", {
-        params: { path: { name }, query: { store } },
-        body: { name: to },
-      }),
-    );
+    const r = await this.api.updateView(name, { name: to }, { store });
     this.cache.noteOwnCommit(r.commit);
     this.apply(store, (vs) => [...vs.filter((v) => v.name !== name && v.name !== to), r.view]);
     return r.view;
   }
 
   async remove(store: string, name: string): Promise<void> {
-    const r = await unwrap(
-      this.api.DELETE("/api/views/{name}", { params: { path: { name }, query: { store } } }),
-    );
+    const r = await this.api.removeView(name, { store });
     this.cache.noteOwnCommit(r.commit);
     this.apply(store, (vs) => vs.filter((v) => v.name !== name));
   }
@@ -266,7 +255,7 @@ export class ViewDirectory {
     const seq = this.bump(store);
     let views: SavedView[] | null = null;
     try {
-      views = (await unwrap(this.api.GET("/api/views", { params: { query: { store } } }))) ?? [];
+      views = (await this.api.listViews({ store })) ?? [];
     } catch {
       views = null;
     }

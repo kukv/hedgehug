@@ -57,7 +57,7 @@ vi.mock("@tanstack/svelte-virtual", () => ({
 
 import TreeView from "./TreeView.svelte";
 
-const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+const ok = (data: unknown) => Promise.resolve(data);
 
 function setup(
   over: {
@@ -120,7 +120,7 @@ function setup(
     dispose() {},
   }));
   const seen: (() => void)[] = [];
-  const api = { POST: vi.fn(), PATCH: vi.fn() };
+  const api = { createTask: vi.fn(), moveTask: vi.fn(), updateTask: vi.fn() };
   const core = {
     api,
     cache: {
@@ -240,10 +240,8 @@ describe("TreeView", () => {
 
   it("keeps the title typed before the schema is read, and adds the task once it is", async () => {
     const { api, loadSchema } = setup({ noSchema: true });
-    api.POST.mockImplementation(async (path: string) =>
-      path === "/api/tasks"
-        ? ok({ task: task("N1", "task", "P", { id: "REL-9", title: "早い" }) })
-        : ok({}),
+    api.createTask.mockImplementation(async () =>
+      ok({ task: task("N1", "task", "P", { id: "REL-9", title: "早い" }) }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByRole("button", { name: /タスクを追加/ }));
@@ -252,21 +250,23 @@ describe("TreeView", () => {
     expect(input).toHaveAttribute("placeholder", "読み込み中…");
     await fireEvent.input(input, { target: { value: "早い" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.createTask).not.toHaveBeenCalled();
     expect(input).toHaveValue("早い");
 
     loadSchema();
     await waitFor(() => expect(input).not.toHaveAttribute("readonly"));
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalledWith("/api/tasks", expect.anything()));
+    await waitFor(() =>
+      expect(api.createTask).toHaveBeenCalledWith(expect.anything(), expect.anything()),
+    );
   });
 
   it("runs a key pressed before the schema is read once it is, in the order pressed", async () => {
     const { api, loadSchema } = setup({ noSchema: true });
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("T3", "task", "P", { status: "done" }), commit: "c3" }),
     );
-    api.POST.mockResolvedValue(ok({ task: task("T3", "task", "E1"), commit: "c4" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("T3", "task", "E1"), commit: "c4" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen
       .getByText("Web のクライアントを更新")
@@ -274,19 +274,13 @@ describe("TreeView", () => {
     await fireEvent.click(row);
     await fireEvent.keyDown(row, { key: " " });
     await fireEvent.keyDown(row, { key: "Tab" });
-    expect(api.PATCH).not.toHaveBeenCalled();
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
+    expect(api.moveTask).not.toHaveBeenCalled();
 
     loadSchema();
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "T3" }, query: { store: "shared" } },
-      body: { status: "done" },
-    });
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
-      params: { path: { id: "T3" }, query: { store: "shared" } },
-      body: { parent: "E1" },
-    });
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalled());
+    expect(api.updateTask).toHaveBeenCalledWith("T3", { status: "done" }, { store: "shared" });
+    expect(api.moveTask).toHaveBeenCalledWith("T3", { parent: "E1" }, { store: "shared" });
   });
 
   it("does not wait for the schema for the keys that do not need it", async () => {
@@ -309,7 +303,7 @@ describe("TreeView", () => {
     await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
     await fireEvent.keyDown(row, { key: " " });
     expect(h.toast).toHaveBeenCalledTimes(2);
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
   });
 
   it("folds a row with its chevron", async () => {
@@ -321,10 +315,8 @@ describe("TreeView", () => {
 
   it("adds a task below the selected row with Enter and puts it in place", async () => {
     const { api } = setup();
-    api.POST.mockImplementation(async (path: string) =>
-      path === "/api/tasks"
-        ? ok({ task: task("N1", "task", "P", { id: "REL-20", title: "新しい" }), commit: "c1" })
-        : ok({ task: task("N1", "task", "P"), commit: "c2" }),
+    api.createTask.mockImplementation(async () =>
+      ok({ task: task("N1", "task", "P", { id: "REL-20", title: "新しい" }), commit: "c1" }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
@@ -333,17 +325,18 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "新しい" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledTimes(1);
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { store: "shared" } },
-      body: { title: "新しい", kind: "task", parent: "P", after: "E1" },
-    });
+    await waitFor(() => expect(api.createTask).toHaveBeenCalled());
+    expect(api.createTask).toHaveBeenCalledTimes(1);
+    expect(api.moveTask).not.toHaveBeenCalled();
+    expect(api.createTask).toHaveBeenCalledWith(
+      { title: "新しい", kind: "task", parent: "P", after: "E1" },
+      { store: "shared" },
+    );
   });
 
   it("completes the selected task with Space", async () => {
     const { api } = setup();
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("T3", "task", "P", { status: "done" }), commit: "c3" }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
@@ -352,11 +345,8 @@ describe("TreeView", () => {
       .closest('[role="treeitem"]') as HTMLElement;
     await fireEvent.click(row);
     await fireEvent.keyDown(row, { key: " " });
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "T3" }, query: { store: "shared" } },
-      body: { status: "done" },
-    });
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
+    expect(api.updateTask).toHaveBeenCalledWith("T3", { status: "done" }, { store: "shared" });
   });
 
   it("does not run the keys while typing in the filter", async () => {
@@ -368,7 +358,7 @@ describe("TreeView", () => {
     await fireEvent.click(row);
     const filter = screen.getByLabelText("フィルタ（hh ls と同じクエリ）");
     await fireEvent.keyDown(filter, { key: " " });
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
   });
 
   it("asks for the base query plus the typed query, and shows the hh ls line", async () => {
@@ -412,7 +402,7 @@ describe("TreeView", () => {
     const chev = screen.getByRole("button", { name: "折りたたむ: API v2 への移行" });
     await fireEvent.keyDown(chev, { key: " " });
     await fireEvent.keyDown(chev, { key: "Enter" });
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
     expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
   });
 
@@ -451,7 +441,7 @@ describe("TreeView", () => {
 
   it("adds right below the selected row even when it is the last one shown, in one request", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(ok({ task: task("N1", "task", "P"), commit: "c1" }));
+    api.createTask.mockResolvedValue(ok({ task: task("N1", "task", "P"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen
       .getByText("Web のクライアントを更新")
@@ -461,13 +451,13 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "直下" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledTimes(1);
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { store: "shared" } },
-      body: { title: "直下", kind: "task", parent: "P", after: "T3" },
-    });
-    expect(api.POST).not.toHaveBeenCalledWith("/api/tasks/{id}/move", expect.anything());
+    await waitFor(() => expect(api.createTask).toHaveBeenCalled());
+    expect(api.createTask).toHaveBeenCalledTimes(1);
+    expect(api.createTask).toHaveBeenCalledWith(
+      { title: "直下", kind: "task", parent: "P", after: "T3" },
+      { store: "shared" },
+    );
+    expect(api.moveTask).not.toHaveBeenCalled();
   });
 
   it("leaves the Esc of a conversion to the input method, and closes the input on any other Esc", async () => {
@@ -505,7 +495,7 @@ describe("TreeView", () => {
   it("does not open the input again when a row was clicked while the task was being made", async () => {
     const { api } = setup();
     let answer: (v: unknown) => void = () => {};
-    api.POST.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    api.createTask.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
     const other = screen
@@ -516,7 +506,7 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "遅い" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    await waitFor(() => expect(api.createTask).toHaveBeenCalled());
     await fireEvent.click(other);
     await waitFor(() => expect(input).not.toBeInTheDocument());
 
@@ -530,7 +520,7 @@ describe("TreeView", () => {
   it("does not open the input again when Esc closed it while the task was being made", async () => {
     const { api } = setup();
     let answer: (v: unknown) => void = () => {};
-    api.POST.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    api.createTask.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
     await fireEvent.click(row);
@@ -538,7 +528,7 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "遅い" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    await waitFor(() => expect(api.createTask).toHaveBeenCalled());
     await fireEvent.keyDown(input, { key: "Escape" });
     await waitFor(() => expect(row).toHaveFocus());
 
@@ -556,67 +546,64 @@ describe("TreeView", () => {
       await fireEvent.click(row);
       return { ...t, row };
     }
-    const moved = (to: object) => ({
-      params: { path: { id: "M3" }, query: { store: "shared" } },
-      body: to,
-    });
+    const moved = (to: object) => ["M3", to, { store: "shared" }] as const;
 
     it("sends each press in turn, deciding on the rows the move before it left", async () => {
       const { api, row, reorder } = await start({ many: 4 });
-      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      api.moveTask.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
-      expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M2" }));
+      await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(1));
+      expect(api.moveTask).toHaveBeenLastCalledWith(...moved({ before: "M2" }));
       // The next one waits until the tree shows the first move.
       await new Promise((r) => setTimeout(r, 60));
-      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(api.moveTask).toHaveBeenCalledTimes(1);
       reorder(["M0", "M1", "M3", "M2"]);
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-      expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M1" }));
+      await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(2));
+      expect(api.moveTask).toHaveBeenLastCalledWith(...moved({ before: "M1" }));
       reorder(["M0", "M3", "M1", "M2"]);
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
-      expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M0" }));
+      await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(3));
+      expect(api.moveTask).toHaveBeenLastCalledWith(...moved({ before: "M0" }));
     });
 
     it("sends the next press at once after a move that changed nothing", async () => {
       const { api, row, core } = await start({ many: 4 });
-      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: null }));
+      api.moveTask.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: null }));
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(2));
       expect(core.cache.refreshTrees).not.toHaveBeenCalled();
     });
 
     it("counts a tree that cannot be read again as a failure, once, and drops the rest", async () => {
       const { api, row, core } = await start({ many: 4 });
-      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      api.moveTask.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
       vi.mocked(core.cache.refreshTrees).mockRejectedValueOnce(new Error("読めません"));
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
       await new Promise((r) => setTimeout(r, 60));
-      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(api.moveTask).toHaveBeenCalledTimes(1);
       expect(h.toast).toHaveBeenCalledTimes(1);
     });
 
     it("sends nothing more, and says nothing, once the view is gone", async () => {
       const { api, row, reorder } = await start({ many: 4 });
-      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      api.moveTask.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(1));
       cleanup();
       reorder(["M0", "M1", "M3", "M2"]);
       await new Promise((r) => setTimeout(r, 60));
-      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(api.moveTask).toHaveBeenCalledTimes(1);
       expect(h.toast).not.toHaveBeenCalled();
     });
 
     it("drops the moves still waiting when one fails, and says so once", async () => {
       const { api, row, reorder } = await start({ many: 4 });
-      api.POST.mockImplementation(
+      api.moveTask.mockImplementation(
         () => new Promise((_, reject) => setTimeout(() => reject(new Error("書き込めません")), 30)),
       );
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
@@ -625,20 +612,20 @@ describe("TreeView", () => {
       await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
       reorder(["M0", "M1", "M3", "M2"]);
       await new Promise((r) => setTimeout(r, 60));
-      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(api.moveTask).toHaveBeenCalledTimes(1);
       expect(h.toast).toHaveBeenCalledTimes(1);
     });
 
     it("drops the moves still waiting when the selection leaves the row", async () => {
       const { api, row, reorder } = await start({ many: 4 });
-      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      api.moveTask.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(1));
       selection.set("M0");
       reorder(["M0", "M1", "M3", "M2"]);
       await new Promise((r) => setTimeout(r, 60));
-      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(api.moveTask).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -657,7 +644,7 @@ describe("TreeView", () => {
 
   it("keeps the title and the focus when the task cannot be made", async () => {
     const { api } = setup();
-    api.POST.mockRejectedValue(new Error("書き込めません"));
+    api.createTask.mockRejectedValue(new Error("書き込めません"));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
     await fireEvent.click(row);
@@ -763,7 +750,7 @@ describe("TreeView", () => {
 
   it("keeps the input where it was until the new task is in the tree", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(
+    api.createTask.mockResolvedValue(
       ok({ task: task("N1", "task", "P", { id: "REL-20", title: "一件目" }), commit: "c1" }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
@@ -773,7 +760,7 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "一件目" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.createTask).toHaveBeenCalledTimes(1));
     // the tree has not read the new task yet: the input stays below the epic and its child
     await waitFor(() => expect(input).toHaveValue(""));
     const next = screen.getByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
@@ -826,7 +813,7 @@ describe("TreeView", () => {
 
   it("opens the new parent only once the task has moved", async () => {
     const { api } = setup();
-    api.POST.mockRejectedValueOnce(new Error("書き込めません"));
+    api.moveTask.mockRejectedValueOnce(new Error("書き込めません"));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByRole("button", { name: "折りたたむ: API v2 への移行" }));
     expect(screen.queryByText("移行ガイドを書く")).toBeNull();
@@ -837,14 +824,14 @@ describe("TreeView", () => {
     await fireEvent.keyDown(row, { key: "Tab" }); // under the epic; it fails
     await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
     expect(screen.queryByText("移行ガイドを書く")).toBeNull();
-    api.POST.mockResolvedValueOnce(ok({ task: task("T3", "task", "E1"), commit: "c9" }));
+    api.moveTask.mockResolvedValueOnce(ok({ task: task("T3", "task", "E1"), commit: "c9" }));
     await fireEvent.keyDown(row, { key: "Tab" });
     expect(await screen.findByText("移行ガイドを書く")).toBeInTheDocument();
   });
 
   it("sets the status chosen in the S menu", async () => {
     const { api } = setup();
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("T3", "task", "P", { status: "doing" }), commit: "c3" }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
@@ -854,16 +841,13 @@ describe("TreeView", () => {
     await fireEvent.click(row);
     await fireEvent.keyDown(row, { key: "s" });
     await fireEvent.click(await screen.findByRole("menuitem", { name: /doing/ }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "T3" }, query: { store: "shared" } },
-      body: { status: "doing" },
-    });
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
+    expect(api.updateTask).toHaveBeenCalledWith("T3", { status: "doing" }, { store: "shared" });
   });
 
   it("sets the kind chosen in the K menu", async () => {
     const { api } = setup();
-    api.PATCH.mockResolvedValue(
+    api.updateTask.mockResolvedValue(
       ok({ task: task("T3", "bug", "P", { status: "todo" }), commit: "c3" }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
@@ -873,11 +857,8 @@ describe("TreeView", () => {
     await fireEvent.click(row);
     await fireEvent.keyDown(row, { key: "k" });
     await fireEvent.click(await screen.findByRole("menuitem", { name: /バグ/ }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
-      params: { path: { id: "T3" }, query: { store: "shared" } },
-      body: { kind: "bug" },
-    });
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
+    expect(api.updateTask).toHaveBeenCalledWith("T3", { kind: "bug" }, { store: "shared" });
   });
 
   it("opens the move dialog from the … menu of a row", async () => {
@@ -956,7 +937,7 @@ describe("TreeView", () => {
     await fireEvent.keyDown(row, { key: " " });
     await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
     expect(h.toast.mock.calls[0]?.[0].message).toContain("完了にできません");
-    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
   });
 
   it("shows the blocker's ID on a task the server says is blocked", () => {
@@ -1002,8 +983,9 @@ describe("TreeView: a read-only Store", () => {
       await fireEvent.keyDown(row, key);
       await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
       expect(h.toast.mock.calls[0]?.[0].message).toBe(`この Store は閲覧のみです（${WHY}）`);
-      expect(api.POST).not.toHaveBeenCalled();
-      expect(api.PATCH).not.toHaveBeenCalled();
+      expect(api.createTask).not.toHaveBeenCalled();
+      expect(api.moveTask).not.toHaveBeenCalled();
+      expect(api.updateTask).not.toHaveBeenCalled();
       expect(screen.queryByRole("textbox", { name: "新しいタスクのタイトル" })).toBeNull();
       expect(screen.queryByRole("menu")).toBeNull();
     },

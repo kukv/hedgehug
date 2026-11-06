@@ -26,7 +26,7 @@ const kinds = [
   { name: "bug", label: "バグ", role: "work", parents: ["root", "project", "epic", "story"] },
   { name: "note", label: "メモ", role: "work", parents: null },
   { name: "nowhere", role: "work", parents: [] },
-] as Schemas["KindDef"][];
+] as Schemas.KindDef[];
 
 const schema: SchemaView = {
   statuses: [

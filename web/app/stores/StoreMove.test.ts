@@ -66,13 +66,12 @@ function setup(opts: { plan?: unknown; move?: unknown; qualify?: boolean } = {})
     qualify: opts.qualify,
   });
   const routes = {
-    plan: vi.fn<(init: unknown) => Promise<unknown>>(() => ok(opts.plan ?? planOf())),
-    move: vi.fn<(init: unknown) => Promise<unknown>>(() => ok(opts.move ?? result)),
+    plan: vi.fn<(id: string, body: unknown) => Promise<unknown>>(() => ok(opts.plan ?? planOf())),
+    move: vi.fn<(id: string, body: unknown) => Promise<unknown>>(() => ok(opts.move ?? result)),
   };
-  k.api.POST.mockImplementation((path: string, init: unknown) =>
-    path.endsWith("/plan") ? routes.plan(init) : routes.move(init),
-  );
-  k.api.GET.mockImplementation(() => ok({ tasks: [] }));
+  k.api.planMoveStore.mockImplementation((id: string, body: unknown) => routes.plan(id, body));
+  k.api.moveStore.mockImplementation((id: string, body: unknown) => routes.move(id, body));
+  k.api.listTasks.mockImplementation(() => ok({ tasks: [] }));
   const onclose = vi.fn();
   return { k, onclose, routes, ...mount(StoreMove, { task, onclose }, k) };
 }
@@ -115,10 +114,7 @@ describe("StoreMove", () => {
     const { routes } = setup();
     await pick("second");
     await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(1));
-    expect(routes.plan).toHaveBeenCalledWith({
-      params: { path: { id: "U1" } },
-      body: { to: "second" },
-    });
+    expect(routes.plan).toHaveBeenCalledWith("U1", { to: "second" });
     expect(await screen.findByText("移動先で変わること")).toBeVisible();
     expect(screen.getByText("移動先の a で振り直します")).toBeVisible();
     expect(screen.getByText("REL-0 元の親 から外れて、a のルートに置きます")).toBeVisible();
@@ -197,7 +193,7 @@ describe("StoreMove", () => {
       await screen.findByText("移動先で変わること");
       expect(screen.getByText("a（SC）")).toBeVisible();
       expect(screen.queryByRole("combobox", { name: "second のワークスペース" })).toBeNull();
-      expect(routes.plan.mock.calls[0]?.[0]).toMatchObject({ body: { to: "second" } });
+      expect(routes.plan.mock.calls[0]?.[1]).toMatchObject({ to: "second" });
     });
 
     it("is picked from a list when the Store has more, and no plan is asked for before", async () => {
@@ -215,10 +211,7 @@ describe("StoreMove", () => {
 
       await fireEvent.change(select, { target: { value: "web" } });
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(1));
-      expect(routes.plan).toHaveBeenCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "multi", workspace: "web" },
-      });
+      expect(routes.plan).toHaveBeenCalledWith("U1", { to: "multi", workspace: "web" });
       expect(cli()).toHaveTextContent("hh mv REL-1 --store multi --workspace web --yes");
     });
   });
@@ -229,31 +222,20 @@ describe("StoreMove", () => {
       await pick("second");
       await screen.findByText("移動先で変わること");
       const picker = screen.getByRole("combobox", { name: "親を選ぶ" });
-      k.api.GET.mockImplementation(() =>
+      k.api.listTasks.mockImplementation(() =>
         ok({ tasks: [taskView({ ulid: "UQ", id: "SC-4", title: "新しい親", store: "second" })] }),
       );
       await fireEvent.input(picker, { target: { value: "新しい" } });
       await fireEvent.click(await screen.findByRole("option", { name: /SC-4/ }, { timeout: 2000 }));
-      expect(k.api.GET).toHaveBeenCalledWith(
-        "/api/tasks",
-        expect.objectContaining({
-          params: { query: expect.objectContaining({ store: "second" }) },
-        }),
-      );
+      expect(k.api.listTasks).toHaveBeenCalledWith(expect.objectContaining({ store: "second" }));
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
-      expect(routes.plan).toHaveBeenLastCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "second", parent: "UQ" },
-      });
+      expect(routes.plan).toHaveBeenLastCalledWith("U1", { to: "second", parent: "UQ" });
       expect(cli()).toHaveTextContent("hh mv REL-1 --store second --parent SC-4 --yes");
       expect(screen.getByRole("dialog")).toHaveTextContent("SC-4 新しい親");
 
       await fireEvent.click(screen.getByRole("button", { name: "外す" }));
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(3));
-      expect(routes.plan).toHaveBeenLastCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "second" },
-      });
+      expect(routes.plan).toHaveBeenLastCalledWith("U1", { to: "second" });
     });
 
     it("sets the workspace to its own, and another workspace or another Store drops it", async () => {
@@ -262,7 +244,7 @@ describe("StoreMove", () => {
       });
       await pick("multi");
       const select = screen.getByRole("combobox", { name: "multi のワークスペース" });
-      k.api.GET.mockImplementation(() =>
+      k.api.listTasks.mockImplementation(() =>
         ok({
           tasks: [
             taskView({
@@ -283,9 +265,10 @@ describe("StoreMove", () => {
         await screen.findByRole("option", { name: /WEB-4/ }, { timeout: 2000 }),
       );
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(1));
-      expect(routes.plan).toHaveBeenCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "multi", workspace: "web", parent: "UQ" },
+      expect(routes.plan).toHaveBeenCalledWith("U1", {
+        to: "multi",
+        workspace: "web",
+        parent: "UQ",
       });
       expect(select).toHaveValue("web");
 
@@ -294,17 +277,14 @@ describe("StoreMove", () => {
       expect(screen.getByRole("dialog")).toHaveTextContent("WEB-4 親");
       await fireEvent.change(select, { target: { value: "api" } });
       expect(screen.queryByRole("button", { name: "外す" })).toBeNull();
-      expect(routes.plan).toHaveBeenLastCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "multi", workspace: "api" },
-      });
+      expect(routes.plan).toHaveBeenLastCalledWith("U1", { to: "multi", workspace: "api" });
     });
 
     it("is dropped, with the workspace, when another Store is picked", async () => {
       const { k, routes } = setup();
       await pick("second");
       await screen.findByText("移動先で変わること");
-      k.api.GET.mockImplementation(() =>
+      k.api.listTasks.mockImplementation(() =>
         ok({ tasks: [taskView({ ulid: "UQ", id: "SC-4", title: "親", store: "second" })] }),
       );
       await fireEvent.input(screen.getByRole("combobox", { name: "親を選ぶ" }), {
@@ -312,12 +292,7 @@ describe("StoreMove", () => {
       });
       await fireEvent.click(await screen.findByRole("option", { name: /SC-4/ }, { timeout: 2000 }));
       await pick("hid");
-      await waitFor(() =>
-        expect(routes.plan).toHaveBeenLastCalledWith({
-          params: { path: { id: "U1" } },
-          body: { to: "hid" },
-        }),
-      );
+      await waitFor(() => expect(routes.plan).toHaveBeenLastCalledWith("U1", { to: "hid" }));
       expect(screen.queryByRole("button", { name: "外す" })).toBeNull();
     });
 
@@ -352,7 +327,7 @@ describe("StoreMove", () => {
 
   it("leaves out the first half of the parent when the task has none", async () => {
     const k = makeCore({ workspaces: spaces, storeItems: stores, tasks: [] });
-    k.api.POST.mockImplementation(() => ok(planOf()));
+    k.api.planMoveStore.mockImplementation(() => ok(planOf()));
     mount(StoreMove, { task: { ...task, parent: null }, onclose: vi.fn() }, k);
     await pick("second");
     expect(await screen.findByText("a のルートに置きます")).toBeVisible();
@@ -368,7 +343,7 @@ describe("StoreMove", () => {
     );
     await pick("hid");
     expect(await screen.findByText("移動先の h で振り直します")).toBeVisible();
-    first({ data: planOf(), response: new Response(null, { status: 200 }) });
+    first(planOf());
     // let the answer of the first ask run its course
     for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(screen.getByText("移動先の h で振り直します")).toBeVisible();
@@ -381,7 +356,7 @@ describe("StoreMove", () => {
     routes.plan.mockImplementationOnce(() => new Promise((res) => (answer = res)));
     await pick("second");
     expect(screen.getByRole("status")).toHaveTextContent("移動の予定を取得しています…");
-    answer({ data: planOf(), response: new Response(null, { status: 200 }) });
+    answer(planOf());
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("移動の予定を更新しました"),
     );
@@ -429,7 +404,7 @@ describe("StoreMove", () => {
     // nothing is dropped while it runs
     expect(radio(/^second/)).toBeChecked();
     expect(screen.queryByRole("alert")).toBeNull();
-    done(await fail(500, "internal"));
+    done(fail(500, "internal"));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "second は移動先に選べなくなりました",
     );
@@ -455,7 +430,7 @@ describe("StoreMove", () => {
     const asked = routes.plan.mock.calls.length;
     await fireEvent.click(radio(/^second/));
     expect(routes.plan.mock.calls.length).toBe(asked);
-    done({ data: result, response: new Response(null, { status: 200 }) });
+    done(result);
     await waitFor(() => expect(onclose).toHaveBeenCalled());
   });
 
@@ -481,10 +456,7 @@ describe("StoreMove", () => {
       );
       await fireEvent.click(within(group).getByRole("radio", { name: "持っていく" }));
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
-      expect(routes.plan).toHaveBeenLastCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "second", scoped: "carry" },
-      });
+      expect(routes.plan).toHaveBeenLastCalledWith("U1", { to: "second", scoped: "carry" });
       expect(await screen.findByText("status review")).toBeVisible();
       expect(screen.getByRole("button", { name: "移動" })).toBeEnabled();
       expect(cli()).toHaveTextContent("hh mv REL-1 --store second --scoped carry --yes");
@@ -514,10 +486,7 @@ describe("StoreMove", () => {
       );
       await fireEvent.click(within(after).getByRole("radio", { name: "持っていかない" }));
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(3));
-      expect(routes.plan).toHaveBeenLastCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "second", scoped: "drop" },
-      });
+      expect(routes.plan).toHaveBeenLastCalledWith("U1", { to: "second", scoped: "drop" });
       await waitFor(() => expect(screen.getByRole("button", { name: "移動" })).toBeEnabled());
       expect(screen.getAllByRole("radiogroup", { name })).toHaveLength(1);
       expect(screen.queryByText(/ここには移せません/)).toBeNull();
@@ -542,10 +511,7 @@ describe("StoreMove", () => {
       await screen.findByText("移動先で変わること");
       await fireEvent.click(screen.getByRole("button", { name: "移動" }));
       await waitFor(() => expect(onclose).toHaveBeenCalled());
-      expect(routes.move).toHaveBeenCalledWith({
-        params: { path: { id: "U1" } },
-        body: { to: "second", confirmed: planOf() },
-      });
+      expect(routes.move).toHaveBeenCalledWith("U1", { to: "second", confirmed: planOf() });
       expect(k.cache.refreshTrees).toHaveBeenCalled();
       expect(k.cache.applyWrite).not.toHaveBeenCalled();
       expect(k.cache.noteOwnCommit).not.toHaveBeenCalled();
@@ -575,8 +541,10 @@ describe("StoreMove", () => {
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
       await fireEvent.click(screen.getByRole("button", { name: "移動" }));
       await waitFor(() => expect(routes.move).toHaveBeenCalled());
-      expect(routes.move.mock.calls[0]?.[0]).toMatchObject({
-        body: { to: "multi", workspace: "web", scoped: "drop" },
+      expect(routes.move.mock.calls[0]?.[1]).toMatchObject({
+        to: "multi",
+        workspace: "web",
+        scoped: "drop",
       });
     });
 

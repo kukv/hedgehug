@@ -30,8 +30,8 @@ type Mount = {
 };
 
 function mount(m: Mount = {}) {
-  const GET = vi.fn((_path: string, _opts: unknown) => ok(m.found ?? []));
-  const POST = vi.fn((_path: string, _opts: unknown) =>
+  const discoverStores = vi.fn((_query: unknown) => ok(m.found ?? []));
+  const mountStores = vi.fn((_body: unknown) =>
     m.mount ? m.mount() : ok({ mounted: [], failed: [] }),
   );
   const accounts = {
@@ -44,8 +44,12 @@ function mount(m: Mount = {}) {
   };
   const stores = { reload: vi.fn(async () => {}), subscribe: () => () => {} };
   const ondone = vi.fn();
-  renderWithCore(Onboarding, { ondone }, { api: { GET, POST }, accounts, stores });
-  return { GET, POST, accounts, ondone };
+  renderWithCore(
+    Onboarding,
+    { ondone },
+    { api: { discoverStores, mountStores }, accounts, stores },
+  );
+  return { discoverStores, mountStores, accounts, ondone };
 }
 
 const next = () => screen.getByRole("button", { name: "次へ: Store を探す" }) as HTMLButtonElement;
@@ -118,16 +122,16 @@ describe("Onboarding: choosing and starting", () => {
   }
 
   it("goes to the Stores step, looks, and goes back", async () => {
-    const { GET } = await toDiscover({ found: [cand("hh-a")] });
+    const { discoverStores } = await toDiscover({ found: [cand("hh-a")] });
     expect(current()).toContain("Store を選ぶ");
     await screen.findByText("org/hh-a");
-    expect(GET).toHaveBeenCalledWith("/api/stores/discover", { params: { query: {} } });
+    expect(discoverStores).toHaveBeenCalledWith({});
     await tick(screen.getByRole("button", { name: "戻る" }));
     expect(screen.getByRole("heading", { name: "GitHub のアカウントを登録します" })).toBeTruthy();
   });
 
   it("mounts, then shows what was mounted, and starts", async () => {
-    const { POST, ondone } = await toDiscover({
+    const { mountStores, ondone } = await toDiscover({
       found: [cand("hh-a"), cand("hh-b", "read")],
       mount: () => ok({ mounted: ["hh-a", "hh-b"], failed: [] }),
     });
@@ -135,7 +139,7 @@ describe("Onboarding: choosing and starting", () => {
     await tick(screen.getByLabelText("org/hh-b を選ぶ"));
     await tick(screen.getByRole("button", { name: "マウントして次へ" }));
     await screen.findByRole("heading", { name: "Store を使い始めます" });
-    expect(POST).toHaveBeenCalledTimes(1);
+    expect(mountStores).toHaveBeenCalledTimes(1);
     expect(current()).toContain("はじめる");
     const list = screen.getByRole("list", { name: "マウントした Store" });
     expect(within(list).getByText("hh-a")).toBeTruthy();

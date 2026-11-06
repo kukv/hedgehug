@@ -64,24 +64,18 @@ const workspace = {
 
 function setup(opts: { readOnly?: string } = {}) {
   const e = emitter();
-  const reads: Record<string, unknown> = {
-    "/api/automations": rules,
-    "/api/automations/stats": stats,
-    "/api/automations/fields": fields,
-    "/api/github": github,
-  };
   const api = {
-    GET: vi.fn((path: string) => ok(reads[path])),
-    POST: vi.fn((path: string, o: { body: { dry_run?: boolean } }) =>
-      ok(
-        path === "/api/github/import"
-          ? { count: 3, skipped: 1, created: o.body.dry_run ? [] : ["A", "B", "C"], warnings: [] }
-          : [],
-      ),
+    listAutomations: vi.fn(() => ok(rules)),
+    getAutomationStats: vi.fn(() => ok(stats)),
+    getAutomationFields: vi.fn(() => ok(fields)),
+    getGithub: vi.fn(() => ok(github)),
+    addAutomation: vi.fn(() => ok([])),
+    importIssues: vi.fn((body: { dry_run?: boolean }) =>
+      ok({ count: 3, skipped: 1, created: body.dry_run ? [] : ["A", "B", "C"], warnings: [] }),
     ),
-    PUT: vi.fn(() => ok(rules)),
-    DELETE: vi.fn(() => ok(rules)),
-    PATCH: vi.fn(() => ok(fields)),
+    setAutomationEnabled: vi.fn(() => ok(rules)),
+    deleteAutomation: vi.fn(() => ok(rules)),
+    updateAutomationFields: vi.fn(() => ok(fields)),
   };
   renderWithCore(
     SettingsAutomations,
@@ -136,16 +130,17 @@ describe("SettingsAutomations", () => {
     const { api } = setup();
     await fireEvent.click(await screen.findByRole("checkbox", { name: "有効: pr-opened" }));
     await waitFor(() =>
-      expect(api.PUT).toHaveBeenCalledWith("/api/automations/{id}/enabled", {
-        params: { path: { id: "pr-opened" }, query: { store: "shared" } },
-        body: { enabled: false },
-      }),
+      expect(api.setAutomationEnabled).toHaveBeenCalledWith(
+        "pr-opened",
+        { enabled: false },
+        { store: "shared" },
+      ),
     );
   });
 
   it("puts the switch back when the write fails", async () => {
     const { api } = setup();
-    api.PUT.mockRejectedValueOnce(new Error("no"));
+    api.setAutomationEnabled.mockRejectedValueOnce(new Error("no"));
     const box = await screen.findByRole("checkbox", { name: "有効: pr-opened" });
     await fireEvent.click(box);
     await waitFor(() => expect(box).toBeChecked());
@@ -158,9 +153,7 @@ describe("SettingsAutomations", () => {
     expect(dialog.textContent).toContain("hh automation rm pr-review");
     await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
     await waitFor(() =>
-      expect(api.DELETE).toHaveBeenCalledWith("/api/automations/{id}", {
-        params: { path: { id: "pr-review" }, query: { store: "shared" } },
-      }),
+      expect(api.deleteAutomation).toHaveBeenCalledWith("pr-review", { store: "shared" }),
     );
   });
 
@@ -181,15 +174,15 @@ describe("SettingsAutomations", () => {
     );
     await fireEvent.click(add);
     await waitFor(() =>
-      expect(api.POST).toHaveBeenCalledWith("/api/automations", {
-        params: { query: { store: "shared" } },
-        body: expect.objectContaining({
+      expect(api.addAutomation).toHaveBeenCalledWith(
+        expect.objectContaining({
           id: "r1",
           on: "pr.merged",
           category: "done",
           when: "all_linked_prs_merged",
         }),
-      }),
+        { store: "shared" },
+      ),
     );
   });
 
@@ -197,16 +190,16 @@ describe("SettingsAutomations", () => {
     const { api } = setup();
     await fireEvent.click(await screen.findByRole("radio", { name: /mirror/ }));
     await waitFor(() =>
-      expect(api.PATCH).toHaveBeenLastCalledWith("/api/automations/fields", {
-        params: { query: { store: "shared" } },
-        body: { default_sync: "mirror" },
-      }),
+      expect(api.updateAutomationFields).toHaveBeenLastCalledWith(
+        { default_sync: "mirror" },
+        { store: "shared" },
+      ),
     );
     await fireEvent.click(screen.getByRole("checkbox", { name: "mirror: 本文" }));
     await waitFor(() =>
-      expect(api.PATCH).toHaveBeenLastCalledWith(
-        "/api/automations/fields",
-        expect.objectContaining({ body: { mirror: ["title", "body", "status", "assignees"] } }),
+      expect(api.updateAutomationFields).toHaveBeenLastCalledWith(
+        { mirror: ["title", "body", "status", "assignees"] },
+        { store: "shared" },
       ),
     );
   });
@@ -219,9 +212,9 @@ describe("SettingsAutomations", () => {
       target: { value: "target" },
     });
     await waitFor(() =>
-      expect(api.PATCH).toHaveBeenLastCalledWith(
-        "/api/automations/fields",
-        expect.objectContaining({ body: { props: { milestone: "target" } } }),
+      expect(api.updateAutomationFields).toHaveBeenLastCalledWith(
+        { props: { milestone: "target" } },
+        { store: "shared" },
       ),
     );
   });
@@ -236,17 +229,15 @@ describe("SettingsAutomations", () => {
     await screen.findByText("$ hh gh import org-a/web --label v2 --workspace dev");
     await fireEvent.click(screen.getByRole("button", { name: "件数を確かめる" }));
     await screen.findByText(/open の Issue 3 件 · うち 1\s+件はリンク済み/);
-    expect(api.POST).toHaveBeenLastCalledWith("/api/github/import", {
-      params: { query: { store: "shared" } },
-      body: { repo: "org-a/web", label: "v2", workspace: "dev", dry_run: true },
-    });
+    expect(api.importIssues).toHaveBeenLastCalledWith(
+      { repo: "org-a/web", label: "v2", workspace: "dev", dry_run: true },
+      { store: "shared" },
+    );
     await fireEvent.click(screen.getByRole("button", { name: /3\s+件を mirror で取り込む/ }));
     await waitFor(() =>
-      expect(api.POST).toHaveBeenLastCalledWith(
-        "/api/github/import",
-        expect.objectContaining({
-          body: expect.objectContaining({ dry_run: false, workspace: "dev" }),
-        }),
+      expect(api.importIssues).toHaveBeenLastCalledWith(
+        expect.objectContaining({ dry_run: false, workspace: "dev" }),
+        { store: "shared" },
       ),
     );
   });

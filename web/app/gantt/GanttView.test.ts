@@ -52,18 +52,15 @@ function setup(
       ],
     },
   ];
-  const patch = vi.fn(async (_: string, _init: { body: unknown; params: unknown }) => ({
-    data: { task: tasks[1], commit: "c1" },
-    response: { ok: true, status: 200 },
-  }));
-  const get = vi.fn(async (path: string) => ({
-    data: path === "/api/sprints" ? (over.sprints ?? []) : (over.releases ?? []),
-    response: { ok: true, status: 200 },
-  }));
+  const patch = vi.fn((_id: string, _body: unknown, _query?: unknown) =>
+    Promise.resolve({ task: tasks[1], commit: "c1" }),
+  );
+  const listSprints = vi.fn(() => Promise.resolve(over.sprints ?? []));
+  const listReleases = vi.fn(() => Promise.resolve(over.releases ?? []));
   const applyWrite = vi.fn();
   const e = emitter();
   const core = {
-    api: { PATCH: patch, GET: get },
+    api: { updateTask: patch, listSprints, listReleases },
     cache: {
       ...e,
       task: (u: string) => tasks.find((t) => t.ulid === u),
@@ -152,7 +149,7 @@ describe("GanttView", () => {
     expect(patch).not.toHaveBeenCalled();
     await fireEvent.keyDown(bar, { key: "Enter" });
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
-    expect(patch.mock.calls[0]?.[1].body).toEqual({
+    expect(patch.mock.calls[0]?.[1]).toEqual({
       props: { start: "2026-11-04", due: "2026-11-06" },
     });
     await waitFor(() => expect(applyWrite).toHaveBeenCalledTimes(1));
@@ -168,7 +165,7 @@ describe("GanttView", () => {
     await fireEvent.keyDown(bar, { key: "ArrowRight", shiftKey: true });
     await fireEvent.keyDown(bar, { key: "Enter" });
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
-    expect(patch.mock.calls[0]?.[1].body).toEqual({ props: { due: "2026-11-05" } });
+    expect(patch.mock.calls[0]?.[1]).toEqual({ props: { due: "2026-11-05" } });
   });
 
   it("offers no move on a Store that cannot be written", () => {

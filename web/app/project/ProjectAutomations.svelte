@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { projectRuleRow } from "../../core/automations";
   import { errorMessage } from "../../core/messages";
   import type { SchemaView } from "../../core/schema";
@@ -57,13 +56,7 @@
   const toggle = (id: string, scoped: string | undefined, el: HTMLInputElement) => {
     const enabled = el.checked;
     return run(
-      () =>
-        unwrap(
-          c.api.PUT("/api/automations/{id}/enabled", {
-            params: { path: { id }, query: { store } },
-            body: { enabled, project: scoped },
-          }),
-        ),
+      () => c.api.setAutomationEnabled(id, { enabled, project: scoped }, { store }),
       () => {
         el.checked = !enabled;
       },
@@ -72,12 +65,7 @@
 
   const remove = (id: string) =>
     run(
-      () =>
-        unwrap(
-          c.api.DELETE("/api/automations/{id}", {
-            params: { path: { id }, query: { store } },
-          }),
-        ),
+      () => c.api.deleteAutomation(id, { store }),
       () => undefined,
     );
 </script>

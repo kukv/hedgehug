@@ -6,7 +6,7 @@ import { makeCore, mount, ok, taskView } from "./testkit";
 describe("TaskPicker", () => {
   it("searches the store by the typed words and picks a result with a click", async () => {
     const k = makeCore();
-    k.api.GET.mockImplementation(() =>
+    k.api.listTasks.mockImplementation(() =>
       ok({
         tasks: [
           taskView({ ulid: "U1", id: "REL-8", title: "リリース作業" }),
@@ -20,16 +20,14 @@ describe("TaskPicker", () => {
       target: { value: "REL" },
     });
     const option = await screen.findByRole("option", { name: /REL-8/ });
-    expect(k.api.GET).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { q: '"REL"', store: "shared" } },
-    });
+    expect(k.api.listTasks).toHaveBeenCalledWith({ q: '"REL"', store: "shared" });
     await fireEvent.click(option);
     expect(onpick).toHaveBeenCalledWith(expect.objectContaining({ ulid: "U1" }));
   });
 
   it("leaves out excluded tasks and picks the active one with Enter", async () => {
     const k = makeCore();
-    k.api.GET.mockImplementation(() =>
+    k.api.listTasks.mockImplementation(() =>
       ok({
         tasks: [
           taskView({ ulid: "U1", id: "REL-1", title: "self" }),
@@ -49,7 +47,7 @@ describe("TaskPicker", () => {
 
   it("ignores Enter and the arrows while an IME is converting", async () => {
     const k = makeCore();
-    k.api.GET.mockImplementation(() =>
+    k.api.listTasks.mockImplementation(() =>
       ok({ tasks: [taskView({ ulid: "U1", id: "REL-1", title: "a" })] }),
     );
     const onpick = vi.fn();

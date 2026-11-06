@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type TaskView, unwrap } from "../../core/api/client";
+  import type { TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import {
     BACKLOG_QUERY,
@@ -92,12 +92,7 @@
       t.ulid,
       at,
     );
-    const r = await unwrap(
-      c.api.POST("/api/tasks/{id}/rank", {
-        params: { path: { id: t.ulid }, query: { store: t.store } },
-        body: { order },
-      }),
-    );
+    const r = await c.api.rankTask(t.ulid, { order }, { store: t.store });
     c.cache.applyWrite({ task: r.task, commit: r.commit });
   }
 

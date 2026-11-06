@@ -7,25 +7,27 @@ describe("createLookup", () => {
     const k = makeCore({ tasks: [taskView({ ulid: "U1", id: "REL-1", title: "one" })] });
     const lookup = createLookup({ api: k.api as never, cache: k.cache as never, store: "shared" });
     expect((await lookup("U1"))?.id).toBe("REL-1");
-    expect(k.api.GET).not.toHaveBeenCalled();
+    expect(k.api.getTask).not.toHaveBeenCalled();
   });
 
   it("fetches a task the cache lacks once for concurrent calls, and gives undefined on an error", async () => {
     const k = makeCore();
-    k.api.GET.mockImplementation(() => ok(showView({ ulid: "U9", id: "REL-9", title: "nine" })));
+    k.api.getTask.mockImplementation(() =>
+      ok(showView({ ulid: "U9", id: "REL-9", title: "nine" })),
+    );
     const lookup = createLookup({ api: k.api as never, cache: k.cache as never, store: "shared" });
     const [a, b] = await Promise.all([lookup("REL-9"), lookup("REL-9")]);
     expect(a?.ulid).toBe("U9");
     expect(b).toBe(a);
-    expect(k.api.GET).toHaveBeenCalledTimes(1);
-    k.api.GET.mockImplementation(() => Promise.reject(new Error("down")));
+    expect(k.api.getTask).toHaveBeenCalledTimes(1);
+    k.api.getTask.mockImplementation(() => Promise.reject(new Error("down")));
     expect(await lookup("REL-10")).toBeUndefined();
   });
 
   it("puts what it fetched in the cache, so that the row follows the task", async () => {
     const k = makeCore();
     const show = showView({ ulid: "U9", id: "REL-9" });
-    k.api.GET.mockImplementation(() => ok(show));
+    k.api.getTask.mockImplementation(() => ok(show));
     k.cache.epochNow.mockReturnValue(7);
     const lookup = createLookup({ api: k.api as never, cache: k.cache as never, store: "shared" });
     await lookup("REL-9");

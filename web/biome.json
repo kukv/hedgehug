@@ -12,7 +12,7 @@
       "app/**/*.svelte",
       "app/**/*.css",
       "core/**/*.ts",
-      "!core/api/schema.d.ts",
+      "!core/api/generated.ts",
       "e2e/**/*.ts",
       "*.ts",
       "*.js"

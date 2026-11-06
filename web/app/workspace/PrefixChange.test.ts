@@ -14,7 +14,7 @@ const others = [
 
 function setup(target = release) {
   const k = makeCore({ workspaces: [target, ...others.slice(1)] });
-  k.api.PATCH.mockImplementation(() =>
+  k.api.updateWorkspace.mockImplementation(() =>
     ok(
       written(
         { id_prefix: "RLS" },
@@ -59,10 +59,11 @@ describe("PrefixChange", () => {
     );
     await fireEvent.click(screen.getByRole("button", { name: "25 件を振り直す" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(k.api.PATCH).toHaveBeenCalledWith("/api/workspaces/{id}", {
-      params: { path: { id: "W1" }, query: { store: "shared" } },
-      body: { prefix: "RLS" },
-    });
+    expect(k.api.updateWorkspace).toHaveBeenCalledWith(
+      "W1",
+      { prefix: "RLS" },
+      { store: "shared" },
+    );
     // the tasks.changed of this commit is ours: the rows must not read "CLI で更新"
     expect(k.cache.noteOwnCommit).toHaveBeenCalledWith("c2");
     expect(k.stores.reload).toHaveBeenCalled();
@@ -86,7 +87,7 @@ describe("PrefixChange", () => {
     expect(screen.getByText(/2〜10 文字/, { selector: ".bad" })).toBeInTheDocument();
     expect(go).toBeDisabled();
     await fireEvent.keyDown(prefixField(), { key: "Enter" });
-    expect(k.api.PATCH).not.toHaveBeenCalled();
+    expect(k.api.updateWorkspace).not.toHaveBeenCalled();
   });
 
   it("has a plain button when the workspace has no task", () => {
@@ -99,7 +100,9 @@ describe("PrefixChange", () => {
 
   it("keeps the dialog open and shows the words of the server when it refuses", async () => {
     const { k, onclose } = setup();
-    k.api.PATCH.mockImplementation(() => fail(409, "workspace.prefix_taken", { prefix: "OPS" }));
+    k.api.updateWorkspace.mockImplementation(() =>
+      fail(409, "workspace.prefix_taken", { prefix: "OPS" }),
+    );
     await fireEvent.input(prefixField(), { target: { value: "OPS" } });
     await fireEvent.keyDown(prefixField(), { key: "Enter" });
     expect(await screen.findByRole("alert")).toHaveTextContent(

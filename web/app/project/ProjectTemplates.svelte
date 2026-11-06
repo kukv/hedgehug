@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import type { Template } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
   import type { ScopedDraft } from "../../core/scoped";
@@ -21,7 +20,8 @@
   $effect(() => {
     const s = store;
     let live = true;
-    unwrap(api.GET("/api/templates", { params: { query: { store: s } } }))
+    api
+      .listTemplates({ store: s })
       .then((r) => {
         if (live) all = r ?? [];
       })

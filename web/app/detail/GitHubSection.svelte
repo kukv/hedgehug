@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type Schemas, type ShowView, unwrap } from "../../core/api/client";
+  import type { Schemas, ShowView } from "../../core/api/client";
   import { cliPr } from "../../core/cli";
   import {
     checksLabel,
@@ -48,7 +48,7 @@
   let opening = $state(false);
   let busy = $state(false);
 
-  async function write(run: () => Promise<Schemas["TaskWrite"]>) {
+  async function write(run: () => Promise<Schemas.TaskWrite>) {
     busy = true;
     try {
       const r = await run();
@@ -60,28 +60,13 @@
     }
   }
 
-  const path = () => ({ path: { id: show.ulid } });
-
   const unlink = (l: Link) => {
     const which = l.type === "github_pr" ? { pr: linkArg(l) } : { issue: linkArg(l) };
-    return write(() =>
-      unwrap(
-        api.DELETE("/api/tasks/{id}/links", {
-          params: { ...path(), query: { store: show.store, ...which } },
-        }),
-      ),
-    );
+    return write(() => api.unlinkTask(show.ulid, { store: show.store, ...which }));
   };
 
   const setMode = (l: Link, sync: Link["sync"]) =>
-    write(() =>
-      unwrap(
-        api.POST("/api/tasks/{id}/links", {
-          params: { ...path(), query: { store: show.store } },
-          body: { issue: linkArg(l), sync },
-        }),
-      ),
-    );
+    write(() => api.linkTask(show.ulid, { issue: linkArg(l), sync }, { store: show.store }));
 
   async function copyPr() {
     const ok = await copyText(cliPr(did.current(show.store, show.id)));

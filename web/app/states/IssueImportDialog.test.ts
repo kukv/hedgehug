@@ -9,14 +9,13 @@ const target = { store: "shared", parent: "P1", parentId: "REL-1" };
 function setup() {
   const onclose = vi.fn();
   const api = {
-    GET: vi.fn(() => ok([{ repo: "github.com/org-a/web" }])),
-    POST: vi.fn((_p: string, o: { body: { dry_run: boolean } }) =>
+    importIssues: vi.fn((body: { dry_run: boolean }) =>
       ok({
         repo: "org-a/web",
         count: 3,
         skipped: 1,
-        dry_run: o.body.dry_run,
-        created: o.body.dry_run ? [] : ["REL-2", "REL-3", "REL-4"],
+        dry_run: body.dry_run,
+        created: body.dry_run ? [] : ["REL-2", "REL-3", "REL-4"],
         warnings: [],
       }),
     ),
@@ -32,17 +31,15 @@ describe("IssueImportDialog", () => {
     await fireEvent.input(screen.getByLabelText("ラベル"), { target: { value: "v2" } });
     await fireEvent.click(screen.getByRole("button", { name: "件数を確かめる" }));
     await screen.findByText("open の Issue 3 件 · うち 1 件はリンク済みのため飛ばします");
-    expect(api.POST).toHaveBeenLastCalledWith("/api/github/import", {
-      params: { query: { store: "shared" } },
-      body: { repo: "org-a/web", label: "v2", parent: "P1", dry_run: true },
-    });
+    expect(api.importIssues).toHaveBeenLastCalledWith(
+      { repo: "org-a/web", label: "v2", parent: "P1", dry_run: true },
+      { store: "shared" },
+    );
     await fireEvent.click(screen.getByRole("button", { name: "3 件を mirror で取り込む" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenLastCalledWith(
-      "/api/github/import",
-      expect.objectContaining({
-        body: { repo: "org-a/web", label: "v2", parent: "P1", dry_run: false },
-      }),
+    expect(api.importIssues).toHaveBeenLastCalledWith(
+      { repo: "org-a/web", label: "v2", parent: "P1", dry_run: false },
+      { store: "shared" },
     );
   });
 

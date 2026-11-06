@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliReleaseAdd, cliReleaseSet, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { Release } from "../../core/planning";
@@ -57,18 +56,11 @@
     try {
       const store = target.store;
       if (was) {
-        await unwrap(
-          c.api.PATCH("/api/releases/{id}", {
-            params: { path: { id: was.ulid }, query: { store } },
-            body: changes,
-          }),
-        );
+        await c.api.updateRelease(was.ulid, changes, { store });
       } else {
-        await unwrap(
-          c.api.POST("/api/releases", {
-            params: { query: { store } },
-            body: { name: name.trim(), workspace: target.name, ...(date ? { date } : {}) },
-          }),
+        await c.api.addRelease(
+          { name: name.trim(), workspace: target.name, ...(date ? { date } : {}) },
+          { store },
         );
       }
       await c.stores.reload().catch(() => undefined);

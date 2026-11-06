@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliSprintAdd, cliSprintSet, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { Sprint } from "../../core/planning";
@@ -63,24 +62,17 @@
     try {
       const store = target.store;
       if (was) {
-        await unwrap(
-          c.api.PATCH("/api/sprints/{id}", {
-            params: { path: { id: was.ulid }, query: { store } },
-            body: changes,
-          }),
-        );
+        await c.api.updateSprint(was.ulid, changes, { store });
       } else {
-        await unwrap(
-          c.api.POST("/api/sprints", {
-            params: { query: { store } },
-            body: {
-              name: name.trim(),
-              workspace: target.name,
-              ...(start ? { start } : {}),
-              ...(end ? { end } : {}),
-              ...(goal ? { goal } : {}),
-            },
-          }),
+        await c.api.addSprint(
+          {
+            name: name.trim(),
+            workspace: target.name,
+            ...(start ? { start } : {}),
+            ...(end ? { end } : {}),
+            ...(goal ? { goal } : {}),
+          },
+          { store },
         );
       }
       await c.stores.reload().catch(() => undefined);

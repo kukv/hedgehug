@@ -29,11 +29,11 @@ function setup(
 ) {
   let n = 0;
   const api = {
-    GET: vi.fn((_p: string, o: { params: { query: { store?: string } } }) =>
-      ok({ ...(plans[Math.min(n++, plans.length - 1)] as PurgePlan), store: o.params.query.store }),
+    listPurge: vi.fn((query: { store?: string }) =>
+      ok({ ...(plans[Math.min(n++, plans.length - 1)] as PurgePlan), store: query.store }),
     ),
-    POST: vi.fn((_p: string, o: { params: { query: { store?: string } } }) =>
-      ok({ ...plan(), store: o.params.query.store, commit: "0123456789abcdef" }),
+    purge: vi.fn((_body: unknown, query: { store?: string }) =>
+      ok({ ...plan(), store: query.store, commit: "0123456789abcdef" }),
     ),
   };
   const view = renderWithCore(
@@ -94,9 +94,7 @@ describe("PurgeSection: the plan", () => {
     const { api } = setup();
     await type("0");
     await fireEvent.click(check());
-    expect(api.GET).toHaveBeenCalledWith("/api/purge", {
-      params: { query: { older_than: "0d", store: "a" } },
-    });
+    expect(api.listPurge).toHaveBeenCalledWith({ older_than: "0d", store: "a" });
     const list = await screen.findByRole("list", { name: "完全に削除されるタスク" });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((r) => r.textContent)).toEqual([
@@ -163,7 +161,8 @@ describe("PurgeSection: the plan", () => {
 
   it("a failure to read the plan is said", async () => {
     const { api } = setup();
-    api.GET.mockImplementation((() => fail(400, "purge.bad_period", { value: "90d" })) as never);
+    api.listPurge.mockImplementation((() =>
+      fail(400, "purge.bad_period", { value: "90d" })) as never);
     await fireEvent.click(check());
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toContain("期間ではありません"),
@@ -173,8 +172,8 @@ describe("PurgeSection: the plan", () => {
   it("the check waits while it asks, and the inputs with it", async () => {
     const late: ((v: unknown) => void)[] = [];
     const api = {
-      GET: vi.fn(() => new Promise((r) => late.push(r))),
-      POST: vi.fn(),
+      listPurge: vi.fn(() => new Promise((r) => late.push(r))),
+      purge: vi.fn(),
     };
     renderWithCore(
       PurgeSection,
@@ -192,14 +191,14 @@ describe("PurgeSection: the plan", () => {
     await fireEvent.click(check());
     expect(check().disabled).toBe(true);
     expect(days().disabled).toBe(true);
-    late[0]?.({ data: plan(), response: new Response(null, { status: 200 }) });
+    late[0]?.(plan());
     await screen.findByRole("button", { name: "完全に削除…" });
     expect(check().disabled).toBe(false);
   });
 
   it("an answer that comes after it is gone changes nothing", async () => {
     let resolve: (v: unknown) => void = () => {};
-    const api = { GET: vi.fn(() => new Promise((r) => (resolve = r))), POST: vi.fn() };
+    const api = { listPurge: vi.fn(() => new Promise((r) => (resolve = r))), purge: vi.fn() };
     const view = renderWithCore(
       PurgeSection,
       { stores: ["a"] },
@@ -215,9 +214,9 @@ describe("PurgeSection: the plan", () => {
     );
     await fireEvent.click(check());
     view.unmount();
-    resolve({ data: plan(), response: new Response(null, { status: 200 }) });
+    resolve(plan());
     await Promise.resolve();
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.purge).not.toHaveBeenCalled();
   });
 });
 
@@ -238,9 +237,7 @@ describe("PurgeSection: the stores", () => {
     expect(screen.queryByRole("button", { name: "完全に削除…" })).toBeNull();
     await fireEvent.click(check());
     await screen.findByRole("button", { name: "完全に削除…" });
-    expect(api.GET).toHaveBeenLastCalledWith("/api/purge", {
-      params: { query: { older_than: "90d", store: "b" } },
-    });
+    expect(api.listPurge).toHaveBeenLastCalledWith({ older_than: "90d", store: "b" });
   });
 });
 
@@ -255,7 +252,7 @@ describe("PurgeSection: a read-only Store", () => {
     expect(del).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
     del.click();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.purge).not.toHaveBeenCalled();
     await fireEvent.change(pick, { target: { value: "b" } });
     await fireEvent.click(check());
     expect(await screen.findByRole("button", { name: "完全に削除…" })).toBeEnabled();
@@ -294,10 +291,10 @@ describe("PurgeSection: the deletion", () => {
     const { api, dialog } = await toDialog();
     await fireEvent.click(within(dialog).getByRole("button", { name: "完全に削除する" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(api.POST).toHaveBeenCalledWith("/api/purge", {
-      params: { query: { store: "a" } },
-      body: { older_than: "0d", confirmed: expect.objectContaining({ store: "a" }) },
-    });
+    expect(api.purge).toHaveBeenCalledWith(
+      { older_than: "0d", confirmed: expect.objectContaining({ store: "a" }) },
+      { store: "a" },
+    );
     expect(toasts.list.map((t) => t.message)).toEqual([
       "2 件のタスクを完全に削除しました（0123456）",
     ]);
@@ -307,8 +304,8 @@ describe("PurgeSection: the deletion", () => {
 
   it("a change after the check (409 purge.changed) says so, and checks again", async () => {
     const { api, dialog } = await toDialog();
-    api.POST.mockImplementation((() => fail(409, "purge.changed")) as never);
-    api.GET.mockImplementation((() =>
+    api.purge.mockImplementation((() => fail(409, "purge.changed")) as never);
+    api.listPurge.mockImplementation((() =>
       ok(plan({ tasks: [{ ulid: "U9", id: "DM-9", title: "new one" }] }))) as never);
     await fireEvent.click(within(dialog).getByRole("button", { name: "完全に削除する" }));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
@@ -325,7 +322,7 @@ describe("PurgeSection: the deletion", () => {
 
   it("another failure is a toast, and the dialog stays", async () => {
     const { api, dialog } = await toDialog();
-    api.POST.mockImplementation((() => fail(500, "internal")) as never);
+    api.purge.mockImplementation((() => fail(500, "internal")) as never);
     await fireEvent.click(within(dialog).getByRole("button", { name: "完全に削除する" }));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -341,7 +338,7 @@ describe("PurgeSection: the deletion", () => {
   it("while it deletes, nothing can be changed and Esc does not close the dialog", async () => {
     const { api, dialog } = await toDialog();
     let resolve: (v: unknown) => void = () => {};
-    api.POST.mockImplementation((() => new Promise((r) => (resolve = r))) as never);
+    api.purge.mockImplementation((() => new Promise((r) => (resolve = r))) as never);
     await fireEvent.click(within(dialog).getByRole("button", { name: "完全に削除する" }));
     expect(
       (within(dialog).getByRole("button", { name: "完全に削除する" }) as HTMLButtonElement)
@@ -355,10 +352,7 @@ describe("PurgeSection: the deletion", () => {
     await fireEvent.keyDown(window, { key: "Escape" });
     await fireEvent.click(within(dialog).getByRole("button", { name: "閉じる" }));
     expect(screen.queryByRole("dialog")).toBeTruthy();
-    resolve({
-      data: { ...plan(), commit: "abcdef0123" },
-      response: new Response(null, { status: 200 }),
-    });
+    resolve({ ...plan(), commit: "abcdef0123" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 

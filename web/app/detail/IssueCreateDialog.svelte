@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliIssue, Placeholder } from "../../core/cli";
   import { repoLabel } from "../../core/github";
   import { errorMessage } from "../../core/messages";
@@ -39,12 +38,7 @@
     busy = true;
     error = "";
     try {
-      const r = await unwrap(
-        api.POST("/api/tasks/{id}/issue", {
-          params: { path: { id: task.ulid }, query: { store: task.store } },
-          body: { repo: typed },
-        }),
-      );
+      const r = await api.createIssue(task.ulid, { repo: typed }, { store: task.store });
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({ message: ["Issue を作りました", ...r.warnings].join(" · ") });
       onclose();

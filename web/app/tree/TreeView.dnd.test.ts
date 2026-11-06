@@ -50,9 +50,10 @@ vi.mock("./dnd", async (orig) => {
   };
 });
 
+import { toApiError } from "../../core/api/client";
 import TreeView from "./TreeView.svelte";
 
-const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+const ok = (data: unknown) => Promise.resolve(data);
 
 function setup(readOnly: string | null = null) {
   const tasks = new Map([
@@ -81,7 +82,7 @@ function setup(readOnly: string | null = null) {
     prefix: "REL",
     projects: [],
   };
-  const api = { POST: vi.fn(), PATCH: vi.fn() };
+  const api = { moveTask: vi.fn(), updateTask: vi.fn() };
   h.core = {
     api,
     cache: {
@@ -139,7 +140,7 @@ describe("TreeView drag and drop", () => {
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("閲覧のみ");
     expect(h.toast.mock.calls[0]?.[0].message).toContain("remote に書き込めません");
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.moveTask).not.toHaveBeenCalled();
   });
 
   it("lets a row of a Store that can be written be dragged", () => {
@@ -215,75 +216,74 @@ describe("TreeView drag and drop", () => {
     row("T7").onDrop("E8", "child");
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("エピックはタスクの下に置けません");
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.moveTask).not.toHaveBeenCalled();
   });
 
   it("drops the drops still waiting when one is refused", async () => {
     const { api, refresh } = setup();
     let shown: () => void = () => {};
     refresh.mockReturnValueOnce(new Promise<void>((resolve) => (shown = resolve)));
-    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("E8").onDrop("T9", "before"); // goes through, and waits for the tree
     row("T7").onDrop("E8", "child"); // refused: an epic under a task
     row("E8").onDrop("T7", "before"); // waits behind the refused one
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(1));
     shown();
     await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
     await new Promise((r) => setTimeout(r, 40));
-    expect(api.POST).toHaveBeenCalledTimes(1);
+    expect(api.moveTask).toHaveBeenCalledTimes(1);
   });
 
   it("makes a child on an accepted drop", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "E8"), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("T9", "task", "E8"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("E8").onDrop("T9", "child");
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
-      params: { path: { id: "T9" }, query: { store: "shared" } },
-      body: { parent: "E8" },
-    });
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalled());
+    expect(api.moveTask).toHaveBeenCalledWith("T9", { parent: "E8" }, { store: "shared" });
   });
 
   it("sends a drop only after the tree shows the move before it", async () => {
     const { api, refresh } = setup();
     let shown: () => void = () => {};
     refresh.mockReturnValueOnce(new Promise<void>((resolve) => (shown = resolve)));
-    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("E8").onDrop("T9", "before");
     row("E8").onDrop("T7", "before");
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(1));
     await new Promise((r) => setTimeout(r, 40));
-    expect(api.POST).toHaveBeenCalledTimes(1);
+    expect(api.moveTask).toHaveBeenCalledTimes(1);
     shown();
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalledTimes(2));
   });
 
   it("reorders next to a sibling", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("E8").onDrop("T9", "before");
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
-      params: { path: { id: "T9" }, query: { store: "shared" } },
-      body: { parent: "P", before: "E8" },
-    });
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalled());
+    expect(api.moveTask).toHaveBeenCalledWith(
+      "T9",
+      { parent: "P", before: "E8" },
+      { store: "shared" },
+    );
   });
 
   it("shows a toast when the server refuses the move", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue({
-      error: {
-        type: "move.invalid",
-        title: "Invalid",
-        status: 422,
-        detail: "x is not under the same parent",
-      },
-      response: new Response(null, { status: 422 }),
-    });
+    api.moveTask.mockImplementation(() =>
+      Promise.reject(
+        toApiError(422, {
+          type: "move.invalid",
+          title: "Invalid",
+          status: 422,
+          detail: "x is not under the same parent",
+        }),
+      ),
+    );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("E8").onDrop("T9", "before");
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
@@ -296,16 +296,17 @@ describe("TreeView drag and drop", () => {
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("T7").onDrop("T7", "child");
     await tick();
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.moveTask).not.toHaveBeenCalled();
     expect(h.toast).not.toHaveBeenCalled();
   });
 
   it("does not open the new parent when the move fails", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue({
-      error: { type: "move.invalid", title: "Invalid", status: 422, detail: "x" },
-      response: new Response(null, { status: 422 }),
-    });
+    api.moveTask.mockImplementation(() =>
+      Promise.reject(
+        toApiError(422, { type: "move.invalid", title: "Invalid", status: 422, detail: "x" }),
+      ),
+    );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     // fold E8, then drop T9 into it
     await fireEvent.click(screen.getByRole("button", { name: /折りたたむ: リリース作業/ }));
@@ -317,7 +318,7 @@ describe("TreeView drag and drop", () => {
 
   it("opens the new parent once the move has gone through", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "E8"), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("T9", "task", "E8"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByRole("button", { name: /折りたたむ: リリース作業/ }));
     expect(screen.queryByText("子")).toBeNull();
@@ -327,13 +328,14 @@ describe("TreeView drag and drop", () => {
 
   it("sends root: true next to a top-level task", async () => {
     const { api } = setup();
-    api.POST.mockResolvedValue(ok({ task: task("E8", "epic", null), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("E8", "epic", null), commit: "c1" }));
     render(TreeView, { view: { kind: "workspace", store: "shared", ulid: "W1" } });
     row("P").onDrop("E8", "after");
-    await waitFor(() => expect(api.POST).toHaveBeenCalled());
-    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
-      params: { path: { id: "E8" }, query: { store: "shared" } },
-      body: { root: true, after: "P" },
-    });
+    await waitFor(() => expect(api.moveTask).toHaveBeenCalled());
+    expect(api.moveTask).toHaveBeenCalledWith(
+      "E8",
+      { root: true, after: "P" },
+      { store: "shared" },
+    );
   });
 });

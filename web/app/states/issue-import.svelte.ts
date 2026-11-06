@@ -1,4 +1,4 @@
-import { type Schemas, unwrap } from "../../core/api/client";
+import type { Schemas } from "../../core/api/client";
 import { cliGhImport, Placeholder } from "../../core/cli";
 import { errorMessage } from "../../core/messages";
 import { core } from "../context";
@@ -18,7 +18,7 @@ export function useIssueImport(
 ): {
   repo: string;
   label: string;
-  readonly counted: Schemas["ImportResult"] | null;
+  readonly counted: Schemas.ImportResult | null;
   readonly busy: boolean;
   readonly error: string;
   readonly ready: boolean;
@@ -29,7 +29,7 @@ export function useIssueImport(
   const c = core();
   let repo = $state("");
   let label = $state("");
-  let counted = $state<Schemas["ImportResult"] | null>(null);
+  let counted = $state<Schemas.ImportResult | null>(null);
   let busy = $state(false);
   let error = $state("");
 
@@ -49,11 +49,9 @@ export function useIssueImport(
     error = "";
     try {
       const { parent, workspace } = place();
-      const r = await unwrap(
-        c.api.POST("/api/github/import", {
-          params: { query: { store: store() } },
-          body: { repo: repo.trim(), label: label.trim(), parent, workspace, dry_run: dry },
-        }),
+      const r = await c.api.importIssues(
+        { repo: repo.trim(), label: label.trim(), parent, workspace, dry_run: dry },
+        { store: store() },
       );
       if (dry) {
         counted = r;

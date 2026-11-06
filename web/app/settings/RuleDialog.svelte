@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { RULE_EVENTS, WHEN_ALL_MERGED, whenLabel } from "../../core/automations";
   import { cliAutomationAdd, Placeholder } from "../../core/cli";
   import { eventLabel } from "../../core/github";
@@ -58,11 +57,9 @@
     busy = true;
     error = "";
     try {
-      await unwrap(
-        c.api.POST("/api/automations", {
-          params: { query: { store } },
-          body: { id: typed, on, status, category, when, project: project?.ulid },
-        }),
+      await c.api.addAutomation(
+        { id: typed, on, status, category, when, project: project?.ulid },
+        { store },
       );
       onclose();
     } catch (err) {

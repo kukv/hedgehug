@@ -35,14 +35,13 @@ function setup(script: (Streams | null)[]) {
   const calls: { url: string; auth: string | null }[] = [];
   const presence: { client: string; visible: boolean }[] = [];
   const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (typeof input === "string") {
+    if (input === "/api/events") {
       calls.push({ url: input, auth: new Headers(init?.headers).get("Authorization") });
       const next = script.shift();
       if (!next) throw new TypeError("Failed to fetch");
       return next.response;
     }
-    const req = input as Request;
-    presence.push(await req.json());
+    presence.push(JSON.parse(String(init?.body)));
     return new Response(null, { status: 204 });
   }) as unknown as typeof fetch;
   const waits: { ms: number; resolve: () => void }[] = [];
@@ -345,7 +344,7 @@ describe("Connection", () => {
     let res: () => Response = () =>
       new Response(JSON.stringify({ type: "auth.token" }), { status: 401 });
     const f = (async (input: RequestInfo | URL) => {
-      if (typeof input === "string") {
+      if (input === "/api/events") {
         calls.push(input);
         return res();
       }

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { unwrap } from "../../core/api/client";
   import { cliWorkspaceSetPrefix, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
@@ -51,12 +50,7 @@
     failure = null;
     const from = w.prefix;
     try {
-      const r = await unwrap(
-        api.PATCH("/api/workspaces/{id}", {
-          params: { path: { id: w.ulid }, query: { store: w.store } },
-          body: { prefix },
-        }),
-      );
+      const r = await api.updateWorkspace(w.ulid, { prefix }, { store: w.store });
       // The commit renumbers the tasks: its tasks.changed is this tab's own.
       cache.noteOwnCommit(r.commit);
       await stores.reload().catch(() => undefined);

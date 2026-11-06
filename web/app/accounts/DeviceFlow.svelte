@@ -11,7 +11,7 @@
   // for the server to say (auth.device) that GitHub approved it. The starting and the cancelling of
   // the flow are the parent's.
   type Props = {
-    flow: Schemas["DeviceStartBody"];
+    flow: Schemas.DeviceStartBody;
     // a flow that another screen started
     resumed?: boolean;
     ondone: (account: string) => void;

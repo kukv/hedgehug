@@ -15,7 +15,7 @@ const bad = (id: string, message: string) =>
 
 function setup(violations: TaskView[] = [], store = "shared") {
   const conn = new FakeConn();
-  const api = { GET: vi.fn((..._: unknown[]) => ok({ tasks: violations })) };
+  const api = { listTasks: vi.fn((..._: unknown[]) => ok({ tasks: violations })) };
   const r = renderWithCore(ProjectViolations, { ulid: "P1", store }, { api, conn });
   return { ...r, api, conn };
 }
@@ -28,10 +28,8 @@ afterEach(cleanup);
 describe("ProjectViolations", () => {
   it("asks for the invalid tasks of the project, in its Store", async () => {
     const { api } = setup();
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
-    expect(api.GET).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { q: "is:invalid project:P1", store: "shared" } },
-    });
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(1));
+    expect(api.listTasks).toHaveBeenCalledWith({ q: "is:invalid project:P1", store: "shared" });
   });
 
   it("lists the tasks that break the rules, with links, or says there are none", async () => {
@@ -53,11 +51,11 @@ describe("ProjectViolations", () => {
     const { api, conn } = setup();
     await screen.findByText("違反しているタスクはありません");
     conn.emit("schema.changed", { store: "shared" });
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(2));
     conn.emit("tasks.changed", tasksChanged("shared"));
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(3));
     conn.emit("resync");
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(4));
   });
 
   it("leaves a change of another Store alone", async () => {
@@ -66,25 +64,25 @@ describe("ProjectViolations", () => {
     conn.emit("schema.changed", { store: "backend" });
     conn.emit("tasks.changed", tasksChanged("backend"));
     await new Promise((r) => setTimeout(r, 10));
-    expect(api.GET).toHaveBeenCalledTimes(1);
+    expect(api.listTasks).toHaveBeenCalledTimes(1);
   });
 
   it("stops reading when the screen is gone", async () => {
     const { api, conn, unmount } = setup();
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(1));
     unmount();
     conn.emit("schema.changed", { store: "shared" });
     conn.emit("tasks.changed", tasksChanged("shared"));
     conn.emit("resync");
     await new Promise((r) => setTimeout(r, 10));
-    expect(api.GET).toHaveBeenCalledTimes(1);
+    expect(api.listTasks).toHaveBeenCalledTimes(1);
   });
 
   it("shows the answer of the latest read when an older one arrives last", async () => {
     const { api, conn } = setup();
     await screen.findByText("違反しているタスクはありません");
     const pending: ((v: unknown) => void)[] = [];
-    api.GET.mockImplementation((() => new Promise((r) => pending.push(r))) as never);
+    api.listTasks.mockImplementation((() => new Promise((r) => pending.push(r))) as never);
     conn.emit("resync");
     conn.emit("resync");
     await waitFor(() => expect(pending).toHaveLength(2));
@@ -99,7 +97,7 @@ describe("ProjectViolations", () => {
   it("keeps the list and shows the error when a new read fails", async () => {
     const { api, conn } = setup([bad("REL-11", "the one that stays")]);
     await screen.findByText("the one that stays");
-    api.GET.mockImplementation((() => fail(500, "internal")) as never);
+    api.listTasks.mockImplementation((() => fail(500, "internal")) as never);
     conn.emit("resync");
     await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
     expect(screen.getByText("the one that stays")).toBeTruthy();
@@ -108,7 +106,7 @@ describe("ProjectViolations", () => {
   it("drops the list of a Store when the project is in another one", async () => {
     const { api, rerender } = setup([bad("REL-11", "from the first Store")]);
     await screen.findByText("from the first Store");
-    api.GET.mockImplementation((() => new Promise(() => {})) as never);
+    api.listTasks.mockImplementation((() => new Promise(() => {})) as never);
     await rerender({ ulid: "P1", store: "backend" });
     expect(screen.queryByText("from the first Store")).toBeNull();
     expect(screen.getByText("読み込み中…")).toBeTruthy();

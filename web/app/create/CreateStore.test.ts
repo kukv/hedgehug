@@ -28,7 +28,7 @@ const acct = (name: string): Account => ({
 });
 
 function mount(
-  post = vi.fn().mockResolvedValue({ data: created, response: new Response() }),
+  post = vi.fn().mockResolvedValue(created),
   accts: { list?: Account[]; loaded?: boolean } = {},
 ) {
   const reload = vi.fn().mockResolvedValue(undefined);
@@ -45,7 +45,7 @@ function mount(
   const r = renderWithCore(
     CreateStore,
     { open: true, onclose, oncreated },
-    { api: { POST: post }, stores: { reload, subscribe: () => () => {} }, accounts },
+    { api: { initStore: post }, stores: { reload, subscribe: () => () => {} }, accounts },
   );
   return { post, reload, onclose, oncreated, accounts, ...r };
 }
@@ -82,14 +82,17 @@ describe("CreateStore", () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it("作成: POST /api/stores、reload、トースト、最初のワークスペースのツリーへ", async () => {
+  it("作成: Store を作る API、reload、トースト、最初のワークスペースのツリーへ", async () => {
     const { getByLabelText, getByRole, post, reload, onclose } = mount();
     await type(getByLabelText("名前"), " me ");
     await type(getByLabelText("ID の接頭辞"), "me");
     await fireEvent.click(getByRole("button", { name: "Store を作る" }));
     await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(post).toHaveBeenCalledWith("/api/stores", {
-      body: { name: "me", prefix: "ME", workspace: undefined, remotes: undefined },
+    expect(post).toHaveBeenCalledWith({
+      name: "me",
+      prefix: "ME",
+      workspace: undefined,
+      remotes: undefined,
     });
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作りました"]);
@@ -104,13 +107,11 @@ describe("CreateStore", () => {
     await type(getByLabelText("remote（任意）"), "git@github.com:org/hh-team.git");
     await fireEvent.click(getByRole("button", { name: "Store を作る" }));
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-    expect(post).toHaveBeenCalledWith("/api/stores", {
-      body: {
-        name: "team",
-        prefix: "TM",
-        workspace: "backend",
-        remotes: ["git@github.com:org/hh-team.git"],
-      },
+    expect(post).toHaveBeenCalledWith({
+      name: "team",
+      prefix: "TM",
+      workspace: "backend",
+      remotes: ["git@github.com:org/hh-team.git"],
     });
   });
 
@@ -167,13 +168,13 @@ describe("CreateStore", () => {
   });
 
   it("作成できたあとに stores.reload が失敗しても、作成の成功として扱う", async () => {
-    const post = vi.fn().mockResolvedValue({ data: created, response: new Response() });
+    const post = vi.fn().mockResolvedValue(created);
     const reload = vi.fn().mockRejectedValue(new Error("network"));
     const onclose = vi.fn();
     const { getByLabelText, getByRole, queryByRole } = renderWithCore(
       CreateStore,
       { open: true, onclose },
-      { api: { POST: post }, stores: { reload, subscribe: () => () => {} } },
+      { api: { initStore: post }, stores: { reload, subscribe: () => () => {} } },
     );
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "me");
@@ -208,7 +209,7 @@ describe("CreateStore", () => {
     expect(cancel.disabled).toBe(true);
     await fireEvent.keyDown(window, { key: "Escape" });
     expect(onclose).not.toHaveBeenCalled();
-    finish({ data: created, response: new Response() });
+    finish(created);
     await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
   });
 
@@ -249,7 +250,7 @@ describe("CreateStore のアカウント", () => {
       await fill(r);
       await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
       await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
-      expect(r.post.mock.calls[0]?.[1].body.account).toBeUndefined();
+      expect(r.post.mock.calls[0]?.[0].account).toBeUndefined();
       expect(r.getByRole("button", { name: /hh store init/ }).textContent).not.toContain(
         "--account",
       );
@@ -263,7 +264,7 @@ describe("CreateStore のアカウント", () => {
     await fill(r);
     await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
     await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
-    expect(r.post.mock.calls[0]?.[1].body.account).toBeUndefined();
+    expect(r.post.mock.calls[0]?.[0].account).toBeUndefined();
   });
 
   it("2 つ以上なら選択欄を出し、選ばないと送らない", async () => {
@@ -284,8 +285,12 @@ describe("CreateStore のアカウント", () => {
     expect(r.getByRole("button", { name: /hh store init/ }).textContent).toContain("--account b");
     await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
     await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
-    expect(r.post).toHaveBeenCalledWith("/api/stores", {
-      body: { name: "me", prefix: "ME", workspace: undefined, remotes: undefined, account: "b" },
+    expect(r.post).toHaveBeenCalledWith({
+      name: "me",
+      prefix: "ME",
+      workspace: undefined,
+      remotes: undefined,
+      account: "b",
     });
   });
 });

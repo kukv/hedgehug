@@ -5,7 +5,7 @@ import type { AppCore } from "./context";
 import { resetToasts, toasts } from "./toast.svelte";
 import { routeStore, runUndo, undoMessage } from "./undo";
 
-type UndoWrite = Schemas["UndoWrite"];
+type UndoWrite = Schemas.UndoWrite;
 
 function result(over: Partial<UndoWrite> = {}): UndoWrite {
   return {

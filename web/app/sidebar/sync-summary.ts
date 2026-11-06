@@ -1,7 +1,7 @@
 import type { Schemas } from "../../core/api/client";
 import type { SyncStatus } from "../../core/connection";
 
-export type SyncReport = Schemas["SyncReport"];
+export type SyncReport = Schemas.SyncReport;
 export type SyncKind = "synced" | "pending" | "error" | "offline";
 export type SyncSummary = {
   kind: SyncKind;

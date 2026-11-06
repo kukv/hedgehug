@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type ShowView, unwrap } from "../../core/api/client";
+  import type { ShowView } from "../../core/api/client";
   import { defaultStatusIn } from "../../core/schema";
   import { core } from "../context";
   import { useRules } from "../github.svelte";
@@ -31,7 +31,8 @@
   let filling = $state(false);
   $effect(() => {
     let live = true;
-    void unwrap(c.api.GET("/api/tasks/{id}", { params: { path: { id: task }, query: { store } } }))
+    void c.api
+      .getTask(task, { store })
       .then((s) => {
         if (live) show = s;
       })

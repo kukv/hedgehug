@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { type ShowView, unwrap } from "../../core/api/client";
+  import type { ShowView } from "../../core/api/client";
   import { cliComment } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
   import { errorMessage } from "../../core/messages";
@@ -88,12 +88,7 @@
     writing = true;
     formError = "";
     try {
-      const r = await unwrap(
-        api.POST("/api/tasks/{id}/comments", {
-          params: { path: { id: show.ulid }, query: { store: show.store } },
-          body: { body },
-        }),
-      );
+      const r = await api.addComment(show.ulid, { body }, { store: show.store });
       cache.noteOwnCommit(r.commit);
       overlay.added = [...overlay.added, r.comment];
       draft = "";
@@ -116,11 +111,11 @@
     writing = true;
     errors = {};
     try {
-      const r = await unwrap(
-        api.PATCH("/api/tasks/{id}/comments/{cid}", {
-          params: { path: { id: show.ulid, cid: c.ulid }, query: { store: show.store } },
-          body: { body: editDraft },
-        }),
+      const r = await api.editComment(
+        show.ulid,
+        c.ulid,
+        { body: editDraft },
+        { store: show.store },
       );
       cache.noteOwnCommit(r.commit);
       // A comment posted here and not read yet is edited where it is held too; once a read has it as
@@ -160,11 +155,7 @@
     deleteBusy = true;
     deleteError = "";
     try {
-      const r = await unwrap(
-        api.DELETE("/api/tasks/{id}/comments/{cid}", {
-          params: { path: { id: show.ulid, cid: c.ulid }, query: { store: show.store } },
-        }),
-      );
+      const r = await api.removeComment(show.ulid, c.ulid, { store: show.store });
       cache.noteOwnCommit(r.commit);
       if (overlay.added.some((a) => a.ulid === c.ulid)) {
         // posted here and not read yet: what was written here is all there is of it

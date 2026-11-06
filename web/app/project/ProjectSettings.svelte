@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { cliScopeRm, cliScopeSet } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import {
@@ -142,12 +141,7 @@
     busy = true;
     failure = null;
     try {
-      const r = await unwrap(
-        c.api.PUT("/api/schema/scoped/{project}", {
-          params: { path: { project: ulid }, query: { store } },
-          body,
-        }),
-      );
+      const r = await c.api.putScoped(ulid, body, { store });
       await takeIn(r.scoped, store);
       toast({ message: "プロジェクトの設定を保存しました" });
     } catch (e) {
@@ -162,11 +156,7 @@
     busy = true;
     resetFailure = null;
     try {
-      const r = await unwrap(
-        c.api.DELETE("/api/schema/scoped/{project}", {
-          params: { path: { project: ulid }, query: { store } },
-        }),
-      );
+      const r = await c.api.deleteScoped(ulid, { store });
       await takeIn(r.scoped, store);
       resetOpen = false;
       toast({ message: "プロジェクトの設定を Store の値に戻しました" });
