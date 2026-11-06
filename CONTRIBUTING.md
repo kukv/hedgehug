@@ -124,7 +124,7 @@ To release, tag the head of `main` and push the tag:
 
 ```bash
 git switch main && git pull
-git tag v0.1.0 && git push origin v0.1.0
+git tag -m v0.1.0 v0.1.0 && git push origin v0.1.0
 ```
 
 The tag push starts `.github/workflows/release.yaml`, which runs GoReleaser: it builds

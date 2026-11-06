@@ -26,7 +26,7 @@ Linux と macOS で動きます。Windows では WSL の中で使ってくださ
 
    ```bash
    sha256sum -c checksums.txt --ignore-missing
-   tar xzf <アーカイブ>.tar.gz
+   tar xzf hedgehug_<バージョン>_linux_amd64.tar.gz
    install hedgehug hh ~/.local/bin
    ```
 
