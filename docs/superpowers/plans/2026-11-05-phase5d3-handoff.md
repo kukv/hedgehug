@@ -18,7 +18,11 @@
 
 検証用 Org で次を行い、結果をここに書く。
 
-- [ ] `hh auth login <name>` の Device Flow でログインし、期限を過ぎた後の `hh sync` でトークンが更新されることを `hh auth status` の期限で確かめる（2026-11-05 20:29 にログイン済み。期限は 11-06 04:29）。更新はトークンを使う操作の中で、期限の 5 分前から行われる
+- [x] `hh auth login <name>` の Device Flow でログインし、期限を過ぎた後の `hh sync` でトークンが更新されることを確かめる（2026-11-06）。結果は次のとおり
+  - 実際の期限切れ（11-06 04:29）の後の 09:45 に `hh auth status` を実行すると更新が走り、期限は 8 時間後の 17:45 になった。`auth status` もトークンを使う操作なので、確認の順番としては `hh sync` より先に実行してはいけなかった
+  - そこでキーチェーンの `expires_at` だけを過去に書き換え、`auth status` を挟まずに `hh sync --store live` を実行した。09:51:37 の実行で期限は 09:50:37 から 17:51:37 に延び、`refresh_expires_at` も 2027-05-06 に延びた
+  - 更新はトークンを使う操作の中で、期限の 5 分前から行われる。`hh sync` が GitHub を読むのは repo ごとに 5 分に 1 回なので、前回の読み取りから 5 分以内の `hh sync` はトークンを使わず、更新も起きない（09:49 の実行で確認）
+  - remote のない Store で、GitHub を読んでも変更がなかった `hh sync` が `Nothing to sync` と表示していたので、`Read GitHub for <store>: nothing new (no remote, nothing to push)` と表示するようにした
 - [x] Hedgehug の GitHub App を入れた Org で、`hh sync` が `hh-live` の PR を取り込む（2026-11-05。Device Flow のトークンで `bright-room-sandbox/hh-live#1` のタイトル・ブランチ・状態が入った）
 - [x] App を外した Org の repo で、repo 名付きの警告が出て同期が成功のままで、`app_missing` が立つ（2026-11-05）。実物の private repo は 403 でなく 404 を返したので判定を足した（plan の決定 17）。App を入れ直すと警告は消え、対象の repo から `hh-live` を外すと 404 で再び `app_missing` が立つことも確かめた。画面の表示は E2E で確かめた
 - [x] リポジトリに secret `HH_LIVE_ORG`・`HH_LIVE_TOKEN` を入れ、`hh-live` に PR を 1 件以上置き、`github-live` を `workflow_dispatch` で流して通る（2026-11-05、run 42022483828）。`bright-room-sandbox/hh-live` は `bright-room-sandbox/structure` の Terraform で管理する

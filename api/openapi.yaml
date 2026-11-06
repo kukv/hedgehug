@@ -2846,6 +2846,8 @@ components:
       properties:
         error:
           type: string
+        github_read:
+          type: boolean
         github_updated:
           type: boolean
         invalid:

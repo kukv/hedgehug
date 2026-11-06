@@ -21,6 +21,7 @@ import (
 
 // GitHubFetchReport is what a fetch did.
 type GitHubFetchReport struct {
+	Read      bool // a repository was read; none is due within the interval
 	Committed bool
 	Warnings  []string
 }
@@ -147,6 +148,7 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		}
 		st.LastFetch, st.Limit, st.Remaining, st.ResetAt = now, rl.Limit, rl.Remaining, rl.ResetAt
 		st.LastTry, st.Warning, st.AppMissing = time.Time{}, "", false
+		rep.Read = true
 		for _, p := range scanned {
 			if p.UpdatedAt.After(st.Since) {
 				st.Since = p.UpdatedAt // GitHub's own time: the clocks may differ

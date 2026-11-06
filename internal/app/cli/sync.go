@@ -79,6 +79,8 @@ func (a *app) printSync(r usecase.SyncReport) error {
 	switch {
 	case r.NoRemote && r.GitHubUpdated:
 		fmt.Fprintf(&b, "Read GitHub for %s: links and gh updated (no remote, nothing to push)\n", r.Store)
+	case r.NoRemote && r.GitHubRead:
+		fmt.Fprintf(&b, "Read GitHub for %s: nothing new (no remote, nothing to push)\n", r.Store)
 	case r.NoRemote:
 		fmt.Fprintf(&b, "Nothing to sync: %s has no remote\n", r.Store)
 	default:

@@ -162,7 +162,7 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 // the sync is done.
 func fetchGitHub(ss *usecase.Session, c *config.Config, e config.StoreEntry, r *usecase.SyncReport, push func() (replicate.Result, error)) {
 	f, err := usecase.FetchGitHub(ss, c, e)
-	r.GitHubUpdated = f.Committed
+	r.GitHubRead, r.GitHubUpdated = f.Read, f.Committed
 	r.Warnings = append(r.Warnings, f.Warnings...)
 	if err != nil {
 		r.Warnings = append(r.Warnings, "read GitHub: "+err.Error())
