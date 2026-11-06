@@ -1,0 +1,107 @@
+# Maintenance
+
+Two things are your job, because hedgehug does not do them for you: running `git gc` on a
+bare repository you use as a remote, and rewriting history when content must be removed.
+This guide also covers `hh doctor` and shell completion.
+
+## Check a store: `hh doctor`
+
+`hh doctor` checks the files, the working tree and the git state of every store and
+prints what it finds.
+
+```console
+$ hh doctor
+WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP): moved to a store that is not mounted (ULID 01M6QB1AX3DCHF1FBZNKZ95D4C) (info)
+1 problem
+```
+
+`hh doctor --fix` repairs, in one commit, what a sync would repair: parent cycles,
+children of deleted tasks, tasks in a different workspace than their parent, and IDs that
+clash. It also rebuilds a store after the history of origin was rewritten (below).
+Whatever it cannot repair, it tells you.
+
+## A bare repository as your remote
+
+If your remote is a bare repository on your own machine or server (not GitHub), run `git gc`
+in it from time to time. hedgehug packs the objects of your local copy during sync, but it
+never touches the remote's, which keeps growing as loose objects.
+
+```bash
+git -C /srv/remotes/team.git gc
+```
+
+GitHub does this on its own.
+
+## Removing content from history
+
+hedgehug has no command that removes content from the history, because a store is a git
+repository and everyone has the full history. Deleting a task (`hh rm`, `hh purge`) or
+moving it to another store leaves the old content in the history. If something must go (a
+leaked secret, for example), rewrite the history by hand, then bring everyone's copy in line.
+Revoke a leaked secret as well; a rewrite does not take it back from those who already cloned.
+
+1. Rewrite in a fresh clone of the remote with [`git filter-repo`](https://github.com/newren/git-filter-repo):
+
+   ```bash
+   git clone <remote-url> rewrite && cd rewrite
+   git filter-repo --path tasks/<a>/<b>/<ULID>.md --invert-paths
+   ```
+
+   Use `--replace-text` to blank a string instead of dropping a file. A store with
+   mirrors has to be rewritten the same way, mirror by mirror.
+
+2. Force-push it. `git filter-repo` removes the `origin` remote, so add it back:
+
+   ```bash
+   git remote add origin <remote-url>
+   git push --force origin main
+   ```
+
+3. Everyone else, and your own store directory, picks it up at the next sync. The sync
+   notices that the history of origin no longer contains the history it follows, and stops:
+
+   ```console
+   $ hh sync
+   hedgehug: sync team: the history of origin differs from this store's; check origin,
+   then run hedgehug doctor --fix to rebuild the store on it
+   ```
+
+   Look at origin, then run:
+
+   ```console
+   $ hh doctor --fix
+   == team
+   Rebuilt team on the history of origin; put back 1 unpushed commit
+   No problems
+   ```
+
+   `hh doctor --fix` clones origin again, puts the commits you had not pushed back on top,
+   and drops the old history from your disk. If some of your changes cannot be put back, it keeps the
+   old copy and prints its path.
+
+Sync does not fix this itself, so that a force-push by mistake does not pull everyone along.
+
+## Shell completion
+
+`hh completion bash|zsh|fish` prints a script that completes commands, flags and values.
+It is written for the name you ran it by: `hh completion zsh` completes `hh`, and
+`hedgehug completion zsh` completes `hedgehug`. Install it for each name you use.
+
+```bash
+hh completion bash > ~/.local/share/bash-completion/completions/hh
+hh completion zsh > "${fpath[1]}/_hh"
+hh completion fish > ~/.config/fish/completions/hh.fish
+```
+
+Start a new shell afterwards. The bash script needs the `bash-completion` package; without
+it, completion does not work. (On macOS, the bash that ships with the system is too old;
+install `bash` and `bash-completion@2` from Homebrew.)
+
+Values come from your stores, read locally; nothing is written or synced when you press
+Tab, and a failure gives no candidates:
+
+- task IDs (with the title) for commands that take a task, and for `--parent`, `--after`,
+  `--before` and `--blocked-by`
+- statuses for `hh status <id> <TAB>`
+- `key=` names for `hh set`, and assignees for `assignees=` and for `assignee:` in `hh ls`
+- stores (`--store`), workspaces, sprints, releases, saved views and templates
