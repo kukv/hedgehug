@@ -145,7 +145,7 @@ spec の表と比べる。超えた項目ごとに `BenchmarkLs/<場面>` を `-
 
 ### Task 5: 目標を超えた項目の修正
 
-mac の計測で6場面すべてが目標内だった（最大は全件の作り直しの 354ms）ので、修正はしない。WSL の結果で超えた項目が出たら、ここに足す。
+WSL の全件の作り直しが 1,033ms で目標を超えた。mac のプロファイルでは、時間のほぼすべてがタスクのファイルを1件ずつ読む pack の `pread` だった。`internal/app/storage/index/build.go` に `readEach`（`errgroup`、`GOMAXPROCS` まで）を足し、`rebuild` と `revalidate` の読み込みと解析を並列にする。index への書き込みは順次のまま。`go test -race` と、実 pack の上の `-race` のベンチで確かめる。
 
 ### Task 6: 結果の記録と引き継ぎ
 

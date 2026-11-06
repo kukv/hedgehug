@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"runtime"
 	"slices"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
@@ -19,6 +21,25 @@ import (
 // read reads the file p of tree.
 func (ix *Index) read(tree plumbing.Hash, p string) ([]byte, error) {
 	return ix.repo.ReadFile(tree, p)
+}
+
+// readEach calls fn with the content of each of paths in tree, by its index
+// in paths. The calls run at the same time, as reading the file of every task
+// one by one is most of what a rebuild costs; fn may only write to its own
+// result. It returns the first error.
+func (ix *Index) readEach(tree plumbing.Hash, paths []string, fn func(i int, b []byte) error) error {
+	var g errgroup.Group
+	g.SetLimit(runtime.GOMAXPROCS(0))
+	for i, p := range paths {
+		g.Go(func() error {
+			b, err := ix.read(tree, p)
+			if err != nil {
+				return err
+			}
+			return fn(i, b)
+		})
+	}
+	return g.Wait()
 }
 
 // readSchema decodes schema.yaml as tree has it.
@@ -41,9 +62,8 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 	if err != nil {
 		return err
 	}
-	tasks := map[model.ULID]*Entry{}
-	forwards := map[model.ULID]*ForwardEntry{}
-	decoded := map[model.ULID]*model.Task{}
+	var paths []string
+	var ulids []model.ULID
 	for p, err := range ix.repo.Files(tree, "tasks/") {
 		if err != nil {
 			return err
@@ -52,16 +72,34 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		if err != nil {
 			continue // not a task file
 		}
-		b, err := ix.read(tree, p)
-		if err != nil {
-			return err
-		}
-		e, t, forward := newEntry(ulid, b)
+		paths, ulids = append(paths, p), append(ulids, ulid)
+	}
+	type file struct {
+		entry   *Entry
+		task    *model.Task
+		forward *ForwardEntry
+	}
+	files := make([]file, len(paths))
+	if err := ix.readEach(tree, paths, func(i int, b []byte) error {
+		e, t, forward := newEntry(ulids[i], b)
 		if forward {
-			forwards[ulid] = decodeForwardEntry(ulid, b)
+			files[i].forward = decodeForwardEntry(ulids[i], b)
+			return nil
+		}
+		files[i].entry, files[i].task = e, t
+		return nil
+	}); err != nil {
+		return err
+	}
+	tasks := map[model.ULID]*Entry{}
+	forwards := map[model.ULID]*ForwardEntry{}
+	decoded := map[model.ULID]*model.Task{}
+	for i, f := range files {
+		if f.forward != nil {
+			forwards[ulids[i]] = f.forward
 			continue
 		}
-		tasks[ulid], decoded[ulid] = e, t
+		tasks[ulids[i]], decoded[ulids[i]] = f.entry, f.task
 	}
 	if err := ix.resolveForwardIDs(slices.Collect(maps.Values(forwards))); err != nil {
 		return err
@@ -86,22 +124,34 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 // violations in their entries. decoded holds tasks already decoded; the
 // others are read from tree again. Broken and missing entries are skipped.
 func (ix *Index) revalidate(tree plumbing.Hash, ulids []model.ULID, decoded map[model.ULID]*model.Task) error {
+	var live []model.ULID
+	var paths []string
 	for _, ulid := range ulids {
-		e := ix.tasks[ulid]
-		if e == nil || e.Broken != "" {
+		if e := ix.tasks[ulid]; e == nil || e.Broken != "" {
 			continue
 		}
+		live = append(live, ulid)
+		if decoded[ulid] == nil {
+			paths = append(paths, model.TaskPath(ulid))
+		}
+	}
+	read := make([]*model.Task, len(paths))
+	if err := ix.readEach(tree, paths, func(i int, b []byte) error {
+		t, err := model.DecodeTask(b)
+		if err != nil {
+			return fmt.Errorf("%s: %w", paths[i], err)
+		}
+		read[i] = t
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, ulid := range live {
 		t := decoded[ulid]
 		if t == nil {
-			b, err := ix.read(tree, model.TaskPath(ulid))
-			if err != nil {
-				return err
-			}
-			if t, err = model.DecodeTask(b); err != nil {
-				return fmt.Errorf("%s: %w", model.TaskPath(ulid), err)
-			}
+			t, read = read[0], read[1:] // paths has the same order
 		}
-		e.Violations = ix.violations(t)
+		ix.tasks[ulid].Violations = ix.violations(t)
 	}
 	return nil
 }
