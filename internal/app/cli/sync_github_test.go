@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
@@ -38,6 +39,25 @@ func TestSyncWithoutArgumentsReadsGitHubForAStoreWithoutRemote(t *testing.T) {
 	g, err := te.task(ulid).GitHub()
 	if err != nil || len(g.PRs) != 1 || g.PRs[0].State != "open" {
 		t.Errorf("gh = %+v, %v", g, err)
+	}
+}
+
+func TestSyncSaysGitHubWasReadWhenNothingChanged(t *testing.T) {
+	t.Parallel()
+	te, _ := githubEnv(t)
+	te.ok("sync")
+	te.now = te.now.Add(5 * time.Minute) // GitHub is read every 5 minutes
+	if out := te.ok("sync"); !strings.Contains(out, "Read GitHub for me: nothing new (no remote, nothing to push)") {
+		t.Errorf("sync = %q", out)
+	}
+}
+
+func TestSyncSaysNothingWhenGitHubIsNotDue(t *testing.T) {
+	t.Parallel()
+	te, _ := githubEnv(t)
+	te.ok("sync")
+	if out := te.ok("sync"); !strings.Contains(out, "Nothing to sync: me has no remote") {
+		t.Errorf("sync = %q", out)
 	}
 }
 

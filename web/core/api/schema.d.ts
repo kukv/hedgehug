@@ -2496,6 +2496,7 @@ export interface components {
         StoresChanged: Record<string, never>;
         SyncReport: {
             error?: string;
+            github_read?: boolean;
             github_updated?: boolean;
             invalid: string[] | null;
             /** Format: int64 */

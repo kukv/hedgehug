@@ -32,6 +32,8 @@ type SyncReport struct {
 	// Unpushable is the number of commits not pushed because the store is
 	// read-only.
 	Unpushable int `json:"unpushable,omitempty"`
+	// GitHubRead is whether the sync read a repository on GitHub.
+	GitHubRead bool `json:"github_read,omitempty"`
 	// GitHubUpdated is whether the sync wrote what it read from GitHub (links
 	// and gh) to the store.
 	GitHubUpdated bool  `json:"github_updated,omitempty"`
