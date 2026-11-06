@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ var version = "dev"
 
 // env is what one run of the command sees of the world outside.
 type env struct {
+	progName       string // the name the command runs by: hh, or hedgehug
 	stdin          io.Reader
 	stdout, stderr io.Writer
 	getenv         func(string) string
@@ -56,6 +58,7 @@ func Main(v string) int {
 		return 1
 	}
 	return run(os.Args[1:], &env{
+		progName:   filepath.Base(os.Args[0]),
 		stdin:      os.Stdin,
 		stdout:     os.Stdout,
 		stderr:     os.Stderr,
