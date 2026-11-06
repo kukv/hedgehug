@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -85,7 +84,7 @@ func TestCompletionCandidates(t *testing.T) {
 	te.ok("sprint", "add", "s1", "--workspace", "work")
 	te.ok("release", "add", "r1", "--workspace", "work")
 	te.ok("view", "save", "mine", "--query", "status:todo")
-	te.uc().SetMembers(replicate.Members{Authors: []string{"github.com/bob"}})
+	te.uc().WriteMembers("me", []usecasetest.Member{{ID: "github.com/bob", Permission: "write"}})
 
 	for _, c := range []struct {
 		name string
