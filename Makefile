@@ -1,4 +1,4 @@
-.PHONY: generate build web licenses web-check e2e-bin e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history check release-check
+.PHONY: generate build web licenses web-check e2e-bin e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history bench-tasks check release-check
 
 # Write the generated files (api/openapi.yaml).
 generate:
@@ -77,6 +77,12 @@ clean-cache:
 # cache directory). -p 1 keeps the packages from measuring at the same time.
 bench-history:
 	HH_BENCH=1 go test -p 1 ./internal/app/storage/history ./internal/app/storage/reportcache ./internal/app/usecase ./internal/app/usecase/browse ./internal/app/usecase/tasks -run '^$$' -bench . -benchtime 5x -timeout 60m
+
+# Measure hedgehug ls on a synthesized store of 10,000 tasks, in the process and
+# as a command (not part of check or CI; see the phase 7 spec). The store is
+# kept in $HH_BENCH_CACHE, as for bench-history.
+bench-tasks:
+	HH_BENCH=1 go test -p 1 ./internal/app/usecase/browse ./cmd/hedgehug -run '^$$' -bench 'BenchmarkLs' -benchtime 5x -timeout 60m
 
 # Run everything the CI checks, locally.
 check: tidy-check lint fmt-check test web-check

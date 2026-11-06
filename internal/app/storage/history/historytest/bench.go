@@ -19,6 +19,23 @@ const (
 	benchSeed    = 1
 )
 
+// The store of make bench-tasks: 20,000 commits after the 10,000 that add the
+// tasks.
+const (
+	TaskBenchCommits = 30_000
+	TaskBenchTasks   = 10_000
+)
+
+// TaskBenchSource is the synthesized store of make bench-tasks. It skips b
+// unless HH_BENCH is set.
+func TaskBenchSource(b *testing.B) string {
+	b.Helper()
+	if os.Getenv("HH_BENCH") == "" {
+		b.Skip("set HH_BENCH=1 (make bench-tasks) to measure on a store of 10,000 tasks")
+	}
+	return Synth(b, TaskBenchCommits, TaskBenchTasks, benchSeed)
+}
+
 // BenchSource is the synthesized store of the benchmarks. It skips b unless
 // HH_BENCH is set.
 func BenchSource(b *testing.B) string {
