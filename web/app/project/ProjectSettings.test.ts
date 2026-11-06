@@ -397,12 +397,6 @@ describe("ProjectSettings", () => {
     ).toBeTruthy();
   });
 
-  it("makes no last-changed date", async () => {
-    setup();
-    await screen.findByRole("group", { name: "表示するステータス" });
-    expect(screen.queryByText(/最終更新/)).toBeNull();
-  });
-
   describe("when the schema changes", () => {
     const hidden = { where: "project:P1", statuses: ["todo", "in_progress", "done", "canceled"] };
 

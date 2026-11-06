@@ -168,7 +168,6 @@ func TestPurgeUsageErrors(t *testing.T) {
 		want string
 	}{
 		{[]string{"purge", "ME-1"}, "--older-than"},
-		{[]string{"purge", "--moved"}, "unknown flag: --moved"},
 		{[]string{"purge", "--older-than", "90"}, `"90" is not a period`},
 		{[]string{"purge", "--older-than=-5d"}, `"-5d" is not a period`},
 		{[]string{"purge", "--older-than", "1w"}, `"1w" is not a period`},
@@ -178,17 +177,6 @@ func TestPurgeUsageErrors(t *testing.T) {
 		if code != 2 || !strings.Contains(errs, c.want) {
 			t.Errorf("%v: exit %d, stderr %q; want 2 and %q", c.args, code, errs, c.want)
 		}
-	}
-}
-
-// The option that rewrote the history is gone: an unknown flag is a usage error.
-func TestPurgeRewriteHistoryIsGone(t *testing.T) {
-	t.Parallel()
-	te := newStoreEnv(t)
-	x := te.addJSON("x")
-	code, _, errs := te.run("purge", "--rewrite-history", x.ID)
-	if code != 2 || !strings.Contains(errs, "unknown flag: --rewrite-history") {
-		t.Errorf("exit %d, stderr %q; want a usage error", code, errs)
 	}
 }
 

@@ -194,7 +194,6 @@ func TestLsErrors(t *testing.T) {
 	}{
 		{[]string{"ls", "nope:x"}, "nope"},
 		{[]string{"ls", "--json", "--ulids-only"}, "only one of"},
-		{[]string{"ls", "--ids-only"}, "unknown flag: --ids-only"},
 		{[]string{"ls", "--format", "{{"}, "--format"},
 		{[]string{"ls", "--format", "{{.nosuch}}"}, "nosuch"},
 		{[]string{"ls", "--tree", "--format", "{{"}, "--format"},

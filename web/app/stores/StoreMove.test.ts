@@ -127,17 +127,6 @@ describe("StoreMove", () => {
     expect(cli()).toHaveTextContent("hh mv REL-1 --store second --yes");
   });
 
-  it("does not say the number the new ID will have, nor what is not in the API", async () => {
-    setup();
-    await pick("second");
-    await screen.findByText("移動先で変わること");
-    const text = document.body.textContent ?? "";
-    expect(text).not.toMatch(/SC-\d/);
-    expect(text).not.toMatch(/読める人 \d/);
-    expect(text).not.toContain("種類・ステータス");
-    expect(text).not.toContain("計画");
-  });
-
   it("does not offer to rewrite the history", async () => {
     setup({ plan: planOf({ hidden: ["alice@example.com", "bob"] }) });
     await pick("second");

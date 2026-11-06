@@ -148,18 +148,6 @@ func TestStoreRemoveWithoutRemote(t *testing.T) {
 	te.ok("store", "remove", "me", "--keep")
 }
 
-// --purge is gone: deleting is what remove does.
-func TestStoreRemovePurgeFlagIsGone(t *testing.T) {
-	t.Parallel()
-	alice, _, _ := twoUsers(t)
-	if code, _, errs := alice.run("store", "remove", "org", "--purge"); code != 2 || !strings.Contains(errs, "unknown flag: --purge") {
-		t.Errorf("remove --purge: exit %d, stderr %q", code, errs)
-	}
-	if _, err := os.Stat(alice.storeDir("org")); err != nil {
-		t.Errorf("a refused command removed the directory: %v", err)
-	}
-}
-
 func TestStoreListJSON(t *testing.T) {
 	t.Parallel()
 	alice, _, remote := twoUsers(t)

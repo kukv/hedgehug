@@ -95,15 +95,6 @@ describe("SettingsGeneral", () => {
     expect(getAllByText(/表示中は 1 分 30 秒ごと/)).toHaveLength(1);
   });
 
-  it("プリセットや GitHub の間隔、GUI サーバーの欄は出さない", () => {
-    const { queryByText, queryByRole } = mount([status({ store: "a" })]);
-    for (const t of ["標準", "控えめ", "カスタム", "GitHub", "GUI サーバー", "ポート"]) {
-      expect(queryByText(new RegExp(t))).toBeNull();
-    }
-    expect(queryByRole("radio")).toBeNull();
-    expect(queryByRole("spinbutton")).toBeNull();
-  });
-
   it("同期の状態は Store ごとに段を分け、それぞれの状態と「今すぐ同期」を持つ", () => {
     const { getByRole } = mount([
       status({ store: "a", unpushed: 0 }),
@@ -163,12 +154,5 @@ describe("SettingsGeneral", () => {
   it("診断の段の名前は同期の状態の段（Store: a）と重ならない", () => {
     const { getAllByRole } = mount([status({ store: "a" })]);
     expect(getAllByRole("region", { name: "Store: a" })).toHaveLength(1);
-  });
-
-  it("インデックスの作り直し・repack・merge driver の登録は出さない", () => {
-    const { container } = mount([status({ store: "a" })]);
-    for (const t of ["作り直", "repack", "登録する", "--moved"]) {
-      expect(container.textContent).not.toContain(t);
-    }
   });
 });

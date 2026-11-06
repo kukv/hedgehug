@@ -3,7 +3,6 @@ package history_test
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"math/rand/v2"
@@ -21,18 +20,13 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-func shortMode() bool {
-	f := flag.Lookup("test.short")
-	return f != nil && f.Value.String() == "true"
-}
-
 // TestPropertyMatchesNaive builds random histories (branches, merges, equal
 // and increasing author times, main moving about) and checks that the index,
 // built step by step and built at once, answers as a walk that compares every
 // commit with its parents does.
 func TestPropertyMatchesNaive(t *testing.T) {
 	seeds, steps := 30, 40
-	if shortMode() {
+	if testing.Short() {
 		seeds, steps = 6, 20
 	}
 	for seed := 1; seed <= seeds; seed++ {

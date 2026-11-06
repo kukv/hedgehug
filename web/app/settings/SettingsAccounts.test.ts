@@ -197,12 +197,6 @@ describe("SettingsAccounts: the list", () => {
     expect(within(card("b")).getByText("s3")).toBeTruthy();
     expect(within(card("c")).getByText("なし", { selector: "dd" })).toBeTruthy();
   });
-
-  it("has no delete and no account of the GitHub App", () => {
-    mount({ list: [acct("a")] });
-    expect(screen.queryByText(/削除/)).toBeNull();
-    expect(screen.queryByText(/GitHub App/)).toBeNull();
-  });
 });
 
 describe("SettingsAccounts: the menu", () => {

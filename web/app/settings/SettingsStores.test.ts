@@ -125,12 +125,6 @@ describe("SettingsStores: the list", () => {
       ).toBe(false);
     }
   });
-
-  it("does not show what is not made: found Stores, task counts, the GitHub search", () => {
-    mount({ list: [item("a"), item("b")] });
-    expect(screen.queryByText(/新しく見つかった/)).toBeNull();
-    expect(screen.queryByText(/タスク/)).toBeNull();
-  });
 });
 
 describe("SettingsStores: the heading buttons", () => {

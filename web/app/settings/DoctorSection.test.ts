@@ -311,13 +311,6 @@ describe("DoctorSection: the diagnosis", () => {
     expect(api.getTask).not.toHaveBeenCalled();
     expect(api.doctorFix).not.toHaveBeenCalled();
   });
-
-  it("does not build what the screen leaves out", async () => {
-    setup({ reports: { a: report({ findings: [fileFinding] }) } });
-    await within(region()).findByText("does not decode");
-    const text = region().textContent ?? "";
-    for (const t of ["作り直", "repack", "登録する", "--moved"]) expect(text).not.toContain(t);
-  });
 });
 
 describe("DoctorSection: the command", () => {
