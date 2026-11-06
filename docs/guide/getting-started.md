@@ -71,10 +71,11 @@ hh add "Review the login page"       # goes to the default store
 hh status WEB-1 in_progress
 hh set WEB-1 assignees=github.com/me labels+=ui
 hh done WEB-1
-hh sync                              # send your changes, get the others'
+hh sync                              # sync now, without waiting for the background sync
 ```
 
-Every command writes to your local copy only. Nothing reaches your team until `hh sync`.
+Every command writes to your local copy first, so it works offline. A store with a remote then
+syncs in the background, about 30 seconds after a write.
 The statuses depend on the store's schema; the default one has `backlog`, `todo`,
 `on_hold`, `in_progress`, `waiting`, `done` and `canceled`.
 

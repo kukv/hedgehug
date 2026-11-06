@@ -60,10 +60,10 @@ hh add "ログインページをレビューする"   # 既定の Store に入�
 hh status WEB-1 in_progress
 hh set WEB-1 assignees=github.com/me labels+=ui
 hh done WEB-1
-hh sync                                 # 自分の変更を送り、ほかの人の変更を受け取る
+hh sync                                 # 裏の同期を待たず、今すぐ同期する
 ```
 
-どのコマンドも、手元のコピーにだけ書きます。`hh sync` を実行するまで、変更はチームに届きません。使えるステータスは Store のスキーマで決まります。既定のスキーマには `backlog`、`todo`、`on_hold`、`in_progress`、`waiting`、`done`、`canceled` があります。
+どのコマンドも、まず手元のコピーに書くので、オフラインでも動きます。remote のある Store は、書き込みの約30秒後に裏で同期します。使えるステータスは Store のスキーマで決まります。既定のスキーマには `backlog`、`todo`、`on_hold`、`in_progress`、`waiting`、`done`、`canceled` があります。
 
 ## 5. 自分の Store を作る
 

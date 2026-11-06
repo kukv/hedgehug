@@ -1,7 +1,11 @@
 # Sync
 
-`hh sync` fetches, merges, repairs and pushes. Commands such as `hh add` and `hh set`
-only commit to your local copy, so sync whenever you want others to see your work.
+`hh sync` fetches, merges, repairs and pushes. You rarely need it: a store with a remote
+syncs in the background. After a write, hedgehug pushes about 30 seconds later
+(`sync.push_interval`), and any command starts a sync when the last one is more than
+2 minutes old (`sync.interval`). Both settings are in `config.yaml`. Run `hh sync` when you
+want it done now or want to see the result. `HEDGEHUG_AUTO_SYNC=0` turns the background
+sync off.
 
 ```console
 $ hh sync --status

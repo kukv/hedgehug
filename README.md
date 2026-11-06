@@ -7,7 +7,7 @@ a GUI in a single binary. The command is `hedgehug`; `hh` is the short form.
 
 - Every task is a Markdown file in a git repository (a store). The history of the
   store is the history of your tasks.
-- Everything works offline. Sync is a separate step: `hh sync`.
+- Everything works offline. A store with a remote syncs in the background, and `hh sync` syncs now.
 - Concurrent edits merge field by field. When two people change the same field, the
   later change wins and the loser sees it in `hh inbox`.
 - Stores map to who you share with: one for yourself, one per team. `hh ls` shows them all.

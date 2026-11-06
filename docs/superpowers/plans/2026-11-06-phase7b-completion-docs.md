@@ -10,10 +10,11 @@
 
 spec: `docs/superpowers/specs/2026-11-06-phase7-finish-design.md` の「7b 補完と文書」
 
-spec から直した点:
+spec から直した点（spec も直した）:
 
 - `hh set` の担当者のキーは `assignees=`（`assignee=` はない）。値はアカウントの ID（`github.com/alice`）
 - `hh use` の引数は Store ではなくプロジェクトなので、タスク ID を出す
+- 自動化のルールの ID（`automation rm`・`enable`・`disable`）も補完する
 
 ---
 
@@ -57,7 +58,7 @@ spec から直した点:
 
 - [ ] **Step 2: fish で確かめる**
 
-fish を入れて同じことを確かめる。
+Debian のコンテナで、bash 5.2（bash-completion あり）と fish 4.0 を確かめる。手元の環境に fish を入れない。
 
 ### Task 4: 文書
 

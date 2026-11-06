@@ -1,6 +1,6 @@
 # 同期
 
-`hh sync` は、fetch、マージ、修復、push をまとめて行います。`hh add` や `hh set` などは手元のコピーにコミットするだけなので、ほかの人に見せたいときに同期します。
+`hh sync` は、fetch、マージ、修復、push をまとめて行います。ふだんは実行しなくても構いません。remote のある Store は裏で同期するからです。書き込みの約30秒後に push し（`sync.push_interval`）、前回の同期から2分以上たっていれば、どのコマンドでも同期を始めます（`sync.interval`）。どちらも `config.yaml` で変えられます。すぐに同期したいときや、結果を見たいときに `hh sync` を実行してください。`HEDGEHUG_AUTO_SYNC=0` で裏の同期を止められます。
 
 ```console
 $ hh sync --status
