@@ -55,7 +55,8 @@ func (a *app) rootCmd() *cobra.Command {
 		Args:          cobra.NoArgs,
 		// Every subcommand uses this one: none has a hook of its own.
 		PersistentPreRunE: a.beforeRun,
-		// completion comes in phase 7.
+		// completion.go has the command: the default one names the script
+		// hedgehug even when it runs as hh.
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SetOut(cmd.ErrOrStderr())
@@ -69,7 +70,8 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.ss.StoreName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.sprintCmd(), a.releaseCmd(), a.worklogCmd(), a.templateCmd(), a.reportCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.linkCmd(), a.unlinkCmd(), a.startCmd(), a.prCmd(), a.issueCmd(), a.ghCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.automationCmd(), a.doctorCmd(), a.workspaceCmd(), a.viewCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd(), a.authCmd(), a.useCmd(), a.uiCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.sprintCmd(), a.releaseCmd(), a.worklogCmd(), a.templateCmd(), a.reportCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.linkCmd(), a.unlinkCmd(), a.startCmd(), a.prCmd(), a.issueCmd(), a.ghCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.automationCmd(), a.doctorCmd(), a.workspaceCmd(), a.viewCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd(), a.authCmd(), a.useCmd(), a.uiCmd(), a.completionCmd())
+	a.wireCompletion(root)
 	return root
 }
 
@@ -104,6 +106,9 @@ var errNoAccountSetUp = errors.New("no account is set up; add one with hedgehug 
 // beforeRun is the hook of every command: it stops a command that needs an
 // account when none is set up, then runs beforeCommand.
 func (a *app) beforeRun(cmd *cobra.Command, _ []string) error {
+	if noCompletion(cmd) {
+		return nil
+	}
 	n, err := a.ss.AccountCount()
 	if !noAccountCommands[cmd.CommandPath()] {
 		if err != nil {

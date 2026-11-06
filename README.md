@@ -3,45 +3,82 @@
 [日本語](README.ja.md)
 
 A local-first task manager that uses git as its storage and sync layer, with a CLI and
-a GUI in a single binary.
+a GUI in a single binary. The command is `hedgehug`; `hh` is the short form.
+
+- Every task is a Markdown file in a git repository (a store). The history of the
+  store is the history of your tasks.
+- Everything works offline. A store with a remote syncs in the background, and `hh sync` syncs now.
+- Concurrent edits merge field by field. When two people change the same field, the
+  later change wins and the loser sees it in `hh inbox`.
+- Stores map to who you share with: one for yourself, one per team. `hh ls` shows them all.
+- Tasks link to GitHub pull requests and issues.
 
 It runs on Linux and macOS. On Windows, use it in WSL.
 
-> **Status: setting up.** The repository has its CI, lint and release configuration, but
-> no features yet. Nothing here is ready to use.
+## Install
 
-## Development
+The archive and `mise` give you both `hedgehug` and `hh`. `hh` shares its name with an
+old version of HSTR (a shell history tool); if you have both, use `hedgehug`.
 
-The GUI is in `web/`: a Svelte app built with Vite, embedded in the binary. You need
-Node and pnpm; `mise install` installs the versions pinned in `mise.toml`.
+1. With [mise](https://mise.jdx.dev/):
+
+   ```bash
+   mise use -g github:kukv/hedgehug@latest
+   ```
+
+2. By hand: download the archive for your OS and CPU and `checksums.txt` from
+   [Releases](https://github.com/kukv/hedgehug/releases), then verify and unpack it:
+
+   ```bash
+   sha256sum -c checksums.txt --ignore-missing
+   tar xzf <archive>.tar.gz
+   install hedgehug hh ~/.local/bin
+   ```
+
+3. From source, with Go, Node and pnpm (`mise install` installs the pinned versions of
+   Node and pnpm):
+
+   ```bash
+   git clone https://github.com/kukv/hedgehug && cd hedgehug
+   make build          # bin/hedgehug, with the GUI inside
+   ```
+
+`go install` is not supported: a binary built without `make build` has no GUI.
+
+Check it: `hh --version`.
+
+## Quick start
 
 ```bash
-mise install
-make build          # builds web/dist, then bin/hedgehug with the GUI inside
-bin/hedgehug ui     # serves the GUI on 127.0.0.1 and opens the browser
+hh auth add me --login <your-github-login> --token gh   # uses the token of the gh CLI
+hh store init me --prefix ME                            # a store only you use
+hh add "Write the README"
+hh ls
+hh done ME-1
+hh ui                                                   # the same tasks in the browser
 ```
 
-To work on the GUI with reload, start the server and the Vite dev server side by side.
-The dev server proxies `/api` to the server and opens the browser with its token:
+To see your team's tasks, run `hh store discover`. The whole walk-through, from install to
+the team's tasks, is in [Getting started](docs/guide/getting-started.md).
 
-```bash
-bin/hedgehug ui --no-open       # prints: Hedgehug UI: http://127.0.0.1:<port>/#token=<token>
-cd web
-HEDGEHUG_UI='http://127.0.0.1:<port>/#token=<token>' pnpm dev
-```
+## Guide
 
-```bash
-make web-check      # Biome, svelte-check, the API types and Vitest (also part of make check)
-make e2e            # Playwright against bin/hedgehug-e2e (built with -tags e2e: a file keyring, not the OS keychain) and bin/fakegh (installs Chromium if it is missing)
-make e2e-bin        # only the GUI and those two binaries
-```
+| Guide | What it covers |
+| --- | --- |
+| [Getting started](docs/guide/getting-started.md) | Install, sign in, your first task, your team's tasks |
+| [Sync](docs/guide/sync.md) | Sync, merges, overwritten values, `hh undo`, `hh restore --at` |
+| [Stores](docs/guide/stores.md) | Several stores, accounts, the project to add under, moving tasks between stores |
+| [GitHub](docs/guide/github.md) | Links, automations, issue sync |
+| [Planning](docs/guide/planning.md) | Sprints, releases, reports, templates |
+| [Maintenance](docs/guide/maintenance.md) | `hh doctor`, bare repositories, removing content from history, shell completion |
 
-A binary built without `make web` (`go build`, `go install`) has no GUI: `hh ui` serves a
-page that says to build it.
+`hh <command> --help` lists every option of a command. The guides are also in
+[Japanese](docs/guide/ja/getting-started.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+Building from source, the GUI dev server and the checks are in
+[CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
 
 ## License
 

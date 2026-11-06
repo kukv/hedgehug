@@ -67,11 +67,11 @@ cobra の既定の `completion` コマンドは使わず、`completion <bash|zsh
 
 | 対象 | 候補 | 使う場所 |
 |---|---|---|
-| タスク ID | 削除していないタスクの ID。説明にタイトル | `<id>` を取るコマンド、`--parent`、`--after`、`--before`、`--blocked-by` |
+| タスク ID | 削除していないタスクの ID。説明にタイトル | `<id>` と `<project>` を取るコマンド、`--parent`、`--after`、`--before`、`--blocked-by` |
 | ステータス | スキーマのステータス | `hh status` の第2引数 |
-| 担当者 | Store のメンバー一覧 | `hh set` の `assignee=`、`hh ls` の `assignee:` |
+| 担当者 | Store のメンバー一覧 | `hh set` の `assignees=`・`watchers=`、`hh ls` の `assignee:` |
 | `hh set` のキー | `key=` の形のフィールド名 | `hh set` の第2引数以降 |
-| Store | マウント中の Store 名 | `--store`、`hh use` |
+| Store | マウント中の Store 名 | `--store`、`hh store` の引数 |
 | ワークスペース | ワークスペースのキー | `--workspace` |
 | スプリント、リリース | 名前 | `--sprint`、`--release`、`hh sprint`・`hh release` の引数 |
 | ビュー、テンプレート | 名前 | `hh view`、`--template` |

@@ -30,6 +30,7 @@ type testEnv struct {
 	home     string
 	hhHome   string
 	stdin    string
+	progName string
 	terminal bool               // what isTerminal reports for every stream
 	openURL  func(string) error // what the browser is opened with; nil for none
 	now      time.Time
@@ -124,6 +125,7 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 	te.t.Helper()
 	var out, errb bytes.Buffer
 	e := &env{
+		progName:   te.progName,
 		stdin:      strings.NewReader(te.stdin),
 		stdout:     &out,
 		stderr:     &errb,
