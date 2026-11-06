@@ -31,7 +31,7 @@ old version of HSTR (a shell history tool); if you have both, use `hedgehug`.
 
    ```bash
    sha256sum -c checksums.txt --ignore-missing
-   tar xzf <archive>.tar.gz
+   tar xzf hedgehug_<version>_linux_amd64.tar.gz
    install hedgehug hh ~/.local/bin
    ```
 
