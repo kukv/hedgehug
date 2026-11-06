@@ -155,7 +155,7 @@ WSL の全件の作り直しが 1,033ms で目標を超えた。mac のプロフ
 
 - [ ] **Step 1: WSL の計測を頼む**
 
-利用者に、ブランチを push した後で WSL で `make bench-tasks` を流し、出力を貼ってもらう。
+ブランチを push し、draft PR を作り、手順を PR にコメントする。利用者は WSL で `make bench-tasks` を流し、出力を `gh pr comment` で PR に載せる。
 
 - [ ] **Step 2: spec に「計測の結果」を足す**
 
