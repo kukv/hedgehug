@@ -357,7 +357,7 @@ func (i IssueFields) problems(base string) []schema.Problem {
 	var ps []schema.Problem
 	oneOf := func(path, v string, want []string) {
 		if !slices.Contains(want, v) {
-			ps = append(ps, schema.Problem{Path: path, Msg: fmt.Sprintf("%q is not one of %s", v, strings.Join(want, ", "))})
+			ps = append(ps, schema.NewProblem(path, "automation.not_one_of", "%q is not one of %s", v, strings.Join(want, ", ")))
 		}
 	}
 	oneOf(base+".default_sync", i.DefaultSync, SyncModes)

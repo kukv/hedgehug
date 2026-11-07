@@ -94,12 +94,12 @@
     {/if}
     <div class="row">
       <PlanField label="名前" value={name} first oninput={(v) => (name = v)} />
-      <PlanField label="start" type="date" value={start} oninput={(v) => (start = v)} />
-      <PlanField label="end" type="date" value={end} oninput={(v) => (end = v)} />
+      <PlanField label="開始日" type="date" value={start} oninput={(v) => (start = v)} />
+      <PlanField label="終了日" type="date" value={end} oninput={(v) => (end = v)} />
     </div>
     <PlanField label="ゴール" value={goal} oninput={(v) => (goal = v)} />
     {#if !was}
-      <p class="note">状態は planned で作ります · 開始するには start と end が必要です</p>
+      <p class="note">状態は planned で作ります · 開始するには開始日と終了日が必要です</p>
     {/if}
     {#if failure}
       <FormError message={failure} />

@@ -1,7 +1,7 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - Onboarding, step 2 ("使う Store を選んでください"): the textbox "フォルダ" and the button
 //     "探す" list the bare repositories under a folder that hold a Store; each row has a checkbox
-//     "<path> を選ぶ", a textbox "<path> の呼び名" (the name the server proposes, the repo name),
+//     "<path> を選ぶ", a textbox "<path> の名前" (the name the server proposes, the repo name),
 //     and "マウントして次へ" mounts the chosen ones; step 3 lists them and "始める" closes Onboarding
 //   - Settings › マウント中の Store has "Store を探す", a dialog with the same search; a Store that
 //     is mounted already is not listed again ("見つかりませんでした")
@@ -29,10 +29,10 @@ test("two Stores in a folder are found, one is renamed, and both are mounted", a
     const beta = page.getByLabel(/beta\.git を選ぶ/);
     await expect(alpha).toBeVisible();
     await expect(beta).toBeVisible();
-    await expect(page.getByLabel(/alpha\.git の呼び名/)).toHaveValue("alpha");
-    await expect(page.getByLabel(/beta\.git の呼び名/)).toHaveValue("beta");
+    await expect(page.getByLabel(/alpha\.git の名前/)).toHaveValue("alpha");
+    await expect(page.getByLabel(/beta\.git の名前/)).toHaveValue("beta");
 
-    await page.getByLabel(/beta\.git の呼び名/).fill("beta-renamed");
+    await page.getByLabel(/beta\.git の名前/).fill("beta-renamed");
     await alpha.check();
     await beta.check();
     await page.getByRole("button", { name: "マウントして次へ" }).click();

@@ -18,11 +18,11 @@ export type StoreTone =
 export function readOnlyReason(why: string): string {
   switch (why) {
     case "the GitHub permission is read":
-      return "GitHub の権限が読み取りです";
+      return "GitHub の権限が読み取りのみです";
     case "the remote cannot be written":
       return "remote に書き込めません";
     case "the remote denied the push":
-      return "remote が push を拒みました";
+      return "remote が push を拒否しました";
     default:
       return why;
   }

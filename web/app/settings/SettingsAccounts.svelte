@@ -92,8 +92,8 @@
   </p>
 
   {#if accounts.current.error}
-    <FormError message="アカウントを読めません · {errorMessage(accounts.current.error)}" />
-    <div><Button onclick={() => c.accounts.reload()}>もう一度読む</Button></div>
+    <FormError message="アカウントを読み込めません · {errorMessage(accounts.current.error)}" />
+    <div><Button onclick={() => c.accounts.reload()}>もう一度読み込む</Button></div>
   {/if}
 
   {#if !accounts.current.loaded}

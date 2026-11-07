@@ -40,7 +40,7 @@
     try {
       const r = await api.createIssue(task.ulid, { repo: typed }, { store: task.store });
       cache.applyWrite({ task: r.task, commit: r.commit });
-      toast({ message: ["Issue を作りました", ...r.warnings].join(" · ") });
+      toast({ message: ["Issue を作成しました", ...r.warnings].join(" · ") });
       onclose();
     } catch (err) {
       error = errorMessage(err);
@@ -50,7 +50,7 @@
   }
 </script>
 
-<Dialog open title="Issue を作る" width={560} {cli} cliDisabled={typed === ""} {onclose}>
+<Dialog open title="Issue を作成" width={560} {cli} cliDisabled={typed === ""} {onclose}>
   <form id="issue-form" class="form" onsubmit={submit}>
     <label class="field">
       <span>リポジトリ</span>

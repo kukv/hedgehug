@@ -153,7 +153,7 @@
 {:else if col.id === "assignee"}
   <FieldInput
     editor="chips"
-    label="担当: {taskId}"
+    label="担当者: {taskId}"
     value={task.assignees ?? []}
     {readonly}
     {describedby}

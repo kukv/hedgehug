@@ -559,7 +559,7 @@ describe("CommandPalette", () => {
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
     expect(await screen.findByText("REL-6 に対して")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("option", { name: /子タスクを作る/ }));
+    await fireEvent.click(screen.getByRole("option", { name: /子タスクを作成/ }));
     expect(createState.request).toEqual({ kind: "task", parent: "U6" });
   });
 
@@ -573,7 +573,7 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("option", { name: /詳細を開く/ })).toBeInTheDocument();
     for (const name of [
       /ステータスを変更/,
-      /子タスクを作る/,
+      /子タスクを作成/,
       /別のワークスペースへ移動/,
       /別の Store へ移動/,
       /タスクを作成/,

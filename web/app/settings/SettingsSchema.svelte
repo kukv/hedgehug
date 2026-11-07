@@ -150,7 +150,7 @@
     if ((o.statuses ?? []).length > 0) parts.push(`ステータス ${o.statuses?.length} 件を表示`);
     const t = Object.keys(o.workflow?.transitions ?? {}).length;
     const r = Object.keys(o.workflow?.required ?? {}).length;
-    if (t > 0) parts.push(`移動の制約 ${t} 件`);
+    if (t > 0) parts.push(`遷移の制約 ${t} 件`);
     if (r > 0) parts.push(`必須の項目 ${r} 件`);
     return parts.join(" · ");
   }
@@ -193,26 +193,26 @@
 
   {#if schema === undefined}
     {#if schemaError}
-      <FormError message="スキーマを読めません · {errorMessage(schemaError)}" />
+      <FormError message="スキーマを読み込めません · {errorMessage(schemaError)}" />
       <div><Button onclick={retry}>もう一度読み込む</Button></div>
     {:else}
       <p class="note">読み込み中…</p>
     {/if}
   {:else}
     {#if tasksFailure}
-      <FormError message="タスクの件数を読めません · {tasksFailure}" />
+      <FormError message="タスクの件数を読み込めません · {tasksFailure}" />
     {/if}
 
     {#snippet actions(target: MigrateTarget, old: string, names: string[], prop?: string)}
       {@const subject = prop ? `${prop} の ${old}` : old}
       <Button
         size="sm"
-        aria-label="名前を変える…（{subject}）"
+        aria-label="名前を変更…（{subject}）"
         disabled={off !== null}
         why={off ?? undefined}
         onclick={() => (ask = { target, prop, old, mode: "rename", names })}
       >
-        名前を変える…
+        名前を変更…
       </Button>
       {#if names.length > 1}
         <Button
@@ -233,7 +233,7 @@
       <section class="sec" aria-labelledby="{uid}-statuses">
         <h2 id="{uid}-statuses">ステータス</h2>
         <p class="note">
-          どれも todo・doing・done・canceled のいずれかのカテゴリに属し、各カテゴリに既定が 1
+          どれも未着手・進行中・完了・中止のいずれかのカテゴリに属し、各カテゴリに既定が 1
           つあります。
         </p>
         <table aria-labelledby="{uid}-statuses">
@@ -380,9 +380,9 @@
       <section class="sec" aria-labelledby="{uid}-workflow">
         <h2 id="{uid}-workflow">ワークフロー</h2>
         <p class="note">
-          制約を付けたステータスだけを縛ります。付けていないステータスはどこへでも移れます。
+          制約は、付けたステータスにだけ適用されます。付けていないステータスはどこへでも移れます。
         </p>
-        <h3>移動の制約</h3>
+        <h3>遷移の制約</h3>
         {#if transitions.length === 0}
           <p class="none">制約はありません</p>
         {:else}
@@ -407,7 +407,7 @@
 
     <section class="sec" aria-labelledby="{uid}-scoped">
       <h2 id="{uid}-scoped">プロジェクトごとの上書き</h2>
-      <p class="note">定義はここで決め、プロジェクトでは振る舞いだけを変えます（scoped）。</p>
+      <p class="note">定義はここで決め、プロジェクトでは設定だけを変えます。</p>
       {#if scoped.length === 0}
         <p class="none">上書きのあるプロジェクトはありません</p>
       {:else}

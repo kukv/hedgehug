@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import type { TaskView } from "../../core/api/client";
-  import { categoryOf } from "../../core/categories";
+  import { CATEGORY_LABEL, categoryOf } from "../../core/categories";
   import { cliLs } from "../../core/cli";
   import {
     chartRange,
@@ -411,9 +411,9 @@
     {/if}
   {:else}
     <div class="legend">
-      <span><i data-fill="doing"></i>doing</span>
-      <span><i data-fill="todo"></i>todo</span>
-      <span><i data-fill="done"></i>done</span>
+      <span><i data-fill="doing"></i>{CATEGORY_LABEL.doing}</span>
+      <span><i data-fill="todo"></i>{CATEGORY_LABEL.todo}</span>
+      <span><i data-fill="done"></i>{CATEGORY_LABEL.done}</span>
       <span><i data-fill="sprint"></i>日付なし（スプリントの期間）</span>
       <span><i data-fill="warn"></i>警告</span>
       {#if places.length > 1}
@@ -470,7 +470,7 @@
                 type="button"
                 class="fold"
                 aria-expanded={r.expanded}
-                aria-label="{r.task.title} の子を{r.expanded ? "畳む" : "開く"}"
+                aria-label="{r.task.title} の子を{r.expanded ? "折りたたむ" : "展開する"}"
                 onclick={() => toggle(r.ulid)}
               >
                 {r.expanded ? "▾" : "▸"}

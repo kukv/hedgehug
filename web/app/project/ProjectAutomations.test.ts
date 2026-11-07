@@ -56,7 +56,7 @@ describe("ProjectAutomations", () => {
   it("starts a rule stopped here again", async () => {
     const { api } = setup();
     await fireEvent.click(
-      await screen.findByRole("checkbox", { name: "このプロジェクトで停止: stopped" }),
+      await screen.findByRole("checkbox", { name: "このプロジェクトで無効: stopped" }),
     );
     await waitFor(() =>
       expect(api.setAutomationEnabled).toHaveBeenCalledWith(
@@ -98,7 +98,7 @@ describe("ProjectAutomations", () => {
       await screen.findByRole("dialog", { name: "このプロジェクトだけのルールを追加" }),
     );
     await fireEvent.input(dialog.getByLabelText("id"), { target: { value: "r1" } });
-    await fireEvent.change(dialog.getByLabelText("行き先"), {
+    await fireEvent.change(dialog.getByLabelText("遷移先"), {
       target: { value: "status:waiting" },
     });
     expect(screen.getByRole("dialog").textContent).toContain("--project REL-1");

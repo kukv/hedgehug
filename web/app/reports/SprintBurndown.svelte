@@ -24,7 +24,7 @@
   <p class="msg" role="alert">{errorMessage(report.error)}</p>
 {:else if view && facts}
   <div class="stat">
-    <span>残り {view.by === "count" ? "件数" : "points"}</span>
+    <span>残り {view.by === "count" ? "件数" : "ポイント"}</span>
     <b
       >{amountLabel(facts.remaining, view.by)}
       <small>/ {amountLabel(facts.scope, view.by)}</small></b

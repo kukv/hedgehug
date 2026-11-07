@@ -116,7 +116,7 @@
     <div class="head">
       <h2 id="backlog-h">バックログ</h2>
       <span class="meta">
-        スプリント未割り当て · todo / doing · rank 順 · {tasks.length} 件 ·
+        スプリント未割り当て · 未着手 / 進行中 · rank 順 · {tasks.length} 件 ·
         {ptLabel(sumPoints(tasks))}
       </span>
     </div>

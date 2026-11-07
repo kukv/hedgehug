@@ -125,9 +125,11 @@ export function groupByKind(
     .filter((g) => g.tasks.length > 0);
 }
 
-/** 2h / 見積 6h, or the time alone for a task that has no estimate. */
+/** 2h / 見積もり 6h, or the time alone for a task that has no estimate. */
 export function worklogLabel(total: string, estimate: unknown): string {
-  return typeof estimate === "string" && estimate !== "" ? `${total} / 見積 ${estimate}` : total;
+  return typeof estimate === "string" && estimate !== ""
+    ? `${total} / 見積もり ${estimate}`
+    : total;
 }
 
 /** The templates a project may use, from the names the schema lists; all of them without a limit. */
@@ -136,4 +138,11 @@ export function usableTemplates<T extends { name: string }>(
   only: readonly string[] | null | undefined,
 ): T[] {
   return only && only.length > 0 ? all.filter((t) => only.includes(t.name)) : [...all];
+}
+
+/** What a bulk update says it did: the value it set on count tasks, or that it cleared field. */
+export function bulkUpdatedLabel(count: number, field: string, value: string): string {
+  return value === ""
+    ? `${count} 件の${field}を外しました`
+    : `${count} 件の${field}を ${value} にしました`;
 }

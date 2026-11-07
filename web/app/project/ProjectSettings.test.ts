@@ -257,17 +257,17 @@ describe("ProjectSettings", () => {
   it("adds a constraint on the transitions of a status, with all of the status", async () => {
     const { api } = setup();
     await screen.findByRole("group", { name: "表示するステータス" });
-    const form = screen.getByRole("group", { name: "遷移の制約を足す" });
+    const form = screen.getByRole("group", { name: "遷移の制約を追加" });
     await fireEvent.change(within(form).getByRole("combobox", { name: "遷移元のステータス" }), {
       target: { value: "todo" },
     });
-    const add = within(form).getByRole("button", { name: "遷移の制約を足す" });
+    const add = within(form).getByRole("button", { name: "遷移の制約を追加" });
     expect(add).toBeDisabled();
     await fireEvent.click(within(form).getByRole("checkbox", { name: /進行中/ }));
     await fireEvent.click(within(form).getByRole("checkbox", { name: /中止/ }));
     await fireEvent.click(add);
     const rows = screen.getByRole("list", { name: "遷移の制約" });
-    expect(within(rows).getByText("このプロジェクトで足した")).toBeTruthy();
+    expect(within(rows).getByText("このプロジェクトで追加")).toBeTruthy();
     await fireEvent.click(save());
     await waitFor(() =>
       expect(putBody(api)).toEqual({ transitions: { todo: ["in_progress", "canceled"] } }),
@@ -282,12 +282,12 @@ describe("ProjectSettings", () => {
       },
     });
     await screen.findByRole("group", { name: "表示するステータス" });
-    const form = screen.getByRole("group", { name: "必須の項目を足す" });
+    const form = screen.getByRole("group", { name: "必須の項目を追加" });
     await fireEvent.change(within(form).getByRole("combobox", { name: "必須にするステータス" }), {
       target: { value: "in_progress" },
     });
     await fireEvent.click(within(form).getByRole("checkbox", { name: "points" }));
-    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を足す" }));
+    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を追加" }));
     await fireEvent.click(save());
     await waitFor(() =>
       expect(putBody(api)).toEqual({
@@ -354,7 +354,7 @@ describe("ProjectSettings", () => {
       within(dialog).getByRole("button", { name: "コマンドをコピー: hh schema scope rm REL-15" }),
     ).toBeTruthy();
     expect(api.deleteScoped).not.toHaveBeenCalled();
-    await fireEvent.click(within(dialog).getByRole("button", { name: "やめる" }));
+    await fireEvent.click(within(dialog).getByRole("button", { name: "キャンセル" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(api.deleteScoped).not.toHaveBeenCalled();
 
@@ -422,7 +422,7 @@ describe("ProjectSettings", () => {
       schemaChanged();
       await screen.findByText(/ほかで変更されました/);
       expect(within(group).getByRole("checkbox", { name: /待機中/ })).not.toBeChecked();
-      await fireEvent.click(screen.getByRole("button", { name: "取り直す" }));
+      await fireEvent.click(screen.getByRole("button", { name: "もう一度読み込む" }));
       await waitFor(() => expect(screen.queryByText(/ほかで変更されました/)).toBeNull());
       expect(within(group).getByRole("checkbox", { name: /待機中/ })).toBeChecked();
       expect(save()).toBeDisabled();
@@ -469,7 +469,7 @@ describe("ProjectSettings", () => {
   it("says why the screen cannot be drawn when the schema cannot be read", async () => {
     setup({ loadError: new Error("boom") });
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("スキーマを読めません");
+    expect(alert).toHaveTextContent("スキーマを読み込めません");
     expect(screen.queryByText("読み込み中…")).toBeNull();
   });
 

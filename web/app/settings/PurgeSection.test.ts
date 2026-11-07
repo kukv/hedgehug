@@ -53,7 +53,7 @@ function setup(
 }
 
 const days = () => screen.getByRole("textbox", { name: "N 日より古いもの" }) as HTMLInputElement;
-const check = () => screen.getByRole("button", { name: "確かめる" }) as HTMLButtonElement;
+const check = () => screen.getByRole("button", { name: "確認する" }) as HTMLButtonElement;
 const type = (v: string) => fireEvent.input(days(), { target: { value: v } });
 
 beforeEach(() => {

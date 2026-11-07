@@ -195,13 +195,13 @@
       disabled={busy || invalid || !store}
       onclick={() => void checkNow("[data-check]")}
     >
-      確かめる
+      確認する
     </Button>
   </div>
   <p id="{uid}-hint" class="hint" class:bad={invalid}>
     {invalid
       ? "0 以上の整数で入力してください（0 ですべて、最大 36500）"
-      : "0 ですべての削除済みタスクが対象になります。消す前に、対象を確かめます"}
+      : "0 ですべての削除済みタスクが対象になります。消す前に、対象を確認します"}
   </p>
 
   {#if failure}

@@ -74,16 +74,14 @@ describe("MigrateDialog", () => {
 
   it("names the definition in the title, and sends nothing while the name is empty or the same", async () => {
     const { post } = setup();
-    expect(
-      screen.getByRole("dialog", { name: "ステータス「triage」の名前を変える" }),
-    ).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "ステータス「triage」の名前を変更" })).toBeVisible();
     await settle();
     await type("triage");
     await settle();
     await type("  ");
     await settle();
     expect(post).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       "hh schema migrate status triage <新しい名前>",
     );
@@ -123,13 +121,13 @@ describe("MigrateDialog", () => {
     await type("review");
     await settle();
     // the dry run has not come back
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeDisabled();
     first.resolve(await ok(out(1)));
     await vi.advanceTimersByTimeAsync(0);
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeEnabled();
     // a new name takes the permission back until its dry run is in
     await type("review2");
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeDisabled();
     expect(screen.queryByText("1 件のタスクが書き換わります")).toBeNull();
   });
 
@@ -158,7 +156,7 @@ describe("MigrateDialog", () => {
     await type("Bad Name");
     await settle();
     expect(screen.getByRole("alert")).toBeVisible();
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeDisabled();
   });
 
   it("is a merge when the name is one the definition already has", async () => {
@@ -167,7 +165,7 @@ describe("MigrateDialog", () => {
     expect(screen.getByRole("button", { name: "併合する" })).toBeDisabled();
     expect(screen.getByText(/「triage」は定義から消え、「todo」に併合されます/)).toBeVisible();
     await type("review");
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeDisabled();
   });
 
   it("merges into one of the other definitions, chosen from a list", async () => {
@@ -195,7 +193,7 @@ describe("MigrateDialog", () => {
       names: ["low", "mid", "high"],
       many: true,
     });
-    expect(screen.getByRole("dialog", { name: "値「mid」の名前を変える" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "値「mid」の名前を変更" })).toBeVisible();
     await type("normal");
     await settle();
     expect(post.mock.calls[0]?.[0]).toEqual({
@@ -216,7 +214,7 @@ describe("MigrateDialog", () => {
     });
     await type("review");
     await settle();
-    await fireEvent.click(screen.getByRole("button", { name: "名前を変える" }));
+    await fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
     await vi.advanceTimersByTimeAsync(0);
     expect(post).toHaveBeenLastCalledWith(
       { target: "status", old: "triage", new: "review" },
@@ -236,7 +234,7 @@ describe("MigrateDialog", () => {
     });
     await type("review");
     await settle();
-    const run = screen.getByRole("button", { name: "名前を変える" });
+    const run = screen.getByRole("button", { name: "名前を変更" });
     run.focus(); // a click focuses the button in a browser; it is disabled while the run is on
     await fireEvent.click(run);
     await vi.advanceTimersByTimeAsync(0);
@@ -245,7 +243,7 @@ describe("MigrateDialog", () => {
     expect(input()).toHaveFocus();
     expect(onclose).not.toHaveBeenCalled();
     expect(ondone).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "名前を変える" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "名前を変更" })).toBeEnabled();
   });
 
   it("holds the dialog while the run is on its way: inputs and buttons off, Esc and Cancel do nothing", async () => {
@@ -253,7 +251,7 @@ describe("MigrateDialog", () => {
     const { onclose } = setup({ post: (b) => (b.dry_run ? ok(out(1)) : run.promise) });
     await type("review");
     await settle();
-    await fireEvent.click(screen.getByRole("button", { name: "名前を変える" }));
+    await fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
     expect(input()).toBeDisabled();
     expect(screen.getByRole("button", { name: "キャンセル" })).toBeDisabled();
     await fireEvent.keyDown(document, { key: "Escape" });

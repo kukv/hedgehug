@@ -133,14 +133,14 @@
         why={off ?? undefined}
         onclick={() => openPlanDialog({ kind: "sprint-add", entry })}
       >
-        スプリントを作る…
+        スプリントを作成…
       </Button>
       <Button
         disabled={off !== null}
         why={off ?? undefined}
         onclick={() => openPlanDialog({ kind: "release-add", entry })}
       >
-        リリースを作る…
+        リリースを作成…
       </Button>
     </div>
     <p class="msg">
@@ -163,7 +163,7 @@
     </p>
     <p class="msg">
       変えると、配下の {count} 件（削除済みを含む）の ID を新しい接頭辞で振り直します（1
-      コミット）。古い ID でも引き続き引けます。
+      コミット）。古い ID でも引き続き検索できます。
     </p>
   </section>
 

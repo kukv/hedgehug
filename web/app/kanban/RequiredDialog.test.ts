@@ -85,9 +85,9 @@ describe("RequiredDialog", () => {
     expect(onclose).not.toHaveBeenCalled();
   });
 
-  it("closes on やめる without sending", async () => {
+  it("closes on キャンセル without sending", async () => {
     const { onsubmit, onclose } = setup();
-    await fireEvent.click(screen.getByRole("button", { name: "やめる" }));
+    await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
     expect(onclose).toHaveBeenCalled();
     expect(onsubmit).not.toHaveBeenCalled();
   });

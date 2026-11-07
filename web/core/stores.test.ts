@@ -347,9 +347,9 @@ describe("StoreDirectory requests", () => {
 
 describe("readOnlyReason", () => {
   it("writes the three reasons of the server in Japanese and leaves other text as it is", () => {
-    expect(readOnlyReason("the GitHub permission is read")).toBe("GitHub の権限が読み取りです");
+    expect(readOnlyReason("the GitHub permission is read")).toBe("GitHub の権限が読み取りのみです");
     expect(readOnlyReason("the remote cannot be written")).toBe("remote に書き込めません");
-    expect(readOnlyReason("the remote denied the push")).toBe("remote が push を拒みました");
+    expect(readOnlyReason("the remote denied the push")).toBe("remote が push を拒否しました");
     expect(readOnlyReason("something else")).toBe("something else");
   });
 });

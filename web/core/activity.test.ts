@@ -46,67 +46,71 @@ function log(over: Partial<Log> = {}): Log {
 }
 
 describe("opLabel", () => {
-  it("names every op the server writes", () => {
-    const table = Object.fromEntries(
-      [
-        "add",
-        "set",
-        "status",
-        "mv",
-        "move-in",
-        "move-out",
-        "rm",
-        "restore",
-        "comment",
-        "merge",
-        "repair",
-        "schema",
-        "view",
-        "workspace",
-        "purge",
-        "revert-overwritten",
-        "undo",
-      ].map((o) => [o, opLabel(o)]),
-    );
-    expect(table).toEqual({
-      add: "作成",
-      set: "変更",
-      status: "ステータスの変更",
-      mv: "移動",
-      "move-in": "別の Store から移動",
-      "move-out": "別の Store へ移動",
-      rm: "削除",
-      restore: "復元",
-      comment: "コメント",
-      merge: "同期のマージ",
-      repair: "同期の修復",
-      schema: "スキーマの変更",
-      view: "ビューの変更",
-      workspace: "ワークスペースの変更",
-      purge: "完全な削除",
-      "revert-overwritten": "上書きを戻す",
-      undo: "取り消し",
-    });
+  it("names the ops in the words of the screen", () => {
+    expect(opLabel("status")).toBe("ステータスの変更");
+    expect(opLabel("dep")).toBe("依存の変更");
+    expect(opLabel("schema")).toBe("プロジェクトの設定の変更");
+    expect(opLabel("gh-mirror")).toBe("Issue からの反映");
+    expect(opLabel("gh-push")).toBe("Issue への反映");
+    expect(opLabel("sprint-close")).toBe("スプリントのクローズ");
+    expect(opLabel("worklog-add")).toBe("作業時間の記録");
   });
 
-  it("names the other ops of internal/app/usecase and the sync, and shows an unknown one as it is", () => {
-    expect(opLabel("edit")).toBe("本文の編集");
-    expect(opLabel("dep")).toBe("依存の変更");
-    expect(opLabel("watch")).toBe("ウォッチ");
-    expect(opLabel("unwatch")).toBe("ウォッチの解除");
-    expect(opLabel("migrate")).toBe("スキーマの移行");
-    expect(opLabel("init")).toBe("Store の作成");
-    expect(opLabel("setup")).toBe("同期の設定");
-    expect(opLabel("replay")).toBe("同期のやり直し");
-    expect(opLabel("link")).toBe("リンク");
-    expect(opLabel("unlink")).toBe("リンクの解除");
-    expect(opLabel("start")).toBe("作業の開始");
-    expect(opLabel("automation")).toBe("自動化の変更");
-    expect(opLabel("gh-fetch")).toBe("GitHub の取り込み");
-    expect(opLabel("gh-mirror")).toBe("Issue の反映");
-    expect(opLabel("gh-push")).toBe("Issue への反映");
+  it("names every op that internal/app writes into a commit", () => {
+    const ops = [
+      "init",
+      "add",
+      "set",
+      "edit",
+      "bulk-set",
+      "status",
+      "dep",
+      "mv",
+      "rm",
+      "restore",
+      "purge",
+      "revert-overwritten",
+      "move-in",
+      "move-out",
+      "migrate",
+      "schema",
+      "undo",
+      "workspace",
+      "comment",
+      "watch",
+      "unwatch",
+      "view",
+      "setup",
+      "merge",
+      "repair",
+      "replay",
+      "link",
+      "unlink",
+      "start",
+      "automation",
+      "gh-fetch",
+      "gh-mirror",
+      "gh-push",
+      "worklog-add",
+      "worklog-rm",
+      "template-set",
+      "template-rm",
+      "sprint-add",
+      "sprint-set",
+      "sprint-rm",
+      "sprint-start",
+      "sprint-close",
+      "release-add",
+      "release-set",
+      "release-rm",
+    ];
+    for (const op of ops) expect(opLabel(op), op).not.toBe(op);
+  });
+
+  it("shows an unknown op as it is, and a commit with none as 変更", () => {
     expect(opLabel("something-new")).toBe("something-new");
     expect(opLabel(null)).toBe("変更");
+    expect(opLabel("")).toBe("変更");
   });
 });
 

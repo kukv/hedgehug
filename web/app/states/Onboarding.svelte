@@ -24,7 +24,7 @@
   const STEPS: { value: Step; label: string }[] = [
     { value: "accounts", label: "アカウント" },
     { value: "discover", label: "Store を選ぶ" },
-    { value: "start", label: "はじめる" },
+    { value: "start", label: "始める" },
   ];
 
   const c = core();
@@ -82,8 +82,8 @@
       </p>
 
       {#if accounts.current.error}
-        <FormError message="アカウントを読めません · {errorMessage(accounts.current.error)}" />
-        <div><Button onclick={() => c.accounts.reload()}>もう一度読む</Button></div>
+        <FormError message="アカウントを読み込めません · {errorMessage(accounts.current.error)}" />
+        <div><Button onclick={() => c.accounts.reload()}>もう一度読み込む</Button></div>
       {/if}
       {#if !accounts.current.loaded}
         {#if !accounts.current.error}
@@ -121,7 +121,7 @@
         <span class="note">あとから 設定 › アカウントと認証 で変えられます</span>
         <span class="spacer"></span>
         {#if none}
-          <span class="note">アカウントを1つ追加してください</span>
+          <span class="note">アカウントを 1 つ追加してください</span>
         {/if}
         <Button variant="primary" disabled={!canGo} onclick={() => (step = "discover")}>
           次へ: Store を探す
@@ -162,7 +162,7 @@
     {/if}
 
     <div class="create">
-      <Button variant="ghost" onclick={() => (creating = true)}>新しく Store を作る</Button>
+      <Button variant="ghost" onclick={() => (creating = true)}>新しく Store を作成</Button>
     </div>
   </section>
 </div>

@@ -128,7 +128,7 @@ describe("ViewSave", () => {
     setup({ views });
     await typeName("weekly");
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "shared のビューを読み込めないため、同じ名前のビューがあるか確かめられません",
+      "shared のビューを読み込めないため、同じ名前のビューがあるか確認できません",
     );
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   });

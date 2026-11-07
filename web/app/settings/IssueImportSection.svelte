@@ -45,7 +45,7 @@
 <div class="row">
   <IssueImportFields {store} {form} />
   <label class="field">
-    <span>置き場所</span>
+    <span>作成先</span>
     <select
       value={place?.key}
       onchange={(e) => {
@@ -75,7 +75,7 @@
       why={off ?? undefined}
       onclick={() => void form.run(true)}
     >
-      件数を確かめる
+      件数を確認する
     </Button>
   {/if}
 </div>

@@ -134,7 +134,7 @@ describe("WorkspaceOverview", () => {
     setup(all, undefined, true);
     expect(await screen.findByText("6 件 · プロジェクト 1")).toBeInTheDocument();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "スキーマを読めないため、カテゴリ別の件数を出せません",
+      "スキーマを読み込めないため、カテゴリ別の件数を出せません",
     );
     expect(screen.queryByRole("img", { name: /未着手/ })).toBeNull();
   });
@@ -142,7 +142,7 @@ describe("WorkspaceOverview", () => {
   it("shows the band once the schema arrives, even after its load failed", async () => {
     const { schemaArrives } = setup(all, undefined, true);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "スキーマを読めないため、カテゴリ別の件数を出せません",
+      "スキーマを読み込めないため、カテゴリ別の件数を出せません",
     );
     schemaArrives();
     expect(

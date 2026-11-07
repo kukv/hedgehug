@@ -44,9 +44,9 @@ export function statLabel(r: Rule, stat: RuleStat | undefined): string {
 function rejectedNote(stat: RuleStat | undefined): string {
   if (!stat?.rejected) return "";
   const [first, ...rest] = stat.rejected_tasks;
-  if (!first) return `直近 7 日で ${stat.rejected} 回拒否しました。`;
+  if (!first) return `直近 7 日で、制約により ${stat.rejected} 回拒否されました。`;
   const on = rest.length > 0 ? `${first.id} ほか ${rest.length} 件` : first.id;
-  return `直近 7 日では ${on} で ${stat.rejected} 回拒否しました。`;
+  return `直近 7 日では ${on} で、制約により ${stat.rejected} 回拒否されました。`;
 }
 
 /**
@@ -62,7 +62,7 @@ export function requiredNote(
   const refused = rejectedNote(stat);
   if (required.length === 0) return refused || null;
   const names = required.join("・");
-  const head = `${statusLabel(s, ruleTarget(r, s))}には ${names} が必要です。${names} が空のタスクでは拒否され、inbox に出ます。`;
+  const head = `${statusLabel(s, ruleTarget(r, s))}には ${names} が必要です。${names} が空のタスクでは拒否され、通知に出ます。`;
   return head + refused;
 }
 
@@ -90,7 +90,7 @@ export function projectRuleRow(
   const source = own ? "このプロジェクトだけ" : (r.project?.title ?? store);
   const row = { source, own, project: ulid };
   if (r.disabled_in.some((p) => p.ulid === ulid)) {
-    return { ...row, checked: false, fixed: false, state: "このプロジェクトで停止" };
+    return { ...row, checked: false, fixed: false, state: "このプロジェクトで無効" };
   }
   if (own) {
     return {
@@ -105,7 +105,7 @@ export function projectRuleRow(
     return { ...row, checked: false, fixed: true, state: `${source} で無効` };
   }
   if (!r.enabled) {
-    return { ...row, checked: false, fixed: true, state: "親のプロジェクトで停止" };
+    return { ...row, checked: false, fixed: true, state: "親のプロジェクトで無効" };
   }
   return { ...row, checked: true, fixed: false, state: "このプロジェクトで有効" };
 }
@@ -119,10 +119,10 @@ export const ISSUE_FIELDS: readonly IssueField[] = [
   {
     name: "status",
     to: "status",
-    note: "完了系は closed（completed）、中止は closed（not_planned）",
+    note: "完了カテゴリは closed（completed）、中止は closed（not_planned）",
   },
   { name: "assignees", to: "assignees", note: "そのリポジトリで割り当てられる人だけ" },
-  { name: "labels", to: "labels", note: "リポジトリにあるラベルだけ。無いものは作らずに警告" },
+  { name: "labels", to: "labels", note: "リポジトリにあるラベルだけ。ないものは作らずに警告" },
   { name: "milestone", to: "props", note: "存在しないマイルストーンは作らずに警告" },
 ].map((f) => ({ ...f, label: fieldLabel(f.name) }));
 

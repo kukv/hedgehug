@@ -122,7 +122,7 @@
   }
 
   const title = $derived(
-    `${NOUN[target]}「${old}」${mode === "merge" ? "を併合する" : "の名前を変える"}`,
+    `${NOUN[target]}「${old}」${mode === "merge" ? "を併合する" : "の名前を変更"}`,
   );
   const cli = $derived(
     cliSchemaMigrate({
@@ -192,7 +192,7 @@
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
     <Button variant="primary" disabled={!ready} onclick={() => void run()}>
-      {merging ? "併合する" : "名前を変える"}
+      {merging ? "併合する" : "名前を変更"}
     </Button>
   {/snippet}
 </Dialog>

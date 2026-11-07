@@ -2,7 +2,13 @@
   import { untrack } from "svelte";
   import type { Schemas } from "../../core/api/client";
   import { cliSchemaCheck } from "../../core/cli";
-  import { groupFindings, type Severity, severityOf } from "../../core/doctor";
+  import {
+    findingHint,
+    findingText,
+    groupFindings,
+    type Severity,
+    severityOf,
+  } from "../../core/doctor";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon, { type IconName } from "../icons/Icon.svelte";
@@ -88,7 +94,7 @@
 <section class="sec" aria-labelledby="{uid}-h">
   <h2 id="{uid}-h">スキーマの検査</h2>
   {#if failure}
-    <FormError message="検査の結果を読めません · {failure}" />
+    <FormError message="検査の結果を読み込めません · {failure}" />
   {/if}
   <p class="sum" aria-live="polite">{summary}</p>
   {#each groups as g (g.check)}
@@ -102,9 +108,9 @@
               ><Icon name={SEVERITY[sev].icon} size={14} />{SEVERITY[sev].label}</span
             >
             <div class="what">
-              <p class="msg">{f.msg}</p>
+              <p class="msg">{findingText(f)}</p>
               {#if f.hint}
-                <p class="hint">{f.hint}</p>
+                <p class="hint">{findingHint(f)}</p>
               {/if}
               <p class="where mono">{f.where}</p>
               {#if f.task}

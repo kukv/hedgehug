@@ -71,7 +71,7 @@
     <b>{ptLabel(sprint.points)}</b>
     <span>{sprint.tasks} 件</span>
     {#if sprint.state === "active"}
-      <a href={board} onclick={(e) => onLinkClick(e, board)}>ボードを開く</a>
+      <a href={board} onclick={(e) => onLinkClick(e, board)}>カンバンを開く</a>
     {:else}
       <Button
         size="sm"

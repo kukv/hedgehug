@@ -103,7 +103,7 @@ describe("SettingsAutomations", () => {
   it("shows the reads and the rate limit", async () => {
     setup();
     await screen.findByText("レート制限 4,812 / 5,000");
-    expect(screen.getByText(/GitHub の取得 3 分前/)).toBeTruthy();
+    expect(screen.getByText(/GitHub から取得: 3 分前/)).toBeTruthy();
   });
 
   it("shows what a rule does and how it went", async () => {
@@ -121,7 +121,9 @@ describe("SettingsAutomations", () => {
     expect(merged.getByText("リンク中の PR がすべてマージ済み")).toBeTruthy();
     expect(merged.getByText("カテゴリ done の既定（完了）")).toBeTruthy();
     expect(
-      await merged.findByText(/完了には points が必要です.*REL-11 で 1 回拒否しました/),
+      await merged.findByText(
+        /完了には points が必要です.*REL-11 で、制約により 1 回拒否されました/,
+      ),
     ).toBeTruthy();
     expect(within(await rule("pr-review")).getByText("無効")).toBeTruthy();
   });
@@ -166,7 +168,7 @@ describe("SettingsAutomations", () => {
     expect(add).toBeDisabled();
     await fireEvent.input(dialog.getByLabelText("id"), { target: { value: "r1" } });
     await fireEvent.change(dialog.getByLabelText("イベント"), { target: { value: "pr.merged" } });
-    await fireEvent.change(dialog.getByLabelText("行き先"), {
+    await fireEvent.change(dialog.getByLabelText("遷移先"), {
       target: { value: "category:done" },
     });
     expect(screen.getByRole("dialog").textContent).toContain(
@@ -225,9 +227,9 @@ describe("SettingsAutomations", () => {
       target: { value: "org-a/web" },
     });
     await fireEvent.input(screen.getByLabelText("ラベル"), { target: { value: "v2" } });
-    await fireEvent.change(screen.getByLabelText("置き場所"), { target: { value: "W1" } });
+    await fireEvent.change(screen.getByLabelText("作成先"), { target: { value: "W1" } });
     await screen.findByText("$ hh gh import org-a/web --label v2 --workspace dev");
-    await fireEvent.click(screen.getByRole("button", { name: "件数を確かめる" }));
+    await fireEvent.click(screen.getByRole("button", { name: "件数を確認する" }));
     await screen.findByText(/open の Issue 3 件 · うち 1\s+件はリンク済み/);
     expect(api.importIssues).toHaveBeenLastCalledWith(
       { repo: "org-a/web", label: "v2", workspace: "dev", dry_run: true },

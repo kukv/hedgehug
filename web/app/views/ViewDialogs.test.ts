@@ -37,7 +37,7 @@ describe("ViewDialogs", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     openViewRename(entry);
-    expect(await screen.findByRole("dialog", { name: "ビュー weekly を改名" })).toBeVisible();
+    expect(await screen.findByRole("dialog", { name: "ビュー weekly の名前を変更" })).toBeVisible();
 
     openViewDelete(entry);
     expect(await screen.findByRole("dialog", { name: "ビュー weekly を削除" })).toBeVisible();

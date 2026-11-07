@@ -220,15 +220,15 @@ describe("the times of the reads", () => {
   it("says the next read only when it is still to come", () => {
     expect(fetchLine({}, now)).toBe("GitHub からまだ取得していません");
     expect(fetchLine({ last: at(-3), next: at(2) }, now)).toBe(
-      "GitHub の取得 3 分前 · 次は 2 分後",
+      "GitHub から取得: 3 分前 · 次は 2 分後",
     );
-    expect(fetchLine({ last: at(-3), next: at(-1) }, now)).toBe("GitHub の取得 3 分前");
+    expect(fetchLine({ last: at(-3), next: at(-1) }, now)).toBe("GitHub から取得: 3 分前");
   });
 
   it("shows the band only until the recovery", () => {
     expect(slowedText(undefined, now)).toBeNull();
     expect(slowedText(at(-1), now)).toBeNull();
-    expect(slowedText(at(30), now)).toBe("取得を 15 分おきに延ばしています · 12:30 に回復");
+    expect(slowedText(at(30), now)).toBe("取得の間隔を 15 分に延ばしています · 12:30 に回復");
   });
 });
 

@@ -52,15 +52,21 @@ func (ss *Session) Duplicates() ([]Duplicate, error) {
 // Text is "in org-b (WEB-45) and org-c (OPS-3); remove the one not needed with
 // hedgehug rm and hedgehug purge --older-than 0d --store <store>" (D19).
 func (d Duplicate) Text() string {
-	parts := make([]string, len(d.Places))
-	for i, p := range d.Places {
-		parts[i] = fmt.Sprintf("%s (%s)", p.Store, p.ID)
-	}
+	parts := d.PlaceLabels()
 	list := parts[0]
 	if n := len(parts); n > 1 {
 		list = strings.Join(parts[:n-1], ", ") + " and " + parts[n-1]
 	}
 	return "in " + list + "; remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>"
+}
+
+// PlaceLabels are the places of d as Text names them: "<store> (<id>)".
+func (d Duplicate) PlaceLabels() []string {
+	parts := make([]string, len(d.Places))
+	for i, p := range d.Places {
+		parts[i] = fmt.Sprintf("%s (%s)", p.Store, p.ID)
+	}
+	return parts
 }
 
 // In tells whether the store name has the task.

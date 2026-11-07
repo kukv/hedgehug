@@ -65,7 +65,7 @@ afterEach(cleanup);
 describe("CreateStore", () => {
   it("名前と接頭辞が空なら送らず、理由を出す", async () => {
     const { getByRole, getByText, post } = mount();
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     expect(post).not.toHaveBeenCalled();
     expect(getByText("名前を入れてください")).toBeTruthy();
     expect(getByText("接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください")).toBeTruthy();
@@ -78,15 +78,15 @@ describe("CreateStore", () => {
     expect(prefix.value).toBe("ME");
     await type(getByLabelText("名前"), "me");
     await type(prefix, "1A");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     expect(post).not.toHaveBeenCalled();
   });
 
-  it("作成: Store を作る API、reload、トースト、最初のワークスペースのツリーへ", async () => {
+  it("作成: Store を作成 API、reload、トースト、最初のワークスペースのツリーへ", async () => {
     const { getByLabelText, getByRole, post, reload, onclose } = mount();
     await type(getByLabelText("名前"), " me ");
     await type(getByLabelText("ID の接頭辞"), "me");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
     expect(post).toHaveBeenCalledWith({
       name: "me",
@@ -95,7 +95,7 @@ describe("CreateStore", () => {
       remotes: undefined,
     });
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作りました"]);
+    expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作成しました"]);
     expect(location.pathname).toBe("/workspaces/me/01HWSME/tree");
   });
 
@@ -105,7 +105,7 @@ describe("CreateStore", () => {
     await type(getByLabelText("ID の接頭辞"), "TM");
     await type(getByLabelText("最初のワークスペース（任意）"), "backend");
     await type(getByLabelText("remote（任意）"), "git@github.com:org/hh-team.git");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     expect(post).toHaveBeenCalledWith({
       name: "team",
@@ -129,11 +129,11 @@ describe("CreateStore", () => {
     const { getByLabelText, getByRole, onclose } = mount(post);
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "ME");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     const alert = await vi.waitFor(() => getByRole("alert"));
     expect(alert.textContent).toContain("操作に失敗しました: boom");
     expect(onclose).not.toHaveBeenCalled();
-    expect((getByRole("button", { name: "Store を作る" }) as HTMLButtonElement).disabled).toBe(
+    expect((getByRole("button", { name: "Store を作成" }) as HTMLButtonElement).disabled).toBe(
       false,
     );
   });
@@ -178,11 +178,11 @@ describe("CreateStore", () => {
     );
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "me");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
     expect(reload).toHaveBeenCalledTimes(1);
     expect(queryByRole("alert")).toBeNull();
-    expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作りました"]);
+    expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作成しました"]);
     expect(location.pathname).toBe("/workspaces/me/01HWSME/tree");
   });
 
@@ -191,7 +191,7 @@ describe("CreateStore", () => {
     const { getByLabelText, getByRole, queryByRole, onclose } = mount(post);
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "ME");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => getByRole("alert"));
     await fireEvent.click(getByRole("button", { name: "キャンセル" }));
     expect(onclose).toHaveBeenCalledTimes(1);
@@ -204,7 +204,7 @@ describe("CreateStore", () => {
     const { getByLabelText, getByRole, onclose } = mount(post);
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "ME");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     const cancel = getByRole("button", { name: "キャンセル" }) as HTMLButtonElement;
     expect(cancel.disabled).toBe(true);
     await fireEvent.keyDown(window, { key: "Escape" });
@@ -217,7 +217,7 @@ describe("CreateStore", () => {
     const { getByLabelText, getByRole, oncreated } = mount();
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "me");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(oncreated).toHaveBeenCalledTimes(1));
   });
 
@@ -226,7 +226,7 @@ describe("CreateStore", () => {
     const { getByLabelText, getByRole, oncreated } = mount(post);
     await type(getByLabelText("名前"), "me");
     await type(getByLabelText("ID の接頭辞"), "ME");
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => getByRole("alert"));
     expect(oncreated).not.toHaveBeenCalled();
   });
@@ -248,7 +248,7 @@ describe("CreateStore のアカウント", () => {
       const r = mount(undefined, { list });
       expect(r.queryByLabelText("アカウント")).toBeNull();
       await fill(r);
-      await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+      await fireEvent.click(r.getByRole("button", { name: "Store を作成" }));
       await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
       expect(r.post.mock.calls[0]?.[0].account).toBeUndefined();
       expect(r.getByRole("button", { name: /hh store init/ }).textContent).not.toContain(
@@ -262,7 +262,7 @@ describe("CreateStore のアカウント", () => {
     const r = mount(undefined, { list: [acct("a"), acct("b")], loaded: false });
     expect(r.queryByLabelText("アカウント")).toBeNull();
     await fill(r);
-    await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(r.getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
     expect(r.post.mock.calls[0]?.[0].account).toBeUndefined();
   });
@@ -273,7 +273,7 @@ describe("CreateStore のアカウント", () => {
     expect(Array.from(pick.options).map((o) => o.value)).toEqual(["", "a", "b"]);
     expect(pick.value).toBe("");
     await fill(r);
-    await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(r.getByRole("button", { name: "Store を作成" }));
     expect(r.getByText("アカウントを選んでください")).toBeTruthy();
     expect(r.post).not.toHaveBeenCalled();
   });
@@ -283,7 +283,7 @@ describe("CreateStore のアカウント", () => {
     await fill(r);
     await fireEvent.change(r.getByLabelText("アカウント"), { target: { value: "b" } });
     expect(r.getByRole("button", { name: /hh store init/ }).textContent).toContain("--account b");
-    await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(r.getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
     expect(r.post).toHaveBeenCalledWith({
       name: "me",

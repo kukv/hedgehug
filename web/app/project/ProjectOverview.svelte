@@ -106,7 +106,7 @@
           <span class="repo">{repoLabel(repo)} · PR {n}</span>
         {/each}
         {#if readOnly.current === null}
-          <Button size="sm" onclick={() => (adding = !adding)}>repo を追加</Button>
+          <Button size="sm" onclick={() => (adding = !adding)}>リポジトリを追加</Button>
         {/if}
       </span>
     </div>
@@ -115,7 +115,7 @@
       <form class="add" onsubmit={add}>
         <input aria-label="リポジトリ" placeholder="org/repo" bind:value={name} autocomplete="off">
         <Button size="sm" type="submit" variant="confirm" disabled={busy || name.trim() === ""}>
-          追加する
+          追加
         </Button>
       </form>
     {/if}

@@ -1,12 +1,12 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - /settings/schema/<store> is the heading "スキーマ"; the navigation "スキーマの種類" has the links
 //     ステータス / 種類 / プロパティと関連 / ワークフロー, and the tab shows a table whose rows are named by the
-//     definition: the number of tasks is its last number, and its buttons are "名前を変える…（<名前>）" and
+//     definition: the number of tasks is its last number, and its buttons are "名前を変更…（<名前>）" and
 //     "併合する…（<名前>）"
 //   - the region "プロジェクトごとの上書き" lists a project with an override as a link to its settings
 //   - the region "スキーマの検査" says "スキーマとタスクは合っています" when `hh schema check` finds nothing
-//   - the dialog "ステータス「<名前>」の名前を変える" has the textbox "新しい名前", the sentence "<n> 件のタスクが
-//     書き換わります" (the dry run) and the button "名前を変える"; a toast says "<n> 件を書き換えました"
+//   - the dialog "ステータス「<名前>」の名前を変更" has the textbox "新しい名前", the sentence "<n> 件のタスクが
+//     書き換わります" (the dry run) and the button "名前を変更"; a toast says "<n> 件を書き換えました"
 //   - the dialog "ステータス「<名前>」を併合する" has the combobox "併合先" in place of the textbox and the button "併合する"
 import type { Page } from "@playwright/test";
 import { expect, test } from "./harness";
@@ -77,10 +77,8 @@ test("a status is renamed: the dry run counts the tasks, and the tasks follow th
   await hh.open(page, SCHEMA);
   await expect(statusRow(page, "waiting").getByRole("cell").nth(3)).toHaveText("2");
 
-  await statusRow(page, "waiting")
-    .getByRole("button", { name: "名前を変える…（waiting）" })
-    .click();
-  const dialog = page.getByRole("dialog", { name: "ステータス「waiting」の名前を変える" });
+  await statusRow(page, "waiting").getByRole("button", { name: "名前を変更…（waiting）" }).click();
+  const dialog = page.getByRole("dialog", { name: "ステータス「waiting」の名前を変更" });
   await dialog.getByRole("textbox", { name: "新しい名前" }).fill("paused");
   await expect(dialog.getByText("2 件のタスクが書き換わります")).toBeVisible();
   await expect(
@@ -88,7 +86,7 @@ test("a status is renamed: the dry run counts the tasks, and the tasks follow th
       name: "コマンドをコピー: hh schema migrate status waiting paused",
     }),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "名前を変える" }).click();
+  await dialog.getByRole("button", { name: "名前を変更" }).click();
 
   await expect(page.getByRole("status").filter({ hasText: "2 件を書き換えました" })).toBeVisible();
   await expect(dialog).toHaveCount(0);

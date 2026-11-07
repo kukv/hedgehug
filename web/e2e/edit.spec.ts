@@ -46,11 +46,11 @@ test("the status, an enum property and a date are saved from the property panel"
   await page.getByRole("menuitem", { name: /^進行中/ }).click();
   await expect(panel.getByRole("button", { name: "ステータス" })).toContainText("進行中");
 
-  await panel.getByRole("button", { name: "priority" }).click();
+  await panel.getByRole("button", { name: "優先度" }).click();
   await page.getByRole("menuitem", { name: "high" }).click();
 
-  await panel.getByLabel("due").fill("2026-12-01");
-  await panel.getByLabel("due").blur();
+  await panel.getByLabel("期限").fill("2026-12-01");
+  await panel.getByLabel("期限").blur();
 
   await expect
     .poll(() => {

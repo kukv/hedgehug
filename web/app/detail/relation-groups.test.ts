@@ -74,7 +74,7 @@ describe("buildGroups", () => {
       note: "relates（双方向）",
     });
     expect(groups.find((g) => g.key === "reverse:duplicates")).toMatchObject({
-      label: "重複されている",
+      label: "重複元",
       removable: false,
     });
     expect(groups.at(-1)).toMatchObject({

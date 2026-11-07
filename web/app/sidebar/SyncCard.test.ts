@@ -80,7 +80,7 @@ describe("SyncCard", () => {
     expect(await findByText("1 分前")).toBeTruthy();
   });
 
-  it("送信待ち: 未 push のコミット数と、push までの秒数", () => {
+  it("push 待ち: 未 push のコミット数と、push までの秒数", () => {
     const { getByText } = mount([
       status({
         store: "a",
@@ -89,12 +89,12 @@ describe("SyncCard", () => {
         push_at: "2026-11-02T09:00:52Z",
       }),
     ]);
-    expect(getByText("送信待ち")).toBeTruthy();
+    expect(getByText("push 待ち")).toBeTruthy();
     expect(getByText("3 コミット")).toBeTruthy();
     expect(getByText("22 秒後に push")).toBeTruthy();
   });
 
-  it("送信待ち: push の時刻が過ぎていれば「まもなく push」、1 分以上先は分で出す", () => {
+  it("push 待ち: push の時刻が過ぎていれば「まもなく push」、1 分以上先は分で出す", () => {
     const a = mount([status({ store: "a", unpushed: 1, push_at: "2026-11-02T09:00:00Z" })]);
     expect(a.getByText("まもなく push")).toBeTruthy();
     cleanup();
@@ -175,7 +175,7 @@ describe("SyncCard", () => {
       post,
       { store: "b" },
     );
-    expect(getByText("送信待ち")).toBeTruthy();
+    expect(getByText("push 待ち")).toBeTruthy();
     expect(queryByText("同期済み")).toBeNull();
     await fireEvent.click(getByRole("button", { name: /今すぐ同期/ }));
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));

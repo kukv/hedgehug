@@ -147,23 +147,23 @@ describe("notificationText", () => {
       n({ ulid: "1", kind: "overwritten", detail: { field: "points", value: 2 } }),
     );
     expect(t.label).toBe("上書き");
-    expect(t.text).toBe("あなたが設定した points が、同時に編集した値で上書きされました");
-    expect(t.mine).toBe("points: 2（あなた）");
+    expect(t.text).toBe("自分が設定した points が、同時に編集された別の値で上書きされました");
+    expect(t.mine).toBe("points: 2（自分）");
   });
 
   it("values: a string as it is, a list with commas, null as empty", () => {
     const mine = (value: unknown) =>
       notificationText(n({ ulid: "1", kind: "overwritten", detail: { field: "f", value } })).mine;
-    expect(mine("abc")).toBe("f: abc（あなた）");
-    expect(mine(["a", "b"])).toBe("f: a, b（あなた）");
-    expect(mine(null)).toBe("f: 空（あなた）");
-    expect(mine({ x: 1 })).toBe('f: {"x":1}（あなた）');
+    expect(mine("abc")).toBe("f: abc（自分）");
+    expect(mine(["a", "b"])).toBe("f: a, b（自分）");
+    expect(mine(null)).toBe("f: 空（自分）");
+    expect(mine({ x: 1 })).toBe('f: {"x":1}（自分）');
   });
 
   it("overwritten with no detail has no value to show", () => {
     const t = notificationText(n({ ulid: "1", kind: "overwritten" }));
     expect(t.mine).toBeUndefined();
-    expect(t.text).toBe("同時に編集した値で上書きされました");
+    expect(t.text).toBe("同時に編集された別の値で上書きされました");
   });
 
   it("mention: by the author, in a comment or in the body", () => {
@@ -208,10 +208,10 @@ describe("notificationText", () => {
     );
     expect(t({ kind: "ref_moved" })).toBe("別の Store へ移ったタスクへの参照を外しました");
     expect(t({ kind: "sprint_detached", value: "S1" })).toBe(
-      "スプリント S1 から外しました（移った先のワークスペースにはありません）",
+      "スプリント S1 から外しました（移動先のワークスペースにはありません）",
     );
     expect(t({ kind: "release_detached", value: "v2" })).toBe(
-      "リリース v2 から外しました（移った先のワークスペースにはありません）",
+      "リリース v2 から外しました（移動先のワークスペースにはありません）",
     );
     expect(t({ kind: "parent_cycle", value: { from: "A", to: null } })).toBe(
       "親の循環を検出したため、ルートに戻しました",
@@ -230,17 +230,17 @@ describe("notificationText", () => {
 
   it("revived, renumbered, rewrite_applied, purged_change", () => {
     expect(notificationText(n({ ulid: "1", kind: "revived" })).text).toBe(
-      "削除と同時にあなたが編集していたため、編集を優先して復活させました",
+      "削除と同時にあなたが編集していたため、編集を優先して復元しました",
     );
     expect(
       notificationText(n({ ulid: "1", kind: "renumbered", detail: { old: "REL-4", new: "REL-9" } }))
         .text,
-    ).toBe("ID を REL-4 から REL-9 に振り直しました。REL-4 でも引けます");
+    ).toBe("ID を REL-4 から REL-9 に振り直しました。REL-4 でも検索できます");
     expect(notificationText(n({ ulid: "1", kind: "rewrite_applied" })).text).toBe(
       "履歴の書き換え（purge）を取り込みました",
     );
     expect(notificationText(n({ ulid: "1", kind: "purged_change" })).text).toBe(
-      "完全に削除されたタスクへの、まだ送っていない変更を捨てました",
+      "完全に削除されたタスクへの、未 push の変更を捨てました",
     );
   });
 
@@ -251,10 +251,10 @@ describe("notificationText", () => {
       task: null as never,
       detail: { kind: "prefix_duplicate", workspace: "W1", value: "REL" },
     });
-    expect(notificationText(item).text).toBe("接頭辞がほかのワークスペースと重なっています");
+    expect(notificationText(item).text).toBe("接頭辞がほかのワークスペースと重複しています");
     expect(
       notificationText(item, { workspaceName: (u) => (u === "W1" ? "release" : undefined) }).text,
-    ).toBe("ワークスペース release の接頭辞がほかのワークスペースと重なっています");
+    ).toBe("ワークスペース release の接頭辞がほかのワークスペースと重複しています");
     expect(
       notificationText(
         n({
@@ -263,7 +263,7 @@ describe("notificationText", () => {
           detail: { kind: "name_duplicate", workspace: "W1" },
         }),
       ).text,
-    ).toBe("名前がほかのワークスペースと重なっています");
+    ).toBe("名前がほかのワークスペースと重複しています");
   });
 
   it("an unknown kind is shown by its name", () => {

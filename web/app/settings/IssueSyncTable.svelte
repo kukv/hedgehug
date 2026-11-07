@@ -152,7 +152,7 @@
   </table>
 </div>
 <p class="hint">
-  push モードで GitHub 側が手で編集されていたら、次の push で上書きし、上書きしたことを inbox
+  push モードで GitHub 側が手で編集されていたら、次の push で上書きし、上書きしたことを通知
   に出します。リンクごとに設定を上書きできます。
 </p>
 <CliLine command={cli} />

@@ -68,7 +68,7 @@
           replace: true,
         });
       }
-      toast({ message: `ビュー ${from} を ${renamed.name} に改名しました` });
+      toast({ message: `ビュー ${from} の名前を ${renamed.name} に変更しました` });
       onclose();
     } catch (e) {
       failure = errorMessage(e);
@@ -86,7 +86,14 @@
   }
 </script>
 
-<Dialog open title="ビュー {from} を改名" width={560} {cli} cliDisabled={invalid} onclose={close}>
+<Dialog
+  open
+  title="ビュー {from} の名前を変更"
+  width={560}
+  {cli}
+  cliDisabled={invalid}
+  onclose={close}
+>
   <div class="form" role="presentation" {onkeydown}>
     <div class="field">
       <label class="lbl" for="{uid}-name">新しい名前</label>
@@ -112,7 +119,7 @@
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
     <Button variant="primary" disabled={busy || invalid} onclick={() => void submit()}>
-      {busy ? "改名中…" : "改名"}
+      {busy ? "変更中…" : "変更"}
     </Button>
   {/snippet}
 </Dialog>

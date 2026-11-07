@@ -32,24 +32,24 @@ func Fresh(before, after []schema.Problem) []schema.Problem {
 // project of the store that is not deleted.
 func (f *File) Check(sc *schema.Schema, project func(model.ULID) bool) []schema.Problem {
 	var ps []schema.Problem
-	add := func(path, format string, args ...any) {
-		ps = append(ps, schema.Problem{Path: path, Msg: fmt.Sprintf(format, args...)})
+	add := func(path, code, format string, args ...any) {
+		ps = append(ps, schema.NewProblem(path, code, format, args...))
 	}
 	// where reads a where; the ULID is zero and ok false when it has a defect,
 	// which is then reported.
 	where := func(path, w string) (model.ULID, bool) {
 		s, found := strings.CutPrefix(w, WherePrefix)
 		if !found {
-			add(path, `where must be "project:<ULID>"`)
+			add(path, "automation.where_form", `where must be "project:<ULID>"`)
 			return model.ULID{}, false
 		}
 		u, err := model.ParseULID(s)
 		if err != nil {
-			add(path, "%v", err)
+			add(path, "automation.bad_ulid", "%v", err)
 			return model.ULID{}, false
 		}
 		if !project(u) {
-			add(path, "%s is not a project of this store, or is deleted", w)
+			add(path, "automation.not_project", "%s is not a project of this store, or is deleted", w)
 			return model.ULID{}, false
 		}
 		return u, true
@@ -60,18 +60,18 @@ func (f *File) Check(sc *schema.Schema, project func(model.ULID) bool) []schema.
 		at := fmt.Sprintf("rules[%d]", i)
 		switch {
 		case r.ID == "":
-			add(at+".id", "id is empty")
+			add(at+".id", "automation.id_empty", "id is empty")
 		case strings.ContainsAny(r.ID, " \t\r\n"):
-			add(at+".id", "id %q has a space or a line break, which the trailer of a commit cannot hold", r.ID)
+			add(at+".id", "automation.id_space", "id %q has a space or a line break, which the trailer of a commit cannot hold", r.ID)
 		case ids[r.ID]:
-			add(at+".id", "id %q is used twice", r.ID)
+			add(at+".id", "automation.id_twice", "id %q is used twice", r.ID)
 		}
 		ids[r.ID] = true
 		if !slices.Contains(Events, r.On) {
-			add(at+".on", "%q is not one of %s", r.On, strings.Join(Events, ", "))
+			add(at+".on", "automation.not_one_of", "%q is not one of %s", r.On, strings.Join(Events, ", "))
 		}
 		if r.When != "" && r.When != AllLinkedPRsMerged {
-			add(at+".when", "%q is not %s", r.When, AllLinkedPRsMerged)
+			add(at+".when", "automation.not_one_of", "%q is not %s", r.When, AllLinkedPRsMerged)
 		}
 		scope := sc.For(nil)
 		if r.Where != "" {
@@ -81,16 +81,16 @@ func (f *File) Check(sc *schema.Schema, project func(model.ULID) bool) []schema.
 		}
 		switch {
 		case r.Set.Status != "" && r.Set.Category != "":
-			add(at+".set", "set takes status or category, not both")
+			add(at+".set", "automation.set_both", "set takes status or category, not both")
 		case r.Set.Status == "" && r.Set.Category == "":
-			add(at+".set", "set needs a status or a category")
+			add(at+".set", "automation.set_none", "set needs a status or a category")
 		case r.Set.Status != "":
 			if !slices.ContainsFunc(scope.Statuses(), func(s schema.Status) bool { return s.Name == r.Set.Status }) {
-				add(at+".set.status", "status %q does not exist, or the project hides it", r.Set.Status)
+				add(at+".set.status", "automation.unknown_status", "status %q does not exist, or the project hides it", r.Set.Status)
 			}
 		default:
 			if !slices.Contains(schema.Categories, schema.Category(r.Set.Category)) {
-				add(at+".set.category", "category %q does not exist", r.Set.Category)
+				add(at+".set.category", "automation.unknown_category", "category %q does not exist", r.Set.Category)
 			}
 		}
 	}
@@ -99,13 +99,13 @@ func (f *File) Check(sc *schema.Schema, project func(model.ULID) bool) []schema.
 	for i, s := range f.Scoped {
 		at := fmt.Sprintf("scoped[%d]", i)
 		if seen[s.Where] {
-			add(at+".where", "%s is used twice", s.Where)
+			add(at+".where", "automation.where_twice", "%s is used twice", s.Where)
 		}
 		seen[s.Where] = true
 		where(at+".where", s.Where)
 		for j, id := range s.Disable {
 			if !ids[id] {
-				add(fmt.Sprintf("%s.disable[%d]", at, j), "there is no rule with the id %q", id)
+				add(fmt.Sprintf("%s.disable[%d]", at, j), "automation.no_rule", "there is no rule with the id %q", id)
 			}
 		}
 	}

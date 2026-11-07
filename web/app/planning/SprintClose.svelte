@@ -102,7 +102,7 @@
     </div>
     {#if open.length > 0}
       <fieldset>
-        <legend>未完了の {open.length} 件の移し先</legend>
+        <legend>未完了の {open.length} 件の移動先</legend>
         <div class="choices">
           <label class="choice" class:on={to.kind === "next"} class:off={!next}>
             <input

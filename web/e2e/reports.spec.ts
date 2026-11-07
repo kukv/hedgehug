@@ -31,7 +31,7 @@ test("the board of a running sprint has the burndown and what joined", async ({ 
   await openTab(page, hh, "sprints");
 
   const now = page.getByRole("region", { name: "Sprint 1 の状況" });
-  await expect(now).toContainText("残り points");
+  await expect(now).toContainText("残り ポイント");
   await expect(now).toContainText("6 pt");
   await expect(now).toContainText("/ 9 pt");
   await expect(now).toContainText("+4 pt");
@@ -87,22 +87,22 @@ test("the reports show what the CLI reports, under the same conditions", async (
 test("a sprint goes from planned to its velocity on the GUI alone", async ({ page, hh }) => {
   hh.hh("add", "one", "-p", "points=3");
   await openTab(page, hh, "settings");
-  await page.getByRole("button", { name: "スプリントを作る…" }).click();
+  await page.getByRole("button", { name: "スプリントを作成…" }).click();
   const made = page.getByRole("dialog");
   await made.getByLabel("名前", { exact: true }).fill("Sprint 1");
   await made.getByRole("button", { name: "作成" }).click();
 
   await page.getByRole("link", { name: "バックログ" }).click();
-  await page.getByRole("button", { name: "one の移し先" }).click();
+  await page.getByRole("button", { name: "one の移動先" }).click();
   await page.getByRole("menuitem", { name: "Sprint 1 に入れる" }).click();
   const panel = page.getByRole("region", { name: "Sprint 1" });
   await panel.getByRole("button", { name: "開始する" }).click();
   const start = page.getByRole("dialog");
-  await start.getByRole("textbox", { name: "start" }).fill(day(0));
-  await start.getByRole("textbox", { name: "end" }).fill(day(13));
+  await start.getByRole("textbox", { name: "開始日" }).fill(day(0));
+  await start.getByRole("textbox", { name: "終了日" }).fill(day(13));
   await start.getByRole("button", { name: "開始する" }).click();
-  await expect(panel.getByRole("link", { name: "ボードを開く" })).toBeVisible();
-  await panel.getByRole("link", { name: "ボードを開く" }).click();
+  await expect(panel.getByRole("link", { name: "カンバンを開く" })).toBeVisible();
+  await panel.getByRole("link", { name: "カンバンを開く" }).click();
 
   const one = hh.show("DM-1");
   await dragCard(

@@ -93,7 +93,7 @@ function setup(o: Setup = {}) {
   const tasks = o.tasks ?? [
     task("A", "task", null, { id: "REL-1", title: "調べる", status: "todo" }),
     task("B", "task", null, { id: "REL-2", title: "作る", status: "doing", props: { points: 3 } }),
-    task("C", "task", null, { id: "REL-3", title: "確かめる", status: "done" }),
+    task("C", "task", null, { id: "REL-3", title: "確認する", status: "done" }),
   ];
   const byUlid = new Map(tasks.map((t) => [t.ulid, t]));
   const none = () => () => {};
@@ -215,7 +215,7 @@ describe("KanbanView: the board", () => {
     );
     expect(within(cell(container, "todo")).getByText("調べる")).toBeInTheDocument();
     expect(within(cell(container, "doing")).getByText("作る")).toBeInTheDocument();
-    expect(within(cell(container, "done")).getByText("確かめる")).toBeInTheDocument();
+    expect(within(cell(container, "done")).getByText("確認する")).toBeInTheDocument();
     expect(container.querySelector('.head[data-column="doing"] .count')).toHaveTextContent("1");
   });
 
@@ -275,7 +275,7 @@ describe("KanbanView: the board", () => {
       ],
     });
     mountView();
-    expect(await screen.findByText("points 未入力")).toBeInTheDocument();
+    expect(await screen.findByText("pointsが未入力です")).toBeInTheDocument();
   });
 
   it("names the blocker on a card that is blocked", async () => {
@@ -688,7 +688,7 @@ describe("KanbanView: dragging a card", () => {
   it("changes nothing when the dialog is closed", async () => {
     const { api } = await ready();
     cellFor("done")?.onDrop(dragA);
-    await fireEvent.click(await screen.findByRole("button", { name: "やめる" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "キャンセル" }));
     expect(api.updateTask).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });

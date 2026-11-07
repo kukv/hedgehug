@@ -159,7 +159,7 @@
         aria-describedby="{uid}-name-msg"
       >
       <span id="{uid}-name-msg" class="msg" class:bad={nameShown}>
-        {nameShown ?? "小文字の英数字と - _ が使えます。同じ Store の名前とは重ねられません"}
+        {nameShown ?? "小文字の英数字と - _ が使えます。同じ Store の中で同じ名前は使えません"}
       </span>
     </div>
 
@@ -177,7 +177,7 @@
       >
       <span id="{uid}-prefix-msg" class="msg" class:bad={prefixShown}>
         {prefixShown ??
-          "接頭辞は英大文字で始まる 2〜10 文字の英大文字と数字です。同じ Store とマウント中の Store のワークスペースとは重ねられません"}
+          "接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください。同じ Store とマウント中の Store のワークスペースと同じ接頭辞は使えません"}
       </span>
     </div>
 

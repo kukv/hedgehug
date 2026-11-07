@@ -55,7 +55,7 @@ describe("SprintBurndown", () => {
   it("shows what is left, what joined and the chart", async () => {
     const { findByText, getByText, get } = setup();
     expect(await findByText("plot: Sprint 1 のバーンダウン")).toBeTruthy();
-    expect(getByText("残り points")).toBeTruthy();
+    expect(getByText("残り ポイント")).toBeTruthy();
     expect(getByText("9 pt")).toBeTruthy();
     expect(getByText("/ 11 pt")).toBeTruthy();
     expect(getByText("+3 pt")).toBeTruthy();

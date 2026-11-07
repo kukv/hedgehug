@@ -82,7 +82,7 @@ describe("SettingsAccounts: the GitHub App", () => {
   it("switches to the token of gh", async () => {
     const { api, accounts } = mount({ list: [acct("a")], github: [missing] });
     await fireEvent.click(
-      await screen.findByRole("button", { name: "gh のトークンで代わりに使う" }),
+      await screen.findByRole("button", { name: "代わりに gh のトークンを使う" }),
     );
     await waitFor(() =>
       expect(api.setAccountTokenSource).toHaveBeenCalledWith("a", { token: "gh" }),
@@ -110,9 +110,9 @@ describe("SettingsAccounts: the list", () => {
       loaded: false,
       error: new ApiError({ status: 502, type: "github.rate_limit", args: { account: "a" } }),
     });
-    expect(screen.getByRole("alert").textContent).toContain("アカウントを読めません");
+    expect(screen.getByRole("alert").textContent).toContain("アカウントを読み込めません");
     expect(screen.queryByText("読み込み中…")).toBeNull();
-    await fireEvent.click(screen.getByRole("button", { name: "もう一度読む" }));
+    await fireEvent.click(screen.getByRole("button", { name: "もう一度読み込む" }));
     expect(accounts.reload).toHaveBeenCalledTimes(1);
   });
 
@@ -220,7 +220,7 @@ describe("SettingsAccounts: the menu", () => {
     mount({ list: [acct("g", { token: "gh" }), acct("e", { token: "env:X" })] });
     for (const n of ["g", "e"]) {
       await open(n);
-      expect(items()).toEqual(["Hedgehug が持っているものはありません"]);
+      expect(items()).toEqual(["Hedgehug が保存しているトークンはありません"]);
       expect((screen.getByRole("menuitem") as HTMLButtonElement).disabled).toBe(true);
       await fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     }
@@ -239,7 +239,7 @@ describe("SettingsAccounts: the menu", () => {
     expect((screen.getByRole("radio", { name: "Device Flow" }) as HTMLInputElement).checked).toBe(
       true,
     );
-    expect((screen.getByLabelText(/呼び名/) as HTMLInputElement).value).toBe("d");
+    expect((screen.getByLabelText(/^名前/) as HTMLInputElement).value).toBe("d");
     expect((screen.getByLabelText("ホスト") as HTMLInputElement).value).toBe("ghe.example.com");
   });
 
@@ -250,7 +250,7 @@ describe("SettingsAccounts: the menu", () => {
     expect(
       (screen.getByRole("radio", { name: "トークンを貼る" }) as HTMLInputElement).checked,
     ).toBe(true);
-    expect((screen.getByLabelText(/呼び名/) as HTMLInputElement).value).toBe("k");
+    expect((screen.getByLabelText(/^名前/) as HTMLInputElement).value).toBe("k");
   });
 
   it("opens each way for an account with no token", async () => {
@@ -333,9 +333,9 @@ describe("SettingsAccounts: the add form", () => {
     api.addAccount.mockImplementation(() => ok({}));
     await fireEvent.click(screen.getByRole("button", { name: "アカウントを追加" }));
     await fireEvent.click(screen.getByRole("radio", { name: "トークンなし" }));
-    await fireEvent.input(screen.getByLabelText(/呼び名/), { target: { value: "bot" } });
-    await fireEvent.input(screen.getByLabelText("login"), { target: { value: "bot" } });
-    await fireEvent.click(screen.getByRole("button", { name: "追加する" }));
+    await fireEvent.input(screen.getByLabelText(/^名前/), { target: { value: "bot" } });
+    await fireEvent.input(screen.getByLabelText("ログイン名"), { target: { value: "bot" } });
+    await fireEvent.click(screen.getByRole("button", { name: "追加" }));
     await waitFor(() =>
       expect(screen.queryByRole("region", { name: "アカウントを追加" })).toBeNull(),
     );

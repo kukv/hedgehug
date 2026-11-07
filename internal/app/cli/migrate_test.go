@@ -152,7 +152,7 @@ func TestSchemaMigrateKindAndProp(t *testing.T) {
 	if x.Kind != "task" || x.Props.Get("begin") == nil || x.Props.Get("start") != nil {
 		t.Errorf("task = kind %q, props %v", x.Kind, x.Props)
 	}
-	if sf := te.schemaFile(); strings.Contains(sf, "name: bug") || !strings.Contains(sf, "begin: {type: date}") {
+	if sf := te.schemaFile(); strings.Contains(sf, "name: bug") || !strings.Contains(sf, "begin: {type: date, label: 開始日}") {
 		t.Errorf("schema.yaml:\n%s", sf)
 	}
 }

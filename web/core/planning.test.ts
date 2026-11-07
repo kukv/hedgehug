@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bulkUpdatedLabel,
   closeLabel,
   closeToValue,
   daysLeft,
@@ -142,7 +143,7 @@ describe("closing", () => {
 
 describe("worklogLabel", () => {
   it("compares with the estimate when there is one", () => {
-    expect(worklogLabel("2h", "6h")).toBe("2h / 見積 6h");
+    expect(worklogLabel("2h", "6h")).toBe("2h / 見積もり 6h");
     expect(worklogLabel("2h", undefined)).toBe("2h");
   });
 });
@@ -153,5 +154,12 @@ describe("usableTemplates", () => {
     expect(usableTemplates(all, ["b"])).toEqual([{ name: "b" }]);
     expect(usableTemplates(all, [])).toEqual(all);
     expect(usableTemplates(all, null)).toEqual(all);
+  });
+});
+
+describe("bulkUpdatedLabel", () => {
+  it("says the value it set, or that it cleared the field", () => {
+    expect(bulkUpdatedLabel(3, "ステータス", "done")).toBe("3 件のステータスを done にしました");
+    expect(bulkUpdatedLabel(3, "ラベル", "")).toBe("3 件のラベルを外しました");
   });
 });

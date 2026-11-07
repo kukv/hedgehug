@@ -279,12 +279,12 @@ describe("App のゲート", () => {
     onboardingApi();
     const { findByText, findByLabelText, getByRole, queryByText } = render(App);
     await findByText("Hedgehug へようこそ");
-    await fireEvent.click(getByRole("button", { name: "新しく Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "新しく Store を作成" }));
     await fireEvent.input(await findByLabelText("名前"), { target: { value: "me" } });
     await fireEvent.input(getByRole("textbox", { name: "ID の接頭辞" }), {
       target: { value: "me" },
     });
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(getByRole("button", { name: "Store を作成" }));
     await vi.waitFor(() => expect(queryByText("Hedgehug へようこそ")).toBeNull());
   });
 });

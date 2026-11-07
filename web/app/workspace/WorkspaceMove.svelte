@@ -80,12 +80,12 @@
   <div class="form">
     {#if target}
       <div class="field">
-        <span class="lbl">移り先のワークスペース</span>
+        <span class="lbl">移動先のワークスペース</span>
         <WorkspaceChoice
           entries={choices}
           value={workspaceKey(target)}
           name="{uid}-to"
-          label="移り先のワークスペース"
+          label="移動先のワークスペース"
           showStore={false}
           isDisabled={(w) => w.ulid === here}
           note={(w) => (w.ulid === here ? "今のワークスペース" : "")}
@@ -94,12 +94,12 @@
       </div>
 
       <ul class="notes">
-        <li>移り先のルートに置きます。配下のタスクも一緒に移ります</li>
+        <li>移動先のルートに置きます。配下のタスクも一緒に移ります</li>
         <li>
           ID を {target.prefix} の番号に振り直します（{did.current(task.store, task.id)}
-          は former_ids に残ります）
+          は旧 ID として残ります）
         </li>
-        <li>スプリント・リリースが移り先のものでなければ外れます</li>
+        <li>スプリント・リリースが移動先のものでなければ外れます</li>
       </ul>
     {:else}
       <p class="none">この Store（{task.store}）にはほかのワークスペースがありません。</p>

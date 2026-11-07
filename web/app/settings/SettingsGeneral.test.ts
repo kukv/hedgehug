@@ -87,7 +87,7 @@ describe("SettingsGeneral", () => {
     expect(getAllByText(/非表示の間は 15 分ごと/)).toHaveLength(1);
   });
 
-  it("間隔は最初の Store の値を1つだけ出す", () => {
+  it("間隔は最初の Store の値を 1 つだけ出す", () => {
     const { getAllByText } = mount([
       status({ store: "a", interval: 90, push_interval: 10 }),
       status({ store: "b", interval: 300, push_interval: 60 }),
@@ -103,7 +103,7 @@ describe("SettingsGeneral", () => {
     const a = getByRole("region", { name: "Store: a" });
     const b = getByRole("region", { name: "Store: b" });
     expect(within(a).getByText("同期済み")).toBeTruthy();
-    expect(within(b).getByText("送信待ち")).toBeTruthy();
+    expect(within(b).getByText("push 待ち")).toBeTruthy();
     expect(within(b).getByText("3 コミット")).toBeTruthy();
     expect(within(a).getByRole("button", { name: /今すぐ同期/ })).toBeTruthy();
     expect(within(b).getByRole("button", { name: /今すぐ同期/ })).toBeTruthy();

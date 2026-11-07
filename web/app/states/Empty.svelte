@@ -49,7 +49,7 @@
     <Icon name="folder" size={28} />
     <b>{name} にはまだタスクがありません</b>
     <span class="text">
-      {scope === "project" ? "このプロジェクト" : "このワークスペース"}の中で
+      {scope === "project" ? "このプロジェクトのリポジトリ" : "このワークスペース"}の中で
       <code>hh add</code>
       しても、ここに入ります。
     </span>
@@ -74,7 +74,7 @@
   <div class="empty">
     <Icon name="folder" size={28} />
     <b>ワークスペースがありません</b>
-    <span class="text">端末でワークスペースを足すと、ここにツリーが出ます。</span>
+    <span class="text">端末でワークスペースを追加すると、ここにツリーが出ます。</span>
     {#each commands as c (c)}
       <CliLine command={c} />
     {/each}

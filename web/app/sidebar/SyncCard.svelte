@@ -86,7 +86,7 @@
   {:else if summary.kind === "pending"}
     <div class="head">
       <span class="dot pending"></span>
-      <b>送信待ち</b>
+      <b>push 待ち</b>
       {#if summary.pushAt}
         <span class="aside">{pushIn(summary.pushAt)}</span>
       {/if}

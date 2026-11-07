@@ -17,7 +17,7 @@ test("the tabs show only with a sprint or a release, and the first one comes fro
 }) => {
   await openTab(page, hh, "settings");
   await expect(page.getByRole("link", { name: "バックログ" })).toHaveCount(0);
-  await page.getByRole("button", { name: "スプリントを作る…" }).click();
+  await page.getByRole("button", { name: "スプリントを作成…" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("名前", { exact: true }).fill("Sprint 1");
   await dialog.getByRole("button", { name: "作成" }).click();
@@ -40,15 +40,15 @@ test("a sprint goes from the backlog through the board to closing", async ({ pag
   await expect(backlogRow(page, "one")).toHaveCount(0);
 
   // Into a sprint from the menu of the row, for the keyboard.
-  await page.getByRole("button", { name: "two の移し先" }).click();
+  await page.getByRole("button", { name: "two の移動先" }).click();
   await page.getByRole("menuitem", { name: "Sprint 1 に入れる" }).click();
   await expect(panel.getByText("5 pt", { exact: true }).first()).toBeVisible();
 
   // Start it from the panel, and work on the board with the days left at the top.
   await panel.getByRole("button", { name: "開始する" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "開始する" }).click();
-  await expect(panel.getByRole("link", { name: "ボードを開く" })).toBeVisible();
-  await panel.getByRole("link", { name: "ボードを開く" }).click();
+  await expect(panel.getByRole("link", { name: "カンバンを開く" })).toBeVisible();
+  await panel.getByRole("link", { name: "カンバンを開く" }).click();
   await expect(page.getByRole("region", { name: "Sprint 1 の状況" })).toContainText("残り");
   await expect(page.getByLabel("カンバンの盤面")).toContainText("one");
   await expect(page.getByLabel("カンバンの盤面")).not.toContainText("three");
@@ -59,7 +59,7 @@ test("a sprint goes from the backlog through the board to closing", async ({ pag
   // Closing carries what is left to the next sprint.
   await page.getByRole("button", { name: "スプリントを閉じる…" }).click();
   const close = page.getByRole("dialog");
-  await expect(close.getByText("未完了の 1 件の移し先")).toBeVisible();
+  await expect(close.getByText("未完了の 1 件の移動先")).toBeVisible();
   await expect(close.getByLabel(/次のスプリント（Sprint 2/)).toBeChecked();
   await close.getByRole("button", { name: "閉じて 1 件を Sprint 2 へ" }).click();
   await expect(page.getByRole("row", { name: /Sprint 1 closed/ })).toBeVisible();
@@ -124,12 +124,12 @@ test("the detail of a task has the sprint, the release and the time spent", asyn
   await page.getByRole("textbox", { name: "時間" }).fill("2h");
   await page.getByRole("textbox", { name: "メモ" }).fill("調査");
   await page.getByRole("button", { name: "記録" }).click();
-  await expect(page.getByText("2h / 見積 6h")).toBeVisible();
+  await expect(page.getByText("2h / 見積もり 6h")).toBeVisible();
   await expect(page.getByText("調査", { exact: true })).toBeVisible();
   expect(hh.hh("worklog", "ls", "DM-1")).toContain("調査");
   await page.getByRole("button", { name: /の記録を削除/ }).click();
   await expect(page.getByText("調査", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("0m / 見積 6h")).toBeVisible();
+  await expect(page.getByText("0m / 見積もり 6h")).toBeVisible();
 
   await page.getByRole("button", { name: "スプリント" }).click();
   await page.getByRole("menuitem", { name: "Sprint 1" }).click();

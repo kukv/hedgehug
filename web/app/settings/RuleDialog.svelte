@@ -98,7 +98,7 @@
       </label>
     {/if}
     <label class="field">
-      <span>行き先</span>
+      <span>遷移先</span>
       <select bind:value={goal}>
         <option value="" disabled>選んでください</option>
         <optgroup label="ステータス">

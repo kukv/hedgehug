@@ -117,10 +117,10 @@ describe("StoreMove", () => {
     expect(routes.plan).toHaveBeenCalledWith("U1", { to: "second" });
     expect(await screen.findByText("移動先で変わること")).toBeVisible();
     expect(screen.getByText("移動先の a で振り直します")).toBeVisible();
-    expect(screen.getByText("REL-0 元の親 から外れて、a のルートに置きます")).toBeVisible();
+    expect(screen.getByText("REL-0 元の親 から外し、a のルートに置きます")).toBeVisible();
     expect(screen.getByText("転送ファイルを残し、古い ID からも辿れます")).toBeVisible();
     // the descendants: the tasks of the plan but the first
-    expect(screen.getByText(/子孫 1/)).toBeVisible();
+    expect(screen.getByText(/配下 1/)).toBeVisible();
     expect(screen.queryByRole("region", { name: /^外す参照/ })).toBeNull();
     expect(screen.queryByRole("note")).toBeNull();
     expect(screen.getByRole("button", { name: "移動" })).toBeEnabled();
@@ -289,7 +289,7 @@ describe("StoreMove", () => {
       setup({ plan: planOf({ parent: { id: "SC-4", title: "新しい親", ulid: "UQ" } }) });
       await pick("second");
       expect(
-        await screen.findByText("REL-0 元の親 から外れて、SC-4 新しい親 の下に置きます"),
+        await screen.findByText("REL-0 元の親 から外し、SC-4 新しい親 の下に置きます"),
       ).toBeVisible();
     });
   });
@@ -309,7 +309,7 @@ describe("StoreMove", () => {
       }),
     });
     await pick("second");
-    expect(await screen.findByText(/から外れて、second:SC-4 新しい親 の下に/)).toBeVisible();
+    expect(await screen.findByText(/から外し、second:SC-4 新しい親 の下に/)).toBeVisible();
     const region = await screen.findByRole("region", { name: /^外す参照/ });
     expect(within(region).getByRole("listitem")).toHaveTextContent("shared:REL-3");
   });
@@ -344,10 +344,10 @@ describe("StoreMove", () => {
     let answer: (v: unknown) => void = () => {};
     routes.plan.mockImplementationOnce(() => new Promise((res) => (answer = res)));
     await pick("second");
-    expect(screen.getByRole("status")).toHaveTextContent("移動の予定を取得しています…");
+    expect(screen.getByRole("status")).toHaveTextContent("移動の内容を取得しています…");
     answer(planOf());
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("移動の予定を更新しました"),
+      expect(screen.getByRole("status")).toHaveTextContent("移動の内容を更新しました"),
     );
   });
 
@@ -556,10 +556,10 @@ describe("StoreMove", () => {
       );
       await fireEvent.click(screen.getByRole("button", { name: "移動" }));
       expect(await screen.findByRole("alert")).toHaveTextContent(
-        "内容が変わりました。確かめてから移動してください",
+        "内容が変わりました。確認してから移動してください",
       );
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
-      expect(await screen.findByText(/子孫 2/)).toBeVisible();
+      expect(await screen.findByText(/配下 2/)).toBeVisible();
       // the notice is where the focus goes, so that it is read before the button is pressed again
       expect(document.activeElement).toContainElement(screen.getByRole("alert"));
       expect(onclose).not.toHaveBeenCalled();
@@ -633,7 +633,7 @@ describe("StoreMove", () => {
       );
       await fireEvent.click(screen.getByRole("button", { name: "移動" }));
       expect(await screen.findByRole("alert")).toHaveTextContent(
-        "second は読み取り専用です（remote に書き込めません）",
+        "second は閲覧のみです（remote に書き込めません）",
       );
       expect(onclose).not.toHaveBeenCalled();
     });

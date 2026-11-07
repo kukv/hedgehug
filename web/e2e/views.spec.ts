@@ -8,7 +8,7 @@
 //     table with the textboxes "タイトル: <ID>", the status "未保存の変更" with the button
 //     "ビューを更新" once the filter differs from the saved query, and the button "ビューの操作
 //     （改名・削除）" whose menu has 改名… and 削除…
-//   - rename: the dialog "ビュー <名前> を改名" (the textbox "新しい名前", the button "改名", the toast
+//   - rename: the dialog "ビュー <名前> の名前を変更" (the textbox "新しい名前", the button "変更", the toast
 //     "ビュー <a> を <b> に改名しました"); delete: the dialog "ビュー <名前> を削除" (the button
 //     "削除", the toast "ビュー <名前> を削除しました" with the button "取り消し")
 //   - /query/<layout>?q= is the heading "クエリ" with the same navigation and the button
@@ -97,19 +97,19 @@ test("a tree saved as a view opens, changes its layout, is updated, renamed and 
   await expect(page.getByText("未保存の変更")).toHaveCount(0);
 
   // rename
-  await page.getByRole("button", { name: "ビューの操作（改名・削除）" }).click();
-  await page.getByRole("menuitem", { name: "改名…" }).click();
-  const rename = page.getByRole("dialog", { name: "ビュー doing を改名" });
+  await page.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }).click();
+  await page.getByRole("menuitem", { name: "名前を変更…" }).click();
+  const rename = page.getByRole("dialog", { name: "ビュー doing の名前を変更" });
   await rename.getByRole("textbox", { name: "新しい名前" }).fill("busy");
-  await rename.getByRole("button", { name: "改名", exact: true }).click();
-  await expect(toast(page, "ビュー doing を busy に改名しました")).toBeVisible();
+  await rename.getByRole("button", { name: "変更", exact: true }).click();
+  await expect(toast(page, "ビュー doing の名前を busy に変更しました")).toBeVisible();
   await expect(page).toHaveURL(`${hh.origin}/views/demo/busy`);
   expect(views().map((v) => v.name)).toEqual(["busy"]);
   await expect(saved(page).getByRole("link", { name: "busy" })).toBeVisible();
 
   // delete, and take it back (at once: the undo comes before the poll of the server has seen the
   // delete, so no views.changed comes, and the tab reads the views again after the undo itself)
-  await page.getByRole("button", { name: "ビューの操作（改名・削除）" }).click();
+  await page.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }).click();
   await page.getByRole("menuitem", { name: "削除…" }).click();
   const remove = page.getByRole("dialog", { name: "ビュー busy を削除" });
   await remove.getByRole("button", { name: "削除", exact: true }).click();

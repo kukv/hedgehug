@@ -134,7 +134,7 @@
 >
   <div class="form" role="presentation" {onkeydown}>
     <div class="field">
-      <label for="{uid}-url">URL（1行に1つ）</label>
+      <label for="{uid}-url">URL（1 行に 1 つ）</label>
       <textarea
         id="{uid}-url"
         class="mono"
@@ -148,7 +148,7 @@
       <span id="{uid}-url-msg" class="msg" class:bad={touched && urlError}>
         {touched && urlError
           ? urlError
-          : "1つ目から取り込みます。2つ目以降はミラーとして書き込み先に加えます"}
+          : "1 つ目から取り込みます。2 つ目以降はミラーとして書き込み先に加えます"}
       </span>
     </div>
 
@@ -190,7 +190,7 @@
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
     <Button variant="primary" disabled={busy} onclick={submit}>
-      {busy ? "追加中…" : "追加する"}
+      {busy ? "追加中…" : "追加"}
     </Button>
   {/snippet}
 </Dialog>

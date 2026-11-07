@@ -1,12 +1,12 @@
 // Screens this spec relies on:
-//   - /settings/accounts lists each account as the article "<呼び名>" (heading, "<login>@<host>", the
+//   - /settings/accounts lists each account as the article "<名前>" (heading, "<login>@<host>", the
 //     state "有効" / "エラー" / "トークンなし", the row "トークンの取得元" with keychain, Device Flow, gh,
-//     環境変数 or なし); its button "<呼び名> の操作" opens a menu
+//     環境変数 or なし); its button "<名前> の操作" opens a menu
 //   - the button "アカウントを追加" opens the region "アカウントを追加": the radios "Device Flow",
-//     "トークンを貼る", "gh", "環境変数", "トークンなし"; the fields "呼び名", "ホスト", "login", "トークン";
+//     "トークンを貼る", "gh", "環境変数", "トークンなし"; the fields "名前", "ホスト", "ログイン名", "トークン";
 //     the buttons "GitHub でログイン" (the code appears as .user-code), "トークンを保存", "追加する", "閉じる"
-//   - the menu item "ログアウト…" opens the dialog "<呼び名> からログアウト" with the button "ログアウト"
-//   - the toasts are in the status regions: "アカウント <呼び名> を追加しました" and so on
+//   - the menu item "ログアウト…" opens the dialog "<名前> からログアウト" with the button "ログアウト"
+//   - the toasts are in the status regions: "アカウント <名前> を追加しました" and so on
 //
 // github: true starts the fake of GitHub as github.com; the Device Flow is approved from the test
 // with fakegh, as a person would on github.com. The account "e2e" has no token to begin with.
@@ -43,9 +43,9 @@ test("an account with no token is added and shows in hh auth status", async ({ p
   await expect(card(page, "e2e")).toContainText("トークンなし");
 
   const form = await openAdd(page, "トークンなし");
-  await form.getByLabel("呼び名").fill("bot");
-  await form.getByRole("textbox", { name: "login", exact: true }).fill("bot");
-  await form.getByRole("button", { name: "追加する" }).click();
+  await form.getByLabel(/^名前/).fill("bot");
+  await form.getByRole("textbox", { name: "ログイン名", exact: true }).fill("bot");
+  await form.getByRole("button", { name: "追加" }).click();
 
   await expect(toast(page, "アカウント bot を追加しました")).toBeVisible();
   await expect(addForm(page)).toHaveCount(0);
@@ -60,7 +60,7 @@ test("a Device Flow login waits for the approval and then shows the account", as
 }) => {
   await hh.open(page, "/settings/accounts");
   const form = await openAdd(page, "Device Flow");
-  await form.getByLabel("呼び名").fill("work");
+  await form.getByLabel(/^名前/).fill("work");
   await form.getByRole("button", { name: "GitHub でログイン" }).click();
 
   const code = form.locator(".user-code");
@@ -104,7 +104,7 @@ test("a pasted token is kept in the keychain, and log out takes it away", async 
   await hh.open(page, "/settings/accounts");
 
   const form = await openAdd(page, "トークンを貼る");
-  await form.getByLabel("呼び名").fill("e2e");
+  await form.getByLabel(/^名前/).fill("e2e");
   await form.getByRole("textbox", { name: "トークン", exact: true }).fill("t9");
   await form.getByRole("button", { name: "トークンを保存" }).click();
 

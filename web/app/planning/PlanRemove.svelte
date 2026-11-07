@@ -51,8 +51,10 @@
 
 <Dialog open title={`${noun} ${plan.name} を削除`} width={560} {cli} {onclose}>
   <p>
-    入っているタスク {plan.tasks} 件から外して削除します。タスクは消えません。hh undo
-    で元に戻せます。
+    入っているタスク
+    {plan.tasks}
+    件から外して削除します。タスクは消えません。コマンドパレットの「直前の操作を取り消す」（hh
+    undo）で元に戻せます。
   </p>
   {#if failure}
     <FormError message={failure} />

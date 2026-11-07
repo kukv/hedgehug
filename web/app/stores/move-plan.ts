@@ -42,7 +42,7 @@ export function parentSentence(i: {
   workspace: string;
 }): string {
   const to = i.parent !== null ? `${i.parent} の下に置きます` : `${i.workspace} のルートに置きます`;
-  return i.from !== null ? `${i.from} から外れて、${to}` : to;
+  return i.from !== null ? `${i.from} から外し、${to}` : to;
 }
 
 /** The two sentences of the notice when accounts lose sight of the task (細部 47). */

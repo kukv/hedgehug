@@ -43,7 +43,7 @@ describe("summarizeSync", () => {
     });
   });
 
-  it("未 push があれば送信待ち。合計と一番古い最初の変更を出す", () => {
+  it("未 push があればpush 待ち。合計と一番古い最初の変更を出す", () => {
     const s = summarizeSync(
       [
         st({

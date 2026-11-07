@@ -43,7 +43,7 @@ describe("WorkspaceMove", () => {
     expect(
       screen.getByRole("dialog", { name: "REL-6 Web の API クライアントを v2 に更新 を移動" }),
     ).toBeVisible();
-    const group = screen.getByRole("radiogroup", { name: "移り先のワークスペース" });
+    const group = screen.getByRole("radiogroup", { name: "移動先のワークスペース" });
     expect(group).toHaveTextContent("release（REL） — 今のワークスペース");
     expect(screen.getByRole("radio", { name: /^release/ })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "shared（SH）" })).toBeChecked();
@@ -61,17 +61,17 @@ describe("WorkspaceMove", () => {
   it("explains the move, with the prefix of the workspace picked", async () => {
     setup();
     expect(
-      screen.getByText("移り先のルートに置きます。配下のタスクも一緒に移ります"),
+      screen.getByText("移動先のルートに置きます。配下のタスクも一緒に移ります"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("ID を SH の番号に振り直します（REL-6 は former_ids に残ります）"),
+      screen.getByText("ID を SH の番号に振り直します（REL-6 は旧 ID として残ります）"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("スプリント・リリースが移り先のものでなければ外れます"),
+      screen.getByText("スプリント・リリースが移動先のものでなければ外れます"),
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("radio", { name: "ops（OPS）" }));
     expect(
-      screen.getByText("ID を OPS の番号に振り直します（REL-6 は former_ids に残ります）"),
+      screen.getByText("ID を OPS の番号に振り直します（REL-6 は旧 ID として残ります）"),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       "hh mv REL-6 --workspace ops",

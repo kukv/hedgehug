@@ -43,7 +43,7 @@ describe("PrefixChange", () => {
     expect(
       screen.getByText(/配下の 25 件（削除済みを含む）の ID を新しい接頭辞で振り直します/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/古い ID は former_ids に残る/)).toBeInTheDocument();
+    expect(screen.getByText(/古い ID は旧 ID として残る/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "25 件を振り直す" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       "hh workspace set-prefix release <接頭辞> --store shared",

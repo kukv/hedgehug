@@ -75,15 +75,16 @@ func checkOwners(ix *index.Index, group []named) []usecase.Finding {
 	}
 	for i, a := range group {
 		if _, ok := ix.Workspace(a.ws); a.ws.IsZero() {
-			out = append(out, usecase.Finding{Check: "file", Where: a.rel, Msg: "workspace is missing", Hint: hint(a.rel)})
+			out = append(out, usecase.Finding{Check: "file", Where: a.rel, Msg: "workspace is missing", Hint: hint(a.rel), Code: "plan.no_workspace"})
 		} else if !ok {
-			out = append(out, usecase.Finding{Check: "file", Where: a.rel, Msg: fmt.Sprintf("workspace %s is not a workspace of this store", a.ws), Hint: hint(a.rel)})
+			out = append(out, usecase.Finding{Check: "file", Where: a.rel, Msg: fmt.Sprintf("workspace %s is not a workspace of this store", a.ws), Hint: hint(a.rel), Code: "plan.unknown_workspace", Args: []string{a.ws.String()}})
 		}
 		for j, b := range group {
 			if i != j && !a.ws.IsZero() && a.ws == b.ws && a.name != "" && strings.EqualFold(a.name, b.name) {
 				out = append(out, usecase.Finding{
 					Check: "file", Where: a.rel, Msg: fmt.Sprintf("has the same name %q as %s in the same workspace", a.name, b.rel),
 					Hint: "rename one of them by hand and commit",
+					Code: "plan.same_name", Args: []string{a.name, b.rel},
 				})
 			}
 		}
@@ -98,6 +99,7 @@ func otherWorkspace(e *index.Entry, field, what string, ulid model.ULID) usecase
 		Check: "task", Where: usecase.TaskWhere(e), Task: e.ULID.String(),
 		Msg:  fmt.Sprintf("%s: %s %s is not in the workspace of this task", field, what, ulid),
 		Hint: "take it off with hedgehug edit, or move the task back to its workspace",
+		Code: "task.plan_other_workspace", Args: []string{field, what, ulid.String()},
 	}
 }
 
@@ -112,5 +114,6 @@ func notInStore(e *index.Entry, field, what string, ulid model.ULID) usecase.Fin
 		Check: "task", Where: usecase.TaskWhere(e), Task: e.ULID.String(),
 		Msg:  fmt.Sprintf("%s: %s %s is not in this store", field, what, ulid),
 		Hint: "take it off with hedgehug edit",
+		Code: "task.plan_missing", Args: []string{field, what, ulid.String()},
 	}
 }

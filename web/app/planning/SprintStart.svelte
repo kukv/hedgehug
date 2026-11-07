@@ -67,8 +67,8 @@
   <div class="form">
     <div class="row">
       <PlanField label="名前" value={name} first oninput={(v) => (name = v)} />
-      <PlanField label="start" type="date" value={start} oninput={(v) => (start = v)} />
-      <PlanField label="end" type="date" value={end} oninput={(v) => (end = v)} />
+      <PlanField label="開始日" type="date" value={start} oninput={(v) => (start = v)} />
+      <PlanField label="終了日" type="date" value={end} oninput={(v) => (end = v)} />
     </div>
     <PlanField label="ゴール" value={goal} oninput={(v) => (goal = v)} />
     <p class="load">入っているタスク {sprint.tasks} 件 · {ptLabel(sprint.points)}</p>

@@ -57,7 +57,7 @@
         disabled={form.busy || !form.ready}
         onclick={() => void form.run(true)}
       >
-        件数を確かめる
+        件数を確認する
       </Button>
     {/if}
   {/snippet}

@@ -2,7 +2,7 @@
 //   - /my is the tasks of the person: the heading "マイタスク", the line "自分 = <login>", the filter
 //     field (its default is assignee:@me -status:done -status:canceled), the count "<n> ワークスペース ·
 //     <m> 件", and the regions named by their group: "期限切れ", "今日", "今週", "来週以降", "期限なし"
-//     (by due date) or the name of the project, "プロジェクトなし" (by project; the button "まとめ方: …"
+//     (by due date) or the name of the project, "プロジェクトなし" (by project; the button "グループ: …"
 //     opens the menu 期限 / ワークスペース / プロジェクト; a workspace group has the badge of its Store
 //     by the name). A row shows the ID and the title as links, and the Store
 //   - a Store that is hidden has its tasks left out, and the text "非表示の Store に <n> 件（<名前>）"
@@ -73,7 +73,7 @@ test("the tasks are grouped by project from the menu", async ({ page, hh }) => {
   hh.add("Outside", "-p", `assignees=${ME}`);
   await hh.open(page, "/my");
 
-  await page.getByRole("button", { name: "まとめ方: 期限" }).click();
+  await page.getByRole("button", { name: "グループ: 期限" }).click();
   await page.getByRole("menuitem", { name: "プロジェクト" }).click();
   await expect(
     page.getByRole("region", { name: "Release", exact: true }).getByText("In the project"),
@@ -125,7 +125,7 @@ test("the tasks are grouped by workspace, and a hidden Store is left out with it
   hh.add("In second", "-p", `assignees=${ME}`, "--store", "second");
   await hh.open(page, "/my");
 
-  await page.getByRole("button", { name: "まとめ方: 期限" }).click();
+  await page.getByRole("button", { name: "グループ: 期限" }).click();
   await page.getByRole("menuitem", { name: "ワークスペース" }).click();
   const heads = page.getByRole("region").locator(".g-head");
   await expect(heads).toHaveCount(2);

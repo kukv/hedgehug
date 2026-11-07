@@ -99,13 +99,13 @@
       return;
     }
     planning = true;
-    announce = "移動の予定を取得しています…";
+    announce = "移動の内容を取得しています…";
     try {
       const p = await api.planMoveStore(task.ulid, fields);
       if (n === seq) {
         plan = p;
         offered = p.scoped !== undefined;
-        announce = "移動の予定を更新しました";
+        announce = "移動の内容を更新しました";
       }
     } catch (e) {
       if (n === seq) {
@@ -196,7 +196,7 @@
     } catch (e) {
       busy = false;
       if (e instanceof ApiError && e.type === "move.changed") {
-        await refresh("内容が変わりました。確かめてから移動してください");
+        await refresh("内容が変わりました。確認してから移動してください");
         // Where the new plan or the notice is: it is read before the button is pressed again.
         await tick();
         failBox?.focus();
@@ -230,7 +230,7 @@
       <span class="mono">{did.current(task.store, task.id)}</span>
       {task.title}
       {#if plan}
-        · 子孫 {plan.tasks.length - 1}
+        · 配下 {plan.tasks.length - 1}
       {/if}
     </p>
 

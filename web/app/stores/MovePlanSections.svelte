@@ -37,7 +37,9 @@
 
 {#if plan.unlinked.length > 0}
   <section class="part" aria-labelledby="{uid}-cut">
-    <h3 id="{uid}-cut">外す参照 <span class="note">— 参照は Store の中に閉じるため</span></h3>
+    <h3 id="{uid}-cut">
+      外す参照 <span class="note">— 参照できるのは同じ Store の中だけのため</span>
+    </h3>
     <ul class="refs">
       {#each unlinkedRows(plan.unlinked) as r (r.key)}
         <li>

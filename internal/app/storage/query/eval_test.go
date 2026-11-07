@@ -95,7 +95,7 @@ func TestRunFilters(t *testing.T) {
 		{"blocked_by:web-1", Options{}, []string{"a"}},
 		{"blocks:" + f.ids["a"].String(), Options{}, []string{"b"}},
 		{"duplicates:" + f.ids["c"].String(), Options{}, []string{"a"}},
-		{"重複されている:" + f.ids["a"].String(), Options{}, []string{"c"}},
+		{"重複元:" + f.ids["a"].String(), Options{}, []string{"c"}},
 		{"relates:" + f.ids["c"].String(), Options{}, []string{"b"}},
 		{"relates:" + f.ids["b"].String(), Options{}, []string{"c"}}, // symmetric
 		{"relates:none", Options{}, []string{"P", "E", "a"}},

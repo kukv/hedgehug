@@ -329,8 +329,8 @@ describe("buildCommands", () => {
       "今すぐ同期する",
       "タスクを作成",
       "プロジェクトを作成",
-      "スプリントを作る",
-      "リリースを作る",
+      "スプリントを作成",
+      "リリースを作成",
       "ワークスペースを追加",
       "直前の操作を取り消す",
       "doctor を実行",
@@ -373,7 +373,7 @@ describe("buildCommands", () => {
       "設定の同期と保守を開く",
     ]);
     expect(labels(buildCommands(env(), "> リリース"))).toEqual([
-      "リリースを作る",
+      "リリースを作成",
       "リリース準備 v2.4 を開く",
     ]);
     expect(buildCommands(env(), ">zzz")).toEqual([]);
@@ -672,7 +672,7 @@ describe("taskCommands", () => {
     if (move?.type === "command") move.run();
     expect(e.moveTask).toHaveBeenCalledWith(t);
     expect(status).toMatchObject({ label: "ステータスを変更…", keepOpen: true });
-    expect(child).toMatchObject({ label: "子タスクを作る", kbd: "C" });
+    expect(child).toMatchObject({ label: "子タスクを作成", kbd: "C" });
     expect(detail).toMatchObject({ label: "詳細を開く", kbd: "⌘↵", href: "/tasks/T1" });
     if (status?.type === "command") status.run();
     expect(e.pickStatus).toHaveBeenCalledWith(t);

@@ -10,10 +10,24 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 )
 
-// Problem is a defect in a schema.
+// Problem is a defect in a schema. Code and Args say it for a reader in
+// another language: Code names the kind of defect, Args are the values the
+// message names, in the order it names them.
 type Problem struct {
 	Path string // where, like "statuses[2]" or "scoped[0].where"
 	Msg  string
+	Code string
+	Args []string
+}
+
+// NewProblem is the Problem at path of the kind code, whose message is format
+// with args.
+func NewProblem(path, code, format string, args ...any) Problem {
+	s := make([]string, len(args))
+	for i, a := range args {
+		s[i] = fmt.Sprint(a)
+	}
+	return Problem{Path: path, Msg: fmt.Sprintf(format, args...), Code: code, Args: s}
 }
 
 func (p Problem) String() string { return p.Path + ": " + p.Msg }
@@ -64,8 +78,8 @@ func parseWhere(w string) (model.ULID, error) {
 // that hh doctor and hh schema check can show them.
 func (s *Schema) Check() []Problem {
 	var ps []Problem
-	add := func(path, format string, args ...any) {
-		ps = append(ps, Problem{path, fmt.Sprintf(format, args...)})
+	add := func(path, code, format string, args ...any) {
+		ps = append(ps, NewProblem(path, code, format, args...))
 	}
 
 	statuses := map[string]bool{}
@@ -74,13 +88,13 @@ func (s *Schema) Check() []Problem {
 		p := fmt.Sprintf("statuses[%d]", i)
 		switch {
 		case st.Name == "":
-			add(p, "name is empty")
+			add(p, "schema.name_empty", "name is empty")
 		case statuses[st.Name]:
-			add(p, "status %q is defined twice", st.Name)
+			add(p, "schema.status_twice", "status %q is defined twice", st.Name)
 		}
 		statuses[st.Name] = true
 		if !slices.Contains(Categories, st.Category) {
-			add(p, "unknown category %q", st.Category)
+			add(p, "schema.unknown_category", "unknown category %q", st.Category)
 		}
 		if st.Default {
 			defaults[st.Category]++
@@ -88,7 +102,7 @@ func (s *Schema) Check() []Problem {
 	}
 	for _, c := range Categories {
 		if defaults[c] != 1 {
-			add("statuses", "category %s needs exactly one default status, has %d", c, defaults[c])
+			add("statuses", "schema.default_status", "category %s needs exactly one default status, has %d", c, defaults[c])
 		}
 	}
 
@@ -98,76 +112,76 @@ func (s *Schema) Check() []Problem {
 		p := fmt.Sprintf("kinds[%d]", i)
 		switch {
 		case k.Name == "":
-			add(p, "name is empty")
+			add(p, "schema.name_empty", "name is empty")
 		case kinds[k.Name]:
-			add(p, "kind %q is defined twice", k.Name)
+			add(p, "schema.kind_twice", "kind %q is defined twice", k.Name)
 		}
 		kinds[k.Name] = true
 		if k.Role != RoleContainer && k.Role != RoleWork {
-			add(p, "unknown role %q", k.Role)
+			add(p, "schema.unknown_role", "unknown role %q", k.Role)
 		}
 		if k.Default && k.Role == RoleWork {
 			workDefaults++
 		}
 		if k.Template != "" {
 			if err := model.ValidTemplateName(k.Template); err != nil {
-				add(p+".template", "%v", err)
+				add(p+".template", "schema.bad_template_name", "%v", err)
 			}
 		}
 	}
 	for i, k := range s.Kinds {
 		for _, parent := range k.Parents {
 			if parent != Root && !kinds[parent] {
-				add(fmt.Sprintf("kinds[%d].parents", i), "unknown kind %q", parent)
+				add(fmt.Sprintf("kinds[%d].parents", i), "schema.unknown_kind", "unknown kind %q", parent)
 			}
 		}
 	}
 	if workDefaults != 1 {
-		add("kinds", "the work role needs exactly one default kind, has %d", workDefaults)
+		add("kinds", "schema.default_kind", "the work role needs exactly one default kind, has %d", workDefaults)
 	}
 
 	props := map[string]bool{}
 	for _, pr := range s.Props {
 		p := "props." + pr.Name
 		if slices.Contains(model.TaskKeys(), pr.Name) {
-			add(p, "%q is a built-in field", pr.Name)
+			add(p, "schema.prop_builtin", "%q is a built-in field", pr.Name)
 		}
 		if props[pr.Name] {
-			add(p, "property %q is defined twice", pr.Name)
+			add(p, "schema.prop_twice", "property %q is defined twice", pr.Name)
 		}
 		props[pr.Name] = true
 		if !slices.Contains(PropTypes, pr.Type) {
-			add(p, "unknown type %q", pr.Type)
+			add(p, "schema.unknown_type", "unknown type %q", pr.Type)
 		}
 		if (pr.Type == TypeEnum || pr.Type == TypeMultiEnum) && len(pr.Values) == 0 {
-			add(p, "values is empty")
+			add(p, "schema.values_empty", "values is empty")
 		}
 		if pr.Inverse != "" && pr.Symmetric {
-			add(p, "inverse and symmetric cannot be used together")
+			add(p, "schema.inverse_and_symmetric", "inverse and symmetric cannot be used together")
 		}
 		if (pr.Inverse != "" || pr.Symmetric) && pr.Type != TypeTaskRef {
-			add(p, "inverse and symmetric are only for task_ref")
+			add(p, "schema.inverse_not_task_ref", "inverse and symmetric are only for task_ref")
 		}
 	}
 
 	checkWorkflow := func(path string, w Workflow) {
 		for _, tr := range w.Transitions {
 			if !statuses[tr.Key] {
-				add(path+".transitions", "unknown status %q", tr.Key)
+				add(path+".transitions", "schema.unknown_status", "unknown status %q", tr.Key)
 			}
 			for _, to := range tr.Values {
 				if !statuses[to] {
-					add(path+".transitions", "unknown status %q", to)
+					add(path+".transitions", "schema.unknown_status", "unknown status %q", to)
 				}
 			}
 		}
 		for _, rq := range w.Required {
 			if !statuses[rq.Key] {
-				add(path+".required", "unknown status %q", rq.Key)
+				add(path+".required", "schema.unknown_status", "unknown status %q", rq.Key)
 			}
 			for _, f := range rq.Values {
 				if !props[f] && !slices.Contains(requirableFields, f) {
-					add(path+".required", "%q is neither a property nor a field that can be required", f)
+					add(path+".required", "schema.not_requirable", "%q is neither a property nor a field that can be required", f)
 				}
 			}
 		}
@@ -180,20 +194,20 @@ func (s *Schema) Check() []Problem {
 		ulid, err := parseWhere(sc.Where)
 		switch {
 		case err != nil:
-			add(p+".where", "%v", err)
+			add(p+".where", "schema.bad_where", "%v", err)
 		case wheres[ulid]:
-			add(p+".where", "%s has two overrides", sc.Where)
+			add(p+".where", "schema.where_twice", "%s has two overrides", sc.Where)
 		}
 		wheres[ulid] = true
 		for _, name := range sc.Statuses {
 			if !statuses[name] {
-				add(p+".statuses", "unknown status %q", name)
+				add(p+".statuses", "schema.unknown_status", "unknown status %q", name)
 			}
 		}
 		if sc.Statuses != nil {
 			for _, c := range Categories {
 				if d, ok := s.DefaultStatus(c); ok && !slices.Contains(sc.Statuses, d.Name) {
-					add(p+".statuses", "%q is the default of %s and cannot be hidden", d.Name, c)
+					add(p+".statuses", "schema.default_hidden", "%q is the default of %s and cannot be hidden", d.Name, c)
 				}
 			}
 		}
@@ -203,7 +217,7 @@ func (s *Schema) Check() []Problem {
 		if sc.Templates != nil {
 			for _, name := range sc.Templates.Only {
 				if err := model.ValidTemplateName(name); err != nil {
-					add(p+".templates.only", "%v", err)
+					add(p+".templates.only", "schema.bad_template_name", "%v", err)
 				}
 			}
 			keys := make([]string, 0, len(sc.Templates.Default))
@@ -213,10 +227,10 @@ func (s *Schema) Check() []Problem {
 			sort.Strings(keys)
 			for _, k := range keys {
 				if !kinds[k] {
-					add(p+".templates.default", "unknown kind %q", k)
+					add(p+".templates.default", "schema.unknown_kind", "unknown kind %q", k)
 				}
 				if err := model.ValidTemplateName(sc.Templates.Default[k]); err != nil {
-					add(p+".templates.default", "%v", err)
+					add(p+".templates.default", "schema.bad_template_name", "%v", err)
 				}
 			}
 		}

@@ -82,7 +82,7 @@ export function dropDecision(i: DropInput): DropDecision {
   for (let n = 0; up && n < 10000; n++) {
     if (up === dragged.ulid) {
       return refuse(
-        "自分の子孫の下には置けません",
+        "自分の配下には置けません",
         `${name(dragged, idOf)}の下の階層に置くことになり、親子が循環します。`,
       );
     }
@@ -91,7 +91,7 @@ export function dropDecision(i: DropInput): DropDecision {
 
   const parent = parentUlid ? i.taskOf(parentUlid) : null;
   if (parentUlid && !parent) {
-    return refuse("置き先の親を読み込めていません", "少し待ってからやり直してください。");
+    return refuse("移動先の親を読み込めていません", "少し待ってからやり直してください。");
   }
   if (!i.schema) {
     return refuse(

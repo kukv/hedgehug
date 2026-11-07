@@ -104,6 +104,6 @@ describe("GitHubSection", () => {
     expect(screen.queryByRole("button", { name: "リンク" })).toBeNull();
     expect(screen.queryByRole("button", { name: "リンクを外す: org-a/web#88" })).toBeNull();
     expect((screen.getByLabelText("同期: org-a/web#45") as HTMLSelectElement).disabled).toBe(true);
-    screen.getByRole("button", { name: "PR を作る" });
+    screen.getByRole("button", { name: "PR を作成" });
   });
 });

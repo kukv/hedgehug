@@ -4,7 +4,7 @@
 //     server and, for a task's, the link "<ID> を開く"; the buttons "もう一度実行" and "修復…"
 //     (the dialog "doctor で修復する" has "修復する"; the toast says "<n> 件を修復しました")
 //   - the same page has the region "削除済みタスクの完全削除": the textbox "N 日より古いもの", the button
-//     "確かめる", the list "完全に削除されるタスク", the button "完全に削除…" (the dialog "完全に削除する"
+//     "確認する", the list "完全に削除されるタスク", the button "完全に削除…" (the dialog "完全に削除する"
 //     has "完全に削除する")
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -97,9 +97,9 @@ test("a deleted task is purged by age: checked, listed, then gone", async ({ pag
   const days = purge(page).getByRole("textbox", { name: "N 日より古いもの" });
   // a negative number cannot be checked
   await days.fill("-1");
-  await expect(purge(page).getByRole("button", { name: "確かめる" })).toBeDisabled();
+  await expect(purge(page).getByRole("button", { name: "確認する" })).toBeDisabled();
   await days.fill("0");
-  await purge(page).getByRole("button", { name: "確かめる" }).click();
+  await purge(page).getByRole("button", { name: "確認する" }).click();
   const list = purge(page).getByRole("list", { name: "完全に削除されるタスク" });
   await expect(list).toContainText(gone.id);
   await expect(list).toContainText("Delete me");

@@ -108,9 +108,9 @@ describe("StoreDiscover: the search on GitHub", () => {
     expect(screen.getByText("その他")).toBeTruthy();
     expect(screen.getByText("org-x/hh-a")).toBeTruthy();
     expect(screen.getByText("/srv/remotes/local.git")).toBeTruthy();
-    expect(screen.getAllByText("書き込み")).toHaveLength(3);
+    expect(screen.getAllByText("書き込み可")).toHaveLength(3);
     expect(screen.getByText("閲覧のみ")).toBeTruthy();
-    expect((screen.getByLabelText("org-x/hh-a の呼び名") as HTMLInputElement).value).toBe("hh-a");
+    expect((screen.getByLabelText("org-x/hh-a の名前") as HTMLInputElement).value).toBe("hh-a");
     expect((screen.getByLabelText("org-x/hh-a を選ぶ") as HTMLInputElement).checked).toBe(false);
   });
 
@@ -186,7 +186,7 @@ describe("StoreDiscover: mounting", () => {
       post: () => ok({ mounted: ["mine"], failed: [] }),
     });
     await screen.findByText("org");
-    await type(screen.getByLabelText("org/hh-a の呼び名"), " mine ");
+    await type(screen.getByLabelText("org/hh-a の名前"), " mine ");
     await fireEvent.click(screen.getByLabelText("org/hh-a を選ぶ"));
     await fireEvent.click(screen.getByRole("button", { name: "マウント" }));
     await waitFor(() => expect(mountStores).toHaveBeenCalledTimes(1));
@@ -213,7 +213,7 @@ describe("StoreDiscover: mounting", () => {
   it("does not send a candidate with an empty name, and says so on its row", async () => {
     const { mountStores } = mount({ get: two, post: () => ok({ mounted: ["hh-b"], failed: [] }) });
     await screen.findByText("org");
-    await type(screen.getByLabelText("org/hh-a の呼び名"), "  ");
+    await type(screen.getByLabelText("org/hh-a の名前"), "  ");
     await fireEvent.click(screen.getByLabelText("org/hh-a を選ぶ"));
     await fireEvent.click(screen.getByLabelText("org/hh-b を選ぶ"));
     await fireEvent.click(screen.getByRole("button", { name: "マウント" }));
@@ -227,7 +227,7 @@ describe("StoreDiscover: mounting", () => {
   it("does not call the server when the only chosen one has no name", async () => {
     const { mountStores } = mount({ get: two });
     await screen.findByText("org");
-    await type(screen.getByLabelText("org/hh-a の呼び名"), "");
+    await type(screen.getByLabelText("org/hh-a の名前"), "");
     await fireEvent.click(screen.getByLabelText("org/hh-a を選ぶ"));
     await fireEvent.click(screen.getByRole("button", { name: "マウント" }));
     expect(screen.getByText("名前を入れてください")).toBeTruthy();

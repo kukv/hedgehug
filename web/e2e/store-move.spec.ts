@@ -50,7 +50,7 @@ test("moves a task and its descendants to another Store, cutting the references 
   const changes = d.getByRole("region", { name: "移動先で変わること" });
   await expect(changes).toContainText("移動先の a で振り直します");
   await expect(changes).toContainText("a のルートに置きます");
-  await expect(d).toContainText("子孫 1");
+  await expect(d).toContainText("配下 1");
   const cut = d.getByRole("region", { name: /^外す参照/ });
   await expect(cut.getByRole("listitem")).toHaveCount(1);
   await expect(cut).toContainText("ブロックされている");
@@ -83,14 +83,14 @@ test("takes the plan again when a task is added under the ones to move", async (
   const d = dialog(page);
   await d.getByRole("radio", { name: /^second/ }).check();
   await d.getByRole("combobox", { name: "second のワークスペース" }).selectOption("a");
-  await expect(d).toContainText("子孫 1");
+  await expect(d).toContainText("配下 1");
 
   hh.hh("add", "Late task", "--parent", child.id);
   await d.getByRole("button", { name: /^(移動|\d+ 件の参照を外して移動)$/ }).click();
   await expect(d.getByRole("alert")).toContainText(
-    "内容が変わりました。確かめてから移動してください",
+    "内容が変わりました。確認してから移動してください",
   );
-  await expect(d).toContainText("子孫 2");
+  await expect(d).toContainText("配下 2");
   await expect(dialog(page)).toBeVisible();
 
   // The plan as it is now goes through.

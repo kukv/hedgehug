@@ -99,33 +99,33 @@ describe("AccountAdd: the ways to get the token", () => {
 
   it("shows the fields of the chosen way", async () => {
     mount();
-    expect(field(/呼び名/)).toBeTruthy();
+    expect(field(/^名前/)).toBeTruthy();
     expect(field("ホスト").value).toBe("github.com");
-    expect(screen.queryByLabelText("login")).toBeNull();
+    expect(screen.queryByLabelText("ログイン名")).toBeNull();
     expect(screen.queryByLabelText("トークン")).toBeNull();
 
     await fireEvent.click(radio("トークンを貼る"));
     const t = field("トークン");
     expect(t.type).toBe("password");
     expect(t.getAttribute("autocomplete")).toBe("off");
-    expect(screen.queryByLabelText("login")).toBeNull();
+    expect(screen.queryByLabelText("ログイン名")).toBeNull();
 
     await fireEvent.click(radio("gh"));
-    expect(field("login")).toBeTruthy();
+    expect(field("ログイン名")).toBeTruthy();
     expect(screen.queryByLabelText("変数名")).toBeNull();
 
     await fireEvent.click(radio("環境変数"));
     expect(field("変数名")).toBeTruthy();
 
     await fireEvent.click(radio("トークンなし"));
-    expect(field("login")).toBeTruthy();
+    expect(field("ログイン名")).toBeTruthy();
     expect(screen.queryByLabelText("変数名")).toBeNull();
   });
 
   it("opens with the way, the name and the host it is given (login again)", () => {
     mount({ initial: { source: "token", name: "work", host: "ghe.example.com" } });
     expect(radio("トークンを貼る").checked).toBe(true);
-    expect(field(/呼び名/).value).toBe("work");
+    expect(field(/^名前/).value).toBe("work");
     expect(field("ホスト").value).toBe("ghe.example.com");
   });
 
@@ -144,14 +144,14 @@ describe("AccountAdd: the line of hh", () => {
   it("is hh auth login for a Device Flow, with the name and a host that is not github.com", async () => {
     mount();
     expect(cliText()).toBe("$ hh auth login");
-    await type(/呼び名/, "work");
+    await type(/^名前/, "work");
     await type("ホスト", "ghe.example.com");
     expect(cliText()).toBe("$ hh auth login work --host ghe.example.com");
   });
 
   it("is hh auth login --with-token for a pasted token, and never has the token", async () => {
     mount({ initial: { source: "token" } });
-    await type(/呼び名/, "work");
+    await type(/^名前/, "work");
     await type("トークン", "ghp_secret");
     expect(cliText()).toBe("$ hh auth login work --with-token");
     expect(document.body.innerHTML).not.toContain("ghp_secret");
@@ -162,8 +162,8 @@ describe("AccountAdd: the line of hh", () => {
     expect(screen.getByRole("button", { name: /^コマンドをコピー/ }).hasAttribute("disabled")).toBe(
       true,
     );
-    await type(/呼び名/, "a");
-    await type("login", "alice");
+    await type(/^名前/, "a");
+    await type("ログイン名", "alice");
     expect(cliText()).toBe("$ hh auth add a --login alice --token gh");
     expect(screen.getByRole("button", { name: /^コマンドをコピー/ }).hasAttribute("disabled")).toBe(
       false,
@@ -181,7 +181,7 @@ describe("AccountAdd: the line of hh", () => {
 describe("AccountAdd: Device Flow", () => {
   it("starts with the name and the host, and shows the code", async () => {
     const { api } = mount();
-    await type(/呼び名/, "work");
+    await type(/^名前/, "work");
     await fireEvent.click(button("GitHub でログイン"));
     expect(api.startDeviceLogin).toHaveBeenCalledWith({ name: "work", host: "github.com" });
     expect(await screen.findByText("ABCD-1234")).toBeTruthy();
@@ -223,7 +223,7 @@ describe("AccountAdd: Device Flow", () => {
     await screen.findByText("ABCD-1234");
     emit({ id: "F1", state: "error", code: "auth.device_failed", message: "expired_token" });
     expect(screen.getByRole("alert").textContent).toContain(
-      "デバイスフローでログインできませんでした",
+      "Device Flow でログインできませんでした",
     );
     await fireEvent.click(button("やり直す"));
     await waitFor(() => expect(api.startDeviceLogin).toHaveBeenCalledTimes(2));
@@ -299,14 +299,14 @@ describe("AccountAdd: Device Flow", () => {
 
 describe("AccountAdd: a pasted token", () => {
   async function fill() {
-    await type(/呼び名/, "work");
+    await type(/^名前/, "work");
     await type("トークン", "ghp_secret");
   }
 
   it("needs a name and a token", async () => {
     mount({ initial: { source: "token" } });
     expect(button("トークンを保存").disabled).toBe(true);
-    await type(/呼び名/, "work");
+    await type(/^名前/, "work");
     expect(button("トークンを保存").disabled).toBe(true);
     await type("トークン", "x");
     expect(button("トークンを保存").disabled).toBe(false);
@@ -369,18 +369,18 @@ describe("AccountAdd: a pasted token", () => {
 describe("AccountAdd: gh, an environment variable and no token", () => {
   it("needs a name and a login", async () => {
     mount({ initial: { source: "none" } });
-    expect(button("追加する").disabled).toBe(true);
-    await type(/呼び名/, "bot");
-    expect(button("追加する").disabled).toBe(true);
-    await type("login", "bot");
-    expect(button("追加する").disabled).toBe(false);
+    expect(button("追加").disabled).toBe(true);
+    await type(/^名前/, "bot");
+    expect(button("追加").disabled).toBe(true);
+    await type("ログイン名", "bot");
+    expect(button("追加").disabled).toBe(false);
   });
 
   it("adds an account without a token", async () => {
     const { api, ondone, accounts } = mount({ initial: { source: "none" } });
-    await type(/呼び名/, "bot");
-    await type("login", "bot");
-    await fireEvent.click(button("追加する"));
+    await type(/^名前/, "bot");
+    await type("ログイン名", "bot");
+    await fireEvent.click(button("追加"));
     await waitFor(() => expect(ondone).toHaveBeenCalledWith("bot"));
     expect(api.addAccount).toHaveBeenCalledWith({
       name: "bot",
@@ -394,9 +394,9 @@ describe("AccountAdd: gh, an environment variable and no token", () => {
 
   it("adds an account whose token is gh", async () => {
     const { api, ondone } = mount({ initial: { source: "gh" } });
-    await type(/呼び名/, "a");
-    await type("login", "alice");
-    await fireEvent.click(button("追加する"));
+    await type(/^名前/, "a");
+    await type("ログイン名", "alice");
+    await fireEvent.click(button("追加"));
     await waitFor(() => expect(ondone).toHaveBeenCalled());
     expect(api.addAccount).toHaveBeenCalledWith({
       name: "a",
@@ -408,17 +408,17 @@ describe("AccountAdd: gh, an environment variable and no token", () => {
 
   it("needs the name of the variable, in capitals, digits and _", async () => {
     const { api, ondone } = mount({ initial: { source: "env" } });
-    await type(/呼び名/, "ci");
-    await type("login", "ci-bot");
-    expect(button("追加する").disabled).toBe(true);
+    await type(/^名前/, "ci");
+    await type("ログイン名", "ci-bot");
+    expect(button("追加").disabled).toBe(true);
     await type("変数名", "hh token");
-    expect(button("追加する").disabled).toBe(true);
+    expect(button("追加").disabled).toBe(true);
     expect(field("変数名").getAttribute("aria-invalid")).toBe("true");
     await type("変数名", "lower");
-    expect(button("追加する").disabled).toBe(true);
+    expect(button("追加").disabled).toBe(true);
     await type("変数名", "HH_TOKEN_2");
     expect(field("変数名").getAttribute("aria-invalid")).toBeNull();
-    await fireEvent.click(button("追加する"));
+    await fireEvent.click(button("追加"));
     await waitFor(() => expect(ondone).toHaveBeenCalled());
     expect(api.addAccount).toHaveBeenCalledWith({
       name: "ci",
@@ -433,9 +433,9 @@ describe("AccountAdd: gh, an environment variable and no token", () => {
       { initial: { source: "none" } },
       { add: () => fail(409, "account.exists", { account: "bot" }) },
     );
-    await type(/呼び名/, "bot");
-    await type("login", "bot");
-    await fireEvent.click(button("追加する"));
+    await type(/^名前/, "bot");
+    await type("ログイン名", "bot");
+    await fireEvent.click(button("追加"));
     expect((await screen.findByRole("alert")).textContent).toContain("bot");
   });
 });

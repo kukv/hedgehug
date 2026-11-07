@@ -121,7 +121,7 @@
   let more = $state<HTMLElement | null>(null);
   const moreItems = $derived(
     [
-      { value: "rename", label: "改名…" },
+      { value: "rename", label: "名前を変更…" },
       { value: "delete", label: "削除…" },
     ].map((i) => (off === null ? i : { ...i, disabled: true, hint: off })),
   );
@@ -164,7 +164,7 @@
         {/if}
         <Button
           size="sm"
-          aria-label="ビューの操作（改名・削除）"
+          aria-label="ビューの操作（名前の変更・削除）"
           aria-haspopup="menu"
           aria-expanded={more !== null}
           onclick={(e) => (more = e.currentTarget)}
@@ -194,7 +194,7 @@
     {/if}
     <Tabs {items} label="レイアウトの切り替え" />
     <div class="switch">
-      <span class="hint">切り替えは保存したビューの layout を変えます（1 コミット）</span>
+      <span class="hint">切り替えは保存したビューのレイアウトを変えます（1 コミット）</span>
       <CliLine command={switchCli} />
     </div>
     <div class="body">

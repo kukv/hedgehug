@@ -342,8 +342,8 @@
 
     {#if s.broken}
       <div class="band broken" role="alert">
-        <p>このタスクのファイルを読めません: {s.broken}</p>
-        <p>hh doctor で確かめてください。</p>
+        <p>このタスクのファイルを読み込めません: {s.broken}</p>
+        <p>hh doctor で確認してください。</p>
         <CliLine command={cliLine(["doctor"])} />
       </div>
     {:else}
@@ -354,7 +354,7 @@
               <li>{p.message}</li>
             {/each}
           </ul>
-          <p>hh doctor で確かめてください。</p>
+          <p>hh doctor で確認してください。</p>
           <CliLine command={cliLine(["doctor"])} />
         </div>
       {/if}

@@ -796,7 +796,15 @@ components:
     Finding:
       additionalProperties: false
       properties:
+        args:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         check:
+          type: string
+        code:
           type: string
         hint:
           type: string

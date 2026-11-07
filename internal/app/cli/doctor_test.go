@@ -48,7 +48,7 @@ func TestDoctorBrokenSchemaFile(t *testing.T) {
 	code, out, _ = te.run("doctor", "--json")
 	var rs []struct {
 		Store    string
-		Findings []map[string]string
+		Findings []map[string]any
 	}
 	if code != 1 || json.Unmarshal([]byte(out), &rs) != nil || len(rs) != 1 || len(rs[0].Findings) == 0 ||
 		rs[0].Findings[0]["check"] != "schema" || rs[0].Findings[0]["severity"] != "error" {
@@ -108,7 +108,7 @@ func TestDoctorFixJSON(t *testing.T) {
 			ULID, ID, Title, Kind string
 			Value                 json.RawMessage
 		}
-		Findings []map[string]string
+		Findings []map[string]any
 	}
 	if code != 0 || json.Unmarshal([]byte(out), &reports) != nil || len(reports) != 1 {
 		t.Fatalf("exit %d\n%s", code, out)

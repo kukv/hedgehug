@@ -38,8 +38,8 @@ function mount(m: { accounts?: Account[]; post?: () => unknown } = {}) {
 
 const type = (el: HTMLElement, value: string) => fireEvent.input(el, { target: { value } });
 const nameField = () => screen.getByLabelText("名前") as HTMLInputElement;
-const urlField = () => screen.getByLabelText("URL（1行に1つ）") as HTMLTextAreaElement;
-const submit = () => screen.getByRole("button", { name: "追加する" });
+const urlField = () => screen.getByLabelText("URL（1 行に 1 つ）") as HTMLTextAreaElement;
+const submit = () => screen.getByRole("button", { name: "追加" });
 const cli = () => screen.getByRole("button", { name: /^コマンドをコピー/ }).textContent;
 
 beforeEach(() => {

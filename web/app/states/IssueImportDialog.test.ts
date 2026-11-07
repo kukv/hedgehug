@@ -29,7 +29,7 @@ describe("IssueImportDialog", () => {
     const { api, onclose } = setup();
     await fireEvent.input(screen.getByLabelText("リポジトリ"), { target: { value: "org-a/web" } });
     await fireEvent.input(screen.getByLabelText("ラベル"), { target: { value: "v2" } });
-    await fireEvent.click(screen.getByRole("button", { name: "件数を確かめる" }));
+    await fireEvent.click(screen.getByRole("button", { name: "件数を確認する" }));
     await screen.findByText("open の Issue 3 件 · うち 1 件はリンク済みのため飛ばします");
     expect(api.importIssues).toHaveBeenLastCalledWith(
       { repo: "org-a/web", label: "v2", parent: "P1", dry_run: true },
@@ -47,9 +47,9 @@ describe("IssueImportDialog", () => {
     setup();
     await fireEvent.input(screen.getByLabelText("リポジトリ"), { target: { value: "org-a/web" } });
     await fireEvent.input(screen.getByLabelText("ラベル"), { target: { value: "v2" } });
-    await fireEvent.click(screen.getByRole("button", { name: "件数を確かめる" }));
+    await fireEvent.click(screen.getByRole("button", { name: "件数を確認する" }));
     await screen.findByRole("button", { name: "3 件を mirror で取り込む" });
     await fireEvent.input(screen.getByLabelText("ラベル"), { target: { value: "v3" } });
-    screen.getByRole("button", { name: "件数を確かめる" });
+    screen.getByRole("button", { name: "件数を確認する" });
   });
 });

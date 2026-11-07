@@ -8,14 +8,25 @@
         "where": "AA-2 (<ULID-1>) Alpha child",
         "task": "<ULID-1>",
         "msg": "blocked_by: task <ULID-2> is not in this store",
-        "severity": "error"
+        "severity": "error",
+        "code": "task.missing_ref",
+        "args": [
+          "blocked_by",
+          "task <ULID-2> is not in this store"
+        ]
       },
       {
         "check": "cross_store_ref",
         "where": "AA-2 (<ULID-1>) Alpha child",
         "task": "<ULID-1>",
         "msg": "blocked_by points at bravo-long's BB-3; references stay inside a store",
-        "severity": "warning"
+        "severity": "warning",
+        "code": "cross_store_ref",
+        "args": [
+          "blocked_by",
+          "bravo-long",
+          "BB-3"
+        ]
       }
     ]
   },
