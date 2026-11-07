@@ -6,12 +6,12 @@ import { daysAgo, formatDate, pad } from "./format";
 import { type Applied, parseApplied, parseRejected, type Rejected } from "./github";
 
 export type Log = Schemas.LogView;
-
 /** The words for every Hedgehug-Op that internal/app/usecase, internal/app/storage/store and internal/app/remote/replicate write. */
 const OP_LABELS: Readonly<Record<string, string>> = {
   add: "作成",
   set: "変更",
   edit: "本文の編集",
+  "bulk-set": "一括更新",
   status: "ステータスの変更",
   dep: "依存の変更",
   link: "リンク",
@@ -19,7 +19,7 @@ const OP_LABELS: Readonly<Record<string, string>> = {
   start: "作業の開始",
   automation: "自動化の変更",
   "gh-fetch": "GitHub の取り込み",
-  "gh-mirror": "Issue の反映",
+  "gh-mirror": "Issue からの反映",
   "gh-push": "Issue への反映",
   watch: "ウォッチ",
   unwatch: "ウォッチの解除",
@@ -29,23 +29,35 @@ const OP_LABELS: Readonly<Record<string, string>> = {
   rm: "削除",
   restore: "復元",
   comment: "コメント",
+  "worklog-add": "作業時間の記録",
+  "worklog-rm": "作業時間の削除",
   merge: "同期のマージ",
   repair: "同期の修復",
-  replay: "同期のやり直し",
-  setup: "同期の設定",
+  replay: "同期の再適用",
+  setup: "同期の準備",
   init: "Store の作成",
-  schema: "スキーマの変更",
+  schema: "プロジェクトの設定の変更",
   migrate: "スキーマの移行",
+  "template-set": "テンプレートの保存",
+  "template-rm": "テンプレートの削除",
   view: "ビューの変更",
   workspace: "ワークスペースの変更",
-  purge: "完全な削除",
-  "revert-overwritten": "上書きを戻す",
+  "sprint-add": "スプリントの作成",
+  "sprint-set": "スプリントの変更",
+  "sprint-rm": "スプリントの削除",
+  "sprint-start": "スプリントの開始",
+  "sprint-close": "スプリントのクローズ",
+  "release-add": "リリースの作成",
+  "release-set": "リリースの変更",
+  "release-rm": "リリースの削除",
+  purge: "完全削除",
+  "revert-overwritten": "上書きの取り消し",
   undo: "取り消し",
 };
 
 /** The words for an op; an op that is not known is shown as it is, a commit with none as 変更. */
 export function opLabel(op: string | null): string {
-  if (op === null) return "変更";
+  if (op === null || op === "") return "変更";
   return OP_LABELS[op] ?? op;
 }
 

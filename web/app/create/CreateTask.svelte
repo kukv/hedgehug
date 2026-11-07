@@ -421,7 +421,7 @@
     </div>
 
     {#if ws}
-      <p class="dest">入れ先 <strong>{ws.name}（{ws.prefix}）</strong> · ID は作成時に振ります</p>
+      <p class="dest">作成先 <strong>{ws.name}（{ws.prefix}）</strong> · ID は作成時に振ります</p>
     {/if}
     {#if blocked}
       <p id="create-blocked" class="hint">{blocked}</p>

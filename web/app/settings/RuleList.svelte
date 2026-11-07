@@ -144,12 +144,14 @@
     if (!busy) removing = null;
   }}
 >
-  <p class="confirm">このルールを消します。プロジェクトごとの停止からも外れます（1 コミット）。</p>
+  <p class="confirm">
+    このルールを消します。プロジェクトごとの無効の設定からも外れます（1 コミット）。
+  </p>
   {#if removeError}
     <FormError message={removeError} />
   {/if}
   {#snippet footer()}
-    <Button disabled={busy} onclick={() => (removing = null)}>やめる</Button>
+    <Button disabled={busy} onclick={() => (removing = null)}>キャンセル</Button>
     <Button variant="danger" disabled={busy} onclick={() => void remove()}>削除</Button>
   {/snippet}
 </Dialog>

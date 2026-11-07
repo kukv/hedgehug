@@ -117,7 +117,7 @@ func Doctor(ss *usecase.Session, fix bool) ([]DoctorReport, error) {
 				// the store did not open for want of the finish: say that
 				r, err = DoctorReport{Store: e.Name, Repaired: repaired[i]}, nil
 			}
-			r.Findings = append(r.Findings, usecase.Finding{Check: "git", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
+			r.Findings = append(r.Findings, usecase.Finding{Check: "git", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again", Code: "rebuild.unfinished", Args: []string{ferr.Error()}})
 		}
 		if rerr := rebuildErr[e.Name]; rerr != nil {
 			if err != nil {
@@ -181,7 +181,7 @@ func doctorStore(ss *usecase.Session, e config.StoreEntry, only bool, repaired [
 		if only {
 			return DoctorReport{}, openErr
 		}
-		fs = []usecase.Finding{{Check: "git", Where: e.Path, Msg: "cannot open the store: " + openErr.Error()}}
+		fs = []usecase.Finding{{Check: "git", Where: e.Path, Msg: "cannot open the store: " + openErr.Error(), Code: "git.open_store", Args: []string{openErr.Error()}}}
 	}
 	if openErr == nil {
 		fs = append(fs, crossStoreFindings(ss, e.Name)...)
@@ -205,7 +205,7 @@ func forcePushFinding(name string, s *store.Store) ([]usecase.Finding, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
-	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix rebuilds the store on the history of origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
+	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix rebuilds the store on the history of origin and puts the unpushed changes back; the old store is kept when some could not be put back", Code: "force_push.unexpected"}}, nil
 }
 
 // withRebuildFailure tells, in the unexpected_force_push finding the store
@@ -217,10 +217,11 @@ func withRebuildFailure(fs []usecase.Finding, name string, rerr error) []usecase
 		if fs[i].Check == "unexpected_force_push" {
 			fs[i].Msg += "; cannot rebuild the store: " + rerr.Error()
 			fs[i].Hint = hint
+			fs[i].Code, fs[i].Args = "force_push.rebuild_failed", []string{rerr.Error()}
 			return fs
 		}
 	}
-	return append(fs, usecase.Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot rebuild the store: " + rerr.Error(), Hint: hint})
+	return append(fs, usecase.Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot rebuild the store: " + rerr.Error(), Hint: hint, Code: "force_push.rebuild_failed", Args: []string{rerr.Error()}})
 }
 
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync
@@ -297,7 +298,7 @@ func crossStoreFindings(ss *usecase.Session, name string) []usecase.Finding {
 	for _, r := range refs {
 		// the same words as the Where of a check of the store's own tasks
 		where := usecase.FormatTaskLabel(r.From.ID, r.From.ID, r.From.ULID) + " " + r.From.Title
-		out = append(out, usecase.Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: usecase.CrossRefMsg(r), Severity: usecase.SeverityWarning})
+		out = append(out, usecase.Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: usecase.CrossRefMsg(r), Severity: usecase.SeverityWarning, Code: "cross_store_ref", Args: []string{r.Field, r.Target.Store.Name, r.Target.RawID()}})
 	}
 	usecase.SortFindings(out)
 	return out
@@ -309,7 +310,7 @@ func duplicateStoreFindings(name string, ds []usecase.Duplicate) []usecase.Findi
 	var out []usecase.Finding
 	for _, d := range ds {
 		if d.In(name) {
-			out = append(out, usecase.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.Text(), Severity: usecase.SeverityWarning})
+			out = append(out, usecase.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.Text(), Severity: usecase.SeverityWarning, Code: "duplicate_across_stores", Args: d.PlaceLabels()})
 		}
 	}
 	return out
@@ -337,7 +338,7 @@ func forwardTargetFindings(ss *usecase.Session, name string) []usecase.Finding {
 			if f.ID != "" {
 				where = fmt.Sprintf("%s (%s)", f.ID, f.ULID)
 			}
-			out = append(out, usecase.Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: usecase.SeverityInfo})
+			out = append(out, usecase.Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: usecase.SeverityInfo, Code: "forward.unmounted", Args: []string{f.MovedTo.String()}})
 		}
 	})
 	if err != nil {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { automationOf, rejectionsOf } from "../../core/activity";
+  import { automationOf, opLabel, rejectionsOf } from "../../core/activity";
   import type { Schemas, ShowView } from "../../core/api/client";
   import { cliRestoreAt } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
@@ -11,7 +11,6 @@
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
-  import { opLabel } from "./history-labels";
 
   type Log = Schemas.LogView;
 

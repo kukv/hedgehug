@@ -192,7 +192,7 @@
   <p class="note" role="alert">{errorMessage(scope.error)}</p>
 {:else if !project || !store || !schema || seenSig === null}
   {#if schemaError}
-    <FormError message="スキーマを読めません · {errorMessage(schemaError)}" />
+    <FormError message="スキーマを読み込めません · {errorMessage(schemaError)}" />
     <div><Button onclick={retry}>もう一度読み込む</Button></div>
   {:else}
     <p class="note">読み込み中…</p>
@@ -200,7 +200,7 @@
 {:else}
   <div class="settings">
     <p class="lead">
-      このプロジェクトだけの振る舞いです。ステータスや種類の定義は
+      このプロジェクトだけの設定です。ステータスや種類の定義は
       {project.store}
       のまま変わりません。
     </p>
@@ -208,7 +208,7 @@
     {#if stale}
       <div class="stale" role="status">
         ほかで変更されました。編集中の内容はそのままです。
-        <Button size="sm" onclick={reread}>取り直す</Button>
+        <Button size="sm" onclick={reread}>もう一度読み込む</Button>
       </div>
     {/if}
 
@@ -235,7 +235,7 @@
         {/each}
       </fieldset>
       <p class="msg" id="{uid}-locked">
-        カテゴリの既定は外せません（チェックを外せないものがそれです）。外したステータスのタスクはそのまま表示されます。
+        カテゴリの既定は外せません（チェックを外せない項目です）。外したステータスのタスクはそのまま表示されます。
       </p>
       {#if shown.length !== statuses.length}
         <div>
@@ -253,7 +253,7 @@
 
     <section class="block" aria-labelledby="{uid}-flow">
       <h2 id="{uid}-flow">ワークフローの制約</h2>
-      <p class="msg">Store の制約に足すことだけできます（緩めることはできません）</p>
+      <p class="msg">Store の制約に追加することだけできます（緩めることはできません）</p>
       <ConstraintEditor
         mode="transition"
         {statuses}
@@ -328,7 +328,7 @@
       {/if}
     </div>
     {#snippet footer()}
-      <Button disabled={busy} onclick={() => (resetOpen = false)}>やめる</Button>
+      <Button disabled={busy} onclick={() => (resetOpen = false)}>キャンセル</Button>
       <Button variant="danger" disabled={busy} onclick={() => void resetAll()}>すべて戻す</Button>
     {/snippet}
   </Dialog>

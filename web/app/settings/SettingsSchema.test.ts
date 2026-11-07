@@ -214,7 +214,7 @@ describe("SettingsSchema", () => {
     const link = await screen.findByRole("link", { name: /リリース準備/ });
     expect(link.getAttribute("href")).toBe("/projects/P1/settings");
     expect(link).toHaveTextContent("REL-15");
-    expect(screen.getByText("ステータス 2 件を表示 · 移動の制約 1 件")).toBeVisible();
+    expect(screen.getByText("ステータス 2 件を表示 · 遷移の制約 1 件")).toBeVisible();
   });
 
   it("says so when no project has an override", async () => {
@@ -272,10 +272,10 @@ describe("SettingsSchema", () => {
 
   it("disables the rename and the merge of a read-only Store, with the reason", async () => {
     setup({ readOnly: "the remote cannot be written" });
-    const rename = await screen.findByRole("button", { name: "名前を変える…（triage）" });
+    const rename = await screen.findByRole("button", { name: "名前を変更…（triage）" });
     expect(rename).toBeDisabled();
     expect(rename).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
-    for (const b of screen.getAllByRole("button", { name: /^(名前を変える|併合する)…/ })) {
+    for (const b of screen.getAllByRole("button", { name: /^(名前を変更|併合する)…/ })) {
       expect(b).toBeDisabled();
     }
     rename.click(); // a disabled button takes no click
@@ -284,7 +284,7 @@ describe("SettingsSchema", () => {
 
   it("closes the dialog when the Store changes, so that it cannot write to the other Store", async () => {
     const k = setup();
-    await fireEvent.click(await screen.findByRole("button", { name: "名前を変える…（triage）" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "名前を変更…（triage）" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     await k.rerender({ store: "ops" });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -323,7 +323,7 @@ describe("SettingsSchema", () => {
       });
       await waitFor(() => expect(within(row(/^todo/)).getByText("2")).toBeVisible());
       conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [], commit: "c" });
-      expect(await screen.findByText(/タスクの件数を読めません/)).toBeVisible();
+      expect(await screen.findByText(/タスクの件数を読み込めません/)).toBeVisible();
       expect(within(row(/^todo/)).getByText("2")).toBeVisible();
     });
 
@@ -335,9 +335,9 @@ describe("SettingsSchema", () => {
       });
       await screen.findByText("スキーマとタスクは合っています");
       conn.emit("resync");
-      await screen.findByText(/タスクの件数を読めません/);
+      await screen.findByText(/タスクの件数を読み込めません/);
       conn.emit("resync");
-      await waitFor(() => expect(screen.queryByText(/タスクの件数を読めません/)).toBeNull());
+      await waitFor(() => expect(screen.queryByText(/タスクの件数を読み込めません/)).toBeNull());
     });
 
     it("drops the answer of an older request that comes after a newer one", async () => {
@@ -411,7 +411,7 @@ describe("SettingsSchema", () => {
     it("says so, with the words of the refusal", async () => {
       setup({ loadError: new Error("読めません") });
       const alert = await screen.findByRole("alert");
-      expect(alert).toHaveTextContent("スキーマを読めません");
+      expect(alert).toHaveTextContent("スキーマを読み込めません");
     });
 
     it("reads the schema again with the button, and shows it once it comes", async () => {
@@ -451,9 +451,9 @@ describe("SettingsSchema", () => {
   describe("migrate", () => {
     it("opens the dialog of the status, rename and merge both", async () => {
       setup();
-      await fireEvent.click(await screen.findByRole("button", { name: "名前を変える…（triage）" }));
+      await fireEvent.click(await screen.findByRole("button", { name: "名前を変更…（triage）" }));
       expect(
-        screen.getByRole("dialog", { name: "ステータス「triage」の名前を変える" }),
+        screen.getByRole("dialog", { name: "ステータス「triage」の名前を変更" }),
       ).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -463,13 +463,13 @@ describe("SettingsSchema", () => {
 
     it("opens it for a kind, a property and a value", async () => {
       const { rerender } = setup({ tab: "kinds" });
-      await fireEvent.click(await screen.findByRole("button", { name: "名前を変える…（task）" }));
-      expect(screen.getByRole("dialog", { name: "種類「task」の名前を変える" })).toBeVisible();
+      await fireEvent.click(await screen.findByRole("button", { name: "名前を変更…（task）" }));
+      expect(screen.getByRole("dialog", { name: "種類「task」の名前を変更" })).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
       await rerender({ tab: "props" });
-      await fireEvent.click(screen.getByRole("button", { name: "名前を変える…（points）" }));
+      await fireEvent.click(screen.getByRole("button", { name: "名前を変更…（points）" }));
       expect(
-        screen.getByRole("dialog", { name: "プロパティ「points」の名前を変える" }),
+        screen.getByRole("dialog", { name: "プロパティ「points」の名前を変更" }),
       ).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
       await fireEvent.click(screen.getByRole("button", { name: "併合する…（priority の low）" }));
@@ -478,19 +478,19 @@ describe("SettingsSchema", () => {
 
     it("offers no merge when nothing else is defined", async () => {
       setup({ tab: "kinds", schema: { ...sch, kinds: [sch.kinds[1] as never] } });
-      expect(await screen.findByRole("button", { name: "名前を変える…（task）" })).toBeVisible();
+      expect(await screen.findByRole("button", { name: "名前を変更…（task）" })).toBeVisible();
       expect(screen.queryByRole("button", { name: "併合する…（task）" })).toBeNull();
     });
 
     async function renameTriage(k: ReturnType<typeof setup>) {
-      const open = await screen.findByRole("button", { name: "名前を変える…（triage）" });
+      const open = await screen.findByRole("button", { name: "名前を変更…（triage）" });
       open.focus(); // a click focuses the button in a browser
       await fireEvent.click(open);
       await fireEvent.input(screen.getByRole("textbox", { name: "新しい名前" }), {
         target: { value: "review" },
       });
       await vi.advanceTimersByTimeAsync(500);
-      const run = screen.getByRole("button", { name: "名前を変える" });
+      const run = screen.getByRole("button", { name: "名前を変更" });
       await waitFor(() => expect(run).toBeEnabled());
       await fireEvent.click(run);
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -524,8 +524,8 @@ describe("SettingsSchema", () => {
           post: (b) => ok({ changed: [], skipped: [], commit: b.dry_run ? null : "c1" }),
         });
         await renameTriage(k);
-        expect(screen.getByRole("button", { name: "名前を変える…（triage）" })).toHaveFocus();
-        const again = screen.getByRole("button", { name: "名前を変える…（triage）" });
+        expect(screen.getByRole("button", { name: "名前を変更…（triage）" })).toHaveFocus();
+        const again = screen.getByRole("button", { name: "名前を変更…（triage）" });
         again.focus();
         await fireEvent.click(again);
         // the rename takes the row away
@@ -538,7 +538,7 @@ describe("SettingsSchema", () => {
           target: { value: "x" },
         });
         await vi.advanceTimersByTimeAsync(500);
-        const run = screen.getByRole("button", { name: "名前を変える" });
+        const run = screen.getByRole("button", { name: "名前を変更" });
         await waitFor(() => expect(run).toBeEnabled());
         await fireEvent.click(run);
         await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

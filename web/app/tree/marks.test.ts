@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
+import type { SchemaView } from "../../core/schema";
 import { task } from "./fixtures";
 import { openBlocker, problemLabel, propText } from "./marks";
 
 describe("problemLabel", () => {
-  it("says a missing required field as the canvas does", () => {
+  it("says a missing or bad field by the name the schema shows", () => {
+    const schema = { props: { due: { label: "期限" } } } as unknown as SchemaView;
+    expect(problemLabel({ code: "required", field: "due", message: "..." }, schema)).toBe(
+      "期限が未入力です",
+    );
+    expect(problemLabel({ code: "bad_value", field: "assignees", message: "" }, schema)).toBe(
+      "担当者の値が正しくありません",
+    );
     expect(problemLabel({ code: "required", field: "points", message: "..." })).toBe(
-      "points 未入力",
+      "pointsが未入力です",
     );
   });
   it("names the other codes in Japanese and falls back to the code", () => {

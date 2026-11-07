@@ -7,7 +7,11 @@
         "check": "forward_target",
         "where": "AA-2 (<ULID-1>)",
         "msg": "moved to a store that is not mounted (ULID <ULID-2>)",
-        "severity": "info"
+        "severity": "info",
+        "code": "forward.unmounted",
+        "args": [
+          "<ULID-2>"
+        ]
       }
     ]
   }

@@ -1,4 +1,6 @@
 import type { TaskView } from "../../core/api/client";
+import type { SchemaView } from "../../core/schema";
+import { requiredLabel } from "../kanban/drop";
 
 type Problem = { code: string; field: string; message: string };
 
@@ -6,8 +8,8 @@ const LABELS: Record<string, string> = {
   unknown_kind: "未定義の種類です",
   unknown_status: "未定義のステータスです",
   missing_title: "タイトルがありません",
-  placement: "置き場所が合いません",
-  transition: "ステータスの遷移が合いません",
+  placement: "この親には置けません",
+  transition: "このステータスへは遷移できません",
   missing_ref: "参照先がありません",
   cycle: "循環しています",
   no_id: "ID がありません",
@@ -16,10 +18,12 @@ const LABELS: Record<string, string> = {
   parent_deleted: "親が削除されています",
 };
 
-// problemLabel is the short Japanese a row shows for what is wrong with a task.
-export function problemLabel(p: Problem): string {
-  if (p.code === "required") return `${p.field} 未入力`;
-  if (p.code === "bad_value") return `${p.field} の値が不正です`;
+// problemLabel is the short Japanese a row shows for what is wrong with a task; a field is named as
+// the schema shows it.
+export function problemLabel(p: Problem, schema?: SchemaView): string {
+  const field = schema ? requiredLabel(schema, p.field) : p.field;
+  if (p.code === "required") return `${field}が未入力です`;
+  if (p.code === "bad_value") return `${field}の値が正しくありません`;
   return LABELS[p.code] ?? p.code;
 }
 

@@ -48,7 +48,7 @@
       return "書き込める Store がありません（すべて閲覧のみです）";
     }
     if (store !== "" && known.current.failed) {
-      return `${store} のビューを読み込めないため、同じ名前のビューがあるか確かめられません`;
+      return `${store} のビューを読み込めないため、同じ名前のビューがあるか確認できません`;
     }
     return null;
   });

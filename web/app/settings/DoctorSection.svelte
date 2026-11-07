@@ -3,6 +3,8 @@
   import { cliDoctor } from "../../core/cli";
   import {
     type DoctorReport,
+    findingHint,
+    findingText,
     fixedText,
     groupFindings,
     type Severity,
@@ -125,7 +127,7 @@
           n > 0
             ? `${n} 件を修復しました`
             : r.rebuilt
-              ? "Store を origin の新しい履歴に揃えました"
+              ? "Store を origin の新しい履歴にそろえました"
               : "修復するものはありませんでした",
       });
       // 「修復…」 may be gone now: the focus goes to the result.
@@ -206,8 +208,8 @@
     <section class="result" aria-labelledby="{uid}-res" tabindex="-1" bind:this={resultEl}>
       <h4 id="{uid}-res">修復の結果</h4>
       {#if fixed.rebuilt}
-        <p class="line">origin の新しい履歴に揃えました</p>
-        <p class="line">送っていなかった {fixed.rebuilt.replayed} コミットを戻しました</p>
+        <p class="line">origin の新しい履歴にそろえました</p>
+        <p class="line">未 push の {fixed.rebuilt.replayed} コミットを再適用しました</p>
         {#if (fixed.rebuilt.dropped ?? []).length > 0}
           <p class="line">戻せなかったタスク: {(fixed.rebuilt.dropped ?? []).join(", ")}</p>
         {/if}
@@ -248,9 +250,9 @@
               ><Icon name={SEVERITY[sev].icon} size={14} />{SEVERITY[sev].label}</span
             >
             <div class="what">
-              <p class="msg">{f.msg}</p>
+              <p class="msg">{findingText(f)}</p>
               {#if f.hint}
-                <p class="hint">{f.hint}</p>
+                <p class="hint">{findingHint(f)}</p>
               {/if}
               <p class="where mono">{f.where}</p>
               {#if f.task}
@@ -275,11 +277,11 @@
     <li>親の循環</li>
     <li>削除済みの親の子</li>
     <li>親と違うワークスペースにあるタスク</li>
-    <li>重なった ID</li>
+    <li>重複した ID</li>
   </ul>
   <p class="p">
-    force push の後は、Store を origin
-    の新しい履歴に揃え、送っていなかった変更を戻します。ほかの問題は直せないので、診断に残ります。
+    force push の後は、Store を origin の新しい履歴にそろえ、未 push
+    の変更を再適用します。ほかの問題は直せないので、診断に残ります。
   </p>
   {#snippet footer()}
     <Button onclick={closeDialog} disabled={fixing}>キャンセル</Button>

@@ -90,7 +90,7 @@
       });
       // The store exists now; a failed reload must not read as a failed create (the SSE resync catches up).
       await stores.reload().catch(() => undefined);
-      toast({ message: `Store「${r.name}」を作りました` });
+      toast({ message: `Store「${r.name}」を作成しました` });
       reset();
       onclose();
       oncreated?.();
@@ -208,7 +208,7 @@
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
     <Button variant="primary" disabled={busy} onclick={submit}>
-      {busy ? "作成中…" : "Store を作る"}
+      {busy ? "作成中…" : "Store を作成"}
     </Button>
   {/snippet}
 </Dialog>

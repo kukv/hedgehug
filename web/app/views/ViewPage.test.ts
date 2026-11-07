@@ -73,17 +73,19 @@ describe("ViewPage", () => {
 
     it("改名・削除は理由つきで無効、メニューは開ける", async () => {
       readOnlySetup();
-      await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
-      for (const label of [/改名/, /削除/]) {
+      await fireEvent.click(
+        screen.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }),
+      );
+      for (const label of [/名前を変更/, /削除/]) {
         const item = screen.getByRole("menuitem", { name: label });
         expect(item).toBeDisabled();
         expect(item).toHaveTextContent(sentence);
       }
-      await fireEvent.click(screen.getByRole("menuitem", { name: /改名/ }));
+      await fireEvent.click(screen.getByRole("menuitem", { name: /名前を変更/ }));
       expect(viewDialog.current).toBeNull();
     });
 
-    it("列やまとめ方を変えると未保存になるが、「ビューを更新」は理由つきで押せない", async () => {
+    it("列やグループを変えると未保存になるが、「ビューを更新」は理由つきで押せない", async () => {
       const views = readOnlySetup();
       await fireEvent.click(screen.getByRole("button", { name: "table-set-group" }));
       expect(screen.getByText("未保存の変更")).toBeVisible();
@@ -146,7 +148,7 @@ describe("ViewPage", () => {
   it("タブの足元に、layout を変える hh view save を出す", () => {
     setup();
     expect(
-      screen.getByText("切り替えは保存したビューの layout を変えます（1 コミット）"),
+      screen.getByText("切り替えは保存したビューのレイアウトを変えます（1 コミット）"),
     ).toBeVisible();
     expect(
       screen.getByRole("button", {
@@ -255,25 +257,25 @@ describe("ViewPage", () => {
 
   it("「…」から改名と削除のダイアログを開く", async () => {
     setup();
-    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
-    await fireEvent.click(screen.getByRole("menuitem", { name: "改名…" }));
+    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "名前を変更…" }));
     expect(viewDialog.current).toMatchObject({ kind: "rename", entry: weekly });
 
-    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
+    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "削除…" }));
     expect(viewDialog.current).toMatchObject({ kind: "delete", entry: weekly });
   });
 
   it("未保存の変更があるまま改名を開くと、その変更を持って行く。なければ持たない", async () => {
     setup();
-    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
-    await fireEvent.click(screen.getByRole("menuitem", { name: "改名…" }));
+    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "名前を変更…" }));
     expect(viewDialog.current).toMatchObject({ kind: "rename", carry: null });
     closeViewDialog();
 
     await fireEvent.click(screen.getByRole("button", { name: "table-set-query" }));
-    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
-    await fireEvent.click(screen.getByRole("menuitem", { name: "改名…" }));
+    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（名前の変更・削除）" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "名前を変更…" }));
     expect(viewDialog.current).toMatchObject({
       kind: "rename",
       carry: { layout: "table", query: "assignee:@me" },

@@ -56,7 +56,7 @@
 </script>
 
 <section class="block" aria-labelledby="{uid}-bad">
-  <h2 id="{uid}-bad">いまの違反</h2>
+  <h2 id="{uid}-bad">今の違反</h2>
   {#if failure}
     <FormError message={failure} />
   {/if}
@@ -67,7 +67,7 @@
   {:else if violations.length === 0}
     <p class="msg">違反しているタスクはありません</p>
   {:else}
-    <p class="msg">いまの違反 {violations.length} 件</p>
+    <p class="msg">今の違反 {violations.length} 件</p>
     <ul class="bad" aria-label="違反しているタスク">
       {#each violations as t (t.ulid)}
         {@const href = router.href({ name: "task", ulid: t.ulid })}

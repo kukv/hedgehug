@@ -119,7 +119,7 @@ func nilIfEmpty(l Lists) Lists {
 func (s *Schema) NewProblems(before []Problem) []Problem {
 	var out []Problem
 	for _, p := range s.Check() {
-		if !slices.Contains(before, p) {
+		if !slices.ContainsFunc(before, func(b Problem) bool { return b.Path == p.Path && b.Msg == p.Msg }) {
 			out = append(out, p)
 		}
 	}

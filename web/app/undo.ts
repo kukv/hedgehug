@@ -1,7 +1,7 @@
+import { opLabel } from "../core/activity";
 import type { Schemas } from "../core/api/client";
 import { errorMessage } from "../core/messages";
 import type { AppCore } from "./context";
-import { opLabel } from "./detail/history-labels";
 import type { Route } from "./router";
 import { toast } from "./toast.svelte";
 

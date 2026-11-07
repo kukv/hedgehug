@@ -72,7 +72,7 @@ func TestSchemaCheckProblems(t *testing.T) {
 		t.Fatalf("--json: exit %d, stderr %q", code, stderr)
 	}
 	var res struct {
-		Findings []map[string]string `json:"findings"`
+		Findings []map[string]any `json:"findings"`
 	}
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("%v: %s", err, out)

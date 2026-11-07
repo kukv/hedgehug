@@ -78,7 +78,7 @@ describe("requiredNote", () => {
 
   it("says what the status needs", () => {
     expect(requiredNote(done, schema, ["points"], undefined)).toBe(
-      "完了には points が必要です。points が空のタスクでは拒否され、inbox に出ます。",
+      "完了には points が必要です。points が空のタスクでは拒否され、通知に出ます。",
     );
   });
 
@@ -86,11 +86,11 @@ describe("requiredNote", () => {
     expect(
       requiredNote(done, schema, ["points"], stat({ rejected: 1, rejected_tasks: [task] })),
     ).toBe(
-      "完了には points が必要です。points が空のタスクでは拒否され、inbox に出ます。直近 7 日では REL-11 で 1 回拒否しました。",
+      "完了には points が必要です。points が空のタスクでは拒否され、通知に出ます。直近 7 日では REL-11 で、制約により 1 回拒否されました。",
     );
     expect(
       requiredNote(done, schema, [], stat({ rejected: 3, rejected_tasks: [task, task] })),
-    ).toBe("直近 7 日では REL-11 ほか 1 件 で 3 回拒否しました。");
+    ).toBe("直近 7 日では REL-11 ほか 1 件 で、制約により 3 回拒否されました。");
   });
 });
 
@@ -113,7 +113,7 @@ describe("projectRuleRow", () => {
     expect(row(r, rule())).toMatchObject({
       checked: false,
       fixed: false,
-      state: "このプロジェクトで停止",
+      state: "このプロジェクトで無効",
       project: "P1",
     });
   });
@@ -125,7 +125,7 @@ describe("projectRuleRow", () => {
 
   it("a rule stopped in a project above cannot be turned on here", () => {
     const r = rule({ enabled: false, disabled_in: [ref("P0")] });
-    expect(row(r, rule())).toMatchObject({ fixed: true, state: "親のプロジェクトで停止" });
+    expect(row(r, rule())).toMatchObject({ fixed: true, state: "親のプロジェクトで無効" });
   });
 
   it("a rule of the project uses its own switch", () => {

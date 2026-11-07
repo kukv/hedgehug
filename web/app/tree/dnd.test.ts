@@ -152,15 +152,15 @@ describe("dropDecision: what it refuses", () => {
     expect(decide("E1", "T1", "child")).toMatchObject({
       ok: false,
       silent: false,
-      title: "自分の子孫の下には置けません",
+      title: "自分の配下には置けません",
     });
     expect(decide("E1", "T1", "before")).toMatchObject({
       ok: false,
-      title: "自分の子孫の下には置けません",
+      title: "自分の配下には置けません",
     });
     expect(decide("T7", "T8", "child")).toMatchObject({
       ok: false,
-      title: "自分の子孫の下には置けません",
+      title: "自分の配下には置けません",
     });
   });
   it("refuses while the schema is not loaded", () => {
@@ -184,7 +184,7 @@ describe("dropDecision: what it refuses", () => {
         schema,
         taskOf,
       }),
-    ).toMatchObject({ ok: false, title: "置き先の親を読み込めていません" });
+    ).toMatchObject({ ok: false, title: "移動先の親を読み込めていません" });
   });
 });
 

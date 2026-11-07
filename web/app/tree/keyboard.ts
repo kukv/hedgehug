@@ -1,4 +1,5 @@
 import type { TaskView } from "../../core/api/client";
+import { CATEGORY_LABEL } from "../../core/categories";
 import { defaultStatusIn, type SchemaView } from "../../core/schema";
 import type { FlatRow } from "./flatten";
 import { checkParent, type MoveArgs, type Rejection } from "./placement";
@@ -106,7 +107,7 @@ export function keyAction(k: KeyInput, c: KeyContext): KeyAction {
           type: "reject",
           rejection: {
             title: done ? "未着手に戻せません" : "完了にできません",
-            reason: `${row.task.store} の schema.yaml にカテゴリが ${category} のステータスがありません。`,
+            reason: `${row.task.store} の schema.yaml にカテゴリが${CATEGORY_LABEL[category]}のステータスがありません。`,
           },
         };
       }

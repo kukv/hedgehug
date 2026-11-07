@@ -3,8 +3,8 @@
 //     （このマシンだけ）" (its dot is [data-tone]) opens a menu of menuitemcheckbox ("ティール" ...
 //     "ブラウン", "自動"); the checkbox "表示"; the text "既定の Store" on the default one; the button
 //     "詳細を開く: <名前>" (then "閉じる: <名前>") opens the details with "既定にする" and "マウントを解除…"
-//   - the buttons "URL で追加" (dialog "URL で追加": "URL（1行に1つ）", "名前", "追加する") and
-//     "Store を作る"
+//   - the buttons "URL で追加" (dialog "URL で追加": "URL（1 行に 1 つ）", "名前", "追加する") and
+//     "Store を作成"
 //   - "マウントを解除…" opens the dialog "<名前> のマウントを解除": the checkbox "ローカルのクローンも消す",
 //     the buttons "解除する" and (after store.unpushed) "クローンを残して解除"
 //   - the toasts are in the status regions: "既定の Store を <名前> にしました", "Store「<名前>」を追加しました",
@@ -114,12 +114,12 @@ test("a Store is added by the URL of a remote that another home pushed", async (
     await hh.open(page, "/settings/stores");
     await page.getByRole("button", { name: "URL で追加" }).click();
     const dialog = page.getByRole("dialog", { name: "URL で追加" });
-    await dialog.getByLabel("URL（1行に1つ）").fill(remoteOf(other));
+    await dialog.getByLabel("URL（1 行に 1 つ）").fill(remoteOf(other));
     // the name is proposed from the URL (remote.git), and replaced by the one that is typed
     await expect(dialog.getByLabel("名前")).toHaveValue("remote");
     await dialog.getByLabel("名前").fill("team");
     await expect(dialog.getByRole("button", { name: /hh store add team --remote / })).toBeVisible();
-    await dialog.getByRole("button", { name: "追加する" }).click();
+    await dialog.getByRole("button", { name: "追加" }).click();
 
     await expect(toast(page, "Store「team」を追加しました")).toBeVisible();
     await expect(dialog).toBeHidden();

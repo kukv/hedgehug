@@ -77,7 +77,7 @@ describe("Onboarding: the accounts step", () => {
     ).toEqual([
       expect.stringContaining("アカウント"),
       expect.stringContaining("Store を選ぶ"),
-      expect.stringContaining("はじめる"),
+      expect.stringContaining("始める"),
     ]);
     expect(current()).toContain("アカウント");
     expect(screen.getByRole("heading", { name: "GitHub のアカウントを登録します" })).toBeTruthy();
@@ -103,7 +103,7 @@ describe("Onboarding: the accounts step", () => {
     mount({ accounts: [] });
     expect(screen.getByRole("region", { name: "アカウントを追加" })).toBeTruthy();
     expect(next().disabled).toBe(true);
-    expect(screen.getByText("アカウントを1つ追加してください")).toBeTruthy();
+    expect(screen.getByText("アカウントを 1 つ追加してください")).toBeTruthy();
   });
 });
 
@@ -134,7 +134,7 @@ describe("Onboarding: choosing and starting", () => {
     await tick(screen.getByRole("button", { name: "マウントして次へ" }));
     await screen.findByRole("heading", { name: "Store を使い始めます" });
     expect(mountStores).toHaveBeenCalledTimes(1);
-    expect(current()).toContain("はじめる");
+    expect(current()).toContain("始める");
     const list = screen.getByRole("list", { name: "マウントした Store" });
     expect(within(list).getByText("hh-a")).toBeTruthy();
     expect(within(list).getByText("閲覧のみ")).toBeTruthy();
@@ -176,7 +176,7 @@ describe("Onboarding: making a new Store", () => {
   it("is offered in every step and opens CreateStore", async () => {
     mount({ found: [cand("hh-a")], mount: () => ok({ mounted: ["hh-a"], failed: [] }) });
     const open = async () => {
-      await tick(screen.getByRole("button", { name: "新しく Store を作る" }));
+      await tick(screen.getByRole("button", { name: "新しく Store を作成" }));
       expect(screen.getByRole("dialog", { name: "Store を作成" })).toBeTruthy();
       await tick(screen.getByRole("button", { name: "キャンセル" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

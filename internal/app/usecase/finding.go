@@ -33,6 +33,12 @@ type Finding struct {
 	Msg      string   `json:"msg"`            //
 	Hint     string   `json:"hint,omitempty"` // how to fix it; empty when there is no advice
 	Severity Severity `json:"severity"`       // Error when empty
+	// Code names the kind of finding and Args are the values its message
+	// names, in order, so that the GUI can say it in its own words. A
+	// finding that passes on the error of a library has that error as its
+	// last arg.
+	Code string   `json:"code,omitempty"`
+	Args []string `json:"args,omitempty"`
 }
 
 // Fails tells whether f makes hh doctor exit 1: it is an error or a warning.

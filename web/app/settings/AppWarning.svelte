@@ -36,7 +36,7 @@
   </span>
   {#if canSwitch}
     <Button size="sm" disabled={busy} onclick={() => void useGh()}>
-      gh のトークンで代わりに使う
+      代わりに gh のトークンを使う
     </Button>
   {/if}
   <a href={installUrl(missing)} target="_blank" rel="noreferrer">管理者にインストールを依頼</a>

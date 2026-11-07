@@ -75,7 +75,7 @@
     <h2 id="project-rules-h">自動化</h2>
     <span class="msg"
       >{store}
-      のルールをこのプロジェクトで止める・このプロジェクトだけのルールを足す</span
+      のルールをこのプロジェクトで無効にする・このプロジェクトだけのルールを追加する</span
     >
   </div>
   <div class="rows">

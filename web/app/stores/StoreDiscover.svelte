@@ -14,7 +14,7 @@
   const OTHER = "その他";
 
   export function permissionLabel(permission: string): string {
-    if (permission === "write") return "書き込み";
+    if (permission === "write") return "書き込み可";
     if (permission === "read") return "閲覧のみ";
     return permission;
   }
@@ -250,7 +250,7 @@
                   type="text"
                   bind:value={r.nick}
                   disabled={r.mounted}
-                  aria-label="{repoName(r.c.url)} の呼び名"
+                  aria-label="{repoName(r.c.url)} の名前"
                   aria-invalid={r.nameError ? "true" : undefined}
                   oninput={() => (r.nameError = false)}
                 >

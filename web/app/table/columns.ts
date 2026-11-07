@@ -13,11 +13,11 @@ const BUILTIN: ColumnSpec[] = [
   { id: "title", label: "タイトル", readonly: false, width: 22 },
   { id: "kind", label: "種類", readonly: false, width: 8 },
   { id: "status", label: "ステータス", readonly: false, width: 10 },
-  { id: "assignee", label: "担当", readonly: false, width: 12 },
+  { id: "assignee", label: "担当者", readonly: false, width: 12 },
   { id: "label", label: "ラベル", readonly: false, width: 12 },
   { id: "parent", label: "親", readonly: true, width: 6.5 },
-  { id: "created", label: "作成", readonly: true, width: 6.5 },
-  { id: "updated", label: "更新", readonly: true, width: 6.5 },
+  { id: "created", label: "作成日", readonly: true, width: 6.5 },
+  { id: "updated", label: "更新日", readonly: true, width: 6.5 },
   { id: "pr", label: "PR", readonly: true, width: 10 },
 ];
 

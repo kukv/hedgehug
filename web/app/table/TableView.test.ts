@@ -286,7 +286,7 @@ describe("TableView", () => {
       "ID",
       "タイトル",
       "ステータス",
-      "担当",
+      "担当者",
       "期限",
     ]);
     expect(order()).toEqual(["REL-4", "REL-2", "REL-9"]);
@@ -419,7 +419,7 @@ describe("TableView", () => {
     it("sends the assignees as a list", async () => {
       const { save } = setup();
       mount();
-      const input = screen.getByRole("textbox", { name: "担当: REL-9" });
+      const input = screen.getByRole("textbox", { name: "担当者: REL-9" });
       await fireEvent.input(input, { target: { value: "sato" } });
       await fireEvent.keyDown(input, { key: "Enter" });
       expect(save.edit).toHaveBeenCalledWith("T3", "shared", "assignees", ["sato"]);

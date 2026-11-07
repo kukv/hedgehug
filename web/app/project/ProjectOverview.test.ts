@@ -89,15 +89,15 @@ describe("ProjectOverview", () => {
         slowed_until: at(30),
       },
     ]);
-    await screen.findByText(/GitHub の取得 3 分前 · 次は 2 分後/);
-    screen.getByText(/取得を 15 分おきに延ばしています/);
+    await screen.findByText(/GitHub から取得: 3 分前 · 次は 2 分後/);
+    screen.getByText(/取得の間隔を 15 分に延ばしています/);
   });
 
   it("adds a repository to the project", async () => {
     const { api } = setup();
-    await fireEvent.click(screen.getByRole("button", { name: "repo を追加" }));
+    await fireEvent.click(screen.getByRole("button", { name: "リポジトリを追加" }));
     await fireEvent.input(screen.getByLabelText("リポジトリ"), { target: { value: "org-a/ops" } });
-    await fireEvent.click(screen.getByRole("button", { name: "追加する" }));
+    await fireEvent.click(screen.getByRole("button", { name: "追加" }));
     await waitFor(() =>
       expect(api.updateTask).toHaveBeenCalledWith(
         "P1",

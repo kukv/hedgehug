@@ -360,7 +360,7 @@ describe("DoctorSection: the repair", () => {
       "親の循環",
       "削除済みの親",
       "親と違うワークスペース",
-      "重なった ID",
+      "重複した ID",
       "1 コミット",
     ]) {
       expect(d.textContent).toContain(t);
@@ -418,7 +418,7 @@ describe("DoctorSection: the repair", () => {
     const result = within(region()).getByRole("region", { name: "修復の結果" });
     expect(result.textContent).toContain("DM-2");
     expect(result.textContent).toContain("親が削除されたため、ルートに移しました");
-    expect(result.textContent).toContain("ID が重なっていたため、DM-3 から DM-4 に振り直しました");
+    expect(result.textContent).toContain("ID が重複していたため、DM-3 から DM-4 に振り直しました");
     await waitFor(() => expect(document.activeElement).toBe(result));
     // what is left
     expect(within(region()).getByText("does not decode")).toBeTruthy();
@@ -442,11 +442,11 @@ describe("DoctorSection: the repair", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "修復する" }),
     );
     const result = await within(region()).findByRole("region", { name: "修復の結果" });
-    expect(result.textContent).toContain("origin の新しい履歴に揃えました");
-    expect(result.textContent).toContain("送っていなかった 3 コミットを戻しました");
+    expect(result.textContent).toContain("origin の新しい履歴にそろえました");
+    expect(result.textContent).toContain("未 push の 3 コミットを再適用しました");
     expect(result.textContent).toContain("戻せなかったタスク: DM-7");
     expect(result.textContent).toContain("/old/store");
-    expect(toasts.list[0]?.message).toBe("Store を origin の新しい履歴に揃えました");
+    expect(toasts.list[0]?.message).toBe("Store を origin の新しい履歴にそろえました");
     expect(within(region()).getByText("問題は見つかりませんでした")).toBeTruthy();
   });
 

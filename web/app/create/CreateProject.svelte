@@ -109,7 +109,7 @@
 
   const repoHint = (text: string) => {
     const id = repoIdOf(text);
-    return id ? `Enter で ${id} として追加します（SSH・HTTPS・末尾の .git を揃えます）` : null;
+    return id ? `Enter で ${id} として追加します（SSH・HTTPS・末尾の .git をそろえます）` : null;
   };
 
   async function submit() {
@@ -211,12 +211,13 @@
       </div>
     {/if}
     <p class="hint">
-      ID はこのワークスペースの接頭辞で、作成時に振ります。子タスクも同じワークスペースに入ります
+      ID
+      はこのワークスペースの接頭辞を付けて、作成時に振ります。子タスクも同じワークスペースに入ります
     </p>
 
     <div class="field">
       <span class="lbl"
-        >リポジトリ <span class="hint">— なくても作れます（運用だけのプロジェクト）</span></span
+        >リポジトリ <span class="hint">— なくても作成できます（運用だけのプロジェクト）</span></span
       >
       <FieldInput
         editor="chips"
@@ -247,10 +248,10 @@
       <div class="dates">
         {#if hasStart}
           <div class="field">
-            <span class="lbl">start</span>
+            <span class="lbl">開始日</span>
             <FieldInput
               editor="date"
-              label="start"
+              label="開始日"
               value={start}
               onedit={(v) => (start = v as string | null)}
               oncommit={() => {}}
@@ -259,10 +260,10 @@
         {/if}
         {#if hasDue}
           <div class="field">
-            <span class="lbl">due</span>
+            <span class="lbl">期限</span>
             <FieldInput
               editor="date"
-              label="due"
+              label="期限"
               value={due}
               onedit={(v) => (due = v as string | null)}
               oncommit={() => {}}

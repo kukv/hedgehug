@@ -128,9 +128,9 @@ describe("GanttView", () => {
 
   it("folds the children of a row", async () => {
     const { getByRole, queryByText } = setup();
-    await fireEvent.click(getByRole("button", { name: "epic の子を畳む" }));
+    await fireEvent.click(getByRole("button", { name: "epic の子を折りたたむ" }));
     expect(queryByText("alpha")).toBeNull();
-    expect(getByRole("button", { name: "epic の子を開く" })).toBeTruthy();
+    expect(getByRole("button", { name: "epic の子を展開する" })).toBeTruthy();
   });
 
   it("changes the settings from its controls", async () => {

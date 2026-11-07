@@ -92,7 +92,7 @@ describe("SettingsStores: the list", () => {
     });
     expect(screen.getByRole("alert")).toBeTruthy();
     expect(screen.queryByText("読み込み中…")).toBeNull();
-    await fireEvent.click(screen.getByRole("button", { name: "もう一度読む" }));
+    await fireEvent.click(screen.getByRole("button", { name: "もう一度読み込む" }));
     expect(stores.reload).toHaveBeenCalledTimes(1);
   });
 
@@ -143,7 +143,7 @@ describe("SettingsStores: the heading buttons", () => {
 
   it("opens CreateStore", async () => {
     mount();
-    await fireEvent.click(screen.getByRole("button", { name: "Store を作る" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Store を作成" }));
     expect(screen.getByRole("dialog", { name: "Store を作成" })).toBeTruthy();
   });
 });

@@ -164,7 +164,7 @@
       >
         追加
       </Button>
-      <Button onclick={() => (adding = false)}>やめる</Button>
+      <Button onclick={() => (adding = false)}>キャンセル</Button>
     </form>
   {:else}
     <div><Button size="sm" onclick={() => (adding = true)}>ルールを追加</Button></div>

@@ -2,6 +2,7 @@
   import type { Schemas } from "../../core/api/client";
   import { cliSetQuery } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
+  import { bulkUpdatedLabel } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
   import { core } from "../context";
   import { useSubscribe } from "../svelte-store";
@@ -122,7 +123,7 @@
       for (const x of commits) c.cache.noteOwnCommit(x.commit);
       const only = commits.length === 1 ? commits[0] : undefined;
       toast({
-        message: `${r.tasks?.length ?? 0} 件の${fieldLabel}を${value === "" ? "外し" : `${value} に`}しました`,
+        message: bulkUpdatedLabel(r.tasks?.length ?? 0, fieldLabel, value),
         undo: only ? () => runUndo(c, only.store) : undefined,
       });
       onclose();

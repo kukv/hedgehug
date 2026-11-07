@@ -3,6 +3,7 @@ package maintenance_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	gosync "sync"
@@ -82,8 +83,9 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 	want := usecase.Finding{
 		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
 		Task: from.String(), Msg: "parent points at org-b's WEB-1; references stay inside a store", Severity: usecase.SeverityWarning,
+		Code: "cross_store_ref", Args: []string{"parent", "org-b", "WEB-1"},
 	}
-	if len(cross) != 1 || cross[0] != want {
+	if len(cross) != 1 || !reflect.DeepEqual(cross[0], want) {
 		t.Errorf("org-a cross_store_ref findings = %+v; want [%+v]", cross, want)
 	}
 	for _, f := range rs[1].Findings {
@@ -124,8 +126,9 @@ func TestDoctorCrossStoreRefWhereIsThePlainIDWhenThePrefixIsShared(t *testing.T)
 	want := usecase.Finding{
 		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
 		Task: from.String(), Msg: "parent points at org-b's API-1; references stay inside a store", Severity: usecase.SeverityWarning,
+		Code: "cross_store_ref", Args: []string{"parent", "org-b", "API-1"},
 	}
-	if len(cross) != 1 || cross[0] != want {
+	if len(cross) != 1 || !reflect.DeepEqual(cross[0], want) {
 		t.Errorf("findings = %+v; want [%+v]", cross, want)
 	}
 }

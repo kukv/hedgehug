@@ -10,7 +10,7 @@
   const cell = (n: number | null | undefined) =>
     n === null || n === undefined ? "—" : amountLabel(n, view.by);
   const table = $derived({
-    head: ["日付", "残り", "範囲", "理想"],
+    head: ["日付", "残り", "総量", "理想"],
     rows: plot.xs.map((x, i) => [
       shortDate(x),
       cell(plot.remaining[i]),
@@ -27,7 +27,7 @@
   {height}
   {table}
   lines={[
-    { label: "範囲", values: plot.scope, color: "ink", thin: true, stepped: true },
+    { label: "総量", values: plot.scope, color: "ink", thin: true, stepped: true },
     { label: "理想", values: plot.ideal, color: "muted-2", dashed: true },
     { label: "残り", values: plot.remaining, color: "accent", dots: true },
   ]}

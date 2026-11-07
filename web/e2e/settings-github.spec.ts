@@ -38,7 +38,7 @@ test("the rules are added, counted, turned off and removed", async ({ page, hh }
   await page.getByRole("button", { name: "ルールを追加" }).click();
   const dialog = page.getByRole("dialog", { name: "ルールを追加" });
   await dialog.getByRole("textbox", { name: "id" }).fill("opened");
-  await dialog.getByLabel("行き先").selectOption("status:in_progress");
+  await dialog.getByLabel("遷移先").selectOption("status:in_progress");
   await dialog.getByRole("button", { name: "追加" }).click();
   await expect(dialog).toHaveCount(0);
   const rule = page.getByRole("article", { name: "opened" });
@@ -51,7 +51,7 @@ test("the rules are added, counted, turned off and removed", async ({ page, hh }
   hh.fakegh("pr", "open", REPO, "--branch", `hh/${task.id}-ship`);
   hh.hh("sync");
   await expect(rule).toContainText("直近 7 日 1 回");
-  await expect(page.getByText(/GitHub の取得 /)).toBeVisible();
+  await expect(page.getByText(/GitHub から取得: /)).toBeVisible();
   await expect(page.getByText(/レート制限 [\d,]+ \/ [\d,]+/)).toBeVisible();
 
   await rule.getByRole("checkbox", { name: "有効: opened" }).uncheck();
@@ -84,7 +84,7 @@ test("a rule says what can refuse it", async ({ page, hh }) => {
   );
   await hh.open(page, SETTINGS);
   await expect(page.getByRole("article", { name: "merged" })).toContainText(
-    "完了には points が必要です",
+    "完了には ポイント が必要です",
   );
 });
 
@@ -114,7 +114,7 @@ test("issues are taken in at the root of a workspace", async ({ page, hh }) => {
   const region = page.getByRole("region", { name: "既存の Issue をまとめて取り込む" });
   await region.getByRole("combobox", { name: "リポジトリ" }).fill(REPO);
   await region.getByRole("textbox", { name: "ラベル" }).fill("v2");
-  await region.getByRole("button", { name: "件数を確かめる" }).click();
+  await region.getByRole("button", { name: "件数を確認する" }).click();
   await region.getByRole("button", { name: "1 件を mirror で取り込む" }).click();
   await expect(page.getByRole("status").filter({ hasText: "1 件を取り込みました" })).toBeVisible();
   expect(hh.hh("ls")).toContain("取り込む Issue");
@@ -127,14 +127,14 @@ test("a project stops a rule of the Store and has its own", async ({ page, hh })
 
   await page.getByRole("checkbox", { name: "このプロジェクトで有効: opened" }).uncheck();
   await expect(
-    page.getByRole("checkbox", { name: "このプロジェクトで停止: opened" }),
+    page.getByRole("checkbox", { name: "このプロジェクトで無効: opened" }),
   ).toBeVisible();
   expect(rules(hh)[0]?.disabled_in.map((p) => p.ulid)).toEqual([project.ulid]);
 
   await page.getByRole("button", { name: "このプロジェクトだけのルールを追加" }).click();
   const dialog = page.getByRole("dialog", { name: "このプロジェクトだけのルールを追加" });
   await dialog.getByRole("textbox", { name: "id" }).fill("own");
-  await dialog.getByLabel("行き先").selectOption("status:in_progress");
+  await dialog.getByLabel("遷移先").selectOption("status:in_progress");
   await dialog.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("このプロジェクトだけ", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "削除: own" }).click();
@@ -186,7 +186,7 @@ test("the GitHub App that is not installed is told on the account", async ({ pag
     `https://github.com/organizations/org-a/settings/installations`,
   );
 
-  await warn.getByRole("button", { name: "gh のトークンで代わりに使う" }).click();
+  await warn.getByRole("button", { name: "代わりに gh のトークンを使う" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "次の取得から gh のトークンを使います" }),
   ).toBeVisible();
@@ -201,8 +201,8 @@ test("a task opens an issue", async ({ page, hh }) => {
   await hh.open(page, `/tasks/${task.ulid}`);
 
   const section = page.getByRole("region", { name: "GitHub" });
-  await section.getByRole("button", { name: "Issue を作る" }).click();
-  const dialog = page.getByRole("dialog", { name: "Issue を作る" });
+  await section.getByRole("button", { name: "Issue を作成" }).click();
+  const dialog = page.getByRole("dialog", { name: "Issue を作成" });
   await expect(dialog.getByRole("combobox", { name: "リポジトリ" })).toHaveValue(REPO);
   await dialog.getByRole("button", { name: "作る" }).click();
   await expect(dialog).toHaveCount(0);

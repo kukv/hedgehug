@@ -41,7 +41,7 @@ describe("ProjectViolations", () => {
       "/tasks/U-REL-11",
     );
     expect(row.textContent).toMatch(/points is required to enter done/);
-    expect(screen.getByText("いまの違反 1 件")).toBeTruthy();
+    expect(screen.getByText("今の違反 1 件")).toBeTruthy();
     cleanup();
     setup();
     expect(await screen.findByText("違反しているタスクはありません")).toBeTruthy();

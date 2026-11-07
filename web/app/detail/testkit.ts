@@ -35,7 +35,7 @@ export const schemaView = {
     points: { type: "number" },
     area: { type: "text" },
     relates: { type: "task_ref", multi: true, symmetric: true, label: "関連" },
-    duplicates: { type: "task_ref", label: "重複している", inverse: "重複されている" },
+    duplicates: { type: "task_ref", label: "重複している", inverse: "重複元" },
   },
   workflow: {},
   scoped: [],

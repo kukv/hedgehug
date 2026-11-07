@@ -164,12 +164,12 @@ test("the overview of a project has its pull requests, and says the reads are he
   const region = page.getByRole("region", { name: "リポジトリと PR" });
   await expect(region.getByRole("row").filter({ hasText: "出荷" })).toContainText(task.id);
   await expect(region).toContainText("org-a/web · PR 1");
-  await expect(region).toContainText("GitHub の取得");
-  await expect(region.getByRole("status")).toContainText("取得を 15 分おきに延ばしています");
+  await expect(region).toContainText("GitHub から取得");
+  await expect(region.getByRole("status")).toContainText("取得の間隔を 15 分に延ばしています");
 
-  await region.getByRole("button", { name: "repo を追加" }).click();
+  await region.getByRole("button", { name: "リポジトリを追加" }).click();
   await region.getByLabel("リポジトリ").fill("org-a/ops");
-  await region.getByRole("button", { name: "追加する" }).click();
+  await region.getByRole("button", { name: "追加", exact: true }).click();
   await expect(region).toContainText("org-a/ops · PR 0");
 });
 
@@ -190,7 +190,7 @@ test("a refused rule is told, and the field it needs moves the task", async ({ p
   await expect(page.getByText(/ルール opened が 進行中 にしました（PR が開かれた）/)).toBeVisible();
   await expect(page.getByText(/ルール merged で動かせませんでした/)).toBeVisible();
 
-  await page.getByRole("button", { name: "points を入力して完了にする" }).click();
+  await page.getByRole("button", { name: "ポイント を入力して完了にする" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("spinbutton").fill("3");
   await dialog.getByRole("button", { name: "完了にする" }).click();
@@ -215,7 +215,7 @@ test("an empty project takes in the issues of a label", async ({ page, hh }) => 
   const dialog = page.getByRole("dialog", { name: "Issue から取り込む" });
   await dialog.getByRole("combobox", { name: "リポジトリ" }).fill(REPO);
   await dialog.getByRole("textbox", { name: "ラベル" }).fill("v2");
-  await dialog.getByRole("button", { name: "件数を確かめる" }).click();
+  await dialog.getByRole("button", { name: "件数を確認する" }).click();
   await dialog.getByRole("button", { name: "1 件を mirror で取り込む" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("treeitem").filter({ hasText: "取り込む Issue" })).toBeVisible();

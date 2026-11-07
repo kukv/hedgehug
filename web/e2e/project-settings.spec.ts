@@ -1,8 +1,8 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - /projects/<ULID>/settings is the settings of a project (the tab "設定" at the right end of the tabs
 //     in the navigation "ビューの切り替え"): the group "表示するステータス" has a checkbox for each status
-//     of the Store (named by its label); the group "必須の項目を足す" has the combobox "必須にするステータス", a
-//     checkbox for each field (named by the field) and the button "必須の項目を足す"; the button "保存"
+//     of the Store (named by its label); the group "必須の項目を追加" has the combobox "必須にするステータス", a
+//     checkbox for each field (named by the field) and the button "必須の項目を追加"; the button "保存"
 //     writes the override and a toast says "プロジェクトの設定を保存しました"; "すべて Store の値に戻す…"
 //     opens the dialog "プロジェクトの設定を Store の値に戻す", whose button "すべて戻す" takes the
 //     override off
@@ -52,12 +52,12 @@ test("a field the workflow needs is asked for on the kanban after it is saved", 
   const ship = hh.add("Ship it", "--parent", project.id);
   await hh.open(page, `/projects/${project.ulid}/settings`);
 
-  const form = page.getByRole("group", { name: "必須の項目を足す" });
+  const form = page.getByRole("group", { name: "必須の項目を追加" });
   await form
     .getByRole("combobox", { name: "必須にするステータス" })
     .selectOption({ label: "進行中" });
   await form.getByRole("checkbox", { name: "points", exact: true }).check();
-  await form.getByRole("button", { name: "必須の項目を足す" }).click();
+  await form.getByRole("button", { name: "必須の項目を追加" }).click();
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(saved(page)).toBeVisible();
   expect(scopeShow(hh, project.id)).toMatch(/required:\n\s+in_progress: points/);
@@ -67,7 +67,7 @@ test("a field the workflow needs is asked for on the kanban after it is saved", 
   await expect(card).toBeVisible();
   await dragCard(page, card, column(page, "in_progress"));
   await expect(
-    page.getByRole("dialog", { name: `${ship.id} を進行中にするには points が必要です` }),
+    page.getByRole("dialog", { name: `${ship.id} を進行中にするには ポイント が必要です` }),
   ).toBeVisible();
   expect(hh.show(ship.id).status).toBe("todo");
 });

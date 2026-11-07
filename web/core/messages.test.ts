@@ -72,7 +72,7 @@ describe("errorMessage", () => {
 
   it("words purge and the bulk read of notifications", () => {
     expect(errorMessage(err("purge.changed"))).toBe(
-      "確認のあとにタスクが変わりました。もう一度確かめてください",
+      "確認のあとにタスクが変わりました。もう一度確認してください",
     );
     expect(errorMessage(err("purge.bad_period", { value: "abc" }))).toBe(
       "「abc」は期間ではありません。90d のように日数で書いてください（0d はすべて）",
@@ -84,7 +84,7 @@ describe("errorMessage", () => {
 
   it("words the codes of a move to another store", () => {
     expect(errorMessage(err("move.changed"))).toBe(
-      "確認のあとに移すタスクが変わりました。予定を取り直して、確かめてから移動してください",
+      "確認のあと、移動するタスクが変わりました。移動の内容を読み込み直して、確認してから移動してください",
     );
     expect(errorMessage(err("move.same_store", { store: "org-a" }))).toBe(
       "タスクはすでに org-a にあります。同じ Store の中で移すには、別のワークスペースを選んでください",
@@ -152,7 +152,7 @@ describe("errorMessage", () => {
 
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
-      "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で origin の新しい履歴に揃えてください",
+      "remote の履歴が手元と食い違っています。確認してから、hh doctor --fix で origin の新しい履歴にそろえてください",
     );
   });
 
@@ -164,35 +164,35 @@ describe("errorMessage", () => {
   });
 
   it("words the codes of the accounts and the device flow", () => {
-    expect(errorMessage(err("auth.device_running"))).toBe("デバイスフローがすでに進んでいます");
+    expect(errorMessage(err("auth.device_running"))).toBe("Device Flow はすでに実行中です");
     expect(errorMessage(err("auth.device_not_found"))).toBe(
-      "そのデバイスフローはすでに終わっているか、ありません",
+      "その Device Flow はすでに終わっているか、ありません",
     );
     expect(errorMessage(err("auth.canceled"))).toBe("ログインをやめました");
     expect(errorMessage(err("request.canceled"))).toBe(
-      "要求が途中で切れました。もう一度試してください",
+      "リクエストが途中で中断されました。もう一度試してください",
     );
     expect(errorMessage(err("auth.device_failed", {}, "the login was denied"))).toBe(
-      "デバイスフローでログインできませんでした: the login was denied",
+      "Device Flow でログインできませんでした: the login was denied",
     );
     expect(errorMessage(err("auth.client_id", { host: "ghe.example.com" }))).toBe(
-      "ghe.example.com のデバイスフローには、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください",
+      "ghe.example.com の Device Flow には、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください",
     );
     expect(
       errorMessage(err("auth.no_device_flow", { account: "work", uses: "env:GH_TOKEN" })),
     ).toBe(
-      "アカウント work は env:GH_TOKEN からトークンを得るため、Hedgehug がログインするものはありません",
+      "アカウント work は env:GH_TOKEN からトークンを得るため、Hedgehug でのログインは不要です",
     );
     expect(
       errorMessage(err("auth.mismatch", { account: "work", host: "github.com", login: "bob" })),
     ).toBe("トークンは github.com/bob のもので、アカウント work のものではありません");
     expect(errorMessage(err("auth.token_empty"))).toBe("トークンが空です");
-    expect(errorMessage(err("auth.login"))).toBe("アカウントの login が必要です");
+    expect(errorMessage(err("auth.login"))).toBe("アカウントのログイン名が必要です");
   });
 
   it("says which sources of a token the account call takes", () => {
     expect(errorMessage(err("auth.token_source", { token: "keychain" }))).toBe(
-      "トークンの取得元「keychain」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、デバイスフローは別の操作です）",
+      "トークンの取得元「keychain」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、Device Flow は別の操作です）",
     );
   });
 
@@ -280,14 +280,14 @@ describe("store.read_only", () => {
     const m = (reason?: string) =>
       errorMessage(err("store.read_only", { store: "shared", reason }));
     expect(m("the GitHub permission is read")).toBe(
-      "shared は読み取り専用です（GitHub の権限が読み取りです）",
+      "shared は閲覧のみです（GitHub の権限が読み取りのみです）",
     );
     expect(m("the remote cannot be written")).toBe(
-      "shared は読み取り専用です（remote に書き込めません）",
+      "shared は閲覧のみです（remote に書き込めません）",
     );
     expect(m("the remote denied the push")).toBe(
-      "shared は読み取り専用です（remote が push を拒みました）",
+      "shared は閲覧のみです（remote が push を拒否しました）",
     );
-    expect(m()).toBe("shared は読み取り専用です");
+    expect(m()).toBe("shared は閲覧のみです");
   });
 });

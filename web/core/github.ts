@@ -103,7 +103,7 @@ export const checksLabel = (l: Link): string => CHECKS[l.checks ?? ""] ?? "";
 
 const VIAS: Readonly<Record<string, string>> = {
   branch: "ブランチ名から自動リンク",
-  mark: "本文の印から自動リンク",
+  mark: "本文の hedgehug:<ULID> から自動リンク",
   id: "ID から自動リンク",
   comment: "コメントから自動リンク",
 };
@@ -148,7 +148,7 @@ const EVENTS: Readonly<Record<string, string>> = {
   "pr.review_requested": "レビューを依頼された",
   "pr.merged": "PR がマージされた",
   "issue.closed": "Issue が閉じられた",
-  "issue.mirror": "Issue の反映",
+  "issue.mirror": "Issue からの反映",
 };
 
 export const eventLabel = (event: string): string => EVENTS[event] ?? event;
@@ -213,7 +213,7 @@ export function fetchedText(last: string | undefined, now: Date): string {
 /** GitHub の取得 3 分前 · 次は 2 分後; the second half only for a read still to come. */
 export function fetchLine(t: FetchTimes, now: Date): string {
   if (!t.last) return "GitHub からまだ取得していません";
-  const head = `GitHub の取得 ${formatRelative(t.last, now)}`;
+  const head = `GitHub から取得: ${formatRelative(t.last, now)}`;
   const ms = t.next ? Date.parse(t.next) - now.getTime() : 0;
   return ms > 0 ? `${head} · 次は ${Math.ceil(ms / 60_000)} 分後` : head;
 }
@@ -255,5 +255,5 @@ export const installUrl = (m: MissingApp): string =>
 /** The band of a rate limit, or null when the reads are not held back. */
 export function slowedText(until: string | undefined, now: Date): string | null {
   if (!until || Date.parse(until) <= now.getTime()) return null;
-  return `取得を ${SLOWED_MINUTES} 分おきに延ばしています · ${formatTime(until)} に回復`;
+  return `取得の間隔を ${SLOWED_MINUTES} 分に延ばしています · ${formatTime(until)} に回復`;
 }

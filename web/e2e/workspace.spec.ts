@@ -8,7 +8,7 @@
 //     button "<n> 件を振り直す"), and "削除" (dialog "ワークスペース <name> を削除", button "削除")
 //   - the detail of a task has the button "その他の操作", whose menu has "別のワークスペースへ移動…"; a
 //     row of the tree has the button "メニュー: <title>" with the same item. Both open the dialog
-//     "<ID> <title> を移動": the radio group "移り先のワークスペース" (a radio is named
+//     "<ID> <title> を移動": the radio group "移動先のワークスペース" (a radio is named
 //     "<name>（<prefix>）", the current workspace adds " — 今のワークスペース" and is disabled) and the
 //     button "移動"
 //   - the toasts say: "ワークスペース <name>（<prefix>）を <store> に追加しました",
@@ -170,7 +170,7 @@ test("a task moves to another workspace from the … menu of its detail", async 
   await expect(dialog.getByRole("radio", { name: /^demo/ })).toBeDisabled();
   await expect(dialog.getByRole("radio", { name: "ops（OPS）" })).toBeChecked();
   await expect(dialog).toContainText(
-    "ID を OPS の番号に振り直します（DM-1 は former_ids に残ります）",
+    "ID を OPS の番号に振り直します（DM-1 は旧 ID として残ります）",
   );
   await expect(dialog.getByRole("button", { name: /コマンドをコピー/ })).toContainText(
     "hh mv DM-1 --workspace ops",

@@ -37,14 +37,14 @@ describe("ConstraintEditor: transitions", () => {
     const store = rows.find((r) => within(r).queryByText("Store"));
     expect(store?.textContent).toMatch(/中止/);
     expect(within(store as HTMLElement).queryByRole("button")).toBeNull();
-    const mine = rows.find((r) => within(r).queryByText("このプロジェクトで足した"));
+    const mine = rows.find((r) => within(r).queryByText("このプロジェクトで追加"));
     expect(within(mine as HTMLElement).getByRole("button", { name: "完了を外す" })).toBeTruthy();
   });
 
   it("adds the targets in the order of the schema, for a status, and clears the form", async () => {
     const { onchange } = mount({ mine: { todo: ["done"] } });
-    const form = screen.getByRole("group", { name: "遷移の制約を足す" });
-    const add = within(form).getByRole("button", { name: "遷移の制約を足す" });
+    const form = screen.getByRole("group", { name: "遷移の制約を追加" });
+    const add = within(form).getByRole("button", { name: "遷移の制約を追加" });
     expect(add).toBeDisabled();
     await fireEvent.change(within(form).getByRole("combobox", { name: "遷移元のステータス" }), {
       target: { value: "todo" },
@@ -86,7 +86,7 @@ describe("ConstraintEditor: transitions", () => {
 describe("ConstraintEditor: required fields", () => {
   it("offers the properties and the built-in fields it is given, named by the field", () => {
     mount({ mode: "required" });
-    const form = screen.getByRole("group", { name: "必須の項目を足す" });
+    const form = screen.getByRole("group", { name: "必須の項目を追加" });
     expect(
       within(form)
         .getAllByRole("checkbox")
@@ -96,24 +96,24 @@ describe("ConstraintEditor: required fields", () => {
 
   it("adds fields to a status, on top of the ones it has", async () => {
     const { onchange } = mount({ mode: "required", mine: { done: ["area"] } });
-    const form = screen.getByRole("group", { name: "必須の項目を足す" });
+    const form = screen.getByRole("group", { name: "必須の項目を追加" });
     await fireEvent.change(within(form).getByRole("combobox", { name: "必須にするステータス" }), {
       target: { value: "done" },
     });
     await fireEvent.click(within(form).getByRole("checkbox", { name: "points" }));
-    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を足す" }));
+    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を追加" }));
     expect(onchange).toHaveBeenCalledWith({ done: ["area", "points"] });
   });
 
   it("keeps a field ticked when the status chosen has the same name", async () => {
     const { onchange } = mount({ mode: "required", fields: ["todo", "points"] });
-    const form = screen.getByRole("group", { name: "必須の項目を足す" });
+    const form = screen.getByRole("group", { name: "必須の項目を追加" });
     await fireEvent.click(within(form).getByRole("checkbox", { name: "todo" }));
     await fireEvent.change(within(form).getByRole("combobox", { name: "必須にするステータス" }), {
       target: { value: "todo" },
     });
     expect(within(form).getByRole("checkbox", { name: "todo" })).toBeChecked();
-    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を足す" }));
+    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を追加" }));
     expect(onchange).toHaveBeenCalledWith({ todo: ["todo"] });
   });
 

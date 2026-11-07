@@ -105,14 +105,14 @@
         aria-describedby="{uid}-msg"
       >
       <span id="{uid}-msg" class="msg" class:bad={shown}>
-        {shown ?? "接頭辞は英大文字で始まる 2〜10 文字の英大文字と数字です"}
+        {shown ?? "接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください"}
       </span>
     </div>
 
     {#if count > 0}
       <p class="note">
         配下の {count} 件（削除済みを含む）の ID を新しい接頭辞で振り直します（1 コミット）。
-        古い ID は former_ids に残るので、検索やリンクでは引き続き引けます。
+        古い ID は旧 ID として残るので、引き続き検索やリンクに使えます。
       </p>
     {:else}
       <p class="note">配下にタスクはありません。接頭辞だけが変わります。</p>

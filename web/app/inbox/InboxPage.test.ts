@@ -129,7 +129,7 @@ describe("InboxPage", () => {
 
   it("puts the unread first, newest first, with the sentence of each", async () => {
     setup([watched, assigned, mention, overwritten]);
-    await screen.findByText("あなたが設定した points が、同時に編集した値で上書きされました");
+    await screen.findByText("自分が設定した points が、同時に編集された別の値で上書きされました");
     const rows = screen.getAllByRole("listitem");
     expect(rows.map((r) => /(REL-\d+)/.exec(r.textContent ?? "")?.[1])).toEqual([
       "REL-11",
@@ -140,7 +140,7 @@ describe("InboxPage", () => {
     expect(
       within(rowOf("REL-4")).getByText("tanaka がコメントであなたをメンションしました"),
     ).toBeTruthy();
-    expect(within(rowOf("REL-11")).getByText("points: 2（あなた）")).toBeTruthy();
+    expect(within(rowOf("REL-11")).getByText("points: 2（自分）")).toBeTruthy();
   });
 
   it("has the tabs with the number of unread; zero shows no number", async () => {
@@ -252,7 +252,7 @@ describe("InboxPage", () => {
     setup([repair]);
     expect(
       await screen.findByText(
-        "ワークスペース release の接頭辞がほかのワークスペースと重なっています",
+        "ワークスペース release の接頭辞がほかのワークスペースと重複しています",
       ),
     ).toBeTruthy();
     expect(within(screen.getByRole("listitem")).queryAllByRole("link")).toHaveLength(0);

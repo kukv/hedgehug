@@ -31,7 +31,7 @@
     <span class="spacer"></span>
     <Button onclick={() => (discovering = true)}>Store を探す</Button>
     <Button onclick={() => (adding = true)}>URL で追加</Button>
-    <Button variant="primary" onclick={() => (creating = true)}>Store を作る</Button>
+    <Button variant="primary" onclick={() => (creating = true)}>Store を作成</Button>
   </header>
   <p class="lead">
     このマシンで扱う Store です。見える範囲は各リポジトリのアクセス権で決まります。「表示」を外した
@@ -39,9 +39,9 @@
   </p>
 
   {#if dir.current.error}
-    <FormError message="Store を読めません · {errorMessage(dir.current.error)}" />
+    <FormError message="Store を読み込めません · {errorMessage(dir.current.error)}" />
     <div>
-      <Button onclick={() => c.stores.reload().catch(() => undefined)}>もう一度読む</Button>
+      <Button onclick={() => c.stores.reload().catch(() => undefined)}>もう一度読み込む</Button>
     </div>
   {/if}
 

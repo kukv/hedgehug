@@ -119,13 +119,13 @@ describe("MyTasks", () => {
 
   it("groups by project from the menu, the tasks outside any project last", async () => {
     mount();
-    await fireEvent.click(screen.getByRole("button", { name: "まとめ方: 期限" }));
+    await fireEvent.click(screen.getByRole("button", { name: "グループ: 期限" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "プロジェクト" }));
     const p = screen.getByRole("region", { name: "リリース準備 v2.4" });
     expect(within(p).getAllByRole("row")).toHaveLength(3);
     const none = screen.getByRole("region", { name: "プロジェクトなし" });
     expect(within(none).getByText("title 3")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "まとめ方: プロジェクト" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "グループ: プロジェクト" })).toBeTruthy();
   });
 
   it("asks again with the query typed in the field", async () => {
@@ -139,7 +139,7 @@ describe("MyTasks", () => {
   it("says there is nothing to do when the default query finds nothing", () => {
     mount({ list: () => [] });
     expect(screen.getByText("一致するタスクはありません")).toBeTruthy();
-    expect(screen.getByText("自分が担当で、完了と中止でないタスクはありません")).toBeTruthy();
+    expect(screen.getByText("自分が担当で、完了でも中止でもないタスクはありません")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "フィルタを解除" })).toBeNull();
   });
 
@@ -174,7 +174,7 @@ describe("MyTasks", () => {
 
   it("offers the three groupings in the order of the canvas", async () => {
     mount();
-    await fireEvent.click(screen.getByRole("button", { name: "まとめ方: 期限" }));
+    await fireEvent.click(screen.getByRole("button", { name: "グループ: 期限" }));
     expect(screen.getAllByRole("menuitem").map((e) => e.textContent?.trim())).toEqual([
       "期限",
       "ワークスペース",
@@ -184,7 +184,7 @@ describe("MyTasks", () => {
 
   it("groups by workspace in the order of the sidebar, with the badge of the Store", async () => {
     mount();
-    await fireEvent.click(screen.getByRole("button", { name: "まとめ方: 期限" }));
+    await fireEvent.click(screen.getByRole("button", { name: "グループ: 期限" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "ワークスペース" }));
     const regions = screen.getAllByRole("region");
     expect(regions).toHaveLength(2);
@@ -195,7 +195,7 @@ describe("MyTasks", () => {
     expect(within(release).getAllByRole("row")).toHaveLength(3);
     // the badge is by the name, outside the heading (so the region keeps the name alone)
     expect(release.querySelector(".g-head")).toHaveTextContent("shared");
-    expect(screen.getByRole("button", { name: "まとめ方: ワークスペース" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "グループ: ワークスペース" })).toBeTruthy();
   });
 
   describe("a hidden Store", () => {

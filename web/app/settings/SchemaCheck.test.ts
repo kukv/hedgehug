@@ -96,16 +96,16 @@ describe("SchemaCheck", () => {
     });
     await screen.findByText("古い指摘");
     conn.emit("schema.changed", { store: "shared" });
-    expect(await screen.findByText(/検査の結果を読めません/)).toBeVisible();
+    expect(await screen.findByText(/検査の結果を読み込めません/)).toBeVisible();
     expect(screen.getByText("古い指摘")).toBeVisible();
     // and takes it away once a reload succeeds
     conn.emit("resync");
-    await waitFor(() => expect(screen.queryByText(/検査の結果を読めません/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/検査の結果を読み込めません/)).toBeNull());
   });
 
   it("does not say it is checking when the first check failed", async () => {
     setup({ get: () => fail(500, "internal", {}, "検査できません") });
-    expect(await screen.findByText(/検査の結果を読めません/)).toBeVisible();
+    expect(await screen.findByText(/検査の結果を読み込めません/)).toBeVisible();
     expect(screen.queryByText("検査しています…")).toBeNull();
     expect(screen.queryByText("スキーマとタスクは合っています")).toBeNull();
   });

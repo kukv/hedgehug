@@ -61,7 +61,11 @@
         ];
       default:
         return [
-          { value: "nothing", label: "Hedgehug が持っているものはありません", disabled: true },
+          {
+            value: "nothing",
+            label: "Hedgehug が保存しているトークンはありません",
+            disabled: true,
+          },
         ];
     }
   });

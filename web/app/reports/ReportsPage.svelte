@@ -74,7 +74,7 @@
   const burnFacts = $derived(burndown.value ? burndownFacts(burndown.value) : null);
   const vel = $derived(velocityPlot(velocity.value ?? []));
   const velTable = $derived({
-    head: ["スプリント", "完了 points", "完了件数", "points なし"],
+    head: ["スプリント", "完了ポイント", "完了件数", "ポイントなし"],
     rows: (velocity.value ?? []).map((r) => [
       r.sprint.name,
       String(r.points),
@@ -141,10 +141,10 @@
         {@render failed(burndown.error)}
       {:else if burndown.value && burnFacts}
         {#if by === "points" && burndown.value.by === "count"}
-          <p class="note">points のあるタスクがないため、件数で数えています</p>
+          <p class="note">ポイントのあるタスクがないため、件数で数えています</p>
         {/if}
         <p class="note">
-          残り {amountLabel(burnFacts.remaining, burndown.value.by)} / 範囲
+          残り {amountLabel(burnFacts.remaining, burndown.value.by)} / 総量
           {amountLabel(burnFacts.scope, burndown.value.by)}（途中で追加
           {amountLabel(burnFacts.added, burndown.value.by)}）
         </p>
@@ -250,13 +250,13 @@
             <span>サイクルタイム 中央値</span>
             <b>{daysLabel(cycle.value.cycle.median)}</b>
             <small
-              >doing に入ってから done まで · 85% は {daysLabel(cycle.value.cycle.p85)} 以内</small
+              >進行中になってから完了まで · 85% は {daysLabel(cycle.value.cycle.p85)} 以内</small
             >
           </div>
           <div class="card">
             <span>リードタイム 中央値</span>
             <b>{daysLabel(cycle.value.lead.median)}</b>
-            <small>作成から done まで · 85% は {daysLabel(cycle.value.lead.p85)} 以内</small>
+            <small>作成から完了まで · 85% は {daysLabel(cycle.value.lead.p85)} 以内</small>
           </div>
         </div>
         {#if (cycle.value.warnings?.length ?? 0) > 0}
@@ -277,7 +277,7 @@
         <h2 id="ea-h">見積もりと実績</h2>
         {#if estimate.value}
           <span class="note"
-            >合計 見積 {estimate.value.estimate} / 実績 {estimate.value.actual}</span
+            >合計 見積もり {estimate.value.estimate} / 実績 {estimate.value.actual}</span
           >
         {/if}
         <div class="right">

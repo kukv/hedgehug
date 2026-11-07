@@ -38,9 +38,9 @@ describe("ViewRename", () => {
 
   it("今の名前が入っていて、変えるまで改名できない", () => {
     setup();
-    expect(screen.getByRole("dialog", { name: "ビュー weekly を改名" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "ビュー weekly の名前を変更" })).toBeVisible();
     expect(screen.getByRole("textbox", { name: "新しい名前" })).toHaveValue("weekly");
-    expect(screen.getByRole("button", { name: "改名" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "変更" })).toBeDisabled();
   });
 
   it("新しい名前で PATCH して、トーストを出して閉じる。足元に hh view rename", async () => {
@@ -49,10 +49,10 @@ describe("ViewRename", () => {
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       cliViewRename("weekly", "monthly", "shared"),
     );
-    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await fireEvent.click(screen.getByRole("button", { name: "変更" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(views.rename).toHaveBeenCalledWith("shared", "weekly", "monthly");
-    expect(toasts.list[0]?.message).toBe("ビュー weekly を monthly に改名しました");
+    expect(toasts.list[0]?.message).toBe("ビュー weekly の名前を monthly に変更しました");
   });
 
   it("開いているのがそのビューの画面なら、新しい名前の画面に移る（履歴は積まない）", async () => {
@@ -60,7 +60,7 @@ describe("ViewRename", () => {
     const before = history.length;
     const { onclose } = setup();
     await typeName("monthly");
-    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await fireEvent.click(screen.getByRole("button", { name: "変更" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(location.pathname).toBe("/views/shared/monthly");
     expect(history.length).toBe(before);
@@ -70,7 +70,7 @@ describe("ViewRename", () => {
     history.replaceState(null, "", "/views/shared/weekly");
     const { onclose } = setup(undefined, unsaved);
     await typeName("monthly");
-    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await fireEvent.click(screen.getByRole("button", { name: "変更" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(takeCarriedDraft("shared", "monthly")).toEqual(unsaved);
     expect(takeCarriedDraft("shared", "monthly")).toBeNull();
@@ -80,7 +80,7 @@ describe("ViewRename", () => {
     history.replaceState(null, "", "/views/shared/Sprint");
     const { onclose } = setup();
     await typeName("monthly");
-    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await fireEvent.click(screen.getByRole("button", { name: "変更" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(location.pathname).toBe("/views/shared/Sprint");
   });
@@ -89,13 +89,13 @@ describe("ViewRename", () => {
     setup();
     await typeName("sprint");
     expect(screen.getByText("Sprint というビューが shared にあります")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "改名" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "変更" })).toBeDisabled();
   });
 
   it("名前が空なら改名できない", async () => {
     setup();
     await typeName("");
-    expect(screen.getByRole("button", { name: "改名" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "変更" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toBeDisabled();
   });
 
@@ -106,7 +106,7 @@ describe("ViewRename", () => {
     );
     const { onclose } = setup(views);
     await typeName("a/b");
-    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await fireEvent.click(screen.getByRole("button", { name: "変更" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("「a/b」はビューの名前に使えません");
     expect(onclose).not.toHaveBeenCalled();
     expect(toasts.list).toHaveLength(0);

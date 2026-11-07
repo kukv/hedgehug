@@ -65,7 +65,7 @@
       bind:this={button}
       type="button"
       class="more"
-      aria-label="{task.title} の移し先"
+      aria-label="{task.title} の移動先"
       aria-haspopup="menu"
       aria-expanded={menu}
       onclick={() => (menu = !menu)}
@@ -76,7 +76,7 @@
       <Menu
         anchor={button}
         items={moves}
-        label="移し先"
+        label="移動先"
         onselect={(v) => {
           menu = false;
           onmove(v);

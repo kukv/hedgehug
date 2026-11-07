@@ -105,7 +105,7 @@ function valueText(v: unknown): string {
 
 export type NotificationText = { label: string; text: string; mine?: string };
 
-const MOVED_AWAY = "移った先のワークスペースにはありません";
+const MOVED_AWAY = "移動先のワークスペースにはありません";
 
 /** The sentence of a repair kind this knows, or null. */
 export function repairedKnownText(detail: Obj): string | null {
@@ -169,11 +169,11 @@ export function notificationText(
   switch (n.kind) {
     case "overwritten": {
       const field = str(detail.field);
-      if (!field) return { label: "上書き", text: "同時に編集した値で上書きされました" };
+      if (!field) return { label: "上書き", text: "同時に編集された別の値で上書きされました" };
       return {
         label: "上書き",
-        text: `あなたが設定した ${field} が、同時に編集した値で上書きされました`,
-        mine: `${field}: ${valueText(detail.value)}（あなた）`,
+        text: `自分が設定した ${field} が、同時に編集された別の値で上書きされました`,
+        mine: `${field}: ${valueText(detail.value)}（自分）`,
       };
     }
     case "mention": {
@@ -231,13 +231,13 @@ export function notificationText(
     case "revived":
       return {
         label: "同期の修復",
-        text: "削除と同時にあなたが編集していたため、編集を優先して復活させました",
+        text: "削除と同時にあなたが編集していたため、編集を優先して復元しました",
       };
     case "renumbered": {
       const old = str(detail.old);
       return {
         label: "同期の修復",
-        text: `ID を ${old} から ${str(detail.new)} に振り直しました。${old} でも引けます`,
+        text: `ID を ${old} から ${str(detail.new)} に振り直しました。${old} でも検索できます`,
       };
     }
     case "prefix_duplicate": {
@@ -245,7 +245,7 @@ export function notificationText(
       const name = opts.workspaceName?.(str(detail.workspace));
       return {
         label: "同期の修復",
-        text: `${name ? `ワークスペース ${name} の` : ""}${what}がほかのワークスペースと重なっています`,
+        text: `${name ? `ワークスペース ${name} の` : ""}${what}がほかのワークスペースと重複しています`,
       };
     }
     case "rewrite_applied":
@@ -253,7 +253,7 @@ export function notificationText(
     case "purged_change":
       return {
         label: "同期の修復",
-        text: "完全に削除されたタスクへの、まだ送っていない変更を捨てました",
+        text: "完全に削除されたタスクへの、未 push の変更を捨てました",
       };
   }
   return { label: n.kind, text: `種類: ${n.kind}` };

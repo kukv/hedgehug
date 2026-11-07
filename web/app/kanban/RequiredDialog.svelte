@@ -138,7 +138,7 @@
           : "この項目"}はタスクの詳細で入力してください。入力するまで{statusLabel}にはできません。
       </p>
     {:else}
-      <p class="note">ステータスと入力した項目は、1回の保存（1コミット）で変わります。</p>
+      <p class="note">ステータスと入力した項目は、1 回の保存（1 コミット）で変わります。</p>
     {/if}
     {#if error}
       <p class="error" role="alert">{error}</p>
@@ -146,7 +146,7 @@
   </div>
 
   {#snippet footer()}
-    <Button onclick={onclose}>やめる</Button>
+    <Button onclick={onclose}>キャンセル</Button>
     <Button
       variant="primary"
       disabled={!complete || elsewhere.length > 0 || busy}

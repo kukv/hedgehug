@@ -203,10 +203,10 @@ func TestShowInverseLabel(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
-	a := te.addJSON("A", "-p", "duplicates+="+other.ID)
+	a := te.addJSON("A", "-p", "causes+="+other.ID)
 	out := te.ok("show", other.ID)
 	// The label is wider than the column: one space follows it.
-	if want := "  重複されている " + label(a) + " A"; !strings.Contains(out, want) {
+	if want := "  起因している " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
 }

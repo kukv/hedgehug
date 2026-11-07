@@ -135,7 +135,7 @@
       <p class="note">削除済みは含めません</p>
       {#if schemaError && !schema}
         <p class="msg error" role="alert">
-          スキーマを読めないため、カテゴリ別の件数を出せません · {errorMessage(schemaError)}
+          スキーマを読み込めないため、カテゴリ別の件数を出せません · {errorMessage(schemaError)}
         </p>
       {:else if counts}
         <div
@@ -180,7 +180,7 @@
                 <th>タイトル</th>
                 <th class="w-progress">進捗</th>
                 <th class="w-due">期限</th>
-                <th class="w-who">担当</th>
+                <th class="w-who">担当者</th>
               </tr>
             </thead>
             <tbody>
@@ -244,7 +244,7 @@
                 <th class="w-id">ID</th>
                 <th>タイトル</th>
                 <th class="w-due">期限</th>
-                <th class="w-who">担当</th>
+                <th class="w-who">担当者</th>
               </tr>
             </thead>
             <tbody>

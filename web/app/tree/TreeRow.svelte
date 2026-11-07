@@ -131,7 +131,7 @@
       <span class="warn" title={task.broken}> <Icon name="warning" size={11} />壊れています </span>
     {:else if problem}
       <span class="warn" title={problem.message}>
-        <Icon name="warning" size={11} />{problemLabel(problem)}
+        <Icon name="warning" size={11} />{problemLabel(problem, schema)}
       </span>
     {/if}
     {#if dropMark === "reject"}

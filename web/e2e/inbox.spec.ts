@@ -44,8 +44,10 @@ test("an overwritten value is put back from the inbox, and the item is read", as
   await hh.open(page, "/inbox");
   await expect(inboxLink(page)).toContainText("1", { timeout: 15000 });
   const row = page.getByRole("listitem").filter({ hasText: task.id });
-  await expect(row).toContainText("あなたが設定した title が、同時に編集した値で上書きされました");
-  await expect(row).toContainText("title: mine（あなた）");
+  await expect(row).toContainText(
+    "自分が設定した title が、同時に編集された別の値で上書きされました",
+  );
+  await expect(row).toContainText("title: mine（自分）");
 
   await row.getByRole("button", { name: "自分の値に戻す" }).click();
   await expect(

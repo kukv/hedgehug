@@ -177,7 +177,7 @@ describe("TaskDetail", () => {
 
   it("shows a broken file with the hh doctor command and no editors", () => {
     setup({ broken: "yaml: line 3: bad", problems: [] });
-    expect(screen.getByText(/hh doctor で確かめてください/)).toBeInTheDocument();
+    expect(screen.getByText(/hh doctor で確認してください/)).toBeInTheDocument();
     expect(screen.getByText("$ hh doctor")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "タイトル" })).toBeNull();
   });

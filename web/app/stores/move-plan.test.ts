@@ -60,12 +60,12 @@ describe("moveButton", () => {
 describe("parentSentence", () => {
   it("leaves the parent in the source and goes under the parent given", () => {
     expect(parentSentence({ from: "DM-1 親", parent: "SC-4 新しい親", workspace: "a" })).toBe(
-      "DM-1 親 から外れて、SC-4 新しい親 の下に置きます",
+      "DM-1 親 から外し、SC-4 新しい親 の下に置きます",
     );
   });
   it("goes to the root of the workspace without a parent", () => {
     expect(parentSentence({ from: "DM-1 親", parent: null, workspace: "a" })).toBe(
-      "DM-1 親 から外れて、a のルートに置きます",
+      "DM-1 親 から外し、a のルートに置きます",
     );
   });
   it("leaves the first half out for a task with no parent", () => {

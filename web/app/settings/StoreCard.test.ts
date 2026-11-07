@@ -83,7 +83,7 @@ describe("StoreCard: the summary", () => {
     mount();
     const c = within(card());
     expect(c.getByRole("heading", { name: "demo" })).toBeTruthy();
-    expect(c.getByText("書き込み")).toBeTruthy();
+    expect(c.getByText("書き込み可")).toBeTruthy();
     expect(c.getByText("git@github.com:org/demo.git · work")).toBeTruthy();
     expect(c.queryByText("閲覧のみ")).toBeNull();
     expect(c.queryByText("既定の Store")).toBeNull();
@@ -103,8 +103,8 @@ describe("StoreCard: the summary", () => {
     mount({ readOnly: "the GitHub permission is read", tone: "readonly" });
     const c = within(card());
     expect(c.getByText("閲覧のみ")).toBeTruthy();
-    expect(c.getByText("GitHub の権限が読み取りです")).toBeTruthy();
-    expect(c.queryByText("書き込み")).toBeNull();
+    expect(c.getByText("GitHub の権限が読み取りのみです")).toBeTruthy();
+    expect(c.queryByText("書き込み可")).toBeNull();
   });
 
   it("marks the default Store by default_store alone, never by default", () => {

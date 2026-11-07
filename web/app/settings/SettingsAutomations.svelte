@@ -64,15 +64,15 @@
   {/if}
 
   {#if schemaError}
-    <FormError message="スキーマを読めません · {errorMessage(schemaError)}" />
+    <FormError message="スキーマを読み込めません · {errorMessage(schemaError)}" />
   {/if}
 
   <section class="block" aria-labelledby="rules-h">
     <div class="line">
       <h2 id="rules-h">ルール</h2>
       <span class="msg">
-        上から順に評価 · プロジェクトごとの停止・追加はプロジェクトの設定から ·
-        制約に反すると拒否して inbox に出します
+        上から順に評価 · プロジェクトごとの無効化・追加はプロジェクトの設定から ·
+        制約に反すると拒否して通知に出します
       </span>
       <span class="end">
         <Button

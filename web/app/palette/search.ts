@@ -249,7 +249,7 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
             {
               type: "command" as const,
               key: `task-child:${t.ulid}`,
-              label: "子タスクを作る",
+              label: "子タスクを作成",
               icon: "plus" as const,
               kbd: "C",
               run: () => env.createTask(t.ulid),
@@ -365,14 +365,14 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     {
       type: "command",
       key: "cmd:sprint-add",
-      label: "スプリントを作る",
+      label: "スプリントを作成",
       icon: "plus",
       run: env.addSprint,
     },
     {
       type: "command",
       key: "cmd:release-add",
-      label: "リリースを作る",
+      label: "リリースを作成",
       icon: "plus",
       run: env.addRelease,
     },

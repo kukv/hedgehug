@@ -382,7 +382,10 @@ export interface Candidate {
 }
 
 export interface Finding {
+  /** @nullable */
+  args?: string[] | null;
   check: string;
+  code?: string;
   hint?: string;
   msg: string;
   severity: string;

@@ -106,7 +106,7 @@
       <span class="badge" data-kind="readonly"><Icon name="forbid" size={14} />閲覧のみ</span>
       <span class="why">{readOnlyReason(readOnly)}</span>
     {:else}
-      <span class="badge" data-kind="write"><Icon name="check" size={14} />書き込み</span>
+      <span class="badge" data-kind="write"><Icon name="check" size={14} />書き込み可</span>
     {/if}
     {#if store.default_store}
       <span class="badge" data-kind="default">既定の Store</span>

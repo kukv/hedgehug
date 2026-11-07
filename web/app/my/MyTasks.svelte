@@ -150,7 +150,7 @@
         aria-haspopup="menu"
         onclick={(e) => (groupAnchor = e.currentTarget)}
       >
-        まとめ方: {groupLabel}
+        グループ: {groupLabel}
       </button>
     {/snippet}
   </ListBar>
@@ -164,8 +164,8 @@
       <Empty
         variant="nomatch"
         note={isDefault
-          ? "自分が担当で、完了と中止でないタスクはありません"
-          : "条件を最初の状態（自分が担当で、完了と中止でない）に戻せます"}
+          ? "自分が担当で、完了でも中止でもないタスクはありません"
+          : "条件を最初の状態（自分が担当で、完了でも中止でもない）に戻せます"}
         onClear={isDefault ? undefined : () => (applied = MY_QUERY)}
       />
     {:else}
@@ -229,7 +229,7 @@
 {#if groupAnchor}
   <Menu
     anchor={groupAnchor}
-    label="まとめ方"
+    label="グループ"
     items={groupItems}
     selected={by}
     onselect={(v) => {

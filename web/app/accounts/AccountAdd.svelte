@@ -263,7 +263,7 @@
   }
 
   const submitLabel = $derived(
-    source === "device" ? "GitHub でログイン" : source === "token" ? "トークンを保存" : "追加する",
+    source === "device" ? "GitHub でログイン" : source === "token" ? "トークンを保存" : "追加",
   );
 </script>
 
@@ -296,12 +296,12 @@
   <form onsubmit={submit}>
     <fieldset disabled={busy || flow !== null || stale !== null}>
       <label class="field">
-        <span>呼び名{source === "device" ? "（任意。空なら login）" : ""}</span>
+        <span>名前{source === "device" ? "（任意。空なら GitHub のログイン名）" : ""}</span>
         <input type="text" bind:value={name} autocomplete="off" required={source !== "device"}>
       </label>
       {#if source === "gh" || source === "env" || source === "none"}
         <label class="field">
-          <span>login</span>
+          <span>ログイン名</span>
           <input type="text" bind:value={login} autocomplete="off" required>
         </label>
       {/if}

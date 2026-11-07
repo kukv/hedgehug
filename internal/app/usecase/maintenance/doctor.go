@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
@@ -53,22 +54,24 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 			Check: "file", Where: model.StoreMetaPath,
 			Msg:  err.Error() + "; the tasks are not checked against the schema",
 			Hint: "restore it with `git restore " + model.StoreMetaPath + "`, or fix it by hand and commit",
+			Code: "store_meta.unreadable", Args: []string{err.Error()},
 		})
 	}
-	msg, err := checkNumbers(dir)
+	np, err := checkNumbers(dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		msg = err.Error()
+		np = schema.NewProblem("", "file.unreadable", "%v", err)
 	}
-	if msg != "" {
+	if np.Msg != "" {
 		out = append(out, usecase.Finding{
-			Check: "file", Where: model.NumbersPath, Msg: msg,
+			Check: "file", Where: model.NumbersPath, Msg: np.Msg,
 			Hint: "fix the file by hand and commit, or restore it with `git restore " + model.NumbersPath + "`",
+			Code: np.Code, Args: np.Args,
 		})
 	}
 	schemaOK := false
 	var sch *schema.Schema
 	if data, err := osfs.ReadFile(filepath.Join(dir, schema.Path)); err != nil {
-		out = append(out, usecase.Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: usecase.BrokenSchemaHint})
+		out = append(out, usecase.Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: usecase.BrokenSchemaHint, Code: "schema.unreadable", Args: []string{err.Error()}})
 	} else {
 		sc, fs := usecase.CheckSchemaFile(data)
 		out = append(out, fs...)
@@ -78,7 +81,8 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 	if !schemaOK {
 		out = append(out, usecase.Finding{
 			Check: "schema", Where: schema.Path,
-			Msg: "the tasks are not checked against the schema, because schema.yaml is not readable; that check is skipped",
+			Msg:  "the tasks are not checked against the schema, because schema.yaml is not readable; that check is skipped",
+			Code: "schema.tasks_skipped",
 		})
 	}
 
@@ -97,14 +101,14 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 	// 3 and 4. the work tree and the git objects.
 	repo, err := gitrepo.Open(dir)
 	if err != nil {
-		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: err.Error()})
+		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: err.Error(), Code: "git.open", Args: []string{err.Error()}})
 		usecase.SortFindings(out)
 		return out, nil
 	}
 	defer func() { _ = repo.Close() }()
 	st, err := repo.Status()
 	if err != nil {
-		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "cannot read the status: " + err.Error()})
+		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "cannot read the status: " + err.Error(), Code: "git.status", Args: []string{err.Error()}})
 	}
 	for _, f := range st {
 		if f.Staged {
@@ -112,6 +116,7 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 				Check: "worktree", Where: f.Path,
 				Msg:  "has a staged change; it would go into the commit of the next operation",
 				Hint: "git restore --staged " + f.Path,
+				Code: "worktree.staged", Args: []string{f.Path},
 			})
 		}
 		if f.Unstaged {
@@ -119,13 +124,14 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 				Check: "worktree", Where: f.Path,
 				Msg:  "has a change that is not committed",
 				Hint: "git restore " + f.Path + ", or remove the file if it is new",
+				Code: "worktree.unstaged", Args: []string{f.Path},
 			})
 		}
 	}
 	out = append(out, checkMergeDriver(dir, repo, getenv("PATH"))...)
 	out = append(out, checkInbox(dir)...)
 	if err := repo.Verify(); err != nil {
-		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "a git object cannot be read: " + err.Error()})
+		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "a git object cannot be read: " + err.Error(), Code: "git.object", Args: []string{err.Error()}})
 	}
 
 	// 5. the schema against the tasks.
@@ -149,13 +155,14 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo, path string) []usecase.Fin
 	where := store.AttributesPath
 	registered, err := repo.MergeDriverRegistered()
 	if err != nil {
-		return []usecase.Finding{{Check: "merge_driver", Where: where, Msg: "cannot read .git/config: " + err.Error()}}
+		return []usecase.Finding{{Check: "merge_driver", Where: where, Msg: "cannot read .git/config: " + err.Error(), Code: "merge_driver.config", Args: []string{err.Error()}}}
 	}
 	if !registered {
 		return []usecase.Finding{{
 			Check: "merge_driver", Where: where,
 			Msg:  "marks files merge=hedgehug, but the merge driver is not registered in .git/config (expected name = Hedgehug field merge and driver = " + gitrepo.MergeDriver + ")",
 			Hint: "run hedgehug sync once",
+			Code: "merge_driver.unregistered", Args: []string{gitrepo.MergeDriver},
 		}}
 	}
 	if _, err := osfs.LookPath("hedgehug", path); err != nil {
@@ -163,6 +170,7 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo, path string) []usecase.Fin
 			Check: "merge_driver", Where: where,
 			Msg:  "hedgehug is not on PATH, so git cannot run the merge driver",
 			Hint: "put hedgehug on PATH",
+			Code: "merge_driver.not_on_path",
 		}}
 	}
 	return nil
@@ -178,7 +186,7 @@ func checkInbox(dir string) []usecase.Finding {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
-		return []usecase.Finding{{Check: "inbox", Where: inbox.RecordsPath, Msg: err.Error()}}
+		return []usecase.Finding{{Check: "inbox", Where: inbox.RecordsPath, Msg: err.Error(), Code: "inbox.unreadable", Args: []string{err.Error()}}}
 	}
 	var out []usecase.Finding
 	waiting := 0
@@ -195,6 +203,7 @@ func checkInbox(dir string) []usecase.Finding {
 			out = append(out, usecase.Finding{
 				Check: "inbox", Where: rel, Msg: "does not decode: " + err.Error() + "; the inbox leaves it where it is",
 				Hint: "remove the file",
+				Code: "inbox.undecodable", Args: []string{err.Error()},
 			})
 			continue
 		}
@@ -205,6 +214,7 @@ func checkInbox(dir string) []usecase.Finding {
 			Check: "inbox", Where: inbox.RecordsPath,
 			Msg:  fmt.Sprintf("%s %s not in the inbox yet", plural.Count(waiting, "merge driver record"), plural.Pick(waiting, "is", "are")),
 			Hint: "run hedgehug inbox",
+			Code: "inbox.waiting", Args: []string{strconv.Itoa(waiting)},
 		})
 	}
 	return out
@@ -238,24 +248,24 @@ func readCheck[T any](dir, rel string, decode func([]byte) (T, error)) error {
 // checkNumbers returns what is wrong with numbers.yaml, or "" if nothing
 // is: that it does not decode, or an entry that is not an id prefix with a
 // number of 1 or more. The error is for a file that cannot be read.
-func checkNumbers(dir string) (string, error) {
+func checkNumbers(dir string) (schema.Problem, error) {
 	data, err := osfs.ReadFile(filepath.Join(dir, filepath.FromSlash(model.NumbersPath)))
 	if err != nil {
-		return "", err
+		return schema.Problem{}, err
 	}
 	n, err := model.DecodeNumbers(data)
 	if err != nil {
-		return "does not decode: " + err.Error(), nil
+		return schema.NewProblem("", "file.undecodable", "does not decode: %v", err), nil
 	}
 	for _, p := range slices.Sorted(maps.Keys(n)) {
 		if err := model.ValidIDPrefix(p); err != nil {
-			return fmt.Sprintf("has an invalid entry: %s: %v", p, err), nil
+			return schema.NewProblem("", "numbers.bad_prefix", "has an invalid entry: %s: %v", p, err), nil
 		}
 		if n[p] < 1 {
-			return fmt.Sprintf("has an invalid entry: %s: the number %d is less than 1", p, n[p]), nil
+			return schema.NewProblem("", "numbers.below_one", "has an invalid entry: %s: the number %d is less than 1", p, n[p]), nil
 		}
 	}
-	return "", nil
+	return schema.Problem{}, nil
 }
 
 // checkStore opens the store and the index and finds what step 5 of Run
@@ -263,7 +273,7 @@ func checkNumbers(dir string) (string, error) {
 func checkStore(dir string) []usecase.Finding {
 	s, err := store.Open(dir)
 	if err != nil {
-		return []usecase.Finding{{Check: "git", Where: dir, Msg: "cannot open the store: " + err.Error()}}
+		return []usecase.Finding{{Check: "git", Where: dir, Msg: "cannot open the store: " + err.Error(), Code: "git.open_store", Args: []string{err.Error()}}}
 	}
 	defer func() { _ = s.Repo().Close() }()
 	ix, err := index.Open(s)
@@ -271,6 +281,7 @@ func checkStore(dir string) []usecase.Finding {
 		return []usecase.Finding{{
 			Check: "git", Where: "HEAD", Msg: "cannot build the index: " + err.Error(),
 			Hint: "the schema.yaml that is committed may be broken; restore a good one and commit it",
+			Code: "git.index", Args: []string{err.Error()},
 		}}
 	}
 	fs, _ := usecase.CheckSchema(s, ix) // the error is for checks that read files; it is nil
@@ -287,7 +298,7 @@ func checkStore(dir string) []usecase.Finding {
 			if p.Field != "" {
 				msg = p.Field + ": " + msg
 			}
-			fs = append(fs, usecase.Finding{Check: "task", Where: usecase.TaskWhere(e), Task: e.ULID.String(), Msg: msg, Hint: fixHint(p)})
+			fs = append(fs, usecase.TaskFinding(e, p, msg, fixHint(p)))
 		}
 	}
 	return fs
@@ -314,12 +325,12 @@ func checkWorkspaces(ix *index.Index) []usecase.Finding {
 	ws := ix.Workspaces()
 	for i, a := range ws {
 		for _, b := range ws[:i] {
-			var what string
+			var what, code, value string
 			switch {
 			case a.IDPrefix == b.IDPrefix:
-				what = "id prefix " + a.IDPrefix
+				what, code, value = "id prefix "+a.IDPrefix, "workspace.same_prefix", a.IDPrefix
 			case strings.EqualFold(a.Name, b.Name):
-				what = "name " + a.Name
+				what, code, value = "name "+a.Name, "workspace.same_name", a.Name
 			default:
 				continue
 			}
@@ -328,6 +339,7 @@ func checkWorkspaces(ix *index.Index) []usecase.Finding {
 					Check: "workspace", Where: model.WorkspacePath(pair[0].ULID),
 					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ULID),
 					Hint: "change one with hedgehug workspace set-prefix (or rename)",
+					Code: code, Args: []string{value, pair[1].Name, pair[1].ULID.String()},
 				})
 			}
 		}
@@ -354,12 +366,12 @@ func checkFiles(dir string) ([]usecase.Finding, error) {
 				return err
 			}
 			rel = filepath.ToSlash(rel)
-			msg, err := checkFile(dir, root, rel)
+			bad, err := checkFile(dir, root, rel)
 			if err != nil {
 				return err
 			}
-			if msg != "" {
-				out = append(out, usecase.Finding{Check: "file", Where: rel, Msg: msg, Hint: "fix the file by hand and commit, or restore it with `git restore " + rel + "`"})
+			if bad.Msg != "" {
+				out = append(out, usecase.Finding{Check: "file", Where: rel, Msg: bad.Msg, Hint: "fix the file by hand and commit, or restore it with `git restore " + rel + "`", Code: bad.Code, Args: bad.Args})
 			}
 			return nil
 		})
@@ -370,35 +382,38 @@ func checkFiles(dir string) ([]usecase.Finding, error) {
 	return out, nil
 }
 
-// checkFile returns what is wrong with the file at rel, or "" if nothing is.
-func checkFile(dir, root, rel string) (string, error) {
-	bad := func(format string, a ...any) (string, error) { return fmt.Sprintf(format, a...), nil }
+// checkFile returns what is wrong with the file at rel, or a zero Problem if
+// nothing is. Its path is empty.
+func checkFile(dir, root, rel string) (schema.Problem, error) {
+	bad := func(code, format string, a ...any) (schema.Problem, error) {
+		return schema.NewProblem("", code, format, a...), nil
+	}
 	data, err := osfs.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
 	if err != nil {
-		return "", err
+		return schema.Problem{}, err
 	}
 	switch root {
 	case "tasks":
 		ulid, err := model.ParseTaskPath(rel)
 		if err != nil {
-			return bad("the name does not follow the rule of task files")
+			return bad("file.bad_name", "the name does not follow the rule of task files")
 		}
 		var got model.ULID
 		if model.IsForward(data) {
 			f, err := model.DecodeForward(data)
 			if err != nil {
-				return bad("does not decode: %v", err)
+				return bad("file.undecodable", "does not decode: %v", err)
 			}
 			got = f.ULID
 		} else {
 			t, err := model.DecodeTask(data)
 			if err != nil {
-				return bad("does not decode: %v", err)
+				return bad("file.undecodable", "does not decode: %v", err)
 			}
 			got = t.ULID
 		}
 		if got != ulid {
-			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
+			return bad("file.ulid_mismatch", "the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 	case "comments", "worklogs":
 		var task, child, got model.ULID
@@ -408,28 +423,28 @@ func checkFile(dir, root, rel string) (string, error) {
 			task, child, err = model.ParseWorklogPath(rel)
 		}
 		if err != nil {
-			return bad("the name does not follow the rule of %s files", root)
+			return bad("file.bad_name", "the name does not follow the rule of %s files", root)
 		}
 		if root == "comments" {
 			c, derr := model.DecodeComment(data)
 			if derr != nil {
-				return bad("does not decode: %v", derr)
+				return bad("file.undecodable", "does not decode: %v", derr)
 			}
 			got = c.ULID
 		} else {
 			w, derr := model.DecodeWorklog(data)
 			if derr != nil {
-				return bad("does not decode: %v", derr)
+				return bad("file.undecodable", "does not decode: %v", derr)
 			}
 			got = w.ULID
 		}
 		if got != child {
-			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
+			return bad("file.ulid_mismatch", "the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 		if _, err := osfs.Stat(filepath.Join(dir, filepath.FromSlash(model.TaskPath(task)))); errors.Is(err, fs.ErrNotExist) {
-			return bad("there is no task file for task %s", task)
+			return bad("file.no_task", "there is no task file for task %s", task)
 		} else if err != nil {
-			return "", err
+			return schema.Problem{}, err
 		}
 	case "sprints", "releases":
 		name := path.Base(rel)
@@ -439,76 +454,76 @@ func checkFile(dir, root, rel string) (string, error) {
 			build = model.ReleasePath
 		}
 		if perr != nil || build(ulid) != rel {
-			return bad("the name does not follow the rule of %s files", root)
+			return bad("file.bad_name", "the name does not follow the rule of %s files", root)
 		}
 		var got model.ULID
 		if root == "sprints" {
 			sp, derr := model.DecodeSprint(data)
 			if derr != nil {
-				return bad("does not decode: %v", derr)
+				return bad("file.undecodable", "does not decode: %v", derr)
 			}
 			got = sp.ULID
 		} else {
 			r, derr := model.DecodeRelease(data)
 			if derr != nil {
-				return bad("does not decode: %v", derr)
+				return bad("file.undecodable", "does not decode: %v", derr)
 			}
 			got = r.ULID
 		}
 		if got != ulid {
-			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
+			return bad("file.ulid_mismatch", "the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 	case "workspaces":
 		ulid, err := model.ParseWorkspacePath(rel)
 		if err != nil {
-			return bad("the name does not follow the rule of workspace files")
+			return bad("file.bad_name", "the name does not follow the rule of workspace files")
 		}
 		w, err := model.DecodeWorkspace(data)
 		if err != nil {
-			return bad("does not decode: %v", err)
+			return bad("file.undecodable", "does not decode: %v", err)
 		}
 		if w.ULID != ulid {
-			return bad("the ulid in the file is %s, which differs from the ulid in the path", w.ULID)
+			return bad("file.ulid_mismatch", "the ulid in the file is %s, which differs from the ulid in the path", w.ULID)
 		}
 		switch {
 		case w.Name == "":
-			return bad("name is missing")
+			return bad("file.missing_field", "%s is missing", "name")
 		case w.IDPrefix == "":
-			return bad("id_prefix is missing")
+			return bad("file.missing_field", "%s is missing", "id_prefix")
 		case w.PrefixSet.IsZero():
-			return bad("prefix_set is missing")
+			return bad("file.missing_field", "%s is missing", "prefix_set")
 		}
 		if err := model.ValidWorkspaceName(w.Name); err != nil {
-			return bad("%v", err)
+			return bad("file.bad_value", "%v", err)
 		}
 		if err := model.ValidIDPrefix(w.IDPrefix); err != nil {
-			return bad("%v", err)
+			return bad("file.bad_value", "%v", err)
 		}
 	case "views":
 		name, ok := model.IsViewPath(rel)
 		if !ok {
-			return bad("is not a view: views holds <name>.yaml files only")
+			return bad("file.not_view", "is not a view: views holds <name>.yaml files only")
 		}
 		if err := view.ValidName(name); err != nil {
-			return bad("the name is not a valid view name: %v", err)
+			return bad("file.bad_view_name", "the name is not a valid view name: %v", err)
 		}
 		v, err := view.Decode(name, data)
 		if err != nil {
-			return bad("does not decode: %v", err)
+			return bad("file.undecodable", "does not decode: %v", err)
 		}
 		if ps := v.Problems(); len(ps) > 0 {
-			return bad("%s", ps[0])
+			return bad("view.problem", "%s", ps[0])
 		}
 	case "templates":
 		name, ok := strings.CutSuffix(path.Base(rel), ".md")
 		if !ok || path.Dir(rel) != "templates" || model.ValidTemplateName(name) != nil {
-			return bad("the name does not follow the rule of template files")
+			return bad("file.bad_name", "the name does not follow the rule of template files")
 		}
 		if _, err := model.DecodeTemplate(name, data); err != nil {
-			return bad("does not decode: %v", err)
+			return bad("file.undecodable", "does not decode: %v", err)
 		}
 	}
-	return "", nil
+	return schema.Problem{}, nil
 }
 
 // checkViewNames finds two views whose names differ only in case, which a
@@ -525,12 +540,13 @@ func checkViewNames(es []view.Entry) []usecase.Finding {
 				out = append(out, usecase.Finding{
 					Check: "file", Where: e.Rel,
 					Msg: "has the same name as " + o.Rel + " but for case; rename one of them with hedgehug view rename", Hint: hint(e.Rel),
+					Code: "view.same_name", Args: []string{o.Rel},
 				})
 			}
 		}
 		if e.View != nil {
 			for _, p := range e.View.Problems()[min(1, len(e.View.Problems())):] {
-				out = append(out, usecase.Finding{Check: "file", Where: e.Rel, Msg: p, Hint: hint(e.Rel)})
+				out = append(out, usecase.Finding{Check: "file", Where: e.Rel, Msg: p, Hint: hint(e.Rel), Code: "view.problem", Args: []string{p}})
 			}
 		}
 	}
@@ -550,6 +566,7 @@ func checkViewColumns(es []view.Entry, sc *schema.Schema) []usecase.Finding {
 				Check: "view", Where: e.Rel,
 				Msg:  fmt.Sprintf("column %q is not a field or a property of the schema; the GUI skips it", c),
 				Hint: "change the columns with hedgehug view save " + e.Name + " --columns ...",
+				Code: "view.unknown_column", Args: []string{c},
 			})
 		}
 		for _, p := range e.View.BadGanttProps(sc) {
@@ -557,6 +574,7 @@ func checkViewColumns(es []view.Entry, sc *schema.Schema) []usecase.Finding {
 				Check: "view", Where: e.Rel,
 				Msg:  fmt.Sprintf("gantt property %q is not a date of the schema; the GUI draws no bar from it", p),
 				Hint: "change it with hedgehug view save " + e.Name + " --gantt-start ... --gantt-end ...",
+				Code: "view.bad_gantt_prop", Args: []string{p},
 			})
 		}
 	}

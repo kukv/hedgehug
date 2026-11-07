@@ -30,7 +30,7 @@ const violationLabels: Record<string, string> = {
   missing_title: "タイトルがありません",
   bad_value: "値が正しくありません",
   placement: "この親には置けません",
-  transition: "このステータスには移れません",
+  transition: "このステータスへは遷移できません",
   required: "必須の項目が空です",
   missing_ref: "参照先がありません",
   cycle: "循環しています",
@@ -62,7 +62,7 @@ const messages: Record<string, Make> = {
     `${str(a, "input")} に当てはまるタスクが複数あります。ULID で指定してください` +
     (list(a, "candidates") ? `（候補: ${list(a, "candidates")}）` : ""),
   not_found: (_, e) => withDetail("見つかりません", e),
-  "task.gone": (a) => `${str(a, "id")} はもうストアにありません`,
+  "task.gone": (a) => `${str(a, "id")} はもう Store にありません`,
   "task.deleted": (a) => `${str(a, "id")} は削除済みです。先に復元してください`,
   "task.parent_deleted": (a) => `親の ${str(a, "id")} が削除済みです。先に復元してください`,
   "task.already_deleted": (a) => `${str(a, "id")} はすでに削除されています`,
@@ -79,7 +79,7 @@ const messages: Record<string, Make> = {
   "workspace.ambiguous": (a) => `${str(a, "input")} に当てはまるワークスペースが複数あります`,
   "workspace.taken": (_, e) => withDetail("そのワークスペースの名前はすでに使われています", e),
   "workspace.none": () =>
-    "この Store にはワークスペースがありません。hh workspace add で作ってください",
+    "この Store にはワークスペースがありません。hh workspace add で作成してください",
   "workspace.choose": (a) =>
     `ワークスペースが複数あります。どれかを指定してください（${list(a, "names")}）`,
   "workspace.bad_name": (a) => `「${str(a, "value")}」はワークスペースの名前に使えません`,
@@ -100,11 +100,11 @@ const messages: Record<string, Make> = {
 
   // writes
   "patch.empty": () => "変更する項目がありません",
-  "edit.changed": () => "編集している間にタスクが変わりました。開き直してください",
+  "edit.changed": () => "編集している間にタスクが変わりました。もう一度開いてください",
   "edit.invalid": (a, e) => withDetail(`${str(a, "field") || "入力"} を変更できません`, e),
   "move.invalid": (_, e) => withDetail("ここには移せません", e),
   "move.changed": () =>
-    "確認のあとに移すタスクが変わりました。予定を取り直して、確かめてから移動してください",
+    "確認のあと、移動するタスクが変わりました。移動の内容を読み込み直して、確認してから移動してください",
   "move.same_store": (a) =>
     `タスクはすでに ${str(a, "store")} にあります。同じ Store の中で移すには、別のワークスペースを選んでください`,
   "move.store_required": () => "移動先の Store を選んでください",
@@ -122,7 +122,7 @@ const messages: Record<string, Make> = {
   "link.not_found": (_, e) => withDetail("そのリンクはありません", e),
   "add.position": (_, e) => withDetail("この位置には作れません", e),
   "position.both": () => "前に置くか後ろに置くか、どちらか一方を指定してください",
-  "dep.invalid": (_, e) => withDetail("ブロックの指定を変えられません", e),
+  "dep.invalid": (_, e) => withDetail("ブロックするタスクを変更できません", e),
   "status.unknown": (a) => `「${str(a, "name")}」というステータスはありません`,
   "schema.no_default": (a) => {
     const what = str(a, "what");
@@ -142,13 +142,13 @@ const messages: Record<string, Make> = {
   "assign.readonly": (a) => `${str(a, "key")} は変更できません`,
   "assign.unknown_key": (a) =>
     `${str(a, "key")} はフィールドでも、スキーマのプロパティでもありません`,
-  "assign.single": (a) => `${str(a, "key")} には値を1つだけ指定できます`,
+  "assign.single": (a) => `${str(a, "key")} には値を 1 つだけ指定できます`,
   "assign.missing_value": (a) => `${str(a, "key")} の値がありません`,
   "assign.bad_value": (a, e) =>
     withDetail(`${str(a, "key")} に「${str(a, "value")}」は指定できません`, e),
 
   // deleting and restoring
-  "purge.changed": () => "確認のあとにタスクが変わりました。もう一度確かめてください",
+  "purge.changed": () => "確認のあとにタスクが変わりました。もう一度確認してください",
   "purge.bad_period": (a) =>
     `「${str(a, "value")}」は期間ではありません。90d のように日数で書いてください（0d はすべて）`,
   "restore_at.bad_time": (a) => `「${str(a, "at")}」は時刻でもコミットでもありません`,
@@ -174,7 +174,7 @@ const messages: Record<string, Make> = {
   "comment.not_found": (a) =>
     a.input ? `${str(a, "input")} というコメントは見つかりません` : "コメントが見つかりません",
   "comment.ambiguous": (a) => `${str(a, "input")} に当てはまるコメントが複数あります`,
-  "comment.changed": () => "編集している間にコメントが変わりました。開き直してください",
+  "comment.changed": () => "編集している間にコメントが変わりました。もう一度開いてください",
   "comment.deleted": () => "このコメントは削除されています",
   "comment.no_author": () => "書いた人が分からないコメントは変更できません",
   "comment.not_author": (a) => `${str(a, "author")} が書いたコメントは変更できません`,
@@ -182,7 +182,7 @@ const messages: Record<string, Make> = {
 
   // stores and sync
   "store.read_only": (a) =>
-    `${str(a, "store")} は読み取り専用です${a.reason ? `（${readOnlyReason(str(a, "reason"))}）` : ""}`,
+    `${str(a, "store")} は閲覧のみです${a.reason ? `（${readOnlyReason(str(a, "reason"))}）` : ""}`,
   "store.bad_name": (a) => `「${str(a, "value")}」は Store の名前に使えません`,
   "store.bad_color": (a) =>
     `「${str(a, "value")}」は Store の色に使えません` +
@@ -191,7 +191,7 @@ const messages: Record<string, Make> = {
   "store.not_found": (a) =>
     `${str(a, "name")} という Store はありません` +
     (list(a, "candidates") ? `（登録済み: ${list(a, "candidates")}）` : ""),
-  "store.none": () => "Store がありません。hh store init で作ってください",
+  "store.none": () => "Store がありません。hh store init で作成してください",
   "store.open": (a, e) => withDetail(`${str(a, "name")} を開けません`, e),
   "store.choose": (_, e) => withDetail("Store を選んでください", e),
   "store.conflict": (a) =>
@@ -201,63 +201,63 @@ const messages: Record<string, Make> = {
     "Store のディレクトリが削除されたか入れ替わりました。もう一度実行してください",
   "store.unpushed": (a) =>
     `${str(a, "name")} にはまだ push していない変更があります。先に同期してください`,
-  "store.remote_required": () => "リモートの URL が必要です",
-  "store.remote_not_empty": (_, e) => withDetail("リモートが空ではありません", e),
+  "store.remote_required": () => "remote の URL が必要です",
+  "store.remote_not_empty": (_, e) => withDetail("remote が空ではありません", e),
   "store.clone_failed": (a, e) => withDetail(`${str(a, "remote")} を取り込めません`, e),
   "store.not_hedgehug": (a) => `${str(a, "name")} は Hedgehug の Store ではありません`,
   "store.mount_failed": (a) => `追加できなかった Store があります（${list(a, "failed")}）`,
   "store.set_args": () => "色か表示のどちらかを指定してください",
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
-  "sync.unrelated": () => "リモートの履歴がこの Store の履歴と無関係です",
+  "sync.unrelated": () => "remote の履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
-    "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で origin の新しい履歴に揃えてください",
+    "remote の履歴が手元と食い違っています。確認してから、hh doctor --fix で origin の新しい履歴にそろえてください",
   "sync.background_needs_store": () => "バックグラウンドの同期には Store の指定が必要です",
 
   // accounts and GitHub
   "account.none": () =>
-    "アカウントが設定されていません。hh auth add <名前> --login <ログイン>（または hh auth login）で足してください",
+    "アカウントが設定されていません。hh auth add <名前> --login <ログイン>（または hh auth login）で追加してください",
   "account.not_found": (a) =>
     `${str(a, "name")} というアカウントはありません` +
     (list(a, "candidates") ? `（登録済み: ${list(a, "candidates")}）` : ""),
   "account.exists": (a) => `アカウント ${str(a, "account")} はすでに設定されています`,
   "account.host_mismatch": (a) =>
-    `アカウント ${str(a, "account")} のホストと、リモートのホストが違います`,
+    `アカウント ${str(a, "account")} のホストと、remote のホストが違います`,
   "auth.token": (a) =>
     a.account
       ? `アカウント ${str(a, "account")} にトークンがありません。hh auth login で設定してください`
       : "この画面は hh ui が開いた URL からだけ使えます。端末で hh ui を実行してください",
   "auth.unauthorized": (a) =>
-    `GitHub がアカウント ${str(a, "account")} のトークンを受け付けませんでした。有効か確かめてください`,
+    `GitHub がアカウント ${str(a, "account")} のトークンを受け付けませんでした。有効か確認してください`,
   "auth.insecure": (a) =>
     `${str(a, "url")} は http なので、トークンを送りません。https を使ってください`,
   "auth.host": (a) =>
     `アカウント ${str(a, "account")} のホストは ${str(a, "host")} です。指定と合いません`,
   "auth.need_token": (a) =>
-    `アカウント ${str(a, "account")} はキーチェーンにトークンを持ちます。標準入力で渡してください`,
+    `アカウント ${str(a, "account")} は keychain にトークンを保存しています。標準入力で渡してください`,
   "auth.device_only": (a) =>
-    `アカウント ${str(a, "account")} はデバイスフローでログインします。標準入力のトークンは使えません`,
+    `アカウント ${str(a, "account")} は Device Flow でログインします。標準入力のトークンは使えません`,
   "auth.name": () => "アカウントの名前が必要です",
-  "auth.login": () => "アカウントの login が必要です",
+  "auth.login": () => "アカウントのログイン名が必要です",
   "auth.token_empty": () => "トークンが空です",
   "auth.token_source": (a) =>
-    `トークンの取得元「${str(a, "token")}」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、デバイスフローは別の操作です）`,
+    `トークンの取得元「${str(a, "token")}」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、Device Flow は別の操作です）`,
   "auth.mismatch": (a) =>
     `トークンは ${str(a, "host")}/${str(a, "login")} のもので、アカウント ${str(a, "account")} のものではありません`,
   "auth.client_id": (a) =>
-    `${str(a, "host")} のデバイスフローには、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください`,
-  "auth.device_running": () => "デバイスフローがすでに進んでいます",
-  "request.canceled": () => "要求が途中で切れました。もう一度試してください",
-  "auth.device_not_found": () => "そのデバイスフローはすでに終わっているか、ありません",
-  "auth.device_failed": (_, e) => withDetail("デバイスフローでログインできませんでした", e),
+    `${str(a, "host")} の Device Flow には、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください`,
+  "auth.device_running": () => "Device Flow はすでに実行中です",
+  "request.canceled": () => "リクエストが途中で中断されました。もう一度試してください",
+  "auth.device_not_found": () => "その Device Flow はすでに終わっているか、ありません",
+  "auth.device_failed": (_, e) => withDetail("Device Flow でログインできませんでした", e),
   "auth.canceled": () => "ログインをやめました",
   "auth.no_device_flow": (a) =>
-    `アカウント ${str(a, "account")} は ${str(a, "uses")} からトークンを得るため、Hedgehug がログインするものはありません`,
+    `アカウント ${str(a, "account")} は ${str(a, "uses")} からトークンを得るため、Hedgehug でのログインは不要です`,
   "github.forbidden": (a) =>
-    `GitHub がアカウント ${str(a, "account")} の操作を許可しませんでした。権限を確かめてください`,
+    `GitHub がアカウント ${str(a, "account")} の操作を許可しませんでした。権限を確認してください`,
   "github.not_found": (a) =>
     `アカウント ${str(a, "account")} では GitHub のリポジトリが見つかりません`,
   "github.rate_limit": (a) =>
-    `GitHub の利用制限に達しました（アカウント ${str(a, "account")}）。しばらく待ってください`,
+    `GitHub のレート制限に達しました（アカウント ${str(a, "account")}）。しばらく待ってください`,
 
   // queries, views, schema
   "query.invalid": (_, e) => withDetail("クエリが正しくありません", e),
@@ -276,10 +276,10 @@ const messages: Record<string, Make> = {
   "sprint.bad_dates": () => "終了日は開始日より後にしてください",
   "sprint.bad_name": () => "スプリントの名前を入れてください",
   "sprint.bad_target": (_, e) => withDetail("そのスプリントへは移せません", e),
-  "sprint.close_to": () => "未完了のタスクの移し先を選んでください",
+  "sprint.close_to": () => "未完了のタスクの移動先を選んでください",
   "sprint.name_taken": () => "同じ名前のスプリントがこのワークスペースにあります",
   "sprint.no_dates": () => "開始するには開始日と終了日が必要です",
-  "sprint.no_next": () => "次のスプリントがありません。別の移し先を選んでください",
+  "sprint.no_next": () => "次のスプリントがありません。別の移動先を選んでください",
   "sprint.not_active": () => "このスプリントは active ではありません",
   "sprint.not_planned": () => "このスプリントは planned ではありません",
   "sprint.nothing_to_set": () => "変更する項目がありません",
@@ -292,7 +292,7 @@ const messages: Record<string, Make> = {
   "worklog.not_author": () => "自分の記録だけ削除できます",
   "worklog.not_found": () => "その記録はありません",
   "template.bad_name": (_, e) => withDetail("テンプレートの名前が正しくありません", e),
-  "template.in_use": (_, e) => withDetail("使われているため削除できません", e),
+  "template.in_use": (_, e) => withDetail("このテンプレートは使われているため削除できません", e),
   "template.invalid": (_, e) => withDetail("テンプレートに問題があります", e),
   "template.no_title": () => "タイトルを入れてください",
   "template.not_allowed": (_, e) => withDetail("このプロジェクトでは使えないテンプレートです", e),
@@ -311,7 +311,7 @@ const messages: Record<string, Make> = {
   "view.bad_value": (_, e) => withDetail("ビューの設定が正しくありません", e),
   "view.bad_column": (a) =>
     `列 ${str(a, "column")} は、フィールドでもスキーマのプロパティでもありません`,
-  "view.rename_with_settings": () => "ビューの改名と設定の変更は、いっしょにはできません",
+  "view.rename_with_settings": () => "ビューの名前と設定は、一緒には変更できません",
   "view.bad_gantt_prop": (a) => `${str(a, "prop")} は日付のプロパティではありません`,
   "view.tree_order": () =>
     "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",

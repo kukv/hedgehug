@@ -20,8 +20,8 @@
 
   const transition = $derived(mode === "transition");
   const heading = $derived(transition ? "遷移の制約" : "必須の項目");
-  const formName = $derived(transition ? "遷移の制約を足す" : "必須の項目を足す");
-  const picksName = $derived(transition ? "行ける先" : "必要な項目");
+  const formName = $derived(transition ? "遷移の制約を追加" : "必須の項目を追加");
+  const picksName = $derived(transition ? "遷移先" : "必要な項目");
   const selectName = $derived(transition ? "遷移元のステータス" : "必須にするステータス");
   const placeholder = $derived(transition ? "遷移元を選ぶ" : "ステータスを選ぶ");
 
@@ -95,7 +95,7 @@
             </span>
           {/each}
         </span>
-        <span class="src" class:own={it.own}>{it.own ? "このプロジェクトで足した" : "Store"}</span>
+        <span class="src" class:own={it.own}>{it.own ? "このプロジェクトで追加" : "Store"}</span>
       </li>
     {/each}
   </ul>

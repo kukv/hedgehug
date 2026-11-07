@@ -104,7 +104,7 @@ describe("SettingsWorkspaces", () => {
   it("shows the rule, the prefixes of the other stores, and the command", () => {
     setup();
     expect(
-      screen.getByText(/接頭辞は英大文字で始まる 2〜10 文字の英大文字と数字です/),
+      screen.getByText(/接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください/),
     ).toBeInTheDocument();
     expect(screen.getByText(/マウント中のほかの Store が使っている接頭辞:/)).toHaveTextContent(
       "API（backend）",

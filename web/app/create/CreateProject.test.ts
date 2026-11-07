@@ -40,7 +40,7 @@ describe("CreateProject", () => {
     const who = screen.getByRole("textbox", { name: "担当者" });
     await fireEvent.input(who, { target: { value: "sato" } });
     await fireEvent.keyDown(who, { key: "Enter" });
-    await fireEvent.change(screen.getByLabelText("due"), { target: { value: "2026-12-01" } });
+    await fireEvent.change(screen.getByLabelText("期限"), { target: { value: "2026-12-01" } });
 
     expect(
       screen.getByText(/--no-repo.*--kind project.*-p repos=github.com\/org-a\/web/),

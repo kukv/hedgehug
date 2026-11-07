@@ -81,9 +81,9 @@
       <span class="hint">{fetched}</span>
     {/if}
     <span class="end">
-      <Button size="sm" onclick={copyPr}>PR を作る</Button>
+      <Button size="sm" onclick={copyPr}>PR を作成</Button>
       {#if !readonly}
-        <Button size="sm" onclick={() => (opening = true)}>Issue を作る</Button>
+        <Button size="sm" onclick={() => (opening = true)}>Issue を作成</Button>
         <Button size="sm" onclick={() => (linking = true)}>リンク</Button>
       {/if}
     </span>
