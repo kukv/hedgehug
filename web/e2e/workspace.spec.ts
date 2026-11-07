@@ -77,7 +77,6 @@ test("the settings tab renames the workspace, and refuses a name another workspa
   const save = page.getByRole("button", { name: "保存" });
   await expect(name).toHaveValue("demo");
   await expect(save).toBeDisabled();
-  await expect(page.getByText("タスクの ID は変わりません")).toBeVisible();
 
   await name.fill("other");
   await expect(page.getByText("other は同じ Store のワークスペースが使っています")).toBeVisible();

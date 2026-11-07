@@ -99,7 +99,10 @@
 <section class="block" aria-labelledby="repo-accounts-h">
   <div class="head">
     <h2 id="repo-accounts-h">GitHub 連携で使うアカウント</h2>
-    <span class="msg">PR・Issue を取得するとき、リポジトリごとに上から順に当てはめます</span>
+    <span class="msg"
+      >タスクにリンクした PR・Issue を GitHub から読むとき、その PR・Issue
+      があるリポジトリに応じて使うアカウントを切り替えます。上のルールから順に照らし合わせ、最初に一致したルールのアカウントを使います。</span
+    >
   </div>
   {#if rules.length > 0}
     <ol>
@@ -140,7 +143,7 @@
       {/each}
     </ol>
   {:else}
-    <p class="msg">ルールがなければ、Store のアカウントで読みます</p>
+    <p class="msg">ルールがないときは、タスクがある Store のアカウントで読みます。</p>
   {/if}
   {#if adding}
     <form class="add" onsubmit={add}>

@@ -267,7 +267,8 @@ describe("ActivityPage", () => {
       set(many(limit));
       await fireEvent.click(await screen.findByRole("button", { name: "さらに読み込む" }));
       await waitFor(() => expect(lastQuery(api).limit).toBe(limit));
-      await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(limit));
+      // Counted with a selector: a role query over a thousand rows outlasts the timeout under load.
+      await waitFor(() => expect(document.querySelectorAll("li")).toHaveLength(limit));
     }
     expect(screen.queryByRole("button", { name: "さらに読み込む" })).toBeNull();
   });

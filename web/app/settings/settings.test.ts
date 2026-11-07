@@ -447,7 +447,7 @@ describe("SettingsRoute", () => {
     const { getByText } = renderWithCore(SettingsRoute, { page: { page: "stores" } }, core(["me"]));
     expect(
       getByText(
-        "このマシンで扱う Store です。見える範囲は各リポジトリのアクセス権で決まります。「表示」を外した Store のワークスペースは、サイドバーにもビューにも出しません。",
+        "このマシンで扱っている Store です。見える範囲は各リポジトリのアクセス権で決まります。「表示」を外した Store のワークスペースは、サイドバーやビューにも表示されません。",
       ),
     ).toBeTruthy();
   });

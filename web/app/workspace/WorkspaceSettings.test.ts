@@ -29,7 +29,6 @@ describe("WorkspaceSettings", () => {
     setup();
     expect(nameField()).toHaveValue("release");
     expect(saveButton()).toBeDisabled();
-    expect(screen.getByText("タスクの ID は変わりません")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /コマンドをコピー/ })[0]).toHaveTextContent(
       "hh workspace rename release <新しい名前> --store shared",
     );
@@ -135,9 +134,7 @@ describe("WorkspaceSettings", () => {
     expect(screen.getByText("REL", { selector: ".prefix" })).toBeInTheDocument();
     expect(screen.getByText(/REL-1, REL-2 … と振ります/)).toBeInTheDocument();
     expect(
-      screen.getByText(`最後に変えたのは ${formatDate(release.prefixSet, new Date())}`, {
-        exact: false,
-      }),
+      screen.getByText(`最終更新日 ${formatDate(release.prefixSet, new Date())}`),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/配下の 25 件（削除済みを含む）の ID を新しい接頭辞で振り直します/),

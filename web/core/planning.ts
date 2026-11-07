@@ -9,7 +9,7 @@ export type ReleaseState = "unreleased" | "released" | "archived";
 
 export const RELEASE_STATES: readonly ReleaseState[] = ["unreleased", "released", "archived"];
 
-// The tabs of the plan show on a workspace that has a sprint or a release (the spec's 6d).
+// The gantt and the reports tabs show on a workspace that has a sprint or a release (the spec's 6d).
 export const hasPlans = (w: Pick<WorkspaceEntry, "sprints" | "releases">): boolean =>
   w.sprints + w.releases > 0;
 

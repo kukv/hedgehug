@@ -84,7 +84,8 @@ describe("StoreCard: the summary", () => {
     const c = within(card());
     expect(c.getByRole("heading", { name: "demo" })).toBeTruthy();
     expect(c.getByText("書き込み可")).toBeTruthy();
-    expect(c.getByText("git@github.com:org/demo.git · work")).toBeTruthy();
+    expect(c.getByText("git@github.com:org/demo.git")).toBeTruthy();
+    expect(c.getByText("work")).toBeTruthy();
     expect(c.queryByText("閲覧のみ")).toBeNull();
     expect(c.queryByText("既定の Store")).toBeNull();
   });
@@ -333,7 +334,7 @@ describe("StoreCard: shown", () => {
     const { api } = mount({ lastVisible: true });
     const box = within(card()).getByRole("checkbox", { name: "表示" }) as HTMLInputElement;
     expect(box.disabled).toBe(true);
-    expect(within(card()).getByText("すべての Store を非表示にはできません")).toBeTruthy();
+    expect(within(card()).getByText("この Store は非表示にできません")).toBeTruthy();
     await fireEvent.click(box);
     expect(api.updateStore).not.toHaveBeenCalled();
   });
@@ -395,7 +396,7 @@ describe("StoreCard: the details", () => {
   it("asks to unmount from the details", async () => {
     const { onremove } = mount();
     await fireEvent.click(toggle());
-    await fireEvent.click(within(card()).getByRole("button", { name: "マウントを解除…" }));
+    await fireEvent.click(within(card()).getByRole("button", { name: "マウントを解除" }));
     expect(onremove).toHaveBeenCalledTimes(1);
   });
 });

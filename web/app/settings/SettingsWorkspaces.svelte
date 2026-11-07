@@ -42,7 +42,7 @@
         <th scope="col">ID の接頭辞</th>
         <th scope="col" class="num">プロジェクト</th>
         <th scope="col" class="num">タスク（削除済みを含む）</th>
-        <th scope="col">接頭辞を最後に変えた日</th>
+        <th scope="col">最終更新日</th>
         <th scope="col"><span class="sr">操作</span></th>
       </tr>
     </thead>
@@ -67,10 +67,6 @@
     </tbody>
   </table>
 
-  <p class="rule">
-    接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください。同じ Store とマウント中の Store
-    のワークスペースと同じ接頭辞は使えません。
-  </p>
   {#if elsewhere.length > 0}
     <p class="rule">
       マウント中のほかの Store が使っている接頭辞:
