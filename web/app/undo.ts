@@ -25,17 +25,15 @@ export function undoMessage(
 
 // routeStore is the store the screen is about: the store of a workspace, of a settings page of a
 // Store (workspaces, schema), of a saved view, or of the project or task it shows (the cache may not
-// have it yet). Home shows the overview of the first workspace, so it is that one's store. Elsewhere
-// there is none (the query screen and the tasks of the person list every store).
+// have it yet). Elsewhere there is none (the query screen and the tasks of the person, which home
+// shows, list every store).
 export function routeStore(
   route: Route,
   taskOf: (ulid: string) => { store: string } | undefined,
-  first?: { store: string },
 ): string | undefined {
   if (route.name === "workspace") return route.store;
   if (route.name === "settings") return "store" in route ? route.store : undefined;
   if (route.name === "view") return route.store;
-  if (route.name === "home") return first?.store;
   if (route.name === "project" || route.name === "task") return taskOf(route.ulid)?.store;
   return undefined;
 }

@@ -1,6 +1,6 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - the tree is the "ツリー" tab of the first workspace, /workspaces/<store>/<ulid>/tree (the
-//     harness opens it with hh.openTree; "/" is the overview); the filter box
+//     harness opens it with hh.openTree); the filter box
 //     "フィルタ（hh ls と同じクエリ）" starts as "-status:canceled" and the foot of the tree
 //     shows the `hh ls` of the filter
 //   - a click on a row selects and focuses it; the keys below act on the focused row

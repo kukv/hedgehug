@@ -1,6 +1,7 @@
 // Screens this spec relies on:
-//   - "/" is the overview of the first workspace: the heading (level 1) is the workspace name, and
-//     the navigation "ビューの切り替え" holds the links 概要, ツリー, カンバン, テーブル and 設定; the
+//   - "/" is マイタスク, and the address stays "/"
+//   - /workspaces/<store>/<ulid> is the overview of a workspace: the heading (level 1) is the
+//     workspace name, and the navigation "ビューの切り替え" holds the links 概要, ツリー, カンバン, テーブル and 設定; the
 //     current one has aria-current="page". The tabs are links (the address, back and reload keep the
 //     tab). A project has the same navigation with the links ツリー, カンバン, テーブル and 設定
 //   - the sidebar ("メインナビゲーション") has the link "設定" (the gear, /settings/general) and the link
@@ -20,12 +21,26 @@ const tabs = (page: Page) => page.getByRole("navigation", { name: "ビューの�
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "メインナビゲーション" });
 const heading = (page: Page) => page.getByRole("heading", { level: 1, name: "demo" });
 
+test('"/" shows the tasks of the person, and the sidebar marks them as here', async ({
+  page,
+  hh,
+}) => {
+  await hh.open(page);
+  await expect(page.getByRole("heading", { level: 1, name: "マイタスク" })).toBeVisible();
+  await expect(page).toHaveURL(`${hh.origin}/`);
+  await expect(sidebar(page).getByRole("link", { name: /マイタスク/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
 test("the tabs of a workspace are links: back, forward and reload keep the tab", async ({
   page,
   hh,
 }) => {
   hh.add("Alpha");
-  await hh.open(page);
+  const overview = await hh.overviewPath();
+  await hh.open(page, overview);
   await expect(heading(page)).toBeVisible();
   await expect(tabs(page).getByRole("link", { name: "概要" })).toHaveAttribute(
     "aria-current",
@@ -43,7 +58,7 @@ test("the tabs of a workspace are links: back, forward and reload keep the tab",
   );
 
   await page.goBack();
-  await expect(page).toHaveURL(`${hh.origin}/`);
+  await expect(page).toHaveURL(`${hh.origin}${overview}`);
   await expect(tabs(page).getByRole("link", { name: "概要" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -60,7 +75,7 @@ test("the tabs of a workspace are links: back, forward and reload keep the tab",
 });
 
 test("the settings tab is the right end of the tabs", async ({ page, hh }) => {
-  await hh.open(page);
+  await hh.open(page, await hh.overviewPath());
   await tabs(page).getByRole("link", { name: "設定" }).click();
   await expect(page).toHaveURL(/\/workspaces\/demo\/[^/]+\/settings$/);
   await expect(tabs(page).getByRole("link", { name: "設定" })).toHaveAttribute(
@@ -114,7 +129,7 @@ test("/settings is the sync and upkeep page, with its own nav in place of the si
 
   await nav.getByRole("link", { name: /Hedgehug に戻る/ }).click();
   await expect(sidebar(page)).toBeVisible();
-  await expect(heading(page)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "マイタスク" })).toBeVisible();
 });
 
 test("the settings of this machine have the accounts and the mounted Stores", async ({
@@ -161,7 +176,7 @@ test("the kanban and the table are tabs of a workspace and of a project", async 
   const project = hh.add("Release", "--kind", "project");
   const child = hh.add("Ship it", "--parent", project.id);
   const board = page.locator('section[aria-label="カンバンの盤面"]');
-  await hh.open(page);
+  await hh.open(page, await hh.overviewPath());
 
   await expect(tabs(page).getByRole("link")).toHaveText([
     "概要",

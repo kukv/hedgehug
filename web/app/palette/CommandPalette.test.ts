@@ -245,7 +245,7 @@ describe("CommandPalette", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("takes back in the store of the task on screen, of the settings, and of the first workspace at home", async () => {
+  it("takes back in the store of the task on screen and of the settings, and asks for no store at home", async () => {
     setup();
     h.route = { name: "task", ulid: "U9" };
     render(CommandPalette);
@@ -266,7 +266,7 @@ describe("CommandPalette", () => {
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
-    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "shared");
+    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), undefined);
   });
 
   it("opens the sync and maintenance settings", async () => {

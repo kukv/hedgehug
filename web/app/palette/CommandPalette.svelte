@@ -188,7 +188,7 @@
       undo: () =>
         void runUndo(
           c,
-          routeStore(router.route, (u) => c.cache.task(u), c.stores.visibleWorkspaces()[0]),
+          routeStore(router.route, (u) => c.cache.task(u)),
         ),
       workspaces: c.stores.visibleWorkspaces(),
       storeNames: c.stores

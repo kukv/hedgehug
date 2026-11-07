@@ -146,6 +146,7 @@ describe("Sidebar", () => {
   });
 
   it("マイタスクは /my を開く行。今の画面なら aria-current", async () => {
+    history.replaceState(null, "", "/activity");
     const { getByRole } = mount();
     const link = getByRole("link", { name: /マイタスク/ });
     expect(link.getAttribute("href")).toBe("/my");
@@ -265,21 +266,11 @@ describe("Sidebar", () => {
       readOnly: () => null,
       subscribe: () => () => {},
     };
-    const hiddenFirst = {
-      ...hiddenOps,
-      visibleWorkspaces: () => workspaces.filter((w) => w.store !== "shared"),
-      hidden: (s: string) => s === "shared",
-    };
 
     it("ワークスペースを外す", () => {
       const { queryByRole, getByRole } = mount({ stores: hiddenOps });
       expect(getByRole("link", { name: /release/ })).toBeTruthy();
       expect(queryByRole("link", { name: /ops/ })).toBeNull();
-    });
-
-    it("ホームで強調するのは、表示中の最初のワークスペース", () => {
-      const { getByRole } = mount({ stores: hiddenFirst });
-      expect(getByRole("link", { name: /ops/ }).getAttribute("aria-current")).toBe("page");
     });
 
     it("保存済みビューを外す。表示中のビューがなければ見出しも出さない", () => {
@@ -341,10 +332,11 @@ describe("Sidebar", () => {
     ).toBeNull();
   });
 
-  it("今いるワークスペースを示す。/ は最初のワークスペース", () => {
+  it("/ はマイタスクを今の画面として示し、ワークスペースは示さない", () => {
     history.replaceState(null, "", "/");
     const { getByRole } = mount();
-    expect(getByRole("link", { name: /release/ }).getAttribute("aria-current")).toBe("page");
+    expect(getByRole("link", { name: /マイタスク/ }).getAttribute("aria-current")).toBe("page");
+    expect(getByRole("link", { name: /release/ }).getAttribute("aria-current")).toBeNull();
   });
 
   it("リンクを押すと router で移動する", async () => {
