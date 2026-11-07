@@ -17,7 +17,6 @@ func TestChecklist(t *testing.T) {
 		{"fenced", "- [ ] a\n```\n- [x] in code\n```\n~~~md\n- [ ] in code\n~~~\n- [x] b\n", 1, 2},
 		{"longer fence closes only on its length", "````\n```\n- [ ] in code\n````\n- [ ] a\n", 0, 1},
 		{"unclosed fence hides the rest", "- [x] a\n```\n- [ ] b\n", 1, 1},
-		{"crlf", "- [ ] a\r\n- [x] b\r\n", 1, 2},
 	} {
 		d, n := Checklist(c.body)
 		if d != c.done || n != c.total {

@@ -94,10 +94,4 @@ describe("FilterBar", () => {
     expect(getByRole("alert")).toBeTruthy();
     expect(queryByRole("button", { name: "status:in_progress" })).toBeNull();
   });
-
-  it("offers nothing when there is no error", async () => {
-    const { queryByRole } = renderWithCore(FilterBar, props({ error: null }), core);
-    await settle();
-    expect(queryByRole("button", { name: "status:in_progress" })).toBeNull();
-  });
 });

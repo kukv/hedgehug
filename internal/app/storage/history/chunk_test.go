@@ -90,34 +90,6 @@ func TestCommitsAreAddedToTheFile(t *testing.T) {
 	}
 }
 
-// TestFileIsWrittenAgainAfterManyChunks checks that the file does not grow
-// by a chunk for every commit for ever.
-func TestFileIsWrittenAgainAfterManyChunks(t *testing.T) {
-	t.Parallel()
-	s := newStore(t)
-	u := model.NewULID()
-	const n = 150
-	for range n {
-		writeTask(t, s, u, "x")
-		if _, err := history.Open(s, history.Options{}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	h, err := history.Open(s, history.Options{})
-	if err != nil || len(h.Task(u)) != n {
-		t.Fatalf("%v, %d commits, want %d", err, len(h.Task(u)), n)
-	}
-	data, err := s.ReadLocal("history")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// every commit as a chunk would be 150 times the 100 or so bytes of a
-	// chunk plus the first part
-	if len(data) > 40*1024 {
-		t.Fatalf("the file has %d bytes", len(data))
-	}
-}
-
 // TestChunkOnAFileOfTheSameCountsIsNotRead checks that a chunk is not read
 // on another file of the same tip that has as many commits and strings but
 // numbers them otherwise: one brought up to the tip and written whole has

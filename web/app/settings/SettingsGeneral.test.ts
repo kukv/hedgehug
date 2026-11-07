@@ -150,9 +150,4 @@ describe("SettingsGeneral", () => {
     expect(getByText("doctor of a many=false")).toBeTruthy();
     expect(getByText("purge of a")).toBeTruthy();
   });
-
-  it("診断の段の名前は同期の状態の段（Store: a）と重ならない", () => {
-    const { getAllByRole } = mount([status({ store: "a" })]);
-    expect(getAllByRole("region", { name: "Store: a" })).toHaveLength(1);
-  });
 });

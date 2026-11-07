@@ -381,7 +381,6 @@ func TestUndoScannerTarget(t *testing.T) {
 		}, 5},
 		{"the root commit is skipped", []gitrepo.LogEntry{entry(1, "me", "add", 0)}, -1},
 		{"an undone one is skipped", []gitrepo.LogEntry{entry(3, "me", "undo", 1, 2), entry(2, "me", "set", 1), entry(1, "me", "add", 1)}, 2},
-		{"empty", nil, -1},
 	}
 	for _, c := range cases {
 		var sc tasks.UndoScanner

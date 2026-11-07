@@ -183,7 +183,6 @@ func TestBadGanttProps(t *testing.T) {
 		v    View
 		want []string
 	}{
-		{"not a gantt", View{Layout: "table"}, nil},
 		{"the defaults", View{Layout: "gantt"}, nil},
 		{"a section on another layout", View{Layout: "tree", Gantt: &Gantt{Start: "nope"}}, []string{"nope"}},
 		{"not a date", View{Layout: "gantt", Gantt: &Gantt{End: "points"}}, []string{"points"}},

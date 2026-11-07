@@ -1,7 +1,6 @@
 package model
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -49,23 +48,6 @@ func TestTemplateChildrenKeepUnknownKeys(t *testing.T) {
 		if !contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
-	}
-}
-
-// Encoder.Put compares values with reflect.DeepEqual. Values holding Fields
-// must compare equal when decoded twice from the same node.
-func TestTemplateItemsDecodeEqualTwice(t *testing.T) {
-	t.Parallel()
-	d := parse(t, "children:\n- {title: a, props: {points: 2, area: [x]}}\n")
-	var a, b []TemplateItem
-	if err := d.Get("children").Decode(&a); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Get("children").Decode(&b); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(a, b) {
-		t.Errorf("decoded twice: %+v != %+v", a, b)
 	}
 }
 

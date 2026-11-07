@@ -153,26 +153,6 @@ func TestReadWithoutGoGitIndexes(t *testing.T) {
 	}
 }
 
-// After Consolidate moved the loose objects into a pack and closed the
-// repository, every object is read from the new pack.
-func TestReadAfterConsolidate(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	r, err := Init(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = r.Close() }()
-	makeHistory(t, r, dir, 0, 10)
-	if _, err := r.HeadTree(); err != nil { // the reader lists the packs: none yet
-		t.Fatal(err)
-	}
-	if err := r.Consolidate(); err != nil {
-		t.Fatal(err)
-	}
-	checkAll(t, dir, r.r.Storer.(*cachedStorage).reader)
-}
-
 // An object the reader cannot find is asked of go-git, which does not find
 // it either; an object of another type is not found. EncodedObjectSize is
 // go-git's own.

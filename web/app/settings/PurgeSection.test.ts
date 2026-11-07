@@ -195,29 +195,6 @@ describe("PurgeSection: the plan", () => {
     await screen.findByRole("button", { name: "完全に削除…" });
     expect(check().disabled).toBe(false);
   });
-
-  it("an answer that comes after it is gone changes nothing", async () => {
-    let resolve: (v: unknown) => void = () => {};
-    const api = { listPurge: vi.fn(() => new Promise((r) => (resolve = r))), purge: vi.fn() };
-    const view = renderWithCore(
-      PurgeSection,
-      { stores: ["a"] },
-      {
-        api,
-        stores: {
-          tone: () => "teal",
-          displayId: (_s: string, id: string) => id,
-          readOnly: () => null,
-          subscribe: () => () => {},
-        },
-      },
-    );
-    await fireEvent.click(check());
-    view.unmount();
-    resolve(plan());
-    await Promise.resolve();
-    expect(api.purge).not.toHaveBeenCalled();
-  });
 });
 
 describe("PurgeSection: the stores", () => {

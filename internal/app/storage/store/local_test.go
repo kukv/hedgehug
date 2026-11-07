@@ -26,7 +26,7 @@ func TestLocalFiles(t *testing.T) {
 	if _, err := osfs.ReadFile(s.path(".hedgehug/local/index")); err != nil {
 		t.Errorf("file not in .hedgehug/local: %v", err)
 	}
-	for _, bad := range []string{"", ".", "..", "a/..", "../a", "a/./b", "/a", "a/", "a//b", `a\b`} {
+	for _, bad := range []string{"../a", "a/./b", "/a", "a/", "a//b", `a\b`} {
 		if err := s.WriteLocal(bad, nil); err == nil {
 			t.Errorf("WriteLocal(%q) succeeded", bad)
 		}

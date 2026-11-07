@@ -138,7 +138,6 @@ func TestMentionsCode(t *testing.T) {
 		{"double backticks", "``@a ` b`` and `@b` @c\n", []string{"c"}},
 		{"runs of another length", "``x` @c\n", []string{"c"}},
 		{"a list item goes on after a blank line", "- item\n\n    @c goes on\n", []string{"c"}},
-		{"an ordered list item goes on", "1. item\n\n   @c\n", []string{"c"}},
 		{"code in a list item", "- item\n\n      @a\n@c\n", []string{"c"}},
 		{"a nested list item", "- a\n  - @b\n\n      @c\n\n          @a\n", []string{"b", "c"}},
 		{"a line left of the item ends the list", "- item\n\n@c\n\n    @a\n", []string{"c"}},

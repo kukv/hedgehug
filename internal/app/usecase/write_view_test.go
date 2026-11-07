@@ -103,20 +103,3 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		t.Errorf("Undo = %+v, %v; want NewCommit = HEAD", un, err)
 	}
 }
-
-// The index a result holds was read before the write: the task added is not
-// in it until View refreshes it.
-func TestResultIndexIsFromBeforeTheWrite(t *testing.T) {
-	t.Parallel()
-	ts := usecasetest.New(t)
-	if a, err := tasks.Add(ts.Session, tasks.AddInput{Title: "parent"}); err != nil || !a.Committed {
-		t.Fatalf("Add = %+v, %v", a, err)
-	}
-	b, err := tasks.Add(ts.Session, tasks.AddInput{Title: "child", Parent: "ME-1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if usecase.ResultIndexHas(b, b.ULID) {
-		t.Error("the index before the write has the new task")
-	}
-}

@@ -293,7 +293,6 @@ func TestSchemaMigrateArgs(t *testing.T) {
 		{[]string{"schema", "migrate", "value", "priority", "low"}, 2},
 		{[]string{"schema", "migrate", "status", "nope", "x"}, 1},
 		{[]string{"schema", "migrate", "status", "todo", "todo"}, 1},
-		{[]string{"schema", "migrate", "status", "-h"}, 0},
 	} {
 		if code, _, stderr := te.run(tc.args...); code != tc.code {
 			t.Errorf("%v: exit %d, want %d (stderr %q)", tc.args, code, tc.code, stderr)

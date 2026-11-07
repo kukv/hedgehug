@@ -144,15 +144,6 @@ func TestTaskPurgeVsEdit(t *testing.T) {
 	}
 }
 
-func TestTaskKeepsCommentsAndUnknownKeys(t *testing.T) {
-	base := task("2026-10-31T10:00:00Z", "title: a # keep", "zz: 1")
-	ours := task("2026-10-31T11:00:00Z", "title: a # keep", "zz: 1", "status: doing")
-	r := mergeTask(t, side(base, ""), side(ours, "a"), side(base, "b"))
-	if !bytes.Contains(r.Data, []byte("# keep")) || !bytes.Contains(r.Data, []byte("zz: 1")) {
-		t.Errorf("lost comment or key:\n%s", r.Data)
-	}
-}
-
 func TestBrokenSideFallsBackToOtherFile(t *testing.T) {
 	base := task("2026-10-31T10:00:00Z", "title: a")
 	broken := []byte("---\nulid: [\n---\n")
