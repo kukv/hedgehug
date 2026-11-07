@@ -137,7 +137,7 @@
       </dd>
     </div>
     <div class="row">
-      <dt>使っている Store</dt>
+      <dt>このアカウントで同期する Store</dt>
       <dd>{stores.length > 0 ? stores.join(" · ") : "なし"}</dd>
     </div>
   </dl>

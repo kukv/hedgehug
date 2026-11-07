@@ -66,7 +66,7 @@ describe("SettingsStores: the list", () => {
   it("keeps the heading and the lead", () => {
     mount();
     expect(screen.getByRole("heading", { level: 1, name: "マウント中の Store" })).toBeTruthy();
-    expect(screen.getByText(/このマシンで扱う Store です/)).toBeTruthy();
+    expect(screen.getByText(/このマシンで扱っている Store です/)).toBeTruthy();
   });
 
   it("shows a card for each Store, in the order of the list", () => {
@@ -152,7 +152,7 @@ describe("SettingsStores: unmounting", () => {
   it("opens the confirmation for the Store whose details were opened, and unmounts it", async () => {
     const { api, stores } = mount({ list: [item("a"), item("b")] });
     await fireEvent.click(within(card("b")).getByRole("button", { name: "詳細を開く: b" }));
-    await fireEvent.click(within(card("b")).getByRole("button", { name: "マウントを解除…" }));
+    await fireEvent.click(within(card("b")).getByRole("button", { name: "マウントを解除" }));
     const dialog = screen.getByRole("dialog", { name: "b のマウントを解除" });
     await fireEvent.click(within(dialog).getByRole("button", { name: "解除する" }));
     await waitFor(() => expect(api.removeStore).toHaveBeenCalledTimes(1));

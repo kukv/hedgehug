@@ -11,18 +11,21 @@ const backlogRow = (page: Page, title: string) =>
     .getByRole("listitem")
     .filter({ has: page.getByRole("link", { name: title, exact: true }) });
 
-test("the tabs show only with a sprint or a release, and the first one comes from the settings", async ({
+test("the plan tabs always show, and the gantt and the reports come with the first sprint made on the sprints tab", async ({
   page,
   hh,
 }) => {
-  await openTab(page, hh, "settings");
-  await expect(page.getByRole("link", { name: "バックログ" })).toHaveCount(0);
-  await page.getByRole("button", { name: "スプリントを作成…" }).click();
+  await openTab(page, hh, "sprints");
+  await expect(page.getByRole("link", { name: "バックログ" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "リリース" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "ガント" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "レポート" })).toHaveCount(0);
+  await page.getByRole("button", { name: "スプリント", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("名前", { exact: true }).fill("Sprint 1");
   await dialog.getByRole("button", { name: "作成" }).click();
-  await expect(page.getByRole("link", { name: "バックログ" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "リリース" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "ガント" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "レポート" })).toBeVisible();
 });
 
 test("a sprint goes from the backlog through the board to closing", async ({ page, hh }) => {

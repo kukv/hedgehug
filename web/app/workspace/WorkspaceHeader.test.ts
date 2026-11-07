@@ -30,7 +30,7 @@ describe("WorkspaceHeader", () => {
     expect(getByText("shared")).toBeTruthy();
   });
 
-  it("タブは概要・ツリー・カンバン・テーブルと右端の設定。今のタブだけ aria-current", () => {
+  it("タブは概要・ツリー・カンバン・テーブル・バックログ・スプリント・リリースと右端の設定。今のタブだけ aria-current", () => {
     const { getByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "tree" });
     const nav = getByRole("navigation", { name: "ビューの切り替え" });
     const links = within(nav).getAllByRole("link");
@@ -39,6 +39,9 @@ describe("WorkspaceHeader", () => {
       "ツリー",
       "カンバン",
       "テーブル",
+      "バックログ",
+      "スプリント",
+      "リリース",
       "設定",
     ]);
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
@@ -46,11 +49,17 @@ describe("WorkspaceHeader", () => {
       "/workspaces/shared/W1/tree",
       "/workspaces/shared/W1/kanban",
       "/workspaces/shared/W1/table",
+      "/workspaces/shared/W1/backlog",
+      "/workspaces/shared/W1/sprints",
+      "/workspaces/shared/W1/releases",
       "/workspaces/shared/W1/settings",
     ]);
     expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([
       null,
       "page",
+      null,
+      null,
+      null,
       null,
       null,
       null,
@@ -65,14 +74,14 @@ describe("WorkspaceHeader", () => {
     expect(getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
   });
 
-  it("スプリントもリリースもなければ計画のタブは出さない", () => {
+  it("スプリントもリリースもなければガントとレポートのタブは出さない", () => {
     const { queryByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "overview" });
-    for (const name of ["ガント", "バックログ", "スプリント", "リリース", "レポート"]) {
+    for (const name of ["ガント", "レポート"]) {
       expect(queryByRole("link", { name })).toBeNull();
     }
   });
 
-  it("スプリントかリリースがあれば計画のタブを出す", () => {
+  it("スプリントかリリースがあればガントとレポートのタブも出す", () => {
     const { getByRole } = renderWithCore(WorkspaceHeader, {
       entry: { ...entry, releases: 1 },
       tab: "backlog",

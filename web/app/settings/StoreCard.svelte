@@ -142,13 +142,14 @@
   </header>
 
   <p class="line">
-    <span class="mono"
-      >{remotes[0] ?? "remote なし"}{store.account ? ` · ${store.account}` : ""}</span
-    >
+    <span class="mono">{remotes[0] ?? "remote なし"}</span>
     <span class="synced">{synced}</span>
   </p>
+  {#if store.account}
+    <p class="line mono">{store.account}</p>
+  {/if}
   {#if cannotHide}
-    <p id="{uid}-why" class="note">すべての Store を非表示にはできません</p>
+    <p id="{uid}-why" class="note">この Store は非表示にできません</p>
   {/if}
 
   {#if open}
@@ -185,7 +186,7 @@
       {#if !store.default_store}
         <Button disabled={busy} onclick={makeDefault}>既定にする</Button>
       {/if}
-      <Button variant="danger" onclick={onremove}>マウントを解除…</Button>
+      <Button variant="danger" onclick={onremove}>マウントを解除</Button>
     </div>
   {/if}
 </article>

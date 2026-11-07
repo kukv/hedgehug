@@ -86,8 +86,8 @@ test("the reports show what the CLI reports, under the same conditions", async (
 
 test("a sprint goes from planned to its velocity on the GUI alone", async ({ page, hh }) => {
   hh.hh("add", "one", "-p", "points=3");
-  await openTab(page, hh, "settings");
-  await page.getByRole("button", { name: "スプリントを作成…" }).click();
+  await openTab(page, hh, "sprints");
+  await page.getByRole("button", { name: "スプリント", exact: true }).click();
   const made = page.getByRole("dialog");
   await made.getByLabel("名前", { exact: true }).fill("Sprint 1");
   await made.getByRole("button", { name: "作成" }).click();

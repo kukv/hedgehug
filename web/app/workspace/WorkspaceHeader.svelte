@@ -17,11 +17,11 @@
     { label: "ツリー", href: at("tree"), current: tab === "tree" },
     { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
     { label: "テーブル", href: at("table"), current: tab === "table" },
+    { label: "バックログ", href: at("backlog"), current: tab === "backlog" },
+    { label: "スプリント", href: at("sprints"), current: tab === "sprints" },
+    { label: "リリース", href: at("releases"), current: tab === "releases" },
     ...(hasPlans(entry)
       ? [
-          { label: "バックログ", href: at("backlog"), current: tab === "backlog" },
-          { label: "スプリント", href: at("sprints"), current: tab === "sprints" },
-          { label: "リリース", href: at("releases"), current: tab === "releases" },
           { label: "ガント", href: at("gantt"), current: tab === "gantt" },
           { label: "レポート", href: at("reports"), current: tab === "reports" },
         ]
