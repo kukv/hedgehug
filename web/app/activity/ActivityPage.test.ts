@@ -265,12 +265,15 @@ describe("ActivityPage", () => {
     const { api, set } = setup(many(100));
     for (let limit = 200; limit <= 1000; limit += 100) {
       set(many(limit));
-      await fireEvent.click(await screen.findByRole("button", { name: "さらに読み込む" }));
+      // found by the text and counted by the tag: the roles of 1000 items, taken again on each try,
+      // are too slow for a busy machine
+      await fireEvent.click(await screen.findByText("さらに読み込む", { selector: "button" }));
       await waitFor(() => expect(lastQuery(api).limit).toBe(limit));
-      await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(limit));
+      await waitFor(() => expect(document.querySelectorAll("li.item")).toHaveLength(limit));
     }
-    expect(screen.queryByRole("button", { name: "さらに読み込む" })).toBeNull();
-  });
+    expect(screen.queryByText("さらに読み込む", { selector: "button" })).toBeNull();
+    // it draws the list 9 times up to 1000 items: with all the files at once, that alone took over 20s
+  }, 60_000);
 
   it("disables the button while a request is on its way", async () => {
     const full = Array.from({ length: 100 }, (_, i) =>

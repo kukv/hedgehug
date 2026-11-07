@@ -162,16 +162,16 @@ describe("MigrateDialog", () => {
   it("is a merge when the name is one the definition already has", async () => {
     setup();
     await type("todo");
-    expect(screen.getByRole("button", { name: "併合する" })).toBeDisabled();
-    expect(screen.getByText(/「triage」は定義から消え、「todo」に併合されます/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "マージ" })).toBeDisabled();
+    expect(screen.getByText(/「triage」は定義から消え、「todo」にマージされます/)).toBeVisible();
     await type("review");
     expect(screen.getByRole("button", { name: "名前を変更" })).toBeDisabled();
   });
 
   it("merges into one of the other definitions, chosen from a list", async () => {
     const { post } = setup({ mode: "merge" });
-    expect(screen.getByRole("dialog", { name: "ステータス「triage」を併合する" })).toBeVisible();
-    const select = screen.getByRole("combobox", { name: "併合先" }) as HTMLSelectElement;
+    expect(screen.getByRole("dialog", { name: "ステータス「triage」をマージ" })).toBeVisible();
+    const select = screen.getByRole("combobox", { name: "マージ先" }) as HTMLSelectElement;
     expect([...select.options].map((o) => o.value)).toEqual(["", "todo", "done"]);
     expect(screen.queryByRole("textbox")).toBeNull();
     await fireEvent.change(select, { target: { value: "todo" } });
@@ -182,7 +182,7 @@ describe("MigrateDialog", () => {
       new: "todo",
       dry_run: true,
     });
-    expect(screen.getByRole("button", { name: "併合する" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "マージ" })).toBeEnabled();
   });
 
   it("sends the property with a value, and --store only when there are many stores", async () => {

@@ -21,6 +21,7 @@ const sch = {
     priority: { type: "enum", values: ["low", "high"] },
     points: { type: "number", label: "ポイント" },
     relates: { type: "task_ref", multi: true, symmetric: true },
+    duplicates: { type: "task_ref", multi: true, label: "重複", inverse: "重複されている" },
   },
   workflow: { transitions: { done: ["todo"] }, required: { done: ["points"] } } as Record<
     "transitions" | "required",
@@ -50,7 +51,11 @@ const t = (ulid: string, over: Partial<TaskView> = {}) =>
 const tasks = [
   t("P1", { kind: "project", title: "リリース準備", id: "REL-15" }),
   t("A", { status: "todo", props: { priority: "high", points: 3 } }),
-  t("B", { status: "triage" }),
+  t("B", {
+    status: "triage",
+    blocked_by: [{ ulid: "A", id: "REL-A", title: "title A" }],
+    props: { relates: ["A"] },
+  }),
   t("C", { status: "done", props: { priority: "high" } }),
 ];
 
@@ -67,7 +72,7 @@ type Opts = {
   // the schema is not in yet and does not come
   pending?: boolean;
   store?: string;
-  tab?: "statuses" | "kinds" | "props" | "workflow";
+  tab?: "statuses" | "kinds" | "props" | "relations" | "workflow";
   readOnly?: string;
 };
 
@@ -138,11 +143,15 @@ describe("SettingsSchema", () => {
   });
   afterEach(() => cleanup());
 
-  it("names the Store and says the schema is edited in the YAML", async () => {
+  it("says the schema is shared by the Store and edited in the YAML", async () => {
     setup();
     expect(await screen.findByRole("heading", { level: 1, name: "スキーマ" })).toBeVisible();
-    expect(screen.getByText(/shared を使う全員に共有される定義です/)).toBeVisible();
-    expect(screen.getByText(/YAML を編集してください/)).toBeVisible();
+    expect(screen.getByText(/この Store を使う共通の定義です/)).toBeVisible();
+    expect(
+      screen.getByText(
+        /YAML（\.hedgehug\/schema\.yaml）を編集してください。名前とマージはこの画面からできます。/,
+      ),
+    ).toBeVisible();
   });
 
   it("shows the Store badge in the heading only with two Stores or more", async () => {
@@ -186,15 +195,40 @@ describe("SettingsSchema", () => {
     expect(within(row(/^task/)).getByText("3")).toBeVisible();
   });
 
-  it("lists the properties, the values of an enum with their own numbers, and the notes of a reference", async () => {
+  it("lists the properties and the values of an enum with their own numbers, without the relations", async () => {
     setup({ tab: "props" });
     await screen.findByRole("row", { name: /^points/ });
     expect(within(row(/^points/)).getByText("ポイント")).toBeVisible();
     expect(within(row(/^points/)).getByText("number")).toBeVisible();
-    expect(within(row(/^relates/)).getByText("複数 · 双方向")).toBeVisible();
+    expect(screen.queryByRole("row", { name: /^relates/ })).toBeNull();
     await waitFor(() => expect(within(row(/^priority enum/)).getByText("2")).toBeVisible());
     expect(within(row(/priority › low/)).getByText("0")).toBeVisible();
     expect(within(row(/priority › high/)).getByText("2")).toBeVisible();
+  });
+
+  it("lists the relations: blocked_by built in and without actions, then the task_ref properties", async () => {
+    setup({ tab: "relations" });
+    expect(await screen.findByRole("heading", { level: 2, name: "関連" })).toBeVisible();
+    const names = screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((r) => r.querySelector("th")?.textContent);
+    expect(names).toEqual(["blocked_by", "relates", "duplicates"]);
+    await waitFor(() => expect(within(row(/^blocked_by/)).getByText("1")).toBeVisible());
+    expect(within(row(/^blocked_by/)).getByText("ブロックされている")).toBeVisible();
+    expect(within(row(/^blocked_by/)).getByText("複数 · 組み込み")).toBeVisible();
+    expect(within(row(/^blocked_by/)).queryByRole("button")).toBeNull();
+    expect(within(row(/^relates/)).getByText("複数 · 双方向")).toBeVisible();
+    expect(within(row(/^relates/)).getByText("1")).toBeVisible();
+    expect(within(row(/^duplicates/)).getByText("複数 · 逆方向: 重複されている")).toBeVisible();
+    expect(within(row(/^duplicates/)).getByText("0")).toBeVisible();
+  });
+
+  it("offers only the other relations as where a relation is merged to", async () => {
+    setup({ tab: "relations" });
+    await fireEvent.click(await screen.findByRole("button", { name: "マージ…（relates）" }));
+    const select = screen.getByRole("combobox", { name: "マージ先" }) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(["", "duplicates"]);
   });
 
   it("shows the transitions and the required fields of the workflow", async () => {
@@ -236,7 +270,9 @@ describe("SettingsSchema", () => {
     await rerender({ tab: "kinds" });
     expect(screen.getByRole("table", { name: "種類" })).toBeVisible();
     await rerender({ tab: "props" });
-    expect(screen.getByRole("table", { name: "プロパティと関連" })).toBeVisible();
+    expect(screen.getByRole("table", { name: "プロパティ" })).toBeVisible();
+    await rerender({ tab: "relations" });
+    expect(screen.getByRole("table", { name: "関連" })).toBeVisible();
   });
 
   it("joins the empty cells of a value row into one", async () => {
@@ -248,7 +284,7 @@ describe("SettingsSchema", () => {
 
   it("each tab is a link to its own address, and the tab of the address is the current one", async () => {
     setup({ tab: "props", store: "org-b/ops" });
-    await screen.findByRole("table", { name: "プロパティと関連" });
+    await screen.findByRole("table", { name: "プロパティ" });
     const links = within(screen.getByRole("navigation", { name: "スキーマの種類" })).getAllByRole(
       "link",
     );
@@ -256,6 +292,7 @@ describe("SettingsSchema", () => {
       "/settings/schema/org-b%2Fops",
       "/settings/schema/org-b%2Fops?tab=kinds",
       "/settings/schema/org-b%2Fops?tab=props",
+      "/settings/schema/org-b%2Fops?tab=relations",
       "/settings/schema/org-b%2Fops?tab=workflow",
       "/settings/schema/org-b%2Fops?tab=templates",
     ]);
@@ -265,17 +302,18 @@ describe("SettingsSchema", () => {
       "page",
       null,
       null,
+      null,
     ]);
-    await fireEvent.click(links[3] as HTMLElement);
+    await fireEvent.click(links[4] as HTMLElement);
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
 
   it("disables the rename and the merge of a read-only Store, with the reason", async () => {
     setup({ readOnly: "the remote cannot be written" });
-    const rename = await screen.findByRole("button", { name: "名前を変更…（triage）" });
+    const rename = await screen.findByRole("button", { name: "名前…（triage）" });
     expect(rename).toBeDisabled();
     expect(rename).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
-    for (const b of screen.getAllByRole("button", { name: /^(名前を変更|併合する)…/ })) {
+    for (const b of screen.getAllByRole("button", { name: /^(名前|マージ)…/ })) {
       expect(b).toBeDisabled();
     }
     rename.click(); // a disabled button takes no click
@@ -284,7 +322,7 @@ describe("SettingsSchema", () => {
 
   it("closes the dialog when the Store changes, so that it cannot write to the other Store", async () => {
     const k = setup();
-    await fireEvent.click(await screen.findByRole("button", { name: "名前を変更…（triage）" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "名前…（triage）" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     await k.rerender({ store: "ops" });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -451,39 +489,39 @@ describe("SettingsSchema", () => {
   describe("migrate", () => {
     it("opens the dialog of the status, rename and merge both", async () => {
       setup();
-      await fireEvent.click(await screen.findByRole("button", { name: "名前を変更…（triage）" }));
+      await fireEvent.click(await screen.findByRole("button", { name: "名前…（triage）" }));
       expect(
         screen.getByRole("dialog", { name: "ステータス「triage」の名前を変更" }),
       ).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
       expect(screen.queryByRole("dialog")).toBeNull();
-      await fireEvent.click(screen.getByRole("button", { name: "併合する…（triage）" }));
-      expect(screen.getByRole("dialog", { name: "ステータス「triage」を併合する" })).toBeVisible();
+      await fireEvent.click(screen.getByRole("button", { name: "マージ…（triage）" }));
+      expect(screen.getByRole("dialog", { name: "ステータス「triage」をマージ" })).toBeVisible();
     });
 
     it("opens it for a kind, a property and a value", async () => {
       const { rerender } = setup({ tab: "kinds" });
-      await fireEvent.click(await screen.findByRole("button", { name: "名前を変更…（task）" }));
+      await fireEvent.click(await screen.findByRole("button", { name: "名前…（task）" }));
       expect(screen.getByRole("dialog", { name: "種類「task」の名前を変更" })).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
       await rerender({ tab: "props" });
-      await fireEvent.click(screen.getByRole("button", { name: "名前を変更…（points）" }));
+      await fireEvent.click(screen.getByRole("button", { name: "名前…（points）" }));
       expect(
         screen.getByRole("dialog", { name: "プロパティ「points」の名前を変更" }),
       ).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-      await fireEvent.click(screen.getByRole("button", { name: "併合する…（priority の low）" }));
-      expect(screen.getByRole("dialog", { name: "値「low」を併合する" })).toBeVisible();
+      await fireEvent.click(screen.getByRole("button", { name: "マージ…（priority の low）" }));
+      expect(screen.getByRole("dialog", { name: "値「low」をマージ" })).toBeVisible();
     });
 
     it("offers no merge when nothing else is defined", async () => {
       setup({ tab: "kinds", schema: { ...sch, kinds: [sch.kinds[1] as never] } });
-      expect(await screen.findByRole("button", { name: "名前を変更…（task）" })).toBeVisible();
-      expect(screen.queryByRole("button", { name: "併合する…（task）" })).toBeNull();
+      expect(await screen.findByRole("button", { name: "名前…（task）" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "マージ…（task）" })).toBeNull();
     });
 
     async function renameTriage(k: ReturnType<typeof setup>) {
-      const open = await screen.findByRole("button", { name: "名前を変更…（triage）" });
+      const open = await screen.findByRole("button", { name: "名前…（triage）" });
       open.focus(); // a click focuses the button in a browser
       await fireEvent.click(open);
       await fireEvent.input(screen.getByRole("textbox", { name: "新しい名前" }), {
@@ -524,8 +562,8 @@ describe("SettingsSchema", () => {
           post: (b) => ok({ changed: [], skipped: [], commit: b.dry_run ? null : "c1" }),
         });
         await renameTriage(k);
-        expect(screen.getByRole("button", { name: "名前を変更…（triage）" })).toHaveFocus();
-        const again = screen.getByRole("button", { name: "名前を変更…（triage）" });
+        expect(screen.getByRole("button", { name: "名前…（triage）" })).toHaveFocus();
+        const again = screen.getByRole("button", { name: "名前…（triage）" });
         again.focus();
         await fireEvent.click(again);
         // the rename takes the row away

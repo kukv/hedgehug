@@ -122,16 +122,16 @@
   }
 
   const title = $derived(
-    `${NOUN[target]}「${old}」${mode === "merge" ? "を併合する" : "の名前を変更"}`,
+    `${NOUN[target]}「${old}」${mode === "merge" ? "をマージ" : "の名前を変更"}`,
   );
   const cli = $derived(
     cliSchemaMigrate({
       ...body,
-      new: name === "" ? new Placeholder(mode === "merge" ? "併合先" : "新しい名前") : name,
+      new: name === "" ? new Placeholder(mode === "merge" ? "マージ先" : "新しい名前") : name,
       store: many ? store : undefined,
     }),
   );
-  const mergeNote = $derived(`「${old}」は定義から消え、「${name}」に併合されます`);
+  const mergeNote = $derived(`「${old}」は定義から消え、「${name}」にマージされます`);
   const summary = $derived.by(() => {
     if (preview !== null) {
       return preview.changed === 0
@@ -151,7 +151,7 @@
   <div class="form" role="presentation" bind:this={form} {onkeydown}>
     {#if mode === "merge"}
       <div class="field">
-        <label class="lbl" for="{uid}-to">併合先</label>
+        <label class="lbl" for="{uid}-to">マージ先</label>
         <select id="{uid}-to" data-autofocus disabled={busy} bind:value={next}>
           <option value="">選んでください</option>
           {#each others as n (n)}
@@ -192,7 +192,7 @@
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
     <Button variant="primary" disabled={!ready} onclick={() => void run()}>
-      {merging ? "併合する" : "名前を変更"}
+      {merging ? "マージ" : "名前を変更"}
     </Button>
   {/snippet}
 </Dialog>
