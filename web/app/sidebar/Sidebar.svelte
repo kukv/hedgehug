@@ -18,7 +18,7 @@
   import SyncCard from "./SyncCard.svelte";
 
   const { stores, cache, views, conn } = core();
-  // What is hidden is left out here; the first workspace that is left is the home (細部 93).
+  // What is hidden is left out here (細部 93).
   const workspaces = useSubscribe(stores, () => stores.visibleWorkspaces());
   const storesRev = useSubscribe(stores, () => ({}));
   const savedViews = useSubscribe(views, () => views.list());
@@ -87,10 +87,9 @@
     }
   }
 
-  function workspaceActive(store: string, ulid: string, index: number): boolean {
+  function workspaceActive(store: string, ulid: string): boolean {
     const r = route;
-    if (r.name === "workspace") return r.store === store && r.ulid === ulid;
-    return r.name === "home" && index === 0;
+    return r.name === "workspace" && r.store === store && r.ulid === ulid;
   }
 </script>
 
@@ -119,8 +118,8 @@
     <a
       href={myHref}
       class="nav-link"
-      class:active={route.name === "my"}
-      aria-current={route.name === "my" ? "page" : undefined}
+      class:active={route.name === "my" || route.name === "home"}
+      aria-current={route.name === "my" || route.name === "home" ? "page" : undefined}
       onclick={(e) => onLinkClick(e, myHref)}
     >
       <Icon name="checklist" size={14} />
@@ -191,9 +190,9 @@
       </button>
     </div>
 
-    {#each workspaces.current as w, i (`${w.store}/${w.ulid}`)}
+    {#each workspaces.current as w (`${w.store}/${w.ulid}`)}
       {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid, tab: "overview" })}
-      {@const wsHere = workspaceActive(w.store, w.ulid, i)}
+      {@const wsHere = workspaceActive(w.store, w.ulid)}
       <div class="ws">
         <div
           class="ws-row"

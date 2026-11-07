@@ -80,10 +80,6 @@ describe("routeStore", () => {
     );
     expect(routeStore({ name: "query", layout: "table", q: "kind:bug" }, taskOf)).toBeUndefined();
     expect(routeStore({ name: "my" }, taskOf)).toBeUndefined();
-  });
-
-  it("takes the store of the first workspace at home, which shows its overview", () => {
-    expect(routeStore({ name: "home" }, taskOf, { store: "shared" })).toBe("shared");
     expect(routeStore({ name: "home" }, taskOf)).toBeUndefined();
   });
 

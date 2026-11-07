@@ -36,12 +36,11 @@
 
   const conn = useSubscribe(c.conn, () => ({ state: c.conn.state, lastOpenAt: c.conn.lastOpenAt }));
   const dir = useSubscribe(c.stores, () => {
-    const first = c.stores.visibleWorkspaces()[0];
     return {
       loaded: c.stores.loaded(),
       count: c.stores.stores().length,
       names: c.stores.stores().map((s) => s.name),
-      first: first ? { store: first.store, ulid: first.ulid } : null,
+      hasWorkspace: c.stores.visibleWorkspaces().length > 0,
     };
   });
   const route = $derived(router.route);
@@ -98,7 +97,7 @@
         {/key}
       {:else if route.name === "query"}
         <QueryPage layout={route.layout} q={route.q} />
-      {:else if route.name === "my"}
+      {:else if route.name === "my" || (route.name === "home" && dir.current.hasWorkspace)}
         <MyTasks />
       {:else if route.name === "inbox"}
         <InboxPage tab={route.tab} />
@@ -106,15 +105,6 @@
         <ActivityPage workspaces={route.workspaces} sync={route.sync} />
       {:else if route.name === "settings"}
         <SettingsRoute page={route} />
-      {:else if route.name === "home" && dir.current.first}
-        <!-- "/" is the overview of the first workspace -->
-        {#key `${dir.current.first.store}/${dir.current.first.ulid}`}
-          <WorkspacePage
-            store={dir.current.first.store}
-            ulid={dir.current.first.ulid}
-            tab="overview"
-          />
-        {/key}
       {:else if route.name === "home" && dir.current.loaded && dir.current.count > 0}
         <!-- stores exist but none has a workspace -->
         <Empty

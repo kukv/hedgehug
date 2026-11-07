@@ -204,8 +204,8 @@ export class Hedgehug {
     return (await r.json()) as T;
   }
 
-  /** The path of the tree tab of the first workspace of the first store, which "/" is the overview of. */
-  async treePath(): Promise<string> {
+  /** The path of the overview of the first workspace of the first store. */
+  async overviewPath(): Promise<string> {
     const stores = await this.get<{ name: string }[]>("/api/stores");
     const store = stores[0]?.name;
     if (!store) throw new Error("hh ui has no store");
@@ -214,7 +214,12 @@ export class Hedgehug {
     );
     const space = spaces[0];
     if (!space) throw new Error(`the store ${store} has no workspace`);
-    return `/workspaces/${encodeURIComponent(store)}/${space.ulid}/tree`;
+    return `/workspaces/${encodeURIComponent(store)}/${space.ulid}`;
+  }
+
+  /** The path of the tree tab of the first workspace of the first store. */
+  async treePath(): Promise<string> {
+    return `${await this.overviewPath()}/tree`;
   }
 
   /** Opens the tree tab of the first workspace, and waits until the page is live. */

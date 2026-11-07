@@ -102,7 +102,7 @@ describe("App のゲート", () => {
     expect(await findByText("Hedgehug へようこそ")).toBeTruthy();
   });
 
-  it("ホーム / は最初のワークスペースの概要を開く（URL は / のまま）", async () => {
+  it("ホーム / はマイタスクを開く（URL は / のまま）", async () => {
     history.replaceState(null, "", "/#token=tkn");
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : (input as Request).url;
@@ -124,12 +124,8 @@ describe("App のゲート", () => {
       }
       return new Promise(() => {});
     });
-    const { findByRole, getByRole } = render(App);
-    expect(await findByRole("heading", { level: 1, name: "me" })).toBeTruthy();
-    expect(
-      getByRole("navigation", { name: "ビューの切り替え" }).querySelector("[aria-current]")
-        ?.textContent,
-    ).toContain("概要");
+    const { findByRole } = render(App);
+    expect(await findByRole("heading", { level: 1, name: "マイタスク" })).toBeTruthy();
     expect(location.pathname).toBe("/");
   });
 
