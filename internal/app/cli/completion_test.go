@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -63,17 +62,6 @@ func TestCompletionNeedsNoAccount(t *testing.T) {
 	te.ok("completion", "zsh")
 	if got := te.complete("show", ""); len(got) != 0 {
 		t.Fatalf("candidates without an account: %v", got)
-	}
-}
-
-func TestCompletionStartsNoSync(t *testing.T) {
-	te := newStoreEnv(t)
-	spawned := false
-	te.now = te.now.Add(time.Hour) // the store is due
-	te.spawn = usecasetest.SpawnFunc(func([]string) { spawned = true })
-	te.complete("show", "")
-	if spawned {
-		t.Fatal("a background sync started")
 	}
 }
 

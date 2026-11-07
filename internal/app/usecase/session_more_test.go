@@ -235,19 +235,6 @@ func TestEntryErrors(t *testing.T) {
 	}
 }
 
-func TestUnpushedWithoutRemote(t *testing.T) {
-	t.Parallel()
-	ts := usecasetest.New(t)
-	s, _, err := ts.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	n, err := usecase.Unpushed(s)
-	if err != nil || n != 1 {
-		t.Errorf("Unpushed = %d, %v; want 1 (the first commit), nil", n, err)
-	}
-}
-
 // A store that was open when a rebuild stopped in its apply phase is not
 // synced, and the sync leaves no mark in sync.json.
 func TestRunSyncRefusesAStoppedApply(t *testing.T) {

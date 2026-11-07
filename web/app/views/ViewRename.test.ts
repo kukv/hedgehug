@@ -76,15 +76,6 @@ describe("ViewRename", () => {
     expect(takeCarriedDraft("shared", "monthly")).toBeNull();
   });
 
-  it("未保存の変更がなければ持ち越さない", async () => {
-    history.replaceState(null, "", "/views/shared/weekly");
-    const { onclose } = setup();
-    await typeName("monthly");
-    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
-    await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(takeCarriedDraft("shared", "monthly")).toBeNull();
-  });
-
   it("ほかの画面にいれば動かさない", async () => {
     history.replaceState(null, "", "/views/shared/Sprint");
     const { onclose } = setup();

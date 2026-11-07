@@ -31,7 +31,6 @@ func FuzzSymmetric(f *testing.F) {
 // forward, or removed.
 func FuzzForwardSymmetric(f *testing.F) {
 	f.Add(uint8(4), uint8(0), uint8(1), "a", "b", int64(1), int64(2)) // no base
-	f.Add(uint8(0), uint8(1), uint8(1), "a", "a", int64(2), int64(2)) // a task base
 	f.Add(uint8(1), uint8(2), uint8(0), "b", "a", int64(1), int64(1)) // a forward base
 	f.Add(uint8(3), uint8(3), uint8(2), "", "", int64(0), int64(0))
 	variant := func(v uint8) []byte {

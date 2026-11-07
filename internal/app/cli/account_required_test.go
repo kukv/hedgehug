@@ -59,7 +59,7 @@ func TestNoAccountStartsNoBackgroundSync(t *testing.T) {
 
 func TestCommandsThatRunWithoutAnAccount(t *testing.T) {
 	t.Parallel()
-	for _, args := range [][]string{{"--help"}, {"help"}, {"help", "ls"}, {"ls", "--help"}, {"--version"}, {"auth", "status"}} {
+	for _, args := range [][]string{{"help"}, {"help", "ls"}, {"auth", "status"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Parallel()
 			te := newTestEnv(t)

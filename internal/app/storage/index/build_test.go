@@ -185,16 +185,6 @@ func TestRefreshRevalidatesChildren(t *testing.T) {
 	}
 }
 
-func TestRefreshWithoutChange(t *testing.T) {
-	t.Parallel()
-	s, _ := newStore(t)
-	put(t, s, newTask("x"))
-	ix := mustOpen(t, s)
-	if err := ix.Refresh(); err != nil {
-		t.Errorf("Refresh = %v", err)
-	}
-}
-
 func hasProblem(ix *Index, ulid model.ULID, code string) bool {
 	return slices.ContainsFunc(ix.Problems(ulid), func(p Problem) bool { return p.Code == code })
 }

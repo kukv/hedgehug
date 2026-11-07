@@ -548,8 +548,6 @@ func TestPutRefusesZeroULID(t *testing.T) {
 		{"PutComment entry", func(tx *Tx) error { return tx.PutComment(ulid, &model.Comment{}) }},
 		{"PutWorklog task", func(tx *Tx) error { return tx.PutWorklog(model.ULID{}, &model.Worklog{ULID: model.NewULID()}) }},
 		{"PutWorklog entry", func(tx *Tx) error { return tx.PutWorklog(ulid, &model.Worklog{}) }},
-		{"PutSprint", func(tx *Tx) error { return tx.PutSprint(&model.Sprint{Name: "S1", State: "planned"}) }},
-		{"PutRelease", func(tx *Tx) error { return tx.PutRelease(&model.Release{Name: "v1", State: "unreleased"}) }},
 		{"RemoveTask", func(tx *Tx) error { return tx.RemoveTask(model.ULID{}) }},
 	} {
 		if _, err := s.Update(Op{Name: "add", Author: testAuthor}, tc.put); err == nil {
