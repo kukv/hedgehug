@@ -1,13 +1,13 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - /settings/schema/<store> is the heading "スキーマ"; the navigation "スキーマの種類" has the links
-//     ステータス / 種類 / プロパティと関連 / ワークフロー, and the tab shows a table whose rows are named by the
-//     definition: the number of tasks is its last number, and its buttons are "名前を変更…（<名前>）" and
-//     "併合する…（<名前>）"
+//     ステータス / 種類 / プロパティ / 関連 / ワークフロー, and the tab shows a table whose rows are named by the
+//     definition: the number of tasks is its last number, and its buttons are "名前…（<名前>）" and
+//     "マージ…（<名前>）"
 //   - the region "プロジェクトごとの上書き" lists a project with an override as a link to its settings
 //   - the region "スキーマの検査" says "スキーマとタスクは合っています" when `hh schema check` finds nothing
 //   - the dialog "ステータス「<名前>」の名前を変更" has the textbox "新しい名前", the sentence "<n> 件のタスクが
 //     書き換わります" (the dry run) and the button "名前を変更"; a toast says "<n> 件を書き換えました"
-//   - the dialog "ステータス「<名前>」を併合する" has the combobox "併合先" in place of the textbox and the button "併合する"
+//   - the dialog "ステータス「<名前>」をマージ" has the combobox "マージ先" in place of the textbox and the button "マージ"
 import type { Page } from "@playwright/test";
 import { expect, test } from "./harness";
 
@@ -77,7 +77,7 @@ test("a status is renamed: the dry run counts the tasks, and the tasks follow th
   await hh.open(page, SCHEMA);
   await expect(statusRow(page, "waiting").getByRole("cell").nth(3)).toHaveText("2");
 
-  await statusRow(page, "waiting").getByRole("button", { name: "名前を変更…（waiting）" }).click();
+  await statusRow(page, "waiting").getByRole("button", { name: "名前…（waiting）" }).click();
   const dialog = page.getByRole("dialog", { name: "ステータス「waiting」の名前を変更" });
   await dialog.getByRole("textbox", { name: "新しい名前" }).fill("paused");
   await expect(dialog.getByText("2 件のタスクが書き換わります")).toBeVisible();
@@ -103,14 +103,14 @@ test("a status is merged into another from the list of the others", async ({ pag
   hh.hh("set", one.id, "status=on_hold");
   await hh.open(page, SCHEMA);
 
-  await statusRow(page, "on_hold").getByRole("button", { name: "併合する…（on_hold）" }).click();
-  const dialog = page.getByRole("dialog", { name: "ステータス「on_hold」を併合する" });
-  await dialog.getByRole("combobox", { name: "併合先" }).selectOption("backlog");
+  await statusRow(page, "on_hold").getByRole("button", { name: "マージ…（on_hold）" }).click();
+  const dialog = page.getByRole("dialog", { name: "ステータス「on_hold」をマージ" });
+  await dialog.getByRole("combobox", { name: "マージ先" }).selectOption("backlog");
   await expect(dialog.getByText("1 件のタスクが書き換わります")).toBeVisible();
   await expect(
-    dialog.getByText("「on_hold」は定義から消え、「backlog」に併合されます"),
+    dialog.getByText("「on_hold」は定義から消え、「backlog」にマージされます"),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "併合する" }).click();
+  await dialog.getByRole("button", { name: "マージ" }).click();
 
   await expect(page.getByRole("status").filter({ hasText: "1 件を書き換えました" })).toBeVisible();
   expect(hh.show(one.id).status).toBe("backlog");

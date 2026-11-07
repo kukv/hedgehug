@@ -108,7 +108,14 @@
   const count = (n: number | undefined): string => (usage && n !== undefined ? String(n) : "—");
   const statuses = $derived(schema?.statuses ?? []);
   const kinds = $derived(schema?.kinds ?? []);
-  const propEntries = $derived(Object.entries(schema?.props ?? {}));
+  const allProps = $derived(Object.entries(schema?.props ?? {}));
+  // A task_ref property is a relation; the relations tab has them, the properties tab the rest.
+  const propEntries = $derived(allProps.filter(([, p]) => p.type !== "task_ref"));
+  const relationEntries = $derived(allProps.filter(([, p]) => p.type === "task_ref"));
+  // blocked_by is a relation built in: it is not in the schema, and its name cannot be changed.
+  const blockedCount = $derived(
+    tasks ? tasks.filter((t) => (t.blocked_by ?? []).length > 0).length : undefined,
+  );
   const transitions = $derived(Object.entries(schema?.workflow?.transitions ?? {}));
   const required = $derived(Object.entries(schema?.workflow?.required ?? {}));
   const scoped = $derived(schema?.scoped ?? []);
@@ -119,7 +126,8 @@
       [
         ["statuses", "ステータス", statuses.length],
         ["kinds", "種類", kinds.length],
-        ["props", "プロパティと関連", propEntries.length],
+        ["props", "プロパティ", propEntries.length],
+        ["relations", "関連", relationEntries.length + 1],
         ["workflow", "ワークフロー", undefined],
         ["templates", "テンプレート", undefined],
       ] as const
@@ -186,9 +194,8 @@
     {/if}
   </header>
   <p class="lead">
-    {store}
-    を使う全員に共有される定義です（.hedgehug/schema.yaml）。追加・削除・色や並びの変更は YAML
-    を編集してください。名前の変更と併合はこの画面からできます。
+    この Store を使う共通の定義です。追加・削除・色や並びの変更は
+    YAML（.hedgehug/schema.yaml）を編集してください。名前とマージはこの画面からできます。
   </p>
 
   {#if schema === undefined}
@@ -207,22 +214,22 @@
       {@const subject = prop ? `${prop} の ${old}` : old}
       <Button
         size="sm"
-        aria-label="名前を変更…（{subject}）"
+        aria-label="名前…（{subject}）"
         disabled={off !== null}
         why={off ?? undefined}
         onclick={() => (ask = { target, prop, old, mode: "rename", names })}
       >
-        名前を変更…
+        名前…
       </Button>
       {#if names.length > 1}
         <Button
           size="sm"
-          aria-label="併合する…（{subject}）"
+          aria-label="マージ…（{subject}）"
           disabled={off !== null}
           why={off ?? undefined}
           onclick={() => (ask = { target, prop, old, mode: "merge", names })}
         >
-          併合する…
+          マージ…
         </Button>
       {/if}
     {/snippet}
@@ -325,10 +332,8 @@
       </section>
     {:else if tab === "props"}
       <section class="sec" aria-labelledby="{uid}-props">
-        <h2 id="{uid}-props">プロパティと関連</h2>
-        <p class="note">
-          task_ref は同じ Store のタスクだけを参照できます。値の件数は、その値を持つタスクの数です。
-        </p>
+        <h2 id="{uid}-props">プロパティ</h2>
+        <p class="note">値の件数は、その値を持つタスクの数です。</p>
         <table aria-labelledby="{uid}-props">
           <thead>
             <tr>
@@ -371,6 +376,51 @@
             {:else}
               <tr>
                 <td colspan="6" class="none">プロパティはありません</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </section>
+    {:else if tab === "relations"}
+      <section class="sec" aria-labelledby="{uid}-relations">
+        <h2 id="{uid}-relations">関連</h2>
+        <p class="note">
+          関連は同じ Store のタスクだけを参照できます。blocked_by
+          は組み込みの関連のため、名前の変更とマージはできません。
+        </p>
+        <table aria-labelledby="{uid}-relations">
+          <thead>
+            <tr>
+              <th scope="col">名前</th>
+              <th scope="col">表示名</th>
+              <th scope="col">設定</th>
+              <th scope="col" class="num">タスク</th>
+              <th scope="col"><span class="sr">操作</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">blocked_by</th>
+              <td>ブロックされている</td>
+              <td>複数 · 組み込み</td>
+              <td class="num">{count(blockedCount)}</td>
+              <td></td>
+            </tr>
+            {#each relationEntries as [name, p] (name)}
+              <tr>
+                <th scope="row">{name}</th>
+                <td>{p.label ?? ""}</td>
+                <td>{propNote(p)}</td>
+                <td class="num">{count(usage?.props[name])}</td>
+                <td>
+                  <div class="acts">
+                    {@render actions(
+                      "prop",
+                      name,
+                      relationEntries.map(([n]) => n),
+                    )}
+                  </div>
+                </td>
               </tr>
             {/each}
           </tbody>
