@@ -38,7 +38,8 @@
         <div>
           <dt>fetch</dt>
           <dd>
-            表示中は {formatDuration(timing.interval)}ごと、非表示の間は
+            この画面を表示している間は
+            {formatDuration(timing.interval)}ごと、別のタブやウィンドウに隠れている間は
             {formatDuration(Math.max(timing.interval, HIDDEN_FETCH))}ごとに fetch します
           </dd>
         </div>

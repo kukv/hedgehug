@@ -2,10 +2,10 @@
 //   - /settings/stores lists each mounted Store as the article "<名前>": the button "<名前> の色を変える
 //     （このマシンだけ）" (its dot is [data-tone]) opens a menu of menuitemcheckbox ("ティール" ...
 //     "ブラウン", "自動"); the checkbox "表示"; the text "既定の Store" on the default one; the button
-//     "詳細を開く: <名前>" (then "閉じる: <名前>") opens the details with "既定にする" and "マウントを解除…"
+//     "詳細を開く: <名前>" (then "閉じる: <名前>") opens the details with "既定にする" and "マウントを解除"
 //   - the buttons "URL で追加" (dialog "URL で追加": "URL（1 行に 1 つ）", "名前", "追加する") and
 //     "Store を作成"
-//   - "マウントを解除…" opens the dialog "<名前> のマウントを解除": the checkbox "ローカルのクローンも消す",
+//   - "マウントを解除" opens the dialog "<名前> のマウントを解除": the checkbox "ローカルのクローンも消す",
 //     the buttons "解除する" and (after store.unpushed) "クローンを残して解除"
 //   - the toasts are in the status regions: "既定の Store を <名前> にしました", "Store「<名前>」を追加しました",
 //     "<名前> のマウントを解除しました"
@@ -41,7 +41,7 @@ async function unmount(page: Page, name: string): Promise<Locator> {
   await card(page, name)
     .getByRole("button", { name: `詳細を開く: ${name}` })
     .click();
-  await card(page, name).getByRole("button", { name: "マウントを解除…" }).click();
+  await card(page, name).getByRole("button", { name: "マウントを解除" }).click();
   return page.getByRole("dialog", { name: `${name} のマウントを解除` });
 }
 
@@ -85,7 +85,7 @@ test("hiding a Store keeps the last shown one on", async ({ page, hh }) => {
   expect(store(hh, "demo")?.hidden).toBe(true);
   const last = card(page, "second").getByRole("checkbox", { name: "表示" });
   await expect(last).toBeDisabled();
-  await expect(card(page, "second")).toContainText("すべての Store を非表示にはできません");
+  await expect(card(page, "second")).toContainText("この Store は非表示にできません");
 
   await card(page, "demo").getByRole("checkbox", { name: "表示" }).click();
   await expect(card(page, "demo").getByRole("checkbox", { name: "表示" })).toBeChecked();

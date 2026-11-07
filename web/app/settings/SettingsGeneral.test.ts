@@ -74,8 +74,8 @@ describe("SettingsGeneral", () => {
     const { getByRole } = mount([status({ store: "a", interval: 120, push_interval: 30 })]);
     const sec = getByRole("region", { name: "同期のタイミング" });
     expect(within(sec).getByText(/書き込みの 30 秒後にまとめて push/)).toBeTruthy();
-    expect(within(sec).getByText(/表示中は 2 分ごと/)).toBeTruthy();
-    expect(within(sec).getByText(/非表示の間は 10 分ごと/)).toBeTruthy();
+    expect(within(sec).getByText(/この画面を表示している間は 2 分ごと/)).toBeTruthy();
+    expect(within(sec).getByText(/別のタブやウィンドウに隠れている間は 10 分ごと/)).toBeTruthy();
     expect(sec.textContent).toContain("sync.interval");
     expect(sec.textContent).toContain("sync.push_interval");
     expect(sec.textContent).toContain("hh ui");
@@ -83,8 +83,8 @@ describe("SettingsGeneral", () => {
 
   it("非表示の間の fetch は max(interval, 10 分)。interval が長ければそれ", () => {
     const { getByText, getAllByText } = mount([status({ store: "a", interval: 900 })]);
-    expect(getByText(/表示中は 15 分ごと/)).toBeTruthy();
-    expect(getAllByText(/非表示の間は 15 分ごと/)).toHaveLength(1);
+    expect(getByText(/この画面を表示している間は 15 分ごと/)).toBeTruthy();
+    expect(getAllByText(/別のタブやウィンドウに隠れている間は 15 分ごと/)).toHaveLength(1);
   });
 
   it("間隔は最初の Store の値を 1 つだけ出す", () => {
@@ -92,7 +92,7 @@ describe("SettingsGeneral", () => {
       status({ store: "a", interval: 90, push_interval: 10 }),
       status({ store: "b", interval: 300, push_interval: 60 }),
     ]);
-    expect(getAllByText(/表示中は 1 分 30 秒ごと/)).toHaveLength(1);
+    expect(getAllByText(/この画面を表示している間は 1 分 30 秒ごと/)).toHaveLength(1);
   });
 
   it("同期の状態は Store ごとに段を分け、それぞれの状態と「今すぐ同期」を持つ", () => {

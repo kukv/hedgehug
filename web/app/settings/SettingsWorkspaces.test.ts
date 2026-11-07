@@ -43,7 +43,7 @@ describe("SettingsWorkspaces", () => {
       "ID の接頭辞",
       "プロジェクト",
       "タスク（削除済みを含む）",
-      "接頭辞を最後に変えた日",
+      "最終更新日",
       "操作",
     ]);
     const release = within(rows[1] as HTMLElement);
@@ -101,11 +101,9 @@ describe("SettingsWorkspaces", () => {
     expect(workspaceDialog.current).toEqual({ kind: "add", store: "shared" });
   });
 
-  it("shows the rule, the prefixes of the other stores, and the command", () => {
+  it("shows the prefixes of the other stores and the command, and leaves the prefix rule to the dialog", () => {
     setup();
-    expect(
-      screen.getByText(/接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください/),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/接頭辞は英大文字と数字/)).toBeNull();
     expect(screen.getByText(/マウント中のほかの Store が使っている接頭辞:/)).toHaveTextContent(
       "API（backend）",
     );

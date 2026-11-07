@@ -34,8 +34,9 @@
     <Button variant="primary" onclick={() => (creating = true)}>Store を作成</Button>
   </header>
   <p class="lead">
-    このマシンで扱う Store です。見える範囲は各リポジトリのアクセス権で決まります。「表示」を外した
-    Store のワークスペースは、サイドバーにもビューにも出しません。
+    このマシンで扱っている Store
+    です。見える範囲は各リポジトリのアクセス権で決まります。「表示」を外した Store
+    のワークスペースは、サイドバーやビューにも表示されません。
   </p>
 
   {#if dir.current.error}

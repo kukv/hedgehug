@@ -118,7 +118,7 @@ test("/settings is the sync and upkeep page, with its own nav in place of the si
   await expect(body.getByRole("heading", { level: 1, name: "同期と保守" })).toBeVisible();
   const timing = body.getByRole("region", { name: "同期のタイミング" });
   await expect(timing).toContainText("書き込みの");
-  await expect(timing).toContainText("非表示の間は 10 分ごと");
+  await expect(timing).toContainText("別のタブやウィンドウに隠れている間は 10 分ごと");
   await expect(body.getByRole("region", { name: "Store: demo" })).toBeVisible();
 
   await nav
@@ -183,6 +183,9 @@ test("the kanban and the table are tabs of a workspace and of a project", async 
     "ツリー",
     "カンバン",
     "テーブル",
+    "バックログ",
+    "スプリント",
+    "リリース",
     "設定",
   ]);
   await tabs(page).getByRole("link", { name: "カンバン" }).click();
