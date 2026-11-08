@@ -36,16 +36,15 @@ func violatesNow(t *testing.T, ts *usecasetest.Session, u model.ULID) bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := schema.Default()
 	tk, err := s.Task(u)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk, anc, err := store.Lineage(tk, s.Task)
+	pk, _, err := store.Lineage(tk, s.Task)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return len(schema.ValidatePlacement(tk.Kind, pk, sc.For(anc))) > 0
+	return len(schema.ValidatePlacement(tk.Kind, pk)) > 0
 }
 
 // plain is a change that carries no migrations.

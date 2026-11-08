@@ -134,7 +134,6 @@ func TestValidateTaskRank(t *testing.T) {
 
 func TestValidatePlacement(t *testing.T) {
 	t.Parallel()
-	e := Default().For(nil)
 	for _, tc := range []struct {
 		kind, parent string
 		ok           bool
@@ -150,7 +149,7 @@ func TestValidatePlacement(t *testing.T) {
 		{"project", "epic", false}, // a project is at the root only
 		{"nope", "", false},
 	} {
-		vs := ValidatePlacement(tc.kind, tc.parent, e)
+		vs := ValidatePlacement(tc.kind, tc.parent)
 		if (len(vs) == 0) != tc.ok {
 			t.Errorf("ValidatePlacement(%q, %q) = %v, want ok=%v", tc.kind, tc.parent, codes(vs), tc.ok)
 		}

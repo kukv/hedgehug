@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
 
 // memFiles is a set of files in memory.
@@ -378,12 +379,14 @@ func parents(t *testing.T, after memFiles) []string {
 	return out
 }
 
-func TestRepairThreeCycleWithBaseRevertsAChangedParent(t *testing.T) {
+// Every edge of this cycle is a task under a task, so the base changes nothing:
+// the one updated last (b) is cut, and no base parent can hold it.
+func TestRepairThreeCycleWithBaseCutsTheLatestMisplaced(t *testing.T) {
 	after, rs := repair(t, RepairInput{Files: threeCycle, Base: base3})
-	if got := parents(t, after); !slices.Equal(got, []string{uncatA, cyC, cyA}) {
-		t.Errorf("parents = %v", got) // a, changed and later than c, leaves for 未分類 (its base root cannot hold a task); b, updated last, keeps c
+	if got := parents(t, after); !slices.Equal(got, []string{cyB, uncatA, cyA}) {
+		t.Errorf("parents = %v", got)
 	}
-	if len(rs) != 1 || rs[0].Kind != "parent_cycle" || rs[0].ULID.String() != cyA || rs[0].Value != `{"from":"`+cyB+`","to":"`+uncatA+`"}` {
+	if len(rs) != 1 || rs[0].Kind != "parent_cycle" || rs[0].ULID.String() != cyB || rs[0].Value != `{"from":"`+cyC+`","to":"`+uncatA+`"}` {
 		t.Errorf("repaired = %+v", rs)
 	}
 }
@@ -406,15 +409,14 @@ func TestRepairCycleWithoutChangedMemberPicksAmongAll(t *testing.T) {
 }
 
 func TestRepairCycleBaseParentStillCyclesGoesToUncategorized(t *testing.T) {
-	// Only c has another parent than in the base, and its base parent b
-	// still leads back to c.
+	// The base parent of b (c's old parent) still leads back to b.
 	base := memFiles{
 		pathOf(cyA): taskFile(cyA, "WEB-1", wsA, cyB, "2026-10-31T09:00:00Z"),
 		pathOf(cyB): taskFile(cyB, "WEB-2", wsA, cyC, "2026-10-31T09:00:00Z"),
 		pathOf(cyC): taskFile(cyC, "WEB-3", wsA, cyB, "2026-10-31T09:00:00Z"),
 	}
 	after, rs := repair(t, RepairInput{Files: threeCycle, Base: base})
-	if got := parents(t, after); !slices.Equal(got, []string{cyB, cyC, uncatA}) || len(rs) != 1 {
+	if got := parents(t, after); !slices.Equal(got, []string{cyB, uncatA, cyA}) || len(rs) != 1 {
 		t.Errorf("parents = %v, repaired = %+v", got, rs)
 	}
 }
@@ -587,5 +589,97 @@ func TestRepairUnreadableNumbers(t *testing.T) {
 	f[pathOf(y)] = taskFile(y, "WEB-1", wsA, "", "2026-10-31T10:00:00Z")
 	if _, _, _, err := Repair(in); err == nil {
 		t.Error("numbered past a numbers.yaml it cannot read")
+	}
+}
+
+// 未分類 starts in the default todo status of the schema of the store.
+func TestRepairUncategorizedUsesTheTodoStatusOfTheSchema(t *testing.T) {
+	p, c := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	sc := schema.Default()
+	var renamed bool
+	for i := range sc.Statuses {
+		if sc.Statuses[i].Name == "todo" {
+			sc.Statuses[i].Name, renamed = "open", true
+		}
+	}
+	if !renamed {
+		t.Fatal("the default schema has no todo status")
+	}
+	b, err := sc.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := memFiles{
+		schema.Path:                        b,
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(p):                          taskFile(p, "WEB-1", wsA, "", "2026-10-31T10:00:00Z", "kind: project", "status: open", "deleted_at: 2026-10-31T10:00:00Z"),
+		pathOf(c):                          taskFile(c, "WEB-2", wsA, p, "2026-10-31T10:00:00Z", "status: open"),
+	}
+	after, _ := repair(t, RepairInput{Files: f})
+	if got := decoded(t, after[pathOf(uncatA)]).Status; got != "open" {
+		t.Errorf("status = %q, want open", got)
+	}
+}
+
+// The derived 未分類 was deleted, or renamed, or put under another project: a
+// task whose parent is deleted still gets a place, never the root.
+func TestRepairUncategorizedThatWasChanged(t *testing.T) {
+	gone, c := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	other := mustULID("01JD0000000000000000000003")
+	for _, tc := range []struct {
+		name       string
+		extra      []string
+		parent     string
+		wantReused bool
+	}{
+		{"deleted", []string{"deleted_at: 2026-10-31T10:00:00Z", "title: 未分類"}, "", false},
+		{"renamed", []string{"title: Misc"}, "", true},
+		{"not at the root", []string{"title: 未分類"}, other.String(), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := memFiles{
+				model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+				pathOf(other.String()):             taskFile(other.String(), "WEB-3", wsA, "", "2026-10-31T10:00:00Z", "kind: project", "title: Other"),
+				pathOf(uncatA):                     taskFile(uncatA, "WEB-4", wsA, tc.parent, "2026-10-31T10:00:00Z", append([]string{"kind: project"}, tc.extra...)...),
+				pathOf(gone):                       taskFile(gone, "WEB-1", wsA, "", "2026-10-31T10:00:00Z", "kind: project", "deleted_at: 2026-10-31T10:00:00Z"),
+				pathOf(c):                          taskFile(c, "WEB-2", wsA, gone, "2026-10-31T10:00:00Z"),
+			}
+			after, rs := repair(t, RepairInput{Files: f})
+			got := decoded(t, after[pathOf(c)])
+			if got.Parent == nil || got.Kind != "task" {
+				t.Fatalf("task = parent %v kind %s; a task is never put at the root", got.Parent, got.Kind)
+			}
+			u := decoded(t, after[pathOf(got.Parent.String())])
+			if u.Kind != "project" || u.Parent != nil || u.DeletedAt != nil {
+				t.Errorf("parent = %+v, want a live root project", u)
+			}
+			if reused := got.Parent.String() == uncatA; reused != tc.wantReused {
+				t.Errorf("parent %s, the derived one is reused: %v, want %v", got.Parent, reused, tc.wantReused)
+			}
+			if !tc.wantReused && (u.Title != "未分類" || u.Created != time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)) {
+				t.Errorf("new project = %q created %v, want 未分類 created with the workspace", u.Title, u.Created)
+			}
+			if len(rs) != 1 {
+				t.Errorf("repaired = %+v", rs)
+			}
+		})
+	}
+}
+
+// With no workspace to make 未分類 in, a task whose parent is deleted is left
+// as it is; the root is not a place for it.
+func TestRepairTaskIsNotPutAtTheRootWithoutAWorkspace(t *testing.T) {
+	p, c := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): []byte("---\n: [\n"),
+		pathOf(p):                          taskFile(p, "WEB-1", wsA, "", "2026-10-31T10:00:00Z", "kind: project", "deleted_at: 2026-10-31T10:00:00Z"),
+		pathOf(c):                          taskFile(c, "WEB-2", wsA, p, "2026-10-31T10:00:00Z"),
+	}
+	after, rs := repair(t, RepairInput{Files: f})
+	if got := decoded(t, after[pathOf(c)]); got.Parent == nil || got.Parent.String() != p {
+		t.Errorf("parent = %v, want it left under the deleted project", got.Parent)
+	}
+	if len(rs) != 0 {
+		t.Errorf("repaired = %+v", rs)
 	}
 }

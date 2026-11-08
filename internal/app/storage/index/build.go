@@ -162,7 +162,7 @@ func (ix *Index) violations(t *model.Task) []schema.Violation {
 	e := ix.sc.For(ix.ancestors(t))
 	vs, _ := schema.ValidateTask(t, e)
 	if parent, known := ix.parentKind(t); known {
-		for _, v := range schema.ValidatePlacement(t.Kind, parent, e) {
+		for _, v := range schema.ValidatePlacement(t.Kind, parent) {
 			if !slices.Contains(vs, v) { // ValidateTask reports an unknown kind too
 				vs = append(vs, v)
 			}

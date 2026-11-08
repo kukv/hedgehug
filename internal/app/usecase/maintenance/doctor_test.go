@@ -276,6 +276,7 @@ func TestRunCycleAndBroken(t *testing.T) {
 	}
 	fs := run(t, dir)
 	var cycles, others int
+	placement := map[string]int{}
 	for _, f := range fs {
 		if f.Check != "task" {
 			continue
@@ -285,12 +286,16 @@ func TestRunCycleAndBroken(t *testing.T) {
 			cycles++
 		case f.Code == "task.placement":
 			// a cycle cannot follow the fixed hierarchy: each task of it is misplaced too
+			placement[f.Task]++
 		default:
 			others++
 		}
 	}
 	if cycles != 2 || others != 1 {
 		t.Errorf("cycles = %d, others = %d, want 2 and 1\n%+v", cycles, others, fs)
+	}
+	if len(placement) != 2 || placement[a.ULID.String()] != 1 || placement[b.ULID.String()] != 1 {
+		t.Errorf("task.placement per task = %v, want exactly one for each of the two on the cycle\n%+v", placement, fs)
 	}
 }
 

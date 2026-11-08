@@ -76,7 +76,7 @@ func ValidateTask(t *model.Task, e *Effective) (violations []Violation, undefine
 
 // ValidatePlacement checks that a task of kind may sit under a parent of
 // parentKind. An empty parentKind means the root.
-func ValidatePlacement(kind, parentKind string, e *Effective) []Violation {
+func ValidatePlacement(kind, parentKind string) []Violation {
 	if _, ok := KindOf(kind); !ok {
 		return []Violation{{CodeUnknownKind, "kind", fmt.Sprintf("unknown kind %q", kind)}}
 	}
@@ -225,7 +225,7 @@ func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *
 
 func taskViolations(t *model.Task, parentKind string, e *Effective) []Violation {
 	vs, _ := ValidateTask(t, e)
-	return append(vs, ValidatePlacement(t.Kind, parentKind, e)...)
+	return append(vs, ValidatePlacement(t.Kind, parentKind)...)
 }
 
 // newViolations returns vs without the ones in had, and without repeats:
