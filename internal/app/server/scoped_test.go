@@ -87,7 +87,7 @@ func TestScopedPutErrors(t *testing.T) {
 		t.Errorf("an unknown field: %+v", e)
 	}
 	var out taskWriteBody
-	ts.call("POST", "/api/tasks", map[string]any{"title": "plain"}, 201, &out)
+	ts.call("POST", "/api/tasks", map[string]any{"title": "plain", "parent": p.ID}, 201, &out)
 	if e := ts.problem("PUT", "/api/schema/scoped/"+out.Task.ID, map[string]any{"statuses": []string{}}, 422); e.Type != "scoped.not_group" {
 		t.Errorf("a task: %+v", e)
 	}

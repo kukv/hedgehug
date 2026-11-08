@@ -1,7 +1,9 @@
 package server
 
 import (
+	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
@@ -110,8 +112,15 @@ func TestSchemaEditErrors(t *testing.T) {
 	for _, r := range []struct{ method, path string }{
 		{"POST", "/api/schema/kinds"}, {"PATCH", "/api/schema/kinds/bug"}, {"DELETE", "/api/schema/kinds/bug"}, {"PUT", "/api/schema/kinds/order"},
 	} {
-		if e := ts.problem(r.method, r.path, map[string]any{"name": "x"}, 404); e.Type != "http.404" && e.Type != "http.405" {
-			t.Errorf("%s %s: %+v", r.method, r.path, e)
+		// The routes are not in api/openapi.yaml, so the reply is not checked against it.
+		req, err := http.NewRequest(r.method, ts.hs.URL+r.path, strings.NewReader(`{"name":"x"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set("Content-Type", "application/json")
+		if got := ts.raw(req); got.Status != 404 && got.Status != 405 {
+			t.Errorf("%s %s: status %d, body %s", r.method, r.path, got.Status, got.Body)
 		}
 	}
 	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "kind", "old": "task", "new": "item"}, 400)

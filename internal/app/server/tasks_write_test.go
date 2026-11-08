@@ -169,15 +169,16 @@ func TestMoveTask(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	a := ts.add("a", "")
-	b := ts.add("b", "")
+	c := ts.add("c", "")
+	b := ts.add("b", a) // a task under the project a
 	var out taskWriteBody
-	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"parent": a}, 200, &out)
+	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"parent": c}, 200, &out)
 	if out.Task.Parent == nil || out.Commit == nil {
 		t.Fatalf("moved = %+v", out)
 	}
-	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"root": true}, 200, &out)
-	if out.Task.Parent != nil {
-		t.Errorf("parent = %v, want none", *out.Task.Parent)
+	// only a project sits at the root
+	if p := ts.problem("POST", "/api/tasks/"+b+"/move", map[string]any{"root": true}, 422); p.Type != "schema.violation" {
+		t.Errorf("a task to the root: %+v", p)
 	}
 	ts.problem("POST", "/api/tasks/"+b+"/move", map[string]any{"root": true, "parent": a}, 400)
 }

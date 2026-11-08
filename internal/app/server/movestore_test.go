@@ -92,7 +92,7 @@ func TestMoveStorePlanAPI(t *testing.T) {
 	}
 
 	// the destination's workspace, and a parent of it
-	ts.call("POST", "/api/tasks/ME-2/move-store/plan", map[string]any{"to": "team", "workspace": "TM", "parent": "TM-1"}, 200, &v)
+	ts.call("POST", "/api/tasks/ME-3/move-store/plan", map[string]any{"to": "team", "workspace": "TM", "parent": "TM-1"}, 200, &v)
 	if v.Parent == nil || v.Parent.ID != "TM-1" || v.Parent.Title != "two" {
 		t.Errorf("parent = %+v", v.Parent)
 	}
