@@ -68,7 +68,7 @@ func Edit(ss *usecase.Session, fn func(*schema.Schema) (*schema.Schema, []schema
 			}
 		}
 		if opts.Check {
-			if err := noNewViolations(s, ix, cur, next); err != nil {
+			if err := noNewViolations(s, ix, cur, next, ms); err != nil {
 				return err
 			}
 		}
@@ -189,14 +189,39 @@ func notInUse(s *store.Store, u Use) error {
 		fmt.Errorf("%s uses %s; merge it into another first", TaskCount(count), u.Name), args...)
 }
 
+// migrated is t as the migrations ms, read against cur, write it; ok is false
+// when one does not apply (rewriteTasks refuses that).
+func migrated(t *model.Task, cur *schema.Schema, ms []schema.Migration) (out *model.Task, ok bool) {
+	c := *t
+	c.Props = slices.Clone(t.Props)
+	for _, m := range ms {
+		if _, err := m.ApplyTask(&c, cur); err != nil {
+			return nil, false
+		}
+	}
+	return &c, true
+}
+
 // noNewViolations refuses a schema under which a task breaks a rule it did
-// not break under the old one.
-func noNewViolations(s *store.Store, ix *index.Index, cur, next *schema.Schema) error {
-	read := func(u model.ULID) (*model.Task, error) {
+// not break under the old one. The task is looked at as it is written under
+// the new schema: the migrations ms, which rename what the tasks carry, are
+// applied to it and to the parents it is read against.
+func noNewViolations(s *store.Store, ix *index.Index, cur, next *schema.Schema, ms []schema.Migration) error {
+	entry := func(u model.ULID) (*model.Task, error) {
 		if e, ok := ix.Task(u); ok && e.Broken == "" {
 			return &model.Task{ULID: e.ULID, Kind: e.Kind, Parent: e.Parent}, nil
 		}
 		return nil, store.ErrNotFound
+	}
+	readNew := func(u model.ULID) (*model.Task, error) {
+		p, err := entry(u)
+		if err != nil {
+			return nil, err
+		}
+		if m, ok := migrated(p, cur, ms); ok {
+			return m, nil
+		}
+		return p, nil
 	}
 	var lines []string
 	for t, err := range s.Tasks() {
@@ -206,15 +231,19 @@ func noNewViolations(s *store.Store, ix *index.Index, cur, next *schema.Schema) 
 			}
 			return err
 		}
-		oldKind, oldAnc, err := store.Lineage(t, cur, read)
+		oldKind, oldAnc, err := store.Lineage(t, cur, entry)
 		if err != nil {
 			return err
 		}
-		newKind, newAnc, err := store.Lineage(t, next, read)
+		nt, ok := migrated(t, cur, ms)
+		if !ok {
+			continue
+		}
+		newKind, newAnc, err := store.Lineage(nt, next, readNew)
 		if err != nil {
 			return err
 		}
-		for _, v := range schema.ValidateWrite(t, oldKind, cur.For(oldAnc), t, newKind, next.For(newAnc), true) {
+		for _, v := range schema.ValidateWrite(t, oldKind, cur.For(oldAnc), nt, newKind, next.For(newAnc), true) {
 			lines = append(lines, usecase.RefName(ix, t.ULID)+": "+v.String())
 		}
 	}

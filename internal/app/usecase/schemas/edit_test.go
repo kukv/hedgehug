@@ -377,3 +377,101 @@ func TestEditRenamesAPropAndKind(t *testing.T) {
 		t.Errorf("kind = %s", got)
 	}
 }
+
+func refList(us ...model.ULID) *yaml.Node {
+	n := &yaml.Node{Kind: yaml.SequenceNode}
+	for _, u := range us {
+		n.Content = append(n.Content, propScalar(u.String()))
+	}
+	return n
+}
+
+// A rename saved with a change that is checked: the tasks are looked at
+// under their new names.
+func TestEditRenameWithCheckedChange(t *testing.T) {
+	t.Parallel()
+	t.Run("kind name and parents", func(t *testing.T) {
+		t.Parallel()
+		ts := usecasetest.New(t)
+		p := ts.AddProject("Web")
+		a := ts.AddTask("a", func(t *model.Task) { t.Parent = &p })
+		n := "item"
+		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+			ps := []string{"project", "epic"}
+			return sc.ChangeKind("task", schema.KindChange{Name: &n, Parents: &ps})
+		}, schemas.EditOpts{Check: true}); err != nil {
+			t.Fatal(err)
+		}
+		if got := taskNow(t, ts, a.ULID).Kind; got != "item" {
+			t.Errorf("kind = %s", got)
+		}
+	})
+	t.Run("parent kind name", func(t *testing.T) {
+		t.Parallel()
+		ts := usecasetest.New(t)
+		p := ts.AddProject("Web")
+		ts.AddTask("a", func(t *model.Task) { t.Parent = &p })
+		n := "folder"
+		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+			return sc.ChangeKind("project", schema.KindChange{Name: &n})
+		}, schemas.EditOpts{Check: true}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("kind name and role", func(t *testing.T) {
+		t.Parallel()
+		ts := usecasetest.New(t)
+		ts.AddProject("Web")
+		n, r := "folder", schema.RoleContainer
+		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+			return sc.ChangeKind("project", schema.KindChange{Name: &n, Role: &r})
+		}, schemas.EditOpts{Check: true}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("kind name and a new violation", func(t *testing.T) {
+		t.Parallel()
+		ts := usecasetest.New(t)
+		p := ts.AddProject("Web")
+		ts.AddTask("bug", func(t *model.Task) { t.Kind = "bug"; t.Parent = &p })
+		n := "defect"
+		_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+			ps := []string{schema.Root}
+			return sc.ChangeKind("bug", schema.KindChange{Name: &n, Parents: &ps})
+		}, schemas.EditOpts{Check: true})
+		if usecase.ProblemCode(err) != "schema.tasks_invalid" {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("prop name and multi", func(t *testing.T) {
+		t.Parallel()
+		ts := usecasetest.New(t)
+		// no task has the property: a multi change cannot hold for one that
+		// has it, a list being a list
+		a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
+		n, m := "cause", false
+		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+			next, ms, _, err := sc.ChangeProp("causes", schema.PropChange{Name: &n, Multi: &m})
+			return next, ms, err
+		}, schemas.EditOpts{Check: true}); err != nil {
+			t.Fatal(err)
+		}
+		if taskNow(t, ts, a.ULID).Props.Get("priority") == nil {
+			t.Error("the task lost a property")
+		}
+	})
+	t.Run("prop name and a new violation", func(t *testing.T) {
+		t.Parallel()
+		ts := usecasetest.New(t)
+		x, y := ts.AddTask("x", nil), ts.AddTask("y", nil)
+		ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "causes", Value: refList(x.ULID, y.ULID)}} })
+		n, m := "cause", false
+		_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+			next, ms, _, err := sc.ChangeProp("causes", schema.PropChange{Name: &n, Multi: &m})
+			return next, ms, err
+		}, schemas.EditOpts{Check: true})
+		if usecase.ProblemCode(err) != "schema.tasks_invalid" {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
