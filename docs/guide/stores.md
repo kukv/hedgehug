@@ -127,7 +127,7 @@ commits the result on top of that commit, pushes it (the remote moves forward, n
 rewritten), and then syncs as usual, so that your history and the converted changes are merged
 and pushed. Other clones then fast-forward to it with `hh store convert`, or sync as usual if they
 are converted. `--dry-run` lists what would be converted and writes nothing. If yet another clone
-pushes meanwhile, the command stops with `store.convert_unsynced`; run it again.
+pushes meanwhile, the command stops with `store.convert_unsynced`; run it again. If the sync that merges fails after the push (for example a file it would write has uncommitted changes), the converted changes of the remote are already pushed and `hh store convert` has nothing left to do: fix the cause and run `hh sync`.
 
 ### Before you convert
 

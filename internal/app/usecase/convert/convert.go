@@ -129,7 +129,8 @@ func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 		}
 		reports = append(reports, rep...)
 		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
-			return reports, fmt.Errorf("sync %s: %w", e.Name, err)
+			// The converted changes of origin are pushed; only the merge is left.
+			return reports, fmt.Errorf("the changes of origin are converted and pushed, but the sync that merges them with this store failed; fix the cause and run hh sync to finish: sync %s: %w", e.Name, err)
 		}
 	}
 	if p.fastForward {
@@ -185,6 +186,10 @@ func convertCommit(ss *usecase.Session, s *store.Store, opt Options, from, to in
 	return reports, nil
 }
 
+// beforeRemotePush runs before convertRemote pushes; the tests make another
+// clone push here.
+var beforeRemotePush = func() {}
+
 // convertRemote applies the steps from format from to format to on the files
 // of origin's head, commits the result as one commit whose parent is that head
 // and pushes it, so that origin goes ahead by a fast-forward and the commit
@@ -214,6 +219,7 @@ func convertRemote(ss *usecase.Session, s *store.Store, opt Options, from, to in
 	if err != nil {
 		return nil, err
 	}
+	beforeRemotePush()
 	err = s.WithLocalLock("sync.lock", usecase.SyncLockWait, func() error {
 		return r.PushCommit("origin", c)
 	})

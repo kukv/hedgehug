@@ -684,14 +684,13 @@ func TestFormatDivergedAndTheWayBack(t *testing.T) {
 	}
 }
 
-// A clone converts, and before it pushes, another clone pushes a commit in the
-// old format: the clone is in the newest format and origin in an older one, and
-// the two are apart. hh store convert converts the changes of origin as a commit
-// on origin's head, pushes it and merges.
-func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
-	t.Parallel()
-	a := newRemoteFx(t)
-	d := cloneOld(t, a) // a third clone, which has nothing of its own
+// reverseRace makes the state of the race: a converts (with opt) and does not push, an
+// edit of its own follows, and another clone pushes a task at the root and a file in format
+// 1. d is a third clone that has nothing of its own; edited is the file a edited.
+func reverseRace(t *testing.T, opt Options) (a *remoteFx, d *usecasetest.Session, theirs *model.Task, edited string) {
+	t.Helper()
+	a = newRemoteFx(t)
+	d = cloneOld(t, a)
 	_, e, err := a.ts.Entry()
 	if err != nil {
 		t.Fatal(err)
@@ -701,12 +700,23 @@ func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the conversion is committed here and not pushed
-	if _, err := convertCommit(a.ts.Session, s, Options{}, 1, model.StoreFormat); err != nil {
+	if _, err := convertCommit(a.ts.Session, s, opt, 1, model.StoreFormat); err != nil {
 		t.Fatal(err)
 	}
 	_ = s.Repo().Close()
+	// a task of its own is edited after that (the project: the conversion leaves it as it is)
+	edited = model.TaskPath(a.o.project.ULID)
+	raw, err := os.ReadFile(filepath.Join(e.Path, filepath.FromSlash(edited))) //nolint:gosec // the test's store
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.Replace(string(raw), "title: web", "title: web renamed", 1)
+	if renamed == string(raw) {
+		t.Fatal("the title was not found in the file of the project")
+	}
+	commitRaw(t, a.ts, "edit after the conversion", map[string]string{edited: renamed})
 	// the other clone pushes: a task at the root and a file, in format 1
-	theirs, _ := rawTask(t, a.o.ws, 7, "task", "theirs at the root", nil)
+	theirs, _ = rawTask(t, a.o.ws, 7, "task", "theirs at the root", nil)
 	theirs.Rank, _ = model.Between("", "")
 	enc, err := theirs.Encode()
 	if err != nil {
@@ -715,13 +725,27 @@ func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
 	pushFile(t, a, model.TaskPath(theirs.ULID), string(enc))
 	pushFile(t, a, "notes.txt", "theirs")
 	a.ts.DropMount()
+	return a, d, theirs, edited
+}
 
+// A clone converts, and before it pushes, another clone pushes a commit in the
+// old format: the clone is in the newest format and origin in an older one, and
+// the two are apart. hh store convert converts the changes of origin as a commit
+// on origin's head, pushes it and merges.
+func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
+	t.Parallel()
+	// the conversion of a is stamped with a time other than the one of the run that follows
+	a, d, theirs, edited := reverseRace(t, Options{Now: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)})
+	_, e, err := a.ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
 	// a sync says which way it goes
 	c, _, err := a.ts.Entry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err = a.ts.OpenStoreAtAnyFormat(e.Path)
+	s, err := a.ts.OpenStoreAtAnyFormat(e.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,6 +787,10 @@ func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(storeDir(t, a.ts), "notes.txt")); err != nil || string(b) != "theirs" { //nolint:gosec // the test's store
 		t.Errorf("the change of the other clone: %q, %v", b, err)
 	}
+	// the edit a made after its conversion survived the merge
+	if b, err := os.ReadFile(filepath.Join(storeDir(t, a.ts), filepath.FromSlash(edited))); err != nil || !strings.Contains(string(b), "title: web renamed") { //nolint:gosec // the test's store
+		t.Errorf("the edit of its own task is gone: %q, %v", b, err)
+	}
 	// its task at the root was converted: under 未分類
 	_, ix, err := a.ts.Open()
 	if err != nil {
@@ -798,6 +826,74 @@ func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
 	}
 	if _, err := replication.Sync(a.ts.Session, false, true); err != nil {
 		t.Errorf("sync after the way back: %v", err)
+	}
+}
+
+// Another clone pushes while the changes of origin are converted: the push is refused, nothing
+// is converted, the error is store.convert_unsynced, and running the command again works. Not
+// parallel: it replaces beforeRemotePush.
+func TestReverseConvertPushRefusedThenAgain(t *testing.T) {
+	a, _, _, _ := reverseRace(t, Options{})
+	pushed := false
+	beforeRemotePush = func() {
+		if !pushed {
+			pushed = true
+			pushFile(t, a, "more.txt", "again")
+		}
+	}
+	t.Cleanup(func() { beforeRemotePush = func() {} })
+	before := headOf(t, a.ts)
+	_, err := Run(a.ts.Session, Options{}, false)
+	wantCode(t, err, usecase.KindConflict, "store.convert_unsynced")
+	if !strings.Contains(err.Error(), "run hh store convert again") {
+		t.Errorf("the error does not say to run it again: %v", err)
+	}
+	if headOf(t, a.ts) != before {
+		t.Error("the store changed")
+	}
+	reports, err := Run(a.ts.Session, Options{}, false)
+	if err != nil || len(reports) == 0 {
+		t.Fatalf("second run = %v, %v", reports, err)
+	}
+	if originHead(t, a.remote) != headOf(t, a.ts) || formatOf(t, a.ts) != model.StoreFormat {
+		t.Error("origin is not at the head of the converted store")
+	}
+	for _, f := range []string{"notes.txt", "more.txt"} {
+		if _, err := os.Stat(filepath.Join(storeDir(t, a.ts), f)); err != nil {
+			t.Errorf("%s was lost: %v", f, err)
+		}
+	}
+}
+
+// The sync after the push can fail: the converted changes of origin are pushed already, the error
+// tells to run hh sync, and hh sync finishes it.
+func TestReverseConvertSyncFailsAfterThePush(t *testing.T) {
+	t.Parallel()
+	a, _, _, _ := reverseRace(t, Options{})
+	// a file origin has and the store does not, written here without a commit: the merge would overwrite it
+	if err := os.WriteFile(filepath.Join(storeDir(t, a.ts), "notes.txt"), []byte("mine, not committed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reports, err := Run(a.ts.Session, Options{}, false)
+	if err == nil || !strings.Contains(err.Error(), "run hh sync to finish") || !errors.Is(err, replicate.ErrDirty) {
+		t.Fatalf("convert = %v, %v", reports, err)
+	}
+	if len(reports) == 0 {
+		t.Error("the reports of what was pushed are not returned")
+	}
+	// the push happened: origin is in the newest format; converting again has nothing to do
+	if reports, err := Run(a.ts.Session, Options{}, false); err != nil || len(reports) != 0 {
+		t.Errorf("run again = %v, %v", reports, err)
+	}
+	// the cause is fixed, and hh sync finishes it
+	if err := os.Remove(filepath.Join(storeDir(t, a.ts), "notes.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := replication.Sync(a.ts.Session, false, true); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if originHead(t, a.remote) != headOf(t, a.ts) || formatOf(t, a.ts) != model.StoreFormat {
+		t.Error("origin is not at the head of the store after the sync")
 	}
 }
 
