@@ -1769,12 +1769,12 @@ export interface TasksChanged {
 }
 
 /**
- * Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid
+ * Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found
  */
 export type TemplateDefaultsInputBodyDefault = {[key: string]: string};
 
 export interface TemplateDefaultsInputBody {
-  /** Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid */
+  /** Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found */
   default: TemplateDefaultsInputBodyDefault;
 }
 

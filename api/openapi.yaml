@@ -3289,7 +3289,7 @@ components:
         default:
           additionalProperties:
             type: string
-          description: Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid
+          description: Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found
           type: object
       required:
         - default

@@ -35,6 +35,10 @@ type EditOpts struct {
 	// Check refuses a schema under which a task breaks a rule it did not
 	// break under the old one.
 	Check bool
+	// Templates are the templates the change names (the defaults of the
+	// kinds); one the store does not have refuses the change with
+	// template.not_found, once the schema is found valid.
+	Templates []string
 }
 
 // Edit makes the change fn describes to the schema, and the tasks it
@@ -57,6 +61,9 @@ func Edit(ss *usecase.Session, fn func(*schema.Schema) (*schema.Schema, []schema
 		}
 		if ps := next.AddedProblems(cur.Check()); len(ps) > 0 {
 			return schemaInvalid(ps)
+		}
+		if err := templatesNamed(s, opts.Templates); err != nil {
+			return err
 		}
 		uses := opts.Use
 		if opts.UseAfter != nil {

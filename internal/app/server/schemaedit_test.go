@@ -80,6 +80,13 @@ func TestSchemaEditTemplateDefaults(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 
+	// a template that the store does not have is refused, as in a project's override
+	if e := ts.problem("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "bug"}}, 404); e.Type != "template.not_found" {
+		t.Errorf("missing template: %+v", e)
+	}
+	for _, name := range []string{"bug", "feature"} {
+		ts.call("PUT", "/api/templates/"+name, map[string]any{"content": bugTemplate}, 200, nil)
+	}
 	var w schemas.EditWrite
 	ts.call("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "bug", "task": "feature"}}, 200, &w)
 	if w.Schema.Templates == nil || w.Schema.Templates.Default["bug"] != "bug" || w.Schema.Templates.Default["task"] != "feature" || w.Commit == nil {

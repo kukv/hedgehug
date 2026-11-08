@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -81,7 +83,7 @@ type orderInput struct {
 type templateDefaultsInput struct {
 	StoreParam
 	Body struct {
-		Default map[string]string `json:"default" nullable:"false" doc:"Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid"`
+		Default map[string]string `json:"default" nullable:"false" doc:"Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found"`
 	}
 }
 
@@ -140,7 +142,7 @@ func (s *Server) registerSchemaEdit() {
 		func(_ context.Context, in *templateDefaultsInput) (*editOutput, error) {
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) {
 				return sc.SetTemplateDefaults(in.Body.Default), nil
-			}), schemas.EditOpts{})
+			}), schemas.EditOpts{Templates: slices.Sorted(maps.Values(in.Body.Default))})
 		})
 
 	huma.Register(s.api, reg("add-prop", http.MethodPost, "/api/schema/props", "Add a property or a relation at the end"),

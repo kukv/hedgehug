@@ -147,6 +147,12 @@ func templatesExist(s *store.Store, ch schema.ScopedChange) error {
 			names = append(names, n)
 		}
 	}
+	return templatesNamed(s, names)
+}
+
+// templatesNamed refuses the first of names that is not a template of the
+// store (KindNotFound, template.not_found).
+func templatesNamed(s *store.Store, names []string) error {
 	for _, n := range names {
 		if _, err := s.Template(n); errors.Is(err, store.ErrNotFound) {
 			return usecase.NewErr(usecase.KindNotFound, "template.not_found", fmt.Errorf("template %s is not in this store", n), "name", n)
