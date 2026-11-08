@@ -720,6 +720,19 @@ components:
         - repaired
         - findings
       type: object
+    EditWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        schema:
+          $ref: "#/components/schemas/SchemaView"
+      required:
+        - schema
+        - commit
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -1123,6 +1136,59 @@ components:
         - author
         - to
         - time
+      type: object
+    KindAddInputBody:
+      additionalProperties: false
+      properties:
+        anywhere:
+          type: boolean
+        icon:
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        parents:
+          description: The kinds it may sit under, root for the top; leave it out with anywhere
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        role:
+          enum:
+            - container
+            - work
+          type: string
+        template:
+          type: string
+      required:
+        - name
+        - role
+      type: object
+    KindChangeInputBody:
+      additionalProperties: false
+      properties:
+        anywhere:
+          type: boolean
+        default:
+          type: boolean
+        icon:
+          type: string
+        label:
+          type: string
+        parents:
+          description: Not empty; anywhere takes the limit off
+          items:
+            type: string
+          type: array
+        role:
+          enum:
+            - container
+            - work
+          type: string
+        template:
+          type: string
       type: object
     KindDef:
       additionalProperties: false
@@ -1705,6 +1771,19 @@ components:
             type: string
           type: array
       type: object
+    OrderBody:
+      additionalProperties: false
+      properties:
+        names:
+          description: Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - names
+      type: object
     Overwritten:
       additionalProperties: false
       properties:
@@ -1832,6 +1911,55 @@ components:
         - type
         - title
         - status
+      type: object
+    PropAddInputBody:
+      additionalProperties: false
+      properties:
+        inverse:
+          type: string
+        label:
+          type: string
+        multi:
+          type: boolean
+        name:
+          type: string
+        symmetric:
+          type: boolean
+        type:
+          enum:
+            - text
+            - number
+            - bool
+            - date
+            - datetime
+            - duration
+            - enum
+            - multi_enum
+            - user
+            - task_ref
+            - url
+          type: string
+        values:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - name
+        - type
+      type: object
+    PropChangeInputBody:
+      additionalProperties: false
+      properties:
+        inverse:
+          type: string
+        label:
+          type: string
+        multi:
+          type: boolean
+        symmetric:
+          type: boolean
       type: object
     PropDef:
       additionalProperties: false
@@ -2250,6 +2378,12 @@ components:
           type:
             - array
             - "null"
+        prop_order:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         props:
           additionalProperties:
             $ref: "#/components/schemas/PropDef"
@@ -2274,6 +2408,7 @@ components:
         - props
         - workflow
         - scoped
+        - prop_order
       type: object
     ScopedDef:
       additionalProperties: false
@@ -2640,6 +2775,46 @@ components:
       required:
         - sprint
         - commit
+      type: object
+    StatusAddInputBody:
+      additionalProperties: false
+      properties:
+        category:
+          enum:
+            - todo
+            - doing
+            - done
+            - canceled
+          type: string
+        color:
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - category
+      type: object
+    StatusChangeInputBody:
+      additionalProperties: false
+      properties:
+        category:
+          enum:
+            - todo
+            - doing
+            - done
+            - canceled
+          type: string
+        color:
+          description: Empty takes it off
+          type: string
+        default:
+          description: true makes it the default of its category; false is not a change
+          type: boolean
+        label:
+          description: Empty takes it off
+          type: string
       type: object
     StatusDef:
       additionalProperties: false
@@ -3321,6 +3496,14 @@ components:
           type: integer
       required:
         - count
+      type: object
+    ValueAddInputBody:
+      additionalProperties: false
+      properties:
+        value:
+          type: string
+      required:
+        - value
       type: object
     VelocityRow:
       additionalProperties: false
@@ -5288,6 +5471,145 @@ paths:
       summary: Check the schema and the tasks, as hh schema check
       tags:
         - schema
+  /api/schema/kinds:
+    post:
+      operationId: add-kind
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KindAddInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a kind at the end
+      tags:
+        - schema
+  /api/schema/kinds/order:
+    put:
+      operationId: order-kinds
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Put the kinds in order
+      tags:
+        - schema
+  /api/schema/kinds/{name}:
+    delete:
+      operationId: delete-kind
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a kind no task uses
+      tags:
+        - schema
+    patch:
+      operationId: change-kind
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KindChangeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change a kind
+      tags:
+        - schema
   /api/schema/migrate:
     post:
       operationId: migrate-schema
@@ -5319,6 +5641,266 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Rename or merge a status, kind, property or value, as hh migrate
+      tags:
+        - schema
+  /api/schema/props:
+    post:
+      operationId: add-prop
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropAddInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a property or a relation at the end
+      tags:
+        - schema
+  /api/schema/props/order:
+    put:
+      operationId: order-props
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Put the relations, or the other properties, in order
+      tags:
+        - schema
+  /api/schema/props/{name}:
+    delete:
+      operationId: delete-prop
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a property no task uses
+      tags:
+        - schema
+    patch:
+      operationId: change-prop
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropChangeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change a property or a relation
+      tags:
+        - schema
+  /api/schema/props/{name}/values:
+    post:
+      operationId: add-value
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValueAddInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a value at the end
+      tags:
+        - schema
+  /api/schema/props/{name}/values/order:
+    put:
+      operationId: order-values
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Put the values in order
+      tags:
+        - schema
+  /api/schema/props/{name}/values/{value}:
+    delete:
+      operationId: delete-value
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+        - description: The value of the enum or multi_enum property
+          in: path
+          name: value
+          required: true
+          schema:
+            description: The value of the enum or multi_enum property
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a value no task uses
       tags:
         - schema
   /api/schema/scoped/{project}:
@@ -5392,6 +5974,145 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Change the override of a project, as hh schema scope set
+      tags:
+        - schema
+  /api/schema/statuses:
+    post:
+      operationId: add-status
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusAddInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a status at the end
+      tags:
+        - schema
+  /api/schema/statuses/order:
+    put:
+      operationId: order-statuses
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Put the statuses in order
+      tags:
+        - schema
+  /api/schema/statuses/{name}:
+    delete:
+      operationId: delete-status
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a status no task uses
+      tags:
+        - schema
+    patch:
+      operationId: change-status
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the definition
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the definition
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusChangeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change a status
       tags:
         - schema
   /api/sprints:
