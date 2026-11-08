@@ -31,7 +31,7 @@ test("a status taken off is saved, and the kanban of the project loses its colum
 
   await tab(page, "設定").click();
   await statuses(page)
-    .getByRole("checkbox", { name: /待機中/ })
+    .getByRole("checkbox", { name: /Waiting/ })
     .uncheck();
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(saved(page)).toBeVisible();
@@ -55,7 +55,7 @@ test("a field the workflow needs is asked for on the kanban after it is saved", 
   const form = page.getByRole("group", { name: "必須の項目を追加" });
   await form
     .getByRole("combobox", { name: "必須にするステータス" })
-    .selectOption({ label: "進行中" });
+    .selectOption({ label: "In progress" });
   await form.getByRole("checkbox", { name: "points", exact: true }).check();
   await form.getByRole("button", { name: "必須の項目を追加" }).click();
   await page.getByRole("button", { name: "保存", exact: true }).click();
@@ -67,7 +67,7 @@ test("a field the workflow needs is asked for on the kanban after it is saved", 
   await expect(card).toBeVisible();
   await dragCard(page, card, column(page, "in_progress"));
   await expect(
-    page.getByRole("dialog", { name: `${ship.id} を進行中にするには ポイント が必要です` }),
+    page.getByRole("dialog", { name: `${ship.id} をIn progressにするには ポイント が必要です` }),
   ).toBeVisible();
   expect(hh.show(ship.id).status).toBe("todo");
 });

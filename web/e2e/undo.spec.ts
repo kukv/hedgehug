@@ -25,7 +25,7 @@ test("the palette takes back my last operation without asking", async ({ page, h
   expect(hh.show(t.id).status).toBe("done");
   await hh.open(page, `/tasks/${t.ulid}`);
   const status = properties(page).getByRole("button", { name: "ステータス" });
-  await expect(status).toContainText("完了");
+  await expect(status).toContainText("Done");
 
   await runUndoFromPalette(page);
 
@@ -34,7 +34,7 @@ test("the palette takes back my last operation without asking", async ({ page, h
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect.poll(() => hh.show(t.id).status).toBe("todo");
   // the detail follows, and the page does not show its own undo as a change from outside
-  await expect(status).toContainText("未着手");
+  await expect(status).toContainText("Todo");
   await expect(page.getByText("CLI で更新 · 今")).toHaveCount(0);
 });
 

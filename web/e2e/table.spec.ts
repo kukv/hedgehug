@@ -30,7 +30,7 @@ test("the status cell chooses a status from a menu", async ({ page, hh }) => {
   await hh.open(page, await tab(hh, "table"));
 
   await page.getByRole("button", { name: `ステータス: ${alpha.id}` }).click();
-  await page.getByRole("menuitem", { name: /進行中/ }).click();
+  await page.getByRole("menuitem", { name: /In progress/ }).click();
   await expect.poll(() => hh.show(alpha.id).status).toBe("in_progress");
 });
 

@@ -187,13 +187,15 @@ test("a refused rule is told, and the field it needs moves the task", async ({ p
   expect(hh.show(task.id).status).toBe("in_progress");
 
   await hh.open(page, "/inbox?tab=automation");
-  await expect(page.getByText(/ルール opened が 進行中 にしました（PR が開かれた）/)).toBeVisible();
+  await expect(
+    page.getByText(/ルール opened が In progress にしました（PR が開かれた）/),
+  ).toBeVisible();
   await expect(page.getByText(/ルール merged で動かせませんでした/)).toBeVisible();
 
-  await page.getByRole("button", { name: "ポイント を入力して完了にする" }).click();
+  await page.getByRole("button", { name: "ポイント を入力してDoneにする" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("spinbutton").fill("3");
-  await dialog.getByRole("button", { name: "完了にする" }).click();
+  await dialog.getByRole("button", { name: "Doneにする" }).click();
   await expect.poll(() => hh.show(task.id).status).toBe("done");
 
   await page.goto(`${hh.origin}/activity?sync=automation`);
