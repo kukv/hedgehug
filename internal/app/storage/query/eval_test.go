@@ -98,6 +98,9 @@ func TestRunFilters(t *testing.T) {
 		{"duplicates:" + f.ids["c"].String(), Options{}, []string{"a"}},
 		{"duplicates.inverse:" + f.ids["a"].String(), Options{}, []string{"c"}},
 		{"duplicates.inverse:" + f.ids["c"].String(), Options{}, []string{}},
+		{"relates.inverse:" + f.ids["c"].String(), Options{}, []string{"b"}}, // symmetric: as relates:
+		{"relates.inverse:" + f.ids["b"].String(), Options{}, []string{"c"}},
+		{"relates.inverse:none", Options{}, []string{"P", "E", "a"}},
 		{"blocked_by.inverse:" + f.ids["a"].String(), Options{}, []string{"b"}},
 		{"relates:" + f.ids["c"].String(), Options{}, []string{"b"}},
 		{"relates:" + f.ids["b"].String(), Options{}, []string{"c"}}, // symmetric

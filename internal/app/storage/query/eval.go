@@ -219,6 +219,9 @@ func (c *compiler) term(t Term) (pred, error) {
 			return c.inverse(t, name)
 		}
 		if p, found := c.sc.Prop(name); found && p.Type == schema.TypeTaskRef {
+			if p.Symmetric {
+				return c.prop(t, p) // no direction: the same as the key itself
+			}
 			return c.inverse(t, p.Name)
 		}
 	}
