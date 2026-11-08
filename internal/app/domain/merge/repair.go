@@ -284,18 +284,6 @@ func (r *repairer) findCycle() []model.ULID {
 	return nil
 }
 
-// onCycle reports whether the parents of u lead back to u.
-func (r *repairer) onCycle(u model.ULID) bool {
-	seen := map[model.ULID]bool{}
-	for p := r.tasks[u].Parent; p != nil && r.tasks[*p] != nil && !seen[*p]; p = r.tasks[*p].Parent {
-		if *p == u {
-			return true
-		}
-		seen[*p] = true
-	}
-	return false
-}
-
 // parentChanged reports whether task u has another parent than in the
 // base. Without a base, no parent is known to have changed.
 func (r *repairer) parentChanged(u model.ULID) bool {
