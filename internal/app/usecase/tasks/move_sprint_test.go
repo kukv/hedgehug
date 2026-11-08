@@ -17,7 +17,9 @@ func TestMoveToWorkspaceDetachesSprintAndReleases(t *testing.T) {
 	mySprint, myRelease := ts.PutSprintRelease(me, "S3", "v1")
 	gone := model.NewULID()
 	ts.WriteAndCommit(model.ReleasePath(gone), "this is not a release\n") // a file that cannot be read
-	ts.AddTask("parent", func(t *model.Task) { t.Kind, t.Workspace, t.Sprint, t.Releases = "project", me, &mySprint, []model.ULID{myRelease} })
+	ts.AddTask("parent", func(t *model.Task) {
+		t.Kind, t.Workspace, t.Sprint, t.Releases = "project", me, &mySprint, []model.ULID{myRelease}
+	})
 	ts.AddTask("dangling", func(t *model.Task) { t.Kind, t.Workspace, t.Releases = "project", me, []model.ULID{gone} })
 
 	// The sprint S3 and the release v1 are of "me", not of "api", so they go.
