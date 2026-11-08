@@ -25,6 +25,7 @@ const schema = {
   kinds: [],
   props: { points: { type: "number" }, area: { type: "text" } },
   scoped: [],
+  prop_order: [],
   workflow: { transitions: {}, required: {} },
   templates: [],
   templateDefaults: {},

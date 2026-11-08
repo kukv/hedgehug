@@ -52,6 +52,7 @@ const schema: SchemaView = {
   },
   workflow: { transitions: {}, required: {} },
   scoped: [],
+  prop_order: [],
 };
 
 describe("canParent", () => {
