@@ -48,10 +48,10 @@ then the store you set as the default.
 ```console
 $ hh store default personal
 personal
-$ hh add "Buy milk"
-Added ME-1 (...) Buy milk
+$ hh add "Buy milk" --parent ME-1
+Added ME-2 (...) Buy milk
 → added to personal / personal
-$ hh add "Plan the demo" --store team
+$ hh add "Plan the demo" --store team --parent WEB-1
 Added WEB-5 (...) Plan the demo
 → added to team / team
 ```
@@ -69,6 +69,50 @@ Added WEB-7 (...) Child of website
 
 Most commands take `--store <name>`. When several stores are set up and a command needs
 one (`hh workspace ls`, for example), it asks for `--store`.
+
+## The store format and `hh store convert`
+
+A store records its format in `.hedgehug/store.yaml`. This version of hedgehug uses
+format 2, in which the kinds of task are fixed (see [Planning](planning.md#kinds)).
+
+- A store in an **older** format does not open. Every command except `hh store convert`
+  and `hh doctor` stops with `hh store convert で新しい形式にしてください`, and the browser shows the same
+  sentence on the store's card in the sidebar and in the settings. `hh doctor` reports
+  the format and names the command.
+- A store in a **newer** format does not open either: update hedgehug.
+
+`hh store convert` brings the store to the newest format, one step after the other, and writes
+all of it as one commit. A store with a remote is converted only when it is in sync with
+it, and the result is pushed; if it is not, the command stops with
+`store.convert_unsynced` (HTTP 409) until you sync.
+
+```console
+$ hh store convert --dry-run
+Format 1 -> 2
+  ワークスペース me の直下のタスクを「未分類」プロジェクトの下へ移した: 1 件（「未分類」を作った: ME-3）
+  schema.yaml の kinds を消した
+  store.yaml の format を 1 から 2 にした
+Nothing was written (--dry-run).
+$ hh store convert
+```
+
+`--dry-run` lists what each step would change and writes nothing; `--json` prints the
+same as JSON. Running it again changes nothing.
+
+- A kind of your own becomes a project when it groups work at the root of a workspace, an
+  epic when it groups work below, and a task when it is a work item. `--kind <old>=<new>`
+  (repeatable) moves the tasks of one kind to one of the fixed kinds instead, such as
+  `--kind sprint=epic`.
+- A task that sat at the root of a workspace and is not a project moves under a project
+  named 「未分類」, made if it is not there.
+- A story, a task or a bug under a story, a task or a bug becomes a step.
+- `--store <name>` picks the store.
+
+When another clone has already converted the remote, `hh store convert` on a clone with
+no unpushed commits fast-forwards it to the remote, and does not convert anything itself. A clone
+that still has unpushed commits has its own changes converted first; see
+[Sync](sync.md#when-the-remote-is-in-a-newer-format). When the remote is at an intermediate
+format, the clone is converted to that format, synced, and then given the remaining steps.
 
 ## Move a task to another store
 

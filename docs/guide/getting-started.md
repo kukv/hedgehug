@@ -67,7 +67,7 @@ WEB-2  01M6QAZMJND1BXZNFVP2PXHFHP  done    bug                             Fix t
 `hh ls --tree` shows the tasks under their parents.
 
 ```bash
-hh add "Review the login page"       # goes to the default store
+hh add "Review the login page" --parent WEB-6   # a task under the project WEB-6, in the default store
 hh status WEB-1 in_progress
 hh set WEB-1 assignees=github.com/me labels+=ui
 hh done WEB-1
@@ -83,8 +83,12 @@ The statuses depend on the store's schema; the default one has `backlog`, `todo`
 
 ```bash
 hh store init me --prefix ME
-hh add "Buy milk"
+hh add "Home"                    # with no parent, a project: ME-1
+hh add "Buy milk" --parent ME-1  # a task under it
 ```
+
+The root of a workspace holds only projects, so a task goes under a project (see
+[Planning](planning.md#kinds)).
 
 A store with no `--remote` stays on this machine. To share it, create an empty
 repository and pass it with `--remote <url>` when you run `hh store init`. For a GitHub

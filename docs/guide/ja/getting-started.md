@@ -56,7 +56,7 @@ WEB-2  01M6QAZMJND1BXZNFVP2PXHFHP  done    bug                             Fix t
 `hh show WEB-1` は、1つのタスクを履歴つきで表示します。`hh ls status:todo` で絞り込み、`hh ls --tree` で親の下に並べます。
 
 ```bash
-hh add "ログインページをレビューする"   # 既定の Store に入る
+hh add "ログインページをレビューする" --parent WEB-6   # 既定の Store の、プロジェクト WEB-6 の下の task
 hh status WEB-1 in_progress
 hh set WEB-1 assignees=github.com/me labels+=ui
 hh done WEB-1
@@ -69,8 +69,11 @@ hh sync                                 # 裏の同期を待たず、今すぐ�
 
 ```bash
 hh store init me --prefix ME
-hh add "牛乳を買う"
+hh add "家"                      # 親がなければ project（ME-1）
+hh add "牛乳を買う" --parent ME-1  # その下の task
 ```
+
+ワークスペースの直下に置けるのは project だけなので、task は project の下に置きます（[計画](planning.md#種類)を参照）。
 
 `--remote` を付けない Store は、このマシンの中だけにあります。共有するには、空のリポジトリを用意し、`hh store init` に `--remote <url>` で渡します。GitHub の URL なら、hedgehug がリポジトリを作り、`hh store discover` が探す topic `hedgehug-store` を付けます。
 

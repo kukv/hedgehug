@@ -2,6 +2,25 @@
 
 スプリント、リリース、テンプレートは、ワークスペースに属します。Store にワークスペースが複数あるときは、`hh sprint`、`hh release`、`hh report` に `--workspace <name>` を渡すか、`hh use` でプロジェクトを選びます。
 
+## 種類
+
+タスクの種類は固定で、それぞれ置ける場所が決まっています。種類を足したり名前を変えたりはできません（スキーマに `kinds` はありません）。
+
+| 種類 | 役割 | 置ける場所 | 子に置ける種類 |
+|---|---|---|---|
+| `project` | グループ | ワークスペースの直下 | epic、story、task、bug |
+| `epic` | グループ | project の下 | story、task、bug |
+| `story` | アイテム | project か epic の下 | step |
+| `task` | アイテム | project か epic の下 | step |
+| `bug` | アイテム | project か epic の下 | step |
+| `step` | アイテム | story、task、bug の下 | なし |
+
+story、task、bug は同じ階層の兄弟です。story の下に task は置けません。ワークスペースの直下に置けるのは project だけで、project の下に project は置けません。`hh add`、`hh mv`、画面は、表で許されない場所を断ります。
+
+`--kind` を省くと、`hh add` は親から種類を決めます。親がなければ project、project か epic の下なら task、story、task、bug の下なら step です。たとえば `hh add "Website"` は project を、`hh add "Login page" --parent WEB-1` はその中の task を作ります。テンプレートの子が種類を書いていないときも、同じ決まりです。
+
+進捗は、project や epic の下の story、task、bug を数えます。step は数えず、親の行に完了した数を `2/3` のように出します。
+
 ## スプリント
 
 スプリントの状態は、`planned`、`active`、`closed` の順に進みます。
@@ -100,4 +119,4 @@ props:
 $ hh add "Crash on save" --template bug
 ```
 
-`--template` を省くと、`hh add` は、そのタスクの種類の既定のテンプレートがスキーマに指定されていれば、それを展開します。`--no-template` で止められます。`hh template show <name>` はファイルを表示し、`hh template rm <name>` は、スキーマが名前を挙げていないテンプレートを削除します。
+`--template` を省くと、`hh add` は、そのタスクの種類の既定のテンプレートがスキーマの `templates.default`（種類と、使うテンプレートの組）に指定されていれば、それを展開します。`--no-template` で止められます。ブラウザでは、設定のテンプレート画面で選びます。種類ごとに「<種類> の既定」のメニューがあります。プロジェクトは、自分の設定で上書きできます。`hh template show <name>` はファイルを表示し、`hh template rm <name>` は、スキーマが名前を挙げていないテンプレートを削除します。

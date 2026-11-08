@@ -73,6 +73,10 @@ Restored WEB-1 (01M6QAZMHYRXKQJSTS7KTHA2GC) Write the login page
 
 タスクの ID とワークスペースは、今のままです。`--at` なしの `hh restore <id>` は、`hh rm` で消したタスクを、同じ `rm` で消えた子孫ごと戻します。
 
+## remote が新しい形式になったとき
+
+ほかのクローンが `hh store convert` を実行して push したあと、push していないコミットが残っているクローンは、それを取り込めません。`hh sync` は `sync.format_diverged`（HTTP 409）で止まり、remote が新しい Store の形式を使っていて、このクローンに push していない変更があると知らせます。`hh store convert` を実行してください。push していない変更を新しい形式に変換し、remote と合わせて push します。push していないコミットのないクローンは、この状態になりません。`hh store convert` が fast-forward するだけです。[Store](stores.md#store-の形式と-hh-store-convert)を参照してください。
+
 ## origin の履歴が変わったとき
 
 remote の履歴が書き換えられると、`hh sync` は push せずに止まります。対処は[メンテナンス](maintenance.md#履歴から内容を消す)にあります。

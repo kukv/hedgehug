@@ -4,6 +4,32 @@ Sprints, releases and templates belong to a workspace. When a store has several
 workspaces, give `--workspace <name>` to `hh sprint`, `hh release` and `hh report`, or
 choose a project with `hh use`.
 
+## Kinds
+
+The kinds of task are fixed, and each one sits in a fixed place. You cannot add or rename
+a kind (the schema has no `kinds` any more).
+
+| Kind | Role | Goes under | Holds |
+|---|---|---|---|
+| `project` | group | the workspace (the root) | epic, story, task, bug |
+| `epic` | group | a project | story, task, bug |
+| `story` | item | a project or an epic | step |
+| `task` | item | a project or an epic | step |
+| `bug` | item | a project or an epic | step |
+| `step` | item | a story, a task or a bug | nothing |
+
+Stories, tasks and bugs are siblings: a task does not go under a story. The root of a
+workspace holds only projects, and a project does not go under a project. `hh add`,
+`hh mv` and the screens refuse a place the table does not allow.
+
+When you give no `--kind`, `hh add` decides it from the parent: a project with no parent,
+a task under a project or an epic, a step under a story, a task or a bug. So
+`hh add "Website"` makes a project, and `hh add "Login page" --parent WEB-1` makes a task
+in it. A template whose child names no kind follows the same rule.
+
+Progress counts the stories, tasks and bugs under a project or an epic. Steps are not
+counted; the row of their parent shows how many are done, such as `2/3`.
+
 ## Sprints
 
 A sprint is `planned`, then `active`, then `closed`.
@@ -109,5 +135,8 @@ $ hh add "Crash on save" --template bug
 ```
 
 Without `--template`, `hh add` expands the default template of the task's kind, if the
-schema names one; `--no-template` turns that off. `hh template show <name>` prints a file,
-and `hh template rm <name>` deletes one that the schema does not name.
+schema names one in `templates.default` (a kind and the template it uses); `--no-template`
+turns that off. In the browser, choose them on Settings, Templates: each kind has a
+"<kind> の既定" menu there. A project can override them in its own settings.
+`hh template show <name>` prints a file, and `hh template rm <name>` deletes one that the
+schema does not name.

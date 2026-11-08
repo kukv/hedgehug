@@ -88,6 +88,15 @@ Restored WEB-1 (01M6QAZMHYRXKQJSTS7KTHA2GC) Write the login page
 The ID and workspace of the task stay as they are now. Without `--at`, `hh restore <id>`
 brings back a task deleted with `hh rm`, together with what the same `rm` deleted under it.
 
+## When the remote is in a newer format
+
+When another clone has run `hh store convert` and pushed, a clone that still has
+unpushed commits cannot merge them: `hh sync` stops with `sync.format_diverged` (HTTP 409)
+and says that the remote uses a newer store format and this clone has changes that are not
+pushed. Run `hh store convert`. It converts your unpushed changes to the new format, merges
+them with the remote and pushes. A clone with no unpushed commits does not hit this:
+`hh store convert` just fast-forwards it. See [Stores](stores.md#the-store-format-and-hh-store-convert).
+
 ## If the history of origin changes
 
 If someone rewrites the history of the remote, `hh sync` stops and does not push. See

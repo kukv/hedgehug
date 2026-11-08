@@ -38,10 +38,10 @@ hh auth status
 ```console
 $ hh store default personal
 personal
-$ hh add "Buy milk"
-Added ME-1 (...) Buy milk
+$ hh add "Buy milk" --parent ME-1
+Added ME-2 (...) Buy milk
 → added to personal / personal
-$ hh add "Plan the demo" --store team
+$ hh add "Plan the demo" --store team --parent WEB-1
 Added WEB-5 (...) Plan the demo
 → added to team / team
 ```
@@ -57,6 +57,34 @@ Added WEB-7 (...) Child of website
 ```
 
 たいていのコマンドは `--store <name>` を受け取ります。Store が複数あり、コマンドが1つに決められないとき(たとえば `hh workspace ls`)は、`--store` を求められます。
+
+## Store の形式と `hh store convert`
+
+Store は、形式の番号を `.hedgehug/store.yaml` に持ちます。このバージョンの hedgehug は形式 2 を使います。形式 2 では、タスクの種類が固定です（[計画](planning.md#種類)を参照）。
+
+- **古い**形式の Store は開きません。`hh store convert` と `hh doctor` 以外のコマンドは、`hh store convert で新しい形式にしてください` と言って止まります。ブラウザも、サイドバーの Store のカードと設定で同じ文を出します。`hh doctor` は、形式の番号を知らせ、このコマンドを案内します。
+- **新しい**形式の Store も開きません。hedgehug を更新してください。
+
+`hh store convert` は、Store を最新の形式に、1 段ずつ変換し、全部を 1 コミットで書きます。remote のある Store は、remote と揃っているときだけ変換し、結果を push します。揃っていないときは、同期するまで `store.convert_unsynced`（HTTP 409）で止まります。
+
+```console
+$ hh store convert --dry-run
+Format 1 -> 2
+  ワークスペース me の直下のタスクを「未分類」プロジェクトの下へ移した: 1 件（「未分類」を作った: ME-3）
+  schema.yaml の kinds を消した
+  store.yaml の format を 1 から 2 にした
+Nothing was written (--dry-run).
+$ hh store convert
+```
+
+`--dry-run` は、段ごとに変わる内容を一覧するだけで、何も書きません。`--json` は同じ内容を JSON で出します。もう一度実行しても、何も変わりません。
+
+- 独自の種類は、ワークスペースの直下でまとまりを作っていれば project、その下でまとまりを作っていれば epic、作業の単位なら task になります。`--kind <今の種類>=<新しい種類>`（繰り返せます）は、その種類のタスクを、決まった種類のどれかへ移します。たとえば `--kind sprint=epic` です。
+- ワークスペースの直下にあった project 以外のタスクは、「未分類」という project の下へ移ります。なければ作ります。
+- story、task、bug の下の story、task、bug は step になります。
+- `--store <name>` で Store を選びます。
+
+ほかのクローンがすでに remote を変換していたとき、push していないコミットのないクローンでは、`hh store convert` は自分では変換せず、remote へ fast-forward します。push していないコミットが残っているクローンは、まず自分の変更を変換します。[同期](sync.md#remote-が新しい形式になったとき)を参照してください。remote が途中の形式なら、クローンをその形式まで変換して同期し、残りの段を当ててから push します。
 
 ## タスクを別の Store へ移す
 
