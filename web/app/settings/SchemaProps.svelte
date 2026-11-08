@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
+  import Button from "../ui/Button.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count, propEntries, propNote } from "./schema-text";
@@ -21,6 +22,16 @@
 <section class="sec" aria-labelledby="{uid}-props">
   <h2 id="{uid}-props">プロパティ</h2>
   <p class="note">値の件数は、その値を持つタスクの数です。</p>
+  <div>
+    <Button
+      size="sm"
+      disabled={off !== null}
+      why={off ?? undefined}
+      onclick={() => onaction({ kind: "add", target: "prop" })}
+    >
+      追加…
+    </Button>
+  </div>
   <table aria-labelledby="{uid}-props">
     <thead>
       <tr>
@@ -46,6 +57,9 @@
                 target="prop"
                 old={name}
                 names={entries.map(([n]) => n)}
+                edit="prop"
+                used={usage?.props[name]}
+                addValue={p.type === "enum" || p.type === "multi_enum"}
                 {off}
                 {onaction}
               />
@@ -64,6 +78,7 @@
                   old={v}
                   names={p.values ?? []}
                   prop={name}
+                  used={usage?.values[name]?.[v]}
                   {off}
                   {onaction}
                 />

@@ -144,15 +144,47 @@ describe("SettingsSchema", () => {
   });
   afterEach(() => cleanup());
 
-  it("says the schema is shared by the Store and edited in the YAML", async () => {
+  it("shows the new lead", async () => {
     setup();
     expect(await screen.findByRole("heading", { level: 1, name: "スキーマ" })).toBeVisible();
-    expect(screen.getByText(/この Store を使う共通の定義です/)).toBeVisible();
     expect(
-      screen.getByText(
-        /YAML（\.hedgehug\/schema\.yaml）を編集してください。名前とマージはこの画面からできます。/,
-      ),
+      screen.getByText("この Store で使う共通の定義です。ここで追加・編集・並べ替えができます。"),
     ).toBeVisible();
+  });
+
+  it("disables delete for a definition in use and for a default", async () => {
+    setup({
+      schema: {
+        ...sch,
+        statuses: [
+          { name: "todo", label: "未着手", category: "todo", default: true },
+          { name: "backlog", label: "バックログ", category: "todo" },
+          { name: "done", label: "完了", category: "done", default: true },
+        ],
+      },
+      tasks: [t("P1", { kind: "project", status: "backlog" }), t("A", { status: "backlog" })],
+    });
+    const backlog = await screen.findByRole("button", { name: "削除…（backlog）" });
+    await waitFor(() => expect(backlog).toBeDisabled());
+    expect(backlog).toHaveAttribute(
+      "title",
+      "タスクが使っているため削除できません。マージ… で別の定義へ移してから削除してください",
+    );
+    const todo = screen.getByRole("button", { name: "削除…（todo）" });
+    expect(todo).toBeDisabled();
+    expect(todo).toHaveAttribute(
+      "title",
+      "既定は削除できません。別のものを既定にしてから削除してください",
+    );
+  });
+
+  it("opens the add dialog from the button above the table, and the edit dialog from a row", async () => {
+    setup();
+    await fireEvent.click(await screen.findByRole("button", { name: "追加…" }));
+    expect(screen.getByRole("dialog", { name: "ステータスを追加" })).toBeVisible();
+    await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
+    await fireEvent.click(screen.getByRole("button", { name: "編集…（triage）" }));
+    expect(screen.getByRole("dialog", { name: "ステータス「triage」を編集" })).toBeVisible();
   });
 
   it("shows the Store badge in the heading only with two Stores or more", async () => {

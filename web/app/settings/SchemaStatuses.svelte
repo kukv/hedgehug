@@ -3,6 +3,7 @@
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
   import StatusIcon from "../icons/StatusIcon.svelte";
+  import Button from "../ui/Button.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count } from "./schema-text";
@@ -25,6 +26,16 @@
   <p class="note">
     どれも未着手・進行中・完了・中止のいずれかのカテゴリに属し、各カテゴリに既定が 1 つあります。
   </p>
+  <div>
+    <Button
+      size="sm"
+      disabled={off !== null}
+      why={off ?? undefined}
+      onclick={() => onaction({ kind: "add", target: "status" })}
+    >
+      追加…
+    </Button>
+  </div>
   <table aria-labelledby="{uid}-statuses">
     <thead>
       <tr>
@@ -55,6 +66,9 @@
                 target="status"
                 old={s.name}
                 names={statuses.map((x) => x.name)}
+                edit="status"
+                used={usage?.statuses[s.name]}
+                isDefault={s.default === true}
                 {off}
                 {onaction}
               />

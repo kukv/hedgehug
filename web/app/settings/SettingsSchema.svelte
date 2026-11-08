@@ -13,18 +13,21 @@
   import Tabs from "../ui/Tabs.svelte";
   import MigrateDialog, { type MigrateTarget } from "./MigrateDialog.svelte";
   import SchemaCheck from "./SchemaCheck.svelte";
+  import SchemaDefDialog from "./SchemaDefDialog.svelte";
+  import SchemaDeleteDialog from "./SchemaDeleteDialog.svelte";
   import SchemaKinds from "./SchemaKinds.svelte";
   import SchemaProps from "./SchemaProps.svelte";
   import SchemaRelations from "./SchemaRelations.svelte";
   import SchemaStatuses from "./SchemaStatuses.svelte";
+  import SchemaValueDialog from "./SchemaValueDialog.svelte";
   import SchemaWorkflow from "./SchemaWorkflow.svelte";
   import SettingsTemplates from "./SettingsTemplates.svelte";
   import type { SchemaAction } from "./schema-action";
   import { propEntries, relationEntries } from "./schema-text";
 
-  // The schema of a Store (its .hedgehug/schema.yaml), read: how many tasks use each definition, the
-  // overrides of the projects, and what `schema check` finds. A name is changed or merged here (migrate);
-  // everything else is edited in the YAML.
+  // The schema of a Store (its .hedgehug/schema.yaml): how many tasks use each definition, the
+  // overrides of the projects, and what `schema check` finds. A definition is added, edited, renamed,
+  // merged and deleted from here.
   let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
@@ -92,6 +95,7 @@
     tasks = null;
     tasksFailure = null;
     ask = null; // a dialog of another Store would write to this one
+    act = null;
     untrack(() => void loadTasks(s));
     const offs = [
       c.conn.on("tasks.changed", (e) => {
@@ -157,10 +161,27 @@
     names: string[];
   };
   let ask = $state.raw<Ask | null>(null);
+  // The other dialogs: add, edit, delete, add a value.
+  let act = $state.raw<Exclude<SchemaAction, { kind: "migrate" }> | null>(null);
 
   function onaction(a: SchemaAction): void {
     if (a.kind === "migrate") ask = a;
+    else act = a;
   }
+
+  // The tasks that a refusal names by their ID, and the projects of the overrides, by what the screen read.
+  const ulidById = $derived(
+    new Map(
+      (tasks ?? []).flatMap((t) => [
+        [t.id, t.ulid] as const,
+        [did.current(store, t.id), t.ulid] as const,
+      ]),
+    ),
+  );
+  const projectLabel = (ulid: string): string => {
+    const p = taskByUlid.get(ulid);
+    return p ? `${did.current(store, p.id)} ${p.title}` : ulid;
+  };
 
   // The row that opened the dialog may be gone (the name changed): the focus then goes to the heading.
   async function migrated(): Promise<void> {
@@ -181,10 +202,7 @@
       <StoreBadge {store} tone={c.stores.tone(store)} />
     {/if}
   </header>
-  <p class="lead">
-    この Store を使う共通の定義です。追加・削除・色や並びの変更は
-    YAML（.hedgehug/schema.yaml）を編集してください。名前とマージはこの画面からできます。
-  </p>
+  <p class="lead">この Store で使う共通の定義です。ここで追加・編集・並べ替えができます。</p>
 
   {#if schema === undefined}
     {#if schemaError}
@@ -264,6 +282,38 @@
     onclose={() => (ask = null)}
     ondone={() => void migrated()}
   />
+{/if}
+
+{#if act && schema}
+  {#if act.kind === "add" || act.kind === "edit"}
+    <SchemaDefDialog
+      {store}
+      target={act.target}
+      name={act.kind === "edit" ? act.name : undefined}
+      {schema}
+      ulidOf={(id) => ulidById.get(id)}
+      onclose={() => (act = null)}
+      ondone={() => void migrated()}
+    />
+  {:else if act.kind === "delete"}
+    <SchemaDeleteDialog
+      {store}
+      target={act.target}
+      name={act.name}
+      prop={act.prop}
+      {schema}
+      {projectLabel}
+      onclose={() => (act = null)}
+      ondone={() => void migrated()}
+    />
+  {:else}
+    <SchemaValueDialog
+      {store}
+      prop={act.prop}
+      onclose={() => (act = null)}
+      ondone={() => void migrated()}
+    />
+  {/if}
 {/if}
 
 <style>

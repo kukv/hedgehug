@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
+  import Button from "../ui/Button.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count, propNote, relationEntries } from "./schema-text";
@@ -27,6 +28,16 @@
     関連は同じ Store のタスクだけを参照できます。blocked_by
     は組み込みの関連のため、名前の変更とマージはできません。
   </p>
+  <div>
+    <Button
+      size="sm"
+      disabled={off !== null}
+      why={off ?? undefined}
+      onclick={() => onaction({ kind: "add", target: "relation" })}
+    >
+      追加…
+    </Button>
+  </div>
   <table aria-labelledby="{uid}-relations">
     <thead>
       <tr>
@@ -57,6 +68,8 @@
                 target="prop"
                 old={name}
                 names={entries.map(([n]) => n)}
+                edit="relation"
+                used={usage?.props[name]}
                 {off}
                 {onaction}
               />

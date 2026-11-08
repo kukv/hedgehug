@@ -2,6 +2,7 @@
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
   import KindIcon from "../icons/KindIcon.svelte";
+  import Button from "../ui/Button.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count } from "./schema-text";
@@ -32,6 +33,16 @@
     役割は container（まとめる単位）と work（作業項目）の 2
     つです。置ける親に反する配置は書き込み時に拒否されます。
   </p>
+  <div>
+    <Button
+      size="sm"
+      disabled={off !== null}
+      why={off ?? undefined}
+      onclick={() => onaction({ kind: "add", target: "kind" })}
+    >
+      追加…
+    </Button>
+  </div>
   <table aria-labelledby="{uid}-kinds">
     <thead>
       <tr>
@@ -65,6 +76,9 @@
                 target="kind"
                 old={k.name}
                 names={kinds.map((x) => x.name)}
+                edit="kind"
+                used={usage?.kinds[k.name]}
+                isDefault={k.default === true}
                 {off}
                 {onaction}
               />
