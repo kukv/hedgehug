@@ -33,7 +33,7 @@
 4. 関連以外のプロパティの `PATCH` で、表示名以外（`multi`・`inverse`・`symmetric`）を送ると 422 `schema.not_task_ref`。enum でないプロパティへの値の操作は 422 `schema.not_enum`。
 5. 削除で外れる参照の一覧は、フロントが `SchemaView` から計算する（`core/schema-edit.ts` の `referencesOf`）。サーバーに dry run は足さない。
 6. プロパティの並びは、スキーマ画面だけでなく、プロパティを並べるすべての箇所（詳細のプロパティと関連、テーブルの列の候補、ガント、上書きの必須の候補）で `prop_order` に従う。いまは名前の順に並べ替えているが、並べ替えの結果が見えないと spec の「並び」を満たさないため。
-7. `StatusIcon` と `KindIcon` は `store` を受け取り、スキーマのキャッシュから色とアイコンを引く。Store をまたぐ列（カテゴリでそろえたカンバンの列など）は `store` を渡さず、今までどおりカテゴリの色で描く。
+7. `StatusIcon` と `KindIcon` は `color` / `icon` を受け取るだけにし、スキーマは引かない。呼び出し元はいまも行ごとにスキーマから `category` / `role` を引いている（`TreeRow.svelte:51-52` など）ので、同じ箇所で `color` / `icon` も引いて渡す。アイコンに context を読ませると、App の外で描くテストで `core()` が投げ、1 万行のツリーで購読が行の数だけ増えるため。Store をまたぐ列（カテゴリでそろえたカンバンの列など）は渡さず、今までどおりカテゴリの色で描く。
 
 ---
 
@@ -992,6 +992,8 @@ func TestEditErrors(t *testing.T) {
 }
 ```
 
+`TestEditRefusesInUse` は、`s.Tasks()` が削除済みのタスクを含むかどうかを確かめるテストでもある。件数 0 で落ちたら、テストを直さずに止めて報告する（spec の「削除済みも数える」を満たす読み方を決め直す必要があるため）。
+
 `usecase.CodeOf` がなければ、`internal/app/usecase/errors.go` で誤りのコードを取る既存の関数を grep して使う。`brokenUnder(t, ts, parent)` はこのテストファイルに書く補助で、kind が project で parent が `parent` のタスクを、検証を通さずに Store に書いてコミットする。書き方は `grep -rn "WriteFile\|CheckOnly\|SkipRequired" internal/app/usecase/usecasetest/ internal/app/usecase/schemas/*_test.go` で、検証を通さずにタスクを置く既存の方法を探して合わせる（`store.Op` の検証を外すフラグか、ファイルを直接書いてコミットする補助）。見つからなければ止めて報告する。
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -1227,7 +1229,7 @@ func TestSchemaEditErrors(t *testing.T) {
 	// DELETE /api/schema/statuses/nope → 404 schema.not_defined
 	// PUT /api/schema/statuses/order {names: [todo]} → 409 schema.order_stale
 	// DELETE /api/schema/statuses/todo → 422 schema.invalid（既定）
-	// タスクを 1 件 in_progress 以外の backlog で作ってから DELETE /api/schema/statuses/backlog → 422 schema.in_use
+	// backlog のタスクを 1 件作ってから DELETE /api/schema/statuses/backlog → 422 schema.in_use
 	// PATCH /api/schema/kinds/bug {parents: []} → 400
 	// PATCH /api/schema/kinds/bug {parents: [root], anywhere: true} → 400
 }
@@ -1645,13 +1647,13 @@ git commit -m "feat(web): プロパティをスキーマの順に並べ、色と
 - Produces:
 
 ```ts
-// StatusIcon
-type Props = { status: string; category?: string; color?: string; store?: string; size?: number };
+// StatusIcon（color は前からある。中で statusColor を通す）
+type Props = { status: string; category?: string; color?: string; size?: number };
 // KindIcon
-type Props = { kind: string; role?: string; icon?: string; store?: string; size?: number };
+type Props = { kind: string; role?: string; icon?: string; size?: number };
 ```
 
-`color` / `icon` を渡せばそれを使う。渡さずに `store` を渡すと、`core().schema.get(store)` からその名前の定義を引き、`color` / `icon`（と、渡されていなければ `category` / `role`）を使う。スキーマの変化に追従するため、`useSubscribe(c.schema, …)` を使う（`SettingsSchema.svelte` の `schemaRev` と同じ書き方）。スキーマを読み込んでいない Store では何も引けないので、今までどおりの形と色で描く。読み込みを始めることはしない（アイコンごとに fetch を起こさないため）。
+アイコンはスキーマも context も読まない（「この plan で埋める spec にない細部」の 7）。
 
 `KindIcon` の形は、`icon` が組み込みの形の名前ならその形、そうでなければ今までどおり名前、役割の順で決める。bug の赤（`--danger`）は、形が bug のときに付ける。
 
@@ -1669,23 +1671,23 @@ it("draws the shape the schema names", () => {
   expect(container.querySelector("svg")?.dataset.kind).toBe("bug");
   expect(container.querySelector("svg")?.getAttribute("style")).toContain("var(--danger)");
 });
-it("reads the color and the icon of the store's schema", async () => {
-  // test-utils.ts の、core を context に入れて描く補助で、schema キャッシュに
-  // { statuses: [{ name: "review", category: "doing", color: "pink" }], kinds: [{ name: "incident", role: "work", icon: "bug" }] }
-  // を入れた Store "main" を用意し、<StatusIcon status="review" store="main" /> と <KindIcon kind="incident" store="main" /> を描いて、
-  // ピンクのトークンと bug の形を確かめる
+it("ignores an icon it does not know", () => {
+  const { container } = render(KindIcon, { kind: "incident", role: "container", icon: "rocket" });
+  expect(container.querySelector("svg")?.dataset.kind).toBe("container");
 });
 ```
 
-属性の名前（`stroke` か `style` か）は、今の `StatusIcon.svelte` の描き方（80 行目以降）に合わせて確かめる。3 つめのテストは `web/app/test-utils.ts` の既存の補助（`fakeCore` などの名前を grep）で書く。
+属性の名前（`stroke` か `style` か）は、今の `StatusIcon.svelte` の描き方（80 行目以降）に合わせて確かめる。
+
+呼び出し元のテスト（`TreeRow` があればそのテスト、なければ `tree` のテスト）に、スキーマの `color: "pink"` と `icon: "bug"` がその行のアイコンに出ることを 1 つ足す。
 
 - [ ] **Step 2〜4: 失敗を確かめ、2 つのアイコンを書き換え、通す**
 
 Run: `cd web && pnpm vitest run app/icons`
 
-- [ ] **Step 5: 呼び出し元に `store` を渡す**
+- [ ] **Step 5: 呼び出し元から色とアイコンを渡す**
 
-タスクを描く箇所は `store={task.store}`（`TaskView.store`）を足す。スキーマの定義そのものを描く箇所（`SettingsSchema`・`ProjectSettings`・`CreateTask`）は、定義の `color` / `icon` を直接渡す。Store をまたいでカテゴリでそろえた列（`KanbanView` で `col` に Store がないとき、`WorkspaceOverview` のカテゴリの見出し）は渡さない。`KanbanView` の列が 1 つの Store のものかどうかは、その列の作り方（`col` の型）を読んで決める。`Sidebar` と `ProjectHeader` の `kind="project"` は、プロジェクトの Store が分かれば渡す。
+各呼び出し元で、いま `category` / `role` を引いている箇所と同じところで、同じ定義から `color` / `icon` を引いて渡す（例: `TreeRow.svelte` は `const def = $derived(schema?.statuses?.find(…))` にまとめて `category={def?.category} color={def?.color}`）。`categoryOf(...)` のような補助を使っている箇所（`MyTasks`・`Relations`・`WorkspaceOverview`）は、その補助の隣に色を返す補助を足す（同じ引き方を 2 回書かない）。スキーマの定義そのものを描く箇所（`SettingsSchema`・`ProjectSettings`・`CreateTask`）は、定義の `color` / `icon` を直接渡す。Store をまたいでカテゴリでそろえた列（`KanbanView` で列が複数の Store にまたがるとき、`WorkspaceOverview` のカテゴリの見出し）は渡さない。`KanbanView` の列が 1 つの Store のものかどうかは、その列の作り方（`col` の型）を読んで決める。`Sidebar` と `ProjectHeader` の `kind="project"` は、プロジェクトの Store のスキーマを持っていれば `icon` を渡す。
 
 Run: `cd web && pnpm vitest run && pnpm check`
 Expected: PASS
