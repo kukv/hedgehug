@@ -275,7 +275,7 @@ func TestMoveStoreNeedsConfirmationAndScopedChoice(t *testing.T) {
 	}
 
 	// the plan shown is checked against what the stores hold at the time
-	if _, err := tasks.Add(f.TS.ForStore("org-a"), tasks.AddInput{Title: "late", Parent: "API-4"}); err != nil {
+	if _, err := tasks.Add(f.TS.ForStore("org-a"), tasks.AddInput{Title: "late", Parent: "API-3"}); err != nil {
 		t.Fatal(err)
 	}
 	in.Yes, in.Confirmed = true, &plan
@@ -600,16 +600,16 @@ func TestMoveStoreParentsComeBeforeTheirChildren(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
 	a := ts.ForStore("org-a")
-	add := func(title, parent string) model.ULID {
-		r, err := tasks.Add(a, tasks.AddInput{Title: title, Parent: parent})
+	add := func(title, parent, kind string) model.ULID {
+		r, err := tasks.Add(a, tasks.AddInput{Title: title, Parent: parent, Kind: kind})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r.ULID
 	}
-	root := add("R", "")
-	g := add("G", "API-2") // older than C
-	c := add("C", "API-2")
+	root := add("R", "", "")
+	g := add("G", "API-2", "task") // older than C
+	c := add("C", "API-2", "epic")
 	if _, err := tasks.Move(a, tasks.MoveInput{Arg: "API-3", Parent: "API-4"}); err != nil {
 		t.Fatal(err)
 	}

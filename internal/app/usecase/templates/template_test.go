@@ -82,7 +82,7 @@ func TestRemoveRefusesWhatTheSchemaNames(t *testing.T) {
 	ts := usecasetest.New(t)
 	p := ts.AddProject("p")
 	for _, edit := range []func(string) string{
-		func(sc string) string { return strings.Replace(sc, "{name: task, ", "{name: task, template: bug, ", 1) },
+		func(sc string) string { return sc + "templates:\n  default:\n    task: bug\n" },
 		func(sc string) string {
 			return sc + "scoped:\n  - where: project:" + p.String() + "\n    templates:\n      only: [bug]\n"
 		},

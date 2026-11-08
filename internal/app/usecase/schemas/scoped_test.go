@@ -195,17 +195,14 @@ func TestScopedSetRefusesWhatSchemaCheckRefuses(t *testing.T) {
 func TestScopedSetNeedsAContainer(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	r, err := tasks.Add(ts.Session, tasks.AddInput{Title: "plain"}) // the default kind is task
-	if err != nil {
-		t.Fatal(err)
-	}
+	plain := ts.AddTask("plain", nil) // a task, under the fixture project
 	none := []string{}
-	_, err = schemas.ScopedSet(ts.Session, r.ULID.String(), schema.ScopedChange{Statuses: &none})
+	_, err := schemas.ScopedSet(ts.Session, plain.ULID.String(), schema.ScopedChange{Statuses: &none})
 	if e := usecase.AsError(err); e == nil || e.Kind != usecase.KindInvalid || e.Code != "scoped.not_container" || e.Args["kind"] != "task" {
 		t.Errorf("task: %v", err)
 	}
 	// an epic is a container too
-	ep, err := tasks.Add(ts.Session, tasks.AddInput{Title: "epic", Kind: "epic"})
+	ep, err := tasks.Add(ts.Session, tasks.AddInput{Title: "epic", Kind: "epic", Parent: plain.Parent.String()})
 	if err != nil {
 		t.Fatal(err)
 	}
