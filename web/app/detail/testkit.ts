@@ -21,13 +21,6 @@ export const schemaView = {
     { name: "done", label: "完了", category: "done", default: true },
     { name: "canceled", label: "中止", category: "canceled" },
   ],
-  kinds: [
-    { name: "project", label: "プロジェクト", role: "container", parents: ["root"] },
-    { name: "epic", label: "エピック", role: "container", parents: ["root", "project"] },
-    { name: "story", label: "ストーリー", role: "work", parents: null },
-    { name: "task", label: "タスク", role: "work", parents: null, default: true },
-    { name: "bug", label: "バグ", role: "work", parents: null },
-  ],
   props: {
     priority: { type: "enum", values: ["low", "mid", "high"] },
     start: { type: "date" },

@@ -25,9 +25,7 @@
   let { task, schema, blockedBy, tone, dragging, onopen, dnd }: Props = $props();
 
   const statusDef = $derived(schema?.statuses?.find((s) => s.name === task.status));
-  const kindDef = $derived(schema?.kinds?.find((k) => k.name === task.kind));
   const category = $derived(statusDef?.category);
-  const role = $derived(kindDef?.role);
   const closed = $derived(category === "done" || category === "canceled");
   const problem = $derived(task.problems?.[0]);
   const due = $derived(propText(task, "due"));
@@ -40,6 +38,7 @@
   const hasMeta = $derived(
     !!(task.broken || problem || blockedBy || priority || due || kids > 0 || people.length > 0) ||
       (task.checklist?.total ?? 0) > 0 ||
+      (task.steps?.total ?? 0) > 0 ||
       prChip(task.links) !== null,
   );
   const more = $derived(Math.max(0, (task.assignees ?? []).length - 3));
@@ -49,7 +48,7 @@
   anywhere on it and Enter on the title open the task; the ID stays above it for its own buttons. -->
 <li class="card" class:dragging data-ulid={task.ulid} {@attach dnd}>
   <div class="top">
-    <KindIcon kind={task.kind} {role} icon={kindDef?.icon} color={kindDef?.color} />
+    <KindIcon kind={task.kind} />
     <span class="id"><IdLabel id={task.id} ulid={task.ulid} store={task.store} /></span>
     {#if tone}
       <StoreBadge store={task.store} {tone} compact />
@@ -78,6 +77,11 @@
       {#if task.checklist && task.checklist.total > 0}
         <span class="chip" title="チェックリスト">
           <Icon name="checklist" size={10} />{task.checklist.done}/{task.checklist.total}
+        </span>
+      {/if}
+      {#if task.steps && task.steps.total > 0}
+        <span class="chip" title="ステップ">
+          <KindIcon kind="step" size={10} />{task.steps.done}/{task.steps.total}
         </span>
       {/if}
       {#if kids > 0}

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { kindColorOf, kindIconOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -18,7 +17,7 @@
   import { openWorkspaceDelete } from "../workspace/dialogs-state.svelte";
   import SyncCard from "./SyncCard.svelte";
 
-  const { stores, cache, views, conn, schema } = core();
+  const { stores, cache, views, conn } = core();
   // What is hidden is left out here (細部 93).
   const workspaces = useSubscribe(stores, () => stores.visibleWorkspaces());
   const storesRev = useSubscribe(stores, () => ({}));
@@ -28,21 +27,6 @@
     return savedViews.current.filter((v) => storeShown(stores, v.store));
   });
   const cacheRev = useSubscribe(cache, () => ({}));
-  const schemaRev = useSubscribe(schema, () => ({}));
-  // The icon of the project kind is the one the schema of the project's store names.
-  $effect(() => {
-    for (const w of workspaces.current) {
-      if (w.projects.length > 0) schema.load(w.store).catch(() => undefined);
-    }
-  });
-  const projectIconOf = (store: string) => {
-    schemaRev.current;
-    return kindIconOf(schema.get(store), "project");
-  };
-  const projectColorOf = (store: string) => {
-    schemaRev.current;
-    return kindColorOf(schema.get(store), "project");
-  };
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
   const settingsHref = hrefOf({ name: "settings", page: "general" });
@@ -251,12 +235,7 @@
               aria-current={here ? "page" : undefined}
               onclick={(e) => onLinkClick(e, phref)}
             >
-              <KindIcon
-                kind="project"
-                icon={projectIconOf(w.store)}
-                color={projectColorOf(w.store)}
-                size={14}
-              />
+              <KindIcon kind="project" size={14} />
               <span class="p-name">{p.title}</span>
               {#if p.progress}
                 <span class="progress">{p.progress.done}/{p.progress.total}</span>

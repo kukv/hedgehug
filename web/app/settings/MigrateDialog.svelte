@@ -1,12 +1,11 @@
 <script lang="ts" module>
-  export type MigrateTarget = "status" | "kind" | "prop";
+  export type MigrateTarget = "status" | "prop";
 
   // How long the name has to rest before the dry run is sent.
   const PAUSE_MS = 350;
 
   const NOUN: Record<MigrateTarget, string> = {
     status: "ステータス",
-    kind: "種類",
     prop: "プロパティ",
   };
 </script>

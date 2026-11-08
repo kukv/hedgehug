@@ -93,20 +93,6 @@ describe("Sidebar", () => {
     expect(getByText(location.host)).toBeTruthy();
   });
 
-  it("プロジェクトのアイコンは、その Store のスキーマが project の種類に付けたもの", async () => {
-    const schema = {
-      subscribe: () => () => {},
-      load: async () => undefined,
-      get: (store: string) =>
-        store === "shared"
-          ? { kinds: [{ name: "project", role: "container", icon: "bug" }] }
-          : undefined,
-    };
-    const { container } = mount({ schema });
-    await vi.waitFor(() => expect(container.querySelector('svg[data-kind="bug"]')).not.toBeNull());
-    expect(container.querySelectorAll('svg[data-kind="project"]').length).toBe(0);
-  });
-
   it("通知とアクティビティの行が出る", () => {
     const { getByRole } = mount();
     expect(getByRole("link", { name: /通知/ })).toBeTruthy();

@@ -117,12 +117,15 @@ describe("the tasks of a plan", () => {
     expect(placed(["a", "b", "c"], "a", 1)).toEqual(["b", "a", "c"]);
     expect(placed(["a", "b", "c"], "a", 9)).toEqual(["b", "c", "a"]);
   });
-  it("groups by kind in the order of the schema, others last", () => {
-    const got = groupByKind(
-      [tv("A", "a", { kind: "bug" }), tv("B", "b"), tv("C", "c", { kind: "gone" })],
-      ["story", "task", "bug"],
-    );
-    expect(got.map((g) => g.kind)).toEqual(["task", "bug", "gone"]);
+  it("groups by kind in the fixed order, others last", () => {
+    const got = groupByKind([
+      tv("A", "a", { kind: "bug" }),
+      tv("B", "b", { kind: "step" }),
+      tv("C", "c"),
+      tv("D", "d", { kind: "gone" }),
+      tv("E", "e", { kind: "story" }),
+    ]);
+    expect(got.map((g) => g.kind)).toEqual(["story", "task", "bug", "step", "gone"]);
   });
 });
 

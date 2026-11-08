@@ -2,6 +2,7 @@
   import type { Attachment } from "svelte/attachments";
   import type { LiveMark } from "../../core/cache";
   import { formatDate } from "../../core/format";
+  import { isGroup } from "../../core/kinds";
   import type { SchemaView } from "../../core/schema";
   import type { StoreTone } from "../../core/stores";
   import Icon from "../icons/Icon.svelte";
@@ -49,9 +50,7 @@
 
   const task = $derived(row.task);
   const statusDef = $derived(schema?.statuses?.find((s) => s.name === task.status));
-  const kindDef = $derived(schema?.kinds?.find((k) => k.name === task.kind));
   const category = $derived(statusDef?.category);
-  const role = $derived(kindDef?.role);
   const closed = $derived(category === "done" || category === "canceled");
   const problem = $derived(task.problems?.[0]);
   const due = $derived(propText(task, "due"));
@@ -109,9 +108,9 @@
       <span class="chev-gap"></span>
     {/if}
     <StatusIcon status={task.status} {category} color={statusDef?.color} />
-    <KindIcon kind={task.kind} {role} icon={kindDef?.icon} color={kindDef?.color} />
+    <KindIcon kind={task.kind} />
     <IdLabel id={task.id} ulid={task.ulid} store={task.store} reveal={keyboardOn} />
-    <span class="title" class:closed class:container={role === "container"}>{task.title}</span>
+    <span class="title" class:closed class:container={isGroup(task.kind)}>{task.title}</span>
 
     {#if progress}
       <span class="progress">
@@ -124,6 +123,11 @@
     {#if task.checklist && task.checklist.total > 0}
       <span class="check" title="チェックリスト">
         <Icon name="checklist" size={10} />{task.checklist.done}/{task.checklist.total}
+      </span>
+    {/if}
+    {#if task.steps && task.steps.total > 0}
+      <span class="check" title="ステップ">
+        <KindIcon kind="step" size={10} />{task.steps.done}/{task.steps.total}
       </span>
     {/if}
     {#if live}

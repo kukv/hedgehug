@@ -1,5 +1,6 @@
 // The sprints and the releases as the screens show them. The server sends no text.
 import type { Schemas, TaskView } from "./api/client";
+import { KINDS } from "./kinds";
 import type { WorkspaceEntry } from "./stores";
 
 export type Sprint = Schemas.SprintView;
@@ -114,13 +115,11 @@ export function closeLabel(n: number, to: CloseTo, next: Sprint | undefined): st
   return `閉じて ${n} 件を ${name} へ`;
 }
 
-/** The kinds in the order the schema has them, each with its tasks: the list of a release. */
-export function groupByKind(
-  tasks: readonly TaskView[],
-  kinds: readonly string[],
-): { kind: string; tasks: TaskView[] }[] {
-  const rest = [...new Set(tasks.map((t) => t.kind))].filter((k) => !kinds.includes(k));
-  return [...kinds, ...rest]
+/** The kinds in the fixed order, each with its tasks: the list of a release. */
+export function groupByKind(tasks: readonly TaskView[]): { kind: string; tasks: TaskView[] }[] {
+  const names = KINDS.map((k) => k.name);
+  const rest = [...new Set(tasks.map((t) => t.kind))].filter((k) => !names.includes(k));
+  return [...names, ...rest]
     .map((kind) => ({ kind, tasks: tasks.filter((t) => t.kind === kind) }))
     .filter((g) => g.tasks.length > 0);
 }

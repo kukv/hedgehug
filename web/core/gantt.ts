@@ -3,6 +3,7 @@
 import type { TaskView } from "./api/client";
 import type { TreeNode } from "./cache";
 import type { Category } from "./categories";
+import { isGroup } from "./kinds";
 import type { GanttSettings } from "./views";
 
 export type Span = { s: number; e: number };
@@ -69,7 +70,6 @@ export type RowsInput = {
   taskOf: (ulid: string) => TaskView | undefined;
   settings: GanttSettings;
   collapsed: ReadonlySet<string>;
-  isContainer: (t: TaskView) => boolean;
   categoryOf: (t: TaskView) => Category;
   sprintSpan: (t: TaskView) => Span | null;
 };
@@ -96,11 +96,11 @@ export function ganttRows(i: RowsInput): GanttRow[] {
   const walk = (nodes: TreeNode[], depth: number) => {
     for (const n of nodes) {
       const task = i.taskOf(n.ulid);
-      if (!task || (i.settings.roadmap && !i.isContainer(task))) continue;
+      if (!task || (i.settings.roadmap && !isGroup(task.kind))) continue;
       const shown = i.settings.roadmap
         ? n.children.filter((c) => {
             const t = i.taskOf(c.ulid);
-            return t !== undefined && i.isContainer(t);
+            return t !== undefined && isGroup(t.kind);
           })
         : n.children;
       const expanded = shown.length > 0 && !i.collapsed.has(n.ulid);

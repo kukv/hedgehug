@@ -3,10 +3,6 @@ import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 
 export type SchemaView = Schemas.SchemaView;
-export type KindDef = Schemas.KindDef;
-
-// The name that stands for "no parent" in the parents of a kind.
-const ROOT = "root";
 
 // SchemaCache keeps the schema.yaml of the stores the screen has asked for,
 // and fetches it again when the store says it changed. A schema that did not
@@ -85,41 +81,6 @@ export class SchemaCache {
       void this.fetch(store).catch(() => undefined);
     }
   }
-}
-
-const kindOf = (s: SchemaView, name: string): KindDef | undefined =>
-  (s.kinds ?? []).find((k) => k.name === name);
-
-const kindLabel = (s: SchemaView, name: string): string => {
-  const k = kindOf(s, name);
-  return k?.label || name;
-};
-
-// canParent is whether a task of childKind may sit under a parent of
-// parentKind (null: at the top, with no parent). Parents that the kind does
-// not list (null) mean anywhere; the top is written "root" in the list.
-export function canParent(s: SchemaView, childKind: string, parentKind: string | null): boolean {
-  const k = kindOf(s, childKind);
-  if (!k) return false;
-  if (!k.parents) return true;
-  return k.parents.includes(parentKind ?? ROOT);
-}
-
-function listJa(names: string[]): string {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join("、")}と${names[names.length - 1]}`;
-}
-
-// parentRule says where a kind can be put, for the tooltip of a kind that
-// cannot be chosen: 「エピックのどの下に置けるかは最上位とプロジェクトだけです」.
-export function parentRule(s: SchemaView, childKind: string): string {
-  const label = kindLabel(s, childKind);
-  const parents = kindOf(s, childKind)?.parents;
-  if (!parents) return `${label}はどこにでも置けます`;
-  if (parents.length === 0) return `${label}は親に置けません`;
-  if (parents.length === 1 && parents[0] === ROOT) return `${label}は最上位にだけ置けます`;
-  const names = parents.map((p) => (p === ROOT ? "最上位" : kindLabel(s, p)));
-  return `${label}のどの下に置けるかは${listJa(names)}だけです`;
 }
 
 // defaultStatusIn is the status a task gets when it moves into a category

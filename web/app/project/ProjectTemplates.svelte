@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { KINDS } from "../../core/kinds";
   import type { Template } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
   import type { ScopedDraft } from "../../core/scoped";
@@ -31,7 +32,6 @@
     };
   });
 
-  const kinds = $derived(schema.kinds ?? []);
   const toggle = (name: string, on: boolean) =>
     onchange({
       ...draft,
@@ -65,15 +65,19 @@
   </fieldset>
   {#if all.length > 0}
     <div class="defaults">
-      {#each kinds as k (k.name)}
+      {#each KINDS as k (k.name)}
         <label>
-          <span>{k.label || k.name} の既定</span>
+          <span>{k.label} の既定</span>
           <select
             value={draft.templateDefaults[k.name] ?? ""}
             disabled={busy}
             onchange={(e) => setDefault(k.name, e.currentTarget.value)}
           >
-            <option value="">{k.template ? `Store の既定（${k.template}）` : "なし"}</option>
+            <option value="">
+              {schema.templates?.default?.[k.name]
+                ? `Store の既定（${schema.templates.default[k.name]}）`
+                : "なし"}
+            </option>
             {#each all as t (t.name)}
               <option value={t.name}>{t.name}</option>
             {/each}

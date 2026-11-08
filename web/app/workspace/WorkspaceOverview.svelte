@@ -3,7 +3,7 @@
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { errorMessage } from "../../core/messages";
-  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
+  import { statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -199,12 +199,7 @@
                   </td>
                   <td>
                     <div class="title">
-                      <KindIcon
-                        kind={p.kind}
-                        role={kindRoleOf(schema, p.kind)}
-                        icon={kindIconOf(schema, p.kind)}
-                        color={kindColorOf(schema, p.kind)}
-                      />
+                      <KindIcon kind={p.kind} />
                       <a {href} onclick={(e) => onLinkClick(e, href)}>{p.title}</a>
                     </div>
                   </td>
@@ -265,12 +260,7 @@
                     />
                   </td>
                   <td>
-                    <KindIcon
-                      kind={t.kind}
-                      role={kindRoleOf(schema, t.kind)}
-                      icon={kindIconOf(schema, t.kind)}
-                      color={kindColorOf(schema, t.kind)}
-                    />
+                    <KindIcon kind={t.kind} />
                   </td>
                   <td>
                     <IdLabel

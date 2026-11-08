@@ -3,6 +3,7 @@
   import type { ShowView } from "../../core/api/client";
   import { cliLine, cliStart } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
+  import { kindLabel } from "../../core/kinds";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
@@ -131,9 +132,7 @@
 
   const crumbs = $derived(collapseCrumbs(chain));
   const parentCrumb = $derived(chain.at(-1)?.ulid === s?.parent ? chain.at(-1) : undefined);
-  const kindLabel = $derived(
-    sc.current?.kinds?.find((k) => k.name === s?.kind)?.label || s?.kind || "",
-  );
+  const kindName = $derived(s ? kindLabel(s.kind) : "");
   const statusLabel = (name: string) =>
     sc.current?.statuses?.find((x) => x.name === name)?.label || name;
 
@@ -290,7 +289,10 @@
 
     <div class="heading">
       <p class="eyebrow">
-        <span>{kindLabel} · <span class="mono">{did.current(s.store, s.id)}</span></span>
+        <span>{kindName} · <span class="mono">{did.current(s.store, s.id)}</span></span>
+        {#if s.steps && s.steps.total > 0}
+          <span class="muted" title="ステップ">ステップ {s.steps.done}/{s.steps.total}</span>
+        {/if}
         {#if (s.former_ids ?? []).length > 0}
           <span class="muted">旧 <span class="mono">{(s.former_ids ?? []).join("、")}</span></span>
         {/if}

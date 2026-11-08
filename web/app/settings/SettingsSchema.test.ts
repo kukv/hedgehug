@@ -38,10 +38,6 @@ const sch = {
     { name: "triage", label: "仕分け", category: "todo" },
     { name: "done", label: "完了", category: "done", default: true },
   ],
-  kinds: [
-    { name: "project", label: "プロジェクト", role: "container", parents: ["root"] },
-    { name: "task", label: "タスク", role: "work", parents: null, default: true },
-  ],
   props: {
     priority: { type: "enum", values: ["low", "high"] },
     points: { type: "number", label: "ポイント" },
@@ -98,7 +94,7 @@ type Opts = {
   // the schema is not in yet and does not come
   pending?: boolean;
   store?: string;
-  tab?: "statuses" | "kinds" | "props" | "relations" | "workflow";
+  tab?: "statuses" | "props" | "relations" | "workflow";
   readOnly?: string;
   order?: (list: string, names: string[]) => unknown;
   del?: () => unknown;
@@ -133,7 +129,6 @@ function setup(opts: Opts = {}) {
     opts.del ? opts.del() : ok({ schema: state.schema, commit: "c1" }),
   );
   const orderStatuses = vi.fn((b: { names: string[] }) => order("statuses", b.names));
-  const orderKinds = vi.fn((b: { names: string[] }) => order("kinds", b.names));
   const orderProps = vi.fn((b: { names: string[] }) => order("props", b.names));
   const load = vi.fn(() =>
     opts.pending
@@ -157,7 +152,6 @@ function setup(opts: Opts = {}) {
         migrateSchema: post,
         deleteStatus,
         orderStatuses,
-        orderKinds,
         orderProps,
       },
       conn,
@@ -181,7 +175,6 @@ function setup(opts: Opts = {}) {
     checkSchema,
     deleteStatus,
     orderStatuses,
-    orderKinds,
     orderProps,
     post,
     reload,
@@ -227,16 +220,7 @@ describe("reorder", () => {
     expect(k.orderStatuses).not.toHaveBeenCalled();
   });
 
-  it("sends the kinds, and the properties and the relations each as their own group", async () => {
-    const k = setup({ tab: "kinds" });
-    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（task）" }), up);
-    await waitFor(() =>
-      expect(k.orderKinds).toHaveBeenCalledWith(
-        { names: ["task", "project"] },
-        { store: "shared" },
-      ),
-    );
-    cleanup();
+  it("sends the properties and the relations each as their own group", async () => {
     const p = setup({ tab: "props" });
     await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（points）" }), up);
     await waitFor(() =>
@@ -327,7 +311,7 @@ describe("reorder", () => {
   it("refuses a drop from another list", async () => {
     const k = setup();
     await screen.findByRole("button", { name: "並べ替え（todo）" });
-    expect((await dropTodoOnDone("kinds")).can).toBe(false);
+    expect((await dropTodoOnDone("props")).can).toBe(false);
     expect(k.orderStatuses).not.toHaveBeenCalled();
   });
 
@@ -482,22 +466,6 @@ describe("SettingsSchema", () => {
     expect(within(row(/^todo/)).getByText("—")).toBeVisible();
   });
 
-  it("lists the kinds with the parents they can sit under", async () => {
-    setup({ tab: "kinds" });
-    expect(await screen.findByRole("heading", { level: 2, name: "種類" })).toBeVisible();
-    expect(within(row(/^project/)).getByText("最上位")).toBeVisible();
-    expect(within(row(/^task/)).getByText("どこにでも")).toBeVisible();
-    expect(within(row(/^project/)).getByText("グループ")).toBeVisible();
-    expect(within(row(/^task/)).getByText("アイテム")).toBeVisible();
-    expect(screen.getByRole("columnheader", { name: "どの下に置けるか" })).toBeVisible();
-    expect(
-      screen.getByText(
-        "役割はグループ（ほかの種類をまとめる単位）とアイテム（作業の項目）の 2 つです。どの下に置けるかに反する配置は書き込み時に拒否されます。",
-      ),
-    ).toBeVisible();
-    expect(within(row(/^task/)).getByText("3")).toBeVisible();
-  });
-
   it("lists the properties without the relations and without a row per value", async () => {
     setup({ tab: "props" });
     await screen.findByRole("row", { name: /^points/ });
@@ -592,8 +560,6 @@ describe("SettingsSchema", () => {
   it("names each table by its heading", async () => {
     const { rerender } = setup();
     expect(await screen.findByRole("table", { name: "ステータス" })).toBeVisible();
-    await rerender({ tab: "kinds" });
-    expect(screen.getByRole("table", { name: "種類" })).toBeVisible();
     await rerender({ tab: "props" });
     expect(screen.getByRole("table", { name: "プロパティ" })).toBeVisible();
     await rerender({ tab: "relations" });
@@ -608,7 +574,6 @@ describe("SettingsSchema", () => {
     );
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/settings/schema/org-b%2Fops",
-      "/settings/schema/org-b%2Fops?tab=kinds",
       "/settings/schema/org-b%2Fops?tab=props",
       "/settings/schema/org-b%2Fops?tab=relations",
       "/settings/schema/org-b%2Fops?tab=workflow",
@@ -616,13 +581,12 @@ describe("SettingsSchema", () => {
     ]);
     expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([
       null,
-      null,
       "page",
       null,
       null,
       null,
     ]);
-    await fireEvent.click(links[4] as HTMLElement);
+    await fireEvent.click(links[3] as HTMLElement);
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
 
@@ -814,20 +778,16 @@ describe("SettingsSchema", () => {
       expect(screen.getByRole("dialog", { name: "ステータス「triage」をマージ" })).toBeVisible();
     });
 
-    it("opens the merge dialog for a kind and a property", async () => {
-      const { rerender } = setup({ tab: "kinds" });
-      await fireEvent.click(await screen.findByRole("button", { name: "マージ（task）" }));
-      expect(screen.getByRole("dialog", { name: "種類「task」をマージ" })).toBeVisible();
-      await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-      await rerender({ tab: "props" });
-      await fireEvent.click(screen.getByRole("button", { name: "マージ（points）" }));
+    it("opens the merge dialog for a property", async () => {
+      setup({ tab: "props" });
+      await fireEvent.click(await screen.findByRole("button", { name: "マージ（points）" }));
       expect(screen.getByRole("dialog", { name: "プロパティ「points」をマージ" })).toBeVisible();
     });
 
     it("offers no merge when nothing else is defined", async () => {
-      setup({ tab: "kinds", schema: { ...sch, kinds: [sch.kinds[1] as never] } });
-      expect(await screen.findByRole("button", { name: "編集（task）" })).toBeVisible();
-      expect(screen.queryByRole("button", { name: "マージ（task）" })).toBeNull();
+      setup({ tab: "props", schema: { ...sch, props: { points: sch.props.points } } as never });
+      expect(await screen.findByRole("button", { name: "編集（points）" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "マージ（points）" })).toBeNull();
     });
 
     async function mergeTriage(k: ReturnType<typeof setup>, beforeRun?: () => void) {

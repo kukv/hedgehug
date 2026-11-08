@@ -2,9 +2,10 @@
   import { untrack } from "svelte";
   import type { TaskView } from "../../core/api/client";
   import { cliAdd, Placeholder } from "../../core/cli";
+  import { canPlace, defaultKindUnder, kindLabel, kindsUnder } from "../../core/kinds";
   import { errorMessage } from "../../core/messages";
   import { type Template, usableTemplates } from "../../core/planning";
-  import { canParent, defaultStatusIn, parentRule } from "../../core/schema";
+  import { defaultStatusIn } from "../../core/schema";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import BodyEditor from "../detail/BodyEditor.svelte";
@@ -116,26 +117,18 @@
   });
   const usable = $derived(usableTemplates(templates, scopedTemplates?.only));
   const kindDefault = $derived.by(() => {
-    const name =
-      scopedTemplates?.default?.[kind] ??
-      sc.current?.kinds?.find((k) => k.name === kind)?.template ??
-      "";
+    const name = scopedTemplates?.default?.[kind] ?? sc.current?.templates?.default?.[kind] ?? "";
     return usable.some((t) => t.name === name) ? name : "";
   });
   const template = $derived(pickedTemplate ?? kindDefault);
-  const kinds = $derived(sc.current?.kinds ?? []);
-  const allowed = (name: string) => !sc.current || canParent(sc.current, name, parentKind);
+  // Only the kinds the parent can hold are offered.
+  const kinds = $derived(kindsUnder(parentKind));
   $effect(() => {
-    const s = sc.current;
-    if (!s) return;
     const pk = parentKind;
     const cur = untrack(() => kind);
-    if (cur && s.kinds?.some((k) => k.name === cur) && canParent(s, cur, pk)) return;
-    kind =
-      (
-        s.kinds?.find((k) => k.default && canParent(s, k.name, pk)) ??
-        s.kinds?.find((k) => canParent(s, k.name, pk))
-      )?.name ?? "";
+    if (cur && canPlace(cur, pk)) return;
+    const next = defaultKindUnder(pk);
+    kind = canPlace(next, pk) ? next : "";
   });
   $effect(() => {
     const s = sc.current;
@@ -148,19 +141,17 @@
     }
   });
 
-  const defaultKindName = $derived(kinds.find((k) => k.default)?.name ?? "");
+  const defaultKindName = $derived(defaultKindUnder(parentKind));
   const defaultStatusName = $derived(sc.current ? defaultStatusIn(sc.current, "todo") : "");
   const rows = $derived(
     (sc.current ? propRows(sc.current, {}) : []).filter((r) => r.editor !== null),
   );
   const statusChoices = $derived(statusOptions(sc.current));
-  const hold = $derived.by(() => {
-    if (!parent) return "";
-    const usable = kinds.filter((k) => allowed(k.name)).map((k) => k.label || k.name);
-    return usable.length < kinds.length
-      ? `${did.current(parent.store, parent.id)} の下に置けるのは${usable.join("・")}です`
-      : "";
-  });
+  const hold = $derived(
+    parent && kinds.length === 0
+      ? `${did.current(parent.store, parent.id)} は ${kindLabel(parent.kind)} なので、その下には置けません`
+      : "",
+  );
   const canSubmit = $derived(
     !busy && title.trim() !== "" && !!ws && !!sc.current && kind !== "" && blocked === "",
   );
@@ -327,22 +318,16 @@
       <span class="lbl">種類</span>
       <div class="kinds" role="radiogroup" aria-label="種類">
         {#each kinds as k (k.name)}
-          {@const usable = allowed(k.name)}
-          <label
-            class:on={kind === k.name}
-            class:off={!usable}
-            title={usable || !sc.current ? undefined : parentRule(sc.current, k.name)}
-          >
+          <label class:on={kind === k.name}>
             <input
               type="radio"
               name="create-kind"
               value={k.name}
               checked={kind === k.name}
-              disabled={!usable}
               onchange={() => (kind = k.name)}
             >
-            <KindIcon kind={k.name} role={k.role} icon={k.icon} color={k.color} />
-            {k.label || k.name}
+            <KindIcon kind={k.name} />
+            {k.label}
           </label>
         {/each}
       </div>
@@ -524,13 +509,6 @@
   .kinds label.on {
     background: var(--ink);
     color: var(--surface);
-  }
-  .kinds label.off {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--line);
-    color: var(--muted-2);
-    text-decoration: line-through;
-    cursor: not-allowed;
   }
   .kinds input {
     position: absolute;

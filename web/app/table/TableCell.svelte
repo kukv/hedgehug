@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { TaskView } from "../../core/api/client";
   import { formatDate } from "../../core/format";
+  import { kindChoices } from "../../core/kinds";
   import type { PatchField } from "../../core/save";
-  import { canParent, parentRule, propEditorOf, type SchemaView } from "../../core/schema";
+  import { propEditorOf, type SchemaView } from "../../core/schema";
   import type { StoreTone } from "../../core/stores";
   import { core } from "../context";
   import FieldInput from "../detail/FieldInput.svelte";
@@ -56,21 +57,7 @@
   const category = $derived(statusDef?.category);
   // null: no parent; undefined: there is one whose kind is not known, so no kind is ruled out.
   const parentKind = $derived(task.parent ? taskOf(task.parent)?.kind : null);
-  const kindOptions = $derived<Option[]>(
-    (schema?.kinds ?? []).map((k) => {
-      const usable =
-        k.name === task.kind ||
-        !schema ||
-        parentKind === undefined ||
-        canParent(schema, k.name, parentKind);
-      return {
-        value: k.name,
-        label: k.label || k.name,
-        disabled: !usable,
-        title: usable || !schema ? undefined : parentRule(schema, k.name),
-      };
-    }),
-  );
+  const kindOptions = $derived<Option[]>(kindChoices(task.kind, parentKind));
   const parent = $derived(task.parent ? taskOf(task.parent) : undefined);
   const did = useDisplayId(core().stores);
   const taskId = $derived(did.current(task.store, task.id));

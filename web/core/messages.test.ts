@@ -243,17 +243,11 @@ describe("errorMessage", () => {
     expect(errorMessage(err("schema.invalid", {}, "boom"))).toBe(
       "スキーマの規則に合わなくなります: boom",
     );
-    expect(errorMessage(err("schema.parents_empty", { kinds: ["sub", "leaf"] }))).toBe(
-      "種類 sub、leaf のどの下に置けるかがなくなるため削除できません。先に sub、leaf のどの下に置けるかを変えてください",
-    );
     expect(errorMessage(err("schema.not_defined"))).toBe(
       "定義が見つかりません。画面を読み込み直してください",
     );
     expect(errorMessage(err("schema.order_stale"))).toBe(
       "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
-    );
-    expect(errorMessage(err("schema.default_container"))).toBe(
-      "既定にできるのはアイテムの種類だけです",
     );
     expect(errorMessage(err("schema.not_task_ref"))).toBe(
       "複数・逆方向・双方向は関連だけの設定です",
@@ -266,9 +260,32 @@ describe("errorMessage", () => {
     );
   });
 
+  it("says what to do for a Store whose format is not the one this version reads", () => {
+    expect(errorMessage(err("store.old_format", { name: "work" }))).toBe(
+      "work は古い形式です。hh store convert で新しい形式にしてください",
+    );
+    expect(errorMessage(err("store.old_format"))).toBe(
+      "この Store は古い形式です。hh store convert で新しい形式にしてください",
+    );
+    expect(errorMessage(err("store.newer_format", { name: "work" }))).toBe(
+      "work は新しい形式です。Hedgehug を更新してください",
+    );
+    expect(errorMessage(err("store.convert_unsynced"))).toContain("先に同期してください");
+    expect(errorMessage(err("sync.format_diverged"))).toContain("hh store convert");
+  });
+
+  it("asks for the parent where a kind cannot sit at the top", () => {
+    expect(errorMessage(err("import.parent_required"))).toBe(
+      "--parent で取り込み先を指定してください",
+    );
+    expect(errorMessage(err("move.parent_required", { kind: "task" }))).toBe(
+      "移動先の親を指定してください",
+    );
+  });
+
   it("words the errors of an override of a project", () => {
-    expect(errorMessage(err("scoped.not_container", { id: "ME-2", kind: "task" }))).toBe(
-      "ME-2 は task で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません",
+    expect(errorMessage(err("scoped.not_group", { id: "ME-2", kind: "task" }))).toBe(
+      "ME-2 は task で、プロジェクトでもエピックでもないため、上書きを設定できません",
     );
     expect(
       errorMessage(

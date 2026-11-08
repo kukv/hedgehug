@@ -20,7 +20,7 @@ describe("PropsPanel", () => {
   it("shows the built-in fields and the properties of the schema", () => {
     mount(PropsPanel, { show }, makeCore({ show }));
     expect(screen.getByRole("button", { name: "ステータス" })).toHaveTextContent("進行中 · doing");
-    expect(screen.getByRole("button", { name: "種類" })).toHaveTextContent("タスク");
+    expect(screen.getByRole("button", { name: "種類" })).toHaveTextContent("Task");
     expect(screen.getByRole("button", { name: "priority" })).toHaveTextContent("mid");
     expect(screen.getByLabelText("due")).toHaveValue("2026-11-07");
     expect(screen.getByRole("spinbutton", { name: "points" })).toHaveValue(5);
@@ -88,21 +88,21 @@ describe("PropsPanel", () => {
     );
     mount(PropsPanel, { show: child }, k);
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));
-    expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: /^Project/ })).toBeDisabled();
   });
 
   it("takes the kind of the parent the screen read when the cache lacks the parent", async () => {
     const child = showView({ ...show, parent: "UP" });
     mount(PropsPanel, { show: child, parentKind: "task" }, makeCore({ show: child }));
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));
-    expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: /^Project/ })).toBeDisabled();
   });
 
   it("rules no kind out while the kind of the parent is not known", async () => {
     const child = showView({ ...show, parent: "UP" });
     mount(PropsPanel, { show: child }, makeCore({ show: child }));
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));
-    expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).not.toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: /^Project/ })).not.toBeDisabled();
   });
 
   it("does not edit when read-only", () => {

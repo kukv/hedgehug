@@ -10,7 +10,6 @@ const schema = {
     { name: "done", category: "done" },
     { name: "canceled", category: "canceled" },
   ],
-  kinds: [{ name: "story" }, { name: "task" }, { name: "bug" }],
   props: {
     priority: { type: "enum", values: ["low", "high", "urgent"] },
     points: { type: "number" },
@@ -19,7 +18,6 @@ const schema = {
 // A second store: a status and a property the first one lacks.
 const other = {
   statuses: [{ name: "review", category: "doing" }],
-  kinds: [{ name: "task" }],
   props: { estimate: { type: "number" } },
 } as unknown as SchemaView;
 
