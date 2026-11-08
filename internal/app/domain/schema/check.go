@@ -134,6 +134,11 @@ func (s *Schema) Check() []Problem {
 		if t == nil {
 			return
 		}
+		if path == "templates" && len(t.Only) > 0 {
+			// Only narrows the templates of a project; on the store it was
+			// never in effect.
+			add(path+".only", "schema.templates_only_on_store", "only is for the override of a project (scoped[].templates.only); on the store it has no effect, so remove it")
+		}
 		for _, name := range t.Only {
 			if err := model.ValidTemplateName(name); err != nil {
 				add(path+".only", "schema.bad_template_name", "%v", err)

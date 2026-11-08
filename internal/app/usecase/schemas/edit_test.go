@@ -188,6 +188,10 @@ func TestEditErrors(t *testing.T) {
 		{"not defined", plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveStatus("nope") }), "schema.not_defined"},
 		{"stale", plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.OrderStatuses([]string{"todo"}) }), "schema.order_stale"},
 		{"invalid", plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveStatus("todo") }), "schema.invalid"},
+		{"templates.only on the store", plain(func(sc *schema.Schema) (*schema.Schema, error) {
+			sc.Templates = &schema.Templates{Only: []string{"bug"}}
+			return sc, nil
+		}), "schema.invalid"},
 		{"not task_ref", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 			m := true
 			next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Multi: &m})

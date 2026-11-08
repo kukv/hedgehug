@@ -411,6 +411,14 @@ func (c *step2State) convertSchema() error {
 			tp.Default = out
 		}
 	}
+	if sc.Templates != nil && len(sc.Templates.Only) > 0 {
+		// Only of the store was checked and never in effect; Check refuses it now.
+		c.notes = append(c.notes, "Store 全体の templates.only を消した（効いていなかった）: "+strings.Join(sc.Templates.Only, ", "))
+		sc.Templates.Only = nil
+		if len(sc.Templates.Default) == 0 {
+			sc.Templates = nil
+		}
+	}
 	if had {
 		c.notes = append([]string{"schema.yaml の kinds を消した"}, c.notes...)
 	}

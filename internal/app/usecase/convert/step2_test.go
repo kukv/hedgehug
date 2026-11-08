@@ -330,6 +330,38 @@ func TestStep2Schema(t *testing.T) {
 	}
 }
 
+// A templates.only of the store was checked and never in effect; it is taken
+// out, and the report says so. The one of a project's override stays.
+func TestStep2DropsTemplatesOnlyOfTheStore(t *testing.T) {
+	t.Parallel()
+	s := newOldStore(t)
+	s.task("project", nil, "p")
+	s.files["schema.yaml"] = append(s.files["schema.yaml"], []byte(`templates:
+  only: [tmpl-task, tmpl-bug]
+scoped:
+  - where: project:`+model.DerivedULID(created, "task p").String()+`
+    templates:
+      only: [tmpl-bug]
+`)...)
+	tr, rep := s.apply(Options{})
+	sc, err := schema.Decode(tr.Read("schema.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Templates != nil && len(sc.Templates.Only) > 0 {
+		t.Errorf("templates.only is still there: %v", sc.Templates.Only)
+	}
+	if got := sc.Scoped[0].Templates.Only; len(got) != 1 || got[0] != "tmpl-bug" {
+		t.Errorf("the override's only = %v", got)
+	}
+	if ps := sc.Check(); len(ps) > 0 {
+		t.Errorf("the schema does not check: %v", ps)
+	}
+	if !strings.Contains(strings.Join(rep.Lines, "\n"), "templates.only") {
+		t.Errorf("the report does not tell of templates.only: %v", rep.Lines)
+	}
+}
+
 func TestStep2Templates(t *testing.T) {
 	t.Parallel()
 	s := newOldStore(t)

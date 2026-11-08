@@ -59,6 +59,7 @@ func TestCheckProblems(t *testing.T) {
 		{"scoped template kind", func(s *Schema) {
 			s.Scoped = []Scoped{{Where: where, Templates: &Templates{Default: map[string]string{"nope": "x"}}}}
 		}, "scoped[0].templates.default"},
+		{"templates.only on the store", func(s *Schema) { s.Templates = &Templates{Only: []string{"ok"}} }, "templates.only"},
 		{"bad only template name", func(s *Schema) {
 			s.Scoped = []Scoped{{Where: where, Templates: &Templates{Only: []string{"ok", "a/b"}}}}
 		}, "scoped[0].templates.only"},

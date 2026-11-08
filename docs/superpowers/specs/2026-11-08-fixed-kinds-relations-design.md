@@ -40,6 +40,7 @@
 - 親を指定せずにプロジェクト以外の種類を指定して作る要求は、今の配置の誤りと同じく拒否する。CLI で `hh use` のプロジェクトがあれば、今までどおりそれが親になる。
 - `hh gh import` は取り込み先の親が必須（2026-11-08、利用者の決定）。`--parent` がなければ `hh use` のプロジェクトを使い、それもなければ 422 `import.parent_required`（「--parent で取り込み先を指定してください」）で止める。取り込んだタスクの種類は親に合わせて決まる。
 - 種類ごとの既定のテンプレート（今の `kinds[].template`）は、schema.yaml の `templates.default`（種類 → テンプレート）へ移す。形はプロジェクトの上書きの `templates.default` と同じ。
+- （2026-11-09、利用者の決定）Store 全体の `templates.only` は、検査はされていたが効いたことがない。schema.yaml にあれば、検査で 422 `schema.invalid`（書き込みを拒否）、doctor の指摘（`schema.templates_only_on_store`）にする。`templates.only` はプロジェクトの上書き（`scoped[].templates.only`）にだけ使える。画面のスキーマ編集は書かない。
 - プロジェクトの上書き（`scoped`）は、今までどおりプロジェクトかエピック（グループの役割）に付けられる。上書きできるのはステータス・ワークフロー・テンプレートだけ（今と同じ）。
 
 ### 親子の修復（同期の自動修復と hh doctor --fix）
@@ -150,7 +151,7 @@
 | 関連 | duplicates・causes・relates はそのまま組み込みの項目へ。独自の task_ref のプロパティは relates へ。今の relates は、保存されていた側から付けた向きありの relates になる |
 | 組み込みのプロパティ | `props:` の中の priority・start・due・estimate・points をトップレベルへ移す。priority の値のリストは今の定義から `priorities:` へ。型が合わない値（例: points が text）があれば一覧にして止める |
 | ラベル | `labels:` のリストにないラベルはタスクから外す。dry run で外れるラベルを一覧するので、残したいものは先にリストに足す。automations の同期する項目から `labels` を取り除く |
-| schema.yaml | `kinds` と task_ref のプロパティと組み込みと同じ名前のプロパティを消す。`kinds[].template` を `templates.default` へ移す |
+| schema.yaml | `kinds` と task_ref のプロパティと組み込みと同じ名前のプロパティを消す。`kinds[].template` を `templates.default` へ移す。Store 全体の `templates.only` を消す（変換の報告に 1 行出す） |
 
 ## ドキュメントの更新
 

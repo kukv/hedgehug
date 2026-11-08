@@ -133,6 +133,8 @@ const MESSAGES: Record<string, Words> = {
   "schema.default_status": ([c, n]) =>
     `カテゴリ${cat(c)}の既定のステータスは 1 つだけにしてください（今は ${n} 個）`,
   "schema.bad_template_name": ([e]) => `テンプレートの名前が正しくありません: ${e}`,
+  "schema.templates_only_on_store": () =>
+    "templates.only はプロジェクトの上書き（scoped の templates.only）にだけ使えます。Store 全体では効かないので消してください",
   "schema.unknown_kind": ([k]) => `「${k}」という種類はありません`,
   "schema.prop_builtin": ([n]) =>
     `「${n}」は組み込みのフィールドなので、プロパティの名前に使えません`,
