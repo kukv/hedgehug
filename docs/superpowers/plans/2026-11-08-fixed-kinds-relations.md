@@ -16,7 +16,7 @@
 - 形式の番号: Part 1 で 2、Part 2 で 3、Part 3 で 4。Part 4 は上げない
 - 古い形式の Store は `hh store convert` と `hh doctor` 以外を 422 `store.old_format` で止める。新しい形式は今までどおり拒否し、409 ではなく 422 `store.newer_format` に分類する
 - 変換は同期済み（未取り込み・未 push なし）でだけ実行し、すぐ push する。そうでなければ 409 `store.convert_unsynced`。push していないコミットを残して新しい形式を取り込むと 409 `sync.format_diverged`
-- 種類: project・epic・story・task・bug・step。表示名 Project・Epic・Story・Task・Bug・Step。階層は spec の表のとおり。既定の種類は task
+- 種類: project・epic・story・task・bug・step。表示名 Project・Epic・Story・Task・Bug・Step。階層は spec の表のとおり。種類を省いたら親に合わせる（親なし→project、project・epic→task、story・task・bug→step）
 - 関連: blocked_by/blocks、causes/caused_by、relates/related_by、duplicates/duplicated_by、clones/cloned_by。表示名は spec の表のとおり（英語）。循環の検査は blocked_by だけ
 - 組み込みのプロパティ: priority（enum、値のリスト `priorities:`、既定 low・mid・high・urgent）・start（date）・due（date）・estimate（duration）・points（number）・labels（multi_enum、値のリスト `labels:`、既定は空）。表示名は 優先度・開始日・期限・見積もり・ポイント・ラベル
 - プロパティのマージは CLI・API・画面のどこでもできない（422 `migrate.prop_merge`）。ステータスと値のマージは残す
@@ -56,7 +56,8 @@ var Kinds = []KindDef{
 	{"step", "Step", RoleItem, []string{"story", "task", "bug"}},
 }
 
-const DefaultKind = "task"
+// DefaultKindUnder は種類を省いたときの種類。parentKind "" は親なし。
+func DefaultKindUnder(parentKind string) string // ""→project、project・epic→task、story・task・bug→step
 
 func KindOf(name string) (KindDef, bool)
 func CanPlace(kind, parentKind string) bool   // parentKind "" = ワークスペースの直下
