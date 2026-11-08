@@ -4,7 +4,7 @@ import type { TaskView } from "../../core/api/client";
 import { FakeConn } from "../../core/testing";
 import { fail, ok } from "../detail/testkit";
 import { emitter, renderWithCore } from "../test-utils";
-import { resetToasts } from "../toast.svelte";
+import { resetToasts, toasts } from "../toast.svelte";
 import SettingsSchema from "./SettingsSchema.svelte";
 
 const sch = {
@@ -75,6 +75,7 @@ type Opts = {
   store?: string;
   tab?: "statuses" | "kinds" | "props" | "relations" | "workflow";
   readOnly?: string;
+  order?: (list: string, names: string[]) => unknown;
 };
 
 function setup(opts: Opts = {}) {
@@ -99,6 +100,13 @@ function setup(opts: Opts = {}) {
     opts.post ? opts.post(body) : ok({ changed: [], skipped: [], commit: null }),
   );
   const reload = vi.fn(async () => {});
+  const order = vi.fn((list: string, names: string[]) =>
+    opts.order ? opts.order(list, names) : ok({ changed: [], skipped: [], commit: "c1" }),
+  );
+  const orderStatuses = vi.fn((b: { names: string[] }) => order("statuses", b.names));
+  const orderKinds = vi.fn((b: { names: string[] }) => order("kinds", b.names));
+  const orderProps = vi.fn((b: { names: string[] }) => order("props", b.names));
+  const orderValues = vi.fn((_p: string, b: { names: string[] }) => order("values", b.names));
   const load = vi.fn(() =>
     opts.pending
       ? new Promise(() => {})
@@ -115,7 +123,15 @@ function setup(opts: Opts = {}) {
     SettingsSchema,
     { store: opts.store ?? "shared", tab: opts.tab ?? "statuses" },
     {
-      api: { listTasks, checkSchema, migrateSchema: post },
+      api: {
+        listTasks,
+        checkSchema,
+        migrateSchema: post,
+        orderStatuses,
+        orderKinds,
+        orderProps,
+        orderValues,
+      },
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
@@ -132,10 +148,127 @@ function setup(opts: Opts = {}) {
       },
     },
   );
-  return { listTasks, checkSchema, post, reload, load, conn, cache, state, ...view };
+  return {
+    listTasks,
+    checkSchema,
+    orderStatuses,
+    orderKinds,
+    orderProps,
+    orderValues,
+    post,
+    reload,
+    load,
+    conn,
+    cache,
+    state,
+    ...view,
+  };
 }
 
 const row = (name: string | RegExp) => screen.getByRole("row", { name });
+
+describe("reorder", () => {
+  beforeEach(() => {
+    resetToasts();
+    history.replaceState(null, "", "/settings/schema/shared");
+  });
+  afterEach(() => cleanup());
+  const down = { key: "ArrowDown", altKey: true };
+  const up = { key: "ArrowUp", altKey: true };
+
+  it("moves a status down with Alt+ArrowDown on its handle", async () => {
+    const k = setup();
+    const h = await screen.findByRole("button", { name: "並べ替え（todo）" });
+    h.focus();
+    await fireEvent.keyDown(h, down);
+    await waitFor(() =>
+      expect(k.orderStatuses).toHaveBeenCalledWith(
+        { names: ["triage", "todo", "done"] },
+        { store: "shared" },
+      ),
+    );
+    await waitFor(() => expect(k.reload).toHaveBeenCalledWith("shared"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "並べ替え（todo）" })).toHaveFocus(),
+    );
+  });
+
+  it("leaves the first status where it is on Alt+ArrowUp", async () => {
+    const k = setup();
+    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（todo）" }), up);
+    expect(k.orderStatuses).not.toHaveBeenCalled();
+  });
+
+  it("sends the kinds, and the properties and the relations each as their own group", async () => {
+    const k = setup({ tab: "kinds" });
+    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（task）" }), up);
+    await waitFor(() =>
+      expect(k.orderKinds).toHaveBeenCalledWith(
+        { names: ["task", "project"] },
+        { store: "shared" },
+      ),
+    );
+    cleanup();
+    const p = setup({ tab: "props" });
+    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（points）" }), up);
+    await waitFor(() =>
+      expect(p.orderProps).toHaveBeenCalledWith(
+        { names: ["points", "priority"] },
+        { store: "shared" },
+      ),
+    );
+    cleanup();
+    const r = setup({ tab: "relations" });
+    await fireEvent.keyDown(
+      await screen.findByRole("button", { name: "並べ替え（duplicates）" }),
+      up,
+    );
+    await waitFor(() =>
+      expect(r.orderProps).toHaveBeenCalledWith(
+        { names: ["duplicates", "relates"] },
+        { store: "shared" },
+      ),
+    );
+  });
+
+  it("reloads and says so when the order is stale", async () => {
+    const k = setup({ order: () => fail(409, "schema.order_stale") });
+    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（todo）" }), down);
+    await waitFor(() => expect(k.reload).toHaveBeenCalledWith("shared"));
+    expect(toasts.list.map((t) => t.message)).toContain(
+      "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
+    );
+  });
+
+  it("moves a value within its property", async () => {
+    const k = setup({
+      tab: "props",
+      schema: {
+        ...sch,
+        props: {
+          ...sch.props,
+          priority: { type: "enum", values: ["low", "mid", "high", "urgent"] },
+        },
+      },
+    });
+    await fireEvent.keyDown(
+      await screen.findByRole("button", { name: "並べ替え（priority の mid）" }),
+      up,
+    );
+    await waitFor(() =>
+      expect(k.orderValues).toHaveBeenCalledWith(
+        "priority",
+        { names: ["mid", "low", "high", "urgent"] },
+        { store: "shared" },
+      ),
+    );
+  });
+
+  it("disables the handles of a read-only Store", async () => {
+    setup({ readOnly: "r/o" });
+    expect(await screen.findByRole("button", { name: "並べ替え（todo）" })).toBeDisabled();
+  });
+});
 
 describe("SettingsSchema", () => {
   beforeEach(() => {

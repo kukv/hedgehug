@@ -4,6 +4,9 @@
   import type { SchemaUsage } from "../../core/schema-usage";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import Button from "../ui/Button.svelte";
+  import { useOrder } from "./order.svelte";
+  import { sortableRow } from "./reorder";
+  import SchemaHandle from "./SchemaHandle.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count } from "./schema-text";
@@ -15,10 +18,16 @@
     off: string | null;
     onaction: (a: SchemaAction) => void;
   };
-  let { schema, usage, off, onaction }: Props = $props();
+  let { store, schema, usage, off, onaction }: Props = $props();
 
   const uid = $props.id();
   const statuses = $derived(schema.statuses ?? []);
+  const order = useOrder(() => store);
+  const names = $derived(statuses.map((x) => x.name));
+  const move = (name: string, from: number, to: number) =>
+    order.move(`statuses/${name}`, names, from, to, (api, s, next) =>
+      api.orderStatuses({ names: next }, { store: s }),
+    );
 </script>
 
 <section class="sec" aria-labelledby="{uid}-statuses">
@@ -36,9 +45,11 @@
       追加…
     </Button>
   </div>
+  <span id="{uid}-move" class="sr">⌥↑ / ⌥↓ で移動</span>
   <table aria-labelledby="{uid}-statuses">
     <thead>
       <tr>
+        <th scope="col"><span class="sr">並べ替え</span></th>
         <th scope="col">名前</th>
         <th scope="col">表示名</th>
         <th scope="col">カテゴリ</th>
@@ -48,8 +59,25 @@
       </tr>
     </thead>
     <tbody>
-      {#each statuses as s (s.name)}
-        <tr>
+      {#each statuses as s, i (s.name)}
+        <tr
+          use:sortableRow={{
+            list: "statuses",
+            name: s.name,
+            index: i,
+            onmove: (a, b) => void move(s.name, a, b),
+          }}
+        >
+          <td>
+            <SchemaHandle
+              id="statuses/{s.name}"
+              subject={s.name}
+              hint="{uid}-move"
+              disabled={order.busy}
+              {off}
+              onstep={(by) => void move(s.name, i, i + by)}
+            />
+          </td>
           <th scope="row">
             <span class="name"
               ><StatusIcon status={s.name} category={s.category} color={s.color} size={14} />
@@ -114,6 +142,12 @@
   }
   tbody th {
     font-weight: 600;
+  }
+  tbody :global(tr[data-edge="top"]) {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  tbody :global(tr[data-edge="bottom"]) {
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
   .name {
     display: inline-flex;

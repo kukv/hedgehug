@@ -2,6 +2,9 @@
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
   import Button from "../ui/Button.svelte";
+  import { useOrder } from "./order.svelte";
+  import { sortableRow } from "./reorder";
+  import SchemaHandle from "./SchemaHandle.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count, propNote, relationEntries } from "./schema-text";
@@ -16,10 +19,16 @@
     onaction: (a: SchemaAction) => void;
     blocked: number | undefined;
   };
-  let { schema, usage, off, onaction, blocked }: Props = $props();
+  let { store, schema, usage, off, onaction, blocked }: Props = $props();
 
   const uid = $props.id();
   const entries = $derived(relationEntries(schema));
+  const order = useOrder(() => store);
+  const names = $derived(entries.map(([n]) => n));
+  const move = (name: string, from: number, to: number) =>
+    order.move(`relations/${name}`, names, from, to, (api, s, next) =>
+      api.orderProps({ names: next }, { store: s }),
+    );
 </script>
 
 <section class="sec" aria-labelledby="{uid}-relations">
@@ -38,9 +47,11 @@
       追加…
     </Button>
   </div>
+  <span id="{uid}-move" class="sr">⌥↑ / ⌥↓ で移動</span>
   <table aria-labelledby="{uid}-relations">
     <thead>
       <tr>
+        <th scope="col"><span class="sr">並べ替え</span></th>
         <th scope="col">名前</th>
         <th scope="col">表示名</th>
         <th scope="col">設定</th>
@@ -50,14 +61,32 @@
     </thead>
     <tbody>
       <tr>
+        <td></td>
         <th scope="row">blocked_by</th>
         <td>ブロックされている</td>
         <td>複数 · 組み込み</td>
         <td class="num">{count(usage, blocked)}</td>
         <td></td>
       </tr>
-      {#each entries as [name, p] (name)}
-        <tr>
+      {#each entries as [name, p], i (name)}
+        <tr
+          use:sortableRow={{
+            list: "relations",
+            name,
+            index: i,
+            onmove: (a, b) => void move(name, a, b),
+          }}
+        >
+          <td>
+            <SchemaHandle
+              id="relations/{name}"
+              subject={name}
+              hint="{uid}-move"
+              disabled={order.busy}
+              {off}
+              onstep={(by) => void move(name, i, i + by)}
+            />
+          </td>
           <th scope="row">{name}</th>
           <td>{p.label ?? ""}</td>
           <td>{propNote(p)}</td>
@@ -115,6 +144,12 @@
   }
   tbody th {
     font-weight: 600;
+  }
+  tbody :global(tr[data-edge="top"]) {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  tbody :global(tr[data-edge="bottom"]) {
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
   .num {
     text-align: right;

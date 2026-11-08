@@ -3,6 +3,9 @@
   import type { SchemaUsage } from "../../core/schema-usage";
   import KindIcon from "../icons/KindIcon.svelte";
   import Button from "../ui/Button.svelte";
+  import { useOrder } from "./order.svelte";
+  import { sortableRow } from "./reorder";
+  import SchemaHandle from "./SchemaHandle.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count } from "./schema-text";
@@ -14,10 +17,16 @@
     off: string | null;
     onaction: (a: SchemaAction) => void;
   };
-  let { schema, usage, off, onaction }: Props = $props();
+  let { store, schema, usage, off, onaction }: Props = $props();
 
   const uid = $props.id();
   const kinds = $derived(schema.kinds ?? []);
+  const order = useOrder(() => store);
+  const names = $derived(kinds.map((x) => x.name));
+  const move = (name: string, from: number, to: number) =>
+    order.move(`kinds/${name}`, names, from, to, (api, s, next) =>
+      api.orderKinds({ names: next }, { store: s }),
+    );
 
   const parentsText = (parents: string[] | null): string =>
     parents === null
@@ -43,9 +52,11 @@
       追加…
     </Button>
   </div>
+  <span id="{uid}-move" class="sr">⌥↑ / ⌥↓ で移動</span>
   <table aria-labelledby="{uid}-kinds">
     <thead>
       <tr>
+        <th scope="col"><span class="sr">並べ替え</span></th>
         <th scope="col">名前</th>
         <th scope="col">表示名</th>
         <th scope="col">役割</th>
@@ -57,8 +68,25 @@
       </tr>
     </thead>
     <tbody>
-      {#each kinds as k (k.name)}
-        <tr>
+      {#each kinds as k, i (k.name)}
+        <tr
+          use:sortableRow={{
+            list: "kinds",
+            name: k.name,
+            index: i,
+            onmove: (a, b) => void move(k.name, a, b),
+          }}
+        >
+          <td>
+            <SchemaHandle
+              id="kinds/{k.name}"
+              subject={k.name}
+              hint="{uid}-move"
+              disabled={order.busy}
+              {off}
+              onstep={(by) => void move(k.name, i, i + by)}
+            />
+          </td>
           <th scope="row">
             <span class="name"
               ><KindIcon kind={k.name} role={k.role} icon={k.icon} size={14} />{k.name}</span
@@ -124,6 +152,12 @@
   }
   tbody th {
     font-weight: 600;
+  }
+  tbody :global(tr[data-edge="top"]) {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  tbody :global(tr[data-edge="bottom"]) {
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
   .name {
     display: inline-flex;

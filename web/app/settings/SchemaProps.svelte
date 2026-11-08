@@ -2,6 +2,9 @@
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
   import Button from "../ui/Button.svelte";
+  import { useOrder } from "./order.svelte";
+  import { sortableRow } from "./reorder";
+  import SchemaHandle from "./SchemaHandle.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
   import { count, propEntries, propNote } from "./schema-text";
@@ -13,10 +16,20 @@
     off: string | null;
     onaction: (a: SchemaAction) => void;
   };
-  let { schema, usage, off, onaction }: Props = $props();
+  let { store, schema, usage, off, onaction }: Props = $props();
 
   const uid = $props.id();
   const entries = $derived(propEntries(schema));
+  const order = useOrder(() => store);
+  const names = $derived(entries.map(([n]) => n));
+  const move = (name: string, from: number, to: number) =>
+    order.move(`props/${name}`, names, from, to, (api, s, next) =>
+      api.orderProps({ names: next }, { store: s }),
+    );
+  const moveValue = (prop: string, values: string[], v: string, from: number, to: number) =>
+    order.move(`values/${prop}/${v}`, values, from, to, (api, s, next) =>
+      api.orderValues(prop, { names: next }, { store: s }),
+    );
 </script>
 
 <section class="sec" aria-labelledby="{uid}-props">
@@ -32,9 +45,11 @@
       追加…
     </Button>
   </div>
+  <span id="{uid}-move" class="sr">⌥↑ / ⌥↓ で移動</span>
   <table aria-labelledby="{uid}-props">
     <thead>
       <tr>
+        <th scope="col"><span class="sr">並べ替え</span></th>
         <th scope="col">名前</th>
         <th scope="col">表示名</th>
         <th scope="col">型</th>
@@ -44,8 +59,25 @@
       </tr>
     </thead>
     <tbody>
-      {#each entries as [name, p] (name)}
-        <tr>
+      {#each entries as [name, p], i (name)}
+        <tr
+          use:sortableRow={{
+            list: "props",
+            name,
+            index: i,
+            onmove: (a, b) => void move(name, a, b),
+          }}
+        >
+          <td>
+            <SchemaHandle
+              id="props/{name}"
+              subject={name}
+              hint="{uid}-move"
+              disabled={order.busy}
+              {off}
+              onstep={(by) => void move(name, i, i + by)}
+            />
+          </td>
           <th scope="row">{name}</th>
           <td>{p.label ?? ""}</td>
           <td class="mono">{p.type}</td>
@@ -66,8 +98,26 @@
             </div>
           </td>
         </tr>
-        {#each p.values ?? [] as v (v)}
-          <tr class="value">
+        {#each p.values ?? [] as v, vi (v)}
+          <tr
+            class="value"
+            use:sortableRow={{
+              list: `values:${name}`,
+              name: v,
+              index: vi,
+              onmove: (a, b) => void moveValue(name, p.values ?? [], v, a, b),
+            }}
+          >
+            <td>
+              <SchemaHandle
+                id="values/{name}/{v}"
+                subject="{name} の {v}"
+                hint="{uid}-move"
+                disabled={order.busy}
+                {off}
+                onstep={(by) => void moveValue(name, p.values ?? [], v, vi, vi + by)}
+              />
+            </td>
             <th scope="row"><span class="vname">{name} › {v}</span></th>
             <td colspan="3"></td>
             <td class="num">{count(usage, usage?.values[name]?.[v])}</td>
@@ -88,7 +138,7 @@
         {/each}
       {:else}
         <tr>
-          <td colspan="6" class="none">プロパティはありません</td>
+          <td colspan="7" class="none">プロパティはありません</td>
         </tr>
       {/each}
     </tbody>
@@ -129,6 +179,12 @@
   }
   tbody th {
     font-weight: 600;
+  }
+  tbody :global(tr[data-edge="top"]) {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  tbody :global(tr[data-edge="bottom"]) {
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
   .value th {
     padding-left: var(--space-24);

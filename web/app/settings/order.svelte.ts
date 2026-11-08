@@ -1,0 +1,54 @@
+import { tick } from "svelte";
+import { ApiError } from "../../core/api/client";
+import { errorMessage } from "../../core/messages";
+import { core } from "../context";
+import { toast } from "../toast.svelte";
+import { HANDLE, moved } from "./reorder";
+
+const STALE =
+  "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください";
+
+// useOrder sends the new order of a list and reads the schema again: the screen is drawn from what
+// the server now holds, never from a guess (a stale list is refused, and there is nothing to undo).
+// The handles of the table are disabled while it is sent, and the focus goes back to the moved one.
+// Call it while a component is being made.
+export function useOrder(store: () => string) {
+  const c = core();
+  let busy = $state(false);
+  return {
+    get busy() {
+      return busy;
+    },
+    // move sends names with the item at from put at to; at an edge (or while sending) nothing is sent.
+    async move(
+      handle: string,
+      names: readonly string[],
+      from: number,
+      to: number,
+      send: (api: typeof c.api, store: string, names: string[]) => Promise<unknown>,
+    ) {
+      const next = moved(names, from, to);
+      if (busy || next.every((n, i) => n === names[i])) return;
+      const s = store();
+      busy = true;
+      try {
+        await send(c.api, s, next);
+      } catch (e) {
+        toast({
+          message:
+            e instanceof ApiError && e.type === "schema.order_stale" ? STALE : errorMessage(e),
+        });
+      }
+      try {
+        await c.schema.reload(s);
+      } catch (e) {
+        toast({ message: errorMessage(e) });
+      }
+      busy = false;
+      await tick();
+      for (const el of document.querySelectorAll<HTMLElement>(`[${HANDLE}]`)) {
+        if (el.getAttribute(HANDLE) === handle) el.focus();
+      }
+    },
+  };
+}

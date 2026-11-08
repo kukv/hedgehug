@@ -26,7 +26,8 @@
     | "bell"
     | "activity"
     | "people"
-    | "database";
+    | "database"
+    | "grip";
 
   type Def = { box: 16 | 24; w: number; d: string };
 
@@ -97,6 +98,7 @@
       w: 2,
       d: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
     },
+    grip: { box: 24, w: 3.4, d: "M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" },
     undo: { box: 24, w: 2, d: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" },
     status: {
       box: 16,
