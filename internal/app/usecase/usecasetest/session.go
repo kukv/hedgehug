@@ -1169,7 +1169,7 @@ func MovedFixture(t *testing.T, ts *Session) model.ULID {
 		t.Fatal(err)
 	}
 	ulid := ea.ULID
-	nt := &model.Task{ULID: ulid, Title: "moved", Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID, FormerIDs: []string{"API-1"}}
+	nt := &model.Task{ULID: ulid, Title: "moved", Kind: "project", Status: "todo", Workspace: ix.Workspaces()[0].ULID, FormerIDs: []string{"API-1"}}
 	if _, err := ts.ForStore("org-b").UpdateCommit(sb, store.Op{Name: "move-in", Task: ulid}, func(tx *store.Tx) error { return tx.PutTask(nt) }); err != nil {
 		t.Fatal(err)
 	}
