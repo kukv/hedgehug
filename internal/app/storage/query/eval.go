@@ -225,6 +225,11 @@ func (c *compiler) term(t Term) (pred, error) {
 			return c.inverse(t, p.Name)
 		}
 	}
+	for _, p := range c.sc.Props {
+		if p.Type == schema.TypeTaskRef && p.Inverse != "" && p.Inverse == t.Key {
+			return nil, c.failUnknown(t, "unknown key %q（逆方向は %s.inverse: で書きます）", t.Key, p.Name)
+		}
+	}
 	return nil, c.failUnknown(t, "unknown key %q", t.Key)
 }
 

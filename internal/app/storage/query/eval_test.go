@@ -3,6 +3,7 @@ package query
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -295,6 +296,34 @@ func TestInverseLabelIsNotAKey(t *testing.T) {
 		var qe *Error
 		if ok == errors.As(err, &qe) {
 			t.Errorf("Run(%q) err = %v", q, err)
+		}
+	}
+}
+
+func TestInverseLabelErrorHintsTheInverseKey(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	sc, _, _, err := s.Schema().ChangeProp("duplicates", schema.PropChange{Inverse: ptr("重複元")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
+		t.Fatal(err)
+	}
+	ix := mustOpen(t, s)
+	for q, hint := range map[string]bool{"重複元:none": true, "nothing:none": false} {
+		parsed, err := Parse(q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Run(ix, parsed, Options{})
+		var qe *Error
+		if !errors.As(err, &qe) {
+			t.Fatalf("Run(%q) err = %v", q, err)
+		}
+		const want = "（逆方向は duplicates.inverse: で書きます）"
+		if got := strings.Contains(qe.Msg, want); got != hint {
+			t.Errorf("Run(%q) msg = %q, hint = %v", q, qe.Msg, got)
 		}
 	}
 }

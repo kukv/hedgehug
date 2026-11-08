@@ -135,7 +135,7 @@ PR #105 を画面で確かめた利用者のフィードバックで、次のと
 - `PATCH /api/schema/props/{name}` は enum と multi_enum のとき `values` を受ける。`values` は保存後の値の全体で、順に `{"name": "<値>", "from": ["<今の値>", …]}` を並べる。
   - `from` がない値は追加。`from` が 1 つで名前が違えば名前の変更。`from` が 2 つ以上ならマージ（タスクの値を `name` に書き換える）。
   - 今の値のうち、どの `from` にも出てこない値は削除。使っているタスクがあれば 422 `schema.in_use`（値と件数を付ける）。
-  - 同じ今の値が 2 つの `from` に出る、空の値、重複した値は 422 `schema.value_invalid`。
+  - 同じ今の値が 2 つの `from` に出る、空の値、重複した値、消える値と同じ名前の新しい値、今の値にない `from` は 422 `schema.value_invalid`。
 - 値の個別の操作（`POST`・`DELETE …/values…`・`PUT …/values/order`）はなくす。
 - 「名前…」ボタンがなくなるので、画面から migrate の API を名前の変更に使うのをやめる。マージは今までどおり migrate を使う。
 
