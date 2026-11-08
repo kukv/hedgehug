@@ -6,7 +6,7 @@
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { onLinkClick, type ProjectTab, router } from "../router";
-  import { useDisplayId } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
 
@@ -18,6 +18,17 @@
   let { ulid, project, workspace, tab }: Props = $props();
 
   const c = core();
+  const schemaRev = useSubscribe(c.schema, () => ({}));
+  // The icon of the project kind is the one the schema of the project's store names.
+  $effect(() => {
+    if (project) c.schema.load(project.store).catch(() => undefined);
+  });
+  const projectIcon = $derived.by(() => {
+    schemaRev.current;
+    return project
+      ? c.schema.get(project.store)?.kinds?.find((k) => k.name === "project")?.icon
+      : undefined;
+  });
   const did = useDisplayId(c.stores);
   const at = (t: ProjectTab) => router.href({ name: "project", ulid, tab: t });
   const items = $derived([
@@ -55,7 +66,7 @@
       </a>
       <span class="sep" aria-hidden="true">›</span>
     {/if}
-    <KindIcon kind="project" />
+    <KindIcon kind="project" icon={projectIcon} />
     <h1 tabindex="-1">{project?.title ?? ""}</h1>
     {#if project}
       <span class="id">{did.current(project.store, project.id)}</span>

@@ -15,6 +15,7 @@ function mount(props: {
   tab: "tree" | "kanban" | "table" | "settings";
   withWorkspace?: boolean;
   noProject?: boolean;
+  schema?: unknown;
 }) {
   return renderWithCore(
     ProjectHeader,
@@ -31,6 +32,15 @@ function mount(props: {
         displayId: (_s: string, id: string) => id,
         subscribe: () => () => {},
       },
+      ...(props.schema
+        ? {
+            schema: {
+              subscribe: () => () => {},
+              get: () => props.schema,
+              load: async () => props.schema,
+            },
+          }
+        : {}),
     },
   );
 }
@@ -49,6 +59,14 @@ describe("ProjectHeader", () => {
     );
     expect(screen.getByRole("heading", { level: 1, name: "リリース準備 v2.4" })).toBeTruthy();
     expect(within(crumb).getByText("REL-15")).toBeTruthy();
+  });
+
+  it("draws the icon the schema names for the project kind", () => {
+    const { container } = mount({
+      tab: "tree",
+      schema: { kinds: [{ name: "project", role: "container", icon: "bug" }] },
+    });
+    expect(container.querySelector("svg[data-kind]")?.getAttribute("data-kind")).toBe("bug");
   });
 
   it("goes to the overview of the workspace through the router", async () => {
