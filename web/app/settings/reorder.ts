@@ -23,6 +23,8 @@ type Opts = {
   name: string;
   index: number;
   onmove: (from: number, to: number) => void;
+  // A list that cannot be written: nothing is dragged and nothing is dropped.
+  disabled?: boolean;
 };
 
 // The drag handle of a row is the element with data-handle inside it.
@@ -39,11 +41,12 @@ export function sortableRow(node: HTMLElement, opts: Opts) {
     draggable({
       element: node,
       dragHandle: node.querySelector<HTMLElement>(`[${HANDLE}]`) ?? undefined,
+      canDrag: () => !cur.disabled,
       getInitialData: () => ({ list: cur.list, name: cur.name, index: cur.index }),
     }),
     dropTargetForElements({
       element: node,
-      canDrop: ({ source }) => source.data.list === cur.list,
+      canDrop: ({ source }) => !cur.disabled && source.data.list === cur.list,
       getData: ({ input }) =>
         attachClosestEdge(
           { list: cur.list, name: cur.name, index: cur.index },

@@ -20,7 +20,10 @@
 
   const uid = $props.id();
   const entries = $derived(propEntries(schema));
-  const order = useOrder(() => store);
+  const order = useOrder(
+    () => store,
+    () => off,
+  );
   const names = $derived(entries.map(([n]) => n));
   const move = (name: string, from: number, to: number) =>
     order.move(`props/${name}`, names, from, to, (api, s, next) =>
@@ -65,6 +68,7 @@
             list: "props",
             name,
             index: i,
+            disabled: off !== null,
             onmove: (a, b) => void move(name, a, b),
           }}
         >
@@ -105,6 +109,7 @@
               list: `values:${name}`,
               name: v,
               index: vi,
+              disabled: off !== null,
               onmove: (a, b) => void moveValue(name, p.values ?? [], v, a, b),
             }}
           >

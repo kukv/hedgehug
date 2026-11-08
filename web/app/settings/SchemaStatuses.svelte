@@ -22,7 +22,10 @@
 
   const uid = $props.id();
   const statuses = $derived(schema.statuses ?? []);
-  const order = useOrder(() => store);
+  const order = useOrder(
+    () => store,
+    () => off,
+  );
   const names = $derived(statuses.map((x) => x.name));
   const move = (name: string, from: number, to: number) =>
     order.move(`statuses/${name}`, names, from, to, (api, s, next) =>
@@ -65,6 +68,7 @@
             list: "statuses",
             name: s.name,
             index: i,
+            disabled: off !== null,
             onmove: (a, b) => void move(s.name, a, b),
           }}
         >

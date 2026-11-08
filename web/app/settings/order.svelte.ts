@@ -12,7 +12,7 @@ const STALE =
 // the server now holds, never from a guess (a stale list is refused, and there is nothing to undo).
 // The handles of the table are disabled while it is sent, and the focus goes back to the moved one.
 // Call it while a component is being made.
-export function useOrder(store: () => string) {
+export function useOrder(store: () => string, off: () => string | null) {
   const c = core();
   let busy = $state(false);
   return {
@@ -28,7 +28,7 @@ export function useOrder(store: () => string) {
       send: (api: typeof c.api, store: string, names: string[]) => Promise<unknown>,
     ) {
       const next = moved(names, from, to);
-      if (busy || next.every((n, i) => n === names[i])) return;
+      if (busy || off() !== null || next.every((n, i) => n === names[i])) return;
       const s = store();
       busy = true;
       try {

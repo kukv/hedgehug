@@ -21,7 +21,10 @@
 
   const uid = $props.id();
   const kinds = $derived(schema.kinds ?? []);
-  const order = useOrder(() => store);
+  const order = useOrder(
+    () => store,
+    () => off,
+  );
   const names = $derived(kinds.map((x) => x.name));
   const move = (name: string, from: number, to: number) =>
     order.move(`kinds/${name}`, names, from, to, (api, s, next) =>
@@ -74,6 +77,7 @@
             list: "kinds",
             name: k.name,
             index: i,
+            disabled: off !== null,
             onmove: (a, b) => void move(k.name, a, b),
           }}
         >

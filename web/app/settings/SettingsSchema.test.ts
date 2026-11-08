@@ -7,6 +7,31 @@ import { emitter, renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import SettingsSchema from "./SettingsSchema.svelte";
 
+// The real drag and drop, with the options each row registers kept for the tests to call.
+const dnd = vi.hoisted(() => ({
+  drag: [] as { element: HTMLElement; canDrag?: () => boolean }[],
+  drop: [] as {
+    element: HTMLElement;
+    canDrop: (a: unknown) => boolean;
+    getData: (a: unknown) => Record<string | symbol, unknown>;
+    onDrop: (a: unknown) => void;
+  }[],
+}));
+vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", async (orig) => {
+  const m = await orig<typeof import("@atlaskit/pragmatic-drag-and-drop/element/adapter")>();
+  return {
+    ...m,
+    draggable: (a: never) => {
+      dnd.drag.push(a);
+      return m.draggable(a);
+    },
+    dropTargetForElements: (a: never) => {
+      dnd.drop.push(a);
+      return m.dropTargetForElements(a);
+    },
+  };
+});
+
 const sch = {
   statuses: [
     { name: "todo", label: "未着手", category: "todo", default: true },
@@ -262,6 +287,52 @@ describe("reorder", () => {
         { store: "shared" },
       ),
     );
+  });
+
+  // Drops the todo status on the done row, as a drag would end.
+  async function dropTodoOnDone(list = "statuses") {
+    const rowOf = (name: string) =>
+      screen.getByRole("button", { name: `並べ替え（${name}）` }).closest("tr");
+    const todo = rowOf("todo");
+    const target = dnd.drop.filter((d) => d.element === rowOf("done")).at(-1);
+    if (!target || !todo) throw new Error("rows are not drop targets");
+    const source = { data: { list, name: "todo", index: 0 } };
+    const self = {
+      data: target.getData({ input: { clientX: 0, clientY: 0 }, element: target.element, source }),
+    };
+    const can = target.canDrop({ source });
+    if (can) target.onDrop({ self, source });
+    return { can, todo };
+  }
+
+  it("sends the order of a drop on another row of the same list", async () => {
+    const k = setup();
+    await screen.findByRole("button", { name: "並べ替え（todo）" });
+    expect((await dropTodoOnDone()).can).toBe(true);
+    await waitFor(() => expect(k.orderStatuses).toHaveBeenCalledTimes(1));
+  });
+
+  it("refuses a drop from another list", async () => {
+    const k = setup();
+    await screen.findByRole("button", { name: "並べ替え（todo）" });
+    expect((await dropTodoOnDone("kinds")).can).toBe(false);
+    expect(k.orderStatuses).not.toHaveBeenCalled();
+  });
+
+  it("neither drags nor drops, and sends nothing, in a read-only Store", async () => {
+    const k = setup({ readOnly: "r/o" });
+    const { todo } = await (async () => {
+      await screen.findByRole("button", { name: "並べ替え（todo）" });
+      return { todo: screen.getByRole("button", { name: "並べ替え（todo）" }).closest("tr") };
+    })();
+    expect(
+      dnd.drag
+        .filter((d) => d.element === todo)
+        .at(-1)
+        ?.canDrag?.(),
+    ).toBe(false);
+    expect((await dropTodoOnDone()).can).toBe(false);
+    expect(k.orderStatuses).not.toHaveBeenCalled();
   });
 
   it("disables the handles of a read-only Store", async () => {
