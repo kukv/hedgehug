@@ -196,9 +196,11 @@
           {#each groups as g (g.kind)}
             <div>
               <h3>
-                <KindIcon kind={g.kind} size={13} />{g.kind}<span class="mono"
-                  >{g.tasks.length}</span
-                >
+                <KindIcon
+                  kind={g.kind}
+                  icon={schema?.kinds?.find((k) => k.name === g.kind)?.icon}
+                  size={13}
+                />{g.kind}<span class="mono">{g.tasks.length}</span>
               </h3>
               {#each g.tasks as t (t.ulid)}
                 {@const href = taskHref(t.ulid)}
@@ -206,6 +208,7 @@
                   <StatusIcon
                     status={t.status}
                     category={schema ? categoryOf(schema, t.status) : undefined}
+                    color={schema?.statuses?.find((s) => s.name === t.status)?.color}
                     size={14}
                   />
                   <span class="mono">{did.current(t.store, t.id)}</span>

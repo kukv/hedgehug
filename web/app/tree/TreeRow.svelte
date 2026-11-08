@@ -48,8 +48,10 @@
   }: Props = $props();
 
   const task = $derived(row.task);
-  const category = $derived(schema?.statuses?.find((s) => s.name === task.status)?.category);
-  const role = $derived(schema?.kinds?.find((k) => k.name === task.kind)?.role);
+  const statusDef = $derived(schema?.statuses?.find((s) => s.name === task.status));
+  const kindDef = $derived(schema?.kinds?.find((k) => k.name === task.kind));
+  const category = $derived(statusDef?.category);
+  const role = $derived(kindDef?.role);
   const closed = $derived(category === "done" || category === "canceled");
   const problem = $derived(task.problems?.[0]);
   const due = $derived(propText(task, "due"));
@@ -106,8 +108,8 @@
     {:else}
       <span class="chev-gap"></span>
     {/if}
-    <StatusIcon status={task.status} {category} />
-    <KindIcon kind={task.kind} {role} />
+    <StatusIcon status={task.status} {category} color={statusDef?.color} />
+    <KindIcon kind={task.kind} {role} icon={kindDef?.icon} />
     <IdLabel id={task.id} ulid={task.ulid} store={task.store} reveal={keyboardOn} />
     <span class="title" class:closed class:container={role === "container"}>{task.title}</span>
 

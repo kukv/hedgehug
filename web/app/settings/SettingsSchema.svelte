@@ -259,7 +259,8 @@
               <tr>
                 <th scope="row">
                   <span class="name"
-                    ><StatusIcon status={s.name} category={s.category} size={14} />{s.name}</span
+                    ><StatusIcon status={s.name} category={s.category} color={s.color} size={14} />
+                    {s.name}</span
                   >
                 </th>
                 <td>{s.label ?? ""}</td>
@@ -307,7 +308,7 @@
               <tr>
                 <th scope="row">
                   <span class="name"
-                    ><KindIcon kind={k.name} role={k.role} size={14} />{k.name}</span
+                    ><KindIcon kind={k.name} role={k.role} icon={k.icon} size={14} />{k.name}</span
                   >
                 </th>
                 <td>{k.label ?? ""}</td>

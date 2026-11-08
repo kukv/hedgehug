@@ -73,6 +73,33 @@ describe("KindIcon", () => {
   });
 });
 
+describe("スキーマの color と icon", () => {
+  it("パレットの色で描く", () => {
+    const { container } = render(StatusIcon, {
+      props: { status: "review", category: "doing", color: "teal" },
+    });
+    expect((container.querySelector("svg") as SVGElement).style.getPropertyValue("--c")).toBe(
+      "var(--store-teal-dot)",
+    );
+  });
+
+  it("スキーマが名指しした形で描く", () => {
+    const { container } = render(KindIcon, {
+      props: { kind: "incident", role: "work", icon: "bug" },
+    });
+    const svg = container.querySelector("svg") as SVGElement;
+    expect(svg.dataset.kind).toBe("bug");
+    expect(svg.style.getPropertyValue("--k")).toBe("var(--danger)");
+  });
+
+  it("知らない icon は無視する", () => {
+    const { container } = render(KindIcon, {
+      props: { kind: "incident", role: "container", icon: "rocket" },
+    });
+    expect((container.querySelector("svg") as SVGElement).dataset.kind).toBe("container");
+  });
+});
+
 describe("Icon", () => {
   it("label がなければ装飾として隠し、あれば img にする", () => {
     const a = render(Icon, { props: { name: "search" } });

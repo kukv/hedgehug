@@ -125,6 +125,9 @@
     return c.schema.get(store);
   };
 
+  const kindIconOf = (t: { store: string; kind: string }) =>
+    schemaOf(t.store)?.kinds?.find((k) => k.name === t.kind)?.icon;
+
   // The sprints and the releases belong to a workspace: with several, there is no one set to draw.
   const places = $derived([
     ...new Set(everyTask.map((t) => JSON.stringify([t.store, t.workspace.name]))),
@@ -473,7 +476,7 @@
             {:else}
               <span class="fold"></span>
             {/if}
-            <KindIcon kind={r.task.kind} size={13} />
+            <KindIcon kind={r.task.kind} icon={kindIconOf(r.task)} size={13} />
             <span class="id">{did.current(r.task.store, r.task.id)}</span>
             <a
               href={taskHref(r.task)}

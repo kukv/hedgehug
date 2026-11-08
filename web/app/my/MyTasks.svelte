@@ -91,9 +91,15 @@
       c.schema.load(store).catch(() => undefined);
     }
   });
-  function categoryOf(store: string, status: string): string | undefined {
+  function statusDefOf(store: string, status: string) {
     schemaRev.current;
-    return c.schema.get(store)?.statuses?.find((s) => s.name === status)?.category;
+    return c.schema.get(store)?.statuses?.find((s) => s.name === status);
+  }
+  const categoryOf = (store: string, status: string) => statusDefOf(store, status)?.category;
+  const colorOf = (store: string, status: string) => statusDefOf(store, status)?.color;
+  function iconOf(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return c.schema.get(store)?.kinds?.find((k) => k.name === kind)?.icon;
   }
 
   const logins = $derived.by(() => {
@@ -184,9 +190,13 @@
                 {@const href = taskHref(t.ulid)}
                 <tr>
                   <td class="w-status">
-                    <StatusIcon status={t.status} category={categoryOf(t.store, t.status)} />
+                    <StatusIcon
+                      status={t.status}
+                      category={categoryOf(t.store, t.status)}
+                      color={colorOf(t.store, t.status)}
+                    />
                   </td>
-                  <td class="w-kind"><KindIcon kind={t.kind} /></td>
+                  <td class="w-kind"><KindIcon kind={t.kind} icon={iconOf(t.store, t.kind)} /></td>
                   <td class="w-id">
                     <IdLabel
                       id={t.id}

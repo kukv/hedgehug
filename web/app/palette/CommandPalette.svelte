@@ -262,6 +262,11 @@
     return t ? c.stores.workspace(t.store, t.workspace.ulid) : undefined;
   }
 
+  function kindIconOf(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return c.schema.get(store)?.kinds?.find((k) => k.name === kind)?.icon;
+  }
+
   const groups = $derived.by<PaletteGroup[]>(() => {
     cacheRev.current;
     schemaRev.current;
@@ -412,7 +417,7 @@
                 onmousemove={() => (active = index)}
               >
                 {#if item.type === "task"}
-                  <KindIcon kind={item.kind} />
+                  <KindIcon kind={item.kind} icon={kindIconOf(item.store, item.kind)} />
                   <span class="key">{did.current(item.store, item.id)}</span>
                   <span class="text">{item.title}</span>
                   {#if item.note}

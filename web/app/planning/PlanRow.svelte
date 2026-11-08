@@ -48,9 +48,14 @@
   <StatusIcon
     status={task.status}
     category={schema ? categoryOf(schema, task.status) : undefined}
+    color={schema?.statuses?.find((s) => s.name === task.status)?.color}
     size={14}
   />
-  <KindIcon kind={task.kind} size={13} />
+  <KindIcon
+    kind={task.kind}
+    icon={schema?.kinds?.find((k) => k.name === task.kind)?.icon}
+    size={13}
+  />
   <span class="id">{did.current(task.store, task.id)}</span>
   <a {href} draggable="false" onclick={(e) => onLinkClick(e, href)}>{task.title}</a>
   {#if task.project}

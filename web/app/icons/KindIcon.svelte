@@ -14,12 +14,14 @@
 </script>
 
 <script lang="ts">
-  type Props = { kind: string; role?: string; size?: number };
-  let { kind, role, size = 16 }: Props = $props();
+  type Props = { kind: string; role?: string; icon?: string; size?: number };
+  let { kind, role, icon, size = 16 }: Props = $props();
 
-  const known = $derived(kind in kinds);
-  const d = $derived(kinds[kind] ?? (role === "container" ? containerShape : workShape));
-  const shape = $derived(known ? kind : role === "container" ? "container" : "work");
+  // The shape the schema names, when it is one we draw; else the kind's own name.
+  const name = $derived(icon && icon in kinds ? icon : kind);
+  const known = $derived(name in kinds);
+  const d = $derived(kinds[name] ?? (role === "container" ? containerShape : workShape));
+  const shape = $derived(known ? name : role === "container" ? "container" : "work");
 </script>
 
 <svg
@@ -27,7 +29,7 @@
   height={size}
   viewBox="0 0 16 16"
   data-kind={shape}
-  style:--k={kind === "bug" ? "var(--danger)" : "var(--icon)"}
+  style:--k={shape === "bug" ? "var(--danger)" : "var(--icon)"}
   aria-hidden="true"
 >
   <path
