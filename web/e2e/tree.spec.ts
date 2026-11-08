@@ -410,7 +410,7 @@ test("a drop the schema does not allow says why and changes nothing", async ({ p
     await expect(page.getByText("ここには置けません")).toBeVisible();
     await expect(page.getByText("Epic は Task の下に置けません")).toBeVisible();
   });
-  await expect(toast(page, "Epic のどの下に置けるかは Project だけです")).toBeVisible();
+  await expect(toast(page, "Epic を置けるのは Project の下だけです")).toBeVisible();
   expect(hh.show(epic.id).parent).toBe(p.ulid);
 });
 

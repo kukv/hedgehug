@@ -110,7 +110,7 @@
     <StatusIcon status={task.status} {category} color={statusDef?.color} />
     <KindIcon kind={task.kind} />
     <IdLabel id={task.id} ulid={task.ulid} store={task.store} reveal={keyboardOn} />
-    <span class="title" class:closed class:container={isGroup(task.kind)}>{task.title}</span>
+    <span class="title" class:closed class:group={isGroup(task.kind)}>{task.title}</span>
 
     {#if progress}
       <span class="progress">
@@ -278,7 +278,7 @@
     white-space: nowrap;
     color: var(--ink);
   }
-  .title.container {
+  .title.group {
     font-weight: 600;
   }
   .title.closed {

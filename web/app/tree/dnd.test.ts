@@ -98,7 +98,7 @@ describe("dropDecision: what it refuses", () => {
       ok: false,
       silent: false,
       title: "Epic は Task の下に置けません",
-      reason: "「REL-8 リリース作業」は Epic です。Epic のどの下に置けるかは Project だけです",
+      reason: "「REL-8 リリース作業」は Epic です。Epic を置けるのは Project の下だけです",
     });
   });
   it("refuses a place whose parent is a task when the kind needs another parent", () => {

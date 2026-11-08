@@ -7,8 +7,8 @@ import { type Column, columnKeyOf } from "./board";
 type Scoped = NonNullable<SchemaView["scoped"]>[number];
 type Transitions = Record<string, string[] | null>;
 
-// The override of a container (its scoped entry in schema.yaml, where: project:<ULID>), by the ULID
-// of the container: the project a board is of, or the scope the server names for a task.
+// The override of a group (its scoped entry in schema.yaml, where: project:<ULID>), by the ULID
+// of the group: the project a board is of, or the scope the server names for a task.
 function scopedOf(schema: SchemaView, project: string | undefined): Scoped | undefined {
   if (!project) return undefined;
   return (schema.scoped ?? []).find((s) => s.where === `project:${project}`);

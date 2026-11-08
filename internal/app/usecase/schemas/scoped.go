@@ -107,8 +107,8 @@ func ScopedGet(ss *usecase.Session, arg string) (ScopedResult, error) {
 // (op schema): the parts ch gives are replaced, a part ch gives empty goes
 // back to the store's value, and the rest is kept, with the templates and the
 // keys schema.yaml has that hedgehug does not know. An override left with
-// nothing is removed. The project must be a task of a kind whose role is
-// container and not deleted (KindInvalid, scoped.not_group; KindConflict,
+// nothing is removed. The project must be a task of a group kind (project or epic)
+// and not deleted (KindInvalid, scoped.not_group; KindConflict,
 // task.deleted). A change that brings a problem schema.Check does not find in
 // schema.yaml now is KindInvalid, scoped.invalid, with the problems as Args
 // "problems"; nothing is written.
@@ -156,7 +156,7 @@ func templatesExist(s *store.Store, ch schema.ScopedChange) error {
 }
 
 // scopedGuard checks the project ulid, which id names, under the lock of the
-// write: it is there, not deleted, and a container in the schema cur.
+// write: it is there, not deleted, and a group (project or epic) in the schema cur.
 func scopedGuard(id string, ulid model.ULID) func(*store.Tx, *schema.Schema) error {
 	return func(tx *store.Tx, cur *schema.Schema) error {
 		t, err := tx.Task(ulid)

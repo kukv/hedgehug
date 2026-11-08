@@ -43,13 +43,17 @@ export const kindsUnder = (parentKind: string | null): Kind[] =>
   KINDS.filter((k) => k.parents.includes(parentKind));
 
 // parentRule says where a kind can be put, for the tooltip of a kind that cannot be
-// chosen: 「Epic のどの下に置けるかは Project だけです」.
+// chosen: 「Epic を置けるのは Project の下だけです」.
 export function parentRule(kind: string): string {
   const k = kindOf(kind);
   if (!k) return `${kind} は種類にありません`;
   if (k.parents.length === 1 && k.parents[0] === null) return `${k.label} は最上位にだけ置けます`;
-  const names = k.parents.map((p) => (p === null ? "最上位" : kindLabel(p)));
-  return `${k.label} のどの下に置けるかは ${names.join("・")} だけです`;
+  const under = k.parents.filter((p): p is string => p !== null).map(kindLabel);
+  const places = [
+    ...(k.parents.includes(null) ? ["最上位"] : []),
+    ...(under.length ? [`${under.join("・")} の下`] : []),
+  ];
+  return `${k.label} を置けるのは ${places.join("か ")}だけです`;
 }
 
 // kindChoices are the kinds to pick from for a task of kind under a parent of parentKind (null: no

@@ -13,7 +13,7 @@ describe("checkParent", () => {
     const r = checkParent(epic, task("T7", "task", null));
     expect(r?.title).toBe("Epic は Task の下に置けません");
     expect(r?.reason).toBe(
-      "「REL-8 リリース作業」は Epic です。Epic のどの下に置けるかは Project だけです",
+      "「REL-8 リリース作業」は Epic です。Epic を置けるのは Project の下だけです",
     );
   });
 

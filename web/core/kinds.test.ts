@@ -68,9 +68,9 @@ describe("defaultKindUnder / kindsUnder", () => {
 describe("parentRule", () => {
   it("どの下に置けるかを日本語で言う", () => {
     expect(parentRule("project")).toBe("Project は最上位にだけ置けます");
-    expect(parentRule("epic")).toBe("Epic のどの下に置けるかは Project だけです");
-    expect(parentRule("task")).toBe("Task のどの下に置けるかは Project・Epic だけです");
-    expect(parentRule("step")).toBe("Step のどの下に置けるかは Story・Task・Bug だけです");
+    expect(parentRule("epic")).toBe("Epic を置けるのは Project の下だけです");
+    expect(parentRule("task")).toBe("Task を置けるのは Project・Epic の下だけです");
+    expect(parentRule("step")).toBe("Step を置けるのは Story・Task・Bug の下だけです");
     expect(parentRule("nowhere")).toBe("nowhere は種類にありません");
   });
 });

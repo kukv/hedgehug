@@ -15,7 +15,7 @@ type Effective struct {
 }
 
 // For returns the schema for a task whose ancestors are ancestors, nearest
-// first (include the task itself first when it is a container). The override
+// first (include the task itself first when it is a group). The override
 // of the nearest ancestor that has one applies; overrides of farther
 // ancestors are not combined with it.
 func (s *Schema) For(ancestors []model.ULID) *Effective {

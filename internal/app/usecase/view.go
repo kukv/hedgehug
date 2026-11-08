@@ -19,7 +19,7 @@ type TaskView struct {
 	// lists, kind:project); it is left out for a task with none.
 	Project *Ref `json:"project,omitempty"`
 	// Scope is the ULID of the ancestor (or the task itself, when it is a
-	// container) whose schema override applies to the task, chosen as a write
+	// group) whose schema override applies to the task, chosen as a write
 	// is checked (schema.For); left out when none does.
 	Scope     string         `json:"scope,omitempty"`
 	Kind      string         `json:"kind"`
@@ -206,7 +206,7 @@ func projectOf(ix *index.Index, e *index.Entry) *Ref {
 
 // scopeOf is the ULID of the ancestor whose override applies to e, or "". The
 // ancestors are the ones the index checks e against (Index.Ancestors): e first
-// when it is a container, then its parents nearest first, up to a task the
+// when it is a group, then its parents nearest first, up to a task the
 // index lacks or cannot read.
 func scopeOf(ix *index.Index, e *index.Entry) string {
 	sc := ix.Schema()

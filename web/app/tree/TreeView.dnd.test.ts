@@ -192,7 +192,7 @@ describe("TreeView drag and drop", () => {
     expect(await screen.findByText("ここには置けません")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Epic は Task の下に置けません");
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Epic のどの下に置けるかは Project だけです",
+      "Epic を置けるのは Project の下だけです",
     );
     const tree = screen.getByRole("tree");
     expect(tree).toHaveClass("refusing");
