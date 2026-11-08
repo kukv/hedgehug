@@ -19,16 +19,16 @@ test("the overview counts the tasks by category and lists the projects and the l
   const notes = hh.add("Write notes", "--parent", project.id);
   hh.add("Cut the tag", "--parent", project.id);
   hh.hh("set", notes.id, "status=done");
-  const loose = hh.add("Loose task");
-  const busy = hh.add("Busy alone");
+  const other = hh.add("Other project", "--kind", "project");
+  const busy = hh.add("Busy alone", "--kind", "project");
   hh.hh("set", busy.id, "status=in_progress");
   const [ws] = hh.json<Workspace[]>("workspace", "ls");
   if (!ws) throw new Error("the store has no workspace");
 
   await hh.open(page, `/workspaces/demo/${ws.ulid}`);
 
-  // project, two children and two loose tasks
-  await expect(page.getByText("5 件 · プロジェクト 1")).toBeVisible();
+  // three projects and the two children of the first
+  await expect(page.getByText("5 件 · プロジェクト 3")).toBeVisible();
   await expect(page.getByText("未着手 3", { exact: true })).toBeVisible();
   await expect(page.getByText("進行中 1", { exact: true })).toBeVisible();
   await expect(page.getByText("完了 1", { exact: true })).toBeVisible();
@@ -39,13 +39,16 @@ test("the overview counts the tasks by category and lists the projects and the l
   await expect(projectRow).toContainText("Release prep");
   await expect(projectRow).toContainText("1/2");
 
-  const loosely = page.getByRole("region", { name: "プロジェクトの外のタスク" });
-  await expect(loosely.getByRole("row", { name: new RegExp(loose.id) })).toContainText(
-    "Loose task",
+  await expect(projects.getByRole("row", { name: new RegExp(other.id) })).toContainText(
+    "Other project",
   );
-  await expect(loosely.getByRole("row", { name: new RegExp(busy.id) })).toBeVisible();
-  // the children of the project are not at the root
-  await expect(loosely.getByText("Write notes")).toHaveCount(0);
+  await expect(projects.getByRole("row", { name: new RegExp(busy.id) })).toBeVisible();
+
+  // the root holds only projects, so nothing is outside them
+  const loosely = page.getByRole("region", { name: "プロジェクトの外のタスク" });
+  await expect(loosely.getByText("プロジェクトの外のタスクはありません")).toBeVisible();
+  // the children of the project are not rows of the list of projects
+  await expect(projects.getByText("Write notes")).toHaveCount(0);
 
   await loosely.getByRole("link", { name: "ツリーで開く" }).click();
   await expect(page).toHaveURL(new RegExp(`/workspaces/demo/${ws.ulid}/tree$`));
@@ -67,17 +70,16 @@ test("the overview follows what the CLI changes", async ({ page, hh }) => {
   await expect(projects.getByRole("row", { name: new RegExp(project.id) })).toContainText("1/2");
   await expect(page.getByText("完了 1", { exact: true })).toBeVisible();
 
-  const added = hh.add("Added from the terminal");
-  await expect(page.getByText("4 件 · プロジェクト 1")).toBeVisible();
-  const loosely = page.getByRole("region", { name: "プロジェクトの外のタスク" });
-  await expect(loosely.getByRole("row", { name: new RegExp(added.id) })).toBeVisible();
+  const added = hh.add("Added from the terminal"); // at the root: a project
+  await expect(page.getByText("4 件 · プロジェクト 2")).toBeVisible();
+  await expect(projects.getByRole("row", { name: new RegExp(added.id) })).toBeVisible();
 
   hh.hh("rm", added.id);
   await expect(page.getByText("3 件 · プロジェクト 1")).toBeVisible();
-  await expect(loosely.getByRole("row", { name: new RegExp(added.id) })).toHaveCount(0);
+  await expect(projects.getByRole("row", { name: new RegExp(added.id) })).toHaveCount(0);
 });
 
-test("the create button makes a task in this workspace, and it shows in the list", async ({
+test("the create button at the root makes a project in this workspace, and it shows in the list", async ({
   page,
   hh,
 }) => {
@@ -86,7 +88,7 @@ test("the create button makes a task in this workspace, and it shows in the list
   if (!ws) throw new Error("the store has no workspace");
 
   await hh.open(page, `/workspaces/demo/${ws.ulid}`);
-  await expect(page.getByText("1 件 · プロジェクト 0")).toBeVisible();
+  await expect(page.getByText("1 件 · プロジェクト 1")).toBeVisible();
   await page.getByRole("button", { name: "タスクを作成", exact: true }).click();
   const dialog = createDialog(page);
   await expect(dialog).toBeVisible();
@@ -95,10 +97,10 @@ test("the create button makes a task in this workspace, and it shows in the list
   await dialog.getByRole("button", { name: /^作成/ }).click();
 
   await expect(toast(page, "DM-2 を作成しました")).toBeVisible();
-  await expect(page.getByText("2 件 · プロジェクト 0")).toBeVisible();
-  const loosely = page.getByRole("region", { name: "プロジェクトの外のタスク" });
-  await expect(loosely.getByRole("row", { name: /DM-2/ })).toContainText("From the overview");
-  expect(hh.show("DM-2").title).toBe("From the overview");
+  await expect(page.getByText("2 件 · プロジェクト 2")).toBeVisible();
+  const projects = page.getByRole("region", { name: "プロジェクト", exact: true });
+  await expect(projects.getByRole("row", { name: /DM-2/ })).toContainText("From the overview");
+  expect(hh.show("DM-2").kind).toBe("project");
 });
 
 test("a workspace with no task says so", async ({ page, hh }) => {
@@ -109,5 +111,5 @@ test("a workspace with no task says so", async ({ page, hh }) => {
   await expect(page.getByText("demo にはまだタスクがありません")).toBeVisible();
 
   hh.add("The first one");
-  await expect(page.getByText("1 件 · プロジェクト 0")).toBeVisible();
+  await expect(page.getByText("1 件 · プロジェクト 1")).toBeVisible();
 });

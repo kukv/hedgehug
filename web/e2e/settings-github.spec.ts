@@ -104,7 +104,10 @@ test("the issue sync is set here", async ({ page, hh }) => {
   await expect.poll(() => fields(hh).push).toContain("milestone");
 });
 
-test("issues are taken in at the root of a workspace", async ({ page, hh }) => {
+test("issues are taken in under a project, and without one there is no place to take them", async ({
+  page,
+  hh,
+}) => {
   connect(hh);
   hh.fakegh("repo", "label", REPO, "v2");
   hh.fakegh("issue", "open", REPO, "--title", "取り込む Issue");
@@ -114,10 +117,18 @@ test("issues are taken in at the root of a workspace", async ({ page, hh }) => {
   const region = page.getByRole("region", { name: "既存の Issue をまとめて取り込む" });
   await region.getByRole("combobox", { name: "リポジトリ" }).fill(REPO);
   await region.getByRole("textbox", { name: "ラベル" }).fill("v2");
+  // the root holds only projects: with none, there is nowhere to take the issues in
+  await expect(region.getByText("取り込み先のプロジェクトがありません")).toBeVisible();
+  await expect(region.getByRole("button", { name: "件数を確認する" })).toBeDisabled();
+
+  const project = hh.add("Release", "--kind", "project"); // the page follows the store
+  await expect(region.getByText("取り込み先のプロジェクトがありません")).toHaveCount(0);
   await region.getByRole("button", { name: "件数を確認する" }).click();
   await region.getByRole("button", { name: "1 件を mirror で取り込む" }).click();
   await expect(page.getByRole("status").filter({ hasText: "1 件を取り込みました" })).toBeVisible();
   expect(hh.hh("ls")).toContain("取り込む Issue");
+  const imported = hh.json<{ tasks: { title: string; parent: string | null }[] }>("ls").tasks;
+  expect(imported.find((t) => t.title === "取り込む Issue")?.parent).toBe(project.ulid);
 });
 
 test("a project stops a rule of the Store and has its own", async ({ page, hh }) => {

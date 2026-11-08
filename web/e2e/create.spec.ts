@@ -22,7 +22,10 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
   await expect(dialog.getByText("親: なし")).toBeVisible();
 
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("Write the spec");
-  await dialog.getByRole("radio", { name: "Bug" }).check({ force: true }); // the input is hidden behind its label
+  // With no parent only a project can be made (the placement table of the schema).
+  await expect(dialog.getByRole("radio", { name: "Project" })).toBeChecked();
+  await expect(dialog.getByRole("radio", { name: "Task" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Bug" })).toHaveCount(0);
   await dialog.getByRole("textbox", { name: "本文" }).click();
   await page.keyboard.type("first line\n\nsecond line");
   await dialog.getByRole("button", { name: /^作成/ }).click();
@@ -34,7 +37,7 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
 
   const t = hh.show("DM-1");
   expect(t.title).toBe("Write the spec");
-  expect(t.kind).toBe("bug");
+  expect(t.kind).toBe("project");
   expect(t.body?.trim()).toBe("first line\n\nsecond line");
   expect(t.history).toHaveLength(1); // the title, the kind and the body are one commit
 
