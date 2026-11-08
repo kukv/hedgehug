@@ -53,7 +53,7 @@ test("moves a task and its descendants to another Store, cutting the references 
   await expect(d).toContainText("配下 1");
   const cut = d.getByRole("region", { name: /^外す参照/ });
   await expect(cut.getByRole("listitem")).toHaveCount(1);
-  await expect(cut).toContainText("ブロックされている");
+  await expect(cut).toContainText("Blocked by");
   await expect(cut).toContainText(blocked.id);
   await expect(d.getByRole("button", { name: /コマンドをコピー/ })).toContainText(
     `hh mv ${parent.id} --store second --workspace a --yes`,

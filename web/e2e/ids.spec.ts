@@ -34,7 +34,7 @@ test("an ID whose prefix is in two Stores is written with the Store, and the pal
 
     await expect(page).toHaveURL(new RegExp(`/tasks/${b.ulid}$`));
     await expect(page.getByRole("textbox", { name: "タイトル" })).toHaveValue("In second");
-    await expect(page.getByText(`タスク · second:${b.id}`)).toBeVisible();
+    await expect(page.getByText(`Task · second:${b.id}`)).toBeVisible();
   } finally {
     other.stop();
   }

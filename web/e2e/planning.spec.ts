@@ -187,7 +187,7 @@ test("a saved board warns over the WIP limit and does not refuse", async ({ page
   await expect(page.getByText("WIP 上限 1 を超えています")).toBeVisible();
   await expect(page.getByText("2 / 1")).toBeVisible();
   await page.getByRole("button", { name: "WIP 上限" }).click();
-  await page.getByLabel("未着手 の上限").fill("3");
+  await page.getByLabel("Todo の上限").fill("3");
   await page.getByRole("button", { name: "適用" }).click();
   await expect(page.getByText("2 / 3")).toBeVisible();
   await expect(page.getByText("WIP 上限 1 を超えています")).toHaveCount(0);
