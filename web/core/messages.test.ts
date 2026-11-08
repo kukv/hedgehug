@@ -273,7 +273,10 @@ describe("errorMessage", () => {
     expect(errorMessage(err("store.convert_unsynced"))).toContain(
       "同期できなかったため変換しませんでした",
     );
-    expect(errorMessage(err("sync.format_diverged"))).toContain("hh store convert");
+    expect(errorMessage(err("sync.format_diverged"))).toContain("push していない変更");
+    expect(errorMessage(err("sync.format_diverged", { remote_older: true }))).toContain(
+      "remote の変更を変換",
+    );
   });
 
   it("asks for the parent where a kind cannot sit at the top", () => {

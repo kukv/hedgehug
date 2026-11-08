@@ -96,6 +96,13 @@ with `store.old_format` (HTTP 422) and tells you to run `hh store convert`. Run 
 converts your unpushed changes to the new format, merges them with the remote and pushes.
 A clone with no unpushed commits does the same, and `hh store convert` just fast-forwards it. See [Stores](stores.md#the-store-format-and-hh-store-convert).
 
+The other way round, a clone that has converted but not pushed can find that another clone has
+pushed a commit in the old format. `hh sync` then stops with `sync.format_diverged` (HTTP 409), and the
+message says that the remote has changes in an older format. Run `hh store convert`: it converts
+the remote's changes, pushes them as a commit on the remote's latest commit, and merges them with
+yours. Before you convert, update hedgehug on every clone that uses the store; see
+[Stores](stores.md#before-you-convert).
+
 ## If the history of origin changes
 
 If someone rewrites the history of the remote, `hh sync` stops and does not push. See

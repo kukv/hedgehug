@@ -42,9 +42,17 @@ var steps = []Step{
 //     sync.format_diverged), the clone converts its own changes to the format
 //     of origin, which a sync then merges; the steps that are left follow.
 //
+// The other way round, origin is in an older format than the store and has a
+// commit the store lacks (another clone pushed it while this one converted;
+// the sync reports it as sync.format_diverged): the steps are applied to the
+// files of origin's head, up to the format of the store, as one commit on that
+// head, which is pushed (a fast-forward of origin); the sync then merges it with
+// the store like any other history. A store in the newest format with a remote
+// looks at origin for this, and does nothing when there is none.
+//
 // Origin in a format newer than this version reads is store.newer_format. A
-// store already in the newest format has nothing to convert and returns no
-// report.
+// store already in the newest format has nothing else to convert and returns
+// no report.
 //
 // When the sync after a commit fails, the commit stays: the reports come back
 // with the error.
@@ -59,12 +67,12 @@ func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 	}
 	defer func() { _ = s.Repo().Close() }()
 	from := s.Meta().Format
-	if from >= model.StoreFormat {
+	remote := len(e.Remotes) > 0
+	if from >= model.StoreFormat && !remote {
 		return nil, nil
 	}
 	r := s.Repo()
 	opt.Now = ss.Now()
-	remote := len(e.Remotes) > 0
 	var syncOpt replicate.Options
 	var p plan
 	if remote {
@@ -74,12 +82,17 @@ func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 		// A dry run only looks: a remote it cannot reach, or one it is not in
 		// sync with, is not its error.
 		if err := replicate.FetchOrigin(s, syncOpt); err == nil {
-			if p, err = checkSynced(r, from); err != nil && !dryRun {
+			if p, err = checkSynced(r, from); err != nil && !dryRun && from < model.StoreFormat {
 				return nil, err
 			}
 		} else if !dryRun {
 			return nil, err
 		}
+	}
+	// A store in the newest format has nothing of its own to convert; only an
+	// origin that keeps changes in an older format is left to do.
+	if from >= model.StoreFormat && !p.reverse {
+		return nil, nil
 	}
 	if dryRun {
 		return dryRunOf(r, opt, from, p)
@@ -102,6 +115,19 @@ func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 		}
 		reports = append(reports, rep...)
 		from = p.format
+		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
+			return reports, fmt.Errorf("sync %s: %w", e.Name, err)
+		}
+	}
+	// Origin has changes in an older format than the store (another clone
+	// pushed them while this one converted): they are converted on origin's
+	// head and pushed, and the sync merges them with the store.
+	if p.reverse {
+		rep, err := convertRemote(ss, s, opt, p.format, from)
+		if err != nil {
+			return nil, err
+		}
+		reports = append(reports, rep...)
 		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
 			return reports, fmt.Errorf("sync %s: %w", e.Name, err)
 		}
@@ -159,6 +185,54 @@ func convertCommit(ss *usecase.Session, s *store.Store, opt Options, from, to in
 	return reports, nil
 }
 
+// convertRemote applies the steps from format from to format to on the files
+// of origin's head, commits the result as one commit whose parent is that head
+// and pushes it, so that origin goes ahead by a fast-forward and the commit
+// is the one the store merges with. The first report says what was done.
+func convertRemote(ss *usecase.Session, s *store.Store, opt Options, from, to int) ([]Report, error) {
+	r := s.Repo()
+	remote, err := r.RemoteHead("origin")
+	if err != nil {
+		return nil, err
+	}
+	tr, src, err := treeAt(r, remote)
+	if err != nil {
+		return nil, err
+	}
+	done, err := apply(tr, opt, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if src.err != nil {
+		return nil, src.err
+	}
+	if err := setFormat(tr, to); err != nil {
+		return nil, err
+	}
+	op := store.Op{Name: "convert", Detail: fmt.Sprintf("format %d to %d, the changes of origin", from, to)}
+	c, err := ss.CommitOnParent(s, remote, tr.Changes(), op)
+	if err != nil {
+		return nil, err
+	}
+	err = s.WithLocalLock("sync.lock", usecase.SyncLockWait, func() error {
+		return r.PushCommit("origin", c)
+	})
+	if errors.Is(err, gitrepo.ErrRejected) {
+		return nil, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
+			fmt.Errorf("origin has gone ahead while its changes were converted, so nothing was converted; run hh store convert again: %w", err))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return append([]Report{{From: from, To: to, Lines: []string{remoteChangesLine(from, to, "した")}}}, done...), nil
+}
+
+// remoteChangesLine says that the changes of origin, which are in an older
+// format than the store, are converted on origin.
+func remoteChangesLine(from, to int, when string) string {
+	return fmt.Sprintf("リモートの変更は古い形式 %d のままなので、形式 %d に変換してリモートの先頭の上にコミットし、push %s", from, to, when)
+}
+
 // dryRunOf is what Run would report, written nowhere. A clone that would go
 // to origin by fast-forward is listed with the steps that would follow, read
 // from origin's files; one with changes not pushed, with the steps from its
@@ -171,6 +245,25 @@ func dryRunOf(r *gitrepo.Repo, opt Options, from int, p plan) ([]Report, error) 
 	}
 	if p.syncFirst {
 		reports = append(reports, Report{From: from, To: from, Lines: []string{"先に古い形式のまま remote と同期する（--dry-run のため何も書かない）"}})
+	}
+	if p.reverse {
+		remote, err := r.RemoteHead("origin")
+		if err != nil {
+			return nil, err
+		}
+		tr, src, err := treeAt(r, remote)
+		if err != nil {
+			return nil, err
+		}
+		done, err := apply(tr, opt, p.format, from)
+		if err != nil {
+			return nil, err
+		}
+		if src.err != nil {
+			return nil, src.err
+		}
+		reports = append(reports, Report{From: p.format, To: from, Lines: []string{remoteChangesLine(p.format, from, "する（--dry-run のため何も書かない）")}})
+		reports = append(reports, done...)
 	}
 	if p.fastForward {
 		if at, err = r.RemoteHead("origin"); err != nil {
@@ -265,8 +358,9 @@ func setFormat(tr *Tree, to int) error {
 type plan struct {
 	fastForward bool // nothing not pushed, origin ahead in format: go to origin
 	diverged    bool // changes not pushed, origin ahead in format: convert them to format
-	format      int  // the format of origin, for the two above
+	format      int  // the format of origin, for the three of them
 	syncFirst   bool // origin in the same format, not in sync: sync before converting
+	reverse     bool // origin has commits the store lacks, in a format older than the store's: convert them on origin
 }
 
 // checkSynced is the zero plan when the store is in sync with origin, as of
@@ -305,10 +399,10 @@ func checkSynced(r *gitrepo.Repo, from int) (plan, error) {
 	case !has && ferr == nil && rf > from && rf <= model.StoreFormat:
 		return plan{fastForward: unpushed == 0, diverged: unpushed > 0, format: rf}, nil
 	}
-	if ferr == nil && rf < from {
-		// Origin is behind the store: a sync would not take it, and this is not a thing to sync away.
-		return plan{}, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
-			fmt.Errorf("the remote is in format %d, older than the store's format %d, so the store cannot be synced with it; convert the remote from a clone in format %d first", rf, from, rf))
+	if ferr == nil && rf < from && !has {
+		// Origin has changes the store lacks, in an older format than the
+		// store's: a sync would not merge them. They are converted on origin.
+		return plan{reverse: true, format: rf}, nil
 	}
 	// The same format, or one origin's files do not tell: a sync merges them.
 	return plan{syncFirst: true}, nil

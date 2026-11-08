@@ -81,6 +81,7 @@ func Classify(err error) *Error {
 	var ae *index.AmbiguousError
 	var ve *store.ValidationError
 	var wt *store.WorkspaceTakenError
+	var fd *replicate.FormatDivergedError
 	switch {
 	case err == nil:
 		return nil
@@ -100,6 +101,8 @@ func Classify(err error) *Error {
 		return NewErr(KindInvalid, "store.old_format", err)
 	case errors.Is(err, model.ErrNewerFormat):
 		return NewErr(KindInvalid, "store.newer_format", err)
+	case errors.As(err, &fd):
+		return NewErr(KindConflict, "sync.format_diverged", err, "remote_older", fd.RemoteOlder())
 	case errors.Is(err, replicate.ErrFormatDiverged):
 		return NewErr(KindConflict, "sync.format_diverged", err)
 	case errors.Is(err, replicate.ErrDirty):

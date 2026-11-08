@@ -243,8 +243,10 @@ const messages: Record<string, Make> = {
   "store.mount_failed": (a) => `追加できなかった Store があります（${list(a, "failed")}）`,
   "store.set_args": () => "色か表示のどちらかを指定してください",
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
-  "sync.format_diverged": () =>
-    "remote はより新しい Store の形式で、手元には push していない変更があります。hh store convert を実行してください",
+  "sync.format_diverged": (a) =>
+    a.remote_older === true
+      ? "remote には古い Store の形式のまま取り込めていない変更があります。hh store convert を実行して、remote の変更を変換してください"
+      : "remote はより新しい Store の形式で、手元には push していない変更があります。hh store convert を実行してください",
   "sync.unrelated": () => "remote の履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
     "remote の履歴が手元と食い違っています。確認してから、hh doctor --fix で origin の新しい履歴にそろえてください",

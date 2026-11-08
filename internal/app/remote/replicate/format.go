@@ -12,10 +12,30 @@ import (
 )
 
 // ErrFormatDiverged means the two sides of a merge keep their store in
-// different formats: the remote was converted to a newer format while this
-// clone still has changes it has not pushed. hh store convert converts those
-// changes, then syncs.
-var ErrFormatDiverged = errors.New("the remote uses a newer store format and this clone has changes that are not pushed; run hh store convert")
+// different formats: one was converted while the other still has changes
+// that are not merged. hh store convert converts those changes, then syncs.
+// The error is a *FormatDivergedError, which says on which side the newer
+// format is.
+var ErrFormatDiverged = errors.New("the remote and this clone keep the store in different formats; run hh store convert")
+
+// FormatDivergedError is ErrFormatDiverged with the two formats.
+type FormatDivergedError struct {
+	Ours, Theirs int
+}
+
+// RemoteOlder reports that the remote is in the older format: the changes
+// that are not merged are the remote's.
+func (e *FormatDivergedError) RemoteOlder() bool { return e.Theirs < e.Ours }
+
+func (e *FormatDivergedError) Error() string {
+	if e.RemoteOlder() {
+		return fmt.Sprintf("format %d here, %d there: the remote has changes in an older store format that are not merged; run hh store convert to convert the changes of the remote", e.Ours, e.Theirs)
+	}
+	return fmt.Sprintf("format %d here, %d there: the remote uses a newer store format and this clone has changes that are not pushed; run hh store convert", e.Ours, e.Theirs)
+}
+
+// Is makes the error ErrFormatDiverged.
+func (e *FormatDivergedError) Is(target error) bool { return target == ErrFormatDiverged }
 
 // FormatAt is the store format of the commit: the format of its store.yaml.
 func FormatAt(r *gitrepo.Repo, commit plumbing.Hash) (int, error) {
@@ -47,7 +67,7 @@ func checkFormats(r *gitrepo.Repo, ours, theirs plumbing.Hash) error {
 		return nil
 	}
 	if a != b {
-		return fmt.Errorf("format %d here, %d there: %w", a, b, ErrFormatDiverged)
+		return &FormatDivergedError{Ours: a, Theirs: b}
 	}
 	return nil
 }

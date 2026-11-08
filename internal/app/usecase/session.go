@@ -603,6 +603,24 @@ func (ss *Session) CommitFiles(s *store.Store, head plumbing.Hash, files map[str
 	return h, err
 }
 
+// CommitOnParent commits files on the commit parent, which is not HEAD, as
+// CommitFiles does on HEAD, and moves nothing: the commit is reachable from
+// nothing until it is pushed.
+func (ss *Session) CommitOnParent(s *store.Store, parent plumbing.Hash, files map[string][]byte, op store.Op) (plumbing.Hash, error) {
+	if err := ss.CheckWritable(s); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	acct, ok, err := ss.Writer()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	if !ok {
+		return plumbing.ZeroHash, ErrNoAccounts
+	}
+	op.Author, op.Account = config.CommitAuthor(acct), acct.ID()
+	return s.CommitOn(parent, files, op, nil)
+}
+
 // CommitHex is the hex form of a commit hash, "" for the zero hash.
 func CommitHex(h plumbing.Hash) string {
 	if h.IsZero() {

@@ -527,7 +527,7 @@ func TestRunSyncFailureIsConvertUnsynced(t *testing.T) {
 	}
 }
 
-// An origin that is in an older format than the store is told as it is, not as a thing to sync.
+// An origin that is in an older format than the store has its changes converted on origin, up to the format of the store.
 func TestRunOriginOlderThanTheStore(t *testing.T) {
 	f := newRemoteFx(t) // origin and store in format 1
 	withFormat3(t)
@@ -538,10 +538,20 @@ func TestRunOriginOlderThanTheStore(t *testing.T) {
 	}
 	commitRaw(t, f.ts, "a store in format 2", map[string]string{model.StoreMetaPath: strings.Replace(string(b), "format: 1", "format: 2", 1)})
 	pushElsewhere(t, f)
-	_, err = Run(f.ts.Session, Options{}, false)
-	wantCode(t, err, usecase.KindConflict, "store.convert_unsynced")
-	if !strings.Contains(err.Error(), "the remote is in format 1, older than the store's format 2") || strings.Contains(err.Error(), "run hh store convert") {
-		t.Errorf("error = %v", err)
+	reports, err := Run(f.ts.Session, Options{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the changes of origin are converted from 1 up to the format of the
+	// store (2), and then the store goes on to 3
+	if len(reports) != 3 || reports[0].From != 1 || reports[0].To != 2 || reports[2].From != 2 || reports[2].To != 3 {
+		t.Fatalf("reports = %+v", reports)
+	}
+	if formatOf(t, f.ts) != 3 || originHead(t, f.remote) != headOf(t, f.ts) {
+		t.Errorf("format %d; origin is not at the head of the store", formatOf(t, f.ts))
+	}
+	if _, err := os.Stat(filepath.Join(storeDir(t, f.ts), "notes.txt")); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -671,6 +681,123 @@ func TestFormatDivergedAndTheWayBack(t *testing.T) {
 		if f.Check != "merge_driver" {
 			t.Errorf("finding after the way back: %+v", f)
 		}
+	}
+}
+
+// A clone converts, and before it pushes, another clone pushes a commit in the
+// old format: the clone is in the newest format and origin in an older one, and
+// the two are apart. hh store convert converts the changes of origin as a commit
+// on origin's head, pushes it and merges.
+func TestOriginOlderAndDivergedIsConvertedFromOrigin(t *testing.T) {
+	t.Parallel()
+	a := newRemoteFx(t)
+	d := cloneOld(t, a) // a third clone, which has nothing of its own
+	_, e, err := a.ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := a.ts.OpenStoreAtAnyFormat(e.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the conversion is committed here and not pushed
+	if _, err := convertCommit(a.ts.Session, s, Options{}, 1, model.StoreFormat); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Repo().Close()
+	// the other clone pushes: a task at the root and a file, in format 1
+	theirs, _ := rawTask(t, a.o.ws, 7, "task", "theirs at the root", nil)
+	theirs.Rank, _ = model.Between("", "")
+	enc, err := theirs.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pushFile(t, a, model.TaskPath(theirs.ULID), string(enc))
+	pushFile(t, a, "notes.txt", "theirs")
+	a.ts.DropMount()
+
+	// a sync says which way it goes
+	c, _, err := a.ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err = a.ts.OpenStoreAtAnyFormat(e.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt, err := a.ts.SyncOptions(c, e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.ts.RunSync(s, opt, true)
+	_ = s.Repo().Close()
+	var fd *replicate.FormatDivergedError
+	if !errors.As(err, &fd) || !fd.RemoteOlder() {
+		t.Fatalf("sync = %v, want a FormatDivergedError with the remote older", err)
+	}
+	wantCode(t, err, usecase.KindConflict, "sync.format_diverged")
+	if ae := usecase.AsError(err); ae.Args["remote_older"] != true {
+		t.Errorf("args = %v", ae.Args)
+	}
+
+	// a dry run lists what it would do and writes nothing
+	before, remote := headOf(t, a.ts), originHead(t, a.remote)
+	reports, err := Run(a.ts.Session, Options{}, true)
+	if err != nil || len(reports) == 0 || !strings.Contains(strings.Join(reports[0].Lines, "\n"), "リモートの変更") {
+		t.Fatalf("dry run = %+v, %v", reports, err)
+	}
+	if headOf(t, a.ts) != before || originHead(t, a.remote) != remote {
+		t.Error("the dry run wrote")
+	}
+
+	reports, err = Run(a.ts.Session, Options{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) == 0 || reports[0].From != 1 || reports[0].To != model.StoreFormat {
+		t.Errorf("reports = %+v", reports)
+	}
+	if formatOf(t, a.ts) != model.StoreFormat || originHead(t, a.remote) != headOf(t, a.ts) {
+		t.Fatalf("format %d; origin is not at the head of the clone", formatOf(t, a.ts))
+	}
+	if b, err := os.ReadFile(filepath.Join(storeDir(t, a.ts), "notes.txt")); err != nil || string(b) != "theirs" { //nolint:gosec // the test's store
+		t.Errorf("the change of the other clone: %q, %v", b, err)
+	}
+	// its task at the root was converted: under 未分類
+	_, ix, err := a.ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unc model.ULID
+	for _, e := range ix.Tasks() {
+		if e.Title == merge.Uncategorized {
+			unc = e.ULID
+		}
+	}
+	if e, ok := ix.Task(theirs.ULID); !ok || unc.IsZero() || e.Parent == nil || *e.Parent != unc {
+		t.Errorf("its task at the root is not under 未分類: %+v", e)
+	}
+	if r, err := a.ts.DoctorOne(false); err != nil {
+		t.Fatal(err)
+	} else {
+		for _, f := range r.Findings {
+			if f.Check != "merge_driver" {
+				t.Errorf("finding after the way back: %+v", f)
+			}
+		}
+	}
+	// the third clone goes to origin by fast-forward, and a sync works from now on
+	if _, err := Run(d.Session, Options{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if headOf(t, d) != originHead(t, a.remote) {
+		t.Error("the third clone is not at the head of origin")
+	}
+	if reports, err := Run(a.ts.Session, Options{}, false); err != nil || len(reports) != 0 {
+		t.Errorf("second run = %v, %v", reports, err)
+	}
+	if _, err := replication.Sync(a.ts.Session, false, true); err != nil {
+		t.Errorf("sync after the way back: %v", err)
 	}
 }
 

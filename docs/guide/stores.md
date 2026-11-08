@@ -86,10 +86,7 @@ all of it as one commit, and a store with a remote has the result pushed. If the
 same old format and the two differ (you have unpushed commits, or the remote has commits you
 lack), the command first syncs the store in the old format (fetch, merge, push), then converts
 and pushes, all in one run. When that sync fails (a push is refused, a merge stops) it stops
-with `store.convert_unsynced` (HTTP 409), and the message tells the cause. A remote in an older
-format than the store cannot be synced with at all; the command stops with the same code,
-without syncing, and says to convert the remote first.
-`--dry-run` neither syncs nor writes; it says that the sync would come first.
+with `store.convert_unsynced` (HTTP 409), and the message tells the cause. `--dry-run` neither syncs nor writes; it says that the sync would come first.
 
 ```console
 $ hh store convert --dry-run
@@ -118,6 +115,31 @@ no unpushed commits fast-forwards it to the remote, and does not convert anythin
 that still has unpushed commits has its own changes converted first; see
 [Sync](sync.md#when-the-remote-is-in-a-newer-format). When the remote is at an intermediate
 format, the clone is converted to that format, synced, and then given the remaining steps.
+
+### When the remote has changes in an older format
+
+Another clone can push a commit in the old format after this clone has converted but before it
+has pushed. This clone is then in the newest format and the remote is in an older one, with
+commits this clone lacks. `hh sync` stops with `sync.format_diverged` (HTTP 409), and its
+message says that the remote has changes in an older format and that `hh store convert` converts them.
+Run `hh store convert`: it applies the conversion steps to the files of the remote's latest commit,
+commits the result on top of that commit, pushes it (the remote moves forward, nothing is
+rewritten), and then syncs as usual, so that your history and the converted changes are merged
+and pushed. Other clones then fast-forward to it with `hh store convert`, or sync as usual if they
+are converted. `--dry-run` lists what would be converted and writes nothing. If yet another clone
+pushes meanwhile, the command stops with `store.convert_unsynced`; run it again.
+
+### Before you convert
+
+Update hedgehug on **every clone** that uses the store before you run `hh store convert`.
+A hedgehug from before the format check does not look at the format: a clone of it that has
+unpushed commits syncs with the converted remote and pushes tasks of a kind of its own, or
+tasks at the root of a workspace, into a store marked format 2. `hh store convert` then has
+nothing to convert (the store is already in format 2), and `hh doctor --fix` does not repair
+them. If it happened, find them with `hh doctor`: the findings with code `task.unknown_kind`
+(`kind: unknown kind "sprint"`) and `task.placement` (`parent: a task cannot be placed under root`)
+name the task. Open each with `hh edit <id>` and change `kind:` to one of the fixed kinds, or
+`parent:` to a task that can hold it (a project at the root, for example), then run `hh doctor` again.
 
 ## Move a task to another store
 

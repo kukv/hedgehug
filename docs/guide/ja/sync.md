@@ -77,6 +77,8 @@ Restored WEB-1 (01M6QAZMHYRXKQJSTS7KTHA2GC) Write the login page
 
 ほかのクローンが `hh store convert` を実行して push したあと、push していないコミットが残っているクローンは、それを取り込めません。そのクローンは古い形式なので、`hh sync` は `store.old_format`（HTTP 422）で止まり、`hh store convert` を実行するよう案内します。実行してください。push していない変更を新しい形式に変換し、remote と合わせて push します。push していないコミットのないクローンも同じ操作で、`hh store convert` が fast-forward するだけです。[Store](stores.md#store-の形式と-hh-store-convert)を参照してください。
 
+逆向きに、変換したが push していないクローンが、別のクローンが古い形式のコミットを push したことに気づくこともあります。そのとき `hh sync` は `sync.format_diverged`（HTTP 409）で止まり、メッセージは remote に古い形式の変更があることを知らせます。`hh store convert` を実行してください。remote の変更を変換し、remote の最新のコミットの上のコミットとして push して、手元の変更とマージします。変換の前に、その Store を使うすべてのクローンで hedgehug を更新してください。[Store](stores.md#変換の前に)を参照してください。
+
 ## origin の履歴が変わったとき
 
 remote の履歴が書き換えられると、`hh sync` は push せずに止まります。対処は[メンテナンス](maintenance.md#履歴から内容を消す)にあります。
