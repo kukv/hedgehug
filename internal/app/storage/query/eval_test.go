@@ -31,7 +31,6 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	inverse := "重複元"
 	s := newStore(t)
 	p, e, a, b, c, d := newTask("P"), newTask("E"), newTask("a"), newTask("b"), newTask("c"), newTask("d")
 	p.Kind = "project"
@@ -54,15 +53,6 @@ func newFixture(t *testing.T) *fixture {
 	setProp(c, "priority", "low")
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	d.DeletedAt = &at
-	// The inverse label of the default schema has a space, which a key of a
-	// query cannot hold; the inverse is tested under one without.
-	sc, _, _, err := s.Schema().ChangeProp("duplicates", schema.PropChange{Inverse: &inverse})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
 	put(t, s, p, e, a, b, c, d)
 	f := &fixture{ix: mustOpen(t, s), ids: map[string]model.ULID{}}
 	for _, task := range []*model.Task{p, e, a, b, c, d} {
@@ -106,7 +96,9 @@ func TestRunFilters(t *testing.T) {
 		{"blocked_by:web-1", Options{}, []string{"a"}},
 		{"blocks:" + f.ids["a"].String(), Options{}, []string{"b"}},
 		{"duplicates:" + f.ids["c"].String(), Options{}, []string{"a"}},
-		{"重複元:" + f.ids["a"].String(), Options{}, []string{"c"}},
+		{"duplicates.inverse:" + f.ids["a"].String(), Options{}, []string{"c"}},
+		{"duplicates.inverse:" + f.ids["c"].String(), Options{}, []string{}},
+		{"blocked_by.inverse:" + f.ids["a"].String(), Options{}, []string{"b"}},
 		{"relates:" + f.ids["c"].String(), Options{}, []string{"b"}},
 		{"relates:" + f.ids["b"].String(), Options{}, []string{"c"}}, // symmetric
 		{"relates:none", Options{}, []string{"P", "E", "a"}},
@@ -229,6 +221,8 @@ func TestRunErrors(t *testing.T) {
 		{"watching:@me", Options{}, 1},
 		{"is:nope", Options{}, 1},
 		{"project:none", Options{}, 1},
+		{"priority.inverse:x", Options{}, 1}, // not a relation
+		{"nope.inverse:x", Options{}, 1},
 	}
 	for _, tt := range tests {
 		q, err := Parse(tt.q)
@@ -277,3 +271,29 @@ func TestRunWorkspace(t *testing.T) {
 		t.Errorf("workspace:nope err = %v, want ErrNotFound", err)
 	}
 }
+
+func TestInverseLabelIsNotAKey(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	sc, _, _, err := s.Schema().ChangeProp("duplicates", schema.PropChange{Inverse: ptr("dup_by")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
+		t.Fatal(err)
+	}
+	ix := mustOpen(t, s)
+	for q, ok := range map[string]bool{"dup_by:none": false, "duplicates.inverse:none": true} {
+		parsed, err := Parse(q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Run(ix, parsed, Options{})
+		var qe *Error
+		if ok == errors.As(err, &qe) {
+			t.Errorf("Run(%q) err = %v", q, err)
+		}
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
