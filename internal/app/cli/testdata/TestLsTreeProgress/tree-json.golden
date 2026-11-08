@@ -59,12 +59,70 @@
             "total": 2
           },
           "steps": {
-            "done": 0,
-            "total": 0
-          }
+            "done": 1,
+            "total": 2
+          },
+          "children": [
+            {
+              "ulid": "<ULID-4>",
+              "id": "ME-5",
+              "store": "me",
+              "workspace": {
+                "ulid": "<ULID-2>",
+                "name": "me",
+                "id_prefix": "ME"
+              },
+              "project": {
+                "ulid": "<ULID-1>",
+                "id": "ME-1",
+                "title": "Project"
+              },
+              "kind": "step",
+              "title": "Step one",
+              "parent": "<ULID-3>",
+              "rank": "a0",
+              "status": "done",
+              "assignees": [],
+              "labels": [],
+              "blocked_by": [],
+              "props": {},
+              "created": "<TIME>",
+              "updated": "<TIME>",
+              "deleted_at": null,
+              "problems": []
+            },
+            {
+              "ulid": "<ULID-5>",
+              "id": "ME-6",
+              "store": "me",
+              "workspace": {
+                "ulid": "<ULID-2>",
+                "name": "me",
+                "id_prefix": "ME"
+              },
+              "project": {
+                "ulid": "<ULID-1>",
+                "id": "ME-1",
+                "title": "Project"
+              },
+              "kind": "step",
+              "title": "Step two",
+              "parent": "<ULID-3>",
+              "rank": "a1",
+              "status": "todo",
+              "assignees": [],
+              "labels": [],
+              "blocked_by": [],
+              "props": {},
+              "created": "<TIME>",
+              "updated": "<TIME>",
+              "deleted_at": null,
+              "problems": []
+            }
+          ]
         },
         {
-          "ulid": "<ULID-4>",
+          "ulid": "<ULID-6>",
           "id": "ME-3",
           "store": "me",
           "workspace": {
@@ -96,7 +154,7 @@
           }
         },
         {
-          "ulid": "<ULID-5>",
+          "ulid": "<ULID-7>",
           "id": "ME-4",
           "store": "me",
           "workspace": {

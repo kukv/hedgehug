@@ -113,16 +113,19 @@ func TestChecklistOfAndText(t *testing.T) {
 		t.Errorf("y = %+v; want nil", got)
 	}
 	for _, c := range []struct {
-		c, p *usecase.Count
-		want string
+		c, p, s *usecase.Count
+		want    string
 	}{
-		{nil, nil, ""},
-		{&usecase.Count{1, 2}, nil, "☑ 1/2"},
-		{nil, &usecase.Count{3, 14}, "3/14"},
-		{&usecase.Count{2, 5}, &usecase.Count{3, 14}, "☑ 2/5  3/14"},
+		{nil, nil, nil, ""},
+		{&usecase.Count{1, 2}, nil, nil, "☑ 1/2"},
+		{nil, &usecase.Count{3, 14}, nil, "3/14"},
+		{&usecase.Count{2, 5}, &usecase.Count{3, 14}, nil, "☑ 2/5  3/14"},
+		{nil, nil, &usecase.Count{2, 3}, "2/3"},
+		{&usecase.Count{1, 2}, nil, &usecase.Count{2, 3}, "☑ 1/2  2/3"},
+		{nil, nil, &usecase.Count{0, 0}, ""}, // a task with no step shows none
 	} {
-		if got := usecase.ProgressText(c.c, c.p); got != c.want {
-			t.Errorf("ProgressText(%v, %v) = %q; want %q", c.c, c.p, got, c.want)
+		if got := usecase.ProgressText(c.c, c.p, c.s); got != c.want {
+			t.Errorf("ProgressText(%v, %v, %v) = %q; want %q", c.c, c.p, c.s, got, c.want)
 		}
 	}
 	for _, c := range []struct {

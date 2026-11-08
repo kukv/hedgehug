@@ -90,6 +90,15 @@ func ChecklistText(c *Count) string {
 	return fmt.Sprintf("☑ %d/%d", c.Done, c.Total)
 }
 
+// StepsText is the steps of a story, a task or a bug as the CLI writes them,
+// "2/3", or "" with none (a task with no step shows nothing, not "0/0").
+func StepsText(c *Count) string {
+	if c == nil || c.Total == 0 {
+		return ""
+	}
+	return ProgressFractionText(c)
+}
+
 // ProgressFractionText is the progress as the CLI writes it, "3/14", or ""
 // with none.
 func ProgressFractionText(c *Count) string {
@@ -99,11 +108,13 @@ func ProgressFractionText(c *Count) string {
 	return fmt.Sprintf("%d/%d", c.Done, c.Total)
 }
 
-// ProgressText is the checklist and the progress as one line of the tree
-// writes them: "☑ 2/5  3/14", either alone, or "" with neither.
-func ProgressText(checklist, progress *Count) string {
+// ProgressText is the checklist, the progress of a group and the steps of a
+// story, a task or a bug as one line of the tree writes them: "☑ 2/5  3/14"
+// (the progress and the steps are never both there), each alone, or "" with
+// none.
+func ProgressText(checklist, progress, steps *Count) string {
 	var parts []string
-	for _, p := range []string{ChecklistText(checklist), ProgressFractionText(progress)} {
+	for _, p := range []string{ChecklistText(checklist), ProgressFractionText(progress), StepsText(steps)} {
 		if p != "" {
 			parts = append(parts, p)
 		}

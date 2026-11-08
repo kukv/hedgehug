@@ -30,8 +30,8 @@
     "total": 2
   },
   "steps": {
-    "done": 0,
-    "total": 0
+    "done": 1,
+    "total": 2
   },
   "body": "- [x] one\n- [ ] two\n",
   "watchers": [

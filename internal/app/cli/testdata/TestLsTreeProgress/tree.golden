@@ -1,4 +1,6 @@
 ME-1 <ULID-1>  todo  project  Project  1/2
-├─ ME-2 <ULID-2>  done  task  Alpha  ☑ 1/2
-├─ ME-3 <ULID-3>  todo  task  Beta
-└─ ME-4 <ULID-4>  canceled  task  Gamma
+├─ ME-2 <ULID-2>  done  task  Alpha  ☑ 1/2  1/2
+│  ├─ ME-5 <ULID-3>  done  step  Step one
+│  └─ ME-6 <ULID-4>  todo  step  Step two
+├─ ME-3 <ULID-5>  todo  task  Beta
+└─ ME-4 <ULID-6>  canceled  task  Gamma

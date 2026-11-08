@@ -28,7 +28,7 @@ a task under a project or an epic, a step under a story, a task or a bug. So
 in it. A template whose child names no kind follows the same rule.
 
 Progress counts the stories, tasks and bugs under a project or an epic. Steps are not
-counted; the row of their parent shows how many are done, such as `2/3`.
+counted; the row of their parent shows how many are done, such as `2/3` (in the browser and in `hh ls --tree`; `hh show` has a `steps` line).
 
 ## Sprints
 

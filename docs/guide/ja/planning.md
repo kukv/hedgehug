@@ -19,7 +19,7 @@ story、task、bug は同じ階層の兄弟です。story の下に task は置�
 
 `--kind` を省くと、`hh add` は親から種類を決めます。親がなければ project、project か epic の下なら task、story、task、bug の下なら step です。たとえば `hh add "Website"` は project を、`hh add "Login page" --parent WEB-1` はその中の task を作ります。テンプレートの子が種類を書いていないときも、同じ決まりです。
 
-進捗は、project や epic の下の story、task、bug を数えます。step は数えず、親の行に完了した数を `2/3` のように出します。
+進捗は、project や epic の下の story、task、bug を数えます。step は数えず、親の行に完了した数を `2/3` のように出します（画面と `hh ls --tree` の行、`hh show` の `steps` の行）。
 
 ## スプリント
 

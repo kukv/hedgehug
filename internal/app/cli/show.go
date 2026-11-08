@@ -72,6 +72,9 @@ func (a *app) showText(v *usecase.ShowView) string {
 	if p := usecase.ProgressFractionText(v.Progress); p != "" {
 		field("progress", p)
 	}
+	if p := usecase.StepsText(v.Steps); p != "" {
+		field("steps", p)
+	}
 	if v.ParentRef != nil {
 		field("parent", v.ParentRef.Name())
 	} else {
