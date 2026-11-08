@@ -19,15 +19,14 @@
   import SchemaProps from "./SchemaProps.svelte";
   import SchemaRelations from "./SchemaRelations.svelte";
   import SchemaStatuses from "./SchemaStatuses.svelte";
-  import SchemaValueDialog from "./SchemaValueDialog.svelte";
   import SchemaWorkflow from "./SchemaWorkflow.svelte";
   import SettingsTemplates from "./SettingsTemplates.svelte";
   import type { SchemaAction } from "./schema-action";
   import { propEntries, relationEntries } from "./schema-text";
 
   // The schema of a Store (its .hedgehug/schema.yaml): how many tasks use each definition, the
-  // overrides of the projects, and what `schema check` finds. A definition is added, edited, renamed,
-  // merged and deleted from here.
+  // overrides of the projects, and what `schema check` finds. A definition is added, edited (its name
+  // too), merged and deleted from here.
   let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
@@ -41,7 +40,7 @@
     return c.schema.get(store);
   });
   const many = $derived(manyStores.current);
-  // A name cannot be changed or merged in a Store that cannot be written (細部 35).
+  // A definition cannot be edited or merged in a Store that cannot be written (細部 35).
   const offSentence = useReadOnlySentence(c.stores, () => store);
   const off = $derived(offSentence.current);
 
@@ -115,7 +114,7 @@
   const usage = $derived(schema && tasks ? schemaUsage(schema, tasks) : null);
   const propCount = $derived(propEntries(schema).length);
   const relationCount = $derived(relationEntries(schema).length);
-  // blocked_by is a relation built in: it is not in the schema, and its name cannot be changed.
+  // blocked_by is a relation built in: it is not in the schema, and it cannot be edited.
   const blockedCount = $derived(
     tasks ? tasks.filter((t) => (t.blocked_by ?? []).length > 0).length : undefined,
   );
@@ -152,16 +151,10 @@
   }
   const projectOf = (where: string): string => where.replace(/^project:/, "");
 
-  // migrate: the dialog for a definition, opened from its row.
-  type Ask = {
-    target: MigrateTarget;
-    prop?: string;
-    old: string;
-    mode: "rename" | "merge";
-    names: string[];
-  };
+  // migrate: the merge dialog for a definition, opened from its row.
+  type Ask = { target: MigrateTarget; old: string; names: string[] };
   let ask = $state.raw<Ask | null>(null);
-  // The other dialogs: add, edit, delete, add a value.
+  // The other dialogs: add, edit, delete.
   let act = $state.raw<Exclude<SchemaAction, { kind: "migrate" }> | null>(null);
 
   function onaction(a: SchemaAction): void {
@@ -275,9 +268,7 @@
     {store}
     {many}
     target={ask.target}
-    prop={ask.prop}
     old={ask.old}
-    mode={ask.mode}
     names={ask.names}
     onclose={() => (ask = null)}
     ondone={() => void migrated()}
@@ -291,6 +282,7 @@
       target={act.target}
       name={act.kind === "edit" ? act.name : undefined}
       {schema}
+      {usage}
       ulidOf={(id) => ulidById.get(id)}
       onclose={() => (act = null)}
       ondone={() => void migrated()}
@@ -300,16 +292,8 @@
       {store}
       target={act.target}
       name={act.name}
-      prop={act.prop}
       {schema}
       {projectLabel}
-      onclose={() => (act = null)}
-      ondone={() => void migrated()}
-    />
-  {:else}
-    <SchemaValueDialog
-      {store}
-      prop={act.prop}
       onclose={() => (act = null)}
       ondone={() => void migrated()}
     />

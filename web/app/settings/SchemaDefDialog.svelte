@@ -28,6 +28,7 @@
   import { CATEGORIES, CATEGORY_LABEL, type Category } from "../../core/categories";
   import { errorMessage } from "../../core/messages";
   import type { SchemaView } from "../../core/schema";
+  import type { SchemaUsage } from "../../core/schema-usage";
   import { core } from "../context";
   import { onLinkClick, router } from "../router";
   import { toast } from "../toast.svelte";
@@ -36,20 +37,32 @@
   import FormError from "../ui/FormError.svelte";
   import ColorPicker from "./ColorPicker.svelte";
   import IconPicker from "./IconPicker.svelte";
+  import SchemaValues, { newKey, type ValueRow } from "./SchemaValues.svelte";
   import { failureOf } from "./schema-text";
 
   // Adds a definition of the schema (name given), or edits one (name of the definition given). Only the
-  // fields that changed are sent. ulidOf finds the task of an ID that a refusal names.
+  // fields that changed are sent (the name too: tasks that use it are rewritten in the same commit).
+  // usage says how many tasks use each value of an enum. ulidOf finds the task of an ID that a refusal names.
   type Props = {
     store: string;
     target: DefTarget;
     name?: string;
     schema: SchemaView;
+    usage?: SchemaUsage | null;
     ulidOf: (id: string) => string | undefined;
     onclose: () => void;
     ondone: () => void;
   };
-  let { store, target, name: editing, schema, ulidOf, onclose, ondone }: Props = $props();
+  let {
+    store,
+    target,
+    name: editing,
+    schema,
+    usage = null,
+    ulidOf,
+    onclose,
+    ondone,
+  }: Props = $props();
 
   const c = core();
   const uid = $props.id();
@@ -64,7 +77,7 @@
   const prop = untrack(() => (editing === undefined ? undefined : schema.props[editing]));
   const kinds = untrack(() => schema.kinds ?? []);
 
-  let name = $state("");
+  let name = $state(untrack(() => editing ?? ""));
   let label = $state(status?.label ?? kind?.label ?? prop?.label ?? "");
   let category = $state(status?.category ?? "todo");
   let color = $state(status?.color ?? "");
@@ -73,9 +86,13 @@
   let anywhere = $state(kind ? kind.parents === null : true);
   let parents = $state<string[]>(kind?.parents ?? []);
   let icon = $state(kind?.icon ?? "");
+  let kindColor = $state(kind?.color ?? "");
   let template = $state(kind?.template ?? "");
   let propType = $state<string>(prop?.type ?? "text");
-  let valuesText = $state("");
+  // The values of an enum, each with the current values it comes from (none for a new one).
+  let valueRows = $state<ValueRow[]>(
+    (prop?.values ?? []).map((v) => ({ key: newKey(), name: v, from: [v] })),
+  );
   let multi = $state(prop?.multi ?? false);
   let symmetric = $state(prop?.symmetric ?? false);
   let inverse = $state(prop?.inverse ?? "");
@@ -102,14 +119,22 @@
   const statusDefaultLocked = status?.default === true;
   const kindDefaultLocked = kind?.default === true;
   const hasValues = $derived(propType === "enum" || propType === "multi_enum");
-  const values = $derived([
-    ...new Set(
-      valuesText
-        .split("\n")
-        .map((v) => v.trim())
-        .filter((v) => v !== ""),
-    ),
-  ]);
+  const valueNames = $derived(valueRows.map((r) => r.name.trim()));
+  const valuesInvalid = $derived(
+    hasValues &&
+      target === "prop" &&
+      (valueNames.some((v) => v === "") || new Set(valueNames).size !== valueNames.length),
+  );
+  // Whether a task uses any of the current values a row comes from (unknown until the tasks are read).
+  const valueUsed = (from: string[]): boolean =>
+    from.some((v) => (usage?.values[editing ?? ""]?.[v] ?? 0) > 0);
+  const valuesChanged = $derived(
+    valueRows.length !== (prop?.values ?? []).length ||
+      valueRows.some(
+        (r, i) =>
+          r.from.length !== 1 || r.from[0] !== r.name.trim() || r.name.trim() !== prop?.values?.[i],
+      ),
+  );
   const kindNames = $derived(["root", ...kinds.map((k) => k.name)]);
   const noParent = $derived(target === "kind" && !anywhere && parents.length === 0);
 
@@ -119,6 +144,11 @@
   const sameSet = (a: string[], b: string[]): boolean =>
     a.length === b.length && a.every((x) => b.includes(x));
   const orderedParents = $derived(kindNames.filter((p) => parents.includes(p)));
+
+  // The new name of an edit, when it changed.
+  const renamed = $derived(
+    name.trim() !== editing && name.trim() !== "" ? { name: name.trim() } : {},
+  );
 
   // The body of the write: all the fields for an add, those that changed for an edit.
   const statusBody = $derived.by(() => {
@@ -132,6 +162,7 @@
       };
     }
     return {
+      ...renamed,
       ...(l !== (status?.label ?? "") ? { label: l } : {}),
       ...(!statusDefaultLocked && category !== status?.category
         ? { category: category as Category }
@@ -149,6 +180,7 @@
         role: role as "container" | "work",
         ...(l ? { label: l } : {}),
         ...(icon ? { icon } : {}),
+        ...(kindColor ? { color: kindColor } : {}),
         ...(template ? { template } : {}),
         ...parentsPart,
       };
@@ -157,10 +189,12 @@
       ? kind?.parents !== null
       : kind?.parents === null || !sameSet(parents, kind?.parents ?? []);
     return {
+      ...renamed,
       ...(l !== (kind?.label ?? "") ? { label: l } : {}),
       ...(!kindDefaultLocked && role !== kind?.role ? { role: role as "container" | "work" } : {}),
       ...(parentsChanged ? parentsPart : {}),
       ...(icon !== (kind?.icon ?? "") ? { icon } : {}),
+      ...(kindColor !== (kind?.color ?? "") ? { color: kindColor } : {}),
       ...(template !== (kind?.template ?? "") ? { template } : {}),
       ...(isDefault && !kindDefaultLocked && role === "work" ? { default: true } : {}),
     };
@@ -173,33 +207,46 @@
       ...(inv !== (prop?.inverse ?? "") ? { inverse: inv } : {}),
     };
   });
-  const propBody = $derived.by(() => {
+  const propEdit = $derived.by(() => {
     const l = label.trim();
-    if (adding) {
-      const type = target === "relation" ? "task_ref" : propType;
-      const inv = symmetric ? "" : inverse.trim();
-      return {
-        name: name.trim(),
-        type: type as (typeof PROP_TYPES)[number] | "task_ref",
-        ...(l ? { label: l } : {}),
-        ...(hasValues && target === "prop" ? { values } : {}),
-        ...(target === "relation"
-          ? {
-              ...(multi ? { multi } : {}),
-              ...(symmetric ? { symmetric } : {}),
-              ...(inv ? { inverse: inv } : {}),
-            }
-          : {}),
-      };
-    }
     return {
+      ...renamed,
       ...(l !== (prop?.label ?? "") ? { label: l } : {}),
       ...(target === "relation" ? relationFlags : {}),
+      ...(hasValues && target === "prop" && valuesChanged
+        ? {
+            values: valueRows.map((r) => ({
+              name: r.name.trim(),
+              ...(r.from.length > 0 ? { from: r.from } : {}),
+            })),
+          }
+        : {}),
+    };
+  });
+  const propBody = $derived.by(() => {
+    if (!adding) return propEdit;
+    const l = label.trim();
+    const type = target === "relation" ? "task_ref" : propType;
+    const inv = symmetric ? "" : inverse.trim();
+    return {
+      name: name.trim(),
+      type: type as (typeof PROP_TYPES)[number] | "task_ref",
+      ...(l ? { label: l } : {}),
+      ...(hasValues && target === "prop" ? { values: valueNames } : {}),
+      ...(target === "relation"
+        ? {
+            ...(multi ? { multi } : {}),
+            ...(symmetric ? { symmetric } : {}),
+            ...(inv ? { inverse: inv } : {}),
+          }
+        : {}),
     };
   });
   const body = $derived(target === "status" ? statusBody : target === "kind" ? kindBody : propBody);
   const changed = $derived(Object.keys(body).length > 0);
-  const canSave = $derived(!busy && (adding ? name.trim() !== "" : changed) && !noParent);
+  const canSave = $derived(
+    !busy && name.trim() !== "" && (adding || changed) && !noParent && !valuesInvalid,
+  );
 
   async function send(): Promise<void> {
     const q = { store };
@@ -212,7 +259,7 @@
       if (adding) await c.api.addKind(kindBody as never, q);
       else await c.api.changeKind(n, kindBody, q);
     } else if (adding) await c.api.addProp(propBody as never, q);
-    else await c.api.changeProp(n, propBody, q);
+    else await c.api.changeProp(n, propEdit, q);
   }
 
   async function save(): Promise<void> {
@@ -220,7 +267,7 @@
     busy = true;
     err = null;
     try {
-      const n = adding ? name.trim() : (editing as string);
+      const n = name.trim();
       await send();
       await c.schema.reload(store);
       toast({ message: `${noun}「${n}」を${adding ? "追加" : "保存"}しました` });
@@ -270,29 +317,20 @@
 
 <Dialog open {title} width={620} onclose={close}>
   <div class="form" role="presentation" bind:this={form} {onkeydown}>
-    {#if adding}
-      <div class="field">
-        <label class="lbl" for="{uid}-name">名前</label>
-        <input
-          id="{uid}-name"
-          type="text"
-          autocomplete="off"
-          data-autofocus
-          disabled={busy}
-          bind:value={name}
-        >
-      </div>
-    {/if}
     <div class="field">
-      <label class="lbl" for="{uid}-label">表示名</label>
+      <label class="lbl" for="{uid}-name">名前</label>
       <input
-        id="{uid}-label"
+        id="{uid}-name"
         type="text"
         autocomplete="off"
-        data-autofocus={adding ? undefined : ""}
+        data-autofocus
         disabled={busy}
-        bind:value={label}
+        bind:value={name}
       >
+    </div>
+    <div class="field">
+      <label class="lbl" for="{uid}-label">表示名</label>
+      <input id="{uid}-label" type="text" autocomplete="off" disabled={busy} bind:value={label}>
     </div>
 
     {#if target === "status"}
@@ -343,15 +381,15 @@
           aria-describedby={kindDefaultLocked ? `${uid}-role-why` : undefined}
           bind:value={role}
         >
-          <option value="container">container</option>
-          <option value="work">work</option>
+          <option value="container">グループ</option>
+          <option value="work">アイテム</option>
         </select>
         {#if kindDefaultLocked}
           <p class="note" id="{uid}-role-why">{roleReason}</p>
         {/if}
       </div>
       <fieldset class="field">
-        <legend class="lbl">置ける親</legend>
+        <legend class="lbl">どの下に置けるか</legend>
         <label class="check">
           <input
             type="radio"
@@ -382,18 +420,22 @@
                   checked={parents.includes(p)}
                   onchange={(e) => toggleParent(p, e.currentTarget.checked)}
                 >
-                {p === "root" ? "ルート" : p}
+                {p === "root" ? "最上位" : p}
               </label>
             {/each}
           </div>
           {#if noParent}
-            <p class="note">置ける親を 1 つ以上選んでください</p>
+            <p class="note">どの下に置けるかを 1 つ以上選んでください</p>
           {/if}
         {/if}
       </fieldset>
       <div class="field">
         <span class="lbl">アイコン</span>
         <IconPicker label="アイコン" bind:value={icon} original={kind?.icon ?? ""} {role} />
+      </div>
+      <div class="field">
+        <span class="lbl">色</span>
+        <ColorPicker label="色" bind:value={kindColor} original={kind?.color ?? ""} />
       </div>
       <div class="field">
         <label class="lbl" for="{uid}-tpl">既定のテンプレート</label>
@@ -434,10 +476,13 @@
           </select>
         </div>
       {/if}
-      {#if adding && target === "prop" && hasValues}
+      {#if target === "prop" && hasValues}
         <div class="field">
-          <label class="lbl" for="{uid}-values">値（1 行に 1 つ）</label>
-          <textarea id="{uid}-values" rows="4" disabled={busy} bind:value={valuesText}></textarea>
+          <span class="lbl">値</span>
+          <SchemaValues bind:rows={valueRows} disabled={busy} used={valueUsed} />
+          {#if valuesInvalid}
+            <p class="note">値が空か、重複しています</p>
+          {/if}
         </div>
       {/if}
       {#if target === "relation"}
@@ -534,8 +579,7 @@
     padding-left: var(--space-20, 20px);
   }
   input[type="text"],
-  select,
-  textarea {
+  select {
     min-height: var(--control-h-lg);
     padding: 0 var(--space-12);
     border: 1px solid var(--line-input);
@@ -545,14 +589,8 @@
     font: inherit;
     font-size: var(--fs-14);
   }
-  textarea {
-    padding: var(--space-8) var(--space-12);
-    font-family: var(--font-mono);
-    resize: vertical;
-  }
   input[type="text"]:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible {
+  select:focus-visible {
     outline: 2px solid var(--accent);
   }
   .note {

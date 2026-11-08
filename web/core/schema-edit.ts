@@ -87,7 +87,7 @@ function workflowRefs(
 /** Where a removal takes the definition out of, one line each, in Japanese. */
 export function referencesOf(
   schema: SchemaView,
-  target: "status" | "kind" | "prop" | "value",
+  target: "status" | "kind" | "prop",
   name: string,
 ): Reference[] {
   const out: Reference[] = [];
@@ -97,7 +97,7 @@ export function referencesOf(
   }
   if (target === "kind") {
     for (const k of schema.kinds ?? []) {
-      if (k.parents?.includes(name)) out.push({ text: `種類 ${k.name} の置ける親` });
+      if (k.parents?.includes(name)) out.push({ text: `種類 ${k.name} のどの下に置けるか` });
     }
   }
   for (const s of schema.scoped ?? []) {

@@ -135,7 +135,6 @@ function setup(opts: Opts = {}) {
   const orderStatuses = vi.fn((b: { names: string[] }) => order("statuses", b.names));
   const orderKinds = vi.fn((b: { names: string[] }) => order("kinds", b.names));
   const orderProps = vi.fn((b: { names: string[] }) => order("props", b.names));
-  const orderValues = vi.fn((_p: string, b: { names: string[] }) => order("values", b.names));
   const load = vi.fn(() =>
     opts.pending
       ? new Promise(() => {})
@@ -160,7 +159,6 @@ function setup(opts: Opts = {}) {
         orderStatuses,
         orderKinds,
         orderProps,
-        orderValues,
       },
       conn,
       stores: {
@@ -185,7 +183,6 @@ function setup(opts: Opts = {}) {
     orderStatuses,
     orderKinds,
     orderProps,
-    orderValues,
     post,
     reload,
     load,
@@ -302,30 +299,6 @@ describe("reorder", () => {
     vi.restoreAllMocks();
   });
 
-  it("moves a value within its property", async () => {
-    const k = setup({
-      tab: "props",
-      schema: {
-        ...sch,
-        props: {
-          ...sch.props,
-          priority: { type: "enum", values: ["low", "mid", "high", "urgent"] },
-        },
-      },
-    });
-    await fireEvent.keyDown(
-      await screen.findByRole("button", { name: "並べ替え（priority の mid）" }),
-      up,
-    );
-    await waitFor(() =>
-      expect(k.orderValues).toHaveBeenCalledWith(
-        "priority",
-        { names: ["mid", "low", "high", "urgent"] },
-        { store: "shared" },
-      ),
-    );
-  });
-
   // Drops the todo status on the done row, as a drag would end.
   async function dropTodoOnDone(list = "statuses") {
     const rowOf = (name: string) =>
@@ -405,13 +378,13 @@ describe("SettingsSchema", () => {
       },
       tasks: [t("P1", { kind: "project", status: "backlog" }), t("A", { status: "backlog" })],
     });
-    const backlog = await screen.findByRole("button", { name: "削除…（backlog）" });
+    const backlog = await screen.findByRole("button", { name: "削除（backlog）" });
     await waitFor(() => expect(backlog).toBeDisabled());
     expect(backlog).toHaveAttribute(
       "title",
-      "タスクが使っているため削除できません。マージ… で別の定義へ移してから削除してください",
+      "タスクが使っているため削除できません。マージで別の定義へ移してから削除してください",
     );
-    const todo = screen.getByRole("button", { name: "削除…（todo）" });
+    const todo = screen.getByRole("button", { name: "削除（todo）" });
     expect(todo).toBeDisabled();
     expect(todo).toHaveAttribute(
       "title",
@@ -427,7 +400,7 @@ describe("SettingsSchema", () => {
 
     it("disables delete in a read-only Store, with the reason", async () => {
       setup({ schema: spare, readOnly: "the remote cannot be written" });
-      const del = await screen.findByRole("button", { name: "削除…（spare）" });
+      const del = await screen.findByRole("button", { name: "削除（spare）" });
       expect(del).toBeDisabled();
       expect(del).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
     });
@@ -449,7 +422,7 @@ describe("SettingsSchema", () => {
         },
       });
       held.k = k;
-      const del = await screen.findByRole("button", { name: "削除…（spare）" });
+      const del = await screen.findByRole("button", { name: "削除（spare）" });
       await waitFor(() => expect(del).toBeEnabled());
       del.focus();
       await fireEvent.click(del);
@@ -461,16 +434,16 @@ describe("SettingsSchema", () => {
       await waitFor(() =>
         expect(screen.getByRole("heading", { level: 1, name: "スキーマ" })).toHaveFocus(),
       );
-      expect(screen.queryByRole("button", { name: "削除…（spare）" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "削除（spare）" })).toBeNull();
     });
   });
 
   it("opens the add dialog from the button above the table, and the edit dialog from a row", async () => {
     setup();
-    await fireEvent.click(await screen.findByRole("button", { name: "追加…" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "追加" }));
     expect(screen.getByRole("dialog", { name: "ステータスを追加" })).toBeVisible();
     await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-    await fireEvent.click(screen.getByRole("button", { name: "編集…（triage）" }));
+    await fireEvent.click(screen.getByRole("button", { name: "編集（triage）" }));
     expect(screen.getByRole("dialog", { name: "ステータス「triage」を編集" })).toBeVisible();
   });
 
@@ -510,20 +483,28 @@ describe("SettingsSchema", () => {
   it("lists the kinds with the parents they can sit under", async () => {
     setup({ tab: "kinds" });
     expect(await screen.findByRole("heading", { level: 2, name: "種類" })).toBeVisible();
-    expect(within(row(/^project/)).getByText("ルート")).toBeVisible();
+    expect(within(row(/^project/)).getByText("最上位")).toBeVisible();
     expect(within(row(/^task/)).getByText("どこにでも")).toBeVisible();
+    expect(within(row(/^project/)).getByText("グループ")).toBeVisible();
+    expect(within(row(/^task/)).getByText("アイテム")).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "どの下に置けるか" })).toBeVisible();
+    expect(
+      screen.getByText(
+        "役割はグループ（ほかの種類をまとめる単位）とアイテム（作業の項目）の 2 つです。どの下に置けるかに反する配置は書き込み時に拒否されます。",
+      ),
+    ).toBeVisible();
     expect(within(row(/^task/)).getByText("3")).toBeVisible();
   });
 
-  it("lists the properties and the values of an enum with their own numbers, without the relations", async () => {
+  it("lists the properties without the relations and without a row per value", async () => {
     setup({ tab: "props" });
     await screen.findByRole("row", { name: /^points/ });
     expect(within(row(/^points/)).getByText("ポイント")).toBeVisible();
     expect(within(row(/^points/)).getByText("number")).toBeVisible();
     expect(screen.queryByRole("row", { name: /^relates/ })).toBeNull();
     await waitFor(() => expect(within(row(/^priority enum/)).getByText("2")).toBeVisible());
-    expect(within(row(/priority › low/)).getByText("0")).toBeVisible();
-    expect(within(row(/priority › high/)).getByText("2")).toBeVisible();
+    expect(screen.queryByRole("row", { name: /priority › low/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /値を追加/ })).toBeNull();
   });
 
   it("lists the properties and the relations in the order of the schema", async () => {
@@ -568,7 +549,7 @@ describe("SettingsSchema", () => {
 
   it("offers only the other relations as where a relation is merged to", async () => {
     setup({ tab: "relations" });
-    await fireEvent.click(await screen.findByRole("button", { name: "マージ…（relates）" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "マージ（relates）" }));
     const select = screen.getByRole("combobox", { name: "マージ先" }) as HTMLSelectElement;
     expect([...select.options].map((o) => o.value)).toEqual(["", "duplicates"]);
   });
@@ -617,13 +598,6 @@ describe("SettingsSchema", () => {
     expect(screen.getByRole("table", { name: "関連" })).toBeVisible();
   });
 
-  it("joins the empty cells of a value row into one", async () => {
-    setup({ tab: "props" });
-    const value = await screen.findByRole("row", { name: /priority › low/ });
-    expect(value.querySelectorAll("td[colspan='3']")).toHaveLength(1);
-    expect(value.querySelectorAll("td:empty")).toHaveLength(1);
-  });
-
   it("each tab is a link to its own address, and the tab of the address is the current one", async () => {
     setup({ tab: "props", store: "org-b/ops" });
     await screen.findByRole("table", { name: "プロパティ" });
@@ -650,21 +624,22 @@ describe("SettingsSchema", () => {
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
 
-  it("disables the rename and the merge of a read-only Store, with the reason", async () => {
+  it("disables the edit and the merge of a read-only Store, with the reason, and has no name button", async () => {
     setup({ readOnly: "the remote cannot be written" });
-    const rename = await screen.findByRole("button", { name: "名前…（triage）" });
-    expect(rename).toBeDisabled();
-    expect(rename).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
-    for (const b of screen.getAllByRole("button", { name: /^(名前|マージ)…/ })) {
+    const edit = await screen.findByRole("button", { name: "編集（triage）" });
+    expect(edit).toBeDisabled();
+    expect(edit).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
+    for (const b of screen.getAllByRole("button", { name: /^(編集|マージ)（/ })) {
       expect(b).toBeDisabled();
     }
-    rename.click(); // a disabled button takes no click
+    expect(screen.queryByRole("button", { name: /^名前/ })).toBeNull();
+    edit.click(); // a disabled button takes no click
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("closes the dialog when the Store changes, so that it cannot write to the other Store", async () => {
     const k = setup();
-    await fireEvent.click(await screen.findByRole("button", { name: "名前…（triage）" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "編集（triage）" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     await k.rerender({ store: "ops" });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -829,48 +804,40 @@ describe("SettingsSchema", () => {
   });
 
   describe("migrate", () => {
-    it("opens the dialog of the status, rename and merge both", async () => {
+    it("has no name button, and opens the merge dialog of a status", async () => {
       setup();
-      await fireEvent.click(await screen.findByRole("button", { name: "名前…（triage）" }));
-      expect(
-        screen.getByRole("dialog", { name: "ステータス「triage」の名前を変更" }),
-      ).toBeVisible();
-      await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-      expect(screen.queryByRole("dialog")).toBeNull();
-      await fireEvent.click(screen.getByRole("button", { name: "マージ…（triage）" }));
+      await screen.findByRole("button", { name: "編集（triage）" });
+      expect(screen.queryByRole("button", { name: /^名前/ })).toBeNull();
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（triage）" }));
       expect(screen.getByRole("dialog", { name: "ステータス「triage」をマージ" })).toBeVisible();
     });
 
-    it("opens it for a kind, a property and a value", async () => {
+    it("opens the merge dialog for a kind and a property", async () => {
       const { rerender } = setup({ tab: "kinds" });
-      await fireEvent.click(await screen.findByRole("button", { name: "名前…（task）" }));
-      expect(screen.getByRole("dialog", { name: "種類「task」の名前を変更" })).toBeVisible();
+      await fireEvent.click(await screen.findByRole("button", { name: "マージ（task）" }));
+      expect(screen.getByRole("dialog", { name: "種類「task」をマージ" })).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
       await rerender({ tab: "props" });
-      await fireEvent.click(screen.getByRole("button", { name: "名前…（points）" }));
-      expect(
-        screen.getByRole("dialog", { name: "プロパティ「points」の名前を変更" }),
-      ).toBeVisible();
-      await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-      await fireEvent.click(screen.getByRole("button", { name: "マージ…（priority の low）" }));
-      expect(screen.getByRole("dialog", { name: "値「low」をマージ" })).toBeVisible();
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（points）" }));
+      expect(screen.getByRole("dialog", { name: "プロパティ「points」をマージ" })).toBeVisible();
     });
 
     it("offers no merge when nothing else is defined", async () => {
       setup({ tab: "kinds", schema: { ...sch, kinds: [sch.kinds[1] as never] } });
-      expect(await screen.findByRole("button", { name: "名前…（task）" })).toBeVisible();
-      expect(screen.queryByRole("button", { name: "マージ…（task）" })).toBeNull();
+      expect(await screen.findByRole("button", { name: "編集（task）" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "マージ（task）" })).toBeNull();
     });
 
-    async function renameTriage(k: ReturnType<typeof setup>) {
-      const open = await screen.findByRole("button", { name: "名前…（triage）" });
+    async function mergeTriage(k: ReturnType<typeof setup>, beforeRun?: () => void) {
+      const open = await screen.findByRole("button", { name: "マージ（triage）" });
       open.focus(); // a click focuses the button in a browser
       await fireEvent.click(open);
-      await fireEvent.input(screen.getByRole("textbox", { name: "新しい名前" }), {
-        target: { value: "review" },
+      beforeRun?.();
+      await fireEvent.change(screen.getByRole("combobox", { name: "マージ先" }), {
+        target: { value: "done" },
       });
       await vi.advanceTimersByTimeAsync(500);
-      const run = screen.getByRole("button", { name: "名前を変更" });
+      const run = screen.getByRole("button", { name: "マージ" });
       await waitFor(() => expect(run).toBeEnabled());
       await fireEvent.click(run);
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -885,9 +852,9 @@ describe("SettingsSchema", () => {
             ok({ changed: [{ ulid: "B" }], skipped: [], commit: b.dry_run ? null : "c1" }),
         });
         await waitFor(() => expect(k.listTasks.mock.calls).toHaveLength(1));
-        await renameTriage(k);
+        await mergeTriage(k);
         expect(k.post).toHaveBeenLastCalledWith(
-          { target: "status", old: "triage", new: "review" },
+          { target: "status", old: "triage", new: "done" },
           { store: "shared" },
         );
         await waitFor(() => expect(k.listTasks.mock.calls).toHaveLength(2));
@@ -897,31 +864,20 @@ describe("SettingsSchema", () => {
       }
     });
 
-    it("gives the focus back to the row, or to the heading when the row is gone", async () => {
+    it("gives the focus to the heading when the row is gone", async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {
         const k = setup({
           post: (b) => ok({ changed: [], skipped: [], commit: b.dry_run ? null : "c1" }),
         });
-        await renameTriage(k);
-        expect(screen.getByRole("button", { name: "名前…（triage）" })).toHaveFocus();
-        const again = screen.getByRole("button", { name: "名前…（triage）" });
-        again.focus();
-        await fireEvent.click(again);
-        // the rename takes the row away
-        k.state.schema = {
-          ...sch,
-          statuses: sch.statuses.map((s) => (s.name === "triage" ? { ...s, name: "review" } : s)),
-        };
-        k.cache.emit();
-        await fireEvent.input(screen.getByRole("textbox", { name: "新しい名前" }), {
-          target: { value: "x" },
+        // the merge takes the row away (the row that opened the dialog)
+        await mergeTriage(k, () => {
+          k.state.schema = {
+            ...sch,
+            statuses: sch.statuses.filter((s) => s.name !== "triage"),
+          };
+          k.cache.emit();
         });
-        await vi.advanceTimersByTimeAsync(500);
-        const run = screen.getByRole("button", { name: "名前を変更" });
-        await waitFor(() => expect(run).toBeEnabled());
-        await fireEvent.click(run);
-        await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
         await waitFor(() =>
           expect(screen.getByRole("heading", { level: 1, name: "スキーマ" })).toHaveFocus(),
         );

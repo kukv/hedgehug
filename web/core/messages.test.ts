@@ -223,10 +223,16 @@ describe("errorMessage", () => {
 
   it("words the errors of a schema edit", () => {
     expect(errorMessage(err("schema.in_use", { count: 3, deleted: 0 }))).toBe(
-      "タスク 3 件が使っているため削除できません。マージ… で別の定義へ移してから削除してください",
+      "タスク 3 件が使っているため削除できません。マージで別の定義へ移してから削除してください",
     );
     expect(errorMessage(err("schema.in_use", { count: 3, deleted: 1 }))).toBe(
-      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。マージ… で別の定義へ移してから削除してください",
+      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。マージで別の定義へ移してから削除してください",
+    );
+    expect(errorMessage(err("schema.in_use", { value: "low", count: 3, deleted: 0 }))).toBe(
+      "値 low は、タスク 3 件が使っているため削除できません。マージで別の値へ移してから削除してください",
+    );
+    expect(errorMessage(err("schema.name_taken"))).toBe(
+      "その名前はすでにあります。まとめるときはマージを使ってください",
     );
     expect(errorMessage(err("schema.tasks_invalid", { violations: ["WEB-2: x"] }))).toBe(
       "変更すると規則に合わなくなるタスクがあります",
@@ -238,7 +244,7 @@ describe("errorMessage", () => {
       "スキーマの規則に合わなくなります: boom",
     );
     expect(errorMessage(err("schema.parents_empty", { kinds: ["sub", "leaf"] }))).toBe(
-      "種類 sub、leaf の置ける親がなくなるため削除できません。先に sub、leaf の置ける親を変えてください",
+      "種類 sub、leaf のどの下に置けるかがなくなるため削除できません。先に sub、leaf のどの下に置けるかを変えてください",
     );
     expect(errorMessage(err("schema.not_defined"))).toBe(
       "定義が見つかりません。画面を読み込み直してください",

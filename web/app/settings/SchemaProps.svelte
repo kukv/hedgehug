@@ -30,15 +30,10 @@
     order.move(`props/${name}`, names, from, to, (api, s, next) =>
       api.orderProps({ names: next }, { store: s }),
     );
-  const moveValue = (prop: string, values: string[], v: string, from: number, to: number) =>
-    order.move(`values/${prop}/${v}`, values, from, to, (api, s, next) =>
-      api.orderValues(prop, { names: next }, { store: s }),
-    );
 </script>
 
 <section class="schema-sec" aria-labelledby="{uid}-props">
   <h2 id="{uid}-props">プロパティ</h2>
-  <p class="note">値の件数は、その値を持つタスクの数です。</p>
   <div>
     <Button
       size="sm"
@@ -46,7 +41,7 @@
       why={off ?? undefined}
       onclick={() => onaction({ kind: "add", target: "prop" })}
     >
-      追加…
+      追加
     </Button>
   </div>
   <span id="{uid}-move" class="sr">{moveKeys()} で移動</span>
@@ -96,52 +91,12 @@
                 {names}
                 edit="prop"
                 used={usage?.props[name]}
-                addValue={p.type === "enum" || p.type === "multi_enum"}
                 {off}
                 {onaction}
               />
             </div>
           </td>
         </tr>
-        {#each p.values ?? [] as v, vi (v)}
-          <tr
-            class="value"
-            use:sortableRow={{
-              list: `values:${name}`,
-              name: v,
-              index: vi,
-              disabled: off !== null,
-              onmove: (a, b) => void moveValue(name, p.values ?? [], v, a, b),
-            }}
-          >
-            <td>
-              <SchemaHandle
-                id="values/{name}/{v}"
-                subject="{name} の {v}"
-                hint="{uid}-move"
-                disabled={order.busy}
-                {off}
-                onstep={(by) => void moveValue(name, p.values ?? [], v, vi, vi + by)}
-              />
-            </td>
-            <th scope="row"><span class="vname">{name} › {v}</span></th>
-            <td colspan="3"></td>
-            <td class="num">{count(usage, usage?.values[name]?.[v])}</td>
-            <td>
-              <div class="acts">
-                <SchemaRowActions
-                  target="value"
-                  old={v}
-                  names={p.values ?? []}
-                  prop={name}
-                  used={usage?.values[name]?.[v]}
-                  {off}
-                  {onaction}
-                />
-              </div>
-            </td>
-          </tr>
-        {/each}
       {:else}
         <tr>
           <td colspan="7" class="none">プロパティはありません</td>
@@ -152,10 +107,6 @@
 </section>
 
 <style>
-  .value th {
-    padding-left: var(--space-24);
-    font-weight: 400;
-  }
   .mono {
     font-family: var(--font-mono);
   }

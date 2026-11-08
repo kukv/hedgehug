@@ -48,7 +48,7 @@
       why={off ?? undefined}
       onclick={() => onaction({ kind: "add", target: "relation" })}
     >
-      追加…
+      追加
     </Button>
   </div>
   <span id="{uid}-move" class="sr">{moveKeys()} で移動</span>

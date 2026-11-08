@@ -32,19 +32,20 @@
       api.orderKinds({ names: next }, { store: s }),
     );
 
+  const ROLE: Record<string, string> = { container: "グループ", work: "アイテム" };
   const parentsText = (parents: string[] | null): string =>
     parents === null
       ? "どこにでも"
       : parents.length === 0
         ? "置けない"
-        : parents.map((p) => (p === "root" ? "ルート" : p)).join("、");
+        : parents.map((p) => (p === "root" ? "最上位" : p)).join("、");
 </script>
 
 <section class="schema-sec" aria-labelledby="{uid}-kinds">
   <h2 id="{uid}-kinds">種類</h2>
   <p class="note">
-    役割は container（まとめる単位）と work（作業項目）の 2
-    つです。置ける親に反する配置は書き込み時に拒否されます。
+    役割はグループ（ほかの種類をまとめる単位）とアイテム（作業の項目）の 2
+    つです。どの下に置けるかに反する配置は書き込み時に拒否されます。
   </p>
   <div>
     <Button
@@ -53,7 +54,7 @@
       why={off ?? undefined}
       onclick={() => onaction({ kind: "add", target: "kind" })}
     >
-      追加…
+      追加
     </Button>
   </div>
   <span id="{uid}-move" class="sr">{moveKeys()} で移動</span>
@@ -64,7 +65,7 @@
         <th scope="col">名前</th>
         <th scope="col">表示名</th>
         <th scope="col">役割</th>
-        <th scope="col">置ける親</th>
+        <th scope="col">どの下に置けるか</th>
         <th scope="col">既定</th>
         <th scope="col">既定のテンプレート</th>
         <th scope="col" class="num">タスク</th>
@@ -99,7 +100,7 @@
             >
           </th>
           <td>{k.label ?? ""}</td>
-          <td>{k.role}</td>
+          <td>{ROLE[k.role] ?? k.role}</td>
           <td>{parentsText(k.parents)}</td>
           <td>{k.default ? "既定" : ""}</td>
           <td>{k.template ?? ""}</td>

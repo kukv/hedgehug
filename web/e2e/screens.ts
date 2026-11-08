@@ -61,10 +61,10 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               もの", the buttons "確認する" and "完全に削除…", the dialog "完全に削除する")
 //   Schema      /settings/schema/<store> (heading "スキーマ"); the navigation "スキーマの種類" has the links
 //               ステータス / 種類 / プロパティ / 関連 / ワークフロー, whose address is /settings/schema/<store>?tab=kinds|props|relations|workflow; a row of a table is named by the definition
-//               and its buttons are "名前…（<名前>）" and "マージ…（<名前>）"; the regions
-//               "プロジェクトごとの上書き" and "スキーマの検査"; the dialog "ステータス「<名前>」の名前を変更"
-//               (or "をマージ") has the textbox "新しい名前" (the combobox "マージ先"), the dry run
-//               "<n> 件のタスクが書き換わります" and the button "名前を変更" / "マージ"
+//               and its buttons are "編集（<名前>）" and "マージ（<名前>）"; the regions
+//               "プロジェクトごとの上書き" and "スキーマの検査"; the dialog "ステータス「<名前>」を編集" has
+//               the textbox "名前" and the button "保存"; the dialog "ステータス「<名前>」をマージ" has the
+//               combobox "マージ先", the dry run "<n> 件のタスクが書き換わります" and the button "マージ"
 
 //
 // Exceptions that hold on to a CSS class, because no role or text tells them apart: change them

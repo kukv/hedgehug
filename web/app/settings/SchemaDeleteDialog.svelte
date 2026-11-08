@@ -9,19 +9,18 @@
   import FormError from "../ui/FormError.svelte";
   import { failureOf } from "./schema-text";
 
-  // Deletes a definition of the schema (or a value of an enum, prop given), and says first what else
+  // Deletes a definition of the schema, and says first what else
   // the removal takes out. projectLabel is how a project of an override is shown (its ID and title).
   type Props = {
     store: string;
-    target: "status" | "kind" | "prop" | "value";
+    target: "status" | "kind" | "prop";
     name: string;
-    prop?: string;
     schema: SchemaView;
     projectLabel: (ulid: string) => string;
     onclose: () => void;
     ondone: () => void;
   };
-  let { store, target, name, prop, schema, projectLabel, onclose, ondone }: Props = $props();
+  let { store, target, name, schema, projectLabel, onclose, ondone }: Props = $props();
 
   const c = core();
   const uid = $props.id();
@@ -30,19 +29,17 @@
       ? "ステータス"
       : target === "kind"
         ? "種類"
-        : target === "value"
-          ? "値"
-          : schema.props[name]?.type === "task_ref"
-            ? "関連"
-            : "プロパティ",
+        : schema.props[name]?.type === "task_ref"
+          ? "関連"
+          : "プロパティ",
   );
   const what = $derived(`${noun}「${name}」`);
-  const title = $derived(target === "value" ? `${prop} の${what}を削除` : `${what}を削除`);
+  const title = $derived(`${what}を削除`);
   const refs = $derived(referencesOf(schema, target, name));
   const orphans = $derived(target === "kind" ? orphanedBy(schema, name) : []);
   const orphanReason = $derived(
     orphans.length > 0
-      ? `種類 ${orphans.join("、")} の置ける親がなくなるため削除できません。先に ${orphans.join("、")} の置ける親を変えてください`
+      ? `種類 ${orphans.join("、")} のどの下に置けるかがなくなるため削除できません。先に ${orphans.join("、")} のどの下に置けるかを変えてください`
       : "",
   );
 
@@ -59,8 +56,7 @@
     try {
       if (target === "status") await c.api.deleteStatus(name, q);
       else if (target === "kind") await c.api.deleteKind(name, q);
-      else if (target === "prop") await c.api.deleteProp(name, q);
-      else await c.api.deleteValue(prop as string, name, q);
+      else await c.api.deleteProp(name, q);
       await c.schema.reload(store);
       toast({ message: `${what}を削除しました` });
       ondone();

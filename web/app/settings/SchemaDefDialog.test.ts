@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SchemaView } from "../../core/schema";
+import type { SchemaUsage } from "../../core/schema-usage";
 import { fail, ok } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
@@ -35,6 +36,7 @@ function setup(
   name?: string,
   over: Record<string, unknown> = {},
   schema: SchemaView = sch,
+  usage: SchemaUsage | null = null,
 ) {
   const w = () => ok({ schema: sch, commit: "c1" });
   const api = {
@@ -62,6 +64,7 @@ function setup(
       target,
       name,
       schema,
+      usage,
       ulidOf: (id: string) => (id === "WEB-2" ? "U2" : undefined),
       onclose,
       ondone,
@@ -142,8 +145,8 @@ describe("SchemaDefDialog", () => {
     await type("名前", "spike");
     await fireEvent.click(screen.getByRole("radio", { name: "指定する" }));
     expect(screen.getByRole("button", { name: "追加" })).toBeDisabled();
-    expect(screen.getByText("置ける親を 1 つ以上選んでください")).toBeVisible();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "ルート" }));
+    expect(screen.getByText("どの下に置けるかを 1 つ以上選んでください")).toBeVisible();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "最上位" }));
     expect(screen.getByRole("button", { name: "追加" })).toBeEnabled();
   });
 
@@ -194,15 +197,17 @@ describe("SchemaDefDialog", () => {
     expect(screen.getByRole("combobox", { name: "役割" })).toBeDisabled();
   });
 
-  it("adds an enum with a value per line, with no task_ref among the types", async () => {
+  it("adds an enum with a row per value, with no task_ref among the types", async () => {
     const { api } = setup("prop");
     const types = screen.getByRole("combobox", { name: "型" }) as HTMLSelectElement;
     expect([...types.options].map((o) => o.value)).not.toContain("task_ref");
     await type("名前", "severity");
     await fireEvent.change(types, { target: { value: "enum" } });
-    await fireEvent.input(screen.getByRole("textbox", { name: "値（1 行に 1 つ）" }), {
-      target: { value: "low\n\n high \nlow" },
-    });
+    await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+    await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+    const rows = screen.getAllByRole("textbox", { name: "値" });
+    await fireEvent.input(rows[0] as HTMLElement, { target: { value: "low" } });
+    await fireEvent.input(rows[1] as HTMLElement, { target: { value: " high " } });
     await fireEvent.click(screen.getByRole("button", { name: "追加" }));
     await waitFor(() => expect(api.addProp).toHaveBeenCalled());
     expect(api.addProp).toHaveBeenCalledWith(
@@ -234,6 +239,161 @@ describe("SchemaDefDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(api.changeProp).toHaveBeenCalled());
     expect(api.changeProp).toHaveBeenCalledWith("duplicates", { multi: true }, { store: "shared" });
+  });
+
+  it("changes the name in the edit dialog and sends it as name", async () => {
+    const { api } = setup("status", "in_progress");
+    expect((screen.getByRole("textbox", { name: "名前" }) as HTMLInputElement).value).toBe(
+      "in_progress",
+    );
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    await type("名前", "doing");
+    await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(api.changeStatus).toHaveBeenCalledTimes(1));
+    expect(api.changeStatus).toHaveBeenCalledWith(
+      "in_progress",
+      { name: "doing" },
+      { store: "shared" },
+    );
+    expect(toasts.list.map((t) => t.message)).toContain("ステータス「doing」を保存しました");
+  });
+
+  it("sends the name with the other changes in one write", async () => {
+    const { api } = setup("relation", "duplicates");
+    await type("名前", "dups");
+    await fireEvent.click(screen.getByRole("checkbox", { name: "複数" }));
+    await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(api.changeProp).toHaveBeenCalledTimes(1));
+    expect(api.changeProp).toHaveBeenCalledWith(
+      "duplicates",
+      { name: "dups", multi: true },
+      { store: "shared" },
+    );
+  });
+
+  it("does not save an empty name", async () => {
+    setup("kind", "sub");
+    await type("名前", " ");
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  });
+
+  it("says the role as group and item, and where a kind can sit as under what", async () => {
+    setup("kind");
+    const role = screen.getByRole("combobox", { name: "役割" }) as HTMLSelectElement;
+    expect([...role.options].map((o) => [o.value, o.textContent])).toEqual([
+      ["container", "グループ"],
+      ["work", "アイテム"],
+    ]);
+    expect(screen.getByRole("group", { name: "どの下に置けるか" })).toBeVisible();
+    await fireEvent.click(screen.getByRole("radio", { name: "指定する" }));
+    expect(screen.getByRole("checkbox", { name: "最上位" })).toBeVisible();
+  });
+
+  it("adds a kind with a color", async () => {
+    const { api } = setup("kind");
+    await type("名前", "spike");
+    await fireEvent.click(screen.getByRole("radio", { name: "ティール" }));
+    await fireEvent.click(screen.getByRole("button", { name: "追加" }));
+    await waitFor(() => expect(api.addKind).toHaveBeenCalled());
+    expect(api.addKind).toHaveBeenCalledWith(
+      { name: "spike", role: "work", anywhere: true, color: "teal" },
+      { store: "shared" },
+    );
+  });
+
+  it("edits the color of a kind and sends it only when it changed", async () => {
+    const { api } = setup("kind", "sub");
+    await fireEvent.click(screen.getByRole("radio", { name: "ティール" }));
+    await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(api.changeKind).toHaveBeenCalledTimes(1));
+    expect(api.changeKind).toHaveBeenCalledWith("sub", { color: "teal" }, { store: "shared" });
+  });
+
+  describe("the values of an enum", () => {
+    const usage = {
+      statuses: {},
+      kinds: {},
+      props: {},
+      values: { priority: { low: 0, high: 2 } },
+    } as unknown as SchemaUsage;
+    const rows = () => screen.getAllByRole("textbox", { name: "値" }) as HTMLInputElement[];
+    const save = async (api: { changeProp: ReturnType<typeof vi.fn> }) => {
+      await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+      await waitFor(() => expect(api.changeProp).toHaveBeenCalledTimes(1));
+      return (api.changeProp.mock.calls as unknown[][])[0]?.[1];
+    };
+
+    it("shows a row per value, and nothing to save until one changes", () => {
+      setup("prop", "priority", {}, sch, usage);
+      expect(rows().map((r) => r.value)).toEqual(["low", "high"]);
+      expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    });
+
+    it("adds a value (no from)", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+      await fireEvent.input(rows()[2] as HTMLElement, { target: { value: "mid" } });
+      expect(await save(api)).toEqual({
+        values: [{ name: "low", from: ["low"] }, { name: "high", from: ["high"] }, { name: "mid" }],
+      });
+    });
+
+    it("renames a value by its text (one from, another name)", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.input(rows()[0] as HTMLElement, { target: { value: "minor" } });
+      expect(await save(api)).toEqual({
+        values: [
+          { name: "minor", from: ["low"] },
+          { name: "high", from: ["high"] },
+        ],
+      });
+    });
+
+    it("deletes an unused value, and disables the delete of a used one with the reason", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      const used = screen.getByRole("button", { name: "削除（値 high）" });
+      expect(used).toBeDisabled();
+      expect(used.getAttribute("title")).toBe(
+        "タスクが使っているため削除できません。マージで別の値へ移してください",
+      );
+      await fireEvent.click(screen.getByRole("button", { name: "削除（値 low）" }));
+      expect(rows().map((r) => r.value)).toEqual(["high"]);
+      expect(await save(api)).toEqual({ values: [{ name: "high", from: ["high"] }] });
+    });
+
+    it("merges a value into another in the dialog: the row goes, its from joins the target", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（値 high）" }));
+      const to = screen.getByRole("combobox", { name: "マージ先（値 high）" }) as HTMLSelectElement;
+      const low = [...to.options].find((o) => o.textContent === "low");
+      await fireEvent.change(to, { target: { value: low?.value } });
+      expect(rows().map((r) => r.value)).toEqual(["low"]);
+      expect(await save(api)).toEqual({ values: [{ name: "low", from: ["low", "high"] }] });
+    });
+
+    it("moves a value with the keys of the handle", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.keyDown(screen.getByRole("button", { name: "並べ替え（値 low）" }), {
+        key: "ArrowDown",
+        altKey: true,
+      });
+      expect(rows().map((r) => r.value)).toEqual(["high", "low"]);
+      expect(await save(api)).toEqual({
+        values: [
+          { name: "high", from: ["high"] },
+          { name: "low", from: ["low"] },
+        ],
+      });
+    });
+
+    it("refuses an empty or repeated value", async () => {
+      setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+      expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+      await fireEvent.input(rows()[2] as HTMLElement, { target: { value: "low" } });
+      expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+      expect(screen.getByText("値が空か、重複しています")).toBeVisible();
+    });
   });
 
   describe("a kind the dialog does not touch", () => {

@@ -8,6 +8,7 @@
   let { value = $bindable(), original = "", label }: Props = $props();
 
   const uid = $props.id();
+  // input[type=color] only takes a 6-digit hex.
   const isFree = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
   // What the free color field shows: the color the schema has, else a blue to start from.
   let free = $state(isFree(value) ? value.toLowerCase() : "#3451d1");

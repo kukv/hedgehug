@@ -136,8 +136,13 @@ const messages: Record<string, Make> = {
   "schema.in_use": (a) => {
     const deleted = Number(a.deleted ?? 0);
     const used = `タスク ${str(a, "count")} 件${deleted > 0 ? `（うち削除済み ${deleted} 件）` : ""}`;
-    return `${used}が使っているため削除できません。マージ… で別の定義へ移してから削除してください`;
+    // A value of an enum says which one: the dialog holds the whole list.
+    if (a.value !== undefined) {
+      return `値 ${str(a, "value")} は、${used}が使っているため削除できません。マージで別の値へ移してから削除してください`;
+    }
+    return `${used}が使っているため削除できません。マージで別の定義へ移してから削除してください`;
   },
+  "schema.name_taken": () => "その名前はすでにあります。まとめるときはマージを使ってください",
   "schema.tasks_invalid": () => "変更すると規則に合わなくなるタスクがあります",
   "schema.invalid": (a, e) => {
     const t = list(a, "problems");
@@ -147,7 +152,7 @@ const messages: Record<string, Make> = {
   },
   "schema.parents_empty": (a) => {
     const kinds = list(a, "kinds");
-    return `種類 ${kinds} の置ける親がなくなるため削除できません。先に ${kinds} の置ける親を変えてください`;
+    return `種類 ${kinds} のどの下に置けるかがなくなるため削除できません。先に ${kinds} のどの下に置けるかを変えてください`;
   },
   "schema.not_defined": () => "定義が見つかりません。画面を読み込み直してください",
   "schema.order_stale": () =>

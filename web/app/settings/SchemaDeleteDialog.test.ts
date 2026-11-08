@@ -32,7 +32,7 @@ const sch = {
 } as unknown as SchemaView;
 
 function setup(
-  target: "status" | "kind" | "prop" | "value",
+  target: "status" | "kind" | "prop",
   name: string,
   prop?: string,
   over: Record<string, unknown> = {},
@@ -41,7 +41,6 @@ function setup(
     deleteStatus: vi.fn(() => ok({ schema: sch, commit: "c" })),
     deleteKind: vi.fn(() => ok({ schema: sch, commit: "c" })),
     deleteProp: vi.fn(() => ok({ schema: sch, commit: "c" })),
-    deleteValue: vi.fn(() => ok({ schema: sch, commit: "c" })),
     ...over,
   };
   const reload = vi.fn(async () => {});
@@ -88,21 +87,12 @@ describe("SchemaDeleteDialog", () => {
     expect(toasts.list.map((t) => t.message)).toContain("ステータス「on_hold」を削除しました");
   });
 
-  it("deletes a value of a property", async () => {
-    const { api } = setup("value", "low", "priority");
-    expect(screen.getByRole("dialog", { name: "priority の値「low」を削除" })).toBeVisible();
-    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
-    await waitFor(() =>
-      expect(api.deleteValue).toHaveBeenCalledWith("priority", "low", { store: "shared" }),
-    );
-  });
-
   it("refuses a kind that leaves another with no parent", () => {
     setup("kind", "epic");
     const del = screen.getByRole("button", { name: "削除" });
     expect(del).toBeDisabled();
     const why = screen.getByText(
-      "種類 sub の置ける親がなくなるため削除できません。先に sub の置ける親を変えてください",
+      "種類 sub のどの下に置けるかがなくなるため削除できません。先に sub のどの下に置けるかを変えてください",
     );
     expect(why).toBeVisible();
     expect(why.id).toMatch(/-orphan-why$/);
@@ -123,7 +113,7 @@ describe("SchemaDeleteDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(
       await screen.findByText(
-        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。マージ… で別の定義へ移してから削除してください",
+        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。マージで別の定義へ移してから削除してください",
       ),
     ).toBeVisible();
     expect(onclose).not.toHaveBeenCalled();

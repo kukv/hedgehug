@@ -79,8 +79,8 @@ describe("schema-edit", () => {
       { text: "上書き: 表示するステータス", project: "01J" },
     ]);
     expect(referencesOf(schema, "kind", "epic")).toEqual([
-      { text: "種類 sub の置ける親" },
-      { text: "種類 task の置ける親" },
+      { text: "種類 sub のどの下に置けるか" },
+      { text: "種類 task のどの下に置けるか" },
       { text: "上書き: 既定のテンプレート", project: "01J" },
     ]);
     expect(referencesOf(schema, "prop", "b")).toEqual([
