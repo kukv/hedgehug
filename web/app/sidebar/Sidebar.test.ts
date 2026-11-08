@@ -42,6 +42,8 @@ function mount(over: Record<string, unknown> = {}) {
       stores: {
         workspaces: () => workspaces,
         visibleWorkspaces: () => workspaces,
+        stores: () => [],
+        failure: () => null,
         hidden: () => false,
         readOnly: () => null,
         subscribe: () => () => {},
@@ -91,6 +93,40 @@ describe("Sidebar", () => {
     const { getByText } = mount();
     expect(getByText("hh")).toBeTruthy();
     expect(getByText(location.host)).toBeTruthy();
+  });
+
+  it("古い形式の Store は消えずに、理由と hh store convert を出す。ほかの Store はそのまま", () => {
+    const { getByRole, getByText } = renderWithCore(
+      Sidebar,
+      {},
+      {
+        stores: {
+          workspaces: () => workspaces,
+          visibleWorkspaces: () => workspaces,
+          stores: () => [
+            { name: "old-one", hidden: false },
+            { name: "org-b/ops", hidden: false },
+          ],
+          failure: (n: string) =>
+            n === "old-one"
+              ? new ApiError({
+                  status: 422,
+                  type: "store.old_format",
+                  detail: "x",
+                  args: { name: "old-one" },
+                })
+              : null,
+          hidden: () => false,
+          readOnly: () => null,
+          subscribe: () => () => {},
+        },
+      },
+    );
+    expect(getByRole("alert")).toHaveTextContent(
+      "old-one は古い形式です。hh store convert で新しい形式にしてください",
+    );
+    expect(getByText("old-one")).toBeTruthy();
+    expect(getByRole("link", { name: /release/ })).toBeTruthy();
   });
 
   it("通知とアクティビティの行が出る", () => {
@@ -262,6 +298,8 @@ describe("Sidebar", () => {
     const hiddenOps = {
       workspaces: () => workspaces,
       visibleWorkspaces: () => workspaces.filter((w) => w.store !== "org-b/ops"),
+      stores: () => [],
+      failure: () => null,
       hidden: (s: string) => s === "org-b/ops",
       readOnly: () => null,
       subscribe: () => () => {},
@@ -389,6 +427,8 @@ describe("Sidebar", () => {
       stores: {
         workspaces: () => workspaces,
         visibleWorkspaces: () => workspaces,
+        stores: () => [],
+        failure: () => null,
         hidden: () => false,
         readOnly: (s: string) => (s === "org-b/ops" ? "the remote cannot be written" : null),
         subscribe: () => () => {},

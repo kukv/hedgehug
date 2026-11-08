@@ -71,6 +71,11 @@ describe("KindIcon", () => {
     }
   });
 
+  it("表にない種類は四角の形で描く", () => {
+    const { container } = render(KindIcon, { props: { kind: "initiative" } });
+    expect(container.querySelector("path")?.getAttribute("d")).toBe("M3 3h10v10H3z");
+  });
+
   it("step の形は task とも story とも違う", () => {
     const d = (kind: string) => {
       const r = render(KindIcon, { props: { kind } });

@@ -445,4 +445,28 @@ describe("StoreDirectory shared prefixes", () => {
     await settle();
     expect(dir.sharedPrefixes()).toBe(dir.sharedPrefixes());
   });
+
+  it("keeps why the workspaces of a store cannot be read, and the other stores stay usable", async () => {
+    const w: World = {
+      stores: [store("old", true), store("fresh")],
+      spaces: { fresh: [ws("W2", "web", "WEB")] },
+      projects: [],
+    };
+    const { api } = fakeApi((r) => {
+      if (r.path === "/api/stores") return w.stores;
+      if (r.path === "/api/workspaces") {
+        return r.query.get("store") === "old"
+          ? problem(422, "store.old_format", { name: "old" })
+          : w.spaces.fresh;
+      }
+      return { tasks: [] };
+    });
+    const conn = new FakeConn();
+    const cache = new TaskCache({ api, conn: conn.asConnection() });
+    const dir = new StoreDirectory({ api, conn: conn.asConnection(), cache });
+    await settle();
+    expect(dir.failure("old")?.type).toBe("store.old_format");
+    expect(dir.failure("fresh")).toBeNull();
+    expect(dir.workspaces().map((x) => x.store)).toEqual(["fresh"]);
+  });
 });

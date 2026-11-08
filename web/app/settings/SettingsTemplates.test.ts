@@ -15,14 +15,23 @@ const sch = (def?: Record<string, string>) =>
   }) as unknown as SchemaView;
 
 function setup(
-  over: { def?: Record<string, string>; off?: string | null; set?: () => unknown } = {},
+  over: {
+    def?: Record<string, string>;
+    off?: string | null;
+    set?: () => unknown;
+    none?: boolean;
+  } = {},
 ) {
   const api = {
     listTemplates: vi.fn(() =>
-      ok([
-        { name: "bug", children: 0 },
-        { name: "feature", children: 2 },
-      ]),
+      ok(
+        over.none
+          ? []
+          : [
+              { name: "bug", children: 0 },
+              { name: "feature", children: 2 },
+            ],
+      ),
     ),
     setTemplateDefaults: vi.fn(over.set ?? (() => ok({ schema: sch(), commit: "c" }))),
   };
@@ -79,6 +88,28 @@ describe("SettingsTemplates: 種類ごとの既定", () => {
         { store: "shared" },
       ),
     );
+  });
+
+  it("保存している間はほかの種類を選べず、終わると選べる", async () => {
+    let release: (v: unknown) => void = () => {};
+    const { api } = setup({
+      set: () => new Promise((r) => (release = r)),
+    });
+    const task = await screen.findByRole("combobox", { name: "Task の既定" });
+    await waitFor(() => expect(task.querySelectorAll("option")).toHaveLength(3));
+    await fireEvent.change(task, { target: { value: "feature" } });
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Bug の既定" })).toBeDisabled(),
+    );
+    release(await ok({ schema: sch(), commit: "c" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Bug の既定" })).toBeEnabled());
+    expect(api.setTemplateDefaults).toHaveBeenCalledTimes(1);
+  });
+
+  it("テンプレートが 1 つもなければ欄を出さない", async () => {
+    setup({ none: true });
+    await screen.findByText("種類ごとの既定のテンプレート");
+    expect(screen.queryByRole("combobox", { name: "Bug の既定" })).toBeNull();
   });
 
   it("書き込めない Store では選べない", async () => {

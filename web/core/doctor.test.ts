@@ -134,6 +134,19 @@ describe("findingText and findingHint", () => {
     expect(findingHint(x)).toBe("");
   });
 
+  it("say an old store format in Japanese, with the command to run", () => {
+    const x = f({
+      check: "file",
+      code: "store.old_format",
+      args: ["1", "2"],
+      hint: "hh store convert",
+    });
+    expect(findingText(x)).toBe(
+      "Store の形式が古いです（1、最新は 2）。hh store convert で新しい形式にしてください",
+    );
+    expect(findingHint(x)).toBe("hh store convert");
+  });
+
   it("say the problem of a task by its code, after its field", () => {
     const x = f({
       check: "task",

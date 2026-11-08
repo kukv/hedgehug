@@ -644,7 +644,7 @@
     const kind = pickKind(parent?.kind ?? null);
     if (!kind) {
       toast({
-        message: `${parent ? `${kindLabel(parent.kind)}の下` : "最上位"}に置ける種類がありません`,
+        message: `${parent ? `${kindLabel(parent.kind)} の下` : "最上位"}に置ける種類がありません`,
       });
       adding = null;
       return true;

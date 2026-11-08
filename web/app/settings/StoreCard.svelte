@@ -25,7 +25,9 @@
   const view = useSubscribe(c.stores, () => ({
     readOnly: c.stores.readOnly(store.name),
     tone: c.stores.tone(store.name),
+    failure: c.stores.failure(store.name),
   }));
+  const failure = $derived(view.current.failure ? errorMessage(view.current.failure) : null);
 
   const readOnly = $derived(view.current.readOnly);
   // The saved colour, else the colour of its place; grey while it cannot be written.
@@ -148,6 +150,9 @@
   {#if store.account}
     <p class="line mono">{store.account}</p>
   {/if}
+  {#if failure}
+    <p class="fail" role="alert">{failure}</p>
+  {/if}
   {#if cannotHide}
     <p id="{uid}-why" class="note">この Store は非表示にできません</p>
   {/if}
@@ -264,6 +269,11 @@
   .badge[data-kind="default"] {
     background: var(--accent-weak);
     color: var(--accent-ink);
+  }
+  .fail {
+    margin: 0;
+    color: var(--danger-ink);
+    font-size: var(--fs-12);
   }
   .why {
     color: var(--muted);

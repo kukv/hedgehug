@@ -8,6 +8,8 @@
     step: "M8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM6.2 8.1l1.4 1.4 2.4-2.8",
     bug: "M5.5 7a2.5 2.5 0 0 1 5 0v3a2.5 2.5 0 0 1-5 0zM8 7v5.5M5.5 9H2.8M13.2 9h-2.7M6 5.2L4.4 3.6M10 5.2l1.6-1.6M5.6 11.6l-1.8 1.4M10.4 11.6l1.8 1.4",
   };
+  // A name that is not a kind (a task of an old file) gets a plain square.
+  const workShape = "M3 3h10v10H3z";
 </script>
 
 <script lang="ts">
@@ -15,7 +17,7 @@
   let { kind, size = 16 }: Props = $props();
 
   // The shape is fixed per kind; bug is red and the others are the icon color.
-  const d = $derived(kinds[kind] ?? "");
+  const d = $derived(kinds[kind] ?? workShape);
   const tint = $derived(kind === "bug" ? "var(--danger)" : "var(--icon)");
 </script>
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   canPlace,
-  countsForProgress,
   defaultKindUnder,
   isGroup,
   KINDS,
@@ -38,14 +37,9 @@ describe("canPlace", () => {
   });
 });
 
-describe("isGroup / countsForProgress / kindLabel", () => {
-  it("グループは project と epic。進捗に数えるのは story・task・bug", () => {
+describe("isGroup / kindLabel", () => {
+  it("グループは project と epic", () => {
     expect(KINDS.filter((k) => isGroup(k.name)).map((k) => k.name)).toEqual(["project", "epic"]);
-    expect(KINDS.filter((k) => countsForProgress(k.name)).map((k) => k.name)).toEqual([
-      "story",
-      "task",
-      "bug",
-    ]);
     expect(isGroup("nowhere")).toBe(false);
   });
 
@@ -77,7 +71,7 @@ describe("parentRule", () => {
     expect(parentRule("epic")).toBe("Epic のどの下に置けるかは Project だけです");
     expect(parentRule("task")).toBe("Task のどの下に置けるかは Project・Epic だけです");
     expect(parentRule("step")).toBe("Step のどの下に置けるかは Story・Task・Bug だけです");
-    expect(parentRule("nowhere")).toBe("nowhere は親に置けません");
+    expect(parentRule("nowhere")).toBe("nowhere は種類にありません");
   });
 });
 

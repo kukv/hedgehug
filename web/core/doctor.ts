@@ -125,17 +125,15 @@ const TASK_PROBLEMS: Record<string, string> = {
 };
 
 const MESSAGES: Record<string, Words> = {
+  "store.old_format": ([from, to]) =>
+    `Store の形式が古いです（${from}、最新は ${to}）。hh store convert で新しい形式にしてください`,
   "schema.name_empty": () => "名前が空です",
   "schema.status_twice": ([n]) => `ステータス「${n}」が 2 回定義されています`,
   "schema.unknown_category": ([c]) => `「${c}」というカテゴリはありません`,
   "schema.default_status": ([c, n]) =>
     `カテゴリ${cat(c)}の既定のステータスは 1 つだけにしてください（今は ${n} 個）`,
-  "schema.kind_twice": ([n]) => `種類「${n}」が 2 回定義されています`,
-  "schema.unknown_role": ([r]) => `「${r}」という役割はありません（container か work です）`,
   "schema.bad_template_name": ([e]) => `テンプレートの名前が正しくありません: ${e}`,
   "schema.unknown_kind": ([k]) => `「${k}」という種類はありません`,
-  "schema.default_kind": ([n]) =>
-    `役割がアイテムの既定の種類は 1 つだけにしてください（今は ${n} 個）`,
   "schema.prop_builtin": ([n]) =>
     `「${n}」は組み込みのフィールドなので、プロパティの名前に使えません`,
   "schema.prop_twice": ([n]) => `プロパティ「${n}」が 2 回定義されています`,

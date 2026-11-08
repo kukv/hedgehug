@@ -46,6 +46,7 @@ function core(
     stores: {
       stores: () => names.map((name) => ({ name, hidden: name === "hidden" })),
       readOnly: (name: string) => readOnly[name] ?? null,
+      failure: () => null,
       tone: () => "teal",
       error: () => null,
       loaded: () => loaded,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { categoryOf } from "../../core/categories";
   import { cliReleaseNotes } from "../../core/cli";
+  import { kindLabel } from "../../core/kinds";
   import { errorMessage } from "../../core/messages";
   import {
     groupByKind,
@@ -192,7 +193,7 @@
           {#each groups as g (g.kind)}
             <div>
               <h3>
-                <KindIcon kind={g.kind} size={13} />{g.kind}<span class="mono"
+                <KindIcon kind={g.kind} size={13} />{kindLabel(g.kind)}<span class="mono"
                   >{g.tasks.length}</span
                 >
               </h3>

@@ -18,12 +18,13 @@
   const sc = useSubscribe(schema, () => schema.get(store));
   const defaults = $derived(sc.current?.templates?.default ?? {});
   let defaultsFailure = $state<string | null>(null);
-  $effect(() => {
-    void schema.load(store).catch(() => undefined);
-  });
+  // A change goes back with all the defaults, so the next one waits for it to be saved.
+  let defaultsBusy = $state(false);
 
   // The default template of a kind: all the defaults go back, with the one of this kind changed.
   async function setDefault(kind: string, name: string) {
+    if (defaultsBusy) return;
+    defaultsBusy = true;
     defaultsFailure = null;
     const { [kind]: _, ...rest } = defaults;
     try {
@@ -34,6 +35,8 @@
       await schema.reload(store);
     } catch (e) {
       defaultsFailure = errorMessage(e);
+    } finally {
+      defaultsBusy = false;
     }
   }
   const uid = $props.id();
@@ -215,17 +218,19 @@
 
 <section class="sec" aria-labelledby="{uid}-d">
   <h2 id="{uid}-d">種類ごとの既定のテンプレート</h2>
-  <p class="none">種類を指定せずに選ぶと使う、種類ごとのテンプレートです</p>
+  <p class="none">テンプレートを選ばずにその種類のタスクを作ると使うテンプレートです</p>
   {#if defaultsFailure}
     <FormError message={defaultsFailure} />
   {/if}
-  <KindTemplateDefaults
-    names={list.map((t) => t.name)}
-    values={defaults}
-    disabled={off !== null}
-    none={() => "なし"}
-    onchange={(k, n) => void setDefault(k, n)}
-  />
+  {#if list.length > 0}
+    <KindTemplateDefaults
+      names={list.map((t) => t.name)}
+      values={defaults}
+      disabled={off !== null || defaultsBusy}
+      none={() => "なし"}
+      onchange={(k, n) => void setDefault(k, n)}
+    />
+  {/if}
 </section>
 
 <style>

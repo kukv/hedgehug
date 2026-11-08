@@ -31,11 +31,6 @@ export const canPlace = (kind: string, parentKind: string | null): boolean =>
 // isGroup is whether kind groups work: a project or an epic.
 export const isGroup = (kind: string): boolean => kindOf(kind)?.role === "group";
 
-// countsForProgress is whether a task of kind counts in the progress of its project or
-// epic: a story, a task or a bug. A step does not.
-export const countsForProgress = (kind: string): boolean =>
-  kind === "story" || kind === "task" || kind === "bug";
-
 // defaultKindUnder is the kind of a task made without one, from the kind of its parent.
 export function defaultKindUnder(parentKind: string | null): string {
   if (parentKind === null) return "project";
@@ -51,7 +46,7 @@ export const kindsUnder = (parentKind: string | null): Kind[] =>
 // chosen: 「Epic のどの下に置けるかは Project だけです」.
 export function parentRule(kind: string): string {
   const k = kindOf(kind);
-  if (!k || k.parents.length === 0) return `${kindLabel(kind)} は親に置けません`;
+  if (!k) return `${kind} は種類にありません`;
   if (k.parents.length === 1 && k.parents[0] === null) return `${k.label} は最上位にだけ置けます`;
   const names = k.parents.map((p) => (p === null ? "最上位" : kindLabel(p)));
   return `${k.label} のどの下に置けるかは ${names.join("・")} だけです`;

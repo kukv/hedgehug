@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -20,6 +21,13 @@
   const { stores, cache, views, conn } = core();
   // What is hidden is left out here (細部 93).
   const workspaces = useSubscribe(stores, () => stores.visibleWorkspaces());
+  // A shown Store whose workspaces cannot be read (an old format, for one) says why where it would be.
+  const failures = useSubscribe(stores, () =>
+    stores
+      .stores()
+      .filter((s) => !s.hidden && stores.failure(s.name) !== null)
+      .map((s) => ({ name: s.name, text: errorMessage(stores.failure(s.name)) })),
+  );
   const storesRev = useSubscribe(stores, () => ({}));
   const savedViews = useSubscribe(views, () => views.list());
   const shownViews = $derived.by(() => {
@@ -246,6 +254,12 @@
             <span class="none">プロジェクトなし</span>
           {/if}
         </div>
+      </div>
+    {/each}
+    {#each failures.current as f (f.name)}
+      <div class="ws">
+        <span class="ws-title">{f.name}</span>
+        <p class="fail" role="alert">{f.text}</p>
       </div>
     {/each}
   </section>
@@ -493,6 +507,13 @@
     color: var(--label);
     font-family: var(--font-mono);
     font-size: var(--fs-11);
+  }
+  .fail {
+    margin: 0;
+    padding: 0 var(--space-8);
+    color: var(--danger-ink);
+    font-size: var(--fs-12);
+    line-height: 1.5;
   }
   .none {
     padding: var(--space-4) var(--space-8);
