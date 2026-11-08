@@ -50,10 +50,10 @@ $ hh store default personal
 personal
 $ hh add "Buy milk" --parent ME-1
 Added ME-2 (...) Buy milk
-→ added to personal / personal
-$ hh add "Plan the demo" --store team --parent WEB-1
-Added WEB-5 (...) Plan the demo
-→ added to team / team
+→ added to personal / Home
+$ hh add "Plan the demo" --store team --parent WEB-6
+Added WEB-8 (...) Plan the demo
+→ added to team / Website
 ```
 
 `hh use <project-id>` makes a project (a task of kind `project`) the place new tasks go

@@ -75,7 +75,7 @@ Restored WEB-1 (01M6QAZMHYRXKQJSTS7KTHA2GC) Write the login page
 
 ## remote が新しい形式になったとき
 
-ほかのクローンが `hh store convert` を実行して push したあと、push していないコミットが残っているクローンは、それを取り込めません。`hh sync` は `sync.format_diverged`（HTTP 409）で止まり、remote が新しい Store の形式を使っていて、このクローンに push していない変更があると知らせます。`hh store convert` を実行してください。push していない変更を新しい形式に変換し、remote と合わせて push します。push していないコミットのないクローンは、この状態になりません。`hh store convert` が fast-forward するだけです。[Store](stores.md#store-の形式と-hh-store-convert)を参照してください。
+ほかのクローンが `hh store convert` を実行して push したあと、push していないコミットが残っているクローンは、それを取り込めません。そのクローンは古い形式なので、`hh sync` は `store.old_format`（HTTP 422）で止まり、`hh store convert` を実行するよう案内します。実行してください。push していない変更を新しい形式に変換し、remote と合わせて push します。push していないコミットのないクローンも同じ操作で、`hh store convert` が fast-forward するだけです。[Store](stores.md#store-の形式と-hh-store-convert)を参照してください。
 
 ## origin の履歴が変わったとき
 

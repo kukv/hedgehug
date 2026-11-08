@@ -91,11 +91,10 @@ brings back a task deleted with `hh rm`, together with what the same `rm` delete
 ## When the remote is in a newer format
 
 When another clone has run `hh store convert` and pushed, a clone that still has
-unpushed commits cannot merge them: `hh sync` stops with `sync.format_diverged` (HTTP 409)
-and says that the remote uses a newer store format and this clone has changes that are not
-pushed. Run `hh store convert`. It converts your unpushed changes to the new format, merges
-them with the remote and pushes. A clone with no unpushed commits does not hit this:
-`hh store convert` just fast-forwards it. See [Stores](stores.md#the-store-format-and-hh-store-convert).
+unpushed commits cannot merge them. That clone is in the old format, so `hh sync` stops
+with `store.old_format` (HTTP 422) and tells you to run `hh store convert`. Run it: it
+converts your unpushed changes to the new format, merges them with the remote and pushes.
+A clone with no unpushed commits does the same, and `hh store convert` just fast-forwards it. See [Stores](stores.md#the-store-format-and-hh-store-convert).
 
 ## If the history of origin changes
 

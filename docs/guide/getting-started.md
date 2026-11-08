@@ -58,9 +58,10 @@ Added store team
 
 ```console
 $ hh ls
-ID     ULID                        STATUS  KIND  ASSIGNEES         LABELS  TITLE
-WEB-1  01M6QAZMHYRXKQJSTS7KTHA2GC  todo    task  github.com/alice  ui      Write the login page
-WEB-2  01M6QAZMJND1BXZNFVP2PXHFHP  done    bug                             Fix the logout bug
+ID     ULID                        STATUS  KIND     ASSIGNEES         LABELS  TITLE
+WEB-1  01M6QAZMHYRXKQJSTS7KTHA2GC  todo    task     github.com/alice  ui      Write the login page
+WEB-2  01M6QAZMJND1BXZNFVP2PXHFHP  done    bug                                Fix the logout bug
+WEB-6  01M6QAZMK2R3Z8Y1W9E4T7H5BD  todo    project                            Website
 ```
 
 `hh show WEB-1` shows one task with its history. `hh ls status:todo` filters, and
