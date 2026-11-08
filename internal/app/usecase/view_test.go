@@ -21,8 +21,9 @@ func scalar(v string) *yaml.Node {
 func TestTaskViewOf(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	blocker := ts.AddTask("blocker", nil)
+	blocker := ts.AddTask("blocker", func(x *model.Task) { x.Kind = "project" }) // a project: it needs no parent
 	task := ts.AddTask("the task", func(x *model.Task) {
+		x.Kind = "project"
 		x.Assignees = []string{"alice"}
 		x.BlockedBy = []model.ULID{blocker.ULID}
 		x.Props.Set("priority", scalar("high"))
@@ -37,7 +38,7 @@ func TestTaskViewOf(t *testing.T) {
 		t.Fatal("task is not in the index")
 	}
 	v := usecase.TaskViewOf(ix, e)
-	if v.ULID != task.ULID.String() || v.ID != task.ID || v.Title != "the task" || v.Kind != "task" || v.Status != "todo" {
+	if v.ULID != task.ULID.String() || v.ID != task.ID || v.Title != "the task" || v.Kind != "project" || v.Status != "todo" {
 		t.Errorf("view = %+v", v)
 	}
 	if v.Workspace == nil || *v.Workspace != (usecase.WorkspaceRef{ULID: task.Workspace.String(), Name: "me", IDPrefix: "ME", Known: true}) {

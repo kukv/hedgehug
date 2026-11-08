@@ -43,7 +43,8 @@ func newStoreAt(t *testing.T, name string, wss ...string) config.StoreEntry {
 	return config.StoreEntry{Name: name, Path: dir}
 }
 
-// put writes one task into the first workspace of e, after edit changed it.
+// put writes one task into the first workspace of e, after edit changed it. It is
+// a project unless edit says otherwise: only a project can be at the root.
 func put(t *testing.T, e config.StoreEntry, title string, edit func(*model.Task)) *model.Task {
 	t.Helper()
 	s, err := store.Open(e.Path)
@@ -59,7 +60,7 @@ func put(t *testing.T, e config.StoreEntry, title string, edit func(*model.Task)
 			ws = w.ULID
 		}
 	}
-	task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "task", Status: "todo", Workspace: ws}
+	task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "project", Status: "todo", Workspace: ws}
 	if edit != nil {
 		edit(task)
 	}
@@ -74,7 +75,7 @@ func project(repos ...string) func(*model.Task) {
 }
 
 // world is org-a (workspace api, API) and org-b (workspace web, WEB): API-1 is a
-// project and API-2 a task in org-a, WEB-1 a task in org-b.
+// project and API-2 a task under it in org-a, WEB-1 a project in org-b.
 type world struct {
 	a, b       config.StoreEntry
 	api1, api2 *model.Task
@@ -85,7 +86,7 @@ func newWorld(t *testing.T) (*world, *mount.Set) {
 	t.Helper()
 	w := &world{a: newStoreAt(t, "org-a", "api", "API"), b: newStoreAt(t, "org-b", "web", "WEB")}
 	w.api1 = put(t, w.a, "API project", project())
-	w.api2 = put(t, w.a, "API task", nil)
+	w.api2 = put(t, w.a, "API task", func(x *model.Task) { x.Kind, x.Parent = "task", &w.api1.ULID })
 	w.web1 = put(t, w.b, "Web task", nil)
 	return w, usecasetest.OpenSet(t, w.a, w.b)
 }

@@ -409,14 +409,14 @@ func TestAnUnusableFileStopsTheSyncOfIssues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := integration.Link(ts.Session, "ME-2", integration.LinkInput{Issue: "org-a/web#" + itoa(p), Sync: model.SyncPush}); err != nil {
+	if _, err := integration.Link(ts.Session, "ME-3", integration.LinkInput{Issue: "org-a/web#" + itoa(p), Sync: model.SyncPush}); err != nil {
 		t.Fatal(err)
 	}
 	refetch(t, ts)
 	if err := fake.EditIssue("org-a/web", m, "theirs", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Set(ts.Session, "ME-2", assign(t, "title=mine")); err != nil {
+	if _, err := tasks.Set(ts.Session, "ME-3", assign(t, "title=mine")); err != nil {
 		t.Fatal(err)
 	}
 	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {

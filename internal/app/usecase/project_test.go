@@ -30,9 +30,6 @@ func TestTaskViewProject(t *testing.T) {
 	grand := add(tasks.AddInput{Title: "grand", Parent: child.ULID})
 	epic := add(tasks.AddInput{Title: "E", Kind: "epic", Parent: proj.ULID})
 	underEpic := add(tasks.AddInput{Title: "under epic", Parent: epic.ULID})
-	loose := add(tasks.AddInput{Title: "loose"})
-	rootEpic := add(tasks.AddInput{Title: "RE", Kind: "epic"})
-	rootEpicChild := add(tasks.AddInput{Title: "under a root epic", Parent: rootEpic.ULID})
 
 	// read after all the adds, as a reader gets it
 	_, ix, err := ts.Open()
@@ -57,9 +54,7 @@ func TestTaskViewProject(t *testing.T) {
 	check("a grandchild", grand, proj)
 	check("a task under an epic: the project above the epic", underEpic, proj)
 	check("the epic under the project", epic, proj)
-	check("an epic at the root: no project", rootEpicChild, nil)
 	check("the project itself: not itself", proj, nil)
-	check("a task with no parent", loose, nil)
 }
 
 // A parent the index does not have, and a task that is its own parent, end

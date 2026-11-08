@@ -86,7 +86,10 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 	if err != nil || rc.Commit != head() {
 		t.Errorf("CommentRemove = %+v, %v; want Commit = HEAD", rc, err)
 	}
-	mv, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-2", Root: true})
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "d"}); err != nil { // ME-3, another project
+		t.Fatal(err)
+	}
+	mv, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-2", Parent: "ME-3"})
 	if err != nil || !mv.Committed || mv.Commit != head() {
 		t.Errorf("Move = %+v, %v; want Commit = HEAD", mv, err)
 	}

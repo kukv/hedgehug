@@ -156,7 +156,7 @@ func TestSecondIDsStayInsideTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	web := usecasetest.UlidOf(t, ts, "WEB-1")
-	edited := bytes.Replace(es.Bytes, []byte("kind: task\n"), []byte("kind: task\nblocked_by: ["+web.String()+"]\n"), 1)
+	edited := bytes.Replace(es.Bytes, []byte("kind: project\n"), []byte("kind: project\nblocked_by: ["+web.String()+"]\n"), 1)
 	nt, err := tasks.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
 	if err != nil {
 		t.Fatal(err)
