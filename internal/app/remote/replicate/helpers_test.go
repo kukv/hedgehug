@@ -108,7 +108,7 @@ func (c *cluster) addTask(i int, title string) *model.Task {
 		c.t.Fatal(err)
 	}
 	c.last = r
-	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "task", Title: title, Status: "todo", Rank: r}
+	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "project", Title: title, Status: "todo", Rank: r}
 	if _, err := s.Update(c.op(i, "add", x.ULID), func(tx *store.Tx) error { return tx.PutTask(x) }); err != nil {
 		c.t.Fatal(err)
 	}

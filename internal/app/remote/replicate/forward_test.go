@@ -47,7 +47,7 @@ func TestSyncForwardWinsAndRepairs(t *testing.T) {
 	fresh := model.NewULID()
 	c.comment(1, x.ULID, "new\n", fresh)
 	child := c.addTask(1, "child")
-	c.set(1, child.ULID, func(t *model.Task) { p := x.ULID; t.Parent = &p })
+	c.set(1, child.ULID, func(t *model.Task) { p := x.ULID; t.Parent, t.Kind = &p, "task" })
 	c.set(1, z.ULID, func(t *model.Task) { t.BlockedBy = []model.ULID{x.ULID} })
 
 	c.sync(0)

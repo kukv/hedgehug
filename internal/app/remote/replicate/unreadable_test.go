@@ -71,7 +71,7 @@ func TestMergeFailsOnUnreadableFile(t *testing.T) {
 	c.addTask(0, "x")
 	c.sync(0)
 	y := c.addTask(1, "y")
-	c.set(1, y.ULID, func(t *model.Task) { p := a.ULID; t.Parent = &p })
+	c.set(1, y.ULID, func(t *model.Task) { p := a.ULID; t.Parent, t.Kind = &p, "task" })
 	c.hideFile(1, model.TaskPath(a.ULID))
 	head, origin := mustHead(t, c.stores[1]), remoteHead(t, c)
 	if r, err := Run(c.stores[1], c.opts[1]); err == nil {

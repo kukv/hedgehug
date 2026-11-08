@@ -203,15 +203,18 @@ func (c *cluster) wsOp(i int, w model.ULID) store.Op {
 	return o
 }
 
+func isProject(t *model.Task) bool { return t.Kind == "project" }
+
 func opAdd(c *cluster, i int, rnd *rand.Rand) []write {
 	v := c.view(i)
 	ws := v.pickWS(rnd, func(*model.Workspace) bool { return true })
 	if ws == nil {
 		return nil
 	}
-	x := &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "task", Title: word(rnd, "t"), Status: "todo", Rank: c.nextRank()}
-	if p := v.pickTask(rnd, func(t *model.Task) bool { return live(t) && t.Workspace == ws.ULID && rnd.IntN(2) == 0 }); p != nil {
-		x.Parent = &p.ULID
+	// The kinds are fixed: a project at the root, a task under a project.
+	x := &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "project", Title: word(rnd, "t"), Status: "todo", Rank: c.nextRank()}
+	if p := v.pickTask(rnd, func(t *model.Task) bool { return live(t) && isProject(t) && t.Workspace == ws.ULID && rnd.IntN(2) == 0 }); p != nil {
+		x.Parent, x.Kind = &p.ULID, "task"
 	}
 	h, ok := c.update(i, c.taskOp(i, "add", x.ULID), func(tx *store.Tx) error { return tx.PutTask(x) })
 	if !ok {
@@ -273,11 +276,12 @@ func opMove(c *cluster, i int, rnd *rand.Rand) []write {
 	if t == nil {
 		return nil
 	}
-	under := v.subtree(t.ULID)
 	var p *model.ULID
-	if q := v.pickTask(rnd, func(x *model.Task) bool {
-		return live(x) && x.Workspace == t.Workspace && !slices.Contains(under, x.ULID) && rnd.IntN(3) > 0
-	}); q != nil {
+	if !isProject(t) { // a project stays at the root; a task goes under a project
+		q := v.pickTask(rnd, func(x *model.Task) bool { return live(x) && isProject(x) && x.Workspace == t.Workspace })
+		if q == nil {
+			return nil
+		}
 		p = &q.ULID
 	}
 	rank := c.nextRank()
@@ -308,7 +312,11 @@ func opMoveWS(c *cluster, i int, rnd *rand.Rand) []write {
 		return nil
 	}
 	var p *model.ULID
-	if q := v.pickTask(rnd, func(x *model.Task) bool { return live(x) && x.Workspace == to.ULID && rnd.IntN(2) == 0 }); q != nil {
+	if !isProject(t) {
+		q := v.pickTask(rnd, func(x *model.Task) bool { return live(x) && isProject(x) && x.Workspace == to.ULID })
+		if q == nil {
+			return nil
+		}
 		p = &q.ULID
 	}
 	rank := c.nextRank()
