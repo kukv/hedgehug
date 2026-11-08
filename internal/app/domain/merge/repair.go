@@ -434,44 +434,68 @@ func (r *repairer) uncategorized(w model.ULID) (*model.ULID, error) {
 	if ws == nil {
 		return nil, nil
 	}
-	for _, u := range r.order {
-		if t := r.tasks[u]; t.Workspace == w && t.Kind == "project" && t.Parent == nil && t.DeletedAt == nil && t.Title == Uncategorized {
-			return &t.ULID, nil
+	u, exists := PickUncategorized(ws, r.order, func(u model.ULID) *model.Task { return r.tasks[u] },
+		func(u model.ULID) bool { return r.brokenIDs[u] || r.forwards[u] })
+	if exists {
+		return &u, nil
+	}
+	t := UncategorizedTask(u, ws, TodoStatus(r.sc))
+	if err := r.toEnd(t); err != nil {
+		return nil, err
+	}
+	r.tasks[u] = t
+	r.order = append(r.order, u)
+	slices.SortFunc(r.order, compareULIDs)
+	r.dirty[u] = true
+	r.moved[u] = true // numbered, with no id_renumbered to tell of
+	return &t.ULID, nil
+}
+
+// PickUncategorized finds the 未分類 project of the workspace ws among the
+// tasks of order (task gives one by ULID, nil when there is none): the first
+// live root project with that title, else a project of the derived ULIDs of
+// ws (the first is made from ws alone, the next ones add a number) that is
+// live and at the root, even when it was renamed, else the first of them that
+// nothing uses (taken says a file other than a task uses it). exists tells
+// whether the project is there; when it is not, u is the ULID to make it at.
+// The ULIDs come from the workspace, so clones that make it make the same
+// file; hh store convert makes it the same way.
+func PickUncategorized(ws *model.Workspace, order []model.ULID, task func(model.ULID) *model.Task, taken func(model.ULID) bool) (u model.ULID, exists bool) {
+	for _, o := range order {
+		if t := task(o); t.Workspace == ws.ULID && t.Kind == "project" && t.Parent == nil && t.DeletedAt == nil && t.Title == Uncategorized {
+			return t.ULID, true
 		}
 	}
 	for n := 0; ; n++ {
-		seed := "uncategorized " + w.String()
+		seed := "uncategorized " + ws.ULID.String()
 		if n > 0 {
 			seed += " " + strconv.Itoa(n)
 		}
 		u := model.DerivedULID(ws.Created, seed)
-		if t := r.tasks[u]; t != nil && t.Workspace == w && t.Kind == "project" && t.Parent == nil && t.DeletedAt == nil {
-			return &t.ULID, nil
+		if t := task(u); t != nil && t.Workspace == ws.ULID && t.Kind == "project" && t.Parent == nil && t.DeletedAt == nil {
+			return u, true
 		}
-		if r.tasks[u] != nil || r.brokenIDs[u] || r.forwards[u] {
+		if task(u) != nil || taken(u) {
 			continue // taken by something else (deleted, moved, another kind)
 		}
-		t := &model.Task{ULID: u, Workspace: w, Kind: "project", Title: Uncategorized, Status: r.todoStatus(), Created: ws.Created}
-		if err := r.toEnd(t); err != nil {
-			return nil, err
-		}
-		r.tasks[u] = t
-		r.order = append(r.order, u)
-		slices.SortFunc(r.order, compareULIDs)
-		r.dirty[u] = true
-		r.moved[u] = true // numbered, with no id_renumbered to tell of
-		return &t.ULID, nil
+		return u, false
 	}
 }
 
-// todoStatus is the status a task made by the repair starts in: the default
-// of the todo category of the schema of the store, else the first status of
-// that category.
-func (r *repairer) todoStatus() string {
-	if st, ok := r.sc.DefaultStatus(schema.CategoryTodo); ok {
+// UncategorizedTask is the 未分類 project to make at u in the workspace ws,
+// starting in status. It has no id, rank or update time yet.
+func UncategorizedTask(u model.ULID, ws *model.Workspace, status string) *model.Task {
+	return &model.Task{ULID: u, Workspace: ws.ULID, Kind: "project", Title: Uncategorized, Status: status, Created: ws.Created}
+}
+
+// TodoStatus is the status a task made by hedgehug on its own starts in: the
+// default of the todo category of the schema, else the first status of that
+// category.
+func TodoStatus(sc *schema.Schema) string {
+	if st, ok := sc.DefaultStatus(schema.CategoryTodo); ok {
 		return st.Name
 	}
-	for _, st := range r.sc.Statuses {
+	for _, st := range sc.Statuses {
 		if st.Category == schema.CategoryTodo {
 			return st.Name
 		}

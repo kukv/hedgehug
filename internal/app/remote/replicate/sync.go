@@ -512,6 +512,9 @@ func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing
 		}
 	}
 	bt, ht, rt := trees[0], trees[1], trees[2]
+	if err := checkFormats(r, ours, theirs); err != nil {
+		return nil, err
+	}
 	oursDiff, err := r.DiffTrees(bt, ht, "")
 	if err != nil {
 		return nil, err

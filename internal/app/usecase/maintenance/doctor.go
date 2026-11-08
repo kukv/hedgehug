@@ -57,6 +57,22 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 			Code: "store_meta.unreadable", Args: []string{err.Error()},
 		})
 	}
+	// A store in an older format is told of, and not checked against the
+	// schema or the tasks: they are in the old form until hh store convert.
+	old := false
+	if metaOK {
+		if data, err := osfs.ReadFile(filepath.Join(dir, filepath.FromSlash(model.StoreMetaPath))); err == nil {
+			if m, err := model.DecodeStoreMeta(data); err == nil && m.OldFormat() {
+				old = true
+				out = append(out, usecase.Finding{
+					Check: "file", Where: model.StoreMetaPath,
+					Msg:  fmt.Sprintf("the store is in format %d, and this version uses format %d", m.Format, model.StoreFormat),
+					Hint: "hh store convert",
+					Code: "store.old_format", Args: []string{strconv.Itoa(m.Format), strconv.Itoa(model.StoreFormat)},
+				})
+			}
+		}
+	}
 	np, err := checkNumbers(dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		np = schema.NewProblem("", "file.unreadable", "%v", err)
@@ -70,20 +86,22 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 	}
 	schemaOK := false
 	var sch *schema.Schema
-	if data, err := osfs.ReadFile(filepath.Join(dir, schema.Path)); err != nil {
-		out = append(out, usecase.Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: usecase.BrokenSchemaHint, Code: "schema.unreadable", Args: []string{err.Error()}})
-	} else {
-		sc, fs := usecase.CheckSchemaFile(data)
-		out = append(out, fs...)
-		schemaOK = sc != nil
-		sch = sc
-	}
-	if !schemaOK {
-		out = append(out, usecase.Finding{
-			Check: "schema", Where: schema.Path,
-			Msg:  "the tasks are not checked against the schema, because schema.yaml is not readable; that check is skipped",
-			Code: "schema.tasks_skipped",
-		})
+	if !old {
+		if data, err := osfs.ReadFile(filepath.Join(dir, schema.Path)); err != nil {
+			out = append(out, usecase.Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: usecase.BrokenSchemaHint, Code: "schema.unreadable", Args: []string{err.Error()}})
+		} else {
+			sc, fs := usecase.CheckSchemaFile(data)
+			out = append(out, fs...)
+			schemaOK = sc != nil
+			sch = sc
+		}
+		if !schemaOK {
+			out = append(out, usecase.Finding{
+				Check: "schema", Where: schema.Path,
+				Msg:  "the tasks are not checked against the schema, because schema.yaml is not readable; that check is skipped",
+				Code: "schema.tasks_skipped",
+			})
+		}
 	}
 
 	// 2. the files of the work tree.
@@ -135,7 +153,7 @@ func Run(dir string, getenv func(string) string) ([]usecase.Finding, error) {
 	}
 
 	// 5. the schema against the tasks.
-	if metaOK && schemaOK {
+	if metaOK && schemaOK && !old {
 		out = append(out, checkStore(dir)...)
 	}
 	usecase.SortFindings(out)
