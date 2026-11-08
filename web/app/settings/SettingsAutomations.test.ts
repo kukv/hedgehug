@@ -221,24 +221,26 @@ describe("SettingsAutomations", () => {
     );
   });
 
-  it("takes in issues under a project or at the root of a workspace", async () => {
+  it("takes in issues under a project, the only place the root leaves", async () => {
     const { api } = setup();
     await fireEvent.input(await screen.findByLabelText("リポジトリ"), {
       target: { value: "org-a/web" },
     });
     await fireEvent.input(screen.getByLabelText("ラベル"), { target: { value: "v2" } });
-    await fireEvent.change(screen.getByLabelText("作成先"), { target: { value: "W1" } });
-    await screen.findByText("$ hh gh import org-a/web --label v2 --workspace dev");
+    // the root holds only projects: the workspace is no place to take issues in
+    expect(screen.getByLabelText("作成先")).toHaveValue("P1");
+    expect(screen.queryByRole("option", { name: /のルート/ })).toBeNull();
+    await screen.findByText("$ hh gh import org-a/web --label v2 --parent REL-1");
     await fireEvent.click(screen.getByRole("button", { name: "件数を確認する" }));
     await screen.findByText(/open の Issue 3 件 · うち 1\s+件はリンク済み/);
     expect(api.importIssues).toHaveBeenLastCalledWith(
-      { repo: "org-a/web", label: "v2", workspace: "dev", dry_run: true },
+      { repo: "org-a/web", label: "v2", parent: "P1", dry_run: true },
       { store: "shared" },
     );
     await fireEvent.click(screen.getByRole("button", { name: /3\s+件を mirror で取り込む/ }));
     await waitFor(() =>
       expect(api.importIssues).toHaveBeenLastCalledWith(
-        expect.objectContaining({ dry_run: false, workspace: "dev" }),
+        expect.objectContaining({ dry_run: false, parent: "P1" }),
         { store: "shared" },
       ),
     );

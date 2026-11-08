@@ -440,12 +440,6 @@ describe("cliMvStore", () => {
 });
 
 describe("the commands of phase 5d-3", () => {
-  it("writes where issues are taken in", () => {
-    expect(cliGhImport({ repo: "org-a/web", label: "v2", workspace: "dev" })).toBe(
-      "hh gh import org-a/web --label v2 --workspace dev",
-    );
-  });
-
   it("writes hh issue with and without a repository", () => {
     expect(cliIssue("REL-1")).toBe("hh issue REL-1");
     expect(cliIssue("REL-1", "org-a/web")).toBe("hh issue REL-1 --repo org-a/web");

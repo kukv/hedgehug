@@ -107,13 +107,20 @@ export type NotificationText = { label: string; text: string; mine?: string };
 
 const MOVED_AWAY = "移動先のワークスペースにはありません";
 
+/** Whether a repair of a parent put the task under another task (value.to) and not at the root. */
+function movedTo(value: unknown): boolean {
+  return "to" in obj(value) && obj(value).to != null;
+}
+
 /** The sentence of a repair kind this knows, or null. */
 export function repairedKnownText(detail: Obj): string | null {
   const kind = str(detail.kind);
   const value = detail.value;
   switch (kind) {
     case "parent_moved":
-      return "親が別の Store へ移ったため、ルートに移しました";
+      return movedTo(value)
+        ? "親が別の Store へ移ったため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました"
+        : "親が別の Store へ移ったため、ルートに移しました";
     case "ref_moved": {
       const field = str(obj(value).field);
       return field
@@ -137,7 +144,9 @@ export function repairedKnownText(detail: Obj): string | null {
       break;
     }
     case "parent_deleted":
-      return "親が削除されたため、ルートに移しました";
+      return movedTo(value)
+        ? "親が削除されたため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました"
+        : "親が削除されたため、ルートに移しました";
   }
   return null;
 }

@@ -105,6 +105,9 @@ describe("fixedText", () => {
     expect(fixedText("parent_deleted", { from: "01P", to: null })).toBe(
       "親が削除されたため、ルートに移しました",
     );
+    expect(fixedText("parent_deleted", { from: "01P", to: "01Q" })).toBe(
+      "親が削除されたため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました",
+    );
   });
 
   it("a kind it does not know is written as it is", () => {

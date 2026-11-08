@@ -222,6 +222,12 @@ describe("notificationText", () => {
     expect(t({ kind: "parent_deleted", value: { from: "A", to: null } })).toBe(
       "親が削除されたため、ルートに移しました",
     );
+    expect(t({ kind: "parent_deleted", value: { from: "A", to: "B" } })).toBe(
+      "親が削除されたため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました",
+    );
+    expect(t({ kind: "parent_moved", value: { from: "A", to: "B" } })).toBe(
+      "親が別の Store へ移ったため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました",
+    );
     expect(t({ kind: "other_repair", value: 3 })).toBe("同期の修復: other_repair（元の値: 3）");
     expect(t({ kind: "other_repair" })).toBe("同期の修復: other_repair");
     expect(t(undefined)).toBe("同期の修復");

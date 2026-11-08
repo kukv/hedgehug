@@ -53,7 +53,7 @@ of the kind is expanded, unless --no-template.`,
 	f := cmd.Flags()
 	f.StringVar(&parent, "parent", "", "the parent task")
 	f.StringVar(&project, "project", "", "the project to add under (a task of kind project)")
-	f.StringVar(&kind, "kind", "", "the kind (default: task)")
+	f.StringVar(&kind, "kind", "", "the kind (default: from the parent: project at the root, task under a project or an epic, step under a story, a task or a bug)")
 	f.StringVar(&status, "status", "", "the status (default: the default status of the todo category)")
 	f.StringVar(&workspace, "workspace", "", "the workspace (default: the parent's, or the only one)")
 	f.StringVar(&before, "before", "", "put it just before this sibling (without --parent, under the sibling's parent)")
