@@ -52,7 +52,7 @@ func writeTaskAs(t *testing.T, s *store.Store, account string, u model.ULID, tit
 	t.Helper()
 	ws := workspace(t, s)
 	h, err := s.UpdateCommit(store.Op{Name: "update", Task: u, Author: testAuthor, Account: account}, func(tx *store.Tx) error {
-		return tx.PutTask(&model.Task{ULID: u, Kind: "task", Title: title, Status: "todo", Workspace: ws})
+		return tx.PutTask(&model.Task{ULID: u, Kind: "project", Title: title, Status: "todo", Workspace: ws})
 	})
 	if err != nil || h.IsZero() {
 		t.Fatalf("write task: %v, %v", h, err)

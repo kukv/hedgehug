@@ -49,7 +49,7 @@ func TestPutAndRemoveWorkspace(t *testing.T) {
 func TestPurgeRecordsNumbers(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)
-	task := &model.Task{ULID: model.NewULID(), Workspace: testWorkspace(t, s).ULID, Kind: "task", Title: "x", Status: "todo", ID: "TST-9", FormerIDs: []string{"OLD-12"}}
+	task := &model.Task{ULID: model.NewULID(), Workspace: testWorkspace(t, s).ULID, Kind: "project", Title: "x", Status: "todo", ID: "TST-9", FormerIDs: []string{"OLD-12"}}
 	if err := put(s, task); err != nil {
 		t.Fatal(err)
 	}

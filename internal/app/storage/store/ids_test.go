@@ -15,7 +15,7 @@ import (
 )
 
 func newTaskIn(ws *model.Workspace, title string) *model.Task {
-	return &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "project", Title: title, Status: "todo"}
 }
 
 func TestAssignIDs(t *testing.T) {

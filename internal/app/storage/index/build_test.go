@@ -147,7 +147,7 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: project\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
 	ix := mustOpen(t, s)
 	if e, _ := ix.Task(task.ULID); len(e.Violations) != 0 {
 		t.Fatalf("violations = %v", e.Violations)
@@ -169,14 +169,16 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 func TestRefreshRevalidatesChildren(t *testing.T) {
 	t.Parallel()
 	s, _ := newStore(t)
-	parent, child := newTask("parent"), newTask("child")
-	parent.Kind, child.Kind = "epic", "story"
+	top, parent, child := newTask("top"), newTask("parent"), newTask("child")
+	parent.Kind, child.Kind = "project", "epic"
 	child.Parent = &parent.ULID
 	put(t, s, parent, child)
 	ix := mustOpen(t, s)
 
-	parent.Kind = "task" // a story cannot sit under a task
-	put(t, s, parent)
+	// an epic cannot sit under an epic: the old violation is not new, so the
+	// parent is first made an epic under a project
+	parent.Kind, parent.Parent = "epic", &top.ULID
+	put(t, s, top, parent)
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +209,7 @@ func TestProblemsFollowRefresh(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: project\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
 	ix := mustOpen(t, s)
 	if len(ix.Problems(task.ULID)) != 0 {
 		t.Fatalf("Problems = %v", ix.Problems(task.ULID))
@@ -228,13 +230,13 @@ func TestProblemsFollowRefresh(t *testing.T) {
 func TestProblemsFollowParentKind(t *testing.T) {
 	t.Parallel()
 	s, _ := newStore(t)
-	parent, child := newTask("parent"), newTask("child")
-	parent.Kind, child.Kind = "epic", "story"
+	top, parent, child := newTask("top"), newTask("parent"), newTask("child")
+	parent.Kind, child.Kind = "project", "epic"
 	child.Parent = &parent.ULID
 	put(t, s, parent, child)
 	ix := mustOpen(t, s)
-	parent.Kind = "task"
-	put(t, s, parent)
+	parent.Kind, parent.Parent = "epic", &top.ULID
+	put(t, s, top, parent)
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}

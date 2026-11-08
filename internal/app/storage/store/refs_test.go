@@ -37,7 +37,39 @@ func ulidList(ulids ...model.ULID) *yaml.Node {
 	return n
 }
 
+// settleKinds gives the tasks that have a parent, and the default kind of
+// newTask (project), the kind a task has under that parent. A test that wants
+// another kind sets it.
+func settleKinds(s *Store, tasks []*model.Task) {
+	by := map[model.ULID]*model.Task{}
+	for _, t := range tasks {
+		by[t.ULID] = t
+	}
+	seen := map[model.ULID]bool{} // a cycle of parents ends the walk
+	var kindOf func(t *model.Task) string
+	kindOf = func(t *model.Task) string {
+		if seen[t.ULID] {
+			return t.Kind
+		}
+		seen[t.ULID] = true
+		if t.Parent != nil && t.Kind == "project" {
+			parentKind := ""
+			if p, ok := by[*t.Parent]; ok {
+				parentKind = kindOf(p)
+			} else if p, err := s.Task(*t.Parent); err == nil {
+				parentKind = p.Kind
+			}
+			t.Kind = schema.DefaultKindUnder(parentKind)
+		}
+		return t.Kind
+	}
+	for _, t := range tasks {
+		kindOf(t)
+	}
+}
+
 func put(s *Store, tasks ...*model.Task) error {
+	settleKinds(s, tasks)
 	_, err := s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
 		for _, t := range tasks {
 			if err := tx.PutTask(t); err != nil {

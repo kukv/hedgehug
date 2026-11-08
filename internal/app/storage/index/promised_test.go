@@ -64,9 +64,10 @@ func TestOpenCacheEqualsRebuild(t *testing.T) {
 	s, dir := newStore(t)
 	p := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "P", Status: "todo"}
 	child := newTask("child")
-	child.Parent = &p.ULID
+	child.Kind, child.Parent = "task", &p.ULID
 	child.Labels = []string{"x", "y"}
 	other := newTask("other")
+	other.Kind, other.Parent = "task", &p.ULID
 	other.BlockedBy = []model.ULID{child.ULID}
 	other.Repos = []string{"github.com/o/r"}
 	other.Links = []model.Link{
@@ -74,6 +75,7 @@ func TestOpenCacheEqualsRebuild(t *testing.T) {
 		{Type: model.LinkIssue, Ref: "github.com/o/r/issues/2", Sync: model.SyncOff},
 	}
 	gone := newTask("gone")
+	gone.Kind, gone.Parent = "task", &p.ULID
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	gone.DeletedAt = &now
 	put(t, s, p, child, other, gone)

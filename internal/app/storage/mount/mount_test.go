@@ -76,7 +76,7 @@ func TestOpenGivesTheClockToTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task := &model.Task{ULID: model.NewULID(), Title: "t", Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID}
+	task := &model.Task{ULID: model.NewULID(), Title: "t", Kind: "project", Status: "todo", Workspace: ix.Workspaces()[0].ULID}
 	if _, err := m.Store.Update(store.Op{Name: "add", Author: mounttest.Author}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 		t.Fatal(err)
 	}

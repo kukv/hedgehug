@@ -19,6 +19,9 @@ func displayIDs(t *testing.T, set *Set) map[string]string {
 			t.Fatal(err)
 		}
 		for _, e := range ix.Tasks() {
+			if e.Title == "fixture project" {
+				continue
+			}
 			out[m.Name] = ix.DisplayID(e)
 		}
 	}

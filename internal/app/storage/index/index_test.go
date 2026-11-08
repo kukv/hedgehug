@@ -18,8 +18,9 @@ func TestOpenIndexesTasks(t *testing.T) {
 	t.Parallel()
 	s, _ := newStore(t)
 	epic := newTask("Epic")
-	epic.Kind = "epic"
+	epic.Kind = "project"
 	first, second := newTask("First"), newTask("Second")
+	first.Kind, second.Kind = "task", "task"
 	first.Parent, second.Parent = &epic.ULID, &epic.ULID
 	first.Rank, second.Rank = "a1", "a0"
 	first.Labels = []string{"backend"}
@@ -85,8 +86,8 @@ func TestOpenViolations(t *testing.T) {
 	put(t, s, parent)
 	unknown, misplaced, orphan := model.NewULID(), model.NewULID(), model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(unknown), rawTask(unknown, "kind: nope\ntitle: x\nstatus: todo\n"))
-	// A bug cannot sit under a task.
-	commitRaw(t, s, dir, model.TaskPath(misplaced), rawTask(misplaced, "kind: bug\ntitle: x\nstatus: todo\nparent: "+parent.ULID.String()+"\n"))
+	// A project cannot sit under a project.
+	commitRaw(t, s, dir, model.TaskPath(misplaced), rawTask(misplaced, "kind: project\ntitle: x\nstatus: todo\nparent: "+parent.ULID.String()+"\n"))
 	// The parent is missing, so its kind is unknown: placement is not checked.
 	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: epic\ntitle: x\nstatus: todo\nparent: "+model.NewULID().String()+"\n"))
 
@@ -166,10 +167,10 @@ func TestSiblingULIDsTreatsAMissingParentAsTheTopLevel(t *testing.T) {
 	root, child := newTask("root"), newTask("child")
 	root.Rank, child.Rank = "a7", "a5"
 	put(t, s, root)
-	child.Parent = &root.ULID
+	child.Kind, child.Parent = "task", &root.ULID
 	put(t, s, child)
 	orphan := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: task\ntitle: x\nstatus: todo\nrank: a5\nworkspace: "+root.Workspace.String()+"\nparent: "+model.NewULID().String()+"\n"))
+	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: project\ntitle: x\nstatus: todo\nrank: a5\nworkspace: "+root.Workspace.String()+"\nparent: "+model.NewULID().String()+"\n"))
 	ix := mustOpen(t, s)
 
 	ulids, err := ix.siblingULIDs(nil, root.Workspace)

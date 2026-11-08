@@ -29,7 +29,7 @@ func newStore(t *testing.T) (*store.Store, string) {
 }
 
 func newTask(title string) *model.Task {
-	return &model.Task{ULID: model.NewULID(), Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Kind: "project", Title: title, Status: "todo"}
 }
 
 // put writes tasks in one operation.

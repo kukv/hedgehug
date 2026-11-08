@@ -108,6 +108,7 @@ func newMoveFixture(t *testing.T, srcPrefix, dstPrefix string, dstSchema *schema
 	f.g = newTaskIn(f.srcWS, "G")
 	f.out.Rank, f.p.Rank, f.c.Rank, f.g.Rank = "a0", "a1", "a0", "a0"
 	f.c.Parent, f.g.Parent = &f.p.ULID, &f.c.ULID
+	f.c.Kind, f.g.Kind = "task", "step"
 	f.p.BlockedBy = []model.ULID{f.out.ULID}
 	f.c.BlockedBy = []model.ULID{f.g.ULID}
 	f.g.Props.Set("relates", ulidList(f.out.ULID))
@@ -282,6 +283,7 @@ func TestMoveInUnderAParent(t *testing.T) {
 	mustPut(t, f.dst, parent)
 	in := f.in()
 	in.Parent = &parent.ULID
+	in.Tasks[0].Kind = "epic" // P, a project at its source, goes under a project
 	if err := f.moveIn(in); err != nil {
 		t.Fatal(err)
 	}
