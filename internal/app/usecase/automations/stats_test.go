@@ -46,7 +46,7 @@ func TestStatsCountTheLastSevenDays(t *testing.T) {
 		x.Repos = []string{web}
 		x.Props.Set("estimate", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "2h"})
 	})
-	for _, branch := range []string{"hh/ME-1-a", "hh/ME-2-a"} {
+	for _, branch := range []string{"hh/ME-1-a", "hh/ME-3-a"} {
 		if _, err := fake.OpenPull("org-a/web", branch, "A", "", false); err != nil {
 			t.Fatal(err)
 		}
