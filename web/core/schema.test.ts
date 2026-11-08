@@ -78,14 +78,16 @@ describe("canParent", () => {
 
 describe("parentRule", () => {
   it("names the kinds that can be the parent", () => {
-    expect(parentRule(schema, "epic")).toBe("エピックを置ける親はルートとプロジェクトだけです");
+    expect(parentRule(schema, "epic")).toBe(
+      "エピックのどの下に置けるかは最上位とプロジェクトだけです",
+    );
     expect(parentRule(schema, "story")).toBe(
-      "ストーリーを置ける親はルート、プロジェクトとエピックだけです",
+      "ストーリーのどの下に置けるかは最上位、プロジェクトとエピックだけです",
     );
   });
 
   it("has its own words for the top only, anywhere and nowhere", () => {
-    expect(parentRule(schema, "project")).toBe("プロジェクトはルートにだけ置けます");
+    expect(parentRule(schema, "project")).toBe("プロジェクトは最上位にだけ置けます");
     expect(parentRule(schema, "note")).toBe("メモはどこにでも置けます");
     expect(parentRule(schema, "nowhere")).toBe("nowhereは親に置けません");
   });

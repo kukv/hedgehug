@@ -393,9 +393,9 @@ test("a drop the schema does not allow says why and changes nothing", async ({ p
 
   await dragRow(page, row(page, "Big epic"), row(page, "Small task"), "child", async () => {
     await expect(page.getByText("ここには置けません")).toBeVisible();
-    await expect(page.getByText("エピックはタスクの下に置けません")).toBeVisible();
+    await expect(page.getByText("EpicはTaskの下に置けません")).toBeVisible();
   });
-  await expect(toast(page, "エピックを置ける親はルートとプロジェクトだけです")).toBeVisible();
+  await expect(toast(page, "Epicのどの下に置けるかは最上位とProjectだけです")).toBeVisible();
   expect(hh.show(epic.id).parent).toBeNull();
 });
 

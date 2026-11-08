@@ -153,14 +153,14 @@ describe("FieldInput", () => {
       nullable: false,
       options: [
         { value: "task", label: "タスク" },
-        { value: "project", label: "プロジェクト", disabled: true, title: "ルートにだけ置けます" },
+        { value: "project", label: "プロジェクト", disabled: true, title: "最上位にだけ置けます" },
       ],
       onedit,
       oncommit: vi.fn(),
     });
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));
     expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).toBeDisabled();
-    expect(screen.getByText("ルートにだけ置けます")).toBeInTheDocument();
+    expect(screen.getByText("最上位にだけ置けます")).toBeInTheDocument();
   });
 
   it("readonly shows the value without editing", () => {

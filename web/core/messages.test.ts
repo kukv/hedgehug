@@ -253,7 +253,7 @@ describe("errorMessage", () => {
       "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
     );
     expect(errorMessage(err("schema.default_container"))).toBe(
-      "既定にできるのは work の役割の種類だけです",
+      "既定にできるのはアイテムの種類だけです",
     );
     expect(errorMessage(err("schema.not_task_ref"))).toBe(
       "複数・逆方向・双方向は関連だけの設定です",

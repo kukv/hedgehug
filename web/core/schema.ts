@@ -111,15 +111,15 @@ function listJa(names: string[]): string {
 }
 
 // parentRule says where a kind can be put, for the tooltip of a kind that
-// cannot be chosen: 「エピックを置ける親はルートとプロジェクトだけです」.
+// cannot be chosen: 「エピックのどの下に置けるかは最上位とプロジェクトだけです」.
 export function parentRule(s: SchemaView, childKind: string): string {
   const label = kindLabel(s, childKind);
   const parents = kindOf(s, childKind)?.parents;
   if (!parents) return `${label}はどこにでも置けます`;
   if (parents.length === 0) return `${label}は親に置けません`;
-  if (parents.length === 1 && parents[0] === ROOT) return `${label}はルートにだけ置けます`;
-  const names = parents.map((p) => (p === ROOT ? "ルート" : kindLabel(s, p)));
-  return `${label}を置ける親は${listJa(names)}だけです`;
+  if (parents.length === 1 && parents[0] === ROOT) return `${label}は最上位にだけ置けます`;
+  const names = parents.map((p) => (p === ROOT ? "最上位" : kindLabel(s, p)));
+  return `${label}のどの下に置けるかは${listJa(names)}だけです`;
 }
 
 // defaultStatusIn is the status a task gets when it moves into a category

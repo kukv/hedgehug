@@ -14,7 +14,7 @@ describe("checkParent", () => {
     const r = checkParent(schema, epic, task("T7", "task", null));
     expect(r?.title).toBe("エピックはタスクの下に置けません");
     expect(r?.reason).toBe(
-      "「REL-8 リリース作業」はエピックです。エピックを置ける親はルートとプロジェクトだけです（shared の schema.yaml の kinds）。",
+      "「REL-8 リリース作業」はエピックです。エピックのどの下に置けるかは最上位とプロジェクトだけです（shared の schema.yaml の kinds）。",
     );
   });
 
@@ -33,7 +33,7 @@ describe("checkParent", () => {
       kinds: schema.kinds?.map((k) => (k.name === "story" ? { ...k, parents: ["epic"] } : k)),
     } as SchemaView;
     expect(checkParent(narrow, task("S1", "story", null), null)?.title).toBe(
-      "ストーリーはルートに置けません",
+      "ストーリーは最上位に置けません",
     );
   });
 

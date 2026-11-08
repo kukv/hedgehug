@@ -157,7 +157,7 @@ const messages: Record<string, Make> = {
   "schema.not_defined": () => "定義が見つかりません。画面を読み込み直してください",
   "schema.order_stale": () =>
     "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
-  "schema.default_container": () => "既定にできるのは work の役割の種類だけです",
+  "schema.default_container": () => "既定にできるのはアイテムの種類だけです",
   "schema.not_task_ref": () => "複数・逆方向・双方向は関連だけの設定です",
   "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
   "schema.value_invalid": () => "値が空か、すでにあります",

@@ -33,7 +33,7 @@ export function checkParent(
   return {
     title: parent
       ? `${mine}は${kindLabel(s, parent.kind)}の下に置けません`
-      : `${mine}はルートに置けません`,
+      : `${mine}は最上位に置けません`,
     reason: `「${idOf(child)} ${child.title}」は${mine}です。${parentRule(s, child.kind)}（${child.store} の schema.yaml の kinds）。`,
   };
 }
