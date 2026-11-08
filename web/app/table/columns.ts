@@ -1,6 +1,7 @@
 import type { TaskView } from "../../core/api/client";
 import type { PatchField } from "../../core/save";
 import type { SchemaView } from "../../core/schema";
+import { propNames } from "../../core/schema-edit";
 import { statusRank } from "../../core/status-order";
 
 // A column of the table. width is in rem.
@@ -41,12 +42,14 @@ function propWidth(def: { type: string; multi?: boolean }): number {
 }
 
 // columnCandidates are the columns the menu offers: the builtin ones, then the properties of the
-// schemas by name. Several stores give the union of their properties, and the label is the one of
+// schemas in the order of schema.yaml. Several stores give the union of their properties, and the label is the one of
 // the first store that has the property.
 export function columnCandidates(schemas: SchemaView[]): ColumnSpec[] {
   const props = new Map<string, ColumnSpec>();
   for (const sc of schemas) {
-    for (const [name, def] of Object.entries(sc.props)) {
+    for (const name of propNames(sc)) {
+      const def = sc.props[name];
+      if (!def) continue;
       if (NOT_A_PROP.has(name) || props.has(name)) continue;
       props.set(name, {
         id: name,
@@ -56,7 +59,7 @@ export function columnCandidates(schemas: SchemaView[]): ColumnSpec[] {
       });
     }
   }
-  return [...BUILTIN, ...[...props.keys()].sort().map((name) => props.get(name) as ColumnSpec)];
+  return [...BUILTIN, ...[...props.values()]];
 }
 
 // shownColumns are the columns of a view in its order. A name that no schema defines is left out

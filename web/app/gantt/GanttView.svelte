@@ -22,6 +22,7 @@
     todayOf,
   } from "../../core/gantt";
   import { errorMessage } from "../../core/messages";
+  import { propNames } from "../../core/schema-edit";
   import type { GanttSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -174,17 +175,11 @@
 
   // --- the settings of the chart ----------------------------------------------------------------
   let scale = $state<Scale>("day");
-  const dateProps = $derived(
-    [
-      ...new Set(
-        schemas.flatMap((s) =>
-          Object.entries(s.props)
-            .filter(([, p]) => p.type === "date")
-            .map(([name]) => name),
-        ),
-      ),
-    ].sort(),
-  );
+  const dateProps = $derived([
+    ...new Set(
+      schemas.flatMap((s) => propNames(s).filter((name) => s.props[name]?.type === "date")),
+    ),
+  ]);
   const propChoices = (now: string) => (dateProps.includes(now) ? dateProps : [now, ...dateProps]);
 
   // --- the geometry -----------------------------------------------------------------------------

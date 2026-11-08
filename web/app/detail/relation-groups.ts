@@ -1,5 +1,6 @@
 import type { ShowView } from "../../core/api/client";
 import type { SchemaView } from "../../core/schema";
+import { propNames } from "../../core/schema-edit";
 import type { Lookup } from "./lookup";
 
 export type RelItem = {
@@ -56,7 +57,7 @@ export async function buildGroups(
       items: await Promise.all(blockers.map((r) => item(r.ulid, r))),
     });
   }
-  for (const name of Object.keys(sc.props).sort()) {
+  for (const name of propNames(sc)) {
     const def = sc.props[name];
     if (def?.type !== "task_ref") continue;
     const raws = asList(show.props[name]);
@@ -97,7 +98,7 @@ export async function buildGroups(
 // relationKinds is what "関連を追加" can add: blocked_by and the task_ref properties.
 export function relationKinds(sc: SchemaView): { key: string; label: string }[] {
   const kinds = [{ key: "blocked_by", label: "ブロックされている" }];
-  for (const name of Object.keys(sc.props).sort()) {
+  for (const name of propNames(sc)) {
     const def = sc.props[name];
     if (def?.type === "task_ref") kinds.push({ key: name, label: def.label || name });
   }

@@ -1,4 +1,5 @@
 import type { SchemaView } from "./schema";
+import { propNames } from "./schema-edit";
 
 type ScopedDef = NonNullable<SchemaView["scoped"]>[number];
 
@@ -91,9 +92,9 @@ export function removeValue(lists: Lists, key: string, value: string): Lists {
   return left.length === 0 ? rest : { ...rest, [key]: left };
 }
 
-/** The fields a status may require: the properties by name, then the built-in fields. */
+/** The fields a status may require: the properties in the order of schema.yaml, then the built-in fields. */
 export function requirableFields(schema: SchemaView): string[] {
-  return [...Object.keys(schema.props).sort(), ...REQUIRABLE_BUILTINS];
+  return [...propNames(schema), ...REQUIRABLE_BUILTINS];
 }
 
 const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
