@@ -5,7 +5,7 @@ import { errorMessage, violationLines } from "../../core/messages";
 export function referenceKind(field: string): string {
   switch (field) {
     case "blocked_by":
-      return "ブロックされている";
+      return "Blocked by";
     case "sprint":
       return "スプリント";
     case "releases":

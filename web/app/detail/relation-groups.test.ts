@@ -64,7 +64,7 @@ describe("buildGroups", () => {
     ]);
     const blocked = groups[0];
     expect(blocked).toMatchObject({
-      label: "ブロックされている",
+      label: "Blocked by",
       note: "blocked_by",
       removable: true,
     });

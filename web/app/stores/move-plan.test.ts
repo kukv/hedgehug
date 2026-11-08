@@ -11,7 +11,7 @@ import {
 
 describe("referenceKind", () => {
   it.each([
-    ["blocked_by", "ブロックされている"],
+    ["blocked_by", "Blocked by"],
     ["sprint", "スプリント"],
     ["releases", "リリース"],
     ["props.relates", "relates"],
@@ -39,7 +39,7 @@ describe("unlinkedRows", () => {
         },
       ]),
     ).toEqual([
-      { key: "U3 blocked_by U1", kind: "ブロックされている", target: "DM-1", id: "DM-3" },
+      { key: "U3 blocked_by U1", kind: "Blocked by", target: "DM-1", id: "DM-3" },
       { key: "U1 sprint S", kind: "スプリント", target: "S1", id: "DM-1" },
       { key: "U4 props.relates U1", kind: "relates", target: "DM-1", id: "DM-4" },
     ]);

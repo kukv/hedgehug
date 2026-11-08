@@ -2,7 +2,7 @@
   import { tick, untrack } from "svelte";
   import type { ShowView, TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
-  import { kindIconOf, kindRoleOf } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf, kindRoleOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
   import { hiddenStores, storeShown } from "../hidden";
@@ -422,6 +422,7 @@
                     kind={item.kind}
                     role={kindRoleOf(schemaOf(item.store), item.kind)}
                     icon={kindIconOf(schemaOf(item.store), item.kind)}
+                    color={kindColorOf(schemaOf(item.store), item.kind)}
                   />
                   <span class="key">{did.current(item.store, item.id)}</span>
                   <span class="text">{item.title}</span>

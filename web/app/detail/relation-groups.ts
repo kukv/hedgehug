@@ -51,7 +51,7 @@ export async function buildGroups(
   if (blockers.length > 0) {
     groups.push({
       key: "blocked_by",
-      label: "ブロックされている",
+      label: "Blocked by",
       note: "blocked_by",
       removable: true,
       items: await Promise.all(blockers.map((r) => item(r.ulid, r))),
@@ -104,7 +104,7 @@ export async function buildGroups(
 
 // relationKinds is what "関連を追加" can add: blocked_by and the task_ref properties.
 export function relationKinds(sc: SchemaView): { key: string; label: string }[] {
-  const kinds = [{ key: "blocked_by", label: "ブロックされている" }];
+  const kinds = [{ key: "blocked_by", label: "Blocked by" }];
   for (const name of propNames(sc)) {
     const def = sc.props[name];
     if (def?.type === "task_ref") kinds.push({ key: name, label: def.label || name });

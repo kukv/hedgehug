@@ -32,6 +32,10 @@ export const statusColorOf = (schema: SchemaView | undefined, name: string): str
 export const kindIconOf = (schema: SchemaView | undefined, name: string): string | undefined =>
   schema?.kinds?.find((k) => k.name === name)?.icon;
 
+/** The color a kind of the schema is given, if any. */
+export const kindColorOf = (schema: SchemaView | undefined, name: string): string | undefined =>
+  schema?.kinds?.find((k) => k.name === name)?.color;
+
 /** The role of a kind of the schema: work or container. */
 export const kindRoleOf = (schema: SchemaView | undefined, name: string): string | undefined =>
   schema?.kinds?.find((k) => k.name === name)?.role;
@@ -46,7 +50,7 @@ export function propNames(schema: SchemaView): string[] {
 }
 
 /** The color to draw: a token for a palette name, the value for another plain color, undefined otherwise. */
-export function statusColor(color: string | undefined): string | undefined {
+export function colorToken(color: string | undefined): string | undefined {
   if (!color) return undefined;
   const named = STATUS_COLORS.find((c) => c.value === color);
   if (named) return named.token;

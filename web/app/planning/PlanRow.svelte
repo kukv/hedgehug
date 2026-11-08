@@ -3,7 +3,7 @@
   import { categoryOf } from "../../core/categories";
   import { pointsOf } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
-  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
@@ -56,6 +56,7 @@
     kind={task.kind}
     role={kindRoleOf(schema, task.kind)}
     icon={kindIconOf(schema, task.kind)}
+    color={kindColorOf(schema, task.kind)}
     size={13}
   />
   <span class="id">{did.current(task.store, task.id)}</span>

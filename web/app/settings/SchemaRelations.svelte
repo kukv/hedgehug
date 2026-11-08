@@ -67,7 +67,7 @@
       <tr>
         <td></td>
         <th scope="row">blocked_by</th>
-        <td>ブロックされている</td>
+        <td>Blocked by</td>
         <td>複数 · 組み込み</td>
         <td class="num">{count(usage, blocked)}</td>
         <td></td>

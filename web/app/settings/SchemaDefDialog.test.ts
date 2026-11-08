@@ -116,7 +116,8 @@ describe("SchemaDefDialog", () => {
 
   it("keeps a custom color unless another is picked", async () => {
     const { api } = setup("status", "in_progress");
-    expect(screen.getByRole("radio", { name: "カスタム（#3451D1）" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "自由な色" })).toBeChecked();
+    expect((screen.getByLabelText("色を選ぶ") as HTMLInputElement).value).toBe("#3451d1");
     await type("表示名", "新");
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(api.changeStatus).toHaveBeenCalled());

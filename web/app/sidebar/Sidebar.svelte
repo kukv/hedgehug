@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { kindIconOf } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -38,6 +38,10 @@
   const projectIconOf = (store: string) => {
     schemaRev.current;
     return kindIconOf(schema.get(store), "project");
+  };
+  const projectColorOf = (store: string) => {
+    schemaRev.current;
+    return kindColorOf(schema.get(store), "project");
   };
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
@@ -247,7 +251,12 @@
               aria-current={here ? "page" : undefined}
               onclick={(e) => onLinkClick(e, phref)}
             >
-              <KindIcon kind="project" icon={projectIconOf(w.store)} size={14} />
+              <KindIcon
+                kind="project"
+                icon={projectIconOf(w.store)}
+                color={projectColorOf(w.store)}
+                size={14}
+              />
               <span class="p-name">{p.title}</span>
               {#if p.progress}
                 <span class="progress">{p.progress.done}/{p.progress.total}</span>

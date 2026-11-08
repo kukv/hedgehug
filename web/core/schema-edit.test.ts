@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { SchemaView } from "./schema";
 import {
+  colorToken,
+  kindColorOf,
   kindIconOf,
   kindRoleOf,
   orphanedBy,
   propNames,
   referencesOf,
-  statusColor,
   statusColorOf,
 } from "./schema-edit";
 
@@ -44,7 +45,7 @@ describe("schema-edit", () => {
     const sc = {
       statuses: [{ name: "todo", category: "todo", color: "teal" }, { name: "done" }],
       kinds: [
-        { name: "epic", role: "container", icon: "epic" },
+        { name: "epic", role: "container", icon: "epic", color: "teal" },
         { name: "task", role: "work" },
       ],
     } as unknown as SchemaView;
@@ -54,6 +55,9 @@ describe("schema-edit", () => {
     expect(statusColorOf(undefined, "todo")).toBeUndefined();
     expect(kindIconOf(sc, "epic")).toBe("epic");
     expect(kindIconOf(sc, "task")).toBeUndefined();
+    expect(kindColorOf(sc, "epic")).toBe("teal");
+    expect(kindColorOf(sc, "task")).toBeUndefined();
+    expect(kindColorOf(undefined, "epic")).toBeUndefined();
     expect(kindRoleOf(sc, "epic")).toBe("container");
     expect(kindRoleOf(sc, "nope")).toBeUndefined();
     expect(kindRoleOf(undefined, "epic")).toBeUndefined();
@@ -62,10 +66,10 @@ describe("schema-edit", () => {
     expect(propNames({ props: { b: {}, a: {} } } as unknown as SchemaView)).toEqual(["a", "b"]);
   });
   it("draws a palette name with its token and keeps a plain color", () => {
-    expect(statusColor("teal")).toBe("var(--store-teal-dot)");
-    expect(statusColor("#3451D1")).toBe("#3451D1");
-    expect(statusColor("url(x)")).toBeUndefined();
-    expect(statusColor(undefined)).toBeUndefined();
+    expect(colorToken("teal")).toBe("var(--store-teal-dot)");
+    expect(colorToken("#3451D1")).toBe("#3451D1");
+    expect(colorToken("url(x)")).toBeUndefined();
+    expect(colorToken(undefined)).toBeUndefined();
   });
   it("lists the references a removal takes out", () => {
     expect(referencesOf(schema, "status", "on_hold")).toEqual([

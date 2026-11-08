@@ -21,7 +21,7 @@ describe("Relations", () => {
   it("says that only tasks of the same store can be referred to, and groups the relations", async () => {
     setup();
     expect(screen.getByText("同じ Store（shared）のタスクだけを参照できます")).toBeInTheDocument();
-    const group = await screen.findByRole("group", { name: "ブロックされている" });
+    const group = await screen.findByRole("group", { name: "Blocked by" });
     expect(within(group).getByText("REL-2")).toBeInTheDocument();
     expect(within(group).getByText("破壊的変更")).toBeInTheDocument();
   });
@@ -31,7 +31,7 @@ describe("Relations", () => {
     const k = makeCore({ show, tasks });
     k.schema.subscribe = () => () => false; // only the cache tells this screen about the other tasks
     mount(Relations, { show, readonly: false }, k);
-    const group = await screen.findByRole("group", { name: "ブロックされている" });
+    const group = await screen.findByRole("group", { name: "Blocked by" });
     expect(within(group).getByText("破壊的変更")).toBeInTheDocument();
     tasks[0] = { ...blocker, title: "変更後の題" };
     k.notify();
@@ -40,7 +40,7 @@ describe("Relations", () => {
 
   it("keeps the ID a link and shows the ULID to copy when the pointer is on it", async () => {
     setup();
-    const group = await screen.findByRole("group", { name: "ブロックされている" });
+    const group = await screen.findByRole("group", { name: "Blocked by" });
     const link = within(group).getByRole("link", { name: "REL-2" });
     expect(link).toHaveAttribute("href", "/tasks/UB");
     expect(within(group).queryByText("UB")).toBeNull();
@@ -122,7 +122,7 @@ describe("Relations", () => {
 
   it("hides the add and remove controls when read-only", async () => {
     setup(true);
-    await screen.findByRole("group", { name: "ブロックされている" });
+    await screen.findByRole("group", { name: "Blocked by" });
     expect(screen.queryByRole("button", { name: "関連を追加" })).toBeNull();
     expect(screen.queryByRole("button", { name: "REL-2 を外す" })).toBeNull();
   });

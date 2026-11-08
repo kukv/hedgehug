@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { TaskView } from "../../core/api/client";
   import { hasPlans } from "../../core/planning";
-  import { kindIconOf } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
@@ -27,6 +27,10 @@
   const projectIcon = $derived.by(() => {
     schemaRev.current;
     return project ? kindIconOf(c.schema.get(project.store), "project") : undefined;
+  });
+  const projectColor = $derived.by(() => {
+    schemaRev.current;
+    return project ? kindColorOf(c.schema.get(project.store), "project") : undefined;
   });
   const did = useDisplayId(c.stores);
   const at = (t: ProjectTab) => router.href({ name: "project", ulid, tab: t });
@@ -65,7 +69,7 @@
       </a>
       <span class="sep" aria-hidden="true">›</span>
     {/if}
-    <KindIcon kind="project" icon={projectIcon} />
+    <KindIcon kind="project" icon={projectIcon} color={projectColor} />
     <h1 tabindex="-1">{project?.title ?? ""}</h1>
     {#if project}
       <span class="id">{did.current(project.store, project.id)}</span>

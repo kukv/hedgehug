@@ -10,7 +10,7 @@
     type ReleaseState,
     releaseDue,
   } from "../../core/planning";
-  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
@@ -201,6 +201,7 @@
                   kind={g.kind}
                   role={kindRoleOf(schema, g.kind)}
                   icon={kindIconOf(schema, g.kind)}
+                  color={kindColorOf(schema, g.kind)}
                   size={13}
                 />{g.kind}<span class="mono">{g.tasks.length}</span>
               </h3>

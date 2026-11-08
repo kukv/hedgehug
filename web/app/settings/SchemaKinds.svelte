@@ -94,7 +94,8 @@
           </td>
           <th scope="row">
             <span class="name"
-              ><KindIcon kind={k.name} role={k.role} icon={k.icon} size={14} />{k.name}</span
+              ><KindIcon kind={k.name} role={k.role} icon={k.icon} color={k.color} size={14} />
+              {k.name}</span
             >
           </th>
           <td>{k.label ?? ""}</td>

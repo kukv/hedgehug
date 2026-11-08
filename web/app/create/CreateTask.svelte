@@ -341,7 +341,7 @@
               disabled={!usable}
               onchange={() => (kind = k.name)}
             >
-            <KindIcon kind={k.name} role={k.role} icon={k.icon} />
+            <KindIcon kind={k.name} role={k.role} icon={k.icon} color={k.color} />
             {k.label || k.name}
           </label>
         {/each}

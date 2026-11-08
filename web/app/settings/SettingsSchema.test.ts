@@ -557,7 +557,7 @@ describe("SettingsSchema", () => {
       .map((r) => r.querySelector("th")?.textContent);
     expect(names).toEqual(["blocked_by", "relates", "duplicates"]);
     await waitFor(() => expect(within(row(/^blocked_by/)).getByText("1")).toBeVisible());
-    expect(within(row(/^blocked_by/)).getByText("ブロックされている")).toBeVisible();
+    expect(within(row(/^blocked_by/)).getByText("Blocked by")).toBeVisible();
     expect(within(row(/^blocked_by/)).getByText("複数 · 組み込み")).toBeVisible();
     expect(within(row(/^blocked_by/)).queryByRole("button")).toBeNull();
     expect(within(row(/^relates/)).getByText("複数 · 双方向")).toBeVisible();

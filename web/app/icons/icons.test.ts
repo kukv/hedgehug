@@ -64,6 +64,22 @@ describe("KindIcon", () => {
     expect(bug.container.querySelector("svg")?.style.getPropertyValue("--k")).toBe("var(--danger)");
   });
 
+  it("color があればその色で描く。なければ今の色", () => {
+    const draw = (props: Record<string, string>) =>
+      render(KindIcon, { props: { kind: "task", ...props } }).container.querySelector(
+        "svg",
+      ) as SVGElement;
+    expect(draw({ color: "teal" }).style.getPropertyValue("--k")).toBe("var(--store-teal-dot)");
+    cleanup();
+    expect(draw({ color: "#3451D1" }).style.getPropertyValue("--k")).toBe("#3451D1");
+    cleanup();
+    expect(draw({ kind: "bug", color: "blue" }).style.getPropertyValue("--k")).toBe(
+      "var(--accent)",
+    );
+    cleanup();
+    expect(draw({}).style.getPropertyValue("--k")).toBe("var(--icon)");
+  });
+
   it("知らない種類は role で container / work の基本形", () => {
     const c = render(KindIcon, { props: { kind: "initiative", role: "container" } });
     expect(c.container.querySelector("svg")?.getAttribute("data-kind")).toBe("container");

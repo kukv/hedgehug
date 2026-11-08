@@ -1,7 +1,7 @@
 <script lang="ts">
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
-  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
@@ -104,6 +104,10 @@
   function iconOf(store: string, kind: string): string | undefined {
     schemaRev.current;
     return kindIconOf(c.schema.get(store), kind);
+  }
+  function kindColor(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return kindColorOf(c.schema.get(store), kind);
   }
   function roleOf(store: string, kind: string): string | undefined {
     schemaRev.current;
@@ -209,6 +213,7 @@
                       kind={t.kind}
                       role={roleOf(t.store, t.kind)}
                       icon={iconOf(t.store, t.kind)}
+                      color={kindColor(t.store, t.kind)}
                     />
                   </td>
                   <td class="w-id">

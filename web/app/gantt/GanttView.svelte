@@ -22,7 +22,7 @@
     todayOf,
   } from "../../core/gantt";
   import { errorMessage } from "../../core/messages";
-  import { kindIconOf, kindRoleOf, propNames } from "../../core/schema-edit";
+  import { kindColorOf, kindIconOf, kindRoleOf, propNames } from "../../core/schema-edit";
   import type { GanttSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -476,6 +476,7 @@
               kind={r.task.kind}
               role={kindRoleOf(schemaOf(r.task.store), r.task.kind)}
               icon={kindIconOf(schemaOf(r.task.store), r.task.kind)}
+              color={kindColorOf(schemaOf(r.task.store), r.task.kind)}
               size={13}
             />
             <span class="id">{did.current(r.task.store, r.task.id)}</span>

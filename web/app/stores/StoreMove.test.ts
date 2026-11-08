@@ -168,7 +168,7 @@ describe("StoreMove", () => {
     const region = await screen.findByRole("region", { name: /^外す参照/ });
     const items = within(region).getAllByRole("listitem");
     expect(items).toHaveLength(3);
-    expect(items[0]).toHaveTextContent("ブロックされている REL-1 REL-3");
+    expect(items[0]).toHaveTextContent("Blocked by REL-1 REL-3");
     expect(items[1]).toHaveTextContent("relates REL-9 REL-2");
     expect(items[1]).not.toHaveTextContent("props.");
     expect(items[2]).toHaveTextContent("スプリント S1 REL-1");

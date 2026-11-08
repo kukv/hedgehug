@@ -58,14 +58,14 @@
 </script>
 
 <script lang="ts">
-  import { statusColor } from "../../core/schema-edit";
+  import { colorToken } from "../../core/schema-edit";
 
   type Props = { status: string; category?: string; color?: string; size?: number };
   let { status, category, color, size = 16 }: Props = $props();
 
   const shape = $derived(shapeOf(status, category));
   const def = $derived(defs[shape]);
-  const custom = $derived(statusColor(color));
+  const custom = $derived(colorToken(color));
   const c = $derived(custom ?? def.c);
   const c2 = $derived(custom ?? def.c2 ?? def.c);
   // A filled circle (done, canceled) draws its mark in the surface color.

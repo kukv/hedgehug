@@ -14,14 +14,18 @@
 </script>
 
 <script lang="ts">
-  type Props = { kind: string; role?: string; icon?: string; size?: number };
-  let { kind, role, icon, size = 16 }: Props = $props();
+  import { colorToken } from "../../core/schema-edit";
+
+  type Props = { kind: string; role?: string; icon?: string; color?: string; size?: number };
+  let { kind, role, icon, color, size = 16 }: Props = $props();
 
   // The shape the schema names, when it is one we draw; else the kind's own name.
   const name = $derived(icon && icon in kinds ? icon : kind);
   const known = $derived(name in kinds);
   const d = $derived(kinds[name] ?? (role === "container" ? containerShape : workShape));
   const shape = $derived(known ? name : role === "container" ? "container" : "work");
+  // The color the schema names; else bug is red and the others are the icon color.
+  const tint = $derived(colorToken(color) ?? (shape === "bug" ? "var(--danger)" : "var(--icon)"));
 </script>
 
 <svg
@@ -29,7 +33,7 @@
   height={size}
   viewBox="0 0 16 16"
   data-kind={shape}
-  style:--k={shape === "bug" ? "var(--danger)" : "var(--icon)"}
+  style:--k={tint}
   aria-hidden="true"
 >
   <path

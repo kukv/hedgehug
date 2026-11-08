@@ -49,7 +49,7 @@
   anywhere on it and Enter on the title open the task; the ID stays above it for its own buttons. -->
 <li class="card" class:dragging data-ulid={task.ulid} {@attach dnd}>
   <div class="top">
-    <KindIcon kind={task.kind} {role} icon={kindDef?.icon} />
+    <KindIcon kind={task.kind} {role} icon={kindDef?.icon} color={kindDef?.color} />
     <span class="id"><IdLabel id={task.id} ulid={task.ulid} store={task.store} /></span>
     {#if tone}
       <StoreBadge store={task.store} {tone} compact />
