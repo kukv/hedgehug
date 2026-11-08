@@ -191,9 +191,7 @@ describe("TreeView drag and drop", () => {
     row("T7").onOver("child", "E8");
     expect(await screen.findByText("ここには置けません")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Epic は Task の下に置けません");
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Epic を置けるのは Project の下だけです",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("Epic を置けるのは Project の下だけです");
     const tree = screen.getByRole("tree");
     expect(tree).toHaveClass("refusing");
     row("T7").onOver(null, null);
