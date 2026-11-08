@@ -30,7 +30,9 @@ var steps = []Step{
 // A store with a remote is converted in sync with it. When origin is in the
 // same format and the two differ (origin has a commit the store lacks, or the
 // store has one origin lacks), the store is first synced in that format (fetch,
-// merge, push), and then converted and pushed. Only when that sync fails is it
+// merge, push), and then converted and pushed. That sync repairs with the fixed
+// table of the newest version, not with --kind: a child whose parent was deleted
+// and whose kind is one of your own goes under 未分類 as it is. Only when that sync fails is it
 // store.convert_unsynced, with the cause. The clones origin has gone ahead of
 // in format, which the fetch shows, are the other case:
 //   - With nothing not pushed, the clone goes to origin by fast-forward. When
@@ -302,6 +304,11 @@ func checkSynced(r *gitrepo.Repo, from int) (plan, error) {
 		return plan{}, nil
 	case !has && ferr == nil && rf > from && rf <= model.StoreFormat:
 		return plan{fastForward: unpushed == 0, diverged: unpushed > 0, format: rf}, nil
+	}
+	if ferr == nil && rf < from {
+		// Origin is behind the store: a sync would not take it, and this is not a thing to sync away.
+		return plan{}, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
+			fmt.Errorf("the remote is in format %d, older than the store's format %d, so the store cannot be synced with it; convert the remote from a clone in format %d first", rf, from, rf))
 	}
 	// The same format, or one origin's files do not tell: a sync merges them.
 	return plan{syncFirst: true}, nil

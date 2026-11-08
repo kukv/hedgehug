@@ -111,6 +111,7 @@
   function text(n: Notification) {
     return notificationText(n, {
       workspaceName: (ulid) => c.stores.workspace(n.store, ulid)?.name,
+      taskName: (ulid) => c.cache.task(ulid)?.title,
       statusLabel: (status) =>
         schemas.current(n.store)?.statuses?.find((s) => s.name === status)?.label || status,
     });

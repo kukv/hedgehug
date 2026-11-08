@@ -3,17 +3,15 @@
 //     (every task that is not deleted, projects included), the legend "未着手 <n>", "進行中 <n>",
 //     "完了 <n>", "中止 <n>", and the region "プロジェクト" (a row for each project: its ID, title
 //     and progress "<done>/<total>"); the root holds only projects, so nothing else is listed
-//   - the buttons "タスクを作成" and "プロジェクトを作成" open the create dialogs for this workspace
+//   - the button "プロジェクトを作成" opens the create dialog of a project for this workspace (there is no
+//     button for a task: the root holds only projects)
 //   - the overview follows the store: a change the CLI makes changes the counts and the lists
 import { expect, test } from "./harness";
-import { createDialog, createReady, toast } from "./screens";
+import { toast } from "./screens";
 
 type Workspace = { name: string; ulid: string };
 
-test("the overview counts the tasks by category and lists the projects and the loose tasks", async ({
-  page,
-  hh,
-}) => {
+test("the overview counts the tasks by category and lists the projects", async ({ page, hh }) => {
   const project = hh.add("Release prep", "--kind", "project");
   const notes = hh.add("Write notes", "--parent", project.id);
   hh.add("Cut the tag", "--parent", project.id);
@@ -72,7 +70,7 @@ test("the overview follows what the CLI changes", async ({ page, hh }) => {
   await expect(projects.getByRole("row", { name: new RegExp(added.id) })).toHaveCount(0);
 });
 
-test("the create button at the root makes a project in this workspace, and it shows in the list", async ({
+test("the create button makes a project in this workspace, and it shows in the list", async ({
   page,
   hh,
 }) => {
@@ -82,12 +80,13 @@ test("the create button at the root makes a project in this workspace, and it sh
 
   await hh.open(page, `/workspaces/demo/${ws.ulid}`);
   await expect(page.getByText("1 件 · プロジェクト 1")).toBeVisible();
-  await page.getByRole("button", { name: "タスクを作成", exact: true }).click();
-  const dialog = createDialog(page);
+  // the root holds only projects: there is one button, for a project
+  await expect(page.getByRole("button", { name: "タスクを作成", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "プロジェクトを作成", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "プロジェクトを作成" });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("textbox", { name: "タイトル" }).fill("From the overview");
-  await createReady(dialog);
-  await dialog.getByRole("button", { name: /^作成/ }).click();
+  await dialog.getByRole("textbox", { name: "名前" }).fill("From the overview");
+  await dialog.getByRole("button", { name: "作成", exact: true }).click();
 
   await expect(toast(page, "DM-2 を作成しました")).toBeVisible();
   await expect(page.getByText("2 件 · プロジェクト 2")).toBeVisible();

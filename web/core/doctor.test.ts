@@ -103,10 +103,16 @@ describe("fixedText", () => {
     );
     expect(fixedText("workspace_revived", null)).toBe("削除されていたワークスペースを復元しました");
     expect(fixedText("parent_deleted", { from: "01P", to: null })).toBe(
-      "親が削除されたため、ルートに移しました",
+      "親「01P」が削除されたため、ルートに移しました",
     );
-    expect(fixedText("parent_deleted", { from: "01P", to: "01Q" })).toBe(
-      "親が削除されたため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました",
+    expect(
+      fixedText(
+        "parent_deleted",
+        { from: "01P", to: "01Q", kind_from: "step", kind_to: "task" },
+        (u) => (u === "01Q" ? "未分類" : undefined),
+      ),
+    ).toBe(
+      "親「01P」が削除されたため、「未分類」の下に移しました。種類を Step から Task に変えました",
     );
   });
 

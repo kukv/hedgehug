@@ -482,6 +482,69 @@ func TestRunSyncsFirstInTheSameFormat(t *testing.T) {
 	})
 }
 
+// The sync that comes before the conversion can fail: the store is then not converted, and the
+// error says why.
+func TestRunSyncFailureIsConvertUnsynced(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes where a mode forbids it")
+	}
+	f := newRemoteFx(t)
+	commitRaw(t, f.ts, "not pushed", map[string]string{"notes.txt": "x"})
+	remote := originHead(t, f.remote)
+	// origin can be read and not written: the push fails
+	var dirs []string
+	_ = filepath.WalkDir(f.remote, func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() {
+			dirs = append(dirs, p)
+		}
+		return nil
+	})
+	slices.Reverse(dirs) // children first: the mode of a parent does not hide them
+	for _, d := range dirs {
+		if err := os.Chmod(d, 0o500); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, d := range dirs {
+			_ = os.Chmod(d, 0o700)
+		}
+	})
+	_, err := Run(f.ts.Session, Options{}, false)
+	wantCode(t, err, usecase.KindConflict, "store.convert_unsynced")
+	if !strings.Contains(err.Error(), "the sync before the conversion failed") || strings.TrimSpace(strings.SplitN(err.Error(), ": ", 2)[1]) == "" {
+		t.Errorf("the error does not tell the cause: %v", err)
+	}
+	t.Log(err)
+	for _, d := range dirs {
+		_ = os.Chmod(d, 0o700)
+	}
+	if formatOf(t, f.ts) != 1 {
+		t.Errorf("the store was converted: format %d", formatOf(t, f.ts))
+	}
+	if originHead(t, f.remote) != remote {
+		t.Error("origin changed")
+	}
+}
+
+// An origin that is in an older format than the store is told as it is, not as a thing to sync.
+func TestRunOriginOlderThanTheStore(t *testing.T) {
+	f := newRemoteFx(t) // origin and store in format 1
+	withFormat3(t)
+	meta := filepath.Join(storeDir(t, f.ts), filepath.FromSlash(model.StoreMetaPath))
+	b, err := os.ReadFile(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitRaw(t, f.ts, "a store in format 2", map[string]string{model.StoreMetaPath: strings.Replace(string(b), "format: 1", "format: 2", 1)})
+	pushElsewhere(t, f)
+	_, err = Run(f.ts.Session, Options{}, false)
+	wantCode(t, err, usecase.KindConflict, "store.convert_unsynced")
+	if !strings.Contains(err.Error(), "the remote is in format 1, older than the store's format 2") || strings.Contains(err.Error(), "run hh store convert") {
+		t.Errorf("error = %v", err)
+	}
+}
+
 // pushElsewhere puts a commit on origin that the store of f.ts lacks, as a
 // clone elsewhere would. The store of f.ts is in format 1, which hedgehug does
 // not clone, so the clone is made with the repository library.

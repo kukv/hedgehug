@@ -95,15 +95,6 @@
   {#snippet actions()}
     <Button
       size="sm"
-      aria-label="タスクを作成"
-      disabled={off !== null}
-      why={off ?? undefined}
-      onclick={() => openCreate({ kind: "task" })}
-    >
-      <Icon name="plus" size={14} />タスク
-    </Button>
-    <Button
-      size="sm"
       aria-label="プロジェクトを作成"
       disabled={off !== null}
       why={off ?? undefined}

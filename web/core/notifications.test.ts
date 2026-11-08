@@ -213,20 +213,43 @@ describe("notificationText", () => {
     expect(t({ kind: "release_detached", value: "v2" })).toBe(
       "リリース v2 から外しました（移動先のワークスペースにはありません）",
     );
+    // a task that is not in the cache is named by its ULID
     expect(t({ kind: "parent_cycle", value: { from: "A", to: null } })).toBe(
-      "親の循環を検出したため、ルートに戻しました",
+      "親の循環を検出したため、ルートに戻しました（元の親: 「A」）",
     );
     expect(t({ kind: "parent_cycle", value: { from: "A", to: "B" } })).toBe(
-      "親の循環を検出したため、元の親に戻しました",
+      "親の循環を検出したため、「B」の下に戻しました（元の親: 「A」）",
     );
     expect(t({ kind: "parent_deleted", value: { from: "A", to: null } })).toBe(
-      "親が削除されたため、ルートに移しました",
+      "親「A」が削除されたため、ルートに移しました",
     );
     expect(t({ kind: "parent_deleted", value: { from: "A", to: "B" } })).toBe(
-      "親が削除されたため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました",
+      "親「A」が削除されたため、「B」の下に移しました",
     );
     expect(t({ kind: "parent_moved", value: { from: "A", to: "B" } })).toBe(
-      "親が別の Store へ移ったため、親に置ける最も近い祖先か「未分類」プロジェクトの下に移しました",
+      "親「A」が別の Store へ移ったため、「B」の下に移しました",
+    );
+    expect(t({ kind: "parent_moved", value: { from: "A", to: null } })).toBe(
+      "親「A」が別の Store へ移ったため、ルートに移しました",
+    );
+    // the kind that changed with it, and the titles from the cache
+    const names = { A: "Old parent", B: "未分類" };
+    expect(
+      notificationText(
+        n({
+          ulid: "1",
+          kind: "repaired",
+          detail: {
+            kind: "parent_deleted",
+            value: { from: "A", to: "B", kind_from: "step", kind_to: "task" },
+          },
+        }),
+        {
+          taskName: (u) => names[u as "A" | "B"],
+        },
+      ).text,
+    ).toBe(
+      "親「Old parent」が削除されたため、「未分類」の下に移しました。種類を Step から Task に変えました",
     );
     expect(t({ kind: "other_repair", value: 3 })).toBe("同期の修復: other_repair（元の値: 3）");
     expect(t({ kind: "other_repair" })).toBe("同期の修復: other_repair");

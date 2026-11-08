@@ -43,6 +43,7 @@ test("a Project, an Epic, a Story and a Step are made in turn, and a Task does n
   await row(page, "Q1").click();
   await page.keyboard.press("c");
   await expect(dialog.getByRole("radio", { name: "Epic" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Project" })).toHaveCount(0);
   await dialog.getByRole("radio", { name: "Story" }).check({ force: true });
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("Login");
   await dialog.getByRole("button", { name: /^作成/ }).click();
@@ -74,8 +75,8 @@ test("a Project, an Epic, a Story and a Step are made in turn, and a Task does n
   ]);
 
   // The CLI refuses what the dialog does not offer, and nothing is made.
-  expect(() =>
-    hh.hh("add", "A task under a story", "--parent", "DM-3", "--kind", "task"),
-  ).toThrow();
+  expect(() => hh.hh("add", "A task under a story", "--parent", "DM-3", "--kind", "task")).toThrow(
+    /the change breaks the schema:\s+parent: a task cannot be placed under story/,
+  );
   expect(hh.json<{ tasks: unknown[] }>("ls").tasks).toHaveLength(4);
 });

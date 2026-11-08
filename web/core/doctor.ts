@@ -1,6 +1,6 @@
 import type { Schemas } from "./api/client";
 import { CATEGORY_LABEL } from "./categories";
-import { repairedKnownText } from "./notifications";
+import { repairedKnownText, type TaskName } from "./notifications";
 
 type Finding = Schemas.Finding;
 export type DoctorReport = Schemas.DoctorReport;
@@ -60,7 +60,7 @@ const rec = (v: unknown): Record<string, unknown> =>
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** What a repair of doctor --fix did (Fixed.kind and Fixed.value), in words. */
-export function fixedText(kind: string, value: unknown): string {
+export function fixedText(kind: string, value: unknown, taskName?: TaskName): string {
   switch (kind) {
     case "id_collision": {
       const v = rec(value);
@@ -81,7 +81,7 @@ export function fixedText(kind: string, value: unknown): string {
       return "削除されていたワークスペースを復元しました";
   }
   // The kinds a sync repairs too are told as the inbox tells them.
-  return repairedKnownText({ kind, value }) ?? kind;
+  return repairedKnownText({ kind, value }, taskName) ?? kind;
 }
 
 // hh purge takes at most this many days (internal/app/usecase/purge.go).

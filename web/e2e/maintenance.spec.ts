@@ -83,7 +83,7 @@ test("a problem of a task is listed with a link to the task, and doctor --fix re
   await expect(page.getByRole("status").filter({ hasText: "1 件を修復しました" })).toBeVisible();
   const result = doctor(page).getByRole("region", { name: "修復の結果" });
   await expect(result).toContainText(child.id);
-  await expect(result).toContainText("「未分類」プロジェクトの下に移しました");
+  await expect(result).toContainText(/親「.+」が削除されたため、「.+」の下に移しました/);
   await expect(doctor(page).getByText("問題は見つかりませんでした")).toBeVisible();
   // The root holds only projects: the task goes under the 未分類 project that doctor made.
   const projects = hh.json<{ tasks: { ulid: string; title: string }[] }>(
