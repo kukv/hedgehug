@@ -230,13 +230,6 @@ func Open(dir string, opts ...Option) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	var asked Store
-	for _, o := range opts {
-		o(&asked)
-	}
-	if meta.OldFormat() && !asked.acceptOld {
-		return nil, model.ErrOldFormat
-	}
 	sc, err := readDecode(dir, schemaPath, schema.Decode)
 	if err != nil {
 		return nil, err
@@ -245,7 +238,12 @@ func Open(dir string, opts ...Option) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newStore(dir, repo, meta, sc, opts...), nil
+	s := newStore(dir, repo, meta, sc, opts...)
+	if meta.OldFormat() && !s.acceptOld {
+		_ = repo.Close()
+		return nil, model.ErrOldFormat
+	}
+	return s, nil
 }
 
 // SetNow makes the store read the time from now, in place of time.Now, for

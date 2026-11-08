@@ -32,7 +32,8 @@ type Options struct {
 
 // Report tells what a step changed, one line for each kind of change.
 type Report struct {
-	From  int      `json:"from" doc:"The format the step read; it wrote the next one"`
+	From  int      `json:"from" doc:"The format the step read"`
+	To    int      `json:"to" doc:"The format it wrote"`
 	Lines []string `json:"lines" doc:"What the step changed, one line for each kind of change"`
 }
 

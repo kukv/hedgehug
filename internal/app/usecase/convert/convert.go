@@ -16,27 +16,34 @@ import (
 )
 
 // steps is the whole conversion, in order. A new format adds the step that
-// reads the format before it at the end, and leaves the others alone.
+// reads the format before it at the end, and leaves the others alone. The
+// tests put steps of their own here, with model.StoreFormat raised to match.
 var steps = []Step{
 	{From: 1, Apply: step2},
 }
 
 // Run converts the store of the session from its format to the newest, one
 // step after the other, and returns what each step changed. With dryRun it
-// writes nothing. Otherwise it writes all the steps as one commit (op
-// convert) and, for a store with a remote, pushes it.
+// writes nothing. Otherwise it writes the steps as one commit (op convert)
+// and, for a store with a remote, pushes it.
 //
 // A store with a remote is converted only when it is in sync with it: origin
 // has no commit the store lacks, and the store has none origin lacks
-// (store.convert_unsynced). The one exception is a clone that has changes it
-// has not pushed while origin was converted: it converts its own changes, then
-// syncs, which merges them (sync.format_diverged, which a sync reports, is this
-// state). A clone with nothing it has not pushed, while origin was converted,
-// has nothing to convert: it goes to origin by fast-forward. A store already in the newest format has nothing to convert and
-// returns no report.
+// (store.convert_unsynced). The exceptions are the clones origin has gone
+// ahead of in format, which the fetch shows:
+//   - With nothing not pushed, the clone goes to origin by fast-forward. When
+//     origin is in a format that is not the newest yet, the steps that are
+//     left are then converted and pushed as usual.
+//   - With changes not pushed (the state a sync reports as
+//     sync.format_diverged), the clone converts its own changes to the format
+//     of origin, which a sync then merges; the steps that are left follow.
 //
-// When the sync after the commit fails, the commit stays: the reports come
-// back with the error.
+// Origin in a format newer than this version reads is store.newer_format. A
+// store already in the newest format has nothing to convert and returns no
+// report.
+//
+// When the sync after a commit fails, the commit stays: the reports come back
+// with the error.
 func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 	c, e, err := ss.Entry()
 	if err != nil {
@@ -52,66 +59,143 @@ func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 		return nil, nil
 	}
 	r := s.Repo()
-	synced := len(e.Remotes) > 0 && !dryRun
+	opt.Now = ss.Now()
+	remote := len(e.Remotes) > 0
 	var syncOpt replicate.Options
-	if len(e.Remotes) > 0 {
+	var p plan
+	if remote {
 		if syncOpt, err = ss.SyncOptions(c, e); err != nil {
 			return nil, err
 		}
-		// A dry run only looks: a remote it cannot reach is not its error.
-		if err := replicate.FetchOrigin(s, syncOpt); err != nil && !dryRun {
-			return nil, err
-		} else if err == nil {
-			ff, err := checkSynced(r, from)
-			switch {
-			case err != nil && !dryRun:
+		// A dry run only looks: a remote it cannot reach, or one it is not in
+		// sync with, is not its error.
+		if err := replicate.FetchOrigin(s, syncOpt); err == nil {
+			if p, err = checkSynced(r, from); err != nil && !dryRun {
 				return nil, err
-			case ff && dryRun:
-				return []Report{{From: from, Lines: []string{fastForwardLine + "する（--dry-run のため何も書かない）"}}}, nil
-			case ff:
-				if err := replicate.FastForwardOrigin(s); err != nil {
-					return nil, err
-				}
-				ss.DropMount()
-				return []Report{{From: from, Lines: []string{fastForwardLine + "した"}}}, nil
 			}
+		} else if !dryRun {
+			return nil, err
 		}
 	}
+	if dryRun {
+		return dryRunOf(r, opt, from, p)
+	}
 
+	var reports []Report
+	// A clone with changes it has not pushed converts them to the format of
+	// origin first; the sync merges.
+	if p.diverged {
+		rep, err := convertCommit(ss, s, opt, from, p.format)
+		if err != nil {
+			return nil, err
+		}
+		reports = append(reports, rep...)
+		from = p.format
+		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
+			return reports, fmt.Errorf("sync %s: %w", e.Name, err)
+		}
+	}
+	if p.fastForward {
+		if err := replicate.FastForwardOrigin(s); err != nil {
+			return nil, err
+		}
+		ss.DropMount()
+		reports = append(reports, Report{From: from, To: p.format, Lines: []string{fastForwardLine(p.format, "した")}})
+		from = p.format
+	}
+	if from >= model.StoreFormat {
+		return reports, nil
+	}
+	rep, err := convertCommit(ss, s, opt, from, model.StoreFormat)
+	if err != nil {
+		return reports, err
+	}
+	reports = append(reports, rep...)
+	if remote {
+		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
+			return reports, fmt.Errorf("sync %s: %w", e.Name, err)
+		}
+	}
+	return reports, nil
+}
+
+// convertCommit applies the steps from format from to format to on HEAD and
+// commits the result as one commit.
+func convertCommit(ss *usecase.Session, s *store.Store, opt Options, from, to int) ([]Report, error) {
+	r := s.Repo()
 	head, err := r.Head()
 	if err != nil {
 		return nil, err
 	}
-	tree, err := r.TreeOf(head)
+	tr, src, err := treeAt(r, head)
 	if err != nil {
 		return nil, err
 	}
-	src := &gitSource{r: r, tree: tree}
-	tr := NewTree(src)
-	opt.Now = ss.Now()
-	reports, err := apply(tr, opt, from)
+	reports, err := apply(tr, opt, from, to)
 	if err != nil {
 		return nil, err
 	}
 	if src.err != nil {
 		return nil, src.err
 	}
-	if dryRun {
-		return reports, nil
-	}
-	if err := setFormat(tr); err != nil {
+	if err := setFormat(tr, to); err != nil {
 		return nil, err
 	}
-	op := store.Op{Name: "convert", Detail: fmt.Sprintf("format %d to %d", from, model.StoreFormat)}
+	op := store.Op{Name: "convert", Detail: fmt.Sprintf("format %d to %d", from, to)}
 	if _, err := ss.CommitFiles(s, head, tr.Changes(), op); err != nil {
 		return nil, err
 	}
-	if synced {
-		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
-			return reports, fmt.Errorf("sync %s: %w", e.Name, err)
-		}
-	}
 	return reports, nil
+}
+
+// dryRunOf is what Run would report, written nowhere. A clone that would go
+// to origin by fast-forward is listed with the steps that would follow, read
+// from origin's files; one with changes not pushed, with the steps from its
+// own files.
+func dryRunOf(r *gitrepo.Repo, opt Options, from int, p plan) ([]Report, error) {
+	var reports []Report
+	at, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	if p.fastForward {
+		if at, err = r.RemoteHead("origin"); err != nil {
+			return nil, err
+		}
+		reports = append(reports, Report{From: from, To: p.format, Lines: []string{fastForwardLine(p.format, "する（--dry-run のため何も書かない）")}})
+		from = p.format
+	}
+	if from >= model.StoreFormat {
+		return reports, nil
+	}
+	tr, src, err := treeAt(r, at)
+	if err != nil {
+		return nil, err
+	}
+	rest, err := apply(tr, opt, from, model.StoreFormat)
+	if err != nil {
+		return nil, err
+	}
+	if src.err != nil {
+		return nil, src.err
+	}
+	return append(reports, rest...), nil
+}
+
+// treeAt is the files of the commit as a tree for the steps.
+func treeAt(r *gitrepo.Repo, commit plumbing.Hash) (*Tree, *gitSource, error) {
+	tree, err := r.TreeOf(commit)
+	if err != nil {
+		return nil, nil, err
+	}
+	src := &gitSource{r: r, tree: tree}
+	return NewTree(src), src, nil
+}
+
+// fastForwardLine says that a clone with nothing not pushed, which origin has
+// gone ahead of in format, goes to the format of origin without converting.
+func fastForwardLine(to int, when string) string {
+	return fmt.Sprintf("リモートがすでに形式 %d に変換されていて、push していない変更もないので、変換せずにリモートへ fast-forward %s", to, when)
 }
 
 // Result is what hh store convert answers with --json.
@@ -128,11 +212,11 @@ func ResultOf(reports []Report, dryRun bool) Result {
 	return Result{DryRun: dryRun, Steps: reports}
 }
 
-// apply runs the steps from format from on, each on what the one before made,
-// and gives each report the format it read.
-func apply(tr *Tree, opt Options, from int) ([]Report, error) {
+// apply runs the steps from format from up to format to, each on what the one
+// before made, and gives each report the formats it read and wrote.
+func apply(tr *Tree, opt Options, from, to int) ([]Report, error) {
 	var reports []Report
-	for f := from; f < model.StoreFormat; f++ {
+	for f := from; f < to; f++ {
 		i := slices.IndexFunc(steps, func(st Step) bool { return st.From == f })
 		if i < 0 {
 			return nil, fmt.Errorf("there is no step that converts format %d", f)
@@ -141,20 +225,20 @@ func apply(tr *Tree, opt Options, from int) ([]Report, error) {
 		if err != nil {
 			return nil, fmt.Errorf("format %d to %d: %w", f, f+1, err)
 		}
-		rep.From = f
+		rep.From, rep.To = f, f+1
 		rep.Lines = append(rep.Lines, fmt.Sprintf("store.yaml の format を %d から %d にした", f, f+1))
 		reports = append(reports, rep)
 	}
 	return reports, nil
 }
 
-// setFormat makes store.yaml say the newest format.
-func setFormat(tr *Tree) error {
+// setFormat makes store.yaml say format to.
+func setFormat(tr *Tree, to int) error {
 	m, err := model.DecodeStoreMeta(tr.Read(model.StoreMetaPath))
 	if err != nil {
 		return fmt.Errorf("%s: %w", model.StoreMetaPath, err)
 	}
-	m.Format = model.StoreFormat
+	m.Format = to
 	b, err := m.Encode()
 	if err != nil {
 		return err
@@ -163,47 +247,50 @@ func setFormat(tr *Tree) error {
 	return nil
 }
 
-// fastForwardLine says what a clone does that has nothing to convert because
-// origin was converted already.
-const fastForwardLine = "リモートがすでに新しい形式に変換されていて、push していない変更もないので、変換せずにリモートへ fast-forward "
+// plan is what the fetch showed about origin, in format terms.
+type plan struct {
+	fastForward bool // nothing not pushed, origin ahead in format: go to origin
+	diverged    bool // changes not pushed, origin ahead in format: convert them to format
+	format      int  // the format of origin, for the two above
+}
 
-// checkSynced is nil when the store is in sync with origin, as of the fetch
-// that was just made, or in the state sync.format_diverged names: changes not
-// pushed, and origin in a newer format than from. Origin with no commit at all
-// has nothing the store could differ from. fastForward is true when the store
-// has nothing that origin lacks and origin is in the newest format: there is
-// nothing to convert, the store goes to origin.
-func checkSynced(r *gitrepo.Repo, from int) (fastForward bool, err error) {
+// checkSynced is the zero plan when the store is in sync with origin, as of
+// the fetch that was just made, or when origin has no commit at all (nothing
+// the store could differ from). When origin is in a format ahead of from, but
+// not past the newest, the plan is fastForward (the store has nothing origin
+// lacks) or diverged (it has). Otherwise it is store.convert_unsynced, or
+// store.newer_format for an origin this version cannot read.
+func checkSynced(r *gitrepo.Repo, from int) (plan, error) {
 	remote, err := r.RemoteHead("origin")
 	if err != nil {
-		return false, err
+		return plan{}, err
 	}
 	if remote.IsZero() {
-		return false, nil
+		return plan{}, nil
+	}
+	rf, ferr := replicate.FormatAt(r, remote)
+	if errors.Is(ferr, model.ErrNewerFormat) {
+		return plan{}, ferr
 	}
 	head, err := r.Head()
 	if err != nil {
-		return false, err
+		return plan{}, err
 	}
 	has, err := r.IsAncestor(remote, head) // false: origin has a commit the store lacks
 	if err != nil {
-		return false, err
+		return plan{}, err
 	}
 	unpushed, err := replicate.Unpushed(r)
 	if err != nil {
-		return false, err
+		return plan{}, err
 	}
-	if has && unpushed == 0 {
-		return false, nil
+	switch {
+	case has && unpushed == 0:
+		return plan{}, nil
+	case !has && ferr == nil && rf > from && rf <= model.StoreFormat:
+		return plan{fastForward: unpushed == 0, diverged: unpushed > 0, format: rf}, nil
 	}
-	rf, ferr := replicate.FormatAt(r, remote)
-	if !has && unpushed > 0 && ferr == nil && rf > from {
-		return false, nil // sync.format_diverged: the sync after the conversion merges
-	}
-	if !has && unpushed == 0 && ferr == nil && rf == model.StoreFormat {
-		return true, nil
-	}
-	return false, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
+	return plan{}, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
 		errors.New("the store is not in sync with its remote, so it is not converted; sync it first (the remote has changes the store lacks, or the store has changes it has not pushed)"))
 }
 

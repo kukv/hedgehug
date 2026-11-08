@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -428,7 +429,7 @@ func TestRunRefusesAnUnsyncedStore(t *testing.T) {
 	if headOf(t, f.ts) != before || formatOf(t, f.ts) != 1 {
 		t.Error("the refused conversion wrote")
 	}
-	// a dry run does not look at the remote
+	// a dry run is not refused for it: it only lists
 	if _, err := Run(f.ts.Session, Options{}, true); err != nil {
 		t.Errorf("dry run: %v", err)
 	}
@@ -443,7 +444,10 @@ func TestRunRefusesAnUnsyncedStore(t *testing.T) {
 // pushElsewhere puts a commit on origin that the store of f.ts lacks, as a
 // clone elsewhere would. The store of f.ts is in format 1, which hedgehug does
 // not clone, so the clone is made with the repository library.
-func pushElsewhere(t *testing.T, f *remoteFx) {
+func pushElsewhere(t *testing.T, f *remoteFx) { pushFile(t, f, "notes.txt", "y") }
+
+// pushFile is pushElsewhere with the file it commits.
+func pushFile(t *testing.T, f *remoteFx, rel, body string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "clone")
 	r, err := gitrepo.Clone(f.remote, dir)
@@ -451,10 +455,13 @@ func pushElsewhere(t *testing.T, f *remoteFx) {
 		t.Fatal(err)
 	}
 	defer func() { _ = r.Close() }()
-	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("y"), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, filepath.FromSlash(rel))), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Commit(gitrepo.Commit{Paths: []string{"notes.txt"}, Subject: "elsewhere", Author: config.CommitAuthor(usecasetest.TestAccount), When: f.ts.Now()}); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(rel)), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "elsewhere", Author: config.CommitAuthor(usecasetest.TestAccount), When: f.ts.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.Push("origin"); err != nil {
@@ -468,7 +475,15 @@ func TestFormatDivergedAndTheWayBack(t *testing.T) {
 	// a second clone: it takes origin as it is, in format 1, and has a change
 	// of its own that is not pushed
 	b := cloneOld(t, a)
-	commitRaw(t, b, "mine", map[string]string{"notes.txt": "mine"})
+	// including a task at the root, which goes under 未分類, and takes the
+	// number the other clone gives to 未分類
+	mine, _ := rawTask(t, a.o.ws, 7, "task", "mine at the root", nil)
+	mine.Rank, _ = model.Between("", "")
+	enc, err := mine.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitRaw(t, b, "mine", map[string]string{"notes.txt": "mine", model.TaskPath(mine.ULID): string(enc)})
 
 	// the first clone converts and pushes
 	if _, err := Run(a.ts.Session, Options{}, false); err != nil {
@@ -518,13 +533,31 @@ func TestFormatDivergedAndTheWayBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := 0
+	ids := map[string]bool{}
+	var unc model.ULID
 	for _, e := range ix.Tasks() {
 		if e.Title == merge.Uncategorized {
 			n++
+			unc = e.ULID
 		}
+		if ids[e.ID] {
+			t.Errorf("the id %s is on two tasks", e.ID)
+		}
+		ids[e.ID] = true
 	}
 	if n != 1 {
 		t.Errorf("%d 未分類 projects, want 1", n)
+	}
+	// both clones made 未分類 the same, so the two updated times are one
+	raw, err := os.ReadFile(filepath.Join(storeDir(t, b), filepath.FromSlash(model.TaskPath(unc)))) //nolint:gosec // the test's store
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, err := model.DecodeTask(raw); err != nil || !u.Updated.Equal(a.o.ws.Created) {
+		t.Errorf("未分類 updated = %v, %v; want the creation of the workspace", u, err)
+	}
+	if e, ok := ix.Task(mine.ULID); !ok || e.Parent == nil || *e.Parent != unc {
+		t.Errorf("its task at the root is not under 未分類: %+v", e)
 	}
 	r, err := b.DoctorOne(false)
 	if err != nil {
@@ -572,6 +605,89 @@ func TestBehindAConvertedOriginFastForwards(t *testing.T) {
 	// and again: nothing to do
 	if reports, err := Run(b.Session, Options{}, false); err != nil || len(reports) != 0 {
 		t.Errorf("second run = %v, %v", reports, err)
+	}
+}
+
+func TestAnOriginOfANewerFormatIsNotUnsynced(t *testing.T) {
+	t.Parallel()
+	f := newRemoteFx(t)
+	pushFile(t, f, model.StoreMetaPath, "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: me\nformat: 99\n")
+	_, err := Run(f.ts.Session, Options{}, false)
+	wantCode(t, err, usecase.KindInvalid, "store.newer_format")
+}
+
+// withFormat3 stands a third format in: the steps get one that writes
+// step3.txt, and the newest format is 3. The test must not be parallel.
+func withFormat3(t *testing.T) {
+	t.Helper()
+	was, wasSteps := model.StoreFormat, steps
+	model.StoreFormat = 3
+	steps = append(slices.Clone(steps), Step{From: 2, Apply: func(tr *Tree, _ Options) (Report, error) {
+		tr.Write("step3.txt", []byte("x"))
+		return Report{Lines: []string{"step3"}}, nil
+	}})
+	t.Cleanup(func() { model.StoreFormat, steps = was, wasSteps })
+}
+
+func TestAnOriginInAMiddleFormatIsFastForwardedToAndConvertedOn(t *testing.T) {
+	a := newRemoteFx(t)
+	b := cloneOld(t, a)
+	if _, err := Run(a.ts.Session, Options{}, false); err != nil { // origin is in format 2
+		t.Fatal(err)
+	}
+	converted := originHead(t, a.remote)
+	withFormat3(t)
+	reports, err := Run(b.Session, Options{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 2 || reports[0].From != 1 || reports[0].To != 2 || reports[1].From != 2 || reports[1].To != 3 {
+		t.Fatalf("reports = %+v", reports)
+	}
+	if !strings.Contains(strings.Join(reports[0].Lines, "\n"), "fast-forward") {
+		t.Errorf("the first report is not the fast-forward: %v", reports[0].Lines)
+	}
+	if formatOf(t, b) != 3 || headOf(t, b) != originHead(t, a.remote) {
+		t.Errorf("format %d, head %s, origin %s", formatOf(t, b), headOf(t, b), originHead(t, a.remote))
+	}
+	if _, err := os.Stat(filepath.Join(storeDir(t, b), "step3.txt")); err != nil {
+		t.Error(err)
+	}
+	// one commit of its own, on the conversion of the first clone
+	r, err := gitrepo.Open(storeDir(t, b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	h, _ := r.Head()
+	log, err := r.LogFrom(h, 2)
+	if err != nil || len(log) != 2 || log[1].Hash.String() != converted {
+		t.Errorf("log = %v, %v; want the conversion of step 3 on %s", log, err, converted)
+	}
+}
+
+func TestAnOriginInAMiddleFormatWithChangesNotPushed(t *testing.T) {
+	a := newRemoteFx(t)
+	b := cloneOld(t, a)
+	commitRaw(t, b, "mine", map[string]string{"notes.txt": "mine"})
+	if _, err := Run(a.ts.Session, Options{}, false); err != nil { // origin is in format 2
+		t.Fatal(err)
+	}
+	withFormat3(t)
+	reports, err := Run(b.Session, Options{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 2 || reports[0].To != 2 || reports[1].From != 2 || reports[1].To != 3 {
+		t.Fatalf("reports = %+v", reports)
+	}
+	if formatOf(t, b) != 3 || headOf(t, b) != originHead(t, a.remote) {
+		t.Errorf("format %d; the clone is not what origin has", formatOf(t, b))
+	}
+	for _, f := range []string{"step3.txt", "notes.txt"} {
+		if _, err := os.Stat(filepath.Join(storeDir(t, b), f)); err != nil {
+			t.Error(err)
+		}
 	}
 }
 

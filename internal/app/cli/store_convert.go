@@ -43,7 +43,7 @@ func (a *app) storeConvertCmd() *cobra.Command {
 				return err
 			}
 			for _, r := range reports {
-				_, _ = fmt.Fprintf(a.stdout, "Format %d -> %d\n", r.From, r.From+1)
+				_, _ = fmt.Fprintf(a.stdout, "Format %d -> %d\n", r.From, r.To)
 				for _, l := range r.Lines {
 					_, _ = fmt.Fprintf(a.stdout, "  %s\n", l)
 				}

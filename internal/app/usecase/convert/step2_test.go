@@ -396,4 +396,29 @@ func TestStep2LeavesWhatItCannotReadAlone(t *testing.T) {
 	}
 }
 
+// A deleted task is placed as a live one is, so that restoring it breaks no
+// rule: a workspace with nothing at its root but a deleted task still gets
+// the 未分類 project.
+func TestStep2MovesDeletedTasksToo(t *testing.T) {
+	t.Parallel()
+	s := newOldStore(t)
+	gone := s.task("task", nil, "deleted at the root")
+	gone.DeletedAt = &created
+	b, err := gone.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.files[model.TaskPath(gone.ULID)] = b
+	tr, _ := s.apply(Options{})
+	u := model.DerivedULID(created, "uncategorized "+s.ws.ULID.String())
+	unc, err := model.DecodeTask(tr.Read(model.TaskPath(u)))
+	if err != nil || unc.DeletedAt != nil {
+		t.Fatalf("the 未分類 project is not there and live: %v, %v", unc, err)
+	}
+	want(t, tr, gone, "task", unc)
+	if taskIn(t, tr, gone).DeletedAt == nil {
+		t.Error("the task is not deleted any more")
+	}
+}
+
 func ptr[T any](v T) *T { return &v }

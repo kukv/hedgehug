@@ -5,8 +5,10 @@ import (
 	"fmt"
 )
 
-// StoreFormat is the newest store format this version reads and writes.
-const StoreFormat = 2
+// StoreFormat is the newest store format this version reads and writes. It is
+// a variable only so that the tests of hh store convert can stand in a newer
+// format; nothing else assigns it.
+var StoreFormat = 2
 
 // ErrNewerFormat means the store was written by a newer Hedgehug.
 var ErrNewerFormat = errors.New("the store uses a newer format; update Hedgehug")
