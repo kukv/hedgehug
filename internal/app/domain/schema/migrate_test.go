@@ -3,7 +3,6 @@ package schema
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 
@@ -19,11 +18,6 @@ const migrateSrc = `statuses:
 - {name: doing, category: doing, default: true}
 - {name: done, category: done, default: true}
 - {name: canceled, category: canceled, default: true}
-kinds:
-- {name: project, role: container}
-- {name: epic, role: container, parents: [root, project]}
-- {name: task, role: work, parents: [root, project, epic], default: true}
-- {name: bug, role: work, parents: [root, epic, project]}
 props:
   priority: {type: enum, values: [low, mid, high]}
   points: {type: number}
@@ -92,10 +86,6 @@ func statusNames(s *Schema) string {
 	})
 }
 
-func kindParents(s *Schema) string {
-	return names(s.Kinds, func(k Kind) string { return fmt.Sprintf("%s:%v", k.Name, k.Parents) })
-}
-
 func propNames(s *Schema) string {
 	return names(s.Props, func(p Prop) string { return p.Name })
 }
@@ -114,7 +104,6 @@ func TestMigrate(t *testing.T) {
 			"scoped.statuses":    "[open ready doing done canceled]",
 			"scoped.transitions": "open:[done]",
 			"scoped.required":    "open:[points] ready:[size]",
-			"kinds":              "project:[] epic:[root project] task:[root project epic] bug:[root epic project]",
 			"scoped.templates":   "map[bug:b epic:e project:p]",
 			"props":              "priority points size area refs ref",
 			"props.priority":     "[low mid high]",
@@ -126,15 +115,6 @@ func TestMigrate(t *testing.T) {
 			"scoped.statuses":    "[ready doing done canceled]",
 			"scoped.transitions": "ready:[done]",
 			"scoped.required":    "ready:[points size]",
-		}},
-		{"rename a kind", Migration{Target: TargetKind, Old: "epic", New: "feature"}, map[string]string{
-			"kinds":            "project:[] feature:[root project] task:[root project feature] bug:[root feature project]",
-			"scoped.templates": "map[bug:b feature:e project:p]",
-			"statuses":         "todo* ready doing* done* canceled*",
-		}},
-		{"merge a kind", Migration{Target: TargetKind, Old: "epic", New: "project"}, map[string]string{
-			"kinds":            "project:[] task:[root project] bug:[root project]",
-			"scoped.templates": "map[bug:b project:p]",
 		}},
 		{"rename a prop", Migration{Target: TargetProp, Old: "points", New: "pts"}, map[string]string{
 			"props":           "priority pts size area refs ref",
@@ -168,7 +148,6 @@ func TestMigrate(t *testing.T) {
 				"scoped.statuses":    fmt.Sprint(got.Scoped[0].Statuses),
 				"scoped.transitions": listsString(got.Scoped[0].Workflow.Transitions),
 				"scoped.required":    listsString(got.Scoped[0].Workflow.Required),
-				"kinds":              kindParents(got),
 				"scoped.templates":   fmt.Sprint(got.Scoped[0].Templates.Default),
 				"props":              propNames(got),
 				"props.priority":     fmt.Sprint(pr.Values),
@@ -189,7 +168,6 @@ func TestMigrateKeepsReceiver(t *testing.T) {
 	t.Parallel()
 	for _, m := range []Migration{
 		{Target: TargetStatus, Old: "todo", New: "ready"},
-		{Target: TargetKind, Old: "epic", New: "project"},
 		{Target: TargetProp, Old: "points", New: "size"},
 		{Target: TargetValue, Prop: "priority", Old: "mid", New: "high"},
 	} {
@@ -260,7 +238,6 @@ func TestMigrateRenameKeepsNotes(t *testing.T) {
 	}{
 		{Migration{Target: TargetProp, Old: "points", New: "pts"}, "  points:\n    type: number # 数値\n    min: 0\n", "  pts:\n    type: number # 数値\n    min: 0\n", "  priority: {type: enum, values: [low, high], order: desc} # 未知のキー\n"},
 		{Migration{Target: TargetStatus, Old: "todo", New: "open"}, "    todo: [in_progress] # 開始\n", "    open: [in_progress] # 開始\n", "# 既定の未着手\n- name: open\n  label: 未着手 # ラベル\n"},
-		{Migration{Target: TargetKind, Old: "task", New: "work"}, "      task: release-checklist\n", "      work: release-checklist\n", "  role: work # 作業\n  default: true\n  wip_limit: 5\n"},
 	} {
 		src, err := os.ReadFile("testdata/extras.yaml")
 		if err != nil {
@@ -278,40 +255,9 @@ func TestMigrateRenameKeepsNotes(t *testing.T) {
 		if tc.m.Target == TargetStatus {
 			want = strings.Replace(want, "- name: todo\n", "- name: open\n", 1)
 		}
-		if tc.m.Target == TargetKind {
-			want = strings.Replace(want, "- name: task\n", "- name: work\n", 1)
-		}
 		if out := encodeString(t, got); out != want || !strings.Contains(out, tc.unmoved) {
 			t.Errorf("%+v:\n%s\nwant:\n%s", tc.m, out, want)
 		}
-	}
-}
-
-func TestMigrateKindMergeDefault(t *testing.T) {
-	t.Parallel()
-	got, err := decodeMigrate(t).Migrate(Migration{Target: TargetKind, Old: "task", New: "bug"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k, _ := got.Kind("bug"); !k.Default {
-		t.Errorf("bug = %+v, want the default", k)
-	}
-	if ps := got.Check(); len(ps) > 0 {
-		t.Errorf("Check() = %v", ps)
-	}
-
-	got, err = decodeMigrate(t).Migrate(Migration{Target: TargetKind, Old: "task", New: "epic"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k, _ := got.Kind("epic"); k.Default {
-		t.Errorf("epic = %+v: a container took the default of work", k)
-	}
-	ps := got.Check()
-	if !slices.ContainsFunc(ps, func(p Problem) bool {
-		return strings.Contains(p.Msg, "the work role needs exactly one default kind, has 0")
-	}) {
-		t.Errorf("Check() = %v, want no default kind", ps)
 	}
 }
 
@@ -323,8 +269,6 @@ func TestMigrateErrors(t *testing.T) {
 	}{
 		{Migration{Target: TargetStatus, Old: "nope", New: "x"}, `status "nope" is not defined`},
 		{Migration{Target: TargetStatus, Old: "todo", New: "todo"}, "the same"},
-		{Migration{Target: TargetKind, Old: "nope", New: "x"}, `kind "nope" is not defined`},
-		{Migration{Target: TargetKind, Old: "task", New: "task"}, "the same"},
 		{Migration{Target: TargetProp, Old: "nope", New: "x"}, `property "nope" is not defined`},
 		{Migration{Target: TargetProp, Old: "points", New: "points"}, "the same"},
 		{Migration{Target: TargetProp, Old: "priority", New: "points"}, "types differ"},
@@ -385,8 +329,6 @@ func TestApplyTask(t *testing.T) {
 	}{
 		{"status", Migration{Target: TargetStatus, Old: "todo", New: "ready"}, true, func(x *taskT) string { return x.Status }, "ready"},
 		{"other status", Migration{Target: TargetStatus, Old: "doing", New: "ready"}, false, func(x *taskT) string { return x.Status }, "todo"},
-		{"kind", Migration{Target: TargetKind, Old: "task", New: "bug"}, true, func(x *taskT) string { return x.Kind }, "bug"},
-		{"other kind", Migration{Target: TargetKind, Old: "epic", New: "bug"}, false, func(x *taskT) string { return x.Kind }, "task"},
 		{"prop", Migration{Target: TargetProp, Old: "points", New: "size"}, true, func(x *taskT) string { return x.keys() + " " + x.prop("size") }, "priority size area 3"},
 		{"absent prop", Migration{Target: TargetProp, Old: "ref", New: "refs"}, false, func(x *taskT) string { return x.keys() }, "priority points area"},
 		{"value", Migration{Target: TargetValue, Prop: "priority", Old: "mid", New: "high"}, true, func(x *taskT) string { return x.prop("priority") }, "high"},

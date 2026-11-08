@@ -3,51 +3,32 @@ package schema
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"go.yaml.in/yaml/v4"
 )
 
 var (
-	ErrNotDefined       = errors.New("not defined")
-	ErrOrderStale       = errors.New("the names differ from the schema")
-	ErrDefaultContainer = errors.New("only a kind of the work role can be the default")
-	ErrNotTaskRef       = errors.New("only a task_ref property has multi, inverse and symmetric")
-	ErrNotEnum          = errors.New("not an enum or multi_enum property")
-	ErrValueInvalid     = errors.New("invalid value")
-	ErrNameTaken        = errors.New("the name is already defined")
+	ErrNotDefined   = errors.New("not defined")
+	ErrOrderStale   = errors.New("the names differ from the schema")
+	ErrNotTaskRef   = errors.New("only a task_ref property has multi, inverse and symmetric")
+	ErrNotEnum      = errors.New("not an enum or multi_enum property")
+	ErrValueInvalid = errors.New("invalid value")
+	ErrNameTaken    = errors.New("the name is already defined")
 )
-
-// ParentsEmptyError is a removal of a kind that would leave Kinds with no
-// parent. An empty parents list is left out of the file, where it means
-// "anywhere", so the removal is refused instead.
-type ParentsEmptyError struct{ Kinds []string }
-
-func (e *ParentsEmptyError) Error() string {
-	return "kinds left with no parent: " + strings.Join(e.Kinds, ", ")
-}
 
 func nameTaken(what, name string) error { return fmt.Errorf("%s %q: %w", what, name, ErrNameTaken) }
 
 func notDefined(what, name string) error { return fmt.Errorf("%s %q: %w", what, name, ErrNotDefined) }
 
-// StatusChange, KindChange and PropChange say what changes. A Name is the
+// StatusChange and PropChange say what changes. A Name is the
 // new name of the definition; the tasks that use it are rewritten by the
 // Migrations the change returns.
 type StatusChange struct {
 	Name, Label, Color *string
 	Category           *Category
 	Default            bool
-}
-
-type KindChange struct {
-	Name, Label, Icon, Color, Template *string
-	Role                               *Role
-	Parents                            *[]string
-	Default                            bool
 }
 
 type PropChange struct {
@@ -194,103 +175,6 @@ func (s *Schema) OrderStatuses(names []string) (*Schema, error) {
 	out := s.clone()
 	var err error
 	if out.Statuses, err = reorder(out.Statuses, func(x Status) string { return x.Name }, names); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (s *Schema) AddKind(k Kind) *Schema {
-	out := s.clone()
-	out.Kinds = append(out.Kinds, k)
-	return out
-}
-
-// ChangeKind returns s with the kind name changed as ch says, and the
-// migration that a new name needs for the tasks. Only a kind of the work
-// role can be made the default; it takes it from the other.
-func (s *Schema) ChangeKind(name string, ch KindChange) (*Schema, []Migration, error) {
-	out := s.clone()
-	i := slices.IndexFunc(out.Kinds, func(x Kind) bool { return x.Name == name })
-	if i < 0 {
-		return nil, nil, notDefined("kind", name)
-	}
-	if ch.Name != nil && *ch.Name != name {
-		if _, ok := s.Kind(*ch.Name); ok {
-			return nil, nil, nameTaken("kind", *ch.Name)
-		}
-	}
-	k := &out.Kinds[i]
-	set(&k.Label, ch.Label)
-	set(&k.Icon, ch.Icon)
-	set(&k.Color, ch.Color)
-	set(&k.Template, ch.Template)
-	set(&k.Role, ch.Role)
-	if ch.Parents != nil {
-		k.Parents = slices.Clone(*ch.Parents)
-	}
-	if ch.Default {
-		if k.Role != RoleWork {
-			return nil, nil, ErrDefaultContainer
-		}
-		for j := range out.Kinds {
-			if out.Kinds[j].Role == RoleWork {
-				out.Kinds[j].Default = j == i
-			}
-		}
-	}
-	if ch.Name == nil || *ch.Name == name {
-		return out, nil, nil
-	}
-	m := Migration{Target: TargetKind, Old: name, New: *ch.Name}
-	out, err := out.Migrate(m)
-	return out, []Migration{m}, err
-}
-
-// RemoveKind returns s without the kind name, without it in the parents of
-// the other kinds and in the default templates of the overrides. A kind
-// left with no parent is a ParentsEmptyError.
-func (s *Schema) RemoveKind(name string) (*Schema, error) {
-	out := s.clone()
-	i := slices.IndexFunc(out.Kinds, func(x Kind) bool { return x.Name == name })
-	if i < 0 {
-		return nil, notDefined("kind", name)
-	}
-	out.Kinds = slices.Delete(out.Kinds, i, i+1)
-	var empty []string
-	for j := range out.Kinds {
-		ps := out.Kinds[j].Parents
-		if !slices.Contains(ps, name) {
-			continue
-		}
-		ps = slices.DeleteFunc(slices.Clone(ps), func(x string) bool { return x == name })
-		if len(ps) == 0 {
-			empty = append(empty, out.Kinds[j].Name)
-		}
-		out.Kinds[j].Parents = ps
-	}
-	if len(empty) > 0 {
-		return nil, &ParentsEmptyError{Kinds: empty}
-	}
-	for j := range out.Scoped {
-		if t := out.Scoped[j].Templates; t != nil && t.Default != nil {
-			d := maps.Clone(t.Default)
-			delete(d, name)
-			if len(d) == 0 && len(t.Only) == 0 {
-				out.Scoped[j].Templates = nil // so that no `templates: {}` is left
-				continue
-			}
-			nt := *t
-			nt.Default = d
-			out.Scoped[j].Templates = &nt
-		}
-	}
-	return out, nil
-}
-
-func (s *Schema) OrderKinds(names []string) (*Schema, error) {
-	out := s.clone()
-	var err error
-	if out.Kinds, err = reorder(out.Kinds, func(x Kind) string { return x.Name }, names); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -481,14 +365,12 @@ func (s *Schema) AddedProblems(before []Problem) []Problem {
 	return out
 }
 
-// TaskUses reports whether t uses the definition name: its status or kind,
+// TaskUses reports whether t uses the definition name: its status,
 // a value for the property, or the value name of the property prop.
 func TaskUses(t *model.Task, target Target, prop, name string) bool {
 	switch target {
 	case TargetStatus:
 		return t.Status == name
-	case TargetKind:
-		return t.Kind == name
 	case TargetProp:
 		return t.Props.Get(name) != nil
 	case TargetValue:

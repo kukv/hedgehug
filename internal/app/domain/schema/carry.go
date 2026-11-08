@@ -17,7 +17,7 @@ func (s *Schema) Carry(sc Scoped, templateExists func(name string) bool) (Scoped
 	var dropped []string
 	drop := func(what, name string) { dropped = append(dropped, what+" "+name) }
 	hasStatus := func(name string) bool { _, ok := s.Status(name); return ok }
-	hasKind := func(name string) bool { _, ok := s.Kind(name); return ok }
+	hasKind := func(name string) bool { _, ok := KindOf(name); return ok }
 	hasField := func(name string) bool {
 		_, ok := s.Prop(name)
 		return ok || slices.Contains(requirableFields, name)

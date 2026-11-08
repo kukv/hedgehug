@@ -3,8 +3,8 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -106,40 +106,6 @@ func (s *Schema) Check() []Problem {
 		}
 	}
 
-	kinds := map[string]bool{}
-	workDefaults := 0
-	for i, k := range s.Kinds {
-		p := fmt.Sprintf("kinds[%d]", i)
-		switch {
-		case k.Name == "":
-			add(p, "schema.name_empty", "name is empty")
-		case kinds[k.Name]:
-			add(p, "schema.kind_twice", "kind %q is defined twice", k.Name)
-		}
-		kinds[k.Name] = true
-		if k.Role != RoleContainer && k.Role != RoleWork {
-			add(p, "schema.unknown_role", "unknown role %q", k.Role)
-		}
-		if k.Default && k.Role == RoleWork {
-			workDefaults++
-		}
-		if k.Template != "" {
-			if err := model.ValidTemplateName(k.Template); err != nil {
-				add(p+".template", "schema.bad_template_name", "%v", err)
-			}
-		}
-	}
-	for i, k := range s.Kinds {
-		for _, parent := range k.Parents {
-			if parent != Root && !kinds[parent] {
-				add(fmt.Sprintf("kinds[%d].parents", i), "schema.unknown_kind", "unknown kind %q", parent)
-			}
-		}
-	}
-	if workDefaults != 1 {
-		add("kinds", "schema.default_kind", "the work role needs exactly one default kind, has %d", workDefaults)
-	}
-
 	props := map[string]bool{}
 	for _, pr := range s.Props {
 		p := "props." + pr.Name
@@ -161,6 +127,25 @@ func (s *Schema) Check() []Problem {
 		}
 		if (pr.Inverse != "" || pr.Symmetric) && pr.Type != TypeTaskRef {
 			add(p, "schema.inverse_not_task_ref", "inverse and symmetric are only for task_ref")
+		}
+	}
+
+	checkTemplates := func(path string, t *Templates) {
+		if t == nil {
+			return
+		}
+		for _, name := range t.Only {
+			if err := model.ValidTemplateName(name); err != nil {
+				add(path+".only", "schema.bad_template_name", "%v", err)
+			}
+		}
+		for _, k := range slices.Sorted(maps.Keys(t.Default)) {
+			if _, ok := KindOf(k); !ok {
+				add(path+".default", "schema.unknown_kind", "unknown kind %q", k)
+			}
+			if err := model.ValidTemplateName(t.Default[k]); err != nil {
+				add(path+".default", "schema.bad_template_name", "%v", err)
+			}
 		}
 	}
 
@@ -214,26 +199,8 @@ func (s *Schema) Check() []Problem {
 		if sc.Workflow != nil {
 			checkWorkflow(p+".workflow", *sc.Workflow)
 		}
-		if sc.Templates != nil {
-			for _, name := range sc.Templates.Only {
-				if err := model.ValidTemplateName(name); err != nil {
-					add(p+".templates.only", "schema.bad_template_name", "%v", err)
-				}
-			}
-			keys := make([]string, 0, len(sc.Templates.Default))
-			for k := range sc.Templates.Default {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				if !kinds[k] {
-					add(p+".templates.default", "schema.unknown_kind", "unknown kind %q", k)
-				}
-				if err := model.ValidTemplateName(sc.Templates.Default[k]); err != nil {
-					add(p+".templates.default", "schema.bad_template_name", "%v", err)
-				}
-			}
-		}
+		checkTemplates(p+".templates", sc.Templates)
 	}
+	checkTemplates("templates", s.Templates)
 	return ps
 }

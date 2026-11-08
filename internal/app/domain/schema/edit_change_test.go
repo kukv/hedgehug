@@ -73,9 +73,6 @@ func TestChangeNameTaken(t *testing.T) {
 	if _, _, err := s.ChangeStatus("todo", StatusChange{Name: ptr("done")}); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("status: %v", err)
 	}
-	if _, _, err := s.ChangeKind("bug", KindChange{Name: ptr("task")}); !errors.Is(err, ErrNameTaken) {
-		t.Errorf("kind: %v", err)
-	}
 	if _, _, _, err := s.ChangeProp("due", PropChange{Name: ptr("start")}); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("prop: %v", err)
 	}
@@ -86,31 +83,6 @@ func TestChangeNameToItselfIsNoMigration(t *testing.T) {
 	_, ms, err := Default().ChangeStatus("todo", StatusChange{Name: ptr("todo"), Label: ptr("T")})
 	if err != nil || len(ms) != 0 {
 		t.Errorf("ms = %v, err = %v", ms, err)
-	}
-}
-
-func TestChangeKindNameRewritesReferences(t *testing.T) {
-	t.Parallel()
-	s := scopedBase(t, `scoped:
-- where: project:`+scopedULID+`
-  templates:
-    default: {task: bug-report}
-`)
-	got, ms, err := s.ChangeKind("task", KindChange{Name: ptr("item")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k, ok := got.Kind("item"); !ok || !k.Default || !slices.Contains(k.Parents, "item") {
-		t.Errorf("item = %+v, %v", k, ok)
-	}
-	if _, ok := got.Kind("task"); ok {
-		t.Error("task is still defined")
-	}
-	if d := got.Scoped[0].Templates.Default; d["item"] != "bug-report" || d["task"] != "" {
-		t.Errorf("templates.default = %v", d)
-	}
-	if want := []Migration{{Target: TargetKind, Old: "task", New: "item"}}; !slices.Equal(ms, want) {
-		t.Errorf("migrations = %v", ms)
 	}
 }
 
@@ -236,23 +208,6 @@ func TestChangePropValuesInvalid(t *testing.T) {
 	}
 }
 
-func TestChangeKindColor(t *testing.T) {
-	t.Parallel()
-	got, _, err := Default().ChangeKind("bug", KindChange{Color: ptr("teal")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k, _ := got.Kind("bug"); k.Color != "teal" {
-		t.Errorf("color = %q", k.Color)
-	}
-	if got, _, err = got.ChangeKind("bug", KindChange{Color: ptr("")}); err != nil {
-		t.Fatal(err)
-	}
-	if k, _ := got.Kind("bug"); k.Color != "" {
-		t.Errorf("color = %q", k.Color)
-	}
-}
-
 func TestDefaultLabels(t *testing.T) {
 	t.Parallel()
 	s := Dev()
@@ -260,7 +215,7 @@ func TestDefaultLabels(t *testing.T) {
 		[]string{"Backlog", "Todo", "On hold", "In progress", "Review", "Waiting", "Done", "Canceled"}) {
 		t.Errorf("statuses = %v", got)
 	}
-	if got := labelsOf(s.Kinds, func(x Kind) string { return x.Label }); !slices.Equal(got, []string{"Project", "Epic", "Story", "Task", "Bug"}) {
+	if got := labelsOf(Kinds, func(x KindDef) string { return x.Label }); !slices.Equal(got, []string{"Project", "Epic", "Story", "Task", "Bug", "Step"}) {
 		t.Errorf("kinds = %v", got)
 	}
 	for name, want := range map[string][2]string{"duplicates": {"Duplicates", "Duplicated by"}, "causes": {"Causes", "Caused by"}, "relates": {"Relates to", ""}} {

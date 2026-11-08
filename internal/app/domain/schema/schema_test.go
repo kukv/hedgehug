@@ -22,8 +22,8 @@ func TestSchemaRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Statuses) != 7 || s.Statuses[3].Color != "#3451D1" || len(s.Kinds) != 5 ||
-		s.Kinds[4].Template != "bug-report" || len(s.Props) != 6 || s.Props[0].Name != "priority" ||
+	if len(s.Statuses) != 7 || s.Statuses[3].Color != "#3451D1" || s.Templates == nil ||
+		s.Templates.Default["bug"] != "bug-report" || len(s.Props) != 6 || s.Props[0].Name != "priority" ||
 		!s.Props[5].Symmetric || len(s.Scoped) != 2 || s.Scoped[0].Templates.Default["task"] != "release-checklist" {
 		t.Errorf("decoded = %+v", s)
 	}
@@ -51,7 +51,7 @@ func TestSchemaEditKeepsComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"# kinds は「種類と階層」",
+		"# templates は「テンプレート」",
 		"- {name: review, label: レビュー, category: doing}\n",
 		"# リリース準備 v2.4",
 	} {
@@ -76,7 +76,7 @@ func TestSchemaKeepsUnknownKeys(t *testing.T) {
 		t.Fatalf("round trip changed the file (%v):\n%s", err, out)
 	}
 	s.Statuses = append(s.Statuses, Status{Name: "review", Category: CategoryDoing})
-	s.Kinds = append(s.Kinds, Kind{Name: "bug", Role: RoleWork})
+	s.Templates.Default["step"] = "check"
 	s.Scoped = append(s.Scoped, Scoped{Where: "project:01JBZ8K3QW7M2X9V4T6R5N8P0C"})
 	out, err = s.Encode()
 	if err != nil {
@@ -86,8 +86,7 @@ func TestSchemaKeepsUnknownKeys(t *testing.T) {
 		"- {name: backlog, category: todo, default: false, hint: 未知のキー}\n",
 		"# 既定の未着手\n- name: todo\n  label: 未着手 # ラベル\n  category: todo\n  default: true\n  sla: 3d\n",
 		"- {name: canceled, category: canceled, default: true}\n- {name: review, category: doing}\n",
-		"- {name: project, role: container, default: false, color: blue}\n",
-		"  role: work # 作業\n  default: true\n  wip_limit: 5\n",
+		"  default:\n    bug: bug-report # バグ\n    task: plain\n    step: check\n",
 		"  owner: github.com/yourname # 未知のキー\n",
 		"    default:\n      task: release-checklist\n      project: kickoff\n",
 		"  priority: {type: enum, values: [low, high], order: desc} # 未知のキー\n",
@@ -110,7 +109,7 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v\n%s", name, err, out)
 		}
-		if len(back.Statuses) != len(s.Statuses) || len(back.Kinds) != 5 || len(back.Props) != 8 {
+		if len(back.Statuses) != len(s.Statuses) || len(back.Props) != 8 {
 			t.Errorf("%s: re-decoded = %+v", name, back)
 		}
 		if !strings.Contains(string(out), "- {name: todo, label: Todo, category: todo, default: true}\n") {
@@ -123,12 +122,6 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 	if st, ok := Dev().Status("review"); !ok || st.Category != CategoryDoing {
 		t.Errorf("Dev review = %+v, %v", st, ok)
 	}
-	if k, ok := Default().Kind("project"); !ok || len(k.Parents) != 1 || k.Parents[0] != Root {
-		t.Errorf("project kind = %+v: parents must be only root", k)
-	}
-	if k, ok := Dev().Kind("project"); !ok || len(k.Parents) != 1 || k.Parents[0] != Root {
-		t.Errorf("Dev project kind = %+v: parents must be only root", k)
-	}
 }
 
 func TestLookups(t *testing.T) {
@@ -136,9 +129,6 @@ func TestLookups(t *testing.T) {
 	s := Default()
 	if st, ok := s.DefaultStatus(CategoryDoing); !ok || st.Name != "in_progress" {
 		t.Errorf("DefaultStatus(doing) = %+v, %v", st, ok)
-	}
-	if k, ok := s.DefaultKind(); !ok || k.Name != "task" {
-		t.Errorf("DefaultKind = %+v, %v", k, ok)
 	}
 	if p, ok := s.Prop("estimate"); !ok || p.Type != TypeDuration {
 		t.Errorf("Prop(estimate) = %+v, %v", p, ok)
@@ -218,7 +208,7 @@ func TestEncodeAddAndRemoveItems(t *testing.T) {
 	t.Parallel()
 	s, src := decodeNotes(t)
 	s.Statuses = append(s.Statuses, Status{Name: "canceled", Category: CategoryCanceled})
-	want := strings.Replace(src, "  x-note: keep\nkinds:", "  x-note: keep\n- name: canceled\n  category: canceled\nkinds:", 1)
+	want := strings.Replace(src, "  x-note: keep\nprops:", "  x-note: keep\n- name: canceled\n  category: canceled\nprops:", 1)
 	if got := encodeString(t, s); got != want {
 		t.Errorf("add:\n%s\nwant:\n%s", got, want)
 	}
@@ -260,18 +250,14 @@ func TestEncodeScopedKeepsNotes(t *testing.T) {
 
 func TestEncodeKeepsEmptyListOfSibling(t *testing.T) {
 	t.Parallel()
-	src := "kinds: [{name: a, role: work, parents: []}, {name: b, role: work}]\n"
+	const a, b = "'project:01JBZ8K3QW7M2X9V4T6R5N8P0B'", "'project:01JBZ8K3QW7M2X9V4T6R5N8P0C'"
+	src := "scoped: [{where: " + a + ", statuses: []}, {where: " + b + "}]\n"
 	s, err := Decode([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.Kinds[1].Label = "B"
-	want := "kinds: [{name: a, role: work, parents: []}, {name: b, label: B, role: work}]\n"
-	if got := encodeString(t, s); got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	s.Kinds[0].Label = "A"
-	want = "kinds: [{name: a, label: A, role: work, parents: []}, {name: b, label: B, role: work}]\n"
+	s.Scoped[1].Statuses = []string{"todo"}
+	want := "scoped: [{where: " + a + ", statuses: []}, {where: " + b + ", statuses: [todo]}]\n"
 	if got := encodeString(t, s); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

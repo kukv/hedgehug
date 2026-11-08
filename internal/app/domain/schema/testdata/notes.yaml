@@ -9,8 +9,6 @@ statuses:
   category: done
   default: false
   x-note: keep
-kinds:
-- {name: task, role: work, x-note: keep} # タスク
 props:
   # 優先度
   priority: {type: enum, values: [low, high], x-note: keep} # 選択
