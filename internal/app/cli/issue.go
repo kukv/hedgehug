@@ -97,7 +97,7 @@ func (a *app) ghCmd() *cobra.Command {
 		},
 	}
 	imp.Flags().StringVar(&in.Label, "label", "", "take the open issues with this label")
-	imp.Flags().StringVar(&in.Parent, "parent", "", "put the tasks under this task")
+	imp.Flags().StringVar(&in.Parent, "parent", "", "put the tasks under this task (default: the project of hedgehug use)")
 	imp.Flags().StringVar(&in.Workspace, "workspace", "", "put the tasks in this workspace")
 	imp.Flags().BoolVar(&in.DryRun, "dry-run", false, "only say how many it would make")
 	cmd.AddCommand(imp)

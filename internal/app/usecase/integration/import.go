@@ -6,6 +6,8 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -32,40 +34,54 @@ type ImportResult struct {
 
 // importTarget is where the new tasks go.
 type importTarget struct {
-	parent    *model.ULID
-	workspace model.ULID
+	parent     *model.ULID
+	parentKind string
+	workspace  model.ULID
 }
 
 func importPlace(ss *usecase.Session, ix *index.Index, in ImportInput) (importTarget, error) {
 	var to importTarget
+	var p *index.Entry
 	if in.Parent != "" {
-		p, err := ss.ResolveRef(ix, in.Parent)
-		if err != nil {
+		var err error
+		if p, err = ss.ResolveRef(ix, in.Parent); err != nil {
 			return to, err
 		}
 		if err := usecase.LiveParent(ix, p); err != nil {
 			return to, err
 		}
-		to.parent, to.workspace = &p.ULID, p.Workspace
+	} else if p = useProject(ss, ix); p == nil {
+		return to, usecase.NewErr(usecase.KindInvalid, "import.parent_required", errors.New("the parent is needed: give --parent, or set a project with hh use"))
 	}
+	to.parent, to.parentKind, to.workspace = &p.ULID, p.Kind, p.Workspace
 	if in.Workspace != "" {
 		w, err := usecase.ResolveWorkspace(ix, in.Workspace)
 		if err != nil {
 			return to, err
 		}
-		if in.Parent != "" && w.ULID != to.workspace {
+		if w.ULID != to.workspace {
 			return to, usecase.NewErr(usecase.KindInvalid, "task.workspace_mismatch", errors.New("the parent is in another workspace"))
 		}
 		to.workspace = w.ULID
 	}
-	if to.workspace.IsZero() {
-		u, err := usecase.OnlyWorkspace(ix)
-		if err != nil {
-			return to, err
-		}
-		to.workspace = u
-	}
 	return to, nil
+}
+
+// useProject is the project hh use set, when it is in this store and live.
+func useProject(ss *usecase.Session, ix *index.Index) *index.Entry {
+	_, p, err := ss.Config()
+	if err != nil {
+		return nil
+	}
+	st := current.Load(p.DataDir, nil)
+	if st.Use == nil {
+		return nil
+	}
+	e, ok := ix.Task(st.Use.Project)
+	if !ok || e.DeletedAt != nil || e.Kind != usecase.ProjectKind {
+		return nil
+	}
+	return e
 }
 
 // linkedIssues lists the issues that have a task: in use or unlinked, which
@@ -122,15 +138,18 @@ func ImportIssues(ss *usecase.Session, in ImportInput) (ImportResult, error) {
 		todo = append(todo, x)
 	}
 	out.Count = len(todo)
-	if in.DryRun || len(todo) == 0 {
+	if len(todo) == 0 {
 		return out, nil
 	}
 	to, err := importPlace(ss, ix, in)
 	if err != nil {
 		return out, err
 	}
+	if in.DryRun {
+		return out, nil
+	}
 	sc := ix.Schema()
-	kind := "task" // not DefaultKindUnder: an issue without a parent would become a project
+	kind := schema.DefaultKindUnder(to.parentKind)
 	status, err := usecase.DefaultTodo(sc)
 	if err != nil {
 		return out, err
