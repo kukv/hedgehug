@@ -281,7 +281,9 @@ describe("reorder", () => {
     const k = setup({ order: () => fail(422, "schema.value_invalid") });
     await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（todo）" }), down);
     await waitFor(() => expect(k.reload).toHaveBeenCalledWith("shared"));
-    expect(toasts.list.map((t) => t.message)).toEqual(["値が空か、すでにあります"]);
+    expect(toasts.list.map((t) => t.message)).toEqual([
+      "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
+    ]);
   });
 
   it("names the keys of the platform in the hint and on the handle", async () => {

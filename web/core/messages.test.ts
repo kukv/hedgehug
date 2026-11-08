@@ -261,7 +261,9 @@ describe("errorMessage", () => {
     expect(errorMessage(err("schema.not_enum"))).toBe(
       "値を持てるのは enum と multi_enum のプロパティだけです",
     );
-    expect(errorMessage(err("schema.value_invalid"))).toBe("値が空か、すでにあります");
+    expect(errorMessage(err("schema.value_invalid"))).toBe(
+      "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
+    );
   });
 
   it("words the errors of an override of a project", () => {
