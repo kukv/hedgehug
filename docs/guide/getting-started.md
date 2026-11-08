@@ -64,6 +64,9 @@ WEB-2  01M6QAZMJND1BXZNFVP2PXHFHP  done    bug                                Fi
 WEB-6  01M6QAZMK2R3Z8Y1W9E4T7H5BD  todo    project                            Website
 ```
 
+The team's store already holds more tasks than this; the example keeps three rows (WEB-3 to
+WEB-5 are left out).
+
 `hh show WEB-1` shows one task with its history. `hh ls status:todo` filters, and
 `hh ls --tree` shows the tasks under their parents.
 

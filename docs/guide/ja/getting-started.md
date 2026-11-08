@@ -54,6 +54,8 @@ WEB-2  01M6QAZMJND1BXZNFVP2PXHFHP  done    bug                                Fi
 WEB-6  01M6QAZMK2R3Z8Y1W9E4T7H5BD  todo    project                            Website
 ```
 
+チームの Store にはこれより多くのタスクがあります。例では 3 行だけを残しています（WEB-3 から WEB-5 は省いています）。
+
 `hh show WEB-1` は、1つのタスクを履歴つきで表示します。`hh ls status:todo` で絞り込み、`hh ls --tree` で親の下に並べます。
 
 ```bash

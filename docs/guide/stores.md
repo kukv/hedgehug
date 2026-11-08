@@ -85,8 +85,10 @@ format 2, in which the kinds of task are fixed (see [Planning](planning.md#kinds
 all of it as one commit, and a store with a remote has the result pushed. If the remote is in the
 same old format and the two differ (you have unpushed commits, or the remote has commits you
 lack), the command first syncs the store in the old format (fetch, merge, push), then converts
-and pushes, all in one run. Only when that sync fails (a push is refused, a merge stops) does it
-stop with `store.convert_unsynced` (HTTP 409), and the message tells the cause.
+and pushes, all in one run. When that sync fails (a push is refused, a merge stops) it stops
+with `store.convert_unsynced` (HTTP 409), and the message tells the cause. A remote in an older
+format than the store cannot be synced with at all; the command stops with the same code,
+without syncing, and says to convert the remote first.
 `--dry-run` neither syncs nor writes; it says that the sync would come first.
 
 ```console
