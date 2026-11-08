@@ -23,6 +23,7 @@ const sch = {
     relates: { type: "task_ref", multi: true, symmetric: true },
     duplicates: { type: "task_ref", multi: true, label: "重複", inverse: "重複されている" },
   },
+  prop_order: ["priority", "points", "relates", "duplicates"],
   workflow: { transitions: { done: ["todo"] }, required: { done: ["points"] } } as Record<
     "transitions" | "required",
     Record<string, string[]>
@@ -204,6 +205,32 @@ describe("SettingsSchema", () => {
     await waitFor(() => expect(within(row(/^priority enum/)).getByText("2")).toBeVisible());
     expect(within(row(/priority › low/)).getByText("0")).toBeVisible();
     expect(within(row(/priority › high/)).getByText("2")).toBeVisible();
+  });
+
+  it("lists the properties and the relations in the order of the schema", async () => {
+    const ordered = {
+      ...sch,
+      props: {
+        a: { type: "number" },
+        b: { type: "number" },
+        r1: { type: "task_ref" },
+        r2: { type: "task_ref" },
+      },
+      prop_order: ["b", "a", "r2", "r1"],
+    };
+    const { unmount } = setup({ tab: "props", schema: ordered as unknown as typeof sch });
+    await screen.findByRole("row", { name: /^b / });
+    const names = (rows: HTMLElement[]) => rows.map((r) => r.textContent?.[0]);
+    expect(names(screen.getAllByRole("row").slice(1))).toEqual(["b", "a"]);
+    unmount();
+    setup({ tab: "relations", schema: ordered as unknown as typeof sch });
+    await screen.findByRole("row", { name: /^r2/ });
+    expect(
+      screen
+        .getAllByRole("row")
+        .slice(2)
+        .map((r) => r.textContent?.slice(0, 2)),
+    ).toEqual(["r2", "r1"]);
   });
 
   it("lists the relations: blocked_by built in and without actions, then the task_ref properties", async () => {
