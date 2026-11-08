@@ -43,8 +43,13 @@ func TestKindOrderRolesAndDefault(t *testing.T) {
 	if !slices.Equal(names, []string{"project", "epic", "story", "task", "bug", "step"}) {
 		t.Errorf("Kinds = %v", names)
 	}
-	if DefaultKind != "task" {
-		t.Errorf("DefaultKind = %q", DefaultKind)
+	for parent, want := range map[string]string{"": "project", "project": "task", "epic": "task", "story": "step", "task": "step", "bug": "step"} {
+		if got := DefaultKindUnder(parent); got != want {
+			t.Errorf("DefaultKindUnder(%q) = %q, want %q", parent, got, want)
+		}
+		if !CanPlace(DefaultKindUnder(parent), parent) {
+			t.Errorf("the default kind under %q cannot be placed there", parent)
+		}
 	}
 	for name, group := range map[string]bool{"project": true, "epic": true, "story": false, "task": false, "bug": false, "step": false, "nope": false} {
 		if IsGroup(name) != group {

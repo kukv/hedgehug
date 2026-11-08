@@ -29,8 +29,18 @@ var Kinds = []KindDef{
 	{"step", "Step", RoleItem, []string{"story", "task", "bug"}},
 }
 
-// DefaultKind is the kind of a task made without one.
-const DefaultKind = "task"
+// DefaultKindUnder is the kind of a task made without one, from the kind of
+// its parent: a project at the top, a task under a project or an epic, a step
+// under a story, a task or a bug.
+func DefaultKindUnder(parentKind string) string {
+	switch parentKind {
+	case "":
+		return "project"
+	case "story", "task", "bug":
+		return "step"
+	}
+	return "task"
+}
 
 // KindOf returns the kind called name.
 func KindOf(name string) (KindDef, bool) {

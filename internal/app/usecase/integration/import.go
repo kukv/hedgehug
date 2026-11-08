@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -131,7 +130,7 @@ func ImportIssues(ss *usecase.Session, in ImportInput) (ImportResult, error) {
 		return out, err
 	}
 	sc := ix.Schema()
-	kind := schema.DefaultKind
+	kind := "task" // not DefaultKindUnder: an issue without a parent would become a project
 	status, err := usecase.DefaultTodo(sc)
 	if err != nil {
 		return out, err

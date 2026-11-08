@@ -27,10 +27,7 @@ func wantPlacement(t *testing.T, err error) {
 func TestAddWithoutAParentOnlyMakesProjects(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	// the kind is task when none is given, and a task is not at the top
-	_, err := tasks.Add(ts.Session, tasks.AddInput{Title: "loose"})
-	wantPlacement(t, err)
-	for _, kind := range []string{"epic", "story", "bug", "step"} {
+	for _, kind := range []string{"task", "epic", "story", "bug", "step"} {
 		_, err := tasks.Add(ts.Session, tasks.AddInput{Title: "loose " + kind, Kind: kind})
 		wantPlacement(t, err)
 	}
@@ -39,19 +36,43 @@ func TestAddWithoutAParentOnlyMakesProjects(t *testing.T) {
 	}
 }
 
-func TestAddDefaultsToATask(t *testing.T) {
-	if schema.DefaultKind != "task" {
-		t.Fatalf("DefaultKind = %q", schema.DefaultKind)
-	}
+func TestAddDefaultKindFollowsTheParent(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	p := ts.AddProject("P")
-	r, err := tasks.Add(ts.Session, tasks.AddInput{Title: "t", Parent: p.String()})
-	if err != nil {
-		t.Fatal(err)
+	kindOf := func(in tasks.AddInput) (string, usecase.TaskResult) {
+		r, err := tasks.Add(ts.Session, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := r.View()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v.Kind, r
 	}
-	if v, err := r.View(); err != nil || v.Kind != "task" {
-		t.Errorf("kind = %+v, %v; want task", v, err)
+	k, p := kindOf(tasks.AddInput{Title: "P"})
+	if k != "project" {
+		t.Errorf("no parent: kind = %s, want project", k)
+	}
+	k, t1 := kindOf(tasks.AddInput{Title: "T", Parent: p.ULID.String()})
+	if k != "task" {
+		t.Errorf("under a project: kind = %s, want task", k)
+	}
+	k, e := kindOf(tasks.AddInput{Title: "E", Kind: "epic", Parent: p.ULID.String()})
+	if k != "epic" {
+		t.Fatalf("kind = %s", k)
+	}
+	if k, _ := kindOf(tasks.AddInput{Title: "T2", Parent: e.ULID.String()}); k != "task" {
+		t.Errorf("under an epic: kind = %s, want task", k)
+	}
+	if k, _ := kindOf(tasks.AddInput{Title: "S", Parent: t1.ULID.String()}); k != "step" {
+		t.Errorf("under a task: kind = %s, want step", k)
+	}
+	for _, kind := range []string{"story", "bug"} {
+		_, par := kindOf(tasks.AddInput{Title: kind, Kind: kind, Parent: p.ULID.String()})
+		if k, _ := kindOf(tasks.AddInput{Title: "s", Parent: par.ULID.String()}); k != "step" {
+			t.Errorf("under a %s: kind = %s, want step", kind, k)
+		}
 	}
 }
 
@@ -70,7 +91,7 @@ func TestAddRefusesWhereAKindDoesNotGo(t *testing.T) {
 	for name, in := range map[string]tasks.AddInput{
 		"a project under a project": {Title: "x", Kind: "project", Parent: p.String()},
 		"an epic under an epic":     {Title: "x", Kind: "epic", Parent: e.ULID.String()},
-		"a task under a task":       {Title: "x", Parent: task.ULID.String()},
+		"a task under a task":       {Title: "x", Kind: "task", Parent: task.ULID.String()},
 		"a step under an epic":      {Title: "x", Kind: "step", Parent: e.ULID.String()},
 		"a step under a project":    {Title: "x", Kind: "step", Parent: p.String()},
 	} {
@@ -124,5 +145,32 @@ func TestMoveRefusesWhereAKindDoesNotGo(t *testing.T) {
 	// what fits goes
 	if _, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: task.ULID.String(), Parent: e.ULID.String()}); err != nil {
 		t.Errorf("a task under an epic: %v", err)
+	}
+}
+
+func TestTemplateChildrenWithoutAKindFollowTheirParent(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.WriteAndCommit("templates/tree.md", "---\nkind: task\nchildren:\n  - title: first\n  - title: second\n---\n")
+	p := ts.AddProject("P")
+	r, err := tasks.Add(ts.Session, tasks.AddInput{Title: "T", Parent: p.String(), Template: "tree"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Children != 2 {
+		t.Fatalf("children = %d", r.Children)
+	}
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kids := ix.Children(r.ULID)
+	if len(kids) != 2 {
+		t.Fatalf("kids = %d", len(kids))
+	}
+	for _, k := range kids {
+		if k.Kind != "step" {
+			t.Errorf("%s: kind = %s, want step", k.Title, k.Kind)
+		}
 	}
 }

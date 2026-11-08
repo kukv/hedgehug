@@ -138,7 +138,7 @@ func (x *expanded) expand(ix *index.Index, parent *model.Task, items []model.Tem
 		c := &model.Task{ULID: model.NewULID(), Workspace: parent.Workspace, Parent: &parent.ULID, Kind: it.Kind, Status: it.Status}
 		var err error
 		if c.Kind == "" {
-			c.Kind = schema.DefaultKind
+			c.Kind = schema.DefaultKindUnder(parent.Kind)
 		}
 		if c.Status == "" {
 			if c.Status, err = usecase.DefaultTodo(ix.Schema()); err != nil {
