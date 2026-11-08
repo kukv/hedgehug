@@ -30,7 +30,12 @@ const sch = {
 
 type Target = "status" | "kind" | "prop" | "relation";
 
-function setup(target: Target, name?: string, over: Record<string, unknown> = {}) {
+function setup(
+  target: Target,
+  name?: string,
+  over: Record<string, unknown> = {},
+  schema: SchemaView = sch,
+) {
   const w = () => ok({ schema: sch, commit: "c1" });
   const api = {
     addStatus: vi.fn(w),
@@ -56,7 +61,7 @@ function setup(target: Target, name?: string, over: Record<string, unknown> = {}
       store: "shared",
       target,
       name,
-      schema: sch,
+      schema,
       ulidOf: (id: string) => (id === "WEB-2" ? "U2" : undefined),
       onclose,
       ondone,
@@ -228,5 +233,44 @@ describe("SchemaDefDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(api.changeProp).toHaveBeenCalled());
     expect(api.changeProp).toHaveBeenCalledWith("duplicates", { multi: true }, { store: "shared" });
+  });
+
+  describe("a kind the dialog does not touch", () => {
+    const odd = {
+      ...sch,
+      kinds: [
+        ...(sch.kinds ?? []),
+        // a custom icon, and a parent that is no kind of the schema
+        {
+          name: "odd",
+          label: "珍",
+          role: "work",
+          parents: ["task", "ghost"],
+          icon: "star",
+        },
+      ],
+    } as unknown as SchemaView;
+
+    it("keeps a custom icon unless another is picked", async () => {
+      const { api } = setup("kind", "odd", {}, odd);
+      expect(screen.getByRole("radio", { name: "カスタム（star）" })).toBeChecked();
+      await type("表示名", "新");
+      await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+      await waitFor(() => expect(api.changeKind).toHaveBeenCalledTimes(1));
+      const sent = (api.changeKind.mock.calls as unknown[][])[0]?.[1];
+      expect(sent).toEqual({ label: "新" });
+      expect(sent).not.toHaveProperty("icon");
+    });
+
+    it("sends no parents while the parents are as they were, a parent that is gone included", async () => {
+      const { api } = setup("kind", "odd", {}, odd);
+      expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+      await type("表示名", "新");
+      await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+      await waitFor(() => expect(api.changeKind).toHaveBeenCalledTimes(1));
+      const sent = (api.changeKind.mock.calls as unknown[][])[0]?.[1];
+      expect(sent).not.toHaveProperty("parents");
+      expect(sent).not.toHaveProperty("anywhere");
+    });
   });
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "../icons/Icon.svelte";
+  import { moveKeys } from "./schema-text";
 
   // The handle of a row: drag it, or press Alt+Up / Alt+Down on it. id names the handle for the
   // focus to come back to; hint is the element that tells the keys; off is why it cannot be used.
@@ -33,7 +34,7 @@
   data-handle={id}
   aria-label="並べ替え（{subject}）"
   aria-describedby={hint}
-  title={off ?? "ドラッグ、または ⌥↑ / ⌥↓ で移動"}
+  title={off ?? `ドラッグ、または ${moveKeys()} で移動`}
   disabled={disabled || off !== null}
   {onkeydown}
 >

@@ -24,6 +24,7 @@
   let { store, target, name, prop, schema, projectLabel, onclose, ondone }: Props = $props();
 
   const c = core();
+  const uid = $props.id();
   const noun = $derived(
     target === "status"
       ? "ステータス"
@@ -93,7 +94,7 @@
       <p class="lead">{what}を定義から削除します。</p>
     {/if}
     {#if orphanReason}
-      <p class="note" id="orphan-why">{orphanReason}</p>
+      <p class="note" id="{uid}-orphan-why">{orphanReason}</p>
     {/if}
     {#if failure}
       <FormError message={failure} />
@@ -106,6 +107,7 @@
       variant="danger"
       data-autofocus
       disabled={busy || orphans.length > 0}
+      aria-describedby={orphans.length > 0 ? `${uid}-orphan-why` : undefined}
       onclick={() => void run()}
     >
       削除

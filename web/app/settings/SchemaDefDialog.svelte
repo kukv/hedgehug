@@ -155,7 +155,7 @@
     }
     const parentsChanged = anywhere
       ? kind?.parents !== null
-      : kind?.parents === null || !sameSet(orderedParents, kind?.parents ?? []);
+      : kind?.parents === null || !sameSet(parents, kind?.parents ?? []);
     return {
       ...(l !== (kind?.label ?? "") ? { label: l } : {}),
       ...(!kindDefaultLocked && role !== kind?.role ? { role: role as "container" | "work" } : {}),

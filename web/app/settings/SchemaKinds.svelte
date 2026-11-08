@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "./schema-table.css";
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
   import KindIcon from "../icons/KindIcon.svelte";
@@ -8,7 +9,7 @@
   import SchemaHandle from "./SchemaHandle.svelte";
   import SchemaRowActions from "./SchemaRowActions.svelte";
   import type { SchemaAction } from "./schema-action";
-  import { count } from "./schema-text";
+  import { count, moveKeys } from "./schema-text";
 
   type Props = {
     store: string;
@@ -39,7 +40,7 @@
         : parents.map((p) => (p === "root" ? "ルート" : p)).join("、");
 </script>
 
-<section class="sec" aria-labelledby="{uid}-kinds">
+<section class="schema-sec" aria-labelledby="{uid}-kinds">
   <h2 id="{uid}-kinds">種類</h2>
   <p class="note">
     役割は container（まとめる単位）と work（作業項目）の 2
@@ -55,7 +56,7 @@
       追加…
     </Button>
   </div>
-  <span id="{uid}-move" class="sr">⌥↑ / ⌥↓ で移動</span>
+  <span id="{uid}-move" class="sr">{moveKeys()} で移動</span>
   <table aria-labelledby="{uid}-kinds">
     <thead>
       <tr>
@@ -107,7 +108,7 @@
               <SchemaRowActions
                 target="kind"
                 old={k.name}
-                names={kinds.map((x) => x.name)}
+                {names}
                 edit="kind"
                 used={usage?.kinds[k.name]}
                 isDefault={k.default === true}
@@ -123,64 +124,9 @@
 </section>
 
 <style>
-  h2 {
-    margin: 0;
-    font-size: var(--fs-15);
-  }
-  .note {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fs-12);
-    line-height: 1.7;
-  }
-  .sec {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--fs-13);
-  }
-  th,
-  td {
-    padding: var(--space-8) var(--space-12);
-    border-bottom: 1px solid var(--line);
-    text-align: left;
-  }
-  thead th {
-    color: var(--muted);
-    font-size: var(--fs-12);
-    font-weight: 600;
-  }
-  tbody th {
-    font-weight: 600;
-  }
-  tbody :global(tr[data-edge="top"]) {
-    box-shadow: inset 0 2px 0 var(--accent);
-  }
-  tbody :global(tr[data-edge="bottom"]) {
-    box-shadow: inset 0 -2px 0 var(--accent);
-  }
   .name {
     display: inline-flex;
     gap: var(--space-6);
     align-items: center;
-  }
-  .num {
-    text-align: right;
-  }
-  .acts {
-    display: flex;
-    gap: var(--space-6);
-    justify-content: flex-end;
-  }
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
 </style>

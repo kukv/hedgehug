@@ -1,12 +1,8 @@
 import { tick } from "svelte";
-import { ApiError } from "../../core/api/client";
 import { errorMessage } from "../../core/messages";
 import { core } from "../context";
 import { toast } from "../toast.svelte";
 import { HANDLE, moved } from "./reorder";
-
-const STALE =
-  "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください";
 
 // useOrder sends the new order of a list and reads the schema again: the screen is drawn from what
 // the server now holds, never from a guess (a stale list is refused, and there is nothing to undo).
@@ -34,10 +30,7 @@ export function useOrder(store: () => string, off: () => string | null) {
       try {
         await send(c.api, s, next);
       } catch (e) {
-        toast({
-          message:
-            e instanceof ApiError && e.type === "schema.order_stale" ? STALE : errorMessage(e),
-        });
+        toast({ message: errorMessage(e) });
       }
       try {
         await c.schema.reload(s);

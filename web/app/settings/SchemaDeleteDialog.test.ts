@@ -68,6 +68,11 @@ describe("SchemaDeleteDialog", () => {
   beforeEach(() => resetToasts());
   afterEach(cleanup);
 
+  it("has no description on a delete that can be done", () => {
+    setup("status", "on_hold");
+    expect(screen.getByRole("button", { name: "削除" })).not.toHaveAttribute("aria-describedby");
+  });
+
   it("lists the references and deletes", async () => {
     const { api, reload, onclose } = setup("status", "on_hold");
     expect(screen.getByRole("dialog", { name: "ステータス「on_hold」を削除" })).toBeVisible();
@@ -94,15 +99,17 @@ describe("SchemaDeleteDialog", () => {
 
   it("refuses a kind that leaves another with no parent", () => {
     setup("kind", "epic");
-    expect(screen.getByRole("button", { name: "削除" })).toBeDisabled();
-    expect(
-      screen.getByText(
-        "種類 sub の置ける親がなくなるため削除できません。先に sub の置ける親を変えてください",
-      ),
-    ).toBeVisible();
+    const del = screen.getByRole("button", { name: "削除" });
+    expect(del).toBeDisabled();
+    const why = screen.getByText(
+      "種類 sub の置ける親がなくなるため削除できません。先に sub の置ける親を変えてください",
+    );
+    expect(why).toBeVisible();
+    expect(why.id).toMatch(/-orphan-why$/);
+    expect(del).toHaveAttribute("aria-describedby", why.id);
   });
 
-  it("shows the server's in_use", async () => {
+  it("words the in_use of the server with the counts", async () => {
     const { onclose } = setup("status", "on_hold", undefined, {
       deleteStatus: vi.fn(() =>
         fail(
@@ -115,7 +122,9 @@ describe("SchemaDeleteDialog", () => {
     });
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(
-      await screen.findByText("2 tasks uses on_hold; merge it into another first"),
+      await screen.findByText(
+        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。マージ… で別の定義へ移してから削除してください",
+      ),
     ).toBeVisible();
     expect(onclose).not.toHaveBeenCalled();
   });

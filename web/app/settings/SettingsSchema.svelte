@@ -229,7 +229,7 @@
     {:else if tab === "relations"}
       <SchemaRelations {store} {schema} {usage} {off} {onaction} blocked={blockedCount} />
     {:else}
-      <SchemaWorkflow {store} {schema} {usage} {off} {onaction} />
+      <SchemaWorkflow {schema} />
     {/if}
 
     <section class="sec" aria-labelledby="{uid}-scoped">

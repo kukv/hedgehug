@@ -1,16 +1,8 @@
 <script lang="ts">
+  import "./schema-table.css";
   import type { SchemaView } from "../../core/schema";
-  import type { SchemaUsage } from "../../core/schema-usage";
-  import type { SchemaAction } from "./schema-action";
 
-  type Props = {
-    store: string;
-    schema: SchemaView;
-    usage: SchemaUsage | null;
-    off: string | null;
-    onaction: (a: SchemaAction) => void;
-  };
-  let { schema }: Props = $props();
+  let { schema }: { schema: SchemaView } = $props();
 
   const uid = $props.id();
   const transitions = $derived(Object.entries(schema.workflow?.transitions ?? {}));
@@ -20,7 +12,7 @@
     (names ?? []).length === 0 ? "なし" : (names ?? []).join("、");
 </script>
 
-<section class="sec" aria-labelledby="{uid}-workflow">
+<section class="schema-sec" aria-labelledby="{uid}-workflow">
   <h2 id="{uid}-workflow">ワークフロー</h2>
   <p class="note">
     制約は、付けたステータスにだけ適用されます。付けていないステータスはどこへでも移れます。
@@ -48,25 +40,10 @@
 </section>
 
 <style>
-  h2 {
-    margin: 0;
-    font-size: var(--fs-15);
-  }
   h3 {
     margin: 0;
     font-size: var(--fs-13);
     font-weight: 600;
-  }
-  .note {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fs-12);
-    line-height: 1.7;
-  }
-  .sec {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
   }
   .mono {
     font-family: var(--font-mono);

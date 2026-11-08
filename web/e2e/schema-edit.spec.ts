@@ -65,6 +65,7 @@ test("a status is added, edited, moved, drawn in its color and deleted from the 
   await hh.open(page, SCHEMA);
   const del = statusRow(page, "review").getByRole("button", { name: "削除…（review）" });
   await expect(del).toBeDisabled();
+  await expect(del).toHaveAttribute("title", /タスクが使っているため削除できません/);
   hh.hh("set", task.id, "status=todo");
   await expect(del).toBeEnabled();
   await del.click();

@@ -101,6 +101,7 @@ type Opts = {
   tab?: "statuses" | "kinds" | "props" | "relations" | "workflow";
   readOnly?: string;
   order?: (list: string, names: string[]) => unknown;
+  del?: () => unknown;
 };
 
 function setup(opts: Opts = {}) {
@@ -128,6 +129,9 @@ function setup(opts: Opts = {}) {
   const order = vi.fn((list: string, names: string[]) =>
     opts.order ? opts.order(list, names) : ok({ changed: [], skipped: [], commit: "c1" }),
   );
+  const deleteStatus = vi.fn((_name: string, _query: { store: string }) =>
+    opts.del ? opts.del() : ok({ schema: state.schema, commit: "c1" }),
+  );
   const orderStatuses = vi.fn((b: { names: string[] }) => order("statuses", b.names));
   const orderKinds = vi.fn((b: { names: string[] }) => order("kinds", b.names));
   const orderProps = vi.fn((b: { names: string[] }) => order("props", b.names));
@@ -152,6 +156,7 @@ function setup(opts: Opts = {}) {
         listTasks,
         checkSchema,
         migrateSchema: post,
+        deleteStatus,
         orderStatuses,
         orderKinds,
         orderProps,
@@ -176,6 +181,7 @@ function setup(opts: Opts = {}) {
   return {
     listTasks,
     checkSchema,
+    deleteStatus,
     orderStatuses,
     orderKinds,
     orderProps,
@@ -263,6 +269,37 @@ describe("reorder", () => {
     expect(toasts.list.map((t) => t.message)).toContain(
       "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
     );
+  });
+
+  it("sends nothing from the keys of a handle that is off, whatever the table does", async () => {
+    const k = setup({ readOnly: "r/o" });
+    const h = await screen.findByRole("button", { name: "並べ替え（todo）" });
+    await fireEvent.keyDown(h, down);
+    await fireEvent.keyDown(h, up);
+    expect(k.orderStatuses).not.toHaveBeenCalled();
+    expect(k.reload).not.toHaveBeenCalled();
+  });
+
+  it("says what failed, and reads the schema again, when the order is refused for another reason", async () => {
+    const k = setup({ order: () => fail(422, "schema.value_invalid") });
+    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（todo）" }), down);
+    await waitFor(() => expect(k.reload).toHaveBeenCalledWith("shared"));
+    expect(toasts.list.map((t) => t.message)).toEqual(["値が空か、すでにあります"]);
+  });
+
+  it("names the keys of the platform in the hint and on the handle", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    setup();
+    const h = await screen.findByRole("button", { name: "並べ替え（todo）" });
+    expect(h).toHaveAttribute("title", "ドラッグ、または ⌥↑ / ⌥↓ で移動");
+    expect(screen.getByText("⌥↑ / ⌥↓ で移動")).toBeInTheDocument();
+    cleanup();
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
+    setup();
+    const w = await screen.findByRole("button", { name: "並べ替え（todo）" });
+    expect(w).toHaveAttribute("title", "ドラッグ、または Alt+↑ / Alt+↓ で移動");
+    expect(screen.getByText("Alt+↑ / Alt+↓ で移動")).toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 
   it("moves a value within its property", async () => {
@@ -382,6 +419,52 @@ describe("SettingsSchema", () => {
     );
   });
 
+  describe("a status nobody uses", () => {
+    const spare = {
+      ...sch,
+      statuses: [...sch.statuses, { name: "spare", label: "予備", category: "doing" }],
+    };
+
+    it("disables delete in a read-only Store, with the reason", async () => {
+      setup({ schema: spare, readOnly: "the remote cannot be written" });
+      const del = await screen.findByRole("button", { name: "削除…（spare）" });
+      expect(del).toBeDisabled();
+      expect(del).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
+    });
+
+    it("gives the focus to the heading when the deleted row is gone", async () => {
+      const held: { k?: ReturnType<typeof setup> } = {};
+      const k = setup({
+        schema: spare,
+        del: () => {
+          // the write takes the row away, and the page is told
+          if (held.k) {
+            held.k.state.schema = {
+              ...spare,
+              statuses: spare.statuses.filter((s) => s.name !== "spare"),
+            };
+            held.k.cache.emit();
+          }
+          return ok({ schema: spare, commit: "c1" });
+        },
+      });
+      held.k = k;
+      const del = await screen.findByRole("button", { name: "削除…（spare）" });
+      await waitFor(() => expect(del).toBeEnabled());
+      del.focus();
+      await fireEvent.click(del);
+      await fireEvent.click(await screen.findByRole("button", { name: "削除" }));
+      await waitFor(() =>
+        expect(k.deleteStatus).toHaveBeenCalledWith("spare", { store: "shared" }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() =>
+        expect(screen.getByRole("heading", { level: 1, name: "スキーマ" })).toHaveFocus(),
+      );
+      expect(screen.queryByRole("button", { name: "削除…（spare）" })).toBeNull();
+    });
+  });
+
   it("opens the add dialog from the button above the table, and the edit dialog from a row", async () => {
     setup();
     await fireEvent.click(await screen.findByRole("button", { name: "追加…" }));
@@ -456,17 +539,13 @@ describe("SettingsSchema", () => {
     };
     const { unmount } = setup({ tab: "props", schema: ordered as unknown as typeof sch });
     await screen.findByRole("row", { name: /^b / });
-    const names = (rows: HTMLElement[]) => rows.map((r) => r.textContent?.[0]);
+    const names = (rows: HTMLElement[]) =>
+      rows.map((r) => r.querySelector("th")?.textContent?.trim());
     expect(names(screen.getAllByRole("row").slice(1))).toEqual(["b", "a"]);
     unmount();
     setup({ tab: "relations", schema: ordered as unknown as typeof sch });
     await screen.findByRole("row", { name: /^r2/ });
-    expect(
-      screen
-        .getAllByRole("row")
-        .slice(2)
-        .map((r) => r.textContent?.slice(0, 2)),
-    ).toEqual(["r2", "r1"]);
+    expect(names(screen.getAllByRole("row").slice(2))).toEqual(["r2", "r1"]);
   });
 
   it("lists the relations: blocked_by built in and without actions, then the task_ref properties", async () => {

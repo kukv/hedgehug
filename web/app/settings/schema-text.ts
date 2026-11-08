@@ -3,6 +3,10 @@ import { errorMessage } from "../../core/messages";
 import type { SchemaView } from "../../core/schema";
 import { propNames } from "../../core/schema-edit";
 import type { SchemaUsage } from "../../core/schema-usage";
+import { kbdLabel } from "../keys";
+
+/** The keys that move a row: ⌥↑ / ⌥↓ on a Mac, Alt+↑ / Alt+↓ elsewhere. */
+export const moveKeys = (): string => `${kbdLabel("alt+arrowup")} / ${kbdLabel("alt+arrowdown")}`;
 
 /** The number of tasks, or a dash until the tasks are read. */
 export const count = (usage: SchemaUsage | null, n: number | undefined): string =>
@@ -29,10 +33,9 @@ export const propEntries = (schema: SchemaView | undefined): PropEntry[] =>
 export const relationEntries = (schema: SchemaView | undefined): PropEntry[] =>
   allProps(schema).filter(([, p]) => p.type === "task_ref");
 
-/** What a refused edit says: the server's own sentence for a definition in use, the lines a change would break. */
+/** What a refused edit says, and the lines of the tasks a change would break. */
 export function failureOf(e: unknown): { text: string; violations?: string[] } {
   if (e instanceof ApiError) {
-    if (e.type === "schema.in_use" && e.detail) return { text: e.detail };
     const v = e.args.violations;
     if (e.type === "schema.tasks_invalid" && Array.isArray(v)) {
       return { text: errorMessage(e), violations: v.map(String) };
