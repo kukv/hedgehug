@@ -103,7 +103,7 @@ describe("dropDecision: what it refuses", () => {
       silent: false,
       title: "エピックはタスクの下に置けません",
       reason:
-        "「REL-8 リリース作業」はエピックです。エピックを置ける親はルートとプロジェクトだけです（shared の schema.yaml の kinds）。",
+        "「REL-8 リリース作業」はエピックです。エピックのどの下に置けるかは最上位とプロジェクトだけです（shared の schema.yaml の kinds）。",
     });
   });
   it("refuses a place whose parent is a task when the kind needs another parent", () => {

@@ -560,6 +560,82 @@ export interface DoctorReport {
   store: string;
 }
 
+export interface KindDef {
+  color?: string;
+  default?: boolean;
+  icon?: string;
+  label?: string;
+  name: string;
+  /** @nullable */
+  parents: string[] | null;
+  role: string;
+  template?: string;
+}
+
+export interface PropDef {
+  inverse?: string;
+  label?: string;
+  multi?: boolean;
+  symmetric?: boolean;
+  type: string;
+  /** @nullable */
+  values?: string[] | null;
+}
+
+export type TemplatesDefDefault = {[key: string]: string};
+
+export interface TemplatesDef {
+  default?: TemplatesDefDefault;
+  /** @nullable */
+  only?: string[] | null;
+}
+
+export type WorkflowDefRequired = {[key: string]: string[] | null};
+
+export type WorkflowDefTransitions = {[key: string]: string[] | null};
+
+export interface WorkflowDef {
+  required: WorkflowDefRequired;
+  transitions: WorkflowDefTransitions;
+}
+
+export interface ScopedDef {
+  /** @nullable */
+  statuses?: string[] | null;
+  templates?: TemplatesDef;
+  where: string;
+  workflow?: WorkflowDef;
+}
+
+export interface StatusDef {
+  category: string;
+  color?: string;
+  default?: boolean;
+  label?: string;
+  name: string;
+}
+
+export type SchemaViewProps = {[key: string]: PropDef};
+
+export interface SchemaView {
+  /** @nullable */
+  kinds: KindDef[] | null;
+  /** @nullable */
+  prop_order: string[] | null;
+  props: SchemaViewProps;
+  /** @nullable */
+  scoped: ScopedDef[] | null;
+  /** @nullable */
+  statuses: StatusDef[] | null;
+  workflow: WorkflowDef;
+}
+
+export interface EditWrite {
+  /** @nullable */
+  commit: string | null;
+  schema: SchemaView;
+}
+
 export interface ErrorDetail {
   /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
   location?: string;
@@ -753,14 +829,49 @@ export interface Item {
   ulid: string;
 }
 
-export interface KindDef {
-  default?: boolean;
+export type KindAddInputBodyRole = typeof KindAddInputBodyRole[keyof typeof KindAddInputBodyRole];
+
+
+export const KindAddInputBodyRole = {
+  container: 'container',
+  work: 'work',
+} as const;
+
+export interface KindAddInputBody {
+  anywhere?: boolean;
+  color?: string;
   icon?: string;
   label?: string;
   name: string;
-  /** @nullable */
-  parents: string[] | null;
-  role: string;
+  /**
+     * The kinds it may sit under, root for the top; leave it out with anywhere
+     * @nullable
+     */
+  parents?: string[] | null;
+  role: KindAddInputBodyRole;
+  template?: string;
+}
+
+export type KindChangeInputBodyRole = typeof KindChangeInputBodyRole[keyof typeof KindChangeInputBodyRole];
+
+
+export const KindChangeInputBodyRole = {
+  container: 'container',
+  work: 'work',
+} as const;
+
+export interface KindChangeInputBody {
+  anywhere?: boolean;
+  /** Empty takes it off */
+  color?: string;
+  default?: boolean;
+  icon?: string;
+  label?: string;
+  /** The new name, as for a status */
+  name?: string;
+  /** Not empty; anywhere takes the limit off */
+  parents?: string[];
+  role?: KindChangeInputBodyRole;
   template?: string;
 }
 
@@ -1054,6 +1165,11 @@ export interface NotificationReadInputBody {
   ids?: string[];
 }
 
+export interface OrderBody {
+  /** Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale */
+  names: string[];
+}
+
 export interface Overwritten {
   author?: string;
   field: string;
@@ -1124,14 +1240,52 @@ export interface Problem {
   type: string;
 }
 
-export interface PropDef {
+export type PropAddInputBodyType = typeof PropAddInputBodyType[keyof typeof PropAddInputBodyType];
+
+
+export const PropAddInputBodyType = {
+  text: 'text',
+  number: 'number',
+  bool: 'bool',
+  date: 'date',
+  datetime: 'datetime',
+  duration: 'duration',
+  enum: 'enum',
+  multi_enum: 'multi_enum',
+  user: 'user',
+  task_ref: 'task_ref',
+  url: 'url',
+} as const;
+
+export interface PropAddInputBody {
   inverse?: string;
   label?: string;
   multi?: boolean;
+  name: string;
   symmetric?: boolean;
-  type: string;
+  type: PropAddInputBodyType;
   /** @nullable */
   values?: string[] | null;
+}
+
+export interface ValueEditBody {
+  /**
+     * The current values it comes from: none for a new value, one for a value kept or renamed, several for a merge
+     * @nullable
+     */
+  from?: string[] | null;
+  name: string;
+}
+
+export interface PropChangeInputBody {
+  inverse?: string;
+  label?: string;
+  multi?: boolean;
+  /** The new name, as for a status */
+  name?: string;
+  symmetric?: boolean;
+  /** All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it */
+  values?: ValueEditBody[];
 }
 
 export interface PurgeForward {
@@ -1306,52 +1460,6 @@ export interface SchemaChanged {
   store: string;
 }
 
-export type SchemaViewProps = {[key: string]: PropDef};
-
-export type TemplatesDefDefault = {[key: string]: string};
-
-export interface TemplatesDef {
-  default?: TemplatesDefDefault;
-  /** @nullable */
-  only?: string[] | null;
-}
-
-export type WorkflowDefRequired = {[key: string]: string[] | null};
-
-export type WorkflowDefTransitions = {[key: string]: string[] | null};
-
-export interface WorkflowDef {
-  required: WorkflowDefRequired;
-  transitions: WorkflowDefTransitions;
-}
-
-export interface ScopedDef {
-  /** @nullable */
-  statuses?: string[] | null;
-  templates?: TemplatesDef;
-  where: string;
-  workflow?: WorkflowDef;
-}
-
-export interface StatusDef {
-  category: string;
-  color?: string;
-  default?: boolean;
-  label?: string;
-  name: string;
-}
-
-export interface SchemaView {
-  /** @nullable */
-  kinds: KindDef[] | null;
-  props: SchemaViewProps;
-  /** @nullable */
-  scoped: ScopedDef[] | null;
-  /** @nullable */
-  statuses: StatusDef[] | null;
-  workflow: WorkflowDef;
-}
-
 export interface ScopedProject {
   id?: string;
   title?: string;
@@ -1506,6 +1614,45 @@ export interface SprintWrite {
   sprint: SprintView;
   /** Closing: where they went: backlog, or the name of a sprint */
   to?: string;
+}
+
+export type StatusAddInputBodyCategory = typeof StatusAddInputBodyCategory[keyof typeof StatusAddInputBodyCategory];
+
+
+export const StatusAddInputBodyCategory = {
+  todo: 'todo',
+  doing: 'doing',
+  done: 'done',
+  canceled: 'canceled',
+} as const;
+
+export interface StatusAddInputBody {
+  category: StatusAddInputBodyCategory;
+  color?: string;
+  label?: string;
+  name: string;
+}
+
+export type StatusChangeInputBodyCategory = typeof StatusChangeInputBodyCategory[keyof typeof StatusChangeInputBodyCategory];
+
+
+export const StatusChangeInputBodyCategory = {
+  todo: 'todo',
+  doing: 'doing',
+  done: 'done',
+  canceled: 'canceled',
+} as const;
+
+export interface StatusChangeInputBody {
+  category?: StatusChangeInputBodyCategory;
+  /** Empty takes it off */
+  color?: string;
+  /** true makes it the default of its category; false is not a change */
+  default?: boolean;
+  /** Empty takes it off */
+  label?: string;
+  /** The new name; the definition, what refers to it and the tasks that use it are rewritten in the same commit. A name already defined is 409 schema.name_taken */
+  name?: string;
 }
 
 export interface StoreAddInputBody {
@@ -2190,7 +2337,47 @@ export type CheckSchemaParams = {
   store?: string;
 };
 
+export type AddKindParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type OrderKindsParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type DeleteKindParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type ChangeKindParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
 export type MigrateSchemaParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type AddPropParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type OrderPropsParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type DeletePropParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type ChangePropParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
 };
@@ -2201,6 +2388,26 @@ export type DeleteScopedParams = {
 };
 
 export type PutScopedParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type AddStatusParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type OrderStatusesParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type DeleteStatusParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type ChangeStatusParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
 };
@@ -3959,6 +4166,179 @@ export const checkSchema = async (params?: CheckSchemaParams, options?: Paramete
 
 
 
+export const getAddKindUrl = (params?: AddKindParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/kinds?${stringifiedParams}` : `/api/schema/kinds`
+}
+
+/**
+ * @summary Add a kind at the end
+ */
+export const addKind = async (kindAddInputBody: KindAddInputBody,
+    params?: AddKindParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getAddKindUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(kindAddInputBody)
+  }
+);}
+
+
+
+export const getOrderKindsUrl = (params?: OrderKindsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/kinds/order?${stringifiedParams}` : `/api/schema/kinds/order`
+}
+
+/**
+ * @summary Put the kinds in order
+ */
+export const orderKinds = async (orderBody: OrderBody,
+    params?: OrderKindsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getOrderKindsUrl(params),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(orderBody)
+  }
+);}
+
+
+
+export const getDeleteKindUrl = (name: string,
+    params?: DeleteKindParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/kinds/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/kinds/${encodeURIComponent(String(name))}`
+}
+
+/**
+ * @summary Remove a kind no task uses
+ */
+export const deleteKind = async (name: string,
+    params?: DeleteKindParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+  return fetcher<EditWrite>(getDeleteKindUrl(name,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getChangeKindUrl = (name: string,
+    params?: ChangeKindParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/kinds/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/kinds/${encodeURIComponent(String(name))}`
+}
+
+/**
+ * @summary Change a kind
+ */
+export const changeKind = async (name: string,
+    kindChangeInputBody: KindChangeInputBody,
+    params?: ChangeKindParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getChangeKindUrl(name,params),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(kindChangeInputBody)
+  }
+);}
+
+
+
 export const getMigrateSchemaUrl = (params?: MigrateSchemaParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -4000,6 +4380,179 @@ return fetcher<MigrateWrite>(getMigrateSchemaUrl(params),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(migrateInputBody)
+  }
+);}
+
+
+
+export const getAddPropUrl = (params?: AddPropParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/props?${stringifiedParams}` : `/api/schema/props`
+}
+
+/**
+ * @summary Add a property or a relation at the end
+ */
+export const addProp = async (propAddInputBody: PropAddInputBody,
+    params?: AddPropParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getAddPropUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propAddInputBody)
+  }
+);}
+
+
+
+export const getOrderPropsUrl = (params?: OrderPropsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/props/order?${stringifiedParams}` : `/api/schema/props/order`
+}
+
+/**
+ * @summary Put the relations, or the other properties, in order
+ */
+export const orderProps = async (orderBody: OrderBody,
+    params?: OrderPropsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getOrderPropsUrl(params),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(orderBody)
+  }
+);}
+
+
+
+export const getDeletePropUrl = (name: string,
+    params?: DeletePropParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/props/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/props/${encodeURIComponent(String(name))}`
+}
+
+/**
+ * @summary Remove a property no task uses
+ */
+export const deleteProp = async (name: string,
+    params?: DeletePropParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+  return fetcher<EditWrite>(getDeletePropUrl(name,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getChangePropUrl = (name: string,
+    params?: ChangePropParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/props/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/props/${encodeURIComponent(String(name))}`
+}
+
+/**
+ * @summary Change a property or a relation
+ */
+export const changeProp = async (name: string,
+    propChangeInputBody: PropChangeInputBody,
+    params?: ChangePropParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getChangePropUrl(name,params),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propChangeInputBody)
   }
 );}
 
@@ -4081,6 +4634,179 @@ return fetcher<ScopedView>(getPutScopedUrl(project,params),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(scopedPutInputBody)
+  }
+);}
+
+
+
+export const getAddStatusUrl = (params?: AddStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/statuses?${stringifiedParams}` : `/api/schema/statuses`
+}
+
+/**
+ * @summary Add a status at the end
+ */
+export const addStatus = async (statusAddInputBody: StatusAddInputBody,
+    params?: AddStatusParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getAddStatusUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(statusAddInputBody)
+  }
+);}
+
+
+
+export const getOrderStatusesUrl = (params?: OrderStatusesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/statuses/order?${stringifiedParams}` : `/api/schema/statuses/order`
+}
+
+/**
+ * @summary Put the statuses in order
+ */
+export const orderStatuses = async (orderBody: OrderBody,
+    params?: OrderStatusesParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getOrderStatusesUrl(params),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(orderBody)
+  }
+);}
+
+
+
+export const getDeleteStatusUrl = (name: string,
+    params?: DeleteStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/statuses/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/statuses/${encodeURIComponent(String(name))}`
+}
+
+/**
+ * @summary Remove a status no task uses
+ */
+export const deleteStatus = async (name: string,
+    params?: DeleteStatusParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+  return fetcher<EditWrite>(getDeleteStatusUrl(name,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getChangeStatusUrl = (name: string,
+    params?: ChangeStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/statuses/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/statuses/${encodeURIComponent(String(name))}`
+}
+
+/**
+ * @summary Change a status
+ */
+export const changeStatus = async (name: string,
+    statusChangeInputBody: StatusChangeInputBody,
+    params?: ChangeStatusParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getChangeStatusUrl(name,params),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(statusChangeInputBody)
   }
 );}
 

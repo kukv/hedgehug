@@ -221,6 +221,51 @@ describe("errorMessage", () => {
     expect(m).toContain("この親には置けません（parent）");
   });
 
+  it("words the errors of a schema edit", () => {
+    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 0 }))).toBe(
+      "タスク 3 件が使っているため削除できません。マージで別の定義へ移してから削除してください",
+    );
+    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 1 }))).toBe(
+      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。マージで別の定義へ移してから削除してください",
+    );
+    expect(errorMessage(err("schema.in_use", { value: "low", count: 3, deleted: 0 }))).toBe(
+      "値 low は、タスク 3 件が使っているため削除できません。マージで別の値へ移してから削除してください",
+    );
+    expect(errorMessage(err("schema.name_taken"))).toBe(
+      "その名前はすでにあります。まとめるときはマージを使ってください",
+    );
+    expect(errorMessage(err("schema.tasks_invalid", { violations: ["WEB-2: x"] }))).toBe(
+      "変更すると規則に合わなくなるタスクがあります",
+    );
+    expect(errorMessage(err("schema.invalid", { problems: ["a", "b"] }))).toBe(
+      "スキーマの規則に合わなくなります: a、b",
+    );
+    expect(errorMessage(err("schema.invalid", {}, "boom"))).toBe(
+      "スキーマの規則に合わなくなります: boom",
+    );
+    expect(errorMessage(err("schema.parents_empty", { kinds: ["sub", "leaf"] }))).toBe(
+      "種類 sub、leaf のどの下に置けるかがなくなるため削除できません。先に sub、leaf のどの下に置けるかを変えてください",
+    );
+    expect(errorMessage(err("schema.not_defined"))).toBe(
+      "定義が見つかりません。画面を読み込み直してください",
+    );
+    expect(errorMessage(err("schema.order_stale"))).toBe(
+      "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
+    );
+    expect(errorMessage(err("schema.default_container"))).toBe(
+      "既定にできるのはアイテムの種類だけです",
+    );
+    expect(errorMessage(err("schema.not_task_ref"))).toBe(
+      "複数・逆方向・双方向は関連だけの設定です",
+    );
+    expect(errorMessage(err("schema.not_enum"))).toBe(
+      "値を持てるのは enum と multi_enum のプロパティだけです",
+    );
+    expect(errorMessage(err("schema.value_invalid"))).toBe(
+      "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
+    );
+  });
+
   it("words the errors of an override of a project", () => {
     expect(errorMessage(err("scoped.not_container", { id: "ME-2", kind: "task" }))).toBe(
       "ME-2 は task で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません",

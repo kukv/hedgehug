@@ -42,7 +42,7 @@ test("the rules are added, counted, turned off and removed", async ({ page, hh }
   await dialog.getByRole("button", { name: "追加" }).click();
   await expect(dialog).toHaveCount(0);
   const rule = page.getByRole("article", { name: "opened" });
-  await expect(rule).toContainText("ステータス → 進行中");
+  await expect(rule).toContainText("ステータス → In progress");
   await expect(rule).toContainText("直近 7 日 0 回");
   expect(rules(hh).map((r) => r.id)).toEqual(["opened"]);
 
@@ -84,7 +84,7 @@ test("a rule says what can refuse it", async ({ page, hh }) => {
   );
   await hh.open(page, SETTINGS);
   await expect(page.getByRole("article", { name: "merged" })).toContainText(
-    "完了には ポイント が必要です",
+    "Doneには ポイント が必要です",
   );
 });
 

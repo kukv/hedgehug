@@ -2,6 +2,7 @@ package schemas_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
@@ -33,6 +34,14 @@ func TestSchemaViewOfDefault(t *testing.T) {
 	w, _ := m["workflow"].(map[string]any)
 	if w["transitions"] == nil || w["required"] == nil {
 		t.Errorf("workflow = %v, want {} for empty mappings, not null", w)
+	}
+}
+
+func TestSchemaViewOfPropOrder(t *testing.T) {
+	t.Parallel()
+	got := strings.Join(schemas.SchemaViewOf(schema.Default()).PropOrder, " ")
+	if want := "priority start due estimate points duplicates causes relates"; got != want {
+		t.Errorf("PropOrder = %q, want %q", got, want)
 	}
 }
 

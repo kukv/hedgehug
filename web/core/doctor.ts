@@ -135,7 +135,7 @@ const MESSAGES: Record<string, Words> = {
   "schema.bad_template_name": ([e]) => `テンプレートの名前が正しくありません: ${e}`,
   "schema.unknown_kind": ([k]) => `「${k}」という種類はありません`,
   "schema.default_kind": ([n]) =>
-    `役割が work の既定の種類は 1 つだけにしてください（今は ${n} 個）`,
+    `役割がアイテムの既定の種類は 1 つだけにしてください（今は ${n} 個）`,
   "schema.prop_builtin": ([n]) =>
     `「${n}」は組み込みのフィールドなので、プロパティの名前に使えません`,
   "schema.prop_twice": ([n]) => `プロパティ「${n}」が 2 回定義されています`,

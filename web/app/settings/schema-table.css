@@ -1,0 +1,57 @@
+/* The look the tabs of the schema share: a section with a heading, a note and a table of rows. */
+.schema-sec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+.schema-sec h2 {
+  margin: 0;
+  font-size: var(--fs-15);
+}
+.schema-sec .note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  line-height: 1.7;
+}
+.schema-sec table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-13);
+}
+.schema-sec th,
+.schema-sec td {
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.schema-sec thead th {
+  color: var(--muted);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.schema-sec tbody th {
+  font-weight: 600;
+}
+.schema-sec .num {
+  text-align: right;
+}
+.schema-sec .acts {
+  display: flex;
+  gap: var(--space-6);
+  justify-content: flex-end;
+}
+.schema-sec .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+/* The edge a dragged row would land on (set by sortableRow). */
+.schema-sec tbody tr[data-edge="top"] {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.schema-sec tbody tr[data-edge="bottom"] {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}

@@ -2,7 +2,7 @@
 //   - /tasks/<ulid> is the detail of a task
 //   - the title is the textbox "タイトル"; the body is the textbox "本文" (CodeMirror)
 //   - the property panel (region "プロパティ") has the button "ステータス" that opens a menu
-//     of menuitems named "<label> · <name>" (未着手 · todo, 進行中 · in_progress …), the
+//     of menuitems named "<label> · <name>" (Todo · todo, In progress · in_progress …), the
 //     button "priority" with the menuitems low, mid, high, urgent, and the date input "due"
 //   - the save state is the status "保存の状態": "保存済み" (or "保存済み · push 待ち")
 //     once a change is on disk
@@ -43,8 +43,8 @@ test("the status, an enum property and a date are saved from the property panel"
   const panel = properties(page);
 
   await panel.getByRole("button", { name: "ステータス" }).click();
-  await page.getByRole("menuitem", { name: /^進行中/ }).click();
-  await expect(panel.getByRole("button", { name: "ステータス" })).toContainText("進行中");
+  await page.getByRole("menuitem", { name: /^In progress/ }).click();
+  await expect(panel.getByRole("button", { name: "ステータス" })).toContainText("In progress");
 
   await panel.getByRole("button", { name: "優先度" }).click();
   await page.getByRole("menuitem", { name: "high" }).click();

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type MigrateTarget = "status" | "kind" | "prop" | "value";
+  export type MigrateTarget = "status" | "kind" | "prop";
 
   // How long the name has to rest before the dry run is sent.
   const PAUSE_MS = 350;
@@ -8,7 +8,6 @@
     status: "ステータス",
     kind: "種類",
     prop: "プロパティ",
-    value: "値",
   };
 </script>
 
@@ -22,21 +21,19 @@
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
 
-  // Renames a definition of the schema (rename) or merges it into another (merge), and rewrites the
-  // tasks that use it. What the run would do is asked for first (dry_run) when the name stops changing.
+  // Merges a definition of the schema into another, and rewrites the tasks that use it (a name is
+  // changed in the edit dialog). What the run would do is asked for first (dry_run) when the name stops changing.
   // names are all the definitions of its kind, old among them.
   type Props = {
     store: string;
     many: boolean;
     target: MigrateTarget;
-    prop?: string;
     old: string;
-    mode: "rename" | "merge";
     names: string[];
     onclose: () => void;
     ondone: () => void;
   };
-  let { store, many, target, prop, old, mode, names, onclose, ondone }: Props = $props();
+  let { store, many, target, old, names, onclose, ondone }: Props = $props();
 
   const c = core();
   const uid = $props.id();
@@ -54,10 +51,9 @@
   const name = $derived(next.trim());
   const sendable = $derived(name !== "" && name !== old);
   const others = $derived(names.filter((n) => n !== old));
-  const merging = $derived(mode === "merge" || names.includes(name));
   const ready = $derived(!busy && preview !== null && preview.name === name);
 
-  const body = $derived({ target, ...(target === "value" ? { prop } : {}), old, new: name });
+  const body = $derived({ target, old, new: name });
 
   $effect(() => {
     const n = name;
@@ -121,13 +117,11 @@
     }
   }
 
-  const title = $derived(
-    `${NOUN[target]}「${old}」${mode === "merge" ? "をマージ" : "の名前を変更"}`,
-  );
+  const title = $derived(`${NOUN[target]}「${old}」をマージ`);
   const cli = $derived(
     cliSchemaMigrate({
       ...body,
-      new: name === "" ? new Placeholder(mode === "merge" ? "マージ先" : "新しい名前") : name,
+      new: name === "" ? new Placeholder("マージ先") : name,
       store: many ? store : undefined,
     }),
   );
@@ -149,32 +143,16 @@
 
 <Dialog open {title} width={560} {cli} cliDisabled={name === ""} onclose={close}>
   <div class="form" role="presentation" bind:this={form} {onkeydown}>
-    {#if mode === "merge"}
-      <div class="field">
-        <label class="lbl" for="{uid}-to">マージ先</label>
-        <select id="{uid}-to" data-autofocus disabled={busy} bind:value={next}>
-          <option value="">選んでください</option>
-          {#each others as n (n)}
-            <option value={n}>{n}</option>
-          {/each}
-        </select>
-      </div>
-    {:else}
-      <div class="field">
-        <label class="lbl" for="{uid}-new">新しい名前</label>
-        <input
-          id="{uid}-new"
-          type="text"
-          autocomplete="off"
-          data-autofocus
-          disabled={busy}
-          value={next}
-          oninput={(e) => (next = e.currentTarget.value)}
-        >
-      </div>
-    {/if}
-
-    {#if merging && sendable}
+    <div class="field">
+      <label class="lbl" for="{uid}-to">マージ先</label>
+      <select id="{uid}-to" data-autofocus disabled={busy} bind:value={next}>
+        <option value="">選んでください</option>
+        {#each others as n (n)}
+          <option value={n}>{n}</option>
+        {/each}
+      </select>
+    </div>
+    {#if sendable}
       <p class="note">{mergeNote}</p>
     {/if}
     <p class="sum" aria-live="polite">{summary}</p>
@@ -191,9 +169,7 @@
 
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
-    <Button variant="primary" disabled={!ready} onclick={() => void run()}>
-      {merging ? "マージ" : "名前を変更"}
-    </Button>
+    <Button variant="primary" disabled={!ready} onclick={() => void run()}> マージ </Button>
   {/snippet}
 </Dialog>
 
@@ -213,7 +189,6 @@
     font-size: var(--fs-12);
     font-weight: 600;
   }
-  input[type="text"],
   select {
     min-height: var(--control-h-lg);
     padding: 0 var(--space-12);
@@ -224,7 +199,6 @@
     font: inherit;
     font-size: var(--fs-14);
   }
-  input[type="text"]:focus-visible,
   select:focus-visible {
     outline: 2px solid var(--accent);
   }

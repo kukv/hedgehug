@@ -30,6 +30,11 @@ const me = withProps({
 const ids = (list: { id: string }[]) => list.map((c) => c.id);
 
 describe("columnCandidates", () => {
+  it("offers the properties in the prop_order of the schema", () => {
+    const sc = { ...shared, prop_order: ["points", "due", "area", "relates"] } as SchemaView;
+    expect(ids(columnCandidates([sc])).slice(-4)).toEqual(["points", "due", "area", "relates"]);
+  });
+
   it("lists the builtin columns, then the properties of the schemas by name", () => {
     expect(ids(columnCandidates([shared]))).toEqual([
       "id",

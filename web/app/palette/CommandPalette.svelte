@@ -2,6 +2,7 @@
   import { tick, untrack } from "svelte";
   import type { ShowView, TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
+  import { kindColorOf, kindIconOf, kindRoleOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
   import { hiddenStores, storeShown } from "../hidden";
@@ -262,6 +263,11 @@
     return t ? c.stores.workspace(t.store, t.workspace.ulid) : undefined;
   }
 
+  function schemaOf(store: string) {
+    schemaRev.current;
+    return c.schema.get(store);
+  }
+
   const groups = $derived.by<PaletteGroup[]>(() => {
     cacheRev.current;
     schemaRev.current;
@@ -412,7 +418,12 @@
                 onmousemove={() => (active = index)}
               >
                 {#if item.type === "task"}
-                  <KindIcon kind={item.kind} />
+                  <KindIcon
+                    kind={item.kind}
+                    role={kindRoleOf(schemaOf(item.store), item.kind)}
+                    icon={kindIconOf(schemaOf(item.store), item.kind)}
+                    color={kindColorOf(schemaOf(item.store), item.kind)}
+                  />
                   <span class="key">{did.current(item.store, item.id)}</span>
                   <span class="text">{item.title}</span>
                   {#if item.note}

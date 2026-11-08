@@ -57,6 +57,8 @@
 - 4e-4 の細部（2026-11-03、利用者の決定）: 通知とスキーマのタブはアドレスに持たせる（`/inbox?tab=overwritten|mention|repair`、`/settings/schema/<store>?tab=kinds|props|relations|workflow`）。通知は全 Store を1回で引き、既読にした上書きの行にはボタンを出さず、同期の修復の文は detail の種類ごとに書く。アクティビティはすべての trailer を出し、タスクはあるが ID がないログは ULID を出す。`limit` の上限はサーバーの最大の 1000、日時を読めないコミットは「日時不明」にまとめる。scoped を1件だけ返す GET はないので、プロジェクトの上書きは `SchemaView.scoped` から読み、`PUT`・`DELETE` のあとに `SchemaCache.reload(store)` を呼ぶ。すでにエントリのあるステータスへ足した制約は、そのエントリに併合する。必須にできる項目は `internal/schema/check.go` の規則から取る。`/settings` は `/settings/general` に置き換える。窓が隠れているあいだの fetch は `max(interval, 10 分)` と案内し、`SyncCard` は任意の `store` を受ける。doctor の API は Store ごとの `DoctorReport[]` を返し、修復のあとは応答の findings をそのまま出す（二度目の GET は送らない）。purge の日数は全角も受ける（NFKC）0〜36500 のテキスト欄にする。スキーマでは `schema.changed` で check だけを取り直し、同じ種類の定義が1つなら「マージ…」を出さず、ワークフローは文の一覧で見せる。ほかの細部は `docs/superpowers/plans/2026-11-03-phase4e-screens.md` の細部 91〜129 と `2026-11-03-phase4e4-settings.md` の「決めたこと」のとおり
 - `/` の画面（2026-11-07、利用者の決定）: `/` はマイタスクを出す（URL は `/` のまま。`/my` も同じ画面）。最初のワークスペースの概要は開かなくなった。表示中のワークスペースが 0 件なら、これまでどおり `noworkspace` の空の状態を出す
 - スキーマ画面（2026-11-08、利用者の決定）: 「プロパティと関連」を「プロパティ」（`task_ref` 以外）と「関連」（`?tab=relations`。`task_ref` のプロパティ）の2タブに分ける。関連タブの先頭には組み込みの `blocked_by` を、名前とマージのボタンなしで出す。関連のマージ先には関連だけを出す。行のボタンは「名前…」「マージ…」、ダイアログの「併合」は「マージ」と呼ぶ
+- スキーマの編集（2026-11-08、利用者の決定）: スキーマ画面から、ステータス・種類・プロパティ・関連・enum の値の追加・削除・型以外の属性の変更・並べ替えができる。使用中の定義は削除できずマージへ案内し、既存のタスクが違反する変更は拒否する。色はパレットから選び、色とアイコンは全画面の表示に使う。CLI は足さない。詳細は `docs/superpowers/specs/2026-11-08-schema-gui-edit-design.md`
+- スキーマの編集のフィードバック（2026-11-08、利用者の決定）: 名前の変更は編集ダイアログに統合（名前と属性を 1 コミット）、ボタンの「…」をなくす、色は 12 色に加えて自由な色、種類にも色、役割を「グループ / アイテム」・置ける親を「どの下に置けるか」・ルートを「最上位」と呼ぶ、enum の値は編集ダイアログの中で設定、新しい Store の既定の表示名（ステータス・関連・種類）を英語にする、関連の逆方向の検索は `<名前>.inverse`。詳細は `docs/superpowers/specs/2026-11-08-schema-gui-edit-design.md` の「フィードバックによる変更」
 - 4f の細部（2026-11-04、利用者の決定）: 4f は3回に分ける（4f-1 Go の不足、4f-2 アカウント・Store の設定と Onboarding、4f-3 サイドバー・マイタスク・閲覧のみの表示・Store 間の移動と E2E）。Store の色と表示は config.yaml の `stores[].color`・`stores[].hidden` に書き（このマシンだけ）、CLI に `hh store set <名前> [--color] [--hidden]` を足す（hidden は GUI の表示だけに効く）。GUI のアカウントの追加は Device Flow（サーバーがポーリングし、結果を SSE で知らせる）・トークンの貼り付け・gh・環境変数・トークンなしを持つ。キャンバスにあって CLI の機能がないもの（`purge --rewrite-history` の導線、`repo_accounts` の編集と GitHub App の警告（5）、gh のアカウントの自動検出、merge driver の状態、remote の追加、フォルダを開く、形式の統計、新しく見つかった Store の自動の案内、メンバー数）は作らない。`hh use` はコンテキスト解決なので GUI には作らない。発見の `--from` と移動の `--parent` は GUI にも出す。ほかの細部は `docs/superpowers/plans/2026-11-04-phase4f-screens.md` のとおり。4f-2 では次の2つを利用者が決めた（2026-11-04）: E2E のバイナリ（ビルドタグ `e2e`）だけ keyring を `$HEDGEHUG_HOME/e2e-keyring.json` のファイルにし、CI の E2E に Secret Service がなくても、手元で本物の Keychain に書かなくても、Device Flow・トークンの貼り付け・ログアウトを E2E で見られるようにする（リリースのバイナリは今のまま OS の keychain。細部 71）。`discover --from` は bare の HEAD ではなく `refs/heads/main` を見る（push は main にしか書かないので、HEAD が master のままの bare で Store を見落としていた。細部 87）
 
 ## 範囲
@@ -85,7 +87,7 @@
 | CommandPalette | ID・タイトルでの検索、画面の移動、操作の実行 | — |
 | States | 空の状態、読み込み中、サーバーに接続できない、同期のエラー、壊れたファイル（doctor への案内） | — |
 | Onboarding | Store が1つもないときの初回起動（store init へ） | Store の発見とマウント（3） |
-| SettingsSchema | スキーマの閲覧、schema check、migrate | テンプレート（6） |
+| SettingsSchema | スキーマの閲覧・編集、schema check、migrate | テンプレート（6） |
 | SettingsGeneral | 同期の状態と間隔（間隔は表示だけ。変えるには config.yaml を編集する）、doctor と修復、期間を指定した purge（削除済みタスクと転送ファイルの完全削除。`hh purge --older-than` と同じ。4e） | — |
 | SettingsWorkspaces | Store ごとの設定の「ワークスペース」: 名前・接頭辞・プロジェクト数・タスク数の一覧、追加、各ワークスペースの設定タブへの移動 | — |
 | SettingsNav | 上の設定画面への移動 | アカウント・Store（3）、自動化（5） |

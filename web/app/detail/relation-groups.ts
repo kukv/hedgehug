@@ -1,5 +1,6 @@
 import type { ShowView } from "../../core/api/client";
 import type { SchemaView } from "../../core/schema";
+import { propNames } from "../../core/schema-edit";
 import type { Lookup } from "./lookup";
 
 export type RelItem = {
@@ -50,13 +51,13 @@ export async function buildGroups(
   if (blockers.length > 0) {
     groups.push({
       key: "blocked_by",
-      label: "ブロックされている",
+      label: "Blocked by",
       note: "blocked_by",
       removable: true,
       items: await Promise.all(blockers.map((r) => item(r.ulid, r))),
     });
   }
-  for (const name of Object.keys(sc.props).sort()) {
+  for (const name of propNames(sc)) {
     const def = sc.props[name];
     if (def?.type !== "task_ref") continue;
     const raws = asList(show.props[name]);
@@ -69,7 +70,14 @@ export async function buildGroups(
       items: await Promise.all(raws.map((r) => item(r))),
     });
   }
-  for (const name of Object.keys(show.reverse ?? {}).sort()) {
+  // The reverse sides follow the order of the properties; a name the schema does not have comes after.
+  const reversed = Object.keys(show.reverse ?? {});
+  const order = propNames(sc);
+  const reverseNames = [
+    ...order.filter((n) => reversed.includes(n)),
+    ...reversed.filter((n) => !order.includes(n)).sort(),
+  ];
+  for (const name of reverseNames) {
     const refs = show.reverse[name] ?? [];
     if (refs.length === 0) continue;
     const def = sc.props[name];
@@ -96,8 +104,8 @@ export async function buildGroups(
 
 // relationKinds is what "関連を追加" can add: blocked_by and the task_ref properties.
 export function relationKinds(sc: SchemaView): { key: string; label: string }[] {
-  const kinds = [{ key: "blocked_by", label: "ブロックされている" }];
-  for (const name of Object.keys(sc.props).sort()) {
+  const kinds = [{ key: "blocked_by", label: "Blocked by" }];
+  for (const name of propNames(sc)) {
     const def = sc.props[name];
     if (def?.type === "task_ref") kinds.push({ key: name, label: def.label || name });
   }

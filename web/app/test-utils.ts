@@ -57,7 +57,7 @@ export function fakeCore(over: Partial<Record<keyof AppCore, unknown>> = {}): Ap
       reload: async () => {},
       subscribe: e.subscribe,
     },
-    schema: { subscribe: e.subscribe },
+    schema: { subscribe: e.subscribe, get: () => undefined, load: async () => undefined },
     views: {
       list: () => [],
       get: () => undefined,

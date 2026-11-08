@@ -10,11 +10,12 @@ import (
 // SchemaView is schema.yaml as GET /api/schema returns it: the keys of the
 // file, with props as a mapping of name to definition.
 type SchemaView struct {
-	Statuses []StatusDef        `json:"statuses"`
-	Kinds    []KindDef          `json:"kinds"`
-	Props    map[string]PropDef `json:"props"`
-	Workflow WorkflowDef        `json:"workflow"`
-	Scoped   []ScopedDef        `json:"scoped"`
+	Statuses  []StatusDef        `json:"statuses"`
+	Kinds     []KindDef          `json:"kinds"`
+	Props     map[string]PropDef `json:"props"`
+	Workflow  WorkflowDef        `json:"workflow"`
+	Scoped    []ScopedDef        `json:"scoped"`
+	PropOrder []string           `json:"prop_order"`
 }
 
 // StatusDef is a status of the schema.
@@ -33,6 +34,7 @@ type KindDef struct {
 	Role     string   `json:"role"`
 	Parents  []string `json:"parents"`
 	Icon     string   `json:"icon,omitempty"`
+	Color    string   `json:"color,omitempty"`
 	Template string   `json:"template,omitempty"`
 	Default  bool     `json:"default,omitempty"`
 }
@@ -82,16 +84,17 @@ func SchemaGet(ss *usecase.Session) (SchemaView, error) {
 func SchemaViewOf(sc *schema.Schema) SchemaView {
 	v := SchemaView{
 		Statuses: []StatusDef{}, Kinds: []KindDef{}, Props: map[string]PropDef{},
-		Workflow: workflowDefOf(sc.Workflow), Scoped: []ScopedDef{},
+		Workflow: workflowDefOf(sc.Workflow), Scoped: []ScopedDef{}, PropOrder: []string{},
 	}
 	for _, st := range sc.Statuses {
 		v.Statuses = append(v.Statuses, StatusDef{st.Name, st.Label, string(st.Category), st.Color, st.Default})
 	}
 	for _, k := range sc.Kinds {
-		v.Kinds = append(v.Kinds, KindDef{k.Name, k.Label, string(k.Role), k.Parents, k.Icon, k.Template, k.Default})
+		v.Kinds = append(v.Kinds, KindDef{k.Name, k.Label, string(k.Role), k.Parents, k.Icon, k.Color, k.Template, k.Default})
 	}
 	for _, p := range sc.Props {
 		v.Props[p.Name] = PropDef{string(p.Type), p.Values, p.Multi, p.Label, p.Inverse, p.Symmetric}
+		v.PropOrder = append(v.PropOrder, p.Name)
 	}
 	for _, s := range sc.Scoped {
 		v.Scoped = append(v.Scoped, ScopedDefOf(s))

@@ -79,6 +79,32 @@ describe("buildBoard: status columns", () => {
     expect(b.columns.find((c) => c.key === "todo")?.label).toBe("未着手");
   });
 
+  it("carries the color of a status only when one store gives the column", () => {
+    const withColor = (color: string) =>
+      sc([
+        { name: "todo", category: "todo", color } as never,
+        { name: "wip", category: "doing", color } as never,
+      ]);
+    const tasks = [
+      task("A", "task", null, { store: "shared", status: "todo" }),
+      task("B", "task", null, { store: "work", status: "wip" }),
+    ];
+    const one = buildBoard(tasks, opts({ schemas: new Map([["shared", withColor("pink")]]) }));
+    expect(one.columns.find((c) => c.key === "todo")?.color).toBe("pink");
+    const two = buildBoard(
+      tasks,
+      opts({
+        schemas: new Map([
+          ["shared", withColor("pink")],
+          ["work", withColor("teal")],
+        ]),
+      }),
+    );
+    // both stores have todo and wip: no one color to draw
+    expect(two.columns.find((c) => c.key === "todo")?.color).toBeUndefined();
+    expect(two.columns.find((c) => c.key === "wip")?.color).toBeUndefined();
+  });
+
   it("leaves out a store that has no task, unless it is the store of the screen", () => {
     const schemas = new Map([
       ["shared", shared],

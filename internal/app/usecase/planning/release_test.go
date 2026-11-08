@@ -79,7 +79,7 @@ func TestReleaseNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "# v1\n\n## エピック\n\n- " + e.ID + " big\n\n## タスク\n\n- " + a.ID + " first\n- " + b.ID + " second\n"
+	want := "# v1\n\n## Epic\n\n- " + e.ID + " big\n\n## Task\n\n- " + a.ID + " first\n- " + b.ID + " second\n"
 	if got != want {
 		t.Fatalf("notes:\n%q\nwant:\n%q", got, want)
 	}

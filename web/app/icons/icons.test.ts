@@ -64,12 +64,55 @@ describe("KindIcon", () => {
     expect(bug.container.querySelector("svg")?.style.getPropertyValue("--k")).toBe("var(--danger)");
   });
 
+  it("color があればその色で描く。なければ今の色", () => {
+    const draw = (props: Record<string, string>) =>
+      render(KindIcon, { props: { kind: "task", ...props } }).container.querySelector(
+        "svg",
+      ) as SVGElement;
+    expect(draw({ color: "teal" }).style.getPropertyValue("--k")).toBe("var(--store-teal-dot)");
+    cleanup();
+    expect(draw({ color: "#3451D1" }).style.getPropertyValue("--k")).toBe("#3451D1");
+    cleanup();
+    expect(draw({ kind: "bug", color: "blue" }).style.getPropertyValue("--k")).toBe(
+      "var(--accent)",
+    );
+    cleanup();
+    expect(draw({}).style.getPropertyValue("--k")).toBe("var(--icon)");
+  });
+
   it("知らない種類は role で container / work の基本形", () => {
     const c = render(KindIcon, { props: { kind: "initiative", role: "container" } });
     expect(c.container.querySelector("svg")?.getAttribute("data-kind")).toBe("container");
     cleanup();
     const w = render(KindIcon, { props: { kind: "chore", role: "work" } });
     expect(w.container.querySelector("svg")?.getAttribute("data-kind")).toBe("work");
+  });
+});
+
+describe("スキーマの color と icon", () => {
+  it("パレットの色で描く", () => {
+    const { container } = render(StatusIcon, {
+      props: { status: "review", category: "doing", color: "teal" },
+    });
+    expect((container.querySelector("svg") as SVGElement).style.getPropertyValue("--c")).toBe(
+      "var(--store-teal-dot)",
+    );
+  });
+
+  it("スキーマが名指しした形で描く", () => {
+    const { container } = render(KindIcon, {
+      props: { kind: "incident", role: "work", icon: "bug" },
+    });
+    const svg = container.querySelector("svg") as SVGElement;
+    expect(svg.dataset.kind).toBe("bug");
+    expect(svg.style.getPropertyValue("--k")).toBe("var(--danger)");
+  });
+
+  it("知らない icon は無視する", () => {
+    const { container } = render(KindIcon, {
+      props: { kind: "incident", role: "container", icon: "rocket" },
+    });
+    expect((container.querySelector("svg") as SVGElement).dataset.kind).toBe("container");
   });
 });
 

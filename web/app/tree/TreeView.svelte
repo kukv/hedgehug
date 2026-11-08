@@ -646,7 +646,7 @@
     const kind = pickKind(schema, parent?.kind ?? null);
     if (!kind) {
       toast({
-        message: `${parent ? `${kindLabel(schema, parent.kind)}の下` : "ルート"}に置ける種類がありません（${store} の schema.yaml の kinds）`,
+        message: `${parent ? `${kindLabel(schema, parent.kind)}の下` : "最上位"}に置ける種類がありません（${store} の schema.yaml の kinds）`,
       });
       adding = null;
       return true;
@@ -941,7 +941,9 @@
     <span><kbd>S</kbd> ステータス</span>
     <span><kbd>K</kbd> 種類</span>
     <span><kbd>{kbdLabel("mod+enter")}</kbd> 詳細を開く</span>
-    <span class="dnd">ドラッグで並べ替え・親の付け替え（置ける親の種類だけ受け付けます）</span>
+    <span class="dnd"
+      >ドラッグで並べ替え・親の付け替え（どの下に置けるかに合う場所だけ受け付けます）</span
+    >
   </footer>
 </section>
 

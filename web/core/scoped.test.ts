@@ -25,6 +25,7 @@ const schema = {
   kinds: [],
   props: { points: { type: "number" }, area: { type: "text" } },
   scoped: [],
+  prop_order: [],
   workflow: { transitions: {}, required: {} },
   templates: [],
   templateDefaults: {},
@@ -104,6 +105,11 @@ describe("lists", () => {
 });
 
 describe("requirableFields", () => {
+  it("lists the properties in prop_order", () => {
+    const sc = { ...schema, prop_order: ["points", "area"] };
+    expect(requirableFields(sc).slice(0, 2)).toEqual(["points", "area"]);
+  });
+
   it("is the properties by name and the built-in fields the server accepts", () => {
     expect(requirableFields(schema)).toEqual([
       "area",

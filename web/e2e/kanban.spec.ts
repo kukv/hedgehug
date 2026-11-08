@@ -45,12 +45,12 @@ test("a status that needs a field asks for it, and sets both in one commit", asy
   const before = commits(hh);
   await dragCard(page, card(page, ship.ulid), cell(page, "in_progress"));
   const dialog = page.getByRole("dialog", {
-    name: `${ship.id} を進行中にするには ポイント が必要です`,
+    name: `${ship.id} をIn progressにするには ポイント が必要です`,
   });
   await expect(dialog).toBeVisible();
   // nothing is written until the field is given
   expect(hh.show(ship.id).status).toBe("todo");
-  const go = dialog.getByRole("button", { name: "進行中にする" });
+  const go = dialog.getByRole("button", { name: "In progressにする" });
   await expect(go).toBeDisabled();
 
   await dialog.getByLabel("ポイント", { exact: true }).fill("5");
@@ -74,7 +74,7 @@ test("closing the dialog of a missing field leaves the task where it was", async
   const before = commits(hh);
   await dragCard(page, card(page, ship.ulid), cell(page, "in_progress"));
   const dialog = page.getByRole("dialog", {
-    name: `${ship.id} を進行中にするには ポイント が必要です`,
+    name: `${ship.id} をIn progressにするには ポイント が必要です`,
   });
   await dialog.getByRole("button", { name: "キャンセル" }).click();
   await expect(dialog).toBeHidden();

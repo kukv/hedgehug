@@ -136,6 +136,7 @@ func (s *Server) register() {
 	s.registerDevice()
 	s.registerStores()
 	s.registerScoped()
+	s.registerSchemaEdit()
 	s.registerViews()
 	s.registerSync()
 	s.registerGitHub()

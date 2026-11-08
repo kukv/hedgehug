@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ShowView, TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
+  import { statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { onLinkClick, router } from "../router";
@@ -62,8 +63,11 @@
     return v !== null && v !== undefined && v !== "";
   };
   const taken = $derived(groups.find((g) => g.key === kind)?.items.map((i) => i.ulid) ?? []);
-  const categoryOf = (status: string | null) =>
-    sc.current?.statuses?.find((s) => s.name === status)?.category ?? "todo";
+  const statusDefOf = (status: string | null) =>
+    sc.current?.statuses?.find((s) => s.name === status);
+  const categoryOf = (status: string | null) => statusDefOf(status)?.category ?? "todo";
+  const colorOf = (status: string | null) =>
+    status === null ? undefined : statusColorOf(sc.current, status);
 
   // One write at a time: the next body is built from `show`, which has the last one only after its answer.
   let busy = $state(false);
@@ -132,7 +136,11 @@
       <ul>
         {#each g.items as it (it.raw)}
           <li>
-            <StatusIcon status={it.status ?? "todo"} category={categoryOf(it.status)} />
+            <StatusIcon
+              status={it.status ?? "todo"}
+              category={categoryOf(it.status)}
+              color={colorOf(it.status)}
+            />
             <IdLabel
               id={it.id}
               ulid={it.ulid}

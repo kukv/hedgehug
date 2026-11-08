@@ -514,7 +514,7 @@
           <div class="heads">
             {#each board.columns as col, i (col.key)}
               <div class="head" data-column={col.key}>
-                <StatusIcon status={col.key} category={col.category} />
+                <StatusIcon status={col.key} category={col.category} color={col.color} />
                 <span class="name">{col.label}</span>
                 <span class="count" class:over={overLimit(col.key, counts[i] ?? 0)}>
                   {countLabelOf(col.key, counts[i] ?? 0)}

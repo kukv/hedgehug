@@ -212,9 +212,22 @@ func (c *compiler) term(t Term) (pred, error) {
 	if p, ok := c.sc.Prop(t.Key); ok {
 		return c.prop(t, p)
 	}
-	for _, p := range c.sc.Props {
-		if p.Type == schema.TypeTaskRef && p.Inverse == t.Key {
+	// <name>.inverse: the tasks that a task points at through the relation
+	// name; blocked_by.inverse is blocks.
+	if name, ok := strings.CutSuffix(t.Key, ".inverse"); ok {
+		if name == "blocked_by" {
+			return c.inverse(t, name)
+		}
+		if p, found := c.sc.Prop(name); found && p.Type == schema.TypeTaskRef {
+			if p.Symmetric {
+				return c.prop(t, p) // no direction: the same as the key itself
+			}
 			return c.inverse(t, p.Name)
+		}
+	}
+	for _, p := range c.sc.Props {
+		if p.Type == schema.TypeTaskRef && p.Inverse != "" && p.Inverse == t.Key {
+			return nil, c.failUnknown(t, "unknown key %q（逆方向は %s.inverse: で書きます）", t.Key, p.Name)
 		}
 	}
 	return nil, c.failUnknown(t, "unknown key %q", t.Key)

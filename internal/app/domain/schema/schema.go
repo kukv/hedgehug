@@ -49,6 +49,7 @@ type Kind struct {
 	Role     Role     `yaml:"role"`
 	Parents  []string `yaml:"parents,omitempty"` // nil: anywhere
 	Icon     string   `yaml:"icon,omitempty"`
+	Color    string   `yaml:"color,omitempty"`
 	Template string   `yaml:"template,omitempty"`
 	Default  bool     `yaml:"default,omitempty"`
 }
@@ -236,7 +237,9 @@ func (s *Schema) Encode() ([]byte, error) {
 	e.Put("statuses", s.Statuses, len(s.Statuses) == 0)
 	e.Put("kinds", s.Kinds, len(s.Kinds) == 0)
 	e.Put("props", s.Props, len(s.Props) == 0)
-	e.Put("workflow", s.Workflow, s.Workflow.IsZero())
+	if !s.Workflow.IsZero() { // a key not put is left out, so an emptied workflow is not written as {}
+		e.Put("workflow", s.Workflow, false)
+	}
 	e.Put("scoped", s.Scoped, len(s.Scoped) == 0)
 	return e.Bytes(s.Extra)
 }
@@ -246,20 +249,20 @@ func (s *Schema) Encode() ([]byte, error) {
 func Default() *Schema {
 	return &Schema{
 		Statuses: []Status{
-			{Name: "backlog", Label: "バックログ", Category: CategoryTodo},
-			{Name: "todo", Label: "未着手", Category: CategoryTodo, Default: true},
-			{Name: "on_hold", Label: "保留", Category: CategoryTodo},
-			{Name: "in_progress", Label: "進行中", Category: CategoryDoing, Default: true},
-			{Name: "waiting", Label: "待機中", Category: CategoryDoing},
-			{Name: "done", Label: "完了", Category: CategoryDone, Default: true},
-			{Name: "canceled", Label: "中止", Category: CategoryCanceled, Default: true},
+			{Name: "backlog", Label: "Backlog", Category: CategoryTodo},
+			{Name: "todo", Label: "Todo", Category: CategoryTodo, Default: true},
+			{Name: "on_hold", Label: "On hold", Category: CategoryTodo},
+			{Name: "in_progress", Label: "In progress", Category: CategoryDoing, Default: true},
+			{Name: "waiting", Label: "Waiting", Category: CategoryDoing},
+			{Name: "done", Label: "Done", Category: CategoryDone, Default: true},
+			{Name: "canceled", Label: "Canceled", Category: CategoryCanceled, Default: true},
 		},
 		Kinds: []Kind{
-			{Name: "project", Label: "プロジェクト", Role: RoleContainer, Parents: []string{Root}},
-			{Name: "epic", Label: "エピック", Role: RoleContainer, Parents: []string{Root, "project"}},
-			{Name: "story", Label: "ストーリー", Role: RoleWork, Parents: []string{Root, "project", "epic"}},
-			{Name: "task", Label: "タスク", Role: RoleWork, Parents: []string{Root, "project", "epic", "story", "task"}, Default: true},
-			{Name: "bug", Label: "バグ", Role: RoleWork, Parents: []string{Root, "project", "epic", "story"}},
+			{Name: "project", Label: "Project", Role: RoleContainer, Parents: []string{Root}},
+			{Name: "epic", Label: "Epic", Role: RoleContainer, Parents: []string{Root, "project"}},
+			{Name: "story", Label: "Story", Role: RoleWork, Parents: []string{Root, "project", "epic"}},
+			{Name: "task", Label: "Task", Role: RoleWork, Parents: []string{Root, "project", "epic", "story", "task"}, Default: true},
+			{Name: "bug", Label: "Bug", Role: RoleWork, Parents: []string{Root, "project", "epic", "story"}},
 		},
 		Props: Props{
 			{Name: "priority", Type: TypeEnum, Values: []string{"low", "mid", "high", "urgent"}, Label: "優先度"},
@@ -267,9 +270,9 @@ func Default() *Schema {
 			{Name: "due", Type: TypeDate, Label: "期限"},
 			{Name: "estimate", Type: TypeDuration, Label: "見積もり"},
 			{Name: "points", Type: TypeNumber, Label: "ポイント"},
-			{Name: "duplicates", Type: TypeTaskRef, Multi: true, Label: "重複している", Inverse: "重複元"},
-			{Name: "causes", Type: TypeTaskRef, Multi: true, Label: "引き起こしている", Inverse: "起因している"},
-			{Name: "relates", Type: TypeTaskRef, Multi: true, Label: "関連", Symmetric: true},
+			{Name: "duplicates", Type: TypeTaskRef, Multi: true, Label: "Duplicates", Inverse: "Duplicated by"},
+			{Name: "causes", Type: TypeTaskRef, Multi: true, Label: "Causes", Inverse: "Caused by"},
+			{Name: "relates", Type: TypeTaskRef, Multi: true, Label: "Relates to", Symmetric: true},
 		},
 	}
 }
@@ -279,7 +282,7 @@ func Default() *Schema {
 func Dev() *Schema {
 	s := Default()
 	s.Statuses = append(s.Statuses[:4:4], append([]Status{
-		{Name: "review", Label: "レビュー", Category: CategoryDoing},
+		{Name: "review", Label: "Review", Category: CategoryDoing},
 	}, s.Statuses[4:]...)...)
 	return s
 }

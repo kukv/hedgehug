@@ -70,7 +70,7 @@ function mount(tab: "tree" | "kanban" | "table" | "settings", read = true, readO
         hidden: () => false,
         subscribe: none,
       },
-      schema: { subscribe: none },
+      schema: { subscribe: none, get: () => undefined, load: async () => undefined },
     },
   );
 }

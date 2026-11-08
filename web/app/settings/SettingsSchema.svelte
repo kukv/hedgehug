@@ -1,12 +1,9 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
   import type { TaskView } from "../../core/api/client";
-  import { CATEGORY_LABEL, type Category } from "../../core/categories";
   import { errorMessage } from "../../core/messages";
   import { schemaUsage } from "../../core/schema-usage";
   import { core } from "../context";
-  import KindIcon from "../icons/KindIcon.svelte";
-  import StatusIcon from "../icons/StatusIcon.svelte";
   import { useReadOnlySentence } from "../read-only";
   import { onLinkClick, router, type SchemaTab } from "../router";
   import { useDisplayId, useManyStores, useSubscribe } from "../svelte-store";
@@ -16,11 +13,20 @@
   import Tabs from "../ui/Tabs.svelte";
   import MigrateDialog, { type MigrateTarget } from "./MigrateDialog.svelte";
   import SchemaCheck from "./SchemaCheck.svelte";
+  import SchemaDefDialog from "./SchemaDefDialog.svelte";
+  import SchemaDeleteDialog from "./SchemaDeleteDialog.svelte";
+  import SchemaKinds from "./SchemaKinds.svelte";
+  import SchemaProps from "./SchemaProps.svelte";
+  import SchemaRelations from "./SchemaRelations.svelte";
+  import SchemaStatuses from "./SchemaStatuses.svelte";
+  import SchemaWorkflow from "./SchemaWorkflow.svelte";
   import SettingsTemplates from "./SettingsTemplates.svelte";
+  import type { SchemaAction } from "./schema-action";
+  import { propEntries, relationEntries } from "./schema-text";
 
-  // The schema of a Store (its .hedgehug/schema.yaml), read: how many tasks use each definition, the
-  // overrides of the projects, and what `schema check` finds. A name is changed or merged here (migrate);
-  // everything else is edited in the YAML.
+  // The schema of a Store (its .hedgehug/schema.yaml): how many tasks use each definition, the
+  // overrides of the projects, and what `schema check` finds. A definition is added, edited (its name
+  // too), merged and deleted from here.
   let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
@@ -34,7 +40,7 @@
     return c.schema.get(store);
   });
   const many = $derived(manyStores.current);
-  // A name cannot be changed or merged in a Store that cannot be written (細部 35).
+  // A definition cannot be edited or merged in a Store that cannot be written (細部 35).
   const offSentence = useReadOnlySentence(c.stores, () => store);
   const off = $derived(offSentence.current);
 
@@ -88,6 +94,7 @@
     tasks = null;
     tasksFailure = null;
     ask = null; // a dialog of another Store would write to this one
+    act = null;
     untrack(() => void loadTasks(s));
     const offs = [
       c.conn.on("tasks.changed", (e) => {
@@ -105,29 +112,22 @@
   });
 
   const usage = $derived(schema && tasks ? schemaUsage(schema, tasks) : null);
-  const count = (n: number | undefined): string => (usage && n !== undefined ? String(n) : "—");
-  const statuses = $derived(schema?.statuses ?? []);
-  const kinds = $derived(schema?.kinds ?? []);
-  const allProps = $derived(Object.entries(schema?.props ?? {}));
-  // A task_ref property is a relation; the relations tab has them, the properties tab the rest.
-  const propEntries = $derived(allProps.filter(([, p]) => p.type !== "task_ref"));
-  const relationEntries = $derived(allProps.filter(([, p]) => p.type === "task_ref"));
-  // blocked_by is a relation built in: it is not in the schema, and its name cannot be changed.
+  const propCount = $derived(propEntries(schema).length);
+  const relationCount = $derived(relationEntries(schema).length);
+  // blocked_by is a relation built in: it is not in the schema, and it cannot be edited.
   const blockedCount = $derived(
     tasks ? tasks.filter((t) => (t.blocked_by ?? []).length > 0).length : undefined,
   );
-  const transitions = $derived(Object.entries(schema?.workflow?.transitions ?? {}));
-  const required = $derived(Object.entries(schema?.workflow?.required ?? {}));
   const scoped = $derived(schema?.scoped ?? []);
   const taskByUlid = $derived(new Map((tasks ?? []).map((t) => [t.ulid, t])));
 
   const tabItems = $derived(
     (
       [
-        ["statuses", "ステータス", statuses.length],
-        ["kinds", "種類", kinds.length],
-        ["props", "プロパティ", propEntries.length],
-        ["relations", "関連", relationEntries.length + 1],
+        ["statuses", "ステータス", (schema?.statuses ?? []).length],
+        ["kinds", "種類", (schema?.kinds ?? []).length],
+        ["props", "プロパティ", propCount],
+        ["relations", "関連", relationCount + 1],
         ["workflow", "ワークフロー", undefined],
         ["templates", "テンプレート", undefined],
       ] as const
@@ -138,19 +138,6 @@
       count: n,
     })),
   );
-
-  const nameList = (names: readonly string[] | null | undefined): string =>
-    (names ?? []).length === 0 ? "なし" : (names ?? []).join("、");
-  const parentsText = (parents: string[] | null): string =>
-    parents === null
-      ? "どこにでも"
-      : parents.length === 0
-        ? "置けない"
-        : parents.map((p) => (p === "root" ? "ルート" : p)).join("、");
-  const propNote = (p: { multi?: boolean; symmetric?: boolean; inverse?: string }): string =>
-    [p.multi ? "複数" : "", p.symmetric ? "双方向" : "", p.inverse ? `逆方向: ${p.inverse}` : ""]
-      .filter(Boolean)
-      .join(" · ");
 
   // What a project's override changes, in a line.
   function overrideText(o: (typeof scoped)[number]): string {
@@ -164,15 +151,30 @@
   }
   const projectOf = (where: string): string => where.replace(/^project:/, "");
 
-  // migrate: the dialog for a definition, opened from its row.
-  type Ask = {
-    target: MigrateTarget;
-    prop?: string;
-    old: string;
-    mode: "rename" | "merge";
-    names: string[];
-  };
+  // migrate: the merge dialog for a definition, opened from its row.
+  type Ask = { target: MigrateTarget; old: string; names: string[] };
   let ask = $state.raw<Ask | null>(null);
+  // The other dialogs: add, edit, delete.
+  let act = $state.raw<Exclude<SchemaAction, { kind: "migrate" }> | null>(null);
+
+  function onaction(a: SchemaAction): void {
+    if (a.kind === "migrate") ask = a;
+    else act = a;
+  }
+
+  // The tasks that a refusal names by their ID, and the projects of the overrides, by what the screen read.
+  const ulidById = $derived(
+    new Map(
+      (tasks ?? []).flatMap((t) => [
+        [t.id, t.ulid] as const,
+        [did.current(store, t.id), t.ulid] as const,
+      ]),
+    ),
+  );
+  const projectLabel = (ulid: string): string => {
+    const p = taskByUlid.get(ulid);
+    return p ? `${did.current(store, p.id)} ${p.title}` : ulid;
+  };
 
   // The row that opened the dialog may be gone (the name changed): the focus then goes to the heading.
   async function migrated(): Promise<void> {
@@ -193,10 +195,7 @@
       <StoreBadge {store} tone={c.stores.tone(store)} />
     {/if}
   </header>
-  <p class="lead">
-    この Store を使う共通の定義です。追加・削除・色や並びの変更は
-    YAML（.hedgehug/schema.yaml）を編集してください。名前とマージはこの画面からできます。
-  </p>
+  <p class="lead">この Store で使う共通の定義です。ここで追加・編集・並べ替えができます。</p>
 
   {#if schema === undefined}
     {#if schemaError}
@@ -210,249 +209,20 @@
       <FormError message="タスクの件数を読み込めません · {tasksFailure}" />
     {/if}
 
-    {#snippet actions(target: MigrateTarget, old: string, names: string[], prop?: string)}
-      {@const subject = prop ? `${prop} の ${old}` : old}
-      <Button
-        size="sm"
-        aria-label="名前…（{subject}）"
-        disabled={off !== null}
-        why={off ?? undefined}
-        onclick={() => (ask = { target, prop, old, mode: "rename", names })}
-      >
-        名前…
-      </Button>
-      {#if names.length > 1}
-        <Button
-          size="sm"
-          aria-label="マージ…（{subject}）"
-          disabled={off !== null}
-          why={off ?? undefined}
-          onclick={() => (ask = { target, prop, old, mode: "merge", names })}
-        >
-          マージ…
-        </Button>
-      {/if}
-    {/snippet}
-
     <Tabs label="スキーマの種類" items={tabItems} />
 
     {#if tab === "statuses"}
-      <section class="sec" aria-labelledby="{uid}-statuses">
-        <h2 id="{uid}-statuses">ステータス</h2>
-        <p class="note">
-          どれも未着手・進行中・完了・中止のいずれかのカテゴリに属し、各カテゴリに既定が 1
-          つあります。
-        </p>
-        <table aria-labelledby="{uid}-statuses">
-          <thead>
-            <tr>
-              <th scope="col">名前</th>
-              <th scope="col">表示名</th>
-              <th scope="col">カテゴリ</th>
-              <th scope="col">既定</th>
-              <th scope="col" class="num">タスク</th>
-              <th scope="col"><span class="sr">操作</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each statuses as s (s.name)}
-              <tr>
-                <th scope="row">
-                  <span class="name"
-                    ><StatusIcon status={s.name} category={s.category} size={14} />{s.name}</span
-                  >
-                </th>
-                <td>{s.label ?? ""}</td>
-                <td>{CATEGORY_LABEL[s.category as Category] ?? s.category}</td>
-                <td>{s.default ? "既定" : ""}</td>
-                <td class="num">{count(usage?.statuses[s.name])}</td>
-                <td>
-                  <div class="acts">
-                    {@render actions(
-                      "status",
-                      s.name,
-                      statuses.map((x) => x.name),
-                    )}
-                  </div>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </section>
+      <SchemaStatuses {store} {schema} {usage} {off} {onaction} />
     {:else if tab === "templates"}
       <SettingsTemplates {store} {off} />
     {:else if tab === "kinds"}
-      <section class="sec" aria-labelledby="{uid}-kinds">
-        <h2 id="{uid}-kinds">種類</h2>
-        <p class="note">
-          役割は container（まとめる単位）と work（作業項目）の 2
-          つです。置ける親に反する配置は書き込み時に拒否されます。
-        </p>
-        <table aria-labelledby="{uid}-kinds">
-          <thead>
-            <tr>
-              <th scope="col">名前</th>
-              <th scope="col">表示名</th>
-              <th scope="col">役割</th>
-              <th scope="col">置ける親</th>
-              <th scope="col">既定</th>
-              <th scope="col">既定のテンプレート</th>
-              <th scope="col" class="num">タスク</th>
-              <th scope="col"><span class="sr">操作</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each kinds as k (k.name)}
-              <tr>
-                <th scope="row">
-                  <span class="name"
-                    ><KindIcon kind={k.name} role={k.role} size={14} />{k.name}</span
-                  >
-                </th>
-                <td>{k.label ?? ""}</td>
-                <td>{k.role}</td>
-                <td>{parentsText(k.parents)}</td>
-                <td>{k.default ? "既定" : ""}</td>
-                <td>{k.template ?? ""}</td>
-                <td class="num">{count(usage?.kinds[k.name])}</td>
-                <td>
-                  <div class="acts">
-                    {@render actions(
-                      "kind",
-                      k.name,
-                      kinds.map((x) => x.name),
-                    )}
-                  </div>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </section>
+      <SchemaKinds {store} {schema} {usage} {off} {onaction} />
     {:else if tab === "props"}
-      <section class="sec" aria-labelledby="{uid}-props">
-        <h2 id="{uid}-props">プロパティ</h2>
-        <p class="note">値の件数は、その値を持つタスクの数です。</p>
-        <table aria-labelledby="{uid}-props">
-          <thead>
-            <tr>
-              <th scope="col">名前</th>
-              <th scope="col">表示名</th>
-              <th scope="col">型</th>
-              <th scope="col">設定</th>
-              <th scope="col" class="num">タスク</th>
-              <th scope="col"><span class="sr">操作</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each propEntries as [name, p] (name)}
-              <tr>
-                <th scope="row">{name}</th>
-                <td>{p.label ?? ""}</td>
-                <td class="mono">{p.type}</td>
-                <td>{propNote(p)}</td>
-                <td class="num">{count(usage?.props[name])}</td>
-                <td>
-                  <div class="acts">
-                    {@render actions(
-                      "prop",
-                      name,
-                      propEntries.map(([n]) => n),
-                    )}
-                  </div>
-                </td>
-              </tr>
-              {#each p.values ?? [] as v (v)}
-                <tr class="value">
-                  <th scope="row"><span class="vname">{name} › {v}</span></th>
-                  <td colspan="3"></td>
-                  <td class="num">{count(usage?.values[name]?.[v])}</td>
-                  <td>
-                    <div class="acts">{@render actions("value", v, p.values ?? [], name)}</div>
-                  </td>
-                </tr>
-              {/each}
-            {:else}
-              <tr>
-                <td colspan="6" class="none">プロパティはありません</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </section>
+      <SchemaProps {store} {schema} {usage} {off} {onaction} />
     {:else if tab === "relations"}
-      <section class="sec" aria-labelledby="{uid}-relations">
-        <h2 id="{uid}-relations">関連</h2>
-        <p class="note">
-          関連は同じ Store のタスクだけを参照できます。blocked_by
-          は組み込みの関連のため、名前の変更とマージはできません。
-        </p>
-        <table aria-labelledby="{uid}-relations">
-          <thead>
-            <tr>
-              <th scope="col">名前</th>
-              <th scope="col">表示名</th>
-              <th scope="col">設定</th>
-              <th scope="col" class="num">タスク</th>
-              <th scope="col"><span class="sr">操作</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">blocked_by</th>
-              <td>ブロックされている</td>
-              <td>複数 · 組み込み</td>
-              <td class="num">{count(blockedCount)}</td>
-              <td></td>
-            </tr>
-            {#each relationEntries as [name, p] (name)}
-              <tr>
-                <th scope="row">{name}</th>
-                <td>{p.label ?? ""}</td>
-                <td>{propNote(p)}</td>
-                <td class="num">{count(usage?.props[name])}</td>
-                <td>
-                  <div class="acts">
-                    {@render actions(
-                      "prop",
-                      name,
-                      relationEntries.map(([n]) => n),
-                    )}
-                  </div>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </section>
+      <SchemaRelations {store} {schema} {usage} {off} {onaction} blocked={blockedCount} />
     {:else}
-      <section class="sec" aria-labelledby="{uid}-workflow">
-        <h2 id="{uid}-workflow">ワークフロー</h2>
-        <p class="note">
-          制約は、付けたステータスにだけ適用されます。付けていないステータスはどこへでも移れます。
-        </p>
-        <h3>遷移の制約</h3>
-        {#if transitions.length === 0}
-          <p class="none">制約はありません</p>
-        {:else}
-          <ul class="flow">
-            {#each transitions as [from, to] (from)}
-              <li><span class="mono">{from}</span> から移せるのは {nameList(to)} だけ</li>
-            {/each}
-          </ul>
-        {/if}
-        <h3>入るときに必須の項目</h3>
-        {#if required.length === 0}
-          <p class="none">必須の項目はありません</p>
-        {:else}
-          <ul class="flow">
-            {#each required as [status, fields] (status)}
-              <li><span class="mono">{status}</span> に入るには {nameList(fields)} が必要</li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
+      <SchemaWorkflow {schema} />
     {/if}
 
     <section class="sec" aria-labelledby="{uid}-scoped">
@@ -498,13 +268,36 @@
     {store}
     {many}
     target={ask.target}
-    prop={ask.prop}
     old={ask.old}
-    mode={ask.mode}
     names={ask.names}
     onclose={() => (ask = null)}
     ondone={() => void migrated()}
   />
+{/if}
+
+{#if act && schema}
+  {#if act.kind === "add" || act.kind === "edit"}
+    <SchemaDefDialog
+      {store}
+      target={act.target}
+      name={act.kind === "edit" ? act.name : undefined}
+      {schema}
+      {usage}
+      ulidOf={(id) => ulidById.get(id)}
+      onclose={() => (act = null)}
+      ondone={() => void migrated()}
+    />
+  {:else if act.kind === "delete"}
+    <SchemaDeleteDialog
+      {store}
+      target={act.target}
+      name={act.name}
+      {schema}
+      {projectLabel}
+      onclose={() => (act = null)}
+      ondone={() => void migrated()}
+    />
+  {/if}
 {/if}
 
 <style>
@@ -530,11 +323,6 @@
     margin: 0;
     font-size: var(--fs-15);
   }
-  h3 {
-    margin: 0;
-    font-size: var(--fs-13);
-    font-weight: 600;
-  }
   .lead,
   .note {
     margin: 0;
@@ -547,42 +335,6 @@
     flex-direction: column;
     gap: var(--space-8);
   }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--fs-13);
-  }
-  th,
-  td {
-    padding: var(--space-8) var(--space-12);
-    border-bottom: 1px solid var(--line);
-    text-align: left;
-  }
-  thead th {
-    color: var(--muted);
-    font-size: var(--fs-12);
-    font-weight: 600;
-  }
-  tbody th {
-    font-weight: 600;
-  }
-  .value th {
-    padding-left: var(--space-24);
-    font-weight: 400;
-  }
-  .name {
-    display: inline-flex;
-    gap: var(--space-6);
-    align-items: center;
-  }
-  .num {
-    text-align: right;
-  }
-  .acts {
-    display: flex;
-    gap: var(--space-6);
-    justify-content: flex-end;
-  }
   .mono {
     font-family: var(--font-mono);
   }
@@ -591,14 +343,6 @@
     color: var(--muted);
     font-size: var(--fs-13);
   }
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .flow,
   .over {
     display: flex;
     flex-direction: column;

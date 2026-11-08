@@ -1,6 +1,7 @@
 <script lang="ts">
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
+  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
@@ -91,9 +92,26 @@
       c.schema.load(store).catch(() => undefined);
     }
   });
-  function categoryOf(store: string, status: string): string | undefined {
+  function statusDefOf(store: string, status: string) {
     schemaRev.current;
-    return c.schema.get(store)?.statuses?.find((s) => s.name === status)?.category;
+    return c.schema.get(store)?.statuses?.find((s) => s.name === status);
+  }
+  const categoryOf = (store: string, status: string) => statusDefOf(store, status)?.category;
+  function colorOf(store: string, status: string): string | undefined {
+    schemaRev.current;
+    return statusColorOf(c.schema.get(store), status);
+  }
+  function iconOf(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return kindIconOf(c.schema.get(store), kind);
+  }
+  function kindColor(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return kindColorOf(c.schema.get(store), kind);
+  }
+  function roleOf(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return kindRoleOf(c.schema.get(store), kind);
   }
 
   const logins = $derived.by(() => {
@@ -184,9 +202,20 @@
                 {@const href = taskHref(t.ulid)}
                 <tr>
                   <td class="w-status">
-                    <StatusIcon status={t.status} category={categoryOf(t.store, t.status)} />
+                    <StatusIcon
+                      status={t.status}
+                      category={categoryOf(t.store, t.status)}
+                      color={colorOf(t.store, t.status)}
+                    />
                   </td>
-                  <td class="w-kind"><KindIcon kind={t.kind} /></td>
+                  <td class="w-kind">
+                    <KindIcon
+                      kind={t.kind}
+                      role={roleOf(t.store, t.kind)}
+                      icon={iconOf(t.store, t.kind)}
+                      color={kindColor(t.store, t.kind)}
+                    />
+                  </td>
                   <td class="w-id">
                     <IdLabel
                       id={t.id}

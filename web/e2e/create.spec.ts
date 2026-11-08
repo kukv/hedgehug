@@ -1,7 +1,7 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - C opens the dialog named "タスクを作成" (CreateTask) when no input has focus
 //   - the dialog has the textbox "タイトル", the textbox "本文" (CodeMirror), the radio
-//     group "種類" (a radio is named by the kind's label: タスク, バグ, エピック …; a kind
+//     group "種類" (a radio is named by the kind's label: Task, Bug, Epic …; a kind
 //     the parent does not accept is disabled), the parent as "<ID> <title>" with the
 //     button "親を外す" (or the hint "親: なし" when there is none), and the buttons
 //     "作成 ⌘↵" / "作成 Ctrl+↵", "続けて作成", "キャンセル"
@@ -22,7 +22,7 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
   await expect(dialog.getByText("親: なし")).toBeVisible();
 
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("Write the spec");
-  await dialog.getByRole("radio", { name: "バグ" }).check({ force: true }); // the input is hidden behind its label
+  await dialog.getByRole("radio", { name: "Bug" }).check({ force: true }); // the input is hidden behind its label
   await dialog.getByRole("textbox", { name: "本文" }).click();
   await page.keyboard.type("first line\n\nsecond line");
   await dialog.getByRole("button", { name: /^作成/ }).click();
@@ -101,7 +101,7 @@ test("the selected row is the parent, and the kinds it cannot hold are disabled"
   const dialog = createDialog(page);
   await expect(dialog.getByText(project.id, { exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "親を外す" })).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: "エピック" })).toBeEnabled();
+  await expect(dialog.getByRole("radio", { name: "Epic" })).toBeEnabled();
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("Under the project");
   await dialog.getByRole("button", { name: /^作成/ }).click();
   await expect(toast(page, "DM-3 を作成しました")).toBeVisible();
@@ -110,8 +110,8 @@ test("the selected row is the parent, and the kinds it cannot hold are disabled"
   await row(page, "A plain task").click();
   await page.keyboard.press("c");
   await expect(dialog.getByText(task.id, { exact: true })).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: "エピック" })).toBeDisabled();
-  await expect(dialog.getByRole("radio", { name: "タスク" })).toBeEnabled();
+  await expect(dialog.getByRole("radio", { name: "Epic" })).toBeDisabled();
+  await expect(dialog.getByRole("radio", { name: "Task" })).toBeEnabled();
 });
 
 test("Escape closes the dialog without creating", async ({ page, hh }) => {

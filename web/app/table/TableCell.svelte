@@ -52,7 +52,8 @@
   const edit = (v: unknown) => {
     if (field) onedit(field, v);
   };
-  const category = $derived(schema?.statuses?.find((s) => s.name === task.status)?.category);
+  const statusDef = $derived(schema?.statuses?.find((s) => s.name === task.status));
+  const category = $derived(statusDef?.category);
   // null: no parent; undefined: there is one whose kind is not known, so no kind is ruled out.
   const parentKind = $derived(task.parent ? taskOf(task.parent)?.kind : null);
   const kindOptions = $derived<Option[]>(
@@ -137,7 +138,7 @@
   />
 {:else if col.id === "status"}
   <span class="status">
-    <StatusIcon status={task.status} {category} />
+    <StatusIcon status={task.status} {category} color={statusDef?.color} />
     <FieldInput
       editor="select"
       label="ステータス: {taskId}"

@@ -18,6 +18,8 @@ export type Column = {
   status: string | null;
   // A status the tasks have and no schema lists (or the schema of its store is not read).
   unknown: boolean;
+  // The color of the status in the schema, when exactly one store gives the column its status.
+  color?: string;
 };
 
 export type Lane = {
@@ -51,7 +53,14 @@ export function columnKeyOf(
   return mode === "category" ? categoryOf(schema, task.status) : task.status;
 }
 
-type Def = { name: string; label: string; category: Category; place: StatusPlace };
+type Def = {
+  name: string;
+  label: string;
+  category: Category;
+  place: StatusPlace;
+  color?: string;
+  owners: number;
+};
 
 const asCategory = (c: string): Category =>
   c === "doing" || c === "done" || c === "canceled" ? c : "todo";
@@ -70,8 +79,14 @@ function statusColumns(tasks: readonly TaskView[], o: BoardOptions): Column[] {
     if (!stores.has(store)) return;
     const schema = o.schemas.get(store);
     for (const s of schema?.statuses ?? []) {
-      if (defs.has(s.name)) continue;
+      const had = defs.get(s.name);
+      if (had) {
+        had.owners++;
+        continue;
+      }
       defs.set(s.name, {
+        owners: 1,
+        color: s.color,
         name: s.name,
         label: s.label || s.name,
         category: asCategory(s.category),
@@ -91,6 +106,7 @@ function statusColumns(tasks: readonly TaskView[], o: BoardOptions): Column[] {
     category: d.category,
     status: d.name,
     unknown: false,
+    color: d.owners === 1 ? d.color : undefined,
   }));
   const unknown = [...inUse].filter((s) => !defs.has(s)).sort();
   for (const s of unknown) {

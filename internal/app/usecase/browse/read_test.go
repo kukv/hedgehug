@@ -327,8 +327,8 @@ func TestShowFullTask(t *testing.T) {
 	if len(r.Relations) != 2 || r.Relations[0].Key != "blocks" || r.Relations[0].Label != "blocks" || r.Relations[0].Tasks[0].ULID != b.ULID.String() {
 		t.Fatalf("Relations = %+v", r.Relations)
 	}
-	if rel := r.Relations[1]; rel.Key != "duplicates" || rel.Label != "重複元" || len(rel.Tasks) != 1 || rel.Tasks[0].ULID != c.ULID.String() {
-		t.Errorf("Relations[1] = %+v; want duplicates / 重複元 / c", rel)
+	if rel := r.Relations[1]; rel.Key != "duplicates" || rel.Label != "Duplicated by" || len(rel.Tasks) != 1 || rel.Tasks[0].ULID != c.ULID.String() {
+		t.Errorf("Relations[1] = %+v; want duplicates / Duplicated by / c", rel)
 	}
 	if len(r.ReferencedBy) != 1 || r.ReferencedBy[0].Title != "d" || r.ReferencedBy[0].Name() == "" {
 		t.Errorf("ReferencedBy = %v; want d", r.ReferencedBy)

@@ -20,6 +20,16 @@ describe("propRows", () => {
     expect(propRows(schemaView, {}).map((r) => r.name)).not.toContain("relates");
   });
 
+  it("follows prop_order when the schema gives it", () => {
+    const names = (o: string[]) =>
+      propRows({ ...schemaView, prop_order: o }, {}).map((r) => r.name);
+    const base = names([]);
+    expect(base.length).toBeGreaterThan(1);
+    expect(names([...base].reverse())).toEqual([...base].reverse());
+    // Only some are named: they come first, the rest by name.
+    expect(names(["start", "points"])).toEqual(["start", "points", "area", "due", "priority"]);
+  });
+
   it("appends keys the schema does not define, read-only", () => {
     const rows = propRows(schemaView, { team: "web" });
     expect(rows.at(-1)).toMatchObject({ name: "team", editor: null, value: "web" });

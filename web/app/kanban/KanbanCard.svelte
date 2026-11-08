@@ -24,8 +24,10 @@
   };
   let { task, schema, blockedBy, tone, dragging, onopen, dnd }: Props = $props();
 
-  const category = $derived(schema?.statuses?.find((s) => s.name === task.status)?.category);
-  const role = $derived(schema?.kinds?.find((k) => k.name === task.kind)?.role);
+  const statusDef = $derived(schema?.statuses?.find((s) => s.name === task.status));
+  const kindDef = $derived(schema?.kinds?.find((k) => k.name === task.kind));
+  const category = $derived(statusDef?.category);
+  const role = $derived(kindDef?.role);
   const closed = $derived(category === "done" || category === "canceled");
   const problem = $derived(task.problems?.[0]);
   const due = $derived(propText(task, "due"));
@@ -47,7 +49,7 @@
   anywhere on it and Enter on the title open the task; the ID stays above it for its own buttons. -->
 <li class="card" class:dragging data-ulid={task.ulid} {@attach dnd}>
   <div class="top">
-    <KindIcon kind={task.kind} {role} />
+    <KindIcon kind={task.kind} {role} icon={kindDef?.icon} color={kindDef?.color} />
     <span class="id"><IdLabel id={task.id} ulid={task.ulid} store={task.store} /></span>
     {#if tone}
       <StoreBadge store={task.store} {tone} compact />

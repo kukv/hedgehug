@@ -74,10 +74,10 @@ test("the detail follows a status changed by the CLI", async ({ page, hh }) => {
   const t = hh.add("Watched");
   await hh.open(page, `/tasks/${t.ulid}`);
   const status = properties(page).getByRole("button", { name: "ステータス" });
-  await expect(status).toContainText("未着手");
+  await expect(status).toContainText("Todo");
 
   hh.hh("set", t.id, "status=in_progress");
-  await expect(status).toContainText("進行中");
+  await expect(status).toContainText("In progress");
 });
 
 test("the detail follows a title changed by the CLI", async ({ page, hh }) => {

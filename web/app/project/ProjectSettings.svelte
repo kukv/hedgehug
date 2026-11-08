@@ -228,7 +228,7 @@
               aria-describedby={locked.has(s.name) ? `${uid}-locked` : undefined}
               onchange={(e) => (draft = setShown(schema, draft, s.name, e.currentTarget.checked))}
             >
-            <StatusIcon status={s.name} category={s.category} />
+            <StatusIcon status={s.name} category={s.category} color={s.color} />
             <span>{s.label || s.name}</span>
             <span class="name">{s.name}</span>
           </label>

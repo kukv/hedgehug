@@ -55,21 +55,17 @@
     check: { r: 7, filled: true, path: "M5 8.3l2 2 4-4.5", c: "var(--success)" },
     cross: { r: 7, filled: true, path: "M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2", c: "var(--muted-2)" },
   };
-
-  /** A color a store chose is used as is; anything that is not a plain color is ignored. */
-  function safeColor(color: string | undefined): string | undefined {
-    if (!color) return undefined;
-    return /^(#[0-9a-f]{3,8}|[a-z]+|var\(--[a-z0-9-]+\))$/i.test(color) ? color : undefined;
-  }
 </script>
 
 <script lang="ts">
+  import { colorToken } from "../../core/schema-edit";
+
   type Props = { status: string; category?: string; color?: string; size?: number };
   let { status, category, color, size = 16 }: Props = $props();
 
   const shape = $derived(shapeOf(status, category));
   const def = $derived(defs[shape]);
-  const custom = $derived(safeColor(color));
+  const custom = $derived(colorToken(color));
   const c = $derived(custom ?? def.c);
   const c2 = $derived(custom ?? def.c2 ?? def.c);
   // A filled circle (done, canceled) draws its mark in the surface color.

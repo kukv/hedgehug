@@ -3,6 +3,7 @@
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { errorMessage } from "../../core/messages";
+  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -79,8 +80,8 @@
   const counts = $derived(schema && !loading && !error ? countByCategory(tasks, schema) : null);
   // Until the list has come, the count of the workspace is the one the store directory has.
   const total = $derived(loading || error ? entry.tasks : tasks.length);
-  const statusCategory = (status: string) =>
-    schema?.statuses?.find((s) => s.name === status)?.category;
+  const statusDefOf = (status: string) => schema?.statuses?.find((s) => s.name === status);
+  const statusCategory = (status: string) => statusDefOf(status)?.category;
 
   // Not written as scope="..." in the markup: Biome reads that name as the HTML attribute.
   const emptyProps = $derived({ scope: "workspace" as const, name: entry.name });
@@ -198,7 +199,12 @@
                   </td>
                   <td>
                     <div class="title">
-                      <KindIcon kind={p.kind} />
+                      <KindIcon
+                        kind={p.kind}
+                        role={kindRoleOf(schema, p.kind)}
+                        icon={kindIconOf(schema, p.kind)}
+                        color={kindColorOf(schema, p.kind)}
+                      />
                       <a {href} onclick={(e) => onLinkClick(e, href)}>{p.title}</a>
                     </div>
                   </td>
@@ -251,8 +257,21 @@
               {#each roots as t (t.ulid)}
                 {@const href = taskHref(t.ulid)}
                 <tr>
-                  <td><StatusIcon status={t.status} category={statusCategory(t.status)} /></td>
-                  <td><KindIcon kind={t.kind} /></td>
+                  <td>
+                    <StatusIcon
+                      status={t.status}
+                      category={statusCategory(t.status)}
+                      color={statusColorOf(schema, t.status)}
+                    />
+                  </td>
+                  <td>
+                    <KindIcon
+                      kind={t.kind}
+                      role={kindRoleOf(schema, t.kind)}
+                      icon={kindIconOf(schema, t.kind)}
+                      color={kindColorOf(schema, t.kind)}
+                    />
+                  </td>
                   <td>
                     <IdLabel
                       id={t.id}
