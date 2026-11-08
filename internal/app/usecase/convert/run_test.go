@@ -537,6 +537,44 @@ func TestFormatDivergedAndTheWayBack(t *testing.T) {
 	}
 }
 
+func TestBehindAConvertedOriginFastForwards(t *testing.T) {
+	t.Parallel()
+	a := newRemoteFx(t)
+	b := cloneOld(t, a)
+	if _, err := Run(a.ts.Session, Options{}, false); err != nil {
+		t.Fatal(err)
+	}
+	before := headOf(t, b)
+
+	// a dry run says so and writes nothing
+	reports, err := Run(b.Session, Options{}, true)
+	if err != nil || len(reports) != 1 || !strings.Contains(strings.Join(reports[0].Lines, "\n"), "fast-forward") {
+		t.Fatalf("dry run = %+v, %v", reports, err)
+	}
+	if headOf(t, b) != before || formatOf(t, b) != 1 {
+		t.Error("the dry run wrote")
+	}
+
+	reports, err = Run(b.Session, Options{}, false)
+	if err != nil || len(reports) != 1 || !strings.Contains(strings.Join(reports[0].Lines, "\n"), "fast-forward") {
+		t.Fatalf("convert = %+v, %v", reports, err)
+	}
+	// the head is the commit of the conversion on origin: no commit of its own
+	if headOf(t, b) != originHead(t, a.remote) || headOf(t, b) != headOf(t, a.ts) {
+		t.Error("the clone is not at the head of origin")
+	}
+	if formatOf(t, b) != model.StoreFormat {
+		t.Errorf("format = %d", formatOf(t, b))
+	}
+	if _, _, err := b.Open(); err != nil {
+		t.Errorf("the store does not open: %v", err)
+	}
+	// and again: nothing to do
+	if reports, err := Run(b.Session, Options{}, false); err != nil || len(reports) != 0 {
+		t.Errorf("second run = %v, %v", reports, err)
+	}
+}
+
 // cloneOld is a second clone of f's store, a Session of its own, taken while
 // the store is in format 1 (git does it; StoreAdd would refuse).
 func cloneOld(t *testing.T, f *remoteFx) *usecasetest.Session {

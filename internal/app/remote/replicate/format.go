@@ -70,3 +70,19 @@ func FetchOrigin(s *store.Store, opt Options) error {
 	}
 	return withEnd(checkOrigin(s, tracked, opt), endFetch(s))
 }
+
+// FastForwardOrigin moves HEAD to the head of origin as the last fetch left
+// it, which has to descend from HEAD. It is for hh store convert, in a clone
+// that origin has converted and that has nothing to push.
+func FastForwardOrigin(s *store.Store) error {
+	r := s.Repo()
+	head, err := r.Head()
+	if err != nil {
+		return err
+	}
+	remote, err := r.RemoteHead("origin")
+	if err != nil {
+		return err
+	}
+	return fastForward(s, head, remote)
+}
