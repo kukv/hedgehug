@@ -66,9 +66,6 @@ func repair(t *testing.T, in RepairInput) (memFiles, []Repaired) {
 	if in.OnOrigin == nil {
 		in.OnOrigin = func(model.ULID, string) bool { return false }
 	}
-	if in.Changed == nil {
-		in.Changed = func(string) bool { return true }
-	}
 	out, rs, _, err := Repair(in)
 	if err != nil {
 		t.Fatal(err)
@@ -317,7 +314,7 @@ func TestRepairPrefixAndNameDuplicatesOnlyTell(t *testing.T) {
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		model.WorkspacePath(mustULID(wsB)): []byte(strings.Replace(later, "created: 2026-10-30", "created: 2026-10-31", 1)),
 	}
-	out, rs, _, err := Repair(RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }})
+	out, rs, _, err := Repair(RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }})
 	if err != nil || len(out) != 0 {
 		t.Fatalf("out = %v, err = %v; duplicates must not change data", out, err)
 	}
@@ -398,13 +395,6 @@ func TestRepairThreeCycleWithoutBaseMovesTheLatestToUncategorized(t *testing.T) 
 	}
 	if len(rs) != 1 || rs[0].ULID.String() != cyB {
 		t.Errorf("repaired = %+v", rs)
-	}
-}
-
-func TestRepairCycleWithoutChangedMemberPicksAmongAll(t *testing.T) {
-	after, rs := repair(t, RepairInput{Files: threeCycle, Changed: func(string) bool { return false }})
-	if got := parents(t, after); !slices.Equal(got, []string{cyB, uncatA, cyA}) || len(rs) != 1 {
-		t.Errorf("parents = %v, repaired = %+v", got, rs)
 	}
 }
 
@@ -582,7 +572,7 @@ func TestRepairUnreadableNumbers(t *testing.T) {
 		pathOf(y):                          taskFile(y, "WEB-2", wsA, "", "2026-10-31T10:00:00Z"),
 		model.NumbersPath:                  []byte("[\n"),
 	}
-	in := RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }}
+	in := RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }}
 	if _, _, _, err := Repair(in); err != nil {
 		t.Errorf("nothing to number, but err = %v", err)
 	}

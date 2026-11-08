@@ -27,7 +27,6 @@ type RepairInput struct {
 	Files    Files
 	Base     Files                                 // the merge base; nil for a repair commit
 	OnOrigin func(ulid model.ULID, id string) bool // origin's main has this task with this id
-	Changed  func(path string) bool                // the merge changed the file (parent_cycle picks among these)
 	Author   func(path string) string              // who last changed the file
 	Now      time.Time
 }
@@ -222,12 +221,10 @@ func (r *repairer) restorePrefixes() {
 	}
 }
 
-// breakCycles breaks one parent cycle at a time until none is left. A cycle
-// has at least one task the kinds do not allow under its parent; the one of
-// those updated last is cut. Without such a task, of the tasks on the cycle
-// whose parent differs from the base's, else whose file the merge changed,
-// else all of them, the one updated last is cut. It goes back to its parent
-// in the base when that can hold it, else as reparent says.
+// breakCycles breaks one parent cycle at a time until none is left. The
+// kinds only deepen, so a cycle always has a task the kinds do not allow under
+// its parent; the one of those updated last is cut. It goes back to its
+// parent in the base when that can hold it, else as reparent says.
 func (r *repairer) breakCycles() error {
 	for {
 		cycle := r.findCycle()
@@ -235,15 +232,6 @@ func (r *repairer) breakCycles() error {
 			return nil
 		}
 		cands := slices.DeleteFunc(slices.Clone(cycle), func(u model.ULID) bool { return r.placedWell(u) })
-		if len(cands) == 0 {
-			cands = slices.DeleteFunc(slices.Clone(cycle), func(u model.ULID) bool { return !r.parentChanged(u) })
-		}
-		if len(cands) == 0 {
-			cands = slices.DeleteFunc(slices.Clone(cycle), func(u model.ULID) bool { return !r.in.Changed(model.TaskPath(u)) })
-		}
-		if len(cands) == 0 {
-			cands = cycle
-		}
 		u := slices.MaxFunc(cands, func(a, b model.ULID) int {
 			ta, tb := r.tasks[a], r.tasks[b]
 			return cmp.Or(ta.Updated.Compare(tb.Updated),
@@ -296,16 +284,6 @@ func (r *repairer) findCycle() []model.ULID {
 		}
 	}
 	return nil
-}
-
-// parentChanged reports whether task u has another parent than in the
-// base. Without a base, no parent is known to have changed.
-func (r *repairer) parentChanged(u model.ULID) bool {
-	if r.in.Base == nil {
-		return false
-	}
-	p, b := r.tasks[u].Parent, r.baseParent(u)
-	return (p == nil) != (b == nil) || p != nil && *p != *b
 }
 
 // baseParent returns the parent of task u in the base, or nil.

@@ -100,7 +100,6 @@ func forwardRepair(t *testing.T, f memFiles) (memFiles, []Repaired, []Overwritte
 		Files:    f,
 		Author:   func(p string) string { return "by " + p },
 		OnOrigin: func(model.ULID, string) bool { return false },
-		Changed:  func(string) bool { return true },
 		Now:      time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
 	})
 	if err != nil {
@@ -157,7 +156,6 @@ func TestRepairChildOfForward(t *testing.T) {
 		Base:     memFiles{pathOf(fwdTask): taskFile(fwdTask, "WEB-1", wsA, pr, "2026-10-31T09:00:00Z", "kind: epic")},
 		Author:   func(p string) string { return "by " + p },
 		OnOrigin: func(model.ULID, string) bool { return false },
-		Changed:  func(string) bool { return true },
 		Now:      time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
 	})
 	if err != nil {
