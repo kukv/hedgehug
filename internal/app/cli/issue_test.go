@@ -80,7 +80,7 @@ func TestGHImportCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	args := []string{"gh", "import", "org-a/web", "--label", "hh"}
+	args := []string{"gh", "import", "org-a/web", "--label", "hh", "--parent", "ME-1"}
 	if out := te.ok(append(args, "--dry-run")...); out != "Would import 2 issues of github.com/org-a/web (0 linked already)\n" {
 		t.Errorf("dry run: %q", out)
 	}

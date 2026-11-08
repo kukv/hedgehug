@@ -3,8 +3,9 @@
   ulid        <ULID-1>
   store       me
   workspace   me (ME, <ULID-2>)
-  kind        task
+  kind        project
   status      todo
+  progress    0/0
   parent      -
   assignees   -
   watchers    github.com/alice

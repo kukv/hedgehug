@@ -240,7 +240,8 @@ func TestMvParentInAnotherWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	q := te.addJSON("q", "--workspace", "api")
-	p := te.addJSON("p", "--workspace", "me")
+	r := te.addJSON("r", "--workspace", "me")
+	p := te.addJSON("p", "--kind", "epic", "--parent", r.ID) // an epic can move to another project; a project cannot
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c))
 	te.ok("mv", p.ID, "--parent", q.ID)

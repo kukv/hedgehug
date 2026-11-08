@@ -57,6 +57,10 @@
           "checklist": {
             "done": 1,
             "total": 2
+          },
+          "steps": {
+            "done": 0,
+            "total": 0
           }
         },
         {
@@ -85,7 +89,11 @@
           "created": "<TIME>",
           "updated": "<TIME>",
           "deleted_at": null,
-          "problems": []
+          "problems": [],
+          "steps": {
+            "done": 0,
+            "total": 0
+          }
         },
         {
           "ulid": "<ULID-5>",
@@ -113,7 +121,11 @@
           "created": "<TIME>",
           "updated": "<TIME>",
           "deleted_at": null,
-          "problems": []
+          "problems": [],
+          "steps": {
+            "done": 0,
+            "total": 0
+          }
         }
       ]
     }

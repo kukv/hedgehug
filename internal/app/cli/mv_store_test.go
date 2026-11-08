@@ -46,7 +46,7 @@ func TestMvStoreYes(t *testing.T) {
 func TestMvStoreJSON(t *testing.T) {
 	t.Parallel()
 	te := newMoveStoreEnv(t)
-	out := te.ok("mv", "AA-2", "--store", "bravo-long", "--yes", "--json")
+	out := te.ok("mv", "AA-2", "--store", "bravo-long", "--parent", "BB-1", "--yes", "--json")
 	te.golden("json", out)
 	var got struct {
 		From  string `json:"from"`
@@ -73,13 +73,13 @@ func TestMvStoreConfirmOnATerminal(t *testing.T) {
 	te.terminal = true
 	te.stdin = "n\n"
 	before := len(te.log("alpha")) + len(te.log("bravo-long"))
-	te.goldenRun("declined", 1, "mv", "AA-2", "--store", "bravo-long")
+	te.goldenRun("declined", 1, "mv", "AA-2", "--store", "bravo-long", "--parent", "BB-1")
 	if got := len(te.log("alpha")) + len(te.log("bravo-long")); got != before {
 		t.Errorf("a declined move wrote %d commits", got-before)
 	}
 
 	te.stdin = "y\n"
-	te.goldenRun("accepted", 0, "mv", "AA-2", "--store", "bravo-long")
+	te.goldenRun("accepted", 0, "mv", "AA-2", "--store", "bravo-long", "--parent", "BB-1")
 }
 
 func TestMvStoreWithoutAYesOffATerminal(t *testing.T) {
@@ -176,5 +176,5 @@ func TestMvStoreTellsWhoCannotSeeItAnymore(t *testing.T) {
 	}
 	te.terminal = true
 	te.stdin = "y\n"
-	te.goldenRun("hidden", 0, "mv", "AA-2", "--store", "bravo-long")
+	te.goldenRun("hidden", 0, "mv", "AA-2", "--store", "bravo-long", "--parent", "BB-1")
 }

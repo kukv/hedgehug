@@ -54,7 +54,11 @@
           "created": "<TIME>",
           "updated": "<TIME>",
           "deleted_at": null,
-          "problems": []
+          "problems": [],
+          "steps": {
+            "done": 0,
+            "total": 0
+          }
         },
         {
           "ulid": "<ULID-4>",
@@ -82,7 +86,11 @@
           "created": "<TIME>",
           "updated": "<TIME>",
           "deleted_at": null,
-          "problems": []
+          "problems": [],
+          "steps": {
+            "done": 0,
+            "total": 0
+          }
         }
       ]
     }

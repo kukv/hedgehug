@@ -100,7 +100,8 @@ func TestAddTemplateCommand(t *testing.T) {
 	if got := te.ok("template", "show", "bug"); !strings.Contains(got, "Steps") {
 		t.Fatalf("show:\n%s", got)
 	}
-	if got := te.ok("add", "--template", "bug"); !strings.Contains(got, "Bug") || !strings.Contains(got, "with 1 task under it") {
+	te.ok("add", "Platform") // ME-1; a task sits under a project
+	if got := te.ok("add", "--template", "bug", "--parent", "ME-1"); !strings.Contains(got, "Bug") || !strings.Contains(got, "with 1 task under it") {
 		t.Fatalf("add:\n%s", got)
 	}
 	te.ok("template", "rm", "bug")

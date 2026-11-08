@@ -21,7 +21,7 @@ func TestAddContextGolden(t *testing.T) {
 	te.goldenRun("project", 0, "add", "Web A", "--kind", "project", "--repo")
 	te.goldenRun("second-project", 0, "add", "Web B", "--kind", "project", "--workspace", "me", "--repo")
 	te.goldenRun("choice-required", 2, "add", "ambiguous")
-	te.goldenRun("with-repo", 0, "add", "linked", "--repo", "--workspace", "me")
+	te.goldenRun("with-repo", 0, "add", "linked", "--repo", "--parent", "ME-1")
 	te.terminal = true
 	te.stdin = "1\n"
 	te.goldenRun("choice-terminal", 0, "add", "picked")

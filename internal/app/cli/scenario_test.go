@@ -35,7 +35,8 @@ func TestScenario(t *testing.T) {
 	p := te.addJSON("Website", "--kind", "project")
 	c := te.addJSON("Login page", "--parent", p.ID)
 	g := te.addJSON("Form", "--parent", c.ID)
-	o := te.addJSON("Other")
+	q := te.addJSON("Elsewhere", "--kind", "project")
+	o := te.addJSON("Other", "--parent", q.ID)
 
 	tree := te.ok("ls", "--tree", "--no-color")
 	for _, s := range []string{"Website", "└─ ", "Form", "Other"} {
@@ -98,9 +99,9 @@ func TestScenario(t *testing.T) {
 			t.Errorf("%v = %q, want No problems", args, out)
 		}
 	}
-	// store init, four adds and the fifteen steps.
-	if n := len(te.log("me")); n != 20 {
-		t.Errorf("commits = %d, want 20", n)
+	// store init, five adds and the fifteen steps.
+	if n := len(te.log("me")); n != 21 {
+		t.Errorf("commits = %d, want 21", n)
 	}
 	// Every commit is the account's.
 	for _, c := range te.log("me") {

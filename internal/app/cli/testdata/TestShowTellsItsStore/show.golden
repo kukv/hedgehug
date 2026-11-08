@@ -3,8 +3,9 @@
   ulid        <ULID-1>
   store       bravo-long
   workspace   bravo-long (BB, <ULID-2>)
-  kind        task
+  kind        project
   status      done
+  progress    0/0
   parent      -
   assignees   -
   watchers    github.com/alice

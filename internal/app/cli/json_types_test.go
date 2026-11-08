@@ -40,6 +40,7 @@ func TestJSONIsTheUsecaseTypes(t *testing.T) {
 	for _, args := range [][]string{
 		{"add", "a"},
 		{"add", "b"},
+		{"add", "c", "--parent", "ME-1"},
 		{"set", "ME-1", "title=A"},
 		{"status", "ME-1", "todo"},
 		{"done", "ME-1"},
@@ -47,7 +48,7 @@ func TestJSONIsTheUsecaseTypes(t *testing.T) {
 		{"dep", "rm", "ME-2", "--blocked-by", "ME-1"},
 		{"watch", "ME-1"},
 		{"unwatch", "ME-1"},
-		{"mv", "ME-2", "--parent", "ME-1"},
+		{"mv", "ME-3", "--parent", "ME-2"},
 		{"restore", "ME-1", "--at", "2999-01-01"},
 	} {
 		tw = usecase.TaskWrite{}
@@ -61,12 +62,12 @@ func TestJSONIsTheUsecaseTypes(t *testing.T) {
 	strictly(t, te.ok("edit", x.ID, "--json"), &tw)
 
 	var aw usecase.AffectedWrite
-	strictly(t, te.ok("rm", "ME-1", "--json"), &aw)
-	if len(aw.Tasks) != 2 || aw.Tasks[0].ID != "ME-1" || aw.Commit == nil {
+	strictly(t, te.ok("rm", "ME-2", "--json"), &aw)
+	if len(aw.Tasks) != 2 || aw.Tasks[0].ID != "ME-2" || aw.Commit == nil {
 		t.Errorf("rm = %+v", aw)
 	}
 	aw = usecase.AffectedWrite{}
-	strictly(t, te.ok("restore", "ME-1", "--json"), &aw)
+	strictly(t, te.ok("restore", "ME-2", "--json"), &aw)
 
 	var cw comments.CommentWrite
 	strictly(t, te.ok("comment", "add", "ME-3", "hello", "--json"), &cw)
@@ -147,7 +148,7 @@ func TestStoreAddAndMoveJSONAreTheUsecaseTypes(t *testing.T) {
 
 	te := newMoveStoreEnv(t)
 	var mv stores.MoveStoreResultView
-	strictly(t, te.ok("mv", "AA-2", "--store", "bravo-long", "--yes", "--json"), &mv)
+	strictly(t, te.ok("mv", "AA-2", "--store", "bravo-long", "--parent", "BB-1", "--yes", "--json"), &mv)
 	if mv.From != "alpha" || mv.To != "bravo-long" {
 		t.Errorf("mv --store = %+v", mv)
 	}

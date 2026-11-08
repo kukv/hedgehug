@@ -19,7 +19,8 @@ func TestMv(t *testing.T) {
 	a := te.addJSON("A", "--parent", p.ID)
 	b := te.addJSON("B", "--parent", p.ID)
 	c := te.addJSON("C", "--parent", p.ID)
-	loose := te.addJSON("Loose")
+	q := te.addJSON("Q", "--kind", "project")
+	loose := te.addJSON("Loose", "--parent", q.ID) // only a project sits at the root
 
 	order := func() string {
 		var titles []string
@@ -33,25 +34,30 @@ func TestMv(t *testing.T) {
 	}
 
 	te.ok("mv", c.ID, "--before", a.ID)
-	if got := order(); got != "P,C,A,B,Loose" {
+	if got := order(); got != "P,C,A,B,Q,Loose" {
 		t.Errorf("after --before: %s", got)
 	}
 	te.ok("mv", c.ID, "--after", b.ID)
-	if got := order(); got != "P,A,B,C,Loose" {
+	if got := order(); got != "P,A,B,C,Q,Loose" {
 		t.Errorf("after --after: %s", got)
 	}
 	te.ok("mv", loose.ID, "--parent", p.ID, "--after", a.ID)
-	if got := order(); got != "P,A,Loose,B,C" {
+	if got := order(); got != "P,A,Loose,B,C,Q" {
 		t.Errorf("after --parent --after: %s", got)
 	}
 	if tk := te.task(loose.ULID); tk.Parent == nil || tk.Parent.String() != p.ULID {
 		t.Errorf("parent = %v, want %s", tk.Parent, p.ULID)
 	}
-	te.ok("mv", loose.ID, "--root")
-	if got := order(); got != "P,A,B,C,Loose" {
-		t.Errorf("after --root: %s", got)
+	te.ok("mv", loose.ID, "--parent", q.ID)
+	if got := order(); got != "P,A,B,C,Q,Loose" {
+		t.Errorf("after --parent: %s", got)
 	}
-	if te.task(loose.ULID).Parent != nil {
+	// a task cannot go to the root; a project can
+	if code, _, stderr := te.run("mv", loose.ID, "--root"); code != 1 || !strings.Contains(stderr, "a task cannot be placed under root") {
+		t.Errorf("a task --root: code %d stderr %q", code, stderr)
+	}
+	te.ok("mv", q.ID, "--root")
+	if te.task(q.ULID).Parent != nil {
 		t.Error("--root left a parent")
 	}
 	if !strings.Contains(te.log("me")[0].Message, "Hedgehug-Op: mv") {
@@ -120,16 +126,18 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			te := newStoreEnv(t)
+			// M starts under another project, Q, which the order below leaves out.
 			var m usecase.TaskView
+			q := te.addJSON("Q", "--kind", "project")
 			if tc.moverFirst {
-				m = te.addJSON("M")
+				m = te.addJSON("M", "--parent", q.ID)
 			}
 			p := te.addJSON("P", "--kind", "project")
 			a := te.addJSON("A", "--parent", p.ID)
 			b := te.addJSON("B", "--parent", p.ID)
 			d := te.addJSON("D", "--parent", p.ID)
 			if !tc.moverFirst {
-				m = te.addJSON("M")
+				m = te.addJSON("M", "--parent", q.ID)
 			}
 			te.commitFile(b.ULID, strings.Replace(te.raw(b.ULID), "rank: "+string(te.task(b.ULID).Rank), "rank: "+string(te.task(a.ULID).Rank), 1))
 			if te.task(a.ULID).Rank != te.task(b.ULID).Rank {
@@ -142,7 +150,7 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 			var titles []string
 			for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
 				l = progressSuffixRE.ReplaceAllString(l, "")
-				if i := strings.LastIndex(l, "  "); i >= 0 {
+				if i := strings.LastIndex(l, "  "); i >= 0 && l[i+2:] != "Q" {
 					titles = append(titles, l[i+2:])
 				}
 			}
@@ -216,8 +224,9 @@ func TestMvWorkspace(t *testing.T) {
 	if got.ID != "API-2" || got.Parent == nil || got.Parent.String() != p.ULID {
 		t.Errorf("child after mv: %+v", got)
 	}
-	other := te.addJSON("o", "--workspace", "me") // ME-1 and ME-2 are not reused
-	if other.ID != "ME-3" {
+	q := te.addJSON("q", "--workspace", "me")  // ME-3: a task starts under a project
+	other := te.addJSON("o", "--parent", q.ID) // ME-1 and ME-2 are not reused
+	if other.ID != "ME-4" {
 		t.Errorf("id = %s", other.ID)
 	}
 	te.ok("mv", other.ID, "--parent", p.ID) // into api by its parent

@@ -219,7 +219,7 @@ func TestInboxRevertParent(t *testing.T) {
 	alice, bob, _ := twoUsers(t)
 	alice.ok("add", "p")
 	alice.ok("add", "q")
-	alice.ok("add", "c")
+	alice.ok("add", "c", "--parent", "ORG-1") // a task sits under a project
 	alice.ok("sync")
 	bob.ok("sync")
 	bob.ok("mv", "ORG-4", "--parent", "ORG-2")
@@ -306,7 +306,7 @@ func TestInboxRevertParentInAnotherWorkspace(t *testing.T) {
 	alice.ok("workspace", "add", "w3", "--prefix", "BB")
 	alice.ok("add", "t2", "--workspace", "w2")
 	alice.ok("add", "t3", "--workspace", "w3")
-	alice.ok("add", "c", "--workspace", "org")
+	alice.ok("add", "c", "--parent", "ORG-1")
 	alice.ok("sync")
 	bob.ok("sync")
 	var c struct{ ULID string }

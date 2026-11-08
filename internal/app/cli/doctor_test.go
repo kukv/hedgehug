@@ -191,8 +191,9 @@ func TestDoctorFixKinds(t *testing.T) {
 		{"workspace_mismatch", func(te *testEnv) {
 			te.ok("workspace", "add", "other", "--prefix", "OT")
 			c := te.addJSON("c", "--workspace", "other")
-			te.ok("add", "d", "--workspace", "me")
-			te.insertField("ME-1", "parent: "+c.ULID)
+			e := te.addJSON("e", "--workspace", "me")
+			te.ok("add", "d", "--parent", e.ID)
+			te.handEdit("me", "ME-2", "parent: "+e.ULID, "parent: "+c.ULID)
 		}, "workspace_mismatch"},
 		{"id_prefix", func(te *testEnv) {
 			te.ok("add", "a")
