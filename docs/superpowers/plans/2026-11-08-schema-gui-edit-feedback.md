@@ -23,11 +23,11 @@
 
 ---
 
-### Task A: Go（ドメイン・usecase・サーバー・生成物）
+### Task 1: Go（ドメイン・usecase・サーバー・生成物）
 
 **Files:** `internal/app/domain/schema/schema.go`・`edit.go`・`edit_test.go`・テストデータ、`internal/app/usecase/schemas/edit.go`・`schemaview.go`・テスト、`internal/app/server/schemaedit.go`・テスト、`api/openapi.yaml`、`web/core/api/generated.ts`
 
-**Interfaces（Task B・C が使う）:**
+**Interfaces（Task 2・3 が使う）:**
 - `Kind.Color string \`yaml:"color,omitempty"\``、`KindDef.Color \`json:"color,omitempty"\``、`KindChange.Color *string`、`KindAddInputBody.color`
 - `StatusChange`・`KindChange`・`PropChange` に `Name *string`（新しい名前）
 - `PropChange.Values *[]ValueEdit`、`type ValueEdit struct { Name string; From []string }`
@@ -58,13 +58,13 @@
   - テスト: 名前の変更が 1 コミットでタスクも書き換える、409 `schema.name_taken`、値の全体の編集（追加・名前の変更・マージ・削除・並び）、使用中の値の削除 422、不正な values 422、種類の color
   - `make generate && cd web && pnpm gen`
 
-- [ ] **Step 4:** `go test ./internal/app/domain/schema/ ./internal/app/usecase/schemas/ ./internal/app/server/` が通る。`cd web && pnpm check` で、消えた関数を使っている箇所が型エラーになるのは Task C で直すので、ここではエラーの一覧を報告に残す（Task C の実装者に渡す）
+- [ ] **Step 4:** `go test ./internal/app/domain/schema/ ./internal/app/usecase/schemas/ ./internal/app/server/` が通る。`cd web && pnpm check` で、消えた関数を使っている箇所が型エラーになるのは Task 3 で直すので、ここではエラーの一覧を報告に残す（Task 3 の実装者に渡す）
 
 - [ ] **Step 5: コミット** `feat: スキーマの編集で名前と enum の値を 1 コミットで変え、種類に色を足す`
 
 ---
 
-### Task B: フロントの表示（種類の色・blocked_by・色の選択）
+### Task 2: フロントの表示（種類の色・blocked_by・色の選択）
 
 **Files:** `web/app/icons/KindIcon.svelte`、`web/core/schema-edit.ts`（`kindColorOf`）、KindIcon の呼び出し元、`web/app/detail/relation-groups.ts`・`web/app/stores/move-plan.ts`・`web/app/settings/SchemaRelations.svelte`（Blocked by）、`web/app/settings/ColorPicker.svelte`（自由な色）、各テスト
 
@@ -73,12 +73,12 @@
 - [ ] blocked_by の画面の表示を「Blocked by」に（3 か所。逆方向の表示があればそれも英語に: Blocks）
 - [ ] `ColorPicker`: 12 色と自動に加えて、自由な色の欄（`<input type="color">`。選ぶと `#rrggbb` を返す）。今の値が 12 色にない `#hex` なら、その欄を選択中にして値を入れる。safeColor を通らない値は今までどおり「カスタム（値）」で保持
 - [ ] テスト: KindIcon の color、Relations の Blocked by、ColorPicker の自由な色の選択と保持
-- [ ] `cd web && pnpm vitest run && pnpm check`（Task A の型エラーのうち Task C の範囲のものは残ってよい。報告に書く）
+- [ ] `cd web && pnpm vitest run && pnpm check`（Task 1 の型エラーのうち Task 3 の範囲のものは残ってよい。報告に書く）
 - [ ] コミット `feat(web): 種類の色と自由な色を描き、blocked_by を英語で出す`
 
 ---
 
-### Task C: スキーマ画面（編集ダイアログ・文言・値）
+### Task 3: スキーマ画面（編集ダイアログ・文言・値）
 
 **Files:** `web/app/settings/SchemaDefDialog.svelte`、`SchemaRowActions.svelte`、各タブ、`SettingsSchema.svelte`、`MigrateDialog.svelte`（rename の経路を使わなくなるなら mode を merge だけに）、`SchemaValueDialog.svelte`（消す）、`schema-action.ts`、`schema-text.ts`、`web/core/messages.ts`（`schema.name_taken`、in_use の値）、テスト、`web/e2e/schema-edit.spec.ts`・`schema.spec.ts`
 
@@ -100,7 +100,7 @@
 
 ---
 
-### Task D: 仕上げ（コントローラー）
+### Task 4: 仕上げ（コントローラー）
 
 - [ ] GUI spec の決定の行に、フィードバックの変更（F1〜F7）を 1 行で追記
 - [ ] 親設計のスキーマ節の追記の行に「種類は色とアイコンを持つ」を足す
