@@ -24,13 +24,13 @@ test("the number of tasks of a status is the number the CLI made", async ({ page
   await hh.open(page, SCHEMA);
 
   await expect(page.getByRole("heading", { level: 1, name: "スキーマ" })).toBeVisible();
-  await expect(statusRow(page, "todo").getByRole("cell").nth(3)).toHaveText("2");
-  await expect(statusRow(page, "waiting").getByRole("cell").nth(3)).toHaveText("1");
-  await expect(statusRow(page, "done").getByRole("cell").nth(3)).toHaveText("0");
+  await expect(statusRow(page, "todo").getByRole("cell").nth(4)).toHaveText("2");
+  await expect(statusRow(page, "waiting").getByRole("cell").nth(4)).toHaveText("1");
+  await expect(statusRow(page, "done").getByRole("cell").nth(4)).toHaveText("0");
 
   // a task made while the page is open is counted at once
   hh.add("Four");
-  await expect(statusRow(page, "todo").getByRole("cell").nth(3)).toHaveText("3");
+  await expect(statusRow(page, "todo").getByRole("cell").nth(4)).toHaveText("3");
 });
 
 test("a project with an override is listed with a link to its settings", async ({ page, hh }) => {
@@ -75,7 +75,7 @@ test("a status is renamed: the dry run counts the tasks, and the tasks follow th
   hh.hh("set", one.id, "status=waiting");
   hh.hh("set", two.id, "status=waiting");
   await hh.open(page, SCHEMA);
-  await expect(statusRow(page, "waiting").getByRole("cell").nth(3)).toHaveText("2");
+  await expect(statusRow(page, "waiting").getByRole("cell").nth(4)).toHaveText("2");
 
   await statusRow(page, "waiting").getByRole("button", { name: "名前…（waiting）" }).click();
   const dialog = page.getByRole("dialog", { name: "ステータス「waiting」の名前を変更" });
@@ -92,7 +92,7 @@ test("a status is renamed: the dry run counts the tasks, and the tasks follow th
   await expect(dialog).toHaveCount(0);
   expect(hh.show(one.id).status).toBe("paused");
   expect(hh.show(two.id).status).toBe("paused");
-  await expect(statusRow(page, "paused").getByRole("cell").nth(3)).toHaveText("2");
+  await expect(statusRow(page, "paused").getByRole("cell").nth(4)).toHaveText("2");
   await expect(statusRow(page, "waiting")).toHaveCount(0);
   // the table was drawn again with the new name, so the focus is not lost with the old row
   await expect(page.getByRole("heading", { level: 1, name: "スキーマ" })).toBeFocused();
