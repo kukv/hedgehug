@@ -121,10 +121,10 @@ func TestGitHubIssueSync(t *testing.T) {
 	if err := fake.TagIssue("org-a/web", n, []string{"alice"}, []string{"hh"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if out := u.ok("gh", "import", "org-a/web", "--label", "hh", "--dry-run"); !strings.Contains(out, "Would import 1 issue") {
+	if out := u.ok("gh", "import", "org-a/web", "--label", "hh", "--parent", "WEB-1", "--dry-run"); !strings.Contains(out, "Would import 1 issue") {
 		t.Fatalf("dry run: %s", out)
 	}
-	if out := u.ok("gh", "import", "org-a/web", "--label", "hh"); !strings.Contains(out, "WEB-2") {
+	if out := u.ok("gh", "import", "org-a/web", "--label", "hh", "--parent", "WEB-1"); !strings.Contains(out, "WEB-2") {
 		t.Fatalf("import: %s", out)
 	}
 	if x := u.show("WEB-2"); x.Title != "Imported" || !slices.Equal(x.Assignees, []string{"github.com/alice"}) {
