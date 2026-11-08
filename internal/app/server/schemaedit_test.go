@@ -76,6 +76,28 @@ func TestSchemaEditRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSchemaEditTemplateDefaults(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+
+	var w schemas.EditWrite
+	ts.call("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "bug", "task": "feature"}}, 200, &w)
+	if w.Schema.Templates == nil || w.Schema.Templates.Default["bug"] != "bug" || w.Schema.Templates.Default["task"] != "feature" || w.Commit == nil {
+		t.Fatalf("set = %+v, commit %v", w.Schema.Templates, w.Commit)
+	}
+	w = schemas.EditWrite{}
+	ts.call("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{}}, 200, &w)
+	if w.Schema.Templates != nil {
+		t.Errorf("cleared = %+v", w.Schema.Templates)
+	}
+	if e := ts.problem("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"nope": "bug"}}, 422); e.Type != "schema.invalid" {
+		t.Errorf("unknown kind: %+v", e)
+	}
+	if e := ts.problem("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "../x"}}, 422); e.Type != "schema.invalid" {
+		t.Errorf("bad name: %+v", e)
+	}
+}
+
 func TestSchemaEditErrors(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

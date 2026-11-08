@@ -78,6 +78,13 @@ type orderInput struct {
 	Body orderBody
 }
 
+type templateDefaultsInput struct {
+	StoreParam
+	Body struct {
+		Default map[string]string `json:"default" nullable:"false" doc:"Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid"`
+	}
+}
+
 // plain is a change that carries no migrations.
 func plain(fn func(*schema.Schema) (*schema.Schema, error)) func(*schema.Schema) (*schema.Schema, []schema.Migration, error) {
 	return func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
@@ -127,6 +134,13 @@ func (s *Server) registerSchemaEdit() {
 	huma.Register(s.api, reg("order-statuses", http.MethodPut, "/api/schema/statuses/order", "Put the statuses in order"),
 		func(_ context.Context, in *orderInput) (*editOutput, error) {
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.OrderStatuses(in.Body.Names) }), schemas.EditOpts{})
+		})
+
+	huma.Register(s.api, reg("set-template-defaults", http.MethodPut, "/api/schema/templates/default", "Set the default template of each kind"),
+		func(_ context.Context, in *templateDefaultsInput) (*editOutput, error) {
+			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) {
+				return sc.SetTemplateDefaults(in.Body.Default), nil
+			}), schemas.EditOpts{})
 		})
 
 	huma.Register(s.api, reg("add-prop", http.MethodPost, "/api/schema/props", "Add a property or a relation at the end"),

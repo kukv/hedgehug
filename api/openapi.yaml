@@ -3283,6 +3283,17 @@ components:
         - author
         - automated
       type: object
+    TemplateDefaultsInputBody:
+      additionalProperties: false
+      properties:
+        default:
+          additionalProperties:
+            type: string
+          description: Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid
+          type: object
+      required:
+        - default
+      type: object
     TemplateFile:
       additionalProperties: false
       properties:
@@ -5788,6 +5799,39 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Change a status
+      tags:
+        - schema
+  /api/schema/templates/default:
+    put:
+      operationId: set-template-defaults
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateDefaultsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Set the default template of each kind
       tags:
         - schema
   /api/sprints:

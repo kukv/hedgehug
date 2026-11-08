@@ -1768,6 +1768,16 @@ export interface TasksChanged {
   ulids: string[] | null;
 }
 
+/**
+ * Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid
+ */
+export type TemplateDefaultsInputBodyDefault = {[key: string]: string};
+
+export interface TemplateDefaultsInputBody {
+  /** Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid */
+  default: TemplateDefaultsInputBodyDefault;
+}
+
 export interface TemplateFile {
   /** The file: front matter and body */
   content: string;
@@ -2330,6 +2340,11 @@ export type DeleteStatusParams = {
 };
 
 export type ChangeStatusParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type SetTemplateDefaultsParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
 };
@@ -4556,6 +4571,52 @@ return fetcher<EditWrite>(getChangeStatusUrl(name,params),
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(statusChangeInputBody)
+  }
+);}
+
+
+
+export const getSetTemplateDefaultsUrl = (params?: SetTemplateDefaultsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/templates/default?${stringifiedParams}` : `/api/schema/templates/default`
+}
+
+/**
+ * @summary Set the default template of each kind
+ */
+export const setTemplateDefaults = async (templateDefaultsInputBody: TemplateDefaultsInputBody,
+    params?: SetTemplateDefaultsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getSetTemplateDefaultsUrl(params),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(templateDefaultsInputBody)
   }
 );}
 

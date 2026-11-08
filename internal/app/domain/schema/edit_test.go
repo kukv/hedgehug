@@ -445,3 +445,20 @@ func TestUntouchedWorkflowRoundTrips(t *testing.T) {
 		t.Errorf("round trip changed:\n%s", got)
 	}
 }
+
+func TestSetTemplateDefaults(t *testing.T) {
+	s := Default().SetTemplateDefaults(map[string]string{"bug": "bug"})
+	if s.Templates == nil || s.Templates.Default["bug"] != "bug" {
+		t.Fatalf("set = %+v", s.Templates)
+	}
+	if got := Default().Templates; got != nil {
+		t.Errorf("the original changed: %+v", got)
+	}
+	s.Templates.Only = []string{"bug"}
+	if got := s.SetTemplateDefaults(nil).Templates; got == nil || got.Default != nil || len(got.Only) != 1 {
+		t.Errorf("cleared keeps only: %+v", got)
+	}
+	if got := Default().SetTemplateDefaults(map[string]string{"bug": "bug"}).SetTemplateDefaults(nil).Templates; got != nil {
+		t.Errorf("cleared = %+v", got)
+	}
+}

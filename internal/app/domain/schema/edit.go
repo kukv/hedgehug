@@ -3,6 +3,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -178,6 +179,26 @@ func (s *Schema) OrderStatuses(names []string) (*Schema, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// SetTemplateDefaults returns s with templates.default replaced by def (kind to
+// template name); an empty def takes it off. templates.only is kept. Check
+// refuses a kind that does not exist and a name that is not a template name.
+func (s *Schema) SetTemplateDefaults(def map[string]string) *Schema {
+	out := s.clone()
+	var tm Templates
+	if out.Templates != nil {
+		tm = *out.Templates
+	}
+	tm.Default = nil
+	if len(def) > 0 {
+		tm.Default = maps.Clone(def)
+	}
+	out.Templates = &tm
+	if len(tm.Only) == 0 && len(tm.Default) == 0 {
+		out.Templates = nil
+	}
+	return out
 }
 
 // AddProp returns s with p at the end. Check does not look at values twice,

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { KINDS } from "../../core/kinds";
   import type { Template } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
   import type { ScopedDraft } from "../../core/scoped";
   import { core } from "../context";
+  import KindTemplateDefaults from "../settings/KindTemplateDefaults.svelte";
 
   type Props = {
     store: string;
@@ -64,27 +64,14 @@
     {/each}
   </fieldset>
   {#if all.length > 0}
-    <div class="defaults">
-      {#each KINDS as k (k.name)}
-        <label>
-          <span>{k.label} の既定</span>
-          <select
-            value={draft.templateDefaults[k.name] ?? ""}
-            disabled={busy}
-            onchange={(e) => setDefault(k.name, e.currentTarget.value)}
-          >
-            <option value="">
-              {schema.templates?.default?.[k.name]
-                ? `Store の既定（${schema.templates.default[k.name]}）`
-                : "なし"}
-            </option>
-            {#each all as t (t.name)}
-              <option value={t.name}>{t.name}</option>
-            {/each}
-          </select>
-        </label>
-      {/each}
-    </div>
+    <KindTemplateDefaults
+      names={all.map((t) => t.name)}
+      values={draft.templateDefaults}
+      disabled={busy}
+      none={(k) =>
+        schema.templates?.default?.[k] ? `Store の既定（${schema.templates.default[k]}）` : "なし"}
+      onchange={setDefault}
+    />
   {/if}
 </section>
 
@@ -116,23 +103,5 @@
     display: inline-flex;
     gap: var(--space-6);
     align-items: center;
-  }
-  .defaults {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    max-width: 420px;
-  }
-  .defaults label {
-    display: flex;
-    gap: var(--space-12);
-    align-items: center;
-    justify-content: space-between;
-  }
-  select {
-    min-height: 30px;
-    border: 1px solid var(--line-input);
-    border-radius: var(--radius-6);
-    background: var(--surface);
   }
 </style>
