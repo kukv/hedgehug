@@ -236,7 +236,9 @@ func (s *Schema) Encode() ([]byte, error) {
 	e.Put("statuses", s.Statuses, len(s.Statuses) == 0)
 	e.Put("kinds", s.Kinds, len(s.Kinds) == 0)
 	e.Put("props", s.Props, len(s.Props) == 0)
-	e.Put("workflow", s.Workflow, s.Workflow.IsZero())
+	if !s.Workflow.IsZero() { // a key not put is left out, so an emptied workflow is not written as {}
+		e.Put("workflow", s.Workflow, false)
+	}
 	e.Put("scoped", s.Scoped, len(s.Scoped) == 0)
 	return e.Bytes(s.Extra)
 }

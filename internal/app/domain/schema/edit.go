@@ -100,12 +100,23 @@ func (s *Schema) RemoveStatus(name string) (*Schema, error) {
 		w.Transitions = dropValue(w.Transitions, name)
 		w.Required = dropKey(w.Required, name)
 	}
+	out.dropEmptyWorkflows()
 	for j := range out.Scoped {
 		if out.Scoped[j].Statuses != nil {
 			out.Scoped[j].Statuses = slices.DeleteFunc(slices.Clone(out.Scoped[j].Statuses), func(x string) bool { return x == name })
 		}
 	}
 	return out, nil
+}
+
+// dropEmptyWorkflows takes an override's workflow that is left with no
+// transition and no required list, so that no `workflow: {}` is written.
+func (s *Schema) dropEmptyWorkflows() {
+	for i := range s.Scoped {
+		if w := s.Scoped[i].Workflow; w != nil && w.IsZero() {
+			s.Scoped[i].Workflow = nil
+		}
+	}
 }
 
 // dropKey is l without the key name.
@@ -293,6 +304,7 @@ func (s *Schema) RemoveProp(name string) (*Schema, error) {
 	for _, w := range out.workflows() {
 		w.Required = nilIfEmpty(dropValue(w.Required, name))
 	}
+	out.dropEmptyWorkflows()
 	return out, nil
 }
 

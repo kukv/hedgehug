@@ -571,3 +571,60 @@ func TestAddPropRefusesBadValues(t *testing.T) {
 		t.Error("area is not added")
 	}
 }
+
+func TestRemovalLeavesNoEmptyWorkflow(t *testing.T) {
+	t.Parallel()
+	store := scopedBase(t, "workflow:\n  transitions:\n    waiting: [on_hold]\n  required:\n    on_hold: [points]\n")
+	got, err := store.RemoveStatus("on_hold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := encoded(t, got); strings.Contains(out, "workflow") {
+		t.Errorf("an empty store workflow stays:\n%s", out)
+	}
+
+	scoped := scopedBase(t, `scoped:
+- where: project:`+scopedULID+`
+  statuses: [todo, on_hold, done]
+  workflow:
+    transitions:
+      waiting: [on_hold]
+    required:
+      on_hold: [points]
+`)
+	got, err = scoped.RemoveStatus("on_hold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scoped[0].Workflow != nil {
+		t.Errorf("workflow = %+v", got.Scoped[0].Workflow)
+	}
+	if out := encoded(t, got); strings.Contains(out, "workflow") {
+		t.Errorf("an empty override workflow stays:\n%s", out)
+	}
+
+	prop := scopedBase(t, "workflow:\n  required:\n    done: [points]\nscoped:\n- where: project:"+scopedULID+"\n  workflow:\n    required:\n      done: [points]\n")
+	got, err = prop.RemoveProp("points")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := encoded(t, got); strings.Contains(out, "workflow") {
+		t.Errorf("RemoveProp leaves a workflow:\n%s", out)
+	}
+}
+
+func TestUntouchedWorkflowRoundTrips(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, "workflow:\n  # keep me\n  transitions:\n    todo: [done]\n")
+	b, err := s.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := encoded(t, s2); got != string(b) || !strings.Contains(got, "# keep me") {
+		t.Errorf("round trip changed:\n%s", got)
+	}
+}

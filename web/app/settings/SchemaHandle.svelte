@@ -2,7 +2,7 @@
   import Icon from "../icons/Icon.svelte";
   import { moveKeys } from "./schema-text";
 
-  // The handle of a row: drag it, or press Alt+Up / Alt+Down on it. id names the handle for the
+  // The handle of a row: drag it, or press the keys of the platform on it (moveKeys: ⌥ or Alt with the arrows). id names the handle for the
   // focus to come back to; hint is the element that tells the keys; off is why it cannot be used.
   let {
     id,
