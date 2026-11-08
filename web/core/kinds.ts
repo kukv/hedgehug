@@ -31,10 +31,11 @@ export const canPlace = (kind: string, parentKind: string | null): boolean =>
 // isGroup is whether kind groups work: a project or an epic.
 export const isGroup = (kind: string): boolean => kindOf(kind)?.role === "group";
 
-// defaultKindUnder is the kind of a task made without one, from the kind of its parent.
+// defaultKindUnder is the kind of a task made without one, from the kind of its parent. A step has
+// no children, so under one it answers step, which canPlace refuses (the same as the server does).
 export function defaultKindUnder(parentKind: string | null): string {
   if (parentKind === null) return "project";
-  if (parentKind === "story" || parentKind === "task" || parentKind === "bug") return "step";
+  if (["story", "task", "bug", "step"].includes(parentKind)) return "step";
   return "task";
 }
 

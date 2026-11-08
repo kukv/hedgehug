@@ -51,6 +51,10 @@ func TestKindOrderRolesAndDefault(t *testing.T) {
 			t.Errorf("the default kind under %q cannot be placed there", parent)
 		}
 	}
+	// a step has no children: the default under one is step, which cannot be placed there
+	if got := DefaultKindUnder("step"); got != "step" || CanPlace(got, "step") {
+		t.Errorf("DefaultKindUnder(step) = %q, placeable %v", got, CanPlace(got, "step"))
+	}
 	for name, group := range map[string]bool{"project": true, "epic": true, "story": false, "task": false, "bug": false, "step": false, "nope": false} {
 		if IsGroup(name) != group {
 			t.Errorf("IsGroup(%q) = %v", name, !group)

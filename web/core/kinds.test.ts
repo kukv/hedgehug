@@ -55,6 +55,9 @@ describe("defaultKindUnder / kindsUnder", () => {
     expect(defaultKindUnder("project")).toBe("task");
     expect(defaultKindUnder("epic")).toBe("task");
     for (const p of ["story", "task", "bug"]) expect(defaultKindUnder(p)).toBe("step");
+    // a step has no children: the kind is step, and it cannot be placed there
+    expect(defaultKindUnder("step")).toBe("step");
+    expect(canPlace("step", "step")).toBe(false);
   });
 
   it("親の下に置ける種類だけを順に返す", () => {

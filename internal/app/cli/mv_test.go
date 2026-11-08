@@ -65,6 +65,19 @@ func TestMv(t *testing.T) {
 	}
 }
 
+// A step has no children: a task made under one without a kind says so with the
+// plain placement error of a step, not with that of a task the user never asked for.
+func TestAddUnderAStepIsAPlacementError(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	p := te.addJSON("P", "--kind", "project")
+	a := te.addJSON("A", "--parent", p.ID)
+	s := te.addJSON("S", "--parent", a.ID)
+	if code, _, stderr := te.run("add", "under a step", "--parent", s.ID); code != 1 || !strings.Contains(stderr, "a step cannot be placed under step") {
+		t.Errorf("add under a step: code %d stderr %q", code, stderr)
+	}
+}
+
 func TestAddAfterBefore(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)

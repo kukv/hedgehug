@@ -31,12 +31,14 @@ var Kinds = []KindDef{
 
 // DefaultKindUnder is the kind of a task made without one, from the kind of
 // its parent: a project at the top, a task under a project or an epic, a step
-// under a story, a task or a bug.
+// under a story, a task or a bug. A step has no children, so under one there is
+// no kind to give: it answers step, which no placement allows, and the write
+// is refused with the plain placement error of a step.
 func DefaultKindUnder(parentKind string) string {
 	switch parentKind {
 	case "":
 		return "project"
-	case "story", "task", "bug":
+	case "story", "task", "bug", "step":
 		return "step"
 	}
 	return "task"
