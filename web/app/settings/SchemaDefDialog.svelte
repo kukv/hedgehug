@@ -295,7 +295,8 @@
       !e.isComposing &&
       e.keyCode !== 229 &&
       t instanceof HTMLInputElement &&
-      t.type === "text"
+      t.type === "text" &&
+      !t.closest("[data-values]") // Enter in a value field does not save the dialog
     ) {
       e.preventDefault();
       void save();

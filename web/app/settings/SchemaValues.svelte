@@ -7,6 +7,7 @@
 </script>
 
 <script lang="ts">
+  import { tick } from "svelte";
   import Button from "../ui/Button.svelte";
   import { moved, sortableRow } from "./reorder";
   import SchemaHandle from "./SchemaHandle.svelte";
@@ -25,6 +26,22 @@
   const uid = $props.id();
   // The row whose merge target is being chosen.
   let merging = $state<string | null>(null);
+  let box: HTMLElement | undefined = $state();
+
+  const inputs = (): HTMLInputElement[] => [
+    ...(box?.querySelectorAll<HTMLInputElement>("input[type=text]") ?? []),
+  ];
+  const nameOf = (r: ValueRow): string => r.name.trim();
+  // Rows with a name are what a value can be merged into.
+  const targets = (except: string): ValueRow[] =>
+    rows.filter((o) => o.key !== except && nameOf(o) !== "");
+
+  // After a row is gone the focus goes to the input now at its place, else the one before, else the add button.
+  async function focusAfterRemoval(index: number): Promise<void> {
+    await tick();
+    const list = inputs();
+    (list[index] ?? list[index - 1] ?? box?.querySelector<HTMLElement>("[data-add]"))?.focus();
+  }
 
   const move = (from: number, to: number): void => {
     const keys = moved(
@@ -37,23 +54,42 @@
   function merge(source: ValueRow, targetKey: string): void {
     merging = null;
     if (targetKey === "") return;
+    const index = rows.findIndex((r) => r.key === source.key);
+    void focusAfterRemoval(index);
     rows = rows
       .filter((r) => r.key !== source.key)
       .map((r) => (r.key === targetKey ? { ...r, from: [...r.from, ...source.from] } : r));
   }
   const remove = (key: string): void => {
+    void focusAfterRemoval(rows.findIndex((r) => r.key === key));
     rows = rows.filter((r) => r.key !== key);
   };
-  const add = (): void => {
+  const add = async (): Promise<void> => {
     rows = [...rows, { key: newKey(), name: "", from: [] }];
+    await tick();
+    inputs().at(-1)?.focus();
   };
+  async function startMerge(key: string): Promise<void> {
+    merging = key;
+    await tick();
+    box?.querySelector<HTMLElement>(`select[data-key="${key}"]`)?.focus();
+  }
+  // Esc closes the choice (and not the dialog); the focus goes back to the button that opened it.
+  async function selectKeydown(e: KeyboardEvent, key: string): Promise<void> {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    merging = null;
+    await tick();
+    box?.querySelector<HTMLElement>(`button[data-merge="${key}"]`)?.focus();
+  }
   const rename = (key: string, name: string): void => {
     rows = rows.map((r) => (r.key === key ? { ...r, name } : r));
   };
   const deleteWhy = "タスクが使っているため削除できません。マージで別の値へ移してください";
 </script>
 
-<div class="values">
+<div class="values" data-values bind:this={box}>
   <span id="{uid}-move" class="sr">{moveKeys()} で移動</span>
   <ul>
     {#each rows as r, i (r.key)}
@@ -85,20 +121,24 @@
         {#if merging === r.key}
           <select
             aria-label="マージ先（値 {r.name}）"
+            data-key={r.key}
             {disabled}
             onchange={(e) => merge(r, e.currentTarget.value)}
+            onkeydown={(e) => void selectKeydown(e, r.key)}
+            onblur={() => (merging = null)}
           >
             <option value="">選んでください</option>
-            {#each rows.filter((o) => o.key !== r.key) as o (o.key)}
+            {#each targets(r.key) as o (o.key)}
               <option value={o.key}>{o.name}</option>
             {/each}
           </select>
-        {:else if rows.length > 1}
+        {:else if targets(r.key).length > 0}
           <Button
             size="sm"
             aria-label="マージ（値 {r.name}）"
+            data-merge={r.key}
             {disabled}
-            onclick={() => (merging = r.key)}
+            onclick={() => void startMerge(r.key)}
           >
             マージ
           </Button>
@@ -116,7 +156,7 @@
     {/each}
   </ul>
   <div>
-    <Button size="sm" {disabled} onclick={add}>値を追加</Button>
+    <Button size="sm" data-add {disabled} onclick={() => void add()}>値を追加</Button>
   </div>
 </div>
 

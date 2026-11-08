@@ -386,6 +386,97 @@ describe("SchemaDefDialog", () => {
       });
     });
 
+    it("merges into a value that was renamed: the target keeps its from and takes the other", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.input(rows()[0] as HTMLElement, { target: { value: "minor" } });
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（値 high）" }));
+      const to = screen.getByRole("combobox", { name: "マージ先（値 high）" }) as HTMLSelectElement;
+      const minor = [...to.options].find((o) => o.textContent === "minor");
+      await fireEvent.change(to, { target: { value: minor?.value } });
+      expect(await save(api)).toEqual({ values: [{ name: "minor", from: ["low", "high"] }] });
+    });
+
+    it("deletes a value that was renamed: its from is left out, so it goes", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.input(rows()[0] as HTMLElement, { target: { value: "minor" } });
+      await fireEvent.click(screen.getByRole("button", { name: "削除（値 minor）" }));
+      expect(await save(api)).toEqual({ values: [{ name: "high", from: ["high"] }] });
+    });
+
+    it("leaves an empty new row out of the merge targets", async () => {
+      setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（値 high）" }));
+      const to = screen.getByRole("combobox", { name: "マージ先（値 high）" }) as HTMLSelectElement;
+      expect([...to.options].map((o) => o.textContent)).toEqual(["選んでください", "low"]);
+    });
+
+    it("focuses the select after マージ, and closes it with Esc without closing the dialog", async () => {
+      const { onclose } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（値 high）" }));
+      const to = await screen.findByRole("combobox", { name: "マージ先（値 high）" });
+      await waitFor(() => expect(to).toHaveFocus());
+      await fireEvent.keyDown(to, { key: "Escape" });
+      expect(screen.queryByRole("combobox", { name: "マージ先（値 high）" })).toBeNull();
+      expect(onclose).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "マージ（値 high）" })).toHaveFocus(),
+      );
+    });
+
+    it("closes the select when it loses the focus", async () => {
+      setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（値 high）" }));
+      const to = await screen.findByRole("combobox", { name: "マージ先（値 high）" });
+      await fireEvent.blur(to);
+      expect(screen.queryByRole("combobox", { name: "マージ先（値 high）" })).toBeNull();
+    });
+
+    it("moves the focus to the next row after a delete, the previous one at the end, then to 値を追加", async () => {
+      const free = {
+        statuses: {},
+        kinds: {},
+        props: {},
+        values: { priority: { low: 0, high: 0 } },
+      } as unknown as SchemaUsage;
+      setup("prop", "priority", {}, sch, free);
+      await fireEvent.click(screen.getByRole("button", { name: "削除（値 low）" }));
+      await waitFor(() => expect(rows()[0]).toHaveFocus());
+      expect(rows()[0]?.value).toBe("high");
+      await fireEvent.click(screen.getByRole("button", { name: "削除（値 high）" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "値を追加" })).toHaveFocus());
+    });
+
+    it("moves the focus to the row before when the last row is deleted", async () => {
+      const free = {
+        statuses: {},
+        kinds: {},
+        props: {},
+        values: { priority: { low: 0, high: 0 } },
+      } as unknown as SchemaUsage;
+      setup("prop", "priority", {}, sch, free);
+      await fireEvent.click(screen.getByRole("button", { name: "削除（値 high）" }));
+      await waitFor(() => expect(rows()[0]).toHaveFocus());
+    });
+
+    it("focuses the next row after a merge, and the new row after 値を追加", async () => {
+      setup("prop", "priority", {}, sch, usage);
+      await fireEvent.click(screen.getByRole("button", { name: "マージ（値 low）" }));
+      const to = screen.getByRole("combobox", { name: "マージ先（値 low）" }) as HTMLSelectElement;
+      const high = [...to.options].find((o) => o.textContent === "high");
+      await fireEvent.change(to, { target: { value: high?.value } });
+      await waitFor(() => expect(rows()[0]).toHaveFocus());
+      await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+      await waitFor(() => expect(rows()[1]).toHaveFocus());
+    });
+
+    it("does not save the dialog on Enter in a value field", async () => {
+      const { api } = setup("prop", "priority", {}, sch, usage);
+      await fireEvent.input(rows()[0] as HTMLElement, { target: { value: "minor" } });
+      await fireEvent.keyDown(rows()[0] as HTMLElement, { key: "Enter" });
+      expect(api.changeProp).not.toHaveBeenCalled();
+    });
+
     it("refuses an empty or repeated value", async () => {
       setup("prop", "priority", {}, sch, usage);
       await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
