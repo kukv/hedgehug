@@ -198,7 +198,7 @@ func TestScopedSetNeedsAContainer(t *testing.T) {
 	plain := ts.AddTask("plain", nil) // a task, under the fixture project
 	none := []string{}
 	_, err := schemas.ScopedSet(ts.Session, plain.ULID.String(), schema.ScopedChange{Statuses: &none})
-	if e := usecase.AsError(err); e == nil || e.Kind != usecase.KindInvalid || e.Code != "scoped.not_container" || e.Args["kind"] != "task" {
+	if e := usecase.AsError(err); e == nil || e.Kind != usecase.KindInvalid || e.Code != "scoped.not_group" || e.Args["kind"] != "task" {
 		t.Errorf("task: %v", err)
 	}
 	// an epic is a container too

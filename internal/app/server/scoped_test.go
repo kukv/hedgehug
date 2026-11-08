@@ -88,7 +88,7 @@ func TestScopedPutErrors(t *testing.T) {
 	}
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "plain"}, 201, &out)
-	if e := ts.problem("PUT", "/api/schema/scoped/"+out.Task.ID, map[string]any{"statuses": []string{}}, 422); e.Type != "scoped.not_container" {
+	if e := ts.problem("PUT", "/api/schema/scoped/"+out.Task.ID, map[string]any{"statuses": []string{}}, 422); e.Type != "scoped.not_group" {
 		t.Errorf("a task: %+v", e)
 	}
 	ts.problem("PUT", "/api/schema/scoped/NOPE-9", map[string]any{"statuses": []string{}}, 404)

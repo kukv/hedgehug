@@ -200,6 +200,23 @@ func TestMoveStoreUnderAParent(t *testing.T) {
 	}
 }
 
+// A task that is not a project cannot go to the root of the destination: the
+// plan says so before anything is written.
+func TestMoveStoreNeedsAParentForANonProject(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	ha, hb := f.Head(t, "org-a"), f.Head(t, "org-b")
+	in := f.In()
+	in.Arg = "API-3" // C, a task under a project
+	_, err := stores.MoveStore(f.TS.Session, in)
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "move.parent_required")
+	_, err = stores.PrepareMovePlan(f.TS.Session, in)
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "move.parent_required")
+	if f.Head(t, "org-a") != ha || f.Head(t, "org-b") != hb {
+		t.Error("a store was written")
+	}
+}
+
 func TestMoveStoreRefusedBySchemaCommitsNothing(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
