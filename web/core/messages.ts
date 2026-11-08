@@ -160,7 +160,7 @@ const messages: Record<string, Make> = {
   "schema.default_container": () => "既定にできるのはアイテムの種類だけです",
   "schema.not_task_ref": () => "複数・逆方向・双方向は関連だけの設定です",
   "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
-  "schema.value_invalid": () => "値が空か、すでにあります",
+  "schema.value_invalid": () => "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
   "ref.cross_store": (a) =>
     `${str(a, "store")} の ${str(a, "id")} は参照できません（参照は同じ Store の中だけです）`,
   "use.not_project": (a) => `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトではありません`,
