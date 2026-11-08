@@ -11,6 +11,7 @@
     sumPoints,
   } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
+  import { kindRoleOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { useReadOnlySentence } from "../read-only";
@@ -25,7 +26,7 @@
   const SHOWN = 100;
 
   const isContainer = (schema: SchemaView | undefined, kind: string): boolean =>
-    schema?.kinds?.find((k) => k.name === kind)?.role === "container";
+    kindRoleOf(schema, kind) === "container";
 
   let { entry }: { entry: WorkspaceEntry } = $props();
 

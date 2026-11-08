@@ -128,3 +128,41 @@ describe("addRefBody / removeRefBody", () => {
     });
   });
 });
+
+describe("buildGroups order", () => {
+  const ref = (ulid: string) => [{ ulid, id: ulid, title: ulid }];
+  const sc = {
+    ...schemaView,
+    props: {
+      ...schemaView.props,
+      causes: { type: "task_ref", multi: true, inverse: "起因している" },
+    },
+  };
+
+  it("follows prop_order for the properties and for the reverse sides", async () => {
+    const both = showView({
+      ulid: "U6",
+      id: "REL-6",
+      props: { relates: ["UR"], duplicates: ["UD"] },
+      reverse: { duplicates: ref("UD"), relates: ref("UR"), causes: ref("UK"), ghost: ref("UB") },
+    });
+    const keys = async (order: string[]) =>
+      (await buildGroups(both, { ...sc, prop_order: order }, lookup)).map((g) => g.key);
+    expect(await keys(["causes", "relates", "duplicates"])).toEqual([
+      "relates",
+      "duplicates",
+      "reverse:causes",
+      "reverse:relates",
+      "reverse:duplicates",
+      "reverse:ghost",
+    ]);
+    expect(await keys(["duplicates", "relates", "causes"])).toEqual([
+      "duplicates",
+      "relates",
+      "reverse:duplicates",
+      "reverse:relates",
+      "reverse:causes",
+      "reverse:ghost",
+    ]);
+  });
+});

@@ -22,7 +22,7 @@
     todayOf,
   } from "../../core/gantt";
   import { errorMessage } from "../../core/messages";
-  import { propNames } from "../../core/schema-edit";
+  import { kindIconOf, kindRoleOf, propNames } from "../../core/schema-edit";
   import type { GanttSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -125,9 +125,6 @@
     return c.schema.get(store);
   };
 
-  const kindIconOf = (t: { store: string; kind: string }) =>
-    schemaOf(t.store)?.kinds?.find((k) => k.name === t.kind)?.icon;
-
   // The sprints and the releases belong to a workspace: with several, there is no one set to draw.
   const places = $derived([
     ...new Set(everyTask.map((t) => JSON.stringify([t.store, t.workspace.name]))),
@@ -164,8 +161,7 @@
       taskOf,
       settings,
       collapsed,
-      isContainer: (t) =>
-        schemaOf(t.store)?.kinds?.find((k) => k.name === t.kind)?.role === "container",
+      isContainer: (t) => kindRoleOf(schemaOf(t.store), t.kind) === "container",
       categoryOf: (t) => categoryOf(schemaOf(t.store), t.status),
       sprintSpan: (t) => {
         const u = t.sprint?.ulid;
@@ -476,7 +472,12 @@
             {:else}
               <span class="fold"></span>
             {/if}
-            <KindIcon kind={r.task.kind} icon={kindIconOf(r.task)} size={13} />
+            <KindIcon
+              kind={r.task.kind}
+              role={kindRoleOf(schemaOf(r.task.store), r.task.kind)}
+              icon={kindIconOf(schemaOf(r.task.store), r.task.kind)}
+              size={13}
+            />
             <span class="id">{did.current(r.task.store, r.task.id)}</span>
             <a
               href={taskHref(r.task)}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { kindIconOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -36,7 +37,7 @@
   });
   const projectIconOf = (store: string) => {
     schemaRev.current;
-    return schema.get(store)?.kinds?.find((k) => k.name === "project")?.icon;
+    return kindIconOf(schema.get(store), "project");
   };
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);

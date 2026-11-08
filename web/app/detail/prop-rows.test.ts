@@ -24,7 +24,10 @@ describe("propRows", () => {
     const names = (o: string[]) =>
       propRows({ ...schemaView, prop_order: o }, {}).map((r) => r.name);
     const base = names([]);
+    expect(base.length).toBeGreaterThan(1);
     expect(names([...base].reverse())).toEqual([...base].reverse());
+    // Only some are named: they come first, the rest by name.
+    expect(names(["start", "points"])).toEqual(["start", "points", "area", "due", "priority"]);
   });
 
   it("appends keys the schema does not define, read-only", () => {

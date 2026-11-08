@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { SchemaView } from "./schema";
-import { orphanedBy, propNames, referencesOf, statusColor } from "./schema-edit";
+import {
+  kindIconOf,
+  kindRoleOf,
+  orphanedBy,
+  propNames,
+  referencesOf,
+  statusColor,
+  statusColorOf,
+} from "./schema-edit";
 
 const schema = {
   statuses: [
@@ -27,6 +35,28 @@ const schema = {
 describe("schema-edit", () => {
   it("orders the props as the file does", () => {
     expect(propNames(schema)).toEqual(["b", "a"]);
+  });
+  it("names a prop once when prop_order repeats it", () => {
+    const sc = { ...schema, prop_order: ["b", "a", "b", "gone"] } as unknown as SchemaView;
+    expect(propNames(sc)).toEqual(["b", "a"]);
+  });
+  it("finds the color of a status and the icon and role of a kind", () => {
+    const sc = {
+      statuses: [{ name: "todo", category: "todo", color: "teal" }, { name: "done" }],
+      kinds: [
+        { name: "epic", role: "container", icon: "epic" },
+        { name: "task", role: "work" },
+      ],
+    } as unknown as SchemaView;
+    expect(statusColorOf(sc, "todo")).toBe("teal");
+    expect(statusColorOf(sc, "done")).toBeUndefined();
+    expect(statusColorOf(sc, "nope")).toBeUndefined();
+    expect(statusColorOf(undefined, "todo")).toBeUndefined();
+    expect(kindIconOf(sc, "epic")).toBe("epic");
+    expect(kindIconOf(sc, "task")).toBeUndefined();
+    expect(kindRoleOf(sc, "epic")).toBe("container");
+    expect(kindRoleOf(sc, "nope")).toBeUndefined();
+    expect(kindRoleOf(undefined, "epic")).toBeUndefined();
   });
   it("falls back to the name order without prop_order", () => {
     expect(propNames({ props: { b: {}, a: {} } } as unknown as SchemaView)).toEqual(["a", "b"]);

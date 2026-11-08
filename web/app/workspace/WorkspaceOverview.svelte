@@ -3,6 +3,7 @@
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { errorMessage } from "../../core/messages";
+  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -81,8 +82,6 @@
   const total = $derived(loading || error ? entry.tasks : tasks.length);
   const statusDefOf = (status: string) => schema?.statuses?.find((s) => s.name === status);
   const statusCategory = (status: string) => statusDefOf(status)?.category;
-  const statusColorOf = (status: string) => statusDefOf(status)?.color;
-  const kindIconOf = (kind: string) => schema?.kinds?.find((k) => k.name === kind)?.icon;
 
   // Not written as scope="..." in the markup: Biome reads that name as the HTML attribute.
   const emptyProps = $derived({ scope: "workspace" as const, name: entry.name });
@@ -200,7 +199,11 @@
                   </td>
                   <td>
                     <div class="title">
-                      <KindIcon kind={p.kind} icon={kindIconOf(p.kind)} />
+                      <KindIcon
+                        kind={p.kind}
+                        role={kindRoleOf(schema, p.kind)}
+                        icon={kindIconOf(schema, p.kind)}
+                      />
                       <a {href} onclick={(e) => onLinkClick(e, href)}>{p.title}</a>
                     </div>
                   </td>
@@ -257,10 +260,16 @@
                     <StatusIcon
                       status={t.status}
                       category={statusCategory(t.status)}
-                      color={statusColorOf(t.status)}
+                      color={statusColorOf(schema, t.status)}
                     />
                   </td>
-                  <td><KindIcon kind={t.kind} icon={kindIconOf(t.kind)} /></td>
+                  <td>
+                    <KindIcon
+                      kind={t.kind}
+                      role={kindRoleOf(schema, t.kind)}
+                      icon={kindIconOf(schema, t.kind)}
+                    />
+                  </td>
                   <td>
                     <IdLabel
                       id={t.id}

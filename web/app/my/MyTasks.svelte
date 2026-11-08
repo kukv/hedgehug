@@ -1,6 +1,7 @@
 <script lang="ts">
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
+  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
@@ -96,10 +97,17 @@
     return c.schema.get(store)?.statuses?.find((s) => s.name === status);
   }
   const categoryOf = (store: string, status: string) => statusDefOf(store, status)?.category;
-  const colorOf = (store: string, status: string) => statusDefOf(store, status)?.color;
+  function colorOf(store: string, status: string): string | undefined {
+    schemaRev.current;
+    return statusColorOf(c.schema.get(store), status);
+  }
   function iconOf(store: string, kind: string): string | undefined {
     schemaRev.current;
-    return c.schema.get(store)?.kinds?.find((k) => k.name === kind)?.icon;
+    return kindIconOf(c.schema.get(store), kind);
+  }
+  function roleOf(store: string, kind: string): string | undefined {
+    schemaRev.current;
+    return kindRoleOf(c.schema.get(store), kind);
   }
 
   const logins = $derived.by(() => {
@@ -196,7 +204,13 @@
                       color={colorOf(t.store, t.status)}
                     />
                   </td>
-                  <td class="w-kind"><KindIcon kind={t.kind} icon={iconOf(t.store, t.kind)} /></td>
+                  <td class="w-kind">
+                    <KindIcon
+                      kind={t.kind}
+                      role={roleOf(t.store, t.kind)}
+                      icon={iconOf(t.store, t.kind)}
+                    />
+                  </td>
                   <td class="w-id">
                     <IdLabel
                       id={t.id}

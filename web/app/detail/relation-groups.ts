@@ -70,7 +70,14 @@ export async function buildGroups(
       items: await Promise.all(raws.map((r) => item(r))),
     });
   }
-  for (const name of Object.keys(show.reverse ?? {}).sort()) {
+  // The reverse sides follow the order of the properties; a name the schema does not have comes after.
+  const reversed = Object.keys(show.reverse ?? {});
+  const order = propNames(sc);
+  const reverseNames = [
+    ...order.filter((n) => reversed.includes(n)),
+    ...reversed.filter((n) => !order.includes(n)).sort(),
+  ];
+  for (const name of reverseNames) {
     const refs = show.reverse[name] ?? [];
     if (refs.length === 0) continue;
     const def = sc.props[name];

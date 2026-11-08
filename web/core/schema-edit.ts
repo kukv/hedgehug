@@ -24,9 +24,21 @@ export const KIND_ICONS: { value: string; label: string }[] = [
   { value: "bug", label: "バグ" },
 ];
 
+/** The color a status of the schema is given, if any. */
+export const statusColorOf = (schema: SchemaView | undefined, name: string): string | undefined =>
+  schema?.statuses?.find((s) => s.name === name)?.color;
+
+/** The icon a kind of the schema is given, if any. */
+export const kindIconOf = (schema: SchemaView | undefined, name: string): string | undefined =>
+  schema?.kinds?.find((k) => k.name === name)?.icon;
+
+/** The role of a kind of the schema: work or container. */
+export const kindRoleOf = (schema: SchemaView | undefined, name: string): string | undefined =>
+  schema?.kinds?.find((k) => k.name === name)?.role;
+
 /** The props of the schema in the order of schema.yaml (by name when the order is not given). */
 export function propNames(schema: SchemaView): string[] {
-  const ordered = (schema.prop_order ?? []).filter((n) => n in schema.props);
+  const ordered = [...new Set(schema.prop_order ?? [])].filter((n) => n in schema.props);
   const rest = Object.keys(schema.props)
     .filter((n) => !ordered.includes(n))
     .sort();

@@ -2,6 +2,7 @@
   import type { ShowView } from "../../core/api/client";
   import type { PatchField } from "../../core/save";
   import { canParent, parentRule } from "../../core/schema";
+  import { kindRoleOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { usePlans } from "../planning/plans.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -52,8 +53,7 @@
   );
   const rows = $derived(sc.current ? propRows(sc.current, show.props) : []);
   const showRepos = $derived(
-    (show.repos ?? []).length > 0 ||
-      sc.current?.kinds?.find((k) => k.name === show.kind)?.role === "container",
+    (show.repos ?? []).length > 0 || kindRoleOf(sc.current, show.kind) === "container",
   );
 
   const plans = usePlans(() => ({ store: show.store, name: show.workspace.name }));

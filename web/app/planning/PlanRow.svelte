@@ -3,6 +3,7 @@
   import { categoryOf } from "../../core/categories";
   import { pointsOf } from "../../core/planning";
   import type { SchemaView } from "../../core/schema";
+  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
@@ -48,12 +49,13 @@
   <StatusIcon
     status={task.status}
     category={schema ? categoryOf(schema, task.status) : undefined}
-    color={schema?.statuses?.find((s) => s.name === task.status)?.color}
+    color={statusColorOf(schema, task.status)}
     size={14}
   />
   <KindIcon
     kind={task.kind}
-    icon={schema?.kinds?.find((k) => k.name === task.kind)?.icon}
+    role={kindRoleOf(schema, task.kind)}
+    icon={kindIconOf(schema, task.kind)}
     size={13}
   />
   <span class="id">{did.current(task.store, task.id)}</span>

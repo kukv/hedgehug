@@ -133,6 +133,29 @@ const messages: Record<string, Make> = {
     const t = violations(a);
     return t ? `スキーマに合わない変更です: ${t}` : withDetail("スキーマに合わない変更です", e);
   },
+  "schema.in_use": (a) => {
+    const deleted = Number(a.deleted ?? 0);
+    const used = `タスク ${str(a, "count")} 件${deleted > 0 ? `（うち削除済み ${deleted} 件）` : ""}`;
+    return `${used}が使っているため削除できません。マージ… で別の定義へ移してから削除してください`;
+  },
+  "schema.tasks_invalid": () => "変更すると規則に合わなくなるタスクがあります",
+  "schema.invalid": (a, e) => {
+    const t = list(a, "problems");
+    return t
+      ? `スキーマの規則に合わなくなります: ${t}`
+      : withDetail("スキーマの規則に合わなくなります", e);
+  },
+  "schema.parents_empty": (a) => {
+    const kinds = list(a, "kinds");
+    return `種類 ${kinds} の置ける親がなくなるため削除できません。先に ${kinds} の置ける親を変えてください`;
+  },
+  "schema.not_defined": () => "定義が見つかりません。画面を読み込み直してください",
+  "schema.order_stale": () =>
+    "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
+  "schema.default_container": () => "既定にできるのは work の役割の種類だけです",
+  "schema.not_task_ref": () => "複数・逆方向・双方向は関連だけの設定です",
+  "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
+  "schema.value_invalid": () => "値が空か、すでにあります",
   "ref.cross_store": (a) =>
     `${str(a, "store")} の ${str(a, "id")} は参照できません（参照は同じ Store の中だけです）`,
   "use.not_project": (a) => `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトではありません`,

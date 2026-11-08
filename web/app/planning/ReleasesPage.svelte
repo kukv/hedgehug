@@ -10,6 +10,7 @@
     type ReleaseState,
     releaseDue,
   } from "../../core/planning";
+  import { kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
@@ -198,7 +199,8 @@
               <h3>
                 <KindIcon
                   kind={g.kind}
-                  icon={schema?.kinds?.find((k) => k.name === g.kind)?.icon}
+                  role={kindRoleOf(schema, g.kind)}
+                  icon={kindIconOf(schema, g.kind)}
                   size={13}
                 />{g.kind}<span class="mono">{g.tasks.length}</span>
               </h3>
@@ -208,7 +210,7 @@
                   <StatusIcon
                     status={t.status}
                     category={schema ? categoryOf(schema, t.status) : undefined}
-                    color={schema?.statuses?.find((s) => s.name === t.status)?.color}
+                    color={statusColorOf(schema, t.status)}
                     size={14}
                   />
                   <span class="mono">{did.current(t.store, t.id)}</span>

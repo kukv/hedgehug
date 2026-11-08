@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TaskView } from "../../core/api/client";
   import { hasPlans } from "../../core/planning";
+  import { kindIconOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
@@ -25,9 +26,7 @@
   });
   const projectIcon = $derived.by(() => {
     schemaRev.current;
-    return project
-      ? c.schema.get(project.store)?.kinds?.find((k) => k.name === "project")?.icon
-      : undefined;
+    return project ? kindIconOf(c.schema.get(project.store), "project") : undefined;
   });
   const did = useDisplayId(c.stores);
   const at = (t: ProjectTab) => router.href({ name: "project", ulid, tab: t });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ShowView, TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
+  import { statusColorOf } from "../../core/schema-edit";
   import { core } from "../context";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { onLinkClick, router } from "../router";
@@ -65,7 +66,8 @@
   const statusDefOf = (status: string | null) =>
     sc.current?.statuses?.find((s) => s.name === status);
   const categoryOf = (status: string | null) => statusDefOf(status)?.category ?? "todo";
-  const colorOf = (status: string | null) => statusDefOf(status)?.color;
+  const colorOf = (status: string | null) =>
+    status === null ? undefined : statusColorOf(sc.current, status);
 
   // One write at a time: the next body is built from `show`, which has the last one only after its answer.
   let busy = $state(false);
