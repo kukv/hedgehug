@@ -8,13 +8,14 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // brokenUnder writes a project under parent past the store's checks.
-func brokenUnder(t *testing.T, ts *usecasetest.Session, parent model.ULID) {
+func brokenUnder(t *testing.T, ts *usecasetest.Session, parent model.ULID) model.ULID {
 	t.Helper()
 	tk := ts.AddTask("nested", nil)
 	tk.Kind = "project"
@@ -24,6 +25,26 @@ func brokenUnder(t *testing.T, ts *usecasetest.Session, parent model.ULID) {
 		t.Fatal(err)
 	}
 	ts.CommitRawFile(model.TaskPath(tk.ULID), string(b))
+	return tk.ULID
+}
+
+// violatesNow reports whether the task u breaks the default schema as stored.
+func violatesNow(t *testing.T, ts *usecasetest.Session, u model.ULID) bool {
+	t.Helper()
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := schema.Default()
+	tk, err := s.Task(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk, anc, err := store.Lineage(tk, sc, s.Task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(schema.ValidatePlacement(tk.Kind, pk, sc.For(anc))) > 0
 }
 
 func TestEditAddsInOneCommit(t *testing.T) {
@@ -88,7 +109,9 @@ func TestEditIgnoresOldViolations(t *testing.T) {
 	p := ts.AddProject("Web")
 	// A project under a project breaks the default schema (project sits at
 	// the root only). Write it past the checks, as a sync can leave it.
-	brokenUnder(t, ts, p)
+	if !violatesNow(t, ts, brokenUnder(t, ts, p)) {
+		t.Fatal("brokenUnder makes no violation under the current schema")
+	}
 	l := "タスク"
 	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, error) {
 		return sc.ChangeKind("task", schema.KindChange{Label: &l})
