@@ -82,9 +82,12 @@ format 2, in which the kinds of task are fixed (see [Planning](planning.md#kinds
 - A store in a **newer** format does not open either: update hedgehug.
 
 `hh store convert` brings the store to the newest format, one step after the other, and writes
-all of it as one commit. A store with a remote is converted only when it is in sync with
-it, and the result is pushed; if it is not, the command stops with
-`store.convert_unsynced` (HTTP 409) until you sync.
+all of it as one commit, and a store with a remote has the result pushed. If the remote is in the
+same old format and the two differ (you have unpushed commits, or the remote has commits you
+lack), the command first syncs the store in the old format (fetch, merge, push), then converts
+and pushes, all in one run. Only when that sync fails (a push is refused, a merge stops) does it
+stop with `store.convert_unsynced` (HTTP 409), and the message tells the cause.
+`--dry-run` neither syncs nor writes; it says that the sync would come first.
 
 ```console
 $ hh store convert --dry-run

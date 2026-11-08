@@ -15,7 +15,7 @@
 - PR は 4 本。Part 1〜4 がそれぞれ 1 本の PR。Part の順に進め、各 Part の終わりに `make check` と `make e2e` を 1 回ずつ回してから PR にする
 - 形式の番号: Part 1 で 2、Part 2 で 3、Part 3 で 4。Part 4 は上げない
 - 古い形式の Store は `hh store convert` と `hh doctor` 以外を 422 `store.old_format` で止める。新しい形式は今までどおり拒否し、409 ではなく 422 `store.newer_format` に分類する
-- 変換は同期済み（未取り込み・未 push なし）でだけ実行し、すぐ push する。そうでなければ 409 `store.convert_unsynced`。push していないコミットを残して新しい形式を取り込むと 409 `sync.format_diverged`
+- 変換はすぐ push する。リモートが同じ古い形式で未同期なら、先に古い形式のまま同期してから変換する。同期が失敗したときだけ 409 `store.convert_unsynced`。push していないコミットを残して新しい形式を取り込むと 409 `sync.format_diverged`
 - 種類: project・epic・story・task・bug・step。表示名 Project・Epic・Story・Task・Bug・Step。階層は spec の表のとおり。種類を省いたら親に合わせる（親なし→project、project・epic→task、story・task・bug→step）
 - 関連: blocked_by/blocks、causes/caused_by、relates/related_by、duplicates/duplicated_by、clones/cloned_by。表示名は spec の表のとおり（英語）。循環の検査は blocked_by だけ
 - 組み込みのプロパティ: priority（enum、値のリスト `priorities:`、既定 low・mid・high・urgent）・start（date）・due（date）・estimate（duration）・points（number）・labels（multi_enum、値のリスト `labels:`、既定は空）。表示名は 優先度・開始日・期限・見積もり・ポイント・ラベル
@@ -111,7 +111,7 @@ type Report struct{ Lines []string } // 段ごとに「何をどう変えたか�
 func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error)
 ```
 
-- Run は同期している Store なら、先に fetch して未取り込み・未 push がないことを確かめる（`replicate.Unpushed` と fetch の結果）。あれば 409 `store.convert_unsynced`。書いたら push する
+- Run は同期している Store なら、先に fetch して未取り込み・未 push がないことを確かめる（`replicate.Unpushed` と fetch の結果）。あれば先に古い形式のまま同期し、失敗したときだけ 409 `store.convert_unsynced`。書いたら push する
 - `sync.format_diverged` の状態（ローカルに未 push、リモートが新しい形式）では、Run はローカルの木を変換してコミットし、そのあと同期を走らせる（このときだけ未 push があっても進める）
 - 段 1→2（Task 1.3 で書く）: spec の「段ごとの変換の中身」の種類・合わない配置・ワークスペース直下・`kinds[].template` の移動・schema.yaml の `kinds` の削除。テンプレートのファイルの `kind` も同じ対応で書き換える。「未分類」プロジェクトは各ワークスペースに 1 つ、タイトル「未分類」
 - CLI: `hh store convert [--dry-run] [--kind old=new]… [--store name]`。dry run は段ごとの Report を出す。`--json` も

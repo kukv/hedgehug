@@ -65,7 +65,7 @@ Store は、形式の番号を `.hedgehug/store.yaml` に持ちます。この�
 - **古い**形式の Store は開きません。`hh store convert` と `hh doctor` 以外のコマンドは、`hh store convert で新しい形式にしてください` と言って止まります。ブラウザも、サイドバーの Store のカードと設定で同じ文を出します。`hh doctor` は、形式の番号を知らせ、このコマンドを案内します。
 - **新しい**形式の Store も開きません。hedgehug を更新してください。
 
-`hh store convert` は、Store を最新の形式に、1 段ずつ変換し、全部を 1 コミットで書きます。remote のある Store は、remote と揃っているときだけ変換し、結果を push します。揃っていないときは、同期するまで `store.convert_unsynced`（HTTP 409）で止まります。
+`hh store convert` は、Store を最新の形式に、1 段ずつ変換し、全部を 1 コミットで書きます。remote のある Store は、結果を push します。remote が同じ古い形式で、手元と違いがあるとき（push していないコミットがある、または手元にない remote のコミットがある）は、コマンドがまず古い形式のまま同期（取り込み・マージ・push）してから変換して push します。1 回の実行で済みます。この同期が失敗したとき（push が拒否された、マージで止まったなど）だけ、`store.convert_unsynced`（HTTP 409）で止まり、メッセージが原因を示します。`--dry-run` は同期も書き込みもせず、先に同期する旨を出します。
 
 ```console
 $ hh store convert --dry-run
