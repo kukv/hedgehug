@@ -151,6 +151,14 @@ func parentMove(from, to []byte) []byte {
 	return []byte(`{"from":` + string(from) + `,"to":` + string(to) + `}`)
 }
 
+// parentMoveKind is parentMove for a task that also changed its kind.
+func parentMoveKind(from, to []byte, kindFrom, kindTo string) []byte {
+	if kindFrom == kindTo {
+		return parentMove(from, to)
+	}
+	return []byte(`{"from":` + string(from) + `,"to":` + string(to) + `,"kind_from":` + string(jsonOf(kindFrom)) + `,"kind_to":` + string(jsonOf(kindTo)) + `}`)
+}
+
 // readBase returns the base's file at path, or nil.
 func (r *repairer) readBase(path string) []byte {
 	if r.in.Base == nil {
@@ -225,6 +233,10 @@ func (r *repairer) breakCycles() error {
 		if len(cands) == 0 {
 			cands = cycle
 		}
+		// A cycle has an edge the kinds do not allow; that one is cut first.
+		if bad := slices.DeleteFunc(slices.Clone(cands), func(u model.ULID) bool { return r.placedWell(u) }); len(bad) > 0 {
+			cands = bad
+		}
 		u := slices.MaxFunc(cands, func(a, b model.ULID) int {
 			ta, tb := r.tasks[a], r.tasks[b]
 			return cmp.Or(ta.Updated.Compare(tb.Updated),
@@ -232,18 +244,18 @@ func (r *repairer) breakCycles() error {
 				compareULIDs(a, b))
 		})
 		t := r.tasks[u]
-		old := jsonOf(t.Parent)
-		t.Parent = r.baseParent(u)
-		if t.Parent != nil && r.onCycle(u) {
-			t.Parent = nil
+		old, kind := jsonOf(t.Parent), t.Kind
+		// The parent the task had in the base first, then the ancestors of
+		// the parent it has now, nearest first.
+		holders := []*model.ULID{r.baseParent(u)}
+		if t.Parent != nil {
+			holders = append(holders, r.ancestors(*t.Parent)...)
 		}
-		if t.Parent == nil {
-			if err := r.toRootEnd(t); err != nil {
-				return err
-			}
+		if err := r.reparent(t, holders); err != nil {
+			return err
 		}
 		r.dirty[u] = true
-		r.tell(u, "parent_cycle", parentMove(old, jsonOf(t.Parent)), model.TaskPath(u))
+		r.tell(u, "parent_cycle", parentMoveKind(old, jsonOf(t.Parent), kind, t.Kind), model.TaskPath(u))
 	}
 }
 
@@ -307,13 +319,14 @@ func (r *repairer) baseParent(u model.ULID) *model.ULID {
 	return t.Parent
 }
 
-// toRootEnd gives t, which is now a root, a rank after the live roots of
-// its workspace. Roots whose rank is not well formed are not counted.
-func (r *repairer) toRootEnd(t *model.Task) error {
+// toEnd gives t a rank after the live siblings it has now, under its parent
+// and in its workspace. Siblings whose rank is not well formed are not
+// counted.
+func (r *repairer) toEnd(t *model.Task) error {
 	var last model.Rank
 	for _, u := range r.order {
 		o := r.tasks[u]
-		if o != t && o.Parent == nil && o.DeletedAt == nil && o.Workspace == t.Workspace && o.Rank.Validate() == nil && o.Rank > last {
+		if o != t && sameParent(o.Parent, t.Parent) && o.DeletedAt == nil && o.Workspace == t.Workspace && o.Rank.Validate() == nil && o.Rank > last {
 			last = o.Rank
 		}
 	}
@@ -325,11 +338,148 @@ func (r *repairer) toRootEnd(t *model.Task) error {
 	return nil
 }
 
-// detachFromDeleted moves to the root the live tasks whose parent is
-// deleted, gone or moved to another store (a forward). A parent whose file
-// does not decode is not known to be any of them.
-func (r *repairer) detachFromDeleted() error {
+func sameParent(a, b *model.ULID) bool { return (a == nil) == (b == nil) && (a == nil || *a == *b) }
+
+// ancestors returns the parents above the task u, nearest first, as far as
+// they can be read: from the task file, or from the base for a task that is
+// gone or moved to another store. It stops at a task it has seen.
+func (r *repairer) ancestors(u model.ULID) []*model.ULID {
+	var out []*model.ULID
+	seen := map[model.ULID]bool{u: true}
+	for {
+		var p *model.ULID
+		if t := r.tasks[u]; t != nil {
+			p = t.Parent
+		} else if b := r.readBase(model.TaskPath(u)); b != nil {
+			if bt, err := model.DecodeTask(b); err == nil {
+				p = bt.Parent
+			}
+		}
+		if p == nil || seen[*p] {
+			return out
+		}
+		seen[*p] = true
+		out = append(out, p)
+		u = *p
+	}
+}
+
+// reparent puts t under the first of cands that can hold it, else under the
+// 未分類 project of its workspace. A candidate holds t when it is a live task
+// that is not under t and whose kind may hold t's kind; a step under a
+// project or an epic becomes a task. nil candidates are skipped.
+func (r *repairer) reparent(t *model.Task, cands []*model.ULID) error {
+	for _, c := range cands {
+		if c == nil {
+			continue
+		}
+		h := r.tasks[*c]
+		if h == nil || h.DeletedAt != nil || r.isUnder(h, t.ULID) {
+			continue
+		}
+		if kind, ok := fitKind(t.Kind, h.Kind); ok {
+			t.Parent, t.Kind = c, kind
+			return r.toEnd(t)
+		}
+	}
+	if schema.CanPlace(t.Kind, "") { // a project may sit at the root
+		t.Parent = nil
+		return r.toEnd(t)
+	}
+	u, err := r.uncategorized(t.Workspace)
+	if err != nil || u == nil {
+		t.Parent = nil
+		if err == nil {
+			err = r.toEnd(t)
+		}
+		return err
+	}
+	t.Parent = u
+	if t.Kind == "step" {
+		t.Kind = "task"
+	}
+	return r.toEnd(t)
+}
+
+// placedWell reports whether the task u sits where its kind allows, under the
+// parent it has now.
+func (r *repairer) placedWell(u model.ULID) bool {
+	t := r.tasks[u]
+	if t.Parent == nil {
+		return schema.CanPlace(t.Kind, "")
+	}
+	p := r.tasks[*t.Parent]
+	return p != nil && schema.CanPlace(t.Kind, p.Kind)
+}
+
+// fitKind says whether a task of kind may sit under a parent of parentKind,
+// and the kind it has there.
+func fitKind(kind, parentKind string) (string, bool) {
+	if schema.CanPlace(kind, parentKind) {
+		return kind, true
+	}
+	if kind == "step" && (parentKind == "project" || parentKind == "epic") {
+		return "task", true
+	}
+	return "", false
+}
+
+// isUnder reports whether h is the task u or lies under it.
+func (r *repairer) isUnder(h *model.Task, u model.ULID) bool {
+	seen := map[model.ULID]bool{}
+	for x := h; x != nil && !seen[x.ULID]; {
+		if x.ULID == u {
+			return true
+		}
+		seen[x.ULID] = true
+		if x.Parent == nil {
+			return false
+		}
+		x = r.tasks[*x.Parent]
+	}
+	return false
+}
+
+// Uncategorized is the title of the project that holds the tasks the repair
+// finds no parent for.
+const Uncategorized = "未分類"
+
+// uncategorized returns the 未分類 project of workspace w: the first live
+// root project with that title, or a new one. Its ULID comes from the
+// workspace, so clones that make it make the same file. It is nil when w is
+// not a workspace the repair can number.
+func (r *repairer) uncategorized(w model.ULID) (*model.ULID, error) {
+	ws := r.ws[w]
+	if ws == nil {
+		return nil, nil
+	}
 	for _, u := range r.order {
+		if t := r.tasks[u]; t.Workspace == w && t.Kind == "project" && t.Parent == nil && t.DeletedAt == nil && t.Title == Uncategorized {
+			return &t.ULID, nil
+		}
+	}
+	u := model.DerivedULID(ws.Created, "uncategorized "+w.String())
+	if r.tasks[u] != nil || r.brokenIDs[u] || r.forwards[u] {
+		return nil, nil
+	}
+	t := &model.Task{ULID: u, Workspace: w, Kind: "project", Title: Uncategorized, Status: "todo", Created: r.in.Now}
+	if err := r.toEnd(t); err != nil {
+		return nil, err
+	}
+	r.tasks[u] = t
+	r.order = append(r.order, u)
+	slices.SortFunc(r.order, compareULIDs)
+	r.dirty[u] = true
+	r.moved[u] = true // numbered, with no id_renumbered to tell of
+	return &t.ULID, nil
+}
+
+// detachFromDeleted moves the live tasks whose parent is deleted, gone or
+// moved to another store (a forward) under the nearest ancestor that can hold
+// them (see reparent). A parent whose file does not decode is not known to be
+// any of them.
+func (r *repairer) detachFromDeleted() error {
+	for _, u := range slices.Clone(r.order) {
 		t := r.tasks[u]
 		if t.DeletedAt != nil || t.Parent == nil || r.brokenIDs[*t.Parent] {
 			continue
@@ -341,13 +491,12 @@ func (r *repairer) detachFromDeleted() error {
 		if r.forwards[*t.Parent] {
 			kind = "parent_moved"
 		}
-		old := jsonOf(t.Parent)
-		t.Parent = nil
-		if err := r.toRootEnd(t); err != nil {
+		old, was := jsonOf(t.Parent), t.Kind
+		if err := r.reparent(t, r.ancestors(*t.Parent)); err != nil {
 			return err
 		}
 		r.dirty[u] = true
-		r.tell(u, kind, parentMove(old, jsonOf(t.Parent)), model.TaskPath(u))
+		r.tell(u, kind, parentMoveKind(old, jsonOf(t.Parent), was, t.Kind), model.TaskPath(u))
 	}
 	return nil
 }

@@ -126,8 +126,6 @@ func RepairedContent(ix *index.Index, it inbox.Item) string {
 	var d RepairDetail
 	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no kind
 	switch d.Kind {
-	case "parent_moved":
-		return "moved to the root because its parent moved to another store"
 	case "ref_moved":
 		return movedRefContent(ix, d.Value)
 	case "sprint_detached", "release_detached":
@@ -138,23 +136,43 @@ func RepairedContent(ix *index.Index, it inbox.Item) string {
 			what := strings.TrimSuffix(d.Kind, "_detached")
 			return fmt.Sprintf("%s: removed from %s %s (it is not in the workspace the task moved to)", d.Kind, what, name)
 		}
-	case "parent_cycle", "parent_deleted":
+	case "parent_cycle", "parent_deleted", "parent_moved":
 		// The value tells where the repair took the task from and put it
-		// (null is the root); the index only gives names to the ULIDs.
-		var m struct{ From, To *model.ULID }
+		// (null is the root), and the kind it had and has when that changed;
+		// the index only gives names to the ULIDs.
+		var m struct {
+			From, To *model.ULID
+			KindFrom string `json:"kind_from"`
+			KindTo   string `json:"kind_to"`
+		}
 		if json.Unmarshal(d.Value, &m) == nil {
 			from := "the root"
 			if m.From != nil {
 				from = TaskName(ix, *m.From)
 			}
-			if d.Kind == "parent_deleted" {
-				return fmt.Sprintf("parent_deleted: moved to the root (its parent %s was deleted)", from)
-			}
-			to := "root"
+			to := "the root"
 			if m.To != nil {
 				to = TaskName(ix, *m.To)
 			}
-			return fmt.Sprintf("parent_cycle: moved back to %s (was under %s)", to, from)
+			var msg string
+			switch {
+			case d.Kind == "parent_cycle" && m.To == nil:
+				msg = fmt.Sprintf("parent_cycle: moved back to root (was under %s)", from)
+			case d.Kind == "parent_cycle":
+				msg = fmt.Sprintf("parent_cycle: moved back to %s (was under %s)", to, from)
+			case d.Kind == "parent_deleted" && m.To == nil:
+				msg = fmt.Sprintf("parent_deleted: moved to the root (its parent %s was deleted)", from)
+			case d.Kind == "parent_deleted":
+				msg = fmt.Sprintf("parent_deleted: moved under %s (its parent %s was deleted)", to, from)
+			case m.To == nil:
+				msg = "moved to the root because its parent moved to another store"
+			default:
+				msg = fmt.Sprintf("moved under %s because its parent %s moved to another store", to, from)
+			}
+			if m.KindFrom != "" && m.KindTo != "" {
+				msg += fmt.Sprintf("; its kind changed from %s to %s", m.KindFrom, m.KindTo)
+			}
+			return msg
 		}
 	}
 	if v := CompactJSON(d.Value); v != "" && v != "null" {

@@ -126,24 +126,48 @@ const (
 	otherTask = "01JD0000000000000000000003"
 )
 
-func TestRepairChildOfForwardGoesToRoot(t *testing.T) {
+// A child of a task that moved to another store goes under the parent the
+// task had in the base when it can hold it, else under 未分類.
+func TestRepairChildOfForward(t *testing.T) {
 	t.Parallel()
+	const pr = "01JD0000000000000000000004"
 	f := memFiles{
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(pr):                         taskFile(pr, "WEB-4", wsA, "", "2026-10-31T10:00:00Z", "kind: project"),
 		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),
 		pathOf(childTask):                  taskFile(childTask, "WEB-2", wsA, fwdTask, "2026-10-31T10:00:00Z", "rank: a0"),
-		pathOf(otherTask):                  taskFile(otherTask, "WEB-3", wsA, "", "2026-10-31T10:00:00Z", "rank: a1"),
+		pathOf(otherTask):                  taskFile(otherTask, "WEB-3", wsA, "", "2026-10-31T10:00:00Z", "rank: a1", "kind: project"),
 	}
 	after, rs, dropped := forwardRepair(t, f)
-	if got := decoded(t, after[pathOf(childTask)]); got.Parent != nil || got.Rank <= "a1" {
-		t.Errorf("parent %v rank %s", got.Parent, got.Rank)
+	got := decoded(t, after[pathOf(childTask)])
+	if got.Parent == nil || got.Parent.String() != uncatA || got.Kind != "task" {
+		t.Errorf("no base: parent %v kind %s", got.Parent, got.Kind)
 	}
-	want := Repaired{ULID: mustULID(childTask), Kind: "parent_moved", Value: `{"from":"` + fwdTask + `","to":null}`, Author: "by " + pathOf(childTask)}
+	want := Repaired{ULID: mustULID(childTask), Kind: "parent_moved", Value: `{"from":"` + fwdTask + `","to":"` + uncatA + `"}`, Author: "by " + pathOf(childTask)}
 	if len(rs) != 1 || rs[0] != want || len(dropped) != 0 {
 		t.Errorf("repaired = %+v dropped = %+v", rs, dropped)
 	}
 	if !bytes.Equal(after[pathOf(fwdTask)], f[pathOf(fwdTask)]) {
 		t.Error("the forward changed")
+	}
+
+	// The base has the task the forward replaced, under the project.
+	out, rs2, _, err := Repair(RepairInput{
+		Files:    f,
+		Base:     memFiles{pathOf(fwdTask): taskFile(fwdTask, "WEB-1", wsA, pr, "2026-10-31T09:00:00Z", "kind: epic")},
+		Author:   func(p string) string { return "by " + p },
+		OnOrigin: func(model.ULID, string) bool { return false },
+		Changed:  func(string) bool { return true },
+		Now:      time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := decoded(t, out[pathOf(childTask)]); got.Parent == nil || got.Parent.String() != pr {
+		t.Errorf("with a base: parent %v, want the project", got.Parent)
+	}
+	if len(rs2) != 1 || rs2[0].Value != `{"from":"`+fwdTask+`","to":"`+pr+`"}` {
+		t.Errorf("with a base: repaired = %+v", rs2)
 	}
 }
 

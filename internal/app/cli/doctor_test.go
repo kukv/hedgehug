@@ -187,7 +187,7 @@ func TestDoctorFixKinds(t *testing.T) {
 			te.ok("add", "a")
 			te.ok("add", "b", "--parent", "ME-1")
 			te.insertField("ME-1", "deleted_at: 2026-10-30T12:00:00Z")
-		}, "parent_deleted: moved to the root"},
+		}, "parent_deleted: moved under"},
 		{"workspace_mismatch", func(te *testEnv) {
 			te.ok("workspace", "add", "other", "--prefix", "OT")
 			c := te.addJSON("c", "--workspace", "other")
