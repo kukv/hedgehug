@@ -113,7 +113,7 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 		if len(back.Statuses) != len(s.Statuses) || len(back.Kinds) != 5 || len(back.Props) != 8 {
 			t.Errorf("%s: re-decoded = %+v", name, back)
 		}
-		if !strings.Contains(string(out), "- {name: todo, label: 未着手, category: todo, default: true}\n") {
+		if !strings.Contains(string(out), "- {name: todo, label: Todo, category: todo, default: true}\n") {
 			t.Errorf("%s: statuses are not in flow style:\n%s", name, out)
 		}
 	}

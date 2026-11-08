@@ -561,6 +561,7 @@ export interface DoctorReport {
 }
 
 export interface KindDef {
+  color?: string;
   default?: boolean;
   icon?: string;
   label?: string;
@@ -838,6 +839,7 @@ export const KindAddInputBodyRole = {
 
 export interface KindAddInputBody {
   anywhere?: boolean;
+  color?: string;
   icon?: string;
   label?: string;
   name: string;
@@ -860,9 +862,13 @@ export const KindChangeInputBodyRole = {
 
 export interface KindChangeInputBody {
   anywhere?: boolean;
+  /** Empty takes it off */
+  color?: string;
   default?: boolean;
   icon?: string;
   label?: string;
+  /** The new name, as for a status */
+  name?: string;
   /** Not empty; anywhere takes the limit off */
   parents?: string[];
   role?: KindChangeInputBodyRole;
@@ -1262,11 +1268,24 @@ export interface PropAddInputBody {
   values?: string[] | null;
 }
 
+export interface ValueEditBody {
+  /**
+     * The current values it comes from: none for a new value, one for a value kept or renamed, several for a merge
+     * @nullable
+     */
+  from?: string[] | null;
+  name: string;
+}
+
 export interface PropChangeInputBody {
   inverse?: string;
   label?: string;
   multi?: boolean;
+  /** The new name, as for a status */
+  name?: string;
   symmetric?: boolean;
+  /** All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it */
+  values?: ValueEditBody[];
 }
 
 export interface PurgeForward {
@@ -1632,6 +1651,8 @@ export interface StatusChangeInputBody {
   default?: boolean;
   /** Empty takes it off */
   label?: string;
+  /** The new name; the definition, what refers to it and the tasks that use it are rewritten in the same commit. A name already defined is 409 schema.name_taken */
+  name?: string;
 }
 
 export interface StoreAddInputBody {
@@ -1859,10 +1880,6 @@ export interface UndoWrite {
 export interface UnreadEvent {
   /** The items not read, in every store */
   count: number;
-}
-
-export interface ValueAddInputBody {
-  value: string;
 }
 
 export interface VelocityRow {
@@ -2361,21 +2378,6 @@ export type DeletePropParams = {
 };
 
 export type ChangePropParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
-export type AddValueParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
-export type OrderValuesParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
-export type DeleteValueParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
 };
@@ -4551,137 +4553,6 @@ return fetcher<EditWrite>(getChangePropUrl(name,params),
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(propChangeInputBody)
-  }
-);}
-
-
-
-export const getAddValueUrl = (name: string,
-    params?: AddValueParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/props/${encodeURIComponent(String(name))}/values?${stringifiedParams}` : `/api/schema/props/${encodeURIComponent(String(name))}/values`
-}
-
-/**
- * @summary Add a value at the end
- */
-export const addValue = async (name: string,
-    valueAddInputBody: ValueAddInputBody,
-    params?: AddValueParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<EditWrite>(getAddValueUrl(name,params),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(valueAddInputBody)
-  }
-);}
-
-
-
-export const getOrderValuesUrl = (name: string,
-    params?: OrderValuesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/props/${encodeURIComponent(String(name))}/values/order?${stringifiedParams}` : `/api/schema/props/${encodeURIComponent(String(name))}/values/order`
-}
-
-/**
- * @summary Put the values in order
- */
-export const orderValues = async (name: string,
-    orderBody: OrderBody,
-    params?: OrderValuesParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<EditWrite>(getOrderValuesUrl(name,params),
-  {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(orderBody)
-  }
-);}
-
-
-
-export const getDeleteValueUrl = (name: string,
-    value: string,
-    params?: DeleteValueParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/props/${encodeURIComponent(String(name))}/values/${encodeURIComponent(String(value))}?${stringifiedParams}` : `/api/schema/props/${encodeURIComponent(String(name))}/values/${encodeURIComponent(String(value))}`
-}
-
-/**
- * @summary Remove a value no task uses
- */
-export const deleteValue = async (name: string,
-    value: string,
-    params?: DeleteValueParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-  return fetcher<EditWrite>(getDeleteValueUrl(name,value,params),
-  {
-    ...options,
-    method: 'DELETE'
-
-
   }
 );}
 

@@ -34,6 +34,7 @@ type KindDef struct {
 	Role     string   `json:"role"`
 	Parents  []string `json:"parents"`
 	Icon     string   `json:"icon,omitempty"`
+	Color    string   `json:"color,omitempty"`
 	Template string   `json:"template,omitempty"`
 	Default  bool     `json:"default,omitempty"`
 }
@@ -89,7 +90,7 @@ func SchemaViewOf(sc *schema.Schema) SchemaView {
 		v.Statuses = append(v.Statuses, StatusDef{st.Name, st.Label, string(st.Category), st.Color, st.Default})
 	}
 	for _, k := range sc.Kinds {
-		v.Kinds = append(v.Kinds, KindDef{k.Name, k.Label, string(k.Role), k.Parents, k.Icon, k.Template, k.Default})
+		v.Kinds = append(v.Kinds, KindDef{k.Name, k.Label, string(k.Role), k.Parents, k.Icon, k.Color, k.Template, k.Default})
 	}
 	for _, p := range sc.Props {
 		v.Props[p.Name] = PropDef{string(p.Type), p.Values, p.Multi, p.Label, p.Inverse, p.Symmetric}

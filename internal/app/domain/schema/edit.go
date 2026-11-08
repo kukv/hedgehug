@@ -18,6 +18,7 @@ var (
 	ErrNotTaskRef       = errors.New("only a task_ref property has multi, inverse and symmetric")
 	ErrNotEnum          = errors.New("not an enum or multi_enum property")
 	ErrValueInvalid     = errors.New("invalid value")
+	ErrNameTaken        = errors.New("the name is already defined")
 )
 
 // ParentsEmptyError is a removal of a kind that would leave Kinds with no
@@ -29,24 +30,38 @@ func (e *ParentsEmptyError) Error() string {
 	return "kinds left with no parent: " + strings.Join(e.Kinds, ", ")
 }
 
+func nameTaken(what, name string) error { return fmt.Errorf("%s %q: %w", what, name, ErrNameTaken) }
+
 func notDefined(what, name string) error { return fmt.Errorf("%s %q: %w", what, name, ErrNotDefined) }
 
+// StatusChange, KindChange and PropChange say what changes. A Name is the
+// new name of the definition; the tasks that use it are rewritten by the
+// Migrations the change returns.
 type StatusChange struct {
-	Label, Color *string
-	Category     *Category
-	Default      bool
+	Name, Label, Color *string
+	Category           *Category
+	Default            bool
 }
 
 type KindChange struct {
-	Label, Icon, Template *string
-	Role                  *Role
-	Parents               *[]string
-	Default               bool
+	Name, Label, Icon, Color, Template *string
+	Role                               *Role
+	Parents                            *[]string
+	Default                            bool
 }
 
 type PropChange struct {
-	Label, Inverse   *string
-	Multi, Symmetric *bool
+	Name, Label, Inverse *string
+	Multi, Symmetric     *bool
+	Values               *[]ValueEdit
+}
+
+// ValueEdit is one value of an enum or multi_enum property after an edit.
+// From lists the current values it comes from: none for a new value, one for
+// a value kept or renamed, several for a merge.
+type ValueEdit struct {
+	Name string
+	From []string
 }
 
 func set[T any](dst *T, v *T) {
@@ -63,13 +78,19 @@ func (s *Schema) AddStatus(st Status) *Schema {
 	return out
 }
 
-// ChangeStatus returns s with the status name changed as ch says. A default
-// takes it from the other default of its category.
-func (s *Schema) ChangeStatus(name string, ch StatusChange) (*Schema, error) {
+// ChangeStatus returns s with the status name changed as ch says, and the
+// migration that a new name needs for the tasks. A default takes it from the
+// other default of its category.
+func (s *Schema) ChangeStatus(name string, ch StatusChange) (*Schema, []Migration, error) {
 	out := s.clone()
 	i := slices.IndexFunc(out.Statuses, func(x Status) bool { return x.Name == name })
 	if i < 0 {
-		return nil, notDefined("status", name)
+		return nil, nil, notDefined("status", name)
+	}
+	if ch.Name != nil && *ch.Name != name {
+		if _, ok := s.Status(*ch.Name); ok {
+			return nil, nil, nameTaken("status", *ch.Name)
+		}
 	}
 	st := &out.Statuses[i]
 	set(&st.Label, ch.Label)
@@ -82,7 +103,12 @@ func (s *Schema) ChangeStatus(name string, ch StatusChange) (*Schema, error) {
 			}
 		}
 	}
-	return out, nil
+	if ch.Name == nil || *ch.Name == name {
+		return out, nil, nil
+	}
+	m := Migration{Target: TargetStatus, Old: name, New: *ch.Name}
+	out, err := out.Migrate(m)
+	return out, []Migration{m}, err
 }
 
 // RemoveStatus returns s without the status name and without the references
@@ -179,17 +205,24 @@ func (s *Schema) AddKind(k Kind) *Schema {
 	return out
 }
 
-// ChangeKind returns s with the kind name changed as ch says. Only a kind
-// of the work role can be made the default; it takes it from the other.
-func (s *Schema) ChangeKind(name string, ch KindChange) (*Schema, error) {
+// ChangeKind returns s with the kind name changed as ch says, and the
+// migration that a new name needs for the tasks. Only a kind of the work
+// role can be made the default; it takes it from the other.
+func (s *Schema) ChangeKind(name string, ch KindChange) (*Schema, []Migration, error) {
 	out := s.clone()
 	i := slices.IndexFunc(out.Kinds, func(x Kind) bool { return x.Name == name })
 	if i < 0 {
-		return nil, notDefined("kind", name)
+		return nil, nil, notDefined("kind", name)
+	}
+	if ch.Name != nil && *ch.Name != name {
+		if _, ok := s.Kind(*ch.Name); ok {
+			return nil, nil, nameTaken("kind", *ch.Name)
+		}
 	}
 	k := &out.Kinds[i]
 	set(&k.Label, ch.Label)
 	set(&k.Icon, ch.Icon)
+	set(&k.Color, ch.Color)
 	set(&k.Template, ch.Template)
 	set(&k.Role, ch.Role)
 	if ch.Parents != nil {
@@ -197,7 +230,7 @@ func (s *Schema) ChangeKind(name string, ch KindChange) (*Schema, error) {
 	}
 	if ch.Default {
 		if k.Role != RoleWork {
-			return nil, ErrDefaultContainer
+			return nil, nil, ErrDefaultContainer
 		}
 		for j := range out.Kinds {
 			if out.Kinds[j].Role == RoleWork {
@@ -205,7 +238,12 @@ func (s *Schema) ChangeKind(name string, ch KindChange) (*Schema, error) {
 			}
 		}
 	}
-	return out, nil
+	if ch.Name == nil || *ch.Name == name {
+		return out, nil, nil
+	}
+	m := Migration{Target: TargetKind, Old: name, New: *ch.Name}
+	out, err := out.Migrate(m)
+	return out, []Migration{m}, err
 }
 
 // RemoveKind returns s without the kind name, without it in the parents of
@@ -273,23 +311,112 @@ func (s *Schema) AddProp(p Prop) (*Schema, error) {
 	return out, nil
 }
 
-// ChangeProp returns s with the property name changed as ch says. multi,
-// inverse and symmetric are for a task_ref property only.
-func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, error) {
+// ChangeProp returns s with the property name changed as ch says, the
+// migrations that a new name and the values need for the tasks, and the
+// values that are removed. multi, inverse and symmetric are for a task_ref
+// property only; values are for an enum or multi_enum property only.
+func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, []string, error) {
 	out := s.clone()
 	i := slices.IndexFunc(out.Props, func(x Prop) bool { return x.Name == name })
 	if i < 0 {
-		return nil, notDefined("property", name)
+		return nil, nil, nil, notDefined("property", name)
 	}
 	p := &out.Props[i]
 	if p.Type != TypeTaskRef && (ch.Inverse != nil || ch.Multi != nil || ch.Symmetric != nil) {
-		return nil, ErrNotTaskRef
+		return nil, nil, nil, ErrNotTaskRef
+	}
+	if ch.Name != nil && *ch.Name != name {
+		if _, ok := s.Prop(*ch.Name); ok {
+			return nil, nil, nil, nameTaken("property", *ch.Name)
+		}
 	}
 	set(&p.Label, ch.Label)
 	set(&p.Inverse, ch.Inverse)
 	set(&p.Multi, ch.Multi)
 	set(&p.Symmetric, ch.Symmetric)
-	return out, nil
+	var ms []Migration
+	var removed []string
+	if ch.Values != nil {
+		if p.Type != TypeEnum && p.Type != TypeMultiEnum {
+			return nil, nil, nil, fmt.Errorf("%s: %w", name, ErrNotEnum)
+		}
+		var err error
+		if p.Values, ms, removed, err = editValues(name, p.Values, *ch.Values); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	if ch.Name == nil || *ch.Name == name {
+		return out, ms, removed, nil
+	}
+	m := Migration{Target: TargetProp, Old: name, New: *ch.Name}
+	out, err := out.Migrate(m)
+	return out, append(ms, m), removed, err
+}
+
+// tempValue stands between two names of a swap; it is only ever written to
+// a task in memory.
+const tempValue = "\x00hedgehug-swap"
+
+// editValues is the values cur after the edit eds, the migrations that carry
+// the tasks from the current values to the new ones, in an order that never
+// moves a value onto one that is still to be moved, and the current values
+// that no edit keeps.
+func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms []Migration, removed []string, err error) {
+	bad := func(format string, a ...any) error {
+		return fmt.Errorf("%s: %s: %w", prop, fmt.Sprintf(format, a...), ErrValueInvalid)
+	}
+	taken := map[string]bool{}
+	from := map[string]bool{}
+	for _, e := range eds {
+		if e.Name == "" || taken[e.Name] {
+			return nil, nil, nil, bad("value %q is empty or repeated", e.Name)
+		}
+		taken[e.Name] = true
+		for _, f := range e.From {
+			if !slices.Contains(cur, f) {
+				return nil, nil, nil, bad("%q is not a current value", f)
+			}
+			if from[f] {
+				return nil, nil, nil, bad("%q comes from more than one value", f)
+			}
+			from[f] = true
+		}
+	}
+	for _, v := range cur {
+		if from[v] {
+			continue
+		}
+		if taken[v] {
+			return nil, nil, nil, bad("%q is a value that goes, and the name of another", v)
+		}
+		removed = append(removed, v)
+	}
+	var pending [][2]string
+	for _, e := range eds {
+		values = append(values, e.Name)
+		for _, f := range e.From {
+			if f != e.Name {
+				pending = append(pending, [2]string{f, e.Name})
+			}
+		}
+	}
+	emit := func(old, to string) {
+		ms = append(ms, Migration{Target: TargetValue, Prop: prop, Old: old, New: to})
+	}
+	for len(pending) > 0 {
+		k := slices.IndexFunc(pending, func(m [2]string) bool {
+			return !slices.ContainsFunc(pending, func(o [2]string) bool { return o[0] == m[1] })
+		})
+		if k >= 0 {
+			emit(pending[k][0], pending[k][1])
+			pending = slices.Delete(pending, k, k+1)
+			continue
+		}
+		// only cycles are left: park one value
+		emit(pending[0][0], tempValue)
+		pending[0][0] = tempValue
+	}
+	return values, ms, removed, nil
 }
 
 // RemoveProp returns s without the property name and without it in the
@@ -338,59 +465,6 @@ func (s *Schema) OrderProps(names []string) (*Schema, error) {
 		props[i] = sorted[k]
 	}
 	out.Props = props
-	return out, nil
-}
-
-// enumProp is the enum or multi_enum property prop of out, to change in place.
-func enumProp(out *Schema, prop string) (*Prop, error) {
-	i := slices.IndexFunc(out.Props, func(x Prop) bool { return x.Name == prop })
-	if i < 0 {
-		return nil, notDefined("property", prop)
-	}
-	p := &out.Props[i]
-	if p.Type != TypeEnum && p.Type != TypeMultiEnum {
-		return nil, fmt.Errorf("%s: %w", prop, ErrNotEnum)
-	}
-	return p, nil
-}
-
-// AddValue returns s with value at the end of the values of prop. Check
-// does not look at values twice, so a value already there is refused here.
-func (s *Schema) AddValue(prop, value string) (*Schema, error) {
-	out := s.clone()
-	p, err := enumProp(out, prop)
-	if err != nil {
-		return nil, err
-	}
-	if value == "" || slices.Contains(p.Values, value) {
-		return nil, fmt.Errorf("value %q of %s is empty or already defined: %w", value, prop, ErrValueInvalid)
-	}
-	p.Values = append(slices.Clone(p.Values), value)
-	return out, nil
-}
-
-func (s *Schema) RemoveValue(prop, value string) (*Schema, error) {
-	out := s.clone()
-	p, err := enumProp(out, prop)
-	if err != nil {
-		return nil, err
-	}
-	if !slices.Contains(p.Values, value) {
-		return nil, notDefined("value", prop+"."+value)
-	}
-	p.Values = slices.DeleteFunc(slices.Clone(p.Values), func(v string) bool { return v == value })
-	return out, nil
-}
-
-func (s *Schema) OrderValues(prop string, names []string) (*Schema, error) {
-	out := s.clone()
-	p, err := enumProp(out, prop)
-	if err != nil {
-		return nil, err
-	}
-	if p.Values, err = reorder(p.Values, func(v string) string { return v }, names); err != nil {
-		return nil, err
-	}
 	return out, nil
 }
 

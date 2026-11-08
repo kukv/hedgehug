@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func statusNames(w schemas.EditWrite) []string {
@@ -52,18 +53,27 @@ func TestSchemaEditRoundTrip(t *testing.T) {
 	}
 
 	w = schemas.EditWrite{}
-	ts.call("POST", "/api/schema/props/priority/values", map[string]any{"value": "none"}, 200, &w)
-	if v := w.Schema.Props["priority"].Values; v[len(v)-1] != "none" {
-		t.Errorf("values = %v", v)
-	}
-	ts.call("PUT", "/api/schema/props/priority/values/order", map[string]any{"names": []string{"none", "low", "mid", "high", "urgent"}}, 200, nil)
-	w = schemas.EditWrite{}
-	ts.call("DELETE", "/api/schema/props/priority/values/none", nil, 200, &w)
-	if v := w.Schema.Props["priority"].Values; slices.Contains(v, "none") {
+	values := []map[string]any{{"name": "none"}, {"name": "low", "from": []string{"low"}}, {"name": "mid", "from": []string{"mid"}}, {"name": "high", "from": []string{"high"}}}
+	ts.call("PATCH", "/api/schema/props/priority", map[string]any{"values": values}, 200, &w)
+	if v := w.Schema.Props["priority"].Values; !slices.Equal(v, []string{"none", "low", "mid", "high"}) {
 		t.Errorf("values = %v", v)
 	}
 
-	ts.call("POST", "/api/schema/kinds", map[string]any{"name": "spike", "role": "work", "anywhere": true}, 200, nil)
+	w = schemas.EditWrite{}
+	ts.call("POST", "/api/schema/kinds", map[string]any{"name": "spike", "role": "work", "anywhere": true, "color": "teal"}, 200, &w)
+	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Name != "spike" || k.Color != "teal" {
+		t.Errorf("spike = %+v", k)
+	}
+	w = schemas.EditWrite{}
+	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"color": "#aabbcc"}, 200, &w)
+	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Color != "#aabbcc" {
+		t.Errorf("spike = %+v", k)
+	}
+	w = schemas.EditWrite{}
+	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"color": ""}, 200, &w)
+	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Color != "" {
+		t.Errorf("spike = %+v", k)
+	}
 	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"label": "調査", "parents": []string{"root", "epic"}}, 200, nil)
 	ts.call("PUT", "/api/schema/kinds/order", map[string]any{"names": []string{"spike", "project", "epic", "story", "task", "bug"}}, 200, nil)
 	ts.call("DELETE", "/api/schema/kinds/spike", nil, 200, nil)
@@ -102,6 +112,18 @@ func TestSchemaEditErrors(t *testing.T) {
 	if e := ts.problem("POST", "/api/schema/props", map[string]any{"name": "area", "type": "enum", "values": []string{"a", "a"}}, 422); e.Type != "schema.value_invalid" {
 		t.Errorf("values twice: %+v", e)
 	}
+	if e := ts.problem("PATCH", "/api/schema/props/priority", map[string]any{"values": []map[string]any{{"name": "a"}, {"name": "a"}}}, 422); e.Type != "schema.value_invalid" {
+		t.Errorf("values given twice: %+v", e)
+	}
+	if e := ts.problem("PATCH", "/api/schema/props/priority", map[string]any{"values": []map[string]any{{"name": "a", "from": []string{"nope"}}}}, 422); e.Type != "schema.value_invalid" {
+		t.Errorf("from not a value: %+v", e)
+	}
+	if e := ts.problem("PATCH", "/api/schema/props/start", map[string]any{"values": []map[string]any{{"name": "a"}}}, 422); e.Type != "schema.not_enum" {
+		t.Errorf("values of a date: %+v", e)
+	}
+	if e := ts.problem("PATCH", "/api/schema/statuses/todo", map[string]any{"name": "done"}, 409); e.Type != "schema.name_taken" {
+		t.Errorf("name taken: %+v", e)
+	}
 	ts.problem("PUT", "/api/schema/statuses/order", map[string]any{"names": nil}, 400)
 	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{}}, 400)
 	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{"root"}, "anywhere": true}, 400)
@@ -113,4 +135,78 @@ func TestSchemaEditPublishesSchemaChanged(t *testing.T) {
 	ts.srv.poller.settle()
 	ts.call("POST", "/api/schema/statuses", map[string]any{"name": "review", "category": "doing"}, 200, nil)
 	waitEvent[schemaChanged](t, ch, nil)
+}
+
+func TestSchemaEditRenameRewritesTasksInOneCommit(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "one", "status": "todo"}, 201, &out)
+	u := mustULID(t, out.Task.ULID)
+	before := ts.uc.Head()
+
+	var w schemas.EditWrite
+	ts.call("PATCH", "/api/schema/statuses/todo", map[string]any{"name": "open", "label": "Open"}, 200, &w)
+	if w.Commit == nil || ts.uc.Head() == before {
+		t.Fatalf("commit = %v", w.Commit)
+	}
+	if got := ts.uc.TaskByULID("me", u).Status; got != "open" {
+		t.Errorf("status = %s", got)
+	}
+	if usecasetest.LastOp(t, ts.uc) != "schema" {
+		t.Errorf("last op = %s", usecasetest.LastOp(t, ts.uc))
+	}
+	for _, st := range w.Schema.Statuses {
+		if st.Name == "todo" {
+			t.Error("todo is still defined")
+		}
+		if st.Name == "open" && (st.Label != "Open" || !st.Default) {
+			t.Errorf("open = %+v", st)
+		}
+	}
+
+	ts.call("PATCH", "/api/schema/kinds/task", map[string]any{"name": "item"}, 200, nil)
+	if got := ts.uc.TaskByULID("me", u).Kind; got != "item" {
+		t.Errorf("kind = %s", got)
+	}
+	ts.call("PATCH", "/api/schema/props/priority", map[string]any{"name": "importance"}, 200, &w)
+	if _, ok := w.Schema.Props["importance"]; !ok {
+		t.Errorf("props = %v", w.Schema.PropOrder)
+	}
+}
+
+func TestSchemaEditValuesMergeRenameAndInUse(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var urgent, mid taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "u", "props": map[string]any{"priority": "urgent"}}, 201, &urgent)
+	ts.call("POST", "/api/tasks", map[string]any{"title": "m", "props": map[string]any{"priority": "mid"}}, 201, &mid)
+
+	// dropping a value a task uses is refused, with the value
+	drop := []map[string]any{{"name": "low", "from": []string{"low"}}, {"name": "high", "from": []string{"high"}}, {"name": "urgent", "from": []string{"urgent"}}}
+	if e := ts.problem("PATCH", "/api/schema/props/priority", map[string]any{"values": drop}, 422); e.Type != "schema.in_use" || e.Args["value"] != "mid" || e.Args["count"] != float64(1) {
+		t.Fatalf("in use: %+v", e)
+	}
+
+	before := ts.uc.Head()
+	edit := []map[string]any{
+		{"name": "none"},
+		{"name": "high", "from": []string{"high", "urgent"}},
+		{"name": "medium", "from": []string{"mid"}},
+		{"name": "low", "from": []string{"low"}},
+	}
+	var w schemas.EditWrite
+	ts.call("PATCH", "/api/schema/props/priority", map[string]any{"values": edit}, 200, &w)
+	if v := w.Schema.Props["priority"].Values; !slices.Equal(v, []string{"none", "high", "medium", "low"}) {
+		t.Errorf("values = %v", v)
+	}
+	if usecasetest.LastOp(t, ts.uc) != "schema" || ts.uc.Head() == before {
+		t.Error("want a commit of op schema")
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, urgent.Task.ULID)).Props.Get("priority").Value; got != "high" {
+		t.Errorf("urgent task = %s", got)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, mid.Task.ULID)).Props.Get("priority").Value; got != "medium" {
+		t.Errorf("mid task = %s", got)
+	}
 }

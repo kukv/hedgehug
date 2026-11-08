@@ -3,6 +3,7 @@ package schemas
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -23,30 +24,56 @@ type Use struct {
 	Name   string
 }
 
-func Edit(ss *usecase.Session, fn func(*schema.Schema) (*schema.Schema, error), use *Use, check bool) (EditWrite, error) {
+// EditOpts says what Edit checks besides the schema.
+type EditOpts struct {
+	// Use are the definitions the change removes; one that a task uses
+	// refuses the change.
+	Use []Use
+	// UseAfter, when set, is asked after fn has run for the removals fn found,
+	// such as the values of an enum that no edit keeps.
+	UseAfter func() []Use
+	// Check refuses a schema under which a task breaks a rule it did not
+	// break under the old one.
+	Check bool
+}
+
+// Edit makes the change fn describes to the schema, and the tasks it
+// carries, in one commit. fn returns the new schema and the migrations that
+// rewrite the tasks for a name that changed; the tasks are rewritten as in
+// migrate, those that do not decode left alone.
+func Edit(ss *usecase.Session, fn func(*schema.Schema) (*schema.Schema, []schema.Migration, error), opts EditOpts) (EditWrite, error) {
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return EditWrite{}, err
 	}
 	var after *schema.Schema
-	hash, err := ss.UpdateCommit(s, store.Op{Name: "schema"}, func(tx *store.Tx) error {
+	// A new name is a task written with a status that the workflow of the
+	// old schema does not lead to.
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "schema", SkipTransitions: true}, func(tx *store.Tx) error {
 		cur := s.Schema()
-		next, err := fn(cur)
+		next, ms, err := fn(cur)
 		if err != nil {
 			return editErr(err)
 		}
 		if ps := next.AddedProblems(cur.Check()); len(ps) > 0 {
 			return schemaInvalid(ps)
 		}
-		if use != nil {
-			if err := notInUse(s, *use); err != nil {
+		uses := opts.Use
+		if opts.UseAfter != nil {
+			uses = append(slices.Clone(uses), opts.UseAfter()...)
+		}
+		for _, u := range uses {
+			if err := notInUse(s, u); err != nil {
 				return err
 			}
 		}
-		if check {
+		if opts.Check {
 			if err := noNewViolations(s, ix, cur, next); err != nil {
 				return err
 			}
+		}
+		if err := rewriteTasks(s, ix, tx, cur, ms); err != nil {
+			return err
 		}
 		after = next
 		return tx.PutSchema(next)
@@ -59,6 +86,46 @@ func Edit(ss *usecase.Session, fn func(*schema.Schema) (*schema.Schema, error), 
 		return EditWrite{}, err
 	}
 	return EditWrite{Schema: SchemaViewOf(after), Commit: usecase.CommitPtr(usecase.CommitHex(hash))}, nil
+}
+
+// rewriteTasks puts every task that the migrations, which are given in the
+// order they are applied and read cur, the schema before them, change.
+func rewriteTasks(s *store.Store, ix *index.Index, tx *store.Tx, cur *schema.Schema, ms []schema.Migration) error {
+	if len(ms) == 0 {
+		return nil
+	}
+	var refused []string
+	for t, err := range s.Tasks() {
+		if err != nil {
+			if _, ok := brokenTask(err); ok {
+				continue
+			}
+			return err
+		}
+		changed := false
+		var terr error
+		for _, m := range ms {
+			ok, err := m.ApplyTask(t, cur)
+			if err != nil {
+				terr = err
+				break
+			}
+			changed = changed || ok
+		}
+		switch {
+		case terr != nil:
+			refused = append(refused, usecase.RefName(ix, t.ULID)+": "+terr.Error())
+		case changed:
+			if err := tx.PutTask(t); err != nil {
+				return err
+			}
+		}
+	}
+	if len(refused) > 0 {
+		slices.Sort(refused)
+		return usecase.NewErr(usecase.KindInvalid, "migrate.invalid", fmt.Errorf("cannot rewrite %s:\n  %s", TaskCount(len(refused)), strings.Join(refused, "\n  ")))
+	}
+	return nil
 }
 
 // editErr gives the errors of the schema package their codes.
@@ -77,6 +144,8 @@ func editErr(err error) error {
 		return usecase.NewErr(usecase.KindInvalid, "schema.not_task_ref", err)
 	case errors.Is(err, schema.ErrNotEnum):
 		return usecase.NewErr(usecase.KindInvalid, "schema.not_enum", err)
+	case errors.Is(err, schema.ErrNameTaken):
+		return usecase.NewErr(usecase.KindConflict, "schema.name_taken", err)
 	case errors.Is(err, schema.ErrValueInvalid):
 		return usecase.NewErr(usecase.KindInvalid, "schema.value_invalid", err)
 	}
@@ -112,8 +181,12 @@ func notInUse(s *store.Store, u Use) error {
 	if count == 0 {
 		return nil
 	}
+	args := []any{"count", count, "deleted", deleted}
+	if u.Target == schema.TargetValue {
+		args = append(args, "value", u.Name)
+	}
 	return usecase.NewErr(usecase.KindInvalid, "schema.in_use",
-		fmt.Errorf("%s uses %s; merge it into another first", TaskCount(count), u.Name), "count", count, "deleted", deleted)
+		fmt.Errorf("%s uses %s; merge it into another first", TaskCount(count), u.Name), args...)
 }
 
 // noNewViolations refuses a schema under which a task breaks a rule it did

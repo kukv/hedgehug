@@ -119,7 +119,7 @@ func TestRemovePropDropsRequired(t *testing.T) {
 
 func TestChangeStatusDefaultMovesIt(t *testing.T) {
 	t.Parallel()
-	got, err := Default().ChangeStatus("backlog", StatusChange{Default: true})
+	got, _, err := Default().ChangeStatus("backlog", StatusChange{Default: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestChangeStatusDefaultMovesIt(t *testing.T) {
 
 func TestChangeKindDefaultRefusesAContainer(t *testing.T) {
 	t.Parallel()
-	if _, err := Default().ChangeKind("epic", KindChange{Default: true}); !errors.Is(err, ErrDefaultContainer) {
+	if _, _, err := Default().ChangeKind("epic", KindChange{Default: true}); !errors.Is(err, ErrDefaultContainer) {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -141,7 +141,7 @@ func TestChangeKindDefaultRefusesAContainer(t *testing.T) {
 func TestChangeKindParentsAnywhere(t *testing.T) {
 	t.Parallel()
 	var anywhere []string
-	got, err := Default().ChangeKind("bug", KindChange{Parents: &anywhere})
+	got, _, err := Default().ChangeKind("bug", KindChange{Parents: &anywhere})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestChangeKindParentsAnywhere(t *testing.T) {
 func TestChangePropRefusesTaskRefFieldsOnOthers(t *testing.T) {
 	t.Parallel()
 	multi := true
-	if _, err := Default().ChangeProp("priority", PropChange{Multi: &multi}); !errors.Is(err, ErrNotTaskRef) {
+	if _, _, _, err := Default().ChangeProp("priority", PropChange{Multi: &multi}); !errors.Is(err, ErrNotTaskRef) {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -188,36 +188,12 @@ func TestOrderStatusesStale(t *testing.T) {
 	}
 }
 
-func TestValues(t *testing.T) {
-	t.Parallel()
-	s, err := Default().AddValue("priority", "none")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s, err = s.OrderValues("priority", []string{"none", "low", "mid", "high", "urgent"}); err != nil {
-		t.Fatal(err)
-	}
-	if s, err = s.RemoveValue("priority", "urgent"); err != nil {
-		t.Fatal(err)
-	}
-	p, _ := s.Prop("priority")
-	if !slices.Equal(p.Values, []string{"none", "low", "mid", "high"}) {
-		t.Errorf("values = %v", p.Values)
-	}
-	if _, err := s.AddValue("start", "x"); !errors.Is(err, ErrNotEnum) {
-		t.Errorf("err = %v", err)
-	}
-	if _, err := s.RemoveValue("priority", "nope"); !errors.Is(err, ErrNotDefined) {
-		t.Errorf("err = %v", err)
-	}
-}
-
 func TestNotDefined(t *testing.T) {
 	t.Parallel()
 	s := Default()
 	for name, err := range map[string]error{
 		"status": func() error { _, err := s.RemoveStatus("x"); return err }(),
-		"kind":   func() error { _, err := s.ChangeKind("x", KindChange{}); return err }(),
+		"kind":   func() error { _, _, err := s.ChangeKind("x", KindChange{}); return err }(),
 		"prop":   func() error { _, err := s.RemoveProp("x"); return err }(),
 	} {
 		if !errors.Is(err, ErrNotDefined) {
@@ -288,7 +264,7 @@ func TestEditKeepsComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = s.AddStatus(Status{Name: "review", Category: CategoryDoing, Color: "teal"})
-	if s, err = s.ChangeStatus("done", StatusChange{Label: ptr("完了")}); err != nil {
+	if s, _, err = s.ChangeStatus("done", StatusChange{Label: ptr("完了")}); err != nil {
 		t.Fatal(err)
 	}
 	if s, err = s.OrderProps([]string{"points", "priority"}); err != nil {
@@ -468,7 +444,7 @@ func TestChangeStatusFields(t *testing.T) {
 	t.Parallel()
 	s := Default()
 	cat := CategoryDoing
-	got, err := s.ChangeStatus("backlog", StatusChange{Category: &cat})
+	got, _, err := s.ChangeStatus("backlog", StatusChange{Category: &cat})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +455,7 @@ func TestChangeStatusFields(t *testing.T) {
 		t.Error("s was changed")
 	}
 	// "" clears the label and the color; nil leaves them.
-	s, err = s.ChangeStatus("done", StatusChange{Label: ptr("完了"), Color: ptr("teal")})
+	s, _, err = s.ChangeStatus("done", StatusChange{Label: ptr("完了"), Color: ptr("teal")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +468,7 @@ func TestChangeStatusFields(t *testing.T) {
 		{"clear label", StatusChange{Label: ptr("")}, "", "teal"},
 		{"clear color", StatusChange{Color: ptr("")}, "完了", ""},
 	} {
-		g, err := s.ChangeStatus("done", c.ch)
+		g, _, err := s.ChangeStatus("done", c.ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -506,7 +482,7 @@ func TestChangeKindFields(t *testing.T) {
 	t.Parallel()
 	s := Default()
 	role := RoleContainer
-	got, err := s.ChangeKind("task", KindChange{Role: &role})
+	got, _, err := s.ChangeKind("task", KindChange{Role: &role})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +493,7 @@ func TestChangeKindFields(t *testing.T) {
 		t.Error("s was changed")
 	}
 	ps := []string{"epic", "story"}
-	if got, err = s.ChangeKind("bug", KindChange{Parents: &ps}); err != nil {
+	if got, _, err = s.ChangeKind("bug", KindChange{Parents: &ps}); err != nil {
 		t.Fatal(err)
 	}
 	if k, _ := got.Kind("bug"); !slices.Equal(k.Parents, ps) {

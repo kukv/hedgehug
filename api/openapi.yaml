@@ -1142,6 +1142,8 @@ components:
       properties:
         anywhere:
           type: boolean
+        color:
+          type: string
         icon:
           type: string
         label:
@@ -1171,11 +1173,17 @@ components:
       properties:
         anywhere:
           type: boolean
+        color:
+          description: Empty takes it off
+          type: string
         default:
           type: boolean
         icon:
           type: string
         label:
+          type: string
+        name:
+          description: The new name, as for a status
           type: string
         parents:
           description: Not empty; anywhere takes the limit off
@@ -1193,6 +1201,8 @@ components:
     KindDef:
       additionalProperties: false
       properties:
+        color:
+          type: string
         default:
           type: boolean
         icon:
@@ -1956,8 +1966,16 @@ components:
           type: string
         multi:
           type: boolean
+        name:
+          description: The new name, as for a status
+          type: string
         symmetric:
           type: boolean
+        values:
+          description: "All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it"
+          items:
+            $ref: "#/components/schemas/ValueEditBody"
+          type: array
       type: object
     PropDef:
       additionalProperties: false
@@ -2813,6 +2831,9 @@ components:
         label:
           description: Empty takes it off
           type: string
+        name:
+          description: The new name; the definition, what refers to it and the tasks that use it are rewritten in the same commit. A name already defined is 409 schema.name_taken
+          type: string
       type: object
     StatusDef:
       additionalProperties: false
@@ -3495,13 +3516,20 @@ components:
       required:
         - count
       type: object
-    ValueAddInputBody:
+    ValueEditBody:
       additionalProperties: false
       properties:
-        value:
+        from:
+          description: "The current values it comes from: none for a new value, one for a value kept or renamed, several for a merge"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        name:
           type: string
       required:
-        - value
+        - name
       type: object
     VelocityRow:
       additionalProperties: false
@@ -5778,127 +5806,6 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Change a property or a relation
-      tags:
-        - schema
-  /api/schema/props/{name}/values:
-    post:
-      operationId: add-value
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-        - description: The name of the definition
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The name of the definition
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ValueAddInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Add a value at the end
-      tags:
-        - schema
-  /api/schema/props/{name}/values/order:
-    put:
-      operationId: order-values
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-        - description: The name of the definition
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The name of the definition
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OrderBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Put the values in order
-      tags:
-        - schema
-  /api/schema/props/{name}/values/{value}:
-    delete:
-      operationId: delete-value
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-        - description: The name of the definition
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The name of the definition
-            type: string
-        - description: The value of the enum or multi_enum property
-          in: path
-          name: value
-          required: true
-          schema:
-            description: The value of the enum or multi_enum property
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Remove a value no task uses
       tags:
         - schema
   /api/schema/scoped/{project}:

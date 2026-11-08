@@ -76,7 +76,7 @@ func TestSchemaMigrateStatus(t *testing.T) {
 		t.Errorf("broken task = %q", got)
 	}
 	sf := te.schemaFile()
-	if strings.Contains(sf, "name: todo") || !strings.Contains(sf, "{name: ready, label: 未着手, category: todo, default: true}") || !strings.Contains(sf, "ready: [in_progress]") {
+	if strings.Contains(sf, "name: todo") || !strings.Contains(sf, "{name: ready, label: Todo, category: todo, default: true}") || !strings.Contains(sf, "ready: [in_progress]") {
 		t.Errorf("schema.yaml:\n%s", sf)
 	}
 	if out := te.ok("ls", "status:ready"); !strings.Contains(out, "Alpha") {

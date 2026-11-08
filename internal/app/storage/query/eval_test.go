@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
@@ -30,6 +31,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
+	inverse := "重複元"
 	s := newStore(t)
 	p, e, a, b, c, d := newTask("P"), newTask("E"), newTask("a"), newTask("b"), newTask("c"), newTask("d")
 	p.Kind = "project"
@@ -52,6 +54,15 @@ func newFixture(t *testing.T) *fixture {
 	setProp(c, "priority", "low")
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	d.DeletedAt = &at
+	// The inverse label of the default schema has a space, which a key of a
+	// query cannot hold; the inverse is tested under one without.
+	sc, _, _, err := s.Schema().ChangeProp("duplicates", schema.PropChange{Inverse: &inverse})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
+		t.Fatal(err)
+	}
 	put(t, s, p, e, a, b, c, d)
 	f := &fixture{ix: mustOpen(t, s), ids: map[string]model.ULID{}}
 	for _, task := range []*model.Task{p, e, a, b, c, d} {

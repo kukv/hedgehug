@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -202,6 +204,10 @@ func TestShowDeleted(t *testing.T) {
 func TestShowInverseLabel(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.writeSchemaFile(func(sc *schema.Schema) {
+		i := slices.IndexFunc(sc.Props, func(p schema.Prop) bool { return p.Name == "causes" })
+		sc.Props[i].Inverse = "起因している"
+	})
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "causes+="+other.ID)
 	out := te.ok("show", other.ID)
@@ -214,6 +220,10 @@ func TestShowInverseLabel(t *testing.T) {
 func TestShowWideLabel(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.writeSchemaFile(func(sc *schema.Schema) {
+		i := slices.IndexFunc(sc.Props, func(p schema.Prop) bool { return p.Name == "relates" })
+		sc.Props[i].Label = "関連"
+	})
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "relates+="+other.ID)
 	out := te.ok("show", other.ID)
