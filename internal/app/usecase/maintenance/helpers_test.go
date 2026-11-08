@@ -87,7 +87,7 @@ func rewriteSchema(t *testing.T, dir string, edit func(*schema.Schema)) *store.S
 }
 
 func newTask(title string) *model.Task {
-	return &model.Task{ULID: model.NewULID(), Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Kind: "project", Title: title, Status: "todo"}
 }
 
 // put writes tasks in one operation, past the checks of transitions.

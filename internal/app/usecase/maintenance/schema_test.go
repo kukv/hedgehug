@@ -141,6 +141,7 @@ func TestSchemaAutomationProjects(t *testing.T) {
 	live := newTask("Live")
 	live.Kind = "project"
 	plain := newTask("Plain")
+	plain.Kind, plain.Parent = "task", &live.ULID
 	gone := newTask("Gone")
 	gone.Kind = "project"
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

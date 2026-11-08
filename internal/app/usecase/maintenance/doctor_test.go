@@ -280,9 +280,12 @@ func TestRunCycleAndBroken(t *testing.T) {
 		if f.Check != "task" {
 			continue
 		}
-		if strings.Contains(f.Msg, "cycle") {
+		switch {
+		case strings.Contains(f.Msg, "cycle"):
 			cycles++
-		} else {
+		case f.Code == "task.placement":
+			// a cycle cannot follow the fixed hierarchy: each task of it is misplaced too
+		default:
 			others++
 		}
 	}
