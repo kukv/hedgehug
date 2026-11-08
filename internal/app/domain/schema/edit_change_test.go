@@ -185,8 +185,10 @@ func TestChangePropValuesSwapAndChain(t *testing.T) {
 	// low and high trade names: the order of the moves, and a parking
 	// place, keep each task value from being moved twice
 	_, ms, _, err := Default().ChangeProp("priority", PropChange{Values: &[]ValueEdit{
-		{Name: "high", From: []string{"low"}}, {Name: "low", From: []string{"high"}},
-		{Name: "mid", From: []string{"mid"}}, {Name: "urgent", From: []string{"urgent"}},
+		{Name: "high", From: []string{"low"}},
+		{Name: "low", From: []string{"high"}},
+		{Name: "mid", From: []string{"mid"}},
+		{Name: "urgent", From: []string{"urgent"}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -199,8 +201,10 @@ func TestChangePropValuesSwapAndChain(t *testing.T) {
 
 	// each takes the name the one before held
 	_, ms, _, err = Default().ChangeProp("priority", PropChange{Values: &[]ValueEdit{
-		{Name: "x", From: []string{"low"}}, {Name: "low", From: []string{"mid"}},
-		{Name: "mid", From: []string{"high"}}, {Name: "urgent", From: []string{"urgent"}},
+		{Name: "x", From: []string{"low"}},
+		{Name: "low", From: []string{"mid"}},
+		{Name: "mid", From: []string{"high"}},
+		{Name: "urgent", From: []string{"urgent"}},
 	}})
 	if err != nil {
 		t.Fatal(err)

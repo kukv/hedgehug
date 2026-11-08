@@ -337,8 +337,10 @@ func TestEditValueSwapRewritesTasks(t *testing.T) {
 	l := ts.AddTask("l", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
 	h := ts.AddTask("h", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("high")}} })
 	edit := []schema.ValueEdit{
-		{Name: "high", From: []string{"low"}}, {Name: "low", From: []string{"high"}},
-		{Name: "mid", From: []string{"mid"}}, {Name: "urgent", From: []string{"urgent"}},
+		{Name: "high", From: []string{"low"}},
+		{Name: "low", From: []string{"high"}},
+		{Name: "mid", From: []string{"mid"}},
+		{Name: "urgent", From: []string{"urgent"}},
 	}
 	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 		next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Values: &edit})
