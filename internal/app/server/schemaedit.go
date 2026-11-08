@@ -24,7 +24,7 @@ type ValueParam struct {
 type editOutput struct{ Body schemas.EditWrite }
 
 type orderBody struct {
-	Names []string `json:"names" doc:"Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale"`
+	Names []string `json:"names" nullable:"false" doc:"Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale"`
 }
 
 type statusAddInput struct {
@@ -218,7 +218,7 @@ func (s *Server) registerSchemaEdit() {
 		func(_ context.Context, in *propAddInput) (*editOutput, error) {
 			b := in.Body
 			p := schema.Prop{Name: b.Name, Label: b.Label, Type: schema.PropType(b.Type), Values: b.Values, Multi: b.Multi, Inverse: b.Inverse, Symmetric: b.Symmetric}
-			return s.edit(in.Store, func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddProp(p), nil }, nil, false)
+			return s.edit(in.Store, func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddProp(p) }, nil, false)
 		})
 	huma.Register(s.api, reg("change-prop", http.MethodPatch, "/api/schema/props/{name}", "Change a property or a relation"),
 		func(_ context.Context, in *propChangeInput) (*editOutput, error) {

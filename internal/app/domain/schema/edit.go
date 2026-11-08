@@ -226,6 +226,10 @@ func (s *Schema) RemoveKind(name string) (*Schema, error) {
 		if t := out.Scoped[j].Templates; t != nil && t.Default != nil {
 			d := maps.Clone(t.Default)
 			delete(d, name)
+			if len(d) == 0 && len(t.Only) == 0 {
+				out.Scoped[j].Templates = nil // so that no `templates: {}` is left
+				continue
+			}
 			nt := *t
 			nt.Default = d
 			out.Scoped[j].Templates = &nt
@@ -243,10 +247,19 @@ func (s *Schema) OrderKinds(names []string) (*Schema, error) {
 	return out, nil
 }
 
-func (s *Schema) AddProp(p Prop) *Schema {
+// AddProp returns s with p at the end. Check does not look at values twice,
+// so a value that is empty or repeated is refused here.
+func (s *Schema) AddProp(p Prop) (*Schema, error) {
+	seen := map[string]bool{}
+	for _, v := range p.Values {
+		if v == "" || seen[v] {
+			return nil, fmt.Errorf("value %q of %s is empty or repeated: %w", v, p.Name, ErrValueInvalid)
+		}
+		seen[v] = true
+	}
 	out := s.clone()
 	out.Props = append(out.Props, p)
-	return out
+	return out, nil
 }
 
 // ChangeProp returns s with the property name changed as ch says. multi,

@@ -1160,11 +1160,8 @@ export interface NotificationReadInputBody {
 }
 
 export interface OrderBody {
-  /**
-     * Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale
-     * @nullable
-     */
-  names: string[] | null;
+  /** Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale */
+  names: string[];
 }
 
 export interface Overwritten {

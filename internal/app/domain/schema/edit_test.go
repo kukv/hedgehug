@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -301,3 +302,272 @@ func TestEditKeepsComments(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func encoded(t *testing.T, s *Schema) string {
+	t.Helper()
+	b, err := s.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+const scopedWorkflow = `workflow:
+  transitions:
+    todo: [on_hold, done]
+    on_hold: [todo]
+    waiting: [on_hold]
+  required:
+    on_hold: [points]
+    done: [points]
+scoped:
+- where: project:` + scopedULID + `
+  statuses: [todo, on_hold, done]
+  workflow:
+    transitions:
+      todo: [on_hold, done]
+      on_hold: [todo]
+      waiting: [on_hold]
+    required:
+      on_hold: [points]
+      done: [points, assignees]
+`
+
+func TestRemoveStatusOnAScopedWorkflow(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, scopedWorkflow)
+	before := encoded(t, s)
+	got, err := s.RemoveStatus("on_hold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, w := range map[string]*Workflow{"store": &got.Workflow, "scoped": got.Scoped[0].Workflow} {
+		if v, _ := w.Transitions.Get("todo"); !slices.Equal(v, []string{"done"}) {
+			t.Errorf("%s: todo targets = %v", name, v)
+		}
+		if _, ok := w.Transitions.Get("on_hold"); ok {
+			t.Errorf("%s: the key on_hold stays", name)
+		}
+		if _, ok := w.Transitions.Get("waiting"); ok {
+			t.Errorf("%s: waiting, left with no target, stays", name)
+		}
+		if _, ok := w.Required.Get("on_hold"); ok {
+			t.Errorf("%s: required on_hold stays", name)
+		}
+		if _, ok := w.Required.Get("done"); !ok {
+			t.Errorf("%s: required done went", name)
+		}
+	}
+	if encoded(t, s) != before {
+		t.Error("s was changed")
+	}
+}
+
+func TestRemoveStatusEmptiesTheKeys(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, "workflow:\n  transitions:\n    waiting: [on_hold]\n  required:\n    on_hold: [points]\n")
+	got, err := s.RemoveStatus("on_hold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Workflow.Transitions) != 0 || len(got.Workflow.Required) != 0 {
+		t.Errorf("workflow = %+v", got.Workflow)
+	}
+}
+
+func TestRemovePropOnAScopedWorkflow(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, scopedWorkflow)
+	before := encoded(t, s)
+	got, err := s.RemoveProp("points")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, w := range map[string]*Workflow{"store": &got.Workflow, "scoped": got.Scoped[0].Workflow} {
+		if _, ok := w.Required.Get("on_hold"); ok {
+			t.Errorf("%s: on_hold, left with nothing, stays", name)
+		}
+	}
+	if v, _ := got.Scoped[0].Workflow.Required.Get("done"); !slices.Equal(v, []string{"assignees"}) {
+		t.Errorf("scoped done = %v", v)
+	}
+	if _, ok := got.Workflow.Required.Get("done"); ok {
+		t.Error("store done, left with nothing, stays")
+	}
+	if encoded(t, s) != before {
+		t.Error("s was changed")
+	}
+}
+
+func TestRemoveKindLeavesSUnchanged(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, `scoped:
+- where: project:`+scopedULID+`
+  templates:
+    default: {epic: plan, task: work}
+`)
+	before := encoded(t, s)
+	if _, err := s.RemoveKind("epic"); err != nil {
+		t.Fatal(err)
+	}
+	if encoded(t, s) != before {
+		t.Error("s was changed")
+	}
+}
+
+func TestRemoveKindLeavesNoEmptyTemplates(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, `scoped:
+- where: project:`+scopedULID+`
+  statuses: [todo, done]
+  templates:
+    default: {epic: plan}
+`)
+	got, err := s.RemoveKind("epic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scoped[0].Templates != nil {
+		t.Errorf("templates = %+v", got.Scoped[0].Templates)
+	}
+	if out := encoded(t, got); strings.Contains(out, "templates") {
+		t.Errorf("templates stay:\n%s", out)
+	}
+
+	// only keeps the templates of the override alive.
+	s = scopedBase(t, `scoped:
+- where: project:`+scopedULID+`
+  templates:
+    only: [work]
+    default: {epic: plan}
+`)
+	if got, err = s.RemoveKind("epic"); err != nil {
+		t.Fatal(err)
+	}
+	if tm := got.Scoped[0].Templates; tm == nil || !slices.Equal(tm.Only, []string{"work"}) || len(tm.Default) != 0 {
+		t.Errorf("templates = %+v", tm)
+	}
+	if out := encoded(t, got); strings.Contains(out, "default: {") {
+		t.Errorf("an empty default stays:\n%s", out)
+	}
+}
+
+func TestRemoveStatusLeavesSUnchanged(t *testing.T) {
+	t.Parallel()
+	s := scopedBase(t, scopedWorkflow)
+	before := encoded(t, s)
+	if _, err := s.RemoveStatus("done"); err != nil {
+		t.Fatal(err)
+	}
+	if encoded(t, s) != before {
+		t.Error("RemoveStatus changed s")
+	}
+}
+
+func TestChangeStatusFields(t *testing.T) {
+	t.Parallel()
+	s := Default()
+	cat := CategoryDoing
+	got, err := s.ChangeStatus("backlog", StatusChange{Category: &cat})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := got.Status("backlog"); st.Category != CategoryDoing {
+		t.Errorf("category = %s", st.Category)
+	}
+	if st, _ := s.Status("backlog"); st.Category == CategoryDoing {
+		t.Error("s was changed")
+	}
+	// "" clears the label and the color; nil leaves them.
+	s, err = s.ChangeStatus("done", StatusChange{Label: ptr("完了"), Color: ptr("teal")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name         string
+		ch           StatusChange
+		label, color string
+	}{
+		{"nil leaves", StatusChange{}, "完了", "teal"},
+		{"clear label", StatusChange{Label: ptr("")}, "", "teal"},
+		{"clear color", StatusChange{Color: ptr("")}, "完了", ""},
+	} {
+		g, err := s.ChangeStatus("done", c.ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st, _ := g.Status("done"); st.Label != c.label || st.Color != c.color {
+			t.Errorf("%s: label %q color %q", c.name, st.Label, st.Color)
+		}
+	}
+}
+
+func TestChangeKindFields(t *testing.T) {
+	t.Parallel()
+	s := Default()
+	role := RoleContainer
+	got, err := s.ChangeKind("task", KindChange{Role: &role})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := got.Kind("task"); k.Role != RoleContainer {
+		t.Errorf("role = %s", k.Role)
+	}
+	if k, _ := s.Kind("task"); k.Role != RoleWork {
+		t.Error("s was changed")
+	}
+	ps := []string{"epic", "story"}
+	if got, err = s.ChangeKind("bug", KindChange{Parents: &ps}); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := got.Kind("bug"); !slices.Equal(k.Parents, ps) {
+		t.Errorf("parents = %v", k.Parents)
+	}
+	ps[0] = "x" // the schema has its own copy
+	if k, _ := got.Kind("bug"); k.Parents[0] != "epic" {
+		t.Error("parents share the slice of the caller")
+	}
+}
+
+func TestOrderKinds(t *testing.T) {
+	t.Parallel()
+	s := Default()
+	var names []string
+	for _, k := range s.Kinds {
+		names = append(names, k.Name)
+	}
+	slices.Reverse(names)
+	got, err := s.OrderKinds(names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, k := range got.Kinds {
+		out = append(out, k.Name)
+	}
+	if !slices.Equal(out, names) {
+		t.Errorf("kinds = %v", out)
+	}
+	if _, err := s.OrderKinds(names[1:]); !errors.Is(err, ErrOrderStale) {
+		t.Errorf("a missing name: err = %v", err)
+	}
+	if _, err := s.OrderKinds(append(slices.Clone(names[1:]), names[1])); !errors.Is(err, ErrOrderStale) {
+		t.Errorf("a name twice: err = %v", err)
+	}
+}
+
+func TestAddPropRefusesBadValues(t *testing.T) {
+	t.Parallel()
+	for name, vs := range map[string][]string{"repeated": {"a", "b", "a"}, "empty": {"a", ""}} {
+		if _, err := Default().AddProp(Prop{Name: "area", Type: TypeEnum, Values: vs}); !errors.Is(err, ErrValueInvalid) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+	got, err := Default().AddProp(Prop{Name: "area", Type: TypeEnum, Values: []string{"a", "b"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.Prop("area"); !ok {
+		t.Error("area is not added")
+	}
+}

@@ -1778,9 +1778,7 @@ components:
           description: Every name of the list, in the new order; a list that differs from the schema is 409 schema.order_stale
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - names
       type: object

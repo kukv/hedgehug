@@ -76,8 +76,49 @@ func TestEditRefusesInUse(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	var ue *usecase.Error
-	if !errors.As(err, &ue) || ue.Args["count"] != 1 || ue.Args["deleted"] != 1 {
+	if !errors.As(err, &ue) {
+		t.Fatal(err)
+	}
+	if ue.Args["count"] != 1 || ue.Args["deleted"] != 1 {
 		t.Errorf("args = %v", ue.Args)
+	}
+}
+
+func TestEditCountsANormalTaskAndTheDeletedOnes(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("live", func(t *model.Task) { t.Status = "on_hold" })
+	ts.AddDeleted("old", time.Now(), func(t *model.Task) { t.Status = "on_hold" })
+	use := &schemas.Use{Target: schema.TargetStatus, Name: "on_hold"}
+	remove := func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveStatus("on_hold") }
+
+	_, err := schemas.Edit(ts.Session, remove, use, false)
+	var ue *usecase.Error
+	if !errors.As(err, &ue) || usecase.ProblemCode(err) != "schema.in_use" {
+		t.Fatalf("err = %v", err)
+	}
+	if ue.Args["count"] != 2 || ue.Args["deleted"] != 1 {
+		t.Errorf("args = %v", ue.Args)
+	}
+
+	// use and check together: the use is looked at first.
+	if _, err := schemas.Edit(ts.Session, remove, use, true); usecase.ProblemCode(err) != "schema.in_use" {
+		t.Errorf("use + check: err = %v", err)
+	}
+}
+
+func TestEditUseAndCheckTogether(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	p := ts.AddProject("Web")
+	ts.AddTask("bug", func(t *model.Task) { t.Kind = "bug"; t.Parent = &p })
+	// Nothing uses epic, so the use passes; the check finds the bug.
+	_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, error) {
+		ps := []string{schema.Root}
+		return sc.ChangeKind("bug", schema.KindChange{Parents: &ps})
+	}, &schemas.Use{Target: schema.TargetKind, Name: "epic"}, true)
+	if usecase.ProblemCode(err) != "schema.tasks_invalid" {
+		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -138,6 +179,16 @@ func TestEditErrors(t *testing.T) {
 			sc = sc.AddKind(schema.Kind{Name: "sub", Role: schema.RoleWork, Parents: []string{"epic"}})
 			return sc.RemoveKind("epic")
 		}, "schema.parents_empty"},
+		{"not task_ref", func(sc *schema.Schema) (*schema.Schema, error) {
+			m := true
+			return sc.ChangeProp("priority", schema.PropChange{Multi: &m})
+		}, "schema.not_task_ref"},
+		{"not enum", func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddValue("start", "x") }, "schema.not_enum"},
+		{"value twice", func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddValue("priority", "low") }, "schema.value_invalid"},
+		{"value empty", func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddValue("priority", "") }, "schema.value_invalid"},
+		{"prop values repeated", func(sc *schema.Schema) (*schema.Schema, error) {
+			return sc.AddProp(schema.Prop{Name: "area", Type: schema.TypeEnum, Values: []string{"a", "a"}})
+		}, "schema.value_invalid"},
 	}
 	for _, c := range cases {
 		if _, err := schemas.Edit(ts.Session, c.fn, nil, false); usecase.ProblemCode(err) != c.code {

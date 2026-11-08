@@ -99,6 +99,10 @@ func TestSchemaEditErrors(t *testing.T) {
 	if e := ts.problem("DELETE", "/api/schema/statuses/backlog", nil, 422); e.Type != "schema.in_use" {
 		t.Errorf("in use: %+v", e)
 	}
+	if e := ts.problem("POST", "/api/schema/props", map[string]any{"name": "area", "type": "enum", "values": []string{"a", "a"}}, 422); e.Type != "schema.value_invalid" {
+		t.Errorf("values twice: %+v", e)
+	}
+	ts.problem("PUT", "/api/schema/statuses/order", map[string]any{"names": nil}, 400)
 	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{}}, 400)
 	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{"root"}, "anywhere": true}, 400)
 }
