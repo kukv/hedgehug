@@ -24,7 +24,7 @@ import (
 
 const (
 	fileName = "report" // in .hedgehug/local
-	format   = 1        // bump when row changes
+	format   = 2        // bump when row changes
 )
 
 // OpMoveIn is the op of the commit that brings a task from another store.

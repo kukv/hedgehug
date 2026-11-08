@@ -205,25 +205,27 @@ func TestMoveStoreRefusedBySchemaCommitsNothing(t *testing.T) {
 	f := usecasetest.NewMoveFx(t)
 	f.SetSchema(t, func(sc *schema.Schema) {
 		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
-		sc.Kinds = append(sc.Kinds, schema.Kind{Name: "spike", Role: schema.RoleWork, Parents: []string{schema.Root, "project", "epic", "story", "task"}})
 	})
 	a := f.TS.ForStore("org-a")
 	if _, err := tasks.Set(a, "API-4", []usecase.Assign{{Key: "status", Op: "=", Value: "review"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Set(a, "API-4", []usecase.Assign{{Key: "kind", Op: "=", Value: "spike"}}); err != nil {
+	if _, err := tasks.Add(f.TS.ForStore("org-b"), tasks.AddInput{Title: "B project", Kind: "project"}); err != nil {
 		t.Fatal(err)
 	}
 	ha, hb := f.Head(t, "org-a"), f.Head(t, "org-b")
 
-	_, err := stores.MoveStore(f.TS.Session, f.In())
+	// the project API-2 cannot go under a project of org-b, and org-b has no review status
+	in := f.In()
+	in.Parent = "WEB-2"
+	_, err := stores.MoveStore(f.TS.Session, in)
 	usecasetest.MustCode(t, err, usecase.KindInvalid, "move.invalid")
 	e := argsOf(err)
 	lines, _ := e["violations"].([]string)
 	if len(lines) != 2 {
 		t.Fatalf("violations = %q", lines)
 	}
-	if !strings.Contains(lines[0], "API-4") || !strings.Contains(lines[0], "spike") || !strings.Contains(lines[1], "API-4") || !strings.Contains(lines[1], "review") {
+	if !strings.Contains(lines[0], "API-2") || !strings.Contains(lines[0], "project cannot be placed") || !strings.Contains(lines[1], "API-4") || !strings.Contains(lines[1], "review") {
 		t.Errorf("violations = %q", lines)
 	}
 	if f.Head(t, "org-a") != ha || f.Head(t, "org-b") != hb {

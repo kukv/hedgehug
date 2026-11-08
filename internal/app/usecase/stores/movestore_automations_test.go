@@ -10,7 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -328,29 +327,12 @@ func TestMoveStoreRefusesATaskDeletedInTheDestination(t *testing.T) {
 	usecasetest.MustCode(t, err, usecase.KindConflict, "move.exists")
 }
 
-// deletedSubProject gives org-a a project under API-2 with a rule, and deletes
-// it. Both stores allow a project there, so that it can move.
+// deletedSubProject gives org-a an epic under API-2 with a rule, and deletes
+// it.
 func deletedSubProject(t *testing.T, f *usecasetest.MoveFx) {
 	t.Helper()
-	anywhere := func(sc *schema.Schema) {
-		for i := range sc.Kinds {
-			if sc.Kinds[i].Name == "project" {
-				sc.Kinds[i].Parents = nil
-			}
-		}
-	}
-	f.SetSchema(t, anywhere)
-	bs, _ := f.TS.ForStore("org-b").OpenStore()
-	sc, err := stores.CloneSchemaOf(bs.Schema())
-	if err != nil {
-		t.Fatal(err)
-	}
-	anywhere(sc)
-	if _, err := f.TS.ForStore("org-b").Update(bs, store.Op{Name: "schema"}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
 	a := f.TS.ForStore("org-a")
-	r, err := tasks.Add(a, tasks.AddInput{Title: "Sub", Parent: "API-2", Kind: "project"})
+	r, err := tasks.Add(a, tasks.AddInput{Title: "Sub", Parent: "API-2", Kind: "epic"})
 	if err != nil {
 		t.Fatal(err)
 	}

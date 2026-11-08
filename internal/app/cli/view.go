@@ -60,7 +60,7 @@ func (a *app) viewCmd() *cobra.Command {
 	f.StringToIntVar(&wip, "wip", nil, "the limits of the kanban columns, such as in_progress=3; replaces the ones saved, and an empty value takes them off")
 	f.StringVar(&ganttStart, "gantt-start", "", "the date property the bars of the gantt start on")
 	f.StringVar(&ganttEnd, "gantt-end", "", "the date property the bars of the gantt end on")
-	f.BoolVar(&roadmap, "roadmap", false, "show the kinds of the container role only on the gantt")
+	f.BoolVar(&roadmap, "roadmap", false, "show projects and epics only on the gantt")
 	cmd.AddCommand(save,
 		&cobra.Command{
 			Use:   "list",

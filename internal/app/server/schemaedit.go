@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -43,35 +42,6 @@ type statusChangeInput struct {
 	}
 }
 
-type kindAddInput struct {
-	StoreParam
-	Body struct {
-		Name     string   `json:"name"`
-		Label    string   `json:"label,omitempty"`
-		Role     string   `json:"role" enum:"container,work"`
-		Parents  []string `json:"parents,omitempty" doc:"The kinds it may sit under, root for the top; leave it out with anywhere"`
-		Anywhere bool     `json:"anywhere,omitempty"`
-		Icon     string   `json:"icon,omitempty"`
-		Color    string   `json:"color,omitempty"`
-		Template string   `json:"template,omitempty"`
-	}
-}
-
-type kindChangeInput struct {
-	DefParam
-	Body struct {
-		Name     *string   `json:"name,omitempty" doc:"The new name, as for a status"`
-		Label    *string   `json:"label,omitempty"`
-		Role     *string   `json:"role,omitempty" enum:"container,work"`
-		Parents  *[]string `json:"parents,omitempty" doc:"Not empty; anywhere takes the limit off"`
-		Anywhere bool      `json:"anywhere,omitempty"`
-		Icon     *string   `json:"icon,omitempty"`
-		Color    *string   `json:"color,omitempty" doc:"Empty takes it off"`
-		Template *string   `json:"template,omitempty"`
-		Default  bool      `json:"default,omitempty"`
-	}
-}
-
 type propAddInput struct {
 	StoreParam
 	Body struct {
@@ -106,20 +76,6 @@ type propChangeInput struct {
 type orderInput struct {
 	StoreParam
 	Body orderBody
-}
-
-// parentsOf is the parents a kind is given: nil for anywhere. Both, or an
-// empty list, are a bad request.
-func parentsOf(parents []string, anywhere bool) ([]string, error) {
-	switch {
-	case anywhere && parents != nil:
-		return nil, errors.New("parents and anywhere cannot be used together")
-	case anywhere:
-		return nil, nil
-	case len(parents) == 0:
-		return nil, errors.New("parents is empty; use anywhere to take the limit off")
-	}
-	return parents, nil
 }
 
 // plain is a change that carries no migrations.
@@ -171,52 +127,6 @@ func (s *Server) registerSchemaEdit() {
 	huma.Register(s.api, reg("order-statuses", http.MethodPut, "/api/schema/statuses/order", "Put the statuses in order"),
 		func(_ context.Context, in *orderInput) (*editOutput, error) {
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.OrderStatuses(in.Body.Names) }), schemas.EditOpts{})
-		})
-
-	huma.Register(s.api, reg("add-kind", http.MethodPost, "/api/schema/kinds", "Add a kind at the end"),
-		func(_ context.Context, in *kindAddInput) (*editOutput, error) {
-			b := in.Body
-			ps, err := parentsOf(b.Parents, b.Anywhere)
-			if err != nil {
-				return nil, badRequest(err)
-			}
-			k := schema.Kind{Name: b.Name, Label: b.Label, Role: schema.Role(b.Role), Parents: ps, Icon: b.Icon, Color: b.Color, Template: b.Template}
-			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddKind(k), nil }), schemas.EditOpts{})
-		})
-	huma.Register(s.api, reg("change-kind", http.MethodPatch, "/api/schema/kinds/{name}", "Change a kind"),
-		func(_ context.Context, in *kindChangeInput) (*editOutput, error) {
-			b := in.Body
-			ch := schema.KindChange{Name: b.Name, Label: b.Label, Icon: b.Icon, Color: b.Color, Template: b.Template, Default: b.Default}
-			if b.Role != nil {
-				r := schema.Role(*b.Role)
-				ch.Role = &r
-			}
-			if b.Parents != nil || b.Anywhere {
-				var given []string
-				if b.Parents != nil {
-					given = *b.Parents
-					if given == nil {
-						given = []string{}
-					}
-				}
-				ps, err := parentsOf(given, b.Anywhere)
-				if err != nil {
-					return nil, badRequest(err)
-				}
-				ch.Parents = &ps
-			}
-			// role and parents can break the tasks there are
-			check := ch.Role != nil || ch.Parents != nil
-			return s.edit(in.Store, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) { return sc.ChangeKind(in.Name, ch) }, schemas.EditOpts{Check: check})
-		})
-	huma.Register(s.api, reg("delete-kind", http.MethodDelete, "/api/schema/kinds/{name}", "Remove a kind no task uses"),
-		func(_ context.Context, in *DefParam) (*editOutput, error) {
-			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveKind(in.Name) }),
-				schemas.EditOpts{Use: []schemas.Use{{Target: schema.TargetKind, Name: in.Name}}})
-		})
-	huma.Register(s.api, reg("order-kinds", http.MethodPut, "/api/schema/kinds/order", "Put the kinds in order"),
-		func(_ context.Context, in *orderInput) (*editOutput, error) {
-			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.OrderKinds(in.Body.Names) }), schemas.EditOpts{})
 		})
 
 	huma.Register(s.api, reg("add-prop", http.MethodPost, "/api/schema/props", "Add a property or a relation at the end"),

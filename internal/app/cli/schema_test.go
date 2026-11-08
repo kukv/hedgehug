@@ -46,7 +46,7 @@ func TestSchemaCheckProblems(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.writeSchemaFile(func(sc *schema.Schema) {
-		sc.Kinds[0].Template = "nope"
+		sc.Templates = &schema.Templates{Default: map[string]string{"task": "nope"}}
 		sc.Statuses[1].Name = "later" // the status of Alpha is gone
 	})
 	code, out, stderr := te.run("schema", "check")
@@ -54,7 +54,7 @@ func TestSchemaCheckProblems(t *testing.T) {
 		t.Fatalf("exit %d, stderr %q\n%s", code, stderr, out)
 	}
 	want := []string{
-		`schema.yaml: kinds[0].template: template "nope" does not exist`,
+		`schema.yaml: templates.default.task: template "nope" does not exist`,
 		"  hint: add templates/nope.md or change the name",
 		label(a) + " Alpha: status: unknown status \"todo\"",
 		"2 problems",

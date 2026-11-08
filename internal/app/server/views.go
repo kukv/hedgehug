@@ -28,7 +28,7 @@ type viewSaveInput struct {
 		KanbanWIP     *map[string]int `json:"kanban_wip,omitempty" doc:"The limit of each column, by its name; replaces the limits, and an empty object takes them off"`
 		GanttStart    *string         `json:"gantt_start,omitempty" doc:"The date property the bars start on"`
 		GanttEnd      *string         `json:"gantt_end,omitempty" doc:"The date property the bars end on"`
-		GanttRoadmap  *bool           `json:"gantt_roadmap,omitempty" doc:"Show the kinds of the container role only"`
+		GanttRoadmap  *bool           `json:"gantt_roadmap,omitempty" doc:"Show projects and epics only"`
 	}
 }
 
@@ -45,7 +45,7 @@ type viewPatchInput struct {
 		KanbanWIP     *map[string]int `json:"kanban_wip,omitempty" doc:"The limit of each column, by its name; replaces the limits, and an empty object takes them off"`
 		GanttStart    *string         `json:"gantt_start,omitempty" doc:"The date property the bars start on"`
 		GanttEnd      *string         `json:"gantt_end,omitempty" doc:"The date property the bars end on"`
-		GanttRoadmap  *bool           `json:"gantt_roadmap,omitempty" doc:"Show the kinds of the container role only"`
+		GanttRoadmap  *bool           `json:"gantt_roadmap,omitempty" doc:"Show projects and epics only"`
 	}
 }
 

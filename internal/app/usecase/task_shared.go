@@ -91,15 +91,6 @@ func WatchInTx(tx *store.Tx, task model.ULID, accts ...string) error {
 	return tx.PutTask(t)
 }
 
-// DefaultKind is the kind of a new task that names none.
-func DefaultKind(sc *schema.Schema) (string, error) {
-	k, ok := sc.DefaultKind()
-	if !ok {
-		return "", NewErr(KindInvalid, "schema.no_default", errors.New("the schema has no default kind; give one with --kind"), "what", "kind")
-	}
-	return k.Name, nil
-}
-
 // DefaultTodo is the status of a new task that names none.
 func DefaultTodo(sc *schema.Schema) (string, error) {
 	st, ok := sc.DefaultStatus(schema.CategoryTodo)

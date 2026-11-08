@@ -299,25 +299,6 @@ func TestMigrateRefusals(t *testing.T) {
 	}
 }
 
-func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
-	t.Parallel()
-	ts := usecasetest.New(t)
-	p, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Parent"})
-	c, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Child", Parent: "ME-1"})
-	before := ts.Head()
-	// A bug may not sit under a bug.
-	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetKind, Old: "task", New: "bug"}, false)
-	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
-	msg := err.Error()
-	if !strings.Contains(msg, "breaks the schema") || !strings.Contains(msg, "cannot be placed") || !strings.HasPrefix(msg, "ME-2 ("+c.ULID.String()+") Child: ") {
-		t.Errorf("message = %q", msg)
-	}
-	_ = p
-	if ts.Head() != before {
-		t.Error("a refused migration committed")
-	}
-}
-
 func TestMigrateUnknownDefinition(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

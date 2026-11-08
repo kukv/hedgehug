@@ -12,7 +12,7 @@ import (
 // compares across stores.
 type SortKey struct {
 	None  bool    // no value; last in either direction
-	Class int     // status: the category's place (todo 0, doing 1, done 2, canceled 3); kind: the role's place (container 0, work 1); 0 for the other fields
+	Class int     // status: the category's place (todo 0, doing 1, done 2, canceled 3); 0 for the other fields
 	Place int     // status, kind, enum, multi_enum: the value's place in the task's own schema (len when not in it); 0 for the other fields
 	Num   float64 // a number, date or datetime that parses
 	NumOK bool

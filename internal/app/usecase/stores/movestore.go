@@ -898,7 +898,7 @@ func (j *moveJob) validate(w *moveWork, dest *schema.Schema) error {
 	var lines []string
 	for i, src := range w.tasks {
 		t := moved[src.ULID]
-		parentKind, ancestors, err := store.Lineage(t, dest, read)
+		parentKind, ancestors, err := store.Lineage(t, read)
 		if err != nil {
 			return err
 		}

@@ -61,7 +61,7 @@ func TestSchemaEachCheck(t *testing.T) {
 	bad.Status = "weird"
 	putRaw(t, s, dir, bad)
 	s = rewriteSchema(t, dir, func(sc *schema.Schema) {
-		sc.Kinds[0].Template = "nope"
+		sc.Templates = &schema.Templates{Default: map[string]string{"task": "nope"}}
 		sc.Props = append(sc.Props, schema.Prop{Name: "label", Type: schema.TypeText})
 		sc.Scoped = []schema.Scoped{{Where: "project:" + model.NewULID().String()}}
 	})
@@ -73,7 +73,7 @@ func TestSchemaEachCheck(t *testing.T) {
 	if got := checks(fs); !slices.Equal(got, want) {
 		t.Fatalf("checks = %v, want %v\n%+v", got, want, fs)
 	}
-	if fs[0].Where != "schema.yaml: kinds[0].template" || !strings.Contains(fs[0].Msg, "nope") {
+	if fs[0].Where != "schema.yaml: templates.default.task" || !strings.Contains(fs[0].Msg, "nope") {
 		t.Errorf("template = %+v", fs[0])
 	}
 	if fs[1].Where != "schema.yaml: props.label" || fs[1].Msg != "queries cannot select by a property with this name" {

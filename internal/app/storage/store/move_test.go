@@ -328,10 +328,8 @@ func TestMoveInKeepsFormerIDs(t *testing.T) {
 
 func TestMoveInRefusesWhatTheSchemaDoes(t *testing.T) {
 	t.Parallel()
-	sc := schema.Default()
-	sc.Kinds = slices.DeleteFunc(sc.Kinds, func(k schema.Kind) bool { return k.Name == "bug" })
-	f := newMoveFixture(t, "SRC", "DST", sc)
-	f.g.Kind = "bug"
+	f := newMoveFixture(t, "SRC", "DST", schema.Default())
+	f.g.Status = "weird" // a status the destination lacks
 	err := f.moveIn(f.in())
 	var ve *ValidationError
 	if !errors.As(err, &ve) || ve.Task != f.g.ULID {

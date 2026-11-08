@@ -59,24 +59,6 @@ func TestSchemaEditRoundTrip(t *testing.T) {
 		t.Errorf("values = %v", v)
 	}
 
-	w = schemas.EditWrite{}
-	ts.call("POST", "/api/schema/kinds", map[string]any{"name": "spike", "role": "work", "anywhere": true, "color": "teal"}, 200, &w)
-	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Name != "spike" || k.Color != "teal" {
-		t.Errorf("spike = %+v", k)
-	}
-	w = schemas.EditWrite{}
-	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"color": "#aabbcc"}, 200, &w)
-	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Color != "#aabbcc" {
-		t.Errorf("spike = %+v", k)
-	}
-	w = schemas.EditWrite{}
-	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"color": ""}, 200, &w)
-	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Color != "" {
-		t.Errorf("spike = %+v", k)
-	}
-	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"label": "調査", "parents": []string{"root", "epic"}}, 200, nil)
-	ts.call("PUT", "/api/schema/kinds/order", map[string]any{"names": []string{"spike", "project", "epic", "story", "task", "bug"}}, 200, nil)
-	ts.call("DELETE", "/api/schema/kinds/spike", nil, 200, nil)
 	ts.call("POST", "/api/schema/props", map[string]any{"name": "area", "type": "text"}, 200, nil)
 	ts.call("PATCH", "/api/schema/props/area", map[string]any{"label": "領域"}, 200, nil)
 	ts.call("PUT", "/api/schema/props/order", map[string]any{"names": []string{"area", "priority", "start", "due", "estimate", "points"}}, 200, nil)
@@ -125,8 +107,14 @@ func TestSchemaEditErrors(t *testing.T) {
 		t.Errorf("name taken: %+v", e)
 	}
 	ts.problem("PUT", "/api/schema/statuses/order", map[string]any{"names": nil}, 400)
-	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{}}, 400)
-	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{"root"}, "anywhere": true}, 400)
+	for _, r := range []struct{ method, path string }{
+		{"POST", "/api/schema/kinds"}, {"PATCH", "/api/schema/kinds/bug"}, {"DELETE", "/api/schema/kinds/bug"}, {"PUT", "/api/schema/kinds/order"},
+	} {
+		if e := ts.problem(r.method, r.path, map[string]any{"name": "x"}, 404); e.Type != "http.404" && e.Type != "http.405" {
+			t.Errorf("%s %s: %+v", r.method, r.path, e)
+		}
+	}
+	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "kind", "old": "task", "new": "item"}, 400)
 }
 
 func TestSchemaEditPublishesSchemaChanged(t *testing.T) {
@@ -165,10 +153,6 @@ func TestSchemaEditRenameRewritesTasksInOneCommit(t *testing.T) {
 		}
 	}
 
-	ts.call("PATCH", "/api/schema/kinds/task", map[string]any{"name": "item"}, 200, nil)
-	if got := ts.uc.TaskByULID("me", u).Kind; got != "item" {
-		t.Errorf("kind = %s", got)
-	}
 	ts.call("PATCH", "/api/schema/props/priority", map[string]any{"name": "importance"}, 200, &w)
 	if _, ok := w.Schema.Props["importance"]; !ok {
 		t.Errorf("props = %v", w.Schema.PropOrder)

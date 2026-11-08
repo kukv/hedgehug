@@ -41,7 +41,7 @@ func violatesNow(t *testing.T, ts *usecasetest.Session, u model.ULID) bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk, anc, err := store.Lineage(tk, sc, s.Task)
+	pk, anc, err := store.Lineage(tk, s.Task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,16 +116,24 @@ func TestEditCountsANormalTaskAndTheDeletedOnes(t *testing.T) {
 	}
 }
 
+// dropHigh takes the value high off priority, which a task may still have.
+func dropHigh(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
+	keep := []schema.ValueEdit{{Name: "low", From: []string{"low"}}, {Name: "mid", From: []string{"mid"}}, {Name: "urgent", From: []string{"urgent"}}}
+	next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Values: &keep})
+	return next, ms, err
+}
+
 func TestEditUseAndCheckTogether(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	p := ts.AddProject("Web")
-	ts.AddTask("bug", func(t *model.Task) { t.Kind = "bug"; t.Parent = &p })
-	// Nothing uses epic, so the use passes; the check finds the bug.
-	_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		ps := []string{schema.Root}
-		return sc.ChangeKind("bug", schema.KindChange{Parents: &ps})
-	}, schemas.EditOpts{Use: []schemas.Use{{Target: schema.TargetKind, Name: "epic"}}, Check: true})
+	ts.AddTask("bug", func(t *model.Task) {
+		t.Parent = &p
+		t.Props = model.Fields{{Key: "priority", Value: propScalar("high")}}
+	})
+	// Nothing uses on_hold, so the use passes; the check finds the task
+	// whose priority is gone.
+	_, err := schemas.Edit(ts.Session, dropHigh, schemas.EditOpts{Use: []schemas.Use{{Target: schema.TargetStatus, Name: "on_hold"}}, Check: true})
 	if usecase.ProblemCode(err) != "schema.tasks_invalid" {
 		t.Fatalf("err = %v", err)
 	}
@@ -135,11 +143,11 @@ func TestEditRefusesNewViolations(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	p := ts.AddProject("Web")
-	ts.AddTask("bug", func(t *model.Task) { t.Kind = "bug"; t.Parent = &p })
-	_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		ps := []string{schema.Root}
-		return sc.ChangeKind("bug", schema.KindChange{Parents: &ps})
-	}, schemas.EditOpts{Check: true})
+	ts.AddTask("bug", func(t *model.Task) {
+		t.Parent = &p
+		t.Props = model.Fields{{Key: "priority", Value: propScalar("high")}}
+	})
+	_, err := schemas.Edit(ts.Session, dropHigh, schemas.EditOpts{Check: true})
 	if usecase.ProblemCode(err) != "schema.tasks_invalid" {
 		t.Fatalf("err = %v", err)
 	}
@@ -164,7 +172,7 @@ func TestEditIgnoresOldViolations(t *testing.T) {
 	}
 	l := "タスク"
 	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		return sc.ChangeKind("task", schema.KindChange{Label: &l})
+		return sc.ChangeStatus("todo", schema.StatusChange{Label: &l})
 	}, schemas.EditOpts{Check: true}); err != nil {
 		t.Fatalf("an old violation refuses the edit: %v", err)
 	}
@@ -181,13 +189,6 @@ func TestEditErrors(t *testing.T) {
 		{"not defined", plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveStatus("nope") }), "schema.not_defined"},
 		{"stale", plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.OrderStatuses([]string{"todo"}) }), "schema.order_stale"},
 		{"invalid", plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveStatus("todo") }), "schema.invalid"},
-		{"container", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			return sc.ChangeKind("epic", schema.KindChange{Default: true})
-		}, "schema.default_container"},
-		{"parents", plain(func(sc *schema.Schema) (*schema.Schema, error) {
-			sc = sc.AddKind(schema.Kind{Name: "sub", Role: schema.RoleWork, Parents: []string{"epic"}})
-			return sc.RemoveKind("epic")
-		}), "schema.parents_empty"},
 		{"not task_ref", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 			m := true
 			next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Multi: &m})
@@ -356,11 +357,11 @@ func TestEditValueSwapRewritesTasks(t *testing.T) {
 	}
 }
 
-func TestEditRenamesAPropAndKind(t *testing.T) {
+func TestEditRenamesAProp(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
-	n, k := "importance", "item"
+	n := "importance"
 	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 		next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Name: &n})
 		return next, ms, err
@@ -369,14 +370,6 @@ func TestEditRenamesAPropAndKind(t *testing.T) {
 	}
 	if taskNow(t, ts, a.ULID).Props.Get("importance") == nil {
 		t.Error("the property was not renamed in the task")
-	}
-	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		return sc.ChangeKind("task", schema.KindChange{Name: &k})
-	}, schemas.EditOpts{}); err != nil {
-		t.Fatal(err)
-	}
-	if got := taskNow(t, ts, a.ULID).Kind; got != "item" {
-		t.Errorf("kind = %s", got)
 	}
 }
 
@@ -392,59 +385,6 @@ func refList(us ...model.ULID) *yaml.Node {
 // under their new names.
 func TestEditRenameWithCheckedChange(t *testing.T) {
 	t.Parallel()
-	t.Run("kind name and parents", func(t *testing.T) {
-		t.Parallel()
-		ts := usecasetest.New(t)
-		p := ts.AddProject("Web")
-		a := ts.AddTask("a", func(t *model.Task) { t.Parent = &p })
-		n := "item"
-		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			ps := []string{"project", "epic"}
-			return sc.ChangeKind("task", schema.KindChange{Name: &n, Parents: &ps})
-		}, schemas.EditOpts{Check: true}); err != nil {
-			t.Fatal(err)
-		}
-		if got := taskNow(t, ts, a.ULID).Kind; got != "item" {
-			t.Errorf("kind = %s", got)
-		}
-	})
-	t.Run("parent kind name", func(t *testing.T) {
-		t.Parallel()
-		ts := usecasetest.New(t)
-		p := ts.AddProject("Web")
-		ts.AddTask("a", func(t *model.Task) { t.Parent = &p })
-		n := "folder"
-		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			return sc.ChangeKind("project", schema.KindChange{Name: &n})
-		}, schemas.EditOpts{Check: true}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	t.Run("kind name and role", func(t *testing.T) {
-		t.Parallel()
-		ts := usecasetest.New(t)
-		ts.AddProject("Web")
-		n, r := "folder", schema.RoleContainer
-		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			return sc.ChangeKind("project", schema.KindChange{Name: &n, Role: &r})
-		}, schemas.EditOpts{Check: true}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	t.Run("kind name and a new violation", func(t *testing.T) {
-		t.Parallel()
-		ts := usecasetest.New(t)
-		p := ts.AddProject("Web")
-		ts.AddTask("bug", func(t *model.Task) { t.Kind = "bug"; t.Parent = &p })
-		n := "defect"
-		_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			ps := []string{schema.Root}
-			return sc.ChangeKind("bug", schema.KindChange{Name: &n, Parents: &ps})
-		}, schemas.EditOpts{Check: true})
-		if usecase.ProblemCode(err) != "schema.tasks_invalid" {
-			t.Fatalf("err = %v", err)
-		}
-	})
 	t.Run("prop name and multi", func(t *testing.T) {
 		t.Parallel()
 		ts := usecasetest.New(t)

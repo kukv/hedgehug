@@ -42,7 +42,8 @@ type TaskView struct {
 
 	// Only in ls --tree --json and show --json.
 	Checklist *Count `json:"checklist,omitempty"`
-	Progress  *Count `json:"progress,omitempty"`
+	Progress  *Count `json:"progress,omitempty"` // of a project or an epic
+	Steps     *Count `json:"steps,omitempty"`    // of a story, a task or a bug: its steps
 
 	// Only in ls --tree --json.
 	Context  bool        `json:"context,omitempty"`  // shown only to connect the tasks found
@@ -172,11 +173,11 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 }
 
 // ListViewOf is the view of the task e as a row of a list: the task with its
-// checklist and progress.
+// checklist, progress and steps.
 func ListViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	v := TaskViewOf(ix, e)
 	v.Checklist = ChecklistOf(e)
-	v.Progress = ProgressOf(ix, e)
+	v.Progress, v.Steps = ProgressOf(ix, e), StepsOf(ix, e)
 	return v
 }
 

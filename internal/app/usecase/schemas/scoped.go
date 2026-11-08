@@ -108,7 +108,7 @@ func ScopedGet(ss *usecase.Session, arg string) (ScopedResult, error) {
 // back to the store's value, and the rest is kept, with the templates and the
 // keys schema.yaml has that hedgehug does not know. An override left with
 // nothing is removed. The project must be a task of a kind whose role is
-// container and not deleted (KindInvalid, scoped.not_container; KindConflict,
+// container and not deleted (KindInvalid, scoped.not_group; KindConflict,
 // task.deleted). A change that brings a problem schema.Check does not find in
 // schema.yaml now is KindInvalid, scoped.invalid, with the problems as Args
 // "problems"; nothing is written.
@@ -125,7 +125,7 @@ func ScopedSet(ss *usecase.Session, arg string, ch schema.ScopedChange) (ScopedR
 		return ScopedResult{}, err
 	}
 	id := ix.DisplayID(e)
-	if err := scopedContainer(ix.Schema(), id, e.Kind); err != nil {
+	if err := scopedGroup(id, e.Kind); err != nil {
 		return ScopedResult{}, err
 	}
 	if err := templatesExist(s, ch); err != nil {
@@ -169,7 +169,7 @@ func scopedGuard(id string, ulid model.ULID) func(*store.Tx, *schema.Schema) err
 		if t.DeletedAt != nil {
 			return usecase.NewErr(usecase.KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", id, id), "id", id)
 		}
-		return scopedContainer(cur, id, t.Kind)
+		return scopedGroup(id, t.Kind)
 	}
 }
 
@@ -228,11 +228,11 @@ func scopedInvalid(ps []schema.Problem) error {
 	return usecase.NewErr(usecase.KindInvalid, "scoped.invalid", fmt.Errorf("the override breaks the schema: %s", strings.Join(msgs, "; ")), "problems", msgs)
 }
 
-// scopedContainer refuses a kind of sc whose role is not container.
-func scopedContainer(sc *schema.Schema, id, kind string) error {
-	if k, ok := sc.Kind(kind); !ok || k.Role != schema.RoleContainer {
-		return usecase.NewErr(usecase.KindInvalid, "scoped.not_container",
-			fmt.Errorf("%s is a %s, which is not a container", id, kind), "id", id, "kind", kind)
+// scopedGroup refuses a kind that is not a group (a project or an epic).
+func scopedGroup(id, kind string) error {
+	if !schema.IsGroup(kind) {
+		return usecase.NewErr(usecase.KindInvalid, "scoped.not_group",
+			fmt.Errorf("%s is a %s; an override can be put on a project or an epic only", id, kind), "id", id, "kind", kind)
 	}
 	return nil
 }

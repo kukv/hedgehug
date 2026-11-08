@@ -374,7 +374,7 @@ func Show(ss *usecase.Session, arg string) (*usecase.ShowView, error) {
 		return nil, err
 	}
 	j := &usecase.ShowView{TaskView: usecase.TaskViewOf(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []usecase.CommentView{}, Reverse: map[string][]usecase.Ref{}, ReferencedBy: []usecase.Ref{}}
-	j.Checklist, j.Progress = usecase.ChecklistOf(e), usecase.ProgressOf(ix, e)
+	j.Checklist, j.Progress, j.Steps = usecase.ChecklistOf(e), usecase.ProgressOf(ix, e), usecase.StepsOf(ix, e)
 	if e.Broken == "" {
 		t, err := s.Task(e.ULID)
 		if err != nil {

@@ -40,7 +40,6 @@ func statuses(ss ...schema.Status) []schema.Status { return ss }
 // before epic).
 func twoSchemas(t *testing.T) (a, b config.StoreEntry) {
 	t.Helper()
-	root := []string{schema.Root}
 	sa := &schema.Schema{
 		Statuses: statuses(
 			schema.Status{Name: "todo", Category: schema.CategoryTodo, Default: true},
@@ -49,10 +48,6 @@ func twoSchemas(t *testing.T) (a, b config.StoreEntry) {
 			schema.Status{Name: "done", Category: schema.CategoryDone, Default: true},
 			schema.Status{Name: "canceled", Category: schema.CategoryCanceled, Default: true},
 		),
-		Kinds: []schema.Kind{
-			{Name: "project", Role: schema.RoleContainer, Parents: root},
-			{Name: "task", Role: schema.RoleWork, Parents: []string{schema.Root, "project"}, Default: true},
-		},
 		Props: schema.Props{
 			{Name: "size", Type: schema.TypeNumber},
 			{Name: "tier", Type: schema.TypeEnum, Values: []string{"gold", "silver"}},
@@ -65,10 +60,6 @@ func twoSchemas(t *testing.T) (a, b config.StoreEntry) {
 			schema.Status{Name: "done", Category: schema.CategoryDone, Default: true},
 			schema.Status{Name: "canceled", Category: schema.CategoryCanceled, Default: true},
 		),
-		Kinds: []schema.Kind{
-			{Name: "task", Role: schema.RoleWork, Parents: []string{schema.Root, "epic"}, Default: true},
-			{Name: "epic", Role: schema.RoleContainer, Parents: root},
-		},
 		Props: schema.Props{{Name: "tier", Type: schema.TypeEnum, Values: []string{"silver", "gold"}}},
 	}
 	return newStoreWith(t, "org-a", "API", sa), newStoreWith(t, "org-b", "WEB", sb)
@@ -456,7 +447,6 @@ func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
 // query.Run does when it is the only one that runs.
 func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
 	t.Parallel()
-	root := []string{schema.Root}
 	odd := &schema.Schema{
 		Statuses: statuses(
 			schema.Status{Name: "done", Category: schema.CategoryDone, Default: true},
@@ -464,7 +454,6 @@ func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
 			schema.Status{Name: "in_progress", Category: schema.CategoryDoing, Default: true},
 			schema.Status{Name: "canceled", Category: schema.CategoryCanceled, Default: true},
 		),
-		Kinds: []schema.Kind{{Name: "task", Role: schema.RoleWork, Parents: root, Default: true}},
 		Props: schema.Props{{Name: "size", Type: schema.TypeNumber}},
 	}
 	a := newStoreWith(t, "org-a", "API", odd)

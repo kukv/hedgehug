@@ -60,9 +60,7 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 	sc := ix.Schema()
 	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status, Body: in.Body, Repos: slices.Clone(in.Repos)}
 	if t.Kind == "" {
-		if t.Kind, err = usecase.DefaultKind(sc); err != nil {
-			return usecase.TaskResult{}, err
-		}
+		t.Kind = schema.DefaultKind
 	}
 	if t.Status == "" {
 		if t.Status, err = usecase.DefaultTodo(sc); err != nil {
