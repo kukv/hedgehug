@@ -122,7 +122,7 @@ func TestQueryStoreFilter(t *testing.T) {
 		q    string
 		want []string
 	}{
-		{"", []string{"a-todo", "a-review", "a-project", "b-wip", "b-todo", "b-epic"}},
+		{"", []string{"a-todo", "a-review", "a-project", "fixture project", "b-wip", "b-todo", "b-epic", "fixture project"}},
 		{"store:org-a kind:task", []string{"a-todo", "a-review"}},
 		{"-store:org-a kind:task", []string{"b-wip", "b-todo"}},
 		{"store:org-b kind:epic", []string{"b-epic"}},
@@ -136,7 +136,7 @@ func TestQueryStoreFilter(t *testing.T) {
 		}
 	}
 	// the stores come in config order whatever the order within them
-	if got := queryTitles(t, set, "", ""); !strings.HasPrefix(got[0], "a-") || !strings.HasPrefix(got[5], "b-") {
+	if got := queryTitles(t, set, "", ""); !strings.HasPrefix(got[0], "a-") || !strings.HasPrefix(got[4], "b-") {
 		t.Errorf("without sort: = %v; want the stores in order", got)
 	}
 	if got := queryTitles(t, set, "store:org-a", "org-b"); got != nil {
@@ -216,10 +216,10 @@ func TestQueryValueOfAnotherSchemaMatchesNothingHere(t *testing.T) {
 		"status:review":     {"a-review"},
 		"status:wip":        {"b-wip"},
 		"status:review,wip": {"a-review", "b-wip"},
-		"-status:review":    {"a-todo", "a-project", "b-wip", "b-todo", "b-epic"},
+		"-status:review":    {"a-todo", "a-project", "fixture project", "b-wip", "b-todo", "b-epic", "fixture project"},
 		"kind:epic":         {"b-epic"},
-		"-kind:epic":        {"a-todo", "a-review", "a-project", "b-wip", "b-todo"},
-		"kind:project,epic": {"a-project", "b-epic"},
+		"-kind:epic":        {"a-todo", "a-review", "a-project", "fixture project", "b-wip", "b-todo", "fixture project"},
+		"kind:project,epic": {"a-project", "fixture project", "b-epic", "fixture project"},
 		"tier:gold":         {"b-todo"},
 	} {
 		if got := queryTitles(t, set, q, ""); !sameSet(got, want) {
@@ -245,7 +245,7 @@ func TestQuerySortStatusByCategoryThenPlaceThenStore(t *testing.T) {
 	set := twoStoreSet(t)
 	// the todo category first (place 0 in both: store order), then the
 	// doing one: b-wip (place 1) before a-review (place 2)
-	want := []string{"a-todo", "a-project", "b-todo", "b-epic", "b-wip", "a-review"}
+	want := []string{"a-todo", "a-project", "fixture project", "b-todo", "b-epic", "fixture project", "b-wip", "a-review"}
 	if got := queryTitles(t, set, "sort:status", ""); !reflect.DeepEqual(got, want) {
 		t.Fatalf("sort:status = %v; want %v", got, want)
 	}
@@ -259,8 +259,8 @@ func TestQuerySortKindByRoleThenPlaceThenStore(t *testing.T) {
 	t.Parallel()
 	set := twoStoreSet(t)
 	got := queryTitles(t, set, "status:todo sort:kind", "")
-	// containers first: a-project (place 0), b-epic (place 1); then the work: b-todo (task, place 0), a-todo (task, place 1)
-	want := []string{"a-project", "b-epic", "b-todo", "a-todo"}
+	// the fixed order of the kinds: the projects (a-project and the fixture project of each store), the epic, then the tasks, in store order
+	want := []string{"a-project", "fixture project", "fixture project", "b-epic", "a-todo", "b-todo"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("sort:kind = %v; want %v", got, want)
 	}
@@ -294,7 +294,7 @@ func TestQuerySortTiesAreInStoreOrder(t *testing.T) {
 	for _, e := range res.Entries {
 		stores = append(stores, e.Store.Name)
 	}
-	if !reflect.DeepEqual(stores, []string{"org-a", "org-b", "org-b"}) {
+	if !reflect.DeepEqual(stores, []string{"org-a", "org-b", "org-a", "org-b", "org-b"}) { // the fixture projects, then the three "same"
 		t.Errorf("stores = %v; want ties in store order", stores)
 	}
 }
@@ -302,15 +302,15 @@ func TestQuerySortTiesAreInStoreOrder(t *testing.T) {
 func TestQuerySortDescendingAcrossStores(t *testing.T) {
 	t.Parallel()
 	set := twoStoreSet(t)
-	want := []string{"b-wip", "b-todo", "b-epic", "a-todo", "a-review", "a-project"}
+	want := []string{"fixture project", "fixture project", "b-wip", "b-todo", "b-epic", "a-todo", "a-review", "a-project"}
 	if got := queryTitles(t, set, "sort:-title", ""); !reflect.DeepEqual(got, want) {
 		t.Errorf("sort:-title = %v; want %v", got, want)
 	}
 	// a number: only org-a has size, so org-b finds nothing; the task with no
 	// value comes last in either direction
 	for q, want := range map[string][]string{
-		"sort:size":  {"a-todo", "a-review", "a-project"},
-		"sort:-size": {"a-review", "a-todo", "a-project"},
+		"sort:size":  {"a-todo", "a-review", "a-project", "fixture project"},
+		"sort:-size": {"a-review", "a-todo", "a-project", "fixture project"},
 	} {
 		if got := queryTitles(t, set, q, ""); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s = %v; want %v", q, got, want)
@@ -323,10 +323,10 @@ func TestQuerySortWithinGroupsAcrossStores(t *testing.T) {
 	set := twoStoreSet(t)
 	for q, want := range map[string]map[string][]string{
 		"group:status sort:title": {
-			"todo": {"a-project", "a-todo", "b-epic", "b-todo"}, "review": {"a-review"}, "wip": {"b-wip"},
+			"todo": {"a-project", "a-todo", "b-epic", "b-todo", "fixture project", "fixture project"}, "review": {"a-review"}, "wip": {"b-wip"},
 		},
 		"group:status sort:-title": {
-			"todo": {"b-todo", "b-epic", "a-todo", "a-project"}, "review": {"a-review"}, "wip": {"b-wip"},
+			"todo": {"fixture project", "fixture project", "b-todo", "b-epic", "a-todo", "a-project"}, "review": {"a-review"}, "wip": {"b-wip"},
 		},
 	} {
 		parsed, _ := query.Parse(q)
@@ -367,11 +367,11 @@ func TestQueryGroupJoinsAcrossStores(t *testing.T) {
 	if want := []string{"todo", "review", "wip"}; !reflect.DeepEqual(keys, want) {
 		t.Errorf("group keys = %v; want %v", keys, want)
 	}
-	if sizes["todo"] != 4 {
-		t.Errorf("todo has %d tasks; want 4 from both stores", sizes["todo"])
+	if sizes["todo"] != 6 { // four, and the fixture project of each store
+		t.Errorf("todo has %d tasks; want 6 from both stores", sizes["todo"])
 	}
-	if len(res.Entries) != 6 {
-		t.Errorf("entries = %d; want the groups' tasks in order, 6", len(res.Entries))
+	if len(res.Entries) != 8 {
+		t.Errorf("entries = %d; want the groups' tasks in order, 8", len(res.Entries))
 	}
 	if len(res.Stores) != 2 {
 		t.Errorf("stores = %d", len(res.Stores))
@@ -416,7 +416,7 @@ func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
 	a, b := twoSchemas(t)
 	parents := mounttest.PutTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "a-parent", "project" })
 	mounttest.PutTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "a-child", &parents[0].ULID })
-	mounttest.PutTasks(t, b, 1, func(_ int, task *model.Task) { task.Title = "b-task" })
+	mounttest.PutTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "b-task", "project" })
 	set := usecasetest.OpenSet(t, a, b)
 	// API-1 is in org-a only; org-b finds nothing and that is no error
 	if got := queryTitles(t, set, "parent:API-1", ""); !reflect.DeepEqual(got, []string{"a-child"}) {
@@ -458,8 +458,8 @@ func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
 	}
 	a := newStoreWith(t, "org-a", "API", odd)
 	_, b := twoSchemas(t)
-	putSpecs(t, a, spec{title: "t", kind: "task", status: "todo", size: "1"}, spec{title: "d", kind: "task", status: "done", size: "1"}, spec{title: "p", kind: "task", status: "in_progress", size: "1"})
-	putSpecs(t, b, spec{title: "b", kind: "task", status: "todo"})
+	putSpecs(t, a, spec{title: "t", kind: "project", status: "todo", size: "1"}, spec{title: "d", kind: "project", status: "done", size: "1"}, spec{title: "p", kind: "project", status: "in_progress", size: "1"})
+	putSpecs(t, b, spec{title: "b", kind: "project", status: "todo"})
 	set := usecasetest.OpenSet(t, a, b)
 	for _, only := range []string{"", "org-a"} {
 		q := "sort:status"
@@ -491,8 +491,8 @@ func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
 func TestQueryGroupWithoutValueComesLast(t *testing.T) {
 	t.Parallel()
 	a, b := twoSchemas(t)
-	putSpecs(t, a, spec{title: "a1", kind: "task", status: "todo", tier: "silver"}, spec{title: "a2", kind: "task", status: "todo"})
-	putSpecs(t, b, spec{title: "b1", kind: "task", status: "todo", tier: "gold"}, spec{title: "b2", kind: "task", status: "todo"})
+	putSpecs(t, a, spec{title: "a1", kind: "project", status: "todo", tier: "silver"}, spec{title: "a2", kind: "project", status: "todo"})
+	putSpecs(t, b, spec{title: "b1", kind: "project", status: "todo", tier: "gold"}, spec{title: "b2", kind: "project", status: "todo"})
 	set := usecasetest.OpenSet(t, a, b)
 	parsed, _ := query.Parse("group:tier")
 	res, err := browse.Query(set, parsed, "", noOptions)
@@ -525,7 +525,7 @@ func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
 	set := usecasetest.OpenSet(t, a, b)
 	// the negation in org-b, which lacks API-1, matches all its tasks
 	got := queryTitles(t, set, "-parent:API-1", "")
-	if !sameSet(got, []string{"a-p1", "a-p2", "a-c2", "b-p", "b-c"}) {
+	if !sameSet(got, []string{"a-p1", "a-p2", "a-c2", "b-p", "b-c", "fixture project"}) {
 		t.Errorf("-parent:API-1 = %v", got)
 	}
 	// one value is missing in each store
@@ -551,7 +551,7 @@ func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
 	}
 	// org-a:API-1 is org-a's only, so its negation matches all of org-b
 	got = queryTitles(t, set, "-parent:org-a:API-1", "")
-	if !sameSet(got, []string{"a-p1", "a-p2", "a-c2", "b-p", "b-c"}) {
+	if !sameSet(got, []string{"a-p1", "a-p2", "a-c2", "b-p", "b-c", "fixture project"}) {
 		t.Errorf("-parent:org-a:API-1 = %v", got)
 	}
 }
