@@ -270,7 +270,9 @@ describe("errorMessage", () => {
     expect(errorMessage(err("store.newer_format", { name: "work" }))).toBe(
       "work は新しい形式です。Hedgehug を更新してください",
     );
-    expect(errorMessage(err("store.convert_unsynced"))).toContain("先に同期してください");
+    expect(errorMessage(err("store.convert_unsynced"))).toContain(
+      "同期できなかったため変換しませんでした",
+    );
     expect(errorMessage(err("sync.format_diverged"))).toContain("hh store convert");
   });
 

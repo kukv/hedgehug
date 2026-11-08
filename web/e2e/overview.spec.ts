@@ -1,9 +1,8 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - /workspaces/<store>/<ulid> is the overview of a workspace: the text "<n> 件 · プロジェクト <m>"
 //     (every task that is not deleted, projects included), the legend "未着手 <n>", "進行中 <n>",
-//     "完了 <n>", "中止 <n>", and two regions: "プロジェクト" (a row for each project: its ID, title
-//     and progress "<done>/<total>") and "プロジェクトの外のタスク" (the tasks at the root that are
-//     not projects, in rank order; the link "ツリーで開く" goes to the tree tab of the workspace)
+//     "完了 <n>", "中止 <n>", and the region "プロジェクト" (a row for each project: its ID, title
+//     and progress "<done>/<total>"); the root holds only projects, so nothing else is listed
 //   - the buttons "タスクを作成" and "プロジェクトを作成" open the create dialogs for this workspace
 //   - the overview follows the store: a change the CLI makes changes the counts and the lists
 import { expect, test } from "./harness";
@@ -44,14 +43,8 @@ test("the overview counts the tasks by category and lists the projects and the l
   );
   await expect(projects.getByRole("row", { name: new RegExp(busy.id) })).toBeVisible();
 
-  // the root holds only projects, so nothing is outside them
-  const loosely = page.getByRole("region", { name: "プロジェクトの外のタスク" });
-  await expect(loosely.getByText("プロジェクトの外のタスクはありません")).toBeVisible();
   // the children of the project are not rows of the list of projects
   await expect(projects.getByText("Write notes")).toHaveCount(0);
-
-  await loosely.getByRole("link", { name: "ツリーで開く" }).click();
-  await expect(page).toHaveURL(new RegExp(`/workspaces/demo/${ws.ulid}/tree$`));
 });
 
 test("the overview follows what the CLI changes", async ({ page, hh }) => {

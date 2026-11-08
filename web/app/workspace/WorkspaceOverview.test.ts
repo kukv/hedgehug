@@ -165,27 +165,7 @@ describe("WorkspaceOverview", () => {
     );
   });
 
-  it("lists the tasks outside the projects in rank order, without the children of a project", async () => {
-    setup(all);
-    const section = await screen.findByRole("region", { name: "プロジェクトの外のタスク" });
-    const ids = within(section)
-      .getAllByRole("row")
-      .slice(1)
-      .map((r) => r.textContent ?? "");
-    expect(ids).toHaveLength(4);
-    expect(ids[0]).toContain("REL-22");
-    expect(ids[1]).toContain("REL-18");
-    expect(ids[2]).toContain("REL-3");
-    expect(ids[3]).toContain("REL-4");
-    expect(within(section).queryByText("子のタスク")).toBeNull();
-    const tree = router.href({ name: "workspace", store: "shared", ulid: "W1", tab: "tree" });
-    expect(within(section).getByRole("link", { name: "ツリーで開く" })).toHaveAttribute(
-      "href",
-      tree,
-    );
-  });
-
-  it("follows tasks.changed: a task added from outside changes the counts and the list", async () => {
+  it("follows tasks.changed: a task added from outside changes the counts", async () => {
     const { rows, conn } = setup(all);
     await screen.findByText("6 件 · プロジェクト 1");
 
@@ -197,7 +177,6 @@ describe("WorkspaceOverview", () => {
 
     expect(await screen.findByText("7 件 · プロジェクト 1")).toBeInTheDocument();
     expect(screen.getByText("進行中 4")).toBeInTheDocument();
-    expect(screen.getByText("あとから足した")).toBeInTheDocument();
   });
 
   it("follows tasks.changed: a project that is gone leaves the list", async () => {

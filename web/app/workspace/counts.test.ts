@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { schema, task } from "../tree/fixtures";
-import { countByCategory, projectsOf, rootsOf } from "./counts";
+import { countByCategory, projectsOf } from "./counts";
 
 describe("countByCategory", () => {
   it("counts every task by the category of its status, projects included", () => {
@@ -33,7 +33,7 @@ describe("countByCategory", () => {
   });
 });
 
-describe("projectsOf and rootsOf", () => {
+describe("projectsOf", () => {
   const tasks = [
     task("T9", "task", null, { rank: "c" }),
     task("P2", "project", null, { rank: "b" }),
@@ -46,14 +46,9 @@ describe("projectsOf and rootsOf", () => {
     expect(projectsOf(tasks).map((t) => t.ulid)).toEqual(["P1", "P2"]);
   });
 
-  it("lists the tasks at the root that are not projects, in rank order", () => {
-    expect(rootsOf(tasks).map((t) => t.ulid)).toEqual(["E1", "T9"]);
-  });
-
   it("does not change the list it is given", () => {
     const before = tasks.map((t) => t.ulid);
     projectsOf(tasks);
-    rootsOf(tasks);
     expect(tasks.map((t) => t.ulid)).toEqual(before);
   });
 });

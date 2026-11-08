@@ -21,8 +21,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               menu of menuitems, named by the label ("ステータス", "優先度"); a date
 //               property is an input labelled by its label ("期限")
 //   Overview    /workspaces/<store>/<ulid> shows "<n> 件 · プロジェクト <m>", the legend "未着手 <n>"
-//               ... "中止 <n>" (exact text), and the regions "プロジェクト" and "プロジェクトの外の
-//               タスク" (name them exactly: the second name starts with the first), whose rows are
+//               ... "中止 <n>" (exact text), and the region "プロジェクト", whose rows are
 //               named by the ID and the title; the buttons "タスクを作成" and "プロジェクトを作成"
 //   Undo        the palette command "直前の操作を取り消す"; the toast says "<ID> の変更を取り消しました"
 //   Kanban      the board is the section "カンバンの盤面": a list for each column, ul[data-column=

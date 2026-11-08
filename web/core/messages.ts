@@ -226,8 +226,11 @@ const messages: Record<string, Make> = {
     `${str(a, "name") ? `${str(a, "name")} は` : "この Store は"}古い形式です。hh store convert で新しい形式にしてください`,
   "store.newer_format": (a) =>
     `${str(a, "name") ? `${str(a, "name")} は` : "この Store は"}新しい形式です。Hedgehug を更新してください`,
-  "store.convert_unsynced": () =>
-    "Store が remote と揃っていないため変換できません。先に同期してください（remote に Store にない変更があるか、まだ push していない変更があります）",
+  "store.convert_unsynced": (_, e) =>
+    withDetail(
+      "変換の前に remote と同期しようとしましたが、同期できなかったため変換しませんでした。原因を直してから、もう一度 hh store convert を実行してください",
+      e,
+    ),
   "store.locked": () => "別の hh が書き込み中です。少し待ってからやり直してください",
   "store.gone": () =>
     "Store のディレクトリが削除されたか入れ替わりました。もう一度実行してください",

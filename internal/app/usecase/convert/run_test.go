@@ -418,27 +418,68 @@ func TestRunPushesWhatItConverts(t *testing.T) {
 	}
 }
 
-func TestRunRefusesAnUnsyncedStore(t *testing.T) {
-	t.Parallel()
-	// changes that are not pushed
-	f := newRemoteFx(t)
-	commitRaw(t, f.ts, "not pushed", map[string]string{"notes.txt": "x"})
-	before := headOf(t, f.ts)
-	_, err := Run(f.ts.Session, Options{}, false)
-	wantCode(t, err, usecase.KindConflict, "store.convert_unsynced")
-	if headOf(t, f.ts) != before || formatOf(t, f.ts) != 1 {
-		t.Error("the refused conversion wrote")
+// wantConvertedAndPushed checks that ts is converted, that origin has exactly its head, and that the
+// files are in its working tree.
+func wantConvertedAndPushed(t *testing.T, f *remoteFx, ts *usecasetest.Session, files ...string) {
+	t.Helper()
+	if formatOf(t, ts) != model.StoreFormat {
+		t.Errorf("format = %d", formatOf(t, ts))
 	}
-	// a dry run is not refused for it: it only lists
-	if _, err := Run(f.ts.Session, Options{}, true); err != nil {
-		t.Errorf("dry run: %v", err)
+	if originHead(t, f.remote) != headOf(t, ts) {
+		t.Error("origin is not at the head of the store")
 	}
+	for _, rel := range files {
+		if _, err := os.Stat(filepath.Join(storeDir(t, ts), filepath.FromSlash(rel))); err != nil {
+			t.Errorf("%s was lost: %v", rel, err)
+		}
+	}
+}
 
-	// changes of the remote that the store lacks
-	g := newRemoteFx(t)
-	pushElsewhere(t, g)
-	_, err = Run(g.ts.Session, Options{}, false)
-	wantCode(t, err, usecase.KindConflict, "store.convert_unsynced")
+// An unsynced store whose origin is in the same format is synced in that format first, and then
+// converted and pushed, by the one command.
+func TestRunSyncsFirstInTheSameFormat(t *testing.T) {
+	t.Parallel()
+	t.Run("changes not pushed", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoteFx(t)
+		commitRaw(t, f.ts, "not pushed", map[string]string{"notes.txt": "x"})
+		if _, err := Run(f.ts.Session, Options{}, false); err != nil {
+			t.Fatal(err)
+		}
+		wantConvertedAndPushed(t, f, f.ts, "notes.txt")
+	})
+	t.Run("changes of origin the store lacks", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoteFx(t)
+		pushElsewhere(t, f)
+		if _, err := Run(f.ts.Session, Options{}, false); err != nil {
+			t.Fatal(err)
+		}
+		wantConvertedAndPushed(t, f, f.ts, "notes.txt")
+	})
+	t.Run("both", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoteFx(t)
+		pushFile(t, f, "remote.txt", "r")
+		commitRaw(t, f.ts, "not pushed", map[string]string{"local.txt": "l"})
+		if _, err := Run(f.ts.Session, Options{}, false); err != nil {
+			t.Fatal(err)
+		}
+		wantConvertedAndPushed(t, f, f.ts, "remote.txt", "local.txt")
+	})
+	t.Run("a dry run says it and writes nothing", func(t *testing.T) {
+		t.Parallel()
+		f := newRemoteFx(t)
+		commitRaw(t, f.ts, "not pushed", map[string]string{"notes.txt": "x"})
+		before, remote := headOf(t, f.ts), originHead(t, f.remote)
+		reports, err := Run(f.ts.Session, Options{}, true)
+		if err != nil || len(reports) == 0 || !strings.Contains(strings.Join(reports[0].Lines, "\n"), "先に古い形式のまま") {
+			t.Fatalf("dry run = %+v, %v", reports, err)
+		}
+		if headOf(t, f.ts) != before || originHead(t, f.remote) != remote || formatOf(t, f.ts) != 1 {
+			t.Error("the dry run wrote")
+		}
+	})
 }
 
 // pushElsewhere puts a commit on origin that the store of f.ts lacks, as a

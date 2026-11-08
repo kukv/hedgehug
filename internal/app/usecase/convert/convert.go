@@ -27,10 +27,12 @@ var steps = []Step{
 // writes nothing. Otherwise it writes the steps as one commit (op convert)
 // and, for a store with a remote, pushes it.
 //
-// A store with a remote is converted only when it is in sync with it: origin
-// has no commit the store lacks, and the store has none origin lacks
-// (store.convert_unsynced). The exceptions are the clones origin has gone
-// ahead of in format, which the fetch shows:
+// A store with a remote is converted in sync with it. When origin is in the
+// same format and the two differ (origin has a commit the store lacks, or the
+// store has one origin lacks), the store is first synced in that format (fetch,
+// merge, push), and then converted and pushed. Only when that sync fails is it
+// store.convert_unsynced, with the cause. The clones origin has gone ahead of
+// in format, which the fetch shows, are the other case:
 //   - With nothing not pushed, the clone goes to origin by fast-forward. When
 //     origin is in a format that is not the newest yet, the steps that are
 //     left are then converted and pushed as usual.
@@ -82,6 +84,13 @@ func Run(ss *usecase.Session, opt Options, dryRun bool) ([]Report, error) {
 	}
 
 	var reports []Report
+	// The same old format on both sides: sync first, as the format allows.
+	if p.syncFirst {
+		if _, err := ss.RunSync(s, syncOpt, true); err != nil {
+			return nil, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
+				fmt.Errorf("the sync before the conversion failed, so the store is not converted: %w", err))
+		}
+	}
 	// A clone with changes it has not pushed converts them to the format of
 	// origin first; the sync merges.
 	if p.diverged {
@@ -157,6 +166,9 @@ func dryRunOf(r *gitrepo.Repo, opt Options, from int, p plan) ([]Report, error) 
 	at, err := r.Head()
 	if err != nil {
 		return nil, err
+	}
+	if p.syncFirst {
+		reports = append(reports, Report{From: from, To: from, Lines: []string{"先に古い形式のまま remote と同期する（--dry-run のため何も書かない）"}})
 	}
 	if p.fastForward {
 		if at, err = r.RemoteHead("origin"); err != nil {
@@ -252,13 +264,14 @@ type plan struct {
 	fastForward bool // nothing not pushed, origin ahead in format: go to origin
 	diverged    bool // changes not pushed, origin ahead in format: convert them to format
 	format      int  // the format of origin, for the two above
+	syncFirst   bool // origin in the same format, not in sync: sync before converting
 }
 
 // checkSynced is the zero plan when the store is in sync with origin, as of
 // the fetch that was just made, or when origin has no commit at all (nothing
 // the store could differ from). When origin is in a format ahead of from, but
 // not past the newest, the plan is fastForward (the store has nothing origin
-// lacks) or diverged (it has). Otherwise it is store.convert_unsynced, or
+// lacks) or diverged (it has). Otherwise it is syncFirst, or
 // store.newer_format for an origin this version cannot read.
 func checkSynced(r *gitrepo.Repo, from int) (plan, error) {
 	remote, err := r.RemoteHead("origin")
@@ -290,8 +303,8 @@ func checkSynced(r *gitrepo.Repo, from int) (plan, error) {
 	case !has && ferr == nil && rf > from && rf <= model.StoreFormat:
 		return plan{fastForward: unpushed == 0, diverged: unpushed > 0, format: rf}, nil
 	}
-	return plan{}, usecase.NewErr(usecase.KindConflict, "store.convert_unsynced",
-		errors.New("the store is not in sync with its remote, so it is not converted; sync it first (the remote has changes the store lacks, or the store has changes it has not pushed)"))
+	// The same format, or one origin's files do not tell: a sync merges them.
+	return plan{syncFirst: true}, nil
 }
 
 // gitSource is the files of a commit's tree. A file that cannot be read is

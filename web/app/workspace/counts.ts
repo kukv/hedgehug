@@ -28,9 +28,3 @@ const byRank = (a: TaskView, b: TaskView): number =>
 export function projectsOf(tasks: readonly TaskView[]): TaskView[] {
   return tasks.filter((t) => t.kind === "project").sort(byRank);
 }
-
-// rootsOf lists the tasks put straight at the root of the workspace, outside
-// every project, in rank order.
-export function rootsOf(tasks: readonly TaskView[]): TaskView[] {
-  return tasks.filter((t) => !t.parent && t.kind !== "project").sort(byRank);
-}
