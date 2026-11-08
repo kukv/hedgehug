@@ -295,7 +295,7 @@ func TestRestoreAtErrors(t *testing.T) {
 func TestRestoreAtRefusesDeletedParent(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	for _, in := range []tasks.AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}} {
+	for _, in := range []tasks.AddInput{{Title: "p"}, {Title: "q"}, {Title: "c", Parent: "ME-1"}} {
 		if _, err := tasks.Add(ts.Session, in); err != nil {
 			t.Fatal(err)
 		}
@@ -305,13 +305,13 @@ func TestRestoreAtRefusesDeletedParent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-2", Root: true}); err != nil {
+	if _, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-3", Parent: "ME-2"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tasks.Remove(ts.Session, "ME-1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = tasks.RestoreAt(ts.Session, "ME-2", head.String())
+	_, err = tasks.RestoreAt(ts.Session, "ME-3", head.String())
 	usecasetest.WantErr(t, err, usecase.KindConflict, "task.parent_deleted")
 }
 

@@ -17,8 +17,8 @@ func TestMoveToWorkspaceDetachesSprintAndReleases(t *testing.T) {
 	mySprint, myRelease := ts.PutSprintRelease(me, "S3", "v1")
 	gone := model.NewULID()
 	ts.WriteAndCommit(model.ReleasePath(gone), "this is not a release\n") // a file that cannot be read
-	ts.AddTask("parent", func(t *model.Task) { t.Workspace, t.Sprint, t.Releases = me, &mySprint, []model.ULID{myRelease} })
-	ts.AddTask("dangling", func(t *model.Task) { t.Workspace, t.Releases = me, []model.ULID{gone} })
+	ts.AddTask("parent", func(t *model.Task) { t.Kind, t.Workspace, t.Sprint, t.Releases = "project", me, &mySprint, []model.ULID{myRelease} })
+	ts.AddTask("dangling", func(t *model.Task) { t.Kind, t.Workspace, t.Releases = "project", me, []model.ULID{gone} })
 
 	// The sprint S3 and the release v1 are of "me", not of "api", so they go.
 	res, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-1", Workspace: "api"})
@@ -57,7 +57,7 @@ func TestMoveToWorkspaceDetachesFromSubtree(t *testing.T) {
 	ts.AddWorkspace("api", "API")
 	me := ts.WorkspaceULID("me")
 	sp, _ := ts.PutSprintRelease(me, "S3", "v1")
-	parent := ts.AddTask("parent", func(t *model.Task) { t.Workspace = me })
+	parent := ts.AddTask("parent", func(t *model.Task) { t.Kind, t.Workspace = "project", me })
 	ts.AddTask("kid", func(t *model.Task) { t.Workspace, t.Parent, t.Sprint = me, &parent.ULID, &sp })
 	res, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-1", Workspace: "api"})
 	if err != nil {
@@ -73,8 +73,8 @@ func TestMoveWithinWorkspaceKeepsSprint(t *testing.T) {
 	ts := usecasetest.New(t)
 	me := ts.WorkspaceULID("me")
 	sp, rel := ts.PutSprintRelease(me, "S3", "v1")
-	ts.AddTask("a", func(t *model.Task) { t.Workspace, t.Sprint, t.Releases = me, &sp, []model.ULID{rel} })
-	ts.AddTask("b", func(t *model.Task) { t.Workspace = me })
+	ts.AddTask("a", func(t *model.Task) { t.Kind, t.Workspace, t.Sprint, t.Releases = "project", me, &sp, []model.ULID{rel} })
+	ts.AddTask("b", func(t *model.Task) { t.Kind, t.Workspace = "project", me })
 	res, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-1", After: "ME-2"})
 	if err != nil {
 		t.Fatal(err)

@@ -43,17 +43,20 @@ func TestMoveParentAndOrder(t *testing.T) {
 	if got, want := strings.Join(ts.Order(ts.WorkspaceULID("me"), nil), " "), "ME-1 ME-3 ME-2"; got != want {
 		t.Errorf("order after --after = %s; want %s", got, want)
 	}
-	if _, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-1", Parent: "ME-2"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "d", Parent: "ME-2"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-4", Parent: "ME-1"}); err != nil {
 		t.Fatal(err)
 	}
 	_, ix, _ := ts.Open()
-	p, _ := ts.Resolve(ix, "ME-2")
-	if got, want := strings.Join(ts.Order(ts.WorkspaceULID("me"), &p.ULID), " "), "ME-1"; got != want {
-		t.Errorf("children of ME-2 = %s; want %s", got, want)
+	p, _ := ts.Resolve(ix, "ME-1")
+	if got, want := strings.Join(ts.Order(ts.WorkspaceULID("me"), &p.ULID), " "), "ME-4"; got != want {
+		t.Errorf("children of ME-1 = %s; want %s", got, want)
 	}
-	// ME-1 is under ME-2 now, so ME-2 under ME-1 would be a cycle; the store
-	// refuses it.
-	_, err = tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-2", Parent: "ME-1"})
+	// ME-4 is under ME-1 now, so ME-1 under ME-4 would be a cycle (and a
+	// project under a task); the store refuses it.
+	_, err = tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-1", Parent: "ME-4"})
 	// The store's error is not wrapped in an *Error; classify gives it its Code.
 	if c := usecase.Classify(err); c == nil || c.Kind != usecase.KindInvalid || c.Code != "schema.violation" {
 		t.Errorf("classify(%v) = %+v; want KindInvalid schema.violation", err, c)
