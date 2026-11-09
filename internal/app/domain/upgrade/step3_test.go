@@ -125,25 +125,53 @@ func TestTask2to3JoinsWhatTheFieldHoldsAndCollapsesDuplicates(t *testing.T) {
 	}
 }
 
-func TestTask2to3WithoutADefinitionMovesOnlyULIDs(t *testing.T) {
+func TestTask2to3WithoutADefinitionMovesTheULIDsAndDropsTheRest(t *testing.T) {
 	t.Parallel()
 	id := newIDs()
 	// the definitions went (a store converted by an older version, or one that
-	// removed them); a value that is a ULID is a relation, one that is not stays
+	// removed them); the values that are ULIDs are relations, the others go
 	props := "duplicates: [" + id.a.String() + "]\nclones: " + id.b.String() + "\nrelates: [" + id.c.String() + ", not-an-id]\ncauses: not-an-id\n"
 	got := up(t, task2(t, props, nil), "")
-	if !eq(got.Duplicates, []model.ULID{id.a}) || !eq(got.Clones, []model.ULID{id.b}) {
-		t.Errorf("duplicates %v, clones %v", got.Duplicates, got.Clones)
+	if !eq(got.Duplicates, []model.ULID{id.a}) || !eq(got.Clones, []model.ULID{id.b}) || !eq(got.Relates, []model.ULID{id.c}) {
+		t.Errorf("duplicates %v, clones %v, relates %v", got.Duplicates, got.Clones, got.Relates)
 	}
-	if len(got.Relates) != 0 || len(got.Causes) != 0 {
-		t.Errorf("relates %v, causes %v; a property with a value that is not a ULID stays whole", got.Relates, got.Causes)
+	if len(got.Causes) != 0 || len(got.Props) != 0 {
+		t.Errorf("causes %v, props %v", got.Causes, got.Props)
 	}
-	keys := []string{}
-	for _, f := range got.Props {
-		keys = append(keys, f.Key)
+}
+
+func TestMoveRelationsListsTheValuesThatAreNoULID(t *testing.T) {
+	t.Parallel()
+	id := newIDs()
+	tk, err := model.DecodeTask(task2(t, "relates: ["+id.c.String()+", not-an-id]\ncauses: 7\n", nil))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !slices.Equal(keys, []string{"relates", "causes"}) {
-		t.Errorf("props = %v", keys)
+	moved := TaskRelations(tk, RelationDefsOf(nil))
+	if len(moved) != 2 || !slices.Equal(moved[0].Bad, []string{"not-an-id"}) || !slices.Equal(moved[1].Bad, []string{"7"}) || !eq(moved[0].Values, []model.ULID{id.c}) {
+		t.Errorf("moved = %+v", moved)
+	}
+}
+
+func TestTask2to3ATaskRefNamedClonesGoesToClones(t *testing.T) {
+	t.Parallel()
+	id := newIDs()
+	got := up(t, task2(t, "clones: "+id.a.String()+"\n", nil), "props:\n  clones: {type: task_ref}\n")
+	if !eq(got.Clones, []model.ULID{id.a}) || len(got.Relates) != 0 {
+		t.Errorf("clones %v, relates %v", got.Clones, got.Relates)
+	}
+}
+
+func TestMoveLegacyFieldsLeavesATaskWithAValueThatIsNoULID(t *testing.T) {
+	t.Parallel()
+	id := newIDs()
+	raw := task2(t, "relates: ["+id.a.String()+"]\ncauses: [oops]\n", nil)
+	tk, _ := model.DecodeTask(raw)
+	if got := LegacyBadValues(tk); !slices.Equal(got, []string{"causes"}) {
+		t.Errorf("bad = %v", got)
+	}
+	if out, err := MoveLegacyFields(raw); err != nil || !bytes.Equal(out, raw) {
+		t.Errorf("a task with a value that is no ULID changed: %q, %v", out, err)
 	}
 }
 
@@ -177,15 +205,12 @@ func TestRelationDefsOf(t *testing.T) {
 		t.Errorf("names = %v", got)
 	}
 	for name, want := range map[string]string{"duplicates": "duplicates", "causes": "causes", "relates": "relates", "fixes": "relates", "clones": "clones"} {
-		if to, _, ok := d.Target(name); !ok || to != want {
+		if to, ok := d.Target(name); !ok || to != want {
 			t.Errorf("target of %s = %q, %v; want %q", name, to, ok, want)
 		}
 	}
-	if _, _, ok := d.Target("note"); ok {
+	if _, ok := d.Target("note"); ok {
 		t.Error("a text property has a target")
-	}
-	if _, defined, _ := d.Target("clones"); defined {
-		t.Error("clones is defined")
 	}
 }
 
@@ -204,9 +229,18 @@ func TestLegacyConflictsAndMoveLegacyFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the task is moved whole or not at all: the conflict of relates keeps causes too
+	if !bytes.Equal(out, both) {
+		t.Errorf("a task with a conflict changed: %q", out)
+	}
+	fine := task2(t, "relates: ["+id.a.String()+"]\ncauses: ["+id.b.String()+"]\n", nil)
+	out, err = MoveLegacyFields(fine)
+	if err != nil {
+		t.Fatal(err)
+	}
 	moved, _ := model.DecodeTask(out)
-	if len(moved.Causes) != 1 || moved.Props.Get("causes") != nil {
-		t.Errorf("causes %v, props %v", moved.Causes, moved.Props)
+	if len(moved.Causes) != 1 || len(moved.Relates) != 1 || len(moved.Props) != 0 {
+		t.Errorf("causes %v, relates %v, props %v", moved.Causes, moved.Relates, moved.Props)
 	}
 	if !strings.Contains(string(out), "relates") {
 		t.Errorf("file = %q", out)

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
@@ -112,8 +114,14 @@ func (c *step3State) convertTasks() {
 			c.unread = append(c.unread, p)
 			continue
 		}
+		stored := slices.Clone(tk.Relates)
 		moved := upgrade.TaskRelations(tk, c.defs)
-		c.relates[tk.ULID] = tk.Relates
+		for _, m := range moved { // the pairs are of relates as it was stored, not of what other properties add
+			if m.Prop == "relates" {
+				stored = append(stored, m.Values...)
+			}
+		}
+		c.relates[tk.ULID] = stored
 		if len(moved) == 0 {
 			continue
 		}
@@ -210,7 +218,7 @@ func (c *step3State) writeTasks() error {
 func (c *step3State) custom() []string {
 	var out []string
 	for _, n := range c.defs.Names() {
-		if to, _, _ := c.defs.Target(n); to == "relates" && n != "relates" {
+		if to, _ := c.defs.Target(n); to == "relates" && n != "relates" {
 			out = append(out, n)
 		}
 	}
@@ -233,7 +241,8 @@ func (c *step3State) mutualPairs() int {
 // convertViews rewrites the query and the columns of each view.
 func (c *step3State) convertViews() {
 	custom := c.custom()
-	gone := append(slices.Clone(custom), "duplicates", "causes", "relates")
+	gone := c.gone()
+	inverse := inverseLabels(c.t.Read(schema.Path), custom)
 	for _, p := range c.t.Paths(model.ViewsDir + "/") {
 		name, ok := model.IsViewPath(p)
 		if !ok {
@@ -248,8 +257,11 @@ func (c *step3State) convertViews() {
 		for _, term := range ambiguousTerms(v.Query) {
 			c.notes = append(c.notes, fmt.Sprintf("ビュー %s の query の %s は、これまで両方向に当たっていたが、これからは付けた側にだけ当たる（書き換えていない。逆方向も含めるなら related_by: も使う）", name, term))
 		}
-		if q := rewriteQuery(v.Query, custom); q != v.Query {
+		if q, removed := rewriteQuery(v.Query, custom, inverse, gone); q != v.Query {
 			c.notes = append(c.notes, fmt.Sprintf("ビュー %s の query を書き換えた: %s → %s", name, v.Query, q))
+			for _, term := range removed {
+				c.notes = append(c.notes, fmt.Sprintf("ビュー %s の query から %s を外した（関連は並べ替え・グループ化の対象にならない）", name, term))
+			}
 			v.Query, changed = q, true
 		}
 		if v.Table != nil {
@@ -265,6 +277,10 @@ func (c *step3State) convertViews() {
 				v.Table.Columns, changed = cols, true
 				c.notes = append(c.notes, fmt.Sprintf("ビュー %s の table.columns から、関連になった %s を外した（関連は列にならない）", name, strings.Join(removed, ", ")))
 			}
+			if slices.Contains(gone, v.Table.GroupBy) {
+				c.notes = append(c.notes, fmt.Sprintf("ビュー %s の table.group_by から、関連になった %s を外した（関連はグループ化の対象にならない）", name, v.Table.GroupBy))
+				v.Table.GroupBy, changed = "", true
+			}
 		}
 		if !changed {
 			continue
@@ -277,20 +293,65 @@ func (c *step3State) convertViews() {
 	}
 }
 
+// gone are the names of the properties that are no more: the task_ref
+// properties of the store, and the definitions of duplicates, causes and
+// relates, which are fields of a task now.
+func (c *step3State) gone() []string {
+	return append(c.defs.Names(), "duplicates", "causes", "relates")
+}
+
+// inverseLabels are the display names of the other direction that the task_ref
+// properties of the store's own gave in schema.yaml (inverse:), which the schema
+// no longer keeps. The raw file is read for them.
+func inverseLabels(raw []byte, custom []string) []string {
+	var doc struct {
+		Props map[string]struct {
+			Inverse string `yaml:"inverse"`
+		} `yaml:"props"`
+	}
+	if yaml.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	var out []string
+	for _, n := range custom {
+		if l := doc.Props[n].Inverse; l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 // rewriteQuery gives the query in the keys of format 3: <relation>.inverse
-// becomes the name of the other direction, and a key that was a task_ref of
-// the store's own becomes relates (and its .inverse related_by). The spacing
+// becomes the name of the other direction; a key that was a task_ref of the
+// store's own becomes relates, and its .inverse and the display name of its
+// other direction related_by (they ask for the tasks that are pointed at). A
+// sort: or group: of a name that is gone is taken out, and returned. The spacing
 // of what is not rewritten stays.
-func rewriteQuery(q string, custom []string) string {
-	var out strings.Builder
-	quoted, start := false, -1
+func rewriteQuery(q string, custom, inverse, gone []string) (string, []string) {
+	type piece struct{ sep, tok string }
+	var pieces []piece
+	var removed []string
+	quoted, start, sepAt := false, -1, 0
 	flush := func(end int) {
 		if start < 0 {
 			return
 		}
 		tok := q[start:end]
-		out.WriteString(rewriteTerm(tok, custom))
+		sep := q[sepAt:start]
+		sepAt = end
 		start = -1
+		t, drop := rewriteTerm(tok, custom, inverse, gone)
+		switch {
+		case drop:
+			removed = append(removed, tok)
+			if len(pieces) == 0 {
+				pieces = append(pieces, piece{sep, ""}) // keeps the leading space for the first term that stays
+			}
+		case len(pieces) > 0 && pieces[len(pieces)-1].tok == "":
+			pieces[len(pieces)-1].tok = t
+		default:
+			pieces = append(pieces, piece{sep, t})
+		}
 	}
 	for i, r := range q {
 		switch {
@@ -301,7 +362,6 @@ func rewriteQuery(q string, custom []string) string {
 			}
 		case unicode.IsSpace(r) && !quoted:
 			flush(i)
-			out.WriteRune(r)
 		default:
 			if start < 0 {
 				start = i
@@ -309,24 +369,37 @@ func rewriteQuery(q string, custom []string) string {
 		}
 	}
 	flush(len(q))
-	return out.String()
+	var out strings.Builder
+	for _, p := range pieces {
+		out.WriteString(p.sep)
+		out.WriteString(p.tok)
+	}
+	if len(removed) == 0 || len(pieces) > 0 && pieces[len(pieces)-1].tok != "" {
+		out.WriteString(q[sepAt:])
+	}
+	return out.String(), removed
 }
 
-// rewriteTerm is one term of a query in the keys of format 3; a term that
-// does not parse is left as it is.
-func rewriteTerm(tok string, custom []string) string {
+// rewriteTerm is one term of a query in the keys of format 3, or drop for a
+// sort: or group: of a name that is gone. A term that does not parse is left
+// as it is.
+func rewriteTerm(tok string, custom, inverse, gone []string) (string, bool) {
 	pq, err := query.Parse(tok)
 	if err != nil || len(pq.Terms) != 1 || pq.Terms[0].Key == "" {
-		return tok
+		return tok, false
 	}
-	key := pq.Terms[0].Key
+	term := pq.Terms[0]
+	key := term.Key
 	at := 0
-	if pq.Terms[0].Neg {
+	if term.Neg {
 		at = 1
+	}
+	if (key == "sort" || key == "group") && len(term.Values) == 1 && slices.Contains(gone, strings.TrimPrefix(term.Values[0], "-")) {
+		return tok, true
 	}
 	to := key
 	switch name, inv := strings.CutSuffix(key, ".inverse"); {
-	case inv && slices.Contains(custom, name):
+	case inv && slices.Contains(custom, name), slices.Contains(inverse, key):
 		to = "related_by"
 	case inv:
 		if r, other, ok := schema.RelationOf(name); ok && !other {
@@ -335,7 +408,7 @@ func rewriteTerm(tok string, custom []string) string {
 	case slices.Contains(custom, key):
 		to = "relates"
 	}
-	return tok[:at] + to + tok[at+len(key):]
+	return tok[:at] + to + tok[at+len(key):], false
 }
 
 // ambiguousTerms are the terms of the query (as it was written) whose key is

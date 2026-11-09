@@ -37,37 +37,41 @@ func legacyNames(t *model.Task) []string {
 // legacyFieldFindings are the tasks that hold a relation in props. --fix moves
 // it when the values are ULIDs and the field of the task has none; the hint
 // says what is to be done where it does not.
-func legacyFieldFindings(ix *index.Index) []usecase.Finding {
+func legacyFieldFindings(s *store.Store, ix *index.Index) []usecase.Finding {
 	var out []usecase.Finding
 	for _, e := range ix.Tasks() {
-		if e.Broken != "" {
+		if e.Broken != "" || !slices.ContainsFunc(e.Props, func(p index.Prop) bool { return slices.Contains(upgrade.LegacyRelationNames, p.Key) }) {
 			continue
 		}
-		for _, p := range e.Props {
-			if !slices.Contains(upgrade.LegacyRelationNames, p.Key) {
-				continue
-			}
-			msg, hint := "is a relation of the task in this format, not a property; an older hedgehug wrote it", "hedgehug doctor --fix moves it to the field "+p.Key
-			switch {
-			case len(e.Targets(p.Key)) > 0:
-				hint = "the field " + p.Key + " has values of its own, so which is newer cannot be told and --fix leaves it; decide with hedgehug edit"
-			case !onlyULIDs(p.Values):
-				hint = "a value is not the ULID of a task, so --fix leaves it; fix it with hedgehug edit"
-			}
-			field := "props." + p.Key
+		t, err := s.Task(e.ULID)
+		if err != nil {
+			continue
+		}
+		// --fix moves a task whole or not at all: what keeps it from moving
+		// is said on each of its findings
+		hint := "hedgehug doctor --fix moves it to the field of the task"
+		if why := legacyBlocker(t); why != "" {
+			hint = "hedgehug doctor --fix leaves this task as it is, because " + why + "; decide with hedgehug edit"
+		}
+		for _, name := range legacyNames(t) {
+			msg := "is a relation of the task in this format, not a property; an older hedgehug wrote it"
+			field := "props." + name
 			out = append(out, usecase.TaskFinding(e, index.Problem{Code: "legacy_field", Field: field, Msg: msg}, field+": "+msg, hint))
 		}
 	}
 	return out
 }
 
-func onlyULIDs(values []string) bool {
-	for _, v := range values {
-		if _, err := model.ParseULID(v); err != nil {
-			return false
-		}
+// legacyBlocker says why --fix does not move the relations of t, or "" when it
+// does.
+func legacyBlocker(t *model.Task) string {
+	if c := upgrade.LegacyConflicts(t); len(c) > 0 {
+		return "the field " + c[0] + " has values of its own, so which is newer cannot be told"
 	}
-	return len(values) > 0
+	if b := upgrade.LegacyBadValues(t); len(b) > 0 {
+		return "props." + b[0] + " has a value that is not the ULID of a task"
+	}
+	return ""
 }
 
 // fixLegacyFields moves, in one commit, the relations that tasks hold in props
@@ -78,7 +82,7 @@ func fixLegacyFields(ss *usecase.Session, s *store.Store) ([]Fixed, error) {
 	files := map[string][]byte{}
 	var out []Fixed
 	for t, err := range s.Tasks() {
-		if err != nil || len(legacyNames(t)) == 0 || len(upgrade.LegacyConflicts(t)) > 0 {
+		if err != nil || len(legacyNames(t)) == 0 || legacyBlocker(t) != "" {
 			continue
 		}
 		raw, err := s.TaskBytes(t.ULID)

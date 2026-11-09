@@ -50,9 +50,9 @@ func TestMergeOverABaseInFormat2DoesNotBringBackARelationOneSideRemoved(t *testi
 		t.Fatal(err)
 	}
 	at := func(m int) time.Time { return time.Date(2026, 11, 9, 12, m, 0, 0, time.UTC) }
-	commit := func(format int, sc string, relates, inProps bool, when time.Time, parents ...plumbing.Hash) plumbing.Hash {
+	commit := func(format int, sc, title string, relates, inProps bool, when time.Time, parents ...plumbing.Hash) plumbing.Hash {
 		t.Helper()
-		x.Relates, x.Props = nil, nil
+		x.Title, x.Relates, x.Props = title, nil, nil
 		if relates && inProps {
 			if err := yaml.Unmarshal([]byte("relates: ["+y.String()+"]\n"), &x.Props); err != nil {
 				t.Fatal(err)
@@ -87,9 +87,10 @@ func TestMergeOverABaseInFormat2DoesNotBringBackARelationOneSideRemoved(t *testi
 		}
 		return h
 	}
-	base := commit(2, schemaWithRelates, true, true, at(0), mustHead(t, s))
-	theirs := commit(model.StoreFormat, string(newSchema), true, false, at(2), base)
-	ours := commit(model.StoreFormat, string(newSchema), false, false, at(1), base)
+	// theirs renames the task, so that the merge has a file to write
+	base := commit(2, schemaWithRelates, "x", true, true, at(0), mustHead(t, s))
+	theirs := commit(model.StoreFormat, string(newSchema), "x renamed", true, false, at(2), base)
+	ours := commit(model.StoreFormat, string(newSchema), "x", false, false, at(1), base)
 
 	m, err := mergeTrees(repo, nil, base, ours, theirs, c.opts[0])
 	if err != nil {
@@ -97,11 +98,14 @@ func TestMergeOverABaseInFormat2DoesNotBringBackARelationOneSideRemoved(t *testi
 	}
 	b, ok := m.files[model.TaskPath(x.ULID)]
 	if !ok {
-		return // nothing to change of ours is the answer too
+		t.Fatal("the merge does not write the task, though theirs renamed it")
 	}
 	got, err := model.DecodeTask(b)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got.Title != "x renamed" {
+		t.Errorf("title = %q; what theirs changed is merged", got.Title)
 	}
 	if len(got.Relates) != 0 || slices.ContainsFunc(got.Props, func(f model.Field) bool { return f.Key == "relates" }) {
 		t.Errorf("merged relates = %v, props = %v; ours removed the relation", got.Relates, got.Props)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 )
 
 func legacyFindings(fs []usecase.Finding) map[string]usecase.Finding {
@@ -40,6 +41,13 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		tk.Causes = []model.ULID{b.ULID}
 	})
 	d := ts.AddTask("d", props("clones: [not-a-ulid]\n"))
+	// e: the conflict of causes keeps the whole task, duplicates included
+	e := ts.AddTask("e", func(tk *model.Task) {
+		props("causes: [" + a.ULID.String() + "]\nduplicates: [" + a.ULID.String() + "]\n")(tk)
+		tk.Causes = []model.ULID{b.ULID}
+	})
+	// f: an empty value is no bad value; --fix takes the key away
+	f := ts.AddTask("f", props("relates: []\n"))
 	before := ts.TaskByULID("me", a.ULID).Updated
 
 	rep, err := ts.DoctorOne(false)
@@ -47,14 +55,22 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := legacyFindings(rep.Findings)
-	if len(got) != 4 {
-		t.Fatalf("findings = %+v; want a (relates, duplicates), c, d", rep.Findings)
+	if len(got) != 7 {
+		t.Fatalf("findings = %+v; want a (relates, duplicates), c, d, e (causes, duplicates), f", rep.Findings)
 	}
-	if f := got[c.ULID.String()+" props.causes"]; !strings.Contains(f.Hint, "has values of its own") {
+	if f := got[c.ULID.String()+" props.causes"]; !strings.Contains(f.Hint, "leaves this task as it is, because the field causes has values of its own") {
 		t.Errorf("c: %+v", f)
 	}
-	if f := got[d.ULID.String()+" props.clones"]; !strings.Contains(f.Hint, "not the ULID") {
+	if f := got[d.ULID.String()+" props.clones"]; !strings.Contains(f.Hint, "leaves this task as it is, because props.clones has a value that is not the ULID") {
 		t.Errorf("d: %+v", f)
+	}
+	if f := got[e.ULID.String()+" props.duplicates"]; !strings.Contains(f.Hint, "leaves this task as it is, because the field causes has values of its own") {
+		t.Errorf("e duplicates: %+v", f)
+	}
+	for _, k := range []string{a.ULID.String() + " props.relates", a.ULID.String() + " props.duplicates", f.ULID.String() + " props.relates"} {
+		if !strings.Contains(got[k].Hint, "--fix moves it") {
+			t.Errorf("%s: %+v", k, got[k])
+		}
 	}
 	if !usecase.FindingsFail(rep.Findings) {
 		t.Error("a relation in props does not fail doctor")
@@ -64,9 +80,17 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rep.Repaired) != 1 || rep.Repaired[0].Kind != "legacy_field" || rep.Repaired[0].ULID != a.ULID.String() ||
-		!strings.Contains(rep.Repaired[0].Line, "props.relates, props.duplicates") {
-		t.Fatalf("repaired = %+v", rep.Repaired)
+	i := slices.IndexFunc(rep.Repaired, func(x maintenance.Fixed) bool { return x.ULID == a.ULID.String() })
+	if len(rep.Repaired) != 2 || i < 0 || rep.Repaired[i].Kind != "legacy_field" ||
+		!strings.Contains(rep.Repaired[i].Line, "props.relates, props.duplicates") ||
+		!slices.ContainsFunc(rep.Repaired, func(x maintenance.Fixed) bool { return x.ULID == f.ULID.String() }) {
+		t.Fatalf("repaired = %+v; want a and f", rep.Repaired)
+	}
+	if nf := ts.TaskByULID("me", f.ULID); len(nf.Props) != 0 {
+		t.Errorf("f: props %v", nf.Props)
+	}
+	if ne := ts.TaskByULID("me", e.ULID); ne.Props.Get("duplicates") == nil {
+		t.Errorf("e was changed: props %v", ne.Props)
 	}
 	na := ts.TaskByULID("me", a.ULID)
 	if !slices.Equal(na.Relates, []model.ULID{b.ULID}) || !slices.Equal(na.Duplicates, []model.ULID{b.ULID}) || len(na.Props) != 0 {
@@ -82,8 +106,8 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		t.Errorf("d was changed: props %v", nd.Props)
 	}
 	got = legacyFindings(rep.Findings)
-	if len(got) != 2 || got[c.ULID.String()+" props.causes"].Task == "" || got[d.ULID.String()+" props.clones"].Task == "" {
-		t.Errorf("findings left = %+v; want c and d", rep.Findings)
+	if len(got) != 4 || got[c.ULID.String()+" props.causes"].Task == "" || got[d.ULID.String()+" props.clones"].Task == "" {
+		t.Errorf("findings left = %+v; want c, d and e", rep.Findings)
 	}
 	// the second --fix has nothing to move
 	if rep, err = ts.DoctorOne(true); err != nil || len(rep.Repaired) != 0 {

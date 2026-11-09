@@ -135,16 +135,120 @@ func TestStep3MovesTheValuesAndTheSchema(t *testing.T) {
 	hasLine(t, rep, "schema.yaml の task_ref のプロパティを消した")
 }
 
-func TestStep3WithoutTheDefinitionsMovesTheULIDs(t *testing.T) {
+func TestStep3WithoutTheDefinitionsMovesTheULIDsAndStopsAtTheOthers(t *testing.T) {
 	t.Parallel()
 	s := newStore2(t)
 	s.put("schema.yaml", "statuses:\n  - {name: todo, category: todo, default: true}\n")
 	b := s.task("b", "")
-	a := s.task("a", "clones: ["+b.ULID.String()+"]\nrelates: [not-an-id]\n")
-	tr, _ := s.ok(Options{}) // a value that is not a ULID of a property without a definition is no reason to stop
+	a := s.task("a", "clones: ["+b.ULID.String()+"]\nrelates: ["+b.ULID.String()+", not-an-id]\n")
+	// the names the schema no longer defines are checked as the others are
+	tr, _, err := s.run(Options{})
+	wantBad := usecase.AsError(err)
+	if wantBad == nil || wantBad.Code != "convert.bad_value" || !strings.Contains(err.Error(), "props.relates: not-an-id") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(tr.Changes()) != 0 {
+		t.Errorf("a step that stops wrote %v", tr.Changes())
+	}
+	tr, rep := s.ok(Options{DropBadValues: true})
 	got := taskIn(t, tr, a)
-	if !slices.Equal(got.Clones, ulids(b)) || len(got.Relates) != 0 || got.Props.Get("relates") == nil {
-		t.Errorf("clones %v, relates %v, props %v", got.Clones, got.Relates, got.Props)
+	if !slices.Equal(got.Clones, ulids(b)) || !slices.Equal(got.Relates, ulids(b)) || len(got.Props) != 0 {
+		t.Errorf("clones %v, relates %v, props %v; the ULID of a mixed value moves", got.Clones, got.Relates, got.Props)
+	}
+	hasLine(t, rep, "props.relates: not-an-id")
+}
+
+func TestStep3ATaskRefNamedClonesGoesToClones(t *testing.T) {
+	t.Parallel()
+	s := newStore2(t)
+	s.put("schema.yaml", "props:\n  clones: {type: task_ref}\n")
+	b := s.task("b", "")
+	a := s.task("a", "clones: "+b.ULID.String()+"\n")
+	tr, rep := s.ok(Options{})
+	if got := taskIn(t, tr, a); !slices.Equal(got.Clones, ulids(b)) || len(got.Relates) != 0 {
+		t.Errorf("clones %v, relates %v", got.Clones, got.Relates)
+	}
+	if strings.Contains(lines(rep), "を relates へ") {
+		t.Errorf("clones is reported as a property of your own:\n%s", lines(rep))
+	}
+}
+
+func TestStep3MovesASelfReferenceAndRewritesScopedRequired(t *testing.T) {
+	t.Parallel()
+	s := newStore2(t)
+	s.put("schema.yaml", schema2+"scoped:\n  - where: project:"+model.NewULID().String()+"\n    workflow:\n      required:\n        done: [fixes, note, relates]\n")
+	a := s.task("a", "")
+	a.Props = nil
+	if err := yaml.Unmarshal([]byte("causes: ["+a.ULID.String()+"]\n"), &a.Props); err != nil {
+		t.Fatal(err)
+	}
+	enc, err := a.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.files[model.TaskPath(a.ULID)] = enc
+	tr, _ := s.ok(Options{})
+	if got := taskIn(t, tr, a).Causes; !slices.Equal(got, ulids(a)) {
+		t.Errorf("causes = %v; a value that points at its own task moves as it is", got)
+	}
+	sc, err := schema.Decode(tr.Read("schema.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := sc.Scoped[0].Workflow.Required.Get("done"); !slices.Equal(got, []string{"relates", "note"}) {
+		t.Errorf("scoped required of done = %v", got)
+	}
+}
+
+func TestStep3CountsOnlyThePairsOfStoredRelates(t *testing.T) {
+	t.Parallel()
+	s := newStore2(t)
+	b := s.task("b", "")
+	a := s.task("a", "fixes: "+b.ULID.String()+"\n")
+	// b holds a in relates, and a holds b through fixes of its own: that is no pair that was stored
+	if err := yaml.Unmarshal([]byte("relates: ["+a.ULID.String()+"]\n"), &b.Props); err != nil {
+		t.Fatal(err)
+	}
+	enc, err := b.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.files[model.TaskPath(b.ULID)] = enc
+	_, rep := s.ok(Options{})
+	if strings.Contains(lines(rep), "相互の組") {
+		t.Errorf("a pair that came from a property of your own is counted:\n%s", lines(rep))
+	}
+}
+
+func TestStep3TakesASortOrAGroupOfAGoneNameOutOfTheQuery(t *testing.T) {
+	t.Parallel()
+	s := newStore2(t)
+	s.put(model.ViewPath("v"), "layout: table\nquery: 'sort:-fixes status:todo group:causes'\ntable:\n  group_by: relates\n")
+	s.put(model.ViewPath("w"), "layout: table\nquery: '  sort:note group:duplicates  status:todo '\n")
+	s.put(model.ViewPath("k"), "layout: table\nquery: 'sort:fixes'\n")
+	tr, rep := s.ok(Options{})
+	if got := viewOf(t, tr, "v"); got.Query != "status:todo" || got.Table.GroupBy != "" {
+		t.Errorf("v: query %q, group_by %q", got.Query, got.Table.GroupBy)
+	}
+	if got := viewOf(t, tr, "w").Query; got != "  sort:note   status:todo " && got != "  sort:note  status:todo " {
+		t.Errorf("w: query %q", got)
+	}
+	if got := viewOf(t, tr, "k").Query; got != "" {
+		t.Errorf("k: query %q", got)
+	}
+	for _, w := range []string{"ビュー v の query から sort:-fixes を外した", "ビュー v の query から group:causes を外した", "ビュー v の table.group_by から", "ビュー w の query から group:duplicates を外した"} {
+		hasLine(t, rep, w)
+	}
+}
+
+func TestStep3RewritesTheDisplayNameOfTheOtherDirectionAndTheInverseOfYourOwn(t *testing.T) {
+	t.Parallel()
+	s := newStore2(t)
+	s.put("schema.yaml", strings.Replace(schema2, "inverse: Fixed by", "inverse: fixed_by", 1))
+	s.put(model.ViewPath("v"), "layout: tree\nquery: 'fixed_by:WEB-1 fixes.inverse:WEB-2 fixes:WEB-3 caused_by:WEB-4'\n")
+	tr, _ := s.ok(Options{})
+	if got := viewOf(t, tr, "v").Query; got != "related_by:WEB-1 related_by:WEB-2 relates:WEB-3 caused_by:WEB-4" {
+		t.Errorf("query = %q", got)
 	}
 }
 

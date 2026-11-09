@@ -47,7 +47,7 @@ func RelationDefsOf(sc *schema.Schema) RelationDefs {
 			continue
 		}
 		to := "relates"
-		if p.Name == "duplicates" || p.Name == "causes" || p.Name == "relates" {
+		if slices.Contains(LegacyRelationNames, p.Name) {
 			to = p.Name
 		}
 		if _, dup := d.to[p.Name]; !dup {
@@ -61,19 +61,19 @@ func RelationDefsOf(sc *schema.Schema) RelationDefs {
 // Names are the task_ref properties, in file order.
 func (d RelationDefs) Names() []string { return slices.Clone(d.names) }
 
-// Target is the relation the values of the property name go to. defined says
-// the schema has the property as task_ref; a name that duplicates, causes,
-// relates or clones has no definition (the value stayed in props after the
-// definition went) goes to the relation of its own name, as long as its
-// values are ULIDs. A property of another type does not move.
-func (d RelationDefs) Target(name string) (to string, defined, ok bool) {
+// Target is the relation the values of the property name go to. A task_ref
+// property of duplicates, causes, relates or clones goes to the relation of its
+// own name, any other to relates; so does one of those four names that has no
+// definition (the value stayed in props after the definition went). A property
+// of another type does not move.
+func (d RelationDefs) Target(name string) (to string, ok bool) {
 	if to, ok := d.to[name]; ok {
-		return to, true, true
+		return to, true
 	}
 	if !d.other[name] && slices.Contains(LegacyRelationNames, name) {
-		return name, false, true
+		return name, true
 	}
-	return "", false, false
+	return "", false
 }
 
 // Moved is what became of one property of a task or of a template item.
@@ -81,9 +81,8 @@ type Moved struct {
 	Prop   string       // the name in props
 	To     string       // the relation
 	Values []model.ULID // the values that were added to the relation, none twice
-	// Bad are the values that are not a ULID, as written. A property the
-	// schema defines as task_ref loses them; a property without a definition
-	// is left alone when it has one.
+	// Bad are the values that are not a ULID, as written. They are not moved
+	// and go with the property.
 	Bad []string
 }
 
@@ -94,7 +93,7 @@ type Moved struct {
 func MoveRelations(props *model.Fields, d RelationDefs, into func(relation string) *[]model.ULID) []Moved {
 	var out []Moved
 	for _, f := range slices.Clone(*props) {
-		to, defined, ok := d.Target(f.Key)
+		to, ok := d.Target(f.Key)
 		if !ok {
 			continue
 		}
@@ -109,9 +108,6 @@ func MoveRelations(props *model.Fields, d RelationDefs, into func(relation strin
 				}
 			}
 			m.Bad = append(m.Bad, nodeText(n))
-		}
-		if len(m.Bad) > 0 && !defined {
-			continue // not known to be a reference: it stays where it is
 		}
 		props.Delete(f.Key)
 		list := into(to)
@@ -206,11 +202,28 @@ func LegacyConflicts(t *model.Task) []string {
 	return out
 }
 
+// LegacyBadValues are the names of the relations that t holds in props with a
+// value that is not the ULID of a task.
+func LegacyBadValues(t *model.Task) []string {
+	var out []string
+	for _, f := range t.Props {
+		if !slices.Contains(LegacyRelationNames, f.Key) {
+			continue
+		}
+		if slices.ContainsFunc(valueNodes(f.Value), func(n *yaml.Node) bool {
+			_, err := model.ParseULID(n.Value)
+			return n.Kind != yaml.ScalarNode || err != nil
+		}) {
+			out = append(out, f.Key)
+		}
+	}
+	return out
+}
+
 // task2to3 moves the task_ref values of a task from props to its relations. A
-// value that is not a ULID is dropped from a property the schema defines as
-// task_ref: a file that is read as the newest format cannot hold it, and hh
-// store convert, which does not drop it unless it is told to, is the one that
-// tells of it.
+// value that is not a ULID is dropped with its property: a file that is read as
+// the newest format cannot hold it, and hh store convert, which does not drop
+// it unless it is told to, is the one that tells of it.
 func task2to3(raw []byte, cx Cx) ([]byte, error) {
 	t, err := model.DecodeTask(raw)
 	if err != nil {
@@ -230,6 +243,17 @@ func task2to3(raw []byte, cx Cx) ([]byte, error) {
 
 // MoveLegacyFields moves the relations that a task of the newest format still
 // holds in props, as an older hedgehug writes them, to the fields of the task:
-// the names format 3 made relations, whose values are ULIDs. It is what hh
-// doctor --fix does; it does not look at the schema, which no longer has them.
-func MoveLegacyFields(raw []byte) ([]byte, error) { return task2to3(raw, Cx{}) }
+// the names format 3 made relations. It is what hh doctor --fix does; it does
+// not look at the schema, which no longer has them. A task with a value that is
+// not a ULID, or whose field has values already (LegacyConflicts), comes back as
+// it is: neither can be moved without losing something.
+func MoveLegacyFields(raw []byte) ([]byte, error) {
+	t, err := model.DecodeTask(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(LegacyConflicts(t)) > 0 || len(LegacyBadValues(t)) > 0 {
+		return raw, nil
+	}
+	return task2to3(raw, Cx{})
+}
