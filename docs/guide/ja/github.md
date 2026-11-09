@@ -66,8 +66,9 @@ Issue のリンクには、モードがあります。
 
 ```bash
 hh link WEB-1 --issue acme/web#12 --sync push
-hh gh import acme/web --label hedgehug --dry-run   # 取り込む件数だけを調べる
-hh gh import acme/web --label hedgehug             # open な Issue ごとに mirror モードのタスクを作る
+hh gh import acme/web --dry-run                    # 取り込む件数だけを調べる
+hh gh import acme/web                              # open な Issue ごとに mirror モードのタスクを作る
+hh gh import acme/web --label hedgehug             # そのラベルの付いた open な Issue だけを取り込む
 ```
 
 `hh automation fields` は、モードごとに反映するフィールドと、既定のモードを表示・変更します。
@@ -80,7 +81,7 @@ mirror: title, status, assignees
 props: -
 ```
 
-ラベルは同期する項目ではありません。ラベルの使い方はリポジトリごと、Organization ごとに違い、Store のラベルのリストとそのまま対応づけられないためです。どのモードも、タスクのラベルを Issue へ送らず、ラベルつきで Issue を作らず、Issue のラベルを取り込みません。`hh automation fields` に `labels` はなく、形式 4 への変換が、既存のルールからも取り除きます（[Store](stores.md#store-の形式と-hh-store-convert)を参照）。`hh gh import --label` は同期ではなく絞り込みで、GitHub のラベルで取り込む Issue を選びます。
+ラベルは同期する項目ではありません。ラベルの使い方はリポジトリごと、Organization ごとに違い、Store のラベルのリストとそのまま対応づけられないためです。どのモードも、タスクのラベルを Issue へ送らず、ラベルつきで Issue を作らず、Issue のラベルを取り込みません。`hh automation fields` に `labels` はなく、形式 4 への変換が、既存のルールからも取り除きます（[Store](stores.md#store-の形式と-hh-store-convert)を参照）。`hh gh import --label` は同期ではなく任意の絞り込みで、GitHub のラベルで取り込む Issue を選びます。省くと open な Issue をすべて取り込みます。
 
 `push` モードでは、GitHub 側で手で編集された値は次の push で上書きされ、上書きしたことが `hh inbox` に出ます。
 

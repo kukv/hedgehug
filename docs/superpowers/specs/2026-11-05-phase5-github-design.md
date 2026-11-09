@@ -356,7 +356,7 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 ### コマンド
 
 - `hh issue <id> [--repo org/repo]`: `push` モードで Issue を作る。repo はタスクの `repos` から決める。複数あれば `--repo` を求める。なければカレントの repo を使う。`issue_fields.push` のフィールドを渡し、閉じる側のタスクなら作成の後に閉じる。閉じられなくてもリンクは書き、基準を `open` にして警告する（次の同期で閉じる。打ち直して Issue が二重にならない）。`synced` と `gh` を同じコミットに書くので、次の同期で差分が出ない。op は `issue`。その repo の使用中の Issue リンクがあれば `link.exists`
-- `hh gh import <org/repo> --label <label> [--parent <id>] [--workspace <name>] [--dry-run]`: 開いている Issue を `mirror` のタスクにする。本文は最初の1回だけ写す。リンク済みの Issue は飛ばす（`off` を含む）。`--dry-run` は件数だけを返す。タスクごとに op `add` の1コミットにするので、途中で落ちても打ち直せる。終わったらその repo を取り込み、担当者と状態を揃える
+- `hh gh import <org/repo> [--label <label>] [--parent <id>] [--workspace <name>] [--dry-run]`: 開いている Issue を `mirror` のタスクにする。`--label` は任意で、指定するとそのラベルの付いた Issue だけ、省くと開いている Issue すべてを取り込む（2026-11-10、利用者の決定。必須にする理由がなかった）。本文は最初の1回だけ写す。リンク済みの Issue は飛ばす（`off` を含む）。`--dry-run` は件数だけを返す。タスクごとに op `add` の1コミットにするので、途中で落ちても打ち直せる。終わったらその repo を取り込み、担当者と状態を揃える
 
 ## 5d の画面
 

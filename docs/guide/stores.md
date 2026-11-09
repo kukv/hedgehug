@@ -206,7 +206,7 @@ a conversion, `hh undo` undoes the operation before it.
     listed in the report.
   - GitHub no longer syncs labels. `labels` leaves the fields of `automations.yaml`, `labels` leaves the
     recorded state of each linked issue, and a link that synced only labels becomes `sync: link` (no sync);
-    the report lists those links. `hh gh import --label` stays: it picks the issues by their GitHub label.
+    the report lists those links. `hh gh import --label` stays as an optional filter: it picks the issues by their GitHub label.
 - `--store <name>` picks the store.
 
 When another clone has already converted the remote, `hh store convert` on a clone with

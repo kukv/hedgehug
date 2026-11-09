@@ -33,11 +33,11 @@ export function useIssueImport(
   let busy = $state(false);
   let error = $state("");
 
-  const ready = $derived(repo.trim() !== "" && label.trim() !== "");
+  const ready = $derived(repo.trim() !== "");
   const cli = $derived(
     cliGhImport({
       repo: repo.trim() || new Placeholder("org/repo"),
-      label: label.trim() || new Placeholder("ラベル"),
+      label: label.trim(),
       parent: place().parentId,
     }),
   );
@@ -49,7 +49,7 @@ export function useIssueImport(
     try {
       const { parent } = place();
       const r = await c.api.importIssues(
-        { repo: repo.trim(), label: label.trim(), parent, dry_run: dry },
+        { repo: repo.trim(), label: label.trim() || undefined, parent, dry_run: dry },
         { store: store() },
       );
       if (dry) {

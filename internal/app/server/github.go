@@ -38,7 +38,7 @@ type githubImportInput struct {
 	StoreParam
 	Body struct {
 		Repo      string `json:"repo" minLength:"1" doc:"The repository, as [<host>/]owner/repo"`
-		Label     string `json:"label" minLength:"1" doc:"The label of the issues to take in"`
+		Label     string `json:"label,omitempty" doc:"Take only the open issues with this label; without it, every open issue"`
 		Parent    string `json:"parent,omitempty" doc:"The task to put them under"`
 		Workspace string `json:"workspace,omitempty" doc:"The workspace; needed without parent when the store has several"`
 		DryRun    bool   `json:"dry_run,omitempty" doc:"Only count them"`
@@ -125,7 +125,7 @@ func (s *Server) registerGitHub() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "import-issues", Method: http.MethodPost, Path: "/api/github/import",
-		Summary: "Make a task in mirror mode for each open issue with a label, as hh gh import", Tags: []string{"github"},
+		Summary: "Make a task in mirror mode for each open issue (or those with a label), as hh gh import", Tags: []string{"github"},
 	}, func(_ context.Context, in *githubImportInput) (*struct{ Body integration.ImportResult }, error) {
 		b := in.Body
 		ss := s.session(in.Store)

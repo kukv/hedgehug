@@ -94,11 +94,15 @@ func (c *Client) Milestones(owner, name string) ([]Milestone, error) {
 	return getAll[Milestone](c, c.repoURL(owner, name)+"/milestones?state=all&per_page=100")
 }
 
-// OpenIssues lists the open issues of owner/name that have the label.
+// OpenIssues lists the open issues of owner/name that have the label, or all
+// of them when label is empty.
 func (c *Client) OpenIssues(owner, name, label string) ([]Issue, RateLimit, error) {
 	var out []Issue
 	var rl RateLimit
-	vars := map[string]any{"owner": owner, "name": name, "label": label}
+	vars := map[string]any{"owner": owner, "name": name, "labels": nil}
+	if label != "" {
+		vars["labels"] = []string{label}
+	}
 	for {
 		var data struct {
 			RateLimit  RateLimit `json:"rateLimit"`
@@ -127,10 +131,10 @@ func (c *Client) OpenIssues(owner, name, label string) ([]Issue, RateLimit, erro
 	}
 }
 
-const openIssuesQuery = `query OpenIssues($owner: String!, $name: String!, $label: String!, $after: String) {
+const openIssuesQuery = `query OpenIssues($owner: String!, $name: String!, $labels: [String!], $after: String) {
 rateLimit { limit remaining resetAt }
 repository(owner: $owner, name: $name) {
-issues(first: 100, after: $after, states: [OPEN], labels: [$label]) {
+issues(first: 100, after: $after, states: [OPEN], labels: $labels) {
 pageInfo { hasNextPage endCursor }
 nodes { ` + issueFields + ` }
 }

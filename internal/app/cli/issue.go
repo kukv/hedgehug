@@ -66,13 +66,10 @@ func (a *app) ghCmd() *cobra.Command {
 	}
 	var in integration.ImportInput
 	imp := &cobra.Command{
-		Use:   "import <org/repo> --label <label> [--parent <id>] [--workspace <name>] [--dry-run]",
-		Short: "Make a task in mirror mode for each open issue with a label",
+		Use:   "import <org/repo> [--label <label>] [--parent <id>] [--workspace <name>] [--dry-run]",
+		Short: "Make a task in mirror mode for each open issue (with --label, only those with the label)",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if in.Label == "" {
-				return usageErrorf("say which issues with --label")
-			}
 			in.Repo = args[0]
 			r, err := integration.ImportIssues(a.ss, in)
 			if err != nil {
@@ -96,7 +93,7 @@ func (a *app) ghCmd() *cobra.Command {
 			return a.warnAll(r.Warnings)
 		},
 	}
-	imp.Flags().StringVar(&in.Label, "label", "", "take the open issues with this label")
+	imp.Flags().StringVar(&in.Label, "label", "", "take only the open issues with this label (default: every open issue)")
 	imp.Flags().StringVar(&in.Parent, "parent", "", "put the tasks under this task (default: the project of hedgehug use)")
 	imp.Flags().StringVar(&in.Workspace, "workspace", "", "put the tasks in this workspace")
 	imp.Flags().BoolVar(&in.DryRun, "dry-run", false, "only say how many it would make")

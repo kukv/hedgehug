@@ -61,7 +61,7 @@ var (
 		"rateLimit": rateLimitShape,
 		"repository": {args: repositoryArgs, kids: map[string]shape{
 			"issues": {
-				args: "first:100,after:$after,states:[OPEN],labels:[$label]",
+				args: "first:100,after:$after,states:[OPEN],labels:$labels",
 				kids: map[string]shape{
 					"pageInfo": {kids: leaves("hasNextPage", "endCursor")},
 					"nodes":    issueShape,

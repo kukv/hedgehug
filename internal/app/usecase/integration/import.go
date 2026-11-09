@@ -97,7 +97,8 @@ func linkedIssues(ix *index.Index) []string {
 }
 
 // ImportIssues makes a task in mirror mode for each open issue of the
-// repository that has the label and no task yet. The body is written once,
+// repository that has the label (any open issue when Label is empty) and no
+// task yet. The body is written once,
 // here; the next read of the repository brings the rest. Each task is a commit
 // of its own, so that a run that stopped goes on by running it again.
 func ImportIssues(ss *usecase.Session, in ImportInput) (ImportResult, error) {

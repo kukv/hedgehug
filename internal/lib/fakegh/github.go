@@ -291,7 +291,10 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request, login string) {
 	case "ScanPulls":
 		s.scanPulls(w, x, after)
 	case "OpenIssues":
-		label, _ := body.Variables["label"].(string)
+		label := ""
+		if l, ok := body.Variables["labels"].([]any); ok && len(l) > 0 {
+			label, _ = l[0].(string)
+		}
 		s.openIssues(w, x, label, after)
 	default:
 		s.linked(w, x, top)

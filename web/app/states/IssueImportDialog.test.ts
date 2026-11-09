@@ -43,6 +43,17 @@ describe("IssueImportDialog", () => {
     );
   });
 
+  it("takes every open issue without a label", async () => {
+    const { api } = setup();
+    await fireEvent.input(screen.getByLabelText("リポジトリ"), { target: { value: "org-a/web" } });
+    await fireEvent.click(screen.getByRole("button", { name: "件数を確認する" }));
+    await screen.findByRole("button", { name: "3 件を mirror で取り込む" });
+    expect(api.importIssues).toHaveBeenLastCalledWith(
+      { repo: "org-a/web", label: undefined, parent: "P1", dry_run: true },
+      { store: "shared" },
+    );
+  });
+
   it("counts again after the label changes", async () => {
     setup();
     await fireEvent.input(screen.getByLabelText("リポジトリ"), { target: { value: "org-a/web" } });

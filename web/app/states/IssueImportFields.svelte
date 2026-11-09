@@ -2,7 +2,7 @@
   import { repoLabel } from "../../core/github";
   import { useGitHubRepos } from "../github.svelte";
 
-  // The repository and the label of hh gh import; the repositories the Store reads are offered.
+  // The repository and the label of hh gh import (the label is optional: without it, every open issue); the repositories the Store reads are offered.
   type Props = { store: string; form: { repo: string; label: string } };
   let { store, form }: Props = $props();
 
@@ -21,7 +21,7 @@
 </label>
 <label class="field">
   <span>ラベル</span>
-  <input autocomplete="off" bind:value={form.label}>
+  <input autocomplete="off" placeholder="なし（開いている Issue すべて）" bind:value={form.label}>
 </label>
 
 <style>
