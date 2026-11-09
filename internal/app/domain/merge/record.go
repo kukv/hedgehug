@@ -29,11 +29,12 @@ func (m *merger) record(ours, theirs Side, updated func([]byte) (time.Time, erro
 	}
 	r := Result{Data: win.Data}
 	if adopt != nil {
-		if data, kept := adopt(win.Data, lose.Data); data != nil {
+		data, gone := adopt(win.Data, lose.Data)
+		if data != nil {
 			r.Data = data
-			if kept {
-				return r, nil
-			}
+		}
+		if gone {
+			return r, nil
 		}
 	}
 	if m.p == LWW {
@@ -62,16 +63,22 @@ func worklogUpdated(data []byte) (time.Time, error) {
 // adoptCommentGH adds to the winning comment the elements of gh of the losing
 // one whose ref the winner lacks: the push that recorded them did not edit the
 // comment, so an edit elsewhere must not lose them. An element with a ref both
-// have stays as the winner has it. It returns nil when there is nothing to
-// add; kept is true when the loser changed nothing else since the base, so the
-// loss overwrote nothing.
-func adoptCommentGH(base, win, lose []byte) (data []byte, kept bool) {
+// have stays as the winner has it. data is the winner with them added, or nil
+// when there is nothing to add. nothingLost is true when the loser changed
+// nothing but gh since the base: gh is a record of the machine, not something
+// a person loses, so the loss is no overwrite.
+func adoptCommentGH(base, win, lose []byte) (data []byte, nothingLost bool) {
 	w, err1 := model.DecodeComment(win)
 	l, err2 := model.DecodeComment(lose)
+	b, err3 := model.DecodeComment(base) // fails with no base: the loser then overwrote
 	if err1 != nil || err2 != nil {
 		return nil, false
 	}
-	b, _ := model.DecodeComment(base) // nil with no base: the loser then overwrote
+	rest := func(c *model.Comment) []byte {
+		out, _ := (&model.Comment{ULID: c.ULID, Author: c.Author, Created: c.Created, Updated: c.Updated, DeletedAt: c.DeletedAt, Extra: c.Extra, Body: c.Body}).Encode()
+		return out
+	}
+	nothingLost = err3 == nil && bytes.Equal(rest(b), rest(l))
 	wl, err1 := w.GitHub()
 	ll, err2 := l.GitHub()
 	if err1 != nil || err2 != nil {
@@ -84,7 +91,7 @@ func adoptCommentGH(base, win, lose []byte) (data []byte, kept bool) {
 		}
 	}
 	if len(merged) == len(wl) {
-		return nil, false
+		return nil, nothingLost
 	}
 	if err := w.SetGitHub(merged); err != nil {
 		return nil, false
@@ -93,20 +100,5 @@ func adoptCommentGH(base, win, lose []byte) (data []byte, kept bool) {
 	if err != nil {
 		return nil, false
 	}
-	// Overwritten nothing when the loser changed nothing but gh since the base,
-	// and the result keeps all of it.
-	rest := func(c *model.Comment) []byte {
-		b, _ := (&model.Comment{ULID: c.ULID, Author: c.Author, Created: c.Created, Updated: c.Updated, DeletedAt: c.DeletedAt, Extra: c.Extra, Body: c.Body}).Encode()
-		return b
-	}
-	return out, b != nil && bytes.Equal(rest(b), rest(l)) && containsAll(merged, ll)
-}
-
-func containsAll(have, want []model.CommentLink) bool {
-	for _, x := range want {
-		if !slices.Contains(have, x) {
-			return false
-		}
-	}
-	return true
+	return out, nothingLost
 }
