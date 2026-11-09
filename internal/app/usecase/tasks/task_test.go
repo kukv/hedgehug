@@ -254,6 +254,26 @@ func TestDepManyRelationsOneCommit(t *testing.T) {
 	}
 }
 
+// The same target written twice for one relation is tied once, and removed once.
+func TestDepSameTargetTwice(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	a := ts.AddTask("a", nil)
+	ts.AddTask("b", nil)
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2", "ME-2"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := taskIn(t, ts, a.ULID).Relates; len(got) != 1 {
+		t.Errorf("relates = %v", got)
+	}
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2", "ME-2"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := taskIn(t, ts, a.ULID).Relates; len(got) != 0 {
+		t.Errorf("relates = %v", got)
+	}
+}
+
 // A pair that is already tied is refused for each target, nothing is written,
 // and so are a task tied to itself and a name that is no relation.
 func TestDepRefusals(t *testing.T) {

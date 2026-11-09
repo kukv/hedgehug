@@ -325,7 +325,9 @@ func Dep(ss *usecase.Session, arg string, targets DepTargets, add bool) (usecase
 			if err != nil {
 				return usecase.TaskResult{}, err
 			}
-			pairs = append(pairs, pair{rel, b.ULID})
+			if !slices.ContainsFunc(pairs, func(q pair) bool { return q.rel.Name == rel.Name && q.target == b.ULID }) {
+				pairs = append(pairs, pair{rel, b.ULID}) // the same one written twice is one
+			}
 		}
 	}
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "dep", Task: e.ULID}, func(tx *store.Tx) error {
