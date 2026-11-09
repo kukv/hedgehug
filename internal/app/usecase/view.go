@@ -19,7 +19,7 @@ type TaskView struct {
 	// lists, kind:project); it is left out for a task with none.
 	Project *Ref `json:"project,omitempty"`
 	// Scope is the ULID of the ancestor (or the task itself, when it is a
-	// container) whose schema override applies to the task, chosen as a write
+	// group) whose schema override applies to the task, chosen as a write
 	// is checked (schema.For); left out when none does.
 	Scope     string         `json:"scope,omitempty"`
 	Kind      string         `json:"kind"`
@@ -42,7 +42,8 @@ type TaskView struct {
 
 	// Only in ls --tree --json and show --json.
 	Checklist *Count `json:"checklist,omitempty"`
-	Progress  *Count `json:"progress,omitempty"`
+	Progress  *Count `json:"progress,omitempty"` // of a project or an epic
+	Steps     *Count `json:"steps,omitempty"`    // of a story, a task or a bug: its steps
 
 	// Only in ls --tree --json.
 	Context  bool        `json:"context,omitempty"`  // shown only to connect the tasks found
@@ -172,11 +173,11 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 }
 
 // ListViewOf is the view of the task e as a row of a list: the task with its
-// checklist and progress.
+// checklist, progress and steps.
 func ListViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	v := TaskViewOf(ix, e)
 	v.Checklist = ChecklistOf(e)
-	v.Progress = ProgressOf(ix, e)
+	v.Progress, v.Steps = ProgressOf(ix, e), StepsOf(ix, e)
 	return v
 }
 
@@ -205,7 +206,7 @@ func projectOf(ix *index.Index, e *index.Entry) *Ref {
 
 // scopeOf is the ULID of the ancestor whose override applies to e, or "". The
 // ancestors are the ones the index checks e against (Index.Ancestors): e first
-// when it is a container, then its parents nearest first, up to a task the
+// when it is a group, then its parents nearest first, up to a task the
 // index lacks or cannot read.
 func scopeOf(ix *index.Index, e *index.Entry) string {
 	sc := ix.Schema()

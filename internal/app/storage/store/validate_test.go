@@ -82,8 +82,7 @@ func TestUpdatePlacement(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)
 	parent := newTask("parent")
-	child := newTask("child")
-	child.Kind = "bug" // a bug cannot sit under a task
+	child := newTask("child") // a project cannot sit under a project
 	child.Parent = &parent.ULID
 	_, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		return errors.Join(tx.PutTask(parent), tx.PutTask(child))
@@ -98,9 +97,8 @@ func TestUpdateParentAndChildTogether(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)
 	parent := newTask("parent")
-	parent.Kind = "epic"
 	child := newTask("child")
-	child.Parent = &parent.ULID
+	child.Kind, child.Parent = "task", &parent.ULID
 	if _, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		// The child is put first: the check runs after fn, when both are queued.
 		return errors.Join(tx.PutTask(child), tx.PutTask(parent))
@@ -209,7 +207,7 @@ func TestUpdateUsesProjectSchema(t *testing.T) {
 	}
 
 	inside := newTask("inside")
-	inside.Parent = &project.ULID
+	inside.Kind, inside.Parent = "task", &project.ULID
 	inside.Status = "in_progress"
 	_, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(inside) })
 	var ve *ValidationError
@@ -254,9 +252,11 @@ func refusedMove(t *testing.T, s *Store, task *model.Task, code string, fn func(
 func TestUpdateMoveChecksPlacement(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)
-	parent := newTask("parent")
-	bug := newTask("bug")
-	bug.Kind = "bug" // fine at the root, not under a task
+	project := newTask("project")
+	parent, bug := newTask("parent"), newTask("bug")
+	parent.Kind, parent.Parent = "task", &project.ULID
+	bug.Kind, bug.Parent = "bug", &project.ULID // fine under a project, not under a task
+	addTask(t, s, project)
 	addTask(t, s, parent)
 	addTask(t, s, bug)
 	refusedMove(t, s, bug, schema.CodePlacement, func(b *model.Task) { b.Parent = &parent.ULID })
@@ -276,7 +276,10 @@ func TestUpdateMoveUsesProjectSchema(t *testing.T) {
 	if _, err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
 		t.Fatal(err)
 	}
+	home := newTask("home")
 	task := newTask("task")
+	task.Kind, task.Parent = "task", &home.ULID
+	addTask(t, s, home)
 	addTask(t, s, task)
 	refusedMove(t, s, task, schema.CodeRequired, func(m *model.Task) {
 		m.Parent = &project.ULID
@@ -293,10 +296,10 @@ func TestValidateWorkspace(t *testing.T) {
 		return err
 	}
 	var ve *ValidationError
-	if err := write(&model.Task{ULID: model.NewULID(), Kind: "task", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
+	if err := write(&model.Task{ULID: model.NewULID(), Kind: "project", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
 		t.Errorf("no workspace: %v", err)
 	}
-	if err := write(&model.Task{ULID: model.NewULID(), Workspace: model.NewULID(), Kind: "task", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
+	if err := write(&model.Task{ULID: model.NewULID(), Workspace: model.NewULID(), Kind: "project", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
 		t.Errorf("unknown workspace: %v", err)
 	}
 	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
@@ -306,7 +309,7 @@ func TestValidateWorkspace(t *testing.T) {
 	parent := newTaskIn(ws, "p")
 	mustPut(t, s, parent)
 	child := newTaskIn(api, "c")
-	child.Parent = &parent.ULID
+	child.Kind, child.Parent = "task", &parent.ULID
 	if err := write(child); !errors.As(err, &ve) || ve.Violations[0].Code != CodeWorkspaceMismatch {
 		t.Errorf("mismatch: %v", err)
 	}

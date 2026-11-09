@@ -7,7 +7,7 @@
   import CliLine from "../ui/CliLine.svelte";
   import FormError from "../ui/FormError.svelte";
 
-  // Takes in the open issues with a label: under a project, or at the root of a workspace.
+  // Takes in the open issues with a label, under a project (the root holds only projects).
   let { store, off }: { store: string; off: string | null } = $props();
 
   const c = core();
@@ -18,13 +18,12 @@
 
   type Option = ImportPlace & { key: string; label: string };
   const options = $derived(
-    spaces.current.flatMap((w): Option[] => [
-      ...w.projects.map((p) => {
+    spaces.current.flatMap((w): Option[] =>
+      w.projects.map((p) => {
         const id = did.current(store, p.id);
         return { key: p.ulid, label: `${p.title} / ${id}`, parent: p.ulid, parentId: id };
       }),
-      { key: w.ulid, label: `${w.name} のルート`, workspace: w.name },
-    ]),
+    ),
   );
   let picked = $state("");
   const place = $derived(options.find((o) => o.key === picked) ?? options[0]);
@@ -32,8 +31,8 @@
   const form = useIssueImport(
     () => store,
     () => {
-      const { parent, parentId, workspace } = place ?? {};
-      return { parent, parentId, workspace };
+      const { parent, parentId } = place ?? {};
+      return { parent, parentId };
     },
     () => {
       form.repo = "";
@@ -79,6 +78,9 @@
     </Button>
   {/if}
 </div>
+{#if options.length === 0}
+  <p class="count">取り込み先のプロジェクトがありません。先にプロジェクトを作ってください</p>
+{/if}
 {#if form.counted}
   <p class="count">
     open の Issue {form.counted.count} 件 · うち {form.counted.skipped}

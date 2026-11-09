@@ -20,7 +20,7 @@ type field struct {
 	by    string                        // "place", "number" or "text"
 	order []string                      // by place: the values in the schema's order
 	parse func(string) (float64, error) // by number: how a value is read
-	class func(*index.Entry) int        // status: the category's place; kind: the role's place; nil: 0
+	class func(*index.Entry) int        // status: the category's place; nil: 0
 }
 
 // sortSpec is the sort: of a query.
@@ -95,15 +95,10 @@ func (c *compiler) fieldOf(t Term, name string, group bool) (field, error) {
 		return f, nil
 	case "kind":
 		var names []string
-		for _, k := range c.sc.Kinds {
+		for _, k := range schema.Kinds {
 			names = append(names, k.Name)
 		}
-		f := placed(field{values: text(func(e *index.Entry) string { return e.Kind })}, names)
-		f.class = func(e *index.Entry) int {
-			k, _ := c.sc.Kind(e.Kind)
-			return roleClass(k.Role)
-		}
-		return f, nil
+		return placed(field{values: text(func(e *index.Entry) string { return e.Kind })}, names), nil
 	case "title":
 		return texted(field{values: text(func(e *index.Entry) string { return e.Title })}), nil
 	case "created":
@@ -135,17 +130,6 @@ func (c *compiler) fieldOf(t Term, name string, group bool) (field, error) {
 		return numbered(f, parsers[p.Type]), nil
 	}
 	return texted(f), nil
-}
-
-// roleClass is the place of a role: container, then work, then anything else.
-func roleClass(r schema.Role) int {
-	switch r {
-	case schema.RoleContainer:
-		return 0
-	case schema.RoleWork:
-		return 1
-	}
-	return 2
 }
 
 // byPlace orders values by their place in order; values not in it come

@@ -317,6 +317,10 @@ func (ss *Session) DropMount() {
 
 // OpenError is the error of a store that does not open.
 func OpenError(name string, err error) *Error {
+	// A format the store is in is told by its own code, in its own words.
+	if e := Classify(err); e != nil && (e.Code == "store.old_format" || e.Code == "store.newer_format") {
+		return NewErr(KindInvalid, e.Code, err, "name", name)
+	}
 	return NewErr(KindInvalid, "store.open", fmt.Errorf("cannot open %s: %w", name, err), "name", name)
 }
 
@@ -403,10 +407,21 @@ func (ss *Session) nameAt(dir string) string {
 // what it writes has the time ss.Now tells. A store whose rebuild stopped
 // part of the way does not open (store.LeftoverError).
 func (ss *Session) OpenStoreAt(dir string) (*store.Store, error) {
+	return ss.openStoreAt(dir)
+}
+
+// OpenStoreAtAnyFormat is OpenStoreAt for a store in an older format too,
+// which OpenStoreAt refuses (model.ErrOldFormat): hh store convert opens it
+// this way.
+func (ss *Session) OpenStoreAtAnyFormat(dir string) (*store.Store, error) {
+	return ss.openStoreAt(dir, store.AcceptOldFormat())
+}
+
+func (ss *Session) openStoreAt(dir string, opts ...store.Option) (*store.Store, error) {
 	if store.RebuildPhaseIn(dir) == store.RebuildApply {
 		return nil, &store.LeftoverError{Name: ss.nameAt(dir)}
 	}
-	s, err := store.Open(dir)
+	s, err := store.Open(dir, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -560,6 +575,50 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 		ss.forgetQualified()
 	}
 	return h, err
+}
+
+// CommitFiles writes files (nil removes a file) over HEAD of s as one commit
+// of the operation op, authored by the store's account, and returns its hash.
+// The commit is not marked for the background sync: the caller syncs. It is
+// for what rewrites files at hand, such as hh store convert. It returns
+// store.ErrHeadMoved when HEAD is not head, and gitrepo.ErrWorkTreeChanged
+// when a file to write is not as in HEAD.
+func (ss *Session) CommitFiles(s *store.Store, head plumbing.Hash, files map[string][]byte, op store.Op) (plumbing.Hash, error) {
+	if err := ss.CheckWritable(s); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	acct, ok, err := ss.Writer()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	if !ok {
+		return plumbing.ZeroHash, ErrNoAccounts
+	}
+	op.Author, op.Account = config.CommitAuthor(acct), acct.ID()
+	h, err := s.CommitMerge(head, []plumbing.Hash{head}, files, op, nil)
+	if err == nil {
+		ss.DropMount()
+		ss.forgetQualified()
+	}
+	return h, err
+}
+
+// CommitOnParent commits files on the commit parent, which is not HEAD, as
+// CommitFiles does on HEAD, and moves nothing: the commit is reachable from
+// nothing until it is pushed.
+func (ss *Session) CommitOnParent(s *store.Store, parent plumbing.Hash, files map[string][]byte, op store.Op) (plumbing.Hash, error) {
+	if err := ss.CheckWritable(s); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	acct, ok, err := ss.Writer()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	if !ok {
+		return plumbing.ZeroHash, ErrNoAccounts
+	}
+	op.Author, op.Account = config.CommitAuthor(acct), acct.ID()
+	return s.CommitOn(parent, files, op, nil)
 }
 
 // CommitHex is the hex form of a commit hash, "" for the zero hash.

@@ -11,9 +11,9 @@ import (
 // file, with props as a mapping of name to definition.
 type SchemaView struct {
 	Statuses  []StatusDef        `json:"statuses"`
-	Kinds     []KindDef          `json:"kinds"`
 	Props     map[string]PropDef `json:"props"`
 	Workflow  WorkflowDef        `json:"workflow"`
+	Templates *TemplatesDef      `json:"templates,omitempty"`
 	Scoped    []ScopedDef        `json:"scoped"`
 	PropOrder []string           `json:"prop_order"`
 }
@@ -25,18 +25,6 @@ type StatusDef struct {
 	Category string `json:"category"`
 	Color    string `json:"color,omitempty"`
 	Default  bool   `json:"default,omitempty"`
-}
-
-// KindDef is a kind of the schema; Parents nil means anywhere.
-type KindDef struct {
-	Name     string   `json:"name"`
-	Label    string   `json:"label,omitempty"`
-	Role     string   `json:"role"`
-	Parents  []string `json:"parents"`
-	Icon     string   `json:"icon,omitempty"`
-	Color    string   `json:"color,omitempty"`
-	Template string   `json:"template,omitempty"`
-	Default  bool     `json:"default,omitempty"`
 }
 
 // PropDef is a property of the schema.
@@ -56,7 +44,8 @@ type WorkflowDef struct {
 	Required    map[string][]string `json:"required"`
 }
 
-// TemplatesDef is the templates of a scoped override, as the keys of
+// TemplatesDef is the templates of the store (only default) or of a scoped
+// override, as the keys of
 // schema.yaml name them.
 type TemplatesDef struct {
 	Only    []string          `json:"only,omitempty"`
@@ -83,18 +72,18 @@ func SchemaGet(ss *usecase.Session) (SchemaView, error) {
 // SchemaViewOf is sc as SchemaView.
 func SchemaViewOf(sc *schema.Schema) SchemaView {
 	v := SchemaView{
-		Statuses: []StatusDef{}, Kinds: []KindDef{}, Props: map[string]PropDef{},
+		Statuses: []StatusDef{}, Props: map[string]PropDef{},
 		Workflow: workflowDefOf(sc.Workflow), Scoped: []ScopedDef{}, PropOrder: []string{},
 	}
 	for _, st := range sc.Statuses {
 		v.Statuses = append(v.Statuses, StatusDef{st.Name, st.Label, string(st.Category), st.Color, st.Default})
 	}
-	for _, k := range sc.Kinds {
-		v.Kinds = append(v.Kinds, KindDef{k.Name, k.Label, string(k.Role), k.Parents, k.Icon, k.Color, k.Template, k.Default})
-	}
 	for _, p := range sc.Props {
 		v.Props[p.Name] = PropDef{string(p.Type), p.Values, p.Multi, p.Label, p.Inverse, p.Symmetric}
 		v.PropOrder = append(v.PropOrder, p.Name)
+	}
+	if sc.Templates != nil && len(sc.Templates.Default) > 0 {
+		v.Templates = &TemplatesDef{Default: sc.Templates.Default}
 	}
 	for _, s := range sc.Scoped {
 		v.Scoped = append(v.Scoped, ScopedDefOf(s))

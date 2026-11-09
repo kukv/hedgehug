@@ -21,7 +21,7 @@ func TestListShowsTheLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	l, err := browse.List(ts.Session, "")
+	l, err := browse.List(ts.Session, "a")
 	if err != nil {
 		t.Fatal(err)
 	}

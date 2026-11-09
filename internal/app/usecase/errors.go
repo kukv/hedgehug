@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -80,6 +81,7 @@ func Classify(err error) *Error {
 	var ae *index.AmbiguousError
 	var ve *store.ValidationError
 	var wt *store.WorkspaceTakenError
+	var fd *replicate.FormatDivergedError
 	switch {
 	case err == nil:
 		return nil
@@ -95,6 +97,14 @@ func Classify(err error) *Error {
 		return NewErr(KindConflict, "store.locked", err)
 	case errors.Is(err, store.ErrStoreGone):
 		return NewErr(KindConflict, "store.gone", err)
+	case errors.Is(err, model.ErrOldFormat):
+		return NewErr(KindInvalid, "store.old_format", err)
+	case errors.Is(err, model.ErrNewerFormat):
+		return NewErr(KindInvalid, "store.newer_format", err)
+	case errors.As(err, &fd):
+		return NewErr(KindConflict, "sync.format_diverged", err, "remote_older", fd.RemoteOlder())
+	case errors.Is(err, replicate.ErrFormatDiverged):
+		return NewErr(KindConflict, "sync.format_diverged", err)
 	case errors.Is(err, replicate.ErrDirty):
 		return NewErr(KindConflict, "sync.dirty", err)
 	case errors.Is(err, replicate.ErrUnrelated):
@@ -131,6 +141,10 @@ var ErrLocked = store.ErrLocked
 
 // ErrForcePush is the error of a sync that found the remote rewritten.
 var ErrForcePush = replicate.ErrForcePush
+
+// ErrFormatDiverged is the error of a sync that found the two sides in
+// different store formats; hh store convert is the way out.
+var ErrFormatDiverged = replicate.ErrFormatDiverged
 
 // ViolationsOf is the violations of a write the schema refused, or ok=false
 // when err is not that.

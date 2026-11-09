@@ -107,8 +107,8 @@ func ScopedGet(ss *usecase.Session, arg string) (ScopedResult, error) {
 // (op schema): the parts ch gives are replaced, a part ch gives empty goes
 // back to the store's value, and the rest is kept, with the templates and the
 // keys schema.yaml has that hedgehug does not know. An override left with
-// nothing is removed. The project must be a task of a kind whose role is
-// container and not deleted (KindInvalid, scoped.not_container; KindConflict,
+// nothing is removed. The project must be a task of a group kind (project or epic)
+// and not deleted (KindInvalid, scoped.not_group; KindConflict,
 // task.deleted). A change that brings a problem schema.Check does not find in
 // schema.yaml now is KindInvalid, scoped.invalid, with the problems as Args
 // "problems"; nothing is written.
@@ -125,7 +125,7 @@ func ScopedSet(ss *usecase.Session, arg string, ch schema.ScopedChange) (ScopedR
 		return ScopedResult{}, err
 	}
 	id := ix.DisplayID(e)
-	if err := scopedContainer(ix.Schema(), id, e.Kind); err != nil {
+	if err := scopedGroup(id, e.Kind); err != nil {
 		return ScopedResult{}, err
 	}
 	if err := templatesExist(s, ch); err != nil {
@@ -147,6 +147,12 @@ func templatesExist(s *store.Store, ch schema.ScopedChange) error {
 			names = append(names, n)
 		}
 	}
+	return templatesNamed(s, names)
+}
+
+// templatesNamed refuses the first of names that is not a template of the
+// store (KindNotFound, template.not_found).
+func templatesNamed(s *store.Store, names []string) error {
 	for _, n := range names {
 		if _, err := s.Template(n); errors.Is(err, store.ErrNotFound) {
 			return usecase.NewErr(usecase.KindNotFound, "template.not_found", fmt.Errorf("template %s is not in this store", n), "name", n)
@@ -156,7 +162,7 @@ func templatesExist(s *store.Store, ch schema.ScopedChange) error {
 }
 
 // scopedGuard checks the project ulid, which id names, under the lock of the
-// write: it is there, not deleted, and a container in the schema cur.
+// write: it is there, not deleted, and a group (project or epic) in the schema cur.
 func scopedGuard(id string, ulid model.ULID) func(*store.Tx, *schema.Schema) error {
 	return func(tx *store.Tx, cur *schema.Schema) error {
 		t, err := tx.Task(ulid)
@@ -169,7 +175,7 @@ func scopedGuard(id string, ulid model.ULID) func(*store.Tx, *schema.Schema) err
 		if t.DeletedAt != nil {
 			return usecase.NewErr(usecase.KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", id, id), "id", id)
 		}
-		return scopedContainer(cur, id, t.Kind)
+		return scopedGroup(id, t.Kind)
 	}
 }
 
@@ -228,11 +234,11 @@ func scopedInvalid(ps []schema.Problem) error {
 	return usecase.NewErr(usecase.KindInvalid, "scoped.invalid", fmt.Errorf("the override breaks the schema: %s", strings.Join(msgs, "; ")), "problems", msgs)
 }
 
-// scopedContainer refuses a kind of sc whose role is not container.
-func scopedContainer(sc *schema.Schema, id, kind string) error {
-	if k, ok := sc.Kind(kind); !ok || k.Role != schema.RoleContainer {
-		return usecase.NewErr(usecase.KindInvalid, "scoped.not_container",
-			fmt.Errorf("%s is a %s, which is not a container", id, kind), "id", id, "kind", kind)
+// scopedGroup refuses a kind that is not a group (a project or an epic).
+func scopedGroup(id, kind string) error {
+	if !schema.IsGroup(kind) {
+		return usecase.NewErr(usecase.KindInvalid, "scoped.not_group",
+			fmt.Errorf("%s is a %s; an override can be put on a project or an epic only", id, kind), "id", id, "kind", kind)
 	}
 	return nil
 }

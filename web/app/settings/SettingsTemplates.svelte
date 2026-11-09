@@ -3,16 +3,42 @@
   import { errorMessage } from "../../core/messages";
   import type { Template } from "../../core/planning";
   import { core } from "../context";
+  import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
   import FormError from "../ui/FormError.svelte";
+  import KindTemplateDefaults from "./KindTemplateDefaults.svelte";
 
   // The templates of a Store: the file as it is, checked by the server when it is saved.
   type Props = { store: string; off: string | null };
   let { store, off }: Props = $props();
 
-  const { api } = core();
+  const { api, schema } = core();
+  const sc = useSubscribe(schema, () => schema.get(store));
+  const defaults = $derived(sc.current?.templates?.default ?? {});
+  let defaultsFailure = $state<string | null>(null);
+  // A change goes back with all the defaults, so the next one waits for it to be saved.
+  let defaultsBusy = $state(false);
+
+  // The default template of a kind: all the defaults go back, with the one of this kind changed.
+  async function setDefault(kind: string, name: string) {
+    if (defaultsBusy) return;
+    defaultsBusy = true;
+    defaultsFailure = null;
+    const { [kind]: _, ...rest } = defaults;
+    try {
+      await api.setTemplateDefaults(
+        { default: name === "" ? rest : { ...rest, [kind]: name } },
+        { store },
+      );
+      await schema.reload(store);
+    } catch (e) {
+      defaultsFailure = errorMessage(e);
+    } finally {
+      defaultsBusy = false;
+    }
+  }
   const uid = $props.id();
 
   let list = $state.raw<Template[]>([]);
@@ -188,6 +214,23 @@
       <FormError message={failure} />
     {/if}
   </div>
+</section>
+
+<section class="sec" aria-labelledby="{uid}-d">
+  <h2 id="{uid}-d">種類ごとの既定のテンプレート</h2>
+  <p class="none">テンプレートを選ばずにその種類のタスクを作ると使うテンプレートです</p>
+  {#if defaultsFailure}
+    <FormError message={defaultsFailure} />
+  {/if}
+  {#if list.length > 0}
+    <KindTemplateDefaults
+      names={list.map((t) => t.name)}
+      values={defaults}
+      disabled={off !== null || defaultsBusy}
+      none={() => "なし"}
+      onchange={(k, n) => void setDefault(k, n)}
+    />
+  {/if}
 </section>
 
 <style>

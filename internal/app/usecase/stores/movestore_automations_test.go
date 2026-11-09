@@ -10,7 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -183,6 +182,7 @@ func TestMoveStoreChildOfAProjectLeavesItsAutomations(t *testing.T) {
 	f.SetAutomations(t, "org-b", dst)
 	in := f.In()
 	in.Arg = "API-3"
+	in.Parent = "WEB-1"
 	res, err := stores.MoveStore(f.TS.Session, in)
 	if err != nil {
 		t.Fatal(err)
@@ -278,12 +278,13 @@ func TestMoveStoreCarriesNothingOfTheAutomations(t *testing.T) {
 	}
 }
 
-// A deleted project goes with its parent, and can be restored there, so its
-// rules go too.
-func TestMoveStoreCarriesTheRulesOfADeletedProject(t *testing.T) {
+// A project with a deleted task under it moves with the task, and its rules go
+// too. (A project cannot be deleted under another one any more: only a project
+// sits at the root, and a deleted root is refused.)
+func TestMoveStoreCarriesTheRulesOfAProjectWithADeletedTask(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
-	deletedSubProject(t, f)
+	deletedTaskWithARule(t, f)
 	in := f.In()
 	in.Scoped = "carry"
 	if _, err := stores.MoveStore(f.TS.Session, in); err != nil {
@@ -299,7 +300,7 @@ func TestMoveStoreCarriesTheRulesOfADeletedProject(t *testing.T) {
 func TestMoveStoreRerunWithADeletedTask(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
-	deletedSubProject(t, f)
+	deletedTaskWithARule(t, f)
 	in := f.In()
 	in.Scoped = "carry"
 	stopInTheSource(t, f, in)
@@ -328,33 +329,16 @@ func TestMoveStoreRefusesATaskDeletedInTheDestination(t *testing.T) {
 	usecasetest.MustCode(t, err, usecase.KindConflict, "move.exists")
 }
 
-// deletedSubProject gives org-a a project under API-2 with a rule, and deletes
-// it. Both stores allow a project there, so that it can move.
-func deletedSubProject(t *testing.T, f *usecasetest.MoveFx) {
+// deletedTaskWithARule gives org-a a task under API-2 and deletes it, and a rule
+// for API-2.
+func deletedTaskWithARule(t *testing.T, f *usecasetest.MoveFx) {
 	t.Helper()
-	anywhere := func(sc *schema.Schema) {
-		for i := range sc.Kinds {
-			if sc.Kinds[i].Name == "project" {
-				sc.Kinds[i].Parents = nil
-			}
-		}
-	}
-	f.SetSchema(t, anywhere)
-	bs, _ := f.TS.ForStore("org-b").OpenStore()
-	sc, err := stores.CloneSchemaOf(bs.Schema())
-	if err != nil {
-		t.Fatal(err)
-	}
-	anywhere(sc)
-	if _, err := f.TS.ForStore("org-b").Update(bs, store.Op{Name: "schema"}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
 	a := f.TS.ForStore("org-a")
-	r, err := tasks.Add(a, tasks.AddInput{Title: "Sub", Parent: "API-2", Kind: "project"})
+	r, err := tasks.Add(a, tasks.AddInput{Title: "Sub", Parent: "API-2", Kind: "task"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.SetAutomations(t, "org-a", "rules:\n- {id: sub, where: 'project:"+r.ULID.String()+"', on: pr.opened, set: {status: done}}\n")
+	f.SetAutomations(t, "org-a", "rules:\n- {id: sub, where: 'project:"+f.P.String()+"', on: pr.opened, set: {status: done}}\n")
 	if _, err := tasks.Remove(a, r.ULID.String()); err != nil {
 		t.Fatal(err)
 	}

@@ -32,7 +32,7 @@ func TestTemplateAPI(t *testing.T) {
 	}
 
 	var added usecase.TaskWrite
-	ts.call("POST", "/api/tasks", map[string]any{"template": "bug"}, 201, &added)
+	ts.call("POST", "/api/tasks", map[string]any{"template": "bug", "parent": ts.add("project", "")}, 201, &added)
 	if added.Task.Title != "Bug" || added.Children != 1 {
 		t.Fatalf("added = %+v", added)
 	}

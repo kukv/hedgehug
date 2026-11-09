@@ -62,6 +62,7 @@ function setup(readOnly: string | null = null) {
     ["T7", task("T7", "task", "P", { id: "REL-7", title: "スキーマを再生成" })],
     ["T9", task("T9", "task", "P", { id: "REL-9", title: "負荷試験" })],
     ["T1", task("T1", "task", "E8", { id: "REL-1", title: "子" })],
+    ["P2", task("P2", "project", null, { id: "REL-16", title: "別のプロジェクト" })],
   ]);
   const roots = [
     {
@@ -189,8 +190,8 @@ describe("TreeView drag and drop", () => {
     row("E8").onDragStart();
     row("T7").onOver("child", "E8");
     expect(await screen.findByText("ここには置けません")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("エピックはタスクの下に置けません");
-    expect(screen.getByRole("status")).toHaveTextContent("（shared の schema.yaml の kinds）");
+    expect(screen.getByRole("status")).toHaveTextContent("Epic は Task の下に置けません");
+    expect(screen.getByRole("status")).toHaveTextContent("Epic を置けるのは Project の下だけです");
     const tree = screen.getByRole("tree");
     expect(tree).toHaveClass("refusing");
     row("T7").onOver(null, null);
@@ -215,7 +216,7 @@ describe("TreeView drag and drop", () => {
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("T7").onDrop("E8", "child");
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
-    expect(h.toast.mock.calls[0]?.[0].message).toContain("エピックはタスクの下に置けません");
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("Epic は Task の下に置けません");
     expect(api.moveTask).not.toHaveBeenCalled();
   });
 
@@ -328,12 +329,12 @@ describe("TreeView drag and drop", () => {
 
   it("sends root: true next to a top-level task", async () => {
     const { api } = setup();
-    api.moveTask.mockResolvedValue(ok({ task: task("E8", "epic", null), commit: "c1" }));
+    api.moveTask.mockResolvedValue(ok({ task: task("P2", "project", null), commit: "c1" }));
     render(TreeView, { view: { kind: "workspace", store: "shared", ulid: "W1" } });
-    row("P").onDrop("E8", "after");
+    row("P").onDrop("P2", "after");
     await waitFor(() => expect(api.moveTask).toHaveBeenCalled());
     expect(api.moveTask).toHaveBeenCalledWith(
-      "E8",
+      "P2",
       { root: true, after: "P" },
       { store: "shared" },
     );

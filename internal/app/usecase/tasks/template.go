@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -137,9 +138,7 @@ func (x *expanded) expand(ix *index.Index, parent *model.Task, items []model.Tem
 		c := &model.Task{ULID: model.NewULID(), Workspace: parent.Workspace, Parent: &parent.ULID, Kind: it.Kind, Status: it.Status}
 		var err error
 		if c.Kind == "" {
-			if c.Kind, err = usecase.DefaultKind(ix.Schema()); err != nil {
-				return err
-			}
+			c.Kind = schema.DefaultKindUnder(parent.Kind)
 		}
 		if c.Status == "" {
 			if c.Status, err = usecase.DefaultTodo(ix.Schema()); err != nil {

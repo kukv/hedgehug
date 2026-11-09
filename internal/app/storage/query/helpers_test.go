@@ -43,7 +43,7 @@ func writeRaw(t *testing.T, s *store.Store, rel, content string) {
 }
 
 func newTask(title string) *model.Task {
-	return &model.Task{ULID: model.NewULID(), Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Kind: "project", Title: title, Status: "todo"}
 }
 
 func setProp(task *model.Task, key, value string) {

@@ -32,28 +32,6 @@ type Status struct {
 	Default  bool     `yaml:"default,omitempty"`
 }
 
-// Role says what a kind of task is for.
-type Role string
-
-const (
-	RoleContainer Role = "container" // groups work, like a project or an epic
-	RoleWork      Role = "work"      // a work item
-)
-
-// Root stands for "no parent" in Kind.Parents.
-const Root = "root"
-
-type Kind struct {
-	Name     string   `yaml:"name"`
-	Label    string   `yaml:"label,omitempty"`
-	Role     Role     `yaml:"role"`
-	Parents  []string `yaml:"parents,omitempty"` // nil: anywhere
-	Icon     string   `yaml:"icon,omitempty"`
-	Color    string   `yaml:"color,omitempty"`
-	Template string   `yaml:"template,omitempty"`
-	Default  bool     `yaml:"default,omitempty"`
-}
-
 type PropType string
 
 const (
@@ -191,17 +169,17 @@ type Scoped struct {
 
 // Schema is schema.yaml.
 type Schema struct {
-	Statuses []Status
-	Kinds    []Kind
-	Props    Props
-	Workflow Workflow
-	Scoped   []Scoped
-	Extra    model.Fields
+	Statuses  []Status
+	Props     Props
+	Workflow  Workflow
+	Templates *Templates // default template of each kind, for the store
+	Scoped    []Scoped
+	Extra     model.Fields
 
 	doc *model.Doc
 }
 
-var schemaKeys = []string{"statuses", "kinds", "props", "workflow", "scoped"}
+var schemaKeys = []string{"statuses", "props", "workflow", "templates", "scoped"}
 
 // Decode reads schema.yaml. It does not check the schema; see Check.
 func Decode(data []byte) (*Schema, error) {
@@ -215,9 +193,9 @@ func Decode(data []byte) (*Schema, error) {
 		out any
 	}{
 		{"statuses", &s.Statuses},
-		{"kinds", &s.Kinds},
 		{"props", &s.Props},
 		{"workflow", &s.Workflow},
+		{"templates", &s.Templates},
 		{"scoped", &s.Scoped},
 	} {
 		if err := d.Decode(f.key, f.out); err != nil {
@@ -235,17 +213,17 @@ func (s *Schema) Encode() ([]byte, error) {
 	}
 	e := s.doc.Encoder()
 	e.Put("statuses", s.Statuses, len(s.Statuses) == 0)
-	e.Put("kinds", s.Kinds, len(s.Kinds) == 0)
 	e.Put("props", s.Props, len(s.Props) == 0)
 	if !s.Workflow.IsZero() { // a key not put is left out, so an emptied workflow is not written as {}
 		e.Put("workflow", s.Workflow, false)
 	}
+	e.Put("templates", s.Templates, s.Templates == nil || (len(s.Templates.Only) == 0 && len(s.Templates.Default) == 0))
 	e.Put("scoped", s.Scoped, len(s.Scoped) == 0)
 	return e.Bytes(s.Extra)
 }
 
 // Default returns the schema of a new store: seven statuses in four
-// categories, five kinds and the common properties.
+// categories and the common properties.
 func Default() *Schema {
 	return &Schema{
 		Statuses: []Status{
@@ -256,13 +234,6 @@ func Default() *Schema {
 			{Name: "waiting", Label: "Waiting", Category: CategoryDoing},
 			{Name: "done", Label: "Done", Category: CategoryDone, Default: true},
 			{Name: "canceled", Label: "Canceled", Category: CategoryCanceled, Default: true},
-		},
-		Kinds: []Kind{
-			{Name: "project", Label: "Project", Role: RoleContainer, Parents: []string{Root}},
-			{Name: "epic", Label: "Epic", Role: RoleContainer, Parents: []string{Root, "project"}},
-			{Name: "story", Label: "Story", Role: RoleWork, Parents: []string{Root, "project", "epic"}},
-			{Name: "task", Label: "Task", Role: RoleWork, Parents: []string{Root, "project", "epic", "story", "task"}, Default: true},
-			{Name: "bug", Label: "Bug", Role: RoleWork, Parents: []string{Root, "project", "epic", "story"}},
 		},
 		Props: Props{
 			{Name: "priority", Type: TypeEnum, Values: []string{"low", "mid", "high", "urgent"}, Label: "優先度"},
@@ -296,15 +267,6 @@ func (s *Schema) Status(name string) (Status, bool) {
 	return Status{}, false
 }
 
-func (s *Schema) Kind(name string) (Kind, bool) {
-	for _, k := range s.Kinds {
-		if k.Name == name {
-			return k, true
-		}
-	}
-	return Kind{}, false
-}
-
 func (s *Schema) Prop(name string) (Prop, bool) {
 	for _, p := range s.Props {
 		if p.Name == name {
@@ -323,14 +285,4 @@ func (s *Schema) DefaultStatus(c Category) (Status, bool) {
 		}
 	}
 	return Status{}, false
-}
-
-// DefaultKind returns the default kind of the work role.
-func (s *Schema) DefaultKind() (Kind, bool) {
-	for _, k := range s.Kinds {
-		if k.Role == RoleWork && k.Default {
-			return k, true
-		}
-	}
-	return Kind{}, false
 }

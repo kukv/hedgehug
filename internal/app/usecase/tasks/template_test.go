@@ -28,10 +28,10 @@ children:
 Welcome.
 `
 
-// defaultTemplateOfTask gives the kind task of schema.yaml a template.
+// defaultTemplateOfTask makes templates.default of schema.yaml name a template for the kind task.
 func defaultTemplateOfTask(name string) func(string) string {
 	return func(sc string) string {
-		return strings.Replace(sc, "{name: task, ", "{name: task, template: "+name+", ", 1)
+		return sc + "templates:\n  default:\n    task: " + name + "\n"
 	}
 }
 
@@ -83,9 +83,10 @@ func TestAddExpandsATemplate(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	ts.WriteAndCommit("templates/onboarding.md", onboarding)
+	p := ts.AddProject("P") // an epic goes under a project
 	head := ts.Head()
 
-	r, err := tasks.Add(ts.Session, tasks.AddInput{Template: "onboarding"})
+	r, err := tasks.Add(ts.Session, tasks.AddInput{Template: "onboarding", Parent: p.String()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,9 +130,10 @@ func TestAddExpandsATemplate(t *testing.T) {
 func TestAddArgumentsWinOverTheTemplate(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	ts.WriteAndCommit("templates/onboarding.md", onboarding)
+	ts.WriteAndCommit("templates/onboarding.md", "---\nkind: epic\ntitle: Onboarding\nlabels: [people]\n---\nWelcome.\n") // no children: the template's own would not fit under a task
+	p := ts.AddProject("P")
 	got := addOf(t, ts, tasks.AddInput{
-		Template: "onboarding", Title: "Mine", Kind: "task", Body: "own\n",
+		Template: "onboarding", Title: "Mine", Kind: "task", Body: "own\n", Parent: p.String(),
 		Assigns: []usecase.Assign{{Key: "labels", Op: "=", Value: "x"}},
 	})
 	if got.Title != "Mine" || got.Kind != "task" || got.Body != "own\n" || !slices.Equal(got.Labels, []string{"x"}) {
@@ -144,14 +146,15 @@ func TestAddTakesTheDefaultTemplateOfTheKind(t *testing.T) {
 	ts := usecasetest.New(t)
 	ts.WriteAndCommit("templates/bug.md", "---\nlabels: [bug]\nchildren:\n  - title: Reproduce\n---\n")
 	ts.EditSchema(defaultTemplateOfTask("bug"))
-	got := addOf(t, ts, tasks.AddInput{Title: "crash"})
+	p := ts.AddProject("P") // a task goes under a project
+	got := addOf(t, ts, tasks.AddInput{Title: "crash", Parent: p.String()})
 	if !slices.Equal(got.Labels, []string{"bug"}) {
 		t.Fatalf("labels = %v", got.Labels)
 	}
 	if kids := children(t, ts, got.ULID); len(kids) != 1 {
 		t.Fatalf("children = %v", titles(kids))
 	}
-	plain := addOf(t, ts, tasks.AddInput{Title: "plain", NoTemplate: true})
+	plain := addOf(t, ts, tasks.AddInput{Title: "plain", NoTemplate: true, Parent: p.String()})
 	if len(plain.Labels) != 0 {
 		t.Fatalf("--no-template kept %v", plain.Labels)
 	}
@@ -164,7 +167,8 @@ func TestAddMissingTemplate(t *testing.T) {
 	usecasetest.WantErr(t, err, usecase.KindNotFound, "template.not_found")
 
 	ts.EditSchema(defaultTemplateOfTask("gone"))
-	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+	p := ts.AddProject("P")
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a", Parent: p.String()}); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.ContainsFunc(ts.Warns, func(w string) bool { return strings.Contains(w, "gone") }) {
@@ -240,8 +244,9 @@ func TestUndoTakesTheExpansionBack(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	ts.WriteAndCommit("templates/onboarding.md", onboarding)
+	p := ts.AddProject("P") // an epic goes under a project
 	before := len(ts.TaskULIDs("me"))
-	if _, err := tasks.Add(ts.Session, tasks.AddInput{Template: "onboarding"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Template: "onboarding", Parent: p.String()}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tasks.Undo(ts.Session); err != nil {

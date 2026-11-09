@@ -1,6 +1,7 @@
 <script lang="ts">
   import { categoryOf } from "../../core/categories";
   import { cliReleaseNotes } from "../../core/cli";
+  import { kindLabel } from "../../core/kinds";
   import { errorMessage } from "../../core/messages";
   import {
     groupByKind,
@@ -10,7 +11,7 @@
     type ReleaseState,
     releaseDue,
   } from "../../core/planning";
-  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
+  import { statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
@@ -69,12 +70,7 @@
     cacheRev.current;
     return (list?.ulids() ?? []).flatMap((u) => c.cache.task(u) ?? []);
   });
-  const groups = $derived(
-    groupByKind(
-      tasks,
-      (schema?.kinds ?? []).map((k) => k.name),
-    ),
-  );
+  const groups = $derived(groupByKind(tasks));
   const counts = $derived.by(() => {
     const n = { done: 0, doing: 0, todo: 0 };
     for (const t of tasks) {
@@ -197,13 +193,9 @@
           {#each groups as g (g.kind)}
             <div>
               <h3>
-                <KindIcon
-                  kind={g.kind}
-                  role={kindRoleOf(schema, g.kind)}
-                  icon={kindIconOf(schema, g.kind)}
-                  color={kindColorOf(schema, g.kind)}
-                  size={13}
-                />{g.kind}<span class="mono">{g.tasks.length}</span>
+                <KindIcon kind={g.kind} size={13} />{kindLabel(g.kind)}<span class="mono"
+                  >{g.tasks.length}</span
+                >
               </h3>
               {#each g.tasks as t (t.ulid)}
                 {@const href = taskHref(t.ulid)}

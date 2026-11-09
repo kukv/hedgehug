@@ -3,6 +3,7 @@
 import type { Schemas } from "./api/client";
 import { daysAgo, formatDateTime, pad } from "./format";
 import { eventLabel, fieldLabel, refLabel } from "./github";
+import { kindLabel } from "./kinds";
 
 export type Notification = Schemas.Notification;
 export type InboxTab =
@@ -107,13 +108,41 @@ export type NotificationText = { label: string; text: string; mine?: string };
 
 const MOVED_AWAY = "移動先のワークスペースにはありません";
 
+/** Gives a task the name a sentence calls it by, from its ULID: its title, or the ULID when it is not known. */
+export type TaskName = (ulid: string) => string | undefined;
+
+/**
+ * The sentence of a repair of a parent (value is {from, to, kind_from?, kind_to?}, each parent a
+ * ULID or null for the root): where the task was and where the repair put it, and the kind it
+ * changed to when it had to (what `hh sync` says).
+ */
+function parentRepairText(kind: string, value: unknown, taskName?: TaskName): string {
+  const v = obj(value);
+  const name = (u: unknown) => (typeof u === "string" && u ? `「${taskName?.(u) ?? u}」` : "");
+  const from = name(v.from);
+  const to = name(v.to);
+  const where = to ? `${to}の下` : "ルート";
+  let text: string;
+  if (kind === "parent_cycle") {
+    text = `親の循環を検出したため、${where}に戻しました${from ? `（元の親: ${from}）` : ""}`;
+  } else if (kind === "parent_deleted") {
+    text = `親${from}が削除されたため、${where}に移しました`;
+  } else {
+    text = `親${from}が別の Store へ移ったため、${where}に移しました`;
+  }
+  const [was, now] = [str(v.kind_from), str(v.kind_to)];
+  if (was && now) text += `。種類を ${kindLabel(was)} から ${kindLabel(now)} に変えました`;
+  return text;
+}
+
 /** The sentence of a repair kind this knows, or null. */
-export function repairedKnownText(detail: Obj): string | null {
+export function repairedKnownText(detail: Obj, taskName?: TaskName): string | null {
   const kind = str(detail.kind);
   const value = detail.value;
   switch (kind) {
     case "parent_moved":
-      return "親が別の Store へ移ったため、ルートに移しました";
+    case "parent_deleted":
+      return parentRepairText(kind, value, taskName);
     case "ref_moved": {
       const field = str(obj(value).field);
       return field
@@ -129,21 +158,15 @@ export function repairedKnownText(detail: Obj): string | null {
       }
       break;
     }
-    case "parent_cycle": {
-      const m = obj(value);
-      if ("to" in m) {
-        return `親の循環を検出したため、${m.to ? "元の親" : "ルート"}に戻しました`;
-      }
+    case "parent_cycle":
+      if ("to" in obj(value)) return parentRepairText(kind, value, taskName);
       break;
-    }
-    case "parent_deleted":
-      return "親が削除されたため、ルートに移しました";
   }
   return null;
 }
 
-function repairedText(detail: Obj): string {
-  const known = repairedKnownText(detail);
+function repairedText(detail: Obj, taskName?: TaskName): string {
+  const known = repairedKnownText(detail, taskName);
   if (known !== null) return known;
   const kind = str(detail.kind);
   const value = detail.value;
@@ -162,6 +185,7 @@ export function notificationText(
   opts: {
     workspaceName?: (ulid: string) => string | undefined;
     statusLabel?: (status: string) => string;
+    taskName?: TaskName;
   } = {},
 ): NotificationText {
   const detail = obj(n.detail);
@@ -227,7 +251,7 @@ export function notificationText(
       };
     }
     case "repaired":
-      return { label: "同期の修復", text: repairedText(detail) };
+      return { label: "同期の修復", text: repairedText(detail, opts.taskName) };
     case "revived":
       return {
         label: "同期の修復",

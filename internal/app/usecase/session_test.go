@@ -25,7 +25,7 @@ func TestUpdateCommitsAndCallsAfterWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws := ix.Workspaces()[0]
-	task := &model.Task{ULID: model.NewULID(), Title: "a", Kind: "task", Status: "todo", Workspace: ws.ULID}
+	task := &model.Task{ULID: model.NewULID(), Title: "a", Kind: "project", Status: "todo", Workspace: ws.ULID}
 	committed, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) })
 	if err != nil || !committed {
 		t.Fatalf("Update = %v, %v; want true, nil", committed, err)
@@ -68,7 +68,7 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		task := &model.Task{ULID: model.NewULID(), Title: "a", Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID}
+		task := &model.Task{ULID: model.NewULID(), Title: "a", Kind: "project", Status: "todo", Workspace: ix.Workspaces()[0].ULID}
 		if _, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 			t.Fatal(err)
 		}

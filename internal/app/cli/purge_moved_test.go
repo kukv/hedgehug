@@ -35,7 +35,7 @@ func (te *testEnv) storeTaskFile(name, id string) (path string, data []byte) {
 func newForwardEnv(t *testing.T) *testEnv {
 	t.Helper()
 	te := newMoveStoreEnv(t)
-	te.ok("mv", "AA-2", "--store", "bravo-long", "--yes")
+	te.ok("mv", "AA-2", "--store", "bravo-long", "--parent", "BB-1", "--yes")
 	return te
 }
 

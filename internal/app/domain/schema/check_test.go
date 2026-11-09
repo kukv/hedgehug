@@ -37,10 +37,6 @@ func TestCheckProblems(t *testing.T) {
 		{"unknown category", func(s *Schema) { s.Statuses[0].Category = "x" }, "statuses[0]"},
 		{"two defaults", func(s *Schema) { s.Statuses[0].Default = true }, "statuses"},
 		{"no default", func(s *Schema) { s.Statuses[6].Default = false }, "statuses"},
-		{"duplicate kind", func(s *Schema) { s.Kinds = append(s.Kinds, s.Kinds[0]) }, "kinds[5]"},
-		{"unknown role", func(s *Schema) { s.Kinds[0].Role = "x" }, "kinds[0]"},
-		{"unknown parent", func(s *Schema) { s.Kinds[1].Parents = []string{"nope"} }, "kinds[1].parents"},
-		{"no work default", func(s *Schema) { s.Kinds[3].Default = false }, "kinds"},
 		{"built-in prop name", func(s *Schema) { s.Props = append(s.Props, Prop{Name: "status", Type: TypeText}) }, "props.status"},
 		{"duplicate prop", func(s *Schema) { s.Props = append(s.Props, s.Props[0]) }, "props.priority"},
 		{"unknown type", func(s *Schema) { s.Props[0].Type = "x" }, "props.priority"},
@@ -63,7 +59,7 @@ func TestCheckProblems(t *testing.T) {
 		{"scoped template kind", func(s *Schema) {
 			s.Scoped = []Scoped{{Where: where, Templates: &Templates{Default: map[string]string{"nope": "x"}}}}
 		}, "scoped[0].templates.default"},
-		{"bad kind template name", func(s *Schema) { s.Kinds[4].Template = "../x" }, "kinds[4].template"},
+		{"templates.only on the store", func(s *Schema) { s.Templates = &Templates{Only: []string{"ok"}} }, "templates.only"},
 		{"bad only template name", func(s *Schema) {
 			s.Scoped = []Scoped{{Where: where, Templates: &Templates{Only: []string{"ok", "a/b"}}}}
 		}, "scoped[0].templates.only"},

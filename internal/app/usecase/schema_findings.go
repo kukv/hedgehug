@@ -136,9 +136,9 @@ func missingTemplates(s *store.Store, sc *schema.Schema) []Finding {
 			})
 		}
 	}
-	for i, k := range sc.Kinds {
-		if k.Template != "" {
-			check(fmt.Sprintf("kinds[%d].template", i), k.Template)
+	if sc.Templates != nil {
+		for _, kind := range slices.Sorted(maps.Keys(sc.Templates.Default)) {
+			check("templates.default."+kind, sc.Templates.Default[kind])
 		}
 	}
 	for i, sco := range sc.Scoped {

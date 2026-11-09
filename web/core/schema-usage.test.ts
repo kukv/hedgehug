@@ -5,7 +5,6 @@ import { schemaUsage } from "./schema-usage";
 
 const schema = {
   statuses: [{ name: "todo" }, { name: "done" }, { name: "triage" }],
-  kinds: [{ name: "task" }, { name: "bug" }],
   props: {
     priority: { type: "enum", values: ["low", "high"] },
     area: { type: "multi_enum", values: ["be", "fe"] },
@@ -20,10 +19,9 @@ const t = (status: string, kind: string, props: Record<string, unknown> = {}) =>
   ({ status, kind, props }) as unknown as TaskView;
 
 describe("schemaUsage", () => {
-  it("counts the tasks of each status and kind, 0 for one nobody uses", () => {
+  it("counts the tasks of each status, 0 for one nobody uses", () => {
     const u = schemaUsage(schema, [t("todo", "task"), t("todo", "bug"), t("done", "task")]);
     expect(u.statuses).toEqual({ todo: 2, done: 1, triage: 0 });
-    expect(u.kinds).toEqual({ task: 2, bug: 1 });
   });
 
   it("counts the tasks that hold a value of a property; an empty value is none", () => {
@@ -59,7 +57,6 @@ describe("schemaUsage", () => {
       t("toString", "constructor", { priority: "valueOf", area: ["toString"], hasOwnProperty: 1 }),
     ]);
     expect(u.statuses).toEqual({ todo: 0, done: 0, triage: 0 });
-    expect(u.kinds).toEqual({ task: 0, bug: 0 });
     expect(u.values.priority).toEqual({ low: 0, high: 0 });
     expect(u.values.area).toEqual({ be: 0, fe: 0 });
     const named = {

@@ -37,19 +37,48 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
+// fixtureTitle is the title of the project AddTask puts the tasks under.
+const fixtureTitle = "fixture project"
+
 // AddTask writes a task titled title into the workspace of the test store, after
-// edit changed it, and returns it as the store has it.
+// edit changed it, and returns it as the store has it. A task that is not a
+// project and has no parent goes under the fixture project, which the first
+// call makes, in the same commit and after the task: the first task is ME-1
+// and the project ME-2, and the next one is ME-3.
 func (ts *Session) AddTask(title string, edit func(*model.Task)) *model.Task {
 	ts.T.Helper()
 	s, ix, err := ts.Open()
 	if err != nil {
 		ts.T.Fatal(err)
 	}
-	task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID}
+	ws := ix.Workspaces()[0].ULID
+	task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "task", Status: "todo", Workspace: ws}
 	if edit != nil {
 		edit(task)
 	}
-	if _, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
+	var made *model.Task
+	if task.Parent == nil && task.Kind != "project" {
+		var fixture *model.Task
+		for _, x := range ix.Tasks() {
+			if x.Title == fixtureTitle && x.DeletedAt == nil {
+				fixture = &model.Task{ULID: x.ULID}
+			}
+		}
+		if fixture == nil {
+			fixture = &model.Task{ULID: model.NewULID(), Title: fixtureTitle, Kind: "project", Status: "todo", Workspace: ws}
+			made = fixture
+		}
+		task.Parent = &fixture.ULID
+	}
+	if _, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error {
+		if err := tx.PutTask(task); err != nil {
+			return err
+		}
+		if made != nil { // after the task, so that it has the number 1
+			return tx.PutTask(made)
+		}
+		return nil
+	}); err != nil {
 		ts.T.Fatal(err)
 	}
 	got, err := s.Task(task.ULID)
@@ -1140,7 +1169,7 @@ func MovedFixture(t *testing.T, ts *Session) model.ULID {
 		t.Fatal(err)
 	}
 	ulid := ea.ULID
-	nt := &model.Task{ULID: ulid, Title: "moved", Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID, FormerIDs: []string{"API-1"}}
+	nt := &model.Task{ULID: ulid, Title: "moved", Kind: "project", Status: "todo", Workspace: ix.Workspaces()[0].ULID, FormerIDs: []string{"API-1"}}
 	if _, err := ts.ForStore("org-b").UpdateCommit(sb, store.Op{Name: "move-in", Task: ulid}, func(tx *store.Tx) error { return tx.PutTask(nt) }); err != nil {
 		t.Fatal(err)
 	}

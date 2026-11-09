@@ -107,8 +107,8 @@ func TestRunGivesSortKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k := res.SortKey(res.Groups[0].Tasks[0]); k.Class != 1 || k.Text != "task" {
-		t.Errorf("kind key = %+v; want work role", k)
+	if k := res.SortKey(res.Groups[0].Tasks[0]); k.Class != 0 || k.Text != "project" || k.By != "place" {
+		t.Errorf("kind key = %+v; want the first fixed kind", k)
 	}
 }
 

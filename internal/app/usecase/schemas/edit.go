@@ -35,6 +35,10 @@ type EditOpts struct {
 	// Check refuses a schema under which a task breaks a rule it did not
 	// break under the old one.
 	Check bool
+	// Templates are the templates the change names (the defaults of the
+	// kinds); one the store does not have refuses the change with
+	// template.not_found, once the schema is found valid.
+	Templates []string
 }
 
 // Edit makes the change fn describes to the schema, and the tasks it
@@ -57,6 +61,9 @@ func Edit(ss *usecase.Session, fn func(*schema.Schema) (*schema.Schema, []schema
 		}
 		if ps := next.AddedProblems(cur.Check()); len(ps) > 0 {
 			return schemaInvalid(ps)
+		}
+		if err := templatesNamed(s, opts.Templates); err != nil {
+			return err
 		}
 		uses := opts.Use
 		if opts.UseAfter != nil {
@@ -130,16 +137,11 @@ func rewriteTasks(s *store.Store, ix *index.Index, tx *store.Tx, cur *schema.Sch
 
 // editErr gives the errors of the schema package their codes.
 func editErr(err error) error {
-	var pe *schema.ParentsEmptyError
 	switch {
-	case errors.As(err, &pe):
-		return usecase.NewErr(usecase.KindInvalid, "schema.parents_empty", err, "kinds", pe.Kinds)
 	case errors.Is(err, schema.ErrNotDefined):
 		return usecase.NewErr(usecase.KindNotFound, "schema.not_defined", err)
 	case errors.Is(err, schema.ErrOrderStale):
 		return usecase.NewErr(usecase.KindConflict, "schema.order_stale", err)
-	case errors.Is(err, schema.ErrDefaultContainer):
-		return usecase.NewErr(usecase.KindInvalid, "schema.default_container", err)
 	case errors.Is(err, schema.ErrNotTaskRef):
 		return usecase.NewErr(usecase.KindInvalid, "schema.not_task_ref", err)
 	case errors.Is(err, schema.ErrNotEnum):
@@ -231,7 +233,7 @@ func noNewViolations(s *store.Store, ix *index.Index, cur, next *schema.Schema, 
 			}
 			return err
 		}
-		oldKind, oldAnc, err := store.Lineage(t, cur, entry)
+		oldKind, oldAnc, err := store.Lineage(t, entry)
 		if err != nil {
 			return err
 		}
@@ -239,7 +241,7 @@ func noNewViolations(s *store.Store, ix *index.Index, cur, next *schema.Schema, 
 		if !ok {
 			continue
 		}
-		newKind, newAnc, err := store.Lineage(nt, next, readNew)
+		newKind, newAnc, err := store.Lineage(nt, readNew)
 		if err != nil {
 			return err
 		}

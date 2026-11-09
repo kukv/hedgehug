@@ -13,8 +13,6 @@ statuses:
 - name: review
   category: doing
   color: teal
-kinds:
-- {name: task, role: work, x-note: keep} # タスク
 props:
   points:
     type: number # 数値

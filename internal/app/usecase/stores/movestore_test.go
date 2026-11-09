@@ -200,30 +200,49 @@ func TestMoveStoreUnderAParent(t *testing.T) {
 	}
 }
 
+// A task that is not a project cannot go to the root of the destination: the
+// plan says so before anything is written.
+func TestMoveStoreNeedsAParentForANonProject(t *testing.T) {
+	t.Parallel()
+	f := usecasetest.NewMoveFx(t)
+	ha, hb := f.Head(t, "org-a"), f.Head(t, "org-b")
+	in := f.In()
+	in.Arg = "API-3" // C, a task under a project
+	_, err := stores.MoveStore(f.TS.Session, in)
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "move.parent_required")
+	_, err = stores.PrepareMovePlan(f.TS.Session, in)
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "move.parent_required")
+	if f.Head(t, "org-a") != ha || f.Head(t, "org-b") != hb {
+		t.Error("a store was written")
+	}
+}
+
 func TestMoveStoreRefusedBySchemaCommitsNothing(t *testing.T) {
 	t.Parallel()
 	f := usecasetest.NewMoveFx(t)
 	f.SetSchema(t, func(sc *schema.Schema) {
 		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
-		sc.Kinds = append(sc.Kinds, schema.Kind{Name: "spike", Role: schema.RoleWork, Parents: []string{schema.Root, "project", "epic", "story", "task"}})
 	})
 	a := f.TS.ForStore("org-a")
 	if _, err := tasks.Set(a, "API-4", []usecase.Assign{{Key: "status", Op: "=", Value: "review"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Set(a, "API-4", []usecase.Assign{{Key: "kind", Op: "=", Value: "spike"}}); err != nil {
+	if _, err := tasks.Add(f.TS.ForStore("org-b"), tasks.AddInput{Title: "B project", Kind: "project"}); err != nil {
 		t.Fatal(err)
 	}
 	ha, hb := f.Head(t, "org-a"), f.Head(t, "org-b")
 
-	_, err := stores.MoveStore(f.TS.Session, f.In())
+	// the project API-2 cannot go under a project of org-b, and org-b has no review status
+	in := f.In()
+	in.Parent = "WEB-2"
+	_, err := stores.MoveStore(f.TS.Session, in)
 	usecasetest.MustCode(t, err, usecase.KindInvalid, "move.invalid")
 	e := argsOf(err)
 	lines, _ := e["violations"].([]string)
 	if len(lines) != 2 {
 		t.Fatalf("violations = %q", lines)
 	}
-	if !strings.Contains(lines[0], "API-4") || !strings.Contains(lines[0], "spike") || !strings.Contains(lines[1], "API-4") || !strings.Contains(lines[1], "review") {
+	if !strings.Contains(lines[0], "API-2") || !strings.Contains(lines[0], "project cannot be placed") || !strings.Contains(lines[1], "API-4") || !strings.Contains(lines[1], "review") {
 		t.Errorf("violations = %q", lines)
 	}
 	if f.Head(t, "org-a") != ha || f.Head(t, "org-b") != hb {
@@ -273,7 +292,7 @@ func TestMoveStoreNeedsConfirmationAndScopedChoice(t *testing.T) {
 	}
 
 	// the plan shown is checked against what the stores hold at the time
-	if _, err := tasks.Add(f.TS.ForStore("org-a"), tasks.AddInput{Title: "late", Parent: "API-4"}); err != nil {
+	if _, err := tasks.Add(f.TS.ForStore("org-a"), tasks.AddInput{Title: "late", Parent: "API-3"}); err != nil {
 		t.Fatal(err)
 	}
 	in.Yes, in.Confirmed = true, &plan
@@ -598,16 +617,16 @@ func TestMoveStoreParentsComeBeforeTheirChildren(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
 	a := ts.ForStore("org-a")
-	add := func(title, parent string) model.ULID {
-		r, err := tasks.Add(a, tasks.AddInput{Title: title, Parent: parent})
+	add := func(title, parent, kind string) model.ULID {
+		r, err := tasks.Add(a, tasks.AddInput{Title: title, Parent: parent, Kind: kind})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r.ULID
 	}
-	root := add("R", "")
-	g := add("G", "API-2") // older than C
-	c := add("C", "API-2")
+	root := add("R", "", "")
+	g := add("G", "API-2", "task") // older than C
+	c := add("C", "API-2", "epic")
 	if _, err := tasks.Move(a, tasks.MoveInput{Arg: "API-3", Parent: "API-4"}); err != nil {
 		t.Fatal(err)
 	}

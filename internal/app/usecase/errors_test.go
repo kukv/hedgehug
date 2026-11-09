@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -126,6 +127,9 @@ func TestAsError(t *testing.T) {
 		{fmt.Errorf("a: %w", replicate.ErrDirty), usecase.KindConflict, "sync.dirty"},
 		{fmt.Errorf("a: %w", replicate.ErrUnrelated), usecase.KindConflict, "sync.unrelated"},
 		{fmt.Errorf("a: %w", replicate.ErrForcePush), usecase.KindConflict, "sync.force_push"},
+		{fmt.Errorf("a: %w", replicate.ErrFormatDiverged), usecase.KindConflict, "sync.format_diverged"},
+		{model.ErrOldFormat, usecase.KindInvalid, "store.old_format"},
+		{fmt.Errorf("a: %w", model.ErrNewerFormat), usecase.KindInvalid, "store.newer_format"},
 		{config.ErrNoStores, usecase.KindConflict, "store.none"},
 		{errors.New("other"), usecase.KindUnknown, ""},
 	}

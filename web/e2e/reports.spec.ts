@@ -85,7 +85,8 @@ test("the reports show what the CLI reports, under the same conditions", async (
 });
 
 test("a sprint goes from planned to its velocity on the GUI alone", async ({ page, hh }) => {
-  hh.hh("add", "one", "-p", "points=3");
+  hh.hh("add", "work", "--kind", "project"); // DM-1
+  hh.hh("add", "one", "--parent", "DM-1", "-p", "points=3");
   await openTab(page, hh, "sprints");
   await page.getByRole("button", { name: "スプリント", exact: true }).click();
   const made = page.getByRole("dialog");
@@ -104,13 +105,13 @@ test("a sprint goes from planned to its velocity on the GUI alone", async ({ pag
   await expect(panel.getByRole("link", { name: "カンバンを開く" })).toBeVisible();
   await panel.getByRole("link", { name: "カンバンを開く" }).click();
 
-  const one = hh.show("DM-1");
+  const one = hh.show("DM-2");
   await dragCard(
     page,
     page.locator(`li[data-ulid="${one.ulid}"]`),
     page.locator('ul[data-column="done"]'),
   );
-  await expect.poll(() => hh.show("DM-1").status).toBe("done");
+  await expect.poll(() => hh.show("DM-2").status).toBe("done");
 
   await page.getByRole("button", { name: "スプリントを閉じる…" }).click();
   await page.getByRole("contentinfo").getByRole("button", { name: "閉じる" }).click();

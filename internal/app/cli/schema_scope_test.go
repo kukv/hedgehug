@@ -12,7 +12,7 @@ func TestSchemaScopeGolden(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Web", "--kind", "project")
-	te.ok("add", "Login")
+	te.ok("add", "Login", "--parent", "ME-1")
 
 	te.goldenRun("show-none", 0, "schema", "scope", "show", "ME-1")
 	te.goldenRun("set-all", 0, "schema", "scope", "set", "ME-1",

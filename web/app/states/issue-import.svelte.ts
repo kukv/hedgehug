@@ -4,8 +4,8 @@ import { errorMessage } from "../../core/messages";
 import { core } from "../context";
 import { toast } from "../toast.svelte";
 
-/** Where the tasks go: under a task (parentId is its ID as the command writes it) or at the root of a workspace. */
-export type ImportPlace = { parent?: string; parentId?: string; workspace?: string };
+/** Where the tasks go: under a task (parentId is its ID as the command writes it). */
+export type ImportPlace = { parent?: string; parentId?: string };
 
 /**
  * The form of hh gh import. The count comes first (dry_run): what the button says is what it takes
@@ -39,7 +39,6 @@ export function useIssueImport(
       repo: repo.trim() || new Placeholder("org/repo"),
       label: label.trim() || new Placeholder("ラベル"),
       parent: place().parentId,
-      workspace: place().workspace,
     }),
   );
 
@@ -48,9 +47,9 @@ export function useIssueImport(
     busy = true;
     error = "";
     try {
-      const { parent, workspace } = place();
+      const { parent } = place();
       const r = await c.api.importIssues(
-        { repo: repo.trim(), label: label.trim(), parent, workspace, dry_run: dry },
+        { repo: repo.trim(), label: label.trim(), parent, dry_run: dry },
         { store: store() },
       );
       if (dry) {

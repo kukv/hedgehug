@@ -165,27 +165,7 @@ describe("WorkspaceOverview", () => {
     );
   });
 
-  it("lists the tasks outside the projects in rank order, without the children of a project", async () => {
-    setup(all);
-    const section = await screen.findByRole("region", { name: "プロジェクトの外のタスク" });
-    const ids = within(section)
-      .getAllByRole("row")
-      .slice(1)
-      .map((r) => r.textContent ?? "");
-    expect(ids).toHaveLength(4);
-    expect(ids[0]).toContain("REL-22");
-    expect(ids[1]).toContain("REL-18");
-    expect(ids[2]).toContain("REL-3");
-    expect(ids[3]).toContain("REL-4");
-    expect(within(section).queryByText("子のタスク")).toBeNull();
-    const tree = router.href({ name: "workspace", store: "shared", ulid: "W1", tab: "tree" });
-    expect(within(section).getByRole("link", { name: "ツリーで開く" })).toHaveAttribute(
-      "href",
-      tree,
-    );
-  });
-
-  it("follows tasks.changed: a task added from outside changes the counts and the list", async () => {
+  it("follows tasks.changed: a task added from outside changes the counts", async () => {
     const { rows, conn } = setup(all);
     await screen.findByText("6 件 · プロジェクト 1");
 
@@ -197,7 +177,6 @@ describe("WorkspaceOverview", () => {
 
     expect(await screen.findByText("7 件 · プロジェクト 1")).toBeInTheDocument();
     expect(screen.getByText("進行中 4")).toBeInTheDocument();
-    expect(screen.getByText("あとから足した")).toBeInTheDocument();
   });
 
   it("follows tasks.changed: a project that is gone leaves the list", async () => {
@@ -224,25 +203,22 @@ describe("WorkspaceOverview", () => {
     expect(calls.filter((c) => c.path === "/api/tasks")).toHaveLength(fetched);
   });
 
-  it("opens the create dialogs from the buttons", async () => {
+  it("opens the project dialog from the button, and has no button for a task (the root holds only projects)", async () => {
     setup(all);
     await screen.findByText("6 件 · プロジェクト 1");
-    screen.getByRole("button", { name: "タスクを作成" }).click();
-    expect(createState.request).toEqual({ kind: "task" });
+    expect(screen.queryByRole("button", { name: "タスクを作成" })).toBeNull();
     screen.getByRole("button", { name: "プロジェクトを作成" }).click();
     expect(createState.request).toEqual({ kind: "project" });
   });
 
-  it("disables the create buttons of a read-only Store, with the reason", async () => {
+  it("disables the create button of a read-only Store, with the reason", async () => {
     const sentence = "この Store は閲覧のみです（remote に書き込めません）";
     setup(all, undefined, false, "the remote cannot be written");
     await screen.findByText("6 件 · プロジェクト 1");
-    for (const name of ["タスクを作成", "プロジェクトを作成"]) {
-      const b = screen.getByRole("button", { name });
-      expect(b).toBeDisabled();
-      expect(b).toHaveAttribute("title", sentence);
-    }
-    screen.getByRole("button", { name: "タスクを作成" }).click();
+    const b = screen.getByRole("button", { name: "プロジェクトを作成" });
+    expect(b).toBeDisabled();
+    expect(b).toHaveAttribute("title", sentence);
+    b.click();
     expect(createState.request).toBeNull();
   });
 

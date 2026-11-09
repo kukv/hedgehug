@@ -24,7 +24,7 @@ func (a *app) storeCmd() *cobra.Command {
 			return usageErrorf("a subcommand is needed")
 		},
 	}
-	cmd.AddCommand(a.storeInitCmd(), a.storeAddCmd(), a.storeListCmd(), a.storeRemoveCmd(), a.storeDefaultCmd(), a.storeDiscoverCmd(), a.storeSetCmd())
+	cmd.AddCommand(a.storeInitCmd(), a.storeAddCmd(), a.storeListCmd(), a.storeRemoveCmd(), a.storeDefaultCmd(), a.storeDiscoverCmd(), a.storeSetCmd(), a.storeConvertCmd())
 	return cmd
 }
 

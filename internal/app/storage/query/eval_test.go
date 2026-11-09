@@ -21,10 +21,10 @@ import (
 //	    └── a (task, in_progress, label backend, assignee alice,
 //	           priority high, due 2026-11-05, estimate 2h, points 3,
 //	           blocked by b, duplicates c, body "検索語 で探す")
-//	b (task, backlog, id WEB-1, priority urgent, due 2026-11-20,
-//	   relates c, body "Fix LOGIN 検索語")
-//	c (task, done, label wip, priority low)
-//	d (task, todo, deleted)
+//	├── b (task, backlog, id WEB-1, priority urgent, due 2026-11-20,
+//	│      relates c, body "Fix LOGIN 検索語")
+//	├── c (task, done, label wip, priority low)
+//	└── d (task, todo, deleted)
 type fixture struct {
 	ix  *index.Index
 	ids map[string]model.ULID
@@ -36,6 +36,9 @@ func newFixture(t *testing.T) *fixture {
 	p, e, a, b, c, d := newTask("P"), newTask("E"), newTask("a"), newTask("b"), newTask("c"), newTask("d")
 	p.Kind = "project"
 	e.Kind, e.Parent = "epic", &p.ULID
+	for _, x := range []*model.Task{a, b, c, d} {
+		x.Kind, x.Parent = "task", &p.ULID
+	}
 	a.Parent, a.Status = &e.ULID, "in_progress"
 	a.Labels, a.Assignees = []string{"backend"}, []string{"github.com/alice"}
 	setProp(a, "priority", "high")
@@ -84,8 +87,8 @@ func TestRunFilters(t *testing.T) {
 		{"assignee:@me", Options{Me: []string{"github.com/Alice"}}, []string{"a"}}, // an account ID is compared without case
 		{"assignee:github.com/alice", Options{}, []string{"a"}},
 		{"parent:" + f.ids["E"].String(), Options{}, []string{"a"}},
-		{"parent:none", Options{}, []string{"P", "b", "c"}},
-		{"project:" + f.ids["P"].String(), Options{}, []string{"E", "a"}},
+		{"parent:none", Options{}, []string{"P"}},
+		{"project:" + f.ids["P"].String(), Options{}, []string{"E", "a", "b", "c"}},
 		{"priority:high,urgent", Options{}, []string{"a", "b"}},
 		{"due<2026-11-10", Options{}, []string{"a"}},
 		{"due>=2026-11-05", Options{}, []string{"a", "b"}},

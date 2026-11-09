@@ -26,6 +26,7 @@ function mount(m: Mount = {}) {
     stores: () => state.list,
     tone: () => "teal",
     readOnly: () => null,
+    failure: () => null,
     loaded: () => state.loaded,
     error: () => state.error,
     reload: vi.fn(async () => {}),

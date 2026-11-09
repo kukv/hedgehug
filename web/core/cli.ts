@@ -149,15 +149,9 @@ export function cliLink(i: { id: string; kind: "pr" | "issue"; ref: Arg }): stri
   return cliLine(["link", i.id, `--${i.kind}`, i.ref]);
 }
 
-export function cliGhImport(i: {
-  repo: Arg;
-  label: Arg;
-  parent?: string;
-  workspace?: string;
-}): string {
+export function cliGhImport(i: { repo: Arg; label: Arg; parent?: string }): string {
   const a: Arg[] = ["gh", "import", i.repo, "--label", i.label];
   if (i.parent) a.push("--parent", i.parent);
-  if (i.workspace) a.push("--workspace", i.workspace);
   return cliLine(a);
 }
 

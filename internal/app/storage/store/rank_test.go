@@ -11,7 +11,7 @@ import (
 )
 
 func rankTask(ws *model.Workspace, title string, r model.Rank) *model.Task {
-	return &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "task", Title: title, Status: "todo", Rank: r}
+	return &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "project", Title: title, Status: "todo", Rank: r}
 }
 
 // writeShared puts tasks on disk as a merge could leave them, bypassing

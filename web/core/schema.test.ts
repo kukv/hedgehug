@@ -1,33 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Schemas } from "./api/client";
-import {
-  canParent,
-  defaultStatusIn,
-  parentRule,
-  propEditorOf,
-  SchemaCache,
-  type SchemaView,
-} from "./schema";
+import { defaultStatusIn, propEditorOf, SchemaCache, type SchemaView } from "./schema";
 import { FakeConn, fakeApi, settle } from "./testing";
 
 // The schema of a new store (internal/app/domain/schema Default), as GET /api/schema
 // tells it.
-const kinds = [
-  { name: "project", label: "プロジェクト", role: "container", parents: ["root"] },
-  { name: "epic", label: "エピック", role: "container", parents: ["root", "project"] },
-  { name: "story", label: "ストーリー", role: "work", parents: ["root", "project", "epic"] },
-  {
-    name: "task",
-    label: "タスク",
-    role: "work",
-    parents: ["root", "project", "epic", "story", "task"],
-    default: true,
-  },
-  { name: "bug", label: "バグ", role: "work", parents: ["root", "project", "epic", "story"] },
-  { name: "note", label: "メモ", role: "work", parents: null },
-  { name: "nowhere", role: "work", parents: [] },
-] as Schemas.KindDef[];
-
 const schema: SchemaView = {
   statuses: [
     { name: "backlog", label: "バックログ", category: "todo" },
@@ -36,7 +12,6 @@ const schema: SchemaView = {
     { name: "done", label: "完了", category: "done", default: true },
     { name: "canceled", label: "中止", category: "canceled", default: true },
   ],
-  kinds,
   props: {
     priority: { type: "enum", values: ["low", "mid", "high", "urgent"] },
     multi: { type: "multi_enum", values: ["a", "b"] },
@@ -54,44 +29,6 @@ const schema: SchemaView = {
   scoped: [],
   prop_order: [],
 };
-
-describe("canParent", () => {
-  it("allows the parents the kind lists, and the top as root", () => {
-    expect(canParent(schema, "epic", null)).toBe(true);
-    expect(canParent(schema, "epic", "project")).toBe(true);
-    expect(canParent(schema, "epic", "task")).toBe(false);
-    expect(canParent(schema, "task", "task")).toBe(true);
-    expect(canParent(schema, "project", "project")).toBe(false);
-    expect(canParent(schema, "project", null)).toBe(true);
-  });
-
-  it("allows anywhere when the kind lists no parents, and nowhere for an empty list", () => {
-    expect(canParent(schema, "note", "bug")).toBe(true);
-    expect(canParent(schema, "note", null)).toBe(true);
-    expect(canParent(schema, "nowhere", null)).toBe(false);
-  });
-
-  it("refuses a kind the schema does not have", () => {
-    expect(canParent(schema, "unknown", null)).toBe(false);
-  });
-});
-
-describe("parentRule", () => {
-  it("names the kinds that can be the parent", () => {
-    expect(parentRule(schema, "epic")).toBe(
-      "エピックのどの下に置けるかは最上位とプロジェクトだけです",
-    );
-    expect(parentRule(schema, "story")).toBe(
-      "ストーリーのどの下に置けるかは最上位、プロジェクトとエピックだけです",
-    );
-  });
-
-  it("has its own words for the top only, anywhere and nowhere", () => {
-    expect(parentRule(schema, "project")).toBe("プロジェクトは最上位にだけ置けます");
-    expect(parentRule(schema, "note")).toBe("メモはどこにでも置けます");
-    expect(parentRule(schema, "nowhere")).toBe("nowhereは親に置けません");
-  });
-});
 
 describe("defaultStatusIn: todo and done", () => {
   it("is the default of the category", () => {
@@ -189,9 +126,9 @@ describe("SchemaCache", () => {
     const fn = vi.fn();
     cache.subscribe(fn);
 
-    set({ ...schema, kinds: kinds.slice(0, 2) });
+    set({ ...schema, statuses: (schema.statuses ?? []).slice(0, 2) });
     conn.emit("schema.changed", { store: "shared" });
-    await vi.waitFor(() => expect(cache.get("shared")?.kinds?.length).toBe(2));
+    await vi.waitFor(() => expect(cache.get("shared")?.statuses?.length).toBe(2));
     expect(cache.get("shared")).not.toBe(first);
     expect(fn).toHaveBeenCalledTimes(1);
   });
@@ -201,9 +138,9 @@ describe("SchemaCache", () => {
     await cache.reload("shared");
     expect(calls).toHaveLength(0);
     await cache.load("shared");
-    set({ ...schema, kinds: kinds.slice(0, 2) });
+    set({ ...schema, statuses: (schema.statuses ?? []).slice(0, 2) });
     await cache.reload("shared");
-    expect(cache.get("shared")?.kinds?.length).toBe(2);
+    expect(cache.get("shared")?.statuses?.length).toBe(2);
     expect(calls).toHaveLength(2);
   });
 
@@ -222,7 +159,7 @@ describe("SchemaCache", () => {
   it("does not let an older fetch that ends last overwrite the newer schema", async () => {
     let n = 0;
     let release: (s: SchemaView) => void = () => undefined;
-    const newer = { ...schema, kinds: kinds.slice(0, 2) };
+    const newer = { ...schema, statuses: (schema.statuses ?? []).slice(0, 2) };
     const { api } = fakeApi(() => {
       n++;
       if (n === 1) return Promise.resolve(schema);
@@ -235,10 +172,10 @@ describe("SchemaCache", () => {
     conn.emit("resync"); // fetch 2, held
     await settle();
     conn.emit("schema.changed", { store: "shared" }); // fetch 3, quick
-    await vi.waitFor(() => expect(cache.get("shared")?.kinds?.length).toBe(2));
+    await vi.waitFor(() => expect(cache.get("shared")?.statuses?.length).toBe(2));
     release(schema);
     await settle();
-    expect(cache.get("shared")?.kinds?.length).toBe(2);
+    expect(cache.get("shared")?.statuses?.length).toBe(2);
   });
 
   it("leaves alone a store nobody asked for at schema.changed", async () => {

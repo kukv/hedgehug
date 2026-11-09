@@ -280,7 +280,7 @@ func TestShowAMovedTask(t *testing.T) {
 		if len(wss) == 0 {
 			return errors.New("the store has no workspace")
 		}
-		return tx.PutTask(&model.Task{ULID: ulid, Title: "Moving", Kind: "task", Status: "todo", Workspace: wss[0].ULID, FormerIDs: []string{moved.ID}})
+		return tx.PutTask(&model.Task{ULID: ulid, Title: "Moving", Kind: "project", Status: "todo", Workspace: wss[0].ULID, FormerIDs: []string{moved.ID}})
 	}); err != nil {
 		t.Fatal(err)
 	}

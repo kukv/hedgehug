@@ -25,7 +25,8 @@ func TestTemplateAndBulkFlow(t *testing.T) {
 	}
 	alice.env = append(alice.env, "EDITOR="+editor)
 	alice.ok("template", "edit", "bug", org)
-	if got := alice.ok("add", "--template", "bug", "Login fails", org); !strings.Contains(got, "with 2 tasks under it") {
+	alice.ok("add", "Platform", org) // ORG-2; a task sits under a project
+	if got := alice.ok("add", "--template", "bug", "Login fails", "--parent", "ORG-2", org); !strings.Contains(got, "with 2 tasks under it") {
 		t.Fatalf("add:\n%s", got)
 	}
 	alice.ok("sync")

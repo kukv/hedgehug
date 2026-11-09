@@ -22,7 +22,7 @@ export type GanttSettings = {
   // The date properties the bars are drawn from.
   start: string;
   end: string;
-  // Only the kinds of the container role.
+  // Only the group kinds (project and epic).
   roadmap: boolean;
 };
 // What a screen of a view holds while it is open: the saved settings, and what was changed since.

@@ -145,6 +145,7 @@ export interface TaskView {
   scope?: string;
   sprint?: PlanRef;
   status: string;
+  steps?: Count;
   store: string;
   title: string;
   ulid: string;
@@ -560,18 +561,6 @@ export interface DoctorReport {
   store: string;
 }
 
-export interface KindDef {
-  color?: string;
-  default?: boolean;
-  icon?: string;
-  label?: string;
-  name: string;
-  /** @nullable */
-  parents: string[] | null;
-  role: string;
-  template?: string;
-}
-
 export interface PropDef {
   inverse?: string;
   label?: string;
@@ -619,14 +608,13 @@ export type SchemaViewProps = {[key: string]: PropDef};
 
 export interface SchemaView {
   /** @nullable */
-  kinds: KindDef[] | null;
-  /** @nullable */
   prop_order: string[] | null;
   props: SchemaViewProps;
   /** @nullable */
   scoped: ScopedDef[] | null;
   /** @nullable */
   statuses: StatusDef[] | null;
+  templates?: TemplatesDef;
   workflow: WorkflowDef;
 }
 
@@ -829,52 +817,6 @@ export interface Item {
   ulid: string;
 }
 
-export type KindAddInputBodyRole = typeof KindAddInputBodyRole[keyof typeof KindAddInputBodyRole];
-
-
-export const KindAddInputBodyRole = {
-  container: 'container',
-  work: 'work',
-} as const;
-
-export interface KindAddInputBody {
-  anywhere?: boolean;
-  color?: string;
-  icon?: string;
-  label?: string;
-  name: string;
-  /**
-     * The kinds it may sit under, root for the top; leave it out with anywhere
-     * @nullable
-     */
-  parents?: string[] | null;
-  role: KindAddInputBodyRole;
-  template?: string;
-}
-
-export type KindChangeInputBodyRole = typeof KindChangeInputBodyRole[keyof typeof KindChangeInputBodyRole];
-
-
-export const KindChangeInputBodyRole = {
-  container: 'container',
-  work: 'work',
-} as const;
-
-export interface KindChangeInputBody {
-  anywhere?: boolean;
-  /** Empty takes it off */
-  color?: string;
-  default?: boolean;
-  icon?: string;
-  label?: string;
-  /** The new name, as for a status */
-  name?: string;
-  /** Not empty; anywhere takes the limit off */
-  parents?: string[];
-  role?: KindChangeInputBodyRole;
-  template?: string;
-}
-
 /**
  * How an issue syncs; on an issue linked already it changes the mode. Without it, issue_fields.default_sync
  */
@@ -927,7 +869,6 @@ export type MigrateInputBodyTarget = typeof MigrateInputBodyTarget[keyof typeof 
 
 export const MigrateInputBodyTarget = {
   status: 'status',
-  kind: 'kind',
   prop: 'prop',
   value: 'value',
 } as const;
@@ -1555,6 +1496,7 @@ export interface ShowView {
   scope?: string;
   sprint?: PlanRef;
   status: string;
+  steps?: Count;
   store: string;
   title: string;
   ulid: string;
@@ -1826,6 +1768,16 @@ export interface TasksChanged {
   ulids: string[] | null;
 }
 
+/**
+ * Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found
+ */
+export type TemplateDefaultsInputBodyDefault = {[key: string]: string};
+
+export interface TemplateDefaultsInputBody {
+  /** Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found */
+  default: TemplateDefaultsInputBodyDefault;
+}
+
 export interface TemplateFile {
   /** The file: front matter and body */
   content: string;
@@ -1910,7 +1862,7 @@ export interface ViewPatchInputBody {
   columns?: string[];
   /** The date property the bars end on */
   gantt_end?: string;
-  /** Show the kinds of the container role only */
+  /** Show projects and epics only */
   gantt_roadmap?: boolean;
   /** The date property the bars start on */
   gantt_start?: string;
@@ -1945,7 +1897,7 @@ export interface ViewSaveInputBody {
   columns?: string[];
   /** The date property the bars end on */
   gantt_end?: string;
-  /** Show the kinds of the container role only */
+  /** Show projects and epics only */
   gantt_roadmap?: boolean;
   /** The date property the bars start on */
   gantt_start?: string;
@@ -2337,26 +2289,6 @@ export type CheckSchemaParams = {
   store?: string;
 };
 
-export type AddKindParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
-export type OrderKindsParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
-export type DeleteKindParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
-export type ChangeKindParams = {
-  /** The store; without it, the one hedgehug picks as the CLI does */
-  store?: string;
-};
-
 export type MigrateSchemaParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
@@ -2408,6 +2340,11 @@ export type DeleteStatusParams = {
 };
 
 export type ChangeStatusParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type SetTemplateDefaultsParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
 };
@@ -4166,179 +4103,6 @@ export const checkSchema = async (params?: CheckSchemaParams, options?: Paramete
 
 
 
-export const getAddKindUrl = (params?: AddKindParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/kinds?${stringifiedParams}` : `/api/schema/kinds`
-}
-
-/**
- * @summary Add a kind at the end
- */
-export const addKind = async (kindAddInputBody: KindAddInputBody,
-    params?: AddKindParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<EditWrite>(getAddKindUrl(params),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(kindAddInputBody)
-  }
-);}
-
-
-
-export const getOrderKindsUrl = (params?: OrderKindsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/kinds/order?${stringifiedParams}` : `/api/schema/kinds/order`
-}
-
-/**
- * @summary Put the kinds in order
- */
-export const orderKinds = async (orderBody: OrderBody,
-    params?: OrderKindsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<EditWrite>(getOrderKindsUrl(params),
-  {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(orderBody)
-  }
-);}
-
-
-
-export const getDeleteKindUrl = (name: string,
-    params?: DeleteKindParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/kinds/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/kinds/${encodeURIComponent(String(name))}`
-}
-
-/**
- * @summary Remove a kind no task uses
- */
-export const deleteKind = async (name: string,
-    params?: DeleteKindParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-  return fetcher<EditWrite>(getDeleteKindUrl(name,params),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export const getChangeKindUrl = (name: string,
-    params?: ChangeKindParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/schema/kinds/${encodeURIComponent(String(name))}?${stringifiedParams}` : `/api/schema/kinds/${encodeURIComponent(String(name))}`
-}
-
-/**
- * @summary Change a kind
- */
-export const changeKind = async (name: string,
-    kindChangeInputBody: KindChangeInputBody,
-    params?: ChangeKindParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<EditWrite>(getChangeKindUrl(name,params),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(kindChangeInputBody)
-  }
-);}
-
-
-
 export const getMigrateSchemaUrl = (params?: MigrateSchemaParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -4355,7 +4119,7 @@ export const getMigrateSchemaUrl = (params?: MigrateSchemaParams,) => {
 }
 
 /**
- * @summary Rename or merge a status, kind, property or value, as hh migrate
+ * @summary Rename or merge a status, property or value, as hh migrate
  */
 export const migrateSchema = async (migrateInputBody: MigrateInputBody,
     params?: MigrateSchemaParams, options?: Parameters<typeof fetcher>[1]): Promise<MigrateWrite> => {
@@ -4807,6 +4571,52 @@ return fetcher<EditWrite>(getChangeStatusUrl(name,params),
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(statusChangeInputBody)
+  }
+);}
+
+
+
+export const getSetTemplateDefaultsUrl = (params?: SetTemplateDefaultsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/templates/default?${stringifiedParams}` : `/api/schema/templates/default`
+}
+
+/**
+ * @summary Set the default template of each kind
+ */
+export const setTemplateDefaults = async (templateDefaultsInputBody: TemplateDefaultsInputBody,
+    params?: SetTemplateDefaultsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getSetTemplateDefaultsUrl(params),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(templateDefaultsInputBody)
   }
 );}
 

@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { ShowView } from "../../core/api/client";
+  import { isGroup, kindChoices } from "../../core/kinds";
   import type { PatchField } from "../../core/save";
-  import { canParent, parentRule } from "../../core/schema";
-  import { kindRoleOf } from "../../core/schema-edit";
   import { core } from "../context";
   import { usePlans } from "../planning/plans.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -35,26 +34,9 @@
   const parentKind = $derived(
     show.parent ? (readKind ?? cache.task(show.parent)?.kind ?? undefined) : null,
   );
-  const kindOptions = $derived<Option[]>(
-    (sc.current?.kinds ?? []).map((k) => {
-      const current = sc.current;
-      const usable =
-        k.name === show.kind ||
-        !current ||
-        parentKind === undefined ||
-        canParent(current, k.name, parentKind);
-      return {
-        value: k.name,
-        label: k.label || k.name,
-        disabled: !usable,
-        title: usable || !current ? undefined : parentRule(current, k.name),
-      };
-    }),
-  );
+  const kindOptions = $derived<Option[]>(kindChoices(show.kind, parentKind));
   const rows = $derived(sc.current ? propRows(sc.current, show.props) : []);
-  const showRepos = $derived(
-    (show.repos ?? []).length > 0 || kindRoleOf(sc.current, show.kind) === "container",
-  );
+  const showRepos = $derived((show.repos ?? []).length > 0 || isGroup(show.kind));
 
   const plans = usePlans(() => ({ store: show.store, name: show.workspace.name }));
   // A closed sprint takes no more tasks; a task in one still shows it.

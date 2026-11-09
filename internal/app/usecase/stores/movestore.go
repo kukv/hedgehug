@@ -733,6 +733,9 @@ func (j *moveJob) place(w *moveWork) error {
 		w.parent, w.workspace = &p.ULID, p.Workspace
 		return nil
 	}
+	if root := w.tasks[0]; !schema.CanPlace(root.Kind, "") {
+		return usecase.NewErr(usecase.KindInvalid, "move.parent_required", fmt.Errorf("the parent is needed: a %s cannot sit at the root of %s", root.Kind, j.toName), "kind", root.Kind)
+	}
 	if ws == nil {
 		all := j.dstIx.Workspaces()
 		switch len(all) {
@@ -898,7 +901,7 @@ func (j *moveJob) validate(w *moveWork, dest *schema.Schema) error {
 	var lines []string
 	for i, src := range w.tasks {
 		t := moved[src.ULID]
-		parentKind, ancestors, err := store.Lineage(t, dest, read)
+		parentKind, ancestors, err := store.Lineage(t, read)
 		if err != nil {
 			return err
 		}

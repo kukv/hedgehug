@@ -1,13 +1,12 @@
 <script lang="ts">
   import type { TaskView } from "../../core/api/client";
   import { hasPlans } from "../../core/planning";
-  import { kindColorOf, kindIconOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { onLinkClick, type ProjectTab, router } from "../router";
-  import { useDisplayId, useSubscribe } from "../svelte-store";
+  import { useDisplayId } from "../svelte-store";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
 
@@ -19,19 +18,6 @@
   let { ulid, project, workspace, tab }: Props = $props();
 
   const c = core();
-  const schemaRev = useSubscribe(c.schema, () => ({}));
-  // The icon of the project kind is the one the schema of the project's store names.
-  $effect(() => {
-    if (project) c.schema.load(project.store).catch(() => undefined);
-  });
-  const projectIcon = $derived.by(() => {
-    schemaRev.current;
-    return project ? kindIconOf(c.schema.get(project.store), "project") : undefined;
-  });
-  const projectColor = $derived.by(() => {
-    schemaRev.current;
-    return project ? kindColorOf(c.schema.get(project.store), "project") : undefined;
-  });
   const did = useDisplayId(c.stores);
   const at = (t: ProjectTab) => router.href({ name: "project", ulid, tab: t });
   const items = $derived([
@@ -69,7 +55,7 @@
       </a>
       <span class="sep" aria-hidden="true">›</span>
     {/if}
-    <KindIcon kind="project" icon={projectIcon} color={projectColor} />
+    <KindIcon kind="project" />
     <h1 tabindex="-1">{project?.title ?? ""}</h1>
     {#if project}
       <span class="id">{did.current(project.store, project.id)}</span>

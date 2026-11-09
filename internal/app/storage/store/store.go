@@ -53,7 +53,8 @@ type Store struct {
 	idNumbers IDNumbers // counts id numbers for Update; nil reads every task
 	siblings  Siblings  // finds siblings for Update; nil reads every task
 
-	lockWait time.Duration // how long a write waits for the file lock
+	lockWait  time.Duration // how long a write waits for the file lock
+	acceptOld bool          // Open takes a store in an older format
 
 	// Replaced by tests.
 	now func() time.Time
@@ -67,6 +68,13 @@ type Option func(*Store)
 // value is used as given: zero means not to wait.
 func WithLockWait(d time.Duration) Option {
 	return func(s *Store) { s.lockWait = d }
+}
+
+// AcceptOldFormat lets Open take a store in a format older than
+// model.StoreFormat, which it refuses with model.ErrOldFormat otherwise. It is
+// for what converts the store, and for hh doctor.
+func AcceptOldFormat() Option {
+	return func(s *Store) { s.acceptOld = true }
 }
 
 func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.Schema, opts ...Option) *Store {
@@ -215,7 +223,8 @@ func undoCreate(dir string, made bool) error {
 
 // Open opens the store in dir. It reads store.yaml and schema.yaml now;
 // Meta returns what it read. Update reads schema.yaml again, and Schema
-// returns the schema read last.
+// returns the schema read last. A store in an older format is refused with
+// model.ErrOldFormat unless AcceptOldFormat is given.
 func Open(dir string, opts ...Option) (*Store, error) {
 	meta, err := readDecode(dir, model.StoreMetaPath, model.DecodeStoreMeta)
 	if err != nil {
@@ -229,7 +238,12 @@ func Open(dir string, opts ...Option) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newStore(dir, repo, meta, sc, opts...), nil
+	s := newStore(dir, repo, meta, sc, opts...)
+	if meta.OldFormat() && !s.acceptOld {
+		_ = repo.Close()
+		return nil, model.ErrOldFormat
+	}
+	return s, nil
 }
 
 // SetNow makes the store read the time from now, in place of time.Now, for

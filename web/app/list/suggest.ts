@@ -1,4 +1,5 @@
 import { CATEGORIES } from "../../core/categories";
+import { KINDS } from "../../core/kinds";
 import type { SchemaView } from "../../core/schema";
 import { splitTerms } from "../tree/filter";
 
@@ -106,7 +107,7 @@ function namesFor(p: Problem, schemas: SchemaView[]): string[] {
         ...CATEGORIES,
       ]);
     case "kind":
-      return uniq(schemas.flatMap((s) => (s.kinds ?? []).map((k) => k.name)));
+      return KINDS.map((k) => k.name);
     case "key":
       return uniq([...QUERY_KEYS, ...schemas.flatMap((s) => Object.keys(s.props ?? {}))]);
     case "value":

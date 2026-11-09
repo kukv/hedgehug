@@ -317,15 +317,15 @@ func TestInboxRevertWritesTheValueBack(t *testing.T) {
 func TestInboxRevertMoves(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	for _, title := range []string{"p", "c"} {
-		if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: title}); err != nil {
+	for _, in := range []tasks.AddInput{{Title: "p"}, {Title: "q"}, {Title: "c", Parent: "ME-2"}} {
+		if _, err := tasks.Add(ts.Session, in); err != nil {
 			t.Fatal(err)
 		}
 	}
 	_, ix, _ := ts.Open()
 	p, _ := ts.Resolve(ix, "ME-1")
-	c, _ := ts.Resolve(ix, "ME-2")
-	child := &model.Task{ULID: c.ULID, ID: "ME-2"}
+	c, _ := ts.Resolve(ix, "ME-3")
+	child := &model.Task{ULID: c.ULID, ID: "ME-3"}
 	u := ts.AddItem(overwritten(child, "c1", "parent", `"`+p.ULID.String()+`"`))
 	if _, err := notifications.InboxRevert(ts.Session, u.String()); err != nil {
 		t.Fatal(err)
@@ -334,14 +334,16 @@ func TestInboxRevertMoves(t *testing.T) {
 	if got, _ := ix.Task(c.ULID); got.Parent == nil || *got.Parent != p.ULID {
 		t.Errorf("parent after revert = %v; want %s", got.Parent, p.ULID)
 	}
-	// null is the root.
-	root := ts.AddItem(overwritten(child, "c2", "parent", `null`))
-	if _, err := notifications.InboxRevert(ts.Session, root.String()); err != nil {
-		t.Fatal(err)
+	// null is the root: a project is there already, and a task cannot be.
+	q, _ := ts.Resolve(ix, "ME-2")
+	rootOfProject := ts.AddItem(overwritten(&model.Task{ULID: q.ULID, ID: "ME-2"}, "c2", "parent", `null`))
+	if res, err := notifications.InboxRevert(ts.Session, rootOfProject.String()); err != nil || res.Committed {
+		t.Errorf("revert of a project to the root = %+v, %v; want no commit", res, err)
 	}
-	_, ix, _ = ts.Open()
-	if got, _ := ix.Task(c.ULID); got.Parent != nil {
-		t.Errorf("parent after revert to null = %v; want the root", got.Parent)
+	root := ts.AddItem(overwritten(child, "c2b", "parent", `null`))
+	_, err := notifications.InboxRevert(ts.Session, root.String())
+	if err == nil || !strings.Contains(err.Error(), "cannot be placed under root") {
+		t.Errorf("revert of a task to the root = %v; want a placement refusal", err)
 	}
 	// A parent that is not in the store, and a workspace that is empty.
 	missing := model.NewULID()
@@ -350,7 +352,7 @@ func TestInboxRevertMoves(t *testing.T) {
 		t.Errorf("revert to a missing parent = %v; want KindNotFound", err)
 	}
 	noWs := ts.AddItem(overwritten(child, "c4", "workspace", `null`))
-	_, err := notifications.InboxRevert(ts.Session, noWs.String())
+	_, err = notifications.InboxRevert(ts.Session, noWs.String())
 	var oe *usecase.Error
 	if usecase.KindOf(err) != usecase.KindInvalid || !errors.As(err, &oe) || oe.Code != "inbox.not_revertable" || err.Error() != "workspace: the value is empty" {
 		t.Errorf("revert to no workspace = %v; want KindInvalid inbox.not_revertable", err)

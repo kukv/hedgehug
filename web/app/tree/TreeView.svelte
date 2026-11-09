@@ -4,6 +4,7 @@
   import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { cliLs } from "../../core/cli";
+  import { KINDS, kindLabel } from "../../core/kinds";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -47,7 +48,7 @@
   } from "./flatten";
   import { type KeyAction, type KeyInput, keyAction, needsSchema, writeTargetOf } from "./keyboard";
   import { openBlocker } from "./marks";
-  import { checkParent, kindLabel, pickKind } from "./placement";
+  import { checkParent, pickKind } from "./placement";
   import { orderRootsByStore, storesOf } from "./stores-order";
   import TreeRow from "./TreeRow.svelte";
 
@@ -567,11 +568,11 @@
       return (menuSchema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
     }
     const parent = menuTask.parent ? taskOf(menuTask.parent) : undefined;
-    return (menuSchema.kinds ?? []).map((k) => {
-      const why = checkParent(menuSchema, { ...menuTask, kind: k.name }, parent ?? null, (t) =>
+    return KINDS.map((k) => {
+      const why = checkParent({ ...menuTask, kind: k.name }, parent ?? null, (t) =>
         c.stores.displayId(t.store, t.id),
       );
-      return { value: k.name, label: k.label || k.name, disabled: why !== null, hint: why?.title };
+      return { value: k.name, label: k.label, disabled: why !== null, hint: why?.title };
     });
   });
   async function pickFromMenu(value: string) {
@@ -599,12 +600,10 @@
   const addWorkspace = $derived(
     adding?.workspace ? workspaceOf(adding.store, adding.workspace) : ls.workspace,
   );
-  const addSchema = $derived(schemaOf(addStore));
   const addKind = $derived.by(() => {
-    if (!addSchema) return null;
     const parentId = adding ? adding.parent : viewRoot;
     const parent = parentId ? taskOf(parentId) : undefined;
-    return pickKind(addSchema, parent?.kind ?? null);
+    return pickKind(parent?.kind ?? null);
   });
   const whereLabel = $derived.by(() => {
     if (all) return addWorkspace ? `${addWorkspace.store} / ${addWorkspace.name}` : "";
@@ -640,13 +639,12 @@
     const a = adding;
     const store = addStore;
     const workspace = addWorkspace;
-    const schema = addSchema;
-    if (!a || !store || !workspace || !schema) return false;
+    if (!a || !store || !workspace) return false;
     const parent = a.parent ? taskOf(a.parent) : undefined;
-    const kind = pickKind(schema, parent?.kind ?? null);
+    const kind = pickKind(parent?.kind ?? null);
     if (!kind) {
       toast({
-        message: `${parent ? `${kindLabel(schema, parent.kind)}の下` : "最上位"}に置ける種類がありません（${store} の schema.yaml の kinds）`,
+        message: `${parent ? `${kindLabel(parent.kind)} の下` : "最上位"}に置ける種類がありません`,
       });
       adding = null;
       return true;
@@ -693,7 +691,6 @@
       dragged,
       target,
       place,
-      schema: schemaOf(dragged.store),
       taskOf,
       readOnly: refusingStore(target.store, dragged.store),
       idOf: (t) => c.stores.displayId(t.store, t.id),
@@ -851,8 +848,8 @@
             editing={true}
             depth={item.depth}
             where={whereLabel}
-            kindLabel={addSchema && addKind ? kindLabel(addSchema, addKind) : ""}
-            ready={!!(addStore && addWorkspace && addSchema)}
+            kindLabel={addKind ? kindLabel(addKind) : ""}
+            ready={!!(addStore && addWorkspace)}
             onstart={() => {}}
             onsubmit={submitAdd}
             oncancel={() => {
@@ -914,7 +911,7 @@
           <AddRow
             editing={false}
             where={all ? "" : whereLabel}
-            kindLabel={addSchema && addKind ? kindLabel(addSchema, addKind) : ""}
+            kindLabel={addKind ? kindLabel(addKind) : ""}
             onstart={startFootAdd}
             onsubmit={submitAdd}
             oncancel={() => {}}

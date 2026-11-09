@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -14,7 +15,7 @@ type Effective struct {
 }
 
 // For returns the schema for a task whose ancestors are ancestors, nearest
-// first (include the task itself first when it is a container). The override
+// first (include the task itself first when it is a group). The override
 // of the nearest ancestor that has one applies; overrides of farther
 // ancestors are not combined with it.
 func (s *Schema) For(ancestors []model.ULID) *Effective {
@@ -99,16 +100,12 @@ func (e *Effective) Required(status string) []string {
 // default template of each kind.
 func (e *Effective) Templates() (only []string, defaults map[string]string) {
 	defaults = map[string]string{}
-	for _, k := range e.s.Kinds {
-		if k.Template != "" {
-			defaults[k.Name] = k.Template
-		}
+	if e.s.Templates != nil {
+		maps.Copy(defaults, e.s.Templates.Default)
 	}
 	if e.scope == nil || e.scope.Templates == nil {
 		return nil, defaults
 	}
-	for k, v := range e.scope.Templates.Default {
-		defaults[k] = v
-	}
+	maps.Copy(defaults, e.scope.Templates.Default)
 	return slices.Clone(e.scope.Templates.Only), defaults
 }

@@ -1,4 +1,4 @@
-# kinds は「種類と階層」、workflow は「ワークフローの制約」を参照
+# templates は「テンプレート」、workflow は「ワークフローの制約」を参照
 statuses:
 - {name: backlog, label: バックログ, category: todo}
 - {name: todo, label: 未着手, category: todo, default: true}
@@ -7,12 +7,6 @@ statuses:
 - {name: waiting, label: 待機中, category: doing}
 - {name: done, label: 完了, category: done, default: true}
 - {name: canceled, label: 中止, category: canceled, default: true}
-kinds:
-- {name: project, label: プロジェクト, role: container}
-- {name: epic, label: エピック, role: container, parents: [root, project]}
-- {name: story, label: ストーリー, role: work, parents: [root, project, epic]}
-- {name: task, label: タスク, role: work, parents: [root, project, epic, story, task], default: true}
-- {name: bug, label: バグ, role: work, parents: [root, project, epic, story], template: bug-report}
 props:
   priority: {type: enum, values: [low, mid, high, urgent]}
   start: {type: date}
@@ -27,6 +21,8 @@ workflow:
   required:
     in_progress: [assignees]
     done: [points]
+templates:
+  default: {bug: bug-report}
 scoped:
 - where: project:01JBZ8K3QW7M2X9V4T6R5N8P0B # リリース準備 v2.4
   workflow:

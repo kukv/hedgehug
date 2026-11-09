@@ -15,7 +15,6 @@ type Target string
 
 const (
 	TargetStatus Target = "status"
-	TargetKind   Target = "kind"
 	TargetProp   Target = "prop"
 	TargetValue  Target = "value" // a value of an enum or multi_enum property
 )
@@ -33,8 +32,8 @@ type Migration struct {
 // Migrate returns s with the migration applied: the definition renamed, or
 // removed in a merge, and every reference to it in the schema rewritten.
 // A list that a merge leaves with a name twice keeps the first. A merged
-// status or kind that was a default hands it to the one it merges into,
-// when that has the same category or role; otherwise Check reports the
+// status that was a default hands it to the one it merges into,
+// when that has the same category; otherwise Check reports the
 // missing default. s is not
 // changed, but the result shares s's file, so that Encode keeps its
 // comments; encoding the result writes into that file, so s is not to be
@@ -47,8 +46,6 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 	switch m.Target {
 	case TargetStatus:
 		return out, out.migrateStatus(m.Old, m.New)
-	case TargetKind:
-		return out, out.migrateKind(m.Old, m.New)
 	case TargetProp:
 		return out, out.migrateProp(m.Old, m.New)
 	case TargetValue:
@@ -60,9 +57,8 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 func (s *Schema) clone() *Schema {
 	out := *s
 	out.Statuses = slices.Clone(s.Statuses)
-	out.Kinds = slices.Clone(s.Kinds)
-	for i := range out.Kinds {
-		out.Kinds[i].Parents = slices.Clone(out.Kinds[i].Parents)
+	if s.Templates != nil {
+		out.Templates = &Templates{Only: slices.Clone(s.Templates.Only), Default: maps.Clone(s.Templates.Default)}
 	}
 	out.Props = slices.Clone(s.Props)
 	for i := range out.Props {
@@ -129,38 +125,6 @@ func (s *Schema) migrateStatus(from, to string) error {
 	}
 	for i := range s.Scoped {
 		s.Scoped[i].Statuses = replace(s.Scoped[i].Statuses, from, to)
-	}
-	return nil
-}
-
-func (s *Schema) migrateKind(from, to string) error {
-	i := slices.IndexFunc(s.Kinds, func(x Kind) bool { return x.Name == from })
-	if i < 0 {
-		return fmt.Errorf("kind %q is not defined", from)
-	}
-	if j := slices.IndexFunc(s.Kinds, func(x Kind) bool { return x.Name == to }); j >= 0 {
-		if s.Kinds[i].Default && s.Kinds[j].Role == s.Kinds[i].Role {
-			s.Kinds[j].Default = true
-		}
-		s.Kinds = slices.Delete(s.Kinds, i, i+1)
-	} else {
-		s.Kinds[i].Name = to
-	}
-	for i := range s.Kinds {
-		s.Kinds[i].Parents = replace(s.Kinds[i].Parents, from, to)
-	}
-	for _, sc := range s.Scoped {
-		if sc.Templates == nil {
-			continue
-		}
-		d := sc.Templates.Default
-		if t, ok := d[from]; ok {
-			// In a merge the template of to wins.
-			if _, has := d[to]; !has {
-				d[to] = t
-			}
-			delete(d, from)
-		}
 	}
 	return nil
 }
@@ -258,8 +222,6 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 	switch m.Target {
 	case TargetStatus:
 		return swap(&t.Status, m.Old, m.New), nil
-	case TargetKind:
-		return swap(&t.Kind, m.Old, m.New), nil
 	case TargetProp:
 		i := slices.IndexFunc(t.Props, func(f model.Field) bool { return f.Key == m.Old })
 		if i < 0 {

@@ -207,6 +207,9 @@ func TestAddHereErrors(t *testing.T) {
 	ts := usecasetest.NewTwoStore(t)
 	setDefaultStore(t, ts, "")
 	pid := usecasetest.AddProjectIn(t, ts, "org-a", "Release")
+	if _, err := tasks.Add(ts.ForStore("org-a"), tasks.AddInput{Title: "t", Parent: pid}); err != nil { // API-3: a task
+		t.Fatal(err)
+	}
 	cases := []struct {
 		name string
 		in   usecase.Input
@@ -214,7 +217,7 @@ func TestAddHereErrors(t *testing.T) {
 		code string
 	}{
 		{"parent and project", usecase.Input{Parent: "API-1", Project: pid}, usecase.KindUsage, "add.parent_and_project"},
-		{"not a project", usecase.Input{Project: "API-1"}, usecase.KindInvalid, "add.not_project"},
+		{"not a project", usecase.Input{Project: "API-3"}, usecase.KindInvalid, "add.not_project"},
 		{"no such parent", usecase.Input{Parent: "API-99"}, usecase.KindNotFound, "task.not_found"},
 		{"no such workspace", usecase.Input{Workspace: "nosuch"}, usecase.KindNotFound, "workspace.not_found"},
 		{"no store chosen", usecase.Input{}, usecase.KindUsage, "choice.required"},

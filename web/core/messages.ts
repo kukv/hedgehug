@@ -107,6 +107,7 @@ const messages: Record<string, Make> = {
     "確認のあと、移動するタスクが変わりました。移動の内容を読み込み直して、確認してから移動してください",
   "move.same_store": (a) =>
     `タスクはすでに ${str(a, "store")} にあります。同じ Store の中で移すには、別のワークスペースを選んでください`,
+  "move.parent_required": () => "移動先の親を指定してください",
   "move.store_required": () => "移動先の Store を選んでください",
   "move.exists": (a) => `${str(a, "ulid")} はすでに ${str(a, "store")} にあります`,
   "move.unfinished": (a) =>
@@ -126,7 +127,7 @@ const messages: Record<string, Make> = {
   "status.unknown": (a) => `「${str(a, "name")}」というステータスはありません`,
   "schema.no_default": (a) => {
     const what = str(a, "what");
-    const name = what === "kind" ? "種類" : what === "status" ? "ステータス" : "完了のステータス";
+    const name = what === "status" ? "ステータス" : "完了のステータス";
     return `スキーマに既定の${name}がありません。指定してください`;
   },
   "schema.violation": (a, e) => {
@@ -150,20 +151,16 @@ const messages: Record<string, Make> = {
       ? `スキーマの規則に合わなくなります: ${t}`
       : withDetail("スキーマの規則に合わなくなります", e);
   },
-  "schema.parents_empty": (a) => {
-    const kinds = list(a, "kinds");
-    return `種類 ${kinds} のどの下に置けるかがなくなるため削除できません。先に ${kinds} のどの下に置けるかを変えてください`;
-  },
   "schema.not_defined": () => "定義が見つかりません。画面を読み込み直してください",
   "schema.order_stale": () =>
     "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
-  "schema.default_container": () => "既定にできるのはアイテムの種類だけです",
   "schema.not_task_ref": () => "複数・逆方向・双方向は関連だけの設定です",
   "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
   "schema.value_invalid": () =>
     "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
   "ref.cross_store": (a) =>
     `${str(a, "store")} の ${str(a, "id")} は参照できません（参照は同じ Store の中だけです）`,
+  "import.parent_required": () => "--parent で取り込み先を指定してください",
   "use.not_project": (a) => `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトではありません`,
 
   // assignments (hh set)
@@ -225,6 +222,15 @@ const messages: Record<string, Make> = {
   "store.choose": (_, e) => withDetail("Store を選んでください", e),
   "store.conflict": (a) =>
     `${str(a, "named")} の ID ですが、指定された Store は ${str(a, "store")} です`,
+  "store.old_format": (a) =>
+    `${str(a, "name") ? `${str(a, "name")} は` : "この Store は"}古い形式です。hh store convert で新しい形式にしてください`,
+  "store.newer_format": (a) =>
+    `${str(a, "name") ? `${str(a, "name")} は` : "この Store は"}新しい形式です。Hedgehug を更新してください`,
+  "store.convert_unsynced": (_, e) =>
+    withDetail(
+      "変換の前に remote と同期しようとしましたが、同期できなかったため変換しませんでした。原因を直してから、もう一度 hh store convert を実行してください",
+      e,
+    ),
   "store.locked": () => "別の hh が書き込み中です。少し待ってからやり直してください",
   "store.gone": () =>
     "Store のディレクトリが削除されたか入れ替わりました。もう一度実行してください",
@@ -237,6 +243,10 @@ const messages: Record<string, Make> = {
   "store.mount_failed": (a) => `追加できなかった Store があります（${list(a, "failed")}）`,
   "store.set_args": () => "色か表示のどちらかを指定してください",
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
+  "sync.format_diverged": (a) =>
+    a.remote_older === true
+      ? "remote には古い Store の形式のまま取り込めていない変更があります。hh store convert を実行して、remote の変更を変換してください"
+      : "remote はより新しい Store の形式で、手元には push していない変更があります。hh store convert を実行してください",
   "sync.unrelated": () => "remote の履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
     "remote の履歴が手元と食い違っています。確認してから、hh doctor --fix で origin の新しい履歴にそろえてください",
@@ -345,8 +355,8 @@ const messages: Record<string, Make> = {
   "view.tree_order": () =>
     "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",
   "migrate.invalid": (_, e) => withDetail("移行するとスキーマに合わないタスクがあります", e),
-  "scoped.not_container": (a) =>
-    `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません`,
+  "scoped.not_group": (a) =>
+    `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトでもエピックでもないため、上書きを設定できません`,
   "scoped.invalid": (a, e) =>
     list(a, "problems")
       ? `上書きがスキーマに合いません: ${list(a, "problems")}`

@@ -141,18 +141,21 @@ func TestSchemaMigrateJSON(t *testing.T) {
 	}
 }
 
-func TestSchemaMigrateKindAndProp(t *testing.T) {
+// The kinds are fixed, so there is nothing to migrate for them.
+func TestSchemaMigrateProp(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	a := te.addJSON("Alpha", "--kind", "bug")
+	a := te.addJSON("Alpha")
 	te.ok("set", a.ID, "start=2026-11-01")
-	te.ok("schema", "migrate", "kind", "bug", "task")
+	if code, _, _ := te.run("schema", "migrate", "kind", "bug", "task"); code != 2 {
+		t.Errorf("migrate kind: exit %d, want 2", code)
+	}
 	te.ok("schema", "migrate", "prop", "start", "begin")
 	x := te.task(a.ULID)
-	if x.Kind != "task" || x.Props.Get("begin") == nil || x.Props.Get("start") != nil {
-		t.Errorf("task = kind %q, props %v", x.Kind, x.Props)
+	if x.Props.Get("begin") == nil || x.Props.Get("start") != nil {
+		t.Errorf("task = props %v", x.Props)
 	}
-	if sf := te.schemaFile(); strings.Contains(sf, "name: bug") || !strings.Contains(sf, "begin: {type: date, label: 開始日}") {
+	if sf := te.schemaFile(); !strings.Contains(sf, "begin: {type: date, label: 開始日}") {
 		t.Errorf("schema.yaml:\n%s", sf)
 	}
 }
@@ -177,19 +180,23 @@ func TestSchemaMigratePropOnBoth(t *testing.T) {
 func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	p := te.addJSON("Parent")
+	p := te.addJSON("Parent", "--kind", "project")
 	c := te.addJSON("Child", "--parent", p.ID)
+	te.ok("set", c.ID, "priority=high")
+	te.putSchema(func(sc *schema.Schema) {
+		sc.Props = append(sc.Props, schema.Prop{Name: "severity", Type: schema.TypeEnum, Values: []string{"s1", "s2"}})
+	})
 	before := len(te.log("me"))
 	sf := te.schemaFile()
-	// A bug may not sit under a bug.
-	code, _, stderr := te.run("schema", "migrate", "kind", "task", "bug")
-	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "cannot be placed") || !strings.Contains(stderr, label(c)+" Child") {
+	// "high" is not a value of severity.
+	code, _, stderr := te.run("schema", "migrate", "prop", "priority", "severity")
+	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, label(c)+" Child") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != before {
 		t.Errorf("commits = %d, want %d", n, before)
 	}
-	if te.schemaFile() != sf || te.task(c.ULID).Kind != "task" {
+	if te.schemaFile() != sf || te.task(c.ULID).Props.Get("priority") == nil {
 		t.Error("the store changed")
 	}
 }

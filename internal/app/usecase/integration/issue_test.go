@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
@@ -281,18 +282,18 @@ func TestImportIssues(t *testing.T) {
 	if r.Count != 2 || len(r.Created) != 0 || !r.DryRun {
 		t.Errorf("dry run %+v", r)
 	}
-	if ids := ts.TaskULIDs("me"); len(ids) != 1 {
+	if ids := ts.TaskULIDs("me"); len(ids) != 2 { // the parent and the fixture project
 		t.Errorf("a dry run wrote %d tasks", len(ids))
 	}
 	in.DryRun = false
 	if r, err = integration.ImportIssues(ts.Session, in); err != nil {
 		t.Fatal(err)
 	}
-	if r.Count != 2 || !slices.Equal(r.Created, []string{"ME-2", "ME-3"}) || len(r.Warnings) != 0 {
+	if r.Count != 2 || !slices.Equal(r.Created, []string{"ME-3", "ME-4"}) || len(r.Warnings) != 0 {
 		t.Fatalf("import %+v", r)
 	}
-	x := taskAt(t, ts, "ME-2")
-	if x.Title != "A" || x.Body != "their text" || x.Parent == nil || *x.Parent != parent.ULID || !slices.Equal(x.Repos, []string{web}) {
+	x := taskAt(t, ts, "ME-3")
+	if x.Kind != "step" || x.Title != "A" || x.Body != "their text" || x.Parent == nil || *x.Parent != parent.ULID || !slices.Equal(x.Repos, []string{web}) {
 		t.Errorf("task %+v", x)
 	}
 	if len(x.Links) != 1 || x.Links[0].Sync != model.SyncMirror || x.Links[0].Ref != web+"/issues/"+strconv.Itoa(a) {
@@ -307,11 +308,11 @@ func TestImportIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	reread(t, ts)
-	if got := taskAt(t, ts, "ME-2").Body; got != "their text" {
+	if got := taskAt(t, ts, "ME-3").Body; got != "their text" {
 		t.Errorf("body %q", got)
 	}
 	// What is linked is passed over, even when it was unlinked.
-	if _, err := integration.Unlink(ts.Session, "ME-2", integration.LinkInput{Issue: "org-a/web#" + strconv.Itoa(a)}); err != nil {
+	if _, err := integration.Unlink(ts.Session, "ME-3", integration.LinkInput{Issue: "org-a/web#" + strconv.Itoa(a)}); err != nil {
 		t.Fatal(err)
 	}
 	if r, err = integration.ImportIssues(ts.Session, in); err != nil {
@@ -322,20 +323,35 @@ func TestImportIssues(t *testing.T) {
 	}
 }
 
-func TestImportNeedsAPlace(t *testing.T) {
+func TestImportNeedsAParent(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
 	openLabeled(t, fake, "A", "")
-	ts.AddWorkspace("two", "TW")
 	in := integration.ImportInput{Repo: "org-a/web", Label: "hh"}
 	_, err := integration.ImportIssues(ts.Session, in)
-	var ue *usecase.Error
-	if !errors.As(err, &ue) || ue.Code != "workspace.choose" {
-		t.Fatalf("no workspace: %v", err)
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "import.parent_required")
+	in.DryRun = true
+	_, err = integration.ImportIssues(ts.Session, in)
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "import.parent_required")
+	if ids := ts.TaskULIDs("me"); len(ids) != 0 {
+		t.Errorf("a refused import wrote %d tasks", len(ids))
 	}
-	in.Workspace = "two"
-	r, err := integration.ImportIssues(ts.Session, in)
-	if err != nil || !slices.Equal(r.Created, []string{"TW-1"}) {
-		t.Errorf("%+v, %v", r, err)
+}
+
+func TestImportGoesUnderTheProjectOfUse(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	openLabeled(t, fake, "A", "")
+	id := ts.AddProject("Release")
+	if _, err := stores.Use(ts.Session, id.String()); err != nil {
+		t.Fatal(err)
+	}
+	r, err := integration.ImportIssues(ts.Session, integration.ImportInput{Repo: "org-a/web", Label: "hh"})
+	if err != nil || len(r.Created) != 1 {
+		t.Fatalf("%+v, %v", r, err)
+	}
+	x := taskAt(t, ts, r.Created[0])
+	if x.Kind != "task" || x.Parent == nil || *x.Parent != id {
+		t.Errorf("kind %q parent %v; want a task under the project", x.Kind, x.Parent)
 	}
 }

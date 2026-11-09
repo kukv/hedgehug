@@ -53,8 +53,9 @@ func TestRestoreAtRefusedParent(t *testing.T) {
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "p")
 	te.ok("add", "c", "--parent", "ME-1")
+	te.ok("add", "q") // ME-3; a task cannot go to the root, so c goes under q
 	h := te.headCommit("me").Hash.String()
-	te.ok("mv", "ME-2", "--root")
+	te.ok("mv", "ME-2", "--parent", "ME-3")
 	te.ok("rm", "ME-1")
 	before := te.headCommit("me").Hash
 	te.goldenRun("restore", 1, "restore", "ME-2", "--at", h)

@@ -12,11 +12,6 @@ const sch = {
     { name: "on_hold", category: "doing" },
     { name: "done", category: "done", default: true },
   ],
-  kinds: [
-    { name: "epic", role: "container", parents: ["root"] },
-    { name: "sub", role: "work", parents: ["epic"] },
-    { name: "task", role: "work", parents: null, default: true },
-  ],
   props: { priority: { type: "enum", values: ["low", "high"] } },
   workflow: {
     transitions: { todo: ["on_hold"], on_hold: ["done"] },
@@ -32,14 +27,13 @@ const sch = {
 } as unknown as SchemaView;
 
 function setup(
-  target: "status" | "kind" | "prop",
+  target: "status" | "prop",
   name: string,
   prop?: string,
   over: Record<string, unknown> = {},
 ) {
   const api = {
     deleteStatus: vi.fn(() => ok({ schema: sch, commit: "c" })),
-    deleteKind: vi.fn(() => ok({ schema: sch, commit: "c" })),
     deleteProp: vi.fn(() => ok({ schema: sch, commit: "c" })),
     ...over,
   };
@@ -85,18 +79,6 @@ describe("SchemaDeleteDialog", () => {
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(reload).toHaveBeenCalledWith("shared");
     expect(toasts.list.map((t) => t.message)).toContain("ステータス「on_hold」を削除しました");
-  });
-
-  it("refuses a kind that leaves another with no parent", () => {
-    setup("kind", "epic");
-    const del = screen.getByRole("button", { name: "削除" });
-    expect(del).toBeDisabled();
-    const why = screen.getByText(
-      "種類 sub のどの下に置けるかがなくなるため削除できません。先に sub のどの下に置けるかを変えてください",
-    );
-    expect(why).toBeVisible();
-    expect(why.id).toMatch(/-orphan-why$/);
-    expect(del).toHaveAttribute("aria-describedby", why.id);
   });
 
   it("words the in_use of the server with the counts", async () => {

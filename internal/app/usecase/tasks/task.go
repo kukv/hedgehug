@@ -59,11 +59,6 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 	}
 	sc := ix.Schema()
 	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status, Body: in.Body, Repos: slices.Clone(in.Repos)}
-	if t.Kind == "" {
-		if t.Kind, err = usecase.DefaultKind(sc); err != nil {
-			return usecase.TaskResult{}, err
-		}
-	}
 	if t.Status == "" {
 		if t.Status, err = usecase.DefaultTodo(sc); err != nil {
 			return usecase.TaskResult{}, err
@@ -121,6 +116,15 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 		if t.Workspace, err = usecase.OnlyWorkspace(ix); err != nil {
 			return usecase.TaskResult{}, err
 		}
+	}
+	if t.Kind == "" {
+		parentKind := ""
+		if t.Parent != nil {
+			if p, ok := ix.Task(*t.Parent); ok {
+				parentKind = p.Kind
+			}
+		}
+		t.Kind = schema.DefaultKindUnder(parentKind)
 	}
 	tpl, err := templateFor(ss, s, ix, in, t)
 	if err != nil {

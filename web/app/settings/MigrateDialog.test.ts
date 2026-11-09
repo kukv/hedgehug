@@ -23,7 +23,7 @@ const deferred = <T>() => {
 };
 
 type Opts = {
-  target?: "status" | "kind" | "prop";
+  target?: "status" | "prop";
   old?: string;
   names?: string[];
   many?: boolean;
@@ -172,18 +172,23 @@ describe("MigrateDialog", () => {
   });
 
   it("sends --store only when there are many stores", async () => {
-    const { post } = setup({ target: "kind", old: "task", names: ["task", "bug"], many: true });
-    expect(screen.getByRole("dialog", { name: "種類「task」をマージ" })).toBeVisible();
-    await pick("bug");
+    const { post } = setup({
+      target: "prop",
+      old: "points",
+      names: ["points", "size"],
+      many: true,
+    });
+    expect(screen.getByRole("dialog", { name: "プロパティ「points」をマージ" })).toBeVisible();
+    await pick("size");
     await settle();
     expect(post.mock.calls[0]?.[0]).toEqual({
-      target: "kind",
-      old: "task",
-      new: "bug",
+      target: "prop",
+      old: "points",
+      new: "size",
       dry_run: true,
     });
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
-      "hh schema migrate kind task bug --store shared",
+      "hh schema migrate prop points size --store shared",
     );
   });
 

@@ -15,7 +15,6 @@
   import SchemaCheck from "./SchemaCheck.svelte";
   import SchemaDefDialog from "./SchemaDefDialog.svelte";
   import SchemaDeleteDialog from "./SchemaDeleteDialog.svelte";
-  import SchemaKinds from "./SchemaKinds.svelte";
   import SchemaProps from "./SchemaProps.svelte";
   import SchemaRelations from "./SchemaRelations.svelte";
   import SchemaStatuses from "./SchemaStatuses.svelte";
@@ -125,7 +124,6 @@
     (
       [
         ["statuses", "ステータス", (schema?.statuses ?? []).length],
-        ["kinds", "種類", (schema?.kinds ?? []).length],
         ["props", "プロパティ", propCount],
         ["relations", "関連", relationCount + 1],
         ["workflow", "ワークフロー", undefined],
@@ -215,8 +213,6 @@
       <SchemaStatuses {store} {schema} {usage} {off} {onaction} />
     {:else if tab === "templates"}
       <SettingsTemplates {store} {off} />
-    {:else if tab === "kinds"}
-      <SchemaKinds {store} {schema} {usage} {off} {onaction} />
     {:else if tab === "props"}
       <SchemaProps {store} {schema} {usage} {off} {onaction} />
     {:else if tab === "relations"}

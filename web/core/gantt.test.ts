@@ -32,7 +32,6 @@ function rowsOf(
     taskOf: (u) => all.get(u),
     settings: DEFAULT_GANTT,
     collapsed: new Set(),
-    isContainer: (t) => t.kind === "epic",
     categoryOf: () => "todo",
     sprintSpan: () => null,
     ...over,

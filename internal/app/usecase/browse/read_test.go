@@ -284,15 +284,15 @@ func TestShowFullTask(t *testing.T) {
 	a := ts.AddTask("a", func(t *model.Task) { t.Body = "the body\n"; t.Watchers = []string{"bob"}; t.Repos = []string{"r1"} })
 	b := ts.AddTask("b", nil)
 	c := ts.AddTask("c", nil)
-	// b is blocked by a; c duplicates a; c writes a as #ME-1 in its body.
-	if _, err := tasks.Dep(ts.Session, "ME-2", "ME-1", true); err != nil {
+	// b (ME-3; ME-2 is the fixture project) is blocked by a; c duplicates a; d writes a as #ME-1 in its body.
+	if _, err := tasks.Dep(ts.Session, "ME-3", "ME-1", true); err != nil {
 		t.Fatal(err)
 	}
 	as, err := usecase.ParseAssigns([]string{"duplicates+=ME-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Set(ts.Session, "ME-3", as); err != nil {
+	if _, err := tasks.Set(ts.Session, "ME-4", as); err != nil {
 		t.Fatal(err)
 	}
 	_ = ts.AddTask("d", func(t *model.Task) { t.Body = "see #ME-1\n" })
@@ -344,13 +344,13 @@ func TestShowFullTask(t *testing.T) {
 	if len(v.Comments) != 2 || v.Comments[0].Body != "first\n" || v.Comments[0].ULID == "" {
 		t.Errorf("Comments view = %+v", v.Comments)
 	}
-	if got := v.Reverse["blocks"]; len(got) != 1 || got[0].ID != "ME-2" || got[0].Title != "b" || got[0].ULID != b.ULID.String() {
+	if got := v.Reverse["blocks"]; len(got) != 1 || got[0].ID != "ME-3" || got[0].Title != "b" || got[0].ULID != b.ULID.String() {
 		t.Errorf("Reverse[blocks] = %+v", got)
 	}
-	if got := v.Reverse["duplicates"]; len(got) != 1 || got[0].ID != "ME-3" {
+	if got := v.Reverse["duplicates"]; len(got) != 1 || got[0].ID != "ME-4" {
 		t.Errorf("Reverse[duplicates] = %+v", got)
 	}
-	if len(v.ReferencedBy) != 1 || v.ReferencedBy[0].ID != "ME-4" {
+	if len(v.ReferencedBy) != 1 || v.ReferencedBy[0].ID != "ME-5" {
 		t.Errorf("ReferencedBy = %+v", v.ReferencedBy)
 	}
 	if len(v.History) == 0 || v.History[0].ID == nil || *v.History[0].ID != "ME-1" {

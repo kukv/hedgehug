@@ -38,6 +38,15 @@ function rootOrder(hh: Hedgehug): string[] {
     .map((t) => t.title);
 }
 
+/** The titles of the children of a task, in the order of their ranks. */
+function childOrder(hh: Hedgehug, parent: string): string[] {
+  return hh
+    .json<{ tasks: { title: string; rank: string; parent: string | null }[] }>("ls")
+    .tasks.filter((t) => t.parent === parent)
+    .sort((x, y) => (x.rank < y.rank ? -1 : 1))
+    .map((t) => t.title);
+}
+
 test("Enter adds a sibling right below the selected row", async ({ page, hh }) => {
   hh.add("Alpha");
   hh.add("Bravo");
@@ -273,18 +282,20 @@ test("Tab indents under the previous sibling and Shift+Tab brings it back", asyn
   page,
   hh,
 }) => {
-  const a = hh.add("Alpha");
-  const b = hh.add("Bravo");
+  // An epic holds a task, and a task does not hold a task: the epic is the previous sibling.
+  const p = hh.add("Project", "--kind", "project");
+  const a = hh.add("Alpha", "--parent", p.id, "--kind", "epic");
+  const b = hh.add("Bravo", "--parent", p.id);
   await hh.openTree(page);
 
   await row(page, "Bravo").click();
   await page.keyboard.press("Tab");
   await expect.poll(() => hh.show(b.id).parent).toBe(a.ulid);
-  await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "2");
+  await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "3");
 
   await page.keyboard.press("Shift+Tab");
-  await expect.poll(() => hh.show(b.id).parent).toBeNull();
-  await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "1");
+  await expect.poll(() => hh.show(b.id).parent).toBe(p.ulid);
+  await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "2");
 });
 
 test("Alt+Up moves a task before its previous sibling", async ({ page, hh }) => {
@@ -352,56 +363,61 @@ test("dragging a row after another reorders; onto the middle makes it a child", 
   page,
   hh,
 }) => {
-  hh.add("Alpha");
-  const b = hh.add("Bravo");
-  const c = hh.add("Charlie");
+  // Under a project: Charlie is an epic, which can hold the task Bravo.
+  const p = hh.add("Project", "--kind", "project");
+  hh.add("Alpha", "--parent", p.id);
+  const b = hh.add("Bravo", "--parent", p.id);
+  const c = hh.add("Charlie", "--parent", p.id, "--kind", "epic");
   await hh.openTree(page);
   await treeReady(page);
 
   await dragRow(page, row(page, "Alpha"), row(page, "Charlie"), "after");
-  await expect.poll(() => rootOrder(hh)).toEqual(["Bravo", "Charlie", "Alpha"]);
+  await expect.poll(() => childOrder(hh, p.ulid)).toEqual(["Bravo", "Charlie", "Alpha"]);
   // Wait for the page to show the new order before the next drag measures the rows.
   await expect(page.getByRole("treeitem").last()).toContainText("Alpha");
 
   await dragRow(page, row(page, "Bravo"), row(page, "Charlie"), "child");
   await expect.poll(() => hh.show(b.id).parent).toBe(c.ulid);
-  await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "2");
+  await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "3");
 });
 
 test("dropping on the lower quarter of an open parent makes the task its child", async ({
   page,
   hh,
 }) => {
-  const parent = hh.add("Parent");
+  const p = hh.add("Project", "--kind", "project");
+  const parent = hh.add("Parent", "--parent", p.id, "--kind", "epic");
   hh.add("Existing child", "--parent", parent.id);
-  const moved = hh.add("Mover");
+  const moved = hh.add("Mover", "--parent", p.id);
   await hh.openTree(page);
   await treeReady(page);
   await expect(row(page, "Existing child")).toBeVisible();
 
   await dragRow(page, row(page, "Mover"), row(page, "Parent"), "after");
   await expect.poll(() => hh.show(moved.id).parent).toBe(parent.ulid);
-  await expect(row(page, "Mover")).toHaveAttribute("aria-level", "2");
+  await expect(row(page, "Mover")).toHaveAttribute("aria-level", "3");
 });
 
 test("a drop the schema does not allow says why and changes nothing", async ({ page, hh }) => {
-  // The default schema lets an epic sit at the root or under a project only.
-  const epic = hh.add("Big epic", "--kind", "epic");
-  hh.add("Small task");
+  // An epic sits under a project only.
+  const p = hh.add("Project", "--kind", "project");
+  const epic = hh.add("Big epic", "--parent", p.id, "--kind", "epic");
+  hh.add("Small task", "--parent", p.id);
   await hh.openTree(page);
   await treeReady(page);
 
   await dragRow(page, row(page, "Big epic"), row(page, "Small task"), "child", async () => {
     await expect(page.getByText("ここには置けません")).toBeVisible();
-    await expect(page.getByText("EpicはTaskの下に置けません")).toBeVisible();
+    await expect(page.getByText("Epic は Task の下に置けません")).toBeVisible();
   });
-  await expect(toast(page, "Epicのどの下に置けるかは最上位とProjectだけです")).toBeVisible();
-  expect(hh.show(epic.id).parent).toBeNull();
+  await expect(toast(page, "Epic を置けるのは Project の下だけです")).toBeVisible();
+  expect(hh.show(epic.id).parent).toBe(p.ulid);
 });
 
 test("the dragging mark and the refusal go away when the drag ends", async ({ page, hh }) => {
-  hh.add("Big epic", "--kind", "epic");
-  hh.add("Small task");
+  const p = hh.add("Project", "--kind", "project");
+  hh.add("Big epic", "--parent", p.id, "--kind", "epic");
+  hh.add("Small task", "--parent", p.id);
   await hh.openTree(page);
   await treeReady(page);
 
@@ -424,9 +440,10 @@ test("the refusal does not cover the last row once the tree is scrolled to its e
   page,
   hh,
 }) => {
-  await hh.post("/api/tasks", { title: "Big epic", kind: "epic" });
+  const p = hh.add("Project", "--kind", "project");
+  await hh.post("/api/tasks", { title: "Big epic", kind: "epic", parent: p.ulid });
   for (let i = 1; i <= 40; i++) {
-    await hh.post("/api/tasks", { title: `Filler ${String(i).padStart(2, "0")}` });
+    await hh.post("/api/tasks", { title: `Filler ${String(i).padStart(2, "0")}`, parent: p.ulid });
   }
   await hh.openTree(page);
   await treeReady(page);

@@ -131,7 +131,7 @@ func addTask(t *testing.T, c *clone, title string, fn func(*model.Task)) *model.
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "task", Title: title, Status: "todo", Rank: r}
+	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "project", Title: title, Status: "todo", Rank: r}
 	if fn != nil {
 		fn(x)
 	}

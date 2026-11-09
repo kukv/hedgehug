@@ -22,7 +22,7 @@
     todayOf,
   } from "../../core/gantt";
   import { errorMessage } from "../../core/messages";
-  import { kindColorOf, kindIconOf, kindRoleOf, propNames } from "../../core/schema-edit";
+  import { propNames } from "../../core/schema-edit";
   import type { GanttSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -161,7 +161,6 @@
       taskOf,
       settings,
       collapsed,
-      isContainer: (t) => kindRoleOf(schemaOf(t.store), t.kind) === "container",
       categoryOf: (t) => categoryOf(schemaOf(t.store), t.status),
       sprintSpan: (t) => {
         const u = t.sprint?.ulid;
@@ -472,13 +471,7 @@
             {:else}
               <span class="fold"></span>
             {/if}
-            <KindIcon
-              kind={r.task.kind}
-              role={kindRoleOf(schemaOf(r.task.store), r.task.kind)}
-              icon={kindIconOf(schemaOf(r.task.store), r.task.kind)}
-              color={kindColorOf(schemaOf(r.task.store), r.task.kind)}
-              size={13}
-            />
+            <KindIcon kind={r.task.kind} size={13} />
             <span class="id">{did.current(r.task.store, r.task.id)}</span>
             <a
               href={taskHref(r.task)}

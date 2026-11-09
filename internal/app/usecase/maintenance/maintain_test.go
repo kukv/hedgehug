@@ -299,25 +299,6 @@ func TestMigrateRefusals(t *testing.T) {
 	}
 }
 
-func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
-	t.Parallel()
-	ts := usecasetest.New(t)
-	p, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Parent"})
-	c, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Child", Parent: "ME-1"})
-	before := ts.Head()
-	// A bug may not sit under a bug.
-	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetKind, Old: "task", New: "bug"}, false)
-	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
-	msg := err.Error()
-	if !strings.Contains(msg, "breaks the schema") || !strings.Contains(msg, "cannot be placed") || !strings.HasPrefix(msg, "ME-2 ("+c.ULID.String()+") Child: ") {
-		t.Errorf("message = %q", msg)
-	}
-	_ = p
-	if ts.Head() != before {
-		t.Error("a refused migration committed")
-	}
-}
-
 func TestMigrateUnknownDefinition(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
@@ -363,5 +344,47 @@ func TestDoctorFindsAnUnexpectedForcePush(t *testing.T) {
 	f := rep.Findings[0]
 	if f.Check != "unexpected_force_push" || f.Where != e.Name || !strings.Contains(f.Msg, "differs from this store's") || !strings.Contains(f.Hint, "doctor --fix") {
 		t.Errorf("finding = %+v", f)
+	}
+}
+
+// A migration that would break the schema for a task is refused, and the
+// message names the task first.
+func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	p, err := tasks.Add(ts.Session, tasks.AddInput{Title: "Parent", Kind: "project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := tasks.Add(ts.Session, tasks.AddInput{Title: "Child", Parent: p.ULID.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cv, err := c.View()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Set(ts.Session, c.ULID.String(), []usecase.Assign{{Key: "priority", Op: "=", Value: "high"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := ts.SchemaOf("me").Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := schema.Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc.Props = append(sc.Props, schema.Prop{Name: "severity", Type: schema.TypeEnum, Values: []string{"s1", "s2"}})
+	ts.MustEdit("me", "schema", usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
+	before := ts.Head()
+	// "high" is not a value of severity.
+	_, err = schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "priority", New: "severity"}, false)
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
+	if msg := err.Error(); !strings.Contains(msg, "breaks the schema") || !strings.HasPrefix(msg, cv.ID+" ("+c.ULID.String()+") Child: ") {
+		t.Errorf("message = %q", msg)
+	}
+	if ts.Head() != before {
+		t.Error("a refused migration committed")
 	}
 }

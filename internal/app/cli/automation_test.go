@@ -15,7 +15,7 @@ func TestAutomationGolden(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Web", "--kind", "project")
-	te.ok("add", "Login")
+	te.ok("add", "Login", "--parent", "ME-1")
 
 	te.goldenRun("list-none", 0, "automation", "list")
 	te.goldenRun("add", 0, "automation", "add", "--id", "opened", "--on", "pr.opened", "--status", "in_progress")

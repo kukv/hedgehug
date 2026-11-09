@@ -239,7 +239,7 @@ func TestProblemOf(t *testing.T) {
 	}
 	ts := newTestServer(t)
 	ve := ts.uc.Edit("me", "add", usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error {
-		return tx.PutTask(&model.Task{ULID: model.NewULID(), Kind: "task", Status: "todo", Workspace: ts.uc.WorkspaceNamed("me", "me")})
+		return tx.PutTask(&model.Task{ULID: model.NewULID(), Kind: "project", Status: "todo", Workspace: ts.uc.WorkspaceNamed("me", "me")})
 	})
 	if _, ok := usecase.ViolationsOf(ve); !ok {
 		t.Fatalf("a task with no title was not refused by the schema: %v", ve)

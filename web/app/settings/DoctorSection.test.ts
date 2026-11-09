@@ -417,7 +417,7 @@ describe("DoctorSection: the repair", () => {
     expect(toasts.list.map((t) => t.message)).toEqual(["2 件を修復しました"]);
     const result = within(region()).getByRole("region", { name: "修復の結果" });
     expect(result.textContent).toContain("DM-2");
-    expect(result.textContent).toContain("親が削除されたため、ルートに移しました");
+    expect(result.textContent).toContain("親「U1」が削除されたため、ルートに移しました");
     expect(result.textContent).toContain("ID が重複していたため、DM-3 から DM-4 に振り直しました");
     await waitFor(() => expect(document.activeElement).toBe(result));
     // what is left

@@ -152,7 +152,7 @@ func TestImportIssues(t *testing.T) {
 	if err := fake.TagIssue("org-a/web", n, nil, []string{"v2"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	body := map[string]any{"repo": "org-a/web", "label": "v2", "dry_run": true}
+	body := map[string]any{"repo": "org-a/web", "label": "v2", "dry_run": true, "parent": ts.add("project", "")}
 	var out integration.ImportResult
 	ts.call("POST", "/api/github/import", body, 200, &out)
 	if out.Count != 1 || len(out.Created) != 0 || !out.DryRun {

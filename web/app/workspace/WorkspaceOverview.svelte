@@ -3,7 +3,6 @@
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { errorMessage } from "../../core/messages";
-  import { kindColorOf, kindIconOf, kindRoleOf, statusColorOf } from "../../core/schema-edit";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -20,7 +19,7 @@
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
-  import { countByCategory, projectsOf, rootsOf } from "./counts";
+  import { countByCategory, projectsOf } from "./counts";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
 
   let { entry }: { entry: WorkspaceEntry } = $props();
@@ -76,18 +75,13 @@
   });
 
   const projects = $derived(projectsOf(tasks));
-  const roots = $derived(rootsOf(tasks));
   const counts = $derived(schema && !loading && !error ? countByCategory(tasks, schema) : null);
   // Until the list has come, the count of the workspace is the one the store directory has.
   const total = $derived(loading || error ? entry.tasks : tasks.length);
-  const statusDefOf = (status: string) => schema?.statuses?.find((s) => s.name === status);
-  const statusCategory = (status: string) => statusDefOf(status)?.category;
 
   // Not written as scope="..." in the markup: Biome reads that name as the HTML attribute.
   const emptyProps = $derived({ scope: "workspace" as const, name: entry.name });
-  const treeHref = $derived(router.href({ name: "workspace", store, ulid, tab: "tree" }));
   const projectHref = (u: string) => router.href({ name: "project", ulid: u, tab: "tree" });
-  const taskHref = (u: string) => router.href({ name: "task", ulid: u });
   const today = new Date();
   const dueOf = (t: Parameters<typeof propText>[0]) => {
     const d = propText(t, "due");
@@ -99,15 +93,6 @@
 
 <WorkspaceHeader {entry} tab="overview">
   {#snippet actions()}
-    <Button
-      size="sm"
-      aria-label="タスクを作成"
-      disabled={off !== null}
-      why={off ?? undefined}
-      onclick={() => openCreate({ kind: "task" })}
-    >
-      <Icon name="plus" size={14} />タスク
-    </Button>
     <Button
       size="sm"
       aria-label="プロジェクトを作成"
@@ -199,12 +184,7 @@
                   </td>
                   <td>
                     <div class="title">
-                      <KindIcon
-                        kind={p.kind}
-                        role={kindRoleOf(schema, p.kind)}
-                        icon={kindIconOf(schema, p.kind)}
-                        color={kindColorOf(schema, p.kind)}
-                      />
+                      <KindIcon kind={p.kind} />
                       <a {href} onclick={(e) => onLinkClick(e, href)}>{p.title}</a>
                     </div>
                   </td>
@@ -222,74 +202,6 @@
                   <td class="who">
                     {#if p.assignees?.[0]}
                       <Avatar name={p.assignees[0]} />
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-      </section>
-
-      <section aria-labelledby="ov-roots">
-        <div class="sec-head">
-          <h2 id="ov-roots">プロジェクトの外のタスク</h2>
-          <span class="sub">ルートに直接置いたタスク · rank 順 · {roots.length} 件</span>
-          <a class="open-tree" href={treeHref} onclick={(e) => onLinkClick(e, treeHref)}
-            >ツリーで開く</a
-          >
-        </div>
-        {#if roots.length === 0}
-          <p class="none">プロジェクトの外のタスクはありません</p>
-        {:else}
-          <table>
-            <thead>
-              <tr>
-                <th class="w-status">ステータス</th>
-                <th class="w-kind">種類</th>
-                <th class="w-id">ID</th>
-                <th>タイトル</th>
-                <th class="w-due">期限</th>
-                <th class="w-who">担当者</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each roots as t (t.ulid)}
-                {@const href = taskHref(t.ulid)}
-                <tr>
-                  <td>
-                    <StatusIcon
-                      status={t.status}
-                      category={statusCategory(t.status)}
-                      color={statusColorOf(schema, t.status)}
-                    />
-                  </td>
-                  <td>
-                    <KindIcon
-                      kind={t.kind}
-                      role={kindRoleOf(schema, t.kind)}
-                      icon={kindIconOf(schema, t.kind)}
-                      color={kindColorOf(schema, t.kind)}
-                    />
-                  </td>
-                  <td>
-                    <IdLabel
-                      id={t.id}
-                      ulid={t.ulid}
-                      store={entry.store}
-                      {href}
-                      onopen={(e) => onLinkClick(e, href)}
-                    />
-                  </td>
-                  <td>
-                    <div class="title">
-                      <a {href} onclick={(e) => onLinkClick(e, href)}>{t.title}</a>
-                    </div>
-                  </td>
-                  <td class="due">{dueOf(t)}</td>
-                  <td class="who">
-                    {#if t.assignees?.[0]}
-                      <Avatar name={t.assignees[0]} />
                     {/if}
                   </td>
                 </tr>
@@ -384,15 +296,6 @@
     color: var(--muted);
     font-size: var(--fs-12);
   }
-  .open-tree {
-    margin-left: auto;
-    color: var(--accent);
-    font-size: var(--fs-12);
-    text-decoration: none;
-  }
-  .open-tree:hover {
-    text-decoration: underline;
-  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -429,10 +332,6 @@
   }
   .w-id {
     width: 6rem;
-  }
-  .w-status,
-  .w-kind {
-    width: 4.5rem;
   }
   .w-progress {
     width: 11rem;

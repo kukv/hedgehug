@@ -12,7 +12,16 @@ WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP): moved to a store that is not mounted (ULID 0
 1 problem
 ```
 
-`hh doctor --fix` は、同期が直すものを1コミットで直します。親の循環、削除済みタスクの子、親と別のワークスペースにあるタスク、ID の衝突です。remote の履歴が書き換えられたあとに、Store を作り直す役目もあります(次の節)。直せなかったものは、そう知らせます。
+`hh doctor --fix` は、同期が直すものを1コミットで直します。親の循環、削除済みタスクの子、親と別のワークスペースにあるタスク、ID の衝突です。親がなくなった子は、置ける最も近い祖先へ移し、なければ「未分類」という project の下へ移します（なければ作ります。step は task になります）。remote の履歴が書き換えられたあとに、Store を作り直す役目もあります(次の節)。直せなかったものは、そう知らせます。
+
+古い形式の Store は、1 件の指摘として知らされ、`hh store convert` が対処として示されます。変換するまで、タスクはスキーマと照らして点検されません（[Store](stores.md#store-の形式と-hh-store-convert)を参照）。
+
+```console
+$ hh doctor
+.hedgehug/store.yaml: the store is in format 1, and this version uses format 2
+  hint: hh store convert
+1 problem
+```
 
 ## bare リポジトリを remote に使うとき
 

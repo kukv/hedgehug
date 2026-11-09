@@ -12,7 +12,6 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item";
 import type { Attachment } from "svelte/attachments";
 import type { TaskView } from "../../core/api/client";
-import type { SchemaView } from "../../core/schema";
 import { checkParent, type MoveArgs } from "./placement";
 
 export type DropPlace = "before" | "after" | "child";
@@ -21,7 +20,6 @@ export type DropInput = {
   dragged: TaskView;
   target: TaskView;
   place: DropPlace;
-  schema: SchemaView | undefined;
   taskOf: (ulid: string) => TaskView | undefined;
   // The Store that cannot be written (the one of the place or of the dragged task) and why (in
   // Japanese), or null/absent when both can.
@@ -93,13 +91,7 @@ export function dropDecision(i: DropInput): DropDecision {
   if (parentUlid && !parent) {
     return refuse("移動先の親を読み込めていません", "少し待ってからやり直してください。");
   }
-  if (!i.schema) {
-    return refuse(
-      "少し待ってからやり直してください",
-      `${dragged.store} の schema.yaml を読み込んでいます。`,
-    );
-  }
-  const rejection = checkParent(i.schema, dragged, parent ?? null, idOf);
+  const rejection = checkParent(dragged, parent ?? null, idOf);
   if (rejection) return refuse(rejection.title, rejection.reason);
 
   if (place === "child") return { ok: true, to: { parent: target.ulid } };

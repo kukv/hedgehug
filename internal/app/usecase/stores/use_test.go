@@ -66,8 +66,11 @@ func TestUseKeepsRecent(t *testing.T) {
 
 func TestUseRefusesWhatIsNotAProject(t *testing.T) {
 	t.Parallel()
-	ts := usecasetest.NewTwoStore(t)
-	_, err := stores.Use(ts.Session, "org-a:API-1")
+	ts := usecasetest.NewTwoStore(t) // API-1 is a project
+	if _, err := tasks.Add(ts.ForStore("org-a"), tasks.AddInput{Title: "t", Parent: "API-1"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := stores.Use(ts.Session, "org-a:API-2")
 	usecasetest.WantCode(t, "Use(task)", err, usecase.KindInvalid, "use.not_project")
 	if st := usecasetest.LoadContext(t, ts); st.Use != nil {
 		t.Errorf("use = %+v; want none", st.Use)
@@ -127,10 +130,11 @@ func TestUseShowWarnsOfAProjectThatIsGone(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	notProject := func(t *testing.T, ts *usecasetest.Session, id string) { // kind changed
-		if _, err := tasks.Set(ts.Session, id, []usecase.Assign{{Key: "kind", Op: "=", Value: "task"}}); err != nil {
-			t.Fatal(err)
-		}
+	notProject := func(t *testing.T, ts *usecasetest.Session, id string) { // a hand edit changed the kind: no command can
+		u := usecasetest.UlidOf(t, ts, "org-a:"+id)
+		ts.StoreName = "org-a"
+		defer func() { ts.StoreName = "" }()
+		ts.EditRawFile(model.TaskPath(u), "kind: project", "kind: task")
 	}
 	unmounted := func(t *testing.T, ts *usecasetest.Session, _ string) { // the store is not in config.yaml
 		c, _, err := ts.Config()

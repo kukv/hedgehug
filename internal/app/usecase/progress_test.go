@@ -15,16 +15,17 @@ func TestProgressOf(t *testing.T) {
 	p := ts.AddTask("P", func(x *model.Task) { x.Kind = "project" })
 	e := ts.AddTask("E", func(x *model.Task) { x.Kind = "epic"; x.Parent = &p.ULID; x.Status = "done" })
 	ts.AddTask("a", func(x *model.Task) { x.Parent = &e.ULID; x.Status = "done" })
-	ts.AddTask("b", func(x *model.Task) { x.Parent = &e.ULID; x.Status = "in_progress" })
+	ts.AddTask("b", func(x *model.Task) { x.Kind = "bug"; x.Parent = &e.ULID; x.Status = "in_progress" })
 	ts.AddTask("c", func(x *model.Task) { x.Parent = &p.ULID; x.Status = "canceled" })
-	d := ts.AddTask("d", func(x *model.Task) { x.Parent = &p.ULID; x.Status = "done" })
+	d := ts.AddTask("d", func(x *model.Task) { x.Kind = "story"; x.Parent = &p.ULID; x.Status = "done" })
 	ts.AddTask("gone", func(x *model.Task) {
 		x.Parent = &p.ULID
 		now := ts.Now()
 		x.DeletedAt = &now
 	})
-	ts.AddTask("sub", func(x *model.Task) { x.Parent = &d.ULID; x.Kind = "task"; x.Status = "todo" })
+	ts.AddTask("sub", func(x *model.Task) { x.Parent = &d.ULID; x.Kind = "step"; x.Status = "todo" })
 	gdel := ts.AddTask("gdel", func(x *model.Task) {
+		x.Kind = "epic"
 		x.Parent = &p.ULID
 		now := ts.Now()
 		x.DeletedAt = &now
@@ -39,9 +40,9 @@ func TestProgressOf(t *testing.T) {
 		en, _ := ix.Task(u)
 		return usecase.ProgressOf(ix, en)
 	}
-	// work descendants of P: a (done), b, c (canceled, left out), d (done), sub, kid (under the deleted gdel, still counted); gone and gdel are deleted
-	if got := get(p.ULID); got == nil || *got != (usecase.Count{Done: 2, Total: 5}) {
-		t.Errorf("P = %+v; want 2/5", got)
+	// stories, tasks and bugs under P: a (done), b, c (canceled, left out), d (done), kid (under the deleted epic gdel, still counted); gone is deleted; sub is a step, which is not counted
+	if got := get(p.ULID); got == nil || *got != (usecase.Count{Done: 2, Total: 4}) {
+		t.Errorf("P = %+v; want 2/4", got)
 	}
 	if got := get(e.ULID); got == nil || *got != (usecase.Count{Done: 1, Total: 2}) {
 		t.Errorf("E = %+v; want 1/2", got)
@@ -50,7 +51,50 @@ func TestProgressOf(t *testing.T) {
 		t.Errorf("Empty = %+v; want 0/0", got)
 	}
 	if got := get(d.ULID); got != nil {
-		t.Errorf("a task of the work role has no progress: %+v", got)
+		t.Errorf("a story has no progress: %+v", got)
+	}
+}
+
+func TestStepsOfBreaksDownTheStepsOfAnItem(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	p := ts.AddTask("P", func(x *model.Task) { x.Kind = "project" })
+	e := ts.AddTask("E", func(x *model.Task) { x.Kind = "epic"; x.Parent = &p.ULID })
+	s1 := ts.AddTask("S1", func(x *model.Task) { x.Kind = "story"; x.Parent = &e.ULID; x.Status = "done" })
+	ts.AddTask("S2", func(x *model.Task) { x.Kind = "story"; x.Parent = &e.ULID })
+	for _, st := range []string{"done", "done", "todo", "canceled"} {
+		ts.AddTask("step "+st, func(x *model.Task) { x.Kind = "step"; x.Parent = &s1.ULID; x.Status = st })
+	}
+	ts.AddTask("gone", func(x *model.Task) {
+		x.Kind = "step"
+		x.Parent = &s1.ULID
+		now := ts.Now()
+		x.DeletedAt = &now
+	})
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps := func(u model.ULID) *usecase.Count {
+		en, _ := ix.Task(u)
+		return usecase.StepsOf(ix, en)
+	}
+	// the epic counts the two stories, not the steps: 1 of 2
+	if en, _ := ix.Task(e.ULID); *usecase.ProgressOf(ix, en) != (usecase.Count{Done: 1, Total: 2}) {
+		t.Errorf("E = %+v; want 1/2", usecase.ProgressOf(ix, en))
+	}
+	// the story shows its steps, 2 of 3 (the canceled one and the deleted one are left out)
+	if got := steps(s1.ULID); got == nil || *got != (usecase.Count{Done: 2, Total: 3}) {
+		t.Errorf("S1 steps = %+v; want 2/3", got)
+	}
+	for _, u := range []model.ULID{p.ULID, e.ULID} {
+		if got := steps(u); got != nil {
+			t.Errorf("a group has no steps: %+v", got)
+		}
+	}
+	en, _ := ix.Task(s1.ULID)
+	if v := usecase.ListViewOf(ix, en); v.Steps == nil || *v.Steps != (usecase.Count{Done: 2, Total: 3}) || v.Progress != nil {
+		t.Errorf("view: steps %+v progress %+v", v.Steps, v.Progress)
 	}
 }
 
@@ -69,16 +113,19 @@ func TestChecklistOfAndText(t *testing.T) {
 		t.Errorf("y = %+v; want nil", got)
 	}
 	for _, c := range []struct {
-		c, p *usecase.Count
-		want string
+		c, p, s *usecase.Count
+		want    string
 	}{
-		{nil, nil, ""},
-		{&usecase.Count{1, 2}, nil, "☑ 1/2"},
-		{nil, &usecase.Count{3, 14}, "3/14"},
-		{&usecase.Count{2, 5}, &usecase.Count{3, 14}, "☑ 2/5  3/14"},
+		{nil, nil, nil, ""},
+		{&usecase.Count{1, 2}, nil, nil, "☑ 1/2"},
+		{nil, &usecase.Count{3, 14}, nil, "3/14"},
+		{&usecase.Count{2, 5}, &usecase.Count{3, 14}, nil, "☑ 2/5  3/14"},
+		{nil, nil, &usecase.Count{2, 3}, "2/3"},
+		{&usecase.Count{1, 2}, nil, &usecase.Count{2, 3}, "☑ 1/2  2/3"},
+		{nil, nil, &usecase.Count{0, 0}, ""}, // a task with no step shows none
 	} {
-		if got := usecase.ProgressText(c.c, c.p); got != c.want {
-			t.Errorf("ProgressText(%v, %v) = %q; want %q", c.c, c.p, got, c.want)
+		if got := usecase.ProgressText(c.c, c.p, c.s); got != c.want {
+			t.Errorf("ProgressText(%v, %v, %v) = %q; want %q", c.c, c.p, c.s, got, c.want)
 		}
 	}
 	for _, c := range []struct {

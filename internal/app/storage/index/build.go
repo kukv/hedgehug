@@ -162,7 +162,7 @@ func (ix *Index) violations(t *model.Task) []schema.Violation {
 	e := ix.sc.For(ix.ancestors(t))
 	vs, _ := schema.ValidateTask(t, e)
 	if parent, known := ix.parentKind(t); known {
-		for _, v := range schema.ValidatePlacement(t.Kind, parent, e) {
+		for _, v := range schema.ValidatePlacement(t.Kind, parent) {
 			if !slices.Contains(vs, v) { // ValidateTask reports an unknown kind too
 				vs = append(vs, v)
 			}
@@ -185,7 +185,7 @@ func (ix *Index) parentKind(t *model.Task) (string, bool) {
 }
 
 // ancestors returns what Schema.For needs for t: its ancestors nearest
-// first, led by t itself when it is a container. The walk stops at a
+// first, led by t itself when it is a group (project or epic). The walk stops at a
 // missing or broken task, and when it comes back to a task it has seen.
 func (ix *Index) ancestors(t *model.Task) []model.ULID {
 	return ix.lineage(t.ULID, t.Kind, t.Parent)
@@ -199,7 +199,7 @@ func (ix *Index) Ancestors(e *Entry) []model.ULID {
 
 func (ix *Index) lineage(ulid model.ULID, kind string, parent *model.ULID) []model.ULID {
 	var out []model.ULID
-	if k, ok := ix.sc.Kind(kind); ok && k.Role == schema.RoleContainer {
+	if schema.IsGroup(kind) {
 		out = append(out, ulid)
 	}
 	seen := map[model.ULID]bool{ulid: true}
@@ -217,7 +217,7 @@ func (ix *Index) lineage(ulid model.ULID, kind string, parent *model.ULID) []mod
 
 const (
 	cacheName   = "index" // in .hedgehug/local
-	cacheFormat = 11      // bump when Entry or cache changes
+	cacheFormat = 12      // bump when Entry or cache changes
 )
 
 // cache is the index as it is kept on disk, for one tree of HEAD.

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Schemas } from "../../core/api/client";
+import { ApiError, type Schemas } from "../../core/api/client";
 import type { StoreTone } from "../../core/stores";
 import { fail, ok } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
@@ -24,6 +24,7 @@ type Mount = {
   store?: Item;
   lastVisible?: boolean;
   readOnly?: string | null;
+  failure?: unknown;
   tone?: StoreTone;
   patch?: () => unknown;
   put?: () => unknown;
@@ -40,6 +41,7 @@ function mount(m: Mount = {}) {
     stores: () => [store],
     tone: () => m.tone ?? "orange",
     readOnly: () => m.readOnly ?? null,
+    failure: () => m.failure ?? null,
     reload: vi.fn(async () => {}),
     subscribe: () => () => {},
   };
@@ -398,5 +400,19 @@ describe("StoreCard: the details", () => {
     await fireEvent.click(toggle());
     await fireEvent.click(within(card()).getByRole("button", { name: "マウントを解除" }));
     expect(onremove).toHaveBeenCalledTimes(1);
+  });
+
+  it("開けない理由（古い形式）を文で出す", () => {
+    mount({
+      failure: new ApiError({
+        status: 422,
+        type: "store.old_format",
+        detail: "x",
+        args: { name: "demo" },
+      }),
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "demo は古い形式です。hh store convert で新しい形式にしてください",
+    );
   });
 });

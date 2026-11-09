@@ -53,7 +53,11 @@
       "created": "<TIME>",
       "updated": "<TIME>",
       "deleted_at": null,
-      "problems": []
+      "problems": [],
+      "steps": {
+        "done": 0,
+        "total": 0
+      }
     },
     {
       "ulid": "<ULID-4>",
@@ -64,7 +68,7 @@
         "name": "bravo-long",
         "id_prefix": "BB"
       },
-      "kind": "task",
+      "kind": "project",
       "title": "Bravo task",
       "parent": null,
       "rank": "a0",
@@ -76,7 +80,11 @@
       "created": "<TIME>",
       "updated": "<TIME>",
       "deleted_at": null,
-      "problems": []
+      "problems": [],
+      "progress": {
+        "done": 0,
+        "total": 0
+      }
     },
     {
       "ulid": "<ULID-6>",
@@ -87,7 +95,7 @@
         "name": "bravo-long",
         "id_prefix": "BB"
       },
-      "kind": "task",
+      "kind": "project",
       "title": "Bravo other",
       "parent": null,
       "rank": "a1",
@@ -99,7 +107,11 @@
       "created": "<TIME>",
       "updated": "<TIME>",
       "deleted_at": null,
-      "problems": []
+      "problems": [],
+      "progress": {
+        "done": 0,
+        "total": 0
+      }
     }
   ]
 }

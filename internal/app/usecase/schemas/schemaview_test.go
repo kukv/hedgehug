@@ -12,8 +12,8 @@ import (
 func TestSchemaViewOfDefault(t *testing.T) {
 	t.Parallel()
 	v := schemas.SchemaViewOf(schema.Default())
-	if len(v.Statuses) == 0 || len(v.Kinds) == 0 {
-		t.Fatalf("view = %+v, want the statuses and kinds of the default", v)
+	if len(v.Statuses) == 0 {
+		t.Fatalf("view = %+v, want the statuses of the default", v)
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -23,13 +23,19 @@ func TestSchemaViewOfDefault(t *testing.T) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"statuses", "kinds", "props", "workflow", "scoped"} {
+	for _, k := range []string{"statuses", "props", "workflow", "scoped"} {
 		if m[k] == nil {
 			t.Errorf("key %q missing or null in %s", k, b)
 		}
 	}
 	if st := v.Statuses[0]; st.Name == "" || st.Category == "" {
 		t.Errorf("status = %+v", st)
+	}
+	if _, ok := m["kinds"]; ok {
+		t.Errorf("kinds is in the view: %s", b)
+	}
+	if _, ok := m["templates"]; ok {
+		t.Errorf("a schema with no store templates has templates in the view: %s", b)
 	}
 	w, _ := m["workflow"].(map[string]any)
 	if w["transitions"] == nil || w["required"] == nil {
@@ -64,5 +70,15 @@ func TestSchemaViewOfScoped(t *testing.T) {
 		`"templates":{"only":["bug"],"default":{"task":"bug"}}}]`
 	if string(b) != want {
 		t.Errorf("scoped = %s\nwant     %s", b, want)
+	}
+}
+
+func TestSchemaViewOfStoreTemplates(t *testing.T) {
+	t.Parallel()
+	sc := schema.Default()
+	sc.Templates = &schema.Templates{Default: map[string]string{"bug": "bug-report"}}
+	v := schemas.SchemaViewOf(sc)
+	if v.Templates == nil || v.Templates.Default["bug"] != "bug-report" {
+		t.Errorf("templates = %+v", v.Templates)
 	}
 }

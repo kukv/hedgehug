@@ -238,49 +238,41 @@ describe("TreeView", () => {
     expect(h.go).toHaveBeenCalledWith("/tasks/T3");
   });
 
-  it("keeps the title typed before the schema is read, and adds the task once it is", async () => {
-    const { api, loadSchema } = setup({ noSchema: true });
+  it("adds a task without waiting for the schema: the kinds are fixed", async () => {
+    const { api } = setup({ noSchema: true });
     api.createTask.mockImplementation(async () =>
       ok({ task: task("N1", "task", "P", { id: "REL-9", title: "早い" }) }),
     );
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByRole("button", { name: /タスクを追加/ }));
     const input = screen.getByRole("textbox", { name: "新しいタスクのタイトル" });
-    expect(input).toHaveAttribute("readonly");
-    expect(input).toHaveAttribute("placeholder", "読み込み中…");
+    expect(input).not.toHaveAttribute("readonly");
     await fireEvent.input(input, { target: { value: "早い" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    expect(api.createTask).not.toHaveBeenCalled();
-    expect(input).toHaveValue("早い");
-
-    loadSchema();
-    await waitFor(() => expect(input).not.toHaveAttribute("readonly"));
-    await fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
-      expect(api.createTask).toHaveBeenCalledWith(expect.anything(), expect.anything()),
+      expect(api.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "早い", kind: "task", parent: "P" }),
+        expect.anything(),
+      ),
     );
   });
 
-  it("runs a key pressed before the schema is read once it is, in the order pressed", async () => {
+  it("runs a key pressed before the schema is read once it is", async () => {
     const { api, loadSchema } = setup({ noSchema: true });
     api.updateTask.mockResolvedValue(
       ok({ task: task("T3", "task", "P", { status: "done" }), commit: "c3" }),
     );
-    api.moveTask.mockResolvedValue(ok({ task: task("T3", "task", "E1"), commit: "c4" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen
       .getByText("Web のクライアントを更新")
       .closest('[role="treeitem"]') as HTMLElement;
     await fireEvent.click(row);
     await fireEvent.keyDown(row, { key: " " });
-    await fireEvent.keyDown(row, { key: "Tab" });
     expect(api.updateTask).not.toHaveBeenCalled();
-    expect(api.moveTask).not.toHaveBeenCalled();
 
     loadSchema();
-    await waitFor(() => expect(api.moveTask).toHaveBeenCalled());
+    await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
     expect(api.updateTask).toHaveBeenCalledWith("T3", { status: "done" }, { store: "shared" });
-    expect(api.moveTask).toHaveBeenCalledWith("T3", { parent: "E1" }, { store: "shared" });
   });
 
   it("does not wait for the schema for the keys that do not need it", async () => {
@@ -856,7 +848,7 @@ describe("TreeView", () => {
       .closest('[role="treeitem"]') as HTMLElement;
     await fireEvent.click(row);
     await fireEvent.keyDown(row, { key: "k" });
-    await fireEvent.click(await screen.findByRole("menuitem", { name: /バグ/ }));
+    await fireEvent.click(await screen.findByRole("menuitem", { name: /Bug/ }));
     await waitFor(() => expect(api.updateTask).toHaveBeenCalled());
     expect(api.updateTask).toHaveBeenCalledWith("T3", { kind: "bug" }, { store: "shared" });
   });

@@ -29,9 +29,10 @@ test("the plan tabs always show, and the gantt and the reports come with the fir
 });
 
 test("a sprint goes from the backlog through the board to closing", async ({ page, hh }) => {
-  hh.hh("add", "one", "-p", "points=3");
-  hh.hh("add", "two", "-p", "points=2");
-  hh.hh("add", "three");
+  hh.hh("add", "work", "--kind", "project"); // DM-1: the backlog lists the tasks, not the projects
+  hh.hh("add", "one", "--parent", "DM-1", "-p", "points=3");
+  hh.hh("add", "two", "--parent", "DM-1", "-p", "points=2");
+  hh.hh("add", "three", "--parent", "DM-1");
   hh.hh("sprint", "add", "Sprint 1", "--start", "2026-11-02", "--end", "2026-12-31");
   hh.hh("sprint", "add", "Sprint 2", "--start", "2027-01-01", "--end", "2027-01-14");
   await openTab(page, hh, "backlog");
@@ -56,7 +57,7 @@ test("a sprint goes from the backlog through the board to closing", async ({ pag
   await expect(page.getByLabel("カンバンの盤面")).toContainText("one");
   await expect(page.getByLabel("カンバンの盤面")).not.toContainText("three");
 
-  hh.hh("set", "DM-1", "status=done");
+  hh.hh("set", "DM-2", "status=done");
   await expect(page.getByRole("cell", { name: "1/2" })).toBeVisible();
 
   // Closing carries what is left to the next sprint.
@@ -66,7 +67,7 @@ test("a sprint goes from the backlog through the board to closing", async ({ pag
   await expect(close.getByLabel(/次のスプリント（Sprint 2/)).toBeChecked();
   await close.getByRole("button", { name: "閉じて 1 件を Sprint 2 へ" }).click();
   await expect(page.getByRole("row", { name: /Sprint 1 closed/ })).toBeVisible();
-  const two = hh.json<{ sprint?: { name: string } }>("show", "DM-2");
+  const two = hh.json<{ sprint?: { name: string } }>("show", "DM-3");
   expect(two.sprint?.name).toBe("Sprint 2");
 });
 

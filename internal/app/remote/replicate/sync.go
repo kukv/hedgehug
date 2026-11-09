@@ -512,6 +512,9 @@ func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing
 		}
 	}
 	bt, ht, rt := trees[0], trees[1], trees[2]
+	if err := checkFormats(r, ours, theirs); err != nil {
+		return nil, err
+	}
 	oursDiff, err := r.DiffTrees(bt, ht, "")
 	if err != nil {
 		return nil, err
@@ -611,7 +614,6 @@ func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing
 		Files:    snap,
 		Base:     baseSnap,
 		OnOrigin: onOrigin,
-		Changed:  func(p string) bool { return changed[p] },
 		Author:   keepError(&authorErr, mergeAuthor(r, open, base, ours, theirs)),
 		Now:      opt.Now().Truncate(time.Second),
 	})
@@ -889,7 +891,6 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		fixed, repaired, dropped, err := merge.Repair(merge.RepairInput{
 			Files:    snap,
 			OnOrigin: onOrigin,
-			Changed:  func(string) bool { return true },
 			Author:   keepError(&authorErr, headAuthor(s.Repo(), historyOf(s), head)),
 			Now:      opt.Now().Truncate(time.Second),
 		})

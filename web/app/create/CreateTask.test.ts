@@ -1,12 +1,10 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { parentRule } from "../../core/schema";
 import {
   fail,
   makeCore,
   mount,
   ok,
-  schemaView,
   stubLayout,
   taskView,
   typeInto,
@@ -17,12 +15,12 @@ import { selection } from "../selection.svelte";
 import { resetToasts, toasts } from "../toast.svelte";
 import CreateTask from "./CreateTask.svelte";
 
-const parent = taskView({ ulid: "UP", id: "REL-8", title: "リリース作業", kind: "task" });
+const parent = taskView({ ulid: "UP", id: "REL-8", title: "リリース作業", kind: "epic" });
 const created = taskView({ ulid: "U9", id: "REL-9", title: "新しい作業" });
 
-function setup(opts: { onclose?: () => void; one?: boolean } = {}) {
+function setup(opts: { onclose?: () => void; one?: boolean; parentKind?: string } = {}) {
   const k = makeCore({
-    tasks: [parent],
+    tasks: [opts.parentKind ? { ...parent, kind: opts.parentKind } : parent],
     workspaces: opts.one ? [workspaces[0] as (typeof workspaces)[number]] : undefined,
   });
   k.api.createTask.mockImplementation(() => ok({ task: created, commit: "c1" }));
@@ -101,14 +99,37 @@ describe("CreateTask", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
   });
 
-  it("strikes out the kinds the parent cannot hold, with the reason as a tooltip", async () => {
+  it("offers only the kinds the parent can hold, and picks the default one", async () => {
     selection.set("UP");
     setup();
-    const project = screen.getByRole("radio", { name: /プロジェクト/ });
-    expect(project).toBeDisabled();
-    expect(project.closest("label")).toHaveAttribute("title", parentRule(schemaView, "project"));
-    await waitFor(() => expect(screen.getByRole("radio", { name: /タスク/ })).toBeChecked());
-    expect(screen.getByRole("radio", { name: /バグ/ })).toBeEnabled();
+    // the parent is an epic
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Task/ })).toBeChecked());
+    expect(screen.getAllByRole("radio", { name: /^(Story|Task|Bug)$/ })).toHaveLength(3);
+    expect(screen.queryByRole("radio", { name: /Project|Epic|Step/ })).toBeNull();
+  });
+
+  it("offers only a step under a task, and nothing under a step", async () => {
+    selection.set("UP");
+    setup({ parentKind: "task" });
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Step/ })).toBeChecked());
+    expect(
+      screen.getAllByRole("radio", { name: /^(Project|Epic|Story|Task|Bug|Step)$/ }),
+    ).toHaveLength(1);
+    cleanup();
+    setup({ parentKind: "step" });
+    expect(await screen.findByText("REL-8 は Step なので、その下には置けません")).toBeVisible();
+    expect(
+      screen.queryByRole("radio", { name: /^(Project|Epic|Story|Task|Bug|Step)$/ }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: /^作成/ })).toBeDisabled();
+  });
+
+  it("offers only a project at the top", async () => {
+    setup();
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Project/ })).toBeChecked());
+    expect(
+      screen.getAllByRole("radio", { name: /^(Project|Epic|Story|Task|Bug|Step)$/ }),
+    ).toHaveLength(1);
   });
 
   it("asks for the workspace when there is no parent and several workspaces", async () => {

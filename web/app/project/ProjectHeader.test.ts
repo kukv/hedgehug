@@ -15,7 +15,6 @@ function mount(props: {
   tab: "tree" | "kanban" | "table" | "settings";
   withWorkspace?: boolean;
   noProject?: boolean;
-  schema?: unknown;
 }) {
   return renderWithCore(
     ProjectHeader,
@@ -32,15 +31,6 @@ function mount(props: {
         displayId: (_s: string, id: string) => id,
         subscribe: () => () => {},
       },
-      ...(props.schema
-        ? {
-            schema: {
-              subscribe: () => () => {},
-              get: () => props.schema,
-              load: async () => props.schema,
-            },
-          }
-        : {}),
     },
   );
 }
@@ -61,12 +51,9 @@ describe("ProjectHeader", () => {
     expect(within(crumb).getByText("REL-15")).toBeTruthy();
   });
 
-  it("draws the icon the schema names for the project kind", () => {
-    const { container } = mount({
-      tab: "tree",
-      schema: { kinds: [{ name: "project", role: "container", icon: "bug" }] },
-    });
-    expect(container.querySelector("svg[data-kind]")?.getAttribute("data-kind")).toBe("bug");
+  it("draws the project kind with its own icon", () => {
+    const { container } = mount({ tab: "tree" });
+    expect(container.querySelector("svg[data-kind]")?.getAttribute("data-kind")).toBe("project");
   });
 
   it("goes to the overview of the workspace through the router", async () => {

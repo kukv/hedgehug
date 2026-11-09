@@ -229,7 +229,7 @@
               {#if x.title}
                 <span>{x.title}</span>
               {/if}
-              <span class="why">{fixedText(x.kind, x.value)}</span>
+              <span class="why">{fixedText(x.kind, x.value, (u) => c.cache.task(u)?.title)}</span>
             </li>
           {/each}
         </ul>

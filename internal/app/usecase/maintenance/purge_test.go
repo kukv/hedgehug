@@ -116,8 +116,8 @@ func TestPurgeKeepsATaskWithALiveChild(t *testing.T) {
 	ts := usecasetest.New(t)
 	at := daysAgo(ts, 100)
 	parent := ts.AddDeleted("parent", at, nil)
-	live := ts.AddTask("live child", func(t *model.Task) { t.Parent = &parent.ULID })
-	gone := ts.AddDeleted("gone child", at, func(t *model.Task) { t.Parent = &parent.ULID })
+	live := ts.AddTask("live child", func(t *model.Task) { t.Kind, t.Parent = "step", &parent.ULID })
+	gone := ts.AddDeleted("gone child", at, func(t *model.Task) { t.Kind, t.Parent = "step", &parent.ULID })
 
 	plan, err := maintenance.PurgeList(ts.Session, 90)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestPurgeWaitsForARecentlyDeletedChild(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	parent := ts.AddDeleted("parent", daysAgo(ts, 100), nil)
-	ts.AddDeleted("child", daysAgo(ts, 10), func(t *model.Task) { t.Parent = &parent.ULID })
+	ts.AddDeleted("child", daysAgo(ts, 10), func(t *model.Task) { t.Kind, t.Parent = "step", &parent.ULID })
 	plan, err := maintenance.PurgeList(ts.Session, 90)
 	if err != nil || !plan.Empty() || len(ts.Warns) != 0 {
 		t.Errorf("plan = %+v, %v, warnings %q; want nothing and no warning", plan, err, ts.Warns)

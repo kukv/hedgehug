@@ -2,7 +2,6 @@
   import { untrack } from "svelte";
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
-  import { canParent } from "../../core/schema";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
@@ -80,17 +79,9 @@
     titleEl?.focus();
   });
 
-  const projectKind = $derived.by(() => {
-    const s = sc.current;
-    if (!s) return "";
-    if (s.kinds?.some((k) => k.name === "project")) return "project";
-    return s.kinds?.find((k) => k.role === "container" && canParent(s, k.name, null))?.name ?? "";
-  });
   const hasStart = $derived(!!sc.current && "start" in sc.current.props);
   const hasDue = $derived(!!sc.current && "due" in sc.current.props);
-  const canSubmit = $derived(
-    !busy && title.trim() !== "" && !!ws && projectKind !== "" && blocked === "",
-  );
+  const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && blocked === "");
 
   const cli = $derived.by(() => {
     const props: Record<string, string> = {};
@@ -100,7 +91,7 @@
     if (due) props.due = due;
     return cliAdd({
       title: title.trim() || new Placeholder("名前"),
-      kind: projectKind || "project",
+      kind: "project",
       store: ws?.store,
       workspace: showChoice ? ws?.name : undefined,
       props: Object.keys(props).length > 0 ? props : undefined,
@@ -123,7 +114,7 @@
       const r = await api.createTask(
         {
           title: title.trim(),
-          kind: projectKind,
+          kind: "project",
           workspace: ws.name,
           ...(assignees.length > 0 ? { assignees } : {}),
           ...(repos.length > 0 ? { repos } : {}),

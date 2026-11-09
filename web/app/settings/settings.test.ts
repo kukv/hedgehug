@@ -46,6 +46,7 @@ function core(
     stores: {
       stores: () => names.map((name) => ({ name, hidden: name === "hidden" })),
       readOnly: (name: string) => readOnly[name] ?? null,
+      failure: () => null,
       tone: () => "teal",
       error: () => null,
       loaded: () => loaded,
@@ -372,13 +373,13 @@ describe("SettingsRoute", () => {
   });
 
   it("スキーマのタブはページに渡す", () => {
-    history.replaceState(null, "", "/settings/schema/shared?tab=kinds");
+    history.replaceState(null, "", "/settings/schema/shared?tab=props");
     const { getByText } = renderWithCore(
       SettingsRoute,
-      { page: { page: "schema", store: "shared", tab: "kinds" } },
+      { page: { page: "schema", store: "shared", tab: "props" } },
       core(["shared"]),
     );
-    expect(getByText("schema of shared (kinds)")).toBeTruthy();
+    expect(getByText("schema of shared (props)")).toBeTruthy();
   });
 
   it("存在しない Store のスキーマの URL は見つからない旨を出す", () => {

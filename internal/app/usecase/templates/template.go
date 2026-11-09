@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -106,7 +107,7 @@ func Read(ss *usecase.Session, name string) (TemplateFile, error) {
 // points at tasks and sprints is checked when the template is expanded.
 func checkItem(sc *schema.Schema, it *model.TemplateItem) error {
 	if it.Kind != "" {
-		if _, ok := sc.Kind(it.Kind); !ok {
+		if _, ok := schema.KindOf(it.Kind); !ok {
 			return fmt.Errorf("kind %q is not in the schema", it.Kind)
 		}
 	}
@@ -150,9 +151,11 @@ func Put(ss *usecase.Session, name, content string) (TemplateWrite, error) {
 
 // usedBy says what of the schema names the template; "" for nothing.
 func usedBy(sc *schema.Schema, name string) string {
-	for _, k := range sc.Kinds {
-		if k.Template == name {
-			return "the kind " + k.Name
+	if sc.Templates != nil {
+		for _, kind := range slices.Sorted(maps.Keys(sc.Templates.Default)) {
+			if sc.Templates.Default[kind] == name {
+				return "the kind " + kind
+			}
 		}
 	}
 	for _, sco := range sc.Scoped {

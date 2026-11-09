@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { dropDecision, placeOf } from "./dnd";
-import { schema, task } from "./fixtures";
+import { task } from "./fixtures";
 
 // P (project)
 //  ├ E1 (epic) ─ T1, T2
-//  ├ T7 (task) ─ T8
+//  ├ T7 (task) ─ T8 (step)
 //  └ E8 (epic, REL-8 リリース作業)
 const all = [
   task("P", "project", null),
@@ -12,7 +12,7 @@ const all = [
   task("T1", "task", "E1"),
   task("T2", "task", "E1"),
   task("T7", "task", "P"),
-  task("T8", "task", "T7"),
+  task("T8", "step", "T7"),
   task("E8", "epic", "P", { id: "REL-8", title: "リリース作業" }),
 ];
 const map = new Map(all.map((t) => [t.ulid, t]));
@@ -24,7 +24,6 @@ function decide(dragged: string, target: string, place: "before" | "after" | "ch
     dragged: at(dragged),
     target: at(target),
     place,
-    schema,
     taskOf,
   });
 }
@@ -35,7 +34,6 @@ describe("a Store that cannot be written", () => {
       dragged: at("T7"),
       target: at("T1"),
       place: "after",
-      schema,
       taskOf,
       readOnly: { store: "dragged-store", why: "remote に書き込めません" },
     });
@@ -50,7 +48,6 @@ describe("the IDs in a reason", () => {
       dragged: { ...at("T7"), store: "a" },
       target: { ...at("T1"), store: "b" },
       place: "after",
-      schema,
       taskOf,
       idOf: (t) => `${t.store}:${t.id}`,
     });
@@ -77,19 +74,18 @@ describe("dropDecision: where the task goes", () => {
     expect(decide("E8", "E1", "after")).toEqual({ ok: true, to: { parent: "P", after: "E1" } });
   });
   it("puts it at the top level next to a root", () => {
-    const root = task("R1", "task", null);
+    const root = task("R1", "project", null);
     expect(
       dropDecision({
-        dragged: at("T1"),
+        dragged: at("P"),
         target: root,
         place: "after",
-        schema,
         taskOf,
       }),
     ).toEqual({ ok: true, to: { root: true, after: "R1" } });
   });
   it("moves among the siblings of another parent", () => {
-    expect(decide("T8", "T1", "before")).toEqual({
+    expect(decide("T7", "T1", "before")).toEqual({
       ok: true,
       to: { parent: "E1", before: "T1" },
     });
@@ -101,16 +97,15 @@ describe("dropDecision: what it refuses", () => {
     expect(decide("E8", "T7", "child")).toEqual({
       ok: false,
       silent: false,
-      title: "エピックはタスクの下に置けません",
-      reason:
-        "「REL-8 リリース作業」はエピックです。エピックのどの下に置けるかは最上位とプロジェクトだけです（shared の schema.yaml の kinds）。",
+      title: "Epic は Task の下に置けません",
+      reason: "「REL-8 リリース作業」は Epic です。Epic を置けるのは Project の下だけです",
     });
   });
   it("refuses a place whose parent is a task when the kind needs another parent", () => {
     // before T8: the parent would be T7, a task
     expect(decide("E8", "T8", "before")).toMatchObject({
       ok: false,
-      title: "エピックはタスクの下に置けません",
+      title: "Epic は Task の下に置けません",
     });
   });
   it("refuses another store", () => {
@@ -120,7 +115,6 @@ describe("dropDecision: what it refuses", () => {
         dragged: at("T7"),
         target: other,
         place: "child",
-        schema,
         taskOf,
       }),
     ).toMatchObject({ ok: false, silent: false, title: "別の Store のタスクの下には置けません" });
@@ -129,7 +123,6 @@ describe("dropDecision: what it refuses", () => {
         dragged: at("T7"),
         target: other,
         place: "after",
-        schema,
         taskOf,
       }),
     ).toMatchObject({ ok: false, title: "別の Store の並びには置けません" });
@@ -143,7 +136,6 @@ describe("dropDecision: what it refuses", () => {
         dragged: at("T7"),
         target: other,
         place: "child",
-        schema,
         taskOf,
       }),
     ).toMatchObject({ ok: false, silent: false, title: "別のワークスペースには置けません" });
@@ -163,17 +155,6 @@ describe("dropDecision: what it refuses", () => {
       title: "自分の配下には置けません",
     });
   });
-  it("refuses while the schema is not loaded", () => {
-    expect(
-      dropDecision({
-        dragged: at("T7"),
-        target: at("E1"),
-        place: "child",
-        schema: undefined,
-        taskOf,
-      }),
-    ).toMatchObject({ ok: false, silent: false, title: "少し待ってからやり直してください" });
-  });
   it("refuses when the new parent is not loaded", () => {
     const orphan = task("O1", "task", "MISSING");
     expect(
@@ -181,7 +162,6 @@ describe("dropDecision: what it refuses", () => {
         dragged: at("T7"),
         target: orphan,
         place: "after",
-        schema,
         taskOf,
       }),
     ).toMatchObject({ ok: false, title: "移動先の親を読み込めていません" });

@@ -96,7 +96,7 @@ func treeLine(st style, v *usecase.TaskView) string {
 	r := taskRow(v)
 	name := r[0] + " " + r[1]
 	line := name + "  " + r[2] + "  " + r[3] + "  " + r[6]
-	if p := usecase.ProgressText(v.Checklist, v.Progress); p != "" {
+	if p := usecase.ProgressText(v.Checklist, v.Progress, v.Steps); p != "" {
 		line += "  " + p
 	}
 	if v.Context {

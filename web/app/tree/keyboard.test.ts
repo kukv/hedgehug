@@ -17,7 +17,7 @@ const tasks = new Map([
   ["T2", task("T2", "task", "E1", { status: "done" })],
   ["T3", task("T3", "task", "P")],
   ["S1", task("S1", "story", "P")],
-  ["T4", task("T4", "task", "S1")],
+  ["T4", task("T4", "step", "S1")],
 ]);
 const tree = [
   {
@@ -56,14 +56,13 @@ const key = (k: string, m: Partial<KeyInput> = {}): KeyInput => ({
 });
 
 describe("which keys need the schema", () => {
-  it("is true for the keys that act through the kinds and the statuses", () => {
-    for (const k of ["Tab", " ", "s", "S", "k", "K"]) {
+  it("is true for the keys that act through the statuses", () => {
+    for (const k of [" ", "s", "S", "k", "K"]) {
       expect(needsSchema(key(k))).toBe(true);
     }
-    expect(needsSchema(key("Tab", { shift: true }))).toBe(true);
   });
-  it("is false for moving, folding, adding and reordering, and for a key with a modifier", () => {
-    for (const k of ["ArrowDown", "ArrowLeft", "Enter", "a"]) {
+  it("is false for moving, folding, adding, reordering and indenting, and for a key with a modifier", () => {
+    for (const k of ["ArrowDown", "ArrowLeft", "Enter", "a", "Tab"]) {
       expect(needsSchema(key(k))).toBe(false);
     }
     expect(needsSchema(key("ArrowUp", { alt: true }))).toBe(false);
@@ -145,10 +144,11 @@ describe("Tab / Shift+Tab", () => {
       ulid: "T3",
       to: { parent: "E1" },
     });
-    expect(keyAction(key("Tab"), ctx("T2"))).toEqual({
-      type: "move",
-      ulid: "T2",
-      to: { parent: "T1" },
+  });
+  it("rejects a task under a task", () => {
+    expect(keyAction(key("Tab"), ctx("T2"))).toMatchObject({
+      type: "reject",
+      rejection: { title: "Task は Task の下に置けません" },
     });
   });
   it("leaves Tab alone on the first sibling", () => {
@@ -160,7 +160,7 @@ describe("Tab / Shift+Tab", () => {
     const r = keyAction(key("Tab"), ctx("S1"));
     expect(r).toMatchObject({
       type: "reject",
-      rejection: { title: "ストーリーはタスクの下に置けません" },
+      rejection: { title: "Story は Task の下に置けません" },
     });
   });
   it("outdents after the parent", () => {
@@ -170,7 +170,7 @@ describe("Tab / Shift+Tab", () => {
       to: { parent: "P", after: "E1" },
     });
   });
-  it("outdents to the root of a workspace view", () => {
+  it("rejects an outdent to the root of a workspace view: only a project goes there", () => {
     // seen from a workspace the epic is a root: it has no parent
     const topTask = (u: string) =>
       u === "E1" ? { ...(tasks.get("E1") as TaskView), parent: null } : tasks.get(u);
@@ -181,24 +181,20 @@ describe("Tab / Shift+Tab", () => {
       new Set(["S1"]),
     );
     const c = ctx("T1", { rows, viewRoot: null, taskOf: topTask });
-    expect(keyAction(key("Tab", { shift: true }), c)).toEqual({
-      type: "move",
-      ulid: "T1",
-      to: { root: true, after: "E1" },
+    expect(keyAction(key("Tab", { shift: true }), c)).toMatchObject({
+      type: "reject",
+      rejection: { title: "Task は最上位に置けません" },
     });
   });
   it("does not outdent a top row of the view", () => {
     expect(keyAction(key("Tab", { shift: true }), ctx("T3"))).toEqual({ type: "none" });
   });
   it("rejects an outdent the kinds do not allow", () => {
-    // a task under an epic can go to the project; make the project not accept tasks
-    const narrow = {
-      ...schema,
-      kinds: schema.kinds?.map((k) => (k.name === "task" ? { ...k, parents: ["epic"] } : k)),
-    } as typeof schema;
-    expect(keyAction(key("Tab", { shift: true }), ctx("T1", { schema: narrow }))).toMatchObject({
+    // a step under a story cannot go to the project
+    const rows = flatten(tree, "P", taskOf, new Set());
+    expect(keyAction(key("Tab", { shift: true }), ctx("T4", { rows }))).toMatchObject({
       type: "reject",
-      rejection: { title: "タスクはプロジェクトの下に置けません" },
+      rejection: { title: "Step は Project の下に置けません" },
     });
   });
 });

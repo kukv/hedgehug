@@ -1,9 +1,8 @@
 <script lang="ts" module>
-  export type DefTarget = "status" | "kind" | "prop" | "relation";
+  export type DefTarget = "status" | "prop" | "relation";
 
   const NOUN: Record<DefTarget, string> = {
     status: "ステータス",
-    kind: "種類",
     prop: "プロパティ",
     relation: "関連",
   };
@@ -26,7 +25,6 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
   import { CATEGORIES, CATEGORY_LABEL, type Category } from "../../core/categories";
-  import { errorMessage } from "../../core/messages";
   import type { SchemaView } from "../../core/schema";
   import type { SchemaUsage } from "../../core/schema-usage";
   import { core } from "../context";
@@ -36,7 +34,6 @@
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
   import ColorPicker from "./ColorPicker.svelte";
-  import IconPicker from "./IconPicker.svelte";
   import SchemaValues, { newKey, type ValueRow } from "./SchemaValues.svelte";
   import { failureOf } from "./schema-text";
 
@@ -73,21 +70,13 @@
   // What the definition has now (the schema may change while the dialog is open: the dialog keeps the
   // fields it was opened with).
   const status = untrack(() => schema.statuses?.find((s) => s.name === editing));
-  const kind = untrack(() => schema.kinds?.find((k) => k.name === editing));
   const prop = untrack(() => (editing === undefined ? undefined : schema.props[editing]));
-  const kinds = untrack(() => schema.kinds ?? []);
 
   let name = $state(untrack(() => editing ?? ""));
-  let label = $state(status?.label ?? kind?.label ?? prop?.label ?? "");
+  let label = $state(status?.label ?? prop?.label ?? "");
   let category = $state(status?.category ?? "todo");
   let color = $state(status?.color ?? "");
-  let isDefault = $state(status?.default ?? kind?.default ?? false);
-  let role = $state(kind?.role ?? "work");
-  let anywhere = $state(kind ? kind.parents === null : true);
-  let parents = $state<string[]>(kind?.parents ?? []);
-  let icon = $state(kind?.icon ?? "");
-  let kindColor = $state(kind?.color ?? "");
-  let template = $state(kind?.template ?? "");
+  let isDefault = $state(status?.default ?? false);
   let propType = $state<string>(prop?.type ?? "text");
   // The values of an enum, each with the current values it comes from (none for a new one).
   let valueRows = $state<ValueRow[]>(
@@ -101,23 +90,7 @@
   let err = $state.raw<unknown>(null);
   let form: HTMLElement | undefined = $state();
 
-  // The templates of the Store, for the kind's default one.
-  let templates = $state.raw<string[]>([]);
-  let templatesFailure = $state<string | null>(null);
-  if (untrack(() => target === "kind")) {
-    Promise.resolve()
-      .then(() => c.api.listTemplates({ store }))
-      .then((r) => (templates = (r ?? []).map((t) => t.name)))
-      .catch((e: unknown) => (templatesFailure = errorMessage(e)));
-  }
-  const templateNames = $derived(
-    kind?.template && !templates.includes(kind.template)
-      ? [kind.template, ...templates]
-      : templates,
-  );
-
   const statusDefaultLocked = status?.default === true;
-  const kindDefaultLocked = kind?.default === true;
   const hasValues = $derived(propType === "enum" || propType === "multi_enum");
   const valueNames = $derived(valueRows.map((r) => r.name.trim()));
   const valuesInvalid = $derived(
@@ -135,16 +108,6 @@
           r.from.length !== 1 || r.from[0] !== r.name.trim() || r.name.trim() !== prop?.values?.[i],
       ),
   );
-  const kindNames = $derived(["root", ...kinds.map((k) => k.name)]);
-  const noParent = $derived(target === "kind" && !anywhere && parents.length === 0);
-
-  function toggleParent(p: string, on: boolean): void {
-    parents = on ? [...parents, p] : parents.filter((x) => x !== p);
-  }
-  const sameSet = (a: string[], b: string[]): boolean =>
-    a.length === b.length && a.every((x) => b.includes(x));
-  const orderedParents = $derived(kindNames.filter((p) => parents.includes(p)));
-
   // The new name of an edit, when it changed.
   const renamed = $derived(
     name.trim() !== editing && name.trim() !== "" ? { name: name.trim() } : {},
@@ -169,34 +132,6 @@
         : {}),
       ...(color !== (status?.color ?? "") ? { color } : {}),
       ...(isDefault && !statusDefaultLocked ? { default: true } : {}),
-    };
-  });
-  const kindBody = $derived.by(() => {
-    const l = label.trim();
-    const parentsPart = anywhere ? { anywhere: true } : { parents: orderedParents };
-    if (adding) {
-      return {
-        name: name.trim(),
-        role: role as "container" | "work",
-        ...(l ? { label: l } : {}),
-        ...(icon ? { icon } : {}),
-        ...(kindColor ? { color: kindColor } : {}),
-        ...(template ? { template } : {}),
-        ...parentsPart,
-      };
-    }
-    const parentsChanged = anywhere
-      ? kind?.parents !== null
-      : kind?.parents === null || !sameSet(parents, kind?.parents ?? []);
-    return {
-      ...renamed,
-      ...(l !== (kind?.label ?? "") ? { label: l } : {}),
-      ...(!kindDefaultLocked && role !== kind?.role ? { role: role as "container" | "work" } : {}),
-      ...(parentsChanged ? parentsPart : {}),
-      ...(icon !== (kind?.icon ?? "") ? { icon } : {}),
-      ...(kindColor !== (kind?.color ?? "") ? { color: kindColor } : {}),
-      ...(template !== (kind?.template ?? "") ? { template } : {}),
-      ...(isDefault && !kindDefaultLocked && role === "work" ? { default: true } : {}),
     };
   });
   const relationFlags = $derived.by(() => {
@@ -242,11 +177,9 @@
         : {}),
     };
   });
-  const body = $derived(target === "status" ? statusBody : target === "kind" ? kindBody : propBody);
+  const body = $derived(target === "status" ? statusBody : propBody);
   const changed = $derived(Object.keys(body).length > 0);
-  const canSave = $derived(
-    !busy && name.trim() !== "" && (adding || changed) && !noParent && !valuesInvalid,
-  );
+  const canSave = $derived(!busy && name.trim() !== "" && (adding || changed) && !valuesInvalid);
 
   async function send(): Promise<void> {
     const q = { store };
@@ -255,9 +188,6 @@
     if (target === "status") {
       if (adding) await c.api.addStatus(statusBody as never, q);
       else await c.api.changeStatus(n, statusBody, q);
-    } else if (target === "kind") {
-      if (adding) await c.api.addKind(kindBody as never, q);
-      else await c.api.changeKind(n, kindBody, q);
     } else if (adding) await c.api.addProp(propBody as never, q);
     else await c.api.changeProp(n, propEdit, q);
   }
@@ -313,7 +243,6 @@
   const title = $derived(adding ? `${noun}を追加` : `${noun}「${editing}」を編集`);
   const categoryReason =
     "既定のステータスはカテゴリを変えられません。先に別のステータスを既定にしてください";
-  const roleReason = "既定の種類は役割を変えられません。先に別の種類を既定にしてください";
 </script>
 
 <Dialog open {title} width={620} onclose={close}>
@@ -370,99 +299,6 @@
             <p class="note" id="{uid}-def-why">
               既定を外すには、別のステータスを既定にしてください
             </p>
-          {/if}
-        </div>
-      {/if}
-    {:else if target === "kind"}
-      <div class="field">
-        <label class="lbl" for="{uid}-role">役割</label>
-        <select
-          id="{uid}-role"
-          disabled={busy || kindDefaultLocked}
-          aria-describedby={kindDefaultLocked ? `${uid}-role-why` : undefined}
-          bind:value={role}
-        >
-          <option value="container">グループ</option>
-          <option value="work">アイテム</option>
-        </select>
-        {#if kindDefaultLocked}
-          <p class="note" id="{uid}-role-why">{roleReason}</p>
-        {/if}
-      </div>
-      <fieldset class="field">
-        <legend class="lbl">どの下に置けるか</legend>
-        <label class="check">
-          <input
-            type="radio"
-            name="{uid}-parents"
-            disabled={busy}
-            checked={anywhere}
-            onchange={() => (anywhere = true)}
-          >
-          どこにでも
-        </label>
-        <label class="check">
-          <input
-            type="radio"
-            name="{uid}-parents"
-            disabled={busy}
-            checked={!anywhere}
-            onchange={() => (anywhere = false)}
-          >
-          指定する
-        </label>
-        {#if !anywhere}
-          <div class="parents">
-            {#each kindNames as p (p)}
-              <label class="check">
-                <input
-                  type="checkbox"
-                  disabled={busy}
-                  checked={parents.includes(p)}
-                  onchange={(e) => toggleParent(p, e.currentTarget.checked)}
-                >
-                {p === "root" ? "最上位" : p}
-              </label>
-            {/each}
-          </div>
-          {#if noParent}
-            <p class="note">どの下に置けるかを 1 つ以上選んでください</p>
-          {/if}
-        {/if}
-      </fieldset>
-      <div class="field">
-        <span class="lbl">アイコン</span>
-        <IconPicker label="アイコン" bind:value={icon} original={kind?.icon ?? ""} {role} />
-      </div>
-      <div class="field">
-        <span class="lbl">色</span>
-        <ColorPicker label="色" bind:value={kindColor} original={kind?.color ?? ""} />
-      </div>
-      <div class="field">
-        <label class="lbl" for="{uid}-tpl">既定のテンプレート</label>
-        <select id="{uid}-tpl" disabled={busy} bind:value={template}>
-          <option value="">なし</option>
-          {#each templateNames as t (t)}
-            <option value={t}>{t}</option>
-          {/each}
-        </select>
-        {#if templatesFailure}
-          <p class="note">テンプレートの一覧を読み込めません · {templatesFailure}</p>
-        {/if}
-      </div>
-      {#if !adding && role === "work"}
-        <div class="field">
-          <label class="check">
-            <input
-              type="checkbox"
-              disabled={busy || kindDefaultLocked}
-              aria-describedby={kindDefaultLocked ? `${uid}-kdef-why` : undefined}
-              bind:checked={isDefault}
-            >
-            既定
-          </label>
-          {#if kindDefaultLocked}
-            <p class="note" id="{uid}-kdef-why">既定を外すには、別の種類を既定にしてください</p>
           {/if}
         </div>
       {/if}
@@ -572,12 +408,6 @@
     gap: var(--space-6);
     align-items: center;
     font-size: var(--fs-13);
-  }
-  .parents {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-6) var(--space-12);
-    padding-left: var(--space-20, 20px);
   }
   input[type="text"],
   select {

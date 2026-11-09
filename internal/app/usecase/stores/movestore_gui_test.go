@@ -144,7 +144,7 @@ func TestMoveStoreConfirmedView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Add(f.TS.ForStore("org-a"), tasks.AddInput{Title: "late", Parent: "API-4"}); err != nil {
+	if _, err := tasks.Add(f.TS.ForStore("org-a"), tasks.AddInput{Title: "late", Parent: "API-3"}); err != nil {
 		t.Fatal(err)
 	}
 	hb := f.Head(t, "org-b")

@@ -60,6 +60,9 @@ func TestLsTreeProgress(t *testing.T) {
 	a := te.addJSON("Alpha", "--parent", p.ID, "--status", "done")
 	te.addJSON("Beta", "--parent", p.ID)
 	te.addJSON("Gamma", "--parent", p.ID, "--status", "canceled")
+	// the steps of a task: two, one done
+	te.addJSON("Step one", "--parent", a.ID, "--status", "done")
+	te.addJSON("Step two", "--parent", a.ID)
 	te.editWith(te.raw(a.ULID) + "- [x] one\n- [ ] two\n")
 	te.ok("edit", a.ID)
 	te.goldenOK("tree", "ls", "--tree")

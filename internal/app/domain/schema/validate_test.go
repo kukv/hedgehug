@@ -134,20 +134,22 @@ func TestValidateTaskRank(t *testing.T) {
 
 func TestValidatePlacement(t *testing.T) {
 	t.Parallel()
-	e := Default().For(nil)
 	for _, tc := range []struct {
 		kind, parent string
 		ok           bool
 	}{
-		{"task", "", true}, // root
-		{"task", "task", true},
+		{"task", "", false}, // only a project is at the root
+		{"task", "project", true},
+		{"task", "task", false},
+		{"step", "task", true},
+		{"step", "project", false},
 		{"epic", "story", false},
 		{"bug", "task", false},
 		{"project", "", true},
 		{"project", "epic", false}, // a project is at the root only
 		{"nope", "", false},
 	} {
-		vs := ValidatePlacement(tc.kind, tc.parent, e)
+		vs := ValidatePlacement(tc.kind, tc.parent)
 		if (len(vs) == 0) != tc.ok {
 			t.Errorf("ValidatePlacement(%q, %q) = %v, want ok=%v", tc.kind, tc.parent, codes(vs), tc.ok)
 		}
@@ -207,28 +209,28 @@ func TestValidateWrite(t *testing.T) {
 		parentKind    string
 		want          []string
 	}{
-		{"new and valid", nil, func(*model.Task) {}, "", "", nil},
+		{"new and valid", nil, func(*model.Task) {}, "project", "project", nil},
 		{"new with a bad value", nil, func(t *model.Task) {
 			t.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "none"})
-		}, "", "", []string{"bad_value:priority"}},
-		{"new needs required fields", nil, func(t *model.Task) { t.Status = "in_progress" }, "", "", []string{"required:assignees"}},
+		}, "project", "project", []string{"bad_value:priority"}},
+		{"new needs required fields", nil, func(t *model.Task) { t.Status = "in_progress" }, "project", "project", []string{"required:assignees"}},
 		{"new in a wrong place", nil, func(t *model.Task) { t.Kind = "bug" }, "", "task", []string{"placement:parent"}},
-		{"unknown status is reported once", nil, func(t *model.Task) { t.Status = "nope" }, "", "", []string{"unknown_status:status"}},
-		{"edit brings a violation", func(*model.Task) {}, func(t *model.Task) { t.Title = "" }, "", "", []string{"missing_title:title"}},
+		{"unknown status is reported once", nil, func(t *model.Task) { t.Status = "nope" }, "project", "project", []string{"unknown_status:status"}},
+		{"edit brings a violation", func(*model.Task) {}, func(t *model.Task) { t.Title = "" }, "project", "project", []string{"missing_title:title"}},
 		{"old violation is left out", func(t *model.Task) { t.Kind = "nope" }, func(t *model.Task) {
 			t.Kind = "nope"
 			t.Title = "renamed"
-		}, "", "", nil},
+		}, "project", "project", nil},
 		{"old placement violation is subtracted when the parent did not change", func(t *model.Task) { t.Kind = "bug" }, func(t *model.Task) {
 			t.Kind = "bug"
 			t.Title = "renamed"
 		}, "task", "task", nil},
-		{"a move brings a placement violation", func(t *model.Task) { t.Kind = "bug" }, func(t *model.Task) { t.Kind = "bug" }, "", "task", []string{"placement:parent"}},
-		{"transition not allowed", func(t *model.Task) { t.Status = "backlog" }, func(t *model.Task) { t.Status = "done" }, "", "", []string{"transition:status"}},
+		{"a move brings a placement violation", func(t *model.Task) { t.Kind = "bug" }, func(t *model.Task) { t.Kind = "bug" }, "project", "task", []string{"placement:parent"}},
+		{"transition not allowed", func(t *model.Task) { t.Status = "backlog" }, func(t *model.Task) { t.Status = "done" }, "project", "project", []string{"transition:status"}},
 		{"same status skips the workflow", func(t *model.Task) { t.Status = "in_progress" }, func(t *model.Task) {
 			t.Status = "in_progress"
 			t.Title = "renamed"
-		}, "", "", nil},
+		}, "project", "project", nil},
 	} {
 		var old *model.Task
 		var oldE *Effective

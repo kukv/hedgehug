@@ -16,29 +16,9 @@ export const STATUS_COLORS: { value: string; label: string; token: string }[] = 
   { value: "brown", label: "ブラウン", token: "var(--store-brown-dot)" },
 ];
 
-export const KIND_ICONS: { value: string; label: string }[] = [
-  { value: "project", label: "プロジェクト" },
-  { value: "epic", label: "エピック" },
-  { value: "story", label: "ストーリー" },
-  { value: "task", label: "タスク" },
-  { value: "bug", label: "バグ" },
-];
-
 /** The color a status of the schema is given, if any. */
 export const statusColorOf = (schema: SchemaView | undefined, name: string): string | undefined =>
   schema?.statuses?.find((s) => s.name === name)?.color;
-
-/** The icon a kind of the schema is given, if any. */
-export const kindIconOf = (schema: SchemaView | undefined, name: string): string | undefined =>
-  schema?.kinds?.find((k) => k.name === name)?.icon;
-
-/** The color a kind of the schema is given, if any. */
-export const kindColorOf = (schema: SchemaView | undefined, name: string): string | undefined =>
-  schema?.kinds?.find((k) => k.name === name)?.color;
-
-/** The role of a kind of the schema: work or container. */
-export const kindRoleOf = (schema: SchemaView | undefined, name: string): string | undefined =>
-  schema?.kinds?.find((k) => k.name === name)?.role;
 
 /** The props of the schema in the order of schema.yaml (by name when the order is not given). */
 export function propNames(schema: SchemaView): string[] {
@@ -87,18 +67,13 @@ function workflowRefs(
 /** Where a removal takes the definition out of, one line each, in Japanese. */
 export function referencesOf(
   schema: SchemaView,
-  target: "status" | "kind" | "prop",
+  target: "status" | "prop",
   name: string,
 ): Reference[] {
   const out: Reference[] = [];
   if (target === "status" || target === "prop") {
     for (const text of workflowRefs(schema.workflow, target, name, "ワークフロー: "))
       out.push({ text });
-  }
-  if (target === "kind") {
-    for (const k of schema.kinds ?? []) {
-      if (k.parents?.includes(name)) out.push({ text: `種類 ${k.name} のどの下に置けるか` });
-    }
   }
   for (const s of schema.scoped ?? []) {
     const project = s.where.replace(/^project:/, "");
@@ -110,18 +85,6 @@ export function referencesOf(
     if (target === "prop") {
       for (const text of workflowRefs(s.workflow, "prop", name, "ワークフロー: ")) add(text);
     }
-    if (target === "kind" && s.templates?.default && name in s.templates.default)
-      add("既定のテンプレート");
   }
   return out;
-}
-
-/** Kinds whose only parent is name (a removal of name is refused). */
-export function orphanedBy(schema: SchemaView, kind: string): string[] {
-  return (schema.kinds ?? [])
-    .filter(
-      (k) =>
-        k.name !== kind && k.parents && k.parents.length > 0 && k.parents.every((p) => p === kind),
-    )
-    .map((k) => k.name);
 }

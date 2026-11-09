@@ -1,8 +1,10 @@
 package model
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/oklog/ulid/v2"
 	"go.yaml.in/yaml/v4"
@@ -14,6 +16,17 @@ type ULID struct{ u ulid.ULID }
 
 // NewULID returns a new ULID. ULIDs made in one process increase monotonically.
 func NewULID() ULID { return ULID{ulid.Make()} }
+
+// DerivedULID returns the ULID that t and seed always give: its time is t and
+// its random part comes from seed. Two clones that need the same task make the
+// same file with it.
+func DerivedULID(t time.Time, seed string) ULID {
+	h := sha256.Sum256([]byte(seed))
+	var x ulid.ULID
+	_ = x.SetTime(ulid.Timestamp(t)) // a time before the year 10889 fits
+	copy(x[6:], h[:10])
+	return ULID{x}
+}
 
 // ParseULID parses a ULID in either case.
 func ParseULID(s string) (ULID, error) {

@@ -172,7 +172,7 @@ func (c *compiler) term(t Term) (pred, error) {
 		return c.matchText(t, c.releaseNames, nil)
 	case "kind":
 		t, err := c.known(t, func(v string) error {
-			if _, ok := c.sc.Kind(v); !ok {
+			if _, ok := schema.KindOf(v); !ok {
 				return fmt.Errorf("unknown kind %q", v)
 			}
 			return nil

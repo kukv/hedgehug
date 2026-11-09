@@ -358,7 +358,7 @@ describe("the tab of a screen is in its address", () => {
   });
 
   it("the schema has ?tab= for every tab but the first; an unknown tab is the first", () => {
-    for (const tab of ["kinds", "props", "workflow"] as const) {
+    for (const tab of ["props", "workflow"] as const) {
       expect(parseRoute("/settings/schema/shared", `?tab=${tab}`)).toEqual({
         name: "settings",
         page: "schema",
@@ -366,6 +366,13 @@ describe("the tab of a screen is in its address", () => {
         tab,
       });
     }
+    // the kinds tab is gone: its old address shows the first tab
+    expect(parseRoute("/settings/schema/shared", "?tab=kinds")).toEqual({
+      name: "settings",
+      page: "schema",
+      store: "shared",
+      tab: "statuses",
+    });
     expect(parseRoute("/settings/schema/shared", "?tab=nope")).toEqual({
       name: "settings",
       page: "schema",
@@ -380,11 +387,11 @@ describe("the tab of a screen is in its address", () => {
   it("router.go keeps the tab, and a tab of a path that is not the screen's is dropped", () => {
     router.go("/inbox?tab=mention");
     expect(location.pathname + location.search).toBe("/inbox?tab=mention");
-    router.go("/settings/schema/shared?tab=kinds");
-    expect(location.pathname + location.search).toBe("/settings/schema/shared?tab=kinds");
-    router.go("/my?tab=kinds");
+    router.go("/settings/schema/shared?tab=props");
+    expect(location.pathname + location.search).toBe("/settings/schema/shared?tab=props");
+    router.go("/my?tab=props");
     expect(location.pathname + location.search).toBe("/my");
-    router.go("/settings/workspaces/shared?tab=kinds");
+    router.go("/settings/workspaces/shared?tab=props");
     expect(location.pathname + location.search).toBe("/settings/workspaces/shared");
   });
 });

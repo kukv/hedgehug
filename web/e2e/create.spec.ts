@@ -1,8 +1,8 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - C opens the dialog named "タスクを作成" (CreateTask) when no input has focus
 //   - the dialog has the textbox "タイトル", the textbox "本文" (CodeMirror), the radio
-//     group "種類" (a radio is named by the kind's label: Task, Bug, Epic …; a kind
-//     the parent does not accept is disabled), the parent as "<ID> <title>" with the
+//     group "種類" (a radio is named by the kind's label: Task, Bug, Epic …; only the
+//     kinds the parent accepts are offered), the parent as "<ID> <title>" with the
 //     button "親を外す" (or the hint "親: なし" when there is none), and the buttons
 //     "作成 ⌘↵" / "作成 Ctrl+↵", "続けて作成", "キャンセル"
 //   - after a create the toast says "<ID> を作成しました · <workspace>" and has the link
@@ -22,7 +22,10 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
   await expect(dialog.getByText("親: なし")).toBeVisible();
 
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("Write the spec");
-  await dialog.getByRole("radio", { name: "Bug" }).check({ force: true }); // the input is hidden behind its label
+  // With no parent only a project can be made (the placement table of the schema).
+  await expect(dialog.getByRole("radio", { name: "Project" })).toBeChecked();
+  await expect(dialog.getByRole("radio", { name: "Task" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Bug" })).toHaveCount(0);
   await dialog.getByRole("textbox", { name: "本文" }).click();
   await page.keyboard.type("first line\n\nsecond line");
   await dialog.getByRole("button", { name: /^作成/ }).click();
@@ -34,7 +37,7 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
 
   const t = hh.show("DM-1");
   expect(t.title).toBe("Write the spec");
-  expect(t.kind).toBe("bug");
+  expect(t.kind).toBe("project");
   expect(t.body?.trim()).toBe("first line\n\nsecond line");
   expect(t.history).toHaveLength(1); // the title, the kind and the body are one commit
 
@@ -88,7 +91,7 @@ test("Create more keeps the dialog and empties the title and the body", async ({
   expect(hh.show("DM-2").title).toBe("Second");
 });
 
-test("the selected row is the parent, and the kinds it cannot hold are disabled", async ({
+test("the selected row is the parent, and only the kinds it can hold are offered", async ({
   page,
   hh,
 }) => {
@@ -110,8 +113,9 @@ test("the selected row is the parent, and the kinds it cannot hold are disabled"
   await row(page, "A plain task").click();
   await page.keyboard.press("c");
   await expect(dialog.getByText(task.id, { exact: true })).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: "Epic" })).toBeDisabled();
-  await expect(dialog.getByRole("radio", { name: "Task" })).toBeEnabled();
+  await expect(dialog.getByRole("radio", { name: "Epic" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Task" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Step" })).toBeChecked();
 });
 
 test("Escape closes the dialog without creating", async ({ page, hh }) => {

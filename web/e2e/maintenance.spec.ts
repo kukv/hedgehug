@@ -83,9 +83,16 @@ test("a problem of a task is listed with a link to the task, and doctor --fix re
   await expect(page.getByRole("status").filter({ hasText: "1 件を修復しました" })).toBeVisible();
   const result = doctor(page).getByRole("region", { name: "修復の結果" });
   await expect(result).toContainText(child.id);
-  await expect(result).toContainText("親が削除されたため、ルートに移しました");
+  await expect(result).toContainText(/親「.+」が削除されたため、「.+」の下に移しました/);
   await expect(doctor(page).getByText("問題は見つかりませんでした")).toBeVisible();
-  expect(hh.show(child.id).parent).toBeNull();
+  // The root holds only projects: the task goes under the 未分類 project that doctor made.
+  const projects = hh.json<{ tasks: { ulid: string; title: string }[] }>(
+    "ls",
+    "kind:project",
+  ).tasks;
+  const uncategorized = projects.find((t) => t.title === "未分類");
+  expect(uncategorized).toBeDefined();
+  expect(hh.show(child.id).parent).toBe(uncategorized?.ulid);
 });
 
 test("a deleted task is purged by age: checked, listed, then gone", async ({ page, hh }) => {

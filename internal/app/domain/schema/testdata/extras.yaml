@@ -9,12 +9,6 @@ statuses:
 - {name: in_progress, category: doing, default: true}
 - {name: done, category: done, default: true}
 - {name: canceled, category: canceled, default: true}
-kinds:
-- {name: project, role: container, default: false, color: blue}
-- name: task
-  role: work # 作業
-  default: true
-  wip_limit: 5
 props:
   priority: {type: enum, values: [low, high], order: desc} # 未知のキー
   points:
@@ -24,6 +18,11 @@ workflow:
   transitions:
     todo: [in_progress] # 開始
   note: 未知のキー
+templates:
+  # 種類ごとの既定
+  default:
+    bug: bug-report # バグ
+    task: plain
 scoped:
 - where: project:01JBZ8K3QW7M2X9V4T6R5N8P0B
   owner: github.com/yourname # 未知のキー

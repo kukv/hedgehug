@@ -21,8 +21,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               menu of menuitems, named by the label ("ステータス", "優先度"); a date
 //               property is an input labelled by its label ("期限")
 //   Overview    /workspaces/<store>/<ulid> shows "<n> 件 · プロジェクト <m>", the legend "未着手 <n>"
-//               ... "中止 <n>" (exact text), and the regions "プロジェクト" and "プロジェクトの外の
-//               タスク" (name them exactly: the second name starts with the first), whose rows are
+//               ... "中止 <n>" (exact text), and the region "プロジェクト", whose rows are
 //               named by the ID and the title; the buttons "タスクを作成" and "プロジェクトを作成"
 //   Undo        the palette command "直前の操作を取り消す"; the toast says "<ID> の変更を取り消しました"
 //   Kanban      the board is the section "カンバンの盤面": a list for each column, ul[data-column=
@@ -60,7 +59,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               region "修復の結果"), and the region "削除済みタスクの完全削除" (the textbox "N 日より古い
 //               もの", the buttons "確認する" and "完全に削除…", the dialog "完全に削除する")
 //   Schema      /settings/schema/<store> (heading "スキーマ"); the navigation "スキーマの種類" has the links
-//               ステータス / 種類 / プロパティ / 関連 / ワークフロー, whose address is /settings/schema/<store>?tab=kinds|props|relations|workflow; a row of a table is named by the definition
+//               ステータス / プロパティ / 関連 / ワークフロー, whose address is /settings/schema/<store>?tab=props|relations|workflow; a row of a table is named by the definition
 //               and its buttons are "編集（<名前>）" and "マージ（<名前>）"; the regions
 //               "プロジェクトごとの上書き" and "スキーマの検査"; the dialog "ステータス「<名前>」を編集" has
 //               the textbox "名前" and the button "保存"; the dialog "ステータス「<名前>」をマージ" has the

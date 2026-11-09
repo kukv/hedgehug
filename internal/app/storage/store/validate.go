@@ -93,7 +93,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		} else if err != nil {
 			return err
 		}
-		parentKind, ancestors, err := lineage(t, sc, tx.task)
+		parentKind, ancestors, err := lineage(t, tx.task)
 		if err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		var oldE *schema.Effective
 		if old != nil {
 			var oldAncestors []model.ULID
-			if oldParentKind, oldAncestors, err = lineage(old, sc, tx.s.Task); err != nil {
+			if oldParentKind, oldAncestors, err = lineage(old, tx.s.Task); err != nil {
 				return err
 			}
 			oldE = sc.For(oldAncestors)
@@ -282,7 +282,7 @@ func (tx *Tx) validateWorkspaces() error {
 
 // lineage returns the kind of t's parent, empty at the root, and the ULIDs
 // For needs: t's ancestors nearest first, led by t itself when t is a
-// container. Parents are read with read: as the operation leaves them for
+// group (project or epic). Parents are read with read: as the operation leaves them for
 // the task being written, from disk for the task as it was.
 //
 // The walk stops at the first task that is missing or does not decode, and
@@ -290,8 +290,8 @@ func (tx *Tx) validateWorkspaces() error {
 // parent is the one missing. So a task whose parent was purged or broken can
 // still be edited; checkRefs refuses a write that adds a missing parent.
 // It also stops when it comes back to a task it has seen.
-func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Task, error)) (parentKind string, ancestors []model.ULID, err error) {
-	if k, ok := sc.Kind(t.Kind); ok && k.Role == schema.RoleContainer {
+func lineage(t *model.Task, read func(model.ULID) (*model.Task, error)) (parentKind string, ancestors []model.ULID, err error) {
+	if schema.IsGroup(t.Kind) {
 		ancestors = append(ancestors, t.ULID)
 	}
 	seen := map[model.ULID]bool{t.ULID: true}
@@ -320,8 +320,8 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Tas
 // Lineage is the kind of t's parent and the ancestors schema.For needs, as a
 // write works them out (see lineage), for a caller that checks a task before
 // it is written. read gives the tasks of the place t is to be written in.
-func Lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Task, error)) (parentKind string, ancestors []model.ULID, err error) {
-	return lineage(t, sc, read)
+func Lineage(t *model.Task, read func(model.ULID) (*model.Task, error)) (parentKind string, ancestors []model.ULID, err error) {
+	return lineage(t, read)
 }
 
 // WorkspaceTakenError means a workspace write would give a workspace the id

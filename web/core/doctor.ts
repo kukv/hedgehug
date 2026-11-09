@@ -1,6 +1,6 @@
 import type { Schemas } from "./api/client";
 import { CATEGORY_LABEL } from "./categories";
-import { repairedKnownText } from "./notifications";
+import { repairedKnownText, type TaskName } from "./notifications";
 
 type Finding = Schemas.Finding;
 export type DoctorReport = Schemas.DoctorReport;
@@ -60,7 +60,7 @@ const rec = (v: unknown): Record<string, unknown> =>
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** What a repair of doctor --fix did (Fixed.kind and Fixed.value), in words. */
-export function fixedText(kind: string, value: unknown): string {
+export function fixedText(kind: string, value: unknown, taskName?: TaskName): string {
   switch (kind) {
     case "id_collision": {
       const v = rec(value);
@@ -81,7 +81,7 @@ export function fixedText(kind: string, value: unknown): string {
       return "削除されていたワークスペースを復元しました";
   }
   // The kinds a sync repairs too are told as the inbox tells them.
-  return repairedKnownText({ kind, value }) ?? kind;
+  return repairedKnownText({ kind, value }, taskName) ?? kind;
 }
 
 // hh purge takes at most this many days (internal/app/usecase/purge.go).
@@ -125,17 +125,17 @@ const TASK_PROBLEMS: Record<string, string> = {
 };
 
 const MESSAGES: Record<string, Words> = {
+  "store.old_format": ([from, to]) =>
+    `Store の形式が古いです（${from}、最新は ${to}）。hh store convert で新しい形式にしてください`,
   "schema.name_empty": () => "名前が空です",
   "schema.status_twice": ([n]) => `ステータス「${n}」が 2 回定義されています`,
   "schema.unknown_category": ([c]) => `「${c}」というカテゴリはありません`,
   "schema.default_status": ([c, n]) =>
     `カテゴリ${cat(c)}の既定のステータスは 1 つだけにしてください（今は ${n} 個）`,
-  "schema.kind_twice": ([n]) => `種類「${n}」が 2 回定義されています`,
-  "schema.unknown_role": ([r]) => `「${r}」という役割はありません（container か work です）`,
   "schema.bad_template_name": ([e]) => `テンプレートの名前が正しくありません: ${e}`,
+  "schema.templates_only_on_store": () =>
+    "templates.only はプロジェクトの上書き（scoped の templates.only）にだけ使えます。Store 全体では効かないので消してください",
   "schema.unknown_kind": ([k]) => `「${k}」という種類はありません`,
-  "schema.default_kind": ([n]) =>
-    `役割がアイテムの既定の種類は 1 つだけにしてください（今は ${n} 個）`,
   "schema.prop_builtin": ([n]) =>
     `「${n}」は組み込みのフィールドなので、プロパティの名前に使えません`,
   "schema.prop_twice": ([n]) => `プロパティ「${n}」が 2 回定義されています`,

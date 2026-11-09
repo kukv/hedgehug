@@ -29,6 +29,10 @@
     "done": 1,
     "total": 2
   },
+  "steps": {
+    "done": 1,
+    "total": 2
+  },
   "body": "- [x] one\n- [ ] two\n",
   "watchers": [
     "github.com/alice"

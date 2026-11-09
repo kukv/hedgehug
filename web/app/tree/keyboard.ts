@@ -48,11 +48,11 @@ export function writeTargetOf(a: KeyAction, selected: string | null): string | n
 
 const NONE: KeyAction = { type: "none" };
 
-// The keys that act through the kinds and the statuses of the schema. Pressed before the schema is
+// The keys that act through the statuses of the schema. Pressed before the schema is
 // read, they wait for it instead of doing nothing.
 export function needsSchema(k: KeyInput): boolean {
   if (k.mod || k.alt) return false;
-  return k.key === "Tab" || k.key === " " || "sSkK".includes(k.key);
+  return k.key === " " || "sSkK".includes(k.key);
 }
 
 export function keyAction(k: KeyInput, c: KeyContext): KeyAction {
@@ -144,19 +144,19 @@ function reorder(dir: -1 | 1, row: FlatRow, c: KeyContext): KeyAction {
 function indent(row: FlatRow, c: KeyContext): KeyAction {
   const sib = siblingsOf(row, c);
   const prev = sib[sib.findIndex((r) => r.ulid === row.ulid) - 1];
-  if (!prev || !c.schema) return NONE;
-  const rejection = checkParent(c.schema, row.task, prev.task, c.idOf);
+  if (!prev) return NONE;
+  const rejection = checkParent(row.task, prev.task, c.idOf);
   if (rejection) return { type: "reject", rejection };
   return { type: "move", ulid: row.ulid, to: { parent: prev.ulid } };
 }
 
 function outdent(row: FlatRow, c: KeyContext): KeyAction {
-  if (row.parent === c.viewRoot || row.parent === null || !c.schema) return NONE;
+  if (row.parent === c.viewRoot || row.parent === null) return NONE;
   const p = c.taskOf(row.parent);
   if (!p) return NONE;
   const grand = p.parent ? (c.taskOf(p.parent) ?? null) : null;
   if (p.parent && !grand) return NONE;
-  const rejection = checkParent(c.schema, row.task, grand, c.idOf);
+  const rejection = checkParent(row.task, grand, c.idOf);
   if (rejection) return { type: "reject", rejection };
   return {
     type: "move",

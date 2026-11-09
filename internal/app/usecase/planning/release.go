@@ -200,9 +200,9 @@ func ReleaseNotes(ss *usecase.Session, name, workspace string) (string, error) {
 			fmt.Fprintf(&b, "- %s %s\n", ix.DisplayID(e), e.Title)
 		}
 	}
-	for _, k := range sc.Kinds {
+	for _, k := range schema.Kinds {
 		if es := done[k.Name]; len(es) > 0 {
-			section(kindTitle(k), es)
+			section(k.Label, es)
 			delete(done, k.Name)
 		}
 	}
@@ -215,13 +215,6 @@ func ReleaseNotes(ss *usecase.Session, name, workspace string) (string, error) {
 		section(k, done[k])
 	}
 	return b.String(), nil
-}
-
-func kindTitle(k schema.Kind) string {
-	if k.Label != "" {
-		return k.Label
-	}
-	return k.Name
 }
 
 // ReleaseRemove takes the release off its tasks and deletes it, in one

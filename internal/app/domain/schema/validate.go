@@ -44,7 +44,7 @@ func (v Violation) String() string { return v.Field + ": " + v.Msg }
 // returned in undefined, in file order.
 func ValidateTask(t *model.Task, e *Effective) (violations []Violation, undefined []string) {
 	s := e.Schema()
-	if _, ok := s.Kind(t.Kind); !ok {
+	if _, ok := KindOf(t.Kind); !ok {
 		violations = append(violations, Violation{CodeUnknownKind, "kind", fmt.Sprintf("unknown kind %q", t.Kind)})
 	}
 	if _, ok := s.Status(t.Status); !ok {
@@ -76,17 +76,16 @@ func ValidateTask(t *model.Task, e *Effective) (violations []Violation, undefine
 
 // ValidatePlacement checks that a task of kind may sit under a parent of
 // parentKind. An empty parentKind means the root.
-func ValidatePlacement(kind, parentKind string, e *Effective) []Violation {
-	k, ok := e.Schema().Kind(kind)
-	if !ok {
+func ValidatePlacement(kind, parentKind string) []Violation {
+	if _, ok := KindOf(kind); !ok {
 		return []Violation{{CodeUnknownKind, "kind", fmt.Sprintf("unknown kind %q", kind)}}
+	}
+	if CanPlace(kind, parentKind) {
+		return nil
 	}
 	parent := parentKind
 	if parent == "" {
-		parent = Root
-	}
-	if k.Parents == nil || slices.Contains(k.Parents, parent) {
-		return nil
+		parent = "root"
 	}
 	return []Violation{{CodePlacement, "parent", fmt.Sprintf("a %s cannot be placed under %s", kind, parent)}}
 }
@@ -226,7 +225,7 @@ func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *
 
 func taskViolations(t *model.Task, parentKind string, e *Effective) []Violation {
 	vs, _ := ValidateTask(t, e)
-	return append(vs, ValidatePlacement(t.Kind, parentKind, e)...)
+	return append(vs, ValidatePlacement(t.Kind, parentKind)...)
 }
 
 // newViolations returns vs without the ones in had, and without repeats:

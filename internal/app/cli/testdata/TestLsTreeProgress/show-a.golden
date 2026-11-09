@@ -6,6 +6,7 @@
   kind        task
   status      done
   checklist   ☑ 1/2
+  steps       1/2
   parent      ME-1 (<ULID-3>) Project
   assignees   -
   watchers    github.com/alice

@@ -1137,95 +1137,6 @@ components:
         - to
         - time
       type: object
-    KindAddInputBody:
-      additionalProperties: false
-      properties:
-        anywhere:
-          type: boolean
-        color:
-          type: string
-        icon:
-          type: string
-        label:
-          type: string
-        name:
-          type: string
-        parents:
-          description: The kinds it may sit under, root for the top; leave it out with anywhere
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        role:
-          enum:
-            - container
-            - work
-          type: string
-        template:
-          type: string
-      required:
-        - name
-        - role
-      type: object
-    KindChangeInputBody:
-      additionalProperties: false
-      properties:
-        anywhere:
-          type: boolean
-        color:
-          description: Empty takes it off
-          type: string
-        default:
-          type: boolean
-        icon:
-          type: string
-        label:
-          type: string
-        name:
-          description: The new name, as for a status
-          type: string
-        parents:
-          description: Not empty; anywhere takes the limit off
-          items:
-            type: string
-          type: array
-        role:
-          enum:
-            - container
-            - work
-          type: string
-        template:
-          type: string
-      type: object
-    KindDef:
-      additionalProperties: false
-      properties:
-        color:
-          type: string
-        default:
-          type: boolean
-        icon:
-          type: string
-        label:
-          type: string
-        name:
-          type: string
-        parents:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        role:
-          type: string
-        template:
-          type: string
-      required:
-        - name
-        - role
-        - parents
-      type: object
     LinkInputBody:
       additionalProperties: false
       properties:
@@ -1380,7 +1291,6 @@ components:
         target:
           enum:
             - status
-            - kind
             - prop
             - value
           type: string
@@ -2388,12 +2298,6 @@ components:
     SchemaView:
       additionalProperties: false
       properties:
-        kinds:
-          items:
-            $ref: "#/components/schemas/KindDef"
-          type:
-            - array
-            - "null"
         prop_order:
           items:
             type: string
@@ -2416,11 +2320,12 @@ components:
           type:
             - array
             - "null"
+        templates:
+          $ref: "#/components/schemas/TemplatesDef"
         workflow:
           $ref: "#/components/schemas/WorkflowDef"
       required:
         - statuses
-        - kinds
         - props
         - workflow
         - scoped
@@ -2629,6 +2534,8 @@ components:
           $ref: "#/components/schemas/PlanRef"
         status:
           type: string
+        steps:
+          $ref: "#/components/schemas/Count"
         store:
           type: string
         title:
@@ -3276,6 +3183,8 @@ components:
           $ref: "#/components/schemas/PlanRef"
         status:
           type: string
+        steps:
+          $ref: "#/components/schemas/Count"
         store:
           type: string
         title:
@@ -3373,6 +3282,17 @@ components:
         - op
         - author
         - automated
+      type: object
+    TemplateDefaultsInputBody:
+      additionalProperties: false
+      properties:
+        default:
+          additionalProperties:
+            type: string
+          description: Kind to template name, all of them after the edit; empty takes templates.default off. A kind that does not exist or a bad template name is 422 schema.invalid; a template the store does not have is 404 template.not_found
+          type: object
+      required:
+        - default
       type: object
     TemplateFile:
       additionalProperties: false
@@ -3564,7 +3484,7 @@ components:
           description: The date property the bars end on
           type: string
         gantt_roadmap:
-          description: Show the kinds of the container role only
+          description: Show projects and epics only
           type: boolean
         gantt_start:
           description: The date property the bars start on
@@ -3606,7 +3526,7 @@ components:
           description: The date property the bars end on
           type: string
         gantt_roadmap:
-          description: Show the kinds of the container role only
+          description: Show projects and epics only
           type: boolean
         gantt_start:
           description: The date property the bars start on
@@ -5497,145 +5417,6 @@ paths:
       summary: Check the schema and the tasks, as hh schema check
       tags:
         - schema
-  /api/schema/kinds:
-    post:
-      operationId: add-kind
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/KindAddInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Add a kind at the end
-      tags:
-        - schema
-  /api/schema/kinds/order:
-    put:
-      operationId: order-kinds
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OrderBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Put the kinds in order
-      tags:
-        - schema
-  /api/schema/kinds/{name}:
-    delete:
-      operationId: delete-kind
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-        - description: The name of the definition
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The name of the definition
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Remove a kind no task uses
-      tags:
-        - schema
-    patch:
-      operationId: change-kind
-      parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
-          explode: false
-          in: query
-          name: store
-          schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
-            type: string
-        - description: The name of the definition
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The name of the definition
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/KindChangeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditWrite"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-          description: Error
-      summary: Change a kind
-      tags:
-        - schema
   /api/schema/migrate:
     post:
       operationId: migrate-schema
@@ -5666,7 +5447,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Rename or merge a status, kind, property or value, as hh migrate
+      summary: Rename or merge a status, property or value, as hh migrate
       tags:
         - schema
   /api/schema/props:
@@ -6018,6 +5799,39 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Change a status
+      tags:
+        - schema
+  /api/schema/templates/default:
+    put:
+      operationId: set-template-defaults
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateDefaultsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Set the default template of each kind
       tags:
         - schema
   /api/sprints:

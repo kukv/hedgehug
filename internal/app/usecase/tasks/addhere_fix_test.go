@@ -83,7 +83,7 @@ func TestAddHereExplainsAnAmbiguityWithinTheNamedStore(t *testing.T) {
 	}
 	ws := ix.Workspaces()[0].ULID
 	for _, title := range []string{"one", "two"} {
-		task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "task", Status: "todo", Workspace: ws, FormerIDs: []string{"OLD-1"}}
+		task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "project", Status: "todo", Workspace: ws, FormerIDs: []string{"OLD-1"}}
 		if _, err := ts.ForStore("org-a").Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 			t.Fatal(err)
 		}

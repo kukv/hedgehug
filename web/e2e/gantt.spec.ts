@@ -71,10 +71,10 @@ test("the chart draws sprints, releases, arrows, what adds up and what is late",
   hh.hh("sprint", "add", "Sprint 1", "--start", day(0), "--end", day(13));
   hh.hh("sprint", "start", "Sprint 1");
   hh.hh("release", "add", "v1", "--date", day(10));
-  hh.hh("add", "epic", "--kind", "epic", "-p", `due=${day(4)}`);
+  hh.hh("add", "container", "--kind", "project", "-p", `due=${day(4)}`);
   hh.hh("add", "first", "--parent", "DM-1", "-p", `start=${day(1)}`, "-p", `due=${day(5)}`);
   hh.hh("add", "second", "--parent", "DM-1", "-p", `start=${day(2)}`, "-p", `due=${day(6)}`);
-  hh.hh("add", "undated", "--sprint", "Sprint 1");
+  hh.hh("add", "undated", "--parent", "DM-1", "--sprint", "Sprint 1");
   hh.hh("set", "DM-3", "blocked_by+=DM-2");
   await openGantt(page, hh);
 
@@ -95,7 +95,8 @@ test("the chart draws sprints, releases, arrows, what adds up and what is late",
   await expect(
     page.getByRole("list", { name: "ガントのタスク" }).getByRole("listitem"),
   ).toHaveCount(1);
-  await expect(page.locator('[data-kind="rollup"] title')).toContainText(short(day(6)));
+  // The bar ends where the last of its children ends: the undated task has the end of its sprint.
+  await expect(page.locator('[data-kind="rollup"] title')).toContainText(short(day(13)));
 });
 
 test("a gantt is saved as a view with its settings, and opens from a query", async ({
@@ -103,7 +104,7 @@ test("a gantt is saved as a view with its settings, and opens from a query", asy
   hh,
 }) => {
   hh.hh("sprint", "add", "Sprint 1");
-  hh.hh("add", "epic", "--kind", "epic");
+  hh.hh("add", "container", "--kind", "project");
   hh.hh("add", "work", "--parent", "DM-1", "-p", `due=${day(2)}`, "-p", `start=${day(1)}`);
   await openGantt(page, hh);
 

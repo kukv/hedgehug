@@ -17,8 +17,20 @@ WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP): moved to a store that is not mounted (ULID 0
 
 `hh doctor --fix` repairs, in one commit, what a sync would repair: parent cycles,
 children of deleted tasks, tasks in a different workspace than their parent, and IDs that
-clash. It also rebuilds a store after the history of origin was rewritten (below).
+clash. A child whose parent is gone moves to the nearest ancestor that can hold it, or else
+under a project called 「未分類」 (made if it is not there; a step becomes a task). It also rebuilds a store after the history of origin was rewritten (below).
 Whatever it cannot repair, it tells you.
+
+A store in an older format is reported once, with `hh store convert` as the way out, and its
+tasks are not checked against the schema until it is converted
+(see [Stores](stores.md#the-store-format-and-hh-store-convert)):
+
+```console
+$ hh doctor
+.hedgehug/store.yaml: the store is in format 1, and this version uses format 2
+  hint: hh store convert
+1 problem
+```
 
 ## A bare repository as your remote
 

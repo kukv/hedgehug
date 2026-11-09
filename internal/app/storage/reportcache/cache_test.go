@@ -58,7 +58,7 @@ func (f *fixture) read(t *testing.T) []report.Task {
 func TestReadGivesTheVersionsInOrder(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	a := &model.Task{ULID: model.NewULID(), Kind: "task", Title: "a", Status: "todo"}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
 	a.Props.Set("points", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: "3"})
 	f.put(t, a)
 	a.Status = "in_progress"
@@ -83,7 +83,7 @@ func TestReadGivesTheVersionsInOrder(t *testing.T) {
 func TestReadKeepsRowsAndReadsOnlyWhatIsNew(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	a := &model.Task{ULID: model.NewULID(), Kind: "task", Title: "a", Status: "todo"}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
 	f.put(t, a)
 	f.read(t)
 	if got := Rows(f.s); got != 1 {
@@ -109,7 +109,7 @@ func TestReadKeepsRowsAndReadsOnlyWhatIsNew(t *testing.T) {
 func TestReadStartsOverForAnotherFormat(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	a := &model.Task{ULID: model.NewULID(), Kind: "task", Title: "a", Status: "todo"}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
 	f.put(t, a)
 	save(f.s, file{Format: format + 1, Rows: map[string][]row{model.TaskPath(a.ULID): {{Status: "stale"}}}})
 	if got := f.read(t); got[0].Versions[0].Status != "todo" {
@@ -126,7 +126,7 @@ func TestReadStartsOverForAnotherFormat(t *testing.T) {
 func TestReadDropsRowsOfCommitsThatAreGone(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	a := &model.Task{ULID: model.NewULID(), Kind: "task", Title: "a", Status: "todo"}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
 	f.put(t, a)
 	f.read(t)
 	c := load(f.s)
@@ -143,7 +143,7 @@ func TestReadDropsRowsOfCommitsThatAreGone(t *testing.T) {
 func TestBrokenAndForwardVersions(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	a := &model.Task{ULID: model.NewULID(), Kind: "task", Title: "a", Status: "todo"}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
 	f.put(t, a)
 	p := model.TaskPath(a.ULID)
 	if _, err := f.s.Update(store.Op{Name: "edit", Author: author}, func(tx *store.Tx) error {

@@ -53,7 +53,7 @@ const treeitem = (title: string) =>
   screen.getByText(title).closest('[role="treeitem"]') as HTMLElement;
 
 // Two stores. The server lists the roots of beta before those of alpha; the stores are alpha, beta.
-//   alpha: A1 (epic) > A2 (task)       beta: B1, B2 (tasks)
+//   alpha: A1 (project) > A2 (task)       beta: B1, B2 (projects)
 const noDone = {
   ...schema,
   statuses: schema.statuses?.filter((s) => s.category !== "done"),
@@ -75,10 +75,13 @@ function setup(
 ) {
   let wsReady = !over.wsLate;
   const tasks = new Map([
-    ["A1", task("A1", "epic", null, { store: "alpha", workspace: wsOf.alpha, title: "alpha one" })],
+    [
+      "A1",
+      task("A1", "project", null, { store: "alpha", workspace: wsOf.alpha, title: "alpha one" }),
+    ],
     ["A2", task("A2", "task", "A1", { store: "alpha", workspace: wsOf.alpha, title: "alpha two" })],
-    ["B1", task("B1", "task", null, { store: "beta", workspace: wsOf.beta, title: "beta one" })],
-    ["B2", task("B2", "task", null, { store: "beta", workspace: wsOf.beta, title: "beta two" })],
+    ["B1", task("B1", "project", null, { store: "beta", workspace: wsOf.beta, title: "beta one" })],
+    ["B2", task("B2", "project", null, { store: "beta", workspace: wsOf.beta, title: "beta two" })],
     [
       "C1",
       task("C1", "task", null, { store: "alpha", workspace: wsOf.alpha, title: "alpha gone" }),
@@ -301,13 +304,13 @@ describe("TreeView over every store", () => {
     const b1 = treeitem("beta one");
     await fireEvent.click(b1);
     await fireEvent.keyDown(b1, { key: "Enter" });
-    expect(screen.getByText("→ beta / beta-ws · 種類: タスク")).toBeInTheDocument();
+    expect(screen.getByText("→ beta / beta-ws · 種類: Project")).toBeInTheDocument();
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "新規" } });
     await fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
       expect(api.createTask).toHaveBeenCalledWith(
-        { title: "新規", kind: "task", workspace: "BBB", after: "B1" },
+        { title: "新規", kind: "project", workspace: "BBB", after: "B1" },
         { store: "beta" },
       ),
     );
@@ -362,7 +365,7 @@ describe("TreeView over every store", () => {
   it("holds a key for the schema of its own store, not of another", async () => {
     const { api, loadBeta, load } = setup({ betaSchema: "none" });
     api.updateTask.mockResolvedValue(
-      ok({ task: task("B1", "task", null, { store: "beta", status: "done" }), commit: "c1" }),
+      ok({ task: task("B1", "project", null, { store: "beta", status: "done" }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
     expect(load).toHaveBeenCalledWith("alpha");
@@ -450,7 +453,7 @@ describe("TreeView over every store", () => {
   it("moves a task within its store as it does in a view of one", async () => {
     const { api } = setup();
     api.moveTask.mockResolvedValue(
-      ok({ task: task("B2", "task", null, { store: "beta" }), commit: "c1" }),
+      ok({ task: task("B2", "project", null, { store: "beta" }), commit: "c1" }),
     );
     render(TreeView, { view: all, query: "" });
     row("B1").onDrop("B2", "before");

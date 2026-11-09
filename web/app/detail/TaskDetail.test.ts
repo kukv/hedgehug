@@ -43,13 +43,13 @@ describe("TaskDetail", () => {
     const show = { ...base };
     const k = makeCore({ show, account: "github.com/koki", tasks: [parent], qualify: true });
     mount(TaskDetail, { ulid: U }, k);
-    expect(screen.getByText(/^タスク ·/)).toHaveTextContent("タスク · shared:REL-6");
+    expect(screen.getByText(/^Task ·/)).toHaveTextContent("Task · shared:REL-6");
     expect(screen.getByRole("navigation", { name: /./ })).toHaveTextContent("shared:REL-6");
   });
 
   it("shows the kind and ID, the former ID, the ULID and the title", () => {
     setup();
-    expect(screen.getByText(/^タスク ·/)).toHaveTextContent("タスク · REL-6");
+    expect(screen.getByText(/^Task ·/)).toHaveTextContent("Task · REL-6");
     expect(screen.getByText(/SH-17/)).toBeInTheDocument();
     expect(screen.getByText(U)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "タイトル" })).toHaveValue(
@@ -159,7 +159,7 @@ describe("TaskDetail", () => {
     mount(TaskDetail, { ulid: U }, k);
     await screen.findByText("API v2 への移行");
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));
-    expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: /^Project/ })).toBeDisabled();
   });
 
   it("toggles a checklist item by rewriting the body and flushing at once", async () => {

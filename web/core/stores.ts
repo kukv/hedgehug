@@ -86,6 +86,7 @@ export class StoreDirectory {
   private spaces = new Map<string, Schemas.WorkspaceView[]>();
   private isLoaded = false;
   private err: ApiError | null = null;
+  private fails = new Map<string, ApiError>();
   private seq = 0;
   private reloadQueued = false;
   private result: WorkspaceEntry[] = [];
@@ -179,6 +180,12 @@ export class StoreDirectory {
     return this.isLoaded;
   }
 
+  // failure is why the workspaces of a store could not be read (a store of an old format, for
+  // one), or null when they could.
+  failure(store: string): ApiError | null {
+    return this.fails.get(store) ?? null;
+  }
+
   // error is why the stores could not be listed, when they could not.
   error(): ApiError | null {
     return this.err;
@@ -210,12 +217,14 @@ export class StoreDirectory {
       }
       throw e;
     }
+    const fails = new Map<string, ApiError>();
     const got = await Promise.all(
       items.map(async (s): Promise<[string, Schemas.WorkspaceView[]]> => {
         try {
           const ws = await this.api.listWorkspaces({ store: s.name });
           return [s.name, ws ?? []];
-        } catch {
+        } catch (e) {
+          if (e instanceof ApiError) fails.set(s.name, e);
           return [s.name, this.spaces.get(s.name) ?? []];
         }
       }),
@@ -227,9 +236,14 @@ export class StoreDirectory {
       JSON.stringify(xs.map(({ last_success: _, ...rest }) => rest));
     const same = sig(items) === sig(this.items);
     const spaces = new Map(got);
+    const failSig = (m: Map<string, ApiError>) =>
+      JSON.stringify([...m].map(([n, e]) => [n, e.type, e.detail]));
+    const failed = failSig(fails) !== failSig(this.fails);
+    this.fails = fails;
     const changed =
       !this.isLoaded ||
       this.err !== null ||
+      failed ||
       !same ||
       JSON.stringify([...spaces]) !== JSON.stringify([...this.spaces]);
     if (!same) this.items = items;

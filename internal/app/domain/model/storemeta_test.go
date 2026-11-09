@@ -7,12 +7,12 @@ import (
 
 func TestStoreMetaRoundTrip(t *testing.T) {
 	t.Parallel()
-	src := "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: shared\nformat: 1\naudience: backend と frontend の両チーム\n"
+	src := "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: shared\nformat: 2\naudience: backend と frontend の両チーム\n"
 	m, err := DecodeStoreMeta([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Name != "shared" || m.Format != 1 || m.Audience == "" {
+	if m.Name != "shared" || m.Format != 2 || m.Audience == "" {
 		t.Errorf("decoded = %+v", m)
 	}
 	out, err := m.Encode()
@@ -23,9 +23,9 @@ func TestStoreMetaRoundTrip(t *testing.T) {
 
 func TestStoreMetaErrors(t *testing.T) {
 	t.Parallel()
-	_, err := DecodeStoreMeta([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nformat: 2\n"))
+	_, err := DecodeStoreMeta([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nformat: 3\n"))
 	if !errors.Is(err, ErrNewerFormat) {
-		t.Errorf("format 2: err = %v, want ErrNewerFormat", err)
+		t.Errorf("format 3: err = %v, want ErrNewerFormat", err)
 	}
 	for _, src := range []string{
 		"format: 1\n",                        // no ulid
@@ -35,5 +35,16 @@ func TestStoreMetaErrors(t *testing.T) {
 		if _, err := DecodeStoreMeta([]byte(src)); err == nil {
 			t.Errorf("DecodeStoreMeta(%q) succeeded", src)
 		}
+	}
+}
+
+func TestStoreMetaOldFormatDecodes(t *testing.T) {
+	t.Parallel()
+	m, err := DecodeStoreMeta([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nformat: 1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.OldFormat() {
+		t.Errorf("format %d is not old", m.Format)
 	}
 }

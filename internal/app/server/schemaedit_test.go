@@ -1,7 +1,9 @@
 package server
 
 import (
+	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
@@ -59,24 +61,6 @@ func TestSchemaEditRoundTrip(t *testing.T) {
 		t.Errorf("values = %v", v)
 	}
 
-	w = schemas.EditWrite{}
-	ts.call("POST", "/api/schema/kinds", map[string]any{"name": "spike", "role": "work", "anywhere": true, "color": "teal"}, 200, &w)
-	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Name != "spike" || k.Color != "teal" {
-		t.Errorf("spike = %+v", k)
-	}
-	w = schemas.EditWrite{}
-	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"color": "#aabbcc"}, 200, &w)
-	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Color != "#aabbcc" {
-		t.Errorf("spike = %+v", k)
-	}
-	w = schemas.EditWrite{}
-	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"color": ""}, 200, &w)
-	if k := w.Schema.Kinds[len(w.Schema.Kinds)-1]; k.Color != "" {
-		t.Errorf("spike = %+v", k)
-	}
-	ts.call("PATCH", "/api/schema/kinds/spike", map[string]any{"label": "調査", "parents": []string{"root", "epic"}}, 200, nil)
-	ts.call("PUT", "/api/schema/kinds/order", map[string]any{"names": []string{"spike", "project", "epic", "story", "task", "bug"}}, 200, nil)
-	ts.call("DELETE", "/api/schema/kinds/spike", nil, 200, nil)
 	ts.call("POST", "/api/schema/props", map[string]any{"name": "area", "type": "text"}, 200, nil)
 	ts.call("PATCH", "/api/schema/props/area", map[string]any{"label": "領域"}, 200, nil)
 	ts.call("PUT", "/api/schema/props/order", map[string]any{"names": []string{"area", "priority", "start", "due", "estimate", "points"}}, 200, nil)
@@ -89,6 +73,35 @@ func TestSchemaEditRoundTrip(t *testing.T) {
 	want := []string{"priority", "start", "due", "estimate", "duplicates", "causes", "relates", "points"}
 	if !slices.Equal(sc.PropOrder, want) {
 		t.Errorf("prop_order = %v, want %v", sc.PropOrder, want)
+	}
+}
+
+func TestSchemaEditTemplateDefaults(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+
+	// a template that the store does not have is refused, as in a project's override
+	if e := ts.problem("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "bug"}}, 404); e.Type != "template.not_found" {
+		t.Errorf("missing template: %+v", e)
+	}
+	for _, name := range []string{"bug", "feature"} {
+		ts.call("PUT", "/api/templates/"+name, map[string]any{"content": bugTemplate}, 200, nil)
+	}
+	var w schemas.EditWrite
+	ts.call("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "bug", "task": "feature"}}, 200, &w)
+	if w.Schema.Templates == nil || w.Schema.Templates.Default["bug"] != "bug" || w.Schema.Templates.Default["task"] != "feature" || w.Commit == nil {
+		t.Fatalf("set = %+v, commit %v", w.Schema.Templates, w.Commit)
+	}
+	w = schemas.EditWrite{}
+	ts.call("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{}}, 200, &w)
+	if w.Schema.Templates != nil {
+		t.Errorf("cleared = %+v", w.Schema.Templates)
+	}
+	if e := ts.problem("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"nope": "bug"}}, 422); e.Type != "schema.invalid" {
+		t.Errorf("unknown kind: %+v", e)
+	}
+	if e := ts.problem("PUT", "/api/schema/templates/default", map[string]any{"default": map[string]string{"bug": "../x"}}, 422); e.Type != "schema.invalid" {
+		t.Errorf("bad name: %+v", e)
 	}
 }
 
@@ -125,8 +138,21 @@ func TestSchemaEditErrors(t *testing.T) {
 		t.Errorf("name taken: %+v", e)
 	}
 	ts.problem("PUT", "/api/schema/statuses/order", map[string]any{"names": nil}, 400)
-	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{}}, 400)
-	ts.problem("PATCH", "/api/schema/kinds/bug", map[string]any{"parents": []string{"root"}, "anywhere": true}, 400)
+	for _, r := range []struct{ method, path string }{
+		{"POST", "/api/schema/kinds"}, {"PATCH", "/api/schema/kinds/bug"}, {"DELETE", "/api/schema/kinds/bug"}, {"PUT", "/api/schema/kinds/order"},
+	} {
+		// The routes are not in api/openapi.yaml, so the reply is not checked against it.
+		req, err := http.NewRequest(r.method, ts.hs.URL+r.path, strings.NewReader(`{"name":"x"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set("Content-Type", "application/json")
+		if got := ts.raw(req); got.Status != 404 && got.Status != 405 {
+			t.Errorf("%s %s: status %d, body %s", r.method, r.path, got.Status, got.Body)
+		}
+	}
+	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "kind", "old": "task", "new": "item"}, 400)
 }
 
 func TestSchemaEditPublishesSchemaChanged(t *testing.T) {
@@ -165,10 +191,6 @@ func TestSchemaEditRenameRewritesTasksInOneCommit(t *testing.T) {
 		}
 	}
 
-	ts.call("PATCH", "/api/schema/kinds/task", map[string]any{"name": "item"}, 200, nil)
-	if got := ts.uc.TaskByULID("me", u).Kind; got != "item" {
-		t.Errorf("kind = %s", got)
-	}
 	ts.call("PATCH", "/api/schema/props/priority", map[string]any{"name": "importance"}, 200, &w)
 	if _, ok := w.Schema.Props["importance"]; !ok {
 		t.Errorf("props = %v", w.Schema.PropOrder)

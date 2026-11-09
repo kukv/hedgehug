@@ -3,7 +3,6 @@ import type { SchemaView } from "./schema";
 
 export type SchemaUsage = {
   statuses: Record<string, number>;
-  kinds: Record<string, number>;
   /** The tasks that hold a value of the property. */
   props: Record<string, number>;
   /** The tasks that hold the value, of each value of an enum or multi_enum property. */
@@ -24,7 +23,6 @@ const bump = (m: Record<string, number>, k: string): void => {
 export function schemaUsage(schema: SchemaView, tasks: readonly TaskView[]): SchemaUsage {
   const u: SchemaUsage = {
     statuses: zero((schema.statuses ?? []).map((s) => s.name)),
-    kinds: zero((schema.kinds ?? []).map((k) => k.name)),
     props: zero(Object.keys(schema.props)),
     values: {},
   };
@@ -33,7 +31,6 @@ export function schemaUsage(schema: SchemaView, tasks: readonly TaskView[]): Sch
   }
   for (const t of tasks) {
     bump(u.statuses, t.status);
-    bump(u.kinds, t.kind);
     for (const name of Object.keys(u.props)) {
       const v = t.props?.[name];
       if (empty(v)) continue;

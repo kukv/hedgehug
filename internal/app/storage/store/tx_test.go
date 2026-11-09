@@ -15,11 +15,12 @@ import (
 )
 
 func newTask(title string) *model.Task {
-	return &model.Task{ULID: model.NewULID(), Workspace: testWorkspaceULID, Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Workspace: testWorkspaceULID, Kind: "project", Title: title, Status: "todo"}
 }
 
 func addTask(t *testing.T, s *Store, task *model.Task) {
 	t.Helper()
+	settleKinds(s, []*model.Task{task})
 	if _, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(task)
 	}); err != nil {
@@ -55,7 +56,7 @@ func TestCheckOnlyFindsEveryViolation(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	mk := func(status string) *model.Task {
-		return &model.Task{ULID: model.NewULID(), Kind: "task", Title: "t", Status: status, Workspace: ws.ULID}
+		return &model.Task{ULID: model.NewULID(), Kind: "project", Title: "t", Status: status, Workspace: ws.ULID}
 	}
 	head, err := s.Repo().Head()
 	if err != nil {

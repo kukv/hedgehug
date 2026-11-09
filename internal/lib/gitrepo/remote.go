@@ -152,6 +152,13 @@ func (r *Repo) Push(remote string) error {
 	if h.IsZero() {
 		return errors.New("push: the repository has no commit")
 	}
+	return r.PushCommit(remote, h)
+}
+
+// PushCommit is Push for the commit h, which need not be main: HEAD stays
+// where it is. It becomes refs/remotes/<remote>/main when it is sent. It
+// returns ErrRejected when the remote is not an ancestor of h.
+func (r *Repo) PushCommit(remote string, h plumbing.Hash) error {
 	u, err := r.remoteURL(remote)
 	if err != nil {
 		return fmt.Errorf("push %s: %w", remote, err)

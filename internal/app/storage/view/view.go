@@ -50,7 +50,7 @@ type Kanban struct {
 type Gantt struct {
 	Start string `yaml:"start,omitempty"`
 	End   string `yaml:"end,omitempty"`
-	// Roadmap narrows the chart to the kinds of the container role.
+	// Roadmap narrows the chart to projects and epics.
 	Roadmap bool `yaml:"roadmap,omitempty"`
 }
 
@@ -171,7 +171,7 @@ func (v *View) GanttEnd() string {
 	return v.Gantt.End
 }
 
-// Roadmap says the gantt shows the kinds of the container role only.
+// Roadmap says the gantt shows projects and epics only.
 func (v *View) Roadmap() bool { return v.Gantt != nil && v.Gantt.Roadmap }
 
 // Problems lists the values of the view that are out of their range, in the

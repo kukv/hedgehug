@@ -103,7 +103,16 @@ describe("fixedText", () => {
     );
     expect(fixedText("workspace_revived", null)).toBe("削除されていたワークスペースを復元しました");
     expect(fixedText("parent_deleted", { from: "01P", to: null })).toBe(
-      "親が削除されたため、ルートに移しました",
+      "親「01P」が削除されたため、ルートに移しました",
+    );
+    expect(
+      fixedText(
+        "parent_deleted",
+        { from: "01P", to: "01Q", kind_from: "step", kind_to: "task" },
+        (u) => (u === "01Q" ? "未分類" : undefined),
+      ),
+    ).toBe(
+      "親「01P」が削除されたため、「未分類」の下に移しました。種類を Step から Task に変えました",
     );
   });
 
@@ -132,6 +141,19 @@ describe("findingText and findingHint", () => {
       "カテゴリ完了の既定のステータスは 1 つだけにしてください（今は 0 個）",
     );
     expect(findingHint(x)).toBe("");
+  });
+
+  it("say an old store format in Japanese, with the command to run", () => {
+    const x = f({
+      check: "file",
+      code: "store.old_format",
+      args: ["1", "2"],
+      hint: "hh store convert",
+    });
+    expect(findingText(x)).toBe(
+      "Store の形式が古いです（1、最新は 2）。hh store convert で新しい形式にしてください",
+    );
+    expect(findingHint(x)).toBe("hh store convert");
   });
 
   it("say the problem of a task by its code, after its field", () => {

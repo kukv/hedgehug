@@ -58,8 +58,11 @@ func TestAdd(t *testing.T) {
 		t.Errorf("commit message = %q", msg)
 	}
 
-	got := te.addJSON("Second")
-	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.ID != "ME-2" ||
+	if first := te.addJSON("Third"); first.Kind != "project" || first.Parent != nil {
+		t.Errorf("an add with no parent made %+v; want a project", first)
+	}
+	got := te.addJSON("Second", "--parent", "ME-1")
+	if got.Kind != "task" || got.Status != "todo" || got.Parent == nil || got.ID != "ME-3" ||
 		got.Workspace == nil || got.Workspace.Name != "me" || got.Workspace.IDPrefix != "ME" || len(got.Workspace.ULID) != 26 {
 		t.Errorf("task = %+v", got)
 	}
@@ -86,7 +89,8 @@ func TestAddRanksAtTheEnd(t *testing.T) {
 func TestAddProps(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	got := te.addJSON("Bug", "--kind", "bug", "--status", "backlog", "-p", "due=2026-11-01", "-p", "labels+=ui")
+	p := te.addJSON("P", "--kind", "project")
+	got := te.addJSON("Bug", "--parent", p.ID, "--kind", "bug", "--status", "backlog", "-p", "due=2026-11-01", "-p", "labels+=ui")
 	if got.Kind != "bug" || got.Status != "backlog" || got.Props["due"] != "2026-11-01" || len(got.Labels) != 1 || got.Labels[0] != "ui" {
 		t.Errorf("task = %+v", got)
 	}

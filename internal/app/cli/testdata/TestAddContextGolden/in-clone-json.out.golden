@@ -16,7 +16,7 @@
     "kind": "task",
     "title": "second",
     "parent": "<ULID-3>",
-    "rank": "a3",
+    "rank": "a4",
     "status": "todo",
     "assignees": [],
     "labels": [],
@@ -25,7 +25,11 @@
     "created": "<TIME>",
     "updated": "<TIME>",
     "deleted_at": null,
-    "problems": []
+    "problems": [],
+    "steps": {
+      "done": 0,
+      "total": 0
+    }
   },
   "commit": "<HASH>"
 }
