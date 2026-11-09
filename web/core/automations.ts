@@ -126,7 +126,7 @@ export const ISSUE_FIELDS: readonly IssueField[] = [
   {
     name: "comments",
     to: "comments",
-    note: "push は自分のコメントだけ（初回は 1 回 30 件）、mirror は取り込んだコメントを編集不可にします。足す前にこの Store を使うすべてのクローンを更新してください",
+    note: "push は自分のコメントだけ（1 回の push で全 issue 合わせて 30 件まで）、mirror は取り込んだコメントを編集不可にします。足す前にこの Store を使うすべてのクローンを更新してください",
   },
 ].map((f) => ({ ...f, label: fieldLabel(f.name) }));
 

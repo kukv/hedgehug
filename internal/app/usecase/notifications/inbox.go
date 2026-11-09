@@ -552,10 +552,15 @@ func issueOverwrittenContent(it inbox.Item) string {
 	lost := strconv.Quote(strings.Join(d.Lost, ", "))
 	field := d.Field
 	if strings.HasPrefix(field, "comments:") {
-		field = "comment" // which one: the start of its text, when the item has it
+		// which comment: the start of its text, when the item has it; then the text that was lost
+		what := "the comment"
 		if d.Comment != "" {
-			field += " " + strconv.Quote(d.Comment)
+			what += " starting " + strconv.Quote(d.Comment)
 		}
+		if d.Side == automation.SideGitHub {
+			return fmt.Sprintf("%s on %s was written over by the task; GitHub had %s", what, label, lost)
+		}
+		return fmt.Sprintf("%s of the task was written over by %s; the task had %s", what, label, lost)
 	}
 	if d.Side == automation.SideGitHub {
 		return fmt.Sprintf("the %s %s on %s was written over by the task", field, lost, label)

@@ -230,7 +230,7 @@ func (c *commit) issueOverwritten(v string) error {
 				return err
 			}
 			if x != nil {
-				comment = CommentPreview(x.Body)
+				comment = commentPreview(x.Body)
 			}
 		}
 	}
@@ -248,8 +248,8 @@ func (c *commit) issueOverwritten(v string) error {
 // commentPreviewRunes is how much of a comment names it in a notice.
 const commentPreviewRunes = 12
 
-// CommentPreview is the first characters of a comment's text, on one line.
-func CommentPreview(body string) string {
+// commentPreview is the first characters of a comment's text, on one line.
+func commentPreview(body string) string {
 	r := []rune(strings.Join(strings.Fields(body), " "))
 	if len(r) > commentPreviewRunes {
 		r = r[:commentPreviewRunes]

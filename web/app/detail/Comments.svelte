@@ -320,8 +320,8 @@
   .gh {
     padding: 0 var(--space-4);
     border: 1px solid var(--line);
-    border-radius: var(--radius-sm, 4px);
-    font-size: var(--fs-11, 11px);
+    border-radius: var(--radius-4);
+    font-size: var(--fs-11);
   }
   .body {
     margin: var(--space-4) 0;

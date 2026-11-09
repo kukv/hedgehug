@@ -115,8 +115,8 @@ hh automation fields --mirror title,status,assignees,comments
   only your own comments (a comment with no author, and a deleted comment that was never sent, are not
   sent), and each clone sends its own. On GitHub the author of the comment is the person who ran the sync. A
   comment that someone edited by hand on GitHub is overwritten at the next push, and the overwrite is reported
-  in `hh inbox` as "comment (...)". The first push after you add `comments` creates 30 comments at most in one
-  sync and leaves the rest for the next one. The body is sent as written, so `@login` is a real mention and
+  in `hh inbox` as "comment (...)". One run of push creates 30 comments at most, across all the issues of the store (this matters when many
+  have piled up, as right after you add `comments`), and leaves the rest for the next sync. The body is sent as written, so `@login` is a real mention and
   notifies that person; `@host/login` (a person of another host) can notify `@host` on GitHub. Each comment
   ends with an invisible marker `<!-- hedgehug:<ULID> -->`, which lets a later sync find the comment again
   even if the record of its GitHub ID was lost.
@@ -124,7 +124,7 @@ hh automation fields --mirror title,status,assignees,comments
   carries edits and deletions over. Two clones that take the same comment make the same file, so the merge keeps
   one. A comment taken from GitHub cannot be edited or deleted in hedgehug, now or after you unlink the issue or change the
   mode (the error is `comment.mirrored`); change it on GitHub. Only the first mirror link of a task is read.
-  Taking comments is not limited and does not notify, and it adds nobody to the watchers.
+  Taking comments is not limited and the notices are not suppressed (a new comment or mention shows in `hh inbox`), but it adds nobody to the watchers.
 - `hh undo` refuses to undo the adding of a comment that was already sent to GitHub. Use `hh comment rm`, which
   removes it from GitHub too.
 - Only comments on issues are synced, not comments on pull requests.
