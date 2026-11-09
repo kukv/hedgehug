@@ -298,7 +298,7 @@ func TestMigrateListIgnoresCase(t *testing.T) {
 	if err != nil || !slices.Equal(out.Priorities, []string{"high", "mid", "urgent"}) {
 		t.Fatalf("priorities = %v, %v", out.Priorities, err)
 	}
-	for _, m := range []Migration{{Target: TargetLabel, Old: "Bug", New: "bug"}, {Target: TargetPriority, Old: "low", New: "LOW"}, {Target: TargetStatus, Old: "todo", New: "todo"}} {
+	for _, m := range []Migration{{Target: TargetLabel, Old: "Bug", New: "bug"}, {Target: TargetPriority, Old: "LOW", New: "low"}, {Target: TargetStatus, Old: "todo", New: "todo"}} {
 		if _, err := sc.Migrate(m); !errors.Is(err, ErrValueInvalid) || !strings.Contains(err.Error(), "the same") {
 			t.Errorf("%+v: %v; want ErrValueInvalid, the same", m, err)
 		}
@@ -307,6 +307,28 @@ func TestMigrateListIgnoresCase(t *testing.T) {
 		if _, err := sc.Migrate(m); !errors.Is(err, ErrNotDefined) {
 			t.Errorf("%+v: %v; want ErrNotDefined", m, err)
 		}
+	}
+	// a name that differs in case only is a new spelling: the list and the
+	// tasks take it, and a task that has it already is not changed
+	out, err = sc.Migrate(Migration{Target: TargetLabel, Old: "bug", New: "Bug"})
+	if err != nil || !slices.Equal(out.Labels, []string{"Bug", "ui"}) {
+		t.Fatalf("labels = %v, %v; want [Bug ui]", out.Labels, err)
+	}
+	out, err = sc.Migrate(Migration{Target: TargetPriority, Old: "low", New: "LOW"})
+	if err != nil || out.Priorities[0] != "LOW" {
+		t.Fatalf("priorities = %v, %v", out.Priorities, err)
+	}
+	spell := &model.Task{Priority: "low", Labels: []string{"bug", "ui"}}
+	for _, m := range []Migration{{Target: TargetPriority, Old: "low", New: "Low"}, {Target: TargetLabel, Old: "bug", New: "Bug"}} {
+		if ok, err := m.ApplyTask(spell, sc); err != nil || !ok {
+			t.Fatalf("%+v: %v, %v", m, ok, err)
+		}
+		if ok, err := m.ApplyTask(spell, sc); err != nil || ok {
+			t.Errorf("%+v again: changed %v, %v; a task with the new spelling is not changed", m, ok, err)
+		}
+	}
+	if spell.Priority != "Low" || !slices.Equal(spell.Labels, []string{"Bug", "ui"}) {
+		t.Errorf("task = %q %v; want Low [Bug ui]", spell.Priority, spell.Labels)
 	}
 	// the tasks follow with the list's spelling
 	task := &model.Task{Priority: "LOW", Labels: []string{"Bug", "ui"}}

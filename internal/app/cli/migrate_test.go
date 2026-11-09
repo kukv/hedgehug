@@ -385,6 +385,35 @@ func TestSchemaMigrateRejectsATaskWithTheNewName(t *testing.T) {
 	}
 }
 
+// A new name that differs from the old one in case only (bug to Bug) is a new
+// spelling: the list and the tasks are rewritten.
+func TestSchemaMigrateCaseOnlyRenameIsASpellingChange(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.labels("bug", "ui")
+	a := te.addJSON("Alpha")
+	te.ok("set", a.ID, "priority=low", "labels+=bug", "labels+=ui")
+	te.ok("schema", "migrate", "label", "bug", "Bug")
+	if got := te.task(a.ULID).Labels; !slices.Equal(got, []string{"Bug", "ui"}) {
+		t.Errorf("labels = %v, want [Bug ui]", got)
+	}
+	if !strings.Contains(te.schemaFile(), "labels: [Bug, ui]") {
+		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+	te.ok("schema", "migrate", "priority", "low", "Low")
+	if got := te.task(a.ULID).Priority; got != "Low" {
+		t.Errorf("priority = %q, want Low", got)
+	}
+	if !strings.Contains(te.schemaFile(), "priorities: [Low, mid, high, urgent]") {
+		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+	// the old name is found without regard to case as well
+	te.ok("schema", "migrate", "label", "BUG", "bUG")
+	if got := te.task(a.ULID).Labels; !slices.Equal(got, []string{"bUG", "ui"}) {
+		t.Errorf("labels = %v, want [bUG ui]", got)
+	}
+}
+
 // The priorities and the labels are found without regard to case, in the old
 // name and in the new one; the list's spelling is what stays.
 func TestSchemaMigrateIgnoresCase(t *testing.T) {
@@ -407,7 +436,7 @@ func TestSchemaMigrateIgnoresCase(t *testing.T) {
 	if !strings.Contains(te.schemaFile(), "priorities: [high, mid, urgent]") {
 		t.Errorf("schema.yaml:\n%s", te.schemaFile())
 	}
-	for _, args := range [][]string{{"label", "ui", "UI"}, {"priority", "high", "HIGH"}, {"status", "todo", "todo"}} {
+	for _, args := range [][]string{{"label", "UI", "ui"}, {"priority", "HIGH", "high"}, {"status", "todo", "todo"}} {
 		code, _, stderr := te.run(append([]string{"schema", "migrate"}, args...)...)
 		if code != 1 || !strings.Contains(stderr, "are the same") {
 			t.Errorf("%v: exit %d, stderr %q", args, code, stderr)

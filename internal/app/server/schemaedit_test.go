@@ -276,3 +276,31 @@ func TestSchemaEditValuesMergeRenameAndInUse(t *testing.T) {
 		t.Errorf("task labels = %v, want the two merged into one", got)
 	}
 }
+
+// A name that changes in case only (high to High) is a new spelling: the list
+// takes it, and the tasks are written with it.
+func TestSchemaEditCaseOnlyRenameRewritesTasks(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var hi taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "h", "priority": "high"}, 201, &hi)
+	ts.labels("bug", "ui")
+	ts.call("PATCH", "/api/tasks/"+hi.Task.ID, map[string]any{"labels": []string{"bug"}}, 200, nil)
+
+	var w schemas.EditWrite
+	rename := []map[string]any{{"name": "low", "from": []string{"low"}}, {"name": "mid", "from": []string{"mid"}}, {"name": "High", "from": []string{"high"}}, {"name": "urgent", "from": []string{"urgent"}}}
+	ts.call("PATCH", "/api/schema/priorities", map[string]any{"values": rename}, 200, &w)
+	if !slices.Equal(w.Schema.Priorities, []string{"low", "mid", "High", "urgent"}) {
+		t.Errorf("priorities = %v", w.Schema.Priorities)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, hi.Task.ULID)).Priority; got != "High" {
+		t.Errorf("priority of the task = %q, want High", got)
+	}
+	ts.call("PATCH", "/api/schema/labels", map[string]any{"values": []map[string]any{{"name": "Bug", "from": []string{"bug"}}, {"name": "ui", "from": []string{"ui"}}}}, 200, &w)
+	if !slices.Equal(w.Schema.Labels, []string{"Bug", "ui"}) {
+		t.Errorf("labels = %v", w.Schema.Labels)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, hi.Task.ULID)).Labels; !slices.Equal(got, []string{"Bug"}) {
+		t.Errorf("labels of the task = %v, want [Bug]", got)
+	}
+}

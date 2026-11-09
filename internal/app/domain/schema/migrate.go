@@ -47,9 +47,9 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 	out := s.clone()
 	switch m.Target {
 	case TargetPriority:
-		m.Old, m.New = spelled(s.Priorities, m.Old), spelled(s.Priorities, m.New)
+		m = m.spelledIn(s.Priorities)
 	case TargetLabel:
-		m.Old, m.New = spelled(s.Labels, m.Old), spelled(s.Labels, m.New)
+		m = m.spelledIn(s.Labels)
 	}
 	if m.Old == m.New {
 		return nil, fmt.Errorf("%q and %q are the same: %w", m.Old, m.New, ErrValueInvalid)
@@ -76,6 +76,17 @@ func spelled(list []string, v string) string {
 		return x
 	}
 	return v
+}
+
+// spelledIn is m with both names as the list spells them, so that they are found
+// without regard to case. A new name that differs from the old one in case only
+// is a new spelling of the same value (bug to Bug), which is kept as it is.
+func (m Migration) spelledIn(list []string) Migration {
+	m.Old = spelled(list, m.Old)
+	if !strings.EqualFold(m.Old, m.New) {
+		m.New = spelled(list, m.New)
+	}
+	return m
 }
 
 func (s *Schema) clone() *Schema {
@@ -258,14 +269,16 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 		return true, nil
 	case TargetPriority:
 		// A value is found without regard to case, as Validate finds it, and
-		// written as the list spells it.
-		if !strings.EqualFold(t.Priority, spelled(s.Priorities, m.Old)) {
+		// written as the list will spell it.
+		m = m.spelledIn(s.Priorities)
+		if !strings.EqualFold(t.Priority, m.Old) || t.Priority == m.New {
 			return false, nil
 		}
-		t.Priority = spelled(s.Priorities, m.New)
+		t.Priority = m.New
 		return true, nil
 	case TargetLabel:
-		from, to := spelled(s.Labels, m.Old), spelled(s.Labels, m.New)
+		m = m.spelledIn(s.Labels)
+		from, to := m.Old, m.New
 		if !slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, from) }) {
 			return false, nil
 		}
@@ -277,6 +290,9 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 			if !slices.Contains(out, l) {
 				out = append(out, l)
 			}
+		}
+		if slices.Equal(out, t.Labels) {
+			return false, nil
 		}
 		t.Labels = out
 		return true, nil
