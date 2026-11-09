@@ -99,6 +99,10 @@ func TestRunSortErrors(t *testing.T) {
 		{"sort:due sort:title", 2},
 		{"group:status group:kind", 2},
 		{"sort:label", 1},
+		{"sort:blocked_by", 1}, // a relation is not a key to sort or group by
+		{"sort:causes", 1},
+		{"group:relates", 1},
+		{"group:clones", 1},
 		{"group:nope", 1},
 		{"-sort:due", 1},
 		{"sort<due", 1},

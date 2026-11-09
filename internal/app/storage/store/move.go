@@ -11,15 +11,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // Unlink is a reference a move cuts: from Task's Field to Target. Field is
-// "blocked_by" or "props.<key>".
+// the name of a relation (blocked_by, causes, ...), "sprint" or "releases".
 type Unlink struct {
 	Task   model.ULID
 	Field  string
@@ -31,14 +29,12 @@ func (u Unlink) String() string {
 	return u.Task.String() + " " + u.Field + " " + u.Target.String()
 }
 
-const propsPrefix = "props."
-
 // Unlinks are the references a move cuts: those between the tasks moved and
-// the tasks that stay (rest), both ways (blocked_by and the properties that sc
-// types task_ref; references inside either group are not listed), and the
+// the tasks that stay (rest), both ways (the five relations; references inside
+// either group are not listed), and the
 // sprint and the releases of the tasks moved, which are files of this store.
 // They come in the order of Task, Field, Target.
-func Unlinks(sc *schema.Schema, moved, rest []*model.Task) []Unlink {
+func Unlinks(moved, rest []*model.Task) []Unlink {
 	in := func(list []*model.Task) map[model.ULID]bool {
 		m := make(map[model.ULID]bool, len(list))
 		for _, t := range list {
@@ -49,15 +45,11 @@ func Unlinks(sc *schema.Schema, moved, rest []*model.Task) []Unlink {
 	var out []Unlink
 	collect := func(from []*model.Task, to map[model.ULID]bool) {
 		for _, t := range from {
-			for _, r := range refsOf(t, sc) {
+			for _, r := range refsOf(t) {
 				if r.field == "parent" || !to[r.ulid] {
 					continue
 				}
-				field := r.field
-				if field != "blocked_by" {
-					field = propsPrefix + field
-				}
-				out = append(out, Unlink{Task: t.ULID, Field: field, Target: r.ulid})
+				out = append(out, Unlink{Task: t.ULID, Field: r.field, Target: r.ulid})
 			}
 		}
 	}
@@ -85,10 +77,6 @@ func Unlinks(sc *schema.Schema, moved, rest []*model.Task) []Unlink {
 // dropRef takes the reference u off t, which must be a task of its own (not
 // one shared with a reader).
 func dropRef(t *model.Task, u Unlink) {
-	if u.Field == "blocked_by" {
-		t.BlockedBy = slices.DeleteFunc(slices.Clone(t.BlockedBy), func(x model.ULID) bool { return x == u.Target })
-		return
-	}
 	switch u.Field {
 	case "sprint":
 		if t.Sprint != nil && *t.Sprint == u.Target {
@@ -99,30 +87,9 @@ func dropRef(t *model.Task, u Unlink) {
 		t.Releases = slices.DeleteFunc(slices.Clone(t.Releases), func(x model.ULID) bool { return x == u.Target })
 		return
 	}
-	key := strings.TrimPrefix(u.Field, propsPrefix)
-	n := t.Props.Get(key)
-	if n == nil {
-		return
+	if rel, inverse, ok := schema.RelationOf(u.Field); ok && !inverse {
+		rel.Set(t, slices.DeleteFunc(slices.Clone(rel.Get(t)), func(x model.ULID) bool { return x == u.Target }))
 	}
-	is := func(n *yaml.Node) bool {
-		x, err := model.ParseULID(n.Value)
-		return n.Kind == yaml.ScalarNode && err == nil && x == u.Target
-	}
-	if n.Kind != yaml.SequenceNode {
-		if is(n) {
-			t.Props.Delete(key)
-		}
-		return
-	}
-	left := slices.DeleteFunc(slices.Clone(n.Content), is)
-	if len(left) == 0 {
-		t.Props.Delete(key)
-		return
-	}
-	// A new node: the old one may be the one the task's document holds.
-	nn := *n
-	nn.Content = left
-	t.Props.Set(key, &nn)
 }
 
 // cloneTask copies t deeply, through its file form.

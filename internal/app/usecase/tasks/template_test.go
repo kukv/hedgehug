@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
@@ -254,5 +255,35 @@ func TestUndoTakesTheExpansionBack(t *testing.T) {
 	}
 	if got := len(ts.TaskULIDs("me")); got != before {
 		t.Fatalf("%d tasks, want %d", got, before)
+	}
+}
+
+// A template's four relations and blocked_by go to the task made, and to its children.
+func TestAddTemplateGivesTheRelations(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	other := ts.AddProject("Other")
+	u := other.String()
+	ts.WriteAndCommit("templates/rel.md", "---\nkind: epic\ntitle: Rel\nblocked_by: ["+u+"]\ncauses: ["+u+"]\nrelates: ["+u+"]\nduplicates: ["+u+"]\nclones: ["+u+"]\n"+
+		"children:\n  - {title: Child, causes: ["+u+"], relates: ["+u+"], duplicates: ["+u+"], clones: ["+u+"]}\n---\n")
+	p := ts.AddProject("P")
+	r, err := tasks.Add(ts.Session, tasks.AddInput{Template: "rel", Parent: p.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := taskIn(t, ts, r.ULID)
+	kids := children(t, ts, root.ULID)
+	if len(kids) != 1 {
+		t.Fatalf("children = %v", titles(kids))
+	}
+	for name, x := range map[string]*model.Task{"root": root, "child": kids[0]} {
+		for _, rel := range schema.Relations {
+			if name == "child" && rel.Name == "blocked_by" {
+				continue
+			}
+			if got := rel.Get(x); !slices.Equal(got, []model.ULID{other}) {
+				t.Errorf("%s %s = %v, want [%s]", name, rel.Name, got, u)
+			}
+		}
 	}
 }

@@ -90,7 +90,7 @@ func TestDepOnAMovedTask(t *testing.T) {
 		t.Fatal(err)
 	}
 	usecasetest.MovedFixture(t, ts)
-	_, err := tasks.Dep(ts.ForStore("org-a"), "API-2", "API-1", true)
+	_, err := tasks.Dep(ts.ForStore("org-a"), "API-2", tasks.DepTargets{"blocked_by": {"API-1"}}, true)
 	wantMoved(t, ts, err, map[string]any{"store": "org-b"})
 }
 

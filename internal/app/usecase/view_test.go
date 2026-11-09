@@ -10,6 +10,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -27,7 +28,8 @@ func TestTaskViewOf(t *testing.T) {
 		x.Assignees = []string{"alice"}
 		x.BlockedBy = []model.ULID{blocker.ULID}
 		x.Props.Set("priority", scalar("high"))
-		x.Props.Set("relates", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{scalar(blocker.ULID.String())}})
+		x.Relates = []model.ULID{blocker.ULID}
+		x.Causes = []model.ULID{blocker.ULID}
 	})
 	_, ix, err := ts.Open()
 	if err != nil {
@@ -54,11 +56,15 @@ func TestTaskViewOf(t *testing.T) {
 	if v.DisplayID != task.ID || v.ParentRef != nil || len(v.FormerDisplayIDs) != 0 {
 		t.Errorf("DisplayID = %q, ParentRef = %+v, FormerDisplayIDs = %v", v.DisplayID, v.ParentRef, v.FormerDisplayIDs)
 	}
-	if len(v.PropList) != 2 || v.PropList[0].Key != "priority" || v.PropList[0].IsRef || !slices.Equal(v.PropList[0].Values, []string{"high"}) {
-		t.Errorf("PropList[0] = %+v", v.PropList)
+	if len(v.PropList) != 1 || v.PropList[0].Key != "priority" || !slices.Equal(v.PropList[0].Values, []string{"high"}) {
+		t.Errorf("PropList = %+v; want priority only: the relations are not properties", v.PropList)
 	}
-	if r := v.PropList[1]; r.Key != "relates" || !r.IsRef || len(r.Refs) != 1 || r.Refs[0].ID != blocker.ID {
-		t.Errorf("PropList[1] = %+v; want the relates taskref", r)
+	wantRef := []usecase.Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker", DisplayID: blocker.ID}}
+	if !reflect.DeepEqual(v.Relates, wantRef) || !reflect.DeepEqual(v.Causes, wantRef) {
+		t.Errorf("Relates = %+v, Causes = %+v", v.Relates, v.Causes)
+	}
+	if v.Duplicates == nil || len(v.Duplicates) != 0 || v.Clones == nil || len(v.Clones) != 0 {
+		t.Errorf("Duplicates = %#v, Clones = %#v; want empty lists", v.Duplicates, v.Clones)
 	}
 	if got, want := v.Label(), usecase.TaskLabel(ix, e); got != want {
 		t.Errorf("Label = %q; want %q", got, want)
@@ -66,8 +72,8 @@ func TestTaskViewOf(t *testing.T) {
 	if got, want := v.BlockedBy[0].Name(), usecase.RefName(ix, blocker.ULID); got != want {
 		t.Errorf("Ref.Name = %q; want %q", got, want)
 	}
-	if !reflect.DeepEqual(v.Props["relates"], []string{blocker.ULID.String()}) {
-		t.Errorf("relates = %#v; want a list", v.Props["relates"])
+	if _, ok := v.Props["relates"]; ok {
+		t.Errorf("props has relates: %#v", v.Props)
 	}
 	if !reflect.DeepEqual(v.Assignees, []string{"alice"}) || v.Labels == nil || len(v.Labels) != 0 {
 		t.Errorf("Assignees = %v, Labels = %#v", v.Assignees, v.Labels)
@@ -79,9 +85,41 @@ func TestTaskViewOf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"workspace":{"ulid":`, `"labels":[]`, `"problems":[]`, `"parent":null`, `"deleted_at":null`} {
+	for _, want := range []string{`"workspace":{"ulid":`, `"labels":[]`, `"causes":[{"ulid":`, `"duplicates":[]`, `"clones":[]`, `"problems":[]`, `"parent":null`, `"deleted_at":null`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("JSON lacks %s:\n%s", want, b)
+		}
+	}
+}
+
+// The view has a list for each relation of the table, by its name.
+func TestTaskViewOfHasEveryRelation(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	other := ts.AddTask("other", func(x *model.Task) { x.Kind = "project" })
+	task := ts.AddTask("the task", func(x *model.Task) {
+		x.Kind = "project"
+		for _, rel := range schema.Relations {
+			rel.Set(x, []model.ULID{other.ULID})
+		}
+	})
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ix.Task(task.ULID)
+	b, err := json.Marshal(usecase.TaskViewOf(ix, e))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range schema.Relations {
+		var got struct{ Refs []usecase.Ref }
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(b, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw[rel.Name], &got.Refs); err != nil || len(got.Refs) != 1 || got.Refs[0].ULID != other.ULID.String() {
+			t.Errorf("%s: %s (%v)", rel.Name, raw[rel.Name], err)
 		}
 	}
 }

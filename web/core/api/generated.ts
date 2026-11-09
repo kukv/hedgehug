@@ -117,13 +117,19 @@ export interface TaskView {
   /** @nullable */
   blocked_by: Ref[] | null;
   broken?: string;
+  /** @nullable */
+  causes: Ref[] | null;
   checklist?: Count;
   /** @nullable */
   children?: TaskView[] | null;
+  /** @nullable */
+  clones: Ref[] | null;
   context?: boolean;
   created: string;
   /** @nullable */
   deleted_at: string | null;
+  /** @nullable */
+  duplicates: Ref[] | null;
   /** @nullable */
   former_ids?: string[] | null;
   id: string;
@@ -141,6 +147,8 @@ export interface TaskView {
   project?: Ref;
   props: TaskViewProps;
   rank: string;
+  /** @nullable */
+  relates: Ref[] | null;
   releases?: PlanRef[];
   scope?: string;
   sprint?: PlanRef;
@@ -280,8 +288,14 @@ export interface BulkInputBody {
   assignees?: string[];
   /** Replaces the blockers: IDs or ULIDs */
   blocked_by?: string[];
+  /** Replaces the tasks this one causes: IDs or ULIDs */
+  causes?: string[];
+  /** Replaces the tasks this one clones: IDs or ULIDs */
+  clones?: string[];
   /** Say what would change and what it would break, and write nothing */
   dry_run?: boolean;
+  /** Replaces the tasks this one duplicates: IDs or ULIDs */
+  duplicates?: string[];
   kind?: string;
   /** Replaces the labels */
   labels?: string[];
@@ -289,6 +303,8 @@ export interface BulkInputBody {
   props?: BulkInputBodyProps;
   /** Change the tasks this query finds; give this or ulids */
   query?: string;
+  /** Replaces the tasks this one relates to: IDs or ULIDs */
+  relates?: string[];
   /** Replaces the releases: names in the workspace of the task, or ULIDs */
   releases?: string[];
   /** Replaces the repos */
@@ -562,10 +578,8 @@ export interface DoctorReport {
 }
 
 export interface PropDef {
-  inverse?: string;
   label?: string;
   multi?: boolean;
-  symmetric?: boolean;
   type: string;
   /** @nullable */
   values?: string[] | null;
@@ -976,7 +990,7 @@ export interface MoveRefView {
 }
 
 export interface MoveUnlinkView {
-  /** blocked_by, props.<name of a property>, sprint or releases */
+  /** The name of a relation (blocked_by, causes, relates, duplicates or clones), sprint or releases */
   field: string;
   target: MoveTargetView;
   task: MoveRefView;
@@ -1133,11 +1147,19 @@ export interface PatchInputBody {
   blocked_by?: string[];
   /** The body in Markdown */
   body?: string;
+  /** Replaces the tasks this one causes: IDs or ULIDs */
+  causes?: string[];
+  /** Replaces the tasks this one clones: IDs or ULIDs */
+  clones?: string[];
+  /** Replaces the tasks this one duplicates: IDs or ULIDs */
+  duplicates?: string[];
   kind?: string;
   /** Replaces the labels */
   labels?: string[];
   /** Property name to value; null clears it, a list replaces a multiple value */
   props?: PatchInputBodyProps;
+  /** Replaces the tasks this one relates to: IDs or ULIDs */
+  relates?: string[];
   /** Replaces the releases: names in the workspace of the task, or ULIDs */
   releases?: string[];
   /** Replaces the repos */
@@ -1194,16 +1216,13 @@ export const PropAddInputBodyType = {
   enum: 'enum',
   multi_enum: 'multi_enum',
   user: 'user',
-  task_ref: 'task_ref',
   url: 'url',
 } as const;
 
 export interface PropAddInputBody {
-  inverse?: string;
   label?: string;
   multi?: boolean;
   name: string;
-  symmetric?: boolean;
   type: PropAddInputBodyType;
   /** @nullable */
   values?: string[] | null;
@@ -1219,12 +1238,10 @@ export interface ValueEditBody {
 }
 
 export interface PropChangeInputBody {
-  inverse?: string;
   label?: string;
   multi?: boolean;
   /** The new name, as for a status */
   name?: string;
-  symmetric?: boolean;
   /** All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it */
   values?: ValueEditBody[];
 }
@@ -1459,15 +1476,21 @@ export interface ShowView {
   blocked_by: Ref[] | null;
   body: string;
   broken?: string;
+  /** @nullable */
+  causes: Ref[] | null;
   checklist?: Count;
   /** @nullable */
   children?: TaskView[] | null;
+  /** @nullable */
+  clones: Ref[] | null;
   /** @nullable */
   comments: CommentView[] | null;
   context?: boolean;
   created: string;
   /** @nullable */
   deleted_at: string | null;
+  /** @nullable */
+  duplicates: Ref[] | null;
   /** @nullable */
   former_ids?: string[] | null;
   /** @nullable */
@@ -1489,6 +1512,8 @@ export interface ShowView {
   rank: string;
   /** @nullable */
   referenced_by: Ref[] | null;
+  /** @nullable */
+  relates: Ref[] | null;
   releases?: PlanRef[];
   /** @nullable */
   repos: string[] | null;
@@ -4165,7 +4190,7 @@ export const getAddPropUrl = (params?: AddPropParams,) => {
 }
 
 /**
- * @summary Add a property or a relation at the end
+ * @summary Add a property at the end
  */
 export const addProp = async (propAddInputBody: PropAddInputBody,
     params?: AddPropParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
@@ -4211,7 +4236,7 @@ export const getOrderPropsUrl = (params?: OrderPropsParams,) => {
 }
 
 /**
- * @summary Put the relations, or the other properties, in order
+ * @summary Put the properties in order
  */
 export const orderProps = async (orderBody: OrderBody,
     params?: OrderPropsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
@@ -4291,7 +4316,7 @@ export const getChangePropUrl = (name: string,
 }
 
 /**
- * @summary Change a property or a relation
+ * @summary Change a property
  */
 export const changeProp = async (name: string,
     propChangeInputBody: PropChangeInputBody,

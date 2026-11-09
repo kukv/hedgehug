@@ -307,6 +307,7 @@ func checkStore(dir string) []usecase.Finding {
 	fs = slices.DeleteFunc(fs, func(f usecase.Finding) bool { return f.Check == "schema" })
 	fs = append(fs, checkWorkspaces(ix)...)
 	fs = append(fs, checkSprintsAndReleases(s, ix)...)
+	fs = append(fs, legacyFieldFindings(s, ix)...)
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ULID) {
 			if !slices.Contains(indexCodes, p.Code) {

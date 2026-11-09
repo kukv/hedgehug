@@ -36,7 +36,7 @@ func ShowAt(ss *usecase.Session, arg, at string) (usecase.ShowView, error) {
 	if err != nil {
 		return usecase.ShowView{}, err
 	}
-	data, err := s.Repo().ReadAt(commit, model.TaskPath(e.ULID))
+	data, err := readTaskAt(s, commit, e.ULID)
 	if errors.Is(err, fs.ErrNotExist) {
 		return usecase.ShowView{}, usecase.NewErr(usecase.KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
 	}

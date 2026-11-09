@@ -73,7 +73,8 @@ one (`hh workspace ls`, for example), it asks for `--store`.
 ## The store format and `hh store convert`
 
 A store records its format in `.hedgehug/store.yaml`. This version of hedgehug uses
-format 2, in which the kinds of task are fixed (see [Planning](planning.md#kinds)).
+format 3. In format 2 the kinds of task are fixed (see [Planning](planning.md#kinds)), and
+in format 3 the relations are too (see [Planning](planning.md#relations)).
 
 - A store in an **older** format does not open. Every command except `hh store convert`
   and `hh doctor` stops with `hh store convert で新しい形式にしてください`, and the browser shows the same
@@ -98,8 +99,26 @@ Nothing was written (--dry-run).
 $ hh store convert
 ```
 
+A store in format 2 converts like this. The lines are in Japanese, as the command prints them:
+
+```console
+$ hh store convert --dry-run
+Format 2 -> 3
+  props の duplicates・causes・relates・clones の値を、タスクの同名の項目へ移した（ULID の関連）: 2 件
+  culprit: 1 件を relates へ
+  相互の組 1 件（A に B・B に A の relates を、どちらも向きありの relates として残した）
+  ビュー bugs の query の relates:ME-2 は、これまで両方向に当たっていたが、これからは付けた側にだけ当たる（書き換えていない。逆方向も含めるなら related_by: も使う）
+  ビュー bugs の query を書き換えた: relates:ME-2 culprit.inverse:ME-3 → relates:ME-2 related_by:ME-3
+  schema.yaml の task_ref のプロパティを消した（値は関連の項目へ移した）: culprit
+  store.yaml の format を 2 から 3 にした
+Nothing was written (--dry-run).
+```
+
 `--dry-run` lists what each step would change and writes nothing; `--json` prints the
 same as JSON. Running it again changes nothing.
+
+The conversion is a commit of its own (`op convert`), and `hh undo` does not take it back: right after
+a conversion, `hh undo` undoes the operation before it.
 
 - A kind of your own becomes a project when it groups work at the root of a workspace, an
   epic when it groups work below, and a task when it is a work item. `--kind <old>=<new>`
@@ -108,6 +127,26 @@ same as JSON. Running it again changes nothing.
 - A task that sat at the root of a workspace and is not a project moves under a project
   named 「未分類」, made if it is not there.
 - A story, a task or a bug under a story, a task or a bug becomes a step.
+- Relations (format 2 to 3): the values of `duplicates`, `causes`, `relates` and `clones` move to the
+  field of the same name of the task. A `task_ref` property named `duplicates`, `causes`, `relates` or
+  `clones` moves to the field of that name; a `task_ref` property with any other name has its values moved to
+  `relates` (the report has one line per property). Both are removed from `schema.yaml`; the type
+  no longer exists.
+- What changes in meaning, and what is lost:
+  - `relates` has a direction now. A pair stored on both tasks (A has B, B has A) stays as two
+    `relates`; the report counts them as `相互の組`. Before, one `relates` was found from both
+    tasks; now `relates:A` finds only the tasks that point at A, and `related_by:A` the tasks A points at.
+    A view whose query has `relates:` or `relates.inverse:` is not rewritten (the report lists it); add `related_by:` if you want both ways.
+    The same goes for a `task_ref` of your own that had `symmetric: true`: its key and its `.inverse:` matched both ways, so they are listed, not rewritten.
+  - `<name>.inverse:` in a view's query becomes the name of the other way (`causes.inverse:` becomes
+    `caused_by:`, `blocked_by.inverse:` becomes `blocks:`); the `.inverse:` of a `task_ref` of your own (one that was not symmetric) becomes `related_by:`, and its key becomes `relates:`.
+  - A relation is not a column, a sort or a group of a view, so the report lists what was taken out of
+    `table.columns`, `sort` and `group`.
+  - A value that is not the ULID of a task stops the conversion with `convert.bad_value`, listing the
+    tasks and values. Fix them in the files, or give `--drop-bad-values` to drop them; each one is then
+    listed in the report. A value that points at a task that does not exist or is deleted, or at the task itself, moves as it is.
+  - A property of your own that is not a `task_ref` and is named `duplicates`, `causes`, `relates` or
+    `clones` stops the conversion with `convert.prop_name_taken`, which lists the names and types. See below.
 - `--store <name>` picks the store.
 
 When another clone has already converted the remote, `hh store convert` on a clone with
@@ -115,6 +154,19 @@ no unpushed commits fast-forwards it to the remote, and does not convert anythin
 that still has unpushed commits has its own changes converted first; see
 [Sync](sync.md#when-the-remote-is-in-a-newer-format). When the remote is at an intermediate
 format, the clone is converted to that format, synced, and then given the remaining steps.
+
+### A property of your own named like a relation
+
+A store in format 2 cannot be edited with `hh` (every command except `hh store convert` and `hh doctor`
+stops), so fix it by hand. In the store's folder (`hh store list` shows where it is):
+
+1. In `schema.yaml`, rename the property under `props:` (`causes` to `crash_cause`, say).
+2. In the files under `tasks/`, rename the same key under `props:` of each task that has it.
+3. Commit (`git add -A && git commit -m "rename properties"`), then run `hh store convert` again.
+
+A property of your own named like the other way (`blocks`, `caused_by`, `related_by`, `duplicated_by` or
+`cloned_by`) does not stop the conversion. It still works, but `hh doctor` warns (`prop_name.query_key`), because the key of a
+query would mean the relation: rename it the same way, or with `hh schema migrate prop` once the store is converted.
 
 ### When the remote has changes in an older format
 
@@ -140,6 +192,13 @@ them. If it happened, find them with `hh doctor`: the findings with code `task.u
 (`kind: unknown kind "sprint"`) and `task.placement` (`parent: a task cannot be placed under root`)
 name the task. Open each with `hh edit <id>` and change `kind:` to one of the fixed kinds, or
 `parent:` to a task that can hold it (a project at the root, for example), then run `hh doctor` again.
+
+The same goes for the relations. A clone from before format 3 keeps writing `duplicates`, `causes`,
+`relates` and `clones` under `props:`, and those are not relations of the task
+in the new format. `hh doctor` reports them as `task.legacy_field`, and `hh doctor --fix` moves
+them to the fields of the task (see [Maintenance](maintenance.md#check-a-store-hh-doctor)).
+A `task_ref` of your own is not one of the four names: `hh doctor` does not report it and `--fix` does
+not move it. Open the task with `hh edit <id>` and move the values to `relates:`.
 
 ## Move a task to another store
 

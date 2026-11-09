@@ -34,6 +34,7 @@ const violationLabels: Record<string, string> = {
   required: "必須の項目が空です",
   missing_ref: "参照先がありません",
   cycle: "循環しています",
+  "ref.self": "自分自身は指せません",
 };
 
 // violationLines writes the violations of an error one by one: the objects of schema.violation,
@@ -46,7 +47,9 @@ export function violationLines(a: Args): string[] {
     const x = (v ?? {}) as Record<string, unknown>;
     const label = violationLabels[String(x.code)] ?? String(x.code ?? "");
     const field = x.field ? `（${String(x.field)}）` : "";
-    return `${label}${field}: ${String(x.message ?? "")}`;
+    const message = String(x.message ?? "");
+    // The server's own words may be the label already (ref.self): say them once.
+    return message === label ? `${label}${field}` : `${label}${field}: ${message}`;
   });
 }
 
@@ -154,7 +157,6 @@ const messages: Record<string, Make> = {
   "schema.not_defined": () => "定義が見つかりません。画面を読み込み直してください",
   "schema.order_stale": () =>
     "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
-  "schema.not_task_ref": () => "複数・逆方向・双方向は関連だけの設定です",
   "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
   "schema.value_invalid": () =>
     "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
@@ -195,6 +197,9 @@ const messages: Record<string, Make> = {
         return "ワークスペースにまだタスクがあるため取り消せません。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください";
     }
   },
+
+  "undo.unsupported": () =>
+    "形式を上げる前の schema.yaml とビューは戻せません。変えるときは hh schema や hh view を使ってください",
 
   // comments
   "comment.not_found": (a) =>

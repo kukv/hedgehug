@@ -10,27 +10,12 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
-
-// newRefStoreAt is newStoreAt with a task_ref property "rel" in the schema.
-func newRefStoreAt(t *testing.T, name, prefix string) config.StoreEntry {
-	t.Helper()
-	sc := schema.Default()
-	sc.Props = append(sc.Props, schema.Prop{Name: "rel", Type: schema.TypeTaskRef})
-	dir := filepath.Join(t.TempDir(), name)
-	ws := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix}
-	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, mounttest.Author, "", time.Now); err != nil {
-		t.Fatal(err)
-	}
-	return config.StoreEntry{Name: name, Path: dir}
-}
 
 // commitTask writes task over its file and commits it directly, as a hand
 // edit or a sync would, which the store's own writes refuse for a reference
@@ -54,26 +39,29 @@ func commitTask(t *testing.T, e config.StoreEntry, task *model.Task) {
 	}
 }
 
-func refScalar(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Value: v} }
-
-func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
+func TestCrossRefsFindsParentAndTheFiveRelations(t *testing.T) {
 	t.Parallel()
-	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
 	target := mounttest.PutTasks(t, b, 1, nil)[0]
-	from := mounttest.PutTasks(t, a, 3, nil)
+	fields := []string{"parent"}
+	for _, rel := range schema.Relations {
+		fields = append(fields, rel.Name)
+	}
+	from := mounttest.PutTasks(t, a, len(fields), nil)
 	from[0].Parent = &target.ULID
-	from[1].BlockedBy = []model.ULID{target.ULID}
-	from[2].Props = model.Fields{{Key: "rel", Value: refScalar(target.ULID.String())}}
+	for i, rel := range schema.Relations {
+		rel.Set(from[i+1], []model.ULID{target.ULID})
+	}
 	for _, x := range from {
 		commitTask(t, a, x)
 	}
 	set := usecasetest.OpenSet(t, a, b)
 	for _, name := range []string{"", "org-a"} {
 		got, err := usecase.CrossRefs(set, name)
-		if err != nil || len(got) != 3 {
-			t.Fatalf("CrossRefs(%q) = %+v, %v; want 3", name, got, err)
+		if err != nil || len(got) != len(fields) {
+			t.Fatalf("CrossRefs(%q) = %+v, %v; want %d", name, got, err, len(fields))
 		}
-		for i, field := range []string{"parent", "blocked_by", "rel"} {
+		for i, field := range fields {
 			g := got[i]
 			if g.Field != field || g.From.ULID != from[i].ULID || g.From.ID != from[i].ID || g.From.Title != from[i].Title || g.From.Store.Name != "org-a" ||
 				g.Target.ULID != target.ULID || g.Target.ID != "WEB-1" || g.Target.RawID() != "WEB-1" || g.Target.Display != "WEB-1" || g.Target.Store.Name != "org-b" {
@@ -88,7 +76,7 @@ func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
 
 func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
 	t.Parallel()
-	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
 	gone := model.NewULID()
 	deleted := mounttest.PutTasks(t, b, 1, nil)[0]
 	now := time.Now()
@@ -113,7 +101,7 @@ func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
 
 func TestCrossRefsSeesAWriteAfterTheIndexWasOpened(t *testing.T) {
 	t.Parallel()
-	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
 	target := mounttest.PutTasks(t, b, 1, nil)[0]
 	from := mounttest.PutTasks(t, a, 1, nil)[0]
 	set := usecasetest.OpenSet(t, a, b)

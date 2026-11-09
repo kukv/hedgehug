@@ -121,21 +121,16 @@ type ref struct {
 	ulid  model.ULID
 }
 
-// refs returns the references of e: its parent, its blockers and its
-// task_ref properties, by the store's schema.
+// refs returns the references of e: its parent and the tasks it points at
+// through its five relations.
 func (ix *Index) refs(e *Entry) []ref {
 	var out []ref
 	if e.Parent != nil {
 		out = append(out, ref{"parent", *e.Parent})
 	}
-	for _, ulid := range e.BlockedBy {
-		out = append(out, ref{"blocked_by", ulid})
-	}
-	for _, p := range e.Props {
-		if def, ok := ix.sc.Prop(p.Key); ok && def.Type == schema.TypeTaskRef {
-			for _, ulid := range e.Targets(p.Key) {
-				out = append(out, ref{p.Key, ulid})
-			}
+	for _, rel := range schema.Relations {
+		for _, ulid := range e.Targets(rel.Name) {
+			out = append(out, ref{rel.Name, ulid})
 		}
 	}
 	return out
@@ -199,9 +194,8 @@ func hasKey[K comparable, V any](m map[K]V, k K) bool {
 	return ok
 }
 
-// Reverse returns the tasks that point at ulid through rel: blocked_by or a
-// task_ref property. For a symmetric property it also returns the tasks ulid
-// points at. Each task appears once, in ULID order.
+// Reverse returns the tasks that point at ulid through the relation rel, by
+// its name. Each task appears once, in ULID order.
 func (ix *Index) Reverse(ulid model.ULID, rel string) []*Entry {
 	seen := map[model.ULID]bool{}
 	var out []*Entry
@@ -214,13 +208,6 @@ func (ix *Index) Reverse(ulid model.ULID, rel string) []*Entry {
 	for _, e := range ix.tasks {
 		if slices.Contains(e.Targets(rel), ulid) {
 			add(e)
-		}
-	}
-	if p, ok := ix.sc.Prop(rel); ok && p.Symmetric {
-		if self := ix.tasks[ulid]; self != nil {
-			for _, to := range self.Targets(rel) {
-				add(ix.tasks[to])
-			}
 		}
 	}
 	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ULID.String(), b.ULID.String()) })

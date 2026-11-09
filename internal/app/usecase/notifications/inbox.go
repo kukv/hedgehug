@@ -8,14 +8,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -421,6 +426,15 @@ func InboxRevertOf(ss *usecase.Session, stores []InboxStore, u model.ULID) (usec
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
+	if key, ok := strings.CutPrefix(d.Field, "props."); ok {
+		was, err := wasRelation(s, it.Commit, key)
+		if err != nil {
+			return usecase.TaskResult{}, notRevertible(fmt.Errorf("%s: the store of the item cannot be read: %w", d.Field, err))
+		}
+		if was {
+			return usecase.TaskResult{}, notRevertible(relationsFixed(d.Field))
+		}
+	}
 	e, ok := ix.Task(it.Task)
 	if !ok {
 		return usecase.TaskResult{}, usecase.NewErr(usecase.KindNotFound, "task.gone", fmt.Errorf("the task of inbox item %s (%s) is gone: %w", u, it.Task, store.ErrNotFound), "id", it.Task.String())
@@ -699,6 +713,11 @@ var refused = map[string]string{
 // revertField puts the value raw, as JSON, back into the field of t, as
 // hedgehug set would write it. The parent is the job of revertParent.
 func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	// An item that an older hedgehug wrote names a relation as a property
+	// (props.relates); the relations are fixed fields of the task now.
+	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyRelationNames, name) {
+		return notRevertible(relationsFixed(field))
+	}
 	switch field {
 	case "title", "kind", "status":
 		var v string
@@ -730,6 +749,14 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 		return revertSet(&t.Repos, field, raw)
 	case "blocked_by":
 		return revertSet(&t.BlockedBy, field, raw)
+	case "causes":
+		return revertSet(&t.Causes, field, raw)
+	case "relates":
+		return revertSet(&t.Relates, field, raw)
+	case "duplicates":
+		return revertSet(&t.Duplicates, field, raw)
+	case "clones":
+		return revertSet(&t.Clones, field, raw)
 	case "releases":
 		return revertSet(&t.Releases, field, raw)
 	case "links":
@@ -839,6 +866,53 @@ func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schem
 		}
 	}
 	return nil
+}
+
+// relationsFixed says why an item of a relation from before format 3 is not
+// reverted: the relations are fields of the task now, set with hedgehug dep.
+func relationsFixed(field string) error {
+	return fmt.Errorf("%s was a relation before the relations were fixed, and cannot be reverted: %w; add the value back with hedgehug dep", field, errNotRevertible)
+}
+
+// wasRelation is whether the property key was a relation in the store as the
+// commit had it: the commit is of a format before the relations were fixed, and
+// the key is one of the four names, or a task_ref in the schema.yaml of the
+// commit (read as it is, for the schema no longer has the type). A commit whose
+// format cannot be read, or whose schema.yaml cannot, is an error: the revert
+// does not guess.
+func wasRelation(s *store.Store, commit, key string) (bool, error) {
+	if !plumbing.IsHash(commit) {
+		return false, fmt.Errorf("the commit %q of the item is not a hash", commit)
+	}
+	h := plumbing.NewHash(commit)
+	r := s.Repo()
+	at := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
+	f, err := at.Format()
+	if err != nil {
+		return false, err
+	}
+	if f >= 3 {
+		return false, nil
+	}
+	if slices.Contains(upgrade.LegacyRelationNames, key) {
+		return true, nil
+	}
+	raw, err := r.ReadAt(h, schema.Path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil // no schema, no task_ref
+	}
+	if err != nil {
+		return false, err
+	}
+	var doc struct {
+		Props map[string]struct {
+			Type string `yaml:"type"`
+		} `yaml:"props"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return false, fmt.Errorf("%s of %s: %w", schema.Path, commit, err)
+	}
+	return schema.PropType(doc.Props[key].Type) == upgrade.TypeTaskRef, nil
 }
 
 // propText is the text hedgehug set reads for the scalar x of the property

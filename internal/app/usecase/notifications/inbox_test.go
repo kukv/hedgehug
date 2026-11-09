@@ -676,6 +676,12 @@ func TestRevertField(t *testing.T) {
 	if err := notifications.RevertField(task, "blocked_by", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || !slices.Equal(task.BlockedBy, []model.ULID{u}) {
 		t.Errorf("blocked_by = %v, %v", task.BlockedBy, err)
 	}
+	for _, rel := range schema.Relations {
+		x := &model.Task{}
+		if err := notifications.RevertField(x, rel.Name, json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || !slices.Equal(rel.Get(x), []model.ULID{u}) {
+			t.Errorf("%s = %v, %v", rel.Name, rel.Get(x), err)
+		}
+	}
 	if err := notifications.RevertField(task, "sprint", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || task.Sprint == nil || *task.Sprint != u {
 		t.Errorf("sprint = %v, %v", task.Sprint, err)
 	}
@@ -687,6 +693,29 @@ func TestRevertField(t *testing.T) {
 	}
 	if err := notifications.RevertField(task, "links", json.RawMessage(`"x"`), sc, resolve); err == nil {
 		t.Errorf("a link that is no link was accepted")
+	}
+}
+
+// An item that was recorded before the relations were fixed names a relation as
+// a property (props.relates, or a task_ref of the store's own): it is not
+// reverted, and nothing is changed.
+func TestRevertFieldRefusesARelationFromBeforeFormat3(t *testing.T) {
+	t.Parallel()
+	sc := schema.Default()
+	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
+	a, b := model.NewULID(), model.NewULID()
+	for _, name := range []string{"duplicates", "causes", "relates", "clones"} {
+		for _, raw := range []string{`"` + a.String() + `"`, `["` + a.String() + `","` + b.String() + `"]`} {
+			task := &model.Task{}
+			err := notifications.RevertField(task, "props."+name, json.RawMessage(raw), sc, resolve)
+			usecasetest.WantErr(t, err, usecase.KindInvalid, "inbox.not_revertable")
+			if !strings.Contains(err.Error(), "dep") {
+				t.Errorf("props.%s: %v", name, err)
+			}
+			if len(task.Props) != 0 || len(task.Duplicates)+len(task.Causes)+len(task.Relates)+len(task.Clones) != 0 {
+				t.Errorf("props.%s changed the task: %+v", name, task)
+			}
+		}
 	}
 }
 

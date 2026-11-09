@@ -21,6 +21,30 @@ story、task、bug は同じ階層の兄弟です。story の下に task は置�
 
 進捗は、project や epic の下の story、task、bug を数えます。step は数えず、親の行に完了した数を `2/3` のように出します（画面と `hh ls --tree` の行、`hh show` の `steps` の行）。
 
+## 関連
+
+タスクは、同じ Store のほかのタスクを、5 つの関連で指せます。関連も種類と同じく固定で、足したり、名前を変えたり、消したりはできません。どの関連にも向きがあります。付けた側のタスクには関連の名前が、付けられた側のタスクには逆方向の名前が出ます。
+
+| 関連 | 逆方向 | 使いどころ |
+|---|---|---|
+| `blocked_by` | `blocks` | 作業の順番。これは、あれが終わるまで待つ |
+| `causes` | `caused_by` | 問題とその結果。すでに起きたことについて使う |
+| `relates` | `related_by` | 2 つのタスクに関係がある |
+| `duplicates` | `duplicated_by` | 同じ内容の重複。片方を閉じるときに使う |
+| `clones` | `cloned_by` | 別のタスクの複製として作ったタスク |
+
+`hh dep add` は、どの関連も受け取ります。1 つのフラグに複数のタスクを渡せます（フラグを繰り返すか、コンマで区切ります）。全部が 1 コミットで書かれます。`hh dep rm` も同じフラグを取ります。
+
+```console
+$ hh dep add WEB-2 --causes WEB-3 --clones WEB-1
+Updated WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP) Fix the logout bug
+$ hh dep rm WEB-2 --clones WEB-1
+```
+
+`hh show WEB-3` は、そのタスク自身の関連を出し、`Related:` の下に、そのタスクを指している関連を `Caused by` のように出します。ブラウザの詳細も、関連の節で同じものを出し、そこで追加と削除ができます。自分自身は指せません（`ref.self`）。`blocked_by` は、これまでどおり循環も断ります。
+
+クエリのキーは、関連の名前か、逆方向の名前です。`hh ls causes:WEB-3` は `WEB-3` を引き起こしたタスク（自分の `causes` に `WEB-3` を持つタスク）を、`hh ls caused_by:WEB-2` は `WEB-2` が引き起こしたタスクを探します。これまでの `causes.inverse:` はなくなり、このキーを書くと、エラーが `caused_by:` を案内します。`relates` にも向きがあるので、`relates:WEB-2` は `WEB-2` を指しているタスクだけを探します。`WEB-2` に関係のあるものをすべて探すときは、`hh ls relates:WEB-2` と `hh ls related_by:WEB-2` の 2 回で求めます。クエリに OR はありません。関連は、ビューの列にも、並べ替えにも、グループにもなりません。
+
 ## スプリント
 
 スプリントの状態は、`planned`、`active`、`closed` の順に進みます。

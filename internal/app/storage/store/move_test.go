@@ -53,22 +53,21 @@ func compareUnlink(a, b Unlink) int {
 
 func TestUnlinks(t *testing.T) {
 	t.Parallel()
-	sc := schema.Default()
 	a, b, c, x, y := newTask("a"), newTask("b"), newTask("c"), newTask("x"), newTask("y")
 	a.BlockedBy = []model.ULID{b.ULID, x.ULID} // one inside M, one out
 	b.BlockedBy = []model.ULID{x.ULID, x.ULID}
-	c.Props.Set("relates", ulidList(y.ULID, a.ULID))
+	c.Relates = []model.ULID{y.ULID, a.ULID}
 	x.BlockedBy = []model.ULID{a.ULID} // from the rest into M
-	y.Props.Set("duplicates", ulidList(c.ULID))
+	y.Duplicates = []model.ULID{c.ULID}
 	y.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "high"})
 	moved, rest := []*model.Task{a, b, c}, []*model.Task{x, y}
-	got := Unlinks(sc, moved, rest)
+	got := Unlinks(moved, rest)
 	want := []Unlink{
 		{a.ULID, "blocked_by", x.ULID},
 		{b.ULID, "blocked_by", x.ULID},
-		{c.ULID, "props.relates", y.ULID},
+		{c.ULID, "relates", y.ULID},
 		{x.ULID, "blocked_by", a.ULID},
-		{y.ULID, "props.duplicates", c.ULID},
+		{y.ULID, "duplicates", c.ULID},
 	}
 	slices.SortFunc(want, compareUnlink)
 	if !slices.Equal(got, want) {
@@ -77,7 +76,7 @@ func TestUnlinks(t *testing.T) {
 	if s := got[0].String(); s != got[0].Task.String()+" "+got[0].Field+" "+got[0].Target.String() {
 		t.Errorf("String = %q", s)
 	}
-	if n := len(Unlinks(sc, moved, nil)); n != 0 {
+	if n := len(Unlinks(moved, nil)); n != 0 {
 		t.Errorf("no rest gave %d unlinks", n)
 	}
 }
@@ -111,7 +110,7 @@ func newMoveFixture(t *testing.T, srcPrefix, dstPrefix string, dstSchema *schema
 	f.c.Kind, f.g.Kind = "task", "step"
 	f.p.BlockedBy = []model.ULID{f.out.ULID}
 	f.c.BlockedBy = []model.ULID{f.g.ULID}
-	f.g.Props.Set("relates", ulidList(f.out.ULID))
+	f.g.Relates = []model.ULID{f.out.ULID}
 	mustPut(t, f.src, f.out, f.p, f.c, f.g)
 	f.out.BlockedBy = []model.ULID{f.g.ULID}
 	mustPut(t, f.src, f.out)
@@ -143,7 +142,7 @@ func newMoveFixture(t *testing.T, srcPrefix, dstPrefix string, dstSchema *schema
 		}
 	}
 	f.moved = []*model.Task{f.p, f.c, f.g}
-	f.unlinked = Unlinks(f.src.Schema(), f.moved, []*model.Task{f.out})
+	f.unlinked = Unlinks(f.moved, []*model.Task{f.out})
 	if len(f.unlinked) != 3 { // P to the outsider, G to the outsider, the outsider to G
 		t.Fatalf("unlinked = %v", f.unlinked)
 	}
@@ -233,7 +232,7 @@ func TestMoveIn(t *testing.T) {
 	if !slices.Equal(c.BlockedBy, []model.ULID{g.ULID}) {
 		t.Errorf("C blocked_by = %v, want [G]", c.BlockedBy)
 	}
-	if g.Props.Get("relates") != nil {
+	if len(g.Relates) != 0 {
 		t.Error("G still relates to the outsider")
 	}
 	for rel, want := range f.notes {
@@ -422,10 +421,10 @@ func TestMoveOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the outsider also relates to P through a property
-	f.out.Props.Set("relates", ulidList(f.p.ULID))
+	f.out.Relates = []model.ULID{f.p.ULID}
 	mustPut(t, f.src, f.out)
 	f.out, _ = f.src.Task(f.out.ULID)
-	f.unlinked = Unlinks(f.src.Schema(), f.moved, []*model.Task{f.out})
+	f.unlinked = Unlinks(f.moved, []*model.Task{f.out})
 
 	if err := f.moveOut(scoped); err != nil {
 		t.Fatal(err)
@@ -453,8 +452,8 @@ func TestMoveOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.BlockedBy) != 0 || out.Props.Get("relates") != nil {
-		t.Errorf("the outsider keeps references: %v %v", out.BlockedBy, out.Props)
+	if len(out.BlockedBy) != 0 || len(out.Relates) != 0 {
+		t.Errorf("the outsider keeps references: %v %v", out.BlockedBy, out.Relates)
 	}
 	n, err := f.src.Numbers()
 	if err != nil {
@@ -691,24 +690,23 @@ func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
 	l.Release()
 }
 
-// A property that lists several tasks loses only the one cut.
-func TestMoveInKeepsTheOtherTargetsOfAProperty(t *testing.T) {
+// A relation that lists several tasks loses only the one cut.
+func TestMoveInKeepsTheOtherTargetsOfARelation(t *testing.T) {
 	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
-	f.c.Props.Set("relates", ulidList(f.out.ULID, f.g.ULID))
+	f.c.Relates = []model.ULID{f.out.ULID, f.g.ULID}
 	mustPut(t, f.src, f.c)
 	f.c, _ = f.src.Task(f.c.ULID)
 	f.moved = []*model.Task{f.p, f.c, f.g}
-	f.unlinked = Unlinks(f.src.Schema(), f.moved, []*model.Task{f.out})
+	f.unlinked = Unlinks(f.moved, []*model.Task{f.out})
 	if err := f.moveIn(f.in()); err != nil {
 		t.Fatal(err)
 	}
 	c, _ := f.dst.Task(f.c.ULID)
-	n := c.Props.Get("relates")
-	if n == nil || len(n.Content) != 1 || n.Content[0].Value != f.g.ULID.String() {
-		t.Errorf("relates = %+v, want only G", n)
+	if !slices.Equal(c.Relates, []model.ULID{f.g.ULID}) {
+		t.Errorf("relates = %v, want only G", c.Relates)
 	}
-	if got := f.c.Props.Get("relates"); len(got.Content) != 2 {
+	if len(f.c.Relates) != 2 {
 		t.Error("the caller's task changed")
 	}
 }
@@ -734,7 +732,7 @@ func TestMoveInTakesOffSprintAndReleases(t *testing.T) {
 	mustPut(t, f.src, f.c)
 	f.c, _ = f.src.Task(f.c.ULID)
 	f.moved = []*model.Task{f.p, f.c, f.g}
-	f.unlinked = Unlinks(f.src.Schema(), f.moved, []*model.Task{f.out})
+	f.unlinked = Unlinks(f.moved, []*model.Task{f.out})
 	var fields []string
 	for _, u := range f.unlinked {
 		if u.Task == f.c.ULID {

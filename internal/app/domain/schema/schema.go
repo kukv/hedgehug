@@ -44,24 +44,21 @@ const (
 	TypeEnum      PropType = "enum"
 	TypeMultiEnum PropType = "multi_enum"
 	TypeUser      PropType = "user"
-	TypeTaskRef   PropType = "task_ref"
 	TypeURL       PropType = "url"
 )
 
 // PropTypes lists every property type.
 var PropTypes = []PropType{
 	TypeText, TypeNumber, TypeBool, TypeDate, TypeDatetime, TypeDuration,
-	TypeEnum, TypeMultiEnum, TypeUser, TypeTaskRef, TypeURL,
+	TypeEnum, TypeMultiEnum, TypeUser, TypeURL,
 }
 
 type Prop struct {
-	Name      string   `yaml:"-"`
-	Type      PropType `yaml:"type"`
-	Values    []string `yaml:"values,omitempty"`
-	Multi     bool     `yaml:"multi,omitempty"`
-	Label     string   `yaml:"label,omitempty"`
-	Inverse   string   `yaml:"inverse,omitempty"`
-	Symmetric bool     `yaml:"symmetric,omitempty"`
+	Name   string   `yaml:"-"`
+	Type   PropType `yaml:"type"`
+	Values []string `yaml:"values,omitempty"`
+	Multi  bool     `yaml:"multi,omitempty"`
+	Label  string   `yaml:"label,omitempty"`
 }
 
 // Props keeps properties in file order. In YAML it is a mapping from name
@@ -241,9 +238,6 @@ func Default() *Schema {
 			{Name: "due", Type: TypeDate, Label: "期限"},
 			{Name: "estimate", Type: TypeDuration, Label: "見積もり"},
 			{Name: "points", Type: TypeNumber, Label: "ポイント"},
-			{Name: "duplicates", Type: TypeTaskRef, Multi: true, Label: "Duplicates", Inverse: "Duplicated by"},
-			{Name: "causes", Type: TypeTaskRef, Multi: true, Label: "Causes", Inverse: "Caused by"},
-			{Name: "relates", Type: TypeTaskRef, Multi: true, Label: "Relates to", Symmetric: true},
 		},
 	}
 }

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -192,7 +190,7 @@ func crossStore(storeName, id string) error {
 		"store", storeName, "id", id)
 }
 
-// ResolveRef resolves a second id (a blocker, a parent, a task_ref value)
+// ResolveRef resolves a second id (a parent, a task of a relation)
 // within the store of ix. An input not in the store that some other mounted
 // store has is refused: KindInvalid, ref.cross_store, Args "store", "id".
 // A "<store>:" naming this store is taken off; naming another store is
@@ -274,18 +272,17 @@ func idOrULID(e *index.Entry) string {
 	return e.ULID.String()
 }
 
-// CheckEditRefs refuses a blocker or task_ref value the edit t adds over old
+// CheckEditRefs refuses a task of a relation the edit t adds over old
 // (nil: every reference counts) when the task is in another mounted store.
 // One that is nowhere is left to the store's own check.
 func (ss *Session) CheckEditRefs(ix *index.Index, old, t *model.Task) error {
 	had := map[model.ULID]bool{}
-	sc := ix.Schema()
 	if old != nil {
-		for _, u := range editRefs(old, sc) {
+		for _, u := range editRefs(old) {
 			had[u] = true
 		}
 	}
-	for _, u := range editRefs(t, sc) {
+	for _, u := range editRefs(t) {
 		if had[u] {
 			continue
 		}
@@ -300,26 +297,11 @@ func (ss *Session) CheckEditRefs(ix *index.Index, old, t *model.Task) error {
 	return nil
 }
 
-// editRefs are the blockers and task_ref values of t.
-func editRefs(t *model.Task, sc *schema.Schema) []model.ULID {
-	out := append([]model.ULID(nil), t.BlockedBy...)
-	for _, f := range t.Props {
-		p, ok := sc.Prop(f.Key)
-		if !ok || p.Type != schema.TypeTaskRef || f.Value == nil {
-			continue
-		}
-		items := []*yaml.Node{f.Value}
-		if f.Value.Kind == yaml.SequenceNode {
-			items = f.Value.Content
-		}
-		for _, n := range items {
-			if n.Kind != yaml.ScalarNode {
-				continue
-			}
-			if u, err := model.ParseULID(n.Value); err == nil {
-				out = append(out, u)
-			}
-		}
+// editRefs are the tasks t points at through its five relations.
+func editRefs(t *model.Task) []model.ULID {
+	var out []model.ULID
+	for _, rel := range schema.Relations {
+		out = append(out, rel.Get(t)...)
 	}
 	return out
 }

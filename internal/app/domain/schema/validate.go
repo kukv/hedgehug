@@ -27,6 +27,9 @@ const (
 	// store, which the checks here do not see.
 	CodeMissingRef = "missing_ref"
 	CodeCycle      = "cycle"
+	// CodeSelfRef is a relation other than blocked_by that points at its
+	// own task; blocked_by pointing at itself is a cycle.
+	CodeSelfRef = "ref.self"
 )
 
 // Violation is a way a task breaks its schema. Writes refuse violations;
@@ -176,8 +179,6 @@ func checkScalar(p Prop, n *yaml.Node) error {
 		if !userRE.MatchString(v) {
 			err = fmt.Errorf("%q is not <host>/<login>", v)
 		}
-	case TypeTaskRef:
-		_, err = model.ParseULID(v)
 	case TypeURL:
 		u, perr := url.Parse(v)
 		if perr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

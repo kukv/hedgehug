@@ -36,7 +36,9 @@ type Finding struct {
 	// Code names the kind of finding and Args are the values its message
 	// names, in order, so that the GUI can say it in its own words. A
 	// finding that passes on the error of a library has that error as its
-	// last arg.
+	// last arg. task.legacy_field is the exception: after the field and the
+	// message come why --fix leaves the task (conflict, bad_value, or "") and
+	// then the names of the relations that keep it.
 	Code string   `json:"code,omitempty"`
 	Args []string `json:"args,omitempty"`
 }

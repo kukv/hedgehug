@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +52,7 @@ func TestShow(t *testing.T) {
 		"due         2026-11-01",
 		"labels      ui",
 		"Related:",
-		"blocks      " + label(waiting) + " Waiting",
+		"Blocks      " + label(waiting) + " Waiting",
 		"The body.",
 		"Comments:",
 		"github.com/alice",
@@ -201,34 +200,63 @@ func TestShowDeleted(t *testing.T) {
 	}
 }
 
-func TestShowInverseLabel(t *testing.T) {
+// show lists the relations a task has by their names, and the tasks that
+// point at it under the name of the other direction, with its display name.
+func TestShowRelations(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	te.writeSchemaFile(func(sc *schema.Schema) {
-		i := slices.IndexFunc(sc.Props, func(p schema.Prop) bool { return p.Name == "causes" })
-		sc.Props[i].Inverse = "起因している"
-	})
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "causes+="+other.ID)
-	out := te.ok("show", other.ID)
-	// The label is wider than the column: one space follows it.
-	if want := "  起因している " + label(a) + " A"; !strings.Contains(out, want) {
-		t.Errorf("show does not contain %q:\n%s", want, out)
+	b := te.addJSON("B", "-p", "relates+="+other.ID)
+	out := te.ok("show", a.ID)
+	if want := "  causes      " + label(other) + " Other"; !strings.Contains(out, want) {
+		t.Errorf("show of A does not contain %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "  relates ") || strings.Contains(out, "  clones ") {
+		t.Errorf("show of A has a relation line for an empty relation:\n%s", out)
+	}
+	out = te.ok("show", other.ID)
+	for _, want := range []string{"  Caused by   " + label(a) + " A", "  Related by  " + label(b) + " B"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("show of Other does not contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Blocks ") || strings.Contains(out, "Duplicated by") {
+		t.Errorf("show of Other has a reverse line with no value:\n%s", out)
+	}
+	if want := "  blocked_by  -"; !strings.Contains(out, want) {
+		t.Errorf("show of Other lacks the blocked_by line %q:\n%s", want, out)
 	}
 }
 
-func TestShowWideLabel(t *testing.T) {
+// show prints every relation of the table: the task that holds it by the name
+// of the relation, the task it points at by the display name of the other
+// direction.
+func TestShowEveryRelation(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	te.writeSchemaFile(func(sc *schema.Schema) {
-		i := slices.IndexFunc(sc.Props, func(p schema.Prop) bool { return p.Name == "relates" })
-		sc.Props[i].Label = "関連"
-	})
+	target := te.addJSON("Target")
+	pad := func(k string) string { return "  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " }
+	for _, rel := range schema.Relations {
+		holder := te.addJSON("Holder "+rel.Name, "-p", rel.Name+"+="+target.ID)
+		if out := te.ok("show", holder.ID); !strings.Contains(out, pad(rel.Name)+label(target)+" Target") {
+			t.Errorf("show of the holder of %s lacks its line:\n%s", rel.Name, out)
+		}
+		if out := te.ok("show", target.ID); !strings.Contains(out, pad(rel.InverseLabel)+label(holder)+" Holder "+rel.Name) {
+			t.Errorf("show of the target lacks %s:\n%s", rel.InverseLabel, out)
+		}
+	}
+}
+
+// A display name wider than the column (Duplicated by is 13 columns, the
+// column 12) is followed by one space.
+func TestShowWideReverseLabel(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
 	other := te.addJSON("Other")
-	a := te.addJSON("A", "-p", "relates+="+other.ID)
+	a := te.addJSON("A", "-p", "duplicates+="+other.ID)
 	out := te.ok("show", other.ID)
-	// 関連 is 4 columns wide; the values start at column 14, as after ulid.
-	if want := "  関連        " + label(a) + " A"; !strings.Contains(out, want) {
+	if want := "  Duplicated by " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
 	if want := "  ulid        " + other.ULID; !strings.Contains(out, want) {

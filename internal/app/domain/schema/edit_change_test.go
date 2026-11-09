@@ -218,11 +218,6 @@ func TestDefaultLabels(t *testing.T) {
 	if got := labelsOf(Kinds, func(x KindDef) string { return x.Label }); !slices.Equal(got, []string{"Project", "Epic", "Story", "Task", "Bug", "Step"}) {
 		t.Errorf("kinds = %v", got)
 	}
-	for name, want := range map[string][2]string{"duplicates": {"Duplicates", "Duplicated by"}, "causes": {"Causes", "Caused by"}, "relates": {"Relates to", ""}} {
-		if p, _ := s.Prop(name); p.Label != want[0] || p.Inverse != want[1] {
-			t.Errorf("%s = %q / %q", name, p.Label, p.Inverse)
-		}
-	}
 	if p, _ := s.Prop("priority"); p.Label != "優先度" {
 		t.Errorf("priority label = %q", p.Label)
 	}

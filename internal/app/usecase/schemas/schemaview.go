@@ -29,12 +29,10 @@ type StatusDef struct {
 
 // PropDef is a property of the schema.
 type PropDef struct {
-	Type      string   `json:"type"`
-	Values    []string `json:"values,omitempty"`
-	Multi     bool     `json:"multi,omitempty"`
-	Label     string   `json:"label,omitempty"`
-	Inverse   string   `json:"inverse,omitempty"`
-	Symmetric bool     `json:"symmetric,omitempty"`
+	Type   string   `json:"type"`
+	Values []string `json:"values,omitempty"`
+	Multi  bool     `json:"multi,omitempty"`
+	Label  string   `json:"label,omitempty"`
 }
 
 // WorkflowDef is the workflow: status → statuses it may move to, and
@@ -79,7 +77,7 @@ func SchemaViewOf(sc *schema.Schema) SchemaView {
 		v.Statuses = append(v.Statuses, StatusDef{st.Name, st.Label, string(st.Category), st.Color, st.Default})
 	}
 	for _, p := range sc.Props {
-		v.Props[p.Name] = PropDef{string(p.Type), p.Values, p.Multi, p.Label, p.Inverse, p.Symmetric}
+		v.Props[p.Name] = PropDef{string(p.Type), p.Values, p.Multi, p.Label}
 		v.PropOrder = append(v.PropOrder, p.Name)
 	}
 	if sc.Templates != nil && len(sc.Templates.Default) > 0 {

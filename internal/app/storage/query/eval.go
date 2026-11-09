@@ -38,7 +38,7 @@ type Result struct {
 	// Desc is whether the sort: is descending.
 	Desc bool
 	// IDs are the values that Options.MissingIDs covers: those that name a
-	// task (project:, parent:, blocked_by:, a task_ref property, ...) or a
+	// task (project:, parent:, blocked_by:, a relation, ...) or a
 	// workspace, and those of status:, kind: and enum properties, with
 	// whether this store knows the value. A value it does not know matches no task here;
 	// mount.Query makes it an error when no store knows it.
@@ -200,34 +200,26 @@ func (c *compiler) term(t Term) (pred, error) {
 		return c.project(t)
 	case "workspace":
 		return c.workspace(t)
-	case "blocked_by":
-		return c.ref(t, func(e *index.Entry) []model.ULID { return e.BlockedBy })
-	case "blocks":
-		return c.inverse(t, "blocked_by")
 	case "is":
 		return c.is(t)
 	case "has":
 		return c.has(t)
 	}
+	// A relation by its name, or by the name of its other direction.
+	if rel, inverse, ok := schema.RelationOf(t.Key); ok {
+		if inverse {
+			return c.inverse(t, rel.Name)
+		}
+		return c.ref(t, func(e *index.Entry) []model.ULID { return e.Targets(rel.Name) })
+	}
 	if p, ok := c.sc.Prop(t.Key); ok {
 		return c.prop(t, p)
 	}
-	// <name>.inverse: the tasks that a task points at through the relation
-	// name; blocked_by.inverse is blocks.
+	// <relation>.inverse was a way to write the other direction; it is
+	// written with the name of that direction now.
 	if name, ok := strings.CutSuffix(t.Key, ".inverse"); ok {
-		if name == "blocked_by" {
-			return c.inverse(t, name)
-		}
-		if p, found := c.sc.Prop(name); found && p.Type == schema.TypeTaskRef {
-			if p.Symmetric {
-				return c.prop(t, p) // no direction: the same as the key itself
-			}
-			return c.inverse(t, p.Name)
-		}
-	}
-	for _, p := range c.sc.Props {
-		if p.Type == schema.TypeTaskRef && p.Inverse != "" && p.Inverse == t.Key {
-			return nil, c.failUnknown(t, "unknown key %q（逆方向は %s.inverse: で書きます）", t.Key, p.Name)
+		if rel, inverse, found := schema.RelationOf(name); found && !inverse {
+			return nil, c.failUnknown(t, "unknown key %q（逆方向は %s: で書きます）", t.Key, rel.Inverse)
 		}
 	}
 	return nil, c.failUnknown(t, "unknown key %q", t.Key)
@@ -549,7 +541,7 @@ func (c *compiler) workspace(t Term) (pred, error) {
 }
 
 // inverse matches tasks that one of the term's tasks points at through rel,
-// as blocks: does for blocked_by; none matches a task no task points at.
+// as blocks: and caused_by: do; none matches a task no task points at.
 func (c *compiler) inverse(t Term, rel string) (pred, error) {
 	none, ulids, err := c.resolve(t)
 	if err != nil {
@@ -580,45 +572,10 @@ func (c *compiler) targeted(rel string) map[model.ULID]bool {
 	return out
 }
 
-// taskRef matches tasks whose property p points at one of the term's
-// tasks. For a symmetric property the tasks those point back at match too,
-// and none matches a task with no such relation either way.
-func (c *compiler) taskRef(t Term, p schema.Prop) (pred, error) {
-	none, ulids, err := c.resolve(t)
-	if err != nil {
-		return nil, err
-	}
-	var back map[model.ULID]bool
-	if p.Symmetric {
-		back = c.targeted(p.Name)
-	}
-	return func(e *index.Entry) bool {
-		got := e.Targets(p.Name)
-		if none && len(got) == 0 && !back[e.ULID] {
-			return true
-		}
-		for _, g := range got {
-			if ulids[g] {
-				return true
-			}
-		}
-		if p.Symmetric {
-			for ulid := range ulids {
-				if x, ok := c.ix.Task(ulid); ok && slices.Contains(x.Targets(p.Name), e.ULID) {
-					return true
-				}
-			}
-		}
-		return false
-	}, nil
-}
-
 // prop matches a property by the type the schema gives it.
 func (c *compiler) prop(t Term, p schema.Prop) (pred, error) {
 	get := func(e *index.Entry) []string { return e.Prop(p.Name) }
 	switch p.Type {
-	case schema.TypeTaskRef:
-		return c.taskRef(t, p)
 	case schema.TypeEnum, schema.TypeMultiEnum:
 		t, err := c.known(t, func(v string) error {
 			if !slices.ContainsFunc(p.Values, func(x string) bool { return strings.EqualFold(x, v) }) {

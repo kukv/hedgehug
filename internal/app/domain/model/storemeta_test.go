@@ -23,9 +23,9 @@ func TestStoreMetaRoundTrip(t *testing.T) {
 
 func TestStoreMetaErrors(t *testing.T) {
 	t.Parallel()
-	_, err := DecodeStoreMeta([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nformat: 3\n"))
+	_, err := DecodeStoreMeta([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nformat: 4\n"))
 	if !errors.Is(err, ErrNewerFormat) {
-		t.Errorf("format 3: err = %v, want ErrNewerFormat", err)
+		t.Errorf("format 4: err = %v, want ErrNewerFormat", err)
 	}
 	for _, src := range []string{
 		"format: 1\n",                        // no ulid

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -42,7 +43,7 @@ func TestAddSetStatusDep(t *testing.T) {
 	if _, err := tasks.SetStatus(ts.Session, "ME-2", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Dep(ts.Session, "ME-1", "ME-2", true); err != nil {
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocked_by": {"ME-2"}}, true); err != nil {
 		t.Fatal(err)
 	}
 	_, ix, err := ts.Open()
@@ -185,16 +186,129 @@ func TestDepErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, err := tasks.Dep(ts.Session, "ME-1", "ME-2", false)
+	_, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocked_by": {"ME-2"}}, false)
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "dep.invalid")
-	if _, err := tasks.Dep(ts.Session, "ME-1", "ME-2", true); err != nil {
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocked_by": {"ME-2"}}, true); err != nil {
 		t.Fatal(err)
 	}
-	_, err = tasks.Dep(ts.Session, "ME-1", "ME-2", true)
+	_, err = tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocked_by": {"ME-2"}}, true)
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "dep.invalid")
-	if r, err := tasks.Dep(ts.Session, "ME-1", "ME-2", false); err != nil || !r.Committed {
+	if r, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocked_by": {"ME-2"}}, false); err != nil || !r.Committed {
 		t.Errorf("Dep remove = %+v, %v", r, err)
 	}
+}
+
+// dep takes several relations and several tasks for each, and writes them in one commit.
+func TestDepManyRelationsOneCommit(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	for _, title := range []string{"a", "b", "c", "d"} {
+		ts.AddTask(title, nil)
+	}
+	head := ts.Head()
+	r, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{
+		"blocked_by": {"ME-2"}, "causes": {"ME-2", "ME-3"}, "relates": {"ME-3"}, "duplicates": {"ME-4"}, "clones": {"ME-4", "ME-2"},
+	}, true)
+	if err != nil || !r.Committed {
+		t.Fatalf("Dep = %+v, %v", r, err)
+	}
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	es, err := usecasetest.LogOf(s.Repo(), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if es[1].Hash.String() != head {
+		t.Error("dep took more than one commit")
+	}
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := func(us []model.ULID) []string {
+		var out []string
+		for _, u := range us {
+			e, _ := ix.Task(u)
+			out = append(out, e.ID)
+		}
+		return out
+	}
+	a, _ := ts.Resolve(ix, "ME-1")
+	for rel, want := range map[string][]string{
+		"blocked_by": {"ME-2"}, "causes": {"ME-2", "ME-3"}, "relates": {"ME-3"}, "duplicates": {"ME-4"}, "clones": {"ME-4", "ME-2"},
+	} {
+		r, _, _ := schema.RelationOf(rel)
+		if got := ids(r.Get(taskIn(t, ts, a.ULID))); !slices.Equal(got, want) {
+			t.Errorf("%s = %v, want %v", rel, got, want)
+		}
+	}
+	// Taking some off leaves the rest.
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"causes": {"ME-2"}, "clones": {"ME-4"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	got := taskIn(t, ts, a.ULID)
+	if !slices.Equal(ids(got.Causes), []string{"ME-3"}) || !slices.Equal(ids(got.Clones), []string{"ME-2"}) {
+		t.Errorf("causes = %v, clones = %v", ids(got.Causes), ids(got.Clones))
+	}
+}
+
+// The same target written twice for one relation is tied once, and removed once.
+func TestDepSameTargetTwice(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	a := ts.AddTask("a", nil)
+	ts.AddTask("b", nil)
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2", "ME-2"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := taskIn(t, ts, a.ULID).Relates; len(got) != 1 {
+		t.Errorf("relates = %v", got)
+	}
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2", "ME-2"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := taskIn(t, ts, a.ULID).Relates; len(got) != 0 {
+		t.Errorf("relates = %v", got)
+	}
+}
+
+// A pair that is already tied is refused for each target, nothing is written,
+// and so are a task tied to itself and a name that is no relation.
+func TestDepRefusals(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	for _, title := range []string{"a", "b", "c"} {
+		ts.AddTask(title, nil)
+	}
+	if _, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	head := ts.Head()
+	_, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2", "ME-3"}, "causes": {"ME-3"}}, true)
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "dep.invalid")
+	if ts.Head() != head {
+		t.Error("a refused dep wrote")
+	}
+	_, err = tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"relates": {"ME-2"}, "causes": {"ME-3"}, "clones": {"ME-3"}}, false)
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "dep.invalid")
+	if msg := err.Error(); !strings.Contains(msg, "causes") || !strings.Contains(msg, "clones") || strings.Contains(msg, "relates") {
+		t.Errorf("each pair on its own line; got %q", msg)
+	}
+	for _, rel := range []string{"relates", "causes", "duplicates", "clones"} {
+		_, err := tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{rel: {"ME-1"}}, true)
+		vs, ok := usecase.ViolationsOf(err)
+		if !ok || len(vs) != 1 || vs[0].Code != schema.CodeSelfRef || vs[0].Field != rel || vs[0].Msg != "自分自身は指せません" {
+			t.Errorf("%s to itself: err = %v", rel, err)
+		}
+	}
+	_, err = tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocked_by": {"ME-1"}}, true)
+	if vs, ok := usecase.ViolationsOf(err); !ok || len(vs) != 1 || vs[0].Code != schema.CodeCycle {
+		t.Errorf("blocked_by to itself: err = %v, want a cycle", err)
+	}
+	_, err = tasks.Dep(ts.Session, "ME-1", tasks.DepTargets{"blocks": {"ME-2"}}, true)
+	usecasetest.WantErr(t, err, usecase.KindUsage, "dep.unknown_relation")
 }
 
 func TestWatchAddsAndRemovesMe(t *testing.T) {

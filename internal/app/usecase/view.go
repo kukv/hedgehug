@@ -21,24 +21,28 @@ type TaskView struct {
 	// Scope is the ULID of the ancestor (or the task itself, when it is a
 	// group) whose schema override applies to the task, chosen as a write
 	// is checked (schema.For); left out when none does.
-	Scope     string         `json:"scope,omitempty"`
-	Kind      string         `json:"kind"`
-	Title     string         `json:"title"`
-	Parent    *string        `json:"parent"`
-	Rank      string         `json:"rank"`
-	Status    string         `json:"status"`
-	Assignees []string       `json:"assignees"`
-	Labels    []string       `json:"labels"`
-	BlockedBy []Ref          `json:"blocked_by"`
-	Sprint    *PlanRef       `json:"sprint,omitempty"`
-	Releases  []PlanRef      `json:"releases,omitempty" nullable:"false"`
-	Props     map[string]any `json:"props"`
-	Created   time.Time      `json:"created"`
-	Updated   time.Time      `json:"updated"`
-	DeletedAt *time.Time     `json:"deleted_at"`
-	Problems  []Problem      `json:"problems"`
-	Broken    string         `json:"broken,omitempty"`
-	Links     []LinkView     `json:"links,omitempty" nullable:"false" doc:"The pull requests and issues linked, with what GitHub says of them"`
+	Scope      string         `json:"scope,omitempty"`
+	Kind       string         `json:"kind"`
+	Title      string         `json:"title"`
+	Parent     *string        `json:"parent"`
+	Rank       string         `json:"rank"`
+	Status     string         `json:"status"`
+	Assignees  []string       `json:"assignees"`
+	Labels     []string       `json:"labels"`
+	BlockedBy  []Ref          `json:"blocked_by"`
+	Causes     []Ref          `json:"causes"`
+	Relates    []Ref          `json:"relates"`
+	Duplicates []Ref          `json:"duplicates"`
+	Clones     []Ref          `json:"clones"`
+	Sprint     *PlanRef       `json:"sprint,omitempty"`
+	Releases   []PlanRef      `json:"releases,omitempty" nullable:"false"`
+	Props      map[string]any `json:"props"`
+	Created    time.Time      `json:"created"`
+	Updated    time.Time      `json:"updated"`
+	DeletedAt  *time.Time     `json:"deleted_at"`
+	Problems   []Problem      `json:"problems"`
+	Broken     string         `json:"broken,omitempty"`
+	Links      []LinkView     `json:"links,omitempty" nullable:"false" doc:"The pull requests and issues linked, with what GitHub says of them"`
 
 	// Only in ls --tree --json and show --json.
 	Checklist *Count `json:"checklist,omitempty"`
@@ -57,13 +61,10 @@ type TaskView struct {
 	PropList         []PropView `json:"-"` // the props in the order the task has them
 }
 
-// PropView is a property of a task for the text: its values, or the tasks it
-// points at when its type is taskref.
+// PropView is a property of a task for the text.
 type PropView struct {
 	Key    string
-	Values []string // when not a taskref
-	Refs   []Ref    // when a taskref
-	IsRef  bool     // the type in the schema is TypeTaskRef
+	Values []string
 }
 
 // WorkspaceRef names the workspace of a task.
@@ -97,24 +98,28 @@ type Problem struct {
 // TaskViewOf is the view of the task e.
 func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	j := &TaskView{
-		ULID:      e.ULID.String(),
-		ID:        e.ID,
-		Store:     ix.StoreName(),
-		FormerIDs: e.FormerIDs,
-		Kind:      e.Kind,
-		Title:     e.Title,
-		Rank:      string(e.Rank),
-		Status:    e.Status,
-		Assignees: OrEmpty(e.Assignees),
-		Labels:    OrEmpty(e.Labels),
-		BlockedBy: []Ref{},
-		Props:     map[string]any{},
-		Created:   e.Created,
-		Updated:   e.Updated,
-		DeletedAt: e.DeletedAt,
-		Problems:  []Problem{},
-		Broken:    e.Broken,
-		Links:     linkViews(e.Links, e.GitHub),
+		ULID:       e.ULID.String(),
+		ID:         e.ID,
+		Store:      ix.StoreName(),
+		FormerIDs:  e.FormerIDs,
+		Kind:       e.Kind,
+		Title:      e.Title,
+		Rank:       string(e.Rank),
+		Status:     e.Status,
+		Assignees:  OrEmpty(e.Assignees),
+		Labels:     OrEmpty(e.Labels),
+		BlockedBy:  []Ref{},
+		Causes:     []Ref{},
+		Relates:    []Ref{},
+		Duplicates: []Ref{},
+		Clones:     []Ref{},
+		Props:      map[string]any{},
+		Created:    e.Created,
+		Updated:    e.Updated,
+		DeletedAt:  e.DeletedAt,
+		Problems:   []Problem{},
+		Broken:     e.Broken,
+		Links:      linkViews(e.Links, e.GitHub),
 
 		DisplayID: ix.DisplayID(e),
 	}
@@ -135,9 +140,15 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	}
 	j.Project = projectOf(ix, e)
 	j.Scope = scopeOf(ix, e)
-	for _, b := range e.BlockedBy {
-		j.BlockedBy = append(j.BlockedBy, RefOf(ix, b))
+	refsOf := func(us []model.ULID) []Ref {
+		out := make([]Ref, len(us))
+		for i, u := range us {
+			out[i] = RefOf(ix, u)
+		}
+		return out
 	}
+	j.BlockedBy, j.Causes, j.Relates = refsOf(e.BlockedBy), refsOf(e.Causes), refsOf(e.Relates)
+	j.Duplicates, j.Clones = refsOf(e.Duplicates), refsOf(e.Clones)
 	if e.Sprint != nil {
 		r := sprintRef(ix, *e.Sprint)
 		j.Sprint = &r
@@ -149,12 +160,6 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	for _, p := range e.Props {
 		sp, ok := sc.Prop(p.Key)
 		pv := PropView{Key: p.Key, Values: p.Values}
-		if ok && sp.Type == schema.TypeTaskRef {
-			pv.IsRef, pv.Values = true, nil
-			for _, u := range e.Targets(p.Key) {
-				pv.Refs = append(pv.Refs, RefOf(ix, u))
-			}
-		}
 		j.PropList = append(j.PropList, pv)
 		multi := (ok && (sp.Multi || sp.Type == schema.TypeMultiEnum)) || (!ok && len(p.Values) != 1)
 		switch {

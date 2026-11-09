@@ -177,3 +177,40 @@ func TestSort(t *testing.T) {
 		t.Errorf("where order = %v %v", fs[3].Where, fs[4].Where)
 	}
 }
+
+// The keys the query reads before the properties are findings for a property of
+// that name, except the names of the fields of the task: prop_builtin says
+// that already.
+func TestSchemaQueryKeysAsPropNames(t *testing.T) {
+	t.Parallel()
+	forward := []string{"causes", "relates", "duplicates", "clones"}
+	inverse := []string{"blocks", "caused_by", "related_by", "duplicated_by", "cloned_by"}
+	_, dir := newStore(t)
+	s := rewriteSchema(t, dir, func(sc *schema.Schema) {
+		for _, n := range slices.Concat(forward, inverse) {
+			sc.Props = append(sc.Props, schema.Prop{Name: n, Type: schema.TypeText})
+		}
+	})
+	fs, err := usecase.CheckSchema(s, mustOpen(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	has := func(check, name string) bool {
+		return slices.ContainsFunc(fs, func(f usecase.Finding) bool { return f.Check == check && f.Where == "schema.yaml: props."+name })
+	}
+	builtin := func(name string) bool {
+		return slices.ContainsFunc(fs, func(f usecase.Finding) bool {
+			return f.Check == "schema" && f.Where == "schema.yaml: props."+name && f.Code == "schema.prop_builtin"
+		})
+	}
+	for _, n := range forward {
+		if !builtin(n) || has("prop_name", n) {
+			t.Errorf("%s: want the prop_builtin finding only: %+v", n, fs)
+		}
+	}
+	for _, n := range inverse {
+		if !has("prop_name", n) {
+			t.Errorf("%s: no query_key finding: %+v", n, fs)
+		}
+	}
+}

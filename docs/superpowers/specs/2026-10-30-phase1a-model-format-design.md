@@ -4,6 +4,7 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」1. Core とファイル形式
 - GUI デザイン: https://claude.ai/artifact/K14rwULxyyS2nYNbMKSr5L
 - 置き換え: 種類（kinds）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。schema.yaml の `kinds`、種類の追加・編集、スキーマ画面の種類タブ、種類ごとの既定のテンプレートの置き場（今は `templates.default`）は、この記述より新しいそちらが正
+- 置き換え: 関連（props の `inverse`・`symmetric`、task_ref 型）と組み込みのプロパティ（priority・start・due・estimate・points・labels の置き場、既定の `props`）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。この記述より新しいそちらが正
 
 ## 位置づけ
 

@@ -61,9 +61,19 @@ describe("diffForRestore", () => {
       { field: "status", label: "ステータス", from: "todo", to: "done" },
       { field: "parent", label: "親", from: "ルート", to: "REL-1" },
       { field: "assignees", label: "担当者", from: "alice", to: "（なし）" },
-      { field: "blocked_by", label: "ブロック", from: "T-B", to: "（なし）" },
+      { field: "blocked_by", label: "Blocked by", from: "T-B", to: "（なし）" },
       { field: "props.due", label: "due", from: "（なし）", to: "2026-11-07" },
       { field: "props.points", label: "ポイント", from: "3", to: "5" },
+    ]);
+  });
+
+  it("5 つの関連の差分を、props. なしの名前と表示名で出す", () => {
+    const ref = (id: string) => [{ ulid: id, id, title: id }];
+    const now = showOf(tv("A", "t", { causes: ref("T-1"), relates: ref("T-2") }));
+    const then = showOf(tv("A", "t", { relates: ref("T-2"), clones: ref("T-3") }));
+    expect(diffForRestore(now, then)).toEqual([
+      { field: "causes", label: "Causes", from: "T-1", to: "（なし）" },
+      { field: "clones", label: "Clones", from: "（なし）", to: "T-3" },
     ]);
   });
 

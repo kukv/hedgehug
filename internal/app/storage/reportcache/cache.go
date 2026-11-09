@@ -18,13 +18,14 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/report"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 const (
 	fileName = "report" // in .hedgehug/local
-	format   = 2        // bump when row changes
+	format   = 3        // bump when row changes, or when a task is read in another way (3: past commits are upgraded to the newest store format)
 )
 
 // OpMoveIn is the op of the commit that brings a task from another store.
@@ -75,8 +76,21 @@ func save(s *store.Store, f file) {
 	_ = s.WriteLocal(fileName, buf.Bytes()) // a failure costs only the next read
 }
 
+// upgrades read the task files of a commit in the newest store format, one
+// reader for each commit, which many tasks share.
+type upgrades map[plumbing.Hash]*upgrade.Commit
+
+func (u upgrades) of(s *store.Store, commit plumbing.Hash) *upgrade.Commit {
+	c, ok := u[commit]
+	if !ok {
+		c = upgrade.At(func(p string) ([]byte, error) { return s.Repo().ReadAt(commit, p) })
+		u[commit] = c
+	}
+	return c
+}
+
 // readRow reads the file p as the commit has it.
-func readRow(s *store.Store, commit plumbing.Hash, p string, ulid model.ULID) (row, error) {
+func readRow(s *store.Store, ups upgrades, commit plumbing.Hash, p string, ulid model.ULID) (row, error) {
 	r := row{Commit: commit}
 	b, err := s.Repo().ReadAt(commit, p)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -89,6 +103,11 @@ func readRow(s *store.Store, commit plumbing.Hash, p string, ulid model.ULID) (r
 	if model.IsForward(b) {
 		r.Gone = true
 		return r, nil
+	}
+	// A version from before a conversion is read in the newest format.
+	if b, err = ups.of(s, commit).Task(b); err != nil {
+		r.Bad = true
+		return r, nil //nolint:nilerr // a version that does not upgrade is left out
 	}
 	t, err := model.DecodeTask(b)
 	if err != nil || t.ULID != ulid {
@@ -132,6 +151,7 @@ func Read(s *store.Store, h *history.History) ([]report.Task, error) {
 	old := load(s)
 	next := file{Format: format, Rows: map[string][]row{}}
 	changed := false
+	ups := upgrades{}
 	var out []report.Task
 	for _, p := range h.Paths("tasks/") {
 		ulid, err := model.ParseTaskPath(p)
@@ -147,7 +167,7 @@ func Read(s *store.Store, h *history.History) ([]report.Task, error) {
 		for _, c := range commits {
 			r, ok := known[c.Hash]
 			if !ok {
-				if r, err = readRow(s, c.Hash, p, ulid); err != nil {
+				if r, err = readRow(s, ups, c.Hash, p, ulid); err != nil {
 					return nil, err
 				}
 				known[c.Hash] = r
@@ -172,8 +192,9 @@ func Versions(s *store.Store, h *history.History, ulid model.ULID) (report.Task,
 	p := model.TaskPath(ulid)
 	commits := h.Path(p)
 	rows := make(map[plumbing.Hash]row, len(commits))
+	ups := upgrades{}
 	for _, c := range commits {
-		r, err := readRow(s, c.Hash, p, ulid)
+		r, err := readRow(s, ups, c.Hash, p, ulid)
 		if err != nil {
 			return report.Task{}, err
 		}

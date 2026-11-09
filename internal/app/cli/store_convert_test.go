@@ -2,11 +2,13 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase/convert"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
@@ -34,7 +36,7 @@ func oldStoreEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(metaPath, []byte(strings.Replace(string(m), "format: 2", "format: 1", 1)), 0o600); err != nil {
+	if err := os.WriteFile(metaPath, []byte(strings.Replace(string(m), fmt.Sprintf("format: %d", model.StoreFormat), "format: 1", 1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gitrepotest.CommitFiles(t, dir, "make it old", "Alice", "alice@example.com", te.now, "schema.yaml", ".hedgehug/store.yaml")
@@ -80,7 +82,7 @@ func TestStoreConvertJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(te.ok("store", "convert", "--dry-run", "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !got.DryRun || len(got.Steps) != 1 || got.Steps[0].From != 1 || len(got.Steps[0].Lines) == 0 {
+	if !got.DryRun || len(got.Steps) != 2 || got.Steps[0].From != 1 || len(got.Steps[0].Lines) == 0 {
 		t.Errorf("result = %+v", got)
 	}
 }
@@ -108,5 +110,39 @@ func TestStoreConvertKindFlag(t *testing.T) {
 	te.ok("store", "convert", "--kind", "task=bug")
 	if out := te.ok("ls"); !strings.Contains(out, "Loose") {
 		t.Errorf("ls: %q", out)
+	}
+}
+
+func TestStoreConvertDropBadValues(t *testing.T) {
+	t.Parallel()
+	te := oldStoreEnv(t)
+	dir := te.storeDir("me")
+	schemaPath := filepath.Join(dir, "schema.yaml")
+	b, err := os.ReadFile(schemaPath) //nolint:gosec // the test's store
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a task_ref property of format 2, and a value of it that is no ULID
+	if err := os.WriteFile(schemaPath, []byte(strings.Replace(string(b), "props:\n", "props:\n  fixes: {type: task_ref}\n", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitrepotest.CommitFiles(t, dir, "a task_ref", "Alice", "alice@example.com", te.now, "schema.yaml")
+	te.handEdit("me", "ME-1", "\nkind: project\n", "\nkind: project\nprops:\n  fixes: nope\n")
+
+	for _, args := range [][]string{{"store", "convert", "--dry-run"}, {"store", "convert"}} {
+		code, _, errs := te.run(args...)
+		if code != 1 || !strings.Contains(errs, "props.fixes: nope") || !strings.Contains(errs, "--drop-bad-values") {
+			t.Errorf("hedgehug %s: exit %d, stderr %q", strings.Join(args, " "), code, errs)
+		}
+	}
+	if out := te.ok("store", "convert", "--dry-run", "--drop-bad-values"); !strings.Contains(out, "ULID の形でない値を外した") || !strings.Contains(out, "props.fixes: nope") {
+		t.Errorf("dry run with --drop-bad-values: %q", out)
+	}
+	if code, _, _ := te.run("ls"); code != 1 {
+		t.Errorf("a dry run converted: ls exits %d", code)
+	}
+	te.ok("store", "convert", "--drop-bad-values")
+	if out := te.ok("doctor"); out != "No problems\n" {
+		t.Errorf("doctor after the conversion: %q", out)
 	}
 }

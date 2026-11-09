@@ -2,6 +2,7 @@ package reportcache
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/report"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -169,5 +171,43 @@ func TestBrokenAndForwardVersions(t *testing.T) {
 	one, err := Versions(f.s, h, a.ULID)
 	if err != nil || len(one.Versions) != 2 {
 		t.Fatalf("Versions = %+v, %v", one, err)
+	}
+}
+
+// A version from before a conversion is read in the newest format: the
+// versions the commits of format 3 hold are upgraded by a step of format 4 that
+// stands in for a real one. The test must not be parallel.
+func TestReadUpgradesTheVersionsOfAnOlderFormat(t *testing.T) {
+	f := newFixture(t)
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
+	f.put(t, a)
+	a.Status = "done"
+	f.put(t, a)
+
+	was, wasSteps := model.StoreFormat, upgrade.Steps
+	model.StoreFormat = 4
+	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 3, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
+		tk, err := model.DecodeTask(raw)
+		if err != nil {
+			return nil, err
+		}
+		if tk.Status == "todo" {
+			tk.Status = "in_progress"
+		}
+		return tk.Encode()
+	}})
+	t.Cleanup(func() { model.StoreFormat, upgrade.Steps = was, wasSteps })
+
+	vs := f.read(t)[0].Versions
+	if len(vs) != 2 || vs[0].Status != "in_progress" || vs[1].Status != "done" {
+		t.Fatalf("versions = %+v; want in_progress then done", vs)
+	}
+	h, err := history.Open(f.s, history.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, err := Versions(f.s, h, a.ULID)
+	if err != nil || len(one.Versions) != 2 || one.Versions[0].Status != "in_progress" {
+		t.Errorf("Versions = %+v, %v", one.Versions, err)
 	}
 }

@@ -43,7 +43,7 @@
     if (!def) return;
     const lookup = createLookup({ api, cache, store: cur.store });
     let live = true;
-    void buildGroups(cur, def, lookup).then((g) => {
+    void buildGroups(cur, lookup).then((g) => {
       if (live) groups = g;
     });
     return () => {
@@ -54,14 +54,7 @@
   let adding = $state(false);
   let kind = $state("blocked_by");
   let error = $state("");
-  const kinds = $derived(sc.current ? relationKinds(sc.current) : []);
-  // A property that holds one task and already has it: the add would silently replace it.
-  const full = (key: string) => {
-    const def = sc.current?.props[key];
-    if (key === "blocked_by" || !def || def.multi) return false;
-    const v = show.props[key];
-    return v !== null && v !== undefined && v !== "";
-  };
+  const kinds = relationKinds();
   const taken = $derived(groups.find((g) => g.key === kind)?.items.map((i) => i.ulid) ?? []);
   const statusDefOf = (status: string | null) =>
     sc.current?.statuses?.find((s) => s.name === status);
@@ -89,12 +82,11 @@
   }
 
   async function add(t: TaskView) {
-    if (!sc.current) return;
-    if (await patch(addRefBody(show, sc.current, kind, t.ulid))) adding = false;
+    if (await patch(addRefBody(show, kind, t.ulid))) adding = false;
   }
 
   function remove(g: RelGroup, item: RelItem) {
-    if (sc.current) void patch(removeRefBody(show, sc.current, g.key, item.raw));
+    void patch(removeRefBody(show, g.key, item.raw));
   }
 </script>
 
@@ -116,8 +108,6 @@
         options={kinds.map((k) => ({
           value: k.key,
           label: k.label,
-          disabled: full(k.key),
-          title: full(k.key) ? "すでに設定されています（外してから追加）" : undefined,
         }))}
         nullable={false}
         onedit={(v) => (kind = String(v))}

@@ -235,12 +235,16 @@ func fixStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *sto
 		return nil, err
 	}
 	var repaired []merge.Repaired
+	var legacy []Fixed
 	err = s.WithLocalLock("sync.lock", usecase.SyncLockWait, func() error {
 		var err error
-		repaired, err = Fix(s, opt)
+		if repaired, err = Fix(s, opt); err != nil {
+			return err
+		}
+		legacy, err = fixLegacyFields(ss, s)
 		return err
 	})
-	if err != nil || len(repaired) == 0 {
+	if err != nil || len(repaired)+len(legacy) == 0 {
 		return nil, err
 	}
 	ss.MarkWritten(s)
@@ -263,7 +267,7 @@ func fixStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *sto
 		f.Line = fmt.Sprintf("repaired: %s: %s", name, fixedContent(ix, x))
 		out = append(out, f)
 	}
-	return out, nil
+	return append(out, legacy...), nil
 }
 
 // fixedContent says what a repair did: the id a clash was given, or the

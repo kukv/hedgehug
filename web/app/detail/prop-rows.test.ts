@@ -16,8 +16,17 @@ describe("propRows", () => {
     });
   });
 
-  it("leaves out task references, which the relations section shows", () => {
-    expect(propRows(schemaView, {}).map((r) => r.name)).not.toContain("relates");
+  it("shows a relation name left in props (a bad value kept there) as a read-only row", () => {
+    const rows = propRows(schemaView, { relates: ["not-a-ulid"] });
+    expect(rows.find((r) => r.name === "relates")).toMatchObject({
+      editor: null,
+      value: ["not-a-ulid"],
+    });
+  });
+
+  it("does not make a row for a relation the schema cannot define", () => {
+    const sc = { ...schemaView, props: { ...schemaView.props, causes: { type: "text" } } };
+    expect(propRows(sc, {}).map((r) => r.name)).not.toContain("causes");
   });
 
   it("follows prop_order when the schema gives it", () => {

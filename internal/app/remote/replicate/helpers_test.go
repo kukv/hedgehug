@@ -43,10 +43,7 @@ func newCluster(t *testing.T, n int) *cluster {
 	if err := gitrepo.InitBare(c.remote); err != nil {
 		t.Fatal(err)
 	}
-	// The schema has a task_ref property, which the moves between stores cut.
-	sc := schema.Default()
-	sc.Props = append(sc.Props, schema.Prop{Name: refProp, Type: schema.TypeTaskRef})
-	first, err := store.Create(filepath.Join(t.TempDir(), "s0"), &model.StoreMeta{ULID: model.NewULID(), Name: "s"}, sc,
+	first, err := store.Create(filepath.Join(t.TempDir(), "s0"), &model.StoreMeta{ULID: model.NewULID(), Name: "s"}, schema.Default(),
 		&model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WEB"}, gitrepo.Signature{Name: "u0", Email: "u0@x"}, "github.com/u0", time.Now)
 	if err != nil {
 		t.Fatal(err)

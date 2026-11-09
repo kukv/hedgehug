@@ -62,6 +62,7 @@ WEB-6  01M6QAZMK2R3Z8Y1W9E4T7H5BD  todo    project                            We
 hh add "ログインページをレビューする" --parent WEB-6   # 既定の Store の、プロジェクト WEB-6 の下の task
 hh status WEB-1 in_progress
 hh set WEB-1 assignees=github.com/me labels+=ui
+hh dep add WEB-2 --blocked-by WEB-1  # WEB-2 は WEB-1 を待つ（計画の「関連」を参照）
 hh done WEB-1
 hh sync                                 # 裏の同期を待たず、今すぐ同期する
 ```

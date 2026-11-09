@@ -254,9 +254,24 @@ components:
           items:
             type: string
           type: array
+        causes:
+          description: "Replaces the tasks this one causes: IDs or ULIDs"
+          items:
+            type: string
+          type: array
+        clones:
+          description: "Replaces the tasks this one clones: IDs or ULIDs"
+          items:
+            type: string
+          type: array
         dry_run:
           description: Say what would change and what it would break, and write nothing
           type: boolean
+        duplicates:
+          description: "Replaces the tasks this one duplicates: IDs or ULIDs"
+          items:
+            type: string
+          type: array
         kind:
           type: string
         labels:
@@ -271,6 +286,11 @@ components:
         query:
           description: Change the tasks this query finds; give this or ulids
           type: string
+        relates:
+          description: "Replaces the tasks this one relates to: IDs or ULIDs"
+          items:
+            type: string
+          type: array
         releases:
           description: "Replaces the releases: names in the workspace of the task, or ULIDs"
           items:
@@ -1593,7 +1613,7 @@ components:
       additionalProperties: false
       properties:
         field:
-          description: blocked_by, props.<name of a property>, sprint or releases
+          description: The name of a relation (blocked_by, causes, relates, duplicates or clones), sprint or releases
           type: string
         target:
           $ref: "#/components/schemas/MoveTargetView"
@@ -1739,6 +1759,21 @@ components:
         body:
           description: The body in Markdown
           type: string
+        causes:
+          description: "Replaces the tasks this one causes: IDs or ULIDs"
+          items:
+            type: string
+          type: array
+        clones:
+          description: "Replaces the tasks this one clones: IDs or ULIDs"
+          items:
+            type: string
+          type: array
+        duplicates:
+          description: "Replaces the tasks this one duplicates: IDs or ULIDs"
+          items:
+            type: string
+          type: array
         kind:
           type: string
         labels:
@@ -1750,6 +1785,11 @@ components:
           additionalProperties: {}
           description: Property name to value; null clears it, a list replaces a multiple value
           type: object
+        relates:
+          description: "Replaces the tasks this one relates to: IDs or ULIDs"
+          items:
+            type: string
+          type: array
         releases:
           description: "Replaces the releases: names in the workspace of the task, or ULIDs"
           items:
@@ -1833,16 +1873,12 @@ components:
     PropAddInputBody:
       additionalProperties: false
       properties:
-        inverse:
-          type: string
         label:
           type: string
         multi:
           type: boolean
         name:
           type: string
-        symmetric:
-          type: boolean
         type:
           enum:
             - text
@@ -1854,7 +1890,6 @@ components:
             - enum
             - multi_enum
             - user
-            - task_ref
             - url
           type: string
         values:
@@ -1870,8 +1905,6 @@ components:
     PropChangeInputBody:
       additionalProperties: false
       properties:
-        inverse:
-          type: string
         label:
           type: string
         multi:
@@ -1879,8 +1912,6 @@ components:
         name:
           description: The new name, as for a status
           type: string
-        symmetric:
-          type: boolean
         values:
           description: "All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it"
           items:
@@ -1890,13 +1921,9 @@ components:
     PropDef:
       additionalProperties: false
       properties:
-        inverse:
-          type: string
         label:
           type: string
         multi:
-          type: boolean
-        symmetric:
           type: boolean
         type:
           type: string
@@ -2432,11 +2459,23 @@ components:
           type: string
         broken:
           type: string
+        causes:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type:
+            - array
+            - "null"
         checklist:
           $ref: "#/components/schemas/Count"
         children:
           items:
             $ref: "#/components/schemas/TaskView"
+          type:
+            - array
+            - "null"
+        clones:
+          items:
+            $ref: "#/components/schemas/Ref"
           type:
             - array
             - "null"
@@ -2455,6 +2494,12 @@ components:
           format: date-time
           type:
             - string
+            - "null"
+        duplicates:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type:
+            - array
             - "null"
         former_ids:
           items:
@@ -2505,6 +2550,12 @@ components:
         rank:
           type: string
         referenced_by:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type:
+            - array
+            - "null"
+        relates:
           items:
             $ref: "#/components/schemas/Ref"
           type:
@@ -2575,6 +2626,10 @@ components:
         - assignees
         - labels
         - blocked_by
+        - causes
+        - relates
+        - duplicates
+        - clones
         - props
         - created
         - updated
@@ -3113,11 +3168,23 @@ components:
             - "null"
         broken:
           type: string
+        causes:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type:
+            - array
+            - "null"
         checklist:
           $ref: "#/components/schemas/Count"
         children:
           items:
             $ref: "#/components/schemas/TaskView"
+          type:
+            - array
+            - "null"
+        clones:
+          items:
+            $ref: "#/components/schemas/Ref"
           type:
             - array
             - "null"
@@ -3130,6 +3197,12 @@ components:
           format: date-time
           type:
             - string
+            - "null"
+        duplicates:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type:
+            - array
             - "null"
         former_ids:
           items:
@@ -3173,6 +3246,12 @@ components:
           type: object
         rank:
           type: string
+        relates:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type:
+            - array
+            - "null"
         releases:
           items:
             $ref: "#/components/schemas/PlanRef"
@@ -3209,6 +3288,10 @@ components:
         - assignees
         - labels
         - blocked_by
+        - causes
+        - relates
+        - duplicates
+        - clones
         - props
         - created
         - updated
@@ -5480,7 +5563,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Add a property or a relation at the end
+      summary: Add a property at the end
       tags:
         - schema
   /api/schema/props/order:
@@ -5513,7 +5596,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Put the relations, or the other properties, in order
+      summary: Put the properties in order
       tags:
         - schema
   /api/schema/props/{name}:
@@ -5586,7 +5669,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Change a property or a relation
+      summary: Change a property
       tags:
         - schema
   /api/schema/scoped/{project}:

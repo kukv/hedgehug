@@ -30,6 +30,42 @@ in it. A template whose child names no kind follows the same rule.
 Progress counts the stories, tasks and bugs under a project or an epic. Steps are not
 counted; the row of their parent shows how many are done, such as `2/3` (in the browser and in `hh ls --tree`; `hh show` has a `steps` line).
 
+## Relations
+
+A task can point at other tasks of the same store through five relations. They are fixed
+like the kinds: you cannot add, rename or remove one. Each has a direction. The task that
+sets it shows the name, and the task it points at shows the name of the other way.
+
+| Relation | Other way | Use it for |
+|---|---|---|
+| `blocked_by` | `blocks` | the order of the work: this one waits for that one |
+| `causes` | `caused_by` | a problem and its effect, once it has happened |
+| `relates` | `related_by` | the two have something to do with each other |
+| `duplicates` | `duplicated_by` | the same content twice; use it when you close one of them |
+| `clones` | `cloned_by` | a task made as a copy of another |
+
+`hh dep add` takes any of them, and several tasks per flag (repeat the flag or separate
+with commas). Everything is written in one commit. `hh dep rm` takes the same flags.
+
+```console
+$ hh dep add WEB-2 --causes WEB-3 --clones WEB-1
+Updated WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP) Fix the logout bug
+$ hh dep rm WEB-2 --clones WEB-1
+```
+
+`hh show WEB-3` lists the task's own relations, and under `Related:` the ones that point at
+it, such as `Caused by`. The detail in the browser shows the same in its Relations
+section, where you can add and remove them. A task cannot point at itself (`ref.self`),
+and `blocked_by` still refuses a cycle.
+
+In a query, the key is the name of the relation or the name of the other way:
+`hh ls causes:WEB-3` finds the tasks that cause `WEB-3` (the ones that have it in their
+`causes`), and `hh ls caused_by:WEB-2` the tasks `WEB-2` causes. The old `causes.inverse:` is
+gone; the error for it names `caused_by:`. `relates` has a direction now, so `relates:WEB-2`
+finds only the tasks that point at `WEB-2`. To find everything that is related to it, run
+`hh ls relates:WEB-2` and `hh ls related_by:WEB-2`: there is no OR in a query. Relations are
+not a column, a sort or a group of a view.
+
 ## Sprints
 
 A sprint is `planned`, then `active`, then `closed`.

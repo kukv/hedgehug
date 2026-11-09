@@ -122,7 +122,7 @@ func TestSecondIDsStayInsideTheStore(t *testing.T) {
 	ts := usecasetest.NewTwoStore(t)
 	const msg = "org-b's WEB-1 cannot be referred to (references stay inside a store)"
 	for _, blocker := range []string{"WEB-1", "org-b:WEB-1"} {
-		_, err := tasks.Dep(ts.Session, "API-1", blocker, true)
+		_, err := tasks.Dep(ts.Session, "API-1", tasks.DepTargets{"blocked_by": {blocker}}, true)
 		usecasetest.WantCode(t, "Dep(API-1, "+blocker+")", err, usecase.KindInvalid, "ref.cross_store")
 		if err != nil && err.Error() != msg {
 			t.Errorf("message = %q; want %q", err, msg)
@@ -134,7 +134,7 @@ func TestSecondIDsStayInsideTheStore(t *testing.T) {
 	if _, err := tasks.Add(ts.ForStore("org-a"), tasks.AddInput{Title: "second"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Dep(ts.Session, "API-1", "org-a:API-2", true); err != nil {
+	if _, err := tasks.Dep(ts.Session, "API-1", tasks.DepTargets{"blocked_by": {"org-a:API-2"}}, true); err != nil {
 		t.Errorf("Dep(API-1, org-a:API-2): %v", err)
 	}
 
@@ -307,7 +307,7 @@ func handedOverOps(t *testing.T) []handedOver {
 			return err
 		}},
 		{name: "Dep", task: true, run: func(ts *usecasetest.Session, id string) error {
-			_, err := tasks.Dep(ts.Session, id, "org-b:WEB-2", true)
+			_, err := tasks.Dep(ts.Session, id, tasks.DepTargets{"blocked_by": {"org-b:WEB-2"}}, true)
 			return err
 		}},
 		{name: "Move", task: true, run: func(ts *usecasetest.Session, id string) error {
@@ -393,11 +393,11 @@ func TestEveryOperationOnAnIDRefusesAReadOnlyStoreAfterTheLookup(t *testing.T) {
 func TestSecondIDThatNoStoreHasIsNotFound(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
-	_, err := tasks.Dep(ts.Session, "API-1", "org-b:WEB-999", true)
+	_, err := tasks.Dep(ts.Session, "API-1", tasks.DepTargets{"blocked_by": {"org-b:WEB-999"}}, true)
 	usecasetest.WantCode(t, "Dep(API-1, org-b:WEB-999)", err, usecase.KindNotFound, "task.not_found")
-	_, err = tasks.Dep(ts.Session, "API-1", "WEB-999", true)
+	_, err = tasks.Dep(ts.Session, "API-1", tasks.DepTargets{"blocked_by": {"WEB-999"}}, true)
 	usecasetest.WantCode(t, "Dep(API-1, WEB-999)", err, usecase.KindNotFound, "task.not_found")
-	_, err = tasks.Dep(ts.Session, "API-1", "org-b:WEB-1", true)
+	_, err = tasks.Dep(ts.Session, "API-1", tasks.DepTargets{"blocked_by": {"org-b:WEB-1"}}, true)
 	usecasetest.WantCode(t, "Dep(API-1, org-b:WEB-1)", err, usecase.KindInvalid, "ref.cross_store")
 }
 
@@ -432,7 +432,7 @@ func TestOperationsOnTwoStoresRunConcurrently(t *testing.T) {
 			case 1:
 				_, errs[i] = tasks.Set(ts.Session, "API-1", []usecase.Assign{{Key: "title", Op: "=", Value: "t"}})
 			default:
-				_, err := tasks.Dep(ts.Session, "API-1", "WEB-1", true)
+				_, err := tasks.Dep(ts.Session, "API-1", tasks.DepTargets{"blocked_by": {"WEB-1"}}, true)
 				if usecase.AsError(err) == nil || usecase.AsError(err).Code != "ref.cross_store" {
 					errs[i] = errors.New("Dep: want ref.cross_store, got " + errString(err))
 				}

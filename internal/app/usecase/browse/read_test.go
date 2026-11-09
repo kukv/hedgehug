@@ -285,7 +285,7 @@ func TestShowFullTask(t *testing.T) {
 	b := ts.AddTask("b", nil)
 	c := ts.AddTask("c", nil)
 	// b (ME-3; ME-2 is the fixture project) is blocked by a; c duplicates a; d writes a as #ME-1 in its body.
-	if _, err := tasks.Dep(ts.Session, "ME-3", "ME-1", true); err != nil {
+	if _, err := tasks.Dep(ts.Session, "ME-3", tasks.DepTargets{"blocked_by": {"ME-1"}}, true); err != nil {
 		t.Fatal(err)
 	}
 	as, err := usecase.ParseAssigns([]string{"duplicates+=ME-1"})
@@ -324,11 +324,11 @@ func TestShowFullTask(t *testing.T) {
 	if !slices.Equal(cs, []string{"first\n", "third\n"}) {
 		t.Errorf("Comments = %q; want first and third (the removed one is left out)", cs)
 	}
-	if len(r.Relations) != 2 || r.Relations[0].Key != "blocks" || r.Relations[0].Label != "blocks" || r.Relations[0].Tasks[0].ULID != b.ULID.String() {
+	if len(r.Relations) != 2 || r.Relations[0].Key != "blocks" || r.Relations[0].Label != "Blocks" || r.Relations[0].Tasks[0].ULID != b.ULID.String() {
 		t.Fatalf("Relations = %+v", r.Relations)
 	}
-	if rel := r.Relations[1]; rel.Key != "duplicates" || rel.Label != "Duplicated by" || len(rel.Tasks) != 1 || rel.Tasks[0].ULID != c.ULID.String() {
-		t.Errorf("Relations[1] = %+v; want duplicates / Duplicated by / c", rel)
+	if rel := r.Relations[1]; rel.Key != "duplicated_by" || rel.Label != "Duplicated by" || len(rel.Tasks) != 1 || rel.Tasks[0].ULID != c.ULID.String() {
+		t.Errorf("Relations[1] = %+v; want duplicated_by / Duplicated by / c", rel)
 	}
 	if len(r.ReferencedBy) != 1 || r.ReferencedBy[0].Title != "d" || r.ReferencedBy[0].Name() == "" {
 		t.Errorf("ReferencedBy = %v; want d", r.ReferencedBy)
@@ -347,8 +347,8 @@ func TestShowFullTask(t *testing.T) {
 	if got := v.Reverse["blocks"]; len(got) != 1 || got[0].ID != "ME-3" || got[0].Title != "b" || got[0].ULID != b.ULID.String() {
 		t.Errorf("Reverse[blocks] = %+v", got)
 	}
-	if got := v.Reverse["duplicates"]; len(got) != 1 || got[0].ID != "ME-4" {
-		t.Errorf("Reverse[duplicates] = %+v", got)
+	if got := v.Reverse["duplicated_by"]; len(got) != 1 || got[0].ID != "ME-4" {
+		t.Errorf("Reverse[duplicated_by] = %+v", got)
 	}
 	if len(v.ReferencedBy) != 1 || v.ReferencedBy[0].ID != "ME-5" {
 		t.Errorf("ReferencedBy = %+v", v.ReferencedBy)

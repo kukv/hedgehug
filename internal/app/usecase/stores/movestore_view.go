@@ -44,7 +44,7 @@ type MoveTargetView struct {
 // MoveUnlinkView is a reference the move cuts.
 type MoveUnlinkView struct {
 	Task   MoveRefView    `json:"task"`
-	Field  string         `json:"field" doc:"blocked_by, props.<name of a property>, sprint or releases"`
+	Field  string         `json:"field" doc:"The name of a relation (blocked_by, causes, relates, duplicates or clones), sprint or releases"`
 	Target MoveTargetView `json:"target"`
 }
 
@@ -125,8 +125,8 @@ type MoveStoreResultView struct {
 	ScopedLines []string `json:"-"`
 }
 
-// MoveUnlinkResult is a reference that was cut, by ULID. Field is blocked_by,
-// props.<name>, sprint or releases.
+// MoveUnlinkResult is a reference that was cut, by ULID. Field is the name of a
+// relation (blocked_by, causes, ...), sprint or releases.
 type MoveUnlinkResult struct {
 	Task   string `json:"task"`
 	Field  string `json:"field"`

@@ -150,6 +150,10 @@ describe("errorMessage", () => {
     expect(errorMessage(err("undo.blocked"))).toContain("ワークスペースにまだタスクがあるため");
   });
 
+  it("words undo.unsupported", () => {
+    expect(errorMessage(err("undo.unsupported"))).toContain("schema.yaml とビューは戻せません");
+  });
+
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
       "remote の履歴が手元と食い違っています。確認してから、hh doctor --fix で origin の新しい履歴にそろえてください",
@@ -210,6 +214,19 @@ describe("errorMessage", () => {
     );
   });
 
+  it("自己参照の違反と、作成時に関連を渡した 400 を日本語で言う", () => {
+    expect(
+      errorMessage(
+        err("schema.violation", {
+          violations: [{ code: "ref.self", field: "causes", message: "自分自身は指せません" }],
+        }),
+      ),
+    ).toBe("スキーマに合わない変更です: 自分自身は指せません（causes）");
+    expect(errorMessage(err("request.invalid", {}, "関連は作成後に付けます"))).toBe(
+      "入力が正しくありません: 関連は作成後に付けます",
+    );
+  });
+
   it("lists what a schema violation broke", () => {
     const m = errorMessage(
       err("schema.violation", {
@@ -248,9 +265,6 @@ describe("errorMessage", () => {
     );
     expect(errorMessage(err("schema.order_stale"))).toBe(
       "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
-    );
-    expect(errorMessage(err("schema.not_task_ref"))).toBe(
-      "複数・逆方向・双方向は関連だけの設定です",
     );
     expect(errorMessage(err("schema.not_enum"))).toBe(
       "値を持てるのは enum と multi_enum のプロパティだけです",

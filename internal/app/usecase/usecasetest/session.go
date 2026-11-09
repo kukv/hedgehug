@@ -1054,10 +1054,10 @@ func NewMoveFx(t *testing.T) *MoveFx {
 		t.Fatal(err)
 	}
 	f.First = e.ULID
-	if _, err := tasks.Dep(a, "API-4", "API-1", true); err != nil {
+	if _, err := tasks.Dep(a, "API-4", tasks.DepTargets{"blocked_by": {"API-1"}}, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Dep(a, "API-5", "API-3", true); err != nil {
+	if _, err := tasks.Dep(a, "API-5", tasks.DepTargets{"blocked_by": {"API-3"}}, true); err != nil {
 		t.Fatal(err)
 	}
 	f.Comment, f.Worklog = model.NewULID(), model.NewULID()

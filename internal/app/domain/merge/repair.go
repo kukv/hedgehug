@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
@@ -50,7 +48,7 @@ type Repaired struct {
 //
 // A task that moved to another store leaves a forward (a task file with only
 // moved_to). The children of a forward go to the root (parent_moved), the
-// blockers and task_ref values that name a forward are removed (ref_moved),
+// blockers and the other relations that name a forward are removed (ref_moved),
 // and the comment and worklog files under a forward are removed. The files
 // removed are returned as dropped, each an Overwritten with Field "*" and
 // the whole file as a JSON string.
@@ -534,63 +532,31 @@ func (r *repairer) detachFromDeleted() error {
 	return nil
 }
 
-// removeMovedRefs removes from each task the blockers and task_ref values
+// removeMovedRefs removes from each task the blockers and the other relations
 // that name a forward.
 func (r *repairer) removeMovedRefs() {
 	if len(r.forwards) == 0 {
 		return
 	}
-	sc := r.sc
 	for _, u := range r.order {
 		t := r.tasks[u]
 		told := map[string]bool{} // one record per field and target
-		tellOnce := func(field string, target model.ULID) {
-			if k := field + " " + target.String(); !told[k] {
-				told[k] = true
-				r.movedRef(u, field, target)
-			}
-		}
-		for _, target := range slices.Clone(t.BlockedBy) {
-			if r.forwards[target] {
-				t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ULID) bool { return x == target })
-				tellOnce("blocked_by", target)
-			}
-		}
-		for _, f := range slices.Clone(t.Props) {
-			if p, ok := sc.Prop(f.Key); !ok || p.Type != schema.TypeTaskRef || f.Value == nil {
+		for _, rel := range schema.Relations {
+			list := rel.Get(t)
+			if !slices.ContainsFunc(list, func(x model.ULID) bool { return r.forwards[x] }) {
 				continue
 			}
-			for _, target := range r.dropFromProp(t, f) {
-				tellOnce("props."+f.Key, target)
+			for _, target := range list {
+				if r.forwards[target] {
+					if k := rel.Name + " " + target.String(); !told[k] {
+						told[k] = true
+						r.movedRef(u, rel.Name, target)
+					}
+				}
 			}
+			rel.Set(t, slices.DeleteFunc(slices.Clone(list), func(x model.ULID) bool { return r.forwards[x] }))
 		}
 	}
-}
-
-// dropFromProp removes the forwards from the task_ref property f of t, and
-// the property itself when nothing is left. It returns the ULIDs removed.
-func (r *repairer) dropFromProp(t *model.Task, f model.Field) []model.ULID {
-	var gone []model.ULID
-	isGone := func(n *yaml.Node) bool {
-		if n.Kind != yaml.ScalarNode {
-			return false
-		}
-		u, err := model.ParseULID(n.Value)
-		if err != nil || !r.forwards[u] {
-			return false
-		}
-		gone = append(gone, u)
-		return true
-	}
-	if f.Value.Kind == yaml.SequenceNode {
-		f.Value.Content = slices.DeleteFunc(f.Value.Content, isGone)
-		if len(gone) > 0 && len(f.Value.Content) == 0 {
-			t.Props.Delete(f.Key)
-		}
-	} else if isGone(f.Value) {
-		t.Props.Delete(f.Key)
-	}
-	return gone
 }
 
 func (r *repairer) movedRef(u model.ULID, field string, target model.ULID) {

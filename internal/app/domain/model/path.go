@@ -43,6 +43,15 @@ func WorkspacePath(ulid ULID) string { return "workspaces/" + ulid.String() + ".
 // pass ValidTemplateName, or the path may point outside templates/.
 func TemplatePath(name string) string { return "templates/" + name + ".md" }
 
+// TemplateNameOf is the name of the template whose file p is.
+func TemplateNameOf(p string) (string, bool) {
+	name, ok := strings.CutSuffix(strings.TrimPrefix(p, "templates/"), ".md")
+	if !ok || !strings.HasPrefix(p, "templates/") || strings.Contains(name, "/") {
+		return "", false
+	}
+	return name, true
+}
+
 // ValidTemplateName reports whether name can be used as a template file
 // name: not empty, no path separators, no "..", no leading "." and no
 // control characters.

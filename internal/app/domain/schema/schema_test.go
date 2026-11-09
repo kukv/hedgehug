@@ -23,8 +23,8 @@ func TestSchemaRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(s.Statuses) != 7 || s.Statuses[3].Color != "#3451D1" || s.Templates == nil ||
-		s.Templates.Default["bug"] != "bug-report" || len(s.Props) != 6 || s.Props[0].Name != "priority" ||
-		!s.Props[5].Symmetric || len(s.Scoped) != 2 || s.Scoped[0].Templates.Default["task"] != "release-checklist" {
+		s.Templates.Default["bug"] != "bug-report" || len(s.Props) != 4 || s.Props[0].Name != "priority" ||
+		s.Props[3].Name != "area" || len(s.Scoped) != 2 || s.Scoped[0].Templates.Default["task"] != "release-checklist" {
 		t.Errorf("decoded = %+v", s)
 	}
 	if got, ok := s.Workflow.Transitions.Get("backlog"); !ok || strings.Join(got, ",") != "todo,canceled" {
@@ -109,7 +109,7 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v\n%s", name, err, out)
 		}
-		if len(back.Statuses) != len(s.Statuses) || len(back.Props) != 8 {
+		if len(back.Statuses) != len(s.Statuses) || len(back.Props) != 5 {
 			t.Errorf("%s: re-decoded = %+v", name, back)
 		}
 		if !strings.Contains(string(out), "- {name: todo, label: Todo, category: todo, default: true}\n") {

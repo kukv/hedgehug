@@ -72,6 +72,10 @@ func applyItem(t *model.Task, it *model.TemplateItem, parent []string) {
 		t.Repos = slices.Clone(it.Repos)
 	}
 	t.BlockedBy = slices.Clone(it.BlockedBy)
+	t.Causes = slices.Clone(it.Causes)
+	t.Relates = slices.Clone(it.Relates)
+	t.Duplicates = slices.Clone(it.Duplicates)
+	t.Clones = slices.Clone(it.Clones)
 	t.Sprint = it.Sprint
 	t.Releases = slices.Clone(it.Releases)
 	t.Links = slices.Clone(it.Links)

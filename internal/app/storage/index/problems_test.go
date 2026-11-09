@@ -28,7 +28,7 @@ func TestProblems(t *testing.T) {
 	ix := indexOf(
 		&Entry{ULID: a, Broken: "bad yaml"},
 		&Entry{ULID: b, Violations: []schema.Violation{{Code: schema.CodeUnknownKind, Field: "kind", Msg: "m"}}},
-		&Entry{ULID: c, Parent: ptr(missing), BlockedBy: []model.ULID{missing}, Props: []Prop{{Key: "duplicates", Values: []string{missing.String(), b.String()}}}},
+		&Entry{ULID: c, Parent: ptr(missing), BlockedBy: []model.ULID{missing}, Duplicates: []model.ULID{missing, b}},
 		&Entry{ULID: d, Parent: ptr(x)}, // points into the cycle, is not on it
 		&Entry{ULID: x, Parent: ptr(y)},
 		&Entry{ULID: y, Parent: ptr(x), BlockedBy: []model.ULID{z}},
@@ -59,12 +59,9 @@ func TestReverse(t *testing.T) {
 	t.Parallel()
 	a, b, c := model.NewULID(), model.NewULID(), model.NewULID()
 	ix := indexOf(
-		&Entry{ULID: a, Title: "a", BlockedBy: []model.ULID{c}, Props: []Prop{
-			{Key: "duplicates", Values: []string{c.String()}},
-			{Key: "relates", Values: []string{b.String()}},
-		}},
-		&Entry{ULID: b, Title: "b", BlockedBy: []model.ULID{c}, Props: []Prop{{Key: "relates", Values: []string{a.String()}}}},
-		&Entry{ULID: c, Title: "c", Props: []Prop{{Key: "relates", Values: []string{a.String()}}}},
+		&Entry{ULID: a, Title: "a", BlockedBy: []model.ULID{c}, Duplicates: []model.ULID{c}, Relates: []model.ULID{b}, Causes: []model.ULID{b}, Clones: []model.ULID{b}},
+		&Entry{ULID: b, Title: "b", BlockedBy: []model.ULID{c}, Relates: []model.ULID{a}},
+		&Entry{ULID: c, Title: "c", Relates: []model.ULID{a}},
 	)
 	want := func(es []*Entry, titles ...string) {
 		t.Helper()
@@ -80,20 +77,38 @@ func TestReverse(t *testing.T) {
 	want(ix.Reverse(c, "blocked_by"), "a", "b")
 	want(ix.Reverse(c, "duplicates"), "a")
 	want(ix.Reverse(a, "duplicates"))
-	// relates is symmetric: both directions, each task once.
+	want(ix.Reverse(b, "causes"), "a")
+	want(ix.Reverse(b, "clones"), "a")
+	// relates has a direction too: only the tasks that point at the task.
 	want(ix.Reverse(a, "relates"), "b", "c")
-	want(ix.Reverse(c, "relates"), "a")
+	want(ix.Reverse(c, "relates"))
+	want(ix.Reverse(b, "relates"), "a")
+}
+
+// Targets reads the same field as the table of relations does, for each.
+func TestTargetsFollowTheTable(t *testing.T) {
+	t.Parallel()
+	for _, rel := range schema.Relations {
+		u := model.NewULID()
+		task := &model.Task{ULID: model.NewULID()}
+		rel.Set(task, []model.ULID{u})
+		if got := EntryOf(task).Targets(rel.Name); !slices.Equal(got, []model.ULID{u}) {
+			t.Errorf("Targets(%s) = %v, want [%s]", rel.Name, got, u)
+		}
+	}
 }
 
 func TestTargets(t *testing.T) {
 	t.Parallel()
-	a, b := model.NewULID(), model.NewULID()
-	e := &Entry{BlockedBy: []model.ULID{a}, Props: []Prop{{Key: "duplicates", Values: []string{b.String(), "not a ulid"}}}}
-	if got := e.Targets("blocked_by"); !slices.Equal(got, []model.ULID{a}) {
-		t.Errorf("Targets(blocked_by) = %v", got)
+	a, b, c, d, f := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()
+	e := &Entry{BlockedBy: []model.ULID{a}, Causes: []model.ULID{b}, Relates: []model.ULID{c}, Duplicates: []model.ULID{d}, Clones: []model.ULID{f}}
+	for rel, want := range map[string]model.ULID{"blocked_by": a, "causes": b, "relates": c, "duplicates": d, "clones": f} {
+		if got := e.Targets(rel); !slices.Equal(got, []model.ULID{want}) {
+			t.Errorf("Targets(%s) = %v", rel, got)
+		}
 	}
-	if got := e.Targets("duplicates"); !slices.Equal(got, []model.ULID{b}) {
-		t.Errorf("Targets(duplicates) = %v", got)
+	if got := e.Targets("blocks"); got != nil {
+		t.Errorf("Targets(blocks) = %v; the other direction is not stored", got)
 	}
 }
 

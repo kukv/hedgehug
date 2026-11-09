@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -70,8 +71,10 @@ func Undo(ss *usecase.Session) (UndoResult, error) {
 }
 
 // undoSkip are the operations undo does not pick: the ones that bring work
-// together or set a store up, which are not something a person did.
-var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "gh-fetch", usecase.OpGitHubMirror, usecase.OpGitHubPush}
+// together or set a store up, which are not something a person did. A
+// conversion (hh store convert) is one of them: it is not taken back, and the
+// undo after it takes back the operation before it.
+var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "convert", "gh-fetch", usecase.OpGitHubMirror, usecase.OpGitHubPush}
 
 // undoScanner finds the commit to undo, one entry at a time, newest first,
 // along the first parents: the newest that the writer made by an operation
@@ -224,7 +227,7 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 			return res, &forwardHitError{ulid: ulid}
 		}
 	}
-	u := &undoer{tx: tx, r: r, ix: ix, sc: s.Schema(), head: head, c: c, paths: map[string]bool{}, res: &res}
+	u := &undoer{tx: tx, r: r, ix: ix, sc: s.Schema(), head: head, c: c, paths: map[string]bool{}, commits: map[plumbing.Hash]*upgrade.Commit{}, res: &res}
 	for _, ch := range changes {
 		u.paths[ch.Path] = true
 	}
@@ -245,8 +248,10 @@ type undoer struct {
 	head  plumbing.Hash
 	c     gitrepo.LogEntry // the commit taken back
 	paths map[string]bool  // the files c changed
-	res   *UndoResult
-	moved []movedTask
+	// commits read a commit's task files in the newest format, by commit
+	commits map[plumbing.Hash]*upgrade.Commit
+	res     *UndoResult
+	moved   []movedTask
 }
 
 // movedTask is a task undo put in another workspace.
@@ -256,12 +261,36 @@ type movedTask struct {
 }
 
 // read returns p as commit has it, or nil when it is not there.
+// A task or template file comes back in the newest store format, whatever the
+// format of the commit (domain/upgrade), so that the versions of a file are
+// compared and merged in one form.
 func (u *undoer) read(commit plumbing.Hash, p string) ([]byte, error) {
 	b, err := u.r.ReadAt(commit, p)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
-	return b, err
+	if err != nil {
+		return nil, err
+	}
+	tpl, isTpl := model.TemplateNameOf(p)
+	if _, perr := model.ParseTaskPath(p); perr != nil && !isTpl {
+		return b, nil //nolint:nilerr // not a task or template file
+	}
+	up := u.upgraded(commit)
+	if isTpl {
+		return up.Template(tpl, b)
+	}
+	return up.Task(b)
+}
+
+// upgraded reads the files of commit in the newest format.
+func (u *undoer) upgraded(commit plumbing.Hash) *upgrade.Commit {
+	up, ok := u.commits[commit]
+	if !ok {
+		up = upgrade.At(func(p string) ([]byte, error) { return u.r.ReadAt(commit, p) })
+		u.commits[commit] = up
+	}
+	return up
 }
 
 // path takes back c's change to the file p.
@@ -277,6 +306,18 @@ func (u *undoer) path(p string) error {
 	base, ours, theirs := files[0], files[1], files[2]
 	if ours == nil && base != nil {
 		return nil // removed since, and stays removed
+	}
+	if _, isView := model.IsViewPath(p); (p == schema.Path || isView) && theirs != nil {
+		// The version to go back to is in the form of an older format: the
+		// schema.yaml that schema.Decode does not read, or a view whose query
+		// and columns use names that are gone. No step upgrades them.
+		f, err := u.upgraded(u.c.Parents[0]).Format()
+		if err != nil {
+			return err
+		}
+		if f < model.StoreFormat {
+			return usecase.NewErr(usecase.KindConflict, "undo.unsupported", fmt.Errorf("%s from before the store was converted cannot be restored; change it with hedgehug schema or hedgehug view", p))
+		}
 	}
 	m, err := merge.Merge(p, u.sc, base, merge.Side{Data: ours}, merge.Side{Data: theirs}, merge.OursWins)
 	if err != nil {

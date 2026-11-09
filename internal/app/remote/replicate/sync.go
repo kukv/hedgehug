@@ -19,6 +19,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	histidx "github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -599,6 +600,7 @@ func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing
 	if err != nil {
 		return nil, err
 	}
+	baseSnap.upgradeTasksTo(ours)
 	originHead := opt.origin
 	if originHead.IsZero() {
 		if originHead, err = r.RemoteHead("origin"); err != nil {
@@ -1082,6 +1084,18 @@ type snapshot struct {
 	over  map[string][]byte
 	paths []string // sorted
 	err   error    // the first failure of Read other than a missing file
+
+	up   *upgrade.Commit // reads the tasks in the format of like, when set
+	like plumbing.Hash
+	to   *upgrade.Commit // of like, to learn the format to upgrade to
+}
+
+// upgradeTasksTo makes Read give the tasks in the format of the commit like,
+// for a snapshot of a base that is in an older format than the sides. A task
+// that cannot be given so is nil, with the cause in err.
+func (s *snapshot) upgradeTasksTo(like plumbing.Hash) {
+	s.up, s.like = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadFile(s.tree, p) }), like
+	s.to = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadAt(like, p) })
 }
 
 func newSnapshot(r *gitrepo.Repo, tree plumbing.Hash, prefix string, over map[string][]byte) (*snapshot, error) {
@@ -1127,6 +1141,18 @@ func (s *snapshot) Read(p string) []byte {
 		}
 		return nil
 	}
+	if _, perr := model.ParseTaskPath(p); perr == nil && s.up != nil {
+		to, err := s.to.Format()
+		if err == nil {
+			b, err = s.up.TaskTo(to, b)
+		}
+		if err != nil {
+			if s.err == nil {
+				s.err = fmt.Errorf("%s at the merge base: %w", p, err)
+			}
+			return nil
+		}
+	}
 	return b
 }
 
@@ -1166,8 +1192,8 @@ func (o Options) storeName() string {
 	return o.Name
 }
 
-// pointsAtForward reports whether the reference of e through field (parent,
-// blocked_by or a task_ref property) names a forward.
+// pointsAtForward reports whether the reference of e through field (parent or
+// one of the five relations) names a forward.
 func pointsAtForward(ix *index.Index, e *index.Entry, field string) bool {
 	targets := e.Targets(field)
 	if field == "parent" && e.Parent != nil {

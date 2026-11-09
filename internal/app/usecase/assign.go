@@ -56,7 +56,7 @@ func ParseAssigns(ss []string) ([]Assign, error) {
 
 // ApplyAssign changes t as a says. Built-in fields come first; any other key
 // must be a property of sc, and its value is read by the property's type.
-// resolve turns task names into ULIDs, for blocked_by and task_ref properties.
+// resolve turns task names into ULIDs, for the relations.
 // Whether the result fits the schema is the store's to check.
 func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
 	switch a.Key {
@@ -74,10 +74,17 @@ func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string
 		return setList(&t.Labels, a)
 	case "repos":
 		return setList(&t.Repos, a)
-	case "blocked_by":
-		return setULIDs(&t.BlockedBy, a, resolve)
 	case "parent", "rank":
 		return NewErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set; use hedgehug mv", a.Key), "key", a.Key)
+	}
+	if rel, inverse, ok := schema.RelationOf(a.Key); ok {
+		if inverse {
+			return NewErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set; set %s on the other task", a.Key, rel.Name), "key", a.Key)
+		}
+		list := slices.Clone(rel.Get(t))
+		err := setULIDs(&list, a, resolve)
+		rel.Set(t, list)
+		return err
 	}
 	if slices.Contains(model.TaskKeys(), a.Key) {
 		return NewErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set", a.Key), "key", a.Key)
@@ -86,7 +93,7 @@ func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string
 	if !ok {
 		return NewErr(KindInvalid, "assign.unknown_key", fmt.Errorf("%s is not a field or a property of the schema", a.Key), "key", a.Key)
 	}
-	return setProp(t, p, a, resolve)
+	return setProp(t, p, a)
 }
 
 // WatchNewAssignees adds to the watchers of t the assignees it has now and
@@ -147,7 +154,7 @@ func setULIDs(dst *[]model.ULID, a Assign, resolve func(string) (model.ULID, err
 	return nil
 }
 
-func setProp(t *model.Task, p schema.Prop, a Assign, resolve func(string) (model.ULID, error)) error {
+func setProp(t *model.Task, p schema.Prop, a Assign) error {
 	multi := p.Multi || p.Type == schema.TypeMultiEnum
 	if a.Op == "=" && a.Value == "" {
 		t.Props.Delete(p.Name)
@@ -159,7 +166,7 @@ func setProp(t *model.Task, p schema.Prop, a Assign, resolve func(string) (model
 	if multi && a.Op != "=" && a.Value == "" {
 		return NewErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
 	}
-	n, err := propValue(p, a.Value, resolve)
+	n, err := propValue(p, a.Value)
 	if err != nil {
 		return err
 	}
@@ -192,7 +199,7 @@ func setProp(t *model.Task, p schema.Prop, a Assign, resolve func(string) (model
 
 // propValue reads v as a value of p. The tag makes the file show the value
 // as its type: a text that looks like a number is quoted, a date is not.
-func propValue(p schema.Prop, v string, resolve func(string) (model.ULID, error)) (*yaml.Node, error) {
+func propValue(p schema.Prop, v string) (*yaml.Node, error) {
 	tag := "!!str"
 	bad := func(what string) error {
 		return NewErr(KindInvalid, "assign.bad_value", fmt.Errorf("%s: %q is not %s", p.Name, v, what), "key", p.Name, "value", v)
@@ -229,12 +236,6 @@ func propValue(p schema.Prop, v string, resolve func(string) (model.ULID, error)
 		if _, err := model.ParseDuration(v); err != nil {
 			return nil, bad("a duration (like 2h30m)")
 		}
-	case schema.TypeTaskRef:
-		ulid, err := resolve(v)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", p.Name, err)
-		}
-		v = ulid.String()
 	}
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: tag, Value: v}, nil
 }

@@ -94,7 +94,7 @@ var argCompleters = map[string]argSpec{
 // command but store init: its --template and --workspace are not the ones of
 // a store that exists.
 var flagCompleters = map[string]completer{
-	"parent": completeIDs, "after": completeIDs, "before": completeIDs, "blocked-by": completeIDs, "project": completeIDs,
+	"parent": completeIDs, "after": completeIDs, "before": completeIDs, "blocked-by": completeIDs, "causes": completeIDs, "relates": completeIDs, "duplicates": completeIDs, "clones": completeIDs, "project": completeIDs,
 	"store": completeStores, "workspace": completeWorkspaces,
 	"sprint": completeSprints, "release": completeReleases, "template": completeTemplates,
 }
@@ -291,7 +291,7 @@ func completeTemplates(a *app, word string) []cobra.Completion {
 }
 
 // setFields are the keys of hedgehug set that are not properties.
-var setFields = []string{"title", "kind", "status", "assignees", "watchers", "labels", "repos", "blocked_by", "sprint", "releases"}
+var setFields = []string{"title", "kind", "status", "assignees", "watchers", "labels", "repos", "blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases"}
 
 // completeAssign completes a key=, then the value of the keys with values to
 // offer.

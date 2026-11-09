@@ -1,6 +1,6 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - /settings/schema/<store> is the heading "スキーマ"; the navigation "スキーマの種類" has the links
-//     ステータス / プロパティ / 関連 / ワークフロー (the kinds are fixed: see 2026-11-08-fixed-kinds-relations-design.md), and the tab shows a table whose rows are named by the
+//     ステータス / プロパティ / ワークフロー (the kinds are fixed: see 2026-11-08-fixed-kinds-relations-design.md), and the tab shows a table whose rows are named by the
 //     definition: the number of tasks is its last number, and its buttons are "編集（<名前>）" and
 //     "マージ（<名前>）"
 //   - the region "プロジェクトごとの上書き" lists a project with an override as a link to its settings

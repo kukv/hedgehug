@@ -3,6 +3,7 @@
 - 日付: 2026-11-08
 - 置き換える部分: `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` の画面の表で、SettingsSchema を「スキーマの閲覧、schema check、migrate」としている行
 - 置き換え: 種類（kinds）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。schema.yaml の `kinds`、種類の追加・編集、スキーマ画面の種類タブ、種類ごとの既定のテンプレートの置き場（今は `templates.default`）は、この記述より新しいそちらが正
+- 置き換え: 関連の編集（F7 の関連の表示名、F8 の `.inverse`、関連の追加・編集・マージ・並べ替え、ブロック）と、組み込みのプロパティ（プロパティのマージ、priority・labels の値の編集）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。この記述より新しいそちらが正
 
 ## 目的
 

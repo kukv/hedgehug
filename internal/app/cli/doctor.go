@@ -20,7 +20,7 @@ func (a *app) doctorCmd() *cobra.Command {
 		Args:  exactArgs(0),
 		RunE:  func(*cobra.Command, []string) error { return a.doctor(fix) },
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "repair parent cycles, children of deleted tasks, tasks in another workspace than their parent and ids that clash, in one commit; rebuild a store on the history of origin after a force push; then tell what is left")
+	cmd.Flags().BoolVar(&fix, "fix", false, "repair parent cycles, children of deleted tasks, tasks in another workspace than their parent and ids that clash, and, in a commit of its own, move relations an older hedgehug left in props to the fields of the task; rebuild a store on the history of origin after a force push; then tell what is left")
 	return cmd
 }
 

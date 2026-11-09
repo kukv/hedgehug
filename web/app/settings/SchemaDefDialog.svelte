@@ -1,13 +1,12 @@
 <script lang="ts" module>
-  export type DefTarget = "status" | "prop" | "relation";
+  export type DefTarget = "status" | "prop";
 
   const NOUN: Record<DefTarget, string> = {
     status: "ステータス",
     prop: "プロパティ",
-    relation: "関連",
   };
 
-  // The types a property can be added as; task_ref is a relation, added from its own tab.
+  // The types a property can be added as. Relations are fixed: they are not properties.
   const PROP_TYPES = [
     "text",
     "number",
@@ -82,9 +81,6 @@
   let valueRows = $state<ValueRow[]>(
     (prop?.values ?? []).map((v) => ({ key: newKey(), name: v, from: [v] })),
   );
-  let multi = $state(prop?.multi ?? false);
-  let symmetric = $state(prop?.symmetric ?? false);
-  let inverse = $state(prop?.inverse ?? "");
 
   let busy = $state(false);
   let err = $state.raw<unknown>(null);
@@ -95,7 +91,6 @@
   const valueNames = $derived(valueRows.map((r) => r.name.trim()));
   const valuesInvalid = $derived(
     hasValues &&
-      target === "prop" &&
       (valueNames.some((v) => v === "") || new Set(valueNames).size !== valueNames.length),
   );
   // Whether a task uses any of the current values a row comes from (unknown until the tasks are read).
@@ -134,21 +129,12 @@
       ...(isDefault && !statusDefaultLocked ? { default: true } : {}),
     };
   });
-  const relationFlags = $derived.by(() => {
-    const inv = symmetric ? "" : inverse.trim();
-    return {
-      ...(multi !== (prop?.multi ?? false) ? { multi } : {}),
-      ...(symmetric !== (prop?.symmetric ?? false) ? { symmetric } : {}),
-      ...(inv !== (prop?.inverse ?? "") ? { inverse: inv } : {}),
-    };
-  });
   const propEdit = $derived.by(() => {
     const l = label.trim();
     return {
       ...renamed,
       ...(l !== (prop?.label ?? "") ? { label: l } : {}),
-      ...(target === "relation" ? relationFlags : {}),
-      ...(hasValues && target === "prop" && valuesChanged
+      ...(hasValues && valuesChanged
         ? {
             values: valueRows.map((r) => ({
               name: r.name.trim(),
@@ -161,20 +147,11 @@
   const propBody = $derived.by(() => {
     if (!adding) return propEdit;
     const l = label.trim();
-    const type = target === "relation" ? "task_ref" : propType;
-    const inv = symmetric ? "" : inverse.trim();
     return {
       name: name.trim(),
-      type: type as (typeof PROP_TYPES)[number] | "task_ref",
+      type: propType as (typeof PROP_TYPES)[number],
       ...(l ? { label: l } : {}),
-      ...(hasValues && target === "prop" ? { values: valueNames } : {}),
-      ...(target === "relation"
-        ? {
-            ...(multi ? { multi } : {}),
-            ...(symmetric ? { symmetric } : {}),
-            ...(inv ? { inverse: inv } : {}),
-          }
-        : {}),
+      ...(hasValues ? { values: valueNames } : {}),
     };
   });
   const body = $derived(target === "status" ? statusBody : propBody);
@@ -303,7 +280,7 @@
         </div>
       {/if}
     {:else}
-      {#if adding && target === "prop"}
+      {#if adding}
         <div class="field">
           <label class="lbl" for="{uid}-type">型</label>
           <select id="{uid}-type" disabled={busy} bind:value={propType}>
@@ -313,37 +290,12 @@
           </select>
         </div>
       {/if}
-      {#if target === "prop" && hasValues}
+      {#if hasValues}
         <div class="field">
           <span class="lbl">値</span>
           <SchemaValues bind:rows={valueRows} disabled={busy} used={valueUsed} />
           {#if valuesInvalid}
             <p class="note">値が空か、重複しています</p>
-          {/if}
-        </div>
-      {/if}
-      {#if target === "relation"}
-        <div class="field">
-          <label class="check">
-            <input type="checkbox" disabled={busy} bind:checked={multi}>
-            複数
-          </label>
-          <label class="check">
-            <input type="checkbox" disabled={busy} bind:checked={symmetric}>
-            双方向
-          </label>
-        </div>
-        <div class="field">
-          <label class="lbl" for="{uid}-inv">逆方向の表示名</label>
-          <input
-            id="{uid}-inv"
-            type="text"
-            autocomplete="off"
-            disabled={busy || symmetric}
-            bind:value={inverse}
-          >
-          {#if symmetric}
-            <p class="note">双方向の関連には逆方向の表示名を付けられません</p>
           {/if}
         </div>
       {/if}

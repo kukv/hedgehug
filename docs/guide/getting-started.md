@@ -74,6 +74,7 @@ WEB-5 are left out).
 hh add "Review the login page" --parent WEB-6   # a task under the project WEB-6, in the default store
 hh status WEB-1 in_progress
 hh set WEB-1 assignees=github.com/me labels+=ui
+hh dep add WEB-2 --blocked-by WEB-1  # WEB-2 waits for WEB-1; see Relations in Planning
 hh done WEB-1
 hh sync                              # sync now, without waiting for the background sync
 ```

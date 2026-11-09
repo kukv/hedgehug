@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
-	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
@@ -734,10 +733,7 @@ func opWSRm(c *cluster, i int, rnd *rand.Rand) []write {
 // and blocked_by, which the moves between stores cut.
 var moveOps = append(slices.Clone(ops), op{"block", opBlock}, op{"block", opBlock}, op{"ref", opRef}, op{"ref", opRef})
 
-// refProp is the task_ref property of the schema of the clusters.
-const refProp = "ref"
-
-// opRef makes the task_ref property of a task point at another task of the
+// opRef makes the relates relation of a task point at another task of the
 // same store. Like opBlock it keeps no write: the invariant is that nothing
 // points at a forward.
 func opRef(c *cluster, i int, rnd *rand.Rand) []write {
@@ -755,7 +751,7 @@ func opRef(c *cluster, i int, rnd *rand.Rand) []write {
 		if err != nil {
 			return err
 		}
-		x.Props.Set(refProp, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: b.ULID.String()})
+		x.Relates = []model.ULID{b.ULID}
 		return tx.PutTask(x)
 	})
 	return nil
@@ -822,7 +818,7 @@ func opMoveStore(src, dst *cluster, i int, rnd *rand.Rand) []write {
 			notes[rel] = b
 		}
 	}
-	unlinked := store.Unlinks(src.stores[i].Schema(), moved, rest)
+	unlinked := store.Unlinks(moved, rest)
 
 	l, err := store.LockInOrder(src.stores[i], dst.stores[i])
 	if err != nil {

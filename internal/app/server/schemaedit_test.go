@@ -68,9 +68,7 @@ func TestSchemaEditRoundTrip(t *testing.T) {
 
 	var sc schemas.SchemaView
 	ts.call("GET", "/api/schema", nil, 200, &sc)
-	// ordering the others put area in the first slot of the group, so points
-	// took the slot area had at the end; the relations kept their places
-	want := []string{"priority", "start", "due", "estimate", "duplicates", "causes", "relates", "points"}
+	want := []string{"priority", "start", "due", "estimate", "points"}
 	if !slices.Equal(sc.PropOrder, want) {
 		t.Errorf("prop_order = %v, want %v", sc.PropOrder, want)
 	}

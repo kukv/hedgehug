@@ -39,20 +39,17 @@ func TestValidateTaskOK(t *testing.T) {
 		Prop{Name: "flag", Type: TypeBool},
 		Prop{Name: "at", Type: TypeDatetime},
 		Prop{Name: "note", Type: TypeText},
-		Prop{Name: "blocker", Type: TypeTaskRef},
 	)
 	task := taskWith(t, `  priority: high
   start: 2026-11-03
   estimate: 1h30m
   points: 2.5
-  duplicates: [01JBZ8K3QW7M2X9V4T6R5N8P0B]
   area: [backend]
   owner: github.com/yourname
   spec: https://example.com/spec
   flag: true
   at: 2026-11-03T10:00:00+09:00
   note: anything
-  blocker: 01JBZ8K3QW7M2X9V4T6R5N8P0C
   custom: 1
 `)
 	vs, undefined := ValidateTask(task, s.For(nil))
@@ -72,7 +69,6 @@ func TestValidateTaskViolations(t *testing.T) {
 		Prop{Name: "owner", Type: TypeUser},
 		Prop{Name: "spec", Type: TypeURL},
 		Prop{Name: "flag", Type: TypeBool},
-		Prop{Name: "blocker", Type: TypeTaskRef},
 	)
 	for _, tc := range []struct{ props, want string }{
 		{"  priority: none\n", "bad_value:priority"},
@@ -85,13 +81,10 @@ func TestValidateTaskViolations(t *testing.T) {
 		{"  points: -Inf\n", "bad_value:points"},
 		{"  points: +Inf\n", "bad_value:points"},
 		{"  points: .inf\n", "bad_value:points"},
-		{"  duplicates: 01JBZ8K3QW7M2X9V4T6R5N8P0B\n", "bad_value:duplicates"}, // multi needs a list
-		{"  duplicates: [nope]\n", "bad_value:duplicates"},
 		{"  area: [ops]\n", "bad_value:area"},
 		{"  owner: yourname\n", "bad_value:owner"},
 		{"  spec: not a url\n", "bad_value:spec"},
 		{"  flag: maybe\n", "bad_value:flag"},
-		{"  blocker: [01JBZ8K3QW7M2X9V4T6R5N8P0C]\n", "bad_value:blocker"}, // single needs a scalar
 	} {
 		vs, _ := ValidateTask(taskWith(t, tc.props), s.For(nil))
 		if got := codes(vs); len(got) != 1 || got[0] != tc.want {

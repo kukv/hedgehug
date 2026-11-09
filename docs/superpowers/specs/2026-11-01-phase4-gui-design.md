@@ -5,6 +5,7 @@
 - 画面のデザイン: Hedgehug GUI デザイン（https://claude.ai/artifact/K14rwULxyyS2nYNbMKSr5L）。色・文字・部品・ふるまいは「実装の基準」（Foundations）のアートボードを正とする
 - 前段: `docs/superpowers/specs/2026-10-31-phase2-sync-merge-design.md`（ほか 1a〜1.5 の spec）
 - 置き換え: 種類（kinds）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。schema.yaml の `kinds`、種類の追加・編集、スキーマ画面の種類タブ、種類ごとの既定のテンプレートの置き場（今は `templates.default`）は、この記述より新しいそちらが正
+- 置き換え: 関連の種類（task_ref）、値を 1 つしか持てない関連、スキーマ画面の関連タブと `.inverse` は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した（関連タブはなくなった）。この記述より新しいそちらが正
 
 ## 位置づけ
 

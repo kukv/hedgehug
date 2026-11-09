@@ -1,4 +1,5 @@
 import type { Api, ShowView } from "./api/client";
+import { RELATIONS, type RelationField } from "./relations";
 
 // showAt is the task as it was at the commit (GET /api/tasks/{id}/history/
 // {commit}). The commit has no task: 404 restore_at.not_found.
@@ -7,7 +8,7 @@ export function showAt(api: Api, id: string, commit: string, store?: string): Pr
 }
 
 export type RestoreChange = {
-  field: string; // title, kind, status, parent, assignees, labels, blocked_by, body, props.<name>
+  field: string; // title, kind, status, parent, assignees, labels, a relation (blocked_by, causes, ...), body, props.<name>
   label: string;
   from: string; // now
   to: string; // after the restore
@@ -60,12 +61,14 @@ export function diffForRestore(
   };
   list("assignees", "担当者", now.assignees, then.assignees);
   list("labels", "ラベル", now.labels, then.labels);
-  list(
-    "blocked_by",
-    "ブロック",
-    (now.blocked_by ?? []).map((r) => r.id),
-    (then.blocked_by ?? []).map((r) => r.id),
-  );
+  for (const r of RELATIONS) {
+    list(
+      r.name,
+      r.label,
+      (now[r.name as RelationField] ?? []).map((x) => x.id),
+      (then[r.name as RelationField] ?? []).map((x) => x.id),
+    );
+  }
   const keys = [...new Set([...Object.keys(now.props ?? {}), ...Object.keys(then.props ?? {})])];
   for (const k of keys.sort()) {
     const a = now.props?.[k] ?? null;

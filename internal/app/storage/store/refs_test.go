@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
@@ -26,15 +24,6 @@ func wantViolation(t *testing.T, err error, task model.ULID, code, field string)
 		}
 	}
 	t.Errorf("violations = %v, want %s on %s", ve.Violations, code, field)
-}
-
-// ulidList is a property value listing ULIDs.
-func ulidList(ulids ...model.ULID) *yaml.Node {
-	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	for _, ulid := range ulids {
-		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ulid.String()})
-	}
-	return n
 }
 
 // settleKinds gives the tasks that have a parent, and the default kind of
@@ -89,12 +78,35 @@ func TestUpdateMissingBlocker(t *testing.T) {
 	wantViolation(t, put(s, task), task.ULID, schema.CodeMissingRef, "blocked_by")
 }
 
-func TestUpdateMissingTaskRefProp(t *testing.T) {
+func TestUpdateMissingRelationTarget(t *testing.T) {
 	t.Parallel()
-	s := newTestStore(t)
-	task := newTask("x")
-	task.Props.Set("duplicates", ulidList(model.NewULID()))
-	wantViolation(t, put(s, task), task.ULID, schema.CodeMissingRef, "duplicates")
+	for _, rel := range schema.Relations {
+		s := newTestStore(t)
+		task := newTask("x")
+		rel.Set(task, []model.ULID{model.NewULID()})
+		wantViolation(t, put(s, task), task.ULID, schema.CodeMissingRef, rel.Name)
+	}
+}
+
+// A relation other than blocked_by that points at its own task is ref.self;
+// blocked_by is a cycle.
+func TestUpdateSelfRelation(t *testing.T) {
+	t.Parallel()
+	for _, rel := range schema.Relations {
+		s := newTestStore(t)
+		task := newTask("x")
+		addTask(t, s, task)
+		got, err := s.Task(task.ULID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel.Set(got, []model.ULID{got.ULID})
+		code := schema.CodeSelfRef
+		if rel.Name == "blocked_by" {
+			code = schema.CodeCycle
+		}
+		wantViolation(t, put(s, got), got.ULID, code, rel.Name)
+	}
 }
 
 func TestUpdateKeepsOldMissingRef(t *testing.T) {

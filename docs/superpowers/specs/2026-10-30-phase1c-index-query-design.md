@@ -3,6 +3,7 @@
 - 日付: 2026-10-30
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」1. Core とファイル形式、「インデックス」「人が読めるキー」「タスク間の関連」「参照は Store の中に閉じる」「クエリ言語」
 - 前段: `docs/superpowers/specs/2026-10-30-phase1a-model-format-design.md`、`docs/superpowers/specs/2026-10-30-phase1b-store-git-design.md`
+- 置き換え: クエリの関連のキー（`Reverse`、`relates` の双方向、`<名前>.inverse`、未知のキーの判定）と、priority・labels などの組み込みのプロパティの扱いは `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。この記述より新しいそちらが正
 
 ## 位置づけ
 

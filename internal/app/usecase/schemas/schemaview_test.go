@@ -46,7 +46,7 @@ func TestSchemaViewOfDefault(t *testing.T) {
 func TestSchemaViewOfPropOrder(t *testing.T) {
 	t.Parallel()
 	got := strings.Join(schemas.SchemaViewOf(schema.Default()).PropOrder, " ")
-	if want := "priority start due estimate points duplicates causes relates"; got != want {
+	if want := "priority start due estimate points"; got != want {
 		t.Errorf("PropOrder = %q, want %q", got, want)
 	}
 }

@@ -142,8 +142,6 @@ func editErr(err error) error {
 		return usecase.NewErr(usecase.KindNotFound, "schema.not_defined", err)
 	case errors.Is(err, schema.ErrOrderStale):
 		return usecase.NewErr(usecase.KindConflict, "schema.order_stale", err)
-	case errors.Is(err, schema.ErrNotTaskRef):
-		return usecase.NewErr(usecase.KindInvalid, "schema.not_task_ref", err)
 	case errors.Is(err, schema.ErrNotEnum):
 		return usecase.NewErr(usecase.KindInvalid, "schema.not_enum", err)
 	case errors.Is(err, schema.ErrNameTaken):

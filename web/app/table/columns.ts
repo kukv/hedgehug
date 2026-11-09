@@ -1,4 +1,5 @@
 import type { TaskView } from "../../core/api/client";
+import { RELATIONS } from "../../core/relations";
 import type { PatchField } from "../../core/save";
 import type { SchemaView } from "../../core/schema";
 import { propNames } from "../../core/schema-edit";
@@ -30,9 +31,9 @@ export const STORE_COLUMN: ColumnSpec = { id: "@store", label: "Store", readonly
 export const isBuiltinColumn = (id: string): boolean =>
   id === STORE_COLUMN.id || BUILTIN.some((c) => c.id === id);
 
-// Names of a schema that are not a column: the builtin ones, and blocked_by, which a view cannot
-// name (the Relations section of the detail edits it).
-const NOT_A_PROP = new Set([...BUILTIN.map((c) => c.id), "blocked_by"]);
+// Names of a schema that are not a column: the builtin ones, and the relations, which a view cannot
+// name (the Relations section of the detail edits them).
+const NOT_A_PROP = new Set([...BUILTIN.map((c) => c.id), ...RELATIONS.map((r) => r.name)]);
 
 function propWidth(def: { type: string; multi?: boolean }): number {
   if (def.multi || def.type === "multi_enum") return 12;
@@ -54,7 +55,7 @@ export function columnCandidates(schemas: SchemaView[]): ColumnSpec[] {
       props.set(name, {
         id: name,
         label: def.label || name,
-        readonly: def.type === "task_ref",
+        readonly: false,
         width: propWidth(def),
       });
     }
@@ -121,7 +122,6 @@ function propKey(t: TaskView, name: string, ctx: SortCtx): SortKey {
   if (typeof v === "boolean") return v ? 1 : 0;
   if (typeof v === "number") return v;
   const def = ctx.schemaOf(t.store)?.props[name];
-  if (def?.type === "task_ref") return ctx.taskOf(String(v))?.id ?? String(v);
   const values = def?.values;
   if (values && values.length > 0) {
     const at = values.indexOf(String(v));

@@ -3,6 +3,7 @@
 - 日付: 2026-11-01
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」3. 複数 Store とアカウント、「Store とアカウント」の章、「コンテキスト解決」、「メンションと通知」、「GUI 仕様」の「複数 Store の見せ方」（CLI に当たる部分）、「開発環境」
 - 前段: `docs/superpowers/specs/2026-10-31-phase2-sync-merge-design.md`（ほか 1a〜1.5 の spec）
+- 置き換え: 参照（`blocked_by` と `task_ref`）は関連の 5 つの組み込みの項目になり、別の Store へ動かすときに切る参照と `ref_moved` の field の名前（`props.` を付けない）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。この記述より新しいそちらが正
 
 ## 2026-11-02 の変更
 
