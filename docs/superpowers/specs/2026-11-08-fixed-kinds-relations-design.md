@@ -145,7 +145,7 @@
 
 - タスクのラベルと GitHub の issue のラベルの同期をやめる。同期する項目（`hh automation fields`）から `labels` をなくし、push・mirror・issue の作成のどれでもラベルを送らず、取り込まない。
 - 理由: ラベルの使い方はリポジトリごと、Organization ごとに違い、hedgehug の値のリストとそのまま対応づけられない。GitHub のラベルとの対応づけは別に検討する。
-- `hh gh import --label` の絞り込み（取り込む issue を GitHub のラベルで選ぶ）は同期ではないので残す。
+- `hh gh import --label` の絞り込み（取り込む issue を GitHub のラベルで選ぶ）は同期ではないので残す。`--label` は任意（省くと開いている issue すべて。2026-11-10、利用者の決定）。hedgehug を使うのに GitHub のラベルが要る場面はない。
 - 既存の automations の `labels` の項目は、変換の段 3→4 で取り除く。
 
 ## GitHub のコメント同期
