@@ -542,6 +542,7 @@ func issueOverwrittenContent(it inbox.Item) string {
 	var d struct {
 		Ref, Field, Side string
 		Lost             []string
+		Comment          string
 	}
 	_ = json.Unmarshal(it.Detail, &d)
 	label := d.Ref
@@ -549,10 +550,22 @@ func issueOverwrittenContent(it inbox.Item) string {
 		label = r.Label()
 	}
 	lost := strconv.Quote(strings.Join(d.Lost, ", "))
-	if d.Side == automation.SideGitHub {
-		return fmt.Sprintf("the %s %s on %s was written over by the task", d.Field, lost, label)
+	field := d.Field
+	if strings.HasPrefix(field, "comments:") {
+		// which comment: the start of its text, when the item has it; then the text that was lost
+		what := "the comment"
+		if d.Comment != "" {
+			what += " starting " + strconv.Quote(d.Comment)
+		}
+		if d.Side == automation.SideGitHub {
+			return fmt.Sprintf("%s on %s was written over by the task; GitHub had %s", what, label, lost)
+		}
+		return fmt.Sprintf("%s of the task was written over by %s; the task had %s", what, label, lost)
 	}
-	return fmt.Sprintf("the %s %s of the task was written over by %s", d.Field, lost, label)
+	if d.Side == automation.SideGitHub {
+		return fmt.Sprintf("the %s %s on %s was written over by the task", field, lost, label)
+	}
+	return fmt.Sprintf("the %s %s of the task was written over by %s", field, lost, label)
 }
 
 // InboxContent says what happened, by the kind of the item. An item that

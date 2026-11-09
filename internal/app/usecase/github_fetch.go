@@ -66,7 +66,7 @@ func fetchStore(ss *Session, c *config.Config, e config.StoreEntry, force string
 		if err != nil {
 			return err
 		}
-		got := fetched{pulls: map[string]github.Pull{}, issues: map[string]github.Issue{}}
+		got := fetched{pulls: map[string]github.Pull{}, issues: map[string]github.Issue{}, comments: map[string][]github.IssueComment{}}
 		if err := fetchLocked(ss, c, e, s, ix, force, got, &rep); err != nil {
 			return err
 		}
@@ -93,6 +93,12 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		return nil // no repository: nothing needs an account
 	}
 	now := ss.Now()
+	// The rules say which issues are read for their comments. Without them the
+	// comments are left; the read under the lock tells why.
+	var commentRules *automation.File
+	if r, err := s.Automations(); err == nil {
+		commentRules = r
+	}
 	auto := map[model.ULID][]autoLink{}
 	// read is what each repository that was read now knows. It goes into the
 	// state only when what was found is written: a repository whose result
@@ -168,6 +174,7 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 			}
 			found = append(found, model.GitHubRef{Repo: repo, Kind: kind, Number: n}.Label()+" is not on GitHub")
 		}
+		readMirrorComments(cl, acct, ix, repo, commentRules, got, rep)
 		rep.Warnings = append(rep.Warnings, found...)
 		st.Warning = strings.Join(found, "\n")
 		read[repo] = st
@@ -243,6 +250,18 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 				x, _ := ix.Task(u) // chosen from ix above
 				if plan, err = planMirror(t, got, rules, s.Schema().For(ix.Ancestors(x))); err != nil {
 					rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
+				}
+			}
+			if usable {
+				cm, err := planCommentMirror(s, t, got, rules)
+				if err != nil {
+					rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
+				}
+				if cm != nil {
+					if plan == nil {
+						plan = &mirrorPlan{ulid: u, set: model.IssueValues{}, synced: map[string]model.IssueValues{}}
+					}
+					plan.comments = cm
 				}
 			}
 			if plan != nil {

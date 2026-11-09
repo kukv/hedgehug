@@ -58,9 +58,15 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 				return nil, err
 			}
 		}
-		if _, mine := isMe(me, e.Writer()); len(e.Parents) == 1 && !mine {
-			if err := c.changes(); err != nil {
-				return nil, err
+		if _, mine := isMe(me, e.Writer()); len(e.Parents) == 1 {
+			// The comments the mirror takes in are news to the one who ran the
+			// sync as well: the commit is theirs, but not the words.
+			op, _ := e.Trailer("Hedgehug-Op")
+			if !mine || op == automation.OpGitHubMirror {
+				c.mirroredOnly = mine
+				if err := c.changes(); err != nil {
+					return nil, err
+				}
 			}
 		}
 		c.dropCoveredWatches()
@@ -89,6 +95,9 @@ type commit struct {
 	tree  plumbing.Hash
 	me    []string
 	items []Item
+	// mirroredOnly makes changes tell only of the comments taken from GitHub:
+	// the commit is a mirror of the one who reads.
+	mirroredOnly bool
 	// changed maps the names of the files the commit changed from any of
 	// its parents to their paths; made when a trailer needs it.
 	changed map[string]string
@@ -220,14 +229,41 @@ func (c *commit) issueOverwritten(v string) error {
 	if err != nil || t == nil {
 		return err
 	}
+	// For a comment, the start of its text in the commit (the text that wrote
+	// over GitHub's), which names the comment where a ULID cannot.
+	var comment string
+	if id, ok := strings.CutPrefix(o.Field, "comments:"); ok {
+		if cm, err := model.ParseULID(id); err == nil {
+			x, err := readComment(c.r, c.tree, u, cm)
+			if err != nil {
+				return err
+			}
+			if x != nil {
+				comment = commentPreview(x.Body)
+			}
+		}
+	}
 	detail := mustJSON(struct {
-		Ref   string   `json:"ref"`
-		Field string   `json:"field"`
-		Side  string   `json:"side"`
-		Lost  []string `json:"lost"`
-	}{ref, o.Field, o.Side, o.Lost})
+		Ref     string   `json:"ref"`
+		Field   string   `json:"field"`
+		Side    string   `json:"side"`
+		Lost    []string `json:"lost"`
+		Comment string   `json:"comment,omitempty"`
+	}{ref, o.Field, o.Side, o.Lost, comment})
 	c.tell(t, Item{Kind: IssueOverwritten, Task: u, Detail: detail})
 	return nil
+}
+
+// commentPreviewRunes is how much of a comment names it in a notice.
+const commentPreviewRunes = 12
+
+// commentPreview is the first characters of a comment's text, on one line.
+func commentPreview(body string) string {
+	r := []rune(strings.Join(strings.Fields(body), " "))
+	if len(r) > commentPreviewRunes {
+		r = r[:commentPreviewRunes]
+	}
+	return string(r)
 }
 
 // tell makes it for each account of me that is an assignee or a watcher
@@ -358,6 +394,9 @@ func (c *commit) changes() error {
 		}
 		var err error
 		if u, perr := model.ParseTaskPath(ch.Path); perr == nil {
+			if c.mirroredOnly {
+				continue
+			}
 			err = c.task(u, from)
 		} else if task, cm, perr := model.ParseCommentPath(ch.Path); perr == nil {
 			err = c.comment(task, cm, from)
@@ -421,6 +460,9 @@ func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
 	old := &model.Comment{}
 	if was != nil {
 		old = was
+	}
+	if c.mirroredOnly && !now.Mirrored() {
+		return nil
 	}
 	d := mustJSON(map[string]model.ULID{"comment": cm})
 	for _, to := range c.mentioned(old.Body, now.Body) {

@@ -154,6 +154,71 @@ func (tx *Tx) PutComment(task model.ULID, c *model.Comment) error {
 	return tx.put(model.CommentPath(task, c.ULID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
 }
 
+// PutCommentAt queues a write of c with the updated that c has, not the time of
+// the operation: the mirror of the comments of an issue takes the times from
+// GitHub, so that clones that take in the same change write the same file.
+// A comment whose updated is zero gets the time of the operation.
+func (tx *Tx) PutCommentAt(task model.ULID, c *model.Comment) error {
+	if task.IsZero() || c.ULID.IsZero() {
+		return errors.New("the comment has no ulid or no task")
+	}
+	if tx.removed[task] {
+		return fmt.Errorf("task %s is removed in this operation", task)
+	}
+	p := &pending{encode: c.Encode, created: &c.Created}
+	if c.Updated.IsZero() {
+		p.updated = &c.Updated
+	}
+	return tx.put(model.CommentPath(task, c.ULID), p)
+}
+
+// PutCommentGH queues a write of c that changes its gh and keeps its updated:
+// the push to GitHub records which comment is which there, which is no edit
+// of the comment, and an edit made elsewhere must not lose to that record on
+// the merge by updated. c is the comment as it is in the file, with only gh
+// changed; the write is refused (ErrCommentChanged) when anything else
+// differs, or when the comment is already written in this operation. The
+// comment must be in the file (ErrNotFound).
+func (tx *Tx) PutCommentGH(task model.ULID, c *model.Comment) error {
+	if task.IsZero() || c.ULID.IsZero() {
+		return errors.New("the comment has no ulid or no task")
+	}
+	if tx.removed[task] {
+		return fmt.Errorf("task %s is removed in this operation", task)
+	}
+	rel := model.CommentPath(task, c.ULID)
+	if _, ok := tx.pending[rel]; ok {
+		return fmt.Errorf("%s: %w: written in this operation", rel, ErrCommentChanged)
+	}
+	b, err := osfs.ReadFile(tx.s.path(rel))
+	if errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%s: %w", rel, ErrNotFound)
+	}
+	if err != nil {
+		return err
+	}
+	cur, err := model.DecodeComment(b)
+	if err != nil {
+		return fmt.Errorf("%s: %w", rel, err)
+	}
+	// Everything but gh, written afresh so that only the values are compared.
+	bare := func(x *model.Comment) ([]byte, error) {
+		return (&model.Comment{ULID: x.ULID, Author: x.Author, Created: x.Created, Updated: x.Updated, DeletedAt: x.DeletedAt, Extra: x.Extra, Body: x.Body}).Encode()
+	}
+	want, err := bare(cur)
+	if err != nil {
+		return err
+	}
+	got, err := bare(c)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(want, got) {
+		return fmt.Errorf("%s: %w", rel, ErrCommentChanged)
+	}
+	return tx.put(rel, &pending{encode: c.Encode})
+}
+
 func (tx *Tx) PutWorklog(task model.ULID, w *model.Worklog) error {
 	if task.IsZero() || w.ULID.IsZero() {
 		return errors.New("the worklog entry has no ulid or no task")

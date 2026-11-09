@@ -386,7 +386,7 @@ func Show(ss *usecase.Session, arg string) (*usecase.ShowView, error) {
 			return nil, err
 		}
 		for _, c := range cs {
-			j.Comments = append(j.Comments, usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body})
+			j.Comments = append(j.Comments, usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, GitHub: c.Mirrored(), Body: c.Body})
 		}
 		if j.Worklog, err = worklogTotal(s, e.ULID); err != nil {
 			return nil, err

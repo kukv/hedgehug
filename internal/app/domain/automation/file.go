@@ -30,7 +30,7 @@ const (
 var Events = []string{PROpened, PRReviewRequested, PRMerged, IssueClosed}
 
 // IssueFieldNames are the fields of an issue that issue_fields may name.
-var IssueFieldNames = []string{"title", "body", "status", "assignees", "milestone"}
+var IssueFieldNames = []string{"title", "body", "status", "assignees", "milestone", "comments"}
 
 // SyncModes are the values of issue_fields.default_sync.
 var SyncModes = []string{model.SyncMirror, model.SyncPush, model.SyncLink}

@@ -144,6 +144,45 @@ func TestMirrorFollowsGitHub(t *testing.T) {
 	}
 }
 
+// comments is a name of the fields, but the scalar mirror does not take it:
+// the task follows the issue as if the link did not name it.
+func TestMirrorIgnoresTheCommentsField(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	n := issueTask(t, ts, fake, model.SyncMirror)
+	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		cur, err := tx.Task(taskIn(t, ts, "me", "ME-1").ULID)
+		if err != nil {
+			return err
+		}
+		cur.Links[0].Fields = []string{"comments"}
+		return tx.PutTask(cur)
+	})
+	if _, err := fake.AddComment("org-a/web", n, "bob", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.EditIssue("org-a/web", n, "new", ""); err != nil {
+		t.Fatal(err)
+	}
+	if w := refetch(t, ts); len(w) != 0 {
+		t.Fatalf("warnings %v", w)
+	}
+	if x := taskIn(t, ts, "me", "ME-1"); x.Title != "a" {
+		t.Errorf("task %+v", x)
+	}
+	// A link that syncs no value has no base for the values: were comments
+	// one of them, the base would be written, empty.
+	g, err := taskIn(t, ts, "me", "ME-1").GitHub()
+	if err != nil || len(g.Issues) != 1 || g.Issues[0].Synced != nil {
+		t.Errorf("gh %+v, %v", g, err)
+	}
+	n0 := len(logOf(t, ts))
+	refetch(t, ts)
+	if c := len(logOf(t, ts)); c != n0 {
+		t.Errorf("%d commits added", c-n0)
+	}
+}
+
 // The labels of an issue are not taken in, not by the default fields, and not
 // by a link that still names labels in its fields.
 func TestMirrorDoesNotTakeTheLabels(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 // The ops of the commits that sync issues. Like gh-fetch they are no one's
 // work: undoing one, the next sync would write the same again.
 const (
-	OpGitHubMirror = "gh-mirror"
+	OpGitHubMirror = automation.OpGitHubMirror
 	OpGitHubPush   = "gh-push"
 )
 
@@ -113,6 +113,7 @@ type mirrorPlan struct {
 	rejected    []automation.Rejection
 	synced      map[string]model.IssueValues // by ref
 	overwritten []issueNote
+	comments    *commentMirror // the comments to write, or nil
 }
 
 // write puts the plan's values and status on t.
@@ -172,7 +173,7 @@ func planMirror(t *model.Task, got fetched, rules *automation.File, e *schema.Ef
 		// A link that was not read keeps its fields: the next link does not
 		// get them for one fetch.
 		var fields []string
-		for _, f := range rules.IssueFields.For(l) {
+		for _, f := range rules.IssueFields.Scalars(l) {
 			if !taken[f] {
 				taken[f] = true
 				fields = append(fields, f)
@@ -300,6 +301,19 @@ func applyMirror(ss *Session, s *store.Store, held *store.Locked, plans []*mirro
 				tx.AddTrailer(automation.TrailerRejected, automation.RejectedTrailer(p.ulid, r))
 			}
 			noteOverwrites(tx, p.ulid, p.overwritten)
+			if p.comments != nil {
+				noteOverwrites(tx, p.ulid, p.comments.notes)
+				for _, c := range p.comments.puts {
+					if err := tx.PutCommentAt(p.ulid, c); err != nil {
+						return err
+					}
+				}
+				for _, c := range p.comments.ghOnly {
+					if err := tx.PutCommentGH(p.ulid, c); err != nil {
+						return err
+					}
+				}
+			}
 			return tx.PutTask(t)
 		})
 		if err != nil {

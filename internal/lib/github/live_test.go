@@ -4,6 +4,7 @@ package github
 
 import (
 	"os"
+	"slices"
 	"testing"
 	"time"
 )
@@ -45,5 +46,46 @@ func TestLiveQueries(t *testing.T) {
 	}
 	if _, _, err := c.OpenIssues(org, "hh-live", "hh-live"); err != nil {
 		t.Errorf("open issues: %v", err)
+	}
+}
+
+// TestLiveIssueComments writes one comment to an open issue of hh-live, reads
+// it back, changes it and deletes it. The token needs the permission to write
+// issues. .github/workflows/github-live.yaml runs it on a schedule.
+func TestLiveIssueComments(t *testing.T) {
+	org, token := os.Getenv("HEDGEHUG_LIVE_ORG"), os.Getenv("HEDGEHUG_LIVE_TOKEN")
+	if org == "" || token == "" {
+		t.Log("HEDGEHUG_LIVE_ORG or HEDGEHUG_LIVE_TOKEN is not set: nothing to check")
+		return
+	}
+	c := New(Options{API: "https://api.github.com"}, token, nil)
+	issues, _, err := c.OpenIssues(org, "hh-live", "hh-live")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) == 0 {
+		t.Fatal("hh-live has no open issue with the label hh-live to comment on")
+	}
+	number := issues[0].Number
+	made, err := c.CreateIssueComment(org, "hh-live", number, "hedgehug live test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.DeleteIssueComment(org, "hh-live", made.ID) }()
+	if made.ID == 0 || made.User == nil || made.CreatedAt.IsZero() {
+		t.Errorf("created comment did not decode: %+v", made)
+	}
+	if _, err := c.UpdateIssueComment(org, "hh-live", made.ID, "hedgehug live test, changed"); err != nil {
+		t.Fatal(err)
+	}
+	all, err := c.IssueComments(org, "hh-live", number)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(all, func(x IssueComment) bool { return x.ID == made.ID && x.Body == "hedgehug live test, changed" }) {
+		t.Errorf("the comment is not in the list of %d", len(all))
+	}
+	if err := c.DeleteIssueComment(org, "hh-live", made.ID); err != nil {
+		t.Fatal(err)
 	}
 }

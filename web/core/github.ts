@@ -133,15 +133,25 @@ const FIELDS: Readonly<Record<string, string>> = {
   // Not a synced field any more; an old notification of the sync can still name it.
   labels: "ラベル",
   milestone: "マイルストーン",
+  comments: "コメント",
 };
 
-export const fieldLabel = (name: string): string => FIELDS[name] ?? name;
+/**
+ * The name of a field; "comments:<ULID>" (a note of the inbox) is one comment, named by the start of
+ * its text (preview) when the note has it.
+ */
+export function fieldLabel(name: string, preview?: string): string {
+  if (name.startsWith("comments:")) {
+    return preview ? `コメント（${preview}）` : "コメント";
+  }
+  return FIELDS[name] ?? name;
+}
 
 /** The fields a link of an issue syncs: its own, else the ones of its mode. The mode link has none. */
 export function syncedFields(l: Link, fields: IssueFields | undefined): string {
   if (l.sync === "link") return "";
   const names = l.fields ?? (l.sync === "push" ? fields?.push : fields?.mirror) ?? [];
-  return names.map(fieldLabel).join("・");
+  return names.map((n) => fieldLabel(n)).join("・");
 }
 
 const EVENTS: Readonly<Record<string, string>> = {

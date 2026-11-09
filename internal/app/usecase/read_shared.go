@@ -42,6 +42,7 @@ type CommentView struct {
 	Created   time.Time  `json:"created"`
 	Updated   *time.Time `json:"updated,omitempty"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty" doc:"When the comment was removed"`
+	GitHub    bool       `json:"github" doc:"true for a comment taken from GitHub (its author starts with github:); it cannot be edited or removed in Hedgehug"`
 	Body      string     `json:"body"`
 }
 

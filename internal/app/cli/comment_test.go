@@ -381,9 +381,56 @@ func TestShowCommentULID(t *testing.T) {
 	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	// ulid, author, created and body.
-	if len(got.Comments) != 1 || got.Comments[0]["ulid"] != a || len(got.Comments[0]) != 4 {
-		t.Errorf("comments = %+v, want only ulid %q, author, created and body", got.Comments, a)
+	// ulid, author, created, github and body.
+	if len(got.Comments) != 1 || got.Comments[0]["ulid"] != a || len(got.Comments[0]) != 5 || got.Comments[0]["github"] != false {
+		t.Errorf("comments = %+v, want only ulid %q, author, created, github (false) and body", got.Comments, a)
+	}
+}
+
+func TestCommentFromGitHubCannotBeEditedOrRemoved(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
+	x := te.addJSON("Alpha")
+	const mirrored = "01HZZZZZZZZZZZZZZZZZZZ0001"
+	const deleted = "01HZZZZZZZZZZZZZZZZZZZ0002"
+	te.putCommentsBy(x.ULID, "github:octocat", mirrored, deleted)
+	te.uc().MustEdit("me", "comment", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		now := time.Now()
+		return tx.PutComment(mustULID(te.t, x.ULID), &model.Comment{ULID: mustULID(te.t, deleted), Author: "github:octocat", DeletedAt: &now, Body: "gone\n"})
+	})
+	for _, verb := range []string{"edit", "rm"} {
+		code, _, errs := te.run("comment", verb, mirrored)
+		if code != 1 || !strings.Contains(errs, "octocat's comment was taken from GitHub") {
+			t.Errorf("comment %s: exit %d, stderr %q", verb, code, errs)
+		}
+		// Deleted comes first.
+		code, _, errs = te.run("comment", verb, deleted)
+		if code != 1 || !strings.Contains(errs, "deleted") || strings.Contains(errs, "GitHub") {
+			t.Errorf("comment %s of a deleted one: exit %d, stderr %q", verb, code, errs)
+		}
+	}
+	for _, c := range te.comments(x.ULID) {
+		if c.ULID.String() == mirrored && (c.DeletedAt != nil || c.Body != "body "+mirrored+"\n") {
+			t.Errorf("the mirrored comment changed: %+v", c)
+		}
+	}
+
+	// show marks it, and --json says github.
+	if out := te.ok("show", x.ID); !strings.Contains(out, "github:octocat  ") || !strings.Contains(out, "(from GitHub)") {
+		t.Errorf("show does not mark the comment from GitHub:\n%s", out)
+	}
+	var got struct {
+		Comments []struct {
+			ULID   string `json:"ulid"`
+			GitHub bool   `json:"github"`
+		} `json:"comments"`
+	}
+	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Comments) != 1 || got.Comments[0].ULID != mirrored || !got.Comments[0].GitHub {
+		t.Errorf("show --json comments = %+v", got.Comments)
 	}
 }
 

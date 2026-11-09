@@ -148,6 +148,51 @@ describe("notificationText", () => {
       text: "タスクのラベルが手で編集されていたため、org-a/web#45 の値に戻しました",
       mine: "ラベル: v2",
     });
+    const comment = n({
+      ulid: "3",
+      kind: "issue_overwritten",
+      detail: {
+        ref: "github.com/org-a/web/issues/45",
+        field: "comments:01JABCDEFGHJKMNPQRSTVWXYZ0",
+        comment: "手元の本文を ここに書く",
+        side: "github",
+        lost: ["GitHub で直した本文"],
+      },
+    });
+    expect(notificationText(comment)).toEqual({
+      label: "自動化",
+      text: "org-a/web#45 のコメント（手元の本文を ここに書く）が GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました",
+      mine: "コメント（手元の本文を ここに書く）: GitHub で直した本文",
+    });
+    // a mirror that wrote GitHub's text over a hand edit of a comment
+    const mirrored = n({
+      ulid: "5",
+      kind: "issue_overwritten",
+      detail: {
+        ref: "github.com/org-a/web/issues/45",
+        field: "comments:01JABCDEFGHJKMNPQRSTVWXYZ0",
+        comment: "GitHub の本文",
+        side: "task",
+        lost: ["手で直した本文"],
+      },
+    });
+    expect(notificationText(mirrored)).toEqual({
+      label: "自動化",
+      text: "タスクのコメント（GitHub の本文）が手で編集されていたため、org-a/web#45 の値に戻しました",
+      mine: "コメント（GitHub の本文）: 手で直した本文",
+    });
+    // an item made before the text was kept names no ULID
+    const oldComment = n({
+      ulid: "4",
+      kind: "issue_overwritten",
+      detail: {
+        ref: "github.com/org-a/web/issues/45",
+        field: "comments:01JABCDEFGHJKMNPQRSTVWXYZ0",
+        side: "github",
+        lost: ["x"],
+      },
+    });
+    expect(notificationText(oldComment).mine).toBe("コメント: x");
     expect(notificationText(item("github"))).toEqual({
       label: "自動化",
       text: "org-a/web#45 のタイトルが GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました",

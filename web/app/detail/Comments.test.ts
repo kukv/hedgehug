@@ -18,6 +18,7 @@ const c1 = {
   ulid: "C1",
   author: "github.com/tanaka",
   created: "2026-11-04T10:12:00Z",
+  github: false,
   body: "ガイドでは「カーソル」で統一します。",
 };
 const show = showView({
@@ -42,6 +43,22 @@ describe("Comments", () => {
     expect(screen.getByRole("heading", { name: /コメント/ })).toHaveTextContent("1");
     expect(screen.getByText("ガイドでは「カーソル」で統一します。")).toBeInTheDocument();
     expect(screen.getByText("github.com/tanaka")).toBeInTheDocument();
+  });
+
+  it("marks a comment taken from GitHub and offers no edit or delete for it", () => {
+    const gh = {
+      ulid: "C9",
+      author: "github:tanaka",
+      created: "2026-11-04T10:30:00Z",
+      github: true,
+      body: "GitHub のコメント",
+    };
+    const s = showView({ ulid: "U6", id: "REL-6", store: "shared", comments: [gh] });
+    const k = makeCore({ show: s, accounts: ["github:tanaka"] });
+    mount(Comments, { show: s, readonly: false }, k);
+    expect(screen.getByText("GitHub から")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "編集" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "削除" })).toBeNull();
   });
 
   it("posts a comment, shows it at once and tells the cache the commit is its own", async () => {
@@ -419,6 +436,7 @@ describe("Comments", () => {
       ulid: "C2",
       author,
       created: "2026-11-04T11:00:00Z",
+      github: false,
       body: "x",
     });
     const withComment = (author: string, opts: FakeCoreOptions = {}) => {

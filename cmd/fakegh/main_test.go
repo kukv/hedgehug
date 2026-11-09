@@ -210,6 +210,10 @@ func TestPullAndIssueCommands(t *testing.T) {
 		{"pr", "merge", "o/r#1", "--server", srv.URL},
 		{"issue", "open", "o/r", "--title", "I", "--server", srv.URL},
 		{"issue", "edit", "o/r#2", "--title", "J", "--server", srv.URL},
+		{"issue", "comment", "add", "o/r#2", "--body", "first", "--author", "bob", "--server", srv.URL},
+		{"issue", "comment", "add", "o/r#2", "--body", "second", "--server", srv.URL},
+		{"issue", "comment", "edit", "o/r", "1", "--body", "edited", "--server", srv.URL},
+		{"issue", "comment", "rm", "o/r", "2", "--server", srv.URL},
 		{"issue", "close", "o/r#2", "--reason", "not_planned", "--server", srv.URL},
 	} {
 		var out, errs strings.Builder
@@ -220,5 +224,8 @@ func TestPullAndIssueCommands(t *testing.T) {
 	r, ok := s.Repo("o/r")
 	if !ok || r.Pulls[0].State != "merged" || r.Issues[0].State != "closed" || r.Issues[0].Title != "J" {
 		t.Errorf("repo = %+v", r)
+	}
+	if cs := r.Issues[0].Comments; len(cs) != 1 || cs[0].ID != 1 || cs[0].Author != "bob" || cs[0].Body != "edited" {
+		t.Errorf("comments = %+v", cs)
 	}
 }

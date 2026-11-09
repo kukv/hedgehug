@@ -33,6 +33,9 @@ const (
   fakegh pr merge <owner/repo#n>
   fakegh issue open <owner/repo> --title <t> [--body b]
   fakegh issue edit <owner/repo#n> [--title t] [--body b] [--assignee a]... [--label l]... [--milestone m]
+  fakegh issue comment add <owner/repo#n> --body <b> [--author a]
+  fakegh issue comment edit <owner/repo> <id> --body <b>
+  fakegh issue comment rm <owner/repo> <id>
   fakegh repo label <owner/repo> <name>
   fakegh repo milestone <owner/repo> <title>
   fakegh repo restrict <owner>
@@ -111,6 +114,9 @@ func dispatch(args []string, stdout io.Writer) error {
 		return usageError{fmt.Errorf("unknown command %q", args[0])}
 	}
 	cmd, rest := args[0]+" "+args[1], args[2:]
+	if cmd == "issue comment" && len(rest) > 0 {
+		cmd, rest = cmd+" "+rest[0], rest[1:]
+	}
 	switch cmd {
 	case "perm set":
 		fs := flagSet("fakegh perm set")
@@ -301,6 +307,37 @@ func dispatch(args []string, stdout io.Writer) error {
 			return err
 		}
 		return admin(*server).Issue("edit", fakegh.AdminBody{Repo: repo, Number: n, Title: *title, Body: *body, Assignees: assignees, Labels: labels, Milestone: *milestone})
+	case "issue comment add":
+		fs := flagSet("fakegh issue comment add")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		body := fs.String("body", "", "the body")
+		author := fs.String("author", "", "who wrote it; empty is a user that is gone")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Issue("comment/add", fakegh.AdminBody{Repo: repo, Number: n, Body: *body, Author: *author})
+	case "issue comment edit":
+		fs := flagSet("fakegh issue comment edit")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		body := fs.String("body", "", "the body")
+		repo, id, err := repoCommentID(fs, rest)
+		if err != nil {
+			return err
+		}
+		return admin(*server).Issue("comment/edit", fakegh.AdminBody{Repo: repo, CommentID: id, Body: *body})
+	case "issue comment rm":
+		fs := flagSet("fakegh issue comment rm")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		repo, id, err := repoCommentID(fs, rest)
+		if err != nil {
+			return err
+		}
+		return admin(*server).Issue("comment/rm", fakegh.AdminBody{Repo: repo, CommentID: id})
 	case "issue close":
 		fs := flagSet("fakegh issue close")
 		server := fs.String("server", defaultServer, "the URL of the running fake")
@@ -347,6 +384,20 @@ func serveOn(ln net.Listener, h http.Handler) error {
 }
 
 // repoNumber splits owner/repo#n.
+// repoCommentID parses the arguments <owner/repo> <id> of a command on a
+// comment.
+func repoCommentID(fs *flag.FlagSet, args []string) (string, int, error) {
+	pos, err := parse(fs, args, 2)
+	if err != nil {
+		return "", 0, err
+	}
+	id, err := strconv.Atoi(pos[1])
+	if err != nil {
+		return "", 0, usageError{fmt.Errorf("want a comment ID, got %q", pos[1])}
+	}
+	return pos[0], id, nil
+}
+
 func repoNumber(s string) (string, int, error) {
 	repo, num, ok := strings.Cut(s, "#")
 	n, err := strconv.Atoi(num)

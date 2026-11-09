@@ -123,6 +123,11 @@ export const ISSUE_FIELDS: readonly IssueField[] = [
   },
   { name: "assignees", to: "assignees", note: "そのリポジトリで割り当てられる人だけ" },
   { name: "milestone", to: "props", note: "存在しないマイルストーンは作らずに警告" },
+  {
+    name: "comments",
+    to: "comments",
+    note: "push は自分のコメントだけ（1 回の push で全 issue 合わせて 30 件まで）、mirror は取り込んだコメントを編集不可にします。足す前にこの Store を使うすべてのクローンを更新してください",
+  },
 ].map((f) => ({ ...f, label: fieldLabel(f.name) }));
 
 /** The fields with one turned on or off, in the order of the table. */

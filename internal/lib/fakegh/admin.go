@@ -26,6 +26,10 @@ type AdminBody struct {
 	State    string   `json:"state,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
 	Request  bool     `json:"request,omitempty"`
+	// What fakegh issue comment sets: the comment to edit or remove, and who
+	// wrote the one added.
+	CommentID int    `json:"comment_id,omitempty"`
+	Author    string `json:"author,omitempty"`
 	// What fakegh issue edit sets. Nil or empty stays as it is; "-" takes the
 	// milestone off.
 	Assignees []string `json:"assignees,omitempty"`
@@ -83,6 +87,12 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			err = s.TagIssue(b.Repo, b.Number, b.Assignees, b.Labels, b.Milestone)
 		}
+	case "/_fakegh/issue/comment/add":
+		_, err = s.AddComment(b.Repo, b.Number, b.Author, b.Body)
+	case "/_fakegh/issue/comment/edit":
+		err = s.EditComment(b.Repo, b.CommentID, b.Body)
+	case "/_fakegh/issue/comment/rm":
+		err = s.RemoveComment(b.Repo, b.CommentID)
 	case "/_fakegh/restrict":
 		s.RestrictApp(b.Repo)
 	case "/_fakegh/uninstall":

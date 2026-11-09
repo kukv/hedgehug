@@ -216,6 +216,11 @@ func Joined(vs []schema.Violation) string {
 	return strings.Join(s, "; ")
 }
 
+// OpGitHubMirror is the Hedgehug-Op of the commits that mirror GitHub into the
+// store. It is here because the inbox, which cannot import usecase, tells of
+// what these commits take in even to the one who ran them.
+const OpGitHubMirror = "gh-mirror"
+
 // The trailers that the commits of the automations carry.
 const (
 	TrailerApplied  = "Hedgehug-Automation"

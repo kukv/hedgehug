@@ -317,6 +317,44 @@ func TestPushOnlyTheFieldsOfTheLink(t *testing.T) {
 	}
 }
 
+// comments is a name of the fields, but the scalar sync does not take it: the
+// issue is synced as if the link did not name it.
+func TestPushIgnoresTheCommentsField(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	x := ts.AddTask("mine", func(x *model.Task) { x.Repos = []string{web}; x.Body = "mine" })
+	n, err := fake.OpenIssue("org-a/web", "theirs", "their text")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fake.AddComment("org-a/web", n, "bob", "kept"); err != nil {
+		t.Fatal(err)
+	}
+	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		cur, err := tx.Task(x.ULID)
+		if err != nil {
+			return err
+		}
+		cur.Links = []model.Link{{Type: model.LinkIssue, Ref: web + "/issues/" + itoa(n), Sync: model.SyncPush, Fields: []string{"title", "comments"}}}
+		return tx.PutTask(cur)
+	})
+	refetch(t, ts)
+	got := onGitHub(t, fake, n)
+	if got.Title != "mine" || got.Body != "their text" || len(got.Comments) != 1 || got.Comments[0].Body != "kept" {
+		t.Errorf("issue %+v", got)
+	}
+	n0, at := len(logOf(t, ts)), got.UpdatedAt
+	// Nothing differs, so the push does not even try a write: "comments" is no
+	// value of the issue to compare, and in the comparison it would always
+	// differ from what the base holds. The one try is the fetch's own.
+	tried := 0
+	ts.BeforeUpdate = func() { tried++ }
+	refetch(t, ts)
+	if c := len(logOf(t, ts)); c != n0 || onGitHub(t, fake, n).UpdatedAt != at || tried != 1 {
+		t.Errorf("a second sync changed something: %d commits added, %d writes tried (want 1: the fetch)", c-n0, tried)
+	}
+}
+
 func TestPushMilestone(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)

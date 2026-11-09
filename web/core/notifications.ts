@@ -238,7 +238,7 @@ export function notificationText(
         text: `ルール ${str(detail.rule)} で動かせませんでした: ${str(detail.reason)}`,
       };
     case "issue_overwritten": {
-      const field = fieldLabel(str(detail.field));
+      const field = fieldLabel(str(detail.field), str(detail.comment));
       const ref = refLabel(str(detail.ref));
       const lost = Array.isArray(detail.lost) ? detail.lost.map(String).join(", ") : "";
       return {

@@ -307,6 +307,9 @@ func (u *undoer) path(p string) error {
 	if ours == nil && base != nil {
 		return nil // removed since, and stays removed
 	}
+	if err := checkCommentNotPushed(p, base, ours, theirs); err != nil {
+		return err
+	}
 	if _, isView := model.IsViewPath(p); (p == schema.Path || isView) && theirs != nil {
 		// The version to go back to is in the form of an older format: the
 		// schema.yaml that schema.Decode does not read, or a view whose query
@@ -342,6 +345,28 @@ func (u *undoer) path(p string) error {
 		return u.tx.RemoveFile(p)
 	}
 	return u.tx.PutFile(p, m.Data)
+}
+
+// checkCommentNotPushed refuses to take back the adding of a comment that has
+// been pushed to GitHub (its file has gh): the comment would stay there. p is
+// the file, and base, ours and theirs its versions as c wrote it, as HEAD has
+// it, and as it was before c (nil when absent).
+func checkCommentNotPushed(p string, base, ours, theirs []byte) error {
+	if _, _, err := model.ParseCommentPath(p); err != nil || base == nil || ours == nil || theirs != nil {
+		return nil //nolint:nilerr // not a comment that c added
+	}
+	c, err := model.DecodeComment(ours)
+	if err != nil {
+		return nil //nolint:nilerr // a file that does not read: no gh to tell, the merge goes on as before
+	}
+	links, err := c.GitHub()
+	if err != nil || len(links) == 0 {
+		return nil //nolint:nilerr // no gh that reads: nothing sent to GitHub that is known
+	}
+	if c.DeletedAt != nil {
+		return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub and is deleted now, so adding it cannot be undone; the comment on GitHub is removed by the next sync of a push link that syncs comments"))
+	}
+	return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub, so adding it cannot be undone; remove it with hedgehug comment rm, which removes it from GitHub too at the next sync of a push link that syncs comments"))
 }
 
 // task writes the task file p, which merged is the merge of: with the id and

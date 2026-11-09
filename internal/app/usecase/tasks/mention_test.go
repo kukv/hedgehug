@@ -40,6 +40,26 @@ func TestCheckCommentEditable(t *testing.T) {
 	usecasetest.WantErr(t, comments.CheckCommentEditable(ref, c, me, "edited"), usecase.KindConflict, "comment.deleted")
 }
 
+func TestCheckCommentEditableRefusesAMirroredComment(t *testing.T) {
+	t.Parallel()
+	ref := store.CommentRef{}
+	me := []string{"github.com/alice"}
+	c := &model.Comment{ULID: model.NewULID(), Author: "github:octocat"}
+	for _, verb := range []string{"edited", "removed"} {
+		err := comments.CheckCommentEditable(ref, c, me, verb)
+		usecasetest.WantErr(t, err, usecase.KindInvalid, "comment.mirrored")
+		if want := "octocat's comment was taken from GitHub and cannot be " + verb + "; change it on GitHub"; err != nil && err.Error() != want {
+			t.Errorf("message = %q; want %q", err, want)
+		}
+	}
+	// Even an author in me: the prefix is checked before the author.
+	usecasetest.WantErr(t, comments.CheckCommentEditable(ref, c, []string{"github:octocat"}, "edited"), usecase.KindInvalid, "comment.mirrored")
+	// Deleted comes first.
+	now := time.Now()
+	c.DeletedAt = &now
+	usecasetest.WantErr(t, comments.CheckCommentEditable(ref, c, me, "edited"), usecase.KindConflict, "comment.deleted")
+}
+
 func TestCommentAuthorOps(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

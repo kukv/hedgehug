@@ -224,6 +224,9 @@ func TestNoticeFieldAndTaskOfPath(t *testing.T) {
 	if got := replication.NoticeField(inbox.Item{Detail: json.RawMessage(`{"field":"title"}`)}); got != "title" {
 		t.Errorf("NoticeField = %q; want title", got)
 	}
+	if got := replication.NoticeField(inbox.Item{Detail: json.RawMessage(`{"field":"comments:01JABCDEFGHJKMNPQRSTVWXYZ0"}`)}); got != "comments:01JABCDEFGHJKMNPQRSTVWXYZ0" {
+		t.Errorf("NoticeField of a comment = %q; want comments:<ULID>", got)
+	}
 	if got := replication.NoticeField(inbox.Item{Detail: json.RawMessage(`not json`)}); got != "" {
 		t.Errorf("NoticeField of bad detail = %q; want empty", got)
 	}

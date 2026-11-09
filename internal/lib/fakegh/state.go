@@ -57,15 +57,27 @@ type Pull struct {
 
 // Issue is an issue.
 type Issue struct {
-	Number      int       `json:"number"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	State       string    `json:"state"`        // open, closed
-	StateReason string    `json:"state_reason"` // completed, not_planned
-	Assignees   []string  `json:"assignees,omitempty"`
-	Labels      []string  `json:"labels,omitempty"`
-	Milestone   string    `json:"milestone,omitempty"` // its title
-	UpdatedAt   time.Time `json:"updated_at"`
+	Number      int        `json:"number"`
+	Title       string     `json:"title"`
+	Body        string     `json:"body"`
+	State       string     `json:"state"`        // open, closed
+	StateReason string     `json:"state_reason"` // completed, not_planned
+	Assignees   []string   `json:"assignees,omitempty"`
+	Labels      []string   `json:"labels,omitempty"`
+	Milestone   string     `json:"milestone,omitempty"` // its title
+	UpdatedAt   time.Time  `json:"updated_at"`
+	Comments    []*Comment `json:"comments,omitempty"`
+}
+
+// Comment is a comment of an issue. An empty Author is a user that is gone:
+// GitHub answers user null for it. The ID is numbered across the whole fake,
+// from 1, when a seed leaves it 0 (a seed gives each comment its own ID).
+type Comment struct {
+	ID        int       `json:"id"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Load reads a seed file.

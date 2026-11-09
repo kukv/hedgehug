@@ -16,6 +16,9 @@ const (
 	IssueNotPlanned = "not_planned"
 )
 
+// FieldComments is the field that syncs the comments of an issue.
+const FieldComments = "comments"
+
 // The side whose value a sync of an issue overwrote.
 const (
 	SideTask   = "task"
@@ -59,6 +62,12 @@ func (f IssueFields) For(l model.Link) []string {
 		out = append(out, n)
 	}
 	return out
+}
+
+// Scalars lists the fields that For lists but comments: the ones the sync of
+// the values of an issue handles. The comments have a sync of their own.
+func (f IssueFields) Scalars(l model.Link) []string {
+	return slices.DeleteFunc(f.For(l), func(n string) bool { return n == FieldComments })
 }
 
 // StatusToken is what a status of category c is on an issue.
