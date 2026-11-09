@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +24,7 @@ import (
 
 const (
 	fileName = "report" // in .hedgehug/local
-	format   = 3        // bump when row changes, or when a task is read in another way (3: past commits are upgraded to the newest store format)
+	format   = 4        // bump when row changes, or when a task is read in another way (3: past commits are upgraded to the newest store format; 4: points is a field of the task)
 )
 
 // OpMoveIn is the op of the commit that brings a task from another store.
@@ -120,10 +119,8 @@ func readRow(s *store.Store, ups upgrades, commit plumbing.Hash, p string, ulid 
 	if t.Sprint != nil {
 		r.Sprint = t.Sprint.String()
 	}
-	if n := t.Props.Get("points"); n != nil {
-		if f, err := strconv.ParseFloat(n.Value, 64); err == nil {
-			r.Points, r.HasPoints = f, true
-		}
+	if t.Points != nil {
+		r.Points, r.HasPoints = *t.Points, true
 	}
 	return r, nil
 }
