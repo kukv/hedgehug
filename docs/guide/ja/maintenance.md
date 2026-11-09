@@ -14,7 +14,7 @@ WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP): moved to a store that is not mounted (ULID 0
 
 `hh doctor --fix` は、同期が直すものを1コミットで直します。親の循環、削除済みタスクの子、親と別のワークスペースにあるタスク、ID の衝突です。親がなくなった子は、置ける最も近い祖先へ移し、なければ「未分類」という project の下へ移します（なければ作ります。step は task になります）。remote の履歴が書き換えられたあとに、Store を作り直す役目もあります(次の節)。直せなかったものは、そう知らせます。
 
-古い hedgehug が新しい形式の Store へ push すると、関連が `props:` の下に残ることがあります（`duplicates`、`causes`、`relates`、`clones`。形式 3 ではタスクの項目です）。`hh doctor` はこれを `task.legacy_field` として指摘し、`hh doctor --fix` が専用のコミットで、タスクの項目へ移します。
+古い hedgehug が新しい形式の Store へ push すると、今はタスクの項目になっている値が `props:` の下に残ることがあります。関連（`duplicates`、`causes`、`relates`、`clones`。形式 3 から項目です）か、組み込みのプロパティ（`priority`、`start`、`due`、`estimate`、`points`。形式 4 から項目です）です。`hh doctor` はどちらも `task.legacy_field` として指摘し、`hh doctor --fix` が専用のコミットで、タスクの項目へ移します。
 
 ```console
 $ hh doctor
@@ -26,13 +26,21 @@ repaired: ME-3: legacy_field props.duplicates moved to the fields of the task
 No problems
 ```
 
-項目にすでに値があるタスクは、どちらが新しいか分からないので、何も移しません。指摘は残ります。`hh edit <id>` でタスクを開き、残したい値を項目に置いて、`props:` の下のものを消してください。`props:` の下の値が ULID の形でないときも、そのまま残るので、`hh edit` で直します。
+組み込みのプロパティも同じように移ります。`props:` の下に datetime で書かれた値（`due: 2026-11-10T09:30:00+09:00`）は日付になり、時刻は落ちます。`--fix` は、落とした時刻を、タスクと元の値つきで出力に一覧します。
+
+```console
+$ hh doctor --fix
+repaired: ME-3: legacy_field props.priority, props.due moved to the fields of the task; the time of props.due was left out: 2026-11-10T09:30:00+09:00
+No problems
+```
+
+項目にすでに値があるタスクは、どちらが新しいか分からないので、何も移しません。指摘は残ります。`hh edit <id>` でタスクを開き、残したい値を項目に置いて、`props:` の下のものを消してください。`props:` の下の値が、関連なら ULID の形でないとき、組み込みのプロパティなら項目の型として読めないとき（期間でない `estimate` など）も、そのまま残るので、`hh edit` で直します。
 
 古い形式の Store は、1 件の指摘として知らされ、`hh store convert` が対処として示されます。変換するまで、タスクはスキーマと照らして点検されません（[Store](stores.md#store-の形式と-hh-store-convert)を参照）。
 
 ```console
 $ hh doctor
-.hedgehug/store.yaml: the store is in format 2, and this version uses format 3
+.hedgehug/store.yaml: the store is in format 3, and this version uses format 4
   hint: hh store convert
 1 problem
 ```

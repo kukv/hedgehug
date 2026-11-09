@@ -93,7 +93,7 @@ $ hh release notes v1.0
 
 ## レポート
 
-レポートは履歴から作るので、事前の設定は要りません。タスクに `hh set <id> points=3` でポイントを付けると、バーンダウンはポイントで数えます。ポイントがなければ、タスクの数で数えます。
+レポートは履歴から作るので、事前の設定は要りません。タスクに `hh set <id> points=3` でポイントを付けると（`points` は、`priority`、`start`、`due`、`estimate` と同じくタスクの項目です）、バーンダウンはポイントで数えます。形式 4 に変換する前のコミットのポイントも、履歴から読みます。ポイントがなければ、タスクの数で数えます。
 
 ```console
 $ hh report burndown "Sprint 2"
@@ -113,7 +113,7 @@ Sprint 1  0       1      1
 
 ## テンプレート
 
-テンプレートは、Store の `templates/` にあるタスクのファイルです。既定のプロパティと本文を持ち、子タスクを持たせることもできます。`$EDITOR` で書きます。
+テンプレートは、Store の `templates/` にあるタスクのファイルです。既定のプロパティと本文を持ち、子タスクを持たせることもできます。`$EDITOR` で書きます。組み込みのプロパティ（`priority`、`start`、`due`、`estimate`、`points`、`labels`）は、タスクと同じく、ファイルの先頭のキーに書きます。Store のリストにないラベルがあると、展開は拒否されるので（`the change breaks the schema`）、`hh template edit` でテンプレートを直します。
 
 ```console
 $ hh template edit bug
@@ -129,8 +129,7 @@ bug   bug   Bug:   0
 ---
 kind: bug
 title: "Bug: "
-props:
-  priority: high
+priority: high
 ---
 ## Steps to reproduce
 

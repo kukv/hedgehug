@@ -61,11 +61,14 @@ WEB-6  01M6QAZMK2R3Z8Y1W9E4T7H5BD  todo    project                            We
 ```bash
 hh add "ログインページをレビューする" --parent WEB-6   # 既定の Store の、プロジェクト WEB-6 の下の task
 hh status WEB-1 in_progress
+hh schema labels add ui                 # タスクが持てるのは、Store のリストにあるラベルだけ
 hh set WEB-1 assignees=github.com/me labels+=ui
 hh dep add WEB-2 --blocked-by WEB-1  # WEB-2 は WEB-1 を待つ（計画の「関連」を参照）
 hh done WEB-1
 hh sync                                 # 裏の同期を待たず、今すぐ同期する
 ```
+
+タスクが持てるラベルは、Store のリスト（スキーマの一部）にあるものだけです。ラベルは `hh schema labels add <名前>…`（ブラウザでは設定の「スキーマ」の「ラベル」タブ）で足します。ラベルは大文字小文字を区別せずに照合し、リストの綴りで保存するので、リストに `bug` があれば、`labels+=Bug` は `bug` を付けます。リストにない名前は `the change breaks the schema` で止まります（`labels: "nope" is not one of [bug ui docs]`。リストが空のときは、設定でラベルを足すよう案内します）。`hh schema labels rm <名前>…` はどのタスクも持っていないラベルを消し、`hh schema migrate label <旧> <新>` は、ラベルを持つタスクのラベルの名前を変えるか、ほかのラベルへマージします。優先度には `hh schema migrate priority <旧> <新>` が同じように使えます（優先度は、ブラウザで変えるまで `low`、`mid`、`high`、`urgent` です）。どちらも、保存したビューの `query` は書き換えません。
 
 どのコマンドも、まず手元のコピーに書くので、オフラインでも動きます。remote のある Store は、書き込みの約30秒後に裏で同期します。使えるステータスは Store のスキーマで決まります。既定のスキーマには `backlog`、`todo`、`on_hold`、`in_progress`、`waiting`、`done`、`canceled` があります。
 

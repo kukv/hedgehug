@@ -11,6 +11,8 @@
 //   - the tabs "優先度" (?tab=priorities) and "ラベル" (?tab=labels) are lists: the textbox "値" per value, the
 //     button "値を追加", the button "保存" (a toast says "ラベルを保存しました"); the detail of a task (the
 //     region "プロパティ") chooses a label from the combobox "ラベル" and shows it with "<名前> を外す"
+//   - renaming a value of the priorities list (the textbox "値") changes the priority of its tasks; the detail
+//     shows it on the button "優先度"
 //   - a status with a color draws its icon with the color in the custom property --c of the svg
 import type { Page } from "@playwright/test";
 import { expect, test } from "./harness";
@@ -159,4 +161,22 @@ test("a priority added in the priorities tab is offered in the detail", async ({
   await hh.open(page, `/tasks/${t.ulid}`);
   await properties(page).getByRole("button", { name: "優先度" }).click();
   await expect(page.getByRole("menuitem", { name: "blocker" })).toBeVisible();
+});
+
+test("a priority renamed in the priorities tab changes the priority of the tasks that hold it", async ({
+  page,
+  hh,
+}) => {
+  const t = hh.add("Renamed priority");
+  hh.hh("set", t.id, "priority=mid");
+  await hh.open(page, `${SCHEMA}?tab=priorities`);
+  const values = page.getByRole("textbox", { name: "値" });
+  await expect(values.nth(1)).toHaveValue("mid");
+  await values.nth(1).fill("medium");
+  await page.getByRole("button", { name: "保存" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "優先度を保存しました" })).toBeVisible();
+  await expect.poll(() => hh.show(t.id).priority).toBe("medium");
+
+  await hh.open(page, `/tasks/${t.ulid}`);
+  await expect(properties(page).getByRole("button", { name: "優先度" })).toContainText("medium");
 });

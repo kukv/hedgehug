@@ -85,10 +85,16 @@ hh gh import acme/web --label hedgehug             # one mirror-mode task per op
 ```console
 $ hh automation fields --default-sync push
 default_sync: push
-push: title, body, status, assignees, labels
+push: title, body, status, assignees
 mirror: title, status, assignees
 props: -
 ```
+
+Labels are not a field to sync: how labels are used differs from one repository and organization to the next, and
+a list of labels of the store does not map onto them. No mode sends the labels of a task to its issue, creates an issue with them, or
+takes the labels of an issue; `hh automation fields` has no `labels`, and the store format 4 conversion removes
+it from an existing rule (see [Stores](stores.md#the-store-format-and-hh-store-convert)). `hh gh import --label` is a
+filter, not a sync: it picks the issues to import by their GitHub label.
 
 In `push` mode, a value that someone edited by hand on GitHub is overwritten at the next
 push, and the overwrite is reported in `hh inbox`.

@@ -73,8 +73,10 @@ one (`hh workspace ls`, for example), it asks for `--store`.
 ## The store format and `hh store convert`
 
 A store records its format in `.hedgehug/store.yaml`. This version of hedgehug uses
-format 3. In format 2 the kinds of task are fixed (see [Planning](planning.md#kinds)), and
-in format 3 the relations are too (see [Planning](planning.md#relations)).
+format 4. In format 2 the kinds of task are fixed (see [Planning](planning.md#kinds)), in
+format 3 the relations are too (see [Planning](planning.md#relations)), and in format 4 the
+built-in properties are: priority, start, due, estimate and points are fields of the task, and
+the values of priority and labels are lists in `schema.yaml`.
 
 - A store in an **older** format does not open. Every command except `hh store convert`
   and `hh doctor` stops with `hh store convert で新しい形式にしてください`, and the browser shows the same
@@ -114,6 +116,27 @@ Format 2 -> 3
 Nothing was written (--dry-run).
 ```
 
+A store in format 3 converts like this (`ME-3` has a `due` with a time and an `estimate` that is
+not a duration; `wip` is not in `labels:` of `schema.yaml`):
+
+```console
+$ hh store convert --dry-run
+hedgehug: format 3 to 4: these values cannot be the built-in priority, start, due, estimate or points: they are not of the type of the field, or the task has the field at the top level too; fix them in the files, or drop them with --drop-bad-values (the value of props is kept for a field that is twice, and the one at the top level is dropped):
+  ME-3 Logout: props.estimate: 3
+$ hh store convert --dry-run --drop-bad-values
+Format 3 -> 4
+  props の priority・start・due・estimate・points の値を、タスクの同名の項目へ移した: 3 件
+  日付にして時刻を落とした: ME-3 Logout: props.due: 2026-11-08T15:30:00+09:00
+  ラベル wip を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  読めない値を外した: ME-3 Logout: props.estimate: 3
+  schema.yaml の組み込みと同じ名前のプロパティを消した（値は同名の項目へ移した）: points, due
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
+
+The first command stops with `convert.bad_value` and exit code 1 (a dry run stops the same way, so you see
+what is wrong before you write anything).
+
 `--dry-run` lists what each step would change and writes nothing; `--json` prints the
 same as JSON. Running it again changes nothing.
 
@@ -147,6 +170,30 @@ a conversion, `hh undo` undoes the operation before it.
     listed in the report. A value that points at a task that does not exist or is deleted, or at the task itself, moves as it is.
   - A property of your own that is not a `task_ref` and is named `duplicates`, `causes`, `relates` or
     `clones` stops the conversion with `convert.prop_name_taken`, which lists the names and types. See below.
+- Built-in properties and labels (format 3 to 4):
+  - The values of `priority`, `start`, `due`, `estimate` and `points` under `props:` move to the
+    field of the task of the same name (the templates too), and the definitions of those names
+    leave `schema.yaml`. `priorities:` is the list the store already has, or else the values of
+    the `priority` definition, or else `low`, `mid`, `high`, `urgent`; a value is matched without regard to
+    case and stored as the list spells it.
+  - A label that is not in the list is **removed** from the tasks and templates. The list is the
+    top-level `labels:` of `schema.yaml` as it is when you convert; a store with none loses all its
+    labels. The dry run lists each label it removes with the number of tasks. See
+    [Keep your labels](#keep-your-labels-through-the-conversion) to keep them.
+  - A list in which two values differ only by case (`[High, high]`) is folded to the one written first, and an empty
+    `priorities: []` falls through to the next source; each is reported, and neither stops the conversion.
+  - A value that can be read as the type of the field is fixed: `"3"` becomes `3`, a datetime
+    becomes a date (the offset it was written with decides the day), a one-item array becomes
+    its item, an empty string is removed. A datetime whose time is not 00:00 loses the time; the
+    report lists each such task and its value.
+  - A value that cannot be read (an `estimate` of `3`, a `due` of `next week`), or a field that is both at
+    the top level and under `props:`, stops the conversion with `convert.bad_value`, which lists the tasks
+    and values, as above. Fix them in the files, or give `--drop-bad-values`: an unreadable value is dropped,
+    and for a field that is twice, the value of `props:` is kept and the one at the top level is dropped; each is
+    listed in the report.
+  - GitHub no longer syncs labels. `labels` leaves the fields of `automations.yaml`, `labels` leaves the
+    recorded state of each linked issue, and a link that synced only labels becomes `sync: link` (no sync);
+    the report lists those links. `hh gh import --label` stays: it picks the issues by their GitHub label.
 - `--store <name>` picks the store.
 
 When another clone has already converted the remote, `hh store convert` on a clone with
@@ -167,6 +214,20 @@ stops), so fix it by hand. In the store's folder (`hh store list` shows where it
 A property of your own named like the other way (`blocks`, `caused_by`, `related_by`, `duplicated_by` or
 `cloned_by`) does not stop the conversion. It still works, but `hh doctor` warns (`prop_name.query_key`), because the key of a
 query would mean the relation: rename it the same way, or with `hh schema migrate prop` once the store is converted.
+
+### Keep your labels through the conversion
+
+A store in format 3 cannot be edited with `hh`, so the list of labels you want to keep has to be
+written by hand before the conversion; with no `labels:` in `schema.yaml`, every label is removed.
+In the store's folder (`hh store list` shows where it is):
+
+1. Find the labels the tasks hold, for example with `hh ls --json` (the `labels` of each task) or by looking in the files under `tasks/`.
+2. In `schema.yaml`, add the top-level key `labels:` with the ones to keep (`labels: [bug, ui]`). Case does not matter when the conversion matches them, and the list's spelling is what is stored.
+3. Commit (`git add -A && git commit -m "labels"`), then run `hh store convert --dry-run`: it lists the labels it would remove. Run `hh store convert` when the list is what you want.
+
+After the conversion, `hh schema labels add <name>…` adds a label to the list and `hh schema labels rm <name>…`
+removes one that no task holds; `hh schema migrate label <old> <new>` renames or merges one (see
+[Getting started](getting-started.md#4-read-and-change-tasks)).
 
 ### When the remote has changes in an older format
 
@@ -193,10 +254,11 @@ them. If it happened, find them with `hh doctor`: the findings with code `task.u
 name the task. Open each with `hh edit <id>` and change `kind:` to one of the fixed kinds, or
 `parent:` to a task that can hold it (a project at the root, for example), then run `hh doctor` again.
 
-The same goes for the relations. A clone from before format 3 keeps writing `duplicates`, `causes`,
-`relates` and `clones` under `props:`, and those are not relations of the task
-in the new format. `hh doctor` reports them as `task.legacy_field`, and `hh doctor --fix` moves
-them to the fields of the task (see [Maintenance](maintenance.md#check-a-store-hh-doctor)).
+The same goes for the relations and the built-in properties. A clone from before format 3 keeps writing
+`duplicates`, `causes`, `relates` and `clones` under `props:`, and one from before format 4 keeps writing
+`priority`, `start`, `due`, `estimate` and `points` there; those are fields of the task in the new
+format. `hh doctor` reports them as `task.legacy_field`, and `hh doctor --fix` moves them to the fields of the task
+(see [Maintenance](maintenance.md#check-a-store-hh-doctor)).
 A `task_ref` of your own is not one of the four names: `hh doctor` does not report it and `--fix` does
 not move it. Open the task with `hh edit <id>` and move the values to `relates:`.
 
