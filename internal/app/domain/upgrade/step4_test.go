@@ -10,6 +10,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
 
 // schema3 is a schema.yaml of format 3: priority, due and points are
@@ -243,7 +244,7 @@ func TestTemplate3to4MovesTheItemsAndTheChildren(t *testing.T) {
 func TestMoveLegacyBuiltinsLeavesTheLabelsAlone(t *testing.T) {
 	t.Parallel()
 	raw := task3(t, "points: \"3\"\npriority: High\nnote: keep\n", func(tk *model.Task) { tk.Labels = []string{"wip"} })
-	got, err := MoveLegacyBuiltins(raw, []string{"low", "high"})
+	got, _, err := MoveLegacyBuiltins(raw, []string{"low", "high"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,12 +261,116 @@ func TestMoveLegacyBuiltinsMovesNothingOfATaskThatCannotBeMovedWhole(t *testing.
 		"a value is no number":  task3(t, "points: lots\npriority: high\n", nil),
 		"a priority not listed": task3(t, "priority: nope\n", nil),
 	} {
-		got, err := MoveLegacyBuiltins(raw, []string{"low", "high"})
+		got, _, err := MoveLegacyBuiltins(raw, []string{"low", "high"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, raw) {
 			t.Errorf("%s: rewritten:\n%s", name, got)
 		}
+	}
+}
+
+func TestMoveLegacyBuiltinsTellsTheTimeOfADate(t *testing.T) {
+	t.Parallel()
+	raw := task3(t, "due: 2026-11-08T15:30:00+09:00\nstart: 2026-11-04T00:00:00Z\n", nil)
+	got, cut, err := MoveLegacyBuiltins(raw, []string{"low"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, _ := model.DecodeTask(got)
+	if tk.Due == nil || tk.Due.String() != "2026-11-08" || len(tk.Props) != 0 {
+		t.Errorf("due %v, props %v", tk.Due, tk.Props)
+	}
+	if len(cut) != 1 || cut[0].Prop != "due" || cut[0].Value != "2026-11-08T15:30:00+09:00" {
+		t.Errorf("cut = %+v; want the due alone, as written", cut)
+	}
+}
+
+func TestBuiltinTextFixesTheTypeAsTheStepDoes(t *testing.T) {
+	t.Parallel()
+	node := func(src string) *yaml.Node {
+		var d yaml.Node
+		if err := yaml.Unmarshal([]byte(src), &d); err != nil {
+			t.Fatal(err)
+		}
+		return d.Content[0]
+	}
+	for _, c := range []struct {
+		name, src, want string
+		empty, ok       bool
+	}{
+		{"due", `"2026-11-08T15:30:00+09:00"`, "2026-11-08", false, true},
+		{"points", `"3"`, "3", false, true},
+		{"points", `[2.5]`, "2.5", false, true},
+		{"estimate", `["45m"]`, "45m", false, true},
+		{"priority", `HIGH`, "high", false, true},
+		{"priority", `nope`, "", false, false},
+		{"estimate", `3`, "", false, false},
+		{"points", `null`, "", true, true},
+	} {
+		text, empty, ok := BuiltinText(c.name, node(c.src), []string{"low", "high"})
+		if text != c.want || empty != c.empty || ok != c.ok {
+			t.Errorf("%s %s: %q, %v, %v; want %q, %v, %v", c.name, c.src, text, empty, ok, c.want, c.empty, c.ok)
+		}
+	}
+}
+
+func TestBuiltinDefsFoldTheListsAndSkipAnEmptyPriorities(t *testing.T) {
+	t.Parallel()
+	d, err := BuiltinDefsOf([]byte("priorities: [High, high, Low]\nlabels: [Bug, bug, ui]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(d.Priorities, []string{"High", "Low"}) || !slices.Equal(d.PrioritiesFolded, []string{"high"}) ||
+		!slices.Equal(d.Labels, []string{"Bug", "ui"}) || !slices.Equal(d.LabelsFolded, []string{"bug"}) {
+		t.Errorf("defs = %+v", d)
+	}
+	// the values of the tasks take the first spelling
+	got := up3(t, task3(t, "priority: HIGH\n", func(tk *model.Task) { tk.Labels = []string{"BUG", "UI"} }), "priorities: [High, high]\nlabels: [Bug, bug, ui]\n")
+	if got.Priority != "High" || !slices.Equal(got.Labels, []string{"Bug", "ui"}) {
+		t.Errorf("priority %q, labels %v", got.Priority, got.Labels)
+	}
+	d, _ = BuiltinDefsOf([]byte("priorities: []\nprops:\n  priority: {type: enum, values: [minor, major]}\n"))
+	if !slices.Equal(d.Priorities, []string{"minor", "major"}) || !d.PrioritiesEmpty || d.PrioritiesFrom != "definition" {
+		t.Errorf("empty list with a definition: %+v", d)
+	}
+	d, _ = BuiltinDefsOf([]byte("priorities: []\n"))
+	if !slices.Equal(d.Priorities, schema.DefaultPriorities) || !d.PrioritiesEmpty || d.PrioritiesFrom != "default" {
+		t.Errorf("empty list alone: %+v", d)
+	}
+}
+
+func TestTask3to4MakesALinkThatSyncedLabelsAloneALinkThatDoesNotSync(t *testing.T) {
+	t.Parallel()
+	links := []model.Link{
+		{Type: "issue", Ref: "github.com/o/r#1", Sync: "push", Fields: []string{"labels"}},
+		{Type: "issue", Ref: "github.com/o/r#2", Sync: "mirror", Fields: []string{"title", "labels"}},
+		{Type: "issue", Ref: "github.com/o/r#3", Sync: "link", Fields: []string{"labels"}},
+	}
+	got := up3(t, task3(t, "", func(tk *model.Task) { tk.Links = slices.Clone(links) }), schema3)
+	if got.Links[0].Sync != "link" || len(got.Links[0].Fields) != 0 {
+		t.Errorf("link 1 = %+v", got.Links[0])
+	}
+	if got.Links[1].Sync != "mirror" || !slices.Equal(got.Links[1].Fields, []string{"title"}) {
+		t.Errorf("link 2 = %+v; it still syncs the title", got.Links[1])
+	}
+	if got.Links[2].Sync != "link" {
+		t.Errorf("link 3 = %+v", got.Links[2])
+	}
+	tk, _ := model.DecodeTask(task3(t, "", func(tk *model.Task) { tk.Links = slices.Clone(links) }))
+	d, _ := BuiltinDefsOf([]byte(schema3))
+	if r := TaskBuiltins(tk, d); !slices.Equal(r.Links, []string{"github.com/o/r#1"}) {
+		t.Errorf("links = %v; want the one whose sync changed", r.Links)
+	}
+	// a template item the same
+	src := "---\nkind: task\ntitle: t\nlinks:\n- {type: issue, ref: 'github.com/o/r#1', sync: push, fields: [labels]}\n---\n"
+	out, err := TemplateTo(3, 4, "tpl", []byte(src), Cx{Schema: []byte(schema3)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tp, err := model.DecodeTemplate("tpl", out)
+	if err != nil || tp.Item.Links[0].Sync != "link" || len(tp.Item.Links[0].Fields) != 0 {
+		t.Errorf("template links = %+v, %v", tp.Item.Links, err)
 	}
 }

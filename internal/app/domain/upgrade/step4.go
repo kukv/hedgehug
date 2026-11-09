@@ -32,6 +32,25 @@ type BuiltinDefs struct {
 	Priorities []string
 	Labels     []string
 	keep       bool // leave what cannot be moved in props
+
+	// What was made of the lists to give a schema of format 4 that checks.
+	PrioritiesFrom   string   // list, definition or default: where Priorities come from
+	PrioritiesEmpty  bool     // priorities: was there and empty, so the next source was used
+	PrioritiesFolded []string // spellings that differ from an earlier one in case only, and were folded into it
+	LabelsFolded     []string
+}
+
+// foldList keeps the first spelling of each value, comparing without regard to
+// case, and returns the spellings it left out.
+func foldList(in []string) (out, folded []string) {
+	for _, v := range in {
+		if _, ok := schema.MatchValue(out, v); ok {
+			folded = append(folded, v)
+			continue
+		}
+		out = append(out, v)
+	}
+	return out, folded
 }
 
 // KeepingBad is d for what reads a task of a past commit: a value that cannot be
@@ -45,11 +64,13 @@ func (d BuiltinDefs) KeepingBad() BuiltinDefs {
 
 // BuiltinDefsOf reads the schema.yaml of format 3, which may be nil (a store
 // without one). The priorities are the priorities: it has, else the values of
-// a property priority of type enum, else the default; the labels are its
-// labels:, none without. The file is read as it is, for it still holds the
+// a property priority of type enum, else the default (an empty priorities: is
+// as if it was not there); the labels are its labels:, none without. Values
+// that differ in case only are folded into the one written first, which format
+// 4 requires of the lists. The file is read as it is, for it still holds the
 // property definitions that the schema no longer keeps.
 func BuiltinDefsOf(raw []byte) (BuiltinDefs, error) {
-	d := BuiltinDefs{Priorities: slices.Clone(schema.DefaultPriorities)}
+	d := BuiltinDefs{Priorities: slices.Clone(schema.DefaultPriorities), PrioritiesFrom: "default"}
 	if raw == nil {
 		return d, nil
 	}
@@ -64,13 +85,16 @@ func BuiltinDefsOf(raw []byte) (BuiltinDefs, error) {
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return BuiltinDefs{}, fmt.Errorf("%s: %w", schema.Path, err)
 	}
-	d.Labels = doc.Labels
+	d.Labels, d.LabelsFolded = foldList(doc.Labels)
+	d.PrioritiesEmpty = doc.Priorities != nil && len(*doc.Priorities) == 0
+	src := d.Priorities
 	switch p := doc.Props["priority"]; {
-	case doc.Priorities != nil:
-		d.Priorities = *doc.Priorities
+	case doc.Priorities != nil && len(*doc.Priorities) > 0:
+		src, d.PrioritiesFrom = *doc.Priorities, "list"
 	case schema.PropType(p.Type) == schema.TypeEnum && len(p.Values) > 0:
-		d.Priorities = p.Values
+		src, d.PrioritiesFrom = p.Values, "definition"
 	}
+	d.Priorities, d.PrioritiesFolded = foldList(src)
 	return d, nil
 }
 
@@ -81,6 +105,8 @@ type BadValue struct {
 	// Twice is set when the value is readable but the field of the task has a
 	// value already, so that which of the two is meant cannot be told.
 	Twice bool
+	// Field is the value the field of the task has, as written, when Twice.
+	Field string
 }
 
 // Builtins is what became of the built-in properties of one task or of a
@@ -91,6 +117,7 @@ type Builtins struct {
 	Time   []BadValue // the dates that lost a time other than 00:00: Value is the value as written
 	Labels []string   // the labels that the list does not have, as written
 	GitHub bool       // a label of the GitHub sync was taken out
+	Links  []string   // refs of the links that synced labels alone: they are not synced now
 
 	changed bool // the file is not what it was
 }
@@ -140,6 +167,27 @@ func (g builtinTarget) has(name string) bool {
 	return *g.points != nil
 }
 
+// text is the value of the field called name as it reads in a list: the key of
+// the file when this version cannot read it.
+func (g builtinTarget) text(name string) string {
+	if g.extra != nil {
+		if n := g.extra.Get(name); n != nil {
+			return nodeText(n)
+		}
+	}
+	switch name {
+	case "priority":
+		return *g.priority
+	case "start":
+		return (*g.start).String()
+	case "due":
+		return (*g.due).String()
+	case "estimate":
+		return (*g.estimate).String()
+	}
+	return strconv.FormatFloat(**g.points, 'f', -1, 64)
+}
+
 // set puts the value of the property name, which is readable, in the field.
 func (g builtinTarget) set(name string, v builtinValue) {
 	if g.extra != nil {
@@ -173,22 +221,12 @@ type builtinValue struct {
 // empty list). ok is false for a value that is not of the type and cannot be
 // made one without losing something.
 func readBuiltin(name string, n *yaml.Node, d BuiltinDefs) (v builtinValue, empty, ok bool) {
-	for n.Kind == yaml.SequenceNode { // a list of one is its value
-		items := valueNodes(n)
-		switch len(items) {
-		case 0:
-			return v, true, true
-		case 1:
-			n = items[0]
-		default:
-			return v, false, false
-		}
-	}
-	if n.Kind != yaml.ScalarNode {
-		return v, false, false
-	}
-	if n.ShortTag() == "!!null" || n.Value == "" {
+	n, kind := single(n)
+	switch kind {
+	case valueEmpty:
 		return v, true, true
+	case valueMany:
+		return v, false, false
 	}
 	s := n.Value
 	var err error
@@ -210,6 +248,36 @@ func readBuiltin(name string, n *yaml.Node, d BuiltinDefs) (v builtinValue, empt
 		}
 	}
 	return v, false, err == nil
+}
+
+const (
+	valueOne = iota
+	valueEmpty
+	valueMany
+)
+
+// single is the one scalar a value of props holds: the value itself, or the
+// item of a list of one. valueEmpty is null, an empty string or an empty list;
+// valueMany is anything that is not one scalar.
+func single(n *yaml.Node) (*yaml.Node, int) {
+	for n.Kind == yaml.SequenceNode {
+		items := valueNodes(n)
+		switch len(items) {
+		case 0:
+			return n, valueEmpty
+		case 1:
+			n = items[0]
+		default:
+			return n, valueMany
+		}
+	}
+	switch {
+	case n.Kind != yaml.ScalarNode:
+		return n, valueMany
+	case n.ShortTag() == "!!null" || n.Value == "":
+		return n, valueEmpty
+	}
+	return n, valueOne
 }
 
 // dateOf reads a date, or a time of RFC 3339 as the day it is written in, in the
@@ -243,7 +311,11 @@ func moveBuiltins(g builtinTarget, d BuiltinDefs, out *Builtins) {
 		text := nodeText(n)
 		twice := ok && g.has(name)
 		if !ok || twice {
-			out.Bad = append(out.Bad, BadValue{Prop: name, Value: text, Twice: twice})
+			b := BadValue{Prop: name, Value: text, Twice: twice}
+			if twice {
+				b.Field = g.text(name)
+			}
+			out.Bad = append(out.Bad, b)
 			if d.keep {
 				continue // stays in props, and the field keeps its value
 			}
@@ -288,7 +360,9 @@ func filterLabels(labels *[]string, list []string, out *Builtins) {
 }
 
 // dropLabelFields takes labels out of the fields of the links, which is what
-// the sync of a link pushed or mirrored.
+// the sync of a link pushed or mirrored. A link that synced labels alone would
+// be left with no fields, which means the default ones, so it is made a link
+// that does not sync (sync: link), and is told in out.Links.
 func dropLabelFields(links *[]model.Link, out *Builtins) {
 	for i := range *links {
 		l := &(*links)[i]
@@ -298,6 +372,10 @@ func dropLabelFields(links *[]model.Link, out *Builtins) {
 		l.Fields = slices.DeleteFunc(slices.Clone(l.Fields), func(f string) bool { return f == "labels" })
 		if len(l.Fields) == 0 {
 			l.Fields = nil
+			if l.Sync == model.SyncPush || l.Sync == model.SyncMirror {
+				l.Sync = model.SyncLink
+				out.Links = append(out.Links, l.Ref)
+			}
 		}
 		out.GitHub, out.changed = true, true
 	}
@@ -364,6 +442,7 @@ func ItemBuiltins(it *model.TemplateItem, d BuiltinDefs) Builtins {
 		out.Time = append(out.Time, c.Time...)
 		out.Labels = append(out.Labels, c.Labels...)
 		out.GitHub = out.GitHub || c.GitHub
+		out.Links = append(out.Links, c.Links...)
 		out.changed = out.changed || c.changed
 	}
 	return out
@@ -421,8 +500,8 @@ func LegacyBuiltinConflicts(t *model.Task) []string {
 // emptyValue is whether a value of props holds nothing: null, an empty string, an
 // empty list.
 func emptyValue(n *yaml.Node) bool {
-	_, empty, _ := readBuiltin("points", n, BuiltinDefs{})
-	return empty
+	_, kind := single(n)
+	return kind == valueEmpty
 }
 
 // LegacyBuiltinBadValues are the names of the five that t holds in props with a
@@ -448,19 +527,45 @@ func LegacyBuiltinBadValues(t *model.Task, priorities []string) []string {
 // schema of the store. A task with a value that cannot be read, or whose field
 // has a value already (LegacyBuiltinConflicts), comes back as it is: neither
 // can be moved without losing something. It touches nothing else: not labels,
-// not gh.
-func MoveLegacyBuiltins(raw []byte, priorities []string) ([]byte, error) {
+// not gh. The dates that lost a time are returned, as written, for the caller
+// to tell of.
+func MoveLegacyBuiltins(raw []byte, priorities []string) ([]byte, []BadValue, error) {
 	t, err := model.DecodeTask(raw)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(LegacyBuiltinConflicts(t)) > 0 || len(LegacyBuiltinBadValues(t, priorities)) > 0 {
-		return raw, nil
+		return raw, nil, nil
 	}
 	var out Builtins
 	moveBuiltins(targetOfTask(t), BuiltinDefs{Priorities: priorities, keep: true}, &out)
 	if !out.changed {
-		return raw, nil
+		return raw, nil, nil
 	}
-	return t.Encode()
+	b, err := t.Encode()
+	return b, out.Time, err
+}
+
+// BuiltinText reads n, a value that a task of format 3 held in props under the
+// name of a built-in property (a priority, start, due, estimate or points), as
+// the value of the field, fixing its type as the step to format 4 does, and
+// gives it as hedgehug set reads it. priorities is the list of the schema now.
+// empty is a value that holds nothing, which clears the field; ok is false for
+// one that cannot be read as the field's type.
+func BuiltinText(name string, n *yaml.Node, priorities []string) (text string, empty, ok bool) {
+	v, empty, ok := readBuiltin(name, n, BuiltinDefs{Priorities: priorities})
+	if empty || !ok {
+		return "", empty, ok
+	}
+	switch name {
+	case "priority":
+		text = v.text
+	case "start", "due":
+		text = v.date.String()
+	case "estimate":
+		text = v.dur.String()
+	default:
+		text = strconv.FormatFloat(v.num, 'f', -1, 64)
+	}
+	return text, false, true
 }

@@ -41,9 +41,10 @@ func legacyNames(t *model.Task) []string {
 	return out
 }
 
-// legacyFieldFindings are the tasks that hold a relation in props. --fix moves
-// it when the values are ULIDs and the field of the task has none; the hint
-// says what is to be done where it does not.
+// legacyFieldFindings are the tasks that hold a relation or one of the five
+// built-in properties in props. --fix moves them when the relations are ULIDs,
+// the other values are of the type of their field and the field of the task has
+// none; the hint says what is to be done where it does not.
 func legacyFieldFindings(s *store.Store, ix *index.Index) []usecase.Finding {
 	var out []usecase.Finding
 	for _, e := range ix.Tasks() {
@@ -102,8 +103,10 @@ func legacyBlocked(t *model.Task, priorities []string) bool {
 
 // fixLegacyFields moves, in one commit, the relations and the five built-in
 // properties that tasks hold in props to their fields, as hh store convert does,
-// and says which task lost which. A task whose field has values of its own is
-// left as it is: which is newer cannot be told, and the finding stays.
+// and says which task lost which, and the time of a date that was made of one.
+// A task whose field has values of its own, or a value that cannot be read as
+// the type of its field, is left as it is: nothing is moved without losing
+// something, and the finding stays.
 func fixLegacyFields(ss *usecase.Session, s *store.Store) ([]Fixed, error) {
 	files := map[string][]byte{}
 	var out []Fixed
@@ -120,7 +123,8 @@ func fixLegacyFields(ss *usecase.Session, s *store.Store) ([]Fixed, error) {
 		if err != nil {
 			return nil, err
 		}
-		if fixed, err = upgrade.MoveLegacyBuiltins(fixed, priorities); err != nil {
+		fixed, cut, err := upgrade.MoveLegacyBuiltins(fixed, priorities)
+		if err != nil {
 			return nil, err
 		}
 		if string(fixed) == string(raw) {
@@ -142,9 +146,12 @@ func fixLegacyFields(ss *usecase.Session, s *store.Store) ([]Fixed, error) {
 			name = t.ULID.String()
 		}
 		value, _ := json.Marshal(moved) // a list of strings always encodes
+		line := fmt.Sprintf("repaired: %s: %s props.%s moved to the fields of the task", name, legacyKind, strings.Join(moved, ", props."))
+		for _, c := range cut { // a date made of a time says what it lost
+			line += fmt.Sprintf("; the time of props.%s was left out: %s", c.Prop, c.Value)
+		}
 		out = append(out, Fixed{
-			ULID: t.ULID.String(), ID: t.ID, Title: t.Title, Kind: legacyKind, Value: value,
-			Line: fmt.Sprintf("repaired: %s: %s props.%s moved to the fields of the task", name, legacyKind, strings.Join(moved, ", props.")),
+			ULID: t.ULID.String(), ID: t.ID, Title: t.Title, Kind: legacyKind, Value: value, Line: line,
 		})
 	}
 	if len(files) == 0 {

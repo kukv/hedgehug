@@ -49,6 +49,7 @@ type step4State struct {
 	moved   int
 	tpMoved map[string]int // by template
 	github  int            // tasks and templates that lost a trace of the label sync
+	links   []string       // the links that synced labels alone, with their task or template
 	bad     []builtinBad
 	cut     []builtinBad // dates that lost a time other than 00:00
 	labels  map[string]*labelStat
@@ -93,6 +94,9 @@ func (c *step4State) take(where string, r upgrade.Builtins, template bool) {
 	if r.GitHub {
 		c.github++
 	}
+	for _, ref := range r.Links {
+		c.links = append(c.links, where+": "+ref)
+	}
 	seen := map[string]bool{}
 	for _, l := range r.Labels {
 		key := strings.ToLower(l)
@@ -101,8 +105,8 @@ func (c *step4State) take(where string, r upgrade.Builtins, template bool) {
 			st = &labelStat{name: l}
 			c.labels[key] = st
 		}
-		if seen[key] && !template {
-			continue // a label twice on a task is one
+		if seen[key] {
+			continue // a label twice on a task or a template is one
 		}
 		seen[key] = true
 		if template {
@@ -168,7 +172,7 @@ func (c *step4State) convertTemplates() {
 func (b builtinBad) listed() string {
 	s := fmt.Sprintf("%s: props.%s: %s", b.where, b.Prop, b.Value)
 	if b.Twice {
-		s += fmt.Sprintf("（トップレベルの %s にも値がある）", b.Prop)
+		s += fmt.Sprintf("（トップレベルの %s にも値がある: %s）", b.Prop, b.Field)
 	}
 	return s
 }
@@ -193,7 +197,7 @@ func (c *step4State) checkValues() error {
 	}
 	for _, b := range c.bad {
 		if b.Twice {
-			c.notes = append(c.notes, "トップレベルの値を外し、props の値を移した: "+b.listed())
+			c.notes = append(c.notes, fmt.Sprintf("トップレベルの %s: %s を外し、props の値を移した: %s", b.Prop, b.Field, b.listed()))
 		} else {
 			c.notes = append(c.notes, "読めない値を外した: "+b.listed())
 		}
@@ -256,7 +260,22 @@ func (c *step4State) convertSchema() error {
 	if !slices.Equal(sc.Priorities, c.defs.Priorities) {
 		changed = true
 		sc.Priorities = slices.Clone(c.defs.Priorities)
+	}
+	if c.defs.PrioritiesFrom == "definition" {
 		c.notes = append(c.notes, "schema.yaml の priorities: を priority の定義の values から作った: "+strings.Join(sc.Priorities, ", "))
+	}
+	if c.defs.PrioritiesEmpty {
+		c.notes = append(c.notes, "schema.yaml の priorities: が空だったので、次の出どころを使った: "+strings.Join(sc.Priorities, ", "))
+	}
+	if len(c.defs.PrioritiesFolded) > 0 {
+		c.notes = append(c.notes, "priorities: の大文字小文字だけ違う値を、先に書かれた綴りに畳んだ（タスクとテンプレートの値もその綴りにした）: "+strings.Join(c.defs.PrioritiesFolded, ", "))
+	}
+	if !slices.Equal(sc.Labels, c.defs.Labels) {
+		changed = true
+		sc.Labels = slices.Clone(c.defs.Labels)
+	}
+	if len(c.defs.LabelsFolded) > 0 {
+		c.notes = append(c.notes, "labels: の大文字小文字だけ違う値を、先に書かれた綴りに畳んだ（タスクとテンプレートの値もその綴りにした）: "+strings.Join(c.defs.LabelsFolded, ", "))
 	}
 	var dropped []string
 	sc.Props = slices.DeleteFunc(sc.Props, func(p schema.Prop) bool {
@@ -302,6 +321,9 @@ func (c *step4State) lines() []string {
 	}
 	if c.github > 0 {
 		out = append(out, fmt.Sprintf("GitHub のラベルの同期の跡（gh.issues[].synced と links の fields の labels）を外した: %d 件", c.github))
+	}
+	for _, l := range c.links {
+		out = append(out, "ラベルだけを同期していたリンクの sync を link（同期しない）にした: "+l)
 	}
 	out = append(out, c.notes...)
 	for _, p := range c.unread {

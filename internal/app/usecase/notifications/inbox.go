@@ -718,6 +718,12 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyRelationNames, name) {
 		return notRevertible(relationsFixed(field))
 	}
+	// Likewise props.priority, start, due, estimate and points: they were
+	// properties then and are fields of the task now, with the same meaning, so
+	// the value goes back to the field of the same name.
+	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyBuiltinNames, name) {
+		return revertLegacyBuiltin(t, name, raw, sc, resolve)
+	}
 	switch field {
 	case "title", "kind", "status":
 		var v string
@@ -863,6 +869,23 @@ func revertTyped(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 		return err
 	}
 	return usecase.ApplyAssign(t, usecase.Assign{Key: field, Op: "=", Value: text}, sc, resolve)
+}
+
+// revertLegacyBuiltin puts the value raw of an item recorded before the five
+// built-in properties were fields (props.<name>) back in the field name. The
+// value is read as the step to format 4 reads it (a datetime is a date, "3" is
+// 3, a list of one is its value), and a priority is spelled as the list now has
+// it. One that cannot be read that way is not reverted, and nothing is changed.
+func revertLegacyBuiltin(t *model.Task, name string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil || len(doc.Content) != 1 {
+		return fmt.Errorf("props.%s: %s does not decode", name, raw)
+	}
+	text, _, ok := upgrade.BuiltinText(name, doc.Content[0], sc.Priorities)
+	if !ok {
+		return notRevertible(fmt.Errorf("props.%s: %s cannot be put back in the field %s of the task: it is not a value of its type (a priority must be one of the priorities now): %w", name, raw, name, errNotRevertible))
+	}
+	return usecase.ApplyAssign(t, usecase.Assign{Key: name, Op: "=", Value: text}, sc, resolve)
 }
 
 // revertProp puts the value raw back in the property key. A list becomes

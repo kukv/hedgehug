@@ -259,3 +259,63 @@ func TestReadTakesThePointsOfAVersionOfFormat3FromProps(t *testing.T) {
 		t.Errorf("versions = %+v; want the points 3 of props", vs)
 	}
 }
+
+// The history of a task runs through the conversion: the points of a version of
+// format 3 (in props), of the commit that converts it (the field) and of a later
+// one read as 3, 3 and 5, so that a burndown sees the one change that was made.
+func TestReadTakesThePointsOfAHistoryThatRunsThroughTheConversion(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	dir := f.s.Dir()
+	meta, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(model.StoreMetaPath))) //nolint:gosec // the test's store
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo", Workspace: f.ws}
+	commit := func(format int, subject string, edit func()) {
+		t.Helper()
+		a.Props, a.Points = nil, nil
+		edit()
+		body, err := a.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := map[string]string{
+			model.StoreMetaPath:    strings.Replace(string(meta), fmt.Sprintf("format: %d", model.StoreFormat), fmt.Sprintf("format: %d", format), 1),
+			model.TaskPath(a.ULID): string(body),
+		}
+		var paths []string
+		for rel, data := range files {
+			p := filepath.Join(dir, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			paths = append(paths, rel)
+		}
+		if _, err := f.s.Repo().Commit(gitrepo.Commit{Paths: paths, Subject: subject, Author: author, When: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	points := func(v float64) func() { return func() { a.Points = &v } }
+	commit(3, "in format 3", func() {
+		if err := yaml.Unmarshal([]byte("points: 3\n"), &a.Props); err != nil {
+			t.Fatal(err)
+		}
+	})
+	commit(model.StoreFormat, "converted", points(3))
+	commit(model.StoreFormat, "changed", points(5))
+	vs := f.read(t)[0].Versions
+	var got []float64
+	for _, v := range vs {
+		if !v.HasPoints {
+			t.Fatalf("versions = %+v; every version has points", vs)
+		}
+		got = append(got, v.Points)
+	}
+	if !slices.Equal(got, []float64{3, 3, 5}) {
+		t.Errorf("points = %v; want 3, 3, 5", got)
+	}
+}

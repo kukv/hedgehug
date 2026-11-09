@@ -209,7 +209,7 @@ func TestStep4StopsAtAKeyInPropsAndAtTheTopLevel(t *testing.T) {
 	}
 	s.files[model.TaskPath(a.ULID)] = b
 	_, _, err = s.run(Options{})
-	if e := usecase.AsError(err); e == nil || e.Code != "convert.bad_value" || !strings.Contains(err.Error(), "props.points: 8（トップレベルの points にも値がある）") {
+	if e := usecase.AsError(err); e == nil || e.Code != "convert.bad_value" || !strings.Contains(err.Error(), "props.points: 8（トップレベルの points にも値がある: 5）") {
 		t.Fatalf("error = %v", err)
 	}
 	tr, rep := s.ok(Options{DropBadValues: true})
@@ -217,7 +217,7 @@ func TestStep4StopsAtAKeyInPropsAndAtTheTopLevel(t *testing.T) {
 	if *got.Points != 8 || len(got.Props) != 1 {
 		t.Errorf("points %v, props %v; the value of props is kept, and the one at the top level goes", *got.Points, got.Props)
 	}
-	hasLine(t, rep, "トップレベルの値を外し、props の値を移した: WEB-2 a: props.points: 8")
+	hasLine(t, rep, "トップレベルの points: 5 を外し、props の値を移した: WEB-2 a: props.points: 8")
 }
 
 func TestStep4RewritesTheItemsAndChildrenOfATemplate(t *testing.T) {
@@ -237,7 +237,7 @@ func TestStep4RewritesTheItemsAndChildrenOfATemplate(t *testing.T) {
 		t.Errorf("child = %+v", c)
 	}
 	hasLine(t, rep, "テンプレート tpl の項目へ移した: 3 件")
-	hasLine(t, rep, "ラベル wip を外した（schema.yaml の labels: にない）: タスク 0 件・テンプレート 2 件")
+	hasLine(t, rep, "ラベル wip を外した（schema.yaml の labels: にない）: タスク 0 件・テンプレート 1 件")
 }
 
 func TestStep4TakesTheTracesOfTheLabelSync(t *testing.T) {
@@ -287,4 +287,67 @@ func TestStep4LeavesAutomationsWithoutLabelsAlone(t *testing.T) {
 	if _, ok := tr.Changes()["automations.yaml"]; ok {
 		t.Error("automations.yaml was rewritten")
 	}
+}
+
+func TestStep4FoldsTheListsThatDifferInCaseOnlyAndSkipsAnEmptyPriorities(t *testing.T) {
+	t.Parallel()
+	s := newStore3(t)
+	s.put("schema.yaml", "priorities: [High, high, Low]\nlabels: [Bug, bug, ui]\n")
+	a := s.task("a", "priority: HIGH\n")
+	a.Labels = []string{"BUG", "ui"}
+	b, err := a.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.files[model.TaskPath(a.ULID)] = b
+	tr, rep := s.ok(Options{})
+	got := taskIn(t, tr, a)
+	if got.Priority != "High" || !slices.Equal(got.Labels, []string{"Bug", "ui"}) {
+		t.Errorf("priority %q, labels %v", got.Priority, got.Labels)
+	}
+	sc, err := schema.Decode(tr.Read("schema.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(sc.Priorities, []string{"High", "Low"}) || !slices.Equal(sc.Labels, []string{"Bug", "ui"}) {
+		t.Errorf("priorities %v, labels %v", sc.Priorities, sc.Labels)
+	}
+	hasLine(t, rep, "priorities: の大文字小文字だけ違う値を、先に書かれた綴りに畳んだ")
+	hasLine(t, rep, "labels: の大文字小文字だけ違う値を、先に書かれた綴りに畳んだ")
+
+	s = newStore3(t)
+	s.put("schema.yaml", "priorities: []\nprops:\n  priority: {type: enum, values: [minor, major]}\n")
+	a = s.task("a", "priority: Major\n")
+	tr, rep = s.ok(Options{})
+	if got := taskIn(t, tr, a); got.Priority != "major" {
+		t.Errorf("priority = %q; an empty list falls through to the definition", got.Priority)
+	}
+	hasLine(t, rep, "priorities: が空だったので、次の出どころを使った: minor, major")
+}
+
+func TestStep4ListsTheLinksItStopsFromSyncing(t *testing.T) {
+	t.Parallel()
+	s := newStore3(t)
+	a := s.task("a", "")
+	a.Links = []model.Link{{Type: "issue", Ref: "github.com/o/r#1", Sync: "push", Fields: []string{"labels"}}}
+	b, err := a.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.files[model.TaskPath(a.ULID)] = b
+	s.put("templates/tpl.md", "---\nkind: task\ntitle: t\nlinks:\n- {type: issue, ref: 'github.com/o/r#9', sync: mirror, fields: [labels]}\n---\n")
+	tr, rep := s.ok(Options{})
+	if l := taskIn(t, tr, a).Links[0]; l.Sync != "link" || len(l.Fields) != 0 {
+		t.Errorf("link = %+v", l)
+	}
+	hasLine(t, rep, "ラベルだけを同期していたリンクの sync を link（同期しない）にした: WEB-2 a: github.com/o/r#1")
+	hasLine(t, rep, "ラベルだけを同期していたリンクの sync を link（同期しない）にした: template tpl: github.com/o/r#9")
+}
+
+func TestStep4CountsATemplateOnceForALabelOnItsItemAndItsChildren(t *testing.T) {
+	t.Parallel()
+	s := newStore3(t)
+	s.put("templates/tpl.md", "---\nkind: task\ntitle: t\nlabels: [wip]\nchildren:\n- {title: a, labels: [wip]}\n- {title: b, labels: [wip]}\n---\n")
+	_, rep := s.ok(Options{})
+	hasLine(t, rep, "ラベル wip を外した（schema.yaml の labels: にない）: タスク 0 件・テンプレート 1 件")
 }
