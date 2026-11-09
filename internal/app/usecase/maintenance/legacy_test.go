@@ -46,6 +46,8 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		props("causes: [" + a.ULID.String() + "]\nduplicates: [" + a.ULID.String() + "]\n")(tk)
 		tk.Causes = []model.ULID{b.ULID}
 	})
+	// g: two names with a value that is no ULID are both told
+	g := ts.AddTask("g", props("clones: [x]\ncauses: [y]\n"))
 	// f: an empty value is no bad value; --fix takes the key away
 	f := ts.AddTask("f", props("relates: []\n"))
 	before := ts.TaskByULID("me", a.ULID).Updated
@@ -55,11 +57,14 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := legacyFindings(rep.Findings)
-	if len(got) != 7 {
+	if len(got) != 9 {
 		t.Fatalf("findings = %+v; want a (relates, duplicates), c, d, e (causes, duplicates), f", rep.Findings)
 	}
 	if f := got[c.ULID.String()+" props.causes"]; !strings.Contains(f.Hint, "leaves this task as it is, because the field causes has values of its own") {
 		t.Errorf("c: %+v", f)
+	}
+	if f := got[g.ULID.String()+" props.causes"]; !strings.Contains(f.Hint, "because props.clones, props.causes has a value") && !strings.Contains(f.Hint, "because props.causes, props.clones has a value") {
+		t.Errorf("g: %+v", f)
 	}
 	if f := got[d.ULID.String()+" props.clones"]; !strings.Contains(f.Hint, "leaves this task as it is, because props.clones has a value that is not the ULID") {
 		t.Errorf("d: %+v", f)
@@ -106,7 +111,7 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		t.Errorf("d was changed: props %v", nd.Props)
 	}
 	got = legacyFindings(rep.Findings)
-	if len(got) != 4 || got[c.ULID.String()+" props.causes"].Task == "" || got[d.ULID.String()+" props.clones"].Task == "" {
+	if len(got) != 6 || got[c.ULID.String()+" props.causes"].Task == "" || got[d.ULID.String()+" props.clones"].Task == "" {
 		t.Errorf("findings left = %+v; want c, d and e", rep.Findings)
 	}
 	// the second --fix has nothing to move

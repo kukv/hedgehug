@@ -31,6 +31,15 @@ type RelationDefs struct {
 	to    map[string]string // name of a task_ref property to its relation
 	other map[string]bool   // names of properties of another type
 	names []string          // of the task_ref properties, in file order
+	keep  bool              // leave the values that are not ULIDs in props
+}
+
+// KeepingBad is d for what reads a task of a past commit: a value that is not
+// a ULID stays in props under its own name, where nothing is lost and doctor
+// finds it (hh store convert drops it only when it is told to).
+func (d RelationDefs) KeepingBad() RelationDefs {
+	d.keep = true
+	return d
 }
 
 // RelationDefsOf reads the properties of sc, which may be nil (a store without
@@ -98,6 +107,7 @@ func MoveRelations(props *model.Fields, d RelationDefs, into func(relation strin
 			continue
 		}
 		m := Moved{Prop: f.Key, To: to}
+		var bad []*yaml.Node
 		for _, n := range valueNodes(f.Value) {
 			if n.Kind == yaml.ScalarNode {
 				if u, err := model.ParseULID(n.Value); err == nil {
@@ -108,8 +118,18 @@ func MoveRelations(props *model.Fields, d RelationDefs, into func(relation strin
 				}
 			}
 			m.Bad = append(m.Bad, nodeText(n))
+			bad = append(bad, n)
 		}
-		props.Delete(f.Key)
+		switch {
+		case d.keep && len(bad) > 0 && f.Value.Kind == yaml.SequenceNode:
+			kept := *f.Value
+			kept.Content = bad
+			props.Set(f.Key, &kept)
+		case d.keep && len(bad) > 0:
+			// a single value that is not a ULID stays as it was
+		default:
+			props.Delete(f.Key)
+		}
 		list := into(to)
 		for _, u := range m.Values {
 			if !slices.Contains(*list, u) {
@@ -221,9 +241,9 @@ func LegacyBadValues(t *model.Task) []string {
 }
 
 // task2to3 moves the task_ref values of a task from props to its relations. A
-// value that is not a ULID is dropped with its property: a file that is read as
-// the newest format cannot hold it, and hh store convert, which does not drop
-// it unless it is told to, is the one that tells of it.
+// value that is not a ULID stays in props under its own name (and doctor
+// tells of it, as of any relation left there), so that reading a past version
+// loses nothing.
 func task2to3(raw []byte, cx Cx) ([]byte, error) {
 	t, err := model.DecodeTask(raw)
 	if err != nil {
@@ -235,7 +255,7 @@ func task2to3(raw []byte, cx Cx) ([]byte, error) {
 			return nil, fmt.Errorf("%s: %w", schema.Path, err)
 		}
 	}
-	if len(TaskRelations(t, RelationDefsOf(sc))) == 0 {
+	if len(TaskRelations(t, RelationDefsOf(sc).KeepingBad())) == 0 {
 		return raw, nil
 	}
 	return t.Encode()

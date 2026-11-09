@@ -176,3 +176,48 @@ func TestUndoReadsTheRelationsOfCommitsBeforeTheConversion(t *testing.T) {
 	}
 	notInProps(t, e)
 }
+
+// A past version with a value that is no ULID is read with the ULIDs moved and
+// the value left in props under its own name; restoring it brings it back, and
+// doctor tells of it.
+func TestAPastVersionWithAValueThatIsNoULIDKeepsItInProps(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	f := makeFormatTwo(t, ts)
+	at := f.commit(t, ts, "x has a bad value", "relates: ["+f.y.ULID.String()+", nope]\nnote: n\n", nil)
+	if _, err := Run(ts.Session, Options{DropBadValues: true}, false); err != nil {
+		t.Fatal(err)
+	}
+	v, err := tasks.ShowAt(ts.Session, f.x.ID, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := refIDs(v.Relates); !slices.Equal(got, []string{f.y.ULID.String()}) {
+		t.Errorf("relates = %v", got)
+	}
+	if v.Props["relates"] == nil {
+		t.Errorf("props = %v; the value that is no ULID is not there", v.Props)
+	}
+	if _, err := tasks.RestoreAt(ts.Session, f.x.ID, at); err != nil {
+		t.Fatal(err)
+	}
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ix.Task(f.x.ULID)
+	if !slices.Equal(e.Relates, []model.ULID{f.y.ULID}) || !slices.Equal(e.Prop("relates"), []string{"nope"}) {
+		t.Errorf("after restore: relates %v, props.relates %v", e.Relates, e.Prop("relates"))
+	}
+	r, err := ts.DoctorOne(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, fd := range r.Findings {
+		found = found || fd.Code == "task.legacy_field" && fd.Task == f.x.ULID.String() && fd.Args[0] == "props.relates"
+	}
+	if !found {
+		t.Errorf("doctor does not tell of props.relates: %+v", r.Findings)
+	}
+}

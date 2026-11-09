@@ -69,7 +69,7 @@ func legacyBlocker(t *model.Task) string {
 		return "the field " + c[0] + " has values of its own, so which is newer cannot be told"
 	}
 	if b := upgrade.LegacyBadValues(t); len(b) > 0 {
-		return "props." + b[0] + " has a value that is not the ULID of a task"
+		return "props." + strings.Join(b, ", props.") + " has a value that is not the ULID of a task"
 	}
 	return ""
 }

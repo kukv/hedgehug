@@ -125,17 +125,20 @@ func TestTask2to3JoinsWhatTheFieldHoldsAndCollapsesDuplicates(t *testing.T) {
 	}
 }
 
-func TestTask2to3WithoutADefinitionMovesTheULIDsAndDropsTheRest(t *testing.T) {
+func TestTask2to3WithoutADefinitionMovesTheULIDsAndKeepsTheRest(t *testing.T) {
 	t.Parallel()
 	id := newIDs()
 	// the definitions went (a store converted by an older version, or one that
-	// removed them); the values that are ULIDs are relations, the others go
+	// removed them); the values that are ULIDs are relations, the others stay
 	props := "duplicates: [" + id.a.String() + "]\nclones: " + id.b.String() + "\nrelates: [" + id.c.String() + ", not-an-id]\ncauses: not-an-id\n"
 	got := up(t, task2(t, props, nil), "")
 	if !eq(got.Duplicates, []model.ULID{id.a}) || !eq(got.Clones, []model.ULID{id.b}) || !eq(got.Relates, []model.ULID{id.c}) {
 		t.Errorf("duplicates %v, clones %v, relates %v", got.Duplicates, got.Clones, got.Relates)
 	}
-	if len(got.Causes) != 0 || len(got.Props) != 0 {
+	var rel, cau []string
+	if len(got.Causes) != 0 || len(got.Props) != 2 ||
+		got.Props.Get("relates").Decode(&rel) != nil || !slices.Equal(rel, []string{"not-an-id"}) ||
+		got.Props.Get("causes").Decode(&cau) != nil && got.Props.Get("causes").Value != "not-an-id" {
 		t.Errorf("causes %v, props %v", got.Causes, got.Props)
 	}
 }
@@ -189,8 +192,13 @@ func TestTask2to3DropsTheValueThatIsNotAULIDOfATaskRef(t *testing.T) {
 	t.Parallel()
 	id := newIDs()
 	got := up(t, task2(t, "causes: ["+id.a.String()+", WEB-3, 7]\n", nil), schema2)
-	if !eq(got.Causes, []model.ULID{id.a}) || len(got.Props) != 0 {
-		t.Errorf("causes %v, props %v", got.Causes, got.Props)
+	if !eq(got.Causes, []model.ULID{id.a}) || len(got.Props) != 1 {
+		t.Fatalf("causes %v, props %v", got.Causes, got.Props)
+	}
+	// the values that are no ULID stay in props, under their own name
+	var left []string
+	if err := got.Props.Get("causes").Decode(&left); err != nil || !slices.Equal(left, []string{"WEB-3", "7"}) {
+		t.Errorf("props.causes = %v, %v", left, err)
 	}
 }
 
