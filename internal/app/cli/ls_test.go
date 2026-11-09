@@ -13,6 +13,7 @@ import (
 func TestLs(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("ui")
 	a := te.addJSON("Alpha", "-p", "labels+=ui")
 	b := te.addJSON("Beta", "--status", "done")
 

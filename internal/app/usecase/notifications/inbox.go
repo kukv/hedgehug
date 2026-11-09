@@ -744,7 +744,13 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 	case "watchers":
 		return revertSet(&t.Watchers, field, raw)
 	case "labels":
-		return revertSet(&t.Labels, field, raw)
+		if err := revertSet(&t.Labels, field, raw); err != nil {
+			return err
+		}
+		usecase.SpellAsListed(t, sc)
+		return nil
+	case "priority", "start", "due", "estimate", "points":
+		return revertTyped(t, field, raw, sc, resolve)
 	case "repos":
 		return revertSet(&t.Repos, field, raw)
 	case "blocked_by":
@@ -836,6 +842,29 @@ func revertLink(t *model.Task, raw json.RawMessage) error {
 	return nil
 }
 
+// revertTyped puts the value raw back in the priority, the start, the due, the
+// estimate or the points, as hedgehug set would write it. null clears it. A
+// date comes in the form of a time (2026-11-11T00:00:00Z), as the merge reads
+// the file, and goes back as the day.
+func revertTyped(t *model.Task, field string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return fmt.Errorf("%s: %w", field, err)
+	}
+	switch v.(type) {
+	case nil, string, json.Number:
+	default:
+		return notRevertible(fmt.Errorf("%s: %s is not a value hedgehug set reads: %w", field, raw, errNotRevertible))
+	}
+	text, err := propText(sc, field, v)
+	if err != nil {
+		return err
+	}
+	return usecase.ApplyAssign(t, usecase.Assign{Key: field, Op: "=", Value: text}, sc, resolve)
+}
+
 // revertProp puts the value raw back in the property key. A list becomes
 // the property's values; null clears it.
 func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
@@ -923,7 +952,7 @@ func propText(sc *schema.Schema, key string, x any) (string, error) {
 		return "", nil
 	case string:
 		// A date reads back from the file as a time.
-		if p, ok := sc.Prop(key); ok && p.Type == schema.TypeDate {
+		if p, ok := sc.PropOrBuiltin(key); ok && p.Type == schema.TypeDate {
 			if tm, err := time.Parse(time.RFC3339, v); err == nil {
 				return tm.Format(time.DateOnly), nil
 			}

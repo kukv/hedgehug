@@ -115,11 +115,25 @@ func TestEditCountsANormalTaskAndTheDeletedOnes(t *testing.T) {
 	}
 }
 
-// dropHigh takes the value high off priority, which a task may still have.
+// dropHigh takes the value high off the priorities, which a task may still have.
 func dropHigh(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 	keep := []schema.ValueEdit{{Name: "low", From: []string{"low"}}, {Name: "mid", From: []string{"mid"}}, {Name: "urgent", From: []string{"urgent"}}}
-	next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Values: &keep})
+	next, ms, _, err := sc.ChangePriorities(keep)
 	return next, ms, err
+}
+
+// addLevel adds the properties "level", an enum with the values low, mid, high
+// and urgent, and "note", a text.
+func addLevel(t *testing.T, ts *usecasetest.Session) {
+	t.Helper()
+	for _, p := range []schema.Prop{
+		{Name: "level", Type: schema.TypeEnum, Values: []string{"low", "mid", "high", "urgent"}},
+		{Name: "note", Type: schema.TypeText},
+	} {
+		if _, err := schemas.Edit(ts.Session, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddProp(p) }), schemas.EditOpts{}); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestEditUseAndCheckTogether(t *testing.T) {
@@ -128,7 +142,7 @@ func TestEditUseAndCheckTogether(t *testing.T) {
 	p := ts.AddProject("Web")
 	ts.AddTask("bug", func(t *model.Task) {
 		t.Parent = &p
-		t.Props = model.Fields{{Key: "priority", Value: propScalar("high")}}
+		t.Priority = "high"
 	})
 	// Nothing uses on_hold, so the use passes; the check finds the task
 	// whose priority is gone.
@@ -144,7 +158,7 @@ func TestEditRefusesNewViolations(t *testing.T) {
 	p := ts.AddProject("Web")
 	ts.AddTask("bug", func(t *model.Task) {
 		t.Parent = &p
-		t.Props = model.Fields{{Key: "priority", Value: propScalar("high")}}
+		t.Priority = "high"
 	})
 	_, err := schemas.Edit(ts.Session, dropHigh, schemas.EditOpts{Check: true})
 	if usecase.ProblemCode(err) != "schema.tasks_invalid" {
@@ -180,6 +194,7 @@ func TestEditIgnoresOldViolations(t *testing.T) {
 func TestEditErrors(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
+	addLevel(t, ts)
 	cases := []struct {
 		name string
 		fn   func(*schema.Schema) (*schema.Schema, []schema.Migration, error)
@@ -193,15 +208,15 @@ func TestEditErrors(t *testing.T) {
 			return sc, nil
 		}), "schema.invalid"},
 		{"not enum", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			next, ms, _, err := sc.ChangeProp("start", schema.PropChange{Values: &[]schema.ValueEdit{{Name: "x"}}})
+			next, ms, _, err := sc.ChangeProp("note", schema.PropChange{Values: &[]schema.ValueEdit{{Name: "x"}}})
 			return next, ms, err
 		}, "schema.not_enum"},
 		{"value twice", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Values: &[]schema.ValueEdit{{Name: "a"}, {Name: "a"}}})
+			next, ms, _, err := sc.ChangeProp("level", schema.PropChange{Values: &[]schema.ValueEdit{{Name: "a"}, {Name: "a"}}})
 			return next, ms, err
 		}, "schema.value_invalid"},
 		{"value empty", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Values: &[]schema.ValueEdit{{Name: ""}}})
+			next, ms, _, err := sc.ChangeProp("level", schema.PropChange{Values: &[]schema.ValueEdit{{Name: ""}}})
 			return next, ms, err
 		}, "schema.value_invalid"},
 		{"name taken", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
@@ -289,8 +304,9 @@ func TestEditRenamesAStatusAndRewritesTasksInOneCommit(t *testing.T) {
 func TestEditValuesRewriteTasksAndRefuseInUse(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	u := ts.AddTask("urgent", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("urgent")}} })
-	m := ts.AddTask("mid", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("mid")}} })
+	addLevel(t, ts)
+	u := ts.AddTask("urgent", func(t *model.Task) { t.Props = model.Fields{{Key: "level", Value: propScalar("urgent")}} })
+	m := ts.AddTask("mid", func(t *model.Task) { t.Props = model.Fields{{Key: "level", Value: propScalar("mid")}} })
 
 	// urgent goes into high, mid is renamed, low is dropped (nothing uses it)
 	edit := []schema.ValueEdit{
@@ -299,17 +315,17 @@ func TestEditValuesRewriteTasksAndRefuseInUse(t *testing.T) {
 	}
 	var removed []string
 	_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		next, ms, r, err := sc.ChangeProp("priority", schema.PropChange{Values: &edit})
+		next, ms, r, err := sc.ChangeProp("level", schema.PropChange{Values: &edit})
 		removed = r
 		return next, ms, err
-	}, schemas.EditOpts{UseAfter: removedUses("priority", &removed)})
+	}, schemas.EditOpts{UseAfter: removedUses("level", &removed)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := taskNow(t, ts, u.ULID).Props.Get("priority").Value; got != "high" {
+	if got := taskNow(t, ts, u.ULID).Props.Get("level").Value; got != "high" {
 		t.Errorf("u.priority = %s", got)
 	}
-	if got := taskNow(t, ts, m.ULID).Props.Get("priority").Value; got != "medium" {
+	if got := taskNow(t, ts, m.ULID).Props.Get("level").Value; got != "medium" {
 		t.Errorf("m.priority = %s", got)
 	}
 
@@ -317,10 +333,10 @@ func TestEditValuesRewriteTasksAndRefuseInUse(t *testing.T) {
 	before := ts.Head()
 	drop := []schema.ValueEdit{{Name: "high", From: []string{"high"}}}
 	_, err = schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		next, ms, r, err := sc.ChangeProp("priority", schema.PropChange{Values: &drop})
+		next, ms, r, err := sc.ChangeProp("level", schema.PropChange{Values: &drop})
 		removed = r
 		return next, ms, err
-	}, schemas.EditOpts{UseAfter: removedUses("priority", &removed)})
+	}, schemas.EditOpts{UseAfter: removedUses("level", &removed)})
 	var ue *usecase.Error
 	if usecase.ProblemCode(err) != "schema.in_use" || !errors.As(err, &ue) || ue.Args["value"] != "medium" || ue.Args["count"] != 1 {
 		t.Fatalf("err = %v", err)
@@ -333,8 +349,9 @@ func TestEditValuesRewriteTasksAndRefuseInUse(t *testing.T) {
 func TestEditValueSwapRewritesTasks(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	l := ts.AddTask("l", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
-	h := ts.AddTask("h", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("high")}} })
+	addLevel(t, ts)
+	l := ts.AddTask("l", func(t *model.Task) { t.Props = model.Fields{{Key: "level", Value: propScalar("low")}} })
+	h := ts.AddTask("h", func(t *model.Task) { t.Props = model.Fields{{Key: "level", Value: propScalar("high")}} })
 	edit := []schema.ValueEdit{
 		{Name: "high", From: []string{"low"}},
 		{Name: "low", From: []string{"high"}},
@@ -342,15 +359,15 @@ func TestEditValueSwapRewritesTasks(t *testing.T) {
 		{Name: "urgent", From: []string{"urgent"}},
 	}
 	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Values: &edit})
+		next, ms, _, err := sc.ChangeProp("level", schema.PropChange{Values: &edit})
 		return next, ms, err
 	}, schemas.EditOpts{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := taskNow(t, ts, l.ULID).Props.Get("priority").Value; got != "high" {
+	if got := taskNow(t, ts, l.ULID).Props.Get("level").Value; got != "high" {
 		t.Errorf("l.priority = %s", got)
 	}
-	if got := taskNow(t, ts, h.ULID).Props.Get("priority").Value; got != "low" {
+	if got := taskNow(t, ts, h.ULID).Props.Get("level").Value; got != "low" {
 		t.Errorf("h.priority = %s", got)
 	}
 }
@@ -358,10 +375,11 @@ func TestEditValueSwapRewritesTasks(t *testing.T) {
 func TestEditRenamesAProp(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
+	addLevel(t, ts)
+	a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "level", Value: propScalar("low")}} })
 	n := "importance"
 	if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-		next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Name: &n})
+		next, ms, _, err := sc.ChangeProp("level", schema.PropChange{Name: &n})
 		return next, ms, err
 	}, schemas.EditOpts{}); err != nil {
 		t.Fatal(err)
@@ -396,10 +414,11 @@ func TestEditRenameWithCheckedChange(t *testing.T) {
 	t.Run("prop name and multi", func(t *testing.T) {
 		t.Parallel()
 		ts := usecasetest.New(t)
+		addLevel(t, ts)
 		addMultiText(t, ts)
 		// no task has the property: a multi change cannot hold for one that
 		// has it, a list being a list
-		a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
+		a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "level", Value: propScalar("low")}} })
 		n, m := "region", false
 		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 			next, ms, _, err := sc.ChangeProp("area", schema.PropChange{Name: &n, Multi: &m})
@@ -407,7 +426,7 @@ func TestEditRenameWithCheckedChange(t *testing.T) {
 		}, schemas.EditOpts{Check: true}); err != nil {
 			t.Fatal(err)
 		}
-		if taskNow(t, ts, a.ULID).Props.Get("priority") == nil {
+		if taskNow(t, ts, a.ULID).Props.Get("level") == nil {
 			t.Error("the task lost a property")
 		}
 	})

@@ -182,7 +182,7 @@ func notInUse(s *store.Store, u Use) error {
 		return nil
 	}
 	args := []any{"count", count, "deleted", deleted}
-	if u.Target == schema.TargetValue {
+	if u.Target != schema.TargetStatus && u.Target != schema.TargetProp {
 		args = append(args, "value", u.Name)
 	}
 	return usecase.NewErr(usecase.KindInvalid, "schema.in_use",
@@ -194,6 +194,7 @@ func notInUse(s *store.Store, u Use) error {
 func migrated(t *model.Task, cur *schema.Schema, ms []schema.Migration) (out *model.Task, ok bool) {
 	c := *t
 	c.Props = slices.Clone(t.Props)
+	c.Labels = slices.Clone(t.Labels)
 	for _, m := range ms {
 		if _, err := m.ApplyTask(&c, cur); err != nil {
 			return nil, false

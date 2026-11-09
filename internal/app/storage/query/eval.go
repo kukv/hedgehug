@@ -154,7 +154,7 @@ func (c *compiler) term(t Term) (pred, error) {
 		return func(e *index.Entry) bool { return strings.Contains(e.Text, text) }, nil
 	}
 	if t.Op != ":" {
-		p, ok := c.sc.Prop(t.Key)
+		p, ok := c.sc.PropOrBuiltin(t.Key)
 		if !ok {
 			return nil, c.failUnknown(t, "%s cannot be compared with %s", t.Key, t.Op)
 		}
@@ -212,7 +212,7 @@ func (c *compiler) term(t Term) (pred, error) {
 		}
 		return c.ref(t, func(e *index.Entry) []model.ULID { return e.Targets(rel.Name) })
 	}
-	if p, ok := c.sc.Prop(t.Key); ok {
+	if p, ok := c.sc.PropOrBuiltin(t.Key); ok {
 		return c.prop(t, p)
 	}
 	// <relation>.inverse was a way to write the other direction; it is

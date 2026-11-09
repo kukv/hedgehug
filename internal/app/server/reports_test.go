@@ -11,7 +11,7 @@ func TestReportAPI(t *testing.T) {
 	ts := newTestServer(t)
 	id := ts.add("a", "")
 	ts.call("POST", "/api/sprints", map[string]any{"name": "s1", "start": "2026-10-28", "end": "2026-10-30"}, 201, nil)
-	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"sprint": "s1", "props": map[string]any{"points": 3, "estimate": "2h"}}, 200, nil)
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"sprint": "s1", "points": 3, "estimate": "2h"}, 200, nil)
 	ts.call("POST", "/api/sprints/s1/start", nil, 200, nil)
 	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"status": "done"}, 200, nil)
 	ts.call("POST", "/api/tasks/"+id+"/worklogs", map[string]any{"duration": "1h"}, 201, nil)

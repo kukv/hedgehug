@@ -291,7 +291,7 @@ func completeTemplates(a *app, word string) []cobra.Completion {
 }
 
 // setFields are the keys of hedgehug set that are not properties.
-var setFields = []string{"title", "kind", "status", "assignees", "watchers", "labels", "repos", "blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases"}
+var setFields = []string{"title", "kind", "status", "priority", "start", "due", "estimate", "points", "assignees", "watchers", "labels", "repos", "blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases"}
 
 // completeAssign completes a key=, then the value of the keys with values to
 // offer.
@@ -312,6 +312,10 @@ func completeAssign(a *app, word string) []cobra.Completion {
 	switch strings.TrimRight(word[:i], "+-") {
 	case "status":
 		values = v.Statuses
+	case "priority":
+		values = v.Priorities
+	case "labels":
+		values = v.Labels
 	case "assignees", "watchers":
 		values = v.Members
 	case "sprint":

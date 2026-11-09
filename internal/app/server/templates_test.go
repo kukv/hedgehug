@@ -49,7 +49,9 @@ func TestTemplateAPI(t *testing.T) {
 func TestScopedTemplatesAPI(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.call("PUT", "/api/templates/bug", map[string]any{"content": "---\nlabels: [x]\n---\n"}, 200, nil)
+	ts.labels("x")
+	// the template writes the label in another case: the task gets the list's
+	ts.call("PUT", "/api/templates/bug", map[string]any{"content": "---\nlabels: [X]\n---\n"}, 200, nil)
 	var p usecase.TaskWrite
 	ts.call("POST", "/api/tasks", map[string]any{"title": "p", "kind": "project"}, 201, &p)
 	ts.problem("PUT", "/api/schema/scoped/"+p.Task.ULID, map[string]any{"templates": []string{"nope"}}, 404)
@@ -69,6 +71,7 @@ func TestBulkAPI(t *testing.T) {
 		ts.call("GET", "/api/tasks/"+id, nil, 200, &v)
 		return v.ULID
 	}
+	ts.labels("x")
 	a, b := ulidOf(ts.add("a", "")), ulidOf(ts.add("b", ""))
 	var r tasks.BulkResult
 
@@ -84,6 +87,16 @@ func TestBulkAPI(t *testing.T) {
 	ts.call("POST", "/api/tasks/bulk", map[string]any{"ulids": []string{a, b}, "labels": []string{"x"}}, 200, &r)
 	if len(r.Commits) != 1 {
 		t.Fatalf("result = %+v", r)
+	}
+	ts.call("POST", "/api/tasks/bulk", map[string]any{"ulids": []string{a, b}, "priority": "HIGH", "due": "2026-11-20", "points": 1.5}, 200, &r)
+	if len(r.Tasks) != 2 || len(r.Commits) != 1 {
+		t.Fatalf("typed = %+v", r)
+	}
+	for _, task := range []string{a, b} {
+		got := ts.uc.TaskByULID("me", mustULID(t, task))
+		if got.Priority != "high" || got.Due == nil || got.Due.String() != "2026-11-20" || got.Points == nil || *got.Points != 1.5 {
+			t.Errorf("task %s = %+v", task, got)
+		}
 	}
 	ts.call("POST", "/api/tasks/bulk", map[string]any{"query": "label:x", "status": "done"}, 200, &r)
 	if len(r.Tasks) != 2 || len(r.Commits) != 1 {

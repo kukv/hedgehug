@@ -18,6 +18,13 @@ func newStoreEnv(t *testing.T) *testEnv {
 	return te
 }
 
+// labels puts names in the list of labels of the schema, which the labels of a
+// task are taken from: it is a commit of its own.
+func (te *testEnv) labels(names ...string) {
+	te.t.Helper()
+	te.ok(append([]string{"schema", "labels", "add"}, names...)...)
+}
+
 // addJSON runs add with --json and returns the task it printed.
 func (te *testEnv) addJSON(args ...string) usecase.TaskView {
 	te.t.Helper()
@@ -89,9 +96,11 @@ func TestAddRanksAtTheEnd(t *testing.T) {
 func TestAddProps(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("ui")
 	p := te.addJSON("P", "--kind", "project")
-	got := te.addJSON("Bug", "--parent", p.ID, "--kind", "bug", "--status", "backlog", "-p", "due=2026-11-01", "-p", "labels+=ui")
-	if got.Kind != "bug" || got.Status != "backlog" || got.Props["due"] != "2026-11-01" || len(got.Labels) != 1 || got.Labels[0] != "ui" {
+	got := te.addJSON("Bug", "--parent", p.ID, "--kind", "bug", "--status", "backlog", "-p", "due=2026-11-01", "-p", "priority=HIGH", "-p", "estimate=1h30m", "-p", "points=2.5", "-p", "labels+=UI")
+	if got.Kind != "bug" || got.Status != "backlog" || got.Due == nil || *got.Due != "2026-11-01" || len(got.Props) != 0 || len(got.Labels) != 1 || got.Labels[0] != "ui" ||
+		got.Priority == nil || *got.Priority != "high" || got.Estimate == nil || *got.Estimate != "1h30m" || got.Points == nil || *got.Points != 2.5 || got.Start != nil {
 		t.Errorf("task = %+v", got)
 	}
 	if tk := te.task(got.ULID); tk.Title != "Bug" {

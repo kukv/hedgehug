@@ -15,7 +15,7 @@ import (
 
 // Builtins are the fields of a task that a table column can name besides
 // the properties of the schema. They are named as the keys of the query.
-var Builtins = []string{"id", "title", "kind", "status", "assignee", "label", "parent", "created", "updated", "pr"}
+var Builtins = []string{"id", "title", "kind", "status", "assignee", "label", "priority", "start", "due", "estimate", "points", "parent", "created", "updated", "pr"}
 
 // IsBuiltin reports whether col is one of Builtins.
 func IsBuiltin(col string) bool { return slices.Contains(Builtins, col) }

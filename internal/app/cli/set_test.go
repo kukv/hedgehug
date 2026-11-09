@@ -9,6 +9,7 @@ import (
 func TestSet(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("ui", "api")
 	a := te.addJSON("Alpha")
 	other := te.addJSON("Other")
 	before := len(te.log("me"))
@@ -21,8 +22,8 @@ func TestSet(t *testing.T) {
 	if tk.Title != "Renamed" || !slices.Equal(tk.Labels, []string{"api"}) || len(tk.BlockedBy) != 1 || tk.BlockedBy[0].String() != other.ULID {
 		t.Errorf("task = %+v", tk)
 	}
-	if n := tk.Props.Get("due"); n == nil || n.Value != "2026-11-01" {
-		t.Errorf("due = %v", n)
+	if tk.Due == nil || tk.Due.String() != "2026-11-01" || tk.Props.Get("due") != nil {
+		t.Errorf("due = %v, props %v", tk.Due, tk.Props)
 	}
 	log := te.log("me")
 	if len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: set") {

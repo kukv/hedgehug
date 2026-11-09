@@ -123,7 +123,7 @@ func TestStoreConvertDropBadValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a task_ref property of format 2, and a value of it that is no ULID
-	if err := os.WriteFile(schemaPath, []byte(strings.Replace(string(b), "props:\n", "props:\n  fixes: {type: task_ref}\n", 1)), 0o600); err != nil {
+	if err := os.WriteFile(schemaPath, []byte(string(b)+"props:\n  fixes: {type: task_ref}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gitrepotest.CommitFiles(t, dir, "a task_ref", "Alice", "alice@example.com", te.now, "schema.yaml")

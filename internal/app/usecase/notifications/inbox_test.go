@@ -639,6 +639,7 @@ func TestCompactJSON(t *testing.T) {
 func TestRevertField(t *testing.T) {
 	t.Parallel()
 	sc := schema.Default()
+	sc.Props = append(sc.Props, schema.Prop{Name: "fixes", Type: schema.TypeText})
 	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
 	task := &model.Task{Title: "alice", Links: []model.Link{{Type: "pr", Ref: "o/r#1", Sync: "auto"}}}
 	if err := notifications.RevertField(task, "title", json.RawMessage(`"bob"`), sc, resolve); err != nil || task.Title != "bob" {
@@ -650,11 +651,37 @@ func TestRevertField(t *testing.T) {
 	if err := notifications.RevertField(task, "links", json.RawMessage(`{"type":"issue","ref":"o/r#2"}`), sc, resolve); err != nil || len(task.Links) != 2 {
 		t.Errorf("links = %+v, %v", task.Links, err)
 	}
-	if err := notifications.RevertField(task, "props.priority", json.RawMessage(`"high"`), sc, resolve); err != nil || task.Props.Get("priority") == nil || task.Props.Get("priority").Value != "high" {
+	if err := notifications.RevertField(task, "props.fixes", json.RawMessage(`"new"`), sc, resolve); err != nil || task.Props.Get("fixes") == nil || task.Props.Get("fixes").Value != "new" {
 		t.Errorf("props = %+v, %v", task.Props, err)
 	}
-	if err := notifications.RevertField(task, "props.priority", json.RawMessage(`null`), sc, resolve); err != nil || task.Props.Get("priority") != nil {
+	if err := notifications.RevertField(task, "props.fixes", json.RawMessage(`null`), sc, resolve); err != nil || task.Props.Get("fixes") != nil {
 		t.Errorf("props = %+v, %v", task.Props, err)
+	}
+	// The built-in values go back to their fields, a date as the day: the item
+	// reads it from the file as a time.
+	for _, tc := range []struct{ field, raw string }{
+		{"priority", `"HIGH"`}, {"start", `"2026-11-11T00:00:00Z"`}, {"due", `"2026-11-20"`}, {"estimate", `"1h30m"`}, {"points", `2.5`},
+	} {
+		if err := notifications.RevertField(task, tc.field, json.RawMessage(tc.raw), sc, resolve); err != nil {
+			t.Errorf("%s: %v", tc.field, err)
+		}
+	}
+	if task.Priority != "high" || task.Start == nil || task.Start.String() != "2026-11-11" || task.Due == nil || task.Due.String() != "2026-11-20" ||
+		task.Estimate == nil || task.Estimate.String() != "1h30m" || task.Points == nil || *task.Points != 2.5 {
+		t.Errorf("built-ins = %q %v %v %v %v", task.Priority, task.Start, task.Due, task.Estimate, task.Points)
+	}
+	for _, f := range []string{"priority", "start", "due", "estimate", "points"} {
+		if err := notifications.RevertField(task, f, json.RawMessage(`null`), sc, resolve); err != nil {
+			t.Errorf("%s null: %v", f, err)
+		}
+	}
+	if task.Priority != "" || task.Start != nil || task.Due != nil || task.Estimate != nil || task.Points != nil {
+		t.Errorf("null did not clear: %+v", task)
+	}
+	for _, tc := range []struct{ field, raw string }{{"due", `["2026-11-20"]`}, {"points", `{"a":1}`}, {"due", `"soon"`}} {
+		if err := notifications.RevertField(task, tc.field, json.RawMessage(tc.raw), sc, resolve); err == nil {
+			t.Errorf("%s %s was reverted", tc.field, tc.raw)
+		}
 	}
 	for _, f := range []string{"*", "id", "former_ids", "workspace", "created", "created_by", "body", "unknown_key"} {
 		if err := notifications.RevertField(task, f, json.RawMessage(`"x"`), sc, resolve); !errors.Is(err, notifications.ErrNotRevertible) || !strings.HasPrefix(err.Error(), f+" ") {
@@ -667,6 +694,13 @@ func TestRevertField(t *testing.T) {
 		t.Errorf("labels = %v, %v", task.Labels, err)
 	}
 	if err := notifications.RevertField(task, "labels", json.RawMessage(`"b"`), sc, resolve); err != nil || !slices.Equal(task.Labels, []string{"a", "b"}) {
+		t.Errorf("labels = %v, %v", task.Labels, err)
+	}
+	// The label goes back as the list spells it.
+	listed := schema.Default()
+	listed.Labels = []string{"Bug"}
+	task.Labels = nil
+	if err := notifications.RevertField(task, "labels", json.RawMessage(`"bug"`), listed, resolve); err != nil || !slices.Equal(task.Labels, []string{"Bug"}) {
 		t.Errorf("labels = %v, %v", task.Labels, err)
 	}
 	if err := notifications.RevertField(task, "assignees", json.RawMessage(`["github.com/bob"]`), sc, resolve); err != nil || !slices.Equal(task.Assignees, []string{"github.com/bob"}) {

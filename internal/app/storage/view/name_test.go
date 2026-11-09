@@ -37,12 +37,12 @@ func TestSameName(t *testing.T) {
 
 func TestIsBuiltin(t *testing.T) {
 	t.Parallel()
-	for _, c := range []string{"id", "title", "kind", "status", "assignee", "label", "parent", "created", "updated"} {
+	for _, c := range []string{"id", "title", "kind", "status", "assignee", "label", "priority", "start", "due", "estimate", "points", "parent", "created", "updated"} {
 		if !IsBuiltin(c) {
 			t.Errorf("%s is not builtin", c)
 		}
 	}
-	for _, c := range []string{"ulid", "due", "assignees", ""} {
+	for _, c := range []string{"ulid", "labels", "assignees", ""} {
 		if IsBuiltin(c) {
 			t.Errorf("%q is builtin", c)
 		}

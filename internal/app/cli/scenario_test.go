@@ -18,6 +18,7 @@ func TestScenario(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.writeAccounts("github.com", "alice")
+	te.labels("ui")
 	step := func(op string, args ...string) {
 		t.Helper()
 		before := len(te.log("me"))
@@ -99,9 +100,9 @@ func TestScenario(t *testing.T) {
 			t.Errorf("%v = %q, want No problems", args, out)
 		}
 	}
-	// store init, five adds and the fifteen steps.
-	if n := len(te.log("me")); n != 21 {
-		t.Errorf("commits = %d, want 21", n)
+	// store init, the labels, five adds and the fifteen steps.
+	if n := len(te.log("me")); n != 22 {
+		t.Errorf("commits = %d, want 22", n)
 	}
 	// Every commit is the account's.
 	for _, c := range te.log("me") {

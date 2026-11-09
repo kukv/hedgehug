@@ -55,7 +55,7 @@ func templateFor(ss *usecase.Session, s *store.Store, ix *index.Index, in AddInp
 
 // applyItem gives t what it has not been given from the item. parent gives
 // the assignees of assignees: inherit, and is nil at the root.
-func applyItem(t *model.Task, it *model.TemplateItem, parent []string) {
+func applyItem(t *model.Task, it *model.TemplateItem, parent []string, sc *schema.Schema) {
 	if t.Title == "" {
 		t.Title = it.Title
 	}
@@ -67,6 +67,8 @@ func applyItem(t *model.Task, it *model.TemplateItem, parent []string) {
 		t.Assignees = slices.Clone(parent)
 	}
 	t.Watchers = slices.Clone(it.Watchers)
+	t.Priority, t.Start, t.Due = it.Priority, it.Start, it.Due
+	t.Estimate, t.Points = it.Estimate, it.Points
 	t.Labels = slices.Clone(it.Labels)
 	if len(t.Repos) == 0 {
 		t.Repos = slices.Clone(it.Repos)
@@ -80,6 +82,7 @@ func applyItem(t *model.Task, it *model.TemplateItem, parent []string) {
 	t.Releases = slices.Clone(it.Releases)
 	t.Links = slices.Clone(it.Links)
 	t.Props = slices.Clone(it.Props)
+	usecase.SpellAsListed(t, sc)
 }
 
 // dropForeign takes off t the sprint and the releases that are not of its
@@ -149,7 +152,7 @@ func (x *expanded) expand(ix *index.Index, parent *model.Task, items []model.Tem
 				return err
 			}
 		}
-		applyItem(c, it, parent.Assignees)
+		applyItem(c, it, parent.Assignees, ix.Schema())
 		if d, ok := dropForeign(ix, c); ok {
 			x.detached = append(x.detached, d)
 		}

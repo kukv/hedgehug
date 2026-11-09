@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
@@ -68,6 +69,13 @@ type propChangeInput struct {
 		Label  *string          `json:"label,omitempty"`
 		Multi  *bool            `json:"multi,omitempty"`
 		Values *[]valueEditBody `json:"values,omitempty" doc:"All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it"`
+	}
+}
+
+type listChangeInput struct {
+	StoreParam
+	Body struct {
+		Values []valueEditBody `json:"values" nullable:"false" doc:"All the values after the edit, in order. A current value that no from names is removed: 422 schema.in_use when a task uses it. The last priority cannot be removed: 422 schema.value_invalid"`
 	}
 }
 
@@ -173,6 +181,28 @@ func (s *Server) registerSchemaEdit() {
 				return us
 			}})
 		})
+	for _, l := range []struct {
+		id, path, summary string
+		edit              func(*usecase.Session, []schema.ValueEdit) (schemas.EditWrite, error)
+	}{
+		{"change-priorities", "/api/schema/priorities", "Change the priorities: add, rename, merge, remove and order", schemas.EditPriorities},
+		{"change-labels", "/api/schema/labels", "Change the labels: add, rename, merge, remove and order", schemas.EditLabels},
+	} {
+		huma.Register(s.api, reg(l.id, http.MethodPatch, l.path, l.summary),
+			func(_ context.Context, in *listChangeInput) (*editOutput, error) {
+				vs := make([]schema.ValueEdit, len(in.Body.Values))
+				for i, v := range in.Body.Values {
+					vs[i] = schema.ValueEdit{Name: v.Name, From: v.From}
+				}
+				ss := s.session(in.Store)
+				defer ss.Close()
+				w, err := l.edit(ss, vs)
+				if err != nil {
+					return nil, problemOf(err)
+				}
+				return &editOutput{Body: w}, nil
+			})
+	}
 	huma.Register(s.api, reg("delete-prop", http.MethodDelete, "/api/schema/props/{name}", "Remove a property no task uses"),
 		func(_ context.Context, in *DefParam) (*editOutput, error) {
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveProp(in.Name) }),

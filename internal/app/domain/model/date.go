@@ -25,6 +25,19 @@ func (d Date) IsZero() bool   { return d.t.IsZero() }
 // Time returns midnight UTC of d.
 func (d Date) Time() time.Time { return d.t }
 
+// GobEncode and GobDecode write d as its text, which gob needs: a Date has no
+// exported field. The index keeps the dates of a task in its cache.
+func (d Date) GobEncode() ([]byte, error) { return []byte(d.String()), nil }
+
+func (d *Date) GobDecode(b []byte) error {
+	p, err := ParseDate(string(b))
+	if err != nil {
+		return err
+	}
+	*d = p
+	return nil
+}
+
 // MarshalYAML writes d as a plain timestamp scalar, so it is not quoted.
 func (d Date) MarshalYAML() (any, error) {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!timestamp", Value: d.String()}, nil

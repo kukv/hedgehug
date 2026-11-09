@@ -33,6 +33,35 @@ func BuiltinOf(name string) (Builtin, bool) {
 	return Builtins[i], true
 }
 
+// IsTypedBuiltin tells whether name is priority, start, due, estimate or
+// points: the built-in properties that hold one value of a type of their own.
+func IsTypedBuiltin(name string) bool {
+	switch name {
+	case "priority", "start", "due", "estimate", "points":
+		return true
+	}
+	return false
+}
+
+// PropOrBuiltin finds a custom property by its name, or else one of the
+// built-in priority, start, due, estimate and points, described as a property
+// (priority has the values of Priorities). The queries, the sorts and the
+// views treat the two alike.
+func (s *Schema) PropOrBuiltin(name string) (Prop, bool) {
+	if p, ok := s.Prop(name); ok {
+		return p, true
+	}
+	if !IsTypedBuiltin(name) {
+		return Prop{}, false
+	}
+	b, _ := BuiltinOf(name)
+	p := Prop{Name: name, Type: b.Type, Label: b.Label}
+	if name == "priority" {
+		p.Values = s.Priorities
+	}
+	return p, true
+}
+
 // MatchValue finds v among values without regard to case and returns the
 // spelling in values, which is the one that is stored. An exact match wins
 // over one that differs in case.

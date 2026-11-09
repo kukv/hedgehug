@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,6 +80,17 @@ func (a *app) showText(v *usecase.ShowView) string {
 		field("parent", v.ParentRef.Name())
 	} else {
 		field("parent")
+	}
+	for _, f := range []struct {
+		key string
+		v   *string
+	}{{"priority", v.Priority}, {"start", v.Start}, {"due", v.Due}, {"estimate", v.Estimate}} {
+		if f.v != nil {
+			field(f.key, *f.v)
+		}
+	}
+	if v.Points != nil {
+		field("points", strconv.FormatFloat(*v.Points, 'f', -1, 64))
 	}
 	field("assignees", v.Assignees...)
 	if v.Broken == "" {

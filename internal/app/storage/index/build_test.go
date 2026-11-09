@@ -147,14 +147,14 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: project\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: project\ntitle: x\nstatus: todo\npriority: high\n"))
 	ix := mustOpen(t, s)
 	if e, _ := ix.Task(task.ULID); len(e.Violations) != 0 {
 		t.Fatalf("violations = %v", e.Violations)
 	}
 
 	sc := schema.Default()
-	sc.Props[0].Values = []string{"low", "mid"} // priority without high
+	sc.Priorities = []string{"low", "mid"} // without high
 	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
 		t.Fatal(err)
 	}
@@ -209,13 +209,13 @@ func TestProblemsFollowRefresh(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: project\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: project\ntitle: x\nstatus: todo\npriority: high\n"))
 	ix := mustOpen(t, s)
 	if len(ix.Problems(task.ULID)) != 0 {
 		t.Fatalf("Problems = %v", ix.Problems(task.ULID))
 	}
 	sc := schema.Default()
-	sc.Props[0].Values = []string{"low", "mid"}
+	sc.Priorities = []string{"low", "mid"}
 	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
 		t.Fatal(err)
 	}

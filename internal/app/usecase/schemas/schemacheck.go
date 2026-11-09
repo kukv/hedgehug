@@ -147,6 +147,9 @@ func migrate(ss *usecase.Session, m schema.Migration, dryRun bool) (*index.Index
 func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*MigrationPlan, error) {
 	sc := s.Schema()
 	next, err := sc.Migrate(m)
+	if errors.Is(err, schema.ErrPropMerge) {
+		return nil, usecase.NewErr(usecase.KindInvalid, "migrate.prop_merge", err)
+	}
 	if err != nil {
 		return nil, err
 	}

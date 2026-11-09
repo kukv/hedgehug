@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -123,21 +124,72 @@ func TestSchemaMigrateJSON(t *testing.T) {
 	te.commitFile(d.ULID, "not a task\n")
 
 	var got migrateOut
-	out := te.ok("schema", "migrate", "value", "priority", "mid", "medium", "--json")
+	out := te.ok("schema", "migrate", "priority", "mid", "medium", "--json")
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
 	if got.Commit == nil {
 		t.Errorf("commit = nil, want the commit made")
 	}
-	if len(got.Changed) != 1 || got.Changed[0].ID != a.ID || got.Changed[0].Props["priority"] != "medium" {
+	if len(got.Changed) != 1 || got.Changed[0].ID != a.ID || got.Changed[0].Priority == nil || *got.Changed[0].Priority != "medium" {
 		t.Errorf("changed = %+v", got.Changed)
 	}
 	if len(got.Skipped) != 1 || got.Skipped[0] != d.ULID {
 		t.Errorf("skipped = %v, want [%s]", got.Skipped, d.ULID)
 	}
-	if !strings.Contains(te.schemaFile(), "values: [low, medium, high, urgent]") {
+	if !strings.Contains(te.schemaFile(), "priorities: [low, medium, high, urgent]") {
 		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+}
+
+// The priorities and the labels are renamed, or merged into another, with the
+// tasks that have them; a dry run writes nothing.
+func TestSchemaMigratePriorityAndLabel(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.labels("bug", "ui")
+	a := te.addJSON("Alpha")
+	b := te.addJSON("Beta")
+	te.ok("set", a.ID, "priority=high", "labels+=bug", "labels+=ui")
+	te.ok("set", b.ID, "priority=urgent", "labels+=BUG")
+	before := len(te.log("me"))
+	sf := te.schemaFile()
+
+	out := te.ok("schema", "migrate", "--dry-run", "priority", "high", "urgent")
+	if !strings.HasPrefix(out, "Would migrate 1 task\n") || !strings.Contains(out, label(a)+"  Alpha\n") {
+		t.Errorf("dry run: stdout = %q", out)
+	}
+	if len(te.log("me")) != before || te.schemaFile() != sf {
+		t.Error("a dry run wrote")
+	}
+
+	out = te.ok("schema", "migrate", "priority", "high", "urgent")
+	if !strings.HasPrefix(out, "Migrated 1 task\n") {
+		t.Errorf("stdout = %q", out)
+	}
+	if got := te.task(a.ULID).Priority; got != "urgent" {
+		t.Errorf("Alpha priority = %q, want urgent", got)
+	}
+	if !strings.Contains(te.schemaFile(), "priorities: [low, mid, urgent]") {
+		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+
+	// Beta has the label in another case, and is found all the same
+	out = te.ok("schema", "migrate", "label", "bug", "ui")
+	if !strings.HasPrefix(out, "Migrated 2 tasks\n") {
+		t.Errorf("stdout = %q", out)
+	}
+	if got := te.task(a.ULID).Labels; !slices.Equal(got, []string{"ui"}) {
+		t.Errorf("Alpha labels = %v, want [ui] (the merge leaves one)", got)
+	}
+	if got := te.task(b.ULID).Labels; !slices.Equal(got, []string{"ui"}) {
+		t.Errorf("Beta labels = %v, want [ui]", got)
+	}
+	if !strings.Contains(te.schemaFile(), "labels: [ui]") {
+		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+	if code, _, stderr := te.run("schema", "migrate", "label", "nope", "x"); code == 0 {
+		t.Errorf("a label the list lacks was migrated: stderr %q", stderr)
 	}
 }
 
@@ -145,59 +197,42 @@ func TestSchemaMigrateJSON(t *testing.T) {
 func TestSchemaMigrateProp(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.putSchema(func(sc *schema.Schema) {
+		sc.Props = append(sc.Props, schema.Prop{Name: "since", Type: schema.TypeDate, Label: "開始"}, schema.Prop{Name: "until", Type: schema.TypeDate})
+	})
 	a := te.addJSON("Alpha")
-	te.ok("set", a.ID, "start=2026-11-01")
+	te.ok("set", a.ID, "since=2026-11-01")
 	if code, _, _ := te.run("schema", "migrate", "kind", "bug", "task"); code != 2 {
 		t.Errorf("migrate kind: exit %d, want 2", code)
 	}
-	te.ok("schema", "migrate", "prop", "start", "begin")
+	te.ok("schema", "migrate", "prop", "since", "begin")
 	x := te.task(a.ULID)
-	if x.Props.Get("begin") == nil || x.Props.Get("start") != nil {
+	if x.Props.Get("begin") == nil || x.Props.Get("since") != nil {
 		t.Errorf("task = props %v", x.Props)
 	}
-	if sf := te.schemaFile(); !strings.Contains(sf, "begin: {type: date, label: 開始日}") {
+	if sf := te.schemaFile(); !strings.Contains(sf, "begin: {type: date, label: 開始}") {
 		t.Errorf("schema.yaml:\n%s", sf)
 	}
 }
 
-func TestSchemaMigratePropOnBoth(t *testing.T) {
+// Properties are not merged: the CLI refuses, naming both, and writes nothing.
+func TestSchemaMigratePropIntoAnother(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	a := te.addJSON("Alpha")
-	te.ok("set", a.ID, "start=2026-11-01", "due=2026-11-30")
-	b := te.addJSON("Beta")
-	te.ok("set", b.ID, "start=2026-11-01", "due=2026-11-30")
-	before := len(te.log("me"))
-	code, _, stderr := te.run("schema", "migrate", "prop", "start", "due")
-	if code != 1 || !strings.Contains(stderr, label(a)) || !strings.Contains(stderr, label(b)) || !strings.Contains(stderr, "both start and due") {
-		t.Errorf("exit %d, stderr %q", code, stderr)
-	}
-	if n := len(te.log("me")); n != before {
-		t.Errorf("commits = %d, want %d", n, before)
-	}
-}
-
-func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
-	t.Parallel()
-	te := newStoreEnv(t)
-	p := te.addJSON("Parent", "--kind", "project")
-	c := te.addJSON("Child", "--parent", p.ID)
-	te.ok("set", c.ID, "priority=high")
 	te.putSchema(func(sc *schema.Schema) {
-		sc.Props = append(sc.Props, schema.Prop{Name: "severity", Type: schema.TypeEnum, Values: []string{"s1", "s2"}})
+		sc.Props = append(sc.Props, schema.Prop{Name: "since", Type: schema.TypeDate}, schema.Prop{Name: "until", Type: schema.TypeDate})
 	})
+	a := te.addJSON("Alpha")
+	te.ok("set", a.ID, "since=2026-11-01", "until=2026-11-30")
 	before := len(te.log("me"))
-	sf := te.schemaFile()
-	// "high" is not a value of severity.
-	code, _, stderr := te.run("schema", "migrate", "prop", "priority", "severity")
-	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, label(c)+" Child") {
-		t.Errorf("exit %d, stderr %q", code, stderr)
+	for _, args := range [][]string{{"schema", "migrate", "prop", "since", "until"}, {"schema", "migrate", "--dry-run", "prop", "since", "until"}} {
+		code, _, stderr := te.run(args...)
+		if code != 1 || !strings.Contains(stderr, "since into until") || !strings.Contains(stderr, "cannot be merged") {
+			t.Errorf("%v: exit %d, stderr %q", args, code, stderr)
+		}
 	}
 	if n := len(te.log("me")); n != before {
 		t.Errorf("commits = %d, want %d", n, before)
-	}
-	if te.schemaFile() != sf || te.task(c.ULID).Props.Get("priority") == nil {
-		t.Error("the store changed")
 	}
 }
 

@@ -545,6 +545,11 @@ func (j *moveJob) load() (*moveWork, error) {
 	if err := j.validate(w, dest); err != nil {
 		return nil, err
 	}
+	// The priority and the labels are matched with the lists of the destination
+	// without regard to case, and are written as they are spelled there.
+	for _, t := range w.tasks {
+		usecase.SpellAsListed(t, dest)
+	}
 	// The files of the tasks.
 	w.notes = map[string][]byte{}
 	for _, t := range w.tasks {

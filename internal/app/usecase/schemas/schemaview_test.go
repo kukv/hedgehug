@@ -45,9 +45,29 @@ func TestSchemaViewOfDefault(t *testing.T) {
 
 func TestSchemaViewOfPropOrder(t *testing.T) {
 	t.Parallel()
-	got := strings.Join(schemas.SchemaViewOf(schema.Default()).PropOrder, " ")
-	if want := "priority start due estimate points"; got != want {
+	sc := schema.Default()
+	sc.Props = schema.Props{{Name: "level", Type: schema.TypeText}, {Name: "begin", Type: schema.TypeDate}}
+	got := strings.Join(schemas.SchemaViewOf(sc).PropOrder, " ")
+	if want := "level begin"; got != want {
 		t.Errorf("PropOrder = %q, want %q", got, want)
+	}
+}
+
+// The two lists of the schema are in the view, in order, and are never null.
+func TestSchemaViewOfLists(t *testing.T) {
+	t.Parallel()
+	v := schemas.SchemaViewOf(schema.Default())
+	if strings.Join(v.Priorities, " ") != "low mid high urgent" || v.Labels == nil || len(v.Labels) != 0 {
+		t.Errorf("priorities = %v, labels = %#v", v.Priorities, v.Labels)
+	}
+	sc := schema.Default()
+	sc.Labels = []string{"bug", "ui"}
+	b, err := json.Marshal(schemas.SchemaViewOf(sc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"labels":["bug","ui"]`) || !strings.Contains(string(b), `"priorities":["low","mid","high","urgent"]`) {
+		t.Errorf("json = %s", b)
 	}
 }
 

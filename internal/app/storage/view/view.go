@@ -249,7 +249,7 @@ func (v *View) BadGanttProps(sc *schema.Schema) []string {
 	}
 	var out []string
 	for _, name := range []string{v.GanttStart(), v.GanttEnd()} {
-		p, ok := sc.Prop(name)
+		p, ok := sc.PropOrBuiltin(name)
 		if (!ok || p.Type != schema.TypeDate) && !slices.Contains(out, name) {
 			out = append(out, name)
 		}

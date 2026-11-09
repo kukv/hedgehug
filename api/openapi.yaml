@@ -267,11 +267,21 @@ components:
         dry_run:
           description: Say what would change and what it would break, and write nothing
           type: boolean
+        due:
+          description: The due date, YYYY-MM-DD; null clears it
+          type:
+            - string
+            - "null"
         duplicates:
           description: "Replaces the tasks this one duplicates: IDs or ULIDs"
           items:
             type: string
           type: array
+        estimate:
+          description: The estimate as a duration like 1h30m; null clears it
+          type:
+            - string
+            - "null"
         kind:
           type: string
         labels:
@@ -279,6 +289,17 @@ components:
           items:
             type: string
           type: array
+        points:
+          description: The points; null clears it
+          format: double
+          type:
+            - number
+            - "null"
+        priority:
+          description: One of the priorities of the schema; null clears it
+          type:
+            - string
+            - "null"
         props:
           additionalProperties: {}
           description: Property name to value; null clears it, a list replaces a multiple value
@@ -304,6 +325,11 @@ components:
         sprint:
           description: "The sprint: a name in the workspace of the task, or a ULID; empty takes it off"
           type: string
+        start:
+          description: The first day, YYYY-MM-DD; null clears it
+          type:
+            - string
+            - "null"
         status:
           type: string
         title:
@@ -582,6 +608,12 @@ components:
         body:
           description: The body in Markdown
           type: string
+        due:
+          description: The due date, YYYY-MM-DD
+          type: string
+        estimate:
+          description: The estimate as a duration like 1h30m
+          type: string
         kind:
           description: project for hh add --kind project
           type: string
@@ -597,6 +629,13 @@ components:
         parent:
           description: "The parent: an ID or a ULID"
           type: string
+        points:
+          description: The points
+          format: double
+          type: number
+        priority:
+          description: One of the priorities of the schema
+          type: string
         props:
           additionalProperties: {}
           description: Property name to value
@@ -608,6 +647,9 @@ components:
           type:
             - array
             - "null"
+        start:
+          description: The first day, YYYY-MM-DD
+          type: string
         status:
           type: string
         template:
@@ -1229,6 +1271,17 @@ components:
         - label
         - sync
       type: object
+    ListChangeInputBody:
+      additionalProperties: false
+      properties:
+        values:
+          description: "All the values after the edit, in order. A current value that no from names is removed: 422 schema.in_use when a task uses it. The last priority cannot be removed: 422 schema.value_invalid"
+          items:
+            $ref: "#/components/schemas/ValueEditBody"
+          type: array
+      required:
+        - values
+      type: object
     LogTrailer:
       additionalProperties: false
       properties:
@@ -1313,6 +1366,8 @@ components:
             - status
             - prop
             - value
+            - priority
+            - label
           type: string
       required:
         - target
@@ -1769,11 +1824,21 @@ components:
           items:
             type: string
           type: array
+        due:
+          description: The due date, YYYY-MM-DD; null clears it
+          type:
+            - string
+            - "null"
         duplicates:
           description: "Replaces the tasks this one duplicates: IDs or ULIDs"
           items:
             type: string
           type: array
+        estimate:
+          description: The estimate as a duration like 1h30m; null clears it
+          type:
+            - string
+            - "null"
         kind:
           type: string
         labels:
@@ -1781,6 +1846,17 @@ components:
           items:
             type: string
           type: array
+        points:
+          description: The points; null clears it
+          format: double
+          type:
+            - number
+            - "null"
+        priority:
+          description: One of the priorities of the schema; null clears it
+          type:
+            - string
+            - "null"
         props:
           additionalProperties: {}
           description: Property name to value; null clears it, a list replaces a multiple value
@@ -1803,6 +1879,11 @@ components:
         sprint:
           description: "The sprint: a name in the workspace of the task, or a ULID; empty takes it off"
           type: string
+        start:
+          description: The first day, YYYY-MM-DD; null clears it
+          type:
+            - string
+            - "null"
         status:
           type: string
         title:
@@ -2325,6 +2406,18 @@ components:
     SchemaView:
       additionalProperties: false
       properties:
+        labels:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        priorities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         prop_order:
           items:
             type: string
@@ -2357,6 +2450,8 @@ components:
         - workflow
         - scoped
         - prop_order
+        - priorities
+        - labels
       type: object
     ScopedDef:
       additionalProperties: false
@@ -2495,11 +2590,21 @@ components:
           type:
             - string
             - "null"
+        due:
+          description: The due date, YYYY-MM-DD; null when the task has none
+          type:
+            - string
+            - "null"
         duplicates:
           items:
             $ref: "#/components/schemas/Ref"
           type:
             - array
+            - "null"
+        estimate:
+          description: The estimate as a duration like 1h30m; null when the task has none
+          type:
+            - string
             - "null"
         former_ids:
           items:
@@ -2531,6 +2636,17 @@ components:
             $ref: "#/components/schemas/LinkView"
           type: array
         parent:
+          type:
+            - string
+            - "null"
+        points:
+          description: The points; null when the task has none
+          format: double
+          type:
+            - number
+            - "null"
+        priority:
+          description: One of the priorities of the schema; null when the task has none
           type:
             - string
             - "null"
@@ -2583,6 +2699,11 @@ components:
           type: string
         sprint:
           $ref: "#/components/schemas/PlanRef"
+        start:
+          description: The first day, YYYY-MM-DD; null when the task has none
+          type:
+            - string
+            - "null"
         status:
           type: string
         steps:
@@ -2623,6 +2744,11 @@ components:
         - parent
         - rank
         - status
+        - priority
+        - start
+        - due
+        - estimate
+        - points
         - assignees
         - labels
         - blocked_by
@@ -3198,11 +3324,21 @@ components:
           type:
             - string
             - "null"
+        due:
+          description: The due date, YYYY-MM-DD; null when the task has none
+          type:
+            - string
+            - "null"
         duplicates:
           items:
             $ref: "#/components/schemas/Ref"
           type:
             - array
+            - "null"
+        estimate:
+          description: The estimate as a duration like 1h30m; null when the task has none
+          type:
+            - string
             - "null"
         former_ids:
           items:
@@ -3228,6 +3364,17 @@ components:
             $ref: "#/components/schemas/LinkView"
           type: array
         parent:
+          type:
+            - string
+            - "null"
+        points:
+          description: The points; null when the task has none
+          format: double
+          type:
+            - number
+            - "null"
+        priority:
+          description: One of the priorities of the schema; null when the task has none
           type:
             - string
             - "null"
@@ -3260,6 +3407,11 @@ components:
           type: string
         sprint:
           $ref: "#/components/schemas/PlanRef"
+        start:
+          description: The first day, YYYY-MM-DD; null when the task has none
+          type:
+            - string
+            - "null"
         status:
           type: string
         steps:
@@ -3285,6 +3437,11 @@ components:
         - parent
         - rank
         - status
+        - priority
+        - start
+        - due
+        - estimate
+        - points
         - assignees
         - labels
         - blocked_by
@@ -5500,6 +5657,39 @@ paths:
       summary: Check the schema and the tasks, as hh schema check
       tags:
         - schema
+  /api/schema/labels:
+    patch:
+      operationId: change-labels
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListChangeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: "Change the labels: add, rename, merge, remove and order"
+      tags:
+        - schema
   /api/schema/migrate:
     post:
       operationId: migrate-schema
@@ -5531,6 +5721,39 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Rename or merge a status, property or value, as hh migrate
+      tags:
+        - schema
+  /api/schema/priorities:
+    patch:
+      operationId: change-priorities
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListChangeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: "Change the priorities: add, rename, merge, remove and order"
       tags:
         - schema
   /api/schema/props:

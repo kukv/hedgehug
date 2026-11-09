@@ -7,12 +7,20 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"go.yaml.in/yaml/v4"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
+
+func mustDate(t *testing.T, s string) model.Date {
+	t.Helper()
+	d, err := model.ParseDate(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
 
 func TestOpenIndexesTasks(t *testing.T) {
 	t.Parallel()
@@ -25,9 +33,22 @@ func TestOpenIndexesTasks(t *testing.T) {
 	first.Rank, second.Rank = "a1", "a0"
 	first.Labels = []string{"backend"}
 	first.Body = "Some BODY text\n"
-	first.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "high"})
+	first.Priority = "high"
+	start, due, est, pts := mustDate(t, "2026-11-02"), mustDate(t, "2026-11-20"), model.Duration(90*time.Minute), 2.5
+	first.Start, first.Due, first.Estimate, first.Points = &start, &due, &est, &pts
 	put(t, s, epic, first, second)
 
+	// the second Open reads the cache the first one wrote: the dates survive it
+	mustOpen(t, s)
+	cached := false
+	for _, c := range readCache(t, s).Tasks {
+		if c.ULID == first.ULID {
+			cached = c.Due != nil && c.Due.String() == "2026-11-20"
+		}
+	}
+	if !cached {
+		t.Fatal("the cache does not hold the due date of the task")
+	}
 	ix := mustOpen(t, s)
 	e, ok := ix.Task(first.ULID)
 	if !ok {
@@ -36,8 +57,19 @@ func TestOpenIndexesTasks(t *testing.T) {
 	if e.Title != "First" || e.Kind != "task" || e.Parent == nil || *e.Parent != epic.ULID || e.Rank != "a1" || !slices.Equal(e.Labels, []string{"backend"}) {
 		t.Errorf("entry = %+v", e)
 	}
-	if got := e.Prop("priority"); !slices.Equal(got, []string{"high"}) {
-		t.Errorf("priority = %v, want [high]", got)
+	if e.Priority != "high" || e.Start == nil || e.Start.String() != "2026-11-02" || e.Due == nil || e.Due.String() != "2026-11-20" ||
+		e.Estimate == nil || *e.Estimate != est || e.Points == nil || *e.Points != 2.5 {
+		t.Errorf("typed fields = %q %v %v %v %v", e.Priority, e.Start, e.Due, e.Estimate, e.Points)
+	}
+	for key, want := range map[string][]string{
+		"priority": {"high"}, "start": {"2026-11-02"}, "due": {"2026-11-20"}, "estimate": {"1h30m"}, "points": {"2.5"},
+	} {
+		if got := e.Prop(key); !slices.Equal(got, want) {
+			t.Errorf("Prop(%q) = %v, want %v", key, got, want)
+		}
+	}
+	if x, _ := ix.Task(second.ULID); x.Priority != "" || x.Start != nil || x.Due != nil || x.Estimate != nil || x.Points != nil || x.Prop("due") != nil || x.Prop("points") != nil {
+		t.Errorf("second has no built-in values: %+v", x)
 	}
 	if !strings.Contains(e.Text, "first") || !strings.Contains(e.Text, "some body text") {
 		t.Errorf("text = %q, want the title and body in lower case", e.Text)

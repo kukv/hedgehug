@@ -217,7 +217,7 @@ func (ix *Index) lineage(ulid model.ULID, kind string, parent *model.ULID) []mod
 
 const (
 	cacheName   = "index" // in .hedgehug/local
-	cacheFormat = 13      // bump when Entry or cache changes
+	cacheFormat = 14      // bump when Entry or cache changes
 )
 
 // cache is the index as it is kept on disk, for one tree of HEAD.

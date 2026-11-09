@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -327,7 +328,7 @@ func New(t *testing.T) *Session {
 	dir := filepath.Join(p.StoresDir, "me")
 	author := config.CommitAuthor(TestAccount)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: "me", IDPrefix: "ME"}
-	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "me"}, schema.Default(), ws, author, "", ts.Now); err != nil {
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "me"}, storeSchema(), ws, author, "", ts.Now); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AddStore("me", dir, nil); err != nil {
@@ -494,7 +495,7 @@ func NewTwoStoreWith(t *testing.T, prefixA, prefixB string) *Session {
 		acct, _ := c.Account(sp.acct)
 		author := config.CommitAuthor(acct)
 		ws := &model.Workspace{ULID: model.NewULID(), Name: sp.name, IDPrefix: sp.prefix}
-		if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: sp.name}, schema.Default(), ws, author, "", ts.Now); err != nil {
+		if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: sp.name}, storeSchema(), ws, author, "", ts.Now); err != nil {
 			t.Fatal(err)
 		}
 		if err := c.AddStore(sp.name, dir, nil); err != nil {
@@ -1242,10 +1243,27 @@ func OpenSet(t *testing.T, es ...config.StoreEntry) *mount.Set {
 	return set
 }
 
-// TestSchema is the default schema with a property of each other type.
+// storeSchema is the schema of the stores the fixtures make: the default one
+// with the TestLabels, which the tasks of the tests use.
+func storeSchema() *schema.Schema {
+	sc := schema.Default()
+	sc.Labels = slices.Clone(TestLabels)
+	return sc
+}
+
+// TestLabels are the labels of TestSchema.
+var TestLabels = []string{"x", "y", "a", "b", "ui", "api", "bug", "hh", "wip", "backend", "ghost", "people"}
+
+// TestSchema is the default schema with a property of each type the built-in
+// ones do not cover, and the TestLabels.
 func TestSchema() *schema.Schema {
 	sc := schema.Default()
+	sc.Labels = slices.Clone(TestLabels)
 	sc.Props = append(sc.Props,
+		schema.Prop{Name: "level", Type: schema.TypeEnum, Values: []string{"low", "high"}},
+		schema.Prop{Name: "begin", Type: schema.TypeDate},
+		schema.Prop{Name: "score", Type: schema.TypeNumber},
+		schema.Prop{Name: "effort", Type: schema.TypeDuration},
 		schema.Prop{Name: "flag", Type: schema.TypeBool},
 		schema.Prop{Name: "at", Type: schema.TypeDatetime},
 		schema.Prop{Name: "note", Type: schema.TypeText},

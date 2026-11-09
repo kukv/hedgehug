@@ -144,7 +144,7 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 				inherited = p.Assignees
 			}
 		}
-		applyItem(t, &tpl.Item, inherited)
+		applyItem(t, &tpl.Item, inherited, ix.Schema())
 		if d, ok := dropForeign(ix, t); ok {
 			x.detached = append(x.detached, d)
 		}

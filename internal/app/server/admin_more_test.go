@@ -22,34 +22,48 @@ type migrated struct {
 func TestMigrateProps(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	if _, err := tasks.Add(ts.session(), tasks.AddInput{Title: "p", Assigns: []usecase.Assign{{Key: "priority", Op: "=", Value: "high"}}}); err != nil {
+	ts.labels("bug", "ui")
+	if _, err := tasks.Add(ts.session(), tasks.AddInput{Title: "p", Assigns: []usecase.Assign{{Key: "priority", Op: "=", Value: "high"}, {Key: "labels", Op: "+=", Value: "bug"}}}); err != nil {
 		t.Fatal(err)
 	}
 	var m migrated
-	body := map[string]any{"target": "value", "prop": "priority", "old": "high", "new": "urgent", "dry_run": true}
-	m = migrated{}
+	body := map[string]any{"target": "priority", "old": "high", "new": "urgent", "dry_run": true}
 	ts.call("POST", "/api/schema/migrate", body, 200, &m)
-	if len(m.Changed) != 1 || m.Commit != nil || m.Changed[0].Props["priority"] != "urgent" {
-		t.Fatalf("value dry run = %+v", m)
+	if len(m.Changed) != 1 || m.Commit != nil || m.Changed[0].Priority == nil || *m.Changed[0].Priority != "urgent" {
+		t.Fatalf("priority dry run = %+v", m)
 	}
 	delete(body, "dry_run")
 	m = migrated{}
 	ts.call("POST", "/api/schema/migrate", body, 200, &m)
-	if len(m.Changed) != 1 || m.Commit == nil || m.Changed[0].Props["priority"] != "urgent" {
-		t.Fatalf("value = %+v", m)
+	if len(m.Changed) != 1 || m.Commit == nil || m.Changed[0].Priority == nil || *m.Changed[0].Priority != "urgent" {
+		t.Fatalf("priority = %+v", m)
 	}
-	body = map[string]any{"target": "prop", "old": "priority", "new": "importance", "dry_run": true}
+	body = map[string]any{"target": "label", "old": "bug", "new": "ui"}
 	m = migrated{}
 	ts.call("POST", "/api/schema/migrate", body, 200, &m)
-	if len(m.Changed) != 1 || m.Changed[0].Props["importance"] != "urgent" || m.Changed[0].Props["priority"] != nil {
-		t.Fatalf("prop dry run = %+v", m)
+	if len(m.Changed) != 1 || m.Commit == nil || len(m.Changed[0].Labels) != 1 || m.Changed[0].Labels[0] != "ui" {
+		t.Fatalf("label = %+v", m)
 	}
-	delete(body, "dry_run")
-	m = migrated{}
-	ts.call("POST", "/api/schema/migrate", body, 200, &m)
-	if len(m.Changed) != 1 || m.Changed[0].Props["importance"] != "urgent" || m.Changed[0].Props["priority"] != nil {
-		t.Fatalf("prop = %+v", m)
+	var sc schemas.SchemaView
+	ts.call("GET", "/api/schema", nil, 200, &sc)
+	if len(sc.Labels) != 1 || sc.Labels[0] != "ui" || sc.Priorities[len(sc.Priorities)-1] != "urgent" || len(sc.Priorities) != 3 {
+		t.Errorf("schema after the migrations: priorities %v, labels %v", sc.Priorities, sc.Labels)
 	}
+
+	// A property is renamed; into another it is refused.
+	ts.call("POST", "/api/schema/props", map[string]any{"name": "area", "type": "text"}, 200, nil)
+	ts.call("POST", "/api/schema/props", map[string]any{"name": "zone", "type": "text"}, 200, nil)
+	head := ts.uc.Head()
+	for _, dry := range []bool{true, false} {
+		p := ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "prop", "old": "area", "new": "zone", "dry_run": dry}, 422)
+		if p.Type != "migrate.prop_merge" {
+			t.Errorf("dry run %v: %+v", dry, p)
+		}
+	}
+	if ts.uc.Head() != head {
+		t.Error("a refused merge committed")
+	}
+	ts.call("POST", "/api/schema/migrate", map[string]any{"target": "prop", "old": "area", "new": "region"}, 200, nil)
 }
 
 func TestDoctorFindsAndRepairs(t *testing.T) {

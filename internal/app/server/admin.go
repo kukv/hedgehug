@@ -43,7 +43,7 @@ type findingsOutput struct{ Body schemas.CheckResult }
 type migrateInput struct {
 	StoreParam
 	Body struct {
-		Target string `json:"target" enum:"status,prop,value"`
+		Target string `json:"target" enum:"status,prop,value,priority,label"`
 		Prop   string `json:"prop,omitempty" doc:"With value: the property whose value it is"`
 		Old    string `json:"old" minLength:"1"`
 		New    string `json:"new" minLength:"1"`
