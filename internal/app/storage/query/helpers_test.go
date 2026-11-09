@@ -3,12 +3,14 @@ package query
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -19,7 +21,9 @@ var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 func newStore(t *testing.T) *store.Store {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
+	sc := schema.Default()
+	sc.Labels = []string{"backend", "wip", "x", "y"}
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, sc, &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +50,39 @@ func newTask(title string) *model.Task {
 	return &model.Task{ULID: model.NewULID(), Kind: "project", Title: title, Status: "todo"}
 }
 
+// setProp sets a built-in property (priority, start, due, estimate, points)
+// on its field, and any other on the props of the task.
 func setProp(task *model.Task, key, value string) {
+	switch key {
+	case "priority":
+		task.Priority = value
+		return
+	case "start", "due":
+		d, err := model.ParseDate(value)
+		if err != nil {
+			panic(err)
+		}
+		if key == "start" {
+			task.Start = &d
+		} else {
+			task.Due = &d
+		}
+		return
+	case "estimate":
+		d, err := model.ParseDuration(value)
+		if err != nil {
+			panic(err)
+		}
+		task.Estimate = &d
+		return
+	case "points":
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			panic(err)
+		}
+		task.Points = &f
+		return
+	}
 	task.Props.Set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
 }
 

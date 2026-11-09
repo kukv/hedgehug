@@ -3,6 +3,7 @@ package index
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,11 @@ type Entry struct {
 	Parent     *model.ULID
 	Rank       model.Rank
 	Status     string
+	Priority   string
+	Start      *model.Date
+	Due        *model.Date
+	Estimate   *model.Duration
+	Points     *float64
 	Assignees  []string
 	Watchers   []string
 	Labels     []string
@@ -62,14 +68,50 @@ type Prop struct {
 	Values []string // one for a scalar, one per item for a list of scalars, none otherwise
 }
 
-// Prop returns the values of the property key; nil when the task has none.
+// Prop returns the values of the property key, as text; nil when the task has
+// none. The built-in priority, start, due, estimate and points are read from
+// the fields of the task, the custom properties from Props.
 func (e *Entry) Prop(key string) []string {
+	if schema.IsTypedBuiltin(key) {
+		return e.typed(key)
+	}
 	for _, p := range e.Props {
 		if p.Key == key {
 			return p.Values
 		}
 	}
 	return nil
+}
+
+// typed returns the value of the built-in property key in the form a property
+// of its type has in a file.
+func (e *Entry) typed(key string) []string {
+	switch key {
+	case "priority":
+		if e.Priority != "" {
+			return []string{e.Priority}
+		}
+	case "start":
+		return dateText(e.Start)
+	case "due":
+		return dateText(e.Due)
+	case "estimate":
+		if e.Estimate != nil {
+			return []string{e.Estimate.String()}
+		}
+	case "points":
+		if e.Points != nil {
+			return []string{strconv.FormatFloat(*e.Points, 'f', -1, 64)}
+		}
+	}
+	return nil
+}
+
+func dateText(d *model.Date) []string {
+	if d == nil {
+		return nil
+	}
+	return []string{d.String()}
 }
 
 // newEntry decodes the task file data, found at the path of ulid. A file that
@@ -104,6 +146,11 @@ func EntryOf(t *model.Task) *Entry {
 		Parent:     t.Parent,
 		Rank:       t.Rank,
 		Status:     t.Status,
+		Priority:   t.Priority,
+		Start:      t.Start,
+		Due:        t.Due,
+		Estimate:   t.Estimate,
+		Points:     t.Points,
 		Assignees:  t.Assignees,
 		Watchers:   t.Watchers,
 		Labels:     t.Labels,

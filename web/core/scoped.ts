@@ -26,6 +26,11 @@ type ScopedBody = Partial<Omit<ScopedDraft, "templateDefaults">> & {
 
 // The built-in fields a workflow may require, besides the properties (internal/app/domain/schema requirableFields).
 const REQUIRABLE_BUILTINS = [
+  "priority",
+  "start",
+  "due",
+  "estimate",
+  "points",
   "parent",
   "assignees",
   "watchers",

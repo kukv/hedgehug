@@ -60,7 +60,12 @@ const rec = (v: unknown): Record<string, unknown> =>
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** What a repair of doctor --fix did (Fixed.kind and Fixed.value), in words. */
-export function fixedText(kind: string, value: unknown, taskName?: TaskName): string {
+export function fixedText(
+  kind: string,
+  value: unknown,
+  taskName?: TaskName,
+  cut?: readonly { prop: string; value: string }[] | null,
+): string {
   switch (kind) {
     case "id_collision": {
       const v = rec(value);
@@ -81,9 +86,12 @@ export function fixedText(kind: string, value: unknown, taskName?: TaskName): st
       return "削除されていたワークスペースを復元しました";
     case "legacy_field": {
       const names = Array.isArray(value) ? value.filter((n) => typeof n === "string") : [];
-      return names.length
-        ? `props の ${names.join("・")} を関連の項目へ移しました`
-        : "props に残っていた関連を関連の項目へ移しました";
+      const moved = names.length
+        ? `props の ${names.join("・")} をタスクの項目へ移しました`
+        : "props に残っていた項目をタスクの項目へ移しました";
+      // A date made of a time says what it lost, with the value as it was written.
+      const lost = (cut ?? []).map((c) => `${c.prop} の時刻を落としました: ${c.value}`);
+      return lost.length ? `${moved}（${lost.join("、")}）` : moved;
     }
   }
   // The kinds a sync repairs too are told as the inbox tells them.
@@ -104,6 +112,10 @@ export function parsePurgeDays(input: string): number | null {
 // The words of a finding come from its code and args (usecase.Finding): the server writes its msg and
 // hint in English for the CLI. A finding whose code is not known here is shown as the server wrote it.
 type Words = (a: readonly string[], f: Finding) => string;
+
+// The list of values a schema finding is about: the priorities or the labels, from where it is.
+const listOf = (f: Finding): string | undefined =>
+  f.where.endsWith(": priorities") ? "優先度" : f.where.endsWith(": labels") ? "ラベル" : undefined;
 
 const cat = (c: string | undefined): string =>
   (CATEGORY_LABEL as Record<string, string | undefined>)[c ?? ""] ?? c ?? "";
@@ -128,13 +140,16 @@ const TASK_PROBLEMS: Record<string, string> = {
   parent_deleted: "親が削除されています",
   no_workspace: "ワークスペースがないか、この Store のワークスペースではありません",
   workspace_mismatch: "親と違うワークスペースにあります",
-  legacy_field: "古い形の関連が props に残っています（関連はタスクの項目です）",
+  legacy_field:
+    "古い形の項目が props に残っています（関連と、優先度・開始日・期限・見積もり・ポイントは、タスクの項目です）",
 };
 
 const MESSAGES: Record<string, Words> = {
   "store.old_format": ([from, to]) =>
     `Store の形式が古いです（${from}、最新は ${to}）。hh store convert で新しい形式にしてください`,
-  "schema.name_empty": () => "名前が空です",
+  "schema.name_empty": (_, f) => (listOf(f) ? "値が空です" : "名前が空です"),
+  "schema.value_twice": ([v], f) =>
+    `${listOf(f) ?? "リスト"}に「${v}」が 2 回定義されています（大文字小文字は区別しません）`,
   "schema.status_twice": ([n]) => `ステータス「${n}」が 2 回定義されています`,
   "schema.unknown_category": ([c]) => `「${c}」というカテゴリはありません`,
   "schema.default_status": ([c, n]) =>
@@ -150,7 +165,8 @@ const MESSAGES: Record<string, Words> = {
     t === "task_ref"
       ? "関連は固定です。hh dep か詳細の関連の欄で付けます（task_ref 型は使えません）"
       : `「${t}」という型はありません`,
-  "schema.values_empty": () => "values が空です",
+  "schema.values_empty": (_, f) =>
+    listOf(f) === "優先度" ? "priorities が空です。優先度は 1 つ以上必要です" : "values が空です",
   "schema.unknown_status": ([s]) => `「${s}」というステータスはありません`,
   "schema.not_requirable": ([n]) =>
     `「${n}」はプロパティでも、必須にできるフィールドでもありません`,
@@ -182,6 +198,8 @@ const MESSAGES: Record<string, Words> = {
   "override.not_project": ([w]) => `${w} はこの Store のプロジェクトではないか、削除されています`,
   "template.bad_name": ([n, e]) => `テンプレートの名前「${n}」が正しくありません: ${e}`,
   "template.missing": ([n]) => `テンプレート「${n}」がありません`,
+  "template.bad_label": ([n, path, l]) =>
+    `テンプレート「${n}」の ${path}: ラベル「${l}」が設定の「ラベル」のリストにありません`,
 
   "task.plan_other_workspace": ([field, what, ulid]) =>
     `${field}: ${plan(what)} ${ulid} はこのタスクのワークスペースにありません`,
@@ -256,6 +274,8 @@ const HINTS: Record<string, Words> = {
   "override.not_project": () => "プロジェクトを復元するか、上書きを外してください",
   "template.bad_name": ([n]) => `templates/${n}.md を追加するか、名前を変更してください`,
   "template.missing": ([n]) => `templates/${n}.md を追加するか、名前を変更してください`,
+  "template.bad_label": ([n]) =>
+    `設定の「ラベル」に足すか（hh schema labels add）、hh template edit ${n} でテンプレートを直してください`,
   "task.duplicate_id": () =>
     "hh doctor --fix で直せます。hh sync でも、push 済みのタスクを残して振り直します",
   "task.id_prefix": () => "hh doctor --fix で直せます",
@@ -264,14 +284,14 @@ const HINTS: Record<string, Words> = {
   "task.missing_ref": () => "hh doctor --fix で直せます",
   "task.parent_deleted": () => "hh doctor --fix で直せます",
   // args: the field, the message, then why --fix leaves the task (conflict, bad_value; "" when it
-  // moves it) and the names of the relations that keep it.
+  // moves it) and the names of the relations or built-in properties that keep it.
   "task.legacy_field": ([, , reason, ...names]) => {
     const list = names.join("・");
     if (reason === "conflict")
       return `${list} は移し先の項目にすでに値があり、どちらが新しいか分からないため、--fix では移せません。hh edit で決めてください`;
     if (reason === "bad_value")
-      return `${list} に ULID でない値があるため、--fix では移せません。hh edit で正しい値に直してください`;
-    return "hh doctor --fix で関連の項目へ移せます";
+      return `${list} に、移し先の項目の型に合わない値があるため、--fix では移せません。hh edit で正しい値に直してください`;
+    return "hh doctor --fix でタスクの項目へ移せます";
   },
   "task.plan_other_workspace": () => "hh edit で外すか、タスクを元のワークスペースに戻してください",
   "task.plan_missing": () => "hh edit で外してください",

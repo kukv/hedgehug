@@ -23,7 +23,7 @@ const deferred = <T>() => {
 };
 
 type Opts = {
-  target?: "status" | "prop";
+  target?: "status";
   old?: string;
   names?: string[];
   many?: boolean;
@@ -172,23 +172,17 @@ describe("MigrateDialog", () => {
   });
 
   it("sends --store only when there are many stores", async () => {
-    const { post } = setup({
-      target: "prop",
-      old: "points",
-      names: ["points", "size"],
-      many: true,
-    });
-    expect(screen.getByRole("dialog", { name: "プロパティ「points」をマージ" })).toBeVisible();
-    await pick("size");
+    const { post } = setup({ many: true });
+    await pick("review");
     await settle();
     expect(post.mock.calls[0]?.[0]).toEqual({
-      target: "prop",
-      old: "points",
-      new: "size",
+      target: "status",
+      old: "triage",
+      new: "review",
       dry_run: true,
     });
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
-      "hh schema migrate prop points size --store shared",
+      "hh schema migrate status triage review --store shared",
     );
   });
 

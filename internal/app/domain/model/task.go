@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
+	"reflect"
 	"slices"
 	"time"
 
@@ -20,6 +22,11 @@ type Task struct {
 	Parent     *ULID
 	Rank       Rank
 	Status     string
+	Priority   string
+	Start      *Date
+	Due        *Date
+	Estimate   *Duration
+	Points     *float64
 	Assignees  []string
 	Watchers   []string
 	Labels     []string
@@ -57,9 +64,15 @@ type Link struct {
 
 var taskKeys = []string{
 	"ulid", "id", "former_ids", "workspace", "kind", "title", "parent", "rank", "status",
+	"priority", "start", "due", "estimate", "points",
 	"assignees", "watchers", "labels", "repos", "blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links",
 	"props", "gh", "created", "created_by", "updated", "deleted_at",
 }
+
+// typedKeys are the built-in keys whose value is read as a priority, a date, a
+// duration or a number. One that cannot be read does not break the task: see
+// DecodeTask.
+var typedKeys = []string{"priority", "start", "due", "estimate", "points"}
 
 // TaskKeys returns the keys of a task file, in the order they are written.
 func TaskKeys() []string { return slices.Clone(taskKeys) }
@@ -79,6 +92,7 @@ func DecodeTask(data []byte) (*Task, error) {
 		return nil, fmt.Errorf("%w", ErrForward)
 	}
 	t := &Task{Body: body, doc: d}
+	var unreadable []string
 	for _, f := range []struct {
 		key string
 		out any
@@ -92,6 +106,11 @@ func DecodeTask(data []byte) (*Task, error) {
 		{"parent", &t.Parent},
 		{"rank", &t.Rank},
 		{"status", &t.Status},
+		{"priority", &t.Priority},
+		{"start", &t.Start},
+		{"due", &t.Due},
+		{"estimate", &t.Estimate},
+		{"points", &t.Points},
 		{"assignees", &t.Assignees},
 		{"watchers", &t.Watchers},
 		{"labels", &t.Labels},
@@ -111,14 +130,24 @@ func DecodeTask(data []byte) (*Task, error) {
 		{"updated", &t.Updated},
 		{"deleted_at", &t.DeletedAt},
 	} {
-		if err := d.Decode(f.key, f.out); err != nil {
-			return nil, err
+		err := d.Decode(f.key, f.out)
+		if err == nil && f.key == "points" && t.Points != nil && (math.IsNaN(*t.Points) || math.IsInf(*t.Points, 0)) {
+			err = errors.New("want a finite number")
+		}
+		if err != nil {
+			if !slices.Contains(typedKeys, f.key) {
+				return nil, err
+			}
+			reflect.ValueOf(f.out).Elem().SetZero() // a failed decode may leave half of a value
+			unreadable = append(unreadable, f.key)
 		}
 	}
 	if t.ULID.IsZero() {
 		return nil, &DecodeError{Field: "ulid", Err: errors.New("missing")}
 	}
-	t.Extra = d.Extra(taskKeys)
+	// A typed value that cannot be read is kept as an unknown key, so that the
+	// task is not broken: the schema reports it and hh set can fix it.
+	t.Extra = d.Extra(slices.DeleteFunc(slices.Clone(taskKeys), func(k string) bool { return slices.Contains(unreadable, k) }))
 	return t, nil
 }
 
@@ -138,6 +167,24 @@ func (t *Task) Encode() ([]byte, error) {
 	e.Put("parent", t.Parent, t.Parent == nil)
 	e.Put("rank", string(t.Rank), t.Rank == "")
 	e.Put("status", t.Status, t.Status == "")
+	// A typed key that DecodeTask could not read stays as it is until a value
+	// is set; the value then takes its place.
+	extra := t.Extra
+	putTyped := func(key string, v any, zero bool) {
+		if extra.Get(key) == nil {
+			e.Put(key, v, zero)
+			return
+		}
+		if !zero {
+			extra = slices.DeleteFunc(slices.Clone(extra), func(f Field) bool { return f.Key == key })
+			e.Put(key, v, zero)
+		}
+	}
+	putTyped("priority", t.Priority, t.Priority == "")
+	putTyped("start", t.Start, t.Start == nil)
+	putTyped("due", t.Due, t.Due == nil)
+	putTyped("estimate", t.Estimate, t.Estimate == nil)
+	putTyped("points", t.Points, t.Points == nil)
 	e.Put("assignees", t.Assignees, len(t.Assignees) == 0)
 	e.Put("watchers", t.Watchers, len(t.Watchers) == 0)
 	e.Put("labels", t.Labels, len(t.Labels) == 0)
@@ -156,7 +203,7 @@ func (t *Task) Encode() ([]byte, error) {
 	e.Put("created_by", t.CreatedBy, t.CreatedBy == "")
 	e.Put("updated", t.Updated, t.Updated.IsZero())
 	e.Put("deleted_at", t.DeletedAt, t.DeletedAt == nil)
-	front, err := e.Bytes(t.Extra)
+	front, err := e.Bytes(extra)
 	if err != nil {
 		return nil, err
 	}

@@ -1,27 +1,24 @@
 <script lang="ts">
   import Button from "../ui/Button.svelte";
-  import type { MigrateTarget } from "./MigrateDialog.svelte";
   import type { SchemaAction } from "./schema-action";
 
-  // The buttons of a row: edit the definition (its name too), merge it into another, delete it. edit is
-  // the target of the edit dialog; used is how many tasks use the definition, and a definition that is
-  // used or the default cannot be deleted.
+  // The buttons of a row: edit the definition (its name too), merge it into another (a status only:
+  // properties are not merged), delete it. used is how many tasks use the definition, and a definition
+  // that is used or the default cannot be deleted.
   let {
     target,
     old,
     names,
     off,
     onaction,
-    edit,
     used,
     isDefault = false,
   }: {
-    target: MigrateTarget;
+    target: "status" | "prop";
     old: string;
     names: string[];
     off: string | null;
     onaction: (a: SchemaAction) => void;
-    edit: "status" | "prop";
     used?: number;
     isDefault?: boolean;
   } = $props();
@@ -30,7 +27,9 @@
   const deleteWhy = $derived(
     off ??
       ((used ?? 0) > 0
-        ? "タスクが使っているため削除できません。マージで別の定義へ移してから削除してください"
+        ? target === "status"
+          ? "タスクが使っているため削除できません。マージで別のステータスへ移してから削除してください"
+          : "タスクが使っているため削除できません。使っているタスクの値を外してから削除してください"
         : isDefault
           ? "既定は削除できません。別のものを既定にしてから削除してください"
           : null),
@@ -42,17 +41,17 @@
   aria-label="編集（{subject}）"
   disabled={off !== null}
   why={off ?? undefined}
-  onclick={() => onaction({ kind: "edit", target: edit, name: old })}
+  onclick={() => onaction({ kind: "edit", target, name: old })}
 >
   編集
 </Button>
-{#if names.length > 1}
+{#if target === "status" && names.length > 1}
   <Button
     size="sm"
     aria-label="マージ（{subject}）"
     disabled={off !== null}
     why={off ?? undefined}
-    onclick={() => onaction({ kind: "migrate", target, old, names })}
+    onclick={() => onaction({ kind: "migrate", target: "status", old, names })}
   >
     マージ
   </Button>

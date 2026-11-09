@@ -73,11 +73,21 @@ WEB-5 are left out).
 ```bash
 hh add "Review the login page" --parent WEB-6   # a task under the project WEB-6, in the default store
 hh status WEB-1 in_progress
+hh schema labels add ui              # a label has to be in the store's list before a task can hold it
 hh set WEB-1 assignees=github.com/me labels+=ui
 hh dep add WEB-2 --blocked-by WEB-1  # WEB-2 waits for WEB-1; see Relations in Planning
 hh done WEB-1
 hh sync                              # sync now, without waiting for the background sync
 ```
+
+A task can hold only the labels in the list of the store. Add them with `hh schema labels add <name>…`
+(in the browser: Settings, Schema, the tab "ラベル"). A label matches without regard to case and is stored as the list
+spells it: with `bug` in the list, `labels+=Bug` stores `bug`. A name that is not in the list stops with
+`the change breaks the schema` (`labels: "nope" is not one of [bug ui docs]`).
+
+To change the list later, `hh schema labels rm <name>…` removes labels no task holds, and
+`hh schema migrate label <old> <new>` renames a label, or merges it into another, on the tasks that hold it.
+`hh schema migrate priority <old> <new>` does the same for a priority. Neither rewrites the `query` of a saved view.
 
 Every command writes to your local copy first, so it works offline. A store with a remote then
 syncs in the background, about 30 seconds after a write.

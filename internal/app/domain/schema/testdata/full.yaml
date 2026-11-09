@@ -7,10 +7,12 @@ statuses:
 - {name: waiting, label: 待機中, category: doing}
 - {name: done, label: 完了, category: done, default: true}
 - {name: canceled, label: 中止, category: canceled, default: true}
+priorities: [low, mid, high, urgent]
+labels: [bug, docs]
 props:
-  priority: {type: enum, values: [low, mid, high, urgent]}
-  start: {type: date}
-  estimate: {type: duration}
+  size: {type: enum, values: [S, M, L]}
+  review_by: {type: date}
+  effort: {type: duration}
   area: {type: multi_enum, values: [backend, frontend, infra, ops]}
 workflow:
   transitions:

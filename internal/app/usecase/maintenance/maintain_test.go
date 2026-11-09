@@ -273,29 +273,45 @@ func TestMigrateWritesTasksAndSchemaInOneCommit(t *testing.T) {
 	}
 }
 
+// Properties are not merged: a migration of a property into one that is
+// defined is refused, a dry run too, and the property is renamed to a name that
+// is free.
 func TestMigrateRefusals(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	a, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Alpha"})
-	b, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Beta"})
+	b, err := ts.SchemaOf("me").Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := schema.Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc.Props = append(sc.Props, schema.Prop{Name: "begin", Type: schema.TypeDate}, schema.Prop{Name: "finish", Type: schema.TypeDate})
+	ts.MustEdit("me", "schema", usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
+	for _, title := range []string{"Alpha", "Beta"} {
+		if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: title}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, id := range []string{"ME-1", "ME-2"} {
-		if _, err := tasks.Set(ts.Session, id, []usecase.Assign{{Key: "start", Op: "=", Value: "2026-11-01"}, {Key: "due", Op: "=", Value: "2026-11-30"}}); err != nil {
+		if _, err := tasks.Set(ts.Session, id, []usecase.Assign{{Key: "begin", Op: "=", Value: "2026-11-01"}, {Key: "finish", Op: "=", Value: "2026-11-30"}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	before := ts.Head()
-	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "start", New: "due"}, false)
-	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
-	for _, want := range []string{"cannot migrate 2 tasks:\n  ", "ME-1 (" + a.ULID.String() + ")", "ME-2 (" + b.ULID.String() + ")", "both start and due"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("message lacks %q:\n%s", want, err)
+	for _, dryRun := range []bool{false, true} {
+		_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "begin", New: "finish"}, dryRun)
+		usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.prop_merge")
+		if err != nil && !strings.Contains(err.Error(), "begin into finish") {
+			t.Errorf("dry run %v: message = %q; want it to name begin and finish", dryRun, err)
 		}
-	}
-	if _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "start", New: "due"}, true); usecase.KindOf(err) != usecase.KindInvalid {
-		t.Errorf("the dry run is refused with kind %v (%v); want KindInvalid", usecase.KindOf(err), err)
 	}
 	if ts.Head() != before {
 		t.Error("a refused migration committed")
+	}
+	if _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "begin", New: "opened"}, false); err != nil {
+		t.Errorf("the rename of a property to a free name: %v", err)
 	}
 }
 
@@ -347,26 +363,10 @@ func TestDoctorFindsAnUnexpectedForcePush(t *testing.T) {
 	}
 }
 
-// A migration that would break the schema for a task is refused, and the
-// message names the task first.
-func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
-	t.Parallel()
-	ts := usecasetest.New(t)
-	p, err := tasks.Add(ts.Session, tasks.AddInput{Title: "Parent", Kind: "project"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := tasks.Add(ts.Session, tasks.AddInput{Title: "Child", Parent: p.ULID.String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cv, err := c.View()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tasks.Set(ts.Session, c.ULID.String(), []usecase.Assign{{Key: "priority", Op: "=", Value: "high"}}); err != nil {
-		t.Fatal(err)
-	}
+// withProps puts properties of the type typ, named names, in the schema of the
+// store, and returns a task added after.
+func withProps(t *testing.T, ts *usecasetest.Session, typ schema.PropType, names ...string) usecase.TaskResult {
+	t.Helper()
 	b, err := ts.SchemaOf("me").Encode()
 	if err != nil {
 		t.Fatal(err)
@@ -375,14 +375,55 @@ func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc.Props = append(sc.Props, schema.Prop{Name: "severity", Type: schema.TypeEnum, Values: []string{"s1", "s2"}})
+	for _, n := range names {
+		sc.Props = append(sc.Props, schema.Prop{Name: n, Type: typ})
+	}
 	ts.MustEdit("me", "schema", usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
+	r, err := tasks.Add(ts.Session, tasks.AddInput{Title: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// A rename of a property is refused for a task that holds the new name as a
+// property the schema does not define, and the message names the task.
+func TestMigrateRefusesATaskThatHasTheNewName(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	r := withProps(t, ts, schema.TypeText, "note")
+	if _, err := tasks.Set(ts.Session, r.ULID.String(), []usecase.Assign{{Key: "note", Op: "=", Value: "y"}}); err != nil {
+		t.Fatal(err)
+	}
+	ts.EditRawFile(model.TaskPath(r.ULID), "  note: y\n", "  note: y\n  custom: z\n")
 	before := ts.Head()
-	// "high" is not a value of severity.
-	_, err = schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "priority", New: "severity"}, false)
+	for _, dryRun := range []bool{false, true} {
+		_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "note", New: "custom"}, dryRun)
+		usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
+		if err != nil && (!strings.Contains(err.Error(), "cannot migrate 1 task:\n  ME-1 ("+r.ULID.String()+") A: ") || !strings.Contains(err.Error(), "both note and custom")) {
+			t.Errorf("dry run %v: message = %q", dryRun, err)
+		}
+	}
+	if ts.Head() != before {
+		t.Error("a refused migration committed")
+	}
+}
+
+// A rename that makes a task break the schema (a value that was bad under the
+// old name is a new violation under the new one) is refused, naming the task.
+func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	r := withProps(t, ts, schema.TypeNumber, "score")
+	if _, err := tasks.Set(ts.Session, r.ULID.String(), []usecase.Assign{{Key: "score", Op: "=", Value: "1"}}); err != nil {
+		t.Fatal(err)
+	}
+	ts.EditRawFile(model.TaskPath(r.ULID), "score: 1\n", "score: abc\n")
+	before := ts.Head()
+	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "score", New: "size"}, false)
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
-	if msg := err.Error(); !strings.Contains(msg, "breaks the schema") || !strings.HasPrefix(msg, cv.ID+" ("+c.ULID.String()+") Child: ") {
-		t.Errorf("message = %q", msg)
+	if err != nil && (!strings.HasPrefix(err.Error(), "ME-1 ("+r.ULID.String()+") A: ") || !strings.Contains(err.Error(), "breaks the schema")) {
+		t.Errorf("message = %q", err)
 	}
 	if ts.Head() != before {
 		t.Error("a refused migration committed")

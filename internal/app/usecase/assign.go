@@ -71,7 +71,9 @@ func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string
 	case "watchers":
 		return setList(&t.Watchers, a)
 	case "labels":
-		return setList(&t.Labels, a)
+		return setLabels(&t.Labels, a, sc.Labels)
+	case "priority", "start", "due", "estimate", "points":
+		return setTyped(t, a, sc)
 	case "repos":
 		return setList(&t.Repos, a)
 	case "parent", "rank":
@@ -112,6 +114,96 @@ func setScalar(dst *string, a Assign) error {
 	}
 	*dst = a.Value
 	return nil
+}
+
+// SpellAsListed gives the priority and the labels of t the spelling of the
+// lists of sc, which match them without regard to case; one the list lacks is
+// left as it is, for the check of the schema to refuse.
+func SpellAsListed(t *model.Task, sc *schema.Schema) {
+	if v, ok := schema.MatchValue(sc.Priorities, t.Priority); ok {
+		t.Priority = v
+	}
+	t.Labels = slices.Clone(t.Labels)
+	for i, l := range t.Labels {
+		if v, ok := schema.MatchValue(sc.Labels, l); ok {
+			t.Labels[i] = v
+		}
+	}
+}
+
+// setLabels is setList for labels, which are matched with the list of the
+// schema without regard to case: the spelling of the list is the one stored,
+// and -= takes away the label whatever the case it is written in. A label the
+// list lacks is kept as written, for the store to refuse.
+func setLabels(dst *[]string, a Assign, list []string) error {
+	if v, ok := schema.MatchValue(list, a.Value); ok {
+		a.Value = v
+	}
+	if a.Op == "-=" {
+		if i := slices.IndexFunc(*dst, func(v string) bool { return strings.EqualFold(v, a.Value) }); i >= 0 {
+			a.Value = (*dst)[i]
+		}
+	}
+	return setList(dst, a)
+}
+
+// setTyped sets the built-in priority, start, due, estimate or points. An
+// empty value clears it, and with it a value the file has that could not be
+// read.
+func setTyped(t *model.Task, a Assign, sc *schema.Schema) error {
+	if a.Op != "=" {
+		return NewErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
+	}
+	if a.Value == "" {
+		switch a.Key {
+		case "priority":
+			t.Priority = ""
+		case "start":
+			t.Start = nil
+		case "due":
+			t.Due = nil
+		case "estimate":
+			t.Estimate = nil
+		case "points":
+			t.Points = nil
+		}
+		t.Extra.Delete(a.Key)
+		return nil
+	}
+	switch a.Key {
+	case "priority":
+		t.Priority = a.Value
+		if v, ok := schema.MatchValue(sc.Priorities, a.Value); ok {
+			t.Priority = v
+		}
+	case "start", "due":
+		d, err := model.ParseDate(a.Value)
+		if err != nil {
+			return badAssign(a.Key, a.Value, "a date (YYYY-MM-DD)")
+		}
+		if a.Key == "start" {
+			t.Start = &d
+		} else {
+			t.Due = &d
+		}
+	case "estimate":
+		d, err := model.ParseDuration(a.Value)
+		if err != nil {
+			return badAssign(a.Key, a.Value, "a duration (like 2h30m)")
+		}
+		t.Estimate = &d
+	case "points":
+		f, err := strconv.ParseFloat(a.Value, 64)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return badAssign(a.Key, a.Value, "a number")
+		}
+		t.Points = &f
+	}
+	return nil
+}
+
+func badAssign(name, v, what string) error {
+	return NewErr(KindInvalid, "assign.bad_value", fmt.Errorf("%s: %q is not %s", name, v, what), "key", name, "value", v)
 }
 
 func setList(dst *[]string, a Assign) error {
@@ -201,9 +293,7 @@ func setProp(t *model.Task, p schema.Prop, a Assign) error {
 // as its type: a text that looks like a number is quoted, a date is not.
 func propValue(p schema.Prop, v string) (*yaml.Node, error) {
 	tag := "!!str"
-	bad := func(what string) error {
-		return NewErr(KindInvalid, "assign.bad_value", fmt.Errorf("%s: %q is not %s", p.Name, v, what), "key", p.Name, "value", v)
-	}
+	bad := func(what string) error { return badAssign(p.Name, v, what) }
 	switch p.Type {
 	case schema.TypeNumber:
 		_, ierr := strconv.ParseInt(v, 10, 64)

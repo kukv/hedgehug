@@ -94,6 +94,22 @@ func TestInboxRevertProp(t *testing.T) {
 	}
 }
 
+// A date that lost comes back from the merge as a time (2026-11-11T00:00:00Z),
+// and the revert puts back the day.
+func TestInboxRevertDate(t *testing.T) {
+	t.Parallel()
+	alice, bob, _ := twoUsers(t)
+	conflict(t, alice, bob, "due", "2026-11-11", "2026-11-20")
+	u := itemOverwriting(t, bob, "due")
+	bob.ok("inbox", "revert", u)
+	if out := bob.ok("show", "ORG-1"); !regexp.MustCompile(`due\s+2026-11-11\n`).MatchString(out) {
+		t.Errorf("after revert: %s", out)
+	}
+	if out := bob.ok("show", "ORG-1", "--json"); !strings.Contains(out, `"due": "2026-11-11"`) {
+		t.Errorf("after revert (json): %s", out)
+	}
+}
+
 func TestInboxRevertErrors(t *testing.T) {
 	t.Parallel()
 	alice, bob, _ := twoUsers(t)

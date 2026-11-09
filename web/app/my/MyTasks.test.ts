@@ -11,10 +11,10 @@ const t = (ulid: string, over: Partial<TaskView>): TaskView =>
   task(ulid, "task", null, { id: `REL-${ulid}`, title: `title ${ulid}`, ...over });
 
 const tasks = [
-  t("1", { props: { due: "2026-11-04" }, project, status: "doing" }),
-  t("2", { props: { due: "2026-11-06" }, project }),
+  t("1", { due: "2026-11-04", project, status: "doing" }),
+  t("2", { due: "2026-11-06", project }),
   t("3", {
-    props: { due: "2026-11-07" },
+    due: "2026-11-07",
     store: "me",
     workspace: { ulid: "W9", name: "me", id_prefix: "ME" },
   }),

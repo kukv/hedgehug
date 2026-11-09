@@ -167,6 +167,7 @@ test("the table updates the rows picked in one commit", async ({ page, hh }) => 
 test("the palette updates what a query finds", async ({ page, hh }) => {
   hh.hh("add", "one");
   hh.hh("add", "two");
+  hh.hh("schema", "labels", "add", "x");
   hh.hh("set", "DM-1", "labels=x");
   hh.hh("set", "DM-2", "labels=x");
   await hh.open(page, "/");

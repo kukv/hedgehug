@@ -82,7 +82,7 @@ func TestStoreConvertJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(te.ok("store", "convert", "--dry-run", "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !got.DryRun || len(got.Steps) != 2 || got.Steps[0].From != 1 || len(got.Steps[0].Lines) == 0 {
+	if !got.DryRun || len(got.Steps) != 3 || got.Steps[0].From != 1 || len(got.Steps[0].Lines) == 0 {
 		t.Errorf("result = %+v", got)
 	}
 }
@@ -123,7 +123,7 @@ func TestStoreConvertDropBadValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a task_ref property of format 2, and a value of it that is no ULID
-	if err := os.WriteFile(schemaPath, []byte(strings.Replace(string(b), "props:\n", "props:\n  fixes: {type: task_ref}\n", 1)), 0o600); err != nil {
+	if err := os.WriteFile(schemaPath, []byte(string(b)+"props:\n  fixes: {type: task_ref}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gitrepotest.CommitFiles(t, dir, "a task_ref", "Alice", "alice@example.com", te.now, "schema.yaml")
@@ -142,6 +142,34 @@ func TestStoreConvertDropBadValues(t *testing.T) {
 		t.Errorf("a dry run converted: ls exits %d", code)
 	}
 	te.ok("store", "convert", "--drop-bad-values")
+	if out := te.ok("doctor"); out != "No problems\n" {
+		t.Errorf("doctor after the conversion: %q", out)
+	}
+}
+
+// A value of the five built-in properties that is of no type stops the
+// conversion, a dry run included (exit code 1), and is dropped with the flag.
+func TestStoreConvertStopsAtABuiltinOfNoType(t *testing.T) {
+	t.Parallel()
+	te := oldStoreEnv(t)
+	te.handEdit("me", "ME-1", "\nkind: project\n", "\nkind: project\nprops:\n  estimate: 3\n  points: \"2\"\n")
+
+	for _, args := range [][]string{{"store", "convert", "--dry-run"}, {"store", "convert"}} {
+		code, _, errs := te.run(args...)
+		if code != 1 || !strings.Contains(errs, "props.estimate: 3") || !strings.Contains(errs, "--drop-bad-values") {
+			t.Errorf("hedgehug %s: exit %d, stderr %q", strings.Join(args, " "), code, errs)
+		}
+	}
+	if out := te.ok("store", "convert", "--dry-run", "--drop-bad-values"); !strings.Contains(out, "読めない値を外した") || !strings.Contains(out, "props.estimate: 3") {
+		t.Errorf("dry run with --drop-bad-values: %q", out)
+	}
+	if code, _, _ := te.run("ls"); code != 1 {
+		t.Errorf("a dry run converted: ls exits %d", code)
+	}
+	te.ok("store", "convert", "--drop-bad-values")
+	if out := te.ok("show", "ME-1"); !strings.Contains(out, "points") || strings.Contains(out, "estimate") {
+		t.Errorf("show after the conversion: %q", out)
+	}
 	if out := te.ok("doctor"); out != "No problems\n" {
 		t.Errorf("doctor after the conversion: %q", out)
 	}

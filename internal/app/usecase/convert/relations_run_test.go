@@ -48,7 +48,7 @@ func TestRunConvertsFromFormat1ToTheRelationsInOneRunAndNothingTheSecondTime(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 2 || reports[0].To != 2 || reports[1].From != 2 || reports[1].To != 3 {
+	if len(reports) != 3 || reports[0].To != 2 || reports[1].From != 2 || reports[1].To != 3 {
 		t.Fatalf("reports = %+v", reports)
 	}
 	if l := strings.Join(reports[1].Lines, "\n"); !strings.Contains(l, "fixes: 1 件を relates へ") || !strings.Contains(l, "相互の組 1 件") {

@@ -1,7 +1,9 @@
 package model
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"go.yaml.in/yaml/v4"
@@ -42,6 +44,11 @@ type TemplateItem struct {
 	Kind       string         `yaml:"kind,omitempty"`
 	Title      string         `yaml:"title,omitempty"`
 	Status     string         `yaml:"status,omitempty"`
+	Priority   string         `yaml:"priority,omitempty"`
+	Start      *Date          `yaml:"start,omitempty"`
+	Due        *Date          `yaml:"due,omitempty"`
+	Estimate   *Duration      `yaml:"estimate,omitempty"`
+	Points     *float64       `yaml:"points,omitempty"`
 	Assignees  Assignees      `yaml:"assignees,omitempty"`
 	Watchers   []string       `yaml:"watchers,omitempty"`
 	Labels     []string       `yaml:"labels,omitempty"`
@@ -64,6 +71,7 @@ type TemplateItem struct {
 func (it *TemplateItem) targets() map[string]any {
 	return map[string]any{
 		"kind": &it.Kind, "title": &it.Title, "status": &it.Status,
+		"priority": &it.Priority, "start": &it.Start, "due": &it.Due, "estimate": &it.Estimate, "points": &it.Points,
 		"assignees": &it.Assignees, "watchers": &it.Watchers, "labels": &it.Labels,
 		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "causes": &it.Causes, "relates": &it.Relates,
 		"duplicates": &it.Duplicates, "clones": &it.Clones, "sprint": &it.Sprint,
@@ -82,7 +90,18 @@ func (it *TemplateItem) UnmarshalYAML(n *yaml.Node) error {
 	targets := it.targets()
 	targets["body"] = &it.Body
 	d := &Doc{root: &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{n}}}
-	return decodeAll(d, targets)
+	if err := decodeAll(d, targets); err != nil {
+		return err
+	}
+	return it.checkPoints()
+}
+
+// checkPoints refuses a points that is not a finite number, as a task does.
+func (it *TemplateItem) checkPoints() error {
+	if it.Points != nil && (math.IsNaN(*it.Points) || math.IsInf(*it.Points, 0)) {
+		return &DecodeError{Field: "points", Err: errors.New("want a finite number")}
+	}
+	return nil
 }
 
 // Template is one template file. Its name is the file name. Item.Body is the
@@ -98,7 +117,7 @@ type Template struct {
 }
 
 var templateKeys = []string{
-	"kind", "title", "status", "assignees", "watchers", "labels", "repos",
+	"kind", "title", "status", "priority", "start", "due", "estimate", "points", "assignees", "watchers", "labels", "repos",
 	"blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links", "props", "children", "created", "updated",
 }
 
@@ -121,6 +140,9 @@ func DecodeTemplate(name string, data []byte) (*Template, error) {
 	if err := decodeAll(d, targets); err != nil {
 		return nil, err
 	}
+	if err := it.checkPoints(); err != nil {
+		return nil, err
+	}
 	it.Body = body
 	t.Extra = d.Extra(templateKeys)
 	return t, nil
@@ -135,6 +157,11 @@ func (t *Template) Encode() ([]byte, error) {
 	e.Put("kind", it.Kind, it.Kind == "")
 	e.Put("title", it.Title, it.Title == "")
 	e.Put("status", it.Status, it.Status == "")
+	e.Put("priority", it.Priority, it.Priority == "")
+	e.Put("start", it.Start, it.Start == nil)
+	e.Put("due", it.Due, it.Due == nil)
+	e.Put("estimate", it.Estimate, it.Estimate == nil)
+	e.Put("points", it.Points, it.Points == nil)
 	e.Put("assignees", it.Assignees, it.Assignees.IsZero())
 	e.Put("watchers", it.Watchers, len(it.Watchers) == 0)
 	e.Put("labels", it.Labels, len(it.Labels) == 0)

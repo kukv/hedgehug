@@ -11,6 +11,7 @@ import (
 func TestSetQuery(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("x")
 	a := te.addJSON("a", "-p", "labels=x")
 	b := te.addJSON("b", "-p", "labels=x")
 	c := te.addJSON("c")
@@ -47,6 +48,7 @@ func TestSetQuery(t *testing.T) {
 func TestSetQueryConfirmsOnATerminal(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("x")
 	a := te.addJSON("a", "-p", "labels=x")
 	te.terminal = true
 	te.stdin = "n\n"
@@ -74,6 +76,7 @@ func TestSetQueryNothingMatches(t *testing.T) {
 func TestSetQueryViolation(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("x")
 	a := te.addJSON("a", "-p", "labels=x")
 	code, _, stderr := te.run("set", "--query", "label:x", "status=nope", "--yes")
 	if code == 0 || !strings.Contains(stderr, a.ID) {
@@ -129,6 +132,7 @@ func TestAddNeedsATitleWithoutATemplate(t *testing.T) {
 
 func TestSchemaScopeTemplates(t *testing.T) {
 	te := newStoreEnv(t) // not parallel: editWith sets the environment
+	te.labels("a")
 	te.editWith("---\nlabels: [a]\n---\n")
 	te.ok("template", "edit", "a")
 	p := te.addJSON("p", "--kind", "project")

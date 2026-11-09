@@ -43,6 +43,12 @@ export type TaskJson = {
   parent: string | null;
   rank: string;
   labels: string[];
+  /** The built-in properties are fields of the task, null when it has none; they are never in props. */
+  priority: string | null;
+  start: string | null;
+  due: string | null;
+  estimate: string | null;
+  points: number | null;
   props: Record<string, unknown>;
   deleted_at: string | null;
   body?: string;

@@ -136,3 +136,77 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 		t.Errorf("second fix = %+v, %v", rep.Repaired, err)
 	}
 }
+
+// A priority, start, due, estimate or points that an older hedgehug left in
+// props is told the same way, and --fix moves it, except where the field has a
+// value already or the value is not of the type of the field.
+func TestDoctorTellsOfABuiltinInPropsAndFixMovesIt(t *testing.T) {
+	ts := newCheckedSession(t)
+	props := func(src string) func(*model.Task) {
+		return func(tk *model.Task) {
+			if err := yaml.Unmarshal([]byte(src), &tk.Props); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	a := ts.AddTask("a", props("priority: High\nstart: 2026-11-03\ndue: 2026-11-08\nestimate: 1h30m\npoints: \"5\"\n"))
+	// b: the field has a value, so which is newer cannot be told
+	b := ts.AddTask("b", func(tk *model.Task) {
+		props("points: 8\n")(tk)
+		p := 5.0
+		tk.Points = &p
+	})
+	// c: a value that is not a number keeps the whole task, relation included
+	c := ts.AddTask("c", props("points: lots\npriority: high\ncauses: ["+a.ULID.String()+"]\n"))
+	// d: a relation and a builtin together move together
+	d := ts.AddTask("d", props("points: 2\nrelates: ["+a.ULID.String()+"]\n"))
+	before := ts.TaskByULID("me", a.ULID).Updated
+
+	rep, err := ts.DoctorOne(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := legacyFindings(rep.Findings)
+	for _, k := range []string{"priority", "start", "due", "estimate", "points"} {
+		if f := got[a.ULID.String()+" props."+k]; !strings.Contains(f.Hint, "--fix moves it") {
+			t.Errorf("a props.%s: %+v", k, f)
+		}
+	}
+	if f := got[b.ULID.String()+" props.points"]; !strings.Contains(f.Hint, "the field points has a value of its own") || !slices.Equal(f.Args[2:], []string{"conflict", "points"}) {
+		t.Errorf("b: %+v", f)
+	}
+	if f := got[c.ULID.String()+" props.causes"]; !strings.Contains(f.Hint, "props.points has a value that is not of the type of the field") || f.Args[2] != "bad_value" {
+		t.Errorf("c: %+v", f)
+	}
+	if !usecase.FindingsFail(rep.Findings) {
+		t.Error("a builtin in props does not fail doctor")
+	}
+
+	rep, err = ts.DoctorOne(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Repaired) != 2 {
+		t.Fatalf("repaired = %+v; want a and d", rep.Repaired)
+	}
+	na := ts.TaskByULID("me", a.ULID)
+	if na.Priority != "high" || na.Start.String() != "2026-11-03" || na.Due.String() != "2026-11-08" || na.Estimate.String() != "1h30m" || *na.Points != 5 || len(na.Props) != 0 {
+		t.Errorf("a: %+v", na)
+	}
+	if !na.Updated.Equal(before) {
+		t.Errorf("updated moved: %v to %v", before, na.Updated)
+	}
+	nd := ts.TaskByULID("me", d.ULID)
+	if *nd.Points != 2 || !slices.Equal(nd.Relates, []model.ULID{a.ULID}) || len(nd.Props) != 0 {
+		t.Errorf("d: points %v, relates %v, props %v", nd.Points, nd.Relates, nd.Props)
+	}
+	if nb := ts.TaskByULID("me", b.ULID); *nb.Points != 5 || nb.Props.Get("points") == nil {
+		t.Errorf("b was changed: points %v, props %v", nb.Points, nb.Props)
+	}
+	if nc := ts.TaskByULID("me", c.ULID); nc.Points != nil || nc.Props.Get("points") == nil || nc.Props.Get("causes") == nil {
+		t.Errorf("c was changed: points %v, props %v", nc.Points, nc.Props)
+	}
+	if rep, err = ts.DoctorOne(true); err != nil || len(rep.Repaired) != 0 {
+		t.Errorf("second fix = %+v, %v", rep.Repaired, err)
+	}
+}

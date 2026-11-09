@@ -2,11 +2,12 @@
   import type { Schemas, TaskView } from "../../core/api/client";
   import { cliSet } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
-  import type { SchemaView } from "../../core/schema";
+  import { isBuiltinProp, type SchemaView } from "../../core/schema";
   import { core } from "../context";
   import FieldInput from "../detail/FieldInput.svelte";
+  import LabelPicker from "../detail/LabelPicker.svelte";
   import PropField from "../detail/PropField.svelte";
-  import { propRows } from "../detail/prop-rows";
+  import { builtinRows, propRows } from "../detail/prop-rows";
   import { onLinkClick, router } from "../router";
   import { useDisplayId } from "../svelte-store";
   import Button from "../ui/Button.svelte";
@@ -27,7 +28,8 @@
   let { task, status, fields, elsewhere, schema, onsubmit, onclose }: Props = $props();
 
   const statusLabel = $derived(schema.statuses?.find((s) => s.name === status)?.label || status);
-  const rows = $derived(propRows(schema, {}));
+  // The built-in properties and the properties of the schema.
+  const rows = $derived([...builtinRows(schema, {}), ...propRows(schema, {})]);
   const rowOf = (name: string) => rows.find((r) => r.name === name);
   const labelOf = (name: string): string => requiredLabel(schema, name);
   const detailHref = $derived(router.href({ name: "task", ulid: task.ulid }));
@@ -68,8 +70,14 @@
     const body: Schemas.PatchInputBody = { status };
     if (fields.includes("assignees")) body.assignees = assignees;
     if (fields.includes("labels")) body.labels = labels;
+    // A built-in property is a field of the body; a property of the schema goes in props.
+    const others = fields.filter((f) => f !== "assignees" && f !== "labels");
     const sent = Object.fromEntries(
-      fields.filter((f) => f !== "assignees" && f !== "labels").map((f) => [f, values[f]]),
+      others.filter((f) => !isBuiltinProp(f)).map((f) => [f, values[f]]),
+    );
+    Object.assign(
+      body,
+      Object.fromEntries(others.filter(isBuiltinProp).map((f) => [f, values[f]])),
     );
     if (Object.keys(sent).length > 0) body.props = sent;
     try {
@@ -97,11 +105,12 @@
             oncommit={() => {}}
           />
         {:else if name === "labels"}
-          <FieldInput
-            editor="chips"
+          <LabelPicker
+            store={task.store}
             label="ラベル"
             value={labels}
-            onedit={(v) => (labels = v as string[])}
+            options={schema.labels ?? []}
+            onedit={(v) => (labels = v)}
             oncommit={() => {}}
           />
         {:else}

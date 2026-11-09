@@ -130,6 +130,7 @@ const FIELDS: Readonly<Record<string, string>> = {
   body: "本文",
   status: "状態",
   assignees: "担当者",
+  // Not a synced field any more; an old notification of the sync can still name it.
   labels: "ラベル",
   milestone: "マイルストーン",
 };

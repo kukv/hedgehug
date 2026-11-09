@@ -61,21 +61,26 @@ func badRequest(err error) *Problem {
 // Fields are the fields hedgehug set changes, as POST and PATCH take them. It
 // is exported because huma skips an embedded struct whose type is not.
 type Fields struct {
-	Title      *string        `json:"title,omitempty"`
-	Kind       *string        `json:"kind,omitempty"`
-	Status     *string        `json:"status,omitempty"`
-	Assignees  *[]string      `json:"assignees,omitempty" doc:"Replaces the assignees"`
-	Watchers   *[]string      `json:"watchers,omitempty" doc:"Replaces the watchers"`
-	Labels     *[]string      `json:"labels,omitempty" doc:"Replaces the labels"`
-	Repos      *[]string      `json:"repos,omitempty" doc:"Replaces the repos"`
-	BlockedBy  *[]string      `json:"blocked_by,omitempty" doc:"Replaces the blockers: IDs or ULIDs"`
-	Causes     *[]string      `json:"causes,omitempty" doc:"Replaces the tasks this one causes: IDs or ULIDs"`
-	Relates    *[]string      `json:"relates,omitempty" doc:"Replaces the tasks this one relates to: IDs or ULIDs"`
-	Duplicates *[]string      `json:"duplicates,omitempty" doc:"Replaces the tasks this one duplicates: IDs or ULIDs"`
-	Clones     *[]string      `json:"clones,omitempty" doc:"Replaces the tasks this one clones: IDs or ULIDs"`
-	Sprint     *string        `json:"sprint,omitempty" doc:"The sprint: a name in the workspace of the task, or a ULID; empty takes it off"`
-	Releases   *[]string      `json:"releases,omitempty" doc:"Replaces the releases: names in the workspace of the task, or ULIDs"`
-	Props      map[string]any `json:"props,omitempty" doc:"Property name to value; null clears it, a list replaces a multiple value"`
+	Title      *string           `json:"title,omitempty"`
+	Kind       *string           `json:"kind,omitempty"`
+	Status     *string           `json:"status,omitempty"`
+	Priority   Nullable[string]  `json:"priority,omitzero" doc:"One of the priorities of the schema; null clears it"`
+	Start      Nullable[string]  `json:"start,omitzero" doc:"The first day, YYYY-MM-DD; null clears it"`
+	Due        Nullable[string]  `json:"due,omitzero" doc:"The due date, YYYY-MM-DD; null clears it"`
+	Estimate   Nullable[string]  `json:"estimate,omitzero" doc:"The estimate as a duration like 1h30m; null clears it"`
+	Points     Nullable[float64] `json:"points,omitzero" doc:"The points; null clears it"`
+	Assignees  *[]string         `json:"assignees,omitempty" doc:"Replaces the assignees"`
+	Watchers   *[]string         `json:"watchers,omitempty" doc:"Replaces the watchers"`
+	Labels     *[]string         `json:"labels,omitempty" doc:"Replaces the labels"`
+	Repos      *[]string         `json:"repos,omitempty" doc:"Replaces the repos"`
+	BlockedBy  *[]string         `json:"blocked_by,omitempty" doc:"Replaces the blockers: IDs or ULIDs"`
+	Causes     *[]string         `json:"causes,omitempty" doc:"Replaces the tasks this one causes: IDs or ULIDs"`
+	Relates    *[]string         `json:"relates,omitempty" doc:"Replaces the tasks this one relates to: IDs or ULIDs"`
+	Duplicates *[]string         `json:"duplicates,omitempty" doc:"Replaces the tasks this one duplicates: IDs or ULIDs"`
+	Clones     *[]string         `json:"clones,omitempty" doc:"Replaces the tasks this one clones: IDs or ULIDs"`
+	Sprint     *string           `json:"sprint,omitempty" doc:"The sprint: a name in the workspace of the task, or a ULID; empty takes it off"`
+	Releases   *[]string         `json:"releases,omitempty" doc:"Replaces the releases: names in the workspace of the task, or ULIDs"`
+	Props      map[string]any    `json:"props,omitempty" doc:"Property name to value; null clears it, a list replaces a multiple value"`
 }
 
 // assigns is f as hedgehug set's assignments, the properties by name.
@@ -94,6 +99,21 @@ func (f *Fields) assigns() ([]usecase.Assign, error) {
 			if err := add(sc.key, *sc.v); err != nil {
 				return nil, err
 			}
+		}
+	}
+	for _, t := range []struct {
+		key string
+		v   Nullable[string]
+	}{{"priority", f.Priority}, {"start", f.Start}, {"due", f.Due}, {"estimate", f.Estimate}, {"points", f.Points.text()}} {
+		if !t.v.Set {
+			continue
+		}
+		var v any // null clears
+		if t.v.Value != nil {
+			v = *t.v.Value
+		}
+		if err := add(t.key, v); err != nil {
+			return nil, err
 		}
 	}
 	for _, l := range []struct {
@@ -174,6 +194,11 @@ type createInput struct {
 		Kind       string         `json:"kind,omitempty" doc:"project for hh add --kind project"`
 		Status     string         `json:"status,omitempty"`
 		Body       string         `json:"body,omitempty" doc:"The body in Markdown"`
+		Priority   *string        `json:"priority,omitempty" doc:"One of the priorities of the schema"`
+		Start      *string        `json:"start,omitempty" doc:"The first day, YYYY-MM-DD"`
+		Due        *string        `json:"due,omitempty" doc:"The due date, YYYY-MM-DD"`
+		Estimate   *string        `json:"estimate,omitempty" doc:"The estimate as a duration like 1h30m"`
+		Points     *float64       `json:"points,omitempty" doc:"The points"`
 		Assignees  []string       `json:"assignees,omitempty"`
 		Labels     []string       `json:"labels,omitempty"`
 		Repos      []string       `json:"repos,omitempty" doc:"The repo IDs to put on the task"`
@@ -238,7 +263,10 @@ func (s *Server) registerTaskWrites() {
 				return nil, badRequest(errors.New("関連は作成後に付けます"))
 			}
 		}
-		f := Fields{Props: b.Props}
+		f := Fields{
+			Props: b.Props, Priority: given(b.Priority), Start: given(b.Start), Due: given(b.Due),
+			Estimate: given(b.Estimate), Points: given(b.Points),
+		}
 		if b.Assignees != nil {
 			f.Assignees = &b.Assignees
 		}

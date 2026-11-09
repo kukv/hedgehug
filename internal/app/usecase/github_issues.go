@@ -23,8 +23,8 @@ const (
 )
 
 // sortedLower is names in the form they compare in: GitHub does not tell
-// logins and labels apart by case. It is never nil, so that no list and an
-// empty one are the same.
+// logins apart by case. It is never nil, so that no list and an empty one are
+// the same.
 func sortedLower(names []string) []string {
 	out := make([]string, 0, len(names))
 	for _, n := range names {
@@ -52,7 +52,6 @@ func GitHubIssueValues(x github.Issue) model.IssueValues {
 		"body":      {model.StripMark(x.Body)},
 		"status":    {IssueToken(x.State, x.StateReason)},
 		"assignees": sortedLower(x.Assignees),
-		"labels":    sortedLower(x.Labels),
 		"milestone": {x.Milestone},
 	}
 }
@@ -94,7 +93,6 @@ func TaskIssueValues(t *model.Task, rules *automation.File, e *schema.Effective,
 		"body":      {model.StripMark(t.Body)},
 		"status":    {automation.StatusToken(st.Category)},
 		"assignees": sortedLower(logins),
-		"labels":    sortedLower(t.Labels),
 		"milestone": {milestone},
 	}
 }
@@ -129,9 +127,6 @@ func (p *mirrorPlan) write(t *model.Task) {
 		before := t.Assignees
 		t.Assignees = slices.Clone(v)
 		WatchNewAssignees(t, before)
-	}
-	if v, ok := p.set["labels"]; ok {
-		t.Labels = slices.Clone(v)
 	}
 	if v, ok := p.set["milestone"]; ok {
 		if v[0] == "" {
@@ -214,9 +209,6 @@ func planMirror(t *model.Task, got fetched, rules *automation.File, e *schema.Ef
 				moved.note = &issueNote{ref, r.Overwritten[i]}
 			}
 			delete(r.ToTask, "status")
-		}
-		if _, ok := r.ToTask["labels"]; ok {
-			r.ToTask["labels"] = slices.Clone(x.Labels) // as GitHub spells them
 		}
 		if v, ok := r.ToTask["assignees"]; ok {
 			_, others := loginsOn(t.Assignees, host)

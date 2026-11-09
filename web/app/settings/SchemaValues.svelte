@@ -13,15 +13,17 @@
   import SchemaHandle from "./SchemaHandle.svelte";
   import { moveKeys } from "./schema-text";
 
-  // The values of an enum or multi_enum property, edited in the dialog: add, rename (the text), delete,
-  // merge into another value, and move. Nothing is written until the dialog is saved. used says whether
-  // a task uses any of the current values a row comes from (such a row cannot be deleted, only merged).
+  // The values of an enum or multi_enum property, of the priorities or of the labels: add, rename (the
+  // text), delete, merge into another value, and move. Nothing is written until the list is saved.
+  // used says whether a task uses any of the current values a row comes from (such a row cannot be
+  // deleted, only merged). keepOne is why the last value cannot be deleted, for a list that needs one.
   type Props = {
     rows: ValueRow[];
     disabled: boolean;
     used: (from: string[]) => boolean;
+    keepOne?: string;
   };
-  let { rows = $bindable(), disabled, used }: Props = $props();
+  let { rows = $bindable(), disabled, used, keepOne }: Props = $props();
 
   const uid = $props.id();
   // The row whose merge target is being chosen.
@@ -87,6 +89,9 @@
     rows = rows.map((r) => (r.key === key ? { ...r, name } : r));
   };
   const deleteWhy = "タスクが使っているため削除できません。マージで別の値へ移してください";
+  // Why a row cannot be deleted, or undefined when it can.
+  const whyNot = (r: ValueRow): string | undefined =>
+    keepOne !== undefined && rows.length <= 1 ? keepOne : used(r.from) ? deleteWhy : undefined;
 </script>
 
 <div class="values" data-values bind:this={box}>
@@ -146,8 +151,8 @@
         <Button
           size="sm"
           aria-label="削除（値 {r.name}）"
-          disabled={disabled || used(r.from)}
-          why={used(r.from) ? deleteWhy : undefined}
+          disabled={disabled || whyNot(r) !== undefined}
+          why={whyNot(r)}
           onclick={() => remove(r.key)}
         >
           削除

@@ -29,7 +29,9 @@ func (a *app) migrateCmd() *cobra.Command {
 		short  string
 	}{
 		{schema.TargetStatus, "status <old> <new>", "Rename or merge a status"},
-		{schema.TargetProp, "prop <old> <new>", "Rename or merge a property"},
+		{schema.TargetProp, "prop <old> <new>", "Rename a property"},
+		{schema.TargetPriority, "priority <old> <new>", "Rename or merge a priority"},
+		{schema.TargetLabel, "label <old> <new>", "Rename or merge a label"},
 		{schema.TargetValue, "value <prop> <old> <new>", "Rename or merge a value of an enum or multi_enum property"},
 	} {
 		n := 2

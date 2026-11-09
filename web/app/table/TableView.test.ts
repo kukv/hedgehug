@@ -52,9 +52,10 @@ import TableView from "./TableView.svelte";
 
 const shared = {
   ...base,
+  priorities: ["low", "high"],
+  labels: ["bug", "ux"],
   props: {
-    due: { type: "date", label: "期限" },
-    points: { type: "number", label: "points" },
+    effort: { type: "number", label: "工数" },
   },
 } as unknown as SchemaView;
 const me = {
@@ -100,7 +101,11 @@ function setup(over: Over = {}) {
         title: "移行ガイドを書く",
         status: "todo",
         assignees: ["tanaka"],
-        props: { points: 3, due: "2026-11-06" },
+        points: 3,
+        due: "2026-11-06",
+        priority: "low",
+        labels: ["bug"],
+        props: { effort: 3 },
       }),
     ],
     [
@@ -110,7 +115,8 @@ function setup(over: Over = {}) {
         title: "破壊的変更をまとめる",
         status: "doing",
         assignees: ["koki"],
-        props: { points: 5 },
+        points: 5,
+        props: { effort: 5 },
       }),
     ],
     ["T3", task("T3", "task", null, { id: "REL-9", title: "負荷試験", status: "backlog" })],
@@ -398,13 +404,39 @@ describe("TableView", () => {
       expect(save.flush).toHaveBeenCalledWith("T1");
     });
 
-    it("sends a property under props.<name>", async () => {
+    it("sends a property of the schema under props.<name>", async () => {
       const { save } = setup();
-      mount({ settings: { ...SETTINGS, columns: ["id", "points"] } });
-      await fireEvent.input(screen.getByRole("spinbutton", { name: "points: REL-4" }), {
+      mount({ settings: { ...SETTINGS, columns: ["id", "effort"] } });
+      await fireEvent.input(screen.getByRole("spinbutton", { name: "工数: REL-4" }), {
         target: { value: "8" },
       });
-      expect(save.edit).toHaveBeenCalledWith("T1", "shared", "props.points", 8);
+      expect(save.edit).toHaveBeenCalledWith("T1", "shared", "props.effort", 8);
+    });
+
+    it("sends a built-in property as a field of the task", async () => {
+      const { save } = setup();
+      mount({ settings: { ...SETTINGS, columns: ["id", "points", "due", "priority"] } });
+      await fireEvent.input(screen.getByRole("spinbutton", { name: "ポイント: REL-4" }), {
+        target: { value: "8" },
+      });
+      expect(save.edit).toHaveBeenCalledWith("T1", "shared", "points", 8);
+      await fireEvent.change(screen.getByLabelText("期限: REL-4"), {
+        target: { value: "2026-11-09" },
+      });
+      expect(save.edit).toHaveBeenCalledWith("T1", "shared", "due", "2026-11-09");
+      await fireEvent.click(screen.getByRole("button", { name: "優先度: REL-4" }));
+      await fireEvent.click(screen.getByRole("menuitem", { name: "high" }));
+      expect(save.edit).toHaveBeenCalledWith("T1", "shared", "priority", "high");
+    });
+
+    it("chooses the labels from the list of the schema, and sends them as labels", async () => {
+      const { save } = setup();
+      mount({ settings: { ...SETTINGS, columns: ["id", "label"] } });
+      expect(screen.queryByRole("textbox", { name: "ラベル: REL-4" })).toBeNull();
+      await fireEvent.change(screen.getByRole("combobox", { name: "ラベル: REL-4" }), {
+        target: { value: "ux" },
+      });
+      expect(save.edit).toHaveBeenCalledWith("T1", "shared", "labels", ["bug", "ux"]);
     });
 
     it("sends a status chosen from the menu of the store of the row, and flushes at once", async () => {
@@ -633,8 +665,8 @@ describe("TableView", () => {
         within(menu)
           .getAllByRole("menuitemcheckbox")
           .map((i) => i.textContent?.trim())
-          .slice(-2),
-      ).toEqual(["期限", "points"]);
+          .slice(-1),
+      ).toEqual(["工数"]);
       await fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /^親/ }));
       expect(onsettings).toHaveBeenCalledWith({
         ...SETTINGS,
@@ -675,13 +707,13 @@ describe("TableView", () => {
       setup(both);
       mount({
         view: { kind: "all" },
-        settings: { ...SETTINGS, columns: ["id", "due", "team"] },
+        settings: { ...SETTINGS, columns: ["id", "effort", "team"] },
       });
       expect(screen.getAllByRole("columnheader").map((c) => c.textContent?.trim())).toEqual([
         "保存の状態",
         "Store",
         "ID",
-        "期限",
+        "工数",
         "チーム",
       ]);
       expect(screen.getByTitle("Store: shared")).toBeInTheDocument();
@@ -1013,9 +1045,9 @@ describe("TableView", () => {
 
   it("waits for the schema before it draws a property", async () => {
     setup();
-    mount({ settings: { ...SETTINGS, columns: ["id", "points"] } });
+    mount({ settings: { ...SETTINGS, columns: ["id", "effort"] } });
     await waitFor(() =>
-      expect(screen.getByRole("spinbutton", { name: "points: REL-4" })).toHaveValue(3),
+      expect(screen.getByRole("spinbutton", { name: "工数: REL-4" })).toHaveValue(3),
     );
   });
 });

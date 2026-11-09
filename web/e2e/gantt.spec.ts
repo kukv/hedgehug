@@ -42,11 +42,11 @@ test("a bar moves and stretches by dragging, each drop one commit", async ({ pag
   await expect(one).toBeVisible();
   const before = commits(hh, "DM-1");
   await drag(page, one, 38 * 2);
-  await expect.poll(() => hh.show("DM-1").props).toMatchObject({ start: day(3), due: day(5) });
+  await expect.poll(() => hh.show("DM-1")).toMatchObject({ start: day(3), due: day(5) });
   expect(commits(hh, "DM-1")).toBe(before + 1);
 
   await drag(page, bar(page, "DM-1 one"), 38, "end");
-  await expect.poll(() => hh.show("DM-1").props).toMatchObject({ start: day(3), due: day(6) });
+  await expect.poll(() => hh.show("DM-1")).toMatchObject({ start: day(3), due: day(6) });
   expect(commits(hh, "DM-1")).toBe(before + 2);
 });
 
@@ -61,7 +61,7 @@ test("a bar moves from the keyboard", async ({ page, hh }) => {
   await page.keyboard.press("Escape");
   await page.keyboard.press("ArrowLeft");
   await page.keyboard.press("Enter");
-  await expect.poll(() => hh.show("DM-1").props).toMatchObject({ start: day(0), due: day(1) });
+  await expect.poll(() => hh.show("DM-1")).toMatchObject({ start: day(0), due: day(1) });
 });
 
 test("the chart draws sprints, releases, arrows, what adds up and what is late", async ({

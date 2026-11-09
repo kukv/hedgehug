@@ -11,7 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/automations"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
-	"go.yaml.in/yaml/v4"
 )
 
 func fetch(t *testing.T, ts *usecasetest.Session) {
@@ -44,7 +43,8 @@ func TestStatsCountTheLastSevenDays(t *testing.T) {
 	refused := ts.AddTask("refused", func(x *model.Task) { x.Repos = []string{web} })
 	ts.AddTask("applied", func(x *model.Task) {
 		x.Repos = []string{web}
-		x.Props.Set("estimate", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "2h"})
+		d, _ := model.ParseDuration("2h")
+		x.Estimate = &d
 	})
 	for _, branch := range []string{"hh/ME-1-a", "hh/ME-3-a"} {
 		if _, err := fake.OpenPull("org-a/web", branch, "A", "", false); err != nil {

@@ -90,6 +90,11 @@ func TestAutomationFields(t *testing.T) {
 	if p := ts.problem("PATCH", "/api/automations/fields", map[string]any{"default_sync": "off"}, 422); p.Type != "automation.invalid" {
 		t.Errorf("bad mode = %+v", p)
 	}
+	for _, field := range []string{"push", "mirror"} {
+		if p := ts.problem("PATCH", "/api/automations/fields", map[string]any{field: []string{"title", "labels"}}, 422); p.Type != "automation.invalid" {
+			t.Errorf("labels in %s = %+v", field, p)
+		}
+	}
 }
 
 func TestAutomationStatsAndActivity(t *testing.T) {

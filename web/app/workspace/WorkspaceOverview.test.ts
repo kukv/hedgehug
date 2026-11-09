@@ -38,7 +38,7 @@ const project = tv("P1", "リリース準備 v2.4", {
   status: "doing",
   rank: "a",
   assignees: ["sato"],
-  props: { due: `${year}-11-12` },
+  due: `${year}-11-12`,
   progress: { done: 3, total: 14 },
 });
 const child = tv("C1", "子のタスク", { id: "REL-16", parent: "P1", status: "doing" });
@@ -48,7 +48,7 @@ const rootEarly = tv("R1", "CI を整理", {
   rank: "b",
   status: "doing",
   assignees: ["tanaka"],
-  props: { due: `${year}-11-08` },
+  due: `${year}-11-08`,
 });
 const done = tv("D1", "終わったもの", { id: "REL-3", rank: "d", status: "done" });
 const canceled = tv("X1", "やめたもの", { id: "REL-4", rank: "e", status: "canceled" });

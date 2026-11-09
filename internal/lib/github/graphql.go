@@ -39,7 +39,6 @@ type Issue struct {
 	State       string // open, closed
 	StateReason string // completed, not_planned; empty when open
 	Assignees   []string
-	Labels      []string
 	Milestone   string // its title; empty with none
 	UpdatedAt   time.Time
 }
@@ -61,7 +60,6 @@ comments(first: 100) { nodes { body } }`
 
 const issueFields = `number title body state stateReason updatedAt
 assignees(first: 100) { nodes { login } }
-labels(first: 100) { nodes { name } }
 milestone { title }`
 
 const scanPullsQuery = `query ScanPulls($owner: String!, $name: String!, $after: String) {
@@ -179,11 +177,6 @@ type issueNode struct {
 			Login string `json:"login"`
 		} `json:"nodes"`
 	} `json:"assignees"`
-	Labels struct {
-		Nodes []struct {
-			Name string `json:"name"`
-		} `json:"nodes"`
-	} `json:"labels"`
 	Milestone *struct {
 		Title string `json:"title"`
 	} `json:"milestone"`
@@ -193,9 +186,6 @@ func (n issueNode) issue() Issue {
 	i := Issue{Number: n.Number, Title: n.Title, Body: n.Body, State: strings.ToLower(n.State), UpdatedAt: n.UpdatedAt}
 	for _, a := range n.Assignees.Nodes {
 		i.Assignees = append(i.Assignees, a.Login)
-	}
-	for _, l := range n.Labels.Nodes {
-		i.Labels = append(i.Labels, l.Name)
 	}
 	if n.Milestone != nil {
 		i.Milestone = n.Milestone.Title

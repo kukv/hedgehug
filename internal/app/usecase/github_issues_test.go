@@ -144,6 +144,36 @@ func TestMirrorFollowsGitHub(t *testing.T) {
 	}
 }
 
+// The labels of an issue are not taken in, not by the default fields, and not
+// by a link that still names labels in its fields.
+func TestMirrorDoesNotTakeTheLabels(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	n := issueTask(t, ts, fake, model.SyncMirror)
+	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		cur, err := tx.Task(taskIn(t, ts, "me", "ME-1").ULID)
+		if err != nil {
+			return err
+		}
+		cur.Links[0].Fields = []string{"labels", "title"}
+		return tx.PutTask(cur)
+	})
+	if err := fake.TagIssue("org-a/web", n, nil, []string{"hh"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.EditIssue("org-a/web", n, "new", ""); err != nil {
+		t.Fatal(err)
+	}
+	refetch(t, ts)
+	x := taskIn(t, ts, "me", "ME-1")
+	if x.Title != "new" || len(x.Labels) != 0 {
+		t.Errorf("task %+v", x)
+	}
+	if v := syncedOf(t, ts); v["labels"] != nil {
+		t.Errorf("synced %v", v)
+	}
+}
+
 // An assignee of another host stays: GitHub here says nothing of them.
 func TestMirrorKeepsOtherHosts(t *testing.T) {
 	t.Parallel()

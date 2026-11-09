@@ -20,11 +20,12 @@ func TestFieldsOfALink(t *testing.T) {
 		want []string
 	}{
 		{"mirror default", f, model.Link{Sync: model.SyncMirror}, []string{"title", "status", "assignees"}},
-		{"push default", f, model.Link{Sync: model.SyncPush}, []string{"title", "body", "status", "assignees", "labels"}},
+		{"push default", f, model.Link{Sync: model.SyncPush}, []string{"title", "body", "status", "assignees"}},
 		{"the link comes first", f, model.Link{Sync: model.SyncPush, Fields: []string{"status"}}, []string{"status"}},
 		{"link mode has none", f, model.Link{Sync: model.SyncLink, Fields: []string{"status"}}, nil},
 		{"off has none", f, model.Link{Sync: model.SyncOff}, nil},
 		{"an unknown name goes", f, model.Link{Sync: model.SyncPush, Fields: []string{"nope", "title", "title"}}, []string{"title"}},
+		{"labels are not synced", f, model.Link{Sync: model.SyncPush, Fields: []string{"labels", "title"}}, []string{"title"}},
 		{"no milestone without props", f, model.Link{Sync: model.SyncPush, Fields: []string{"milestone"}}, nil},
 		{"milestone with props", on, model.Link{Sync: model.SyncPush}, []string{"title", "milestone"}},
 	} {
@@ -85,14 +86,14 @@ func TestReflect(t *testing.T) {
 
 // A field that is not asked for is left alone.
 func TestReflectOnlyTheFields(t *testing.T) {
-	task := model.IssueValues{"title": {"a"}, "labels": {"x"}}
-	gh := model.IssueValues{"title": {"b"}, "labels": {}}
+	task := model.IssueValues{"title": {"a"}, "assignees": {"x"}}
+	gh := model.IssueValues{"title": {"b"}, "assignees": {}}
 	r := Reflect(model.SyncMirror, []string{"title"}, task, gh, nil)
 	if !reflect.DeepEqual(r.ToTask, model.IssueValues{"title": {"b"}}) {
 		t.Errorf("%+v", r)
 	}
-	r = Reflect(model.SyncPush, []string{"labels"}, task, gh, nil)
-	if !reflect.DeepEqual(r.ToGitHub, model.IssueValues{"labels": {"x"}}) {
+	r = Reflect(model.SyncPush, []string{"assignees"}, task, gh, nil)
+	if !reflect.DeepEqual(r.ToGitHub, model.IssueValues{"assignees": {"x"}}) {
 		t.Errorf("%+v", r)
 	}
 }
@@ -126,7 +127,7 @@ func TestIssueOverwrittenTrailer(t *testing.T) {
 	if !ok || gotU != u || gotRef != ref || !reflect.DeepEqual(got, o) {
 		t.Errorf("%v %v %s %+v", ok, gotU, gotRef, got)
 	}
-	if _, _, _, ok := ParseIssueOverwritten(IssueOverwrittenTrailer(u, ref, Overwrite{Field: "labels", Side: SideTask})); !ok {
+	if _, _, _, ok := ParseIssueOverwritten(IssueOverwrittenTrailer(u, ref, Overwrite{Field: "assignees", Side: SideTask})); !ok {
 		t.Error("an empty value does not read")
 	}
 	for _, bad := range []string{"", "nope a b c []", u.String() + " a b c not-json"} {

@@ -11,14 +11,13 @@ const schema = {
     { name: "canceled", category: "canceled" },
   ],
   props: {
-    priority: { type: "enum", values: ["low", "high", "urgent"] },
-    points: { type: "number" },
+    effort: { type: "number" },
   },
 } as unknown as SchemaView;
 // A second store: a status and a property the first one lacks.
 const other = {
   statuses: [{ name: "review", category: "doing" }],
-  props: { estimate: { type: "number" } },
+  props: { memo: { type: "text" } },
 } as unknown as SchemaView;
 
 // The server's words are English and cannot be told apart by anything but the detail: that is what
@@ -59,7 +58,20 @@ describe("suggestTerm", () => {
     );
   });
 
-  it("fixes a key: the ones of the query and the properties of the schemas", () => {
+  it("fixes a key: the ones of the query, the built-in properties and the properties of the schemas", () => {
+    expect(suggestTerm(bad('term 1 (efort>=3): unknown key "efort"'), [schema])).toBe("effort>=3");
+    expect(suggestTerm(bad('term 1 (mem:x): unknown key "mem"'), [schema, other])).toBe("memo:x");
+    for (const [typo, name] of [
+      ["priorty", "priority"],
+      ["stat", "start"],
+      ["du", "due"],
+      ["estimte", "estimate"],
+      ["pionts", "points"],
+    ] as const) {
+      expect(suggestTerm(bad(`term 1 (${typo}:1): unknown key "${typo}"`), [schema])).toBe(
+        `${name}:1`,
+      );
+    }
     expect(suggestTerm(bad('term 1 (asignee:@me): unknown key "asignee"'), [schema])).toBe(
       "assignee:@me",
     );

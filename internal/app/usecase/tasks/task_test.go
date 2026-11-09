@@ -117,10 +117,14 @@ func TestApplyAssignErrorKinds(t *testing.T) {
 		{"nope=1", "assign.unknown_key"},
 		{"title+=x", "assign.single"},
 		{"due+=2026-11-01", "assign.single"},
+		{"begin+=2026-11-01", "assign.single"},
 		{"labels+=", "assign.missing_value"},
 		{"tags-=", "assign.missing_value"},
 		{"due=tomorrow", "assign.bad_value"},
 		{"points=many", "assign.bad_value"},
+		{"start=2026-13-01", "assign.bad_value"},
+		{"estimate=long", "assign.bad_value"},
+		{"score=many", "assign.bad_value"},
 		{"flag=maybe", "assign.bad_value"},
 	} {
 		a, err := usecase.ParseAssign(tc.in)

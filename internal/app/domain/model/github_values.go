@@ -9,15 +9,15 @@ import (
 )
 
 // IssueValues is what the fields of an issue hold, by the name of the field:
-// assignees and labels as they are, the others as one value. A field that is
+// assignees as they are, the others as one value. A field that is
 // not there has no value yet.
 type IssueValues map[string][]string
 
 // IssueValueKeys are the fields of IssueValues, in the order they are written.
-var IssueValueKeys = []string{"title", "body", "status", "assignees", "labels", "milestone"}
+var IssueValueKeys = []string{"title", "body", "status", "assignees", "milestone"}
 
 // IsIssueList reports whether the field of an issue holds a list.
-func IsIssueList(field string) bool { return field == "assignees" || field == "labels" }
+func IsIssueList(field string) bool { return field == "assignees" }
 
 // Values reads Synced.
 func (x IssueState) Values() (IssueValues, error) {

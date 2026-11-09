@@ -496,7 +496,7 @@ func (c *commit) readTask(tree plumbing.Hash, u model.ULID) (*model.Task, error)
 		if c.upgrades == nil {
 			c.upgrades = map[plumbing.Hash]*upgrade.Commit{}
 		}
-		up = upgrade.At(func(p string) ([]byte, error) { return c.r.ReadFile(tree, p) })
+		up = upgrade.At(func(p string) ([]byte, error) { return c.r.ReadFile(tree, p) }, c.r.ReadHead)
 		c.upgrades[tree] = up
 	}
 	if b, err = up.Task(b); err != nil {

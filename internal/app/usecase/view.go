@@ -27,6 +27,11 @@ type TaskView struct {
 	Parent     *string        `json:"parent"`
 	Rank       string         `json:"rank"`
 	Status     string         `json:"status"`
+	Priority   *string        `json:"priority" doc:"One of the priorities of the schema; null when the task has none"`
+	Start      *string        `json:"start" doc:"The first day, YYYY-MM-DD; null when the task has none"`
+	Due        *string        `json:"due" doc:"The due date, YYYY-MM-DD; null when the task has none"`
+	Estimate   *string        `json:"estimate" doc:"The estimate as a duration like 1h30m; null when the task has none"`
+	Points     *float64       `json:"points" doc:"The points; null when the task has none"`
 	Assignees  []string       `json:"assignees"`
 	Labels     []string       `json:"labels"`
 	BlockedBy  []Ref          `json:"blocked_by"`
@@ -113,6 +118,7 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 		Relates:    []Ref{},
 		Duplicates: []Ref{},
 		Clones:     []Ref{},
+		Points:     e.Points,
 		Props:      map[string]any{},
 		Created:    e.Created,
 		Updated:    e.Updated,
@@ -138,6 +144,9 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 			j.Workspace.Name, j.Workspace.IDPrefix, j.Workspace.Known = w.Name, w.IDPrefix, true
 		}
 	}
+	j.Priority = textPtr(e.Prop("priority"))
+	j.Start, j.Due = textPtr(e.Prop("start")), textPtr(e.Prop("due"))
+	j.Estimate = textPtr(e.Prop("estimate"))
 	j.Project = projectOf(ix, e)
 	j.Scope = scopeOf(ix, e)
 	refsOf := func(us []model.ULID) []Ref {
@@ -234,6 +243,14 @@ func RefOf(ix *index.Index, ulid model.ULID) Ref {
 		r.Missing = true
 	}
 	return r
+}
+
+// textPtr is the one value of vals, or nil when there is none.
+func textPtr(vals []string) *string {
+	if len(vals) == 0 {
+		return nil
+	}
+	return &vals[0]
 }
 
 // OrEmpty is s, or an empty slice when s is nil, so JSON prints [].

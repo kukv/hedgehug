@@ -30,9 +30,7 @@
   const problem = $derived(task.problems?.[0]);
   const due = $derived(propText(task, "due"));
   const priority = $derived(propText(task, "priority"));
-  const points = $derived(
-    typeof task.props?.points === "number" ? (task.props.points as number) : undefined,
-  );
+  const points = $derived(task.points ?? undefined);
   const kids = $derived(task.progress?.total ?? 0);
   const people = $derived((task.assignees ?? []).slice(0, 3));
   const hasMeta = $derived(

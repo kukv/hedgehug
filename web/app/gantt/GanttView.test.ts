@@ -40,8 +40,8 @@ function setup(
 ) {
   const tasks = over.tasks ?? [
     tv("E", "epic", { kind: "epic" }),
-    tv("A", "alpha", { id: "T-1", props: { start: "2026-11-02", due: "2026-11-04" } }),
-    tv("B", "beta", { id: "T-2", props: { start: "2026-11-03", due: "2026-11-05" } }),
+    tv("A", "alpha", { id: "T-1", start: "2026-11-02", due: "2026-11-04" }),
+    tv("B", "beta", { id: "T-2", start: "2026-11-03", due: "2026-11-05" }),
   ];
   const roots = over.roots ?? [
     {
@@ -91,7 +91,7 @@ function setup(
           { name: "task", role: "work" },
         ],
         statuses: [{ name: "todo", category: "todo" }],
-        props: { start: { type: "date" }, due: { type: "date" }, points: { type: "number" } },
+        props: { kickoff: { type: "date" }, effort: { type: "number" } },
       }),
       load: async () => {},
     },
@@ -141,6 +141,14 @@ describe("GanttView", () => {
     expect(onsettings).toHaveBeenLastCalledWith({ ...DEFAULT_GANTT, start: "due" });
   });
 
+  it("offers the built-in start and due, and the date properties of the schema, for the ends of a bar", async () => {
+    const { getByLabelText } = setup();
+    for (const label of ["開始", "終了"]) {
+      const options = [...(getByLabelText(label) as HTMLSelectElement).options].map((o) => o.value);
+      expect(options).toEqual(["start", "due", "kickoff"]);
+    }
+  });
+
   it("keeps a move from the keyboard in one PATCH, on Enter", async () => {
     const { getByRole, patch, applyWrite } = setup();
     const bar = getByRole("button", { name: barName });
@@ -150,7 +158,8 @@ describe("GanttView", () => {
     await fireEvent.keyDown(bar, { key: "Enter" });
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
     expect(patch.mock.calls[0]?.[1]).toEqual({
-      props: { start: "2026-11-04", due: "2026-11-06" },
+      start: "2026-11-04",
+      due: "2026-11-06",
     });
     await waitFor(() => expect(applyWrite).toHaveBeenCalledTimes(1));
   });
@@ -165,7 +174,7 @@ describe("GanttView", () => {
     await fireEvent.keyDown(bar, { key: "ArrowRight", shiftKey: true });
     await fireEvent.keyDown(bar, { key: "Enter" });
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
-    expect(patch.mock.calls[0]?.[1]).toEqual({ props: { due: "2026-11-05" } });
+    expect(patch.mock.calls[0]?.[1]).toEqual({ due: "2026-11-05" });
   });
 
   it("offers no move on a Store that cannot be written", () => {
@@ -176,11 +185,12 @@ describe("GanttView", () => {
 
   it("says in words what is late, and draws the arrow", () => {
     const tasks = [
-      tv("A", "alpha", { id: "T-1", props: { start: "2026-11-02", due: "2026-11-04" } }),
+      tv("A", "alpha", { id: "T-1", start: "2026-11-02", due: "2026-11-04" }),
       tv("B", "beta", {
         id: "T-2",
         blocked_by: [{ ulid: "A", id: "T-1", title: "alpha" }],
-        props: { start: "2026-11-03", due: "2026-11-05" },
+        start: "2026-11-03",
+        due: "2026-11-05",
       }),
     ];
     const { getByRole, container } = setup({

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { makeCore, mount, ok, taskView, workspaces } from "../detail/testkit";
+import { makeCore, mount, ok, schemaView, taskView, workspaces } from "../detail/testkit";
 import { resetToasts, toasts } from "../toast.svelte";
 import CreateProject from "./CreateProject.svelte";
 
@@ -19,6 +19,22 @@ async function name(text: string) {
   await fireEvent.input(screen.getByRole("textbox", { name: "名前" }), { target: { value: text } });
   await waitFor(() => expect(screen.getByRole("button", { name: "作成" })).toBeEnabled());
 }
+
+describe("CreateProject: the labels link", () => {
+  it("closes the dialog when the link to the labels of the settings is followed", async () => {
+    const k = makeCore();
+    k.schema.get.mockImplementation(() => ({ ...schemaView, labels: [] }) as never);
+    const onclose = vi.fn();
+    mount(CreateProject, { request: { kind: "project" }, onclose }, k);
+    await fireEvent.click(
+      await screen.findByRole("link", { name: "設定の「ラベル」で足してください" }),
+    );
+    expect(onclose).toHaveBeenCalled();
+    expect(window.location.pathname + window.location.search).toBe(
+      "/settings/schema/shared?tab=labels",
+    );
+  });
+});
 
 describe("CreateProject", () => {
   beforeEach(() => {
@@ -40,10 +56,19 @@ describe("CreateProject", () => {
     const who = screen.getByRole("textbox", { name: "担当者" });
     await fireEvent.input(who, { target: { value: "sato" } });
     await fireEvent.keyDown(who, { key: "Enter" });
+    await fireEvent.click(screen.getByRole("button", { name: "優先度" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "high" }));
+    await fireEvent.change(screen.getByRole("combobox", { name: "ラベル" }), {
+      target: { value: "bug" },
+    });
+    await fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2026-11-15" } });
     await fireEvent.change(screen.getByLabelText("期限"), { target: { value: "2026-12-01" } });
 
     expect(
       screen.getByText(/--no-repo.*--kind project.*-p repos=github.com\/org-a\/web/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/-p priority=high -p start=2026-11-15 -p due=2026-12-01 -p labels=bug/),
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
@@ -54,7 +79,10 @@ describe("CreateProject", () => {
         workspace: "release",
         assignees: ["sato"],
         repos: ["github.com/org-a/web"],
-        props: { due: "2026-12-01" },
+        priority: "high",
+        start: "2026-11-15",
+        due: "2026-12-01",
+        labels: ["bug"],
       },
       { store: "shared" },
     );

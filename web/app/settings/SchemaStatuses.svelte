@@ -99,7 +99,6 @@
                 target="status"
                 old={s.name}
                 {names}
-                edit="status"
                 used={usage?.statuses[s.name]}
                 isDefault={s.default === true}
                 {off}

@@ -68,10 +68,10 @@ func newHistory(t *testing.T) *history {
 	})
 	h.newer = commitFiles(t, e.Path, "newest", map[string]string{
 		model.StoreMetaPath: string(meta),
-		"schema.yaml":       strings.Replace(string(sc), "props:\n", "props:\n  fixes: {type: text}\n", 1),
+		"schema.yaml":       string(sc) + "props:\n  fixes: {type: text}\n",
 	})
-	if !strings.Contains(string(sc), "props:\n") {
-		t.Fatal("the schema of the test store has no props")
+	if strings.Contains(string(sc), "props:") {
+		t.Fatal("the schema of the test store has props: the file is no longer the one to add them to")
 	}
 	h.meta = string(meta)
 	return h

@@ -14,7 +14,7 @@ import (
 func TestTemplate1to2GivesTheItemsFixedKinds(t *testing.T) {
 	t.Parallel()
 	raw := []byte("---\nkind: area\ntitle: t\nchildren:\n  - kind: chore\n    title: c\n  - kind: bug\n    title: b\n  - title: none\n---\n")
-	at := At(files{model.StoreMetaPath: meta("1"), schema.Path: oldSchema}.read)
+	at := At(files{model.StoreMetaPath: meta("1"), schema.Path: oldSchema}.read, files{}.read)
 	got, err := at.Template("tpl", raw)
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestTemplate1to2GivesTheItemsFixedKinds(t *testing.T) {
 	}
 	// nothing of its own: the file comes back as it is, even without a schema
 	same := []byte("---\nkind: task\ntitle: t\n---\n")
-	if out, err := At(files{model.StoreMetaPath: meta("1")}.read).Template("tpl", same); err != nil || !bytes.Equal(out, same) {
+	if out, err := At(files{model.StoreMetaPath: meta("1")}.read, files{}.read).Template("tpl", same); err != nil || !bytes.Equal(out, same) {
 		t.Errorf("%q, %v", out, err)
 	}
 }

@@ -4,6 +4,7 @@ import type { TaskView } from "./api/client";
 import type { TreeNode } from "./cache";
 import type { Category } from "./categories";
 import { isGroup } from "./kinds";
+import { isBuiltinProp, propValue } from "./schema";
 import type { GanttSettings } from "./views";
 
 export type Span = { s: number; e: number };
@@ -81,7 +82,8 @@ export type RowsInput = {
 export function ganttRows(i: RowsInput): GanttRow[] {
   const out: GanttRow[] = [];
   const spans = new Map<string, Span | null>();
-  const ownOf = (t: TaskView) => spanOf(t.props[i.settings.start], t.props[i.settings.end]);
+  const ownOf = (t: TaskView) =>
+    spanOf(propValue(t, i.settings.start), propValue(t, i.settings.end));
   const rollup = (n: TreeNode) =>
     n.children.reduce<Span | null>((a, c) => union(a, spanUnder(c)), null);
 
@@ -218,18 +220,25 @@ export function dragged(bar: Span, mode: DragMode, delta: number): Span {
   return { s: bar.s, e: Math.max(bar.e + delta, bar.s) };
 }
 
-/** The properties a drop changes: what differs from the task, in one PATCH. */
-export function dropProps(
+/**
+ * What a drop changes, in one PATCH: what differs from the task. A built-in date (start, due) is a
+ * field at the top of the body; a date property of the schema goes in props.
+ */
+export function dropPatch(
   row: Pick<GanttRow, "task">,
   to: Span,
   settings: GanttSettings,
-): Record<string, string> {
+): { props?: Record<string, string>; start?: string; due?: string } {
   const props: Record<string, string> = {};
+  const patch: Record<string, unknown> = {};
   const put = (name: string, day: number) => {
     const v = dateOf(day);
-    if (row.task.props[name] !== v) props[name] = v;
+    if (propValue(row.task, name) === v) return;
+    if (isBuiltinProp(name)) patch[name] = v;
+    else props[name] = v;
   };
   put(settings.start, to.s);
   put(settings.end, to.e);
-  return props;
+  if (Object.keys(props).length > 0) patch.props = props;
+  return patch;
 }

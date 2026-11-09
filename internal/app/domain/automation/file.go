@@ -30,7 +30,7 @@ const (
 var Events = []string{PROpened, PRReviewRequested, PRMerged, IssueClosed}
 
 // IssueFieldNames are the fields of an issue that issue_fields may name.
-var IssueFieldNames = []string{"title", "body", "status", "assignees", "labels", "milestone"}
+var IssueFieldNames = []string{"title", "body", "status", "assignees", "milestone"}
 
 // SyncModes are the values of issue_fields.default_sync.
 var SyncModes = []string{model.SyncMirror, model.SyncPush, model.SyncLink}
@@ -177,7 +177,7 @@ var fileKeys = []string{"rules", "scoped", "issue_fields"}
 func defaultIssueFields() IssueFields {
 	return IssueFields{
 		DefaultSync: model.SyncLink,
-		Push:        []string{"title", "body", "status", "assignees", "labels"},
+		Push:        []string{"title", "body", "status", "assignees"},
 		Mirror:      []string{"title", "status", "assignees"},
 	}
 }

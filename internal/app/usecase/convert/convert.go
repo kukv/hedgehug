@@ -21,6 +21,7 @@ import (
 var steps = []Step{
 	{From: 1, Apply: step2},
 	{From: 2, Apply: step3},
+	{From: 3, Apply: step4},
 }
 
 // Run converts the store of the session from its format to the newest, one

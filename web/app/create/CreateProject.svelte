@@ -5,6 +5,9 @@
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
+  import LabelPicker from "../detail/LabelPicker.svelte";
+  import PropField from "../detail/PropField.svelte";
+  import { builtinRows } from "../detail/prop-rows";
   import { modKey } from "../keys";
   import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
@@ -70,6 +73,8 @@
   let title = $state("");
   let repos = $state<string[]>([]);
   let assignees = $state<string[]>([]);
+  let priority = $state<string | null>(null);
+  let labels = $state<string[]>([]);
   let start = $state<string | null>(null);
   let due = $state<string | null>(null);
   let busy = $state(false);
@@ -79,16 +84,16 @@
     titleEl?.focus();
   });
 
-  const hasStart = $derived(!!sc.current && "start" in sc.current.props);
-  const hasDue = $derived(!!sc.current && "due" in sc.current.props);
   const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && blocked === "");
 
   const cli = $derived.by(() => {
     const props: Record<string, string> = {};
     if (assignees.length > 0) props.assignees = assignees.join(",");
     if (repos.length > 0) props.repos = repos.join(",");
+    if (priority) props.priority = priority;
     if (start) props.start = start;
     if (due) props.due = due;
+    if (labels.length > 0) props.labels = labels.join(",");
     return cliAdd({
       title: title.trim() || new Placeholder("名前"),
       kind: "project",
@@ -108,9 +113,6 @@
     busy = true;
     error = "";
     try {
-      const props: Record<string, unknown> = {};
-      if (start) props.start = start;
-      if (due) props.due = due;
       const r = await api.createTask(
         {
           title: title.trim(),
@@ -118,7 +120,10 @@
           workspace: ws.name,
           ...(assignees.length > 0 ? { assignees } : {}),
           ...(repos.length > 0 ? { repos } : {}),
-          ...(Object.keys(props).length > 0 ? { props } : {}),
+          ...(priority ? { priority } : {}),
+          ...(start ? { start } : {}),
+          ...(due ? { due } : {}),
+          ...(labels.length > 0 ? { labels } : {}),
         },
         { store: ws.store },
       );
@@ -235,32 +240,55 @@
       />
     </div>
 
-    {#if hasStart || hasDue}
-      <div class="dates">
-        {#if hasStart}
-          <div class="field">
-            <span class="lbl">開始日</span>
-            <FieldInput
-              editor="date"
-              label="開始日"
-              value={start}
-              onedit={(v) => (start = v as string | null)}
-              oncommit={() => {}}
-            />
-          </div>
-        {/if}
-        {#if hasDue}
-          <div class="field">
-            <span class="lbl">期限</span>
-            <FieldInput
-              editor="date"
-              label="期限"
-              value={due}
-              onedit={(v) => (due = v as string | null)}
-              oncommit={() => {}}
-            />
-          </div>
-        {/if}
+    {#if sc.current}
+      {@const priorityRow = builtinRows(sc.current, {}).find((r) => r.name === "priority")}
+      {#if priorityRow}
+        <div class="field">
+          <span class="lbl">{priorityRow.label}</span>
+          <PropField
+            row={priorityRow}
+            value={priority}
+            onedit={(v) => (priority = v as string | null)}
+            oncommit={() => {}}
+          />
+        </div>
+      {/if}
+    {/if}
+
+    <div class="dates">
+      <div class="field">
+        <span class="lbl">開始日</span>
+        <FieldInput
+          editor="date"
+          label="開始日"
+          value={start}
+          onedit={(v) => (start = v as string | null)}
+          oncommit={() => {}}
+        />
+      </div>
+      <div class="field">
+        <span class="lbl">期限</span>
+        <FieldInput
+          editor="date"
+          label="期限"
+          value={due}
+          onedit={(v) => (due = v as string | null)}
+          oncommit={() => {}}
+        />
+      </div>
+    </div>
+    {#if sc.current && ws}
+      <div class="field">
+        <span class="lbl">ラベル</span>
+        <LabelPicker
+          store={ws.store}
+          label="ラベル"
+          value={labels}
+          options={sc.current.labels ?? []}
+          onnavigate={onclose}
+          onedit={(v) => (labels = v)}
+          oncommit={() => {}}
+        />
       </div>
     {/if}
     {#if blocked}

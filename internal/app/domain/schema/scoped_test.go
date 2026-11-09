@@ -12,7 +12,7 @@ const scopedULID = "01J00000000000000000000001"
 
 func scopedBase(t *testing.T, extra string) *Schema {
 	t.Helper()
-	b, err := Default().Encode()
+	b, err := withProps().Encode()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -93,7 +93,7 @@ $ hh release notes v1.0
 
 ## レポート
 
-レポートは履歴から作るので、事前の設定は要りません。タスクに `hh set <id> points=3` でポイントを付けると、バーンダウンはポイントで数えます。ポイントがなければ、タスクの数で数えます。
+レポートは履歴から作るので、事前の設定は要りません。タスクに `hh set <id> points=3` でポイントを付けると（`points` は、`priority`、`start`、`due`、`estimate` と同じくタスクの項目です）、バーンダウンはポイントで数えます。形式 4 に変換する前のコミットのポイントも、履歴から読みます。ポイントがなければ、タスクの数で数えます。
 
 ```console
 $ hh report burndown "Sprint 2"
@@ -113,7 +113,7 @@ Sprint 1  0       1      1
 
 ## テンプレート
 
-テンプレートは、Store の `templates/` にあるタスクのファイルです。既定のプロパティと本文を持ち、子タスクを持たせることもできます。`$EDITOR` で書きます。
+テンプレートは、Store の `templates/` にあるタスクのファイルです。既定のプロパティと本文を持ち、子タスクを持たせることもできます。`$EDITOR` で書きます。組み込みのプロパティ（`priority`、`start`、`due`、`estimate`、`points`、`labels`）は、タスクと同じく、ファイルの先頭のキーに書きます。Store のリストにないラベルがあると、展開は `the change breaks the schema` で拒否されます。`hh doctor` は、そのテンプレートを `template.bad_label` として、テンプレートの中のラベルの場所つきで指摘します。直すには `hh template edit` を使います。
 
 ```console
 $ hh template edit bug
@@ -129,8 +129,7 @@ bug   bug   Bug:   0
 ---
 kind: bug
 title: "Bug: "
-props:
-  priority: high
+priority: high
 ---
 ## Steps to reproduce
 
@@ -141,6 +140,17 @@ props:
 
 ```console
 $ hh add "Crash on save" --template bug
+```
+
+テンプレートがリストにないラベルを持つと、`hh add --template` は `the change breaks the schema` で断り、`hh doctor` が指摘します。
+
+```console
+$ hh doctor
+templates/lab.md: children[0].labels: label "docs" is not in the list of labels of the schema
+  hint: add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit lab`
+templates/lab.md: labels: label "zzz" is not in the list of labels of the schema
+  hint: add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit lab`
+2 problems
 ```
 
 `--template` を省くと、`hh add` は、そのタスクの種類の既定のテンプレートがスキーマの `templates.default`（種類と、使うテンプレートの組）に指定されていれば、それを展開します。`--no-template` で止められます。ブラウザでは、設定のテンプレート画面で選びます。種類ごとに「<種類> の既定」のメニューがあります。プロジェクトは、自分の設定で上書きできます。`hh template show <name>` はファイルを表示し、`hh template rm <name>` は、スキーマが名前を挙げていないテンプレートを削除します。

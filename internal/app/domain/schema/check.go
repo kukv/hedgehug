@@ -35,6 +35,7 @@ func (p Problem) String() string { return p.Path + ": " + p.Msg }
 // requirableFields are the built-in task fields that workflow.required may
 // name, besides properties.
 var requirableFields = []string{
+	"priority", "start", "due", "estimate", "points",
 	"parent", "assignees", "watchers", "labels", "repos",
 	"blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links",
 }
@@ -46,6 +47,16 @@ func builtinFilled(t *model.Task, name string) (filled, ok bool) {
 		return len(r.Get(t)) > 0, true
 	}
 	switch name {
+	case "priority":
+		return t.Priority != "", true
+	case "start":
+		return t.Start != nil, true
+	case "due":
+		return t.Due != nil, true
+	case "estimate":
+		return t.Estimate != nil, true
+	case "points":
+		return t.Points != nil, true // 0 is a value
 	case "parent":
 		return t.Parent != nil, true
 	case "assignees":
@@ -106,6 +117,27 @@ func (s *Schema) Check() []Problem {
 			add("statuses", "schema.default_status", "category %s needs exactly one default status, has %d", c, defaults[c])
 		}
 	}
+
+	// priorities needs a value and labels may be empty. A value is told apart
+	// from another without regard to case.
+	checkValues := func(path string, values []string) {
+		seen := map[string]bool{}
+		for _, v := range values {
+			k := strings.ToLower(v)
+			switch {
+			case v == "":
+				add(path, "schema.name_empty", "a value is empty")
+			case seen[k]:
+				add(path, "schema.value_twice", "value %q is defined twice (case is ignored)", v)
+			}
+			seen[k] = true
+		}
+	}
+	if len(s.Priorities) == 0 {
+		add("priorities", "schema.values_empty", "priorities is empty")
+	}
+	checkValues("priorities", s.Priorities)
+	checkValues("labels", s.Labels)
 
 	props := map[string]bool{}
 	for _, pr := range s.Props {

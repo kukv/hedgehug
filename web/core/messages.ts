@@ -144,9 +144,13 @@ const messages: Record<string, Make> = {
     if (a.value !== undefined) {
       return `値 ${str(a, "value")} は、${used}が使っているため削除できません。マージで別の値へ移してから削除してください`;
     }
-    return `${used}が使っているため削除できません。マージで別の定義へ移してから削除してください`;
+    // A property is not merged: its values are taken off the tasks.
+    if (str(a, "target") === "prop") {
+      return `${used}が使っているため削除できません。使っているタスクの値を外してから削除してください`;
+    }
+    return `${used}が使っているため削除できません。マージで別のステータスへ移してから削除してください`;
   },
-  "schema.name_taken": () => "その名前はすでにあります。まとめるときはマージを使ってください",
+  "schema.name_taken": () => "その名前はすでにあります。別の名前にしてください",
   "schema.tasks_invalid": () => "変更すると規則に合わなくなるタスクがあります",
   "schema.invalid": (a, e) => {
     const t = list(a, "problems");
@@ -159,7 +163,7 @@ const messages: Record<string, Make> = {
     "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
   "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
   "schema.value_invalid": () =>
-    "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
+    "値が空・重複している（大文字小文字は区別しません）、移し替え元が合わない、または優先度がなくなります。値の一覧を見直してください",
   "ref.cross_store": (a) =>
     `${str(a, "store")} の ${str(a, "id")} は参照できません（参照は同じ Store の中だけです）`,
   "import.parent_required": () => "--parent で取り込み先を指定してください",
@@ -359,6 +363,7 @@ const messages: Record<string, Make> = {
   "view.bad_gantt_prop": (a) => `${str(a, "prop")} は日付のプロパティではありません`,
   "view.tree_order": () =>
     "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",
+  "migrate.prop_merge": () => "プロパティどうしはマージできません。名前の変更だけできます",
   "migrate.invalid": (_, e) => withDetail("移行するとスキーマに合わないタスクがあります", e),
   "scoped.not_group": (a) =>
     `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトでもエピックでもないため、上書きを設定できません`,

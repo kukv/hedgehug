@@ -21,6 +21,7 @@ import (
 func TestShow(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("ui")
 	p := te.addJSON("Project", "--kind", "project")
 	other := te.addJSON("Other")
 	a := te.addJSON("Write the spec", "--parent", p.ID, "-p", "blocked_by+="+other.ID, "-p", "due=2026-11-01", "-p", "labels+=ui")

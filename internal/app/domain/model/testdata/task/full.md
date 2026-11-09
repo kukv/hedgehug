@@ -8,6 +8,11 @@ title: ログイン画面の改修
 parent: 01JBZ8K3QW7M2X9V4T6R5N8P0B
 rank: a0V
 status: in_progress
+priority: high # 優先度
+start: 2026-11-03
+due: 2026-11-10
+estimate: 3h
+points: 5
 assignees: [github.com/yourname]
 watchers: [github.com/yourname, github.com/teammate]
 labels: [frontend]
@@ -22,11 +27,7 @@ releases: [01JBZ8K3QW7M2X9V4T6R5N8P0E]
 links:
 - {type: github_pr, ref: github.com/org-a/web/pull/123, sync: mirror}
 props:
-  priority: high # 優先度
-  start: 2026-11-03
-  due: 2026-11-10
-  estimate: 3h
-  points: 5
+  size: M # 独自のプロパティ
 gh: {}
 created: 2026-10-29T10:00:00+09:00
 created_by: github.com/yourname

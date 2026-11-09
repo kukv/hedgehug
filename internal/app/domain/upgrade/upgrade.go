@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/fs"
 	"slices"
+	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
@@ -29,6 +30,29 @@ import (
 // was in the format the step reads.
 type Cx struct {
 	Schema []byte // schema.yaml of that version; nil when it had none
+	// Labels is the list labels: of the store as it is now (HEAD), which the
+	// labels of a task of a past version are matched against, for a version of
+	// format 3 has none of its own to speak of (step 3 to 4).
+	Labels []string
+
+	memo *defsMemo // the parsed Schema, when the Cx belongs to a Commit
+}
+
+// defsMemo is BuiltinDefsOf of the schema.yaml of a Commit, made once for all
+// the files of the commit.
+type defsMemo struct {
+	once sync.Once
+	defs BuiltinDefs
+	err  error
+}
+
+// builtinDefs is BuiltinDefsOf cx.Schema, parsed once when cx belongs to a Commit.
+func (cx Cx) builtinDefs() (BuiltinDefs, error) {
+	if cx.memo == nil {
+		return BuiltinDefsOf(cx.Schema)
+	}
+	cx.memo.once.Do(func() { cx.memo.defs, cx.memo.err = BuiltinDefsOf(cx.Schema) })
+	return cx.memo.defs, cx.memo.err
 }
 
 // Step rewrites a task file of format From into the form of format From+1.
@@ -36,7 +60,8 @@ type Step struct {
 	From  int
 	Apply func(raw []byte, cx Cx) ([]byte, error)
 	// Template does the same for a template file, named name: the kinds of
-	// its items (format 1 to 2), the relations in its props (2 to 3); nil when
+	// its items (format 1 to 2), the relations in its props (2 to 3), the
+	// built-in properties and the labels (3 to 4); nil when
 	// a format changes nothing in a template.
 	Template func(name string, raw []byte, cx Cx) ([]byte, error)
 }
@@ -47,6 +72,7 @@ type Step struct {
 var Steps = []Step{
 	{From: 1, Apply: task1to2, Template: template1to2},
 	{From: 2, Apply: task2to3, Template: template2to3},
+	{From: 3, Apply: task3to4, Template: template3to4},
 }
 
 // Upgrade rewrites the task file raw, which is in format from, into the newest
@@ -102,15 +128,25 @@ func run(from, to int, raw []byte, what string, pick func(Step) func([]byte, Cx)
 // steps need from its schema.yaml, the first time a file needs them.
 type Commit struct {
 	read   func(path string) ([]byte, error)
-	format int   // 0 until read
-	ferr   error // of reading the format
+	head   func(path string) ([]byte, error) // the store as it is now
+	format int                               // 0 until read
+	ferr   error                             // of reading the format
 	cx     *Cx
 	err    error // of reading the schema
 }
 
-// At is the Commit whose files read gives. read returns an error that is
-// fs.ErrNotExist for a file the commit lacks.
-func At(read func(path string) ([]byte, error)) *Commit { return &Commit{read: read} }
+// At is the Commit whose files read gives. head gives the files of the store as
+// it is now (HEAD), for what a step matches against the present (the labels).
+// Both return an error that is fs.ErrNotExist for a file that is not there.
+func At(read, head func(path string) ([]byte, error)) *Commit {
+	return &Commit{read: read, head: head}
+}
+
+// FormatOf is the store format of the commit whose files read gives, for what
+// asks no more than that.
+func FormatOf(read func(path string) ([]byte, error)) (int, error) {
+	return (&Commit{read: read}).Format()
+}
 
 // Format is the store format of the commit: the format of its store.yaml. A
 // store.yaml that is missing, does not decode, or is of a newer format than
@@ -177,6 +213,19 @@ func (c *Commit) context(to int, raw []byte) (int, *Cx, error) {
 		case !errors.Is(err, fs.ErrNotExist):
 			c.err = err
 		}
+		if c.err == nil && c.head != nil {
+			switch b, err := c.head(schema.Path); {
+			case err == nil:
+				var d BuiltinDefs
+				if d, err = BuiltinDefsOf(b); err != nil {
+					c.err = fmt.Errorf("the schema of now: %w", err)
+				}
+				cx.Labels = d.Labels
+			case !errors.Is(err, fs.ErrNotExist):
+				c.err = err
+			}
+		}
+		cx.memo = &defsMemo{}
 		c.cx = &cx
 	}
 	if c.err != nil {

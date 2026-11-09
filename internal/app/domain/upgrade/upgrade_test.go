@@ -116,32 +116,32 @@ func TestUpgradeNeedsAStepForEveryFormat(t *testing.T) {
 	}
 }
 
-// withFormat4 stands a fourth format in, whose step writes "(4)" after the
+// withFormat5 stands a fifth format in, whose step writes "(5)" after the
 // title. The test must not be parallel.
-func withFormat4(t *testing.T) {
+func withFormat5(t *testing.T) {
 	t.Helper()
 	was, wasSteps := model.StoreFormat, Steps
-	model.StoreFormat = 4
-	Steps = append(slices.Clone(Steps), Step{From: 3, Apply: func(raw []byte, _ Cx) ([]byte, error) {
+	model.StoreFormat = 5
+	Steps = append(slices.Clone(Steps), Step{From: 4, Apply: func(raw []byte, _ Cx) ([]byte, error) {
 		tk, err := model.DecodeTask(raw)
 		if err != nil {
 			return nil, err
 		}
-		tk.Title += "(4)"
+		tk.Title += "(5)"
 		return tk.Encode()
 	}})
 	t.Cleanup(func() { model.StoreFormat, Steps = was, wasSteps })
 }
 
 func TestUpgradeRunsTheStepsInOrderToTheNewestOrToAFormat(t *testing.T) {
-	withFormat4(t)
+	withFormat5(t)
 	raw := taskFile(t, "chore", nil)
 	cx := Cx{Schema: []byte(oldSchema)}
 	all, err := Upgrade(1, raw, cx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk, _ := model.DecodeTask(all); tk.Kind != "task" || tk.Title != "x(4)" {
+	if tk, _ := model.DecodeTask(all); tk.Kind != "task" || tk.Title != "x(5)" {
 		t.Errorf("1 to the newest: kind %q, title %q", tk.Kind, tk.Title)
 	}
 	mid, err := To(1, 2, raw, cx)
@@ -177,7 +177,7 @@ func TestCommitReadsTheFormatAndTheSchemaOfTheCommit(t *testing.T) {
 	}
 	raw := taskFile(t, "chore", nil)
 
-	old := At(files{model.StoreMetaPath: meta("1"), schema.Path: oldSchema}.read)
+	old := At(files{model.StoreMetaPath: meta("1"), schema.Path: oldSchema}.read, files{}.read)
 	if f, err := old.Format(); f != 1 || err != nil {
 		t.Errorf("format = %d, %v", f, err)
 	}
@@ -187,7 +187,7 @@ func TestCommitReadsTheFormatAndTheSchemaOfTheCommit(t *testing.T) {
 	}
 
 	// a commit in the newest format is read as it is, and needs no schema
-	cur := At(files{model.StoreMetaPath: meta("2")}.read)
+	cur := At(files{model.StoreMetaPath: meta("2")}.read, files{}.read)
 	if got, err := cur.Task(raw); err != nil || !bytes.Equal(got, raw) {
 		t.Errorf("task of the newest format: %q, %v", got, err)
 	}
@@ -201,12 +201,12 @@ func TestCommitReadsTheFormatAndTheSchemaOfTheCommit(t *testing.T) {
 		"newer":   files{model.StoreMetaPath: meta("99")}.read,
 		"io":      func(string) ([]byte, error) { return nil, boom },
 	} {
-		got, err := At(read).Task(raw)
+		got, err := At(read, files{}.read).Task(raw)
 		if err == nil || got != nil || !strings.Contains(err.Error(), model.StoreMetaPath) {
 			t.Errorf("%s store.yaml: %q, %v; want an error naming store.yaml", name, got, err)
 		}
 	}
-	if _, err := At(files{model.StoreMetaPath: meta("99")}.read).Format(); !errors.Is(err, model.ErrNewerFormat) {
+	if _, err := At(files{model.StoreMetaPath: meta("99")}.read, files{}.read).Format(); !errors.Is(err, model.ErrNewerFormat) {
 		t.Errorf("newer format: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestCommitReadsTheFormatAndTheSchemaOfTheCommit(t *testing.T) {
 			return nil, boom
 		}
 		return files{model.StoreMetaPath: meta("1")}.read(p)
-	})
+	}, files{}.read)
 	if _, err := failing.Task(raw); !errors.Is(err, boom) {
 		t.Errorf("err = %v, want boom", err)
 	}

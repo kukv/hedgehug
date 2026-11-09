@@ -119,7 +119,8 @@ headings are in Japanese). `hh release set v1.0 state=released` changes the stat
 ## Reports
 
 Reports are read from the history, so they need no setup. Give a task points with
-`hh set <id> points=3` and the burndown counts points; without points it counts tasks.
+`hh set <id> points=3` (`points` is a field of the task, like `priority`, `start`, `due` and `estimate`) and the burndown
+counts points, also from the commits made before the store was converted to format 4; without points it counts tasks.
 
 ```console
 $ hh report burndown "Sprint 2"
@@ -140,7 +141,8 @@ Sprint 1  0       1      1
 ## Templates
 
 A template is a task file in `templates/` of the store: default properties and a body,
-and optionally child tasks. Write one in your `$EDITOR`:
+and optionally child tasks. The built-in properties (`priority`, `start`, `due`, `estimate`, `points`, `labels`) are keys at the top of
+the file, as in a task; a label that is not in the list of the store refuses the expansion (`the change breaks the schema`), `hh doctor` reports the template (`template.bad_label`, with the path of the label inside it), and `hh template edit` fixes it. Write one in your `$EDITOR`:
 
 ```console
 $ hh template edit bug
@@ -156,8 +158,7 @@ The file looks like this:
 ---
 kind: bug
 title: "Bug: "
-props:
-  priority: high
+priority: high
 ---
 ## Steps to reproduce
 
@@ -168,6 +169,17 @@ props:
 
 ```console
 $ hh add "Crash on save" --template bug
+```
+
+If a template names a label that is not in the list of the store, `hh add --template` refuses with `the change breaks the schema`, and `hh doctor` reports it:
+
+```console
+$ hh doctor
+templates/lab.md: children[0].labels: label "docs" is not in the list of labels of the schema
+  hint: add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit lab`
+templates/lab.md: labels: label "zzz" is not in the list of labels of the schema
+  hint: add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit lab`
+2 problems
 ```
 
 Without `--template`, `hh add` expands the default template of the task's kind, if the

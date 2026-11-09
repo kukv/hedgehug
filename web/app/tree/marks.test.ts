@@ -27,10 +27,20 @@ describe("problemLabel", () => {
 
 describe("propText", () => {
   it("returns a string property and ignores the others", () => {
-    const t = task("T1", "task", null, { props: { due: "2026-11-07", points: 3 } });
+    const t = task("T1", "task", null, {
+      due: "2026-11-07",
+      priority: "high",
+      points: 3,
+      props: { area: "web", effort: 3, due: "ignored: a built-in name in props" },
+    });
+    // a built-in property is a field of the task, a custom one is in props
     expect(propText(t, "due")).toBe("2026-11-07");
+    expect(propText(t, "priority")).toBe("high");
     expect(propText(t, "points")).toBeUndefined();
+    expect(propText(t, "area")).toBe("web");
+    expect(propText(t, "effort")).toBeUndefined();
     expect(propText(t, "none")).toBeUndefined();
+    expect(propText(task("T2", "task", null), "due")).toBeUndefined();
   });
 });
 

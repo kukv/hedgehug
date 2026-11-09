@@ -137,7 +137,7 @@ func TestProblems(t *testing.T) {
 
 func TestMissingColumns(t *testing.T) {
 	t.Parallel()
-	v, _ := Decode("x", []byte("layout: table\ntable:\n  columns: [id, due, gone, label, other]\n"))
+	v, _ := Decode("x", []byte("layout: table\ntable:\n  columns: [id, due, gone, label, priority, start, estimate, points, other]\n"))
 	if got := v.MissingColumns(schema.Default()); !slices.Equal(got, []string{"gone", "other"}) {
 		t.Errorf("MissingColumns = %q", got)
 	}
@@ -190,6 +190,8 @@ func TestBadGanttProps(t *testing.T) {
 		{"the defaults", View{Layout: "gantt"}, nil},
 		{"a section on another layout", View{Layout: "tree", Gantt: &Gantt{Start: "nope"}}, []string{"nope"}},
 		{"not a date", View{Layout: "gantt", Gantt: &Gantt{End: "points"}}, []string{"points"}},
+		{"the built-in dates", View{Layout: "gantt", Gantt: &Gantt{Start: "due", End: "start"}}, nil},
+		{"a built-in that is no date", View{Layout: "gantt", Gantt: &Gantt{Start: "start", End: "estimate"}}, []string{"estimate"}},
 		{"once each", View{Layout: "gantt", Gantt: &Gantt{Start: "x", End: "x"}}, []string{"x"}},
 	}
 	for _, c := range cases {

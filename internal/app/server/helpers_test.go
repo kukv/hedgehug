@@ -22,6 +22,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -105,6 +106,15 @@ func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 	ts.port, _ = strconv.Atoi(p)
 	ts.srv.SetPort(ts.port)
 	return ts
+}
+
+// labels puts names in the list of labels of the schema, which a task can only
+// have the labels of.
+func (ts *testServer) labels(names ...string) {
+	ts.t.Helper()
+	if _, err := schemas.AddLabels(ts.session(), names); err != nil {
+		ts.t.Fatal(err)
+	}
 }
 
 // addRemote makes a bare repository the remote of the store "me" and

@@ -59,7 +59,7 @@ func TestUnlinks(t *testing.T) {
 	c.Relates = []model.ULID{y.ULID, a.ULID}
 	x.BlockedBy = []model.ULID{a.ULID} // from the rest into M
 	y.Duplicates = []model.ULID{c.ULID}
-	y.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "high"})
+	y.Props.Set("note", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "high"})
 	moved, rest := []*model.Task{a, b, c}, []*model.Task{x, y}
 	got := Unlinks(moved, rest)
 	want := []Unlink{

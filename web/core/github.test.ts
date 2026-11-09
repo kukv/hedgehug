@@ -141,6 +141,8 @@ describe("the words", () => {
     const fields = { default_sync: "link", push: ["title", "body"], mirror: ["status"], props: {} };
     expect(syncedFields(issue(), fields)).toBe("タイトル・本文");
     expect(syncedFields(issue({ sync: "mirror" }), fields)).toBe("状態");
+    expect(syncedFields(issue({ fields: ["milestone"] }), fields)).toBe("マイルストーン");
+    // a link made while the labels were synced still names them
     expect(syncedFields(issue({ fields: ["labels"] }), fields)).toBe("ラベル");
     expect(syncedFields(issue({ sync: "link" }), fields)).toBe("");
     expect(syncedFields(issue(), undefined)).toBe("");

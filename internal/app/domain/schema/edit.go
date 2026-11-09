@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"go.yaml.in/yaml/v4"
@@ -16,6 +17,9 @@ var (
 	ErrNotEnum      = errors.New("not an enum or multi_enum property")
 	ErrValueInvalid = errors.New("invalid value")
 	ErrNameTaken    = errors.New("the name is already defined")
+	// ErrPropMerge is a migration of a property into one that is defined:
+	// properties are not merged.
+	ErrPropMerge = errors.New("properties cannot be merged")
 )
 
 func nameTaken(what, name string) error { return fmt.Errorf("%s %q: %w", what, name, ErrNameTaken) }
@@ -239,7 +243,7 @@ func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, [
 			return nil, nil, nil, fmt.Errorf("%s: %w", name, ErrNotEnum)
 		}
 		var err error
-		if p.Values, ms, removed, err = editValues(name, p.Values, *ch.Values); err != nil {
+		if p.Values, ms, removed, err = editValues(name, p.Values, *ch.Values, identity); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -251,6 +255,60 @@ func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, [
 	return out, append(ms, m), removed, err
 }
 
+// ChangePriorities returns s with the values of priority after the edit,
+// the migrations that carry the tasks to them, and the values that are
+// removed. The rules are those of the values of an enum property, with two
+// more: a value is told apart from another without regard to case, and the
+// last value cannot go.
+func (s *Schema) ChangePriorities(values []ValueEdit) (*Schema, []Migration, []string, error) {
+	return s.changeList("priority", TargetPriority, s.Priorities, values, true, func(out *Schema, v []string) { out.Priorities = v })
+}
+
+// ChangeLabels is ChangePriorities for the values of labels, which may be
+// all removed.
+func (s *Schema) ChangeLabels(values []ValueEdit) (*Schema, []Migration, []string, error) {
+	return s.changeList("label", TargetLabel, s.Labels, values, false, func(out *Schema, v []string) { out.Labels = v })
+}
+
+// changeList is the edit of one list of the schema: set puts the new values
+// into the copy of s that is returned.
+func (s *Schema) changeList(name string, target Target, cur []string, eds []ValueEdit, needOne bool, set func(*Schema, []string)) (*Schema, []Migration, []string, error) {
+	values, ms, removed, err := editList(name, target, cur, eds, needOne)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	out := s.clone()
+	set(out, values)
+	return out, ms, removed, nil
+}
+
+// editList is editValues for a list of the schema: its migrations are of the
+// target, and the new names differ without regard to case.
+func editList(name string, target Target, cur []string, eds []ValueEdit, needOne bool) ([]string, []Migration, []string, error) {
+	if needOne && len(eds) == 0 {
+		return nil, nil, nil, fmt.Errorf("%s: the last value cannot be removed: %w", name, ErrValueInvalid)
+	}
+	folded := map[string]bool{}
+	for _, e := range eds {
+		k := strings.ToLower(e.Name)
+		if folded[k] {
+			return nil, nil, nil, fmt.Errorf("%s: value %q is repeated, case is ignored: %w", name, e.Name, ErrValueInvalid)
+		}
+		folded[k] = true
+	}
+	values, ms, removed, err := editValues(name, cur, eds, strings.ToLower)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for i := range ms {
+		ms[i].Target, ms[i].Prop = target, ""
+	}
+	return values, ms, removed, nil
+}
+
+// identity is the name as it is.
+func identity(s string) string { return s }
+
 // tempValue stands between two names of a swap; it is only ever written to
 // a task in memory.
 const tempValue = "\x00hedgehug-swap"
@@ -259,17 +317,22 @@ const tempValue = "\x00hedgehug-swap"
 // the tasks from the current values to the new ones, in an order that never
 // moves a value onto one that is still to be moved, and the current values
 // that no edit keeps.
-func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms []Migration, removed []string, err error) {
+//
+// key says which names are one value: identity for the values of a property,
+// which differ in case; the lower case for a list of the schema, which does
+// not. A name that is key-equal to a value that goes is a name taken, and a
+// move onto a value waits for the move of that value.
+func editValues(prop string, cur []string, eds []ValueEdit, key func(string) string) (values []string, ms []Migration, removed []string, err error) {
 	bad := func(format string, a ...any) error {
 		return fmt.Errorf("%s: %s: %w", prop, fmt.Sprintf(format, a...), ErrValueInvalid)
 	}
 	taken := map[string]bool{}
 	from := map[string]bool{}
 	for _, e := range eds {
-		if e.Name == "" || taken[e.Name] {
+		if e.Name == "" || taken[key(e.Name)] {
 			return nil, nil, nil, bad("value %q is empty or repeated", e.Name)
 		}
-		taken[e.Name] = true
+		taken[key(e.Name)] = true
 		for _, f := range e.From {
 			if !slices.Contains(cur, f) {
 				return nil, nil, nil, bad("%q is not a current value", f)
@@ -284,7 +347,7 @@ func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms
 		if from[v] {
 			continue
 		}
-		if taken[v] {
+		if taken[key(v)] {
 			return nil, nil, nil, bad("%q is a value that goes, and the name of another", v)
 		}
 		removed = append(removed, v)
@@ -303,7 +366,8 @@ func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms
 	}
 	for len(pending) > 0 {
 		k := slices.IndexFunc(pending, func(m [2]string) bool {
-			return !slices.ContainsFunc(pending, func(o [2]string) bool { return o[0] == m[1] })
+			// a move that only changes the case of a value is not held by itself
+			return !slices.ContainsFunc(pending, func(o [2]string) bool { return o != m && key(o[0]) == key(m[1]) })
 		})
 		if k >= 0 {
 			emit(pending[k][0], pending[k][1])
@@ -366,6 +430,10 @@ func TaskUses(t *model.Task, target Target, prop, name string) bool {
 		return t.Status == name
 	case TargetProp:
 		return t.Props.Get(name) != nil
+	case TargetPriority:
+		return strings.EqualFold(t.Priority, name)
+	case TargetLabel:
+		return slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, name) })
 	case TargetValue:
 		n := t.Props.Get(prop)
 		if n == nil {

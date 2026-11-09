@@ -1087,15 +1087,17 @@ type snapshot struct {
 
 	up   *upgrade.Commit // reads the tasks in the format of like, when set
 	like plumbing.Hash
-	to   *upgrade.Commit // of like, to learn the format to upgrade to
+	to   func() (int, error) // the format of like, to upgrade to
 }
 
 // upgradeTasksTo makes Read give the tasks in the format of the commit like,
 // for a snapshot of a base that is in an older format than the sides. A task
 // that cannot be given so is nil, with the cause in err.
 func (s *snapshot) upgradeTasksTo(like plumbing.Hash) {
-	s.up, s.like = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadFile(s.tree, p) }), like
-	s.to = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadAt(like, p) })
+	s.up, s.like = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadFile(s.tree, p) }, func(p string) ([]byte, error) { return s.r.ReadAt(like, p) }), like
+	s.to = func() (int, error) {
+		return upgrade.FormatOf(func(p string) ([]byte, error) { return s.r.ReadAt(like, p) })
+	}
 }
 
 func newSnapshot(r *gitrepo.Repo, tree plumbing.Hash, prefix string, over map[string][]byte) (*snapshot, error) {
@@ -1142,7 +1144,7 @@ func (s *snapshot) Read(p string) []byte {
 		return nil
 	}
 	if _, perr := model.ParseTaskPath(p); perr == nil && s.up != nil {
-		to, err := s.to.Format()
+		to, err := s.to()
 		if err == nil {
 			b, err = s.up.TaskTo(to, b)
 		}

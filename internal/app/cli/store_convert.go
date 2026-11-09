@@ -21,7 +21,7 @@ func (a *app) storeConvertCmd() *cobra.Command {
 			"--kind moves the tasks of a kind to one of the fixed kinds (project, epic, story, task, bug, step): a kind of\n" +
 			"your own is otherwise a project when it groups work at the root of a workspace, an epic when it groups work\n" +
 			"below, and a task when it is a work item.\n" +
-			"--drop-bad-values drops the values a step cannot convert (such as a relation that is not the ULID of a task)\n" +
+			"--drop-bad-values drops the values a step cannot convert (such as a relation that is not the ULID of a task, or an estimate that is not a duration)\n" +
 			"and lists each in the report; without it the conversion stops and lists them.",
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {

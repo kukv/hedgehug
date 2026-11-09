@@ -12,7 +12,7 @@ const sch = {
     { name: "on_hold", category: "doing" },
     { name: "done", category: "done", default: true },
   ],
-  props: { priority: { type: "enum", values: ["low", "high"] } },
+  props: { tier: { type: "enum", values: ["low", "high"] } },
   workflow: {
     transitions: { todo: ["on_hold"], on_hold: ["done"] },
     required: { on_hold: ["priority"] },
@@ -87,15 +87,15 @@ describe("SchemaDeleteDialog", () => {
         fail(
           422,
           "schema.in_use",
-          { count: 2, deleted: 1 },
-          "2 tasks uses on_hold; merge it into another first",
+          { count: 2, deleted: 1, target: "status" },
+          "2 tasks use on_hold; merge it into another first",
         ),
       ),
     });
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(
       await screen.findByText(
-        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。マージで別の定義へ移してから削除してください",
+        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。マージで別のステータスへ移してから削除してください",
       ),
     ).toBeVisible();
     expect(onclose).not.toHaveBeenCalled();

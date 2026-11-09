@@ -1,4 +1,4 @@
-import type { Api, Schemas } from "./api/client";
+import type { Api, Schemas, TaskView } from "./api/client";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 
@@ -113,10 +113,32 @@ const BUILTIN: Record<string, PropEditor> = {
   assignees: "user",
   watchers: "user",
   title: "text",
-  labels: "text",
   repos: "text",
   body: "text",
 };
+
+/**
+ * The built-in properties of a task, in the order the detail shows them (internal/app/domain/schema
+ * Builtins). Each is a field of the task with the same name, outside props. priority and labels take
+ * their values from the lists of the schema (priorities and labels).
+ */
+export const BUILTIN_PROPS: readonly { name: string; label: string; editor: PropEditor }[] = [
+  { name: "priority", label: "優先度", editor: "enum" },
+  { name: "start", label: "開始日", editor: "date" },
+  { name: "due", label: "期限", editor: "date" },
+  { name: "estimate", label: "見積もり", editor: "duration" },
+  { name: "points", label: "ポイント", editor: "number" },
+  { name: "labels", label: "ラベル", editor: "multi_enum" },
+];
+
+/** Whether the name is one of the built-in properties (not a property of the schema). */
+export const isBuiltinProp = (name: string): boolean => BUILTIN_PROPS.some((b) => b.name === name);
+
+/** A property of the task: a built-in one from the field of the task, a custom one from props. */
+export function propValue(t: TaskView, name: string): unknown {
+  if (isBuiltinProp(name)) return (t as unknown as Record<string, unknown>)[name];
+  return t.props?.[name];
+}
 
 // The types of a property of the schema (internal/app/domain/schema PropType) and the
 // editor each gets.
@@ -136,7 +158,7 @@ const BY_TYPE: Record<string, PropEditor> = {
 // propEditorOf is the editor for the field or property name, or null when
 // the schema does not define it.
 export function propEditorOf(s: SchemaView, name: string): PropEditor | null {
-  const builtin = BUILTIN[name];
+  const builtin = BUILTIN[name] ?? BUILTIN_PROPS.find((b) => b.name === name)?.editor;
   if (builtin) return builtin;
   const p = s.props[name];
   if (!p) return null;

@@ -16,6 +16,9 @@ type SchemaView struct {
 	Templates *TemplatesDef      `json:"templates,omitempty"`
 	Scoped    []ScopedDef        `json:"scoped"`
 	PropOrder []string           `json:"prop_order"`
+	// Priorities and Labels are the values of the two lists, in order.
+	Priorities []string `json:"priorities"`
+	Labels     []string `json:"labels"`
 }
 
 // StatusDef is a status of the schema.
@@ -72,6 +75,7 @@ func SchemaViewOf(sc *schema.Schema) SchemaView {
 	v := SchemaView{
 		Statuses: []StatusDef{}, Props: map[string]PropDef{},
 		Workflow: workflowDefOf(sc.Workflow), Scoped: []ScopedDef{}, PropOrder: []string{},
+		Priorities: usecase.OrEmpty(sc.Priorities), Labels: usecase.OrEmpty(sc.Labels),
 	}
 	for _, st := range sc.Statuses {
 		v.Statuses = append(v.Statuses, StatusDef{st.Name, st.Label, string(st.Category), st.Color, st.Default})

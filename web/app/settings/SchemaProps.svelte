@@ -89,7 +89,6 @@
                 target="prop"
                 old={name}
                 {names}
-                edit="prop"
                 used={usage?.props[name]}
                 {off}
                 {onaction}

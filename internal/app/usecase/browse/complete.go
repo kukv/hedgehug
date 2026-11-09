@@ -11,8 +11,11 @@ import (
 // the completion of the shell. Each list is sorted and has no repeats.
 type Vocabulary struct {
 	Statuses []string
-	Props    []string
-	Members  []string // account IDs
+	Props    []string // the custom properties
+	// Priorities and Labels are the values of the lists of the schemas.
+	Priorities []string
+	Labels     []string
+	Members    []string // account IDs
 }
 
 // ReadVocabulary reads the vocabulary of the stores of a list.
@@ -30,6 +33,8 @@ func ReadVocabulary(ss *usecase.Session) (Vocabulary, error) {
 		for _, p := range sc.Props {
 			v.Props = append(v.Props, p.Name)
 		}
+		v.Priorities = append(v.Priorities, sc.Priorities...)
+		v.Labels = append(v.Labels, sc.Labels...)
 		ms, err := replicate.ReadMembers(m.Store)
 		if err != nil {
 			return Vocabulary{}, usecase.Classify(err)
@@ -39,7 +44,7 @@ func ReadVocabulary(ss *usecase.Session) (Vocabulary, error) {
 			v.Members = append(v.Members, c.ID)
 		}
 	}
-	for _, l := range []*[]string{&v.Statuses, &v.Props, &v.Members} {
+	for _, l := range []*[]string{&v.Statuses, &v.Props, &v.Priorities, &v.Labels, &v.Members} {
 		slices.Sort(*l)
 		*l = slices.Compact(*l)
 	}

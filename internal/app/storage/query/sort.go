@@ -115,7 +115,7 @@ func (c *compiler) fieldOf(t Term, name string, group bool) (field, error) {
 		}
 		return texted(field{values: get, multi: true}), nil
 	}
-	p, ok := c.sc.Prop(name)
+	p, ok := c.sc.PropOrBuiltin(name)
 	if !ok {
 		return field{}, c.failUnknown(t, "cannot sort or group by %q", name)
 	}

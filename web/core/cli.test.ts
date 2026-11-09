@@ -386,18 +386,12 @@ describe("commands", () => {
     expect(cliSchemaCheck("shared")).toBe("hh schema check --store shared");
   });
 
-  it("writes hh schema migrate for each target; value takes the property first", () => {
+  it("writes hh schema migrate status, with --store when the Store is named", () => {
     expect(cliSchemaMigrate({ target: "status", old: "triage", new: "todo" })).toBe(
       "hh schema migrate status triage todo",
     );
-    expect(cliSchemaMigrate({ target: "kind", old: "bug", new: "defect", store: "a b" })).toBe(
-      'hh schema migrate kind bug defect --store "a b"',
-    );
-    expect(cliSchemaMigrate({ target: "prop", old: "area", new: "team" })).toBe(
-      "hh schema migrate prop area team",
-    );
-    expect(cliSchemaMigrate({ target: "value", prop: "priority", old: "mid", new: "normal" })).toBe(
-      "hh schema migrate value priority mid normal",
+    expect(cliSchemaMigrate({ target: "status", old: "a", new: "b", store: "a b" })).toBe(
+      'hh schema migrate status a b --store "a b"',
     );
   });
 

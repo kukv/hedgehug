@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/planning"
@@ -315,11 +313,13 @@ func TestSprintListCounts(t *testing.T) {
 	ts.AddTask("a", func(task *model.Task) {
 		inSprint(t, s1)(task)
 		task.Status = "done"
-		task.Props.Set("points", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: "3"})
+		points := 3.0
+		task.Points = &points
 	})
 	ts.AddTask("b", func(task *model.Task) {
 		inSprint(t, s1)(task)
-		task.Props.Set("points", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!float", Value: "2.5"})
+		points := 2.5
+		task.Points = &points
 	})
 	vs, err := planning.SprintList(ts.Session, "", model.SprintPlanned)
 	if err != nil {

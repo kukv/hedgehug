@@ -59,7 +59,7 @@ func TestTemplateTo3MovesTheValuesOfTheItems(t *testing.T) {
 	t.Parallel()
 	id := newIDs()
 	raw := []byte("---\nkind: task\ntitle: t\nprops:\n  causes: [" + id.a.String() + "]\n  fixes: [" + id.b.String() + "]\n  note: keep\nchildren:\n  - title: c\n    props:\n      relates: [" + id.c.String() + "]\n---\n")
-	got, err := At(files{model.StoreMetaPath: meta("2"), schema.Path: schema2}.read).Template("tpl", raw)
+	got, err := At(files{model.StoreMetaPath: meta("2"), schema.Path: schema2}.read, files{}.read).Template("tpl", raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,12 +82,12 @@ func TestTemplateTo3MovesTheValuesOfTheItems(t *testing.T) {
 		"nothing to move": files{model.StoreMetaPath: meta("2"), schema.Path: schema2}.read,
 		"newest format":   files{model.StoreMetaPath: meta("3")}.read,
 	} {
-		if out, err := At(read).Template("tpl", same); err != nil || !bytes.Equal(out, same) {
+		if out, err := At(read, files{}.read).Template("tpl", same); err != nil || !bytes.Equal(out, same) {
 			t.Errorf("%s: %q, %v", name, out, err)
 		}
 	}
 	// a commit whose format cannot be read is an error, never a guess
-	if out, err := At(files{}.read).Template("tpl", raw); err == nil || out != nil {
+	if out, err := At(files{}.read, files{}.read).Template("tpl", raw); err == nil || out != nil {
 		t.Errorf("no store.yaml: %q, %v", out, err)
 	}
 }

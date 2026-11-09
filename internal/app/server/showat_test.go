@@ -9,6 +9,7 @@ import (
 func TestShowTaskAt(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
+	ts.labels("x")
 	var created taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "orig", "body": "old body\n"}, 201, &created)
 	id := created.Task.ID

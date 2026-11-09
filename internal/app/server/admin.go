@@ -43,7 +43,7 @@ type findingsOutput struct{ Body schemas.CheckResult }
 type migrateInput struct {
 	StoreParam
 	Body struct {
-		Target string `json:"target" enum:"status,prop,value"`
+		Target string `json:"target" enum:"status,prop,value,priority,label"`
 		Prop   string `json:"prop,omitempty" doc:"With value: the property whose value it is"`
 		Old    string `json:"old" minLength:"1"`
 		New    string `json:"new" minLength:"1"`
@@ -167,7 +167,7 @@ func (s *Server) registerAdmin() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "migrate-schema", Method: http.MethodPost, Path: "/api/schema/migrate",
-		Summary: "Rename or merge a status, property or value, as hh migrate", Tags: []string{"schema"},
+		Summary: "Rename or merge a status, priority, label or value, or rename a property, as hh migrate", Tags: []string{"schema"},
 	}, func(_ context.Context, in *migrateInput) (*migrateOutput, error) {
 		b := in.Body
 		m := schema.Migration{Target: schema.Target(b.Target), Prop: b.Prop, Old: b.Old, New: b.New}

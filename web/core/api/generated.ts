@@ -128,8 +128,18 @@ export interface TaskView {
   created: string;
   /** @nullable */
   deleted_at: string | null;
+  /**
+     * The due date, YYYY-MM-DD; null when the task has none
+     * @nullable
+     */
+  due: string | null;
   /** @nullable */
   duplicates: Ref[] | null;
+  /**
+     * The estimate as a duration like 1h30m; null when the task has none
+     * @nullable
+     */
+  estimate: string | null;
   /** @nullable */
   former_ids?: string[] | null;
   id: string;
@@ -141,6 +151,16 @@ export interface TaskView {
   links?: LinkView[];
   /** @nullable */
   parent: string | null;
+  /**
+     * The points; null when the task has none
+     * @nullable
+     */
+  points: number | null;
+  /**
+     * One of the priorities of the schema; null when the task has none
+     * @nullable
+     */
+  priority: string | null;
   /** @nullable */
   problems: IndexProblem[] | null;
   progress?: Count;
@@ -152,6 +172,11 @@ export interface TaskView {
   releases?: PlanRef[];
   scope?: string;
   sprint?: PlanRef;
+  /**
+     * The first day, YYYY-MM-DD; null when the task has none
+     * @nullable
+     */
+  start: string | null;
   status: string;
   steps?: Count;
   store: string;
@@ -294,11 +319,31 @@ export interface BulkInputBody {
   clones?: string[];
   /** Say what would change and what it would break, and write nothing */
   dry_run?: boolean;
+  /**
+     * The due date, YYYY-MM-DD; null clears it
+     * @nullable
+     */
+  due?: string | null;
   /** Replaces the tasks this one duplicates: IDs or ULIDs */
   duplicates?: string[];
+  /**
+     * The estimate as a duration like 1h30m; null clears it
+     * @nullable
+     */
+  estimate?: string | null;
   kind?: string;
   /** Replaces the labels */
   labels?: string[];
+  /**
+     * The points; null clears it
+     * @nullable
+     */
+  points?: number | null;
+  /**
+     * One of the priorities of the schema; null clears it
+     * @nullable
+     */
+  priority?: string | null;
   /** Property name to value; null clears it, a list replaces a multiple value */
   props?: BulkInputBodyProps;
   /** Change the tasks this query finds; give this or ulids */
@@ -311,6 +356,11 @@ export interface BulkInputBody {
   repos?: string[];
   /** The sprint: a name in the workspace of the task, or a ULID; empty takes it off */
   sprint?: string;
+  /**
+     * The first day, YYYY-MM-DD; null clears it
+     * @nullable
+     */
+  start?: string | null;
   status?: string;
   title?: string;
   /**
@@ -467,6 +517,10 @@ export interface CreateInputBody {
   before?: string;
   /** The body in Markdown */
   body?: string;
+  /** The due date, YYYY-MM-DD */
+  due?: string;
+  /** The estimate as a duration like 1h30m */
+  estimate?: string;
   /** project for hh add --kind project */
   kind?: string;
   /** @nullable */
@@ -475,6 +529,10 @@ export interface CreateInputBody {
   no_template?: boolean;
   /** The parent: an ID or a ULID */
   parent?: string;
+  /** The points */
+  points?: number;
+  /** One of the priorities of the schema */
+  priority?: string;
   /** Property name to value */
   props?: CreateInputBodyProps;
   /**
@@ -482,6 +540,8 @@ export interface CreateInputBody {
      * @nullable
      */
   repos?: string[] | null;
+  /** The first day, YYYY-MM-DD */
+  start?: string;
   status?: string;
   /** The template to expand */
   template?: string;
@@ -559,8 +619,15 @@ export interface Rebuilt {
   replayed: number;
 }
 
+export interface LostTime {
+  prop: string;
+  value: string;
+}
+
 export interface Fixed {
   author?: string;
+  /** @nullable */
+  cut?: LostTime[] | null;
   id?: string;
   kind: string;
   title: string;
@@ -621,6 +688,10 @@ export interface StatusDef {
 export type SchemaViewProps = {[key: string]: PropDef};
 
 export interface SchemaView {
+  /** @nullable */
+  labels: string[] | null;
+  /** @nullable */
+  priorities: string[] | null;
   /** @nullable */
   prop_order: string[] | null;
   props: SchemaViewProps;
@@ -852,6 +923,20 @@ export interface LinkInputBody {
   sync?: LinkInputBodySync;
 }
 
+export interface ValueEditBody {
+  /**
+     * The current values it comes from: none for a new value, one for a value kept or renamed, several for a merge
+     * @nullable
+     */
+  from?: string[] | null;
+  name: string;
+}
+
+export interface ListChangeInputBody {
+  /** All the values after the edit, in order. A current value that no from names is removed: 422 schema.in_use when a task uses it. The last priority cannot be removed: 422 schema.value_invalid */
+  values: ValueEditBody[];
+}
+
 export interface LogTrailer {
   key: string;
   value: string;
@@ -885,6 +970,8 @@ export const MigrateInputBodyTarget = {
   status: 'status',
   prop: 'prop',
   value: 'value',
+  priority: 'priority',
+  label: 'label',
 } as const;
 
 export interface MigrateInputBody {
@@ -1151,11 +1238,31 @@ export interface PatchInputBody {
   causes?: string[];
   /** Replaces the tasks this one clones: IDs or ULIDs */
   clones?: string[];
+  /**
+     * The due date, YYYY-MM-DD; null clears it
+     * @nullable
+     */
+  due?: string | null;
   /** Replaces the tasks this one duplicates: IDs or ULIDs */
   duplicates?: string[];
+  /**
+     * The estimate as a duration like 1h30m; null clears it
+     * @nullable
+     */
+  estimate?: string | null;
   kind?: string;
   /** Replaces the labels */
   labels?: string[];
+  /**
+     * The points; null clears it
+     * @nullable
+     */
+  points?: number | null;
+  /**
+     * One of the priorities of the schema; null clears it
+     * @nullable
+     */
+  priority?: string | null;
   /** Property name to value; null clears it, a list replaces a multiple value */
   props?: PatchInputBodyProps;
   /** Replaces the tasks this one relates to: IDs or ULIDs */
@@ -1166,6 +1273,11 @@ export interface PatchInputBody {
   repos?: string[];
   /** The sprint: a name in the workspace of the task, or a ULID; empty takes it off */
   sprint?: string;
+  /**
+     * The first day, YYYY-MM-DD; null clears it
+     * @nullable
+     */
+  start?: string | null;
   status?: string;
   title?: string;
   /** Replaces the watchers */
@@ -1226,15 +1338,6 @@ export interface PropAddInputBody {
   type: PropAddInputBodyType;
   /** @nullable */
   values?: string[] | null;
-}
-
-export interface ValueEditBody {
-  /**
-     * The current values it comes from: none for a new value, one for a value kept or renamed, several for a merge
-     * @nullable
-     */
-  from?: string[] | null;
-  name: string;
 }
 
 export interface PropChangeInputBody {
@@ -1489,8 +1592,18 @@ export interface ShowView {
   created: string;
   /** @nullable */
   deleted_at: string | null;
+  /**
+     * The due date, YYYY-MM-DD; null when the task has none
+     * @nullable
+     */
+  due: string | null;
   /** @nullable */
   duplicates: Ref[] | null;
+  /**
+     * The estimate as a duration like 1h30m; null when the task has none
+     * @nullable
+     */
+  estimate: string | null;
   /** @nullable */
   former_ids?: string[] | null;
   /** @nullable */
@@ -1504,6 +1617,16 @@ export interface ShowView {
   links?: LinkView[];
   /** @nullable */
   parent: string | null;
+  /**
+     * The points; null when the task has none
+     * @nullable
+     */
+  points: number | null;
+  /**
+     * One of the priorities of the schema; null when the task has none
+     * @nullable
+     */
+  priority: string | null;
   /** @nullable */
   problems: IndexProblem[] | null;
   progress?: Count;
@@ -1520,6 +1643,11 @@ export interface ShowView {
   reverse: ShowViewReverse;
   scope?: string;
   sprint?: PlanRef;
+  /**
+     * The first day, YYYY-MM-DD; null when the task has none
+     * @nullable
+     */
+  start: string | null;
   status: string;
   steps?: Count;
   store: string;
@@ -2314,7 +2442,17 @@ export type CheckSchemaParams = {
   store?: string;
 };
 
+export type ChangeLabelsParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
 export type MigrateSchemaParams = {
+  /** The store; without it, the one hedgehug picks as the CLI does */
+  store?: string;
+};
+
+export type ChangePrioritiesParams = {
   /** The store; without it, the one hedgehug picks as the CLI does */
   store?: string;
 };
@@ -4128,6 +4266,52 @@ export const checkSchema = async (params?: CheckSchemaParams, options?: Paramete
 
 
 
+export const getChangeLabelsUrl = (params?: ChangeLabelsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/labels?${stringifiedParams}` : `/api/schema/labels`
+}
+
+/**
+ * @summary Change the labels: add, rename, merge, remove and order
+ */
+export const changeLabels = async (listChangeInputBody: ListChangeInputBody,
+    params?: ChangeLabelsParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getChangeLabelsUrl(params),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(listChangeInputBody)
+  }
+);}
+
+
+
 export const getMigrateSchemaUrl = (params?: MigrateSchemaParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -4144,7 +4328,7 @@ export const getMigrateSchemaUrl = (params?: MigrateSchemaParams,) => {
 }
 
 /**
- * @summary Rename or merge a status, property or value, as hh migrate
+ * @summary Rename or merge a status, priority, label or value, or rename a property, as hh migrate
  */
 export const migrateSchema = async (migrateInputBody: MigrateInputBody,
     params?: MigrateSchemaParams, options?: Parameters<typeof fetcher>[1]): Promise<MigrateWrite> => {
@@ -4169,6 +4353,52 @@ return fetcher<MigrateWrite>(getMigrateSchemaUrl(params),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(migrateInputBody)
+  }
+);}
+
+
+
+export const getChangePrioritiesUrl = (params?: ChangePrioritiesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schema/priorities?${stringifiedParams}` : `/api/schema/priorities`
+}
+
+/**
+ * @summary Change the priorities: add, rename, merge, remove and order
+ */
+export const changePriorities = async (listChangeInputBody: ListChangeInputBody,
+    params?: ChangePrioritiesParams, options?: Parameters<typeof fetcher>[1]): Promise<EditWrite> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<EditWrite>(getChangePrioritiesUrl(params),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(listChangeInputBody)
   }
 );}
 

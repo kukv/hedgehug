@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"go.yaml.in/yaml/v4"
 )
 
 func taskWith(t *testing.T, props string) *model.Task {
@@ -31,7 +30,7 @@ func codes(vs []Violation) []string {
 
 func TestValidateTaskOK(t *testing.T) {
 	t.Parallel()
-	s := Default()
+	s := withProps()
 	s.Props = append(s.Props,
 		Prop{Name: "area", Type: TypeMultiEnum, Values: []string{"backend", "frontend"}},
 		Prop{Name: "owner", Type: TypeUser},
@@ -40,10 +39,10 @@ func TestValidateTaskOK(t *testing.T) {
 		Prop{Name: "at", Type: TypeDatetime},
 		Prop{Name: "note", Type: TypeText},
 	)
-	task := taskWith(t, `  priority: high
-  start: 2026-11-03
-  estimate: 1h30m
-  points: 2.5
+	task := taskWith(t, `  level: high
+  begin: 2026-11-03
+  effort: 1h30m
+  score: 2.5
   area: [backend]
   owner: github.com/yourname
   spec: https://example.com/spec
@@ -63,7 +62,7 @@ func TestValidateTaskOK(t *testing.T) {
 
 func TestValidateTaskViolations(t *testing.T) {
 	t.Parallel()
-	s := Default()
+	s := withProps()
 	s.Props = append(s.Props,
 		Prop{Name: "area", Type: TypeMultiEnum, Values: []string{"backend"}},
 		Prop{Name: "owner", Type: TypeUser},
@@ -71,16 +70,16 @@ func TestValidateTaskViolations(t *testing.T) {
 		Prop{Name: "flag", Type: TypeBool},
 	)
 	for _, tc := range []struct{ props, want string }{
-		{"  priority: none\n", "bad_value:priority"},
-		{"  start: 2026-13-01\n", "bad_value:start"},
-		{"  estimate: 1d\n", "bad_value:estimate"},
-		{"  points: many\n", "bad_value:points"},
-		{"  points: NaN\n", "bad_value:points"},
-		{"  points: .nan\n", "bad_value:points"},
-		{"  points: Inf\n", "bad_value:points"},
-		{"  points: -Inf\n", "bad_value:points"},
-		{"  points: +Inf\n", "bad_value:points"},
-		{"  points: .inf\n", "bad_value:points"},
+		{"  level: none\n", "bad_value:level"},
+		{"  begin: 2026-13-01\n", "bad_value:begin"},
+		{"  effort: 1d\n", "bad_value:effort"},
+		{"  score: many\n", "bad_value:score"},
+		{"  score: NaN\n", "bad_value:score"},
+		{"  score: .nan\n", "bad_value:score"},
+		{"  score: Inf\n", "bad_value:score"},
+		{"  score: -Inf\n", "bad_value:score"},
+		{"  score: +Inf\n", "bad_value:score"},
+		{"  score: .inf\n", "bad_value:score"},
 		{"  area: [ops]\n", "bad_value:area"},
 		{"  owner: yourname\n", "bad_value:owner"},
 		{"  spec: not a url\n", "bad_value:spec"},
@@ -104,9 +103,9 @@ func TestValidateTaskViolations(t *testing.T) {
 func TestValidateTaskNumberOK(t *testing.T) {
 	t.Parallel()
 	for _, v := range []string{"1.5", "-3", "1e3"} {
-		vs, _ := ValidateTask(taskWith(t, "  points: "+v+"\n"), Default().For(nil))
+		vs, _ := ValidateTask(taskWith(t, "  score: "+v+"\n"), withProps().For(nil))
 		if len(vs) != 0 {
-			t.Errorf("points: %s: violations = %v, want none", v, codes(vs))
+			t.Errorf("score: %s: violations = %v, want none", v, codes(vs))
 		}
 	}
 }
@@ -172,7 +171,8 @@ func TestValidateTransition(t *testing.T) {
 	if vs := ValidateTransition("todo", "done", task, e); len(vs) != 1 || vs[0].Field != "points" {
 		t.Errorf("todo→done without points = %v", codes(vs))
 	}
-	task.Props.Set("points", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: "3"})
+	three := 3.0
+	task.Points = &three
 	if vs := ValidateTransition("todo", "done", task, e); len(vs) != 0 {
 		t.Errorf("todo→done with points = %v", codes(vs))
 	}
@@ -204,7 +204,7 @@ func TestValidateWrite(t *testing.T) {
 	}{
 		{"new and valid", nil, func(*model.Task) {}, "project", "project", nil},
 		{"new with a bad value", nil, func(t *model.Task) {
-			t.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "none"})
+			t.Priority = "none"
 		}, "project", "project", []string{"bad_value:priority"}},
 		{"new needs required fields", nil, func(t *model.Task) { t.Status = "in_progress" }, "project", "project", []string{"required:assignees"}},
 		{"new in a wrong place", nil, func(t *model.Task) { t.Kind = "bug" }, "", "task", []string{"placement:parent"}},

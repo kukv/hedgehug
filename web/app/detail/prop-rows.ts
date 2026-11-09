@@ -1,6 +1,7 @@
+import type { TaskView } from "../../core/api/client";
 import { RELATIONS } from "../../core/relations";
 import type { SchemaView } from "../../core/schema";
-import { type PropEditor, propEditorOf } from "../../core/schema";
+import { BUILTIN_PROPS, type PropEditor, propEditorOf } from "../../core/schema";
 import { propNames } from "../../core/schema-edit";
 import type { Option } from "./field-types";
 
@@ -14,6 +15,24 @@ export type PropRow = {
 };
 
 const builtIn = new Set(["status", "kind", ...RELATIONS.map((r) => r.name)]);
+
+type BuiltinValues = Partial<
+  Pick<TaskView, "priority" | "start" | "due" | "estimate" | "points" | "labels">
+>;
+
+// builtinRows lists the built-in properties in their fixed order (priority, start, due, estimate,
+// points, labels), with the value of the field of the task. The priority is chosen from the
+// priorities of the schema and the labels from its labels.
+export function builtinRows(sc: SchemaView, task: BuiltinValues): PropRow[] {
+  return BUILTIN_PROPS.map((b) => ({
+    name: b.name,
+    label: b.label,
+    editor: b.editor,
+    multi: b.name === "labels",
+    options: (b.name === "priority" ? sc.priorities : b.name === "labels" ? sc.labels : null) ?? [],
+    value: task[b.name as keyof BuiltinValues] ?? null,
+  }));
+}
 
 // propRows lists the properties the detail panel edits: those the schema defines (in the order of schema.yaml), then the keys the task has that the schema does not (read-only, editor null).
 // The relations the schema cannot define are not here: the relations section shows them.

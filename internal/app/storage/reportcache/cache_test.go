@@ -1,8 +1,11 @@
 package reportcache
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +13,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/report"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -61,7 +65,8 @@ func TestReadGivesTheVersionsInOrder(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo"}
-	a.Props.Set("points", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: "3"})
+	three := 3.0
+	a.Points = &three
 	f.put(t, a)
 	a.Status = "in_progress"
 	f.put(t, a)
@@ -175,7 +180,7 @@ func TestBrokenAndForwardVersions(t *testing.T) {
 }
 
 // A version from before a conversion is read in the newest format: the
-// versions the commits of format 3 hold are upgraded by a step of format 4 that
+// versions the commits of format 4 hold are upgraded by a step of format 5 that
 // stands in for a real one. The test must not be parallel.
 func TestReadUpgradesTheVersionsOfAnOlderFormat(t *testing.T) {
 	f := newFixture(t)
@@ -185,8 +190,8 @@ func TestReadUpgradesTheVersionsOfAnOlderFormat(t *testing.T) {
 	f.put(t, a)
 
 	was, wasSteps := model.StoreFormat, upgrade.Steps
-	model.StoreFormat = 4
-	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 3, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
+	model.StoreFormat = 5
+	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 4, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
 		tk, err := model.DecodeTask(raw)
 		if err != nil {
 			return nil, err
@@ -209,5 +214,108 @@ func TestReadUpgradesTheVersionsOfAnOlderFormat(t *testing.T) {
 	one, err := Versions(f.s, h, a.ULID)
 	if err != nil || len(one.Versions) != 2 || one.Versions[0].Status != "in_progress" {
 		t.Errorf("Versions = %+v, %v", one.Versions, err)
+	}
+}
+
+// A version from a commit of format 3 keeps its points in props (the property
+// of the store, here a text); the report reads it as the points of the task.
+func TestReadTakesThePointsOfAVersionOfFormat3FromProps(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	dir := f.s.Dir()
+	meta, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(model.StoreMetaPath))) //nolint:gosec // the test's store
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo", Workspace: f.ws}
+	if err := yaml.Unmarshal([]byte("points: \"3\"\n"), &a.Props); err != nil {
+		t.Fatal(err)
+	}
+	body, err := a.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		model.StoreMetaPath:    strings.Replace(string(meta), fmt.Sprintf("format: %d", model.StoreFormat), "format: 3", 1),
+		schema.Path:            "props:\n  points: {type: text}\n",
+		model.TaskPath(a.ULID): string(body),
+	}
+	var paths []string
+	for rel, data := range files {
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, rel)
+	}
+	if _, err := f.s.Repo().Commit(gitrepo.Commit{Paths: paths, Subject: "a, in format 3", Author: author, When: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	vs := f.read(t)[0].Versions
+	if len(vs) != 1 || !vs[0].HasPoints || vs[0].Points != 3 {
+		t.Errorf("versions = %+v; want the points 3 of props", vs)
+	}
+}
+
+// The history of a task runs through the conversion: the points of a version of
+// format 3 (in props), of the commit that converts it (the field) and of a later
+// one read as 3, 3 and 5, so that a burndown sees the one change that was made.
+func TestReadTakesThePointsOfAHistoryThatRunsThroughTheConversion(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	dir := f.s.Dir()
+	meta, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(model.StoreMetaPath))) //nolint:gosec // the test's store
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "a", Status: "todo", Workspace: f.ws}
+	commit := func(format int, subject string, edit func()) {
+		t.Helper()
+		a.Props, a.Points = nil, nil
+		edit()
+		body, err := a.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := map[string]string{
+			model.StoreMetaPath:    strings.Replace(string(meta), fmt.Sprintf("format: %d", model.StoreFormat), fmt.Sprintf("format: %d", format), 1),
+			model.TaskPath(a.ULID): string(body),
+		}
+		var paths []string
+		for rel, data := range files {
+			p := filepath.Join(dir, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			paths = append(paths, rel)
+		}
+		if _, err := f.s.Repo().Commit(gitrepo.Commit{Paths: paths, Subject: subject, Author: author, When: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	points := func(v float64) func() { return func() { a.Points = &v } }
+	commit(3, "in format 3", func() {
+		if err := yaml.Unmarshal([]byte("points: 3\n"), &a.Props); err != nil {
+			t.Fatal(err)
+		}
+	})
+	commit(model.StoreFormat, "converted", points(3))
+	commit(model.StoreFormat, "changed", points(5))
+	vs := f.read(t)[0].Versions
+	var got []float64
+	for _, v := range vs {
+		if !v.HasPoints {
+			t.Fatalf("versions = %+v; every version has points", vs)
+		}
+		got = append(got, v.Points)
+	}
+	if !slices.Equal(got, []float64{3, 3, 5}) {
+		t.Errorf("points = %v; want 3, 3, 5", got)
 	}
 }

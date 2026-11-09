@@ -14,6 +14,7 @@ import (
 func TestLog(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
+	te.labels("x")
 	a := te.addJSON("First")
 	b := te.addJSON("Second")
 	te.ok("set", a.ID, "labels+=x")
@@ -23,8 +24,8 @@ func TestLog(t *testing.T) {
 		return strings.Split(strings.TrimRight(te.ok(args...), "\n"), "\n")
 	}
 	all := lines("log")
-	if len(all) != 5 {
-		t.Fatalf("log has %d lines, want 5:\n%s", len(all), strings.Join(all, "\n"))
+	if len(all) != 6 {
+		t.Fatalf("log has %d lines, want 6:\n%s", len(all), strings.Join(all, "\n"))
 	}
 	re := regexp.MustCompile(`^[0-9a-f]{7}  \d{4}-\d{2}-\d{2} \d{2}:\d{2}  alice  hedgehug: `)
 	for _, l := range all {
@@ -32,7 +33,7 @@ func TestLog(t *testing.T) {
 			t.Errorf("log line %q does not match %s", l, re)
 		}
 	}
-	if !strings.Contains(all[0], "comment") || !strings.Contains(all[4], "init") {
+	if !strings.Contains(all[0], "comment") || !strings.Contains(all[5], "init") {
 		t.Errorf("log is not newest first:\n%s", strings.Join(all, "\n"))
 	}
 	c := te.log("me")[0]

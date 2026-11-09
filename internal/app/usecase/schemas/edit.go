@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 type EditWrite struct {
@@ -181,12 +182,20 @@ func notInUse(s *store.Store, u Use) error {
 	if count == 0 {
 		return nil
 	}
-	args := []any{"count", count, "deleted", deleted}
-	if u.Target == schema.TargetValue {
+	// target says what is removed, so that the words can say what to do: a
+	// property cannot be merged, its values are taken off the tasks.
+	args := []any{"count", count, "deleted", deleted, "target", string(u.Target)}
+	first := "merge it into another first"
+	switch u.Target {
+	case schema.TargetProp:
+		first = "take its values off the tasks first; properties are not merged"
+	case schema.TargetStatus:
+	default:
 		args = append(args, "value", u.Name)
+		first = "merge it into another value first"
 	}
 	return usecase.NewErr(usecase.KindInvalid, "schema.in_use",
-		fmt.Errorf("%s uses %s; merge it into another first", TaskCount(count), u.Name), args...)
+		fmt.Errorf("%s %s %s; %s", TaskCount(count), plural.Pick(count, "uses", "use"), u.Name, first), args...)
 }
 
 // migrated is t as the migrations ms, read against cur, write it; ok is false
@@ -194,6 +203,7 @@ func notInUse(s *store.Store, u Use) error {
 func migrated(t *model.Task, cur *schema.Schema, ms []schema.Migration) (out *model.Task, ok bool) {
 	c := *t
 	c.Props = slices.Clone(t.Props)
+	c.Labels = slices.Clone(t.Labels)
 	for _, m := range ms {
 		if _, err := m.ApplyTask(&c, cur); err != nil {
 			return nil, false

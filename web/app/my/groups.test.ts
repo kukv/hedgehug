@@ -15,7 +15,7 @@ import {
 const wed = new Date(2026, 10, 4, 15, 30);
 
 function due(ulid: string, date: string | undefined, extra: Partial<TaskView> = {}): TaskView {
-  return task(ulid, "task", null, { props: date ? { due: date } : {}, ...extra });
+  return task(ulid, "task", null, { due: date ?? null, ...extra });
 }
 
 describe("MY_QUERY", () => {
@@ -147,8 +147,8 @@ describe("groupMyTasks by workspace", () => {
 
   it("puts the soonest first within a group", () => {
     const tasks = [
-      { ...inWs("1", "a", "W1", "m"), props: { due: "2026-11-07" } },
-      { ...inWs("2", "a", "W1", "m"), props: { due: "2026-11-05" } },
+      { ...inWs("1", "a", "W1", "m"), due: "2026-11-07" },
+      { ...inWs("2", "a", "W1", "m"), due: "2026-11-05" },
     ] as TaskView[];
     expect(groupMyTasks(tasks, "workspace", wed, [])[0]?.tasks.map((t) => t.ulid)).toEqual([
       "2",

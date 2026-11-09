@@ -46,7 +46,7 @@ func UpgradedBase(r *gitrepo.Repo, base, ours plumbing.Hash, path string, b []by
 	if err != nil {
 		return nil, err
 	}
-	up, err := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(base, p) }).TaskTo(to, b)
+	up, err := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(base, p) }, func(p string) ([]byte, error) { return r.ReadAt(ours, p) }).TaskTo(to, b)
 	if err != nil {
 		return nil, fmt.Errorf("%s at the merge base: %w", path, err)
 	}

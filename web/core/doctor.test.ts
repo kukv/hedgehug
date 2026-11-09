@@ -178,18 +178,109 @@ describe("findingText and findingHint", () => {
         hint: "h",
       });
     expect(findingText(x(""))).toBe(
-      "props.relates: 古い形の関連が props に残っています（関連はタスクの項目です）",
+      "props.relates: 古い形の項目が props に残っています（関連と、優先度・開始日・期限・見積もり・ポイントは、タスクの項目です）",
     );
-    expect(findingHint(x(""))).toBe("hh doctor --fix で関連の項目へ移せます");
+    expect(findingHint(x(""))).toBe("hh doctor --fix でタスクの項目へ移せます");
     expect(findingHint(x("conflict", "causes"))).toBe(
       "causes は移し先の項目にすでに値があり、どちらが新しいか分からないため、--fix では移せません。hh edit で決めてください",
     );
     expect(findingHint(x("bad_value", "clones", "causes"))).toBe(
-      "clones・causes に ULID でない値があるため、--fix では移せません。hh edit で正しい値に直してください",
+      "clones・causes に、移し先の項目の型に合わない値があるため、--fix では移せません。hh edit で正しい値に直してください",
     );
     expect(fixedText("legacy_field", ["relates", "causes"])).toBe(
-      "props の relates・causes を関連の項目へ移しました",
+      "props の relates・causes をタスクの項目へ移しました",
     );
+  });
+
+  it("task.legacy_field: 優先度・期限などが props に残っている場合も同じ言葉で言う", () => {
+    const x = (...rest: string[]) =>
+      f({
+        check: "task",
+        code: "task.legacy_field",
+        args: ["props.due", "x", ...rest],
+        hint: "h",
+      });
+    expect(findingText(x(""))).toContain("props.due: 古い形の項目が props に残っています");
+    expect(findingHint(x("conflict", "due"))).toBe(
+      "due は移し先の項目にすでに値があり、どちらが新しいか分からないため、--fix では移せません。hh edit で決めてください",
+    );
+    expect(findingHint(x("bad_value", "points"))).toBe(
+      "points に、移し先の項目の型に合わない値があるため、--fix では移せません。hh edit で正しい値に直してください",
+    );
+    expect(fixedText("legacy_field", ["priority", "due", "relates"])).toBe(
+      "props の priority・due・relates をタスクの項目へ移しました",
+    );
+    expect(fixedText("legacy_field", null)).toBe(
+      "props に残っていた項目をタスクの項目へ移しました",
+    );
+  });
+
+  it("fixedText: 日付にして落とした時刻を、元の値のまま言う", () => {
+    const cut = [
+      { prop: "due", value: "2026-11-08T15:30:00+09:00" },
+      { prop: "start", value: "2026-11-04T09:00:00Z" },
+    ];
+    expect(fixedText("legacy_field", ["due", "start"], undefined, cut)).toBe(
+      "props の due・start をタスクの項目へ移しました（due の時刻を落としました: 2026-11-08T15:30:00+09:00、start の時刻を落としました: 2026-11-04T09:00:00Z）",
+    );
+    expect(fixedText("legacy_field", ["due"], undefined, null)).toBe(
+      "props の due をタスクの項目へ移しました",
+    );
+    expect(fixedText("legacy_field", ["due"], undefined, [])).toBe(
+      "props の due をタスクの項目へ移しました",
+    );
+  });
+
+  it("schema.value_twice: どちらのリストの値かと、大文字小文字を区別しないことを言う", () => {
+    const x = (list: string) =>
+      f({
+        check: "schema",
+        where: `schema.yaml: ${list}`,
+        code: "schema.value_twice",
+        args: ["Bug"],
+      });
+    expect(findingText(x("priorities"))).toBe(
+      "優先度に「Bug」が 2 回定義されています（大文字小文字は区別しません）",
+    );
+    expect(findingText(x("labels"))).toBe(
+      "ラベルに「Bug」が 2 回定義されています（大文字小文字は区別しません）",
+    );
+  });
+
+  it("schema.values_empty: 優先度のリストが空なら、1 つ以上必要と言う", () => {
+    expect(
+      findingText(
+        f({ check: "schema", where: "schema.yaml: priorities", code: "schema.values_empty" }),
+      ),
+    ).toBe("priorities が空です。優先度は 1 つ以上必要です");
+    expect(
+      findingText(
+        f({ check: "schema", where: "schema.yaml: props.tier", code: "schema.values_empty" }),
+      ),
+    ).toBe("values が空です");
+  });
+
+  it("schema.value_twice: props.mylabels のようなプロパティ名はリストと取り違えない", () => {
+    const x = f({
+      check: "schema",
+      where: "schema.yaml: props.mylabels",
+      code: "schema.value_twice",
+      args: ["a"],
+    });
+    expect(findingText(x)).toBe(
+      "リストに「a」が 2 回定義されています（大文字小文字は区別しません）",
+    );
+  });
+
+  it("schema.name_empty: リストの値が空なら、値が空と言う", () => {
+    expect(
+      findingText(f({ check: "schema", where: "schema.yaml: labels", code: "schema.name_empty" })),
+    ).toBe("値が空です");
+    expect(
+      findingText(
+        f({ check: "schema", where: "schema.yaml: statuses[0]", code: "schema.name_empty" }),
+      ),
+    ).toBe("名前が空です");
   });
 
   it("schema.unknown_type: task_ref は関連の案内を出す", () => {
@@ -198,6 +289,22 @@ describe("findingText and findingHint", () => {
       "関連は固定です。hh dep か詳細の関連の欄で付けます",
     );
     expect(findingText(x("foo"))).toBe("「foo」という型はありません");
+  });
+
+  it("template.bad_label: テンプレートのラベルがリストにないと、場所と直し方を言う", () => {
+    const x = f({
+      check: "template",
+      where: "templates/bug.md: children[0].labels",
+      code: "template.bad_label",
+      hint: "h",
+      args: ["bug", "children[0].labels", "wip"],
+    });
+    expect(findingText(x)).toBe(
+      "テンプレート「bug」の children[0].labels: ラベル「wip」が設定の「ラベル」のリストにありません",
+    );
+    expect(findingHint(x)).toBe(
+      "設定の「ラベル」に足すか（hh schema labels add）、hh template edit bug でテンプレートを直してください",
+    );
   });
 
   it("keep the error of a library as it is, after the Japanese", () => {

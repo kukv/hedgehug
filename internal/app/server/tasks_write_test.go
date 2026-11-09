@@ -25,10 +25,29 @@ type affectedBody struct {
 func TestCreateTask(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
+	ts.labels("a", "b")
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "one", "labels": []string{"a", "b"}}, 201, &out)
 	if out.Task == nil || out.Task.ID != "ME-1" || out.Commit == nil || len(out.Task.Labels) != 2 {
 		t.Fatalf("created = %+v", out)
+	}
+	// The built-in properties are fields of the body; the labels and the
+	// priority are written as the lists spell them.
+	ts.call("POST", "/api/tasks", map[string]any{
+		"title": "typed", "priority": "HIGH", "start": "2026-11-02", "due": "2026-11-20", "estimate": "1h30m", "points": 2.5, "labels": []string{"A"},
+	}, 201, &out)
+	if x := out.Task; x.Priority == nil || *x.Priority != "high" || x.Start == nil || *x.Start != "2026-11-02" || x.Due == nil || *x.Due != "2026-11-20" ||
+		x.Estimate == nil || *x.Estimate != "1h30m" || x.Points == nil || *x.Points != 2.5 || len(x.Labels) != 1 || x.Labels[0] != "a" || len(x.Props) != 0 {
+		t.Errorf("typed = %+v", x)
+	}
+	if p := ts.problem("POST", "/api/tasks", map[string]any{"title": "x", "priority": "soon"}, 422); p.Type != "schema.violation" {
+		t.Errorf("a priority the list lacks: %+v", p)
+	}
+	if p := ts.problem("POST", "/api/tasks", map[string]any{"title": "x", "labels": []string{"nope"}}, 422); p.Type != "schema.violation" {
+		t.Errorf("a label the list lacks: %+v", p)
+	}
+	if p := ts.problem("POST", "/api/tasks", map[string]any{"title": "x", "due": "tomorrow"}, 422); p.Type != "assign.bad_value" {
+		t.Errorf("a bad date: %+v", p)
 	}
 	ts.call("POST", "/api/tasks", map[string]any{"title": "p", "kind": "project"}, 201, &out)
 	if out.Task.Kind != "project" {
@@ -207,6 +226,7 @@ func TestPatchEveryRelation(t *testing.T) {
 func TestPatchTask(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
+	ts.labels("x")
 	id := ts.add("one", "")
 	blocker := ts.add("blocker", "")
 	var out taskWriteBody
@@ -229,6 +249,33 @@ func TestPatchTask(t *testing.T) {
 	if len(out.Task.Labels) != 0 {
 		t.Errorf("labels = %v, want none", out.Task.Labels)
 	}
+	// The built-in properties: a value sets, null clears, and a field that is
+	// not sent stays.
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{
+		"priority": "Urgent", "start": "2026-11-02", "due": "2026-11-20", "estimate": "2h", "points": 3, "labels": []string{"X"},
+	}, 200, &out)
+	if x := out.Task; x.Priority == nil || *x.Priority != "urgent" || x.Start == nil || *x.Start != "2026-11-02" || x.Due == nil || *x.Due != "2026-11-20" ||
+		x.Estimate == nil || *x.Estimate != "2h" || x.Points == nil || *x.Points != 3 || len(x.Labels) != 1 || x.Labels[0] != "x" || len(x.Props) != 0 {
+		t.Fatalf("typed = %+v", x)
+	}
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"due": nil, "points": nil}, 200, &out)
+	if x := out.Task; x.Due != nil || x.Points != nil || x.Priority == nil || x.Start == nil || x.Estimate == nil {
+		t.Errorf("null clears the field and leaves the others: %+v", x)
+	}
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"title": "three"}, 200, &out)
+	if x := out.Task; x.Priority == nil || x.Start == nil || x.Estimate == nil {
+		t.Errorf("a field that is not sent changed: %+v", x)
+	}
+	for _, body := range []map[string]any{{"priority": "soon"}, {"labels": []string{"nope"}}} {
+		if p := ts.problem("PATCH", "/api/tasks/"+id, body, 422); p.Type != "schema.violation" {
+			t.Errorf("%v: %+v", body, p)
+		}
+	}
+	if p := ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"due": "tomorrow"}, 422); p.Type != "assign.bad_value" {
+		t.Errorf("a bad date: %+v", p)
+	}
+	ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"props": map[string]any{"priority": "high"}}, 400)
+	ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"points": "many"}, 400)
 	if p := ts.problem("PATCH", "/api/tasks/"+id, map[string]any{}, 400); p.Type != "patch.empty" {
 		t.Errorf("empty patch: %+v", p)
 	}

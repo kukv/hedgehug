@@ -31,7 +31,8 @@ break the schema. It lists the tasks and asks; --yes does not ask, and
   key+=value  add to a list
   key-=value  remove from a list
 
-Fields: title, kind, status, assignees, watchers, labels, repos, blocked_by,
+Fields: title, kind, status, priority, start, due (YYYY-MM-DD), estimate (like
+1h30m), points, assignees, watchers, labels, repos, blocked_by,
 causes, relates, duplicates, clones, sprint, releases (a name in the workspace
 of the task). The other direction of a relation (blocks, caused_by, ...) is
 read-only.

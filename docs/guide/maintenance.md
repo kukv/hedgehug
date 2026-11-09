@@ -21,9 +21,10 @@ clash. A child whose parent is gone moves to the nearest ancestor that can hold 
 under a project called 「未分類」 (made if it is not there; a step becomes a task). It also rebuilds a store after the history of origin was rewritten (below).
 Whatever it cannot repair, it tells you.
 
-An older hedgehug that pushes to a store in the new format leaves a relation under `props:`
-(`duplicates`, `causes`, `relates` or `clones`; with format 3 these are fields of the task).
-`hh doctor` reports it as `task.legacy_field`, and `hh doctor --fix` moves it to the field
+An older hedgehug that pushes to a store in the new format leaves values under `props:` that are
+fields of the task now: a relation (`duplicates`, `causes`, `relates` or `clones`; fields since format 3)
+or a built-in property (`priority`, `start`, `due`, `estimate` or `points`; fields since format 4).
+`hh doctor` reports each as `task.legacy_field`, and `hh doctor --fix` moves it to the field
 of the task, in a commit of its own:
 
 ```console
@@ -36,10 +37,20 @@ repaired: ME-3: legacy_field props.duplicates moved to the fields of the task
 No problems
 ```
 
+A built-in property is moved the same way. A datetime written under `props:` (`due: 2026-11-10T09:30:00+09:00`) becomes a
+date, and the time is dropped; `--fix` lists each dropped time with the task and the value it was:
+
+```console
+$ hh doctor --fix
+repaired: ME-3: legacy_field props.priority, props.due moved to the fields of the task; the time of props.due was left out: 2026-11-10T09:30:00+09:00
+No problems
+```
+
 A task that already has a value in the field has nothing moved, because it is not known which
 of the two is newer. The finding stays: open the task with `hh edit <id>`, keep the value you
 want in the field, and delete the one under `props:`. A value under `props:` that is not the
-ULID of a task also stays, and `hh edit` is how you fix it.
+ULID of a task (a relation), or that cannot be read as the type of the field (a built-in property, such as an
+`estimate` that is not a duration), also stays, and `hh edit` is how you fix it.
 
 A store in an older format is reported once, with `hh store convert` as the way out, and its
 tasks are not checked against the schema until it is converted
@@ -47,7 +58,7 @@ tasks are not checked against the schema until it is converted
 
 ```console
 $ hh doctor
-.hedgehug/store.yaml: the store is in format 2, and this version uses format 3
+.hedgehug/store.yaml: the store is in format 3, and this version uses format 4
   hint: hh store convert
 1 problem
 ```

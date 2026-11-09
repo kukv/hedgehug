@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"go.yaml.in/yaml/v4"
@@ -17,6 +18,10 @@ const (
 	TargetStatus Target = "status"
 	TargetProp   Target = "prop"
 	TargetValue  Target = "value" // a value of an enum or multi_enum property
+	// A value of the built-in priority and of the built-in labels, which are
+	// kept in lists of the schema, not in a property.
+	TargetPriority Target = "priority"
+	TargetLabel    Target = "label"
 )
 
 // Migration renames Old to New, or merges Old into New when New is
@@ -39,10 +44,11 @@ type Migration struct {
 // comments; encoding the result writes into that file, so s is not to be
 // encoded after it.
 func (s *Schema) Migrate(m Migration) (*Schema, error) {
-	if m.Old == m.New {
-		return nil, fmt.Errorf("%q and %q are the same", m.Old, m.New)
-	}
 	out := s.clone()
+	m = m.Spelled(s)
+	if m.Old == m.New {
+		return nil, fmt.Errorf("%q and %q are the same: %w", m.Old, m.New, ErrValueInvalid)
+	}
 	switch m.Target {
 	case TargetStatus:
 		return out, out.migrateStatus(m.Old, m.New)
@@ -50,13 +56,56 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 		return out, out.migrateProp(m.Old, m.New)
 	case TargetValue:
 		return out, out.migrateValue(m.Prop, m.Old, m.New)
+	case TargetPriority:
+		return out, migrateListValue("priority", &out.Priorities, m.Old, m.New)
+	case TargetLabel:
+		return out, migrateListValue("label", &out.Labels, m.Old, m.New)
 	}
 	return nil, fmt.Errorf("unknown target %q", m.Target)
+}
+
+// spelled is v as the list spells it, which finds it without regard to case;
+// v itself when the list lacks it.
+func spelled(list []string, v string) string {
+	if x, ok := MatchValue(list, v); ok {
+		return x
+	}
+	return v
+}
+
+// Spelled is m with the names of a priority or a label as they are to be
+// written: the old name as the list of s (the schema before the migration)
+// spells it, the new name as the list it lands in spells it (the value it is
+// merged into), or as given for a rename, which includes a new spelling of the
+// same value (bug to Bug). ApplyTask writes the new name exactly as it is, so
+// what applies a migration to tasks is given the Migration that this returns.
+// Another target is m.
+func (m Migration) Spelled(s *Schema) Migration {
+	switch m.Target {
+	case TargetPriority:
+		return m.spelledIn(s.Priorities)
+	case TargetLabel:
+		return m.spelledIn(s.Labels)
+	}
+	return m
+}
+
+// spelledIn is m with both names as the list spells them, so that they are found
+// without regard to case. A new name that differs from the old one in case only
+// is a new spelling of the same value (bug to Bug), which is kept as it is.
+func (m Migration) spelledIn(list []string) Migration {
+	m.Old = spelled(list, m.Old)
+	if !strings.EqualFold(m.Old, m.New) {
+		m.New = spelled(list, m.New)
+	}
+	return m
 }
 
 func (s *Schema) clone() *Schema {
 	out := *s
 	out.Statuses = slices.Clone(s.Statuses)
+	out.Priorities = slices.Clone(s.Priorities)
+	out.Labels = slices.Clone(s.Labels)
 	if s.Templates != nil {
 		out.Templates = &Templates{Only: slices.Clone(s.Templates.Only), Default: maps.Clone(s.Templates.Default)}
 	}
@@ -106,7 +155,7 @@ func (s *Schema) workflows() []*Workflow {
 func (s *Schema) migrateStatus(from, to string) error {
 	i := slices.IndexFunc(s.Statuses, func(x Status) bool { return x.Name == from })
 	if i < 0 {
-		return fmt.Errorf("status %q is not defined", from)
+		return notDefined("status", from)
 	}
 	if j := slices.IndexFunc(s.Statuses, func(x Status) bool { return x.Name == to }); j >= 0 {
 		if s.Statuses[i].Default && s.Statuses[j].Category == s.Statuses[i].Category {
@@ -132,17 +181,12 @@ func (s *Schema) migrateStatus(from, to string) error {
 func (s *Schema) migrateProp(from, to string) error {
 	i := slices.IndexFunc(s.Props, func(x Prop) bool { return x.Name == from })
 	if i < 0 {
-		return fmt.Errorf("property %q is not defined", from)
+		return notDefined("property", from)
 	}
-	if np, ok := s.Prop(to); ok {
-		op := s.Props[i]
-		if op.Type != np.Type || op.Multi != np.Multi {
-			return fmt.Errorf("the types differ: %s is %s, %s is %s", from, propTypeName(op), to, propTypeName(np))
-		}
-		s.Props = slices.Delete(s.Props, i, i+1)
-	} else {
-		s.Props[i].Name = to
+	if _, ok := s.Prop(to); ok {
+		return fmt.Errorf("%s into %s: %w", from, to, ErrPropMerge)
 	}
+	s.Props[i].Name = to
 	for _, w := range s.workflows() {
 		for k := range w.Required {
 			w.Required[k].Values = replace(w.Required[k].Values, from, to)
@@ -151,26 +195,29 @@ func (s *Schema) migrateProp(from, to string) error {
 	return nil
 }
 
-func propTypeName(p Prop) string {
-	if p.Multi {
-		return string(p.Type) + " (multi)"
-	}
-	return string(p.Type)
-}
-
 func (s *Schema) migrateValue(prop, from, to string) error {
 	i := slices.IndexFunc(s.Props, func(x Prop) bool { return x.Name == prop })
 	if i < 0 {
-		return fmt.Errorf("property %q is not defined", prop)
+		return notDefined("property", prop)
 	}
 	p := &s.Props[i]
 	if p.Type != TypeEnum && p.Type != TypeMultiEnum {
 		return fmt.Errorf("%s is %s, not enum or multi_enum", prop, p.Type)
 	}
 	if !slices.Contains(p.Values, from) {
-		return fmt.Errorf("value %q of %s is not defined", from, prop)
+		return notDefined("value of "+prop, from)
 	}
 	p.Values = replace(p.Values, from, to)
+	return nil
+}
+
+// migrateListValue renames the value from of a list of the schema to to, or
+// merges it into to when that is a value too.
+func migrateListValue(what string, list *[]string, from, to string) error {
+	if !slices.Contains(*list, from) {
+		return notDefined(what, from)
+	}
+	*list = replace(*list, from, to)
 	return nil
 }
 
@@ -216,8 +263,9 @@ func renameKey(l Lists, from, to string) Lists {
 }
 
 // ApplyTask rewrites the field of t that the migration renames, and
-// reports whether it changed. In a merge of properties, a task with values
-// for both is an error. s is the schema before the migration.
+// reports whether it changed. For a priority or a label the names are those of
+// Spelled. A task that already has a value for the new
+// name of a property is an error. s is the schema before the migration.
 func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error) {
 	switch m.Target {
 	case TargetStatus:
@@ -231,6 +279,33 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 			return false, fmt.Errorf("the task has both %s and %s", m.Old, m.New)
 		}
 		t.Props[i].Key = m.New
+		return true, nil
+	case TargetPriority:
+		// A value is found without regard to case, as Validate finds it, and
+		// written as m gives it (see Spelled).
+		if !strings.EqualFold(t.Priority, m.Old) || t.Priority == m.New {
+			return false, nil
+		}
+		t.Priority = m.New
+		return true, nil
+	case TargetLabel:
+		from, to := m.Old, m.New
+		if !slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, from) }) {
+			return false, nil
+		}
+		var out []string
+		for _, l := range t.Labels {
+			if strings.EqualFold(l, from) || strings.EqualFold(l, to) {
+				l = to
+			}
+			if !slices.Contains(out, l) {
+				out = append(out, l)
+			}
+		}
+		if slices.Equal(out, t.Labels) {
+			return false, nil
+		}
+		t.Labels = out
 		return true, nil
 	case TargetValue:
 		if p, ok := s.Prop(m.Prop); !ok || (p.Type != TypeEnum && p.Type != TypeMultiEnum) {

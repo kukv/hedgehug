@@ -82,11 +82,9 @@ const byRank = (a: TaskView, b: TaskView): number =>
 
 export const inRankOrder = (tasks: readonly TaskView[]): TaskView[] => [...tasks].sort(byRank);
 
-/** The points of a task; null when it has none. A list has the value as the file writes it. */
-export function pointsOf(t: Pick<TaskView, "props">): number | null {
-  const p = t.props.points;
-  const n = typeof p === "string" && p !== "" ? Number(p) : p;
-  return typeof n === "number" && !Number.isNaN(n) ? n : null;
+/** The points of a task; null when it has none. */
+export function pointsOf(t: Pick<TaskView, "points">): number | null {
+  return typeof t.points === "number" && !Number.isNaN(t.points) ? t.points : null;
 }
 
 export const sumPoints = (tasks: readonly TaskView[]): number =>

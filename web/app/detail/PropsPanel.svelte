@@ -9,8 +9,9 @@
   import StoreBadge from "../ui/StoreBadge.svelte";
   import FieldInput from "./FieldInput.svelte";
   import type { Option } from "./field-types";
+  import LabelPicker from "./LabelPicker.svelte";
   import PropField from "./PropField.svelte";
-  import { propRows, statusOptions } from "./prop-rows";
+  import { builtinRows, propRows, statusOptions } from "./prop-rows";
 
   // parentKind is the kind of the parent as the screen read it (the cache may not have the parent when
   // the detail is opened by its URL); undefined: not read yet.
@@ -36,6 +37,8 @@
   );
   const kindOptions = $derived<Option[]>(kindChoices(show.kind, parentKind));
   const rows = $derived(sc.current ? propRows(sc.current, show.props) : []);
+  // The built-in properties come right below the status, in a fixed order.
+  const builtin = $derived(sc.current ? builtinRows(sc.current, show) : []);
   const showRepos = $derived((show.repos ?? []).length > 0 || isGroup(show.kind));
 
   const plans = usePlans(() => ({ store: show.store, name: show.workspace.name }));
@@ -86,6 +89,32 @@
     />
   </dd>
 
+  {#each builtin as r (r.name)}
+    <dt>{r.label}</dt>
+    <dd>
+      {#if r.name === "labels"}
+        <LabelPicker
+          store={show.store}
+          label={r.label}
+          value={show.labels ?? []}
+          options={r.options}
+          {readonly}
+          onedit={(v) => edit("labels", v)}
+          oncommit={commit}
+        />
+      {:else}
+        <PropField
+          row={r}
+          value={r.value}
+          {readonly}
+          pending={pend.current.editing(r.name as PatchField)}
+          onedit={(v) => edit(r.name as PatchField, v)}
+          oncommit={commit}
+        />
+      {/if}
+    </dd>
+  {/each}
+
   <dt>担当者</dt>
   <dd>
     <FieldInput
@@ -94,18 +123,6 @@
       value={show.assignees ?? []}
       {readonly}
       onedit={(v) => edit("assignees", v)}
-      oncommit={commit}
-    />
-  </dd>
-
-  <dt>ラベル</dt>
-  <dd>
-    <FieldInput
-      editor="chips"
-      label="ラベル"
-      value={show.labels ?? []}
-      {readonly}
-      onedit={(v) => edit("labels", v)}
       oncommit={commit}
     />
   </dd>

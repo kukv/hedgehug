@@ -7,6 +7,10 @@ export type SchemaUsage = {
   props: Record<string, number>;
   /** The tasks that hold the value, of each value of an enum or multi_enum property. */
   values: Record<string, Record<string, number>>;
+  /** The tasks that hold each priority of the list. */
+  priorities: Record<string, number>;
+  /** The tasks that hold each label of the list. */
+  labels: Record<string, number>;
 };
 
 const empty = (v: unknown): boolean =>
@@ -25,12 +29,17 @@ export function schemaUsage(schema: SchemaView, tasks: readonly TaskView[]): Sch
     statuses: zero((schema.statuses ?? []).map((s) => s.name)),
     props: zero(Object.keys(schema.props)),
     values: {},
+    priorities: zero(schema.priorities ?? []),
+    labels: zero(schema.labels ?? []),
   };
   for (const [name, p] of Object.entries(schema.props)) {
     if (p.type === "enum" || p.type === "multi_enum") u.values[name] = zero(p.values ?? []);
   }
   for (const t of tasks) {
     bump(u.statuses, t.status);
+    if (t.priority) bump(u.priorities, t.priority);
+    // a label is held once by the task, whatever the file repeats
+    for (const l of new Set(t.labels ?? [])) bump(u.labels, l);
     for (const name of Object.keys(u.props)) {
       const v = t.props?.[name];
       if (empty(v)) continue;

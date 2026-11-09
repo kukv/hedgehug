@@ -8,7 +8,7 @@
     type DragMode,
     dayOf,
     dragged,
-    dropProps,
+    dropPatch,
     type GanttRow,
     ganttLinks,
     ganttRows,
@@ -173,10 +173,13 @@
 
   // --- the settings of the chart ----------------------------------------------------------------
   let scale = $state<Scale>("day");
+  // The dates a bar can run between: the built-in start and due, then the date properties of the schemas.
   const dateProps = $derived([
-    ...new Set(
-      schemas.flatMap((s) => propNames(s).filter((name) => s.props[name]?.type === "date")),
-    ),
+    ...new Set([
+      "start",
+      "due",
+      ...schemas.flatMap((s) => propNames(s).filter((name) => s.props[name]?.type === "date")),
+    ]),
   ]);
   const propChoices = (now: string) => (dateProps.includes(now) ? dateProps : [now, ...dateProps]);
 
@@ -233,13 +236,13 @@
 
   async function drop(r: GanttRow, d: Drag) {
     if (!r.bar) return;
-    const props = dropProps(r, dragged(r.bar, d.mode, d.delta), settings);
-    if (d.delta === 0 || Object.keys(props).length === 0) {
+    const patch = dropPatch(r, dragged(r.bar, d.mode, d.delta), settings);
+    if (d.delta === 0 || Object.keys(patch).length === 0) {
       drag = null;
       return;
     }
     try {
-      await patchTask(c, r.task, { props });
+      await patchTask(c, r.task, patch);
     } catch (e) {
       toast({ message: errorMessage(e) });
     } finally {

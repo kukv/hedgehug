@@ -143,7 +143,9 @@ func assignable(x *Repo) []string {
 }
 
 // issueInput is what the REST endpoints of an issue take. A key that is not
-// there stays.
+// there stays. Labels are taken like GitHub does, although the client no longer
+// sends them: a test then sees an issue with labels if it ever does again.
+// TagIssue and AddLabel set labels up for hh gh import --label.
 type issueInput struct {
 	Title       *string         `json:"title"`
 	Body        *string         `json:"body"`

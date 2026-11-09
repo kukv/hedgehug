@@ -15,6 +15,7 @@
   import SchemaCheck from "./SchemaCheck.svelte";
   import SchemaDefDialog from "./SchemaDefDialog.svelte";
   import SchemaDeleteDialog from "./SchemaDeleteDialog.svelte";
+  import SchemaList from "./SchemaList.svelte";
   import SchemaProps from "./SchemaProps.svelte";
   import SchemaStatuses from "./SchemaStatuses.svelte";
   import SchemaWorkflow from "./SchemaWorkflow.svelte";
@@ -24,7 +25,7 @@
 
   // The schema of a Store (its .hedgehug/schema.yaml): how many tasks use each definition, the
   // overrides of the projects, and what `schema check` finds. A definition is added, edited (its name
-  // too), merged and deleted from here.
+  // too), merged and deleted from here; the priorities and the labels are edited as lists.
   let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
@@ -118,6 +119,8 @@
     (
       [
         ["statuses", "ステータス", (schema?.statuses ?? []).length],
+        ["priorities", "優先度", (schema?.priorities ?? []).length],
+        ["labels", "ラベル", (schema?.labels ?? []).length],
         ["props", "プロパティ", propCount],
         ["workflow", "ワークフロー", undefined],
         ["templates", "テンプレート", undefined],
@@ -204,6 +207,10 @@
 
     {#if tab === "statuses"}
       <SchemaStatuses {store} {schema} {usage} {off} {onaction} />
+    {:else if tab === "priorities" || tab === "labels"}
+      {#key tab}
+        <SchemaList {store} kind={tab} {schema} {usage} {off} ondone={() => void migrated()} />
+      {/key}
     {:else if tab === "templates"}
       <SettingsTemplates {store} {off} />
     {:else if tab === "props"}

@@ -718,6 +718,12 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyRelationNames, name) {
 		return notRevertible(relationsFixed(field))
 	}
+	// Likewise props.priority, start, due, estimate and points: they were
+	// properties then and are fields of the task now, with the same meaning, so
+	// the value goes back to the field of the same name.
+	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyBuiltinNames, name) {
+		return revertLegacyBuiltin(t, name, raw, sc, resolve)
+	}
 	switch field {
 	case "title", "kind", "status":
 		var v string
@@ -744,7 +750,13 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 	case "watchers":
 		return revertSet(&t.Watchers, field, raw)
 	case "labels":
-		return revertSet(&t.Labels, field, raw)
+		if err := revertSet(&t.Labels, field, raw); err != nil {
+			return err
+		}
+		usecase.SpellAsListed(t, sc)
+		return nil
+	case "priority", "start", "due", "estimate", "points":
+		return revertTyped(t, field, raw, sc, resolve)
 	case "repos":
 		return revertSet(&t.Repos, field, raw)
 	case "blocked_by":
@@ -836,6 +848,46 @@ func revertLink(t *model.Task, raw json.RawMessage) error {
 	return nil
 }
 
+// revertTyped puts the value raw back in the priority, the start, the due, the
+// estimate or the points, as hedgehug set would write it. null clears it. A
+// date comes in the form of a time (2026-11-11T00:00:00Z), as the merge reads
+// the file, and goes back as the day.
+func revertTyped(t *model.Task, field string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return fmt.Errorf("%s: %w", field, err)
+	}
+	switch v.(type) {
+	case nil, string, json.Number:
+	default:
+		return notRevertible(fmt.Errorf("%s: %s is not a value hedgehug set reads: %w", field, raw, errNotRevertible))
+	}
+	text, err := propText(sc, field, v)
+	if err != nil {
+		return err
+	}
+	return usecase.ApplyAssign(t, usecase.Assign{Key: field, Op: "=", Value: text}, sc, resolve)
+}
+
+// revertLegacyBuiltin puts the value raw of an item recorded before the five
+// built-in properties were fields (props.<name>) back in the field name. The
+// value is read as the step to format 4 reads it (a datetime is a date, "3" is
+// 3, a list of one is its value), and a priority is spelled as the list now has
+// it. One that cannot be read that way is not reverted, and nothing is changed.
+func revertLegacyBuiltin(t *model.Task, name string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil || len(doc.Content) != 1 {
+		return fmt.Errorf("props.%s: %s does not decode", name, raw)
+	}
+	text, _, ok := upgrade.BuiltinText(name, doc.Content[0], sc.Priorities)
+	if !ok {
+		return notRevertible(fmt.Errorf("props.%s: %s cannot be put back in the field %s of the task: it is not a value of its type (a priority must be one of the priorities now): %w", name, raw, name, errNotRevertible))
+	}
+	return usecase.ApplyAssign(t, usecase.Assign{Key: name, Op: "=", Value: text}, sc, resolve)
+}
+
 // revertProp puts the value raw back in the property key. A list becomes
 // the property's values; null clears it.
 func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
@@ -886,8 +938,7 @@ func wasRelation(s *store.Store, commit, key string) (bool, error) {
 	}
 	h := plumbing.NewHash(commit)
 	r := s.Repo()
-	at := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
-	f, err := at.Format()
+	f, err := upgrade.FormatOf(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
 	if err != nil {
 		return false, err
 	}
@@ -923,7 +974,7 @@ func propText(sc *schema.Schema, key string, x any) (string, error) {
 		return "", nil
 	case string:
 		// A date reads back from the file as a time.
-		if p, ok := sc.Prop(key); ok && p.Type == schema.TypeDate {
+		if p, ok := sc.PropOrBuiltin(key); ok && p.Type == schema.TypeDate {
 			if tm, err := time.Parse(time.RFC3339, v); err == nil {
 				return tm.Format(time.DateOnly), nil
 			}

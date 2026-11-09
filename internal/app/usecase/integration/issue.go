@@ -221,9 +221,6 @@ func openIssue(cl *github.Client, res *usecase.IssueResolver, t *model.Task, rep
 	if u.Assignees != nil {
 		in.Assignees = *u.Assignees
 	}
-	if u.Labels != nil {
-		in.Labels = *u.Labels
-	}
 	if u.Milestone != nil {
 		in.Milestone = *u.Milestone
 	}

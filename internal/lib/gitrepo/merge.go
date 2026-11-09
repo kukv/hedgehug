@@ -104,6 +104,16 @@ func (r *Repo) ReadAt(commit plumbing.Hash, path string) ([]byte, error) {
 	return r.ReadFile(tree, path)
 }
 
+// ReadHead is ReadAt of the commit HEAD points at; a repository without a
+// commit has no file.
+func (r *Repo) ReadHead(path string) ([]byte, error) {
+	head, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	return r.ReadAt(head, path)
+}
+
 // Between returns the commits reachable from from but not from base, through
 // every parent, in the order of the history: a commit never comes before its
 // parents. Among commits that can go next, the oldest by author time goes

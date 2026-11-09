@@ -3,6 +3,7 @@ package schema
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"go.yaml.in/yaml/v4"
@@ -166,17 +167,19 @@ type Scoped struct {
 
 // Schema is schema.yaml.
 type Schema struct {
-	Statuses  []Status
-	Props     Props
-	Workflow  Workflow
-	Templates *Templates // default template of each kind, for the store
-	Scoped    []Scoped
-	Extra     model.Fields
+	Statuses   []Status
+	Priorities []string `yaml:"priorities"` // the values of priority, in order
+	Labels     []string `yaml:"labels"`     // the values of labels
+	Props      Props
+	Workflow   Workflow
+	Templates  *Templates // default template of each kind, for the store
+	Scoped     []Scoped
+	Extra      model.Fields
 
 	doc *model.Doc
 }
 
-var schemaKeys = []string{"statuses", "props", "workflow", "templates", "scoped"}
+var schemaKeys = []string{"statuses", "priorities", "labels", "props", "workflow", "templates", "scoped"}
 
 // Decode reads schema.yaml. It does not check the schema; see Check.
 func Decode(data []byte) (*Schema, error) {
@@ -190,6 +193,8 @@ func Decode(data []byte) (*Schema, error) {
 		out any
 	}{
 		{"statuses", &s.Statuses},
+		{"priorities", &s.Priorities},
+		{"labels", &s.Labels},
 		{"props", &s.Props},
 		{"workflow", &s.Workflow},
 		{"templates", &s.Templates},
@@ -198,6 +203,9 @@ func Decode(data []byte) (*Schema, error) {
 		if err := d.Decode(f.key, f.out); err != nil {
 			return nil, err
 		}
+	}
+	if n := d.Get("priorities"); n == nil || n.ShortTag() == "!!null" {
+		s.Priorities = slices.Clone(DefaultPriorities)
 	}
 	s.Extra = d.Extra(schemaKeys)
 	return s, nil
@@ -210,6 +218,8 @@ func (s *Schema) Encode() ([]byte, error) {
 	}
 	e := s.doc.Encoder()
 	e.Put("statuses", s.Statuses, len(s.Statuses) == 0)
+	e.Put("priorities", s.Priorities, slices.Equal(s.Priorities, DefaultPriorities))
+	e.Put("labels", s.Labels, len(s.Labels) == 0)
 	e.Put("props", s.Props, len(s.Props) == 0)
 	if !s.Workflow.IsZero() { // a key not put is left out, so an emptied workflow is not written as {}
 		e.Put("workflow", s.Workflow, false)
@@ -219,8 +229,12 @@ func (s *Schema) Encode() ([]byte, error) {
 	return e.Bytes(s.Extra)
 }
 
+// DefaultPriorities are the values of priority when schema.yaml has no
+// priorities.
+var DefaultPriorities = []string{"low", "mid", "high", "urgent"}
+
 // Default returns the schema of a new store: seven statuses in four
-// categories and the common properties.
+// categories and the default priorities.
 func Default() *Schema {
 	return &Schema{
 		Statuses: []Status{
@@ -232,13 +246,7 @@ func Default() *Schema {
 			{Name: "done", Label: "Done", Category: CategoryDone, Default: true},
 			{Name: "canceled", Label: "Canceled", Category: CategoryCanceled, Default: true},
 		},
-		Props: Props{
-			{Name: "priority", Type: TypeEnum, Values: []string{"low", "mid", "high", "urgent"}, Label: "優先度"},
-			{Name: "start", Type: TypeDate, Label: "開始日"},
-			{Name: "due", Type: TypeDate, Label: "期限"},
-			{Name: "estimate", Type: TypeDuration, Label: "見積もり"},
-			{Name: "points", Type: TypeNumber, Label: "ポイント"},
-		},
+		Priorities: slices.Clone(DefaultPriorities),
 	}
 }
 

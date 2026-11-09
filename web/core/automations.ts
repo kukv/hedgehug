@@ -122,7 +122,6 @@ export const ISSUE_FIELDS: readonly IssueField[] = [
     note: "完了カテゴリは closed（completed）、中止は closed（not_planned）",
   },
   { name: "assignees", to: "assignees", note: "そのリポジトリで割り当てられる人だけ" },
-  { name: "labels", to: "labels", note: "リポジトリにあるラベルだけ。ないものは作らずに警告" },
   { name: "milestone", to: "props", note: "存在しないマイルストーンは作らずに警告" },
 ].map((f) => ({ ...f, label: fieldLabel(f.name) }));
 

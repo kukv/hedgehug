@@ -82,6 +82,8 @@ func TestRunFilters(t *testing.T) {
 		{"-status:done", Options{}, []string{"P", "E", "a", "b"}},
 		{"kind:task", Options{}, []string{"a", "b", "c"}},
 		{"label:BACKEND", Options{}, []string{"a"}},
+		{"label:nosuch", Options{}, []string{}}, // a label the list lacks is not an error
+		{"priority:HIGH", Options{}, []string{"a"}},
 		{"label:none", Options{}, []string{"P", "E", "b"}},
 		{"assignee:@me", me, []string{"a"}},
 		{"assignee:@me", Options{Me: []string{"github.com/Alice"}}, []string{"a"}}, // an account ID is compared without case

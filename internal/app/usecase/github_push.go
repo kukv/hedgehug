@@ -20,7 +20,6 @@ type IssueResolver struct {
 	cl          *github.Client
 	repo        string
 	owner, name string
-	labels      map[string]string // by the lower case, as GitHub spells them
 	logins      map[string]string
 	milestones  map[string]int
 }
@@ -31,31 +30,18 @@ func NewIssueResolver(cl *github.Client, repo string) *IssueResolver {
 	return &IssueResolver{cl: cl, repo: repo, owner: parts[1], name: parts[2]}
 }
 
-// names returns the list of a field of the task, by the lower case.
-func (r *IssueResolver) names(field string) (map[string]string, error) {
-	spelled := func(list []string) map[string]string {
-		m := make(map[string]string, len(list))
-		for _, s := range list {
-			m[strings.ToLower(s)] = s
-		}
-		return m
-	}
-	if field == "labels" {
-		if r.labels == nil {
-			list, err := r.cl.Labels(r.owner, r.name)
-			if err != nil {
-				return nil, err
-			}
-			r.labels = spelled(list)
-		}
-		return r.labels, nil
-	}
+// names returns the logins that can be assigned, by the lower case, as GitHub
+// spells them.
+func (r *IssueResolver) names() (map[string]string, error) {
 	if r.logins == nil {
 		list, err := r.cl.Assignees(r.owner, r.name)
 		if err != nil {
 			return nil, err
 		}
-		r.logins = spelled(list)
+		r.logins = make(map[string]string, len(list))
+		for _, s := range list {
+			r.logins[strings.ToLower(s)] = s
+		}
 	}
 	return r.logins, nil
 }
@@ -112,7 +98,7 @@ func (r *IssueResolver) Filter(vals model.IssueValues, fields []string, gh model
 		if len(vals[f]) == 0 {
 			continue
 		}
-		names, err := r.names(f)
+		names, err := r.names()
 		if err != nil {
 			return nil, err
 		}
@@ -137,9 +123,9 @@ func ForeignAssignees(t *model.Task, repo string) []string {
 	return nil
 }
 
-// spell gives the names of a field as GitHub spells them.
-func (r *IssueResolver) spell(field string, list []string) ([]string, error) {
-	names, err := r.names(field)
+// spell gives the logins as GitHub spells them.
+func (r *IssueResolver) spell(list []string) ([]string, error) {
+	names, err := r.names()
 	if err != nil {
 		return nil, err
 	}
@@ -180,14 +166,12 @@ func (r *IssueResolver) Update(u model.ULID, to model.IssueValues) (github.Issue
 			out.StateReason = &reason
 		}
 	}
-	for field, dst := range map[string]**[]string{"assignees": &out.Assignees, "labels": &out.Labels} {
-		if v, ok := to[field]; ok {
-			list, err := r.spell(field, v)
-			if err != nil {
-				return out, err
-			}
-			*dst = &list
+	if v, ok := to["assignees"]; ok {
+		list, err := r.spell(v)
+		if err != nil {
+			return out, err
 		}
+		out.Assignees = &list
 	}
 	if v, ok := to["milestone"]; ok {
 		n := 0

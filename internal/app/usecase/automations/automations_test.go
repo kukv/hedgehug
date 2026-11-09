@@ -231,7 +231,7 @@ func TestFields(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	v, err := automations.Fields(ts.Session)
-	if err != nil || v.DefaultSync != "link" || len(v.Push) != 5 || len(v.Mirror) != 3 || v.Props == nil || len(v.Props) != 0 {
+	if err != nil || v.DefaultSync != "link" || len(v.Push) != 4 || len(v.Mirror) != 3 || v.Props == nil || len(v.Props) != 0 {
 		t.Fatalf("Fields = %+v, %v", v, err)
 	}
 	head := ts.Head()

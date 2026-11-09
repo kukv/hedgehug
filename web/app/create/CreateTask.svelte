@@ -10,8 +10,9 @@
   import type { CreateRequest } from "../create-state.svelte";
   import BodyEditor from "../detail/BodyEditor.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
+  import LabelPicker from "../detail/LabelPicker.svelte";
   import PropField from "../detail/PropField.svelte";
-  import { propRows, statusOptions } from "../detail/prop-rows";
+  import { builtinRows, propRows, statusOptions } from "../detail/prop-rows";
   import TaskPicker from "../detail/TaskPicker.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
@@ -84,6 +85,10 @@
   let pickedTemplate = $state<string | null>(null);
   let assignees = $state<string[]>([]);
   let propValues = $state<Record<string, unknown>>({});
+  // The built-in properties the dialog asks for: priority, due and labels.
+  let priority = $state<string | null>(null);
+  let due = $state<string | null>(null);
+  let labels = $state<string[]>([]);
   let busy = $state(false);
   let error = $state("");
   let titleEl = $state<HTMLInputElement>();
@@ -146,6 +151,13 @@
   const rows = $derived(
     (sc.current ? propRows(sc.current, {}) : []).filter((r) => r.editor !== null),
   );
+  const priorityRow = $derived(
+    sc.current ? builtinRows(sc.current, {}).find((r) => r.name === "priority") : undefined,
+  );
+  const dueRow = $derived(
+    sc.current ? builtinRows(sc.current, {}).find((r) => r.name === "due") : undefined,
+  );
+  const labelOptions = $derived(sc.current?.labels ?? []);
   const statusChoices = $derived(statusOptions(sc.current));
   const hold = $derived(
     parent && kinds.length === 0
@@ -172,6 +184,9 @@
     const props: Record<string, string> = {};
     if (status && status !== defaultStatusName) props.status = status;
     if (assignees.length > 0) props.assignees = assignees.join(",");
+    if (priority) props.priority = priority;
+    if (due) props.due = due;
+    if (labels.length > 0) props.labels = labels.join(",");
     for (const [k, v] of Object.entries(cleanProps())) {
       props[k] = Array.isArray(v) ? v.join(",") : String(v);
     }
@@ -203,6 +218,9 @@
           status,
           ...(template ? { template } : kindDefault ? { no_template: true } : {}),
           ...(assignees.length > 0 ? { assignees } : {}),
+          ...(priority ? { priority } : {}),
+          ...(due ? { due } : {}),
+          ...(labels.length > 0 ? { labels } : {}),
           ...(Object.keys(props).length > 0 ? { props } : {}),
         },
         { store: ws.store },
@@ -392,6 +410,42 @@
           oncommit={() => {}}
         />
       </div>
+      {#if priorityRow}
+        <div class="prow">
+          <span class="lbl">{priorityRow.label}</span>
+          <PropField
+            row={priorityRow}
+            value={priority}
+            onedit={(v) => (priority = v as string | null)}
+            oncommit={() => {}}
+          />
+        </div>
+      {/if}
+      {#if dueRow}
+        <div class="prow">
+          <span class="lbl">{dueRow.label}</span>
+          <PropField
+            row={dueRow}
+            value={due}
+            onedit={(v) => (due = v as string | null)}
+            oncommit={() => {}}
+          />
+        </div>
+      {/if}
+      {#if ws && sc.current}
+        <div class="prow">
+          <span class="lbl">ラベル</span>
+          <LabelPicker
+            store={ws.store}
+            label="ラベル"
+            value={labels}
+            options={labelOptions}
+            onnavigate={onclose}
+            onedit={(v) => (labels = v)}
+            oncommit={() => {}}
+          />
+        </div>
+      {/if}
       {#each rows as r (r.name)}
         <div class="prow">
           <span class="lbl">{r.label}</span>
