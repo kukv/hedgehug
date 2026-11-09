@@ -730,6 +730,14 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 		return revertSet(&t.Repos, field, raw)
 	case "blocked_by":
 		return revertSet(&t.BlockedBy, field, raw)
+	case "causes":
+		return revertSet(&t.Causes, field, raw)
+	case "relates":
+		return revertSet(&t.Relates, field, raw)
+	case "duplicates":
+		return revertSet(&t.Duplicates, field, raw)
+	case "clones":
+		return revertSet(&t.Clones, field, raw)
 	case "releases":
 		return revertSet(&t.Releases, field, raw)
 	case "links":

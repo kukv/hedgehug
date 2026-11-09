@@ -27,6 +27,9 @@ const (
 	// store, which the checks here do not see.
 	CodeMissingRef = "missing_ref"
 	CodeCycle      = "cycle"
+	// CodeSelfRef is a relation other than blocked_by that points at its
+	// own task; blocked_by pointing at itself is a cycle.
+	CodeSelfRef = "ref.self"
 )
 
 // Violation is a way a task breaks its schema. Writes refuse violations;

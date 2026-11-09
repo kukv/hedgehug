@@ -72,8 +72,8 @@ type WorklogTotal struct {
 
 // RelationView is one kind of task pointing at the task shown.
 type RelationView struct {
-	Key   string // the name in JSON: blocks, or the property
-	Label string // the name in the text
+	Key   string // the name in JSON: the other direction of a relation, such as blocks
+	Label string // the name in the text, such as Blocks
 	Tasks []Ref
 }
 

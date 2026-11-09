@@ -433,7 +433,7 @@ func (j *moveJob) load() (*moveWork, error) {
 
 	// Step 4: the references to cut.
 	srcSchema := j.srcIx.Schema()
-	unlinked := store.Unlinks(srcSchema, w.tasks, rest)
+	unlinked := store.Unlinks(w.tasks, rest)
 	w.plan = MovePlan{From: j.fromName, To: j.toName, Tasks: entries, Unlinked: unlinked}
 	w.plan.Labels = j.labels(entries, unlinked)
 

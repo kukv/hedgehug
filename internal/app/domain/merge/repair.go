@@ -48,7 +48,7 @@ type Repaired struct {
 //
 // A task that moved to another store leaves a forward (a task file with only
 // moved_to). The children of a forward go to the root (parent_moved), the
-// blockers and task_ref values that name a forward are removed (ref_moved),
+// blockers and the other relations that name a forward are removed (ref_moved),
 // and the comment and worklog files under a forward are removed. The files
 // removed are returned as dropped, each an Overwritten with Field "*" and
 // the whole file as a JSON string.

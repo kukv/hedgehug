@@ -32,7 +32,9 @@ break the schema. It lists the tasks and asks; --yes does not ask, and
   key-=value  remove from a list
 
 Fields: title, kind, status, assignees, watchers, labels, repos, blocked_by,
-sprint, releases (a name in the workspace of the task).
+causes, relates, duplicates, clones, sprint, releases (a name in the workspace
+of the task). The other direction of a relation (blocks, caused_by, ...) is
+read-only.
 Any other key is a property of the schema. Use hedgehug mv for the parent
 and the order.`,
 		Args: func(cmd *cobra.Command, args []string) error {

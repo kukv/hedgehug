@@ -676,6 +676,12 @@ func TestRevertField(t *testing.T) {
 	if err := notifications.RevertField(task, "blocked_by", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || !slices.Equal(task.BlockedBy, []model.ULID{u}) {
 		t.Errorf("blocked_by = %v, %v", task.BlockedBy, err)
 	}
+	for _, rel := range schema.Relations {
+		x := &model.Task{}
+		if err := notifications.RevertField(x, rel.Name, json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || !slices.Equal(rel.Get(x), []model.ULID{u}) {
+			t.Errorf("%s = %v, %v", rel.Name, rel.Get(x), err)
+		}
+	}
 	if err := notifications.RevertField(task, "sprint", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || task.Sprint == nil || *task.Sprint != u {
 		t.Errorf("sprint = %v, %v", task.Sprint, err)
 	}

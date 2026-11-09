@@ -433,27 +433,10 @@ func reverse(ix *index.Index, ulid model.ULID) []usecase.RelationView {
 		}
 		return rs
 	}
-	if es := ix.Reverse(ulid, "blocked_by"); len(es) > 0 {
-		out = append(out, usecase.RelationView{Key: "blocks", Label: "blocks", Tasks: refs(es)})
-	}
-	for _, p := range ix.Schema().Props {
-		if p.Type != schema.TypeTaskRef {
-			continue
+	for _, rel := range schema.Relations {
+		if es := ix.Reverse(ulid, rel.Name); len(es) > 0 {
+			out = append(out, usecase.RelationView{Key: rel.Inverse, Label: rel.InverseLabel, Tasks: refs(es)})
 		}
-		es := ix.Reverse(ulid, p.Name)
-		if len(es) == 0 {
-			continue
-		}
-		label := p.Name + " (from)"
-		switch {
-		case p.Inverse != "":
-			label = p.Inverse
-		case p.Symmetric && p.Label != "":
-			label = p.Label
-		case p.Symmetric:
-			label = p.Name
-		}
-		out = append(out, usecase.RelationView{Key: p.Name, Label: label, Tasks: refs(es)})
 	}
 	return out
 }

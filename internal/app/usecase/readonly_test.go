@@ -69,7 +69,10 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		{"Add", func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "two"}); return err }},
 		{"Set", func() error { _, err := tasks.Set(ts.Session, "ME-99", nil); return err }},
 		{"SetStatus", func() error { _, err := tasks.SetStatus(ts.Session, "ME-99", "done"); return err }},
-		{"Dep", func() error { _, err := tasks.Dep(ts.Session, "ME-99", "ME-98", true); return err }},
+		{"Dep", func() error {
+			_, err := tasks.Dep(ts.Session, "ME-99", tasks.DepTargets{"blocked_by": {"ME-98"}}, true)
+			return err
+		}},
 		{"Watch", func() error { _, err := tasks.Watch(ts.Session, "ME-99", true); return err }},
 		{"BeginEdit", func() error { _, err := tasks.BeginEdit(ts.Session, "ME-99"); return err }},
 		{"Edit", func() error { _, err := tasks.Edit(ts.Session, "ME-99", []byte("x")); return err }},

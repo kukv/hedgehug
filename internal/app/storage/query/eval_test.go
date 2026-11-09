@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
@@ -20,10 +19,10 @@ import (
 //	└── E (epic, todo)
 //	    └── a (task, in_progress, label backend, assignee alice,
 //	           priority high, due 2026-11-05, estimate 2h, points 3,
-//	           blocked by b, duplicates c, body "検索語 で探す")
+//	           blocked by b, duplicates c, causes b, body "検索語 で探す")
 //	├── b (task, backlog, id WEB-1, priority urgent, due 2026-11-20,
 //	│      relates c, body "Fix LOGIN 検索語")
-//	├── c (task, done, label wip, priority low)
+//	├── c (task, done, label wip, priority low, clones a)
 //	└── d (task, todo, deleted)
 type fixture struct {
 	ix  *index.Index
@@ -46,15 +45,16 @@ func newFixture(t *testing.T) *fixture {
 	setProp(a, "estimate", "2h")
 	setProp(a, "points", "3")
 	a.BlockedBy = []model.ULID{b.ULID}
-	setRefs(a, "duplicates", c.ULID)
+	a.Duplicates, a.Causes = []model.ULID{c.ULID}, []model.ULID{b.ULID}
 	a.Body = "検索語 で探す\n"
 	b.Status, b.ID = "backlog", "WEB-1"
 	setProp(b, "priority", "urgent")
 	setProp(b, "due", "2026-11-20")
-	setRefs(b, "relates", c.ULID)
+	b.Relates = []model.ULID{c.ULID}
 	b.Body = "Fix LOGIN 検索語\n"
 	c.Status, c.Labels = "done", []string{"wip"}
 	setProp(c, "priority", "low")
+	c.Clones = []model.ULID{a.ULID}
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	d.DeletedAt = &at
 	put(t, s, p, e, a, b, c, d)
@@ -100,15 +100,20 @@ func TestRunFilters(t *testing.T) {
 		{"blocked_by:web-1", Options{}, []string{"a"}},
 		{"blocks:" + f.ids["a"].String(), Options{}, []string{"b"}},
 		{"duplicates:" + f.ids["c"].String(), Options{}, []string{"a"}},
-		{"duplicates.inverse:" + f.ids["a"].String(), Options{}, []string{"c"}},
-		{"duplicates.inverse:" + f.ids["c"].String(), Options{}, []string{}},
-		{"relates.inverse:" + f.ids["c"].String(), Options{}, []string{"b"}}, // symmetric: as relates:
-		{"relates.inverse:" + f.ids["b"].String(), Options{}, []string{"c"}},
-		{"relates.inverse:none", Options{}, []string{"P", "E", "a"}},
-		{"blocked_by.inverse:" + f.ids["a"].String(), Options{}, []string{"b"}},
+		{"duplicated_by:" + f.ids["a"].String(), Options{}, []string{"c"}},
+		{"duplicated_by:" + f.ids["c"].String(), Options{}, []string{}},
+		{"duplicated_by:none", Options{}, []string{"P", "E", "a", "b"}},
+		{"causes:" + f.ids["b"].String(), Options{}, []string{"a"}},
+		{"caused_by:" + f.ids["a"].String(), Options{}, []string{"b"}},
+		{"clones:" + f.ids["a"].String(), Options{}, []string{"c"}},
+		{"cloned_by:" + f.ids["c"].String(), Options{}, []string{"a"}},
 		{"relates:" + f.ids["c"].String(), Options{}, []string{"b"}},
-		{"relates:" + f.ids["b"].String(), Options{}, []string{"c"}}, // symmetric
-		{"relates:none", Options{}, []string{"P", "E", "a"}},
+		{"relates:" + f.ids["b"].String(), Options{}, []string{}}, // it has a direction
+		{"related_by:" + f.ids["b"].String(), Options{}, []string{"c"}},
+		{"related_by:" + f.ids["c"].String(), Options{}, []string{}},
+		{"related_by:none", Options{}, []string{"P", "E", "a", "b"}},
+		{"relates:none", Options{}, []string{"P", "E", "a", "c"}},
+		{"relates:" + f.ids["c"].String() + " related_by:" + f.ids["b"].String(), Options{}, []string{}},
 		{"is:blocked", Options{}, []string{"a"}},
 		{"is:invalid", Options{}, []string{}},
 		{"is:deleted", Options{}, []string{"d"}},
@@ -230,6 +235,7 @@ func TestRunErrors(t *testing.T) {
 		{"project:none", Options{}, 1},
 		{"priority.inverse:x", Options{}, 1}, // not a relation
 		{"nope.inverse:x", Options{}, 1},
+		{"relates.inverse:x", Options{}, 1}, // written related_by: now
 	}
 	for _, tt := range tests {
 		q, err := Parse(tt.q)
@@ -279,42 +285,19 @@ func TestRunWorkspace(t *testing.T) {
 	}
 }
 
-func TestInverseLabelIsNotAKey(t *testing.T) {
+// <relation>.inverse is no key. Only for a relation does the error say how to
+// write the other direction.
+func TestInverseSuffixHintsTheInverseName(t *testing.T) {
 	t.Parallel()
-	s := newStore(t)
-	sc, _, _, err := s.Schema().ChangeProp("duplicates", schema.PropChange{Inverse: ptr("dup_by")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
-	ix := mustOpen(t, s)
-	for q, ok := range map[string]bool{"dup_by:none": false, "duplicates.inverse:none": true} {
-		parsed, err := Parse(q)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = Run(ix, parsed, Options{})
-		var qe *Error
-		if ok == errors.As(err, &qe) {
-			t.Errorf("Run(%q) err = %v", q, err)
-		}
-	}
-}
-
-func TestInverseLabelErrorHintsTheInverseKey(t *testing.T) {
-	t.Parallel()
-	s := newStore(t)
-	sc, _, _, err := s.Schema().ChangeProp("duplicates", schema.PropChange{Inverse: ptr("重複元")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
-	ix := mustOpen(t, s)
-	for q, hint := range map[string]bool{"重複元:none": true, "nothing:none": false} {
+	ix := newFixture(t).ix
+	for q, hint := range map[string]string{
+		"duplicates.inverse:none": "（逆方向は duplicated_by: で書きます）",
+		"blocked_by.inverse:none": "（逆方向は blocks: で書きます）",
+		"relates.inverse:none":    "（逆方向は related_by: で書きます）",
+		"priority.inverse:none":   "",
+		"nothing:none":            "",
+		"duplicated_by.inverse:x": "",
+	} {
 		parsed, err := Parse(q)
 		if err != nil {
 			t.Fatal(err)
@@ -324,11 +307,8 @@ func TestInverseLabelErrorHintsTheInverseKey(t *testing.T) {
 		if !errors.As(err, &qe) {
 			t.Fatalf("Run(%q) err = %v", q, err)
 		}
-		const want = "（逆方向は duplicates.inverse: で書きます）"
-		if got := strings.Contains(qe.Msg, want); got != hint {
-			t.Errorf("Run(%q) msg = %q, hint = %v", q, qe.Msg, got)
+		if hint != "" && !strings.Contains(qe.Msg, hint) || hint == "" && strings.Contains(qe.Msg, "逆方向") {
+			t.Errorf("Run(%q) msg = %q, want hint %q", q, qe.Msg, hint)
 		}
 	}
 }
-
-func ptr[T any](v T) *T { return &v }

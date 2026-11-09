@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
-	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
@@ -84,10 +83,10 @@ func TestPropertyConvergesStores(t *testing.T) {
 	if testing.Short() {
 		rounds, steps = 5, 30
 	}
-	var moves, multi, backs, overwritten, parentMoved, refMoved, taskRefMoved atomic.Int64
+	var moves, multi, backs, overwritten, parentMoved, refMoved, relatesMoved atomic.Int64
 	t.Cleanup(func() {
-		t.Logf("moves %d, moves of a task that had moved %d, moves back to a store with the forward %d, task files overwritten by a forward %d, parent_moved %d, ref_moved %d (task_ref %d)",
-			moves.Load(), multi.Load(), backs.Load(), overwritten.Load(), parentMoved.Load(), refMoved.Load(), taskRefMoved.Load())
+		t.Logf("moves %d, moves of a task that had moved %d, moves back to a store with the forward %d, task files overwritten by a forward %d, parent_moved %d, ref_moved %d (relates %d)",
+			moves.Load(), multi.Load(), backs.Load(), overwritten.Load(), parentMoved.Load(), refMoved.Load(), relatesMoved.Load())
 		// Each path is reached at least once over the seeds of a full run.
 		if testing.Short() {
 			return
@@ -95,7 +94,7 @@ func TestPropertyConvergesStores(t *testing.T) {
 		for name, n := range map[string]int64{
 			"a move between stores": moves.Load(), "a move of a task that had moved": multi.Load(),
 			"a move back to the store with the forward": backs.Load(), "a parent_moved repair": parentMoved.Load(),
-			"a ref_moved repair of blocked_by or task_ref": refMoved.Load(), "a ref_moved repair of a task_ref": taskRefMoved.Load(),
+			"a ref_moved repair of a relation": refMoved.Load(), "a ref_moved repair of relates": relatesMoved.Load(),
 			"a task file overwritten by a forward": overwritten.Load(),
 		} {
 			if n == 0 {
@@ -189,8 +188,8 @@ func TestPropertyConvergesStores(t *testing.T) {
 						parentMoved.Add(1)
 					case "ref_moved":
 						refMoved.Add(1)
-						if strings.Contains(r.value, `"props.`+refProp+`"`) {
-							taskRefMoved.Add(1)
+						if strings.Contains(r.value, `"field":"relates"`) {
+							relatesMoved.Add(1)
 						}
 					}
 				}
@@ -756,9 +755,11 @@ func (h *history) checkInvariants(ps *problems) {
 				ps.add("task %s (%s) is blocked by %s, which moved to another store", u, t.ID, b)
 			}
 		}
-		if n := t.Props.Get(refProp); n != nil && n.Kind == yaml.ScalarNode {
-			if r, err := model.ParseULID(n.Value); err == nil && v.fwd[r] != nil {
-				ps.add("task %s (%s) has a task_ref to %s, which moved to another store", u, t.ID, r)
+		for _, rel := range schema.Relations[1:] {
+			for _, r := range rel.Get(t) {
+				if v.fwd[r] != nil {
+					ps.add("task %s (%s) %s %s, which moved to another store", u, t.ID, rel.Name, r)
+				}
 			}
 		}
 		if t.Parent == nil {

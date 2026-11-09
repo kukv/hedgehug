@@ -282,15 +282,21 @@ func SetStatus(ss *usecase.Session, arg, name string) (usecase.TaskResult, error
 	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
-// Dep makes the task arg names blocked by the task blockerArg names, or, with
-// add false, no longer blocked by it.
-func Dep(ss *usecase.Session, arg, blockerArg string, add bool) (usecase.TaskResult, error) {
+// DepTargets are the tasks to tie to a task, by the name of the relation
+// (blocked_by, causes, relates, duplicates or clones): IDs or ULIDs.
+type DepTargets map[string][]string
+
+// Dep ties the task arg names to the tasks of targets through the relations
+// they are listed under, or, with add false, unties them, in one commit. A
+// pair that is already tied (or, with add false, is not) is refused as
+// dep.invalid, each pair on its own line of the message.
+func Dep(ss *usecase.Session, arg string, targets DepTargets, add bool) (usecase.TaskResult, error) {
 	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
 	if ts != ss {
-		return Dep(ts, arg, blockerArg, add)
+		return Dep(ts, arg, targets, add)
 	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
@@ -303,25 +309,47 @@ func Dep(ss *usecase.Session, arg, blockerArg string, add bool) (usecase.TaskRes
 	if err := usecase.NotDeleted(ix, e); err != nil {
 		return usecase.TaskResult{}, err
 	}
-	b, err := ss.ResolveRef(ix, blockerArg)
-	if err != nil {
-		return usecase.TaskResult{}, err
+	type pair struct {
+		rel    schema.Relation
+		target model.ULID
+	}
+	var pairs []pair
+	for name := range targets {
+		if _, inverse, ok := schema.RelationOf(name); !ok || inverse {
+			return usecase.TaskResult{}, usecase.NewErr(usecase.KindUsage, "dep.unknown_relation", fmt.Errorf("%q is not a relation that can be tied", name), "relation", name)
+		}
+	}
+	for _, rel := range schema.Relations { // in the order of the table
+		for _, targetArg := range targets[rel.Name] {
+			b, err := ss.ResolveRef(ix, targetArg)
+			if err != nil {
+				return usecase.TaskResult{}, err
+			}
+			pairs = append(pairs, pair{rel, b.ULID})
+		}
 	}
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "dep", Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
 		}
-		has := slices.Contains(t.BlockedBy, b.ULID)
-		switch {
-		case add && has:
-			return usecase.NewErr(usecase.KindInvalid, "dep.invalid", fmt.Errorf("%s is already blocked by %s", usecase.RefName(ix, e.ULID), usecase.RefName(ix, b.ULID)))
-		case add:
-			t.BlockedBy = append(t.BlockedBy, b.ULID)
-		case !has:
-			return usecase.NewErr(usecase.KindInvalid, "dep.invalid", fmt.Errorf("%s is not blocked by %s", usecase.RefName(ix, e.ULID), usecase.RefName(ix, b.ULID)))
-		default:
-			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ULID) bool { return x == b.ULID })
+		var refused []string
+		for _, p := range pairs {
+			list := slices.Clone(p.rel.Get(t))
+			has := slices.Contains(list, p.target)
+			switch {
+			case add && has:
+				refused = append(refused, fmt.Sprintf("%s already has %s %s", usecase.RefName(ix, e.ULID), p.rel.Name, usecase.RefName(ix, p.target)))
+			case add:
+				p.rel.Set(t, append(list, p.target))
+			case !has:
+				refused = append(refused, fmt.Sprintf("%s does not have %s %s", usecase.RefName(ix, e.ULID), p.rel.Name, usecase.RefName(ix, p.target)))
+			default:
+				p.rel.Set(t, slices.DeleteFunc(list, func(x model.ULID) bool { return x == p.target }))
+			}
+		}
+		if len(refused) > 0 {
+			return usecase.NewErr(usecase.KindInvalid, "dep.invalid", errors.New(strings.Join(refused, "\n")))
 		}
 		return tx.PutTask(t)
 	})

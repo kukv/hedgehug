@@ -47,13 +47,11 @@ type statusChangeInput struct {
 type propAddInput struct {
 	StoreParam
 	Body struct {
-		Name      string   `json:"name"`
-		Label     string   `json:"label,omitempty"`
-		Type      string   `json:"type" enum:"text,number,bool,date,datetime,duration,enum,multi_enum,user,task_ref,url"`
-		Values    []string `json:"values,omitempty"`
-		Multi     bool     `json:"multi,omitempty"`
-		Inverse   string   `json:"inverse,omitempty"`
-		Symmetric bool     `json:"symmetric,omitempty"`
+		Name   string   `json:"name"`
+		Label  string   `json:"label,omitempty"`
+		Type   string   `json:"type" enum:"text,number,bool,date,datetime,duration,enum,multi_enum,user,url"`
+		Values []string `json:"values,omitempty"`
+		Multi  bool     `json:"multi,omitempty"`
 	}
 }
 
@@ -66,12 +64,10 @@ type valueEditBody struct {
 type propChangeInput struct {
 	DefParam
 	Body struct {
-		Name      *string          `json:"name,omitempty" doc:"The new name, as for a status"`
-		Label     *string          `json:"label,omitempty"`
-		Multi     *bool            `json:"multi,omitempty"`
-		Inverse   *string          `json:"inverse,omitempty"`
-		Symmetric *bool            `json:"symmetric,omitempty"`
-		Values    *[]valueEditBody `json:"values,omitempty" doc:"All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it"`
+		Name   *string          `json:"name,omitempty" doc:"The new name, as for a status"`
+		Label  *string          `json:"label,omitempty"`
+		Multi  *bool            `json:"multi,omitempty"`
+		Values *[]valueEditBody `json:"values,omitempty" doc:"All the values after the edit, in order, of an enum or multi_enum property. A current value that no from names is removed: 422 schema.in_use when a task uses it"`
 	}
 }
 
@@ -145,16 +141,16 @@ func (s *Server) registerSchemaEdit() {
 			}), schemas.EditOpts{Templates: slices.Sorted(maps.Values(in.Body.Default))})
 		})
 
-	huma.Register(s.api, reg("add-prop", http.MethodPost, "/api/schema/props", "Add a property or a relation at the end"),
+	huma.Register(s.api, reg("add-prop", http.MethodPost, "/api/schema/props", "Add a property at the end"),
 		func(_ context.Context, in *propAddInput) (*editOutput, error) {
 			b := in.Body
-			p := schema.Prop{Name: b.Name, Label: b.Label, Type: schema.PropType(b.Type), Values: b.Values, Multi: b.Multi, Inverse: b.Inverse, Symmetric: b.Symmetric}
+			p := schema.Prop{Name: b.Name, Label: b.Label, Type: schema.PropType(b.Type), Values: b.Values, Multi: b.Multi}
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.AddProp(p) }), schemas.EditOpts{})
 		})
-	huma.Register(s.api, reg("change-prop", http.MethodPatch, "/api/schema/props/{name}", "Change a property or a relation"),
+	huma.Register(s.api, reg("change-prop", http.MethodPatch, "/api/schema/props/{name}", "Change a property"),
 		func(_ context.Context, in *propChangeInput) (*editOutput, error) {
 			b := in.Body
-			ch := schema.PropChange{Name: b.Name, Label: b.Label, Inverse: b.Inverse, Multi: b.Multi, Symmetric: b.Symmetric}
+			ch := schema.PropChange{Name: b.Name, Label: b.Label, Multi: b.Multi}
 			if b.Values != nil {
 				vs := make([]schema.ValueEdit, len(*b.Values))
 				for i, v := range *b.Values {
@@ -182,7 +178,7 @@ func (s *Server) registerSchemaEdit() {
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.RemoveProp(in.Name) }),
 				schemas.EditOpts{Use: []schemas.Use{{Target: schema.TargetProp, Name: in.Name}}})
 		})
-	huma.Register(s.api, reg("order-props", http.MethodPut, "/api/schema/props/order", "Put the relations, or the other properties, in order"),
+	huma.Register(s.api, reg("order-props", http.MethodPut, "/api/schema/props/order", "Put the properties in order"),
 		func(_ context.Context, in *orderInput) (*editOutput, error) {
 			return s.edit(in.Store, plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc.OrderProps(in.Body.Names) }), schemas.EditOpts{})
 		})

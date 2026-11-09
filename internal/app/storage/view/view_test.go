@@ -141,6 +141,10 @@ func TestMissingColumns(t *testing.T) {
 	if got := v.MissingColumns(schema.Default()); !slices.Equal(got, []string{"gone", "other"}) {
 		t.Errorf("MissingColumns = %q", got)
 	}
+	rel, _ := Decode("x", []byte("layout: table\ntable:\n  columns: [id, blocked_by, causes, relates, duplicates, clones]\n"))
+	if got := rel.MissingColumns(schema.Default()); !slices.Equal(got, []string{"blocked_by", "causes", "relates", "duplicates", "clones"}) {
+		t.Errorf("MissingColumns of relations = %q; a relation is no column", got)
+	}
 	dup, _ := Decode("x", []byte("layout: table\ntable:\n  columns: [gone, gone, other, gone]\n"))
 	if got := dup.MissingColumns(schema.Default()); !slices.Equal(got, []string{"gone", "other"}) {
 		t.Errorf("MissingColumns with repeats = %q", got)

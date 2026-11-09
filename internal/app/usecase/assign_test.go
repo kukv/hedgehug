@@ -9,6 +9,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -95,24 +96,44 @@ func TestApplyAssign(t *testing.T) {
 			t.Errorf("labels= : err %v, labels %v", err, task.Labels)
 		}
 	})
-	t.Run("blocked_by resolves ULIDs", func(t *testing.T) {
-		task := newTask()
-		if err := apply(t, task, "blocked_by+=other"); err != nil {
-			t.Fatal(err)
+	t.Run("relations resolve ULIDs", func(t *testing.T) {
+		for _, rel := range schema.Relations {
+			task := newTask()
+			if err := apply(t, task, rel.Name+"+=other"); err != nil {
+				t.Fatal(err)
+			}
+			if got := rel.Get(task); !slices.Equal(got, []model.ULID{other}) {
+				t.Errorf("%s = %v", rel.Name, got)
+			}
+			if task.Props.Get(rel.Name) != nil {
+				t.Errorf("%s landed in props", rel.Name)
+			}
+			if err := apply(t, task, rel.Name+"-=other"); err != nil || len(rel.Get(task)) != 0 {
+				t.Errorf("%s-= : err %v, %v", rel.Name, err, rel.Get(task))
+			}
+			if err := apply(t, task, rel.Name+"+=nope"); err == nil {
+				t.Errorf("an unknown task was added to %s", rel.Name)
+			}
+			if err := apply(t, task, rel.Name+"=other"); err != nil || len(rel.Get(task)) != 1 {
+				t.Errorf("%s= : err %v, %v", rel.Name, err, rel.Get(task))
+			}
+			if err := apply(t, task, rel.Name+"="); err != nil || len(rel.Get(task)) != 0 {
+				t.Errorf("%s= (clear): err %v, %v", rel.Name, err, rel.Get(task))
+			}
 		}
-		if !slices.Equal(task.BlockedBy, []model.ULID{other}) {
-			t.Errorf("blocked_by = %v", task.BlockedBy)
-		}
-		if err := apply(t, task, "blocked_by-=other"); err != nil || len(task.BlockedBy) != 0 {
-			t.Errorf("blocked_by-= : err %v, %v", err, task.BlockedBy)
-		}
-		if err := apply(t, task, "blocked_by+=nope"); err == nil {
-			t.Error("an unknown task was added to blocked_by")
+	})
+	t.Run("the other direction is read-only", func(t *testing.T) {
+		for _, rel := range schema.Relations {
+			a, err := usecase.ParseAssign(rel.Inverse + "+=other")
+			if err != nil {
+				t.Fatal(err)
+			}
+			usecasetest.WantErr(t, usecase.ApplyAssign(newTask(), a, usecasetest.TestSchema(), resolve), usecase.KindInvalid, "assign.readonly")
 		}
 	})
 	t.Run("props by type", func(t *testing.T) {
 		task := newTask()
-		if err := apply(t, task, "due=2026-11-01", "points=3", "estimate=2h", "priority=high", "flag=true", "at=2026-10-30T10:00:00Z", "note=123", "duplicates+=other", "tags+=a"); err != nil {
+		if err := apply(t, task, "due=2026-11-01", "points=3", "estimate=2h", "priority=high", "flag=true", "at=2026-10-30T10:00:00Z", "note=123", "tags+=a"); err != nil {
 			t.Fatal(err)
 		}
 		for key, want := range map[string]string{"due": "2026-11-01", "points": "3", "estimate": "2h", "priority": "high", "flag": "true", "at": "2026-10-30T10:00:00Z", "note": "123"} {
@@ -121,8 +142,8 @@ func TestApplyAssign(t *testing.T) {
 				t.Errorf("props.%s = %+v, want %q", key, n, want)
 			}
 		}
-		if n := task.Props.Get("duplicates"); n == nil || n.Kind != yaml.SequenceNode || len(n.Content) != 1 || n.Content[0].Value != other.String() {
-			t.Errorf("props.duplicates = %+v", n)
+		if n := task.Props.Get("tags"); n == nil || n.Kind != yaml.SequenceNode || len(n.Content) != 1 || n.Content[0].Value != "a" {
+			t.Errorf("props.tags = %+v", n)
 		}
 		b, err := task.Encode()
 		if err != nil {
@@ -136,15 +157,15 @@ func TestApplyAssign(t *testing.T) {
 		if err := apply(t, task, "due="); err != nil || task.Props.Get("due") != nil {
 			t.Errorf("due= : err %v, due %v", err, task.Props.Get("due"))
 		}
-		if err := apply(t, task, "duplicates-=other"); err != nil || task.Props.Get("duplicates") != nil {
-			t.Errorf("duplicates-= : err %v, %v", err, task.Props.Get("duplicates"))
+		if err := apply(t, task, "tags-=a"); err != nil || task.Props.Get("tags") != nil {
+			t.Errorf("tags-= : err %v, %v", err, task.Props.Get("tags"))
 		}
 	})
 	t.Run("errors", func(t *testing.T) {
 		for _, s := range []string{
 			"parent=x", "rank=x", "ulid=x", "created=x", "deleted_at=x", "id=x", "sprint=x", "props=x",
 			"nope=1", "due=tomorrow", "points=many", "flag=maybe", "at=today", "estimate=long",
-			"due+=2026-11-01", "duplicates+=nope", "duplicates+=", "duplicates-=", "tags+=", "tags-=",
+			"due+=2026-11-01", "duplicates+=nope", "duplicates+=", "duplicates-=", "blocks+=other", "tags+=", "tags-=",
 		} {
 			if err := apply(t, newTask(), s); err == nil {
 				t.Errorf("%s succeeded", s)

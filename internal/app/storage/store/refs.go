@@ -4,45 +4,26 @@ import (
 	"errors"
 	"fmt"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
 
 // ref is one reference from a task to another task of the store.
 type ref struct {
-	field string // parent, blocked_by or the name of a task_ref property
+	field string // parent or the name of a relation
 	ulid  model.ULID
 }
 
-// refsOf returns the references of t: its parent, its blockers and the
-// values of its task_ref properties. Property values that are not ULIDs are
-// left out; ValidateTask reports them.
-func refsOf(t *model.Task, sc *schema.Schema) []ref {
+// refsOf returns the references of t: its parent and the tasks it points at
+// through its five relations.
+func refsOf(t *model.Task) []ref {
 	var out []ref
 	if t.Parent != nil {
 		out = append(out, ref{"parent", *t.Parent})
 	}
-	for _, ulid := range t.BlockedBy {
-		out = append(out, ref{"blocked_by", ulid})
-	}
-	for _, f := range t.Props {
-		p, ok := sc.Prop(f.Key)
-		if !ok || p.Type != schema.TypeTaskRef || f.Value == nil {
-			continue
-		}
-		items := []*yaml.Node{f.Value}
-		if f.Value.Kind == yaml.SequenceNode {
-			items = f.Value.Content
-		}
-		for _, n := range items {
-			if n.Kind != yaml.ScalarNode {
-				continue
-			}
-			if ulid, err := model.ParseULID(n.Value); err == nil {
-				out = append(out, ref{f.Key, ulid})
-			}
+	for _, rel := range schema.Relations {
+		for _, ulid := range rel.Get(t) {
+			out = append(out, ref{rel.Name, ulid})
 		}
 	}
 	return out
@@ -53,16 +34,17 @@ func refsOf(t *model.Task, sc *schema.Schema) []ref {
 // checked, so a task left with a missing reference by a purge or a sync can
 // still be edited. A new parent or blocker that leads back to t through the
 // same kind of reference is a cycle; cycles made only of references that were
-// already there are let through.
-func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violation, error) {
+// already there are let through. A new relation other than blocked_by that
+// points at t itself is refused as ref.self.
+func (tx *Tx) checkRefs(old, t *model.Task) ([]schema.Violation, error) {
 	had := map[ref]bool{}
 	if old != nil {
-		for _, r := range refsOf(old, sc) {
+		for _, r := range refsOf(old) {
 			had[r] = true
 		}
 	}
 	var vs []schema.Violation
-	for _, r := range refsOf(t, sc) {
+	for _, r := range refsOf(t) {
 		if had[r] {
 			continue
 		}
@@ -76,6 +58,9 @@ func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violati
 			continue
 		}
 		if r.field != "parent" && r.field != "blocked_by" {
+			if r.ulid == t.ULID {
+				vs = append(vs, schema.Violation{Code: schema.CodeSelfRef, Field: r.field, Msg: "自分自身は指せません"})
+			}
 			continue
 		}
 		cycle, err := tx.reaches(r.ulid, t.ULID, r.field)

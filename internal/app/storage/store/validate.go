@@ -114,7 +114,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		if err != nil {
 			return err
 		}
-		rvs, err := tx.checkRefs(old, t, sc)
+		rvs, err := tx.checkRefs(old, t)
 		if err != nil {
 			return err
 		}

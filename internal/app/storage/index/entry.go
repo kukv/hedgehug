@@ -14,31 +14,35 @@ import (
 
 // Entry is what the index keeps of one task.
 type Entry struct {
-	ULID      model.ULID
-	ID        string
-	FormerIDs []string
-	Workspace model.ULID
-	Kind      string
-	Title     string
-	Parent    *model.ULID
-	Rank      model.Rank
-	Status    string
-	Assignees []string
-	Watchers  []string
-	Labels    []string
-	BlockedBy []model.ULID
-	Sprint    *model.ULID
-	Releases  []model.ULID
-	Repos     []string          // the repositories of the task
-	Links     []model.Link      // the links, those unlinked included
-	GitHub    model.GitHubState // what GitHub says of them, without synced
-	Props     []Prop            // in file order; queries read them by the schema's types
-	Created   time.Time
-	Updated   time.Time
-	DeletedAt *time.Time
-	Text      string   // title and body in lower case, for free-text search
-	Mentions  []string // accounts mentioned in the body and the comments not deleted (login or host/login, as written), each once, in order
-	Refs      []string // ids referred to as #<ID> there, each once, in order
+	ULID       model.ULID
+	ID         string
+	FormerIDs  []string
+	Workspace  model.ULID
+	Kind       string
+	Title      string
+	Parent     *model.ULID
+	Rank       model.Rank
+	Status     string
+	Assignees  []string
+	Watchers   []string
+	Labels     []string
+	BlockedBy  []model.ULID
+	Causes     []model.ULID
+	Relates    []model.ULID
+	Duplicates []model.ULID
+	Clones     []model.ULID
+	Sprint     *model.ULID
+	Releases   []model.ULID
+	Repos      []string          // the repositories of the task
+	Links      []model.Link      // the links, those unlinked included
+	GitHub     model.GitHubState // what GitHub says of them, without synced
+	Props      []Prop            // in file order; queries read them by the schema's types
+	Created    time.Time
+	Updated    time.Time
+	DeletedAt  *time.Time
+	Text       string   // title and body in lower case, for free-text search
+	Mentions   []string // accounts mentioned in the body and the comments not deleted (login or host/login, as written), each once, in order
+	Refs       []string // ids referred to as #<ID> there, each once, in order
 	// The checkbox items of the body, and those checked; total is 0 when it has none.
 	ChecklistDone  int
 	ChecklistTotal int
@@ -91,30 +95,34 @@ func newEntry(ulid model.ULID, data []byte) (e *Entry, t *model.Task, forward bo
 // command uses it for a task that is not yet written.
 func EntryOf(t *model.Task) *Entry {
 	e := &Entry{
-		ULID:      t.ULID,
-		ID:        t.ID,
-		FormerIDs: t.FormerIDs,
-		Workspace: t.Workspace,
-		Kind:      t.Kind,
-		Title:     t.Title,
-		Parent:    t.Parent,
-		Rank:      t.Rank,
-		Status:    t.Status,
-		Assignees: t.Assignees,
-		Watchers:  t.Watchers,
-		Labels:    t.Labels,
-		BlockedBy: t.BlockedBy,
-		Sprint:    t.Sprint,
-		Releases:  t.Releases,
-		Repos:     t.Repos,
-		Links:     t.Links,
-		GitHub:    githubOf(t),
-		Created:   t.Created,
-		Updated:   t.Updated,
-		DeletedAt: t.DeletedAt,
-		Text:      strings.ToLower(t.Title + "\n" + t.Body),
-		Mentions:  Mentions(t.Body),
-		Refs:      TaskRefs(t.Body),
+		ULID:       t.ULID,
+		ID:         t.ID,
+		FormerIDs:  t.FormerIDs,
+		Workspace:  t.Workspace,
+		Kind:       t.Kind,
+		Title:      t.Title,
+		Parent:     t.Parent,
+		Rank:       t.Rank,
+		Status:     t.Status,
+		Assignees:  t.Assignees,
+		Watchers:   t.Watchers,
+		Labels:     t.Labels,
+		BlockedBy:  t.BlockedBy,
+		Causes:     t.Causes,
+		Relates:    t.Relates,
+		Duplicates: t.Duplicates,
+		Clones:     t.Clones,
+		Sprint:     t.Sprint,
+		Releases:   t.Releases,
+		Repos:      t.Repos,
+		Links:      t.Links,
+		GitHub:     githubOf(t),
+		Created:    t.Created,
+		Updated:    t.Updated,
+		DeletedAt:  t.DeletedAt,
+		Text:       strings.ToLower(t.Title + "\n" + t.Body),
+		Mentions:   Mentions(t.Body),
+		Refs:       TaskRefs(t.Body),
 	}
 	e.ChecklistDone, e.ChecklistTotal = Checklist(t.Body)
 	for _, f := range t.Props {
@@ -157,17 +165,20 @@ func scalars(n *yaml.Node) []string {
 	return nil
 }
 
-// Targets returns the tasks e points at through rel: blocked_by, or a
-// task_ref property. Property values that are not ULIDs are left out.
+// Targets returns the tasks e points at through the relation rel, by its name
+// (blocked_by, causes, relates, duplicates or clones).
 func (e *Entry) Targets(rel string) []model.ULID {
-	if rel == "blocked_by" {
+	switch rel {
+	case "blocked_by":
 		return e.BlockedBy
+	case "causes":
+		return e.Causes
+	case "relates":
+		return e.Relates
+	case "duplicates":
+		return e.Duplicates
+	case "clones":
+		return e.Clones
 	}
-	var out []model.ULID
-	for _, v := range e.Prop(rel) {
-		if ulid, err := model.ParseULID(v); err == nil {
-			out = append(out, ulid)
-		}
-	}
-	return out
+	return nil
 }

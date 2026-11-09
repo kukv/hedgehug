@@ -192,11 +192,6 @@ func TestEditErrors(t *testing.T) {
 			sc.Templates = &schema.Templates{Only: []string{"bug"}}
 			return sc, nil
 		}), "schema.invalid"},
-		{"not task_ref", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			m := true
-			next, ms, _, err := sc.ChangeProp("priority", schema.PropChange{Multi: &m})
-			return next, ms, err
-		}, "schema.not_task_ref"},
 		{"not enum", func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
 			next, ms, _, err := sc.ChangeProp("start", schema.PropChange{Values: &[]schema.ValueEdit{{Name: "x"}}})
 			return next, ms, err
@@ -376,12 +371,22 @@ func TestEditRenamesAProp(t *testing.T) {
 	}
 }
 
-func refList(us ...model.ULID) *yaml.Node {
+func propList(vs ...string) *yaml.Node {
 	n := &yaml.Node{Kind: yaml.SequenceNode}
-	for _, u := range us {
-		n.Content = append(n.Content, propScalar(u.String()))
+	for _, v := range vs {
+		n.Content = append(n.Content, propScalar(v))
 	}
 	return n
+}
+
+// addMultiText adds a text property "area" that holds a list.
+func addMultiText(t *testing.T, ts *usecasetest.Session) {
+	t.Helper()
+	if _, err := schemas.Edit(ts.Session, plain(func(sc *schema.Schema) (*schema.Schema, error) {
+		return sc.AddProp(schema.Prop{Name: "area", Type: schema.TypeText, Multi: true})
+	}), schemas.EditOpts{}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // A rename saved with a change that is checked: the tasks are looked at
@@ -391,12 +396,13 @@ func TestEditRenameWithCheckedChange(t *testing.T) {
 	t.Run("prop name and multi", func(t *testing.T) {
 		t.Parallel()
 		ts := usecasetest.New(t)
+		addMultiText(t, ts)
 		// no task has the property: a multi change cannot hold for one that
 		// has it, a list being a list
 		a := ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "priority", Value: propScalar("low")}} })
-		n, m := "cause", false
+		n, m := "region", false
 		if _, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			next, ms, _, err := sc.ChangeProp("causes", schema.PropChange{Name: &n, Multi: &m})
+			next, ms, _, err := sc.ChangeProp("area", schema.PropChange{Name: &n, Multi: &m})
 			return next, ms, err
 		}, schemas.EditOpts{Check: true}); err != nil {
 			t.Fatal(err)
@@ -408,11 +414,11 @@ func TestEditRenameWithCheckedChange(t *testing.T) {
 	t.Run("prop name and a new violation", func(t *testing.T) {
 		t.Parallel()
 		ts := usecasetest.New(t)
-		x, y := ts.AddTask("x", nil), ts.AddTask("y", nil)
-		ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "causes", Value: refList(x.ULID, y.ULID)}} })
-		n, m := "cause", false
+		addMultiText(t, ts)
+		ts.AddTask("a", func(t *model.Task) { t.Props = model.Fields{{Key: "area", Value: propList("x", "y")}} })
+		n, m := "region", false
 		_, err := schemas.Edit(ts.Session, func(sc *schema.Schema) (*schema.Schema, []schema.Migration, error) {
-			next, ms, _, err := sc.ChangeProp("causes", schema.PropChange{Name: &n, Multi: &m})
+			next, ms, _, err := sc.ChangeProp("area", schema.PropChange{Name: &n, Multi: &m})
 			return next, ms, err
 		}, schemas.EditOpts{Check: true})
 		if usecase.ProblemCode(err) != "schema.tasks_invalid" {

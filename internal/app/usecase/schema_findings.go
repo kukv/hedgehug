@@ -14,7 +14,11 @@ import (
 )
 
 // queryKeys are the keys that queries read before they read properties.
-var queryKeys = []string{"project", "is", "sort", "group", "blocks", "label", "assignee"}
+var queryKeys = []string{
+	"project", "is", "sort", "group", "blocks", "label", "assignee",
+	"causes", "relates", "duplicates", "clones",
+	"caused_by", "related_by", "duplicated_by", "cloned_by",
+}
 
 // schemaCodes are the problems of a task that come from the schema.
 var schemaCodes = []string{

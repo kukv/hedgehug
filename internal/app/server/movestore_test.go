@@ -28,7 +28,7 @@ func moveFixture(t *testing.T, ts *testServer) {
 	add("P", "")
 	add("C", "ME-2")
 	add("O", "")
-	if _, err := tasks.Dep(ss, "ME-4", "ME-3", true); err != nil {
+	if _, err := tasks.Dep(ss, "ME-4", tasks.DepTargets{"blocked_by": {"ME-3"}}, true); err != nil {
 		t.Fatal(err)
 	}
 	u := usecasetest.UlidOf(t, ts.uc, "ME-3")

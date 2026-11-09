@@ -1166,8 +1166,8 @@ func (o Options) storeName() string {
 	return o.Name
 }
 
-// pointsAtForward reports whether the reference of e through field (parent,
-// blocked_by or a task_ref property) names a forward.
+// pointsAtForward reports whether the reference of e through field (parent or
+// one of the five relations) names a forward.
 func pointsAtForward(ix *index.Index, e *index.Entry, field string) bool {
 	targets := e.Targets(field)
 	if field == "parent" && e.Parent != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -60,17 +61,21 @@ func badRequest(err error) *Problem {
 // Fields are the fields hedgehug set changes, as POST and PATCH take them. It
 // is exported because huma skips an embedded struct whose type is not.
 type Fields struct {
-	Title     *string        `json:"title,omitempty"`
-	Kind      *string        `json:"kind,omitempty"`
-	Status    *string        `json:"status,omitempty"`
-	Assignees *[]string      `json:"assignees,omitempty" doc:"Replaces the assignees"`
-	Watchers  *[]string      `json:"watchers,omitempty" doc:"Replaces the watchers"`
-	Labels    *[]string      `json:"labels,omitempty" doc:"Replaces the labels"`
-	Repos     *[]string      `json:"repos,omitempty" doc:"Replaces the repos"`
-	BlockedBy *[]string      `json:"blocked_by,omitempty" doc:"Replaces the blockers: IDs or ULIDs"`
-	Sprint    *string        `json:"sprint,omitempty" doc:"The sprint: a name in the workspace of the task, or a ULID; empty takes it off"`
-	Releases  *[]string      `json:"releases,omitempty" doc:"Replaces the releases: names in the workspace of the task, or ULIDs"`
-	Props     map[string]any `json:"props,omitempty" doc:"Property name to value; null clears it, a list replaces a multiple value"`
+	Title      *string        `json:"title,omitempty"`
+	Kind       *string        `json:"kind,omitempty"`
+	Status     *string        `json:"status,omitempty"`
+	Assignees  *[]string      `json:"assignees,omitempty" doc:"Replaces the assignees"`
+	Watchers   *[]string      `json:"watchers,omitempty" doc:"Replaces the watchers"`
+	Labels     *[]string      `json:"labels,omitempty" doc:"Replaces the labels"`
+	Repos      *[]string      `json:"repos,omitempty" doc:"Replaces the repos"`
+	BlockedBy  *[]string      `json:"blocked_by,omitempty" doc:"Replaces the blockers: IDs or ULIDs"`
+	Causes     *[]string      `json:"causes,omitempty" doc:"Replaces the tasks this one causes: IDs or ULIDs"`
+	Relates    *[]string      `json:"relates,omitempty" doc:"Replaces the tasks this one relates to: IDs or ULIDs"`
+	Duplicates *[]string      `json:"duplicates,omitempty" doc:"Replaces the tasks this one duplicates: IDs or ULIDs"`
+	Clones     *[]string      `json:"clones,omitempty" doc:"Replaces the tasks this one clones: IDs or ULIDs"`
+	Sprint     *string        `json:"sprint,omitempty" doc:"The sprint: a name in the workspace of the task, or a ULID; empty takes it off"`
+	Releases   *[]string      `json:"releases,omitempty" doc:"Replaces the releases: names in the workspace of the task, or ULIDs"`
+	Props      map[string]any `json:"props,omitempty" doc:"Property name to value; null clears it, a list replaces a multiple value"`
 }
 
 // assigns is f as hedgehug set's assignments, the properties by name.
@@ -94,7 +99,8 @@ func (f *Fields) assigns() ([]usecase.Assign, error) {
 	for _, l := range []struct {
 		key string
 		v   *[]string
-	}{{"assignees", f.Assignees}, {"watchers", f.Watchers}, {"labels", f.Labels}, {"repos", f.Repos}, {"releases", f.Releases}, {"blocked_by", f.BlockedBy}} {
+	}{{"assignees", f.Assignees}, {"watchers", f.Watchers}, {"labels", f.Labels}, {"repos", f.Repos}, {"releases", f.Releases}, {"blocked_by", f.BlockedBy},
+		{"causes", f.Causes}, {"relates", f.Relates}, {"duplicates", f.Duplicates}, {"clones", f.Clones}} {
 		if l.v != nil {
 			items := make([]any, len(*l.v))
 			for i, s := range *l.v {
@@ -216,6 +222,11 @@ func (s *Server) registerTaskWrites() {
 		b := &in.Body
 		if b.Title == "" && b.Template == "" {
 			return nil, badRequest(errors.New("give title or template"))
+		}
+		for name := range b.Props {
+			if _, _, ok := schema.RelationOf(name); ok {
+				return nil, badRequest(errors.New("関連は作成後に付けます"))
+			}
 		}
 		f := Fields{Props: b.Props}
 		if b.Assignees != nil {

@@ -89,6 +89,14 @@ func (a *app) showText(v *usecase.ShowView) string {
 		field("repos", v.Repos...)
 	}
 	field("blocked_by", names(v.BlockedBy)...)
+	for _, rel := range []struct {
+		name string
+		refs []usecase.Ref
+	}{{"causes", v.Causes}, {"relates", v.Relates}, {"duplicates", v.Duplicates}, {"clones", v.Clones}} {
+		if len(rel.refs) > 0 {
+			field(rel.name, names(rel.refs)...)
+		}
+	}
 	if v.Sprint != nil {
 		field("sprint", v.Sprint.Text())
 	}
@@ -100,10 +108,6 @@ func (a *app) showText(v *usecase.ShowView) string {
 		field("releases", rels...)
 	}
 	for _, p := range v.PropList {
-		if p.IsRef {
-			field(p.Key, names(p.Refs)...)
-			continue
-		}
 		field(p.Key, p.Values...)
 	}
 	if v.Worklog != nil {

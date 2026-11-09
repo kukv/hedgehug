@@ -38,7 +38,7 @@ func (t TaskRef) RawID() string {
 // but in another mounted store.
 type CrossRef struct {
 	From   TaskRef // the task that refers
-	Field  string  // "parent", "blocked_by" or the task_ref property
+	Field  string  // "parent" or the name of a relation
 	Target TaskRef // the task in the other store
 }
 
@@ -54,8 +54,8 @@ type pending struct {
 // reference that its own store holds, even to a deleted task, is not one; a
 // target that is deleted in the other store, or in none, is not found. A
 // target in more than one other store is reported for the first of them. The
-// order is that of the stores, then the ULID of the task, then parent,
-// blocked_by and the task_ref properties as the file has them. The data is
+// order is that of the stores, then the ULID of the task, then parent and
+// the relations in the order of schema.Relations. The data is
 // not changed. What it returns is copied out of the indexes of the stores
 // inside Mounted.With, so it can be kept.
 func CrossRefs(set *mount.Set, name string) ([]CrossRef, error) {
@@ -106,15 +106,9 @@ func unresolved(m *mount.Mounted, ix *index.Index) []pending {
 		if e.Parent != nil {
 			add("parent", *e.Parent)
 		}
-		for _, u := range e.BlockedBy {
-			add("blocked_by", u)
-		}
-		for _, p := range e.Props {
-			if sp, ok := ix.Schema().Prop(p.Key); !ok || sp.Type != schema.TypeTaskRef {
-				continue
-			}
-			for _, u := range e.Targets(p.Key) {
-				add(p.Key, u)
+		for _, rel := range schema.Relations {
+			for _, u := range e.Targets(rel.Name) {
+				add(rel.Name, u)
 			}
 		}
 	}

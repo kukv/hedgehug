@@ -109,7 +109,7 @@ func TestRepairedContentOfMoves(t *testing.T) {
 	for _, c := range []struct{ kind, value, want string }{
 		{"parent_moved", `{"from":"` + ulid.String() + `","to":null}`, "moved to the root because its parent moved to another store"},
 		{"ref_moved", `{"field":"blocked_by","target":"` + ulid.String() + `"}`, "blocked_by to API-1 was removed because it moved to another store"},
-		{"ref_moved", `{"field":"props.relates","target":"` + ulid.String() + `"}`, "props.relates to API-1 was removed because it moved to another store"},
+		{"ref_moved", `{"field":"relates","target":"` + ulid.String() + `"}`, "relates to API-1 was removed because it moved to another store"},
 	} {
 		if got := usecase.RepairedContent(ix, item(c.kind, c.value)); got != c.want {
 			t.Errorf("%s: content = %q; want %q", c.kind, got, c.want)

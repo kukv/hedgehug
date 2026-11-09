@@ -3,9 +3,11 @@ package server
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -126,6 +128,58 @@ func TestCreateTaskWithBodyAndRepos(t *testing.T) {
 	got := ts.uc.TaskByULID("me", mustULID(t, out.Task.ULID))
 	if got.Body != "line one\n\nline two\n" || len(got.Repos) != 1 || got.Repos[0] != "github.com/o/r" {
 		t.Errorf("body = %q, repos = %q", got.Body, got.Repos)
+	}
+}
+
+// The four relations and blocked_by are patched as lists of IDs, and come back
+// as lists of tasks at the top level of the task.
+func TestPatchRelations(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	id := ts.add("one", "")
+	other := ts.add("other", "")
+	third := ts.add("third", "")
+	var out taskWriteBody
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{
+		"blocked_by": []string{other}, "causes": []string{other, third}, "relates": []string{third}, "duplicates": []string{other}, "clones": []string{third},
+	}, 200, &out)
+	ids := func(rs []usecase.Ref) []string {
+		var out []string
+		for _, r := range rs {
+			out = append(out, r.ID)
+		}
+		return out
+	}
+	t0 := out.Task
+	if !slices.Equal(ids(t0.BlockedBy), []string{other}) || !slices.Equal(ids(t0.Causes), []string{other, third}) || !slices.Equal(ids(t0.Relates), []string{third}) ||
+		!slices.Equal(ids(t0.Duplicates), []string{other}) || !slices.Equal(ids(t0.Clones), []string{third}) {
+		t.Fatalf("patched = %+v", t0)
+	}
+	if len(t0.Props) != 0 {
+		t.Errorf("props = %v; a relation is not a property", t0.Props)
+	}
+	// An empty list takes them off.
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"causes": []string{}, "clones": []string{}}, 200, &out)
+	if len(out.Task.Causes) != 0 || len(out.Task.Clones) != 0 || len(out.Task.Relates) != 1 {
+		t.Errorf("after the empty lists = %+v", out.Task)
+	}
+	// A relation to the task itself is refused, as is a task that is not there.
+	p := ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"relates": []string{id}}, 422)
+	if p.Type != "schema.violation" || !strings.Contains(p.Detail, "自分自身は指せません") {
+		t.Errorf("relates to itself: %+v", p)
+	}
+	ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"duplicates": []string{"ME-999"}}, 404)
+}
+
+// A task is created without relations: they are put on it after.
+func TestCreateTaskRefusesRelationsInProps(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	for _, rel := range schema.Relations {
+		p := ts.problem("POST", "/api/tasks", map[string]any{"title": "t", "props": map[string]any{rel.Name: "ME-1"}}, 400)
+		if p.Type != "request.invalid" || !strings.Contains(p.Detail, "関連は作成後に付けます") {
+			t.Errorf("props.%s: %+v", rel.Name, p)
+		}
 	}
 }
 
