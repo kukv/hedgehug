@@ -167,7 +167,15 @@ func TestImportIssues(t *testing.T) {
 	if out.Count != 0 || out.Skipped != 1 {
 		t.Errorf("again = %+v", out)
 	}
-	ts.problem("POST", "/api/github/import", map[string]any{"repo": "org-a/web"}, 400)
+	// The label is optional: without it, every open issue counts.
+	if _, err := fake.OpenIssue("org-a/web", "no label", ""); err != nil {
+		t.Fatal(err)
+	}
+	ts.call("POST", "/api/github/import", map[string]any{"repo": "org-a/web", "dry_run": true, "parent": body["parent"]}, 200, &out)
+	if out.Count != 1 || out.Skipped != 1 {
+		t.Errorf("no label = %+v", out)
+	}
+	ts.problem("POST", "/api/github/import", map[string]any{"label": "v2"}, 400)
 }
 
 func TestGetGitHub(t *testing.T) {

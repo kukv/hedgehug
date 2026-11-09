@@ -149,8 +149,9 @@ export function cliLink(i: { id: string; kind: "pr" | "issue"; ref: Arg }): stri
   return cliLine(["link", i.id, `--${i.kind}`, i.ref]);
 }
 
-export function cliGhImport(i: { repo: Arg; label: Arg; parent?: string }): string {
-  const a: Arg[] = ["gh", "import", i.repo, "--label", i.label];
+export function cliGhImport(i: { repo: Arg; label?: Arg; parent?: string }): string {
+  const a: Arg[] = ["gh", "import", i.repo];
+  if (i.label) a.push("--label", i.label);
   if (i.parent) a.push("--parent", i.parent);
   return cliLine(a);
 }

@@ -786,11 +786,8 @@ export interface GitHubSummary {
 export interface GithubImportInputBody {
   /** Only count them */
   dry_run?: boolean;
-  /**
-     * The label of the issues to take in
-     * @minLength 1
-     */
-  label: string;
+  /** Take only the open issues with this label; without it, every open issue */
+  label?: string;
   /** The task to put them under */
   parent?: string;
   /**
@@ -3440,7 +3437,7 @@ export const getImportIssuesUrl = (params?: ImportIssuesParams,) => {
 }
 
 /**
- * @summary Make a task in mirror mode for each open issue with a label, as hh gh import
+ * @summary Make a task in mirror mode for each open issue (or those with a label), as hh gh import
  */
 export const importIssues = async (githubImportInputBody: GithubImportInputBody,
     params?: ImportIssuesParams, options?: Parameters<typeof fetcher>[1]): Promise<ImportResult> => {

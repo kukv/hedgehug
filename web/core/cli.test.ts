@@ -126,6 +126,10 @@ describe("commands", () => {
     expect(cliGhImport({ repo: "org-a/web", label: "v2", parent: "REL-1" })).toBe(
       "hh gh import org-a/web --label v2 --parent REL-1",
     );
+    expect(cliGhImport({ repo: "org-a/web", parent: "REL-1" })).toBe(
+      "hh gh import org-a/web --parent REL-1",
+    );
+    expect(cliGhImport({ repo: "org-a/web", label: "" })).toBe("hh gh import org-a/web");
     expect(cliInbox()).toBe("hh inbox");
     expect(cliInbox({ all: true })).toBe("hh inbox --all");
     expect(cliInbox({ all: true, store: "shared" })).toBe("hh inbox --all --store shared");

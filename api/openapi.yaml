@@ -1018,8 +1018,7 @@ components:
           description: Only count them
           type: boolean
         label:
-          description: The label of the issues to take in
-          minLength: 1
+          description: Take only the open issues with this label; without it, every open issue
           type: string
         parent:
           description: The task to put them under
@@ -1033,7 +1032,6 @@ components:
           type: string
       required:
         - repo
-        - label
       type: object
     GroupView:
       additionalProperties: false
@@ -4857,7 +4855,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Make a task in mirror mode for each open issue with a label, as hh gh import
+      summary: Make a task in mirror mode for each open issue (or those with a label), as hh gh import
       tags:
         - github
   /api/health:

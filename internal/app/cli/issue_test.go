@@ -95,8 +95,12 @@ func TestGHImportCommand(t *testing.T) {
 	if r.Skipped != 2 || r.Created == nil || r.Warnings == nil {
 		t.Errorf("json %+v", r)
 	}
-	if errOut := te.misused("gh", "import", "org-a/web"); !strings.Contains(errOut, "label") {
-		t.Errorf("no label: %s", errOut)
+	// Without --label, every open issue comes: the two tagged ones and the one that is not.
+	if _, err := fake.OpenIssue("org-a/web", "C", ""); err != nil {
+		t.Fatal(err)
+	}
+	if out := te.ok("gh", "import", "org-a/web", "--parent", "ME-1", "--dry-run"); out != "Would import 1 issue of github.com/org-a/web (2 linked already)\n" {
+		t.Errorf("no label: %q", out)
 	}
 	if errOut := te.misused("gh"); !strings.Contains(errOut, "a subcommand is needed") {
 		t.Errorf("no subcommand: %s", errOut)

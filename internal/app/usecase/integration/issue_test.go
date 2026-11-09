@@ -323,6 +323,24 @@ func TestImportIssues(t *testing.T) {
 	}
 }
 
+func TestImportWithoutALabelTakesEveryOpenIssue(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	ts.AddTask("parent", nil)
+	openLabeled(t, fake, "A", "")
+	if _, err := fake.OpenIssue("org-a/web", "no label", ""); err != nil {
+		t.Fatal(err)
+	}
+	r, err := integration.ImportIssues(ts.Session, integration.ImportInput{Repo: "org-a/web", Parent: "ME-1", DryRun: true})
+	if err != nil || r.Count != 2 {
+		t.Fatalf("%+v, %v", r, err)
+	}
+	r, err = integration.ImportIssues(ts.Session, integration.ImportInput{Repo: "org-a/web", Label: "hh", Parent: "ME-1", DryRun: true})
+	if err != nil || r.Count != 1 {
+		t.Fatalf("with the label: %+v, %v", r, err)
+	}
+}
+
 func TestImportNeedsAParent(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)

@@ -59,12 +59,12 @@ func TestLiveIssueComments(t *testing.T) {
 		return
 	}
 	c := New(Options{API: "https://api.github.com"}, token, nil)
-	issues, _, err := c.OpenIssues(org, "hh-live", "hh-live")
+	issues, _, err := c.OpenIssues(org, "hh-live", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(issues) == 0 {
-		t.Fatal("hh-live has no open issue with the label hh-live to comment on")
+		t.Fatal("hh-live has no open issue to comment on")
 	}
 	number := issues[0].Number
 	made, err := c.CreateIssueComment(org, "hh-live", number, "hedgehug live test")

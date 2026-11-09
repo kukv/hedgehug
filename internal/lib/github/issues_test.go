@@ -163,4 +163,12 @@ func TestOpenIssues(t *testing.T) {
 	if !slices.Equal(nums, want) {
 		t.Errorf("got %v", nums)
 	}
+	// Without a label, every open issue comes, labeled or not.
+	got, _, err = c.OpenIssues("alice", "web", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 119 { // 120 issues, one closed
+		t.Errorf("without a label: %d issues, want 119", len(got))
+	}
 }

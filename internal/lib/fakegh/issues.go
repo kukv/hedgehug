@@ -267,12 +267,12 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, x *Repo, num
 	writeJSON(w, 200, map[string]int{"number": n})
 }
 
-// openIssues answers the query OpenIssues: the open issues with the label, a
-// page of 100.
+// openIssues answers the query OpenIssues: the open issues with the label (all
+// of them when it is empty), a page of 100.
 func (s *Server) openIssues(w http.ResponseWriter, x *Repo, label, after string) {
 	var match []*Issue
 	for _, i := range x.Issues {
-		if i.State == "open" && slices.Contains(i.Labels, label) {
+		if i.State == "open" && (label == "" || slices.Contains(i.Labels, label)) {
 			match = append(match, i)
 		}
 	}
