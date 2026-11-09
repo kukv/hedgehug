@@ -124,7 +124,7 @@
 ## API・JSON の形（2026-11-09、利用者の決定）
 
 - タスクの JSON は、組み込みの項目を blocked_by・labels と同じくトップレベルに、型つきで持つ。GET・一覧の行（`hh ls --json`、`GET /api/tasks`）・PATCH・POST が同じ形。`props` の中には出さない。
-- 関連 4 つは、GET も PATCH も ID の配列（`relations:` の入れ子は作らない）。
+- 関連 4 つは blocked_by と同じ形にする。GET は Ref オブジェクト（ULID・ID・タイトルなど）の配列、PATCH は ID の配列で受ける（`relations:` の入れ子は作らない。2026-11-09、利用者の決定）。
 - priority・start・due・estimate・points は、points が数、日付が `YYYY-MM-DD`、期間が `1h30m`。値がなければ `null`。PATCH で消すのは `null`。
 - `props` に組み込みの名前を入れた要求は、今までどおり 400。
 
