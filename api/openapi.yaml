@@ -207,7 +207,7 @@ components:
           description: The mode of a new issue link
           type: string
         mirror:
-          description: Replaces the fields mirror mode syncs
+          description: Replaces the fields mirror mode syncs (comments takes the comments of the issue)
           items:
             type: string
           type: array
@@ -217,7 +217,7 @@ components:
           description: Field to property; an empty value takes it off
           type: object
         push:
-          description: Replaces the fields push mode syncs
+          description: Replaces the fields push mode syncs (comments sends the comments of the task)
           items:
             type: string
           type: array
@@ -548,6 +548,9 @@ components:
           description: When the comment was removed
           format: date-time
           type: string
+        github:
+          description: true for a comment taken from GitHub (its author starts with github:); it cannot be edited or removed in Hedgehug
+          type: boolean
         task:
           description: The ULID of the task the comment is on
           type: string
@@ -560,6 +563,7 @@ components:
         - ulid
         - author
         - created
+        - github
         - body
       type: object
     CommentWrite:

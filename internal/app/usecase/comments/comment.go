@@ -43,7 +43,7 @@ type CommentWrite struct {
 func (r CommentResult) Write() CommentWrite {
 	w := CommentWrite{Commit: usecase.CommitPtr(r.Commit)}
 	if c := r.Comment; c != nil {
-		w.Comment = usecase.CommentView{ULID: c.ULID.String(), Task: r.Ref.Task.String(), Author: c.Author, Created: c.Created, Body: c.Body}
+		w.Comment = usecase.CommentView{ULID: c.ULID.String(), Task: r.Ref.Task.String(), Author: c.Author, Created: c.Created, GitHub: c.Mirrored(), Body: c.Body}
 		if !c.Updated.IsZero() {
 			w.Comment.Updated = &c.Updated
 		}
@@ -136,11 +136,16 @@ func commentDeleted(msg string) error {
 	return usecase.NewErr(usecase.KindConflict, "comment.deleted", errors.New(msg))
 }
 
-// CheckCommentEditable refuses to edit a deleted comment, and one that none
-// of the accounts me wrote. verb is "edited" or "removed".
+// CheckCommentEditable refuses to edit a deleted comment, one taken from
+// GitHub, and one that none of the accounts me wrote, in this order. verb is
+// "edited" or "removed".
 func CheckCommentEditable(ref store.CommentRef, c *model.Comment, me []string, verb string) error {
 	if c.DeletedAt != nil {
 		return commentDeleted(fmt.Sprintf("comment %s is deleted and cannot be edited", ref.Comment.String()))
+	}
+	if c.Mirrored() {
+		return usecase.NewErr(usecase.KindInvalid, "comment.mirrored",
+			fmt.Errorf("%s's comment was taken from GitHub and cannot be %s; change it on GitHub", strings.TrimPrefix(c.Author, model.MirroredAuthorPrefix), verb), "author", c.Author)
 	}
 	if c.Author == "" {
 		return usecase.NewErr(usecase.KindConflict, "comment.no_author",

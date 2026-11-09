@@ -197,8 +197,8 @@ func (a *app) automationFieldsCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&sync, "default-sync", "", "how a linked issue syncs when --sync is not given: mirror, push or link")
-	f.StringVar(&push, "push", "", "the fields a push link sends, such as title,body,status")
-	f.StringVar(&mirror, "mirror", "", "the fields a mirror link takes both ways, such as title,status")
+	f.StringVar(&push, "push", "", "the fields a push link sends, such as title,body,status; comments sends the comments of the task")
+	f.StringVar(&mirror, "mirror", "", "the fields a mirror link takes both ways, such as title,status; comments takes the comments of the issue")
 	f.StringArrayVar(&props, "prop", nil, "a property of the issue to sync, such as milestone=target (repeatable)")
 	return cmd
 }

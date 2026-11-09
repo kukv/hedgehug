@@ -92,10 +92,15 @@ func MarkedBody(u ULID, body string) string {
 	return mark
 }
 
-// StripMark is body as it compares: with no mark on its last line, in LF, and
-// with no white space at its end. GitHub's web editor writes CRLF.
+// NormalizeBody is body as it compares: in LF and with no white space at its
+// end. GitHub's web editor writes CRLF.
+func NormalizeBody(body string) string {
+	return strings.TrimRight(strings.ReplaceAll(body, "\r\n", "\n"), " \t\n")
+}
+
+// StripMark is NormalizeBody with no mark on its last line.
 func StripMark(body string) string {
-	b := strings.TrimRight(strings.ReplaceAll(body, "\r\n", "\n"), " \t\n")
+	b := NormalizeBody(body)
 	i := strings.LastIndexByte(b, '\n') + 1
 	if markLine.MatchString(strings.TrimSpace(b[i:])) {
 		b = strings.TrimRight(b[:i], " \t\n")

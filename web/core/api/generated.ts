@@ -286,11 +286,11 @@ export type AutomationFieldsInputBodyProps = {[key: string]: string};
 export interface AutomationFieldsInputBody {
   /** The mode of a new issue link */
   default_sync?: string;
-  /** Replaces the fields mirror mode syncs */
+  /** Replaces the fields mirror mode syncs (comments takes the comments of the issue) */
   mirror?: string[];
   /** Field to property; an empty value takes it off */
   props?: AutomationFieldsInputBodyProps;
-  /** Replaces the fields push mode syncs */
+  /** Replaces the fields push mode syncs (comments sends the comments of the task) */
   push?: string[];
 }
 
@@ -487,6 +487,8 @@ export interface CommentView {
   created: string;
   /** When the comment was removed */
   deleted_at?: string;
+  /** true for a comment taken from GitHub (its author starts with github:); it cannot be edited or removed in Hedgehug */
+  github: boolean;
   /** The ULID of the task the comment is on */
   task?: string;
   ulid: string;

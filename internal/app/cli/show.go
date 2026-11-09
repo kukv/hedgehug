@@ -171,7 +171,11 @@ func (a *app) showText(v *usecase.ShowView) string {
 			if author == "" {
 				author = "-"
 			}
-			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ULID), author, c.Created.Format(time.RFC3339))
+			fmt.Fprintf(&b, "  %s  %s  %s", st.id(c.ULID), author, c.Created.Format(time.RFC3339))
+			if c.GitHub {
+				b.WriteString("  (from GitHub)")
+			}
+			b.WriteString("\n")
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}

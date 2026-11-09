@@ -41,6 +41,10 @@ var Attributes = []string{
 // ErrNotFound means a file the caller asked for is not in the store.
 var ErrNotFound = errors.New("not found")
 
+// ErrCommentChanged means PutCommentGH was given a comment that differs from
+// the file in more than gh.
+var ErrCommentChanged = errors.New("the comment differs from its file in more than gh")
+
 // Store is one store: a directory of task files under git.
 type Store struct {
 	dir  string

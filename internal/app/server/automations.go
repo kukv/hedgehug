@@ -46,8 +46,8 @@ type automationFieldsInput struct {
 	StoreParam
 	Body struct {
 		DefaultSync *string           `json:"default_sync,omitempty" doc:"The mode of a new issue link"`
-		Push        *[]string         `json:"push,omitempty" doc:"Replaces the fields push mode syncs"`
-		Mirror      *[]string         `json:"mirror,omitempty" doc:"Replaces the fields mirror mode syncs"`
+		Push        *[]string         `json:"push,omitempty" doc:"Replaces the fields push mode syncs (comments sends the comments of the task)"`
+		Mirror      *[]string         `json:"mirror,omitempty" doc:"Replaces the fields mirror mode syncs (comments takes the comments of the issue)"`
 		Props       map[string]string `json:"props,omitempty" doc:"Field to property; an empty value takes it off"`
 	}
 }
