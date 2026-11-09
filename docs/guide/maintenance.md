@@ -21,13 +21,33 @@ clash. A child whose parent is gone moves to the nearest ancestor that can hold 
 under a project called 「未分類」 (made if it is not there; a step becomes a task). It also rebuilds a store after the history of origin was rewritten (below).
 Whatever it cannot repair, it tells you.
 
+An older hedgehug that pushes to a store in the new format leaves a relation under `props:`
+(`duplicates`, `causes`, `relates` or `clones`; with format 3 these are fields of the task).
+`hh doctor` reports it as `task.legacy_field`, and `hh doctor --fix` moves it to the field
+of the task, in a commit of its own:
+
+```console
+$ hh doctor
+ME-3 (01M6ZCTTTJ0TC1RY48125GV8SB) Data loss: props.duplicates: is a relation of the task in this format, not a property; an older hedgehug wrote it
+  hint: hedgehug doctor --fix moves it to the field of the task
+1 problem
+$ hh doctor --fix
+repaired: ME-3: legacy_field props.duplicates moved to the fields of the task
+No problems
+```
+
+A task that already has a value in the field has nothing moved, because it is not known which
+of the two is newer. The finding stays: open the task with `hh edit <id>`, keep the value you
+want in the field, and delete the one under `props:`. A value under `props:` that is not the
+ULID of a task also stays, and `hh edit` is how you fix it.
+
 A store in an older format is reported once, with `hh store convert` as the way out, and its
 tasks are not checked against the schema until it is converted
 (see [Stores](stores.md#the-store-format-and-hh-store-convert)):
 
 ```console
 $ hh doctor
-.hedgehug/store.yaml: the store is in format 1, and this version uses format 2
+.hedgehug/store.yaml: the store is in format 2, and this version uses format 3
   hint: hh store convert
 1 problem
 ```
@@ -113,7 +133,7 @@ Values come from your stores, read locally; nothing is written or synced when yo
 Tab, and a failure gives no candidates:
 
 - task IDs (with the title) for commands that take a task, and for `--parent`, `--after`,
-  `--before` and `--blocked-by`
+  `--before` and the relations of `hh dep` (`--blocked-by`, `--causes`, `--relates`, `--duplicates`, `--clones`)
 - statuses for `hh status <id> <TAB>`
 - `key=` names for `hh set`, and assignees for `assignees=` and for `assignee:` in `hh ls`
 - stores (`--store`), workspaces, sprints, releases, saved views and templates

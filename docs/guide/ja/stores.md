@@ -60,7 +60,7 @@ Added WEB-7 (...) Child of website
 
 ## Store の形式と `hh store convert`
 
-Store は、形式の番号を `.hedgehug/store.yaml` に持ちます。このバージョンの hedgehug は形式 2 を使います。形式 2 では、タスクの種類が固定です（[計画](planning.md#種類)を参照）。
+Store は、形式の番号を `.hedgehug/store.yaml` に持ちます。このバージョンの hedgehug は形式 3 を使います。形式 2 でタスクの種類が固定になり（[計画](planning.md#種類)を参照）、形式 3 で関連も固定になりました（[計画](planning.md#関連)を参照）。
 
 - **古い**形式の Store は開きません。`hh store convert` と `hh doctor` 以外のコマンドは、`hh store convert で新しい形式にしてください` と言って止まります。ブラウザも、サイドバーの Store のカードと設定で同じ文を出します。`hh doctor` は、形式の番号を知らせ、このコマンドを案内します。
 - **新しい**形式の Store も開きません。hedgehug を更新してください。
@@ -77,14 +77,46 @@ Nothing was written (--dry-run).
 $ hh store convert
 ```
 
+形式 2 の Store は、次のように変換されます。
+
+```console
+$ hh store convert --dry-run
+Format 2 -> 3
+  props の duplicates・causes・relates・clones の値を、タスクの同名の項目へ移した（ULID の関連）: 2 件
+  culprit: 1 件を relates へ
+  相互の組 1 件（A に B・B に A の relates を、どちらも向きありの relates として残した）
+  ビュー bugs の query の relates:ME-2 は、これまで両方向に当たっていたが、これからは付けた側にだけ当たる（書き換えていない。逆方向も含めるなら related_by: も使う）
+  ビュー bugs の query を書き換えた: relates:ME-2 culprit.inverse:ME-3 → relates:ME-2 related_by:ME-3
+  schema.yaml の task_ref のプロパティを消した（値は関連の項目へ移した）: culprit
+  store.yaml の format を 2 から 3 にした
+Nothing was written (--dry-run).
+```
+
 `--dry-run` は、段ごとに変わる内容を一覧するだけで、何も書きません。`--json` は同じ内容を JSON で出します。もう一度実行しても、何も変わりません。
 
 - 独自の種類は、ワークスペースの直下でまとまりを作っていれば project、その下でまとまりを作っていれば epic、作業の単位なら task になります。`--kind <今の種類>=<新しい種類>`（繰り返せます）は、その種類のタスクを、決まった種類のどれかへ移します。たとえば `--kind sprint=epic` です。
 - ワークスペースの直下にあった project 以外のタスクは、「未分類」という project の下へ移ります。なければ作ります。
 - story、task、bug の下の story、task、bug は step になります。
+- 関連（形式 2 から 3）: `duplicates`、`causes`、`relates`、`clones` の値は、タスクの同名の項目へ移ります。型が `task_ref` の独自のプロパティは、値が `relates` へ移り（報告にプロパティごとに 1 行出ます）、`schema.yaml` から消えます。この型はなくなりました。
+- 意味が変わるものと、失うもの:
+  - `relates` に向きができました。A に B、B に A の両方に保存されていた組は、2 本の `relates` のまま残り、報告に `相互の組` として数えます。これまでは 1 本の `relates` がどちらのタスクからも見つかりましたが、これからは `relates:A` は A を指しているタスクだけを、`related_by:A` は A が指しているタスクを探します。クエリに `relates:` があるビューは書き換えず、報告に一覧します。両方向を探したいときは `related_by:` を足してください。
+  - ビューのクエリの `<名前>.inverse:` は、逆方向の名前になります（`causes.inverse:` は `caused_by:`）。独自の `task_ref` の `.inverse:` は `related_by:` に、キーは `relates:` になります。
+  - 関連は、ビューの列にも、並べ替えにも、グループにもなりません。`table.columns`、`sort`、`group` から外したものは、報告に一覧します。
+  - タスクの ULID の形でない値があると、変換は `convert.bad_value` で止まり、タスクと値を一覧します。ファイルを直すか、`--drop-bad-values` を付けて外してください。外した値は、報告にすべて出ます。存在しない、または削除済みのタスクや、タスク自身を指す値は、そのまま移ります。
+  - `task_ref` ではない独自のプロパティが `duplicates`、`causes`、`relates`、`clones` という名前を持っていると、変換は `convert.prop_name_taken` で止まり、名前と型を一覧します。次の節を参照してください。
 - `--store <name>` で Store を選びます。
 
 ほかのクローンがすでに remote を変換していたとき、push していないコミットのないクローンでは、`hh store convert` は自分では変換せず、remote へ fast-forward します。push していないコミットが残っているクローンは、まず自分の変更を変換します。[同期](sync.md#remote-が新しい形式になったとき)を参照してください。remote が途中の形式なら、クローンをその形式まで変換して同期し、残りの段を当ててから push します。
+
+### 関連と同じ名前の独自のプロパティ
+
+形式 2 の Store は `hh` で編集できません（`hh store convert` と `hh doctor` 以外のコマンドが止まります）。手で直してください。Store のフォルダ（場所は `hh store list` で分かります）で、次のようにします。
+
+1. `schema.yaml` の `props:` の下で、プロパティの名前を変えます（たとえば `causes` を `crash_cause` に）。
+2. `tasks/` の下のファイルで、そのキーを持つタスクの `props:` の同じキーの名前を変えます。
+3. コミットして（`git add -A && git commit -m "rename properties"`）、もう一度 `hh store convert` を実行します。
+
+逆方向の名前（`blocks`、`caused_by`、`related_by`、`duplicated_by`、`cloned_by`）と同じ名前の独自のプロパティは、変換を止めません。そのまま動きますが、クエリのキーが関連の意味になるので、`hh doctor` が警告します（`prop_name.query_key`）。同じ手順か、変換のあとに `hh schema migrate prop` で名前を変えてください。
 
 ### remote に古い形式の変更があるとき
 
@@ -93,6 +125,8 @@ $ hh store convert
 ### 変換の前に
 
 `hh store convert` を実行する前に、その Store を使う**すべてのクローン**で hedgehug を更新してください。形式の検査を持たない古い hedgehug は、形式を見ません。push していないコミットのある古いクローンが、変換済みの remote と同期すると、独自の種類のタスクや、ワークスペース直下のタスクを、形式 2 の Store へ push してしまいます。そうなると、`hh store convert` は変換するものがなく（すでに形式 2 です）、`hh doctor --fix` でも直せません。起きたときは、`hh doctor` で探します。コード `task.unknown_kind`（`kind: unknown kind "sprint"`）と `task.placement`（`parent: a task cannot be placed under root`）の指摘が、そのタスクを示します。それぞれを `hh edit <id>` で開き、`kind:` を決まった種類のどれかに、または `parent:` を置けるタスク（直下ならプロジェクトなど）に直して、もう一度 `hh doctor` を実行してください。
+
+関連も同じです。形式 3 より前のクローンは、`duplicates`、`causes`、`relates`、`clones`（と独自の `task_ref`）を `props:` の下に書き続けます。新しい形式では、これらはタスクの関連ではありません。`hh doctor` が `task.legacy_field` として指摘し、`hh doctor --fix` がタスクの項目へ移します（[メンテナンス](maintenance.md#store-を点検する-hh-doctor)を参照）。
 
 ## タスクを別の Store へ移す
 

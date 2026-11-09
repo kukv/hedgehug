@@ -14,11 +14,25 @@ WEB-2 (01M6QAZMJND1BXZNFVP2PXHFHP): moved to a store that is not mounted (ULID 0
 
 `hh doctor --fix` は、同期が直すものを1コミットで直します。親の循環、削除済みタスクの子、親と別のワークスペースにあるタスク、ID の衝突です。親がなくなった子は、置ける最も近い祖先へ移し、なければ「未分類」という project の下へ移します（なければ作ります。step は task になります）。remote の履歴が書き換えられたあとに、Store を作り直す役目もあります(次の節)。直せなかったものは、そう知らせます。
 
+古い hedgehug が新しい形式の Store へ push すると、関連が `props:` の下に残ることがあります（`duplicates`、`causes`、`relates`、`clones`。形式 3 ではタスクの項目です）。`hh doctor` はこれを `task.legacy_field` として指摘し、`hh doctor --fix` が専用のコミットで、タスクの項目へ移します。
+
+```console
+$ hh doctor
+ME-3 (01M6ZCTTTJ0TC1RY48125GV8SB) Data loss: props.duplicates: is a relation of the task in this format, not a property; an older hedgehug wrote it
+  hint: hedgehug doctor --fix moves it to the field of the task
+1 problem
+$ hh doctor --fix
+repaired: ME-3: legacy_field props.duplicates moved to the fields of the task
+No problems
+```
+
+項目にすでに値があるタスクは、どちらが新しいか分からないので、何も移しません。指摘は残ります。`hh edit <id>` でタスクを開き、残したい値を項目に置いて、`props:` の下のものを消してください。`props:` の下の値が ULID の形でないときも、そのまま残るので、`hh edit` で直します。
+
 古い形式の Store は、1 件の指摘として知らされ、`hh store convert` が対処として示されます。変換するまで、タスクはスキーマと照らして点検されません（[Store](stores.md#store-の形式と-hh-store-convert)を参照）。
 
 ```console
 $ hh doctor
-.hedgehug/store.yaml: the store is in format 1, and this version uses format 2
+.hedgehug/store.yaml: the store is in format 2, and this version uses format 3
   hint: hh store convert
 1 problem
 ```
@@ -88,7 +102,7 @@ hh completion fish > ~/.config/fish/completions/hh.fish
 
 値は、手元の Store から読みます。Tab を押しても、書き込みも同期もしません。読めなかったときは、候補を出しません。
 
-- タスクを取るコマンドと、`--parent`、`--after`、`--before`、`--blocked-by` には、タスク ID(タイトル付き)
+- タスクを取るコマンドと、`--parent`、`--after`、`--before` と、`hh dep` の関連（`--blocked-by`、`--causes`、`--relates`、`--duplicates`、`--clones`）には、タスク ID(タイトル付き)
 - `hh status <id> <TAB>` には、ステータス
 - `hh set` には `key=` の形のフィールド名。`assignees=` と `hh ls` の `assignee:` には担当者
 - Store(`--store`)、ワークスペース、スプリント、リリース、保存したビュー、テンプレート
