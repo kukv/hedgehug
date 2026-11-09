@@ -150,6 +150,10 @@ describe("errorMessage", () => {
     expect(errorMessage(err("undo.blocked"))).toContain("ワークスペースにまだタスクがあるため");
   });
 
+  it("words undo.unsupported", () => {
+    expect(errorMessage(err("undo.unsupported"))).toContain("schema.yaml は戻せません");
+  });
+
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
       "remote の履歴が手元と食い違っています。確認してから、hh doctor --fix で origin の新しい履歴にそろえてください",

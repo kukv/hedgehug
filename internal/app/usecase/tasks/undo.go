@@ -261,9 +261,9 @@ type movedTask struct {
 }
 
 // read returns p as commit has it, or nil when it is not there.
-// A task file comes back in the newest store format, whatever the format of
-// the commit (domain/upgrade), so that the versions of a file are compared and
-// merged in one form.
+// A task or template file comes back in the newest store format, whatever the
+// format of the commit (domain/upgrade), so that the versions of a file are
+// compared and merged in one form.
 func (u *undoer) read(commit plumbing.Hash, p string) ([]byte, error) {
 	b, err := u.r.ReadAt(commit, p)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -272,15 +272,25 @@ func (u *undoer) read(commit plumbing.Hash, p string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, perr := model.ParseTaskPath(p); perr != nil {
-		return b, nil //nolint:nilerr // not a task file
+	tpl, isTpl := model.TemplateNameOf(p)
+	if _, perr := model.ParseTaskPath(p); perr != nil && !isTpl {
+		return b, nil //nolint:nilerr // not a task or template file
 	}
+	up := u.upgraded(commit)
+	if isTpl {
+		return up.Template(tpl, b)
+	}
+	return up.Task(b)
+}
+
+// upgraded reads the files of commit in the newest format.
+func (u *undoer) upgraded(commit plumbing.Hash) *upgrade.Commit {
 	up, ok := u.commits[commit]
 	if !ok {
 		up = upgrade.At(func(p string) ([]byte, error) { return u.r.ReadAt(commit, p) })
 		u.commits[commit] = up
 	}
-	return up.Task(b)
+	return up
 }
 
 // path takes back c's change to the file p.
@@ -296,6 +306,17 @@ func (u *undoer) path(p string) error {
 	base, ours, theirs := files[0], files[1], files[2]
 	if ours == nil && base != nil {
 		return nil // removed since, and stays removed
+	}
+	if p == schema.Path && theirs != nil {
+		// The version to go back to is in the form of an older format, which
+		// schema.Decode does not read, and no step upgrades it.
+		f, err := u.upgraded(u.c.Parents[0]).Format()
+		if err != nil {
+			return err
+		}
+		if f < model.StoreFormat {
+			return usecase.NewErr(usecase.KindConflict, "undo.unsupported", errors.New("schema.yaml before the store was converted cannot be restored; change the schema with hedgehug schema"))
+		}
 	}
 	m, err := merge.Merge(p, u.sc, base, merge.Side{Data: ours}, merge.Side{Data: theirs}, merge.OursWins)
 	if err != nil {

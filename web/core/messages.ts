@@ -198,6 +198,9 @@ const messages: Record<string, Make> = {
     }
   },
 
+  "undo.unsupported": () =>
+    "形式を上げる前の schema.yaml は戻せません。スキーマを変えるときは hh schema を使ってください",
+
   // comments
   "comment.not_found": (a) =>
     a.input ? `${str(a, "input")} というコメントは見つかりません` : "コメントが見つかりません",

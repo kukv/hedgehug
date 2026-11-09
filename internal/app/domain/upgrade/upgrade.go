@@ -35,6 +35,9 @@ type Cx struct {
 type Step struct {
 	From  int
 	Apply func(raw []byte, cx Cx) ([]byte, error)
+	// Template does the same for a template file, named name; nil when the
+	// format changed nothing in a template.
+	Template func(name string, raw []byte, cx Cx) ([]byte, error)
 }
 
 // Steps is every step, in order of From. A new format adds one at the end.
@@ -42,7 +45,7 @@ type Step struct {
 // match.
 var Steps = []Step{
 	{From: 1, Apply: task1to2},
-	{From: 2, Apply: task2to3},
+	{From: 2, Apply: task2to3, Template: template2to3},
 }
 
 // Upgrade rewrites the task file raw, which is in format from, into the newest
@@ -57,14 +60,37 @@ func To(from, to int, raw []byte, cx Cx) ([]byte, error) {
 	if raw == nil || model.IsForward(raw) {
 		return raw, nil
 	}
+	return run(from, to, raw, "task", func(s Step) func([]byte, Cx) ([]byte, error) { return s.Apply }, cx)
+}
+
+// TemplateTo is To for a template file, named name.
+func TemplateTo(from, to int, name string, raw []byte, cx Cx) ([]byte, error) {
+	if raw == nil {
+		return raw, nil
+	}
+	return run(from, to, raw, "template", func(s Step) func([]byte, Cx) ([]byte, error) {
+		if s.Template == nil {
+			return nil
+		}
+		return func(raw []byte, cx Cx) ([]byte, error) { return s.Template(name, raw, cx) }
+	}, cx)
+}
+
+// run applies the steps from format from to format to, each as pick gives it;
+// a step that pick gives nothing for leaves the file as it is.
+func run(from, to int, raw []byte, what string, pick func(Step) func([]byte, Cx) ([]byte, error), cx Cx) ([]byte, error) {
 	for f := from; f < to; f++ {
 		i := slices.IndexFunc(Steps, func(s Step) bool { return s.From == f })
 		if i < 0 {
-			return nil, fmt.Errorf("there is no step that upgrades a task of format %d", f)
+			return nil, fmt.Errorf("there is no step that upgrades a %s of format %d", what, f)
+		}
+		apply := pick(Steps[i])
+		if apply == nil {
+			continue
 		}
 		var err error
-		if raw, err = Steps[i].Apply(raw, cx); err != nil {
-			return nil, fmt.Errorf("task format %d to %d: %w", f, f+1, err)
+		if raw, err = apply(raw, cx); err != nil {
+			return nil, fmt.Errorf("%s format %d to %d: %w", what, f, f+1, err)
 		}
 	}
 	return raw, nil
@@ -109,12 +135,38 @@ func (c *Commit) Task(raw []byte) ([]byte, error) { return c.TaskTo(model.StoreF
 
 // TaskTo is Task up to format to, for what merges with a side in that format.
 func (c *Commit) TaskTo(to int, raw []byte) ([]byte, error) {
-	from, err := c.Format()
+	from, cx, err := c.context(to, raw)
 	if err != nil {
 		return nil, err
 	}
-	if from >= to || raw == nil {
+	if cx == nil {
 		return raw, nil
+	}
+	return To(from, to, raw, *cx)
+}
+
+// Template is raw, a template file of the commit called name, in the newest
+// format.
+func (c *Commit) Template(name string, raw []byte) ([]byte, error) {
+	from, cx, err := c.context(model.StoreFormat, raw)
+	if err != nil {
+		return nil, err
+	}
+	if cx == nil {
+		return raw, nil
+	}
+	return TemplateTo(from, model.StoreFormat, name, raw, *cx)
+}
+
+// context is the format of the commit and what the steps need, or a nil Cx when
+// there is nothing to upgrade to format to.
+func (c *Commit) context(to int, raw []byte) (int, *Cx, error) {
+	from, err := c.Format()
+	if err != nil {
+		return 0, nil, err
+	}
+	if from >= to || raw == nil {
+		return from, nil, nil
 	}
 	if c.cx == nil && c.err == nil {
 		cx := Cx{}
@@ -127,7 +179,7 @@ func (c *Commit) TaskTo(to int, raw []byte) ([]byte, error) {
 		c.cx = &cx
 	}
 	if c.err != nil {
-		return nil, c.err
+		return 0, nil, c.err
 	}
-	return To(from, to, raw, *c.cx)
+	return from, c.cx, nil
 }

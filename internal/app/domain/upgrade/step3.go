@@ -262,6 +262,25 @@ func task2to3(raw []byte, cx Cx) ([]byte, error) {
 	return t.Encode()
 }
 
+// template2to3 moves the task_ref values of the items of a template, as
+// task2to3 does for a task.
+func template2to3(name string, raw []byte, cx Cx) ([]byte, error) {
+	tp, err := model.DecodeTemplate(name, raw)
+	if err != nil {
+		return nil, err
+	}
+	var sc *schema.Schema
+	if cx.Schema != nil {
+		if sc, err = schema.Decode(cx.Schema); err != nil {
+			return nil, fmt.Errorf("%s: %w", schema.Path, err)
+		}
+	}
+	if len(ItemRelations(&tp.Item, RelationDefsOf(sc).KeepingBad())) == 0 {
+		return raw, nil
+	}
+	return tp.Encode()
+}
+
 // MoveLegacyFields moves the relations that a task of the newest format still
 // holds in props, as an older hedgehug writes them, to the fields of the task:
 // the names format 3 made relations. It is what hh doctor --fix does; it does
