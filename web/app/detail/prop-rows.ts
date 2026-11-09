@@ -16,7 +16,7 @@ export type PropRow = {
 const builtIn = new Set(["status", "kind", ...RELATIONS.map((r) => r.name)]);
 
 // propRows lists the properties the detail panel edits: those the schema defines (in the order of schema.yaml), then the keys the task has that the schema does not (read-only, editor null).
-// The relations are not here: the relations section shows them.
+// The relations the schema cannot define are not here: the relations section shows them.
 export function propRows(sc: SchemaView, values: Record<string, unknown>): PropRow[] {
   const rows: PropRow[] = [];
   for (const name of propNames(sc)) {
@@ -34,7 +34,9 @@ export function propRows(sc: SchemaView, values: Record<string, unknown>): PropR
     });
   }
   for (const name of Object.keys(values)) {
-    if (name in sc.props || builtIn.has(name)) continue;
+    // A relation name left in props (an old form, or a bad value kept there) is shown read-only:
+    // doctor names it and hh edit fixes it.
+    if (name in sc.props || name === "status" || name === "kind") continue;
     rows.push({ name, label: name, editor: null, multi: false, options: [], value: values[name] });
   }
   return rows;

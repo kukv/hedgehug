@@ -214,10 +214,10 @@ describe("errorMessage", () => {
     expect(
       errorMessage(
         err("schema.violation", {
-          violations: [{ code: "ref.self", field: "causes", message: "points at itself" }],
+          violations: [{ code: "ref.self", field: "causes", message: "自分自身は指せません" }],
         }),
       ),
-    ).toBe("スキーマに合わない変更です: 自分自身は指せません（causes）: points at itself");
+    ).toBe("スキーマに合わない変更です: 自分自身は指せません（causes）");
     expect(errorMessage(err("request.invalid", {}, "関連は作成後に付けます"))).toBe(
       "入力が正しくありません: 関連は作成後に付けます",
     );

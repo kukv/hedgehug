@@ -47,7 +47,9 @@ export function violationLines(a: Args): string[] {
     const x = (v ?? {}) as Record<string, unknown>;
     const label = violationLabels[String(x.code)] ?? String(x.code ?? "");
     const field = x.field ? `（${String(x.field)}）` : "";
-    return `${label}${field}: ${String(x.message ?? "")}`;
+    const message = String(x.message ?? "");
+    // The server's own words may be the label already (ref.self): say them once.
+    return message === label ? `${label}${field}` : `${label}${field}: ${message}`;
   });
 }
 
