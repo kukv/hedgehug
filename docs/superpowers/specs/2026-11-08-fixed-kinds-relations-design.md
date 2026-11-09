@@ -219,11 +219,11 @@
 
 ### 段 2→3 の細部
 
-- 動かすのは task_ref 型のプロパティの値だけ（2026-11-09、利用者の決定）。duplicates・causes・relates の名前で task_ref 型の定義を持つ値は同名の項目へ、独自の名前の task_ref は relates へ動かす。定義が schema.yaml から消えて値だけ `props` に残った duplicates・causes・relates・clones は、値が ULID なら関連として動かす。task_ref でない独自プロパティが duplicates・causes・relates・clones の名前を持っていれば、変換を 422 `convert.prop_name_taken` で止め、重なる名前と型を一覧して、名前を変えるよう案内する。旧形式の Store は `hh` で編集できないので、ガイドに、schema.yaml とタスクのファイルを手で直してコミットする手順を書く。逆方向の名前（blocks・caused_by・related_by・duplicated_by・cloned_by）と同名の独自プロパティは止めない。変換では何もせず、doctor の既存の警告（`prop_name.query_key`）が出る。
+- 動かすのは task_ref 型のプロパティの値だけ（2026-11-09、利用者の決定）。duplicates・causes・relates・clones の名前で task_ref 型の定義を持つ値は同名の項目へ（clones は 2026-11-09、利用者の決定）、それ以外の独自の名前の task_ref は relates へ動かす。定義が schema.yaml から消えて値だけ `props` に残った duplicates・causes・relates・clones は、値が ULID なら関連として動かす。ULID の形でない値は、下の値の検査と同じく一覧にして止める（`--drop-bad-values` で外す）。task_ref でない独自プロパティが duplicates・causes・relates・clones の名前を持っていれば、変換を 422 `convert.prop_name_taken` で止め、重なる名前と型を一覧して、名前を変えるよう案内する。旧形式の Store は `hh` で編集できないので、ガイドに、schema.yaml とタスクのファイルを手で直してコミットする手順を書く。逆方向の名前（blocks・caused_by・related_by・duplicated_by・cloned_by）と同名の独自プロパティは止めない。変換では何もせず、doctor の既存の警告（`prop_name.query_key`）が出る。
 - A に B・B に A が両方保存されていた relates は、2 本とも向きありの relates として残し、報告に「相互の組 N 件」と出す（2026-11-09、利用者の決定）。
 - 値の検査: ULID の形でない値だけを一覧にして止める（422 `convert.bad_value`、タスクと値の一覧）。`--drop-bad-values` を付けたときだけ、外して報告にすべて出す（段 3→4 と同じ仕組み）。存在しない・削除済み・自分自身を指す値は、blocked_by と同じくそのまま動かす。単一の値は 1 要素のリストにし、重複は 1 つにまとめる（2026-11-09、利用者の決定）。
 - 報告: 独自の task_ref のプロパティごとに「<名前>: N 件を relates へ」を 1 行出す。確認は求めない（2026-11-09、利用者の決定）。
-- ビュー等の書き換え（2026-11-09、利用者の決定）: `<名前>.inverse:` は逆方向の名前に（`causes.inverse:` → `caused_by:`、`blocked_by.inverse:` → `blocks:`）。独自の task_ref のキー（逆方向の表示名のキーを含む）は `relates:` に。`table.columns` から、消える名前（独自の task_ref、duplicates・causes・relates の列）を外す。`workflow.required` の独自の task_ref の名前は `relates` に。元の `relates:X` は両方向に当たっていて意味が変わるので書き換えず、dry run の報告に一覧する。表の列や並べ替えに使っていた人にも、この報告で知らせる。
+- ビュー等の書き換え（2026-11-09、利用者の決定）: `<名前>.inverse:` は逆方向の名前に（`causes.inverse:` → `caused_by:`、`blocked_by.inverse:` → `blocks:`）。独自の task_ref のキーは `relates:` に。独自の `<名前>.inverse:` と、逆方向の表示名のキーは `related_by:` に（指されている側を求めるため。2026-11-09、利用者の決定。逆方向の表示名は、その版の schema.yaml を生のまま読んで拾う）。`table.columns` から、消える名前（独自の task_ref、duplicates・causes・relates の列）を外す。`workflow.required` の独自の task_ref の名前は `relates` に。元の `relates:X` は両方向に当たっていて意味が変わるので書き換えず、dry run の報告に一覧する。表の列や並べ替えに使っていた人にも、この報告で知らせる。`sort:`・`group:`・`group_by` に消える名前（関連と独自の task_ref）があれば、列と同じく外して報告に一覧する（2026-11-09、利用者の決定）。
 - schema.yaml の duplicates・causes・relates の定義（表示名や逆方向の表示名を変えたものも）は消える。`workflow.required` の duplicates・causes・relates は同名の組み込みになるので、そのまま有効。
 
 ### 段 3→4 の細部
