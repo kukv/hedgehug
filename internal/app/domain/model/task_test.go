@@ -26,7 +26,7 @@ func TestTaskRoundTrip(t *testing.T) {
 	if task.ID != "WEB-42" || task.Title != "ログイン画面の改修" || task.Rank != "a0V" ||
 		task.Parent == nil || task.Sprint == nil || len(task.BlockedBy) != 1 || len(task.Causes) != 1 || len(task.Relates) != 2 || len(task.Duplicates) != 1 || len(task.Clones) != 1 ||
 		len(task.Links) != 1 || task.Links[0].Sync != "mirror" ||
-		task.Props.Get("points").Value != "5" || task.GH == nil || task.DeletedAt != nil ||
+		task.Props.Get("size").Value != "M" || task.Priority != "high" || task.Start.String() != "2026-11-03" || task.Due.String() != "2026-11-10" || task.Estimate.String() != "3h" || task.Points == nil || *task.Points != 5 || task.GH == nil || task.DeletedAt != nil ||
 		task.Extra.Get("custom").Value != "kept" || !strings.HasPrefix(task.Body, "メモ本文") {
 		t.Errorf("decoded task = %+v", task)
 	}
@@ -76,19 +76,19 @@ func TestTaskEncodeChanges(t *testing.T) {
 	}
 	task.ID = "WEB-43"
 	task.Labels = append(task.Labels, "api")
-	task.Props.Delete("points")
+	task.Points = nil
 	task.Extra.Delete("custom")
 	out, err := task.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(out)
-	for _, want := range []string{"id: WEB-43 # 人が読める ID\n", "labels: [frontend, api]\n", "  priority: high # 優先度\n"} {
+	for _, want := range []string{"id: WEB-43 # 人が読める ID\n", "labels: [frontend, api]\n", "priority: high # 優先度\n"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("output lacks %q:\n%s", want, s)
 		}
 	}
-	for _, gone := range []string{"points:", "custom:"} {
+	for _, gone := range []string{"points: 5", "custom:"} {
 		if strings.Contains(s, gone) {
 			t.Errorf("output still has %q", gone)
 		}

@@ -17,6 +17,10 @@ const (
 	TargetStatus Target = "status"
 	TargetProp   Target = "prop"
 	TargetValue  Target = "value" // a value of an enum or multi_enum property
+	// A value of the built-in priority and of the built-in labels, which are
+	// kept in lists of the schema, not in a property.
+	TargetPriority Target = "priority"
+	TargetLabel    Target = "label"
 )
 
 // Migration renames Old to New, or merges Old into New when New is
@@ -50,6 +54,10 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 		return out, out.migrateProp(m.Old, m.New)
 	case TargetValue:
 		return out, out.migrateValue(m.Prop, m.Old, m.New)
+	case TargetPriority:
+		return out, migrateListValue("priority", &out.Priorities, m.Old, m.New)
+	case TargetLabel:
+		return out, migrateListValue("label", &out.Labels, m.Old, m.New)
 	}
 	return nil, fmt.Errorf("unknown target %q", m.Target)
 }
@@ -57,6 +65,8 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 func (s *Schema) clone() *Schema {
 	out := *s
 	out.Statuses = slices.Clone(s.Statuses)
+	out.Priorities = slices.Clone(s.Priorities)
+	out.Labels = slices.Clone(s.Labels)
 	if s.Templates != nil {
 		out.Templates = &Templates{Only: slices.Clone(s.Templates.Only), Default: maps.Clone(s.Templates.Default)}
 	}
@@ -134,28 +144,16 @@ func (s *Schema) migrateProp(from, to string) error {
 	if i < 0 {
 		return fmt.Errorf("property %q is not defined", from)
 	}
-	if np, ok := s.Prop(to); ok {
-		op := s.Props[i]
-		if op.Type != np.Type || op.Multi != np.Multi {
-			return fmt.Errorf("the types differ: %s is %s, %s is %s", from, propTypeName(op), to, propTypeName(np))
-		}
-		s.Props = slices.Delete(s.Props, i, i+1)
-	} else {
-		s.Props[i].Name = to
+	if _, ok := s.Prop(to); ok {
+		return fmt.Errorf("%s into %s: %w", from, to, ErrPropMerge)
 	}
+	s.Props[i].Name = to
 	for _, w := range s.workflows() {
 		for k := range w.Required {
 			w.Required[k].Values = replace(w.Required[k].Values, from, to)
 		}
 	}
 	return nil
-}
-
-func propTypeName(p Prop) string {
-	if p.Multi {
-		return string(p.Type) + " (multi)"
-	}
-	return string(p.Type)
 }
 
 func (s *Schema) migrateValue(prop, from, to string) error {
@@ -171,6 +169,16 @@ func (s *Schema) migrateValue(prop, from, to string) error {
 		return fmt.Errorf("value %q of %s is not defined", from, prop)
 	}
 	p.Values = replace(p.Values, from, to)
+	return nil
+}
+
+// migrateListValue renames the value from of a list of the schema to to, or
+// merges it into to when that is a value too.
+func migrateListValue(what string, list *[]string, from, to string) error {
+	if !slices.Contains(*list, from) {
+		return fmt.Errorf("%s %q is not defined", what, from)
+	}
+	*list = replace(*list, from, to)
 	return nil
 }
 
@@ -216,8 +224,8 @@ func renameKey(l Lists, from, to string) Lists {
 }
 
 // ApplyTask rewrites the field of t that the migration renames, and
-// reports whether it changed. In a merge of properties, a task with values
-// for both is an error. s is the schema before the migration.
+// reports whether it changed. A task that already has a value for the new
+// name of a property is an error. s is the schema before the migration.
 func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error) {
 	switch m.Target {
 	case TargetStatus:
@@ -231,6 +239,14 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 			return false, fmt.Errorf("the task has both %s and %s", m.Old, m.New)
 		}
 		t.Props[i].Key = m.New
+		return true, nil
+	case TargetPriority:
+		return swap(&t.Priority, m.Old, m.New), nil
+	case TargetLabel:
+		if !slices.Contains(t.Labels, m.Old) {
+			return false, nil
+		}
+		t.Labels = replace(t.Labels, m.Old, m.New)
 		return true, nil
 	case TargetValue:
 		if p, ok := s.Prop(m.Prop); !ok || (p.Type != TypeEnum && p.Type != TypeMultiEnum) {

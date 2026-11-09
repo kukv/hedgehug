@@ -137,7 +137,21 @@ const (
 	whole  how = iota // one side's value, timed by When
 	byKey             // a mapping, key by key
 	byItem            // a list, item by item
+	bySet             // a list of scalars, as a set: what a side added or removed is kept
 )
+
+// allScalarLists reports whether the nodes are lists, or absent, of scalars.
+func allScalarLists(nodes ...*yaml.Node) bool {
+	for _, n := range nodes {
+		if n == nil {
+			continue
+		}
+		if n.Kind != yaml.SequenceNode || slices.ContainsFunc(n.Content, func(x *yaml.Node) bool { return x.Kind != yaml.ScalarNode }) {
+			return false
+		}
+	}
+	return true
+}
 
 // split tells how the value at path is merged, given the versions of it
 // that are there: key by key when all are mappings; item by item when all
@@ -148,6 +162,9 @@ func split(path []string, nodes ...*yaml.Node) (how, string) {
 	}
 	if k := elemKey(path); k != "" && itemsHave(k, nodes...) {
 		return byItem, k
+	}
+	if slices.Equal(path, []string{"labels"}) && allScalarLists(nodes...) {
+		return bySet, ""
 	}
 	return whole, ""
 }
@@ -268,6 +285,8 @@ func (m *sides) yamlNode(path []string, b, o, t *yaml.Node) *yaml.Node {
 			v = m.yamlMapping(path, b, o, t, d)
 		case byItem:
 			v = m.yamlList(path, k, b, o, t, d)
+		case bySet:
+			v = m.yamlSet(b, o, t, d)
 		default:
 			v = pickAt(m, strings.Join(path, "."), when(m.ours, path), when(m.theirs, path), b, o, t, nodeEqual)
 		}
@@ -399,6 +418,20 @@ func (m *sides) yamlList(path []string, key string, b, o, t, d *yaml.Node) *yaml
 			out.Content = append(out.Content, v)
 		}
 	}
+	return &out
+}
+
+// yamlSet merges lists of scalars as a set, as setField does for a task:
+// against the base, what either side added or removed is in the result.
+func (m *sides) yamlSet(b, o, t, d *yaml.Node) *yaml.Node {
+	items := func(n *yaml.Node) []*yaml.Node {
+		if n == nil {
+			return nil
+		}
+		return n.Content
+	}
+	out := *d
+	out.Content = mergeSet(items(b), items(o), items(t), func(n *yaml.Node) string { return n.Value })
 	return &out
 }
 

@@ -61,6 +61,7 @@ func ValidateTask(t *model.Task, e *Effective) (violations []Violation, undefine
 			violations = append(violations, Violation{CodeBadValue, "rank", err.Error()})
 		}
 	}
+	violations = append(violations, builtinViolations(t, s)...)
 	for _, f := range t.Props {
 		p, ok := s.Prop(f.Key)
 		if !ok {
@@ -75,6 +76,51 @@ func ValidateTask(t *model.Task, e *Effective) (violations []Violation, undefine
 		}
 	}
 	return violations, undefined
+}
+
+// noLabels is the message for a label when the schema has none to give.
+const noLabels = "設定の「ラベル」で足してください"
+
+// builtinViolations checks the built-in properties of t: priority and the
+// labels against the lists of the schema, without regard to case, and the
+// typed values that DecodeTask could not read and kept in Extra.
+func builtinViolations(t *model.Task, s *Schema) []Violation {
+	var vs []Violation
+	if t.Priority != "" {
+		if _, ok := MatchValue(s.Priorities, t.Priority); !ok {
+			vs = append(vs, Violation{CodeBadValue, "priority", fmt.Sprintf("%q is not one of %v", t.Priority, s.Priorities)})
+		}
+	}
+	for _, l := range t.Labels {
+		if _, ok := MatchValue(s.Labels, l); ok {
+			continue
+		}
+		msg := fmt.Sprintf("%q is not one of %v", l, s.Labels)
+		if len(s.Labels) == 0 {
+			msg = noLabels
+		}
+		vs = append(vs, Violation{CodeBadValue, "labels", msg})
+		if len(s.Labels) == 0 {
+			break
+		}
+	}
+	for _, b := range Builtins {
+		if b.Name == "labels" {
+			continue
+		}
+		n := t.Extra.Get(b.Name)
+		if n == nil || n.ShortTag() == "!!null" {
+			continue
+		}
+		err := errors.New("cannot be read")
+		if n.Kind != yaml.ScalarNode {
+			err = errors.New("want a single value")
+		} else if cerr := checkScalar(Prop{Type: b.Type}, n); cerr != nil {
+			err = cerr
+		}
+		vs = append(vs, Violation{CodeBadValue, b.Name, err.Error()})
+	}
+	return vs
 }
 
 // ValidatePlacement checks that a task of kind may sit under a parent of

@@ -279,12 +279,12 @@ func TestTaskPropChangeKeepsOtherComments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task.Props.Set("points", node(t, 8))
+	task.Props.Set("size", node(t, "L"))
 	out, err := task.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"  priority: high # 優先度\n", "  points: 8\n", "custom: kept # 未知のキー\n"} {
+	for _, want := range []string{"priority: high # 優先度\n", "  size: L\n", "custom: kept # 未知のキー\n"} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

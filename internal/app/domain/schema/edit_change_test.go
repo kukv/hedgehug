@@ -69,11 +69,11 @@ scoped:
 
 func TestChangeNameTaken(t *testing.T) {
 	t.Parallel()
-	s := Default()
+	s := withProps()
 	if _, _, err := s.ChangeStatus("todo", StatusChange{Name: ptr("done")}); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("status: %v", err)
 	}
-	if _, _, _, err := s.ChangeProp("due", PropChange{Name: ptr("start")}); !errors.Is(err, ErrNameTaken) {
+	if _, _, _, err := s.ChangeProp("finish", PropChange{Name: ptr("begin")}); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("prop: %v", err)
 	}
 }
@@ -90,9 +90,9 @@ func TestChangePropNameRewritesRequired(t *testing.T) {
 	t.Parallel()
 	s := scopedBase(t, `workflow:
   required:
-    done: [priority]
+    done: [level]
 `)
-	got, ms, _, err := s.ChangeProp("priority", PropChange{Name: ptr("importance")})
+	got, ms, _, err := s.ChangeProp("level", PropChange{Name: ptr("importance")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,14 +102,14 @@ func TestChangePropNameRewritesRequired(t *testing.T) {
 	if v, _ := got.Workflow.Required.Get("done"); !slices.Equal(v, []string{"importance"}) {
 		t.Errorf("required = %v", v)
 	}
-	if want := []Migration{{Target: TargetProp, Old: "priority", New: "importance"}}; !slices.Equal(ms, want) {
+	if want := []Migration{{Target: TargetProp, Old: "level", New: "importance"}}; !slices.Equal(ms, want) {
 		t.Errorf("migrations = %v", ms)
 	}
 }
 
 func TestChangePropValues(t *testing.T) {
 	t.Parallel()
-	got, ms, removed, err := Default().ChangeProp("priority", PropChange{Values: &[]ValueEdit{
+	got, ms, removed, err := withProps().ChangeProp("level", PropChange{Values: &[]ValueEdit{
 		{Name: "none"},
 		{Name: "low", From: []string{"low"}},
 		{Name: "high", From: []string{"high", "urgent"}},
@@ -118,12 +118,12 @@ func TestChangePropValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := got.Prop("priority"); !slices.Equal(p.Values, []string{"none", "low", "high", "medium"}) {
+	if p, _ := got.Prop("level"); !slices.Equal(p.Values, []string{"none", "low", "high", "medium"}) {
 		t.Errorf("values = %v", p.Values)
 	}
 	want := []Migration{
-		{Target: TargetValue, Prop: "priority", Old: "urgent", New: "high"},
-		{Target: TargetValue, Prop: "priority", Old: "mid", New: "medium"},
+		{Target: TargetValue, Prop: "level", Old: "urgent", New: "high"},
+		{Target: TargetValue, Prop: "level", Old: "mid", New: "medium"},
 	}
 	if !slices.Equal(ms, want) {
 		t.Errorf("migrations = %v", ms)
@@ -131,20 +131,20 @@ func TestChangePropValues(t *testing.T) {
 	if len(removed) != 0 {
 		t.Errorf("removed = %v", removed)
 	}
-	if p, _ := Default().Prop("priority"); !slices.Equal(p.Values, []string{"low", "mid", "high", "urgent"}) {
+	if p, _ := withProps().Prop("level"); !slices.Equal(p.Values, []string{"low", "mid", "high", "urgent"}) {
 		t.Error("the schema was changed")
 	}
 }
 
 func TestChangePropValuesRemoved(t *testing.T) {
 	t.Parallel()
-	got, ms, removed, err := Default().ChangeProp("priority", PropChange{Values: &[]ValueEdit{
+	got, ms, removed, err := withProps().ChangeProp("level", PropChange{Values: &[]ValueEdit{
 		{Name: "high", From: []string{"high"}}, {Name: "low", From: []string{"low"}},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := got.Prop("priority"); !slices.Equal(p.Values, []string{"high", "low"}) {
+	if p, _ := got.Prop("level"); !slices.Equal(p.Values, []string{"high", "low"}) {
 		t.Errorf("values = %v", p.Values)
 	}
 	if len(ms) != 0 || !slices.Equal(removed, []string{"mid", "urgent"}) {
@@ -156,7 +156,7 @@ func TestChangePropValuesSwapAndChain(t *testing.T) {
 	t.Parallel()
 	// low and high trade names: the order of the moves, and a parking
 	// place, keep each task value from being moved twice
-	_, ms, _, err := Default().ChangeProp("priority", PropChange{Values: &[]ValueEdit{
+	_, ms, _, err := withProps().ChangeProp("level", PropChange{Values: &[]ValueEdit{
 		{Name: "high", From: []string{"low"}},
 		{Name: "low", From: []string{"high"}},
 		{Name: "mid", From: []string{"mid"}},
@@ -172,7 +172,7 @@ func TestChangePropValuesSwapAndChain(t *testing.T) {
 	}
 
 	// each takes the name the one before held
-	_, ms, _, err = Default().ChangeProp("priority", PropChange{Values: &[]ValueEdit{
+	_, ms, _, err = withProps().ChangeProp("level", PropChange{Values: &[]ValueEdit{
 		{Name: "x", From: []string{"low"}},
 		{Name: "low", From: []string{"mid"}},
 		{Name: "mid", From: []string{"high"}},
@@ -199,11 +199,11 @@ func TestChangePropValuesInvalid(t *testing.T) {
 		"from repeated":   {{Name: "a", From: []string{"low", "low"}}},
 		"name of a goner": {{Name: "urgent", From: []string{"low"}}},
 	} {
-		if _, _, _, err := Default().ChangeProp("priority", PropChange{Values: &vs}); !errors.Is(err, ErrValueInvalid) {
+		if _, _, _, err := withProps().ChangeProp("level", PropChange{Values: &vs}); !errors.Is(err, ErrValueInvalid) {
 			t.Errorf("%s: err = %v", name, err)
 		}
 	}
-	if _, _, _, err := Default().ChangeProp("start", PropChange{Values: &[]ValueEdit{{Name: "x"}}}); !errors.Is(err, ErrNotEnum) {
+	if _, _, _, err := withProps().ChangeProp("begin", PropChange{Values: &[]ValueEdit{{Name: "x"}}}); !errors.Is(err, ErrNotEnum) {
 		t.Errorf("not enum: err = %v", err)
 	}
 }
@@ -218,7 +218,8 @@ func TestDefaultLabels(t *testing.T) {
 	if got := labelsOf(Kinds, func(x KindDef) string { return x.Label }); !slices.Equal(got, []string{"Project", "Epic", "Story", "Task", "Bug", "Step"}) {
 		t.Errorf("kinds = %v", got)
 	}
-	if p, _ := s.Prop("priority"); p.Label != "優先度" {
-		t.Errorf("priority label = %q", p.Label)
+	if got := labelsOf(Builtins, func(x Builtin) string { return x.Label }); !slices.Equal(got,
+		[]string{"優先度", "開始日", "期限", "見積もり", "ポイント", "ラベル"}) {
+		t.Errorf("built-in properties = %v", got)
 	}
 }

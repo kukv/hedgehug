@@ -2,6 +2,7 @@ package schema
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestSchemaRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(s.Statuses) != 7 || s.Statuses[3].Color != "#3451D1" || s.Templates == nil ||
-		s.Templates.Default["bug"] != "bug-report" || len(s.Props) != 4 || s.Props[0].Name != "priority" ||
+		s.Templates.Default["bug"] != "bug-report" || len(s.Props) != 4 || s.Props[0].Name != "size" || !slices.Equal(s.Priorities, DefaultPriorities) || !slices.Equal(s.Labels, []string{"bug", "docs"}) ||
 		s.Props[3].Name != "area" || len(s.Scoped) != 2 || s.Scoped[0].Templates.Default["task"] != "release-checklist" {
 		t.Errorf("decoded = %+v", s)
 	}
@@ -109,7 +110,7 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v\n%s", name, err, out)
 		}
-		if len(back.Statuses) != len(s.Statuses) || len(back.Props) != 5 {
+		if len(back.Statuses) != len(s.Statuses) || len(back.Props) != 0 || !slices.Equal(back.Priorities, DefaultPriorities) || len(back.Labels) != 0 {
 			t.Errorf("%s: re-decoded = %+v", name, back)
 		}
 		if !strings.Contains(string(out), "- {name: todo, label: Todo, category: todo, default: true}\n") {
@@ -124,14 +125,27 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 	}
 }
 
+// withProps is Default with one property of each type the tests change.
+func withProps() *Schema {
+	s := Default()
+	s.Props = Props{
+		{Name: "level", Type: TypeEnum, Values: []string{"low", "mid", "high", "urgent"}, Label: "レベル"},
+		{Name: "begin", Type: TypeDate},
+		{Name: "finish", Type: TypeDate},
+		{Name: "effort", Type: TypeDuration},
+		{Name: "score", Type: TypeNumber},
+	}
+	return s
+}
+
 func TestLookups(t *testing.T) {
 	t.Parallel()
 	s := Default()
 	if st, ok := s.DefaultStatus(CategoryDoing); !ok || st.Name != "in_progress" {
 		t.Errorf("DefaultStatus(doing) = %+v, %v", st, ok)
 	}
-	if p, ok := s.Prop("estimate"); !ok || p.Type != TypeDuration {
-		t.Errorf("Prop(estimate) = %+v, %v", p, ok)
+	if b, ok := BuiltinOf("estimate"); !ok || b.Type != TypeDuration {
+		t.Errorf("BuiltinOf(estimate) = %+v, %v", b, ok)
 	}
 	if _, ok := s.Status("nope"); ok {
 		t.Error("Status(nope) found")

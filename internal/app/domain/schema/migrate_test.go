@@ -19,8 +19,8 @@ const migrateSrc = `statuses:
 - {name: done, category: done, default: true}
 - {name: canceled, category: canceled, default: true}
 props:
-  priority: {type: enum, values: [low, mid, high]}
-  points: {type: number}
+  level: {type: enum, values: [low, mid, high]}
+  score: {type: number}
   size: {type: number}
   area: {type: multi_enum, values: [a, b]}
   tags: {type: text, multi: true}
@@ -31,8 +31,8 @@ workflow:
     ready: [doing, todo]
     doing: [done, todo]
   required:
-    todo: [points]
-    doing: [points, size]
+    todo: [score]
+    doing: [score, size]
 scoped:
 - where: project:01JBZ8K3QW7M2X9V4T6R5N8P0B
   statuses: [todo, ready, doing, done, canceled]
@@ -40,7 +40,7 @@ scoped:
     transitions:
       todo: [done]
     required:
-      todo: [points]
+      todo: [score]
       ready: [size]
   templates:
     default:
@@ -100,38 +100,33 @@ func TestMigrate(t *testing.T) {
 		{"rename a status", Migration{Target: TargetStatus, Old: "todo", New: "open"}, map[string]string{
 			"statuses":           "open* ready doing* done* canceled*",
 			"transitions":        "open:[doing ready] ready:[doing open] doing:[done open]",
-			"required":           "open:[points] doing:[points size]",
+			"required":           "open:[score] doing:[score size]",
 			"scoped.statuses":    "[open ready doing done canceled]",
 			"scoped.transitions": "open:[done]",
-			"scoped.required":    "open:[points] ready:[size]",
+			"scoped.required":    "open:[score] ready:[size]",
 			"scoped.templates":   "map[bug:b epic:e project:p]",
-			"props":              "priority points size area tags memo",
-			"props.priority":     "[low mid high]",
+			"props":              "level score size area tags memo",
+			"props.level":        "[low mid high]",
 		}},
 		{"merge a status", Migration{Target: TargetStatus, Old: "todo", New: "ready"}, map[string]string{
 			"statuses":           "ready* doing* done* canceled*",
 			"transitions":        "ready:[doing ready] doing:[done ready]",
-			"required":           "ready:[points] doing:[points size]",
+			"required":           "ready:[score] doing:[score size]",
 			"scoped.statuses":    "[ready doing done canceled]",
 			"scoped.transitions": "ready:[done]",
-			"scoped.required":    "ready:[points size]",
+			"scoped.required":    "ready:[score size]",
 		}},
-		{"rename a prop", Migration{Target: TargetProp, Old: "points", New: "pts"}, map[string]string{
-			"props":           "priority pts size area tags memo",
+		{"rename a prop", Migration{Target: TargetProp, Old: "score", New: "pts"}, map[string]string{
+			"props":           "level pts size area tags memo",
 			"required":        "todo:[pts] doing:[pts size]",
 			"scoped.required": "todo:[pts] ready:[size]",
 		}},
-		{"merge a prop", Migration{Target: TargetProp, Old: "points", New: "size"}, map[string]string{
-			"props":           "priority size area tags memo",
-			"required":        "todo:[size] doing:[size]",
-			"scoped.required": "todo:[size] ready:[size]",
+		{"rename a value", Migration{Target: TargetValue, Prop: "level", Old: "mid", New: "medium"}, map[string]string{
+			"props.level": "[low medium high]",
+			"props":       "level score size area tags memo",
 		}},
-		{"rename a value", Migration{Target: TargetValue, Prop: "priority", Old: "mid", New: "medium"}, map[string]string{
-			"props.priority": "[low medium high]",
-			"props":          "priority points size area tags memo",
-		}},
-		{"merge a value", Migration{Target: TargetValue, Prop: "priority", Old: "mid", New: "high"}, map[string]string{
-			"props.priority": "[low high]",
+		{"merge a value", Migration{Target: TargetValue, Prop: "level", Old: "mid", New: "high"}, map[string]string{
+			"props.level": "[low high]",
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,7 +135,7 @@ func TestMigrate(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pr, _ := got.Prop("priority")
+			pr, _ := got.Prop("level")
 			have := map[string]string{
 				"statuses":           statusNames(got),
 				"transitions":        listsString(got.Workflow.Transitions),
@@ -150,7 +145,7 @@ func TestMigrate(t *testing.T) {
 				"scoped.required":    listsString(got.Scoped[0].Workflow.Required),
 				"scoped.templates":   fmt.Sprint(got.Scoped[0].Templates.Default),
 				"props":              propNames(got),
-				"props.priority":     fmt.Sprint(pr.Values),
+				"props.level":        fmt.Sprint(pr.Values),
 			}
 			for k, want := range tc.want {
 				if have[k] != want {
@@ -168,8 +163,8 @@ func TestMigrateKeepsReceiver(t *testing.T) {
 	t.Parallel()
 	for _, m := range []Migration{
 		{Target: TargetStatus, Old: "todo", New: "ready"},
-		{Target: TargetProp, Old: "points", New: "size"},
-		{Target: TargetValue, Prop: "priority", Old: "mid", New: "high"},
+		{Target: TargetProp, Old: "score", New: "pts"},
+		{Target: TargetValue, Prop: "level", Old: "mid", New: "high"},
 	} {
 		s := decodeMigrate(t)
 		if _, err := s.Migrate(m); err != nil {
@@ -270,12 +265,12 @@ func TestMigrateErrors(t *testing.T) {
 		{Migration{Target: TargetStatus, Old: "nope", New: "x"}, `status "nope" is not defined`},
 		{Migration{Target: TargetStatus, Old: "todo", New: "todo"}, "the same"},
 		{Migration{Target: TargetProp, Old: "nope", New: "x"}, `property "nope" is not defined`},
-		{Migration{Target: TargetProp, Old: "points", New: "points"}, "the same"},
-		{Migration{Target: TargetProp, Old: "priority", New: "points"}, "types differ"},
-		{Migration{Target: TargetProp, Old: "tags", New: "memo"}, "types differ"},
+		{Migration{Target: TargetProp, Old: "score", New: "score"}, "the same"},
+		{Migration{Target: TargetProp, Old: "level", New: "score"}, "cannot be merged"},
+		{Migration{Target: TargetProp, Old: "score", New: "size"}, "cannot be merged"},
 		{Migration{Target: TargetValue, Prop: "nope", Old: "a", New: "b"}, `property "nope" is not defined`},
-		{Migration{Target: TargetValue, Prop: "points", Old: "a", New: "b"}, "not enum or multi_enum"},
-		{Migration{Target: TargetValue, Prop: "priority", Old: "nope", New: "b"}, `value "nope" of priority is not defined`},
+		{Migration{Target: TargetValue, Prop: "score", Old: "a", New: "b"}, "not enum or multi_enum"},
+		{Migration{Target: TargetValue, Prop: "level", Old: "nope", New: "b"}, `value "nope" of level is not defined`},
 		{Migration{Target: TargetValue, Prop: "area", Old: "a", New: "a"}, "the same"},
 		{Migration{Target: "nope", Old: "a", New: "b"}, "unknown target"},
 	} {
@@ -319,7 +314,7 @@ func (x *taskT) keys() string {
 
 func TestApplyTask(t *testing.T) {
 	t.Parallel()
-	const props = "  priority: mid\n  points: 3\n  area: [a, b]\n"
+	const props = "  level: mid\n  score: 3\n  area: [a, b]\n"
 	for _, tc := range []struct {
 		name    string
 		m       Migration
@@ -329,18 +324,18 @@ func TestApplyTask(t *testing.T) {
 	}{
 		{"status", Migration{Target: TargetStatus, Old: "todo", New: "ready"}, true, func(x *taskT) string { return x.Status }, "ready"},
 		{"other status", Migration{Target: TargetStatus, Old: "doing", New: "ready"}, false, func(x *taskT) string { return x.Status }, "todo"},
-		{"prop", Migration{Target: TargetProp, Old: "points", New: "size"}, true, func(x *taskT) string { return x.keys() + " " + x.prop("size") }, "priority size area 3"},
-		{"absent prop", Migration{Target: TargetProp, Old: "memo", New: "tags"}, false, func(x *taskT) string { return x.keys() }, "priority points area"},
-		{"value", Migration{Target: TargetValue, Prop: "priority", Old: "mid", New: "high"}, true, func(x *taskT) string { return x.prop("priority") }, "high"},
-		{"other value", Migration{Target: TargetValue, Prop: "priority", Old: "low", New: "high"}, false, func(x *taskT) string { return x.prop("priority") }, "mid"},
+		{"prop", Migration{Target: TargetProp, Old: "score", New: "size"}, true, func(x *taskT) string { return x.keys() + " " + x.prop("size") }, "level size area 3"},
+		{"absent prop", Migration{Target: TargetProp, Old: "memo", New: "tags"}, false, func(x *taskT) string { return x.keys() }, "level score area"},
+		{"value", Migration{Target: TargetValue, Prop: "level", Old: "mid", New: "high"}, true, func(x *taskT) string { return x.prop("level") }, "high"},
+		{"other value", Migration{Target: TargetValue, Prop: "level", Old: "low", New: "high"}, false, func(x *taskT) string { return x.prop("level") }, "mid"},
 		{"multi value", Migration{Target: TargetValue, Prop: "area", Old: "a", New: "c"}, true, func(x *taskT) string { return x.prop("area") }, "[c b]"},
 		{"multi value merged", Migration{Target: TargetValue, Prop: "area", Old: "a", New: "b"}, true, func(x *taskT) string { return x.prop("area") }, "[b]"},
-		{"value of an absent prop", Migration{Target: TargetValue, Prop: "priority", Old: "mid", New: "high"}, false, nil, ""},
+		{"value of an absent prop", Migration{Target: TargetValue, Prop: "level", Old: "mid", New: "high"}, false, nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := props
 			if tc.check == nil {
-				p = "  points: 3\n"
+				p = "  score: 3\n"
 			}
 			s, x := migrateTask(t, p)
 			before, err := x.Encode()
@@ -372,9 +367,9 @@ func TestApplyTask(t *testing.T) {
 
 func TestApplyTaskPropOnBoth(t *testing.T) {
 	t.Parallel()
-	s, x := migrateTask(t, "  points: 3\n  size: 5\n")
-	if _, err := (Migration{Target: TargetProp, Old: "points", New: "size"}).ApplyTask(x.Task, s); err == nil ||
-		!strings.Contains(err.Error(), "has both points and size") {
+	s, x := migrateTask(t, "  score: 3\n  size: 5\n")
+	if _, err := (Migration{Target: TargetProp, Old: "score", New: "size"}).ApplyTask(x.Task, s); err == nil ||
+		!strings.Contains(err.Error(), "has both score and size") {
 		t.Errorf("err = %v, want both", err)
 	}
 }

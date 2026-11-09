@@ -18,7 +18,6 @@ func TestCheckDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.Props = append(s.Props, Prop{Name: "points", Type: TypeNumber}) // full.yaml requires points
 	if ps := s.Check(); len(ps) != 0 {
 		t.Errorf("full.yaml has problems: %v", ps)
 	}
@@ -38,9 +37,15 @@ func TestCheckProblems(t *testing.T) {
 		{"two defaults", func(s *Schema) { s.Statuses[0].Default = true }, "statuses"},
 		{"no default", func(s *Schema) { s.Statuses[6].Default = false }, "statuses"},
 		{"built-in prop name", func(s *Schema) { s.Props = append(s.Props, Prop{Name: "status", Type: TypeText}) }, "props.status"},
-		{"duplicate prop", func(s *Schema) { s.Props = append(s.Props, s.Props[0]) }, "props.priority"},
-		{"unknown type", func(s *Schema) { s.Props[0].Type = "x" }, "props.priority"},
-		{"enum without values", func(s *Schema) { s.Props[0].Values = nil }, "props.priority"},
+		{"duplicate prop", func(s *Schema) { s.Props = Props{{Name: "size", Type: TypeText}, {Name: "size", Type: TypeText}} }, "props.size"},
+		{"built-in priority", func(s *Schema) { s.Props = Props{{Name: "priority", Type: TypeEnum, Values: []string{"a"}}} }, "props.priority"},
+		{"built-in due", func(s *Schema) { s.Props = Props{{Name: "due", Type: TypeDate}} }, "props.due"},
+		{"empty priorities", func(s *Schema) { s.Priorities = []string{} }, "priorities"},
+		{"empty priority value", func(s *Schema) { s.Priorities = []string{"low", ""} }, "priorities"},
+		{"priorities differing in case", func(s *Schema) { s.Priorities = []string{"low", "Low"} }, "priorities"},
+		{"labels differing in case", func(s *Schema) { s.Labels = []string{"bug", "Bug"} }, "labels"},
+		{"unknown type", func(s *Schema) { s.Props = Props{{Name: "size", Type: "x"}} }, "props.size"},
+		{"enum without values", func(s *Schema) { s.Props = Props{{Name: "size", Type: TypeEnum}} }, "props.size"},
 		{"task_ref", func(s *Schema) { s.Props = append(s.Props, Prop{Name: "r", Type: "task_ref"}) }, "props.r"},
 		{"relation name", func(s *Schema) { s.Props = append(s.Props, Prop{Name: "causes", Type: TypeText}) }, "props.causes"},
 		{"transition from unknown", func(s *Schema) { s.Workflow.Transitions = Lists{{"nope", []string{"todo"}}} }, "workflow.transitions"},

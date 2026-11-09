@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"go.yaml.in/yaml/v4"
@@ -16,6 +17,9 @@ var (
 	ErrNotEnum      = errors.New("not an enum or multi_enum property")
 	ErrValueInvalid = errors.New("invalid value")
 	ErrNameTaken    = errors.New("the name is already defined")
+	// ErrPropMerge is a migration of a property into one that is defined:
+	// properties are not merged.
+	ErrPropMerge = errors.New("properties cannot be merged")
 )
 
 func nameTaken(what, name string) error { return fmt.Errorf("%s %q: %w", what, name, ErrNameTaken) }
@@ -251,6 +255,59 @@ func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, [
 	return out, append(ms, m), removed, err
 }
 
+// ChangePriorities returns s with the values of priority after the edit,
+// the migrations that carry the tasks to them, and the values that are
+// removed. The rules are those of the values of an enum property, with two
+// more: a value is told apart from another without regard to case, and the
+// last value cannot go.
+func (s *Schema) ChangePriorities(values []ValueEdit) (*Schema, []Migration, []string, error) {
+	out := s.clone()
+	var ms []Migration
+	var removed []string
+	var err error
+	if out.Priorities, ms, removed, err = editList("priority", TargetPriority, s.Priorities, values, true); err != nil {
+		return nil, nil, nil, err
+	}
+	return out, ms, removed, nil
+}
+
+// ChangeLabels is ChangePriorities for the values of labels, which may be
+// all removed.
+func (s *Schema) ChangeLabels(values []ValueEdit) (*Schema, []Migration, []string, error) {
+	out := s.clone()
+	var ms []Migration
+	var removed []string
+	var err error
+	if out.Labels, ms, removed, err = editList("labels", TargetLabel, s.Labels, values, false); err != nil {
+		return nil, nil, nil, err
+	}
+	return out, ms, removed, nil
+}
+
+// editList is editValues for a list of the schema: its migrations are of the
+// target, and the new names differ without regard to case.
+func editList(name string, target Target, cur []string, eds []ValueEdit, needOne bool) ([]string, []Migration, []string, error) {
+	if needOne && len(eds) == 0 {
+		return nil, nil, nil, fmt.Errorf("%s: the last value cannot be removed: %w", name, ErrValueInvalid)
+	}
+	folded := map[string]bool{}
+	for _, e := range eds {
+		k := strings.ToLower(e.Name)
+		if folded[k] {
+			return nil, nil, nil, fmt.Errorf("%s: value %q is repeated, case is ignored: %w", name, e.Name, ErrValueInvalid)
+		}
+		folded[k] = true
+	}
+	values, ms, removed, err := editValues(name, cur, eds)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for i := range ms {
+		ms[i].Target, ms[i].Prop = target, ""
+	}
+	return values, ms, removed, nil
+}
+
 // tempValue stands between two names of a swap; it is only ever written to
 // a task in memory.
 const tempValue = "\x00hedgehug-swap"
@@ -366,6 +423,10 @@ func TaskUses(t *model.Task, target Target, prop, name string) bool {
 		return t.Status == name
 	case TargetProp:
 		return t.Props.Get(name) != nil
+	case TargetPriority:
+		return t.Priority == name
+	case TargetLabel:
+		return slices.Contains(t.Labels, name)
 	case TargetValue:
 		n := t.Props.Get(prop)
 		if n == nil {

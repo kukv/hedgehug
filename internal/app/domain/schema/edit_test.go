@@ -73,8 +73,8 @@ scoped:
 
 func TestRemovePropDropsRequired(t *testing.T) {
 	t.Parallel()
-	s := scopedBase(t, "workflow:\n  required:\n    done: [points]\n    in_progress: [points, assignees]\n")
-	got, err := s.RemoveProp("points")
+	s := scopedBase(t, "workflow:\n  required:\n    done: [score]\n    in_progress: [score, assignees]\n")
+	got, err := s.RemoveProp("score")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +102,8 @@ func TestChangeStatusDefaultMovesIt(t *testing.T) {
 
 func TestOrderProps(t *testing.T) {
 	t.Parallel()
-	s := Default() // priority start due estimate points
-	got, err := s.OrderProps([]string{"points", "estimate", "due", "start", "priority"})
+	s := withProps() // level begin finish effort score
+	got, err := s.OrderProps([]string{"score", "effort", "finish", "begin", "level"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,10 +111,10 @@ func TestOrderProps(t *testing.T) {
 	for _, p := range got.Props {
 		names = append(names, p.Name)
 	}
-	if want := []string{"points", "estimate", "due", "start", "priority"}; !slices.Equal(names, want) {
+	if want := []string{"score", "effort", "finish", "begin", "level"}; !slices.Equal(names, want) {
 		t.Errorf("props = %v", names)
 	}
-	if _, err := s.OrderProps([]string{"points", "estimate"}); !errors.Is(err, ErrOrderStale) {
+	if _, err := s.OrderProps([]string{"score", "effort"}); !errors.Is(err, ErrOrderStale) {
 		t.Errorf("a missing name: err = %v", err)
 	}
 }
@@ -230,8 +230,8 @@ const scopedWorkflow = `workflow:
     on_hold: [todo]
     waiting: [on_hold]
   required:
-    on_hold: [points]
-    done: [points]
+    on_hold: [score]
+    done: [score]
 scoped:
 - where: project:` + scopedULID + `
   statuses: [todo, on_hold, done]
@@ -241,8 +241,8 @@ scoped:
       on_hold: [todo]
       waiting: [on_hold]
     required:
-      on_hold: [points]
-      done: [points, assignees]
+      on_hold: [score]
+      done: [score, assignees]
 `
 
 func TestRemoveStatusOnAScopedWorkflow(t *testing.T) {
@@ -277,7 +277,7 @@ func TestRemoveStatusOnAScopedWorkflow(t *testing.T) {
 
 func TestRemoveStatusEmptiesTheKeys(t *testing.T) {
 	t.Parallel()
-	s := scopedBase(t, "workflow:\n  transitions:\n    waiting: [on_hold]\n  required:\n    on_hold: [points]\n")
+	s := scopedBase(t, "workflow:\n  transitions:\n    waiting: [on_hold]\n  required:\n    on_hold: [score]\n")
 	got, err := s.RemoveStatus("on_hold")
 	if err != nil {
 		t.Fatal(err)
@@ -291,7 +291,7 @@ func TestRemovePropOnAScopedWorkflow(t *testing.T) {
 	t.Parallel()
 	s := scopedBase(t, scopedWorkflow)
 	before := encoded(t, s)
-	got, err := s.RemoveProp("points")
+	got, err := s.RemoveProp("score")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func TestAddPropRefusesBadValues(t *testing.T) {
 
 func TestRemovalLeavesNoEmptyWorkflow(t *testing.T) {
 	t.Parallel()
-	store := scopedBase(t, "workflow:\n  transitions:\n    waiting: [on_hold]\n  required:\n    on_hold: [points]\n")
+	store := scopedBase(t, "workflow:\n  transitions:\n    waiting: [on_hold]\n  required:\n    on_hold: [score]\n")
 	got, err := store.RemoveStatus("on_hold")
 	if err != nil {
 		t.Fatal(err)
@@ -395,7 +395,7 @@ func TestRemovalLeavesNoEmptyWorkflow(t *testing.T) {
     transitions:
       waiting: [on_hold]
     required:
-      on_hold: [points]
+      on_hold: [score]
 `)
 	got, err = scoped.RemoveStatus("on_hold")
 	if err != nil {
@@ -408,8 +408,8 @@ func TestRemovalLeavesNoEmptyWorkflow(t *testing.T) {
 		t.Errorf("an empty override workflow stays:\n%s", out)
 	}
 
-	prop := scopedBase(t, "workflow:\n  required:\n    done: [points]\nscoped:\n- where: project:"+scopedULID+"\n  workflow:\n    required:\n      done: [points]\n")
-	got, err = prop.RemoveProp("points")
+	prop := scopedBase(t, "workflow:\n  required:\n    done: [score]\nscoped:\n- where: project:"+scopedULID+"\n  workflow:\n    required:\n      done: [score]\n")
+	got, err = prop.RemoveProp("score")
 	if err != nil {
 		t.Fatal(err)
 	}

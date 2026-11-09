@@ -42,6 +42,11 @@ type TemplateItem struct {
 	Kind       string         `yaml:"kind,omitempty"`
 	Title      string         `yaml:"title,omitempty"`
 	Status     string         `yaml:"status,omitempty"`
+	Priority   string         `yaml:"priority,omitempty"`
+	Start      *Date          `yaml:"start,omitempty"`
+	Due        *Date          `yaml:"due,omitempty"`
+	Estimate   *Duration      `yaml:"estimate,omitempty"`
+	Points     *float64       `yaml:"points,omitempty"`
 	Assignees  Assignees      `yaml:"assignees,omitempty"`
 	Watchers   []string       `yaml:"watchers,omitempty"`
 	Labels     []string       `yaml:"labels,omitempty"`
@@ -64,6 +69,7 @@ type TemplateItem struct {
 func (it *TemplateItem) targets() map[string]any {
 	return map[string]any{
 		"kind": &it.Kind, "title": &it.Title, "status": &it.Status,
+		"priority": &it.Priority, "start": &it.Start, "due": &it.Due, "estimate": &it.Estimate, "points": &it.Points,
 		"assignees": &it.Assignees, "watchers": &it.Watchers, "labels": &it.Labels,
 		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "causes": &it.Causes, "relates": &it.Relates,
 		"duplicates": &it.Duplicates, "clones": &it.Clones, "sprint": &it.Sprint,
@@ -98,7 +104,7 @@ type Template struct {
 }
 
 var templateKeys = []string{
-	"kind", "title", "status", "assignees", "watchers", "labels", "repos",
+	"kind", "title", "status", "priority", "start", "due", "estimate", "points", "assignees", "watchers", "labels", "repos",
 	"blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links", "props", "children", "created", "updated",
 }
 
@@ -135,6 +141,11 @@ func (t *Template) Encode() ([]byte, error) {
 	e.Put("kind", it.Kind, it.Kind == "")
 	e.Put("title", it.Title, it.Title == "")
 	e.Put("status", it.Status, it.Status == "")
+	e.Put("priority", it.Priority, it.Priority == "")
+	e.Put("start", it.Start, it.Start == nil)
+	e.Put("due", it.Due, it.Due == nil)
+	e.Put("estimate", it.Estimate, it.Estimate == nil)
+	e.Put("points", it.Points, it.Points == nil)
 	e.Put("assignees", it.Assignees, it.Assignees.IsZero())
 	e.Put("watchers", it.Watchers, len(it.Watchers) == 0)
 	e.Put("labels", it.Labels, len(it.Labels) == 0)
