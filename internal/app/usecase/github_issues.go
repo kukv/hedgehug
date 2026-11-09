@@ -113,6 +113,7 @@ type mirrorPlan struct {
 	rejected    []automation.Rejection
 	synced      map[string]model.IssueValues // by ref
 	overwritten []issueNote
+	comments    *commentMirror // the comments to write, or nil
 }
 
 // write puts the plan's values and status on t.
@@ -300,6 +301,13 @@ func applyMirror(ss *Session, s *store.Store, held *store.Locked, plans []*mirro
 				tx.AddTrailer(automation.TrailerRejected, automation.RejectedTrailer(p.ulid, r))
 			}
 			noteOverwrites(tx, p.ulid, p.overwritten)
+			if p.comments != nil {
+				for _, c := range p.comments.puts {
+					if err := tx.PutComment(p.ulid, c); err != nil {
+						return err
+					}
+				}
+			}
 			return tx.PutTask(t)
 		})
 		if err != nil {

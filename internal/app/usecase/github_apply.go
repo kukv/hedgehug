@@ -15,6 +15,9 @@ import (
 type fetched struct {
 	pulls  map[string]github.Pull
 	issues map[string]github.Issue
+	// comments are the comments of the issues that tasks take comments from, by
+	// ref; an issue whose comments were not read in full is not here.
+	comments map[string][]github.IssueComment
 }
 
 // applied is what apply did to a task: whether it changed, and gh before and

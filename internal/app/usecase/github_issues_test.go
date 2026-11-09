@@ -155,7 +155,7 @@ func TestMirrorIgnoresTheCommentsField(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		cur.Links[0].Fields = []string{"title", "comments"}
+		cur.Links[0].Fields = []string{"comments"}
 		return tx.PutTask(cur)
 	})
 	if _, err := fake.AddComment("org-a/web", n, "bob", "hello"); err != nil {
@@ -167,11 +167,14 @@ func TestMirrorIgnoresTheCommentsField(t *testing.T) {
 	if w := refetch(t, ts); len(w) != 0 {
 		t.Fatalf("warnings %v", w)
 	}
-	if x := taskIn(t, ts, "me", "ME-1"); x.Title != "new" {
+	if x := taskIn(t, ts, "me", "ME-1"); x.Title != "a" {
 		t.Errorf("task %+v", x)
 	}
-	if got := syncedOf(t, ts); got["comments"] != nil {
-		t.Errorf("synced %v", got)
+	// A link that syncs no value has no base for the values: were comments
+	// one of them, the base would be written, empty.
+	g, err := taskIn(t, ts, "me", "ME-1").GitHub()
+	if err != nil || len(g.Issues) != 1 || g.Issues[0].Synced != nil {
+		t.Errorf("gh %+v, %v", g, err)
 	}
 	n0 := len(logOf(t, ts))
 	refetch(t, ts)
