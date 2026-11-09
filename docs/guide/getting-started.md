@@ -80,13 +80,14 @@ hh done WEB-1
 hh sync                              # sync now, without waiting for the background sync
 ```
 
-A task can hold only the labels in the list of the store (the store's schema). Add labels with
-`hh schema labels add <name>…` (or on Settings, Schema, the tab "ラベル" in the browser). A label matches without regard to case and is
-stored as the list spells it, so with `bug` in the list, `labels+=Bug` stores `bug`. A name that is not in the list stops with
-`the change breaks the schema` (`labels: "nope" is not one of [bug ui docs]`; an empty list says to add the labels in the settings).
-`hh schema labels rm <name>…` removes labels no task holds, and `hh schema migrate label <old> <new>` renames a label, or
-merges it into another, on the tasks that hold it; `hh schema migrate priority <old> <new>` does the same for a priority (the
-priorities are `low`, `mid`, `high` and `urgent` until you change them in the browser). Neither rewrites the `query` of a saved view.
+A task can hold only the labels in the list of the store. Add them with `hh schema labels add <name>…`
+(in the browser: Settings, Schema, the tab "ラベル"). A label matches without regard to case and is stored as the list
+spells it: with `bug` in the list, `labels+=Bug` stores `bug`. A name that is not in the list stops with
+`the change breaks the schema` (`labels: "nope" is not one of [bug ui docs]`).
+
+To change the list later, `hh schema labels rm <name>…` removes labels no task holds, and
+`hh schema migrate label <old> <new>` renames a label, or merges it into another, on the tasks that hold it.
+`hh schema migrate priority <old> <new>` does the same for a priority. Neither rewrites the `query` of a saved view.
 
 Every command writes to your local copy first, so it works offline. A store with a remote then
 syncs in the background, about 30 seconds after a write.

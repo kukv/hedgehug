@@ -162,9 +162,28 @@ Nothing was written (--dry-run).
 
 形式 3 の Store は `hh` で編集できないので、残したいラベルのリストは、変換の前に手で書きます。`schema.yaml` に `labels:` がないと、すべてのラベルが外れます。Store のフォルダ（場所は `hh store list` で分かります）で、次のようにします。
 
-1. タスクが持っているラベルを調べます。たとえば `hh ls --json`（タスクごとの `labels`）で見るか、`tasks/` の下のファイルを見ます。
+1. タスクが持っているラベルを調べます。形式 3 の Store では `hh ls` が止まるので、変換に聞きます。`schema.yaml` に `labels:` がない状態で `hh store convert --dry-run` を実行すると、すべてのラベルが、持っているタスクの件数つきで一覧されます（何も書きません）。`tasks/` の下のファイルを見てもかまいません（`grep -rh "^labels" tasks/`）。
+
+```console
+$ hh store convert --dry-run
+Format 3 -> 4
+  ラベル bug を外した（schema.yaml の labels: にない）: タスク 2 件・テンプレート 0 件
+  ラベル ui を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  ラベル wip を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
+
 2. `schema.yaml` のトップレベルに、残すラベルを `labels:` として書きます（`labels: [bug, ui]`）。変換は大文字小文字を区別せずに照合し、リストの綴りで保存します。
-3. コミットして（`git add -A && git commit -m "labels"`）、`hh store convert --dry-run` を実行します。外れるラベルが一覧されます。一覧が思ったとおりなら、`hh store convert` を実行してください。
+3. コミットして（`git add -A && git commit -m "labels"`）、もう一度 `hh store convert --dry-run` を実行します。まだ外れるラベル（下の例では `wip`）だけが一覧されます。一覧が思ったとおりなら、`hh store convert` を実行してください。
+
+```console
+$ hh store convert --dry-run
+Format 3 -> 4
+  ラベル wip を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
 
 変換のあとは、`hh schema labels add <名前>…` でリストにラベルを足し、`hh schema labels rm <名前>…` でどのタスクも持っていないラベルを消し、`hh schema migrate label <旧> <新>` で名前を変える、またはほかのラベルへマージします（[はじめに](getting-started.md#4-タスクを読み変更する)を参照）。
 

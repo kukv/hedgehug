@@ -234,9 +234,30 @@ A store in format 3 cannot be edited with `hh`, so the list of labels you want t
 written by hand before the conversion; with no `labels:` in `schema.yaml`, every label is removed.
 In the store's folder (`hh store list` shows where it is):
 
-1. Find the labels the tasks hold, for example with `hh ls --json` (the `labels` of each task) or by looking in the files under `tasks/`.
+1. Find the labels the tasks hold. `hh ls` stops on a store in format 3, so ask the conversion: with no `labels:` in
+   `schema.yaml`, `hh store convert --dry-run` lists every label, with the number of tasks that hold it (it writes nothing).
+   Looking in the files works too (`grep -rh "^labels" tasks/`).
+
+```console
+$ hh store convert --dry-run
+Format 3 -> 4
+  ラベル bug を外した（schema.yaml の labels: にない）: タスク 2 件・テンプレート 0 件
+  ラベル ui を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  ラベル wip を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
+
 2. In `schema.yaml`, add the top-level key `labels:` with the ones to keep (`labels: [bug, ui]`). Case does not matter when the conversion matches them, and the list's spelling is what is stored.
-3. Commit (`git add -A && git commit -m "labels"`), then run `hh store convert --dry-run`: it lists the labels it would remove. Run `hh store convert` when the list is what you want.
+3. Commit (`git add -A && git commit -m "labels"`), then run `hh store convert --dry-run` again: it lists only the labels it would still remove (`wip` below). Run `hh store convert` when that is what you want.
+
+```console
+$ hh store convert --dry-run
+Format 3 -> 4
+  ラベル wip を外した（schema.yaml の labels: にない）: タスク 1 件・テンプレート 0 件
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
 
 After the conversion, `hh schema labels add <name>…` adds a label to the list and `hh schema labels rm <name>…`
 removes one that no task holds; `hh schema migrate label <old> <new>` renames or merges one (see
