@@ -283,6 +283,7 @@ func pushIssues(ss *Session, c *config.Config, e config.StoreEntry, s *store.Sto
 		conns[repo] = x
 		return x
 	}
+	created := 0 // comments made on GitHub by this run, of all the repositories
 	for _, x := range ix.Tasks() {
 		if x.DeletedAt != nil || x.Broken != "" || !slices.ContainsFunc(x.Links, func(l model.Link) bool { return l.Type == model.LinkIssue && l.Sync == model.SyncPush }) {
 			continue
@@ -297,6 +298,7 @@ func pushIssues(ss *Session, c *config.Config, e config.StoreEntry, s *store.Sto
 			continue // told when the fetch read it
 		}
 		var done []*pushed
+		var cp *commentPush
 		for _, l := range t.Links {
 			issue, read := got.issues[model.CanonRef(l.Ref)]
 			if l.Type != model.LinkIssue || l.Sync != model.SyncPush || !read {
@@ -311,11 +313,42 @@ func pushIssues(ss *Session, c *config.Config, e config.StoreEntry, s *store.Sto
 			if p := pushLink(t, l, issue, g, rules, vals, cn.cl, cn.res, cn.acct, rep); p != nil {
 				done = append(done, p)
 			}
+			if !slices.Contains(rules.IssueFields.For(l), automation.FieldComments) {
+				continue
+			}
+			if cp == nil {
+				cp = &commentPush{}
+				if cp.work, err = commentsToPush(s, t, c.Me(), rep); err != nil {
+					rep.Warnings = append(rep.Warnings, t.ULID.String()+": "+err.Error())
+					cp.work = nil
+				}
+			}
+			pushLinkComments(cp, l, issue.Number, cn.cl, cn.acct, &created, rep)
 		}
-		if len(done) == 0 {
+		var written []*commentWork
+		if cp != nil {
+			written = slices.DeleteFunc(slices.Clone(cp.work), func(w *commentWork) bool { return !w.dirty })
+		}
+		if len(done) == 0 && len(written) == 0 && (cp == nil || len(cp.notes) == 0) {
 			continue
 		}
 		hash, err := ss.UpdateCommit(s, store.Op{Name: OpGitHubPush, Task: t.ULID, Automated: true}, func(tx *store.Tx) error {
+			for _, w := range written {
+				// Only gh: the text of the comment is not edited by this.
+				if err := w.c.SetGitHub(w.links); err != nil {
+					return err
+				}
+				if err := tx.PutCommentGH(t.ULID, w.c); err != nil {
+					return err
+				}
+			}
+			if cp != nil && len(cp.notes) > 0 {
+				tx.AllowEmpty() // GitHub went back: gh may be the same
+				noteOverwrites(tx, t.ULID, cp.notes)
+			}
+			if len(done) == 0 {
+				return nil
+			}
 			cur, err := tx.Task(t.ULID)
 			if err != nil {
 				return err

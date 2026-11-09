@@ -98,6 +98,34 @@ func NormalizeBody(body string) string {
 	return strings.TrimRight(strings.ReplaceAll(body, "\r\n", "\n"), " \t\n")
 }
 
+var commentMarkRE = regexp.MustCompile(`(?:^|\n)<!-- hedgehug:([0-9A-Za-z]{26}) -->$`)
+
+// MarkedComment is body, as a push sends it as a comment: the mark that gives
+// the comment u back, which GitHub does not show, ends it.
+func MarkedComment(u ULID, body string) string {
+	mark := "<!-- hedgehug:" + u.String() + " -->"
+	if b := NormalizeBody(body); b != "" {
+		return b + "\n\n" + mark
+	}
+	return mark
+}
+
+// SplitComment is the text of a comment of GitHub, in NormalizeBody form with
+// the mark MarkedComment puts on its last line taken off, and the ULID the
+// mark names. A comment with no mark has none.
+func SplitComment(body string) (text string, u ULID, ok bool) {
+	b := NormalizeBody(body)
+	m := commentMarkRE.FindStringSubmatchIndex(b)
+	if m == nil {
+		return b, ULID{}, false
+	}
+	u, err := ParseULID(b[m[2]:m[3]])
+	if err != nil {
+		return b, ULID{}, false
+	}
+	return strings.TrimRight(b[:m[0]], " \t\n"), u, true
+}
+
 // StripMark is NormalizeBody with no mark on its last line.
 func StripMark(body string) string {
 	b := NormalizeBody(body)

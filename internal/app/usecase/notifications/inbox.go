@@ -549,10 +549,14 @@ func issueOverwrittenContent(it inbox.Item) string {
 		label = r.Label()
 	}
 	lost := strconv.Quote(strings.Join(d.Lost, ", "))
-	if d.Side == automation.SideGitHub {
-		return fmt.Sprintf("the %s %s on %s was written over by the task", d.Field, lost, label)
+	field := d.Field
+	if u, ok := strings.CutPrefix(field, "comments:"); ok {
+		field = "comment " + u // which comment: its ULID, and the text that was lost
 	}
-	return fmt.Sprintf("the %s %s of the task was written over by %s", d.Field, lost, label)
+	if d.Side == automation.SideGitHub {
+		return fmt.Sprintf("the %s %s on %s was written over by the task", field, lost, label)
+	}
+	return fmt.Sprintf("the %s %s of the task was written over by %s", field, lost, label)
 }
 
 // InboxContent says what happened, by the kind of the item. An item that

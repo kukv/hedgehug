@@ -344,9 +344,14 @@ func TestPushIgnoresTheCommentsField(t *testing.T) {
 		t.Errorf("issue %+v", got)
 	}
 	n0, at := len(logOf(t, ts)), got.UpdatedAt
+	// Nothing differs, so the push does not even try a write: "comments" is no
+	// value of the issue to compare, and in the comparison it would always
+	// differ from what the base holds. The one try is the fetch's own.
+	tried := 0
+	ts.BeforeUpdate = func() { tried++ }
 	refetch(t, ts)
-	if c := len(logOf(t, ts)); c != n0 || onGitHub(t, fake, n).UpdatedAt != at {
-		t.Errorf("a second sync changed something: %d commits added", c-n0)
+	if c := len(logOf(t, ts)); c != n0 || onGitHub(t, fake, n).UpdatedAt != at || tried != 1 {
+		t.Errorf("a second sync changed something: %d commits added, %d writes tried (want 1: the fetch)", c-n0, tried)
 	}
 }
 
