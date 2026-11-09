@@ -202,6 +202,9 @@ const messages: Record<string, Make> = {
     }
   },
 
+  "undo.comment_pushed": () =>
+    "GitHub に送ったコメントの追加は取り消せません。消すときは hh comment rm を使ってください（GitHub からも消えます）",
+
   "undo.unsupported": () =>
     "形式を上げる前の schema.yaml とビューは戻せません。変えるときは hh schema や hh view を使ってください",
 
@@ -214,6 +217,8 @@ const messages: Record<string, Make> = {
   "comment.no_author": () => "書いた人が分からないコメントは変更できません",
   "comment.not_author": (a) => `${str(a, "author")} が書いたコメントは変更できません`,
   "comment.empty": () => "コメントが空です",
+  "comment.mirrored": () =>
+    "GitHub から取り込んだコメントは変更できません。GitHub で変えてください",
 
   // stores and sync
   "store.read_only": (a) =>

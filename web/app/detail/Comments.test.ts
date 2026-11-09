@@ -45,6 +45,22 @@ describe("Comments", () => {
     expect(screen.getByText("github.com/tanaka")).toBeInTheDocument();
   });
 
+  it("marks a comment taken from GitHub and offers no edit or delete for it", () => {
+    const gh = {
+      ulid: "C9",
+      author: "github:tanaka",
+      created: "2026-11-04T10:30:00Z",
+      github: true,
+      body: "GitHub のコメント",
+    };
+    const s = showView({ ulid: "U6", id: "REL-6", store: "shared", comments: [gh] });
+    const k = makeCore({ show: s, accounts: ["github:tanaka"] });
+    mount(Comments, { show: s, readonly: false }, k);
+    expect(screen.getByText("GitHub から")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "編集" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "削除" })).toBeNull();
+  });
+
   it("posts a comment, shows it at once and tells the cache the commit is its own", async () => {
     const { k, container } = setup();
     k.api.addComment.mockImplementation(() =>

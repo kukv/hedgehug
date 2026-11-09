@@ -98,3 +98,33 @@ filter, not a sync: it picks the issues to import by their GitHub label.
 
 In `push` mode, a value that someone edited by hand on GitHub is overwritten at the next
 push, and the overwrite is reported in `hh inbox`.
+
+### Sync comments
+
+`comments` is a field of the sync that neither mode carries by default; add it to the mode you want:
+
+```bash
+hh automation fields --push title,body,status,assignees,comments
+hh automation fields --mirror title,status,assignees,comments
+```
+
+- **Update every clone first.** Before you add `comments`, update hedgehug in every clone that uses the store.
+  An older hedgehug cannot read an `automations.yaml` that names `comments`, so in that clone the rules and the
+  issue sync stop. The store format does not change, so nothing else warns you.
+- **`push`** creates the comments of the task as comments of the issue, and carries edits and deletions over. It sends
+  only your own comments (a comment with no author, and a deleted comment that was never sent, are not
+  sent), and each clone sends its own. On GitHub the author of the comment is the person who ran the sync. A
+  comment that someone edited by hand on GitHub is overwritten at the next push, and the overwrite is reported
+  in `hh inbox` as "comment (...)". The first push after you add `comments` creates 30 comments at most in one
+  sync and leaves the rest for the next one. The body is sent as written, so `@login` is a real mention and
+  notifies that person; `@host/login` (a person of another host) can notify `@host` on GitHub. Each comment
+  ends with an invisible marker `<!-- hedgehug:<ULID> -->`, which lets a later sync find the comment again
+  even if the record of its GitHub ID was lost.
+- **`mirror`** takes the comments of the issue as comments of the task, with the author `github:<login>`, and
+  carries edits and deletions over. Two clones that take the same comment make the same file, so the merge keeps
+  one. A comment taken from GitHub cannot be edited or deleted in hedgehug, now or after you unlink the issue or change the
+  mode (the error is `comment.mirrored`); change it on GitHub. Only the first mirror link of a task is read.
+  Taking comments is not limited and does not notify, and it adds nobody to the watchers.
+- `hh undo` refuses to undo the adding of a comment that was already sent to GitHub. Use `hh comment rm`, which
+  removes it from GitHub too.
+- Only comments on issues are synced, not comments on pull requests.

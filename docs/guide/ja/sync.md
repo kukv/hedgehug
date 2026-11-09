@@ -79,6 +79,12 @@ Restored WEB-1 (01M6QAZMHYRXKQJSTS7KTHA2GC) Write the login page
 
 逆向きに、変換したが push していないクローンが、別のクローンが古い形式のコミットを push したことに気づくこともあります。そのとき `hh sync` は `sync.format_diverged`（HTTP 409）で止まり、メッセージは remote に古い形式の変更があることを知らせます。`hh store convert` を実行してください。remote の変更を変換し、remote の最新のコミットの上のコミットとして push して、手元の変更とマージします。変換の前に、その Store を使うすべてのクローンで hedgehug を更新してください。[Store](stores.md#変換の前に)を参照してください。
 
+## コメントと GitHub の Issue の同期
+
+コメントは1件ごとに別のファイルなので、2人がコメントを足しても衝突しません。同じコメントが両側で編集されたときは、ほかのフィールドと同じく、あとの編集が残ります（LWW）。
+
+GitHub の Issue に送った（または Issue から取り込んだ）コメントのファイルには、`gh` の要素があります。Issue、GitHub 上のコメントの ID、最後に同期した本文を持ちます。`gh` だけを書くときはコメントの `updated` を進めないので、GitHub の ID の記録が後の本文の編集に勝つことも、編集が ID を落とすこともありません。マージが新しい側のファイルを採るときは、その側にない Issue の `gh` の要素を負けた側から足します。コメントの同期は[GitHub](github.md#コメントを同期する)にあります。`comments` を同期する項目に足す前に、すべてのクローンを更新してください。
+
 ## origin の履歴が変わったとき
 
 remote の履歴が書き換えられると、`hh sync` は push せずに止まります。対処は[メンテナンス](maintenance.md#履歴から内容を消す)にあります。

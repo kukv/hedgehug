@@ -14,6 +14,12 @@ describe("errorMessage", () => {
     expect(errorMessage(err("task.not_found", { input: "REL-9" }))).toBe(
       "REL-9 というタスクは見つかりません",
     );
+    expect(errorMessage(err("comment.mirrored", { author: "github:alice" }))).toBe(
+      "GitHub から取り込んだコメントは変更できません。GitHub で変えてください",
+    );
+    expect(errorMessage(err("undo.comment_pushed"))).toBe(
+      "GitHub に送ったコメントの追加は取り消せません。消すときは hh comment rm を使ってください（GitHub からも消えます）",
+    );
     expect(errorMessage(err("comment.not_author", { author: "alice" }))).toBe(
       "alice が書いたコメントは変更できません",
     );

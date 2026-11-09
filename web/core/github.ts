@@ -133,9 +133,15 @@ const FIELDS: Readonly<Record<string, string>> = {
   // Not a synced field any more; an old notification of the sync can still name it.
   labels: "ラベル",
   milestone: "マイルストーン",
+  comments: "コメント",
 };
 
-export const fieldLabel = (name: string): string => FIELDS[name] ?? name;
+/** The name of a field; "comments:<ULID>" (a note of the inbox) is one comment, named by the end of its ULID. */
+export function fieldLabel(name: string): string {
+  const comment = name.startsWith("comments:") ? name.slice("comments:".length) : "";
+  if (comment) return `${FIELDS.comments}（…${comment.slice(-6)}）`;
+  return FIELDS[name] ?? name;
+}
 
 /** The fields a link of an issue syncs: its own, else the ones of its mode. The mode link has none. */
 export function syncedFields(l: Link, fields: IssueFields | undefined): string {

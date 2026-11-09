@@ -185,6 +185,13 @@
         <div class="main">
           <p class="meta">
             <strong>{c.author}</strong>
+            {#if c.github}
+              <span
+                class="gh"
+                title="GitHub のコメントを取り込んだもの。ここでは編集も削除もできません"
+                >GitHub から</span
+              >
+            {/if}
             ·
             <span class="mono">{formatDateTime(c.created, new Date())}</span>
           </p>
@@ -209,7 +216,7 @@
             </div>
           {:else}
             <p class="body">{c.body}</p>
-            {#if !readonly && isMine(c)}
+            {#if !readonly && !c.github && isMine(c)}
               <div class="row">
                 <Button size="sm" variant="ghost" onclick={() => startEdit(c)}>編集</Button>
                 <Button size="sm" variant="ghost" onclick={() => askRemove(c)}>削除</Button>
@@ -309,6 +316,12 @@
   }
   .mono {
     font-family: var(--font-mono);
+  }
+  .gh {
+    padding: 0 var(--space-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--fs-11, 11px);
   }
   .body {
     margin: var(--space-4) 0;

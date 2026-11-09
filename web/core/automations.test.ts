@@ -152,7 +152,24 @@ describe("the fields of the issue sync", () => {
       "状態",
       "担当者",
       "マイルストーン",
+      "コメント",
     ]);
+  });
+
+  it("lists the same names as the fields the server accepts", () => {
+    expect(ISSUE_FIELDS.map((f) => f.name)).toEqual([
+      "title",
+      "body",
+      "status",
+      "assignees",
+      "milestone",
+      "comments",
+    ]);
+  });
+
+  it("keeps comments when another field is switched", () => {
+    expect(withField(["comments", "title"], "body", true)).toEqual(["title", "body", "comments"]);
+    expect(withField(["comments", "title"], "title", false)).toEqual(["comments"]);
   });
 
   it("keeps the order of the table", () => {

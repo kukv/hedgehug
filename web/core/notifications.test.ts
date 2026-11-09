@@ -148,6 +148,21 @@ describe("notificationText", () => {
       text: "タスクのラベルが手で編集されていたため、org-a/web#45 の値に戻しました",
       mine: "ラベル: v2",
     });
+    const comment = n({
+      ulid: "3",
+      kind: "issue_overwritten",
+      detail: {
+        ref: "github.com/org-a/web/issues/45",
+        field: "comments:01JABCDEFGHJKMNPQRSTVWXYZ0",
+        side: "github",
+        lost: ["GitHub で直した本文"],
+      },
+    });
+    expect(notificationText(comment)).toEqual({
+      label: "自動化",
+      text: "org-a/web#45 のコメント（…VWXYZ0）が GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました",
+      mine: "コメント（…VWXYZ0）: GitHub で直した本文",
+    });
     expect(notificationText(item("github"))).toEqual({
       label: "自動化",
       text: "org-a/web#45 のタイトルが GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました",

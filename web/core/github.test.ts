@@ -5,6 +5,7 @@ import {
   fetchedText,
   fetchLine,
   fetchTimes,
+  fieldLabel,
   fullRepo,
   type GitHubRepo,
   installUrl,
@@ -266,5 +267,12 @@ describe("the reads as the settings show them", () => {
     expect(installUrl(m as MissingApp)).toBe(
       "https://github.com/organizations/org-b/settings/installations",
     );
+  });
+});
+
+describe("fieldLabel of comments", () => {
+  it("names the comments, and one comment by the end of its ULID", () => {
+    expect(fieldLabel("comments")).toBe("コメント");
+    expect(fieldLabel("comments:01JABCDEFGHJKMNPQRSTVWXYZ0")).toBe("コメント（…VWXYZ0）");
   });
 });
