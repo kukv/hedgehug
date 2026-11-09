@@ -1,9 +1,14 @@
 package tasks_test
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
@@ -160,4 +165,45 @@ func TestShowAtOfSeveralStores(t *testing.T) {
 	// A session of the other store does not see it.
 	_, err = tasks.ShowAt(ts.ForStore("org-a"), r.ULID.String(), r.Commit)
 	usecasetest.WantErr(t, err, usecase.KindNotFound, "task.not_found")
+}
+
+// A commit that has no store.yaml cannot say its format: that is not a task that
+// did not exist then, for ShowAt and RestoreAt alike.
+func TestAtACommitWithoutStoreMeta(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	_, e, err := ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := e.Path
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta, err := os.ReadFile(filepath.Join(path, filepath.FromSlash(model.StoreMetaPath))) //nolint:gosec // a file of the test's own store
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := ts.UpdateCommit(s, store.Op{Name: "test"}, func(tx *store.Tx) error { return tx.RemoveFile(model.StoreMetaPath) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Update(s, store.Op{Name: "test"}, func(tx *store.Tx) error {
+		return tx.PutFile(model.StoreMetaPath, meta)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, run := range []func() error{
+		func() error { _, err := tasks.ShowAt(ts.Session, "ME-1", h.String()); return err },
+		func() error { _, err := tasks.RestoreAt(ts.Session, "ME-1", h.String()); return err },
+	} {
+		err := run()
+		if err == nil || strings.Contains(err.Error(), "did not exist") || !strings.Contains(err.Error(), "store format") {
+			t.Errorf("err = %v", err)
+		}
+	}
 }

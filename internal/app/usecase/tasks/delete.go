@@ -217,14 +217,20 @@ func ParseAtTime(at string, loc *time.Location) (time.Time, bool) {
 
 // readTaskAt is the file of the task ulid as commit has it, in the newest
 // store format: a commit from before a conversion is read through the steps
-// of domain/upgrade. The error is fs.ErrNotExist when the commit lacks it.
+// of domain/upgrade. The error is fs.ErrNotExist when the commit lacks the task
+// (and only then: a commit whose format cannot be read is another error).
 func readTaskAt(s *store.Store, commit plumbing.Hash, ulid model.ULID) ([]byte, error) {
 	r := s.Repo()
 	data, err := r.ReadAt(commit, model.TaskPath(ulid))
 	if err != nil {
 		return nil, err
 	}
-	return upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }).Task(data)
+	data, err = upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }).Task(data)
+	if errors.Is(err, fs.ErrNotExist) {
+		// A commit without store.yaml is unreadable, which is not a task that did not exist.
+		return nil, fmt.Errorf("the store format of %s cannot be read: %v", commit, err)
+	}
+	return data, err
 }
 
 // commitAt returns the commit whose state RestoreAt reads: for a time, the
