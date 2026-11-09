@@ -29,9 +29,19 @@ func (s *Server) RefuseComments(op string, on bool) {
 	s.noComments[op] = on
 }
 
-// nextCommentID is one more than the greatest ID of any comment.
+// CommentGoneOnUpdate makes the next PATCH of a comment find the comment
+// deleted: it is removed and the PATCH answers 404, once.
+func (s *Server) CommentGoneOnUpdate() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.goneOnUpdate = true
+}
+
+// nextCommentID is one more than the greatest ID any comment has had: GitHub
+// does not number a comment again after one is deleted.
 func (s *Server) nextCommentID() int {
-	n := 0
+	n := s.lastComment
+	defer func() { s.lastComment = n + 1 }()
 	for _, r := range s.st.Repos {
 		for _, i := range r.Issues {
 			for _, c := range i.Comments {
@@ -195,6 +205,13 @@ func (s *Server) issueComment(w http.ResponseWriter, r *http.Request, x *Repo, i
 	n, _ := strconv.Atoi(id)
 	issue, c := commentOf(x, n)
 	if c == nil {
+		fail(w, http.StatusNotFound, "Not Found")
+		return
+	}
+	if r.Method != "DELETE" && s.goneOnUpdate {
+		s.goneOnUpdate = false
+		dropComment(issue, c)
+		issue.UpdatedAt = s.now()
 		fail(w, http.StatusNotFound, "Not Found")
 		return
 	}

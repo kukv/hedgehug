@@ -377,9 +377,6 @@ func TestPushCommentsCreatesAgainWhenGitHubLostIt(t *testing.T) {
 	c := say(t, ts, x.ULID, mine, "mine")
 	refetch(t, ts)
 	was := oneGH(t, commentOn(t, ts, x.ULID, c.ULID))
-	if _, err := fake.AddComment("org-a/web", n, "bob", "other"); err != nil { // so that the fake does not number it again
-		t.Fatal(err)
-	}
 	if err := fake.RemoveComment("org-a/web", int(was.ID)); err != nil {
 		t.Fatal(err)
 	}
@@ -387,11 +384,11 @@ func TestPushCommentsCreatesAgainWhenGitHubLostIt(t *testing.T) {
 		t.Fatalf("warnings %v", w)
 	}
 	got := hostComments(t, fake, n)
-	if len(got) != 2 || got[1].Body != marked(c.ULID, "mine") {
+	if len(got) != 1 || got[0].Body != marked(c.ULID, "mine") {
 		t.Fatalf("comments %+v", got)
 	}
 	l := ghOf(t, commentOn(t, ts, x.ULID, c.ULID))
-	if len(l) != 1 || l[0].ID != int64(got[1].ID) || l[0].ID == was.ID {
+	if len(l) != 1 || l[0].ID != int64(got[0].ID) || l[0].ID == was.ID {
 		t.Errorf("gh %+v, was %+v", l, was)
 	}
 }

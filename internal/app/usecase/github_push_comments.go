@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 
@@ -23,6 +24,27 @@ type commentWork struct {
 	c     *model.Comment
 	links []model.CommentLink
 	dirty bool
+	// touched is what this push did to gh, by ref: the new element, or nil
+	// for one that goes. The comment may be edited while the push talks to
+	// GitHub, so it is written onto the file as it is by then.
+	touched map[string]*model.CommentLink
+}
+
+// apply puts what the push did on links, the gh of the comment as it is now.
+func (w *commentWork) apply(links []model.CommentLink) []model.CommentLink {
+	for _, ref := range slices.Sorted(maps.Keys(w.touched)) {
+		l := w.touched[ref]
+		i := slices.IndexFunc(links, func(x model.CommentLink) bool { return model.CanonRef(x.Ref) == ref })
+		switch {
+		case l == nil && i >= 0:
+			links = slices.Delete(links, i, i+1)
+		case l != nil && i >= 0:
+			links[i] = *l
+		case l != nil:
+			links = append(links, *l)
+		}
+	}
+	return links
 }
 
 // commentPush is what the push of the comments of one task found to write.
@@ -37,17 +59,50 @@ func (w *commentWork) at(ref string) int {
 
 // setLink puts l in the gh of w, in the place of the one with its ref.
 func (w *commentWork) setLink(l model.CommentLink) {
-	if i := w.at(model.CanonRef(l.Ref)); i >= 0 {
+	ref := model.CanonRef(l.Ref)
+	if i := w.at(ref); i >= 0 {
 		w.links[i] = l
 	} else {
 		w.links = append(w.links, l)
 	}
-	w.dirty = true
+	w.touch(ref, &l)
 }
 
 func (w *commentWork) dropLink(ref string) {
 	w.links = slices.DeleteFunc(w.links, func(l model.CommentLink) bool { return model.CanonRef(l.Ref) == ref })
+	w.touch(ref, nil)
+}
+
+func (w *commentWork) touch(ref string, l *model.CommentLink) {
+	if w.touched == nil {
+		w.touched = map[string]*model.CommentLink{}
+	}
+	w.touched[ref] = l
 	w.dirty = true
+}
+
+// putCommentGH writes what the push did to the gh of w onto the comment as the
+// file has it now (the store is locked): an edit or a delete made while the
+// push talked to GitHub stays, and the next push sends it. A comment that is
+// gone is nothing to write.
+func putCommentGH(s *store.Store, tx *store.Tx, task model.ULID, w *commentWork) error {
+	for cur, err := range s.Comments(task) {
+		if err != nil {
+			return err
+		}
+		if cur.ULID != w.c.ULID {
+			continue
+		}
+		links, err := cur.GitHub()
+		if err != nil {
+			return err
+		}
+		if err := cur.SetGitHub(w.apply(links)); err != nil {
+			return err
+		}
+		return tx.PutCommentGH(task, cur)
+	}
+	return nil
 }
 
 // commentsToPush reads the comments of t that this clone sends: those written

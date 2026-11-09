@@ -334,11 +334,7 @@ func pushIssues(ss *Session, c *config.Config, e config.StoreEntry, s *store.Sto
 		}
 		hash, err := ss.UpdateCommit(s, store.Op{Name: OpGitHubPush, Task: t.ULID, Automated: true}, func(tx *store.Tx) error {
 			for _, w := range written {
-				// Only gh: the text of the comment is not edited by this.
-				if err := w.c.SetGitHub(w.links); err != nil {
-					return err
-				}
-				if err := tx.PutCommentGH(t.ULID, w.c); err != nil {
+				if err := putCommentGH(s, tx, t.ULID, w); err != nil {
 					return err
 				}
 			}
