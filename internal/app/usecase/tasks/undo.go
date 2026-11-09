@@ -287,7 +287,7 @@ func (u *undoer) read(commit plumbing.Hash, p string) ([]byte, error) {
 func (u *undoer) upgraded(commit plumbing.Hash) *upgrade.Commit {
 	up, ok := u.commits[commit]
 	if !ok {
-		up = upgrade.At(func(p string) ([]byte, error) { return u.r.ReadAt(commit, p) })
+		up = upgrade.At(func(p string) ([]byte, error) { return u.r.ReadAt(commit, p) }, u.r.ReadHead)
 		u.commits[commit] = up
 	}
 	return up

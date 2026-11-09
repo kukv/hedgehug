@@ -82,7 +82,7 @@ type upgrades map[plumbing.Hash]*upgrade.Commit
 func (u upgrades) of(s *store.Store, commit plumbing.Hash) *upgrade.Commit {
 	c, ok := u[commit]
 	if !ok {
-		c = upgrade.At(func(p string) ([]byte, error) { return s.Repo().ReadAt(commit, p) })
+		c = upgrade.At(func(p string) ([]byte, error) { return s.Repo().ReadAt(commit, p) }, s.Repo().ReadHead)
 		u[commit] = c
 	}
 	return c

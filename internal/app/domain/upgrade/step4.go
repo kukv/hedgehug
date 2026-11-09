@@ -448,6 +448,19 @@ func ItemBuiltins(it *model.TemplateItem, d BuiltinDefs) Builtins {
 	return out
 }
 
+// pastDefs is the defs for reading a past version: the priorities are those of
+// its schema.yaml, the labels are those of the list now (Cx.Labels), so that a
+// version from before the list was written loses none of the labels that the
+// store keeps (2026-11-09, the user's decision).
+func (cx Cx) pastDefs() (BuiltinDefs, error) {
+	d, err := cx.builtinDefs()
+	if err != nil {
+		return BuiltinDefs{}, err
+	}
+	d.Labels = cx.Labels
+	return d.KeepingBad(), nil
+}
+
 // task3to4 moves the five built-in properties of a task out of props and does
 // the rest of what one task decides. A value that cannot be moved stays in
 // props under its own name (and doctor tells of it, as of any property left
@@ -457,11 +470,11 @@ func task3to4(raw []byte, cx Cx) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, err := BuiltinDefsOf(cx.Schema)
+	d, err := cx.pastDefs()
 	if err != nil {
 		return nil, err
 	}
-	if !TaskBuiltins(t, d.KeepingBad()).Changed() {
+	if !TaskBuiltins(t, d).Changed() {
 		return raw, nil
 	}
 	return t.Encode()
@@ -473,11 +486,11 @@ func template3to4(name string, raw []byte, cx Cx) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, err := BuiltinDefsOf(cx.Schema)
+	d, err := cx.pastDefs()
 	if err != nil {
 		return nil, err
 	}
-	if !ItemBuiltins(&tp.Item, d.KeepingBad()).Changed() {
+	if !ItemBuiltins(&tp.Item, d).Changed() {
 		return raw, nil
 	}
 	return tp.Encode()

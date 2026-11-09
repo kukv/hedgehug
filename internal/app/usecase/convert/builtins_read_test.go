@@ -102,6 +102,40 @@ func TestShowAtReadsTheBuiltinsOfACommitBeforeTheConversion(t *testing.T) {
 	}
 }
 
+// A commit of format 3 usually has no labels: in its schema.yaml, which the
+// store got only just before the conversion. Its labels are matched against the
+// list that the store has now, and spelled as that list spells them.
+func TestShowAtAndRestoreAtMatchTheLabelsOfAPastCommitToTheListOfNow(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	f := makeFormatThree(t, ts)
+	f.files["schema.yaml"] = strings.Replace(schema3, "labels: [bug, ui]\n", "", 1)
+	at := f.commit(t, ts, "x has labels", "note: n\n", []string{"BUG", "wip"}, nil)
+	commitRawWith(t, ts, "the list of labels", map[string]string{"schema.yaml": schema3}, nil)
+	ts.DropMount()
+	if _, err := Run(ts.Session, Options{}, false); err != nil {
+		t.Fatal(err)
+	}
+	v, err := tasks.ShowAt(ts.Session, f.x.ID, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(v.Labels, []string{"bug"}) {
+		t.Errorf("show --at: labels = %v; the list of now has bug and not wip", v.Labels)
+	}
+	if _, err := tasks.RestoreAt(ts.Session, f.x.ID, at); err != nil {
+		t.Fatal(err)
+	}
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ix.Task(f.x.ULID)
+	if !slices.Equal(e.Labels, []string{"bug"}) {
+		t.Errorf("restore --at: labels = %v; want [bug]", e.Labels)
+	}
+}
+
 func TestRestoreAtPutsBackTheBuiltinsOfACommitBeforeTheConversion(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

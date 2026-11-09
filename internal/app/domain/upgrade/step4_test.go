@@ -43,9 +43,11 @@ func task3(t *testing.T, props string, fn func(*model.Task)) []byte {
 	return b
 }
 
-func up3(t *testing.T, raw []byte, sc string) *model.Task {
+// up3 is the task raw of a past version of format 3, with the schema.yaml sc,
+// read while the list of labels of now is labels.
+func up3(t *testing.T, raw []byte, sc string, labels ...string) *model.Task {
 	t.Helper()
-	got, err := To(3, 4, raw, Cx{Schema: []byte(sc)})
+	got, err := To(3, 4, raw, Cx{Schema: []byte(sc), Labels: labels})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +76,7 @@ func TestTask3to4MovesTheFiveToTheFields(t *testing.T) {
 func TestTask3to4LeavesATaskWithNothingToDoAsItIs(t *testing.T) {
 	t.Parallel()
 	raw := task3(t, "note: keep\n", func(tk *model.Task) { tk.Labels = []string{"bug"} })
-	got, err := To(3, 4, raw, Cx{Schema: []byte(schema3)})
+	got, err := To(3, 4, raw, Cx{Schema: []byte(schema3), Labels: []string{"bug", "ui"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,11 +188,16 @@ func TestBuiltinsOfAConversionTakeTheValueOfPropsOverTheField(t *testing.T) {
 func TestTask3to4TakesTheLabelsTheListLacks(t *testing.T) {
 	t.Parallel()
 	raw := task3(t, "", func(tk *model.Task) { tk.Labels = []string{"UI", "wip", "bug", "Bug"} })
-	got := up3(t, raw, schema3)
+	got := up3(t, raw, schema3, "bug", "ui")
 	if !slices.Equal(got.Labels, []string{"ui", "bug"}) {
 		t.Errorf("labels = %v; want the list's spelling, once each, without wip", got.Labels)
 	}
-	// a schema without labels: gives none
+	// the list that counts is the one of now, not the labels: of the version
+	got = up3(t, raw, "labels: [wip]\n", "bug", "ui")
+	if !slices.Equal(got.Labels, []string{"ui", "bug"}) {
+		t.Errorf("labels = %v; the schema.yaml of the version does not decide", got.Labels)
+	}
+	// a list of now without labels gives none
 	got = up3(t, raw, "note: x\n")
 	if len(got.Labels) != 0 {
 		t.Errorf("labels = %v; a store with no list has none left", got.Labels)
@@ -223,7 +230,7 @@ func TestTask3to4TakesTheTracesOfTheLabelSync(t *testing.T) {
 func TestTemplate3to4MovesTheItemsAndTheChildren(t *testing.T) {
 	t.Parallel()
 	src := "---\nkind: task\ntitle: t\nprops:\n  priority: Major\n  points: \"2\"\n  note: keep\nlabels: [bug, wip]\nchildren:\n- title: c\n  props:\n    due: 2026-11-09T10:00:00Z\n  labels: [UI]\n---\n"
-	got, err := TemplateTo(3, 4, "tpl", []byte(src), Cx{Schema: []byte(schema3)})
+	got, err := TemplateTo(3, 4, "tpl", []byte(src), Cx{Schema: []byte(schema3), Labels: []string{"bug", "ui"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +334,7 @@ func TestBuiltinDefsFoldTheListsAndSkipAnEmptyPriorities(t *testing.T) {
 		t.Errorf("defs = %+v", d)
 	}
 	// the values of the tasks take the first spelling
-	got := up3(t, task3(t, "priority: HIGH\n", func(tk *model.Task) { tk.Labels = []string{"BUG", "UI"} }), "priorities: [High, high]\nlabels: [Bug, bug, ui]\n")
+	got := up3(t, task3(t, "priority: HIGH\n", func(tk *model.Task) { tk.Labels = []string{"BUG", "UI"} }), "priorities: [High, high]\nlabels: [Bug, bug, ui]\n", "Bug", "ui")
 	if got.Priority != "High" || !slices.Equal(got.Labels, []string{"Bug", "ui"}) {
 		t.Errorf("priority %q, labels %v", got.Priority, got.Labels)
 	}
@@ -372,5 +379,35 @@ func TestTask3to4MakesALinkThatSyncedLabelsAloneALinkThatDoesNotSync(t *testing.
 	tp, err := model.DecodeTemplate("tpl", out)
 	if err != nil || tp.Item.Links[0].Sync != "link" || len(tp.Item.Links[0].Fields) != 0 {
 		t.Errorf("template links = %+v, %v", tp.Item.Links, err)
+	}
+}
+
+// A commit parses its schema.yaml once for all the tasks and templates it is
+// asked for, and reads the list of now once.
+func TestCommitParsesTheSchemaOnceForManyTasks(t *testing.T) {
+	t.Parallel()
+	reads := map[string]int{}
+	count := func(f files, name string) func(string) ([]byte, error) {
+		return func(p string) ([]byte, error) {
+			reads[name+":"+p]++
+			return f.read(p)
+		}
+	}
+	meta := "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: x\nformat: 3\n"
+	c := At(count(files{model.StoreMetaPath: meta, schema.Path: schema3}, "past"), count(files{schema.Path: "labels: [bug]\n"}, "now"))
+	for range 3 {
+		got, err := c.Task(task3(t, "priority: major\n", func(tk *model.Task) { tk.Labels = []string{"bug", "wip"} }))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tk, _ := model.DecodeTask(got); tk.Priority != "major" || !slices.Equal(tk.Labels, []string{"bug"}) {
+			t.Errorf("priority %q, labels %v", tk.Priority, tk.Labels)
+		}
+	}
+	if reads["past:"+schema.Path] != 1 || reads["now:"+schema.Path] != 1 {
+		t.Errorf("reads = %v; want each schema.yaml once", reads)
+	}
+	if c.cx.memo == nil || c.cx.memo.defs.Priorities == nil {
+		t.Errorf("the parsed schema.yaml was not kept: %+v", c.cx.memo)
 	}
 }

@@ -39,7 +39,7 @@ func (e *FormatDivergedError) Is(target error) bool { return target == ErrFormat
 
 // FormatAt is the store format of the commit: the format of its store.yaml.
 func FormatAt(r *gitrepo.Repo, commit plumbing.Hash) (int, error) {
-	return upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }).Format()
+	return upgrade.FormatOf(func(p string) ([]byte, error) { return r.ReadAt(commit, p) })
 }
 
 // checkFormats is ErrFormatDiverged when ours and theirs have different

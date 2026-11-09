@@ -225,7 +225,7 @@ func readTaskAt(s *store.Store, commit plumbing.Hash, ulid model.ULID) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	data, err = upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }).Task(data)
+	data, err = upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }, r.ReadHead).Task(data)
 	if errors.Is(err, fs.ErrNotExist) {
 		// A commit without store.yaml is unreadable, which is not a task that did not exist.
 		return nil, fmt.Errorf("the store format of %s cannot be read: %v", commit, err)

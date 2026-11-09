@@ -938,8 +938,7 @@ func wasRelation(s *store.Store, commit, key string) (bool, error) {
 	}
 	h := plumbing.NewHash(commit)
 	r := s.Repo()
-	at := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
-	f, err := at.Format()
+	f, err := upgrade.FormatOf(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
 	if err != nil {
 		return false, err
 	}
