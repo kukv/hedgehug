@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
@@ -133,4 +134,56 @@ func TestCommentWritesThatFail(t *testing.T) {
 		}
 		id, _ = fake.AddComment("alice/web", n, "alice", "x")
 	}
+}
+
+// Every write to a comment, by the API or by the admin, moves the update time
+// of its issue, as GitHub does.
+func TestCommentWritesMoveTheIssue(t *testing.T) {
+	t.Parallel()
+	fake, c, n := commentFake(t)
+	clock := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	fake.SetNow(func() time.Time { clock = clock.Add(time.Hour); return clock })
+	moved := func(what string, do func()) {
+		t.Helper()
+		before := issueOf(t, fake, n).UpdatedAt
+		do()
+		if !issueOf(t, fake, n).UpdatedAt.After(before) {
+			t.Errorf("%s did not move the issue", what)
+		}
+	}
+	var id int64
+	moved("API create", func() {
+		made, err := c.CreateIssueComment("alice", "web", n, "a")
+		if err != nil {
+			t.Fatal(err)
+		}
+		id = made.ID
+	})
+	moved("API update", func() {
+		if _, err := c.UpdateIssueComment("alice", "web", id, "b"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	moved("API delete", func() {
+		if err := c.DeleteIssueComment("alice", "web", id); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var aid int
+	moved("admin add", func() {
+		var err error
+		if aid, err = fake.AddComment("alice/web", n, "bob", "x"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	moved("admin edit", func() {
+		if err := fake.EditComment("alice/web", aid, "y"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	moved("admin remove", func() {
+		if err := fake.RemoveComment("alice/web", aid); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

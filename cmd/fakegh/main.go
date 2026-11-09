@@ -325,27 +325,19 @@ func dispatch(args []string, stdout io.Writer) error {
 		fs := flagSet("fakegh issue comment edit")
 		server := fs.String("server", defaultServer, "the URL of the running fake")
 		body := fs.String("body", "", "the body")
-		pos, err := parse(fs, rest, 2)
+		repo, id, err := repoCommentID(fs, rest)
 		if err != nil {
 			return err
 		}
-		id, err := strconv.Atoi(pos[1])
-		if err != nil {
-			return usageError{fmt.Errorf("want a comment ID, got %q", pos[1])}
-		}
-		return admin(*server).Issue("comment/edit", fakegh.AdminBody{Repo: pos[0], CommentID: id, Body: *body})
+		return admin(*server).Issue("comment/edit", fakegh.AdminBody{Repo: repo, CommentID: id, Body: *body})
 	case "issue comment rm":
 		fs := flagSet("fakegh issue comment rm")
 		server := fs.String("server", defaultServer, "the URL of the running fake")
-		pos, err := parse(fs, rest, 2)
+		repo, id, err := repoCommentID(fs, rest)
 		if err != nil {
 			return err
 		}
-		id, err := strconv.Atoi(pos[1])
-		if err != nil {
-			return usageError{fmt.Errorf("want a comment ID, got %q", pos[1])}
-		}
-		return admin(*server).Issue("comment/rm", fakegh.AdminBody{Repo: pos[0], CommentID: id})
+		return admin(*server).Issue("comment/rm", fakegh.AdminBody{Repo: repo, CommentID: id})
 	case "issue close":
 		fs := flagSet("fakegh issue close")
 		server := fs.String("server", defaultServer, "the URL of the running fake")
@@ -392,6 +384,20 @@ func serveOn(ln net.Listener, h http.Handler) error {
 }
 
 // repoNumber splits owner/repo#n.
+// repoCommentID parses the arguments <owner/repo> <id> of a command on a
+// comment.
+func repoCommentID(fs *flag.FlagSet, args []string) (string, int, error) {
+	pos, err := parse(fs, args, 2)
+	if err != nil {
+		return "", 0, err
+	}
+	id, err := strconv.Atoi(pos[1])
+	if err != nil {
+		return "", 0, usageError{fmt.Errorf("want a comment ID, got %q", pos[1])}
+	}
+	return pos[0], id, nil
+}
+
 func repoNumber(s string) (string, int, error) {
 	repo, num, ok := strings.Cut(s, "#")
 	n, err := strconv.Atoi(num)

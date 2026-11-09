@@ -55,7 +55,10 @@ func (s *Server) AddComment(repo string, number int, author, body string) (int, 
 	if at < 0 {
 		return 0, fmt.Errorf("no issue %s#%d", repo, number)
 	}
-	return s.addComment(r.Issues[at], author, body).ID, nil
+	i := r.Issues[at]
+	id := s.addComment(i, author, body).ID
+	i.UpdatedAt = s.now()
+	return id, nil
 }
 
 func (s *Server) addComment(i *Issue, author, body string) *Comment {
@@ -69,11 +72,12 @@ func (s *Server) addComment(i *Issue, author, body string) *Comment {
 func (s *Server) EditComment(repo string, id int, body string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, c, err := s.findComment(repo, id)
+	i, c, err := s.findComment(repo, id)
 	if err != nil {
 		return err
 	}
 	c.Body, c.UpdatedAt = body, s.now()
+	i.UpdatedAt = c.UpdatedAt
 	return nil
 }
 
@@ -86,6 +90,7 @@ func (s *Server) RemoveComment(repo string, id int) error {
 		return err
 	}
 	dropComment(i, c)
+	i.UpdatedAt = s.now()
 	return nil
 }
 
@@ -195,6 +200,7 @@ func (s *Server) issueComment(w http.ResponseWriter, r *http.Request, x *Repo, i
 	}
 	if r.Method == "DELETE" {
 		dropComment(issue, c)
+		issue.UpdatedAt = s.now()
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -203,5 +209,6 @@ func (s *Server) issueComment(w http.ResponseWriter, r *http.Request, x *Repo, i
 		return
 	}
 	c.Body, c.UpdatedAt = body, s.now()
+	issue.UpdatedAt = c.UpdatedAt
 	writeJSON(w, 200, commentJSON(c))
 }
