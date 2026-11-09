@@ -273,6 +273,8 @@ func (m *sides) yamlNode(path []string, b, o, t *yaml.Node) *yaml.Node {
 		v = t
 	case !tc || model.NodeEqual(o, t):
 		v = o
+	case slices.Equal(path, []string{"labels"}) && allScalarLists(b, o, t):
+		v = m.yamlSet(b, o, t, d)
 	case o == nil:
 		v = t
 		m.revived(m.ours.Author)
@@ -422,7 +424,11 @@ func (m *sides) yamlList(path []string, key string, b, o, t, d *yaml.Node) *yaml
 }
 
 // yamlSet merges lists of scalars as a set, as setField does for a task:
-// against the base, what either side added or removed is in the result.
+// against the base, what either side added or removed is in the result. A
+// key a side does not have is an empty list. Items that differ only in case
+// are one: the base's spelling stays, and between two sides that added it
+// the smaller one is written, so that the result does not depend on which
+// side is ours.
 func (m *sides) yamlSet(b, o, t, d *yaml.Node) *yaml.Node {
 	items := func(n *yaml.Node) []*yaml.Node {
 		if n == nil {
@@ -430,8 +436,34 @@ func (m *sides) yamlSet(b, o, t, d *yaml.Node) *yaml.Node {
 		}
 		return n.Content
 	}
-	out := *d
-	out.Content = mergeSet(items(b), items(o), items(t), func(n *yaml.Node) string { return n.Value })
+	key := func(n *yaml.Node) string { return strings.ToLower(n.Value) }
+	merged := mergeSet(items(b), items(o), items(t), key)
+	for i, x := range merged {
+		k := key(x)
+		bs := ""
+		if bi := find(items(b), k, key); bi >= 0 {
+			bs = items(b)[bi].Value
+		}
+		// the spellings a side wrote that the base did not have
+		var written []*yaml.Node
+		for _, side := range [][]*yaml.Node{items(o), items(t)} {
+			if si := find(side, k, key); si >= 0 && side[si].Value != bs {
+				written = append(written, side[si])
+			}
+		}
+		if len(written) == 0 {
+			continue
+		}
+		merged[i] = slices.MinFunc(written, func(a, c *yaml.Node) int { return strings.Compare(a.Value, c.Value) })
+	}
+	like := d
+	for _, n := range []*yaml.Node{o, t, b} {
+		if like == nil {
+			like = n
+		}
+	}
+	out := *like
+	out.Content = merged
 	return &out
 }
 

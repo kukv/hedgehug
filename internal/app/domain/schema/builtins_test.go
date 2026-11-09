@@ -2,6 +2,7 @@ package schema
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -353,7 +354,7 @@ func TestMigratePriorityAndLabel(t *testing.T) {
 		if err != nil || changed != c.changed {
 			t.Errorf("%+v: changed = %v, err = %v", c.m, changed, err)
 		}
-		if got := x.Priority + " " + strings.Join([]string{"[" + strings.Join(x.Labels, " ") + "]"}, ""); got != c.want {
+		if got := fmt.Sprint(x.Priority, " ", x.Labels); got != c.want {
 			t.Errorf("%+v: got %s, want %s", c.m, got, c.want)
 		}
 	}
@@ -378,6 +379,44 @@ func TestTaskUsesPriorityAndLabel(t *testing.T) {
 		if got := TaskUses(task, c.target, "", c.name); got != c.want {
 			t.Errorf("TaskUses(%s %s) = %v", c.target, c.name, got)
 		}
+	}
+}
+
+// Tasks are found and rewritten without regard to case, as Validate finds
+// them, and written as the list spells the value.
+func TestMigrateAndUsesIgnoreCase(t *testing.T) {
+	t.Parallel()
+	s := withLists([]string{"low", "high"}, []string{"bug", "docs"})
+	task := mustTask(t, "priority: HIGH\nlabels: [Bug, Docs]\n")
+	if !TaskUses(task, TargetLabel, "", "bug") || !TaskUses(task, TargetPriority, "", "high") {
+		t.Error("TaskUses misses a value that differs in case")
+	}
+	if changed, err := (Migration{Target: TargetLabel, Old: "bug", New: "defect"}).ApplyTask(task, s); err != nil || !changed || fmt.Sprint(task.Labels) != "[defect Docs]" {
+		t.Errorf("rename: %v %v %v", changed, task.Labels, err)
+	}
+	if changed, err := (Migration{Target: TargetLabel, Old: "defect", New: "docs"}).ApplyTask(task, s); err != nil || !changed || fmt.Sprint(task.Labels) != "[docs]" {
+		t.Errorf("merge: %v %v %v", changed, task.Labels, err)
+	}
+	if changed, err := (Migration{Target: TargetPriority, Old: "high", New: "urgent"}).ApplyTask(task, s); err != nil || !changed || task.Priority != "urgent" {
+		t.Errorf("priority: %v %q %v", changed, task.Priority, err)
+	}
+}
+
+// A value that is set replaces what was kept unread: the task is valid again
+// in memory, and clearing it is the field at nil and the key out of Extra.
+func TestSetValueIgnoresTheUnreadOne(t *testing.T) {
+	t.Parallel()
+	e := Default().For(nil)
+	task := mustTask(t, "due: next week\n")
+	d, _ := model.ParseDate("2026-11-10")
+	task.Due = &d
+	if vs, _ := ValidateTask(task, e); len(vs) != 0 {
+		t.Errorf("violations = %v", codes(vs))
+	}
+	task.Due = nil
+	task.Extra.Delete("due")
+	if vs, _ := ValidateTask(task, e); len(vs) != 0 {
+		t.Errorf("violations = %v", codes(vs))
 	}
 }
 

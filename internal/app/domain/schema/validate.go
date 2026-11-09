@@ -108,6 +108,10 @@ func builtinViolations(t *model.Task, s *Schema) []Violation {
 		if b.Name == "labels" {
 			continue
 		}
+		// A value that is set replaces what was kept unread.
+		if filled, _ := builtinFilled(t, b.Name); filled {
+			continue
+		}
 		n := t.Extra.Get(b.Name)
 		if n == nil || n.ShortTag() == "!!null" {
 			continue

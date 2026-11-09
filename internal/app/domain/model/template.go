@@ -1,7 +1,9 @@
 package model
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"go.yaml.in/yaml/v4"
@@ -88,7 +90,18 @@ func (it *TemplateItem) UnmarshalYAML(n *yaml.Node) error {
 	targets := it.targets()
 	targets["body"] = &it.Body
 	d := &Doc{root: &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{n}}}
-	return decodeAll(d, targets)
+	if err := decodeAll(d, targets); err != nil {
+		return err
+	}
+	return it.checkPoints()
+}
+
+// checkPoints refuses a points that is not a finite number, as a task does.
+func (it *TemplateItem) checkPoints() error {
+	if it.Points != nil && (math.IsNaN(*it.Points) || math.IsInf(*it.Points, 0)) {
+		return &DecodeError{Field: "points", Err: errors.New("want a finite number")}
+	}
+	return nil
 }
 
 // Template is one template file. Its name is the file name. Item.Body is the
@@ -125,6 +138,9 @@ func DecodeTemplate(name string, data []byte) (*Template, error) {
 	targets := it.targets()
 	targets["created"], targets["updated"] = &t.Created, &t.Updated
 	if err := decodeAll(d, targets); err != nil {
+		return nil, err
+	}
+	if err := it.checkPoints(); err != nil {
 		return nil, err
 	}
 	it.Body = body

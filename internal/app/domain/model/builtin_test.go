@@ -89,6 +89,19 @@ func TestTaskBuiltinProperties(t *testing.T) {
 	}
 }
 
+func TestTemplateRefusesNonFinitePoints(t *testing.T) {
+	t.Parallel()
+	for _, src := range []string{
+		"---\npoints: .nan\n---\n",
+		"---\npoints: .inf\n---\n",
+		"---\nchildren:\n- {title: c, points: -.inf}\n---\n",
+	} {
+		if _, err := DecodeTemplate("x", []byte(src)); err == nil {
+			t.Errorf("DecodeTemplate(%q) succeeded", src)
+		}
+	}
+}
+
 func TestTemplateBuiltinProperties(t *testing.T) {
 	t.Parallel()
 	src := []byte("---\nkind: task\npriority: high\nstart: 2026-11-03\ndue: 2026-11-10\nestimate: 2h\npoints: 3\n" +

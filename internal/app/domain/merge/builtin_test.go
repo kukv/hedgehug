@@ -87,6 +87,22 @@ func TestSchemaLabelsMergeAsASet(t *testing.T) {
 	}
 }
 
+// A side that removed the key has an empty list, and the other side's
+// changes still merge; names that differ only in case are one label.
+func TestSchemaLabelsKeyRemovedAndCase(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, base, ours, theirs, want string }{
+		{"key removed on one side", "statuses: []\nlabels: [a, b]\n", "statuses: []\n", "statuses: []\nlabels: [a, b, c]\n", "statuses: []\nlabels: [c]\n"},
+		{"both add one in two cases", "labels: [a]\n", "labels: [a, Docs]\n", "labels: [a, docs]\n", "labels: [a, Docs]\n"},
+		{"the base's spelling stays", "labels: [Docs]\n", "labels: [Docs, x]\n", "labels: [docs]\n", "labels: [docs, x]\n"},
+	} {
+		r := mergeSym(t, schema.Path, Side{Data: []byte(c.base)}, Side{Data: []byte(c.ours), Author: "a", When: whenAt(time.Unix(1, 0))}, Side{Data: []byte(c.theirs), Author: "b", When: whenAt(time.Unix(2, 0))})
+		if string(r.Data) != c.want {
+			t.Errorf("%s: merged = %q, want %q", c.name, r.Data, c.want)
+		}
+	}
+}
+
 func TestSchemaPrioritiesMergeWhole(t *testing.T) {
 	t.Parallel()
 	base := []byte("priorities: [low, high]\n")

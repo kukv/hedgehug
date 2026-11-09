@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"go.yaml.in/yaml/v4"
@@ -241,12 +242,27 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 		t.Props[i].Key = m.New
 		return true, nil
 	case TargetPriority:
-		return swap(&t.Priority, m.Old, m.New), nil
-	case TargetLabel:
-		if !slices.Contains(t.Labels, m.Old) {
+		// A value is found without regard to case, as Validate finds it, and
+		// written as the list spells it.
+		if !strings.EqualFold(t.Priority, m.Old) {
 			return false, nil
 		}
-		t.Labels = replace(t.Labels, m.Old, m.New)
+		t.Priority = m.New
+		return true, nil
+	case TargetLabel:
+		if !slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, m.Old) }) {
+			return false, nil
+		}
+		var out []string
+		for _, l := range t.Labels {
+			if strings.EqualFold(l, m.Old) || strings.EqualFold(l, m.New) {
+				l = m.New
+			}
+			if !slices.Contains(out, l) {
+				out = append(out, l)
+			}
+		}
+		t.Labels = out
 		return true, nil
 	case TargetValue:
 		if p, ok := s.Prop(m.Prop); !ok || (p.Type != TypeEnum && p.Type != TypeMultiEnum) {

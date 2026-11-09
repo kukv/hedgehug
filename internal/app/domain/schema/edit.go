@@ -261,26 +261,24 @@ func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, [
 // more: a value is told apart from another without regard to case, and the
 // last value cannot go.
 func (s *Schema) ChangePriorities(values []ValueEdit) (*Schema, []Migration, []string, error) {
-	out := s.clone()
-	var ms []Migration
-	var removed []string
-	var err error
-	if out.Priorities, ms, removed, err = editList("priority", TargetPriority, s.Priorities, values, true); err != nil {
-		return nil, nil, nil, err
-	}
-	return out, ms, removed, nil
+	return s.changeList("priority", TargetPriority, s.Priorities, values, true, func(out *Schema, v []string) { out.Priorities = v })
 }
 
 // ChangeLabels is ChangePriorities for the values of labels, which may be
 // all removed.
 func (s *Schema) ChangeLabels(values []ValueEdit) (*Schema, []Migration, []string, error) {
-	out := s.clone()
-	var ms []Migration
-	var removed []string
-	var err error
-	if out.Labels, ms, removed, err = editList("labels", TargetLabel, s.Labels, values, false); err != nil {
+	return s.changeList("label", TargetLabel, s.Labels, values, false, func(out *Schema, v []string) { out.Labels = v })
+}
+
+// changeList is the edit of one list of the schema: set puts the new values
+// into the copy of s that is returned.
+func (s *Schema) changeList(name string, target Target, cur []string, eds []ValueEdit, needOne bool, set func(*Schema, []string)) (*Schema, []Migration, []string, error) {
+	values, ms, removed, err := editList(name, target, cur, eds, needOne)
+	if err != nil {
 		return nil, nil, nil, err
 	}
+	out := s.clone()
+	set(out, values)
 	return out, ms, removed, nil
 }
 
@@ -424,9 +422,9 @@ func TaskUses(t *model.Task, target Target, prop, name string) bool {
 	case TargetProp:
 		return t.Props.Get(name) != nil
 	case TargetPriority:
-		return t.Priority == name
+		return strings.EqualFold(t.Priority, name)
 	case TargetLabel:
-		return slices.Contains(t.Labels, name)
+		return slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, name) })
 	case TargetValue:
 		n := t.Props.Get(prop)
 		if n == nil {
