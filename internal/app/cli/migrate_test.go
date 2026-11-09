@@ -407,6 +407,12 @@ func TestSchemaMigrateIgnoresCase(t *testing.T) {
 	if !strings.Contains(te.schemaFile(), "priorities: [high, mid, urgent]") {
 		t.Errorf("schema.yaml:\n%s", te.schemaFile())
 	}
+	for _, args := range [][]string{{"label", "ui", "UI"}, {"priority", "high", "HIGH"}, {"status", "todo", "todo"}} {
+		code, _, stderr := te.run(append([]string{"schema", "migrate"}, args...)...)
+		if code != 1 || !strings.Contains(stderr, "are the same") {
+			t.Errorf("%v: exit %d, stderr %q", args, code, stderr)
+		}
+	}
 	for _, args := range [][]string{
 		{"label", "nope", "x"}, {"priority", "nope", "x"}, {"status", "nope", "x"}, {"prop", "nope", "x"}, {"value", "nope", "a", "b"},
 	} {

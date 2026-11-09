@@ -44,9 +44,6 @@ type Migration struct {
 // comments; encoding the result writes into that file, so s is not to be
 // encoded after it.
 func (s *Schema) Migrate(m Migration) (*Schema, error) {
-	if m.Old == m.New {
-		return nil, fmt.Errorf("%q and %q are the same", m.Old, m.New)
-	}
 	out := s.clone()
 	switch m.Target {
 	case TargetPriority:
@@ -55,7 +52,7 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 		m.Old, m.New = spelled(s.Labels, m.Old), spelled(s.Labels, m.New)
 	}
 	if m.Old == m.New {
-		return nil, fmt.Errorf("%q and %q are the same", m.Old, m.New)
+		return nil, fmt.Errorf("%q and %q are the same: %w", m.Old, m.New, ErrValueInvalid)
 	}
 	switch m.Target {
 	case TargetStatus:

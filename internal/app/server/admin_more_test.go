@@ -98,6 +98,24 @@ func TestMigrateIgnoresCaseAndNamesWhatIsNotDefined(t *testing.T) {
 	}
 }
 
+// Old and new that are the same name, in any case, are 422 schema.value_invalid.
+func TestMigrateRefusesTheSameName(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	ts.labels("bug")
+	for _, b := range []map[string]any{
+		{"target": "status", "old": "todo", "new": "todo"},
+		{"target": "prop", "old": "a", "new": "a"},
+		{"target": "label", "old": "bug", "new": "bug"},
+		{"target": "label", "old": "Bug", "new": "bug"},
+		{"target": "priority", "old": "low", "new": "LOW"},
+	} {
+		if p := ts.problem("POST", "/api/schema/migrate", b, 422); p.Type != "schema.value_invalid" {
+			t.Errorf("%v: %+v", b, p)
+		}
+	}
+}
+
 func TestDoctorFindsAndRepairs(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

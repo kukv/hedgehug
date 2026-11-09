@@ -298,8 +298,10 @@ func TestMigrateListIgnoresCase(t *testing.T) {
 	if err != nil || !slices.Equal(out.Priorities, []string{"high", "mid", "urgent"}) {
 		t.Fatalf("priorities = %v, %v", out.Priorities, err)
 	}
-	if _, err := sc.Migrate(Migration{Target: TargetLabel, Old: "Bug", New: "bug"}); err == nil || !strings.Contains(err.Error(), "the same") {
-		t.Errorf("Bug into bug: %v; want the same", err)
+	for _, m := range []Migration{{Target: TargetLabel, Old: "Bug", New: "bug"}, {Target: TargetPriority, Old: "low", New: "LOW"}, {Target: TargetStatus, Old: "todo", New: "todo"}} {
+		if _, err := sc.Migrate(m); !errors.Is(err, ErrValueInvalid) || !strings.Contains(err.Error(), "the same") {
+			t.Errorf("%+v: %v; want ErrValueInvalid, the same", m, err)
+		}
 	}
 	for _, m := range []Migration{{Target: TargetLabel, Old: "nope", New: "x"}, {Target: TargetPriority, Old: "nope", New: "x"}, {Target: TargetStatus, Old: "nope", New: "x"}} {
 		if _, err := sc.Migrate(m); !errors.Is(err, ErrNotDefined) {
