@@ -162,7 +162,7 @@ Nothing was written (--dry-run).
 
 形式 3 の Store は `hh` で編集できないので、残したいラベルのリストは、変換の前に手で書きます。`schema.yaml` に `labels:` がないと、すべてのラベルが外れます。Store のフォルダ（場所は `hh store list` で分かります）で、次のようにします。
 
-1. タスクが持っているラベルを調べます。形式 3 の Store では `hh ls` が止まるので、変換に聞きます。`schema.yaml` に `labels:` がない状態で `hh store convert --dry-run` を実行すると、すべてのラベルが、持っているタスクの件数つきで一覧されます（何も書きません）。`tasks/` の下のファイルを見てもかまいません（`grep -rh "^labels" tasks/`）。
+1. タスクが持っているラベルを調べます。形式 3 の Store では `hh ls` が止まるので、変換に聞きます。`schema.yaml` に `labels:` がない状態で `hh store convert --dry-run` を実行すると、すべてのラベルが、持っているタスクの件数つきで一覧されます（何も書きません）。読めない値がある Store では、`convert.bad_value`（上を参照）で止まってラベルの一覧が出ません。そのときは `--drop-bad-values` を付けてください（dry run なので、値を外したり書いたりはしません）。ファイルを見てもかまいません（`grep -rh "labels:" tasks/ templates/`。テンプレートの子のタスクのラベルはインデントされているので、行頭を指定しません）。
 
 ```console
 $ hh store convert --dry-run

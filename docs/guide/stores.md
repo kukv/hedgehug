@@ -236,7 +236,10 @@ In the store's folder (`hh store list` shows where it is):
 
 1. Find the labels the tasks hold. `hh ls` stops on a store in format 3, so ask the conversion: with no `labels:` in
    `schema.yaml`, `hh store convert --dry-run` lists every label, with the number of tasks that hold it (it writes nothing).
-   Looking in the files works too (`grep -rh "^labels" tasks/`).
+   If the store holds a value that cannot be read (see `convert.bad_value` above), the dry run stops with that error and
+   lists no label; add `--drop-bad-values` to see the list (still a dry run, so nothing is dropped or written).
+   Looking in the files works too (`grep -rh "labels:" tasks/ templates/`; the labels of the tasks under a template are
+   indented, so the line is not at the start).
 
 ```console
 $ hh store convert --dry-run
