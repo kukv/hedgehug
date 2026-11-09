@@ -66,6 +66,38 @@ func TestMigrateProps(t *testing.T) {
 	ts.call("POST", "/api/schema/migrate", map[string]any{"target": "prop", "old": "area", "new": "region"}, 200, nil)
 }
 
+// The old and the new name of a priority or a label are found without regard
+// to case; a name that is not defined is 404 schema.not_defined.
+func TestMigrateIgnoresCaseAndNamesWhatIsNotDefined(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	ts.labels("bug", "ui")
+	if _, err := tasks.Add(ts.session(), tasks.AddInput{Title: "p", Assigns: []usecase.Assign{{Key: "priority", Op: "=", Value: "low"}, {Key: "labels", Op: "+=", Value: "bug"}}}); err != nil {
+		t.Fatal(err)
+	}
+	var m migrated
+	ts.call("POST", "/api/schema/migrate", map[string]any{"target": "label", "old": "BUG", "new": "UI"}, 200, &m)
+	if len(m.Changed) != 1 || len(m.Changed[0].Labels) != 1 || m.Changed[0].Labels[0] != "ui" {
+		t.Fatalf("label = %+v", m)
+	}
+	m = migrated{}
+	ts.call("POST", "/api/schema/migrate", map[string]any{"target": "priority", "old": "LOW", "new": "High"}, 200, &m)
+	if len(m.Changed) != 1 || m.Changed[0].Priority == nil || *m.Changed[0].Priority != "high" {
+		t.Fatalf("priority = %+v", m)
+	}
+	for _, b := range []map[string]any{
+		{"target": "label", "old": "nope", "new": "x"},
+		{"target": "priority", "old": "nope", "new": "x"},
+		{"target": "status", "old": "nope", "new": "x"},
+		{"target": "prop", "old": "nope", "new": "x"},
+		{"target": "value", "prop": "nope", "old": "a", "new": "b"},
+	} {
+		if p := ts.problem("POST", "/api/schema/migrate", b, 404); p.Type != "schema.not_defined" {
+			t.Errorf("%v: %+v", b, p)
+		}
+	}
+}
+
 func TestDoctorFindsAndRepairs(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

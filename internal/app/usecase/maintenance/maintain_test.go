@@ -362,3 +362,70 @@ func TestDoctorFindsAnUnexpectedForcePush(t *testing.T) {
 		t.Errorf("finding = %+v", f)
 	}
 }
+
+// withProps puts properties of the type typ, named names, in the schema of the
+// store, and returns a task added after.
+func withProps(t *testing.T, ts *usecasetest.Session, typ schema.PropType, names ...string) usecase.TaskResult {
+	t.Helper()
+	b, err := ts.SchemaOf("me").Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := schema.Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range names {
+		sc.Props = append(sc.Props, schema.Prop{Name: n, Type: typ})
+	}
+	ts.MustEdit("me", "schema", usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
+	r, err := tasks.Add(ts.Session, tasks.AddInput{Title: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// A rename of a property is refused for a task that holds the new name as a
+// property the schema does not define, and the message names the task.
+func TestMigrateRefusesATaskThatHasTheNewName(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	r := withProps(t, ts, schema.TypeText, "note")
+	if _, err := tasks.Set(ts.Session, r.ULID.String(), []usecase.Assign{{Key: "note", Op: "=", Value: "y"}}); err != nil {
+		t.Fatal(err)
+	}
+	ts.EditRawFile(model.TaskPath(r.ULID), "  note: y\n", "  note: y\n  custom: z\n")
+	before := ts.Head()
+	for _, dryRun := range []bool{false, true} {
+		_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "note", New: "custom"}, dryRun)
+		usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
+		if err != nil && (!strings.Contains(err.Error(), "cannot migrate 1 task:\n  ME-1 ("+r.ULID.String()+") A: ") || !strings.Contains(err.Error(), "both note and custom")) {
+			t.Errorf("dry run %v: message = %q", dryRun, err)
+		}
+	}
+	if ts.Head() != before {
+		t.Error("a refused migration committed")
+	}
+}
+
+// A rename that makes a task break the schema (a value that was bad under the
+// old name is a new violation under the new one) is refused, naming the task.
+func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	r := withProps(t, ts, schema.TypeNumber, "score")
+	if _, err := tasks.Set(ts.Session, r.ULID.String(), []usecase.Assign{{Key: "score", Op: "=", Value: "1"}}); err != nil {
+		t.Fatal(err)
+	}
+	ts.EditRawFile(model.TaskPath(r.ULID), "score: 1\n", "score: abc\n")
+	before := ts.Head()
+	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "score", New: "size"}, false)
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
+	if err != nil && (!strings.HasPrefix(err.Error(), "ME-1 ("+r.ULID.String()+") A: ") || !strings.Contains(err.Error(), "breaks the schema")) {
+		t.Errorf("message = %q", err)
+	}
+	if ts.Head() != before {
+		t.Error("a refused migration committed")
+	}
+}

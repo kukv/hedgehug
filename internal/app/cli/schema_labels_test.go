@@ -44,6 +44,10 @@ func TestSchemaLabelsAddAndRemove(t *testing.T) {
 	if te.headCommit("me").Hash != head {
 		t.Error("a refused removal committed")
 	}
+	if out := te.ok("schema", "labels", "rm", "UI"); !strings.Contains(out, "Removed 1 label: ui") {
+		t.Errorf("rm UI: stdout = %q, want the list's spelling", out)
+	}
+	te.ok("schema", "labels", "add", "ui")
 	var w schemas.EditWrite
 	if err := json.Unmarshal([]byte(te.ok("schema", "labels", "rm", "UI", "--json")), &w); err != nil || !slices.Equal(w.Schema.Labels, []string{"bug"}) || w.Commit == nil {
 		t.Errorf("rm --json = %+v, %v", w, err)

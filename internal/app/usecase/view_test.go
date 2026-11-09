@@ -22,12 +22,18 @@ func scalar(v string) *yaml.Node {
 func TestTaskViewOf(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
+	ts.EditSchema(func(s string) string { return s + "props:\n  note: {type: text}\n" })
 	blocker := ts.AddTask("blocker", func(x *model.Task) { x.Kind = "project" }) // a project: it needs no parent
+	due, _ := model.ParseDate("2026-11-20")
+	points := 2.5
 	task := ts.AddTask("the task", func(x *model.Task) {
 		x.Kind = "project"
 		x.Assignees = []string{"alice"}
 		x.BlockedBy = []model.ULID{blocker.ULID}
-		x.Props.Set("priority", scalar("high"))
+		x.Priority = "high"
+		x.Due = &due
+		x.Points = &points
+		x.Props.Set("note", scalar("hello"))
 		x.Relates = []model.ULID{blocker.ULID}
 		x.Causes = []model.ULID{blocker.ULID}
 	})
@@ -49,15 +55,18 @@ func TestTaskViewOf(t *testing.T) {
 	if !reflect.DeepEqual(v.BlockedBy, []usecase.Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker", DisplayID: blocker.ID}}) {
 		t.Errorf("BlockedBy = %+v", v.BlockedBy)
 	}
-	if v.Props["priority"] != "high" {
-		t.Errorf("priority = %v; want the scalar", v.Props["priority"])
+	if v.Priority == nil || *v.Priority != "high" || v.Due == nil || *v.Due != "2026-11-20" || v.Points == nil || *v.Points != 2.5 || v.Start != nil || v.Estimate != nil {
+		t.Errorf("built-ins = %v %v %v %v %v; want high, 2026-11-20, 2.5, no start, no estimate", v.Priority, v.Start, v.Due, v.Estimate, v.Points)
+	}
+	if v.Props["note"] != "hello" || len(v.Props) != 1 {
+		t.Errorf("Props = %v; want the custom note only: the built-ins are not props", v.Props)
 	}
 	// what the text writes
 	if v.DisplayID != task.ID || v.ParentRef != nil || len(v.FormerDisplayIDs) != 0 {
 		t.Errorf("DisplayID = %q, ParentRef = %+v, FormerDisplayIDs = %v", v.DisplayID, v.ParentRef, v.FormerDisplayIDs)
 	}
-	if len(v.PropList) != 1 || v.PropList[0].Key != "priority" || !slices.Equal(v.PropList[0].Values, []string{"high"}) {
-		t.Errorf("PropList = %+v; want priority only: the relations are not properties", v.PropList)
+	if len(v.PropList) != 1 || v.PropList[0].Key != "note" || !slices.Equal(v.PropList[0].Values, []string{"hello"}) {
+		t.Errorf("PropList = %+v; want note only: the relations are not properties", v.PropList)
 	}
 	wantRef := []usecase.Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker", DisplayID: blocker.ID}}
 	if !reflect.DeepEqual(v.Relates, wantRef) || !reflect.DeepEqual(v.Causes, wantRef) {

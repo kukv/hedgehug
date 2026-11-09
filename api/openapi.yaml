@@ -5720,7 +5720,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Rename or merge a status, property or value, as hh migrate
+      summary: Rename or merge a status, priority, label or value, or rename a property, as hh migrate
       tags:
         - schema
   /api/schema/priorities:

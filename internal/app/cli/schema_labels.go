@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/lib/plural"
@@ -36,14 +37,26 @@ func (a *app) labelsCmd() *cobra.Command {
 			Short: x.short,
 			Args:  minArgs(1),
 			RunE: func(_ *cobra.Command, args []string) error {
+				cur, err := schemas.SchemaGet(a.ss)
+				if err != nil {
+					return err
+				}
 				w, err := x.edit(a.ss, args)
 				if err != nil {
 					return err
 				}
+				// the names as the list spelled them before the edit
+				names := make([]string, len(args))
+				for i, n := range args {
+					names[i] = n
+					if v, ok := schema.MatchValue(cur.Labels, n); ok {
+						names[i] = v
+					}
+				}
 				if a.jsonOut {
 					return a.printJSON(w)
 				}
-				_, err = fmt.Fprintf(a.stdout, "%s %s: %s\n", x.done, plural.Count(len(args), "label"), strings.Join(args, ", "))
+				_, err = fmt.Fprintf(a.stdout, "%s %s: %s\n", x.done, plural.Count(len(names), "label"), strings.Join(names, ", "))
 				return err
 			},
 		})

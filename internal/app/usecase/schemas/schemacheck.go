@@ -151,7 +151,7 @@ func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*Migrat
 		return nil, usecase.NewErr(usecase.KindInvalid, "migrate.prop_merge", err)
 	}
 	if err != nil {
-		return nil, err
+		return nil, editErr(err)
 	}
 	if ps := next.Check(); len(ps) > 0 {
 		return nil, &store.SchemaError{Problems: ps}

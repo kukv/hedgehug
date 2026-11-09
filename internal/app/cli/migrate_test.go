@@ -341,3 +341,78 @@ func TestSchemaMigrateArgs(t *testing.T) {
 		}
 	}
 }
+
+// A rename that makes a task break the schema is refused, naming the task: a
+// value that was bad under the old name is a new violation under the new one.
+func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.putSchema(func(sc *schema.Schema) {
+		sc.Props = append(sc.Props, schema.Prop{Name: "score", Type: schema.TypeNumber})
+	})
+	a := te.addJSON("Alpha")
+	te.ok("set", a.ID, "score=1")
+	te.commitFile(a.ULID, strings.Replace(te.raw(a.ULID), "score: 1", "score: abc", 1))
+	before := len(te.log("me"))
+	sf := te.schemaFile()
+	code, _, stderr := te.run("schema", "migrate", "prop", "score", "size")
+	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, label(a)+" Alpha") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+	if n := len(te.log("me")); n != before || te.schemaFile() != sf {
+		t.Errorf("commits = %d (want %d), or the schema changed", n, before)
+	}
+}
+
+// A task that holds the new name of a property as one the schema does not
+// define is refused, naming the task.
+func TestSchemaMigrateRejectsATaskWithTheNewName(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.putSchema(func(sc *schema.Schema) {
+		sc.Props = append(sc.Props, schema.Prop{Name: "note", Type: schema.TypeText})
+	})
+	a := te.addJSON("Alpha")
+	te.ok("set", a.ID, "note=y")
+	te.commitFile(a.ULID, strings.Replace(te.raw(a.ULID), "  note: y\n", "  note: y\n  custom: z\n", 1))
+	before := len(te.log("me"))
+	code, _, stderr := te.run("schema", "migrate", "prop", "note", "custom")
+	if code != 1 || !strings.Contains(stderr, "both note and custom") || !strings.Contains(stderr, label(a)+" Alpha") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}
+
+// The priorities and the labels are found without regard to case, in the old
+// name and in the new one; the list's spelling is what stays.
+func TestSchemaMigrateIgnoresCase(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.labels("bug", "ui")
+	a := te.addJSON("Alpha")
+	te.ok("set", a.ID, "priority=low", "labels+=bug")
+	te.ok("schema", "migrate", "label", "Bug", "UI")
+	if got := te.task(a.ULID).Labels; !slices.Equal(got, []string{"ui"}) {
+		t.Errorf("labels = %v, want [ui]", got)
+	}
+	if !strings.Contains(te.schemaFile(), "labels: [ui]") {
+		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+	te.ok("schema", "migrate", "priority", "LOW", "High")
+	if got := te.task(a.ULID).Priority; got != "high" {
+		t.Errorf("priority = %q, want high", got)
+	}
+	if !strings.Contains(te.schemaFile(), "priorities: [high, mid, urgent]") {
+		t.Errorf("schema.yaml:\n%s", te.schemaFile())
+	}
+	for _, args := range [][]string{
+		{"label", "nope", "x"}, {"priority", "nope", "x"}, {"status", "nope", "x"}, {"prop", "nope", "x"}, {"value", "nope", "a", "b"},
+	} {
+		code, _, stderr := te.run(append([]string{"schema", "migrate"}, args...)...)
+		if code != 1 || !strings.Contains(stderr, "nope") || !strings.Contains(stderr, "not defined") {
+			t.Errorf("%v: exit %d, stderr %q", args, code, stderr)
+		}
+	}
+}

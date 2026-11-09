@@ -1,8 +1,10 @@
 package schema
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -262,15 +264,15 @@ func TestMigrateErrors(t *testing.T) {
 		m    Migration
 		want string
 	}{
-		{Migration{Target: TargetStatus, Old: "nope", New: "x"}, `status "nope" is not defined`},
+		{Migration{Target: TargetStatus, Old: "nope", New: "x"}, `status "nope": not defined`},
 		{Migration{Target: TargetStatus, Old: "todo", New: "todo"}, "the same"},
-		{Migration{Target: TargetProp, Old: "nope", New: "x"}, `property "nope" is not defined`},
+		{Migration{Target: TargetProp, Old: "nope", New: "x"}, `property "nope": not defined`},
 		{Migration{Target: TargetProp, Old: "score", New: "score"}, "the same"},
 		{Migration{Target: TargetProp, Old: "level", New: "score"}, "cannot be merged"},
 		{Migration{Target: TargetProp, Old: "score", New: "size"}, "cannot be merged"},
-		{Migration{Target: TargetValue, Prop: "nope", Old: "a", New: "b"}, `property "nope" is not defined`},
+		{Migration{Target: TargetValue, Prop: "nope", Old: "a", New: "b"}, `property "nope": not defined`},
 		{Migration{Target: TargetValue, Prop: "score", Old: "a", New: "b"}, "not enum or multi_enum"},
-		{Migration{Target: TargetValue, Prop: "level", Old: "nope", New: "b"}, `value "nope" of level is not defined`},
+		{Migration{Target: TargetValue, Prop: "level", Old: "nope", New: "b"}, `value of level "nope": not defined`},
 		{Migration{Target: TargetValue, Prop: "area", Old: "a", New: "a"}, "the same"},
 		{Migration{Target: "nope", Old: "a", New: "b"}, "unknown target"},
 	} {
@@ -278,6 +280,41 @@ func TestMigrateErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("Migrate(%+v) = %v, want %q", tc.m, err, tc.want)
 		}
+	}
+}
+
+// The priorities and the labels are found, in the old name and the new one,
+// without regard to case, and the list's spelling stays; a name that is not
+// there is ErrNotDefined.
+func TestMigrateListIgnoresCase(t *testing.T) {
+	t.Parallel()
+	sc := Default()
+	sc.Labels = []string{"bug", "ui"}
+	out, err := sc.Migrate(Migration{Target: TargetLabel, Old: "BUG", New: "UI"})
+	if err != nil || !slices.Equal(out.Labels, []string{"ui"}) {
+		t.Fatalf("labels = %v, %v; want [ui]", out.Labels, err)
+	}
+	out, err = sc.Migrate(Migration{Target: TargetPriority, Old: "low", New: "HIGH"})
+	if err != nil || !slices.Equal(out.Priorities, []string{"high", "mid", "urgent"}) {
+		t.Fatalf("priorities = %v, %v", out.Priorities, err)
+	}
+	if _, err := sc.Migrate(Migration{Target: TargetLabel, Old: "Bug", New: "bug"}); err == nil || !strings.Contains(err.Error(), "the same") {
+		t.Errorf("Bug into bug: %v; want the same", err)
+	}
+	for _, m := range []Migration{{Target: TargetLabel, Old: "nope", New: "x"}, {Target: TargetPriority, Old: "nope", New: "x"}, {Target: TargetStatus, Old: "nope", New: "x"}} {
+		if _, err := sc.Migrate(m); !errors.Is(err, ErrNotDefined) {
+			t.Errorf("%+v: %v; want ErrNotDefined", m, err)
+		}
+	}
+	// the tasks follow with the list's spelling
+	task := &model.Task{Priority: "LOW", Labels: []string{"Bug", "ui"}}
+	for _, m := range []Migration{{Target: TargetPriority, Old: "low", New: "HIGH"}, {Target: TargetLabel, Old: "bug", New: "UI"}} {
+		if _, err := m.ApplyTask(task, sc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if task.Priority != "high" || !slices.Equal(task.Labels, []string{"ui"}) {
+		t.Errorf("task = %q %v; want high [ui]", task.Priority, task.Labels)
 	}
 }
 

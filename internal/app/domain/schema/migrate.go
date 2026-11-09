@@ -49,6 +49,15 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 	}
 	out := s.clone()
 	switch m.Target {
+	case TargetPriority:
+		m.Old, m.New = spelled(s.Priorities, m.Old), spelled(s.Priorities, m.New)
+	case TargetLabel:
+		m.Old, m.New = spelled(s.Labels, m.Old), spelled(s.Labels, m.New)
+	}
+	if m.Old == m.New {
+		return nil, fmt.Errorf("%q and %q are the same", m.Old, m.New)
+	}
+	switch m.Target {
 	case TargetStatus:
 		return out, out.migrateStatus(m.Old, m.New)
 	case TargetProp:
@@ -61,6 +70,15 @@ func (s *Schema) Migrate(m Migration) (*Schema, error) {
 		return out, migrateListValue("label", &out.Labels, m.Old, m.New)
 	}
 	return nil, fmt.Errorf("unknown target %q", m.Target)
+}
+
+// spelled is v as the list spells it, which finds it without regard to case;
+// v itself when the list lacks it.
+func spelled(list []string, v string) string {
+	if x, ok := MatchValue(list, v); ok {
+		return x
+	}
+	return v
 }
 
 func (s *Schema) clone() *Schema {
@@ -117,7 +135,7 @@ func (s *Schema) workflows() []*Workflow {
 func (s *Schema) migrateStatus(from, to string) error {
 	i := slices.IndexFunc(s.Statuses, func(x Status) bool { return x.Name == from })
 	if i < 0 {
-		return fmt.Errorf("status %q is not defined", from)
+		return notDefined("status", from)
 	}
 	if j := slices.IndexFunc(s.Statuses, func(x Status) bool { return x.Name == to }); j >= 0 {
 		if s.Statuses[i].Default && s.Statuses[j].Category == s.Statuses[i].Category {
@@ -143,7 +161,7 @@ func (s *Schema) migrateStatus(from, to string) error {
 func (s *Schema) migrateProp(from, to string) error {
 	i := slices.IndexFunc(s.Props, func(x Prop) bool { return x.Name == from })
 	if i < 0 {
-		return fmt.Errorf("property %q is not defined", from)
+		return notDefined("property", from)
 	}
 	if _, ok := s.Prop(to); ok {
 		return fmt.Errorf("%s into %s: %w", from, to, ErrPropMerge)
@@ -160,14 +178,14 @@ func (s *Schema) migrateProp(from, to string) error {
 func (s *Schema) migrateValue(prop, from, to string) error {
 	i := slices.IndexFunc(s.Props, func(x Prop) bool { return x.Name == prop })
 	if i < 0 {
-		return fmt.Errorf("property %q is not defined", prop)
+		return notDefined("property", prop)
 	}
 	p := &s.Props[i]
 	if p.Type != TypeEnum && p.Type != TypeMultiEnum {
 		return fmt.Errorf("%s is %s, not enum or multi_enum", prop, p.Type)
 	}
 	if !slices.Contains(p.Values, from) {
-		return fmt.Errorf("value %q of %s is not defined", from, prop)
+		return notDefined("value of "+prop, from)
 	}
 	p.Values = replace(p.Values, from, to)
 	return nil
@@ -177,7 +195,7 @@ func (s *Schema) migrateValue(prop, from, to string) error {
 // merges it into to when that is a value too.
 func migrateListValue(what string, list *[]string, from, to string) error {
 	if !slices.Contains(*list, from) {
-		return fmt.Errorf("%s %q is not defined", what, from)
+		return notDefined(what, from)
 	}
 	*list = replace(*list, from, to)
 	return nil
@@ -244,19 +262,20 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 	case TargetPriority:
 		// A value is found without regard to case, as Validate finds it, and
 		// written as the list spells it.
-		if !strings.EqualFold(t.Priority, m.Old) {
+		if !strings.EqualFold(t.Priority, spelled(s.Priorities, m.Old)) {
 			return false, nil
 		}
-		t.Priority = m.New
+		t.Priority = spelled(s.Priorities, m.New)
 		return true, nil
 	case TargetLabel:
-		if !slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, m.Old) }) {
+		from, to := spelled(s.Labels, m.Old), spelled(s.Labels, m.New)
+		if !slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, from) }) {
 			return false, nil
 		}
 		var out []string
 		for _, l := range t.Labels {
-			if strings.EqualFold(l, m.Old) || strings.EqualFold(l, m.New) {
-				l = m.New
+			if strings.EqualFold(l, from) || strings.EqualFold(l, to) {
+				l = to
 			}
 			if !slices.Contains(out, l) {
 				out = append(out, l)
