@@ -106,6 +106,13 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 	m := &commentMirror{}
 	seen := map[int64]bool{}
 	relinked := map[model.ULID]bool{}
+	// held are the comments whose gh has an ID that GitHub still lists.
+	held := map[model.ULID]bool{}
+	for _, x := range list {
+		if c, ok := byID[x.ID]; ok {
+			held[c.ULID] = true
+		}
+	}
 	for _, x := range list {
 		seen[x.ID] = true
 		text, _, _ := model.SplitComment(x.Body)
@@ -124,8 +131,13 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 			continue
 		}
 		// The mark of a comment of this task: it is that comment, whose gh was
-		// lost or has an ID that is gone. It gets its gh back.
-		if _, mark, marked := model.SplitComment(x.Body); marked && byULID[mark] != nil && !relinked[mark] {
+		// lost or has an ID that is gone. The one whose ID gh holds is it (above);
+		// without one, the first with the mark gets its gh back, and body, as
+		// GitHub is the master here. The others with the mark are not comments.
+		if _, mark, marked := model.SplitComment(x.Body); marked && byULID[mark] != nil {
+			if held[mark] || relinked[mark] {
+				continue
+			}
 			c := byULID[mark]
 			relinked[mark] = true
 			links, _ := c.GitHub() // read above
@@ -136,10 +148,18 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 			} else {
 				links = append(links, link)
 			}
+			changed := model.NormalizeBody(c.Body) != text
+			if changed {
+				c.Body = text
+			}
 			if err := c.SetGitHub(links); err != nil {
 				return nil, err
 			}
-			m.ghOnly = append(m.ghOnly, c)
+			if changed {
+				m.puts = append(m.puts, c)
+			} else {
+				m.ghOnly = append(m.ghOnly, c)
+			}
 			continue
 		}
 		u := model.DerivedULID(x.CreatedAt, fmt.Sprintf("%s#%d", ref, x.ID))

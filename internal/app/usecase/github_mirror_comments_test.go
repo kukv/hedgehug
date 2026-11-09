@@ -140,7 +140,10 @@ func TestMirrorCommentsTakesTheMarkOff(t *testing.T) {
 	}
 }
 
-func TestMirrorCommentsOnlyWhenTheFieldIsThere(t *testing.T) {
+// Without comments among the fields nothing is taken in, and the comments are
+// not read: 101 of them need a second page, which the fake refuses, so a read
+// would be a warning.
+func TestMirrorCommentsNotReadWithoutTheField(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
 	x := ts.AddTask("mine", func(x *model.Task) { x.Repos = []string{web} })
@@ -149,10 +152,12 @@ func TestMirrorCommentsOnlyWhenTheFieldIsThere(t *testing.T) {
 		t.Fatal(err)
 	}
 	mirrorTo(t, ts, x.ULID, web+"/issues/"+itoa(n), "title", "body")
-	if _, err := fake.AddComment("org-a/web", n, "bob", "hello"); err != nil {
-		t.Fatal(err)
+	for range 101 {
+		if _, err := fake.AddComment("org-a/web", n, "bob", "hello"); err != nil {
+			t.Fatal(err)
+		}
 	}
-	fake.RefuseComments(fakegh.CommentList, true) // not even asked for
+	fake.RefuseComments(fakegh.CommentList, true)
 	if w := refetch(t, ts); len(w) != 0 {
 		t.Fatalf("warnings %v", w)
 	}
