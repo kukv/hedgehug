@@ -136,9 +136,10 @@ a conversion, `hh undo` undoes the operation before it.
   - `relates` has a direction now. A pair stored on both tasks (A has B, B has A) stays as two
     `relates`; the report counts them as `相互の組`. Before, one `relates` was found from both
     tasks; now `relates:A` finds only the tasks that point at A, and `related_by:A` the tasks A points at.
-    A view whose query has `relates:` is not rewritten (the report lists it); add `related_by:` if you want both ways.
+    A view whose query has `relates:` or `relates.inverse:` is not rewritten (the report lists it); add `related_by:` if you want both ways.
+    The same goes for a `task_ref` of your own that had `symmetric: true`: its key and its `.inverse:` matched both ways, so they are listed, not rewritten.
   - `<name>.inverse:` in a view's query becomes the name of the other way (`causes.inverse:` becomes
-    `caused_by:`, `blocked_by.inverse:` becomes `blocks:`); the `.inverse:` of a `task_ref` of your own becomes `related_by:`, and its key becomes `relates:`.
+    `caused_by:`, `blocked_by.inverse:` becomes `blocks:`); the `.inverse:` of a `task_ref` of your own (one that was not symmetric) becomes `related_by:`, and its key becomes `relates:`.
   - A relation is not a column, a sort or a group of a view, so the report lists what was taken out of
     `table.columns`, `sort` and `group`.
   - A value that is not the ULID of a task stops the conversion with `convert.bad_value`, listing the
@@ -193,9 +194,11 @@ name the task. Open each with `hh edit <id>` and change `kind:` to one of the fi
 `parent:` to a task that can hold it (a project at the root, for example), then run `hh doctor` again.
 
 The same goes for the relations. A clone from before format 3 keeps writing `duplicates`, `causes`,
-`relates` and `clones` under `props:` (and a `task_ref` of its own), and those are not relations of the task
+`relates` and `clones` under `props:`, and those are not relations of the task
 in the new format. `hh doctor` reports them as `task.legacy_field`, and `hh doctor --fix` moves
 them to the fields of the task (see [Maintenance](maintenance.md#check-a-store-hh-doctor)).
+A `task_ref` of your own is not one of the four names: `hh doctor` does not report it and `--fix` does
+not move it. Open the task with `hh edit <id>` and move the values to `relates:`.
 
 ## Move a task to another store
 

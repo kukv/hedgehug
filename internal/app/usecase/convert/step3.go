@@ -242,7 +242,9 @@ func (c *step3State) mutualPairs() int {
 func (c *step3State) convertViews() {
 	custom := c.custom()
 	gone := c.gone()
-	inverse := inverseLabels(c.t.Read(schema.Path), custom)
+	raw := c.t.Read(schema.Path)
+	inverse := inverseLabels(raw, custom)
+	sym := symmetricNames(raw, custom)
 	for _, p := range c.t.Paths(model.ViewsDir + "/") {
 		name, ok := model.IsViewPath(p)
 		if !ok {
@@ -254,10 +256,10 @@ func (c *step3State) convertViews() {
 			continue
 		}
 		changed := false
-		for _, term := range ambiguousTerms(v.Query) {
+		for _, term := range ambiguousTerms(v.Query, sym) {
 			c.notes = append(c.notes, fmt.Sprintf("ビュー %s の query の %s は、これまで両方向に当たっていたが、これからは付けた側にだけ当たる（書き換えていない。逆方向も含めるなら related_by: も使う）", name, term))
 		}
-		if q, removed := rewriteQuery(v.Query, custom, inverse, gone); q != v.Query {
+		if q, removed := rewriteQuery(v.Query, custom, inverse, sym, gone); q != v.Query {
 			c.notes = append(c.notes, fmt.Sprintf("ビュー %s の query を書き換えた: %s → %s", name, v.Query, q))
 			for _, term := range removed {
 				c.notes = append(c.notes, fmt.Sprintf("ビュー %s の query から %s を外した（関連は並べ替え・グループ化の対象にならない）", name, term))
@@ -321,13 +323,36 @@ func inverseLabels(raw []byte, custom []string) []string {
 	return out
 }
 
+// symmetricNames are the names that matched in both directions in format 2:
+// relates, and the task_ref properties of the store's own that gave
+// symmetric: true in schema.yaml, which the schema no longer keeps. The raw
+// file is read for them.
+func symmetricNames(raw []byte, custom []string) []string {
+	var doc struct {
+		Props map[string]struct {
+			Symmetric bool `yaml:"symmetric"`
+		} `yaml:"props"`
+	}
+	out := []string{"relates"}
+	if yaml.Unmarshal(raw, &doc) != nil {
+		return out
+	}
+	for _, n := range custom {
+		if doc.Props[n].Symmetric {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // rewriteQuery gives the query in the keys of format 3: <relation>.inverse
 // becomes the name of the other direction; a key that was a task_ref of the
 // store's own becomes relates, and its .inverse and the display name of its
-// other direction related_by (they ask for the tasks that are pointed at). A
-// sort: or group: of a name that is gone is taken out, and returned. The spacing
-// of what is not rewritten stays.
-func rewriteQuery(q string, custom, inverse, gone []string) (string, []string) {
+// other direction related_by (they ask for the tasks that are pointed at). The
+// keys of the names that were symmetric, and their .inverse, stay as they are
+// (ambiguousTerms lists them). A sort: or group: of a name that is gone is
+// taken out, and returned. The spacing of what is not rewritten stays.
+func rewriteQuery(q string, custom, inverse, sym, gone []string) (string, []string) {
 	type piece struct{ sep, tok string }
 	var pieces []piece
 	var removed []string
@@ -340,7 +365,7 @@ func rewriteQuery(q string, custom, inverse, gone []string) (string, []string) {
 		sep := q[sepAt:start]
 		sepAt = end
 		start = -1
-		t, drop := rewriteTerm(tok, custom, inverse, gone)
+		t, drop := rewriteTerm(tok, custom, inverse, sym, gone)
 		switch {
 		case drop:
 			removed = append(removed, tok)
@@ -383,7 +408,7 @@ func rewriteQuery(q string, custom, inverse, gone []string) (string, []string) {
 // rewriteTerm is one term of a query in the keys of format 3, or drop for a
 // sort: or group: of a name that is gone. A term that does not parse is left
 // as it is.
-func rewriteTerm(tok string, custom, inverse, gone []string) (string, bool) {
+func rewriteTerm(tok string, custom, inverse, sym, gone []string) (string, bool) {
 	pq, err := query.Parse(tok)
 	if err != nil || len(pq.Terms) != 1 || pq.Terms[0].Key == "" {
 		return tok, false
@@ -396,6 +421,9 @@ func rewriteTerm(tok string, custom, inverse, gone []string) (string, bool) {
 	}
 	if (key == "sort" || key == "group") && len(term.Values) == 1 && slices.Contains(gone, strings.TrimPrefix(term.Values[0], "-")) {
 		return tok, true
+	}
+	if symmetricKey(key, sym) {
+		return tok, false
 	}
 	to := key
 	switch name, inv := strings.CutSuffix(key, ".inverse"); {
@@ -411,16 +439,24 @@ func rewriteTerm(tok string, custom, inverse, gone []string) (string, bool) {
 	return tok[:at] + to + tok[at+len(key):], false
 }
 
+// symmetricKey is whether the key, or its .inverse, is one of the names that
+// matched in both directions in format 2.
+func symmetricKey(key string, sym []string) bool {
+	name, _ := strings.CutSuffix(key, ".inverse")
+	return slices.Contains(sym, name)
+}
+
 // ambiguousTerms are the terms of the query (as it was written) whose key is
-// relates: in format 2 relates matched in both directions, and it does not now.
-func ambiguousTerms(q string) []string {
+// one of the names that matched in both directions in format 2 (relates, and
+// the symmetric task_ref of the store's own), or its .inverse: they do not now.
+func ambiguousTerms(q string, sym []string) []string {
 	pq, err := query.Parse(q)
 	if err != nil {
 		return nil
 	}
 	var out []string
 	for _, t := range pq.Terms {
-		if t.Key == "relates" && !slices.Contains(out, t.Raw) {
+		if symmetricKey(t.Key, sym) && !slices.Contains(out, t.Raw) {
 			out = append(out, t.Raw)
 		}
 	}

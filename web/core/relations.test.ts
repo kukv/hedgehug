@@ -9,7 +9,7 @@ describe("RELATIONS", () => {
       resolve(process.cwd(), "../internal/app/domain/schema/relations.go"),
       "utf8",
     );
-    const rows = [...src.matchAll(/\{"(\w+)", "([^"]+)", "(\w+)", "([^"]+)",/g)].map((m) => ({
+    const rows = [...src.matchAll(/\{\s*"(\w+)", "([^"]+)", "(\w+)", "([^"]+)",/g)].map((m) => ({
       name: m[1],
       label: m[2],
       inverse: m[3],

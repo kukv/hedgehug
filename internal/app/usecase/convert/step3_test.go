@@ -397,7 +397,7 @@ func TestStep3RewritesTheViews(t *testing.T) {
 	s.put(model.ViewPath("rel"), "layout: tree\nquery: relates:WEB-1 -relates:WEB-2 text\n")
 	tr, rep := s.ok(Options{})
 	v := viewOf(t, tr, "v")
-	if want := `caused_by:WEB-1  blocks:me -relates:WEB-2 related_by:WEB-3 "fixes.x" status:todo related_by:WEB-4`; v.Query != want {
+	if want := `caused_by:WEB-1  blocks:me -relates:WEB-2 related_by:WEB-3 "fixes.x" status:todo relates.inverse:WEB-4`; v.Query != want {
 		t.Errorf("query = %q\n want    %q", v.Query, want)
 	}
 	if got := v.Table.Columns; !slices.Equal(got, []string{"id", "title", "due", "note"}) {
@@ -413,6 +413,25 @@ func TestStep3RewritesTheViews(t *testing.T) {
 	hasLine(t, rep, "ビュー rel の query の relates:WEB-1")
 	hasLine(t, rep, "ビュー rel の query の -relates:WEB-2")
 	hasLine(t, rep, "ビュー v の table.columns")
+	hasLine(t, rep, "ビュー v の query の relates.inverse:WEB-4")
+}
+
+func TestStep3ListsTheSymmetricNamesOfTheViews(t *testing.T) {
+	t.Parallel()
+	s := newStore2(t)
+	s.put("schema.yaml", strings.Replace(schema2, "  note: {type: text}\n", "  note: {type: text}\n  see: {type: task_ref, multi: true, label: See, symmetric: true}\n", 1))
+	s.put(model.ViewPath("sym"), "layout: tree\nquery: see:WEB-1 see.inverse:WEB-2 -see:WEB-3 fixes.inverse:WEB-4 text\n")
+	tr, rep := s.ok(Options{})
+	// see was symmetric: its terms matched in both directions, so they are listed, not rewritten
+	if want := "see:WEB-1 see.inverse:WEB-2 -see:WEB-3 related_by:WEB-4 text"; viewOf(t, tr, "sym").Query != want {
+		t.Errorf("query = %q\n want    %q", viewOf(t, tr, "sym").Query, want)
+	}
+	for _, term := range []string{"see:WEB-1", "see.inverse:WEB-2", "-see:WEB-3"} {
+		hasLine(t, rep, "ビュー sym の query の "+term)
+	}
+	if strings.Contains(lines(rep), "ビュー sym の query の fixes.inverse") {
+		t.Error("a name that was not symmetric was listed")
+	}
 }
 
 func TestStep3RewritesWorkflowRequired(t *testing.T) {
