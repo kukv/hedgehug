@@ -99,8 +99,18 @@ func (f *Fields) assigns() ([]usecase.Assign, error) {
 	for _, l := range []struct {
 		key string
 		v   *[]string
-	}{{"assignees", f.Assignees}, {"watchers", f.Watchers}, {"labels", f.Labels}, {"repos", f.Repos}, {"releases", f.Releases}, {"blocked_by", f.BlockedBy},
-		{"causes", f.Causes}, {"relates", f.Relates}, {"duplicates", f.Duplicates}, {"clones", f.Clones}} {
+	}{
+		{"assignees", f.Assignees},
+		{"watchers", f.Watchers},
+		{"labels", f.Labels},
+		{"repos", f.Repos},
+		{"releases", f.Releases},
+		{"blocked_by", f.BlockedBy},
+		{"causes", f.Causes},
+		{"relates", f.Relates},
+		{"duplicates", f.Duplicates},
+		{"clones", f.Clones},
+	} {
 		if l.v != nil {
 			items := make([]any, len(*l.v))
 			for i, s := range *l.v {
