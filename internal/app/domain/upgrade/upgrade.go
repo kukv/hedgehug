@@ -36,7 +36,8 @@ type Step struct {
 	From  int
 	Apply func(raw []byte, cx Cx) ([]byte, error)
 	// Template does the same for a template file, named name: the kinds of
-	// its items (format 1 to 2), the relations in its props (2 to 3); nil when
+	// its items (format 1 to 2), the relations in its props (2 to 3), the
+	// built-in properties and the labels (3 to 4); nil when
 	// a format changes nothing in a template.
 	Template func(name string, raw []byte, cx Cx) ([]byte, error)
 }
@@ -47,6 +48,7 @@ type Step struct {
 var Steps = []Step{
 	{From: 1, Apply: task1to2, Template: template1to2},
 	{From: 2, Apply: task2to3, Template: template2to3},
+	{From: 3, Apply: task3to4, Template: template3to4},
 }
 
 // Upgrade rewrites the task file raw, which is in format from, into the newest

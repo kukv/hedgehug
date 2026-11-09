@@ -116,32 +116,32 @@ func TestUpgradeNeedsAStepForEveryFormat(t *testing.T) {
 	}
 }
 
-// withFormat4 stands a fourth format in, whose step writes "(4)" after the
+// withFormat5 stands a fifth format in, whose step writes "(5)" after the
 // title. The test must not be parallel.
-func withFormat4(t *testing.T) {
+func withFormat5(t *testing.T) {
 	t.Helper()
 	was, wasSteps := model.StoreFormat, Steps
-	model.StoreFormat = 4
-	Steps = append(slices.Clone(Steps), Step{From: 3, Apply: func(raw []byte, _ Cx) ([]byte, error) {
+	model.StoreFormat = 5
+	Steps = append(slices.Clone(Steps), Step{From: 4, Apply: func(raw []byte, _ Cx) ([]byte, error) {
 		tk, err := model.DecodeTask(raw)
 		if err != nil {
 			return nil, err
 		}
-		tk.Title += "(4)"
+		tk.Title += "(5)"
 		return tk.Encode()
 	}})
 	t.Cleanup(func() { model.StoreFormat, Steps = was, wasSteps })
 }
 
 func TestUpgradeRunsTheStepsInOrderToTheNewestOrToAFormat(t *testing.T) {
-	withFormat4(t)
+	withFormat5(t)
 	raw := taskFile(t, "chore", nil)
 	cx := Cx{Schema: []byte(oldSchema)}
 	all, err := Upgrade(1, raw, cx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk, _ := model.DecodeTask(all); tk.Kind != "task" || tk.Title != "x(4)" {
+	if tk, _ := model.DecodeTask(all); tk.Kind != "task" || tk.Title != "x(5)" {
 		t.Errorf("1 to the newest: kind %q, title %q", tk.Kind, tk.Title)
 	}
 	mid, err := To(1, 2, raw, cx)
