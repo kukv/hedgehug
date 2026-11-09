@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"strconv"
 	"strings"
@@ -425,8 +426,14 @@ func InboxRevertOf(ss *usecase.Session, stores []InboxStore, u model.ULID) (usec
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	if key, ok := strings.CutPrefix(d.Field, "props."); ok && wasRelation(s, it.Commit, key) {
-		return usecase.TaskResult{}, notRevertible(relationsFixed(d.Field))
+	if key, ok := strings.CutPrefix(d.Field, "props."); ok {
+		was, err := wasRelation(s, it.Commit, key)
+		if err != nil {
+			return usecase.TaskResult{}, notRevertible(fmt.Errorf("%s: the store of the item cannot be read: %w", d.Field, err))
+		}
+		if was {
+			return usecase.TaskResult{}, notRevertible(relationsFixed(d.Field))
+		}
 	}
 	e, ok := ix.Task(it.Task)
 	if !ok {
@@ -870,30 +877,42 @@ func relationsFixed(field string) error {
 // wasRelation is whether the property key was a relation in the store as the
 // commit had it: the commit is of a format before the relations were fixed, and
 // the key is one of the four names, or a task_ref in the schema.yaml of the
-// commit (read as it is, for the schema no longer has the type).
-func wasRelation(s *store.Store, commit, key string) bool {
+// commit (read as it is, for the schema no longer has the type). A commit whose
+// format cannot be read, or whose schema.yaml cannot, is an error: the revert
+// does not guess.
+func wasRelation(s *store.Store, commit, key string) (bool, error) {
 	if !plumbing.IsHash(commit) {
-		return false
+		return false, fmt.Errorf("the commit %q of the item is not a hash", commit)
 	}
 	h := plumbing.NewHash(commit)
 	r := s.Repo()
 	at := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
-	if f, err := at.Format(); err != nil || f >= 3 {
-		return false
+	f, err := at.Format()
+	if err != nil {
+		return false, err
+	}
+	if f >= 3 {
+		return false, nil
 	}
 	if slices.Contains(upgrade.LegacyRelationNames, key) {
-		return true
+		return true, nil
 	}
 	raw, err := r.ReadAt(h, schema.Path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil // no schema, no task_ref
+	}
 	if err != nil {
-		return false
+		return false, err
 	}
 	var doc struct {
 		Props map[string]struct {
 			Type string `yaml:"type"`
 		} `yaml:"props"`
 	}
-	return yaml.Unmarshal(raw, &doc) == nil && schema.PropType(doc.Props[key].Type) == upgrade.TypeTaskRef
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return false, fmt.Errorf("%s of %s: %w", schema.Path, commit, err)
+	}
+	return schema.PropType(doc.Props[key].Type) == upgrade.TypeTaskRef, nil
 }
 
 // propText is the text hedgehug set reads for the scalar x of the property
