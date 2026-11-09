@@ -69,6 +69,9 @@ func readMirrorComments(cl *github.Client, acct config.Account, ix *index.Index,
 // comments as they are to be, new or changed.
 type commentMirror struct {
 	puts []*model.Comment
+	// ghOnly are comments that got their gh back: only gh is written, and
+	// updated stays.
+	ghOnly []*model.Comment
 }
 
 // planCommentMirror compares the comments of the issue that t takes its
@@ -102,6 +105,7 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 	}
 	m := &commentMirror{}
 	seen := map[int64]bool{}
+	relinked := map[model.ULID]bool{}
 	for _, x := range list {
 		seen[x.ID] = true
 		text, _, _ := model.SplitComment(x.Body)
@@ -117,6 +121,25 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 				return nil, err
 			}
 			m.puts = append(m.puts, c)
+			continue
+		}
+		// The mark of a comment of this task: it is that comment, whose gh was
+		// lost or has an ID that is gone. It gets its gh back.
+		if _, mark, marked := model.SplitComment(x.Body); marked && byULID[mark] != nil && !relinked[mark] {
+			c := byULID[mark]
+			relinked[mark] = true
+			links, _ := c.GitHub() // read above
+			link := model.CommentLink{Ref: ref, ID: x.ID, BodySynced: text}
+			if i := slices.IndexFunc(links, func(y model.CommentLink) bool { return model.CanonRef(y.Ref) == ref }); i >= 0 {
+				delete(byID, links[i].ID) // gone from GitHub, but not deleted: this is it
+				links[i] = link
+			} else {
+				links = append(links, link)
+			}
+			if err := c.SetGitHub(links); err != nil {
+				return nil, err
+			}
+			m.ghOnly = append(m.ghOnly, c)
 			continue
 		}
 		u := model.DerivedULID(x.CreatedAt, fmt.Sprintf("%s#%d", ref, x.ID))
@@ -141,7 +164,7 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 			m.puts = append(m.puts, c)
 		}
 	}
-	if len(m.puts) == 0 {
+	if len(m.puts)+len(m.ghOnly) == 0 {
 		return nil, nil //nolint:nilnil // nothing to write is no error
 	}
 	slices.SortFunc(m.puts, func(a, b *model.Comment) int { return strings.Compare(a.ULID.String(), b.ULID.String()) })

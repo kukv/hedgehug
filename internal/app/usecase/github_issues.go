@@ -307,6 +307,11 @@ func applyMirror(ss *Session, s *store.Store, held *store.Locked, plans []*mirro
 						return err
 					}
 				}
+				for _, c := range p.comments.ghOnly {
+					if err := tx.PutCommentGH(p.ulid, c); err != nil {
+						return err
+					}
+				}
 			}
 			return tx.PutTask(t)
 		})
