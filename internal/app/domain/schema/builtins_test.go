@@ -232,6 +232,39 @@ func TestValidateUnreadableTypedValues(t *testing.T) {
 	}
 }
 
+// A swap of two names is a cycle of migrations through a value no list has, and
+// carries the tasks of each to the other, as for an enum property.
+func TestChangeListSwapCarriesTheTasks(t *testing.T) {
+	t.Parallel()
+	s := Default()
+	s.Labels = []string{"bug", "ui"}
+	_, pms, _, err := s.ChangePriorities([]ValueEdit{
+		{Name: "mid", From: []string{"low"}},
+		{Name: "low", From: []string{"mid"}},
+		{Name: "high", From: []string{"high"}},
+		{Name: "urgent", From: []string{"urgent"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, lms, _, err := s.ChangeLabels([]ValueEdit{{Name: "ui", From: []string{"bug"}}, {Name: "bug", From: []string{"ui"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &model.Task{Priority: "low", Labels: []string{"bug"}}
+	b := &model.Task{Priority: "mid", Labels: []string{"ui", "bug"}}
+	for _, task := range []*model.Task{a, b} {
+		for _, m := range append(slices.Clone(pms), lms...) {
+			if _, err := m.ApplyTask(task, s); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if a.Priority != "mid" || b.Priority != "low" || !slices.Equal(a.Labels, []string{"ui"}) || !slices.Equal(b.Labels, []string{"bug", "ui"}) {
+		t.Errorf("a = %q %v, b = %q %v", a.Priority, a.Labels, b.Priority, b.Labels)
+	}
+}
+
 func TestChangePriorities(t *testing.T) {
 	t.Parallel()
 	s := Default() // low mid high urgent

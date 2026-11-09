@@ -304,3 +304,46 @@ func TestSchemaEditCaseOnlyRenameRewritesTasks(t *testing.T) {
 		t.Errorf("labels of the task = %v, want [Bug]", got)
 	}
 }
+
+// Two names that swap places (a to b and b to a) are carried to the tasks as
+// the values of an enum property are.
+func TestSchemaEditSwapRewritesTasks(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var lo, mid taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "l", "priority": "low"}, 201, &lo)
+	ts.call("POST", "/api/tasks", map[string]any{"title": "m", "priority": "mid"}, 201, &mid)
+	ts.labels("bug", "ui")
+	ts.call("PATCH", "/api/tasks/"+lo.Task.ID, map[string]any{"labels": []string{"bug"}}, 200, nil)
+	ts.call("PATCH", "/api/tasks/"+mid.Task.ID, map[string]any{"labels": []string{"ui"}}, 200, nil)
+
+	var w schemas.EditWrite
+	swap := []map[string]any{
+		{"name": "mid", "from": []string{"low"}},
+		{"name": "low", "from": []string{"mid"}},
+		{"name": "high", "from": []string{"high"}},
+		{"name": "urgent", "from": []string{"urgent"}},
+	}
+	ts.call("PATCH", "/api/schema/priorities", map[string]any{"values": swap}, 200, &w)
+	if !slices.Equal(w.Schema.Priorities, []string{"mid", "low", "high", "urgent"}) {
+		t.Errorf("priorities = %v", w.Schema.Priorities)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, lo.Task.ULID)).Priority; got != "mid" {
+		t.Errorf("priority of the low task = %q, want mid", got)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, mid.Task.ULID)).Priority; got != "low" {
+		t.Errorf("priority of the mid task = %q, want low", got)
+	}
+	ts.call("PATCH", "/api/schema/labels", map[string]any{"values": []map[string]any{
+		{"name": "ui", "from": []string{"bug"}}, {"name": "bug", "from": []string{"ui"}},
+	}}, 200, &w)
+	if !slices.Equal(w.Schema.Labels, []string{"ui", "bug"}) {
+		t.Errorf("labels = %v", w.Schema.Labels)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, lo.Task.ULID)).Labels; !slices.Equal(got, []string{"ui"}) {
+		t.Errorf("labels of the first task = %v, want [ui]", got)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, mid.Task.ULID)).Labels; !slices.Equal(got, []string{"bug"}) {
+		t.Errorf("labels of the second task = %v, want [bug]", got)
+	}
+}
