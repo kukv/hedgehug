@@ -220,14 +220,41 @@ func (c *commit) issueOverwritten(v string) error {
 	if err != nil || t == nil {
 		return err
 	}
+	// For a comment, the start of its text in the commit (the text that wrote
+	// over GitHub's), which names the comment where a ULID cannot.
+	var comment string
+	if id, ok := strings.CutPrefix(o.Field, "comments:"); ok {
+		if cm, err := model.ParseULID(id); err == nil {
+			x, err := readComment(c.r, c.tree, u, cm)
+			if err != nil {
+				return err
+			}
+			if x != nil {
+				comment = CommentPreview(x.Body)
+			}
+		}
+	}
 	detail := mustJSON(struct {
-		Ref   string   `json:"ref"`
-		Field string   `json:"field"`
-		Side  string   `json:"side"`
-		Lost  []string `json:"lost"`
-	}{ref, o.Field, o.Side, o.Lost})
+		Ref     string   `json:"ref"`
+		Field   string   `json:"field"`
+		Side    string   `json:"side"`
+		Lost    []string `json:"lost"`
+		Comment string   `json:"comment,omitempty"`
+	}{ref, o.Field, o.Side, o.Lost, comment})
 	c.tell(t, Item{Kind: IssueOverwritten, Task: u, Detail: detail})
 	return nil
+}
+
+// commentPreviewRunes is how much of a comment names it in a notice.
+const commentPreviewRunes = 12
+
+// CommentPreview is the first characters of a comment's text, on one line.
+func CommentPreview(body string) string {
+	r := []rune(strings.Join(strings.Fields(body), " "))
+	if len(r) > commentPreviewRunes {
+		r = r[:commentPreviewRunes]
+	}
+	return string(r)
 }
 
 // tell makes it for each account of me that is an assignee or a watcher

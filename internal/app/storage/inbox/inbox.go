@@ -62,7 +62,8 @@ type Item struct {
 	// watch {"changed":[...]} or {"comment"}; mention {"comment"} when a
 	// comment mentions; automation {"rule","event","status"};
 	// automation_rejected {"rule","reason"}; issue_overwritten
-	// {"ref","field","side","lost"}.
+	// {"ref","field","side","lost"} and, for a comment ("comments:<ULID>"),
+	// "comment": the first characters of its text.
 	Detail json.RawMessage `json:"detail,omitempty"`
 }
 

@@ -542,6 +542,7 @@ func issueOverwrittenContent(it inbox.Item) string {
 	var d struct {
 		Ref, Field, Side string
 		Lost             []string
+		Comment          string
 	}
 	_ = json.Unmarshal(it.Detail, &d)
 	label := d.Ref
@@ -550,8 +551,11 @@ func issueOverwrittenContent(it inbox.Item) string {
 	}
 	lost := strconv.Quote(strings.Join(d.Lost, ", "))
 	field := d.Field
-	if u, ok := strings.CutPrefix(field, "comments:"); ok {
-		field = "comment " + u // which comment: its ULID, and the text that was lost
+	if strings.HasPrefix(field, "comments:") {
+		field = "comment" // which one: the start of its text, when the item has it
+		if d.Comment != "" {
+			field += " " + strconv.Quote(d.Comment)
+		}
 	}
 	if d.Side == automation.SideGitHub {
 		return fmt.Sprintf("the %s %s on %s was written over by the task", field, lost, label)

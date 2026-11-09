@@ -136,10 +136,14 @@ const FIELDS: Readonly<Record<string, string>> = {
   comments: "コメント",
 };
 
-/** The name of a field; "comments:<ULID>" (a note of the inbox) is one comment, named by the end of its ULID. */
-export function fieldLabel(name: string): string {
-  const comment = name.startsWith("comments:") ? name.slice("comments:".length) : "";
-  if (comment) return `${FIELDS.comments}（…${comment.slice(-6)}）`;
+/**
+ * The name of a field; "comments:<ULID>" (a note of the inbox) is one comment, named by the start of
+ * its text (preview) when the note has it.
+ */
+export function fieldLabel(name: string, preview?: string): string {
+  if (name.startsWith("comments:")) {
+    return preview ? `コメント（${preview}）` : "コメント";
+  }
   return FIELDS[name] ?? name;
 }
 
@@ -147,7 +151,7 @@ export function fieldLabel(name: string): string {
 export function syncedFields(l: Link, fields: IssueFields | undefined): string {
   if (l.sync === "link") return "";
   const names = l.fields ?? (l.sync === "push" ? fields?.push : fields?.mirror) ?? [];
-  return names.map(fieldLabel).join("・");
+  return names.map((n) => fieldLabel(n)).join("・");
 }
 
 const EVENTS: Readonly<Record<string, string>> = {

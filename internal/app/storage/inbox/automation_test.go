@@ -1,6 +1,7 @@
 package inbox
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
@@ -143,6 +144,36 @@ func TestCollectIssueOverwritten(t *testing.T) {
 	}
 	if items := collectAfter(t, a, func() { note(other.ULID, "title") }, "github.com/b"); len(items) != 0 {
 		t.Errorf("a task b has no part in: items = %+v", items)
+	}
+}
+
+func TestCollectIssueOverwrittenComment(t *testing.T) {
+	t.Parallel()
+	a, b := twoClones(t)
+	x := addTask(t, a, "x", func(x *model.Task) { x.Assignees = []string{"github.com/b"} })
+	syncBoth(t, a, b)
+	cm := addComment(t, a, x.ULID, "手元の本文を\nここに書く。あとは長い続き\n")
+	field := "comments:" + cm.ULID.String()
+	items := collectAfter(t, a, func() {
+		if _, err := a.s.Update(a.op("gh-push", x.ULID), func(tx *store.Tx) error {
+			tx.AllowEmpty()
+			tx.AddTrailer(automation.TrailerIssueOverwritten, automation.IssueOverwrittenTrailer(x.ULID, "github.com/o/r/issues/1", automation.Overwrite{Field: field, Side: automation.SideGitHub, Lost: []string{"GitHub 側"}}))
+			// a comment the commit does not have names nothing
+			tx.AddTrailer(automation.TrailerIssueOverwritten, automation.IssueOverwrittenTrailer(x.ULID, "github.com/o/r/issues/1", automation.Overwrite{Field: "comments:" + model.NewULID().String(), Side: automation.SideGitHub, Lost: []string{"y"}}))
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}, "github.com/b")
+	if len(items) != 2 {
+		t.Fatalf("items = %+v", items)
+	}
+	want := `{"ref":"github.com/o/r/issues/1","field":"` + field + `","side":"github","lost":["GitHub 側"],"comment":"手元の本文を ここに書く"}`
+	if string(items[0].Detail) != want {
+		t.Errorf("detail = %s\nwant %s", items[0].Detail, want)
+	}
+	if strings.Contains(string(items[1].Detail), `"comment":`) {
+		t.Errorf("detail = %s; want no comment text", items[1].Detail)
 	}
 }
 

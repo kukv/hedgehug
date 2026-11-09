@@ -271,8 +271,11 @@ describe("the reads as the settings show them", () => {
 });
 
 describe("fieldLabel of comments", () => {
-  it("names the comments, and one comment by the end of its ULID", () => {
+  it("names the comments, and one comment by the start of its text", () => {
     expect(fieldLabel("comments")).toBe("コメント");
-    expect(fieldLabel("comments:01JABCDEFGHJKMNPQRSTVWXYZ0")).toBe("コメント（…VWXYZ0）");
+    expect(fieldLabel("comments:01JABCDEFGHJKMNPQRSTVWXYZ0")).toBe("コメント");
+    expect(fieldLabel("comments:01JABCDEFGHJKMNPQRSTVWXYZ0", "手元の本文")).toBe(
+      "コメント（手元の本文）",
+    );
   });
 });
