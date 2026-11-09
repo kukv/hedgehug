@@ -3,6 +3,7 @@ package replicate
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/fs"
 	"time"
 
@@ -21,7 +22,9 @@ func Sides(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, path string) (b []
 	if b, err = readAt(r, base, path); err != nil {
 		return nil, o, t, err
 	}
-	b = UpgradedBase(r, base, ours, path, b)
+	if b, err = UpgradedBase(r, base, ours, path, b); err != nil {
+		return nil, o, t, err
+	}
 	if o, err = side(r, base, ours, path); err != nil {
 		return nil, o, t, err
 	}
@@ -32,21 +35,22 @@ func Sides(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, path string) (b []
 // UpgradedBase is the file b of a task at the merge base in the store format of
 // ours: a base from before a conversion is read through the steps of
 // domain/upgrade, so that a side that converted and then changed a value is not
-// merged against the unconverted base. Another file, or a task that does not
-// upgrade, is b as it is, for the merge to treat as a file that does not decode.
-func UpgradedBase(r *gitrepo.Repo, base, ours plumbing.Hash, path string, b []byte) []byte {
+// merged against the unconverted base. Another file is b as it is. A format
+// that cannot be read, or a task that does not upgrade, is an error: the merge
+// does not go on against a base in another form.
+func UpgradedBase(r *gitrepo.Repo, base, ours plumbing.Hash, path string, b []byte) ([]byte, error) {
 	if _, err := model.ParseTaskPath(path); err != nil || b == nil {
-		return b
+		return b, nil //nolint:nilerr // not a task file
 	}
 	to, err := FormatAt(r, ours)
 	if err != nil {
-		return b
+		return nil, err
 	}
 	up, err := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(base, p) }).TaskTo(to, b)
 	if err != nil {
-		return b
+		return nil, fmt.Errorf("%s at the merge base: %w", path, err)
 	}
-	return up
+	return up, nil
 }
 
 // side is path as the commit from has it, with who changed it last and

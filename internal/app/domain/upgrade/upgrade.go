@@ -74,7 +74,8 @@ func To(from, to int, raw []byte, cx Cx) ([]byte, error) {
 // steps need from its schema.yaml, the first time a file needs them.
 type Commit struct {
 	read   func(path string) ([]byte, error)
-	format int // 0 until read
+	format int   // 0 until read
+	ferr   error // of reading the format
 	cx     *Cx
 	err    error // of reading the schema
 }
@@ -83,22 +84,23 @@ type Commit struct {
 // fs.ErrNotExist for a file the commit lacks.
 func At(read func(path string) ([]byte, error)) *Commit { return &Commit{read: read} }
 
-// Format is the store format of the commit. A store.yaml that is missing or
-// does not decode is taken for the newest format: such a commit is read as it
-// is.
-func (c *Commit) Format() int {
-	if c.format != 0 {
-		return c.format
+// Format is the store format of the commit: the format of its store.yaml. A
+// store.yaml that is missing, does not decode, or is of a newer format than
+// this version reads is an error; the format of a commit is never guessed.
+func (c *Commit) Format() (int, error) {
+	if c.format != 0 || c.ferr != nil {
+		return c.format, c.ferr
 	}
-	c.format = model.StoreFormat
 	b, err := c.read(model.StoreMetaPath)
-	if err != nil {
-		return c.format
+	if err == nil {
+		var m *model.StoreMeta
+		if m, err = model.DecodeStoreMeta(b); err == nil {
+			c.format = m.Format
+			return c.format, nil
+		}
 	}
-	if m, err := model.DecodeStoreMeta(b); err == nil {
-		c.format = m.Format
-	}
-	return c.format
+	c.ferr = fmt.Errorf("%s: %w", model.StoreMetaPath, err)
+	return 0, c.ferr
 }
 
 // Task is raw, a task file of the commit, in the newest format.
@@ -106,7 +108,10 @@ func (c *Commit) Task(raw []byte) ([]byte, error) { return c.TaskTo(model.StoreF
 
 // TaskTo is Task up to format to, for what merges with a side in that format.
 func (c *Commit) TaskTo(to int, raw []byte) ([]byte, error) {
-	from := c.Format()
+	from, err := c.Format()
+	if err != nil {
+		return nil, err
+	}
 	if from >= to || raw == nil {
 		return raw, nil
 	}

@@ -116,3 +116,43 @@ func TestUndoReadsCommitsBeforeTheConversion(t *testing.T) {
 		t.Errorf("after undo: %+v; want kind task, title a chore", e)
 	}
 }
+
+// The conversion itself is not what undo takes back: right after hh store
+// convert, undo takes back the operation of the writer before it.
+func TestUndoAfterTheConversionTakesBackTheOperationBeforeIt(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
+	o := makeOld(t, ts)
+	o.sharp.Title = "edited"
+	b, err := o.sharp.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitRawWith(t, ts, "set ME-6 edited", map[string]string{model.TaskPath(o.sharp.ULID): string(b)}, []gitrepo.Trailer{
+		{Key: "Hedgehug-Op", Value: "set"}, {Key: "Hedgehug-Author", Value: "github.com/alice"},
+	})
+	if _, err := Run(ts.Session, Options{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if op := usecasetest.LastOp(t, ts); op != "convert" {
+		t.Fatalf("last op = %q, want convert", op)
+	}
+	res, err := tasks.Undo(ts.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Found || tasks.UndoSubject(res.Undone.Subject) != "set ME-6 edited" {
+		t.Errorf("undone = %+v; want the set before the conversion", res.Undone)
+	}
+	if formatOf(t, ts) != model.StoreFormat {
+		t.Errorf("format = %d; the conversion was taken back", formatOf(t, ts))
+	}
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := ix.Task(o.sharp.ULID); !ok || e.Title != "a chore" || e.Kind != "task" {
+		t.Errorf("after undo: %+v", e)
+	}
+}

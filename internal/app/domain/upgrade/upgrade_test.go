@@ -178,8 +178,8 @@ func TestCommitReadsTheFormatAndTheSchemaOfTheCommit(t *testing.T) {
 	raw := taskFile(t, "chore", nil)
 
 	old := At(files{model.StoreMetaPath: meta("1"), schema.Path: oldSchema}.read)
-	if old.Format() != 1 {
-		t.Errorf("format = %d", old.Format())
+	if f, err := old.Format(); f != 1 || err != nil {
+		t.Errorf("format = %d, %v", f, err)
 	}
 	got, err := old.Task(raw)
 	if err != nil || kindOf(t, got) != "task" {
@@ -192,15 +192,25 @@ func TestCommitReadsTheFormatAndTheSchemaOfTheCommit(t *testing.T) {
 		t.Errorf("task of the newest format: %q, %v", got, err)
 	}
 
-	// no store.yaml, or one that does not decode: as it is
-	for name, f := range map[string]files{"missing": {}, "broken": {model.StoreMetaPath: "format: ["}} {
-		if got, err := At(f.read).Task(raw); err != nil || !bytes.Equal(got, raw) {
-			t.Errorf("%s store.yaml: %q, %v", name, got, err)
+	// no store.yaml, one that does not decode, one that cannot be read, and
+	// one of a newer format: an error, never the newest format by guess
+	boom := errors.New("boom")
+	for name, read := range map[string]func(string) ([]byte, error){
+		"missing": files{}.read,
+		"broken":  files{model.StoreMetaPath: "format: ["}.read,
+		"newer":   files{model.StoreMetaPath: meta("99")}.read,
+		"io":      func(string) ([]byte, error) { return nil, boom },
+	} {
+		got, err := At(read).Task(raw)
+		if err == nil || got != nil || !strings.Contains(err.Error(), model.StoreMetaPath) {
+			t.Errorf("%s store.yaml: %q, %v; want an error naming store.yaml", name, got, err)
 		}
+	}
+	if _, err := At(files{model.StoreMetaPath: meta("99")}.read).Format(); !errors.Is(err, model.ErrNewerFormat) {
+		t.Errorf("newer format: %v", err)
 	}
 
 	// a schema that cannot be read is the error of the read
-	boom := errors.New("boom")
 	failing := At(func(p string) ([]byte, error) {
 		if p == schema.Path {
 			return nil, boom

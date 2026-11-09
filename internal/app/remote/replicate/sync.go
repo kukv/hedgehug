@@ -600,7 +600,7 @@ func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing
 	if err != nil {
 		return nil, err
 	}
-	baseSnap.upgradeTasksTo(r, ours)
+	baseSnap.upgradeTasksTo(ours)
 	originHead := opt.origin
 	if originHead.IsZero() {
 		if originHead, err = r.RemoteHead("origin"); err != nil {
@@ -1085,16 +1085,17 @@ type snapshot struct {
 	paths []string // sorted
 	err   error    // the first failure of Read other than a missing file
 
-	up     *upgrade.Commit // reads the tasks in format to, when set
-	format int
+	up   *upgrade.Commit // reads the tasks in the format of like, when set
+	like plumbing.Hash
+	to   *upgrade.Commit // of like, to learn the format to upgrade to
 }
 
 // upgradeTasksTo makes Read give the tasks in the format of the commit like,
-// for a snapshot of a base that is in an older format than the sides.
-func (s *snapshot) upgradeTasksTo(r *gitrepo.Repo, like plumbing.Hash) {
-	if f, err := FormatAt(r, like); err == nil {
-		s.up, s.format = upgrade.At(func(p string) ([]byte, error) { return r.ReadFile(s.tree, p) }), f
-	}
+// for a snapshot of a base that is in an older format than the sides. A task
+// that cannot be given so is nil, with the cause in err.
+func (s *snapshot) upgradeTasksTo(like plumbing.Hash) {
+	s.up, s.like = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadFile(s.tree, p) }), like
+	s.to = upgrade.At(func(p string) ([]byte, error) { return s.r.ReadAt(like, p) })
 }
 
 func newSnapshot(r *gitrepo.Repo, tree plumbing.Hash, prefix string, over map[string][]byte) (*snapshot, error) {
@@ -1141,10 +1142,15 @@ func (s *snapshot) Read(p string) []byte {
 		return nil
 	}
 	if _, perr := model.ParseTaskPath(p); perr == nil && s.up != nil {
-		// A task that does not upgrade stays as it is, for the merge to
-		// treat as a file that does not decode.
-		if up, err := s.up.TaskTo(s.format, b); err == nil {
-			b = up
+		to, err := s.to.Format()
+		if err == nil {
+			b, err = s.up.TaskTo(to, b)
+		}
+		if err != nil {
+			if s.err == nil {
+				s.err = fmt.Errorf("%s at the merge base: %w", p, err)
+			}
+			return nil
 		}
 	}
 	return b

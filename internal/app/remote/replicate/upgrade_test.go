@@ -1,6 +1,8 @@
 package replicate
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -123,4 +126,51 @@ func TestMergeOverABaseOfAnOlderFormatKeepsWhatOneSideChanged(t *testing.T) {
 	if err != nil || got.Kind != "bug" {
 		t.Errorf("merged kind = %q, %v; want bug", got.Kind, err)
 	}
+}
+
+// A format that cannot be read is no reason to merge against a base in another
+// form: the merge stops with the cause, whichever of the base and ours it is.
+func TestSidesStopsWhenAFormatCannotBeRead(t *testing.T) {
+	t.Parallel()
+	c := newCluster(t, 1)
+	x, base, ours, theirs := fromBeforeAConversion(t, c)
+	s := c.stores[0]
+	without := func(parent plumbing.Hash) plumbing.Hash {
+		t.Helper()
+		if err := os.Remove(filepath.Join(s.Dir(), filepath.FromSlash(model.StoreMetaPath))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
+		h, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{model.StoreMetaPath}, Parents: []plumbing.Hash{parent}, Subject: "no store.yaml", Author: gitrepo.Signature{Name: "a", Email: "a@x"}, When: time.Now()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	path := model.TaskPath(x.ULID)
+	noOurs := without(ours)
+	if _, _, _, err := Sides(s.Repo(), base, noOurs, theirs, path); err == nil || !strings.Contains(err.Error(), model.StoreMetaPath) {
+		t.Errorf("ours without store.yaml: %v", err)
+	}
+	noBase := without(base)
+	if _, _, _, err := Sides(s.Repo(), noBase, ours, theirs, path); err == nil || !strings.Contains(err.Error(), model.StoreMetaPath) {
+		t.Errorf("base without store.yaml: %v", err)
+	}
+	// the snapshot of such a base records it, for the merge to stop on
+	snap, err := newSnapshot(s.Repo(), mustTree(t, s, noBase), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap.upgradeTasksTo(ours)
+	if b := snap.Read(path); b != nil || snap.err == nil {
+		t.Errorf("snapshot read = %q, err %v; want nil and an error", b, snap.err)
+	}
+}
+
+func mustTree(t *testing.T, s *store.Store, commit plumbing.Hash) plumbing.Hash {
+	t.Helper()
+	tree, err := s.Repo().TreeOf(commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tree
 }

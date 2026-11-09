@@ -71,8 +71,10 @@ func Undo(ss *usecase.Session) (UndoResult, error) {
 }
 
 // undoSkip are the operations undo does not pick: the ones that bring work
-// together or set a store up, which are not something a person did.
-var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "gh-fetch", usecase.OpGitHubMirror, usecase.OpGitHubPush}
+// together or set a store up, which are not something a person did. A
+// conversion (hh store convert) is one of them: it is not taken back, and the
+// undo after it takes back the operation before it.
+var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "convert", "gh-fetch", usecase.OpGitHubMirror, usecase.OpGitHubPush}
 
 // undoScanner finds the commit to undo, one entry at a time, newest first,
 // along the first parents: the newest that the writer made by an operation

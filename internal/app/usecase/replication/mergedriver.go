@@ -81,7 +81,9 @@ func MergeDriver(ss *usecase.Session, in MergeDriverInput) error {
 		// git's base file is the one of a commit of the history, which may be
 		// in an older format than the sides.
 		if baseData != nil {
-			baseData = replicate.UpgradedBase(r, base, head, rel, baseData)
+			if baseData, err = replicate.UpgradedBase(r, base, head, rel, baseData); err != nil {
+				return err
+			}
 		}
 	}
 	ours.Data, other.Data = data[1], data[2]

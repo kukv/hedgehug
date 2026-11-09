@@ -92,6 +92,8 @@ type commit struct {
 	// changed maps the names of the files the commit changed from any of
 	// its parents to their paths; made when a trailer needs it.
 	changed map[string]string
+	// upgrades read the task files of a tree in the newest format, by tree
+	upgrades map[plumbing.Hash]*upgrade.Commit
 }
 
 // add puts in an item of a trailer: who caused it the trailer does not
@@ -131,7 +133,7 @@ func (c *commit) ids() error {
 		}
 		id, ok := got[it.Task]
 		if !ok {
-			t, err := readTask(c.r, c.tree, it.Task)
+			t, err := c.readTask(c.tree, it.Task)
 			if err != nil {
 				return err
 			}
@@ -175,7 +177,7 @@ func (c *commit) applied(v string) error {
 	if !ok || !hasTask || err != nil {
 		return nil
 	}
-	t, err := readTask(c.r, c.tree, u)
+	t, err := c.readTask(c.tree, u)
 	if err != nil || t == nil {
 		return err
 	}
@@ -195,7 +197,7 @@ func (c *commit) rejected(v string) error {
 	if !ok {
 		return nil
 	}
-	t, err := readTask(c.r, c.tree, u)
+	t, err := c.readTask(c.tree, u)
 	if err != nil || t == nil {
 		return err
 	}
@@ -214,7 +216,7 @@ func (c *commit) issueOverwritten(v string) error {
 	if !ok {
 		return nil
 	}
-	t, err := readTask(c.r, c.tree, u)
+	t, err := c.readTask(c.tree, u)
 	if err != nil || t == nil {
 		return err
 	}
@@ -368,11 +370,11 @@ func (c *commit) changes() error {
 }
 
 func (c *commit) task(u model.ULID, from plumbing.Hash) error {
-	now, err := readTask(c.r, c.tree, u)
+	now, err := c.readTask(c.tree, u)
 	if err != nil || now == nil {
 		return err
 	}
-	was, err := readTask(c.r, from, u)
+	was, err := c.readTask(from, u)
 	if err != nil {
 		return err
 	}
@@ -427,7 +429,7 @@ func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
 	if was != nil {
 		return nil
 	}
-	t, err := readTask(c.r, c.tree, task)
+	t, err := c.readTask(c.tree, task)
 	if err != nil || t == nil {
 		return err
 	}
@@ -484,12 +486,20 @@ func (c *commit) watchers(t *model.Task) []string {
 // readTask reads the task u in tree, in the newest store format whatever the
 // format of the tree (domain/upgrade); nil when it is missing or does not
 // decode.
-func readTask(r *gitrepo.Repo, tree plumbing.Hash, u model.ULID) (*model.Task, error) {
-	b, err := readAt(r, tree, model.TaskPath(u))
+func (c *commit) readTask(tree plumbing.Hash, u model.ULID) (*model.Task, error) {
+	b, err := readAt(c.r, tree, model.TaskPath(u))
 	if err != nil || b == nil {
 		return nil, err
 	}
-	if b, err = upgrade.At(func(p string) ([]byte, error) { return r.ReadFile(tree, p) }).Task(b); err != nil {
+	up, ok := c.upgrades[tree]
+	if !ok {
+		if c.upgrades == nil {
+			c.upgrades = map[plumbing.Hash]*upgrade.Commit{}
+		}
+		up = upgrade.At(func(p string) ([]byte, error) { return c.r.ReadFile(tree, p) })
+		c.upgrades[tree] = up
+	}
+	if b, err = up.Task(b); err != nil {
 		return nil, nil //nolint:nilerr // a task that does not upgrade makes no item
 	}
 	t, err := model.DecodeTask(b)

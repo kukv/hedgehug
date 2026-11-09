@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
@@ -39,19 +39,7 @@ func (e *FormatDivergedError) Is(target error) bool { return target == ErrFormat
 
 // FormatAt is the store format of the commit: the format of its store.yaml.
 func FormatAt(r *gitrepo.Repo, commit plumbing.Hash) (int, error) {
-	tree, err := r.TreeOf(commit)
-	if err != nil {
-		return 0, err
-	}
-	b, err := r.ReadFile(tree, model.StoreMetaPath)
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", model.StoreMetaPath, err)
-	}
-	m, err := model.DecodeStoreMeta(b)
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", model.StoreMetaPath, err)
-	}
-	return m.Format, nil
+	return upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }).Format()
 }
 
 // checkFormats is ErrFormatDiverged when ours and theirs have different
