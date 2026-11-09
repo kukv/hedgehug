@@ -55,7 +55,8 @@ func CheckSchema(s *store.Store, ix *index.Index) ([]Finding, error) {
 	}
 	fs = append(fs, missingTemplates(s, sc)...)
 	for _, p := range sc.Props {
-		if slices.Contains(queryKeys, p.Name) {
+		// A name that is a field of the task is refused already, as prop_builtin.
+		if slices.Contains(queryKeys, p.Name) && !slices.Contains(model.TaskKeys(), p.Name) {
 			fs = append(fs, Finding{
 				Check: "prop_name", Where: schema.Path + ": props." + p.Name,
 				Msg:  "queries cannot select by a property with this name",

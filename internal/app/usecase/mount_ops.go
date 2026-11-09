@@ -190,7 +190,7 @@ func crossStore(storeName, id string) error {
 		"store", storeName, "id", id)
 }
 
-// ResolveRef resolves a second id (a blocker, a parent, a task_ref value)
+// ResolveRef resolves a second id (a parent, a task of a relation)
 // within the store of ix. An input not in the store that some other mounted
 // store has is refused: KindInvalid, ref.cross_store, Args "store", "id".
 // A "<store>:" naming this store is taken off; naming another store is

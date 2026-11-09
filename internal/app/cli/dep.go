@@ -46,11 +46,20 @@ func (a *app) depCmd() *cobra.Command {
 		for _, rel := range schema.Relations {
 			var v []string
 			flags[rel.Name] = &v
-			sub.Flags().StringSliceVar(&v, strings.ReplaceAll(rel.Name, "_", "-"), nil, "the tasks "+strings.ToLower(rel.Label)+" (a task, comma separated or repeated)")
+			sub.Flags().StringSliceVar(&v, strings.ReplaceAll(rel.Name, "_", "-"), nil, depFlagHelp[rel.Name])
 		}
 		cmd.AddCommand(sub)
 	}
 	return cmd
+}
+
+// depFlagHelp is the help of the flag of each relation.
+var depFlagHelp = map[string]string{
+	"blocked_by": "the tasks that block this one (repeat the flag or separate with commas)",
+	"causes":     "the tasks this one causes (repeat the flag or separate with commas)",
+	"relates":    "the tasks this one relates to (repeat the flag or separate with commas)",
+	"duplicates": "the tasks this one duplicates (repeat the flag or separate with commas)",
+	"clones":     "the tasks this one clones (repeat the flag or separate with commas)",
 }
 
 // depFlagsUsage is the flags of dep add and dep rm as the usage line shows them.

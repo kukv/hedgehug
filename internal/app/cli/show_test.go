@@ -228,6 +228,22 @@ func TestShowRelations(t *testing.T) {
 	}
 }
 
+// A display name wider than the column (Duplicated by is 13 columns, the
+// column 12) is followed by one space.
+func TestShowWideReverseLabel(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	other := te.addJSON("Other")
+	a := te.addJSON("A", "-p", "duplicates+="+other.ID)
+	out := te.ok("show", other.ID)
+	if want := "  Duplicated by " + label(a) + " A"; !strings.Contains(out, want) {
+		t.Errorf("show does not contain %q:\n%s", want, out)
+	}
+	if want := "  ulid        " + other.ULID; !strings.Contains(out, want) {
+		t.Errorf("show does not contain %q:\n%s", want, out)
+	}
+}
+
 func TestDisplayWidth(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

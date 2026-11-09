@@ -165,7 +165,12 @@ func TestPatchRelations(t *testing.T) {
 	}
 	// A relation to the task itself is refused, as is a task that is not there.
 	p := ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"relates": []string{id}}, 422)
-	if p.Type != "schema.violation" || !strings.Contains(p.Detail, "自分自身は指せません") {
+	vs, _ := p.Args["violations"].([]any)
+	var first map[string]any
+	if len(vs) > 0 {
+		first, _ = vs[0].(map[string]any)
+	}
+	if p.Type != "schema.violation" || first["code"] != "ref.self" || first["field"] != "relates" || first["message"] != "自分自身は指せません" {
 		t.Errorf("relates to itself: %+v", p)
 	}
 	ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"duplicates": []string{"ME-999"}}, 404)

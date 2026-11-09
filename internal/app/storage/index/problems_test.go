@@ -85,6 +85,19 @@ func TestReverse(t *testing.T) {
 	want(ix.Reverse(b, "relates"), "a")
 }
 
+// Targets reads the same field as the table of relations does, for each.
+func TestTargetsFollowTheTable(t *testing.T) {
+	t.Parallel()
+	for _, rel := range schema.Relations {
+		u := model.NewULID()
+		task := &model.Task{ULID: model.NewULID()}
+		rel.Set(task, []model.ULID{u})
+		if got := EntryOf(task).Targets(rel.Name); !slices.Equal(got, []model.ULID{u}) {
+			t.Errorf("Targets(%s) = %v, want [%s]", rel.Name, got, u)
+		}
+	}
+}
+
 func TestTargets(t *testing.T) {
 	t.Parallel()
 	a, b, c, d, f := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()

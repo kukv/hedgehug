@@ -10,6 +10,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -87,6 +88,38 @@ func TestTaskViewOf(t *testing.T) {
 	for _, want := range []string{`"workspace":{"ulid":`, `"labels":[]`, `"causes":[{"ulid":`, `"duplicates":[]`, `"clones":[]`, `"problems":[]`, `"parent":null`, `"deleted_at":null`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("JSON lacks %s:\n%s", want, b)
+		}
+	}
+}
+
+// The view has a list for each relation of the table, by its name.
+func TestTaskViewOfHasEveryRelation(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	other := ts.AddTask("other", func(x *model.Task) { x.Kind = "project" })
+	task := ts.AddTask("the task", func(x *model.Task) {
+		x.Kind = "project"
+		for _, rel := range schema.Relations {
+			rel.Set(x, []model.ULID{other.ULID})
+		}
+	})
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ix.Task(task.ULID)
+	b, err := json.Marshal(usecase.TaskViewOf(ix, e))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range schema.Relations {
+		var got struct{ Refs []usecase.Ref }
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(b, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw[rel.Name], &got.Refs); err != nil || len(got.Refs) != 1 || got.Refs[0].ULID != other.ULID.String() {
+			t.Errorf("%s: %s (%v)", rel.Name, raw[rel.Name], err)
 		}
 	}
 }
