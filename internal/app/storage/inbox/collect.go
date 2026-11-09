@@ -62,7 +62,7 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 			// The comments the mirror takes in are news to the one who ran the
 			// sync as well: the commit is theirs, but not the words.
 			op, _ := e.Trailer("Hedgehug-Op")
-			if !mine || op == opGitHubMirror {
+			if !mine || op == automation.OpGitHubMirror {
 				c.mirroredOnly = mine
 				if err := c.changes(); err != nil {
 					return nil, err
@@ -253,10 +253,6 @@ func (c *commit) issueOverwritten(v string) error {
 	c.tell(t, Item{Kind: IssueOverwritten, Task: u, Detail: detail})
 	return nil
 }
-
-// opGitHubMirror is the Hedgehug-Op of the commits that mirror GitHub into the
-// store (usecase.OpGitHubMirror, which this package cannot import).
-const opGitHubMirror = "gh-mirror"
 
 // commentPreviewRunes is how much of a comment names it in a notice.
 const commentPreviewRunes = 12

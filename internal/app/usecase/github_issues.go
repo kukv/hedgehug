@@ -18,7 +18,7 @@ import (
 // The ops of the commits that sync issues. Like gh-fetch they are no one's
 // work: undoing one, the next sync would write the same again.
 const (
-	OpGitHubMirror = "gh-mirror"
+	OpGitHubMirror = automation.OpGitHubMirror
 	OpGitHubPush   = "gh-push"
 )
 
