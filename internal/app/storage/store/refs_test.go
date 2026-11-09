@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
@@ -26,15 +24,6 @@ func wantViolation(t *testing.T, err error, task model.ULID, code, field string)
 		}
 	}
 	t.Errorf("violations = %v, want %s on %s", ve.Violations, code, field)
-}
-
-// ulidList is a property value listing ULIDs.
-func ulidList(ulids ...model.ULID) *yaml.Node {
-	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	for _, ulid := range ulids {
-		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ulid.String()})
-	}
-	return n
 }
 
 // settleKinds gives the tasks that have a parent, and the default kind of

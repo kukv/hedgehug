@@ -76,6 +76,26 @@ func CommitFiles(t testing.TB, dir, subject, name, email string, when time.Time,
 	}
 }
 
+// CommitFilesOn is CommitFiles on top of the commit parent (a hash, as hex)
+// rather than HEAD: the branch goes back to parent first, with the files as they
+// are. It returns the hash of the new commit.
+func CommitFilesOn(t testing.TB, dir, parent, subject, name, email string, when time.Time, rels ...string) string {
+	t.Helper()
+	r, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Reset(&git.ResetOptions{Commit: plumbing.NewHash(parent), Mode: git.SoftReset}); err != nil {
+		t.Fatal(err)
+	}
+	CommitFiles(t, dir, subject, name, email, when, rels...)
+	return HeadHash(t, dir)
+}
+
 // HeadHash is the hash of HEAD of the repository at dir, as hex.
 func HeadHash(t testing.TB, dir string) string {
 	t.Helper()

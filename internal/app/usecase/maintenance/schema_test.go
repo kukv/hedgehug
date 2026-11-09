@@ -185,8 +185,8 @@ func TestSchemaQueryKeysAsPropNames(t *testing.T) {
 	t.Parallel()
 	forward := []string{"causes", "relates", "duplicates", "clones"}
 	inverse := []string{"blocks", "caused_by", "related_by", "duplicated_by", "cloned_by"}
-	s, dir := newStore(t)
-	s = rewriteSchema(t, dir, func(sc *schema.Schema) {
+	_, dir := newStore(t)
+	s := rewriteSchema(t, dir, func(sc *schema.Schema) {
 		for _, n := range slices.Concat(forward, inverse) {
 			sc.Props = append(sc.Props, schema.Prop{Name: n, Type: schema.TypeText})
 		}

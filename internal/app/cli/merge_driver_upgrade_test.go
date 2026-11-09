@@ -8,11 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // The base git gives the driver is a file of the history, which may be in an
@@ -22,11 +20,6 @@ func TestMergeDriverUpgradesABaseOfAnOlderFormat(t *testing.T) {
 	alice, _, _ := twoUsers(t)
 	task := *task1(t, alice)
 	dir := alice.storeDir("org")
-	r, err := gitrepo.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = r.Close() }()
 	read := func(rel string) string {
 		t.Helper()
 		b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))) //nolint:gosec // the store of the test
@@ -48,7 +41,7 @@ func TestMergeDriverUpgradesABaseOfAnOlderFormat(t *testing.T) {
 		}
 		return string(b)
 	}
-	commit := func(format, sc, kind string, when time.Time, parent plumbing.Hash) plumbing.Hash {
+	commit := func(format, sc, kind string, when time.Time, parent string) string {
 		t.Helper()
 		files := map[string]string{
 			model.StoreMetaPath:       strings.Replace(meta, fmt.Sprintf("format: %d", model.StoreFormat), "format: "+format, 1),
@@ -62,16 +55,9 @@ func TestMergeDriverUpgradesABaseOfAnOlderFormat(t *testing.T) {
 			}
 			paths = append(paths, rel)
 		}
-		h, err := r.Commit(gitrepo.Commit{Paths: paths, Parents: []plumbing.Hash{parent}, Subject: "x", Author: gitrepo.Signature{Name: "a", Email: "a@x"}, When: when})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return h
+		return gitrepotest.CommitFilesOn(t, dir, parent, "x", "a", "a@x", when, paths...)
 	}
-	head, err := r.Head()
-	if err != nil {
-		t.Fatal(err)
-	}
+	head := gitrepotest.HeadHash(t, dir)
 	// The base is in format 1 with the task a chore. Both sides converted it
 	// (kind task); ours then made it a bug, earlier than theirs converted.
 	base := commit("1", oldSchema, "chore", at(0), head)
@@ -86,7 +72,7 @@ func TestMergeDriverUpgradesABaseOfAnOlderFormat(t *testing.T) {
 		}
 	}
 	t.Chdir(dir)
-	t.Setenv("GITHEAD_"+theirsCommit.String(), "theirs")
+	t.Setenv("GITHEAD_"+theirsCommit, "theirs")
 	if code, _, errs := alice.run("merge-driver", baseFile, ours, theirs, model.TaskPath(task.ULID)); code != 0 {
 		t.Fatalf("merge-driver: %d %s", code, errs)
 	}
