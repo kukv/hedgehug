@@ -385,6 +385,32 @@ func TestSchemaMigrateRejectsATaskWithTheNewName(t *testing.T) {
 	}
 }
 
+// A rename writes the new name as it was typed; a merge writes the spelling of
+// the value it is merged into.
+func TestSchemaMigrateRenameAndMergeSpelling(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.labels("bug", "ui", "docs")
+	a := te.addJSON("Alpha")
+	te.ok("set", a.ID, "priority=low", "labels+=bug", "labels+=docs")
+	te.ok("schema", "migrate", "label", "bug", "Feature")
+	if got := te.task(a.ULID).Labels; !slices.Equal(got, []string{"Feature", "docs"}) {
+		t.Errorf("labels = %v, want [Feature docs]", got)
+	}
+	te.ok("schema", "migrate", "label", "Feature", "UI")
+	if got := te.task(a.ULID).Labels; !slices.Equal(got, []string{"ui", "docs"}) {
+		t.Errorf("labels = %v, want [ui docs]: the merge writes the spelling of the list", got)
+	}
+	te.ok("schema", "migrate", "priority", "low", "Medium")
+	if got := te.task(a.ULID).Priority; got != "Medium" {
+		t.Errorf("priority = %q, want Medium", got)
+	}
+	te.ok("schema", "migrate", "priority", "medium", "HIGH")
+	if got := te.task(a.ULID).Priority; got != "high" {
+		t.Errorf("priority = %q, want high", got)
+	}
+}
+
 // A new name that differs from the old one in case only (bug to Bug) is a new
 // spelling: the list and the tasks are rewritten.
 func TestSchemaMigrateCaseOnlyRenameIsASpellingChange(t *testing.T) {

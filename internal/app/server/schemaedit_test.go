@@ -305,6 +305,44 @@ func TestSchemaEditCaseOnlyRenameRewritesTasks(t *testing.T) {
 	}
 }
 
+// The tasks get each name as the edit spells it, also when a name differs from
+// the one of another value in case only.
+func TestSchemaEditWritesTheNamesOfTheEdit(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var hi, mid taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "h", "priority": "high"}, 201, &hi)
+	ts.call("POST", "/api/tasks", map[string]any{"title": "m", "priority": "mid"}, 201, &mid)
+	ts.labels("bug")
+	ts.call("PATCH", "/api/tasks/"+hi.Task.ID, map[string]any{"labels": []string{"bug"}}, 200, nil)
+
+	// mid goes while Mid is the new name of high
+	bad := []map[string]any{
+		{"name": "low", "from": []string{"low"}}, {"name": "Mid", "from": []string{"high"}}, {"name": "urgent", "from": []string{"urgent"}},
+	}
+	if e := ts.problem("PATCH", "/api/schema/priorities", map[string]any{"values": bad}, 422); e.Type != "schema.value_invalid" {
+		t.Errorf("problem = %+v", e)
+	}
+	var w schemas.EditWrite
+	edit := []map[string]any{
+		{"name": "low", "from": []string{"low"}},
+		{"name": "Mid", "from": []string{"high"}},
+		{"name": "x", "from": []string{"mid"}},
+		{"name": "urgent", "from": []string{"urgent"}},
+	}
+	ts.call("PATCH", "/api/schema/priorities", map[string]any{"values": edit}, 200, &w)
+	if got := ts.uc.TaskByULID("me", mustULID(t, hi.Task.ULID)).Priority; got != "Mid" {
+		t.Errorf("priority of the high task = %q, want Mid", got)
+	}
+	if got := ts.uc.TaskByULID("me", mustULID(t, mid.Task.ULID)).Priority; got != "x" {
+		t.Errorf("priority of the mid task = %q, want x", got)
+	}
+	ts.call("PATCH", "/api/schema/labels", map[string]any{"values": []map[string]any{{"name": "UI", "from": []string{"bug"}}}}, 200, &w)
+	if got := ts.uc.TaskByULID("me", mustULID(t, hi.Task.ULID)).Labels; !slices.Equal(got, []string{"UI"}) {
+		t.Errorf("labels of the task = %v, want [UI]", got)
+	}
+}
+
 // Two names that swap places (a to b and b to a) are carried to the tasks as
 // the values of an enum property are.
 func TestSchemaEditSwapRewritesTasks(t *testing.T) {

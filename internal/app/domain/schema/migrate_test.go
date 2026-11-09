@@ -320,6 +320,7 @@ func TestMigrateListIgnoresCase(t *testing.T) {
 	}
 	spell := &model.Task{Priority: "low", Labels: []string{"bug", "ui"}}
 	for _, m := range []Migration{{Target: TargetPriority, Old: "low", New: "Low"}, {Target: TargetLabel, Old: "bug", New: "Bug"}} {
+		m = m.Spelled(sc)
 		if ok, err := m.ApplyTask(spell, sc); err != nil || !ok {
 			t.Fatalf("%+v: %v, %v", m, ok, err)
 		}
@@ -333,7 +334,7 @@ func TestMigrateListIgnoresCase(t *testing.T) {
 	// the tasks follow with the list's spelling
 	task := &model.Task{Priority: "LOW", Labels: []string{"Bug", "ui"}}
 	for _, m := range []Migration{{Target: TargetPriority, Old: "low", New: "HIGH"}, {Target: TargetLabel, Old: "bug", New: "UI"}} {
-		if _, err := m.ApplyTask(task, sc); err != nil {
+		if _, err := m.Spelled(sc).ApplyTask(task, sc); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -265,6 +265,52 @@ func TestChangeListSwapCarriesTheTasks(t *testing.T) {
 	}
 }
 
+// The migrations of an edit write each name as the edit spells it, and a value
+// that moves onto the case-variant of another waits for that one.
+func TestChangeListWritesTheNamesOfTheEdit(t *testing.T) {
+	t.Parallel()
+	s := Default() // low mid high urgent
+	s.Labels = []string{"bug"}
+	apply := func(task *model.Task, ms []Migration) {
+		t.Helper()
+		for _, m := range ms {
+			if _, err := m.ApplyTask(task, s); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	_, ms, _, err := s.ChangePriorities([]ValueEdit{
+		{Name: "low", From: []string{"low"}},
+		{Name: "Mid", From: []string{"high"}},
+		{Name: "x", From: []string{"mid"}},
+		{Name: "urgent", From: []string{"urgent"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hi, mid := &model.Task{Priority: "high"}, &model.Task{Priority: "mid"}
+	apply(hi, ms)
+	apply(mid, ms)
+	if hi.Priority != "Mid" || mid.Priority != "x" {
+		t.Errorf("high task = %q, mid task = %q; want Mid and x", hi.Priority, mid.Priority)
+	}
+	// mid goes while Mid is a name of the list: the names differ in case only
+	if _, _, _, err := s.ChangePriorities([]ValueEdit{
+		{Name: "low", From: []string{"low"}}, {Name: "Mid", From: []string{"high"}}, {Name: "urgent", From: []string{"urgent"}},
+	}); !errors.Is(err, ErrValueInvalid) {
+		t.Errorf("err = %v; want ErrValueInvalid", err)
+	}
+	_, ms, _, err = s.ChangeLabels([]ValueEdit{{Name: "UI", From: []string{"bug"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := &model.Task{Labels: []string{"bug"}}
+	apply(b, ms)
+	if !slices.Equal(b.Labels, []string{"UI"}) {
+		t.Errorf("labels = %v; want [UI]", b.Labels)
+	}
+}
+
 func TestChangePriorities(t *testing.T) {
 	t.Parallel()
 	s := Default() // low mid high urgent

@@ -45,12 +45,7 @@ type Migration struct {
 // encoded after it.
 func (s *Schema) Migrate(m Migration) (*Schema, error) {
 	out := s.clone()
-	switch m.Target {
-	case TargetPriority:
-		m = m.spelledIn(s.Priorities)
-	case TargetLabel:
-		m = m.spelledIn(s.Labels)
-	}
+	m = m.Spelled(s)
 	if m.Old == m.New {
 		return nil, fmt.Errorf("%q and %q are the same: %w", m.Old, m.New, ErrValueInvalid)
 	}
@@ -76,6 +71,23 @@ func spelled(list []string, v string) string {
 		return x
 	}
 	return v
+}
+
+// Spelled is m with the names of a priority or a label as they are to be
+// written: the old name as the list of s (the schema before the migration)
+// spells it, the new name as the list it lands in spells it (the value it is
+// merged into), or as given for a rename, which includes a new spelling of the
+// same value (bug to Bug). ApplyTask writes the new name exactly as it is, so
+// what applies a migration to tasks is given the Migration that this returns.
+// Another target is m.
+func (m Migration) Spelled(s *Schema) Migration {
+	switch m.Target {
+	case TargetPriority:
+		return m.spelledIn(s.Priorities)
+	case TargetLabel:
+		return m.spelledIn(s.Labels)
+	}
+	return m
 }
 
 // spelledIn is m with both names as the list spells them, so that they are found
@@ -251,7 +263,8 @@ func renameKey(l Lists, from, to string) Lists {
 }
 
 // ApplyTask rewrites the field of t that the migration renames, and
-// reports whether it changed. A task that already has a value for the new
+// reports whether it changed. For a priority or a label the names are those of
+// Spelled. A task that already has a value for the new
 // name of a property is an error. s is the schema before the migration.
 func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error) {
 	switch m.Target {
@@ -269,15 +282,13 @@ func (m Migration) ApplyTask(t *model.Task, s *Schema) (changed bool, err error)
 		return true, nil
 	case TargetPriority:
 		// A value is found without regard to case, as Validate finds it, and
-		// written as the list will spell it.
-		m = m.spelledIn(s.Priorities)
+		// written as m gives it (see Spelled).
 		if !strings.EqualFold(t.Priority, m.Old) || t.Priority == m.New {
 			return false, nil
 		}
 		t.Priority = m.New
 		return true, nil
 	case TargetLabel:
-		m = m.spelledIn(s.Labels)
 		from, to := m.Old, m.New
 		if !slices.ContainsFunc(t.Labels, func(l string) bool { return strings.EqualFold(l, from) }) {
 			return false, nil

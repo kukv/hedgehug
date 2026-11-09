@@ -243,7 +243,7 @@ func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, [
 			return nil, nil, nil, fmt.Errorf("%s: %w", name, ErrNotEnum)
 		}
 		var err error
-		if p.Values, ms, removed, err = editValues(name, p.Values, *ch.Values); err != nil {
+		if p.Values, ms, removed, err = editValues(name, p.Values, *ch.Values, identity); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -296,7 +296,7 @@ func editList(name string, target Target, cur []string, eds []ValueEdit, needOne
 		}
 		folded[k] = true
 	}
-	values, ms, removed, err := editValues(name, cur, eds)
+	values, ms, removed, err := editValues(name, cur, eds, strings.ToLower)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -306,6 +306,9 @@ func editList(name string, target Target, cur []string, eds []ValueEdit, needOne
 	return values, ms, removed, nil
 }
 
+// identity is the name as it is.
+func identity(s string) string { return s }
+
 // tempValue stands between two names of a swap; it is only ever written to
 // a task in memory.
 const tempValue = "\x00hedgehug-swap"
@@ -314,17 +317,22 @@ const tempValue = "\x00hedgehug-swap"
 // the tasks from the current values to the new ones, in an order that never
 // moves a value onto one that is still to be moved, and the current values
 // that no edit keeps.
-func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms []Migration, removed []string, err error) {
+//
+// key says which names are one value: identity for the values of a property,
+// which differ in case; the lower case for a list of the schema, which does
+// not. A name that is key-equal to a value that goes is a name taken, and a
+// move onto a value waits for the move of that value.
+func editValues(prop string, cur []string, eds []ValueEdit, key func(string) string) (values []string, ms []Migration, removed []string, err error) {
 	bad := func(format string, a ...any) error {
 		return fmt.Errorf("%s: %s: %w", prop, fmt.Sprintf(format, a...), ErrValueInvalid)
 	}
 	taken := map[string]bool{}
 	from := map[string]bool{}
 	for _, e := range eds {
-		if e.Name == "" || taken[e.Name] {
+		if e.Name == "" || taken[key(e.Name)] {
 			return nil, nil, nil, bad("value %q is empty or repeated", e.Name)
 		}
-		taken[e.Name] = true
+		taken[key(e.Name)] = true
 		for _, f := range e.From {
 			if !slices.Contains(cur, f) {
 				return nil, nil, nil, bad("%q is not a current value", f)
@@ -339,7 +347,7 @@ func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms
 		if from[v] {
 			continue
 		}
-		if taken[v] {
+		if taken[key(v)] {
 			return nil, nil, nil, bad("%q is a value that goes, and the name of another", v)
 		}
 		removed = append(removed, v)
@@ -358,7 +366,8 @@ func editValues(prop string, cur []string, eds []ValueEdit) (values []string, ms
 	}
 	for len(pending) > 0 {
 		k := slices.IndexFunc(pending, func(m [2]string) bool {
-			return !slices.ContainsFunc(pending, func(o [2]string) bool { return o[0] == m[1] })
+			// a move that only changes the case of a value is not held by itself
+			return !slices.ContainsFunc(pending, func(o [2]string) bool { return o != m && key(o[0]) == key(m[1]) })
 		})
 		if k >= 0 {
 			emit(pending[k][0], pending[k][1])
