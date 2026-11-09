@@ -127,6 +127,14 @@ describe("BulkDialog", () => {
     await waitFor(() => expect(calls.at(-1)?.body).toMatchObject({ props: { effort: 2.5 } }));
   });
 
+  it("treats a blank number property as no value, and sends null, not 0", async () => {
+    const { calls } = setup(() => ({ tasks: [task] }));
+    await fireEvent.change(screen.getByLabelText("項目"), { target: { value: "props.effort" } });
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "   " } });
+    await waitFor(() => expect(calls.at(-1)?.body).toMatchObject({ props: { effort: null } }));
+    expect(screen.queryByText("数を入れてください")).toBeNull();
+  });
+
   it("chooses the labels from the list of the schema, and sends the whole list", async () => {
     const { calls } = setup(() => ({ tasks: [task] }));
     await fireEvent.change(screen.getByLabelText("項目"), { target: { value: "labels" } });

@@ -77,8 +77,9 @@
   const notNumber = $derived(isNumber && value.trim() !== "" && !Number.isFinite(Number(value)));
   const ready = $derived((field !== "status" || value !== "") && !notNumber);
   const propOf = (name: string): unknown => {
-    if (value === "") return null;
-    return defs[name]?.type === "number" ? Number(value) : value;
+    // a number that is blank (spaces too) is no value, as the points are
+    if (defs[name]?.type === "number") return value.trim() === "" ? null : Number(value);
+    return value === "" ? null : value;
   };
   const change = $derived.by<Partial<Body>>(() => {
     if (field === "status") return { status: value };

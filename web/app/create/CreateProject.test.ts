@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { makeCore, mount, ok, taskView, workspaces } from "../detail/testkit";
+import { makeCore, mount, ok, schemaView, taskView, workspaces } from "../detail/testkit";
 import { resetToasts, toasts } from "../toast.svelte";
 import CreateProject from "./CreateProject.svelte";
 
@@ -19,6 +19,22 @@ async function name(text: string) {
   await fireEvent.input(screen.getByRole("textbox", { name: "名前" }), { target: { value: text } });
   await waitFor(() => expect(screen.getByRole("button", { name: "作成" })).toBeEnabled());
 }
+
+describe("CreateProject: the labels link", () => {
+  it("closes the dialog when the link to the labels of the settings is followed", async () => {
+    const k = makeCore();
+    k.schema.get.mockImplementation(() => ({ ...schemaView, labels: [] }) as never);
+    const onclose = vi.fn();
+    mount(CreateProject, { request: { kind: "project" }, onclose }, k);
+    await fireEvent.click(
+      await screen.findByRole("link", { name: "設定の「ラベル」で足してください" }),
+    );
+    expect(onclose).toHaveBeenCalled();
+    expect(window.location.pathname + window.location.search).toBe(
+      "/settings/schema/shared?tab=labels",
+    );
+  });
+});
 
 describe("CreateProject", () => {
   beforeEach(() => {
