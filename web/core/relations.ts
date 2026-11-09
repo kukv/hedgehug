@@ -26,16 +26,6 @@ export const RELATIONS: readonly Relation[] = [
   { name: "clones", label: "Clones", inverse: "cloned_by", inverseLabel: "Cloned by" },
 ];
 
-// relationOf finds a relation by its name (inverse is false) or by the name of its other
-// direction (inverse is true).
-export function relationOf(name: string): { name: string; inverse: boolean } | undefined {
-  for (const r of RELATIONS) {
-    if (name === r.name) return { name: r.name, inverse: false };
-    if (name === r.inverse) return { name: r.name, inverse: true };
-  }
-  return undefined;
-}
-
 // relationLabel is the display name of a relation, or of its other direction; a name that is
 // neither comes back as it is.
 export function relationLabel(name: string): string {
@@ -45,5 +35,3 @@ export function relationLabel(name: string): string {
   }
   return name;
 }
-
-export const inverseRelationNames = (): string[] => RELATIONS.map((r) => r.inverse);

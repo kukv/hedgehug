@@ -169,19 +169,23 @@ describe("findingText and findingHint", () => {
     );
   });
 
-  it("task.legacy_field: 移せる指摘と、移せない指摘で案内を分ける", () => {
-    const base = { check: "task", code: "task.legacy_field", args: ["props.relates", "x"] };
-    const movable = f({ ...base, hint: "hedgehug doctor --fix moves it to the field of the task" });
-    expect(findingText(movable)).toBe(
+  it("task.legacy_field: 移せない理由と名前を args から言う", () => {
+    const x = (...rest: string[]) =>
+      f({
+        check: "task",
+        code: "task.legacy_field",
+        args: ["props.relates", "x", ...rest],
+        hint: "h",
+      });
+    expect(findingText(x(""))).toBe(
       "props.relates: 古い形の関連が props に残っています（関連はタスクの項目です）",
     );
-    expect(findingHint(movable)).toBe("hh doctor --fix で関連の項目へ移せます");
-    const stuck = f({
-      ...base,
-      hint: "hedgehug doctor --fix leaves this task as it is, because the field relates has values of its own; decide with hedgehug edit",
-    });
-    expect(findingHint(stuck)).toBe(
-      "移し先に値があるか、値が ULID でないため、--fix では移せません。hh edit で決めてください",
+    expect(findingHint(x(""))).toBe("hh doctor --fix で関連の項目へ移せます");
+    expect(findingHint(x("conflict", "causes"))).toBe(
+      "causes は移し先の項目にすでに値があり、どちらが新しいか分からないため、--fix では移せません。hh edit で決めてください",
+    );
+    expect(findingHint(x("bad_value", "clones", "causes"))).toBe(
+      "clones・causes に ULID でない値があるため、--fix では移せません。hh edit で正しい値に直してください",
     );
     expect(fixedText("legacy_field", ["relates", "causes"])).toBe(
       "props の relates・causes を関連の項目へ移しました",

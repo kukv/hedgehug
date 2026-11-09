@@ -263,12 +263,16 @@ const HINTS: Record<string, Words> = {
   "task.cycle": () => "hh doctor --fix で直せます",
   "task.missing_ref": () => "hh doctor --fix で直せます",
   "task.parent_deleted": () => "hh doctor --fix で直せます",
-  // The server says why --fix leaves a task (the field has values of its own, or a value is not a
-  // ULID) in a hint that begins "hedgehug doctor --fix leaves"; only then is it for hh edit.
-  "task.legacy_field": (_, f) =>
-    f.hint?.includes("--fix leaves")
-      ? "移し先に値があるか、値が ULID でないため、--fix では移せません。hh edit で決めてください"
-      : "hh doctor --fix で関連の項目へ移せます",
+  // args: the field, the message, then why --fix leaves the task (conflict, bad_value; "" when it
+  // moves it) and the names of the relations that keep it.
+  "task.legacy_field": ([, , reason, ...names]) => {
+    const list = names.join("・");
+    if (reason === "conflict")
+      return `${list} は移し先の項目にすでに値があり、どちらが新しいか分からないため、--fix では移せません。hh edit で決めてください`;
+    if (reason === "bad_value")
+      return `${list} に ULID でない値があるため、--fix では移せません。hh edit で正しい値に直してください`;
+    return "hh doctor --fix で関連の項目へ移せます";
+  },
   "task.plan_other_workspace": () => "hh edit で外すか、タスクを元のワークスペースに戻してください",
   "task.plan_missing": () => "hh edit で外してください",
   "file.bad_name": (_, f) => restore(f),

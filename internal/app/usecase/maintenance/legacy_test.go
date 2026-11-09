@@ -77,6 +77,23 @@ func TestDoctorTellsOfARelationInPropsAndFixMovesIt(t *testing.T) {
 			t.Errorf("%s: %+v", k, got[k])
 		}
 	}
+	// the args carry why --fix leaves a task, for the screen: the reason, then the names
+	args := func(x model.Task, name string) []string { return got[x.ULID.String()+" props."+name].Args[2:] }
+	if v := args(*c, "causes"); !slices.Equal(v, []string{"conflict", "causes"}) {
+		t.Errorf("c args = %v", v)
+	}
+	if v := args(*e, "duplicates"); !slices.Equal(v, []string{"conflict", "causes"}) {
+		t.Errorf("e args = %v", v)
+	}
+	if v := args(*d, "clones"); !slices.Equal(v, []string{"bad_value", "clones"}) {
+		t.Errorf("d args = %v", v)
+	}
+	if v := args(*g, "causes"); len(v) != 3 || v[0] != "bad_value" || !slices.Contains(v, "clones") || !slices.Contains(v, "causes") {
+		t.Errorf("g args = %v", v)
+	}
+	if v := args(*a, "relates"); !slices.Equal(v, []string{""}) {
+		t.Errorf("a args = %v; want no reason", v)
+	}
 	if !usecase.FindingsFail(rep.Findings) {
 		t.Error("a relation in props does not fail doctor")
 	}
