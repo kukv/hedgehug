@@ -154,6 +154,24 @@ func (tx *Tx) PutComment(task model.ULID, c *model.Comment) error {
 	return tx.put(model.CommentPath(task, c.ULID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
 }
 
+// PutCommentAt queues a write of c with the updated that c has, not the time of
+// the operation: the mirror of the comments of an issue takes the times from
+// GitHub, so that clones that take in the same change write the same file.
+// A comment whose updated is zero gets the time of the operation.
+func (tx *Tx) PutCommentAt(task model.ULID, c *model.Comment) error {
+	if task.IsZero() || c.ULID.IsZero() {
+		return errors.New("the comment has no ulid or no task")
+	}
+	if tx.removed[task] {
+		return fmt.Errorf("task %s is removed in this operation", task)
+	}
+	p := &pending{encode: c.Encode, created: &c.Created}
+	if c.Updated.IsZero() {
+		p.updated = &c.Updated
+	}
+	return tx.put(model.CommentPath(task, c.ULID), p)
+}
+
 // PutCommentGH queues a write of c that changes its gh and keeps its updated:
 // the push to GitHub records which comment is which there, which is no edit
 // of the comment, and an edit made elsewhere must not lose to that record on

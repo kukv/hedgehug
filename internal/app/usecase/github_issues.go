@@ -302,8 +302,9 @@ func applyMirror(ss *Session, s *store.Store, held *store.Locked, plans []*mirro
 			}
 			noteOverwrites(tx, p.ulid, p.overwritten)
 			if p.comments != nil {
+				noteOverwrites(tx, p.ulid, p.comments.notes)
 				for _, c := range p.comments.puts {
-					if err := tx.PutComment(p.ulid, c); err != nil {
+					if err := tx.PutCommentAt(p.ulid, c); err != nil {
 						return err
 					}
 				}

@@ -111,7 +111,9 @@ both sides, the later edit wins (last writer wins), as for any field.
 A comment that was sent to a GitHub issue (or taken from one) carries a `gh` entry in its file: the issue, the ID
 of the comment on GitHub, and the body as last synced. Writing only `gh` does not change the `updated` time of the
 comment, so a recorded GitHub ID never beats a later edit of the text, and an edit never drops the ID. When the
-merge takes the newer file, it adds the `gh` entries of issues that the newer file lacks. The comment sync is
+merge takes the newer file, it adds the `gh` entries of issues that the newer file lacks. The times of a comment taken
+from GitHub come from GitHub (and, for a deletion, from the file before it), so clones that read the same change
+write the same file and the merge reports no overwrite. The comment sync is
 described in [GitHub](github.md#sync-comments); update every clone before you add `comments` to the synced fields.
 
 ## If the history of origin changes

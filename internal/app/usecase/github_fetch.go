@@ -253,7 +253,7 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 				}
 			}
 			if usable {
-				cm, err := planCommentMirror(s, t, got, rules, now)
+				cm, err := planCommentMirror(s, t, got, rules)
 				if err != nil {
 					rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
 				}

@@ -119,12 +119,18 @@ hh automation fields --mirror title,status,assignees,comments
   have piled up, as right after you add `comments`), and leaves the rest for the next sync. The body is sent as written, so `@login` is a real mention and
   notifies that person; `@host/login` (a person of another host) can notify `@host` on GitHub. Each comment
   ends with an invisible marker `<!-- hedgehug:<ULID> -->`, which lets a later sync find the comment again
-  even if the record of its GitHub ID was lost.
+  even if the record of its GitHub ID was lost. If two clones of one account created the same comment at the same
+  time, so that the issue holds two comments with one marker, the next push keeps the one the record points to (the
+  first one when there is no record) and deletes the others.
 - **`mirror`** takes the comments of the issue as comments of the task, with the author `github:<login>`, and
   carries edits and deletions over. Two clones that take the same comment make the same file, so the merge keeps
   one. A comment taken from GitHub cannot be edited or deleted in hedgehug, now or after you unlink the issue or change the
   mode (the error is `comment.mirrored`); change it on GitHub. Only the first mirror link of a task is read.
-  Taking comments is not limited and the notices are not suppressed (a new comment or mention shows in `hh inbox`), but it adds nobody to the watchers.
-- `hh undo` refuses to undo the adding of a comment that was already sent to GitHub. Use `hh comment rm`, which
-  removes it from GitHub too.
+  Taking comments is not limited and the notices are not suppressed (a new comment or mention shows in `hh inbox`,
+  also to the person who ran the sync), but it adds nobody to the watchers. A comment of yours that the record ties
+  to a comment on GitHub (one you sent in `push` mode before you changed the mode) is also written with the text on
+  GitHub; if you had edited it in hedgehug since the last sync, the text you lost is reported in `hh inbox`.
+- `hh undo` refuses to undo the adding of a comment that was already sent to GitHub. Use `hh comment rm`: while the
+  link is in `push` mode and `comments` is among its fields, the next sync removes the comment from GitHub too (otherwise
+  it stays there).
 - Only comments on issues are synced, not comments on pull requests.

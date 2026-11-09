@@ -114,7 +114,7 @@ func commentsToPush(s *store.Store, t *model.Task, me []string, rep *GitHubFetch
 		if err != nil {
 			return nil, err
 		}
-		if c.Mirrored() || !slices.Contains(me, c.Author) {
+		if c.Mirrored() || !slices.ContainsFunc(me, func(a string) bool { return config.SameAccount(a, c.Author) }) {
 			continue
 		}
 		links, err := c.GitHub()
@@ -150,11 +150,26 @@ func pushLinkComments(cp *commentPush, l model.Link, number int, cl *github.Clie
 	}
 	byID := map[int64]github.IssueComment{}
 	byMark := map[model.ULID]github.IssueComment{}
+	// marked are the comments with each mark, in the order of the list.
+	marked := map[model.ULID][]github.IssueComment{}
 	for _, x := range list {
 		byID[x.ID] = x
 		if _, u, ok := model.SplitComment(x.Body); ok {
 			if _, seen := byMark[u]; !seen {
 				byMark[u] = x
+			}
+			marked[u] = append(marked[u], x)
+		}
+	}
+	// dropExtras deletes the comments with the mark of u other than keep: two
+	// clones that made the comment at the same time left one too many.
+	dropExtras := func(u model.ULID, keep int64) {
+		for _, x := range marked[u] {
+			if x.ID == keep {
+				continue
+			}
+			if err := cl.DeleteIssueComment(owner, name, x.ID); err != nil && !errors.Is(err, github.ErrNotFound) {
+				warn(err)
 			}
 		}
 	}
@@ -185,7 +200,9 @@ func pushLinkComments(cp *commentPush, l model.Link, number int, cl *github.Clie
 				warn(err)
 				continue
 			}
+			gone := w.links[at].ID
 			w.dropLink(ref)
+			dropExtras(c.ULID, gone)
 			continue
 		}
 		want := model.NormalizeBody(c.Body)
@@ -209,8 +226,9 @@ func pushLinkComments(cp *commentPush, l model.Link, number int, cl *github.Clie
 			create(w, want)
 			continue
 		}
-		text, mark, marked := model.SplitComment(there.Body)
-		if marked && mark == c.ULID && text == want {
+		dropExtras(c.ULID, there.ID)
+		text, mark, isMarked := model.SplitComment(there.Body)
+		if isMarked && mark == c.ULID && text == want {
 			if lk.BodySynced != want {
 				lk.BodySynced = want
 				w.setLink(lk)

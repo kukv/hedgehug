@@ -72,13 +72,29 @@ type commentMirror struct {
 	// ghOnly are comments that got their gh back: only gh is written, and
 	// updated stays.
 	ghOnly []*model.Comment
+	// notes are the hand edits that the mirror wrote over.
+	notes []issueNote
+}
+
+// deletedAfter is how much later than its last update a comment that GitHub no
+// longer has is marked as deleted. GitHub does not say when it went, so the time
+// comes from the file: clones that read the deletion write the same file.
+const deletedAfter = time.Second
+
+// githubTimes is the created and updated that a comment gets from x.
+func githubTimes(x github.IssueComment) (created, updated time.Time) {
+	created, updated = x.CreatedAt.UTC(), x.UpdatedAt.UTC()
+	if updated.Before(created) {
+		updated = created
+	}
+	return created, updated
 }
 
 // planCommentMirror compares the comments of the issue that t takes its
 // comments from with the comments of t that stand for them, matched by the ID in
-// gh, and returns what to write; nil when there is nothing. now is the time of a
-// deletion.
-func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automation.File, now time.Time) (*commentMirror, error) {
+// gh, and returns what to write; nil when there is nothing. The times of a comment come
+// from GitHub, or from the file for a deletion, never from the clock.
+func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automation.File) (*commentMirror, error) {
 	l, ok := commentsLink(t.Links, rules)
 	if !ok {
 		return nil, nil //nolint:nilnil // no comments to take is no error
@@ -122,8 +138,14 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 			}
 			links, _ := c.GitHub() // read above
 			i := slices.IndexFunc(links, func(y model.CommentLink) bool { return model.CanonRef(y.Ref) == ref })
+			if model.NormalizeBody(c.Body) != links[i].BodySynced {
+				// Edited here since the last sync: GitHub is the master, and the
+				// text is told as lost.
+				m.notes = append(m.notes, issueNote{ref, automation.Overwrite{Field: "comments:" + c.ULID.String(), Side: automation.SideTask, Lost: []string{c.Body}}})
+			}
 			links[i].BodySynced = text
 			c.Body = text
+			_, c.Updated = githubTimes(x)
 			if err := c.SetGitHub(links); err != nil {
 				return nil, err
 			}
@@ -151,6 +173,7 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 			changed := model.NormalizeBody(c.Body) != text
 			if changed {
 				c.Body = text
+				_, c.Updated = githubTimes(x)
 			}
 			if err := c.SetGitHub(links); err != nil {
 				return nil, err
@@ -170,7 +193,8 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 		if x.User != nil {
 			author = model.MirroredAuthorPrefix + x.User.Login
 		}
-		c := &model.Comment{ULID: u, Author: author, Created: x.CreatedAt.UTC(), Body: text}
+		created, updated := githubTimes(x)
+		c := &model.Comment{ULID: u, Author: author, Created: created, Updated: updated, Body: text}
 		if err := c.SetGitHub([]model.CommentLink{{Ref: ref, ID: x.ID, BodySynced: text}}); err != nil {
 			return nil, err
 		}
@@ -179,8 +203,8 @@ func planCommentMirror(s *store.Store, t *model.Task, got fetched, rules *automa
 	// Gone from GitHub, now that the whole list was read.
 	for id, c := range byID {
 		if !seen[id] && c.DeletedAt == nil {
-			at := now
-			c.DeletedAt = &at
+			at := c.Updated.Add(deletedAfter)
+			c.DeletedAt, c.Updated = &at, at
 			m.puts = append(m.puts, c)
 		}
 	}

@@ -364,9 +364,9 @@ func checkCommentNotPushed(p string, base, ours, theirs []byte) error {
 		return nil //nolint:nilerr // no gh that reads: nothing sent to GitHub that is known
 	}
 	if c.DeletedAt != nil {
-		return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub and is deleted now, so adding it cannot be undone; the comment on GitHub is removed by the next sync"))
+		return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub and is deleted now, so adding it cannot be undone; the comment on GitHub is removed by the next sync of a push link that syncs comments"))
 	}
-	return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub, so adding it cannot be undone; remove it with hedgehug comment rm, which removes it from GitHub too"))
+	return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub, so adding it cannot be undone; remove it with hedgehug comment rm, which removes it from GitHub too at the next sync of a push link that syncs comments"))
 }
 
 // task writes the task file p, which merged is the merge of: with the id and
