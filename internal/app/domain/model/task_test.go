@@ -186,3 +186,29 @@ func TestTaskKeysIsACopy(t *testing.T) {
 		t.Error("TaskKeys returned the shared slice")
 	}
 }
+
+// Each relation of the field list is read and written under its own key.
+func TestTaskRelationKeys(t *testing.T) {
+	u := NewULID()
+	for key, get := range map[string]func(*Task) []ULID{
+		"blocked_by": func(x *Task) []ULID { return x.BlockedBy }, "causes": func(x *Task) []ULID { return x.Causes },
+		"relates": func(x *Task) []ULID { return x.Relates }, "duplicates": func(x *Task) []ULID { return x.Duplicates },
+		"clones": func(x *Task) []ULID { return x.Clones },
+	} {
+		src := []byte("---\nulid: " + NewULID().String() + "\n" + key + ": [" + u.String() + "]\n---\n")
+		task, err := DecodeTask(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := get(task); len(got) != 1 || got[0] != u {
+			t.Errorf("%s = %v", key, got)
+		}
+		if task.Extra.Get(key) != nil {
+			t.Errorf("%s is kept as an unknown key", key)
+		}
+		out, err := task.Encode()
+		if err != nil || string(out) != string(src) {
+			t.Errorf("%s: round trip = %q, %v", key, out, err)
+		}
+	}
+}

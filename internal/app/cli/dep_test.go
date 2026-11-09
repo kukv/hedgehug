@@ -95,3 +95,16 @@ func TestDepManyFlags(t *testing.T) {
 		t.Errorf("blocked-by itself: exit %d, stderr %q", code, stderr)
 	}
 }
+
+// Every relation of the table has a flag help.
+func TestDepFlagHelpCoversTheTable(t *testing.T) {
+	t.Parallel()
+	for _, rel := range schema.Relations {
+		if depFlagHelp[rel.Name] == "" {
+			t.Errorf("no help for --%s", strings.ReplaceAll(rel.Name, "_", "-"))
+		}
+	}
+	if len(depFlagHelp) != len(schema.Relations) {
+		t.Errorf("depFlagHelp has %d entries, the table %d", len(depFlagHelp), len(schema.Relations))
+	}
+}

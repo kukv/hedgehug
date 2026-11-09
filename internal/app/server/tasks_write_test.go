@@ -188,6 +188,22 @@ func TestCreateTaskRefusesRelationsInProps(t *testing.T) {
 	}
 }
 
+// PATCH takes a list for each relation of the table.
+func TestPatchEveryRelation(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	id := ts.add("one", "")
+	other := ts.add("other", "")
+	for _, rel := range schema.Relations {
+		var out taskWriteBody
+		ts.call("PATCH", "/api/tasks/"+id, map[string]any{rel.Name: []string{other}}, 200, &out)
+		got := ts.uc.TaskByULID("me", mustULID(t, out.Task.ULID))
+		if len(rel.Get(got)) != 1 {
+			t.Errorf("%s = %v after PATCH", rel.Name, rel.Get(got))
+		}
+	}
+}
+
 func TestPatchTask(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

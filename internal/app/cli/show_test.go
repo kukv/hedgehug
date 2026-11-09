@@ -13,6 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -225,6 +226,25 @@ func TestShowRelations(t *testing.T) {
 	}
 	if want := "  blocked_by  -"; !strings.Contains(out, want) {
 		t.Errorf("show of Other lacks the blocked_by line %q:\n%s", want, out)
+	}
+}
+
+// show prints every relation of the table: the task that holds it by the name
+// of the relation, the task it points at by the display name of the other
+// direction.
+func TestShowEveryRelation(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	target := te.addJSON("Target")
+	pad := func(k string) string { return "  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " }
+	for _, rel := range schema.Relations {
+		holder := te.addJSON("Holder "+rel.Name, "-p", rel.Name+"+="+target.ID)
+		if out := te.ok("show", holder.ID); !strings.Contains(out, pad(rel.Name)+label(target)+" Target") {
+			t.Errorf("show of the holder of %s lacks its line:\n%s", rel.Name, out)
+		}
+		if out := te.ok("show", target.ID); !strings.Contains(out, pad(rel.InverseLabel)+label(holder)+" Holder "+rel.Name) {
+			t.Errorf("show of the target lacks %s:\n%s", rel.InverseLabel, out)
+		}
 	}
 }
 

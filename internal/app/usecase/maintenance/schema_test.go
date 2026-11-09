@@ -198,8 +198,13 @@ func TestSchemaQueryKeysAsPropNames(t *testing.T) {
 	has := func(check, name string) bool {
 		return slices.ContainsFunc(fs, func(f usecase.Finding) bool { return f.Check == check && f.Where == "schema.yaml: props."+name })
 	}
+	builtin := func(name string) bool {
+		return slices.ContainsFunc(fs, func(f usecase.Finding) bool {
+			return f.Check == "schema" && f.Where == "schema.yaml: props."+name && f.Code == "schema.prop_builtin"
+		})
+	}
 	for _, n := range forward {
-		if !has("schema", n) || has("prop_name", n) {
+		if !builtin(n) || has("prop_name", n) {
 			t.Errorf("%s: want the prop_builtin finding only: %+v", n, fs)
 		}
 	}
