@@ -35,8 +35,9 @@ type Cx struct {
 type Step struct {
 	From  int
 	Apply func(raw []byte, cx Cx) ([]byte, error)
-	// Template does the same for a template file, named name; nil when the
-	// format changed nothing in a template.
+	// Template does the same for a template file, named name: the kinds of
+	// its items (format 1 to 2), the relations in its props (2 to 3); nil when
+	// a format changes nothing in a template.
 	Template func(name string, raw []byte, cx Cx) ([]byte, error)
 }
 
@@ -44,7 +45,7 @@ type Step struct {
 // The tests put steps of their own here, with model.StoreFormat raised to
 // match.
 var Steps = []Step{
-	{From: 1, Apply: task1to2},
+	{From: 1, Apply: task1to2, Template: template1to2},
 	{From: 2, Apply: task2to3, Template: template2to3},
 }
 

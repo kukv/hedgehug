@@ -75,3 +75,55 @@ func task1to2(raw []byte, cx Cx) ([]byte, error) {
 	t.Kind = FixedKind(kinds, t.Kind, t.Parent == nil)
 	return t.Encode()
 }
+
+// ItemKinds gives the template item and the items under it the kinds that to
+// says, and counts the ones it changed. An item with no kind keeps none. A
+// template item has no place in a tree, so a group counts as below the root.
+func ItemKinds(it *model.TemplateItem, to func(string) string) int {
+	n := 0
+	if it.Kind != "" {
+		if k := to(it.Kind); k != it.Kind {
+			it.Kind = k
+			n++
+		}
+	}
+	for i := range it.Children {
+		n += ItemKinds(&it.Children[i], to)
+	}
+	return n
+}
+
+// template1to2 gives the items of a template fixed kinds, as task1to2 does for a
+// task.
+func template1to2(name string, raw []byte, cx Cx) ([]byte, error) {
+	tp, err := model.DecodeTemplate(name, raw)
+	if err != nil {
+		return nil, err
+	}
+	// the schema is read when an item has a kind of its own, as for a task
+	var kinds []OldKind
+	var kerr error
+	read := false
+	n := ItemKinds(&tp.Item, func(k string) string {
+		if _, ok := schema.KindOf(k); ok {
+			return k
+		}
+		if !read {
+			read = true
+			var sc *schema.Schema
+			if sc, kerr = schema.Decode(cx.Schema); kerr != nil {
+				kerr = fmt.Errorf("%s: %w", schema.Path, kerr)
+				return k
+			}
+			kinds, kerr = OldKinds(sc)
+		}
+		return FixedKind(kinds, k, false)
+	})
+	if kerr != nil {
+		return nil, kerr
+	}
+	if n == 0 {
+		return raw, nil
+	}
+	return tp.Encode()
+}

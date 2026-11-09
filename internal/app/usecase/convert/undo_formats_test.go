@@ -75,3 +75,25 @@ func TestUndoRefusesToRestoreTheSchemaOfBeforeTheConversion(t *testing.T) {
 	_, err := tasks.Undo(ts.Session)
 	wantCode(t, err, usecase.KindConflict, "undo.unsupported")
 }
+
+// Nor does it put back a view of a commit before the conversion: its query and
+// columns use the names of format 2.
+func TestUndoRefusesToRestoreAViewOfBeforeTheConversion(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
+	f := makeFormatTwo(t, ts)
+	f.commit(t, ts, "setup", "note: n\n", nil)
+	commitRawWith(t, ts, "view before", map[string]string{model.ViewPath("v"): "layout: table\nquery: fixes:ME-1\n"}, nil)
+	commitRawWith(t, ts, "view after", map[string]string{model.ViewPath("v"): "layout: table\nquery: status:todo\n"}, []gitrepo.Trailer{
+		{Key: "Hedgehug-Op", Value: "view"}, {Key: "Hedgehug-Author", Value: "github.com/alice"},
+	})
+	ts.DropMount()
+	ts.AsAccount("bob")
+	if _, err := Run(ts.Session, Options{}, false); err != nil {
+		t.Fatal(err)
+	}
+	ts.AsAccount("alice")
+	_, err := tasks.Undo(ts.Session)
+	wantCode(t, err, usecase.KindConflict, "undo.unsupported")
+}

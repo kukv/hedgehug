@@ -704,7 +704,7 @@ func TestRevertFieldRefusesARelationFromBeforeFormat3(t *testing.T) {
 	sc := schema.Default()
 	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
 	a, b := model.NewULID(), model.NewULID()
-	for _, name := range []string{"duplicates", "causes", "relates", "clones", "fixes"} {
+	for _, name := range []string{"duplicates", "causes", "relates", "clones"} {
 		for _, raw := range []string{`"` + a.String() + `"`, `["` + a.String() + `","` + b.String() + `"]`} {
 			task := &model.Task{}
 			err := notifications.RevertField(task, "props."+name, json.RawMessage(raw), sc, resolve)

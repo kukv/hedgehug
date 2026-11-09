@@ -465,17 +465,7 @@ func (c *step2State) convertTemplates() {
 // rewriteKinds gives the item and the items under it fixed kinds and counts
 // the ones it changed. An item with no kind keeps none.
 func (c *step2State) rewriteKinds(it *model.TemplateItem) int {
-	n := 0
-	if it.Kind != "" {
-		if to := c.kindWide(it.Kind); to != it.Kind {
-			it.Kind = to
-			n++
-		}
-	}
-	for i := range it.Children {
-		n += c.rewriteKinds(&it.Children[i])
-	}
-	return n
+	return upgrade.ItemKinds(it, c.kindWide)
 }
 
 // lines is the report, one line for each kind of change.

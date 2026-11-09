@@ -13,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
@@ -421,6 +424,9 @@ func InboxRevertOf(ss *usecase.Session, stores []InboxStore, u model.ULID) (usec
 	s, ix, err := sub.OpenForWrite()
 	if err != nil {
 		return usecase.TaskResult{}, err
+	}
+	if key, ok := strings.CutPrefix(d.Field, "props."); ok && wasRelation(s, it.Commit, key) {
+		return usecase.TaskResult{}, notRevertible(relationsFixed(d.Field))
 	}
 	e, ok := ix.Task(it.Task)
 	if !ok {
@@ -839,9 +845,6 @@ func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schem
 	if len(values) == 0 {
 		values = []any{nil}
 	}
-	if _, known := sc.Prop(key); !known && allULIDs(values) {
-		return notRevertible(relationsFixed("props." + key)) // a task_ref of the store's own, from before format 3
-	}
 	for i, x := range values {
 		text, err := propText(sc, key, x)
 		if err != nil {
@@ -864,19 +867,33 @@ func relationsFixed(field string) error {
 	return fmt.Errorf("%s was a relation before the relations were fixed, and cannot be reverted: %w; add the value back with hedgehug dep", field, errNotRevertible)
 }
 
-// allULIDs is whether every one of the values is the text of a ULID, and
-// there is one.
-func allULIDs(values []any) bool {
-	for _, x := range values {
-		s, ok := x.(string)
-		if !ok {
-			return false
-		}
-		if _, err := model.ParseULID(s); err != nil {
-			return false
-		}
+// wasRelation is whether the property key was a relation in the store as the
+// commit had it: the commit is of a format before the relations were fixed, and
+// the key is one of the four names, or a task_ref in the schema.yaml of the
+// commit (read as it is, for the schema no longer has the type).
+func wasRelation(s *store.Store, commit, key string) bool {
+	if !plumbing.IsHash(commit) {
+		return false
 	}
-	return len(values) > 0
+	h := plumbing.NewHash(commit)
+	r := s.Repo()
+	at := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(h, p) })
+	if f, err := at.Format(); err != nil || f >= 3 {
+		return false
+	}
+	if slices.Contains(upgrade.LegacyRelationNames, key) {
+		return true
+	}
+	raw, err := r.ReadAt(h, schema.Path)
+	if err != nil {
+		return false
+	}
+	var doc struct {
+		Props map[string]struct {
+			Type string `yaml:"type"`
+		} `yaml:"props"`
+	}
+	return yaml.Unmarshal(raw, &doc) == nil && schema.PropType(doc.Props[key].Type) == upgrade.TypeTaskRef
 }
 
 // propText is the text hedgehug set reads for the scalar x of the property

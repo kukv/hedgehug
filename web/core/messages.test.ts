@@ -151,7 +151,7 @@ describe("errorMessage", () => {
   });
 
   it("words undo.unsupported", () => {
-    expect(errorMessage(err("undo.unsupported"))).toContain("schema.yaml は戻せません");
+    expect(errorMessage(err("undo.unsupported"))).toContain("schema.yaml とビューは戻せません");
   });
 
   it("words sync.force_push", () => {

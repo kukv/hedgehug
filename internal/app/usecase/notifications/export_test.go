@@ -13,3 +13,5 @@ var InboxTaskRef = inboxTaskRef
 var PropText = propText
 
 var RevertField = revertField
+
+var WasRelation = wasRelation

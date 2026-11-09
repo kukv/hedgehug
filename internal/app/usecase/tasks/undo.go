@@ -307,15 +307,16 @@ func (u *undoer) path(p string) error {
 	if ours == nil && base != nil {
 		return nil // removed since, and stays removed
 	}
-	if p == schema.Path && theirs != nil {
-		// The version to go back to is in the form of an older format, which
-		// schema.Decode does not read, and no step upgrades it.
+	if _, isView := model.IsViewPath(p); (p == schema.Path || isView) && theirs != nil {
+		// The version to go back to is in the form of an older format: the
+		// schema.yaml that schema.Decode does not read, or a view whose query
+		// and columns use names that are gone. No step upgrades them.
 		f, err := u.upgraded(u.c.Parents[0]).Format()
 		if err != nil {
 			return err
 		}
 		if f < model.StoreFormat {
-			return usecase.NewErr(usecase.KindConflict, "undo.unsupported", errors.New("schema.yaml before the store was converted cannot be restored; change the schema with hedgehug schema"))
+			return usecase.NewErr(usecase.KindConflict, "undo.unsupported", fmt.Errorf("%s from before the store was converted cannot be restored; change it with hedgehug schema or hedgehug view", p))
 		}
 	}
 	m, err := merge.Merge(p, u.sc, base, merge.Side{Data: ours}, merge.Side{Data: theirs}, merge.OursWins)
