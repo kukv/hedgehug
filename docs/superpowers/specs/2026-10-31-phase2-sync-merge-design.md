@@ -3,6 +3,7 @@
 - 日付: 2026-10-31
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」2. 同期とマージ、「同期とマージ」の章、「データ形式」の「人が読める ID」「ワークスペース」、「メンションと通知」、「開発環境」
 - 前段: `docs/superpowers/specs/2026-10-31-phase1-5-workspace-keys-design.md`（ほか 1a〜1d-2 の spec）
+- 置き換え: 関連は 5 つの組み込みの項目（集合マージ）になり、task_ref 型の `multi` のマージはなくなった。priorities・labels の値のリストのマージ（labels は集合）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。この記述より新しいそちらが正
 
 ## 2026-11-02 の変更
 

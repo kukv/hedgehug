@@ -4,6 +4,7 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」5. GitHub 連携、「GitHub 連携」、「開発環境」の「GitHub API のフェイク」
 - 画面のデザイン: Hedgehug GUI デザイン（https://claude.ai/artifact/K14rwULxyyS2nYNbMKSr5L）
 - 前段: `docs/superpowers/specs/2026-11-01-phase3-stores-accounts-design.md`、`docs/superpowers/specs/2026-11-01-phase4-gui-design.md`、`docs/superpowers/specs/2026-11-04-codebase-restructure-design.md`
+- 置き換え: GitHub のラベルの同期（`issue_fields` と `synced` の `labels`）は `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` でやめた。5c の issue 同期にはコメント（`comments`）が加わる。この記述より新しいそちらが正
 
 ## 位置づけ
 

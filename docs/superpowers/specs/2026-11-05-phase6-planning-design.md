@@ -4,6 +4,7 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」6. 計画とレポート、「計画とアジャイル」、「データ形式」の「テンプレート」「作業時間の記録」「プロジェクトごとの上書き」
 - 画面のデザイン: Hedgehug GUI デザイン（https://claude.ai/artifact/K14rwULxyyS2nYNbMKSr5L）
 - 前段: `docs/superpowers/specs/2026-11-01-phase4-gui-design.md`、`docs/superpowers/specs/2026-11-05-phase5-github-design.md`
+- 置き換え: points・estimate・start・due の置き場は、`props` の外の組み込みのプロパティ（トップレベルのキー）になった。レポートが過去のコミットを読むときの扱いは `docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md` で固定した。この記述より新しいそちらが正
 
 ## 位置づけ
 
