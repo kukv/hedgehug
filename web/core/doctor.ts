@@ -107,7 +107,7 @@ type Words = (a: readonly string[], f: Finding) => string;
 
 // The list of values a schema finding is about: the priorities or the labels, from where it is.
 const listOf = (f: Finding): string | undefined =>
-  f.where.endsWith("priorities") ? "優先度" : f.where.endsWith("labels") ? "ラベル" : undefined;
+  f.where.endsWith(": priorities") ? "優先度" : f.where.endsWith(": labels") ? "ラベル" : undefined;
 
 const cat = (c: string | undefined): string =>
   (CATEGORY_LABEL as Record<string, string | undefined>)[c ?? ""] ?? c ?? "";

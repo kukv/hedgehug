@@ -244,6 +244,18 @@ describe("findingText and findingHint", () => {
     ).toBe("values が空です");
   });
 
+  it("schema.value_twice: props.mylabels のようなプロパティ名はリストと取り違えない", () => {
+    const x = f({
+      check: "schema",
+      where: "schema.yaml: props.mylabels",
+      code: "schema.value_twice",
+      args: ["a"],
+    });
+    expect(findingText(x)).toBe(
+      "リストに「a」が 2 回定義されています（大文字小文字は区別しません）",
+    );
+  });
+
   it("schema.name_empty: リストの値が空なら、値が空と言う", () => {
     expect(
       findingText(f({ check: "schema", where: "schema.yaml: labels", code: "schema.name_empty" })),
