@@ -54,9 +54,9 @@ $ hh dep rm WEB-2 --clones WEB-1
 ```
 
 `hh show WEB-3` lists the task's own relations, and under `Related:` the ones that point at
-it, such as `Caused by`. The detail in the browser shows the same in the section 関連,
-where you can add and remove them. A task cannot point at itself (`ref.self`), and `blocked_by` still refuses a
-cycle.
+it, such as `Caused by`. The detail in the browser shows the same in its Relations
+section, where you can add and remove them. A task cannot point at itself (`ref.self`),
+and `blocked_by` still refuses a cycle.
 
 In a query, the key is the name of the relation or the name of the other way:
 `hh ls causes:WEB-3` finds the tasks that cause `WEB-3` (the ones that have it in their

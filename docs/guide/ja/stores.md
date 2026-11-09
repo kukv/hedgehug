@@ -94,13 +94,15 @@ Nothing was written (--dry-run).
 
 `--dry-run` は、段ごとに変わる内容を一覧するだけで、何も書きません。`--json` は同じ内容を JSON で出します。もう一度実行しても、何も変わりません。
 
+変換は専用のコミット（`op convert`）で、`hh undo` では取り消せません。変換の直後に `hh undo` を実行すると、変換より前の操作が取り消されます。
+
 - 独自の種類は、ワークスペースの直下でまとまりを作っていれば project、その下でまとまりを作っていれば epic、作業の単位なら task になります。`--kind <今の種類>=<新しい種類>`（繰り返せます）は、その種類のタスクを、決まった種類のどれかへ移します。たとえば `--kind sprint=epic` です。
 - ワークスペースの直下にあった project 以外のタスクは、「未分類」という project の下へ移ります。なければ作ります。
 - story、task、bug の下の story、task、bug は step になります。
-- 関連（形式 2 から 3）: `duplicates`、`causes`、`relates`、`clones` の値は、タスクの同名の項目へ移ります。型が `task_ref` の独自のプロパティは、値が `relates` へ移り（報告にプロパティごとに 1 行出ます）、`schema.yaml` から消えます。この型はなくなりました。
+- 関連（形式 2 から 3）: `duplicates`、`causes`、`relates`、`clones` の値は、タスクの同名の項目へ移ります。型が `task_ref` のプロパティは、名前が `duplicates`、`causes`、`relates`、`clones` のどれかなら同名の項目へ、それ以外の名前なら値が `relates` へ移り（報告にプロパティごとに 1 行出ます）、どちらも `schema.yaml` から消えます。この型はなくなりました。
 - 意味が変わるものと、失うもの:
   - `relates` に向きができました。A に B、B に A の両方に保存されていた組は、2 本の `relates` のまま残り、報告に `相互の組` として数えます。これまでは 1 本の `relates` がどちらのタスクからも見つかりましたが、これからは `relates:A` は A を指しているタスクだけを、`related_by:A` は A が指しているタスクを探します。クエリに `relates:` があるビューは書き換えず、報告に一覧します。両方向を探したいときは `related_by:` を足してください。
-  - ビューのクエリの `<名前>.inverse:` は、逆方向の名前になります（`causes.inverse:` は `caused_by:`）。独自の `task_ref` の `.inverse:` は `related_by:` に、キーは `relates:` になります。
+  - ビューのクエリの `<名前>.inverse:` は、逆方向の名前になります（`causes.inverse:` は `caused_by:`、`blocked_by.inverse:` は `blocks:`）。独自の `task_ref` の `.inverse:` は `related_by:` に、キーは `relates:` になります。
   - 関連は、ビューの列にも、並べ替えにも、グループにもなりません。`table.columns`、`sort`、`group` から外したものは、報告に一覧します。
   - タスクの ULID の形でない値があると、変換は `convert.bad_value` で止まり、タスクと値を一覧します。ファイルを直すか、`--drop-bad-values` を付けて外してください。外した値は、報告にすべて出ます。存在しない、または削除済みのタスクや、タスク自身を指す値は、そのまま移ります。
   - `task_ref` ではない独自のプロパティが `duplicates`、`causes`、`relates`、`clones` という名前を持っていると、変換は `convert.prop_name_taken` で止まり、名前と型を一覧します。次の節を参照してください。

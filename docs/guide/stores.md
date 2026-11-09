@@ -117,6 +117,9 @@ Nothing was written (--dry-run).
 `--dry-run` lists what each step would change and writes nothing; `--json` prints the
 same as JSON. Running it again changes nothing.
 
+The conversion is a commit of its own (`op convert`), and `hh undo` does not take it back: right after
+a conversion, `hh undo` undoes the operation before it.
+
 - A kind of your own becomes a project when it groups work at the root of a workspace, an
   epic when it groups work below, and a task when it is a work item. `--kind <old>=<new>`
   (repeatable) moves the tasks of one kind to one of the fixed kinds instead, such as
@@ -125,8 +128,9 @@ same as JSON. Running it again changes nothing.
   named 「未分類」, made if it is not there.
 - A story, a task or a bug under a story, a task or a bug becomes a step.
 - Relations (format 2 to 3): the values of `duplicates`, `causes`, `relates` and `clones` move to the
-  field of the same name of the task, and a property of your own of type `task_ref` has its values moved to
-  `relates` (the report has one line per property) and is removed from `schema.yaml`; the type
+  field of the same name of the task. A `task_ref` property named `duplicates`, `causes`, `relates` or
+  `clones` moves to the field of that name; a `task_ref` property with any other name has its values moved to
+  `relates` (the report has one line per property). Both are removed from `schema.yaml`; the type
   no longer exists.
 - What changes in meaning, and what is lost:
   - `relates` has a direction now. A pair stored on both tasks (A has B, B has A) stays as two
@@ -134,7 +138,7 @@ same as JSON. Running it again changes nothing.
     tasks; now `relates:A` finds only the tasks that point at A, and `related_by:A` the tasks A points at.
     A view whose query has `relates:` is not rewritten (the report lists it); add `related_by:` if you want both ways.
   - `<name>.inverse:` in a view's query becomes the name of the other way (`causes.inverse:` becomes
-    `caused_by:`); the `.inverse:` of a `task_ref` of your own becomes `related_by:`, and its key becomes `relates:`.
+    `caused_by:`, `blocked_by.inverse:` becomes `blocks:`); the `.inverse:` of a `task_ref` of your own becomes `related_by:`, and its key becomes `relates:`.
   - A relation is not a column, a sort or a group of a view, so the report lists what was taken out of
     `table.columns`, `sort` and `group`.
   - A value that is not the ULID of a task stops the conversion with `convert.bad_value`, listing the
