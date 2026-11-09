@@ -32,6 +32,11 @@ func cloneIssues(in []*Issue) []*Issue {
 	for i, x := range in {
 		c := *x
 		c.Assignees, c.Labels = slices.Clone(x.Assignees), slices.Clone(x.Labels)
+		c.Comments = make([]*Comment, len(x.Comments))
+		for k, cm := range x.Comments {
+			cc := *cm
+			c.Comments[k] = &cc
+		}
 		out[i] = &c
 	}
 	return out

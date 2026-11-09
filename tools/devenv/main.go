@@ -248,9 +248,11 @@ func initEnv(dir, fakeghURL string, stdout io.Writer) error {
 // devSeed is the state the fake GitHub starts with: the users and the two
 // organizations, the repositories (the three stores have the hedgehug-store
 // topic; org-a/web is code and has none), who may do what with them, and the
-// tokens the HH_DEV_TOKEN variables hold. bob reads org-b/hh-ops only.
+// tokens the HH_DEV_TOKEN variables hold. bob reads org-b/hh-ops only. org-a/web has
+// an issue with two comments, one of them by a bot, to link a task to.
 func devSeed() fakegh.State {
 	interval := 5
+	seedAt := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
 	return fakegh.State{
 		Users: []string{"alice", "alice-corp", "bob"},
 		Orgs: map[string][]string{
@@ -262,7 +264,13 @@ func devSeed() fakegh.State {
 			{Owner: "kukv", Name: "hh-tasks", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice": "admin"}},
 			{Owner: "org-a", Name: "hh-shared", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice-corp": "admin", "bob": "write"}},
 			{Owner: "org-b", Name: "hh-ops", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice-corp": "admin", "bob": "read"}},
-			{Owner: "org-a", Name: "web", Private: true, Perms: map[string]string{"alice-corp": "write", "bob": "write"}},
+			{Owner: "org-a", Name: "web", Private: true, Perms: map[string]string{"alice-corp": "write", "bob": "write"}, Issues: []*fakegh.Issue{{
+				Number: 1, Title: "Login page is slow", Body: "It takes seconds to open.", State: "open", UpdatedAt: seedAt,
+				Comments: []*fakegh.Comment{
+					{Author: "bob", Body: "I can reproduce this.", CreatedAt: seedAt, UpdatedAt: seedAt},
+					{Author: "dependabot[bot]", Body: "Bumped the dependency.", CreatedAt: seedAt.Add(time.Hour), UpdatedAt: seedAt.Add(time.Hour)},
+				},
+			}}},
 		},
 		DeviceInterval: &interval,
 	}

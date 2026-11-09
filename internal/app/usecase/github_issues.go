@@ -172,7 +172,7 @@ func planMirror(t *model.Task, got fetched, rules *automation.File, e *schema.Ef
 		// A link that was not read keeps its fields: the next link does not
 		// get them for one fetch.
 		var fields []string
-		for _, f := range rules.IssueFields.For(l) {
+		for _, f := range rules.IssueFields.Scalars(l) {
 			if !taken[f] {
 				taken[f] = true
 				fields = append(fields, f)

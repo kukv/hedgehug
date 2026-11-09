@@ -2,6 +2,7 @@ package automation
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -26,12 +27,31 @@ func TestFieldsOfALink(t *testing.T) {
 		{"off has none", f, model.Link{Sync: model.SyncOff}, nil},
 		{"an unknown name goes", f, model.Link{Sync: model.SyncPush, Fields: []string{"nope", "title", "title"}}, []string{"title"}},
 		{"labels are not synced", f, model.Link{Sync: model.SyncPush, Fields: []string{"labels", "title"}}, []string{"title"}},
+		{"comments are a name of their own", f, model.Link{Sync: model.SyncPush, Fields: []string{"title", "comments"}}, []string{"title", "comments"}},
 		{"no milestone without props", f, model.Link{Sync: model.SyncPush, Fields: []string{"milestone"}}, nil},
 		{"milestone with props", on, model.Link{Sync: model.SyncPush}, []string{"title", "milestone"}},
 	} {
 		if got := c.f.For(c.l); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestCommentsAreNotInTheDefaults(t *testing.T) {
+	f := Default().IssueFields
+	if !slices.Contains(IssueFieldNames, "comments") || slices.Contains(f.Push, "comments") || slices.Contains(f.Mirror, "comments") {
+		t.Errorf("names %v, push %v, mirror %v", IssueFieldNames, f.Push, f.Mirror)
+	}
+}
+
+func TestScalarFieldsLeaveOutComments(t *testing.T) {
+	f := Default().IssueFields
+	l := model.Link{Sync: model.SyncPush, Fields: []string{"comments", "title", "comments"}}
+	if got := f.Scalars(l); !reflect.DeepEqual(got, []string{"title"}) {
+		t.Errorf("scalars = %v", got)
+	}
+	if got := f.Scalars(model.Link{Sync: model.SyncLink, Fields: []string{"comments"}}); got != nil {
+		t.Errorf("scalars of a link that does not sync = %v", got)
 	}
 }
 

@@ -165,7 +165,7 @@ func CreateIssue(ss *usecase.Session, arg string, in IssueInput) (IssueResult, e
 		return IssueResult{}, err
 	}
 	host, _, _ := strings.Cut(repo, "/")
-	fields := rules.IssueFields.For(model.Link{Sync: model.SyncPush})
+	fields := rules.IssueFields.Scalars(model.Link{Sync: model.SyncPush})
 	vals := usecase.TaskIssueValues(t, rules, s.Schema().For(ix.Ancestors(e)), host)
 	res := usecase.NewIssueResolver(cl, repo)
 	warnings, err := res.Filter(vals, fields, nil)

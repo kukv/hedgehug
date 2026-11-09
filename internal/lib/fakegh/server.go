@@ -42,7 +42,8 @@ type Server struct {
 	nextID  int
 	rate    rateLimit
 
-	noIssueEdits bool // each PATCH of an issue fails
+	noIssueEdits bool            // each PATCH of an issue fails
+	noComments   map[string]bool // the operations on comments that fail: see RefuseComments
 
 	restricted map[string]bool // owners the GitHub App is not installed on, in lower case
 	// uninstalled are the owners whose repositories GitHub hides from the
@@ -85,6 +86,15 @@ func (s *Server) Reset(st State) {
 	}
 	st.Repos = repos
 	s.st = st
+	for _, r := range repos {
+		for _, i := range r.Issues {
+			for _, c := range i.Comments {
+				if c.ID == 0 {
+					c.ID = s.nextCommentID()
+				}
+			}
+		}
+	}
 	s.devices, s.access, s.refresh = map[string]*device{}, map[string]issued{}, map[string]string{}
 	s.rate = rateLimit{Limit: 5000, Remaining: 5000, ResetAt: time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)}
 }
@@ -294,6 +304,10 @@ func (s *Server) repoRoute(w http.ResponseWriter, r *http.Request, parts []strin
 		s.createIssue(w, r, x, login)
 	case r.Method == "PATCH" && len(parts) == 5 && parts[3] == "issues":
 		s.patchIssue(w, r, x, parts[4], login)
+	case len(parts) == 6 && parts[3] == "issues" && parts[5] == "comments" && (r.Method == "GET" || r.Method == "POST"):
+		s.issueComments(w, r, x, parts[4], login)
+	case len(parts) == 6 && parts[3] == "issues" && parts[4] == "comments" && (r.Method == "PATCH" || r.Method == "DELETE"):
+		s.issueComment(w, r, x, parts[5], login)
 	case r.Method == "GET" && len(parts) == 4 && parts[3] == "assignees":
 		out := assignable(x)
 		s.page(w, r, len(out), func(i int) any { return map[string]string{"login": out[i]} })

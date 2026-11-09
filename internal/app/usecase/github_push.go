@@ -207,7 +207,7 @@ func pushLink(t *model.Task, l model.Link, x github.Issue, g model.GitHubState, 
 	if err != nil {
 		return nil // told when the fetch read it
 	}
-	fields := rules.IssueFields.For(l)
+	fields := rules.IssueFields.Scalars(l)
 	warn := func(err error) {
 		rep.Warnings = append(rep.Warnings, github.Describe(err, acct.ID(), acct.Name, "write "+model.GitHubRef{Repo: repoOf(ref), Kind: model.LinkIssue, Number: x.Number}.Label()).Error())
 	}
