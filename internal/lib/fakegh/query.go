@@ -52,7 +52,6 @@ var (
 		leaves("number", "title", "body", "state", "stateReason", "updatedAt"),
 		map[string]shape{
 			"assignees": {args: "first:100", kids: map[string]shape{"nodes": {kids: leaves("login")}}},
-			"labels":    {args: "first:100", kids: map[string]shape{"nodes": {kids: leaves("name")}}},
 			"milestone": {kids: leaves("title")},
 		})}
 

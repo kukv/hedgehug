@@ -74,7 +74,7 @@ func TestDecodeDefaults(t *testing.T) {
 			t.Errorf("%q: %+v", src, f)
 		}
 		i := f.IssueFields
-		if i.DefaultSync != "link" || !slices.Equal(i.Push, []string{"title", "body", "status", "assignees", "labels"}) ||
+		if i.DefaultSync != "link" || !slices.Equal(i.Push, []string{"title", "body", "status", "assignees"}) ||
 			!slices.Equal(i.Mirror, []string{"title", "status", "assignees"}) || len(i.Props) != 0 {
 			t.Errorf("%q: issue_fields = %+v", src, i)
 		}
@@ -321,7 +321,9 @@ func TestSetIssueFields(t *testing.T) {
 	for _, ch := range []IssueFieldsChange{
 		{DefaultSync: &bad},
 		{Push: &[]string{"nope"}},
+		{Push: &[]string{"title", "labels"}},
 		{Mirror: &[]string{"nope"}},
+		{Mirror: &[]string{"labels"}},
 		{Props: map[string]string{"owner": "x"}},
 	} {
 		if err := f.SetIssueFields(ch); err == nil {

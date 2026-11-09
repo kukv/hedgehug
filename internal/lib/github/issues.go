@@ -4,16 +4,16 @@ import "strconv"
 
 // NewIssue is an issue to open. A Milestone of 0 is none.
 type NewIssue struct {
-	Title, Body       string
-	Assignees, Labels []string
-	Milestone         int
+	Title, Body string
+	Assignees   []string
+	Milestone   int
 }
 
 // IssueUpdate says what to change of an issue: a nil field stays. A Milestone
 // of 0 takes the milestone off, and StateReason goes with a closed State.
 type IssueUpdate struct {
 	Title, Body, State, StateReason *string
-	Assignees, Labels               *[]string
+	Assignees                       *[]string
 	Milestone                       *int
 }
 
@@ -28,9 +28,6 @@ func (c *Client) CreateIssue(owner, name string, in NewIssue) (int, error) {
 	body := map[string]any{"title": in.Title, "body": in.Body}
 	if len(in.Assignees) > 0 {
 		body["assignees"] = in.Assignees
-	}
-	if len(in.Labels) > 0 {
-		body["labels"] = in.Labels
 	}
 	if in.Milestone != 0 {
 		body["milestone"] = in.Milestone
@@ -59,9 +56,6 @@ func (c *Client) UpdateIssue(owner, name string, number int, u IssueUpdate) erro
 	if u.Assignees != nil {
 		body["assignees"] = nonNil(*u.Assignees)
 	}
-	if u.Labels != nil {
-		body["labels"] = nonNil(*u.Labels)
-	}
 	if u.Milestone != nil {
 		body["milestone"] = nil
 		if *u.Milestone != 0 {
@@ -78,21 +72,6 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-// Labels lists the names of the labels of owner/name.
-func (c *Client) Labels(owner, name string) ([]string, error) {
-	all, err := getAll[struct {
-		Name string `json:"name"`
-	}](c, c.repoURL(owner, name)+"/labels?per_page=100")
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, len(all))
-	for i, l := range all {
-		out[i] = l.Name
-	}
-	return out, nil
 }
 
 // Assignees lists the logins that the issues of owner/name can be assigned to.

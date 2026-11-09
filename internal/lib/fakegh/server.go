@@ -294,8 +294,6 @@ func (s *Server) repoRoute(w http.ResponseWriter, r *http.Request, parts []strin
 		s.createIssue(w, r, x, login)
 	case r.Method == "PATCH" && len(parts) == 5 && parts[3] == "issues":
 		s.patchIssue(w, r, x, parts[4], login)
-	case r.Method == "GET" && len(parts) == 4 && parts[3] == "labels":
-		s.page(w, r, len(x.Labels), func(i int) any { return map[string]string{"name": x.Labels[i]} })
 	case r.Method == "GET" && len(parts) == 4 && parts[3] == "assignees":
 		out := assignable(x)
 		s.page(w, r, len(out), func(i int) any { return map[string]string{"login": out[i]} })

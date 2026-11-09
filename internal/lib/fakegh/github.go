@@ -219,10 +219,6 @@ func issueJSON(i *Issue) map[string]any {
 	for n, a := range i.Assignees {
 		assignees[n] = map[string]string{"login": a}
 	}
-	labels := make([]map[string]string, len(i.Labels))
-	for n, l := range i.Labels {
-		labels[n] = map[string]string{"name": l}
-	}
 	var milestone any
 	if i.Milestone != "" {
 		milestone = map[string]string{"title": i.Milestone}
@@ -231,7 +227,6 @@ func issueJSON(i *Issue) map[string]any {
 		"number": i.Number, "title": i.Title, "body": i.Body, "state": strings.ToUpper(i.State),
 		"stateReason": reason, "updatedAt": i.UpdatedAt,
 		"assignees": map[string]any{"nodes": assignees},
-		"labels":    map[string]any{"nodes": labels},
 		"milestone": milestone,
 	}
 }

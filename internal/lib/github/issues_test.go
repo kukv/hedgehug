@@ -42,21 +42,20 @@ func issueOf(t *testing.T, fake *fakegh.Server, n int) *fakegh.Issue {
 func TestCreateAndUpdateIssue(t *testing.T) {
 	t.Parallel()
 	fake, c := issueFake(t)
-	n, err := c.CreateIssue("alice", "web", github.NewIssue{Title: "a", Body: "b", Assignees: []string{"bob"}, Labels: []string{"bug"}, Milestone: 2})
+	n, err := c.CreateIssue("alice", "web", github.NewIssue{Title: "a", Body: "b", Assignees: []string{"bob"}, Milestone: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	x := issueOf(t, fake, n)
-	if x.Title != "a" || x.Body != "b" || x.State != "open" || !slices.Equal(x.Assignees, []string{"bob"}) || !slices.Equal(x.Labels, []string{"bug"}) || x.Milestone != "v2" {
+	if x.Title != "a" || x.Body != "b" || x.State != "open" || !slices.Equal(x.Assignees, []string{"bob"}) || x.Milestone != "v2" {
 		t.Errorf("created %+v", x)
 	}
 	title, closed, reason, none := "c", "closed", "not_planned", 0
-	empty := []string{}
-	if err := c.UpdateIssue("alice", "web", n, github.IssueUpdate{Title: &title, State: &closed, StateReason: &reason, Labels: &empty, Milestone: &none}); err != nil {
+	if err := c.UpdateIssue("alice", "web", n, github.IssueUpdate{Title: &title, State: &closed, StateReason: &reason, Milestone: &none}); err != nil {
 		t.Fatal(err)
 	}
 	x = issueOf(t, fake, n)
-	if x.Title != "c" || x.Body != "b" || x.State != "closed" || x.StateReason != "not_planned" || len(x.Labels) != 0 || x.Milestone != "" || len(x.Assignees) != 1 {
+	if x.Title != "c" || x.Body != "b" || x.State != "closed" || x.StateReason != "not_planned" || x.Milestone != "" || len(x.Assignees) != 1 {
 		t.Errorf("updated %+v", x)
 	}
 	open := "open"
@@ -72,7 +71,6 @@ func TestIssueWritesThatGitHubRefuses(t *testing.T) {
 	t.Parallel()
 	_, c := issueFake(t)
 	for name, in := range map[string]github.NewIssue{
-		"label":    {Title: "a", Labels: []string{"nope"}},
 		"assignee": {Title: "a", Assignees: []string{"carol"}},
 	} {
 		if _, err := c.CreateIssue("alice", "web", in); err == nil || !strings.Contains(err.Error(), "422") {
@@ -103,9 +101,6 @@ func TestIssueWriteNeedsWriteAccess(t *testing.T) {
 func TestRepositoryNames(t *testing.T) {
 	t.Parallel()
 	_, c := issueFake(t)
-	if got, err := c.Labels("alice", "web"); err != nil || !slices.Equal(got, []string{"bug", "api"}) {
-		t.Errorf("labels %v, %v", got, err)
-	}
 	if got, err := c.Assignees("alice", "web"); err != nil || !slices.Equal(got, []string{"alice", "bob"}) {
 		t.Errorf("assignees %v, %v", got, err)
 	}
@@ -129,7 +124,7 @@ func TestLinkedItemsReadTheFieldsOfAnIssue(t *testing.T) {
 		t.Fatal(err)
 	}
 	x := got.Issues[0]
-	if x.Title != "t" || x.Body != "b" || !slices.Equal(x.Assignees, []string{"bob"}) || !slices.Equal(x.Labels, []string{"bug"}) || x.Milestone != "v1" {
+	if x.Title != "t" || x.Body != "b" || !slices.Equal(x.Assignees, []string{"bob"}) || x.Milestone != "v1" {
 		t.Errorf("issue %+v", x)
 	}
 }

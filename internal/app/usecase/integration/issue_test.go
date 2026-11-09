@@ -86,7 +86,7 @@ func TestCreateIssue(t *testing.T) {
 		t.Errorf("op %s", op)
 	}
 	got := firstIssue(t, fake)
-	if got.Title != "a" || got.Body != "text\n\nhedgehug:"+x.ULID.String() || !slices.Equal(got.Labels, []string{"bug"}) || !slices.Equal(got.Assignees, []string{"alice"}) {
+	if got.Title != "a" || got.Body != "text\n\nhedgehug:"+x.ULID.String() || len(got.Labels) != 0 || !slices.Equal(got.Assignees, []string{"alice"}) {
 		t.Errorf("issue %+v", got)
 	}
 	cur := taskAt(t, ts, "ME-1")
@@ -159,13 +159,13 @@ func TestCreateIssueLeavesOutWhatGitHubDoesNotKnow(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) {
-		x.Repos, x.Labels, x.Assignees = []string{web}, []string{"ghost"}, []string{"github.com/nobody"}
+		x.Repos, x.Assignees = []string{web}, []string{"github.com/nobody"}
 	})
 	r, err := integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := strings.Join(r.Warnings, "\n"); !strings.Contains(w, `label "ghost"`) || !strings.Contains(w, `assignee "nobody"`) {
+	if w := strings.Join(r.Warnings, "\n"); !strings.Contains(w, `assignee "nobody"`) {
 		t.Errorf("warnings %v", r.Warnings)
 	}
 	if got := firstIssue(t, fake); len(got.Labels) != 0 || len(got.Assignees) != 0 {

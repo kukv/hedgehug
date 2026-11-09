@@ -7,7 +7,7 @@ import (
 )
 
 func TestIssueValuesRoundTrip(t *testing.T) {
-	in := IssueValues{"title": {"a: b"}, "status": {"open"}, "body": {"one\ntwo"}, "assignees": {"alice", "bob"}, "labels": {}, "milestone": {""}}
+	in := IssueValues{"title": {"a: b"}, "status": {"open"}, "body": {"one\ntwo"}, "assignees": {"alice", "bob"}, "milestone": {""}}
 	var x IssueState
 	if err := x.SetValues(in); err != nil {
 		t.Fatal(err)
@@ -24,10 +24,22 @@ func TestIssueValuesRoundTrip(t *testing.T) {
 	}
 }
 
+// A file from before the labels went still reads, and a write leaves them out.
+func TestIssueValuesDropOldLabels(t *testing.T) {
+	var x IssueState
+	if err := x.SetValues(IssueValues{"title": {"a"}, "labels": {"x"}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := x.Values()
+	if err != nil || !reflect.DeepEqual(got, IssueValues{"title": {"a"}}) {
+		t.Errorf("got %#v, %v", got, err)
+	}
+}
+
 func TestIssueValuesInTheFile(t *testing.T) {
 	task := &Task{ULID: NewULID(), Title: "x", Status: "todo"}
 	g := GitHubState{Issues: []IssueState{{Ref: "github.com/a/b/issues/1", State: "open"}}}
-	want := IssueValues{"title": {"a"}, "status": {"open"}, "labels": {"x", "y"}}
+	want := IssueValues{"title": {"a"}, "status": {"open"}, "assignees": {"x", "y"}}
 	if err := g.Issues[0].SetValues(want); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +50,7 @@ func TestIssueValuesInTheFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "synced: {title: a, status: open, labels: [x, y]}") {
+	if !strings.Contains(string(data), "synced: {title: a, status: open, assignees: [x, y]}") {
 		t.Errorf("file:\n%s", data)
 	}
 	back, err := DecodeTask(data)

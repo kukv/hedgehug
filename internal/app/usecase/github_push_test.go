@@ -38,7 +38,7 @@ func set(t *testing.T, ts *usecasetest.Session, s string) {
 func TestPushWritesTheTaskToTheIssue(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
-	if err := fake.AddLabel("org-a/web", "Bug"); err != nil {
+	if err := fake.AddLabel("org-a/web", "bug"); err != nil {
 		t.Fatal(err)
 	}
 	x := ts.AddTask("mine", func(x *model.Task) {
@@ -53,8 +53,8 @@ func TestPushWritesTheTaskToTheIssue(t *testing.T) {
 	if got.Title != "mine" || got.Body != "my text\n\nhedgehug:"+x.ULID.String() {
 		t.Errorf("issue %+v", got)
 	}
-	if !slices.Equal(got.Labels, []string{"Bug"}) || !slices.Equal(got.Assignees, []string{"alice"}) {
-		t.Errorf("issue %+v", got)
+	if len(got.Labels) != 0 || !slices.Equal(got.Assignees, []string{"alice"}) {
+		t.Errorf("a label is not sent: %+v", got)
 	}
 	es := logOf(t, ts)
 	if op, _ := es[0].Trailer("Hedgehug-Op"); op != "gh-push" {
@@ -66,7 +66,7 @@ func TestPushWritesTheTaskToTheIssue(t *testing.T) {
 	if notes := trailers(es, automation.TrailerIssueOverwritten); notes != nil {
 		t.Errorf("a first push tells nothing: %v", notes)
 	}
-	// The mark and the case of a label are not a difference.
+	// The mark is not a difference.
 	n0, at := len(es), got.UpdatedAt
 	refetch(t, ts)
 	if c := len(logOf(t, ts)); c != n0 {
@@ -216,21 +216,16 @@ func TestPushSendsWhatTheRulesDid(t *testing.T) {
 func TestPushLeavesOutWhatGitHubDoesNotKnow(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)
-	if err := fake.AddLabel("org-a/web", "bug"); err != nil {
-		t.Fatal(err)
-	}
 	n := issueTask(t, ts, fake, model.SyncPush)
-	set(t, ts, "labels+=bug")
-	set(t, ts, "labels+=ghost")
 	set(t, ts, "assignees+=github.com/nobody")
 	set(t, ts, "assignees+=ghe.example.com/zoe")
 	w := strings.Join(refetch(t, ts), "\n")
-	for _, s := range []string{`label "ghost"`, `assignee "nobody"`, "ghe.example.com/zoe"} {
+	for _, s := range []string{`assignee "nobody"`, "ghe.example.com/zoe"} {
 		if !strings.Contains(w, s) {
 			t.Errorf("no warning of %s: %s", s, w)
 		}
 	}
-	if x := onGitHub(t, fake, n); !slices.Equal(x.Labels, []string{"bug"}) || len(x.Assignees) != 0 {
+	if x := onGitHub(t, fake, n); len(x.Assignees) != 0 {
 		t.Errorf("issue %+v", x)
 	}
 	// It is told again, and is not an edit of GitHub.
@@ -243,6 +238,31 @@ func TestPushLeavesOutWhatGitHubDoesNotKnow(t *testing.T) {
 	}
 	if notes := trailers(logOf(t, ts), automation.TrailerIssueOverwritten); notes != nil {
 		t.Errorf("notes %v", notes)
+	}
+}
+
+// A link that still names labels in its fields sends nothing of them.
+func TestPushDoesNotSendTheLabelsOfALink(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	if err := fake.AddLabel("org-a/web", "bug"); err != nil {
+		t.Fatal(err)
+	}
+	n := issueTask(t, ts, fake, model.SyncPush)
+	ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		cur, err := tx.Task(taskIn(t, ts, "me", "ME-1").ULID)
+		if err != nil {
+			return err
+		}
+		cur.Labels = []string{"bug"}
+		cur.Links[0].Fields = []string{"labels", "title"}
+		return tx.PutTask(cur)
+	})
+	if w := refetch(t, ts); len(w) != 0 {
+		t.Fatalf("warnings: %v", w)
+	}
+	if x := onGitHub(t, fake, n); x.Title != "a" || len(x.Labels) != 0 {
+		t.Errorf("issue %+v", x)
 	}
 }
 

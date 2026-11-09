@@ -24,7 +24,7 @@ scoped:
   disable: [pr-review]
 issue_fields:
   default_sync: link
-  push: [title, body, status, assignees, labels]
+  push: [title, body, status, assignees]
   mirror: [title, status, assignees]
   props: {milestone: target}
   note: unknown key

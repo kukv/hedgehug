@@ -82,7 +82,7 @@ func TestLinkedItems(t *testing.T) {
 	if len(got.Issues) != 1 || got.Issues[0].State != "closed" || got.Issues[0].StateReason != "not_planned" {
 		t.Errorf("issues = %+v", got.Issues)
 	}
-	if x := got.Issues[0]; x.Title != "API v2" || x.Body != "text" || x.Milestone != "v2" || len(x.Assignees) != 1 || x.Assignees[0] != "alice" || len(x.Labels) != 2 {
+	if x := got.Issues[0]; x.Title != "API v2" || x.Body != "text" || x.Milestone != "v2" || len(x.Assignees) != 1 || x.Assignees[0] != "alice" {
 		t.Errorf("fields of the issue = %+v", x)
 	}
 	if len(got.MissingPulls) != 1 || got.MissingPulls[0] != 13 {
