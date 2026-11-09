@@ -135,10 +135,11 @@ func TestTask2to3WithoutADefinitionMovesTheULIDsAndKeepsTheRest(t *testing.T) {
 	if !eq(got.Duplicates, []model.ULID{id.a}) || !eq(got.Clones, []model.ULID{id.b}) || !eq(got.Relates, []model.ULID{id.c}) {
 		t.Errorf("duplicates %v, clones %v, relates %v", got.Duplicates, got.Clones, got.Relates)
 	}
-	var rel, cau []string
+	var rel []string
+	// relates stays a list with the value that is no ULID; causes stays the scalar it was
 	if len(got.Causes) != 0 || len(got.Props) != 2 ||
 		got.Props.Get("relates").Decode(&rel) != nil || !slices.Equal(rel, []string{"not-an-id"}) ||
-		got.Props.Get("causes").Decode(&cau) != nil && got.Props.Get("causes").Value != "not-an-id" {
+		got.Props.Get("causes").Value != "not-an-id" {
 		t.Errorf("causes %v, props %v", got.Causes, got.Props)
 	}
 }
@@ -188,7 +189,7 @@ func TestTask2to3AProperyOfAnotherTypeIsNotARelation(t *testing.T) {
 	}
 }
 
-func TestTask2to3DropsTheValueThatIsNotAULIDOfATaskRef(t *testing.T) {
+func TestTask2to3KeepsTheValuesThatAreNoULIDInProps(t *testing.T) {
 	t.Parallel()
 	id := newIDs()
 	got := up(t, task2(t, "causes: ["+id.a.String()+", WEB-3, 7]\n", nil), schema2)

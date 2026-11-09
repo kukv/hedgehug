@@ -90,8 +90,9 @@ type Moved struct {
 	Prop   string       // the name in props
 	To     string       // the relation
 	Values []model.ULID // the values that were added to the relation, none twice
-	// Bad are the values that are not a ULID, as written. They are not moved
-	// and go with the property.
+	// Bad are the values that are not a ULID, as written. They are not moved:
+	// they stay in props under their own name when the defs keep them
+	// (KeepingBad), and go with the property otherwise.
 	Bad []string
 }
 
