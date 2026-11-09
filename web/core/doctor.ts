@@ -79,6 +79,12 @@ export function fixedText(kind: string, value: unknown, taskName?: TaskName): st
       return "親と違うワークスペースにあったため、親のワークスペースに合わせました";
     case "workspace_revived":
       return "削除されていたワークスペースを復元しました";
+    case "legacy_field": {
+      const names = Array.isArray(value) ? value.filter((n) => typeof n === "string") : [];
+      return names.length
+        ? `props の ${names.join("・")} を関連の項目へ移しました`
+        : "props に残っていた関連を関連の項目へ移しました";
+    }
   }
   // The kinds a sync repairs too are told as the inbox tells them.
   return repairedKnownText({ kind, value }, taskName) ?? kind;
@@ -122,6 +128,7 @@ const TASK_PROBLEMS: Record<string, string> = {
   parent_deleted: "親が削除されています",
   no_workspace: "ワークスペースがないか、この Store のワークスペースではありません",
   workspace_mismatch: "親と違うワークスペースにあります",
+  legacy_field: "古い形の関連が props に残っています（関連はタスクの項目です）",
 };
 
 const MESSAGES: Record<string, Words> = {
@@ -139,10 +146,11 @@ const MESSAGES: Record<string, Words> = {
   "schema.prop_builtin": ([n]) =>
     `「${n}」は組み込みのフィールドなので、プロパティの名前に使えません`,
   "schema.prop_twice": ([n]) => `プロパティ「${n}」が 2 回定義されています`,
-  "schema.unknown_type": ([t]) => `「${t}」という型はありません`,
+  "schema.unknown_type": ([t]) =>
+    t === "task_ref"
+      ? "関連は固定です。hh dep か詳細の関連の欄で付けます（task_ref 型は使えません）"
+      : `「${t}」という型はありません`,
   "schema.values_empty": () => "values が空です",
-  "schema.inverse_and_symmetric": () => "inverse と symmetric は同時に使えません",
-  "schema.inverse_not_task_ref": () => "inverse と symmetric は task_ref にだけ使えます",
   "schema.unknown_status": ([s]) => `「${s}」というステータスはありません`,
   "schema.not_requirable": ([n]) =>
     `「${n}」はプロパティでも、必須にできるフィールドでもありません`,
@@ -255,6 +263,12 @@ const HINTS: Record<string, Words> = {
   "task.cycle": () => "hh doctor --fix で直せます",
   "task.missing_ref": () => "hh doctor --fix で直せます",
   "task.parent_deleted": () => "hh doctor --fix で直せます",
+  // The server says why --fix leaves a task (the field has values of its own, or a value is not a
+  // ULID) in a hint that begins "hedgehug doctor --fix leaves"; only then is it for hh edit.
+  "task.legacy_field": (_, f) =>
+    f.hint?.includes("--fix leaves")
+      ? "移し先に値があるか、値が ULID でないため、--fix では移せません。hh edit で決めてください"
+      : "hh doctor --fix で関連の項目へ移せます",
   "task.plan_other_workspace": () => "hh edit で外すか、タスクを元のワークスペースに戻してください",
   "task.plan_missing": () => "hh edit で外してください",
   "file.bad_name": (_, f) => restore(f),

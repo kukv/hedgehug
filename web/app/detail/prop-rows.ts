@@ -1,3 +1,4 @@
+import { RELATIONS } from "../../core/relations";
 import type { SchemaView } from "../../core/schema";
 import { type PropEditor, propEditorOf } from "../../core/schema";
 import { propNames } from "../../core/schema-edit";
@@ -12,16 +13,15 @@ export type PropRow = {
   value: unknown;
 };
 
-const builtIn = new Set(["status", "kind", "blocked_by"]);
+const builtIn = new Set(["status", "kind", ...RELATIONS.map((r) => r.name)]);
 
 // propRows lists the properties the detail panel edits: those the schema defines (in the order of schema.yaml), then the keys the task has that the schema does not (read-only, editor null).
-// Task references are not here: the relations section shows them.
+// The relations are not here: the relations section shows them.
 export function propRows(sc: SchemaView, values: Record<string, unknown>): PropRow[] {
   const rows: PropRow[] = [];
   for (const name of propNames(sc)) {
     if (builtIn.has(name)) continue;
     const editor = propEditorOf(sc, name);
-    if (editor === "taskref") continue;
     const def = sc.props[name];
     if (!def) continue;
     rows.push({

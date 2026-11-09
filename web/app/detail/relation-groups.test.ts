@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Crumb, Lookup } from "./lookup";
 import { addRefBody, buildGroups, relationKinds, removeRefBody } from "./relation-groups";
-import { schemaView, showView } from "./testkit";
+import { showView } from "./testkit";
 
 const crumbs: Record<string, Crumb> = {
   UB: {
@@ -43,126 +43,89 @@ const crumbs: Record<string, Crumb> = {
 };
 const lookup: Lookup = async (k) => crumbs[k];
 
+const ref = (ulid: string, id = ulid) => ({ ulid, id, title: ulid });
+
 const show = showView({
   ulid: "U6",
   id: "REL-6",
   blocked_by: [{ ulid: "UB", id: "REL-2", title: "破壊的変更" }],
-  props: { relates: ["UR"], duplicates: "UD" },
-  reverse: { duplicates: [{ ulid: "UD", id: "SH-26", title: "対応" }] },
+  relates: [ref("UR", "REL-7")],
+  duplicates: [ref("UD", "SH-26")],
+  reverse: { duplicated_by: [ref("UD", "SH-26")], caused_by: [ref("UK", "REL-4")] },
   referenced_by: [{ ulid: "UK", id: "REL-4", title: "移行ガイド" }],
 });
 
 describe("buildGroups", () => {
-  it("makes a group for blocked_by, each task_ref property, the reverse side and the backlinks", async () => {
-    const groups = await buildGroups(show, schemaView, lookup);
+  it("5 つの関連、その逆方向、バックリンクの順に、固定の表示名で並べる", async () => {
+    const groups = await buildGroups(show, lookup);
     expect(groups.map((g) => g.key)).toEqual([
       "blocked_by",
-      "duplicates",
       "relates",
-      "reverse:duplicates",
+      "duplicates",
+      "reverse:caused_by",
+      "reverse:duplicated_by",
       "referenced_by",
     ]);
-    const blocked = groups[0];
-    expect(blocked).toMatchObject({
-      label: "Blocked by",
-      note: "blocked_by",
-      removable: true,
-    });
-    expect(blocked?.items[0]).toMatchObject({ raw: "UB", id: "REL-2", status: "waiting" });
-    expect(groups.find((g) => g.key === "relates")).toMatchObject({
-      label: "関連",
-      note: "relates（双方向）",
-    });
-    expect(groups.find((g) => g.key === "reverse:duplicates")).toMatchObject({
-      label: "重複元",
+    expect(groups.map((g) => g.label)).toEqual([
+      "Blocked by",
+      "Relates to",
+      "Duplicates",
+      "Caused by",
+      "Duplicated by",
+      "バックリンク",
+    ]);
+    expect(groups[0]).toMatchObject({ note: "blocked_by", removable: true });
+    expect(groups[0]?.items[0]).toMatchObject({ raw: "UB", id: "REL-2", status: "waiting" });
+    expect(groups.find((g) => g.key === "reverse:caused_by")).toMatchObject({
+      note: "caused_by",
       removable: false,
     });
     expect(groups.at(-1)).toMatchObject({
-      label: "バックリンク",
       note: "本文・コメントの #REL-6",
       removable: false,
     });
   });
 
-  it("falls back to the reference itself when the task cannot be read", async () => {
-    const groups = await buildGroups(show, schemaView, async () => undefined);
+  it("同じ相手を複数の関連に置ける", async () => {
+    const both = showView({ causes: [ref("UR")], clones: [ref("UR")] });
+    const groups = await buildGroups(both, lookup);
+    expect(groups.map((g) => g.key)).toEqual(["causes", "clones"]);
+  });
+
+  it("読めないタスクは持っている参照のまま出す", async () => {
+    const groups = await buildGroups(show, async () => undefined);
     expect(groups[0]?.items[0]).toMatchObject({ id: "REL-2", title: "破壊的変更", status: null });
     expect(groups.find((g) => g.key === "relates")?.items[0]).toMatchObject({
       raw: "UR",
-      id: "UR",
+      id: "REL-7",
     });
   });
 
-  it("leaves out empty groups", async () => {
-    expect(await buildGroups(showView(), schemaView, lookup)).toEqual([]);
+  it("空のグループは出さない", async () => {
+    expect(await buildGroups(showView(), lookup)).toEqual([]);
   });
 });
 
 describe("relationKinds", () => {
-  it("offers blocked_by and the task_ref properties", () => {
-    expect(relationKinds(schemaView).map((k) => k.key)).toEqual([
-      "blocked_by",
-      "duplicates",
-      "relates",
+  it("順方向の 5 つだけを選べる", () => {
+    expect(relationKinds()).toEqual([
+      { key: "blocked_by", label: "Blocked by" },
+      { key: "causes", label: "Causes" },
+      { key: "relates", label: "Relates to" },
+      { key: "duplicates", label: "Duplicates" },
+      { key: "clones", label: "Clones" },
     ]);
   });
 });
 
 describe("addRefBody / removeRefBody", () => {
-  it("adds to blocked_by by ULID", () => {
-    expect(addRefBody(show, schemaView, "blocked_by", "UX")).toEqual({ blocked_by: ["UB", "UX"] });
-    expect(removeRefBody(show, schemaView, "blocked_by", "UB")).toEqual({ blocked_by: [] });
+  it("トップレベルの ULID の配列で足す。すでにあれば足さない", () => {
+    expect(addRefBody(show, "blocked_by", "UX")).toEqual({ blocked_by: ["UB", "UX"] });
+    expect(addRefBody(show, "relates", "UR")).toEqual({ relates: ["UR"] });
+    expect(addRefBody(show, "clones", "UX")).toEqual({ clones: ["UX"] });
   });
-  it("adds to a multiple property as a list and to a single one as a value", () => {
-    expect(addRefBody(show, schemaView, "relates", "UX")).toEqual({
-      props: { relates: ["UR", "UX"] },
-    });
-    expect(addRefBody(show, schemaView, "duplicates", "UX")).toEqual({
-      props: { duplicates: "UX" },
-    });
-  });
-  it("removes from a list, and clears a single value with null", () => {
-    expect(removeRefBody(show, schemaView, "relates", "UR")).toEqual({ props: { relates: [] } });
-    expect(removeRefBody(show, schemaView, "duplicates", "UD")).toEqual({
-      props: { duplicates: null },
-    });
-  });
-});
-
-describe("buildGroups order", () => {
-  const ref = (ulid: string) => [{ ulid, id: ulid, title: ulid }];
-  const sc = {
-    ...schemaView,
-    props: {
-      ...schemaView.props,
-      causes: { type: "task_ref", multi: true, inverse: "起因している" },
-    },
-  };
-
-  it("follows prop_order for the properties and for the reverse sides", async () => {
-    const both = showView({
-      ulid: "U6",
-      id: "REL-6",
-      props: { relates: ["UR"], duplicates: ["UD"] },
-      reverse: { duplicates: ref("UD"), relates: ref("UR"), causes: ref("UK"), ghost: ref("UB") },
-    });
-    const keys = async (order: string[]) =>
-      (await buildGroups(both, { ...sc, prop_order: order }, lookup)).map((g) => g.key);
-    expect(await keys(["causes", "relates", "duplicates"])).toEqual([
-      "relates",
-      "duplicates",
-      "reverse:causes",
-      "reverse:relates",
-      "reverse:duplicates",
-      "reverse:ghost",
-    ]);
-    expect(await keys(["duplicates", "relates", "causes"])).toEqual([
-      "duplicates",
-      "relates",
-      "reverse:duplicates",
-      "reverse:relates",
-      "reverse:causes",
-      "reverse:ghost",
-    ]);
+  it("外すと残りの配列を返す。最後の 1 つなら空の配列", () => {
+    expect(removeRefBody(show, "blocked_by", "UB")).toEqual({ blocked_by: [] });
+    expect(removeRefBody(show, "duplicates", "UD")).toEqual({ duplicates: [] });
   });
 });

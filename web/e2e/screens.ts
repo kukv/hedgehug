@@ -59,7 +59,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               region "修復の結果"), and the region "削除済みタスクの完全削除" (the textbox "N 日より古い
 //               もの", the buttons "確認する" and "完全に削除…", the dialog "完全に削除する")
 //   Schema      /settings/schema/<store> (heading "スキーマ"); the navigation "スキーマの種類" has the links
-//               ステータス / プロパティ / 関連 / ワークフロー, whose address is /settings/schema/<store>?tab=props|relations|workflow; a row of a table is named by the definition
+//               ステータス / プロパティ / ワークフロー（the relations are fixed and have no tab）, whose address is /settings/schema/<store>?tab=props|workflow; a row of a table is named by the definition
 //               and its buttons are "編集（<名前>）" and "マージ（<名前>）"; the regions
 //               "プロジェクトごとの上書き" and "スキーマの検査"; the dialog "ステータス「<名前>」を編集" has
 //               the textbox "名前" and the button "保存"; the dialog "ステータス「<名前>」をマージ" has the

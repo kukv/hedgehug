@@ -14,8 +14,10 @@ describe("referenceKind", () => {
     ["blocked_by", "Blocked by"],
     ["sprint", "スプリント"],
     ["releases", "リリース"],
-    ["props.relates", "relates"],
-    ["props.duplicates", "duplicates"],
+    ["causes", "Causes"],
+    ["relates", "Relates to"],
+    ["duplicates", "Duplicates"],
+    ["clones", "Clones"],
     ["something", "something"],
   ])("%s は %s", (field, want) => {
     expect(referenceKind(field)).toBe(want);
@@ -34,14 +36,14 @@ describe("unlinkedRows", () => {
         { task: { id: "DM-1", ulid: "U1" }, field: "sprint", target: { label: "S1", ulid: "S" } },
         {
           task: { id: "DM-4", ulid: "U4" },
-          field: "props.relates",
+          field: "relates",
           target: { label: "DM-1", ulid: "U1" },
         },
       ]),
     ).toEqual([
       { key: "U3 blocked_by U1", kind: "Blocked by", target: "DM-1", id: "DM-3" },
       { key: "U1 sprint S", kind: "スプリント", target: "S1", id: "DM-1" },
-      { key: "U4 props.relates U1", kind: "relates", target: "DM-1", id: "DM-4" },
+      { key: "U4 relates U1", kind: "Relates to", target: "DM-1", id: "DM-4" },
     ]);
   });
   it("is empty for none", () => {

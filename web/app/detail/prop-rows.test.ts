@@ -16,8 +16,10 @@ describe("propRows", () => {
     });
   });
 
-  it("leaves out task references, which the relations section shows", () => {
-    expect(propRows(schemaView, {}).map((r) => r.name)).not.toContain("relates");
+  it("leaves out the relations, which the relations section shows, even as a stray key", () => {
+    const names = propRows(schemaView, { causes: ["x"], relates: ["y"] }).map((r) => r.name);
+    expect(names).not.toContain("causes");
+    expect(names).not.toContain("relates");
   });
 
   it("follows prop_order when the schema gives it", () => {

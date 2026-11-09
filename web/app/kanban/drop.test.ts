@@ -4,7 +4,14 @@ import type { SchemaView } from "../../core/schema";
 import { tv } from "../../core/testing";
 import { task } from "../tree/fixtures";
 import type { Column } from "./board";
-import { canTransition, decideDrop, requiredFields, requiredGap, scopedStatusesOf } from "./drop";
+import {
+  canTransition,
+  decideDrop,
+  requiredFields,
+  requiredGap,
+  requiredLabel,
+  scopedStatusesOf,
+} from "./drop";
 
 const schema = {
   statuses: [
@@ -17,7 +24,6 @@ const schema = {
   props: {
     points: { type: "number" },
     area: { type: "text" },
-    parent_ref: { type: "task_ref" },
     tags: { type: "multi_enum", values: ["a", "b"] },
   },
   scoped: [
@@ -110,24 +116,31 @@ describe("requiredGap", () => {
     expect(requiredGap(u, ["points", "tags", "assignees"], schema).fill).toEqual(["tags"]);
   });
 
-  it("sends the fields only the detail can fill there: the parent, blockers, task references, and what the API does not show", () => {
-    const gap = requiredGap(
-      t,
-      ["parent", "blocked_by", "sprint", "releases", "links", "parent_ref", "nothing"],
-      schema,
-    );
-    expect(gap).toEqual({
-      fill: [],
-      elsewhere: ["parent", "blocked_by", "sprint", "releases", "links", "parent_ref", "nothing"],
-    });
+  it("sends the fields only the detail can fill there: the parent, the five relations, and what the API does not show", () => {
+    const names = [
+      "parent",
+      "blocked_by",
+      "causes",
+      "relates",
+      "duplicates",
+      "clones",
+      "sprint",
+      "releases",
+      "links",
+      "nothing",
+    ];
+    expect(requiredGap(t, names, schema)).toEqual({ fill: [], elsewhere: names });
   });
 
-  it("leaves out the parent, blockers and a task reference the task has", () => {
-    const u = task("B", "task", "P", {
-      blocked_by: [{ ulid: "Z", id: "REL-9", title: "z" }],
-      props: { parent_ref: "01Z" },
-    });
-    expect(requiredGap(u, ["parent", "blocked_by", "parent_ref"], schema).elsewhere).toEqual([]);
+  it("leaves out the parent and the relations the task has", () => {
+    const ref = [{ ulid: "Z", id: "REL-9", title: "z" }];
+    const u = task("B", "task", "P", { blocked_by: ref, clones: ref });
+    expect(requiredGap(u, ["parent", "blocked_by", "clones"], schema).elsewhere).toEqual([]);
+  });
+
+  it("shows a relation by its display name", () => {
+    expect(requiredLabel(schema, "blocked_by")).toBe("Blocked by");
+    expect(requiredLabel(schema, "relates")).toBe("Relates to");
   });
 
   it("reads watchers and repos from the full task, and counts them as lacking without it", () => {

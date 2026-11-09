@@ -366,13 +366,15 @@ describe("the tab of a screen is in its address", () => {
         tab,
       });
     }
-    // the kinds tab is gone: its old address shows the first tab
-    expect(parseRoute("/settings/schema/shared", "?tab=kinds")).toEqual({
-      name: "settings",
-      page: "schema",
-      store: "shared",
-      tab: "statuses",
-    });
+    // the kinds and relations tabs are gone: their old addresses show the first tab
+    for (const gone of ["kinds", "relations"]) {
+      expect(parseRoute("/settings/schema/shared", `?tab=${gone}`)).toEqual({
+        name: "settings",
+        page: "schema",
+        store: "shared",
+        tab: "statuses",
+      });
+    }
     expect(parseRoute("/settings/schema/shared", "?tab=nope")).toEqual({
       name: "settings",
       page: "schema",

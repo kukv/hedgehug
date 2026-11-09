@@ -41,10 +41,8 @@ const sch = {
   props: {
     priority: { type: "enum", values: ["low", "high"] },
     points: { type: "number", label: "ポイント" },
-    relates: { type: "task_ref", multi: true, symmetric: true },
-    duplicates: { type: "task_ref", multi: true, label: "重複", inverse: "重複されている" },
   },
-  prop_order: ["priority", "points", "relates", "duplicates"],
+  prop_order: ["priority", "points"],
   workflow: { transitions: { done: ["todo"] }, required: { done: ["points"] } } as Record<
     "transitions" | "required",
     Record<string, string[]>
@@ -76,7 +74,6 @@ const tasks = [
   t("B", {
     status: "triage",
     blocked_by: [{ ulid: "A", id: "REL-A", title: "title A" }],
-    props: { relates: ["A"] },
   }),
   t("C", { status: "done", props: { priority: "high" } }),
 ];
@@ -94,7 +91,7 @@ type Opts = {
   // the schema is not in yet and does not come
   pending?: boolean;
   store?: string;
-  tab?: "statuses" | "props" | "relations" | "workflow";
+  tab?: "statuses" | "props" | "workflow";
   readOnly?: string;
   order?: (list: string, names: string[]) => unknown;
   del?: () => unknown;
@@ -220,24 +217,12 @@ describe("reorder", () => {
     expect(k.orderStatuses).not.toHaveBeenCalled();
   });
 
-  it("sends the properties and the relations each as their own group", async () => {
+  it("sends the order of the properties", async () => {
     const p = setup({ tab: "props" });
     await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（points）" }), up);
     await waitFor(() =>
       expect(p.orderProps).toHaveBeenCalledWith(
         { names: ["points", "priority"] },
-        { store: "shared" },
-      ),
-    );
-    cleanup();
-    const r = setup({ tab: "relations" });
-    await fireEvent.keyDown(
-      await screen.findByRole("button", { name: "並べ替え（duplicates）" }),
-      up,
-    );
-    await waitFor(() =>
-      expect(r.orderProps).toHaveBeenCalledWith(
-        { names: ["duplicates", "relates"] },
         { store: "shared" },
       ),
     );
@@ -466,62 +451,36 @@ describe("SettingsSchema", () => {
     expect(within(row(/^todo/)).getByText("—")).toBeVisible();
   });
 
-  it("lists the properties without the relations and without a row per value", async () => {
+  it("lists the properties without a row per value", async () => {
     setup({ tab: "props" });
     await screen.findByRole("row", { name: /^points/ });
     expect(within(row(/^points/)).getByText("ポイント")).toBeVisible();
     expect(within(row(/^points/)).getByText("number")).toBeVisible();
-    expect(screen.queryByRole("row", { name: /^relates/ })).toBeNull();
     await waitFor(() => expect(within(row(/^priority enum/)).getByText("2")).toBeVisible());
     expect(screen.queryByRole("row", { name: /priority › low/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /値を追加/ })).toBeNull();
   });
 
-  it("lists the properties and the relations in the order of the schema", async () => {
+  it("lists the properties in the order of the schema", async () => {
     const ordered = {
       ...sch,
-      props: {
-        a: { type: "number" },
-        b: { type: "number" },
-        r1: { type: "task_ref" },
-        r2: { type: "task_ref" },
-      },
-      prop_order: ["b", "a", "r2", "r1"],
+      props: { a: { type: "number" }, b: { type: "number" } },
+      prop_order: ["b", "a"],
     };
-    const { unmount } = setup({ tab: "props", schema: ordered as unknown as typeof sch });
+    setup({ tab: "props", schema: ordered as unknown as typeof sch });
     await screen.findByRole("row", { name: /^b / });
-    const names = (rows: HTMLElement[]) =>
-      rows.map((r) => r.querySelector("th")?.textContent?.trim());
-    expect(names(screen.getAllByRole("row").slice(1))).toEqual(["b", "a"]);
-    unmount();
-    setup({ tab: "relations", schema: ordered as unknown as typeof sch });
-    await screen.findByRole("row", { name: /^r2/ });
-    expect(names(screen.getAllByRole("row").slice(2))).toEqual(["r2", "r1"]);
-  });
-
-  it("lists the relations: blocked_by built in and without actions, then the task_ref properties", async () => {
-    setup({ tab: "relations" });
-    expect(await screen.findByRole("heading", { level: 2, name: "関連" })).toBeVisible();
     const names = screen
       .getAllByRole("row")
       .slice(1)
-      .map((r) => r.querySelector("th")?.textContent);
-    expect(names).toEqual(["blocked_by", "relates", "duplicates"]);
-    await waitFor(() => expect(within(row(/^blocked_by/)).getByText("1")).toBeVisible());
-    expect(within(row(/^blocked_by/)).getByText("Blocked by")).toBeVisible();
-    expect(within(row(/^blocked_by/)).getByText("複数 · 組み込み")).toBeVisible();
-    expect(within(row(/^blocked_by/)).queryByRole("button")).toBeNull();
-    expect(within(row(/^relates/)).getByText("複数 · 双方向")).toBeVisible();
-    expect(within(row(/^relates/)).getByText("1")).toBeVisible();
-    expect(within(row(/^duplicates/)).getByText("複数 · 逆方向: 重複されている")).toBeVisible();
-    expect(within(row(/^duplicates/)).getByText("0")).toBeVisible();
+      .map((r) => r.querySelector("th")?.textContent?.trim());
+    expect(names).toEqual(["b", "a"]);
   });
 
-  it("offers only the other relations as where a relation is merged to", async () => {
-    setup({ tab: "relations" });
-    await fireEvent.click(await screen.findByRole("button", { name: "マージ（relates）" }));
-    const select = screen.getByRole("combobox", { name: "マージ先" }) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value)).toEqual(["", "duplicates"]);
+  it("has no relations tab: the relations are fixed", async () => {
+    setup({ tab: "props" });
+    await screen.findByRole("table", { name: "プロパティ" });
+    const nav = within(screen.getByRole("navigation", { name: "スキーマの種類" }));
+    expect(nav.queryByRole("link", { name: /関連/ })).toBeNull();
   });
 
   it("shows the transitions and the required fields of the workflow", async () => {
@@ -562,8 +521,6 @@ describe("SettingsSchema", () => {
     expect(await screen.findByRole("table", { name: "ステータス" })).toBeVisible();
     await rerender({ tab: "props" });
     expect(screen.getByRole("table", { name: "プロパティ" })).toBeVisible();
-    await rerender({ tab: "relations" });
-    expect(screen.getByRole("table", { name: "関連" })).toBeVisible();
   });
 
   it("each tab is a link to its own address, and the tab of the address is the current one", async () => {
@@ -575,18 +532,11 @@ describe("SettingsSchema", () => {
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/settings/schema/org-b%2Fops",
       "/settings/schema/org-b%2Fops?tab=props",
-      "/settings/schema/org-b%2Fops?tab=relations",
       "/settings/schema/org-b%2Fops?tab=workflow",
       "/settings/schema/org-b%2Fops?tab=templates",
     ]);
-    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([
-      null,
-      "page",
-      null,
-      null,
-      null,
-    ]);
-    await fireEvent.click(links[3] as HTMLElement);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, "page", null, null]);
+    await fireEvent.click(links[2] as HTMLElement);
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
 

@@ -23,13 +23,7 @@
   let { store, target, name, schema, projectLabel, onclose, ondone }: Props = $props();
 
   const c = core();
-  const noun = $derived(
-    target === "status"
-      ? "ステータス"
-      : schema.props[name]?.type === "task_ref"
-        ? "関連"
-        : "プロパティ",
-  );
+  const noun = $derived(target === "status" ? "ステータス" : "プロパティ");
   const what = $derived(`${noun}「${name}」`);
   const title = $derived(`${what}を削除`);
   const refs = $derived(referencesOf(schema, target, name));

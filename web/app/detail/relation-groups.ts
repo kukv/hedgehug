@@ -1,7 +1,8 @@
-import type { ShowView } from "../../core/api/client";
-import type { SchemaView } from "../../core/schema";
-import { propNames } from "../../core/schema-edit";
+import type { Schemas, ShowView } from "../../core/api/client";
+import { RELATIONS, type RelationField } from "../../core/relations";
 import type { Lookup } from "./lookup";
+
+type Ref = Schemas.Ref;
 
 export type RelItem = {
   raw: string;
@@ -17,117 +18,69 @@ export type RelGroup = {
   items: RelItem[];
   removable: boolean;
 };
-export type RefPatch = { blocked_by?: string[]; props?: Record<string, unknown> };
+export type RefPatch = Record<string, string[]>;
 
-function asList(v: unknown): string[] {
-  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
-  return typeof v === "string" && v !== "" ? [v] : [];
-}
+const refsOf = (show: ShowView, name: string): Ref[] => show[name as RelationField] ?? [];
 
-// buildGroups lists the relations of a task: blocked_by, each task_ref property, their reverse sides
-// (labelled with the property's inverse) and the backlinks. A task that cannot be read keeps the
-// reference as it is stored; empty groups are left out.
-export async function buildGroups(
-  show: ShowView,
-  sc: SchemaView,
-  lookup: Lookup,
-): Promise<RelGroup[]> {
-  const item = async (
-    raw: string,
-    ref?: { ulid: string; id: string; title: string },
-  ): Promise<RelItem> => {
-    const c = await lookup(ref?.ulid ?? raw);
+// buildGroups lists the relations of a task: the five it holds, then their reverse sides (labelled
+// with the display name of the other direction) and the backlinks. A task that cannot be read keeps
+// the reference as it is stored; empty groups are left out.
+export async function buildGroups(show: ShowView, lookup: Lookup): Promise<RelGroup[]> {
+  const item = async (ref: Ref): Promise<RelItem> => {
+    const c = await lookup(ref.ulid);
     return {
-      raw,
-      ulid: c?.ulid ?? ref?.ulid ?? raw,
-      id: c?.id ?? ref?.id ?? raw,
-      title: c?.title ?? ref?.title ?? "",
+      raw: ref.ulid,
+      ulid: c?.ulid ?? ref.ulid,
+      id: c?.id ?? ref.id,
+      title: c?.title ?? ref.title,
       status: c?.status ?? null,
     };
   };
   const groups: RelGroup[] = [];
+  const push = async (
+    key: string,
+    label: string,
+    note: string,
+    refs: Ref[],
+    removable: boolean,
+  ) => {
+    if (refs.length === 0) return;
+    groups.push({ key, label, note, removable, items: await Promise.all(refs.map(item)) });
+  };
 
-  const blockers = show.blocked_by ?? [];
-  if (blockers.length > 0) {
-    groups.push({
-      key: "blocked_by",
-      label: "Blocked by",
-      note: "blocked_by",
-      removable: true,
-      items: await Promise.all(blockers.map((r) => item(r.ulid, r))),
-    });
+  for (const r of RELATIONS) await push(r.name, r.label, r.name, refsOf(show, r.name), true);
+  for (const r of RELATIONS) {
+    await push(
+      `reverse:${r.inverse}`,
+      r.inverseLabel,
+      r.inverse,
+      show.reverse?.[r.inverse] ?? [],
+      false,
+    );
   }
-  for (const name of propNames(sc)) {
-    const def = sc.props[name];
-    if (def?.type !== "task_ref") continue;
-    const raws = asList(show.props[name]);
-    if (raws.length === 0) continue;
-    groups.push({
-      key: name,
-      label: def.label || name,
-      note: name + (def.symmetric ? "（双方向）" : ""),
-      removable: true,
-      items: await Promise.all(raws.map((r) => item(r))),
-    });
-  }
-  // The reverse sides follow the order of the properties; a name the schema does not have comes after.
-  const reversed = Object.keys(show.reverse ?? {});
-  const order = propNames(sc);
-  const reverseNames = [
-    ...order.filter((n) => reversed.includes(n)),
-    ...reversed.filter((n) => !order.includes(n)).sort(),
-  ];
-  for (const name of reverseNames) {
-    const refs = show.reverse[name] ?? [];
-    if (refs.length === 0) continue;
-    const def = sc.props[name];
-    groups.push({
-      key: `reverse:${name}`,
-      label: def?.inverse || `${def?.label || name}（逆）`,
-      note: `${name} の逆方向`,
-      removable: false,
-      items: await Promise.all(refs.map((r) => item(r.ulid, r))),
-    });
-  }
-  const back = show.referenced_by ?? [];
-  if (back.length > 0) {
-    groups.push({
-      key: "referenced_by",
-      label: "バックリンク",
-      note: `本文・コメントの #${show.id}`,
-      removable: false,
-      items: await Promise.all(back.map((r) => item(r.ulid, r))),
-    });
-  }
+  await push(
+    "referenced_by",
+    "バックリンク",
+    `本文・コメントの #${show.id}`,
+    show.referenced_by ?? [],
+    false,
+  );
   return groups;
 }
 
-// relationKinds is what "関連を追加" can add: blocked_by and the task_ref properties.
-export function relationKinds(sc: SchemaView): { key: string; label: string }[] {
-  const kinds = [{ key: "blocked_by", label: "Blocked by" }];
-  for (const name of propNames(sc)) {
-    const def = sc.props[name];
-    if (def?.type === "task_ref") kinds.push({ key: name, label: def.label || name });
-  }
-  return kinds;
+// relationKinds is what "関連を追加" can add: the five relations, not their reverse sides.
+export const relationKinds = (): { key: string; label: string }[] =>
+  RELATIONS.map((r) => ({ key: r.name, label: r.label }));
+
+export function addRefBody(show: ShowView, kind: string, ulid: string): RefPatch {
+  const cur = refsOf(show, kind).map((r) => r.ulid);
+  return { [kind]: cur.includes(ulid) ? cur : [...cur, ulid] };
 }
 
-export function addRefBody(show: ShowView, sc: SchemaView, kind: string, ulid: string): RefPatch {
-  if (kind === "blocked_by") {
-    const cur = (show.blocked_by ?? []).map((r) => r.ulid);
-    return { blocked_by: cur.includes(ulid) ? cur : [...cur, ulid] };
-  }
-  if (sc.props[kind]?.multi) {
-    const cur = asList(show.props[kind]);
-    return { props: { [kind]: cur.includes(ulid) ? cur : [...cur, ulid] } };
-  }
-  return { props: { [kind]: ulid } };
-}
-
-export function removeRefBody(show: ShowView, sc: SchemaView, kind: string, raw: string): RefPatch {
-  if (kind === "blocked_by")
-    return { blocked_by: (show.blocked_by ?? []).map((r) => r.ulid).filter((u) => u !== raw) };
-  if (sc.props[kind]?.multi)
-    return { props: { [kind]: asList(show.props[kind]).filter((v) => v !== raw) } };
-  return { props: { [kind]: null } };
+export function removeRefBody(show: ShowView, kind: string, ulid: string): RefPatch {
+  return {
+    [kind]: refsOf(show, kind)
+      .map((r) => r.ulid)
+      .filter((u) => u !== ulid),
+  };
 }

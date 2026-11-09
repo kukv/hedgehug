@@ -18,8 +18,9 @@ const shared = withProps({
   due: { type: "date", label: "期限" },
   points: { type: "number" },
   area: { type: "multi_enum", values: ["backend", "frontend"] },
-  relates: { type: "task_ref", label: "関連" },
-  blocked_by: { type: "task_ref" },
+  site: { type: "url", label: "サイト" },
+  causes: { type: "text" },
+  blocked_by: { type: "text" },
   status: { type: "text" },
 });
 const me = withProps({
@@ -31,8 +32,8 @@ const ids = (list: { id: string }[]) => list.map((c) => c.id);
 
 describe("columnCandidates", () => {
   it("offers the properties in the prop_order of the schema", () => {
-    const sc = { ...shared, prop_order: ["points", "due", "area", "relates"] } as SchemaView;
-    expect(ids(columnCandidates([sc])).slice(-4)).toEqual(["points", "due", "area", "relates"]);
+    const sc = { ...shared, prop_order: ["points", "due", "area", "site"] } as SchemaView;
+    expect(ids(columnCandidates([sc])).slice(-4)).toEqual(["points", "due", "area", "site"]);
   });
 
   it("lists the builtin columns, then the properties of the schemas by name", () => {
@@ -50,23 +51,23 @@ describe("columnCandidates", () => {
       "area",
       "due",
       "points",
-      "relates",
+      "site",
     ]);
   });
 
   it("takes the union of several stores and the label of the first store that has the property", () => {
     const list = columnCandidates([shared, me]);
-    expect(ids(list).slice(10)).toEqual(["area", "due", "points", "relates", "team"]);
+    expect(ids(list).slice(10)).toEqual(["area", "due", "points", "site", "team"]);
     expect(list.find((c) => c.id === "area")?.label).toBe("area");
     expect(list.find((c) => c.id === "team")?.label).toBe("チーム");
     expect(list.find((c) => c.id === "due")?.label).toBe("期限");
   });
 
-  it("shows ID, parent, created, updated, the pull requests and task references only", () => {
+  it("shows ID, parent, created, updated and the pull requests only; a relation's name is not a column", () => {
     const readonly = columnCandidates([shared])
       .filter((c) => c.readonly)
       .map((c) => c.id);
-    expect(readonly).toEqual(["id", "parent", "created", "updated", "pr", "relates"]);
+    expect(readonly).toEqual(["id", "parent", "created", "updated", "pr"]);
   });
 
   it("has no property column without a schema", () => {
@@ -121,8 +122,7 @@ describe("patchFieldOf", () => {
     expect(of("points")).toBe("props.points");
   });
   it("has none for what is only shown", () => {
-    for (const id of ["id", "parent", "created", "updated", "pr", "relates"])
-      expect(of(id)).toBeNull();
+    for (const id of ["id", "parent", "created", "updated", "pr"]) expect(of(id)).toBeNull();
   });
 });
 

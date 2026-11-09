@@ -1,17 +1,16 @@
 import { ApiError, type Schemas } from "../../core/api/client";
 import { errorMessage, violationLines } from "../../core/messages";
+import { relationLabel } from "../../core/relations";
 
 /** The kind of a reference the move cuts, as the screen says it (細部 47・67). */
 export function referenceKind(field: string): string {
   switch (field) {
-    case "blocked_by":
-      return "Blocked by";
     case "sprint":
       return "スプリント";
     case "releases":
       return "リリース";
     default:
-      return field.startsWith("props.") ? field.slice("props.".length) : field;
+      return relationLabel(field);
   }
 }
 

@@ -15,15 +15,14 @@ const sch = {
   ],
   props: {
     priority: { type: "enum", values: ["low", "high"] },
-    relates: { type: "task_ref", multi: true, symmetric: true, label: "関連" },
-    duplicates: { type: "task_ref", label: "重複", inverse: "重複元" },
+    memo: { type: "text", label: "メモ" },
   },
-  prop_order: ["priority", "relates", "duplicates"],
+  prop_order: ["priority", "memo"],
   workflow: {},
   scoped: [],
 } as unknown as SchemaView;
 
-type Target = "status" | "prop" | "relation";
+type Target = "status" | "prop";
 
 function setup(
   target: Target,
@@ -159,29 +158,14 @@ describe("SchemaDefDialog", () => {
     );
   });
 
-  it("adds a relation as task_ref without a type field, and turns the inverse off for two-way", async () => {
-    const { api } = setup("relation");
-    expect(screen.queryByRole("combobox", { name: "型" })).toBeNull();
-    await type("名前", "causes");
-    await type("逆方向の表示名", "caused_by");
-    await fireEvent.click(screen.getByRole("checkbox", { name: "双方向" }));
-    expect(screen.getByRole("textbox", { name: "逆方向の表示名" })).toBeDisabled();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "複数" }));
-    await fireEvent.click(screen.getByRole("button", { name: "追加" }));
-    await waitFor(() => expect(api.addProp).toHaveBeenCalled());
-    expect(api.addProp).toHaveBeenCalledWith(
-      { name: "causes", type: "task_ref", multi: true, symmetric: true },
-      { store: "shared" },
-    );
-  });
-
-  it("edits a relation by the fields that changed", async () => {
-    const { api } = setup("relation", "duplicates");
-    expect(screen.getByRole("dialog", { name: "関連「duplicates」を編集" })).toBeVisible();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "複数" }));
-    await fireEvent.click(screen.getByRole("button", { name: "保存" }));
-    await waitFor(() => expect(api.changeProp).toHaveBeenCalled());
-    expect(api.changeProp).toHaveBeenCalledWith("duplicates", { multi: true }, { store: "shared" });
+  it("offers no task_ref type, and no flags of a relation", async () => {
+    setup("prop");
+    const types = Array.from(
+      (screen.getByRole("combobox", { name: "型" }) as HTMLSelectElement).options,
+    ).map((o) => o.value);
+    expect(types).not.toContain("task_ref");
+    expect(screen.queryByRole("checkbox", { name: "双方向" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "逆方向の表示名" })).toBeNull();
   });
 
   it("changes the name in the edit dialog and sends it as name", async () => {
@@ -202,14 +186,14 @@ describe("SchemaDefDialog", () => {
   });
 
   it("sends the name with the other changes in one write", async () => {
-    const { api } = setup("relation", "duplicates");
-    await type("名前", "dups");
-    await fireEvent.click(screen.getByRole("checkbox", { name: "複数" }));
+    const { api } = setup("prop", "memo");
+    await type("名前", "note");
+    await type("表示名", "ノート");
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(api.changeProp).toHaveBeenCalledTimes(1));
     expect(api.changeProp).toHaveBeenCalledWith(
-      "duplicates",
-      { name: "dups", multi: true },
+      "memo",
+      { name: "note", label: "ノート" },
       { store: "shared" },
     );
   });

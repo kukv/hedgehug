@@ -21,7 +21,7 @@
     names: string[];
     off: string | null;
     onaction: (a: SchemaAction) => void;
-    edit: "status" | "prop" | "relation";
+    edit: "status" | "prop";
     used?: number;
     isDefault?: boolean;
   } = $props();

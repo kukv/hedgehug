@@ -71,15 +71,29 @@ describe("Relations", () => {
     await waitFor(() => expect(remove).toBeEnabled());
   });
 
-  it("disables a single-valued kind that already has a value, with the reason", async () => {
-    const withDup = showView({ ...show, props: { duplicates: "UD" } });
-    const k = makeCore({ show: withDup, tasks: [blocker] });
-    mount(Relations, { show: withDup, readonly: false }, k);
+  it("選べる関連は順方向の 5 つの表示名だけ", async () => {
+    setup();
     await fireEvent.click(screen.getByRole("button", { name: "関連を追加" }));
     await fireEvent.click(screen.getByRole("button", { name: "関連の種類" }));
-    expect(screen.getByRole("menuitem", { name: /重複している/ })).toBeDisabled();
-    expect(screen.getByText("すでに設定されています（外してから追加）")).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /関連/ })).toBeEnabled();
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent?.trim())).toEqual([
+      "Blocked by",
+      "Causes",
+      "Relates to",
+      "Duplicates",
+      "Clones",
+    ]);
+  });
+
+  it("逆方向のグループは表示名で出し、外すボタンを持たない", async () => {
+    const withBack = showView({
+      ...show,
+      reverse: { caused_by: [{ ulid: "UB", id: "REL-2", title: "破壊的変更" }] },
+    });
+    const k = makeCore({ show: withBack, tasks: [blocker] });
+    mount(Relations, { show: withBack, readonly: false }, k);
+    const group = await screen.findByRole("group", { name: "Caused by" });
+    expect(within(group).getByText("REL-2")).toBeInTheDocument();
+    expect(within(group).queryByRole("button")).toBeNull();
   });
 
   it("adds a relation: pick the kind, search, pick a task", async () => {
@@ -90,17 +104,13 @@ describe("Relations", () => {
     k.api.updateTask.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c2" }));
     await fireEvent.click(screen.getByRole("button", { name: "関連を追加" }));
     await fireEvent.click(screen.getByRole("button", { name: "関連の種類" }));
-    await fireEvent.click(screen.getByRole("menuitem", { name: "関連" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Relates to" }));
     await fireEvent.input(screen.getByRole("combobox", { name: "タスクを検索" }), {
       target: { value: "REL-9" },
     });
     await fireEvent.click(await screen.findByRole("option", { name: /REL-9/ }));
     await waitFor(() =>
-      expect(k.api.updateTask).toHaveBeenCalledWith(
-        "U6",
-        { props: { relates: ["UN"] } },
-        { store: "shared" },
-      ),
+      expect(k.api.updateTask).toHaveBeenCalledWith("U6", { relates: ["UN"] }, { store: "shared" }),
     );
   });
 

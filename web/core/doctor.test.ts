@@ -169,6 +169,33 @@ describe("findingText and findingHint", () => {
     );
   });
 
+  it("task.legacy_field: 移せる指摘と、移せない指摘で案内を分ける", () => {
+    const base = { check: "task", code: "task.legacy_field", args: ["props.relates", "x"] };
+    const movable = f({ ...base, hint: "hedgehug doctor --fix moves it to the field of the task" });
+    expect(findingText(movable)).toBe(
+      "props.relates: 古い形の関連が props に残っています（関連はタスクの項目です）",
+    );
+    expect(findingHint(movable)).toBe("hh doctor --fix で関連の項目へ移せます");
+    const stuck = f({
+      ...base,
+      hint: "hedgehug doctor --fix leaves this task as it is, because the field relates has values of its own; decide with hedgehug edit",
+    });
+    expect(findingHint(stuck)).toBe(
+      "移し先に値があるか、値が ULID でないため、--fix では移せません。hh edit で決めてください",
+    );
+    expect(fixedText("legacy_field", ["relates", "causes"])).toBe(
+      "props の relates・causes を関連の項目へ移しました",
+    );
+  });
+
+  it("schema.unknown_type: task_ref は関連の案内を出す", () => {
+    const x = (t: string) => f({ check: "schema", code: "schema.unknown_type", args: [t] });
+    expect(findingText(x("task_ref"))).toContain(
+      "関連は固定です。hh dep か詳細の関連の欄で付けます",
+    );
+    expect(findingText(x("foo"))).toBe("「foo」という型はありません");
+  });
+
   it("keep the error of a library as it is, after the Japanese", () => {
     const x = f({
       check: "file",

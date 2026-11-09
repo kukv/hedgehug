@@ -102,17 +102,16 @@ export type PropEditor =
   | "bool"
   | "duration"
   | "url"
-  | "taskref"
   | "user"
   | "text";
 
-// The fields every task has, and what edits them.
+// The fields every task has, and what edits them. The relations are not here: the Relations section
+// of the detail edits them.
 const BUILTIN: Record<string, PropEditor> = {
   status: "status",
   kind: "kind",
   assignees: "user",
   watchers: "user",
-  blocked_by: "taskref",
   title: "text",
   labels: "text",
   repos: "text",
@@ -131,7 +130,6 @@ const BY_TYPE: Record<string, PropEditor> = {
   enum: "enum",
   multi_enum: "multi_enum",
   user: "user",
-  task_ref: "taskref",
   url: "url",
 };
 

@@ -16,12 +16,11 @@
   import SchemaDefDialog from "./SchemaDefDialog.svelte";
   import SchemaDeleteDialog from "./SchemaDeleteDialog.svelte";
   import SchemaProps from "./SchemaProps.svelte";
-  import SchemaRelations from "./SchemaRelations.svelte";
   import SchemaStatuses from "./SchemaStatuses.svelte";
   import SchemaWorkflow from "./SchemaWorkflow.svelte";
   import SettingsTemplates from "./SettingsTemplates.svelte";
   import type { SchemaAction } from "./schema-action";
-  import { propEntries, relationEntries } from "./schema-text";
+  import { propEntries } from "./schema-text";
 
   // The schema of a Store (its .hedgehug/schema.yaml): how many tasks use each definition, the
   // overrides of the projects, and what `schema check` finds. A definition is added, edited (its name
@@ -112,11 +111,6 @@
 
   const usage = $derived(schema && tasks ? schemaUsage(schema, tasks) : null);
   const propCount = $derived(propEntries(schema).length);
-  const relationCount = $derived(relationEntries(schema).length);
-  // blocked_by is a relation built in: it is not in the schema, and it cannot be edited.
-  const blockedCount = $derived(
-    tasks ? tasks.filter((t) => (t.blocked_by ?? []).length > 0).length : undefined,
-  );
   const scoped = $derived(schema?.scoped ?? []);
   const taskByUlid = $derived(new Map((tasks ?? []).map((t) => [t.ulid, t])));
 
@@ -125,7 +119,6 @@
       [
         ["statuses", "ステータス", (schema?.statuses ?? []).length],
         ["props", "プロパティ", propCount],
-        ["relations", "関連", relationCount + 1],
         ["workflow", "ワークフロー", undefined],
         ["templates", "テンプレート", undefined],
       ] as const
@@ -215,8 +208,6 @@
       <SettingsTemplates {store} {off} />
     {:else if tab === "props"}
       <SchemaProps {store} {schema} {usage} {off} {onaction} />
-    {:else if tab === "relations"}
-      <SchemaRelations {store} {schema} {usage} {off} {onaction} blocked={blockedCount} />
     {:else}
       <SchemaWorkflow {schema} />
     {/if}

@@ -1,5 +1,6 @@
 import type { ShowView, TaskView } from "../../core/api/client";
 import { CATEGORY_LABEL } from "../../core/categories";
+import { RELATIONS } from "../../core/relations";
 import { defaultStatusIn, propEditorOf, type SchemaView } from "../../core/schema";
 import type { KanbanSettings } from "../../core/views";
 import { type Column, columnKeyOf } from "./board";
@@ -60,7 +61,6 @@ const REQUIRED_NAMES: Readonly<Record<string, string>> = {
   assignees: "担当者",
   labels: "ラベル",
   parent: "親",
-  blocked_by: "ブロックしているタスク",
   watchers: "ウォッチャー",
   repos: "リポジトリ",
   sprint: "スプリント",
@@ -70,11 +70,13 @@ const REQUIRED_NAMES: Readonly<Record<string, string>> = {
 
 // requiredLabel is the name a required field is shown with.
 export const requiredLabel = (schema: SchemaView, name: string): string =>
-  REQUIRED_NAMES[name] ?? (schema.props[name]?.label || name);
+  REQUIRED_NAMES[name] ??
+  RELATIONS.find((r) => r.name === name)?.label ??
+  (schema.props[name]?.label || name);
 
 // What a required field of a task lacks: `fill` are the empty ones the dialog can take in (assignees,
 // labels, a property it has an editor for); `elsewhere` are the ones that can only be filled in the
-// task detail (the parent, blockers, watchers, repos, a task reference, and what the API does not
+// task detail (the parent, the five relations, watchers, repos, and what the API does not
 // show: sprint, releases, links), or whose value is not known here.
 export type RequiredGap = { fill: string[]; elsewhere: string[] };
 
@@ -103,7 +105,11 @@ export function requiredGap(
         if (t.parent === null) gap.elsewhere.push(name);
         break;
       case "blocked_by":
-        if (empty(t.blocked_by)) gap.elsewhere.push(name);
+      case "causes":
+      case "relates":
+      case "duplicates":
+      case "clones":
+        if (empty(t[name])) gap.elsewhere.push(name);
         break;
       case "watchers":
       case "repos":
@@ -119,7 +125,7 @@ export function requiredGap(
       default: {
         if (!empty((t.props as Record<string, unknown> | undefined)?.[name])) break;
         const editor = propEditorOf(schema, name);
-        (editor === null || editor === "taskref" ? gap.elsewhere : gap.fill).push(name);
+        (editor === null ? gap.elsewhere : gap.fill).push(name);
       }
     }
   }

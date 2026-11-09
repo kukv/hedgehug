@@ -153,7 +153,7 @@ describe("StoreMove", () => {
           },
           {
             task: { id: "REL-2", ulid: "U2" },
-            field: "props.relates",
+            field: "relates",
             target: { label: "REL-9", ulid: "U9" },
           },
           {
@@ -169,8 +169,7 @@ describe("StoreMove", () => {
     const items = within(region).getAllByRole("listitem");
     expect(items).toHaveLength(3);
     expect(items[0]).toHaveTextContent("Blocked by REL-1 REL-3");
-    expect(items[1]).toHaveTextContent("relates REL-9 REL-2");
-    expect(items[1]).not.toHaveTextContent("props.");
+    expect(items[1]).toHaveTextContent("Relates to REL-9 REL-2");
     expect(items[2]).toHaveTextContent("スプリント S1 REL-1");
     expect(screen.getByRole("button", { name: "3 件の参照を外して移動" })).toBeEnabled();
   });

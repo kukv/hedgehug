@@ -34,6 +34,7 @@ const violationLabels: Record<string, string> = {
   required: "必須の項目が空です",
   missing_ref: "参照先がありません",
   cycle: "循環しています",
+  "ref.self": "自分自身は指せません",
 };
 
 // violationLines writes the violations of an error one by one: the objects of schema.violation,
@@ -154,7 +155,6 @@ const messages: Record<string, Make> = {
   "schema.not_defined": () => "定義が見つかりません。画面を読み込み直してください",
   "schema.order_stale": () =>
     "ほかの変更と重なったため並べ替えられませんでした。読み込み直したので、もう一度並べ替えてください",
-  "schema.not_task_ref": () => "複数・逆方向・双方向は関連だけの設定です",
   "schema.not_enum": () => "値を持てるのは enum と multi_enum のプロパティだけです",
   "schema.value_invalid": () =>
     "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",

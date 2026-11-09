@@ -18,7 +18,6 @@ const schema: SchemaView = {
     start: { type: "date" },
     points: { type: "number" },
     owner: { type: "user" },
-    relates: { type: "task_ref", multi: true, label: "関連", symmetric: true },
     estimate: { type: "duration" },
     done_flag: { type: "bool" },
     site: { type: "url" },
@@ -77,7 +76,6 @@ describe("propEditorOf", () => {
     expect(propEditorOf(schema, "start")).toBe("date");
     expect(propEditorOf(schema, "points")).toBe("number");
     expect(propEditorOf(schema, "owner")).toBe("user");
-    expect(propEditorOf(schema, "relates")).toBe("taskref");
     expect(propEditorOf(schema, "estimate")).toBe("duration");
     expect(propEditorOf(schema, "done_flag")).toBe("bool");
     expect(propEditorOf(schema, "site")).toBe("url");
@@ -90,12 +88,13 @@ describe("propEditorOf", () => {
     expect(propEditorOf(schema, "kind")).toBe("kind");
     expect(propEditorOf(schema, "assignees")).toBe("user");
     expect(propEditorOf(schema, "watchers")).toBe("user");
-    expect(propEditorOf(schema, "blocked_by")).toBe("taskref");
     expect(propEditorOf(schema, "title")).toBe("text");
   });
 
-  it("is null for what the schema does not define", () => {
+  it("is null for what the schema does not define, and for the relations", () => {
     expect(propEditorOf(schema, "legacy")).toBeNull();
+    for (const n of ["blocked_by", "causes", "relates", "duplicates", "clones"])
+      expect(propEditorOf(schema, n)).toBeNull();
   });
 });
 
