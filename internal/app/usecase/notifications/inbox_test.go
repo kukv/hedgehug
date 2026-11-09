@@ -696,25 +696,25 @@ func TestRevertField(t *testing.T) {
 	}
 }
 
-// An item that an older hedgehug wrote names a relation as a property
-// (props.relates): reverting it writes the field of the task and leaves props
-// alone.
-func TestRevertFieldTakesAPropertyThatIsARelationNowForTheField(t *testing.T) {
+// An item that was recorded before the relations were fixed names a relation as
+// a property (props.relates, or a task_ref of the store's own): it is not
+// reverted, and nothing is changed.
+func TestRevertFieldRefusesARelationFromBeforeFormat3(t *testing.T) {
 	t.Parallel()
 	sc := schema.Default()
 	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
 	a, b := model.NewULID(), model.NewULID()
-	for _, name := range []string{"duplicates", "causes", "relates", "clones"} {
-		task := &model.Task{}
-		rel, _, _ := schema.RelationOf(name)
-		if err := notifications.RevertField(task, "props."+name, json.RawMessage(`"`+a.String()+`"`), sc, resolve); err != nil || !slices.Equal(rel.Get(task), []model.ULID{a}) {
-			t.Errorf("props.%s: %v, %v", name, rel.Get(task), err)
-		}
-		if err := notifications.RevertField(task, "props."+name, json.RawMessage(`["`+a.String()+`","`+b.String()+`"]`), sc, resolve); err != nil || !slices.Equal(rel.Get(task), []model.ULID{a, b}) {
-			t.Errorf("props.%s as a list: %v, %v", name, rel.Get(task), err)
-		}
-		if len(task.Props) != 0 {
-			t.Errorf("props.%s left in props: %v", name, task.Props)
+	for _, name := range []string{"duplicates", "causes", "relates", "clones", "fixes"} {
+		for _, raw := range []string{`"` + a.String() + `"`, `["` + a.String() + `","` + b.String() + `"]`} {
+			task := &model.Task{}
+			err := notifications.RevertField(task, "props."+name, json.RawMessage(raw), sc, resolve)
+			usecasetest.WantErr(t, err, usecase.KindInvalid, "inbox.not_revertable")
+			if !strings.Contains(err.Error(), "dep") {
+				t.Errorf("props.%s: %v", name, err)
+			}
+			if len(task.Props) != 0 || len(task.Duplicates)+len(task.Causes)+len(task.Relates)+len(task.Clones) != 0 {
+				t.Errorf("props.%s changed the task: %+v", name, task)
+			}
 		}
 	}
 }

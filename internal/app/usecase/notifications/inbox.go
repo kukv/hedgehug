@@ -701,9 +701,9 @@ var refused = map[string]string{
 // hedgehug set would write it. The parent is the job of revertParent.
 func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
 	// An item that an older hedgehug wrote names a relation as a property
-	// (props.relates); it is the field of the task now.
+	// (props.relates); the relations are fixed fields of the task now.
 	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyRelationNames, name) {
-		field = name
+		return notRevertible(relationsFixed(field))
 	}
 	switch field {
 	case "title", "kind", "status":
@@ -839,6 +839,9 @@ func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schem
 	if len(values) == 0 {
 		values = []any{nil}
 	}
+	if _, known := sc.Prop(key); !known && allULIDs(values) {
+		return notRevertible(relationsFixed("props." + key)) // a task_ref of the store's own, from before format 3
+	}
 	for i, x := range values {
 		text, err := propText(sc, key, x)
 		if err != nil {
@@ -853,6 +856,27 @@ func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schem
 		}
 	}
 	return nil
+}
+
+// relationsFixed says why an item of a relation from before format 3 is not
+// reverted: the relations are fields of the task now, set with hedgehug dep.
+func relationsFixed(field string) error {
+	return fmt.Errorf("%s was a relation before the relations were fixed, and cannot be reverted: %w; add the value back with hedgehug dep", field, errNotRevertible)
+}
+
+// allULIDs is whether every one of the values is the text of a ULID, and
+// there is one.
+func allULIDs(values []any) bool {
+	for _, x := range values {
+		s, ok := x.(string)
+		if !ok {
+			return false
+		}
+		if _, err := model.ParseULID(s); err != nil {
+			return false
+		}
+	}
+	return len(values) > 0
 }
 
 // propText is the text hedgehug set reads for the scalar x of the property
