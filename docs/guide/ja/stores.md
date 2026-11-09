@@ -111,6 +111,18 @@ Nothing was written (--dry-run).
 
 1 つ目のコマンドは `convert.bad_value` で止まり、終了コードは 1 です（`--dry-run` も同じように止まるので、書き込む前に原因が分かります）。
 
+ラベルを GitHub と同期していた Store には、次の行も出ます。この例の `ME-2` は、同期する項目が `labels` だけの Issue リンクを持っていたので、リンクは何も同期しなくなります（`sync: link`）。
+
+```console
+$ hh store convert --dry-run
+Format 3 -> 4
+  GitHub のラベルの同期の跡（gh.issues[].synced と links の fields の labels）を外した: 1 件
+  ラベルだけを同期していたリンクの sync を link（同期しない）にした: ME-2 Login: github.com/acme/web#12
+  automations.yaml の issue_fields の push・mirror から labels を外した（GitHub のラベルは同期しない）
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
+
 `--dry-run` は、段ごとに変わる内容を一覧するだけで、何も書きません。`--json` は同じ内容を JSON で出します。もう一度実行しても、何も変わりません。
 
 変換は専用のコミット（`op convert`）で、`hh undo` では取り消せません。変換の直後に `hh undo` を実行すると、変換より前の操作が取り消されます。

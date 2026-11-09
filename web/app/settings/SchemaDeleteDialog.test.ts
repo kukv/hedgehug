@@ -88,7 +88,7 @@ describe("SchemaDeleteDialog", () => {
           422,
           "schema.in_use",
           { count: 2, deleted: 1, target: "status" },
-          "2 tasks uses on_hold; merge it into another first",
+          "2 tasks use on_hold; merge it into another first",
         ),
       ),
     });

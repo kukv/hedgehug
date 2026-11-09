@@ -131,6 +131,9 @@ func TestEditCountsANormalTaskAndTheDeletedOnes(t *testing.T) {
 	if ue.Args["count"] != 2 || ue.Args["deleted"] != 1 {
 		t.Errorf("args = %v", ue.Args)
 	}
+	if want := "2 tasks use on_hold; merge it into another first"; err.Error() != want {
+		t.Errorf("message = %q, want %q", err.Error(), want)
+	}
 
 	// use and check together: the use is looked at first.
 	if _, err := schemas.Edit(ts.Session, remove, schemas.EditOpts{Use: use, Check: true}); usecase.ProblemCode(err) != "schema.in_use" {

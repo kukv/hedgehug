@@ -137,6 +137,19 @@ Nothing was written (--dry-run).
 The first command stops with `convert.bad_value` and exit code 1 (a dry run stops the same way, so you see
 what is wrong before you write anything).
 
+A store that synced labels with GitHub also gets these lines. Here `ME-2` has an issue link whose only synced field was
+`labels`, so the link now syncs nothing (`sync: link`):
+
+```console
+$ hh store convert --dry-run
+Format 3 -> 4
+  GitHub のラベルの同期の跡（gh.issues[].synced と links の fields の labels）を外した: 1 件
+  ラベルだけを同期していたリンクの sync を link（同期しない）にした: ME-2 Login: github.com/acme/web#12
+  automations.yaml の issue_fields の push・mirror から labels を外した（GitHub のラベルは同期しない）
+  store.yaml の format を 3 から 4 にした
+Nothing was written (--dry-run).
+```
+
 `--dry-run` lists what each step would change and writes nothing; `--json` prints the
 same as JSON. Running it again changes nothing.
 

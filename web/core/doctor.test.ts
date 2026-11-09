@@ -291,6 +291,22 @@ describe("findingText and findingHint", () => {
     expect(findingText(x("foo"))).toBe("「foo」という型はありません");
   });
 
+  it("template.bad_label: テンプレートのラベルがリストにないと、場所と直し方を言う", () => {
+    const x = f({
+      check: "template",
+      where: "templates/bug.md: children[0].labels",
+      code: "template.bad_label",
+      hint: "h",
+      args: ["bug", "children[0].labels", "wip"],
+    });
+    expect(findingText(x)).toBe(
+      "テンプレート「bug」の children[0].labels: ラベル「wip」が設定の「ラベル」のリストにありません",
+    );
+    expect(findingHint(x)).toBe(
+      "設定の「ラベル」に足すか（hh schema labels add）、hh template edit bug でテンプレートを直してください",
+    );
+  });
+
   it("keep the error of a library as it is, after the Japanese", () => {
     const x = f({
       check: "file",

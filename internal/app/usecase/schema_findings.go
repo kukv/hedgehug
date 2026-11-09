@@ -54,6 +54,7 @@ func CheckSchema(s *store.Store, ix *index.Index) ([]Finding, error) {
 		fs = append(fs, Finding{Check: "schema", Where: schema.Path + ": " + p.Path, Msg: p.Msg, Code: p.Code, Args: p.Args})
 	}
 	fs = append(fs, missingTemplates(s, sc)...)
+	fs = append(fs, templateLabels(s, sc)...)
 	for _, p := range sc.Props {
 		// A name that is a field of the task is refused already, as prop_builtin.
 		if slices.Contains(queryKeys, p.Name) && !slices.Contains(model.TaskKeys(), p.Name) {
@@ -156,6 +157,39 @@ func missingTemplates(s *store.Store, sc *schema.Schema) []Finding {
 		for _, kind := range slices.Sorted(maps.Keys(sco.Templates.Default)) {
 			check(fmt.Sprintf("scoped[%d].templates.default.%s", i, kind), sco.Templates.Default[kind])
 		}
+	}
+	return fs
+}
+
+// templateLabels finds the labels of the templates (their items and children,
+// at any depth) that are not in the list of labels of the schema, without regard
+// to case. Expanding such a template is refused; hh template edit fixes it. A
+// template that does not decode is reported by doctor elsewhere.
+func templateLabels(s *store.Store, sc *schema.Schema) []Finding {
+	var fs []Finding
+	for t, err := range s.Templates() {
+		if err != nil || t == nil {
+			continue
+		}
+		var walk func(it model.TemplateItem, path string)
+		walk = func(it model.TemplateItem, path string) {
+			for _, l := range it.Labels {
+				if _, ok := schema.MatchValue(sc.Labels, l); ok {
+					continue
+				}
+				where := model.TemplatePath(t.Name) + ": " + path + "labels"
+				fs = append(fs, Finding{
+					Check: "template", Where: where,
+					Msg:  fmt.Sprintf("label %q is not in the list of labels of the schema", l),
+					Hint: "add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit " + t.Name + "`",
+					Code: "template.bad_label", Args: []string{t.Name, path + "labels", l},
+				})
+			}
+			for i, c := range it.Children {
+				walk(c, fmt.Sprintf("%schildren[%d].", path, i))
+			}
+		}
+		walk(t.Item, "")
 	}
 	return fs
 }

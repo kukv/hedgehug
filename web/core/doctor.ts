@@ -198,6 +198,8 @@ const MESSAGES: Record<string, Words> = {
   "override.not_project": ([w]) => `${w} はこの Store のプロジェクトではないか、削除されています`,
   "template.bad_name": ([n, e]) => `テンプレートの名前「${n}」が正しくありません: ${e}`,
   "template.missing": ([n]) => `テンプレート「${n}」がありません`,
+  "template.bad_label": ([n, path, l]) =>
+    `テンプレート「${n}」の ${path}: ラベル「${l}」が設定の「ラベル」のリストにありません`,
 
   "task.plan_other_workspace": ([field, what, ulid]) =>
     `${field}: ${plan(what)} ${ulid} はこのタスクのワークスペースにありません`,
@@ -272,6 +274,8 @@ const HINTS: Record<string, Words> = {
   "override.not_project": () => "プロジェクトを復元するか、上書きを外してください",
   "template.bad_name": ([n]) => `templates/${n}.md を追加するか、名前を変更してください`,
   "template.missing": ([n]) => `templates/${n}.md を追加するか、名前を変更してください`,
+  "template.bad_label": ([n]) =>
+    `設定の「ラベル」に足すか（hh schema labels add）、hh template edit ${n} でテンプレートを直してください`,
   "task.duplicate_id": () =>
     "hh doctor --fix で直せます。hh sync でも、push 済みのタスクを残して振り直します",
   "task.id_prefix": () => "hh doctor --fix で直せます",

@@ -142,7 +142,7 @@ Sprint 1  0       1      1
 
 A template is a task file in `templates/` of the store: default properties and a body,
 and optionally child tasks. The built-in properties (`priority`, `start`, `due`, `estimate`, `points`, `labels`) are keys at the top of
-the file, as in a task; a label that is not in the list of the store refuses the expansion (`the change breaks the schema`), and `hh template edit` fixes the template. Write one in your `$EDITOR`:
+the file, as in a task; a label that is not in the list of the store refuses the expansion (`the change breaks the schema`), `hh doctor` reports the template (`template.bad_label`, with the path of the label inside it), and `hh template edit` fixes it. Write one in your `$EDITOR`:
 
 ```console
 $ hh template edit bug
@@ -169,6 +169,17 @@ priority: high
 
 ```console
 $ hh add "Crash on save" --template bug
+```
+
+If a template names a label that is not in the list of the store, `hh add --template` refuses with `the change breaks the schema`, and `hh doctor` reports it:
+
+```console
+$ hh doctor
+templates/lab.md: children[0].labels: label "docs" is not in the list of labels of the schema
+  hint: add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit lab`
+templates/lab.md: labels: label "zzz" is not in the list of labels of the schema
+  hint: add the label with `hedgehug schema labels add`, or fix the template with `hedgehug template edit lab`
+2 problems
 ```
 
 Without `--template`, `hh add` expands the default template of the task's kind, if the
