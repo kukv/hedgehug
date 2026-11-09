@@ -80,9 +80,9 @@ func Merge(path string, sc *schema.Schema, base []byte, ours, theirs Side, p Pol
 		}
 		return mergeFile(m, base, ours, theirs, taskKind)
 	case kindComment:
-		return m.record(ours, theirs, commentUpdated)
+		return m.record(ours, theirs, commentUpdated, func(win, lose []byte) ([]byte, bool) { return adoptCommentGH(base, win, lose) })
 	case kindWorklog:
-		return m.record(ours, theirs, worklogUpdated)
+		return m.record(ours, theirs, worklogUpdated, nil)
 	case kindSprint, kindRelease, kindTemplate, kindWorkspace:
 		return m.plan(base, ours, theirs)
 	case kindYAML:

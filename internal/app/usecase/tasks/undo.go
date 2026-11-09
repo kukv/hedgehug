@@ -357,14 +357,14 @@ func checkCommentNotPushed(p string, base, ours, theirs []byte) error {
 	}
 	c, err := model.DecodeComment(ours)
 	if err != nil {
-		return err
+		return nil //nolint:nilerr // a file that does not read: no gh to tell, the merge goes on as before
 	}
 	links, err := c.GitHub()
-	if err != nil {
-		return err
+	if err != nil || len(links) == 0 {
+		return nil //nolint:nilerr // no gh that reads: nothing sent to GitHub that is known
 	}
-	if len(links) == 0 {
-		return nil
+	if c.DeletedAt != nil {
+		return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub and is deleted now, so adding it cannot be undone; the comment on GitHub is removed by the next sync"))
 	}
 	return usecase.NewErr(usecase.KindInvalid, "undo.comment_pushed", errors.New("the comment was sent to GitHub, so adding it cannot be undone; remove it with hedgehug comment rm, which removes it from GitHub too"))
 }

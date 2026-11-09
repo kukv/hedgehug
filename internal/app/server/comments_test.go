@@ -86,6 +86,9 @@ func TestCommentFromGitHub(t *testing.T) {
 	if p := ts.problem("PATCH", "/api/tasks/"+id+"/comments/"+deleted.String(), map[string]any{"body": "x"}, 409); p.Type != "comment.deleted" {
 		t.Errorf("edit of a deleted one: %+v", p)
 	}
+	if p := ts.problem("DELETE", "/api/tasks/"+id+"/comments/"+deleted.String(), nil, 409); p.Type != "comment.deleted" {
+		t.Errorf("remove of a deleted one: %+v", p)
+	}
 	ts.call("GET", "/api/tasks/"+id, nil, 200, &show)
 	flags := map[string]bool{}
 	for _, c := range show.Comments {

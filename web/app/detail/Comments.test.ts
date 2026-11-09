@@ -18,6 +18,7 @@ const c1 = {
   ulid: "C1",
   author: "github.com/tanaka",
   created: "2026-11-04T10:12:00Z",
+  github: false,
   body: "ガイドでは「カーソル」で統一します。",
 };
 const show = showView({
@@ -419,6 +420,7 @@ describe("Comments", () => {
       ulid: "C2",
       author,
       created: "2026-11-04T11:00:00Z",
+      github: false,
       body: "x",
     });
     const withComment = (author: string, opts: FakeCoreOptions = {}) => {
