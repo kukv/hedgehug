@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,7 @@ func TestMergeDriverUpgradesABaseOfAnOlderFormat(t *testing.T) {
 	commit := func(format, sc, kind string, when time.Time, parent plumbing.Hash) plumbing.Hash {
 		t.Helper()
 		files := map[string]string{
-			model.StoreMetaPath:       strings.Replace(meta, "format: 2", "format: "+format, 1),
+			model.StoreMetaPath:       strings.Replace(meta, fmt.Sprintf("format: %d", model.StoreFormat), "format: "+format, 1),
 			schema.Path:               sc,
 			model.TaskPath(task.ULID): taskFile(kind),
 		}

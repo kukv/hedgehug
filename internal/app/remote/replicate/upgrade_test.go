@@ -2,6 +2,7 @@ package replicate
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -61,7 +62,7 @@ func fromBeforeAConversion(t *testing.T, c *cluster) (x *model.Task, base, ours,
 			t.Fatal(err)
 		}
 		files := map[string]string{
-			model.StoreMetaPath:    strings.Replace(string(meta), "format: 2", "format: "+string(rune('0'+format)), 1),
+			model.StoreMetaPath:    strings.Replace(string(meta), fmt.Sprintf("format: %d", model.StoreFormat), fmt.Sprintf("format: %d", format), 1),
 			schema.Path:            sc,
 			model.TaskPath(x.ULID): string(body),
 		}

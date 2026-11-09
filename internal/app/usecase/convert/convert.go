@@ -20,6 +20,7 @@ import (
 // tests put steps of their own here, with model.StoreFormat raised to match.
 var steps = []Step{
 	{From: 1, Apply: step2},
+	{From: 2, Apply: step3},
 }
 
 // Run converts the store of the session from its format to the newest, one

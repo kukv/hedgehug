@@ -28,6 +28,9 @@ type Options struct {
 	// Now is the time the tasks a step changes are stamped with; zero leaves
 	// their time as it is.
 	Now time.Time
+	// DropBadValues drops the values a step cannot convert (--drop-bad-values),
+	// and reports each, where it would otherwise stop with convert.bad_value.
+	DropBadValues bool
 }
 
 // Report tells what a step changed, one line for each kind of change.

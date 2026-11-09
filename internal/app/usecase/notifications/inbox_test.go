@@ -696,6 +696,29 @@ func TestRevertField(t *testing.T) {
 	}
 }
 
+// An item that an older hedgehug wrote names a relation as a property
+// (props.relates): reverting it writes the field of the task and leaves props
+// alone.
+func TestRevertFieldTakesAPropertyThatIsARelationNowForTheField(t *testing.T) {
+	t.Parallel()
+	sc := schema.Default()
+	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
+	a, b := model.NewULID(), model.NewULID()
+	for _, name := range []string{"duplicates", "causes", "relates", "clones"} {
+		task := &model.Task{}
+		rel, _, _ := schema.RelationOf(name)
+		if err := notifications.RevertField(task, "props."+name, json.RawMessage(`"`+a.String()+`"`), sc, resolve); err != nil || !slices.Equal(rel.Get(task), []model.ULID{a}) {
+			t.Errorf("props.%s: %v, %v", name, rel.Get(task), err)
+		}
+		if err := notifications.RevertField(task, "props."+name, json.RawMessage(`["`+a.String()+`","`+b.String()+`"]`), sc, resolve); err != nil || !slices.Equal(rel.Get(task), []model.ULID{a, b}) {
+			t.Errorf("props.%s as a list: %v, %v", name, rel.Get(task), err)
+		}
+		if len(task.Props) != 0 {
+			t.Errorf("props.%s left in props: %v", name, task.Props)
+		}
+	}
+}
+
 func TestInboxRevertAfterARealSync(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

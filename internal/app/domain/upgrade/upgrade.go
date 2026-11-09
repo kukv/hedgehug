@@ -42,6 +42,7 @@ type Step struct {
 // match.
 var Steps = []Step{
 	{From: 1, Apply: task1to2},
+	{From: 2, Apply: task2to3},
 }
 
 // Upgrade rewrites the task file raw, which is in format from, into the newest

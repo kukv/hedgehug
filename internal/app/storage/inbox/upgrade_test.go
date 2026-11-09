@@ -23,11 +23,11 @@ func TestCollectReadsTheParentOfAConversionInTheNewFormat(t *testing.T) {
 	syncBoth(t, a, b)
 	before := head(t, b)
 
-	// Format 3 keeps who works on a task in the file, where format 2 had
+	// Format 4 keeps who works on a task in the file, where format 3 had
 	// nobody: the step gives every old task the assignee github.com/b.
 	was, wasSteps := model.StoreFormat, upgrade.Steps
-	model.StoreFormat = 3
-	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 2, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
+	model.StoreFormat = 4
+	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 3, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
 		tk, err := model.DecodeTask(raw)
 		if err != nil {
 			return nil, err
@@ -48,7 +48,7 @@ func TestCollectReadsTheParentOfAConversionInTheNewFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		model.StoreMetaPath:    strings.Replace(string(meta), "format: 2", "format: 3", 1),
+		model.StoreMetaPath:    strings.Replace(string(meta), "format: 3", "format: 4", 1),
 		model.TaskPath(x.ULID): string(body),
 	}
 	var paths []string

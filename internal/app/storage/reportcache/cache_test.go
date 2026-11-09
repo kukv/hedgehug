@@ -175,7 +175,7 @@ func TestBrokenAndForwardVersions(t *testing.T) {
 }
 
 // A version from before a conversion is read in the newest format: the
-// versions the commits of format 2 hold are upgraded by a step of format 3 that
+// versions the commits of format 3 hold are upgraded by a step of format 4 that
 // stands in for a real one. The test must not be parallel.
 func TestReadUpgradesTheVersionsOfAnOlderFormat(t *testing.T) {
 	f := newFixture(t)
@@ -185,8 +185,8 @@ func TestReadUpgradesTheVersionsOfAnOlderFormat(t *testing.T) {
 	f.put(t, a)
 
 	was, wasSteps := model.StoreFormat, upgrade.Steps
-	model.StoreFormat = 3
-	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 2, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
+	model.StoreFormat = 4
+	upgrade.Steps = append(slices.Clone(wasSteps), upgrade.Step{From: 3, Apply: func(raw []byte, _ upgrade.Cx) ([]byte, error) {
 		tk, err := model.DecodeTask(raw)
 		if err != nil {
 			return nil, err

@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -699,6 +700,11 @@ var refused = map[string]string{
 // revertField puts the value raw, as JSON, back into the field of t, as
 // hedgehug set would write it. The parent is the job of revertParent.
 func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	// An item that an older hedgehug wrote names a relation as a property
+	// (props.relates); it is the field of the task now.
+	if name, ok := strings.CutPrefix(field, "props."); ok && slices.Contains(upgrade.LegacyRelationNames, name) {
+		field = name
+	}
 	switch field {
 	case "title", "kind", "status":
 		var v string

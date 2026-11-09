@@ -2,6 +2,7 @@ package convert
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -123,7 +124,7 @@ func makeOld(t *testing.T, ts *usecasetest.Session) *oldTasks {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files[model.StoreMetaPath] = strings.Replace(string(meta), "format: 2", "format: 1", 1)
+	files[model.StoreMetaPath] = strings.Replace(string(meta), fmt.Sprintf("format: %d", model.StoreFormat), "format: 1", 1)
 	commitRaw(t, ts, "make it old", files)
 	ts.DropMount() // what the commands of a new run read from the files
 	return o
@@ -190,7 +191,7 @@ func TestOldFormatDoesNotOpen(t *testing.T) {
 func TestNewerFormatDoesNotOpen(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	commitRaw(t, ts, "newer", map[string]string{model.StoreMetaPath: "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: me\nformat: 3\n"})
+	commitRaw(t, ts, "newer", map[string]string{model.StoreMetaPath: "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: me\nformat: 4\n"})
 	_, _, err := ts.Open()
 	wantCode(t, err, usecase.KindInvalid, "store.newer_format")
 }
@@ -228,7 +229,7 @@ func TestRunConverts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 1 || reports[0].From != 1 || len(reports[0].Lines) == 0 {
+	if len(reports) != 2 || reports[0].From != 1 || reports[1].From != 2 || len(reports[0].Lines) == 0 {
 		t.Fatalf("reports = %+v", reports)
 	}
 	if formatOf(t, ts) != model.StoreFormat {
@@ -287,7 +288,7 @@ func TestRunDryRunWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 1 || len(reports[0].Lines) < 3 {
+	if len(reports) != 2 || len(reports[0].Lines) < 3 {
 		t.Errorf("reports = %+v", reports)
 	}
 	if headOf(t, ts) != before || formatOf(t, ts) != 1 {
@@ -536,24 +537,24 @@ func TestRunSyncFailureIsConvertUnsynced(t *testing.T) {
 // An origin that is in an older format than the store has its changes converted on origin, up to the format of the store.
 func TestRunOriginOlderThanTheStore(t *testing.T) {
 	f := newRemoteFx(t) // origin and store in format 1
-	withFormat3(t)
+	withFormat4(t)
 	meta := filepath.Join(storeDir(t, f.ts), filepath.FromSlash(model.StoreMetaPath))
 	b, err := os.ReadFile(meta)
 	if err != nil {
 		t.Fatal(err)
 	}
-	commitRaw(t, f.ts, "a store in format 2", map[string]string{model.StoreMetaPath: strings.Replace(string(b), "format: 1", "format: 2", 1)})
+	commitRaw(t, f.ts, "a store in format 3", map[string]string{model.StoreMetaPath: strings.Replace(string(b), "format: 1", "format: 3", 1)})
 	pushElsewhere(t, f)
 	reports, err := Run(f.ts.Session, Options{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// the changes of origin are converted from 1 up to the format of the
-	// store (2), and then the store goes on to 3
-	if len(reports) != 3 || reports[0].From != 1 || reports[0].To != 2 || reports[2].From != 2 || reports[2].To != 3 {
+	// store (3), and then the store goes on to 4
+	if len(reports) != 4 || reports[0].From != 1 || reports[0].To != 3 || reports[3].From != 3 || reports[3].To != 4 {
 		t.Fatalf("reports = %+v", reports)
 	}
-	if formatOf(t, f.ts) != 3 || originHead(t, f.remote) != headOf(t, f.ts) {
+	if formatOf(t, f.ts) != 4 || originHead(t, f.remote) != headOf(t, f.ts) {
 		t.Errorf("format %d; origin is not at the head of the store", formatOf(t, f.ts))
 	}
 	if _, err := os.Stat(filepath.Join(storeDir(t, f.ts), "notes.txt")); err != nil {
@@ -635,7 +636,7 @@ func TestFormatDivergedAndTheWayBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 1 {
+	if len(reports) != 2 {
 		t.Fatalf("reports = %+v", reports)
 	}
 	if formatOf(t, b) != model.StoreFormat {
@@ -949,15 +950,15 @@ func TestAnOriginOfANewerFormatIsNotUnsynced(t *testing.T) {
 	wantCode(t, err, usecase.KindInvalid, "store.newer_format")
 }
 
-// withFormat3 stands a third format in: the steps get one that writes
-// step3.txt, and the newest format is 3. The test must not be parallel.
-func withFormat3(t *testing.T) {
+// withFormat4 stands a fourth format in: the steps get one that writes
+// step4.txt, and the newest format is 4. The test must not be parallel.
+func withFormat4(t *testing.T) {
 	t.Helper()
 	was, wasSteps := model.StoreFormat, steps
-	model.StoreFormat = 3
-	steps = append(slices.Clone(steps), Step{From: 2, Apply: func(tr *Tree, _ Options) (Report, error) {
-		tr.Write("step3.txt", []byte("x"))
-		return Report{Lines: []string{"step3"}}, nil
+	model.StoreFormat = 4
+	steps = append(slices.Clone(steps), Step{From: 3, Apply: func(tr *Tree, _ Options) (Report, error) {
+		tr.Write("step4.txt", []byte("x"))
+		return Report{Lines: []string{"step4"}}, nil
 	}})
 	t.Cleanup(func() { model.StoreFormat, steps = was, wasSteps })
 }
@@ -965,25 +966,25 @@ func withFormat3(t *testing.T) {
 func TestAnOriginInAMiddleFormatIsFastForwardedToAndConvertedOn(t *testing.T) {
 	a := newRemoteFx(t)
 	b := cloneOld(t, a)
-	if _, err := Run(a.ts.Session, Options{}, false); err != nil { // origin is in format 2
+	if _, err := Run(a.ts.Session, Options{}, false); err != nil { // origin is in format 3
 		t.Fatal(err)
 	}
 	converted := originHead(t, a.remote)
-	withFormat3(t)
+	withFormat4(t)
 	reports, err := Run(b.Session, Options{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 2 || reports[0].From != 1 || reports[0].To != 2 || reports[1].From != 2 || reports[1].To != 3 {
+	if len(reports) != 2 || reports[0].From != 1 || reports[0].To != 3 || reports[1].From != 3 || reports[1].To != 4 {
 		t.Fatalf("reports = %+v", reports)
 	}
 	if !strings.Contains(strings.Join(reports[0].Lines, "\n"), "fast-forward") {
 		t.Errorf("the first report is not the fast-forward: %v", reports[0].Lines)
 	}
-	if formatOf(t, b) != 3 || headOf(t, b) != originHead(t, a.remote) {
+	if formatOf(t, b) != 4 || headOf(t, b) != originHead(t, a.remote) {
 		t.Errorf("format %d, head %s, origin %s", formatOf(t, b), headOf(t, b), originHead(t, a.remote))
 	}
-	if _, err := os.Stat(filepath.Join(storeDir(t, b), "step3.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(storeDir(t, b), "step4.txt")); err != nil {
 		t.Error(err)
 	}
 	// one commit of its own, on the conversion of the first clone
@@ -995,7 +996,7 @@ func TestAnOriginInAMiddleFormatIsFastForwardedToAndConvertedOn(t *testing.T) {
 	h, _ := r.Head()
 	log, err := r.LogFrom(h, 2)
 	if err != nil || len(log) != 2 || log[1].Hash.String() != converted {
-		t.Errorf("log = %v, %v; want the conversion of step 3 on %s", log, err, converted)
+		t.Errorf("log = %v, %v; want the conversion of step 4 on %s", log, err, converted)
 	}
 }
 
@@ -1003,21 +1004,21 @@ func TestAnOriginInAMiddleFormatWithChangesNotPushed(t *testing.T) {
 	a := newRemoteFx(t)
 	b := cloneOld(t, a)
 	commitRaw(t, b, "mine", map[string]string{"notes.txt": "mine"})
-	if _, err := Run(a.ts.Session, Options{}, false); err != nil { // origin is in format 2
+	if _, err := Run(a.ts.Session, Options{}, false); err != nil { // origin is in format 3
 		t.Fatal(err)
 	}
-	withFormat3(t)
+	withFormat4(t)
 	reports, err := Run(b.Session, Options{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 2 || reports[0].To != 2 || reports[1].From != 2 || reports[1].To != 3 {
+	if len(reports) != 3 || reports[0].To != 2 || reports[1].To != 3 || reports[2].From != 3 || reports[2].To != 4 {
 		t.Fatalf("reports = %+v", reports)
 	}
-	if formatOf(t, b) != 3 || headOf(t, b) != originHead(t, a.remote) {
+	if formatOf(t, b) != 4 || headOf(t, b) != originHead(t, a.remote) {
 		t.Errorf("format %d; the clone is not what origin has", formatOf(t, b))
 	}
-	for _, f := range []string{"step3.txt", "notes.txt"} {
+	for _, f := range []string{"step4.txt", "notes.txt"} {
 		if _, err := os.Stat(filepath.Join(storeDir(t, b), f)); err != nil {
 			t.Error(err)
 		}
