@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -20,13 +21,7 @@ import (
 // the only place that reads the old form.
 
 // oldKind is one entry of the kinds of a schema.yaml in format 1.
-type oldKind struct {
-	Name     string `yaml:"name"`
-	Role     string `yaml:"role"`
-	Template string `yaml:"template"`
-}
-
-func (k oldKind) isGroup() bool { return k.Role == "container" }
+type oldKind = upgrade.OldKind
 
 // isItem reports whether kind is a story, a task or a bug.
 func isItem(kind string) bool { return kind == "story" || kind == "task" || kind == "bug" }
@@ -96,10 +91,8 @@ func loadStep2(t *Tree, opt Options) (*step2State, error) {
 		return nil, fmt.Errorf("%s: %w", schema.Path, err)
 	}
 	c.sc = sc
-	if n := sc.Extra.Get("kinds"); n != nil {
-		if err := n.Decode(&c.file); err != nil {
-			return nil, fmt.Errorf("%s: kinds: %w", schema.Path, err)
-		}
+	if c.file, err = upgrade.OldKinds(sc); err != nil {
+		return nil, err
 	}
 	for _, k := range c.file {
 		if _, dup := c.kind[k.Name]; !dup {
@@ -176,16 +169,7 @@ func (c *step2State) newKind(name string, atRoot bool) string {
 	if to, ok := c.opt.Kinds[name]; ok {
 		return to
 	}
-	if _, ok := schema.KindOf(name); ok {
-		return name
-	}
-	if k, ok := c.kind[name]; ok && k.isGroup() {
-		if atRoot {
-			return "project"
-		}
-		return "epic"
-	}
-	return "task"
+	return upgrade.FixedKind(c.file, name, atRoot)
 }
 
 // kindWide is newKind for what has no place in a tree, such as the default

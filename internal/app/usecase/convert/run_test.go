@@ -31,6 +31,12 @@ type oldTasks struct {
 // hedgehug did: the store may be in a format that does not open.
 func commitRaw(t *testing.T, ts *usecasetest.Session, subject string, files map[string]string) {
 	t.Helper()
+	commitRawWith(t, ts, subject, files, nil)
+}
+
+// commitRawWith is commitRaw with the trailers of the commit.
+func commitRawWith(t *testing.T, ts *usecasetest.Session, subject string, files map[string]string, trailers []gitrepo.Trailer) {
+	t.Helper()
 	_, e, err := ts.Entry()
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +57,7 @@ func commitRaw(t *testing.T, ts *usecasetest.Session, subject string, files map[
 		}
 		paths = append(paths, rel)
 	}
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: paths, Subject: subject, Author: config.CommitAuthor(usecasetest.TestAccount), When: ts.Now()}); err != nil {
+	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: paths, Subject: subject, Trailers: trailers, Author: config.CommitAuthor(usecasetest.TestAccount), When: ts.Now()}); err != nil {
 		t.Fatal(err)
 	}
 }

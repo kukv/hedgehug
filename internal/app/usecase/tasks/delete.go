@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -214,6 +215,18 @@ func ParseAtTime(at string, loc *time.Location) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// readTaskAt is the file of the task ulid as commit has it, in the newest
+// store format: a commit from before a conversion is read through the steps
+// of domain/upgrade. The error is fs.ErrNotExist when the commit lacks it.
+func readTaskAt(s *store.Store, commit plumbing.Hash, ulid model.ULID) ([]byte, error) {
+	r := s.Repo()
+	data, err := r.ReadAt(commit, model.TaskPath(ulid))
+	if err != nil {
+		return nil, err
+	}
+	return upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(commit, p) }).Task(data)
+}
+
 // commitAt returns the commit whose state RestoreAt reads: for a time, the
 // newest commit on the first-parent line from HEAD made at or before it (the
 // zero hash when there is none); for anything else, the commit it names, an
@@ -311,7 +324,7 @@ func RestoreAt(ss *usecase.Session, arg, at string) (RestoreAtResult, error) {
 		if e, err = usecase.Refreshed(ix, e); err != nil {
 			return err
 		}
-		data, err := s.Repo().ReadAt(commit, model.TaskPath(e.ULID))
+		data, err := readTaskAt(s, commit, e.ULID)
 		if errors.Is(err, fs.ErrNotExist) {
 			return usecase.NewErr(usecase.KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
 		}

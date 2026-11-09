@@ -18,13 +18,14 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/report"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 const (
 	fileName = "report" // in .hedgehug/local
-	format   = 2        // bump when row changes
+	format   = 3        // bump when row changes, or when a task is read in another way (3: past commits are upgraded to the newest store format)
 )
 
 // OpMoveIn is the op of the commit that brings a task from another store.
@@ -89,6 +90,11 @@ func readRow(s *store.Store, commit plumbing.Hash, p string, ulid model.ULID) (r
 	if model.IsForward(b) {
 		r.Gone = true
 		return r, nil
+	}
+	// A version from before a conversion is read in the newest format.
+	if b, err = upgrade.At(func(p string) ([]byte, error) { return s.Repo().ReadAt(commit, p) }).Task(b); err != nil {
+		r.Bad = true
+		return r, nil //nolint:nilerr // a version that does not upgrade is left out
 	}
 	t, err := model.DecodeTask(b)
 	if err != nil || t.ULID != ulid {

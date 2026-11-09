@@ -10,6 +10,8 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -19,11 +21,32 @@ func Sides(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, path string) (b []
 	if b, err = readAt(r, base, path); err != nil {
 		return nil, o, t, err
 	}
+	b = UpgradedBase(r, base, ours, path, b)
 	if o, err = side(r, base, ours, path); err != nil {
 		return nil, o, t, err
 	}
 	t, err = side(r, base, theirs, path)
 	return b, o, t, err
+}
+
+// UpgradedBase is the file b of a task at the merge base in the store format of
+// ours: a base from before a conversion is read through the steps of
+// domain/upgrade, so that a side that converted and then changed a value is not
+// merged against the unconverted base. Another file, or a task that does not
+// upgrade, is b as it is, for the merge to treat as a file that does not decode.
+func UpgradedBase(r *gitrepo.Repo, base, ours plumbing.Hash, path string, b []byte) []byte {
+	if _, err := model.ParseTaskPath(path); err != nil || b == nil {
+		return b
+	}
+	to, err := FormatAt(r, ours)
+	if err != nil {
+		return b
+	}
+	up, err := upgrade.At(func(p string) ([]byte, error) { return r.ReadAt(base, p) }).TaskTo(to, b)
+	if err != nil {
+		return b
+	}
+	return up
 }
 
 // side is path as the commit from has it, with who changed it last and

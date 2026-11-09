@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
@@ -224,7 +225,7 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 			return res, &forwardHitError{ulid: ulid}
 		}
 	}
-	u := &undoer{tx: tx, r: r, ix: ix, sc: s.Schema(), head: head, c: c, paths: map[string]bool{}, res: &res}
+	u := &undoer{tx: tx, r: r, ix: ix, sc: s.Schema(), head: head, c: c, paths: map[string]bool{}, commits: map[plumbing.Hash]*upgrade.Commit{}, res: &res}
 	for _, ch := range changes {
 		u.paths[ch.Path] = true
 	}
@@ -245,8 +246,10 @@ type undoer struct {
 	head  plumbing.Hash
 	c     gitrepo.LogEntry // the commit taken back
 	paths map[string]bool  // the files c changed
-	res   *UndoResult
-	moved []movedTask
+	// commits read a commit's task files in the newest format, by commit
+	commits map[plumbing.Hash]*upgrade.Commit
+	res     *UndoResult
+	moved   []movedTask
 }
 
 // movedTask is a task undo put in another workspace.
@@ -256,12 +259,26 @@ type movedTask struct {
 }
 
 // read returns p as commit has it, or nil when it is not there.
+// A task file comes back in the newest store format, whatever the format of
+// the commit (domain/upgrade), so that the versions of a file are compared and
+// merged in one form.
 func (u *undoer) read(commit plumbing.Hash, p string) ([]byte, error) {
 	b, err := u.r.ReadAt(commit, p)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
-	return b, err
+	if err != nil {
+		return nil, err
+	}
+	if _, perr := model.ParseTaskPath(p); perr != nil {
+		return b, nil //nolint:nilerr // not a task file
+	}
+	up, ok := u.commits[commit]
+	if !ok {
+		up = upgrade.At(func(p string) ([]byte, error) { return u.r.ReadAt(commit, p) })
+		u.commits[commit] = up
+	}
+	return up.Task(b)
 }
 
 // path takes back c's change to the file p.

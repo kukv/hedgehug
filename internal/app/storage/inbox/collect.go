@@ -14,6 +14,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/upgrade"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -480,12 +481,16 @@ func (c *commit) watchers(t *model.Task) []string {
 	return out
 }
 
-// readTask reads the task u in tree; nil when it is missing or does not
+// readTask reads the task u in tree, in the newest store format whatever the
+// format of the tree (domain/upgrade); nil when it is missing or does not
 // decode.
 func readTask(r *gitrepo.Repo, tree plumbing.Hash, u model.ULID) (*model.Task, error) {
 	b, err := readAt(r, tree, model.TaskPath(u))
 	if err != nil || b == nil {
 		return nil, err
+	}
+	if b, err = upgrade.At(func(p string) ([]byte, error) { return r.ReadFile(tree, p) }).Task(b); err != nil {
+		return nil, nil //nolint:nilerr // a task that does not upgrade makes no item
 	}
 	t, err := model.DecodeTask(b)
 	if err != nil {

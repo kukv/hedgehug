@@ -78,6 +78,11 @@ func MergeDriver(ss *usecase.Session, in MergeDriverInput) error {
 		if _, ours, other, err = replicate.Sides(r, base, head, theirs, rel); err != nil {
 			return err
 		}
+		// git's base file is the one of a commit of the history, which may be
+		// in an older format than the sides.
+		if baseData != nil {
+			baseData = replicate.UpgradedBase(r, base, head, rel, baseData)
+		}
 	}
 	ours.Data, other.Data = data[1], data[2]
 	m, err := merge.Merge(rel, sc, baseData, ours, other, merge.LWW)
