@@ -61,7 +61,7 @@ test("a status that needs a field asks for it, and sets both in one commit", asy
 
   const after = hh.show(ship.id);
   expect(after.status).toBe("in_progress");
-  expect(after.props.points).toBe("5");
+  expect(after.points).toBe(5);
   expect(commits(hh)).toBe(before + 1);
 });
 

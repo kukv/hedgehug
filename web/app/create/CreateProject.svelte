@@ -20,7 +20,7 @@
 
   let { onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
-  const { api, cache, stores, schema } = core();
+  const { api, cache, stores } = core();
   const did = useDisplayId(stores);
   const all = useSubscribe(stores, () => stores.workspaces());
   const roOf = useReadOnlyOf(stores);
@@ -62,11 +62,6 @@
     if (again.workspace) wsKey = opened = workspaceKey(again.workspace);
   });
 
-  const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
-  $effect(() => {
-    if (ws) void schema.load(ws.store);
-  });
-
   let title = $state("");
   let repos = $state<string[]>([]);
   let assignees = $state<string[]>([]);
@@ -79,8 +74,6 @@
     titleEl?.focus();
   });
 
-  const hasStart = $derived(!!sc.current && "start" in sc.current.props);
-  const hasDue = $derived(!!sc.current && "due" in sc.current.props);
   const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && blocked === "");
 
   const cli = $derived.by(() => {
@@ -108,9 +101,6 @@
     busy = true;
     error = "";
     try {
-      const props: Record<string, unknown> = {};
-      if (start) props.start = start;
-      if (due) props.due = due;
       const r = await api.createTask(
         {
           title: title.trim(),
@@ -118,7 +108,8 @@
           workspace: ws.name,
           ...(assignees.length > 0 ? { assignees } : {}),
           ...(repos.length > 0 ? { repos } : {}),
-          ...(Object.keys(props).length > 0 ? { props } : {}),
+          ...(start ? { start } : {}),
+          ...(due ? { due } : {}),
         },
         { store: ws.store },
       );
@@ -235,34 +226,28 @@
       />
     </div>
 
-    {#if hasStart || hasDue}
-      <div class="dates">
-        {#if hasStart}
-          <div class="field">
-            <span class="lbl">開始日</span>
-            <FieldInput
-              editor="date"
-              label="開始日"
-              value={start}
-              onedit={(v) => (start = v as string | null)}
-              oncommit={() => {}}
-            />
-          </div>
-        {/if}
-        {#if hasDue}
-          <div class="field">
-            <span class="lbl">期限</span>
-            <FieldInput
-              editor="date"
-              label="期限"
-              value={due}
-              onedit={(v) => (due = v as string | null)}
-              oncommit={() => {}}
-            />
-          </div>
-        {/if}
+    <div class="dates">
+      <div class="field">
+        <span class="lbl">開始日</span>
+        <FieldInput
+          editor="date"
+          label="開始日"
+          value={start}
+          onedit={(v) => (start = v as string | null)}
+          oncommit={() => {}}
+        />
       </div>
-    {/if}
+      <div class="field">
+        <span class="lbl">期限</span>
+        <FieldInput
+          editor="date"
+          label="期限"
+          value={due}
+          onedit={(v) => (due = v as string | null)}
+          oncommit={() => {}}
+        />
+      </div>
+    </div>
     {#if blocked}
       <p id="create-blocked" class="hint">{blocked}</p>
     {/if}

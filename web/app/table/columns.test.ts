@@ -14,15 +14,20 @@ import {
 const withProps = (props: Record<string, unknown>): SchemaView =>
   ({ ...base, props }) as unknown as SchemaView;
 
-const shared = withProps({
-  due: { type: "date", label: "期限" },
-  points: { type: "number" },
-  area: { type: "multi_enum", values: ["backend", "frontend"] },
-  site: { type: "url", label: "サイト" },
-  causes: { type: "text" },
-  blocked_by: { type: "text" },
-  status: { type: "text" },
-});
+const shared = {
+  ...withProps({
+    kickoff: { type: "date", label: "着手" },
+    effort: { type: "number" },
+    area: { type: "multi_enum", values: ["backend", "frontend"] },
+    site: { type: "url", label: "サイト" },
+    causes: { type: "text" },
+    blocked_by: { type: "text" },
+    status: { type: "text" },
+    due: { type: "date" },
+    priority: { type: "text" },
+  }),
+  priorities: ["low", "mid", "high", "urgent"],
+} as SchemaView;
 const me = withProps({
   area: { type: "multi_enum", label: "領域", values: ["x"] },
   team: { type: "text", label: "チーム" },
@@ -32,8 +37,8 @@ const ids = (list: { id: string }[]) => list.map((c) => c.id);
 
 describe("columnCandidates", () => {
   it("offers the properties in the prop_order of the schema", () => {
-    const sc = { ...shared, prop_order: ["points", "due", "area", "site"] } as SchemaView;
-    expect(ids(columnCandidates([sc])).slice(-4)).toEqual(["points", "due", "area", "site"]);
+    const sc = { ...shared, prop_order: ["effort", "kickoff", "area", "site"] } as SchemaView;
+    expect(ids(columnCandidates([sc])).slice(-4)).toEqual(["effort", "kickoff", "area", "site"]);
   });
 
   it("lists the builtin columns, then the properties of the schemas by name", () => {
@@ -44,23 +49,41 @@ describe("columnCandidates", () => {
       "status",
       "assignee",
       "label",
+      "priority",
+      "start",
+      "due",
+      "estimate",
+      "points",
       "parent",
       "created",
       "updated",
       "pr",
       "area",
-      "due",
-      "points",
+      "effort",
+      "kickoff",
       "site",
     ]);
   });
 
+  it("names the built-in columns as the detail does; a property of the schema cannot take their names", () => {
+    const list = columnCandidates([shared]);
+    const label = (id: string) => list.find((c) => c.id === id)?.label;
+    expect(label("priority")).toBe("優先度");
+    expect(label("start")).toBe("開始日");
+    expect(label("due")).toBe("期限");
+    expect(label("estimate")).toBe("見積もり");
+    expect(label("points")).toBe("ポイント");
+    expect(label("label")).toBe("ラベル");
+    expect(list.filter((c) => c.id === "due")).toHaveLength(1);
+    expect(list.filter((c) => c.id === "priority")).toHaveLength(1);
+  });
+
   it("takes the union of several stores and the label of the first store that has the property", () => {
     const list = columnCandidates([shared, me]);
-    expect(ids(list).slice(10)).toEqual(["area", "due", "points", "site", "team"]);
+    expect(ids(list).slice(15)).toEqual(["area", "effort", "kickoff", "site", "team"]);
     expect(list.find((c) => c.id === "area")?.label).toBe("area");
     expect(list.find((c) => c.id === "team")?.label).toBe("チーム");
-    expect(list.find((c) => c.id === "due")?.label).toBe("期限");
+    expect(list.find((c) => c.id === "kickoff")?.label).toBe("着手");
   });
 
   it("shows ID, parent, created, updated and the pull requests only; a relation's name is not a column", () => {
@@ -71,7 +94,7 @@ describe("columnCandidates", () => {
   });
 
   it("has no property column without a schema", () => {
-    expect(columnCandidates([])).toHaveLength(10);
+    expect(columnCandidates([])).toHaveLength(15);
   });
 });
 
@@ -79,9 +102,9 @@ describe("shownColumns", () => {
   const candidates = columnCandidates([shared]);
 
   it("keeps the order of the view and leaves out what no schema defines", () => {
-    expect(ids(shownColumns(["title", "nope", "due", "id"], candidates))).toEqual([
+    expect(ids(shownColumns(["title", "nope", "kickoff", "id"], candidates))).toEqual([
       "title",
-      "due",
+      "kickoff",
       "id",
     ]);
   });
@@ -119,7 +142,11 @@ describe("patchFieldOf", () => {
     expect(of("status")).toBe("status");
     expect(of("assignee")).toBe("assignees");
     expect(of("label")).toBe("labels");
-    expect(of("points")).toBe("props.points");
+    expect(of("effort")).toBe("props.effort");
+  });
+  it("is the field of the task for a built-in property, and props for a property of the schema", () => {
+    for (const id of ["priority", "start", "due", "estimate", "points"]) expect(of(id)).toBe(id);
+    expect(of("kickoff")).toBe("props.kickoff");
   });
   it("has none for what is only shown", () => {
     for (const id of ["id", "parent", "created", "updated", "pr"]) expect(of(id)).toBeNull();
@@ -160,11 +187,34 @@ describe("sortKey", () => {
     expect(sortKey(t, "@store", ctx)).toBe(0);
   });
 
+  it("reads the built-in properties from the fields of the task", () => {
+    const t = task("T1", "task", null, {
+      priority: "high",
+      start: "2026-11-02",
+      due: "2026-11-09",
+      estimate: "1h30m",
+      points: 0,
+    });
+    expect(sortKey(t, "priority", ctx)).toBe(2);
+    expect(sortKey(t, "start", ctx)).toBe("2026-11-02");
+    expect(sortKey(t, "due", ctx)).toBe("2026-11-09");
+    expect(sortKey(t, "estimate", ctx)).toBe(90);
+    expect(sortKey(t, "points", ctx)).toBe(0);
+    // none, and a priority the list lacks goes after the ones it has
+    const none = task("T2", "task", null);
+    for (const id of ["priority", "start", "due", "estimate", "points"]) {
+      expect(sortKey(none, id, ctx)).toBeUndefined();
+    }
+    expect(sortKey(task("T3", "task", null, { priority: "gone" }), "priority", ctx)).toBe(4);
+    expect(sortKey(task("T4", "task", null, { estimate: "45m" }), "estimate", ctx)).toBe(45);
+    expect(sortKey(task("T5", "task", null, { estimate: "6h" }), "estimate", ctx)).toBe(360);
+  });
+
   it("reads a property by its type", () => {
     const t = task("T1", "task", null, {
-      props: { points: 5, done: true, prio: "high", note: "x", empty: "", area: ["a", "b"] },
+      props: { effort: 5, done: true, prio: "high", note: "x", empty: "", area: ["a", "b"] },
     });
-    expect(sortKey(t, "points", ctx)).toBe(5);
+    expect(sortKey(t, "effort", ctx)).toBe(5);
     expect(sortKey(t, "done", ctx)).toBe(1);
     expect(sortKey(t, "prio", ctx)).toBe(2);
     expect(sortKey(t, "note", ctx)).toBe("x");

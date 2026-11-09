@@ -41,12 +41,34 @@ describe("SaveController", () => {
     expect(patches()).toHaveLength(0);
   });
 
+  it("sends the built-in properties at the top of the body, as the fields of the task, and null clears one", async () => {
+    const { save, timers, patches } = setup();
+    save.edit("A", "shared", "priority", "high");
+    save.edit("A", "shared", "due", null);
+    save.edit("A", "shared", "start", "2026-11-02");
+    save.edit("A", "shared", "estimate", "1h30m");
+    save.edit("A", "shared", "points", 0);
+    save.edit("A", "shared", "labels", ["bug"]);
+    save.edit("A", "shared", "props.area", "web");
+    timers[0]?.fn();
+    await vi.waitFor(() => expect(save.state("A").kind).toBe("saved"));
+    expect(patches()[0]?.body).toEqual({
+      priority: "high",
+      due: null,
+      start: "2026-11-02",
+      estimate: "1h30m",
+      points: 0,
+      labels: ["bug"],
+      props: { area: "web" },
+    });
+  });
+
   it("sends the fields edited in one PATCH, with the props together", async () => {
     const { save, timers, patches } = setup();
     save.edit("A", "shared", "title", "new title");
     save.edit("A", "shared", "title", "newer title");
-    save.edit("A", "shared", "props.points", 3);
-    save.edit("A", "shared", "props.due", null);
+    save.edit("A", "shared", "props.area", "web");
+    save.edit("A", "shared", "props.site", null);
     save.edit("A", "shared", "assignees", ["alice"]);
     timers[0]?.fn();
     await vi.waitFor(() => expect(save.state("A").kind).toBe("saved"));
@@ -57,7 +79,7 @@ describe("SaveController", () => {
     expect(p?.body).toEqual({
       title: "newer title",
       assignees: ["alice"],
-      props: { points: 3, due: null },
+      props: { area: "web", site: null },
     });
   });
 

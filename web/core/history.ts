@@ -1,5 +1,6 @@
 import type { Api, ShowView } from "./api/client";
 import { RELATIONS, type RelationField } from "./relations";
+import { BUILTIN_PROPS } from "./schema";
 
 // showAt is the task as it was at the commit (GET /api/tasks/{id}/history/
 // {commit}). The commit has no task: 404 restore_at.not_found.
@@ -8,7 +9,7 @@ export function showAt(api: Api, id: string, commit: string, store?: string): Pr
 }
 
 export type RestoreChange = {
-  field: string; // title, kind, status, parent, assignees, labels, a relation (blocked_by, causes, ...), body, props.<name>
+  field: string; // title, kind, status, parent, assignees, a built-in property (priority, due, labels, ...), a relation (blocked_by, causes, ...), body, props.<name>
   label: string;
   from: string; // now
   to: string; // after the restore
@@ -31,7 +32,7 @@ const sameSet = (
 
 // diffForRestore lists what a restore to `then` changes in `now`, the fields
 // that differ and no others: the title, kind, status, parent, assignees,
-// labels, blockers, props, and the body (shown only as changed). Nothing in
+// the built-in properties, blockers, props, and the body (shown only as changed). Nothing in
 // the list means the task is the same as at that time. idOf shows the ULID of
 // a parent as its ID; propLabel is the label of a property.
 export function diffForRestore(
@@ -60,7 +61,16 @@ export function diffForRestore(
     if (!sameSet(a, b)) out.push({ field, label, from: shown(a), to: shown(b) });
   };
   list("assignees", "担当者", now.assignees, then.assignees);
-  list("labels", "ラベル", now.labels, then.labels);
+  // The built-in properties are fields of the task, in the order the detail shows them.
+  for (const b of BUILTIN_PROPS) {
+    if (b.name === "labels") {
+      list("labels", b.label, now.labels, then.labels);
+      continue;
+    }
+    const a = (now as unknown as Record<string, unknown>)[b.name] ?? null;
+    const c = (then as unknown as Record<string, unknown>)[b.name] ?? null;
+    if (a !== c) out.push({ field: b.name, label: b.label, from: shown(a), to: shown(c) });
+  }
   for (const r of RELATIONS) {
     list(
       r.name,

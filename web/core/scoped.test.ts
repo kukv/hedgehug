@@ -23,7 +23,9 @@ const schema = {
     { name: "canceled", category: "canceled", default: true },
   ],
   kinds: [],
-  props: { points: { type: "number" }, area: { type: "text" } },
+  priorities: ["low", "high"],
+  labels: [],
+  props: { effort: { type: "number" }, area: { type: "text" } },
   scoped: [],
   prop_order: [],
   workflow: { transitions: {}, required: {} },
@@ -106,13 +108,18 @@ describe("lists", () => {
 
 describe("requirableFields", () => {
   it("lists the properties in prop_order", () => {
-    const sc = { ...schema, prop_order: ["points", "area"] };
-    expect(requirableFields(sc).slice(0, 2)).toEqual(["points", "area"]);
+    const sc = { ...schema, prop_order: ["effort", "area"] };
+    expect(requirableFields(sc).slice(0, 2)).toEqual(["effort", "area"]);
   });
 
   it("is the properties by name and the built-in fields the server accepts", () => {
     expect(requirableFields(schema)).toEqual([
       "area",
+      "effort",
+      "priority",
+      "start",
+      "due",
+      "estimate",
       "points",
       "parent",
       "assignees",

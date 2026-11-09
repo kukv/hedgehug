@@ -10,7 +10,12 @@ const task = { ulid: "A", id: "T-1", store: "s", title: "one" };
 const schema = {
   subscribe: () => () => {},
   load: async () => undefined,
-  get: () => ({ statuses: [{ name: "done", label: "完了", category: "done" }], props: {} }),
+  get: () => ({
+    statuses: [{ name: "done", label: "完了", category: "done" }],
+    priorities: ["low", "high"],
+    labels: ["bug", "ux"],
+    props: { area: { type: "text" }, effort: { type: "number" } },
+  }),
 };
 const cache = { subscribe: () => () => {}, noteOwnCommit: vi.fn() };
 
@@ -50,6 +55,76 @@ describe("BulkDialog", () => {
     await screen.findByText("1 件が対象です · 違反 1 件");
     expect(screen.getByText("T-1: points が必要です")).toBeInTheDocument();
     expect(button().disabled).toBe(true);
+  });
+
+  it("lists the built-in properties in their fixed order, then the properties of the schema", () => {
+    setup(() => ({ tasks: [] }));
+    const names = [...(screen.getByLabelText("項目") as HTMLSelectElement).options].map(
+      (o) => o.textContent,
+    );
+    expect(names).toEqual([
+      "ステータス",
+      "スプリント",
+      "リリース",
+      "担当者",
+      "優先度",
+      "開始日",
+      "期限",
+      "見積もり",
+      "ポイント",
+      "ラベル",
+      "area",
+      "effort",
+    ]);
+  });
+
+  it("sets a built-in property at the top of the body: the priority from the list, a date, the points as a number, null to clear", async () => {
+    const { calls } = setup(() => ({ tasks: [task] }));
+    const pick = async (field: string) =>
+      fireEvent.change(screen.getByLabelText("項目"), { target: { value: field } });
+    const last = () => calls.at(-1)?.body;
+
+    await pick("priority");
+    expect(
+      [...(screen.getByLabelText("値") as HTMLSelectElement).options].map((o) => o.value),
+    ).toEqual(["", "low", "high"]);
+    await fireEvent.change(screen.getByLabelText("値"), { target: { value: "high" } });
+    await waitFor(() => expect(last()).toMatchObject({ priority: "high", dry_run: true }));
+
+    await pick("due");
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "2026-11-20" } });
+    await waitFor(() => expect(last()).toMatchObject({ due: "2026-11-20" }));
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "" } });
+    await waitFor(() => expect(last()).toMatchObject({ due: null }));
+
+    await pick("points");
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "0" } });
+    await waitFor(() => expect(last()).toMatchObject({ points: 0 }));
+
+    await pick("estimate");
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "1h30m" } });
+    await waitFor(() => expect(last()).toMatchObject({ estimate: "1h30m" }));
+    expect(calls.every((c) => (c.body as { props?: unknown }).props === undefined)).toBe(true);
+  });
+
+  it("chooses the labels from the list of the schema, and sends the whole list", async () => {
+    const { calls } = setup(() => ({ tasks: [task] }));
+    await fireEvent.change(screen.getByLabelText("項目"), { target: { value: "labels" } });
+    expect(screen.queryByRole("textbox")).toBeNull();
+    await fireEvent.change(screen.getByRole("combobox", { name: "ラベル" }), {
+      target: { value: "bug" },
+    });
+    await fireEvent.change(screen.getByRole("combobox", { name: "ラベル" }), {
+      target: { value: "ux" },
+    });
+    await waitFor(() => expect(calls.at(-1)?.body).toMatchObject({ labels: ["bug", "ux"] }));
+  });
+
+  it("still puts a property of the schema in props", async () => {
+    const { calls } = setup(() => ({ tasks: [task] }));
+    await fireEvent.change(screen.getByLabelText("項目"), { target: { value: "props.effort" } });
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "3" } });
+    await waitFor(() => expect(calls.at(-1)?.body).toMatchObject({ props: { effort: 3 } }));
   });
 
   it("offers the statuses of every Store for a query", async () => {

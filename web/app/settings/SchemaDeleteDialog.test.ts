@@ -95,7 +95,7 @@ describe("SchemaDeleteDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(
       await screen.findByText(
-        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。マージで別の定義へ移してから削除してください",
+        "タスク 2 件（うち削除済み 1 件）が使っているため削除できません。ステータスはマージで別のステータスへ移し、プロパティは使っているタスクの値を外してから削除してください",
       ),
     ).toBeVisible();
     expect(onclose).not.toHaveBeenCalled();

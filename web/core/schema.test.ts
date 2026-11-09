@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { defaultStatusIn, propEditorOf, SchemaCache, type SchemaView } from "./schema";
+import type { TaskView } from "./api/client";
+import {
+  BUILTIN_PROPS,
+  defaultStatusIn,
+  isBuiltinProp,
+  propEditorOf,
+  propValue,
+  SchemaCache,
+  type SchemaView,
+} from "./schema";
 import { FakeConn, fakeApi, settle } from "./testing";
 
 // The schema of a new store (internal/app/domain/schema Default), as GET /api/schema
@@ -12,13 +21,12 @@ const schema: SchemaView = {
     { name: "done", label: "完了", category: "done", default: true },
     { name: "canceled", label: "中止", category: "canceled", default: true },
   ],
+  priorities: ["low", "mid", "high", "urgent"],
+  labels: ["bug", "ux"],
   props: {
-    priority: { type: "enum", values: ["low", "mid", "high", "urgent"] },
     multi: { type: "multi_enum", values: ["a", "b"] },
-    start: { type: "date" },
-    points: { type: "number" },
     owner: { type: "user" },
-    estimate: { type: "duration" },
+    effort: { type: "duration" },
     done_flag: { type: "bool" },
     site: { type: "url" },
     memo: { type: "text" },
@@ -71,12 +79,9 @@ describe("defaultStatusIn", () => {
 
 describe("propEditorOf", () => {
   it("maps the types of the schema", () => {
-    expect(propEditorOf(schema, "priority")).toBe("enum");
     expect(propEditorOf(schema, "multi")).toBe("multi_enum");
-    expect(propEditorOf(schema, "start")).toBe("date");
-    expect(propEditorOf(schema, "points")).toBe("number");
     expect(propEditorOf(schema, "owner")).toBe("user");
-    expect(propEditorOf(schema, "estimate")).toBe("duration");
+    expect(propEditorOf(schema, "effort")).toBe("duration");
     expect(propEditorOf(schema, "done_flag")).toBe("bool");
     expect(propEditorOf(schema, "site")).toBe("url");
     expect(propEditorOf(schema, "memo")).toBe("text");
@@ -91,10 +96,51 @@ describe("propEditorOf", () => {
     expect(propEditorOf(schema, "title")).toBe("text");
   });
 
+  it("knows the built-in properties, which the schema does not list in props", () => {
+    expect(propEditorOf(schema, "priority")).toBe("enum");
+    expect(propEditorOf(schema, "start")).toBe("date");
+    expect(propEditorOf(schema, "due")).toBe("date");
+    expect(propEditorOf(schema, "estimate")).toBe("duration");
+    expect(propEditorOf(schema, "points")).toBe("number");
+    expect(propEditorOf(schema, "labels")).toBe("multi_enum");
+  });
+
   it("is null for what the schema does not define, and for the relations", () => {
     expect(propEditorOf(schema, "legacy")).toBeNull();
     for (const n of ["blocked_by", "causes", "relates", "duplicates", "clones"])
       expect(propEditorOf(schema, n)).toBeNull();
+  });
+});
+
+describe("built-in properties", () => {
+  it("are six, in the order the detail shows them, with the names of internal/app/domain/schema Builtins", () => {
+    expect(BUILTIN_PROPS.map((b) => [b.name, b.label])).toEqual([
+      ["priority", "優先度"],
+      ["start", "開始日"],
+      ["due", "期限"],
+      ["estimate", "見積もり"],
+      ["points", "ポイント"],
+      ["labels", "ラベル"],
+    ]);
+    expect(isBuiltinProp("due")).toBe(true);
+    expect(isBuiltinProp("labels")).toBe(true);
+    expect(isBuiltinProp("area")).toBe(false);
+  });
+
+  it("propValue reads a built-in property from the field of the task and a custom one from props", () => {
+    const t = {
+      priority: "high",
+      due: null,
+      points: 0,
+      labels: ["bug"],
+      props: { area: "web", due: "ignored" },
+    } as unknown as TaskView;
+    expect(propValue(t, "priority")).toBe("high");
+    expect(propValue(t, "due")).toBeNull();
+    expect(propValue(t, "points")).toBe(0);
+    expect(propValue(t, "labels")).toEqual(["bug"]);
+    expect(propValue(t, "area")).toBe("web");
+    expect(propValue(t, "none")).toBeUndefined();
   });
 });
 

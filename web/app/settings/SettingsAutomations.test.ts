@@ -40,7 +40,7 @@ const stats = [
 ];
 const fields = {
   default_sync: "link",
-  push: ["title", "body", "status", "assignees", "labels"],
+  push: ["title", "body", "status", "assignees"],
   mirror: ["title", "status", "assignees"],
   props: {},
 };
@@ -122,7 +122,7 @@ describe("SettingsAutomations", () => {
     expect(merged.getByText("カテゴリ done の既定（完了）")).toBeTruthy();
     expect(
       await merged.findByText(
-        /完了には points が必要です.*REL-11 で、制約により 1 回拒否されました/,
+        /完了には ポイント が必要です.*REL-11 で、制約により 1 回拒否されました/,
       ),
     ).toBeTruthy();
     expect(within(await rule("pr-review")).getByText("無効")).toBeTruthy();

@@ -130,7 +130,6 @@ const FIELDS: Readonly<Record<string, string>> = {
   body: "本文",
   status: "状態",
   assignees: "担当者",
-  labels: "ラベル",
   milestone: "マイルストーン",
 };
 

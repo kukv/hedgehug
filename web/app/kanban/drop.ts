@@ -1,7 +1,7 @@
 import type { ShowView, TaskView } from "../../core/api/client";
 import { CATEGORY_LABEL } from "../../core/categories";
 import { RELATIONS } from "../../core/relations";
-import { defaultStatusIn, propEditorOf, type SchemaView } from "../../core/schema";
+import { BUILTIN_PROPS, defaultStatusIn, propEditorOf, type SchemaView } from "../../core/schema";
 import type { KanbanSettings } from "../../core/views";
 import { type Column, columnKeyOf } from "./board";
 
@@ -71,11 +71,12 @@ const REQUIRED_NAMES: Readonly<Record<string, string>> = {
 // requiredLabel is the name a required field is shown with.
 export const requiredLabel = (schema: SchemaView, name: string): string =>
   REQUIRED_NAMES[name] ??
+  BUILTIN_PROPS.find((b) => b.name === name)?.label ??
   RELATIONS.find((r) => r.name === name)?.label ??
   (schema.props[name]?.label || name);
 
 // What a required field of a task lacks: `fill` are the empty ones the dialog can take in (assignees,
-// labels, a property it has an editor for); `elsewhere` are the ones that can only be filled in the
+// labels, a built-in property, a property it has an editor for); `elsewhere` are the ones that can only be filled in the
 // task detail (the parent, the five relations, watchers, repos, and what the API does not
 // show: sprint, releases, links), or whose value is not known here.
 export type RequiredGap = { fill: string[]; elsewhere: string[] };
@@ -100,6 +101,14 @@ export function requiredGap(
         break;
       case "labels":
         if (empty(t.labels)) gap.fill.push(name);
+        break;
+      case "priority":
+      case "start":
+      case "due":
+      case "estimate":
+      case "points":
+        // 0 points is a value
+        if (empty(t[name])) gap.fill.push(name);
         break;
       case "parent":
         if (t.parent === null) gap.elsewhere.push(name);

@@ -1,6 +1,6 @@
 import { CATEGORIES } from "../../core/categories";
 import { KINDS } from "../../core/kinds";
-import type { SchemaView } from "../../core/schema";
+import { BUILTIN_PROPS, type SchemaView } from "../../core/schema";
 import { splitTerms } from "../tree/filter";
 
 // "もしかして": the term of a query the server refused, written again with the name it is
@@ -33,6 +33,8 @@ const QUERY_KEYS = [
   "store",
   "sort",
   "group",
+  // The built-in properties of a task; the labels are `label`, above.
+  ...BUILTIN_PROPS.filter((b) => b.name !== "labels").map((b) => b.name),
 ];
 const MAX_DISTANCE = 2;
 // The shortest word that is taken for the part of a name.

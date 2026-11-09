@@ -252,19 +252,57 @@ describe("CreateTask", () => {
     expect(screen.getByRole("button", { name: "続けて作成" })).toBeDisabled();
   });
 
-  it("sends the properties and the assignee that were set", async () => {
+  it("sends the priority, the due date and the labels at the top of the body, a property of the schema in props, and the assignee", async () => {
     const { k } = setup();
     await typeTitle("x");
-    await fireEvent.click(screen.getByRole("button", { name: "priority" }));
+    await fireEvent.click(screen.getByRole("button", { name: "優先度" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "high" }));
+    await fireEvent.change(screen.getByLabelText("期限"), { target: { value: "2026-11-20" } });
+    await fireEvent.change(screen.getByRole("combobox", { name: "ラベル" }), {
+      target: { value: "bug" },
+    });
+    await fireEvent.input(screen.getByRole("textbox", { name: "area" }), {
+      target: { value: "web" },
+    });
     const assignee = screen.getByRole("textbox", { name: "担当者" });
     await fireEvent.input(assignee, { target: { value: "sato" } });
     await fireEvent.keyDown(assignee, { key: "Enter" });
+    expect(
+      screen.getByText(
+        /-p assignees=sato -p priority=high -p due=2026-11-20 -p labels=bug -p area=web/,
+      ),
+    ).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
     await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
     const [sent] = k.api.createTask.mock.calls[0] as [object];
-    expect(sent).toMatchObject({ assignees: ["sato"], props: { priority: "high" } });
+    expect(sent).toMatchObject({
+      assignees: ["sato"],
+      priority: "high",
+      due: "2026-11-20",
+      labels: ["bug"],
+      props: { area: "web" },
+    });
+  });
+
+  it("asks for the priority, the due date and the labels, and not for the start, the estimate or the points", () => {
+    setup();
+    expect(screen.getByRole("button", { name: "優先度" })).toBeInTheDocument();
+    expect(screen.getByLabelText("期限")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "ラベル" })).toBeInTheDocument();
+    for (const name of ["開始日", "見積もり", "ポイント"]) {
+      expect(screen.queryByLabelText(name)).toBeNull();
+    }
+  });
+
+  it("sends nothing of what was left empty", async () => {
+    const { k } = setup();
+    await typeTitle("x");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+    await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
+    await waitFor(() => expect(k.api.createTask).toHaveBeenCalled());
+    const [sent] = k.api.createTask.mock.calls[0] as [Record<string, unknown>];
+    for (const key of ["priority", "due", "labels", "props"]) expect(sent).not.toHaveProperty(key);
   });
 
   it("shows the server's error in the dialog and stays open", async () => {

@@ -1,12 +1,13 @@
 <script lang="ts" module>
-  export type MigrateTarget = "status" | "prop";
+  // Only statuses are merged here: properties are not merged (a name is changed in the edit dialog),
+  // and the values of a priority, a label or an enum are merged in their list.
+  export type MigrateTarget = "status";
 
   // How long the name has to rest before the dry run is sent.
   const PAUSE_MS = 350;
 
   const NOUN: Record<MigrateTarget, string> = {
     status: "ステータス",
-    prop: "プロパティ",
   };
 </script>
 

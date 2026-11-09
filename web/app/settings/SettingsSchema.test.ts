@@ -38,12 +38,14 @@ const sch = {
     { name: "triage", label: "仕分け", category: "todo" },
     { name: "done", label: "完了", category: "done", default: true },
   ],
+  priorities: ["low", "mid", "high"],
+  labels: ["bug", "ux"],
   props: {
-    priority: { type: "enum", values: ["low", "high"] },
-    points: { type: "number", label: "ポイント" },
+    tier: { type: "enum", values: ["low", "high"] },
+    effort: { type: "number", label: "工数" },
   },
-  prop_order: ["priority", "points"],
-  workflow: { transitions: { done: ["todo"] }, required: { done: ["points"] } } as Record<
+  prop_order: ["tier", "effort"],
+  workflow: { transitions: { done: ["todo"] }, required: { done: ["effort"] } } as Record<
     "transitions" | "required",
     Record<string, string[]>
   >,
@@ -70,12 +72,12 @@ const t = (ulid: string, over: Partial<TaskView> = {}) =>
 
 const tasks = [
   t("P1", { kind: "project", title: "リリース準備", id: "REL-15" }),
-  t("A", { status: "todo", props: { priority: "high", points: 3 } }),
+  t("A", { status: "todo", priority: "high", labels: ["bug"], props: { tier: "high", effort: 3 } }),
   t("B", {
     status: "triage",
     blocked_by: [{ ulid: "A", id: "REL-A", title: "title A" }],
   }),
-  t("C", { status: "done", props: { priority: "high" } }),
+  t("C", { status: "done", priority: "high", labels: ["bug", "ux"], props: { tier: "high" } }),
 ];
 
 type Finding = { check: string; msg: string; severity: string; where: string; task?: string };
@@ -91,7 +93,7 @@ type Opts = {
   // the schema is not in yet and does not come
   pending?: boolean;
   store?: string;
-  tab?: "statuses" | "props" | "workflow";
+  tab?: "statuses" | "priorities" | "labels" | "props" | "workflow";
   readOnly?: string;
   order?: (list: string, names: string[]) => unknown;
   del?: () => unknown;
@@ -127,6 +129,12 @@ function setup(opts: Opts = {}) {
   );
   const orderStatuses = vi.fn((b: { names: string[] }) => order("statuses", b.names));
   const orderProps = vi.fn((b: { names: string[] }) => order("props", b.names));
+  const changePriorities = vi.fn((_b: unknown, _q: { store: string }) =>
+    ok({ schema: state.schema, commit: "c1" }),
+  );
+  const changeLabels = vi.fn((_b: unknown, _q: { store: string }) =>
+    ok({ schema: state.schema, commit: "c1" }),
+  );
   const load = vi.fn(() =>
     opts.pending
       ? new Promise(() => {})
@@ -150,6 +158,8 @@ function setup(opts: Opts = {}) {
         deleteStatus,
         orderStatuses,
         orderProps,
+        changePriorities,
+        changeLabels,
       },
       conn,
       stores: {
@@ -173,6 +183,8 @@ function setup(opts: Opts = {}) {
     deleteStatus,
     orderStatuses,
     orderProps,
+    changePriorities,
+    changeLabels,
     post,
     reload,
     load,
@@ -219,12 +231,9 @@ describe("reorder", () => {
 
   it("sends the order of the properties", async () => {
     const p = setup({ tab: "props" });
-    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（points）" }), up);
+    await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（effort）" }), up);
     await waitFor(() =>
-      expect(p.orderProps).toHaveBeenCalledWith(
-        { names: ["points", "priority"] },
-        { store: "shared" },
-      ),
+      expect(p.orderProps).toHaveBeenCalledWith({ names: ["effort", "tier"] }, { store: "shared" }),
     );
   });
 
@@ -251,7 +260,7 @@ describe("reorder", () => {
     await fireEvent.keyDown(await screen.findByRole("button", { name: "並べ替え（todo）" }), down);
     await waitFor(() => expect(k.reload).toHaveBeenCalledWith("shared"));
     expect(toasts.list.map((t) => t.message)).toEqual([
-      "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
+      "値が空・重複している（大文字小文字は区別しません）、移し替え元が合わない、または優先度がなくなります。値の一覧を見直してください",
     ]);
   });
 
@@ -353,7 +362,7 @@ describe("SettingsSchema", () => {
     await waitFor(() => expect(backlog).toBeDisabled());
     expect(backlog).toHaveAttribute(
       "title",
-      "タスクが使っているため削除できません。マージで別の定義へ移してから削除してください",
+      "タスクが使っているため削除できません。マージで別のステータスへ移してから削除してください",
     );
     const todo = screen.getByRole("button", { name: "削除（todo）" });
     expect(todo).toBeDisabled();
@@ -453,12 +462,58 @@ describe("SettingsSchema", () => {
 
   it("lists the properties without a row per value", async () => {
     setup({ tab: "props" });
-    await screen.findByRole("row", { name: /^points/ });
-    expect(within(row(/^points/)).getByText("ポイント")).toBeVisible();
-    expect(within(row(/^points/)).getByText("number")).toBeVisible();
-    await waitFor(() => expect(within(row(/^priority enum/)).getByText("2")).toBeVisible());
-    expect(screen.queryByRole("row", { name: /priority › low/ })).toBeNull();
+    await screen.findByRole("row", { name: /^effort/ });
+    expect(within(row(/^effort/)).getByText("工数")).toBeVisible();
+    expect(within(row(/^effort/)).getByText("number")).toBeVisible();
+    await waitFor(() => expect(within(row(/^tier enum/)).getByText("2")).toBeVisible());
+    expect(screen.queryByRole("row", { name: /tier › low/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /値を追加/ })).toBeNull();
+  });
+
+  it("lists the priorities as a list of values, with the tasks that hold each", async () => {
+    setup({ tab: "priorities" });
+    expect(await screen.findByRole("heading", { level: 2, name: "優先度" })).toBeVisible();
+    expect(
+      screen.getAllByRole("textbox", { name: "値" }).map((i) => (i as HTMLInputElement).value),
+    ).toEqual(["low", "mid", "high"]);
+    // high is held by the tasks A and C: it can be merged, not deleted
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "削除（値 high）" })).toBeDisabled(),
+    );
+    expect(screen.getByRole("button", { name: "削除（値 low）" })).toBeEnabled();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("saves the labels, reads the counts again, and keeps the page", async () => {
+    const k = setup({ tab: "labels" });
+    expect(await screen.findByRole("heading", { level: 2, name: "ラベル" })).toBeVisible();
+    // bug is held by A and C, ux by C
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "削除（値 ux）" })).toBeDisabled(),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "値を追加" }));
+    const boxes = screen.getAllByRole("textbox", { name: "値" });
+    await fireEvent.input(boxes[2] as HTMLElement, { target: { value: "ops" } });
+    await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(k.changeLabels).toHaveBeenCalledTimes(1));
+    expect(k.changeLabels).toHaveBeenCalledWith(
+      {
+        values: [{ name: "bug", from: ["bug"] }, { name: "ux", from: ["ux"] }, { name: "ops" }],
+      },
+      { store: "shared" },
+    );
+    expect(k.changePriorities).not.toHaveBeenCalled();
+    await waitFor(() => expect(k.reload).toHaveBeenCalledWith("shared"));
+    // the tasks are counted again
+    await waitFor(() => expect(k.listTasks.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it("shows the number of values on the tabs of the lists", async () => {
+    setup({ tab: "priorities" });
+    await screen.findByRole("heading", { level: 2, name: "優先度" });
+    const nav = within(screen.getByRole("navigation", { name: "スキーマの種類" }));
+    expect(nav.getByRole("link", { name: /優先度/ })).toHaveTextContent("3");
+    expect(nav.getByRole("link", { name: /ラベル/ })).toHaveTextContent("2");
   });
 
   it("lists the properties in the order of the schema", async () => {
@@ -486,7 +541,7 @@ describe("SettingsSchema", () => {
   it("shows the transitions and the required fields of the workflow", async () => {
     setup({ tab: "workflow" });
     expect(await screen.findByText(/から移せるのは todo だけ/)).toBeVisible();
-    expect(screen.getByText(/に入るには points が必要/)).toBeVisible();
+    expect(screen.getByText(/に入るには effort が必要/)).toBeVisible();
   });
 
   it("says so when the workflow has no constraint", async () => {
@@ -531,12 +586,29 @@ describe("SettingsSchema", () => {
     );
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/settings/schema/org-b%2Fops",
+      "/settings/schema/org-b%2Fops?tab=priorities",
+      "/settings/schema/org-b%2Fops?tab=labels",
       "/settings/schema/org-b%2Fops?tab=props",
       "/settings/schema/org-b%2Fops?tab=workflow",
       "/settings/schema/org-b%2Fops?tab=templates",
     ]);
-    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, "page", null, null]);
-    await fireEvent.click(links[2] as HTMLElement);
+    expect(links.map((l) => l.textContent?.replace(/\s*\d+$/, "").trim())).toEqual([
+      "ステータス",
+      "優先度",
+      "ラベル",
+      "プロパティ",
+      "ワークフロー",
+      "テンプレート",
+    ]);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([
+      null,
+      null,
+      null,
+      "page",
+      null,
+      null,
+    ]);
+    await fireEvent.click(links[4] as HTMLElement);
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
 
@@ -728,16 +800,17 @@ describe("SettingsSchema", () => {
       expect(screen.getByRole("dialog", { name: "ステータス「triage」をマージ" })).toBeVisible();
     });
 
-    it("opens the merge dialog for a property", async () => {
+    it("has no merge button for a property: properties are renamed, not merged", async () => {
       setup({ tab: "props" });
-      await fireEvent.click(await screen.findByRole("button", { name: "マージ（points）" }));
-      expect(screen.getByRole("dialog", { name: "プロパティ「points」をマージ" })).toBeVisible();
+      expect(await screen.findByRole("button", { name: "編集（effort）" })).toBeVisible();
+      expect(screen.getAllByRole("button", { name: /^編集（/ })).toHaveLength(2);
+      expect(screen.queryByRole("button", { name: /^マージ（/ })).toBeNull();
     });
 
-    it("offers no merge when nothing else is defined", async () => {
-      setup({ tab: "props", schema: { ...sch, props: { points: sch.props.points } } as never });
-      expect(await screen.findByRole("button", { name: "編集（points）" })).toBeVisible();
-      expect(screen.queryByRole("button", { name: "マージ（points）" })).toBeNull();
+    it("offers no merge of a status when nothing else is defined", async () => {
+      setup({ schema: { ...sch, statuses: [sch.statuses[0]] } as never });
+      expect(await screen.findByRole("button", { name: "編集（todo）" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "マージ（todo）" })).toBeNull();
     });
 
     async function mergeTriage(k: ReturnType<typeof setup>, beforeRun?: () => void) {

@@ -22,7 +22,6 @@ const schema = {
   ],
   kinds: [],
   props: {
-    points: { type: "number" },
     area: { type: "text" },
     tags: { type: "multi_enum", values: ["a", "b"] },
   },
@@ -102,7 +101,7 @@ describe("workflow of a task", () => {
 });
 
 describe("requiredGap", () => {
-  const t = task("A", "task", null, { props: { points: 0, area: "" }, assignees: [] });
+  const t = task("A", "task", null, { points: 0, props: { area: "" }, assignees: [] });
 
   it("names the empty fields the dialog can take in", () => {
     expect(requiredGap(t, ["points", "area", "assignees", "labels"], schema)).toEqual({
@@ -112,8 +111,32 @@ describe("requiredGap", () => {
   });
 
   it("counts 0 and false as filled, and an empty list as empty", () => {
-    const u = task("B", "task", null, { props: { points: 0, tags: [] }, assignees: ["gh/koki"] });
+    const u = task("B", "task", null, { points: 0, props: { tags: [] }, assignees: ["gh/koki"] });
     expect(requiredGap(u, ["points", "tags", "assignees"], schema).fill).toEqual(["tags"]);
+  });
+
+  it("takes in the built-in properties the task lacks, the fields of the task and not props", () => {
+    const names = ["priority", "start", "due", "estimate", "points"];
+    const bare = task("C", "task", null, { props: { priority: "high", due: "2026-11-01" } });
+    expect(requiredGap(bare, names, schema)).toEqual({ fill: names, elsewhere: [] });
+    const full = task("D", "task", null, {
+      priority: "low",
+      start: "2026-11-01",
+      due: "2026-11-02",
+      estimate: "1h",
+      points: 0,
+    });
+    expect(requiredGap(full, names, schema)).toEqual({ fill: [], elsewhere: [] });
+  });
+
+  it("shows a built-in property by the name the detail shows", () => {
+    expect(requiredLabel(schema, "priority")).toBe("優先度");
+    expect(requiredLabel(schema, "start")).toBe("開始日");
+    expect(requiredLabel(schema, "due")).toBe("期限");
+    expect(requiredLabel(schema, "estimate")).toBe("見積もり");
+    expect(requiredLabel(schema, "points")).toBe("ポイント");
+    expect(requiredLabel(schema, "labels")).toBe("ラベル");
+    expect(requiredLabel(schema, "area")).toBe("area");
   });
 
   it("sends the fields only the detail can fill there: the parent, the five relations, and what the API does not show", () => {
@@ -164,7 +187,7 @@ describe("decideDrop", () => {
     expect(d).toEqual({ ok: true, status: "review", fill: [], elsewhere: [] });
     const done = decideDrop({
       ...base,
-      task: task("A", "task", null, { status: "doing", props: { points: 3 }, assignees: [] }),
+      task: task("A", "task", null, { status: "doing", points: 3, assignees: [] }),
       column: col("done"),
     });
     expect(done).toEqual({ ok: true, status: "done", fill: ["assignees"], elsewhere: [] });

@@ -25,7 +25,9 @@ describe("diffForRestore", () => {
     tv("A", "title", {
       assignees: ["alice"],
       labels: ["ops", "web"],
-      props: { priority: "high", points: 3 },
+      priority: "high",
+      points: 3,
+      props: { area: "web" },
       blocked_by: [{ ulid: "B", id: "T-B", title: "b" }],
     }),
     { body: "text" },
@@ -47,23 +49,26 @@ describe("diffForRestore", () => {
         parent: "P1",
         assignees: [],
         labels: ["ops", "web"],
-        props: { priority: "high", points: 5, due: "2026-11-07" },
+        priority: "high",
+        points: 5,
+        due: "2026-11-07",
+        props: { area: "web" },
         blocked_by: [],
       }),
       { body: "text" },
     );
     const got = diffForRestore(base, then, {
       idOf: (u) => (u === "P1" ? "REL-1" : u),
-      propLabel: (n) => (n === "points" ? "ポイント" : n),
+      propLabel: (n) => n,
     });
     expect(got).toEqual([
       { field: "title", label: "タイトル", from: "title", to: "older title" },
       { field: "status", label: "ステータス", from: "todo", to: "done" },
       { field: "parent", label: "親", from: "ルート", to: "REL-1" },
       { field: "assignees", label: "担当者", from: "alice", to: "（なし）" },
+      { field: "due", label: "期限", from: "（なし）", to: "2026-11-07" },
+      { field: "points", label: "ポイント", from: "3", to: "5" },
       { field: "blocked_by", label: "Blocked by", from: "T-B", to: "（なし）" },
-      { field: "props.due", label: "due", from: "（なし）", to: "2026-11-07" },
-      { field: "props.points", label: "ポイント", from: "3", to: "5" },
     ]);
   });
 
@@ -78,10 +83,36 @@ describe("diffForRestore", () => {
   });
 
   it("shows a changed body only as changed, and a prop that goes away as none", () => {
-    const then = showOf(tv("A", "title", { ...base, props: { points: 3 } }), { body: "other" });
+    const then = showOf(tv("A", "title", { ...base, props: {} }), { body: "other" });
     expect(diffForRestore(base, then)).toEqual([
-      { field: "props.priority", label: "priority", from: "high", to: "（なし）" },
+      { field: "props.area", label: "area", from: "web", to: "（なし）" },
       { field: "body", label: "本文", from: "現在の本文", to: "この時点の本文" },
+    ]);
+  });
+
+  it("lists the built-in properties by their names at the top of the task, with the labels the screen shows", () => {
+    const now = showOf(tv("A", "t", { priority: "low", start: "2026-11-01", labels: ["bug"] }));
+    const then = showOf(
+      tv("A", "t", {
+        priority: null,
+        start: "2026-11-02",
+        estimate: "1h30m",
+        labels: ["bug", "ux"],
+      }),
+    );
+    expect(diffForRestore(now, then)).toEqual([
+      { field: "priority", label: "優先度", from: "low", to: "（なし）" },
+      { field: "start", label: "開始日", from: "2026-11-01", to: "2026-11-02" },
+      { field: "estimate", label: "見積もり", from: "（なし）", to: "1h30m" },
+      { field: "labels", label: "ラベル", from: "bug", to: "bug、ux" },
+    ]);
+  });
+
+  it("tells 0 points from none", () => {
+    const now = showOf(tv("A", "t", { points: null }));
+    const then = showOf(tv("A", "t", { points: 0 }));
+    expect(diffForRestore(now, then)).toEqual([
+      { field: "points", label: "ポイント", from: "（なし）", to: "0" },
     ]);
   });
 

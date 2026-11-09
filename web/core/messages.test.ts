@@ -238,12 +238,28 @@ describe("errorMessage", () => {
     expect(m).toContain("この親には置けません（parent）");
   });
 
+  it("says a notification cannot be reverted, with why in the words of the server", () => {
+    expect(
+      errorMessage(
+        err("inbox.not_revertable", {}, "props.priority: cannot be put back: not a priority now"),
+      ),
+    ).toBe(
+      "この通知の操作は取り消せません: props.priority: cannot be put back: not a priority now",
+    );
+  });
+
+  it("says that properties are not merged", () => {
+    expect(errorMessage(err("migrate.prop_merge"))).toBe(
+      "プロパティどうしはマージできません。名前の変更だけできます",
+    );
+  });
+
   it("words the errors of a schema edit", () => {
     expect(errorMessage(err("schema.in_use", { count: 3, deleted: 0 }))).toBe(
-      "タスク 3 件が使っているため削除できません。マージで別の定義へ移してから削除してください",
+      "タスク 3 件が使っているため削除できません。ステータスはマージで別のステータスへ移し、プロパティは使っているタスクの値を外してから削除してください",
     );
     expect(errorMessage(err("schema.in_use", { count: 3, deleted: 1 }))).toBe(
-      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。マージで別の定義へ移してから削除してください",
+      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。ステータスはマージで別のステータスへ移し、プロパティは使っているタスクの値を外してから削除してください",
     );
     expect(errorMessage(err("schema.in_use", { value: "low", count: 3, deleted: 0 }))).toBe(
       "値 low は、タスク 3 件が使っているため削除できません。マージで別の値へ移してから削除してください",
@@ -270,7 +286,7 @@ describe("errorMessage", () => {
       "値を持てるのは enum と multi_enum のプロパティだけです",
     );
     expect(errorMessage(err("schema.value_invalid"))).toBe(
-      "値が空・重複している、または移し替え元が合いません。値の一覧を見直してください",
+      "値が空・重複している（大文字小文字は区別しません）、移し替え元が合わない、または優先度がなくなります。値の一覧を見直してください",
     );
   });
 

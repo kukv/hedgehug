@@ -1,5 +1,5 @@
 import type { TaskView } from "../../core/api/client";
-import type { SchemaView } from "../../core/schema";
+import { propValue, type SchemaView } from "../../core/schema";
 import { requiredLabel } from "../kanban/drop";
 
 type Problem = { code: string; field: string; message: string };
@@ -27,9 +27,9 @@ export function problemLabel(p: Problem, schema?: SchemaView): string {
   return LABELS[p.code] ?? p.code;
 }
 
-// propText is a property of the task when it holds a string.
+// propText is a property of the task (a built-in one or one of the schema) when it holds a string.
 export function propText(t: TaskView, name: string): string | undefined {
-  const v = (t.props as Record<string, unknown> | undefined)?.[name];
+  const v = propValue(t, name);
   return typeof v === "string" ? v : undefined;
 }
 

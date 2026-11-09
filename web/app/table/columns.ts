@@ -17,6 +17,11 @@ const BUILTIN: ColumnSpec[] = [
   { id: "status", label: "ステータス", readonly: false, width: 10 },
   { id: "assignee", label: "担当者", readonly: false, width: 12 },
   { id: "label", label: "ラベル", readonly: false, width: 12 },
+  { id: "priority", label: "優先度", readonly: false, width: 9 },
+  { id: "start", label: "開始日", readonly: false, width: 8 },
+  { id: "due", label: "期限", readonly: false, width: 8 },
+  { id: "estimate", label: "見積もり", readonly: false, width: 8 },
+  { id: "points", label: "ポイント", readonly: false, width: 6.5 },
   { id: "parent", label: "親", readonly: true, width: 6.5 },
   { id: "created", label: "作成日", readonly: true, width: 6.5 },
   { id: "updated", label: "更新日", readonly: true, width: 6.5 },
@@ -93,6 +98,12 @@ export function patchFieldOf(spec: ColumnSpec): PatchField | null {
       return "assignees";
     case "label":
       return "labels";
+    case "priority":
+    case "start":
+    case "due":
+    case "estimate":
+    case "points":
+      return spec.id;
     default:
       return `props.${spec.id}`;
   }
@@ -130,6 +141,12 @@ function propKey(t: TaskView, name: string, ctx: SortCtx): SortKey {
   return String(v);
 }
 
+// The minutes of an estimate (1h30m, 6h, 45m); the text itself for what is not one.
+function minutesOf(d: string): SortKey {
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?$/.exec(d);
+  return m ? Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0) : d;
+}
+
 // sortKey is the value the column sorts the task by.
 export function sortKey(t: TaskView, id: string, ctx: SortCtx): SortKey {
   switch (id) {
@@ -149,6 +166,18 @@ export function sortKey(t: TaskView, id: string, ctx: SortCtx): SortKey {
       return asKey(t.assignees?.[0] ?? "");
     case "label":
       return asKey((t.labels ?? []).join(","));
+    case "priority": {
+      if (!t.priority) return undefined;
+      const at = (ctx.schemaOf(t.store)?.priorities ?? []).indexOf(t.priority);
+      return at >= 0 ? at : (ctx.schemaOf(t.store)?.priorities ?? []).length;
+    }
+    case "start":
+    case "due":
+      return asKey(t[id] ?? "");
+    case "estimate":
+      return t.estimate ? minutesOf(t.estimate) : undefined;
+    case "points":
+      return t.points ?? undefined;
     case "parent":
       return t.parent ? (ctx.taskOf(t.parent)?.id ?? undefined) : undefined;
     case "created":

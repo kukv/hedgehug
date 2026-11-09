@@ -67,7 +67,8 @@ const schema = {
     { name: "done", label: "完了", category: "done", default: true },
     { name: "canceled", label: "中止", category: "canceled", default: true },
   ],
-  props: { points: { type: "number" }, priority: { type: "enum", values: ["high", "urgent"] } },
+  priorities: ["high", "urgent"],
+  props: {},
   workflow: { transitions: { done: ["todo"] }, required: { done: ["points"] } },
 } as unknown as SchemaView;
 
@@ -92,7 +93,7 @@ type Setup = {
 function setup(o: Setup = {}) {
   const tasks = o.tasks ?? [
     task("A", "task", null, { id: "REL-1", title: "調べる", status: "todo" }),
-    task("B", "task", null, { id: "REL-2", title: "作る", status: "doing", props: { points: 3 } }),
+    task("B", "task", null, { id: "REL-2", title: "作る", status: "doing", points: 3 }),
     task("C", "task", null, { id: "REL-3", title: "確認する", status: "done" }),
   ];
   const byUlid = new Map(tasks.map((t) => [t.ulid, t]));
@@ -264,6 +265,26 @@ describe("KanbanView: the board", () => {
     expect(h.go).toHaveBeenCalledWith("/task");
   });
 
+  it("shows the priority, the points and the due date of a card from the fields of the task, not props", async () => {
+    setup({
+      tasks: [
+        task("A", "task", null, {
+          title: "急ぎ",
+          status: "todo",
+          priority: "urgent",
+          points: 5,
+          due: "2026-11-20",
+          props: { priority: "low", points: 9 },
+        }),
+      ],
+    });
+    mountView();
+    expect(await screen.findByText("5 pt")).toBeInTheDocument();
+    expect(screen.getByText("urgent")).toBeInTheDocument();
+    expect(screen.queryByText("low")).toBeNull();
+    expect(screen.queryByText("9 pt")).toBeNull();
+  });
+
   it("says what is wrong with a card, as the server sees it", async () => {
     setup({
       tasks: [
@@ -275,7 +296,7 @@ describe("KanbanView: the board", () => {
       ],
     });
     mountView();
-    expect(await screen.findByText("pointsが未入力です")).toBeInTheDocument();
+    expect(await screen.findByText("ポイントが未入力です")).toBeInTheDocument();
   });
 
   it("names the blocker on a card that is blocked", async () => {
@@ -670,16 +691,16 @@ describe("KanbanView: dragging a card", () => {
     cellFor("done")?.onDrop(dragA);
     expect(api.updateTask).not.toHaveBeenCalled();
     expect(
-      await screen.findByRole("dialog", { name: "REL-1 を完了にするには points が必要です" }),
+      await screen.findByRole("dialog", { name: "REL-1 を完了にするには ポイント が必要です" }),
     ).toBeInTheDocument();
-    await fireEvent.input(screen.getByRole("spinbutton", { name: "points" }), {
+    await fireEvent.input(screen.getByRole("spinbutton", { name: "ポイント" }), {
       target: { value: "5" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "完了にする" }));
     await waitFor(() => expect(api.updateTask).toHaveBeenCalledTimes(1));
     expect(api.updateTask).toHaveBeenCalledWith(
       "A",
-      { status: "done", props: { points: 5 } },
+      { status: "done", points: 5 },
       { store: "shared" },
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -816,12 +837,12 @@ describe("KanbanView: dragging a card", () => {
       cellFor("done")?.onDrop(dragA);
       expect(
         await screen.findByRole("dialog", {
-          name: "REL-1 を完了にするには points・親・ウォッチャー が必要です",
+          name: "REL-1 を完了にするには ポイント・親・ウォッチャー が必要です",
         }),
       ).toBeInTheDocument();
       // the watchers were not on the list: the full task was read to know
       expect(s.api.getTask).toHaveBeenCalledWith("A", { store: "shared" });
-      await fireEvent.input(screen.getByRole("spinbutton", { name: "points" }), {
+      await fireEvent.input(screen.getByRole("spinbutton", { name: "ポイント" }), {
         target: { value: "5" },
       });
       expect(screen.getByRole("button", { name: "完了にする" })).toBeDisabled();
@@ -837,7 +858,9 @@ describe("KanbanView: dragging a card", () => {
       await screen.findByText("調べる");
       cellFor("done")?.onDrop(dragA);
       expect(
-        await screen.findByRole("dialog", { name: "REL-1 を完了にするには points・親 が必要です" }),
+        await screen.findByRole("dialog", {
+          name: "REL-1 を完了にするには ポイント・親 が必要です",
+        }),
       ).toBeInTheDocument();
     });
 

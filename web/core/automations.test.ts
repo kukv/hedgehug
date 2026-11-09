@@ -151,7 +151,6 @@ describe("the fields of the issue sync", () => {
       "本文",
       "状態",
       "担当者",
-      "ラベル",
       "マイルストーン",
     ]);
   });

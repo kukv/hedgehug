@@ -6,7 +6,7 @@ import {
   dateOf,
   dayOf,
   dragged,
-  dropProps,
+  dropPatch,
   type GanttRow,
   ganttLinks,
   ganttRows,
@@ -61,9 +61,9 @@ describe("days", () => {
 });
 
 describe("ganttRows", () => {
-  const epic = tv("E", "epic", { kind: "epic", props: { due: "2026-11-05" } });
-  const child = tv("C", "child", { props: { start: "2026-11-02", due: "2026-11-04" } });
-  const grand = tv("G", "grand", { props: { start: "2026-11-03", due: "2026-11-09" } });
+  const epic = tv("E", "epic", { kind: "epic", due: "2026-11-05" });
+  const child = tv("C", "child", { start: "2026-11-02", due: "2026-11-04" });
+  const grand = tv("G", "grand", { start: "2026-11-03", due: "2026-11-09" });
   const tree: TreeNode[] = [
     {
       ulid: "E",
@@ -118,16 +118,29 @@ describe("ganttRows", () => {
     });
     expect(r?.bar).toEqual({ s: d("2026-11-01"), e: d("2026-11-02") });
   });
+
+  it("reads a built-in date from the field of the task and a custom one from props, whichever is the start", () => {
+    const t = tv("T", "t", {
+      start: "2026-11-01",
+      due: "2026-11-09",
+      props: { finish: "2026-11-03" },
+    });
+    const [r] = rowsOf([{ ulid: "T", children: [] }], tasks(t), {
+      settings: { start: "start", end: "finish", roadmap: false },
+    });
+    expect(r?.bar).toEqual({ s: d("2026-11-01"), e: d("2026-11-03") });
+  });
 });
 
 describe("links and warnings", () => {
   const ref = (ulid: string) => ({ ulid, id: ulid, title: ulid });
-  const a = tv("A", "a", { id: "T-1", props: { start: "2026-11-02", due: "2026-11-04" } });
+  const a = tv("A", "a", { id: "T-1", start: "2026-11-02", due: "2026-11-04" });
   const on = (date: string) =>
     tv("B", "b", {
       id: "T-2",
       blocked_by: [ref("A"), ref("GONE")],
-      props: { start: date, due: "2026-11-09" },
+      start: date,
+      due: "2026-11-09",
     });
   const top = (...u: string[]): TreeNode[] => u.map((ulid) => ({ ulid, children: [] }));
 
@@ -152,7 +165,7 @@ describe("links and warnings", () => {
   });
 
   it("has a sentence for a parent that a child runs out of", () => {
-    const p = tv("P", "p", { id: "T-9", props: { due: "2026-11-03" } });
+    const p = tv("P", "p", { id: "T-9", due: "2026-11-03" });
     const rows = rowsOf([{ ulid: "P", children: [{ ulid: "A", children: [] }] }], tasks(p, a));
     expect(ganttWarnings(rows, [])[0]?.text).toBe(
       "子の期間（11/02 – 11/04）が、設定した期間（11/03 – 11/03）からはみ出しています。",
@@ -166,7 +179,7 @@ describe("the axis", () => {
   it("takes in the bars, the marks and today, with room around them", () => {
     const rows = rowsOf(
       [{ ulid: "A", children: [] }],
-      tasks(tv("A", "a", { props: { start: "2026-11-05", due: "2026-11-06" } })),
+      tasks(tv("A", "a", { start: "2026-11-05", due: "2026-11-06" })),
     );
     expect(chartRange(rows, [d("2026-11-20")], d("2026-11-01"), "day")).toEqual({
       s: d("2026-11-01") - 3,
@@ -199,17 +212,26 @@ describe("a drop", () => {
     expect(dragged(bar, mode, delta)).toEqual(want);
   });
 
-  it("writes only what changes, in the properties of the view", () => {
-    const task = tv("T", "t", { props: { start: "2026-11-02", due: "2026-11-04" } });
-    expect(dropProps({ task }, { s: d("2026-11-02"), e: d("2026-11-05") }, DEFAULT_GANTT)).toEqual({
+  it("writes only what changes, at the top of the body for the built-in dates", () => {
+    const task = tv("T", "t", { start: "2026-11-02", due: "2026-11-04" });
+    expect(dropPatch({ task }, { s: d("2026-11-02"), e: d("2026-11-05") }, DEFAULT_GANTT)).toEqual({
       due: "2026-11-05",
     });
   });
 
   it("gives a task with no dates both", () => {
     const task = tv("T", "t");
-    expect(dropProps({ task }, { s: d("2026-11-02"), e: d("2026-11-05") }, DEFAULT_GANTT)).toEqual({
+    expect(dropPatch({ task }, { s: d("2026-11-02"), e: d("2026-11-05") }, DEFAULT_GANTT)).toEqual({
       start: "2026-11-02",
+      due: "2026-11-05",
+    });
+  });
+
+  it("writes the custom date properties of the view in props", () => {
+    const settings = { start: "kickoff", end: "due", roadmap: false };
+    const task = tv("T", "t", { due: "2026-11-04", props: { kickoff: "2026-11-02" } });
+    expect(dropPatch({ task }, { s: d("2026-11-01"), e: d("2026-11-05") }, settings)).toEqual({
+      props: { kickoff: "2026-11-01" },
       due: "2026-11-05",
     });
   });

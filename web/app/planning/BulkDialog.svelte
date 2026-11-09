@@ -3,8 +3,9 @@
   import { cliSetQuery } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { bulkUpdatedLabel } from "../../core/planning";
-  import type { SchemaView } from "../../core/schema";
+  import { BUILTIN_PROPS, type SchemaView } from "../../core/schema";
   import { core } from "../context";
+  import LabelPicker from "../detail/LabelPicker.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
@@ -38,12 +39,19 @@
     Object.assign({}, ...schemas.map((s) => s.props ?? {})),
   );
 
+  // The priorities and labels any of the Stores lists.
+  const priorities = $derived([...new Set(schemas.flatMap((s) => s.priorities ?? []))]);
+  const labelChoices = $derived([...new Set(schemas.flatMap((s) => s.labels ?? []))]);
+  // Where the labels are added when there are none: the Store of the target, else the first.
+  const labelStore = $derived(target.store ?? names[0] ?? "");
+
   const BUILTINS = [
     { value: "status", label: "ステータス" },
     { value: "sprint", label: "スプリント" },
     { value: "releases", label: "リリース" },
     { value: "assignees", label: "担当者" },
-    { value: "labels", label: "ラベル" },
+    // The built-in properties of a task: priority, start, due, estimate, points, labels.
+    ...BUILTIN_PROPS.map((b) => ({ value: b.name, label: b.label })),
   ];
   const fields = $derived([
     ...BUILTINS,
@@ -53,6 +61,8 @@
   ]);
   let field = $state("status");
   let value = $state("");
+  // The labels to set, chosen from the list.
+  let labels = $state<string[]>([]);
 
   const list = (v: string) =>
     v
@@ -70,7 +80,12 @@
     if (field === "sprint") return { sprint: value.trim() };
     if (field === "releases") return { releases: list(value) };
     if (field === "assignees") return { assignees: list(value) };
-    if (field === "labels") return { labels: list(value) };
+    if (field === "labels") return { labels };
+    // priority, start, due, estimate and points are fields of the body; empty clears them.
+    if (field === "points") return { points: value.trim() === "" ? null : Number(value) };
+    if (field === "priority" || field === "start" || field === "due" || field === "estimate") {
+      return { [field]: value.trim() === "" ? null : value.trim() };
+    }
     return { props: { [field.slice("props.".length)]: propOf(field.slice("props.".length)) } };
   });
   const bodyOf = (dry_run: boolean): Body => ({
@@ -109,7 +124,7 @@
   const bad = $derived(preview?.violations ?? []);
   const fieldLabel = $derived(fields.find((f) => f.value === field)?.label ?? field);
   const assigns = $derived<Record<string, string>>({
-    [field.replace(/^props\./, "")]: value,
+    [field.replace(/^props\./, "")]: field === "labels" ? labels.join(",") : value,
   });
 
   let busy = $state(false);
@@ -153,6 +168,7 @@
           onchange={(e) => {
             field = e.currentTarget.value;
             value = "";
+            labels = [];
           }}
         >
           {#each fields as f (f.value)}
@@ -169,13 +185,29 @@
               <option value={s.name}>{s.label || s.name}</option>
             {/each}
           </select>
+        {:else if field === "priority"}
+          <select id="{uid}-v" {value} onchange={(e) => (value = e.currentTarget.value)}>
+            <option value="">外す</option>
+            {#each priorities as p (p)}
+              <option value={p}>{p}</option>
+            {/each}
+          </select>
+        {:else if field === "labels"}
+          <LabelPicker
+            store={labelStore}
+            label="ラベル"
+            value={labels}
+            options={labelChoices}
+            onedit={(v) => (labels = v)}
+            oncommit={() => {}}
+          />
         {:else}
           <input
             id="{uid}-v"
-            type="text"
+            type={field === "start" || field === "due" ? "date" : "text"}
             autocomplete="off"
             {value}
-            placeholder={field === "releases" || field === "assignees" || field === "labels"
+            placeholder={field === "releases" || field === "assignees"
               ? "カンマで区切ります。空なら外します"
               : "空なら外します"}
             oninput={(e) => (value = e.currentTarget.value)}

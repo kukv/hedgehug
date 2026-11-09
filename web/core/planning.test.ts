@@ -103,13 +103,15 @@ describe("the tasks of a plan", () => {
     expect(got.map((t) => t.ulid)).toEqual(["C", "A", "B"]);
   });
   it("reads and sums points", () => {
-    const a = tv("A", "a", { props: { points: 3 } });
-    const b = tv("B", "b", { props: { points: "x" } });
+    const a = tv("A", "a", { points: 3 });
+    const b = tv("B", "b", { points: null });
     expect(pointsOf(a)).toBe(3);
     expect(pointsOf(b)).toBeNull();
-    expect(pointsOf(tv("D", "d", { props: { points: "5" } }))).toBe(5);
+    expect(pointsOf(tv("D", "d", { points: 0 }))).toBe(0);
     expect(pointsOf(tv("E", "e"))).toBeNull();
-    expect(sumPoints([a, b, tv("C", "c", { props: { points: 1.5 } })])).toBe(4.5);
+    // a number in props is a custom property, not the points of the task
+    expect(pointsOf(tv("F", "f", { props: { points: 9 } }))).toBeNull();
+    expect(sumPoints([a, b, tv("C", "c", { points: 1.5 })])).toBe(4.5);
     expect(ptLabel(4.5)).toBe("4.5 pt");
   });
   it("places a task among the others", () => {

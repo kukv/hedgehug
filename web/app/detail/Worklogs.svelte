@@ -96,7 +96,7 @@
 <section aria-labelledby="{uid}-h">
   <div class="head">
     <h2 id="{uid}-h">作業時間</h2>
-    <span class="sum">{worklogLabel(total, show.props.estimate)}</span>
+    <span class="sum">{worklogLabel(total, show.estimate)}</span>
   </div>
   {#if logs.length > 0}
     <ul>

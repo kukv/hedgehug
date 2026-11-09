@@ -472,7 +472,7 @@ describe("InboxPage", () => {
         { name: "done", label: "完了", category: "done", default: true },
       ],
       kinds: [{ name: "task", role: "work" }],
-      props: { points: { type: "number", label: "points" } },
+      props: {},
       workflow: { required: { done: ["points"] } },
     };
 
@@ -502,7 +502,7 @@ describe("InboxPage", () => {
     it("offers to fill what the status of the rule needs, and moves the task", async () => {
       const api = refusedSetup([{ id: "pr-merged", on: "pr.merged", category: "done" }]);
       await fireEvent.click(
-        await screen.findByRole("button", { name: "points を入力して完了にする" }),
+        await screen.findByRole("button", { name: "ポイント を入力して完了にする" }),
       );
       const dialog = await screen.findByRole("dialog");
       await fireEvent.input(within(dialog).getByRole("spinbutton"), { target: { value: "3" } });
@@ -510,7 +510,7 @@ describe("InboxPage", () => {
       await waitFor(() =>
         expect(api.updateTask).toHaveBeenCalledWith(
           "U-PAY-29",
-          { status: "done", props: { points: 3 } },
+          { status: "done", points: 3 },
           { store: "shared" },
         ),
       );

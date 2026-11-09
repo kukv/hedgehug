@@ -358,7 +358,7 @@ describe("the tab of a screen is in its address", () => {
   });
 
   it("the schema has ?tab= for every tab but the first; an unknown tab is the first", () => {
-    for (const tab of ["props", "workflow"] as const) {
+    for (const tab of ["priorities", "labels", "props", "workflow", "templates"] as const) {
       expect(parseRoute("/settings/schema/shared", `?tab=${tab}`)).toEqual({
         name: "settings",
         page: "schema",

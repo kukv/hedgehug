@@ -40,11 +40,13 @@ describe("CreateProject", () => {
     const who = screen.getByRole("textbox", { name: "担当者" });
     await fireEvent.input(who, { target: { value: "sato" } });
     await fireEvent.keyDown(who, { key: "Enter" });
+    await fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2026-11-15" } });
     await fireEvent.change(screen.getByLabelText("期限"), { target: { value: "2026-12-01" } });
 
     expect(
       screen.getByText(/--no-repo.*--kind project.*-p repos=github.com\/org-a\/web/),
     ).toBeInTheDocument();
+    expect(screen.getByText(/-p start=2026-11-15 -p due=2026-12-01/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(k.api.createTask).toHaveBeenCalledWith(
@@ -54,7 +56,8 @@ describe("CreateProject", () => {
         workspace: "release",
         assignees: ["sato"],
         repos: ["github.com/org-a/web"],
-        props: { due: "2026-12-01" },
+        start: "2026-11-15",
+        due: "2026-12-01",
       },
       { store: "shared" },
     );

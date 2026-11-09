@@ -3,7 +3,7 @@
 //   - the title is the textbox "タイトル"; the body is the textbox "本文" (CodeMirror)
 //   - the property panel (region "プロパティ") has the button "ステータス" that opens a menu
 //     of menuitems named "<label> · <name>" (Todo · todo, In progress · in_progress …), the
-//     button "priority" with the menuitems low, mid, high, urgent, and the date input "due"
+//     button "優先度" with the menuitems low, mid, high, urgent, and the date input "期限"
 //   - the save state is the status "保存の状態": "保存済み" (or "保存済み · push 待ち")
 //     once a change is on disk
 //   - a change is saved 2 seconds after the last key, or when the field loses focus
@@ -55,7 +55,7 @@ test("the status, an enum property and a date are saved from the property panel"
   await expect
     .poll(() => {
       const s = hh.show(t.id);
-      return [s.status, s.props.priority, s.props.due];
+      return [s.status, s.priority, s.due];
     })
     .toEqual(["in_progress", "high", "2026-12-01"]);
   await expect(saved(page)).toBeVisible();

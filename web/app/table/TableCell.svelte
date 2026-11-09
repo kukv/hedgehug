@@ -8,8 +8,9 @@
   import { core } from "../context";
   import FieldInput from "../detail/FieldInput.svelte";
   import type { Option } from "../detail/field-types";
+  import LabelPicker from "../detail/LabelPicker.svelte";
   import PropField from "../detail/PropField.svelte";
-  import { type PropRow, statusOptions } from "../detail/prop-rows";
+  import { builtinRows, type PropRow, statusOptions } from "../detail/prop-rows";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { onLinkClick, router } from "../router";
   import { useDisplayId } from "../svelte-store";
@@ -62,6 +63,14 @@
   const did = useDisplayId(core().stores);
   const taskId = $derived(did.current(task.store, task.id));
   const taskHref = (ulid: string) => router.href({ name: "task", ulid });
+
+  // A built-in property of the task (priority, start, due, estimate, points): a field of the task,
+  // not a property of the schema.
+  const builtin = $derived.by<PropRow | null>(() => {
+    if (!schema || col.id === "label") return null;
+    const r = builtinRows(schema, task).find((x) => x.name === col.id);
+    return r ? { ...r, label: `${r.label}: ${taskId}` } : null;
+  });
 
   // A property of the schema: its definition in the store of the task, or none (the store does not
   // define it: 未定義).
@@ -143,15 +152,19 @@
     {oncommit}
   />
 {:else if col.id === "label"}
-  <FieldInput
-    editor="chips"
-    label="ラベル: {taskId}"
-    value={task.labels ?? []}
-    {readonly}
-    {describedby}
-    onedit={edit}
-    {oncommit}
-  />
+  {#if schema}
+    <LabelPicker
+      store={task.store}
+      label="ラベル: {taskId}"
+      value={task.labels ?? []}
+      options={schema.labels ?? []}
+      {readonly}
+      onedit={edit}
+      {oncommit}
+    />
+  {:else}
+    <span class="plain"></span>
+  {/if}
 {:else if col.id === "parent"}
   {#if parent}
     <IdLabel
@@ -174,6 +187,16 @@
   >
 {:else if !schema}
   <span class="plain"></span>
+{:else if builtin}
+  <PropField
+    row={builtin}
+    value={builtin.value}
+    {pending}
+    {readonly}
+    {describedby}
+    onedit={edit}
+    {oncommit}
+  />
 {:else if !row}
   <span class="undef" title="{task.store} の schema.yaml にはないプロパティです">（未定義）</span>
 {:else}
