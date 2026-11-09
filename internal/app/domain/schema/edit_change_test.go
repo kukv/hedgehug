@@ -3,6 +3,7 @@ package schema
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -104,6 +105,21 @@ func TestChangePropNameRewritesRequired(t *testing.T) {
 	}
 	if want := []Migration{{Target: TargetProp, Old: "level", New: "importance"}}; !slices.Equal(ms, want) {
 		t.Errorf("migrations = %v", ms)
+	}
+}
+
+// Renaming a value into the name of a value that the same edit removes is
+// refused for the values of an enum property, and so for a list of the schema
+// (where the names differ without regard to case, TestChangeListWritesTheNamesOfTheEdit).
+func TestChangePropValuesRefuseTheNameOfAValueThatGoes(t *testing.T) {
+	t.Parallel()
+	_, _, _, err := withProps().ChangeProp("level", PropChange{Values: &[]ValueEdit{
+		{Name: "low", From: []string{"low"}},
+		{Name: "mid", From: []string{"high"}},
+		{Name: "urgent", From: []string{"urgent"}},
+	}})
+	if !errors.Is(err, ErrValueInvalid) || !strings.Contains(err.Error(), "a value that goes, and the name of another") {
+		t.Errorf("err = %v; want ErrValueInvalid, a value that goes and the name of another", err)
 	}
 }
 
