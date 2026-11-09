@@ -12,8 +12,6 @@ props:
   start: {type: date}
   estimate: {type: duration}
   area: {type: multi_enum, values: [backend, frontend, infra, ops]}
-  duplicates: {type: task_ref, multi: true, label: 重複している, inverse: 重複されている}
-  relates: {type: task_ref, multi: true, label: 関連, symmetric: true}
 workflow:
   transitions:
     backlog: [todo, canceled]

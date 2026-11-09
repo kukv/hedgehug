@@ -295,7 +295,7 @@ func (m *sides) multi(key string) bool {
 		return false
 	}
 	p, ok := m.sc.Prop(key)
-	return ok && (p.Type == schema.TypeMultiEnum || p.Type == schema.TypeTaskRef && p.Multi)
+	return ok && (p.Type == schema.TypeMultiEnum)
 }
 
 func nodeEqual(a, b any) bool { return model.NodeEqual(a.(*yaml.Node), b.(*yaml.Node)) }

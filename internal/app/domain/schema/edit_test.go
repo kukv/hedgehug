@@ -100,18 +100,10 @@ func TestChangeStatusDefaultMovesIt(t *testing.T) {
 	}
 }
 
-func TestChangePropRefusesTaskRefFieldsOnOthers(t *testing.T) {
-	t.Parallel()
-	multi := true
-	if _, _, _, err := Default().ChangeProp("priority", PropChange{Multi: &multi}); !errors.Is(err, ErrNotTaskRef) {
-		t.Errorf("err = %v", err)
-	}
-}
-
 func TestOrderProps(t *testing.T) {
 	t.Parallel()
-	s := Default() // priority start due estimate points | duplicates causes relates
-	got, err := s.OrderProps([]string{"relates", "duplicates", "causes"})
+	s := Default() // priority start due estimate points
+	got, err := s.OrderProps([]string{"points", "estimate", "due", "start", "priority"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,15 +111,11 @@ func TestOrderProps(t *testing.T) {
 	for _, p := range got.Props {
 		names = append(names, p.Name)
 	}
-	want := []string{"priority", "start", "due", "estimate", "points", "relates", "duplicates", "causes"}
-	if !slices.Equal(names, want) {
+	if want := []string{"points", "estimate", "due", "start", "priority"}; !slices.Equal(names, want) {
 		t.Errorf("props = %v", names)
 	}
-	if _, err := s.OrderProps([]string{"relates", "duplicates"}); !errors.Is(err, ErrOrderStale) {
+	if _, err := s.OrderProps([]string{"points", "estimate"}); !errors.Is(err, ErrOrderStale) {
 		t.Errorf("a missing name: err = %v", err)
-	}
-	if _, err := s.OrderProps([]string{"priority", "relates", "duplicates", "causes"}); !errors.Is(err, ErrOrderStale) {
-		t.Errorf("a mix of the two groups: err = %v", err)
 	}
 }
 

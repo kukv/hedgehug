@@ -126,3 +126,26 @@ func TestAssigneesYAML(t *testing.T) {
 		t.Error("DecodeTemplate accepted a mapping for assignees")
 	}
 }
+
+func TestTemplateRelations(t *testing.T) {
+	t.Parallel()
+	const a, b, c, d = "01JBZ8K3QW7M2X9V4T6R5N8P0A", "01JBZ8K3QW7M2X9V4T6R5N8P0B", "01JBZ8K3QW7M2X9V4T6R5N8P0C", "01JBZ8K3QW7M2X9V4T6R5N8P0D"
+	src := []byte("---\nkind: story\nblocked_by: [" + a + "]\ncauses: [" + b + "]\nrelates: [" + c + "]\nduplicates: [" + d + "]\nclones: [" + a + "]\n" +
+		"children:\n- {title: 子, causes: [" + b + "], relates: [" + c + "], duplicates: [" + d + "], clones: [" + a + "]}\n---\n")
+	tp, err := DecodeTemplate("rel", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := tp.Item
+	if len(it.Causes) != 1 || len(it.Relates) != 1 || len(it.Duplicates) != 1 || len(it.Clones) != 1 {
+		t.Errorf("item = %+v", it)
+	}
+	ch := it.Children[0]
+	if ch.Causes[0].String() != b || ch.Relates[0].String() != c || ch.Duplicates[0].String() != d || ch.Clones[0].String() != a {
+		t.Errorf("child = %+v", ch)
+	}
+	out, err := tp.Encode()
+	if err != nil || string(out) != string(src) {
+		t.Fatalf("round trip changed the file (%v):\n%s", err, out)
+	}
+}

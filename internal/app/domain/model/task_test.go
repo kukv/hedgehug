@@ -24,7 +24,7 @@ func TestTaskRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if task.ID != "WEB-42" || task.Title != "ログイン画面の改修" || task.Rank != "a0V" ||
-		task.Parent == nil || task.Sprint == nil || len(task.BlockedBy) != 1 ||
+		task.Parent == nil || task.Sprint == nil || len(task.BlockedBy) != 1 || len(task.Causes) != 1 || len(task.Relates) != 2 || len(task.Duplicates) != 1 || len(task.Clones) != 1 ||
 		len(task.Links) != 1 || task.Links[0].Sync != "mirror" ||
 		task.Props.Get("points").Value != "5" || task.GH == nil || task.DeletedAt != nil ||
 		task.Extra.Get("custom").Value != "kept" || !strings.HasPrefix(task.Body, "メモ本文") {

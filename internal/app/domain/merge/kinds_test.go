@@ -422,3 +422,29 @@ func TestByKey(t *testing.T) {
 		}
 	}
 }
+
+// A template's relations are fields like its other lists: the later side's
+// list wins whole.
+func TestTemplateRelationFields(t *testing.T) {
+	t.Parallel()
+	const a, b = "01JBZ8K3QW7M2X9V4T6R5N8P0B", "01JBZ8K3QW7M2X9V4T6R5N8P0C"
+	tmpl := func(updated string, lines ...string) []byte {
+		return []byte("---\n" + strings.Join(lines, "\n") + "\nupdated: " + updated + "\n---\n")
+	}
+	for _, rel := range schema.Relations {
+		base := tmpl("2026-10-31T10:00:00Z", "title: t")
+		ours := tmpl("2026-10-31T11:00:00Z", "title: t", rel.Name+": ["+a+"]")
+		theirs := tmpl("2026-10-31T12:00:00Z", "title: t", rel.Name+": ["+b+"]")
+		r := mergeSym(t, "templates/rel.md", Side{Data: base}, Side{Data: ours, Author: "a"}, Side{Data: theirs, Author: "b"})
+		x, err := model.DecodeTemplate("rel", r.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var holder model.Task
+		holder.BlockedBy, holder.Causes, holder.Relates, holder.Duplicates, holder.Clones =
+			x.Item.BlockedBy, x.Item.Causes, x.Item.Relates, x.Item.Duplicates, x.Item.Clones
+		if got := rel.Get(&holder); len(got) != 1 || got[0].String() != b {
+			t.Errorf("%s = %v, want [%s]", rel.Name, got, b)
+		}
+	}
+}

@@ -201,15 +201,22 @@ func TestTaskLinks(t *testing.T) {
 	}
 }
 
+// areaSchema has a multi_enum property, which merges as a set.
+func areaSchema() *schema.Schema {
+	sc := schema.Default()
+	sc.Props = append(sc.Props, schema.Prop{Name: "area", Type: schema.TypeMultiEnum, Values: []string{"a", "b", "c", "d", "e", "x"}})
+	return sc
+}
+
 func TestTaskMultiPropIsASet(t *testing.T) {
-	base := task("2026-10-31T10:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0B]", "  priority: low")
-	ours := task("2026-10-31T11:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0B, 01JBZ8K3QW7M2X9V4T6R5N8P0C]", "  priority: high")
-	theirs := task("2026-10-31T12:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0D]", "  priority: mid")
-	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
+	base := task("2026-10-31T10:00:00Z", "props:", "  area: [b]", "  priority: low")
+	ours := task("2026-10-31T11:00:00Z", "props:", "  area: [b, c]", "  priority: high")
+	theirs := task("2026-10-31T12:00:00Z", "props:", "  area: [d]", "  priority: mid")
+	r := mergeAt(t, taskPath, areaSchema(), LWW, side(base, ""), side(ours, "a"), side(theirs, "b"))
 	x := decoded(t, r.Data)
-	v := x.Props.Get("relates")
-	if v == nil || len(v.Content) != 2 || v.Content[0].Value != "01JBZ8K3QW7M2X9V4T6R5N8P0C" || v.Content[1].Value != "01JBZ8K3QW7M2X9V4T6R5N8P0D" {
-		t.Errorf("relates = %v\n%s", v, r.Data)
+	v := x.Props.Get("area")
+	if v == nil || len(v.Content) != 2 || v.Content[0].Value != "c" || v.Content[1].Value != "d" {
+		t.Errorf("area = %v\n%s", v, r.Data)
 	}
 	ow := []Overwritten{{Path: taskPath, Field: "props.priority", Value: `"high"`, Author: "a"}}
 	if !sameOverwritten(r.Overwritten, ow) {
@@ -315,13 +322,13 @@ func TestTaskOursWins(t *testing.T) {
 
 // Items both sides added take the top side's node, in either order.
 func TestTaskMultiPropItemNodes(t *testing.T) {
-	base := task("2026-10-31T10:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0X]")
-	low := task("2026-10-31T11:00:00Z", "props:", `  relates: ["01JBZ8K3QW7M2X9V4T6R5N8P0C", 01JBZ8K3QW7M2X9V4T6R5N8P0D]`)
-	top := task("2026-10-31T12:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0X, 01JBZ8K3QW7M2X9V4T6R5N8P0C, 01JBZ8K3QW7M2X9V4T6R5N8P0E]")
-	r := mergeTask(t, side(base, ""), side(low, "a"), side(top, "b"))
-	want := "relates: [01JBZ8K3QW7M2X9V4T6R5N8P0C, 01JBZ8K3QW7M2X9V4T6R5N8P0D, 01JBZ8K3QW7M2X9V4T6R5N8P0E]"
+	base := task("2026-10-31T10:00:00Z", "props:", "  area: [x]")
+	low := task("2026-10-31T11:00:00Z", "props:", `  area: ["c", d]`)
+	top := task("2026-10-31T12:00:00Z", "props:", "  area: [x, c, e]")
+	r := mergeAt(t, taskPath, areaSchema(), LWW, side(base, ""), side(low, "a"), side(top, "b"))
+	want := "area: [c, d, e]"
 	if !bytes.Contains(r.Data, []byte(want)) {
-		t.Errorf("relates:\n%s", r.Data)
+		t.Errorf("area:\n%s", r.Data)
 	}
 }
 
@@ -355,5 +362,25 @@ func TestTaskEqualValuesNotOverwritten(t *testing.T) {
 	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
 	if v := decoded(t, r.Data).Props.Get("points"); v == nil || v.Value != "16" || len(r.Overwritten) != 0 {
 		t.Errorf("points %v overwritten %v", v, r.Overwritten)
+	}
+}
+
+// The five relations merge as sets, as blocked_by does: both sides' additions
+// stay and a removal on one side is kept.
+func TestRelationsMergeAsSets(t *testing.T) {
+	t.Parallel()
+	const a, b, c = "01JBZ8K3QW7M2X9V4T6R5N8P0B", "01JBZ8K3QW7M2X9V4T6R5N8P0C", "01JBZ8K3QW7M2X9V4T6R5N8P0D"
+	for _, rel := range schema.Relations {
+		base := task("2026-10-31T10:00:00Z", rel.Name+": ["+a+", "+b+"]")
+		ours := task("2026-10-31T11:00:00Z", rel.Name+": ["+a+", "+b+", "+c+"]")
+		theirs := task("2026-10-31T12:00:00Z", rel.Name+": ["+a+"]")
+		r := mergeTask(t, Side{Data: base}, Side{Data: ours, Author: "a"}, Side{Data: theirs, Author: "b"})
+		var have []string
+		for _, u := range rel.Get(decoded(t, r.Data)) {
+			have = append(have, u.String())
+		}
+		if !slices.Equal(have, []string{a, c}) {
+			t.Errorf("%s = %v, want [%s %s]", rel.Name, have, a, c)
+		}
 	}
 }

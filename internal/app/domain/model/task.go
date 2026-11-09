@@ -11,31 +11,35 @@ import (
 
 // Task is one task file. A project is a task too.
 type Task struct {
-	ULID      ULID
-	ID        string   // human-readable id such as WEB-42, given when the task is written
-	FormerIDs []string // ids before renumbering
-	Workspace ULID     // zero when not set
-	Kind      string
-	Title     string
-	Parent    *ULID
-	Rank      Rank
-	Status    string
-	Assignees []string
-	Watchers  []string
-	Labels    []string
-	Repos     []string
-	BlockedBy []ULID
-	Sprint    *ULID
-	Releases  []ULID
-	Links     []Link
-	Props     Fields     // typed by the schema, not here
-	GH        *yaml.Node // values from GitHub, read-only; read them with GitHub
-	Created   time.Time
-	CreatedBy string
-	Updated   time.Time
-	DeletedAt *time.Time
-	Extra     Fields // keys this version does not know, in file order
-	Body      string
+	ULID       ULID
+	ID         string   // human-readable id such as WEB-42, given when the task is written
+	FormerIDs  []string // ids before renumbering
+	Workspace  ULID     // zero when not set
+	Kind       string
+	Title      string
+	Parent     *ULID
+	Rank       Rank
+	Status     string
+	Assignees  []string
+	Watchers   []string
+	Labels     []string
+	Repos      []string
+	BlockedBy  []ULID
+	Causes     []ULID
+	Relates    []ULID
+	Duplicates []ULID
+	Clones     []ULID
+	Sprint     *ULID
+	Releases   []ULID
+	Links      []Link
+	Props      Fields     // typed by the schema, not here
+	GH         *yaml.Node // values from GitHub, read-only; read them with GitHub
+	Created    time.Time
+	CreatedBy  string
+	Updated    time.Time
+	DeletedAt  *time.Time
+	Extra      Fields // keys this version does not know, in file order
+	Body       string
 
 	doc *Doc
 }
@@ -53,7 +57,7 @@ type Link struct {
 
 var taskKeys = []string{
 	"ulid", "id", "former_ids", "workspace", "kind", "title", "parent", "rank", "status",
-	"assignees", "watchers", "labels", "repos", "blocked_by", "sprint", "releases", "links",
+	"assignees", "watchers", "labels", "repos", "blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links",
 	"props", "gh", "created", "created_by", "updated", "deleted_at",
 }
 
@@ -93,6 +97,10 @@ func DecodeTask(data []byte) (*Task, error) {
 		{"labels", &t.Labels},
 		{"repos", &t.Repos},
 		{"blocked_by", &t.BlockedBy},
+		{"causes", &t.Causes},
+		{"relates", &t.Relates},
+		{"duplicates", &t.Duplicates},
+		{"clones", &t.Clones},
 		{"sprint", &t.Sprint},
 		{"releases", &t.Releases},
 		{"links", &t.Links},
@@ -135,6 +143,10 @@ func (t *Task) Encode() ([]byte, error) {
 	e.Put("labels", t.Labels, len(t.Labels) == 0)
 	e.Put("repos", t.Repos, len(t.Repos) == 0)
 	e.Put("blocked_by", t.BlockedBy, len(t.BlockedBy) == 0)
+	e.Put("causes", t.Causes, len(t.Causes) == 0)
+	e.Put("relates", t.Relates, len(t.Relates) == 0)
+	e.Put("duplicates", t.Duplicates, len(t.Duplicates) == 0)
+	e.Put("clones", t.Clones, len(t.Clones) == 0)
 	e.Put("sprint", t.Sprint, t.Sprint == nil)
 	e.Put("releases", t.Releases, len(t.Releases) == 0)
 	e.Put("links", t.Links, len(t.Links) == 0)

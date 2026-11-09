@@ -13,7 +13,6 @@ import (
 var (
 	ErrNotDefined   = errors.New("not defined")
 	ErrOrderStale   = errors.New("the names differ from the schema")
-	ErrNotTaskRef   = errors.New("only a task_ref property has multi, inverse and symmetric")
 	ErrNotEnum      = errors.New("not an enum or multi_enum property")
 	ErrValueInvalid = errors.New("invalid value")
 	ErrNameTaken    = errors.New("the name is already defined")
@@ -33,9 +32,9 @@ type StatusChange struct {
 }
 
 type PropChange struct {
-	Name, Label, Inverse *string
-	Multi, Symmetric     *bool
-	Values               *[]ValueEdit
+	Name, Label *string
+	Multi       *bool
+	Values      *[]ValueEdit
 }
 
 // ValueEdit is one value of an enum or multi_enum property after an edit.
@@ -218,8 +217,7 @@ func (s *Schema) AddProp(p Prop) (*Schema, error) {
 
 // ChangeProp returns s with the property name changed as ch says, the
 // migrations that a new name and the values need for the tasks, and the
-// values that are removed. multi, inverse and symmetric are for a task_ref
-// property only; values are for an enum or multi_enum property only.
+// values that are removed. Values are for an enum or multi_enum property only.
 func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, []string, error) {
 	out := s.clone()
 	i := slices.IndexFunc(out.Props, func(x Prop) bool { return x.Name == name })
@@ -227,18 +225,13 @@ func (s *Schema) ChangeProp(name string, ch PropChange) (*Schema, []Migration, [
 		return nil, nil, nil, notDefined("property", name)
 	}
 	p := &out.Props[i]
-	if p.Type != TypeTaskRef && (ch.Inverse != nil || ch.Multi != nil || ch.Symmetric != nil) {
-		return nil, nil, nil, ErrNotTaskRef
-	}
 	if ch.Name != nil && *ch.Name != name {
 		if _, ok := s.Prop(*ch.Name); ok {
 			return nil, nil, nil, nameTaken("property", *ch.Name)
 		}
 	}
 	set(&p.Label, ch.Label)
-	set(&p.Inverse, ch.Inverse)
 	set(&p.Multi, ch.Multi)
-	set(&p.Symmetric, ch.Symmetric)
 	var ms []Migration
 	var removed []string
 	if ch.Values != nil {
@@ -340,36 +333,15 @@ func (s *Schema) RemoveProp(name string) (*Schema, error) {
 	return out, nil
 }
 
-// OrderProps puts the task_ref properties, or the others, in the order of
-// names, which names the whole of one group. The other group keeps its
-// places.
+// OrderProps puts the properties in the order of names, which names all of
+// them.
 func (s *Schema) OrderProps(names []string) (*Schema, error) {
 	out := s.clone()
-	if len(names) == 0 {
-		return nil, ErrOrderStale
-	}
-	first, ok := out.Prop(names[0])
-	if !ok {
-		return nil, ErrOrderStale
-	}
-	rel := first.Type == TypeTaskRef
-	var slots []int
-	var group Props
-	for i, p := range out.Props {
-		if (p.Type == TypeTaskRef) == rel {
-			slots = append(slots, i)
-			group = append(group, p)
-		}
-	}
-	sorted, err := reorder(group, func(x Prop) string { return x.Name }, names)
+	sorted, err := reorder(out.Props, func(x Prop) string { return x.Name }, names)
 	if err != nil {
 		return nil, err
 	}
-	props := slices.Clone(out.Props)
-	for k, i := range slots {
-		props[i] = sorted[k]
-	}
-	out.Props = props
+	out.Props = sorted
 	return out, nil
 }
 

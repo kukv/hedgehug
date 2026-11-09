@@ -169,19 +169,19 @@ func TestRepairChildOfForward(t *testing.T) {
 	}
 }
 
-func TestRepairBlockedByAndTaskRefToForward(t *testing.T) {
+func TestRepairRelationsToForward(t *testing.T) {
 	t.Parallel()
 	f := memFiles{
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),
 		pathOf(childTask): taskFile(childTask, "WEB-2", wsA, "", "2026-10-31T10:00:00Z",
-			"blocked_by: ["+fwdTask+", "+otherTask+"]", "props:\n  duplicates: ["+fwdTask+"]\n  relates: "+fwdTask),
+			"blocked_by: ["+fwdTask+", "+otherTask+"]", "relates: ["+fwdTask+"]", "duplicates: ["+fwdTask+"]"),
 		pathOf(otherTask): taskFile(otherTask, "WEB-3", wsA, "", "2026-10-31T10:00:00Z"),
 	}
 	after, rs, _ := forwardRepair(t, f)
 	got := decoded(t, after[pathOf(childTask)])
-	if !slices.Equal(got.BlockedBy, []model.ULID{mustULID(otherTask)}) || got.Props.Get("duplicates") != nil || got.Props.Get("relates") != nil {
-		t.Errorf("blocked_by %v props %v", got.BlockedBy, got.Props)
+	if !slices.Equal(got.BlockedBy, []model.ULID{mustULID(otherTask)}) || len(got.Relates) != 0 || len(got.Duplicates) != 0 {
+		t.Errorf("blocked_by %v relates %v duplicates %v", got.BlockedBy, got.Relates, got.Duplicates)
 	}
 	var kinds, values []string
 	for _, x := range rs {
@@ -193,8 +193,8 @@ func TestRepairBlockedByAndTaskRefToForward(t *testing.T) {
 	}
 	wantValues := []string{
 		`{"field":"blocked_by","target":"` + fwdTask + `"}`,
-		`{"field":"props.duplicates","target":"` + fwdTask + `"}`,
-		`{"field":"props.relates","target":"` + fwdTask + `"}`,
+		`{"field":"relates","target":"` + fwdTask + `"}`,
+		`{"field":"duplicates","target":"` + fwdTask + `"}`,
 	}
 	if !slices.Equal(kinds, []string{"ref_moved", "ref_moved", "ref_moved"}) || !slices.Equal(values, wantValues) {
 		t.Errorf("kinds %v values %v", kinds, values)
@@ -246,11 +246,11 @@ func TestRepairForwardListedTwiceIsToldOnce(t *testing.T) {
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),
 		pathOf(childTask): taskFile(childTask, "WEB-2", wsA, "", "2026-10-31T10:00:00Z",
-			"blocked_by: ["+fwdTask+", "+fwdTask+"]", "props:\n  duplicates: ["+fwdTask+", "+fwdTask+"]"),
+			"blocked_by: ["+fwdTask+", "+fwdTask+"]", "duplicates: ["+fwdTask+", "+fwdTask+"]"),
 	}
 	after, rs, _ := forwardRepair(t, f)
-	if got := decoded(t, after[pathOf(childTask)]); len(got.BlockedBy) != 0 || got.Props.Get("duplicates") != nil {
-		t.Errorf("blocked_by %v props %v", got.BlockedBy, got.Props)
+	if got := decoded(t, after[pathOf(childTask)]); len(got.BlockedBy) != 0 || len(got.Duplicates) != 0 {
+		t.Errorf("blocked_by %v duplicates %v", got.BlockedBy, got.Duplicates)
 	}
 	if len(rs) != 2 {
 		t.Errorf("repaired = %+v; want one record per field and target", rs)

@@ -36,12 +36,15 @@ func (p Problem) String() string { return p.Path + ": " + p.Msg }
 // name, besides properties.
 var requirableFields = []string{
 	"parent", "assignees", "watchers", "labels", "repos",
-	"blocked_by", "sprint", "releases", "links",
+	"blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links",
 }
 
 // builtinFilled reports whether the built-in field name of t has a value.
 // ok is false when name is not a requirable built-in field.
 func builtinFilled(t *model.Task, name string) (filled, ok bool) {
+	if r, inverse, ok := RelationOf(name); ok && !inverse {
+		return len(r.Get(t)) > 0, true
+	}
 	switch name {
 	case "parent":
 		return t.Parent != nil, true
@@ -53,8 +56,6 @@ func builtinFilled(t *model.Task, name string) (filled, ok bool) {
 		return len(t.Labels) > 0, true
 	case "repos":
 		return len(t.Repos) > 0, true
-	case "blocked_by":
-		return len(t.BlockedBy) > 0, true
 	case "sprint":
 		return t.Sprint != nil, true
 	case "releases":
@@ -116,17 +117,14 @@ func (s *Schema) Check() []Problem {
 			add(p, "schema.prop_twice", "property %q is defined twice", pr.Name)
 		}
 		props[pr.Name] = true
-		if !slices.Contains(PropTypes, pr.Type) {
+		switch {
+		case pr.Type == "task_ref":
+			ps = append(ps, Problem{Path: p, Msg: "関連は固定です。hh dep か詳細の関連の欄で付けます", Code: "schema.unknown_type", Args: []string{string(pr.Type)}})
+		case !slices.Contains(PropTypes, pr.Type):
 			add(p, "schema.unknown_type", "unknown type %q", pr.Type)
 		}
 		if (pr.Type == TypeEnum || pr.Type == TypeMultiEnum) && len(pr.Values) == 0 {
 			add(p, "schema.values_empty", "values is empty")
-		}
-		if pr.Inverse != "" && pr.Symmetric {
-			add(p, "schema.inverse_and_symmetric", "inverse and symmetric cannot be used together")
-		}
-		if (pr.Inverse != "" || pr.Symmetric) && pr.Type != TypeTaskRef {
-			add(p, "schema.inverse_not_task_ref", "inverse and symmetric are only for task_ref")
 		}
 	}
 

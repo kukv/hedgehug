@@ -39,20 +39,24 @@ func (a *Assignees) UnmarshalYAML(n *yaml.Node) error {
 // TemplateItem is a task to create from a template. The parent and the rank
 // are decided when the template is expanded.
 type TemplateItem struct {
-	Kind      string         `yaml:"kind,omitempty"`
-	Title     string         `yaml:"title,omitempty"`
-	Status    string         `yaml:"status,omitempty"`
-	Assignees Assignees      `yaml:"assignees,omitempty"`
-	Watchers  []string       `yaml:"watchers,omitempty"`
-	Labels    []string       `yaml:"labels,omitempty"`
-	Repos     []string       `yaml:"repos,omitempty"`
-	BlockedBy []ULID         `yaml:"blocked_by,omitempty"`
-	Sprint    *ULID          `yaml:"sprint,omitempty"`
-	Releases  []ULID         `yaml:"releases,omitempty"`
-	Links     []Link         `yaml:"links,omitempty"`
-	Props     Fields         `yaml:"props,omitempty"`
-	Body      string         `yaml:"body,omitempty"`
-	Children  []TemplateItem `yaml:"children,omitempty"`
+	Kind       string         `yaml:"kind,omitempty"`
+	Title      string         `yaml:"title,omitempty"`
+	Status     string         `yaml:"status,omitempty"`
+	Assignees  Assignees      `yaml:"assignees,omitempty"`
+	Watchers   []string       `yaml:"watchers,omitempty"`
+	Labels     []string       `yaml:"labels,omitempty"`
+	Repos      []string       `yaml:"repos,omitempty"`
+	BlockedBy  []ULID         `yaml:"blocked_by,omitempty"`
+	Causes     []ULID         `yaml:"causes,omitempty"`
+	Relates    []ULID         `yaml:"relates,omitempty"`
+	Duplicates []ULID         `yaml:"duplicates,omitempty"`
+	Clones     []ULID         `yaml:"clones,omitempty"`
+	Sprint     *ULID          `yaml:"sprint,omitempty"`
+	Releases   []ULID         `yaml:"releases,omitempty"`
+	Links      []Link         `yaml:"links,omitempty"`
+	Props      Fields         `yaml:"props,omitempty"`
+	Body       string         `yaml:"body,omitempty"`
+	Children   []TemplateItem `yaml:"children,omitempty"`
 }
 
 // targets returns the decode targets of the keys a template file shares
@@ -61,7 +65,8 @@ func (it *TemplateItem) targets() map[string]any {
 	return map[string]any{
 		"kind": &it.Kind, "title": &it.Title, "status": &it.Status,
 		"assignees": &it.Assignees, "watchers": &it.Watchers, "labels": &it.Labels,
-		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "sprint": &it.Sprint,
+		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "causes": &it.Causes, "relates": &it.Relates,
+		"duplicates": &it.Duplicates, "clones": &it.Clones, "sprint": &it.Sprint,
 		"releases": &it.Releases, "links": &it.Links, "props": &it.Props,
 		"children": &it.Children,
 	}
@@ -94,7 +99,7 @@ type Template struct {
 
 var templateKeys = []string{
 	"kind", "title", "status", "assignees", "watchers", "labels", "repos",
-	"blocked_by", "sprint", "releases", "links", "props", "children", "created", "updated",
+	"blocked_by", "causes", "relates", "duplicates", "clones", "sprint", "releases", "links", "props", "children", "created", "updated",
 }
 
 func DecodeTemplate(name string, data []byte) (*Template, error) {
@@ -135,6 +140,10 @@ func (t *Template) Encode() ([]byte, error) {
 	e.Put("labels", it.Labels, len(it.Labels) == 0)
 	e.Put("repos", it.Repos, len(it.Repos) == 0)
 	e.Put("blocked_by", it.BlockedBy, len(it.BlockedBy) == 0)
+	e.Put("causes", it.Causes, len(it.Causes) == 0)
+	e.Put("relates", it.Relates, len(it.Relates) == 0)
+	e.Put("duplicates", it.Duplicates, len(it.Duplicates) == 0)
+	e.Put("clones", it.Clones, len(it.Clones) == 0)
 	e.Put("sprint", it.Sprint, it.Sprint == nil)
 	e.Put("releases", it.Releases, len(it.Releases) == 0)
 	e.Put("links", it.Links, len(it.Links) == 0)
