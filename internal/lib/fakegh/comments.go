@@ -30,11 +30,13 @@ func (s *Server) RefuseComments(op string, on bool) {
 }
 
 // CommentGoneOnUpdate makes the next PATCH of a comment find the comment
-// deleted: it is removed and the PATCH answers 404, once.
-func (s *Server) CommentGoneOnUpdate() {
+// deleted: it is removed and the PATCH answers 404, once. A non-empty
+// replacement is made at the same time as a comment of the same author, as
+// when someone else made it again.
+func (s *Server) CommentGoneOnUpdate(replacement string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.goneOnUpdate = true
+	s.goneOnUpdate = &replacement
 }
 
 // nextCommentID is one more than the greatest ID any comment has had: GitHub
@@ -208,9 +210,13 @@ func (s *Server) issueComment(w http.ResponseWriter, r *http.Request, x *Repo, i
 		fail(w, http.StatusNotFound, "Not Found")
 		return
 	}
-	if r.Method != "DELETE" && s.goneOnUpdate {
-		s.goneOnUpdate = false
+	if r.Method != "DELETE" && s.goneOnUpdate != nil {
+		again := *s.goneOnUpdate
+		s.goneOnUpdate = nil
 		dropComment(issue, c)
+		if again != "" {
+			s.addComment(issue, c.Author, again)
+		}
 		issue.UpdatedAt = s.now()
 		fail(w, http.StatusNotFound, "Not Found")
 		return

@@ -221,7 +221,22 @@ func pushLinkComments(cp *commentPush, l model.Link, number int, cl *github.Clie
 		// not the one last made the same, it was edited there.
 		if _, err := cl.UpdateIssueComment(owner, name, lk.ID, model.MarkedComment(c.ULID, want)); err != nil {
 			if errors.Is(err, github.ErrNotFound) {
-				create(w, want) // deleted there since the list: the task is the master
+				// Deleted there since the list. Someone may have made it again
+				// since: the mark is looked for before it is made.
+				fresh, err := cl.IssueComments(owner, name, number)
+				if err != nil {
+					warn(err)
+					continue
+				}
+				if again := slices.IndexFunc(fresh, func(x github.IssueComment) bool {
+					_, u, ok := model.SplitComment(x.Body)
+					return ok && u == c.ULID
+				}); again >= 0 {
+					text, _, _ := model.SplitComment(fresh[again].Body)
+					w.setLink(model.CommentLink{Ref: ref, ID: fresh[again].ID, BodySynced: text})
+				} else {
+					create(w, want) // the task is the master
+				}
 			} else {
 				warn(err)
 			}

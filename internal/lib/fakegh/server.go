@@ -45,7 +45,7 @@ type Server struct {
 	noIssueEdits bool            // each PATCH of an issue fails
 	noComments   map[string]bool // the operations on comments that fail: see RefuseComments
 	lastComment  int             // the greatest ID given to a comment: an ID is not given twice
-	goneOnUpdate bool            // the next PATCH of a comment finds it deleted: see CommentGoneOnUpdate
+	goneOnUpdate *string         // the next PATCH of a comment finds it deleted: see CommentGoneOnUpdate
 
 	restricted map[string]bool // owners the GitHub App is not installed on, in lower case
 	// uninstalled are the owners whose repositories GitHub hides from the

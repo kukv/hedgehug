@@ -91,7 +91,7 @@ func TestPushCommentsCreatesAgainWhenTheUpdateFindsItGone(t *testing.T) {
 	refetch(t, ts)
 	was := oneGH(t, commentOn(t, ts, x.ULID, c.ULID))
 	editComment(t, ts, x.ULID, commentOn(t, ts, x.ULID, c.ULID), "B")
-	fake.CommentGoneOnUpdate()
+	fake.CommentGoneOnUpdate("")
 	if w := refetch(t, ts); len(w) != 0 {
 		t.Fatalf("warnings %v", w)
 	}
