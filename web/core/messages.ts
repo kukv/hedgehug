@@ -144,9 +144,13 @@ const messages: Record<string, Make> = {
     if (a.value !== undefined) {
       return `値 ${str(a, "value")} は、${used}が使っているため削除できません。マージで別の値へ移してから削除してください`;
     }
-    return `${used}が使っているため削除できません。ステータスはマージで別のステータスへ移し、プロパティは使っているタスクの値を外してから削除してください`;
+    // A property is not merged: its values are taken off the tasks.
+    if (str(a, "target") === "prop") {
+      return `${used}が使っているため削除できません。使っているタスクの値を外してから削除してください`;
+    }
+    return `${used}が使っているため削除できません。マージで別のステータスへ移してから削除してください`;
   },
-  "schema.name_taken": () => "その名前はすでにあります。まとめるときはマージを使ってください",
+  "schema.name_taken": () => "その名前はすでにあります。別の名前にしてください",
   "schema.tasks_invalid": () => "変更すると規則に合わなくなるタスクがあります",
   "schema.invalid": (a, e) => {
     const t = list(a, "problems");

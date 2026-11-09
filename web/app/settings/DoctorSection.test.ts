@@ -403,6 +403,14 @@ describe("DoctorSection: the repair", () => {
               kind: "id_collision",
               value: { old: "DM-3", new: "DM-4" },
             },
+            {
+              ulid: "U5",
+              id: "DM-5",
+              title: "dated",
+              kind: "legacy_field",
+              value: ["due"],
+              cut: [{ prop: "due", value: "2026-11-08T15:30:00+09:00" }],
+            },
           ],
           findings: [fileFinding],
         }),
@@ -414,11 +422,15 @@ describe("DoctorSection: the repair", () => {
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(api.doctorFix).toHaveBeenCalledWith({ store: "a" });
-    expect(toasts.list.map((t) => t.message)).toEqual(["2 件を修復しました"]);
+    expect(toasts.list.map((t) => t.message)).toEqual(["3 件を修復しました"]);
     const result = within(region()).getByRole("region", { name: "修復の結果" });
     expect(result.textContent).toContain("DM-2");
     expect(result.textContent).toContain("親「U1」が削除されたため、ルートに移しました");
     expect(result.textContent).toContain("ID が重複していたため、DM-3 から DM-4 に振り直しました");
+    // the time a date lost is shown, with the value as it was written
+    expect(result.textContent).toContain(
+      "props の due をタスクの項目へ移しました（due の時刻を落としました: 2026-11-08T15:30:00+09:00）",
+    );
     await waitFor(() => expect(document.activeElement).toBe(result));
     // what is left
     expect(within(region()).getByText("does not decode")).toBeTruthy();

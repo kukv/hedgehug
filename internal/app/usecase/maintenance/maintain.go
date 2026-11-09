@@ -16,8 +16,16 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
+// LostTime is the time of a date that a repair made from a date and a time:
+// Prop is the property it was in and Value the whole value, as it was written.
+type LostTime struct {
+	Prop  string `json:"prop"`
+	Value string `json:"value"`
+}
+
 // Fixed is something doctor --fix repaired. Line is the text line, made when
-// the repair is read, with the names the store has after it.
+// the repair is read, with the names the store has after it. Cut lists the
+// times a repair left out of a date.
 type Fixed struct {
 	ULID   string          `json:"ulid"`
 	ID     string          `json:"id,omitempty"`
@@ -25,6 +33,7 @@ type Fixed struct {
 	Kind   string          `json:"kind"`
 	Value  json.RawMessage `json:"value"`
 	Author string          `json:"author,omitempty"`
+	Cut    []LostTime      `json:"cut,omitempty"`
 	Line   string          `json:"-"`
 }
 

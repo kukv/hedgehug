@@ -147,11 +147,13 @@ func fixLegacyFields(ss *usecase.Session, s *store.Store) ([]Fixed, error) {
 		}
 		value, _ := json.Marshal(moved) // a list of strings always encodes
 		line := fmt.Sprintf("repaired: %s: %s props.%s moved to the fields of the task", name, legacyKind, strings.Join(moved, ", props."))
+		var lost []LostTime
 		for _, c := range cut { // a date made of a time says what it lost
 			line += fmt.Sprintf("; the time of props.%s was left out: %s", c.Prop, c.Value)
+			lost = append(lost, LostTime{Prop: c.Prop, Value: c.Value})
 		}
 		out = append(out, Fixed{
-			ULID: t.ULID.String(), ID: t.ID, Title: t.Title, Kind: legacyKind, Value: value, Line: line,
+			ULID: t.ULID.String(), ID: t.ID, Title: t.Title, Kind: legacyKind, Value: value, Cut: lost, Line: line,
 		})
 	}
 	if len(files) == 0 {

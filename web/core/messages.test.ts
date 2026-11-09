@@ -255,17 +255,21 @@ describe("errorMessage", () => {
   });
 
   it("words the errors of a schema edit", () => {
-    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 0 }))).toBe(
-      "タスク 3 件が使っているため削除できません。ステータスはマージで別のステータスへ移し、プロパティは使っているタスクの値を外してから削除してください",
+    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 0, target: "status" }))).toBe(
+      "タスク 3 件が使っているため削除できません。マージで別のステータスへ移してから削除してください",
     );
-    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 1 }))).toBe(
-      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。ステータスはマージで別のステータスへ移し、プロパティは使っているタスクの値を外してから削除してください",
+    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 1, target: "status" }))).toBe(
+      "タスク 3 件（うち削除済み 1 件）が使っているため削除できません。マージで別のステータスへ移してから削除してください",
+    );
+    // a property is not merged: its values are taken off
+    expect(errorMessage(err("schema.in_use", { count: 3, deleted: 0, target: "prop" }))).toBe(
+      "タスク 3 件が使っているため削除できません。使っているタスクの値を外してから削除してください",
     );
     expect(errorMessage(err("schema.in_use", { value: "low", count: 3, deleted: 0 }))).toBe(
       "値 low は、タスク 3 件が使っているため削除できません。マージで別の値へ移してから削除してください",
     );
     expect(errorMessage(err("schema.name_taken"))).toBe(
-      "その名前はすでにあります。まとめるときはマージを使ってください",
+      "その名前はすでにあります。別の名前にしてください",
     );
     expect(errorMessage(err("schema.tasks_invalid", { violations: ["WEB-2: x"] }))).toBe(
       "変更すると規則に合わなくなるタスクがあります",

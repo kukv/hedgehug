@@ -152,19 +152,16 @@
     {oncommit}
   />
 {:else if col.id === "label"}
-  {#if schema}
-    <LabelPicker
-      store={task.store}
-      label="ラベル: {taskId}"
-      value={task.labels ?? []}
-      options={schema.labels ?? []}
-      {readonly}
-      onedit={edit}
-      {oncommit}
-    />
-  {:else}
-    <span class="plain"></span>
-  {/if}
+  <LabelPicker
+    store={task.store}
+    label="ラベル: {taskId}"
+    value={task.labels ?? []}
+    options={schema ? (schema.labels ?? []) : undefined}
+    {readonly}
+    {describedby}
+    onedit={edit}
+    {oncommit}
+  />
 {:else if col.id === "parent"}
   {#if parent}
     <IdLabel

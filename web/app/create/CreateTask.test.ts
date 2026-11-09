@@ -5,6 +5,7 @@ import {
   makeCore,
   mount,
   ok,
+  schemaView,
   stubLayout,
   taskView,
   typeInto,
@@ -283,6 +284,19 @@ describe("CreateTask", () => {
       labels: ["bug"],
       props: { area: "web" },
     });
+  });
+
+  it("closes the dialog when the link to the labels of the settings is followed, so the settings show", async () => {
+    const k = makeCore({ tasks: [parent] });
+    k.schema.get.mockImplementation(() => ({ ...schemaView, labels: [] }) as never);
+    const onclose = vi.fn();
+    mount(CreateTask, { request: { kind: "task" }, onclose }, k);
+    const link = await screen.findByRole("link", { name: "設定の「ラベル」で足してください" });
+    await fireEvent.click(link);
+    expect(onclose).toHaveBeenCalled();
+    expect(window.location.pathname + window.location.search).toBe(
+      "/settings/schema/shared?tab=labels",
+    );
   });
 
   it("asks for the priority, the due date and the labels, and not for the start, the estimate or the points", () => {

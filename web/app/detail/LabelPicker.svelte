@@ -11,19 +11,28 @@
     label,
     options,
     readonly = false,
+    describedby,
+    onnavigate,
     onedit,
     oncommit,
   }: {
     store: string;
     value: string[];
     label: string;
-    options: string[];
+    // undefined: the schema is not read yet; the labels the task holds are shown and nothing is offered.
+    options: string[] | undefined;
     readonly?: boolean;
+    // The id of the text that says why the labels only read.
+    describedby?: string;
+    // Called when the link to the settings is followed, for a dialog that has to close to show them.
+    onnavigate?: () => void;
     onedit: (v: string[]) => void;
     oncommit: () => void;
   } = $props();
 
-  const rest = $derived(options.filter((o) => !value.includes(o)));
+  // A label is told apart from another without regard to case: a task that holds Bug has bug.
+  const held = $derived(new Set(value.map((v) => v.toLowerCase())));
+  const rest = $derived((options ?? []).filter((o) => !held.has(o.toLowerCase())));
   const href = $derived(router.href({ name: "settings", page: "schema", store, tab: "labels" }));
 
   function change(next: string[]) {
@@ -38,7 +47,7 @@
   }
 </script>
 
-<div class="labels" class:readonly>
+<fieldset class="labels" class:readonly aria-label={label} aria-describedby={describedby}>
   {#each value as v (v)}
     <span class="chip">
       {v}
@@ -61,13 +70,24 @@
       {/each}
     </select>
   {/if}
-  {#if !readonly && options.length === 0}
-    <a {href} onclick={(e) => onLinkClick(e, href)}>設定の「ラベル」で足してください</a>
+  {#if !readonly && options !== undefined && options.length === 0}
+    <a
+      {href}
+      onclick={(e) => {
+        onnavigate?.();
+        onLinkClick(e, href);
+      }}
+      >設定の「ラベル」で足してください</a
+    >
   {/if}
-</div>
+</fieldset>
 
 <style>
   .labels {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;

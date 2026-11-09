@@ -67,4 +67,52 @@ describe("LabelPicker", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("link")).toBeNull();
   });
+
+  it("tells a label from another without regard to case: a task that holds Bug is not offered bug", () => {
+    render(LabelPicker, { ...base, value: ["Bug"], onedit: vi.fn(), oncommit: vi.fn() });
+    const pick = screen.getByRole("combobox", { name: "ラベル" }) as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.value)).toEqual(["", "ux", "ops"]);
+  });
+
+  it("shows the labels the task holds while the schema is not read, and offers nothing", () => {
+    render(LabelPicker, {
+      ...base,
+      options: undefined,
+      value: ["bug"],
+      onedit: vi.fn(),
+      oncommit: vi.fn(),
+    });
+    expect(screen.getByText("bug")).toBeTruthy();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("points the group at the text that says why it only reads", () => {
+    render(LabelPicker, {
+      ...base,
+      value: ["bug"],
+      readonly: true,
+      describedby: "why",
+      onedit: vi.fn(),
+      oncommit: vi.fn(),
+    });
+    expect(screen.getByRole("group", { name: "ラベル" })).toHaveAttribute(
+      "aria-describedby",
+      "why",
+    );
+  });
+
+  it("tells the caller before the link to the settings is followed", async () => {
+    const onnavigate = vi.fn();
+    render(LabelPicker, {
+      ...base,
+      options: [],
+      value: [],
+      onnavigate,
+      onedit: vi.fn(),
+      oncommit: vi.fn(),
+    });
+    await fireEvent.click(screen.getByRole("link", { name: "設定の「ラベル」で足してください" }));
+    expect(onnavigate).toHaveBeenCalledTimes(1);
+  });
 });

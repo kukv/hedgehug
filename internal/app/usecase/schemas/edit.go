@@ -181,12 +181,20 @@ func notInUse(s *store.Store, u Use) error {
 	if count == 0 {
 		return nil
 	}
-	args := []any{"count", count, "deleted", deleted}
-	if u.Target != schema.TargetStatus && u.Target != schema.TargetProp {
+	// target says what is removed, so that the words can say what to do: a
+	// property cannot be merged, its values are taken off the tasks.
+	args := []any{"count", count, "deleted", deleted, "target", string(u.Target)}
+	first := "merge it into another first"
+	switch u.Target {
+	case schema.TargetProp:
+		first = "take its values off the tasks first; properties are not merged"
+	case schema.TargetStatus:
+	default:
 		args = append(args, "value", u.Name)
+		first = "merge it into another value first"
 	}
 	return usecase.NewErr(usecase.KindInvalid, "schema.in_use",
-		fmt.Errorf("%s uses %s; merge it into another first", TaskCount(count), u.Name), args...)
+		fmt.Errorf("%s uses %s; %s", TaskCount(count), u.Name, first), args...)
 }
 
 // migrated is t as the migrations ms, read against cur, write it; ok is false

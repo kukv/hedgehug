@@ -70,7 +70,12 @@
       .map((x) => x.trim())
       .filter(Boolean);
   // An empty value takes the field off, except a status, which every task has.
-  const ready = $derived(field !== "status" || value !== "");
+  // A number field with text that is not a number would be sent as null and clear the value.
+  const isNumber = $derived(
+    field === "points" || (field.startsWith("props.") && defs[field.slice(6)]?.type === "number"),
+  );
+  const notNumber = $derived(isNumber && value.trim() !== "" && !Number.isFinite(Number(value)));
+  const ready = $derived((field !== "status" || value !== "") && !notNumber);
   const propOf = (name: string): unknown => {
     if (value === "") return null;
     return defs[name]?.type === "number" ? Number(value) : value;
@@ -215,6 +220,9 @@
         {/if}
       </div>
     </div>
+    {#if notNumber}
+      <FormError message="数を入れてください" />
+    {/if}
     {#if preview}
       <p class="count">{count} 件が対象です{bad.length > 0 ? ` · 違反 ${bad.length} 件` : ""}</p>
       {#if bad.length > 0}

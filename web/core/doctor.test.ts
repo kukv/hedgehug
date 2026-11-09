@@ -215,6 +215,22 @@ describe("findingText and findingHint", () => {
     );
   });
 
+  it("fixedText: 日付にして落とした時刻を、元の値のまま言う", () => {
+    const cut = [
+      { prop: "due", value: "2026-11-08T15:30:00+09:00" },
+      { prop: "start", value: "2026-11-04T09:00:00Z" },
+    ];
+    expect(fixedText("legacy_field", ["due", "start"], undefined, cut)).toBe(
+      "props の due・start をタスクの項目へ移しました（due の時刻を落としました: 2026-11-08T15:30:00+09:00、start の時刻を落としました: 2026-11-04T09:00:00Z）",
+    );
+    expect(fixedText("legacy_field", ["due"], undefined, null)).toBe(
+      "props の due をタスクの項目へ移しました",
+    );
+    expect(fixedText("legacy_field", ["due"], undefined, [])).toBe(
+      "props の due をタスクの項目へ移しました",
+    );
+  });
+
   it("schema.value_twice: どちらのリストの値かと、大文字小文字を区別しないことを言う", () => {
     const x = (list: string) =>
       f({

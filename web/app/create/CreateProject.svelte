@@ -5,6 +5,9 @@
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
+  import LabelPicker from "../detail/LabelPicker.svelte";
+  import PropField from "../detail/PropField.svelte";
+  import { builtinRows } from "../detail/prop-rows";
   import { modKey } from "../keys";
   import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
@@ -20,7 +23,7 @@
 
   let { onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
-  const { api, cache, stores } = core();
+  const { api, cache, stores, schema } = core();
   const did = useDisplayId(stores);
   const all = useSubscribe(stores, () => stores.workspaces());
   const roOf = useReadOnlyOf(stores);
@@ -62,9 +65,16 @@
     if (again.workspace) wsKey = opened = workspaceKey(again.workspace);
   });
 
+  const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
+  $effect(() => {
+    if (ws) void schema.load(ws.store);
+  });
+
   let title = $state("");
   let repos = $state<string[]>([]);
   let assignees = $state<string[]>([]);
+  let priority = $state<string | null>(null);
+  let labels = $state<string[]>([]);
   let start = $state<string | null>(null);
   let due = $state<string | null>(null);
   let busy = $state(false);
@@ -80,8 +90,10 @@
     const props: Record<string, string> = {};
     if (assignees.length > 0) props.assignees = assignees.join(",");
     if (repos.length > 0) props.repos = repos.join(",");
+    if (priority) props.priority = priority;
     if (start) props.start = start;
     if (due) props.due = due;
+    if (labels.length > 0) props.labels = labels.join(",");
     return cliAdd({
       title: title.trim() || new Placeholder("名前"),
       kind: "project",
@@ -108,8 +120,10 @@
           workspace: ws.name,
           ...(assignees.length > 0 ? { assignees } : {}),
           ...(repos.length > 0 ? { repos } : {}),
+          ...(priority ? { priority } : {}),
           ...(start ? { start } : {}),
           ...(due ? { due } : {}),
+          ...(labels.length > 0 ? { labels } : {}),
         },
         { store: ws.store },
       );
@@ -226,6 +240,21 @@
       />
     </div>
 
+    {#if sc.current}
+      {@const priorityRow = builtinRows(sc.current, {}).find((r) => r.name === "priority")}
+      {#if priorityRow}
+        <div class="field">
+          <span class="lbl">{priorityRow.label}</span>
+          <PropField
+            row={priorityRow}
+            value={priority}
+            onedit={(v) => (priority = v as string | null)}
+            oncommit={() => {}}
+          />
+        </div>
+      {/if}
+    {/if}
+
     <div class="dates">
       <div class="field">
         <span class="lbl">開始日</span>
@@ -248,6 +277,20 @@
         />
       </div>
     </div>
+    {#if sc.current && ws}
+      <div class="field">
+        <span class="lbl">ラベル</span>
+        <LabelPicker
+          store={ws.store}
+          label="ラベル"
+          value={labels}
+          options={sc.current.labels ?? []}
+          onnavigate={onclose}
+          onedit={(v) => (labels = v)}
+          oncommit={() => {}}
+        />
+      </div>
+    {/if}
     {#if blocked}
       <p id="create-blocked" class="hint">{blocked}</p>
     {/if}

@@ -107,6 +107,26 @@ describe("BulkDialog", () => {
     expect(calls.every((c) => (c.body as { props?: unknown }).props === undefined)).toBe(true);
   });
 
+  it("does not send a value that is not a number as the points or a number property: it would clear them", async () => {
+    const { calls } = setup(() => ({ tasks: [task] }));
+    for (const [field, text] of [
+      ["points", "abc"],
+      ["points", "1,5"],
+      ["props.effort", "x"],
+    ] as const) {
+      await fireEvent.change(screen.getByLabelText("項目"), { target: { value: field } });
+      await fireEvent.input(screen.getByLabelText("値"), { target: { value: text } });
+      expect(screen.getByText("数を入れてください")).toBeVisible();
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    expect(calls).toEqual([]);
+    expect(button().disabled).toBe(true);
+    // a number clears the warning and is sent
+    await fireEvent.input(screen.getByLabelText("値"), { target: { value: "2.5" } });
+    expect(screen.queryByText("数を入れてください")).toBeNull();
+    await waitFor(() => expect(calls.at(-1)?.body).toMatchObject({ props: { effort: 2.5 } }));
+  });
+
   it("chooses the labels from the list of the schema, and sends the whole list", async () => {
     const { calls } = setup(() => ({ tasks: [task] }));
     await fireEvent.change(screen.getByLabelText("項目"), { target: { value: "labels" } });

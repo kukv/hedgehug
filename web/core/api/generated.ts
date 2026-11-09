@@ -619,8 +619,15 @@ export interface Rebuilt {
   replayed: number;
 }
 
+export interface LostTime {
+  prop: string;
+  value: string;
+}
+
 export interface Fixed {
   author?: string;
+  /** @nullable */
+  cut?: LostTime[] | null;
   id?: string;
   kind: string;
   title: string;

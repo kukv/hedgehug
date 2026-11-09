@@ -902,6 +902,12 @@ components:
       properties:
         author:
           type: string
+        cut:
+          items:
+            $ref: "#/components/schemas/LostTime"
+          type:
+            - array
+            - "null"
         id:
           type: string
         kind:
@@ -1346,6 +1352,17 @@ components:
       required:
         - name
         - email
+      type: object
+    LostTime:
+      additionalProperties: false
+      properties:
+        prop:
+          type: string
+        value:
+          type: string
+      required:
+        - prop
+        - value
       type: object
     MigrateInputBody:
       additionalProperties: false

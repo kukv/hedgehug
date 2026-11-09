@@ -440,6 +440,7 @@
             label="ラベル"
             value={labels}
             options={labelOptions}
+            onnavigate={onclose}
             onedit={(v) => (labels = v)}
             oncommit={() => {}}
           />

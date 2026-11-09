@@ -132,6 +132,22 @@ describe("notificationText", () => {
           lost: ["手で直した題"],
         },
       });
+    // a notification made while the labels were still synced is worded in Japanese too
+    const old = n({
+      ulid: "2",
+      kind: "issue_overwritten",
+      detail: {
+        ref: "github.com/org-a/web/issues/45",
+        field: "labels",
+        side: "hedgehug",
+        lost: ["v2"],
+      },
+    });
+    expect(notificationText(old)).toEqual({
+      label: "自動化",
+      text: "タスクのラベルが手で編集されていたため、org-a/web#45 の値に戻しました",
+      mine: "ラベル: v2",
+    });
     expect(notificationText(item("github"))).toEqual({
       label: "自動化",
       text: "org-a/web#45 のタイトルが GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました",

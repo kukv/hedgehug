@@ -60,7 +60,12 @@ const rec = (v: unknown): Record<string, unknown> =>
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** What a repair of doctor --fix did (Fixed.kind and Fixed.value), in words. */
-export function fixedText(kind: string, value: unknown, taskName?: TaskName): string {
+export function fixedText(
+  kind: string,
+  value: unknown,
+  taskName?: TaskName,
+  cut?: readonly { prop: string; value: string }[] | null,
+): string {
   switch (kind) {
     case "id_collision": {
       const v = rec(value);
@@ -81,9 +86,12 @@ export function fixedText(kind: string, value: unknown, taskName?: TaskName): st
       return "削除されていたワークスペースを復元しました";
     case "legacy_field": {
       const names = Array.isArray(value) ? value.filter((n) => typeof n === "string") : [];
-      return names.length
+      const moved = names.length
         ? `props の ${names.join("・")} をタスクの項目へ移しました`
         : "props に残っていた項目をタスクの項目へ移しました";
+      // A date made of a time says what it lost, with the value as it was written.
+      const lost = (cut ?? []).map((c) => `${c.prop} の時刻を落としました: ${c.value}`);
+      return lost.length ? `${moved}（${lost.join("、")}）` : moved;
     }
   }
   // The kinds a sync repairs too are told as the inbox tells them.

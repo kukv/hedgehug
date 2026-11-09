@@ -87,8 +87,31 @@ func TestEditRefusesInUse(t *testing.T) {
 	if !errors.As(err, &ue) {
 		t.Fatal(err)
 	}
-	if ue.Args["count"] != 1 || ue.Args["deleted"] != 1 {
+	if ue.Args["count"] != 1 || ue.Args["deleted"] != 1 || ue.Args["target"] != "status" {
 		t.Errorf("args = %v", ue.Args)
+	}
+	if !strings.Contains(err.Error(), "merge it into another first") {
+		t.Errorf("err = %v; want the way out of a status to be a merge", err)
+	}
+}
+
+// A property is not merged: the words say its values are taken off the tasks.
+func TestEditInUsePropSaysItIsNotMerged(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("live", func(t *model.Task) {
+		if err := yaml.Unmarshal([]byte("area: web\n"), &t.Props); err != nil {
+			panic(err)
+		}
+	})
+	same := plain(func(sc *schema.Schema) (*schema.Schema, error) { return sc, nil })
+	_, err := schemas.Edit(ts.Session, same, schemas.EditOpts{Use: []schemas.Use{{Target: schema.TargetProp, Prop: "area", Name: "area"}}})
+	var ue *usecase.Error
+	if !errors.As(err, &ue) || usecase.ProblemCode(err) != "schema.in_use" || ue.Args["target"] != "prop" {
+		t.Fatalf("err = %v", err)
+	}
+	if _, has := ue.Args["value"]; has || strings.Contains(err.Error(), "merge it into") {
+		t.Errorf("err = %v, args = %v; a property is not merged", err, ue.Args)
 	}
 }
 
