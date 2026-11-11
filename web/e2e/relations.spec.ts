@@ -3,7 +3,7 @@
 //     (a fieldset named by the display name: "Causes", "Clones", "Caused by", "Cloned by"), which lists the IDs of the tasks
 //   - the button "関連を追加" opens the button "関連の種類" (a menu of the five display names) and the combobox "タスクを検索",
 //     whose option (the ID and the title) is picked to add the relation
-// The relations are fixed (docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md): a task
+// The relations are fixed: a task
 // shows a relation under its own name, and the task it points at shows it under the name of the other way.
 import { expect, test } from "./harness";
 
