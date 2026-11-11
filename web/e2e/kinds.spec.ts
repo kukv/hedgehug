@@ -1,5 +1,5 @@
 // Screens this spec relies on (see screens.ts and create.spec.ts for the shared list):
-//   - the kinds are fixed (docs/superpowers/specs/2026-11-08-fixed-kinds-relations-design.md): a project sits
+//   - the kinds are fixed: a project sits
 //     at the root, an epic under a project, a story / task / bug under a project or an epic, and a step
 //     under a story, a task or a bug
 //   - the create dialog offers as radios ("種類") only the kinds the parent can hold, and its parent is
