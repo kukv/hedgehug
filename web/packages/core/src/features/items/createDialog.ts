@@ -133,8 +133,13 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     return { next, ctx };
   }
 
+  // memberCheck は、ワークスペースを変えたあとも担当者を残せるか。同じ Store なら残し、別の Store ならメンバーにいるときだけ。
+  const memberCheck = (from: string, to: string, ctx: WorkspaceContext) => (login: string) =>
+    storeOf(from)?.id === storeOf(to)?.id ||
+    ctx.people.members.some((m) => m.login.toLowerCase() === login.toLowerCase());
+
   // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトル・「続けて作成」・値は残す
-  // (決定 27)。ワークスペースを変えたときの値は、新しいワークスペースに合わせた値のまま出す。
+  // (決定 27)。ワークスペースが変わったときは、そのいまの値に新しいワークスペースへの切り替えを当てる。
   async function reloaded(form: ItemForm, error = "") {
     const gen = ++seq;
     const loaded = await refresh(form, error);
@@ -142,7 +147,14 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     if (gen !== seq || !now) return;
     if (!loaded) return void state.set(null);
     const { title, keepOpen } = now.form;
-    const values = now.form.workspaceId === form.workspaceId ? now.form.values : form.values;
+    const values =
+      now.form.workspaceId === form.workspaceId
+        ? now.form.values
+        : switchWorkspace(
+            now.form.values,
+            loaded.ctx.settings,
+            memberCheck(now.form.workspaceId, form.workspaceId, loaded.ctx),
+          );
     const kept = { ...loaded.next.form, title, keepOpen, values };
     current = loaded.ctx;
     state.set({ ...loaded.next, form: kept, rows: rowsFor(loaded.ctx, kept) });
@@ -174,10 +186,12 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     deps.toasts.show(`${itemDisplayId(ws.prefix, created.number)} を作成しました`);
     if (s.form.keepOpen) {
       // 続けて作成: タイトルとエラーだけを空にし、ほかは残す(02「作成したあと」)。
-      const now = get(state) ?? s;
-      const form = { ...now.form, title: "" };
-      state.set({ ...now, form, error: "" });
-      await reloaded(form);
+      const now = get(state);
+      if (now) {
+        const form = { ...now.form, title: "" };
+        state.set({ ...now, form, error: "" });
+        await reloaded(form);
+      }
     } else {
       seq += 1;
       state.set(null);
@@ -221,18 +235,6 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       if (patch.workspaceId !== undefined && patch.workspaceId !== s.form.workspaceId) {
         // ワークスペースを変えたら、プロジェクトを先頭にし、親を選び直す(02「ダイアログの中での連動」)。
         form.projectId = wsOf(patch.workspaceId)?.projects[0]?.id ?? "";
-        const store = storeOf(patch.workspaceId);
-        if (store) {
-          const next = await load(store.id, patch.workspaceId);
-          const sameStore = store.id === storeOf(s.form.workspaceId)?.id;
-          form.values = switchWorkspace(
-            s.form.values,
-            next.settings,
-            (login) =>
-              sameStore ||
-              next.people.members.some((m) => m.login.toLowerCase() === login.toLowerCase()),
-          );
-        }
         await reloaded(form, s.error);
         return;
       }

@@ -23,6 +23,8 @@ export function createContextLoader(workspaces: WorkspacesPort, catalog: Catalog
         catalog.me(storeId).catch(() => ""),
       ]).then(([d, members, me]) => ({ settings: d.settings, people: { members, me } }));
       cache.set(key, p);
+      // 失敗は覚えない(次に読むときにもう一度読む)。
+      p.catch(() => cache.delete(key));
     }
     return p;
   };

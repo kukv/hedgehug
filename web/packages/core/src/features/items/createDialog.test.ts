@@ -245,4 +245,16 @@ describe("createItemDialog", () => {
     expect(get(dialog.state)?.form.title).toBe("ab");
     expect(get(dialog.state)?.error).toBe("ポイントは 0 以上の数で入力してください");
   });
+
+  it("does not bring the dialog back when it was closed while sending with keep-open", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    await dialog.update({ title: "a", keepOpen: true });
+    const held = items.holdCreate();
+    const sending = dialog.submit();
+    dialog.close();
+    held.release();
+    await sending;
+    expect(get(dialog.state)).toBeNull();
+  });
 });
