@@ -11,8 +11,9 @@ type SyncStoreStatus struct {
 	LastSuccess string `json:"lastSuccess" doc:"最後に成功した同期の時刻(RFC 3339、UTC)。なければ空"`
 }
 
-// SyncStatusList は、同期の状態の一覧(サイドバーの並び。非表示の Store も含む)。
+// SyncStatusList は、同期の状態の一覧(サイドバーの並び。非表示の Store も含む)と、自動同期のオン・オフ。
 type SyncStatusList struct {
+	Auto   bool              `json:"auto" doc:"「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ)"`
 	Stores []SyncStoreStatus `json:"stores" nullable:"false"`
 }
 

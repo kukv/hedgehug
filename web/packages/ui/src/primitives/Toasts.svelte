@@ -12,7 +12,7 @@
 
 <div class="toasts">
   {#each toasts as toast (toast.id)}
-    <div class="toast" class:error={toast.error} role="status">
+    <div class="toast" class:error={toast.error} class:warn={toast.warn} role="status">
       <span>{toast.text}</span>
       {#if toast.action}
         <button type="button" class="toast-btn" onclick={() => onaction?.(toast.id)}>
@@ -57,6 +57,10 @@
   }
   .error {
     background: var(--danger);
+  }
+  .toast.warn {
+    background: var(--c-amber-bg);
+    color: var(--c-amber-fg);
   }
   .toast-btn {
     border: 0;

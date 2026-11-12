@@ -17,6 +17,30 @@ func TestFakeStores(t *testing.T) {
 	})
 }
 
+func TestStoresVersions(t *testing.T) {
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	s.AddStore("S2")
+	var _ port.StoreVersions = s
+	before, err := s.Versions(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.Versions(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after["S1"] == before["S1"] {
+		t.Errorf("S1 version did not change after a write: %q", after["S1"])
+	}
+	if after["S2"] != before["S2"] {
+		t.Errorf("S2 version changed without a write: %q -> %q", before["S2"], after["S2"])
+	}
+}
+
 func TestSample(t *testing.T) {
 	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
 	s.AddStore("S1")

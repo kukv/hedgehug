@@ -8,9 +8,10 @@
     ondrawer: () => void;
     crumbs?: Snippet;
     actions?: Snippet;
+    alert?: boolean;
   }
 
-  let { title, note, ondrawer, crumbs, actions }: Props = $props();
+  let { title, note, ondrawer, crumbs, actions, alert = false }: Props = $props();
 </script>
 
 <header class="page-head">
@@ -20,6 +21,9 @@
         <path d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </IconButton>
+    {#if alert}
+      <span class="alert-dot" role="img" aria-label="同期エラー"></span>
+    {/if}
   </span>
   <div class="head-main">
     {#if crumbs}
@@ -76,6 +80,17 @@
   }
   .drawer-btn {
     display: none;
+    position: relative;
+  }
+  .alert-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    pointer-events: none;
   }
   .ico {
     stroke: currentColor;
