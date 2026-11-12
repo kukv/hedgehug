@@ -55,6 +55,7 @@ func TestFailures(t *testing.T) {
 		{"rate limit with reset", status(403, map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1794484800"}), ghcall.RateLimited, time.Unix(1794484800, 0)},
 		{"retry after seconds", status(429, map[string]string{"Retry-After": "90"}), ghcall.RateLimited, now.Add(90 * time.Second)},
 		{"rate limit unknown time", status(429, nil), ghcall.RateLimited, time.Time{}},
+		{"empty login", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"login":""}`)) }, ghcall.Unreachable, time.Time{}},
 		{"broken json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("{")) }, ghcall.Unreachable, time.Time{}},
 	}
 	for _, c := range cases {
