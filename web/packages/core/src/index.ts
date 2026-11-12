@@ -70,6 +70,21 @@ export {
   type ToastItem,
   type Toasts,
 } from "./features/toasts/toasts";
+export type {
+  Account,
+  AccountRow,
+  AccountValues,
+  AuthMethod,
+  SignInCode,
+  SignInFailure,
+  SignInPurpose,
+  SignInResult,
+  SignInStart,
+  SignInStatus,
+  SignInTarget,
+  TokenMethod,
+  TokenValues,
+} from "./model/account";
 export { NotFound, Refused } from "./model/errors";
 export type { Item, Kind, NewItem } from "./model/item";
 export type { Member } from "./model/member";
@@ -77,6 +92,7 @@ export type { NewProject, Project, ProjectStatus } from "./model/project";
 export type { StoreInfo } from "./model/store";
 export type { SystemInfo } from "./model/system";
 export type { Workspace } from "./model/workspace";
+export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
