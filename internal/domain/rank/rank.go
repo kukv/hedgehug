@@ -19,3 +19,33 @@ func After(s string) string {
 	}
 	return s + First
 }
+
+// Between は、a < 値 < b の値。a が空なら b より前のどこか、b が空なら After(a)。
+// 呼ぶ側は a < b を守る。値の文字は digits だけで、'0' で終わる値は作らない(作れる値が尽きないため)。
+func Between(a, b string) string {
+	if b == "" {
+		return After(a)
+	}
+	var out []byte
+	for i := 0; ; i++ {
+		lo := 0
+		if i < len(a) {
+			lo = strings.IndexByte(digits, a[i])
+		}
+		hi := strings.IndexByte(digits, b[i]) // a < b なので、b が尽きる前に lo < hi の桁が来る
+		if lo == hi {
+			out = append(out, digits[lo])
+			continue
+		}
+		if mid := (lo + hi) / 2; mid > lo {
+			return string(append(out, digits[mid]))
+		}
+		// hi == lo+1: この桁は lo にして、残りは a の続きよりあとにする。
+		out = append(out, digits[lo])
+		rest := ""
+		if i+1 < len(a) {
+			rest = a[i+1:]
+		}
+		return string(out) + After(rest)
+	}
+}

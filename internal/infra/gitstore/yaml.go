@@ -1,6 +1,10 @@
 package gitstore
 
 import (
+	"sort"
+
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
@@ -49,6 +53,10 @@ type itemYAML struct {
 	Rank      string      `yaml:"rank"`
 	Title     string      `yaml:"title"`
 	Created   createdYAML `yaml:"created,flow"`
+	Status    *string     `yaml:"status"`
+	Priority  *string     `yaml:"priority"`
+	Systems   []string    `yaml:"systems,flow"`
+	Fields    yaml.Node   `yaml:"fields"`
 	Watchers  []string    `yaml:"watchers,flow"`
 }
 
@@ -82,21 +90,64 @@ func renderYAML(kind change.Kind, log []change.Record) ([]byte, error) {
 		if !ok {
 			return nil, nil
 		}
-		v = itemToYAML(it)
+		v = itemToYAML(it, log)
 	}
 	return encodeYAML(v)
 }
 
-func itemToYAML(it item.Item) itemYAML {
+func itemToYAML(it item.Item, log []change.Record) itemYAML {
 	y := itemYAML{
 		ID: string(it.ID), Workspace: string(it.Place.Workspace), Project: string(it.Place.Project),
 		Number: it.Place.Number, Kind: string(it.Kind), Rank: it.Rank, Title: it.Title,
 		Created:  createdYAML{At: it.Created.At.Format(change.TimeLayout), By: it.Created.By},
+		Status:   idPtr(it.Status),
+		Priority: idPtr(it.Priority),
+		Systems:  []string{},
+		Fields:   fieldsNode(it, log),
 		Watchers: it.Watchers,
+	}
+	for _, s := range it.Systems {
+		y.Systems = append(y.Systems, string(s))
 	}
 	if it.Place.Parent != nil {
 		p := string(*it.Place.Parent)
 		y.Parent = &p
 	}
 	return y
+}
+
+// idPtr は、空の ID を null にする。
+func idPtr(id change.ID) *string {
+	if id == "" {
+		return nil
+	}
+	s := string(id)
+	return &s
+}
+
+// fieldsNode は、追加プロパティの値(プロパティの ID の辞書順)。複数選択は [..]、単一選択は 1 つの値。
+func fieldsNode(it item.Item, log []change.Record) yaml.Node {
+	n := yaml.Node{Kind: yaml.MappingNode}
+	if len(it.Choices) == 0 {
+		n.Style = yaml.FlowStyle
+		return n
+	}
+	props := make([]string, 0, len(it.Choices))
+	for p := range it.Choices {
+		props = append(props, string(p))
+	}
+	sort.Strings(props)
+	for _, p := range props {
+		key := &yaml.Node{Kind: yaml.ScalarNode, Value: p}
+		vs := it.Choices[change.ID(p)]
+		val := &yaml.Node{Kind: yaml.ScalarNode, Value: string(vs[0])}
+		if item.MultiChoice(log, change.ID(p)) {
+			val = &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
+			for _, v := range vs {
+				val.Content = append(val.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: string(v)})
+			}
+		}
+		n.Content = append(n.Content, key, val)
+	}
+	return n
 }

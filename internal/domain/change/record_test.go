@@ -160,3 +160,30 @@ func TestRefValid(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteRoundTrip(t *testing.T) {
+	d := change.NewDelete("statuses/01VAL00000000000000000000A")
+	if d.T != change.Delete || d.F != "statuses/01VAL00000000000000000000A" || d.From != nil || d.To != nil {
+		t.Fatalf("draft = %+v", d)
+	}
+	r := change.Record{
+		ID: "01REC00000000000000000000A", Op: "01OP000000000000000000000A",
+		At: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), By: "taro", Actor: change.User("taro"),
+		T: d.T, F: d.F,
+	}
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"t":"delete","f":"statuses/01VAL00000000000000000000A"`) {
+		t.Errorf("line = %s", b)
+	}
+	var back change.Record
+	if err := json.Unmarshal(b, &back); err != nil || back.T != change.Delete || back.F != d.F {
+		t.Errorf("back = %+v, %v", back, err)
+	}
+	// Resolve は削除の行を値として読まない(削除を読むのは、エンティティごとの FromLog)。
+	if s := change.Resolve([]change.Record{r}, change.Options{}); s.Created != nil || len(s.Values) != 0 {
+		t.Errorf("resolve = %+v", s)
+	}
+}

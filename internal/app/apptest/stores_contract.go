@@ -37,6 +37,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"members have one log with an empty id", contractRefs},
 		{"projects and items are listed", contractLists},
 		{"workspace settings round trip", contractSettings},
+		{"item values and deletes round trip", contractItemValues},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

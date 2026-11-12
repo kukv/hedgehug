@@ -1,0 +1,44 @@
+package apptest
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
+)
+
+// contractItemValues は、アイテムの値(ステータス・優先度・関連システム・選択肢)と、ワークスペースの
+// 削除の行が、書いたとおりに読めることを確かめる。
+func contractItemValues(t *testing.T, s port.Stores, id port.StoreID) {
+	const (
+		st   change.ID = "01CONTRACTST00000000000001"
+		pr   change.ID = "01CONTRACTPI00000000000001"
+		sy   change.ID = "01CONTRACTSY00000000000001"
+		prop change.ID = "01CONTRACTPP00000000000001"
+		ch   change.ID = "01CONTRACTCH00000000000001"
+	)
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if err := tx.WriteWorkspaces().Append(cWorkspace.ID, change.NewDelete("statuses/"+string(st))); err != nil {
+			return err
+		}
+		return tx.WriteItems().Append(cItem.ID,
+			change.NewSet("status", nil, st), change.NewSet("priority", nil, pr),
+			change.NewAdd("systems", sy), change.NewAdd(item.FieldKey(prop), ch))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		it, err := r.Items().Get(cItem.ID)
+		want := map[change.ID][]change.ID{prop: {ch}}
+		if err != nil || it.Status != st || it.Priority != pr ||
+			!reflect.DeepEqual(it.Systems, []change.ID{sy}) || !reflect.DeepEqual(it.Choices, want) {
+			t.Errorf("item = %+v, %v", it, err)
+		}
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: cWorkspace.ID})
+		if err != nil || log[len(log)-1].T != change.Delete || log[len(log)-1].F != "statuses/"+string(st) {
+			t.Errorf("workspace log = %+v, %v", log, err)
+		}
+		return nil
+	})
+}
