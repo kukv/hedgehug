@@ -177,6 +177,50 @@ func TestSignInCancelledWhileSaving(t *testing.T) {
 	}
 }
 
+// blockingGitHub は、持ち主を確かめているあいだ、release が閉じられるまで待つ(entered で待ちに入ったことを知らせる)。
+type blockingGitHub struct {
+	port.GitHub
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (g blockingGitHub) Viewer(ctx context.Context, token string) (string, error) {
+	close(g.entered)
+	<-g.release
+	return g.GitHub.Viewer(ctx, token)
+}
+
+// 同じ流れの Poll が重なったら、あとの Poll は GitHub に聞かずに待つと答える。許可を受けた Poll の登録を失わせない。
+func TestSignInOverlappingPollWaits(t *testing.T) {
+	f := newConn(t)
+	f.gh.Users["tok-saburo"] = "saburo"
+	f.device.Polls = []port.DeviceGrant{granted, {Status: port.DeviceExpired}}
+	s := f.signIn()
+	code, _ := s.Start(context.Background(), github.SignInInput{Name: "x", Login: "saburo"})
+	b := blockingGitHub{GitHub: f.gh, entered: make(chan struct{}), release: make(chan struct{})}
+	s.GitHub = b
+	type out struct {
+		r   github.SignInResult
+		err error
+	}
+	first := make(chan out, 1)
+	go func() {
+		r, err := s.Poll(context.Background(), code.ID)
+		first <- out{r, err}
+	}()
+	<-b.entered
+	if r, err := s.Poll(context.Background(), code.ID); err != nil || r.State != github.SignInWaiting || r.Interval != code.Interval {
+		t.Errorf("overlapping Poll = %+v, %v", r, err)
+	}
+	close(b.release)
+	if o := <-first; o.err != nil || o.r.State != github.SignInDone {
+		t.Errorf("1st Poll = %+v, %v", o.r, o.err)
+	}
+	if f.count(t) != 3 {
+		t.Errorf("accounts = %d, want 3", f.count(t))
+	}
+}
+
 // 許可を待つあいだに同じ表示名・ログイン名のアカウントが登録されたら、保存の直前に断る(裁定 Q1)。
 func TestSignInRechecksBeforeSaving(t *testing.T) {
 	cases := map[string]account.Account{

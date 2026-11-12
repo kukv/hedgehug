@@ -6,7 +6,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
-// flow はサインインの途中の流れ。addFlow のあとは interval と granted だけが変わり、Session.mu の中で読み書きする。
+// flow はサインインの途中の流れ。addFlow のあとは interval・granted・polling だけが変わり、Session.mu の中で読み書きする。
 type flow struct {
 	target     account.Account // 登録・保存する値(登録では ID が空)
 	previous   account.Account // 編集・再認証の前の値
@@ -15,6 +15,7 @@ type flow struct {
 	expiresAt  time.Time
 	interval   time.Duration
 	granted    *account.DeviceToken // 許可されたが、持ち主をまだ確かめられていないトークン
+	polling    bool                 // Poll の最中(同じ流れの Poll を重ねない)
 }
 
 func (s *Session) addFlow(id string, f *flow) {
@@ -58,6 +59,23 @@ func (s *Session) grantOf(f *flow) (account.DeviceToken, bool) {
 		return account.DeviceToken{}, false
 	}
 	return *f.granted, true
+}
+
+// beginPoll は、流れの Poll を始める。別の Poll の最中なら false(重なった Poll が許可を失わせないため)。
+func (s *Session) beginPoll(f *flow) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f.polling {
+		return false
+	}
+	f.polling = true
+	return true
+}
+
+func (s *Session) endPoll(f *flow) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f.polling = false
 }
 
 // takeFlow は、流れを取り出して消す。取り出すのと消すのをロックの中で一度に行い、キャンセルと重ならないようにする。

@@ -119,6 +119,11 @@ func (u SignIn) Poll(ctx context.Context, id string) (SignInResult, error) {
 	if !ok {
 		return SignInResult{}, port.ErrNotFound
 	}
+	// 同じ流れの Poll が最中なら、GitHub に聞かずに待つ。重ねると、許可を受けた Poll の流れが先に捨てられる。
+	if !u.Session.beginPoll(f) {
+		return u.waiting(f), nil
+	}
+	defer u.Session.endPoll(f)
 	// 期限はいちばん先に見る。許可されたトークンを持っていても、期限が過ぎたら流れごと捨てる。
 	if !u.Clock.Now().Before(f.expiresAt) {
 		return u.end(id, SignInResult{State: SignInExpired}), nil
