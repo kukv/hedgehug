@@ -15,10 +15,12 @@
     "test": "pnpm -r --if-present test",
     "deps": "depcruise packages app --config .dependency-cruiser.cjs",
     "size": "node scripts/check-size.mjs",
-    "gen": "pnpm --filter @hedgehug/api gen"
+    "gen": "pnpm --filter @hedgehug/api gen",
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
+    "@playwright/test": "1.64.1",
     "dependency-cruiser": "18.7.2",
     "svelte": "5.57.3",
     "typescript": "6.0.3"
