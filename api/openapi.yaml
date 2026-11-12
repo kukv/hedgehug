@@ -1,5 +1,54 @@
 components:
   schemas:
+    CreateItem:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        parent:
+          description: 空は親を選んでいない
+          type: string
+        project:
+          description: 空はプロジェクトを選んでいない
+          type: string
+        title:
+          type: string
+      required:
+        - project
+        - kind
+        - title
+      type: object
+    CreateProject:
+      additionalProperties: false
+      properties:
+        end:
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        owner:
+          type: string
+        start:
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        status:
+          enum:
+            - Todo
+            - InProgress
+            - Done
+            - Pending
+            - Cancel
+            - ""
+          type: string
+        title:
+          type: string
+      required:
+        - title
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -46,6 +95,97 @@ components:
           format: uri
           type: string
       type: object
+    Item:
+      additionalProperties: false
+      properties:
+        createdAt:
+          type: string
+        createdBy:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        number:
+          format: int64
+          type: integer
+        parent:
+          description: 親の内部 ID。Epic は null
+          nullable: true
+          type: string
+        project:
+          type: string
+        rank:
+          type: string
+        title:
+          type: string
+        watchers:
+          items:
+            type: string
+          nullable: true
+          type: array
+        workspace:
+          type: string
+      required:
+        - id
+        - workspace
+        - project
+        - parent
+        - number
+        - kind
+        - rank
+        - title
+        - watchers
+        - createdAt
+        - createdBy
+      type: object
+    Project:
+      additionalProperties: false
+      properties:
+        end:
+          type: string
+        id:
+          type: string
+        number:
+          format: int64
+          type: integer
+        owner:
+          description: ログイン名。空は「なし」
+          type: string
+        rank:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は「なし」
+          type: string
+        status:
+          enum:
+            - Todo
+            - InProgress
+            - Done
+            - Pending
+            - Cancel
+          type: string
+        title:
+          type: string
+        workspace:
+          type: string
+      required:
+        - id
+        - workspace
+        - number
+        - rank
+        - title
+        - owner
+        - status
+        - start
+        - end
+      type: object
     SystemInfo:
       additionalProperties: false
       properties:
@@ -60,6 +200,186 @@ info:
   version: dev
 openapi: 3.0.3
 paths:
+  /api/stores/{store}/items:
+    post:
+      operationId: create-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItem"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを作成
+  /api/stores/{store}/items/{item}:
+    get:
+      operationId: get-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを返す
+  /api/stores/{store}/projects/{project}:
+    get:
+      operationId: get-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトを返す
+  /api/stores/{store}/projects/{project}/items:
+    get:
+      operationId: list-project-items
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Item"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのすべてのアイテムを番号の順で返す
+  /api/stores/{store}/workspaces/{workspace}/projects:
+    get:
+      operationId: list-projects
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Project"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースのプロジェクトを並び順で返す
+    post:
+      operationId: create-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProject"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトを作成
   /api/system:
     get:
       operationId: get-system

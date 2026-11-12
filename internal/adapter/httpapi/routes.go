@@ -6,8 +6,12 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
+	appitems "github.com/kukv/hedgehug/internal/app/items"
 	"github.com/kukv/hedgehug/internal/app/port"
+	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 )
 
 // Deps は、API が使う口。トラックが、自分の API に要る口を足す。
@@ -30,6 +34,8 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	api := humago.New(mux, cfg)
 
 	system.Register(api, deps.Version)
+	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
+	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 
 	return api
 }
