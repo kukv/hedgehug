@@ -2153,7 +2153,7 @@ func TestEditAccountRefusals(t *testing.T) {
 	}
 	// 自分自身の表示名・ログイン名は重なりに数えない。
 	f.secrets.Err = nil
-	if _, err := f.edit().Do(context.Background(), github.EditAccountInput{ID: work.ID, Name: "WORK", Login: "TARO", Method: account.GhCLI}); err != nil {
+	if _, err := f.edit().Do(context.Background(), github.EditAccountInput{ID: work.ID, Name: "WORK", Login: "taro", Method: account.GhCLI}); err != nil {
 		t.Errorf("self: %v", err)
 	}
 	if list, _ := f.accounts.List(context.Background()); list[0].Name != "WORK" {
