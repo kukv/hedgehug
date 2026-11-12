@@ -164,8 +164,7 @@ export interface WorkspaceProperty {
   hidden: boolean;
   id: string;
   key: string;
-  /** @nullable */
-  kinds: string[] | null;
+  kinds: string[];
   name: string;
   type: string;
 }
@@ -176,21 +175,16 @@ export interface WorkspaceSettings {
   categoryDefaults: WorkspaceSettingsCategoryDefaults;
   initialPriority: string;
   initialStatus: string;
-  /** @nullable */
-  priorities: WorkspaceValue[] | null;
-  /** @nullable */
-  properties: WorkspaceProperty[] | null;
-  /** @nullable */
-  statuses: WorkspaceValue[] | null;
-  /** @nullable */
-  systems: WorkspaceValue[] | null;
+  priorities: WorkspaceValue[];
+  properties: WorkspaceProperty[];
+  statuses: WorkspaceValue[];
+  systems: WorkspaceValue[];
 }
 
 export interface WorkspaceDetail {
   id: string;
   name: string;
-  /** @nullable */
-  oldPrefixes: string[] | null;
+  oldPrefixes: string[];
   prefix: string;
   settings: WorkspaceSettings;
 }

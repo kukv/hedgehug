@@ -234,7 +234,6 @@ components:
         oldPrefixes:
           items:
             type: string
-          nullable: true
           type: array
         prefix:
           type: string
@@ -261,7 +260,6 @@ components:
         kinds:
           items:
             type: string
-          nullable: true
           type: array
         name:
           type: string
@@ -290,22 +288,18 @@ components:
         priorities:
           items:
             $ref: "#/components/schemas/WorkspaceValue"
-          nullable: true
           type: array
         properties:
           items:
             $ref: "#/components/schemas/WorkspaceProperty"
-          nullable: true
           type: array
         statuses:
           items:
             $ref: "#/components/schemas/WorkspaceValue"
-          nullable: true
           type: array
         systems:
           items:
             $ref: "#/components/schemas/WorkspaceValue"
-          nullable: true
           type: array
       required:
         - properties

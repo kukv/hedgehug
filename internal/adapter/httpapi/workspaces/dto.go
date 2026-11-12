@@ -28,16 +28,16 @@ type WorkspaceProperty struct {
 	Name    string   `json:"name"`
 	Type    string   `json:"type"`
 	Builtin bool     `json:"builtin"`
-	Kinds   []string `json:"kinds"`
+	Kinds   []string `json:"kinds" nullable:"false"`
 	Hidden  bool     `json:"hidden"`
 }
 
 // WorkspaceSettings は、ワークスペースの設定。
 type WorkspaceSettings struct {
-	Properties       []WorkspaceProperty `json:"properties"`
-	Statuses         []WorkspaceValue    `json:"statuses"`
-	Priorities       []WorkspaceValue    `json:"priorities"`
-	Systems          []WorkspaceValue    `json:"systems"`
+	Properties       []WorkspaceProperty `json:"properties" nullable:"false"`
+	Statuses         []WorkspaceValue    `json:"statuses" nullable:"false"`
+	Priorities       []WorkspaceValue    `json:"priorities" nullable:"false"`
+	Systems          []WorkspaceValue    `json:"systems" nullable:"false"`
 	InitialStatus    string              `json:"initialStatus"`
 	InitialPriority  string              `json:"initialPriority"`
 	CategoryDefaults map[string]string   `json:"categoryDefaults"`
@@ -46,7 +46,7 @@ type WorkspaceSettings struct {
 // WorkspaceDetail は、詳細が返すワークスペースと設定。
 type WorkspaceDetail struct {
 	WorkspaceSummary
-	OldPrefixes []string          `json:"oldPrefixes"`
+	OldPrefixes []string          `json:"oldPrefixes" nullable:"false"`
 	Settings    WorkspaceSettings `json:"settings"`
 }
 

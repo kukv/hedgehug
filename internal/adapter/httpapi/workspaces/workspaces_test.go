@@ -96,3 +96,28 @@ func TestNotFound(t *testing.T) {
 		t.Errorf("unknown store: %d", res.Code)
 	}
 }
+
+func TestRenameAndPrefixRefusalsAre422WithTheSpecText(t *testing.T) {
+	api := newAPI(t)
+	id := create(t, api, "Web", "HH")
+	create(t, api, "App", "AP")
+	cases := []struct {
+		name, path string
+		body       map[string]string
+		want       string
+	}{
+		{"empty name", "/name", map[string]string{"name": ""}, "名前は空にできません"},
+		{"duplicate name", "/name", map[string]string{"name": "App"}, "この Store には同じ名前のワークスペースがあります"},
+		{"bad prefix shape", "/prefix", map[string]string{"prefix": "1A"}, "接頭辞は英大文字で始まる 10 文字以内の英大文字と数字にしてください"},
+		{"empty prefix", "/prefix", map[string]string{"prefix": ""}, "接頭辞を入力してください"},
+		{"duplicate prefix", "/prefix", map[string]string{"prefix": "ap"}, "この Store には同じ接頭辞のワークスペースがあります"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := api.Put(base+"/"+id+c.path, c.body)
+			if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), c.want) {
+				t.Errorf("%d %s", res.Code, res.Body)
+			}
+		})
+	}
+}
