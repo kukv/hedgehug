@@ -54,7 +54,7 @@ func (s *Service) run(ctx context.Context, t port.SyncTarget) (Outcome, error) {
 		if out.MirrorFailures, err = s.mirror(ctx, t, tok); err != nil {
 			return out, err
 		}
-		if s.AfterSuccess != nil {
+		if s.AfterSuccess != nil && !t.Hidden {
 			s.AfterSuccess(ctx, t.ID)
 		}
 	}

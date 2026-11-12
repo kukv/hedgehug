@@ -253,6 +253,42 @@ func TestSyncStoreUnknownStore(t *testing.T) {
 	}
 }
 
+// 06「同期のあとの完全な削除」: 非表示の Store では、自動では行わない。
+func TestSyncStoreHiddenSkipsAfterSuccess(t *testing.T) {
+	f := newFixture(t)
+	out, err := f.svc.SyncStore(context.Background(), "S5")
+	if err != nil || !out.OK() {
+		t.Fatalf("S5 = %+v, %v", out, err)
+	}
+	if got := f.afterCalls(); len(got) != 0 {
+		t.Errorf("AfterSuccess = %v", got)
+	}
+}
+
+// AfterSuccess が panic しても、その Store の次の同期が止まらない。
+func TestSyncStoreRecoversFromPanic(t *testing.T) {
+	f := newFixture(t)
+	f.svc.AfterSuccess = func(context.Context, port.StoreID) { panic("boom") }
+	func() {
+		defer func() { _ = recover() }()
+		_, _ = f.svc.SyncStore(context.Background(), "S1")
+	}()
+	f.svc.AfterSuccess = nil
+	done := make(chan bool, 1)
+	go func() {
+		out, err := f.svc.SyncStore(context.Background(), "S1")
+		done <- err == nil && out.OK()
+	}()
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Error("second sync failed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("second sync is wedged")
+	}
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
