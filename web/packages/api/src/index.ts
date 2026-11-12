@@ -1,3 +1,3 @@
 export { ApiError, setToken } from "./fetcher";
 export { createSystemPort } from "./system";
-export { tokenFromHash } from "./token";
+export { newTabUrl, rememberToken, tokenFromHash } from "./token";
