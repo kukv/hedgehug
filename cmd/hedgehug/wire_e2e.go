@@ -52,7 +52,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHub:      &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
 		DeviceFlow:  apptest.NewDeviceFlow(),
 		Hosts:       apptest.Hosts{ID: "e2e-client"},
-		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "チーム", Remote: true}}},
+		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "e2e", Remote: true}, {ID: readonlyStore, Name: "readonly"}}},
 		Clock:       apptest.NewClock(time.Now()),
 	}, nil
 }
