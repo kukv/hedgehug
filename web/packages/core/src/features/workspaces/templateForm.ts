@@ -183,10 +183,11 @@ export function kindChangeNote(form: TemplateForm, kind: string): string | null 
   let children = 0;
   let steps = 0;
   if (structure !== "children") {
-    children = form.children.length;
-    steps += form.children.reduce((n, c) => n + c.steps.length, 0);
+    const kept = form.children.filter((c) => keep(c.title));
+    children = kept.length;
+    steps += kept.reduce((n, c) => n + c.steps.filter((s) => keep(s.title)).length, 0);
   }
-  if (structure !== "steps") steps += form.steps.length;
+  if (structure !== "steps") steps += form.steps.filter((s) => keep(s.title)).length;
   const parts: string[] = [];
   if (children > 0) parts.push(`子 ${children} 件`);
   if (steps > 0) parts.push(`Step ${steps} 件`);

@@ -60,10 +60,10 @@
   {/each}
 </nav>
 <span class="grow"></span>
-<ItemMenu {v} />
 <IconButton label={full ? "パネルで表示" : "全画面で表示"} size="sm" onclick={detail.toggleFull}
   >{full ? "⤡" : "⤢"}</IconButton
 >
+<ItemMenu {v} />
 <IconButton label="閉じる" size="sm" onclick={detail.close}>×</IconButton>
 
 <style>

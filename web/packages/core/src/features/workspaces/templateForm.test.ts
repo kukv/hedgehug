@@ -127,6 +127,19 @@ describe("kind change", () => {
     expect(kindChangeNote(t, "Step")).toBe("Step 1 件は、この種類では保存されません");
     expect(kindChangeNote(t, "Bug")).toBeNull();
   });
+
+  it("does not count rows with a blank title", () => {
+    const t = {
+      ...emptyTemplateForm(),
+      steps: [
+        { id: "", title: "a", assignee: "@parent" },
+        { id: "", title: "  ", assignee: "@parent" },
+      ],
+    };
+    expect(kindChangeNote(t, "Epic")).toBe("Step 1 件は、この種類では保存されません");
+    const blank = { ...emptyTemplateForm(), steps: [{ id: "", title: "", assignee: "@parent" }] };
+    expect(kindChangeNote(blank, "Epic")).toBeNull();
+  });
 });
 
 describe("input", () => {
