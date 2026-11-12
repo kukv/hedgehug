@@ -93,16 +93,24 @@ export function statusOptions(settings: WorkspaceSettings, current: string): Val
   }));
 }
 
+export const unknownUser = "不明なユーザー";
+
+// peopleOptions は、担当者のメニュー。ログイン名はメンバーと大文字小文字を区別せず比べる(01)。
+// メンバーにいない値は、「不明なユーザー」として選ばれた項目にする。
 function peopleOptions(people: People, current: string): ValueOption[] {
-  const me = people.me.toLowerCase();
-  return [
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const options: ValueOption[] = [
     { id: "", label: "未割り当て", checked: current === "" },
     ...people.members.map((m) => ({
       id: m.login,
-      label: m.login.toLowerCase() === me ? `${m.name}(あなた)` : m.name,
-      checked: m.login === current,
+      label: same(m.login, people.me) ? `${m.name}(あなた)` : m.name,
+      checked: current !== "" && same(m.login, current),
     })),
   ];
+  if (current !== "" && !options.some((o) => o.checked)) {
+    options.push({ id: current, label: unknownUser, checked: true });
+  }
+  return options;
 }
 
 function choiceRow(settings: WorkspaceSettings, p: WorkspaceProperty, value: PropertyInput) {
@@ -133,8 +141,7 @@ export function propertyRows(
     if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value) };
     if (p.type === "user") {
       const options = peopleOptions(people, String(value));
-      // メンバーにいない人は、ログイン名をそのまま出す。
-      const text = options.find((o) => o.checked)?.label ?? String(value);
+      const text = options.find((o) => o.checked)?.label ?? "";
       return { ...base, text, deleted: false, options };
     }
     return { ...base, text: String(value), deleted: false, options: [] };

@@ -81,4 +81,39 @@ describe("properties", () => {
       { id: "st2", label: "InProgress", hint: "進行中", checked: true },
     ]);
   });
+
+  const rowsFor = (over: object) => {
+    const it = { ...task, ...over };
+    return propertyRows(settings, "Task", (p) => valueOf(it, p), people);
+  };
+  const rowOf = (rows: ReturnType<typeof rowsFor>, id: string) => {
+    const r = rows.find((x) => x.property.id === id);
+    if (!r) throw new Error(id);
+    return r;
+  };
+
+  it("shows a login that is not a member as an unknown user, checked in the options", () => {
+    const row = rowOf(rowsFor({ assignee: "ghost" }), "assignee");
+    expect(row.text).toBe("不明なユーザー");
+    expect(row.options.find((o) => o.checked)).toEqual({
+      id: "ghost",
+      label: "不明なユーザー",
+      checked: true,
+    });
+    expect(row.options.map((o) => o.label)).toContain("太郎");
+  });
+
+  it("matches logins case-insensitively for the label and the check", () => {
+    const row = rowOf(rowsFor({ assignee: "HANAKO" }), "assignee");
+    expect(row.text).toBe("花子(あなた)");
+    expect(row.options.filter((o) => o.checked).map((o) => o.id)).toEqual(["hanako"]);
+  });
+
+  it("shows an empty assignee as unassigned and an empty status as deleted", () => {
+    expect(rowOf(rowsFor({ assignee: "" }), "assignee").text).toBe("未割り当て");
+    expect(rowOf(rowsFor({ status: "" }), "status")).toMatchObject({
+      text: deletedValue,
+      deleted: true,
+    });
+  });
 });

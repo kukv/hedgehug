@@ -1,6 +1,7 @@
 import { NotFound, Refused } from "../../model/errors";
 import type { Item, Kind, PropertyInput } from "../../model/item";
 import type { ItemsPort } from "../../port/items";
+import type { ItemValues } from "./properties";
 
 // flush は、待っている Promise の続きを先に進める(core は setTimeout の型を持たないので、マイクロタスクを回す)。
 export async function flush(): Promise<void> {
@@ -19,19 +20,7 @@ export function gate(): { wait: Promise<void>; release: () => void } {
 // テスト用のアイテムの口。メモリ上にアイテムを持ち、作成・変更をそのまま反映する。
 // 番号はワークスペースごとの連番。断りは、タイトルが空のときだけ(サーバーの検査の代わり)。
 
-const initialValues: Pick<
-  Item,
-  | "status"
-  | "priority"
-  | "assignee"
-  | "start"
-  | "end"
-  | "points"
-  | "estimate"
-  | "systems"
-  | "choices"
-  | "fields"
-> = {
+const initialValues: ItemValues = {
   status: "st1",
   priority: "pr2",
   assignee: "",
