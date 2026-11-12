@@ -9,6 +9,14 @@ type Draft struct {
 	From json.RawMessage
 	To   json.RawMessage
 	Root *bool
+	// Rule は、自動化のルールが書いた行のルール(B4-1)。空なら操作の実行者の行。
+	Rule ID
+}
+
+// ByRule は、自動化のルール rule が書いた行にする。
+func (d Draft) ByRule(rule ID) Draft {
+	d.Rule = rule
+	return d
 }
 
 // Value は値を JSON にする。JSON にできない値を渡すのは呼び出しの誤りなので panic する。
