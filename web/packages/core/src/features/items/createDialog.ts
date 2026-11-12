@@ -1,6 +1,9 @@
 import { Refused } from "../../model/errors";
 import type { Item, Kind } from "../../model/item";
+import type { WorkspaceSettings } from "../../model/workspace";
+import type { CatalogPort } from "../../port/catalog";
 import type { ItemsPort } from "../../port/items";
+import type { WorkspacesPort } from "../../port/workspaces";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import type { Option } from "../projects/createDialog";
@@ -14,9 +17,12 @@ import {
   pickParent,
   startValues,
 } from "./createDefaults";
+import { createContextLoader, rowsFor, type WorkspaceContext } from "./createDialogLoad";
+import { initialValues, shownValues, switchWorkspace, type Values } from "./createValues";
+import type { PropertyRow } from "./properties";
 
 // アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。検査はサーバーに任せ、断りを赤字で出す
-// (A2 の計画の決定 14)。テンプレート・プロパティ・スプリント・説明は A3。
+// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレート・スプリント・説明は A3 後半。
 
 export interface ItemForm {
   workspaceId: string;
@@ -25,6 +31,8 @@ export interface ItemForm {
   parentId: string | null;
   title: string;
   keepOpen: boolean;
+  // values は、プロパティの内部 ID → 入力。隠した欄の値も覚えておく。
+  values: Values;
 }
 
 export interface ItemDialogState {
@@ -36,6 +44,9 @@ export interface ItemDialogState {
   parentMissing: string;
   // preview は「ID は HH-13 になります。」。
   preview: string;
+  // rows は、種類で使うプロパティの行。settings は、そのワークスペースの設定。
+  rows: PropertyRow[];
+  settings: WorkspaceSettings;
   error: string;
 }
 
@@ -50,6 +61,8 @@ export interface ItemDialog {
 export interface ItemDialogDeps {
   catalog: Catalog;
   items: ItemsPort;
+  workspaces: WorkspacesPort;
+  catalogPort: CatalogPort;
   toasts: Toasts;
   here(): Here;
   openProjectDialog(workspaceId: string): void;
@@ -67,6 +80,9 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
   let seq = 0;
   // busy は、送信中。そのあいだは submit を受けない。
   let busy = false;
+  // load は、ワークスペースの設定とメンバーを読む(ダイアログを開いているあいだだけ覚える)。current は、いま出している分。
+  let load = createContextLoader(deps.workspaces, deps.catalogPort);
+  let current: WorkspaceContext | null = null;
 
   const stores = () => get(deps.catalog.stores);
   const storeOf = (wsId: string) => stores().find((s) => s.workspaces.some((w) => w.id === wsId));
@@ -87,36 +103,61 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     kind !== "Epic" && candidates.length === 0 ? parentMissing(kind) : "";
 
   // refresh は、ワークスペース・プロジェクト・種類から、選択肢・親・ID の予告を作り直す。
-  async function refresh(form: ItemForm, error = ""): Promise<ItemDialogState | null> {
+  async function refresh(
+    form: ItemForm,
+    error = "",
+  ): Promise<{ next: ItemDialogState; ctx: WorkspaceContext } | null> {
     const store = storeOf(form.workspaceId);
     const ws = wsOf(form.workspaceId);
     if (!store || !ws) return null;
-    const [list, next] = await Promise.all([
+    const [list, nextNo, ctx] = await Promise.all([
       form.projectId ? deps.items.list(store.id, form.projectId) : Promise.resolve([]),
       deps.items.nextNumber(store.id, ws.id),
+      load(store.id, ws.id),
     ]);
     projectItems = list;
     const candidates = parentCandidates(list, form.kind);
     const parentId = form.kind === "Epic" ? null : pickParent(candidates, form.parentId);
-    return {
-      form: { ...form, parentId },
+    const shown = { ...form, parentId };
+    const next: ItemDialogState = {
+      form: shown,
       workspaces: wsOptions(),
       projects: ws.projects.map((p) => ({ value: p.id, label: p.title })),
       parents: parentOptions(ws.prefix, candidates),
       parentMissing: missing(form.kind, candidates),
-      preview: `ID は ${itemDisplayId(ws.prefix, next)} になります。`,
+      preview: `ID は ${itemDisplayId(ws.prefix, nextNo)} になります。`,
+      rows: rowsFor(ctx, shown),
+      settings: ctx.settings,
       error,
     };
+    return { next, ctx };
   }
 
-  // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトルと「続けて作成」は残す。
+  // memberCheck は、ワークスペースを変えたあとも担当者を残せるか。同じ Store なら残し、別の Store ならメンバーにいるときだけ。
+  const memberCheck = (from: string, to: string, ctx: WorkspaceContext) => (login: string) =>
+    storeOf(from)?.id === storeOf(to)?.id ||
+    ctx.people.members.some((m) => m.login.toLowerCase() === login.toLowerCase());
+
+  // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトル・「続けて作成」・値は残す
+  // (決定 27)。ワークスペースが変わったときは、そのいまの値に新しいワークスペースへの切り替えを当てる。
   async function reloaded(form: ItemForm, error = "") {
     const gen = ++seq;
-    const next = await refresh(form, error);
+    const loaded = await refresh(form, error);
     const now = get(state);
     if (gen !== seq || !now) return;
+    if (!loaded) return void state.set(null);
     const { title, keepOpen } = now.form;
-    state.set(next && { ...next, form: { ...next.form, title, keepOpen } });
+    const values =
+      now.form.workspaceId === form.workspaceId
+        ? now.form.values
+        : switchWorkspace(
+            now.form.values,
+            loaded.ctx.settings,
+            memberCheck(now.form.workspaceId, form.workspaceId, loaded.ctx),
+          );
+    const kept = { ...loaded.next.form, title, keepOpen, values };
+    current = loaded.ctx;
+    state.set({ ...loaded.next, form: kept, rows: rowsFor(loaded.ctx, kept) });
   }
 
   // send は、アイテムを作る。作ったあと、「続けて作成」ならタイトルを空にして読み直し、でなければ閉じる。
@@ -128,18 +169,29 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     const parentId = kind === "Epic" ? null : s.form.parentId;
     let created: Item;
     try {
-      created = await deps.items.create(store.id, { projectId, parentId, kind, title });
+      created = await deps.items.create(store.id, {
+        projectId,
+        parentId,
+        kind,
+        title,
+        values: shownValues(s.form.values, s.settings, kind),
+      });
     } catch (e) {
       if (!(e instanceof Refused)) throw e;
-      state.set({ ...s, error: e.message });
+      // 送っているあいだに入力された分を残す(決定 27)。
+      const now = get(state);
+      if (now) state.set({ ...now, error: e.message });
       return;
     }
     deps.toasts.show(`${itemDisplayId(ws.prefix, created.number)} を作成しました`);
     if (s.form.keepOpen) {
       // 続けて作成: タイトルとエラーだけを空にし、ほかは残す(02「作成したあと」)。
-      const form = { ...s.form, title: "" };
-      state.set({ ...s, form, error: "" });
-      await reloaded(form);
+      const now = get(state);
+      if (now) {
+        const form = { ...now.form, title: "" };
+        state.set({ ...now, form, error: "" });
+        await reloaded(form);
+      }
     } else {
       seq += 1;
       state.set(null);
@@ -163,10 +215,18 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         parentId: start.parentId,
         title: "",
         keepOpen: false,
+        values: {},
       };
+      load = createContextLoader(deps.workspaces, deps.catalogPort);
       const gen = ++seq;
-      const next = await refresh(form);
-      if (gen === seq) state.set(next);
+      const store = storeOf(form.workspaceId);
+      if (!store) return;
+      const loadedCtx = await load(store.id, form.workspaceId);
+      form.values = initialValues(loadedCtx.settings);
+      const loaded = await refresh(form);
+      if (gen !== seq) return;
+      current = loaded?.ctx ?? null;
+      state.set(loaded?.next ?? null);
     },
     async update(patch) {
       const s = get(state);
@@ -192,10 +252,12 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
           form,
           parents: parentOptions(ws?.prefix ?? "", candidates),
           parentMissing: missing(form.kind, candidates),
+          rows: current ? rowsFor(current, form) : s.rows,
         });
         return;
       }
-      state.set({ ...s, form });
+      const rows = patch.values && current ? rowsFor(current, form) : s.rows;
+      state.set({ ...s, form, rows });
     },
     async submit() {
       const s = get(state);

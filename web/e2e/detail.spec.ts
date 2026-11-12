@@ -49,6 +49,50 @@ test("renames a Task, adds Steps and moves one up", async ({ page }, info) => {
   await expect(steps.getByRole("link")).toHaveText(["実装", "設計"]);
 });
 
+test("a Step's checkbox follows the saved status, also when the save is refused", async ({
+  page,
+}, info) => {
+  const step = unique(info, "確認の Step");
+  await page.goto(tokenUrl("/s/e2e/i/HH-2"));
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  const input = panel.getByRole("textbox", { name: "Step を追加" });
+  await input.fill(step);
+  await input.press("Enter");
+  const box = panel.getByRole("checkbox", { name: step });
+  await expect(box).not.toBeChecked();
+  // 保存のあとの読み直しを遅らせる。保存の応答から読み直しまでのあいだも、チェックは保存済みの状態のままで、
+  // 次のクリックは見えている状態の逆を保存する(全体を通すと、このあいだにクリックが入ることがあった)。
+  await page.route("**/api/stores/*/projects/*/items", async (route) => {
+    await new Promise((r) => setTimeout(r, 500));
+    await route.continue();
+  });
+  const saved = () => page.waitForResponse((r) => r.url().endsWith("/check") && r.ok());
+  let [res] = await Promise.all([saved(), box.click()]);
+  expect(res.request().postDataJSON()).toEqual({ done: true });
+  await expect(box).toBeChecked();
+  [res] = await Promise.all([saved(), box.click()]);
+  expect(res.request().postDataJSON()).toEqual({ done: false });
+  await expect(box).not.toBeChecked();
+
+  // 断られたら、チェックは保存済みの状態(オフ)に戻る。
+  await page.route("**/api/stores/*/items/*/check", (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: "application/problem+json",
+      body: JSON.stringify({ title: "Unprocessable Entity", status: 422, detail: "テストの断り" }),
+    }),
+  );
+  await box.click();
+  await expect(page.getByText("テストの断り")).toBeVisible();
+  await expect(box).not.toBeChecked();
+
+  // 通信が失敗したときも、チェックは保存済みの状態に戻る。
+  await page.unroute("**/api/stores/*/items/*/check");
+  await page.route("**/api/stores/*/items/*/check", (route) => route.abort());
+  await box.click();
+  await expect(box).not.toBeChecked();
+});
+
 test("copies the ID", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(tokenUrl("/s/e2e/i/HH-1"));

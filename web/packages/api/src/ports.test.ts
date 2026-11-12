@@ -50,6 +50,7 @@ describe("items port", () => {
       parentId: null,
       kind: "Epic",
       title: "認証",
+      values: {},
     });
     const [url, init] = call(fetch);
     expect(url).toBe("/api/stores/S1/items");
@@ -58,6 +59,7 @@ describe("items port", () => {
       parent: "",
       kind: "Epic",
       title: "認証",
+      values: {},
     });
     expect(it).toMatchObject({ id: "I1", storeId: "S1", parentId: null, watchers: [] });
   });

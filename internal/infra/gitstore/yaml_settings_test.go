@@ -1,17 +1,20 @@
 package gitstore
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
+	"go.yaml.in/yaml/v4"
 )
 
 const (
@@ -178,6 +181,38 @@ func TestRebuildYAMLMatchesWritePath(t *testing.T) {
 		if string(tr[p]) != w {
 			t.Errorf("%s が書く道と違う:\n--- 同期\n%s\n--- 書く道\n%s", p, tr[p], w)
 		}
+	}
+}
+
+func TestItemYAMLHasPlainValues(t *testing.T) {
+	three, half := 3.0, 1.5
+	it := item.Item{
+		ID: "01ITEM0000000000000000000A", Kind: item.Task, Title: "x",
+		Assignee: "taro", Start: "2026-11-11", End: "2026-11-15", Points: &three, Estimate: &half,
+		Fields: map[change.ID]json.RawMessage{
+			"01PROP0000000000000000000C": json.RawMessage(`"下書き memo"`),
+			"01PROP0000000000000000000D": json.RawMessage(`42`), "01PROP0000000000000000000E": json.RawMessage(`true`),
+		},
+	}
+	meta := change.Meta{Op: "01OP", At: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), Actor: change.User("taro")}
+	log := change.Stamp(nil, []change.Draft{item.Create(it)}, meta, yIDs())
+	out, err := renderYAML(change.KindItem, log, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := yaml.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"assignee": "taro", "start": "2026-11-11", "end": "2026-11-15", "points": 3, "estimate": 1.5}
+	for k, v := range want {
+		if fmt.Sprint(got[k]) != fmt.Sprint(v) {
+			t.Errorf("%s = %v, want %v\n%s", k, got[k], v, out)
+		}
+	}
+	f, _ := got["fields"].(map[string]any)
+	if f["01PROP0000000000000000000C"] != "下書き memo" || fmt.Sprint(f["01PROP0000000000000000000D"]) != "42" || f["01PROP0000000000000000000E"] != true {
+		t.Errorf("fields = %v\n%s", got["fields"], out)
 	}
 }
 

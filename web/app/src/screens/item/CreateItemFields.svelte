@@ -3,6 +3,7 @@
   import { kinds } from "@hedgehug/core";
   import { Input, Select } from "@hedgehug/ui";
   import { itemDialog } from "../../wire";
+  import CreatePropertyFields from "./CreatePropertyFields.svelte";
 
   // 作成ダイアログの項目(02「ダイアログの項目」のうち A2 の分: 種類・ワークスペース・プロジェクト・親・タイトル)。
   interface Props {
@@ -69,6 +70,7 @@
     bind:value={() => s.form.title, (v) => void itemDialog.update({ title: v })}
   />
 </div>
+<CreatePropertyFields {s} />
 
 <style>
   .grid {

@@ -1,6 +1,7 @@
 package gitstore
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -24,6 +25,8 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 		Created:  createdYAML{At: it.Created.At.Format(change.TimeLayout), By: it.Created.By},
 		Status:   idNode(it.Status),
 		Priority: idNode(it.Priority),
+		Assignee: optString(it.Assignee), Start: optString(it.Start), End: optString(it.End),
+		Points: it.Points, Estimate: it.Estimate,
 		Systems:  systemsNode(it.Systems, st),
 		Fields:   fieldsNode(it, log, st),
 		Watchers: it.Watchers,
@@ -35,6 +38,14 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 		y.Parent = &p
 	}
 	return y
+}
+
+// optString は、空の文字列を nil(null)にする。
+func optString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func systemsNode(ids []change.ID, st workspace.Settings) *yaml.Node {
@@ -58,21 +69,30 @@ func namesOf(vs []workspace.Value, ids []change.ID) []string {
 	return out
 }
 
-// fieldsNode は、追加プロパティの値(プロパティの ID の辞書順)。複数選択は [..]、単一選択は 1 つの値。
-// 行末の注釈は「プロパティ名: 値の名前」。
+// fieldsNode は、追加プロパティの値(プロパティの ID の辞書順)。複数選択は [..]、単一選択は 1 つの値、
+// 選択式でない値はそのままの値。行末の注釈は選択式だけに付け、「プロパティ名: 値の名前」。
 func fieldsNode(it item.Item, log []change.Record, st workspace.Settings) *yaml.Node {
 	n := &yaml.Node{Kind: yaml.MappingNode}
-	if len(it.Choices) == 0 {
-		n.Style = yaml.FlowStyle
-		return n
-	}
-	props := make([]string, 0, len(it.Choices))
+	props := make([]string, 0, len(it.Choices)+len(it.Fields))
 	for p := range it.Choices {
 		props = append(props, string(p))
 	}
+	for p := range it.Fields {
+		if _, ok := it.Choices[p]; !ok {
+			props = append(props, string(p))
+		}
+	}
+	if len(props) == 0 {
+		n.Style = yaml.FlowStyle
+		return n
+	}
 	sort.Strings(props)
 	for _, p := range props {
-		vs := it.Choices[change.ID(p)]
+		vs, ok := it.Choices[change.ID(p)]
+		if !ok {
+			n.Content = append(n.Content, key(p), rawNode(it.Fields[change.ID(p)]))
+			continue
+		}
 		val := strNode(string(vs[0]))
 		if item.MultiChoice(log, change.ID(p)) {
 			ids := make([]string, len(vs))
@@ -84,6 +104,15 @@ func fieldsNode(it item.Item, log []change.Record, st workspace.Settings) *yaml.
 		val.LineComment = fieldComment(st, change.ID(p), vs)
 		n.Content = append(n.Content, key(p), val)
 	}
+	return n
+}
+
+// rawNode は、ログに書いた JSON の値を、そのままの値のノードにする。
+func rawNode(raw json.RawMessage) *yaml.Node {
+	var v any
+	_ = json.Unmarshal(raw, &v)
+	n := &yaml.Node{}
+	_ = n.Encode(v)
 	return n
 }
 

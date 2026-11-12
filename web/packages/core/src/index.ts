@@ -54,6 +54,23 @@ export {
   type DetailView,
   normalizeTitle,
 } from "./features/items/detail";
+export {
+  categoryOf,
+  childCount,
+  dueLabel,
+  stepProgress,
+} from "./features/items/progress";
+export {
+  deletedValue,
+  type ItemValues,
+  type People,
+  type PropertyRow as ItemPropertyRow,
+  propertyRows as itemPropertyRows,
+  statusOptions,
+  type ValueOption,
+  valueOf,
+  visibleProperties,
+} from "./features/items/properties";
 export { ancestorsOf, buildTree, compareSiblings, type TreeNode } from "./features/items/tree";
 export {
   createProjectDialog,
@@ -228,7 +245,7 @@ export type {
   TokenValues,
 } from "./model/account";
 export { NotFound, Refused } from "./model/errors";
-export type { Item, Kind, NewItem } from "./model/item";
+export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";
 export type { NewProject, Project, ProjectStatus } from "./model/project";
 export type { StoreInfo } from "./model/store";

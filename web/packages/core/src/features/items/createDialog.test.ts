@@ -4,8 +4,9 @@ import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort, project } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
-import { createItemDialog } from "./createDialog";
+import { createItemDialog, type ItemDialog } from "./createDialog";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
+import { fakeWorkspaces } from "./settings.test-util";
 
 async function setup(here = {}) {
   const catalog = createCatalog(fakeCatalogPort());
@@ -19,6 +20,8 @@ async function setup(here = {}) {
   const dialog = createItemDialog({
     catalog,
     items,
+    workspaces: fakeWorkspaces(),
+    catalogPort: fakeCatalogPort(),
     toasts,
     here: () => here,
     openProjectDialog: (ws) => void projectDialogs.push(ws),
@@ -26,6 +29,8 @@ async function setup(here = {}) {
   });
   return { dialog, items, toasts, projectDialogs, created, epic, task };
 }
+
+const currentValues = (dialog: ItemDialog) => get(dialog.state)?.form.values ?? {};
 
 describe("createItemDialog", () => {
   it("opens with a Task under the first Epic and the ID preview", async () => {
@@ -99,6 +104,8 @@ describe("createItemDialog", () => {
       toasts,
       here: () => ({}),
       openProjectDialog: (ws) => void opened.push(ws),
+      workspaces: fakeWorkspaces(),
+      catalogPort: fakeCatalogPort(),
       onCreated: () => {},
     });
     await dialog.open();
@@ -128,6 +135,8 @@ describe("createItemDialog", () => {
       toasts: createToasts({ set: () => 0, clear: () => {} }),
       here: () => ({ workspaceId: "S1-W1", projectId: "S1-P1" }),
       openProjectDialog: () => {},
+      workspaces: fakeWorkspaces(),
+      catalogPort: fakeCatalogPort(),
       onCreated: () => {},
     });
     await dialog.open();
@@ -182,6 +191,70 @@ describe("createItemDialog", () => {
     dialog.close();
     release();
     await switching;
+    expect(get(dialog.state)).toBeNull();
+  });
+
+  it("starts with the initial values and property rows", async () => {
+    const { dialog } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const s = get(dialog.state);
+    expect(s?.form.values).toEqual({ status: "st1", priority: "pr2" });
+    expect(s?.rows.map((r) => r.property.id)).toContain("assignee");
+  });
+
+  it("sends the shown values with the item", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const values = { ...currentValues(dialog), assignee: "taro" };
+    await dialog.update({ title: "値つき", values });
+    await dialog.submit();
+    expect(items.createdValues[0]).toEqual({ status: "st1", priority: "pr2", assignee: "taro" });
+  });
+
+  it("hides a property the kind does not use and restores its value", async () => {
+    const { dialog } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open({ kind: "Story" });
+    await dialog.update({ values: { ...currentValues(dialog), points: "3" } });
+    await dialog.update({ kind: "Task" });
+    expect(get(dialog.state)?.rows.map((r) => r.property.id)).not.toContain("points");
+    await dialog.update({ kind: "Story" });
+    expect(get(dialog.state)?.form.values.points).toBe("3");
+  });
+
+  it("keeps the values entered while a reload is in flight", async () => {
+    const { dialog } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const reload = dialog.update({ projectId: "S1-P2" });
+    await dialog.update({ values: { ...currentValues(dialog), assignee: "taro" } });
+    await reload;
+    expect(get(dialog.state)?.form.values.assignee).toBe("taro");
+    expect(get(dialog.state)?.rows.find((r) => r.property.id === "assignee")?.value).toBe("taro");
+  });
+
+  // A2 の申し送り(決定 27)。
+  it("keeps what was typed while sending when the server refuses", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    await dialog.update({ title: "a" });
+    const held = items.holdCreate();
+    items.refuseNext("ポイントは 0 以上の数で入力してください");
+    const sending = dialog.submit();
+    await dialog.update({ title: "ab" });
+    held.release();
+    await sending;
+    expect(get(dialog.state)?.form.title).toBe("ab");
+    expect(get(dialog.state)?.error).toBe("ポイントは 0 以上の数で入力してください");
+  });
+
+  it("does not bring the dialog back when it was closed while sending with keep-open", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    await dialog.update({ title: "a", keepOpen: true });
+    const held = items.holdCreate();
+    const sending = dialog.submit();
+    dialog.close();
+    held.release();
+    await sending;
     expect(get(dialog.state)).toBeNull();
   });
 });

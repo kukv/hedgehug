@@ -107,9 +107,14 @@ rank: V
 title: ログイン画面
 created: {at: "2026-11-12T09:00:00.000+09:00", by: taro}
 status: ` + string(apptest.SampleStatusTodo) + ` # Todo
+assignee: null
 priority: ` + string(apptest.SamplePriorityMedium) + ` # Medium
+start: null
+end: null
+points: null
 systems: []
 fields: {}
+estimate: null
 watchers: [taro]
 `
 	if string(b) != want {

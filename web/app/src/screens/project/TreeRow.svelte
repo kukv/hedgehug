@@ -1,12 +1,18 @@
 <script lang="ts">
   import {
+    categoryOf,
     childKindOf,
+    dueLabel,
     type Item,
     itemDisplayId,
+    type Member,
     readOnlyNote,
+    stepProgress,
     type TreeNode,
+    type WorkspaceSettings,
   } from "@hedgehug/core";
-  import { IconButton, KindIcon } from "@hedgehug/ui";
+  import { Avatar, IconButton, KindIcon } from "@hedgehug/ui";
+  import StatusButton from "../item/StatusButton.svelte";
   import Self from "./TreeRow.svelte";
 
   // ツリーの 1 行と、その下の行(04「ツリー」の「行」のうち、A2 の計画の決定 17 の分)。
@@ -22,13 +28,38 @@
     // onopen は、タイトルを押したとき(詳細パネルを開く)。Ctrl+クリックなどは新しいタブでアイテムの入口を開く。
     onopen: (event: MouseEvent, item: Item) => void;
     href: (item: Item) => string;
+    settings: WorkspaceSettings;
+    members: Member[];
+    items: Item[];
+    today: Date;
+    onstatus: (item: Item, statusId: string) => void;
   }
 
-  let { node, prefix, depth, collapsed, readOnly, ontoggle, onadd, onopen, href }: Props = $props();
+  let {
+    node,
+    prefix,
+    depth,
+    collapsed,
+    readOnly,
+    ontoggle,
+    onadd,
+    onopen,
+    href,
+    settings,
+    members,
+    items,
+    today,
+    onstatus,
+  }: Props = $props();
 
   const it = $derived(node.item);
   const open = $derived(!collapsed.has(it.id));
   const child = $derived(childKindOf(it.kind));
+  const progress = $derived(
+    it.kind === "Epic" || it.kind === "Step" ? null : stepProgress(items, it.id, settings),
+  );
+  const due = $derived(dueLabel(it.end, categoryOf(settings, it.status), today));
+  const member = $derived(members.find((x) => x.login.toLowerCase() === it.assignee.toLowerCase()));
 </script>
 
 <li class="tree-row" style:--d={depth}>
@@ -55,6 +86,29 @@
     onauxclick={(e) => onopen(e, it)}
     >{it.title}</a
   >
+  {#if progress}
+    <span class="progress">{progress.done}/{progress.total}</span>
+  {/if}
+  {#if due}
+    <span
+      class="due"
+      class:overdue={due.emphasis === "overdue"}
+      class:today={due.emphasis === "today"}
+      >{due.text}</span
+    >
+  {/if}
+  {#if it.points !== null}
+    <span class="points">{it.points} pt</span>
+  {/if}
+  <StatusButton
+    status={it.status}
+    {settings}
+    disabled={readOnly}
+    onchange={(id) => onstatus(it, id)}
+  />
+  {#if it.assignee}
+    <Avatar name={member?.name ?? ""} title={member?.name ?? "不明なユーザー"} />
+  {/if}
   {#if child}
     <IconButton
       label="{child} を追加"
@@ -78,6 +132,11 @@
       {onadd}
       {onopen}
       {href}
+      {settings}
+      {members}
+      {items}
+      {today}
+      {onstatus}
     />
   {/each}
 {/if}
@@ -111,6 +170,19 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--muted);
+  }
+  .progress,
+  .due,
+  .points {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .overdue {
+    color: var(--danger);
+  }
+  .today {
+    font-weight: 600;
   }
   .row-title {
     color: var(--ink);

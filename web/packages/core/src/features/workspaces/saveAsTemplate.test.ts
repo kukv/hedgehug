@@ -13,13 +13,16 @@ const newToasts = () => createToasts({ set: () => 0, clear: () => {} });
 
 // viewOf は、Store S1 の Task(子は Step)を詳細パネルで開いた状態の DetailView を作る。
 async function viewOf(title: string, childTitles: string[]): Promise<DetailView> {
-  const catalog = createCatalog(fakeCatalogPort());
+  const catalogPort = fakeCatalogPort();
+  const catalog = createCatalog(catalogPort);
   await catalog.load();
   const task = item("S1", "S1-P1", 1, "Task", null, title);
   const steps = childTitles.map((t, i) => item("S1", "S1-P1", i + 2, "Step", task.id, t));
   const detail = createDetail({
     catalog,
     items: fakeItemsPort([task, ...steps]),
+    workspaces: fakeWorkspacesPort(),
+    catalogPort,
     toasts: newToasts(),
     onChanged: () => {},
   });

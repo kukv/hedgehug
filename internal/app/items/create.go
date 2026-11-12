@@ -2,6 +2,7 @@ package items
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -11,18 +12,21 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // ErrParentElsewhere は、親が別のプロジェクトにあるとき。作成ダイアログの親の候補は同じプロジェクトだけ(02)。
 var ErrParentElsewhere = errors.New("the parent is in another project")
 
-// CreateInput は、作成ダイアログの入力のうち A1 で扱うもの。プロパティとテンプレートは A3 で足す。
+// CreateInput は、作成ダイアログの入力。Values はプロパティの値(キーはプロパティの ID。組み込みはキー)。
+// テンプレートは A3 の後で足す。
 type CreateInput struct {
 	Store   port.StoreID
 	Project project.ID
 	Parent  *item.ID
 	Kind    item.Kind
 	Title   string
+	Values  map[change.ID]json.RawMessage
 }
 
 // Create は、アイテムを作る(02「作成したあと」)。
@@ -78,18 +82,80 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 	if err != nil {
 		return item.Item{}, err
 	}
+	vals, st, err := s.checkValues(tx, p, in.Values)
+	if err != nil {
+		return item.Item{}, err
+	}
 	wsLog, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: p.Place.Workspace})
 	if err != nil {
 		return item.Item{}, err
 	}
-	return item.Item{
+	created := item.Item{
 		ID:       s.IDs.New(),
 		Place:    item.Place{Workspace: p.Place.Workspace, Project: p.ID, Parent: in.Parent, Number: numbering.Next(wsLog, numbering.Items)},
 		Kind:     in.Kind,
 		Rank:     rank.After(lastRank(all, in.Parent)),
 		Title:    title,
 		Watchers: []string{me},
-	}, nil
+	}
+	applyValues(&created, vals, st)
+	return created, nil
+}
+
+// checkValues は、プロジェクトのワークスペースの設定で作成の値を検査して読む(親の検査のあと)。
+func (s Service) checkValues(tx port.Tx, p project.Project, in map[change.ID]json.RawMessage) (map[change.ID]json.RawMessage, workspace.Settings, error) {
+	st, err := tx.Workspaces().Settings(p.Place.Workspace)
+	if err != nil {
+		return nil, workspace.Settings{}, err
+	}
+	vals, err := item.CheckInputs(st, in)
+	if errors.Is(err, item.ErrNoSuchValue) {
+		return nil, st, port.ErrNotFound
+	}
+	return vals, st, err
+}
+
+// applyValues は、読んだ値をアイテムに入れ、ステータスと優先度がなければ初期値にする(決定 10)。
+// 読み方は item の readValues と同じ(item の非公開関数は app から呼べないので、ここに写している)。
+func applyValues(it *item.Item, vals map[change.ID]json.RawMessage, st workspace.Settings) {
+	read := func(k string) string {
+		var s string
+		_ = json.Unmarshal(vals[change.ID(k)], &s)
+		return s
+	}
+	it.Status = change.ID(read("status"))
+	it.Priority = change.ID(read("priority"))
+	it.Assignee, it.Start, it.End = read("assignee"), read("start"), read("end")
+	it.Points, it.Estimate = number(vals["points"]), number(vals["estimate"])
+	_ = json.Unmarshal(vals["systems"], &it.Systems)
+	if it.Status == "" {
+		it.Status = st.InitialStatus
+	}
+	if it.Priority == "" {
+		it.Priority = st.InitialPriority
+	}
+	for id, v := range vals {
+		if p, ok := st.Property(id); ok && !p.Builtin && hasValue(p, v) {
+			if it.Fields == nil {
+				it.Fields = map[change.ID]json.RawMessage{}
+			}
+			it.Fields[id] = v
+		}
+	}
+}
+
+// hasValue は、作成で書く値か。null と、外したチェック(false)は書かない(決定 8)。
+func hasValue(p workspace.Property, v json.RawMessage) bool {
+	return string(v) != "null" && (p.Type != workspace.TypeCheck || string(v) != "false")
+}
+
+// number は、数の値。item の非公開の num と同じ(app から呼べないので写している)。
+func number(v json.RawMessage) *float64 {
+	var f float64
+	if len(v) == 0 || string(v) == "null" || json.Unmarshal(v, &f) != nil {
+		return nil
+	}
+	return &f
 }
 
 // kindOf は、親の種類を返す。親を選んでいなければ nil。

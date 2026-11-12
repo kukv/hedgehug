@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
+import ValueMenu from "../patterns/ValueMenu.svelte";
 import Dialog from "../primitives/Dialog.svelte";
 import { text } from "../test-snippet";
 import SidePanel from "./SidePanel.svelte";
@@ -31,6 +32,24 @@ describe("SidePanel", () => {
     const onclose = vi.fn();
     render(SidePanel, { props: { ...base, open: true, onclose } });
     render(Dialog, { props: { open: true, title: "作成", onclose: vi.fn(), children: text("x") } });
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(onclose).not.toHaveBeenCalled();
+  });
+
+  it("leaves Escape to an open menu", async () => {
+    const onclose = vi.fn();
+    render(SidePanel, { props: { ...base, open: true, onclose } });
+    render(ValueMenu, {
+      props: {
+        open: true,
+        x: 0,
+        y: 0,
+        label: "優先度",
+        options: [],
+        onselect: vi.fn(),
+        onclose: vi.fn(),
+      },
+    });
     await fireEvent.keyDown(window, { key: "Escape" });
     expect(onclose).not.toHaveBeenCalled();
   });

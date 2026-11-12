@@ -22,7 +22,7 @@ func newAPI(t *testing.T) humatest.TestAPI {
 		t.Fatal(err)
 	}
 	_, api := humatest.New(t)
-	items.Register(api, appitems.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}})
+	items.Register(api, appitems.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))})
 	return api
 }
 

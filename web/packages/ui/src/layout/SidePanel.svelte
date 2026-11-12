@@ -19,6 +19,8 @@
     // 日本語入力の変換中の Esc は、変換の取り消しに使う。パネルは閉じない。
     if (!open || event.key !== "Escape" || event.isComposing) return;
     if (document.querySelector('[aria-modal="true"]')) return;
+    // 値を選ぶメニューが開いているあいだは、メニューが Esc を受ける。
+    if (document.querySelector('[role="menu"]')) return;
     onclose();
   }
 </script>

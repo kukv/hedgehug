@@ -13,6 +13,14 @@ export type MenuItem =
   | { id: string; label: string; hint?: string; danger?: boolean; disabled?: boolean }
   | { separator: true };
 
+// ValueOption は、値を選ぶメニュー(ValueMenu)の 1 行。checked はいまの値。
+export interface ValueOption {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+}
+
 export interface Toast {
   id: string;
   text: string;

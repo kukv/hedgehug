@@ -7,7 +7,7 @@
     type Route,
   } from "@hedgehug/core";
   import { SvelteSet } from "svelte/reactivity";
-  import { detail, itemDialog, links } from "../../wire";
+  import { detail, itemDialog, links, projectScreen } from "../../wire";
   import TreeRow from "./TreeRow.svelte";
 
   // プロジェクトの「ツリー」のタブ。Epic を一番上の階層に並べる(04「ツリー」の「行」)。
@@ -18,6 +18,8 @@
   let { view }: Props = $props();
 
   // 開閉は、画面を出しているあいだだけ覚える。初めはすべて開いている。
+  // 期限の判定に使う今日は、画面を出したときの日付(決定 22)。
+  const today = new Date();
   const collapsed = new SvelteSet<string>();
   function toggle(id: string) {
     if (collapsed.has(id)) collapsed.delete(id);
@@ -55,6 +57,11 @@
       onadd={add}
       onopen={open}
       {href}
+      settings={view.settings}
+      members={view.members}
+      items={view.items}
+      {today}
+      onstatus={(it, id) => void projectScreen.setStatus(it.id, id)}
     />
   {/each}
 </ul>

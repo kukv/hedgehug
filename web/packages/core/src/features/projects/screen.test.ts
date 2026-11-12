@@ -3,6 +3,8 @@ import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { fakeItemsPort, item } from "../items/fixtures.test-util";
+import { fakeWorkspaces } from "../items/settings.test-util";
+import { createToasts } from "../toasts/toasts";
 import { createProjectScreen, ownerName } from "./screen";
 
 async function setup() {
@@ -13,7 +15,17 @@ async function setup() {
   const first = { ...item("S1", "S1-P1", 3, "Epic", null), rank: "V" };
   const task = item("S1", "S1-P1", 2, "Task", epic.id);
   const items = fakeItemsPort([epic, task, first]);
-  return { screen: createProjectScreen(catalog, port, items), items };
+  const toasts = createToasts({ set: () => 0, clear: () => {} });
+  let changed = 0;
+  const screen = createProjectScreen(
+    catalog,
+    port,
+    items,
+    fakeWorkspaces(),
+    toasts,
+    () => void changed++,
+  );
+  return { screen, items, toasts, changed: () => changed };
 }
 
 describe("createProjectScreen", () => {
@@ -29,10 +41,48 @@ describe("createProjectScreen", () => {
     expect(v?.members).toEqual([{ login: "taro", name: "太郎" }]);
   });
 
+  it("loads the workspace settings", async () => {
+    const { screen } = await setup();
+    await screen.load("S1", "S1-P1");
+    expect(get(screen.view)?.settings.initialStatus).toBe("st1");
+  });
+
+  it("changes a status and reloads, showing a refusal as a toast", async () => {
+    const { screen, items, toasts, changed } = await setup();
+    await screen.load("S1", "S1-P1");
+    await screen.setStatus("S1-I2", "st2");
+    expect(items.calls).toEqual(['setProperty S1-I2 status "st2"']);
+    expect(get(screen.view)?.items.find((it) => it.id === "S1-I2")?.status).toBe("st2");
+    expect(changed()).toBe(1);
+    items.refuseNext("テストの断り");
+    await screen.setStatus("S1-I2", "st3");
+    expect(get(toasts.list)[0]?.error).toBe(true);
+    expect(changed()).toBe(1);
+  });
+
+  it("does not reload or notify when the screen moved on during the save", async () => {
+    const { screen, items, changed } = await setup();
+    await screen.load("S1", "S1-P1");
+    const save = items.setProperty.bind(items);
+    items.setProperty = async (...a) => {
+      await screen.load("S1", "nope");
+      return save(...a);
+    };
+    await screen.setStatus("S1-I2", "st2");
+    expect(get(screen.view)).toBeNull();
+    expect(changed()).toBe(0);
+  });
+
   it("reloads the shown project and is null for a project not in the catalog", async () => {
     const { screen, items } = await setup();
     await screen.load("S1", "S1-P1");
-    await items.create("S1", { projectId: "S1-P1", parentId: null, kind: "Epic", title: "新しい" });
+    await items.create("S1", {
+      projectId: "S1-P1",
+      parentId: null,
+      kind: "Epic",
+      title: "新しい",
+      values: {},
+    });
     await screen.reload();
     expect(get(screen.view)?.items).toHaveLength(4);
     await screen.load("S1", "nope");

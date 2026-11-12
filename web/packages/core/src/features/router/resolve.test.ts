@@ -24,6 +24,10 @@ function itemsIn(storeId: string): ItemsPort {
     create: unused,
     rename: unused,
     addStep: unused,
+    setProperty: unused,
+    addValue: unused,
+    removeValue: unused,
+    checkStep: unused,
     moveUp: unused,
     nextNumber: unused,
     async findByNumber(s, w, n) {

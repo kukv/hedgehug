@@ -2,16 +2,20 @@ package items_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/items"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 const store port.StoreID = "S1"
@@ -24,7 +28,7 @@ func setup(t *testing.T) items.Service {
 	if err := apptest.Sample(context.Background(), s, store); err != nil {
 		t.Fatal(err)
 	}
-	return items.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "hanako"}}
+	return items.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "hanako"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))}
 }
 
 func message(err error) string {
@@ -104,5 +108,82 @@ func TestCreateWithParentInAnotherProject(t *testing.T) {
 func TestGetUnknown(t *testing.T) {
 	if _, err := setup(t).Get(t.Context(), store, "01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCreateUsesInitialStatusAndPriority(t *testing.T) {
+	svc, _ := setupRec(t)
+	it, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "新しい"})
+	if err != nil || it.Status != apptest.SampleStatusTodo || it.Priority != apptest.SamplePriorityMedium {
+		t.Errorf("Create = %+v, %v", it, err)
+	}
+}
+
+func TestCreateWritesGivenValues(t *testing.T) {
+	svc, _ := setupRec(t)
+	epic := apptest.SampleEpic
+	it, err := svc.Create(t.Context(), items.CreateInput{
+		Store: store, Project: apptest.SampleProject, Parent: &epic, Kind: item.Task, Title: "x",
+		Values: map[change.ID]json.RawMessage{
+			"status":   raw(`"` + string(apptest.SampleStatusInProgress) + `"`),
+			"assignee": raw(`"taro"`), "start": raw(`"2026-11-18"`), "end": raw(`"2026-11-20"`),
+			"points": raw(`"3"`), "estimate": raw(`"2"`),
+			"systems": raw(`["` + string(apptest.SampleSystemWeb) + `"]`),
+		},
+	})
+	if err != nil || it.Status != apptest.SampleStatusInProgress || it.Assignee != "taro" ||
+		it.Start != "2026-11-18" || it.End != "2026-11-20" || it.Points == nil || *it.Points != 3 || it.Estimate == nil || *it.Estimate != 2 || len(it.Systems) != 1 {
+		t.Errorf("Create = %+v, %v", it, err)
+	}
+}
+
+func TestCreateChecksValuesAfterTheParent(t *testing.T) {
+	svc, _ := setupRec(t)
+	_, err := svc.Create(t.Context(), items.CreateInput{
+		Store: store, Project: apptest.SampleProject, Kind: item.Task, Title: "x",
+		Values: map[change.ID]json.RawMessage{"points": raw(`"-1"`)},
+	})
+	if message(err) != "親になる Epic を選んでください" {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAddStepTakesTheParentsAssignee(t *testing.T) {
+	svc, _ := setupRec(t)
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "assignee", raw(`"taro"`)); err != nil {
+		t.Fatal(err)
+	}
+	st, err := svc.AddStep(t.Context(), store, apptest.SampleTask, "確認")
+	if err != nil || st.Assignee != "taro" || st.Status != apptest.SampleStatusTodo || st.Priority != apptest.SamplePriorityMedium {
+		t.Errorf("AddStep = %+v, %v", st, err)
+	}
+}
+
+// 作成ダイアログでチェックを入れてから外したとき(false)は、値がないのと同じく書かない(決定 8)。
+func TestCreateDoesNotWriteAFalseCheck(t *testing.T) {
+	svc, rec := setupRec(t)
+	p, _ := custom(t, svc, rec, "done", workspace.TypeCheck)
+	it, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "決済", Values: map[change.ID]json.RawMessage{p.ID: raw(`false`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := it.Fields[p.ID]; ok || item.FieldValue(it, p) != false {
+		t.Errorf("fields = %v, value = %v", it.Fields, item.FieldValue(it, p))
+	}
+	err = rec.Read(t.Context(), store, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
+		for _, c := range log {
+			if strings.Contains(string(c.To), item.FieldKey(p.ID)) {
+				t.Errorf("the create record has %s: %s", item.FieldKey(p.ID), c.To)
+			}
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	on, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "請求", Values: map[change.ID]json.RawMessage{p.ID: raw(`true`)}})
+	if err != nil || item.FieldValue(on, p) != true {
+		t.Errorf("true = %v, %v", item.FieldValue(on, p), err)
 	}
 }
