@@ -27,9 +27,7 @@ func mergeTrees(base, a, b tree) (tree, error) {
 			out[p] = v
 		}
 	}
-	for _, d := range underTransferred(out) {
-		removeDir(out, d)
-	}
+	removeDirs(out, underTransferred(out))
 	if err := rebuildYAML(out); err != nil {
 		return nil, err
 	}
@@ -63,27 +61,38 @@ func isEntityYAML(p string) bool {
 // removedEntities は、共通の祖先にあって、どちらかの版で消えたエンティティのフォルダ。
 func removedEntities(base, a, b tree) map[string]bool {
 	gone := map[string]bool{}
+	inA, inB := dirSet(a), dirSet(b)
 	for p := range base {
 		d := entityDir(p)
-		if d != "" && (!hasDir(a, d) || !hasDir(b, d)) {
+		if d != "" && (!inA[d] || !inB[d]) {
 			gone[d] = true
 		}
 	}
 	return gone
 }
 
-func hasDir(t tree, d string) bool {
+// dirSet は、ツリーにファイルがあるエンティティのフォルダの集まり。
+func dirSet(t tree) map[string]bool {
+	dirs := map[string]bool{}
 	for p := range t {
-		if strings.HasPrefix(p, d+"/") {
-			return true
+		if d := entityDir(p); d != "" {
+			dirs[d] = true
 		}
 	}
-	return false
+	return dirs
 }
 
-func removeDir(t tree, d string) {
+// removeDirs は、dirs のフォルダの下のファイルを全部消す。
+func removeDirs(t tree, dirs []string) {
+	if len(dirs) == 0 {
+		return
+	}
+	set := map[string]bool{}
+	for _, d := range dirs {
+		set[d] = true
+	}
 	for p := range t {
-		if strings.HasPrefix(p, d+"/") {
+		if set[entityDir(p)] {
 			delete(t, p)
 		}
 	}
@@ -101,6 +110,11 @@ func mergeFile(p string, base, a, b tree) ([]byte, bool) {
 		}
 		return filemerge.MergeLog(a[p], b[p]), true
 	case name == "description.md" && entityDir(p) != "":
+		_, inA := a[p]
+		_, inB := b[p]
+		if !inA && !inB {
+			return nil, false
+		}
 		return []byte(mergeDescription(p, base, a, b)), true
 	}
 	return mergeOther(p, base, a, b)

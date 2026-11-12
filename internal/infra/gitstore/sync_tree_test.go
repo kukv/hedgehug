@@ -8,6 +8,9 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // line は、log.jsonl の 1 行を作る。
@@ -153,5 +156,131 @@ func TestMergeTreesUnknownFiles(t *testing.T) {
 	}
 	if got := mustMerge(t, base, tree{}, tree{"README.md": []byte("base")}); got["README.md"] != nil {
 		t.Errorf("one side's removal lost")
+	}
+}
+
+func TestMergeTreesDescriptionTieOrdersByBody(t *testing.T) {
+	// 最後の desc の at が同じなら、本文のバイト順で古い版を決める。
+	desc := func(id string) string {
+		return line(t, change.Record{ID: change.ID(id), Op: change.ID(id), At: at(9), By: "x", Actor: change.User("x"), T: "desc"})
+	}
+	create := itemCreate(t, "I1", nil, at(0))
+	base := tree{"items/I1/log.jsonl": []byte(create), "items/I1/description.md": []byte("a\nb\n")}
+	a := tree{"items/I1/log.jsonl": []byte(create + desc("dA")), "items/I1/description.md": []byte("a\nNEW-B\n")}
+	b := tree{"items/I1/log.jsonl": []byte(create + desc("dB")), "items/I1/description.md": []byte("a\nNEW-A\n")}
+	got := mustMerge(t, base, a, b)
+	if d := string(got["items/I1/description.md"]); d != "a\nNEW-A\n-----\nNEW-B\n" {
+		t.Errorf("description = %q", d)
+	}
+}
+
+func TestMergeTreesDescriptionGoneOnBothSidesStaysGone(t *testing.T) {
+	l := []byte(itemCreate(t, "I1", nil, at(0)))
+	base := tree{"items/I1/log.jsonl": l, "items/I1/description.md": []byte("a\n")}
+	got := mustMerge(t, base, tree{"items/I1/log.jsonl": l}, tree{"items/I1/log.jsonl": l})
+	if _, ok := got["items/I1/description.md"]; ok {
+		t.Errorf("description.md was recreated: %q", got["items/I1/description.md"])
+	}
+}
+
+func TestMergeTreesUnknownFileRemovedOnOneSideEditedOnOther(t *testing.T) {
+	base := tree{"README.md": []byte("base")}
+	got := mustMerge(t, base, tree{}, tree{"README.md": []byte("edited")})
+	if string(got["README.md"]) != "edited" {
+		t.Errorf("edit lost: %q", got["README.md"])
+	}
+}
+
+func transferLine(target string) []byte {
+	return []byte(`{"id":"X1","op":"X1","at":"2026-11-12T10:05:00.000Z","by":"taro","target":"` + target + `","old":"HH-1","new":"WEB-31","to_store":"S2","to_store_name":"team-b","to_remote":""}` + "\n")
+}
+
+func TestMergeTreesDropsWholeFolderOfChildOfTransferred(t *testing.T) {
+	epic := itemCreate(t, "E1", nil, at(0))
+	e1 := item.ID("E1")
+	base := tree{"items/E1/log.jsonl": []byte(epic)}
+	a := tree{"transfers.jsonl": transferLine("E1")}
+	b := tree{
+		"items/E1/log.jsonl":        []byte(epic),
+		"items/T1/log.jsonl":        []byte(itemCreate(t, "T1", &e1, at(3))),
+		"items/T1/description.md":   []byte("body\n"),
+		"items/T1/item.yaml":        []byte("x"),
+		"items/T1/attachments/a.md": []byte("x"),
+	}
+	for p := range mustMerge(t, base, a, b) {
+		if strings.HasPrefix(p, "items/") {
+			t.Errorf("%s is left", p)
+		}
+	}
+}
+
+func rec(t *testing.T, id string, kind change.Type, d change.Draft, when time.Time) string {
+	t.Helper()
+	return line(t, change.Record{ID: change.ID(id), Op: change.ID(id), At: when, By: "taro", Actor: change.User("taro"), T: kind, F: d.F, From: d.From, To: d.To})
+}
+
+func workspaceCreate(t *testing.T) string {
+	t.Helper()
+	d, err := workspace.Create(workspace.Workspace{ID: "W1", Name: "Hedgehug", Prefix: "HH"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rec(t, "w0", change.Create, d, at(0))
+}
+
+func projectCreate(t *testing.T) string {
+	t.Helper()
+	p := project.Project{ID: "P1", Place: project.Place{Workspace: "W1", Number: 1}, Rank: "a", Title: "Old", Status: "active"}
+	return rec(t, "p0", change.Create, project.Create(p), at(0))
+}
+
+func TestMergeTreesRebuildsMembersWorkspaceProjectYAML(t *testing.T) {
+	init := rec(t, "m0", change.Create, member.Init(), at(0))
+	ws, pr := workspaceCreate(t), projectCreate(t)
+	title := func(id, to string, when time.Time) string {
+		return rec(t, id, change.Set, change.NewSet("title", "Old", to), when)
+	}
+	base := tree{"members/log.jsonl": []byte(init), "workspaces/W1/log.jsonl": []byte(ws), "projects/P1/log.jsonl": []byte(pr)}
+	a := tree{
+		"members/log.jsonl":       []byte(init + rec(t, "m1", change.Add, member.Join("ann"), at(1))),
+		"workspaces/W1/log.jsonl": []byte(ws),
+		"projects/P1/log.jsonl":   []byte(pr + title("pA", "Alpha", at(1))),
+	}
+	b := tree{
+		"members/log.jsonl":       []byte(init + rec(t, "m2", change.Add, member.Join("bob"), at(2))),
+		"workspaces/W1/log.jsonl": []byte(ws),
+		"projects/P1/log.jsonl":   []byte(pr + title("pB", "Beta", at(2))),
+	}
+	got := mustMerge(t, base, a, b)
+	if y := string(got["members/members.yaml"]); !strings.Contains(y, "login: ann") || !strings.Contains(y, "login: bob") {
+		t.Errorf("members.yaml =\n%s", y)
+	}
+	if y := string(got["workspaces/W1/workspace.yaml"]); !strings.Contains(y, "prefix: HH") {
+		t.Errorf("workspace.yaml =\n%s", y)
+	}
+	if y := string(got["projects/P1/project.yaml"]); !strings.Contains(y, "title: Beta") {
+		t.Errorf("project.yaml =\n%s", y)
+	}
+}
+
+func TestMergeTreesTransferOfProjectOrWorkspaceDropsChildren(t *testing.T) {
+	ws, pr := workspaceCreate(t), projectCreate(t)
+	base := tree{"workspaces/W1/log.jsonl": []byte(ws), "projects/P1/log.jsonl": []byte(pr)}
+	newSide := func() tree {
+		return tree{
+			"workspaces/W1/log.jsonl": []byte(ws),
+			"projects/P1/log.jsonl":   []byte(pr),
+			"items/I1/log.jsonl":      []byte(itemCreate(t, "I1", nil, at(3))),
+		}
+	}
+	// プロジェクトを移した: そのプロジェクトの下のアイテムが消え、ワークスペースは残る。
+	got := mustMerge(t, base, tree{"workspaces/W1/log.jsonl": []byte(ws), "transfers.jsonl": transferLine("P1")}, newSide())
+	if got["items/I1/log.jsonl"] != nil || got["projects/P1/log.jsonl"] != nil || got["workspaces/W1/log.jsonl"] == nil {
+		t.Errorf("project transfer: %v", keys(got))
+	}
+	// ワークスペースを移した: その下のプロジェクトとアイテムが消える。
+	got = mustMerge(t, base, tree{"transfers.jsonl": transferLine("W1")}, newSide())
+	if got["items/I1/log.jsonl"] != nil || got["projects/P1/log.jsonl"] != nil || got["workspaces/W1/log.jsonl"] != nil {
+		t.Errorf("workspace transfer: %v", keys(got))
 	}
 }

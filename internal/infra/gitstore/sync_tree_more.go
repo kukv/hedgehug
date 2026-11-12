@@ -28,7 +28,8 @@ func mergeDescription(p string, base, a, b tree) string {
 	return filemerge.MergeText(string(base[p]), textB, textA)
 }
 
-// lastDesc は、side で足された(base にない)desc の行のうち、最後の時刻。
+// lastDesc は、side で足された(base にない)desc の行のうち、最大の at。
+// 決定 8 の「最後の行の at」は、合わせた log.jsonl(at 順)では最大の at と同じ。side の並びに左右されないよう最大を取る。
 func lastDesc(side, base []byte) time.Time {
 	inBase := map[change.ID]bool{}
 	for _, r := range parseLog(base) {
@@ -51,13 +52,15 @@ func underTransferred(t tree) []string {
 		return nil
 	}
 	var out []string
+	dirs := dirSet(t)
+	logs := map[string][]change.Record{}
 	for _, p := range sortedKeys(t) {
 		d := entityDir(p)
 		if d == "" || !strings.HasSuffix(p, "/log.jsonl") {
 			continue
 		}
-		for _, anc := range ancestors(t, d) {
-			if targets[anc] && !hasDir(t, dirOfAncestor(t, anc)) {
+		for _, anc := range ancestors(t, d, logs) {
+			if targets[anc] && !hasEntity(dirs, anc) {
 				out = append(out, d)
 				break
 			}
@@ -81,12 +84,17 @@ func transferTargets(b []byte) map[string]bool {
 
 // ancestors は、エンティティの祖先の内部 ID(親のアイテムを辿り、プロジェクトとワークスペースまで)。
 // 祖先のフォルダがなければ、そこで辿るのをやめる。
-func ancestors(t tree, d string) []string {
+// logs は、読んだ log.jsonl の覚え(フォルダごと)。
+func ancestors(t tree, d string, logs map[string][]change.Record) []string {
 	var out []string
 	seen := map[string]bool{}
 	for d != "" && !seen[d] {
 		seen[d] = true
-		log := parseLog(t[d+"/log.jsonl"])
+		log, ok := logs[d]
+		if !ok {
+			log = parseLog(t[d+"/log.jsonl"])
+			logs[d] = log
+		}
 		switch {
 		case strings.HasPrefix(d, "items/"):
 			it, ok := item.FromLog(log)
@@ -111,15 +119,9 @@ func ancestors(t tree, d string) []string {
 	return out
 }
 
-// dirOfAncestor は、祖先の ID のフォルダ。アイテム・プロジェクト・ワークスペースのどれかにあればそのフォルダ、
-// どれにもなければ、アイテムのフォルダの名前を返す(どれも無いので、hasDir は false になる)。
-func dirOfAncestor(t tree, id string) string {
-	for _, k := range []string{"items/", "projects/", "workspaces/"} {
-		if hasDir(t, k+id) {
-			return k + id
-		}
-	}
-	return "items/" + id
+// hasEntity は、内部 ID のエンティティ(アイテム・プロジェクト・ワークスペースのどれか)のフォルダがあるか。
+func hasEntity(dirs map[string]bool, id string) bool {
+	return dirs["items/"+id] || dirs["projects/"+id] || dirs["workspaces/"+id]
 }
 
 // rebuildYAML は、合わせた log.jsonl から、読む用の YAML を作り直す。
