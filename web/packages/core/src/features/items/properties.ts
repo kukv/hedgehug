@@ -2,6 +2,7 @@ import type { Item, Kind, PropertyInput } from "../../model/item";
 import type { Member } from "../../model/member";
 import type { WorkspaceProperty, WorkspaceSettings, WorkspaceValue } from "../../model/workspace";
 import { categoryLabels } from "../workspaces/values";
+import { transitionRefusal } from "../workspaces/workflow";
 
 // 詳細パネルと作成ダイアログのプロパティの行(02「プロパティの入力と保存」、決定 19〜21)。
 
@@ -12,6 +13,9 @@ export interface ValueOption {
   label: string;
   hint?: string;
   checked: boolean;
+  // disabled は選べない項目、reason はその理由(遷移の制約。A3b-5)。
+  disabled?: boolean;
+  reason?: string;
 }
 export interface People {
   members: Member[];
@@ -83,14 +87,24 @@ function listOf(settings: WorkspaceSettings, p: WorkspaceProperty): WorkspaceVal
   return p.choices;
 }
 
-// statusOptions は、ステータスのメニューの項目(決定 21)。使わないステータスの扱いは B5 の後(決定 3)。
-export function statusOptions(settings: WorkspaceSettings, current: string): ValueOption[] {
-  return settings.statuses.map((s) => ({
-    id: s.id,
-    label: s.name,
-    hint: s.category ? categoryLabels[s.category] : undefined,
-    checked: s.id === current,
-  }));
+// statusOptions は、ステータスのメニューの項目(決定 21)。workflow なら、遷移の制約で移れない項目を無効にし、
+// 理由を添える(02「ステータスの変更」、A3b-4)。作成ダイアログは制約を適用しないので false。
+// 使わないステータスの扱いは B5 の後(決定 3)。
+export function statusOptions(
+  settings: WorkspaceSettings,
+  current: string,
+  workflow = false,
+): ValueOption[] {
+  return settings.statuses.map((s) => {
+    const reason = workflow ? transitionRefusal(settings, current, s.id) : null;
+    return {
+      id: s.id,
+      label: s.name,
+      hint: s.category ? categoryLabels[s.category] : undefined,
+      checked: s.id === current,
+      ...(reason ? { disabled: true, reason } : {}),
+    };
+  });
 }
 
 export const unknownUser = "不明なユーザー";

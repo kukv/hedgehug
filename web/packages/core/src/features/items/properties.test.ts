@@ -82,6 +82,30 @@ describe("properties", () => {
     ]);
   });
 
+  describe("statusOptions with the workflow", () => {
+    const restricted = { ...settings, workflow: { st1: ["st2"] } };
+    it("disables statuses the workflow forbids and gives the reason", () => {
+      const opts = statusOptions(restricted, "st1", true);
+      expect(opts.find((o) => o.id === "st3")).toMatchObject({
+        disabled: true,
+        hint: "完了",
+        reason: "ワークフローの制約: Todo から Done には変更できません(InProgress のみ)",
+      });
+      expect(opts.find((o) => o.id === "st2")?.disabled).toBeFalsy();
+      expect(opts.find((o) => o.id === "st1")?.disabled).toBeFalsy();
+    });
+    it("leaves every status selectable without the workflow (create dialog)", () => {
+      expect(statusOptions(restricted, "st1").some((o) => o.disabled)).toBe(false);
+      const row = propertyRows(
+        restricted,
+        "Task",
+        (p) => (p.id === "status" ? "st1" : ""),
+        people,
+      ).find((r) => r.property.id === "status");
+      expect(row?.options.some((o) => o.disabled)).toBe(false);
+    });
+  });
+
   const rowsFor = (over: object) => {
     const it = { ...task, ...over };
     return propertyRows(settings, "Task", (p) => valueOf(it, p), people);

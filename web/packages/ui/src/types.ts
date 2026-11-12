@@ -19,6 +19,9 @@ export interface ValueOption {
   label: string;
   hint?: string;
   checked: boolean;
+  // disabled は選べない項目、reason はその理由(遷移の制約。A3b-5)。
+  disabled?: boolean;
+  reason?: string;
 }
 
 export interface Toast {

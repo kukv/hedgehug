@@ -8,7 +8,7 @@
   import { StatusDot, ValueMenu } from "@hedgehug/ui";
   import { pressWhileOpen } from "./pressWhileOpen";
 
-  // ステータスのボタンとメニュー(02「ステータスの変更」、決定 21)。いまの値を選び直しても保存しない。
+  // ステータスのボタンとメニュー(02「ステータスの変更」、決定 21)。いまの値を選び直しても保存しない。遷移の制約で移れない項目は無効にする(A3b-4)。
   interface Props {
     status: string;
     settings: WorkspaceSettings;
@@ -54,7 +54,7 @@
   x={menu?.x ?? 0}
   y={menu?.y ?? 0}
   label="ステータス"
-  options={statusOptions(settings, status)}
+  options={statusOptions(settings, status, true)}
   onselect={(id) => {
     if (id !== status) onchange(id);
   }}
