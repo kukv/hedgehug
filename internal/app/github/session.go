@@ -39,6 +39,14 @@ func (s *Session) markBroken(id account.ID, reason string) {
 	delete(s.fps, id)
 }
 
+// forget は、削除したアカウントの状態を捨てる。
+func (s *Session) forget(id account.ID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.fps, id)
+	delete(s.broken, id)
+}
+
 func (s *Session) state(id account.ID) (broken bool, reason string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
