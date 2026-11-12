@@ -74,6 +74,12 @@ export {
   syncCard,
 } from "./features/sync/card";
 export { createReflection, type Reflection, type ReflectionDeps } from "./features/sync/reflection";
+export {
+  createTabSignals,
+  resendMs,
+  type TabSignals,
+  type TabSignalsDeps,
+} from "./features/sync/signals";
 export { createSync, type SyncDeps, type SyncState } from "./features/sync/sync";
 export { createSystemInfo, type SystemInfoState } from "./features/system/system";
 export {
