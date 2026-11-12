@@ -68,6 +68,14 @@ type Item struct {
 	Priority change.ID                 // なければ空
 	Systems  []change.ID               // 関連システム
 	Choices  map[change.ID][]change.ID // 選択式の追加プロパティの値。単一選択は 1 つ。なければ nil
+
+	// 選択式でない値。日付は YYYY-MM-DD。なければ空か nil。
+	Assignee string                        // ログイン名
+	Start    string                        // 開始日
+	End      string                        // 終了日
+	Points   *float64                      // ストーリーポイント
+	Estimate *float64                      // 見積もり時間
+	Fields   map[change.ID]json.RawMessage // 追加プロパティの値(ログの set の値のまま)。選択式の値は Choices にも入る
 }
 
 // DisplayID は、画面の ID(HH-12)。
@@ -75,13 +83,30 @@ func (it Item) DisplayID(prefix string) string {
 	return prefix + "-" + strconv.Itoa(it.Place.Number)
 }
 
-// Create は、アイテムの作成の変更。作成の時刻と人は、変更記録の at と by から取る。
-// 種類と親の組み合わせは検査しない。呼ぶ側が先に CanPlace で確かめる。
+// Create は、アイテムの作成の変更。値のない項目は書かない(読むときは空として扱う)。
+// 作成の時刻と人は、変更記録の at と by から取る。種類と親の組み合わせは検査しない。呼ぶ側が先に CanPlace で確かめる。
 func Create(it Item) change.Draft {
-	return change.NewCreate(map[string]any{
+	to := map[string]any{
 		"id": it.ID, "place": it.Place, "kind": it.Kind, "rank": it.Rank, "title": it.Title,
 		"watchers": it.Watchers,
-	})
+	}
+	put := func(k string, v any, ok bool) {
+		if ok {
+			to[k] = v
+		}
+	}
+	put("status", it.Status, it.Status != "")
+	put("priority", it.Priority, it.Priority != "")
+	put("assignee", it.Assignee, it.Assignee != "")
+	put("start", it.Start, it.Start != "")
+	put("end", it.End, it.End != "")
+	put("points", it.Points, it.Points != nil)
+	put("estimate", it.Estimate, it.Estimate != nil)
+	put("systems", it.Systems, len(it.Systems) > 0)
+	for p, raw := range it.Fields {
+		to[FieldKey(p)] = raw
+	}
+	return change.NewCreate(to)
 }
 
 // FromLog は、アイテムのログからいまの値を作る。作成の行がなければ false。
