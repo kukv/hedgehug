@@ -34,7 +34,7 @@
 
 <Dialog open title="テンプレートとして保存" {onclose}>
   <div class="form">
-    <Input label="テンプレート名" bind:value={name} focusOnMount />
+    <Input label="名前" bind:value={name} focusOnMount />
     <Input label="タイトルの書き出し" bind:value={title} />
     {#if model.showStructure}
       <Checkbox label="子と Step を含める" bind:checked={structure} />
