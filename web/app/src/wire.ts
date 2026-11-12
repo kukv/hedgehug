@@ -1,5 +1,18 @@
-import { createSystemPort, rememberToken, setToken } from "@hedgehug/api";
-import { createNavigation, createShell, createSystemInfo, createToasts } from "@hedgehug/core";
+import {
+  createCatalogPort,
+  createItemsPort,
+  createSystemPort,
+  rememberToken,
+  setToken,
+} from "@hedgehug/api";
+import {
+  createCatalog,
+  createNavigation,
+  createScreen,
+  createShell,
+  createSystemInfo,
+  createToasts,
+} from "@hedgehug/core";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 
@@ -18,3 +31,19 @@ export const toasts = createToasts({
   set: (fn, ms) => setTimeout(fn, ms),
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 });
+
+const itemsPort = createItemsPort();
+export const catalog = createCatalog(createCatalogPort());
+export const screen = createScreen({
+  navigation,
+  catalog,
+  items: itemsPort,
+  // 詳細パネルは Task 10 で足す。それまでアイテムの入口は、プロジェクトのツリーを開くだけ。
+  openItem: () => {},
+});
+
+// 画面を移ったら、サイドバーのドロワーを閉じる(01「画面の移り方」)。
+navigation.route.subscribe(() => shell.closeDrawer());
+
+// 一覧を読んでから、アドレスの解決を始める(一覧がないと Store 名と ID を解決できない)。
+void catalog.load().then(() => screen.start());

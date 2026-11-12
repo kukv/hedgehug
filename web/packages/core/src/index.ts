@@ -8,6 +8,11 @@ export {
 } from "./features/catalog/catalog";
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
 export { ancestorsOf, buildTree, compareSiblings, type TreeNode } from "./features/items/tree";
+export {
+  type ProjectCategory,
+  projectCategory,
+  projectStatuses,
+} from "./features/projects/status";
 export { createNavigation, type Navigation } from "./features/router/navigation";
 export {
   type Resolved,
@@ -25,6 +30,7 @@ export {
   projectDisplayId,
   type Route,
 } from "./features/router/route";
+export { createScreen, type Screen } from "./features/screen/screen";
 export { createShell, type Shell } from "./features/shell/shell";
 export { createSystemInfo, type SystemInfoState } from "./features/system/system";
 export {

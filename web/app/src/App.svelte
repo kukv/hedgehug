@@ -1,36 +1,21 @@
 <script lang="ts">
-  import { AppFrame, Brand, PageHead, Toasts } from "@hedgehug/ui";
-  import { shell, system, toasts } from "./wire";
+  import { AppFrame, Toasts } from "@hedgehug/ui";
+  import Screen from "./shell/Screen.svelte";
+  import Sidebar from "./shell/Sidebar.svelte";
+  import { catalog, links, screen, shell, system, toasts } from "./wire";
 
   const drawerOpen = shell.drawerOpen;
   const version = system.version;
   const toastList = toasts.list;
+  const stores = catalog.stores;
+  const current = screen.current;
   system.load();
 </script>
 
 <AppFrame drawerOpen={$drawerOpen} onclosedrawer={shell.closeDrawer}>
   {#snippet sidebar()}
-    <Brand />
+    <Sidebar stores={$stores} current={$current} {links} />
   {/snippet}
-  <PageHead title="hedgehug" ondrawer={shell.openDrawer} />
-  <div class="content">
-    {#if $version}
-      <p class="version">{$version}</p>
-    {/if}
-  </div>
+  <Screen current={$current} stores={$stores} version={$version} ondrawer={shell.openDrawer} />
 </AppFrame>
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />
-
-<style>
-  .content {
-    flex: 1;
-    overflow: auto;
-    padding: 16px 24px 40px;
-    min-height: 0;
-  }
-  .version {
-    color: var(--muted);
-    font-family: var(--font-mono);
-    margin: 0;
-  }
-</style>
