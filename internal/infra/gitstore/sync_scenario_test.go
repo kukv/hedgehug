@@ -12,8 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/member"
 )
 
-var _ port.Replicator = (*Replicator)(nil)
-
 // title は、サンプルのタスクのタイトルを読む。
 func title(t *testing.T, m machine) string {
 	t.Helper()
