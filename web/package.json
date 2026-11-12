@@ -14,7 +14,8 @@
     "check": "pnpm -r --if-present check",
     "test": "pnpm -r --if-present test",
     "deps": "depcruise packages app --config .dependency-cruiser.cjs",
-    "size": "node scripts/check-size.mjs"
+    "size": "node scripts/check-size.mjs",
+    "gen": "pnpm --filter @hedgehug/api gen"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",

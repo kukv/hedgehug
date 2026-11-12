@@ -1,0 +1,22 @@
+{
+  "name": "@hedgehug/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen": "orval",
+    "check": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hedgehug/core": "workspace:*"
+  },
+  "devDependencies": {
+    "orval": "8.46.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}
