@@ -1,9 +1,0 @@
-Format 1 -> 2
-  ワークスペース me の直下のタスクを「未分類」プロジェクトの下へ移した: 1 件（「未分類」を作った: ME-3）
-  schema.yaml の kinds を消した
-  store.yaml の format を 1 から 2 にした
-Format 2 -> 3
-  store.yaml の format を 2 から 3 にした
-Format 3 -> 4
-  store.yaml の format を 3 から 4 にした
-Nothing was written (--dry-run).

@@ -1,7 +1,0 @@
-== alpha
-AA-1 <ULID-1>  todo  project  Alpha project  0/1
-└─ AA-2 <ULID-2>  todo  task  Alpha child
-
-== bravo-long
-BB-1 <ULID-3>  done  project  Bravo task  0/0
-BB-2 <ULID-4>  todo  project  Bravo other  0/0

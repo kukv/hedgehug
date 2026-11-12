@@ -1,8 +1,0 @@
-Changed the override of ME-1  Web
-ME-1  Web
-  statuses: todo, in_progress, done, canceled
-  transitions:
-    todo: in_progress, done
-    in_progress: done
-  required:
-    done: points
