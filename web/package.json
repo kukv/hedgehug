@@ -1,0 +1,25 @@
+{
+  "name": "hedgehug-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.17.0",
+  "engines": {
+    "node": "v26.13.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @hedgehug/app build",
+    "lint": "biome ci .",
+    "fix": "biome check --write .",
+    "check": "pnpm -r --if-present check",
+    "test": "pnpm -r --if-present test",
+    "deps": "depcruise packages app --config .dependency-cruiser.cjs",
+    "size": "node scripts/check-size.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "dependency-cruiser": "18.7.2",
+    "svelte": "5.57.3",
+    "typescript": "6.0.3"
+  }
+}
