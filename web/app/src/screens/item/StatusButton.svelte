@@ -6,6 +6,7 @@
     type WorkspaceSettings,
   } from "@hedgehug/core";
   import { StatusDot, ValueMenu } from "@hedgehug/ui";
+  import { pressWhileOpen } from "./pressWhileOpen";
 
   // ステータスのボタンとメニュー(02「ステータスの変更」、決定 21)。いまの値を選び直しても保存しない。
   interface Props {
@@ -40,7 +41,7 @@
   {disabled}
   title={disabled ? readOnlyNote : undefined}
   aria-label="ステータス: {name}"
-  onpointerdown={() => (wasOpen = menu !== null)}
+  onpointerdown={() => pressWhileOpen(menu !== null, (v) => (wasOpen = v))}
   onclick={open}
 >
   {#if current}

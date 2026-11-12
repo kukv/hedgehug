@@ -18,15 +18,33 @@ async function setup() {
   const items = fakeItemsPort([epic, task, s1, s2]);
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   let changed = 0;
+  const workspaces = fakeWorkspaces();
+  const fetched = { workspace: 0 };
+  const getWorkspace = workspaces.get.bind(workspaces);
+  workspaces.get = async (...a) => {
+    fetched.workspace += 1;
+    return getWorkspace(...a);
+  };
   const detail = createDetail({
     catalog,
     items,
     toasts,
-    workspaces: fakeWorkspaces(),
+    workspaces,
     catalogPort,
     onChanged: () => void changed++,
   });
-  return { detail, items, toasts, task, s1, s2, changed: () => changed };
+  return {
+    detail,
+    items,
+    toasts,
+    task,
+    epic,
+    s1,
+    s2,
+    catalogPort,
+    fetched,
+    changed: () => changed,
+  };
 }
 
 describe("createDetail", () => {
@@ -130,6 +148,28 @@ describe("createDetail", () => {
     await detail.checkStep(s1.id, true);
     expect(items.calls).toEqual([`checkStep ${s1.id} true`]);
     expect(get(detail.view)?.children.find((c) => c.id === s1.id)?.status).toBe("st3");
+  });
+
+  it("reads the workspace settings once per workspace and again on reload", async () => {
+    const { detail, task, epic, fetched } = await setup();
+    await detail.open("S1", task.id);
+    await detail.open("S1", epic.id);
+    await detail.setProperty(epic.id, "estimate", "2");
+    expect(fetched.workspace).toBe(1);
+    await detail.reload();
+    expect(fetched.workspace).toBe(2);
+    detail.close();
+    await detail.open("S1", task.id);
+    expect(fetched.workspace).toBe(3);
+  });
+
+  it("opens even when the member list cannot be read", async () => {
+    const { detail, task, catalogPort } = await setup();
+    catalogPort.listMembers = async () => {
+      throw new Error("offline");
+    };
+    await detail.open("S1", task.id);
+    expect(get(detail.view)?.people).toEqual({ members: [], me: "taro" });
   });
 
   it("closes when the item is gone, and toggles full screen", async () => {

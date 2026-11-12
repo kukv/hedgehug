@@ -79,18 +79,38 @@ export function createDetail(deps: DetailDeps): Detail {
   // target は、開いている(開こうとしている)アイテム。reload が、開いている途中の別のアイテムを古い表示で上書きしないために持つ。
   let target: { storeId: string; itemId: string } | null = null;
 
-  async function load(storeId: string, itemId: string) {
+  // context は、ワークスペースごとの設定とメンバー。一度読んだら使い回し、画面への反映(reload)と
+  // 詳細パネルを閉じたときに読み直す(A3 前半の決定 29)。
+  type Context = { settings: WorkspaceSettings; people: People };
+  let contexts = new Map<string, Promise<Context>>();
+  function contextOf(storeId: string, workspaceId: string, refresh: boolean): Promise<Context> {
+    const key = `${storeId}/${workspaceId}`;
+    const cached = contexts.get(key);
+    if (cached && !refresh) return cached;
+    const read = (async () => {
+      const [ws, members, me] = await Promise.all([
+        deps.workspaces.get(storeId, workspaceId),
+        deps.catalogPort.listMembers(storeId).catch(() => []),
+        // me が決まらないときは空(A2 の決定 3)。
+        deps.catalogPort.me(storeId).catch(() => ""),
+      ]);
+      return { settings: ws.settings, people: { members, me } };
+    })();
+    contexts.set(key, read);
+    // 読めなかったら、次のときに読み直せるよう残さない。
+    read.catch(() => contexts.get(key) === read && contexts.delete(key));
+    return read;
+  }
+
+  async function load(storeId: string, itemId: string, refresh = false) {
     latest += 1;
     const mine = latest;
     target = { storeId, itemId };
     try {
       const item = await deps.items.get(storeId, itemId);
-      const [all, ws, members, me] = await Promise.all([
+      const [all, { settings, people }] = await Promise.all([
         deps.items.list(storeId, item.projectId),
-        deps.workspaces.get(storeId, item.workspaceId),
-        deps.catalogPort.listMembers(storeId),
-        // me が決まらないときは空(A2 の決定 3)。
-        deps.catalogPort.me(storeId).catch(() => ""),
+        contextOf(storeId, item.workspaceId, refresh),
       ]);
       const store = deps.catalog.store(storeId);
       const project = deps.catalog.project(storeId, item.projectId);
@@ -101,7 +121,6 @@ export function createDetail(deps: DetailDeps): Detail {
         view.set(null);
         return;
       }
-      const people = { members, me };
       view.set({
         store,
         workspace,
@@ -111,9 +130,9 @@ export function createDetail(deps: DetailDeps): Detail {
         ancestors: ancestorsOf(all, item.id),
         children: all.filter((it) => it.parentId === item.id).sort(compareSiblings),
         readOnly: store.readOnly,
-        settings: ws.settings,
+        settings: settings,
         people,
-        rows: propertyRows(ws.settings, item.kind, (p) => valueOfItem(item, p), people),
+        rows: propertyRows(settings, item.kind, (p) => valueOfItem(item, p), people),
       });
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
@@ -141,10 +160,11 @@ export function createDetail(deps: DetailDeps): Detail {
   return {
     view: readonly(view),
     full: readonly(full),
-    open: load,
+    open: (storeId, itemId) => load(storeId, itemId),
     close() {
       latest += 1;
       target = null;
+      contexts = new Map();
       view.set(null);
       full.set(false);
     },
@@ -228,7 +248,7 @@ export function createDetail(deps: DetailDeps): Detail {
       await saved(v.store.id, v.item.id);
     },
     async reload() {
-      if (target) await load(target.storeId, target.itemId);
+      if (target) await load(target.storeId, target.itemId, true);
     },
   };
 }

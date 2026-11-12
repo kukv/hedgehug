@@ -6,6 +6,7 @@
     type WorkspaceSettings,
   } from "@hedgehug/core";
   import { Input, Select, ValueMenu } from "@hedgehug/ui";
+  import { pressWhileOpen } from "./pressWhileOpen";
   import StatusButton from "./StatusButton.svelte";
 
   // 1 つのプロパティの入力(02「入力の方法と保存」の表、決定 20)。onchange は、選ぶもの・チェックは選んだとき、
@@ -31,10 +32,21 @@
   let menu = $state<{ x: number; y: number } | null>(null);
   // メニューは、外を押すと閉じる(ボタンを押したときも)。開いているときにボタンを押したら、開き直さず閉じたままにする。
   let wasOpen = false;
+  const checkedId = $derived(row.options.find((o) => o.checked)?.id ?? shown);
+  // editing は、入力欄にフォーカスがあるあいだ。画面への反映では、編集中の入力欄を書き換えない(06)。
+  // $state にしない(フォーカスが外れたときに $effect が走り直し、保存の前に戻すため)。base は、フォーカスしたときの値。
+  let editing = false;
+  let base = "";
   $effect(() => {
-    draft = shown;
-    selected = row.options.find((o) => o.checked)?.id ?? shown;
+    const next = shown;
+    const picked = checkedId;
+    if (!editing) draft = next;
+    selected = picked;
   });
+  function focused(event: FocusEvent) {
+    editing = true;
+    base = (event.currentTarget as HTMLInputElement).value;
+  }
 
   function openMenu(event: MouseEvent) {
     if (wasOpen) {
@@ -53,6 +65,13 @@
   // 数の欄に数でない文字があるとき: ポイント・見積もり時間はサーバーに断らせ(決定 16)、ほかは送らずに戻す。
   function commit(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
+    editing = false;
+    // 打ち換えずに離れたら保存せず、反映で受け取った最新の値に合わせる。
+    if (input.value === base) {
+      draft = shown;
+      input.value = shown;
+      return;
+    }
     const bad = input.validity?.badInput ?? false;
     if (bad && !builtinNumber) {
       draft = shown;
@@ -88,7 +107,7 @@
     {disabled}
     title={note}
     aria-label="{p.name}: {row.text}"
-    onpointerdown={() => (wasOpen = menu !== null)}
+    onpointerdown={() => pressWhileOpen(menu !== null, (v) => (wasOpen = v))}
     onclick={openMenu}
   >
     {row.text}
@@ -121,6 +140,7 @@
     {disabled}
     title={note}
     value={draft}
+    onfocus={focused}
     onblur={commit}
     onkeydown={enter}
   >
@@ -130,6 +150,7 @@
     {disabled}
     title={note}
     bind:value={draft}
+    onfocus={focused}
     onblur={commit}
     onkeydown={enter}
   />
