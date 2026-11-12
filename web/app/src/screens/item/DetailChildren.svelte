@@ -1,16 +1,18 @@
 <script lang="ts">
   import {
+    childCount,
     type DetailView,
     type Item,
     itemDisplayId,
     type Kind,
     readOnlyNote,
   } from "@hedgehug/core";
-  import { Button, IconButton, Input, KindIcon } from "@hedgehug/ui";
+  import { Avatar, Button, Input, KindIcon } from "@hedgehug/ui";
   import { detail, itemDialog, links } from "../../wire";
+  import StatusButton from "./StatusButton.svelte";
+  import StepRow from "./StepRow.svelte";
 
-  // 詳細パネルの「子」(02「子と Step」のうち、一覧・Step の追加・「上へ」)。完了の数・ステータス・担当者・
-  // Step のチェックと「×」は A3・A4(A2 の計画の決定 18)。
+  // 詳細パネルの「子」(02「子と Step」。Step の「×」は A4)。
   interface Props {
     v: DetailView;
   }
@@ -18,9 +20,12 @@
   let { v }: Props = $props();
 
   const isEpic = $derived(v.item.kind === "Epic");
+  const count = $derived(childCount(v.children, v.settings));
   const note = $derived(v.readOnly ? readOnlyNote : undefined);
   let newStep = $state("");
 
+  const person = (it: Item) =>
+    v.people.members.find((x) => x.login.toLowerCase() === it.assignee.toLowerCase());
   const id = (it: Item) => itemDisplayId(v.workspace.prefix, it.number);
   const route = (it: Item) => ({ name: "item" as const, store: v.store.name, item: id(it) });
 
@@ -41,32 +46,33 @@
 </script>
 
 <section class="peek-sec" aria-label={isEpic ? "Story・Task・Bug" : "Step"}>
-  <h3>{isEpic ? "Story・Task・Bug" : "Step"}</h3>
+  <h3>{isEpic ? "Story・Task・Bug" : "Step"} {count.done}/{count.total}</h3>
   {#each v.children as c (c.id)}
-    <div class="child-row">
-      {#if isEpic}
+    {#if isEpic}
+      {@const m = person(c)}
+      <div class="child-row">
         <KindIcon kind={c.kind} />
         <code class="id">{id(c)}</code>
-      {/if}
-      <a
-        class="row-title"
-        href={links.href(route(c))}
-        onclick={(e) => links.click(e, route(c), () => void detail.open(v.store.id, c.id))}
-        onauxclick={(e) => links.click(e, route(c))}
-        >{c.title}</a
-      >
-      {#if !isEpic}
-        <code class="id">{id(c)}</code>
-        <IconButton
-          label="上へ"
-          size="xs"
-          disabled={v.readOnly}
-          title={note}
-          onclick={() => void detail.moveUp(c.id)}
-          >↑</IconButton
+        <a
+          class="row-title"
+          href={links.href(route(c))}
+          onclick={(e) => links.click(e, route(c), () => void detail.open(v.store.id, c.id))}
+          onauxclick={(e) => links.click(e, route(c))}
+          >{c.title}</a
         >
-      {/if}
-    </div>
+        <StatusButton
+          status={c.status}
+          settings={v.settings}
+          disabled={v.readOnly}
+          onchange={(s) => void detail.setProperty(c.id, "status", s)}
+        />
+        {#if c.assignee}
+          <Avatar name={m?.name ?? ""} title={m?.name ?? "不明なユーザー"} />
+        {/if}
+      </div>
+    {:else}
+      <StepRow {v} {c} />
+    {/if}
   {/each}
   {#if isEpic}
     <div class="row-gap">

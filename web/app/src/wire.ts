@@ -61,7 +61,16 @@ export const toasts = createToasts(timer);
 const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
 export const catalog = createCatalog(catalogPort);
-export const projectScreen = createProjectScreen(catalog, catalogPort, itemsPort);
+const workspacesPort = createWorkspacesPort();
+// ツリーでステータスを変えたら、開いている詳細パネルも読み直す。detail は後で作るので、呼ぶときに引く。
+export const projectScreen = createProjectScreen(
+  catalog,
+  catalogPort,
+  itemsPort,
+  workspacesPort,
+  toasts,
+  () => void detail.reload(),
+);
 export const projectDialog = createProjectDialog({
   catalog,
   catalogPort,
@@ -70,7 +79,6 @@ export const projectDialog = createProjectDialog({
   onCreated: (storeId, project) =>
     navigation.go(routeOfProject(get(catalog.stores), storeId, project.id, "overview")),
 });
-const workspacesPort = createWorkspacesPort();
 export const workspaceSettings = createWorkspaceSettings({
   port: workspacesPort,
   catalog,

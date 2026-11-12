@@ -55,6 +55,12 @@ export {
   normalizeTitle,
 } from "./features/items/detail";
 export {
+  categoryOf,
+  childCount,
+  dueLabel,
+  stepProgress,
+} from "./features/items/progress";
+export {
   deletedValue,
   type ItemValues,
   type People,
