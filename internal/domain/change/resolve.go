@@ -83,6 +83,9 @@ func fields(log []Record, initial map[string]json.RawMessage) map[string]bool {
 
 func resolveValue(log []Record, f string, initial map[string]json.RawMessage) (json.RawMessage, bool) {
 	w := winner(tipsOf(group(log, key(Record{T: Set, F: f}))))
+	if w == nil {
+		return nil, false // 先端がない(prev が輪になっている)項目は、値なし
+	}
 	if w.T == Create {
 		v, ok := initial[f]
 		return v, ok
@@ -110,7 +113,7 @@ func resolveList(log []Record, f string, initial json.RawMessage) []json.RawMess
 	var out []json.RawMessage
 	for c := range cands {
 		w := winner(tipsOf(group(log, "list\x00"+f+"\x00"+c)))
-		if w.T == Add || (w.T == Create && inStart[c]) {
+		if w != nil && (w.T == Add || (w.T == Create && inStart[c])) {
 			out = append(out, json.RawMessage(c))
 		}
 	}

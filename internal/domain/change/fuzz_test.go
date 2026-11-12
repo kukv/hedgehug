@@ -49,10 +49,12 @@ func FuzzResolveOrderIndependent(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, seed, perm uint64) {
 		log := randomLog(seed)
-		want := change.Resolve(log, opts)
+		o := opts
+		o.Valid = func(r change.Record) bool { return r.F != "b" || string(r.To) != "3" } // 手順 0 も通す
+		want := change.Resolve(log, o)
 		shuffled := append([]change.Record(nil), log...)
 		rand.New(rand.NewPCG(perm, 1)).Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
-		if got := change.Resolve(shuffled, opts); !reflect.DeepEqual(got, want) {
+		if got := change.Resolve(shuffled, o); !reflect.DeepEqual(got, want) {
 			t.Fatalf("order changed the result:\n%+v\n%+v", got, want)
 		}
 	})

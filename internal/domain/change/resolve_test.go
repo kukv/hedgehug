@@ -141,3 +141,89 @@ func list(s change.State, f string) string {
 	}
 	return strings.Join(parts, ",")
 }
+
+func TestResolveCyclicPrevHasNoValue(t *testing.T) {
+	cases := map[string][]change.Record{
+		"self": {
+			create(map[string]any{"title": "a", "systems": []string{"Y1"}}),
+			rec("A", at(1), "ann", change.NewSet("title", "a", "A"), "c", "A"),
+			rec("B", at(1), "ann", change.NewAdd("systems", "Y2"), "c", "B"),
+		},
+		"mutual": {
+			create(map[string]any{"title": "a", "systems": []string{"Y1"}}),
+			rec("A", at(1), "ann", change.NewSet("title", "a", "A"), "c", "B"),
+			rec("B", at(2), "bob", change.NewSet("title", "a", "B"), "c", "A"),
+			rec("C", at(1), "ann", change.NewAdd("systems", "Y2"), "c", "D"),
+			rec("D", at(2), "bob", change.NewAdd("systems", "Y2"), "c", "C"),
+		},
+	}
+	for name, log := range cases {
+		s := change.Resolve(log, opts)
+		if v, ok := s.Values["title"]; ok {
+			t.Errorf("%s: title = %s, want absent", name, v)
+		}
+		if got := list(s, "systems"); got != `"Y1"` {
+			t.Errorf("%s: systems = %s, want only Y1", name, got)
+		}
+	}
+}
+
+func TestResolveIgnoresOtherTypes(t *testing.T) {
+	log := []change.Record{
+		create(map[string]any{"title": "a"}),
+		rec("A", at(1), "ann", change.Draft{T: "desc", F: "title", To: change.Value("x")}, "c"),
+		rec("B", at(2), "ann", change.Draft{T: "comment", To: change.Value("hi")}, "c"),
+	}
+	s := change.Resolve(log, opts)
+	if got := value(t, s, "title"); got != `"a"` || len(s.Values) != 1 || len(s.Lists) != 0 {
+		t.Errorf("state %+v", s)
+	}
+}
+
+func TestResolveTwoCreates(t *testing.T) {
+	older := rec("c1", at(1), "zed", change.NewCreate(map[string]any{"title": "old"}))
+	newer := rec("c2", at(2), "amy", change.NewCreate(map[string]any{"title": "new"}))
+	s := change.Resolve([]change.Record{older, newer}, opts)
+	if s.Created == nil || s.Created.ID != "c2" {
+		t.Errorf("created = %+v, want c2", s.Created)
+	}
+}
+
+func TestResolveEmptyListIsOmitted(t *testing.T) {
+	log := []change.Record{
+		create(map[string]any{"systems": []string{}}),
+		rec("A", at(1), "ann", change.NewAdd("systems", "Y1"), "c"),
+		rec("B", at(2), "ann", change.NewRemove("systems", "Y1"), "A"),
+	}
+	s := change.Resolve(log, opts)
+	if _, ok := s.Lists["systems"]; ok {
+		t.Errorf("systems = %v, want omitted", s.Lists["systems"])
+	}
+}
+
+func TestTipsPerField(t *testing.T) {
+	log := []change.Record{
+		create(map[string]any{}),
+		rec("A", at(1), "ann", change.NewAdd("systems", "Y1"), "c"),
+		rec("B", at(2), "ann", change.NewRemove("systems", "Y1"), "A"),
+		rec("D", at(3), "ann", change.NewAdd("systems", "Y2"), "c"),
+		rec("E", at(4), "ann", change.Draft{T: "desc", F: "title"}, "c"),
+		rec("F", at(5), "ann", change.Draft{T: "desc", F: "body"}, "c"),
+	}
+	cases := []struct {
+		name string
+		r    change.Record
+		want string
+	}{
+		{"remove follows its value", rec("x", at(9), "a", change.NewRemove("systems", "Y1")), "[B]"},
+		{"add of another value", rec("x", at(9), "a", change.NewAdd("systems", "Y2")), "[D]"},
+		{"other type keyed by T and F", rec("x", at(9), "a", change.Draft{T: "desc", F: "title"}), "[E]"},
+		{"other field", rec("x", at(9), "a", change.Draft{T: "desc", F: "body"}), "[F]"},
+		{"untouched field points at create", rec("x", at(9), "a", change.NewSet("status", nil, "S")), "[c]"},
+	}
+	for _, c := range cases {
+		if got := fmt.Sprint(change.Tips(log, c.r)); got != c.want {
+			t.Errorf("%s: tips = %s, want %s", c.name, got, c.want)
+		}
+	}
+}
