@@ -63,6 +63,9 @@ func parseNumber(s string) (v float64, ok, empty bool) {
 		return 0, false, true
 	}
 	v, err := strconv.ParseFloat(s, 64)
+	if v == 0 {
+		v = 0 // 「-0」は 0 として書く
+	}
 	return v, err == nil && !math.IsInf(v, 0) && !math.IsNaN(v), false
 }
 

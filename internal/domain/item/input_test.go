@@ -88,6 +88,10 @@ func TestParseInputNormalizes(t *testing.T) {
 		{prop("start"), `null`, `null`},
 		{prop("points"), `"3"`, `3`},
 		{prop("estimate"), `"1.50"`, `1.5`},
+		// 「-0」は 0 として書く
+		{prop("points"), `"-0"`, `0`},
+		{prop("estimate"), `"-0"`, `0`},
+		{workspace.Property{ID: fNote, Type: workspace.TypeNumber}, `"-0"`, `0`},
 		{workspace.Property{ID: fNote, Type: workspace.TypeText}, `"  memo  "`, `"memo"`},
 		{workspace.Property{ID: fNote, Type: workspace.TypeURL}, `"   "`, `null`},
 		{workspace.Property{ID: fDone, Type: workspace.TypeCheck}, `true`, `true`},

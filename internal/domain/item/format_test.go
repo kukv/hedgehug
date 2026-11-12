@@ -2,6 +2,7 @@ package item_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,10 @@ func TestDisplay(t *testing.T) {
 		{p("end"), `"2027-01-05"`, "2027/01/05"},
 		{p("estimate"), `1.5`, "1.5 時間"},
 		{p("estimate"), `2`, "2 時間"},
+		{p("estimate"), `0.125`, "0.13 時間"},
+		// とても大きな値も、桁あふれせずに数字で書く(上限は設けない)
+		{p("estimate"), `1e300`, "1" + strings.Repeat("0", 300) + " 時間"},
+		{p("estimate"), `1e308`, "1" + strings.Repeat("0", 308) + " 時間"},
 		{p("points"), `3`, "3"},
 		{p("systems"), `["` + string(st.Systems[0].ID) + `","` + string(st.Systems[1].ID) + `"]`, "Web, API"},
 		{p("systems"), `[]`, "なし"},

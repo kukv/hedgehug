@@ -2,6 +2,7 @@ package item
 
 import (
 	"encoding/json"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -56,8 +57,13 @@ func Display(p workspace.Property, v json.RawMessage, st workspace.Settings, nam
 }
 
 // Hours は、時間を小数第 2 位までで、末尾の 0 を省いて書く(02「時間の値」)。
+// 100 倍すると無限大になるほど大きな値は、丸めずにそのまま書く(上限は設けない)。
 func Hours(v *float64) string {
-	return strconv.FormatFloat(float64(int64(*v*100+0.5))/100, 'f', -1, 64)
+	r := math.Round(*v*100) / 100
+	if math.IsInf(r, 0) {
+		r = *v
+	}
+	return strconv.FormatFloat(r, 'f', -1, 64)
 }
 
 func valueName(vs []workspace.Value, id change.ID) string {
