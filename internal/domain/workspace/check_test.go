@@ -39,6 +39,47 @@ func TestCheckCreate(t *testing.T) {
 	}
 }
 
+func TestCheckRename(t *testing.T) {
+	others := []workspace.Workspace{{ID: "A", Name: "Web", Prefix: "HH"}, {ID: "B", Name: "API", Prefix: "API"}}
+	cases := []struct {
+		name, msg string
+	}{
+		{"", "名前は空にできません"},
+		{"API", "この Store には同じ名前のワークスペースがあります"},
+		{"Web", ""}, // 自分と同じ名前は重複ではない
+		{"web", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := workspace.Workspace{ID: "A", Name: c.name, Prefix: "HH"}
+			if got := messageOf(workspace.CheckRename(w, others)); got != c.msg {
+				t.Errorf("message = %q, want %q", got, c.msg)
+			}
+		})
+	}
+}
+
+func TestCheckPrefix(t *testing.T) {
+	others := []workspace.Workspace{{ID: "A", Name: "Web", Prefix: "HH"}, {ID: "B", Name: "API", Prefix: "API"}}
+	cases := []struct {
+		prefix, msg string
+	}{
+		{"", "接頭辞を入力してください"},
+		{"W-B", "接頭辞は英大文字で始まる 10 文字以内の英大文字と数字にしてください"},
+		{"API", "この Store には同じ接頭辞のワークスペースがあります"},
+		{"HH", ""}, // 自分と同じ接頭辞は重複ではない
+		{"WEB", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.prefix, func(t *testing.T) {
+			w := workspace.Workspace{ID: "A", Name: "Web", Prefix: c.prefix}
+			if got := messageOf(workspace.CheckPrefix(w, others)); got != c.msg {
+				t.Errorf("message = %q, want %q", got, c.msg)
+			}
+		})
+	}
+}
+
 // messageOf は、断りの文言を返す。断りでなければ err の文言、nil なら空文字。
 func messageOf(err error) string {
 	var r *refusal.Refusal
