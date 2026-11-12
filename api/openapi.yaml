@@ -15,12 +15,6 @@ components:
     ErrorModel:
       additionalProperties: false
       properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          example: https://example.com/ErrorModel.json
-          format: uri
-          readOnly: true
-          type: string
         detail:
           description: A human-readable explanation specific to this occurrence of the problem.
           example: Property foo is required but is missing.
@@ -55,12 +49,6 @@ components:
     SystemInfo:
       additionalProperties: false
       properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          example: https://example.com/SystemInfo.json
-          format: uri
-          readOnly: true
-          type: string
         version:
           description: hedgehug の版
           type: string

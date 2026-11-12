@@ -23,6 +23,8 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	cfg.OpenAPIPath = "" // OpenAPI は make generate で api/openapi.yaml に書く。サーバーでは出さない
 	cfg.DocsPath = ""
 	cfg.SchemasPath = ""
+	// 既定の CreateHooks は、本文に $schema(出さないパスへのリンク)を足す。本文は {"version"} のような約束どおりにする
+	cfg.CreateHooks = nil
 	api := humago.New(mux, cfg)
 
 	system.Register(api, deps.Version)

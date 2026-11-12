@@ -52,7 +52,7 @@ func TestSystemNeedsToken(t *testing.T) {
 		}
 	}
 	code, body := get(t, srv.URL+"/api/system", "secret")
-	if code != http.StatusOK || !strings.Contains(body, `"version":"v0.0.0-test"`) {
+	if code != http.StatusOK || strings.TrimSpace(body) != `{"version":"v0.0.0-test"}` {
 		t.Errorf("status %d, body %s", code, body)
 	}
 }
