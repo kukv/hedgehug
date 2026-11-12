@@ -46,9 +46,11 @@ export interface WorkspaceSettingsScreen {
   reload(): Promise<void>;
   // run は操作を 1 つ行い、読み直す。断りはエラーのトーストにして false を返す。
   // ok を渡したら、成功のときにトーストを出す。
+  // onRefused を渡したら、断りをトーストにせず、その文言を渡す(ダイアログの中の赤字用)。
   run(
     op: (port: WorkspacesPort, storeId: string, workspaceId: string) => Promise<unknown>,
     ok?: string,
+    onRefused?: (message: string) => void,
   ): Promise<boolean>;
 }
 
@@ -115,7 +117,7 @@ export function createWorkspaceSettings(deps: {
       state.update((s) => (s ? { ...s, tab } : s));
     },
     reload,
-    async run(op, ok) {
+    async run(op, ok, onRefused) {
       if (!current) return false;
       const { storeId, workspaceId } = current;
       let catalogChanged = false;
@@ -132,7 +134,8 @@ export function createWorkspaceSettings(deps: {
         if (ok) toasts.show(ok);
       } catch (e) {
         if (!(e instanceof Refused)) throw e;
-        toasts.show(e.message, { error: true });
+        if (onRefused) onRefused(e.message);
+        else toasts.show(e.message, { error: true });
       } finally {
         // 読み直しを先にする。サイドバーの読み直しが投げても、設定の読み直しを飛ばさない。
         await reload();

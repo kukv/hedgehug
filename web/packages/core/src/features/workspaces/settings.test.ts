@@ -60,6 +60,23 @@ describe("workspace settings", () => {
     expect(port.calls.filter((c) => c === "get")).toHaveLength(2); // 開いたときと、断りのあと
   });
 
+  it("hands a refusal to onRefused instead of the toast, for refusals shown in a dialog", async () => {
+    const { screen, port, toasts } = await setup();
+    await screen.open("S1", "S1-W1");
+    port.refuseNext("同じ名前のプロパティがあります");
+    const messages: string[] = [];
+    const ok = await screen.run(
+      (p, s, w) => p.rename(s, w, "x"),
+      undefined,
+      (m) => messages.push(m),
+    );
+    expect([ok, messages, get(toasts.list)]).toEqual([
+      false,
+      ["同じ名前のプロパティがあります"],
+      [],
+    ]);
+  });
+
   it("shows the success toast only when given", async () => {
     const { screen, toasts } = await setup();
     await screen.open("S1", "S1-W1");

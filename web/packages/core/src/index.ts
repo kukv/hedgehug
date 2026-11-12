@@ -72,6 +72,18 @@ export {
 } from "./features/toasts/toasts";
 export { prefixConfirm, prefixExamples, prefixHelp } from "./features/workspaces/general";
 export {
+  addableTypes,
+  deletePropertyBody,
+  keyHint,
+  newProperty,
+  type PropertyRow,
+  propertiesHelp,
+  propertyKinds,
+  propertyRows,
+  toggleKind,
+  typeLabels,
+} from "./features/workspaces/properties";
+export {
   createWorkspaceSettings,
   type SettingsState,
   type SettingsTab,
