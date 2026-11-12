@@ -8,6 +8,8 @@
     size?: "md" | "sm";
     disabled?: boolean;
     title?: string;
+    // onchange は、選んだ値を渡す(選んだときに保存するため)。
+    onchange?: (value: string) => void;
   }
 
   let {
@@ -17,10 +19,18 @@
     size = "md",
     disabled = false,
     title,
+    onchange,
   }: Props = $props();
 </script>
 
-<select class="select {size}" aria-label={label} {disabled} {title} bind:value>
+<select
+  class="select {size}"
+  aria-label={label}
+  {disabled}
+  {title}
+  bind:value
+  onchange={(event) => onchange?.(event.currentTarget.value)}
+>
   {#each options as option (option.value)}
     <option value={option.value}>{option.label}</option>
   {/each}
