@@ -1,0 +1,182 @@
+package gitstore
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
+)
+
+const (
+	yWS     workspace.ID = "01YWS000000000000000000001"
+	yProj   project.ID   = "01YPR000000000000000000001"
+	yItem   item.ID      = "01YIT000000000000000000001"
+	yEnv    change.ID    = "01YPROP0000000000000000001"
+	yTag    change.ID    = "01YPROP0000000000000000002"
+	yEnvVal change.ID    = "01YVAL00000000000000000A01"
+	yTagA   change.ID    = "01YVAL00000000000000000B01"
+	yTagC   change.ID    = "01YVAL00000000000000000B03"
+)
+
+func yIDs() func() change.ID {
+	n := 0
+	return func() change.ID {
+		n++
+		return change.ID(fmt.Sprintf("01YVALUE%017d", n))
+	}
+}
+
+// ySettings は、既定の設定と、それに足す単一選択「環境」・複数選択「タグ」の行。
+func ySettings() (workspace.Settings, []change.Draft) {
+	s := workspace.DefaultSettings(yIDs())
+	env := workspace.Property{ID: yEnv, Key: "env", Name: "環境", Type: workspace.TypeSingle, Kinds: []string{"Story", "Task"}, Rank: "c"}
+	tag := workspace.Property{ID: yTag, Key: "tag", Name: "タグ", Type: workspace.TypeMulti, Kinds: []string{"Task"}, Rank: "d"}
+	envList := workspace.List{Kind: workspace.ListChoices, Property: yEnv}
+	tagList := workspace.List{Kind: workspace.ListChoices, Property: yTag}
+	ds := workspace.PropertyDrafts(env)
+	ds = append(ds, workspace.ValueDrafts(envList, workspace.Value{ID: yEnvVal, Name: "本番", Color: "gray", Rank: "V"})...)
+	ds = append(ds, workspace.PropertyDrafts(tag)...)
+	for i, v := range []change.ID{yTagA, "01YVAL00000000000000000B02", yTagC} {
+		ds = append(ds, workspace.ValueDrafts(tagList, workspace.Value{ID: v, Name: string(rune('A' + i)), Color: "gray", Rank: string(rune('V' + i))})...)
+	}
+	return s, ds
+}
+
+func ySeed(t *testing.T) (*Stores, port.StoreID, string, workspace.Settings) {
+	t.Helper()
+	s, id, dir := newStore(t)
+	st, extra := ySettings()
+	d, err := workspace.CreateWithRank(workspace.Workspace{ID: yWS, Name: "Web", Prefix: "HH"}, st, "V")
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := item.Item{ID: yItem, Place: item.Place{Workspace: yWS, Project: yProj, Number: 1}, Kind: item.Task, Rank: "V", Title: "t"}
+	pr := project.Project{ID: yProj, Place: project.Place{Workspace: yWS, Number: 1}, Rank: "V", Title: "p", Owner: "taro", Status: project.Todo}
+	op := port.Operation{Actor: change.User("taro"), Summary: "準備"}
+	err = s.Write(t.Context(), id, op, func(tx port.Tx) error {
+		if err := tx.WriteWorkspaces().Append(yWS, append([]change.Draft{d}, extra...)...); err != nil {
+			return err
+		}
+		if err := tx.WriteProjects().Append(yProj, project.Create(pr)); err != nil {
+			return err
+		}
+		return tx.WriteItems().Append(yItem, item.Create(it),
+			change.NewSet("status", nil, st.Statuses[0].ID),
+			change.NewSet("priority", nil, st.Priorities[2].ID),
+			change.NewAdd("systems", st.Systems[0].ID),
+			change.NewAdd("systems", st.Systems[1].ID),
+			change.NewSet(item.FieldKey(yEnv), nil, yEnvVal),
+			change.NewAdd(item.FieldKey(yTag), yTagA),
+			change.NewAdd(item.FieldKey(yTag), yTagC),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, id, dir, st
+}
+
+func readFileString(t *testing.T, dir, rel string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func mustContain(t *testing.T, name, got string, wants ...string) {
+	t.Helper()
+	for _, w := range wants {
+		if !strings.Contains(got, w) {
+			t.Errorf("%s に %q がない:\n%s", name, w, got)
+		}
+	}
+}
+
+func TestWorkspaceYAMLHasSettings(t *testing.T) {
+	_, _, dir, st := ySeed(t)
+	got := readFileString(t, dir, "workspaces/"+string(yWS)+"/workspace.yaml")
+	mustContain(t, "workspace.yaml", got,
+		"rank: V\n", "properties:\n", "statuses:\n", "priorities:\n", "systems:\n", "category_defaults:",
+		"initial_status: "+string(st.InitialStatus)+" # Todo\n",
+		"initial_priority: "+string(st.InitialPriority)+" # Medium\n",
+		"key: env\n", "choices:\n", "name: 本番",
+		// 選択肢のないプロパティは flow の 1 行。
+		"- {id: status, key: status, name: ステータス, type: status, builtin: true, kinds: [Epic, Story, Task, Bug, Step], hidden: false, rank: V}",
+	)
+	// プロパティの順は設定の順(組み込みのあとに追加)。
+	prev := -1
+	for _, p := range st.Properties {
+		i := strings.Index(got, "id: "+string(p.ID))
+		if i <= prev {
+			t.Errorf("プロパティ %s の位置 %d が前(%d)より後ろでない:\n%s", p.ID, i, prev, got)
+		}
+		prev = i
+	}
+}
+
+func TestItemYAMLHasNameComments(t *testing.T) {
+	_, _, dir, st := ySeed(t)
+	got := readFileString(t, dir, "items/"+string(yItem)+"/item.yaml")
+	mustContain(t, "item.yaml", got,
+		"status: "+string(st.Statuses[0].ID)+" # Todo\n",
+		"priority: "+string(st.Priorities[2].ID)+" # Medium\n",
+		" # "+st.Systems[0].Name+", "+st.Systems[1].Name+"\n",
+		" # 環境: 本番\n",
+		" # タグ: A, C\n",
+	)
+}
+
+func TestWorkspaceRenameValueRegeneratesItemYAML(t *testing.T) {
+	s, id, dir, st := ySeed(t)
+	name := "statuses/" + string(st.Statuses[0].ID) + "/name"
+	op := port.Operation{Actor: change.User("taro"), Summary: "値の名前を変える"}
+	before := headCount(t, dir)
+	err := s.Write(t.Context(), id, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(yWS, change.NewSet(name, "Todo", "未着手"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := headCount(t, dir); n != before+1 {
+		t.Errorf("commits = %d, want %d", n, before+1)
+	}
+	got := readFileString(t, dir, "items/"+string(yItem)+"/item.yaml")
+	mustContain(t, "item.yaml", got, "status: "+string(st.Statuses[0].ID)+" # 未着手\n")
+	if !worktreeStatus(t, dir).IsClean() {
+		t.Error("作業ツリーがきれいでない(item.yaml が同じコミットに入っていない)")
+	}
+	if log := readFileString(t, dir, "items/"+string(yItem)+"/log.jsonl"); strings.Contains(log, "未着手") {
+		t.Errorf("アイテムの log.jsonl に書いている:\n%s", log)
+	}
+}
+
+func TestRebuildYAMLMatchesWritePath(t *testing.T) {
+	_, _, dir, _ := ySeed(t)
+	tr := tree{}
+	want := map[string]string{}
+	for _, rel := range []string{"workspaces/" + string(yWS), "projects/" + string(yProj), "items/" + string(yItem)} {
+		tr[rel+"/log.jsonl"] = []byte(readFileString(t, dir, rel+"/log.jsonl"))
+	}
+	for rel, yml := range map[string]string{
+		"workspaces/" + string(yWS): "workspace.yaml", "items/" + string(yItem): "item.yaml",
+	} {
+		want[rel+"/"+yml] = readFileString(t, dir, rel+"/"+yml)
+	}
+	if err := rebuildYAML(tr); err != nil {
+		t.Fatal(err)
+	}
+	for p, w := range want {
+		if string(tr[p]) != w {
+			t.Errorf("%s が書く道と違う:\n--- 同期\n%s\n--- 書く道\n%s", p, tr[p], w)
+		}
+	}
+}
