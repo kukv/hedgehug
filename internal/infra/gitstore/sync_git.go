@@ -50,6 +50,9 @@ func (l link) fetch(ctx context.Context, repo *git.Repository, branch plumbing.R
 		RemoteName: remoteName,
 		Auth:       l.auth,
 		Force:      true,
+		// remote で消えたブランチは手元からも消す。消えた main の古い先端と合わせない(決定 4)。
+		Prune: true,
+		Tags:  git.NoTags,
 	})
 	switch {
 	case errors.Is(err, transport.ErrEmptyRemoteRepository):
@@ -68,16 +71,45 @@ func (l link) fetch(ctx context.Context, repo *git.Repository, branch plumbing.R
 }
 
 // send は、branch を remote の同じ名前のブランチへ送る。履歴を書き換えない(強制しない)。
-func (l link) send(ctx context.Context, branch plumbing.ReferenceName) error {
+// theirs は、この回で合わせた remote の先端(remote が空ならゼロ)。
+func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs plumbing.Hash) error {
 	spec := config.RefSpec(branch.String() + ":" + branch.String())
 	err := l.remote.PushContext(ctx, &git.PushOptions{RemoteName: remoteName, RefSpecs: []config.RefSpec{spec}, Auth: l.auth})
-	switch {
-	case err == nil, errors.Is(err, git.NoErrAlreadyUpToDate):
+	if err == nil || errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil
-	case errors.Is(err, git.ErrNonFastForwardUpdate), strings.Contains(err.Error(), "non-fast-forward"):
+	}
+	// go-git が送る前に見つける重なりは "non-fast-forward update" の文で返る。
+	if strings.Contains(err.Error(), "non-fast-forward") {
+		return errRejected
+	}
+	// サーバーが断る文は、サーバーごとに違う(git の "failed to update ref"、GitHub の "cannot lock ref" など)。
+	// 文で見分けず、remote の先端をもう一度見る。合わせた先端から動いていれば、他の人の更新と重なったので、
+	// 受け取りからやり直す。動いていなければ、重なりではない失敗としてそのまま返す。
+	tip, lerr := l.tip(ctx, branch)
+	if lerr != nil {
+		return errors.Join(err, lerr)
+	}
+	if tip != theirs {
 		return errRejected
 	}
 	return err
+}
+
+// tip は、remote の branch の先端を、受け取らずに見る。remote が空か、そのブランチがなければゼロ。
+func (l link) tip(ctx context.Context, branch plumbing.ReferenceName) (plumbing.Hash, error) {
+	refs, err := l.remote.ListContext(ctx, &git.ListOptions{Auth: l.auth})
+	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
+		return plumbing.ZeroHash, nil
+	}
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	for _, r := range refs {
+		if r.Name() == branch {
+			return r.Hash(), nil
+		}
+	}
+	return plumbing.ZeroHash, nil
 }
 
 // checkRemoteStore は、remote の先端が hedgehug の Store で、この hedgehug が読める形式かを確かめる。

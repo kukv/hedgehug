@@ -46,6 +46,8 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 		return port.SyncResult{}, err
 	}
 	s := syncRun{r: r, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash()}
+	// 2 回目からの試みが失敗しても(断る理由のエラーでも、ErrSendConflict と同じく)、前の試みで作った
+	// 合わせたコミットはこのマシンに残る。それは受け取ったものを正しく合わせたもので、次の同期で続ける。
 	for range maxSendTries {
 		res, err := s.once(ctx)
 		if errors.Is(err, errRejected) {
@@ -85,7 +87,7 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 			return port.SyncResult{}, err
 		}
 	}
-	if err := s.link.send(ctx, s.branch); err != nil {
+	if err := s.link.send(ctx, s.branch, theirs); err != nil {
 		return port.SyncResult{}, err
 	}
 	return s.result(theirs)
