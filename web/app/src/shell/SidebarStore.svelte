@@ -1,7 +1,14 @@
 <script lang="ts">
-  import { projectCategory, type Resolved, type Route, type StoreNode } from "@hedgehug/core";
+  import {
+    projectCategory,
+    type Resolved,
+    type Route,
+    readOnlyNote,
+    type StoreNode,
+  } from "@hedgehug/core";
   import { StatusDot, StoreBadge } from "@hedgehug/ui";
   import type { Links } from "../links";
+  import { workspaceDialog } from "../wire";
   import StoreMenu from "./StoreMenu.svelte";
   import WorkspaceMenu from "./WorkspaceMenu.svelte";
 
@@ -81,6 +88,15 @@
   {:else}
     <p class="side-empty">ワークスペースはまだありません</p>
   {/each}
+  <button
+    type="button"
+    class="add-ws"
+    disabled={store.readOnly}
+    title={store.readOnly ? readOnlyNote : undefined}
+    onclick={() => workspaceDialog.open(store.id)}
+  >
+    ワークスペースを追加
+  </button>
 </section>
 
 <style>
@@ -145,6 +161,25 @@
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted);
+  }
+  .add-ws {
+    align-self: flex-start;
+    margin: 2px 0 0 22px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .add-ws:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .add-ws:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
   .side-empty {
     color: var(--muted);
