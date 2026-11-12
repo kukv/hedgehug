@@ -60,9 +60,11 @@ test("a Step's checkbox follows the saved status, also when the save is refused"
   await input.press("Enter");
   const box = panel.getByRole("checkbox", { name: step });
   await expect(box).not.toBeChecked();
-  await box.check();
+  // 保存の応答を待ってから次へ進む(保存が重なったり、あとの断りの設定に先の保存が掛かったりしないように)。
+  const saved = () => page.waitForResponse((r) => r.url().endsWith("/check") && r.ok());
+  await Promise.all([saved(), box.check()]);
   await expect(box).toBeChecked();
-  await box.uncheck();
+  await Promise.all([saved(), box.uncheck()]);
   await expect(box).not.toBeChecked();
 
   // 断られたら、チェックは保存済みの状態(オフ)に戻る。
