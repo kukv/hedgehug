@@ -1523,7 +1523,7 @@ func pushRaw(t *testing.T, remote port.Remote, files map[string]string) {
 		t.Fatal(err)
 	}
 	rm := git.NewRemote(repo.Storer, &config.RemoteConfig{Name: "raw", URLs: []string{remote.URL}})
-	if err := rm.Push(&git.PushOptions{RefSpecs: []config.RefSpec{"refs/heads/master:refs/heads/master"}}); err != nil {
+	if err := rm.Push(&git.PushOptions{RefSpecs: []config.RefSpec{"refs/heads/main:refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1589,7 +1589,7 @@ func TestSyncRefusesRemoteWithoutTheBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	rm := git.NewRemote(r.Storer, &config.RemoteConfig{Name: "raw", URLs: []string{remote.URL}})
-	if err := rm.Push(&git.PushOptions{RefSpecs: []config.RefSpec{"refs/heads/master:refs/heads/other"}}); err != nil {
+	if err := rm.Push(&git.PushOptions{RefSpecs: []config.RefSpec{"refs/heads/main:refs/heads/other"}}); err != nil {
 		t.Fatal(err)
 	}
 	_, _, dir := newStore(t)
@@ -2028,6 +2028,6 @@ gh pr create --base develop --title "feat(gitstore): 同期の合わせ方(ト�
 
 | # | 点 | 推奨案 |
 |---|---|---|
-| 1 | 新しく作る Store のブランチの名前。土台の `gitstore.Create` は go-git の既定(`master`)で作るが、GitHub で作ったリポジトリの既定は `main`。決定 4 では、名前の違う remote と合わせない(空のリポジトリへの最初の送信は通る) | `gitstore.Create` を `main` で作る形に直す(土台の Go のライン Task 6 の中で直すか、C2 の前に小さな PR)。仕様に書いた振る舞いは変わらない |
+| 1 | 新しく作る Store のブランチの名前。土台の `gitstore.Create` は go-git の既定(`master`)で作るが、GitHub で作ったリポジトリの既定は `main`。決定 4 では、名前の違う remote と合わせない(空のリポジトリへの最初の送信は通る) | **決定(2026-11-12): `main`。** 土台の計画の Task 6 を直した |
 | 2 | 時計のずれの警告(06「時計のずれの警告」)が使う「GitHub の応答に付く日時」を、どの口で受け取るか。GitHub の口はトラック D が定める | D の `GitHub` の口の各呼び出しの結果に、応答の日時を含める。C5 がそれを受け取って比べる |
 | 3 | 自動化の通知(06「自動化」)を作る場所。自動化を動かすのはトラック B、通知を持つのは C4 の `Inbox` | C4 で `port.Inbox` を定め、B の自動化の実行が `Inbox` に書く。C4 が先に入るまで、B は通知を作らない(B と C4 の計画のどちらにも書く) |
