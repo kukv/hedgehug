@@ -1,0 +1,1 @@
+{"extends":"./tsconfig.base.json","compilerOptions":{"types":["node"]},"include":["e2e","*.ts","app/vite.config.ts"]}

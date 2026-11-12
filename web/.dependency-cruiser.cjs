@@ -1,5 +1,6 @@
-// 画面のパッケージの依存の向き(設計書 6 節の表)。テストのファイルと ui の設定ファイル(vitest・svelte)は vitest などを使うので、from から外す。
-const notTest = "\\.test\\.ts$|^packages/ui/(vitest\\.(config|setup)\\.ts|svelte\\.config\\.js)$";
+// 画面のパッケージの依存の向き(設計書 6 節の表)。テストのファイルと、ui の設定ファイル(vitest・svelte)、api の orval の設定ファイルは開発用の道具を使うので、from から外す。
+const notTest =
+  "\\.test\\.ts$|^packages/ui/(vitest\\.(config|setup)\\.ts|svelte\\.config\\.js)$|^packages/api/orval\\.config\\.ts$";
 const svelte = "(^|/)node_modules/svelte/";
 
 module.exports = {
@@ -16,7 +17,7 @@ module.exports = {
       comment: "api が使ってよいのは core だけ",
       severity: "error",
       from: { path: "^packages/api/", pathNot: notTest },
-      to: { path: "^packages/(ui|app)/|^app/" },
+      to: { pathNot: "^packages/(api|core)/" },
     },
     {
       name: "ui-imports-only-svelte",
@@ -33,6 +34,7 @@ module.exports = {
     },
   ],
   options: {
+    tsPreCompilationDeps: true,
     doNotFollow: { path: "node_modules" },
     tsConfig: { fileName: "tsconfig.base.json" },
     enhancedResolveOptions: {

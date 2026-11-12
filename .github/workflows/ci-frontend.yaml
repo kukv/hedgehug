@@ -1,0 +1,155 @@
+name: CI (frontend)
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # GUI（web/）。Node は1つの OS で確かめれば足りるので ubuntu だけで回す。
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # mise.toml に固定した Node と pnpm を入れる。
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          install_args: node pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # packages/api/src/generated.ts は api/openapi.yaml から作る。古ければここで気付く。
+      - name: Verify the API types are up to date
+        run: |
+          pnpm gen
+          git diff --exit-code -- packages/api/src/generated.ts
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Dependency rules
+        run: pnpm deps
+
+      - name: Size limits
+        run: pnpm size
+
+      - name: Build
+        run: pnpm build
+
+  # 実際のバイナリ（GUI を埋め込んだもの）をブラウザで動かす。
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          install_args: node pnpm
+
+      # Go のビルドキャッシュとモジュールキャッシュを復元する。保存は main への push だけ（backend と同じ）。
+      - name: Locate Go caches
+        id: go-env
+        shell: bash
+        run: |
+          echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: go-cache
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-e2e-${{ hashFiles('go.mod', 'go.sum') }}
+
+      - name: Verify the module cache
+        run: go mod verify
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # Playwright のブラウザは版ごとにキャッシュする（版は pnpm-lock.yaml に固定されている）。Go と同じく、保存は main への push だけ。
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: browser-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+
+      # ブラウザが無いときはブラウザと共有ライブラリ（apt）を入れる。キャッシュがあるときは共有ライブラリだけ。
+      # make e2e の playwright install chromium は、取得済みのブラウザなら何も取りに行かない。
+      - name: Install the browser
+        working-directory: web
+        env:
+          CACHE_HIT: ${{ steps.browser-cache.outputs.cache-hit }}
+        run: |
+          if [ "$CACHE_HIT" = "true" ]; then
+            pnpm exec playwright install-deps chromium
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
+
+      # Ubuntu は AppArmor で非特権ユーザー名前空間を止めていて、このままだと Chromium のサンドボックスが起動しない。
+      - name: Allow the Chromium sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: E2E
+        run: make e2e
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && steps.browser-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browser-cache.outputs.cache-primary-key }}
+
+      # 失敗したときは trace（失敗したテストの画面の記録）と HTML のレポートを残す。
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: e2e-traces
+          path: |
+            web/test-results
+            web/playwright-report
+          retention-days: 1
+          if-no-files-found: ignore
