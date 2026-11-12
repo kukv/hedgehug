@@ -78,6 +78,8 @@ type Settings struct {
 	InitialStatus    change.ID
 	InitialPriority  change.ID
 	CategoryDefaults map[Category]change.ID
+	// Workflow は、遷移の制約(03「遷移の制約」)。From のステータス ID → 許可する To。行のない From は制限なし。
+	Workflow map[change.ID][]change.ID
 }
 
 func validColor(c Color) bool {

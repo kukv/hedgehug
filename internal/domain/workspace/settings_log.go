@@ -58,6 +58,7 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 	}
 	for f, list := range st.Lists {
 		b.setKinds(f, list)
+		b.setWorkflow(f, list)
 	}
 	return b.settings(), true
 }
