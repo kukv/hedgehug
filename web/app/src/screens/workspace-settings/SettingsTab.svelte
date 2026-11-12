@@ -4,6 +4,7 @@
   import { workspaceSettings } from "../../wire";
   import GeneralPanel from "./GeneralPanel.svelte";
   import PropertiesPanel from "./PropertiesPanel.svelte";
+  import TemplatesPanel from "./TemplatesPanel.svelte";
   import ValuesPanel from "./ValuesPanel.svelte";
   import WorkflowPanel from "./WorkflowPanel.svelte";
 
@@ -49,6 +50,8 @@
       <ValuesPanel state={$settings} list="systems" />
     {:else if $settings.tab === "workflow"}
       <WorkflowPanel state={$settings} />
+    {:else if $settings.tab === "templates"}
+      <TemplatesPanel state={$settings} />
     {/if}
   </div>
 {/if}

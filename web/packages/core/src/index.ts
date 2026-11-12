@@ -152,6 +152,18 @@ export {
   type WorkspaceMover,
 } from "./features/workspaces/sidebarMenu";
 export {
+  deleteTemplateBody,
+  deleteTemplateTitle,
+  type KindDefault,
+  kindDefaults,
+  type TemplateRow,
+  templateCreated,
+  templateDeleted,
+  templateRows,
+  templateSummary,
+  templatesEmpty,
+} from "./features/workspaces/templates";
+export {
   categoryLabels,
   colors,
   type DeleteDialogModel,
@@ -197,10 +209,6 @@ export type {
   SyncStoreStatus,
 } from "./model/sync";
 export type { SystemInfo } from "./model/system";
-export {
-  stepNone,
-  stepParent,
-} from "./model/workspace";
 export type {
   Category,
   ChildKind,
@@ -218,6 +226,10 @@ export type {
   WorkspaceTemplate,
   WorkspaceUsage,
   WorkspaceValue,
+} from "./model/workspace";
+export {
+  stepNone,
+  stepParent,
 } from "./model/workspace";
 export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";
