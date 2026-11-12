@@ -6,12 +6,9 @@ export const prefixHelp =
   "Epic・Story・Task・Bug・Step の ID の頭に付きます。変更すると、すべての ID が新しい接頭辞で表示されます(番号はそのままです)。";
 
 // prefixExamples は、接頭辞の欄の例。番号の小さい方から 3 件まで。
-export function prefixExamples(prefix: string, firstNumbers: number[]): string {
-  if (firstNumbers.length === 0) return "アイテムはまだありません";
-  return firstNumbers
-    .slice(0, 3)
-    .map((n) => `${prefix}-${n}`)
-    .join(", ");
+// アイテムがなければ空(画面が「アイテムはまだありません」を出す)。
+export function prefixExamples(prefix: string, firstNumbers: number[]): string[] {
+  return firstNumbers.slice(0, 3).map((n) => `${prefix}-${n}`);
 }
 
 // prefixConfirm は、確認ダイアログ「接頭辞を変更」の本文。

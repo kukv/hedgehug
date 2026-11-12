@@ -27,6 +27,7 @@
     prefix = s.detail.prefix;
   });
 
+  const examples = $derived(prefixExamples(s.detail.prefix, s.usage.firstNumbers));
   const title = $derived(s.readOnly ? readOnlyNote : undefined);
 
   function commitName() {
@@ -80,7 +81,13 @@
       />
       <Button disabled={s.readOnly} {title} onclick={askPrefix}>変更</Button>
     </div>
-    <p class="hint">例: {prefixExamples(s.detail.prefix, s.usage.firstNumbers)}</p>
+    <p class="hint">
+      {#if examples.length === 0}
+        アイテムはまだありません
+      {:else}
+        今の例: {#each examples as id (id)}<code>{id}</code>{" "}{/each}
+      {/if}
+    </p>
     <p class="hint">{prefixHelp}</p>
   </div>
 </div>
@@ -112,6 +119,9 @@
   .row {
     display: flex;
     gap: 8px;
+  }
+  code {
+    font-family: var(--font-mono);
   }
   .hint {
     margin: 0;

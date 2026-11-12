@@ -10,9 +10,9 @@ const usage = (items: number, firstNumbers: number[]) => ({
 
 describe("general", () => {
   it("shows up to three ids as examples", () => {
-    expect(prefixExamples("HH", [1, 2, 5])).toBe("HH-1, HH-2, HH-5");
-    expect(prefixExamples("HH", [1, 2, 3, 4])).toBe("HH-1, HH-2, HH-3");
-    expect(prefixExamples("HH", [])).toBe("アイテムはまだありません");
+    expect(prefixExamples("HH", [1, 2, 5])).toEqual(["HH-1", "HH-2", "HH-5"]);
+    expect(prefixExamples("HH", [1, 2, 3, 4])).toEqual(["HH-1", "HH-2", "HH-3"]);
+    expect(prefixExamples("HH", [])).toEqual([]);
   });
 
   it("writes the confirm text of spec 03", () => {
