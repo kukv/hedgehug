@@ -2,6 +2,7 @@ package syncing
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -45,8 +46,10 @@ func (s *Service) Status(ctx context.Context) ([]StoreStatus, error) {
 		if t.Account == "" {
 			st.Reason = syncstatus.NoAccount
 		}
+		// 1 つの Store の数を読めなくても、ほかの Store の状態は返す。その Store は 0 件とする。
 		if st.Unsent, err = s.Replicator.Unsent(ctx, t.ID); err != nil {
-			return nil, err
+			slog.Warn("未送信の数を読めませんでした", "store", t.ID, "error", err)
+			st.Unsent = 0
 		}
 		out = append(out, st)
 	}

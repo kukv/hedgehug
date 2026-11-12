@@ -24,6 +24,7 @@ type Replicator struct {
 	Errs       map[port.StoreID]error
 	MirrorErrs map[string]error // ミラーの URL → エラー
 	UnsentN    map[port.StoreID]int
+	UnsentErrs map[port.StoreID]error // Unsent が返すエラー
 	Gate       chan struct{}
 	calls      []ReplicatorCall
 }
@@ -58,6 +59,9 @@ func (r *Replicator) Mirror(_ context.Context, id port.StoreID, mirror port.Remo
 func (r *Replicator) Unsent(_ context.Context, id port.StoreID) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := r.UnsentErrs[id]; err != nil {
+		return 0, err
+	}
 	return r.UnsentN[id], nil
 }
 

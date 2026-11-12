@@ -40,7 +40,7 @@ func (s *Service) run(ctx context.Context, t port.SyncTarget) (Outcome, error) {
 	}
 	res, err := s.Replicator.Sync(ctx, t.ID, port.Remote{URL: t.Remote, Token: tok, Seen: seen, ReceiveOnly: t.ReadOnly})
 	if err != nil {
-		r := remoteReason(err)
+		r := remoteReason(t.ID, err)
 		if r == syncstatus.AuthFailed {
 			s.Tokens.StoreRejected(ctx, t.ID)
 		}
@@ -78,7 +78,7 @@ func (s *Service) mirror(ctx context.Context, t port.SyncTarget, tok string) (in
 	for _, m := range t.Mirrors {
 		var r syncstatus.Reason
 		if err := s.Replicator.Mirror(ctx, t.ID, port.Remote{URL: m, Token: tok}); err != nil {
-			r = remoteReason(err)
+			r = remoteReason(t.ID, err)
 			failures++
 			if r == syncstatus.AuthFailed {
 				s.Tokens.StoreRejected(ctx, t.ID)

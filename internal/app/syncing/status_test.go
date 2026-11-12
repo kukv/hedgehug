@@ -2,12 +2,26 @@ package syncing_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
+
+// 1 つの Store の未送信の数を読めなくても、状態の表示は失敗させず、その Store だけ 0 件にする。
+func TestStatusToleratesAnUnsentError(t *testing.T) {
+	f := newFixture(t)
+	f.rep.UnsentErrs = map[port.StoreID]error{"S1": errors.New("cannot open the store")}
+	st, err := f.svc.Status(context.Background())
+	if err != nil || len(st) != 4 {
+		t.Fatalf("Status = %+v, %v", st, err)
+	}
+	if st[0].Store != "S1" || st[0].Unsent != 0 {
+		t.Errorf("S1 = %+v", st[0])
+	}
+}
 
 // 06「同期の状態の表示」: remote がある Store の状態(非表示も含め、画面が分ける)。
 func TestStatus(t *testing.T) {

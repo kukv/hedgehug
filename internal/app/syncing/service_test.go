@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/syncing"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
@@ -225,6 +226,37 @@ func TestSyncStoreJoinsTheRunningSync(t *testing.T) {
 	}
 	if n := f.syncs()["S1"]; n != 1 {
 		t.Errorf("Sync ran %d times", n)
+	}
+}
+
+// 同期が panic で終わっても、その結果を待っていた呼び出しは、成功に見える空の結果でなくエラーを受け取る。
+func TestSyncStoreReportsPanicToWaiters(t *testing.T) {
+	f := newFixture(t)
+	f.rep.Gate = make(chan struct{})
+	f.svc.AfterSuccess = func(context.Context, port.StoreID) { panic("boom") }
+	go func() {
+		defer func() { _ = recover() }()
+		_, _ = f.svc.SyncStore(context.Background(), "S1")
+	}()
+	waitFor(t, func() bool { return f.syncs()["S1"] == 1 })
+	type result struct {
+		out syncing.Outcome
+		err error
+	}
+	got := make(chan result, 1)
+	go func() {
+		out, err := f.svc.SyncStore(context.Background(), "S1")
+		got <- result{out, err}
+	}()
+	time.Sleep(50 * time.Millisecond) // 2 つ目が待ちに入る時間
+	f.rep.Gate <- struct{}{}
+	select {
+	case r := <-got:
+		if r.err == nil {
+			t.Errorf("the waiter got %+v with no error", r.out)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the waiter did not return")
 	}
 }
 

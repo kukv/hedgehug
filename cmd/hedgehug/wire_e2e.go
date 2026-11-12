@@ -42,6 +42,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		}
 	}
 	hub := events.NewHub()
+	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
 	syncSvc := &syncing.Service{
 		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: "e2e-account"},

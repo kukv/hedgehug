@@ -4,6 +4,7 @@ package syncing
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -90,10 +91,18 @@ func (s *Service) once(ctx context.Context, t port.SyncTarget) (Outcome, error) 
 	s.mu.Unlock()
 
 	defer func() {
+		// run が panic で終わったとき、待っている呼び出しに成功に見える空の結果を渡さず、エラーを渡す。
+		r := recover()
+		if r != nil {
+			c.err = fmt.Errorf("sync panicked: %v", r)
+		}
 		s.mu.Lock()
 		delete(s.running, t.ID)
 		s.mu.Unlock()
 		close(c.done)
+		if r != nil {
+			panic(r)
+		}
 	}()
 	c.out, c.err = s.run(context.WithoutCancel(ctx), t)
 	return c.out, c.err

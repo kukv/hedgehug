@@ -2,6 +2,7 @@ package syncing
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
@@ -42,11 +43,15 @@ var remoteReasons = []struct {
 
 // remoteReason は、Replicator の失敗の理由。どれにも当たらなければ「remote に接続できません」
 // (06: 途中で切れたときは、接続できないと同じ扱い)。
-func remoteReason(err error) syncstatus.Reason {
+// 理由が決まらずに接続できないとした失敗は、原因を調べられるようログに残す。
+func remoteReason(id port.StoreID, err error) syncstatus.Reason {
 	for _, r := range remoteReasons {
 		if errors.Is(err, r.err) {
 			return r.reason
 		}
+	}
+	if !errors.Is(err, port.ErrUnreachable) {
+		slog.Warn("同期の失敗を接続できないとして扱います", "store", id, "error", err)
 	}
 	return syncstatus.Unreachable
 }

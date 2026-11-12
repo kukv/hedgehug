@@ -4,6 +4,7 @@ package syncing
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -119,7 +120,7 @@ func toAll(a appsyncing.AllOutcome) SyncAllResult {
 	switch {
 	case a.Nothing:
 		r.Result = "nothing"
-	case len(a.Lines) > 1:
+	case slices.ContainsFunc(a.Outcomes, func(o appsyncing.Outcome) bool { return !o.OK() }):
 		r.Result = "failed"
 	}
 	return r
