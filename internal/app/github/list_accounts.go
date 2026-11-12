@@ -7,11 +7,28 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
-// ListAccounts は、登録したアカウントを登録した順に返す。
-type ListAccounts struct {
-	Accounts port.Accounts
+// AccountState は、一覧の 1 行(07「状態」)。GitHub App 未導入は D4 が足す。
+type AccountState struct {
+	Account   account.Account
+	AuthError bool
+	Reason    string // 「認証エラー」の下に出す赤字(ログイン名の不一致)。なければ空
 }
 
-func (u ListAccounts) Do(ctx context.Context) ([]account.Account, error) {
-	return u.Accounts.List(ctx)
+// ListAccounts は、登録したアカウントを登録した順に、状態を付けて返す。
+type ListAccounts struct {
+	Accounts port.Accounts
+	Session  *Session
+}
+
+func (u ListAccounts) Do(ctx context.Context) ([]AccountState, error) {
+	accs, err := u.Accounts.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AccountState, 0, len(accs))
+	for _, a := range accs {
+		broken, reason := u.Session.state(a.ID)
+		out = append(out, AccountState{Account: a, AuthError: broken, Reason: reason})
+	}
+	return out, nil
 }

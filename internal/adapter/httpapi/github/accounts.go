@@ -55,8 +55,8 @@ func Register(api huma.API, list ghapp.ListAccounts, add ghapp.AddAccount) {
 		}
 		out := &listOutput{}
 		out.Body.Accounts = make([]accountBody, 0, len(accs))
-		for _, a := range accs {
-			out.Body.Accounts = append(out.Body.Accounts, toBody(a))
+		for _, s := range accs {
+			out.Body.Accounts = append(out.Body.Accounts, toBody(s.Account))
 		}
 		return out, nil
 	})

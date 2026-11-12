@@ -21,7 +21,7 @@ func newAPI(t *testing.T, gh *apptest.GitHub) humatest.TestAPI {
 	accounts := apptest.NewAccounts()
 	secrets := &apptest.Secrets{Tokens: map[string]string{"taro": "tok-taro"}}
 	ghapi.Register(api,
-		ghapp.ListAccounts{Accounts: accounts},
+		ghapp.ListAccounts{Accounts: accounts, Session: ghapp.NewSession()},
 		ghapp.AddAccount{
 			Accounts: accounts, Secrets: secrets, GitHub: gh, IDs: apptest.NewIDs(),
 			Clock: apptest.NewClock(time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)),

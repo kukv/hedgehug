@@ -57,7 +57,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	ghapi.Register(api,
-		ghapp.ListAccounts{Accounts: deps.Accounts},
+		ghapp.ListAccounts{Accounts: deps.Accounts, Session: ghapp.NewSession()},
 		ghapp.AddAccount{Accounts: deps.Accounts, Secrets: deps.Secrets, GitHub: deps.GitHub, IDs: deps.IDs, Clock: deps.Clock})
 
 	return api
