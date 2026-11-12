@@ -38,7 +38,7 @@
 
 | # | 決めたこと | 根拠 |
 |---|---|---|
-| B3-1 | 遷移の制約は、From のステータスごとの項目 `workflow/<From の値 ID>` に、許可する To の値 ID を `add`・`remove` で持つ。`Settings.Workflow`(`map[change.ID][]change.ID`)で読む。行がない・空の From は制限なし | 保存形式「変更記録」(`add`・`remove` の対象に「ワークフローの遷移」)。06「同時に編集したとき」(値を複数持つ項目は 1 つずつの追加と削除を両方生かす)。From と To の組ごとに勝ち負けが決まる |
+| B3-1 | 遷移の制約は、From のステータスごとの項目 `workflow/<From の値 ID>` に、許可する To の値 ID を `add`・`remove` で持つ。`Settings.Workflow`(`map[change.ID][]change.ID`)で読む。行がない・空の From は制限なし。B5 のプロジェクトの制約も同じ形(`project_rules/<P>/workflow/<From>` に To を `add`・`remove`)にする | 保存形式「変更記録」(`add`・`remove` の対象に「ワークフローの遷移」)。06「同時に編集したとき」(値を複数持つ項目は 1 つずつの追加と削除を両方生かす)。From と To の組ごとに勝ち負けが決まる |
 | B3-2 | 判定は `workspace.CheckTransition(s, from, to) error`(断りは 03 の文言)と `Settings.Allowed(from) ([]change.ID, bool)`。from と to が同じ、from が空、制限のない行は通す。許可先は、いまあるステータスだけを、ステータスの並びで数える。プロジェクトの制約(「両方が許す To」と「変更できる先がありません」)は B5 が引数を足して広げる | 03「遷移の制約」。B の未決 3(判定は domain の関数で、A の操作が呼ぶ) |
 | B3-3 | 画面のメニューで無効の理由を出すため、同じ判定を core の `transitionRefusal(settings, from, to)` にも置く(文言は Go と同じ)。A3b がステータスのメニューと Step のチェックから呼ぶ | B2 の R10(確認の前の断りを core にも置いた)と同じ分け方。03「ステータスのメニュー: 選べない項目を無効にし、理由を添える」 |
 | B3-4 | テンプレートは、テンプレートごとの項目 `templates/<T>/{name,kind,title,description}`、値 `templates/<T>/values/<プロパティ ID>`、子 `templates/<T>/children/<C>/{kind,title,description,rank}` と `templates/<T>/children/<C>/values/<プロパティ ID>`、Step `templates/<T>/steps/<S>/{parent,title,assignee,rank}`(`parent` は空ならもとになるアイテム、ほかは子の ID)で持つ。どれも `set`。削除は `delete` の行(`templates/<T>`、`templates/<T>/children/<C>`、`templates/<T>/steps/<S>`)。子を消すときは、その子の Step の行は書かない(読むときに持ち主のない Step を捨てる) | B の決定 2(1 つの値ごとに 1 項目)。06「同時に編集したとき」(テンプレートも項目ごとの後勝ち。編集と削除が重なったら編集を残す)。子の削除が同期で取り消されたとき、Step も一緒に戻るため |
@@ -48,7 +48,7 @@
 | B3-8 | Step の担当者は文字列で、`@parent`(親と同じ。初期値)、`@none`(未割り当て)、またはメンバーのログイン名。ログイン名に `@` は入らない | 03「持てるもの」の Step の担当者の 3 つ |
 | B3-9 | 編集の保存は、ダイアログの中身をまるごと送り、サーバーが、書く Tx の中で読み直したテンプレートと比べて、変わった項目の行だけを書く。値は、送られた項目を置き換え(`null` は外す)、送られなかった項目はいまの値を残す(非表示のプロパティの値を消さない)。種類で使わなくなった値だけを外す | 06(項目ごとの後勝ち)。03「編集して保存しても、ほかの項目の値は消えない」 |
 | B3-10 | 子と Step の並びは、保存のたびに、送られた並びで `rank.First` から `rank.After` を順に振り直し、値の変わった行だけ `rank` を書く。テンプレートの一覧の並びは内部 ID の順(作った順)。テンプレートの並べ替えはない | 03 に一覧の並べ替えがない。子と Step は「上へ」「下へ」で動かす(03「一覧と編集」) |
-| B3-11 | 名前は前後の空白を除いて保存し、完全一致で重複を断る(大文字と小文字・全角と半角は区別する)。タイトルの書き出し・子と Step のタイトルも前後の空白を除き、空の子と Step を捨てる | 03 冒頭「名前の重複」。03「タイトルが空の子と Step の行は、保存するときに捨てる」 |
+| B3-11 | 名前は前後の空白を除いて保存し、完全一致で重複を断る(大文字と小文字・全角と半角は区別する)。タイトルの書き出しは、入力どおりに保存する(「調査: 」の末尾の空白は、続きを打つための書き出しの一部)。子と Step のタイトルは前後の空白を除き、空なら捨てる | 03 冒頭「名前の重複」(空白を除くのは名前だけ)。03「タイトルが空の子と Step の行は、保存するときに捨てる」。子と Step のタイトルは、作るときにアイテムのタイトルとして整える(02「タイトル」)ので、除いても結果は同じ |
 | B3-12 | 種類ごとの既定は `template_default/<種類>`(`set`。「なし」は `null`)で持ち、`Settings.TemplateDefaults`(種類 → テンプレート ID)で読む。テンプレートの削除・種類の変更では、同じ保存で、そのテンプレートを指す既定を `null` にする | 03「種類ごとの既定」。保存形式の `project_rules/<P>/template_default/<種類>` と同じ形 |
 | B3-13 | テンプレートの作成・編集・削除のアクティビティの文は「テンプレート「X」を作成」「テンプレート「X」を編集」「テンプレート「X」を削除」で、編集の X は保存したあとの名前。トーストは作成「テンプレートを作成しました」、削除「テンプレートを削除しました」だけで、編集は出さない | 03 冒頭の表。表のトーストの欄は作成と削除の文しか持たず、編集に「作成しました」を出すと誤りになる |
 | B3-14 | 種類を変えて保存するとき、捨てる構成があれば確認ダイアログ「テンプレートを保存」(ボタン「保存」)に「子 N 件・Step M 件は、この種類では保存されません」を出す。0 件の方は書かない(「Step 3 件は、この種類では保存されません」) | 03「一覧と編集」。確認ダイアログの見出しとボタンは仕様にないので、ダイアログの動詞に合わせた |
@@ -58,6 +58,7 @@
 | B3-18 | 作成ダイアログでの適用の規則(タイトル・説明・値の入れ方、テンプレート由来の説明の見分け、使えるテンプレートと既定、「一緒に作るもの」の行と見出し)は、core の関数 `applyTemplate`・`usableTemplates`・`defaultTemplate`・`templateStructure` として持つ。作成ダイアログへのはめ込み、テンプレートでまとめて作る保存(番号・スプリント)は A3b | トラック B の小計画の一覧(「適用の規則を core の関数として持つ」)。A3 前半の計画の決定 1・5 |
 | B3-19 | 設定の画面は、テンプレートのタブを開くとき、Store のメンバーを読む(担当者の選択肢)。`createWorkspaceSettings` の deps に `listMembers` を足す | 03「持てるもの」(担当者は Store のメンバー)。プロジェクトの作成ダイアログと同じ口(`CatalogPort.listMembers`)を使う |
 | B3-20 | テンプレートの値の入力は、型ごとに `@hedgehug/ui` の `Select`・`Input`・`Checkbox` で作る(A3 前半の `PropertyField` はまだ develop にないので使わない)。チェック型は「指定しない」「オン」「オフ」のセレクトにする(値なしと「オフ」を分けるため) | 03「持てるもの」(値のない項目は置き換えない)。チェックボックス 1 つでは「指定しない」を表せない |
+| B3-21 | 仕様にない文言を 3 つ足す: 「テンプレートとして保存…」のダイアログの見出し「テンプレートとして保存」、テンプレートの値のセレクトの空の選択肢「指定しない」(優先度以外の単一選択・ユーザー型・チェックにも使う)、編集ダイアログの見出し「テンプレートの編集」(新規は「テンプレートを作成」) | 見出しはメニューの項目の動詞からとった。「指定しない」は 03 が優先度に使う語で、値なしの意味が同じ |
 
 ---
 
@@ -98,7 +99,7 @@
 | 1〜9 | サーバー(遷移の制約、テンプレートの型・ログ・検査、操作、アイテムから作る、削除の追従、yaml、API) | B3 の PR 1 本(共有部分を変えないので、共有の PR はない) |
 | 10〜16 | 画面と e2e | 同じ B3 の PR |
 
-Task 1 → 4 は順。Task 2 → 3 → 5 → 6 は順。Task 7 は 1〜3 のあと。Task 8 は 2 のあと。Task 9 は 4〜7 のあと。Task 10 は 9 のあと。11〜15 は 10 のあとならどの順でもよい(14 は画面を持たない)。16 は最後。
+Task は番号の順に 1 つずつ行う。依存: 2 は 1(`builder` の形)、3 は 2、4 は 1、5 は 3・4(`summary_test.go` を 4・5 の両方が直す)、6 は 5、7 は 1・3・4・5、8 は 1・3、9 は 4〜7、10 は 9、11・12 は 10、13・14・15 は 12(`TemplatesPanel`・`templateSummary`・`templateCreated`)、16 は最後。
 
 ## ファイルの地図
 
@@ -332,7 +333,7 @@ Expected: FAIL(`WorkflowField` が未定義)
 	Multi: func(f string) bool { return strings.HasSuffix(f, "/kinds") || strings.HasPrefix(f, workflowPrefix) },
 ```
 
-`settings_log.go`: `newBuilder` の `b.acc.CategoryDefaults = ...` の次に `b.acc.Workflow = map[change.ID][]change.ID{}`。`SettingsFromLog` の `for f, list := range st.Lists` の中で、`b.setKinds(f, list)` に続けて `b.setWorkflow(f, list)` を呼ぶ。
+`settings_log.go`: `SettingsFromLog` の `for f, list := range st.Lists` の中で、`b.setKinds(f, list)` に続けて `b.setWorkflow(f, list)` を呼ぶ。`Workflow` は `newBuilder` で作らず、`setWorkflow` が書くときにだけ作る(行がなければ nil のまま)。既存のテスト(`settings_test.go` の `reflect.DeepEqual(got, s)`、`stores_contract_values.go` の照合)が、読み直した設定を `DefaultSettings` と丸ごと比べているため。
 
 `workflow.go`:
 
@@ -364,9 +365,13 @@ func (b *builder) setWorkflow(f string, list []json.RawMessage) {
 	}
 	for _, raw := range list {
 		var to change.ID
-		if json.Unmarshal(raw, &to) == nil {
-			b.acc.Workflow[change.ID(from)] = append(b.acc.Workflow[change.ID(from)], to)
+		if json.Unmarshal(raw, &to) != nil {
+			continue
 		}
+		if b.acc.Workflow == nil {
+			b.acc.Workflow = map[change.ID][]change.ID{}
+		}
+		b.acc.Workflow[change.ID(from)] = append(b.acc.Workflow[change.ID(from)], to)
 	}
 }
 
@@ -639,7 +644,7 @@ func HoldsTemplateValue(p Property) bool {
 }
 ```
 
-`template_log.go`(builder の部品。`settings_log.go` の `builder` に `tpl *templateBuilder` を持たせ、`newBuilder` で `tpl: newTemplateBuilder()`、`b.acc.TemplateDefaults = map[string]change.ID{}` にする):
+`template_log.go`(builder の部品。`settings_log.go` の `builder` に `tpl *templateBuilder` を持たせ、`newBuilder` で `tpl: newTemplateBuilder()` にする。`Templates`・`TemplateDefaults` は、1 つもなければ nil のままにする(Task 1 の `Workflow` と同じ理由)):
 
 ```go
 package workspace
@@ -776,7 +781,7 @@ func putValue(m *map[change.ID]json.RawMessage, prop string, raw json.RawMessage
 
 // templates は、消したもの・名前のないもの・持ち主のないものを除いて並べた一覧。
 func (tb *templateBuilder) templates(deleted map[string]bool) []Template {
-	out := make([]Template, 0, len(tb.tpls))
+	var out []Template // 1 つもなければ nil
 	for id, t := range tb.tpls {
 		if t.Name == "" || deleted[TemplateField(id)] {
 			continue
@@ -819,8 +824,9 @@ func (tb *templateBuilder) liveSteps(t, parent change.ID, deleted map[string]boo
 ```
 
 `settings_log.go`:
-- `builder.set` の `switch` に 2 つの `case` を足す: `case len(parts) >= 3 && parts[0] == "templates": b.tpl.set(parts, raw)`。`case len(parts) == 2 && parts[0] == "template_default":` は、`slices.Contains(Kinds, parts[1])` のときだけ、値が `null` なら `delete(b.acc.TemplateDefaults, parts[1])`、そうでなければ `change.ID` に読んで入れる。
-- `builder.settings()` の末尾(`b.attachChoices` のあと)で `s.Templates = b.tpl.templates(b.deleted)` とし、続けて `maps.DeleteFunc(s.TemplateDefaults, func(_ string, id change.ID) bool { _, ok := s.Template(id); return !ok })`(消したテンプレートを指す既定を出さない)。
+- `builder.set` の `switch` に 2 つの `case` を足す: `case len(parts) >= 3 && parts[0] == "templates": b.tpl.set(parts, raw)`。`case len(parts) == 2 && parts[0] == "template_default":` は、`slices.Contains(Kinds, parts[1])` のときだけ、値が `null` なら `delete(b.acc.TemplateDefaults, parts[1])`、そうでなければ(map が nil なら作ってから)`change.ID` に読んで入れる。
+- `builder.settings()` の末尾(`b.attachChoices` のあと)で `s.Templates = b.tpl.templates(b.deleted)` とし、続けて `maps.DeleteFunc(s.TemplateDefaults, func(_ string, id change.ID) bool { _, ok := s.Template(id); return !ok })`(消したテンプレートを指す既定を出さない)。消した結果が空なら `s.TemplateDefaults = nil`。
+- `go test ./internal/app/...` も流し、照合テスト(`stores_contract_values.go`)が通ることを確かめる。
 - `settings_log.go` が 300 行を超えるなら、`set` の `templates` と `template_default` の分岐を `template_log.go` の `func (b *builder) setTemplate(parts []string, raw json.RawMessage) bool`(扱ったら true)に移し、`set` の先頭で呼ぶ。
 
 - [ ] **Step 4: 通るのを確かめる**
@@ -879,7 +885,7 @@ func raw(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
 
 const envProp change.ID = "01P0000000000000000000000E"
 
-// 名前とタイトルの前後の空白を除き、空の Step を捨て、種類で使わない値・持たない値・持てない構成を捨てる。
+// 名前の前後の空白を除き(タイトルの書き出しはそのまま)、空の Step を捨て、種類で使わない値・持たない値・持てない構成を捨てる。
 func TestNormalizeTemplate(t *testing.T) {
 	s := workspace.DefaultSettings(seqIDs())
 	s.Properties = append(s.Properties, workspace.Property{ID: envProp, Key: "env", Name: "環境", Type: workspace.TypeText, Kinds: []string{"Story"}})
@@ -892,7 +898,7 @@ func TestNormalizeTemplate(t *testing.T) {
 		Children: []workspace.TemplateChild{{Kind: "Story", Title: "捨てる"}},
 	}
 	got := workspace.NormalizeTemplate(s, in)
-	if got.Name != "調査" || got.Title != "調査:" {
+	if got.Name != "調査" || got.Title != " 調査: " {
 		t.Errorf("name/title = %q %q", got.Name, got.Title)
 	}
 	if len(got.Values) != 1 || got.Values["priority"] == nil {
@@ -1062,11 +1068,11 @@ var childKinds = []string{"Story", "Task", "Bug"}
 // hasSteps は、もとになるアイテムが Step を持てる種類か。
 func hasSteps(kind string) bool { return slices.Contains(childKinds, kind) }
 
-// NormalizeTemplate は、保存する形にする(B3-6・B3-11): 名前とタイトルの前後の空白を除き、
+// NormalizeTemplate は、保存する形にする(B3-6・B3-11): 名前の前後の空白を除き(タイトルの書き出しはそのまま)、
 // タイトルが空の子と Step を捨て、種類で持てない構成と、持たない・種類で使わないプロパティの値を捨てる。
 // Step の担当者が空なら「親と同じ」。
 func NormalizeTemplate(s Settings, t Template) Template {
-	t.Name, t.Title = NormalizeName(t.Name), strings.TrimSpace(t.Title)
+	t.Name = NormalizeName(t.Name)
 	t.Values = keepValues(s, t.Kind, t.Values)
 	steps, cs := t.Steps, t.Children
 	t.Steps, t.Children = nil, nil
@@ -1599,7 +1605,7 @@ func TestCreateTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved, ok := settingsOf(t, s, w.ID).Template(got.ID)
-	if !ok || saved.Name != "リリース作業" || saved.Title != "リリース" || len(saved.Children) != 2 ||
+	if !ok || saved.Name != "リリース作業" || saved.Title != "リリース " || len(saved.Children) != 2 ||
 		len(saved.Children[0].Steps) != 1 || saved.Children[0].Steps[0].Assignee != workspace.StepParent ||
 		len(saved.Values) != 1 {
 		t.Errorf("saved = %+v", saved)
@@ -2502,9 +2508,9 @@ func workflowNode(s workspace.Settings) *yaml.Node {
 			ids = append(ids, string(id))
 			names = append(names, valueName(s.Statuses, id))
 		}
-		k := key(string(v.ID))
-		k.LineComment = comment(v.Name + " → " + strings.Join(names, "・"))
-		kv = append(kv, k, flowSeq(ids...))
+		seq := flowSeq(ids...)
+		seq.LineComment = comment(v.Name + " → " + strings.Join(names, "・")) // initial_status と同じく値の節に注釈
+		kv = append(kv, key(string(v.ID)), seq)
 	}
 	return mapping(len(kv) == 0, kv...)
 }
@@ -3796,3 +3802,4 @@ git commit -m "test(e2e): ワークフローとテンプレートの通しのテ
 - [ ] トラックの PR を 1 本出す(向き先 develop、タイトル「feat: トラック B3(ワークフローとテンプレート)」)。本文に、できること・決めたこと(B3-1〜B3-20)・A3b・A4・B4・B5・C・E への申し送り(漏れの表の「範囲の外」の行)・確認の結果を書く。force push は拒否されるので、載せ直すときは別名のブランチで出す。
 - [ ] A3b への申し送り: `transitionRefusal`・`CheckTransition` を呼ぶ場所(ステータスのメニュー・Step のチェック・`SetProperty` のステータス・`CheckStep`)、作成ダイアログで `usableTemplates`・`defaultTemplate`・`applyTemplate`・`templateStructure` を使うこと、テンプレートでまとめて作る保存(番号は深さ優先、スプリントはもとだけ、子の優先度はテンプレートの値か初期優先度、Step は初期優先度、担当者の「親と同じ」「未割り当て」)、「続けて作成」で説明を空にしたあとは入れ直さないこと。
 - [ ] A4 への申し送り: 詳細パネルのメニューの枠は B3 が作った(B3-17)。ほかの項目はそこへ足す。説明を足すときに、アイテムから作るテンプレートへ説明を写す。削除済みの子を写さない。
+- [ ] A3a(別のセッションで進行中)への申し送り: `WorkspaceSettings` に必須の欄 `workflow`・`templates`・`templateDefaults` が増えた。あとから develop を取り込む側で、テスト用の設定(A3a の `features/items/settings.test-util.ts` など)に 3 つの欄を足さないと `pnpm check` が落ちる。
