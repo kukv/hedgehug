@@ -92,6 +92,10 @@ export interface CreateProject {
 }
 
 export interface CreateWorkspace {
+  /**
+     * 1 行。改行は入れられない
+     * @pattern ^[^\r\n]*$
+     */
   name: string;
   prefix: string;
 }
@@ -184,6 +188,10 @@ export interface Project {
 }
 
 export interface RenameWorkspace {
+  /**
+     * 1 行。改行は入れられない
+     * @pattern ^[^\r\n]*$
+     */
   name: string;
 }
 
@@ -192,10 +200,47 @@ export interface SystemInfo {
   version: string;
 }
 
+/**
+ * ステータスの分類(todo・doing・done・canceled)
+ */
+export type WorkspaceValueCategory = typeof WorkspaceValueCategory[keyof typeof WorkspaceValueCategory];
+
+
+export const WorkspaceValueCategory = {
+  todo: 'todo',
+  doing: 'doing',
+  done: 'done',
+  canceled: 'canceled',
+} as const;
+
+export type WorkspaceValueColor = typeof WorkspaceValueColor[keyof typeof WorkspaceValueColor];
+
+
+export const WorkspaceValueColor = {
+  gray: 'gray',
+  slate: 'slate',
+  brown: 'brown',
+  red: 'red',
+  rose: 'rose',
+  pink: 'pink',
+  magenta: 'magenta',
+  purple: 'purple',
+  indigo: 'indigo',
+  blue: 'blue',
+  sky: 'sky',
+  cyan: 'cyan',
+  teal: 'teal',
+  green: 'green',
+  olive: 'olive',
+  amber: 'amber',
+  yellow: 'yellow',
+  orange: 'orange',
+} as const;
+
 export interface WorkspaceValue {
   /** ステータスの分類(todo・doing・done・canceled) */
-  category?: string;
-  color: string;
+  category?: WorkspaceValueCategory;
+  color: WorkspaceValueColor;
   id: string;
   name: string;
 }

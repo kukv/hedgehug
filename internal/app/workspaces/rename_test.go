@@ -53,17 +53,20 @@ func TestRename(t *testing.T) {
 	}
 }
 
-// 改行の入った名前は 1 行にして保存する(03)。
-func TestRenameFoldsNewline(t *testing.T) {
+// 名前の途中の空白は残す。「Web  App」は既存の「Web App」と別の名前(03「名前の重複」)。
+func TestRenameKeepsInnerSpaces(t *testing.T) {
 	s := setup(t)
+	if _, err := s.Create(t.Context(), store, "Web App", "AP"); err != nil {
+		t.Fatal(err)
+	}
 	w, err := s.Create(t.Context(), store, "Web", "HH")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Rename(t.Context(), store, w.ID, " Web\n  App \r\n "); err != nil {
+	if err := s.Rename(t.Context(), store, w.ID, " Web  App "); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := stored(t, s, w.ID); got.Name != "Web App" {
+	if got, _ := stored(t, s, w.ID); got.Name != "Web  App" {
 		t.Errorf("name = %q", got.Name)
 	}
 }

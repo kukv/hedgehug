@@ -97,6 +97,18 @@ func TestNotFound(t *testing.T) {
 	}
 }
 
+// 改行の入った名前は 1 行でないので 422 で断る(プロジェクトのタイトルと同じ)。
+func TestNewlineInNameIs422(t *testing.T) {
+	api := newAPI(t)
+	if res := api.Post(base, map[string]string{"name": "Web\nApp", "prefix": "HH"}); res.Code != http.StatusUnprocessableEntity {
+		t.Errorf("create: %d %s", res.Code, res.Body)
+	}
+	id := create(t, api, "Web", "HH")
+	if res := api.Put(base+"/"+id+"/name", map[string]string{"name": "Web\r\nApp"}); res.Code != http.StatusUnprocessableEntity {
+		t.Errorf("rename: %d %s", res.Code, res.Body)
+	}
+}
+
 func TestRenameAndPrefixRefusalsAre422WithTheSpecText(t *testing.T) {
 	api := newAPI(t)
 	id := create(t, api, "Web", "HH")

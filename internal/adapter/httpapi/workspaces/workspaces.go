@@ -31,7 +31,7 @@ type oneOutput struct{ Body WorkspaceSummary }
 
 // CreateWorkspace は、ワークスペースの作成の本文。
 type CreateWorkspace struct {
-	Name   string `json:"name"`
+	Name   string `json:"name" pattern:"^[^\\r\\n]*$" doc:"1 行。改行は入れられない"`
 	Prefix string `json:"prefix"`
 }
 
@@ -42,7 +42,7 @@ type createInput struct {
 
 // RenameWorkspace は、名前の変更の本文。
 type RenameWorkspace struct {
-	Name string `json:"name"`
+	Name string `json:"name" pattern:"^[^\\r\\n]*$" doc:"1 行。改行は入れられない"`
 }
 
 type renameInput struct {

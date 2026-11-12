@@ -17,8 +17,8 @@ type WorkspaceSummary struct {
 type WorkspaceValue struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
-	Color    string `json:"color"`
-	Category string `json:"category,omitempty" doc:"ステータスの分類(todo・doing・done・canceled)"`
+	Color    string `json:"color" enum:"gray,slate,brown,red,rose,pink,magenta,purple,indigo,blue,sky,cyan,teal,green,olive,amber,yellow,orange"`
+	Category string `json:"category,omitempty" enum:"todo,doing,done,canceled" doc:"ステータスの分類(todo・doing・done・canceled)"`
 }
 
 // WorkspaceProperty は、プロパティの定義。

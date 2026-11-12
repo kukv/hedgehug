@@ -104,6 +104,8 @@ components:
       additionalProperties: false
       properties:
         name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
           type: string
         prefix:
           type: string
@@ -263,6 +265,8 @@ components:
       additionalProperties: false
       properties:
         name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
           type: string
       required:
         - name
@@ -381,8 +385,32 @@ components:
       properties:
         category:
           description: ステータスの分類(todo・doing・done・canceled)
+          enum:
+            - todo
+            - doing
+            - done
+            - canceled
           type: string
         color:
+          enum:
+            - gray
+            - slate
+            - brown
+            - red
+            - rose
+            - pink
+            - magenta
+            - purple
+            - indigo
+            - blue
+            - sky
+            - cyan
+            - teal
+            - green
+            - olive
+            - amber
+            - yellow
+            - orange
           type: string
         id:
           type: string

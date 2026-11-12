@@ -56,18 +56,21 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// 名前の途中の空白と改行は 1 つの空白にまとめ、1 行の名前で保存する(03)。
-func TestCreateFoldsNewlineInName(t *testing.T) {
+// 保存する名前は前後の空白だけを除く。途中の空白は残すので、「Web  App」は「Web App」と別の名前(03「名前の重複」)。
+func TestCreateKeepsInnerSpacesInName(t *testing.T) {
 	s := setup(t)
-	w, err := s.Create(t.Context(), store, " Web\n  App \r\n ", "HH")
+	if _, err := s.Create(t.Context(), store, "Web App", "AP"); err != nil {
+		t.Fatal(err)
+	}
+	w, err := s.Create(t.Context(), store, "  Web  App ", "HH")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Name != "Web App" {
+	if w.Name != "Web  App" {
 		t.Errorf("name = %q", w.Name)
 	}
-	// 同じ名前を 1 行で入れても重複になる。
-	_, err = s.Create(t.Context(), store, "Web App", "API")
+	// 完全に一致する名前は前後の空白を除いても重複になる。
+	_, err = s.Create(t.Context(), store, " Web  App", "API")
 	rejected(t, err, "この Store には同じ名前のワークスペースがあります")
 }
 

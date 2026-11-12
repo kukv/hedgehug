@@ -6,8 +6,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
-// NormalizeName は、保存する名前の形(連続する空白と改行を 1 つの空白にまとめ、前後の空白を除く。03「名前の重複」)。
-func NormalizeName(s string) string { return strings.Join(strings.Fields(s), " ") }
+// NormalizeName は、保存する名前の形(前後の空白だけを除く。途中の空白は残す。03「名前の重複」)。
+func NormalizeName(s string) string { return strings.TrimSpace(s) }
 
 // NormalizePrefix は、接頭辞の形(前後の空白を除いて大文字。03「接頭辞」)。
 func NormalizePrefix(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }

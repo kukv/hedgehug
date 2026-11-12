@@ -9,7 +9,7 @@ import (
 )
 
 func TestNormalize(t *testing.T) {
-	if got := workspace.NormalizeName("  a \n\t b  "); got != "a b" {
+	if got := workspace.NormalizeName("  a \n\t b  "); got != "a \n\t b" {
 		t.Errorf("NormalizeName = %q", got)
 	}
 	if got := workspace.NormalizePrefix(" hh "); got != "HH" {
