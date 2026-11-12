@@ -40,12 +40,12 @@ A2 の計画の Global Constraints をすべて引き継ぐ。再掲する:
 
 | 仕様の箇所 | 作るトラック |
 |---|---|
-| コマンドパレットの「すべての Store を同期」 | コマンドパレットのトラック(E) |
-| 設定「一般」の「すべて同期」、設定「Store」の「今すぐ同期」と同期の状況 | G |
-| サイドバーの Store メニューの「今すぐ同期」(remote なしは無効) | Store メニューを作るトラック(G) |
+| コマンドパレットの「すべての Store を同期」 | コマンドパレットを作るトラック(A5) |
+| 設定「一般」の「すべて同期」、設定「Store」の「今すぐ同期」と同期の状況 | 設定のタブ「一般」「Store」を作るトラック |
+| サイドバーの Store メニューの「今すぐ同期」(remote なしは無効) | サイドバーの Store メニューを作るトラック |
 | 同期カードの時計のずれの行 | C5 |
 | 他の書き手との重なりのトースト(削除の取り消し) | C3 |
-| 待つ条件のうち「ドラッグしているとき」「説明やコメントを編集しているとき」「書きかけがあるとき」 | ドラッグ(A4)、説明・コメントの入力欄(A3 以降)を作るトラック。決定 S9 の `holdReasons` に足す |
+| 待つ条件のうち「ドラッグしているとき」「説明やコメントを編集しているとき」「書きかけがあるとき」 | ドラッグ、説明・コメントの入力欄を作るトラック。決定 S9 の `holdReasons` に足す |
 | 「GitHub を使わない場合」の同期の無効の入口(D2 画面の決定 S2 で C2 画面に回したもの) | G。いま同期の入口は同期カードだけで、カードは remote がある Store があるときだけ出る(06)。remote を足す入口(G)と一緒に作る |
 
 **本物のアプリでの見え方:** 本物の組み立ては `port.SyncTargets` に Store のない実装を使う(決定 C2-2)。そのため、G が入るまでは、本物のアプリでは同期カードもオフラインの帯も出ない(どちらも「remote がある表示中の Store」が要る)。e2e のビルドは 2 つの Store(e2e・readonly)に remote を持つので、カードが出る。
@@ -65,8 +65,9 @@ A2 の計画の Global Constraints をすべて引き継ぐ。再掲する:
 | S7 | 相対時間は 01 の表どおり(たった今・N 分前・N 時間前・N 日前・日付)。7 日以上は `formatDay`(今年なら M/D)。カードの相対時間と 24 時間の判定は 30 秒ごとに数え直す | 01「日付と時刻」。06(経過時間で判定) |
 | S8 | 「Store ごとの同期状態」は、同期カードの要約(ボタン)を押すと開くメニュー。行は「{Store 名}」と「{要約} · {相対時間 または 未同期}」。24 時間以上の行は相対時間を警告の色にする。行を選ぶと、その Store を同期する(1 つの Store の同期のトースト)。Esc・外のクリックで閉じる。ui の `Menu` は 1 行に 1 色の補足しか出せないので、カードの中に専用のメニューを持つ | 06「同期の状態の表示」 |
 | S9 | 自動の同期と反映を待つ条件は、いま画面にあるものだけを見る: ダイアログ(`[aria-modal="true"]`)、メニュー(`[role="menu"]`)、入力欄にフォーカス(`input`・`textarea`・`select`・`[contenteditable="true"]`)。app の `holdReasons`(関数の配列)に並べ、ドラッグ・説明やコメント・書きかけは、それを作るトラックが足す | 06「自動で同期する」の 5 つの条件のうち、いまある部品の 3 つ。残りは部品がない |
-| S10 | 反映: `store` の出来事を受けたら、Store の一覧(`catalog.load`)、開いているプロジェクトの画面(`projectScreen.reload`)、開いている詳細パネル(`detail.reload`)を読み直す。`sync` の出来事なら同期の状態の一覧を読み直す。待つ条件にあるあいだと見えていないあいだは溜め、条件が解けたら(0.5 秒ごとに確かめる)種類ごとに 1 回で読み直す。見えるようになったときも同じ | 06「反映を待つとき」「反映するもの」。決定 C2-20 |
+| S10 | 反映: `store` の出来事を受けたら、Store の一覧(`catalog.load`)、開いているプロジェクトの画面(`projectScreen.reload`)、開いている詳細パネル(`detail.reload`)と、同期の状態の一覧(保存で未送信の数が変わる)を読み直す。`sync` の出来事なら同期の状態の一覧だけを読み直す。待つ条件にあるあいだは溜め、条件が解けたら(0.5 秒ごとに確かめる)種類ごとに 1 回で読み直す | 06「反映を待つとき」「反映するもの」。決定 C2-20 |
 | S11 | `GET /api/events` につないだとき(つなぎ直しを含む)は、溜めていなくても、両方の種類を 1 回読み直す。切れたら 1 秒あとにつなぎ直し、続けて失敗するたびに 2 倍(最大 10 秒)にする | サーバーは溢れた出来事を落とす(events.go の `buffer`)。切れているあいだの変化も取りこぼさない |
+| S22 | `GET /api/events` は、タブが見えているあいだだけつなぐ。見えなくなったら切り、見えるようになったらつなぎ直す(S11 で全部を読み直す) | サーバーは loopback の HTTP/1.1 で、ブラウザは 1 つの宛先に同時に 6 本ほどしかつながない。タブごとに流れを持ち続けると、6 つほどのタブで API の呼び出しが詰まる。06「見えていないブラウザのタブは、見えるようになったときに反映する」 |
 | S12 | 手動の同期の結果は、待たずに反映する(終わったら、溜めているかを問わず、両方の種類を読み直す)。詳細パネルのタイトルの入力欄は、フォーカスがあるあいだは読み直しで書き換えない(別のアイテムを開いたときは書き換える) | 06「手動の同期の結果は、待たずに反映する。ただし、編集中の入力欄の内容は書き換えない」 |
 | S13 | 手動の同期のトースト: 1 つの Store は、`synced`・`skipped` を通常、`failed` をエラーで `message` を出し、`mirrorWarning` があれば続けて警告のトーストを出す。「すべて同期」は、`lines` を改行でつないで 1 つのトーストにし、`failed` ならエラー、`synced`・`nothing` は通常 | 06「同期の結果」「手動で同期する」。決定 C2-21。文言はサーバー(domain/syncstatus)が作り、画面は組み立てない |
 | S14 | 警告のトーストは、警告の色(`--c-amber-*`)で、通常と同じ 4.5 秒で消える。トーストの文の改行は、そのまま行にする | 06 は「警告のトースト」と言うが、01 のトーストは通常とエラーの 2 つ。消える時間は 01 の通常に合わせ、色だけ分ける |
@@ -392,7 +393,8 @@ export type SyncStoreResult = { result: "synced" | "skipped" | "failed"; message
 export type SyncAllResult = { result: "synced" | "failed" | "nothing"; lines: string[] }
 export type SyncEventKind = "store" | "sync"
 // port/sync.ts
-export interface SyncPort { status(): Promise<SyncStatus>; syncStore(storeId: string): Promise<SyncStoreResult>; syncAll(): Promise<SyncAllResult>; hold(tab: string, hold: boolean): Promise<void>; network(tab: string, online: boolean): Promise<void>; watch(on: { open(): void; event(kind: SyncEventKind): void }, signal: AbortSignal): Promise<void> }
+export interface SyncPort { status(): Promise<SyncStatus>; syncStore(storeId: string): Promise<SyncStoreResult>; syncAll(): Promise<SyncAllResult>; hold(tab: string, hold: boolean): Promise<void>; network(tab: string, online: boolean): Promise<void>; watch(on: { open(): void; event(kind: SyncEventKind): void }): Watching }
+export interface Watching { done: Promise<void>; stop(): void }
 // features/sync/card.ts
 export interface SyncRow { storeId: string; name: string; summary: string; time: string; stale: boolean }
 export interface SyncCard { summary: string; error: boolean; last: string; stale: string | null; rows: SyncRow[] }
@@ -451,6 +453,13 @@ export type SyncEventKind = "store" | "sync";
 ```ts
 import type { SyncAllResult, SyncEventKind, SyncStatus, SyncStoreResult } from "../model/sync";
 
+// Watching は、読み続けている出来事の流れ。done は、流れが終わったか stop で止めたら解決し、つなげなかった・
+// 途中で切れたら reject する。core は DOM の AbortSignal を持たないので、止める関数で表す。
+export interface Watching {
+  done: Promise<void>;
+  stop(): void;
+}
+
 // 同期の口。実装は api パッケージにある。存在しない Store の同期は NotFound を投げる。
 export interface SyncPort {
   status(): Promise<SyncStatus>;
@@ -460,9 +469,8 @@ export interface SyncPort {
   hold(tab: string, hold: boolean): Promise<void>;
   // network は、このタブがネットワークにつながっているかを知らせる(決定 C2-18b)。
   network(tab: string, online: boolean): Promise<void>;
-  // watch は、画面への反映の出来事を受け続ける。つながったら open を呼ぶ。流れが終わったら解決し、
-  // つなげなければ投げる。signal で止める(止めたときは解決する)。
-  watch(on: { open(): void; event(kind: SyncEventKind): void }, signal: AbortSignal): Promise<void>;
+  // watch は、画面への反映の出来事を受け始める。つながったら open を呼ぶ。
+  watch(on: { open(): void; event(kind: SyncEventKind): void }): Watching;
 }
 ```
 
@@ -718,7 +726,7 @@ export type {
   SyncStoreResult,
   SyncStoreStatus,
 } from "./model/sync";
-export type { SyncPort } from "./port/sync";
+export type { SyncPort, Watching } from "./port/sync";
 ```
 
 - [ ] **Step 5: 通るのを確かめる**
@@ -829,7 +837,7 @@ export function fakeSyncPort(over: Partial<SyncPort> = {}): SyncPort & { calls: 
     syncAll: async () => ({ result: "synced", lines: [] }),
     hold: async () => {},
     network: async () => {},
-    watch: async () => {},
+    watch: () => ({ done: Promise.resolve(), stop: () => {} }),
     ...over,
   };
   return {
@@ -839,7 +847,7 @@ export function fakeSyncPort(over: Partial<SyncPort> = {}): SyncPort & { calls: 
     syncAll: () => (calls.push("syncAll"), port.syncAll()),
     hold: (tab, hold) => (calls.push(`hold ${tab} ${hold}`), port.hold(tab, hold)),
     network: (tab, online) => (calls.push(`network ${tab} ${online}`), port.network(tab, online)),
-    watch: (on, signal) => (calls.push("watch"), port.watch(on, signal)),
+    watch: (on) => (calls.push("watch"), port.watch(on)),
   };
 }
 ```
@@ -1129,7 +1137,9 @@ function manualTimer() {
     },
     clear: (h) => void pending.delete(h as number),
   };
+  // advance は、先に待っている処理(失敗した watch のあとの timer.set ほか)を流してから時間を進める。
   const advance = async (ms: number) => {
+    await flush();
     now += ms;
     for (const [h, p] of [...pending].sort((a, b) => a[1].at - b[1].at)) {
       if (p.at <= now) {
@@ -1142,7 +1152,10 @@ function manualTimer() {
   return { timer, advance };
 }
 
-const flush = () => new Promise((r) => setTimeout(r, 0));
+// flush は、マイクロタスクを回す(core は setTimeout の型を持たない)。
+const flush = async () => {
+  for (let i = 0; i < 50; i++) await Promise.resolve();
+};
 
 // stream は、watch の流れを外から動かす。open・send・end・fail で流れを進める。
 function stream() {
@@ -1150,18 +1163,27 @@ function stream() {
   let finish: (() => void) | undefined;
   let error: ((e: unknown) => void) | undefined;
   let connects = 0;
-  const watch: SyncPort["watch"] = (o, signal) => {
+  let stopped = false;
+  const watch: SyncPort["watch"] = (o) => {
     connects += 1;
     on = o;
-    return new Promise<void>((resolve, reject) => {
+    stopped = false;
+    const done = new Promise<void>((resolve, reject) => {
       finish = resolve;
       error = reject;
-      signal.addEventListener("abort", () => resolve());
     });
+    return {
+      done,
+      stop: () => {
+        stopped = true;
+        finish?.();
+      },
+    };
   };
   return {
     watch,
     connects: () => connects,
+    aborted: () => stopped,
     open: () => on?.open(),
     send: (k: SyncEventKind) => on?.event(k),
     end: () => finish?.(),
@@ -1233,19 +1255,32 @@ describe("createReflection (06「画面への反映」)", () => {
     expect(t.applied).toEqual([["store", "sync"], ["store", "sync"]]);
   });
 
-  it("waits while the tab is not visible and applies on wake", async () => {
+  it("drops the stream while hidden and reloads everything when shown (決定 S22)", async () => {
     const t = setup();
     t.r.start();
     t.s.open();
     await t.advance(0);
     t.show(false);
-    t.s.send("sync");
-    await t.advance(5000);
-    expect(t.applied).toHaveLength(1);
+    t.r.wake();
+    await t.advance(0);
+    expect(t.s.aborted()).toBe(true);
+    await t.advance(20_000);
+    expect(t.s.connects()).toBe(1);
     t.show(true);
     t.r.wake();
     await t.advance(0);
-    expect(t.applied.at(-1)).toEqual(["sync"]);
+    expect(t.s.connects()).toBe(2);
+    t.s.open();
+    await t.advance(0);
+    expect(t.applied).toEqual([["store", "sync"], ["store", "sync"]]);
+  });
+
+  it("does not connect while it starts hidden", async () => {
+    const t = setup();
+    t.show(false);
+    t.r.start();
+    await t.advance(5000);
+    expect(t.s.connects()).toBe(0);
   });
 
   it("applies now even while held (手動の同期。決定 S12)", async () => {
@@ -1299,7 +1334,7 @@ Expected: FAIL(`Failed to resolve import "./reflection"`)
 
 ```ts
 import type { SyncEventKind } from "../../model/sync";
-import type { SyncPort } from "../../port/sync";
+import type { SyncPort, Watching } from "../../port/sync";
 import type { Timer } from "../toasts/toasts";
 
 // 画面への反映(06「画面への反映」「反映を待つとき」。決定 S10〜S12)。出来事を種類ごとに溜め、待つ条件に
@@ -1317,11 +1352,12 @@ export interface ReflectionDeps {
 }
 
 export interface Reflection {
-  // start は、出来事を受け始め、止める関数を返す。
+  // start は、出来事を受け始め(見えていれば、つなぐ)、止める関数を返す。
   start(): () => void;
   // now は、待つ条件を問わず、すべてをすぐに読み直す(手動の同期のあと)。
   now(): Promise<void>;
-  // wake は、待つ条件が解けたかもしれないとき(見えるようになったときほか)に、すぐ確かめる。
+  // wake は、見えるか・待つ条件が変わったかもしれないときに呼ぶ。見えていればつなぎ、見えていなければ
+  // 切り(決定 S22)、溜めたものを確かめる。
   wake(): void;
 }
 
@@ -1361,42 +1397,71 @@ export function createReflection(deps: ReflectionDeps): Reflection {
     void flush();
   }
 
+  let stopped = true;
+  let current: { w: Watching; dropped: boolean } | undefined;
+  let again: unknown;
+  let backoff = firstBackoff;
+
+  // connect は、流れがなく、つなぎ直しを待っていなければ、つなぐ。切れたら、見えているあいだだけつなぎ直す。
+  function connect() {
+    if (stopped || current || again !== undefined) return;
+    const c = {
+      w: deps.port.watch({
+        open: () => {
+          backoff = firstBackoff;
+          add(...order);
+        },
+        event: (k) => add(k),
+      }),
+      dropped: false,
+    };
+    current = c;
+    void (async () => {
+      try {
+        await c.w.done;
+      } catch {
+        // つなげなかった・切れた。下でつなぎ直す。
+      }
+      if (current === c) current = undefined;
+      if (c.dropped || stopped || !deps.visible()) return;
+      again = deps.timer.set(() => {
+        again = undefined;
+        connect();
+      }, backoff);
+      backoff = Math.min(backoff * 2, maxBackoff);
+    })();
+  }
+
+  function disconnect() {
+    if (current) {
+      current.dropped = true;
+      current.w.stop();
+    }
+    current = undefined;
+    if (again !== undefined) deps.timer.clear(again);
+    again = undefined;
+  }
+
   return {
     start() {
-      const abort = new AbortController();
-      let backoff = firstBackoff;
-      let again: unknown;
-      const connect = async () => {
-        try {
-          await deps.port.watch(
-            {
-              open: () => {
-                backoff = firstBackoff;
-                add(...order);
-              },
-              event: (k) => add(k),
-            },
-            abort.signal,
-          );
-        } catch {
-          // つなげなかった・切れた。下でつなぎ直す。
-        }
-        if (abort.signal.aborted) return;
-        again = deps.timer.set(() => void connect(), backoff);
-        backoff = Math.min(backoff * 2, maxBackoff);
-      };
-      void connect();
+      stopped = false;
+      if (deps.visible()) connect();
       return () => {
-        abort.abort();
-        if (again !== undefined) deps.timer.clear(again);
+        stopped = true;
+        disconnect();
         if (retry !== undefined) deps.timer.clear(retry);
+        retry = undefined;
       };
     },
     async now() {
       for (const k of order) pending.delete(k);
       await deps.apply([...order]);
     },
-    wake: () => void flush(),
+    wake() {
+      if (deps.visible()) connect();
+      else disconnect();
+      void flush();
+    },
   };
 }
 ```
@@ -1781,10 +1846,8 @@ describe("watch", () => {
     vi.stubGlobal("fetch", fetch);
     setToken("tok");
     const seen: string[] = [];
-    await createSyncPort().watch(
-      { open: () => seen.push("open"), event: (k) => seen.push(k) },
-      new AbortController().signal,
-    );
+    await createSyncPort().watch({ open: () => seen.push("open"), event: (k) => seen.push(k) })
+      .done;
     expect(seen).toEqual(["open", "store", "sync"]);
     const init = fetch.mock.calls[0]?.[1] as RequestInit;
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer tok");
@@ -1792,21 +1855,22 @@ describe("watch", () => {
 
   it("throws when the server refuses", async () => {
     respond(401, undefined);
-    await expect(
-      createSyncPort().watch({ open: () => {}, event: () => {} }, new AbortController().signal),
-    ).rejects.toThrow();
+    await expect(createSyncPort().watch({ open: () => {}, event: () => {} }).done).rejects.toThrow();
   });
 
   it("resolves when stopped", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => {
-        throw Object.assign(new Error("aborted"), { name: "AbortError", signal: init.signal });
-      }),
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+          }),
+      ),
     );
-    const abort = new AbortController();
-    abort.abort();
-    await expect(createSyncPort().watch({ open: () => {}, event: () => {} }, abort.signal)).resolves.toBeUndefined();
+    const w = createSyncPort().watch({ open: () => {}, event: () => {} });
+    w.stop();
+    await expect(w.done).resolves.toBeUndefined();
   });
 });
 ```
@@ -1830,7 +1894,7 @@ export function authHeader(): string {
 `web/packages/api/src/sync.ts`:
 
 ```ts
-import type { SyncEventKind, SyncPort } from "@hedgehug/core";
+import type { SyncEventKind, SyncPort, Watching } from "@hedgehug/core";
 import { call } from "./errors";
 import { ApiError, authHeader } from "./fetcher";
 import {
@@ -1848,10 +1912,7 @@ import {
 const kindOf = (name: string): SyncEventKind | null =>
   name === "store" || name === "sync" ? name : null;
 
-async function watch(
-  on: Parameters<SyncPort["watch"]>[0],
-  signal: AbortSignal,
-): Promise<void> {
+async function read(on: Parameters<SyncPort["watch"]>[0], signal: AbortSignal): Promise<void> {
   let res: Response;
   try {
     res = await fetch(getWatchEventsUrl(), {
@@ -1890,6 +1951,12 @@ async function watch(
     if (signal.aborted) return;
     throw e;
   }
+}
+
+// watch は、止めたら解決する流れを返す(core の Watching)。
+function watch(on: Parameters<SyncPort["watch"]>[0]): Watching {
+  const abort = new AbortController();
+  return { done: read(on, abort.signal), stop: () => abort.abort() };
 }
 
 export function createSyncPort(): SyncPort {
@@ -2157,7 +2224,7 @@ export interface SyncCardView {
       aria-expanded={open}
       onclick={() => (open = !open)}>{card.summary}</button
     >
-    <span title={hint}><Button size="sm" onclick={onsyncall}>すべて同期</Button></span>
+    <Button size="sm" title={hint} onclick={onsyncall}>すべて同期</Button>
   </div>
   <p class="line">{card.last}</p>
   {#if card.stale}
@@ -2401,12 +2468,12 @@ const syncPort = createSyncPort();
 
 // 画面への反映(06「画面への反映」)。store は一覧・開いているプロジェクト・詳細パネル、sync は同期の状態。
 // 失敗は出さない(A2 の決定 29)。
+// 同期の状態は、どちらの種類でも読み直す(保存で未送信の数が変わる。決定 S10)。
 async function reflect(kinds: SyncEventKind[]) {
-  const jobs: Promise<unknown>[] = [];
+  const jobs: Promise<unknown>[] = [sync.load()];
   if (kinds.includes("store")) {
     jobs.push(catalog.load().then(() => Promise.all([projectScreen.reload(), detail.reload()])));
   }
-  if (kinds.includes("sync")) jobs.push(sync.load());
   await Promise.allSettled(jobs);
 }
 
@@ -2440,8 +2507,9 @@ export const syncNow = readonly(now);
 const onlineState = writable(isOnline());
 export const online = readonly(onlineState);
 
-// startSync は、出来事の受け取り・知らせ・時刻の更新を始める。App が 1 回呼ぶ。
-export function startSync() {
+// startSync は、出来事の受け取り・知らせ・時刻の更新を始める。最初の一覧を読んだあとに 1 回呼ぶ(つないだときの
+// 読み直しが最初の解決より先に走らないように)。
+function startSync() {
   reflection.start();
   void sync.load();
   const recheck = () => {
@@ -2460,6 +2528,16 @@ export function startSync() {
   window.addEventListener("online", network);
   window.addEventListener("offline", network);
 }
+```
+
+ファイルの末尾の `void catalog.load().then(() => screen.start());` を次にする:
+
+```ts
+// 一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID を解決できない)。
+void catalog.load().then(() => {
+  screen.start();
+  startSync();
+});
 ```
 
 - [ ] **Step 4: 画面に出す**
@@ -2502,11 +2580,10 @@ export function startSync() {
   // (既存の import に足す)
   import { hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
   import { OfflineBand } from "@hedgehug/ui";
-  import { online, startSync, sync, syncNow } from "./wire";
+  import { online, sync, syncNow } from "./wire";
 
   const syncStatus = sync.status;
   const isOnline = online;
-  startSync();
 
   // オフラインの帯は、同期カードを出す条件のときだけ(06「オフライン」。決定 S20)。
   const band = $derived(
@@ -2514,19 +2591,22 @@ export function startSync() {
   );
   const alert = $derived(hasSyncError($syncStatus));
 
-  // Shift+Ctrl+S(Shift+Cmd+S)は、入力中とダイアログを開いているときも使える(06。決定 S17)。
-  function onkeydowncapture(event: KeyboardEvent) {
-    if (!isSyncAllKey(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    void sync.syncAll();
-  }
+  // Shift+Ctrl+S(Shift+Cmd+S)は、入力中とダイアログを開いているときも使える(06。決定 S17)。capture の
+  // 段階で受けるので、入力欄やダイアログが先に止めても届く。
+  $effect(() => {
+    const onSyncKey = (event: KeyboardEvent) => {
+      if (!isSyncAllKey(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void sync.syncAll();
+    };
+    window.addEventListener("keydown", onSyncKey, { capture: true });
+    return () => window.removeEventListener("keydown", onSyncKey, { capture: true });
+  });
 </script>
-
-<svelte:window {onkeydown} {onkeydowncapture} />
 ```
 
-Svelte 5 の `on<event>capture` の属性で、capture の段階で受ける(詳細パネルの入力欄やダイアログが先に止めても届く)。
+`<svelte:window {onkeydown} />` は変えない。
 
 `<AppFrame>` の中の `<Screen>` の前に帯を置き、`Screen` に `alert` を渡す:
 
@@ -2546,8 +2626,9 @@ Svelte 5 の `on<event>capture` の属性で、capture の段階で受ける(詳
 ```svelte
   // タイトルの入力欄。開いたアイテムが変わったら、そのタイトルに戻す。同じアイテムの読み直し(画面への
   // 反映)では、入力欄にフォーカスがあるあいだは書き換えない(06「編集中の入力欄の内容は書き換えない」)。
+  // editing は $state にしない(フォーカスが外れたときに $effect が走り直し、保存の前に古い値へ戻すため)。
   let title = $state("");
-  let editing = $state(false);
+  let editing = false;
   let shownId: string | undefined;
   $effect(() => {
     const id = $view?.item.id;
@@ -2613,7 +2694,7 @@ test("the sync card shows the stores and syncs them all", async ({ page }, info)
   const side = await sidebar(page, info);
   await expect(side.getByText(/最終同期 .+ · Store 2 件/)).toBeVisible();
   const all = side.getByRole("button", { name: "すべて同期" });
-  await expect(all.locator("..")).toHaveAttribute("title", /Shift\+(Ctrl|Cmd)\+S/);
+  await expect(all).toHaveAttribute("title", /Shift\+(Ctrl|Cmd)\+S/);
   await all.click();
   await expect(page.getByRole("status").filter({ hasText: "2 件の Store を同期しました" })).toBeVisible();
   await expect(side.getByText("すべて最新")).toBeVisible();
@@ -2628,6 +2709,9 @@ test("Shift+Ctrl+S syncs while typing in the title", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "2 件の Store を同期しました" })).toBeVisible();
   await expect(title).toHaveValue("入力中のタイトル");
   await expect(title).toBeFocused();
+  // サーバーは 3 つの幅とほかのテストで共有なので、元のタイトルに戻してから離れる(保存されない)。
+  await title.fill("ログイン画面を作る");
+  await title.blur();
 });
 
 test("「Store ごとの同期状態」 syncs one store", async ({ page }, info) => {
