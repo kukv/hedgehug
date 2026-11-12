@@ -6,7 +6,7 @@
 
 **Architecture:** 同期の usecase は `app/syncing` に置く。`Service` が 1 つの Store の同期(トークンを得る → 前に受け取った位置を読む → `Replicator.Sync` → 状態を記録 → ミラーへ送る)と「すべて同期」と状態の一覧を持ち、`Auto` が自動の契機(間隔・アプリを開いたとき・オンライン復帰・書き込み後と、タブの待つ条件)を見て `Service` を呼ぶ。`Watch` が Store の版の変化を見張って `Events` に流し、`adapter/httpapi/events` が Server-Sent Events で画面へ送る。このマシンの同期の状態は `infra/statedb`(SQLite)に置く。`infra/gitstore` の `Replicator` には、通信の失敗の見分け、60 秒止まったときの中断、remote の履歴の書き換えの検出、受け取りだけの同期、ミラーへの送信、未送信の数を足す。
 
-**Tech Stack:** Go 1.27.3、go-git v5.19.3、huma v2.40.0(`sse` を含む)、modernc.org/sqlite v1.61.1(新しく足す)。
+**Tech Stack:** Go 1.27.3、go-git v5.19.3、huma v2.40.0、modernc.org/sqlite v1.61.1(新しく足す)。
 
 **Spec:**
 - `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/06-sync-notifications.md`「同期とは」〜「画面への反映」の各節、「同期のあとの完全な削除」
@@ -50,7 +50,7 @@
 | C2-12 | 前に受け取った位置があり、remote が空になった、または同じ名前のブランチがなくなったときも、履歴の書き換え(`ErrRemoteRewritten`)とする | 06(履歴が過去へ巻き戻されたときも同じ) |
 | C2-13 | 閲覧のみの Store は、`Remote.ReceiveOnly` で受け取りと合わせだけを行い、送らない。ミラーにも送らず、完全な削除の呼び出し口も呼ばない | 01「閲覧のみの Store」、06「自動で同期する」(受け取りだけ)、06「同期のあとの完全な削除」(閲覧のみでは行わない) |
 | C2-14 | 「未送信」は、前の同期で受け取った remote の先端(gitstore の `refs/hedgehug/remote/<ブランチ>`)から辿れない保存の数(`Replicator.Unsent`)。一度も受け取っていなければ、すべての保存を数える。G が Store を追加(clone)するときは、この参照を作ってから使う | 06「同期の状態の表示」(このマシンで保存して、まだ送っていない保存の数) |
-| C2-15 | ミラーへの送信(`Replicator.Mirror`)は、ミラーのブランチを `refs/hedgehug/mirror/<URL の SHA-1 の先頭 12 文字>/` に受け取り、空なら送り、自分の先端の祖先なら送り、共通の祖先がない(同じ名前のブランチがない場合を含む)なら `ErrMirrorUnrelated`、それ以外は `ErrMirrorAhead`。送信が重なって拒否されたら `ErrMirrorAhead` | 保存形式「同期」の手順 7、06 のミラーの段落 |
+| C2-15 | ミラーへの送信(`Replicator.Mirror`)は、ミラーのブランチを `refs/hedgehug/mirror/<URL の SHA-256 の先頭 12 文字(16 進)>/` に受け取り、空なら送り、自分の先端の祖先なら送り、共通の祖先がない(同じ名前のブランチがない場合を含む)なら `ErrMirrorUnrelated`、それ以外は `ErrMirrorAhead`。送信が重なって拒否されたら `ErrMirrorAhead` | 保存形式「同期」の手順 7、06 のミラーの段落 |
 | C2-16 | 「アカウントが設定されていない」は記録せず、状態の一覧で、remote があって割り当てがない Store を同期エラーとして導く。アカウントを割り当てれば、表示は次の同期を待たずに消える | 06「同期のエラー」(試していなくても同期エラー、アカウントを設定すると消える) |
 | C2-17 | 同じ Store の同期が動いているときは、新しく始めずに、その結果を待って返す。動いている同期は、始めた要求が切れても最後まで続ける(`context.WithoutCancel`。60 秒の見張りで必ず終わる) | 06「手動で同期する」 |
 | C2-18 | 自動の同期は、サーバーの `Auto` が 1 秒ごとに契機を調べて行う。タブは、見えていて待つ条件にあるあいだ `PUT /api/sync/hold`(`{tab, hold: true}`)を 10 秒ごとに送り、解けたら `hold: false` を送る。知らせは 30 秒で切れる(閉じたタブが待たせ続けないため)。「アプリを開いたとき」はサーバーの起動 | 06「自動で同期する」(見えているタブの条件だけで待つ)。待つ条件はタブにしか分からない |
@@ -5281,7 +5281,25 @@ git commit -m "feat(cmd): 同期の usecase・自動の同期・Store の見張�
 - **C3**: 同期の修復の保存は、`NotifyWrites` で包む前の `port.Stores` で書く(修復で「書き込み後」の同期を起こさないため)。`Service.run` の、`Succeeded` の前に修復を足す。
 - **C4**: アクティビティの同期の行は、`SyncState` に「成功した同期の行」を足して記録する(決定 C2-5)。受信箱の出来事は `port.EventKind` に `inbox` を足す。
 - **C5**: D の `github.New(onSkew)` に時計のずれの記録を差し込む。
+- **トラック G(最終レビューの引き継ぎ)**:
+  - `Sync` は、受け取り・送りのあいだ Store のロックを持つ(通信 1 回が最大 60 秒、やり直しを含めて最大 3 回)。ミラーはロックの外で通信するよう直したが、`Sync` は変えていない。本物の Store をつなぐ前に、受け取りをロックの外で行う形に組み替えるか、ロックの範囲を狭める。
+  - remote の URL が SSH の形(`git@github.com:org/repo.git`。08 は受け付け、07 は SSH 鍵を使わないとしている)のとき、G の stores か `Service` が `https://host/path.git` に直してから `Replicator` へ渡す(通信の見張りも HTTP だけが対象)。
+  - remote を空にしたとき(08「前に受け取った履歴の記録を捨てる」)は、受け取った位置(Seen)の記録を消す。`SyncState` に消す関数を足し、remote を空にしたときと Store の削除のときに使う。
+  - アカウントの割り当て・非表示・remote が変わったとき、G が `port.Event{Kind: EventSync}` を流して画面の状態を更新する(決定 C2-16)。
+  - `Auto`: `LastAttempt` の記録に失敗すると、その Store は 1 秒ごとに「時間が来た」と判定され続ける。`Auto` に、Store ごとの最後に試した時刻をメモリに持たせることを検討する。
+  - **C2 画面**: ブラウザは見えないタブのタイマーを間引く(Chrome はおよそ 1 分に 1 回)ので、オフライン(10 秒)・待つ条件(30 秒)の知らせの期限が切れうる。見えているタブからだけ送るか、期限を延ばす。また、生成される `watchEvents()` は解決しないので、`getWatchEventsUrl` と fetch の読み続けを使う。
 
 ## 実装で計画から変えたこと
 
-(実装のあとで書く)
+- **SSE は huma/sse でなく手書きの流す処理**: `huma.Register` で、`text/event-stream` を直接書く処理を登録した。huma の `sse` が作るスキーマの `const` を orval が受け付けないため。
+- **C2-15 の名前**: ミラーの受け取り先は、URL の SHA-1 でなく SHA-256 の先頭 12 文字(16 進)。
+- **`Auto.Step`**: Store の失敗で残りを止めず、`errors.Join` で集めて続ける。`all` の選び出しに失敗したら `all` を戻す。`Run` は `Step` のエラーをログに出す。
+- **`Online()` は `Network(tab, online)` に変えた**(C2-18b)。
+- **`AfterSuccess` は非表示の Store では呼ばない**(06「同期のあとの完全な削除」)。
+- **`ErrRemoteRewritten` のとき**、remote の追跡ブランチを Seen に戻す(`restoreSeen`)ので、`Unsent` が保たれる。送信に成功したら、追跡ブランチを進める。
+- **契約テスト**は、gocognit の上限に合わせてヘルパーに分けた。
+- **`once()`** は、後始末を `defer` で行い、panic を待っている呼び出しにエラーで伝えてから再び panic する。
+- **`Mirror`** は、ロックを HEAD(名前とハッシュ)を読むあいだだけ持ち、通信はロックの外で行う。
+- **送信の途中で接続が切れたら** `ErrWriteDenied` でなく `ErrUnreachable`(`refused` が通信の失敗を見分ける)。サーバーの断り(403・フックの拒否)は `ErrWriteDenied` のまま。
+- **`Status`** は、1 つの Store の `Unsent` が失敗しても全体を失敗させず、その Store を 0 件にしてログに出す。理由が決まらず「接続できません」にした失敗の原因もログに出す。
+- **A2 に載せ替えたあと**、`Deps.StoreList`・`noStores` は残し、e2e の `SyncTargets` は 2 つの e2e の Store(e2e、readonly)を並べる。
