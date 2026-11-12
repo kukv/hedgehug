@@ -1,3 +1,4 @@
+<!-- 空の script は、svelte-check が index.ts の import を解決するために必要 -->
 <script lang="ts"></script>
 
 <div class="side-top">

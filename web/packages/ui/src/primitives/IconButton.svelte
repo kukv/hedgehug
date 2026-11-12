@@ -20,6 +20,11 @@
     onclick,
     children,
   }: Props = $props();
+
+  // 押せない間は onclick を呼ばない(合成イベントでも)。
+  function guarded(event: MouseEvent) {
+    if (!disabled) onclick?.(event);
+  }
 </script>
 
 <button
@@ -29,7 +34,7 @@
   aria-label={label}
   {disabled}
   {title}
-  {onclick}
+  onclick={guarded}
 >
   {@render children()}
 </button>

@@ -21,7 +21,7 @@
     children,
   }: Props = $props();
 
-  // jsdom は disabled のボタンにもクリックを届けるため、押せない間は呼ばない。
+  // 押せない間は onclick を呼ばない(合成イベントでも)。
   function guarded(event: MouseEvent) {
     if (!disabled) onclick?.(event);
   }

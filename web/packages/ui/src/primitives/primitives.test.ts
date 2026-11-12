@@ -30,6 +30,15 @@ describe("IconButton", () => {
     render(IconButton, { props: { label: "メニュー", children: text("≡") } });
     expect(screen.getByRole("button", { name: "メニュー" })).toBeInTheDocument();
   });
+
+  it("does not call onclick when disabled", async () => {
+    const onclick = vi.fn();
+    render(IconButton, {
+      props: { label: "メニュー", disabled: true, onclick, children: text("≡") },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "メニュー" }));
+    expect(onclick).not.toHaveBeenCalled();
+  });
 });
 
 describe("Tabs", () => {

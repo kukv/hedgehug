@@ -37,7 +37,10 @@
           class="menu-item"
           class:danger={item.danger}
           disabled={item.disabled}
-          onclick={() => !item.disabled && onselect(item.id)}
+          onclick={() => {
+            // 押せない間は onselect を呼ばない(合成イベントでも)。
+            if (!item.disabled) onselect(item.id);
+          }}
         >
           <span class="menu-label">{item.label}</span>
           {#if item.hint}
@@ -98,6 +101,7 @@
   }
   .menu-sep {
     height: 1px;
+    border: 0;
     background: var(--line);
     margin: 4px 0;
   }
