@@ -17,12 +17,17 @@ func (s Service) ChangePrefix(ctx context.Context, store port.StoreID, id worksp
 	if err != nil {
 		return err
 	}
-	// Summary は Write の前に決めるので、いまの接頭辞は先に読む。書く値は Write の中で読み直して決める。
-	current, err := s.Get(ctx, store, id)
-	if err != nil {
+	// Operation は Write の前に渡す口の形なので、Summary の旧い接頭辞は先に読んだ値から作る。
+	// 読んでから書くまでに別の変更が入ると、文だけがずれうる。書く値は Write の中で読み直して決める。
+	var current workspace.Workspace
+	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
+		var err error
+		current, err = r.Workspaces().Get(id)
+		return err
+	}); err != nil {
 		return err
 	}
-	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("接頭辞を %s から %s に変更", current.Workspace.Prefix, prefix)}
+	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("接頭辞を %s から %s に変更", current.Prefix, prefix)}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
 		w, err := tx.Workspaces().Get(id)
 		if err != nil {
