@@ -178,7 +178,7 @@ func TestRefusesSummaryThatIsNotOneLine(t *testing.T) {
 		err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: summary}, func(tx port.Tx) error {
 			return tx.WriteItems().Append(strayItem, change.NewCreate(map[string]any{"id": strayItem}))
 		})
-		if !errors.Is(err, errSummary) {
+		if !errors.Is(err, port.ErrInvalidOperation) {
 			t.Errorf("summary %q: Write error = %v", summary, err)
 		}
 		if n := headCount(t, dir); n != 1 {

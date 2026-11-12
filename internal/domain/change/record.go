@@ -4,11 +4,17 @@ package change
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 )
 
 // ID は内部 ID(ULID)。
 type ID string
+
+var idPattern = regexp.MustCompile(`^[0-9A-Za-z]+$`)
+
+// ValidID は、エンティティの内部 ID に使えるか(空でなく、英数字だけ。Store ではフォルダの名前になる)。
+func ValidID(id ID) bool { return idPattern.MatchString(string(id)) }
 
 // Type は変更の種類(保存形式「変更記録」の t)。土台は下の 4 つだけを扱い、ほかの種類はトラックが足す。
 type Type string
@@ -100,4 +106,15 @@ const (
 type Ref struct {
 	Kind Kind
 	ID   ID
+}
+
+// Valid は、ログを指せる Ref か。メンバーの一覧は ID が空のときだけ、ほかの種類は ValidID の ID のときだけ。
+func (r Ref) Valid() bool {
+	switch r.Kind {
+	case KindMembers:
+		return r.ID == ""
+	case KindWorkspace, KindProject, KindItem:
+		return ValidID(r.ID)
+	}
+	return false
 }

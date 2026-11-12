@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
@@ -27,3 +29,9 @@ func (noIdentity) Me(context.Context, port.StoreID) (string, error) {
 
 // tokenAndAddr は、起動ごとのトークンと、127.0.0.1 の空いた番号を返す。
 func tokenAndAddr() (token, addr string) { return newToken(), "127.0.0.1:0" }
+
+func newToken() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b) // crypto/rand.Read は失敗しない(Go 1.24 から)
+	return hex.EncodeToString(b)
+}

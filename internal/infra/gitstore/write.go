@@ -2,17 +2,11 @@ package gitstore
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
-
-// errSummary は、行を書く Write の Operation.Summary が 1 行でないときのエラー。コミットメッセージの
-// 1 行目になるので、空や複数行は断る。
-var errSummary = errors.New("operation summary must be one non-empty line")
 
 // open は、Store のロックを取り、途中で止まった保存が残っていれば戻す。
 func open(root string) (unlock func(), err error) {
@@ -61,8 +55,9 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	if len(t.pending) == 0 {
 		return nil
 	}
-	if op.Summary == "" || strings.ContainsAny(op.Summary, "\r\n") {
-		return fmt.Errorf("%w: %q", errSummary, op.Summary)
+	// Summary はコミットメッセージの 1 行目、ログイン名はコミットの作者になる。
+	if err := op.Check(); err != nil {
+		return err
 	}
 	return s.commit(root, t, op)
 }
@@ -76,8 +71,8 @@ type tx struct {
 }
 
 func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
-	if _, err := dirOf(ref); err != nil {
-		return err
+	if !ref.Valid() {
+		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, ref.ID)
 	}
 	// 行がなければ pending に足さない。足すと、空のコミットや空の log.jsonl ができる。
 	if len(drafts) == 0 {

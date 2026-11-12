@@ -4,8 +4,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -61,10 +59,4 @@ func serve(ctx context.Context, ln net.Listener, h http.Handler) error {
 		return err
 	}
 	return <-shutdown
-}
-
-func newToken() string {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b) // crypto/rand.Read は失敗しない(Go 1.24 から)
-	return hex.EncodeToString(b)
 }

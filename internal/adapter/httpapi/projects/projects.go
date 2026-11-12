@@ -4,6 +4,7 @@ package projects
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -42,7 +43,7 @@ type wsPath struct {
 // CreateProject は、プロジェクトの作成の本文。名前のない型にすると、OpenAPI のスキーマ名が
 // CreateInputBody・CreateInputBody1 のように、ほかの機能との登録の順で決まる。
 type CreateProject struct {
-	Title  string `json:"title"`
+	Title  string `json:"title" pattern:"^[^\\r\\n]*$" doc:"1 行。改行は入れられない"`
 	Owner  string `json:"owner,omitempty"`
 	Status string `json:"status,omitempty" enum:"Todo,InProgress,Done,Pending,Cancel,"`
 	Start  string `json:"start,omitempty" pattern:"^(\\d{4}-\\d{2}-\\d{2})?$"`
@@ -69,6 +70,12 @@ type getInput struct {
 func Register(api huma.API, svc appprojects.Service) {
 	huma.Register(api, huma.Operation{OperationID: "create-project", Method: http.MethodPost, Path: "/api/stores/{store}/workspaces/{workspace}/projects", Summary: "プロジェクトを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
+			// 形(pattern)だけでは 2026-02-30 のような無い日付を通すので、暦の上の日付かを確かめる
+			for _, d := range []string{in.Body.Start, in.Body.End} {
+				if _, err := time.Parse(time.DateOnly, d); d != "" && err != nil {
+					return nil, huma.Error422UnprocessableEntity("not a date: " + d)
+				}
+			}
 			p, err := svc.Create(ctx, appprojects.CreateInput{
 				Store: port.StoreID(in.Store), Workspace: workspace.ID(in.Workspace), Title: in.Body.Title,
 				Owner: in.Body.Owner, Status: project.Status(in.Body.Status), Start: in.Body.Start, End: in.Body.End,

@@ -19,6 +19,17 @@ func TestIDsAreSortedULIDs(t *testing.T) {
 	}
 }
 
+// 記録の at はミリ秒までなので、時計もミリ秒で切り捨てる。読み戻した時刻と == で比べられるよう、
+// 単調時計の読みも持たない。
+func TestClockIsMillisecondsWithoutMonotonic(t *testing.T) {
+	for range 100 {
+		now := (sysclock.Clock{}).Now()
+		if now.Nanosecond()%int(time.Millisecond) != 0 || now != now.Round(0) {
+			t.Fatalf("Now() = %s", now)
+		}
+	}
+}
+
 func TestClockHasLocalZone(t *testing.T) {
 	if got := (sysclock.Clock{}).Now().Location(); got != time.Local {
 		t.Errorf("location = %s", got)

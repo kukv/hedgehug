@@ -9,10 +9,11 @@ import (
 )
 
 func TestFakeStores(t *testing.T) {
-	apptest.RunStoresContract(t, func(t *testing.T) (port.Stores, port.StoreID) {
+	apptest.RunStoresContract(t, func(t *testing.T) (port.Stores, port.StoreID, port.StoreID) {
 		s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
 		s.AddStore("S1")
-		return s, "S1"
+		s.AddStore("S2")
+		return s, "S1", "S2"
 	})
 }
 
@@ -36,6 +37,32 @@ func TestSample(t *testing.T) {
 		st, err := r.Workspaces().Settings(apptest.SampleWorkspace)
 		if err != nil || st.InitialStatus != apptest.SampleStatusTodo || st.InitialPriority != apptest.SamplePriorityMedium {
 			t.Errorf("settings = %+v, %v", st, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 同じ ID の Store を 2 度足すのはテストの書き間違いなので、黙って空の Store に替えずに panic する。
+func TestAddStoreTwicePanics(t *testing.T) {
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("AddStore of an existing id did not panic")
+			}
+		}()
+		s.AddStore("S1")
+	}()
+	err := s.Read(t.Context(), "S1", func(r port.Reader) error {
+		if ws, err := r.Workspaces().List(); err != nil || len(ws) != 1 {
+			t.Errorf("the existing store was replaced: workspaces = %+v, %v", ws, err)
 		}
 		return nil
 	})
