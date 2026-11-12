@@ -1,7 +1,7 @@
 name: github-live
 
 # 本物の GitHub に対して、infra/github の問い合わせが通ることを確かめる(設計書 7 節)。
-# 変数 HEDGEHUG_LIVE_LOGIN と secret の HEDGEHUG_LIVE_TOKEN が未設定なら、手順を実行せずに成功する。
+# 変数 HEDGEHUG_LIVE_ORG と secret の HEDGEHUG_LIVE_TOKEN が未設定なら、手順を実行せずに成功する。
 # トークンは job の env に置かず、テストの step にだけ渡す。
 
 on:
@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
     env:
-      HEDGEHUG_LIVE_ON: ${{ vars.HEDGEHUG_LIVE_LOGIN != '' && secrets.HEDGEHUG_LIVE_TOKEN != '' }}
+      HEDGEHUG_LIVE_ON: ${{ vars.HEDGEHUG_LIVE_ORG != '' && secrets.HEDGEHUG_LIVE_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HEDGEHUG_LIVE_ON == 'true'
@@ -33,6 +33,6 @@ jobs:
       - name: Run the live tests against GitHub
         if: env.HEDGEHUG_LIVE_ON == 'true'
         env:
-          HEDGEHUG_LIVE_LOGIN: ${{ vars.HEDGEHUG_LIVE_LOGIN }}
+          HEDGEHUG_LIVE_ORG: ${{ vars.HEDGEHUG_LIVE_ORG }}
           HEDGEHUG_LIVE_TOKEN: ${{ secrets.HEDGEHUG_LIVE_TOKEN }}
         run: go test -tags live -count=1 -run 'TestLive' ./internal/infra/github
