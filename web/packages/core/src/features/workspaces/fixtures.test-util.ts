@@ -4,6 +4,7 @@ import type {
   Workspace,
   WorkspaceDetail,
   WorkspaceProperty,
+  WorkspaceTemplate,
   WorkspaceValue,
 } from "../../model/workspace";
 import type { Direction, WorkspacesPort } from "../../port/workspaces";
@@ -34,7 +35,7 @@ export function defaultDetail(storeId: string, id: string): WorkspaceDetail {
       properties: [
         builtin("status", "ステータス", "status"),
         builtin("priority", "優先度", "priority"),
-        builtin("owner", "担当者", "user"),
+        builtin("assignee", "担当者", "user"),
         builtin("start", "開始日", "date"),
         builtin("end", "終了日", "date"),
         builtin("estimate", "見積もり時間", "duration"),
@@ -66,6 +67,9 @@ export function defaultDetail(storeId: string, id: string): WorkspaceDetail {
       initialStatus: "st1",
       initialPriority: "pr3",
       categoryDefaults: { todo: "st1", doing: "st2", done: "st4", canceled: "st5" },
+      workflow: {},
+      templates: [],
+      templateDefaults: {},
     },
   };
 }
@@ -241,5 +245,31 @@ export function fakeWorkspacesPort(): FakeWorkspacesPort {
       write("setCategoryDefault", () => {
         detail(s, w).settings.categoryDefaults[category] = id;
       }),
+    setTransition: (s, w, from, to, allowed) =>
+      write("setTransition", () => {
+        const wf = detail(s, w).settings.workflow;
+        const tos = wf[from] ?? [];
+        const without = tos.filter((t) => t !== to);
+        wf[from] = allowed ? [...without, to] : without;
+      }),
+    createTemplate: (s, w, input) =>
+      write("createTemplate", (): WorkspaceTemplate => ({ id: "t-new", ...clone(input) })),
+    updateTemplate: (_s, _w, _id, _input) => write("updateTemplate", () => undefined),
+    deleteTemplate: (_s, _w, _id) => write("deleteTemplate", () => undefined),
+    setTemplateDefault: (_s, _w, _kind, _id) => write("setTemplateDefault", () => undefined),
+    saveItemAsTemplate: (_s, _item, input) =>
+      write(
+        "saveItemAsTemplate",
+        (): WorkspaceTemplate => ({
+          id: "t-new",
+          name: input.name,
+          kind: "Task",
+          title: input.title,
+          description: "",
+          values: {},
+          children: [],
+          steps: [],
+        }),
+      ),
   };
 }

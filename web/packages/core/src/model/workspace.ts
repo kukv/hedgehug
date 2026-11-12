@@ -47,6 +47,11 @@ export interface WorkspaceSettings {
   initialStatus: string;
   initialPriority: string;
   categoryDefaults: Partial<Record<Category, string>>;
+  // From → 許可する To(制限のない From はない)
+  workflow: Record<string, string[]>;
+  templates: WorkspaceTemplate[];
+  // 種類 → テンプレート ID
+  templateDefaults: Partial<Record<string, string>>;
 }
 
 export interface WorkspaceDetail extends Workspace {
@@ -70,4 +75,44 @@ export interface NewProperty {
   key: string;
   type: PropertyType;
   kinds: string[];
+}
+
+export const stepParent = "@parent"; // Step の担当者「親と同じ」
+export const stepNone = "@none"; // Step の担当者「未割り当て」
+
+export type ChildKind = "Story" | "Task" | "Bug";
+
+export interface TemplateStep {
+  id: string;
+  title: string;
+  assignee: string;
+}
+
+export interface TemplateChild {
+  id: string;
+  kind: ChildKind;
+  title: string;
+  description: string;
+  values: Record<string, unknown>;
+  steps: TemplateStep[];
+}
+
+export interface TemplateInput {
+  name: string;
+  kind: string;
+  title: string;
+  description: string;
+  values: Record<string, unknown>;
+  children: TemplateChild[];
+  steps: TemplateStep[];
+}
+
+export interface WorkspaceTemplate extends TemplateInput {
+  id: string;
+}
+
+export interface SaveAsTemplateInput {
+  name: string;
+  title: string;
+  structure: boolean;
 }

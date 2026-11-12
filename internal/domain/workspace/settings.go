@@ -78,6 +78,12 @@ type Settings struct {
 	InitialStatus    change.ID
 	InitialPriority  change.ID
 	CategoryDefaults map[Category]change.ID
+	// Workflow は、遷移の制約(03「遷移の制約」)。From のステータス ID → 許可する To。行のない From は制限なし。
+	Workflow map[change.ID][]change.ID
+	// Templates は、テンプレート。内部 ID の順(作った順。B3-10)。
+	Templates []Template
+	// TemplateDefaults は、種類 → 既定のテンプレート(B3-12)。「なし」は入れない。
+	TemplateDefaults map[string]change.ID
 }
 
 func validColor(c Color) bool {

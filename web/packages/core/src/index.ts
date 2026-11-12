@@ -157,6 +157,13 @@ export {
   typeLabels,
 } from "./features/workspaces/properties";
 export {
+  createSaveAsTemplate,
+  type SaveAsTemplate,
+  type SaveAsTemplateModel,
+  saveAsTemplateDialog,
+  saveAsTemplateLabel,
+} from "./features/workspaces/saveAsTemplate";
+export {
   createWorkspaceSettings,
   type SettingsState,
   type WorkspaceSettingsScreen,
@@ -169,6 +176,42 @@ export {
   type WorkspaceMover,
 } from "./features/workspaces/sidebarMenu";
 export {
+  type ApplyMode,
+  type ApplyState,
+  applyTemplate,
+  defaultTemplate,
+  type StructureRow,
+  templateStructure,
+  usableTemplates,
+} from "./features/workspaces/templateApply";
+export {
+  type ChildForm,
+  childKinds,
+  emptyTemplateForm,
+  formOfTemplate,
+  kindChangeNote,
+  type StepForm,
+  type Structure,
+  stepAssigneeOptions,
+  structureOf,
+  type TemplateForm,
+  toTemplateInput,
+  type ValueField,
+  valueFields,
+} from "./features/workspaces/templateForm";
+export {
+  deleteTemplateBody,
+  deleteTemplateTitle,
+  type KindDefault,
+  kindDefaults,
+  type TemplateRow,
+  templateCreated,
+  templateDeleted,
+  templateRows,
+  templateSummary,
+  templatesEmpty,
+} from "./features/workspaces/templates";
+export {
   categoryLabels,
   colors,
   type DeleteDialogModel,
@@ -179,6 +222,13 @@ export {
   valueRows,
   valuesHelp,
 } from "./features/workspaces/values";
+export {
+  transitionRefusal,
+  type WorkflowCell,
+  type WorkflowRow,
+  workflowHelp,
+  workflowRows,
+} from "./features/workspaces/workflow";
 export type {
   Account,
   AccountRow,
@@ -209,15 +259,25 @@ export type {
 export type { SystemInfo } from "./model/system";
 export type {
   Category,
+  ChildKind,
   NewProperty,
   PropertyType,
+  SaveAsTemplateInput,
+  TemplateChild,
+  TemplateInput,
+  TemplateStep,
   ValueList,
   Workspace,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspaceSettings,
+  WorkspaceTemplate,
   WorkspaceUsage,
   WorkspaceValue,
+} from "./model/workspace";
+export {
+  stepNone,
+  stepParent,
 } from "./model/workspace";
 export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";

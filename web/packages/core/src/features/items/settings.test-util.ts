@@ -50,6 +50,9 @@ export const settings: WorkspaceSettings = {
   initialStatus: "st1",
   initialPriority: "pr2",
   categoryDefaults: { todo: "st1", doing: "st2", done: "st3", canceled: "st4" },
+  workflow: {},
+  templates: [],
+  templateDefaults: {},
 };
 
 // settings2 は、別のワークスペースの設定(初期値が違う)。

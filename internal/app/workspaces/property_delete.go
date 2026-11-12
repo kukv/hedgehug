@@ -28,7 +28,8 @@ func (s Service) DeleteProperty(ctx context.Context, store port.StoreID, ws work
 			if err := clearItems(tx, ws, p); err != nil {
 				return nil, err
 			}
-			return []change.Draft{change.NewDelete("properties/" + string(id))}, nil
+			ds := []change.Draft{change.NewDelete("properties/" + string(id))}
+			return append(ds, workspace.TemplatePropertyDrafts(st, id)...), nil
 		})
 }
 

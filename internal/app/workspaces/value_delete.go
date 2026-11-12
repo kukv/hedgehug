@@ -34,7 +34,11 @@ func (s Service) DeleteValue(ctx context.Context, store port.StoreID, ws workspa
 					}
 				}
 			}
-			return []change.Draft{change.NewDelete(l.Ref(id))}, nil
+			ds := []change.Draft{change.NewDelete(l.Ref(id))}
+			if l.Kind == workspace.ListStatuses {
+				ds = append(ds, workspace.WorkflowDeleteDrafts(st, id)...)
+			}
+			return append(ds, workspace.TemplateValueDrafts(st, l, id, repl)...), nil
 		})
 }
 

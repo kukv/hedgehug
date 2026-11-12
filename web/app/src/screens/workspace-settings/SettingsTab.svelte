@@ -4,7 +4,9 @@
   import { workspaceSettings } from "../../wire";
   import GeneralPanel from "./GeneralPanel.svelte";
   import PropertiesPanel from "./PropertiesPanel.svelte";
+  import TemplatesPanel from "./TemplatesPanel.svelte";
   import ValuesPanel from "./ValuesPanel.svelte";
+  import WorkflowPanel from "./WorkflowPanel.svelte";
 
   // 設定タブの枠(03「範囲と画面の構成」)。サブタブはアドレスに入れず、履歴にも積まない。
   interface Props {
@@ -46,6 +48,10 @@
       <ValuesPanel state={$settings} list="priorities" />
     {:else if $settings.tab === "systems"}
       <ValuesPanel state={$settings} list="systems" />
+    {:else if $settings.tab === "workflow"}
+      <WorkflowPanel state={$settings} />
+    {:else if $settings.tab === "templates"}
+      <TemplatesPanel state={$settings} />
     {/if}
   </div>
 {/if}

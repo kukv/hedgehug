@@ -1,8 +1,13 @@
 import type {
+  ChildKind,
   PropertyType,
+  TemplateChild,
+  TemplateInput,
+  TemplateStep,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspacesPort,
+  WorkspaceTemplate,
   WorkspaceUsage,
   WorkspaceValue,
 } from "@hedgehug/core";
@@ -11,13 +16,19 @@ import {
   type AddWorkspaceProperty,
   type WorkspaceDetail as ApiDetail,
   type WorkspaceProperty as ApiProperty,
+  type WorkspaceTemplate as ApiTemplate,
+  type WorkspaceTemplateChild as ApiTemplateChild,
+  type WorkspaceTemplateInput as ApiTemplateInput,
+  type WorkspaceTemplateStep as ApiTemplateStep,
   type WorkspaceUsage as ApiUsage,
   type WorkspaceValue as ApiValue,
   addWorkspaceProperty,
   addWorkspaceValue,
   changeWorkspacePrefix,
   createWorkspace,
+  createWorkspaceTemplate,
   deleteWorkspaceProperty,
+  deleteWorkspaceTemplate,
   deleteWorkspaceValue,
   getWorkspace,
   getWorkspaceUsage,
@@ -28,13 +39,17 @@ import {
   renameWorkspaceProperty,
   renameWorkspaceValue,
   type SetWorkspaceValueColorColor,
+  saveItemAsTemplate,
   setWorkspaceCategoryDefault,
   setWorkspaceInitialPriority,
   setWorkspaceInitialStatus,
   setWorkspacePropertyHidden,
   setWorkspacePropertyKinds,
   setWorkspaceStatusCategory,
+  setWorkspaceTemplateDefault,
+  setWorkspaceTransition,
   setWorkspaceValueColor,
+  updateWorkspaceTemplate,
 } from "./generated";
 
 // ワークスペースと設定の口の実装。API の型を core の型に直す(設計書 6 節)。
@@ -50,6 +65,22 @@ function toProperty(p: ApiProperty): WorkspaceProperty {
     choices: (p.choices ?? []).map(toValue),
   };
 }
+
+const toStep = (s: ApiTemplateStep): TemplateStep => s;
+
+const toChild = (c: ApiTemplateChild): TemplateChild => ({
+  ...c,
+  kind: c.kind as ChildKind,
+  values: c.values ?? {},
+  steps: (c.steps ?? []).map(toStep),
+});
+
+const toTemplate = (t: ApiTemplate): WorkspaceTemplate => ({
+  ...t,
+  values: t.values ?? {},
+  children: (t.children ?? []).map(toChild),
+  steps: (t.steps ?? []).map(toStep),
+});
 
 function toDetail(storeId: string, d: ApiDetail): WorkspaceDetail {
   const s = d.settings;
@@ -67,6 +98,11 @@ function toDetail(storeId: string, d: ApiDetail): WorkspaceDetail {
       initialStatus: s.initialStatus,
       initialPriority: s.initialPriority,
       categoryDefaults: s.categoryDefaults ?? {},
+      workflow: Object.fromEntries(
+        Object.entries(s.workflow ?? {}).map(([from, tos]) => [from, tos ?? []]),
+      ),
+      templates: (s.templates ?? []).map(toTemplate),
+      templateDefaults: s.templateDefaults ?? {},
     },
   };
 }
@@ -77,6 +113,8 @@ const toUsage = (u: ApiUsage): WorkspaceUsage => ({
   values: u.values ?? {},
   properties: u.properties ?? {},
 });
+
+const toTemplateBody = (input: TemplateInput) => input as ApiTemplateInput;
 
 export function createWorkspacesPort(): WorkspacesPort {
   return {
@@ -125,5 +163,25 @@ export function createWorkspacesPort(): WorkspacesPort {
     setInitialPriority: (s, w, value) => call(() => setWorkspaceInitialPriority(s, w, { value })),
     setCategoryDefault: (s, w, category, value) =>
       call(() => setWorkspaceCategoryDefault(s, w, category, { value })),
+    setTransition: (s, w, from, to, allowed) =>
+      call(() => setWorkspaceTransition(s, w, from, to, { allowed })),
+    createTemplate: (s, w, input) =>
+      call(async () => toTemplate(await createWorkspaceTemplate(s, w, toTemplateBody(input)))),
+    updateTemplate: (s, w, id, input) =>
+      call(() => updateWorkspaceTemplate(s, w, id, toTemplateBody(input))),
+    deleteTemplate: (s, w, id) => call(() => deleteWorkspaceTemplate(s, w, id)),
+    setTemplateDefault: (s, w, kind, template) =>
+      call(() =>
+        setWorkspaceTemplateDefault(
+          s,
+          w,
+          kind as Parameters<typeof setWorkspaceTemplateDefault>[2],
+          {
+            template,
+          },
+        ),
+      ),
+    saveItemAsTemplate: (s, item, input) =>
+      call(async () => toTemplate(await saveItemAsTemplate(s, item, input))),
   };
 }

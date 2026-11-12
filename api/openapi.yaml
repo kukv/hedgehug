@@ -470,6 +470,21 @@ components:
       required:
         - name
       type: object
+    SaveItemAsTemplate:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        structure:
+          description: 子と Step を含める
+          type: boolean
+        title:
+          type: string
+      required:
+        - name
+        - title
+        - structure
+      type: object
     SetItemProperty:
       additionalProperties: false
       properties:
@@ -508,6 +523,23 @@ components:
           type: string
       required:
         - category
+      type: object
+    SetWorkspaceTemplateDefault:
+      additionalProperties: false
+      properties:
+        template:
+          description: テンプレートの ID。空なら「なし」
+          type: string
+      required:
+        - template
+      type: object
+    SetWorkspaceTransition:
+      additionalProperties: false
+      properties:
+        allowed:
+          type: boolean
+      required:
+        - allowed
       type: object
     SetWorkspaceValueColor:
       additionalProperties: false
@@ -843,6 +875,23 @@ components:
           items:
             $ref: "#/components/schemas/WorkspaceValue"
           type: array
+        templateDefaults:
+          additionalProperties:
+            type: string
+          description: 種類 → 既定のテンプレート ID。なしの種類は入れない
+          type: object
+        templates:
+          items:
+            $ref: "#/components/schemas/WorkspaceTemplate"
+          type: array
+        workflow:
+          additionalProperties:
+            items:
+              type: string
+            nullable: true
+            type: array
+          description: From のステータス ID → 許可する To(ステータスの並び)。制限のない From は入れない
+          type: object
       required:
         - properties
         - statuses
@@ -851,6 +900,9 @@ components:
         - initialStatus
         - initialPriority
         - categoryDefaults
+        - workflow
+        - templates
+        - templateDefaults
       type: object
     WorkspaceSummary:
       additionalProperties: false
@@ -865,6 +917,133 @@ components:
         - id
         - name
         - prefix
+      type: object
+    WorkspaceTemplate:
+      additionalProperties: false
+      properties:
+        children:
+          items:
+            $ref: "#/components/schemas/WorkspaceTemplateChild"
+          type: array
+        description:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        name:
+          type: string
+        steps:
+          items:
+            $ref: "#/components/schemas/WorkspaceTemplateStep"
+          type: array
+        title:
+          type: string
+        values:
+          additionalProperties: {}
+          description: プロパティの ID → 値。null は指定しない
+          type: object
+      required:
+        - id
+        - name
+        - kind
+        - title
+        - description
+        - values
+        - children
+        - steps
+      type: object
+    WorkspaceTemplateChild:
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        id:
+          description: 新しく足すときは空
+          type: string
+        kind:
+          enum:
+            - Story
+            - Task
+            - Bug
+          type: string
+        steps:
+          items:
+            $ref: "#/components/schemas/WorkspaceTemplateStep"
+          type: array
+        title:
+          type: string
+        values:
+          additionalProperties: {}
+          description: プロパティの ID → 値。null は指定しない
+          type: object
+      required:
+        - id
+        - kind
+        - title
+        - description
+        - values
+        - steps
+      type: object
+    WorkspaceTemplateInput:
+      additionalProperties: false
+      properties:
+        children:
+          items:
+            $ref: "#/components/schemas/WorkspaceTemplateChild"
+          type: array
+        description:
+          type: string
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        name:
+          type: string
+        steps:
+          items:
+            $ref: "#/components/schemas/WorkspaceTemplateStep"
+          type: array
+        title:
+          type: string
+        values:
+          additionalProperties: {}
+          description: プロパティの ID → 値。null は指定しない
+          type: object
+      required:
+        - name
+        - kind
+        - title
+        - description
+        - values
+        - children
+        - steps
+      type: object
+    WorkspaceTemplateStep:
+      additionalProperties: false
+      properties:
+        assignee:
+          description: "@parent(親と同じ)・@none(未割り当て)・メンバーのログイン名"
+          type: string
+        id:
+          description: 新しく足すときは空
+          type: string
+        title:
+          type: string
+      required:
+        - id
+        - title
+        - assignee
       type: object
     WorkspaceUsage:
       additionalProperties: false
@@ -1535,6 +1714,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 関連システム・複数選択に値を足す
+  /api/stores/{store}/items/{item}/save-as-template:
+    post:
+      operationId: save-item-as-template
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveItemAsTemplate"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTemplate"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムをテンプレートとして保存
   /api/stores/{store}/items/{item}/steps:
     post:
       operationId: add-step
@@ -2583,6 +2796,144 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: ステータスの分類を変更
+  /api/stores/{store}/workspaces/{workspace}/template-defaults/{kind}:
+    put:
+      operationId: set-workspace-template-default
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: kind
+          required: true
+          schema:
+            enum:
+              - Epic
+              - Story
+              - Task
+              - Bug
+              - Step
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceTemplateDefault"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 種類ごとの既定のテンプレートを変更
+  /api/stores/{store}/workspaces/{workspace}/templates:
+    post:
+      operationId: create-workspace-template
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceTemplateInput"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTemplate"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: テンプレートを作成
+  /api/stores/{store}/workspaces/{workspace}/templates/{template}:
+    delete:
+      operationId: delete-workspace-template
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: template
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: テンプレートを削除
+    put:
+      operationId: update-workspace-template
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: template
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceTemplateInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: テンプレートを編集
   /api/stores/{store}/workspaces/{workspace}/usage:
     get:
       operationId: get-workspace-usage
@@ -2611,6 +2962,46 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの件数と、値・プロパティごとの件数
+  /api/stores/{store}/workspaces/{workspace}/workflow/{from}/{to}:
+    put:
+      operationId: set-workspace-transition
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: from
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: to
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceTransition"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 遷移の制約のセルを変更
   /api/sync:
     get:
       operationId: list-sync-status

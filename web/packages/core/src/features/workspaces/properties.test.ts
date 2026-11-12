@@ -41,6 +41,9 @@ function settings(): WorkspaceSettings {
     initialStatus: "",
     initialPriority: "",
     categoryDefaults: {},
+    workflow: {},
+    templates: [],
+    templateDefaults: {},
   };
 }
 

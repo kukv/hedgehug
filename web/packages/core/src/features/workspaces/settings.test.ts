@@ -20,7 +20,12 @@ async function setup() {
   await catalog.load();
   const port = fakeWorkspacesPort();
   const toasts = createToasts({ set: () => 0, clear: () => {} });
-  const screen = createWorkspaceSettings({ port, catalog, toasts });
+  const screen = createWorkspaceSettings({
+    port,
+    catalog,
+    toasts,
+    listMembers: async () => [{ login: "taro", name: "田中" }],
+  });
   return { screen, port, toasts, loads: () => loads };
 }
 
@@ -36,6 +41,12 @@ describe("workspace settings", () => {
       "テンプレート",
       "自動化",
     ]);
+  });
+
+  it("loads the store's members with the settings", async () => {
+    const { screen } = await setup();
+    await screen.open("S1", "S1-W1");
+    expect(get(screen.state)?.members).toEqual([{ login: "taro", name: "田中" }]);
   });
 
   it("reloads without clearing the state or the sub tab when the same workspace is opened again", async () => {
@@ -126,7 +137,7 @@ describe("workspace settings", () => {
     await catalog.load();
     const port = fakeWorkspacesPort();
     const toasts = createToasts({ set: () => 0, clear: () => {} });
-    const screen = createWorkspaceSettings({ port, catalog, toasts });
+    const screen = createWorkspaceSettings({ port, catalog, toasts, listMembers: async () => [] });
     await screen.open("S1", "S1-W1");
     catalogPort.listStores = async () => {
       throw new Error("down");
@@ -156,7 +167,12 @@ describe("workspace settings", () => {
     const catalog = createCatalog(two);
     await catalog.load();
     const toasts = createToasts({ set: () => 0, clear: () => {} });
-    const screen = createWorkspaceSettings({ port: fakeWorkspacesPort(), catalog, toasts });
+    const screen = createWorkspaceSettings({
+      port: fakeWorkspacesPort(),
+      catalog,
+      toasts,
+      listMembers: async () => [],
+    });
     await screen.open("S1", "S1-W1");
     expect(screen.askPrefix("WEB")).toBe(true);
     expect(screen.askPrefix("API")).toBe(false);

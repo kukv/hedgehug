@@ -19,6 +19,7 @@ import {
   createProjectDialog,
   createProjectScreen,
   createReflection,
+  createSaveAsTemplate,
   createScreen,
   createShell,
   createSignIn,
@@ -34,6 +35,7 @@ import {
   readonly,
   routeOfProject,
   routeOfWorkspace,
+  type SaveAsTemplate,
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
@@ -83,6 +85,7 @@ export const workspaceSettings = createWorkspaceSettings({
   port: workspacesPort,
   catalog,
   toasts,
+  listMembers: (s) => catalogPort.listMembers(s),
 });
 export const workspaceDialog = createWorkspaceDialog({
   catalog,
@@ -92,6 +95,15 @@ export const workspaceDialog = createWorkspaceDialog({
     navigation.go(routeOfWorkspace(get(catalog.stores), storeId, workspace.id, "overview")),
 });
 export const workspaceMover = createWorkspaceMover({ catalog, port: workspacesPort, toasts });
+const saveAsTemplateCore = createSaveAsTemplate({ port: workspacesPort, toasts });
+// 保存できたら、開いている設定の画面を読み直す(開いていなければ何もしない)。
+export const saveAsTemplate: SaveAsTemplate = {
+  async save(view, input, onRefused) {
+    const ok = await saveAsTemplateCore.save(view, input, onRefused);
+    if (ok) void workspaceSettings.reload();
+    return ok;
+  },
+};
 export const detail = createDetail({
   catalog,
   items: itemsPort,
