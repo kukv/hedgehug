@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
@@ -36,6 +36,18 @@ describe("workspace settings", () => {
       "テンプレート",
       "自動化",
     ]);
+  });
+
+  it("does not read again when the same workspace is already open", async () => {
+    const { screen, port } = await setup();
+    await screen.open("S1", "S1-W1");
+    const before = get(screen.state);
+    const reads = vi.spyOn(port, "get");
+    await screen.open("S1", "S1-W1");
+    expect(reads).not.toHaveBeenCalled();
+    expect(get(screen.state)).toBe(before);
+    await screen.reload();
+    expect(reads).toHaveBeenCalledTimes(1);
   });
 
   it("opens on 一般 and keeps the sub tab while the workspace stays", async () => {

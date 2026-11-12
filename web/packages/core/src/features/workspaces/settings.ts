@@ -1,7 +1,7 @@
 import { Refused } from "../../model/errors";
 import type { WorkspaceDetail, WorkspaceUsage } from "../../model/workspace";
 import type { WorkspacesPort } from "../../port/workspaces";
-import { type Readable, readonly, writable } from "../../reactive/store";
+import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import type { Toasts } from "../toasts/toasts";
 
@@ -39,7 +39,8 @@ export interface SettingsState {
 
 export interface WorkspaceSettingsScreen {
   state: Readable<SettingsState | null>;
-  // 同じワークスペースならサブタブを保つ。別ならサブタブは一般。
+  // 同じワークスペースを開いて読み込み済みなら何もしない(入力の途中を消さない。読み直しは reload)。
+  // 別のワークスペースなら、サブタブは一般にして読み込む。
   open(storeId: string, workspaceId: string): Promise<void>;
   // 履歴に積まない(01)。
   selectTab(tab: SettingsTab): void;
@@ -104,6 +105,7 @@ export function createWorkspaceSettings(deps: {
   return {
     state: readonly(state),
     async open(storeId, workspaceId) {
+      if (current?.storeId === storeId && current.workspaceId === workspaceId && get(state)) return;
       if (current?.storeId !== storeId || current.workspaceId !== workspaceId) {
         tab = "general";
         // 古いワークスペースを、新しいアドレスの下に出さない。

@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, type TestInfo, test } from "@playwright/test";
+import { expect, type Page, type TestInfo, test } from "@playwright/test";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
 // ワークスペースの設定の通しのテスト(B2)。サーバーは 3 つの幅で共有なので、
@@ -80,15 +80,22 @@ test("the workspace menu opens the settings and moves the workspace down", async
   const second = unique(info, "移動 B");
   await createWorkspace(page, info, first, prefixOf(info));
   await createWorkspace(page, info, second, prefixOf(info));
-  const side = await sidebar(page, info);
-  const block = side.getByRole("region", { name: "e2e" });
+  // 並びの確認は、このテストが作った 2 つの相対の順だけを見る(ほかの幅が同じ Store で動かすため)。
+  // 狭い幅の引き出しの開閉は動きがあって当てにならないので、毎回開き直したページで開く。
+  const block = async () => {
+    await page.goto(tokenUrl());
+    return (await sidebar(page, info)).getByRole("region", { name: "e2e" });
+  };
   const order = async () =>
-    block.locator("a.ws-name").evaluateAll((els) => els.map((e) => e.textContent ?? ""));
+    (await block()).locator("a.ws-name").evaluateAll((els) => els.map((e) => e.textContent ?? ""));
+  const idx = async (name: string) => (await order()).indexOf(name);
+  const menuOf = async (name: string) =>
+    (await block())
+      .locator(".ws-row")
+      .filter({ has: page.getByRole("link", { name, exact: true }) })
+      .getByRole("button", { name: "ワークスペースのメニュー" });
 
-  const row = block
-    .locator(".ws-row")
-    .filter({ has: page.getByRole("link", { name: first, exact: true }) });
-  await row.getByRole("button", { name: "ワークスペースのメニュー" }).click();
+  await (await menuOf(first)).click();
   await page.getByRole("menuitem", { name: "設定を開く" }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("tab", { name: "設定", exact: true })).toHaveAttribute(
@@ -99,17 +106,21 @@ test("the workspace menu opens the settings and moves the workspace down", async
     await expect(page.getByRole("tab", { name: label, exact: true })).toBeVisible();
   }
 
-  const side2 = await sidebar(page, info);
-  const block2 = side2.getByRole("region", { name: "e2e" });
-  const before = (await order()).indexOf(first);
-  expect(before).toBeGreaterThanOrEqual(0);
-  await block2
-    .locator(".ws-row")
-    .filter({ has: page.getByRole("link", { name: first, exact: true }) })
-    .getByRole("button", { name: "ワークスペースのメニュー" })
-    .click();
-  await page.getByRole("menuitem", { name: "下へ移動" }).click();
-  await expect.poll(async () => (await order()).indexOf(first)).toBe(before + 1);
+  // first が second より下になるまで押す(隣がほかのワークスペースのこともある)。1 回以上、10 回まで。
+  for (let i = 0; i < 10; i++) {
+    const prev = (await order()).join("\n");
+    await (await menuOf(first)).click();
+    const down = page.getByRole("menuitem", { name: "下へ移動" });
+    // 末尾なら押せない(ほかの幅が second を先に動かして、すでに first の方が下のとき)。
+    if (await down.isDisabled()) {
+      await page.keyboard.press("Escape");
+      break;
+    }
+    await down.click();
+    await expect.poll(async () => (await order()).join("\n")).not.toBe(prev);
+    if ((await idx(first)) > (await idx(second))) break;
+  }
+  await expect.poll(async () => (await idx(first)) > (await idx(second))).toBe(true);
 });
 
 test("the general tab restores an empty name and confirms a prefix change", async ({
