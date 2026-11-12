@@ -64,21 +64,19 @@ func contractStamped(t *testing.T, s port.Stores, id port.StoreID) {
 
 func contractFailedWrite(t *testing.T, s port.Stores, id port.StoreID) {
 	boom := errors.New("boom")
-	err := s.Write(ctx, id, taro, func(tx port.Tx) error {
+	err := s.Write(t.Context(), id, taro, func(tx port.Tx) error {
 		if err := writeFixture(tx); err != nil {
 			return err
 		}
 		return boom
 	})
+	// fn のエラーは、errors.Is で同じエラーと分かればよい(包んでよい)。
 	if !errors.Is(err, boom) {
 		t.Fatalf("Write error = %v, want boom", err)
 	}
 	mustRead(t, s, id, func(r port.Reader) error {
-		if _, err := r.Items().Get(cItem.ID); !errors.Is(err, port.ErrNotFound) {
-			t.Errorf("item after failed write: %v", err)
-		}
-		if ms, _ := r.Members().List(); len(ms) != 0 {
-			t.Errorf("members after failed write: %+v", ms)
+		if n, err := fixtureSeen(r); n != 0 || err != nil {
+			t.Errorf("after failed write: %d of %d parts seen, %v", n, fixtureParts, err)
 		}
 		return nil
 	})
@@ -105,18 +103,24 @@ func contractNotFound(t *testing.T, s port.Stores, id port.StoreID) {
 		if _, err := r.Workspaces().Get("01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("workspace: %v", err)
 		}
+		if _, err := r.Projects().Get("01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("project: %v", err)
+		}
 		if _, err := r.Items().Get("01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("item: %v", err)
+		}
+		if ms, err := r.Members().List(); err != nil || len(ms) != 0 {
+			t.Errorf("members of an empty store = %+v, %v", ms, err)
 		}
 		if _, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: "01NOPE00000000000000000000"}); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("changes: %v", err)
 		}
 		return nil
 	})
-	if err := s.Read(ctx, "no-such-store", func(port.Reader) error { return nil }); !errors.Is(err, port.ErrStoreNotFound) {
+	if err := s.Read(t.Context(), "no-such-store", func(port.Reader) error { return nil }); !errors.Is(err, port.ErrStoreNotFound) {
 		t.Errorf("Read of unknown store: %v", err)
 	}
-	if err := s.Write(ctx, "no-such-store", taro, func(port.Tx) error { return nil }); !errors.Is(err, port.ErrStoreNotFound) {
+	if err := s.Write(t.Context(), "no-such-store", taro, func(port.Tx) error { return nil }); !errors.Is(err, port.ErrStoreNotFound) {
 		t.Errorf("Write to unknown store: %v", err)
 	}
 }
@@ -126,18 +130,22 @@ func contractSerialized(t *testing.T, s port.Stores, id port.StoreID) {
 	var wg sync.WaitGroup
 	for i := range 10 {
 		wg.Go(func() {
-			if err := s.Write(ctx, id, taro, setTitle(cItem.ID, "", fmt.Sprint(i))); err != nil {
+			if err := s.Write(t.Context(), id, taro, setTitle(cItem.ID, "", fmt.Sprint(i))); err != nil {
 				t.Errorf("Write %d: %v", i, err)
 			}
 		})
 	}
 	wg.Wait()
 	mustRead(t, s, id, func(r port.Reader) error {
-		log, _ := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		if err != nil || len(log) == 0 {
+			t.Fatalf("log = %+v, %v", log, err)
+		}
 		prevs := map[change.ID]bool{}
 		for _, rec := range log[1:] {
 			if len(rec.Prev) != 1 {
 				t.Errorf("concurrent tips: %+v", rec)
+				continue
 			}
 			prevs[rec.Prev[0]] = true
 		}

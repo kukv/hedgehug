@@ -25,7 +25,8 @@ var (
 // Stores は Store のデータの口。1 回の操作 = 1 回の Write。
 type Stores interface {
 	Read(ctx context.Context, storeID StoreID, fn func(r Reader) error) error
-	// Write は fn がエラーなら何も残さない。同じ Store への Write は 1 つずつ順に行う。
+	// Write は fn がエラーなら何も残さず、errors.Is で同じエラーと分かるエラーを返す(包んでよい)。
+	// 同じ Store への Write は 1 つずつ順に行う。
 	Write(ctx context.Context, storeID StoreID, op Operation, fn func(tx Tx) error) error
 }
 

@@ -1,0 +1,128 @@
+package apptest
+
+import (
+	"errors"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
+)
+
+// fixtureParts は、fixtureSeen が数える writeFixture の部分の数。
+const fixtureParts = 8
+
+// fixtureSeen は、writeFixture で書いたもののうち、読めた部分の数を返す。
+// 見つからないときの port.ErrNotFound 以外のエラーは、まとめて返す。
+func fixtureSeen(r port.Reader) (int, error) {
+	n := 0
+	var errs []error
+	count := func(err error) {
+		switch {
+		case err == nil:
+			n++
+		case !errors.Is(err, port.ErrNotFound):
+			errs = append(errs, err)
+		}
+	}
+	_, err := r.Workspaces().Get(cWorkspace.ID)
+	count(err)
+	_, err = r.Projects().Get(cProject.ID)
+	count(err)
+	_, err = r.Items().Get(cItem.ID)
+	count(err)
+	for _, ref := range []change.Ref{
+		{Kind: change.KindMembers},
+		{Kind: change.KindWorkspace, ID: cWorkspace.ID},
+		{Kind: change.KindProject, ID: cProject.ID},
+		{Kind: change.KindItem, ID: cItem.ID},
+	} {
+		_, err = r.Changes().Of(ref)
+		count(err)
+	}
+	ms, err := r.Members().List()
+	if err != nil {
+		errs = append(errs, err)
+	} else if len(ms) > 0 {
+		n++
+	}
+	return n, errors.Join(errs...)
+}
+
+// contractReadIsolated は、書いている途中の Write を、ほかの Read が途中まで見ないことを確かめる。
+// Read は、Write が終わるまで待ってもよい。待たずに返すなら、途中の行を 1 つも見てはいけない。
+func contractReadIsolated(t *testing.T, s port.Stores, id port.StoreID) {
+	const timeout = 5 * time.Second
+	started, release := make(chan struct{}), make(chan struct{})
+	var released atomic.Bool
+	var once sync.Once
+	doRelease := func() { once.Do(func() { released.Store(true); close(release) }) }
+	defer doRelease()
+
+	wrote := make(chan error, 1)
+	go func() {
+		wrote <- s.Write(t.Context(), id, taro, func(tx port.Tx) error {
+			if err := writeFixture(tx); err != nil {
+				return err
+			}
+			close(started)
+			<-release
+			return nil
+		})
+	}()
+	wait(t, started, timeout, "Write did not start")
+
+	read := make(chan struct{})
+	go func() {
+		defer close(read)
+		readDuringWrite(t, s, id, &released)
+	}()
+	select {
+	case <-read: // 待たずに返した。中で何も見ていないことを確かめた。
+	case <-time.After(100 * time.Millisecond): // Write が終わるまで待っている。
+	}
+
+	doRelease()
+	select {
+	case err := <-wrote:
+		if err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+	case <-time.After(timeout):
+		t.Fatal("Write did not finish after release")
+	}
+	wait(t, read, timeout, "Read did not finish after the write")
+	mustRead(t, s, id, func(r port.Reader) error {
+		if n, err := fixtureSeen(r); n != fixtureParts || err != nil {
+			t.Errorf("after write: %d of %d parts seen, %v", n, fixtureParts, err)
+		}
+		return nil
+	})
+}
+
+// readDuringWrite は、書いている途中に読む。見えるのは、全部か何もないかのどちらか。
+// Write を放す前に読めたなら、何も見えてはいけない。
+func readDuringWrite(t *testing.T, s port.Stores, id port.StoreID, released *atomic.Bool) {
+	err := s.Read(t.Context(), id, func(r port.Reader) error {
+		before := !released.Load()
+		n, err := fixtureSeen(r)
+		if err != nil || (n != 0 && n != fixtureParts) || (before && n != 0) {
+			t.Errorf("read during write: %d of %d parts seen (before release: %v), %v", n, fixtureParts, before, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Errorf("Read during write: %v", err)
+	}
+}
+
+func wait(t *testing.T, ch <-chan struct{}, timeout time.Duration, msg string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(timeout):
+		t.Fatal(msg)
+	}
+}

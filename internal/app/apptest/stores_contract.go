@@ -1,7 +1,6 @@
 package apptest
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -27,6 +26,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (port.Stores, 
 		{"not found", contractNotFound},
 		{"writes are serialized", contractSerialized},
 		{"workspaces are listed in id order", contractList},
+		{"reads never see a write in progress", contractReadIsolated},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -35,8 +35,6 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (port.Stores, 
 		})
 	}
 }
-
-var ctx = context.Background()
 
 // 照合テストの準備のデータ。
 var (
@@ -61,14 +59,14 @@ func writeFixture(tx port.Tx) error {
 
 func mustWrite(t *testing.T, s port.Stores, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) {
 	t.Helper()
-	if err := s.Write(ctx, id, op, fn); err != nil {
+	if err := s.Write(t.Context(), id, op, fn); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 }
 
 func mustRead(t *testing.T, s port.Stores, id port.StoreID, fn func(r port.Reader) error) {
 	t.Helper()
-	if err := s.Read(ctx, id, fn); err != nil {
+	if err := s.Read(t.Context(), id, fn); err != nil {
 		t.Fatalf("Read: %v", err)
 	}
 }

@@ -2,17 +2,15 @@
 package apptest
 
 import (
-	"fmt"
 	"sync"
 	"time"
-
-	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
 // Clock は、呼ぶたびに Step だけ進む時計。
 type Clock struct {
-	mu   sync.Mutex
-	now  time.Time
+	mu  sync.Mutex
+	now time.Time
+	// Step は、Now を呼ぶたびに進む幅。変えるなら Now を呼ぶ前に変える(Now と同時に変えてはいけない)。
 	Step time.Duration
 }
 
@@ -24,19 +22,4 @@ func (c *Clock) Now() time.Time {
 	t := c.now
 	c.now = c.now.Add(c.Step)
 	return t
-}
-
-// IDs は、辞書順に並ぶ 26 文字の ID を順に返す。
-type IDs struct {
-	mu sync.Mutex
-	n  int
-}
-
-func NewIDs() *IDs { return &IDs{} }
-
-func (g *IDs) New() change.ID {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.n++
-	return change.ID(fmt.Sprintf("01TEST%020d", g.n))
 }

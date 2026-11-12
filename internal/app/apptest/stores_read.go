@@ -21,8 +21,24 @@ type view struct {
 	pending map[change.Ref][]change.Record
 }
 
+// log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
 func (v *view) log(ref change.Ref) []change.Record {
-	return append(slices.Clone(v.base[ref]), v.pending[ref]...)
+	out := make([]change.Record, 0, len(v.base[ref])+len(v.pending[ref]))
+	for _, r := range append(slices.Clone(v.base[ref]), v.pending[ref]...) {
+		out = append(out, cloneRecord(r))
+	}
+	return out
+}
+
+func cloneRecord(r change.Record) change.Record {
+	r.Prev = slices.Clone(r.Prev)
+	r.From = slices.Clone(r.From)
+	r.To = slices.Clone(r.To)
+	if r.Root != nil {
+		root := *r.Root
+		r.Root = &root
+	}
+	return r
 }
 
 func (v *view) ids(kind change.Kind) []change.ID {
