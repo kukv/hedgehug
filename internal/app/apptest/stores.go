@@ -3,6 +3,8 @@ package apptest
 import (
 	"context"
 	"fmt"
+	"maps"
+	"strconv"
 	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -22,6 +24,8 @@ type Stores struct {
 type store struct {
 	mu   sync.Mutex
 	logs map[change.Ref][]change.Record
+	// writes は、保存が成功した回数(Versions の印)。
+	writes int
 }
 
 func NewStores(clock port.Clock, ids port.IDs) *Stores {
@@ -84,7 +88,23 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	for ref, recs := range t.pending {
 		logs[ref] = append(logs[ref], recs...)
 	}
+	st.writes++
 	return nil
+}
+
+// Versions は port.StoreVersions。版の印は、その Store の保存が成功した回数。
+func (s *Stores) Versions(context.Context) (map[port.StoreID]string, error) {
+	s.mu.Lock()
+	ids := make(map[port.StoreID]*store, len(s.stores))
+	maps.Copy(ids, s.stores)
+	s.mu.Unlock()
+	out := make(map[port.StoreID]string, len(ids))
+	for id, st := range ids {
+		st.mu.Lock()
+		out[id] = strconv.Itoa(st.writes)
+		st.mu.Unlock()
+	}
+	return out, nil
 }
 
 // tx と種類ごとの Writer は、本物(infra/gitstore)にもほぼ同じものがある。gitstore は apptest を

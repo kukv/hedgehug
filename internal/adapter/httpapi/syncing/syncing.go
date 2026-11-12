@@ -44,7 +44,11 @@ func Register(api huma.API, s Services) {
 		if err != nil {
 			return nil, err
 		}
-		return &statusOutput{Body: toStatusList(st)}, nil
+		timing, err := s.Auto.Settings.Timing(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &statusOutput{Body: toStatusList(st, timing.Auto)}, nil
 	})
 	huma.Register(api, huma.Operation{
 		OperationID: "sync-all", Method: http.MethodPost, Path: "/api/sync",
@@ -86,8 +90,8 @@ func registerAuto(api huma.API, a *appsyncing.Auto) {
 	})
 }
 
-func toStatusList(st []appsyncing.StoreStatus) SyncStatusList {
-	out := SyncStatusList{Stores: []SyncStoreStatus{}}
+func toStatusList(st []appsyncing.StoreStatus, auto bool) SyncStatusList {
+	out := SyncStatusList{Auto: auto, Stores: []SyncStoreStatus{}}
 	for _, s := range st {
 		last := ""
 		if !s.LastSuccess.IsZero() {

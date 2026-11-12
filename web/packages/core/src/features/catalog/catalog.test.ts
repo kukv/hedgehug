@@ -55,6 +55,36 @@ describe("catalog", () => {
     expect(get(catalog.stores).map((s) => s.name)).toEqual(["work", "ro"]);
   });
 
+  it("waits for the last of overlapping loads before a superseded load returns", async () => {
+    const port = fakeCatalogPort();
+    let release: () => void = () => {};
+    const slow = new Promise<void>((r) => {
+      release = r;
+    });
+    let calls = 0;
+    const catalog = createCatalog({
+      ...port,
+      listStores: async () => {
+        calls += 1;
+        // 2 回目(最後に始めた読み直し)が遅い。1 回目は先に終わるが、結果は捨てられる。
+        if (calls === 2) await slow;
+        return port.listStores();
+      },
+    });
+    const first = catalog.load();
+    const second = catalog.load();
+    let firstDone = false;
+    void first.then(() => {
+      firstDone = true;
+    });
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(firstDone).toBe(false);
+    release();
+    await first;
+    expect(get(catalog.stores).map((s) => s.name)).toEqual(["work", "ro"]);
+    await second;
+  });
+
   it("lists the workspaces of writable stores only", async () => {
     const catalog = createCatalog(fakeCatalogPort());
     await catalog.load();

@@ -55,3 +55,12 @@ describe("Checkbox", () => {
     expect(screen.getByRole("checkbox", { name: "続けて作成" })).toBeDisabled();
   });
 });
+
+describe("Input onfocus", () => {
+  it("reports focus", async () => {
+    const onfocus = vi.fn();
+    render(Input, { props: { label: "タイトル", onfocus } });
+    await fireEvent.focus(screen.getByLabelText("タイトル"));
+    expect(onfocus).toHaveBeenCalledOnce();
+  });
+});

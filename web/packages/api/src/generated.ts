@@ -436,6 +436,8 @@ export interface SyncStoreStatus {
 }
 
 export interface SyncStatusList {
+  /** 「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ) */
+  auto: boolean;
   stores: SyncStoreStatus[];
 }
 

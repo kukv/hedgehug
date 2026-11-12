@@ -37,6 +37,7 @@ export {
 } from "./features/catalog/catalog";
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
 export { formatDay } from "./features/dates/date";
+export { olderThanADay, relativeTime } from "./features/dates/relative";
 export { type CreateContext, childKindOf, type Here } from "./features/items/createDefaults";
 export {
   createItemDialog,
@@ -93,6 +94,24 @@ export {
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { createShell, type Shell } from "./features/shell/shell";
+export {
+  hasSyncError,
+  isSyncAllKey,
+  offlineBand,
+  offlineSyncMessage,
+  type SyncCard,
+  type SyncRow,
+  syncAllHint,
+  syncCard,
+} from "./features/sync/card";
+export { createReflection, type Reflection, type ReflectionDeps } from "./features/sync/reflection";
+export {
+  createTabSignals,
+  resendMs,
+  type TabSignals,
+  type TabSignalsDeps,
+} from "./features/sync/signals";
+export { createSync, type SyncDeps, type SyncState } from "./features/sync/sync";
 export { createSystemInfo, type SystemInfoState } from "./features/system/system";
 export {
   createToasts,
@@ -163,6 +182,13 @@ export type { Item, Kind, NewItem } from "./model/item";
 export type { Member } from "./model/member";
 export type { NewProject, Project, ProjectStatus } from "./model/project";
 export type { StoreInfo } from "./model/store";
+export type {
+  SyncAllResult,
+  SyncEventKind,
+  SyncStatus,
+  SyncStoreResult,
+  SyncStoreStatus,
+} from "./model/sync";
 export type { SystemInfo } from "./model/system";
 export type {
   Category,
@@ -181,6 +207,7 @@ export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
 export type { ProjectsPort } from "./port/projects";
+export type { SyncPort, Watching } from "./port/sync";
 export type { SystemPort } from "./port/system";
 export type { Direction, WorkspacesPort } from "./port/workspaces";
 export {

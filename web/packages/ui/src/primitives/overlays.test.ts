@@ -69,3 +69,17 @@ describe("Toasts", () => {
     expect(ondismiss).toHaveBeenCalledWith("t1");
   });
 });
+
+describe("Toasts warnings and lines (C2 画面の決定 S14)", () => {
+  it("marks a warning and keeps the line breaks", () => {
+    render(Toasts, {
+      props: {
+        toasts: [{ id: "t1", text: "成功 1 件・失敗 1 件\nteam: 認証に失敗しました", warn: true }],
+        ondismiss: vi.fn(),
+      },
+    });
+    const toast = screen.getByRole("status");
+    expect(toast).toHaveClass("warn");
+    expect(toast.textContent).toContain("成功 1 件・失敗 1 件\nteam: 認証に失敗しました");
+  });
+});

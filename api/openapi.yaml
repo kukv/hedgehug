@@ -603,11 +603,15 @@ components:
     SyncStatusList:
       additionalProperties: false
       properties:
+        auto:
+          description: 「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ)
+          type: boolean
         stores:
           items:
             $ref: "#/components/schemas/SyncStoreStatus"
           type: array
       required:
+        - auto
         - stores
       type: object
     SyncStoreResult:

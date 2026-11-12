@@ -16,9 +16,10 @@
     workspace: WorkspaceNode;
     tab: WorkspaceTab;
     ondrawer: () => void;
+    alert: boolean;
   }
 
-  let { store, workspace, tab, ondrawer }: Props = $props();
+  let { store, workspace, tab, ondrawer, alert }: Props = $props();
 
   // タブは「概要」「設定」だけ(B2 の計画の決定 15)。履歴に積む(01)。
   const tabs = [
@@ -35,7 +36,7 @@
   }
 </script>
 
-<PageHead title={workspace.name} {ondrawer}>
+<PageHead title={workspace.name} {ondrawer} {alert}>
   {#snippet crumbs()}
     <StoreBadge name={store.name} color={store.color} />
     <code class="prefix">{workspace.prefix}</code>

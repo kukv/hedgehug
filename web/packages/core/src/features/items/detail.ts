@@ -34,6 +34,9 @@ export interface Detail {
   addStep(title: string): Promise<boolean>;
   // moveUp は、Step を直前の Step と入れ替える。先頭なら何もしない。
   moveUp(itemId: string): Promise<void>;
+  // reload は、開いているアイテムを読み直す(画面への反映)。開いていなければ何もしない。
+  // なくなっていたら、パネルを閉じる(06「反映で変わる画面」)。
+  reload(): Promise<void>;
 }
 
 export interface DetailDeps {
@@ -57,10 +60,13 @@ export function createDetail(deps: DetailDeps): Detail {
   const view = writable<DetailView | null>(null);
   const full = writable(false);
   let latest = 0;
+  // target は、開いている(開こうとしている)アイテム。reload が、開いている途中の別のアイテムを古い表示で上書きしないために持つ。
+  let target: { storeId: string; itemId: string } | null = null;
 
   async function load(storeId: string, itemId: string) {
     latest += 1;
     const mine = latest;
+    target = { storeId, itemId };
     try {
       const item = await deps.items.get(storeId, itemId);
       const all = await deps.items.list(storeId, item.projectId);
@@ -69,6 +75,7 @@ export function createDetail(deps: DetailDeps): Detail {
       const workspace = project && deps.catalog.workspace(storeId, project.workspaceId);
       if (mine !== latest) return;
       if (!store || !project || !workspace) {
+        target = null;
         view.set(null);
         return;
       }
@@ -85,14 +92,17 @@ export function createDetail(deps: DetailDeps): Detail {
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
       if (!(e instanceof NotFound)) throw e;
-      if (mine === latest) view.set(null);
+      if (mine === latest) {
+        target = null;
+        view.set(null);
+      }
     }
   }
 
-  // saved は、保存したあとに画面を読み直す。保存のあいだに別の画面へ移っていたら(gen が古い)、読み直さない。
-  async function saved(gen: number) {
-    const v = get(view);
-    if (v && gen === latest) await load(v.store.id, v.item.id);
+  // saved は、保存したあとに画面を読み直す。保存のあいだに別のアイテムへ移っていたら、読み直さない。
+  // 反映の reload で latest が進んでいても、同じアイテムを開いていれば読み直す。
+  async function saved(storeId: string, itemId: string) {
+    if (target?.storeId === storeId && target.itemId === itemId) await load(storeId, itemId);
     deps.onChanged();
   }
 
@@ -108,6 +118,7 @@ export function createDetail(deps: DetailDeps): Detail {
     open: load,
     close() {
       latest += 1;
+      target = null;
       view.set(null);
       full.set(false);
     },
@@ -121,14 +132,13 @@ export function createDetail(deps: DetailDeps): Detail {
         return false;
       }
       if (next === v.item.title) return true;
-      const gen = latest;
       try {
         await deps.items.rename(v.store.id, v.item.id, next);
       } catch (e) {
         refusedToast(e);
         return false;
       }
-      await saved(gen);
+      await saved(v.store.id, v.item.id);
       return true;
     },
     async addStep(title) {
@@ -136,27 +146,28 @@ export function createDetail(deps: DetailDeps): Detail {
       const next = normalizeTitle(title);
       // 空のまま Enter を押したときは何もしない(02「子と Step」)。
       if (!v || next === "") return false;
-      const gen = latest;
       try {
         await deps.items.addStep(v.store.id, v.item.id, next);
       } catch (e) {
         refusedToast(e);
         return false;
       }
-      await saved(gen);
+      await saved(v.store.id, v.item.id);
       return true;
     },
     async moveUp(itemId) {
       const v = get(view);
       if (!v || v.children[0]?.id === itemId) return;
-      const gen = latest;
       try {
         await deps.items.moveUp(v.store.id, itemId);
       } catch (e) {
         refusedToast(e);
         return;
       }
-      await saved(gen);
+      await saved(v.store.id, v.item.id);
+    },
+    async reload() {
+      if (target) await load(target.storeId, target.itemId);
     },
   };
 }

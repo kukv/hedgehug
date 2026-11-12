@@ -93,6 +93,9 @@ func TestSyncAllAndStatus(t *testing.T) {
 	if res.Code != http.StatusOK || len(st.Stores) != 2 {
 		t.Fatalf("status: %d %s", res.Code, res.Body)
 	}
+	if !st.Auto {
+		t.Errorf("auto = false, want true (settings say on)")
+	}
 	if s := st.Stores[0]; s.Store != "S1" || s.Error != "" || s.Unsent != 3 || s.LastSuccess != "2026-11-13T10:00:00Z" {
 		t.Errorf("S1 = %+v", s)
 	}
@@ -118,5 +121,16 @@ func TestHoldAndOnline(t *testing.T) {
 	}
 	if err := e.auto.Step(context.Background()); err != nil || len(e.rep.Calls()) == 0 {
 		t.Errorf("not synced after release: %v", err)
+	}
+}
+
+// 決定 S1(C2 画面): 一覧は「裏で自動的に同期する」を返す(オフラインの帯の文を選ぶ)。
+func TestStatusReportsAutoOff(t *testing.T) {
+	e := newEnv(t)
+	e.auto.Settings = &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}}
+	res := e.api.Get("/api/sync")
+	st := decode[syncing.SyncStatusList](t, res.Body.Bytes())
+	if res.Code != http.StatusOK || st.Auto {
+		t.Errorf("status: %d auto=%v", res.Code, st.Auto)
 	}
 }

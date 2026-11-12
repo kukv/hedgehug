@@ -33,6 +33,7 @@ export function createCatalog(port: CatalogPort): Catalog {
   const stores = writable<StoreNode[]>([]);
   // 読み直しが重なったときは、最後に始めたものの結果だけを使う。
   let latest = 0;
+  let newest: Promise<void> = Promise.resolve();
 
   async function loadWorkspace(storeId: string, w: Workspace): Promise<WorkspaceNode> {
     const projects = await port.listProjects(storeId, w.id);
@@ -59,9 +60,20 @@ export function createCatalog(port: CatalogPort): Catalog {
     async load() {
       latest += 1;
       const mine = latest;
-      const infos = await port.listStores();
-      const loaded = await Promise.all(infos.map(loadStore));
-      if (mine === latest) stores.set(loaded);
+      const run = (async () => {
+        const infos = await port.listStores();
+        const loaded = await Promise.all(infos.map(loadStore));
+        if (mine === latest) stores.set(loaded);
+      })();
+      newest = run;
+      await run;
+      // 後から始めた読み直しに結果を譲ったときは、その読み直しが終わるまで返さない(呼んだ側が、自分の保存のあとの
+      // 一覧を読めるように)。後の読み直しの失敗は、その呼び出しが受け取る。
+      let waiting: Promise<void>;
+      do {
+        waiting = newest;
+        await waiting.catch(() => {});
+      } while (waiting !== newest);
     },
     store,
     workspace,

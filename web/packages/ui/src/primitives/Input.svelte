@@ -15,6 +15,7 @@
     // focusOnMount は、出たときにフォーカスを置く(ダイアログのタイトルの欄など)。autofocus という名前は、
     // 使う側のマークアップで Biome の a11y/noAutofocus に当たるので使わない。
     focusOnMount?: boolean;
+    onfocus?: (event: FocusEvent) => void;
     onblur?: (event: FocusEvent) => void;
     onkeydown?: (event: KeyboardEvent) => void;
   }
@@ -31,6 +32,7 @@
     title,
     id,
     focusOnMount = false,
+    onfocus,
     onblur,
     onkeydown,
   }: Props = $props();
@@ -54,6 +56,7 @@
   {placeholder}
   {disabled}
   {title}
+  {onfocus}
   {onblur}
   {onkeydown}
   bind:value

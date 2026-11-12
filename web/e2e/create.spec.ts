@@ -35,6 +35,7 @@ test("creates an Epic, a Task under it and a Step from the project screen", asyn
   await dialog.getByRole("textbox", { name: "タイトル" }).fill(`${epic} の Task`);
   await dialog.getByRole("button", { name: "作成" }).click();
   await expect(tree.getByText(`${epic} の Task`)).toBeVisible();
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(`${epic} の Task`);
   await page.keyboard.press("Escape");
 
   await tree

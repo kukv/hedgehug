@@ -8,13 +8,14 @@
   interface Props {
     tab: SettingsTab;
     ondrawer: () => void;
+    alert: boolean;
   }
 
-  let { tab, ondrawer }: Props = $props();
+  let { tab, ondrawer, alert }: Props = $props();
   const tabs = [{ id: "accounts", label: "アカウントとメンバー" }];
 </script>
 
-<PageHead title="設定" note="このマシンの設定と、Store の管理" {ondrawer} />
+<PageHead title="設定" note="このマシンの設定と、Store の管理" {ondrawer} {alert} />
 <Tabs
   {tabs}
   current={tab}

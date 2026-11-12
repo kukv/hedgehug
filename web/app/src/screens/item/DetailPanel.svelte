@@ -9,10 +9,19 @@
   const view = detail.view;
   const full = detail.full;
 
-  // タイトルの入力欄。開いたアイテムが変わったら、そのタイトルに戻す。
+  // タイトルの入力欄。開いたアイテムが変わったら、そのタイトルに戻す。同じアイテムの読み直し(画面への
+  // 反映)では、入力欄にフォーカスがあるあいだは書き換えない(06「編集中の入力欄の内容は書き換えない」)。
+  // editing は $state にしない(フォーカスが外れたときに $effect が走り直し、保存の前に古い値へ戻すため)。
   let title = $state("");
+  // base は、フォーカスしたときの値。打ち換えずに離れたら保存せず、反映で受け取った最新の値に合わせる。
+  let editing = false;
+  let base = "";
+  let shownId: string | undefined;
   $effect(() => {
-    title = $view?.item.title ?? "";
+    const id = $view?.item.id;
+    const next = $view?.item.title ?? "";
+    if (id !== shownId || !editing) title = next;
+    shownId = id;
   });
 
   async function save() {
@@ -59,7 +68,15 @@
       heading
       disabled={v.readOnly}
       title={v.readOnly ? readOnlyNote : undefined}
-      onblur={() => void save()}
+      onfocus={() => {
+        editing = true;
+        base = title;
+      }}
+      onblur={() => {
+        editing = false;
+        if (title === base) title = $view?.item.title ?? "";
+        else void save();
+      }}
       {onkeydown}
       bind:value={title}
     />

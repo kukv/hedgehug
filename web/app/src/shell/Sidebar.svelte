@@ -1,9 +1,10 @@
 <script lang="ts">
-  import type { Resolved, Route, StoreNode } from "@hedgehug/core";
-  import { Brand, Button } from "@hedgehug/ui";
+  import { type Resolved, type Route, type StoreNode, syncAllHint, syncCard } from "@hedgehug/core";
+  import { Brand, Button, SyncCard } from "@hedgehug/ui";
   import { SvelteSet } from "svelte/reactivity";
   import type { Links } from "../links";
-  import { itemDialog } from "../wire";
+  import { isMac } from "../tab";
+  import { itemDialog, sync, syncNow } from "../wire";
   import SidebarStore from "./SidebarStore.svelte";
 
   // サイドバー(04「サイドバー」)。A2 は、名前・「新規作成」・Store ごとのブロックだけを出す。
@@ -15,6 +16,9 @@
 
   let { stores, current, links }: Props = $props();
 
+  const status = sync.status;
+  const card = $derived(syncCard($status, $syncNow));
+  const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
 
   // 開閉は、このタブのあいだだけ覚える(このマシンに残すのはトラック G のマシンの設定が入ってから)。
@@ -51,6 +55,14 @@
 {#each stores as store (store.id)}
   <SidebarStore {store} {current} {links} {collapsed} ontoggle={toggle} />
 {/each}
+{#if card}
+  <SyncCard
+    {card}
+    {hint}
+    onsyncall={() => void sync.syncAll()}
+    onsyncstore={(id) => void sync.syncStore(id)}
+  />
+{/if}
 
 <style>
   .top {
