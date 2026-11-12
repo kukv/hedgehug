@@ -5,6 +5,42 @@
  * OpenAPI spec version: dev
  */
 import { fetcher } from './fetcher';
+export type AccountBodyMethod = typeof AccountBodyMethod[keyof typeof AccountBodyMethod];
+
+
+export const AccountBodyMethod = {
+  device: 'device',
+  gh: 'gh',
+  env: 'env',
+  keychain: 'keychain',
+} as const;
+
+export interface AccountBody {
+  id: string;
+  login: string;
+  method: AccountBodyMethod;
+  name: string;
+}
+
+/**
+ * デバイスフローはサインインの API で登録する
+ */
+export type AddInputBodyMethod = typeof AddInputBodyMethod[keyof typeof AddInputBodyMethod];
+
+
+export const AddInputBodyMethod = {
+  gh: 'gh',
+  env: 'env',
+  keychain: 'keychain',
+} as const;
+
+export interface AddInputBody {
+  login: string;
+  /** デバイスフローはサインインの API で登録する */
+  method: AddInputBodyMethod;
+  name: string;
+}
+
 export interface ErrorDetail {
   /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
   location?: string;
@@ -32,10 +68,77 @@ export interface ErrorModel {
   type?: string;
 }
 
+export interface ListOutputBody {
+  /** @nullable */
+  accounts: AccountBody[] | null;
+}
+
 export interface SystemInfo {
   /** hedgehug の版 */
   version: string;
 }
+
+export const getListAccountsUrl = () => {
+
+
+
+
+  return `/api/accounts`
+}
+
+/**
+ * @summary 登録したアカウントを返す
+ */
+export const listAccounts = async ( options?: Parameters<typeof fetcher>[1]): Promise<ListOutputBody> => {
+
+  return fetcher<ListOutputBody>(getListAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAddAccountUrl = () => {
+
+
+
+
+  return `/api/accounts`
+}
+
+/**
+ * @summary GitHub で確かめてからアカウントを登録する
+ */
+export const addAccount = async (addInputBody: AddInputBody, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<AccountBody>(getAddAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(addInputBody)
+  }
+);}
+
+
 
 export const getGetSystemUrl = () => {
 

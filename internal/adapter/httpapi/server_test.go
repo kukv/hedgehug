@@ -8,9 +8,27 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
+	"github.com/kukv/hedgehug/internal/app/apptest"
 )
+
+func TestAccountsAreRegistered(t *testing.T) {
+	srv := httptest.NewServer(httpapi.New("secret", fstest.MapFS{}, httpapi.Deps{
+		Version:  "test",
+		IDs:      apptest.NewIDs(),
+		Accounts: apptest.NewAccounts(),
+		Secrets:  &apptest.Secrets{},
+		GitHub:   &apptest.GitHub{},
+		Clock:    apptest.NewClock(time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)),
+	}))
+	t.Cleanup(srv.Close)
+	code, body := get(t, srv.URL+"/api/accounts", "secret")
+	if code != http.StatusOK || !strings.Contains(body, `"accounts":[]`) {
+		t.Errorf("status %d, body %s", code, body)
+	}
+}
 
 func newServer(t *testing.T) *httptest.Server {
 	t.Helper()

@@ -27,7 +27,15 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	if err := apptest.Sample(ctx, stores, e2eStore); err != nil {
 		return httpapi.Deps{}, err
 	}
-	return httpapi.Deps{Stores: stores, IDs: ids, Identity: apptest.Identity{Login: "taro"}}, nil
+	return httpapi.Deps{
+		Stores:   stores,
+		IDs:      ids,
+		Identity: apptest.Identity{Login: "taro"},
+		Accounts: apptest.NewAccounts(),
+		Secrets:  &apptest.Secrets{Tokens: map[string]string{"taro": "e2e-gh-token"}},
+		GitHub:   &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
+		Clock:    apptest.NewClock(time.Now()),
+	}, nil
 }
 
 // tokenAndAddr は、テストが決めたトークン(HEDGEHUG_TOKEN)と待ち受け(HEDGEHUG_ADDR)を返す。
