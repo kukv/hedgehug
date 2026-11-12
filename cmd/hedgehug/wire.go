@@ -10,14 +10,29 @@ import (
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/infra/github"
 	"github.com/kukv/hedgehug/internal/infra/gitstore"
+	"github.com/kukv/hedgehug/internal/infra/machineconfig"
+	"github.com/kukv/hedgehug/internal/infra/secret"
 	"github.com/kukv/hedgehug/internal/infra/sysclock"
 )
 
 // wire は、本物の部品を口に差し込む。Store の一覧の読み込みはトラック G が足す(この計画の決定 6)。
 func wire(context.Context) (httpapi.Deps, error) {
 	stores := gitstore.New(sysclock.Clock{}, sysclock.IDs{})
-	return httpapi.Deps{Stores: stores, IDs: sysclock.IDs{}, Identity: noIdentity{}}, nil
+	cfg, err := configPath()
+	if err != nil {
+		return httpapi.Deps{}, err
+	}
+	return httpapi.Deps{
+		Stores:   stores,
+		IDs:      sysclock.IDs{},
+		Identity: noIdentity{},
+		Accounts: machineconfig.Open(cfg).Accounts(),
+		Secrets:  secret.New(),
+		GitHub:   github.New(nil), // 時計のずれはトラック C が受け取る(トラック D の計画の決定 3)
+		Clock:    sysclock.Clock{},
+	}, nil
 }
 
 // noIdentity は、「あなた」を決める仕組み(トラック G)が入るまでの仮。保存する操作は断る。
