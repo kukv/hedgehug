@@ -2,6 +2,7 @@
   import type { SettingsTab } from "@hedgehug/core";
   import { PageHead, Tabs } from "@hedgehug/ui";
   import { navigation } from "../../wire";
+  import AccountsSection from "./AccountsSection.svelte";
 
   // 設定の画面(08「設定画面の構成」)。タブは、作ったものだけを出す(D2 画面の計画の決定 S1・S4)。
   interface Props {
@@ -19,7 +20,11 @@
   current={tab}
   onselect={(id) => navigation.go({ name: "settings", tab: id as SettingsTab })}
 />
-<div class="content"></div>
+<div class="content">
+  {#if tab === "accounts"}
+    <AccountsSection />
+  {/if}
+</div>
 
 <style>
   .content {
