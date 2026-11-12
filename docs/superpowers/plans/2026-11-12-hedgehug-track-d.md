@@ -4,7 +4,7 @@
 
 **Goal:** 仕様 07 の GitHub 連携(アカウント、PR・Issue のリンク、PR の自動リンク、GitHub を読む間隔、コラボレーターの取り込み、Store の検索)を作る。
 
-**Architecture:** 設計書の 3 節のとおり、usecase(`app/github`)は口(`port.GitHub`・`port.Secrets`・`port.Accounts` ほか)越しにだけ外に触る。GitHub の REST API の実装は `infra/github`、トークンの読み出しは `infra/secret`、アカウントの一覧は `infra/machineconfig`(config.yaml)に置く。GitHub とのやりとりの失敗は `domain/ghcall.Failure`(種類と値)で表し、usecase が利用者に返すときに `ghcall.Refuse` でトラック A の `domain/refusal`(仕様の文言の断り)に直す。API は A の `apierr.From` で 422 の `detail` に文言を入れる。トークンはエラーにもログにも出さない。usecase のテストは `app/apptest` の偽物で、`infra/github` のテストは httptest の偽のサーバーで行い、本物の GitHub での確認は週 1 回の github-live で行う。
+**Architecture:** 設計書の 3 節のとおり、usecase(`app/github`)は口(`port.GitHub`・`port.Secrets`・`port.Accounts` ほか)越しにだけ外に触る。GitHub の REST API の実装は `infra/github`、トークンの読み出しは `infra/secret`、アカウントの一覧は `infra/machineconfig`(config.yaml)に置く。GitHub とのやりとりの失敗は `domain/ghcall.Failure`(種類と値)で表し、usecase が利用者に返すときに `ghcall.Refuse` でトラック A の `domain/refusal`(仕様の文言の断り)に直す。API は A の `apierr.From` で 422 の `detail` に文言を入れる。トークンはエラーにもログにも出さない(前回の実装と同じく、エラー文の中の `ghp_`・`gho_`・`ghu_`・`ghs_`・`ghr_`・`github_pat_` で始まる文字列を伏せる)。usecase のテストは `app/apptest` の偽物で、`infra/github` のテストは httptest の偽のサーバーで行い、本物の GitHub での確認は週 1 回の github-live で行う。
 
 **Tech Stack:** Go 1.27.3、net/http(GitHub の REST API v3、`X-GitHub-Api-Version: 2022-11-28`)、github.com/zalando/go-keyring、go.yaml.in/yaml/v4、huma v2。画面は土台の core・api・ui・app の形。
 
@@ -81,9 +81,9 @@
 | 小計画 | 範囲(仕様 07 の節) | 順 | 待つもの | 完成の条件 |
 |---|---|---|---|---|
 | **D1 アカウントの登録と GitHub への接続(サーバー)** | 「アカウント」の「登録」「認証の確認」(デバイスフロー以外)、「GitHub との通信に失敗したとき」の失敗の種類と 30 秒の打ち切り、時計のずれの測定、github-live | 1 | 土台 Task 5・6・8 | `make check` が緑。`POST /api/accounts` で gh・環境変数・キーチェーンのアカウントを登録でき、07 の表のすべての断り方を `code` で返す。`Accounts` の照合テストが偽物と config.yaml の両方で通る。github-live が手動で動く |
-| **D2 アカウントの画面と残りの操作** | 「GitHub を使わない場合」の入口の無効(共通の部品)、「デバイスフロー」「接続のたびの照合」「状態」「再認証」「編集」「削除の影響」、「GitHub との通信に使うアカウント」(Store の割り当ての読み取り)、設定の「アカウントとメンバー」の GitHub アカウントの画面 | 2 | D1、土台 Task 11・12 | 設定の画面でアカウントを追加・編集・削除・再認証でき、3 つの状態と帯が出る。デバイスフローを偽の GitHub で通しで確かめる(Playwright、3 幅)。トークンの指紋を照合する |
+| **D2 アカウントの画面と残りの操作** | 「GitHub を使わない場合」の入口の無効(共通の部品)、「デバイスフロー」「接続のたびの照合」「状態」「再認証」「編集」「削除の影響」、「GitHub との通信に使うアカウント」(Store の割り当ての読み取り)、設定の「アカウントとメンバー」の GitHub アカウントの画面。前回の実装から取り込む: `config.yaml` の `hosts[].client_id` の読み出し、期限付きトークンの取り直し(期限の前に、ロックを取って更新用のトークン `ghr_` で取り直す。`expires_in` が 0 なら期限なし) | 2 | D1、土台 Task 11・12 | 設定の画面でアカウントを追加・編集・削除・再認証でき、3 つの状態と帯が出る。デバイスフローを偽の GitHub で通しで確かめる(Playwright、3 幅)。トークンの指紋を照合する |
 | **D3 PR と Issue のリンク(手で付ける・外す・取り直す)** | 「PR と Issue のリンク」の「追加」「表示と更新」(詳細パネルを開いたときの取り直し、改名・移管の追従、失敗の表示)、「解除」、「アクティビティに残る文」のリンクの 3 行 | 3 | D2、A の A2(詳細パネル)・A4(プロジェクトのリポジトリ) | 詳細パネルで PR・Issue をリンク・解除でき、07 の検査の表のすべての断り方を出す。Issue の 1 対 1 をすべての Store で確かめる。取り直しで値が変わったときだけ実行者「GitHub」で保存する |
-| **D4 GitHub を読む間隔と PR の自動リンク・自動化のきっかけ** | 「GitHub を読む間隔」、「表示と更新」の間隔ごとの取り直し、「PR の自動リンク」、「PR・Issue の状態で動く自動化」、「状態」の GitHub App 未導入の検出と「再確認」、認証エラーの自動の確かめ直し | 4 | D3、B の自動化の実行、C の「自動で同期する」と state.db の骨組み | 間隔・利用上限(3 倍・解除まで止める・1 分)・失敗後の待ちを、偽の時計で確かめる。ブランチ名・印・タイトル・本文・コメントから PR を自動でリンクし、初回の読み取りではきっかけを起こさない |
+| **D4 GitHub を読む間隔と PR の自動リンク・自動化のきっかけ** | 「GitHub を読む間隔」、「表示と更新」の間隔ごとの取り直し、「PR の自動リンク」、「PR・Issue の状態で動く自動化」、「状態」の GitHub App 未導入の検出(前回の実装と同じく、App のトークンで組織のリポジトリを読んだときの GitHub の拒否の応答で見分ける)と「再確認」、認証エラーの自動の確かめ直し | 4 | D3、B の自動化の実行、C の「自動で同期する」と state.db の骨組み | 間隔・利用上限(3 倍・解除まで止める・1 分)・失敗後の待ちを、偽の時計で確かめる。ブランチ名・印・タイトル・本文・コメントから PR を自動でリンクし、初回の読み取りではきっかけを起こさない |
 | **D5 コラボレーターの取り込みと Store の検索** | 「GitHub のコラボレーターをメンバーに追加」、「GitHub から Store を検索」、「アクティビティに残る文」のコラボレーターの行 | 5(コラボレーターは D2 のあとならいつでも) | D2(コラボレーター)、G の Store の追加(検索のマウント) | コラボレーターを 100 人ずつ最後まで読み、選んだ人を 1 回の保存で加える。Store の検索で、見えるリポジトリを 1 行にまとめ、マウントで Store を追加する |
 
 ### 漏れの確かめ(仕様 07 の節 → 小計画)
@@ -2345,4 +2345,4 @@ PR の説明に、リポジトリの設定で secret `HEDGEHUG_LIVE_TOKEN`(読�
 |---|---|---|---|
 | 1 | アカウントの一覧の置き場所。設計書 3 節は `MachineSettings` を `infra/statedb` に置き、保存形式の設計は `config.yaml` に置く(土台の計画で伝えた食い違い)。D は G より先にアカウントの一覧が要る | **決定(2026-11-12): `config.yaml` 1 つ。** D1 が `infra/machineconfig` を作り、G が同じパッケージに Store の一覧などを足す。設計書 3 節は直した | 決定済み |
 | 2 | 「OS のキーチェーン」で、どこに置いたトークンを読むか。仕様に、利用者への伝え方の文言がない | **決定(2026-11-12): 前回の実装どおり。** サービス `hedgehug`・アカウント `github.com/{ログイン名}`。見つからないときの文言に場所を出し、キーチェーンのない環境では gh CLI か環境変数を案内する(仕様 07「認証の確認」に反映)。画面からキーチェーンへ入れる入口は持たない | 決定済み |
-| 3 | デバイスフローに使う GitHub App(client ID)。仕様は「hedgehug の GitHub App」を前提にするが、どの App か、client ID をどう持つかが決まっていない(前回は設定ファイルに書かせていた) | **決定(2026-11-12): 環境変数 `HEDGEHUG_GITHUB_CLIENT_ID` で渡し、組み込まない。** ないときは「アカウントを追加」で断る(仕様 07「デバイスフロー」に反映) | 決定済み |
+| 3 | デバイスフローに使う GitHub App(client ID)。仕様は「hedgehug の GitHub App」を前提にするが、どの App か、client ID をどう持つかが決まっていない(前回は設定ファイルに書かせていた) | **決定(2026-11-12): `config.yaml` の `hosts[].client_id`(前回の実装と同じ形)に書き、組み込まない。GitHub App と OAuth App のどちらも受け付け、種類は確かめない。** ないときは「アカウントを追加」で断る(仕様 07「デバイスフロー」に反映) | 決定済み |
