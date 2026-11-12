@@ -1,7 +1,13 @@
 import { NotFound } from "../../model/errors";
 import type { ItemsPort } from "../../port/items";
 import type { StoreNode } from "../catalog/catalog";
-import { type ProjectTab, parseDisplayId, type Route, type WorkspaceTab } from "./route";
+import {
+  type ProjectTab,
+  parseDisplayId,
+  type Route,
+  type SettingsTab,
+  type WorkspaceTab,
+} from "./route";
 
 // アドレス(Store 名と画面の ID)を内部 ID にする(01「画面のアドレス」、A2 の計画の決定 7)。
 // アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す。
@@ -11,7 +17,8 @@ export type Resolved =
   | { name: "home" }
   | { name: "workspace"; storeId: string; workspaceId: string; tab: WorkspaceTab }
   | { name: "project"; storeId: string; projectId: string; tab: ProjectTab }
-  | { name: "item"; storeId: string; projectId: string; itemId: string };
+  | { name: "item"; storeId: string; projectId: string; itemId: string }
+  | { name: "settings"; tab: SettingsTab };
 
 const home = { name: "home" } as const;
 
@@ -64,6 +71,8 @@ export async function resolveRoute(
       return home;
     case "item":
       return findItem(stores, route.store, route.item, items);
+    case "settings":
+      return { name: "settings", tab: route.tab };
   }
 }
 

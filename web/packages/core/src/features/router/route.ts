@@ -3,19 +3,24 @@
 //   /s/{Store名}/w/{接頭辞}/{タブ}     ワークスペース(タブなしは概要)
 //   /s/{Store名}/p/{HH-P1}/{タブ}     プロジェクト
 //   /s/{Store名}/i/{HH-12}           アイテムの入口
+//   /settings/{タブ}                設定(D2 画面の計画の決定 S3)
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree";
 export type WorkspaceTab = "overview" | "settings";
 
+export type SettingsTab = "accounts";
+
 export type Route =
   | { name: "home" }
   | { name: "workspace"; store: string; prefix: string; tab: WorkspaceTab }
   | { name: "project"; store: string; project: string; tab: ProjectTab }
-  | { name: "item"; store: string; item: string };
+  | { name: "item"; store: string; item: string }
+  | { name: "settings"; tab: SettingsTab };
 
 const projectTabs: readonly string[] = ["overview", "tree"] satisfies ProjectTab[];
 const workspaceTabs: readonly string[] = ["overview", "settings"] satisfies WorkspaceTab[];
+const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];
 
 function decode(segment: string): string | null {
   try {
@@ -31,6 +36,12 @@ export function parseRoute(path: string): Route {
     .filter((s) => s !== "")
     .map(decode);
   if (segs.some((s) => s === null || s === "")) return { name: "home" };
+  if (segs[0] === "settings" && segs.length <= 2) {
+    const t = segs[1] ?? "accounts";
+    return settingsTabs.includes(t)
+      ? { name: "settings", tab: t as SettingsTab }
+      : { name: "home" };
+  }
   const [s, store, kind, id, tab, ...rest] = segs as string[];
   if (s !== "s" || store === undefined || id === undefined || rest.length > 0) {
     return { name: "home" };
@@ -62,6 +73,8 @@ export function formatRoute(route: Route): string {
       return `/s/${e(route.store)}/p/${e(route.project)}/${route.tab}`;
     case "item":
       return `/s/${e(route.store)}/i/${e(route.item)}`;
+    case "settings":
+      return `/settings/${route.tab}`;
   }
 }
 

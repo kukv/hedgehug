@@ -85,3 +85,19 @@ describe("display IDs", () => {
     expect(projectDisplayId("HH", 1)).toBe("HH-P1");
   });
 });
+
+describe("settings", () => {
+  it("reads /settings and /settings/accounts as the accounts tab", () => {
+    expect(parseRoute("/settings")).toEqual({ name: "settings", tab: "accounts" });
+    expect(parseRoute("/settings/accounts")).toEqual({ name: "settings", tab: "accounts" });
+  });
+
+  it("goes home for a tab that is not there", () => {
+    expect(parseRoute("/settings/general")).toEqual({ name: "home" });
+    expect(parseRoute("/settings/accounts/x")).toEqual({ name: "home" });
+  });
+
+  it("writes the settings address", () => {
+    expect(formatRoute({ name: "settings", tab: "accounts" })).toBe("/settings/accounts");
+  });
+});

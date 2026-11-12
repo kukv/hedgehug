@@ -106,8 +106,8 @@ kind: Task
 rank: V
 title: ログイン画面
 created: {at: "2026-11-12T09:00:00.000+09:00", by: taro}
-status: null
-priority: null
+status: ` + string(apptest.SampleStatusTodo) + ` # Todo
+priority: ` + string(apptest.SamplePriorityMedium) + ` # Medium
 systems: []
 fields: {}
 watchers: [taro]
@@ -288,7 +288,14 @@ func TestItemYAMLValues(t *testing.T) {
 	if err := apptest.Sample(t.Context(), s, id); err != nil {
 		t.Fatal(err)
 	}
+	const bare item.ID = "01BARE000000000000000000001" // 値のないアイテム
 	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "値を付ける"}, func(tx port.Tx) error {
+		if err := tx.WriteItems().Append(bare, item.Create(item.Item{
+			ID: bare, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 3},
+			Kind: item.Epic, Rank: "W", Title: "値なし",
+		})); err != nil {
+			return err
+		}
 		return tx.WriteItems().Append(apptest.SampleTask,
 			change.NewSet("status", nil, sDoing),
 			change.NewAdd("systems", yAPI),
@@ -310,7 +317,7 @@ func TestItemYAMLValues(t *testing.T) {
 	y := read(apptest.SampleTask)
 	for _, want := range []string{
 		"status: " + string(sDoing) + "\n",
-		"priority: null\n",
+		"priority: " + string(apptest.SamplePriorityMedium) + " # Medium\n",
 		"systems: [" + string(yAPI) + "]\n",
 		"fields:\n  " + string(fEnv) + ": " + string(vProd) + "\n  " + string(fTags) + ": [" + string(vA) + ", " + string(vB) + "]\n",
 	} {
@@ -318,7 +325,7 @@ func TestItemYAMLValues(t *testing.T) {
 			t.Errorf("item.yaml に %q がない:\n%s", want, y)
 		}
 	}
-	y = read(apptest.SampleEpic)
+	y = read(bare)
 	for _, want := range []string{"status: null\n", "priority: null\n", "systems: []\n", "fields: {}\n"} {
 		if !strings.Contains(y, want) {
 			t.Errorf("値のないアイテムの item.yaml に %q がない:\n%s", want, y)

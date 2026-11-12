@@ -10,7 +10,7 @@ import { deleteRefusal } from "./values";
 // ワークスペースの設定の画面の状態(03「範囲と画面の構成」)。
 // 操作は run に渡す。断りはエラーのトーストにして、設定を読み直し、入力を元に戻す。
 
-export type SettingsTab =
+export type WorkspaceSettingsTab =
   | "general"
   | "properties"
   | "statuses"
@@ -20,7 +20,7 @@ export type SettingsTab =
   | "templates"
   | "automation";
 
-export const settingsTabs: { id: SettingsTab; label: string }[] = [
+export const workspaceSettingsTabs: { id: WorkspaceSettingsTab; label: string }[] = [
   { id: "general", label: "一般" },
   { id: "properties", label: "プロパティ" },
   { id: "statuses", label: "ステータス" },
@@ -34,7 +34,7 @@ export const settingsTabs: { id: SettingsTab; label: string }[] = [
 export interface SettingsState {
   storeId: string;
   readOnly: boolean;
-  tab: SettingsTab;
+  tab: WorkspaceSettingsTab;
   detail: WorkspaceDetail;
   usage: WorkspaceUsage;
 }
@@ -45,7 +45,7 @@ export interface WorkspaceSettingsScreen {
   // 別のワークスペースなら、サブタブは一般にして、state を消してから読み込む。
   open(storeId: string, workspaceId: string): Promise<void>;
   // 履歴に積まない(01)。
-  selectTab(tab: SettingsTab): void;
+  selectTab(tab: WorkspaceSettingsTab): void;
   reload(): Promise<void>;
   // 確認ダイアログを開く前の検査。断るときはエラーのトーストを出して false を返す(ダイアログは開かない)。
   askPrefix(prefix: string): boolean;
@@ -68,7 +68,7 @@ export function createWorkspaceSettings(deps: {
   const { port, catalog, toasts } = deps;
   const state = writable<SettingsState | null>(null);
   let current: { storeId: string; workspaceId: string } | null = null;
-  let tab: SettingsTab = "general";
+  let tab: WorkspaceSettingsTab = "general";
   // 読み直しが重なったときは、最後に始めたものの結果だけを使う。
   let latest = 0;
 

@@ -1,4 +1,5 @@
 import {
+  createAccountsPort,
   createCatalogPort,
   createItemsPort,
   createProjectsPort,
@@ -8,6 +9,8 @@ import {
   setToken,
 } from "@hedgehug/api";
 import {
+  createAccountForm,
+  createAccountList,
   createCatalog,
   createDetail,
   createItemDialog,
@@ -16,6 +19,7 @@ import {
   createProjectScreen,
   createScreen,
   createShell,
+  createSignIn,
   createSystemInfo,
   createToasts,
   createWorkspaceDialog,
@@ -40,10 +44,11 @@ export const system = createSystemInfo(createSystemPort());
 export const navigation = createNavigation(browserHistory());
 navigation.start();
 export const links = createLinks(navigation, token);
-export const toasts = createToasts({
-  set: (fn, ms) => setTimeout(fn, ms),
-  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-});
+const timer = {
+  set: (fn: () => void, ms: number) => setTimeout(fn, ms),
+  clear: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+export const toasts = createToasts(timer);
 
 const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
@@ -82,6 +87,27 @@ export const screen = createScreen({
   catalog,
   items: itemsPort,
   openItem: (storeId, itemId) => void detail.open(storeId, itemId),
+});
+
+// 設定「アカウントとメンバー」の GitHub アカウント(07)。3 つは互いを呼ぶので、呼ぶのは作ったあと。
+const accountsPort = createAccountsPort();
+export const accountList = createAccountList({
+  accounts: accountsPort,
+  toasts,
+  reauthDevice: (account) => signIn.reauth(account),
+});
+export const accountForm = createAccountForm({
+  accounts: accountsPort,
+  toasts,
+  signIn: (target, code) => signIn.begin(target, code),
+  onSaved: () => void accountList.reload(),
+});
+export const signIn = createSignIn({
+  accounts: accountsPort,
+  toasts,
+  timer,
+  back: (target, failure) => accountForm.back(target, failure),
+  onDone: () => void accountList.reload(),
 });
 
 // here は、作成ダイアログの初期値に使う、いま開いている画面のワークスペースとプロジェクト(02)。
@@ -123,6 +149,9 @@ navigation.route.subscribe(() => {
   itemDialog.close();
   projectDialog.close();
   workspaceDialog.close();
+  accountForm.close();
+  signIn.close();
+  accountList.cancelDelete();
 });
 
 // 一覧を読んでから、アドレスの解決を始める(一覧がないと Store 名と ID を解決できない)。

@@ -1,4 +1,33 @@
 export {
+  type AccountForm,
+  type AccountFormState,
+  createAccountForm,
+} from "./features/accounts/form";
+export {
+  type AccountList,
+  type AccountListState,
+  createAccountList,
+} from "./features/accounts/list";
+export {
+  createSignIn,
+  type SignIn,
+  type SignInDialogState,
+  type SignInEnd,
+} from "./features/accounts/signIn";
+export {
+  addedMessage,
+  askingText,
+  changedMessage,
+  deletedMessage,
+  deniedText,
+  expiredText,
+  methodChoices,
+  methodLine,
+  reauthedMessage,
+  signedInMessage,
+  waitingText,
+} from "./features/accounts/text";
+export {
   type Catalog,
   createCatalog,
   type ProjectNode,
@@ -59,6 +88,7 @@ export {
   parseRoute,
   projectDisplayId,
   type Route,
+  type SettingsTab,
   type WorkspaceTab,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
@@ -93,9 +123,9 @@ export {
 export {
   createWorkspaceSettings,
   type SettingsState,
-  type SettingsTab,
-  settingsTabs,
   type WorkspaceSettingsScreen,
+  type WorkspaceSettingsTab,
+  workspaceSettingsTabs,
 } from "./features/workspaces/settings";
 export {
   canMoveWorkspace,
@@ -113,6 +143,21 @@ export {
   valueRows,
   valuesHelp,
 } from "./features/workspaces/values";
+export type {
+  Account,
+  AccountRow,
+  AccountValues,
+  AuthMethod,
+  SignInCode,
+  SignInFailure,
+  SignInPurpose,
+  SignInResult,
+  SignInStart,
+  SignInStatus,
+  SignInTarget,
+  TokenMethod,
+  TokenValues,
+} from "./model/account";
 export { NotFound, Refused } from "./model/errors";
 export type { Item, Kind, NewItem } from "./model/item";
 export type { Member } from "./model/member";
@@ -131,6 +176,7 @@ export type {
   WorkspaceUsage,
   WorkspaceValue,
 } from "./model/workspace";
+export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";

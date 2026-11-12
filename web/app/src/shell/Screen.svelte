@@ -2,6 +2,7 @@
   import type { Resolved, StoreNode } from "@hedgehug/core";
   import { PageHead } from "@hedgehug/ui";
   import ProjectScreen from "../screens/project/ProjectScreen.svelte";
+  import SettingsScreen from "../screens/settings/SettingsScreen.svelte";
   import WorkspaceScreen from "../screens/workspace/WorkspaceScreen.svelte";
 
   // いまの画面を出す。画面が替わるたびに作り直すので、本文は先頭から出る(01「画面の移り方」)。
@@ -15,7 +16,7 @@
   let { current, stores, version, ondrawer }: Props = $props();
 
   const store = $derived(
-    current && current.name !== "home" ? stores.find((s) => s.id === current.storeId) : undefined,
+    current && "storeId" in current ? stores.find((s) => s.id === current.storeId) : undefined,
   );
   const workspace = $derived(
     current?.name === "workspace"
@@ -26,7 +27,9 @@
 </script>
 
 {#key current}
-  {#if current?.name === "project"}
+  {#if current?.name === "settings"}
+    <SettingsScreen tab={current.tab} {ondrawer} />
+  {:else if current?.name === "project"}
     <ProjectScreen
       storeId={current.storeId}
       projectId={current.projectId}

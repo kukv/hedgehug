@@ -390,6 +390,75 @@ export interface StoreInfo {
   readOnly: boolean;
 }
 
+export type SyncAllResultResult = typeof SyncAllResultResult[keyof typeof SyncAllResultResult];
+
+
+export const SyncAllResultResult = {
+  synced: 'synced',
+  failed: 'failed',
+  nothing: 'nothing',
+} as const;
+
+export interface SyncAllResult {
+  lines: string[];
+  result: SyncAllResultResult;
+}
+
+export interface SyncHold {
+  hold: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  tab: string;
+}
+
+export interface SyncNetwork {
+  online: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  tab: string;
+}
+
+export interface SyncStoreStatus {
+  /** 同期エラーなら短い理由(06 の表の文言)。なければ空 */
+  error: string;
+  hidden: boolean;
+  /** 最後に成功した同期の時刻(RFC 3339、UTC)。なければ空 */
+  lastSuccess: string;
+  name: string;
+  readOnly: boolean;
+  store: string;
+  /** 未送信の保存の数 */
+  unsent: number;
+}
+
+export interface SyncStatusList {
+  stores: SyncStoreStatus[];
+}
+
+/**
+ * synced はトースト、skipped は案内、failed はエラーのトースト
+ */
+export type SyncStoreResultResult = typeof SyncStoreResultResult[keyof typeof SyncStoreResultResult];
+
+
+export const SyncStoreResultResult = {
+  synced: 'synced',
+  skipped: 'skipped',
+  failed: 'failed',
+} as const;
+
+export interface SyncStoreResult {
+  message: string;
+  /** ミラーに送れなかったときの警告のトースト。なければ空 */
+  mirrorWarning: string;
+  /** synced はトースト、skipped は案内、failed はエラーのトースト */
+  result: SyncStoreResultResult;
+}
+
 export interface SystemInfo {
   /** hedgehug の版 */
   version: string;
@@ -725,6 +794,31 @@ export const reauthAccount = async (id: string, options?: Parameters<typeof fetc
   {
     ...options,
     method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getWatchEventsUrl = () => {
+
+
+
+
+  return `/api/events`
+}
+
+/**
+ * 出来事ごとに `event: store` または `event: sync` の行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
+ * @summary Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
+ */
+export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
+
+  return fetcher<string>(getWatchEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
 
 
   }
@@ -1108,6 +1202,30 @@ export const listProjectItems = async (store: string,
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getSyncStoreUrl = (store: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/sync`
+}
+
+/**
+ * @summary 1 つの Store を同期する
+ */
+export const syncStore = async (store: string, options?: Parameters<typeof fetcher>[1]): Promise<SyncStoreResult> => {
+
+  return fetcher<SyncStoreResult>(getSyncStoreUrl(store),
+  {
+    ...options,
+    method: 'POST'
 
 
   }
@@ -2095,6 +2213,130 @@ export const getWorkspaceUsage = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListSyncStatusUrl = () => {
+
+
+
+
+  return `/api/sync`
+}
+
+/**
+ * @summary remote がある Store の同期の状態を返す
+ */
+export const listSyncStatus = async ( options?: Parameters<typeof fetcher>[1]): Promise<SyncStatusList> => {
+
+  return fetcher<SyncStatusList>(getListSyncStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getSyncAllUrl = () => {
+
+
+
+
+  return `/api/sync`
+}
+
+/**
+ * @summary 表示中で remote がある Store をすべて同期する
+ */
+export const syncAll = async ( options?: Parameters<typeof fetcher>[1]): Promise<SyncAllResult> => {
+
+  return fetcher<SyncAllResult>(getSyncAllUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getHoldSyncUrl = () => {
+
+
+
+
+  return `/api/sync/hold`
+}
+
+/**
+ * @summary 見えているタブが、自動の同期を待たせる条件にあるかを知らせる
+ */
+export const holdSync = async (syncHold: SyncHold, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getHoldSyncUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(syncHold)
+  }
+);}
+
+
+
+export const getSyncNetworkUrl = () => {
+
+
+
+
+  return `/api/sync/network`
+}
+
+/**
+ * @summary タブがネットワークにつながっているかを知らせる(オフラインのあいだは自動で同期しない)
+ */
+export const syncNetwork = async (syncNetworkBody: SyncNetwork, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSyncNetworkUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(syncNetworkBody)
   }
 );}
 

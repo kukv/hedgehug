@@ -31,6 +31,7 @@ const (
 	SampleStatusPending    change.ID = "01SAMPLEVAL000000000000004"
 	SampleStatusCancel     change.ID = "01SAMPLEVAL000000000000005"
 	SamplePriorityMedium   change.ID = "01SAMPLEVAL000000000000008"
+	SampleSystemWeb        change.ID = "01SAMPLEVAL000000000000011"
 )
 
 func sampleValueIDs() func() change.ID {
@@ -46,9 +47,9 @@ func sampleValueIDs() func() change.ID {
 func Sample(ctx context.Context, s port.Stores, id port.StoreID) error {
 	ws := workspace.Workspace{ID: SampleWorkspace, Name: "Web", Prefix: "HH"}
 	pr := project.Project{ID: SampleProject, Place: project.Place{Workspace: ws.ID, Number: 1}, Rank: "V", Title: "ログイン", Owner: "taro", Status: project.Todo}
-	epic := item.Item{ID: SampleEpic, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Number: 1}, Kind: item.Epic, Rank: rank.First, Title: "認証", Watchers: []string{"taro"}}
+	epic := item.Item{ID: SampleEpic, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Number: 1}, Kind: item.Epic, Rank: rank.First, Title: "認証", Watchers: []string{"taro"}, Status: SampleStatusTodo, Priority: SamplePriorityMedium}
 	parent := epic.ID
-	task := item.Item{ID: SampleTask, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Parent: &parent, Number: 2}, Kind: item.Task, Rank: rank.First, Title: "ログイン画面を作る", Watchers: []string{"taro"}}
+	task := item.Item{ID: SampleTask, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Parent: &parent, Number: 2}, Kind: item.Task, Rank: rank.First, Title: "ログイン画面を作る", Watchers: []string{"taro"}, Status: SampleStatusTodo, Priority: SamplePriorityMedium}
 	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
 	return s.Write(ctx, id, op, func(tx port.Tx) error {
 		d, err := workspace.CreateWithSettings(ws, workspace.DefaultSettings(sampleValueIDs()))

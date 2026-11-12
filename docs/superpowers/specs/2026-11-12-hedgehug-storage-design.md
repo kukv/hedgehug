@@ -90,7 +90,7 @@ status: 01JD0R5P7K…S3       # InProgress
 assignee: taro
 priority: 01JD0R5P7K…P2     # Medium
 start: 2026-11-11
-due: 2026-11-15
+end: 2026-11-15
 points: 3
 systems: [01JD0R5P7K…Y1]    # Web
 sprint: 01JD0R5P7K…SP4      # Sprint 4

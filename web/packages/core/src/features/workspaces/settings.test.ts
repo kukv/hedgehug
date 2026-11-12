@@ -4,7 +4,7 @@ import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { fakeWorkspacesPort } from "./fixtures.test-util";
-import { createWorkspaceSettings, settingsTabs } from "./settings";
+import { createWorkspaceSettings, workspaceSettingsTabs } from "./settings";
 
 async function setup() {
   const catalogPort = fakeCatalogPort();
@@ -26,7 +26,7 @@ async function setup() {
 
 describe("workspace settings", () => {
   it("has the eight sub tabs in the order of spec 03", () => {
-    expect(settingsTabs.map((t) => t.label)).toEqual([
+    expect(workspaceSettingsTabs.map((t) => t.label)).toEqual([
       "一般",
       "プロパティ",
       "ステータス",

@@ -45,8 +45,15 @@ func newLink(repo *git.Repository, rm port.Remote) link {
 // fetch は、remote の全ブランチを受け取り、branch と同じ名前のブランチの先端を返す。
 // remote が空なら、ゼロのハッシュと nil。remote が空でなく、そのブランチがなければ port.ErrNoCommonHistory。
 func (l link) fetch(ctx context.Context, repo *git.Repository, branch plumbing.ReferenceName) (plumbing.Hash, error) {
-	err := l.remote.FetchContext(ctx, &git.FetchOptions{
-		RefSpecs:   []config.RefSpec{config.RefSpec("+refs/heads/*:" + remotePrefix + "*")},
+	return l.fetchTo(ctx, repo, branch, remotePrefix)
+}
+
+// fetchTo は、fetch と同じことを、受け取ったブランチを prefix の下に置いて行う(ミラーは別の場所に置く)。
+func (l link) fetchTo(ctx context.Context, repo *git.Repository, branch plumbing.ReferenceName, prefix string) (plumbing.Hash, error) {
+	wctx, done := watch(ctx)
+	defer done()
+	err := l.remote.FetchContext(wctx, &git.FetchOptions{
+		RefSpecs:   []config.RefSpec{config.RefSpec("+refs/heads/*:" + prefix + "*")},
 		RemoteName: remoteName,
 		Auth:       l.auth,
 		Force:      true,
@@ -58,9 +65,9 @@ func (l link) fetch(ctx context.Context, repo *git.Repository, branch plumbing.R
 	case errors.Is(err, transport.ErrEmptyRemoteRepository):
 		return plumbing.ZeroHash, nil
 	case err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate):
-		return plumbing.ZeroHash, err
+		return plumbing.ZeroHash, classify(wctx, err, false)
 	}
-	ref, err := repo.Reference(plumbing.ReferenceName(remotePrefix+branch.Short()), true)
+	ref, err := repo.Reference(plumbing.ReferenceName(prefix+branch.Short()), true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return plumbing.ZeroHash, port.ErrNoCommonHistory
 	}
@@ -73,8 +80,10 @@ func (l link) fetch(ctx context.Context, repo *git.Repository, branch plumbing.R
 // send は、branch を remote の同じ名前のブランチへ送る。履歴を書き換えない(強制しない)。
 // theirs は、この回で合わせた remote の先端(remote が空ならゼロ)、mine は送る自分の先端。
 func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs, mine plumbing.Hash) error {
+	wctx, done := watch(ctx)
+	defer done()
 	spec := config.RefSpec(branch.String() + ":" + branch.String())
-	err := l.remote.PushContext(ctx, &git.PushOptions{RemoteName: remoteName, RefSpecs: []config.RefSpec{spec}, Auth: l.auth})
+	err := l.remote.PushContext(wctx, &git.PushOptions{RemoteName: remoteName, RefSpecs: []config.RefSpec{spec}, Auth: l.auth})
 	if err == nil || errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil
 	}
@@ -89,7 +98,7 @@ func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs, m
 	// (やり直すと、次の回で送った数が 0 になる)。
 	tip, lerr := l.tip(ctx, branch)
 	if lerr != nil {
-		return errors.Join(err, lerr)
+		return errors.Join(classify(wctx, err, true), lerr)
 	}
 	if tip == mine {
 		return nil
@@ -97,17 +106,19 @@ func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs, m
 	if tip != theirs {
 		return errRejected
 	}
-	return err
+	return refused(wctx, err)
 }
 
 // tip は、remote の branch の先端を、受け取らずに見る。remote が空か、そのブランチがなければゼロ。
 func (l link) tip(ctx context.Context, branch plumbing.ReferenceName) (plumbing.Hash, error) {
-	refs, err := l.remote.ListContext(ctx, &git.ListOptions{Auth: l.auth})
+	wctx, done := watch(ctx)
+	defer done()
+	refs, err := l.remote.ListContext(wctx, &git.ListOptions{Auth: l.auth})
 	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
 		return plumbing.ZeroHash, nil
 	}
 	if err != nil {
-		return plumbing.ZeroHash, err
+		return plumbing.ZeroHash, classify(wctx, err, false)
 	}
 	for _, r := range refs {
 		if r.Name() == branch {

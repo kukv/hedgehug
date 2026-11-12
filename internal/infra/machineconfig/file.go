@@ -16,6 +16,7 @@ import (
 type config struct {
 	Accounts []accountYAML `yaml:"accounts"`
 	Hosts    []hostYAML    `yaml:"hosts,omitempty"`
+	Sync     syncYAML      `yaml:"sync,omitempty"`
 }
 
 // File は config.yaml。同じプロセスの中の読み書きは 1 つずつ行う。

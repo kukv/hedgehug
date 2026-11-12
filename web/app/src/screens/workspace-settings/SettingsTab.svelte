@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { readOnlyBand, type SettingsTab, settingsTabs } from "@hedgehug/core";
+  import { readOnlyBand, type WorkspaceSettingsTab, workspaceSettingsTabs } from "@hedgehug/core";
   import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
   import { workspaceSettings } from "../../wire";
   import GeneralPanel from "./GeneralPanel.svelte";
@@ -27,9 +27,9 @@
 {#if $settings && $settings.storeId === storeId && $settings.detail.id === workspaceId}
   <div class="subtabs">
     <Tabs
-      tabs={settingsTabs}
+      tabs={workspaceSettingsTabs}
       current={$settings.tab}
-      onselect={(id) => workspaceSettings.selectTab(id as SettingsTab)}
+      onselect={(id) => workspaceSettings.selectTab(id as WorkspaceSettingsTab)}
     />
   </div>
   <div class="body">
