@@ -14,10 +14,11 @@ type Session struct {
 	fps     map[account.ID][32]byte // 最後に確かめたトークンの指紋(07「接続のたびの照合」)
 	broken  map[account.ID]string   // 認証エラーと、行に出す理由(空なら理由の文言なし)
 	refresh sync.Mutex              // 期限付きトークンの取り直しを 1 つずつ行う(決定 D2-6)
+	flows   map[string]*flow        // サインインの途中の流れ(SignIn)
 }
 
 func NewSession() *Session {
-	return &Session{fps: map[account.ID][32]byte{}, broken: map[account.ID]string{}}
+	return &Session{fps: map[account.ID][32]byte{}, broken: map[account.ID]string{}, flows: map[string]*flow{}}
 }
 
 func fingerprint(token string) [32]byte { return sha256.Sum256([]byte(token)) }
@@ -39,12 +40,17 @@ func (s *Session) markBroken(id account.ID, reason string) {
 	delete(s.fps, id)
 }
 
-// forget は、削除したアカウントの状態を捨てる。
+// forget は、削除したアカウントの状態と、そのアカウントの編集・再認証のサインインの流れを捨てる。
 func (s *Session) forget(id account.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.fps, id)
 	delete(s.broken, id)
+	for fid, f := range s.flows {
+		if f.target.ID == id {
+			delete(s.flows, fid)
+		}
+	}
 }
 
 func (s *Session) state(id account.ID) (broken bool, reason string) {
