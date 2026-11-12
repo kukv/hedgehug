@@ -39,4 +39,6 @@ export interface NewItem {
   title: string;
   // values は、作成のときに書くプロパティの値(プロパティの ID ごと)。
   values: Record<string, PropertyInput>;
+  // templateId は、一緒に作るテンプレート(空かなしは「なし」)。
+  templateId?: string;
 }

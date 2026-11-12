@@ -117,6 +117,8 @@ export interface CreateItem {
   parent?: string;
   /** 空はプロジェクトを選んでいない */
   project: string;
+  /** 一緒に作るテンプレートの内部 ID。空は「なし」 */
+  template?: string;
   title: string;
   /** プロパティの値(キーはプロパティの内部 ID。組み込みはキー) */
   values?: CreateItemValues;

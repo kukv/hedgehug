@@ -64,3 +64,14 @@ func TestRefusals(t *testing.T) {
 		t.Errorf("unknown: %d", res.Code)
 	}
 }
+
+func TestCreatePassesTheTemplate(t *testing.T) {
+	api := newAPI(t)
+	res := api.Post("/api/stores/S1/items", map[string]any{
+		"project": string(apptest.SampleProject), "parent": string(apptest.SampleEpic),
+		"kind": "Task", "title": "調査", "template": "01NOSUCHTEMPLATE000000001",
+	})
+	if res.Code != http.StatusNotFound {
+		t.Errorf("status = %d, body %s", res.Code, res.Body)
+	}
+}
