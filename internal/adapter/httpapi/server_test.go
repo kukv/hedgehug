@@ -126,7 +126,7 @@ func TestNoIndexIs404WithoutListing(t *testing.T) {
 func TestOpenAPIIsNotServed(t *testing.T) {
 	mux := http.NewServeMux()
 	httpapi.NewAPI(mux, httpapi.Deps{Version: "v0.0.0-test"})
-	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/SystemInfo.json"} {
+	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/SystemInfo.json", "/schemas/x.json"} {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {
