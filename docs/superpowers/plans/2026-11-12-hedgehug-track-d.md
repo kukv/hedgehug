@@ -882,7 +882,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 )
 
-const secretToken = "ghp_SECRET0123456789"
+const fakeToken = "fake-token"
 
 var now = time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
 
@@ -899,14 +899,14 @@ func newClient(t *testing.T, h http.HandlerFunc) (*Client, *[]time.Duration) {
 
 func TestViewer(t *testing.T) {
 	c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/user" || r.Header.Get("Authorization") != "Bearer "+secretToken ||
+		if r.URL.Path != "/user" || r.Header.Get("Authorization") != "Bearer "+fakeToken ||
 			r.Header.Get("X-GitHub-Api-Version") != "2022-11-28" {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 		_, _ = w.Write([]byte(`{"login":"taro","id":1}`))
 	})
-	login, err := c.Viewer(context.Background(), secretToken)
+	login, err := c.Viewer(context.Background(), fakeToken)
 	if err != nil || login != "taro" {
 		t.Errorf("Viewer = %q, %v", login, err)
 	}
@@ -930,7 +930,7 @@ func TestFailures(t *testing.T) {
 	}
 	for _, c := range cases {
 		client, _ := newClient(t, c.h)
-		_, err := client.Viewer(context.Background(), secretToken)
+		_, err := client.Viewer(context.Background(), fakeToken)
 		var f *ghcall.Failure
 		if !ghcall.Is(err, c.kind) {
 			t.Errorf("%s: err = %v, want %s", c.name, err, c.kind)
@@ -940,7 +940,7 @@ func TestFailures(t *testing.T) {
 		if !f.ResetAt.Equal(c.reset) {
 			t.Errorf("%s: ResetAt = %v, want %v", c.name, f.ResetAt, c.reset)
 		}
-		if strings.Contains(err.Error(), secretToken) {
+		if strings.Contains(err.Error(), fakeToken) {
 			t.Errorf("%s: the error shows the token", c.name)
 		}
 	}
@@ -951,8 +951,8 @@ func TestTimeoutIsUnreachable(t *testing.T) {
 	c, _ := newClient(t, func(http.ResponseWriter, *http.Request) { <-release })
 	defer close(release)
 	c.HTTP.Timeout = 50 * time.Millisecond
-	_, err := c.Viewer(context.Background(), secretToken)
-	if !ghcall.Is(err, ghcall.Unreachable) || strings.Contains(err.Error(), secretToken) {
+	_, err := c.Viewer(context.Background(), fakeToken)
+	if !ghcall.Is(err, ghcall.Unreachable) || strings.Contains(err.Error(), fakeToken) {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -962,7 +962,7 @@ func TestSkewIsReportedOnEveryAnswer(t *testing.T) {
 		w.Header().Set("Date", now.Add(6*time.Minute).Format(http.TimeFormat))
 		http.Error(w, "", http.StatusUnauthorized)
 	})
-	_, _ = c.Viewer(context.Background(), secretToken)
+	_, _ = c.Viewer(context.Background(), fakeToken)
 	if len(*skews) != 1 || (*skews)[0] != 6*time.Minute {
 		t.Errorf("skews = %v", *skews)
 	}
