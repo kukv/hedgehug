@@ -128,7 +128,10 @@ test("sets an added text property", async ({ page, request }, info) => {
   await Promise.all([page.waitForResponse(isSet), field.blur()]);
   await page.reload();
   // 再読み込みでパネルは閉じる。ツリーから開き直す。
-  await page.getByRole("list", { name: "ツリー" }).getByRole("link", { name: task, exact: true }).click();
+  await page
+    .getByRole("list", { name: "ツリー" })
+    .getByRole("link", { name: task, exact: true })
+    .click();
   await expect(
     page.getByRole("region", { name: "プロパティ" }).getByRole("textbox", { name }),
   ).toHaveValue("メモの値");
