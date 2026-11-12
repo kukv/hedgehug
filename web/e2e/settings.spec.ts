@@ -120,7 +120,14 @@ test("the workspace menu opens the settings and moves the workspace down", async
     await expect.poll(async () => (await order()).join("\n")).not.toBe(prev);
     if ((await idx(first)) > (await idx(second))) break;
   }
-  await expect.poll(async () => (await idx(first)) > (await idx(second))).toBe(true);
+  await expect
+    .poll(
+      async () =>
+        (await idx(second)) >= 0 &&
+        (await idx(first)) >= 0 &&
+        (await idx(first)) > (await idx(second)),
+    )
+    .toBe(true);
 });
 
 test("the general tab restores an empty name and confirms a prefix change", async ({
@@ -140,6 +147,11 @@ test("the general tab restores an empty name and confirms a prefix change", asyn
 
   const prefixInput = page.getByRole("textbox", { name: "接頭辞", exact: true });
   await expect(page.getByText("アイテムはまだありません")).toBeVisible();
+  // 空の接頭辞は、確認ダイアログを開かずに、エラーのトーストで断られる。
+  await prefixInput.fill("");
+  await page.getByRole("button", { name: "変更", exact: true }).click();
+  await expect(page.getByText("接頭辞を入力してください")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await prefixInput.fill(next.toLowerCase());
   await expect(prefixInput).toHaveValue(next);
   await page.getByRole("button", { name: "変更", exact: true }).click();
@@ -181,16 +193,31 @@ test("the statuses tab adds, recolors, reorders and deletes values", async ({ pa
   await review.getByRole("button", { name: "上へ" }).click();
   await expect.poll(async () => (await names()).at(-2)).toBe("Review");
 
+  // 作ったばかりのワークスペースの「Todo」は初期ステータスで未着手の既定でもある。ごみ箱を押すと、
+  // 確認ダイアログを開かずに、1 つの文のエラーのトーストが出る。
+  const dialog = page.getByRole("dialog");
+  await rowOf("Todo").getByRole("button", { name: "削除" }).click();
+  await expect(
+    page.getByText(
+      "「Todo」は初期ステータスで、未着手の既定のステータスでもあります。先に別のステータスを、初期ステータスと未着手の既定にしてください",
+    ),
+  ).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+
   await review.getByRole("button", { name: "初期ステータスにする" }).click();
   await expect(review.getByText("初期", { exact: true })).toBeVisible();
 
+  // 初期でなくなると、未着手の既定だけの文になる。これも、ダイアログを開かない。
   await rowOf("Todo").getByRole("button", { name: "削除" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByText(/「Todo」は未着手の既定のステータスです/)).toBeVisible();
+  await expect(dialog).toHaveCount(0);
 
   await page.getByRole("combobox", { name: "未着手の既定" }).selectOption({ label: "Pending" });
-  await rowOf("Todo").getByRole("button", { name: "削除" }).click();
+  // 既定の付け替えが保存されて読み直されるまでは、まだ断られる。ダイアログが開くまで押し直す。
+  await expect(async () => {
+    await rowOf("Todo").getByRole("button", { name: "削除" }).click();
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByText("「Todo」を削除しました")).toBeVisible();
   await expect(rowOf("Todo")).toHaveCount(0);

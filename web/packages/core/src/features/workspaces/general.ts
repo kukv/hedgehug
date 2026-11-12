@@ -19,3 +19,14 @@ export function prefixConfirm(oldPrefix: string, newPrefix: string, usage: Works
   }
   return `${usage.items} 件の ID が ${oldPrefix}-${first} → ${newPrefix}-${first} のように変わります。古い ID で書かれたコメントやリンクは、そのままの文字で残ります。旧い接頭辞でも検索できます。`;
 }
+
+// prefixRefusal は、接頭辞の「変更」を押したときの検査(確認ダイアログの前)。作成と同じ規則で、
+// 当たらなければ null。others は、同じ Store のほかのワークスペースの接頭辞。
+export function prefixRefusal(prefix: string, others: string[]): string | null {
+  if (prefix === "") return "接頭辞を入力してください";
+  if (!/^[A-Z][A-Z0-9]{0,9}$/.test(prefix)) {
+    return "接頭辞は英大文字で始まる 10 文字以内の英大文字と数字にしてください";
+  }
+  if (others.includes(prefix)) return "この Store には同じ接頭辞のワークスペースがあります";
+  return null;
+}

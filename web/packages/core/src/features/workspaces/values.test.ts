@@ -4,6 +4,7 @@ import {
   categoryLabels,
   colors,
   deleteDialog,
+  deleteRefusal,
   statusHelp,
   valueListLabel,
   valueRows,
@@ -193,5 +194,39 @@ describe("delete dialog", () => {
     const s = withSingleChoice(settings(), "multi");
     const d = deleteDialog(s, ids.env, ids.prod, usage({ [ids.prod]: 1 }));
     expect(d.replacements).toBeUndefined();
+  });
+});
+
+describe("delete refusal", () => {
+  it("merges the initial and default texts into one sentence for a status that is both", () => {
+    expect(deleteRefusal(settings(), "statuses", ids.todo)).toBe(
+      "「Todo」は初期ステータスで、未着手の既定のステータスでもあります。先に別のステータスを、初期ステータスと未着手の既定にしてください",
+    );
+  });
+
+  it("refuses the initial status alone", () => {
+    const s = { ...settings(), initialStatus: ids.pending };
+    expect(deleteRefusal(s, "statuses", ids.pending)).toBe(
+      "初期ステータスは削除できません。先に別のステータスを初期ステータスにしてください",
+    );
+  });
+
+  it("refuses the default status of a category alone", () => {
+    expect(deleteRefusal(settings(), "statuses", ids.doing)).toBe(
+      "「InProgress」は進行中の既定のステータスです。先に別のステータスを既定にしてください",
+    );
+  });
+
+  it("refuses the initial priority", () => {
+    expect(deleteRefusal(settings(), "priorities", ids.high)).toBe(
+      "初期優先度は削除できません。先に別の優先度を初期優先度にしてください",
+    );
+  });
+
+  it("does not refuse other values", () => {
+    expect(deleteRefusal(settings(), "statuses", ids.pending)).toBeNull();
+    expect(deleteRefusal(settings(), "priorities", ids.low)).toBeNull();
+    expect(deleteRefusal(settings(), "systems", ids.web)).toBeNull();
+    expect(deleteRefusal(withSingleChoice(settings()), ids.env, ids.prod)).toBeNull();
   });
 });

@@ -42,7 +42,7 @@
   }
   function askPrefix() {
     if (prefix === s.detail.prefix) return;
-    confirming = prefix;
+    if (workspaceSettings.askPrefix(prefix)) confirming = prefix;
   }
   function prefixKey(event: KeyboardEvent) {
     if (event.key === "Enter" && !event.isComposing) askPrefix();

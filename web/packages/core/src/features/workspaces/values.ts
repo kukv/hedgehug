@@ -152,3 +152,35 @@ export function deleteDialog(
   }
   return model;
 }
+
+const categoryName = (c: Category) => categoryLabels[c];
+
+// deleteRefusal は、値のごみ箱を押したときの検査(確認ダイアログの前。03「初期ステータス」「分類ごとの
+// 既定のステータス」「初期優先度」)。断る文言か、当たらなければ null。サーバーの検査と同じ文。
+export function deleteRefusal(
+  settings: WorkspaceSettings,
+  list: ValueList,
+  valueId: string,
+): string | null {
+  if (list === "priorities") {
+    return valueId === settings.initialPriority
+      ? "初期優先度は削除できません。先に別の優先度を初期優先度にしてください"
+      : null;
+  }
+  if (list !== "statuses") return null;
+  const initial = valueId === settings.initialStatus;
+  const category = (Object.keys(settings.categoryDefaults) as Category[]).find(
+    (c) => settings.categoryDefaults[c] === valueId,
+  );
+  const name = settings.statuses.find((x) => x.id === valueId)?.name ?? "";
+  if (initial && category) {
+    const c = categoryName(category);
+    return `「${name}」は初期ステータスで、${c}の既定のステータスでもあります。先に別のステータスを、初期ステータスと${c}の既定にしてください`;
+  }
+  if (initial)
+    return "初期ステータスは削除できません。先に別のステータスを初期ステータスにしてください";
+  if (category) {
+    return `「${name}」は${categoryName(category)}の既定のステータスです。先に別のステータスを既定にしてください`;
+  }
+  return null;
+}

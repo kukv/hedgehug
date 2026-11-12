@@ -75,7 +75,9 @@
               : p.setInitialPriority(st, w, row.id),
           )}
         onmove={(d) => run((p, st, w) => p.moveValue(st, w, list, row.id, d))}
-        ondelete={() => (deleting = row.id)}
+        ondelete={() => {
+          if (workspaceSettings.askDelete(list, row.id)) deleting = row.id;
+        }}
       />
     {/each}
   </div>

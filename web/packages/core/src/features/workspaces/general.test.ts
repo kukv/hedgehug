@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prefixConfirm, prefixExamples, prefixHelp } from "./general";
+import { prefixConfirm, prefixExamples, prefixHelp, prefixRefusal } from "./general";
 
 const usage = (items: number, firstNumbers: number[]) => ({
   items,
@@ -29,5 +29,19 @@ describe("general", () => {
     expect(prefixHelp).toBe(
       "Epic・Story・Task・Bug・Step の ID の頭に付きます。変更すると、すべての ID が新しい接頭辞で表示されます(番号はそのままです)。",
     );
+  });
+
+  it("refuses an empty, malformed or taken prefix with the texts of spec 03", () => {
+    expect(prefixRefusal("", ["API"])).toBe("接頭辞を入力してください");
+    for (const bad of ["1AB", "AB-C", "ABCDEFGHIJK", "ab"]) {
+      expect(prefixRefusal(bad, [])).toBe(
+        "接頭辞は英大文字で始まる 10 文字以内の英大文字と数字にしてください",
+      );
+    }
+    expect(prefixRefusal("API", ["HH", "API"])).toBe(
+      "この Store には同じ接頭辞のワークスペースがあります",
+    );
+    expect(prefixRefusal("WEB", ["API"])).toBeNull();
+    expect(prefixRefusal("ABCDEFGHI0", [])).toBeNull();
   });
 });

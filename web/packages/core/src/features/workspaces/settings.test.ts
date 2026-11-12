@@ -143,4 +143,32 @@ describe("workspace settings", () => {
     await screen.open("S1", "S1-W1");
     expect(get(screen.state)?.readOnly).toBe(false);
   });
+
+  it("shows the refusal as an error toast before a dialog opens", async () => {
+    const catalogPort = fakeCatalogPort();
+    const two = {
+      ...catalogPort,
+      listWorkspaces: async (storeId: string) => [
+        { id: `${storeId}-W1`, storeId, name: "Web", prefix: "HH" },
+        { id: `${storeId}-W2`, storeId, name: "API", prefix: "API" },
+      ],
+    };
+    const catalog = createCatalog(two);
+    await catalog.load();
+    const toasts = createToasts({ set: () => 0, clear: () => {} });
+    const screen = createWorkspaceSettings({ port: fakeWorkspacesPort(), catalog, toasts });
+    await screen.open("S1", "S1-W1");
+    expect(screen.askPrefix("WEB")).toBe(true);
+    expect(screen.askPrefix("API")).toBe(false);
+    expect(screen.askPrefix("HH")).toBe(true); // 自分の接頭辞は重ならない
+    expect(screen.askDelete("statuses", "st1")).toBe(false); // 初期かつ未着手の既定
+    expect(screen.askDelete("statuses", "st3")).toBe(true);
+    expect(get(toasts.list).map((t) => [t.text, t.error])).toEqual([
+      ["この Store には同じ接頭辞のワークスペースがあります", true],
+      [
+        "「未着手」は初期ステータスで、未着手の既定のステータスでもあります。先に別のステータスを、初期ステータスと未着手の既定にしてください",
+        true,
+      ],
+    ]);
+  });
 });

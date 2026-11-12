@@ -1,9 +1,11 @@
 import { Refused } from "../../model/errors";
-import type { WorkspaceDetail, WorkspaceUsage } from "../../model/workspace";
+import type { ValueList, WorkspaceDetail, WorkspaceUsage } from "../../model/workspace";
 import type { WorkspacesPort } from "../../port/workspaces";
-import { type Readable, readonly, writable } from "../../reactive/store";
+import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import type { Toasts } from "../toasts/toasts";
+import { prefixRefusal } from "./general";
+import { deleteRefusal } from "./values";
 
 // ワークスペースの設定の画面の状態(03「範囲と画面の構成」)。
 // 操作は run に渡す。断りはエラーのトーストにして、設定を読み直し、入力を元に戻す。
@@ -45,6 +47,9 @@ export interface WorkspaceSettingsScreen {
   // 履歴に積まない(01)。
   selectTab(tab: SettingsTab): void;
   reload(): Promise<void>;
+  // 確認ダイアログを開く前の検査。断るときはエラーのトーストを出して false を返す(ダイアログは開かない)。
+  askPrefix(prefix: string): boolean;
+  askDelete(list: ValueList, valueId: string): boolean;
   // run は操作を 1 つ行い、読み直す。断りはエラーのトーストにして false を返す。
   // ok を渡したら、成功のときにトーストを出す。
   // onRefused を渡したら、断りをトーストにせず、その文言を渡す(ダイアログの中の赤字用)。
@@ -86,6 +91,11 @@ export function createWorkspaceSettings(deps: {
     });
   }
 
+  function allowed(refusal: string | null): boolean {
+    if (refusal !== null) toasts.show(refusal, { error: true });
+    return refusal === null;
+  }
+
   // 名前・接頭辞・並びを変えたら、サイドバーも読み直す。
   function watching(onCatalogChange: () => void): WorkspacesPort {
     const touch =
@@ -118,6 +128,18 @@ export function createWorkspaceSettings(deps: {
       state.update((s) => (s ? { ...s, tab } : s));
     },
     reload,
+    askPrefix(prefix) {
+      const others = (current && catalog.store(current.storeId)?.workspaces) || [];
+      const refusal = prefixRefusal(
+        prefix,
+        others.filter((w) => w.id !== current?.workspaceId).map((w) => w.prefix),
+      );
+      return allowed(refusal);
+    },
+    askDelete(list, valueId) {
+      const settings = get(state)?.detail.settings;
+      return allowed(settings ? deleteRefusal(settings, list, valueId) : null);
+    },
     async run(op, ok, onRefused) {
       if (!current) return false;
       const { storeId, workspaceId } = current;
