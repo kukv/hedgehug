@@ -91,6 +91,10 @@ export interface ChangeWorkspacePrefix {
   prefix: string;
 }
 
+export interface CheckStep {
+  done: boolean;
+}
+
 export type CreateItemKind = typeof CreateItemKind[keyof typeof CreateItemKind];
 
 
@@ -102,6 +106,11 @@ export const CreateItemKind = {
   Step: 'Step',
 } as const;
 
+/**
+ * プロパティの値(キーはプロパティの内部 ID。組み込みはキー)
+ */
+export type CreateItemValues = {[key: string]: unknown};
+
 export interface CreateItem {
   kind: CreateItemKind;
   /** 空は親を選んでいない */
@@ -109,6 +118,8 @@ export interface CreateItem {
   /** 空はプロジェクトを選んでいない */
   project: string;
   title: string;
+  /** プロパティの値(キーはプロパティの内部 ID。組み込みはキー) */
+  values?: CreateItemValues;
 }
 
 export type CreateProjectStatus = typeof CreateProjectStatus[keyof typeof CreateProjectStatus];
@@ -178,6 +189,16 @@ export interface ImpactOutputBody {
   lines: string[] | null;
 }
 
+/**
+ * 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)
+ */
+export type ItemChoices = {[key: string]: string[] | null};
+
+/**
+ * 追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む
+ */
+export type ItemFields = {[key: string]: unknown};
+
 export type ItemKind = typeof ItemKind[keyof typeof ItemKind];
 
 
@@ -190,8 +211,20 @@ export const ItemKind = {
 } as const;
 
 export interface Item {
+  /** ログイン名。空は未割り当て */
+  assignee: string;
+  /** 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID) */
+  choices: ItemChoices;
   createdAt: string;
   createdBy: string;
+  end: string;
+  /**
+     * 時間
+     * @nullable
+     */
+  estimate: number | null;
+  /** 追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む */
+  fields: ItemFields;
   id: string;
   kind: ItemKind;
   number: number;
@@ -200,8 +233,16 @@ export interface Item {
      * @nullable
      */
   parent: string | null;
+  /** @nullable */
+  points: number | null;
+  priority: string;
   project: string;
   rank: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  /** ステータスの内部 ID。空は値なし */
+  status: string;
+  systems: string[];
   title: string;
   /** @nullable */
   watchers: string[] | null;
@@ -289,6 +330,11 @@ export interface RenameWorkspaceValue {
      * @pattern ^[^\r\n]*$
      */
   name: string;
+}
+
+export interface SetItemProperty {
+  /** 新しい値。null と空の文字列は値を空にする */
+  value: unknown;
 }
 
 export interface SetWorkspacePropertyHidden {
@@ -1003,6 +1049,47 @@ export const getItem = async (store: string,
 
 
 
+export const getCheckStepUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/check`
+}
+
+/**
+ * @summary Step のチェックを入り切りする
+ */
+export const checkStep = async (store: string,
+    item: string,
+    checkStepBody: CheckStep, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getCheckStepUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(checkStepBody)
+  }
+);}
+
+
+
 export const getMoveItemUpUrl = (store: string,
     item: string,) => {
 
@@ -1019,6 +1106,109 @@ export const moveItemUp = async (store: string,
     item: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
 
   return fetcher<void>(getMoveItemUpUrl(store,item),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getSetItemPropertyUrl = (store: string,
+    item: string,
+    property: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/properties/${encodeURIComponent(String(property))}`
+}
+
+/**
+ * @summary アイテムのプロパティの値を変える
+ */
+export const setItemProperty = async (store: string,
+    item: string,
+    property: string,
+    setItemPropertyBody: SetItemProperty, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getSetItemPropertyUrl(store,item,property),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setItemPropertyBody)
+  }
+);}
+
+
+
+export const getRemoveItemValueUrl = (store: string,
+    item: string,
+    property: string,
+    value: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/properties/${encodeURIComponent(String(property))}/values/${encodeURIComponent(String(value))}`
+}
+
+/**
+ * @summary 関連システム・複数選択から値を取り除く
+ */
+export const removeItemValue = async (store: string,
+    item: string,
+    property: string,
+    value: string, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+  return fetcher<Item>(getRemoveItemValueUrl(store,item,property,value),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getAddItemValueUrl = (store: string,
+    item: string,
+    property: string,
+    value: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/properties/${encodeURIComponent(String(property))}/values/${encodeURIComponent(String(value))}`
+}
+
+/**
+ * @summary 関連システム・複数選択に値を足す
+ */
+export const addItemValue = async (store: string,
+    item: string,
+    property: string,
+    value: string, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+  return fetcher<Item>(getAddItemValueUrl(store,item,property,value),
   {
     ...options,
     method: 'POST'

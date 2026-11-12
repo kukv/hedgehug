@@ -3,7 +3,7 @@ package items
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -29,6 +29,17 @@ type Item struct {
 	Watchers  []string `json:"watchers"`
 	CreatedAt string   `json:"createdAt"`
 	CreatedBy string   `json:"createdBy"`
+
+	Status   string                     `json:"status" doc:"ステータスの内部 ID。空は値なし"`
+	Priority string                     `json:"priority"`
+	Assignee string                     `json:"assignee" doc:"ログイン名。空は未割り当て"`
+	Start    string                     `json:"start" doc:"YYYY-MM-DD。空は値なし"`
+	End      string                     `json:"end"`
+	Points   *float64                   `json:"points"`
+	Estimate *float64                   `json:"estimate" doc:"時間"`
+	Systems  []string                   `json:"systems" nullable:"false"`
+	Choices  map[string][]string        `json:"choices" nullable:"false" doc:"選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)"`
+	Fields   map[string]json.RawMessage `json:"fields" nullable:"false" doc:"追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む"`
 }
 
 func toAPI(it item.Item) Item {
@@ -36,6 +47,21 @@ func toAPI(it item.Item) Item {
 		ID: string(it.ID), Workspace: string(it.Place.Workspace), Project: string(it.Place.Project),
 		Number: it.Place.Number, Kind: string(it.Kind), Rank: it.Rank, Title: it.Title, Watchers: it.Watchers,
 		CreatedAt: it.Created.At.Format(change.TimeLayout), CreatedBy: it.Created.By,
+		Status: string(it.Status), Priority: string(it.Priority), Assignee: it.Assignee, Start: it.Start, End: it.End,
+		Points: it.Points, Estimate: it.Estimate, Systems: []string{}, Choices: map[string][]string{}, Fields: map[string]json.RawMessage{},
+	}
+	for _, s := range it.Systems {
+		out.Systems = append(out.Systems, string(s))
+	}
+	for k, vs := range it.Choices {
+		ids := make([]string, 0, len(vs))
+		for _, v := range vs {
+			ids = append(ids, string(v))
+		}
+		out.Choices[string(k)] = ids
+	}
+	for k, v := range it.Fields {
+		out.Fields[string(k)] = v
 	}
 	if out.Watchers == nil {
 		out.Watchers = []string{}
@@ -54,6 +80,8 @@ type CreateItem struct {
 	Parent  string `json:"parent,omitempty" doc:"空は親を選んでいない"`
 	Kind    string `json:"kind" enum:"Epic,Story,Task,Bug,Step"`
 	Title   string `json:"title"`
+
+	Values map[string]json.RawMessage `json:"values,omitempty" doc:"プロパティの値(キーはプロパティの内部 ID。組み込みはキー)"`
 }
 
 type createInput struct {
@@ -80,25 +108,24 @@ func Register(api huma.API, svc appitems.Service) {
 	registerCreateRead(api, svc)
 	registerEdit(api, svc)
 	registerNumbers(api, svc)
+	registerValues(api, svc)
 }
 
 func registerCreateRead(api huma.API, svc appitems.Service) {
 	huma.Register(api, huma.Operation{OperationID: "create-item", Method: http.MethodPost, Path: "/api/stores/{store}/items", Summary: "アイテムを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
 			req := appitems.CreateInput{Store: port.StoreID(in.Store), Project: project.ID(in.Body.Project), Kind: item.Kind(in.Body.Kind), Title: in.Body.Title}
+			if len(in.Body.Values) > 0 {
+				req.Values = make(map[change.ID]json.RawMessage, len(in.Body.Values))
+				for k, v := range in.Body.Values {
+					req.Values[change.ID(k)] = v
+				}
+			}
 			if in.Body.Parent != "" {
 				p := item.ID(in.Body.Parent)
 				req.Parent = &p
 			}
-			it, err := svc.Create(ctx, req)
-			if errors.Is(err, appitems.ErrParentElsewhere) {
-				// 画面の親の候補は同じプロジェクトだけなので、呼び出しの誤り。仕様の文言はない
-				return nil, huma.Error422UnprocessableEntity(err.Error())
-			}
-			if err != nil {
-				return nil, apierr.From(err)
-			}
-			return &oneOutput{Body: toAPI(it)}, nil
+			return one(svc.Create(ctx, req))
 		})
 	huma.Register(api, huma.Operation{OperationID: "get-item", Method: http.MethodGet, Path: "/api/stores/{store}/items/{item}", Summary: "アイテムを返す"},
 		func(ctx context.Context, in *getInput) (*oneOutput, error) {

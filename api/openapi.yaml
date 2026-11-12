@@ -110,6 +110,14 @@ components:
       required:
         - prefix
       type: object
+    CheckStep:
+      additionalProperties: false
+      properties:
+        done:
+          type: boolean
+      required:
+        - done
+      type: object
     CreateItem:
       additionalProperties: false
       properties:
@@ -129,6 +137,10 @@ components:
           type: string
         title:
           type: string
+        values:
+          additionalProperties: {}
+          description: プロパティの値(キーはプロパティの内部 ID。組み込みはキー)
+          type: object
       required:
         - project
         - kind
@@ -234,10 +246,32 @@ components:
     Item:
       additionalProperties: false
       properties:
+        assignee:
+          description: ログイン名。空は未割り当て
+          type: string
+        choices:
+          additionalProperties:
+            items:
+              type: string
+            nullable: true
+            type: array
+          description: 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)
+          type: object
         createdAt:
           type: string
         createdBy:
           type: string
+        end:
+          type: string
+        estimate:
+          description: 時間
+          format: double
+          nullable: true
+          type: number
+        fields:
+          additionalProperties: {}
+          description: 追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む
+          type: object
         id:
           type: string
         kind:
@@ -255,10 +289,26 @@ components:
           description: 親の内部 ID。Epic は null
           nullable: true
           type: string
+        points:
+          format: double
+          nullable: true
+          type: number
+        priority:
+          type: string
         project:
           type: string
         rank:
           type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          type: string
+        status:
+          description: ステータスの内部 ID。空は値なし
+          type: string
+        systems:
+          items:
+            type: string
+          type: array
         title:
           type: string
         watchers:
@@ -280,6 +330,16 @@ components:
         - watchers
         - createdAt
         - createdBy
+        - status
+        - priority
+        - assignee
+        - start
+        - end
+        - points
+        - estimate
+        - systems
+        - choices
+        - fields
       type: object
     ListOutputBody:
       additionalProperties: false
@@ -409,6 +469,14 @@ components:
           type: string
       required:
         - name
+      type: object
+    SetItemProperty:
+      additionalProperties: false
+      properties:
+        value:
+          description: 新しい値。null と空の文字列は値を空にする
+      required:
+        - value
       type: object
     SetWorkspacePropertyHidden:
       additionalProperties: false
@@ -1295,6 +1363,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムを返す
+  /api/stores/{store}/items/{item}/check:
+    post:
+      operationId: check-step
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckStep"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Step のチェックを入り切りする
   /api/stores/{store}/items/{item}/move-up:
     post:
       operationId: move-item-up
@@ -1319,6 +1421,120 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムを直前の兄弟と入れ替える
+  /api/stores/{store}/items/{item}/properties/{property}:
+    put:
+      operationId: set-item-property
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetItemProperty"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのプロパティの値を変える
+  /api/stores/{store}/items/{item}/properties/{property}/values/{value}:
+    delete:
+      operationId: remove-item-value
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連システム・複数選択から値を取り除く
+    post:
+      operationId: add-item-value
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連システム・複数選択に値を足す
   /api/stores/{store}/items/{item}/steps:
     post:
       operationId: add-step
