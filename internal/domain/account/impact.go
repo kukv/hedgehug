@@ -32,8 +32,8 @@ func EditLines(a Account, newLogin string, uses []StoreUse) []string {
 	return identityLines(a.Login, strings.TrimSpace(newLogin), uses)
 }
 
-// identityLines は「あなた」が変わる行。変わり先が分からない(空)ときは出さない。
 func identityLines(from, to string, uses []StoreUse) []string {
+	// 変わり先が空(マシンのログイン名が未設定)なら、「あなた」が何に変わるか言えないので行を出さない。
 	if to == "" || strings.EqualFold(from, to) {
 		return nil
 	}

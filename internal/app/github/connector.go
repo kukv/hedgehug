@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -51,16 +52,11 @@ func (c Connector) storeAccount(ctx context.Context, store port.StoreID) (accoun
 	if id == "" {
 		return account.Account{}, nil
 	}
-	accs, err := c.Accounts.List(ctx)
-	if err != nil {
-		return account.Account{}, err
+	a, err := find(ctx, c.Accounts, id)
+	if errors.Is(err, port.ErrNotFound) {
+		return account.Account{}, nil // 割り当てたアカウントが一覧にない: 割り当てなしとして読む
 	}
-	for _, a := range accs {
-		if a.ID == id {
-			return a, nil
-		}
-	}
-	return account.Account{}, nil
+	return a, err
 }
 
 // Rejected は、a のトークンが GitHub に拒否された(401)ことを知らせ、認証エラーにする(07「状態」)。
@@ -148,6 +144,7 @@ func authError(a account.Account) error {
 }
 
 // mismatchText は、トークンのログイン名が登録と違うときの文言(07「接続のたびの照合」。登録と同じ文言)。
+// 文言を 2 か所に持たないよう、ghcall.Refuse で作る。
 func mismatchText(login string) string {
 	return ghcall.Refuse(&ghcall.Failure{Kind: ghcall.LoginMismatch, Login: login}, time.Time{}).Error()
 }

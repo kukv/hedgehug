@@ -35,10 +35,14 @@ func RunAccountsContract(t *testing.T, newAccounts func(t *testing.T) port.Accou
 			t.Errorf("List = %+v, %v; want %+v", got, err, want)
 		}
 	})
-	t.Run("updates in place and removes", func(t *testing.T) { runUpdateRemove(t, newAccounts(t)) })
+	t.Run("updates in place and removes", func(t *testing.T) {
+		runUpdateRemove(t, newAccounts)
+	})
 }
 
-func runUpdateRemove(t *testing.T, accs port.Accounts) {
+// runUpdateRemove は Update・Remove の検査(認知的複雑度の上限のため RunAccountsContract から分ける)。
+func runUpdateRemove(t *testing.T, newAccounts func(t *testing.T) port.Accounts) {
+	accs := newAccounts(t)
 	a := account.Account{ID: "01ACC00000000000000000001", Name: "work", Login: "taro", Method: account.GhCLI}
 	b := account.Account{ID: "01ACC00000000000000000002", Name: "家", Login: "taro-home", Method: account.DeviceFlow}
 	for _, x := range []account.Account{a, b} {

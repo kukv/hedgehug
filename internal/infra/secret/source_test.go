@@ -111,7 +111,7 @@ func TestKeychainToken(t *testing.T) {
 	if _, err := s.Token(context.Background(), acc(account.Keychain)); !ghcall.Is(err, ghcall.KeychainUnavailable) {
 		t.Errorf("no keychain: %v", err)
 	}
-	// デバイスフローが置いた JSON の項目は、access_token をトークンとして読む(D2 の計画の決定 D2-5)。
+	// デバイスフローが置いた JSON の項目は、access_token をトークンとして読む(この小計画の決定 D2-5)。
 	s.Keyring = fakeKeyring{"hedgehug|github.com/taro": `{"access_token":"tok-device","refresh_token":"r"}`}
 	if tok, err := s.Token(context.Background(), acc(account.Keychain)); err != nil || tok != "tok-device" {
 		t.Errorf("device JSON: Token = %q, %v", tok, err)

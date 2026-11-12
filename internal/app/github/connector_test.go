@@ -161,9 +161,13 @@ func TestDeviceRefreshFailuresAreAuthErrors(t *testing.T) {
 	cases := map[string]func(f *connFixture){
 		"rejected": func(*connFixture) {},
 		"refresh expired": func(f *connFixture) {
+			f.device.Refreshed = account.DeviceToken{Access: "tok-new", Refresh: "r2"} // 取り直しに行けば成功する
 			f.secrets.Device["hanako"] = account.DeviceToken{Access: "tok-old", Refresh: "r", ExpiresAt: start, RefreshExpiresAt: start}
 		},
-		"no client id":    func(f *connFixture) { f.conn.Hosts = apptest.Hosts{} },
+		"no client id": func(f *connFixture) {
+			f.device.Refreshed = account.DeviceToken{Access: "tok-new", Refresh: "r2"}
+			f.conn.Hosts = apptest.Hosts{}
+		},
 		"not in keychain": func(f *connFixture) { delete(f.secrets.Device, "hanako") },
 		"cannot keep it": func(f *connFixture) {
 			f.device.Refreshed = account.DeviceToken{Access: "tok-new"}
@@ -177,19 +181,26 @@ func TestDeviceRefreshFailuresAreAuthErrors(t *testing.T) {
 		if _, err := f.conn.Token(context.Background(), home); !ghcall.Is(err, ghcall.AuthError) {
 			t.Errorf("%s: Token = %v", name, err)
 		}
+		// 取り直せない場合は、GitHub に問い合わせない。
+		if (name == "refresh expired" || name == "no client id") && f.device.Refreshes != 0 {
+			t.Errorf("%s: asked GitHub to refresh %d times", name, f.device.Refreshes)
+		}
 	}
 }
 
 func TestDeviceRefreshUnreachableKeepsTheAccount(t *testing.T) {
-	f := newConn(t)
-	f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-old", Refresh: "r", ExpiresAt: start}}
-	f.device.RefreshErr = &ghcall.Failure{Kind: ghcall.Unreachable}
-	if _, err := f.conn.Token(context.Background(), home); !ghcall.Is(err, ghcall.Unreachable) {
-		t.Fatalf("Token = %v", err)
-	}
-	list, _ := github.ListAccounts{Accounts: f.accounts, Session: f.session}.Do(context.Background())
-	if list[1].AuthError {
-		t.Error("an unreachable GitHub made the account an auth error")
+	// 到達できない・利用上限は、認証エラーにしない(07「状態」の「利用上限では状態を変えない」)。
+	for _, kind := range []ghcall.Kind{ghcall.Unreachable, ghcall.RateLimited} {
+		f := newConn(t)
+		f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-old", Refresh: "r", ExpiresAt: start}}
+		f.device.RefreshErr = &ghcall.Failure{Kind: kind}
+		if _, err := f.conn.Token(context.Background(), home); !ghcall.Is(err, kind) {
+			t.Fatalf("%s: Token = %v", kind, err)
+		}
+		list, _ := github.ListAccounts{Accounts: f.accounts, Session: f.session}.Do(context.Background())
+		if list[1].AuthError {
+			t.Errorf("%s made the account an auth error", kind)
+		}
 	}
 }
 

@@ -5,12 +5,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 )
+
+var deviceNow = time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)
+
+func deviceClient(srvURL string, hc *http.Client) *Client {
+	return &Client{WebURL: srvURL, HTTP: hc, Now: func() time.Time { return deviceNow }}
+}
 
 func deviceServer(t *testing.T, answer func(form map[string]string) any) *Client {
 	t.Helper()
@@ -19,7 +26,8 @@ func deviceServer(t *testing.T, answer func(form map[string]string) any) *Client
 			t.Errorf("%s %s accept %q", r.Method, r.URL.Path, r.Header.Get("Accept"))
 		}
 		if err := r.ParseForm(); err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		form := map[string]string{"path": r.URL.Path}
 		for k := range r.PostForm {
@@ -28,8 +36,14 @@ func deviceServer(t *testing.T, answer func(form map[string]string) any) *Client
 		_ = json.NewEncoder(w).Encode(answer(form))
 	}))
 	t.Cleanup(srv.Close)
-	now := time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)
-	return &Client{WebURL: srv.URL, HTTP: srv.Client(), Now: func() time.Time { return now }}
+	return deviceClient(srv.URL, srv.Client())
+}
+
+func statusServer(t *testing.T, h http.HandlerFunc) *Client {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return deviceClient(srv.URL, srv.Client())
 }
 
 func TestStartDevice(t *testing.T) {
@@ -80,9 +94,8 @@ func TestPollDeviceGranted(t *testing.T) {
 		return map[string]any{"access_token": "tok-a", "refresh_token": "tok-r", "expires_in": 28800, "refresh_token_expires_in": 15897600}
 	})
 	g, err := c.PollDevice(context.Background(), "Iv23abc", "dc")
-	now := time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)
 	if err != nil || g.Status != port.DeviceGranted || g.Token.Access != "tok-a" || g.Token.Refresh != "tok-r" ||
-		!g.Token.ExpiresAt.Equal(now.Add(8*time.Hour)) || !g.Token.RefreshExpiresAt.Equal(now.Add(15897600*time.Second)) {
+		!g.Token.ExpiresAt.Equal(deviceNow.Add(8*time.Hour)) || !g.Token.RefreshExpiresAt.Equal(deviceNow.Add(15897600*time.Second)) {
 		t.Errorf("PollDevice = %+v, %v", g, err)
 	}
 }
@@ -119,36 +132,78 @@ func TestDeviceUnreachable(t *testing.T) {
 	}
 }
 
-func statusServer(t *testing.T, code int) *Client {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(code)
-	}))
-	t.Cleanup(srv.Close)
-	return &Client{WebURL: srv.URL, HTTP: srv.Client(), Now: time.Now}
+var limitHeaders = map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1794484800"}
+
+// 200 以外の応答(C5): 利用上限のほかは、宛先が違うだけなので「通信できない」にする。
+func TestDeviceNon200(t *testing.T) {
+	cases := []struct {
+		name string
+		h    http.HandlerFunc
+		kind ghcall.Kind
+	}{
+		{"401", status(401, nil), ghcall.Unreachable},
+		{"404", status(404, nil), ghcall.Unreachable},
+		{"500", status(500, nil), ghcall.Unreachable},
+		{"429", status(429, nil), ghcall.RateLimited},
+		{"403 limit", status(403, limitHeaders), ghcall.RateLimited},
+	}
+	for _, tc := range cases {
+		c := statusServer(t, tc.h)
+		_, err := c.StartDevice(context.Background(), "Iv23abc")
+		if !ghcall.Is(err, tc.kind) {
+			t.Errorf("StartDevice %s = %v, want %s", tc.name, err, tc.kind)
+		}
+		_, err = c.PollDevice(context.Background(), "Iv23abc", "dc")
+		if !ghcall.Is(err, tc.kind) {
+			t.Errorf("PollDevice %s = %v, want %s", tc.name, err, tc.kind)
+		}
+	}
 }
 
-func TestDeviceNon200(t *testing.T) {
-	// client_id の打ち間違いなどで 200 以外が返っても、「#0 が見つかりません」などの別の場面の文言にしない。
-	for _, code := range []int{http.StatusNotFound, http.StatusUnauthorized, http.StatusBadRequest} {
-		c := statusServer(t, code)
-		if _, err := c.StartDevice(context.Background(), "typo"); !ghcall.Is(err, ghcall.Unreachable) {
-			t.Errorf("%d: StartDevice = %v", code, err)
-		}
-		if _, err := c.PollDevice(context.Background(), "typo", "dc"); !ghcall.Is(err, ghcall.Unreachable) {
-			t.Errorf("%d: PollDevice = %v", code, err)
+func TestDeviceRateLimitResetAt(t *testing.T) {
+	c := statusServer(t, status(403, limitHeaders))
+	_, err := c.PollDevice(context.Background(), "Iv23abc", "dc")
+	f, ok := err.(*ghcall.Failure)
+	if !ok || !f.ResetAt.Equal(time.Unix(1794484800, 0)) {
+		t.Errorf("PollDevice = %#v", err)
+	}
+}
+
+// 更新用のトークンの取り直し: 401・403・404 は拒否。利用上限は拒否にしない(裁定 Q2)。
+func TestRefreshDeviceNon200(t *testing.T) {
+	cases := []struct {
+		name string
+		h    http.HandlerFunc
+		kind ghcall.Kind
+	}{
+		{"401", status(401, nil), ghcall.TokenRejected},
+		{"403", status(403, nil), ghcall.TokenRejected},
+		{"404", status(404, nil), ghcall.TokenRejected},
+		{"500", status(500, nil), ghcall.Unreachable},
+		{"429", status(429, nil), ghcall.Unreachable},
+		{"403 limit", status(403, limitHeaders), ghcall.Unreachable},
+	}
+	for _, tc := range cases {
+		c := statusServer(t, tc.h)
+		if _, err := c.RefreshDevice(context.Background(), "Iv23abc", "tok-r"); !ghcall.Is(err, tc.kind) {
+			t.Errorf("RefreshDevice %s = %v, want %s", tc.name, err, tc.kind)
 		}
 	}
-	// 取り直しは、401・404 を拒否として扱う。応答の分からない 400 などは「通信できない」のまま(次の接続でやり直す)。
-	for _, code := range []int{http.StatusNotFound, http.StatusUnauthorized} {
-		if _, err := statusServer(t, code).RefreshDevice(context.Background(), "typo", "r"); !ghcall.Is(err, ghcall.TokenRejected) {
-			t.Errorf("%d: RefreshDevice = %v", code, err)
+}
+
+// 裁定 R9: エラーの文に、更新用のトークンや device_code を書かない。
+func TestDeviceErrorsHideSecrets(t *testing.T) {
+	for _, code := range []int{401, 500} {
+		c := statusServer(t, status(code, nil))
+		if _, err := c.RefreshDevice(context.Background(), "Iv23abc", "tok-r"); err == nil || strings.Contains(err.Error(), "tok-r") {
+			t.Errorf("RefreshDevice %d error = %v", code, err)
+		}
+		if _, err := c.PollDevice(context.Background(), "Iv23abc", "device-secret"); err == nil || strings.Contains(err.Error(), "device-secret") {
+			t.Errorf("PollDevice %d error = %v", code, err)
 		}
 	}
-	if _, err := statusServer(t, http.StatusBadRequest).RefreshDevice(context.Background(), "x", "r"); !ghcall.Is(err, ghcall.Unreachable) {
-		t.Errorf("400: RefreshDevice = %v", err)
-	}
-	if _, err := statusServer(t, http.StatusTooManyRequests).StartDevice(context.Background(), "x"); !ghcall.Is(err, ghcall.RateLimited) {
-		t.Errorf("429: %v", err)
+	down := &Client{WebURL: "http://127.0.0.1:1", HTTP: http.DefaultClient, Now: time.Now}
+	if _, err := down.PollDevice(context.Background(), "Iv23abc", "device-secret"); err == nil || strings.Contains(err.Error(), "device-secret") {
+		t.Errorf("PollDevice unreachable error = %v", err)
 	}
 }

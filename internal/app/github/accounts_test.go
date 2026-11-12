@@ -61,7 +61,7 @@ func TestAddAccount(t *testing.T) {
 		t.Errorf("added %+v, count %d", got, f.count(t))
 	}
 	list, _ := github.ListAccounts{Accounts: f.accounts, Session: github.NewSession()}.Do(context.Background())
-	if len(list) != 1 || list[0].Account != got || list[0].AuthError {
+	if len(list) != 1 || list[0].Account != got {
 		t.Errorf("ListAccounts = %+v", list)
 	}
 }

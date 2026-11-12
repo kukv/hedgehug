@@ -33,8 +33,8 @@ func (c *Client) StartDevice(ctx context.Context, clientID string) (port.DeviceC
 		Interval        int    `json:"interval"`
 		Error           string `json:"error"`
 	}
-	if err := c.postForm(ctx, "/login/device/code", url.Values{"client_id": {clientID}}, &a); err != nil {
-		return port.DeviceCode{}, unreachableUnless(err)
+	if err := c.postForm(ctx, "/login/device/code", url.Values{"client_id": {clientID}}, &a, pollFailure); err != nil {
+		return port.DeviceCode{}, err
 	}
 	if a.Error != "" || a.DeviceCode == "" {
 		return port.DeviceCode{}, &ghcall.Failure{Kind: ghcall.Unreachable}
@@ -51,9 +51,9 @@ func (c *Client) PollDevice(ctx context.Context, clientID, deviceCode string) (p
 	err := c.postForm(ctx, "/login/oauth/access_token", url.Values{
 		"client_id": {clientID}, "device_code": {deviceCode},
 		"grant_type": {"urn:ietf:params:oauth:grant-type:device_code"},
-	}, &a)
+	}, &a, pollFailure)
 	if err != nil {
-		return port.DeviceGrant{}, unreachableUnless(err)
+		return port.DeviceGrant{}, err
 	}
 	switch a.Error {
 	case "":
@@ -77,13 +77,9 @@ func (c *Client) RefreshDevice(ctx context.Context, clientID, refresh string) (a
 	var a tokenAnswer
 	err := c.postForm(ctx, "/login/oauth/access_token", url.Values{
 		"client_id": {clientID}, "refresh_token": {refresh}, "grant_type": {"refresh_token"},
-	}, &a)
+	}, &a, refreshFailure)
 	if err != nil {
-		if ghcall.Is(err, ghcall.Unreachable) || ghcall.Is(err, ghcall.RateLimited) {
-			return account.DeviceToken{}, err
-		}
-		// 401・403・404 は、更新用のトークンが受け付けられなかったものとして扱う(D2 の決定 D2-7)。
-		return account.DeviceToken{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
+		return account.DeviceToken{}, err
 	}
 	if a.Error != "" || a.AccessToken == "" {
 		return account.DeviceToken{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
@@ -104,8 +100,33 @@ func (c *Client) tokenOf(a tokenAnswer) account.DeviceToken {
 	return t
 }
 
-// postForm は、WebURL+path にフォームを POST し、200 なら本文を out に読む。失敗は *ghcall.Failure。
-func (c *Client) postForm(ctx context.Context, path string, form url.Values, out any) error {
+// pollFailure は、StartDevice・PollDevice で 200 以外が返ったときの種類。
+// 利用上限のほかは宛先の間違いなどなので、「見つかりません」や「トークンが受け付けられません」にせず「通信できない」にする。
+func pollFailure(_ int, limited *ghcall.Failure) *ghcall.Failure {
+	if limited != nil {
+		return limited
+	}
+	return &ghcall.Failure{Kind: ghcall.Unreachable}
+}
+
+// refreshFailure は、RefreshDevice で 200 以外が返ったときの種類。
+// 利用上限は拒否にしない(先に判定する)。401・403・404 は更新用のトークンの拒否。
+func refreshFailure(status int, limited *ghcall.Failure) *ghcall.Failure {
+	if limited != nil {
+		return &ghcall.Failure{Kind: ghcall.Unreachable}
+	}
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		return &ghcall.Failure{Kind: ghcall.TokenRejected}
+	}
+	return &ghcall.Failure{Kind: ghcall.Unreachable}
+}
+
+// postForm は、WebURL+path にフォームを POST し、2xx なら本文を out に読む。
+// 2xx でなければ、状態コードと(利用上限なら)その失敗を onFail に渡し、返った失敗を返す。失敗は *ghcall.Failure。
+func (c *Client) postForm(ctx context.Context, path string, form url.Values, out any,
+	onFail func(status int, limited *ghcall.Failure) *ghcall.Failure,
+) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.WebURL+path, strings.NewReader(form.Encode()))
 	if err != nil {
 		return &ghcall.Failure{Kind: ghcall.Unreachable}
@@ -114,24 +135,15 @@ func (c *Client) postForm(ctx context.Context, path string, form url.Values, out
 	req.Header.Set("Accept", "application/json")
 	res, err := c.HTTP.Do(req)
 	if err != nil {
+		// net/http のエラーは URL を含むことがあるので、種類だけを返す。
 		return &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
 	defer func() { _ = res.Body.Close() }()
-	if f := c.classify(res); f != nil {
-		return f
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return onFail(res.StatusCode, c.rateLimited(res))
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, maxBody)).Decode(out); err != nil {
 		return &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
 	return nil
-}
-
-// unreachableUnless は、デバイスフローの宛先の失敗を、利用上限のほかは「通信できない」に畳む。
-// 宛先は API でないので、404 や 401 を「番号の PR がない」「トークンが拒否された」と出さないため
-// (client_id の打ち間違いでも起きる)。
-func unreachableUnless(err error) error {
-	if ghcall.Is(err, ghcall.RateLimited) {
-		return err
-	}
-	return &ghcall.Failure{Kind: ghcall.Unreachable}
 }

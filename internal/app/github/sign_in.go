@@ -65,17 +65,6 @@ type SignInResult struct {
 	Account  account.Account
 }
 
-// flow はサインインの途中の流れ。
-type flow struct {
-	target     account.Account // 登録・保存する値(登録では ID が空)
-	previous   account.Account // 編集・再認証の前の値
-	clientID   string
-	deviceCode string
-	expiresAt  time.Time
-	interval   time.Duration
-	granted    *account.DeviceToken // 許可されたが、持ち主をまだ確かめられていないトークン
-}
-
 func (u SignIn) Start(ctx context.Context, in SignInInput) (SignInCode, error) {
 	now := u.Clock.Now()
 	u.Session.dropExpired(now)
@@ -95,20 +84,16 @@ func (u SignIn) Start(ctx context.Context, in SignInInput) (SignInCode, error) {
 
 // prepare は、入力を 07「登録」の表の順に確かめ、client_id を読む。
 func (u SignIn) prepare(ctx context.Context, in SignInInput) (*flow, error) {
-	existing, err := u.Accounts.List(ctx)
-	if err != nil {
-		return nil, err
-	}
 	f := &flow{}
+	var err error
 	if in.Account != "" {
 		if f.previous, err = find(ctx, u.Accounts, in.Account); err != nil {
 			return nil, err
 		}
 	}
-	if f.target, err = account.Check(account.Account{Name: in.Name, Login: in.Login, Method: account.DeviceFlow}, existing, in.Account); err != nil {
+	if f.target, err = u.check(ctx, account.Account{ID: in.Account, Name: in.Name, Login: in.Login, Method: account.DeviceFlow}); err != nil {
 		return nil, err
 	}
-	f.target.ID = in.Account
 	if f.clientID, err = u.Hosts.ClientID(ctx); err != nil {
 		return nil, err
 	}
@@ -118,21 +103,39 @@ func (u SignIn) prepare(ctx context.Context, in SignInInput) (*flow, error) {
 	return f, nil
 }
 
-// Poll は、許可されたかを GitHub に 1 回だけ聞く。GitHub に届かないときは待ち続ける。
+// check は、いまのアカウントの一覧で a を確かめる(07「登録」の表)。a.ID は編集するアカウント(登録では空)。
+// 始めるときと、許可を待つあいだに別の登録が済んだときのために保存の直前とで使う。
+func (u SignIn) check(ctx context.Context, a account.Account) (account.Account, error) {
+	existing, err := u.Accounts.List(ctx)
+	if err != nil {
+		return account.Account{}, err
+	}
+	return account.Check(a, existing, a.ID)
+}
+
+// Poll は、許可されたかを GitHub に 1 回だけ聞く。
 func (u SignIn) Poll(ctx context.Context, id string) (SignInResult, error) {
-	f, ok := u.Session.flow(id)
+	f, ok := u.Session.lookupFlow(id)
 	if !ok {
 		return SignInResult{}, port.ErrNotFound
 	}
-	if tok, ok := u.Session.grantedOf(f); ok {
-		return u.finish(ctx, id, f, tok) // 許可は済み。持ち主の確かめだけをやり直す
+	// 同じ流れの Poll が最中なら、GitHub に聞かずに待つ。重ねると、許可を受けた Poll の流れが先に捨てられる。
+	if !u.Session.beginPoll(f) {
+		return u.waiting(f), nil
 	}
+	defer u.Session.endPoll(f)
+	// 期限はいちばん先に見る。許可されたトークンを持っていても、期限が過ぎたら流れごと捨てる。
 	if !u.Clock.Now().Before(f.expiresAt) {
 		return u.end(id, SignInResult{State: SignInExpired}), nil
 	}
+	if tok, ok := u.Session.grantOf(f); ok {
+		// 許可は済んでいて device_code はもう使えない。持ち主の確かめだけをやり直す。
+		return u.verifyGrant(ctx, id, f, tok)
+	}
 	g, err := u.Device.PollDevice(ctx, f.clientID, f.deviceCode)
 	if err != nil {
-		return SignInResult{State: SignInWaiting, Interval: u.Session.intervalOf(f)}, nil
+		// GitHub に届かないときは、つながるまで待ち続ける(07「待っているあいだに通信が切れたときは」)。
+		return u.waiting(f), nil
 	}
 	switch g.Status {
 	case port.DeviceSlowDown:
@@ -142,38 +145,60 @@ func (u SignIn) Poll(ctx context.Context, id string) (SignInResult, error) {
 	case port.DeviceDenied:
 		return u.end(id, SignInResult{State: SignInDenied}), nil
 	case port.DeviceGranted:
-		return u.finish(ctx, id, f, g.Token)
+		return u.verifyGrant(ctx, id, f, g.Token)
 	}
-	return SignInResult{State: SignInWaiting, Interval: u.Session.intervalOf(f)}, nil
+	return u.waiting(f), nil
 }
 
-// finish は、許可されたトークンの持ち主を確かめ、キーチェーンに置いて、アカウントを登録・保存する。
-func (u SignIn) finish(ctx context.Context, id string, f *flow, tok account.DeviceToken) (SignInResult, error) {
+// end は、流れを捨てて r を返す。
+func (u SignIn) end(id string, r SignInResult) SignInResult {
+	u.Session.endFlow(id)
+	return r
+}
+
+// failure は、理由を「アカウントを追加」に出す結果。
+func (u SignIn) failure(err error) SignInResult {
+	return SignInResult{State: SignInFailed, Message: ghcall.Refuse(err, u.Clock.Now()).Error()}
+}
+
+func (u SignIn) waiting(f *flow) SignInResult {
+	return SignInResult{State: SignInWaiting, Interval: u.Session.intervalOf(f)}
+}
+
+// verifyGrant は、許可されたトークンの持ち主を GitHub で確かめる。GitHub に届かない(通信できない・利用上限)
+// ときは、トークンを流れに持ったまま待つ(07「待っているあいだに通信が切れたときは、つながるまで待ち続ける」)。
+func (u SignIn) verifyGrant(ctx context.Context, id string, f *flow, tok account.DeviceToken) (SignInResult, error) {
 	login, err := u.GitHub.Viewer(ctx, tok.Access)
-	switch {
-	case ghcall.Is(err, ghcall.Unreachable) || ghcall.Is(err, ghcall.RateLimited):
-		// 許可は済んでいる(device_code はもう使えない)。トークンを流れに持ったまま、つながるまで待つ(07)。
-		u.Session.setGranted(f, tok)
-		return SignInResult{State: SignInWaiting, Interval: u.Session.intervalOf(f)}, nil
-	case err != nil:
-		return u.end(id, SignInResult{State: SignInFailed, Message: ghcall.Refuse(err, u.Clock.Now()).Error()}), nil
-	case !strings.EqualFold(login, f.target.Login):
+	if ghcall.Is(err, ghcall.Unreachable) || ghcall.Is(err, ghcall.RateLimited) {
+		u.Session.holdGrant(f, tok)
+		return u.waiting(f), nil
+	}
+	if err != nil {
+		return u.end(id, u.failure(err)), nil
+	}
+	if !strings.EqualFold(login, f.target.Login) {
 		return u.end(id, SignInResult{State: SignInMismatch, Message: mismatchText(login)}), nil
 	}
-	// 許可を待つあいだに、同じ表示名・ログイン名のアカウントが登録されていないかを確かめ直す。
-	if err := u.recheck(ctx, f); err != nil {
+	return u.commit(ctx, id, tok)
+}
+
+// commit は、流れを取り出してから、確かめたトークンをキーチェーンに置いて、アカウントを登録・保存する。
+// 取り出せなければ(確かめているあいだにキャンセルされた)、何も置かず、何も登録しない(07「ダイアログを閉じる」)。
+func (u SignIn) commit(ctx context.Context, id string, tok account.DeviceToken) (SignInResult, error) {
+	f, ok := u.Session.takeFlow(id)
+	if !ok {
+		return SignInResult{}, port.ErrNotFound
+	}
+	// 置く前に確かめ直す。置いたあとでは、同じログイン名の別のデバイスフローのアカウントの項目を上書きしてしまう。
+	if _, err := u.check(ctx, f.target); err != nil {
 		var r *refusal.Refusal
 		if errors.As(err, &r) {
-			return u.end(id, SignInResult{State: SignInFailed, Message: r.Message}), nil
+			return u.failure(err), nil
 		}
 		return SignInResult{}, err
 	}
-	// ここから先は 1 回だけ行う。キャンセルされていたら、何も置かず、何も登録しない(07「ダイアログを閉じる」)。
-	if !u.Session.takeFlow(id) {
-		return SignInResult{}, port.ErrNotFound
-	}
 	if err := u.Secrets.SaveDeviceToken(ctx, f.target.Login, tok); err != nil {
-		return SignInResult{State: SignInFailed, Message: ghcall.Refuse(err, u.Clock.Now()).Error()}, nil
+		return u.failure(err), nil
 	}
 	a, err := u.save(ctx, f)
 	if err != nil {
@@ -183,16 +208,7 @@ func (u SignIn) finish(ctx context.Context, id string, f *flow, tok account.Devi
 	return SignInResult{State: SignInDone, Account: a}, nil
 }
 
-// recheck は、07「登録」の検査を、保存の直前にもう一度行う。
-func (u SignIn) recheck(ctx context.Context, f *flow) error {
-	existing, err := u.Accounts.List(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = account.Check(account.Account{Name: f.target.Name, Login: f.target.Login, Method: account.DeviceFlow}, existing, f.target.ID)
-	return err
-}
-
+// save は、登録なら新しい ID で足し、編集・再認証なら値を入れ替える。
 func (u SignIn) save(ctx context.Context, f *flow) (account.Account, error) {
 	a := f.target
 	if a.ID == "" {
@@ -203,16 +219,11 @@ func (u SignIn) save(ctx context.Context, f *flow) (account.Account, error) {
 		return account.Account{}, err
 	}
 	// デバイスフローのままログイン名を変えたら、古いログイン名の項目は誰も読まないので消す(決定 D2-13)。
-	// キーチェーンの名前は大文字と小文字を区別するので、綴りが少しでも違えば消す。
+	// キーチェーンの名前は大文字と小文字を区別するので、そのまま比べる。消せなくても保存は失敗にしない。
 	if f.previous.Method == account.DeviceFlow && f.previous.Login != a.Login {
-		return a, u.Secrets.DeleteDeviceToken(ctx, f.previous.Login)
+		_ = u.Secrets.DeleteDeviceToken(ctx, f.previous.Login)
 	}
 	return a, nil
-}
-
-func (u SignIn) end(id string, r SignInResult) SignInResult {
-	u.Session.endFlow(id)
-	return r
 }
 
 // Cancel は、流れを捨てる(キャンセル・Esc・外側のクリック)。何も登録しない。

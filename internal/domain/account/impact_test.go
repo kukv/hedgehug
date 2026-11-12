@@ -30,6 +30,19 @@ func TestDeleteLinesOnlyWhatApplies(t *testing.T) {
 	}
 }
 
+func TestDeleteLinesEmptyMachineLogin(t *testing.T) {
+	a := Account{ID: "A1", Name: "work", Login: "taro", Method: GhCLI}
+	uses := []StoreUse{{Name: "チーム", Remote: true}, {Name: "個人", Remote: false}, {Name: "OSS", Remote: true}}
+	got := DeleteLines(a, uses, "")
+	want := []string{
+		"「work」を削除します。",
+		"チーム・OSS の同期に使っているため、それらは同期できなくなります。",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("DeleteLines = %q, want %q", got, want)
+	}
+}
+
 func TestEditLines(t *testing.T) {
 	a := Account{ID: "A1", Name: "work", Login: "taro", Method: GhCLI}
 	uses := []StoreUse{{Name: "チーム", Remote: true}, {Name: "個人"}}
@@ -43,14 +56,7 @@ func TestEditLines(t *testing.T) {
 	if got := EditLines(a, "TARO", uses); len(got) != 0 {
 		t.Errorf("same login: EditLines = %q", got)
 	}
-}
-
-func TestNoIdentityLinesForABlankLogin(t *testing.T) {
-	a := Account{ID: "A1", Name: "work", Login: "taro", Method: GhCLI}
-	if got := EditLines(a, "  ", []StoreUse{{Name: "チーム"}}); len(got) != 0 {
-		t.Errorf("EditLines = %q", got)
-	}
-	if got := DeleteLines(a, []StoreUse{{Name: "チーム"}}, ""); !slices.Equal(got, []string{"「work」を削除します。"}) {
-		t.Errorf("DeleteLines = %q", got)
+	if got := EditLines(a, "  ", uses); len(got) != 0 {
+		t.Errorf("blank login: EditLines = %q", got)
 	}
 }

@@ -35,6 +35,7 @@ func toBody(a account.Account) accountBody {
 }
 
 // accountRow は一覧の 1 行(07「状態」)。reason は「認証エラー」の下の赤字(なければ空)。
+// huma は埋め込みの構造体をスキーマに展開しないので、accountBody を埋め込まず欄を並べる。
 type accountRow struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -107,9 +108,9 @@ func registerAccounts(api huma.API, s Services) {
 			if r.AuthError {
 				status = "auth_error"
 			}
-			a := r.Account
 			out.Body.Accounts = append(out.Body.Accounts, accountRow{
-				ID: string(a.ID), Name: a.Name, Login: a.Login, Method: string(a.Method), Status: status, Reason: r.Reason,
+				ID: string(r.Account.ID), Name: r.Account.Name, Login: r.Account.Login, Method: string(r.Account.Method),
+				Status: status, Reason: r.Reason,
 			})
 		}
 		return out, nil

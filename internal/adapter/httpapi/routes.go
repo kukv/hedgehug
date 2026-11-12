@@ -65,7 +65,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 }
 
 // githubServices は、GitHub 連携の usecase を組む。Session はサーバーに 1 つ(アプリを開いているあいだの状態)。
-// Connector を使う API を足すときも、同じ Session から作る。
+// D3 で Connector を使う API を足すときは、同じ s から ghapp.Connector{Session: s, ...} を作る(Session を 2 つ作らない)。
 func githubServices(d Deps) ghapi.Services {
 	s := ghapp.NewSession()
 	return ghapi.Services{
