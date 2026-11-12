@@ -5,6 +5,48 @@
  * OpenAPI spec version: dev
  */
 import { fetcher } from './fetcher';
+export type CreateItemKind = typeof CreateItemKind[keyof typeof CreateItemKind];
+
+
+export const CreateItemKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export interface CreateItem {
+  kind: CreateItemKind;
+  /** 空は親を選んでいない */
+  parent?: string;
+  /** 空はプロジェクトを選んでいない */
+  project: string;
+  title: string;
+}
+
+export type CreateProjectStatus = typeof CreateProjectStatus[keyof typeof CreateProjectStatus];
+
+
+export const CreateProjectStatus = {
+  Todo: 'Todo',
+  InProgress: 'InProgress',
+  Done: 'Done',
+  Pending: 'Pending',
+  Cancel: 'Cancel',
+  '': '',
+} as const;
+
+export interface CreateProject {
+  /** @pattern ^(\d{4}-\d{2}-\d{2})?$ */
+  end?: string;
+  owner?: string;
+  /** @pattern ^(\d{4}-\d{2}-\d{2})?$ */
+  start?: string;
+  status?: CreateProjectStatus;
+  title: string;
+}
+
 export interface ErrorDetail {
   /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
   location?: string;
@@ -32,10 +74,249 @@ export interface ErrorModel {
   type?: string;
 }
 
+export type ItemKind = typeof ItemKind[keyof typeof ItemKind];
+
+
+export const ItemKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export interface Item {
+  createdAt: string;
+  createdBy: string;
+  id: string;
+  kind: ItemKind;
+  number: number;
+  /**
+     * 親の内部 ID。Epic は null
+     * @nullable
+     */
+  parent: string | null;
+  project: string;
+  rank: string;
+  title: string;
+  /** @nullable */
+  watchers: string[] | null;
+  workspace: string;
+}
+
+export type ProjectStatus = typeof ProjectStatus[keyof typeof ProjectStatus];
+
+
+export const ProjectStatus = {
+  Todo: 'Todo',
+  InProgress: 'InProgress',
+  Done: 'Done',
+  Pending: 'Pending',
+  Cancel: 'Cancel',
+} as const;
+
+export interface Project {
+  end: string;
+  id: string;
+  number: number;
+  /** ログイン名。空は「なし」 */
+  owner: string;
+  rank: string;
+  /** YYYY-MM-DD。空は「なし」 */
+  start: string;
+  status: ProjectStatus;
+  title: string;
+  workspace: string;
+}
+
 export interface SystemInfo {
   /** hedgehug の版 */
   version: string;
 }
+
+export const getCreateItemUrl = (store: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items`
+}
+
+/**
+ * @summary アイテムを作成
+ */
+export const createItem = async (store: string,
+    createItemBody: CreateItem, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getCreateItemUrl(store),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createItemBody)
+  }
+);}
+
+
+
+export const getGetItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}`
+}
+
+/**
+ * @summary アイテムを返す
+ */
+export const getItem = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+  return fetcher<Item>(getGetItemUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getGetProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}`
+}
+
+/**
+ * @summary プロジェクトを返す
+ */
+export const getProject = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+  return fetcher<Project>(getGetProjectUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListProjectItemsUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/items`
+}
+
+/**
+ * @summary プロジェクトのすべてのアイテムを番号の順で返す
+ */
+export const listProjectItems = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<Item[] | null> => {
+
+  return fetcher<Item[] | null>(getListProjectItemsUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListProjectsUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/projects`
+}
+
+/**
+ * @summary ワークスペースのプロジェクトを並び順で返す
+ */
+export const listProjects = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<Project[] | null> => {
+
+  return fetcher<Project[] | null>(getListProjectsUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getCreateProjectUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/projects`
+}
+
+/**
+ * @summary プロジェクトを作成
+ */
+export const createProject = async (store: string,
+    workspace: string,
+    createProjectBody: CreateProject, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getCreateProjectUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createProjectBody)
+  }
+);}
+
+
 
 export const getGetSystemUrl = () => {
 
