@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
@@ -14,9 +13,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: openapi-gen <output.yaml>")
 		os.Exit(2)
 	}
-	api := httpapi.NewAPI(http.NewServeMux(), httpapi.Deps{Version: "dev"})
-	// orval は OpenAPI 3.0 を読むので、3.1 から下げて書く。
-	b, err := api.OpenAPI().DowngradeYAML()
+	b, err := httpapi.OpenAPIYAML()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
