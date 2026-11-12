@@ -7,7 +7,7 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/oklog/ulid/v2 v2.1.2
 	go.yaml.in/yaml/v4 v4.0.0
-	golang.org/x/sys v0.50.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
