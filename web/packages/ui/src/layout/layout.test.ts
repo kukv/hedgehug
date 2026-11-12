@@ -36,4 +36,11 @@ describe("PageHead", () => {
     await fireEvent.click(screen.getByRole("button", { name: "メニュー" }));
     expect(ondrawer).toHaveBeenCalledOnce();
   });
+  it("marks the drawer button with a dot while a sync error exists (決定 S19)", () => {
+    const { rerender } = render(PageHead, { props: { title: "x", ondrawer: vi.fn() } });
+    expect(screen.queryByRole("img", { name: "同期エラー" })).not.toBeInTheDocument();
+    rerender({ title: "x", ondrawer: vi.fn(), alert: true });
+    expect(screen.getByRole("img", { name: "同期エラー" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "メニュー" })).toBeInTheDocument();
+  });
 });
