@@ -16,8 +16,11 @@
   let { storeId, workspaceId, storeName }: Props = $props();
 
   const settings = workspaceSettings.state;
+  // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(入力の途中を消さないため)。
+  const sid = $derived(storeId);
+  const wid = $derived(workspaceId);
   $effect(() => {
-    void workspaceSettings.open(storeId, workspaceId);
+    void workspaceSettings.open(sid, wid);
   });
 </script>
 

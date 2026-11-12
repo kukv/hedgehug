@@ -1,13 +1,15 @@
 <script lang="ts">
   import {
+    get,
     prefixConfirm,
     prefixExamples,
     prefixHelp,
     readOnlyNote,
+    routeOfWorkspace,
     type SettingsState,
   } from "@hedgehug/core";
   import { Button, Input } from "@hedgehug/ui";
-  import { workspaceSettings } from "../../wire";
+  import { catalog, navigation, workspaceSettings } from "../../wire";
   import PrefixDialog from "./PrefixDialog.svelte";
 
   // 「一般」の名前と接頭辞(03「名前」「接頭辞」)。入力の途中の値だけを持ち、操作は core の run に渡す。
@@ -46,11 +48,19 @@
     if (event.key === "Enter" && !event.isComposing) askPrefix();
   }
   // 検査の断りはエラーのトーストなので、確認ダイアログを閉じてから run する。
-  function applyPrefix() {
+  // 変えたら、アドレスの接頭辞も新しいものにする(古いままだと、この画面が開けなくなる)。
+  async function applyPrefix() {
     const value = confirming;
     confirming = null;
     if (value === null) return;
-    void workspaceSettings.run((p, st, w) => p.changePrefix(st, w, value), "接頭辞を変えました");
+    const storeId = s.storeId;
+    const workspaceId = s.detail.id;
+    const ok = await workspaceSettings.run(
+      (p, st, w) => p.changePrefix(st, w, value),
+      "接頭辞を変えました",
+    );
+    if (ok)
+      navigation.replace(routeOfWorkspace(get(catalog.stores), storeId, workspaceId, "settings"));
   }
 </script>
 
@@ -98,7 +108,7 @@
 {#if confirming !== null}
   <PrefixDialog
     text={prefixConfirm(s.detail.prefix, confirming, s.usage)}
-    onconfirm={applyPrefix}
+    onconfirm={() => void applyPrefix()}
     onclose={() => (confirming = null)}
   />
 {/if}
