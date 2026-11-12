@@ -52,7 +52,7 @@ export interface ItemDialogState {
   rows: PropertyRow[];
   // templates は、テンプレートのセレクトの選択肢(使えるものがなければ空で、欄を出さない)。
   templates: Option[];
-  // structure は「一緒に作るもの」。テンプレートが「なし」なら null。
+  // structure は「一緒に作るもの」。テンプレートが「なし」、または子も Step もないときは null。
   structure: { heading: string; rows: StructureRow[] } | null;
   settings: WorkspaceSettings;
   error: string;
@@ -150,7 +150,8 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       : now.form.values;
     let kept: ItemForm = { ...loaded.next.form, title, keepOpen, values, templateId };
     // ワークスペースを変えたら、テンプレートを「なし」にしてから新しいワークスペースの既定を当てはめる(A3b-14)。
-    if (switched) kept = applyDefault(kept, loaded.ctx.settings);
+    // 待っているあいだに種類が変わっていたら、読み直した種類にテンプレートを合わせる。
+    if (switched || now.form.kind !== kept.kind) kept = applyDefault(kept, loaded.ctx.settings);
     current = loaded.ctx;
     state.set({ ...loaded.next, form: kept, ...viewOf(loaded.ctx, kept) });
   }

@@ -121,6 +121,19 @@ describe("create dialog templates", () => {
     expect(get(dialog.state)?.form.templateId).toBe("T2");
   });
 
+  it("keeps the kind and the template together when the kind changes during a reload", async () => {
+    const { dialog } = await setup();
+    const reloading = dialog.update({ projectId: "S1-P2" });
+    await dialog.update({ kind: "Bug" });
+    await reloading;
+    const s = get(dialog.state);
+    const usable = (s?.templates ?? []).map((o) => o.value);
+    expect(s?.form.templateId === "" || usable.includes(s?.form.templateId ?? "")).toBe(true);
+    expect(
+      s?.settings.templates.find((t) => t.id === s?.form.templateId)?.kind ?? s?.form.kind,
+    ).toBe(s?.form.kind);
+  });
+
   it("does not put the template's title back after continuing or a project change", async () => {
     const { dialog } = await setup();
     await dialog.update({ title: "調べる", keepOpen: true });
