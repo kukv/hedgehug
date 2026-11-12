@@ -76,6 +76,12 @@ test("a Step's checkbox follows the saved status, also when the save is refused"
   await box.click();
   await expect(page.getByText("テストの断り")).toBeVisible();
   await expect(box).not.toBeChecked();
+
+  // 通信が失敗したときも、チェックは保存済みの状態に戻る。
+  await page.unroute("**/api/stores/*/items/*/check");
+  await page.route("**/api/stores/*/items/*/check", (route) => route.abort());
+  await box.click();
+  await expect(box).not.toBeChecked();
 });
 
 test("copies the ID", async ({ page, context }) => {

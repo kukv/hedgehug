@@ -25,10 +25,13 @@
     v.people.members.find((x) => x.login.toLowerCase() === c.assignee.toLowerCase()),
   );
 
-  // 保存のあと(断られたときも)、チェックを保存済みの分類に合わせ直す。
+  // 保存のあと(断られたときも、通信の失敗のときも)、チェックを保存済みの分類に合わせ直す。
   async function check(box: HTMLInputElement) {
-    await detail.checkStep(c.id, !done);
-    box.checked = done;
+    try {
+      await detail.checkStep(c.id, !done);
+    } finally {
+      box.checked = done;
+    }
   }
 </script>
 
