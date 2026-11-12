@@ -108,6 +108,7 @@ func TestValueActivitySummaries(t *testing.T) {
 		s.SetCategoryDefault(ctx, store, w.ID, workspace.CategoryTodo, st.Statuses[3].ID),
 		s.DeleteValue(ctx, store, w.ID, statuses, st.Statuses[0].ID, ""),
 		s.DeleteValue(ctx, store, w.ID, envs, prod.ID, ""),
+		s.SetTransition(ctx, store, w.ID, st.Statuses[1].ID, st.Statuses[2].ID, true),
 	} {
 		if err != nil {
 			t.Fatal(err)
@@ -125,6 +126,7 @@ func TestValueActivitySummaries(t *testing.T) {
 		"分類「未着手」の既定を「" + st.Statuses[3].Name + "」に変更",
 		"ステータス「" + st.Statuses[0].Name + "」を削除",
 		"「環境」の選択肢「本番」を削除",
+		"ワークフローの遷移の制約を変更",
 	}
 	if len(rec.summaries) != len(want) {
 		t.Fatalf("summaries = %q", rec.summaries)
