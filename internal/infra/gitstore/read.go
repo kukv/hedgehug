@@ -25,8 +25,12 @@ type view struct {
 }
 
 // log は、呼び出し側が変えてもまだ書いていない行(pending)が変わらないように、pending の行を深く写して返す。
-// 作業ツリーの行は毎回ファイルから読むので写さない。
+// 作業ツリーの行は毎回ファイルから読むので写さない。ref が Valid でなければ空(読み取りは
+// port.ErrNotFound になる)。
 func (v *view) log(ref change.Ref) ([]change.Record, error) {
+	if !ref.Valid() {
+		return nil, nil
+	}
 	base, err := readLog(v.root, ref)
 	if err != nil {
 		return nil, err
