@@ -36,4 +36,11 @@ describe("PageHead", () => {
     await fireEvent.click(screen.getByRole("button", { name: "メニュー" }));
     expect(ondrawer).toHaveBeenCalledOnce();
   });
+
+  it("shows the note under the title", () => {
+    render(PageHead, {
+      props: { title: "設定", note: "このマシンの設定と、Store の管理", ondrawer: vi.fn() },
+    });
+    expect(screen.getByText("このマシンの設定と、Store の管理")).toBeInTheDocument();
+  });
 });

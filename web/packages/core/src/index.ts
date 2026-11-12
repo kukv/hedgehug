@@ -59,6 +59,7 @@ export {
   parseRoute,
   projectDisplayId,
   type Route,
+  type SettingsTab,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { createShell, type Shell } from "./features/shell/shell";

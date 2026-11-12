@@ -100,3 +100,12 @@ describe("routes of internal IDs", () => {
     expect(routeOfWorkspace(s, "S9", "S1-W1")).toEqual({ name: "home" });
   });
 });
+
+describe("resolveRoute settings", () => {
+  it("resolves the settings without any store", async () => {
+    expect(await resolveRoute({ name: "settings", tab: "accounts" }, [], itemsIn("none"))).toEqual({
+      name: "settings",
+      tab: "accounts",
+    });
+  });
+});
