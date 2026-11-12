@@ -16,7 +16,7 @@ import (
 
 var t0 = time.Date(2026, 11, 12, 9, 0, 0, 0, time.FixedZone("JST", 9*3600))
 
-func newStore(t *testing.T) (port.StoreID, string) {
+func newStore(t *testing.T) (*Stores, port.StoreID, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
 	if err := Create(dir, "01STORE0000000000000000001", t0); err != nil {
@@ -27,11 +27,11 @@ func newStore(t *testing.T) (port.StoreID, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id, dir
+	return s, id, dir
 }
 
 func TestCreateWritesStoreYAMLInOneCommit(t *testing.T) {
-	id, dir := newStore(t)
+	_, id, dir := newStore(t)
 	if id != "01STORE0000000000000000001" {
 		t.Errorf("id = %s", id)
 	}
@@ -62,7 +62,7 @@ func TestCreateWritesStoreYAMLInOneCommit(t *testing.T) {
 }
 
 func TestCreateUsesMainBranch(t *testing.T) {
-	_, dir := newStore(t)
+	_, _, dir := newStore(t)
 	repo, err := git.PlainOpen(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestCreateCleansUpOnFailure(t *testing.T) {
 }
 
 func TestAttachRefusesZeroFormat(t *testing.T) {
-	_, dir := newStore(t)
+	_, _, dir := newStore(t)
 	for _, body := range []string{"store: X\nretention_days: 30\n", "store: X\nformat: 0\n", "store: [\n"} {
 		if err := os.WriteFile(filepath.Join(dir, ".hedgehug", "store.yaml"), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
@@ -148,7 +148,7 @@ func TestAttachRefusesZeroFormat(t *testing.T) {
 }
 
 func TestUnlockTwice(t *testing.T) {
-	_, dir := newStore(t)
+	_, _, dir := newStore(t)
 	unlock, err := lock(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +167,7 @@ func TestAttachRefuses(t *testing.T) {
 	if _, err := s.Attach(t.TempDir()); !errors.Is(err, ErrNotStore) {
 		t.Errorf("plain dir: %v", err)
 	}
-	_, dir := newStore(t)
+	_, _, dir := newStore(t)
 	if err := os.WriteFile(filepath.Join(dir, ".hedgehug", "store.yaml"), []byte("store: X\nformat: 2\nretention_days: 30\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestUnknownStore(t *testing.T) {
 }
 
 func TestLockIsExclusive(t *testing.T) {
-	_, dir := newStore(t)
+	_, _, dir := newStore(t)
 	unlock, err := lock(dir)
 	if err != nil {
 		t.Fatal(err)
