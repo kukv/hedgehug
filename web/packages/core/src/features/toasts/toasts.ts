@@ -7,6 +7,8 @@ export interface ToastItem {
   id: string;
   text: string;
   error: boolean;
+  // warn は、警告の色で出す(消える時間は通常と同じ。C2 画面の決定 S14)。
+  warn: boolean;
 }
 
 // Timer は、時間が来たら呼ぶ仕組み。core は DOM の setTimeout を知らないので、app が渡す。
@@ -17,7 +19,7 @@ export interface Timer {
 
 export interface Toasts {
   list: Readable<ToastItem[]>;
-  show(text: string, opts?: { error?: boolean }): void;
+  show(text: string, opts?: { error?: boolean; warn?: boolean }): void;
   dismiss(id: string): void;
 }
 
@@ -42,7 +44,12 @@ export function createToasts(timer: Timer): Toasts {
     list: readonly(list),
     show(text, opts = {}) {
       next += 1;
-      const toast: ToastItem = { id: `t${next}`, text, error: opts.error ?? false };
+      const toast: ToastItem = {
+        id: `t${next}`,
+        text,
+        error: opts.error ?? false,
+        warn: opts.warn ?? false,
+      };
       handles.set(
         toast.id,
         timer.set(() => dismiss(toast.id), toast.error ? errorToastMs : toastMs),

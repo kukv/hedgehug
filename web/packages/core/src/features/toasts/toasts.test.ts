@@ -38,8 +38,8 @@ describe("toasts", () => {
     toasts.show("HH-13 を作成しました");
     toasts.show("タイトルは空にできません", { error: true });
     expect(get(toasts.list)).toEqual([
-      { id: "t1", text: "HH-13 を作成しました", error: false },
-      { id: "t2", text: "タイトルは空にできません", error: true },
+      { id: "t1", text: "HH-13 を作成しました", error: false, warn: false },
+      { id: "t2", text: "タイトルは空にできません", error: true, warn: false },
     ]);
     advance(4499);
     expect(texts(toasts)).toHaveLength(2);
@@ -47,6 +47,17 @@ describe("toasts", () => {
     expect(texts(toasts)).toEqual(["タイトルは空にできません"]);
     advance(2500);
     expect(texts(toasts)).toEqual([]);
+  });
+
+  it("shows a warning in 4.5 seconds like a normal toast (決定 S14)", () => {
+    const { timer, advance } = fakeTimer();
+    const toasts = createToasts(timer);
+    toasts.show("ミラー 1 件に送れませんでした", { warn: true });
+    expect(get(toasts.list)).toEqual([
+      { id: "t1", text: "ミラー 1 件に送れませんでした", error: false, warn: true },
+    ]);
+    advance(4500);
+    expect(get(toasts.list)).toEqual([]);
   });
 
   it("keeps 4 at most and drops the oldest", () => {

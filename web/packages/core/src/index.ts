@@ -73,6 +73,7 @@ export {
   syncAllHint,
   syncCard,
 } from "./features/sync/card";
+export { createSync, type SyncDeps, type SyncState } from "./features/sync/sync";
 export { createSystemInfo, type SystemInfoState } from "./features/system/system";
 export {
   createToasts,
