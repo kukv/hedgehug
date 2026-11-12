@@ -59,6 +59,17 @@ func TestSyncRefusesRemoteThatIsNotAStore(t *testing.T) {
 	}
 }
 
+// store.yaml に format がなければ、Attach と同じく Store ではないとして断る。
+func TestSyncRefusesRemoteStoreWithoutFormat(t *testing.T) {
+	remote := newRemote(t)
+	pushRaw(t, remote, map[string]string{".hedgehug/store.yaml": "store: 01STORE0000000000000000001\n"})
+	_, _, dir := newStore(t)
+	m := newMachine(t, dir, "A", t0)
+	if _, err := m.rep.Sync(t.Context(), m.id, remote); !errors.Is(err, port.ErrRemoteNotStore) {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestSyncRefusesUnrelatedHistory(t *testing.T) {
 	remote := newRemote(t)
 	firstMachine(t, remote)

@@ -98,7 +98,7 @@ func checkRemoteStore(repo *git.Repository, h plumbing.Hash) error {
 		return err
 	}
 	var y storeYAML
-	if yaml.Unmarshal([]byte(text), &y) != nil || y.Store == "" {
+	if yaml.Unmarshal([]byte(text), &y) != nil || y.Store == "" || y.Format == 0 {
 		return port.ErrRemoteNotStore
 	}
 	if y.Format > Format {
