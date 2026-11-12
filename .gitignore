@@ -54,13 +54,3 @@ dist/
 node_modules/
 /web/test-results/
 /web/playwright-report/
-
-### RDRAAgent ###
-*.log
-*.err
-*.swp
-*.swo
-*~
-_no_use/
-_graph_script/
-_script_Prompt/
