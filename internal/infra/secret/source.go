@@ -27,6 +27,8 @@ func KeychainKey(login string) string { return account.Host + "/" + login }
 // Keyring は OS のキーチェーン。テストでは差し替える。
 type Keyring interface {
 	Get(service, user string) (string, error)
+	Set(service, user, value string) error
+	Delete(service, user string) error
 }
 
 // Source はトークンの読み出し。
@@ -60,7 +62,7 @@ func (s *Source) Token(ctx context.Context, a account.Account) (string, error) {
 		case err != nil || strings.TrimSpace(v) == "":
 			return "", &ghcall.Failure{Kind: ghcall.KeychainMissing, Login: a.Login}
 		}
-		return strings.TrimSpace(v), nil
+		return accessOf(v), nil
 	}
 	return "", fmt.Errorf("no token source for the method %q", a.Method)
 }
@@ -83,13 +85,3 @@ func (s *Source) ghToken(ctx context.Context, login string) (string, error) {
 func run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).Output() //nolint:gosec // 実行するのは gh だけで、引数はこのパッケージが決める
 }
-
-func (s *Source) DeviceToken(context.Context, string) (account.DeviceToken, error) {
-	return account.DeviceToken{}, errors.New("not yet")
-}
-
-func (s *Source) SaveDeviceToken(context.Context, string, account.DeviceToken) error {
-	return errors.New("not yet")
-}
-
-func (s *Source) DeleteDeviceToken(context.Context, string) error { return errors.New("not yet") }
