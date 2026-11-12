@@ -1,5 +1,5 @@
 import { createSystemPort, rememberToken, setToken } from "@hedgehug/api";
-import { createNavigation, createShell, createSystemInfo } from "@hedgehug/core";
+import { createNavigation, createShell, createSystemInfo, createToasts } from "@hedgehug/core";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 
@@ -14,3 +14,7 @@ export const system = createSystemInfo(createSystemPort());
 export const navigation = createNavigation(browserHistory());
 navigation.start();
 export const links = createLinks(navigation, token);
+export const toasts = createToasts({
+  set: (fn, ms) => setTimeout(fn, ms),
+  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+});

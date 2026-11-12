@@ -19,3 +19,9 @@ export interface Toast {
   error?: boolean;
   action?: string;
 }
+
+// KindName は、種類のアイコンに出す種類。Project はプロジェクトのアイコン。
+export type KindName = "Epic" | "Story" | "Task" | "Bug" | "Step" | "Project";
+
+// Category は、ステータスの分類(03)。点の色を決める。
+export type Category = "todo" | "doing" | "done" | "canceled";

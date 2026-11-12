@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { AppFrame, Brand, PageHead } from "@hedgehug/ui";
-  import { shell, system } from "./wire";
+  import { AppFrame, Brand, PageHead, Toasts } from "@hedgehug/ui";
+  import { shell, system, toasts } from "./wire";
 
   const drawerOpen = shell.drawerOpen;
   const version = system.version;
+  const toastList = toasts.list;
   system.load();
 </script>
 
@@ -18,6 +19,7 @@
     {/if}
   </div>
 </AppFrame>
+<Toasts toasts={$toastList} ondismiss={toasts.dismiss} />
 
 <style>
   .content {
