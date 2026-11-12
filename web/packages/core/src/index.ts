@@ -47,10 +47,6 @@ export {
   kinds,
 } from "./features/items/createDialog";
 export {
-  structureOf as createStructureOf,
-  templateOptions,
-} from "./features/items/createTemplate";
-export {
   copiedMessage,
   copyFailedMessage,
   createDetail,

@@ -9,20 +9,22 @@ import type { Catalog } from "../catalog/catalog";
 import type { Option } from "../projects/createDialog";
 import { itemDisplayId } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
+import type { StructureRow } from "../workspaces/templateApply";
 import {
   type CreateContext,
   type Here,
   parentCandidates,
-  parentMissing,
   pickParent,
   startValues,
 } from "./createDefaults";
-import { createContextLoader, rowsFor, type WorkspaceContext } from "./createDialogLoad";
+import { createContextLoader, type WorkspaceContext } from "./createDialogLoad";
+import { missing, parentOptions, viewOf, wsOptions } from "./createDialogOptions";
+import { applyDefault, applyToForm, othersOf } from "./createTemplate";
 import { initialValues, shownValues, switchWorkspace, type Values } from "./createValues";
 import type { PropertyRow } from "./properties";
 
 // アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。検査はサーバーに任せ、断りを赤字で出す
-// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレート・スプリント・説明は A3 後半。
+// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F、説明は A4。
 
 export interface ItemForm {
   workspaceId: string;
@@ -33,6 +35,8 @@ export interface ItemForm {
   keepOpen: boolean;
   // values は、プロパティの内部 ID → 入力。隠した欄の値も覚えておく。
   values: Values;
+  // templateId は、当てはめているテンプレート。空は「なし」。
+  templateId: string;
 }
 
 export interface ItemDialogState {
@@ -46,6 +50,10 @@ export interface ItemDialogState {
   preview: string;
   // rows は、種類で使うプロパティの行。settings は、そのワークスペースの設定。
   rows: PropertyRow[];
+  // templates は、テンプレートのセレクトの選択肢(使えるものがなければ空で、欄を出さない)。
+  templates: Option[];
+  // structure は「一緒に作るもの」。テンプレートが「なし」なら null。
+  structure: { heading: string; rows: StructureRow[] } | null;
   settings: WorkspaceSettings;
   error: string;
 }
@@ -87,21 +95,6 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
   const stores = () => get(deps.catalog.stores);
   const storeOf = (wsId: string) => stores().find((s) => s.workspaces.some((w) => w.id === wsId));
   const wsOf = (wsId: string) => storeOf(wsId)?.workspaces.find((w) => w.id === wsId);
-  const wsOptions = () =>
-    stores()
-      .filter((s) => !s.readOnly)
-      .flatMap((s) =>
-        s.workspaces.map((w) => ({ value: w.id, label: `${s.name} / ${w.name} (${w.prefix})` })),
-      );
-
-  const parentOptions = (prefix: string, candidates: Item[]) =>
-    candidates.map((it) => ({
-      value: it.id,
-      label: `${itemDisplayId(prefix, it.number)} ${it.title}`,
-    }));
-  const missing = (kind: Kind, candidates: Item[]) =>
-    kind !== "Epic" && candidates.length === 0 ? parentMissing(kind) : "";
-
   // refresh は、ワークスペース・プロジェクト・種類から、選択肢・親・ID の予告を作り直す。
   async function refresh(
     form: ItemForm,
@@ -121,12 +114,12 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     const shown = { ...form, parentId };
     const next: ItemDialogState = {
       form: shown,
-      workspaces: wsOptions(),
+      workspaces: wsOptions(stores()),
       projects: ws.projects.map((p) => ({ value: p.id, label: p.title })),
       parents: parentOptions(ws.prefix, candidates),
       parentMissing: missing(form.kind, candidates),
       preview: `ID は ${itemDisplayId(ws.prefix, nextNo)} になります。`,
-      rows: rowsFor(ctx, shown),
+      ...viewOf(ctx, shown),
       settings: ctx.settings,
       error,
     };
@@ -146,18 +139,20 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     const now = get(state);
     if (gen !== seq || !now) return;
     if (!loaded) return void state.set(null);
-    const { title, keepOpen } = now.form;
-    const values =
-      now.form.workspaceId === form.workspaceId
-        ? now.form.values
-        : switchWorkspace(
-            now.form.values,
-            loaded.ctx.settings,
-            memberCheck(now.form.workspaceId, form.workspaceId, loaded.ctx),
-          );
-    const kept = { ...loaded.next.form, title, keepOpen, values };
+    const { title, keepOpen, templateId } = now.form;
+    const switched = now.form.workspaceId !== form.workspaceId;
+    const values = switched
+      ? switchWorkspace(
+          now.form.values,
+          loaded.ctx.settings,
+          memberCheck(now.form.workspaceId, form.workspaceId, loaded.ctx),
+        )
+      : now.form.values;
+    let kept: ItemForm = { ...loaded.next.form, title, keepOpen, values, templateId };
+    // ワークスペースを変えたら、テンプレートを「なし」にしてから新しいワークスペースの既定を当てはめる(A3b-14)。
+    if (switched) kept = applyDefault(kept, loaded.ctx.settings);
     current = loaded.ctx;
-    state.set({ ...loaded.next, form: kept, rows: rowsFor(loaded.ctx, kept) });
+    state.set({ ...loaded.next, form: kept, ...viewOf(loaded.ctx, kept) });
   }
 
   // send は、アイテムを作る。作ったあと、「続けて作成」ならタイトルを空にして読み直し、でなければ閉じる。
@@ -175,6 +170,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         kind,
         title,
         values: shownValues(s.form.values, s.settings, kind),
+        ...(s.form.templateId ? { templateId: s.form.templateId } : {}),
       });
     } catch (e) {
       if (!(e instanceof Refused)) throw e;
@@ -183,7 +179,10 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       if (now) state.set({ ...now, error: e.message });
       return;
     }
-    deps.toasts.show(`${itemDisplayId(ws.prefix, created.number)} を作成しました`);
+    // 一緒に作った子と Step の数を「ほか N 件」で出す(A3b-16)。
+    const others = othersOf(s.settings, s.form.templateId);
+    const id = itemDisplayId(ws.prefix, created.number);
+    deps.toasts.show(others > 0 ? `${id} ほか ${others} 件を作成しました` : `${id} を作成しました`);
     if (s.form.keepOpen) {
       // 続けて作成: タイトルとエラーだけを空にし、ほかは残す(02「作成したあと」)。
       const now = get(state);
@@ -208,7 +207,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         if (start.workspaceWithoutProject) deps.openProjectDialog(start.workspaceWithoutProject.id);
         return;
       }
-      const form: ItemForm = {
+      let form: ItemForm = {
         workspaceId: start.workspace.id,
         projectId: start.projectId,
         kind: start.kind,
@@ -216,6 +215,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         title: "",
         keepOpen: false,
         values: {},
+        templateId: "",
       };
       load = createContextLoader(deps.workspaces, deps.catalogPort);
       const gen = ++seq;
@@ -223,6 +223,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       if (!store) return;
       const loadedCtx = await load(store.id, form.workspaceId);
       form.values = initialValues(loadedCtx.settings);
+      form = applyDefault(form, loadedCtx.settings);
       const loaded = await refresh(form);
       if (gen !== seq) return;
       current = loaded?.ctx ?? null;
@@ -231,7 +232,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     async update(patch) {
       const s = get(state);
       if (!s) return;
-      const form = { ...s.form, ...patch };
+      let form = { ...s.form, ...patch };
       if (patch.workspaceId !== undefined && patch.workspaceId !== s.form.workspaceId) {
         // ワークスペースを変えたら、プロジェクトを先頭にし、親を選び直す(02「ダイアログの中での連動」)。
         form.projectId = wsOf(patch.workspaceId)?.projects[0]?.id ?? "";
@@ -247,17 +248,26 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         const candidates = parentCandidates(projectItems, form.kind);
         const ws = wsOf(form.workspaceId);
         form.parentId = form.kind === "Epic" ? null : pickParent(candidates, form.parentId);
+        // テンプレートを「なし」にしてから新しい種類の既定を当てはめる(A3b-14)。
+        if (current) form = applyDefault(form, current.settings);
         state.set({
           ...s,
           form,
           parents: parentOptions(ws?.prefix ?? "", candidates),
           parentMissing: missing(form.kind, candidates),
-          rows: current ? rowsFor(current, form) : s.rows,
+          ...(current ? viewOf(current, form) : {}),
         });
         return;
       }
-      const rows = patch.values && current ? rowsFor(current, form) : s.rows;
-      state.set({ ...s, form, rows });
+      if (patch.templateId !== undefined && patch.templateId !== s.form.templateId && current) {
+        // テンプレートを変えたら当てはめる(02「テンプレートを変えたとき」)。
+        const before = { ...form, templateId: s.form.templateId };
+        const applied = applyToForm(before, current.settings, patch.templateId);
+        state.set({ ...s, form: applied, ...viewOf(current, applied) });
+        return;
+      }
+      // 担当者を変えると「一緒に作るもの」の「親と同じ」も変わるので、値の変更でも作り直す。
+      state.set({ ...s, form, ...(current ? viewOf(current, form) : {}) });
     },
     async submit() {
       const s = get(state);
