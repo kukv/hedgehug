@@ -143,7 +143,7 @@ async function executePrompt(filePair, options = {}) {
 // ========================================
 async function executeParallel(filePairs, options = {}) {
     if (filePairs.length === 0) {
-        console.log('\n⏭️ 実行するファイルがありません');
+        console.log('\n⏭ 実行するファイルがありません');
         return [];
     }
     
