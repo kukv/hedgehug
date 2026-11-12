@@ -91,6 +91,75 @@ func TestCreateRefusesNonEmptyDir(t *testing.T) {
 	if err := Create(dir, "01STORE0000000000000000001", t0); err == nil {
 		t.Error("Create on a non-empty dir succeeded")
 	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf(".git: %v", err)
+	}
+}
+
+func TestCreateRefusesUnreadableDir(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := Create(file, "01STORE0000000000000000001", t0)
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Errorf("Create on a file: %v", err)
+	}
+}
+
+func TestCreateCleansUpOnFailure(t *testing.T) {
+	boom := errors.New("boom")
+	afterInit = func() error { return boom }
+	t.Cleanup(func() { afterInit = nil })
+
+	missing := filepath.Join(t.TempDir(), "store")
+	if err := Create(missing, "01STORE0000000000000000001", t0); !errors.Is(err, boom) {
+		t.Fatalf("missing dir: %v", err)
+	}
+	if _, err := os.Stat(missing); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("missing dir was left: %v", err)
+	}
+
+	empty := t.TempDir()
+	if err := Create(empty, "01STORE0000000000000000001", t0); !errors.Is(err, boom) {
+		t.Fatalf("empty dir: %v", err)
+	}
+	if entries, err := os.ReadDir(empty); err != nil || len(entries) != 0 {
+		t.Errorf("empty dir now has %v (%v)", entries, err)
+	}
+
+	afterInit = nil
+	if err := Create(empty, "01STORE0000000000000000001", t0); err != nil {
+		t.Errorf("retry: %v", err)
+	}
+}
+
+func TestAttachRefusesZeroFormat(t *testing.T) {
+	_, dir := newStore(t)
+	for _, body := range []string{"store: X\nretention_days: 30\n", "store: X\nformat: 0\n", "store: [\n"} {
+		if err := os.WriteFile(filepath.Join(dir, ".hedgehug", "store.yaml"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s := New(apptest.NewClock(t0), apptest.NewIDs())
+		if _, err := s.Attach(dir); !errors.Is(err, ErrNotStore) || err.Error() == ErrNotStore.Error() {
+			t.Errorf("%q: %v", body, err)
+		}
+	}
+}
+
+func TestUnlockTwice(t *testing.T) {
+	_, dir := newStore(t)
+	unlock, err := lock(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	unlock()
+	again, err := lock(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again()
 }
 
 func TestAttachRefuses(t *testing.T) {

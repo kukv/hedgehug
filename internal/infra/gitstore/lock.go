@@ -3,6 +3,7 @@ package gitstore
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
 	"golang.org/x/sys/unix"
 )
@@ -19,8 +20,12 @@ func lock(root string) (unlock func(), err error) {
 		_ = f.Close()
 		return nil, err
 	}
+	// unlock は 2 回呼んでもよい(閉じたあとのファイルに Flock しない)。
+	var once sync.Once
 	return func() {
-		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
-		_ = f.Close()
+		once.Do(func() {
+			_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
+			_ = f.Close()
+		})
 	}, nil
 }
