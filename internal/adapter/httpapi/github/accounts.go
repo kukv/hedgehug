@@ -3,6 +3,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -129,13 +130,13 @@ func registerAccounts(api huma.API, s Services) {
 	huma.Register(api, huma.Operation{
 		OperationID: "edit-account", Method: http.MethodPut, Path: "/api/accounts/{id}",
 		Summary: "新しい値を GitHub で確かめてから、アカウントの値を入れ替える",
-		Errors:  []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+		Errors:  []int{http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity},
 	}, func(ctx context.Context, in *editInput) (*accountOutput, error) {
 		a, err := s.Edit.Do(ctx, ghapp.EditAccountInput{
 			ID: account.ID(in.ID), Name: in.Body.Name, Login: in.Body.Login, Method: account.Method(in.Body.Method),
 		})
 		if err != nil {
-			return nil, apierr.From(err)
+			return nil, fromErr(err)
 		}
 		return &accountOutput{Body: toBody(a)}, nil
 	})
@@ -152,11 +153,11 @@ func registerManage(api huma.API, s Services) {
 	huma.Register(api, huma.Operation{
 		OperationID: "reauth-account", Method: http.MethodPost, Path: "/api/accounts/{id}/reauth",
 		Summary: "gh CLI・環境変数・OS のキーチェーンのアカウントの認証の確認をやり直す",
-		Errors:  []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+		Errors:  []int{http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity},
 	}, func(ctx context.Context, in *idInput) (*accountOutput, error) {
 		a, err := s.Reauth.Do(ctx, account.ID(in.ID))
 		if err != nil {
-			return nil, apierr.From(err)
+			return nil, fromErr(err)
 		}
 		return &accountOutput{Body: toBody(a)}, nil
 	})
@@ -184,4 +185,13 @@ func impact(lines []string, err error) (*impactOutput, error) {
 	out := &impactOutput{}
 	out.Body.Lines = append([]string{}, lines...)
 	return out, nil
+}
+
+// fromErr は、apierr.From に加えて、デバイスフローのアカウントをこの API で再認証・保存しようとしたときを 409 にする
+// (デバイスフローは /api/sign-ins でサインインし直す。D2 画面の計画の決定 S6)。
+func fromErr(err error) error {
+	if errors.Is(err, ghapp.ErrDeviceFlow) {
+		return huma.Error409Conflict("デバイスフローのアカウントは /api/sign-ins でサインインし直す")
+	}
+	return apierr.From(err)
 }
