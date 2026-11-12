@@ -1,0 +1,103 @@
+// Package change は、変更の記録(log.jsonl の 1 行)と、記録からいまの値を決める規則を持つ。
+package change
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+// ID は内部 ID(ULID)。
+type ID string
+
+// Type は変更の種類(保存形式「変更記録」の t)。土台は下の 4 つだけを扱い、ほかの種類はトラックが足す。
+type Type string
+
+const (
+	Create Type = "create"
+	Set    Type = "set"
+	Add    Type = "add"
+	Remove Type = "remove"
+)
+
+// TimeLayout は記録の時刻の書き方(ミリ秒までの RFC 3339、このマシンの時刻帯付き)。
+const TimeLayout = "2006-01-02T15:04:05.000Z07:00"
+
+// Record は log.jsonl の 1 行。
+type Record struct {
+	ID    ID
+	Op    ID
+	At    time.Time
+	By    string
+	Actor Actor
+	T     Type
+	F     string
+	From  json.RawMessage
+	To    json.RawMessage
+	Prev  []ID
+	Root  *bool
+}
+
+// line は log.jsonl に書く形。キーの並びは保存形式の例と同じ。
+type line struct {
+	ID    ID              `json:"id"`
+	Op    ID              `json:"op"`
+	At    string          `json:"at"`
+	By    string          `json:"by"`
+	Actor string          `json:"actor"`
+	T     Type            `json:"t"`
+	F     string          `json:"f,omitempty"`
+	From  json.RawMessage `json:"from,omitempty"`
+	To    json.RawMessage `json:"to,omitempty"`
+	Prev  []ID            `json:"prev"`
+	Root  *bool           `json:"root,omitempty"`
+}
+
+// MarshalJSON は log.jsonl の 1 行にする。prev が空でも [] で書く。
+func (r Record) MarshalJSON() ([]byte, error) {
+	prev := r.Prev
+	if prev == nil {
+		prev = []ID{}
+	}
+	return json.Marshal(line{
+		ID: r.ID, Op: r.Op, At: r.At.Format(TimeLayout), By: r.By, Actor: r.Actor.Code(),
+		T: r.T, F: r.F, From: r.From, To: r.To, Prev: prev, Root: r.Root,
+	})
+}
+
+// UnmarshalJSON は log.jsonl の 1 行を読む。
+func (r *Record) UnmarshalJSON(b []byte) error {
+	var l line
+	if err := json.Unmarshal(b, &l); err != nil {
+		return fmt.Errorf("record: %w", err)
+	}
+	at, err := time.Parse(time.RFC3339, l.At)
+	if err != nil {
+		return fmt.Errorf("record %s: at: %w", l.ID, err)
+	}
+	actor, err := ParseActor(l.Actor, l.By)
+	if err != nil {
+		return fmt.Errorf("record %s: %w", l.ID, err)
+	}
+	*r = Record{
+		ID: l.ID, Op: l.Op, At: at, By: l.By, Actor: actor,
+		T: l.T, F: l.F, From: l.From, To: l.To, Prev: l.Prev, Root: l.Root,
+	}
+	return nil
+}
+
+// Kind はログを持つエンティティの種類。
+type Kind string
+
+const (
+	KindMembers   Kind = "members"
+	KindWorkspace Kind = "workspace"
+	KindProject   Kind = "project"
+	KindItem      Kind = "item"
+)
+
+// Ref は、どのエンティティのログかを指す。メンバーの一覧は Store に 1 つなので ID は空。
+type Ref struct {
+	Kind Kind
+	ID   ID
+}
