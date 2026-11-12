@@ -79,7 +79,7 @@ type deleteValueInput struct {
 	Workspace   string `path:"workspace"`
 	List        string `path:"list"`
 	Value       string `path:"value"`
-	Replacement string `query:"replacement" doc:"代わりに使う値の ID。省略すると、使っているアイテムの値は外れる"`
+	Replacement string `query:"replacement" doc:"代わりに使う値の ID。省略すると、使っているアイテムは、ステータス・優先度では初期値に、単一選択では「なし」になる。関連システムと複数選択では指定できず(404)、使っているアイテムから値が外れる"`
 }
 
 type categoryInput struct {

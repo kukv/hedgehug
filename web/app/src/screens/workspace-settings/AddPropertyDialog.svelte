@@ -47,7 +47,7 @@
 
 <Dialog open title="プロパティを追加" {onclose}>
   <Input label="名前" bind:value={name} focusOnMount />
-  <Input label="キー" bind:value={key} mono placeholder={keyHint} />
+  <Input label="キー" bind:value={key} mono />
   <p class="hint">{keyHint}</p>
   <Select label="型" bind:value={type as string} options={typeOptions} />
   <fieldset>

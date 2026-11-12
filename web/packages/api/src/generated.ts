@@ -522,7 +522,7 @@ export type AccountEditImpactParams = {
 };
 
 export type DeleteWorkspaceValueParams = {
-  /** 代わりに使う値の ID。省略すると、使っているアイテムの値は外れる */
+  /** 代わりに使う値の ID。省略すると、使っているアイテムは、ステータス・優先度では初期値に、単一選択では「なし」になる。関連システムと複数選択では指定できず(404)、使っているアイテムから値が外れる */
   replacement?: string;
 };
 
