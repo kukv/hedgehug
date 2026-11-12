@@ -83,3 +83,13 @@ func (s *Source) ghToken(ctx context.Context, login string) (string, error) {
 func run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).Output() //nolint:gosec // 実行するのは gh だけで、引数はこのパッケージが決める
 }
+
+func (s *Source) DeviceToken(context.Context, string) (account.DeviceToken, error) {
+	return account.DeviceToken{}, errors.New("not yet")
+}
+
+func (s *Source) SaveDeviceToken(context.Context, string, account.DeviceToken) error {
+	return errors.New("not yet")
+}
+
+func (s *Source) DeleteDeviceToken(context.Context, string) error { return errors.New("not yet") }
