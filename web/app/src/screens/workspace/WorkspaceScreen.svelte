@@ -8,12 +8,13 @@
     store: StoreNode;
     workspace: WorkspaceNode;
     ondrawer: () => void;
+    alert: boolean;
   }
 
-  let { store, workspace, ondrawer }: Props = $props();
+  let { store, workspace, ondrawer, alert }: Props = $props();
 </script>
 
-<PageHead title={workspace.name} {ondrawer}>
+<PageHead title={workspace.name} {ondrawer} {alert}>
   {#snippet crumbs()}
     <StoreBadge name={store.name} color={store.color} />
     <code class="prefix">{workspace.prefix}</code>

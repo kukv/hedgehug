@@ -9,10 +9,11 @@
     current: Resolved | null;
     stores: StoreNode[];
     version: string | null;
+    alert: boolean;
     ondrawer: () => void;
   }
 
-  let { current, stores, version, ondrawer }: Props = $props();
+  let { current, stores, version, alert, ondrawer }: Props = $props();
 
   const store = $derived(
     current && current.name !== "home" ? stores.find((s) => s.id === current.storeId) : undefined,
@@ -31,12 +32,13 @@
       projectId={current.projectId}
       tab={current.tab}
       {ondrawer}
+      {alert}
     />
   {:else if store && workspace}
-    <WorkspaceScreen {store} {workspace} {ondrawer} />
+    <WorkspaceScreen {store} {workspace} {ondrawer} {alert} />
   {:else}
     <!-- ホーム。マイタスク(トラック E)が入ったら替える(A2 の計画の決定 6)。 -->
-    <PageHead title="hedgehug" {ondrawer} />
+    <PageHead title="hedgehug" {ondrawer} {alert} />
     <div class="content">
       {#if version}
         <p class="version">{version}</p>

@@ -2,6 +2,7 @@ import {
   createCatalogPort,
   createItemsPort,
   createProjectsPort,
+  createSyncPort,
   createSystemPort,
   rememberToken,
   setToken,
@@ -13,16 +14,23 @@ import {
   createNavigation,
   createProjectDialog,
   createProjectScreen,
+  createReflection,
   createScreen,
   createShell,
+  createSync,
   createSystemInfo,
+  createTabSignals,
   createToasts,
   get,
   type Here,
+  readonly,
   routeOfProject,
+  type SyncEventKind,
+  writable,
 } from "@hedgehug/core";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
+import { held, online as isOnline, tabId, visible } from "./tab";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 
@@ -105,5 +113,76 @@ navigation.route.subscribe(() => {
   projectDialog.close();
 });
 
-// 一覧を読んでから、アドレスの解決を始める(一覧がないと Store 名と ID を解決できない)。
-void catalog.load().then(() => screen.start());
+const syncPort = createSyncPort();
+
+// 画面への反映(06「画面への反映」)。store は一覧・開いているプロジェクト・詳細パネル、sync は同期の状態。
+// 失敗は出さない(A2 の決定 29)。
+// 同期の状態は、どちらの種類でも読み直す(保存で未送信の数が変わる。決定 S10)。
+async function reflect(kinds: SyncEventKind[]) {
+  const jobs: Promise<unknown>[] = [sync.load()];
+  if (kinds.includes("store")) {
+    jobs.push(catalog.load().then(() => Promise.all([projectScreen.reload(), detail.reload()])));
+  }
+  await Promise.allSettled(jobs);
+}
+
+export const reflection = createReflection({
+  port: syncPort,
+  timer: {
+    set: (fn, ms) => setTimeout(fn, ms),
+    clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+  },
+  held,
+  visible,
+  apply: reflect,
+});
+
+export const sync = createSync({
+  port: syncPort,
+  toasts,
+  online: isOnline,
+  onSynced: () => void reflection.now(),
+});
+
+const signals = createTabSignals({
+  port: syncPort,
+  tab: tabId,
+  held,
+  visible,
+  online: isOnline,
+  now: () => Date.now(),
+});
+
+// syncNow は、相対時間と 24 時間の判定に使う時刻。30 秒ごとに進める(決定 S7)。
+const now = writable(new Date());
+export const syncNow = readonly(now);
+const onlineState = writable(isOnline());
+export const online = readonly(onlineState);
+
+// startSync は、出来事の受け取り・知らせ・時刻の更新を始める。最初の一覧を読んだあとに 1 回呼ぶ(つないだときの
+// 読み直しが最初の解決より先に走らないように)。
+function startSync() {
+  reflection.start();
+  void sync.load();
+  const recheck = () => {
+    signals.check();
+    reflection.wake();
+  };
+  setInterval(() => signals.check(), 1000);
+  setInterval(() => now.set(new Date()), 30_000);
+  document.addEventListener("visibilitychange", recheck);
+  document.addEventListener("focusout", () => setTimeout(recheck, 0));
+  document.addEventListener("focusin", () => signals.check());
+  const network = () => {
+    onlineState.set(isOnline());
+    recheck();
+  };
+  window.addEventListener("online", network);
+  window.addEventListener("offline", network);
+}
+
+// 一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID を解決できない)。
+void catalog.load().then(() => {
+  screen.start();
+  startSync();
+});

@@ -17,9 +17,10 @@
     projectId: string;
     tab: ProjectTab;
     ondrawer: () => void;
+    alert: boolean;
   }
 
-  let { storeId, projectId, tab, ondrawer }: Props = $props();
+  let { storeId, projectId, tab, ondrawer, alert }: Props = $props();
 
   const view = projectScreen.view;
   $effect(() => {
@@ -56,7 +57,7 @@
 
 {#if $view && $view.store.id === storeId && $view.project.id === projectId && wsRoute}
   {@const p = $view.project}
-  <PageHead title="{p.displayId} {p.title}" {ondrawer}>
+  <PageHead title="{p.displayId} {p.title}" {ondrawer} {alert}>
     {#snippet crumbs()}
       <StoreBadge name={$view.store.name} color={$view.store.color} />
       <a
