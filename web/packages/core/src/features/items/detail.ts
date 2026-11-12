@@ -1,10 +1,14 @@
 import { NotFound, Refused } from "../../model/errors";
-import type { Item } from "../../model/item";
+import type { Item, PropertyInput } from "../../model/item";
+import type { WorkspaceSettings } from "../../model/workspace";
+import type { CatalogPort } from "../../port/catalog";
 import type { ItemsPort } from "../../port/items";
+import type { WorkspacesPort } from "../../port/workspaces";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog, ProjectNode, StoreNode, WorkspaceNode } from "../catalog/catalog";
 import { itemDisplayId } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
+import { type People, type PropertyRow, propertyRows, valueOf as valueOfItem } from "./properties";
 import { ancestorsOf, compareSiblings } from "./tree";
 
 // 詳細パネルの状態(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
@@ -20,6 +24,10 @@ export interface DetailView {
   // children は、子(Epic なら Story・Task・Bug、Story・Task・Bug なら Step)を並び順で。
   children: Item[];
   readOnly: boolean;
+  // settings・people・rows は、プロパティの区画(02「プロパティの入力と保存」)。
+  settings: WorkspaceSettings;
+  people: People;
+  rows: PropertyRow[];
 }
 
 export interface Detail {
@@ -34,6 +42,12 @@ export interface Detail {
   addStep(title: string): Promise<boolean>;
   // moveUp は、Step を直前の Step と入れ替える。先頭なら何もしない。
   moveUp(itemId: string): Promise<void>;
+  // setProperty は、プロパティの値を 1 つ保存する。false なら、入力欄を保存済みの値に戻す。
+  setProperty(itemId: string, propertyId: string, value: PropertyInput): Promise<boolean>;
+  // toggleValue は、関連システム・複数選択の値を 1 つ入れる・外す。
+  toggleValue(propertyId: string, valueId: string, on: boolean): Promise<void>;
+  // checkStep は、Step のチェックを入れ切りする(ステータスが変わる)。
+  checkStep(stepId: string, done: boolean): Promise<void>;
   // reload は、開いているアイテムを読み直す(画面への反映)。開いていなければ何もしない。
   // なくなっていたら、パネルを閉じる(06「反映で変わる画面」)。
   reload(): Promise<void>;
@@ -42,6 +56,8 @@ export interface Detail {
 export interface DetailDeps {
   catalog: Catalog;
   items: ItemsPort;
+  workspaces: WorkspacesPort;
+  catalogPort: CatalogPort;
   toasts: Toasts;
   // onChanged は、保存したあと(開いているプロジェクトの画面を読み直す)。
   onChanged(): void;
@@ -69,7 +85,13 @@ export function createDetail(deps: DetailDeps): Detail {
     target = { storeId, itemId };
     try {
       const item = await deps.items.get(storeId, itemId);
-      const all = await deps.items.list(storeId, item.projectId);
+      const [all, ws, members, me] = await Promise.all([
+        deps.items.list(storeId, item.projectId),
+        deps.workspaces.get(storeId, item.workspaceId),
+        deps.catalogPort.listMembers(storeId),
+        // me が決まらないときは空(A2 の決定 3)。
+        deps.catalogPort.me(storeId).catch(() => ""),
+      ]);
       const store = deps.catalog.store(storeId);
       const project = deps.catalog.project(storeId, item.projectId);
       const workspace = project && deps.catalog.workspace(storeId, project.workspaceId);
@@ -79,6 +101,7 @@ export function createDetail(deps: DetailDeps): Detail {
         view.set(null);
         return;
       }
+      const people = { members, me };
       view.set({
         store,
         workspace,
@@ -88,6 +111,9 @@ export function createDetail(deps: DetailDeps): Detail {
         ancestors: ancestorsOf(all, item.id),
         children: all.filter((it) => it.parentId === item.id).sort(compareSiblings),
         readOnly: store.readOnly,
+        settings: ws.settings,
+        people,
+        rows: propertyRows(ws.settings, item.kind, (p) => valueOfItem(item, p), people),
       });
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
@@ -160,6 +186,41 @@ export function createDetail(deps: DetailDeps): Detail {
       if (!v || v.children[0]?.id === itemId) return;
       try {
         await deps.items.moveUp(v.store.id, itemId);
+      } catch (e) {
+        refusedToast(e);
+        return;
+      }
+      await saved(v.store.id, v.item.id);
+    },
+    async setProperty(itemId, propertyId, value) {
+      const v = get(view);
+      if (!v) return false;
+      try {
+        await deps.items.setProperty(v.store.id, itemId, propertyId, value);
+      } catch (e) {
+        refusedToast(e);
+        return false;
+      }
+      await saved(v.store.id, v.item.id);
+      return true;
+    },
+    async toggleValue(propertyId, valueId, on) {
+      const v = get(view);
+      if (!v) return;
+      try {
+        if (on) await deps.items.addValue(v.store.id, v.item.id, propertyId, valueId);
+        else await deps.items.removeValue(v.store.id, v.item.id, propertyId, valueId);
+      } catch (e) {
+        refusedToast(e);
+        return;
+      }
+      await saved(v.store.id, v.item.id);
+    },
+    async checkStep(stepId, done) {
+      const v = get(view);
+      if (!v) return;
+      try {
+        await deps.items.checkStep(v.store.id, stepId, done);
       } catch (e) {
         refusedToast(e);
         return;

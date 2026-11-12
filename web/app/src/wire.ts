@@ -87,6 +87,8 @@ export const workspaceMover = createWorkspaceMover({ catalog, port: workspacesPo
 export const detail = createDetail({
   catalog,
   items: itemsPort,
+  workspaces: workspacesPort,
+  catalogPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
 });

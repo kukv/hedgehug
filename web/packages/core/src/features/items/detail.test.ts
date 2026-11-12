@@ -5,9 +5,11 @@ import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { copiedMessage, copyFailedMessage, createDetail, normalizeTitle } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
+import { fakeWorkspaces } from "./settings.test-util";
 
 async function setup() {
-  const catalog = createCatalog(fakeCatalogPort());
+  const catalogPort = fakeCatalogPort();
+  const catalog = createCatalog(catalogPort);
   await catalog.load();
   const epic = item("S1", "S1-P1", 1, "Epic", null, "認証");
   const task = item("S1", "S1-P1", 2, "Task", epic.id, "画面");
@@ -16,7 +18,14 @@ async function setup() {
   const items = fakeItemsPort([epic, task, s1, s2]);
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   let changed = 0;
-  const detail = createDetail({ catalog, items, toasts, onChanged: () => void changed++ });
+  const detail = createDetail({
+    catalog,
+    items,
+    toasts,
+    workspaces: fakeWorkspaces(),
+    catalogPort,
+    onChanged: () => void changed++,
+  });
   return { detail, items, toasts, task, s1, s2, changed: () => changed };
 }
 
@@ -65,6 +74,62 @@ describe("createDetail", () => {
     await detail.moveUp(s2.id);
     await detail.moveUp(s1.id);
     expect(items.calls).toEqual([`moveUp ${s1.id}`]);
+  });
+
+  it("loads settings, members and property rows with the item", async () => {
+    const { detail, task } = await setup();
+    await detail.open("S1", task.id);
+    const v = get(detail.view);
+    expect(v?.rows.map((r) => r.property.id)).toEqual([
+      "status",
+      "assignee",
+      "priority",
+      "start",
+      "estimate",
+      "systems",
+      "F1",
+      "F2",
+    ]);
+    expect(v?.people).toEqual({ members: [{ login: "taro", name: "太郎" }], me: "taro" });
+  });
+
+  it("saves a property and reloads", async () => {
+    const { detail, items, task, changed } = await setup();
+    await detail.open("S1", task.id);
+    expect(await detail.setProperty(task.id, "estimate", "3")).toBe(true);
+    expect(items.calls).toEqual([`setProperty ${task.id} estimate "3"`]);
+    expect(get(detail.view)?.item.estimate).toBe(3);
+    expect(changed()).toBe(1);
+  });
+
+  it("shows a refusal as an error toast", async () => {
+    const { detail, items, toasts, task } = await setup();
+    await detail.open("S1", task.id);
+    items.refuseNext("ポイントは 0 以上の数で入力してください");
+    expect(await detail.setProperty(task.id, "points", "-1")).toBe(false);
+    expect(get(toasts.list)[0]).toMatchObject({
+      text: "ポイントは 0 以上の数で入力してください",
+      error: true,
+    });
+  });
+
+  it("toggles a multi value with add and remove", async () => {
+    const { detail, items, task } = await setup();
+    await detail.open("S1", task.id);
+    await detail.toggleValue("systems", "sy1", true);
+    await detail.toggleValue("systems", "sy1", false);
+    expect(items.calls).toEqual([
+      `addValue ${task.id} systems sy1`,
+      `removeValue ${task.id} systems sy1`,
+    ]);
+  });
+
+  it("checks a Step", async () => {
+    const { detail, items, task, s1 } = await setup();
+    await detail.open("S1", task.id);
+    await detail.checkStep(s1.id, true);
+    expect(items.calls).toEqual([`checkStep ${s1.id} true`]);
+    expect(get(detail.view)?.children.find((c) => c.id === s1.id)?.status).toBe("st3");
   });
 
   it("closes when the item is gone, and toggles full screen", async () => {

@@ -4,6 +4,7 @@
   import { detail, toasts } from "../../wire";
   import DetailChildren from "./DetailChildren.svelte";
   import DetailHeader from "./DetailHeader.svelte";
+  import DetailProperties from "./DetailProperties.svelte";
 
   // アイテムの詳細パネル(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
   const view = detail.view;
@@ -80,6 +81,7 @@
       {onkeydown}
       bind:value={title}
     />
+    <DetailProperties {v} />
     {#if v.item.kind !== "Step"}
       <DetailChildren {v} />
     {/if}
