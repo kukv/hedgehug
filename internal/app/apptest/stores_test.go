@@ -33,6 +33,16 @@ func TestSample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = s.Read(t.Context(), "S1", func(r port.Reader) error {
+		st, err := r.Workspaces().Settings(apptest.SampleWorkspace)
+		if err != nil || st.InitialStatus != apptest.SampleStatusTodo || st.InitialPriority != apptest.SamplePriorityMedium {
+			t.Errorf("settings = %+v, %v", st, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // 同じ ID の Store を 2 度足すのはテストの書き間違いなので、黙って空の Store に替えずに panic する。

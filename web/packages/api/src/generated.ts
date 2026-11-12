@@ -49,6 +49,10 @@ export interface AccountRow {
   status: AccountRowStatus;
 }
 
+export interface ChangeWorkspacePrefix {
+  prefix: string;
+}
+
 export type CreateItemKind = typeof CreateItemKind[keyof typeof CreateItemKind];
 
 
@@ -93,6 +97,15 @@ export interface CreateProject {
      * @pattern ^[^\r\n]*$
      */
   title: string;
+}
+
+export interface CreateWorkspace {
+  /**
+     * 1 行。改行は入れられない
+     * @pattern ^[^\r\n]*$
+     */
+  name: string;
+  prefix: string;
 }
 
 export interface ErrorDetail {
@@ -187,6 +200,14 @@ export interface Project {
   workspace: string;
 }
 
+export interface RenameWorkspace {
+  /**
+     * 1 行。改行は入れられない
+     * @pattern ^[^\r\n]*$
+     */
+  name: string;
+}
+
 export interface SignInCode {
   /** 秒 */
   expires_in: number;
@@ -246,6 +267,87 @@ export interface ValuesBody {
   /** デバイスフローはサインインの API で登録・保存する */
   method: ValuesBodyMethod;
   name: string;
+}
+
+/**
+ * ステータスの分類(todo・doing・done・canceled)
+ */
+export type WorkspaceValueCategory = typeof WorkspaceValueCategory[keyof typeof WorkspaceValueCategory];
+
+
+export const WorkspaceValueCategory = {
+  todo: 'todo',
+  doing: 'doing',
+  done: 'done',
+  canceled: 'canceled',
+} as const;
+
+export type WorkspaceValueColor = typeof WorkspaceValueColor[keyof typeof WorkspaceValueColor];
+
+
+export const WorkspaceValueColor = {
+  gray: 'gray',
+  slate: 'slate',
+  brown: 'brown',
+  red: 'red',
+  rose: 'rose',
+  pink: 'pink',
+  magenta: 'magenta',
+  purple: 'purple',
+  indigo: 'indigo',
+  blue: 'blue',
+  sky: 'sky',
+  cyan: 'cyan',
+  teal: 'teal',
+  green: 'green',
+  olive: 'olive',
+  amber: 'amber',
+  yellow: 'yellow',
+  orange: 'orange',
+} as const;
+
+export interface WorkspaceValue {
+  /** ステータスの分類(todo・doing・done・canceled) */
+  category?: WorkspaceValueCategory;
+  color: WorkspaceValueColor;
+  id: string;
+  name: string;
+}
+
+export interface WorkspaceProperty {
+  builtin: boolean;
+  hidden: boolean;
+  id: string;
+  key: string;
+  kinds: string[];
+  name: string;
+  type: string;
+}
+
+export type WorkspaceSettingsCategoryDefaults = {[key: string]: string};
+
+export interface WorkspaceSettings {
+  categoryDefaults: WorkspaceSettingsCategoryDefaults;
+  initialPriority: string;
+  initialStatus: string;
+  priorities: WorkspaceValue[];
+  properties: WorkspaceProperty[];
+  statuses: WorkspaceValue[];
+  systems: WorkspaceValue[];
+}
+
+export interface WorkspaceDetail {
+  id: string;
+  name: string;
+  oldPrefixes: string[];
+  prefix: string;
+  settings: WorkspaceSettings;
+}
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  prefix: string;
 }
 
 export type AccountEditImpactParams = {
@@ -656,6 +758,177 @@ export const listProjectItems = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListWorkspacesUrl = (store: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces`
+}
+
+/**
+ * @summary Store のワークスペースの一覧
+ */
+export const listWorkspaces = async (store: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceSummary[] | null> => {
+
+  return fetcher<WorkspaceSummary[] | null>(getListWorkspacesUrl(store),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getCreateWorkspaceUrl = (store: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces`
+}
+
+/**
+ * @summary ワークスペースを作成
+ */
+export const createWorkspace = async (store: string,
+    createWorkspaceBody: CreateWorkspace, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceSummary> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<WorkspaceSummary>(getCreateWorkspaceUrl(store),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createWorkspaceBody)
+  }
+);}
+
+
+
+export const getGetWorkspaceUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}`
+}
+
+/**
+ * @summary ワークスペースと設定
+ */
+export const getWorkspace = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceDetail> => {
+
+  return fetcher<WorkspaceDetail>(getGetWorkspaceUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getRenameWorkspaceUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/name`
+}
+
+/**
+ * @summary ワークスペースの名前を変更
+ */
+export const renameWorkspace = async (store: string,
+    workspace: string,
+    renameWorkspaceBody: RenameWorkspace, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getRenameWorkspaceUrl(store,workspace),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameWorkspaceBody)
+  }
+);}
+
+
+
+export const getChangeWorkspacePrefixUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/prefix`
+}
+
+/**
+ * @summary 接頭辞を変更
+ */
+export const changeWorkspacePrefix = async (store: string,
+    workspace: string,
+    changeWorkspacePrefixBody: ChangeWorkspacePrefix, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getChangeWorkspacePrefixUrl(store,workspace),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changeWorkspacePrefixBody)
   }
 );}
 

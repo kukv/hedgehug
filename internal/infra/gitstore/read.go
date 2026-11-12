@@ -111,6 +111,10 @@ func (r workspaces) List() ([]workspace.Workspace, error) {
 	return out, nil
 }
 
+func (r workspaces) Settings(id workspace.ID) (workspace.Settings, error) {
+	return get(r.v, change.Ref{Kind: change.KindWorkspace, ID: id}, workspace.SettingsFromLog)
+}
+
 type projects struct{ v *view }
 
 func (r projects) Get(id project.ID) (project.Project, error) {

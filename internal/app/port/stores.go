@@ -86,6 +86,7 @@ type Tx interface {
 type WorkspaceReader interface {
 	Get(id workspace.ID) (workspace.Workspace, error)
 	List() ([]workspace.Workspace, error) // 内部 ID の順
+	Settings(id workspace.ID) (workspace.Settings, error)
 }
 
 type ProjectReader interface {

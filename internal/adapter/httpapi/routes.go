@@ -10,10 +10,12 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
+	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
 )
 
 // Deps は、API が使う口。トラックが、自分の API に要る口を足す。
@@ -47,6 +49,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	system.Register(api, deps.Version)
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
+	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	ghapi.Register(api, githubServices(deps))
 
 	return api
