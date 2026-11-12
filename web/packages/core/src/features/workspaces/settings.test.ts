@@ -38,16 +38,16 @@ describe("workspace settings", () => {
     ]);
   });
 
-  it("does not read again when the same workspace is already open", async () => {
+  it("reloads without clearing the state or the sub tab when the same workspace is opened again", async () => {
     const { screen, port } = await setup();
     await screen.open("S1", "S1-W1");
-    const before = get(screen.state);
+    screen.selectTab("statuses");
     const reads = vi.spyOn(port, "get");
-    await screen.open("S1", "S1-W1");
-    expect(reads).not.toHaveBeenCalled();
-    expect(get(screen.state)).toBe(before);
-    await screen.reload();
+    const opening = screen.open("S1", "S1-W1");
+    expect(get(screen.state)).not.toBeNull(); // 読み直しの間も消さない
+    await opening;
     expect(reads).toHaveBeenCalledTimes(1);
+    expect(get(screen.state)?.tab).toBe("statuses");
   });
 
   it("opens on 一般 and keeps the sub tab while the workspace stays", async () => {
