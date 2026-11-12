@@ -1160,7 +1160,7 @@ gh CLI・環境変数 `GH_TOKEN`・OS のキーチェーンから、アカウン
 - [ ] **Step 1: 依存を入れる**
 
 ```bash
-go get github.com/zalando/go-keyring@latest
+go get github.com/zalando/go-keyring@v0.2.8
 ```
 
 - [ ] **Step 2: 失敗するテストを書く**

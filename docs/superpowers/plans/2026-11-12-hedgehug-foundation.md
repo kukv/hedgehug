@@ -45,7 +45,7 @@
 - コミットの作者とコミッター: 実行者が人(`user`)なら `<ログイン名> <<ログイン名>@hedgehug.invalid>`、それ以外は `hedgehug[bot] <bot@hedgehug.invalid>`(01「「あなた」の決まり方」)。
 - 保存のコミットのメッセージは、1 行目が `Operation.Summary`、空行のあとに `Hedgehug-Op: <操作の ID>`。
 - 画面のコードのコメントと UI の文言は日本語、識別子は英語。
-- 新しく入れる依存は、手で版を書かずに、ステップのコマンド(`go get …@latest`、`pnpm add -E …`)で入れる。pnpm は `minimumReleaseAge` で 7 日未満の版を入れない。
+- 新しく入れる依存は、版を明記して入れる(`go get <module>@vX.Y.Z`、`pnpm add -E <pkg>@X.Y.Z`)。`@latest` や版なしでは入れない。版は公開から 7 日以上たったものを選ぶ(Go は `go list -m -json <module>@<版>` の `Time` で確かめる)。pnpm は `minimumReleaseAge` でも 7 日未満の版を入れない。
 - 前回のファイルを写すときは `git show cf58222d~1:<path>` で取り出し、ステップに書いた変更だけを加える。
 
 ## この計画で決めたこと(設計書の規則の当てはめ)
@@ -4685,10 +4685,10 @@ packages:
 ```bash
 cd web
 pnpm install
-pnpm add -D -E -w dependency-cruiser
+pnpm add -D -E -w dependency-cruiser@18.7.2
 ```
 
-`pnpm add` は、公開から 7 日以上たった最新の版を入れる(`minimumReleaseAge`)。
+版は明記する。公開から 7 日以上たったものを選ぶ(`minimumReleaseAge` でも 7 日未満の版は入らない)。
 
 - [ ] **Step 3: 失敗するテストを書く**
 
