@@ -37,7 +37,7 @@ func Create(w Workspace) (change.Draft, error) {
 }
 
 var opts = change.Options{
-	Multi: func(f string) bool { return strings.HasSuffix(f, "/kinds") },
+	Multi: func(f string) bool { return strings.HasSuffix(f, "/kinds") || strings.HasPrefix(f, workflowPrefix) },
 	Valid: valid,
 }
 

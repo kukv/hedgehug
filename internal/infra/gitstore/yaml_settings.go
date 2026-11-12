@@ -67,6 +67,9 @@ func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings) *
 		key("initial_status"), initStatus,
 		key("initial_priority"), initPrio,
 		key("category_defaults"), categoryDefaultsNode(s),
+		key("workflow"), workflowNode(s),
+		key("templates"), templatesNode(s.Templates),
+		key("template_defaults"), templateDefaultsNode(s),
 	)
 }
 

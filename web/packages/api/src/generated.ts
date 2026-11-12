@@ -291,6 +291,13 @@ export interface RenameWorkspaceValue {
   name: string;
 }
 
+export interface SaveItemAsTemplate {
+  name: string;
+  /** 子と Step を含める */
+  structure: boolean;
+  title: string;
+}
+
 export interface SetWorkspacePropertyHidden {
   hidden: boolean;
 }
@@ -311,6 +318,15 @@ export const SetWorkspaceStatusCategoryCategory = {
 
 export interface SetWorkspaceStatusCategory {
   category: SetWorkspaceStatusCategoryCategory;
+}
+
+export interface SetWorkspaceTemplateDefault {
+  /** テンプレートの ID。空なら「なし」 */
+  template: string;
+}
+
+export interface SetWorkspaceTransition {
+  allowed: boolean;
 }
 
 export type SetWorkspaceValueColorColor = typeof SetWorkspaceValueColorColor[keyof typeof SetWorkspaceValueColorColor];
@@ -542,7 +558,78 @@ export interface WorkspaceProperty {
   type: string;
 }
 
+export type WorkspaceTemplateChildKind = typeof WorkspaceTemplateChildKind[keyof typeof WorkspaceTemplateChildKind];
+
+
+export const WorkspaceTemplateChildKind = {
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+} as const;
+
+export interface WorkspaceTemplateStep {
+  /** @parent(親と同じ)・@none(未割り当て)・メンバーのログイン名 */
+  assignee: string;
+  /** 新しく足すときは空 */
+  id: string;
+  title: string;
+}
+
+/**
+ * プロパティの ID → 値。null は指定しない
+ */
+export type WorkspaceTemplateChildValues = {[key: string]: unknown};
+
+export interface WorkspaceTemplateChild {
+  description: string;
+  /** 新しく足すときは空 */
+  id: string;
+  kind: WorkspaceTemplateChildKind;
+  steps: WorkspaceTemplateStep[];
+  title: string;
+  /** プロパティの ID → 値。null は指定しない */
+  values: WorkspaceTemplateChildValues;
+}
+
+export type WorkspaceTemplateKind = typeof WorkspaceTemplateKind[keyof typeof WorkspaceTemplateKind];
+
+
+export const WorkspaceTemplateKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+/**
+ * プロパティの ID → 値。null は指定しない
+ */
+export type WorkspaceTemplateValues = {[key: string]: unknown};
+
+export interface WorkspaceTemplate {
+  children: WorkspaceTemplateChild[];
+  description: string;
+  id: string;
+  kind: WorkspaceTemplateKind;
+  name: string;
+  steps: WorkspaceTemplateStep[];
+  title: string;
+  /** プロパティの ID → 値。null は指定しない */
+  values: WorkspaceTemplateValues;
+}
+
 export type WorkspaceSettingsCategoryDefaults = {[key: string]: string};
+
+/**
+ * 種類 → 既定のテンプレート ID。なしの種類は入れない
+ */
+export type WorkspaceSettingsTemplateDefaults = {[key: string]: string};
+
+/**
+ * From のステータス ID → 許可する To(ステータスの並び)。制限のない From は入れない
+ */
+export type WorkspaceSettingsWorkflow = {[key: string]: string[] | null};
 
 export interface WorkspaceSettings {
   categoryDefaults: WorkspaceSettingsCategoryDefaults;
@@ -552,6 +639,11 @@ export interface WorkspaceSettings {
   properties: WorkspaceProperty[];
   statuses: WorkspaceValue[];
   systems: WorkspaceValue[];
+  /** 種類 → 既定のテンプレート ID。なしの種類は入れない */
+  templateDefaults: WorkspaceSettingsTemplateDefaults;
+  templates: WorkspaceTemplate[];
+  /** From のステータス ID → 許可する To(ステータスの並び)。制限のない From は入れない */
+  workflow: WorkspaceSettingsWorkflow;
 }
 
 export interface WorkspaceDetail {
@@ -566,6 +658,33 @@ export interface WorkspaceSummary {
   id: string;
   name: string;
   prefix: string;
+}
+
+export type WorkspaceTemplateInputKind = typeof WorkspaceTemplateInputKind[keyof typeof WorkspaceTemplateInputKind];
+
+
+export const WorkspaceTemplateInputKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+/**
+ * プロパティの ID → 値。null は指定しない
+ */
+export type WorkspaceTemplateInputValues = {[key: string]: unknown};
+
+export interface WorkspaceTemplateInput {
+  children: WorkspaceTemplateChild[];
+  description: string;
+  kind: WorkspaceTemplateInputKind;
+  name: string;
+  steps: WorkspaceTemplateStep[];
+  title: string;
+  /** プロパティの ID → 値。null は指定しない */
+  values: WorkspaceTemplateInputValues;
 }
 
 /**
@@ -1024,6 +1143,47 @@ export const moveItemUp = async (store: string,
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export const getSaveItemAsTemplateUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/save-as-template`
+}
+
+/**
+ * @summary アイテムをテンプレートとして保存
+ */
+export const saveItemAsTemplate = async (store: string,
+    item: string,
+    saveItemAsTemplateBody: SaveItemAsTemplate, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTemplate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<WorkspaceTemplate>(getSaveItemAsTemplateUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveItemAsTemplateBody)
   }
 );}
 
@@ -2194,6 +2354,161 @@ return fetcher<void>(getSetWorkspaceStatusCategoryUrl(store,workspace,value),
 
 
 
+export const getSetWorkspaceTemplateDefaultUrl = (store: string,
+    workspace: string,
+    kind: 'Epic' | 'Story' | 'Task' | 'Bug' | 'Step',) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/template-defaults/${encodeURIComponent(String(kind))}`
+}
+
+/**
+ * @summary 種類ごとの既定のテンプレートを変更
+ */
+export const setWorkspaceTemplateDefault = async (store: string,
+    workspace: string,
+    kind: 'Epic' | 'Story' | 'Task' | 'Bug' | 'Step',
+    setWorkspaceTemplateDefaultBody: SetWorkspaceTemplateDefault, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetWorkspaceTemplateDefaultUrl(store,workspace,kind),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setWorkspaceTemplateDefaultBody)
+  }
+);}
+
+
+
+export const getCreateWorkspaceTemplateUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/templates`
+}
+
+/**
+ * @summary テンプレートを作成
+ */
+export const createWorkspaceTemplate = async (store: string,
+    workspace: string,
+    workspaceTemplateInput: WorkspaceTemplateInput, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTemplate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<WorkspaceTemplate>(getCreateWorkspaceTemplateUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceTemplateInput)
+  }
+);}
+
+
+
+export const getDeleteWorkspaceTemplateUrl = (store: string,
+    workspace: string,
+    template: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/templates/${encodeURIComponent(String(template))}`
+}
+
+/**
+ * @summary テンプレートを削除
+ */
+export const deleteWorkspaceTemplate = async (store: string,
+    workspace: string,
+    template: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteWorkspaceTemplateUrl(store,workspace,template),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getUpdateWorkspaceTemplateUrl = (store: string,
+    workspace: string,
+    template: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/templates/${encodeURIComponent(String(template))}`
+}
+
+/**
+ * @summary テンプレートを編集
+ */
+export const updateWorkspaceTemplate = async (store: string,
+    workspace: string,
+    template: string,
+    workspaceTemplateInput: WorkspaceTemplateInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getUpdateWorkspaceTemplateUrl(store,workspace,template),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceTemplateInput)
+  }
+);}
+
+
+
 export const getGetWorkspaceUsageUrl = (store: string,
     workspace: string,) => {
 
@@ -2215,6 +2530,51 @@ export const getWorkspaceUsage = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getSetWorkspaceTransitionUrl = (store: string,
+    workspace: string,
+    from: string,
+    to: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/workflow/${encodeURIComponent(String(from))}/${encodeURIComponent(String(to))}`
+}
+
+/**
+ * @summary 遷移の制約のセルを変更
+ */
+export const setWorkspaceTransition = async (store: string,
+    workspace: string,
+    from: string,
+    to: string,
+    setWorkspaceTransitionBody: SetWorkspaceTransition, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetWorkspaceTransitionUrl(store,workspace,from,to),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setWorkspaceTransitionBody)
   }
 );}
 

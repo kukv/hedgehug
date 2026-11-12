@@ -108,6 +108,7 @@ func TestValueActivitySummaries(t *testing.T) {
 		s.SetCategoryDefault(ctx, store, w.ID, workspace.CategoryTodo, st.Statuses[3].ID),
 		s.DeleteValue(ctx, store, w.ID, statuses, st.Statuses[0].ID, ""),
 		s.DeleteValue(ctx, store, w.ID, envs, prod.ID, ""),
+		s.SetTransition(ctx, store, w.ID, st.Statuses[1].ID, st.Statuses[2].ID, true),
 	} {
 		if err != nil {
 			t.Fatal(err)
@@ -125,6 +126,7 @@ func TestValueActivitySummaries(t *testing.T) {
 		"分類「未着手」の既定を「" + st.Statuses[3].Name + "」に変更",
 		"ステータス「" + st.Statuses[0].Name + "」を削除",
 		"「環境」の選択肢「本番」を削除",
+		"ワークフローの遷移の制約を変更",
 	}
 	if len(rec.summaries) != len(want) {
 		t.Fatalf("summaries = %q", rec.summaries)
@@ -132,6 +134,43 @@ func TestValueActivitySummaries(t *testing.T) {
 	for i := range want {
 		if rec.summaries[i] != want[i] {
 			t.Errorf("summary %d = %q, want %q", i, rec.summaries[i], want[i])
+		}
+	}
+}
+
+// テンプレートのアクティビティの文は仕様 03 の文字どおり。
+func TestTemplateActivitySummaries(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, err := s.Create(ctx, store, "Web", "HH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{Stores: s.Stores}
+	s.Stores = rec
+	tpl, err := s.CreateTemplate(ctx, store, w.ID, workspace.Template{Name: "調査", Kind: "Task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, err := range []error{
+		s.UpdateTemplate(ctx, store, w.ID, tpl.ID, workspace.Template{Name: "調査 2", Kind: "Task"}),
+		s.SetTemplateDefault(ctx, store, w.ID, "Task", tpl.ID),
+		s.DeleteTemplate(ctx, store, w.ID, tpl.ID),
+	} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{
+		"テンプレート「調査」を作成",
+		"テンプレート「調査 2」を編集",
+		"Task の既定のテンプレートを変更",
+		"テンプレート「調査 2」を削除",
+	}
+	got := rec.summaries[len(rec.summaries)-len(want):]
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("summary %d = %q, want %q", i, got[i], want[i])
 		}
 	}
 }

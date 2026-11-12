@@ -58,6 +58,7 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 	}
 	for f, list := range st.Lists {
 		b.setKinds(f, list)
+		b.setWorkflow(f, list)
 	}
 	return b.settings(), true
 }
@@ -70,12 +71,14 @@ type builder struct {
 	choices map[change.ID]map[change.ID]*Value
 	deleted map[string]bool // 削除の行の f
 	acc     Settings
+	tpl     *templateBuilder
 }
 
 func newBuilder() *builder {
 	b := &builder{
 		props: map[change.ID]*Property{}, vals: map[string]map[change.ID]*Value{},
 		choices: map[change.ID]map[change.ID]*Value{}, deleted: map[string]bool{},
+		tpl: newTemplateBuilder(),
 	}
 	for _, l := range valueLists {
 		b.vals[l] = map[change.ID]*Value{}
@@ -134,6 +137,10 @@ func (b *builder) set(f string, raw json.RawMessage) {
 		if json.Unmarshal(raw, &id) == nil && validCategory(Category(parts[1])) {
 			b.acc.CategoryDefaults[Category(parts[1])] = id
 		}
+	case len(parts) >= 3 && parts[0] == "templates":
+		b.tpl.set(parts, raw)
+	case len(parts) == 2 && parts[0] == "template_default" && slices.Contains(Kinds, parts[1]):
+		b.setTemplateDefault(parts[1], raw)
 	}
 }
 
@@ -208,6 +215,11 @@ func (b *builder) settings() Settings {
 	s.Priorities = byRank(b.vals["priorities"], valueRank)
 	s.Systems = byRank(b.vals["systems"], valueRank)
 	b.attachChoices(&s, valueRank)
+	s.Templates = b.tpl.templates(b.deleted)
+	maps.DeleteFunc(s.TemplateDefaults, func(_ string, id change.ID) bool { _, ok := s.Template(id); return !ok })
+	if len(s.TemplateDefaults) == 0 {
+		s.TemplateDefaults = nil
+	}
 	return s
 }
 

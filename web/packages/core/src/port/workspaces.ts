@@ -1,10 +1,13 @@
 import type {
   Category,
   NewProperty,
+  SaveAsTemplateInput,
+  TemplateInput,
   ValueList,
   Workspace,
   WorkspaceDetail,
   WorkspaceProperty,
+  WorkspaceTemplate,
   WorkspaceUsage,
   WorkspaceValue,
 } from "../model/workspace";
@@ -94,4 +97,35 @@ export interface WorkspacesPort {
     category: Category,
     valueId: string,
   ): Promise<void>;
+  setTransition(
+    storeId: string,
+    workspaceId: string,
+    from: string,
+    to: string,
+    allowed: boolean,
+  ): Promise<void>;
+  createTemplate(
+    storeId: string,
+    workspaceId: string,
+    input: TemplateInput,
+  ): Promise<WorkspaceTemplate>;
+  updateTemplate(
+    storeId: string,
+    workspaceId: string,
+    templateId: string,
+    input: TemplateInput,
+  ): Promise<void>;
+  deleteTemplate(storeId: string, workspaceId: string, templateId: string): Promise<void>;
+  // templateId が空なら「なし」
+  setTemplateDefault(
+    storeId: string,
+    workspaceId: string,
+    kind: string,
+    templateId: string,
+  ): Promise<void>;
+  saveItemAsTemplate(
+    storeId: string,
+    itemId: string,
+    input: SaveAsTemplateInput,
+  ): Promise<WorkspaceTemplate>;
 }

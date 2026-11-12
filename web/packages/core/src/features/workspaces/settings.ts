@@ -1,4 +1,5 @@
 import { Refused } from "../../model/errors";
+import type { Member } from "../../model/member";
 import type { ValueList, WorkspaceDetail, WorkspaceUsage } from "../../model/workspace";
 import type { WorkspacesPort } from "../../port/workspaces";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
@@ -37,6 +38,8 @@ export interface SettingsState {
   tab: WorkspaceSettingsTab;
   detail: WorkspaceDetail;
   usage: WorkspaceUsage;
+  // Store のメンバー。テンプレートの担当者の選択肢(B3-19)。
+  members: Member[];
 }
 
 export interface WorkspaceSettingsScreen {
@@ -64,8 +67,9 @@ export function createWorkspaceSettings(deps: {
   port: WorkspacesPort;
   catalog: Catalog;
   toasts: Toasts;
+  listMembers(storeId: string): Promise<Member[]>;
 }): WorkspaceSettingsScreen {
-  const { port, catalog, toasts } = deps;
+  const { port, catalog, toasts, listMembers } = deps;
   const state = writable<SettingsState | null>(null);
   let current: { storeId: string; workspaceId: string } | null = null;
   let tab: WorkspaceSettingsTab = "general";
@@ -77,9 +81,10 @@ export function createWorkspaceSettings(deps: {
     const { storeId, workspaceId } = current;
     latest += 1;
     const mine = latest;
-    const [detail, usage] = await Promise.all([
+    const [detail, usage, members] = await Promise.all([
       port.get(storeId, workspaceId),
       port.usage(storeId, workspaceId),
+      listMembers(storeId),
     ]);
     if (mine !== latest) return;
     state.set({
@@ -88,6 +93,7 @@ export function createWorkspaceSettings(deps: {
       tab,
       detail,
       usage,
+      members,
     });
   }
 
