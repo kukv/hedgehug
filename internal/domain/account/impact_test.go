@@ -44,3 +44,13 @@ func TestEditLines(t *testing.T) {
 		t.Errorf("same login: EditLines = %q", got)
 	}
 }
+
+func TestNoIdentityLinesForABlankLogin(t *testing.T) {
+	a := Account{ID: "A1", Name: "work", Login: "taro", Method: GhCLI}
+	if got := EditLines(a, "  ", []StoreUse{{Name: "チーム"}}); len(got) != 0 {
+		t.Errorf("EditLines = %q", got)
+	}
+	if got := DeleteLines(a, []StoreUse{{Name: "チーム"}}, ""); !slices.Equal(got, []string{"「work」を削除します。"}) {
+		t.Errorf("DeleteLines = %q", got)
+	}
+}

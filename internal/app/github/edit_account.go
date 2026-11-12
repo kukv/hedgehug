@@ -26,7 +26,7 @@ type EditAccountInput struct {
 }
 
 func (u EditAccount) Do(ctx context.Context, in EditAccountInput) (account.Account, error) {
-	a, fp, err := u.verify(ctx, in)
+	cur, a, fp, err := u.verify(ctx, in)
 	if err != nil {
 		return account.Account{}, ghcall.Refuse(err, u.Clock.Now())
 	}
@@ -34,25 +34,30 @@ func (u EditAccount) Do(ctx context.Context, in EditAccountInput) (account.Accou
 		return account.Account{}, err
 	}
 	u.Session.markOK(a.ID, fp)
+	// デバイスフローから替えたとき、古い項目を読むのは、同じログイン名の OS のキーチェーンの認証方法だけ(決定 D2-5)。
+	// ほかは誰も読まないトークンが残るので消す(決定 D2-12・D2-13)。消せなくても編集は済んでいる。
+	if cur.Method == account.DeviceFlow && (a.Method != account.Keychain || a.Login != cur.Login) {
+		_ = u.Secrets.DeleteDeviceToken(ctx, cur.Login)
+	}
 	return a, nil
 }
 
-func (u EditAccount) verify(ctx context.Context, in EditAccountInput) (account.Account, [32]byte, error) {
+// verify は、いまの値(cur)と、確かめた新しい値(a)と、そのトークンの指紋を返す。
+func (u EditAccount) verify(ctx context.Context, in EditAccountInput) (cur, a account.Account, fp [32]byte, err error) {
 	existing, err := u.Accounts.List(ctx)
 	if err != nil {
-		return account.Account{}, [32]byte{}, err
+		return cur, a, fp, err
 	}
-	if _, err := find(ctx, u.Accounts, in.ID); err != nil {
-		return account.Account{}, [32]byte{}, err
+	if cur, err = find(ctx, u.Accounts, in.ID); err != nil {
+		return cur, a, fp, err
 	}
-	a, err := account.Check(account.Account{Name: in.Name, Login: in.Login, Method: in.Method}, existing, in.ID)
-	if err != nil {
-		return account.Account{}, [32]byte{}, err
+	if a, err = account.Check(account.Account{Name: in.Name, Login: in.Login, Method: in.Method}, existing, in.ID); err != nil {
+		return cur, a, fp, err
 	}
 	a.ID = in.ID
 	if a.Method == account.DeviceFlow {
-		return account.Account{}, [32]byte{}, ErrDeviceFlow
+		return cur, a, fp, ErrDeviceFlow
 	}
-	fp, err := verifyToken(ctx, u.Secrets, u.GitHub, a)
-	return a, fp, err
+	fp, err = verifyToken(ctx, u.Secrets, u.GitHub, a)
+	return cur, a, fp, err
 }

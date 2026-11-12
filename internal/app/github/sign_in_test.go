@@ -240,3 +240,34 @@ func TestSignInCanceledAfterTheGrant(t *testing.T) {
 		t.Errorf("Poll = %v, count %d, keychain %v", err, f.count(t), f.secrets.Device)
 	}
 }
+
+func TestSignInRechecksBeforeSaving(t *testing.T) {
+	f := newConn(t)
+	f.gh.Users["tok-saburo"] = "saburo"
+	f.device.Polls = []port.DeviceGrant{granted}
+	s := f.signIn()
+	code, _ := s.Start(context.Background(), github.SignInInput{Name: "副業", Login: "saburo"})
+	// 許可を待つあいだに、別の方法で同じログイン名のアカウントが登録された。
+	if err := f.accounts.Add(context.Background(), account.Account{ID: "A3", Name: "別", Login: "Saburo", Method: account.GhCLI}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Poll(context.Background(), code.ID)
+	if err != nil || r.State != github.SignInFailed || r.Message != "同じログイン名のアカウントがあります" || f.count(t) != 3 || len(f.secrets.Device) != 0 {
+		t.Errorf("Poll = %+v, %v", r, err)
+	}
+}
+
+func TestSignInLoginCaseChangeMovesTheToken(t *testing.T) {
+	f := newConn(t)
+	f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-old"}}
+	f.gh.Users["tok-saburo"] = "Hanako"
+	f.device.Polls = []port.DeviceGrant{granted}
+	s := f.signIn()
+	code, _ := s.Start(context.Background(), github.SignInInput{Account: home.ID, Name: home.Name, Login: "Hanako"})
+	if r, _ := s.Poll(context.Background(), code.ID); r.State != github.SignInDone {
+		t.Fatalf("Poll = %+v", r)
+	}
+	if _, ok := f.secrets.Device["hanako"]; ok {
+		t.Error("the entry under the old spelling was left")
+	}
+}

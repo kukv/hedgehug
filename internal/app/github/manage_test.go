@@ -163,3 +163,41 @@ func TestImpact(t *testing.T) {
 		t.Errorf("no store uses home: %q", got)
 	}
 }
+
+func TestEditFromDeviceFlowRemovesTheUnusedToken(t *testing.T) {
+	cases := []struct {
+		name  string
+		in    github.EditAccountInput
+		keeps bool
+	}{
+		{"to gh", github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.GhCLI}, false},
+		{"to keychain, same login", github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.Keychain}, true},
+	}
+	for _, c := range cases {
+		f := newConn(t)
+		f.secrets.Tokens["hanako"] = "tok-hanako"
+		f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
+		if _, err := f.edit().Do(context.Background(), c.in); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if _, ok := f.secrets.Device["hanako"]; ok != c.keeps {
+			t.Errorf("%s: token kept = %v", c.name, ok)
+		}
+	}
+}
+
+func TestDeleteEndsTheSignInOfTheAccount(t *testing.T) {
+	f := newConn(t)
+	s := f.signIn()
+	code, err := s.Start(context.Background(), github.SignInInput{Account: home.ID, Name: home.Name, Login: home.Login})
+	if err != nil {
+		t.Fatal(err)
+	}
+	del := github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores}
+	if err := del.Do(context.Background(), home.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Poll(context.Background(), code.ID); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("the sign-in of the deleted account is left: %v", err)
+	}
+}

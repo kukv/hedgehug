@@ -31,7 +31,9 @@ func (u DeleteAccount) Do(ctx context.Context, id account.ID) error {
 	}
 	u.Session.forget(id)
 	if a.Method == account.DeviceFlow {
-		return u.Secrets.DeleteDeviceToken(ctx, a.Login)
+		// アカウントはもう消えている。キーチェーンの項目を消せなくても、削除は済んだものとして返す
+		// (エラーにすると、やり直しは 404 になるだけなので)。
+		_ = u.Secrets.DeleteDeviceToken(ctx, a.Login)
 	}
 	return nil
 }

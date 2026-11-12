@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -159,6 +160,14 @@ func (u SignIn) finish(ctx context.Context, id string, f *flow, tok account.Devi
 	case !strings.EqualFold(login, f.target.Login):
 		return u.end(id, SignInResult{State: SignInMismatch, Message: mismatchText(login)}), nil
 	}
+	// 許可を待つあいだに、同じ表示名・ログイン名のアカウントが登録されていないかを確かめ直す。
+	if err := u.recheck(ctx, f); err != nil {
+		var r *refusal.Refusal
+		if errors.As(err, &r) {
+			return u.end(id, SignInResult{State: SignInFailed, Message: r.Message}), nil
+		}
+		return SignInResult{}, err
+	}
 	// ここから先は 1 回だけ行う。キャンセルされていたら、何も置かず、何も登録しない(07「ダイアログを閉じる」)。
 	if !u.Session.takeFlow(id) {
 		return SignInResult{}, port.ErrNotFound
@@ -174,6 +183,16 @@ func (u SignIn) finish(ctx context.Context, id string, f *flow, tok account.Devi
 	return SignInResult{State: SignInDone, Account: a}, nil
 }
 
+// recheck は、07「登録」の検査を、保存の直前にもう一度行う。
+func (u SignIn) recheck(ctx context.Context, f *flow) error {
+	existing, err := u.Accounts.List(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = account.Check(account.Account{Name: f.target.Name, Login: f.target.Login, Method: account.DeviceFlow}, existing, f.target.ID)
+	return err
+}
+
 func (u SignIn) save(ctx context.Context, f *flow) (account.Account, error) {
 	a := f.target
 	if a.ID == "" {
@@ -184,7 +203,8 @@ func (u SignIn) save(ctx context.Context, f *flow) (account.Account, error) {
 		return account.Account{}, err
 	}
 	// デバイスフローのままログイン名を変えたら、古いログイン名の項目は誰も読まないので消す(決定 D2-13)。
-	if f.previous.Method == account.DeviceFlow && !strings.EqualFold(f.previous.Login, a.Login) {
+	// キーチェーンの名前は大文字と小文字を区別するので、綴りが少しでも違えば消す。
+	if f.previous.Method == account.DeviceFlow && f.previous.Login != a.Login {
 		return a, u.Secrets.DeleteDeviceToken(ctx, f.previous.Login)
 	}
 	return a, nil

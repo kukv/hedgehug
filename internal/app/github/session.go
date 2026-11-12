@@ -55,11 +55,17 @@ func (s *Session) checked(id account.ID, fp [32]byte) bool {
 	return ok && got == fp
 }
 
+// forget は、削除したアカウントの状態と、そのアカウントの編集・再認証のサインインの流れを捨てる。
 func (s *Session) forget(id account.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.broken, id)
 	delete(s.fps, id)
+	for fid, f := range s.flows {
+		if f.target.ID == id {
+			delete(s.flows, fid)
+		}
+	}
 }
 
 func (s *Session) addFlow(id string, f *flow) {
