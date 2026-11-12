@@ -207,3 +207,25 @@ func TestWorkspaceListReturnsReadErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestProjectAndItemListReturnReadErrors(t *testing.T) {
+	s, id, dir := newStore(t)
+	for _, d := range []string{"projects/01BADPR0000000000000000001", "items/01BADIT0000000000000000001"} {
+		// log.jsonl がフォルダなので、読むとエラーになる。
+		if err := os.MkdirAll(filepath.Join(dir, d, "log.jsonl"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := s.Read(t.Context(), id, func(r port.Reader) error {
+		if ps, err := r.Projects().List("W"); err == nil {
+			t.Errorf("Projects().List = %+v, want an error", ps)
+		}
+		if its, err := r.Items().List("P"); err == nil {
+			t.Errorf("Items().List = %+v, want an error", its)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

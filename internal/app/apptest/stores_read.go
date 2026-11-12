@@ -1,6 +1,7 @@
 package apptest
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 
@@ -94,6 +95,19 @@ func (r projects) Get(id project.ID) (project.Project, error) {
 	return p, nil
 }
 
+func (r projects) List(ws workspace.ID) ([]project.Project, error) {
+	var out []project.Project
+	for _, id := range r.v.ids(change.KindProject) {
+		if p, err := r.Get(id); err == nil && p.Place.Workspace == ws {
+			out = append(out, p)
+		}
+	}
+	slices.SortFunc(out, func(a, b project.Project) int {
+		return cmp.Or(strings.Compare(a.Rank, b.Rank), strings.Compare(string(a.ID), string(b.ID)))
+	})
+	return out, nil
+}
+
 type items struct{ v *view }
 
 func (r items) Get(id item.ID) (item.Item, error) {
@@ -102,6 +116,17 @@ func (r items) Get(id item.ID) (item.Item, error) {
 		return item.Item{}, port.ErrNotFound
 	}
 	return it, nil
+}
+
+func (r items) List(p project.ID) ([]item.Item, error) {
+	var out []item.Item
+	for _, id := range r.v.ids(change.KindItem) {
+		if it, err := r.Get(id); err == nil && it.Place.Project == p {
+			out = append(out, it)
+		}
+	}
+	slices.SortFunc(out, func(a, b item.Item) int { return cmp.Compare(a.Place.Number, b.Place.Number) })
+	return out, nil
 }
 
 type members struct{ v *view }
