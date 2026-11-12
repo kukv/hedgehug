@@ -1,8 +1,10 @@
 package gitstore
 
 import (
+	"cmp"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -115,10 +117,46 @@ func (r projects) Get(id project.ID) (project.Project, error) {
 	return get(r.v, change.Ref{Kind: change.KindProject, ID: id}, project.FromLog)
 }
 
+func (r projects) List(ws workspace.ID) ([]project.Project, error) {
+	out, err := list(r.v, change.KindProject, r.Get, func(p project.Project) bool { return p.Place.Workspace == ws })
+	slices.SortFunc(out, func(a, b project.Project) int {
+		return cmp.Or(strings.Compare(a.Rank, b.Rank), strings.Compare(string(a.ID), string(b.ID)))
+	})
+	return out, err
+}
+
 type items struct{ v *view }
 
 func (r items) Get(id item.ID) (item.Item, error) {
 	return get(r.v, change.Ref{Kind: change.KindItem, ID: id}, item.FromLog)
+}
+
+func (r items) List(p project.ID) ([]item.Item, error) {
+	out, err := list(r.v, change.KindItem, r.Get, func(it item.Item) bool { return it.Place.Project == p })
+	slices.SortFunc(out, func(a, b item.Item) int { return cmp.Compare(a.Place.Number, b.Place.Number) })
+	return out, err
+}
+
+// list は、kind のすべてのうち keep に合うものを返す。作成の行がないものは飛ばす。
+func list[T any](v *view, kind change.Kind, get func(change.ID) (T, error), keep func(T) bool) ([]T, error) {
+	ids, err := v.ids(kind)
+	if err != nil {
+		return nil, err
+	}
+	var out []T
+	for _, id := range ids {
+		x, err := get(id)
+		if errors.Is(err, port.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if keep(x) {
+			out = append(out, x)
+		}
+	}
+	return out, nil
 }
 
 type members struct{ v *view }

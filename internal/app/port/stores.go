@@ -90,10 +90,14 @@ type WorkspaceReader interface {
 
 type ProjectReader interface {
 	Get(id project.ID) (project.Project, error)
+	// List は、ワークスペースのプロジェクトを、並び順の値の順(同じなら内部 ID の順)で返す。
+	List(ws workspace.ID) ([]project.Project, error)
 }
 
 type ItemReader interface {
 	Get(id item.ID) (item.Item, error)
+	// List は、プロジェクトのすべてのアイテムを、番号の順で返す。
+	List(p project.ID) ([]item.Item, error)
 }
 
 type MemberReader interface {

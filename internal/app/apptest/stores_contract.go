@@ -2,6 +2,7 @@ package apptest
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -34,6 +35,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"actor must round-trip", contractActorRoundTrip},
 		{"malformed ids are not found and not written", contractMalformedIDs},
 		{"members have one log with an empty id", contractRefs},
+		{"projects and items are listed", contractLists},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -50,8 +52,8 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 // 照合テストの準備のデータ。
 var (
 	cWorkspace = workspace.Workspace{ID: "01CONTRACTWS00000000000001", Name: "Web", Prefix: "HH"}
-	cProject   = project.Project{ID: "01CONTRACTPR00000000000001", Place: project.Place{Workspace: cWorkspace.ID, Number: 1}, Title: "ログイン"}
-	cItem      = item.Item{ID: "01CONTRACTIT00000000000001", Place: item.Place{Workspace: cWorkspace.ID, Project: cProject.ID, Number: 1}, Kind: item.Epic, Rank: "a", Title: "認証"}
+	cProject   = project.Project{ID: "01CONTRACTPR00000000000001", Place: project.Place{Workspace: cWorkspace.ID, Number: 1}, Rank: "V", Title: "ログイン", Status: project.Todo}
+	cItem      = item.Item{ID: "01CONTRACTIT00000000000001", Place: item.Place{Workspace: cWorkspace.ID, Project: cProject.ID, Number: 1}, Kind: item.Epic, Rank: "a", Title: "認証", Watchers: []string{"taro"}}
 	taro       = port.Operation{Actor: change.User("taro"), Summary: "準備"}
 )
 
@@ -84,9 +86,7 @@ func mustRead(t *testing.T, s port.Stores, id port.StoreID, fn func(r port.Reade
 
 func sameItem(a, b item.Item) bool {
 	a.Created, b.Created = item.Stamp{}, item.Stamp{}
-	pa, pb := a.Place.Parent, b.Place.Parent
-	a.Place.Parent, b.Place.Parent = nil, nil
-	return a == b && (pa == nil) == (pb == nil) && (pa == nil || *pa == *pb)
+	return reflect.DeepEqual(a, b)
 }
 
 func setTitle(id item.ID, from, to string) func(tx port.Tx) error {

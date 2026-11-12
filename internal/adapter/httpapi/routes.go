@@ -12,8 +12,10 @@ import (
 
 // Deps は、API が使う口。トラックが、自分の API に要る口を足す。
 type Deps struct {
-	Version string
-	Stores  port.Stores
+	Version  string
+	Stores   port.Stores
+	IDs      port.IDs
+	Identity port.Identity
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。

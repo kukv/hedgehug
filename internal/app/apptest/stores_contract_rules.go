@@ -127,6 +127,13 @@ func contractMalformedIDs(t *testing.T, s port.Stores, id port.StoreID) {
 	mustRead(t, s, id, func(r port.Reader) error {
 		for _, bad := range malformedIDs {
 			expectNotFound(t, fmt.Sprintf("malformed %q", bad), r, bad)
+			// 一覧は、見つからない ID と同じく空を返す。
+			if ps, err := r.Projects().List(bad); err != nil || len(ps) != 0 {
+				t.Errorf("Projects().List(%q) = %+v, %v", bad, ps, err)
+			}
+			if its, err := r.Items().List(bad); err != nil || len(its) != 0 {
+				t.Errorf("Items().List(%q) = %+v, %v", bad, its, err)
+			}
 		}
 		return nil
 	})

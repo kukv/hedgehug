@@ -27,12 +27,13 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	if err := checkLoopback(os.Getenv("HEDGEHUG_ADDR")); err != nil {
 		return httpapi.Deps{}, err
 	}
-	stores := apptest.NewStores(apptest.NewClock(time.Now()), apptest.NewIDs())
+	ids := apptest.NewIDs()
+	stores := apptest.NewStores(apptest.NewClock(time.Now()), ids)
 	stores.AddStore(e2eStore)
 	if err := apptest.Sample(ctx, stores, e2eStore); err != nil {
 		return httpapi.Deps{}, err
 	}
-	return httpapi.Deps{Stores: stores}, nil
+	return httpapi.Deps{Stores: stores, IDs: ids, Identity: apptest.Identity{Login: "taro"}}, nil
 }
 
 // checkLoopback は、addr の host が 127.0.0.1・::1・localhost でなければエラーを返す。
