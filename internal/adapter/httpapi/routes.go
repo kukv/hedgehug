@@ -6,11 +6,13 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
+	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
@@ -19,6 +21,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
+	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
 )
 
@@ -40,6 +43,13 @@ type Deps struct {
 	Hosts       port.Hosts
 	StoreGitHub port.StoreGitHub
 	Clock       port.Clock
+
+	// トラック C(同期)。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。
+	Sync   *appsyncing.Service
+	Auto   *appsyncing.Auto
+	Events *events.Hub // nil なら NewAPI が作る(知らせる者がいない)
+	// GitHubSession は、GitHub の API と同期のトークンの入口で共用する Session。nil なら githubServices が作る。
+	GitHubSession *ghapp.Session
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -60,6 +70,12 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	ghapi.Register(api, githubServices(deps))
+	hub := deps.Events
+	if hub == nil {
+		hub = events.NewHub()
+	}
+	events.Register(api, hub)
+	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})
 
 	return api
 }
@@ -67,7 +83,10 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 // githubServices は、GitHub 連携の usecase を組む。Session はサーバーに 1 つ(アプリを開いているあいだの状態)。
 // D3 で Connector を使う API を足すときは、同じ s から ghapp.Connector{Session: s, ...} を作る(Session を 2 つ作らない)。
 func githubServices(d Deps) ghapi.Services {
-	s := ghapp.NewSession()
+	s := d.GitHubSession
+	if s == nil {
+		s = ghapp.NewSession()
+	}
 	return ghapi.Services{
 		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s},
 		Add:    ghapp.AddAccount{Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, IDs: d.IDs, Clock: d.Clock},

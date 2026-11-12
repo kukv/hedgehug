@@ -164,12 +164,14 @@ func cloneMachine(t *testing.T, remote port.Remote, letter string, start time.Ti
 	return newMachine(t, dir, letter, start)
 }
 
+// sync は、同期して、送った数と受け取った数だけを返す(Seen は空にする。件数を比べるテストのため)。
 func (m machine) sync(t *testing.T, remote port.Remote) port.SyncResult {
 	t.Helper()
 	res, err := m.rep.Sync(t.Context(), m.id, remote)
 	if err != nil {
 		t.Fatalf("sync of %s: %v", m.dir, err)
 	}
+	res.Seen = ""
 	return res
 }
 
