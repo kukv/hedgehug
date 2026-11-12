@@ -130,3 +130,33 @@ func TestDrafts(t *testing.T) {
 		t.Errorf("NewRemove = %+v", d)
 	}
 }
+
+func TestValidID(t *testing.T) {
+	for id, want := range map[change.ID]bool{
+		"01TEST00000000000000000001": true, "a": true,
+		"": false, "../x": false, "a/b": false, "a b": false, "あ": false, ".": false,
+	} {
+		if got := change.ValidID(id); got != want {
+			t.Errorf("ValidID(%q) = %v", id, got)
+		}
+	}
+}
+
+// メンバーの一覧は Store に 1 つなので、ID が空のときだけ指せる。ほかの種類は ValidID の ID だけ。
+func TestRefValid(t *testing.T) {
+	for _, c := range []struct {
+		ref  change.Ref
+		want bool
+	}{
+		{change.Ref{Kind: change.KindMembers}, true},
+		{change.Ref{Kind: change.KindMembers, ID: "x"}, false},
+		{change.Ref{Kind: change.KindItem, ID: "01A"}, true},
+		{change.Ref{Kind: change.KindWorkspace, ID: ""}, false},
+		{change.Ref{Kind: change.KindProject, ID: "../x"}, false},
+		{change.Ref{Kind: "robot", ID: "01A"}, false},
+	} {
+		if got := c.ref.Valid(); got != c.want {
+			t.Errorf("%+v.Valid() = %v", c.ref, got)
+		}
+	}
+}

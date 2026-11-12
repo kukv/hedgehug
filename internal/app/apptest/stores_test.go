@@ -9,10 +9,11 @@ import (
 )
 
 func TestFakeStores(t *testing.T) {
-	apptest.RunStoresContract(t, func(t *testing.T) (port.Stores, port.StoreID) {
+	apptest.RunStoresContract(t, func(t *testing.T) (port.Stores, port.StoreID, port.StoreID) {
 		s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
 		s.AddStore("S1")
-		return s, "S1"
+		s.AddStore("S2")
+		return s, "S1", "S2"
 	})
 }
 
