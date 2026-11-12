@@ -52,10 +52,3 @@ func (s *Session) checked(id account.ID, fp [32]byte) bool {
 	got, ok := s.fps[id]
 	return ok && got == fp
 }
-
-func (s *Session) forget(id account.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.broken, id)
-	delete(s.fps, id)
-}
