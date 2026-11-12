@@ -89,9 +89,10 @@ export function createDetail(deps: DetailDeps): Detail {
     }
   }
 
-  async function saved() {
+  // saved は、保存したあとに画面を読み直す。保存のあいだに別の画面へ移っていたら(gen が古い)、読み直さない。
+  async function saved(gen: number) {
     const v = get(view);
-    if (v) await load(v.store.id, v.item.id);
+    if (v && gen === latest) await load(v.store.id, v.item.id);
     deps.onChanged();
   }
 
@@ -120,13 +121,14 @@ export function createDetail(deps: DetailDeps): Detail {
         return false;
       }
       if (next === v.item.title) return true;
+      const gen = latest;
       try {
         await deps.items.rename(v.store.id, v.item.id, next);
       } catch (e) {
         refusedToast(e);
         return false;
       }
-      await saved();
+      await saved(gen);
       return true;
     },
     async addStep(title) {
@@ -134,25 +136,27 @@ export function createDetail(deps: DetailDeps): Detail {
       const next = normalizeTitle(title);
       // 空のまま Enter を押したときは何もしない(02「子と Step」)。
       if (!v || next === "") return false;
+      const gen = latest;
       try {
         await deps.items.addStep(v.store.id, v.item.id, next);
       } catch (e) {
         refusedToast(e);
         return false;
       }
-      await saved();
+      await saved(gen);
       return true;
     },
     async moveUp(itemId) {
       const v = get(view);
       if (!v || v.children[0]?.id === itemId) return;
+      const gen = latest;
       try {
         await deps.items.moveUp(v.store.id, itemId);
       } catch (e) {
         refusedToast(e);
         return;
       }
-      await saved();
+      await saved(gen);
     },
   };
 }

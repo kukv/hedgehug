@@ -63,6 +63,10 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
   const state = writable<ItemDialogState | null>(null);
   // projectItems は、選んでいるプロジェクトのアイテム(親の候補を作る)。
   let projectItems: Item[] = [];
+  // seq は、読み直しの世代。待っているあいだに開き直し・閉じ・別の読み直しがあったら、古い結果を捨てる。
+  let seq = 0;
+  // busy は、送信中。そのあいだは submit を受けない。
+  let busy = false;
 
   const stores = () => get(deps.catalog.stores);
   const storeOf = (wsId: string) => stores().find((s) => s.workspaces.some((w) => w.id === wsId));
@@ -105,6 +109,44 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     };
   }
 
+  // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトルと「続けて作成」は残す。
+  async function reloaded(form: ItemForm, error = "") {
+    const gen = ++seq;
+    const next = await refresh(form, error);
+    const now = get(state);
+    if (gen !== seq || !now) return;
+    const { title, keepOpen } = now.form;
+    state.set(next && { ...next, form: { ...next.form, title, keepOpen } });
+  }
+
+  // send は、アイテムを作る。作ったあと、「続けて作成」ならタイトルを空にして読み直し、でなければ閉じる。
+  async function send(s: ItemDialogState) {
+    const store = storeOf(s.form.workspaceId);
+    const ws = wsOf(s.form.workspaceId);
+    if (!store || !ws) return;
+    const { projectId, kind, title } = s.form;
+    const parentId = kind === "Epic" ? null : s.form.parentId;
+    let created: Item;
+    try {
+      created = await deps.items.create(store.id, { projectId, parentId, kind, title });
+    } catch (e) {
+      if (!(e instanceof Refused)) throw e;
+      state.set({ ...s, error: e.message });
+      return;
+    }
+    deps.toasts.show(`${itemDisplayId(ws.prefix, created.number)} を作成しました`);
+    if (s.form.keepOpen) {
+      // 続けて作成: タイトルとエラーだけを空にし、ほかは残す(02「作成したあと」)。
+      const form = { ...s.form, title: "" };
+      state.set({ ...s, form, error: "" });
+      await reloaded(form);
+    } else {
+      seq += 1;
+      state.set(null);
+    }
+    deps.onCreated(created, s.form.keepOpen);
+  }
+
   return {
     state: readonly(state),
     async open(ctx = {}) {
@@ -122,7 +164,9 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         title: "",
         keepOpen: false,
       };
-      state.set(await refresh(form));
+      const gen = ++seq;
+      const next = await refresh(form);
+      if (gen === seq) state.set(next);
     },
     async update(patch) {
       const s = get(state);
@@ -131,11 +175,11 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       if (patch.workspaceId !== undefined && patch.workspaceId !== s.form.workspaceId) {
         // ワークスペースを変えたら、プロジェクトを先頭にし、親を選び直す(02「ダイアログの中での連動」)。
         form.projectId = wsOf(patch.workspaceId)?.projects[0]?.id ?? "";
-        state.set(await refresh(form, s.error));
+        await reloaded(form, s.error);
         return;
       }
       if (patch.projectId !== undefined && patch.projectId !== s.form.projectId) {
-        state.set(await refresh(form, s.error));
+        await reloaded(form, s.error);
         return;
       }
       if (patch.kind !== undefined && patch.kind !== s.form.kind) {
@@ -155,29 +199,16 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     },
     async submit() {
       const s = get(state);
-      const store = s && storeOf(s.form.workspaceId);
-      const ws = s && wsOf(s.form.workspaceId);
-      if (!s || !store || !ws) return;
-      const { projectId, kind, title } = s.form;
-      const parentId = kind === "Epic" ? null : s.form.parentId;
-      let created: Item;
+      if (!s || busy) return;
+      busy = true;
       try {
-        created = await deps.items.create(store.id, { projectId, parentId, kind, title });
-      } catch (e) {
-        if (!(e instanceof Refused)) throw e;
-        state.set({ ...s, error: e.message });
-        return;
+        await send(s);
+      } finally {
+        busy = false;
       }
-      deps.toasts.show(`${itemDisplayId(ws.prefix, created.number)} を作成しました`);
-      if (s.form.keepOpen) {
-        // 続けて作成: タイトルとエラーだけを空にし、ほかは残す(02「作成したあと」)。
-        state.set(await refresh({ ...s.form, title: "" }));
-      } else {
-        state.set(null);
-      }
-      deps.onCreated(created, s.form.keepOpen);
     },
     close() {
+      seq += 1;
       state.set(null);
     },
   };

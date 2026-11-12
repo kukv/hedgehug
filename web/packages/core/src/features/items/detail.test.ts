@@ -4,7 +4,7 @@ import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { copiedMessage, copyFailedMessage, createDetail, normalizeTitle } from "./detail";
-import { fakeItemsPort, item } from "./fixtures.test-util";
+import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 
 async function setup() {
   const catalog = createCatalog(fakeCatalogPort());
@@ -76,6 +76,32 @@ describe("createDetail", () => {
     expect(get(detail.view)).toBeNull();
     detail.close();
     expect(get(detail.full)).toBe(false);
+  });
+
+  it("keeps the item opened while a save was in flight", async () => {
+    const { detail, items, task, s1 } = await setup();
+    const renameGate = gate();
+    const getGate = gate();
+    const rename = items.rename.bind(items);
+    const getItem = items.get.bind(items);
+    items.rename = async (...a) => {
+      await renameGate.wait;
+      return rename(...a);
+    };
+    items.get = async (st, id) => {
+      if (id === s1.id) await getGate.wait;
+      return getItem(st, id);
+    };
+    await detail.open("S1", task.id);
+    const saving = detail.rename("新しい画面");
+    await flush();
+    const opening = detail.open("S1", s1.id);
+    await flush();
+    renameGate.release();
+    await saving;
+    getGate.release();
+    await opening;
+    expect(get(detail.view)?.item.id).toBe(s1.id);
   });
 });
 

@@ -87,7 +87,13 @@ export const itemDialog = createItemDialog({
   // 「続けて作成」がオフなら、作ったアイテムの詳細パネルを開く(02「作成したあと」)。
   onCreated: (item, keptOpen) => {
     void projectScreen.reload();
-    if (!keptOpen) void detail.open(item.storeId, item.id);
+    if (!keptOpen) {
+      void detail.open(item.storeId, item.id);
+      return;
+    }
+    // 続けて作成: 開いている詳細パネルの子の一覧も読み直す(決定 19)。
+    const v = get(detail.view);
+    if (v) void detail.open(v.store.id, v.item.id);
   },
 });
 
@@ -95,6 +101,8 @@ export const itemDialog = createItemDialog({
 navigation.route.subscribe(() => {
   shell.closeDrawer();
   detail.close();
+  itemDialog.close();
+  projectDialog.close();
 });
 
 // 一覧を読んでから、アドレスの解決を始める(一覧がないと Store 名と ID を解決できない)。

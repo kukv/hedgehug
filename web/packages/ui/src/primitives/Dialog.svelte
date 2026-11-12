@@ -15,7 +15,7 @@
   const titleId = $props.id();
 
   function onkeydown(event: KeyboardEvent) {
-    if (open && event.key === "Escape") onclose();
+    if (open && event.key === "Escape" && !event.isComposing) onclose();
   }
 
   // ダイアログの外(暗くした背景)を押したときだけ閉じる。

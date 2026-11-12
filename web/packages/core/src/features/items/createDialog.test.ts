@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { Item } from "../../model/item";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
-import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakeCatalogPort, project } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createItemDialog } from "./createDialog";
-import { fakeItemsPort, item } from "./fixtures.test-util";
+import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 
 async function setup(here = {}) {
   const catalog = createCatalog(fakeCatalogPort());
@@ -108,5 +108,80 @@ describe("createItemDialog", () => {
       error: true,
     });
     expect(opened).toEqual(["S1-W1"]);
+  });
+
+  it("re-picks the parent and project when the workspace changes", async () => {
+    const catalog = createCatalog({
+      ...fakeCatalogPort(),
+      listWorkspaces: async (storeId) => [
+        { id: `${storeId}-W1`, storeId, name: "Web", prefix: "HH" },
+        { id: `${storeId}-W2`, storeId, name: "Ops", prefix: "OP" },
+      ],
+      listProjects: async (storeId, workspaceId) =>
+        workspaceId === `${storeId}-W1` ? [project(storeId, workspaceId, 1)] : [],
+    });
+    await catalog.load();
+    const epic = item("S1", "S1-P1", 1, "Epic", null, "認証");
+    const dialog = createItemDialog({
+      catalog,
+      items: fakeItemsPort([epic]),
+      toasts: createToasts({ set: () => 0, clear: () => {} }),
+      here: () => ({ workspaceId: "S1-W1", projectId: "S1-P1" }),
+      openProjectDialog: () => {},
+      onCreated: () => {},
+    });
+    await dialog.open();
+    expect(get(dialog.state)?.form.parentId).toBe(epic.id);
+    await dialog.update({ workspaceId: "S1-W2" });
+    expect(get(dialog.state)?.form).toMatchObject({ workspaceId: "S1-W2", projectId: "" });
+    expect(get(dialog.state)?.parents).toEqual([]);
+    await dialog.update({ workspaceId: "S1-W1" });
+    expect(get(dialog.state)?.form).toMatchObject({ projectId: "S1-P1", parentId: epic.id });
+  });
+
+  it("sends once for a double submit", async () => {
+    const { dialog, items } = await setup();
+    await dialog.open({ kind: "Epic" });
+    await dialog.update({ title: "決済" });
+    await Promise.all([dialog.submit(), dialog.submit()]);
+    expect(items.calls).toEqual(["create Epic 決済"]);
+  });
+
+  it("keeps what was typed while the projects reload", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const { wait, release } = gate();
+    const list = items.list.bind(items);
+    items.list = async (...a) => {
+      await wait;
+      return list(...a);
+    };
+    const switching = dialog.update({ projectId: "S1-P2" });
+    await flush();
+    await dialog.update({ title: "途中の入力", keepOpen: true });
+    release();
+    await switching;
+    expect(get(dialog.state)?.form).toMatchObject({
+      projectId: "S1-P2",
+      title: "途中の入力",
+      keepOpen: true,
+    });
+  });
+
+  it("stays closed when closed while the projects reload", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const { wait, release } = gate();
+    const list = items.list.bind(items);
+    items.list = async (...a) => {
+      await wait;
+      return list(...a);
+    };
+    const switching = dialog.update({ projectId: "S1-P2" });
+    await flush();
+    dialog.close();
+    release();
+    await switching;
+    expect(get(dialog.state)).toBeNull();
   });
 });

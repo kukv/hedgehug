@@ -7,6 +7,15 @@ export async function flush(): Promise<void> {
   for (let i = 0; i < 50; i++) await Promise.resolve();
 }
 
+// gate は、release を呼ぶまで待たせる Promise(待っているあいだの操作を試すために使う)。
+export function gate(): { wait: Promise<void>; release: () => void } {
+  let release = () => {};
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { wait, release };
+}
+
 // テスト用のアイテムの口。メモリ上にアイテムを持ち、作成・変更をそのまま反映する。
 // 番号はワークスペースごとの連番。断りは、タイトルが空のときだけ(サーバーの検査の代わり)。
 

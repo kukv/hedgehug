@@ -24,6 +24,13 @@ describe("Dialog", () => {
     await fireEvent.mouseDown(dialog.parentElement as HTMLElement);
     expect(onclose).toHaveBeenCalledTimes(2);
   });
+
+  it("ignores Escape while composing text", async () => {
+    const onclose = vi.fn();
+    render(Dialog, { props: { open: true, title: "削除", onclose, children: text("本文") } });
+    await fireEvent.keyDown(window, { key: "Escape", isComposing: true });
+    expect(onclose).not.toHaveBeenCalled();
+  });
 });
 
 describe("Menu", () => {
