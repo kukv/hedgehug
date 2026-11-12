@@ -24,14 +24,19 @@ func wire(context.Context) (httpapi.Deps, error) {
 	if err != nil {
 		return httpapi.Deps{}, err
 	}
+	file := machineconfig.Open(cfg)
+	gh := github.New(nil) // 時計のずれはトラック C が受け取る(トラック D の計画の決定 3)
 	return httpapi.Deps{
-		Stores:   stores,
-		IDs:      sysclock.IDs{},
-		Identity: noIdentity{},
-		Accounts: machineconfig.Open(cfg).Accounts(),
-		Secrets:  secret.New(),
-		GitHub:   github.New(nil), // 時計のずれはトラック C が受け取る(トラック D の計画の決定 3)
-		Clock:    sysclock.Clock{},
+		Stores:      stores,
+		IDs:         sysclock.IDs{},
+		Identity:    noIdentity{},
+		Accounts:    file.Accounts(),
+		Secrets:     secret.New(),
+		GitHub:      gh,
+		DeviceFlow:  gh,
+		Hosts:       file.Hosts(),
+		StoreGitHub: noStoreGitHub{},
+		Clock:       sysclock.Clock{},
 	}, nil
 }
 

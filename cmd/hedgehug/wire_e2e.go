@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/port"
 )
 
 // e2eStore は、e2e 用のビルドのサンプルデータを入れた Store の ID。
@@ -34,13 +35,16 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		return httpapi.Deps{}, err
 	}
 	return httpapi.Deps{
-		Stores:   stores,
-		IDs:      ids,
-		Identity: apptest.Identity{Login: "taro"},
-		Accounts: apptest.NewAccounts(),
-		Secrets:  &apptest.Secrets{Tokens: map[string]string{"taro": "e2e-gh-token"}},
-		GitHub:   &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
-		Clock:    apptest.NewClock(time.Now()),
+		Stores:      stores,
+		IDs:         ids,
+		Identity:    apptest.Identity{Login: "taro"},
+		Accounts:    apptest.NewAccounts(),
+		Secrets:     &apptest.Secrets{Tokens: map[string]string{"taro": "e2e-gh-token"}},
+		GitHub:      &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
+		DeviceFlow:  apptest.NewDeviceFlow(),
+		Hosts:       apptest.Hosts{ID: "e2e-client"},
+		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "チーム", Remote: true}}},
+		Clock:       apptest.NewClock(time.Now()),
 	}, nil
 }
 

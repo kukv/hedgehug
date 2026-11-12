@@ -26,10 +26,13 @@ type Deps struct {
 	Identity port.Identity
 
 	// トラック D(GitHub)
-	Accounts port.Accounts
-	Secrets  port.Secrets
-	GitHub   port.GitHub
-	Clock    port.Clock
+	Accounts    port.Accounts
+	Secrets     port.Secrets
+	GitHub      port.GitHub
+	DeviceFlow  port.DeviceFlow
+	Hosts       port.Hosts
+	StoreGitHub port.StoreGitHub
+	Clock       port.Clock
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -47,9 +50,25 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
-	ghapi.Register(api,
-		ghapp.ListAccounts{Accounts: deps.Accounts},
-		ghapp.AddAccount{Accounts: deps.Accounts, Secrets: deps.Secrets, GitHub: deps.GitHub, IDs: deps.IDs, Clock: deps.Clock})
+	ghapi.Register(api, githubServices(deps))
 
 	return api
+}
+
+// githubServices は、GitHub 連携の usecase を組む。Session はサーバーに 1 つ(アプリを開いているあいだの状態)。
+// Connector を使う API を足すときも、同じ Session から作る。
+func githubServices(d Deps) ghapi.Services {
+	s := ghapp.NewSession()
+	return ghapi.Services{
+		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s},
+		Add:    ghapp.AddAccount{Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, IDs: d.IDs, Clock: d.Clock},
+		Edit:   ghapp.EditAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Clock: d.Clock},
+		Delete: ghapp.DeleteAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, Stores: d.StoreGitHub},
+		Reauth: ghapp.Reauth{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Clock: d.Clock},
+		Impact: ghapp.Impact{Accounts: d.Accounts, Stores: d.StoreGitHub},
+		SignIn: ghapp.SignIn{
+			Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
+			Hosts: d.Hosts, IDs: d.IDs, Clock: d.Clock,
+		},
+	}
 }

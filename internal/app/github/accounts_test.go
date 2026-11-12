@@ -60,8 +60,8 @@ func TestAddAccount(t *testing.T) {
 	if got.ID == "" || got.Name != "work" || got.Login != "taro" || f.count(t) != 1 {
 		t.Errorf("added %+v, count %d", got, f.count(t))
 	}
-	list, _ := github.ListAccounts{Accounts: f.accounts}.Do(context.Background())
-	if len(list) != 1 || list[0] != got {
+	list, _ := github.ListAccounts{Accounts: f.accounts, Session: github.NewSession()}.Do(context.Background())
+	if len(list) != 1 || list[0].Account != got || list[0].AuthError {
 		t.Errorf("ListAccounts = %+v", list)
 	}
 }
@@ -135,3 +135,5 @@ func TestAddAccountChecksDuplicatesBeforeAskingGitHub(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func errorsAs(err error, target **ghcall.Failure) bool { return errors.As(err, target) }

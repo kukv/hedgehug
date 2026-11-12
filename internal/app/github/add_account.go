@@ -4,7 +4,6 @@ package github
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
@@ -55,16 +54,8 @@ func (u AddAccount) verify(ctx context.Context, in AddAccountInput) (account.Acc
 	if a.Method == account.DeviceFlow {
 		return account.Account{}, ErrDeviceFlow
 	}
-	token, err := u.Secrets.Token(ctx, a)
-	if err != nil {
+	if _, err := verifyToken(ctx, u.Secrets, u.GitHub, a); err != nil {
 		return account.Account{}, err
-	}
-	login, err := u.GitHub.Viewer(ctx, token)
-	if err != nil {
-		return account.Account{}, err
-	}
-	if !strings.EqualFold(login, a.Login) {
-		return account.Account{}, &ghcall.Failure{Kind: ghcall.LoginMismatch, Login: login}
 	}
 	return a, nil
 }

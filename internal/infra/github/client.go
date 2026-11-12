@@ -15,6 +15,7 @@ import (
 
 const (
 	apiURL     = "https://api.github.com"
+	webURL     = "https://github.com"
 	apiVersion = "2022-11-28"
 	// timeout は 1 回の問い合わせの打ち切り(07「GitHub との通信に失敗したとき」)。
 	timeout = 30 * time.Second
@@ -25,6 +26,7 @@ const (
 // Client は GitHub の API に問い合わせる。
 type Client struct {
 	BaseURL string
+	WebURL  string // デバイスフローの宛先(github.com)
 	HTTP    *http.Client
 	Now     func() time.Time
 	// OnSkew は、応答の Date からこのマシンの時計を引いたずれを、応答のたびに受け取る(トラック C が記録する)。
@@ -32,7 +34,7 @@ type Client struct {
 }
 
 func New(onSkew func(time.Duration)) *Client {
-	return &Client{BaseURL: apiURL, HTTP: &http.Client{Timeout: timeout}, Now: time.Now, OnSkew: onSkew}
+	return &Client{BaseURL: apiURL, WebURL: webURL, HTTP: &http.Client{Timeout: timeout}, Now: time.Now, OnSkew: onSkew}
 }
 
 // get は、path を GET して、成功なら本文を out に読む。失敗は *ghcall.Failure。
