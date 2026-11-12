@@ -66,6 +66,7 @@ type Property struct {
 	Kinds   []string // 使う種類(Kinds の並び)
 	Hidden  bool
 	Rank    string
+	Choices []Value // 選択肢(単一選択・複数選択だけ)。Rank の順
 }
 
 // Settings は、ワークスペースの設定。一覧はどれも Rank の順。

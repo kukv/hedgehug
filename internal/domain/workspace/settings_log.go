@@ -48,6 +48,11 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 		return Settings{}, false
 	}
 	b := newBuilder()
+	for _, r := range log { // Resolve は削除の行を読み飛ばすので、生のログから集める
+		if r.T == change.Delete {
+			b.deleted[r.F] = true
+		}
+	}
 	for f, raw := range st.Values {
 		b.set(f, raw)
 	}
@@ -61,11 +66,17 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 type builder struct {
 	props map[change.ID]*Property
 	vals  map[string]map[change.ID]*Value
-	acc   Settings
+	// choices は、プロパティの ID、値の ID の順の選択肢。
+	choices map[change.ID]map[change.ID]*Value
+	deleted map[string]bool // 削除の行の f
+	acc     Settings
 }
 
 func newBuilder() *builder {
-	b := &builder{props: map[change.ID]*Property{}, vals: map[string]map[change.ID]*Value{}}
+	b := &builder{
+		props: map[change.ID]*Property{}, vals: map[string]map[change.ID]*Value{},
+		choices: map[change.ID]map[change.ID]*Value{}, deleted: map[string]bool{},
+	}
 	for _, l := range valueLists {
 		b.vals[l] = map[change.ID]*Value{}
 	}
@@ -91,6 +102,20 @@ func (b *builder) value(list, id string) *Value {
 	return v
 }
 
+func (b *builder) choice(prop, id string) *Value {
+	m, ok := b.choices[change.ID(prop)]
+	if !ok {
+		m = map[change.ID]*Value{}
+		b.choices[change.ID(prop)] = m
+	}
+	v, ok := m[change.ID(id)]
+	if !ok {
+		v = &Value{ID: change.ID(id)}
+		m[change.ID(id)] = v
+	}
+	return v
+}
+
 func (b *builder) set(f string, raw json.RawMessage) {
 	parts := strings.Split(f, "/")
 	switch {
@@ -98,6 +123,8 @@ func (b *builder) set(f string, raw json.RawMessage) {
 		setProperty(b.prop(parts[1]), parts[2], raw)
 	case len(parts) == 3 && slices.Contains(valueLists, parts[0]):
 		setValue(b.value(parts[0], parts[1]), parts[2], raw)
+	case len(parts) == 4 && parts[0] == "choices":
+		setValue(b.choice(parts[1], parts[2]), parts[3], raw)
 	case f == "initial_status":
 		_ = json.Unmarshal(raw, &b.acc.InitialStatus)
 	case f == "initial_priority":
@@ -174,15 +201,38 @@ func byRank[T any](m map[change.ID]*T, rank func(*T) (string, change.ID)) []T {
 
 func (b *builder) settings() Settings {
 	s := b.acc
-	// 作成の行にない ID への行だけで生じた、名前の空の項目は一覧に出さない。
-	maps.DeleteFunc(b.props, func(_ change.ID, p *Property) bool { return p.Name == "" })
-	for _, m := range b.vals {
-		maps.DeleteFunc(m, func(_ change.ID, v *Value) bool { return v.Name == "" })
-	}
+	b.dropDeleted()
 	s.Properties = byRank(b.props, func(p *Property) (string, change.ID) { return p.Rank, p.ID })
 	valueRank := func(v *Value) (string, change.ID) { return v.Rank, v.ID }
 	s.Statuses = byRank(b.vals["statuses"], valueRank)
 	s.Priorities = byRank(b.vals["priorities"], valueRank)
 	s.Systems = byRank(b.vals["systems"], valueRank)
+	b.attachChoices(&s, valueRank)
 	return s
+}
+
+// dropDeleted は、名前の空の項目と、削除の行のある項目を除く。名前の空は、作成の行にない ID への行だけで生じる。
+func (b *builder) dropDeleted() {
+	maps.DeleteFunc(b.props, func(id change.ID, p *Property) bool {
+		return p.Name == "" || b.deleted["properties/"+string(id)]
+	})
+	for l, m := range b.vals {
+		maps.DeleteFunc(m, func(id change.ID, v *Value) bool {
+			return v.Name == "" || b.deleted[l+"/"+string(id)]
+		})
+	}
+	for pid, m := range b.choices {
+		maps.DeleteFunc(m, func(id change.ID, v *Value) bool {
+			return v.Name == "" || b.deleted["choices/"+string(pid)+"/"+string(id)]
+		})
+	}
+}
+
+// attachChoices は、選択肢を持ち主のプロパティに入れる。持ち主が消えていれば捨てる。1 つもなければ nil のまま。
+func (b *builder) attachChoices(s *Settings, valueRank func(*Value) (string, change.ID)) {
+	for i, p := range s.Properties {
+		if m := b.choices[p.ID]; len(m) > 0 {
+			s.Properties[i].Choices = byRank(m, valueRank)
+		}
+	}
 }
