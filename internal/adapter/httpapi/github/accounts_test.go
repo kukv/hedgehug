@@ -12,21 +12,36 @@ import (
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 )
 
 func newAPI(t *testing.T, gh *apptest.GitHub) humatest.TestAPI {
 	t.Helper()
 	_, api := humatest.New(t)
+	ghapi.Register(api, newServices(gh))
+	return api
+}
+
+func newServices(gh *apptest.GitHub) ghapi.Services {
 	accounts := apptest.NewAccounts()
 	secrets := &apptest.Secrets{Tokens: map[string]string{"taro": "tok-taro"}}
-	ghapi.Register(api,
-		ghapp.ListAccounts{Accounts: accounts, Session: ghapp.NewSession()},
-		ghapp.AddAccount{
-			Accounts: accounts, Secrets: secrets, GitHub: gh, IDs: apptest.NewIDs(),
-			Clock: apptest.NewClock(time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)),
-		})
-	return api
+	clock := apptest.NewClock(time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC))
+	stores := &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: "S1", Name: "チーム", Remote: true}}}
+	session := ghapp.NewSession()
+	device := apptest.NewDeviceFlow()
+	hosts := apptest.Hosts{ID: "Iv23abc"}
+	ids := apptest.NewIDs()
+	return ghapi.Services{
+		List:   ghapp.ListAccounts{Accounts: accounts, Session: session},
+		Add:    ghapp.AddAccount{Accounts: accounts, Secrets: secrets, GitHub: gh, IDs: ids, Clock: clock},
+		Edit:   ghapp.EditAccount{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Clock: clock},
+		Delete: ghapp.DeleteAccount{Session: session, Accounts: accounts, Secrets: secrets, Stores: stores},
+		Reauth: ghapp.Reauth{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Clock: clock},
+		Impact: ghapp.Impact{Accounts: accounts, Stores: stores},
+		SignIn: ghapp.SignIn{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Device: device, Hosts: hosts, IDs: ids, Clock: clock},
+	}
 }
 
 func TestAddAndList(t *testing.T) {
@@ -61,7 +76,9 @@ func TestRefusalsAre422WithTheSpecText(t *testing.T) {
 	for _, c := range cases {
 		res := newAPI(t, c.gh).Post("/api/accounts", c.body)
 		var body struct{ Detail string }
-		_ = json.Unmarshal(res.Body.Bytes(), &body)
+		if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
 		if res.Code != http.StatusUnprocessableEntity || body.Detail != c.want {
 			t.Errorf("%s: %d %s, want detail %q", c.name, res.Code, res.Body, c.want)
 		}
@@ -72,5 +89,65 @@ func TestDeviceFlowIsNotAcceptedHere(t *testing.T) {
 	res := newAPI(t, &apptest.GitHub{}).Post("/api/accounts", map[string]string{"name": "w", "login": "taro", "method": "device"})
 	if res.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status %d", res.Code)
+	}
+}
+
+func addTaro(t *testing.T, api humatest.TestAPI) string {
+	t.Helper()
+	res := api.Post("/api/accounts", map[string]string{"name": "work", "login": "taro", "method": "gh"})
+	var acc struct{ ID string }
+	if err := json.Unmarshal(res.Body.Bytes(), &acc); err != nil {
+		t.Fatal(err)
+	}
+	return acc.ID
+}
+
+func TestEditDeleteReauthImpact(t *testing.T) {
+	api := newAPI(t, &apptest.GitHub{Users: map[string]string{"tok-taro": "taro"}})
+	id := addTaro(t, api)
+
+	res := api.Put("/api/accounts/"+id, map[string]string{"name": "仕事", "login": "taro", "method": "keychain"})
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"name":"仕事"`) {
+		t.Fatalf("PUT: %d %s", res.Code, res.Body)
+	}
+	res = api.Post("/api/accounts/"+id+"/reauth", map[string]string{})
+	if res.Code != http.StatusOK {
+		t.Fatalf("reauth: %d %s", res.Code, res.Body)
+	}
+	res = api.Get("/api/accounts/" + id + "/edit-impact?login=jiro")
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"lines":[]`) {
+		t.Errorf("edit-impact (no store uses it): %d %s", res.Code, res.Body)
+	}
+	res = api.Get("/api/accounts/" + id + "/delete-impact")
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "「仕事」を削除します。") {
+		t.Errorf("delete-impact: %d %s", res.Code, res.Body)
+	}
+	if res = api.Delete("/api/accounts/" + id); res.Code != http.StatusNoContent {
+		t.Fatalf("DELETE: %d %s", res.Code, res.Body)
+	}
+	if res = api.Delete("/api/accounts/" + id); res.Code != http.StatusNotFound {
+		t.Errorf("DELETE again: %d", res.Code)
+	}
+}
+
+func TestListShowsAuthError(t *testing.T) {
+	gh := &apptest.GitHub{Users: map[string]string{"tok-taro": "taro"}}
+	svc := newServices(gh)
+	_, api := humatest.New(t)
+	ghapi.Register(api, svc)
+	id := addTaro(t, api)
+
+	gh.Err = &ghcall.Failure{Kind: ghcall.TokenRejected}
+	res := api.Post("/api/accounts/"+id+"/reauth", map[string]string{})
+	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), "トークンが GitHub に受け付けられませんでした") {
+		t.Errorf("reauth: %d %s", res.Code, res.Body)
+	}
+	if res = api.Get("/api/accounts"); !strings.Contains(res.Body.String(), `"status":"ok"`) {
+		t.Errorf("a failed reauth changed the state: %s", res.Body)
+	}
+
+	ghapp.Connector{Session: svc.List.Session}.Rejected(account.ID(id))
+	if res = api.Get("/api/accounts"); !strings.Contains(res.Body.String(), `"status":"auth_error"`) {
+		t.Errorf("a rejected token must show auth_error: %s", res.Body)
 	}
 }

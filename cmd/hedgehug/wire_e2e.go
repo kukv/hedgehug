@@ -47,10 +47,13 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
 		}},
-		Accounts: apptest.NewAccounts(),
-		Secrets:  &apptest.Secrets{Tokens: map[string]string{"taro": "e2e-gh-token"}},
-		GitHub:   &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
-		Clock:    apptest.NewClock(time.Now()),
+		Accounts:    apptest.NewAccounts(),
+		Secrets:     &apptest.Secrets{Tokens: map[string]string{"taro": "e2e-gh-token"}},
+		GitHub:      &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
+		DeviceFlow:  apptest.NewDeviceFlow(),
+		Hosts:       apptest.Hosts{ID: "e2e-client"},
+		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "チーム", Remote: true}}},
+		Clock:       apptest.NewClock(time.Now()),
 	}, nil
 }
 

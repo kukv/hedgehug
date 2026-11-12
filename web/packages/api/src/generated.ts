@@ -22,23 +22,31 @@ export interface AccountBody {
   name: string;
 }
 
-/**
- * デバイスフローはサインインの API で登録する
- */
-export type AddInputBodyMethod = typeof AddInputBodyMethod[keyof typeof AddInputBodyMethod];
+export type AccountRowMethod = typeof AccountRowMethod[keyof typeof AccountRowMethod];
 
 
-export const AddInputBodyMethod = {
+export const AccountRowMethod = {
+  device: 'device',
   gh: 'gh',
   env: 'env',
   keychain: 'keychain',
 } as const;
 
-export interface AddInputBody {
+export type AccountRowStatus = typeof AccountRowStatus[keyof typeof AccountRowStatus];
+
+
+export const AccountRowStatus = {
+  ok: 'ok',
+  auth_error: 'auth_error',
+} as const;
+
+export interface AccountRow {
+  id: string;
   login: string;
-  /** デバイスフローはサインインの API で登録する */
-  method: AddInputBodyMethod;
+  method: AccountRowMethod;
   name: string;
+  reason: string;
+  status: AccountRowStatus;
 }
 
 export interface AddStep {
@@ -131,6 +139,11 @@ export interface ErrorModel {
   type?: string;
 }
 
+export interface ImpactOutputBody {
+  /** @nullable */
+  lines: string[] | null;
+}
+
 export type ItemKind = typeof ItemKind[keyof typeof ItemKind];
 
 
@@ -163,7 +176,7 @@ export interface Item {
 
 export interface ListOutputBody {
   /** @nullable */
-  accounts: AccountBody[] | null;
+  accounts: AccountRow[] | null;
 }
 
 export interface Me {
@@ -216,6 +229,43 @@ export interface RenameWorkspace {
   name: string;
 }
 
+export interface SignInCode {
+  /** 秒 */
+  expires_in: number;
+  id: string;
+  /** 秒 */
+  interval: number;
+  user_code: string;
+  verification_uri: string;
+}
+
+export interface SignInInputBody {
+  /** 編集・再認証するアカウントの ID。登録では空 */
+  account?: string;
+  login: string;
+  name: string;
+}
+
+export type SignInResultState = typeof SignInResultState[keyof typeof SignInResultState];
+
+
+export const SignInResultState = {
+  waiting: 'waiting',
+  expired: 'expired',
+  denied: 'denied',
+  mismatch: 'mismatch',
+  failed: 'failed',
+  done: 'done',
+} as const;
+
+export interface SignInResult {
+  account?: AccountBody;
+  /** 次に問い合わせるまでの秒 */
+  interval: number;
+  message: string;
+  state: SignInResultState;
+}
+
 export interface StoreInfo {
   /** 画面のトークン --t-<色> の名前 */
   color: string;
@@ -227,6 +277,25 @@ export interface StoreInfo {
 export interface SystemInfo {
   /** hedgehug の版 */
   version: string;
+}
+
+/**
+ * デバイスフローはサインインの API で登録・保存する
+ */
+export type ValuesBodyMethod = typeof ValuesBodyMethod[keyof typeof ValuesBodyMethod];
+
+
+export const ValuesBodyMethod = {
+  gh: 'gh',
+  env: 'env',
+  keychain: 'keychain',
+} as const;
+
+export interface ValuesBody {
+  login: string;
+  /** デバイスフローはサインインの API で登録・保存する */
+  method: ValuesBodyMethod;
+  name: string;
 }
 
 /**
@@ -310,6 +379,10 @@ export interface WorkspaceSummary {
   prefix: string;
 }
 
+export type AccountEditImpactParams = {
+  login?: string;
+};
+
 export const getListAccountsUrl = () => {
 
 
@@ -319,7 +392,7 @@ export const getListAccountsUrl = () => {
 }
 
 /**
- * @summary 登録したアカウントを返す
+ * @summary 登録したアカウントを、状態を付けて返す
  */
 export const listAccounts = async ( options?: Parameters<typeof fetcher>[1]): Promise<ListOutputBody> => {
 
@@ -345,7 +418,7 @@ export const getAddAccountUrl = () => {
 /**
  * @summary GitHub で確かめてからアカウントを登録する
  */
-export const addAccount = async (addInputBody: AddInputBody, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
+export const addAccount = async (valuesBody: ValuesBody, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -366,7 +439,237 @@ return fetcher<AccountBody>(getAddAccountUrl(),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addInputBody)
+    body: JSON.stringify(valuesBody)
+  }
+);}
+
+
+
+export const getDeleteAccountUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary アカウントを削除し、割り当てた Store を「なし」にする
+ */
+export const deleteAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteAccountUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getEditAccountUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary 新しい値を GitHub で確かめてから、アカウントの値を入れ替える
+ */
+export const editAccount = async (id: string,
+    valuesBody: ValuesBody, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<AccountBody>(getEditAccountUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(valuesBody)
+  }
+);}
+
+
+
+export const getAccountDeleteImpactUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}/delete-impact`
+}
+
+/**
+ * @summary 「アカウントを削除」の確認の本文の行
+ */
+export const accountDeleteImpact = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<ImpactOutputBody> => {
+
+  return fetcher<ImpactOutputBody>(getAccountDeleteImpactUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAccountEditImpactUrl = (id: string,
+    params?: AccountEditImpactParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/accounts/${encodeURIComponent(String(id))}/edit-impact?${stringifiedParams}` : `/api/accounts/${encodeURIComponent(String(id))}/edit-impact`
+}
+
+/**
+ * @summary ログイン名を変えるときの「アカウントを変更」の確認の本文の行(空なら確認を出さない)
+ */
+export const accountEditImpact = async (id: string,
+    params?: AccountEditImpactParams, options?: Parameters<typeof fetcher>[1]): Promise<ImpactOutputBody> => {
+
+  return fetcher<ImpactOutputBody>(getAccountEditImpactUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getReauthAccountUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}/reauth`
+}
+
+/**
+ * @summary gh CLI・環境変数・OS のキーチェーンのアカウントの認証の確認をやり直す
+ */
+export const reauthAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
+
+  return fetcher<AccountBody>(getReauthAccountUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getStartSignInUrl = () => {
+
+
+
+
+  return `/api/sign-ins`
+}
+
+/**
+ * @summary デバイスフローのサインインを始め、GitHub で入力するコードを返す
+ */
+export const startSignIn = async (signInInputBody: SignInInputBody, options?: Parameters<typeof fetcher>[1]): Promise<SignInCode> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<SignInCode>(getStartSignInUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(signInInputBody)
+  }
+);}
+
+
+
+export const getCancelSignInUrl = (id: string,) => {
+
+
+
+
+  return `/api/sign-ins/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary サインインをやめる(何も登録しない)
+ */
+export const cancelSignIn = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getCancelSignInUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getPollSignInUrl = (id: string,) => {
+
+
+
+
+  return `/api/sign-ins/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary サインインが許可されたかを GitHub に 1 回聞く
+ */
+export const pollSignIn = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<SignInResult> => {
+
+  return fetcher<SignInResult>(getPollSignInUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
