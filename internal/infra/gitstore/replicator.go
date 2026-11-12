@@ -56,6 +56,9 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 		if errors.Is(err, errRejected) {
 			continue
 		}
+		if errors.Is(err, port.ErrRemoteRewritten) {
+			err = errors.Join(err, s.restoreSeen())
+		}
 		return res, err
 	}
 	return port.SyncResult{}, port.ErrSendConflict

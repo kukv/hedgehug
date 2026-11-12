@@ -80,12 +80,35 @@ func TestSyncReturnsSeenAndContinuesFromIt(t *testing.T) {
 	}
 }
 
+// removeMainKeepOther は、他のブランチが残っていて main だけがない(remote は空と言われない。決定 C2-12)場面を作る。
+func removeMainKeepOther(t *testing.T, remote port.Remote, old plumbing.Hash) {
+	t.Helper()
+	repo, err := git.PlainOpen(bareOf(t, remote))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Storer.SetReference(plumbing.NewHashReference(plumbing.NewBranchReferenceName("other"), old)); err != nil {
+		t.Fatal(err)
+	}
+	setRemoteBranch(t, remote, plumbing.ZeroHash)
+}
+
+func unsentOf(t *testing.T, m machine) int {
+	t.Helper()
+	n, err := m.rep.Unsent(t.Context(), m.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
 // 保存形式「remote の履歴が書き換えられたとき」: 前に受け取った位置の続きでなければ、Store を変えずに止める。
 // 巻き戻したとき、空にしたとき(決定 C2-12)も同じ。
 func TestSyncStopsWhenTheRemoteWasRewritten(t *testing.T) {
 	cases := map[string]func(t *testing.T, remote port.Remote, old plumbing.Hash){
-		"rewound": func(t *testing.T, remote port.Remote, old plumbing.Hash) { setRemoteBranch(t, remote, old) },
-		"emptied": func(t *testing.T, remote port.Remote, _ plumbing.Hash) { setRemoteBranch(t, remote, plumbing.ZeroHash) },
+		"rewound":        func(t *testing.T, remote port.Remote, old plumbing.Hash) { setRemoteBranch(t, remote, old) },
+		"emptied":        func(t *testing.T, remote port.Remote, _ plumbing.Hash) { setRemoteBranch(t, remote, plumbing.ZeroHash) },
+		"branch removed": removeMainKeepOther,
 	}
 	for name, rewrite := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -100,11 +123,16 @@ func TestSyncStopsWhenTheRemoteWasRewritten(t *testing.T) {
 			rewrite(t, remote, old)
 			rename(t, a, "未送信の名前")
 			before := snap(t, a)
+			unsent := unsentOf(t, a)
 			_, err = a.rep.Sync(t.Context(), a.id, port.Remote{URL: remote.URL, Seen: res.Seen})
 			if !errors.Is(err, port.ErrRemoteRewritten) {
 				t.Errorf("Sync = %v", err)
 			}
 			unchanged(t, a, before)
+			// 止めた同期は、未送信の数を動かさない(06「未送信の保存はそのまま残る」)。
+			if n := unsentOf(t, a); n != unsent {
+				t.Errorf("Unsent = %d; want %d", n, unsent)
+			}
 		})
 	}
 }

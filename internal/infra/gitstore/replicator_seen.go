@@ -40,6 +40,15 @@ func (s syncRun) checkSeen(theirs plumbing.Hash) error {
 	return nil
 }
 
+// restoreSeen は、止めた同期のあとで、受け取った位置の記録を s.seen に戻す(受け取りが書き換え後の先端に
+// 動かしたので)。未送信の数が動かない(06「未送信の保存はそのまま残る」)。s.seen の保存が手元になければそのままにする。
+func (s syncRun) restoreSeen() error {
+	if _, err := s.repo.CommitObject(s.seen); err != nil {
+		return nil
+	}
+	return s.repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName(remotePrefix+s.branch.Short()), s.seen))
+}
+
 // parseSeen は、Remote.Seen をハッシュにする。読めなければゼロ(確かめない)。
 func parseSeen(s string) plumbing.Hash {
 	if !plumbing.IsHash(s) {
