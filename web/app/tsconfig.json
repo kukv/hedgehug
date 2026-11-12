@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["svelte", "vite/client", "node"]
+    "types": ["svelte", "vite/client"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src"]
 }

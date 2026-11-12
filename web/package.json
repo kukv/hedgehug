@@ -11,7 +11,7 @@
     "build": "pnpm --filter @hedgehug/app build",
     "lint": "biome ci .",
     "fix": "biome check --write .",
-    "check": "pnpm -r --if-present check",
+    "check": "pnpm -r --if-present check && tsc -p .",
     "test": "pnpm -r --if-present test",
     "deps": "depcruise packages app --config .dependency-cruiser.cjs",
     "size": "node scripts/check-size.mjs",
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
     "@playwright/test": "1.64.1",
+    "@types/node": "26.6.6",
     "dependency-cruiser": "18.7.2",
     "svelte": "5.57.3",
     "typescript": "6.0.3"

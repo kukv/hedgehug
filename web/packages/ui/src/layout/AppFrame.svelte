@@ -69,11 +69,16 @@
       width: min(290px, 86vw);
       z-index: 50;
       transform: translateX(-102%);
-      transition: transform 0.18s;
+      visibility: hidden;
+      transition:
+        transform 0.18s,
+        visibility 0s 0.18s;
       padding-top: max(12px, env(safe-area-inset-top, 0px));
     }
     .drawer-open .side {
       transform: none;
+      visibility: visible;
+      transition: transform 0.18s;
       box-shadow: var(--shadow-dialog);
     }
     .drawer-open .side-scrim {

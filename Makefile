@@ -59,4 +59,4 @@ web-check:
 	cd web && pnpm install --frozen-lockfile
 	cd web && pnpm gen
 	git diff --exit-code -- web/packages/api/src/generated.ts
-	cd web && pnpm lint && pnpm check && pnpm test && pnpm deps && pnpm size
+	cd web && pnpm lint && pnpm check && pnpm test && pnpm deps && pnpm size && pnpm build
