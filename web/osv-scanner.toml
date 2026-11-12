@@ -1,7 +1,0 @@
-# Vulnerabilities the sca job (osv-scanner) does not fail on, each with the
-# reason. Review them when ignoreUntil passes.
-
-[[IgnoredVulns]]
-id = "GHSA-gcqx-w48m-w2h4"
-ignoreUntil = 2027-02-01
-reason = "deepmerge 4.3.1 (prototype poisoning) has no fixed version. Only @sveltejs/vite-plugin-svelte uses it, at build time, to merge our own Svelte config; it is not in web/dist."

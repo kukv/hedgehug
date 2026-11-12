@@ -1,4 +1,0 @@
-ID          ON                   WHEN                   SET                 SCOPE  STATE
-opened      pr.opened            -                      status=in_progress  store  on
-merged      pr.merged            all_linked_prs_merged  category=done       store  on
-web-review  pr.review_requested  -                      status=in_progress  ME-1   on

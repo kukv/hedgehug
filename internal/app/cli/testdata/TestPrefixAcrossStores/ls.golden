@@ -1,4 +1,0 @@
-STORE  ID           ULID                        STATUS  KIND     ASSIGNEES  LABELS  TITLE
-org-a  org-a:API-1  <ULID-1>  todo    project                     Alpha task
-org-b  org-b:API-1  <ULID-2>  todo    project                     Bravo task
-org-c  WEB-1        <ULID-3>  todo    project                     Charlie task
