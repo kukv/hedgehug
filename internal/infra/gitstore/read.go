@@ -1,6 +1,7 @@
 package gitstore
 
 import (
+	"errors"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -92,9 +93,14 @@ func (r workspaces) List() ([]workspace.Workspace, error) {
 	}
 	var out []workspace.Workspace
 	for _, id := range ids {
-		if w, err := r.Get(id); err == nil {
-			out = append(out, w)
+		w, err := r.Get(id)
+		if errors.Is(err, port.ErrNotFound) {
+			continue
 		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, w)
 	}
 	return out, nil
 }

@@ -84,34 +84,31 @@ func listIDs(root string, kind change.Kind) ([]change.ID, error) {
 	return ids, nil
 }
 
-// appendLog は、log.jsonl に行を足す。ファイルを新しく作ったら true。
-func appendLog(root string, ref change.Ref, recs []change.Record) (created bool, err error) {
+// appendLog は、log.jsonl に行を足す。
+func appendLog(root string, ref change.Ref, recs []change.Record) error {
 	d, err := dirOf(ref)
 	if err != nil {
-		return false, err
+		return err
 	}
-	path := filepath.Join(root, d, "log.jsonl")
-	_, statErr := os.Stat(path)
-	created = errors.Is(statErr, os.ErrNotExist)
 	if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil { //nolint:gosec // G301: Store のフォルダは共有するもので秘密ではない
-		return created, err
+		return err
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302・G304: パスは dirOf で検査済みの ID から作り、中身は共有するもので秘密ではない
+	f, err := os.OpenFile(filepath.Join(root, d, "log.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302・G304: パスは dirOf で検査済みの ID から作り、中身は共有するもので秘密ではない
 	if err != nil {
-		return created, err
+		return err
 	}
 	w := bufio.NewWriter(f)
 	for _, r := range recs {
 		b, err := json.Marshal(r)
 		if err != nil {
 			_ = f.Close()
-			return created, err
+			return err
 		}
 		_, _ = w.Write(append(b, '\n'))
 	}
 	if err := w.Flush(); err != nil {
 		_ = f.Close()
-		return created, err
+		return err
 	}
-	return created, f.Close()
+	return f.Close()
 }

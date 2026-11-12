@@ -2,17 +2,37 @@ package gitstore
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
+
+// errSummary は、行を書く Write の Operation.Summary が 1 行でないときのエラー。コミットメッセージの
+// 1 行目になるので、空や複数行は断る。
+var errSummary = errors.New("operation summary must be one non-empty line")
+
+// open は、Store のロックを取り、途中で止まった保存が残っていれば戻す。
+func open(root string) (unlock func(), err error) {
+	unlock, err = lock(root)
+	if err != nil {
+		return nil, err
+	}
+	if err := recoverInterrupted(root); err != nil {
+		unlock()
+		return nil, err
+	}
+	return unlock, nil
+}
 
 func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader) error) error {
 	root, err := s.dir(id)
 	if err != nil {
 		return err
 	}
-	unlock, err := lock(root)
+	unlock, err := open(root)
 	if err != nil {
 		return err
 	}
@@ -25,7 +45,7 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	if err != nil {
 		return err
 	}
-	unlock, err := lock(root)
+	unlock, err := open(root)
 	if err != nil {
 		return err
 	}
@@ -40,6 +60,9 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	}
 	if len(t.pending) == 0 {
 		return nil
+	}
+	if op.Summary == "" || strings.ContainsAny(op.Summary, "\r\n") {
+		return fmt.Errorf("%w: %q", errSummary, op.Summary)
 	}
 	return s.commit(root, t, op)
 }

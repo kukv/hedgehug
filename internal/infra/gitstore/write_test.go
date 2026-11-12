@@ -19,15 +19,34 @@ func headCount(t *testing.T, dir string) int {
 	t.Helper()
 	repo, err := git.PlainOpen(dir)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("open repository: %v", err)
 	}
 	iter, err := repo.Log(&git.LogOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := 0
-	_ = iter.ForEach(func(*object.Commit) error { n++; return nil })
+	if err := iter.ForEach(func(*object.Commit) error { n++; return nil }); err != nil {
+		t.Fatalf("walk log: %v", err)
+	}
 	return n
+}
+
+func headCommit(t *testing.T, dir string) *object.Commit {
+	t.Helper()
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatalf("head: %v", err)
+	}
+	c, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		t.Fatalf("head commit: %v", err)
+	}
+	return c
 }
 
 func TestOneWriteIsOneCommit(t *testing.T) {
@@ -35,9 +54,7 @@ func TestOneWriteIsOneCommit(t *testing.T) {
 	if err := apptest.Sample(t.Context(), s, id); err != nil {
 		t.Fatal(err)
 	}
-	repo, _ := git.PlainOpen(dir)
-	head, _ := repo.Head()
-	c, _ := repo.CommitObject(head.Hash())
+	c := headCommit(t, dir)
 	if headCount(t, dir) != 2 {
 		t.Errorf("commits = %d, want 2 (store.yaml + one save)", headCount(t, dir))
 	}
@@ -244,18 +261,7 @@ func TestNonUserWriteIsByBot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	head, err := repo.Head()
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := repo.CommitObject(head.Hash())
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := headCommit(t, dir)
 	if c.Author.Name != "hedgehug[bot]" || c.Author.Email != "bot@hedgehug.invalid" || c.Committer.Name != "hedgehug[bot]" || c.Committer.Email != "bot@hedgehug.invalid" {
 		t.Errorf("author = %+v, committer = %+v", c.Author, c.Committer)
 	}

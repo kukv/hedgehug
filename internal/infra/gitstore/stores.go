@@ -27,6 +27,8 @@ type Stores struct {
 
 	// beforeCommit は、ファイルを書いたあと、コミットの前に呼ぶ。テストで失敗を起こすためのもの。
 	beforeCommit func() error
+	// afterEntity は、1 つのエンティティのファイルを書いてインデックスに足すたびに呼ぶ。テストで失敗を起こすためのもの。
+	afterEntity func() error
 }
 
 func New(clock port.Clock, ids port.IDs) *Stores {
