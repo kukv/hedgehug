@@ -41,8 +41,8 @@
 | B2-3 | 削除は `change.Delete`(`t: "delete"`)の行で書く。値は `f: "statuses/<ID>"`・`"choices/<プロパティ ID>/<ID>"`、プロパティは `f: "properties/<ID>"`。削除の行がある値・プロパティは設定から除く。復元(`restore`)を読むのは、復元を作るトラック(C の同期の修復、G の削除済み)が足す | 保存形式「同期の修復」(8)「値(ステータス・テンプレート)に delete がある」。B2 は復元を作らない |
 | B2-4 | 選択肢は `choices/<プロパティ ID>/<値 ID>/{name,color,rank}` に持ち、`Property.Choices` で返す | 決定 2(1 つの値ごとに 1 項目)を選択肢に当てはめた |
 | B2-5 | 作成後に足すプロパティ・値は、項目ごとの `set` の行(`from` は null)で書く。使う種類は `add`・`remove` | 項目ごとの後勝ち(06)。B1 の作成の 1 行と同じ項目名 |
-| B2-6 | 値とプロパティの並べ替えは、隣と `rank` を入れ替える(2 行)。ワークスペースの並べ替えも、アイテムの「上へ移動」(A1・A2)と同じく、隣と入れ替える | 03「並べ替え」(隣と入れ替える)。ワークスペースは既存の作りにそろえる |
-| B2-7 | ワークスペースの並びは、ワークスペースのログの `rank` に持つ。作成のときに、Store の末尾(いちばん大きい `rank` の `rank.After`)を `set rank` で書く。一覧は `rank`、同じなら内部 ID の順。B1 のころに作った `rank` のないワークスペースは先頭に並ぶ | 04「並び順と並べ替え」(新しく作ったものは末尾)。`workspace.Workspace` の型は変えない(B の決定 1) |
+| B2-6 | 値とプロパティの並べ替えは、隣と `rank` を入れ替える(2 行)。ワークスペースの並べ替えは、動かした 1 件の `rank` だけを、新しい隣どうしのあいだの値(`rank.Between`。共有 PR で `domain/rank` に足す)に変える | 03「並べ替え」(値とプロパティは隣と入れ替える)。04「並び順と並べ替え」(ワークスペースは、位置が変わるのは動かした 1 件だけ。同期で並びが崩れないため) |
+| B2-7 | ワークスペースの並びは、ワークスペースのログの `rank` に持つ。作成のときに、Store の末尾(いちばん大きい `rank` の `rank.After`)を `set rank` で書く。一覧は `rank`、同じなら内部 ID の順。`rank` のないワークスペース(B1 のころに作ったもの、`apptest.Sample` のもの)は先頭に並び、並べ替えるときに同じ保存で、`rank` のないものだけに表示の順で `rank` を振る | 04「並び順と並べ替え」(新しく作ったものは末尾)。`workspace.Workspace` の型は変えない(B の決定 1)。`rank` のないものどうしは、あいだの値を作れないため |
 | B2-8 | 単一の値(ステータス・優先度・単一選択)の削除では、使っているアイテムに `set` を書いて代わりの値(単一選択は null も可)に置き換える。複数の値(関連システム・複数選択)の削除と、追加プロパティの削除では、`remove`(複数)か `set` null(単一)でアイテムから値を外す。アイテムの書き込みは、ワークスペースの削除の行と同じ保存に入れる | 03「値の編集」の「削除」、「プロパティ」の「削除」。01「書き込みの単位」 |
 | B2-9 | 「履歴には残らない」(複数の値の削除、プロパティの削除)は、履歴の画面(A4)が、ワークスペースのログの `delete` と同じ `op` のアイテムの行を出さないことで満たす。B2 は行を書くだけ | 行を書かずに読むときに除く案は、同期の修復(C)が値の削除を取り消したときに古い値が戻ってしまう |
 | B2-10 | 置き換えの検査をしない・自動化を動かさない(03)。B2 の時点では遷移の制約も自動化もないので、何もしない。B3・B4 は、値の削除の操作に「検査を呼ばない」ことを守る | 03「削除」 |
@@ -83,7 +83,7 @@
 | 同: 初期値と分類の既定を使う場面(作成・Step・複製・Space・カンバン・自動化・移動) | A3・A4・E・B4 |
 | 03 変更が及ぶ範囲: プロパティ・値の行 | Task 4・5 |
 | 保存形式: item.yaml・workspace.yaml の注釈と書き出し | Task 1(項目)・Task 8(注釈と設定の書き出し) |
-| 保存形式: 同期のあとの `*.yaml` の作り直し | C |
+| 保存形式: 同期のあとの `*.yaml` の作り直し(注釈を含む) | Task 8(C1 の `rebuildYAML` に設定を渡す) |
 | 履歴の画面で、削除と同じ保存のアイテムの行を出さない | A4(B2-9) |
 | 削除済みのアイテムを件数から除く | A4(B2-11) |
 | サイドバーのドラッグでの並べ替え(ワークスペース・プロジェクト) | 持ち主未定(A2 の残り。B2 はメニューだけ) |
@@ -170,6 +170,7 @@ web/e2e/settings.spec.ts
   - `item.Item` の `Status change.ID`・`Priority change.ID`・`Systems []change.ID`・`Choices map[change.ID][]change.ID`
   - `item.FieldKey(property change.ID) string`(`"fields/" + id`)
   - `item.MultiChoice(log []change.Record, property change.ID) bool`
+  - `rank.Between(a, b string) string`(Step 16〜18。`internal/domain/rank/rank.go`)
 
 この PR は単独で develop に出す(B2-1)。Task 2 以降は、この PR の上に積む。
 
@@ -563,7 +564,7 @@ func contractItemValues(t *testing.T, s port.Stores, id port.StoreID) {
 Run: `go test ./internal/app/apptest/ ./internal/infra/gitstore/`
 Expected: PASS。gitstore が `delete` の行を書けない・読めないときは、行の種類を検査している箇所(`grep -rn "change.Remove" internal/infra/gitstore`)に `change.Delete` を足す。
 
-- [ ] **Step 15: 全体を確かめてコミットし、PR を出す**
+- [ ] **Step 15: コミット**
 
 Run: `make check`
 Expected: PASS
@@ -573,7 +574,83 @@ git add internal/domain/change internal/domain/item internal/infra/gitstore inte
 git commit -m "feat(item): アイテムのステータス・優先度・関連システム・選択肢の値と、削除の行を足す"
 ```
 
-PR は develop 向けに単独で出す(ブランチ `feat/track-b2-item-values`。題「アイテムの値と削除の行(トラック B2 の共有部分)」)。本文に B2-1〜B2-3 と、A3 への申し送りを書く: 作成時の初期値・変更の操作・選択式でない追加プロパティ(テキスト・数値など)の値は A3 が `fields/<ID>` に足す。`readValues` は内部 ID でない値を読み飛ばすので、型ごとの読み分けは A3 で足す。
+- [ ] **Step 16: あいだの並びの値のテストを書く(`domain/rank`。Task 7 が使う。共有なのでこの PR に入れる)**
+
+`internal/domain/rank/rank_test.go` に足す:
+
+```go
+func TestBetween(t *testing.T) {
+	cases := [][2]string{{"", "V"}, {"V", "W"}, {"V", "X"}, {"Vz", "W"}, {"V", "V1"}, {"", "1"}, {"a", "b"}}
+	for _, c := range cases {
+		got := rank.Between(c[0], c[1])
+		if !(c[0] < got && got < c[1]) {
+			t.Errorf("Between(%q, %q) = %q", c[0], c[1], got)
+		}
+	}
+	if got := rank.Between("V", ""); got != rank.After("V") {
+		t.Errorf("no upper bound: %q", got)
+	}
+	// 何度あいだに詰めても、順が保たれる。
+	lo, hi := "V", "W"
+	for range 200 {
+		m := rank.Between(lo, hi)
+		if !(lo < m && m < hi) {
+			t.Fatalf("Between(%q, %q) = %q", lo, hi, m)
+		}
+		hi = m
+	}
+}
+```
+
+- [ ] **Step 17: 失敗を確かめる** — Run: `go test ./internal/domain/rank/`、Expected: FAIL(`rank.Between` が未定義)
+
+- [ ] **Step 18: 実装する**
+
+`internal/domain/rank/rank.go` に足す:
+
+```go
+// Between は、a < 値 < b の値。a が空なら b より前のどこか、b が空なら After(a)。
+// 呼ぶ側は a < b を守る。値の文字は digits だけで、'0' で終わる値は作らない(作れる値が尽きないため)。
+func Between(a, b string) string {
+	if b == "" {
+		return After(a)
+	}
+	var out []byte
+	for i := 0; ; i++ {
+		lo := 0
+		if i < len(a) {
+			lo = strings.IndexByte(digits, a[i])
+		}
+		hi := strings.IndexByte(digits, b[i]) // a < b なので、b が尽きる前に lo < hi の桁が来る
+		if lo == hi {
+			out = append(out, digits[lo])
+			continue
+		}
+		if mid := (lo + hi) / 2; mid > lo {
+			return string(append(out, digits[mid]))
+		}
+		// hi == lo+1: この桁は lo にして、残りは a の続きよりあとにする。
+		out = append(out, digits[lo])
+		rest := ""
+		if i+1 < len(a) {
+			rest = a[i+1:]
+		}
+		return string(out) + After(rest)
+	}
+}
+```
+
+- [ ] **Step 19: 通るのを確かめ、コミットし、PR を出す**
+
+Run: `go test ./internal/domain/rank/ && make check`
+Expected: PASS
+
+```bash
+git add internal/domain/rank
+git commit -m "feat(rank): 2 つの並びの値のあいだの値を返す Between を足す"
+```
+
+PR は develop 向けに単独で出す(ブランチ `feat/track-b2-item-values`。題「アイテムの値・削除の行・あいだの並び(トラック B2 の共有部分)」)。本文に B2-1〜B2-3・B2-6 と、A3 への申し送りを書く: 作成時の初期値・変更の操作・選択式でない追加プロパティ(テキスト・数値など)の値は A3 が `fields/<ID>` に足す。`readValues` は内部 ID でない値を読み飛ばすので、型ごとの読み分けは A3 で足す。`rank.Between` は、04 の「位置が変わるのは動かした 1 件だけ」の並べ替え(プロジェクトのドラッグなど)にも使える。
 
 ---
 
@@ -1939,6 +2016,7 @@ git commit -m "feat(app): ワークスペースのアイテムの件数と、値
   - `func workspace.RankOf(log []change.Record) string`(ログの `rank` のいまの値。なければ空)
   - `func (s Service) MoveWorkspace(ctx, store port.StoreID, ws workspace.ID, up bool) error`
   - `Service.List` は `rank` の順、同じなら内部 ID の順で返す(B2-7)
+- Consumes: `rank.Between`(Task 1 の共有 PR)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -1970,13 +2048,46 @@ func TestWorkspaceOrder(t *testing.T) {
 	if last := rec.summaries[len(rec.summaries)-1]; last != "Docs の並びを変更" {
 		t.Errorf("summary = %q", last)
 	}
+	// 位置が変わるのは動かした 1 件だけ(04)。B のログは作成と rank の 2 行のまま。
+	if _, log := stored(t, s, b.ID); len(log) != 2 {
+		t.Errorf("neighbor was written: %+v", log)
+	}
 	// 先頭で上へ・末尾で下へは、何も保存しない。
-	n := len(rec.summaries)
 	_ = s.MoveWorkspace(ctx, store, a.ID, true)
 	_ = s.MoveWorkspace(ctx, store, b.ID, false)
-	_, log := stored(t, s, a.ID)
-	if len(log) != 2 { // 作成と rank だけ
-		t.Errorf("log = %+v (%d summaries since)", log, len(rec.summaries)-n)
+	if _, log := stored(t, s, a.ID); len(log) != 2 {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+// rank のないワークスペース(B2 より前に作ったもの、apptest.Sample)は先頭に内部 ID の順で並ぶ。
+// 並べ替えると、同じ保存で、rank のないものに表示の順で rank を振ってから動かす(B2-7)。
+func TestWorkspaceOrderWithoutRanks(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	// workspace.Create の行だけを書き、rank を持たない 2 つを作る。
+	for _, w := range []workspace.Workspace{
+		{ID: "01OLD0000000000000000000A1", Name: "旧A", Prefix: "OA"},
+		{ID: "01OLD0000000000000000000B1", Name: "旧B", Prefix: "OB"},
+	} {
+		d, _ := workspace.Create(w)
+		if err := s.Stores.Write(ctx, store, port.Operation{Actor: change.User("taro"), Summary: "準備"}, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(w.ID, d)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, _ := s.Create(ctx, store, "新", "NEW")
+	if err := s.MoveWorkspace(ctx, store, "01OLD0000000000000000000B1", true); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.List(ctx, store)
+	var ids []workspace.ID
+	for _, w := range list {
+		ids = append(ids, w.ID)
+	}
+	if !slices.Equal(ids, []workspace.ID{"01OLD0000000000000000000B1", "01OLD0000000000000000000A1", n.ID}) {
+		t.Errorf("order = %v", ids)
 	}
 }
 ```
@@ -1992,7 +2103,8 @@ func TestWorkspaceOrder(t *testing.T) {
 - `domain/workspace/order.go` の `RankOf` は `change.Resolve(log, opts).Values["rank"]` を文字列で読む。
 - `create.go`: 書く Tx の中で、ほかのワークスペースのログから `RankOf` を集め、`workspace.NextRank(...)` を `change.NewSet("rank", nil, r)` として、作成の行と同じ `Append` に足す。
 - `list.go`: 一覧を読んだあと、各ワークスペースのログ(`r.Changes().Of`)から `RankOf` を引き、`rank`、同じなら内部 ID の順に並べる。
-- `order.go` の `MoveWorkspace`: 文は「{名前} の並びを変更」(04「並び順と並べ替え」)。名前は `oneLine`。並べた一覧で隣と `workspace.SwapRanks("rank", ra, "rank", rb)` の 2 行を、それぞれのワークスペースのログに 1 行ずつ書く(`SwapRanks` の 1 行目を自分、2 行目を隣へ)。端なら行なし。
+- `order.go` の `MoveWorkspace`: 文は「{名前} の並びを変更」(04「並び順と並べ替え」)。名前は `oneLine`。並べた一覧(`rank`、同じなら内部 ID)で位置 `i` を探し、端なら行なし。動かすのは自分の `rank` だけ(B2-6): 上へは `rank.Between(rank[i-2] または "", rank[i-1])`、下へは `rank.Between(rank[i+1], rank[i+2] または "")` を `change.NewSet("rank", いま, 新)` で自分のログに書く。
+- `rank` が空のワークスペースが Store に 1 つでもあれば、`Between` の前に、同じ保存の中で、空のものに表示の順で `rank` を振る(先頭の空でない `rank` より前に並ぶよう、`rank.Between("", 先頭の rank)` を順に詰める。空でないものがなければ `rank.First` から `rank.After`)。そのあとの並びで上の `Between` を行う。振るのは空のものだけで、空でないものは書き換えない。
 
 - [ ] **Step 4: 通るのを確かめる** — Run: `go test ./internal/app/workspaces/ ./internal/domain/workspace/`、Expected: PASS
 
@@ -2068,6 +2180,7 @@ fields:
 - `workspace.yaml` に `statuses:`・`initial_status: <Todo の ID>  # Todo`・`category_defaults:` があり、プロパティの順が設定の順であること
 - `item.yaml` の `status:` の行末に `# Todo`、`fields:` の行に `# 環境: 本番` があること
 - 値の名前を変える Write(`RenameValue` と同じ行 `statuses/<ID>/name` をワークスペースのログに書くだけの Write)で、アイテムのログに行を書かなくても、そのアイテムの `item.yaml` の注釈が新しい名前になること(同じコミットで作り直す)
+- 同期の作り直し: `rebuildYAML` に、ワークスペースとアイテムの `log.jsonl` を持つ木を渡すと、書く道で作った `item.yaml`・`workspace.yaml` と同じバイト列ができること(`sync_tree_test.go` の既存の準備を使う)
 
 既存の gitstore のテストの準備の関数(Store を作って `Write` する関数)を使う。
 
@@ -2078,6 +2191,7 @@ fields:
 - `renderYAML` の `change.KindWorkspace` の枝で、`workspace.SettingsFromLog(log)` と `workspace.RankOf(log)` から上の形を作る。`yaml_settings.go` に `workspaceToYAML(w, rank, settings) (*yaml.Node, error)` を置く。
 - `renderYAML` の `change.KindItem` の枝は、アイテムのワークスペースの設定が要る。`renderYAML` に `settings func(workspace.ID) (workspace.Settings, bool)` を渡す形に変え、`commit.go` の `writeEntity` から、書いている Tx の読み取り(書いた行を含む)で設定を引く関数を渡す。
 - `commit.go`: Tx がワークスペースのログに行を書いたら、そのワークスペースのすべてのアイテム(`Projects().List` → `Items().List`)の `item.yaml` も作り直して、同じコミットに入れる。アイテムのログは書かない。
+- 同期の作り直し(C1 の `sync_tree_more.go` の `rebuildYAML`)も `renderYAML` を呼ぶ。こちらには、合わせたあとの木の `workspaces/<ID>/log.jsonl` を `parseLog` して `workspace.SettingsFromLog` で設定を引く関数を渡す。書く道と同期の道で、同じログから同じバイト列になること(保存形式「どのマシンで作っても同じ中身」)。
 - ファイルが 300 行、関数が 60 行を超えないように分ける。
 
 - [ ] **Step 4: 通るのを確かめる** — Run: `go test ./internal/infra/gitstore/`、Expected: PASS
