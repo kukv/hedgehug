@@ -25,13 +25,11 @@
     v.people.members.find((x) => x.login.toLowerCase() === c.assignee.toLowerCase()),
   );
 
-  // 保存のあと(断られたときも、通信の失敗のときも)、チェックを保存済みの分類に合わせ直す。
-  async function check(box: HTMLInputElement) {
-    try {
-      await detail.checkStep(c.id, !done);
-    } finally {
-      box.checked = done;
-    }
+  // チェックは保存済みの分類だけから描く。クリックでは切り替えず(preventDefault)、保存して読み直したら変わる。
+  // 断られたときも通信の失敗のときも、見えている状態は保存済みの状態のまま。
+  function check(e: MouseEvent) {
+    e.preventDefault();
+    void detail.checkStep(c.id, !done);
   }
 </script>
 
@@ -42,7 +40,7 @@
     checked={done}
     disabled={v.readOnly}
     title={note}
-    onchange={(e) => void check(e.currentTarget)}
+    onclick={check}
   >
   <a
     class="row-title"

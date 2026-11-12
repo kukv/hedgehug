@@ -60,15 +60,16 @@ test("checks a Step and shows the count", async ({ page }, info) => {
   const steps = panel.getByRole("region", { name: "Step" });
   // Step の行に group の役割はない。Step は 1 つだけなので、region からチェックとボタンを直接探す。
   const box = steps.getByRole("checkbox", { name: "確認" });
+  // チェックはクリックでは切り替わらず、保存して読み直してから変わる。check() は押した直後の切り替わりを求めるので、click() で押す。
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/check") && r.ok()),
-    box.check(),
+    box.click(),
   ]);
   await expect(steps.getByRole("button", { name: "ステータス: Done" })).toBeVisible();
   await expect(steps.getByRole("heading")).toHaveText("Step 1/1");
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/check") && r.ok()),
-    box.uncheck(),
+    box.click(),
   ]);
   await expect(steps.getByRole("button", { name: "ステータス: Todo" })).toBeVisible();
 });
