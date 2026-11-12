@@ -24,6 +24,19 @@ async function createWorkspace(page: Page, info: TestInfo, name: string, prefix:
   await expect(page.getByRole("heading", { name })).toBeVisible();
 }
 
+// afterSave は、path に合う保存の応答のあとに来る、設定の読み直し(ワークスペースと件数の GET)の
+// 応答を両方待つ。保存の前に呼んでおく。
+function afterSave(page: Page, path: RegExp) {
+  let saved = false;
+  const reread = (end: RegExp) =>
+    page.waitForResponse((r) => {
+      const url = new URL(r.url()).pathname;
+      if (r.request().method() !== "GET" && path.test(url)) saved = true;
+      return saved && r.request().method() === "GET" && end.test(url);
+    });
+  return Promise.all([reread(/\/workspaces\/[^/]+$/), reread(/\/workspaces\/[^/]+\/usage$/)]);
+}
+
 // 作ったワークスペースの設定タブを、アドレスから開く。
 async function openSettings(page: Page, prefix: string, subtab = "一般") {
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}/settings`));
@@ -212,12 +225,13 @@ test("the statuses tab adds, recolors, reorders and deletes values", async ({ pa
   await expect(page.getByText(/「Todo」は未着手の既定のステータスです/)).toBeVisible();
   await expect(dialog).toHaveCount(0);
 
+  // 既定の付け替えが保存されて読み直されるまでは、まだ断られる。保存のあとの読み直し
+  // (ワークスペースと件数の 2 つ)の応答を待ってから押す。
+  const reloaded = afterSave(page, /\/category-defaults\/todo$/);
   await page.getByRole("combobox", { name: "未着手の既定" }).selectOption({ label: "Pending" });
-  // 既定の付け替えが保存されて読み直されるまでは、まだ断られる。ダイアログが開くまで押し直す。
-  await expect(async () => {
-    await rowOf("Todo").getByRole("button", { name: "削除" }).click();
-    await expect(dialog).toBeVisible({ timeout: 1000 });
-  }).toPass();
+  await reloaded;
+  await rowOf("Todo").getByRole("button", { name: "削除" }).click();
+  await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByText("「Todo」を削除しました")).toBeVisible();
   await expect(rowOf("Todo")).toHaveCount(0);
