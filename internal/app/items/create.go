@@ -135,13 +135,18 @@ func applyValues(it *item.Item, vals map[change.ID]json.RawMessage, st workspace
 		it.Priority = st.InitialPriority
 	}
 	for id, v := range vals {
-		if p, ok := st.Property(id); ok && !p.Builtin && string(v) != "null" {
+		if p, ok := st.Property(id); ok && !p.Builtin && hasValue(p, v) {
 			if it.Fields == nil {
 				it.Fields = map[change.ID]json.RawMessage{}
 			}
 			it.Fields[id] = v
 		}
 	}
+}
+
+// hasValue は、作成で書く値か。null と、外したチェック(false)は書かない(決定 8)。
+func hasValue(p workspace.Property, v json.RawMessage) bool {
+	return string(v) != "null" && (p.Type != workspace.TypeCheck || string(v) != "false")
 }
 
 // number は、数の値。item の非公開の num と同じ(app から呼べないので写している)。

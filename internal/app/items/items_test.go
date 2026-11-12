@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 const store port.StoreID = "S1"
@@ -154,5 +156,34 @@ func TestAddStepTakesTheParentsAssignee(t *testing.T) {
 	st, err := svc.AddStep(t.Context(), store, apptest.SampleTask, "確認")
 	if err != nil || st.Assignee != "taro" || st.Status != apptest.SampleStatusTodo || st.Priority != apptest.SamplePriorityMedium {
 		t.Errorf("AddStep = %+v, %v", st, err)
+	}
+}
+
+// 作成ダイアログでチェックを入れてから外したとき(false)は、値がないのと同じく書かない(決定 8)。
+func TestCreateDoesNotWriteAFalseCheck(t *testing.T) {
+	svc, rec := setupRec(t)
+	p, _ := custom(t, svc, rec, "done", workspace.TypeCheck)
+	it, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "決済", Values: map[change.ID]json.RawMessage{p.ID: raw(`false`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := it.Fields[p.ID]; ok || item.FieldValue(it, p) != false {
+		t.Errorf("fields = %v, value = %v", it.Fields, item.FieldValue(it, p))
+	}
+	err = rec.Read(t.Context(), store, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
+		for _, c := range log {
+			if strings.Contains(string(c.To), item.FieldKey(p.ID)) {
+				t.Errorf("the create record has %s: %s", item.FieldKey(p.ID), c.To)
+			}
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	on, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "請求", Values: map[change.ID]json.RawMessage{p.ID: raw(`true`)}})
+	if err != nil || item.FieldValue(on, p) != true {
+		t.Errorf("true = %v, %v", item.FieldValue(on, p), err)
 	}
 }
