@@ -91,18 +91,22 @@ B2 本体との重なり(`git diff origin/develop...feat/track-b2` で確かめ�
 | 22 | ツリーの行には、Step の進捗「完了/対象」(Story・Task・Bug で、対象が 0 件でないとき)、期限、ポイント、ステータスのボタン、担当者のアバターを出す。「ブロック中」とメニューは A4。期限の「期限切れ」「今日」は画面を出したときの日付で決め、日付が変わったときの自動の更新はトラック E(マイタスクと集計の表示の持ち主)が足す | 04「ツリー」の「行」「集計の定義」、A2 の決定 17。01「日付と時刻」の自動の更新は複数の画面にまたがる |
 | 23 | 詳細パネルの子の見出しに「3/8」(完了/中止を除く総数)を添える。Epic の子の行にステータスのボタンと担当者のアバター、Step の行にチェックボックス・ステータスのボタン・担当者のアバターを足す。Step の削除の「×」は A4 | 02「子と Step」、A2 の決定 18 |
 | 24 | アバターは ui の新しい部品 `Avatar`(表示名の頭の 1 文字を丸に出し、`title` に表示名)。メンバーにいない人は中身のない丸で、`title` は「不明なユーザー」。担当者がいなければ何も出さない | 01「画面の移り方と、共通の表示」(不明なユーザー)。仕様にアバターの中身の定めがない |
-| 25 | 作成ダイアログのプロパティ欄は、その種類で使う表示中のすべてのプロパティを、設定の並びで出す(ステータスは初期ステータスを初期値にしたセレクト、優先度は初期優先度)。種類を切り替えたときは、使わない欄を隠し、入力済みの値はダイアログを開いているあいだ覚え、使える種類に戻すと値を戻す。「作成」では、表示している欄の値だけを送る。ワークスペースを変えたときは、担当者・開始日・終了日・ポイント・見積もり時間を残し(担当者は、Store が違えばログイン名が一致するメンバーだけ)、優先度・関連システム・追加プロパティ・ステータスを初期値に戻す | 02「ダイアログの中での連動」(テンプレート以外の部分) |
+| 25 | 作成ダイアログのプロパティ欄は、その種類で使う表示中のすべてのプロパティを、設定の並びで出す。ステータスは初期ステータスを初期値にしたセレクト(詳細パネルのボタンとメニューではない)、優先度は初期優先度を初期値にしたボタンとメニュー。種類を切り替えたときは、使わない欄を隠し、入力済みの値はダイアログを開いているあいだ覚え、使える種類に戻すと値を戻す。「作成」では、表示している欄の値だけを送る。ワークスペースを変えたときは、担当者・開始日・終了日・ポイント・見積もり時間を残し(担当者は、Store が違えばログイン名が一致するメンバーだけ)、優先度・関連システム・追加プロパティ・ステータスを初期値に戻す | 02「ダイアログの中での連動」(テンプレート以外の部分) |
 | 26 | 作成ダイアログの検査は、A2 の決定 14 のとおりサーバーに任せ、`Refused` を赤字で出す | A2 の決定 14 |
 | 27 | A2 の申し送り「送信中の入力が断りのあと古い値に戻る」は、断りを受けたとき、送った時点の状態ではなく、いまの状態に `error` だけを足して直す。作ったあと(続けて作成)も、送信中に変えた入力を残す | A2 の最終レビューの残り。02「入力の検査」(入力はそのまま残す) |
 | 28 | 閲覧のみの Store のアイテムでは、プロパティの入力・ステータスのボタン・Step のチェックを無効にし、「閲覧のみの Store です」を添える | 01「閲覧のみの Store」、02「詳細パネル」の冒頭 |
 | 29 | 値の選択肢は、画面がワークスペースの詳細(B2 の `WorkspacesPort.get` の `settings`)から作る。詳細パネルとツリーは、ワークスペースごとに 1 回読み、プロジェクトの画面を読み直すときに読み直す | B2 の web の口を使う(別名の型を作らない) |
-| 30 | e2e の追加プロパティは、B2 の API(`add-property`)でテストの初めに作る | develop に追加プロパティを作る手段は B2 の API だけ |
+| 30 | e2e の追加プロパティは、B2 の API(`add-workspace-property`)でテストの初めに作る。値を変える e2e は、3 幅が同じサーバーを使うので、それぞれ自分の Task を作ってから変える | develop に追加プロパティを作る手段は B2 の API だけ。A2 の決定 21 |
+| 31 | item.yaml の日付(`start: 2026-11-11`)を引用符で囲むかどうかは、yaml の書き出しの既定に任せる。保存形式の例は引用符なしだが、`*.yaml` は人が読むための写しで、読み戻した値が同じならよい | 保存形式「いまの値の決め方」(`*.yaml` は `log.jsonl` から作る)。書き出しの細工で 1 か所だけ形を変えない |
+| 32 | 追加プロパティの削除(B2 の `DeleteProperty`)と件数(B2 の `Usage`)は、`Choices` だけを見ている。選択式でない値(テキスト・数値・日付・チェック・ユーザー・URL)もアイテムから外し、件数に数えるよう、Task 2 の共有 PR で B2 の 2 つの関数を広げる | 03「プロパティ」の「削除」(値が消える)、「値の入っている N 件」。選択式でない値を足すのはこの計画 |
+| 33 | 値を選ぶメニューは ui の新しい部品 `ValueMenu` にする。B2 の `KindsMenu`(設定の画面の中の、開いたまま入り切りするメニュー)は使わない。共有の `Menu` は変えない | 詳細パネル・作成ダイアログ・ツリー、のちのカンバン・テーブル(E)が使う。B2 は `Menu` を変えずに画面の中の部品にした |
 
 ### ユーザーに確かめること(実装の前)
 
 | # | 点 | 推奨 |
 |---|---|---|
 | Q1 | 終了日のログの項目名。保存形式の「アイテムの例」は `due: 2026-11-15`、03「組み込みの 8 種」と 04 の検索のキーは `end`。どちらにそろえるか | `end`(決定 7)。組み込みの項目名を、プロパティの内部 ID(= キー)と同じ 1 つの規則で引ける。保存形式の例の 1 語を直す |
+| Q2 | 「複製」を前半・後半のどちらに入れるか | どちらにも入れず A4(決定 4)。テンプレートには依存しないが、clones の関連・アイテムのメニュー・説明(A4)とスプリント(F)に依存する |
 
 ## 漏れの表(範囲 → タスク、範囲の外 → 持ち主)
 
@@ -143,8 +147,10 @@ B2 本体との重なり(`git diff origin/develop...feat/track-b2` で確かめ�
 | 04 ツリーの行: ブロック中・メニュー | A4 |
 | 01 日付が変わったときの自動の更新 | トラック E(決定 22) |
 | 保存形式: item.yaml の assignee・start・end・points・estimate・追加プロパティの値 | Task 2 |
+| 03 プロパティの削除・件数(選択式でない値) | Task 2(決定 32) |
 | PR #159 の申し送り(選択式でない値、型ごとの読み分け) | Task 1 |
 | A2 の申し送り(送信中の入力) | Task 10 |
+
 
 ---
 
@@ -460,7 +466,7 @@ func ptr(f float64) *float64 { return &f }
 
 `internal/app/apptest/stores_contract_values.go` の `contractItemValues` の書き込みに、`change.NewSet("assignee", nil, "taro")`、`change.NewSet("end", nil, "2026-11-15")`、`change.NewSet("estimate", nil, 1.5)`、`change.NewSet(item.FieldKey(note), nil, "memo")`(`note` は新しい定数 `01CONTRACTNT00000000000001`)を足し、読んだ `it` の `Assignee == "taro"`・`End == "2026-11-15"`・`*Estimate == 1.5`・`string(it.Fields[note]) == `"memo"`` も確かめる。
 
-`internal/app/apptest/sample.go` の `epic` と `task` に `Status: SampleStatusTodo, Priority: SamplePriorityMedium` を足す(決定 11)。`sample` を読むテスト(`apptest` の `stores_test.go`)が `Status` を確かめるように、1 行足す。
+`internal/app/apptest/sample.go` の `epic` と `task` に `Status: SampleStatusTodo, Priority: SamplePriorityMedium` を足す(決定 11)。値の定数に `SampleSystemWeb change.ID = "01SAMPLEVAL000000000000011"`(関連システムの先頭。ステータス 5・優先度 5 の次)を足す。B2 本体のテストと e2e は自分で作ったワークスペースを使うので(`feat/track-b2` で確かめた)、Sample の値が増えても B2 の件数のテストは変わらない。`sample` を読むテスト(`apptest` の `stores_test.go`)が `Status` を確かめるように、1 行足す。
 
 - [ ] **Step 2: テストが失敗するのを確かめる**
 
@@ -647,24 +653,26 @@ make check
 git add internal/domain/item internal/app/apptest
 git commit -m "feat(item): 組み込みの値と選択式でない追加プロパティの値を持ち、設定の型で読み分ける(A3 前半 Task 1)"
 git push -u origin feat/track-a3a-item-values
-gh pr create --base develop --title "アイテムの値の項目と型ごとの読み分け(トラック A3 前半の共有部分)" --body "…(中身・決めたこと 7〜9・11・確認)"
+gh pr create --base develop --title "アイテムの値の項目と型ごとの読み分け(トラック A3 前半の共有部分)" --body-file "$SCRATCH/pr-body.md"   # $SCRATCH はセッションのスクラッチパッド
 ```
 
-PR がマージされたら、`feat/track-a3a` を develop から切る(B2 が入っていれば B2 の後の develop)。
+PR の本文は、中身(`Item` の項目・`Field`・`Current`・`FieldValue`・Sample)、決めたこと(この計画の決定 7〜9・11)、`make check` の結果、末尾の生成の印。PR がマージされたら、`feat/track-a3a` を develop から切る(B2 が入っていれば B2 の後の develop)。
 
 ---
 
-### Task 2: 共有: item.yaml の新しい項目
+### Task 2: 共有: item.yaml の新しい項目と、B2 のプロパティの削除・件数
 
 **ブランチ:** B2 本体が develop に入ってから、develop から `feat/track-a3a-yaml`。
 
 **Files:**
 - Modify: `internal/infra/gitstore/yaml.go`(`itemYAML` に項目)・`yaml_notes.go`(`itemToYAML`・`fieldsNode`)
 - Test: `internal/infra/gitstore/yaml_test.go`(あるファイルに追記)
+- Modify: `internal/app/workspaces/property_delete.go`(`clearItems`)・`usage.go`(`count`)。B の持ち場だが、選択式でない値を足すのはこの計画なので、同じ共有 PR で B2 の処理を広げる(決定 32)
+- Test: `internal/app/workspaces/property_test.go`・`usage_test.go`(追記)
 
 **Interfaces:**
 - Consumes: Task 1 の `Item` の項目、B2 の `itemToYAML(it, log, settings)`・`fieldsNode`・`comment`
-- Produces: item.yaml の `assignee`・`start`・`end`・`points`・`estimate`、`fields` の選択式でない値
+- Produces: item.yaml の `assignee`・`start`・`end`・`points`・`estimate`、`fields` の選択式でない値。追加プロパティの削除で選択式でない値も消え、件数にも入る
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -680,20 +688,50 @@ func TestItemYAMLHasPlainValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range []string{
-		"assignee: taro", "start: \"2026-11-11\"", "end: \"2026-11-15\"", "points: 3", "estimate: 1.5",
-		"01PROP0000000000000000000C: memo",
-	} {
-		if !strings.Contains(string(out), line) {
-			t.Errorf("item.yaml has no %q:\n%s", line, out)
+	var got map[string]any
+	if err := yaml.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"assignee": "taro", "start": "2026-11-11", "end": "2026-11-15", "points": 3, "estimate": 1.5}
+	for k, v := range want {
+		if fmt.Sprint(got[k]) != fmt.Sprint(v) {
+			t.Errorf("%s = %v, want %v\n%s", k, got[k], v, out)
 		}
+	}
+	if f, _ := got["fields"].(map[string]any); f["01PROP0000000000000000000C"] != "memo" {
+		t.Errorf("fields = %v", got["fields"])
 	}
 }
 ```
 
+日付を引用符で囲むかどうかは、yaml の書き出しの既定に任せる(決定 31)。テストは読み戻した値で比べる。
+
 (`rows` がこのパッケージにないときは、`change.Stamp` で 1 行を作る小さな関数をテストに置く。)
 
-- [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/infra/gitstore/ -run TestItemYAMLHasPlainValues` / Expected: FAIL
+B2 のテストに倣い、`internal/app/workspaces/property_test.go` に足す:
+
+```go
+// テキストの追加プロパティを消すと、選択式でない値も外れる(03「プロパティ」の「削除」、決定 32)。
+func TestDeletePropertyClearsPlainValues(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, _ := s.Create(ctx, store, "Web", "HH")
+	memo, _ := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "メモ", Key: "memo", Type: workspace.TypeText})
+	id := putItem(t, s, w.ID, change.NewSet(item.FieldKey(memo.ID), nil, "下書き"))
+	u, _ := s.Usage(ctx, store, w.ID)
+	if u.Properties[memo.ID] != 1 {
+		t.Errorf("usage = %+v", u.Properties)
+	}
+	if err := s.DeleteProperty(ctx, store, w.ID, memo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if it := itemOf(t, s, id); it.Fields != nil {
+		t.Errorf("fields = %v", it.Fields)
+	}
+}
+```
+
+- [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/infra/gitstore/ ./internal/app/workspaces/` / Expected: FAIL
 
 - [ ] **Step 3: 実装する**
 
@@ -707,10 +745,13 @@ func TestItemYAMLHasPlainValues(t *testing.T) {
 	Estimate *float64 `yaml:"estimate"`
 ```
 
-`itemToYAML` で、空の文字列は `nil`(`null` を出す)にして入れる。`fieldsNode` は、`it.Choices` のプロパティに加えて、`it.Fields` にあり `it.Choices` にないプロパティを、生の値(`yaml.Unmarshal` した値のノード)で出す。並びはプロパティの ID の辞書順のまま。選択式でない値には注釈を付けない。
+`itemToYAML` で、空の文字列は `nil`(`null` を出す)にして入れる。
 
-- [ ] **Step 4: 通るのを確かめる** — Run: `go test ./internal/infra/gitstore/...` / Expected: PASS
-- [ ] **Step 5: `make check`、コミット、PR**(タイトル「item.yaml に担当者・日付・ポイント・見積もり時間と追加プロパティの値を書く(トラック A3 前半の共有部分)」)。マージ後、`feat/track-a3a` に develop を取り込む。
+`property_delete.go` の `clearItems` は、`it.Choices[p.ID]` に加えて、`it.Fields[p.ID]` に値があり選択式でないときに `change.NewSet(item.FieldKey(p.ID), it.Fields[p.ID], nil)` を書く。`usage.go` の `count` は、`it.Fields` のプロパティ(値が null でないもの)も `Properties` に数える(`Choices` と同じプロパティは 1 回だけ)。
+`fieldsNode` は、`it.Choices` のプロパティに加えて、`it.Fields` にあり `it.Choices` にないプロパティを、生の値(`yaml.Unmarshal` した値のノード)で出す。並びはプロパティの ID の辞書順のまま。選択式でない値には注釈を付けない。
+
+- [ ] **Step 4: 通るのを確かめる** — Run: `go test ./internal/infra/gitstore/... ./internal/app/workspaces/...` / Expected: PASS
+- [ ] **Step 5: `make check`、コミット、PR**(タイトル「item.yaml の新しい値と、選択式でない追加プロパティの削除・件数(トラック A3 前半の共有部分)」。B2 の持ち主に、`property_delete.go`・`usage.go` を変えたことを本文で知らせる)。マージ後、`feat/track-a3a` に develop を取り込む。
 
 ---
 
@@ -781,17 +822,21 @@ func TestCheckDates(t *testing.T) {
 	refusedWith(t, item.CheckDates("2026-11-11", "2026-11-10"), "終了日は開始日以降にしてください")
 }
 
+// byKey は、設定の組み込みのプロパティ(キー k)。
+func byKey(t *testing.T, st workspace.Settings, k string) workspace.Property {
+	t.Helper()
+	for _, p := range st.Properties {
+		if p.Key == k {
+			return p
+		}
+	}
+	t.Fatalf("no %s", k)
+	return workspace.Property{}
+}
+
 func TestParseInputNormalizes(t *testing.T) {
 	st := workspace.DefaultSettings(seqIDs())
-	byKey := func(k string) workspace.Property {
-		for _, p := range st.Properties {
-			if p.Key == k {
-				return p
-			}
-		}
-		t.Fatalf("no %s", k)
-		return workspace.Property{}
-	}
+	byKey := func(k string) workspace.Property { return byKey(t, st, k) }
 	cases := []struct {
 		p    workspace.Property
 		in   string
@@ -832,7 +877,18 @@ func TestParseInputRejectsUnknownValues(t *testing.T) {
 }
 ```
 
-`seqIDs()` と `mustJSON(v any) []byte` はテストの小さな関数として `input_test.go` に置く(`seqIDs` は `01SEQ` に 21 桁の連番を付ける)。
+`input_test.go` に次の小さな関数も置く:
+
+```go
+func seqIDs() func() change.ID {
+	n := 0
+	return func() change.ID { n++; return change.ID(fmt.Sprintf("01SEQ%021d", n)) }
+}
+
+func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
+
+func raw(s string) json.RawMessage { return json.RawMessage(s) }
+```
 
 `internal/domain/item/format_test.go`:
 
@@ -846,7 +902,7 @@ func TestDisplay(t *testing.T) {
 		return login
 	}
 	today := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
-	p := func(k string) workspace.Property { /* byKey と同じ */ }
+	p := func(k string) workspace.Property { return byKey(t, st, k) }
 	cases := []struct {
 		p    workspace.Property
 		v    string
@@ -1164,7 +1220,7 @@ func dateText(s string, today time.Time) string {
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`internal/app/items/values_test.go`(`edit_test.go` の `setupRec`・`logLen`・`last` を使う。`setupRec` の `items.Service` に `Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))` を足す):
+`internal/app/items/values_test.go`(`edit_test.go` の `setupRec`・`logLen`・`last` を使う。`setupRec` の `items.Service` に `Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))` を足す。`items_test.go` の組み立ても同じ):
 
 ```go
 package items_test
@@ -1255,7 +1311,7 @@ func TestSetPropertyUnknownIsNotFound(t *testing.T) {
 
 func TestToggleSystems(t *testing.T) {
 	svc, rec := setupRec(t)
-	web := sampleSystem(t, svc, 0) // 設定の関連システムの 0 番目(Web)の内部 ID
+	web := apptest.SampleSystemWeb
 	it, err := svc.AddValue(t.Context(), store, apptest.SampleTask, "systems", web)
 	if err != nil || len(it.Systems) != 1 || last(rec) != "HH-2 の関連システムを Web に変更" {
 		t.Fatalf("AddValue = %+v, %v, %q", it, err, last(rec))
@@ -1272,7 +1328,7 @@ func TestToggleSystems(t *testing.T) {
 }
 ```
 
-`sampleSystem(t, svc, i)` は、`svc.Stores.Read` で `Settings(apptest.SampleWorkspace)` を読み、`Systems[i].ID` を返すテストの関数として同じファイルに置く。担当者の表示名のテストは、Sample のメンバーの表示名がログイン名と同じなので、`taro` になる(決定 15)。
+import には `errors` も入れる。担当者の表示名のテストは、Sample のメンバーの表示名がログイン名と同じなので、`taro` になる(決定 15)。
 
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/app/items/...` / Expected: FAIL
 
@@ -1512,7 +1568,7 @@ func toggled(ids []change.ID, v change.ID, on bool) []change.ID {
 }
 ```
 
-`service.go` の `Service` に `Clock port.Clock` を足し、`routes.go` の `appitems.Service{…}` に `Clock: deps.Clock` を足す。既存のテストの `items.Service{…}` にも `Clock` を足す。
+`service.go` の `Service` に `Clock port.Clock` を足し、`routes.go` の 70 行目 `appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity}` に `Clock: deps.Clock` を足す。既存のテストで `items.Service` を組み立てている箇所(`edit_test.go` の `setupRec`、`items_test.go`、httpapi の `newAPI`)にも `Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))` を足す。
 
 - [ ] **Step 4: 通るのを確かめる** — Run: `go test ./internal/app/items/... ./internal/adapter/httpapi/...` / Expected: PASS
 - [ ] **Step 5: `make check`、コミット** — `git commit -m "feat(app): プロパティの変更と、関連システム・複数選択の入り切りを足す(A3 前半 Task 4)"`
@@ -1579,7 +1635,7 @@ func TestCreateWritesGivenValues(t *testing.T) {
 		Values: map[change.ID]json.RawMessage{
 			"status":   raw(`"` + string(apptest.SampleStatusInProgress) + `"`),
 			"assignee": raw(`"taro"`), "end": raw(`"2026-11-20"`), "estimate": raw(`"2"`),
-			"systems":  raw(`["` + string(sampleSystem(t, svc, 0)) + `"]`),
+			"systems":  raw(`["` + string(apptest.SampleSystemWeb) + `"]`),
 		},
 	})
 	if err != nil || it.Status != apptest.SampleStatusInProgress || it.Assignee != "taro" ||
@@ -1802,42 +1858,70 @@ func (s Service) CheckStep(ctx context.Context, store port.StoreID, id item.ID, 
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`items_test.go` と同じ組み立て(`humatest` とサンプルの Store)で:
+`items_test.go` の `newAPI`(Store「S1」に Sample)を使う。(`newAPI` の `Clock` は Task 4 で足してある。)`values_test.go`:
 
 ```go
+package items_test
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/apptest"
+)
+
+const taskPath = "/api/stores/S1/items/" + string(apptest.SampleTask)
+
 func TestSetItemPropertyAPI(t *testing.T) {
-	api := setup(t) // items_test.go の組み立て
-	resp := api.Put("/api/stores/s/items/"+string(apptest.SampleTask)+"/properties/points", map[string]any{"value": "3"})
-	if resp.Code != http.StatusOK || !strings.Contains(resp.Body.String(), `"points":3`) {
-		t.Fatalf("PUT = %d %s", resp.Code, resp.Body)
+	api := newAPI(t)
+	res := api.Put(taskPath+"/properties/points", map[string]any{"value": "3"})
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"points":3`) {
+		t.Fatalf("PUT = %d %s", res.Code, res.Body)
 	}
-	resp = api.Put("/api/stores/s/items/"+string(apptest.SampleTask)+"/properties/points", map[string]any{"value": "-1"})
-	if resp.Code != http.StatusUnprocessableEntity || !strings.Contains(resp.Body.String(), "ポイントは 0 以上の数で入力してください") {
-		t.Errorf("PUT -1 = %d %s", resp.Code, resp.Body)
+	res = api.Put(taskPath+"/properties/points", map[string]any{"value": "-1"})
+	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), "ポイントは 0 以上の数で入力してください") {
+		t.Errorf("PUT -1 = %d %s", res.Code, res.Body)
+	}
+}
+
+// value は any。真偽・null・配列も届く(決定 12)。
+func TestSetItemPropertyValueShapes(t *testing.T) {
+	api := newAPI(t)
+	if res := api.Put(taskPath+"/properties/assignee", map[string]any{"value": "taro"}); !strings.Contains(res.Body.String(), `"assignee":"taro"`) {
+		t.Errorf("string: %d %s", res.Code, res.Body)
+	}
+	if res := api.Put(taskPath+"/properties/assignee", map[string]any{"value": nil}); !strings.Contains(res.Body.String(), `"assignee":""`) {
+		t.Errorf("null: %d %s", res.Code, res.Body)
+	}
+	if res := api.Put(taskPath+"/properties/start", map[string]any{"value": true}); res.Code != http.StatusUnprocessableEntity {
+		t.Errorf("bool for a date: %d %s", res.Code, res.Body)
+	}
+	if res := api.Put(taskPath+"/properties/systems", map[string]any{"value": []string{string(apptest.SampleSystemWeb)}}); res.Code != http.StatusNotFound {
+		t.Errorf("array for systems must use the toggle API: %d %s", res.Code, res.Body)
 	}
 }
 
 func TestToggleAndCheckAPI(t *testing.T) {
-	api := setup(t)
-	web := sampleSystemID(t) // Sample の設定の Systems[0]
-	path := "/api/stores/s/items/" + string(apptest.SampleTask) + "/properties/systems/values/" + string(web)
-	if resp := api.Post(path); resp.Code != http.StatusOK {
-		t.Errorf("POST = %d %s", resp.Code, resp.Body)
+	api := newAPI(t)
+	path := taskPath + "/properties/systems/values/" + string(apptest.SampleSystemWeb)
+	if res := api.Post(path); res.Code != http.StatusOK || !strings.Contains(res.Body.String(), string(apptest.SampleSystemWeb)) {
+		t.Errorf("POST = %d %s", res.Code, res.Body)
 	}
-	if resp := api.Delete(path); resp.Code != http.StatusOK || !strings.Contains(resp.Body.String(), `"systems":[]`) {
-		t.Errorf("DELETE = %d %s", resp.Code, resp.Body)
+	if res := api.Delete(path); res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"systems":[]`) {
+		t.Errorf("DELETE = %d %s", res.Code, res.Body)
 	}
-	if resp := api.Post("/api/stores/s/items/"+string(apptest.SampleTask)+"/check", map[string]any{"done": true}); resp.Code != http.StatusNotFound {
-		t.Errorf("check a Task = %d", resp.Code)
+	if res := api.Post(taskPath+"/check", map[string]any{"done": true}); res.Code != http.StatusNotFound {
+		t.Errorf("check a Task = %d", res.Code)
 	}
 }
 
 func TestItemHasValues(t *testing.T) {
-	api := setup(t)
-	resp := api.Get("/api/stores/s/items/" + string(apptest.SampleTask))
+	api := newAPI(t)
+	res := api.Get(taskPath)
 	for _, s := range []string{`"status":"` + string(apptest.SampleStatusTodo) + `"`, `"assignee":""`, `"points":null`, `"systems":[]`, `"choices":{}`, `"fields":{}`} {
-		if !strings.Contains(resp.Body.String(), s) {
-			t.Errorf("GET has no %s: %s", s, resp.Body)
+		if !strings.Contains(res.Body.String(), s) {
+			t.Errorf("GET has no %s: %s", s, res.Body)
 		}
 	}
 }
@@ -1938,7 +2022,7 @@ make generate
 cd web && pnpm gen && cd ..
 go test ./internal/adapter/httpapi/...
 ```
-Expected: PASS。`generated.ts` に `setItemProperty`・`addItemValue`・`removeItemValue`・`checkStep` ができる。
+Expected: PASS。`generated.ts` に `setItemProperty`・`addItemValue`・`removeItemValue`・`checkStep` ができ、`SetItemProperty` の `value` が `unknown` になっていることを目で確かめる(`json.RawMessage` は huma で型のないスキーマになる。違う型になったら、`Value any` にして `json.Marshal` で `json.RawMessage` に戻す)。
 
 - [ ] **Step 5: `make check`(web の型検査を含む)、コミット** — `git commit -m "feat(adapter): アイテムの値・プロパティの変更・入り切り・Step のチェックの API を足す(A3 前半 Task 6)"`
 
@@ -1946,11 +2030,13 @@ Expected: PASS。`generated.ts` に `setItemProperty`・`addItemValue`・`remove
 
 ### Task 7: 共有: ui の `ValueMenu` と `Avatar`
 
-**ブランチ:** B2 本体が develop に入ってから、develop から `feat/track-a3a-ui`。この PR だけで develop へ入れる。B2 は共有の `Menu` を変えずに画面の中の部品(`ColorMenu`)を作ったので、`Menu` は変えず、値を選ぶための新しい部品を `patterns` に足す。
+**ブランチ:** B2 本体が develop に入ってから、develop から `feat/track-a3a-ui`。この PR だけで develop へ入れる。
+
+B2 は、共有の `Menu` を変えずに、画面の中の部品で `ColorMenu`(1 つを選ぶ)と `KindsMenu`(開いたまま入り切りする、`workspace-settings` の中)を作った。値を選ぶメニューは、詳細パネル・作成ダイアログ・ツリー・のちのカンバンとテーブル(トラック E)が使うので、画面の中ではなく ui の `patterns` に 1 つ足す。`Menu` は変えない。B2 の `KindsMenu` を `ValueMenu` に置き換えるかは、B2 の持ち主に任せる(この計画では触らない)。
 
 **Files:**
 - Create: `web/packages/ui/src/patterns/ValueMenu.svelte`、`web/packages/ui/src/patterns/Avatar.svelte`
-- Modify: `web/packages/ui/src/index.ts`、`web/packages/ui/src/types.ts`(`ValueOption`)
+- Modify: `web/packages/ui/src/index.ts`、`web/packages/ui/src/types.ts`(`ValueOption`)、`web/packages/ui/src/primitives/Select.svelte`(`onchange?: () => void` を足し、`<select onchange={onchange}>` に渡す。選んだときに保存するため)
 - Test: `web/packages/ui/src/patterns/ValueMenu.test.ts`、`web/packages/ui/src/patterns/Avatar.test.ts`
 
 **Interfaces:**
@@ -1958,7 +2044,7 @@ Expected: PASS。`generated.ts` に `setItemProperty`・`addItemValue`・`remove
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`ValueMenu.test.ts`(Testing Library。ほかの ui のテストと同じ書き方):
+まず `web/packages/ui/src/primitives/Menu.test.ts` があれば、その書き方(`@testing-library/svelte` の `render`・`fireEvent`)に合わせる。`ValueMenu.test.ts`:
 
 ```ts
 import { fireEvent, render, screen } from "@testing-library/svelte";
@@ -1967,49 +2053,76 @@ import ValueMenu from "./ValueMenu.svelte";
 
 const opts = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: `v${i}`, label: `値${i}`, checked: i === 1 }));
+const base = { open: true, x: 0, y: 0, label: "優先度" };
 
 describe("ValueMenu", () => {
   it("marks the current value and reports the choice", async () => {
     const onselect = vi.fn();
-    render(ValueMenu, { open: true, x: 0, y: 0, label: "優先度", options: opts(3), onselect, onclose: vi.fn() });
+    render(ValueMenu, { ...base, options: opts(3), onselect, onclose: vi.fn() });
     expect(screen.getByRole("menuitemcheckbox", { name: /値1/ })).toHaveAttribute("aria-checked", "true");
     await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /値2/ }));
     expect(onselect).toHaveBeenCalledWith("v2");
   });
 
-  it("shows a search field from 7 options and filters by label", async () => {
-    const { rerender } = render(ValueMenu, { open: true, x: 0, y: 0, label: "優先度", options: opts(6), onselect: vi.fn(), onclose: vi.fn() });
+  it("has no search field below 7 options", () => {
+    render(ValueMenu, { ...base, options: opts(6), onselect: vi.fn(), onclose: vi.fn() });
     expect(screen.queryByRole("searchbox")).toBeNull();
-    await rerender({ options: opts(7) });
+  });
+
+  it("filters by label from 7 options", async () => {
+    render(ValueMenu, { ...base, options: opts(7), onselect: vi.fn(), onclose: vi.fn() });
     await fireEvent.input(screen.getByRole("searchbox"), { target: { value: "値6" } });
     expect(screen.getAllByRole("menuitemcheckbox")).toHaveLength(1);
   });
 
-  it("closes after a choice unless multi", async () => {
+  it("closes after a choice", async () => {
     const onclose = vi.fn();
-    const { rerender } = render(ValueMenu, { open: true, x: 0, y: 0, label: "x", options: opts(2), onselect: vi.fn(), onclose });
+    render(ValueMenu, { ...base, options: opts(2), onselect: vi.fn(), onclose });
     await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /値0/ }));
     expect(onclose).toHaveBeenCalledTimes(1);
-    await rerender({ multi: true });
+  });
+
+  it("stays open for multi", async () => {
+    const onclose = vi.fn();
+    render(ValueMenu, { ...base, multi: true, options: opts(2), onselect: vi.fn(), onclose });
     await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /値0/ }));
-    expect(onclose).toHaveBeenCalledTimes(1);
+    expect(onclose).not.toHaveBeenCalled();
   });
 });
 ```
 
-`Avatar.test.ts`: `name: "太郎", title: "太郎"` で「太」が出て `title` が「太郎」。`name` なしで中身が空、`title: "不明なユーザー"`。
+`Avatar.test.ts`:
 
-- [ ] **Step 2: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/ui test` / Expected: FAIL
+```ts
+import { render, screen } from "@testing-library/svelte";
+import { describe, expect, it } from "vitest";
+import Avatar from "./Avatar.svelte";
+
+describe("Avatar", () => {
+  it("shows the first letter and the name as the title", () => {
+    render(Avatar, { name: "太郎", title: "太郎" });
+    const a = screen.getByTitle("太郎");
+    expect(a).toHaveTextContent("太");
+  });
+  it("is empty for an unknown user", () => {
+    render(Avatar, { title: "不明なユーザー" });
+    expect(screen.getByTitle("不明なユーザー")).toHaveTextContent("");
+  });
+});
+```
+
+- [ ] **Step 2: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/ui test` / Expected: FAIL(部品がない)
+
 - [ ] **Step 3: 実装する**
 
-`ValueMenu.svelte`(`Menu.svelte` の外側を押したら閉じる・Esc の扱いをそのまま使う):
+`ValueMenu.svelte`:
 
 ```svelte
 <script lang="ts">
   import type { ValueOption } from "../types";
 
   // 値を選ぶメニュー(02「入力の方法と保存」)。いまの値にチェックを付け、7 件以上で検索欄を出す。
-  // multi なら選んでも閉じない(関連システム・複数選択)。
+  // multi なら選んでも閉じない(関連システム・複数選択)。外を押すか Esc で閉じる(Menu と同じ)。
   interface Props {
     open: boolean;
     x: number;
@@ -2047,12 +2160,26 @@ describe("ValueMenu", () => {
 <svelte:window {onkeydown} {onpointerdown} />
 
 {#if open}
-  <div class="menu-pop" role="menu" aria-label={label} style:left="{x}px" style:top="{y}px" bind:this={element}>
+  <div
+    class="menu-pop"
+    role="menu"
+    aria-label={label}
+    style:left="{x}px"
+    style:top="{y}px"
+    bind:this={element}
+  >
     {#if options.length >= 7}
+      <!-- 「検索」は読み上げの名前で、画面に出る文言ではない -->
       <input class="menu-search" type="search" aria-label="検索" bind:value={query} />
     {/if}
     {#each shown as o (o.id)}
-      <button type="button" role="menuitemcheckbox" aria-checked={o.checked} class="menu-item" onclick={() => choose(o.id)}>
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={o.checked}
+        class="menu-item"
+        onclick={() => choose(o.id)}
+      >
         <span class="check" aria-hidden="true">{o.checked ? "✓" : ""}</span>
         <span class="menu-label">{o.label}</span>
         {#if o.hint}<span class="menu-hint">{o.hint}</span>{/if}
@@ -2062,7 +2189,7 @@ describe("ValueMenu", () => {
 {/if}
 ```
 
-(スタイルは `Menu.svelte` の `.menu-pop`・`.menu-item`・`.menu-hint` を写し、`.check` は幅 14px。検索欄の `aria-label` の「検索」は画面に出ない読み上げの名前で、仕様の文言ではない。)
+スタイルは `Menu.svelte` の `.menu-pop`・`.menu-item`・`.menu-label`・`.menu-hint` を写す。足すのは `.check { width: 14px; display: inline-block; }` と `.menu-search { width: 100%; margin-bottom: 4px; }` だけ。
 
 `Avatar.svelte`:
 
@@ -2073,15 +2200,30 @@ describe("ValueMenu", () => {
     name?: string;
     title: string;
   }
+
   let { name = "", title }: Props = $props();
 </script>
 
 <span class="avatar" class:empty={name === ""} {title} aria-label={title}>{name.slice(0, 1)}</span>
+
+<style>
+  .avatar {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--c-slate-soft);
+    font-size: 10.5px;
+  }
+  .empty {
+    background: none;
+    border: 1px dashed var(--muted);
+  }
+</style>
 ```
 
-(スタイル: 18px の丸、背景 `var(--c-slate-soft)`、文字 10.5px。`.empty` は枠線だけ。)
-
-`index.ts` に 2 つを export し、`types.ts` に `ValueOption` を足す。
+`types.ts` に `ValueOption` を足し、`index.ts` に `ValueMenu`・`Avatar`・`ValueOption` を export する。
 
 - [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/ui test && pnpm check` / Expected: PASS
 - [ ] **Step 5: コミットと PR** — `git commit -m "feat(ui): 値を選ぶメニューとアバターの部品を足す(A3 前半 Task 7)"`。PR のタイトル「ui: ValueMenu・Avatar(トラック A3 前半の共有部分)」。マージ後、`feat/track-a3a` に develop を取り込む。
@@ -2092,60 +2234,168 @@ describe("ValueMenu", () => {
 
 **Files:**
 - Modify: `web/packages/core/src/model/item.ts`、`web/packages/core/src/port/items.ts`、`web/packages/api/src/items.ts`、`web/packages/core/src/index.ts`
+- Modify: `web/packages/core/src/features/items/fixtures.test-util.ts`(`item()` の値、偽の口の 4 つ)
+- Create: `web/packages/core/src/features/items/settings.test-util.ts`(テスト用の設定と、ワークスペースの偽の口)
 - Create: `web/packages/core/src/features/items/properties.ts`
-- Test: `web/packages/core/src/features/items/properties.test.ts`、`web/packages/api/src/items.test.ts`(あれば追記。なければ `ports.test.ts` に追記)
+- Test: `web/packages/core/src/features/items/properties.test.ts`
 
 **Interfaces:**
-- Consumes: B2 の `WorkspaceSettings`・`WorkspaceProperty`・`WorkspaceValue`・`Category`(`model/workspace.ts`)、Task 6 の生成物
-- Produces: 「型と口」の `PropertyInput`・`Item` の値・`ItemsPort` の 4 つ・`properties.ts` の関数
+- Consumes: B2 の `WorkspaceSettings`・`WorkspaceProperty`・`WorkspaceValue`・`Category`(`model/workspace.ts`)・`WorkspacesPort`・`fakeWorkspacesPort`(`features/workspaces/fixtures.test-util.ts`)、Task 6 の生成物
+- Produces: 「型と口」の `PropertyInput`・`Item` の値・`ItemsPort` の 4 つ・`properties.ts`。テスト用に `settings`・`settings2`・`fakeWorkspaces`、`FakeItems.refuseNext`・`holdCreate`・`createdValues`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [ ] **Step 1: テストの道具を足す**
 
-`properties.test.ts`(設定は B2 の `features/workspaces/fixtures.test-util.ts` があればそれを使い、なければこのファイルに小さな設定を置く):
+`settings.test-util.ts`:
+
+```ts
+import type { WorkspaceProperty, WorkspaceSettings, WorkspaceValue } from "../../model/workspace";
+import type { WorkspacesPort } from "../../port/workspaces";
+import { fakeWorkspacesPort } from "../workspaces/fixtures.test-util";
+
+const all = ["Epic", "Story", "Task", "Bug", "Step"];
+const v = (id: string, name: string, category?: WorkspaceValue["category"]): WorkspaceValue =>
+  category ? { id, name, color: "gray", category } : { id, name, color: "gray" };
+const prop = (id: string, name: string, type: WorkspaceProperty["type"], extra: Partial<WorkspaceProperty> = {}): WorkspaceProperty => ({
+  id, key: id, name, type, builtin: true, kinds: all, hidden: false, choices: [], ...extra,
+});
+
+// テスト用の設定。終了日は非表示、ポイントは Story だけ、F1 は単一選択の追加プロパティ、F2 はテキストの追加プロパティ。
+export const settings: WorkspaceSettings = {
+  properties: [
+    prop("status", "ステータス", "status"),
+    prop("assignee", "担当者", "user"),
+    prop("priority", "優先度", "priority"),
+    prop("start", "開始日", "date"),
+    prop("end", "終了日", "date", { hidden: true }),
+    prop("points", "ポイント", "number", { kinds: ["Story"] }),
+    prop("estimate", "見積もり時間", "duration"),
+    prop("systems", "関連システム", "systems"),
+    prop("F1", "環境", "single", { builtin: false, choices: [v("C1", "本番"), v("C2", "検証")] }),
+    prop("F2", "メモ", "text", { builtin: false }),
+  ],
+  statuses: [v("st1", "Todo", "todo"), v("st2", "InProgress", "doing"), v("st3", "Done", "done"), v("st4", "Cancel", "canceled")],
+  priorities: [v("pr1", "High"), v("pr2", "Medium")],
+  systems: [v("sy1", "Web"), v("sy2", "API")],
+  initialStatus: "st1",
+  initialPriority: "pr2",
+  categoryDefaults: { todo: "st1", doing: "st2", done: "st3", canceled: "st4" },
+};
+
+// settings2 は、別のワークスペースの設定(初期値が違う)。
+export const settings2: WorkspaceSettings = {
+  ...settings,
+  statuses: [v("ns1", "新規", "todo"), v("ns2", "完了", "done")],
+  priorities: [v("np1", "普通")],
+  initialStatus: "ns1",
+  initialPriority: "np1",
+  categoryDefaults: { todo: "ns1", done: "ns2" },
+};
+
+// fakeWorkspaces は、get だけを byId(ワークスペースの内部 ID → 設定)で返す口。ないものは settings。
+export function fakeWorkspaces(byId: Record<string, WorkspaceSettings> = {}): WorkspacesPort {
+  return {
+    ...fakeWorkspacesPort(),
+    get: async (storeId, id) => ({ id, storeId, name: "Web", prefix: "HH", oldPrefixes: [], settings: byId[id] ?? settings }),
+  };
+}
+```
+
+(`WorkspaceDetail` の項目が B2 のマージ後に違っていたら、それに合わせる。)
+
+`fixtures.test-util.ts`:
+
+- `item()` の返す値に `status: "st1", priority: "pr2", assignee: "", start: "", end: "", points: null, estimate: null, systems: [], choices: {}, fields: {}` を足す。
+- `fakeItemsPort` に次を足す。`FakeItems` に `refuseNext(message: string): void`・`holdCreate(): { release: () => void }`・`createdValues: Record<string, PropertyInput>[]` を足す。
+
+```ts
+  let refusal = "";
+  let hold: Promise<void> | null = null;
+  const createdValues: Record<string, PropertyInput>[] = [];
+  // takeRefusal は、refuseNext で決めた断りを 1 回だけ投げる。
+  const takeRefusal = () => {
+    if (refusal === "") return;
+    const m = refusal;
+    refusal = "";
+    throw new Refused(m);
+  };
+  // set は、プロパティの値をアイテムに入れる(テスト用の簡単な形。組み込みはキー、追加は fields)。
+  const set = (it: Item, propertyId: string, value: PropertyInput) => {
+    const builtin = ["status", "priority", "assignee", "start", "end"];
+    if (builtin.includes(propertyId)) (it as unknown as Record<string, PropertyInput>)[propertyId] = value ?? "";
+    else if (propertyId === "points" || propertyId === "estimate") it[propertyId] = value === "" || value === null ? null : Number(value);
+    else it.fields = { ...it.fields, [propertyId]: value };
+  };
+```
+
+```ts
+    refuseNext(message) { refusal = message; },
+    holdCreate() {
+      const g = gate();
+      hold = g.wait;
+      return { release: g.release };
+    },
+    createdValues,
+    async setProperty(_s, id, propertyId, value) {
+      calls.push(`setProperty ${id} ${propertyId} ${JSON.stringify(value)}`);
+      takeRefusal();
+      const it = find(id);
+      set(it, propertyId, value);
+      return it;
+    },
+    async addValue(_s, id, propertyId, valueId) {
+      calls.push(`addValue ${id} ${propertyId} ${valueId}`);
+      const it = find(id);
+      if (propertyId === "systems") it.systems = [...it.systems, valueId];
+      return it;
+    },
+    async removeValue(_s, id, propertyId, valueId) {
+      calls.push(`removeValue ${id} ${propertyId} ${valueId}`);
+      const it = find(id);
+      if (propertyId === "systems") it.systems = it.systems.filter((x) => x !== valueId);
+      return it;
+    },
+    async checkStep(_s, id, done) {
+      calls.push(`checkStep ${id} ${done}`);
+      const it = find(id);
+      it.status = done ? "st3" : "st1";
+      return it;
+    },
+```
+
+既存の `create` の先頭で `if (hold) { const h = hold; hold = null; await h; }`、続けて `takeRefusal()` を呼び、`createdValues.push(input.values)` をする。作るアイテムには `item()` と同じ値の初期値を入れ、`input.values` の `status`・`priority` があれば上書きする。
+
+- [ ] **Step 2: 失敗するテストを書く**
+
+`properties.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import type { Item } from "../../model/item";
-import type { WorkspaceSettings } from "../../model/workspace";
+import { item } from "./fixtures.test-util";
 import { deletedValue, propertyRows, statusOptions, valueOf, visibleProperties } from "./properties";
+import { settings } from "./settings.test-util";
 
-const v = (id: string, name: string, category?: "todo" | "doing" | "done" | "canceled") => ({ id, name, color: "gray", category });
-const prop = (id: string, type: string, extra: Partial<{ builtin: boolean; kinds: string[]; hidden: boolean; choices: ReturnType<typeof v>[] }> = {}) => ({
-  id, key: id, name: id, type, builtin: extra.builtin ?? true, kinds: extra.kinds ?? ["Epic", "Story", "Task", "Bug", "Step"],
-  hidden: extra.hidden ?? false, choices: extra.choices ?? [],
-});
-const settings: WorkspaceSettings = {
-  properties: [
-    prop("status", "status"), prop("assignee", "user"), prop("priority", "priority"),
-    prop("start", "date"), prop("end", "date", { hidden: true }), prop("points", "number", { kinds: ["Story"] }),
-    prop("estimate", "duration"), prop("systems", "systems"),
-    prop("F1", "single", { builtin: false, choices: [v("C1", "本番"), v("C2", "検証")] }),
-  ] as WorkspaceSettings["properties"],
-  statuses: [v("S1", "Todo", "todo"), v("S2", "InProgress", "doing"), v("S3", "Done", "done")],
-  priorities: [v("P1", "High"), v("P2", "Medium")],
-  systems: [v("Y1", "Web"), v("Y2", "API")],
-  initialStatus: "S1", initialPriority: "P2", categoryDefaults: { todo: "S1", doing: "S2", done: "S3" },
-};
-const item = { kind: "Task", status: "S2", priority: "P9", assignee: "taro", start: "", end: "", points: null, estimate: 1.5,
-  systems: ["Y2"], choices: { F1: ["C2"] }, fields: {} } as unknown as Item;
+const task = { ...item("S1", "S1-P1", 2, "Task", "S1-I1"), status: "st2", priority: "gone", assignee: "taro",
+  estimate: 1.5, systems: ["sy2"], choices: { F1: ["C2"] }, fields: { F2: "01CHOICE00000000000000000A" } };
 const people = { members: [{ login: "taro", name: "太郎" }, { login: "hanako", name: "花子" }], me: "hanako" };
+const byId = (id: string) => settings.properties.find((p) => p.id === id)!;
 
 describe("properties", () => {
   it("shows visible properties for the kind in settings order", () => {
     expect(visibleProperties(settings, "Task").map((p) => p.id)).toEqual(
-      ["status", "assignee", "priority", "start", "estimate", "systems", "F1"],
+      ["status", "assignee", "priority", "start", "estimate", "systems", "F1", "F2"],
     );
+    expect(visibleProperties(settings, "Story").map((p) => p.id)).toContain("points");
   });
 
-  it("reads values by type", () => {
-    const byId = (id: string) => settings.properties.find((p) => p.id === id)!;
-    expect(valueOf(item, byId("estimate"))).toBe("1.5");
-    expect(valueOf(item, byId("systems"))).toEqual(["Y2"]);
-    expect(valueOf(item, byId("F1"))).toBe("C2");
+  it("reads values by type, an ID-shaped text as text", () => {
+    expect(valueOf(task, byId("estimate"))).toBe("1.5");
+    expect(valueOf(task, byId("systems"))).toEqual(["sy2"]);
+    expect(valueOf(task, byId("F1"))).toBe("C2");
+    expect(valueOf(task, byId("F2"))).toBe("01CHOICE00000000000000000A");
   });
 
   it("labels values and marks deleted ones", () => {
-    const rows = propertyRows(settings, "Task", (p) => valueOf(item, p), people);
+    const rows = propertyRows(settings, "Task", (p) => valueOf(task, p), people);
     const row = (id: string) => rows.find((r) => r.property.id === id)!;
     expect(row("status").text).toBe("InProgress");
     expect(row("priority")).toMatchObject({ text: deletedValue, deleted: true });
@@ -2153,23 +2403,23 @@ describe("properties", () => {
     expect(row("F1")).toMatchObject({ text: "検証", extra: true });
     expect(row("F1").options[0]).toMatchObject({ id: "", label: "なし" });
     expect(row("assignee").options.map((o) => o.label)).toEqual(["未割り当て", "太郎", "花子(あなた)"]);
+    expect(row("assignee").text).toBe("太郎");
   });
 
   it("lists statuses with their category and checks the current one", () => {
-    expect(statusOptions(settings, "S2")).toEqual([
-      { id: "S1", label: "Todo", hint: "未着手", checked: false },
-      { id: "S2", label: "InProgress", hint: "進行中", checked: true },
-      { id: "S3", label: "Done", hint: "完了", checked: false },
+    expect(statusOptions(settings, "st2").slice(0, 2)).toEqual([
+      { id: "st1", label: "Todo", hint: "未着手", checked: false },
+      { id: "st2", label: "InProgress", hint: "進行中", checked: true },
     ]);
   });
 });
 ```
 
-- [ ] **Step 2: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test properties` / Expected: FAIL
+- [ ] **Step 3: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test properties` / Expected: FAIL(`properties.ts` がない)
 
-- [ ] **Step 3: 実装する**
+- [ ] **Step 4: 実装する**
 
-`model/item.ts` と `port/items.ts` を「型と口」のとおりに変える。`api/src/items.ts` の `toItem` に値を写し(`points`・`estimate` は null のまま、配列と辞書は空で補う)、口の 4 つを足す:
+`model/item.ts` と `port/items.ts` を「型と口」のとおりに変える。`api/src/items.ts` の `toItem` に値を写す(`status: it.status, priority: it.priority, assignee: it.assignee, start: it.start, end: it.end, points: it.points ?? null, estimate: it.estimate ?? null, systems: it.systems ?? [], choices: it.choices ?? {}, fields: it.fields ?? {}`)。口の 4 つを足す:
 
 ```ts
     setProperty: (storeId, itemId, propertyId, value) =>
@@ -2182,7 +2432,7 @@ describe("properties", () => {
       call(async () => toItem(storeId, await checkStep(storeId, itemId, { done }))),
 ```
 
-`create` は `values: input.values` を本文に足す。
+`create` の本文に `values: input.values` を足す。
 
 `features/items/properties.ts`:
 
@@ -2194,10 +2444,23 @@ import type { Category, WorkspaceProperty, WorkspaceSettings, WorkspaceValue } f
 // 詳細パネルと作成ダイアログのプロパティの行(02「プロパティの入力と保存」、決定 19〜21)。
 
 export const deletedValue = "(削除された値)";
-export const categoryLabels: Record<Category, string> = { todo: "未着手", doing: "進行中", done: "完了", canceled: "中止" };
+export const categoryLabels: Record<Category, string> = {
+  todo: "未着手",
+  doing: "進行中",
+  done: "完了",
+  canceled: "中止",
+};
 
-export interface ValueOption { id: string; label: string; hint?: string; checked: boolean }
-export interface People { members: Member[]; me: string }
+export interface ValueOption {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+}
+export interface People {
+  members: Member[];
+  me: string;
+}
 export interface PropertyRow {
   property: WorkspaceProperty;
   extra: boolean;
@@ -2207,7 +2470,12 @@ export interface PropertyRow {
   options: ValueOption[];
 }
 
-type Values = Pick<Item, "status" | "priority" | "assignee" | "start" | "end" | "points" | "estimate" | "systems" | "choices" | "fields">;
+export type ItemValues = Pick<
+  Item,
+  "status" | "priority" | "assignee" | "start" | "end" | "points" | "estimate" | "systems" | "choices" | "fields"
+>;
+
+const chooser = ["status", "priority", "systems", "single", "multi"];
 
 // visibleProperties は、非表示でなく、その種類で使うプロパティ(設定の並び)。
 export function visibleProperties(settings: WorkspaceSettings, kind: Kind): WorkspaceProperty[] {
@@ -2215,45 +2483,57 @@ export function visibleProperties(settings: WorkspaceSettings, kind: Kind): Work
 }
 
 // valueOf は、アイテムの値を、入力欄に入れる形で返す。数は文字列、複数は ID の配列、チェックは真偽、空は ""。
-export function valueOf(it: Values, p: WorkspaceProperty): PropertyInput {
-  if (p.builtin) {
-    switch (p.key) {
-      case "points": return it.points === null ? "" : String(it.points);
-      case "estimate": return it.estimate === null ? "" : String(it.estimate);
-      case "systems": return it.systems;
-      default: return (it as unknown as Record<string, string>)[p.key] ?? "";
-    }
-  }
+export function valueOf(it: ItemValues, p: WorkspaceProperty): PropertyInput {
+  if (p.builtin) return builtinValue(it, p.key);
   if (p.type === "multi") return it.choices[p.id] ?? [];
   if (p.type === "single") return it.choices[p.id]?.[0] ?? "";
   const raw = it.fields[p.id];
   if (p.type === "check") return raw === true;
-  if (raw === undefined || raw === null) return "";
-  return String(raw);
+  return raw === undefined || raw === null ? "" : String(raw);
+}
+
+function builtinValue(it: ItemValues, key: string): PropertyInput {
+  switch (key) {
+    case "points":
+      return it.points === null ? "" : String(it.points);
+    case "estimate":
+      return it.estimate === null ? "" : String(it.estimate);
+    case "systems":
+      return it.systems;
+    case "status":
+    case "priority":
+    case "assignee":
+    case "start":
+    case "end":
+      return it[key];
+  }
+  return "";
 }
 
 function listOf(settings: WorkspaceSettings, p: WorkspaceProperty): WorkspaceValue[] {
-  switch (p.type) {
-    case "status": return settings.statuses;
-    case "priority": return settings.priorities;
-    case "systems": return settings.systems;
-    default: return p.choices;
-  }
+  if (p.type === "status") return settings.statuses;
+  if (p.type === "priority") return settings.priorities;
+  if (p.type === "systems") return settings.systems;
+  return p.choices;
 }
 
 // statusOptions は、ステータスのメニューの項目(決定 21)。使わないステータスの扱いは B5 の後(決定 3)。
 export function statusOptions(settings: WorkspaceSettings, current: string): ValueOption[] {
   return settings.statuses.map((s) => ({
-    id: s.id, label: s.name, hint: s.category ? categoryLabels[s.category] : undefined, checked: s.id === current,
+    id: s.id,
+    label: s.name,
+    hint: s.category ? categoryLabels[s.category] : undefined,
+    checked: s.id === current,
   }));
 }
 
 function peopleOptions(people: People, current: string): ValueOption[] {
+  const me = people.me.toLowerCase();
   return [
     { id: "", label: "未割り当て", checked: current === "" },
     ...people.members.map((m) => ({
       id: m.login,
-      label: m.login.toLowerCase() === people.me.toLowerCase() ? `${m.name}(あなた)` : m.name,
+      label: m.login.toLowerCase() === me ? `${m.name}(あなた)` : m.name,
       checked: m.login === current,
     })),
   ];
@@ -2263,110 +2543,161 @@ function choiceRow(settings: WorkspaceSettings, p: WorkspaceProperty, value: Pro
   const list = listOf(settings, p);
   const ids = Array.isArray(value) ? value : value ? [String(value)] : [];
   const names = ids.map((id) => list.find((v) => v.id === id)?.name);
-  const deleted = names.some((n) => n === undefined) || (ids.length === 0 && (p.type === "status" || p.type === "priority"));
+  const required = p.type === "status" || p.type === "priority";
+  const deleted = names.some((n) => n === undefined) || (required && ids.length === 0);
   const text = deleted ? deletedValue : names.length > 0 ? names.join(", ") : "なし";
   const options =
     p.type === "status"
       ? statusOptions(settings, ids[0] ?? "")
       : list.map((v) => ({ id: v.id, label: v.name, checked: ids.includes(v.id) }));
-  const withNone = p.type === "single" ? [{ id: "", label: "なし", checked: ids.length === 0 }, ...options] : options;
-  return { text, deleted, options: withNone };
+  if (p.type === "single") options.unshift({ id: "", label: "なし", checked: ids.length === 0 });
+  return { text, deleted, options };
 }
 
 // propertyRows は、種類で使う表示中のプロパティの行。values はプロパティの入力欄の値を返す。
-export function propertyRows(settings: WorkspaceSettings, kind: Kind, values: (p: WorkspaceProperty) => PropertyInput, people: People): PropertyRow[] {
+export function propertyRows(
+  settings: WorkspaceSettings,
+  kind: Kind,
+  values: (p: WorkspaceProperty) => PropertyInput,
+  people: People,
+): PropertyRow[] {
   return visibleProperties(settings, kind).map((p) => {
     const value = values(p);
     const base = { property: p, extra: !p.builtin, value };
-    if (["status", "priority", "systems", "single", "multi"].includes(p.type)) {
-      return { ...base, ...choiceRow(settings, p, value) };
-    }
+    if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value) };
     if (p.type === "user") {
       const options = peopleOptions(people, String(value));
-      return { ...base, text: options.find((o) => o.checked)?.label ?? String(value), deleted: false, options };
+      // メンバーにいない人は、ログイン名をそのまま出す。
+      const text = options.find((o) => o.checked)?.label ?? String(value);
+      return { ...base, text, deleted: false, options };
     }
     return { ...base, text: String(value), deleted: false, options: [] };
   });
 }
 ```
 
-(ファイルが 150 行を超えたら `choiceRow` と `peopleOptions` を `propertyOptions.ts` に分ける。担当者がメンバーにいないときの表示は、ログイン名をそのまま出す。)
+(150 行を超えたら、`choiceRow`・`peopleOptions`・`statusOptions` を `propertyOptions.ts` に分ける。)`index.ts` に `properties.ts` の export を足す。
 
-`index.ts` に `properties.ts` の export を足す。
-
-- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test && pnpm --filter @hedgehug/api test && pnpm check` / Expected: PASS
-- [ ] **Step 5: コミット** — `git commit -m "feat(core): アイテムの値の型・口と、プロパティの行を足す(A3 前半 Task 8)"`
+- [ ] **Step 5: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test && pnpm --filter @hedgehug/api test && pnpm check` / Expected: PASS
+- [ ] **Step 6: コミット** — `git commit -m "feat(core): アイテムの値の型・口と、プロパティの行を足す(A3 前半 Task 8)"`
 
 ---
 
 ### Task 9: 詳細パネルのプロパティ
 
 **Files:**
-- Modify: `web/packages/core/src/features/items/detail.ts`(設定・メンバー・値の保存)
+- Modify: `web/packages/core/src/features/items/detail.ts`
 - Create: `web/app/src/screens/item/PropertyField.svelte`、`web/app/src/screens/item/DetailProperties.svelte`、`web/app/src/screens/item/StatusButton.svelte`
-- Modify: `web/app/src/screens/item/DetailPanel.svelte`、`web/app/src/wire.ts`(`createDetail` に `workspaces`・`catalogPort` を渡す)
-- Test: `web/packages/core/src/features/items/detail.test.ts`(追記)
+- Modify: `web/app/src/screens/item/DetailPanel.svelte`、`web/app/src/wire.ts`
+- Test: `web/packages/core/src/features/items/detail.test.ts`(追記と `setup` の変更)
 
 **Interfaces:**
 - Consumes: Task 8、B2 の `WorkspacesPort.get`、`CatalogPort.listMembers`・`me`
-- Produces: `DetailView.settings`・`people`・`rows`、`Detail.setProperty(itemId, propertyId, value): Promise<boolean>`、`Detail.toggleValue(propertyId, valueId, on): Promise<void>`、`Detail.checkStep(stepId, done): Promise<void>`、`StatusButton`(props: `status: string`・`settings`・`disabled`・`onchange(statusId)`)
+- Produces: `DetailView.settings`・`people`・`rows`、`Detail.setProperty(itemId, propertyId, value): Promise<boolean>`、`Detail.toggleValue(propertyId, valueId, on): Promise<void>`、`Detail.checkStep(stepId, done): Promise<void>`、`StatusButton.svelte`(props: `status`・`settings`・`disabled`・`onchange(statusId)`)、`PropertyField.svelte`(props: `row`・`disabled`・`statusSelect?`・`onchange(value)`・`ontoggle(valueId, on)`)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`detail.test.ts` の偽の口に、`setProperty`・`addValue`・`removeValue`・`checkStep`(呼ばれた引数を覚え、更新後のアイテムを返す)と、`workspaces.get`(上の `settings` を返す)、`catalogPort.listMembers`・`me` を足し、次を確かめる:
+`detail.test.ts` の `setup` の `createDetail` に `workspaces: fakeWorkspaces()` と `catalogPort: fakeCatalogPort()` を足す(`import { fakeWorkspaces } from "./settings.test-util"`)。テストを足す:
 
 ```ts
-it("loads settings and members with the item", async () => {
-  const d = setup(); // 偽の口でつくる
-  await d.open("s", "T1");
-  const v = get(d.view)!;
-  expect(v.rows.map((r) => r.property.id)).toContain("status");
-  expect(v.people.me).toBe("hanako");
-});
+  it("loads settings, members and property rows with the item", async () => {
+    const { detail, task } = await setup();
+    await detail.open("S1", task.id);
+    const v = get(detail.view);
+    expect(v?.rows.map((r) => r.property.id)).toEqual(
+      ["status", "assignee", "priority", "start", "estimate", "systems", "F1", "F2"],
+    );
+    expect(v?.people).toEqual({ members: [{ login: "taro", name: "太郎" }], me: "taro" });
+  });
 
-it("saves a property and reloads", async () => {
-  const d = setup();
-  await d.open("s", "T1");
-  expect(await d.setProperty("T1", "points", "3")).toBe(true);
-  expect(calls.setProperty).toEqual([["s", "T1", "points", "3"]]);
-});
+  it("saves a property and reloads", async () => {
+    const { detail, items, task, changed } = await setup();
+    await detail.open("S1", task.id);
+    expect(await detail.setProperty(task.id, "points", "3")).toBe(true);
+    expect(items.calls).toEqual([`setProperty ${task.id} points "3"`]);
+    expect(changed()).toBe(1);
+  });
 
-it("shows a refusal as an error toast and keeps nothing", async () => {
-  const d = setup({ refuse: "ポイントは 0 以上の数で入力してください" });
-  await d.open("s", "T1");
-  expect(await d.setProperty("T1", "points", "-1")).toBe(false);
-  expect(toastTexts()).toContain("ポイントは 0 以上の数で入力してください");
-});
+  it("shows a refusal as an error toast", async () => {
+    const { detail, items, toasts, task } = await setup();
+    await detail.open("S1", task.id);
+    items.refuseNext("ポイントは 0 以上の数で入力してください");
+    expect(await detail.setProperty(task.id, "points", "-1")).toBe(false);
+    expect(get(toasts.list)[0]).toMatchObject({ text: "ポイントは 0 以上の数で入力してください", error: true });
+  });
 
-it("checks a step with the done flag", async () => {
-  const d = setup();
-  await d.open("s", "T1");
-  await d.checkStep("ST1", true);
-  expect(calls.checkStep).toEqual([["s", "ST1", true]]);
-});
+  it("toggles a multi value with add and remove", async () => {
+    const { detail, items, task } = await setup();
+    await detail.open("S1", task.id);
+    await detail.toggleValue("systems", "sy1", true);
+    await detail.toggleValue("systems", "sy1", false);
+    expect(items.calls).toEqual([`addValue ${task.id} systems sy1`, `removeValue ${task.id} systems sy1`]);
+  });
 
-it("toggles a multi value with add and remove", async () => {
-  const d = setup();
-  await d.open("s", "T1");
-  await d.toggleValue("systems", "Y1", true);
-  await d.toggleValue("systems", "Y2", false);
-  expect(calls.addValue).toEqual([["s", "T1", "systems", "Y1"]]);
-  expect(calls.removeValue).toEqual([["s", "T1", "systems", "Y2"]]);
-});
+  it("checks a Step", async () => {
+    const { detail, items, task, s1 } = await setup();
+    await detail.open("S1", task.id);
+    await detail.checkStep(s1.id, true);
+    expect(items.calls).toEqual([`checkStep ${s1.id} true`]);
+    expect(get(detail.view)?.children.find((c) => c.id === s1.id)?.status).toBe("st3");
+  });
 ```
 
 - [ ] **Step 2: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test detail` / Expected: FAIL
 
-- [ ] **Step 3: 実装する**
+- [ ] **Step 3: core を実装する**
 
 `detail.ts`:
 
-- `DetailDeps` に `workspaces: WorkspacesPort`(B2)と `catalogPort: CatalogPort` を足す。
-- `DetailView` に `settings: WorkspaceSettings`・`people: People`・`rows: PropertyRow[]` を足す。`load` で、`items.get` のあと `Promise.all([items.list, workspaces.get(storeId, project.workspaceId), catalogPort.listMembers(storeId), catalogPort.me(storeId).catch(() => "")])` を読み、`rows = propertyRows(settings, item.kind, (p) => valueOf(item, p), people)` を作る(`me` が決まらないときは空。A2 の決定 3)。
-- 次の 3 つを足す。どれも `rename` と同じく、断りはエラーのトースト(決定 17)、保存したら `saved(gen)`:
+- `DetailDeps` に `workspaces: WorkspacesPort` と `catalogPort: CatalogPort` を足す。
+- `DetailView` に `settings: WorkspaceSettings`・`people: People`・`rows: PropertyRow[]` を足す。
+- `load` を次にする(`me` が決まらないときは空。A2 の決定 3):
 
 ```ts
-    // setProperty は、itemId(開いているアイテムか、子の行)のプロパティを保存する。false なら入力を戻す。
+  async function load(storeId: string, itemId: string) {
+    latest += 1;
+    const mine = latest;
+    try {
+      const item = await deps.items.get(storeId, itemId);
+      const [all, ws, members, me] = await Promise.all([
+        deps.items.list(storeId, item.projectId),
+        deps.workspaces.get(storeId, item.workspaceId),
+        deps.catalogPort.listMembers(storeId),
+        deps.catalogPort.me(storeId).catch(() => ""),
+      ]);
+      const store = deps.catalog.store(storeId);
+      const project = deps.catalog.project(storeId, item.projectId);
+      const workspace = project && deps.catalog.workspace(storeId, project.workspaceId);
+      if (mine !== latest) return;
+      if (!store || !project || !workspace) {
+        view.set(null);
+        return;
+      }
+      const people = { members, me };
+      view.set({
+        store,
+        workspace,
+        project,
+        item,
+        displayId: itemDisplayId(workspace.prefix, item.number),
+        ancestors: ancestorsOf(all, item.id),
+        children: all.filter((it) => it.parentId === item.id).sort(compareSiblings),
+        readOnly: store.readOnly,
+        settings: ws.settings,
+        people,
+        rows: propertyRows(ws.settings, item.kind, (p) => valueOf(item, p), people),
+      });
+    } catch (e) {
+      // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
+      if (!(e instanceof NotFound)) throw e;
+      if (mine === latest) view.set(null);
+    }
+  }
+```
+
+- 保存の 3 つを足す。どれも `rename` と同じく、断りはエラーのトースト(決定 17)、保存したら `saved(gen)`:
+
+```ts
     async setProperty(itemId, propertyId, value) {
       const v = get(view);
       if (!v) return false;
@@ -2384,8 +2715,9 @@ it("toggles a multi value with add and remove", async () => {
       const v = get(view);
       if (!v) return;
       const gen = latest;
+      const send = on ? deps.items.addValue : deps.items.removeValue;
       try {
-        await (on ? deps.items.addValue : deps.items.removeValue)(v.store.id, v.item.id, propertyId, valueId);
+        await send(v.store.id, v.item.id, propertyId, valueId);
       } catch (e) {
         refusedToast(e);
         return;
@@ -2406,25 +2738,31 @@ it("toggles a multi value with add and remove", async () => {
     },
 ```
 
-(`detail.ts` が 300 行を超えるなら、3 つの保存を `detailValues.ts` の `valueActions(view, deps, saved)` に分ける。)
+(`detail.ts` が 300 行を超えるなら、3 つを `detailValues.ts` の `valueActions(view, deps, saved, refusedToast)` に分け、`createDetail` の返す値に広げる。)
+
+- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test` / Expected: PASS
+
+- [ ] **Step 5: 画面をつくる**
 
 `StatusButton.svelte`:
 
 ```svelte
 <script lang="ts">
-  import { statusOptions, deletedValue, type WorkspaceSettings, readOnlyNote } from "@hedgehug/core";
+  import { deletedValue, readOnlyNote, statusOptions, type WorkspaceSettings } from "@hedgehug/core";
   import { StatusDot, ValueMenu } from "@hedgehug/ui";
 
-  // ステータスのボタンとメニュー(02「ステータスの変更」、決定 21)。
+  // ステータスのボタンとメニュー(02「ステータスの変更」、決定 21)。いまの値を選び直しても保存しない。
   interface Props {
     status: string;
     settings: WorkspaceSettings;
     disabled: boolean;
     onchange: (statusId: string) => void;
   }
+
   let { status, settings, disabled, onchange }: Props = $props();
   let menu = $state<{ x: number; y: number } | null>(null);
   const current = $derived(settings.statuses.find((s) => s.id === status));
+  const name = $derived(current?.name ?? deletedValue);
 
   function open(event: MouseEvent) {
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -2432,194 +2770,290 @@ it("toggles a multi value with add and remove", async () => {
   }
 </script>
 
-<button type="button" class="status-btn" class:deleted={!current} {disabled}
-  title={disabled ? readOnlyNote : undefined} aria-label="ステータス: {current?.name ?? deletedValue}" onclick={open}>
-  {#if current}<StatusDot category={current.category ?? "todo"} />{current.name}{:else}{deletedValue}{/if}
+<button
+  type="button"
+  class="status-btn"
+  class:deleted={!current}
+  {disabled}
+  title={disabled ? readOnlyNote : undefined}
+  aria-label="ステータス: {name}"
+  onclick={open}
+>
+  {#if current}<StatusDot category={current.category ?? "todo"} label={current.name} />{/if}
+  {name}
 </button>
-<ValueMenu open={menu !== null} x={menu?.x ?? 0} y={menu?.y ?? 0} label="ステータス"
+<ValueMenu
+  open={menu !== null}
+  x={menu?.x ?? 0}
+  y={menu?.y ?? 0}
+  label="ステータス"
   options={statusOptions(settings, status)}
-  onselect={(id) => { if (id !== status) onchange(id); }} onclose={() => (menu = null)} />
+  onselect={(id) => {
+    if (id !== status) onchange(id);
+  }}
+  onclose={() => (menu = null)}
+/>
+
+<style>
+  .status-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .deleted {
+    color: var(--muted);
+  }
+</style>
 ```
 
-(`.deleted` は `color: var(--muted)`。いまの値を選び直したときは保存しない。サーバーも同じ値は保存しない。)
+(`aria-label` の「ステータス: {name}」は読み上げとテストのための名前で、画面に出る文言ではない。)
 
-`PropertyField.svelte`(詳細パネルと作成ダイアログで共用。保存はしない。値を `onchange` で返す):
+`PropertyField.svelte`(詳細パネルと作成ダイアログで共用。保存はせず、値を返す):
 
 ```svelte
 <script lang="ts">
-  import { type PropertyInput, type PropertyRow, readOnlyNote } from "@hedgehug/core";
-  import { Checkbox, Input, Select, ValueMenu } from "@hedgehug/ui";
+  import { type PropertyInput, type PropertyRow, readOnlyNote, type WorkspaceSettings } from "@hedgehug/core";
+  import { Input, Select, ValueMenu } from "@hedgehug/ui";
+  import StatusButton from "./StatusButton.svelte";
 
-  // 1 つのプロパティの入力(02「入力の方法と保存」の表、決定 20)。
-  // onchange は、選ぶもの・チェックは選んだとき、入力欄はフォーカスが外れたとき(Enter でも)に呼ぶ。
-  // ontoggle は、関連システム・複数選択の項目を入り切りしたとき。
+  // 1 つのプロパティの入力(02「入力の方法と保存」の表、決定 20)。onchange は、選ぶもの・チェックは選んだとき、
+  // 入力欄はフォーカスが外れたとき(Enter でも)。ontoggle は関連システム・複数選択の入り切り。
+  // statusSelect なら、ステータスをセレクトで出す(作成ダイアログ。02「ダイアログの項目」)。
   interface Props {
     row: PropertyRow;
+    settings: WorkspaceSettings;
     disabled: boolean;
+    statusSelect?: boolean;
     onchange: (value: PropertyInput) => void;
     ontoggle: (valueId: string, on: boolean) => void;
   }
-  let { row, disabled, onchange, ontoggle }: Props = $props();
+
+  let { row, settings, disabled, statusSelect = false, onchange, ontoggle }: Props = $props();
   const p = $derived(row.property);
   const note = $derived(disabled ? readOnlyNote : undefined);
+  const multi = $derived(p.type === "systems" || p.type === "multi");
+  const builtinNumber = $derived(p.builtin && (p.key === "points" || p.key === "estimate"));
   let draft = $state("");
+  let selected = $state("");
   let menu = $state<{ x: number; y: number } | null>(null);
   $effect(() => {
     draft = typeof row.value === "string" ? row.value : "";
+    selected = draft;
   });
 
   function openMenu(event: MouseEvent) {
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
     menu = { x: r.left, y: r.bottom + 4 };
   }
-  function select(id: string) {
-    if (p.type === "systems" || p.type === "multi") {
-      ontoggle(id, !row.options.find((o) => o.id === id)?.checked);
-    } else if (id !== row.value) {
-      onchange(id);
-    }
+  function pick(id: string) {
+    if (multi) ontoggle(id, !row.options.find((o) => o.id === id)?.checked);
+    else if (id !== row.value) onchange(id);
   }
-  // number 型の入力欄で数でない文字が入っているときは、送らずに元に戻す(決定 16)。見積もり時間とポイントは送る。
+  // 数の欄に数でない文字があるとき: ポイント・見積もり時間はサーバーに断らせ(決定 16)、ほかは送らずに戻す。
   function commit(event: Event) {
-    const el = event.currentTarget as HTMLInputElement;
-    const builtinNumber = p.builtin && (p.key === "points" || p.key === "estimate");
-    if (el.validity?.badInput && !builtinNumber) {
+    const bad = (event.currentTarget as HTMLInputElement).validity?.badInput ?? false;
+    if (bad && !builtinNumber) {
       draft = String(row.value ?? "");
       return;
     }
-    const value = el.validity?.badInput ? "x" : draft;
+    const value = bad ? "x" : draft;
     if (value !== row.value) onchange(value);
   }
   function enter(event: KeyboardEvent) {
     if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
   }
 </script>
+
+{#if p.type === "status" && !statusSelect}
+  <StatusButton status={String(row.value)} {settings} {disabled} onchange={(id) => onchange(id)} />
+{:else if p.type === "status" || p.type === "user"}
+  <Select
+    label={p.name}
+    {disabled}
+    title={note}
+    options={row.options.map((o) => ({ value: o.id, label: o.label }))}
+    bind:value={selected}
+    onchange={() => onchange(selected)}
+  />
+{:else if row.options.length > 0 || multi || p.type === "priority" || p.type === "single"}
+  <button type="button" class="value-btn" class:deleted={row.deleted} {disabled} title={note}
+    aria-label="{p.name}: {row.text}" onclick={openMenu}>{row.text}</button>
+  <ValueMenu open={menu !== null} x={menu?.x ?? 0} y={menu?.y ?? 0} label={p.name}
+    options={row.options} {multi} onselect={pick} onclose={() => (menu = null)} />
+{:else if p.type === "check"}
+  <input type="checkbox" aria-label={p.name} checked={row.value === true} {disabled} title={note}
+    onchange={() => onchange(row.value !== true)} />
+{:else if p.type === "date" || p.type === "number" || p.type === "duration"}
+  <input
+    class="field"
+    type={p.type === "date" ? "date" : "number"}
+    step={p.type === "duration" ? "0.25" : "any"}
+    aria-label={p.name}
+    {disabled}
+    title={note}
+    bind:value={draft}
+    onblur={commit}
+    onkeydown={enter}
+  />
+{:else}
+  <Input label={p.name} {disabled} title={note} bind:value={draft} onblur={commit} onkeydown={enter} />
+{/if}
 ```
 
-テンプレートは型で分ける:
-
-- `status`・`priority`・`single`・`systems`・`multi`: ボタン(`row.text`。`row.deleted` なら薄い字)と `ValueMenu`(`options={row.options}`・`multi={p.type === "systems" || p.type === "multi"}`・`label={p.name}`・`onselect={select}`)。ステータスは `StatusButton` を使う。
-- `user`: `Select`(`options={row.options.map((o) => ({ value: o.id, label: o.label }))}`、`value` が変わったら `onchange`)。
-- `date`: `<input type="date" aria-label={p.name} bind:value={draft} onblur={commit} onkeydown={enter}>`。
-- `number`・`duration`: `<input type="number" step={p.type === "duration" ? "0.25" : "any"} …>`。見積もり時間とポイントで数でない文字のときは、サーバーに「x」を送って仕様の文言で断らせる(決定 16)。
-- `check`: `Checkbox`(`checked={row.value === true}`、変わったら `onchange(!row.value)`)。
-- `text`・`url`: `Input`(`onblur` で `commit`)。
-- どれも `disabled`・`title={note}`。
+(`Select` の `onchange` は Task 7 で足す。`Input` の `onblur`・`onkeydown`・`title`・`disabled` は A2 で足してある(Task 9 の実装の前に `Input.svelte` の props を見て、名前が違えば合わせる)。スタイル: `.value-btn` は `StatusButton` と同じ大きさ、`.deleted` は `color: var(--muted)`、`.field` は `Input` と同じ高さ。)
 
 `DetailProperties.svelte`:
 
 ```svelte
 <script lang="ts">
-  import type { DetailView } from "@hedgehug/core";
+  import type { DetailView, PropertyInput } from "@hedgehug/core";
   import { detail, links } from "../../wire";
   import PropertyField from "./PropertyField.svelte";
 
-  // 詳細パネルのプロパティの区画(02「上から順の構成」、決定 19)。
-  interface Props { v: DetailView }
+  // 詳細パネルのプロパティの区画(02「上から順の構成」、決定 19)。保存できなかったら、入力を保存済みの値に戻す。
+  interface Props {
+    v: DetailView;
+  }
+
   let { v }: Props = $props();
-  const settingsRoute = $derived({ name: "workspace" as const, store: v.store.name, workspace: v.workspace.prefix, tab: "settings" as const });
   let version = $state(0);
-  async function change(propertyId: string, value: import("@hedgehug/core").PropertyInput) {
-    if (!(await detail.setProperty(v.item.id, propertyId, value))) version += 1; // 入力を保存済みの値に戻す
+  // B2 のワークスペースの設定タブのアドレス(/s/{store}/w/{prefix}/settings)。Route の形は B2 のマージ後の型に合わせる。
+  const settingsRoute = $derived({
+    name: "workspace" as const,
+    store: v.store.name,
+    workspace: v.workspace.prefix,
+    tab: "settings" as const,
+  });
+
+  async function change(propertyId: string, value: PropertyInput) {
+    if (!(await detail.setProperty(v.item.id, propertyId, value))) version += 1;
   }
 </script>
 
 <section class="peek-sec" aria-label="プロパティ">
   <dl class="props">
-    {#each v.rows as row (row.property.id + version)}
-      <dt>{row.property.name}{#if row.extra}<span class="extra">追加</span>{/if}</dt>
+    {#each v.rows as row (`${row.property.id}-${version}`)}
+      <dt>
+        {row.property.name}
+        {#if row.extra}<span class="extra">追加</span>{/if}
+      </dt>
       <dd>
-        <PropertyField {row} disabled={v.readOnly} onchange={(value) => void change(row.property.id, value)}
-          ontoggle={(id, on) => void detail.toggleValue(row.property.id, id, on)} />
+        <PropertyField
+          {row}
+          settings={v.settings}
+          disabled={v.readOnly}
+          onchange={(value) => void change(row.property.id, value)}
+          ontoggle={(id, on) => void detail.toggleValue(row.property.id, id, on)}
+        />
       </dd>
     {/each}
   </dl>
-  <a class="props-link" href={links.href(settingsRoute)} onclick={(e) => links.click(e, settingsRoute)}>プロパティを追加・変更</a>
+  <a
+    class="props-link"
+    href={links.href(settingsRoute)}
+    onclick={(e) => links.click(e, settingsRoute)}>プロパティを追加・変更</a
+  >
 </section>
 ```
 
-(`settingsRoute` の形は B2 のマージ後の `Route` の型に合わせる。B2 は `/s/{store}/w/{prefix}/{tab}` で設定タブを開く。プロパティを追加・変更は閲覧のみの Store でも押せる。)
+(スタイル: `.props` は 2 列のグリッド(名前 96px と値)。全画面ではそのまま右の列に入る。`.extra` は小さい薄い字。「プロパティを追加・変更」は閲覧のみの Store でも押せる(02 の閲覧のみの例外)。)
 
-`DetailPanel.svelte` のタイトルの下に `<DetailProperties {v} />` を置く。`wire.ts` の `createDetail` に `workspaces`・`catalogPort` を渡す。
+`DetailPanel.svelte` のタイトルの `Input` の下に `<DetailProperties {v} />` を置く。`wire.ts` の `createDetail` の引数に `workspaces`(B2 が `wire.ts` に作った `WorkspacesPort` の実装)と `catalogPort` を渡す。
 
-- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test && pnpm check` / Expected: PASS。`pnpm --filter @hedgehug/e2e test detail` も通る(既存の詳細パネルの e2e)。
-- [ ] **Step 5: コミット** — `git commit -m "feat(web): 詳細パネルでプロパティを入れて保存する(A3 前半 Task 9)"`
+- [ ] **Step 6: 画面を確かめる** — Run: `cd web && pnpm check && pnpm e2e detail.spec.ts` / Expected: PASS(既存の詳細パネルの e2e が通る)
+- [ ] **Step 7: コミット** — `git commit -m "feat(web): 詳細パネルでプロパティを入れて保存する(A3 前半 Task 9)"`
 
 ---
 
 ### Task 10: 作成ダイアログのプロパティと連動、A2 の申し送り
 
 **Files:**
-- Create: `web/packages/core/src/features/items/createValues.ts`、`web/app/src/screens/item/CreatePropertyFields.svelte`
+- Create: `web/packages/core/src/features/items/createValues.ts`、`web/packages/core/src/features/items/createDialogLoad.ts`、`web/app/src/screens/item/CreatePropertyFields.svelte`
 - Modify: `web/packages/core/src/features/items/createDialog.ts`、`web/app/src/screens/item/CreateItemFields.svelte`、`web/app/src/wire.ts`
-- Test: `web/packages/core/src/features/items/createValues.test.ts`、`web/packages/core/src/features/items/createDialog.test.ts`(追記)
+- Test: `web/packages/core/src/features/items/createValues.test.ts`、`web/packages/core/src/features/items/createDialog.test.ts`(追記と `setup` の変更)
 
 **Interfaces:**
 - Consumes: Task 8・9
-- Produces: `createValues.ts` の `initialValues(settings)`・`switchWorkspace(values, next, keepAssignee)`・`shownValues(values, settings, kind)`、`ItemDialogState.rows: PropertyRow[]`、`ItemForm.values: Record<string, PropertyInput>`
+- Produces: `initialValues(settings)`・`switchWorkspace(values, next, member)`・`shownValues(values, settings, kind)`、`ItemForm.values`、`ItemDialogState.rows`・`settings`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`createValues.test.ts`(設定は Task 8 のテストと同じ):
+`createValues.test.ts`:
 
 ```ts
+import { describe, expect, it } from "vitest";
+import { initialValues, shownValues, switchWorkspace } from "./createValues";
+import { settings, settings2 } from "./settings.test-util";
+
 describe("create values", () => {
   it("starts with the initial status and priority", () => {
-    expect(initialValues(settings)).toEqual({ status: "S1", priority: "P2" });
+    expect(initialValues(settings)).toEqual({ status: "st1", priority: "pr2" });
   });
 
-  it("keeps assignee, dates, points and estimate when the workspace changes, and resets the rest", () => {
-    const values = { status: "S2", priority: "P1", assignee: "taro", start: "2026-11-11", estimate: "2", systems: ["Y1"], F1: "C1" };
-    expect(switchWorkspace(values, settings2, (login) => login === "taro")).toEqual({
-      status: settings2.initialStatus, priority: settings2.initialPriority, assignee: "taro", start: "2026-11-11", estimate: "2",
+  it("keeps assignee, dates, points and estimate when the workspace changes", () => {
+    const values = { status: "st2", priority: "pr1", assignee: "taro", start: "2026-11-11", estimate: "2", systems: ["sy1"], F1: "C1" };
+    expect(switchWorkspace(values, settings2, () => true)).toEqual({
+      status: "ns1", priority: "np1", assignee: "taro", start: "2026-11-11", estimate: "2",
     });
-    expect(switchWorkspace(values, settings2, () => false).assignee).toBeUndefined();
+  });
+
+  it("drops the assignee who is not a member of the new store", () => {
+    expect(switchWorkspace({ assignee: "taro" }, settings2, () => false).assignee).toBeUndefined();
   });
 
   it("sends only the values shown for the kind", () => {
-    const values = { status: "S1", priority: "P2", points: "3", end: "2026-11-20" };
-    // points は Story だけ、end は非表示
-    expect(shownValues(values, settings, "Task")).toEqual({ status: "S1", priority: "P2" });
-    expect(shownValues(values, settings, "Story")).toEqual({ status: "S1", priority: "P2", points: "3" });
+    const values = { status: "st1", priority: "pr2", points: "3", end: "2026-11-20", F2: "" };
+    expect(shownValues(values, settings, "Task")).toEqual({ status: "st1", priority: "pr2" });
+    expect(shownValues(values, settings, "Story")).toEqual({ status: "st1", priority: "pr2", points: "3" });
   });
 });
 ```
 
-`createDialog.test.ts` に:
+`createDialog.test.ts` の `setup` の `createItemDialog` に `workspaces: fakeWorkspaces()` と `catalogPort: fakeCatalogPort()` を足し、テストを足す:
 
 ```ts
-it("keeps values typed while sending when the server refuses", async () => {
-  // items.create を、解決を待たせる偽物にする
-  const pending = deferred<Item>();
-  const dialog = setup({ create: () => pending.promise });
-  await dialog.open({});
-  await dialog.update({ title: "a" });
-  const sending = dialog.submit();
-  await dialog.update({ title: "ab" });
-  pending.reject(new Refused("ポイントは 0 以上の数で入力してください"));
-  await sending;
-  const s = get(dialog.state)!;
-  expect(s.form.title).toBe("ab");
-  expect(s.error).toBe("ポイントは 0 以上の数で入力してください");
-});
+  it("starts with the initial values and property rows", async () => {
+    const { dialog } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const s = get(dialog.state);
+    expect(s?.form.values).toEqual({ status: "st1", priority: "pr2" });
+    expect(s?.rows.map((r) => r.property.id)).toContain("assignee");
+  });
 
-it("sends property values with the item", async () => {
-  const dialog = setup();
-  await dialog.open({});
-  await dialog.update({ values: { ...get(dialog.state)!.form.values, assignee: "taro" } });
-  await dialog.submit();
-  expect(created[0].values).toMatchObject({ status: "S1", priority: "P2", assignee: "taro" });
-});
+  it("sends the shown values with the item", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const values = { ...get(dialog.state)!.form.values, assignee: "taro" };
+    await dialog.update({ title: "値つき", values });
+    await dialog.submit();
+    expect(items.createdValues[0]).toEqual({ status: "st1", priority: "pr2", assignee: "taro" });
+  });
 
-it("restores values when switching back to a kind that uses the property", async () => {
-  const dialog = setup();
-  await dialog.open({ kind: "Story" });
-  await dialog.update({ values: { ...get(dialog.state)!.form.values, points: "3" } });
-  await dialog.update({ kind: "Task" });
-  expect(get(dialog.state)!.rows.map((r) => r.property.id)).not.toContain("points");
-  await dialog.update({ kind: "Story" });
-  expect(get(dialog.state)!.form.values.points).toBe("3");
-});
+  it("hides a property the kind does not use and restores its value", async () => {
+    const { dialog } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open({ kind: "Story" });
+    await dialog.update({ values: { ...get(dialog.state)!.form.values, points: "3" } });
+    await dialog.update({ kind: "Task" });
+    expect(get(dialog.state)?.rows.map((r) => r.property.id)).not.toContain("points");
+    await dialog.update({ kind: "Story" });
+    expect(get(dialog.state)?.form.values.points).toBe("3");
+  });
+
+  // A2 の申し送り(決定 27)。
+  it("keeps what was typed while sending when the server refuses", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    await dialog.update({ title: "a" });
+    const held = items.holdCreate();
+    items.refuseNext("ポイントは 0 以上の数で入力してください");
+    const sending = dialog.submit();
+    await dialog.update({ title: "ab" });
+    held.release();
+    await sending;
+    expect(get(dialog.state)?.form.title).toBe("ab");
+    expect(get(dialog.state)?.error).toBe("ポイントは 0 以上の数で入力してください");
+  });
 ```
 
 - [ ] **Step 2: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test create` / Expected: FAIL
@@ -2633,8 +3067,8 @@ import type { Kind, PropertyInput } from "../../model/item";
 import type { WorkspaceSettings } from "../../model/workspace";
 import { visibleProperties } from "./properties";
 
-// 作成ダイアログの値(02「ダイアログの中での連動」のテンプレート以外、決定 25)。
-// values はプロパティの内部 ID → 入力。隠した欄の値も覚えておく(種類を戻すと値が戻る)。
+// 作成ダイアログの値(02「ダイアログの中での連動」のテンプレート以外、決定 25)。values はプロパティの
+// 内部 ID → 入力。隠した欄の値も覚えておく(使える種類に戻すと値が戻る)。
 
 export type Values = Record<string, PropertyInput>;
 
@@ -2645,7 +3079,7 @@ export function initialValues(settings: WorkspaceSettings): Values {
 }
 
 // switchWorkspace は、ワークスペースを変えたときの値。担当者・開始日・終了日・ポイント・見積もり時間を残し、
-// ほかは初期値に戻す。担当者は member(login) が true のときだけ残す(Store が違えばログイン名が一致するメンバー)。
+// ほかは初期値に戻す。担当者は member(login) が true のときだけ残す。
 export function switchWorkspace(values: Values, next: WorkspaceSettings, member: (login: string) => boolean): Values {
   const out = initialValues(next);
   for (const k of kept) {
@@ -2669,21 +3103,97 @@ export function shownValues(values: Values, settings: WorkspaceSettings, kind: K
 }
 ```
 
+`createDialogLoad.ts`:
+
+```ts
+import type { WorkspacesPort } from "../../port/workspaces";
+import type { CatalogPort } from "../../port/catalog";
+import type { WorkspaceSettings } from "../../model/workspace";
+import type { People } from "./properties";
+
+export interface WorkspaceContext {
+  settings: WorkspaceSettings;
+  people: People;
+}
+
+// createContextLoader は、ワークスペースの設定とメンバー・あなたを読み、ワークスペースごとに覚える。
+export function createContextLoader(workspaces: WorkspacesPort, catalog: CatalogPort) {
+  const cache = new Map<string, Promise<WorkspaceContext>>();
+  return (storeId: string, workspaceId: string): Promise<WorkspaceContext> => {
+    const key = `${storeId}/${workspaceId}`;
+    let p = cache.get(key);
+    if (!p) {
+      p = Promise.all([
+        workspaces.get(storeId, workspaceId),
+        catalog.listMembers(storeId),
+        catalog.me(storeId).catch(() => ""),
+      ]).then(([d, members, me]) => ({ settings: d.settings, people: { members, me } }));
+      cache.set(key, p);
+    }
+    return p;
+  };
+}
+```
+
+(覚えるのはダイアログを開いているあいだだけにする。`open` のたびに `createContextLoader` を作り直す。)
+
 `createDialog.ts`:
 
-- `ItemForm` に `values: Values` を足し、`ItemDialogState` に `rows: PropertyRow[]` を足す。`ItemDialogDeps` に `workspaces: WorkspacesPort` と `catalogPort: CatalogPort` を足す。
-- `refresh` で、ワークスペースの設定(`workspaces.get`)・メンバー・あなたを読み(ワークスペースごとに覚えておき、同じなら読み直さない)、`rows = propertyRows(settings, form.kind, (p) => form.values[p.id] ?? "", people)` を作る。
-- `open` で `values: initialValues(settings)`。
-- `update` で、ワークスペースが変わったら `switchWorkspace(values, nextSettings, (login) => sameStore || nextMembers.some((m) => m.login.toLowerCase() === login.toLowerCase()))`。種類を変えたときは `values` を変えずに `rows` だけ作り直す(隠した値を覚える)。`patch.values` が来たら `rows` を作り直す。
-- `send` で `values: shownValues(s.form.values, settings, kind)` を `items.create` に渡す(Epic と Step で使わないプロパティも、設定の使う種類で落ちる)。
-- 申し送りの直し(決定 27): `send` の断りでは、`const now = get(state); if (now) state.set({ ...now, error: e.message });` とする(送った時点の `s` で上書きしない)。続けて作成のときも、`get(state)` のいまの入力を元に、タイトル・エラーだけを空にする。
-- 300 行を超えないよう、設定とメンバーの読み込みを `createDialogLoad.ts` の `loadWorkspaceContext(deps, storeId, workspaceId)` に分ける。
+- `ItemForm` に `values: Values`、`ItemDialogState` に `rows: PropertyRow[]` と `settings: WorkspaceSettings` を足す。`ItemDialogDeps` に `workspaces: WorkspacesPort` と `catalogPort: CatalogPort` を足す。
+- `refresh` で `const ctx = await load(store.id, ws.id)` を読み、`rows: propertyRows(ctx.settings, form.kind, (p) => form.values[p.id] ?? "", ctx.people)`・`settings: ctx.settings` を返す。
+- `open` で、読んだ設定から `values: initialValues(ctx.settings)` を入れる(`refresh` の前に `load` を 1 回呼ぶ)。
+- `update`:
+  - ワークスペースが変わったら、新しいワークスペースの `ctx` を読み、`form.values = switchWorkspace(s.form.values, next.settings, (login) => sameStore || next.people.members.some((m) => m.login.toLowerCase() === login.toLowerCase()))`(`sameStore` は前と同じ Store か)。
+  - 種類を変えたときは、`values` を変えずに `rows` だけを新しい種類で作り直す(隠した値を覚えておく)。
+  - `patch.values` が来たら、`rows` を作り直す(`propertyRows` を同じ設定で呼ぶ)。
+- `send` で、`items.create` に `values: shownValues(s.form.values, s.settings, kind)` を渡す。
+- 申し送りの直し(決定 27): 断りを受けたら `const now = get(state); if (now) state.set({ ...now, error: e.message });`(送った時点の `s` で上書きしない)。続けて作成のときも、`get(state)` のいまの入力を元に、タイトル・エラーだけを空にする。
+- 300 行を超えないよう、`rows` を作る小さな関数 `rowsFor(ctx, form)` を `createDialogLoad.ts` に置く。
 
-`CreatePropertyFields.svelte`: `rows` を `PropertyField` で並べ、`onchange` で `itemDialog.update({ values: { ...form.values, [id]: value } })`、`ontoggle` で配列に足す・除く。`CreateItemFields.svelte` のタイトルの下に置く。
+`CreatePropertyFields.svelte`:
 
-`wire.ts` の `createItemDialog` に `workspaces`・`catalogPort` を渡す。
+```svelte
+<script lang="ts">
+  import type { ItemDialogState, PropertyInput } from "@hedgehug/core";
+  import { itemDialog } from "../../wire";
+  import PropertyField from "../item/PropertyField.svelte";
 
-- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test && pnpm check && pnpm --filter @hedgehug/e2e test create` / Expected: PASS
+  // 作成ダイアログのプロパティ欄(02「ダイアログの項目」、決定 25)。ステータスはセレクトで出す。
+  interface Props {
+    s: ItemDialogState;
+  }
+
+  let { s }: Props = $props();
+
+  function set(id: string, value: PropertyInput) {
+    void itemDialog.update({ values: { ...s.form.values, [id]: value } });
+  }
+  function toggle(id: string, valueId: string, on: boolean) {
+    const now = (s.form.values[id] as string[] | undefined) ?? [];
+    set(id, on ? [...now, valueId] : now.filter((x) => x !== valueId));
+  }
+</script>
+
+<div class="create-props">
+  {#each s.rows as row (row.property.id)}
+    <label class="create-prop">
+      <span>{row.property.name}</span>
+      <PropertyField
+        {row}
+        settings={s.settings}
+        disabled={false}
+        statusSelect
+        onchange={(value) => set(row.property.id, value)}
+        ontoggle={(valueId, on) => toggle(row.property.id, valueId, on)}
+      />
+    </label>
+  {/each}
+</div>
+```
+
+`CreateItemFields.svelte` のタイトルの欄の下に `<CreatePropertyFields {s} />` を置く(200 行を超えない)。`wire.ts` の `createItemDialog` に `workspaces`・`catalogPort` を渡す。
+
+- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test && pnpm check && pnpm e2e create.spec.ts` / Expected: PASS
 - [ ] **Step 5: コミット** — `git commit -m "feat(web): 作成ダイアログのプロパティと値の連動を足し、送信中の入力を断りのあとも残す(A3 前半 Task 10)"`
 
 ---
@@ -2691,25 +3201,39 @@ export function shownValues(values: Values, settings: WorkspaceSettings, kind: K
 ### Task 11: ツリーの行と詳細パネルの子の行、Step のチェック
 
 **Files:**
-- Create: `web/packages/core/src/features/items/progress.ts`
-- Modify: `web/packages/core/src/features/projects/screen.ts`(設定を読む、`setStatus`)、`web/app/src/screens/project/TreeRow.svelte`・`ProjectTree.svelte`、`web/app/src/screens/item/DetailChildren.svelte`
-- Test: `web/packages/core/src/features/items/progress.test.ts`、`web/packages/core/src/features/projects/screen.test.ts`(追記)
+- Create: `web/packages/core/src/features/items/progress.ts`、`web/app/src/screens/item/StepRow.svelte`
+- Modify: `web/packages/core/src/features/projects/screen.ts`、`web/app/src/screens/project/TreeRow.svelte`・`ProjectTree.svelte`・`ProjectScreen.svelte`、`web/app/src/screens/item/DetailChildren.svelte`、`web/app/src/wire.ts`
+- Test: `web/packages/core/src/features/items/progress.test.ts`、`web/packages/core/src/features/projects/screen.test.ts`(追記と `setup` の変更)
 
 **Interfaces:**
 - Consumes: Task 7〜9
-- Produces: `stepProgress`・`dueLabel`・`formatDate`・`childCount`、`ProjectView.settings`、`ProjectScreen.setStatus(itemId, statusId): Promise<void>`
+- Produces: `categoryOf`・`childCount`・`stepProgress`・`dueLabel`・`formatDate`、`ProjectView.settings`、`ProjectScreen.setStatus(itemId, statusId): Promise<void>`、`createProjectScreen(catalog, catalogPort, items, workspaces, toasts)`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 `progress.test.ts`:
 
 ```ts
+import { describe, expect, it } from "vitest";
+import { item } from "./fixtures.test-util";
+import { childCount, dueLabel, formatDate, stepProgress } from "./progress";
+import { settings } from "./settings.test-util";
+
+const step = (n: number, status: string) => ({ ...item("S1", "S1-P1", n, "Step", "S1-I2"), status });
+
 describe("progress", () => {
   const today = new Date(2026, 10, 13);
-  it("counts done steps and leaves canceled ones out", () => {
-    const items = [step("S1", "S3"), step("S2", "S1"), step("S3", "SC")]; // 完了・未着手・中止
-    expect(stepProgress(items, "T1", settingsWithCancel)).toEqual({ done: 1, total: 2 });
-    expect(stepProgress([], "T1", settingsWithCancel)).toBeNull();
+
+  it("counts done children and leaves canceled ones out", () => {
+    const steps = [step(3, "st3"), step(4, "st1"), step(5, "st4")];
+    expect(childCount(steps, settings)).toEqual({ done: 1, total: 2 });
+    expect(stepProgress(steps, "S1-I2", settings)).toEqual({ done: 1, total: 2 });
+    expect(stepProgress([], "S1-I2", settings)).toBeNull();
+  });
+
+  it("formats dates like 01", () => {
+    expect(formatDate("2026-05-12", today)).toBe("5/12");
+    expect(formatDate("2027-01-05", today)).toBe("2027/01/05");
   });
 
   it("labels the due date", () => {
@@ -2717,16 +3241,36 @@ describe("progress", () => {
     expect(dueLabel("2026-11-12", "todo", today)).toEqual({ text: "期限切れ 11/12", emphasis: "overdue" });
     expect(dueLabel("2026-11-13", "doing", today)).toEqual({ text: "今日 11/13", emphasis: "today" });
     expect(dueLabel("2026-11-12", "done", today)).toEqual({ text: "11/12", emphasis: null });
-    expect(dueLabel("2027-01-05", "todo", today)).toEqual({ text: "2027/01/05", emphasis: null });
   });
 });
 ```
 
-`screen.test.ts` に、`setStatus` が `items.setProperty(storeId, itemId, "status", statusId)` を呼んで読み直すこと、断りがエラーのトーストになることを足す。
+`screen.test.ts` の `setup` を `createProjectScreen(catalog, port, items, fakeWorkspaces(), toasts)` にし(`toasts` は `createToasts({ set: () => 0, clear: () => {} })`)、テストを足す:
+
+```ts
+  it("loads the workspace settings", async () => {
+    const { screen } = await setup();
+    await screen.load("S1", "S1-P1");
+    expect(get(screen.view)?.settings.initialStatus).toBe("st1");
+  });
+
+  it("changes a status and reloads, showing a refusal as a toast", async () => {
+    const { screen, items, toasts } = await setup();
+    await screen.load("S1", "S1-P1");
+    await screen.setStatus("S1-I2", "st2");
+    expect(items.calls).toEqual(['setProperty S1-I2 status "st2"']);
+    expect(get(screen.view)?.items.find((it) => it.id === "S1-I2")?.status).toBe("st2");
+    items.refuseNext("テストの断り");
+    await screen.setStatus("S1-I2", "st3");
+    expect(get(toasts.list)[0]?.error).toBe(true);
+  });
+```
+
+(「テストの断り」は偽の口が返すだけの値。前半には遷移の制約がないので、仕様の断りの文言は使わない。)
 
 - [ ] **Step 2: 失敗を確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test progress screen` / Expected: FAIL
 
-- [ ] **Step 3: 実装する**
+- [ ] **Step 3: core を実装する**
 
 `progress.ts`:
 
@@ -2734,21 +3278,24 @@ describe("progress", () => {
 import type { Item } from "../../model/item";
 import type { Category, WorkspaceSettings } from "../../model/workspace";
 
-// 04「集計の定義」の「完了/対象」と期限の表示。
+// 04「集計の定義」の「完了/対象」と、期限の表示。
 
 export function categoryOf(settings: WorkspaceSettings, statusId: string): Category | undefined {
   return settings.statuses.find((s) => s.id === statusId)?.category;
 }
 
-// childCount は、子のうち完了の数と、中止を除いた数(詳細パネルの見出しの「3/8」とツリーの「完了/対象」)。
-export function childCount(children: Item[], settings: WorkspaceSettings): { done: number; total: number } {
+// childCount は、子のうち完了の数と、中止を除いた数(詳細パネルの見出しの「3/8」)。
+// 一覧にないステータスは未完了として数える(決定 11)。
+export function childCount(children: Item[], settings: WorkspaceSettings) {
   const counted = children.filter((c) => categoryOf(settings, c.status) !== "canceled");
-  return { done: counted.filter((c) => categoryOf(settings, c.status) === "done").length, total: counted.length };
+  const done = counted.filter((c) => categoryOf(settings, c.status) === "done").length;
+  return { done, total: counted.length };
 }
 
 // stepProgress は、ツリーの Story・Task・Bug の行の「完了/対象」。対象が 0 件なら null。
 export function stepProgress(items: Item[], parentId: string, settings: WorkspaceSettings) {
-  const c = childCount(items.filter((it) => it.parentId === parentId && it.kind === "Step"), settings);
+  const steps = items.filter((it) => it.parentId === parentId && it.kind === "Step");
+  const c = childCount(steps, settings);
   return c.total === 0 ? null : c;
 }
 
@@ -2756,7 +3303,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 // formatDate は、01「日付と時刻」の日付の表示(今年なら M/D、ほかの年は YYYY/MM/DD)。
 export function formatDate(iso: string, today: Date): string {
-  const [y, m, d] = iso.split("-").map(Number);
+  const [y = 0, m = 0, d = 0] = iso.split("-").map(Number);
   return y === today.getFullYear() ? `${m}/${d}` : `${y}/${pad(m)}/${pad(d)}`;
 }
 
@@ -2764,7 +3311,7 @@ export function formatDate(iso: string, today: Date): string {
 export function dueLabel(end: string, category: Category | undefined, today: Date) {
   if (end === "") return null;
   const text = formatDate(end, today);
-  const open = category === "todo" || category === "doing" || category === undefined;
+  const open = category !== "done" && category !== "canceled";
   const t = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   if (open && end < t) return { text: `期限切れ ${text}`, emphasis: "overdue" as const };
   if (open && end === t) return { text: `今日 ${text}`, emphasis: "today" as const };
@@ -2772,21 +3319,96 @@ export function dueLabel(end: string, category: Category | undefined, today: Dat
 }
 ```
 
-(分類のない値、つまり一覧にないステータスは未完了として扱う。決定 11。)
+`screen.ts`: 引数に `workspaces: WorkspacesPort` と `toasts: Toasts` を足し、`load` の `Promise.all` に `workspaces.get(storeId, workspace.id)` を足して `ProjectView.settings` に入れる。`setStatus` を足す:
 
-`screen.ts`: `createProjectScreen` に `workspaces: WorkspacesPort` と `toasts: Toasts` を渡し、`load` で設定を読み、`ProjectView` に `settings` を足す。`setStatus(itemId, statusId)` は `items.setProperty` を呼び、断りはエラーのトースト、成功したら `reload`。あなたのログイン名は不要。
+```ts
+    async setStatus(itemId, statusId) {
+      if (!shown) return;
+      try {
+        await items.setProperty(shown.storeId, itemId, "status", statusId);
+      } catch (e) {
+        if (!(e instanceof Refused)) throw e;
+        toasts.show(e.message, { error: true });
+        return;
+      }
+      await reload();
+    },
+```
 
-`TreeRow.svelte`: タイトルの後ろに、`stepProgress` があれば「{done}/{total}」、`dueLabel` があればその文字(`overdue` は `var(--c-red-text)`、`today` は太字)、ポイントがあれば「{N} pt」、`StatusButton`、担当者の `Avatar`(`name` はメンバーの表示名、メンバーにいなければ空で `title` は「不明なユーザー」)を出す。並びは 04「行」の順(進捗・期限・ポイント・ステータス・担当者)。行の props に `settings`・`members`・`today`・`onstatus` を足し、`ProjectTree.svelte` から渡す。
+`wire.ts` の `createProjectScreen` の呼び出しに `workspaces`・`toasts` を足す。
+
+- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test` / Expected: PASS
+
+- [ ] **Step 5: 画面をつくる**
+
+`TreeRow.svelte` に props `settings: WorkspaceSettings`・`members: Member[]`・`items: Item[]`・`today: Date`・`onstatus: (item: Item, statusId: string) => void` を足し(下の行へもそのまま渡す)、タイトルの `<a>` の後ろに 04「行」の順で足す:
+
+```svelte
+  {#if it.kind !== "Epic" && it.kind !== "Step"}
+    {@const pr = stepProgress(items, it.id, settings)}
+    {#if pr}<span class="progress">{pr.done}/{pr.total}</span>{/if}
+  {/if}
+  {@const due = dueLabel(it.end, categoryOf(settings, it.status), today)}
+  {#if due}<span class="due" class:overdue={due.emphasis === "overdue"} class:today={due.emphasis === "today"}>{due.text}</span>{/if}
+  {#if it.points !== null}<span class="points">{it.points} pt</span>{/if}
+  <StatusButton status={it.status} {settings} disabled={readOnly} onchange={(id) => onstatus(it, id)} />
+  {#if it.assignee}
+    {@const m = members.find((x) => x.login.toLowerCase() === it.assignee.toLowerCase())}
+    <Avatar name={m?.name ?? ""} title={m?.name ?? "不明なユーザー"} />
+  {/if}
+```
+
+(「{N} pt」は 02「作業時間」の見出しの「· {N} pt」と同じ書き方。`.overdue` は `color: var(--c-red-text)`、`.today` は `font-weight: 600`。TreeRow が 200 行を超えるなら、値の並びを `TreeRowValues.svelte` に分ける。)`ProjectTree.svelte` は `view.settings`・`view.members`・`view.items`・`new Date()`(画面を出したとき。決定 22)・`(it, id) => void projectScreen.setStatus(it.id, id)` を渡す。
+
+`StepRow.svelte`(DetailChildren の Step の 1 行を分ける):
+
+```svelte
+<script lang="ts">
+  import { categoryOf, type DetailView, type Item, itemDisplayId, readOnlyNote } from "@hedgehug/core";
+  import { Avatar, IconButton } from "@hedgehug/ui";
+  import { detail, links } from "../../wire";
+  import StatusButton from "./StatusButton.svelte";
+
+  // Step の 1 行(02「子と Step」の「Step の行」。「×」は A4)。チェックがオンなのは分類が完了のときだけ。
+  interface Props {
+    v: DetailView;
+    c: Item;
+    first: boolean;
+  }
+
+  let { v, c, first }: Props = $props();
+  const done = $derived(categoryOf(v.settings, c.status) === "done");
+  const id = $derived(itemDisplayId(v.workspace.prefix, c.number));
+  const route = $derived({ name: "item" as const, store: v.store.name, item: id });
+  const note = $derived(v.readOnly ? readOnlyNote : undefined);
+  const m = $derived(v.people.members.find((x) => x.login.toLowerCase() === c.assignee.toLowerCase()));
+</script>
+
+<div class="child-row" role="group" aria-label={c.title}>
+  <input type="checkbox" aria-label={c.title} checked={done} disabled={v.readOnly} title={note}
+    onchange={() => void detail.checkStep(c.id, !done)} />
+  <a class="row-title" href={links.href(route)}
+    onclick={(e) => links.click(e, route, () => void detail.open(v.store.id, c.id))}
+    onauxclick={(e) => links.click(e, route)}>{c.title}</a>
+  <code class="id">{id}</code>
+  <StatusButton status={c.status} settings={v.settings} disabled={v.readOnly}
+    onchange={(s) => void detail.setProperty(c.id, "status", s)} />
+  {#if c.assignee}<Avatar name={m?.name ?? ""} title={m?.name ?? "不明なユーザー"} />{/if}
+  <IconButton label="上へ" size="xs" disabled={v.readOnly || first} title={note}
+    onclick={() => void detail.moveUp(c.id)}>↑</IconButton>
+</div>
+```
+
+(既存の DetailChildren の Step の行の「上へ」の書き方(`IconButton` の props)をそのまま移す。)
 
 `DetailChildren.svelte`:
 
-- 見出しを「{Story・Task・Bug または Step} {done}/{total}」にする(`childCount`)。
-- Epic の子の行に `StatusButton`(`onchange` で `detail.setProperty(c.id, "status", id)`)と担当者の `Avatar`。
-- Step の行の先頭に `Checkbox`(`checked` は分類が完了のとき。押したら `detail.checkStep(c.id, !checked)`)、ID の後ろに `StatusButton` と `Avatar`。閲覧のみの Store では無効にし、「閲覧のみの Store です」を添える。
-- 200 行を超えるなら、Step の 1 行を `StepRow.svelte` に分ける。
+- 見出しの `h3` を、1 つの文字列 `` `${isEpic ? "Story・Task・Bug" : "Step"} ${count.done}/${count.total}` ``(`count = childCount(v.children, v.settings)`)にする。区画の `aria-label` は今のまま(「Story・Task・Bug」「Step」)。
+- Epic の子の行の ID・タイトルの後ろに `StatusButton`(`onchange` で `detail.setProperty(c.id, "status", id)`)と担当者の `Avatar` を足す。
+- Step の行は `StepRow` に置き換える。
 
-- [ ] **Step 4: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/core test && pnpm check && pnpm --filter @hedgehug/e2e test project detail` / Expected: PASS
-- [ ] **Step 5: コミット** — `git commit -m "feat(web): ツリーと詳細パネルの子の行に値を出し、ステータスの変更と Step のチェックを足す(A3 前半 Task 11)"`
+- [ ] **Step 6: 画面を確かめる** — Run: `cd web && pnpm check && pnpm e2e project.spec.ts detail.spec.ts` / Expected: PASS
+- [ ] **Step 7: コミット** — `git commit -m "feat(web): ツリーと詳細パネルの子の行に値を出し、ステータスの変更と Step のチェックを足す(A3 前半 Task 11)"`
 
 ---
 
@@ -2794,25 +3416,64 @@ export function dueLabel(end: string, category: Category | undefined, today: Dat
 
 **Files:**
 - Create: `web/e2e/properties.spec.ts`
-- Modify: `web/e2e/helpers.ts`(追加プロパティを API で作る関数。B2 の `add-property` を使う)
+- Modify: `web/e2e/helpers.ts`(`newTask`・`addProperty`)
 
 **Interfaces:**
-- Consumes: Task 9〜11、B2 の `add-property` API
+- Consumes: Task 9〜11、B2 の `add-workspace-property`(`POST /api/stores/{store}/workspaces/{workspace}/properties`、本文 `{name, key, type, kinds}`)
 
-- [ ] **Step 1: テストを書く**
+3 つの幅は 1 つのサーバーを共有する(A2 の決定 21)。値を変えるテストは、それぞれ `newTask` で自分の Task を作ってから使う(Sample の HH-2 を変えると、ほかの幅の結果が変わる)。
+
+- [ ] **Step 1: 道具を足す**
+
+`helpers.ts`:
+
+```ts
+import { type APIRequestContext, expect, type Page, type TestInfo } from "@playwright/test";
+
+// e2e のサーバーの Store「e2e」とサンプルのワークスペース「Web」の内部 ID(cmd/hedgehug/wire_e2e.go・apptest.Sample)。
+const e2eStore = "01E2ESTORE0000000000000001";
+const sampleWorkspace = "01SAMPLEWS0000000000000001";
+
+// newTask は、Epic「認証」の下に Task を作り、その詳細パネルを開いた状態にする。
+export async function newTask(page: Page, info: TestInfo, title: string) {
+  const name = unique(info, title);
+  await page.goto(tokenUrl("/s/e2e/p/HH-P1/tree"));
+  await page.getByRole("list", { name: "ツリー" }).getByRole("link", { name: "認証" }).click();
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await panel.getByRole("button", { name: "Task" }).click();
+  const dialog = page.getByRole("dialog", { name: "新規作成" });
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill(name);
+  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(name);
+  return { name, panel };
+}
+
+// addProperty は、サンプルのワークスペースに追加プロパティを作る(B2 の API)。
+export async function addProperty(request: APIRequestContext, body: { name: string; key: string; type: string }) {
+  const res = await request.post(`/api/stores/${e2eStore}/workspaces/${sampleWorkspace}/properties`, {
+    headers: { Authorization: "Bearer e2e-token" },
+    data: { ...body, kinds: [] },
+  });
+  if (!res.ok()) throw new Error(`addProperty: ${res.status()} ${await res.text()}`);
+}
+```
+
+(`e2eStore` の値は `wire_e2e.go` の `e2eStore` の定数と同じにする。既存の `tokenUrl`・`unique` はこのファイルにある。)
+
+- [ ] **Step 2: テストを書く**
 
 ```ts
 import { expect, test } from "@playwright/test";
-import { addProperty, tokenUrl, unique } from "./helpers";
+import { addProperty, newTask, tokenUrl, unique } from "./helpers";
 
 test("sets properties in the detail panel", async ({ page }, info) => {
-  await page.goto(tokenUrl("/s/e2e/i/HH-2"));
-  const panel = page.getByRole("complementary", { name: "詳細パネル" });
+  const { panel } = await newTask(page, info, "値");
   const props = panel.getByRole("region", { name: "プロパティ" });
-  await props.getByRole("button", { name: /^ステータス:/ }).click();
+  await props.getByRole("button", { name: "ステータス: Todo" }).click();
   await page.getByRole("menuitemcheckbox", { name: /InProgress/ }).click();
   await expect(props.getByRole("button", { name: "ステータス: InProgress" })).toBeVisible();
   await props.getByRole("combobox", { name: "担当者" }).selectOption("taro");
+  await expect(props.getByRole("combobox", { name: "担当者" })).toHaveValue("taro");
   await props.getByLabel("開始日").fill("2026-11-11");
   await props.getByLabel("開始日").blur();
   await props.getByLabel("終了日").fill("2026-11-10");
@@ -2822,11 +3483,11 @@ test("sets properties in the detail panel", async ({ page }, info) => {
   await props.getByLabel("見積もり時間").fill("0.123");
   await props.getByLabel("見積もり時間").press("Enter");
   await expect(page.getByText("見積もり時間は小数第 2 位までで入力してください")).toBeVisible();
-  await props.getByRole("button", { name: /関連システム/ }).click();
+  await props.getByRole("button", { name: /^関連システム:/ }).click();
   await page.getByRole("menuitemcheckbox", { name: "Web" }).click();
   await page.getByRole("menuitemcheckbox", { name: "API" }).click();
   await page.keyboard.press("Escape");
-  await expect(props.getByText("Web, API")).toBeVisible();
+  await expect(props.getByRole("button", { name: "関連システム: Web, API" })).toBeVisible();
 });
 
 test("creates a task with properties", async ({ page }, info) => {
@@ -2834,56 +3495,75 @@ test("creates a task with properties", async ({ page }, info) => {
   await page.goto(tokenUrl("/s/e2e/p/HH-P1/tree"));
   await page.keyboard.press("c");
   const dialog = page.getByRole("dialog", { name: "新規作成" });
-  await expect(dialog.getByRole("button", { name: "ステータス: Todo" })).toBeVisible();
-  await dialog.getByLabel("ポイント").fill("-1");
+  await expect(dialog.getByRole("combobox", { name: "ステータス" })).toHaveValue(/.+/);
   await dialog.getByRole("textbox", { name: "タイトル" }).fill(title);
+  await dialog.getByLabel("見積もり時間").fill("-1");
   await dialog.getByRole("button", { name: "作成" }).click();
-  await expect(dialog.getByText("ポイントは 0 以上の数で入力してください")).toBeVisible();
-  await dialog.getByLabel("ポイント").fill("3");
+  await expect(dialog.getByText("見積もり時間は 0 以上の数で入力してください")).toBeVisible();
+  await expect(dialog.getByRole("textbox", { name: "タイトル" })).toHaveValue(title);
+  await dialog.getByLabel("見積もり時間").fill("2");
   await dialog.getByRole("button", { name: "作成" }).click();
   await expect(dialog).toBeHidden();
-  const panel = page.getByRole("complementary", { name: "詳細パネル" });
-  await expect(panel.getByLabel("ポイント")).toHaveValue("3");
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await expect(panel.getByLabel("見積もり時間")).toHaveValue("2");
+  await expect(panel.getByRole("button", { name: "ステータス: Todo" })).toBeVisible();
 });
 
-test("checks a step and changes status from the tree", async ({ page }, info) => {
-  await page.goto(tokenUrl("/s/e2e/i/HH-2"));
-  const panel = page.getByRole("complementary", { name: "詳細パネル" });
-  const step = unique(info, "確認");
-  await panel.getByPlaceholder("Step を追加して Enter").fill(step);
-  await panel.getByPlaceholder("Step を追加して Enter").press("Enter");
-  const row = panel.getByRole("region", { name: "Step" }).getByRole("listitem").filter({ hasText: step });
+test("checks a Step and shows the count", async ({ page }, info) => {
+  const { panel } = await newTask(page, info, "Step つき");
+  const input = panel.getByRole("textbox", { name: "Step を追加" });
+  await input.fill("確認");
+  await input.press("Enter");
+  const steps = panel.getByRole("region", { name: "Step" });
+  const row = steps.getByRole("group", { name: "確認" });
   await row.getByRole("checkbox").check();
   await expect(row.getByRole("button", { name: "ステータス: Done" })).toBeVisible();
-  await page.goto(tokenUrl("/s/e2e/p/HH-P1/tree"));
+  await expect(steps.getByRole("heading")).toHaveText("Step 1/1");
+  await row.getByRole("checkbox").uncheck();
+  await expect(row.getByRole("button", { name: "ステータス: Todo" })).toBeVisible();
+});
+
+test("changes a status from the tree", async ({ page }, info) => {
+  const { name } = await newTask(page, info, "ツリー");
+  await page.keyboard.press("Escape");
   const tree = page.getByRole("list", { name: "ツリー" });
-  await expect(tree.getByText(/\d+\/\d+/).first()).toBeVisible();
+  const row = tree.getByRole("listitem").filter({ has: page.getByRole("link", { name }) }).last();
+  await row.getByRole("button", { name: "ステータス: Todo" }).click();
+  await page.getByRole("menuitemcheckbox", { name: /Done/ }).click();
+  await expect(row.getByRole("button", { name: "ステータス: Done" })).toBeVisible();
 });
 
 test("sets an added text property", async ({ page, request }, info) => {
   const name = unique(info, "メモ");
-  await addProperty(request, { name, key: `memo_${info.project.name}`.replace(/\W/g, "_").toLowerCase(), type: "text" });
-  await page.goto(tokenUrl("/s/e2e/i/HH-2"));
-  const props = page.getByRole("region", { name: "プロパティ" });
+  const key = `memo_${info.project.name}_${info.retry}`;
+  await addProperty(request, { name, key, type: "text" });
+  const { panel } = await newTask(page, info, "追加の値");
+  const props = panel.getByRole("region", { name: "プロパティ" });
   await expect(props.getByText("追加").first()).toBeVisible();
-  await props.getByRole("textbox", { name }).fill("  01CHOICE00000000000000000A  ");
-  await props.getByRole("textbox", { name }).blur();
+  const field = props.getByRole("textbox", { name });
+  await field.fill("  01CHOICE00000000000000000A  ");
+  await field.blur();
   await page.reload();
-  await expect(page.getByRole("region", { name: "プロパティ" }).getByRole("textbox", { name })).toHaveValue("01CHOICE00000000000000000A");
+  // 再読み込みでパネルは閉じる(01)。ツリーから開き直す。
+  await page.getByRole("list", { name: "ツリー" }).getByRole("link", { name: unique(info, "追加の値") }).click();
+  await expect(page.getByRole("region", { name: "プロパティ" }).getByRole("textbox", { name })).toHaveValue(
+    "01CHOICE00000000000000000A",
+  );
 });
 
-test("read-only store disables properties", async ({ page }) => {
+test("a read-only store disables properties", async ({ page }) => {
   await page.goto(tokenUrl("/s/readonly/i/HH-2"));
   const props = page.getByRole("region", { name: "プロパティ" });
   await expect(props.getByRole("button", { name: /^ステータス:/ })).toBeDisabled();
   await expect(props.getByRole("combobox", { name: "担当者" })).toBeDisabled();
+  await expect(props.getByRole("link", { name: "プロパティを追加・変更" })).toBeEnabled();
 });
 ```
 
-(3 幅のプロジェクトは 1 つのサーバーを共有する(A2 の決定 21)。値を変える e2e はアイテム HH-2 を共有するので、値を比べる箇所は、そのテストで入れた値だけを見る。ぶつかるなら、各テストの初めに `unique` のタイトルで Task を作り、それを使う。)
+(ツリーの行は `<li class="tree-row">` で、`list` の中の `listitem` になる。子の行も同じ `li` なので、`filter` でタイトルのリンクを持つものを選び、入れ子の外側を避けるために `.last()` を取る。見出しは Task 11 のとおり `h3` に「Step 1/1」の 1 つの文字列で出す。)
 
-- [ ] **Step 2: 通るのを確かめる** — Run: `cd web && pnpm --filter @hedgehug/e2e test` / Expected: 3 幅で PASS
-- [ ] **Step 3: `make check` とコミット** — `git commit -m "test(e2e): A3 前半の完成の条件を 3 つの幅で通しで確かめる(A3 前半 Task 12)"`
+- [ ] **Step 3: 通るのを確かめる** — Run: `cd web && pnpm e2e` / Expected: 全部の spec が 3 幅で PASS
+- [ ] **Step 4: `make check` とコミット** — `git commit -m "test(e2e): A3 前半の完成の条件を 3 つの幅で通しで確かめる(A3 前半 Task 12)"`
 
 ---
 
@@ -2891,7 +3571,7 @@ test("read-only store disables properties", async ({ page }) => {
 
 - [ ] 最終レビュー(`code-review` を high で、`feat/track-a3a` の develop との差分全体)。指摘を直す。
 - [ ] `make check` と e2e(3 幅)を通す。
-- [ ] トラックの PR を 1 本出す(向き先 develop、タイトル「feat: トラック A3 前半(プロパティとステータス)」)。本文に、できること・決めたこと(この計画の表の番号)・後半と A4・B5・E・F に回したもの・確認の結果を書く。force push は拒否されるので、載せ直すときは別名のブランチで出す。
+- [ ] トラックの PR を 1 本出す(向き先 develop、タイトル「feat: トラック A3 前半(プロパティとステータス)」)。本文に、できること・決めたこと(この計画の表の番号)・後半(A3b)と A4・B5・E・F に回したもの・確認の結果を書く。force push は拒否されるので、載せ直すときは別名のブランチで出す。
 
 ## 完成の条件
 
