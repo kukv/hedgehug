@@ -5,7 +5,6 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
@@ -28,28 +27,4 @@ func (a *Accounts) Add(_ context.Context, acc account.Account) error {
 	defer a.mu.Unlock()
 	a.list = append(a.list, acc)
 	return nil
-}
-
-func (a *Accounts) Update(_ context.Context, acc account.Account) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for i := range a.list {
-		if a.list[i].ID == acc.ID {
-			a.list[i] = acc
-			return nil
-		}
-	}
-	return port.ErrNotFound
-}
-
-func (a *Accounts) Remove(_ context.Context, id account.ID) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for i := range a.list {
-		if a.list[i].ID == id {
-			a.list = slices.Delete(a.list, i, i+1)
-			return nil
-		}
-	}
-	return port.ErrNotFound
 }

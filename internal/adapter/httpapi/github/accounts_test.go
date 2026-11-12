@@ -12,35 +12,21 @@ import (
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
-	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 )
 
 func newAPI(t *testing.T, gh *apptest.GitHub) humatest.TestAPI {
 	t.Helper()
 	_, api := humatest.New(t)
-	ghapi.Register(api, newServices(gh))
-	return api
-}
-
-func newServices(gh *apptest.GitHub) ghapi.Services {
 	accounts := apptest.NewAccounts()
 	secrets := &apptest.Secrets{Tokens: map[string]string{"taro": "tok-taro"}}
-	clock := apptest.NewClock(time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC))
-	stores := &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: "S1", Name: "チーム", Remote: true}}}
-	session := ghapp.NewSession()
-	device := apptest.NewDeviceFlow()
-	hosts := apptest.Hosts{ID: "Iv23abc"}
-	ids := apptest.NewIDs()
-	return ghapi.Services{
-		List:   ghapp.ListAccounts{Accounts: accounts, Session: session},
-		Add:    ghapp.AddAccount{Accounts: accounts, Secrets: secrets, GitHub: gh, IDs: ids, Clock: clock},
-		Edit:   ghapp.EditAccount{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Clock: clock},
-		Delete: ghapp.DeleteAccount{Session: session, Accounts: accounts, Secrets: secrets, Stores: stores},
-		Reauth: ghapp.Reauth{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Clock: clock},
-		Impact: ghapp.Impact{Accounts: accounts, Stores: stores},
-		SignIn: ghapp.SignIn{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Device: device, Hosts: hosts, IDs: ids, Clock: clock},
-	}
+	ghapi.Register(api,
+		ghapp.ListAccounts{Accounts: accounts},
+		ghapp.AddAccount{
+			Accounts: accounts, Secrets: secrets, GitHub: gh, IDs: apptest.NewIDs(),
+			Clock: apptest.NewClock(time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)),
+		})
+	return api
 }
 
 func TestAddAndList(t *testing.T) {
@@ -86,53 +72,5 @@ func TestDeviceFlowIsNotAcceptedHere(t *testing.T) {
 	res := newAPI(t, &apptest.GitHub{}).Post("/api/accounts", map[string]string{"name": "w", "login": "taro", "method": "device"})
 	if res.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status %d", res.Code)
-	}
-}
-
-func TestEditDeleteReauthImpact(t *testing.T) {
-	gh := &apptest.GitHub{Users: map[string]string{"tok-taro": "taro"}}
-	api := newAPI(t, gh)
-	res := api.Post("/api/accounts", map[string]string{"name": "work", "login": "taro", "method": "gh"})
-	var acc struct{ ID string }
-	_ = json.Unmarshal(res.Body.Bytes(), &acc)
-
-	res = api.Put("/api/accounts/"+acc.ID, map[string]string{"name": "仕事", "login": "taro", "method": "keychain"})
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"name":"仕事"`) {
-		t.Fatalf("PUT: %d %s", res.Code, res.Body)
-	}
-	res = api.Post("/api/accounts/"+acc.ID+"/reauth", map[string]string{})
-	if res.Code != http.StatusOK {
-		t.Fatalf("reauth: %d %s", res.Code, res.Body)
-	}
-	res = api.Get("/api/accounts/" + acc.ID + "/edit-impact?login=jiro")
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"lines":[]`) {
-		t.Errorf("edit-impact (no store uses it): %d %s", res.Code, res.Body)
-	}
-	res = api.Get("/api/accounts/" + acc.ID + "/delete-impact")
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "「仕事」を削除します。") {
-		t.Errorf("delete-impact: %d %s", res.Code, res.Body)
-	}
-	if res = api.Delete("/api/accounts/" + acc.ID); res.Code != http.StatusNoContent {
-		t.Fatalf("DELETE: %d %s", res.Code, res.Body)
-	}
-	if res = api.Delete("/api/accounts/" + acc.ID); res.Code != http.StatusNotFound {
-		t.Errorf("DELETE again: %d", res.Code)
-	}
-}
-
-func TestListShowsAuthError(t *testing.T) {
-	gh := &apptest.GitHub{Users: map[string]string{"tok-taro": "taro"}}
-	api := newAPI(t, gh)
-	res := api.Post("/api/accounts", map[string]string{"name": "work", "login": "taro", "method": "gh"})
-	var acc struct{ ID string }
-	_ = json.Unmarshal(res.Body.Bytes(), &acc)
-	gh.Err = &ghcall.Failure{Kind: ghcall.TokenRejected}
-	res = api.Post("/api/accounts/"+acc.ID+"/reauth", map[string]string{})
-	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), "トークンが GitHub に受け付けられませんでした") {
-		t.Errorf("reauth: %d %s", res.Code, res.Body)
-	}
-	res = api.Get("/api/accounts")
-	if !strings.Contains(res.Body.String(), `"status":"ok"`) {
-		t.Errorf("a failed reauth changed the state: %s", res.Body)
 	}
 }

@@ -2,7 +2,6 @@ package machineconfig
 
 import (
 	"context"
-	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
@@ -34,35 +33,7 @@ func (a accounts) List(context.Context) ([]account.Account, error) {
 
 func (a accounts) Add(_ context.Context, acc account.Account) error {
 	return a.f.update(func(c *config) error {
-		c.Accounts = append(c.Accounts, toYAML(acc))
+		c.Accounts = append(c.Accounts, accountYAML{ID: string(acc.ID), Name: acc.Name, Login: acc.Login, Method: string(acc.Method)})
 		return nil
 	})
-}
-
-func (a accounts) Update(_ context.Context, acc account.Account) error {
-	return a.f.update(func(c *config) error {
-		for i := range c.Accounts {
-			if c.Accounts[i].ID == string(acc.ID) {
-				c.Accounts[i] = toYAML(acc)
-				return nil
-			}
-		}
-		return port.ErrNotFound
-	})
-}
-
-func (a accounts) Remove(_ context.Context, id account.ID) error {
-	return a.f.update(func(c *config) error {
-		for i := range c.Accounts {
-			if c.Accounts[i].ID == string(id) {
-				c.Accounts = slices.Delete(c.Accounts, i, i+1)
-				return nil
-			}
-		}
-		return port.ErrNotFound
-	})
-}
-
-func toYAML(acc account.Account) accountYAML {
-	return accountYAML{ID: string(acc.ID), Name: acc.Name, Login: acc.Login, Method: string(acc.Method)}
 }

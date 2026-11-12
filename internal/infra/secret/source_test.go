@@ -25,25 +25,6 @@ func (k fakeKeyring) Get(service, user string) (string, error) {
 	return v, nil
 }
 
-func (k fakeKeyring) Set(service, user, value string) error {
-	if k == nil {
-		return errors.New("no secret service on this machine")
-	}
-	k[service+"|"+user] = value
-	return nil
-}
-
-func (k fakeKeyring) Delete(service, user string) error {
-	if k == nil {
-		return errors.New("no secret service on this machine")
-	}
-	if _, ok := k[service+"|"+user]; !ok {
-		return ErrNotFound
-	}
-	delete(k, service+"|"+user)
-	return nil
-}
-
 func acc(m account.Method) account.Account {
 	return account.Account{ID: "A1", Name: "work", Login: "taro", Method: m}
 }
@@ -110,11 +91,6 @@ func TestKeychainToken(t *testing.T) {
 	s.Keyring = fakeKeyring(nil)
 	if _, err := s.Token(context.Background(), acc(account.Keychain)); !ghcall.Is(err, ghcall.KeychainUnavailable) {
 		t.Errorf("no keychain: %v", err)
-	}
-	// デバイスフローが置いた JSON の項目は、access_token をトークンとして読む(D2 の計画の決定 D2-5)。
-	s.Keyring = fakeKeyring{"hedgehug|github.com/taro": `{"access_token":"tok-device","refresh_token":"r"}`}
-	if tok, err := s.Token(context.Background(), acc(account.Keychain)); err != nil || tok != "tok-device" {
-		t.Errorf("device JSON: Token = %q, %v", tok, err)
 	}
 }
 

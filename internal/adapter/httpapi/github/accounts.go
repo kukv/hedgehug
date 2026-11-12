@@ -12,17 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
-// Services は、GitHub 連携の API が使う usecase。
-type Services struct {
-	List   ghapp.ListAccounts
-	Add    ghapp.AddAccount
-	Edit   ghapp.EditAccount
-	Delete ghapp.DeleteAccount
-	Reauth ghapp.Reauth
-	Impact ghapp.Impact
-	SignIn ghapp.SignIn
-}
-
 type accountBody struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -34,153 +23,55 @@ func toBody(a account.Account) accountBody {
 	return accountBody{ID: string(a.ID), Name: a.Name, Login: a.Login, Method: string(a.Method)}
 }
 
-// accountRow は一覧の 1 行(07「状態」)。reason は「認証エラー」の下の赤字(なければ空)。
-type accountRow struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Login  string `json:"login"`
-	Method string `json:"method" enum:"device,gh,env,keychain"`
-	Status string `json:"status" enum:"ok,auth_error"`
-	Reason string `json:"reason"`
-}
-
 type listOutput struct {
 	Body struct {
-		Accounts []accountRow `json:"accounts"`
+		Accounts []accountBody `json:"accounts"`
 	}
-}
-
-type valuesBody struct {
-	Name   string `json:"name"`
-	Login  string `json:"login"`
-	Method string `json:"method" enum:"gh,env,keychain" doc:"デバイスフローはサインインの API で登録・保存する"`
 }
 
 type addInput struct {
-	Body valuesBody
-}
-
-type accountOutput struct {
-	Body accountBody
-}
-
-type idInput struct {
-	ID string `path:"id"`
-}
-
-type editInput struct {
-	ID   string `path:"id"`
-	Body valuesBody
-}
-
-type editImpactInput struct {
-	ID    string `path:"id"`
-	Login string `query:"login"`
-}
-
-type impactOutput struct {
 	Body struct {
-		Lines []string `json:"lines"`
+		Name   string `json:"name"`
+		Login  string `json:"login"`
+		Method string `json:"method" enum:"gh,env,keychain" doc:"デバイスフローはサインインの API で登録する"`
 	}
 }
 
-// Register は、アカウントとサインインの API を登録する。
-func Register(api huma.API, s Services) {
-	registerAccounts(api, s)
-	registerManage(api, s)
-	registerSignIn(api, s.SignIn)
+type addOutput struct {
+	Body accountBody
 }
 
-func registerAccounts(api huma.API, s Services) {
+// Register は、アカウントの API を登録する。
+func Register(api huma.API, list ghapp.ListAccounts, add ghapp.AddAccount) {
 	huma.Register(api, huma.Operation{
-		OperationID: "list-accounts", Method: http.MethodGet, Path: "/api/accounts",
-		Summary: "登録したアカウントを、状態を付けて返す",
+		OperationID: "list-accounts",
+		Method:      http.MethodGet,
+		Path:        "/api/accounts",
+		Summary:     "登録したアカウントを返す",
 	}, func(ctx context.Context, _ *struct{}) (*listOutput, error) {
-		rows, err := s.List.Do(ctx)
+		accs, err := list.Do(ctx)
 		if err != nil {
 			return nil, apierr.From(err)
 		}
 		out := &listOutput{}
-		out.Body.Accounts = make([]accountRow, 0, len(rows))
-		for _, r := range rows {
-			status := "ok"
-			if r.AuthError {
-				status = "auth_error"
-			}
-			a := r.Account
-			out.Body.Accounts = append(out.Body.Accounts, accountRow{
-				ID: string(a.ID), Name: a.Name, Login: a.Login, Method: string(a.Method), Status: status, Reason: r.Reason,
-			})
+		out.Body.Accounts = make([]accountBody, 0, len(accs))
+		for _, a := range accs {
+			out.Body.Accounts = append(out.Body.Accounts, toBody(a))
 		}
 		return out, nil
 	})
 	huma.Register(api, huma.Operation{
-		OperationID: "add-account", Method: http.MethodPost, Path: "/api/accounts",
-		Summary: "GitHub で確かめてからアカウントを登録する", DefaultStatus: http.StatusCreated,
-		Errors: []int{http.StatusUnprocessableEntity},
-	}, func(ctx context.Context, in *addInput) (*accountOutput, error) {
-		a, err := s.Add.Do(ctx, ghapp.AddAccountInput{Name: in.Body.Name, Login: in.Body.Login, Method: account.Method(in.Body.Method)})
+		OperationID:   "add-account",
+		Method:        http.MethodPost,
+		Path:          "/api/accounts",
+		Summary:       "GitHub で確かめてからアカウントを登録する",
+		DefaultStatus: http.StatusCreated,
+		Errors:        []int{http.StatusUnprocessableEntity},
+	}, func(ctx context.Context, in *addInput) (*addOutput, error) {
+		a, err := add.Do(ctx, ghapp.AddAccountInput{Name: in.Body.Name, Login: in.Body.Login, Method: account.Method(in.Body.Method)})
 		if err != nil {
 			return nil, apierr.From(err)
 		}
-		return &accountOutput{Body: toBody(a)}, nil
+		return &addOutput{Body: toBody(a)}, nil
 	})
-	huma.Register(api, huma.Operation{
-		OperationID: "edit-account", Method: http.MethodPut, Path: "/api/accounts/{id}",
-		Summary: "新しい値を GitHub で確かめてから、アカウントの値を入れ替える",
-		Errors:  []int{http.StatusNotFound, http.StatusUnprocessableEntity},
-	}, func(ctx context.Context, in *editInput) (*accountOutput, error) {
-		a, err := s.Edit.Do(ctx, ghapp.EditAccountInput{
-			ID: account.ID(in.ID), Name: in.Body.Name, Login: in.Body.Login, Method: account.Method(in.Body.Method),
-		})
-		if err != nil {
-			return nil, apierr.From(err)
-		}
-		return &accountOutput{Body: toBody(a)}, nil
-	})
-}
-
-func registerManage(api huma.API, s Services) {
-	huma.Register(api, huma.Operation{
-		OperationID: "delete-account", Method: http.MethodDelete, Path: "/api/accounts/{id}",
-		Summary: "アカウントを削除し、割り当てた Store を「なし」にする", DefaultStatus: http.StatusNoContent,
-		Errors: []int{http.StatusNotFound},
-	}, func(ctx context.Context, in *idInput) (*struct{}, error) {
-		return nil, apierr.From(s.Delete.Do(ctx, account.ID(in.ID)))
-	})
-	huma.Register(api, huma.Operation{
-		OperationID: "reauth-account", Method: http.MethodPost, Path: "/api/accounts/{id}/reauth",
-		Summary: "gh CLI・環境変数・OS のキーチェーンのアカウントの認証の確認をやり直す",
-		Errors:  []int{http.StatusNotFound, http.StatusUnprocessableEntity},
-	}, func(ctx context.Context, in *idInput) (*accountOutput, error) {
-		a, err := s.Reauth.Do(ctx, account.ID(in.ID))
-		if err != nil {
-			return nil, apierr.From(err)
-		}
-		return &accountOutput{Body: toBody(a)}, nil
-	})
-	huma.Register(api, huma.Operation{
-		OperationID: "account-delete-impact", Method: http.MethodGet, Path: "/api/accounts/{id}/delete-impact",
-		Summary: "「アカウントを削除」の確認の本文の行", Errors: []int{http.StatusNotFound},
-	}, func(ctx context.Context, in *idInput) (*impactOutput, error) {
-		lines, err := s.Impact.Delete(ctx, account.ID(in.ID))
-		return impact(lines, err)
-	})
-	huma.Register(api, huma.Operation{
-		OperationID: "account-edit-impact", Method: http.MethodGet, Path: "/api/accounts/{id}/edit-impact",
-		Summary: "ログイン名を変えるときの「アカウントを変更」の確認の本文の行(空なら確認を出さない)",
-		Errors:  []int{http.StatusNotFound},
-	}, func(ctx context.Context, in *editImpactInput) (*impactOutput, error) {
-		lines, err := s.Impact.Edit(ctx, account.ID(in.ID), in.Login)
-		return impact(lines, err)
-	})
-}
-
-func impact(lines []string, err error) (*impactOutput, error) {
-	if err != nil {
-		return nil, apierr.From(err)
-	}
-	out := &impactOutput{}
-	out.Body.Lines = append([]string{}, lines...)
-	return out, nil
 }

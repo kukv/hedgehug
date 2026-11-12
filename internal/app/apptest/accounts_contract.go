@@ -2,7 +2,6 @@ package apptest
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"testing"
 
@@ -35,33 +34,4 @@ func RunAccountsContract(t *testing.T, newAccounts func(t *testing.T) port.Accou
 			t.Errorf("List = %+v, %v; want %+v", got, err, want)
 		}
 	})
-	t.Run("updates in place and removes", func(t *testing.T) { runUpdateRemove(t, newAccounts(t)) })
-}
-
-func runUpdateRemove(t *testing.T, accs port.Accounts) {
-	a := account.Account{ID: "01ACC00000000000000000001", Name: "work", Login: "taro", Method: account.GhCLI}
-	b := account.Account{ID: "01ACC00000000000000000002", Name: "家", Login: "taro-home", Method: account.DeviceFlow}
-	for _, x := range []account.Account{a, b} {
-		if err := accs.Add(context.Background(), x); err != nil {
-			t.Fatal(err)
-		}
-	}
-	a2 := account.Account{ID: a.ID, Name: "仕事", Login: "jiro", Method: account.Keychain}
-	if err := accs.Update(context.Background(), a2); err != nil {
-		t.Fatal(err)
-	}
-	if err := accs.Remove(context.Background(), b.ID); err != nil {
-		t.Fatal(err)
-	}
-	got, err := accs.List(context.Background())
-	if err != nil || !slices.Equal(got, []account.Account{a2}) {
-		t.Errorf("List = %+v, %v", got, err)
-	}
-	missing := account.Account{ID: "01ACC00000000000000000009", Name: "x", Login: "x", Method: account.GhCLI}
-	if err := accs.Update(context.Background(), missing); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("Update missing = %v", err)
-	}
-	if err := accs.Remove(context.Background(), missing.ID); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("Remove missing = %v", err)
-	}
 }
