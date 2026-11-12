@@ -66,6 +66,9 @@ type prefixInput struct {
 func Register(api huma.API, svc appworkspaces.Service) {
 	registerRead(api, svc)
 	registerWrite(api, svc)
+	registerProperties(api, svc)
+	registerValues(api, svc)
+	registerUsage(api, svc)
 }
 
 func registerRead(api huma.API, svc appworkspaces.Service) {

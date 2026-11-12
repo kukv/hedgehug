@@ -23,13 +23,14 @@ type WorkspaceValue struct {
 
 // WorkspaceProperty は、プロパティの定義。
 type WorkspaceProperty struct {
-	ID      string   `json:"id"`
-	Key     string   `json:"key"`
-	Name    string   `json:"name"`
-	Type    string   `json:"type"`
-	Builtin bool     `json:"builtin"`
-	Kinds   []string `json:"kinds" nullable:"false"`
-	Hidden  bool     `json:"hidden"`
+	ID      string           `json:"id"`
+	Key     string           `json:"key"`
+	Name    string           `json:"name"`
+	Type    string           `json:"type"`
+	Builtin bool             `json:"builtin"`
+	Kinds   []string         `json:"kinds" nullable:"false"`
+	Hidden  bool             `json:"hidden"`
+	Choices []WorkspaceValue `json:"choices" nullable:"false" doc:"選択肢(単一選択・複数選択だけ。ほかは空)"`
 }
 
 // WorkspaceSettings は、ワークスペースの設定。
@@ -72,14 +73,18 @@ func toSettings(s workspace.Settings) WorkspaceSettings {
 		out.CategoryDefaults[string(c)] = string(id)
 	}
 	for _, p := range s.Properties {
-		kinds := p.Kinds
-		if kinds == nil {
-			kinds = []string{}
-		}
-		out.Properties = append(out.Properties, WorkspaceProperty{
-			ID: string(p.ID), Key: p.Key, Name: p.Name, Type: string(p.Type),
-			Builtin: p.Builtin, Kinds: kinds, Hidden: p.Hidden,
-		})
+		out.Properties = append(out.Properties, toProperty(p))
 	}
 	return out
+}
+
+func toProperty(p workspace.Property) WorkspaceProperty {
+	kinds := p.Kinds
+	if kinds == nil {
+		kinds = []string{}
+	}
+	return WorkspaceProperty{
+		ID: string(p.ID), Key: p.Key, Name: p.Name, Type: string(p.Type),
+		Builtin: p.Builtin, Kinds: kinds, Hidden: p.Hidden, Choices: toValues(p.Choices),
+	}
 }
