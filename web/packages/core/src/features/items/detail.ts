@@ -75,6 +75,7 @@ export function createDetail(deps: DetailDeps): Detail {
       const workspace = project && deps.catalog.workspace(storeId, project.workspaceId);
       if (mine !== latest) return;
       if (!store || !project || !workspace) {
+        target = null;
         view.set(null);
         return;
       }
@@ -91,7 +92,10 @@ export function createDetail(deps: DetailDeps): Detail {
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
       if (!(e instanceof NotFound)) throw e;
-      if (mine === latest) view.set(null);
+      if (mine === latest) {
+        target = null;
+        view.set(null);
+      }
     }
   }
 

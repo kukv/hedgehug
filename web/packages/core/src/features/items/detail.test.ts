@@ -134,6 +134,18 @@ describe("createDetail", () => {
     expect(get(detail.view)?.item.id).toBe(s1.id);
   });
 
+  it("reload does not reopen a panel that closed because the item was gone", async () => {
+    const { detail, items, task } = await setup();
+    await detail.open("S1", task.id);
+    const i = items.all.findIndex((x) => x.id === task.id);
+    items.all.splice(i, 1);
+    await detail.reload();
+    expect(get(detail.view)).toBeNull();
+    items.all.splice(i, 0, task);
+    await detail.reload();
+    expect(get(detail.view)).toBeNull();
+  });
+
   it("reload does nothing when the panel is closed", async () => {
     const { detail } = await setup();
     await detail.reload();
