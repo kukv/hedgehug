@@ -15,6 +15,7 @@ import (
 // config は config.yaml の中身。項目は、持つトラックが足す(トラック G が Store の一覧などを足す)。
 type config struct {
 	Accounts []accountYAML `yaml:"accounts"`
+	Hosts    []hostYAML    `yaml:"hosts,omitempty"`
 }
 
 // File は config.yaml。同じプロセスの中の読み書きは 1 つずつ行う。
