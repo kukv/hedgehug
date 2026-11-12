@@ -13,7 +13,9 @@
   // 反映)では、入力欄にフォーカスがあるあいだは書き換えない(06「編集中の入力欄の内容は書き換えない」)。
   // editing は $state にしない(フォーカスが外れたときに $effect が走り直し、保存の前に古い値へ戻すため)。
   let title = $state("");
+  // base は、フォーカスしたときの値。打ち換えずに離れたら保存せず、反映で受け取った最新の値に合わせる。
   let editing = false;
+  let base = "";
   let shownId: string | undefined;
   $effect(() => {
     const id = $view?.item.id;
@@ -66,10 +68,14 @@
       heading
       disabled={v.readOnly}
       title={v.readOnly ? readOnlyNote : undefined}
-      onfocus={() => (editing = true)}
+      onfocus={() => {
+        editing = true;
+        base = title;
+      }}
       onblur={() => {
         editing = false;
-        void save();
+        if (title === base) title = $view?.item.title ?? "";
+        else void save();
       }}
       {onkeydown}
       bind:value={title}
