@@ -31,10 +31,13 @@
       {#if "separator" in item}
         <hr class="menu-sep">
       {:else}
+        <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: checked を渡したときは menuitemradio になり、aria-checked に対応する -->
         <button
           type="button"
-          role="menuitem"
+          role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+          aria-checked={item.checked}
           class="menu-item"
+          class:checked={item.checked}
           class:danger={item.danger}
           disabled={item.disabled}
           onclick={() => {
@@ -79,6 +82,10 @@
   }
   .menu-item:hover:not(:disabled) {
     background: var(--hover);
+  }
+  .menu-item.checked {
+    background: var(--hover);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
   .menu-item:disabled {
     opacity: 0.45;

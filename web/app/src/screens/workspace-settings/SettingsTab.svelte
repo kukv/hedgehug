@@ -14,32 +14,32 @@
 
   let { storeId, workspaceId, storeName }: Props = $props();
 
-  const state = workspaceSettings.state;
+  const settings = workspaceSettings.state;
   $effect(() => {
     void workspaceSettings.open(storeId, workspaceId);
   });
 </script>
 
-{#if $state && $state.storeId === storeId && $state.detail.id === workspaceId}
+{#if $settings && $settings.storeId === storeId && $settings.detail.id === workspaceId}
   <div class="subtabs">
     <Tabs
       tabs={settingsTabs}
-      current={$state.tab}
+      current={$settings.tab}
       onselect={(id) => workspaceSettings.selectTab(id as SettingsTab)}
     />
   </div>
   <div class="body">
-    {#if $state.readOnly}
+    {#if $settings.readOnly}
       <ReadOnlyBand text={readOnlyBand(storeName)} />
     {/if}
-    {#if $state.tab === "general"}
-      <GeneralPanel state={$state} />
-    {:else if $state.tab === "statuses"}
-      <ValuesPanel state={$state} list="statuses" />
-    {:else if $state.tab === "priorities"}
-      <ValuesPanel state={$state} list="priorities" />
-    {:else if $state.tab === "systems"}
-      <ValuesPanel state={$state} list="systems" />
+    {#if $settings.tab === "general"}
+      <GeneralPanel state={$settings} />
+    {:else if $settings.tab === "statuses"}
+      <ValuesPanel state={$settings} list="statuses" />
+    {:else if $settings.tab === "priorities"}
+      <ValuesPanel state={$settings} list="priorities" />
+    {:else if $settings.tab === "systems"}
+      <ValuesPanel state={$settings} list="systems" />
     {/if}
   </div>
 {/if}

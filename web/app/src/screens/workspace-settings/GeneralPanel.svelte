@@ -85,7 +85,10 @@
       {#if examples.length === 0}
         アイテムはまだありません
       {:else}
-        今の例: {#each examples as id (id)}<code>{id}</code>{" "}{/each}
+        今の例:
+        {#each examples as id (id)}
+          <code>{id}</code>{" "}
+        {/each}
       {/if}
     </p>
     <p class="hint">{prefixHelp}</p>

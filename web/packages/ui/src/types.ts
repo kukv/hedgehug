@@ -10,7 +10,15 @@ export interface Tab {
 }
 
 export type MenuItem =
-  | { id: string; label: string; hint?: string; danger?: boolean; disabled?: boolean }
+  | {
+      id: string;
+      label: string;
+      hint?: string;
+      danger?: boolean;
+      disabled?: boolean;
+      // 選択式のメニューの選択中。文字は足さず、aria-checked と印の見た目で示す。
+      checked?: boolean;
+    }
   | { separator: true };
 
 export interface Toast {

@@ -37,7 +37,7 @@
   items={colors.map((c) => ({
     id: c.id,
     label: c.label,
-    ...(c.id === color ? { hint: "選択中" } : {}),
+    checked: c.id === color,
   }))}
   onselect={(id) => {
     at = null;
