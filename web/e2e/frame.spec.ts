@@ -9,6 +9,16 @@ test("shows the frame and reads the server with the token", async ({ page }) => 
   await expect(page.getByText("dev", { exact: true })).toBeVisible();
 });
 
+test("keeps the token out of the address and still reads the server after a reload", async ({
+  page,
+}) => {
+  await page.goto(url);
+  await expect(page.getByText("dev", { exact: true })).toBeVisible();
+  expect(new URL(page.url()).hash).toBe("");
+  await page.reload();
+  await expect(page.getByText("dev", { exact: true })).toBeVisible();
+});
+
 test("the sidebar is a drawer only when the frame is 860px or narrower", async ({ page }, info) => {
   await page.goto(url);
   const sidebar = page.getByRole("complementary");
