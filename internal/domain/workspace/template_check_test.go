@@ -2,6 +2,7 @@ package workspace_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -92,5 +93,23 @@ func TestValidTemplate(t *testing.T) {
 		if workspace.ValidTemplate(s, bad) {
 			t.Errorf("%s: invalid template accepted", name)
 		}
+	}
+}
+
+func TestTemplateValuesFor(t *testing.T) {
+	s := workspace.DefaultSettings(seqIDs())
+	hidden := workspace.Property{ID: "01HIDDEN00000000000000001", Key: "memo", Name: "メモ", Type: workspace.TypeText, Kinds: []string{"Task"}, Hidden: true}
+	storyOnly := workspace.Property{ID: "01STORY000000000000000001", Key: "area", Name: "領域", Type: workspace.TypeText, Kinds: []string{"Story"}}
+	s.Properties = append(s.Properties, hidden, storyOnly)
+	vs := map[change.ID]json.RawMessage{
+		"priority":   raw(s.Priorities[0].ID),
+		"systems":    raw([]change.ID{"01NOSUCHVALUE000000000001"}), // 消えた値の参照
+		hidden.ID:    raw("非表示"),
+		storyOnly.ID: raw("Story だけ"),
+	}
+	got := workspace.TemplateValuesFor(s, "Task", vs)
+	want := map[change.ID]json.RawMessage{"priority": raw(s.Priorities[0].ID)}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TemplateValuesFor = %s, want %s", got, want)
 	}
 }
