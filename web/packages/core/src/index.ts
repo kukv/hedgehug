@@ -16,6 +16,14 @@ export {
   type ItemForm,
   kinds,
 } from "./features/items/createDialog";
+export {
+  copiedMessage,
+  copyFailedMessage,
+  createDetail,
+  type Detail,
+  type DetailView,
+  normalizeTitle,
+} from "./features/items/detail";
 export { ancestorsOf, buildTree, compareSiblings, type TreeNode } from "./features/items/tree";
 export {
   createProjectDialog,

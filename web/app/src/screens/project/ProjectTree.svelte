@@ -1,7 +1,13 @@
 <script lang="ts">
-  import { childKindOf, type Item, type ProjectView } from "@hedgehug/core";
+  import {
+    childKindOf,
+    type Item,
+    itemDisplayId,
+    type ProjectView,
+    type Route,
+  } from "@hedgehug/core";
   import { SvelteSet } from "svelte/reactivity";
-  import { itemDialog } from "../../wire";
+  import { detail, itemDialog, links } from "../../wire";
   import TreeRow from "./TreeRow.svelte";
 
   // プロジェクトの「ツリー」のタブ。Epic を一番上の階層に並べる(04「ツリー」の「行」)。
@@ -17,6 +23,14 @@
     if (collapsed.has(id)) collapsed.delete(id);
     else collapsed.add(id);
   }
+  const route = (it: Item): Route => ({
+    name: "item",
+    store: view.store.name,
+    item: itemDisplayId(view.workspace.prefix, it.number),
+  });
+  const href = (it: Item) => links.href(route(it));
+  const open = (e: MouseEvent, it: Item) =>
+    links.click(e, route(it), () => void detail.open(view.store.id, it.id));
   function add(parent: Item) {
     const kind = childKindOf(parent.kind);
     if (!kind) return;
@@ -39,6 +53,8 @@
       readOnly={view.store.readOnly}
       ontoggle={toggle}
       onadd={add}
+      onopen={open}
+      {href}
     />
   {/each}
 </ul>

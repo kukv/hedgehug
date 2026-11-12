@@ -1,0 +1,96 @@
+<script lang="ts">
+  import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
+  import { IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
+  import { detail, toasts } from "../../wire";
+  import DetailChildren from "./DetailChildren.svelte";
+  import DetailHeader from "./DetailHeader.svelte";
+
+  // アイテムの詳細パネル(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
+  const view = detail.view;
+  const full = detail.full;
+
+  // タイトルの入力欄。開いたアイテムが変わったら、そのタイトルに戻す。
+  let title = $state("");
+  $effect(() => {
+    title = $view?.item.title ?? "";
+  });
+
+  async function save() {
+    // 保存できなかった(空・断り)ときは、元のタイトルに戻す(02「タイトル」)。
+    if (!(await detail.rename(title))) title = $view?.item.title ?? "";
+  }
+
+  function onkeydown(event: KeyboardEvent) {
+    // Enter でもフォーカスを外して保存する。
+    if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
+  }
+
+  async function copy(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      toasts.show(copiedMessage(id));
+    } catch {
+      toasts.show(copyFailedMessage(id), { error: true });
+    }
+  }
+</script>
+
+<SidePanel open={$view !== null} full={$full} label="詳細パネル" onclose={detail.close}>
+  {#snippet head()}
+    {#if $view}
+      <DetailHeader v={$view} full={$full} />
+    {/if}
+  {/snippet}
+  {#if $view}
+    {@const v = $view}
+    {#if v.readOnly}
+      <ReadOnlyBand text={readOnlyBand(v.store.name)} inset />
+    {/if}
+    <div class="kind-row">
+      <KindIcon kind={v.item.kind} />
+      <span>{v.item.kind}</span>
+      <code class="id">{v.displayId}</code>
+      <IconButton label="ID をコピー" size="xs" onclick={() => void copy(v.displayId)}
+        >⧉</IconButton
+      >
+    </div>
+    <Input
+      label="タイトル"
+      heading
+      disabled={v.readOnly}
+      title={v.readOnly ? readOnlyNote : undefined}
+      onblur={() => void save()}
+      {onkeydown}
+      bind:value={title}
+    />
+    {#if v.item.kind !== "Step"}
+      <DetailChildren {v} />
+    {/if}
+    <section class="peek-sec" aria-label="GitHub">
+      <h3>GitHub</h3>
+      <p class="muted">リンクはありません</p>
+    </section>
+  {/if}
+</SidePanel>
+
+<style>
+  .kind-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+  }
+  .id {
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+  .peek-sec h3 {
+    font-size: 13px;
+    margin: 0 0 6px;
+  }
+  .muted {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 0;
+  }
+</style>

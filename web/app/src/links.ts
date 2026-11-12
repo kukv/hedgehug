@@ -7,7 +7,8 @@ export interface Links {
   // href は、リンクのアドレス。トークンを入れない(右クリックの「新しいタブで開く」はトークンのない URL。08)。
   href(route: Route): string;
   // click は、ふつうのクリックで画面を移り、Ctrl・Cmd・Shift+クリックと中クリックで新しいタブに開く(01)。
-  click(event: MouseEvent, route: Route): void;
+  // action を渡すと、ふつうのクリックで画面を移る代わりに action を呼ぶ(行のタイトルで詳細パネルを開くとき)。
+  click(event: MouseEvent, route: Route, action?: () => void): void;
 }
 
 export function createLinks(
@@ -17,7 +18,7 @@ export function createLinks(
 ): Links {
   return {
     href: formatRoute,
-    click(event, route) {
+    click(event, route, action) {
       // 右クリック(button 2)などは、ブラウザのメニューに任せる。
       if (event.button > 1) return;
       event.preventDefault();
@@ -25,7 +26,8 @@ export function createLinks(
         open(newTabUrl(formatRoute(route), token));
         return;
       }
-      navigation.go(route);
+      if (action) action();
+      else navigation.go(route);
     },
   };
 }

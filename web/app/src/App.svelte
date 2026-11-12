@@ -1,6 +1,7 @@
 <script lang="ts">
   import { AppFrame, Toasts } from "@hedgehug/ui";
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
+  import DetailPanel from "./screens/item/DetailPanel.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
@@ -31,6 +32,7 @@
     <Sidebar stores={$stores} current={$current} {links} />
   {/snippet}
   <Screen current={$current} stores={$stores} version={$version} ondrawer={shell.openDrawer} />
+  <DetailPanel />
 </AppFrame>
 <CreateProjectDialog />
 <CreateItemDialog />

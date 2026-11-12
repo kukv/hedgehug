@@ -1,12 +1,15 @@
 <script lang="ts">
   import {
     formatDay,
+    type Item,
     itemDisplayId,
     ownerName,
     type ProjectView,
+    type Route,
     readOnlyNote,
   } from "@hedgehug/core";
   import { Button, KindIcon } from "@hedgehug/ui";
+  import { detail, links } from "../../wire";
 
   // プロジェクトの「概要」のタブ。A2 では「Epic」の区画と、プロパティの表示だけ(A2 の計画の決定 16)。
   interface Props {
@@ -18,6 +21,8 @@
 
   const year = new Date().getFullYear();
   const p = $derived(view.project);
+  const id = (it: Item) => itemDisplayId(view.workspace.prefix, it.number);
+  const route = (it: Item): Route => ({ name: "item", store: view.store.name, item: id(it) });
 </script>
 
 <div class="overview-frame">
@@ -38,8 +43,14 @@
       {#each view.epics as e (e.id)}
         <div class="list-row">
           <KindIcon kind="Epic" />
-          <code class="id">{itemDisplayId(view.workspace.prefix, e.number)}</code>
-          <span class="row-title">{e.title}</span>
+          <code class="id">{id(e)}</code>
+          <a
+            class="row-title"
+            href={links.href(route(e))}
+            onclick={(ev) => links.click(ev, route(e), () => void detail.open(view.store.id, e.id))}
+            onauxclick={(ev) => links.click(ev, route(e))}
+            >{e.title}</a
+          >
         </div>
       {/each}
     </section>
@@ -97,6 +108,8 @@
     color: var(--muted);
   }
   .row-title {
+    color: var(--ink);
+    text-decoration: none;
     flex: 1;
     min-width: 0;
   }

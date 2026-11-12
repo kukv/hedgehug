@@ -19,9 +19,12 @@
     ontoggle: (id: string) => void;
     // onadd は、行の「+」(その行を親にした作成ダイアログ)。
     onadd: (parent: Item) => void;
+    // onopen は、タイトルを押したとき(詳細パネルを開く)。Ctrl+クリックなどは新しいタブでアイテムの入口を開く。
+    onopen: (event: MouseEvent, item: Item) => void;
+    href: (item: Item) => string;
   }
 
-  let { node, prefix, depth, collapsed, readOnly, ontoggle, onadd }: Props = $props();
+  let { node, prefix, depth, collapsed, readOnly, ontoggle, onadd, onopen, href }: Props = $props();
 
   const it = $derived(node.item);
   const open = $derived(!collapsed.has(it.id));
@@ -45,7 +48,13 @@
   {/if}
   <KindIcon kind={it.kind} />
   <code class="id">{itemDisplayId(prefix, it.number)}</code>
-  <span class="row-title">{it.title}</span>
+  <a
+    class="row-title"
+    href={href(it)}
+    onclick={(e) => onopen(e, it)}
+    onauxclick={(e) => onopen(e, it)}
+    >{it.title}</a
+  >
   {#if child}
     <IconButton
       label="{child} を追加"
@@ -59,7 +68,17 @@
 </li>
 {#if open}
   {#each node.children as c (c.item.id)}
-    <Self node={c} {prefix} depth={depth + 1} {collapsed} {readOnly} {ontoggle} {onadd} />
+    <Self
+      node={c}
+      {prefix}
+      depth={depth + 1}
+      {collapsed}
+      {readOnly}
+      {ontoggle}
+      {onadd}
+      {onopen}
+      {href}
+    />
   {/each}
 {/if}
 
@@ -94,6 +113,8 @@
     color: var(--muted);
   }
   .row-title {
+    color: var(--ink);
+    text-decoration: none;
     flex: 1;
     min-width: 0;
     overflow: hidden;

@@ -8,6 +8,7 @@ import {
 } from "@hedgehug/api";
 import {
   createCatalog,
+  createDetail,
   createItemDialog,
   createNavigation,
   createProjectDialog,
@@ -51,12 +52,17 @@ export const projectDialog = createProjectDialog({
   onCreated: (storeId, project) =>
     navigation.go(routeOfProject(get(catalog.stores), storeId, project.id, "overview")),
 });
+export const detail = createDetail({
+  catalog,
+  items: itemsPort,
+  toasts,
+  onChanged: () => void projectScreen.reload(),
+});
 export const screen = createScreen({
   navigation,
   catalog,
   items: itemsPort,
-  // 詳細パネルは Task 10 で足す。それまでアイテムの入口は、プロジェクトのツリーを開くだけ。
-  openItem: () => {},
+  openItem: (storeId, itemId) => void detail.open(storeId, itemId),
 });
 
 // here は、作成ダイアログの初期値に使う、いま開いている画面のワークスペースとプロジェクト(02)。
@@ -78,11 +84,18 @@ export const itemDialog = createItemDialog({
   toasts,
   here,
   openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),
-  onCreated: () => void projectScreen.reload(),
+  // 「続けて作成」がオフなら、作ったアイテムの詳細パネルを開く(02「作成したあと」)。
+  onCreated: (item, keptOpen) => {
+    void projectScreen.reload();
+    if (!keptOpen) void detail.open(item.storeId, item.id);
+  },
 });
 
-// 画面を移ったら、サイドバーのドロワーを閉じる(01「画面の移り方」)。
-navigation.route.subscribe(() => shell.closeDrawer());
+// 画面を移ったら、サイドバーのドロワーと詳細パネルを閉じる(01「画面の移り方」)。
+navigation.route.subscribe(() => {
+  shell.closeDrawer();
+  detail.close();
+});
 
 // 一覧を読んでから、アドレスの解決を始める(一覧がないと Store 名と ID を解決できない)。
 void catalog.load().then(() => screen.start());

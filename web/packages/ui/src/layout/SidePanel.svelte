@@ -16,7 +16,8 @@
   let { open, full = false, label, onclose, head, children }: Props = $props();
 
   function onkeydown(event: KeyboardEvent) {
-    if (!open || event.key !== "Escape") return;
+    // 日本語入力の変換中の Esc は、変換の取り消しに使う。パネルは閉じない。
+    if (!open || event.key !== "Escape" || event.isComposing) return;
     if (document.querySelector('[aria-modal="true"]')) return;
     onclose();
   }

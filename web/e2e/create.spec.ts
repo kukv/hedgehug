@@ -17,6 +17,10 @@ test("creates an Epic, a Task under it and a Step from the project screen", asyn
   await expect(dialog).toBeHidden();
   await expect(page.getByText(/^HH-\d+ を作成しました$/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Epic" }).getByText(epic)).toBeVisible();
+  // 「続けて作成」がオフなので、作った Epic の詳細パネルが開く。Esc で閉じる。
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(epic);
+  await page.keyboard.press("Escape");
 
   await page.getByRole("tab", { name: "ツリー" }).click();
   const tree = page.getByRole("list", { name: "ツリー" });
@@ -31,6 +35,7 @@ test("creates an Epic, a Task under it and a Step from the project screen", asyn
   await dialog.getByRole("textbox", { name: "タイトル" }).fill(`${epic} の Task`);
   await dialog.getByRole("button", { name: "作成" }).click();
   await expect(tree.getByText(`${epic} の Task`)).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await tree
     .getByRole("listitem")
