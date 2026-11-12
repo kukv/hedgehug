@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "default": {
+    "provider": "claude"
+  },
+  "providers": {
+    "claude": {
+      "command": "claude",
+      "useStdin": true,
+      "env": {
+        "NO_COLOR": "1",
+        "FORCE_COLOR": "0"
+      },
+      "vars": {
+        "model": "claude-haiku-4-5"
+      },
+      "args": [
+        "-p",
+        "--output-format",
+        "text",
+        "--permission-mode",
+        "bypassPermissions"
+      ],
+      "argsIf": {
+        "model": [
+          "--model",
+          "{model}"
+        ],
+        "maxTurns": [
+          "--max-turns",
+          "{maxTurns}"
+        ],
+        "systemPrompt": [
+          "--system-prompt",
+          "{systemPrompt}"
+        ]
+      }
+    },
+    "gemini": {
+      "command": "gemini",
+      "useStdin": false,
+      "env": {
+        "NO_COLOR": "1",
+        "CI": "1"
+      },
+      "vars": {
+        "model": "gemini-3-flash-preview",
+        "yolo": true
+      },
+      "args": [],
+      "argsIf": {
+        "model": [
+          "--model",
+          "{model}"
+        ],
+        "yolo": [
+          "--yolo"
+        ],
+        "prompt": [
+          "{prompt}"
+        ]
+      }
+    },
+    "codex": {
+      "command": "codex",
+      "useStdin": false,
+      "env": {
+        "NO_COLOR": "1"
+      },
+      "vars": {
+        "model": "gpt-5-codex-mini",
+        "approvalMode": "full-auto"
+      },
+      "args": [],
+      "argsIf": {
+        "approvalMode": [
+          "--approval-mode",
+          "{approvalMode}"
+        ],
+        "model": [
+          "--model",
+          "{model}"
+        ],
+        "prompt": [
+          "{prompt}"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>画面照会（BUC/アクター）</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .window {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      max-width: 1400px;
+      margin: 0 auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 700px;
+    }
+
+    .window-header {
+      background: linear-gradient(to bottom, #f0f0f0, #e0e0e0);
+      padding: 12px 16px;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .close-button {
+      background: #dc3545;
+      color: #fff;
+      border: none;
+      padding: 6px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .close-button:hover { background: #c82333; }
+
+    .tabs-container {
+      display: flex;
+      gap: 6px;
+      padding: 10px 10px 0 10px;
+      background: #f9f9f9;
+      border-bottom: 7px solid #008cff;
+    }
+    .tab {
+      padding: 8px 16px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+      color: #666;
+      font-size: 16px;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .tab.active {
+      background: #008cff;
+      color: #fff;
+      border-color: #008cff;
+    }
+    .tab:hover:not(.active) { background: #f0f0f0; }
+
+    .content-area {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      flex: 1;
+      min-height: 500px;
+      background: #fff;
+    }
+
+    .sidebar {
+      border-right: 1px solid #e0e0e0;
+      background: #fafafa;
+      overflow: auto;
+      padding: 10px;
+    }
+    .sidebar-title {
+      font-weight: 700;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .tree { list-style: none; padding-left: 0; }
+    .tree li { margin: 2px 0; }
+    .tree-node {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+      color: #333;
+    }
+    .tree-node:hover { background: #f0f8ff; }
+    .tree-node.selected { background: #e6f4ff; outline: 1px solid #008cff; }
+    .twisty {
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 12px;
+      flex: 0 0 14px;
+    }
+    .twisty.empty { visibility: hidden; }
+    .children { list-style: none; margin-left: 18px; padding-left: 0; }
+    .children.collapsed { display: none; }
+    .node-type {
+      font-size: 11px;
+      color: #666;
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 1px 6px;
+      border-radius: 999px;
+    }
+
+    .body {
+      padding: 10px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 10px;
+    }
+
+    .screen-list-panel,
+    .screen-detail-panel {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-header {
+      background: #f0f0f0;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .panel-subtitle {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .screen-names {
+      overflow: auto;
+      padding: 8px;
+    }
+    .screen-name-item {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 13px;
+      line-height: 1.3;
+      background: #fff;
+    }
+    .screen-name-item:hover { border-color: #008cff; background: #f0f8ff; }
+    .screen-name-item.selected { border-color: #008cff; background: #e6f4ff; }
+    .screen-name-badges { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #666;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+    }
+    .badge.primary {
+      border-color: #008cff;
+      color: #008cff;
+      background: #e6f4ff;
+    }
+    .badge.warn {
+      border-color: #ffc107;
+      color: #8a6d3b;
+      background: #fff9db;
+    }
+
+    .screen-detail {
+      overflow: auto;
+      padding: 10px;
+      min-height: 0;
+    }
+    .empty-state {
+      text-align: center;
+      color: #999;
+      padding: 40px 10px;
+      font-size: 14px;
+    }
+
+    .detail-top {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .detail-title {
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .detail-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 10px;
+      min-height: 0;
+    }
+    .data-list {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      padding: 8px;
+      overflow: auto;
+      min-height: 200px;
+    }
+    .data-item {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+    }
+    .data-item:hover { border-color: #008cff; background: #f0f8ff; }
+    .data-item.active { border-color: #008cff; background: #e6f4ff; }
+    .data-id { font-weight: 800; color: #008cff; }
+    .data-name { color: #333; }
+
+    .fields {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      padding: 12px;
+      overflow: auto;
+      min-height: 200px;
+    }
+    .field-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .field-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #666;
+      text-align: right;
+    }
+    .field-input {
+      width: 100%;
+      padding: 7px 10px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      background: #fff;
+    }
+    .field-input:focus {
+      outline: none;
+      border-color: #008cff;
+      box-shadow: 0 0 0 2px rgba(0, 140, 255, 0.1);
+    }
+
+    .section-title {
+      background: #f0f0f0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 13px;
+      margin-top: 12px;
+      margin-bottom: 8px;
+    }
+
+    .data-access-item {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: #fff;
+    }
+    .entity { font-weight: 800; color: #333; }
+    .crud { display: inline-flex; gap: 4px; }
+    .crud-badge {
+      background: #e6f4ff;
+      color: #008cff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .main-flag {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #666;
+      font-size: 12px;
+    }
+
+    @media (max-width: 1100px) {
+      .content-area { grid-template-columns: 1fr; }
+      .sidebar { border-right: none; border-bottom: 1px solid #e0e0e0; }
+      .body { grid-template-columns: 1fr; }
+      .detail-layout { grid-template-columns: 1fr; }
+      .field-row { grid-template-columns: 120px 1fr; }
+      .field-label { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="window-header">
+      <span>画面照会（BUC/アクター）</span>
+      <button class="close-button" onclick="closeAndStopServer()">閉じる</button>
+    </div>
+
+    <div class="tabs-container">
+      <div class="tab active" id="tabBuc" onclick="switchMode('buc')">BUC</div>
+      <div class="tab" id="tabActor" onclick="switchMode('actor')">アクター</div>
+    </div>
+
+    <div class="content-area">
+      <div class="sidebar">
+        <div class="sidebar-title" id="sidebarTitle">業務 / BUC / アクター（Tree View）</div>
+        <ul class="tree" id="treeRoot"></ul>
+      </div>
+
+      <div class="body">
+        <div class="screen-list-panel">
+          <div class="panel-header">
+            <span>画面名一覧</span>
+            <span class="panel-subtitle" id="screenListSubtitle">-</span>
+          </div>
+          <div class="screen-names" id="screenNames"></div>
+        </div>
+
+        <div class="screen-detail-panel">
+          <div class="panel-header">
+            <span>画面詳細</span>
+            <span class="panel-subtitle" id="detailSubtitle">-</span>
+          </div>
+          <div class="screen-detail" id="screenDetail">
+            <div class="empty-state">左のTreeからアクターを選択してください</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let uiData = null;
+    let screensIndex = new Map();
+
+    const state = {
+      mode: 'buc', // 'buc' | 'actor'
+      // BUCモード選択
+      selectedBusiness: null,
+      selectedBuc: null,
+      selectedBucActor: null,
+      // アクターモード選択
+      selectedGroup: null,
+      selectedGroupActor: null,
+      // 共通
+      selectedScreenName: null,
+      selectedScreenDataIndex: 0,
+    };
+
+    function escapeHtml(s) {
+      return String(s ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function buildScreensIndex() {
+      screensIndex = new Map();
+      const screens = Array.isArray(uiData?.screens) ? uiData.screens : [];
+      for (const s of screens) {
+        if (s?.screen_name && !screensIndex.has(s.screen_name)) {
+          screensIndex.set(s.screen_name, s);
+        }
+      }
+    }
+
+    function lookupScreen(screenName) {
+      const found = screensIndex.get(screenName);
+      if (found) return { screen: found, isMissing: false };
+      return {
+        screen: {
+          screen_name: screenName,
+          operation: '',
+          fields: [],
+          screen_datas: [],
+          data_access: [],
+        },
+        isMissing: true,
+      };
+    }
+
+    function parseVariationOptions(field) {
+      const t = String(field?.tooltip ?? '').trim();
+      if (!t) return [];
+      // 「未契約、契約中、契約終了」のような記述を想定
+      const parts = t.split(/[,、]/).map(x => x.trim()).filter(Boolean);
+      // 先頭が説明文の場合があるので、短い列挙だけを返す（雑に長文は除外）
+      if (parts.length >= 2 && parts.every(p => p.length <= 20)) return parts;
+      return [];
+    }
+
+    function inputKind(field) {
+      const rawType = String(field?.type ?? '').trim();
+      const type = rawType.toLowerCase();
+      if (type === 'number') return { kind: 'input', inputType: 'number' };
+      if (type === 'date') return { kind: 'input', inputType: 'date' };
+      if (type === 'datetime') return { kind: 'input', inputType: 'datetime-local' };
+      // Type=バリエーション/状態 は ComboBox（select）にする
+      if (rawType === 'バリエーション' || rawType === '状態') {
+        return { kind: 'select', options: parseVariationOptions(field) };
+      }
+      return { kind: 'input', inputType: 'text' };
+    }
+
+    // Dateコンポーネント（依存なし・ネイティブ入力をラップ）
+    function toDatetimeLocalValue(v) {
+      const s = String(v ?? '').trim();
+      if (!s) return '';
+      // "YYYY-MM-DDTHH:mm" はそのまま、"YYYY-MM-DD HH:mm" は "T" に寄せる
+      if (s.includes('T')) return s;
+      return s.replace(' ', 'T');
+    }
+
+    function createDateInput(value, placeholder) {
+      const el = document.createElement('input');
+      el.className = 'field-input';
+      el.type = 'date';
+      el.value = String(value ?? '');
+      el.placeholder = placeholder ?? '';
+      return el;
+    }
+
+    function createDateTimeInput(value, placeholder) {
+      const el = document.createElement('input');
+      el.className = 'field-input';
+      el.type = 'datetime-local';
+      el.value = toDatetimeLocalValue(value);
+      el.placeholder = placeholder ?? '';
+      return el;
+    }
+
+    function setTabs() {
+      document.getElementById('tabBuc').classList.toggle('active', state.mode === 'buc');
+      document.getElementById('tabActor').classList.toggle('active', state.mode === 'actor');
+      document.getElementById('sidebarTitle').textContent =
+        state.mode === 'buc'
+          ? '業務 / BUC / アクター（Tree View）'
+          : 'アクター群 / アクター（Tree View）';
+    }
+
+    function clearBody(message) {
+      state.selectedScreenName = null;
+      state.selectedScreenDataIndex = 0;
+
+      document.getElementById('screenNames').innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+      document.getElementById('screenDetail').innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+      document.getElementById('screenListSubtitle').textContent = '-';
+      document.getElementById('detailSubtitle').textContent = '-';
+    }
+
+    function renderTree() {
+      const root = document.getElementById('treeRoot');
+      root.innerHTML = '';
+
+      if (state.mode === 'buc') {
+        const businesses = Array.isArray(uiData?.businesses) ? uiData.businesses : [];
+        for (const b of businesses) {
+          root.appendChild(createTreeBusinessNode(b));
+        }
+      } else {
+        const groups = Array.isArray(uiData?.actorGroups) ? uiData.actorGroups : [];
+        for (const g of groups) {
+          root.appendChild(createTreeGroupNode(g));
+        }
+      }
+    }
+
+    function createTreeBusinessNode(business) {
+      const li = document.createElement('li');
+      const children = document.createElement('ul');
+      children.className = 'children';
+
+      const node = createTreeNode({
+        label: business.business_name,
+        typeLabel: '業務',
+        hasChildren: Array.isArray(business?.BUCs) && business.BUCs.length > 0,
+        isSelected: state.selectedBusiness === business.business_name && state.selectedBuc == null && state.selectedBucActor == null,
+        onClick: () => {
+          state.selectedBusiness = business.business_name;
+          state.selectedBuc = null;
+          state.selectedBucActor = null;
+          updateTreeSelection();
+          clearBody('（業務/BUC選択中）アクターを選択してください');
+        },
+        onToggle: (collapsed) => {
+          children.classList.toggle('collapsed', collapsed);
+        }
+      });
+
+      li.appendChild(node);
+      li.appendChild(children);
+
+      const bucs = Array.isArray(business?.BUCs) ? business.BUCs : [];
+      for (const buc of bucs) {
+        children.appendChild(createTreeBucNode(business.business_name, buc));
+      }
+
+      return li;
+    }
+
+    function createTreeBucNode(businessName, buc) {
+      const li = document.createElement('li');
+      const children = document.createElement('ul');
+      children.className = 'children';
+
+      const node = createTreeNode({
+        label: buc.buc_name,
+        typeLabel: 'BUC',
+        hasChildren: Array.isArray(buc?.actors) && buc.actors.length > 0,
+        isSelected: state.selectedBusiness === businessName && state.selectedBuc === buc.buc_name && state.selectedBucActor == null,
+        onClick: () => {
+          state.selectedBusiness = businessName;
+          state.selectedBuc = buc.buc_name;
+          state.selectedBucActor = null;
+          updateTreeSelection();
+          clearBody('（業務/BUC選択中）アクターを選択してください');
+        },
+        onToggle: (collapsed) => {
+          children.classList.toggle('collapsed', collapsed);
+        }
+      });
+
+      li.appendChild(node);
+      li.appendChild(children);
+
+      const actors = Array.isArray(buc?.actors) ? buc.actors : [];
+      for (const a of actors) {
+        children.appendChild(createTreeActorNodeBUC(businessName, buc.buc_name, a));
+      }
+
+      return li;
+    }
+
+    function createTreeActorNodeBUC(businessName, bucName, actor) {
+      const li = document.createElement('li');
+      const node = createTreeNode({
+        label: actor.actor_name,
+        typeLabel: 'アクター',
+        hasChildren: false,
+        isSelected:
+          state.mode === 'buc' &&
+          state.selectedBusiness === businessName &&
+          state.selectedBuc === bucName &&
+          state.selectedBucActor === actor.actor_name,
+        onClick: () => {
+          state.selectedBusiness = businessName;
+          state.selectedBuc = bucName;
+          state.selectedBucActor = actor.actor_name;
+          updateTreeSelection();
+          renderScreenNamesForActor(actor.screen_names || []);
+          clearScreenDetail('画面名を選択してください');
+        },
+      });
+      li.appendChild(node);
+      return li;
+    }
+
+    function createTreeGroupNode(group) {
+      const li = document.createElement('li');
+      const children = document.createElement('ul');
+      children.className = 'children';
+
+      const node = createTreeNode({
+        label: group.group_name,
+        typeLabel: '群',
+        hasChildren: Array.isArray(group?.actors) && group.actors.length > 0,
+        isSelected: state.selectedGroup === group.group_name && state.selectedGroupActor == null,
+        onClick: () => {
+          state.selectedGroup = group.group_name;
+          state.selectedGroupActor = null;
+          updateTreeSelection();
+          clearBody('（アクター群選択中）アクターを選択してください');
+        },
+        onToggle: (collapsed) => {
+          children.classList.toggle('collapsed', collapsed);
+        }
+      });
+
+      li.appendChild(node);
+      li.appendChild(children);
+
+      const actors = Array.isArray(group?.actors) ? group.actors : [];
+      for (const a of actors) {
+        children.appendChild(createTreeActorNodeGroup(group.group_name, a));
+      }
+
+      return li;
+    }
+
+    function createTreeActorNodeGroup(groupName, actor) {
+      const li = document.createElement('li');
+      const node = createTreeNode({
+        label: actor.actor_name,
+        typeLabel: 'アクター',
+        hasChildren: false,
+        isSelected:
+          state.mode === 'actor' &&
+          state.selectedGroup === groupName &&
+          state.selectedGroupActor === actor.actor_name,
+        onClick: () => {
+          state.selectedGroup = groupName;
+          state.selectedGroupActor = actor.actor_name;
+          updateTreeSelection();
+          renderScreenNamesForActor(actor.screen_names || []);
+          clearScreenDetail('画面名を選択してください');
+        },
+      });
+      li.appendChild(node);
+      return li;
+    }
+
+    function createTreeNode({ label, typeLabel, hasChildren, isSelected, onClick, onToggle }) {
+      const row = document.createElement('div');
+      row.className = 'tree-node';
+      if (isSelected) row.classList.add('selected');
+
+      const twisty = document.createElement('span');
+      twisty.className = 'twisty' + (hasChildren ? '' : ' empty');
+      twisty.textContent = hasChildren ? '▾' : '▾';
+      row.appendChild(twisty);
+
+      const tag = document.createElement('span');
+      tag.className = 'node-type';
+      tag.textContent = typeLabel;
+      row.appendChild(tag);
+
+      const text = document.createElement('span');
+      text.textContent = label;
+      row.appendChild(text);
+
+      if (hasChildren) {
+        let collapsed = false;
+        twisty.style.cursor = 'pointer';
+        twisty.onclick = (e) => {
+          e.stopPropagation();
+          collapsed = !collapsed;
+          twisty.textContent = collapsed ? '▸' : '▾';
+          onToggle?.(collapsed);
+        };
+      }
+
+      row.onclick = () => onClick?.();
+      return row;
+    }
+
+    function updateTreeSelection() {
+      // ざっくり全描画で選択反映（データ量が小さい前提）
+      renderTree();
+    }
+
+    function renderScreenNamesForActor(screenNames) {
+      const container = document.getElementById('screenNames');
+      container.innerHTML = '';
+
+      const actorLabel = state.mode === 'buc'
+        ? `${state.selectedBusiness ?? '-'} / ${state.selectedBuc ?? '-'} / ${state.selectedBucActor ?? '-'}`
+        : `${state.selectedGroup ?? '-'} / ${state.selectedGroupActor ?? '-'}`;
+      document.getElementById('screenListSubtitle').textContent = actorLabel;
+
+      if (!Array.isArray(screenNames) || screenNames.length === 0) {
+        container.innerHTML = '<div class="empty-state">画面がありません</div>';
+        return;
+      }
+
+      for (const name of screenNames) {
+        const { screen, isMissing } = lookupScreen(name);
+        const item = document.createElement('div');
+        item.className = 'screen-name-item';
+        if (state.selectedScreenName === name) item.classList.add('selected');
+
+        const title = document.createElement('div');
+        title.textContent = name;
+        item.appendChild(title);
+
+        const badges = document.createElement('div');
+        badges.className = 'screen-name-badges';
+
+        // 機能名（operation）
+        if (screen?.operation) {
+          const b = document.createElement('span');
+          b.className = 'badge primary';
+          b.textContent = `機能: ${screen.operation}`;
+          badges.appendChild(b);
+        }
+
+        if (isMissing) {
+          const b = document.createElement('span');
+          b.className = 'badge warn';
+          b.textContent = '未定義画面';
+          badges.appendChild(b);
+        }
+
+        if (badges.childElementCount > 0) item.appendChild(badges);
+
+        item.onclick = () => {
+          state.selectedScreenName = name;
+          state.selectedScreenDataIndex = 0;
+          renderScreenNamesForActor(screenNames); // 選択反映
+          renderScreenDetail();
+        };
+
+        container.appendChild(item);
+      }
+    }
+
+    function clearScreenDetail(message) {
+      state.selectedScreenName = null;
+      state.selectedScreenDataIndex = 0;
+      document.getElementById('detailSubtitle').textContent = '-';
+      document.getElementById('screenDetail').innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    }
+
+    function renderScreenDetail() {
+      const targetName = state.selectedScreenName;
+      if (!targetName) {
+        clearScreenDetail('画面名を選択してください');
+        return;
+      }
+
+      const { screen, isMissing } = lookupScreen(targetName);
+
+      // ヘッダー表示（BUCパネルは機能名も、アクターパネルは画面名のみ）
+      const title = state.mode === 'buc'
+        ? `${screen.screen_name}${screen.operation ? `（${screen.operation}）` : ''}`
+        : `${screen.screen_name}`;
+
+      document.getElementById('detailSubtitle').textContent =
+        state.mode === 'buc'
+          ? `${state.selectedBusiness ?? '-'} / ${state.selectedBuc ?? '-'} / ${state.selectedBucActor ?? '-'}`
+          : `${state.selectedGroup ?? '-'} / ${state.selectedGroupActor ?? '-'}`;
+
+      const wrap = document.getElementById('screenDetail');
+      wrap.innerHTML = '';
+
+      const top = document.createElement('div');
+      top.className = 'detail-top';
+
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'detail-title';
+      titleDiv.textContent = isMissing ? `${title}（未定義画面）` : title;
+      top.appendChild(titleDiv);
+
+      const layout = document.createElement('div');
+      layout.className = 'detail-layout';
+
+      // 画面データ一覧
+      const dataList = document.createElement('div');
+      dataList.className = 'data-list';
+      const screenDatas = Array.isArray(screen?.screen_datas) ? screen.screen_datas : [];
+
+      if (screenDatas.length === 0) {
+        dataList.innerHTML = '<div class="empty-state">画面データがありません</div>';
+      } else {
+        screenDatas.forEach((d, idx) => {
+          const item = document.createElement('div');
+          item.className = 'data-item';
+          if (idx === state.selectedScreenDataIndex) item.classList.add('active');
+
+          const id = document.createElement('span');
+          id.className = 'data-id';
+          id.textContent = String(idx + 1).padStart(3, '0');
+
+          const name = document.createElement('span');
+          name.className = 'data-name';
+          name.textContent = d?.display_name ?? `データ${idx + 1}`;
+
+          item.appendChild(id);
+          item.appendChild(name);
+          item.onclick = () => {
+            state.selectedScreenDataIndex = idx;
+            renderScreenDetail(); // まとめて再描画
+          };
+
+          dataList.appendChild(item);
+        });
+      }
+
+      // 画面（fields）
+      const fields = document.createElement('div');
+      fields.className = 'fields';
+
+      const fieldDefs = Array.isArray(screen?.fields) ? screen.fields : [];
+      const selectedData = screenDatas[state.selectedScreenDataIndex];
+      const dummy = Array.isArray(selectedData?.dummy_data) ? selectedData.dummy_data : [];
+      // 仕様JSON（2_RDRASpec/画面照会.json）は dummy_data が { field_name, value } 形式
+      const valueMap = new Map(dummy.map(x => [x?.field_name, x?.value]));
+
+      if (fieldDefs.length === 0) {
+        fields.innerHTML = '<div class="empty-state">項目がありません</div>';
+      } else {
+        for (const f of fieldDefs) {
+          const row = document.createElement('div');
+          row.className = 'field-row';
+
+          const label = document.createElement('div');
+          label.className = 'field-label';
+          label.textContent = f?.field_name ?? '';
+
+          const value = valueMap.get(f?.field_name) ?? '';
+          const kind = inputKind(f);
+
+          let inputEl;
+          if (kind.kind === 'select') {
+            inputEl = document.createElement('select');
+            inputEl.className = 'field-input';
+
+            const opts = Array.isArray(kind.options) ? kind.options : [];
+            if (opts.length === 0) {
+              const opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = '--（選択肢なし）--';
+              inputEl.appendChild(opt);
+            } else {
+              // 現在値が選択肢に存在しない場合も表示できるように先頭に補完
+              if (value && !opts.includes(String(value))) {
+                const opt = document.createElement('option');
+                opt.value = String(value);
+                opt.textContent = String(value);
+                inputEl.appendChild(opt);
+              }
+              for (const optText of opts) {
+                const opt = document.createElement('option');
+                opt.value = optText;
+                opt.textContent = optText;
+                inputEl.appendChild(opt);
+              }
+            }
+            inputEl.value = value;
+          } else {
+            const placeholder = f?.tooltip ?? f?.type ?? '';
+            if (kind.inputType === 'date') {
+              inputEl = createDateInput(value, placeholder);
+            } else if (kind.inputType === 'datetime-local') {
+              inputEl = createDateTimeInput(value, placeholder);
+            } else {
+              inputEl = document.createElement('input');
+              inputEl.className = 'field-input';
+              inputEl.type = kind.inputType;
+              inputEl.placeholder = placeholder;
+              inputEl.value = value;
+            }
+          }
+
+          inputEl.title = f?.tooltip ?? '';
+
+          row.appendChild(label);
+          row.appendChild(inputEl);
+          fields.appendChild(row);
+        }
+      }
+
+      layout.appendChild(dataList);
+      layout.appendChild(fields);
+      top.appendChild(layout);
+
+      // データアクセス
+      const accesses = Array.isArray(screen?.data_access) ? screen.data_access : [];
+      const accessTitle = document.createElement('div');
+      accessTitle.className = 'section-title';
+      accessTitle.textContent = 'データアクセス';
+      top.appendChild(accessTitle);
+
+      if (accesses.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'データアクセスがありません';
+        top.appendChild(empty);
+      } else {
+        for (const a of accesses) {
+          const item = document.createElement('div');
+          item.className = 'data-access-item';
+
+          const entity = document.createElement('span');
+          entity.className = 'entity';
+          entity.textContent = `Entity: ${a?.entity ?? '-'}`;
+          item.appendChild(entity);
+
+          const crud = document.createElement('span');
+          crud.className = 'crud';
+          const crudArr = Array.isArray(a?.CRUD) ? a.CRUD : [];
+          for (const c of crudArr) {
+            const b = document.createElement('span');
+            b.className = 'crud-badge';
+            b.textContent = c;
+            crud.appendChild(b);
+          }
+          item.appendChild(crud);
+
+          const main = document.createElement('span');
+          main.className = 'main-flag';
+          main.innerHTML = `isMain: <span style="font-size:16px">${a?.isMain ? '☑' : '☐'}</span>`;
+          item.appendChild(main);
+
+          top.appendChild(item);
+        }
+      }
+
+      wrap.appendChild(top);
+    }
+
+    function switchMode(mode) {
+      if (mode !== 'buc' && mode !== 'actor') return;
+      state.mode = mode;
+      // 選択状態は維持せず、モード切替時はTreeを先頭に戻す
+      state.selectedBusiness = null;
+      state.selectedBuc = null;
+      state.selectedBucActor = null;
+      state.selectedGroup = null;
+      state.selectedGroupActor = null;
+      state.selectedScreenName = null;
+      state.selectedScreenDataIndex = 0;
+      setTabs();
+      renderTree();
+      clearBody('左のTreeからアクターを選択してください');
+      // 初期表示はBUCパネル（要件）
+      if (mode === 'buc') {
+        autoSelectFirstBucActor();
+      } else {
+        autoSelectFirstGroupActor();
+      }
+    }
+
+    function autoSelectFirstBucActor() {
+      const businesses = Array.isArray(uiData?.businesses) ? uiData.businesses : [];
+      const b = businesses[0];
+      const buc = b?.BUCs?.[0];
+      const actor = buc?.actors?.[0];
+      if (!b || !b.business_name || !buc || !buc.buc_name || !actor || !actor.actor_name) return;
+
+      state.selectedBusiness = b.business_name;
+      state.selectedBuc = buc.buc_name;
+      state.selectedBucActor = actor.actor_name;
+      updateTreeSelection();
+      renderScreenNamesForActor(actor.screen_names || []);
+      clearScreenDetail('画面名を選択してください');
+    }
+
+    function autoSelectFirstGroupActor() {
+      const groups = Array.isArray(uiData?.actorGroups) ? uiData.actorGroups : [];
+      const g = groups[0];
+      const actor = g?.actors?.[0];
+      if (!g || !g.group_name || !actor || !actor.actor_name) return;
+
+      state.selectedGroup = g.group_name;
+      state.selectedGroupActor = actor.actor_name;
+      updateTreeSelection();
+      renderScreenNamesForActor(actor.screen_names || []);
+      clearScreenDetail('画面名を選択してください');
+    }
+
+    async function closeAndStopServer() {
+      if (!confirm('サーバーを停止して画面を閉じますか？')) return;
+      try {
+        await fetch('/shutdown');
+      } catch (e) {
+        // 無視（停止要求が通らないケース）
+      }
+      setTimeout(() => {
+        window.close();
+        document.body.innerHTML =
+          '<div style="text-align:center; padding:50px; font-size:18px;">サーバーが停止しました。<br>このタブを閉じてください。</div>';
+      }, 200);
+    }
+
+    async function initialize() {
+      try {
+        const res = await fetch('/ui.json');
+        uiData = await res.json();
+        buildScreensIndex();
+        setTabs();
+        renderTree();
+        clearBody('左のTreeからアクターを選択してください');
+        // 初期表示はBUCパネル＋先頭アクター選択（要件）
+        autoSelectFirstBucActor();
+      } catch (e) {
+        console.error(e);
+        document.getElementById('treeRoot').innerHTML = '';
+        clearBody('データの読み込みに失敗しました（/ui.json）');
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
+
