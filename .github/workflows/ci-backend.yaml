@@ -67,9 +67,15 @@ jobs:
       - name: Format check
         run: golangci-lint fmt --diff ./...
 
-      # タグ e2e のときだけビルドされるファイルは、上の lint とテストでは検査されない。
+      # タグ e2e のときだけビルドされるファイルは、上の lint と test ジョブでは検査されないので、ここで検査する。
       - name: Vet the e2e build
         run: go vet -tags e2e ./cmd/hedgehug
+
+      - name: Lint the e2e build
+        run: golangci-lint run --build-tags e2e ./cmd/...
+
+      - name: Test the e2e build
+        run: go test -count=1 -tags e2e ./cmd/hedgehug
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'

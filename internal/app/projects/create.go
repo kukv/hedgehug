@@ -31,8 +31,14 @@ func (s Service) Create(ctx context.Context, in CreateInput) (project.Project, e
 	if err != nil {
 		return project.Project{}, err
 	}
+	if in.Status != "" && !project.ValidStatus(in.Status) {
+		return project.Project{}, fmt.Errorf("unknown project status %q", in.Status)
+	}
 	title := strings.TrimSpace(in.Title)
-	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("プロジェクト「%s」を作成", title)}
+	// 保存するタイトルは前後の空白だけを除く(02)。アクティビティの 1 行は 1 行でなければならないので、
+	// 改行を含む連続する空白を 1 つの空白にまとめて書く。
+	oneLine := strings.Join(strings.Fields(title), " ")
+	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("プロジェクト「%s」を作成", oneLine)}
 	var created project.Project
 	err = s.Stores.Write(ctx, in.Store, op, func(tx port.Tx) error {
 		if _, err := tx.Workspaces().Get(in.Workspace); err != nil {

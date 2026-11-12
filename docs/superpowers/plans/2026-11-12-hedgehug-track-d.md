@@ -57,7 +57,7 @@
 | 8 | 詳細パネルの GitHub の欄は、区画の枠をトラック A の A2 が置き(A の計画の漏れの表「詳細パネル: GitHub」)、D3 がその中身(`screens/github/LinkSection.svelte`)を作る | 02 が配置を、07 が中身を定める |
 | 9 | state.db の骨組み(開く・表の作り方)は、C と D のうち先に要るトラックが、共有の小さな PR で入れる。D の表(GitHub を読んだ記録、チェックの結果、GitHub App 未導入の組織、トークンの指紋)は D の小計画の中で足す | 設計書 8 節「共有部分の変更」。state.db は複数のトラックが使う |
 | 10 | usecase のパッケージは `app/github` 1 つから始め、20 ファイルを超えそうになったら、操作のまとまりで `app/githublink`(リンク)・`app/githubread`(読む間隔)に分ける | 設計書 1 節・4 節 |
-| 11 | 本物の GitHub での確認(github-live)は、週 1 回と手動で、secret `HEDGEHUG_LIVE_TOKEN` と変数 `HEDGEHUG_LIVE_LOGIN`(D3 から `HEDGEHUG_LIVE_REPO` も)が設定されているときだけ動かす。設定がなければ手順を飛ばして成功する(前回と同じ形) | 設計書 7 節 |
+| 11 | 本物の GitHub での確認(github-live)は、週 1 回と手動で、リポジトリに設定済みの secret `HEDGEHUG_LIVE_TOKEN` と変数 `HEDGEHUG_LIVE_ORG`(前回と同じもの。D3 からは検証用の組織のリポジトリ `hh-live` を読む)が設定されているときだけ動かす。設定がなければ手順を飛ばして成功する(前回と同じ形) | 設計書 7 節 |
 | 12 | トラック A の A1 Task 1(`domain/refusal`・`apierr`・`port.Identity`・`ProjectReader.List`・`ItemReader.List`・`httpapi.Deps` の `IDs`・`Identity`)を前提にし、同じものを D で別に定義しない。保存する操作の「あなた」は `port.Identity.Me` で得る | 親のセッションからの調整(A1 Task 1 が B・C・D より先に入る共有部分) |
 
 ## 共有部分の変更
@@ -1160,7 +1160,7 @@ gh CLI・環境変数 `GH_TOKEN`・OS のキーチェーンから、アカウン
 - [ ] **Step 1: 依存を入れる**
 
 ```bash
-go get github.com/zalando/go-keyring@latest
+go get github.com/zalando/go-keyring@v0.2.8
 ```
 
 - [ ] **Step 2: 失敗するテストを書く**
@@ -2252,7 +2252,7 @@ git commit -m "feat: GitHub のアカウントの API を組み立てに差し�
 
 **Interfaces:**
 - Consumes: Task 2 の `github.New`・`Viewer`
-- Produces: ビルドタグ `live` のテスト `TestLive*`。secret `HEDGEHUG_LIVE_TOKEN`、変数 `HEDGEHUG_LIVE_LOGIN`
+- Produces: ビルドタグ `live` のテスト `TestLive*`。secret `HEDGEHUG_LIVE_TOKEN`、変数 `HEDGEHUG_LIVE_ORG`(どちらも設定済み)
 
 - [ ] **Step 1: テストを書く**
 
@@ -2270,27 +2270,29 @@ import (
 	"testing"
 )
 
-// 本物の GitHub に問い合わせる(github-live)。HEDGEHUG_LIVE_TOKEN と HEDGEHUG_LIVE_LOGIN が要る。
-func liveEnv(t *testing.T) (token, login string) {
+// 本物の GitHub に問い合わせる(github-live)。リポジトリに設定済みの secret HEDGEHUG_LIVE_TOKEN と
+// 変数 HEDGEHUG_LIVE_ORG(検証用の組織。リポジトリを読む操作は D3 から確かめる)が要る。
+func liveToken(t *testing.T) string {
 	t.Helper()
-	token, login = os.Getenv("HEDGEHUG_LIVE_TOKEN"), os.Getenv("HEDGEHUG_LIVE_LOGIN")
-	if token == "" || login == "" {
-		t.Skip("HEDGEHUG_LIVE_TOKEN and HEDGEHUG_LIVE_LOGIN are not set")
+	token, org := os.Getenv("HEDGEHUG_LIVE_TOKEN"), os.Getenv("HEDGEHUG_LIVE_ORG")
+	if token == "" || org == "" {
+		t.Skip("HEDGEHUG_LIVE_TOKEN and HEDGEHUG_LIVE_ORG are not set")
 	}
-	return token, login
+	return token
 }
 
 func TestLiveViewer(t *testing.T) {
-	token, login := liveEnv(t)
+	token := liveToken(t)
+	// トークンの持ち主のログイン名は設定に持たないので、空でない名前が返ることだけを確かめる。
 	got, err := New(nil).Viewer(context.Background(), token)
-	if err != nil || !strings.EqualFold(got, login) {
-		t.Errorf("Viewer = %q, %v; want %q", got, err, login)
+	if err != nil || got == "" {
+		t.Errorf("Viewer = %q, %v", got, err)
 	}
 }
 
 func TestLiveRejectsBadToken(t *testing.T) {
-	liveEnv(t)
-	_, err := New(nil).Viewer(context.Background(), "ghp_not_a_real_token")
+	liveToken(t)
+	_, err := New(nil).Viewer(context.Background(), "not-a-real-token")
 	if err == nil || !strings.Contains(err.Error(), "token_rejected") {
 		t.Errorf("err = %v", err)
 	}
@@ -2310,11 +2312,11 @@ git show cf58222d~1:.github/workflows/github-live.yaml > .github/workflows/githu
 1. 先頭のコメントを次にする。
    ```yaml
    # 本物の GitHub に対して、infra/github の問い合わせが通ることを確かめる(設計書 7 節)。
-   # 変数 HEDGEHUG_LIVE_LOGIN と secret の HEDGEHUG_LIVE_TOKEN が未設定なら、手順を実行せずに成功する。
+   # 変数 HEDGEHUG_LIVE_ORG と secret の HEDGEHUG_LIVE_TOKEN が未設定なら、手順を実行せずに成功する。
    # トークンは job の env に置かず、テストの step にだけ渡す。
    ```
-2. `HEDGEHUG_LIVE_ON` の条件の `vars.HEDGEHUG_LIVE_ORG` を `vars.HEDGEHUG_LIVE_LOGIN` にする。
-3. テストの step の `env` を `HEDGEHUG_LIVE_LOGIN: ${{ vars.HEDGEHUG_LIVE_LOGIN }}` と `HEDGEHUG_LIVE_TOKEN: ${{ secrets.HEDGEHUG_LIVE_TOKEN }}` にし、`run` を `go test -tags live -count=1 -run 'TestLive' ./internal/infra/github` にする。
+2. `HEDGEHUG_LIVE_ON` の条件は変えない(設定済みの `vars.HEDGEHUG_LIVE_ORG` と `secrets.HEDGEHUG_LIVE_TOKEN` を使う)。
+3. テストの step の `env` を `HEDGEHUG_LIVE_ORG: ${{ vars.HEDGEHUG_LIVE_ORG }}` と `HEDGEHUG_LIVE_TOKEN: ${{ secrets.HEDGEHUG_LIVE_TOKEN }}` にし、`run` を `go test -tags live -count=1 -run 'TestLive' ./internal/infra/github` にする。
 
 Run: `actionlint .github/workflows/github-live.yaml`
 Expected: 指摘なし
@@ -2326,7 +2328,7 @@ git add internal/infra/github/live_test.go .github/workflows/github-live.yaml
 git commit -m "ci: 本物の GitHub で infra/github を確かめる github-live を足す"
 ```
 
-PR の説明に、リポジトリの設定で secret `HEDGEHUG_LIVE_TOKEN`(読み取りだけのトークン)と変数 `HEDGEHUG_LIVE_LOGIN` を入れると動く、と書く。入れるかどうかはユーザーが決める。
+secret `HEDGEHUG_LIVE_TOKEN` と変数 `HEDGEHUG_LIVE_ORG` はリポジトリに設定済み(前回の github-live と同じもの)なので、新しい設定は要らない。
 
 ---
 

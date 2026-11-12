@@ -23,7 +23,11 @@ type view struct {
 }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
+// ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。
 func (v *view) log(ref change.Ref) []change.Record {
+	if !ref.Valid() {
+		return nil
+	}
 	out := make([]change.Record, 0, len(v.base[ref])+len(v.pending[ref]))
 	for _, r := range append(slices.Clone(v.base[ref]), v.pending[ref]...) {
 		out = append(out, cloneRecord(r))
@@ -83,6 +87,14 @@ func (r workspaces) List() ([]workspace.Workspace, error) {
 		}
 	}
 	return out, nil
+}
+
+func (r workspaces) Settings(id workspace.ID) (workspace.Settings, error) {
+	s, ok := workspace.SettingsFromLog(r.v.log(change.Ref{Kind: change.KindWorkspace, ID: id}))
+	if !ok {
+		return workspace.Settings{}, port.ErrNotFound
+	}
+	return s, nil
 }
 
 type projects struct{ v *view }

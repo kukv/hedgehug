@@ -36,7 +36,12 @@ func Create(w Workspace) (change.Draft, error) {
 	return change.NewCreate(map[string]any{"id": w.ID, "name": w.Name, "prefix": w.Prefix}), nil
 }
 
-var opts = change.Options{Valid: func(r change.Record) bool {
+var opts = change.Options{
+	Multi: func(f string) bool { return strings.HasSuffix(f, "/kinds") },
+	Valid: valid,
+}
+
+func valid(r change.Record) bool {
 	switch {
 	case r.T == change.Set && r.F == "prefix":
 		var p string
@@ -44,9 +49,15 @@ var opts = change.Options{Valid: func(r change.Record) bool {
 	case r.T == change.Create:
 		var v struct{ Prefix string }
 		return json.Unmarshal(r.To, &v) == nil && ValidPrefix(v.Prefix)
+	case r.T == change.Set && strings.HasSuffix(r.F, "/color"):
+		var c Color
+		return json.Unmarshal(r.To, &c) == nil && validColor(c)
+	case r.T == change.Set && strings.HasSuffix(r.F, "/category"):
+		var c Category
+		return json.Unmarshal(r.To, &c) == nil && validCategory(c)
 	}
 	return true
-}}
+}
 
 // FromLog は、ワークスペースのログからいまの値を作る。作成の行がなければ false。
 func FromLog(log []change.Record) (Workspace, bool) {

@@ -14,8 +14,9 @@ import (
 )
 
 // RunStoresContract は、port.Stores が満たすべき振る舞いを確かめる。偽物と、本物の実装(infra/gitstore)の
-// 両方のテストから呼ぶ。newStores は、空の Store を 1 つだけ持つ Stores と、その Store の ID を返す。
-func RunStoresContract(t *testing.T, newStores func(t *testing.T) (port.Stores, port.StoreID)) {
+// 両方のテストから呼ぶ。newStores は、空の Store を 2 つ持つ Stores と、その 2 つの Store の ID を返す。
+// ほとんどの照合は 1 つ目だけを使う。
+func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores, id, other port.StoreID)) {
 	cases := []struct {
 		name string
 		fn   func(t *testing.T, s port.Stores, id port.StoreID)
@@ -28,14 +29,25 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (port.Stores, 
 		{"writes are serialized", contractSerialized},
 		{"workspaces are listed in id order", contractList},
 		{"reads never see a write in progress", contractReadIsolated},
+		{"summary is one non-empty line", contractSummary},
+		{"a write without rows needs no summary", contractEmptyWrite},
+		{"actor login must be valid", contractActorLogin},
+		{"actor must round-trip", contractActorRoundTrip},
+		{"malformed ids are not found and not written", contractMalformedIDs},
+		{"members have one log with an empty id", contractRefs},
 		{"projects and items are listed", contractLists},
+		{"workspace settings round trip", contractSettings},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			s, id := newStores(t)
+			s, id, _ := newStores(t)
 			c.fn(t, s, id)
 		})
 	}
+	t.Run("a write to another store inside a write", func(t *testing.T) {
+		s, a, b := newStores(t)
+		contractNestedStores(t, s, a, b)
+	})
 }
 
 // 照合テストの準備のデータ。

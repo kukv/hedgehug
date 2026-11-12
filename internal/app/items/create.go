@@ -53,6 +53,11 @@ func (s Service) Create(ctx context.Context, in CreateInput) (item.Item, error) 
 
 // build は、検査をして、作るアイテムを決める。
 func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item, error) {
+	// 表の順を守るため、タイトルとプロジェクトは親を読む前に確かめる。CheckCreate はこの 2 つを親より先に
+	// 検査するので、親を渡さずに呼べば、この 2 つのどちらかで断る。
+	if title == "" || in.Project == "" {
+		return item.Item{}, item.CheckCreate(in.Kind, in.Title, in.Project != "", nil)
+	}
 	parentKind, err := kindOf(tx, in.Parent, in.Project)
 	if err != nil {
 		return item.Item{}, err
@@ -82,8 +87,7 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 	}, nil
 }
 
-// kindOf は、親の種類を返す。親を選んでいなければ nil。プロジェクトを選んでいなければ、
-// 親のプロジェクトとは比べない(CheckCreate が「プロジェクトを選んでください」で断る)。
+// kindOf は、親の種類を返す。親を選んでいなければ nil。
 func kindOf(tx port.Tx, parent *item.ID, p project.ID) (*item.Kind, error) {
 	if parent == nil {
 		return nil, nil //nolint:nilnil // 親なしは正しい結果
@@ -92,7 +96,7 @@ func kindOf(tx port.Tx, parent *item.ID, p project.ID) (*item.Kind, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p != "" && it.Place.Project != p {
+	if it.Place.Project != p {
 		return nil, ErrParentElsewhere
 	}
 	return &it.Kind, nil

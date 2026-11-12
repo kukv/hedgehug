@@ -1,5 +1,118 @@
 components:
   schemas:
+    AccountBody:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        login:
+          type: string
+        method:
+          enum:
+            - device
+            - gh
+            - env
+            - keychain
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - login
+        - method
+      type: object
+    AddInputBody:
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+        method:
+          description: デバイスフローはサインインの API で登録する
+          enum:
+            - gh
+            - env
+            - keychain
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - login
+        - method
+      type: object
+    ChangeWorkspacePrefix:
+      additionalProperties: false
+      properties:
+        prefix:
+          type: string
+      required:
+        - prefix
+      type: object
+    CreateItem:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        parent:
+          description: 空は親を選んでいない
+          type: string
+        project:
+          description: 空はプロジェクトを選んでいない
+          type: string
+        title:
+          type: string
+      required:
+        - project
+        - kind
+        - title
+      type: object
+    CreateProject:
+      additionalProperties: false
+      properties:
+        end:
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        owner:
+          type: string
+        start:
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        status:
+          enum:
+            - Todo
+            - InProgress
+            - Done
+            - Pending
+            - Cancel
+            - ""
+          type: string
+        title:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+      required:
+        - title
+      type: object
+    CreateWorkspace:
+      additionalProperties: false
+      properties:
+        name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+        prefix:
+          type: string
+      required:
+        - name
+        - prefix
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -46,6 +159,118 @@ components:
           format: uri
           type: string
       type: object
+    Item:
+      additionalProperties: false
+      properties:
+        createdAt:
+          type: string
+        createdBy:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        number:
+          format: int64
+          type: integer
+        parent:
+          description: 親の内部 ID。Epic は null
+          nullable: true
+          type: string
+        project:
+          type: string
+        rank:
+          type: string
+        title:
+          type: string
+        watchers:
+          items:
+            type: string
+          nullable: true
+          type: array
+        workspace:
+          type: string
+      required:
+        - id
+        - workspace
+        - project
+        - parent
+        - number
+        - kind
+        - rank
+        - title
+        - watchers
+        - createdAt
+        - createdBy
+      type: object
+    ListOutputBody:
+      additionalProperties: false
+      properties:
+        accounts:
+          items:
+            $ref: "#/components/schemas/AccountBody"
+          nullable: true
+          type: array
+      required:
+        - accounts
+      type: object
+    Project:
+      additionalProperties: false
+      properties:
+        end:
+          type: string
+        id:
+          type: string
+        number:
+          format: int64
+          type: integer
+        owner:
+          description: ログイン名。空は「なし」
+          type: string
+        rank:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は「なし」
+          type: string
+        status:
+          enum:
+            - Todo
+            - InProgress
+            - Done
+            - Pending
+            - Cancel
+          type: string
+        title:
+          type: string
+        workspace:
+          type: string
+      required:
+        - id
+        - workspace
+        - number
+        - rank
+        - title
+        - owner
+        - status
+        - start
+        - end
+      type: object
+    RenameWorkspace:
+      additionalProperties: false
+      properties:
+        name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+      required:
+        - name
+      type: object
     SystemInfo:
       additionalProperties: false
       properties:
@@ -55,11 +280,519 @@ components:
       required:
         - version
       type: object
+    WorkspaceDetail:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        oldPrefixes:
+          items:
+            type: string
+          type: array
+        prefix:
+          type: string
+        settings:
+          $ref: "#/components/schemas/WorkspaceSettings"
+      required:
+        - oldPrefixes
+        - settings
+        - id
+        - name
+        - prefix
+      type: object
+    WorkspaceProperty:
+      additionalProperties: false
+      properties:
+        builtin:
+          type: boolean
+        hidden:
+          type: boolean
+        id:
+          type: string
+        key:
+          type: string
+        kinds:
+          items:
+            type: string
+          type: array
+        name:
+          type: string
+        type:
+          type: string
+      required:
+        - id
+        - key
+        - name
+        - type
+        - builtin
+        - kinds
+        - hidden
+      type: object
+    WorkspaceSettings:
+      additionalProperties: false
+      properties:
+        categoryDefaults:
+          additionalProperties:
+            type: string
+          type: object
+        initialPriority:
+          type: string
+        initialStatus:
+          type: string
+        priorities:
+          items:
+            $ref: "#/components/schemas/WorkspaceValue"
+          type: array
+        properties:
+          items:
+            $ref: "#/components/schemas/WorkspaceProperty"
+          type: array
+        statuses:
+          items:
+            $ref: "#/components/schemas/WorkspaceValue"
+          type: array
+        systems:
+          items:
+            $ref: "#/components/schemas/WorkspaceValue"
+          type: array
+      required:
+        - properties
+        - statuses
+        - priorities
+        - systems
+        - initialStatus
+        - initialPriority
+        - categoryDefaults
+      type: object
+    WorkspaceSummary:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        prefix:
+          type: string
+      required:
+        - id
+        - name
+        - prefix
+      type: object
+    WorkspaceValue:
+      additionalProperties: false
+      properties:
+        category:
+          description: ステータスの分類(todo・doing・done・canceled)
+          enum:
+            - todo
+            - doing
+            - done
+            - canceled
+          type: string
+        color:
+          enum:
+            - gray
+            - slate
+            - brown
+            - red
+            - rose
+            - pink
+            - magenta
+            - purple
+            - indigo
+            - blue
+            - sky
+            - cyan
+            - teal
+            - green
+            - olive
+            - amber
+            - yellow
+            - orange
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - color
+      type: object
 info:
   title: hedgehug
   version: dev
 openapi: 3.0.3
 paths:
+  /api/accounts:
+    get:
+      operationId: list-accounts
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 登録したアカウントを返す
+    post:
+      operationId: add-account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountBody"
+          description: Created
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: GitHub で確かめてからアカウントを登録する
+  /api/stores/{store}/items:
+    post:
+      operationId: create-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItem"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを作成
+  /api/stores/{store}/items/{item}:
+    get:
+      operationId: get-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを返す
+  /api/stores/{store}/projects/{project}:
+    get:
+      operationId: get-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトを返す
+  /api/stores/{store}/projects/{project}/items:
+    get:
+      operationId: list-project-items
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Item"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのすべてのアイテムを番号の順で返す
+  /api/stores/{store}/workspaces:
+    get:
+      operationId: list-workspaces
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/WorkspaceSummary"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Store のワークスペースの一覧
+    post:
+      operationId: create-workspace
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspace"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceSummary"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースを作成
+  /api/stores/{store}/workspaces/{workspace}:
+    get:
+      operationId: get-workspace
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceDetail"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースと設定
+  /api/stores/{store}/workspaces/{workspace}/name:
+    put:
+      operationId: rename-workspace
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameWorkspace"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースの名前を変更
+  /api/stores/{store}/workspaces/{workspace}/prefix:
+    put:
+      operationId: change-workspace-prefix
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeWorkspacePrefix"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 接頭辞を変更
+  /api/stores/{store}/workspaces/{workspace}/projects:
+    get:
+      operationId: list-projects
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Project"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースのプロジェクトを並び順で返す
+    post:
+      operationId: create-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProject"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトを作成
   /api/system:
     get:
       operationId: get-system

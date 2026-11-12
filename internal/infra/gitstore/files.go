@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
-
-var safeID = regexp.MustCompile(`^[0-9A-Za-z]+$`)
 
 // kindDirs は、種類ごとのフォルダと、読む用の YAML の名前。
 var kindDirs = map[change.Kind]struct{ dir, yaml string }{
@@ -24,17 +21,15 @@ var kindDirs = map[change.Kind]struct{ dir, yaml string }{
 	change.KindItem:      {"items", "item.yaml"},
 }
 
-// dirOf は、エンティティのフォルダ(Store の根からの相対パス)。
+// dirOf は、エンティティのフォルダ(Store の根からの相対パス)。ref が change.Ref.Valid でなければ
+// エラー(ID は change.ValidID なので、フォルダの名前にしても Store の外を指さない)。
 func dirOf(ref change.Ref) (string, error) {
-	k, ok := kindDirs[ref.Kind]
-	if !ok {
-		return "", fmt.Errorf("unknown kind %q", ref.Kind)
+	if !ref.Valid() {
+		return "", fmt.Errorf("ref %+v cannot be a folder", ref)
 	}
+	k := kindDirs[ref.Kind]
 	if ref.Kind == change.KindMembers {
 		return k.dir, nil
-	}
-	if !safeID.MatchString(string(ref.ID)) {
-		return "", fmt.Errorf("id %q cannot be a folder name", ref.ID)
 	}
 	return filepath.Join(k.dir, string(ref.ID)), nil
 }
@@ -76,7 +71,7 @@ func listIDs(root string, kind change.Kind) ([]change.ID, error) {
 	}
 	var ids []change.ID
 	for _, e := range entries {
-		if e.IsDir() && safeID.MatchString(e.Name()) {
+		if e.IsDir() && change.ValidID(change.ID(e.Name())) {
 			ids = append(ids, change.ID(e.Name()))
 		}
 	}
