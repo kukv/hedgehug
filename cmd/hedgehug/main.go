@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
@@ -29,8 +30,9 @@ func main() {
 }
 
 func run() error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	context.AfterFunc(ctx, stop) // 止め始めたら、2 回目の Ctrl-C ですぐに終わるようにする
 	deps, err := wire(ctx)
 	if err != nil {
 		return err
@@ -41,18 +43,24 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: httpapi.New(token, web.Dist(), deps), ReadHeaderTimeout: 10 * time.Second}
 	fmt.Printf("http://%s/#token=%s\n", ln.Addr(), token)
+	return serve(ctx, ln, httpapi.New(token, web.Dist(), deps))
+}
+
+// serve は、ctx が終わるまで ln で待ち受ける。終わったら、処理中の要求を(最大 5 秒)待ってから戻る。
+func serve(ctx context.Context, ln net.Listener, h http.Handler) error {
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	shutdown := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		wait, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second) // ctx はもう終わっているので、取り消しだけを外す
 		defer cancel()
-		_ = srv.Shutdown(shutdown)
+		shutdown <- srv.Shutdown(wait)
 	}()
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
-	return nil
+	return <-shutdown
 }
 
 func newToken() string {

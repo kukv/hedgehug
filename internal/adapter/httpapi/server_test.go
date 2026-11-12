@@ -63,6 +63,13 @@ func TestUnknownAPIIs404WithToken(t *testing.T) {
 	}
 }
 
+// ない API も、トークンがなければ 401(パスの有無を見せない)。
+func TestUnknownAPINeedsToken(t *testing.T) {
+	if code, _ := get(t, newServer(t).URL+"/api/nope", ""); code != http.StatusUnauthorized {
+		t.Errorf("status %d, want 401", code)
+	}
+}
+
 func TestStaticFilesNeedNoToken(t *testing.T) {
 	srv := newServer(t)
 	if code, body := get(t, srv.URL+"/assets/app.js", ""); code != http.StatusOK || body != "console.log(1)" {
