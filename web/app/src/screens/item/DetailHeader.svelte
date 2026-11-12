@@ -2,9 +2,10 @@
   import type { DetailView, Route } from "@hedgehug/core";
   import { IconButton, StoreBadge } from "@hedgehug/ui";
   import { detail, links } from "../../wire";
+  import ItemMenu from "./ItemMenu.svelte";
 
   // 詳細パネルのヘッダー: パンくず(Store・ワークスペース・プロジェクト・祖先)、全画面、閉じる(02「上から順の構成」)。
-  // ウォッチとメニューは A4(A2 の計画の決定 18)。
+  // ウォッチと、メニューのほかの項目は A4。メニューの枠と「テンプレートとして保存…」は B3(B3-17)。
   interface Props {
     v: DetailView;
     full: boolean;
@@ -59,6 +60,7 @@
   {/each}
 </nav>
 <span class="grow"></span>
+<ItemMenu {v} />
 <IconButton label={full ? "パネルで表示" : "全画面で表示"} size="sm" onclick={detail.toggleFull}
   >{full ? "⤡" : "⤢"}</IconButton
 >

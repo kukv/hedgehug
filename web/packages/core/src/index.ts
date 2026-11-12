@@ -140,6 +140,13 @@ export {
   typeLabels,
 } from "./features/workspaces/properties";
 export {
+  createSaveAsTemplate,
+  type SaveAsTemplate,
+  type SaveAsTemplateModel,
+  saveAsTemplateDialog,
+  saveAsTemplateLabel,
+} from "./features/workspaces/saveAsTemplate";
+export {
   createWorkspaceSettings,
   type SettingsState,
   type WorkspaceSettingsScreen,
