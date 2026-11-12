@@ -190,15 +190,25 @@ export type {
   SyncStoreStatus,
 } from "./model/sync";
 export type { SystemInfo } from "./model/system";
+export {
+  stepNone,
+  stepParent,
+} from "./model/workspace";
 export type {
   Category,
+  ChildKind,
   NewProperty,
   PropertyType,
+  SaveAsTemplateInput,
+  TemplateChild,
+  TemplateInput,
+  TemplateStep,
   ValueList,
   Workspace,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspaceSettings,
+  WorkspaceTemplate,
   WorkspaceUsage,
   WorkspaceValue,
 } from "./model/workspace";

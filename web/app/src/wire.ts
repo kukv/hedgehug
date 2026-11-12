@@ -75,6 +75,7 @@ export const workspaceSettings = createWorkspaceSettings({
   port: workspacesPort,
   catalog,
   toasts,
+  listMembers: (s) => catalogPort.listMembers(s),
 });
 export const workspaceDialog = createWorkspaceDialog({
   catalog,

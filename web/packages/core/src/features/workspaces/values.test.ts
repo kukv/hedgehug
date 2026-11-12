@@ -43,6 +43,9 @@ function settings(): WorkspaceSettings {
     initialStatus: ids.todo,
     initialPriority: ids.high,
     categoryDefaults: { todo: ids.todo, doing: ids.doing, done: ids.done, canceled: ids.cancel },
+    workflow: {},
+    templates: [],
+    templateDefaults: {},
   };
 }
 
