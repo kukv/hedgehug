@@ -180,3 +180,29 @@ func TestRebuildYAMLMatchesWritePath(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceYAMLHasWorkflowAndTemplates(t *testing.T) {
+	s, id, dir, st := ySeed(t)
+	todo, doing := st.Statuses[0].ID, st.Statuses[1].ID
+	tpl := workspace.Template{
+		ID: "01YTPL00000000000000000001", Name: "リリース作業", Kind: "Epic", Title: "リリース",
+		Children: []workspace.TemplateChild{{
+			ID: "01YCHD00000000000000000001", Kind: "Story", Title: "QA",
+			Steps: []workspace.TemplateStep{{ID: "01YSTP00000000000000000001", Title: "確認", Assignee: workspace.StepParent}},
+		}},
+	}.Ranked()
+	ds := append([]change.Draft{change.NewAdd(workspace.WorkflowField(todo), doing)}, workspace.TemplateDrafts(workspace.Template{}, tpl)...)
+	ds = append(ds, change.NewSet("template_default/Epic", nil, tpl.ID))
+	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "準備"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(yWS, ds...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := readFileString(t, dir, "workspaces/"+string(yWS)+"/workspace.yaml")
+	mustContain(t, "workspace.yaml", got,
+		"workflow:\n", "  "+string(todo)+": ["+string(doing)+"] # Todo → InProgress\n",
+		"templates:\n", "name: リリース作業\n", "kind: Epic\n", "children:\n", "title: QA",
+		"assignee: '@parent'", "template_defaults: {Epic: 01YTPL00000000000000000001}",
+	)
+}
