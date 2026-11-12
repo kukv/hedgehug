@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"net/http"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -61,3 +62,6 @@ func newToken() string {
 	_, _ = rand.Read(b) // crypto/rand.Read は失敗しない(Go 1.24 から)
 	return hex.EncodeToString(b)
 }
+
+// wrap は、本物のビルドでは何も足さない(e2e のビルドだけが、テストの入口を足す)。
+func wrap(_ string, h http.Handler) http.Handler { return h }

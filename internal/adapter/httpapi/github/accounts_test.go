@@ -151,3 +151,15 @@ func TestListShowsAuthError(t *testing.T) {
 		t.Errorf("a rejected token must show auth_error: %s", res.Body)
 	}
 }
+
+func TestDeviceFlowAccountIsReauthenticatedBySigningIn(t *testing.T) {
+	s := newServices(&apptest.GitHub{})
+	if err := s.Reauth.Accounts.Add(t.Context(), account.Account{ID: "A9", Name: "dev", Login: "jiro", Method: account.DeviceFlow}); err != nil {
+		t.Fatal(err)
+	}
+	_, api := humatest.New(t)
+	ghapi.Register(api, s)
+	if res := api.Post("/api/accounts/A9/reauth", map[string]string{}); res.Code != http.StatusConflict {
+		t.Errorf("status %d %s", res.Code, res.Body)
+	}
+}
