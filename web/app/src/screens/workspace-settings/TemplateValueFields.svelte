@@ -54,8 +54,19 @@
           />
         {/each}
       </div>
+    {:else if f.input === "number"}
+      <!-- ui の Input は text と date だけなので、数はネイティブの欄で受ける(値は文字のまま持ち、送るときに数へ直す)。 -->
+      <input
+        class="number"
+        type="number"
+        step="any"
+        aria-label={f.label}
+        {disabled}
+        {title}
+        value={one(f.propertyId)}
+        oninput={(e) => set(f.propertyId, e.currentTarget.value)}
+      >
     {:else}
-      <!-- ui の Input は text と date だけなので、数と URL は text で受ける(送るときに数へ直す)。 -->
       <Input
         label={f.label}
         type={f.input === "date" ? "date" : "text"}
@@ -77,6 +88,24 @@
   .k {
     font-size: 12.5px;
     color: var(--ink-2);
+  }
+  /* 見た目は ui の Input に合わせる。 */
+  .number {
+    height: var(--control-h);
+    border: 1px solid var(--line-input);
+    border-radius: 7px;
+    background: var(--surface);
+    padding: 0 10px;
+    min-width: 0;
+  }
+  .number:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: transparent;
+  }
+  .number:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .multi {
     display: flex;

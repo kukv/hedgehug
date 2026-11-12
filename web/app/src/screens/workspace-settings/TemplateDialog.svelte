@@ -29,8 +29,6 @@
   let { state: s, template, onclose }: Props = $props();
 
   const start = () => (template ? formOfTemplate(template) : emptyTemplateForm());
-  // 種類を変えたときに捨てる構成は、開いたときの構成と比べる(B3-14)。
-  const original = start();
   let form = $state(start());
   let error = $state("");
   let confirming = $state<string | null>(null);
@@ -49,7 +47,8 @@
 
   function save() {
     if (s.readOnly) return;
-    const note = kindChangeNote(original, form.kind);
+    // 種類を変えたときに捨てる構成は、いまのフォームの構成で数える(B3-14)。
+    const note = kindChangeNote($state.snapshot(form), form.kind);
     if (note === null) void commit();
     else confirming = note;
   }

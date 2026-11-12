@@ -188,6 +188,16 @@ describe("input", () => {
     ]);
   });
 
+  it("trims numbers and sends null for what is not a number", () => {
+    const s = { ...settings, properties: [...settings.properties, custom("n", "number")] };
+    const send = (n: string) =>
+      toTemplateInput({ ...emptyTemplateForm(), values: { n } }, s).values.n;
+    expect(send(" 3 ")).toBe(3);
+    expect(send("1.5")).toBe(1.5);
+    expect(send("")).toBeNull();
+    expect(send("abc")).toBeNull();
+  });
+
   it("reads a template back into the form", () => {
     const t: WorkspaceTemplate = {
       id: "t1",

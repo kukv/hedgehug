@@ -200,7 +200,12 @@ function inputValue(
 ): unknown {
   if (v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) return null;
   if (Array.isArray(v)) return v;
-  if (f.input === "number") return Number(v);
+  if (f.input === "number") {
+    // 前後の空白を除いて数にする。数でなければ値なし。
+    const t = v.trim();
+    const n = Number(t);
+    return t === "" || !Number.isFinite(n) ? null : n;
+  }
   const check = settings.properties.find((p) => p.id === f.propertyId)?.type === "check";
   return check ? v === "on" : v;
 }
