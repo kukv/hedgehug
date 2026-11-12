@@ -177,4 +177,47 @@ describe("createSignIn", () => {
     f.refuse.startSignIn = unreachable;
     await expect(signIn.reauth(taro)).rejects.toBeInstanceOf(Refused);
   });
+
+  it("polls a new flow even while the closed flow's request is still pending", async () => {
+    const { f, t, signIn, texts, done } = setup();
+    signIn.begin(add, code("F1"));
+    const held: ((r: SignInResult) => void)[] = [];
+    const ok = f.port.pollSignIn;
+    f.port.pollSignIn = (id) => {
+      if (id !== "F1") return ok(id);
+      f.calls.push(`pollSignIn ${id}`);
+      return new Promise((resolve) => held.push(resolve));
+    };
+    await tick(t, 5000);
+    signIn.close();
+    signIn.begin(add, code("F2"));
+    await tick(t, 5000);
+    expect(f.calls).toContain("pollSignIn F2");
+    f.polls.push(doneWith(taro));
+    await tick(t, 5000);
+    expect(get(signIn.state)).toBeNull();
+    expect(texts()).toEqual(["@taro としてサインインしました"]);
+    held[0]?.(waiting);
+    await flush();
+    expect(get(signIn.state)).toBeNull();
+    expect(done()).toBe(1);
+  });
+
+  it("does not poll twice later when a poll at expiry fails", async () => {
+    const { f, t, signIn } = setup();
+    signIn.begin(add, { ...code("F1"), expiresInSec: 5 });
+    f.polls.push(new TypeError("Failed to fetch"));
+    await tick(t, 5000);
+    const n = f.calls.length;
+    await tick(t, 5000);
+    expect(f.calls.length - n).toBe(1);
+  });
+
+  it("ignores retry while the dialog is still waiting", async () => {
+    const { f, signIn } = setup();
+    signIn.begin(add, code("F1"));
+    await signIn.retry();
+    expect(f.calls).toEqual([]);
+    expect(get(signIn.state)).toMatchObject({ code: { id: "F1" }, retrying: false });
+  });
 });

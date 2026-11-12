@@ -68,7 +68,8 @@ export function createSignIn(deps: SignInDeps): SignIn {
   let flow: string | null = null;
   let next: unknown = null;
   let expiry: unknown = null;
-  let inFlight = false;
+  // asking は、問い合わせ中の流れの ID。別の流れの問い合わせとは重ねて数えない。
+  let asking: string | null = null;
   // again は、問い合わせのあいだに期限が来たとき、答えを受けたらすぐ問い合わせ直す印。
   let again = false;
   const patch = (p: Partial<SignInDialogState>) => state.update((s) => (s ? { ...s, ...p } : s));
@@ -164,14 +165,17 @@ export function createSignIn(deps: SignInDeps): SignIn {
   function failed(s: SignInDialogState, e: unknown) {
     if (e instanceof NotFound) end("expired");
     else if (e instanceof Refused) fail(s.target, { error: e.message });
-    else wait(s.code.intervalSec);
+    else {
+      again = false;
+      wait(s.code.intervalSec);
+    }
   }
 
   async function poll() {
     const id = flow;
     const s = get(state);
     if (id === null || s === null) return;
-    if (inFlight) {
+    if (asking === id) {
       again = true;
       return;
     }
@@ -179,16 +183,16 @@ export function createSignIn(deps: SignInDeps): SignIn {
       deps.timer.clear(next);
       next = null;
     }
-    inFlight = true;
+    asking = id;
     let r: SignInResult;
     try {
       r = await deps.accounts.pollSignIn(id);
     } catch (e) {
-      inFlight = false;
+      if (asking === id) asking = null;
       if (id === flow) failed(s, e);
       return;
     }
-    inFlight = false;
+    if (asking === id) asking = null;
     if (id === flow) answer(s.target, r);
     // 閉じたあとに済んだと分かったら、一覧だけ読み直す(決定 S10)。
     else if (r.status === "done") deps.onDone();
@@ -213,7 +217,7 @@ export function createSignIn(deps: SignInDeps): SignIn {
     },
     async retry() {
       const s = get(state);
-      if (!s || s.retrying) return;
+      if (!s || s.ended === "" || s.retrying) return;
       patch({ retrying: true, error: "" });
       try {
         const code = await deps.accounts.startSignIn(startOf(s.target));
