@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 func headCount(t *testing.T, dir string) int {
@@ -105,6 +106,10 @@ kind: Task
 rank: V
 title: ログイン画面
 created: {at: "2026-11-12T09:00:00.000+09:00", by: taro}
+status: null
+priority: null
+systems: []
+fields: {}
 watchers: [taro]
 `
 	if string(b) != want {
@@ -265,5 +270,58 @@ func TestNonUserWriteIsByBot(t *testing.T) {
 	c := headCommit(t, dir)
 	if c.Author.Name != "hedgehug[bot]" || c.Author.Email != "bot@hedgehug.invalid" || c.Committer.Name != "hedgehug[bot]" || c.Committer.Email != "bot@hedgehug.invalid" {
 		t.Errorf("author = %+v, committer = %+v", c.Author, c.Committer)
+	}
+}
+
+// 値を持つアイテムの item.yaml は、status・priority・systems・fields を書く(値のないものは空)。
+func TestItemYAMLValues(t *testing.T) {
+	const (
+		sDoing change.ID = "01STATUS00000000000000000B"
+		yAPI   change.ID = "01SYS00000000000000000000B"
+		fEnv   change.ID = "01PROP0000000000000000000A" // 単一選択
+		fTags  change.ID = "01PROP0000000000000000000B" // 複数選択
+		vProd  change.ID = "01CHOICE00000000000000000A"
+		vA     change.ID = "01CHOICE00000000000000000B"
+		vB     change.ID = "01CHOICE00000000000000000C"
+	)
+	s, id, dir := newStore(t)
+	if err := apptest.Sample(t.Context(), s, id); err != nil {
+		t.Fatal(err)
+	}
+	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "値を付ける"}, func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask,
+			change.NewSet("status", nil, sDoing),
+			change.NewAdd("systems", yAPI),
+			change.NewSet(item.FieldKey(fEnv), nil, vProd),
+			change.NewAdd(item.FieldKey(fTags), vB),
+			change.NewAdd(item.FieldKey(fTags), vA),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(it item.ID) string {
+		b, err := os.ReadFile(filepath.Join(dir, "items", string(it), "item.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	y := read(apptest.SampleTask)
+	for _, want := range []string{
+		"status: " + string(sDoing) + "\n",
+		"priority: null\n",
+		"systems: [" + string(yAPI) + "]\n",
+		"fields:\n  " + string(fEnv) + ": " + string(vProd) + "\n  " + string(fTags) + ": [" + string(vA) + ", " + string(vB) + "]\n",
+	} {
+		if !strings.Contains(y, want) {
+			t.Errorf("item.yaml に %q がない:\n%s", want, y)
+		}
+	}
+	y = read(apptest.SampleEpic)
+	for _, want := range []string{"status: null\n", "priority: null\n", "systems: []\n", "fields: {}\n"} {
+		if !strings.Contains(y, want) {
+			t.Errorf("値のないアイテムの item.yaml に %q がない:\n%s", want, y)
+		}
 	}
 }

@@ -33,3 +33,6 @@ func NewAdd(f string, v any) Draft { return Draft{T: Add, F: f, To: Value(v)} }
 
 // NewRemove は、値を複数持つ項目からの、値 1 つの取り除き。
 func NewRemove(f string, v any) Draft { return Draft{T: Remove, F: f, From: Value(v)} }
+
+// NewDelete は、f が指すものの削除。from も to も持たない。
+func NewDelete(f string) Draft { return Draft{T: Delete, F: f} }
