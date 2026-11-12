@@ -49,6 +49,10 @@ export interface AccountRow {
   status: AccountRowStatus;
 }
 
+export interface AddStep {
+  title: string;
+}
+
 export interface ChangeWorkspacePrefix {
   prefix: string;
 }
@@ -184,6 +188,10 @@ export interface Member {
   name: string;
 }
 
+export interface NextNumber {
+  number: number;
+}
+
 export type ProjectStatus = typeof ProjectStatus[keyof typeof ProjectStatus];
 
 
@@ -207,6 +215,10 @@ export interface Project {
   status: ProjectStatus;
   title: string;
   workspace: string;
+}
+
+export interface RenameItem {
+  title: string;
 }
 
 export interface RenameWorkspace {
@@ -752,6 +764,114 @@ export const getItem = async (store: string,
 
 
 
+export const getMoveItemUpUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-up`
+}
+
+/**
+ * @summary アイテムを直前の兄弟と入れ替える
+ */
+export const moveItemUp = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getMoveItemUpUrl(store,item),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getAddStepUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/steps`
+}
+
+/**
+ * @summary アイテムの子の末尾に Step を作る
+ */
+export const addStep = async (store: string,
+    item: string,
+    addStepBody: AddStep, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getAddStepUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(addStepBody)
+  }
+);}
+
+
+
+export const getRenameItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/title`
+}
+
+/**
+ * @summary アイテムのタイトルを変える
+ */
+export const renameItem = async (store: string,
+    item: string,
+    renameItemBody: RenameItem, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getRenameItemUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameItemBody)
+  }
+);}
+
+
+
 export const getGetMeUrl = (store: string,) => {
 
 
@@ -941,6 +1061,34 @@ export const getWorkspace = async (store: string,
 
 
 
+export const getFindItemByNumberUrl = (store: string,
+    workspace: string,
+    number: number,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/items/by-number/${encodeURIComponent(String(number))}`
+}
+
+/**
+ * @summary ワークスペースの番号でアイテムを返す
+ */
+export const findItemByNumber = async (store: string,
+    workspace: string,
+    number: number, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+  return fetcher<Item>(getFindItemByNumberUrl(store,workspace,number),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getRenameWorkspaceUrl = (store: string,
     workspace: string,) => {
 
@@ -977,6 +1125,32 @@ return fetcher<void>(getRenameWorkspaceUrl(store,workspace),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(renameWorkspaceBody)
+  }
+);}
+
+
+
+export const getNextItemNumberUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/next-item-number`
+}
+
+/**
+ * @summary ワークスペースで次に作るアイテムの番号を返す
+ */
+export const nextItemNumber = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<NextNumber> => {
+
+  return fetcher<NextNumber>(getNextItemNumberUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
