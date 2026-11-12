@@ -24,6 +24,8 @@ const (
 	Set    Type = "set"
 	Add    Type = "add"
 	Remove Type = "remove"
+	// Delete は削除。f は消すもの(値なら "statuses/<ID>"、プロパティなら "properties/<ID>")。
+	Delete Type = "delete"
 )
 
 // TimeLayout は記録の時刻の書き方(ミリ秒までの RFC 3339、このマシンの時刻帯付き)。

@@ -161,7 +161,7 @@ func TestRealGitSyncReturnsRefusalThatIsNotAnOverlap(t *testing.T) {
 	a.write(t, "a", set("title", "", "A"))
 	_, err := a.rep.Sync(t.Context(), a.id, remote)
 	if err == nil || errors.Is(err, port.ErrSendConflict) || errors.Is(err, errRejected) ||
-		!strings.Contains(err.Error(), "pre-receive hook declined") {
+		!errors.Is(err, port.ErrWriteDenied) || !strings.Contains(err.Error(), "pre-receive hook declined") {
 		t.Errorf("err = %v", err)
 	}
 	b, rerr := os.ReadFile(count) //nolint:gosec // G304: テストの一時フォルダのファイル

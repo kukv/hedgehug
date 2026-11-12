@@ -62,6 +62,12 @@ type Item struct {
 	Title    string
 	Created  Stamp
 	Watchers []string // ウォッチ中の人のログイン名
+
+	// 値は内部 ID で指す(保存形式「アイテムの例」)。初期値と変更の操作は A3 が足す(B2-1)。
+	Status   change.ID                 // なければ空
+	Priority change.ID                 // なければ空
+	Systems  []change.ID               // 関連システム
+	Choices  map[change.ID][]change.ID // 選択式の追加プロパティの値。単一選択は 1 つ。なければ nil
 }
 
 // DisplayID は、画面の ID(HH-12)。
@@ -78,11 +84,9 @@ func Create(it Item) change.Draft {
 	})
 }
 
-var opts = change.Options{Multi: func(f string) bool { return f == "watchers" }}
-
 // FromLog は、アイテムのログからいまの値を作る。作成の行がなければ false。
 func FromLog(log []change.Record) (Item, bool) {
-	s := change.Resolve(log, opts)
+	s := change.Resolve(log, change.Options{Multi: multi(log)})
 	if s.Created == nil {
 		return Item{}, false
 	}
@@ -98,5 +102,6 @@ func FromLog(log []change.Record) (Item, bool) {
 			it.Watchers = append(it.Watchers, login)
 		}
 	}
+	readValues(&it, s)
 	return it, true
 }
