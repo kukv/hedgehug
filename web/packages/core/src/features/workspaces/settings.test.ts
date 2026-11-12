@@ -82,6 +82,31 @@ describe("workspace settings", () => {
     expect(loads()).toBe(4);
   });
 
+  it("clears the state while another workspace loads", async () => {
+    const { screen } = await setup();
+    await screen.open("S1", "S1-W1");
+    const opening = screen.open("S1", "S1-W2");
+    expect(get(screen.state)).toBeNull();
+    await opening;
+    expect(get(screen.state)?.detail.id).toBe("S1-W2");
+  });
+
+  it("reloads the settings even when the catalog load throws", async () => {
+    const catalogPort = fakeCatalogPort();
+    const catalog = createCatalog(catalogPort);
+    await catalog.load();
+    const port = fakeWorkspacesPort();
+    const toasts = createToasts({ set: () => 0, clear: () => {} });
+    const screen = createWorkspaceSettings({ port, catalog, toasts });
+    await screen.open("S1", "S1-W1");
+    catalogPort.listStores = async () => {
+      throw new Error("down");
+    };
+    const before = port.calls.filter((c) => c === "get").length;
+    await expect(screen.run((p, s, w) => p.rename(s, w, "フロント"))).rejects.toThrow("down");
+    expect(port.calls.filter((c) => c === "get").length).toBe(before + 1);
+  });
+
   it("is read only on a read-only store", async () => {
     const { screen } = await setup();
     await screen.open("S2", "S2-W1");

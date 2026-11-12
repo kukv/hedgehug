@@ -102,7 +102,11 @@ export function createWorkspaceSettings(deps: {
   return {
     state: readonly(state),
     async open(storeId, workspaceId) {
-      if (current?.storeId !== storeId || current.workspaceId !== workspaceId) tab = "general";
+      if (current?.storeId !== storeId || current.workspaceId !== workspaceId) {
+        tab = "general";
+        // 古いワークスペースを、新しいアドレスの下に出さない。
+        state.set(null);
+      }
       current = { storeId, workspaceId };
       await reload();
     },
@@ -130,8 +134,9 @@ export function createWorkspaceSettings(deps: {
         if (!(e instanceof Refused)) throw e;
         toasts.show(e.message, { error: true });
       } finally {
-        if (catalogChanged) await catalog.load();
+        // 読み直しを先にする。サイドバーの読み直しが投げても、設定の読み直しを飛ばさない。
         await reload();
+        if (catalogChanged) await catalog.load();
       }
       return succeeded;
     },

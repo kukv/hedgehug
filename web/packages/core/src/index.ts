@@ -70,6 +70,7 @@ export {
   type ToastItem,
   type Toasts,
 } from "./features/toasts/toasts";
+export { prefixConfirm, prefixExamples, prefixHelp } from "./features/workspaces/general";
 export {
   createWorkspaceSettings,
   type SettingsState,
