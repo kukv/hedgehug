@@ -1,4 +1,4 @@
-.PHONY: generate build fmt fmt-check lint tidy-check test cover clean-cache check
+.PHONY: generate build fmt fmt-check lint tidy-check test cover clean-cache web-check check
 
 # 生成物(api/openapi.yaml)を書く。
 generate:
@@ -38,4 +38,9 @@ clean-cache:
 	go clean -cache -testcache
 
 # CI が確かめることを手元でまとめて行う。
-check: tidy-check lint fmt-check test
+check: tidy-check lint fmt-check test web-check
+
+# 画面を確かめる: Biome、型、単体テスト、依存の向き、大きさの上限(CI の web と同じ)。
+web-check:
+	cd web && pnpm install --frozen-lockfile
+	cd web && pnpm lint && pnpm check && pnpm test && pnpm deps && pnpm size
