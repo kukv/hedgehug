@@ -2,14 +2,18 @@ import type { Item, ItemsPort } from "@hedgehug/core";
 import { call } from "./errors";
 import {
   type Item as ApiItem,
+  addItemValue,
   addStep,
+  checkStep,
   createItem,
   findItemByNumber,
   getItem,
   listProjectItems,
   moveItemUp,
   nextItemNumber,
+  removeItemValue,
   renameItem,
+  setItemProperty,
 } from "./generated";
 
 export function toItem(storeId: string, it: ApiItem): Item {
@@ -26,6 +30,18 @@ export function toItem(storeId: string, it: ApiItem): Item {
     watchers: it.watchers ?? [],
     createdAt: it.createdAt,
     createdBy: it.createdBy,
+    status: it.status,
+    priority: it.priority,
+    assignee: it.assignee,
+    start: it.start,
+    end: it.end,
+    points: it.points ?? null,
+    estimate: it.estimate ?? null,
+    systems: it.systems ?? [],
+    choices: Object.fromEntries(
+      Object.entries(it.choices ?? {}).map(([id, ids]) => [id, ids ?? []]),
+    ),
+    fields: (it.fields ?? {}) as Item["fields"],
   };
 }
 
@@ -45,6 +61,7 @@ export function createItemsPort(): ItemsPort {
             parent: input.parentId ?? "",
             kind: input.kind,
             title: input.title,
+            values: input.values,
           }),
         ),
       ),
@@ -52,6 +69,18 @@ export function createItemsPort(): ItemsPort {
       call(async () => toItem(storeId, await renameItem(storeId, itemId, { title }))),
     addStep: (storeId, parentId, title) =>
       call(async () => toItem(storeId, await addStep(storeId, parentId, { title }))),
+    setProperty: (storeId, itemId, propertyId, value) =>
+      call(async () =>
+        toItem(storeId, await setItemProperty(storeId, itemId, propertyId, { value })),
+      ),
+    addValue: (storeId, itemId, propertyId, valueId) =>
+      call(async () => toItem(storeId, await addItemValue(storeId, itemId, propertyId, valueId))),
+    removeValue: (storeId, itemId, propertyId, valueId) =>
+      call(async () =>
+        toItem(storeId, await removeItemValue(storeId, itemId, propertyId, valueId)),
+      ),
+    checkStep: (storeId, itemId, done) =>
+      call(async () => toItem(storeId, await checkStep(storeId, itemId, { done }))),
     moveUp: (storeId, itemId) =>
       call(async () => {
         await moveItemUp(storeId, itemId);

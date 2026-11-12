@@ -32,7 +32,13 @@ describe("createProjectScreen", () => {
   it("reloads the shown project and is null for a project not in the catalog", async () => {
     const { screen, items } = await setup();
     await screen.load("S1", "S1-P1");
-    await items.create("S1", { projectId: "S1-P1", parentId: null, kind: "Epic", title: "新しい" });
+    await items.create("S1", {
+      projectId: "S1-P1",
+      parentId: null,
+      kind: "Epic",
+      title: "新しい",
+      values: {},
+    });
     await screen.reload();
     expect(get(screen.view)?.items).toHaveLength(4);
     await screen.load("S1", "nope");

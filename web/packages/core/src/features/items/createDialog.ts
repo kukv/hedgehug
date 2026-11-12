@@ -128,7 +128,13 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     const parentId = kind === "Epic" ? null : s.form.parentId;
     let created: Item;
     try {
-      created = await deps.items.create(store.id, { projectId, parentId, kind, title });
+      created = await deps.items.create(store.id, {
+        projectId,
+        parentId,
+        kind,
+        title,
+        values: {}, // Task 10 で作成ダイアログの値に替える
+      });
     } catch (e) {
       if (!(e instanceof Refused)) throw e;
       state.set({ ...s, error: e.message });
