@@ -2,6 +2,7 @@ package change_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,6 +68,26 @@ func TestCreateHasEmptyPrev(t *testing.T) {
 	want := `{"id":"a","op":"a","at":"1970-01-01T09:00:00.000+09:00","by":"t","actor":"user","t":"create","to":{"id":"a"},"prev":[]}`
 	if string(b) != want {
 		t.Errorf("got  %s\nwant %s", b, want)
+	}
+}
+
+func TestRecordUnmarshalErrors(t *testing.T) {
+	cases := []struct{ name, in string }{
+		{"invalid JSON", `{"id":`},
+		{"bad at", `{"id":"a","op":"a","at":"yesterday","by":"t","actor":"user","t":"set","prev":[]}`},
+		{"unknown actor", `{"id":"a","op":"a","at":"2026-01-02T03:04:05.000+09:00","by":"t","actor":"robot","t":"set","prev":[]}`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var r change.Record
+			err := r.UnmarshalJSON([]byte(c.in)) // json.Unmarshal は壊れた JSON をここへ渡す前に弾くので、直接呼ぶ
+			if err == nil {
+				t.Fatal("error expected")
+			}
+			if !strings.Contains(err.Error(), "record") {
+				t.Errorf("error lacks record context: %v", err)
+			}
+		})
 	}
 }
 

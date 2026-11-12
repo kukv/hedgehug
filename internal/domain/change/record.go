@@ -69,7 +69,7 @@ func (r Record) MarshalJSON() ([]byte, error) {
 func (r *Record) UnmarshalJSON(b []byte) error {
 	var l line
 	if err := json.Unmarshal(b, &l); err != nil {
-		return err
+		return fmt.Errorf("record: %w", err)
 	}
 	at, err := time.Parse(time.RFC3339, l.At)
 	if err != nil {
