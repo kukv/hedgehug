@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -91,6 +92,34 @@ func TestSyncGivesUpWhenTheRemoteStalls(t *testing.T) {
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("took %v", d)
+	}
+}
+
+// 06「同期のエラー」: 送信の途中で接続が切れたら、サーバーが断ったのではないので「接続できません」。
+func TestRealGitSyncUnreachableWhenConnectionBreaksWhileSending(t *testing.T) {
+	var armed, broke atomic.Bool
+	remote, _ := newRealRemote(t, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/git-receive-pack") && armed.Load() {
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err == nil {
+					broke.Store(true)
+					_ = conn.Close()
+				}
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	a := firstMachine(t, remote)
+	a.write(t, "a", set("title", "", "A"))
+	armed.Store(true)
+	_, err := a.rep.Sync(t.Context(), a.id, remote)
+	if !broke.Load() {
+		t.Fatal("the send did not reach the breaking server")
+	}
+	if !errors.Is(err, port.ErrUnreachable) || errors.Is(err, port.ErrWriteDenied) {
+		t.Errorf("Sync = %v, want ErrUnreachable", err)
 	}
 }
 

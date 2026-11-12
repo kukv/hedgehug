@@ -5,9 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"syscall"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/client"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -111,6 +115,22 @@ func refused(ctx context.Context, err error) error {
 		return fmt.Errorf("%w: %w", port.ErrUnreachable, errStalled)
 	case errors.Is(err, transport.ErrAuthenticationRequired):
 		return fmt.Errorf("%w: %w", port.ErrAuthFailed, err)
+	case brokenConnection(err):
+		return fmt.Errorf("%w: %w", port.ErrUnreachable, err)
 	}
 	return fmt.Errorf("%w: %w", port.ErrWriteDenied, err)
+}
+
+// brokenConnection は、err がサーバーの断りでなく、通信が途中で切れたことか(サーバーが応答を返していれば false)。
+// go-git は通信の失敗を *plumbing.UnexpectedError に包み、Unwrap を持たないので、中身を取り出して調べる。
+func brokenConnection(err error) bool {
+	var ue *plumbing.UnexpectedError
+	if errors.As(err, &ue) {
+		err = ue.Err
+	}
+	var ne net.Error
+	var uerr *url.Error
+	return errors.As(err, &ne) || errors.As(err, &uerr) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE)
 }

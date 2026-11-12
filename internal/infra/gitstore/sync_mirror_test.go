@@ -2,6 +2,9 @@ package gitstore
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +31,43 @@ func TestMirrorSendsToEmptyAndBehindMirrors(t *testing.T) {
 	if err := a.rep.Mirror(t.Context(), a.id, mirror); err != nil {
 		t.Errorf("same head: %v", err)
 	}
+}
+
+// ミラーとの通信のあいだ、Store のロックを持たない(Store の読み書きを最大 60 秒止めない)。
+func TestMirrorDoesNotHoldTheStoreLockWhileTalkingToTheMirror(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		once.Do(func() { close(entered) })
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	a := firstMachine(t, newRemote(t))
+	done := make(chan error, 1)
+	go func() { done <- a.rep.Mirror(t.Context(), a.id, port.Remote{URL: srv.URL + "/o/m.git"}) }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Mirror did not reach the mirror")
+	}
+	wrote := make(chan struct{})
+	go func() {
+		rename(t, a, "ミラーの通信中")
+		close(wrote)
+	}()
+	select {
+	case <-wrote:
+	case <-time.After(2 * time.Second):
+		t.Error("a write was blocked while Mirror talked to the mirror")
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Logf("Mirror: %v", err)
+	}
+	<-wrote
 }
 
 // ミラーにだけ保存があれば、上書きしないため送らない。

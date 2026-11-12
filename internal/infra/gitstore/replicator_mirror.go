@@ -28,28 +28,18 @@ func (r *Replicator) Mirror(ctx context.Context, id port.StoreID, mirror port.Re
 	if err != nil {
 		return err
 	}
-	unlock, err := open(root)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	repo, err := git.PlainOpen(root)
-	if err != nil {
-		return err
-	}
-	head, err := repo.Head()
+	repo, name, mine, err := readHead(root)
 	if err != nil {
 		return err
 	}
 	l := newLink(repo, mirror)
-	theirs, err := l.fetchTo(ctx, repo, head.Name(), mirrorRefPrefix(mirror.URL))
+	theirs, err := l.fetchTo(ctx, repo, name, mirrorRefPrefix(mirror.URL))
 	if errors.Is(err, port.ErrNoCommonHistory) {
 		return port.ErrMirrorUnrelated
 	}
 	if err != nil {
 		return err
 	}
-	mine := head.Hash()
 	if theirs == mine {
 		return nil
 	}
@@ -58,11 +48,30 @@ func (r *Replicator) Mirror(ctx context.Context, id port.StoreID, mirror port.Re
 			return err
 		}
 	}
-	err = l.send(ctx, head.Name(), theirs, mine)
+	err = l.send(ctx, name, theirs, mine)
 	if errors.Is(err, errRejected) {
 		return port.ErrMirrorAhead // 送るあいだに、ミラーが先に進んだ
 	}
 	return err
+}
+
+// readHead は、Store の先端のブランチ名とハッシュを読む。ロックを持つのは読むあいだだけで、
+// ミラーとの通信(最大 60 秒)のあいだは持たない。ミラーへは、ここで読んだハッシュで合わせる。
+func readHead(root string) (*git.Repository, plumbing.ReferenceName, plumbing.Hash, error) {
+	unlock, err := open(root)
+	if err != nil {
+		return nil, "", plumbing.ZeroHash, err
+	}
+	defer unlock()
+	repo, err := git.PlainOpen(root)
+	if err != nil {
+		return nil, "", plumbing.ZeroHash, err
+	}
+	head, err := repo.Head()
+	if err != nil {
+		return nil, "", plumbing.ZeroHash, err
+	}
+	return repo, head.Name(), head.Hash(), nil
 }
 
 // mirrorBehind は、ミラーの先端 theirs が自分の先端 mine の祖先なら nil。共通の祖先がなければ
