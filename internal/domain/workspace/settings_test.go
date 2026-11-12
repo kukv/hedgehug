@@ -132,3 +132,51 @@ func TestCreateWithSettingsChecksLikeCreate(t *testing.T) {
 		t.Error("empty name accepted")
 	}
 }
+
+func TestRowsForUnknownIDsDoNotAddEntries(t *testing.T) {
+	w := workspace.Workspace{ID: "01WS0000000000000000000001", Name: "Web", Prefix: "HH"}
+	s := workspace.DefaultSettings(seqIDs())
+	d, _ := workspace.CreateWithSettings(w, s)
+	log := stamp(nil, d, "c", 0)
+	log = stamp(log, change.NewSet("statuses/01GHOST/color", "gray", "red"), "s1", 1)
+	log = stamp(log, change.NewSet("properties/01GHOST/hidden", false, true), "s2", 2)
+	log = stamp(log, change.NewAdd("properties/01GHOST2/kinds", "Task"), "s3", 3)
+	got, _ := workspace.SettingsFromLog(log)
+	if !reflect.DeepEqual(got, s) {
+		t.Errorf("settings changed:\n%+v\nwant\n%+v", got, s)
+	}
+}
+
+func TestUnknownCategoryDefaultIsIgnored(t *testing.T) {
+	w := workspace.Workspace{ID: "01WS0000000000000000000001", Name: "Web", Prefix: "HH"}
+	s := workspace.DefaultSettings(seqIDs())
+	d, _ := workspace.CreateWithSettings(w, s)
+	log := stamp(nil, d, "c", 0)
+	log = stamp(log, change.NewSet("category_default/someday", nil, string(s.Statuses[0].ID)), "s1", 1)
+	got, _ := workspace.SettingsFromLog(log)
+	if !reflect.DeepEqual(got.CategoryDefaults, s.CategoryDefaults) {
+		t.Errorf("category defaults = %v", got.CategoryDefaults)
+	}
+}
+
+func TestListsAreInRankOrderThenID(t *testing.T) {
+	w := workspace.Workspace{ID: "01WS0000000000000000000001", Name: "Web", Prefix: "HH"}
+	s := workspace.DefaultSettings(seqIDs())
+	a, b, c := s.Statuses[0].ID, s.Statuses[1].ID, s.Statuses[2].ID
+	d, _ := workspace.CreateWithSettings(w, s)
+	log := stamp(nil, d, "c", 0)
+	// a と b の順位を入れ替え、c を a の元の順位にそろえる。
+	ra, rb := s.Statuses[0].Rank, s.Statuses[1].Rank
+	log = stamp(log, change.NewSet("statuses/"+string(a)+"/rank", ra, rb), "s1", 1)
+	log = stamp(log, change.NewSet("statuses/"+string(b)+"/rank", rb, ra), "s2", 2)
+	log = stamp(log, change.NewSet("statuses/"+string(c)+"/rank", s.Statuses[2].Rank, ra), "s3", 3)
+	got, _ := workspace.SettingsFromLog(log)
+	var ids []change.ID
+	for _, v := range got.Statuses[:3] {
+		ids = append(ids, v.ID)
+	}
+	// 順位 ra は b と c(ID の順)、順位 rb は a。
+	if !reflect.DeepEqual(ids, []change.ID{b, c, a}) {
+		t.Errorf("order = %v, want %v", ids, []change.ID{b, c, a})
+	}
+}

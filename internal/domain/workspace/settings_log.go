@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 
@@ -12,7 +13,8 @@ import (
 var valueLists = []string{"statuses", "priorities", "systems"}
 
 // CreateWithSettings は、設定を含めたワークスペースの作成の変更。検査は Create と同じ。
-// 設定は項目ごと(statuses/<ID>/name など)に、作成の 1 行の to に書く(この計画の決定 2・4)。
+// 設定は項目ごと(statuses/<ID>/name など)に、作成の 1 行の to に書く。
+// 項目ごとに後勝ちで合わせるため(保存形式の設計書「変更記録」「いまの値の決め方」)。
 func CreateWithSettings(w Workspace, s Settings) (change.Draft, error) {
 	if _, err := Create(w); err != nil {
 		return change.Draft{}, err
@@ -102,7 +104,7 @@ func (b *builder) set(f string, raw json.RawMessage) {
 		_ = json.Unmarshal(raw, &b.acc.InitialPriority)
 	case len(parts) == 2 && parts[0] == "category_default":
 		var id change.ID
-		if json.Unmarshal(raw, &id) == nil {
+		if json.Unmarshal(raw, &id) == nil && validCategory(Category(parts[1])) {
 			b.acc.CategoryDefaults[Category(parts[1])] = id
 		}
 	}
@@ -172,6 +174,11 @@ func byRank[T any](m map[change.ID]*T, rank func(*T) (string, change.ID)) []T {
 
 func (b *builder) settings() Settings {
 	s := b.acc
+	// 作成の行にない ID への行だけで生じた、名前の空の項目は一覧に出さない。
+	maps.DeleteFunc(b.props, func(_ change.ID, p *Property) bool { return p.Name == "" })
+	for _, m := range b.vals {
+		maps.DeleteFunc(m, func(_ change.ID, v *Value) bool { return v.Name == "" })
+	}
 	s.Properties = byRank(b.props, func(p *Property) (string, change.ID) { return p.Rank, p.ID })
 	valueRank := func(v *Value) (string, change.ID) { return v.Rank, v.ID }
 	s.Statuses = byRank(b.vals["statuses"], valueRank)
