@@ -39,7 +39,7 @@ func clearItems(tx port.Tx, ws workspace.ID, p workspace.Property) error {
 		return err
 	}
 	for _, it := range its {
-		if ds := clearChoice(p, it.Choices[p.ID]); len(ds) > 0 {
+		if ds := clearValue(p, it); len(ds) > 0 {
 			if err := tx.WriteItems().Append(it.ID, ds...); err != nil {
 				return err
 			}
@@ -48,15 +48,17 @@ func clearItems(tx port.Tx, ws workspace.ID, p workspace.Property) error {
 	return nil
 }
 
-// clearChoice は、アイテムからプロパティ p の値 vs を外す行。複数選択は値ごとに remove、ほかは set null。
-func clearChoice(p workspace.Property, vs []change.ID) []change.Draft {
+// clearValue は、アイテム it からプロパティ p の値を外す行(型で読み分ける、A3 前半の決定 9・32)。
+// 複数選択は値ごとに remove、ほかの型は値が入っていれば set null。
+func clearValue(p workspace.Property, it item.Item) []change.Draft {
 	f := item.FieldKey(p.ID)
-	if len(vs) == 0 {
+	if p.Type != workspace.TypeMulti {
+		if raw, ok := it.Fields[p.ID]; ok {
+			return []change.Draft{change.NewSet(f, raw, nil)}
+		}
 		return nil
 	}
-	if p.Type != workspace.TypeMulti {
-		return []change.Draft{change.NewSet(f, vs[0], nil)}
-	}
+	vs := it.Choices[p.ID]
 	ds := make([]change.Draft, 0, len(vs))
 	for _, v := range vs {
 		ds = append(ds, change.NewRemove(f, v))

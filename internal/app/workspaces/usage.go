@@ -41,7 +41,8 @@ func (s Service) Usage(ctx context.Context, store port.StoreID, ws workspace.ID)
 	return u, err
 }
 
-// count は、アイテム 1 つが持つ値とプロパティを数える。
+// count は、アイテム 1 つが持つ値とプロパティを数える。プロパティは、選択式の値(Choices)か
+// どの型の値(Fields)かが入っていれば 1 回数える(A3 前半の決定 32)。
 func (u Usage) count(it item.Item) {
 	for _, v := range append([]change.ID{it.Status, it.Priority}, it.Systems...) {
 		if v != "" {
@@ -49,11 +50,14 @@ func (u Usage) count(it item.Item) {
 		}
 	}
 	for p, vs := range it.Choices {
-		if len(vs) > 0 {
+		if _, ok := it.Fields[p]; len(vs) > 0 && !ok {
 			u.Properties[p]++
 		}
 		for _, v := range vs {
 			u.Values[v]++
 		}
+	}
+	for p := range it.Fields {
+		u.Properties[p]++
 	}
 }

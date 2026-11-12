@@ -176,3 +176,48 @@ func TestDeleteProperty(t *testing.T) {
 		t.Errorf("choices = %v", it.Choices)
 	}
 }
+
+// 選択式でない追加プロパティを消すと、その値も外れる(03「プロパティ」の「削除」、A3 前半の決定 32)。
+// 内部 ID の形をしたテキストも、テキストとして 1 行で外す。
+func TestDeletePropertyClearsPlainValues(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, _ := s.Create(ctx, store, "Web", "HH")
+	memo, _ := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "メモ", Key: "memo", Type: workspace.TypeText})
+	size, _ := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "大きさ", Key: "size", Type: workspace.TypeNumber})
+	done, _ := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "確認", Key: "done", Type: workspace.TypeCheck})
+	ref, _ := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "参照", Key: "ref", Type: workspace.TypeText})
+	id := putItem(t, s, w.ID,
+		change.NewSet(item.FieldKey(memo.ID), nil, "下書き"),
+		change.NewSet(item.FieldKey(size.ID), nil, 3),
+		change.NewSet(item.FieldKey(done.ID), nil, true),
+		change.NewSet(item.FieldKey(ref.ID), nil, "01IDLIKE000000000000000000"))
+	if it := itemOf(t, s, id); len(it.Fields) != 4 {
+		t.Fatalf("precondition: fields = %v", it.Fields)
+	}
+	for _, p := range []change.ID{memo.ID, size.ID, done.ID, ref.ID} {
+		if err := s.DeleteProperty(ctx, store, w.ID, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if it := itemOf(t, s, id); it.Fields != nil || len(it.Choices) != 0 {
+		t.Errorf("fields = %v, choices = %v", it.Fields, it.Choices)
+	}
+	var log []change.Record
+	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
+		var err error
+		log, err = r.Changes().Of(change.Ref{Kind: change.KindItem, ID: id})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows := 0
+	for _, r := range log {
+		if r.F == item.FieldKey(ref.ID) {
+			rows++
+		}
+	}
+	if rows != 2 { // 付けた行と外した行
+		t.Errorf("参照の行 = %d、want 2", rows)
+	}
+}
