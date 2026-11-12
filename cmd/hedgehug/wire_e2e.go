@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/syncing"
 )
 
 // e2e 用のビルドの Store の ID。どちらにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。
@@ -39,6 +41,19 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 			return httpapi.Deps{}, err
 		}
 	}
+	hub := events.NewHub()
+	syncSvc := &syncing.Service{
+		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{
+			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: "e2e-account"},
+			{ID: readonlyStore, Name: "readonly", Remote: "https://example.invalid/readonly.git", Account: "e2e-account", ReadOnly: true},
+		}},
+		Tokens:     &apptest.SyncTokens{Tokens: map[port.StoreID]string{e2eStore: "e2e-gh-token", readonlyStore: "e2e-gh-token"}},
+		Replicator: &apptest.Replicator{},
+		State:      apptest.NewSyncState(),
+		Events:     hub,
+		Clock:      apptest.NewClock(time.Now()),
+	}
+	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
 	return httpapi.Deps{
 		Stores:   stores,
 		IDs:      ids,
@@ -54,6 +69,9 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Hosts:       apptest.Hosts{ID: "e2e-client"},
 		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "チーム", Remote: true}}},
 		Clock:       apptest.NewClock(time.Now()),
+		Sync:        syncSvc,
+		Auto:        auto,
+		Events:      hub,
 	}, nil
 }
 
