@@ -8,8 +8,11 @@ test("creates a project, an Epic, a Task and a Step, and renames the Task", asyn
   const project = unique(info, "請求");
   await page.goto(tokenUrl());
   const side = await sidebar(page, info);
+  // 通しのテストが作ったワークスペースが並ぶので、サンプルの「Web」の行に絞る。
   await side
     .getByRole("region", { name: "e2e" })
+    .locator(".ws-row")
+    .filter({ has: page.getByRole("link", { name: "Web", exact: true }) })
     .getByRole("button", { name: "ワークスペースのメニュー" })
     .click();
   await page.getByRole("menuitem", { name: "プロジェクトを作成" }).click();
