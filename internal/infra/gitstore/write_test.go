@@ -102,9 +102,10 @@ project: 01SAMPLEPR0000000000000001
 parent: 01SAMPLEIT0000000000000001
 number: 2
 kind: Task
-rank: a
+rank: V
 title: ログイン画面
 created: {at: "2026-11-12T09:00:00.000+09:00", by: taro}
+watchers: [taro]
 `
 	if string(b) != want {
 		t.Errorf("item.yaml =\n%s\nwant\n%s", b, want)

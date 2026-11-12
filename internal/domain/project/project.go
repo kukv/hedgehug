@@ -12,17 +12,42 @@ import (
 // ID はプロジェクトの内部 ID。
 type ID = change.ID
 
+// Status は、プロジェクトのステータス。5 つに固定で、利用者は変えられない(01・02)。
+type Status string
+
+const (
+	Todo       Status = "Todo"
+	InProgress Status = "InProgress"
+	Done       Status = "Done"
+	Pending    Status = "Pending"
+	Cancel     Status = "Cancel"
+)
+
+// ValidStatus は、5 つのどれかか。
+func ValidStatus(s Status) bool {
+	switch s {
+	case Todo, InProgress, Done, Pending, Cancel:
+		return true
+	}
+	return false
+}
+
 // Place は、プロジェクトの場所(ワークスペースと番号)。1 つの項目として変える。
 type Place struct {
 	Workspace workspace.ID `json:"workspace"`
 	Number    int          `json:"number"`
 }
 
-// Project は、土台が扱う項目だけを持つ。オーナー・日付・ステータス・説明はトラック A が足す。
+// Project は、プロジェクトの固定の項目(02「プロジェクト」)。説明はトラック A の A4 で足す。
 type Project struct {
-	ID    ID
-	Place Place
-	Title string
+	ID     ID
+	Place  Place
+	Rank   string
+	Title  string
+	Owner  string // ログイン名。空は「なし」
+	Status Status
+	Start  string // YYYY-MM-DD。空は「なし」
+	End    string
 }
 
 // DisplayID は、画面の ID(HH-P1)。
@@ -32,7 +57,10 @@ func (p Project) DisplayID(prefix string) string {
 
 // Create は、プロジェクトの作成の変更。
 func Create(p Project) change.Draft {
-	return change.NewCreate(map[string]any{"id": p.ID, "place": p.Place, "title": p.Title})
+	return change.NewCreate(map[string]any{
+		"id": p.ID, "place": p.Place, "rank": p.Rank, "title": p.Title,
+		"owner": p.Owner, "status": p.Status, "start": p.Start, "end": p.End,
+	})
 }
 
 // FromLog は、プロジェクトのログからいまの値を作る。作成の行がなければ false。
@@ -42,8 +70,13 @@ func FromLog(log []change.Record) (Project, bool) {
 		return Project{}, false
 	}
 	var p Project
-	_ = json.Unmarshal(s.Values["id"], &p.ID)
-	_ = json.Unmarshal(s.Values["place"], &p.Place)
-	_ = json.Unmarshal(s.Values["title"], &p.Title)
+	for f, dst := range map[string]any{
+		"id": &p.ID, "place": &p.Place, "rank": &p.Rank, "title": &p.Title,
+		"owner": &p.Owner, "status": &p.Status, "start": &p.Start, "end": &p.End,
+	} {
+		if v, ok := s.Values[f]; ok {
+			_ = json.Unmarshal(v, dst)
+		}
+	}
 	return p, true
 }

@@ -44,6 +44,7 @@ func TestCreateAndFromLog(t *testing.T) {
 		ID:    "T",
 		Place: item.Place{Workspace: "W", Project: "P", Parent: &parent, Number: 12},
 		Kind:  item.Task, Rank: "a0V", Title: "ログイン画面を作る",
+		Watchers: []string{"hanako"},
 	}
 	ts := time.Date(2026, 11, 10, 9, 0, 0, 0, time.FixedZone("JST", 9*3600))
 	log := change.Stamp(nil, []change.Draft{item.Create(it)}, change.Meta{Op: "o", At: ts, Actor: change.User("hanako")}, func() change.ID { return "c" })
@@ -60,5 +61,8 @@ func TestCreateAndFromLog(t *testing.T) {
 	}
 	if got.DisplayID("HH") != "HH-12" {
 		t.Errorf("DisplayID = %s", got.DisplayID("HH"))
+	}
+	if len(got.Watchers) != 1 || got.Watchers[0] != "hanako" {
+		t.Errorf("Watchers = %v", got.Watchers)
 	}
 }

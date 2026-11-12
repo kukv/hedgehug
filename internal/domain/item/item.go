@@ -55,12 +55,13 @@ type Stamp struct {
 
 // Item は、土台が扱う項目だけを持つ。ステータス・担当者などはトラック A・B が足す。
 type Item struct {
-	ID      ID
-	Place   Place
-	Kind    Kind
-	Rank    string
-	Title   string
-	Created Stamp
+	ID       ID
+	Place    Place
+	Kind     Kind
+	Rank     string
+	Title    string
+	Created  Stamp
+	Watchers []string // ウォッチ中の人のログイン名
 }
 
 // DisplayID は、画面の ID(HH-12)。
@@ -73,12 +74,15 @@ func (it Item) DisplayID(prefix string) string {
 func Create(it Item) change.Draft {
 	return change.NewCreate(map[string]any{
 		"id": it.ID, "place": it.Place, "kind": it.Kind, "rank": it.Rank, "title": it.Title,
+		"watchers": it.Watchers,
 	})
 }
 
+var opts = change.Options{Multi: func(f string) bool { return f == "watchers" }}
+
 // FromLog は、アイテムのログからいまの値を作る。作成の行がなければ false。
 func FromLog(log []change.Record) (Item, bool) {
-	s := change.Resolve(log, change.Options{})
+	s := change.Resolve(log, opts)
 	if s.Created == nil {
 		return Item{}, false
 	}
@@ -88,5 +92,11 @@ func FromLog(log []change.Record) (Item, bool) {
 	_ = json.Unmarshal(s.Values["kind"], &it.Kind)
 	_ = json.Unmarshal(s.Values["rank"], &it.Rank)
 	_ = json.Unmarshal(s.Values["title"], &it.Title)
+	for _, raw := range s.Lists["watchers"] {
+		var login string
+		if json.Unmarshal(raw, &login) == nil {
+			it.Watchers = append(it.Watchers, login)
+		}
+	}
 	return it, true
 }

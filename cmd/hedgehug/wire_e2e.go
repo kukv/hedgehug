@@ -21,12 +21,13 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	if os.Getenv("HEDGEHUG_TOKEN") == "" || os.Getenv("HEDGEHUG_ADDR") == "" {
 		return httpapi.Deps{}, errors.New("e2e のビルドには HEDGEHUG_TOKEN と HEDGEHUG_ADDR が要る")
 	}
-	stores := apptest.NewStores(apptest.NewClock(time.Now()), apptest.NewIDs())
+	ids := apptest.NewIDs()
+	stores := apptest.NewStores(apptest.NewClock(time.Now()), ids)
 	stores.AddStore(e2eStore)
 	if err := apptest.Sample(ctx, stores, e2eStore); err != nil {
 		return httpapi.Deps{}, err
 	}
-	return httpapi.Deps{Stores: stores}, nil
+	return httpapi.Deps{Stores: stores, IDs: ids, Identity: apptest.Identity{Login: "taro"}}, nil
 }
 
 // tokenAndAddr は、テストが決めたトークン(HEDGEHUG_TOKEN)と待ち受け(HEDGEHUG_ADDR)を返す。
