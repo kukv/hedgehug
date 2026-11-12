@@ -1,23 +1,25 @@
 // 画面のアドレス(01「画面のアドレス」)。綴りはこの計画の決定 4:
 //   /                               ホーム
-//   /s/{Store名}/w/{接頭辞}           ワークスペース
+//   /s/{Store名}/w/{接頭辞}/{タブ}     ワークスペース(タブなしは概要)
 //   /s/{Store名}/p/{HH-P1}/{タブ}     プロジェクト
 //   /s/{Store名}/i/{HH-12}           アイテムの入口
 //   /settings/{タブ}                設定(D2 画面の計画の決定 S3)
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree";
+export type WorkspaceTab = "overview" | "settings";
 
 export type SettingsTab = "accounts";
 
 export type Route =
   | { name: "home" }
-  | { name: "workspace"; store: string; prefix: string }
+  | { name: "workspace"; store: string; prefix: string; tab: WorkspaceTab }
   | { name: "project"; store: string; project: string; tab: ProjectTab }
   | { name: "item"; store: string; item: string }
   | { name: "settings"; tab: SettingsTab };
 
 const projectTabs: readonly string[] = ["overview", "tree"] satisfies ProjectTab[];
+const workspaceTabs: readonly string[] = ["overview", "settings"] satisfies WorkspaceTab[];
 const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];
 
 function decode(segment: string): string | null {
@@ -44,7 +46,12 @@ export function parseRoute(path: string): Route {
   if (s !== "s" || store === undefined || id === undefined || rest.length > 0) {
     return { name: "home" };
   }
-  if (kind === "w" && tab === undefined) return { name: "workspace", store, prefix: id };
+  if (kind === "w") {
+    const t = tab ?? "overview";
+    if (workspaceTabs.includes(t)) {
+      return { name: "workspace", store, prefix: id, tab: t as WorkspaceTab };
+    }
+  }
   if (kind === "i" && tab === undefined) return { name: "item", store, item: id };
   if (kind === "p") {
     const t = tab ?? "overview";
@@ -61,7 +68,7 @@ export function formatRoute(route: Route): string {
     case "home":
       return "/";
     case "workspace":
-      return `/s/${e(route.store)}/w/${e(route.prefix)}`;
+      return `/s/${e(route.store)}/w/${e(route.prefix)}/${route.tab}`;
     case "project":
       return `/s/${e(route.store)}/p/${e(route.project)}/${route.tab}`;
     case "item":

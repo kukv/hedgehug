@@ -10,7 +10,7 @@ test("the sidebar lists stores and opens a workspace that survives a reload", as
   await expect(e2e.getByRole("link", { name: "ログイン" })).toBeVisible();
   await e2e.getByRole("link", { name: "Web" }).click();
   await expect(page.getByRole("heading", { name: "Web" })).toBeVisible();
-  await expect(page).toHaveURL(/\/s\/e2e\/w\/HH$/);
+  await expect(page).toHaveURL(/\/s\/e2e\/w\/HH(\/overview)?$/);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Web" })).toBeVisible();
 });
@@ -28,8 +28,13 @@ test("the arrow hides and shows the projects of a workspace", async ({ page }, i
   await page.goto(tokenUrl());
   const side = await sidebar(page, info);
   const e2e = side.getByRole("region", { name: "e2e" });
-  await e2e.getByRole("button", { name: "開閉" }).click();
+  // 通しのテストが作ったワークスペースが並ぶので、サンプルの「Web」の行に絞る。
+  const twisty = e2e
+    .locator(".ws-row")
+    .filter({ has: page.getByRole("link", { name: "Web", exact: true }) })
+    .getByRole("button", { name: "開閉" });
+  await twisty.click();
   await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
-  await e2e.getByRole("button", { name: "開閉" }).click();
+  await twisty.click();
   await expect(e2e.getByRole("link", { name: "ログイン" })).toBeVisible();
 });

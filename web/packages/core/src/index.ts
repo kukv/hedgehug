@@ -90,6 +90,7 @@ export {
   projectDisplayId,
   type Route,
   type SettingsTab,
+  type WorkspaceTab,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { createShell, type Shell } from "./features/shell/shell";
@@ -118,6 +119,49 @@ export {
   type ToastItem,
   type Toasts,
 } from "./features/toasts/toasts";
+export {
+  createWorkspaceDialog,
+  prefixPreviewHelp,
+  type WorkspaceDialog,
+  type WorkspaceDialogState,
+  type WorkspaceForm,
+} from "./features/workspaces/createDialog";
+export { prefixConfirm, prefixExamples, prefixHelp } from "./features/workspaces/general";
+export {
+  addableTypes,
+  deletePropertyBody,
+  keyHint,
+  newProperty,
+  type PropertyRow,
+  propertiesHelp,
+  propertyKinds,
+  propertyRows,
+  toggleKind,
+  typeLabels,
+} from "./features/workspaces/properties";
+export {
+  createWorkspaceSettings,
+  type SettingsState,
+  type WorkspaceSettingsScreen,
+  type WorkspaceSettingsTab,
+  workspaceSettingsTabs,
+} from "./features/workspaces/settings";
+export {
+  canMoveWorkspace,
+  createWorkspaceMover,
+  type WorkspaceMover,
+} from "./features/workspaces/sidebarMenu";
+export {
+  categoryLabels,
+  colors,
+  type DeleteDialogModel,
+  deleteDialog,
+  statusHelp,
+  type ValueRow,
+  valueListLabel,
+  valueRows,
+  valuesHelp,
+} from "./features/workspaces/values";
 export type {
   Account,
   AccountRow,
@@ -146,7 +190,18 @@ export type {
   SyncStoreStatus,
 } from "./model/sync";
 export type { SystemInfo } from "./model/system";
-export type { Workspace } from "./model/workspace";
+export type {
+  Category,
+  NewProperty,
+  PropertyType,
+  ValueList,
+  Workspace,
+  WorkspaceDetail,
+  WorkspaceProperty,
+  WorkspaceSettings,
+  WorkspaceUsage,
+  WorkspaceValue,
+} from "./model/workspace";
 export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
@@ -154,6 +209,7 @@ export type { ItemsPort } from "./port/items";
 export type { ProjectsPort } from "./port/projects";
 export type { SyncPort, Watching } from "./port/sync";
 export type { SystemPort } from "./port/system";
+export type { Direction, WorkspacesPort } from "./port/workspaces";
 export {
   get,
   type Readable,

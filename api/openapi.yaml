@@ -61,6 +61,47 @@ components:
       required:
         - title
       type: object
+    AddWorkspaceProperty:
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+        kinds:
+          description: 使う種類。空ならすべて
+          items:
+            type: string
+          type: array
+        name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+        type:
+          enum:
+            - text
+            - number
+            - date
+            - single
+            - multi
+            - user
+            - check
+            - url
+          type: string
+      required:
+        - name
+        - key
+        - type
+        - kinds
+      type: object
+    AddWorkspaceValue:
+      additionalProperties: false
+      properties:
+        name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+      required:
+        - name
+      type: object
     ChangeWorkspacePrefix:
       additionalProperties: false
       properties:
@@ -270,6 +311,17 @@ components:
         - login
         - name
       type: object
+    MoveWorkspaceItem:
+      additionalProperties: false
+      properties:
+        direction:
+          enum:
+            - up
+            - down
+          type: string
+      required:
+        - direction
+      type: object
     NextNumber:
       additionalProperties: false
       properties:
@@ -337,6 +389,92 @@ components:
           type: string
       required:
         - name
+      type: object
+    RenameWorkspaceProperty:
+      additionalProperties: false
+      properties:
+        name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameWorkspaceValue:
+      additionalProperties: false
+      properties:
+        name:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
+          type: string
+      required:
+        - name
+      type: object
+    SetWorkspacePropertyHidden:
+      additionalProperties: false
+      properties:
+        hidden:
+          type: boolean
+      required:
+        - hidden
+      type: object
+    SetWorkspacePropertyKinds:
+      additionalProperties: false
+      properties:
+        kinds:
+          items:
+            type: string
+          type: array
+      required:
+        - kinds
+      type: object
+    SetWorkspaceStatusCategory:
+      additionalProperties: false
+      properties:
+        category:
+          enum:
+            - todo
+            - doing
+            - done
+            - canceled
+          type: string
+      required:
+        - category
+      type: object
+    SetWorkspaceValueColor:
+      additionalProperties: false
+      properties:
+        color:
+          enum:
+            - gray
+            - slate
+            - brown
+            - red
+            - rose
+            - pink
+            - magenta
+            - purple
+            - indigo
+            - blue
+            - sky
+            - cyan
+            - teal
+            - green
+            - olive
+            - amber
+            - yellow
+            - orange
+          type: string
+      required:
+        - color
+      type: object
+    SetWorkspaceValueRef:
+      additionalProperties: false
+      properties:
+        value:
+          type: string
+      required:
+        - value
       type: object
     SignInCode:
       additionalProperties: false
@@ -581,6 +719,11 @@ components:
       properties:
         builtin:
           type: boolean
+        choices:
+          description: 選択肢(単一選択・複数選択だけ。ほかは空)
+          items:
+            $ref: "#/components/schemas/WorkspaceValue"
+          type: array
         hidden:
           type: boolean
         id:
@@ -603,6 +746,7 @@ components:
         - builtin
         - kinds
         - hidden
+        - choices
       type: object
     WorkspaceSettings:
       additionalProperties: false
@@ -653,6 +797,36 @@ components:
         - id
         - name
         - prefix
+      type: object
+    WorkspaceUsage:
+      additionalProperties: false
+      properties:
+        firstNumbers:
+          description: 番号の小さい方から 3 つ
+          items:
+            format: int64
+            type: integer
+          type: array
+        items:
+          format: int64
+          type: integer
+        properties:
+          additionalProperties:
+            format: int64
+            type: integer
+          description: 追加プロパティの ID ごとの、値の入っているアイテムの数
+          type: object
+        values:
+          additionalProperties:
+            format: int64
+            type: integer
+          description: 値の ID ごとの、その値を持つアイテムの数
+          type: object
+      required:
+        - items
+        - firstNumbers
+        - values
+        - properties
       type: object
     WorkspaceValue:
       additionalProperties: false
@@ -1438,6 +1612,106 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: ワークスペースと設定
+  /api/stores/{store}/workspaces/{workspace}/category-defaults/{category}:
+    put:
+      operationId: set-workspace-category-default
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: category
+          required: true
+          schema:
+            enum:
+              - todo
+              - doing
+              - done
+              - canceled
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceValueRef"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 分類の既定のステータスを変更
+  /api/stores/{store}/workspaces/{workspace}/initial-priority:
+    put:
+      operationId: set-workspace-initial-priority
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceValueRef"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 初期優先度を変更
+  /api/stores/{store}/workspaces/{workspace}/initial-status:
+    put:
+      operationId: set-workspace-initial-status
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceValueRef"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 初期ステータスを変更
   /api/stores/{store}/workspaces/{workspace}/items/by-number/{number}:
     get:
       operationId: find-item-by-number
@@ -1473,6 +1747,236 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: ワークスペースの番号でアイテムを返す
+  /api/stores/{store}/workspaces/{workspace}/lists/{list}/values:
+    post:
+      operationId: add-workspace-value
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: list
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWorkspaceValue"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceValue"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 値を追加
+  /api/stores/{store}/workspaces/{workspace}/lists/{list}/values/{value}:
+    delete:
+      operationId: delete-workspace-value
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: list
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+        - description: 代わりに使う値の ID。省略すると、使っているアイテムは、ステータス・優先度では初期値に、単一選択では「なし」になる。関連システムと複数選択では指定できず(404)、使っているアイテムから値が外れる
+          explode: false
+          in: query
+          name: replacement
+          schema:
+            description: 代わりに使う値の ID。省略すると、使っているアイテムは、ステータス・優先度では初期値に、単一選択では「なし」になる。関連システムと複数選択では指定できず(404)、使っているアイテムから値が外れる
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 値を削除
+  /api/stores/{store}/workspaces/{workspace}/lists/{list}/values/{value}/color:
+    put:
+      operationId: set-workspace-value-color
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: list
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceValueColor"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 値の色を変更
+  /api/stores/{store}/workspaces/{workspace}/lists/{list}/values/{value}/move:
+    post:
+      operationId: move-workspace-value
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: list
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveWorkspaceItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 値を上へ・下へ移動
+  /api/stores/{store}/workspaces/{workspace}/lists/{list}/values/{value}/name:
+    put:
+      operationId: rename-workspace-value
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: list
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameWorkspaceValue"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 値の名前を変更
+  /api/stores/{store}/workspaces/{workspace}/move:
+    post:
+      operationId: move-workspace
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveWorkspaceItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースを上へ・下へ移動
   /api/stores/{store}/workspaces/{workspace}/name:
     put:
       operationId: rename-workspace
@@ -1625,6 +2129,272 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトを作成
+  /api/stores/{store}/workspaces/{workspace}/properties:
+    post:
+      operationId: add-workspace-property
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWorkspaceProperty"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceProperty"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 追加プロパティを作成
+  /api/stores/{store}/workspaces/{workspace}/properties/{property}:
+    delete:
+      operationId: delete-workspace-property
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロパティを削除
+  /api/stores/{store}/workspaces/{workspace}/properties/{property}/hidden:
+    put:
+      operationId: set-workspace-property-hidden
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspacePropertyHidden"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロパティの表示・非表示を変更
+  /api/stores/{store}/workspaces/{workspace}/properties/{property}/kinds:
+    put:
+      operationId: set-workspace-property-kinds
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspacePropertyKinds"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロパティを使う種類を変更
+  /api/stores/{store}/workspaces/{workspace}/properties/{property}/move:
+    post:
+      operationId: move-workspace-property
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveWorkspaceItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロパティを上へ・下へ移動
+  /api/stores/{store}/workspaces/{workspace}/properties/{property}/name:
+    put:
+      operationId: rename-workspace-property
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: property
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameWorkspaceProperty"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロパティの名前を変更
+  /api/stores/{store}/workspaces/{workspace}/statuses/{value}/category:
+    put:
+      operationId: set-workspace-status-category
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWorkspaceStatusCategory"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ステータスの分類を変更
+  /api/stores/{store}/workspaces/{workspace}/usage:
+    get:
+      operationId: get-workspace-usage
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceUsage"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの件数と、値・プロパティごとの件数
   /api/sync:
     get:
       operationId: list-sync-status

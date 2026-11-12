@@ -53,7 +53,8 @@ type Stamp struct {
 	By string
 }
 
-// Item は、土台が扱う項目だけを持つ。ステータス・担当者などはトラック A・B が足す。
+// Item は、いま扱う項目だけを持つ。ステータス・優先度・関連システム・選択肢の値は B2 で足した。
+// 担当者・日付などは、まだ持たない(足すトラックが加える)。
 type Item struct {
 	ID       ID
 	Place    Place

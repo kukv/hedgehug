@@ -1,7 +1,6 @@
 package gitstore
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -134,16 +133,7 @@ func readStoreYAML(dir string) (storeYAML, error) {
 	return y, nil
 }
 
-// encodeYAML は、字下げ 2 の YAML にする。
+// encodeYAML は、字下げ 2、行を折り返さない YAML にする(折り返すと、flow の 1 行が途中で切れる)。
 func encodeYAML(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	if err := enc.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return yaml.Dump(v, yaml.WithV3Defaults(), yaml.WithIndent(2), yaml.WithLineWidth(-1))
 }

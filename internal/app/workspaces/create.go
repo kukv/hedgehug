@@ -31,7 +31,15 @@ func (s Service) Create(ctx context.Context, store port.StoreID, name, prefix st
 		if err := workspace.CheckCreate(w, others); err != nil {
 			return err
 		}
-		draft, err := workspace.CreateWithSettings(w, workspace.DefaultSettings(s.IDs.New))
+		ordered, err := orderedWorkspaces(tx)
+		if err != nil {
+			return err
+		}
+		ranks := make([]string, len(ordered))
+		for i, o := range ordered {
+			ranks[i] = o.rank
+		}
+		draft, err := workspace.CreateWithRank(w, workspace.DefaultSettings(s.IDs.New), workspace.NextRank(ranks...))
 		if err != nil {
 			return err
 		}

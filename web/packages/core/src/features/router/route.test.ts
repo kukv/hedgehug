@@ -11,7 +11,8 @@ import {
 describe("parseRoute and formatRoute", () => {
   const cases: [string, Route][] = [
     ["/", { name: "home" }],
-    ["/s/work/w/HH", { name: "workspace", store: "work", prefix: "HH" }],
+    ["/s/work/w/HH/overview", { name: "workspace", store: "work", prefix: "HH", tab: "overview" }],
+    ["/s/work/w/HH/settings", { name: "workspace", store: "work", prefix: "HH", tab: "settings" }],
     [
       "/s/work/p/HH-P1/overview",
       { name: "project", store: "work", project: "HH-P1", tab: "overview" },
@@ -23,6 +24,19 @@ describe("parseRoute and formatRoute", () => {
   it.each(cases)("reads %s and writes it back", (path, route) => {
     expect(parseRoute(path)).toEqual(route);
     expect(formatRoute(route)).toBe(path);
+  });
+
+  it("opens the overview when the workspace address has no tab", () => {
+    expect(parseRoute("/s/work/w/HH")).toEqual({
+      name: "workspace",
+      store: "work",
+      prefix: "HH",
+      tab: "overview",
+    });
+  });
+
+  it("sends an unknown workspace tab home", () => {
+    expect(parseRoute("/s/work/w/HH/kanban")).toEqual({ name: "home" });
   });
 
   it("opens the overview when the project address has no tab", () => {

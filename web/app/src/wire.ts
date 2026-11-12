@@ -5,6 +5,7 @@ import {
   createProjectsPort,
   createSyncPort,
   createSystemPort,
+  createWorkspacesPort,
   rememberToken,
   setToken,
 } from "@hedgehug/api";
@@ -25,10 +26,14 @@ import {
   createSystemInfo,
   createTabSignals,
   createToasts,
+  createWorkspaceDialog,
+  createWorkspaceMover,
+  createWorkspaceSettings,
   get,
   type Here,
   readonly,
   routeOfProject,
+  routeOfWorkspace,
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
@@ -65,6 +70,20 @@ export const projectDialog = createProjectDialog({
   onCreated: (storeId, project) =>
     navigation.go(routeOfProject(get(catalog.stores), storeId, project.id, "overview")),
 });
+const workspacesPort = createWorkspacesPort();
+export const workspaceSettings = createWorkspaceSettings({
+  port: workspacesPort,
+  catalog,
+  toasts,
+});
+export const workspaceDialog = createWorkspaceDialog({
+  catalog,
+  port: workspacesPort,
+  // 作ったら、そのワークスペースの概要を開く。トーストは出さない(03「ワークスペースの作成」)。
+  onCreated: (storeId, workspace) =>
+    navigation.go(routeOfWorkspace(get(catalog.stores), storeId, workspace.id, "overview")),
+});
+export const workspaceMover = createWorkspaceMover({ catalog, port: workspacesPort, toasts });
 export const detail = createDetail({
   catalog,
   items: itemsPort,
@@ -137,6 +156,7 @@ navigation.route.subscribe(() => {
   detail.close();
   itemDialog.close();
   projectDialog.close();
+  workspaceDialog.close();
   accountForm.close();
   signIn.close();
   accountList.cancelDelete();

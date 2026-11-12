@@ -52,9 +52,14 @@ describe("createScreen", () => {
       projectId: "S1-P2",
       tab: "overview",
     });
-    navigation.go({ name: "workspace", store: "work", prefix: "HH" });
+    navigation.go({ name: "workspace", store: "work", prefix: "HH", tab: "overview" });
     await flush();
-    expect(get(screen.current)).toEqual({ name: "workspace", storeId: "S1", workspaceId: "S1-W1" });
+    expect(get(screen.current)).toEqual({
+      name: "workspace",
+      storeId: "S1",
+      workspaceId: "S1-W1",
+      tab: "overview",
+    });
   });
 
   it("does not emit current again for the same resolution", async () => {

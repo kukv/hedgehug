@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 	"github.com/kukv/hedgehug/internal/infra/gitstore/filemerge"
 )
 
@@ -140,6 +141,7 @@ func hasEntity(dirs map[string]bool, id string) bool {
 
 // rebuildYAML は、合わせた log.jsonl から、読む用の YAML を作り直す。
 func rebuildYAML(t tree) error {
+	settings := treeSettings(t)
 	for _, p := range sortedKeys(t) {
 		if !strings.HasSuffix(p, "/log.jsonl") {
 			continue
@@ -149,7 +151,7 @@ func rebuildYAML(t tree) error {
 		if !ok {
 			continue
 		}
-		y, err := renderYAML(kind, parseLog(t[p]))
+		y, err := renderYAML(kind, parseLog(t[p]), settings)
 		if err != nil {
 			return err
 		}
@@ -158,6 +160,19 @@ func rebuildYAML(t tree) error {
 		}
 	}
 	return nil
+}
+
+// treeSettings は、木の workspaces/<ID>/log.jsonl から設定を引く(書く道と同じログから同じ設定になる)。
+func treeSettings(t tree) settingsOf {
+	cache := map[workspace.ID]settingsEntry{}
+	return func(id workspace.ID) (workspace.Settings, bool) {
+		if e, ok := cache[id]; ok {
+			return e.s, e.ok
+		}
+		s, ok := workspace.SettingsFromLog(parseLog(t["workspaces/"+string(id)+"/log.jsonl"]))
+		cache[id] = settingsEntry{s, ok}
+		return s, ok
+	}
 }
 
 // kindOfDir は、フォルダ(members、items/<ID> など)の種類。

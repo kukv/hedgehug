@@ -54,11 +54,11 @@ describe("resolveRoute", () => {
 
   it("resolves a workspace by its prefix", async () => {
     const r = await resolveRoute(
-      { name: "workspace", store: "nope", prefix: "HH" },
+      { name: "workspace", store: "nope", prefix: "HH", tab: "overview" },
       await stores(),
       itemsIn("S1"),
     );
-    expect(r).toEqual({ name: "workspace", storeId: "S1", workspaceId: "S1-W1" });
+    expect(r).toEqual({ name: "workspace", storeId: "S1", workspaceId: "S1-W1", tab: "overview" });
   });
 
   it.each([
@@ -66,7 +66,7 @@ describe("resolveRoute", () => {
     { name: "project", store: "work", project: "HH-9", tab: "overview" },
     { name: "item", store: "work", item: "HH-13" },
     { name: "item", store: "work", item: "XX-12" },
-    { name: "workspace", store: "work", prefix: "XX" },
+    { name: "workspace", store: "work", prefix: "XX", tab: "overview" },
   ] as const)("goes home when %o is not found", async (route) => {
     expect(await resolveRoute(route, await stores(), itemsIn("S1"))).toEqual({ name: "home" });
   });
@@ -95,7 +95,9 @@ describe("routes of internal IDs", () => {
       name: "workspace",
       store: "work",
       prefix: "HH",
+      tab: "overview",
     });
+    expect(routeOfWorkspace(s, "S1", "S1-W1", "settings")).toMatchObject({ tab: "settings" });
     expect(routeOfProject(s, "S1", "nope", "tree")).toEqual({ name: "home" });
     expect(routeOfWorkspace(s, "S9", "S1-W1")).toEqual({ name: "home" });
   });

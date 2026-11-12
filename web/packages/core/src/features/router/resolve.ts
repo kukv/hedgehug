@@ -1,7 +1,13 @@
 import { NotFound } from "../../model/errors";
 import type { ItemsPort } from "../../port/items";
 import type { StoreNode } from "../catalog/catalog";
-import { type ProjectTab, parseDisplayId, type Route, type SettingsTab } from "./route";
+import {
+  type ProjectTab,
+  parseDisplayId,
+  type Route,
+  type SettingsTab,
+  type WorkspaceTab,
+} from "./route";
 
 // アドレス(Store 名と画面の ID)を内部 ID にする(01「画面のアドレス」、A2 の計画の決定 7)。
 // アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す。
@@ -9,7 +15,7 @@ import { type ProjectTab, parseDisplayId, type Route, type SettingsTab } from ".
 
 export type Resolved =
   | { name: "home" }
-  | { name: "workspace"; storeId: string; workspaceId: string }
+  | { name: "workspace"; storeId: string; workspaceId: string; tab: WorkspaceTab }
   | { name: "project"; storeId: string; projectId: string; tab: ProjectTab }
   | { name: "item"; storeId: string; projectId: string; itemId: string }
   | { name: "settings"; tab: SettingsTab };
@@ -52,7 +58,7 @@ export async function resolveRoute(
     case "workspace":
       for (const s of inOrder(stores, route.store)) {
         const w = s.workspaces.find((x) => x.prefix === route.prefix);
-        if (w) return { name: "workspace", storeId: s.id, workspaceId: w.id };
+        if (w) return { name: "workspace", storeId: s.id, workspaceId: w.id, tab: route.tab };
       }
       return home;
     case "project":
@@ -86,8 +92,13 @@ export function routeOfProject(
 }
 
 // routeOfWorkspace は、ワークスペースの画面のアドレス。一覧にないときはホーム。
-export function routeOfWorkspace(stores: StoreNode[], storeId: string, workspaceId: string): Route {
+export function routeOfWorkspace(
+  stores: StoreNode[],
+  storeId: string,
+  workspaceId: string,
+  tab: WorkspaceTab = "overview",
+): Route {
   const s = stores.find((x) => x.id === storeId);
   const w = s?.workspaces.find((x) => x.id === workspaceId);
-  return s && w ? { name: "workspace", store: s.name, prefix: w.prefix } : home;
+  return s && w ? { name: "workspace", store: s.name, prefix: w.prefix, tab } : home;
 }

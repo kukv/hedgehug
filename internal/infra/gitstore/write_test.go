@@ -106,8 +106,8 @@ kind: Task
 rank: V
 title: ログイン画面
 created: {at: "2026-11-12T09:00:00.000+09:00", by: taro}
-status: ` + string(apptest.SampleStatusTodo) + `
-priority: ` + string(apptest.SamplePriorityMedium) + `
+status: ` + string(apptest.SampleStatusTodo) + ` # Todo
+priority: ` + string(apptest.SamplePriorityMedium) + ` # Medium
 systems: []
 fields: {}
 watchers: [taro]
@@ -317,7 +317,7 @@ func TestItemYAMLValues(t *testing.T) {
 	y := read(apptest.SampleTask)
 	for _, want := range []string{
 		"status: " + string(sDoing) + "\n",
-		"priority: " + string(apptest.SamplePriorityMedium) + "\n",
+		"priority: " + string(apptest.SamplePriorityMedium) + " # Medium\n",
 		"systems: [" + string(yAPI) + "]\n",
 		"fields:\n  " + string(fEnv) + ": " + string(vProd) + "\n  " + string(fTags) + ": [" + string(vA) + ", " + string(vB) + "]\n",
 	} {

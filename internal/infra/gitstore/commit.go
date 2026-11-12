@@ -54,6 +54,14 @@ func (s *Stores) commit(root string, t *tx, op port.Operation) error {
 }
 
 func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) error {
+	sc, err := newTxSettings(t)
+	if err != nil {
+		return err
+	}
+	stale, err := sc.staleItems()
+	if err != nil {
+		return err
+	}
 	refs := make([]change.Ref, 0, len(t.pending))
 	for ref := range t.pending {
 		refs = append(refs, ref)
@@ -62,25 +70,53 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 		return strings.Compare(string(a.Kind)+"/"+string(a.ID), string(b.Kind)+"/"+string(b.ID))
 	})
 	for _, ref := range refs {
-		paths, err := writeEntity(t, ref)
+		paths, err := writeEntity(t, ref, sc.lookup)
 		if err != nil {
 			return err
 		}
-		for _, p := range paths {
-			if err := wt.AddWithOptions(&git.AddOptions{Path: p, SkipStatus: true}); err != nil {
-				return err
-			}
+		if err := addPaths(wt, paths...); err != nil {
+			return err
 		}
 		if err := s.hook(s.afterEntity); err != nil {
 			return err
 		}
 	}
+	if err := rewriteStale(wt, t, sc, stale); err != nil {
+		return err
+	}
 	if err := s.hook(s.beforeCommit); err != nil {
 		return err
 	}
 	sig := author(op.Actor, t.meta.At)
-	_, err := wt.Commit(op.Summary+"\n\nHedgehug-Op: "+string(t.meta.Op)+"\n", &git.CommitOptions{Author: sig, Committer: sig})
+	_, err = wt.Commit(op.Summary+"\n\nHedgehug-Op: "+string(t.meta.Op)+"\n", &git.CommitOptions{Author: sig, Committer: sig})
 	return err
+}
+
+// addPaths は、書いたファイルをインデックスに足す。空のパス(書かなかったもの)は飛ばす。
+func addPaths(wt *git.Worktree, paths ...string) error {
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if err := wt.AddWithOptions(&git.AddOptions{Path: p, SkipStatus: true}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rewriteStale は、設定が変わったワークスペースの、ほかのアイテムの item.yaml を同じコミットで作り直す(B2-19)。
+func rewriteStale(wt *git.Worktree, t *tx, sc *txSettings, stale []change.ID) error {
+	for _, id := range stale {
+		p, err := rewriteItemYAML(t, id, sc.lookup)
+		if err != nil {
+			return err
+		}
+		if err := addPaths(wt, p); err != nil {
+			return err
+		}
+	}
+	return sc.err
 }
 
 func (s *Stores) hook(f func() error) error {
@@ -92,7 +128,7 @@ func (s *Stores) hook(f func() error) error {
 
 // writeEntity は、1 つのエンティティの log.jsonl に行を足し、読む用の YAML を作り直す。
 // 書いたファイル(Store の根からの相対パス)を返す。
-func writeEntity(t *tx, ref change.Ref) ([]string, error) {
+func writeEntity(t *tx, ref change.Ref, settings settingsOf) ([]string, error) {
 	d, err := dirOf(ref)
 	if err != nil {
 		return nil, err
@@ -105,7 +141,7 @@ func writeEntity(t *tx, ref change.Ref) ([]string, error) {
 		return nil, err
 	}
 	paths := []string{filepath.Join(d, "log.jsonl")}
-	y, err := renderYAML(ref.Kind, append(base, t.pending[ref]...))
+	y, err := renderYAML(ref.Kind, append(base, t.pending[ref]...), settings)
 	if err != nil || y == nil {
 		return paths, err
 	}

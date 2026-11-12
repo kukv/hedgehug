@@ -24,6 +24,7 @@
       ? store?.workspaces.find((w) => w.id === current.workspaceId)
       : undefined,
   );
+  const workspaceTab = $derived(current?.name === "workspace" ? current.tab : "overview");
 </script>
 
 {#key current}
@@ -38,7 +39,7 @@
       {alert}
     />
   {:else if store && workspace}
-    <WorkspaceScreen {store} {workspace} {ondrawer} {alert} />
+    <WorkspaceScreen {store} {workspace} tab={workspaceTab} {ondrawer} {alert} />
   {:else}
     <!-- ホーム。マイタスク(トラック E)が入ったら替える(A2 の計画の決定 6)。 -->
     <PageHead title="hedgehug" {ondrawer} {alert} />

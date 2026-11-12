@@ -1,0 +1,129 @@
+import type {
+  PropertyType,
+  WorkspaceDetail,
+  WorkspaceProperty,
+  WorkspacesPort,
+  WorkspaceUsage,
+  WorkspaceValue,
+} from "@hedgehug/core";
+import { call } from "./errors";
+import {
+  type AddWorkspaceProperty,
+  type WorkspaceDetail as ApiDetail,
+  type WorkspaceProperty as ApiProperty,
+  type WorkspaceUsage as ApiUsage,
+  type WorkspaceValue as ApiValue,
+  addWorkspaceProperty,
+  addWorkspaceValue,
+  changeWorkspacePrefix,
+  createWorkspace,
+  deleteWorkspaceProperty,
+  deleteWorkspaceValue,
+  getWorkspace,
+  getWorkspaceUsage,
+  moveWorkspace,
+  moveWorkspaceProperty,
+  moveWorkspaceValue,
+  renameWorkspace,
+  renameWorkspaceProperty,
+  renameWorkspaceValue,
+  type SetWorkspaceValueColorColor,
+  setWorkspaceCategoryDefault,
+  setWorkspaceInitialPriority,
+  setWorkspaceInitialStatus,
+  setWorkspacePropertyHidden,
+  setWorkspacePropertyKinds,
+  setWorkspaceStatusCategory,
+  setWorkspaceValueColor,
+} from "./generated";
+
+// ワークスペースと設定の口の実装。API の型を core の型に直す(設計書 6 節)。
+// 空の一覧・集計は null で届いてもよいので、空にする。
+
+const toValue = (v: ApiValue): WorkspaceValue => v;
+
+function toProperty(p: ApiProperty): WorkspaceProperty {
+  return {
+    ...p,
+    type: p.type as PropertyType,
+    kinds: p.kinds ?? [],
+    choices: (p.choices ?? []).map(toValue),
+  };
+}
+
+function toDetail(storeId: string, d: ApiDetail): WorkspaceDetail {
+  const s = d.settings;
+  return {
+    id: d.id,
+    storeId,
+    name: d.name,
+    prefix: d.prefix,
+    oldPrefixes: d.oldPrefixes ?? [],
+    settings: {
+      properties: (s.properties ?? []).map(toProperty),
+      statuses: (s.statuses ?? []).map(toValue),
+      priorities: (s.priorities ?? []).map(toValue),
+      systems: (s.systems ?? []).map(toValue),
+      initialStatus: s.initialStatus,
+      initialPriority: s.initialPriority,
+      categoryDefaults: s.categoryDefaults ?? {},
+    },
+  };
+}
+
+const toUsage = (u: ApiUsage): WorkspaceUsage => ({
+  items: u.items,
+  firstNumbers: u.firstNumbers ?? [],
+  values: u.values ?? {},
+  properties: u.properties ?? {},
+});
+
+export function createWorkspacesPort(): WorkspacesPort {
+  return {
+    get: (s, w) => call(async () => toDetail(s, await getWorkspace(s, w))),
+    usage: (s, w) => call(async () => toUsage(await getWorkspaceUsage(s, w))),
+    create: (s, name, prefix) =>
+      call(async () => {
+        const w = await createWorkspace(s, { name, prefix });
+        return { id: w.id, storeId: s, name: w.name, prefix: w.prefix };
+      }),
+    rename: (s, w, name) => call(() => renameWorkspace(s, w, { name })),
+    changePrefix: (s, w, prefix) => call(() => changeWorkspacePrefix(s, w, { prefix })),
+    move: (s, w, direction) => call(() => moveWorkspace(s, w, { direction })),
+    addProperty: (s, w, input) =>
+      call(async () =>
+        toProperty(
+          await addWorkspaceProperty(s, w, {
+            ...input,
+            type: input.type as AddWorkspaceProperty["type"],
+          }),
+        ),
+      ),
+    renameProperty: (s, w, id, name) => call(() => renameWorkspaceProperty(s, w, id, { name })),
+    setPropertyKinds: (s, w, id, kinds) =>
+      call(() => setWorkspacePropertyKinds(s, w, id, { kinds })),
+    setPropertyHidden: (s, w, id, hidden) =>
+      call(() => setWorkspacePropertyHidden(s, w, id, { hidden })),
+    moveProperty: (s, w, id, direction) =>
+      call(() => moveWorkspaceProperty(s, w, id, { direction })),
+    deleteProperty: (s, w, id) => call(() => deleteWorkspaceProperty(s, w, id)),
+    addValue: (s, w, list, name) =>
+      call(async () => toValue(await addWorkspaceValue(s, w, list, { name }))),
+    renameValue: (s, w, list, id, name) =>
+      call(() => renameWorkspaceValue(s, w, list, id, { name })),
+    setValueColor: (s, w, list, id, color) =>
+      call(() =>
+        setWorkspaceValueColor(s, w, list, id, { color: color as SetWorkspaceValueColorColor }),
+      ),
+    setStatusCategory: (s, w, id, category) =>
+      call(() => setWorkspaceStatusCategory(s, w, id, { category })),
+    moveValue: (s, w, list, id, direction) =>
+      call(() => moveWorkspaceValue(s, w, list, id, { direction })),
+    deleteValue: (s, w, list, id, replacement) =>
+      call(() => deleteWorkspaceValue(s, w, list, id, replacement === "" ? {} : { replacement })),
+    setInitialStatus: (s, w, value) => call(() => setWorkspaceInitialStatus(s, w, { value })),
+    setInitialPriority: (s, w, value) => call(() => setWorkspaceInitialPriority(s, w, { value })),
+    setCategoryDefault: (s, w, category, value) =>
+      call(() => setWorkspaceCategoryDefault(s, w, category, { value })),
+  };
+}

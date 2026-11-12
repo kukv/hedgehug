@@ -6,3 +6,4 @@ export { createProjectsPort } from "./projects";
 export { createSyncPort } from "./sync";
 export { createSystemPort } from "./system";
 export { newTabUrl, rememberToken, tokenFromHash } from "./token";
+export { createWorkspacesPort } from "./workspaces";

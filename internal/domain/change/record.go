@@ -16,7 +16,7 @@ var idPattern = regexp.MustCompile(`^[0-9A-Za-z]+$`)
 // ValidID は、エンティティの内部 ID に使えるか(空でなく、英数字だけ。Store ではフォルダの名前になる)。
 func ValidID(id ID) bool { return idPattern.MatchString(string(id)) }
 
-// Type は変更の種類(保存形式「変更記録」の t)。土台は下の 4 つだけを扱い、ほかの種類はトラックが足す。
+// Type は変更の種類(保存形式「変更記録」の t)。下の 5 つ(delete を含む)を扱い、ほかの種類はトラックが足す。
 type Type string
 
 const (
