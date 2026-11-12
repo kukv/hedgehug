@@ -43,4 +43,11 @@ describe("PageHead", () => {
     expect(screen.getByRole("img", { name: "同期エラー" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "メニュー" })).toBeInTheDocument();
   });
+
+  it("shows the note under the title", () => {
+    render(PageHead, {
+      props: { title: "設定", note: "このマシンの設定と、Store の管理", ondrawer: vi.fn() },
+    });
+    expect(screen.getByText("このマシンの設定と、Store の管理")).toBeInTheDocument();
+  });
 });

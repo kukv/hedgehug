@@ -40,6 +40,19 @@ func readValues(it *Item, s change.State) {
 	it.Status = id(s.Values["status"])
 	it.Priority = id(s.Values["priority"])
 	it.Systems = ids(s.Lists["systems"])
+	it.Assignee = str(s.Values["assignee"])
+	it.Start = str(s.Values["start"])
+	it.End = str(s.Values["end"])
+	it.Points = num(s.Values["points"])
+	it.Estimate = num(s.Values["estimate"])
+	for f, raw := range s.Values {
+		if strings.HasPrefix(f, fieldsPrefix) && string(raw) != "null" {
+			if it.Fields == nil {
+				it.Fields = map[change.ID]json.RawMessage{}
+			}
+			it.Fields[change.ID(strings.TrimPrefix(f, fieldsPrefix))] = raw
+		}
+	}
 	for f, raw := range s.Values {
 		if v := id(raw); strings.HasPrefix(f, fieldsPrefix) && v != "" {
 			it.choice(change.ID(strings.TrimPrefix(f, fieldsPrefix)), []change.ID{v})
@@ -66,6 +79,24 @@ func id(raw json.RawMessage) change.ID {
 		return ""
 	}
 	return v
+}
+
+// str は、文字列の値。null や文字列でない値は空。
+func str(raw json.RawMessage) string {
+	var v string
+	if json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	return v
+}
+
+// num は、数の値。null や数でない値は nil。
+func num(raw json.RawMessage) *float64 {
+	var v float64
+	if len(raw) == 0 || string(raw) == "null" || json.Unmarshal(raw, &v) != nil {
+		return nil
+	}
+	return &v
 }
 
 func ids(list []json.RawMessage) []change.ID {

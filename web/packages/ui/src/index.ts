@@ -2,6 +2,7 @@ export { default as AppFrame } from "./layout/AppFrame.svelte";
 export { default as Brand } from "./layout/Brand.svelte";
 export { default as PageHead } from "./layout/PageHead.svelte";
 export { default as SidePanel } from "./layout/SidePanel.svelte";
+export { default as ConfirmDialog } from "./patterns/ConfirmDialog.svelte";
 export { default as KindIcon } from "./patterns/KindIcon.svelte";
 export { default as OfflineBand } from "./patterns/OfflineBand.svelte";
 export { default as ReadOnlyBand } from "./patterns/ReadOnlyBand.svelte";

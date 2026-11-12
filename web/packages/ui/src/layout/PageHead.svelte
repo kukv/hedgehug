@@ -4,13 +4,14 @@
 
   interface Props {
     title: string;
+    note?: string;
     ondrawer: () => void;
     crumbs?: Snippet;
     actions?: Snippet;
     alert?: boolean;
   }
 
-  let { title, ondrawer, crumbs, actions, alert = false }: Props = $props();
+  let { title, note, ondrawer, crumbs, actions, alert = false }: Props = $props();
 </script>
 
 <header class="page-head">
@@ -29,6 +30,9 @@
       <div class="crumbs">{@render crumbs()}</div>
     {/if}
     <h1 class="title">{title}</h1>
+    {#if note}
+      <p class="note">{note}</p>
+    {/if}
   </div>
   {#if actions}
     <div class="head-actions">{@render actions()}</div>
@@ -61,6 +65,11 @@
     letter-spacing: 0.005em;
     line-height: 1.35;
     text-wrap: balance;
+  }
+  .note {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
   }
   .head-actions {
     display: flex;

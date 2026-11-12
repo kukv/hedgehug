@@ -62,6 +62,9 @@ func TestSample(t *testing.T) {
 		if err != nil || st.InitialStatus != apptest.SampleStatusTodo || st.InitialPriority != apptest.SamplePriorityMedium {
 			t.Errorf("settings = %+v, %v", st, err)
 		}
+		if it, err := r.Items().Get(apptest.SampleTask); err != nil || it.Status != apptest.SampleStatusTodo || it.Priority != apptest.SamplePriorityMedium {
+			t.Errorf("sample task = %+v, %v", it, err)
+		}
 		return nil
 	})
 	if err != nil {

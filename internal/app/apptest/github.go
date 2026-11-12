@@ -28,6 +28,16 @@ func (g *GitHub) Viewer(_ context.Context, token string) (string, error) {
 	return login, nil
 }
 
+// AddUser は、トークン token をログイン名 login の人のものにする(通しのテストで、デバイスフローの許可に使う)。
+func (g *GitHub) AddUser(token, login string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.Users == nil {
+		g.Users = map[string]string{}
+	}
+	g.Users[token] = login
+}
+
 // Secrets は port.Secrets の偽物。Tokens はログイン名からトークンへの対応。ない、または Err があれば失敗する。
 // Device はデバイスフローのトークンの組(ログイン名から)。NoKeychain なら、デバイスフローのトークンを読めず、置けない。
 // DeleteErr があれば、DeleteDeviceToken は消さずにそれを返す(NoKeychain では消す処理を失敗させない)。
