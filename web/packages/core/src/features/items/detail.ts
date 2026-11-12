@@ -43,6 +43,7 @@ export interface Detail {
   // moveUp は、Step を直前の Step と入れ替える。先頭なら何もしない。
   moveUp(itemId: string): Promise<void>;
   // setProperty は、プロパティの値を 1 つ保存する。false なら、入力欄を保存済みの値に戻す。
+  // itemId が開いているアイテムでもその子でもなければ、保存せずに false。
   setProperty(itemId: string, propertyId: string, value: PropertyInput): Promise<boolean>;
   // toggleValue は、関連システム・複数選択の値を 1 つ入れる・外す。
   toggleValue(propertyId: string, valueId: string, on: boolean): Promise<void>;
@@ -214,7 +215,8 @@ export function createDetail(deps: DetailDeps): Detail {
     },
     async setProperty(itemId, propertyId, value) {
       const v = get(view);
-      if (!v) return false;
+      // 開いているアイテムとその子のほかは保存しない(入力中に開くアイテムが変わったときの、前の入力)。
+      if (!v || (itemId !== v.item.id && !v.children.some((c) => c.id === itemId))) return false;
       try {
         await deps.items.setProperty(v.store.id, itemId, propertyId, value);
       } catch (e) {

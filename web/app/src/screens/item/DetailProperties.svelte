@@ -18,14 +18,15 @@
     tab: "settings",
   });
 
-  async function change(propertyId: string, value: PropertyInput) {
-    if (!(await detail.setProperty(v.item.id, propertyId, value))) version += 1;
+  // at は、入力欄にフォーカスしたときのアイテム。開いているアイテムが変わっていたら、保存せずに入力を戻す。
+  async function change(propertyId: string, value: PropertyInput, at = v.item.id) {
+    if (at !== v.item.id || !(await detail.setProperty(at, propertyId, value))) version += 1;
   }
 </script>
 
 <section class="peek-sec" aria-label="プロパティ">
   <dl class="props">
-    {#each v.rows as row (`${row.property.id}-${version}`)}
+    {#each v.rows as row (`${v.item.id}-${row.property.id}-${version}`)}
       <dt>
         {row.property.name}
         {#if row.extra}
@@ -35,9 +36,10 @@
       <dd>
         <PropertyField
           {row}
+          itemId={v.item.id}
           settings={v.settings}
           disabled={v.readOnly}
-          onchange={(value) => void change(row.property.id, value)}
+          onchange={(value, at) => void change(row.property.id, value, at)}
           ontoggle={(id, on) => void detail.toggleValue(row.property.id, id, on)}
         />
       </dd>

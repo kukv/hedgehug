@@ -120,6 +120,14 @@ describe("createDetail", () => {
     expect(changed()).toBe(1);
   });
 
+  it("saves only the open item and its children, not a draft of an item opened before", async () => {
+    const { detail, items, toasts, task, epic, s1 } = await setup();
+    await detail.open("S1", task.id);
+    expect(await detail.setProperty(epic.id, "estimate", "7")).toBe(false);
+    expect(await detail.setProperty(s1.id, "status", "st2")).toBe(true);
+    expect([items.calls, get(toasts.list)]).toEqual([[`setProperty ${s1.id} status "st2"`], []]);
+  });
+
   it("shows a refusal as an error toast", async () => {
     const { detail, items, toasts, task } = await setup();
     await detail.open("S1", task.id);

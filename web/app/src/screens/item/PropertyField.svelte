@@ -12,16 +12,26 @@
   // 1 つのプロパティの入力(02「入力の方法と保存」の表、決定 20)。onchange は、選ぶもの・チェックは選んだとき、
   // 入力欄はフォーカスが外れたとき(Enter でも)。ontoggle は関連システム・複数選択の入り切り。
   // statusSelect なら、ステータスをセレクトで出す(作成ダイアログ。02「ダイアログの項目」)。
+  // itemId は、詳細パネルで値を持つアイテム。入力欄は、フォーカスしたときの itemId を onchange に添える。
   interface Props {
     row: ItemPropertyRow;
+    itemId?: string;
     settings: WorkspaceSettings;
     disabled: boolean;
     statusSelect?: boolean;
-    onchange: (value: PropertyInput) => void;
+    onchange: (value: PropertyInput, itemId?: string) => void;
     ontoggle: (valueId: string, on: boolean) => void;
   }
 
-  let { row, settings, disabled, statusSelect = false, onchange, ontoggle }: Props = $props();
+  let {
+    row,
+    itemId,
+    settings,
+    disabled,
+    statusSelect = false,
+    onchange,
+    ontoggle,
+  }: Props = $props();
   const p = $derived(row.property);
   const note = $derived(disabled ? readOnlyNote : undefined);
   const multi = $derived(p.type === "systems" || p.type === "multi");
@@ -37,6 +47,7 @@
   // $state にしない(フォーカスが外れたときに $effect が走り直し、保存の前に戻すため)。base は、フォーカスしたときの値。
   let editing = false;
   let base = "";
+  let focusedItem: string | undefined;
   $effect(() => {
     const next = shown;
     const picked = checkedId;
@@ -46,6 +57,7 @@
   function focused(event: FocusEvent) {
     editing = true;
     base = (event.currentTarget as HTMLInputElement).value;
+    focusedItem = itemId;
   }
 
   function openMenu(event: MouseEvent) {
@@ -79,7 +91,7 @@
       return;
     }
     const value = bad ? "x" : input.value;
-    if (value !== shown) onchange(value);
+    if (value !== shown) onchange(value, focusedItem);
   }
   function enter(event: KeyboardEvent) {
     if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
