@@ -85,25 +85,48 @@ func rankAt(list []ranked, i int) string {
 	return list[i].rank
 }
 
-// fillRanks は、rank のないワークスペース(list の先頭に並んでいる)だけに、表示の順を保つ rank を振り、
-// 同じ保存に書く。list の rank も書き換える。rank を持つものは変えない。
+// fillRanks は、rank が空か、前のもの以下(同じ値を含む)のワークスペースだけに、表示の順を保つ rank を振り、
+// 同じ保存に書く。list の rank も書き換える。空でなく厳密に増えている rank は変えない。
+// 変えるものの rank は、前に残るものと、次に残るもののあいだの値にする。
 func fillRanks(tx port.Tx, list []ranked) error {
-	k := slices.IndexFunc(list, func(r ranked) bool { return r.rank != "" })
-	if k < 0 { // rank を持つものがまだない: 先頭から順に伸ばす
-		k = len(list)
-		prev := ""
-		for i := range list {
-			list[i].rank = rank.After(prev)
+	keep := keptRanks(list)
+	prev := ""
+	for i := range list {
+		if keep[i] {
 			prev = list[i].rank
+			continue
 		}
-	}
-	for i := k - 1; i >= 0 && k < len(list); i-- { // 最初の rank より前に、後ろから詰める
-		list[i].rank = rank.Between("", list[i+1].rank)
-	}
-	for _, r := range list[:k] {
-		if err := tx.WriteWorkspaces().Append(r.ID, change.NewSet("rank", nil, r.rank)); err != nil {
+		var from any
+		if list[i].rank != "" {
+			from = list[i].rank
+		}
+		list[i].rank = rank.Between(prev, nextKept(list, keep, i))
+		prev = list[i].rank
+		if err := tx.WriteWorkspaces().Append(list[i].ID, change.NewSet("rank", from, list[i].rank)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// keptRanks は、rank を変えないもの(空でなく、前に残るものより大きい)を true にして返す。
+func keptRanks(list []ranked) []bool {
+	keep := make([]bool, len(list))
+	prev := ""
+	for i, r := range list {
+		if r.rank != "" && r.rank > prev {
+			keep[i], prev = true, r.rank
+		}
+	}
+	return keep
+}
+
+// nextKept は、list[i] より後ろで最初に残るものの rank。なければ空。
+func nextKept(list []ranked, keep []bool, i int) string {
+	for j := i + 1; j < len(list); j++ {
+		if keep[j] {
+			return list[j].rank
+		}
+	}
+	return ""
 }
