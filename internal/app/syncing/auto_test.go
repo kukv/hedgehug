@@ -2,6 +2,7 @@ package syncing_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -147,6 +148,77 @@ func TestAutoWaitsWhileOfflineAndSyncsWhenBackOnline(t *testing.T) {
 	step(t, a)
 	if n := f.syncs(); n["S1"] != 2 {
 		t.Errorf("expired offline still blocks: %v", n) // 書き込み後の契機(S1)で同期する
+	}
+}
+
+// 1 つの Store の同期が生のエラーで返っても、同じ Step の残りの Store は同期し、Step はエラーを返す。
+func TestAutoContinuesAfterAStoreError(t *testing.T) {
+	f, a, _ := newAuto(t)
+	f.tokens.Errs = map[port.StoreID]error{"S1": errors.New("keychain broken")}
+	if err := a.Step(context.Background()); err == nil {
+		t.Fatal("Step = nil, want the S1 error")
+	}
+	if n := f.syncs(); n["S4"] != 1 {
+		t.Errorf("S4 starved by S1's error: %v", n)
+	}
+}
+
+// 開いたとき・オンライン復帰の契機は、間隔の「まだ試していない」とは別。記録ができたあとでも、間隔を待たずに同期する。
+func TestAutoAllTriggerSurvivesAHold(t *testing.T) {
+	f, a, _ := newAuto(t)
+	step(t, a) // 記録を作る
+	f.clock.Advance(time.Minute)
+	a.Network("tab-2", false)
+	a.Network("tab-2", true) // オンライン復帰の契機
+	a.Hold("tab-1", true)
+	step(t, a)
+	if n := f.syncs()["S1"]; n != 1 {
+		t.Fatalf("synced while held: %d", n)
+	}
+	a.Hold("tab-1", false)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 2 || n["S4"] != 2 {
+		t.Errorf("all trigger lost during the hold: %v", n)
+	}
+}
+
+func TestAutoBackOnlineSyncsAllBeforeTheInterval(t *testing.T) {
+	f, a, _ := newAuto(t)
+	step(t, a) // 記録を作る
+	f.clock.Advance(time.Minute)
+	a.Network("tab-1", false)
+	f.clock.Advance(20 * time.Second)
+	a.Network("tab-1", true)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 2 || n["S4"] != 2 {
+		t.Errorf("back online did not sync all: %v", n)
+	}
+}
+
+// 同期が動いているあいだの保存は、同期で送ったものとして消さず、あとの書き込み後の契機で同期する。
+func TestAutoWriteDuringASyncSurvives(t *testing.T) {
+	f, a, _ := newAuto(t)
+	step(t, a)
+	f.clock.Advance(time.Minute)
+	a.Wrote("S1")
+	f.clock.Advance(30 * time.Second)
+	f.rep.Gate = make(chan struct{}, 1)
+	done := make(chan error, 1)
+	go func() { done <- a.Step(context.Background()) }()
+	for f.syncs()["S1"] < 2 { // Sync が始まって止まるまで待つ
+		time.Sleep(time.Millisecond)
+	}
+	f.clock.Advance(5 * time.Second)
+	a.Wrote("S1")
+	f.rep.Gate <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	f.rep.Gate = nil
+	f.clock.Advance(30 * time.Second)
+	step(t, a)
+	if n := f.syncs()["S1"]; n != 3 {
+		t.Errorf("write during the sync was dropped: %d", n)
 	}
 }
 

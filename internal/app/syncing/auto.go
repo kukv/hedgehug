@@ -2,6 +2,8 @@ package syncing
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -69,12 +71,14 @@ func (a *Auto) Hold(tab string, hold bool) {
 	delete(a.holds, tab)
 }
 
-// Run は、ctx が終わるまで、1 秒ごとに Step を呼ぶ。Step の失敗は、次の Step でやり直す。
+// Run は、ctx が終わるまで、1 秒ごとに Step を呼ぶ。Step の失敗は、ログに出して、次の Step でやり直す。
 func (a *Auto) Run(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for {
-		_ = a.Step(ctx)
+		if err := a.Step(ctx); err != nil {
+			slog.Warn("自動の同期に失敗しました", "err", err)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -96,15 +100,22 @@ func (a *Auto) Step(ctx context.Context) error {
 	}
 	picked, err := a.pick(ctx, now, all, wrote, timing)
 	if err != nil {
+		if all { // 使い切った契機を戻して、次の Step でやり直す
+			a.mu.Lock()
+			a.all = true
+			a.mu.Unlock()
+		}
 		return err
 	}
+	var errs []error
 	for _, t := range picked {
 		if _, err := a.Service.once(ctx, t); err != nil {
-			return err
+			errs = append(errs, err) // 1 つの失敗で、あとの Store を止めない
+			continue
 		}
 		a.synced(t.ID, now)
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // take は、待っている契機を読む。待つ条件にあるタブかオフラインのタブがあれば held。そうでなければ「アプリを開いた・
