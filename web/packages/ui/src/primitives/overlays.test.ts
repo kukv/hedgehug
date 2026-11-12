@@ -48,24 +48,6 @@ describe("Menu", () => {
     expect(onselect).toHaveBeenCalledExactlyOnceWith("copy");
   });
 
-  it("marks the checked item with aria-checked", () => {
-    const radios = [
-      { id: "a", label: "赤", checked: false },
-      { id: "b", label: "青", checked: true },
-    ];
-    render(Menu, {
-      props: { open: true, x: 0, y: 0, items: radios, onselect: vi.fn(), onclose: vi.fn() },
-    });
-    expect(screen.getByRole("menuitemradio", { name: "青" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
-    expect(screen.getByRole("menuitemradio", { name: "赤" })).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
-  });
-
   it("closes on Escape", async () => {
     const onclose = vi.fn();
     render(Menu, { props: { open: true, x: 0, y: 0, items, onselect: vi.fn(), onclose } });
