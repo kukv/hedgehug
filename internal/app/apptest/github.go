@@ -29,13 +29,15 @@ func (g *GitHub) Viewer(_ context.Context, token string) (string, error) {
 }
 
 // Secrets は port.Secrets の偽物。Tokens はログイン名からトークンへの対応。ない、または Err があれば失敗する。
-// Device はデバイスフローのトークンの組(ログイン名から)。NoKeychain なら、デバイスフローのトークンを読めも置けもしない。
+// Device はデバイスフローのトークンの組(ログイン名から)。NoKeychain なら、デバイスフローのトークンを読めず、置けない。
+// DeleteErr があれば、DeleteDeviceToken は消さずにそれを返す(NoKeychain では消す処理を失敗させない)。
 type Secrets struct {
 	mu                sync.Mutex
 	Tokens            map[string]string
 	Device            map[string]account.DeviceToken
 	NoKeychain        bool
 	NoKeychainForSave bool // 読めるが置けない(取り直したトークンを置けないとき)
+	DeleteErr         error
 	Err               error
 }
 
@@ -81,6 +83,9 @@ func (s *Secrets) SaveDeviceToken(_ context.Context, login string, t account.Dev
 func (s *Secrets) DeleteDeviceToken(_ context.Context, login string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.DeleteErr != nil {
+		return s.DeleteErr
+	}
 	delete(s.Device, login)
 	return nil
 }

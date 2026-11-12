@@ -32,7 +32,9 @@ func TestSignInAPI(t *testing.T) {
 		ExpiresIn int    `json:"expires_in"`
 		Interval  int    `json:"interval"`
 	}
-	_ = json.Unmarshal(res.Body.Bytes(), &code)
+	if err := json.Unmarshal(res.Body.Bytes(), &code); err != nil {
+		t.Fatal(err)
+	}
 	if code.UserCode != "WDJB-MJHT" || code.ExpiresIn != 900 || code.Interval != 5 {
 		t.Errorf("code %+v", code)
 	}
@@ -49,7 +51,9 @@ func TestSignInAPI(t *testing.T) {
 	}
 	res = api.Post("/api/sign-ins", map[string]string{"name": "x", "login": "x"})
 	var other struct{ ID string }
-	_ = json.Unmarshal(res.Body.Bytes(), &other)
+	if err := json.Unmarshal(res.Body.Bytes(), &other); err != nil {
+		t.Fatal(err)
+	}
 	if res = api.Delete("/api/sign-ins/" + other.ID); res.Code != http.StatusNoContent {
 		t.Errorf("DELETE: %d", res.Code)
 	}

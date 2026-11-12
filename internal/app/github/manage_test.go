@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/github"
@@ -87,7 +88,6 @@ func TestEditAccountRefusals(t *testing.T) {
 		{github.EditAccountInput{ID: work.ID, Name: "work", Login: "Hanako", Method: account.GhCLI}, "同じログイン名のアカウントがあります"},
 		{github.EditAccountInput{ID: work.ID, Name: "work", Login: "jiro", Method: account.EnvVar}, "環境変数 GH_TOKEN が設定されていません"},
 	}
-	f.secrets.Err = nil
 	for _, c := range cases {
 		if c.in.Method == account.EnvVar {
 			f.secrets.Err = &ghcall.Failure{Kind: ghcall.EnvMissing}
@@ -114,11 +114,80 @@ func TestEditAccountToDeviceFlowSignsIn(t *testing.T) {
 	}
 }
 
+// デバイスフローから替えるときは、誰も読まなくなるキーチェーンのトークンを消す(決定 D2-13)。
+func TestEditAccountFromDeviceFlowDropsTheOldToken(t *testing.T) {
+	cases := []struct {
+		name     string
+		in       github.EditAccountInput
+		wantKept bool
+	}{
+		{"gh", github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.GhCLI}, false},
+		{"keychain, same login", github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.Keychain}, true},
+		{"keychain, case-only change", github.EditAccountInput{ID: home.ID, Name: "家", Login: "Hanako", Method: account.Keychain}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newConn(t)
+			f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
+			f.secrets.Tokens["hanako"] = "tok-hanako"
+			f.secrets.Tokens["Hanako"] = "tok-hanako"
+			if _, err := f.edit().Do(context.Background(), c.in); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := f.secrets.Device["hanako"]; ok != c.wantKept {
+				t.Errorf("device token kept = %v; want %v", ok, c.wantKept)
+			}
+		})
+	}
+}
+
+func TestEditAccountKeepsGoingWhenTheOldTokenCannotBeDeleted(t *testing.T) {
+	f := newConn(t)
+	f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
+	f.secrets.Tokens["hanako"] = "tok-hanako"
+	f.secrets.DeleteErr = errors.New("locked")
+	in := github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.GhCLI}
+	if _, err := f.edit().Do(context.Background(), in); err != nil {
+		t.Fatalf("Do = %v", err)
+	}
+	if got := f.state(t, 1); got.Account.Method != account.GhCLI {
+		t.Errorf("not saved: %+v", got)
+	}
+}
+
+func TestEditAccountLeavesOtherDeviceTokens(t *testing.T) {
+	f := newConn(t)
+	f.secrets.Device = map[string]account.DeviceToken{"taro": {Access: "tok-taro"}}
+	in := github.EditAccountInput{ID: work.ID, Name: "WORK", Login: "taro", Method: account.GhCLI}
+	if _, err := f.edit().Do(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.secrets.Device["taro"]; !ok {
+		t.Error("a token of a non-device-flow account was deleted")
+	}
+}
+
+func TestEditAccountKeepsTheOldTokenWhenVerifyFails(t *testing.T) {
+	f := newConn(t)
+	f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
+	in := github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.GhCLI}
+	if _, err := f.edit().Do(context.Background(), in); err == nil {
+		t.Fatal("want a refusal (no gh token for hanako)")
+	}
+	if _, ok := f.secrets.Device["hanako"]; !ok {
+		t.Error("deleted before the edit succeeded")
+	}
+}
+
+func (f connFixture) del() github.DeleteAccount {
+	return github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores}
+}
+
 func TestDeleteAccount(t *testing.T) {
 	f := newConn(t)
 	f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
 	f.stores.Stores[1].Account = home.ID
-	del := github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores}
+	del := f.del()
 	if err := del.Do(context.Background(), home.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -137,6 +206,37 @@ func TestDeleteAccount(t *testing.T) {
 	}
 	if err := del.Do(context.Background(), work.ID); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("again: %v", err)
+	}
+}
+
+func TestDeleteAccountSucceedsWhenTheTokenCannotBeDeleted(t *testing.T) {
+	f := newConn(t)
+	f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
+	f.secrets.DeleteErr = errors.New("locked")
+	f.stores.Stores[1].Account = home.ID
+	if err := f.del().Do(context.Background(), home.ID); err != nil {
+		t.Fatalf("Do = %v", err)
+	}
+	if list, _ := f.accounts.List(context.Background()); len(list) != 1 {
+		t.Errorf("accounts %+v", list)
+	}
+	if s, _ := f.stores.List(context.Background()); s[1].Account != "" {
+		t.Errorf("stores %+v", s)
+	}
+}
+
+// 削除したアカウントの認証エラーを、同じ ID で作り直したアカウントに引き継がない。
+func TestDeleteAccountForgetsTheSessionState(t *testing.T) {
+	f := newConn(t)
+	f.conn.Rejected(work.ID)
+	if err := f.del().Do(context.Background(), work.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.accounts.Add(context.Background(), work); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.state(t, 1); got.AuthError {
+		t.Errorf("state survived the delete: %+v", got)
 	}
 }
 
@@ -164,40 +264,16 @@ func TestImpact(t *testing.T) {
 	}
 }
 
-func TestEditFromDeviceFlowRemovesTheUnusedToken(t *testing.T) {
-	cases := []struct {
-		name  string
-		in    github.EditAccountInput
-		keeps bool
-	}{
-		{"to gh", github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.GhCLI}, false},
-		{"to keychain, same login", github.EditAccountInput{ID: home.ID, Name: "家", Login: "hanako", Method: account.Keychain}, true},
-	}
-	for _, c := range cases {
-		f := newConn(t)
-		f.secrets.Tokens["hanako"] = "tok-hanako"
-		f.secrets.Device = map[string]account.DeviceToken{"hanako": {Access: "tok-hanako"}}
-		if _, err := f.edit().Do(context.Background(), c.in); err != nil {
-			t.Fatalf("%s: %v", c.name, err)
-		}
-		if _, ok := f.secrets.Device["hanako"]; ok != c.keeps {
-			t.Errorf("%s: token kept = %v", c.name, ok)
-		}
-	}
-}
-
-func TestDeleteEndsTheSignInOfTheAccount(t *testing.T) {
+func TestImpactWithoutMachineLoginHasNoYouLines(t *testing.T) {
 	f := newConn(t)
-	s := f.signIn()
-	code, err := s.Start(context.Background(), github.SignInInput{Account: home.ID, Name: home.Name, Login: home.Login})
+	f.stores.Login = ""
+	got, err := github.Impact{Accounts: f.accounts, Stores: f.stores}.Delete(context.Background(), work.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	del := github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores}
-	if err := del.Do(context.Background(), home.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Poll(context.Background(), code.ID); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("the sign-in of the deleted account is left: %v", err)
+	for _, line := range got {
+		if strings.Contains(line, "あなた が") {
+			t.Errorf("line with the machine login: %q", line)
+		}
 	}
 }

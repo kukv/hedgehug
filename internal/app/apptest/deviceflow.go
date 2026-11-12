@@ -11,7 +11,7 @@ import (
 )
 
 // DeviceFlow は port.DeviceFlow の偽物。Polls は PollDevice が順に返す答え(使い切ったら最後のものを返し続ける)。
-// StartErr・PollErr があれば、その問い合わせはそれを返す。Refreshed は RefreshDevice が返すトークンの組
+// StartErr・PollErr・RefreshErr があれば、その問い合わせはそれを返す。Refreshed は RefreshDevice が返すトークンの組
 // (Access が空なら TokenRejected)。Starts・Refreshes は呼ばれた回数。
 type DeviceFlow struct {
 	mu         sync.Mutex

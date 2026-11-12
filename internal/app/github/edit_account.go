@@ -26,38 +26,45 @@ type EditAccountInput struct {
 }
 
 func (u EditAccount) Do(ctx context.Context, in EditAccountInput) (account.Account, error) {
-	cur, a, fp, err := u.verify(ctx, in)
+	prev, a, fp, err := u.verify(ctx, in)
 	if err != nil {
 		return account.Account{}, ghcall.Refuse(err, u.Clock.Now())
 	}
 	if err := u.Accounts.Update(ctx, a); err != nil {
 		return account.Account{}, err
 	}
+	u.dropOldDeviceToken(ctx, prev, a)
 	u.Session.markOK(a.ID, fp)
-	// デバイスフローから替えたとき、古い項目を読むのは、同じログイン名の OS のキーチェーンの認証方法だけ(決定 D2-5)。
-	// ほかは誰も読まないトークンが残るので消す(決定 D2-12・D2-13)。消せなくても編集は済んでいる。
-	if cur.Method == account.DeviceFlow && (a.Method != account.Keychain || a.Login != cur.Login) {
-		_ = u.Secrets.DeleteDeviceToken(ctx, cur.Login)
-	}
 	return a, nil
 }
 
-// verify は、いまの値(cur)と、確かめた新しい値(a)と、そのトークンの指紋を返す。
-func (u EditAccount) verify(ctx context.Context, in EditAccountInput) (cur, a account.Account, fp [32]byte, err error) {
+// dropOldDeviceToken は、デバイスフローから替えて誰も読まなくなったキーチェーンのトークンを消す(決定 D2-13)。
+// 残すのは、同じログイン名の OS のキーチェーンへ替えたときだけ(キーチェーンの名前は大文字と小文字を区別する)。
+// 消せなくても編集は失敗にしない。
+func (u EditAccount) dropOldDeviceToken(ctx context.Context, prev, a account.Account) {
+	if prev.Method != account.DeviceFlow || (a.Method == account.Keychain && a.Login == prev.Login) {
+		return
+	}
+	_ = u.Secrets.DeleteDeviceToken(ctx, prev.Login)
+}
+
+// verify は、編集前のアカウント(prev)、保存する値、確かめたトークンの指紋を返す。
+func (u EditAccount) verify(ctx context.Context, in EditAccountInput) (prev, a account.Account, fp [32]byte, err error) {
 	existing, err := u.Accounts.List(ctx)
 	if err != nil {
-		return cur, a, fp, err
+		return prev, a, fp, err
 	}
-	if cur, err = find(ctx, u.Accounts, in.ID); err != nil {
-		return cur, a, fp, err
+	if prev, err = find(ctx, u.Accounts, in.ID); err != nil {
+		return prev, a, fp, err
 	}
-	if a, err = account.Check(account.Account{Name: in.Name, Login: in.Login, Method: in.Method}, existing, in.ID); err != nil {
-		return cur, a, fp, err
+	a, err = account.Check(account.Account{Name: in.Name, Login: in.Login, Method: in.Method}, existing, in.ID)
+	if err != nil {
+		return prev, a, fp, err
 	}
 	a.ID = in.ID
 	if a.Method == account.DeviceFlow {
-		return cur, a, fp, ErrDeviceFlow
+		return prev, a, fp, ErrDeviceFlow
 	}
 	fp, err = verifyToken(ctx, u.Secrets, u.GitHub, a)
-	return cur, a, fp, err
+	return prev, a, fp, err
 }
