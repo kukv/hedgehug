@@ -31,6 +31,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (project.Project, e
 	if err != nil {
 		return project.Project{}, err
 	}
+	if in.Status != "" && !project.ValidStatus(in.Status) {
+		return project.Project{}, fmt.Errorf("unknown project status %q", in.Status)
+	}
 	title := strings.TrimSpace(in.Title)
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("プロジェクト「%s」を作成", title)}
 	var created project.Project

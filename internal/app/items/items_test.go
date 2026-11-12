@@ -77,6 +77,8 @@ func TestCreateRefuses(t *testing.T) {
 		{items.CreateInput{Project: apptest.SampleProject, Kind: item.Task, Title: " \n "}, "タイトルを入力してください"},
 		{items.CreateInput{Kind: item.Task, Title: "画面"}, "プロジェクトを選んでください"},
 		{items.CreateInput{Parent: ptr(apptest.SampleEpic), Kind: item.Task, Title: "画面"}, "プロジェクトを選んでください"},
+		{items.CreateInput{Project: apptest.SampleProject, Parent: ptr("01NOPE00000000000000000000"), Kind: item.Task, Title: " "}, "タイトルを入力してください"},
+		{items.CreateInput{Parent: ptr("01NOPE00000000000000000000"), Kind: item.Task, Title: "画面"}, "プロジェクトを選んでください"},
 		{items.CreateInput{Project: apptest.SampleProject, Kind: item.Step, Title: "下書き"}, "親になる Story・Task・Bug を選んでください"},
 		{items.CreateInput{Project: apptest.SampleProject, Kind: item.Task, Title: "画面"}, "親になる Epic を選んでください"},
 		{items.CreateInput{Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: item.Step, Title: "下書き"}, "Step は Epic の下に置けません"},

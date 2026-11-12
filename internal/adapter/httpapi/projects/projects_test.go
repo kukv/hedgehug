@@ -53,7 +53,9 @@ func TestRefusalIs422WithTheMessage(t *testing.T) {
 
 func TestBadInputIsRefusedByTheSchema(t *testing.T) {
 	api := newAPI(t)
-	for _, body := range []map[string]any{{"title": "x", "status": "Review"}, {"title": "x", "start": "11/01"}} {
+	for _, body := range []map[string]any{
+		{"title": "x", "status": "Review"}, {"title": "x", "start": "11/01"}, {"title": "x", "end": "2026-02-30"}, {"title": "a\nb"},
+	} {
 		if res := api.Post(base, body); res.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%v: %d", body, res.Code)
 		}

@@ -45,6 +45,8 @@ components:
             - ""
           type: string
         title:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
           type: string
       required:
         - title
