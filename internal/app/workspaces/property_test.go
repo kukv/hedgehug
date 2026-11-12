@@ -30,10 +30,21 @@ func settingsOf(t *testing.T, s workspaces.Service, ws workspace.ID) workspace.S
 func putItem(t *testing.T, s workspaces.Service, ws workspace.ID, drafts ...change.Draft) item.ID {
 	t.Helper()
 	p := project.Project{ID: s.IDs.New(), Place: project.Place{Workspace: ws, Number: 1}, Rank: "V", Title: "p", Status: project.Todo}
-	it := item.Item{ID: s.IDs.New(), Place: item.Place{Workspace: ws, Project: p.ID, Number: 1}, Kind: item.Epic, Rank: "V", Title: "x"}
+	return putItemIn(t, s, p, 1, drafts...)
+}
+
+// putItemIn は、プロジェクト p に番号 number のアイテムを作り、drafts を足す。番号 1 のときだけプロジェクトも作る。
+func putItemIn(t *testing.T, s workspaces.Service, p project.Project, number int, drafts ...change.Draft) item.ID {
+	t.Helper()
+	ws := p.Place.Workspace
+	it := item.Item{ID: s.IDs.New(), Place: item.Place{Workspace: ws, Project: p.ID, Number: number}, Kind: item.Epic, Rank: "V", Title: "x"}
 	err := s.Stores.Write(t.Context(), store, port.Operation{Actor: change.User("taro"), Summary: "準備"}, func(tx port.Tx) error {
+		var perr error
+		if number == 1 {
+			perr = tx.WriteProjects().Append(p.ID, project.Create(p))
+		}
 		return errors.Join(
-			tx.WriteProjects().Append(p.ID, project.Create(p)),
+			perr,
 			tx.WriteItems().Append(it.ID, append([]change.Draft{item.Create(it)}, drafts...)...),
 		)
 	})
