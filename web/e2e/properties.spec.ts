@@ -105,10 +105,13 @@ test("changes a status from the tree", async ({ page }, info) => {
   const tree = page.getByRole("list", { name: "ツリー" });
   const row = tree
     .getByRole("listitem")
-    .filter({ has: page.getByRole("link", { name }) })
+    .filter({ has: page.getByRole("link", { name, exact: true }) })
     .last();
   await row.getByRole("button", { name: "ステータス: Todo" }).click();
-  await page.getByRole("menuitemcheckbox", { name: /Done/ }).click();
+  await Promise.all([
+    page.waitForResponse(isSet),
+    page.getByRole("menuitemcheckbox", { name: /Done/ }).click(),
+  ]);
   await expect(row.getByRole("button", { name: "ステータス: Done" })).toBeVisible();
 });
 
@@ -125,7 +128,7 @@ test("sets an added text property", async ({ page, request }, info) => {
   await Promise.all([page.waitForResponse(isSet), field.blur()]);
   await page.reload();
   // 再読み込みでパネルは閉じる。ツリーから開き直す。
-  await page.getByRole("list", { name: "ツリー" }).getByRole("link", { name: task }).click();
+  await page.getByRole("list", { name: "ツリー" }).getByRole("link", { name: task, exact: true }).click();
   await expect(
     page.getByRole("region", { name: "プロパティ" }).getByRole("textbox", { name }),
   ).toHaveValue("メモの値");
