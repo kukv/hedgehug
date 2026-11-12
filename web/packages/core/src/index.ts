@@ -59,6 +59,7 @@ export {
   parseRoute,
   projectDisplayId,
   type Route,
+  type WorkspaceTab,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { createShell, type Shell } from "./features/shell/shell";
@@ -69,18 +70,37 @@ export {
   type ToastItem,
   type Toasts,
 } from "./features/toasts/toasts";
+export {
+  createWorkspaceSettings,
+  type SettingsState,
+  type SettingsTab,
+  settingsTabs,
+  type WorkspaceSettingsScreen,
+} from "./features/workspaces/settings";
 export { NotFound, Refused } from "./model/errors";
 export type { Item, Kind, NewItem } from "./model/item";
 export type { Member } from "./model/member";
 export type { NewProject, Project, ProjectStatus } from "./model/project";
 export type { StoreInfo } from "./model/store";
 export type { SystemInfo } from "./model/system";
-export type { Workspace } from "./model/workspace";
+export type {
+  Category,
+  NewProperty,
+  PropertyType,
+  ValueList,
+  Workspace,
+  WorkspaceDetail,
+  WorkspaceProperty,
+  WorkspaceSettings,
+  WorkspaceUsage,
+  WorkspaceValue,
+} from "./model/workspace";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
 export type { ProjectsPort } from "./port/projects";
 export type { SystemPort } from "./port/system";
+export type { Direction, WorkspacesPort } from "./port/workspaces";
 export {
   get,
   type Readable,

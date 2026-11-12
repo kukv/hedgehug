@@ -3,6 +3,7 @@ import {
   createItemsPort,
   createProjectsPort,
   createSystemPort,
+  createWorkspacesPort,
   rememberToken,
   setToken,
 } from "@hedgehug/api";
@@ -17,6 +18,7 @@ import {
   createShell,
   createSystemInfo,
   createToasts,
+  createWorkspaceSettings,
   get,
   type Here,
   routeOfProject,
@@ -51,6 +53,11 @@ export const projectDialog = createProjectDialog({
   // 作ったら、そのプロジェクトの概要を開く。トーストは出さない(02「作成」)。
   onCreated: (storeId, project) =>
     navigation.go(routeOfProject(get(catalog.stores), storeId, project.id, "overview")),
+});
+export const workspaceSettings = createWorkspaceSettings({
+  port: createWorkspacesPort(),
+  catalog,
+  toasts,
 });
 export const detail = createDetail({
   catalog,

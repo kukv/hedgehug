@@ -16,6 +16,7 @@
     name: "workspace",
     store: v.store.name,
     prefix: v.workspace.prefix,
+    tab: "overview",
   });
   const projectRoute = $derived<Route>({
     name: "project",

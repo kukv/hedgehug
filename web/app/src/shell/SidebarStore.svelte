@@ -16,7 +16,12 @@
 
   let { store, current, links, collapsed, ontoggle }: Props = $props();
 
-  const wsRoute = (prefix: string): Route => ({ name: "workspace", store: store.name, prefix });
+  const wsRoute = (prefix: string): Route => ({
+    name: "workspace",
+    store: store.name,
+    prefix,
+    tab: "overview",
+  });
   const projectRoute = (displayId: string): Route => ({
     name: "project",
     store: store.name,

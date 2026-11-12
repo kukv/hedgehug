@@ -31,7 +31,14 @@
     { id: "tree", label: "ツリー" },
   ];
   const wsRoute = $derived<Route | null>(
-    $view ? { name: "workspace", store: $view.store.name, prefix: $view.workspace.prefix } : null,
+    $view
+      ? {
+          name: "workspace",
+          store: $view.store.name,
+          prefix: $view.workspace.prefix,
+          tab: "overview",
+        }
+      : null,
   );
   function select(id: string) {
     if (!$view) return;

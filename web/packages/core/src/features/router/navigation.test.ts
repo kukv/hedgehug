@@ -51,17 +51,22 @@ describe("navigation", () => {
   it("does not push the address that is already open", () => {
     const { history, stack } = fakeHistory("/");
     const nav = createNavigation(history);
-    nav.go({ name: "workspace", store: "work", prefix: "HH" });
-    nav.go({ name: "workspace", store: "work", prefix: "HH" });
-    expect(stack).toEqual(["/", "/s/work/w/HH"]);
+    nav.go({ name: "workspace", store: "work", prefix: "HH", tab: "overview" });
+    nav.go({ name: "workspace", store: "work", prefix: "HH", tab: "overview" });
+    expect(stack).toEqual(["/", "/s/work/w/HH/overview"]);
   });
 
   it("stops following the back button", () => {
     const { history, back } = fakeHistory("/");
     const nav = createNavigation(history);
-    nav.go({ name: "workspace", store: "work", prefix: "HH" });
+    nav.go({ name: "workspace", store: "work", prefix: "HH", tab: "overview" });
     nav.start()();
     back();
-    expect(get(nav.route)).toEqual({ name: "workspace", store: "work", prefix: "HH" });
+    expect(get(nav.route)).toEqual({
+      name: "workspace",
+      store: "work",
+      prefix: "HH",
+      tab: "overview",
+    });
   });
 });
