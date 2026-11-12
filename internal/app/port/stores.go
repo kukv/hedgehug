@@ -43,11 +43,18 @@ type Operation struct {
 	Summary string       // アクティビティの 1 行
 }
 
-// Check は、行を書ける操作かを確かめる。Summary が空か複数行(\n か \r を含む)、または人の操作の
-// ログイン名が member.ValidLogin でなければ、ErrInvalidOperation を包んだエラーを返す。
+// Check は、行を書ける操作かを確かめる。Summary が空か複数行(\n か \r を含む)、実行者が行の actor・by に
+// 書いて読み戻すと同じにならない(知らない種類、ルールの ID が change.ValidID でない自動化、種類に要らない
+// Login・Rule を持つ)、または人の操作のログイン名が member.ValidLogin でなければ、ErrInvalidOperation を
+// 包んだエラーを返す。読み戻せない行は、読むときに読み飛ばされて消えるため。
 func (op Operation) Check() error {
 	if op.Summary == "" || strings.ContainsAny(op.Summary, "\r\n") {
 		return fmt.Errorf("%w: summary must be one non-empty line: %q", ErrInvalidOperation, op.Summary)
+	}
+	a := op.Actor
+	if back, err := change.ParseActor(a.Code(), a.By()); err != nil || back != a ||
+		(a.Kind == change.ActorAutomation && !change.ValidID(a.Rule)) {
+		return fmt.Errorf("%w: actor %+v cannot be written", ErrInvalidOperation, a)
 	}
 	if op.Actor.Kind == change.ActorUser && !member.ValidLogin(op.Actor.Login) {
 		return fmt.Errorf("%w: login %q", ErrInvalidOperation, op.Actor.Login)

@@ -31,6 +31,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"summary is one non-empty line", contractSummary},
 		{"a write without rows needs no summary", contractEmptyWrite},
 		{"actor login must be valid", contractActorLogin},
+		{"actor must round-trip", contractActorRoundTrip},
 		{"malformed ids are not found and not written", contractMalformedIDs},
 		{"members have one log with an empty id", contractRefs},
 	}

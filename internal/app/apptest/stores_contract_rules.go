@@ -76,6 +76,39 @@ func contractActorLogin(t *testing.T, s port.Stores, id port.StoreID) {
 	}
 }
 
+// 実行者は、行の actor と by に書いて読み戻すと同じになるものだけを書く。読み戻せない行は、読むときに
+// 読み飛ばされて消えるため。
+func contractActorRoundTrip(t *testing.T, s port.Stores, id port.StoreID) {
+	for _, a := range []change.Actor{
+		{},
+		{Kind: "robot"},
+		{Kind: change.ActorAutomation, Login: "taro"},
+		{Kind: change.ActorAutomation, Login: "taro", Rule: "../x"},
+		{Kind: change.ActorSync, Login: "taro"},
+		{Kind: change.ActorGitHub, Rule: "01RULE"},
+		{Kind: change.ActorUser, Login: "taro", Rule: "01RULE"},
+	} {
+		refuseWrite(t, s, id, fmt.Sprintf("actor %+v", a), port.Operation{Actor: a, Summary: "準備"}, nil, false)
+	}
+	for i, a := range []change.Actor{
+		{Kind: change.ActorAutomation, Login: "taro", Rule: "01RULE"},
+		{Kind: change.ActorGitHub},
+		{Kind: change.ActorNone},
+	} {
+		wsID := change.ID(fmt.Sprintf("01ROUNDTRIP%d", i))
+		mustWrite(t, s, id, port.Operation{Actor: a, Summary: "準備"}, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(wsID, change.NewCreate(map[string]any{"id": string(wsID)}))
+		})
+		mustRead(t, s, id, func(r port.Reader) error {
+			log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: wsID})
+			if err != nil || len(log) != 1 || log[0].Actor != a {
+				t.Errorf("actor %+v: log = %+v, %v", a, log, err)
+			}
+			return nil
+		})
+	}
+}
+
 var malformedIDs = []change.ID{"", "../x", "a/b", ".", "あ"}
 
 // 使えない ID(change.ValidID でないもの)は、読むと見つからず、書くと断られる。

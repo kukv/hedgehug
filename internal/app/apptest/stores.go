@@ -28,10 +28,14 @@ func NewStores(clock port.Clock, ids port.IDs) *Stores {
 	return &Stores{clock: clock, ids: ids, stores: map[port.StoreID]*store{}}
 }
 
-// AddStore は、空の Store を足す。
+// AddStore は、空の Store を足す。同じ ID の Store がもうあれば、テストの書き間違いなので panic する
+// (黙って空の Store に替えると、書いたデータが消える)。
 func (s *Stores) AddStore(id port.StoreID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.stores[id]; ok {
+		panic(fmt.Sprintf("apptest: AddStore: store %q already exists", id))
+	}
 	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}}
 }
 
