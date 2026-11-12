@@ -1,5 +1,32 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { sidebar, tokenUrl, unique } from "./helpers";
+
+// status は、GET /api/sync の応答を差し替える(決定 S21)。
+async function status(page: Page, body: unknown) {
+  await page.route("**/api/sync", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: body }) : route.fallback(),
+  );
+}
+
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+
+// gotoSynced は、同期の状態を読み終えるまで待つ。画面は一覧を読んだあとに online・offline の受け取りを始めるので、
+// その前に出来事を送ると取りこぼす。
+async function gotoSynced(page: Page) {
+  const loaded = page.waitForResponse(
+    (r) => r.url().endsWith("/api/sync") && r.request().method() === "GET",
+  );
+  await page.goto(tokenUrl());
+  await loaded;
+}
+
+// goOffline は、navigator.onLine を差し替えて offline の出来事を送る(setOffline は localhost も止める)。
+async function goOffline(page: Page) {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    window.dispatchEvent(new Event("offline"));
+  });
+}
 
 test("the sync card shows the stores and syncs them all", async ({ page }, info) => {
   await page.goto(tokenUrl());
@@ -70,4 +97,138 @@ test("an untouched focused title takes the synced title on blur", async ({
   // サーバーに残った値を、別のページで開き直して確かめる(/i/ のアドレスはツリーへ移るので、reload では開かない)。
   await other.goto(tokenUrl(`/s/e2e/i/${id}`));
   await expect(otherTitle).toHaveValue(`${task} 別タブ`);
+});
+
+test("「Store ごとの同期状態」 syncs one store", async ({ page }, info) => {
+  await page.goto(tokenUrl());
+  const side = await sidebar(page, info);
+  await side.getByRole("button", { name: /すべて最新|未送信/ }).click();
+  const menu = page.getByRole("menu", { name: "Store ごとの同期状態" });
+  await menu.getByRole("menuitem", { name: /^readonly/ }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "readonly を同期しました(送信 0 件・受信 0 件)" }),
+  ).toBeVisible();
+});
+
+test("a sync error shows on the card, the menu and the drawer button", async ({ page }, info) => {
+  await status(page, {
+    auto: true,
+    stores: [
+      {
+        store: "S1",
+        name: "team-a",
+        hidden: false,
+        readOnly: false,
+        error: "認証に失敗しました",
+        unsent: 0,
+        lastSuccess: hoursAgo(48),
+      },
+      {
+        store: "S2",
+        name: "solo",
+        hidden: false,
+        readOnly: false,
+        error: "",
+        unsent: 3,
+        lastSuccess: hoursAgo(1),
+      },
+    ],
+  });
+  await page.goto(tokenUrl());
+  if (info.project.name !== "desktop") {
+    await expect(page.getByRole("img", { name: "同期エラー" })).toBeVisible();
+  }
+  const side = await sidebar(page, info);
+  await expect(side.getByRole("button", { name: "1 件の Store で同期エラー" })).toBeVisible();
+  await expect(side.getByText("1 件の Store が 24 時間以上同期されていません")).toBeVisible();
+  await side.getByRole("button", { name: "1 件の Store で同期エラー" }).click();
+  await expect(page.getByRole("menu", { name: "Store ごとの同期状態" })).toContainText(
+    "同期エラー: 認証に失敗しました · 2 日前",
+  );
+});
+
+test("a failed sync of all shows the lines in one error toast", async ({ page }, info) => {
+  await page.route("**/api/sync", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          json: { result: "failed", lines: ["成功 1 件・失敗 1 件", "e2e: 認証に失敗しました"] },
+        })
+      : route.fallback(),
+  );
+  await page.goto(tokenUrl());
+  const side = await sidebar(page, info);
+  await side.getByRole("button", { name: "すべて同期" }).click();
+  const toast = page.getByRole("status").filter({ hasText: "成功 1 件・失敗 1 件" });
+  await expect(toast).toContainText("e2e: 認証に失敗しました");
+  await expect(toast).toHaveClass(/error/);
+});
+
+test("offline shows the band, tells the server and refuses a manual sync", async ({
+  page,
+}, info) => {
+  const sent: unknown[] = [];
+  await page.route("**/api/sync/network", async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ status: 204 });
+  });
+  await gotoSynced(page);
+  await goOffline(page);
+  await expect(
+    page.getByText(
+      "オフラインです。変更はこのマシンにコミットします。つながったら「すべて同期」で push してください。",
+    ),
+  ).toBeVisible();
+  await expect.poll(() => sent.length).toBeGreaterThan(0);
+  expect(sent[0]).toMatchObject({ online: false });
+  const side = await sidebar(page, info);
+  await side.getByRole("button", { name: "すべて同期" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "オフラインのため同期できません。つながったら同期します" }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    window.dispatchEvent(new Event("online"));
+  });
+  await expect(page.getByText(/^オフラインです。/)).toBeHidden();
+  await expect.poll(() => sent.at(-1)).toMatchObject({ online: true });
+});
+
+test("the band follows the automatic sync setting", async ({ page }) => {
+  await status(page, {
+    auto: true,
+    stores: [
+      {
+        store: "S1",
+        name: "team-a",
+        hidden: false,
+        readOnly: false,
+        error: "",
+        unsent: 0,
+        lastSuccess: "",
+      },
+    ],
+  });
+  await gotoSynced(page);
+  await goOffline(page);
+  await expect(
+    page.getByText("オフラインです。変更はこのマシンにコミットし、つながったら push します。"),
+  ).toBeVisible();
+});
+
+test("a held tab tells the server and waits to apply", async ({ page }) => {
+  const holds: unknown[] = [];
+  await page.route("**/api/sync/hold", async (route) => {
+    holds.push(route.request().postDataJSON());
+    await route.fulfill({ status: 204 });
+  });
+  await page.goto(tokenUrl("/s/e2e/i/HH-2"));
+  const title = page
+    .getByRole("region", { name: "詳細パネル" })
+    .getByRole("textbox", { name: "タイトル" });
+  await title.focus();
+  await expect.poll(() => holds.at(-1)).toMatchObject({ hold: true });
+  await title.blur();
+  await expect.poll(() => holds.at(-1)).toMatchObject({ hold: false });
 });
