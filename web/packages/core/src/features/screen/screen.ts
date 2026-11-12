@@ -22,6 +22,10 @@ export interface ScreenDeps {
   openItem(storeId: string, itemId: string): void;
 }
 
+function sameScreen(a: Resolved | null, b: Resolved): boolean {
+  return a !== null && JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function createScreen(deps: ScreenDeps): Screen {
   const current = writable<Resolved | null>(null);
   // 解決が重なったときは、最後に始めたものの結果だけを使う。
@@ -38,7 +42,8 @@ export function createScreen(deps: ScreenDeps): Screen {
       deps.openItem(r.storeId, r.itemId);
       return;
     }
-    current.set(r);
+    // 前と同じ画面なら出し直さない(出し直すと、画面が作り直されて入力中の文字やスクロールが消える)。
+    if (!sameScreen(get(current), r)) current.set(r);
   }
 
   return {

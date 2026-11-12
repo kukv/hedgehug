@@ -20,7 +20,7 @@ function memoryHistory(start: string): HistoryPort & { paths: string[] } {
   };
 }
 
-async function setup(start: string) {
+async function setup(start: string, begin = true) {
   const history = memoryHistory(start);
   const navigation = createNavigation(history);
   const catalog = createCatalog(fakeCatalogPort());
@@ -33,14 +33,19 @@ async function setup(start: string) {
     items,
     openItem: (s, i) => void opened.push(`${s}/${i}`),
   });
-  screen.start();
-  await flush();
-  return { screen, navigation, history, opened };
+  if (begin) {
+    screen.start();
+    await flush();
+  }
+  return { screen, navigation, history, opened, catalog };
 }
 
 describe("createScreen", () => {
   it("is null before the first resolution and then follows the address", async () => {
-    const { screen, navigation } = await setup("/s/work/p/HH-P2/overview");
+    const { screen, navigation } = await setup("/s/work/p/HH-P2/overview", false);
+    expect(get(screen.current)).toBeNull();
+    screen.start();
+    await flush();
     expect(get(screen.current)).toEqual({
       name: "project",
       storeId: "S1",
@@ -50,6 +55,15 @@ describe("createScreen", () => {
     navigation.go({ name: "workspace", store: "work", prefix: "HH" });
     await flush();
     expect(get(screen.current)).toEqual({ name: "workspace", storeId: "S1", workspaceId: "S1-W1" });
+  });
+
+  it("does not emit current again for the same resolution", async () => {
+    const { screen, catalog } = await setup("/s/work/p/HH-P2/overview");
+    const seen: unknown[] = [];
+    screen.current.subscribe((r) => void seen.push(r));
+    await catalog.load();
+    await flush();
+    expect(seen).toHaveLength(1);
   });
 
   it("opens an item entry as its project's tree with the panel, without pushing history", async () => {
