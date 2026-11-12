@@ -162,6 +162,13 @@ export {
   valueRows,
   valuesHelp,
 } from "./features/workspaces/values";
+export {
+  transitionRefusal,
+  type WorkflowCell,
+  type WorkflowRow,
+  workflowHelp,
+  workflowRows,
+} from "./features/workspaces/workflow";
 export type {
   Account,
   AccountRow,
