@@ -118,3 +118,37 @@ func TestDeviceUnreachable(t *testing.T) {
 		t.Errorf("PollDevice = %v", err)
 	}
 }
+
+func statusServer(t *testing.T, code int) *Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(code)
+	}))
+	t.Cleanup(srv.Close)
+	return &Client{WebURL: srv.URL, HTTP: srv.Client(), Now: time.Now}
+}
+
+func TestDeviceNon200(t *testing.T) {
+	// client_id の打ち間違いなどで 200 以外が返っても、「#0 が見つかりません」などの別の場面の文言にしない。
+	for _, code := range []int{http.StatusNotFound, http.StatusUnauthorized, http.StatusBadRequest} {
+		c := statusServer(t, code)
+		if _, err := c.StartDevice(context.Background(), "typo"); !ghcall.Is(err, ghcall.Unreachable) {
+			t.Errorf("%d: StartDevice = %v", code, err)
+		}
+		if _, err := c.PollDevice(context.Background(), "typo", "dc"); !ghcall.Is(err, ghcall.Unreachable) {
+			t.Errorf("%d: PollDevice = %v", code, err)
+		}
+	}
+	// 取り直しは、401・404 を拒否として扱う。応答の分からない 400 などは「通信できない」のまま(次の接続でやり直す)。
+	for _, code := range []int{http.StatusNotFound, http.StatusUnauthorized} {
+		if _, err := statusServer(t, code).RefreshDevice(context.Background(), "typo", "r"); !ghcall.Is(err, ghcall.TokenRejected) {
+			t.Errorf("%d: RefreshDevice = %v", code, err)
+		}
+	}
+	if _, err := statusServer(t, http.StatusBadRequest).RefreshDevice(context.Background(), "x", "r"); !ghcall.Is(err, ghcall.Unreachable) {
+		t.Errorf("400: RefreshDevice = %v", err)
+	}
+	if _, err := statusServer(t, http.StatusTooManyRequests).StartDevice(context.Background(), "x"); !ghcall.Is(err, ghcall.RateLimited) {
+		t.Errorf("429: %v", err)
+	}
+}

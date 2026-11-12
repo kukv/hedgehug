@@ -72,6 +72,7 @@ type flow struct {
 	deviceCode string
 	expiresAt  time.Time
 	interval   time.Duration
+	granted    *account.DeviceToken // 許可されたが、持ち主をまだ確かめられていないトークン
 }
 
 func (u SignIn) Start(ctx context.Context, in SignInInput) (SignInCode, error) {
@@ -122,6 +123,9 @@ func (u SignIn) Poll(ctx context.Context, id string) (SignInResult, error) {
 	if !ok {
 		return SignInResult{}, port.ErrNotFound
 	}
+	if tok, ok := u.Session.grantedOf(f); ok {
+		return u.finish(ctx, id, f, tok) // 許可は済み。持ち主の確かめだけをやり直す
+	}
 	if !u.Clock.Now().Before(f.expiresAt) {
 		return u.end(id, SignInResult{State: SignInExpired}), nil
 	}
@@ -145,23 +149,29 @@ func (u SignIn) Poll(ctx context.Context, id string) (SignInResult, error) {
 // finish は、許可されたトークンの持ち主を確かめ、キーチェーンに置いて、アカウントを登録・保存する。
 func (u SignIn) finish(ctx context.Context, id string, f *flow, tok account.DeviceToken) (SignInResult, error) {
 	login, err := u.GitHub.Viewer(ctx, tok.Access)
-	if err != nil {
-		// 許可は済んでいるが確かめられない。流れを捨て、理由を「アカウントを追加」に出す。
+	switch {
+	case ghcall.Is(err, ghcall.Unreachable) || ghcall.Is(err, ghcall.RateLimited):
+		// 許可は済んでいる(device_code はもう使えない)。トークンを流れに持ったまま、つながるまで待つ(07)。
+		u.Session.setGranted(f, tok)
+		return SignInResult{State: SignInWaiting, Interval: u.Session.intervalOf(f)}, nil
+	case err != nil:
 		return u.end(id, SignInResult{State: SignInFailed, Message: ghcall.Refuse(err, u.Clock.Now()).Error()}), nil
-	}
-	if !strings.EqualFold(login, f.target.Login) {
+	case !strings.EqualFold(login, f.target.Login):
 		return u.end(id, SignInResult{State: SignInMismatch, Message: mismatchText(login)}), nil
 	}
+	// ここから先は 1 回だけ行う。キャンセルされていたら、何も置かず、何も登録しない(07「ダイアログを閉じる」)。
+	if !u.Session.takeFlow(id) {
+		return SignInResult{}, port.ErrNotFound
+	}
 	if err := u.Secrets.SaveDeviceToken(ctx, f.target.Login, tok); err != nil {
-		return u.end(id, SignInResult{State: SignInFailed, Message: ghcall.Refuse(err, u.Clock.Now()).Error()}), nil
+		return SignInResult{State: SignInFailed, Message: ghcall.Refuse(err, u.Clock.Now()).Error()}, nil
 	}
 	a, err := u.save(ctx, f)
 	if err != nil {
-		u.Session.endFlow(id)
 		return SignInResult{}, err
 	}
 	u.Session.markOK(a.ID, [32]byte{})
-	return u.end(id, SignInResult{State: SignInDone, Account: a}), nil
+	return SignInResult{State: SignInDone, Account: a}, nil
 }
 
 func (u SignIn) save(ctx context.Context, f *flow) (account.Account, error) {

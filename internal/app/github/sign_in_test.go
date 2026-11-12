@@ -207,3 +207,36 @@ func TestSignInCancel(t *testing.T) {
 		t.Errorf("Poll = %v", err)
 	}
 }
+
+func TestSignInWaitsWhenTheOwnerCannotBeChecked(t *testing.T) {
+	f := newConn(t)
+	f.device.Polls = []port.DeviceGrant{granted, {Status: port.DeviceExpired}}
+	f.gh.Err = &ghcall.Failure{Kind: ghcall.Unreachable}
+	s := f.signIn()
+	code, _ := s.Start(context.Background(), github.SignInInput{Name: "x", Login: "saburo"})
+	if r, err := s.Poll(context.Background(), code.ID); err != nil || r.State != github.SignInWaiting {
+		t.Fatalf("offline after the grant: %+v, %v", r, err)
+	}
+	// つながったら、GitHub に許可を聞き直さずに(device_code はもう使えない)、持ち主だけを確かめて登録する。
+	f.gh.Err = nil
+	f.gh.Users["tok-saburo"] = "saburo"
+	r, err := s.Poll(context.Background(), code.ID)
+	if err != nil || r.State != github.SignInDone || f.count(t) != 3 {
+		t.Errorf("back online: %+v, %v", r, err)
+	}
+}
+
+func TestSignInCanceledAfterTheGrant(t *testing.T) {
+	f := newConn(t)
+	f.device.Polls = []port.DeviceGrant{granted}
+	f.gh.Err = &ghcall.Failure{Kind: ghcall.Unreachable}
+	s := f.signIn()
+	code, _ := s.Start(context.Background(), github.SignInInput{Name: "x", Login: "saburo"})
+	_, _ = s.Poll(context.Background(), code.ID)
+	s.Cancel(code.ID)
+	f.gh.Err = nil
+	f.gh.Users["tok-saburo"] = "saburo"
+	if _, err := s.Poll(context.Background(), code.ID); !errors.Is(err, port.ErrNotFound) || f.count(t) != 2 || len(f.secrets.Device) != 0 {
+		t.Errorf("Poll = %v, count %d, keychain %v", err, f.count(t), f.secrets.Device)
+	}
+}

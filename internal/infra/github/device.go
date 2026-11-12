@@ -34,7 +34,7 @@ func (c *Client) StartDevice(ctx context.Context, clientID string) (port.DeviceC
 		Error           string `json:"error"`
 	}
 	if err := c.postForm(ctx, "/login/device/code", url.Values{"client_id": {clientID}}, &a); err != nil {
-		return port.DeviceCode{}, err
+		return port.DeviceCode{}, unreachableUnless(err)
 	}
 	if a.Error != "" || a.DeviceCode == "" {
 		return port.DeviceCode{}, &ghcall.Failure{Kind: ghcall.Unreachable}
@@ -53,7 +53,7 @@ func (c *Client) PollDevice(ctx context.Context, clientID, deviceCode string) (p
 		"grant_type": {"urn:ietf:params:oauth:grant-type:device_code"},
 	}, &a)
 	if err != nil {
-		return port.DeviceGrant{}, err
+		return port.DeviceGrant{}, unreachableUnless(err)
 	}
 	switch a.Error {
 	case "":
@@ -79,7 +79,11 @@ func (c *Client) RefreshDevice(ctx context.Context, clientID, refresh string) (a
 		"client_id": {clientID}, "refresh_token": {refresh}, "grant_type": {"refresh_token"},
 	}, &a)
 	if err != nil {
-		return account.DeviceToken{}, err
+		if ghcall.Is(err, ghcall.Unreachable) || ghcall.Is(err, ghcall.RateLimited) {
+			return account.DeviceToken{}, err
+		}
+		// 401・403・404 は、更新用のトークンが受け付けられなかったものとして扱う(D2 の決定 D2-7)。
+		return account.DeviceToken{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
 	}
 	if a.Error != "" || a.AccessToken == "" {
 		return account.DeviceToken{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
@@ -120,4 +124,14 @@ func (c *Client) postForm(ctx context.Context, path string, form url.Values, out
 		return &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
 	return nil
+}
+
+// unreachableUnless は、デバイスフローの宛先の失敗を、利用上限のほかは「通信できない」に畳む。
+// 宛先は API でないので、404 や 401 を「番号の PR がない」「トークンが拒否された」と出さないため
+// (client_id の打ち間違いでも起きる)。
+func unreachableUnless(err error) error {
+	if ghcall.Is(err, ghcall.RateLimited) {
+		return err
+	}
+	return &ghcall.Failure{Kind: ghcall.Unreachable}
 }

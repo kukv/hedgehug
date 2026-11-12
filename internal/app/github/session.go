@@ -105,3 +105,29 @@ func (s *Session) intervalOf(f *flow) time.Duration {
 	defer s.mu.Unlock()
 	return f.interval
 }
+
+// takeFlow は、流れを取り出して消す。もうなければ(キャンセルされた、ほかの問い合わせが済ませた) false。
+func (s *Session) takeFlow(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.flows[id]; !ok {
+		return false
+	}
+	delete(s.flows, id)
+	return true
+}
+
+func (s *Session) setGranted(f *flow, t account.DeviceToken) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f.granted = &t
+}
+
+func (s *Session) grantedOf(f *flow) (account.DeviceToken, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f.granted == nil {
+		return account.DeviceToken{}, false
+	}
+	return *f.granted, true
+}

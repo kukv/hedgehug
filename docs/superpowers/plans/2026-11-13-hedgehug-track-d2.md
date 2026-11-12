@@ -45,7 +45,7 @@
 | D2-11 | Store の GitHub に関わる値(名前・割り当てたアカウント・remote の有無)と、マシンの設定「ログイン名」は、口 `port.StoreGitHub` で読む。削除で割り当てを「なし」にする書き込み(`Unassign`)も同じ口に置く。本物はトラック G が作る。それまでは、本物の組み立ては Store のない実装(`noStoreGitHub`)を使い、e2e は偽物とサンプルの Store を使う | トラック D の決定 1。Store の一覧とマシンのログイン名は G の持ち場(config.yaml) |
 | D2-12 | アカウントを削除したとき、認証方法がデバイスフローなら、キーチェーンのそのトークンも消す。ほかの認証方法では消さない(利用者が置いたものなので) | 07「アカウント」(トークンは hedgehug がデバイスフローで保存したもの)。前回の実装の `Delete` |
 | D2-13 | 編集でデバイスフローのアカウントのログイン名を変えたときは、サインインのあと、古いログイン名の項目を消す。認証方法をデバイスフローからほかへ替えたときは、項目を消さない(決定 D2-5 で読めるため) | 決定 D2-12 と同じ考え方。残しても誰も読まない項目だけを消す |
-| D2-14 | `config.yaml` の `hosts` は、前回と同じ `- {host: github.com, client_id: ...}` の形で読む。`host` と `client_id` のほかの鍵(前回の `api`・`web`)は読まない | 07「デバイスフロー」(ホスト `github.com` の `client_id`)。ホストは github.com に固定(07「登録」) |
+| D2-14 | `config.yaml` の `hosts` は、前回と同じ `- {host: github.com, client_id: ...}` の形で読む。`host` と `client_id` のほかの鍵(前回の `api`・`web`)は読まない。アカウントの追加などで `config.yaml` を書き直すと、それらの鍵とコメントは消える(D1 からの書き方。手で書いたコメントを残す書き方は G で config.yaml を広げるときに決める) | 07「デバイスフロー」(ホスト `github.com` の `client_id`)。ホストは github.com に固定(07「登録」) |
 | D2-15 | 再認証と編集の確かめ方は、D1 の登録(`AddAccount`)の確かめ方を `verifyToken` に出して共用する | 07「再認証」「編集」(登録と同じ認証の確認) |
 
 ## ファイルの地図
@@ -3510,7 +3510,7 @@ func wire(context.Context) (httpapi.Deps, error) {
 - [ ] **Step 5: 生成物を作り直し、全体を確かめる**
 
 Run: `make generate && (cd web && pnpm gen) && make check`
-Expected: PASS。`api/openapi.yaml` に 9 つの operation(`list-accounts`・`add-account`・`edit-account`・`delete-account`・`reauth-account`・`account-delete-impact`・`account-edit-impact`・`start-sign-in`・`poll-sign-in`・`cancel-sign-in`)がある。`go build -tags e2e ./cmd/hedgehug` も通る。
+Expected: PASS。`api/openapi.yaml` に 10 の operation(`list-accounts`・`add-account`・`edit-account`・`delete-account`・`reauth-account`・`account-delete-impact`・`account-edit-impact`・`start-sign-in`・`poll-sign-in`・`cancel-sign-in`)がある。`go build -tags e2e ./cmd/hedgehug` も通る。
 
 - [ ] **Step 6: コミット**
 
@@ -3520,6 +3520,15 @@ git commit -m "feat: アカウントの編集・削除・再認証とデバイ�
 ```
 
 ---
+
+## 実装で計画から変えたこと
+
+- 一覧の行(`accountRow`)は `accountBody` を埋め込まず、欄を並べて書いた。huma は埋め込みの構造体をスキーマに展開しないため。
+- `RunAccountsContract` の Update・Remove の検査は、認知的複雑度の上限(15)を超えるので、`runUpdateRemove` に分けた。
+- `EditAccount` の自分自身の検査のテストは、ログイン名を `taro` のままにした(偽物のトークンはログイン名の綴りどおりに引くため)。
+- デバイスフローの宛先(`github.com/login/...`)が 200 以外を返したとき、`StartDevice`・`PollDevice` は利用上限のほかを「通信できない」にする。`classify` のままでは、404 が「#0 が見つかりません」、401 が「トークンが受け付けられませんでした」になる(`client_id` の打ち間違いで起きる)。`RefreshDevice` は 401・403・404 を拒否(認証エラー)、それ以外は「通信できない」にする。
+- 許可のあとで持ち主を確かめる問い合わせが届かない(通信できない・利用上限)ときは、許可されたトークンを流れに持ったまま「待っている」を返し、次の問い合わせで確かめだけをやり直す(07「待っているあいだに通信が切れたときは、つながるまで待ち続ける」。`device_code` はもう使えないため)。
+- 許可のあとの保存の前に、流れを `Session` のロックの中で取り出す。キャンセルと重なったら、何も置かず、何も登録しない(07「ダイアログを閉じる」)。
 
 ## D2 のあと
 
