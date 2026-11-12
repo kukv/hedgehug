@@ -159,7 +159,7 @@ export const syncNow = readonly(now);
 const onlineState = writable(isOnline());
 export const online = readonly(onlineState);
 
-// started は、startSync のあとか。つながり方の変化は、一覧を読み終える前でも帯に出すので、リスナーはモジュールを
+// started は、startSync のあとか。つながり方の状態を取りこぼさないよう、リスナーはモジュールを
 // 読んだときに付ける。知らせと反映は、startSync のあとだけ行う(つないだときの読み直しが最初の解決より先に走らないように)。
 let started = false;
 const network = () => {

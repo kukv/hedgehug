@@ -104,6 +104,26 @@ describe("createDetail", () => {
     expect(get(detail.view)?.item.id).toBe(s1.id);
   });
 
+  it("shows the saved title even when a reload ran during the save", async () => {
+    const { detail, items, task } = await setup();
+    const renameGate = gate();
+    const rename = items.rename.bind(items);
+    items.rename = async (...a) => {
+      await renameGate.wait;
+      return rename(...a);
+    };
+    // 実際の通信と同じく、読むたびに別の値を返す(同じ参照だと、保存が表示へ直に映ってしまう)。
+    const getItem = items.get.bind(items);
+    items.get = async (st, id) => ({ ...(await getItem(st, id)) });
+    await detail.open("S1", task.id);
+    const saving = detail.rename("新しい画面");
+    await flush();
+    await detail.reload();
+    renameGate.release();
+    await saving;
+    expect(get(detail.view)?.item.title).toBe("新しい画面");
+  });
+
   it("reload reads the open item again (C2 画面の決定 S10)", async () => {
     const { detail, items, task } = await setup();
     await detail.open("S1", task.id);

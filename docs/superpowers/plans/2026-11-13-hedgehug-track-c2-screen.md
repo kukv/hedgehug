@@ -127,6 +127,11 @@ src/screens/item/DetailPanel.svelte(変更)              タイトルの入力�
 
 web/e2e(Task 10)
 sync.spec.ts
+
+実装で足したもの
+internal/app/apptest/stores.go(変更)                   Versions
+cmd/hedgehug/wire_e2e.go(変更)                         syncing.Watch
+web/packages/core/src/features/catalog/catalog.ts(変更)
 ```
 
 ---
@@ -2855,7 +2860,20 @@ git commit -m "test(e2e): 同期カード・オフライン・Shift+Ctrl+S・画
 - G: `port.SyncTargets` の本物が入ると、本物のアプリにも同期カードが出る。アカウントの割り当て・非表示・remote が変わったときに `EventSync` を流せば、カードは `sync` の出来事で読み直す(C2 の引き継ぎ)。
 - C3: 他の書き手との重なりのトーストは、反映(`reflect`)とは別に、保存の応答から出す。
 - C5: 時計のずれの行は、`syncCard` に行を 1 つ足す。
+- G: オフラインの知らせが期限で切れると(`auto.go` の `waiting` が消す)、そのタブが送る `online: true` は「オンライン復帰」の契機にならず、次の間隔まで同期しない。タブの online の送信が失敗したときも同じ。
+- 画面がなくなったとき(別のタブで削除)、画面はホームになるが、アドレスと詳細パネルが残る(A2 からの形。01「マイタスクに移る」「画面を移るとパネルを閉じる」)。
+- `projectScreen` は画面を離れたあとも、Store の出来事のたびに前のプロジェクトを読み直す(無駄な通信)。
+- 起動の直後、一覧と同期の状態を 2 回ずつ読む(害はない)。
 
 ## 実装で計画から変えたこと
 
-(実装のあとで書く)
+- core は DOM の AbortSignal を持たないので、`SyncPort.watch(on)` は `Watching { done, stop }` を返す形にした(計画の初版の signal 引数をやめた)。
+- e2e のサーバーで `syncing.Watch` を動かす(`apptest.Stores.Versions`、`cmd/hedgehug/wire_e2e.go`)。別のタブの反映を e2e で確かめるため。
+- `window` の online・offline のリスナーは `wire.ts` を読んだときに付け、知らせと `reflection.wake` は `startSync` のあとだけ行う(一覧を読む前の出来事を取りこぼさない)。
+- `catalog.load` は、後から始めた読み直しがあれば、それが終わるまで待ってから返す(A2 の決定 19 の「最後に始めたものの結果だけを使う」の上に足した。作成のあと、Watch の出来事による古い読み直しが先に返り、新しいプロジェクトのない一覧で画面が解決されていたため)。
+- 詳細パネルは、開こうとしているアイテム(`target`)を持ち、`reload` はそれを読み直す。アイテムが消えて閉じたら `target` も消す。保存のあとの読み直しは、同じアイテムを開いていれば行う(保存の途中で反映の `reload` が走っても飛ばさない)。
+- 詳細パネルのタイトルは、フォーカスしただけで打ち換えていなければ、離れたときに保存せず最新の値に合わせる。
+- Task 6 の計画のテストにあった、何も確かめない `expect(s).toBeDefined()` を消した。
+- 待つ条件の `input` から checkbox・radio を除いた。
+- オフラインで、状態の一覧に remote がある表示中の Store が 1 つもないときの手動の同期は、「同期する Store がありません(remote のある、表示中の Store が要ります)」を出す。
+- e2e の create.spec.ts は、Task を作ったあと詳細パネルが開くのを待ってから Esc を押す(もとからあった競合が、Watch で起きやすくなった)。

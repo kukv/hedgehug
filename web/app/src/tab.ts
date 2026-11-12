@@ -6,7 +6,9 @@ export const holdReasons: (() => boolean)[] = [
   () => document.querySelector('[aria-modal="true"]') !== null,
   () => document.querySelector('[role="menu"]') !== null,
   () =>
-    document.activeElement?.closest("input, textarea, select, [contenteditable='true']") != null,
+    document.activeElement?.closest(
+      "input:not([type='checkbox']):not([type='radio']), textarea, select, [contenteditable='true']",
+    ) != null,
 ];
 
 export const held = () => holdReasons.some((r) => r());

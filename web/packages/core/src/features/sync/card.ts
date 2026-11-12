@@ -72,6 +72,9 @@ export function offlineBand(auto: boolean): string {
     : "オフラインです。変更はこのマシンにコミットします。つながったら「すべて同期」で push してください。";
 }
 
+// nothingToSyncMessage は、同期する Store がないときの通常のトースト。サーバーの domain/syncstatus の NothingToSync と同じ文字列。
+export const nothingToSyncMessage =
+  "同期する Store がありません(remote のある、表示中の Store が要ります)";
 // offlineSyncMessage は、オフラインで手動の同期をしたときのエラーのトースト。
 export const offlineSyncMessage = "オフラインのため同期できません。つながったら同期します";
 

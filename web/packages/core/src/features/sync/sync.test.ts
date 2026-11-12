@@ -128,6 +128,23 @@ describe("createSync", () => {
     ]);
   });
 
+  it("says there is nothing to sync when offline and no visible store has a remote", async () => {
+    const { sync, shown, port } = setup(
+      fakeSyncPort({ status: async () => ({ auto: true, stores: [] }) }),
+      false,
+    );
+    await sync.load();
+    await sync.syncAll();
+    expect(port.calls).toEqual(["status"]);
+    expect(shown()).toEqual([
+      {
+        text: "同期する Store がありません(remote のある、表示中の Store が要ります)",
+        error: false,
+        warn: false,
+      },
+    ]);
+  });
+
   it("does not show a failed request (決定 S16)", async () => {
     const { sync, shown, onSynced } = setup(
       fakeSyncPort({

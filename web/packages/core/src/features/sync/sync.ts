@@ -1,8 +1,8 @@
 import type { SyncStatus } from "../../model/sync";
 import type { SyncPort } from "../../port/sync";
-import { type Readable, readonly, writable } from "../../reactive/store";
+import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Toasts } from "../toasts/toasts";
-import { offlineSyncMessage } from "./card";
+import { nothingToSyncMessage, offlineSyncMessage } from "./card";
 
 // 同期の状態と手動の同期(06「手動で同期する」「同期の結果」)。トーストの文言はサーバーが作る(決定 C2-21)。
 
@@ -41,7 +41,9 @@ export function createSync(deps: SyncDeps): SyncState {
   // run は、オフラインなら送らずにトーストを出し、そうでなければ同期して、結果を出して読み直す。
   async function run(sync: () => Promise<void>) {
     if (!deps.online()) {
-      deps.toasts.show(offlineSyncMessage, { error: true });
+      const none = get(status)?.stores.every((s) => s.hidden);
+      if (none) deps.toasts.show(nothingToSyncMessage);
+      else deps.toasts.show(offlineSyncMessage, { error: true });
       return;
     }
     try {
