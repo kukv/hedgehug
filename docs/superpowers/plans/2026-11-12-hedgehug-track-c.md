@@ -31,7 +31,7 @@
 - 口は git の言葉(コミット、ブランチ、clone、push)を使わない。git の言葉は `infra/gitstore` の中だけ。
 - 内部 ID は ULID。時刻はミリ秒までの RFC 3339(`change.TimeLayout`)、比べるときは UTC。
 - 人でない実行者の行の `by` とコミットの作者は `hedgehug[bot]`(`change.BotLogin`)、メールは `bot@hedgehug.invalid`。
-- 新しい依存は `go get …@latest`・`pnpm add -E …` のステップで入れる。版を手で書かない。
+- 新しい依存は、版を明記して入れる(`go get <module>@vX.Y.Z`・`pnpm add -E <pkg>@X.Y.Z`)。`@latest` や版なしでは入れない。版は公開から 7 日以上たったものを選ぶ。
 - 共有部分(口、domain の中心の型、ui の基本部品、cmd の組み立て)を変えるときは、その変更だけの小さな PR を先に develop へ入れる(設計書 8 節)。
 
 ## この計画で決めたこと(仕様と設計書の規則の当てはめ)
@@ -1075,7 +1075,7 @@ git commit -m "feat(gitstore): 3 つのツリーから、どちらで合わせ�
 テストの、プロセスの中の git サーバーが `go-billy` を直接使う。
 
 ```bash
-go get github.com/go-git/go-billy/v5@latest
+go get github.com/go-git/go-billy/v5@v5.9.2
 ```
 
 - [ ] **Step 2: テストの道具を書く**
