@@ -53,13 +53,17 @@
 | C2-15 | ミラーへの送信(`Replicator.Mirror`)は、ミラーのブランチを `refs/hedgehug/mirror/<URL の SHA-1 の先頭 12 文字>/` に受け取り、空なら送り、自分の先端の祖先なら送り、共通の祖先がない(同じ名前のブランチがない場合を含む)なら `ErrMirrorUnrelated`、それ以外は `ErrMirrorAhead`。送信が重なって拒否されたら `ErrMirrorAhead` | 保存形式「同期」の手順 7、06 のミラーの段落 |
 | C2-16 | 「アカウントが設定されていない」は記録せず、状態の一覧で、remote があって割り当てがない Store を同期エラーとして導く。アカウントを割り当てれば、表示は次の同期を待たずに消える | 06「同期のエラー」(試していなくても同期エラー、アカウントを設定すると消える) |
 | C2-17 | 同じ Store の同期が動いているときは、新しく始めずに、その結果を待って返す。動いている同期は、始めた要求が切れても最後まで続ける(`context.WithoutCancel`。60 秒の見張りで必ず終わる) | 06「手動で同期する」 |
-| C2-18 | 自動の同期は、サーバーの `Auto` が 1 秒ごとに契機を調べて行う。タブは、見えていて待つ条件にあるあいだ `PUT /api/sync/hold`(`{tab, hold: true}`)を 10 秒ごとに送り、解けたら `hold: false` を送る。知らせは 30 秒で切れる(閉じたタブが待たせ続けないため)。オンライン復帰はタブが `POST /api/sync/online` で知らせる。「アプリを開いたとき」はサーバーの起動 | 06「自動で同期する」(見えているタブの条件だけで待つ)。待つ条件はタブにしか分からない |
+| C2-18 | 自動の同期は、サーバーの `Auto` が 1 秒ごとに契機を調べて行う。タブは、見えていて待つ条件にあるあいだ `PUT /api/sync/hold`(`{tab, hold: true}`)を 10 秒ごとに送り、解けたら `hold: false` を送る。知らせは 30 秒で切れる(閉じたタブが待たせ続けないため)。「アプリを開いたとき」はサーバーの起動 | 06「自動で同期する」(見えているタブの条件だけで待つ)。待つ条件はタブにしか分からない |
+| C2-18b | オフラインは、タブ(見えているかを問わない)が `PUT /api/sync/network`(`{tab, online}`)で知らせる。オフラインの知らせは hold と同じく 10 秒ごとに送り直し、30 秒で切れる。オフラインのタブがあるあいだ、`Auto` はどの契機でも同期しない(試さないので「接続できません」を記録せず、Store の状態をエラーにしない)。オフラインを知らせていたタブが `online: true` を送ったら、「オンライン復帰」の契機にする | 06「オフライン」(オフラインは Store の同期の状態をエラーにしない)、06「自動で同期する」(オンライン復帰)。つながっているかはタブ(navigator.onLine)にしか分からない |
 | C2-19 | 「書き込み後」の契機は、`syncing.NotifyWrites` で包んだ `port.Stores` の `Write` が成功したときに数える。このサーバーの外のプログラム(CLI)の書き込みは、CLI を作るときに足す | 01(CLI はこの仕様で扱わない)。CLI はまだない |
 | C2-20 | 「画面への反映」のサーバー側は、`Watch` が 0.5 秒ごとに Store の版(gitstore の先端)を見て、変わった Store を `Events` に `store` として流す。書き手(このタブ、別のタブ、同期)は問わない。同期の状態が変わったら `Service` が `sync` を流す。SSE は `GET /api/events`。ブラウザの EventSource はヘッダーを付けられないので、画面は fetch の読み続けで受ける(C2 画面) | 保存形式「技術構成」(HEAD の変化を見張り SSE で知らせる)。06「画面への反映」(1 秒ほどで反映) |
 | C2-21 | 同期の結果は失敗でも 200 で返し、本文の `result`(`synced`・`skipped`・`failed`)と `message`(06 の文言)で分ける。存在しない Store は 404 | 同期の失敗は断り(422)ではなく結果。画面はトーストの種類を `result` で選ぶ |
 | C2-22 | 「同期のあとの完全な削除」は、`Service.AfterSuccess`(関数)を、書き込める Store の同期に成功した直後に呼ぶ。中身はトラック G が差し込む | トラック C の決定 13 |
 | C2-23 | usecase のパッケージ名は `app/syncing`、API は `adapter/httpapi/syncing` にする(トラック C の計画の持ち場では `sync`)。`sync` は標準ライブラリの名前と重なり、`sync.Mutex` を使うたびに別名が要るため | 読みやすさ。持ち場の意味は変わらない |
 | C2-24 | 自動の同期の失敗はトーストもアクティビティも出さない(結果は状態の一覧に出る)。自動の同期で `Auto` は結果を捨てる | 06「自動で同期する」 |
+| C2-25 | 送信をサーバーが断り、remote の先端が動いていない(重なりではない)ときは、401 なら「認証に失敗しました」、60 秒止まったなら「接続できません」、それ以外(403、pre-receive のフック、保護されたブランチ)は「remote への書き込みが許可されていません」にする。直前に remote の先端を読めているので、つながらないのではない | 06「同期のエラー」の「push が拒否された」の行 |
+| C2-26 | apptest のテスト以外のファイルは 20 個の上限に近い(いま 17 個、A2 の #153 で 18 個)。同期の偽物は `apptest/sync.go`(Replicator・SyncTargets・SyncSettings・SyncTokens・StoreVersions・Events)と `apptest/syncstate.go`(SyncState と照合テスト)の 2 つにまとめる | 設計書 4 節(パッケージ 20 ファイル) |
+| C2-27 | サーバーを止めるときは、`Hub.Close` で SSE の流れを終える(`http.Server.Shutdown` は要求の context を取り消さないので、つないだままだと 5 秒待って失敗で終わる) | 終了コードを 0 に保つため |
 
 ## ファイルの地図
 
@@ -76,12 +80,9 @@ internal/app/port/syncsettings.go              SyncTiming・SyncSettings
 internal/app/port/syncstate.go                 SyncRecord・MirrorRecord・SyncState
 internal/app/port/events.go                    Event・Events
 internal/app/port/storeversions.go             StoreVersions
-internal/app/apptest/replicator.go             Replicator の偽物
-internal/app/apptest/synctargets.go            SyncTargets・SyncSettings・SyncTokens・StoreVersions の偽物
-internal/app/apptest/syncstate.go              SyncState の偽物
-internal/app/apptest/syncstate_contract.go     RunSyncStateContract
-internal/app/apptest/syncstate_test.go
-internal/app/apptest/events.go                 Events の偽物(記録する)
+internal/app/apptest/sync.go                   Replicator・SyncTargets・SyncSettings・SyncTokens・StoreVersions・Events の偽物
+internal/app/apptest/syncstate.go              SyncState の偽物と RunSyncStateContract
+internal/app/apptest/syncstate_test.go・replicator_test.go
 
 internal/infra/statedb/db.go                   Open・Close
 internal/infra/statedb/migrate.go              register・migrate
@@ -381,7 +382,7 @@ git commit -m "feat(domain): 同期の結果と状態の文言を足し、remote
 **Files:**
 - Modify: `internal/app/port/replicator.go`
 - Create: `internal/app/port/synctargets.go`・`synctokens.go`・`syncsettings.go`・`syncstate.go`・`events.go`・`storeversions.go`
-- Create: `internal/app/apptest/replicator.go`・`synctargets.go`・`syncstate.go`・`syncstate_contract.go`・`events.go`
+- Create: `internal/app/apptest/sync.go`・`syncstate.go`(決定 C2-26。apptest のテスト以外のファイルを 2 つしか増やさない)
 - Test: `internal/app/apptest/syncstate_test.go`・`internal/app/apptest/replicator_test.go`
 
 **Interfaces:**
@@ -732,7 +733,7 @@ type StoreVersions interface {
 
 - [ ] **Step 4: 偽物を足す**
 
-`internal/app/apptest/replicator.go`:
+`internal/app/apptest/sync.go`(この塊と、続く 2 つの塊を 1 つのファイルにまとめる。import は 1 つにする):
 
 ```go
 package apptest
@@ -805,7 +806,7 @@ func (r *Replicator) Calls() []ReplicatorCall {
 }
 ```
 
-`internal/app/apptest/synctargets.go`:
+(続けて `sync.go` に)
 
 ```go
 package apptest
@@ -900,7 +901,7 @@ func (s *StoreVersions) Set(v map[port.StoreID]string) {
 }
 ```
 
-`internal/app/apptest/events.go`:
+(続けて `sync.go` に)
 
 ```go
 package apptest
@@ -1023,7 +1024,7 @@ func (s *SyncState) Mirrors(_ context.Context, id port.StoreID) ([]port.MirrorRe
 }
 ```
 
-`internal/app/apptest/syncstate_contract.go`:
+(続けて `syncstate.go` に。import は 1 つにする)
 
 ```go
 package apptest
@@ -1116,8 +1117,8 @@ func must(t *testing.T, err error) {
 
 - [ ] **Step 5: テストが通ることを確かめる**
 
-Run: `go build ./... && go test ./internal/app/... ./internal/infra/gitstore/ && golangci-lint run ./internal/app/... ./internal/infra/gitstore/`
-Expected: PASS、指摘なし
+Run: `go build ./... && go test ./internal/app/... ./internal/infra/gitstore/ ./internal/archtest/ && golangci-lint run ./internal/app/... ./internal/infra/gitstore/`
+Expected: PASS、指摘なし(archtest が apptest のファイル数と行数を確かめる。上限を超えるなら、実装者は止めて報告する)
 
 - [ ] **Step 6: コミットする**
 
@@ -1879,9 +1880,27 @@ func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs, m
 	if tip != theirs {
 		return errRejected
 	}
-	return classify(wctx, err, true)
+	return refused(wctx, err)
 }
 ```
+
+`sync_transport.go` に、重なりでない送信の拒否の見分けを足す(決定 C2-25)。
+
+```go
+// refused は、送信をサーバーが断り、remote の先端が動いていないときの理由。直前に先端を読めているので、
+// 401 と止まったとき以外は「書き込みが許可されていない」(フック・保護されたブランチを含む)。
+func refused(ctx context.Context, err error) error {
+	switch {
+	case errors.Is(context.Cause(ctx), errStalled):
+		return fmt.Errorf("%w: %w", port.ErrUnreachable, errStalled)
+	case errors.Is(err, transport.ErrAuthenticationRequired):
+		return fmt.Errorf("%w: %w", port.ErrAuthFailed, err)
+	}
+	return fmt.Errorf("%w: %w", port.ErrWriteDenied, err)
+}
+```
+
+C1 の `TestRealGitSyncReturnsRefusalThatIsNotAnOverlap`(`sync_realgit_test.go`)の確かめに、`!errors.Is(err, port.ErrWriteDenied)` なら失敗、を足す(pre-receive のフックで断られた送信は「書き込みが許可されていません」)。
 
 `tip` を見張りで包み、失敗を見分ける。
 
@@ -3729,7 +3748,7 @@ git commit -m "feat(app): Store の同期・すべて同期・同期の状態の
 
 ```go
 func NewAuto(svc *Service, settings port.SyncSettings) *Auto
-func (a *Auto) Online()
+func (a *Auto) Network(tab string, online bool)
 func (a *Auto) Wrote(id port.StoreID)
 func (a *Auto) Hold(tab string, hold bool)
 func (a *Auto) Step(ctx context.Context) error
@@ -3890,7 +3909,8 @@ func TestAutoWaitsWhileATabHolds(t *testing.T) {
 	if n := f.syncs()["S1"]; n != 1 {
 		t.Fatalf("not synced after release: %d", n)
 	}
-	a.Online()
+	a.Network("tab-2", false)
+	a.Network("tab-2", true) // オンライン復帰の契機
 	a.Hold("tab-2", true)
 	f.clock.Advance(31 * time.Second)
 	step(t, a)
@@ -3899,15 +3919,41 @@ func TestAutoWaitsWhileATabHolds(t *testing.T) {
 	}
 }
 
-// オンライン復帰: 間隔を待たずに、対象のすべての Store。
-func TestAutoSyncsWhenBackOnline(t *testing.T) {
+// 決定 C2-18b: オフラインのあいだは、どの契機でも試さない(エラーを記録しない)。つながったら、間隔を待たずに、
+// 対象のすべての Store。オフラインの知らせは 30 秒で切れる。
+func TestAutoWaitsWhileOfflineAndSyncsWhenBackOnline(t *testing.T) {
 	f, a, _ := newAuto(t)
+	a.Network("tab-1", false)
 	step(t, a)
+	f.clock.Advance(20 * time.Second)
+	a.Network("tab-1", false) // 送り直し
+	a.Wrote("S1")
+	f.clock.Advance(time.Minute - 20*time.Second)
+	a.Network("tab-1", false)
+	step(t, a)
+	if len(f.rep.Calls()) != 0 {
+		t.Fatalf("synced while offline: %+v", f.rep.Calls())
+	}
+	if rs, _ := f.state.Records(context.Background()); len(rs) != 0 {
+		t.Fatalf("recorded while offline: %+v", rs)
+	}
+	a.Network("tab-1", true)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 1 || n["S4"] != 1 {
+		t.Fatalf("after back online: %v", n)
+	}
 	f.clock.Advance(time.Minute)
-	a.Online()
+	a.Network("tab-1", true) // オフラインでなかったタブの online は契機にしない
 	step(t, a)
-	if n := f.syncs(); n["S1"] != 2 || n["S4"] != 2 {
-		t.Errorf("syncs = %v", n)
+	if n := f.syncs(); n["S1"] != 1 {
+		t.Errorf("online without offline triggered: %v", n)
+	}
+	a.Wrote("S1")
+	a.Network("tab-2", false)
+	f.clock.Advance(31 * time.Second)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 2 {
+		t.Errorf("expired offline still blocks: %v", n) // 書き込み後の契機(S1)で同期する
 	}
 }
 
@@ -3916,7 +3962,8 @@ func TestAutoOffStopsEverything(t *testing.T) {
 	f, a, settings := newAuto(t)
 	settings.Value.Auto = false
 	a.Wrote("S1")
-	a.Online()
+	a.Network("tab-1", false)
+	a.Network("tab-1", true)
 	f.clock.Advance(time.Hour)
 	step(t, a)
 	if len(f.rep.Calls()) != 0 {
@@ -4019,28 +4066,41 @@ import (
 const holdFor = 30 * time.Second
 
 // Auto は、自動の同期(06「自動で同期する」)。契機は、間隔、アプリを開いたとき(作ったとき)、オンライン復帰
-// (Online)、書き込み後(Wrote)。見えているタブが待つ条件にあるあいだ(Hold)は始めない。結果は捨てる
-// (自動の同期はトーストもアクティビティも出さない。決定 C2-24)。
+// (Network)、書き込み後(Wrote)。見えているタブが待つ条件にあるあいだ(Hold)と、オフラインのタブがある
+// あいだ(Network)は始めない。結果は捨てる(自動の同期はトーストもアクティビティも出さない。決定 C2-24)。
 type Auto struct {
 	Service  *Service
 	Settings port.SyncSettings
 
-	mu    sync.Mutex
-	all   bool                       // 「アプリを開いたとき」「オンライン復帰」が待っている
-	wrote map[port.StoreID]time.Time // Store ごとの最後の保存の時刻
-	holds map[string]time.Time       // 待つ条件にあるタブと、知らせの期限
+	mu      sync.Mutex
+	all     bool                       // 「アプリを開いたとき」「オンライン復帰」が待っている
+	wrote   map[port.StoreID]time.Time // Store ごとの最後の保存の時刻
+	holds   map[string]time.Time       // 待つ条件にあるタブと、知らせの期限
+	offline map[string]time.Time       // オフラインのタブと、知らせの期限
 }
 
 // NewAuto は、「アプリを開いたとき」の契機を持った Auto を作る。
 func NewAuto(svc *Service, settings port.SyncSettings) *Auto {
-	return &Auto{Service: svc, Settings: settings, all: true, wrote: map[port.StoreID]time.Time{}, holds: map[string]time.Time{}}
+	return &Auto{
+		Service: svc, Settings: settings, all: true,
+		wrote: map[port.StoreID]time.Time{}, holds: map[string]time.Time{}, offline: map[string]time.Time{},
+	}
 }
 
-// Online は、オフラインからつながったことを知らせる。
-func (a *Auto) Online() {
+// Network は、タブ tab がネットワークにつながっているか(online)を知らせる(決定 C2-18b)。オフラインを
+// 知らせていたタブがつながったら、「オンライン復帰」の契機にする。
+func (a *Auto) Network(tab string, online bool) {
+	now := a.Service.Clock.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.all = true
+	if !online {
+		a.offline[tab] = now.Add(holdFor)
+		return
+	}
+	if _, was := a.offline[tab]; was {
+		delete(a.offline, tab)
+		a.all = true
+	}
 }
 
 // Wrote は、Store に保存したことを知らせる。
@@ -4101,7 +4161,7 @@ func (a *Auto) Step(ctx context.Context) error {
 	return nil
 }
 
-// take は、待っている契機を読む。待つ条件にあるタブがあれば held。そうでなければ「アプリを開いた・
+// take は、待っている契機を読む。待つ条件にあるタブかオフラインのタブがあれば held。そうでなければ「アプリを開いた・
 // オンライン復帰」の契機をここで使い切る。自動同期がオフなら、契機をすべて捨てる。
 func (a *Auto) take(now time.Time, auto bool) (all bool, wrote map[port.StoreID]time.Time, held bool) {
 	a.mu.Lock()
@@ -4111,11 +4171,8 @@ func (a *Auto) take(now time.Time, auto bool) (all bool, wrote map[port.StoreID]
 		clear(a.wrote)
 		return false, nil, false
 	}
-	for tab, until := range a.holds {
-		if now.Before(until) {
-			return false, nil, true
-		}
-		delete(a.holds, tab)
+	if waiting(a.holds, now) || waiting(a.offline, now) {
+		return false, nil, true
 	}
 	all, a.all = a.all, false
 	wrote = make(map[port.StoreID]time.Time, len(a.wrote))
@@ -4145,6 +4202,19 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 		}
 	}
 	return picked, nil
+}
+
+// waiting は、期限の切れていない知らせが 1 つでもあるか。切れた知らせは消す。
+func waiting(m map[string]time.Time, now time.Time) bool {
+	held := false
+	for tab, until := range m {
+		if now.Before(until) {
+			held = true
+			continue
+		}
+		delete(m, tab)
+	}
+	return held
 }
 
 // synced は、始めた時刻 started より前の保存を、同期で送ったものとして消す(同期のあいだの保存は残す)。
@@ -4415,7 +4485,7 @@ git commit -m "feat: Store の版の変化を見張り、画面への反映の�
 **Interfaces:**
 - Consumes: `appsyncing.Service`・`Auto`(Task 9・10)、`port.Events`
 - Produces:
-  - `events.NewHub() *Hub`・`(*Hub).Publish(port.Event)`・`(*Hub).Listeners() int`・`events.Register(api huma.API, h *Hub)`
+  - `events.NewHub() *Hub`・`(*Hub).Publish(port.Event)`・`(*Hub).Listeners() int`・`(*Hub).Close()`・`events.Register(api huma.API, h *Hub)`
   - `syncing.Register(api huma.API, s Services)`・`type Services struct { Sync *appsyncing.Service; Auto *appsyncing.Auto }`
   - `httpapi.Deps` に `Sync *appsyncing.Service`・`Auto *appsyncing.Auto`・`Events *events.Hub`・`GitHubSession *ghapp.Session`
 
@@ -4425,8 +4495,12 @@ git commit -m "feat: Store の版の変化を見張り、画面への反映の�
 | `POST /api/sync` | `sync-all` | なし | 200 `SyncAllResult` |
 | `POST /api/stores/{store}/sync` | `sync-store` | なし | 200 `SyncStoreResult`、404 |
 | `PUT /api/sync/hold` | `hold-sync` | `SyncHold` | 204 |
-| `POST /api/sync/online` | `sync-online` | なし | 204 |
+| `PUT /api/sync/network` | `sync-network` | `SyncNetwork` | 204 |
 | `GET /api/events` | `watch-events` | なし | 200 `text/event-stream`(`store`・`sync` の出来事。どちらも `{"store": "<Store ID>"}`) |
+
+- [ ] **Step 0: SSE の操作が生成物を通るかを先に確かめる**
+
+`text/event-stream` の操作が、`DowngradeYAML`(OpenAPI 3.0 への書き下し)・orval・`make web-check` を通るかを、最初に小さく試す。`events.Register` だけを書いて `make generate && (cd web && pnpm gen) && make web-check` を流し、通らなければ止めて報告する(SSE を OpenAPI から外して手で登録するかを決めるため)。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -4438,6 +4512,7 @@ package events_test
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -4498,6 +4573,51 @@ func TestPublishWithoutListeners(t *testing.T) {
 	hub.Publish(port.Event{Kind: port.EventStore, Store: "S1"})
 	if hub.Listeners() != 0 {
 		t.Error("listeners")
+	}
+}
+
+// 決定 C2-27: Close で、つないでいる流れを終える(サーバーをすぐ止められるように)。Close のあとにつないだ
+// 流れも、すぐ終わる。
+func TestCloseEndsStreams(t *testing.T) {
+	hub := events.NewHub()
+	mux := http.NewServeMux()
+	events.Register(humago.New(mux, huma.DefaultConfig("t", "0")), hub)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	ended := make(chan error, 1)
+	go func() {
+		res, err := http.Get(srv.URL + "/api/events") //nolint:noctx // テストの中だけ
+		if err != nil {
+			ended <- err
+			return
+		}
+		_, err = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		ended <- err
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for hub.Listeners() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("no listener")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	hub.Close()
+	select {
+	case err := <-ended:
+		if err != nil {
+			t.Errorf("stream ended with %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the stream did not end")
+	}
+	res, err := http.Get(srv.URL + "/api/events") //nolint:noctx // テストの中だけ
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if _, err := io.Copy(io.Discard, res.Body); err != nil {
+		t.Errorf("after Close: %v", err)
 	}
 }
 ```
@@ -4608,7 +4728,7 @@ func TestSyncAllAndStatus(t *testing.T) {
 	}
 }
 
-// 決定 C2-18: タブの待つ条件とオンライン復帰を、自動の同期に伝える。
+// 決定 C2-18・C2-18b: タブの待つ条件とネットワークの状態を、自動の同期に伝える。
 func TestHoldAndOnline(t *testing.T) {
 	e := newEnv(t)
 	if res := e.api.Put("/api/sync/hold", map[string]any{"tab": "t1", "hold": true}); res.Code != http.StatusNoContent {
@@ -4620,8 +4740,8 @@ func TestHoldAndOnline(t *testing.T) {
 	if res := e.api.Put("/api/sync/hold", map[string]any{"tab": "t1", "hold": false}); res.Code != http.StatusNoContent {
 		t.Fatalf("release: %d", res.Code)
 	}
-	if res := e.api.Post("/api/sync/online"); res.Code != http.StatusNoContent {
-		t.Fatalf("online: %d", res.Code)
+	if res := e.api.Put("/api/sync/network", map[string]any{"tab": "t1", "online": true}); res.Code != http.StatusNoContent {
+		t.Fatalf("network: %d %s", res.Code, res.Body)
 	}
 	if err := e.auto.Step(context.Background()); err != nil || len(e.rep.Calls()) == 0 {
 		t.Errorf("not synced after release: %v", err)
@@ -4660,8 +4780,9 @@ const buffer = 64
 
 // Hub は、つないでいる画面ごとに出来事を配る port.Events。
 type Hub struct {
-	mu   sync.Mutex
-	subs map[chan port.Event]struct{}
+	mu     sync.Mutex
+	subs   map[chan port.Event]struct{}
+	closed bool
 }
 
 func NewHub() *Hub { return &Hub{subs: map[chan port.Event]struct{}{}} }
@@ -4685,15 +4806,31 @@ func (h *Hub) Listeners() int {
 	return len(h.subs)
 }
 
+// Close は、つないでいるすべての流れを終え、このあとつなぐ流れもすぐ終える(決定 C2-27)。
+func (h *Hub) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.closed = true
+	for ch := range h.subs {
+		close(ch)
+		delete(h.subs, ch)
+	}
+}
+
+// subscribe は、出来事を受ける口を作る。Close のあとなら、閉じた口を返す。
 func (h *Hub) subscribe() (<-chan port.Event, func()) {
 	ch := make(chan port.Event, buffer)
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		close(ch)
+		return ch, func() {}
+	}
 	h.subs[ch] = struct{}{}
-	h.mu.Unlock()
 	return ch, func() {
 		h.mu.Lock()
+		defer h.mu.Unlock()
 		delete(h.subs, ch)
-		h.mu.Unlock()
 	}
 }
 
@@ -4721,7 +4858,10 @@ func Register(api huma.API, h *Hub) {
 				select {
 				case <-ctx.Done():
 					return
-				case e := <-ch:
+				case e, ok := <-ch:
+					if !ok {
+						return
+					}
 					var err error
 					switch e.Kind {
 					case port.EventStore:
@@ -4777,6 +4917,12 @@ type SyncHold struct {
 	Tab  string `json:"tab" minLength:"1" maxLength:"64"`
 	Hold bool   `json:"hold"`
 }
+
+// SyncNetwork は、タブがネットワークにつながっているかの知らせ(決定 C2-18b)。
+type SyncNetwork struct {
+	Tab    string `json:"tab" minLength:"1" maxLength:"64"`
+	Online bool   `json:"online"`
+}
 ```
 
 `internal/adapter/httpapi/syncing/syncing.go`:
@@ -4815,6 +4961,8 @@ type storeOutput struct{ Body SyncStoreResult }
 type allOutput struct{ Body SyncAllResult }
 
 type holdInput struct{ Body SyncHold }
+
+type networkInput struct{ Body SyncNetwork }
 
 func Register(api huma.API, s Services) {
 	huma.Register(api, huma.Operation{
@@ -4859,10 +5007,10 @@ func registerAuto(api huma.API, a *appsyncing.Auto) {
 		return nil, nil
 	})
 	huma.Register(api, huma.Operation{
-		OperationID: "sync-online", Method: http.MethodPost, Path: "/api/sync/online",
-		Summary: "オフラインからつながったことを知らせる(自動の同期の契機)", DefaultStatus: http.StatusNoContent,
-	}, func(context.Context, *struct{}) (*struct{}, error) {
-		a.Online()
+		OperationID: "sync-network", Method: http.MethodPut, Path: "/api/sync/network",
+		Summary: "タブがネットワークにつながっているかを知らせる(オフラインのあいだは自動で同期しない)", DefaultStatus: http.StatusNoContent,
+	}, func(_ context.Context, in *networkInput) (*struct{}, error) {
+		a.Network(in.Body.Tab, in.Body.Online)
 		return nil, nil
 	})
 }
@@ -5059,6 +5207,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Replicator: gitstore.NewReplicator(stores), State: db.SyncState(), Events: hub, Clock: clock,
 	}
 	auto := syncing.NewAuto(svc, file.SyncSettings())
+	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
 	go auto.Run(ctx)
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	return httpapi.Deps{
@@ -5127,7 +5276,7 @@ git commit -m "feat(cmd): 同期の usecase・自動の同期・Store の見張�
 
 ## C2 のあと
 
-- **C2 画面**(決定 C2-1): A2 の Task 5・6・7 が develop に入ったら、計画を書く。中身は、同期カード(要約・最終同期・24 時間・「すべて同期」のボタンと案内)、「Store ごとの同期状態」のメニュー、860px 以下の点、オフラインの帯(自動同期のオン・オフで文を替える)、手動の同期のトースト(`result` で種類を選ぶ。オフラインなら送らずに 06 の文言)、Shift+Ctrl+S、待つ条件の判定と `PUT /api/sync/hold`、`online` の知らせ、`GET /api/events` を fetch で読み続けて一覧の状態を読み直すこと(待つ条件のあいだは溜めて 1 回で)。core に置くロジック(要約の数え方、24 時間、待つ条件)は TS の単体テストで確かめる。
+- **C2 画面**(決定 C2-1): A2 の Task 5・6・7 が develop に入ったら、計画を書く。中身は、同期カード(要約・最終同期・24 時間・「すべて同期」のボタンと案内)、「Store ごとの同期状態」のメニュー、860px 以下の点、オフラインの帯(自動同期のオン・オフで文を替える)、手動の同期のトースト(`result` で種類を選ぶ。オフラインなら送らずに 06 の文言)、Shift+Ctrl+S、待つ条件の判定と `PUT /api/sync/hold`、`PUT /api/sync/network` の知らせ(オフラインのあいだ 10 秒ごと)、`GET /api/events` を fetch で読み続けて一覧の状態を読み直すこと(待つ条件のあいだは溜めて 1 回で)。core に置くロジック(要約の数え方、24 時間、待つ条件)は TS の単体テストで確かめる。
 - **トラック G**: `port.SyncTargets` と `port.StoreGitHub` の本物(config.yaml の Store の一覧)。Store を clone で追加したら `refs/hedgehug/remote/<ブランチ>` を作る(決定 C2-14)。Store をこのマシンから削除したら、state.db の `sync_status`・`mirror_status` のその Store の行を消す(保存形式「このマシンに持つもの」。`SyncState` に消す関数を足す)。`Service.AfterSuccess` に完全な削除を差し込む。設定の「一般」の同期のタイミングの書き換え。
 - **C3**: 同期の修復の保存は、`NotifyWrites` で包む前の `port.Stores` で書く(修復で「書き込み後」の同期を起こさないため)。`Service.run` の、`Succeeded` の前に修復を足す。
 - **C4**: アクティビティの同期の行は、`SyncState` に「成功した同期の行」を足して記録する(決定 C2-5)。受信箱の出来事は `port.EventKind` に `inbox` を足す。
