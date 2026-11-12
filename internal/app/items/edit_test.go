@@ -33,7 +33,7 @@ func setupRec(t *testing.T) (items.Service, *recorder) {
 		t.Fatal(err)
 	}
 	rec := &recorder{Stores: s}
-	return items.Service{Stores: rec, IDs: ids, Identity: apptest.Identity{Login: "hanako"}}, rec
+	return items.Service{Stores: rec, IDs: ids, Identity: apptest.Identity{Login: "hanako"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))}, rec
 }
 
 // logLen は、アイテムのログの行数。何も保存しなかったことを確かめるのに使う。

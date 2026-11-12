@@ -13,6 +13,7 @@ type Service struct {
 	Stores   port.Stores
 	IDs      port.IDs
 	Identity port.Identity
+	Clock    port.Clock
 }
 
 // withID は、アイテムと、その画面の ID(HH-12)を返す。アクティビティの 1 行に ID を書く操作が使う。

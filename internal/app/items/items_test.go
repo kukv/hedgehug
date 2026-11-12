@@ -24,7 +24,7 @@ func setup(t *testing.T) items.Service {
 	if err := apptest.Sample(context.Background(), s, store); err != nil {
 		t.Fatal(err)
 	}
-	return items.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "hanako"}}
+	return items.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "hanako"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))}
 }
 
 func message(err error) string {
