@@ -72,6 +72,8 @@ export function createSignIn(deps: SignInDeps): SignIn {
   let asking: string | null = null;
   // again は、問い合わせのあいだに期限が来たとき、答えを受けたらすぐ問い合わせ直す印。
   let again = false;
+  // generation は、begin と close のたびに進める。コードを待つあいだに閉じた・別のサインインを始めたかを見分ける。
+  let generation = 0;
   const patch = (p: Partial<SignInDialogState>) => state.update((s) => (s ? { ...s, ...p } : s));
 
   function stop() {
@@ -98,6 +100,7 @@ export function createSignIn(deps: SignInDeps): SignIn {
   }
 
   function begin(target: SignInTarget, code: SignInCode) {
+    generation += 1;
     drop();
     flow = code.id;
     state.set({ target, code, ended: "", error: "", retrying: false });
@@ -213,28 +216,46 @@ export function createSignIn(deps: SignInDeps): SignIn {
         name: account.name,
         login: account.login,
       };
-      begin(target, await deps.accounts.startSignIn(startOf(target)));
+      const mine = generation;
+      let code: SignInCode;
+      try {
+        code = await deps.accounts.startSignIn(startOf(target));
+      } catch (e) {
+        if (mine !== generation && e instanceof Refused) return;
+        throw e;
+      }
+      if (mine !== generation) {
+        void deps.accounts.cancelSignIn(code.id).catch(() => undefined);
+        return;
+      }
+      begin(target, code);
     },
     async retry() {
       const s = get(state);
       if (!s || s.ended === "" || s.retrying) return;
       patch({ retrying: true, error: "" });
+      const mine = generation;
       try {
         const code = await deps.accounts.startSignIn(startOf(s.target));
-        if (get(state) === null) {
+        if (mine !== generation) {
           void deps.accounts.cancelSignIn(code.id).catch(() => undefined);
           return;
         }
         begin(s.target, code);
       } catch (e) {
+        if (mine !== generation) {
+          if (e instanceof Refused) return;
+          throw e;
+        }
         if (!(e instanceof Refused)) {
           patch({ retrying: false });
           throw e;
         }
-        if (get(state) !== null) fail(s.target, { error: e.message });
+        fail(s.target, { error: e.message });
       }
     },
     close() {
+      generation += 1;
       drop();
       state.set(null);
     },

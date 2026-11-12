@@ -131,9 +131,10 @@ export function createAccountForm(deps: AccountFormDeps): AccountForm {
   }
 
   // needsConfirm は、ログイン名を変えた編集で「あなた」が変わる Store があれば、確認の行を出して true を返す。
-  async function needsConfirm(s: AccountFormState): Promise<boolean> {
+  async function needsConfirm(s: AccountFormState, mine: number): Promise<boolean> {
     if (!s.original || s.form.login === s.original.login) return false;
     const lines = await deps.accounts.editImpact(s.original.id, s.form.login);
+    if (mine !== opened) return true;
     if (lines.length === 0) return false;
     patch({ confirm: lines });
     return true;
@@ -152,7 +153,7 @@ export function createAccountForm(deps: AccountFormDeps): AccountForm {
       busy = true;
       const mine = opened;
       try {
-        if (await needsConfirm(s)) return;
+        if (await needsConfirm(s, mine)) return;
         await save(s, mine);
       } catch (e) {
         if (!(e instanceof NotFound)) throw e;

@@ -169,4 +169,21 @@ describe("createAccountForm", () => {
       error: "",
     });
   });
+
+  it("drops the confirm that arrives after the dialog was closed and another opened", async () => {
+    const a = row("A1", { name: "work", login: "taro" });
+    const b = row("A2", { name: "home", login: "jiro" });
+    const { f, form } = setup([a, b]);
+    form.openEdit(a);
+    form.update({ login: "saburo" });
+    const held: ((lines: string[]) => void)[] = [];
+    f.port.editImpact = () => new Promise((resolve) => held.push(resolve));
+    const pending = form.submit();
+    form.close();
+    form.openEdit(b);
+    held[0]?.(["チーム での あなた が変わります。"]);
+    await pending;
+    expect(get(form.state)).toMatchObject({ original: { id: "A2" }, confirm: null });
+    expect(f.calls).toEqual([]);
+  });
 });

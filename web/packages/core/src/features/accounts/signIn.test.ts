@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   Account,
   AccountRow,
+  SignInCode,
   SignInFailure,
   SignInResult,
   SignInTarget,
@@ -219,5 +220,39 @@ describe("createSignIn", () => {
     await signIn.retry();
     expect(f.calls).toEqual([]);
     expect(get(signIn.state)).toMatchObject({ code: { id: "F1" }, retrying: false });
+  });
+
+  it("drops the code of a reauth that arrives after the dialog was closed", async () => {
+    const { f, t, signIn } = setup();
+    const held: ((c: SignInCode) => void)[] = [];
+    f.port.startSignIn = () => new Promise((resolve) => held.push(resolve));
+    const pending = signIn.reauth(taro);
+    signIn.close();
+    held[0]?.(code("R1"));
+    await pending;
+    await tick(t, 60_000);
+    expect(get(signIn.state)).toBeNull();
+    expect(f.calls).toEqual(["cancelSignIn R1"]);
+  });
+
+  it("drops the code of a retry that arrives after close and another sign-in", async () => {
+    const { f, t, signIn } = setup();
+    signIn.begin({ ...add, purpose: "reauth" }, code("F1"));
+    f.polls.push({ ...waiting, status: "expired" });
+    await tick(t, 5000);
+    expect(get(signIn.state)?.ended).toBe("expired");
+    const held: ((c: SignInCode) => void)[] = [];
+    f.port.startSignIn = () => new Promise((resolve) => held.push(resolve));
+    const pending = signIn.retry();
+    signIn.close();
+    signIn.begin(add, code("F2"));
+    held[0]?.(code("R1"));
+    await pending;
+    expect(get(signIn.state)).toMatchObject({ target: add, code: { id: "F2" }, retrying: false });
+    expect(f.calls).toContain("cancelSignIn R1");
+    expect(f.calls).not.toContain("cancelSignIn F2");
+    f.calls.length = 0;
+    await tick(t, 5000);
+    expect(f.calls).toEqual(["pollSignIn F2"]);
   });
 });
