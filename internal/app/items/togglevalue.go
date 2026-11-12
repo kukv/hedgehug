@@ -36,15 +36,15 @@ func (s Service) toggle(ctx context.Context, store port.StoreID, id item.ID, pro
 	}
 	after := toggled(currentIDs(ec.item, p), value, on)
 	summary := fmt.Sprintf("%s の%sを %s に変更", ec.display, p.Name, item.Display(p, change.Value(after), ec.settings, ec.names, s.Clock.Now()))
-	return s.writeValue(ctx, store, id, summary, func(it item.Item) []change.Draft {
+	return s.writeValue(ctx, store, id, summary, func(_ port.Tx, it item.Item) ([]change.Draft, error) {
 		has := slices.Contains(currentIDs(it, p), value)
 		switch {
 		case on && !has:
-			return []change.Draft{change.NewAdd(item.Field(p), value)}
+			return []change.Draft{change.NewAdd(item.Field(p), value)}, nil
 		case !on && has:
-			return []change.Draft{change.NewRemove(item.Field(p), value)}
+			return []change.Draft{change.NewRemove(item.Field(p), value)}, nil
 		}
-		return nil
+		return nil, nil
 	})
 }
 
