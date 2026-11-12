@@ -85,6 +85,14 @@ func (r workspaces) List() ([]workspace.Workspace, error) {
 	return out, nil
 }
 
+func (r workspaces) Settings(id workspace.ID) (workspace.Settings, error) {
+	s, ok := workspace.SettingsFromLog(r.v.log(change.Ref{Kind: change.KindWorkspace, ID: id}))
+	if !ok {
+		return workspace.Settings{}, port.ErrNotFound
+	}
+	return s, nil
+}
+
 type projects struct{ v *view }
 
 func (r projects) Get(id project.ID) (project.Project, error) {

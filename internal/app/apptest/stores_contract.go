@@ -29,6 +29,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (port.Stores, 
 		{"workspaces are listed in id order", contractList},
 		{"reads never see a write in progress", contractReadIsolated},
 		{"projects and items are listed", contractLists},
+		{"workspace settings round trip", contractSettings},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
