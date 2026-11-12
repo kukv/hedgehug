@@ -15,6 +15,7 @@ import (
 
 const (
 	apiURL     = "https://api.github.com"
+	webURL     = "https://github.com"
 	apiVersion = "2022-11-28"
 	// timeout は 1 回の問い合わせの打ち切り(07「GitHub との通信に失敗したとき」)。
 	timeout = 30 * time.Second
@@ -25,6 +26,7 @@ const (
 // Client は GitHub の API に問い合わせる。
 type Client struct {
 	BaseURL string
+	WebURL  string // デバイスフローの宛先(github.com)
 	HTTP    *http.Client
 	Now     func() time.Time
 	// OnSkew は、応答の Date からこのマシンの時計を引いたずれを、応答のたびに受け取る(トラック C が記録する)。
@@ -32,7 +34,7 @@ type Client struct {
 }
 
 func New(onSkew func(time.Duration)) *Client {
-	return &Client{BaseURL: apiURL, HTTP: &http.Client{Timeout: timeout}, Now: time.Now, OnSkew: onSkew}
+	return &Client{BaseURL: apiURL, WebURL: webURL, HTTP: &http.Client{Timeout: timeout}, Now: time.Now, OnSkew: onSkew}
 }
 
 // get は、path を GET して、成功なら本文を out に読む。失敗は *ghcall.Failure。
@@ -63,21 +65,30 @@ func (c *Client) get(ctx context.Context, token, path string, out any) error {
 // classify は、成功でない応答を失敗の種類に分ける。成功なら nil。
 func (c *Client) classify(res *http.Response) *ghcall.Failure {
 	code := res.StatusCode
-	limited := code == http.StatusTooManyRequests ||
-		(code == http.StatusForbidden && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != ""))
+	limit := c.rateLimited(res)
 	switch {
 	case code >= 200 && code < 300:
 		return nil
 	case code == http.StatusUnauthorized:
 		return &ghcall.Failure{Kind: ghcall.TokenRejected}
-	case limited:
-		return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: c.resetAt(res.Header)}
+	case limit != nil:
+		return limit
 	case code == http.StatusForbidden:
 		return &ghcall.Failure{Kind: ghcall.Forbidden}
 	case code == http.StatusNotFound:
 		return &ghcall.Failure{Kind: ghcall.NotFound}
 	}
 	return &ghcall.Failure{Kind: ghcall.Unreachable}
+}
+
+// rateLimited は、利用上限の応答(429、または上限の見出しが付いた 403)なら RateLimited の失敗を、そうでなければ nil を返す。
+func (c *Client) rateLimited(res *http.Response) *ghcall.Failure {
+	code := res.StatusCode
+	if code == http.StatusTooManyRequests ||
+		(code == http.StatusForbidden && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "")) {
+		return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: c.resetAt(res.Header)}
+	}
+	return nil
 }
 
 // resetAt は、利用上限が戻る時刻。秒数(Retry-After)があれば今に足し、なければ X-RateLimit-Reset の時刻。
