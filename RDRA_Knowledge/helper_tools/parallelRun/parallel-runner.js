@@ -26,7 +26,7 @@ function showHelp() {
   {input.md,output.tsv}       互換用（output 側は無視されます）
 
 オプション:
-  --timeout <ms>              タイムアウト（ミリ秒、デフォルト: 180000）
+  --timeout <ms>              タイムアウト（ミリ秒、デフォルト: 600000）
   --system-prompt <path>      System Promptファイルパス（全タスク共通）
   --help, -h                  このヘルプを表示
 
@@ -41,7 +41,7 @@ function showHelp() {
   
 System Prompt:
   --system-prompt で指定されたファイルは、全並列タスクの共通コンテキストとして使用されます。
-  Claude: --system-prompt オプションで渡されます
+  Claude: --append-system-prompt-file オプションでファイルの中身が渡されます
   Gemini: --system-instruction オプションで渡されます
   共通コンテキストがキャッシュされることで、トークン消費を大幅に削減できます。
 `);
@@ -66,7 +66,7 @@ function parseArgs(argv) {
     const config = {
         filePairs: [],  // { input } の配列（{input,output} 形式は互換用で input のみ使用）
         options: {
-            timeout: 180000, // 3分
+            timeout: 600000, // 10分
             systemPrompt: null,  // System Promptファイルパス
         },
     };

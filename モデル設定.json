@@ -12,14 +12,15 @@
         "FORCE_COLOR": "0"
       },
       "vars": {
-        "model": "claude-haiku-4-5"
+        "model": "claude-sonnet-5-5"
       },
       "args": [
         "-p",
         "--output-format",
         "text",
         "--permission-mode",
-        "bypassPermissions"
+        "auto",
+        "--setting-sources="
       ],
       "argsIf": {
         "model": [
@@ -31,7 +32,7 @@
           "{maxTurns}"
         ],
         "systemPrompt": [
-          "--system-prompt",
+          "--append-system-prompt-file",
           "{systemPrompt}"
         ]
       }
