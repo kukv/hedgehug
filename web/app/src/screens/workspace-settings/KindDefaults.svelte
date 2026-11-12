@@ -23,7 +23,7 @@
     <div class="item">
       <span class="kind"><KindIcon kind={d.kind as KindName} />{d.kind}</span>
       <Select
-        label={`${d.kind} の既定`}
+        label={d.kind}
         options={d.options}
         disabled={s.readOnly}
         {title}

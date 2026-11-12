@@ -248,8 +248,9 @@ export function fakeWorkspacesPort(): FakeWorkspacesPort {
     setTransition: (s, w, from, to, allowed) =>
       write("setTransition", () => {
         const wf = detail(s, w).settings.workflow;
-        const tos = (wf[from] ??= []);
-        wf[from] = allowed ? [...tos, to] : tos.filter((t) => t !== to);
+        const tos = wf[from] ?? [];
+        const without = tos.filter((t) => t !== to);
+        wf[from] = allowed ? [...without, to] : without;
       }),
     createTemplate: (s, w, input) =>
       write("createTemplate", (): WorkspaceTemplate => ({ id: "t-new", ...clone(input) })),

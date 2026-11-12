@@ -6,8 +6,8 @@ import type {
   TemplateStep,
   WorkspaceDetail,
   WorkspaceProperty,
-  WorkspaceTemplate,
   WorkspacesPort,
+  WorkspaceTemplate,
   WorkspaceUsage,
   WorkspaceValue,
 } from "@hedgehug/core";
@@ -38,8 +38,8 @@ import {
   renameWorkspace,
   renameWorkspaceProperty,
   renameWorkspaceValue,
-  saveItemAsTemplate,
   type SetWorkspaceValueColorColor,
+  saveItemAsTemplate,
   setWorkspaceCategoryDefault,
   setWorkspaceInitialPriority,
   setWorkspaceInitialStatus,
@@ -48,8 +48,8 @@ import {
   setWorkspaceStatusCategory,
   setWorkspaceTemplateDefault,
   setWorkspaceTransition,
-  updateWorkspaceTemplate,
   setWorkspaceValueColor,
+  updateWorkspaceTemplate,
 } from "./generated";
 
 // ワークスペースと設定の口の実装。API の型を core の型に直す(設計書 6 節)。
