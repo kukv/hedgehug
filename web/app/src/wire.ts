@@ -136,6 +136,8 @@ function here(): Here {
 export const itemDialog = createItemDialog({
   catalog,
   items: itemsPort,
+  workspaces: workspacesPort,
+  catalogPort,
   toasts,
   here,
   openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),
