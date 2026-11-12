@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -54,10 +55,20 @@ func FromLog(log []change.Record) []Member {
 			present[login] = true
 		}
 	}
-	first := firstSpellings(log, present)
+	first := map[string]spelling{}
+	for _, r := range log {
+		var login string
+		if r.F != "members" || r.T != change.Add || json.Unmarshal(r.To, &login) != nil || !present[login] {
+			continue
+		}
+		key := strings.ToLower(login)
+		if e, ok := first[key]; !ok || r.At.Before(e.at) || (r.At.Equal(e.at) && r.ID < e.id) {
+			first[key] = spelling{login: login, at: r.At, id: r.ID}
+		}
+	}
 	out := make([]Member, 0, len(first))
-	for key, login := range first {
-		m := Member{Login: login, Name: login}
+	for key, sp := range first {
+		m := Member{Login: sp.login, Name: sp.login}
 		if v, ok := s.Values["name/"+key]; ok {
 			_ = json.Unmarshal(v, &m.Name)
 		}
@@ -69,24 +80,9 @@ func FromLog(log []change.Record) []Member {
 	return out
 }
 
-// firstSpellings は、いま載っているログイン名を小文字で束ね、最も早く追加した綴りを返す。
-func firstSpellings(log []change.Record, present map[string]bool) map[string]string {
-	earliest := map[string]change.Record{}
-	for _, r := range log {
-		var login string
-		if r.F != "members" || r.T != change.Add || json.Unmarshal(r.To, &login) != nil || !present[login] || !ValidLogin(login) {
-			continue
-		}
-		key := strings.ToLower(login)
-		if e, ok := earliest[key]; !ok || r.At.Before(e.At) || (r.At.Equal(e.At) && r.ID < e.ID) {
-			earliest[key] = r
-		}
-	}
-	out := make(map[string]string, len(earliest))
-	for key, r := range earliest {
-		var login string
-		_ = json.Unmarshal(r.To, &login)
-		out[key] = login
-	}
-	return out
+// spelling は、ログイン名の綴りと、それを追加した行の時刻と ID。
+type spelling struct {
+	login string
+	at    time.Time
+	id    change.ID
 }

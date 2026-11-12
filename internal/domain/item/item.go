@@ -69,6 +69,7 @@ func (it Item) DisplayID(prefix string) string {
 }
 
 // Create は、アイテムの作成の変更。作成の時刻と人は、変更記録の at と by から取る。
+// 種類と親の組み合わせは検査しない。呼ぶ側が先に CanPlace で確かめる。
 func Create(it Item) change.Draft {
 	return change.NewCreate(map[string]any{
 		"id": it.ID, "place": it.Place, "kind": it.Kind, "rank": it.Rank, "title": it.Title,

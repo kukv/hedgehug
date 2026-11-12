@@ -44,3 +44,13 @@ func TestCreateAndFromLog(t *testing.T) {
 		t.Error("empty log gave a workspace")
 	}
 }
+
+// 手で書き換えた不正な接頭辞の作成の行は無いものとし、ワークスペースは無い。
+func TestFromLogIgnoresInvalidCreate(t *testing.T) {
+	d := change.NewCreate(map[string]any{"id": "W", "name": "Web", "prefix": "h h"})
+	meta := change.Meta{Op: "o", At: time.Unix(0, 0), Actor: change.User("taro")}
+	log := change.Stamp(nil, []change.Draft{d}, meta, func() change.ID { return "c" })
+	if w, ok := workspace.FromLog(log); ok {
+		t.Errorf("FromLog = %+v, want none", w)
+	}
+}
