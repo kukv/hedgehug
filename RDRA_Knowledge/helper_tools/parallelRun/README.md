@@ -35,13 +35,13 @@ node parallel-runner.js prompt/run1.md "{prompt/run2.md,output/custom.tsv}"
 |-----------|-------|------|
 | `--provider` | `-P` | AIプロバイダー (claude / gemini / codex) |
 | `--model` | `-m` | モデル指定 |
-| `--timeout` | | タイムアウト（ミリ秒、デフォルト: 120000） |
+| `--timeout` | | タイムアウト（ミリ秒、デフォルト: 600000） |
 | `--help` | `-h` | ヘルプ表示 |
 
 ### 出力例
 
 ```
-files: 3, provider: (default), model: (default), timeout: 120000ms
+files: 3, provider: (default), model: (default), timeout: 600000ms
 
 🚀 並行実行開始
 対象ファイル: prompt/run1.md, prompt/run2.md, prompt/run3.md

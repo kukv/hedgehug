@@ -12,6 +12,7 @@ const targetFolders = [
     '1_RDRA',
     '1_RDRA/Validation',
     '2_RDRASpec',
+    '2_RDRASpec/phase1',
     '2_RDRASpec/Validation',
 ];
 

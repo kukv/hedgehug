@@ -42,7 +42,8 @@ function findProjectRoot(startDir) {
  * 指定Phaseの共通コンテキストを収集してSystem Promptファイルを生成
  * 
  * @param {number} phaseNumber - Phase番号 (1-4)
- * @returns {string} 生成したSystem Promptファイルの絶対パス
+ * @returns {string} 生成したSystem Promptファイルの、カレントディレクトリからの相対パス
+ *   （shell 経由で引数に渡すため、プロジェクトのパスに空白があっても分割されないようにする）
  * @throws {Error} 不正なPhase番号の場合
  */
 function generateSystemPrompt(phaseNumber) {
@@ -111,14 +112,15 @@ function generateSystemPrompt(phaseNumber) {
         console.warn(`  - スキップしたファイル: ${skippedFiles.join(', ')}`);
     }
 
-    return outputAbsPath;
+    return path.relative(process.cwd(), outputAbsPath);
 }
 
 /**
  * RDRASpec（仕様作成）Phase用のSystem Promptファイルを生成
  * 
  * @param {number} phaseNumber - specPhase番号 (1-2)
- * @returns {string} 生成したSystem Promptファイルの絶対パス
+ * @returns {string} 生成したSystem Promptファイルの、カレントディレクトリからの相対パス
+ *   （shell 経由で引数に渡すため、プロジェクトのパスに空白があっても分割されないようにする）
  * @throws {Error} 不正なPhase番号の場合
  */
 function generateSpecSystemPrompt(phaseNumber) {
@@ -187,7 +189,7 @@ function generateSpecSystemPrompt(phaseNumber) {
         console.warn(`  - スキップしたファイル: ${skippedFiles.join(', ')}`);
     }
 
-    return outputAbsPath;
+    return path.relative(process.cwd(), outputAbsPath);
 }
 
 /**
