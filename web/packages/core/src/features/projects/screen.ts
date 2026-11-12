@@ -92,15 +92,18 @@ export function createProjectScreen(
       if (shown) await load(shown.storeId, shown.projectId);
     },
     async setStatus(itemId, statusId) {
-      if (!shown) return;
+      const s = shown;
+      if (!s) return;
       try {
-        await items.setProperty(shown.storeId, itemId, "status", statusId);
+        await items.setProperty(s.storeId, itemId, "status", statusId);
       } catch (e) {
         if (!(e instanceof Refused)) throw e;
         toasts.show(e.message, { error: true });
         return;
       }
-      await load(shown.storeId, shown.projectId);
+      // 保存のあいだに別の画面へ移っていたら、読み直さず知らせない。
+      if (shown?.storeId !== s.storeId || shown.projectId !== s.projectId) return;
+      await load(s.storeId, s.projectId);
       onChanged();
     },
   };

@@ -60,6 +60,19 @@ describe("createProjectScreen", () => {
     expect(changed()).toBe(1);
   });
 
+  it("does not reload or notify when the screen moved on during the save", async () => {
+    const { screen, items, changed } = await setup();
+    await screen.load("S1", "S1-P1");
+    const save = items.setProperty.bind(items);
+    items.setProperty = async (...a) => {
+      await screen.load("S1", "nope");
+      return save(...a);
+    };
+    await screen.setStatus("S1-I2", "st2");
+    expect(get(screen.view)).toBeNull();
+    expect(changed()).toBe(0);
+  });
+
   it("reloads the shown project and is null for a project not in the catalog", async () => {
     const { screen, items } = await setup();
     await screen.load("S1", "S1-P1");

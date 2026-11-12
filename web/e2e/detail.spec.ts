@@ -49,6 +49,35 @@ test("renames a Task, adds Steps and moves one up", async ({ page }, info) => {
   await expect(steps.getByRole("link")).toHaveText(["実装", "設計"]);
 });
 
+test("a Step's checkbox follows the saved status, also when the save is refused", async ({
+  page,
+}, info) => {
+  const step = unique(info, "確認の Step");
+  await page.goto(tokenUrl("/s/e2e/i/HH-2"));
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  const input = panel.getByRole("textbox", { name: "Step を追加" });
+  await input.fill(step);
+  await input.press("Enter");
+  const box = panel.getByRole("checkbox", { name: step });
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  await expect(box).not.toBeChecked();
+
+  // 断られたら、チェックは保存済みの状態(オフ)に戻る。
+  await page.route("**/api/stores/*/items/*/check", (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: "application/problem+json",
+      body: JSON.stringify({ title: "Unprocessable Entity", status: 422, detail: "テストの断り" }),
+    }),
+  );
+  await box.click();
+  await expect(page.getByText("テストの断り")).toBeVisible();
+  await expect(box).not.toBeChecked();
+});
+
 test("copies the ID", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(tokenUrl("/s/e2e/i/HH-1"));

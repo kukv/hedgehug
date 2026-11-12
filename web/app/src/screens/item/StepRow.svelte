@@ -24,6 +24,12 @@
   const m = $derived(
     v.people.members.find((x) => x.login.toLowerCase() === c.assignee.toLowerCase()),
   );
+
+  // 保存のあと(断られたときも)、チェックを保存済みの分類に合わせ直す。
+  async function check(box: HTMLInputElement) {
+    await detail.checkStep(c.id, !done);
+    box.checked = done;
+  }
 </script>
 
 <div class="child-row">
@@ -33,7 +39,7 @@
     checked={done}
     disabled={v.readOnly}
     title={note}
-    onchange={() => void detail.checkStep(c.id, !done)}
+    onchange={(e) => void check(e.currentTarget)}
   >
   <a
     class="row-title"
