@@ -209,3 +209,54 @@ func TestTxReadRowsAreCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 偽物と同じく、行のない Append は何も書かない(コミットも、新しいフォルダも作らない)。
+func TestAppendWithoutDraftsWritesNothing(t *testing.T) {
+	s, id, dir := newStore(t)
+	if err := apptest.Sample(t.Context(), s, id); err != nil {
+		t.Fatal(err)
+	}
+	const newID = "01NEWITEM00000000000000001"
+	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "x"}, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Append(apptest.SampleTask), tx.WriteItems().Append(newID))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if headCount(t, dir) != 2 {
+		t.Errorf("a write without rows made a commit")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "items", newID)); !os.IsNotExist(err) {
+		t.Errorf("new folder made: %v", err)
+	}
+}
+
+// 自動化・同期・GitHub の保存の作者とコミッターは hedgehug[bot](01「「あなた」の決まり方」)。
+func TestNonUserWriteIsByBot(t *testing.T) {
+	s, id, dir := newStore(t)
+	if err := apptest.Sample(t.Context(), s, id); err != nil {
+		t.Fatal(err)
+	}
+	op := port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "修復"}
+	err := s.Write(t.Context(), id, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("title", "ログイン画面を作る", "y"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Author.Name != "hedgehug[bot]" || c.Author.Email != "bot@hedgehug.invalid" || c.Committer.Name != "hedgehug[bot]" || c.Committer.Email != "bot@hedgehug.invalid" {
+		t.Errorf("author = %+v, committer = %+v", c.Author, c.Committer)
+	}
+}

@@ -56,6 +56,10 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	if _, err := dirOf(ref); err != nil {
 		return err
 	}
+	// 行がなければ pending に足さない。足すと、空のコミットや空の log.jsonl ができる。
+	if len(drafts) == 0 {
+		return nil
+	}
 	log, err := t.log(ref)
 	if err != nil {
 		return err
