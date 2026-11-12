@@ -208,9 +208,49 @@ func files(t *testing.T, dir string) map[string]string {
 	return out
 }
 
-// sameFiles は、2 台の Store のファイルがバイト単位で同じことを確かめる(保存形式「テスト」)。
+// snapshot は、Store のファイルと先端のコミット。断る同期の前後で比べる。
+type snapshot struct {
+	files map[string]string
+	head  plumbing.Hash
+}
+
+func snap(t *testing.T, m machine) snapshot {
+	t.Helper()
+	return snapshot{files: files(t, m.dir), head: headCommit(t, m.dir).Hash}
+}
+
+// unchanged は、断った同期が Store を変えなかったこと(ファイル・先端・作業ツリー)を確かめる。
+func unchanged(t *testing.T, m machine, before snapshot) {
+	t.Helper()
+	after := snap(t, m)
+	if after.head != before.head {
+		t.Errorf("head moved: %s -> %s", before.head, after.head)
+	}
+	if len(after.files) != len(before.files) {
+		t.Errorf("files: %d -> %d", len(before.files), len(after.files))
+	}
+	for p, v := range before.files {
+		if after.files[p] != v {
+			t.Errorf("%s changed", p)
+		}
+	}
+	if st := worktreeStatus(t, m.dir); !st.IsClean() {
+		t.Errorf("worktree is not clean:\n%s", st)
+	}
+}
+
+// sameFiles は、2 台の Store のファイルがバイト単位で同じで、先端のコミットも同じで、どちらの作業ツリーも
+// コミットと同じことを確かめる(保存形式「テスト」)。
 func sameFiles(t *testing.T, a, b machine) {
 	t.Helper()
+	if ha, hb := headCommit(t, a.dir).Hash, headCommit(t, b.dir).Hash; ha != hb {
+		t.Errorf("heads differ: a %s, b %s", ha, hb)
+	}
+	for _, m := range []machine{a, b} {
+		if st := worktreeStatus(t, m.dir); !st.IsClean() {
+			t.Errorf("%s: worktree is not clean:\n%s", m.dir, st)
+		}
+	}
 	fa, fb := files(t, a.dir), files(t, b.dir)
 	for p, v := range fa {
 		if fb[p] != v {

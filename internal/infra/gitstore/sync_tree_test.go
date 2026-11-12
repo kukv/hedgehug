@@ -118,6 +118,32 @@ func TestMergeTreesDropsChildrenOfTransferred(t *testing.T) {
 	}
 }
 
+func TestMergeTreesPurgedAfterSameStoreMoveKeepsChildren(t *testing.T) {
+	// a は E1 を同じ Store の別のワークスペースへ移したあと、完全に削除した(フォルダがない)。b は同時に E1 の下に
+	// T1 を作った。別の Store への移動ではないので T1 は消さない(親のない子は、同期の修復が扱う)。
+	// 同じ Store の中の移動の行は、to_store がないか、自分の Store ID を持つ。
+	epic := itemCreate(t, "E1", nil, at(0))
+	e1 := item.ID("E1")
+	store := []byte("store: S1\nformat: 1\nretention_days: 30\n")
+	purged := []byte(`{"id":"P1","at":"2026-11-12T10:06:00.000Z","by":"taro","actor":"user","entity":"item","target":"E1","display":"WEB-31"}` + "\n")
+	rows := map[string]string{
+		"no to_store":   `{"id":"X1","op":"X1","at":"2026-11-12T10:05:00.000Z","by":"taro","target":"E1","old":"HH-1","new":"WEB-31"}`,
+		"same to_store": `{"id":"X1","op":"X1","at":"2026-11-12T10:05:00.000Z","by":"taro","target":"E1","old":"HH-1","new":"WEB-31","to_store":"S1","to_store_name":"","to_remote":""}`,
+	}
+	for name, row := range rows {
+		base := tree{".hedgehug/store.yaml": store, "items/E1/log.jsonl": []byte(epic)}
+		a := tree{".hedgehug/store.yaml": store, "transfers.jsonl": []byte(row + "\n"), "purged.jsonl": purged}
+		b := tree{".hedgehug/store.yaml": store, "items/E1/log.jsonl": []byte(epic), "items/T1/log.jsonl": []byte(itemCreate(t, "T1", &e1, at(3)))}
+		got := mustMerge(t, base, a, b)
+		if got["items/T1/log.jsonl"] == nil {
+			t.Errorf("%s: child of a purged item moved within the store was dropped", name)
+		}
+		if got["items/E1/log.jsonl"] != nil {
+			t.Errorf("%s: the purged folder came back", name)
+		}
+	}
+}
+
 func TestMergeTreesSameStoreMoveKeepsChildren(t *testing.T) {
 	// 同じ Store の別のワークスペースへの移動も転送記録を残すが、フォルダは残るので、子は消さない。
 	epic := itemCreate(t, "E1", nil, at(0))

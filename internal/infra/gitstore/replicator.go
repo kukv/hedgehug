@@ -87,7 +87,11 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 			return port.SyncResult{}, err
 		}
 	}
-	if err := s.link.send(ctx, s.branch, theirs); err != nil {
+	head, err := s.repo.Head()
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	if err := s.link.send(ctx, s.branch, theirs, head.Hash()); err != nil {
 		return port.SyncResult{}, err
 	}
 	return s.result(theirs)
@@ -121,7 +125,7 @@ func (s syncRun) integrate(theirs plumbing.Hash) error {
 	if ahead, err := oc.IsAncestor(tc); err != nil {
 		return err
 	} else if ahead {
-		return s.guarded(func() error { return wt.Reset(&git.ResetOptions{Commit: theirs, Mode: git.HardReset}) })
+		return s.guarded(func() error { return s.forward(wt, ours, theirs) })
 	}
 	bases, err := oc.MergeBase(tc)
 	if err != nil {
@@ -148,7 +152,23 @@ func (s syncRun) guarded(fn func() error) error {
 	return nil
 }
 
-// merge は、3 つのツリーを合わせて作業ツリーに書き、2 つの親を持つコミットにする。失敗したら元に戻す。
+// forward は、自分の先端を remote の先端 theirs へ進める。ハードリセットは使わない(go-git v5 のハードリセットは
+// インデックスにないファイルも消すので、Store のものでないファイルまで消してしまう)。
+func (s syncRun) forward(wt *git.Worktree, ours, theirs plumbing.Hash) error {
+	from, err := readTree(s.repo, ours)
+	if err != nil {
+		return err
+	}
+	to, err := readTree(s.repo, theirs)
+	if err != nil {
+		return err
+	}
+	return s.apply(wt, ours, from, to, func() error {
+		return s.repo.Storer.SetReference(plumbing.NewHashReference(s.branch, theirs))
+	})
+}
+
+// merge は、3 つのツリーを合わせて作業ツリーに書き、2 つの親を持つコミットにする。
 func (s syncRun) merge(wt *git.Worktree, base, ours, theirs plumbing.Hash) error {
 	trees := make([]tree, 3)
 	for i, h := range []plumbing.Hash{base, ours, theirs} {
@@ -162,17 +182,26 @@ func (s syncRun) merge(wt *git.Worktree, base, ours, theirs plumbing.Hash) error
 	if err != nil {
 		return err
 	}
-	created, err := writeTree(s.root, trees[1], merged)
+	return s.apply(wt, ours, trees[1], merged, func() error {
+		sig := signature(botName, botEmail, s.r.stores.clock.Now())
+		_, err := wt.Commit("remote と合わせる\n", &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}})
+		return err
+	})
+}
+
+// apply は、作業ツリーを from から to にし、変えたファイルだけをインデックスに載せて、finish でブランチを動かす。
+// 失敗したら ours に戻し、新しく作ったファイルを消す。
+func (s syncRun) apply(wt *git.Worktree, ours plumbing.Hash, from, to tree, finish func() error) error {
+	changes, err := writeTree(s.root, from, to)
 	if err == nil {
-		err = wt.AddWithOptions(&git.AddOptions{All: true})
+		err = stage(wt, changes)
 	}
 	if err == nil {
-		sig := signature(botName, botEmail, s.r.stores.clock.Now())
-		_, err = wt.Commit("remote と合わせる\n", &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}})
+		err = finish()
 	}
 	if err != nil {
 		errs := []error{err, wt.Reset(&git.ResetOptions{Commit: ours, Mode: git.HardReset})}
-		for _, p := range created {
+		for _, p := range changes.created {
 			errs = append(errs, os.Remove(filepath.Join(s.root, p)))
 		}
 		return errors.Join(errs...)

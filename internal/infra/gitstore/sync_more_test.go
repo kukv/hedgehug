@@ -112,10 +112,77 @@ func TestSyncRefusesWhenRemoteBranchWasDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.write(t, "b", set("title", "", "B"))
+	before := snap(t, b)
 	if _, err := b.rep.Sync(t.Context(), b.id, remote); !errors.Is(err, port.ErrNoCommonHistory) {
 		t.Errorf("err = %v", err)
 	}
+	unchanged(t, b, before)
 	if _, err := bare.Reference(main, true); !errors.Is(err, plumbing.ErrReferenceNotFound) {
 		t.Errorf("main was sent again: %v", err)
+	}
+}
+
+// committedTree は、先端のコミットのファイル。
+func committedTree(t *testing.T, dir string) tree {
+	t.Helper()
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := readTree(repo, headCommit(t, dir).Hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// keptOnlyLocally は、stray のファイルが m の作業ツリーに残り、コミットにも、送った先の other にもないことを確かめる。
+func keptOnlyLocally(t *testing.T, m, other machine, stray []string) {
+	t.Helper()
+	committed, onOther := committedTree(t, m.dir), files(t, other.dir)
+	for _, p := range stray {
+		if _, ok := committed[p]; ok {
+			t.Errorf("%s was committed", p)
+		}
+		if _, ok := onOther[p]; ok {
+			t.Errorf("%s was sent", p)
+		}
+		if _, err := os.Stat(filepath.Join(m.dir, p)); err != nil {
+			t.Errorf("%s on %s: %v", p, m.dir, err)
+		}
+	}
+	if len(committed) != len(onOther) {
+		t.Errorf("commit has %d files, the other has %d", len(committed), len(onOther))
+	}
+}
+
+// 作業ツリーにある、Store のものでないファイル(OS やエディタが作るもの)は、合わせたコミットに入れず、送らない。
+// 受け取るだけ(進める)ときも消さない。
+func TestSyncMergeLeavesUntrackedFilesOut(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	a.write(t, "a", set("title", "", "A"))
+	a.sync(t, remote)
+	b.write(t, "b", set("rank", "a", "b"))
+	stray := []string{".DS_Store", "items/" + string(apptest.SampleTask) + "/.DS_Store"}
+	for _, p := range stray {
+		if err := os.WriteFile(filepath.Join(b.dir, p), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if res := b.sync(t, remote); res != (port.SyncResult{Sent: 1, Received: 1}) {
+		t.Errorf("b sync = %+v", res)
+	}
+	a.sync(t, remote)
+	keptOnlyLocally(t, b, a, stray)
+	a.write(t, "a2", set("title", "A", "A2"))
+	a.sync(t, remote)
+	if res := b.sync(t, remote); res != (port.SyncResult{Received: 1}) {
+		t.Errorf("fast-forward = %+v", res)
+	}
+	keptOnlyLocally(t, b, a, stray)
+	if got := title(t, b); got != "A2" {
+		t.Errorf("title = %q", got)
 	}
 }

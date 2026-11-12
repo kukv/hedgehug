@@ -50,13 +50,11 @@ func TestSyncRefusesRemoteThatIsNotAStore(t *testing.T) {
 	pushRaw(t, remote, map[string]string{"README.md": "hello"})
 	_, _, dir := newStore(t)
 	m := newMachine(t, dir, "A", t0)
-	before := files(t, dir)
+	before := snap(t, m)
 	if _, err := m.rep.Sync(t.Context(), m.id, remote); !errors.Is(err, port.ErrRemoteNotStore) {
 		t.Errorf("err = %v", err)
 	}
-	if len(files(t, dir)) != len(before) {
-		t.Error("the store changed")
-	}
+	unchanged(t, m, before)
 }
 
 // store.yaml に format がなければ、Attach と同じく Store ではないとして断る。
@@ -65,9 +63,11 @@ func TestSyncRefusesRemoteStoreWithoutFormat(t *testing.T) {
 	pushRaw(t, remote, map[string]string{".hedgehug/store.yaml": "store: 01STORE0000000000000000001\n"})
 	_, _, dir := newStore(t)
 	m := newMachine(t, dir, "A", t0)
+	before := snap(t, m)
 	if _, err := m.rep.Sync(t.Context(), m.id, remote); !errors.Is(err, port.ErrRemoteNotStore) {
 		t.Errorf("err = %v", err)
 	}
+	unchanged(t, m, before)
 }
 
 func TestSyncRefusesUnrelatedHistory(t *testing.T) {
@@ -80,9 +80,11 @@ func TestSyncRefusesUnrelatedHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newMachine(t, dir, "Z", t0)
+	before := snap(t, m)
 	if _, err := m.rep.Sync(t.Context(), m.id, remote); !errors.Is(err, port.ErrNoCommonHistory) {
 		t.Errorf("err = %v", err)
 	}
+	unchanged(t, m, before)
 }
 
 func TestSyncRefusesNewerFormat(t *testing.T) {
@@ -103,13 +105,11 @@ func TestSyncRefusesNewerFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.sync(t, remote)
-	before := files(t, a.dir)
+	before := snap(t, a)
 	if _, err := a.rep.Sync(t.Context(), a.id, remote); !errors.Is(err, port.ErrRemoteNewerFormat) {
 		t.Errorf("err = %v", err)
 	}
-	if after := files(t, a.dir); after[".hedgehug/store.yaml"] != before[".hedgehug/store.yaml"] {
-		t.Error("the store changed")
-	}
+	unchanged(t, a, before)
 }
 
 func TestSyncRefusesRemoteWithoutTheBranch(t *testing.T) {
@@ -127,9 +127,11 @@ func TestSyncRefusesRemoteWithoutTheBranch(t *testing.T) {
 	}
 	_, _, dir := newStore(t)
 	m := newMachine(t, dir, "A", t0)
+	before := snap(t, m)
 	if _, err := m.rep.Sync(t.Context(), m.id, remote); !errors.Is(err, port.ErrNoCommonHistory) {
 		t.Errorf("err = %v", err)
 	}
+	unchanged(t, m, before)
 }
 
 // 保存が途中で止まった跡が残っていても、同期はそれを戻してから合わせる。跡を合わせたコミットに入れて送らない。

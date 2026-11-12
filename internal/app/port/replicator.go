@@ -23,7 +23,10 @@ type SyncResult struct {
 	Received int
 }
 
-// 同期を断る理由(06「同期のエラー」)。どれも、このマシンの Store を変えずに返す。
+// 同期を断る理由(06「同期のエラー」)。
+// ErrNoCommonHistory・ErrRemoteNotStore・ErrRemoteNewerFormat は、最初の試みで返すときは、このマシンの Store を
+// 変えない。ErrSendConflict のときと、2 回目からの試みで断るときは、前の試みで合わせた結果がこのマシンに残り、
+// 次の同期で続ける。
 var (
 	ErrNoCommonHistory   = errors.New("the remote has no history in common with the store")
 	ErrRemoteNotStore    = errors.New("the remote is not a hedgehug store")

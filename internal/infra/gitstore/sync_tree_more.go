@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -47,7 +49,7 @@ func lastDesc(side, base []byte) time.Time {
 // underTransferred は、別の Store へ移ったもの(transfers.jsonl にあり、フォルダがない)の下にある
 // エンティティのフォルダを返す(保存形式「同期」の手順 3 の最後)。消す前に全部を決める。
 func underTransferred(t tree) []string {
-	targets := transferTargets(t["transfers.jsonl"])
+	targets := transferTargets(t["transfers.jsonl"], treeStoreID(t))
 	if len(targets) == 0 {
 		return nil
 	}
@@ -69,17 +71,29 @@ func underTransferred(t tree) []string {
 	return out
 }
 
-func transferTargets(b []byte) map[string]bool {
+// transferTargets は、別の Store へ移ったものの内部 ID。同じ Store の別のワークスペースへの移動も
+// transfers.jsonl に行を足すが、to_store がないか自分の Store ID なので数えない(保存形式「移動・番号・旧 ID」)。
+func transferTargets(b []byte, self string) map[string]bool {
 	targets := map[string]bool{}
 	for _, l := range bytes.Split(b, []byte("\n")) {
 		var v struct {
-			Target string `json:"target"`
+			Target  string `json:"target"`
+			ToStore string `json:"to_store"`
 		}
-		if json.Unmarshal(l, &v) == nil && v.Target != "" {
+		if json.Unmarshal(l, &v) == nil && v.Target != "" && v.ToStore != "" && v.ToStore != self {
 			targets[v.Target] = true
 		}
 	}
 	return targets
+}
+
+// treeStoreID は、ツリーの .hedgehug/store.yaml の Store ID。読めなければ空。
+func treeStoreID(t tree) string {
+	var y storeYAML
+	if yaml.Unmarshal(t[storeFile], &y) != nil {
+		return ""
+	}
+	return y.Store
 }
 
 // ancestors は、エンティティの祖先の内部 ID(親のアイテムを辿り、プロジェクトとワークスペースまで)。

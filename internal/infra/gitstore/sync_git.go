@@ -71,8 +71,8 @@ func (l link) fetch(ctx context.Context, repo *git.Repository, branch plumbing.R
 }
 
 // send は、branch を remote の同じ名前のブランチへ送る。履歴を書き換えない(強制しない)。
-// theirs は、この回で合わせた remote の先端(remote が空ならゼロ)。
-func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs plumbing.Hash) error {
+// theirs は、この回で合わせた remote の先端(remote が空ならゼロ)、mine は送る自分の先端。
+func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs, mine plumbing.Hash) error {
 	spec := config.RefSpec(branch.String() + ":" + branch.String())
 	err := l.remote.PushContext(ctx, &git.PushOptions{RemoteName: remoteName, RefSpecs: []config.RefSpec{spec}, Auth: l.auth})
 	if err == nil || errors.Is(err, git.NoErrAlreadyUpToDate) {
@@ -85,9 +85,14 @@ func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs pl
 	// サーバーが断る文は、サーバーごとに違う(git の "failed to update ref"、GitHub の "cannot lock ref" など)。
 	// 文で見分けず、remote の先端をもう一度見る。合わせた先端から動いていれば、他の人の更新と重なったので、
 	// 受け取りからやり直す。動いていなければ、重なりではない失敗としてそのまま返す。
+	// remote の先端が自分の先端なら、サーバーは更新したが応答が届かなかったので、送れたものとする
+	// (やり直すと、次の回で送った数が 0 になる)。
 	tip, lerr := l.tip(ctx, branch)
 	if lerr != nil {
 		return errors.Join(err, lerr)
+	}
+	if tip == mine {
+		return nil
 	}
 	if tip != theirs {
 		return errRejected
@@ -166,10 +171,19 @@ func readTree(repo *git.Repository, h plumbing.Hash) (tree, error) {
 	return out, err
 }
 
-// writeTree は、作業ツリーを from から to の中身にする。新しく作ったファイルを返す(失敗したら消すため)。
-func writeTree(root string, from, to tree) (created []string, err error) {
-	if err := removeGone(root, from, to); err != nil {
-		return nil, err
+// treeChanges は、writeTree が作業ツリーで変えたファイル(Store の根からの相対パス)。
+// written は書いたもの、removed は消したもの、created は written のうち新しく作ったもの(失敗したら消すため)。
+type treeChanges struct {
+	written, removed, created []string
+}
+
+// writeTree は、作業ツリーを from から to の中身にする。from と to にないファイル(OS やエディタが作るもの)には触らない。
+func writeTree(root string, from, to tree) (treeChanges, error) {
+	var c treeChanges
+	removed, err := removeGone(root, from, to)
+	c.removed = removed
+	if err != nil {
+		return c, err
 	}
 	for _, p := range sortedKeys(to) {
 		old, existed := from[p]
@@ -178,28 +192,47 @@ func writeTree(root string, from, to tree) (created []string, err error) {
 		}
 		full := filepath.Join(root, p)
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil { //nolint:gosec // G301: Store のファイルは共有するもので秘密ではない
-			return created, err
+			return c, err
 		}
 		if !existed {
-			created = append(created, p)
+			c.created = append(c.created, p)
 		}
+		c.written = append(c.written, p)
 		if err := os.WriteFile(full, to[p], 0o644); err != nil { //nolint:gosec // G306: Store のファイルは共有するもので秘密ではない
-			return created, err
+			return c, err
 		}
 	}
-	return created, nil
+	return c, nil
 }
 
-// removeGone は、from にあって to にないファイルを消す。
-func removeGone(root string, from, to tree) error {
-	for p := range from {
+// removeGone は、from にあって to にないファイルを消し、消したものを返す。
+func removeGone(root string, from, to tree) ([]string, error) {
+	var removed []string
+	for _, p := range sortedKeys(from) {
 		if _, keep := to[p]; keep {
 			continue
 		}
 		if err := os.Remove(filepath.Join(root, p)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return removed, err
+		}
+		removed = append(removed, p)
+		_ = os.Remove(filepath.Dir(filepath.Join(root, p))) // 空になったフォルダだけが消える
+	}
+	return removed, nil
+}
+
+// stage は、writeTree が変えたファイルだけをインデックスに載せる。作業ツリー全体は足さない(Store のものでない
+// ファイルを、合わせたコミットに入れて送らないため)。
+func stage(wt *git.Worktree, c treeChanges) error {
+	for _, p := range c.removed {
+		if _, err := wt.Remove(p); err != nil {
 			return err
 		}
-		_ = os.Remove(filepath.Dir(filepath.Join(root, p))) // 空になったフォルダだけが消える
+	}
+	for _, p := range c.written {
+		if err := wt.AddWithOptions(&git.AddOptions{Path: p, SkipStatus: true}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

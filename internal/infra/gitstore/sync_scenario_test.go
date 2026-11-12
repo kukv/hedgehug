@@ -175,8 +175,8 @@ func TestSyncRetriesWhenSendOverlaps(t *testing.T) {
 		}
 		return nil
 	}
-	if res := a.sync(t, remote); res.Received != 1 {
-		t.Errorf("a sync = %+v, want the overlapping save received", res)
+	if res := a.sync(t, remote); res != (port.SyncResult{Sent: 1, Received: 1}) {
+		t.Errorf("a sync = %+v, want Sent 1 and the overlapping save received", res)
 	}
 	b.sync(t, remote)
 	sameFiles(t, a, b)
