@@ -3,6 +3,7 @@ package apptest
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -22,6 +23,24 @@ const (
 	SampleTask      item.ID      = "01SAMPLEIT0000000000000002"
 )
 
+// サンプルのワークスペースの値の内部 ID(DefaultSettings が振る順: ステータス 5、優先度 5、関連システム 6)。
+const (
+	SampleStatusTodo       change.ID = "01SAMPLEVAL000000000000001"
+	SampleStatusInProgress change.ID = "01SAMPLEVAL000000000000002"
+	SampleStatusDone       change.ID = "01SAMPLEVAL000000000000003"
+	SampleStatusPending    change.ID = "01SAMPLEVAL000000000000004"
+	SampleStatusCancel     change.ID = "01SAMPLEVAL000000000000005"
+	SamplePriorityMedium   change.ID = "01SAMPLEVAL000000000000008"
+)
+
+func sampleValueIDs() func() change.ID {
+	n := 0
+	return func() change.ID {
+		n++
+		return change.ID(fmt.Sprintf("01SAMPLEVAL%015d", n))
+	}
+}
+
 // Sample は、メンバー 2 人(taro・hanako)、ワークスペース「Web」(HH)、プロジェクト HH-P1、
 // Epic HH-1 とその下の Task HH-2 を、1 回の保存で書く。
 func Sample(ctx context.Context, s port.Stores, id port.StoreID) error {
@@ -32,7 +51,7 @@ func Sample(ctx context.Context, s port.Stores, id port.StoreID) error {
 	task := item.Item{ID: SampleTask, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Parent: &parent, Number: 2}, Kind: item.Task, Rank: rank.First, Title: "ログイン画面を作る", Watchers: []string{"taro"}}
 	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
 	return s.Write(ctx, id, op, func(tx port.Tx) error {
-		d, err := workspace.Create(ws)
+		d, err := workspace.CreateWithSettings(ws, workspace.DefaultSettings(sampleValueIDs()))
 		if err != nil {
 			return err
 		}
