@@ -161,9 +161,13 @@ func TestDeviceRefreshFailuresAreAuthErrors(t *testing.T) {
 	cases := map[string]func(f *connFixture){
 		"rejected": func(*connFixture) {},
 		"refresh expired": func(f *connFixture) {
+			f.device.Refreshed = account.DeviceToken{Access: "tok-new", Refresh: "r2"} // 取り直しに行けば成功する
 			f.secrets.Device["hanako"] = account.DeviceToken{Access: "tok-old", Refresh: "r", ExpiresAt: start, RefreshExpiresAt: start}
 		},
-		"no client id":    func(f *connFixture) { f.conn.Hosts = apptest.Hosts{} },
+		"no client id": func(f *connFixture) {
+			f.device.Refreshed = account.DeviceToken{Access: "tok-new", Refresh: "r2"}
+			f.conn.Hosts = apptest.Hosts{}
+		},
 		"not in keychain": func(f *connFixture) { delete(f.secrets.Device, "hanako") },
 		"cannot keep it": func(f *connFixture) {
 			f.device.Refreshed = account.DeviceToken{Access: "tok-new"}
@@ -176,6 +180,10 @@ func TestDeviceRefreshFailuresAreAuthErrors(t *testing.T) {
 		setup(&f)
 		if _, err := f.conn.Token(context.Background(), home); !ghcall.Is(err, ghcall.AuthError) {
 			t.Errorf("%s: Token = %v", name, err)
+		}
+		// 取り直せない場合は、GitHub に問い合わせない。
+		if (name == "refresh expired" || name == "no client id") && f.device.Refreshes != 0 {
+			t.Errorf("%s: asked GitHub to refresh %d times", name, f.device.Refreshes)
 		}
 	}
 }
