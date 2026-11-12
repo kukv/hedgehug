@@ -69,7 +69,7 @@ describe("network (決定 S4・C2-18b)", () => {
   });
 
   it("ignores a failed request and sends again on the next resend", async () => {
-    const { st, s } = setup();
+    const { st } = setup();
     const failing = fakeSyncPort({
       network: async () => {
         throw new Error("down");
@@ -88,6 +88,5 @@ describe("network (決定 S4・C2-18b)", () => {
     st.now = 10_000;
     t.check();
     expect(failing.calls).toEqual(["network T false", "network T false"]);
-    expect(s).toBeDefined();
   });
 });
