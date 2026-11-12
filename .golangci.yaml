@@ -1,0 +1,92 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - revive
+    - gosec
+    - misspell
+    - gocritic
+    - bodyclose
+    - unconvert
+    - unparam
+    - depguard
+    - funlen
+    - gocognit
+  settings:
+    # 大きさの上限(設計書 4 節)。超えたら上限を上げずに分ける。
+    funlen:
+      lines: 60
+      statements: -1
+      ignore-comments: true
+    gocognit:
+      min-complexity: 15
+    # 依存の向き(設計書 2 節)のうち、depguard で書けるもの。
+    # 機能どうし(app/<機能>・infra/<実装>・adapter/<口>)の禁止と、apptest をテストだけに
+    # 限ることは、internal/archtest が確かめる。
+    depguard:
+      rules:
+        domain:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/kukv/hedgehug/internal/domain
+        domain-test:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**/*_test.go"
+          allow:
+            - $gostd
+            - github.com/kukv/hedgehug/internal/domain
+            - github.com/kukv/hedgehug/internal/app/apptest
+        port:
+          list-mode: strict
+          files:
+            - "**/internal/app/port/**"
+          allow:
+            - $gostd
+            - github.com/kukv/hedgehug/internal/domain
+        app:
+          list-mode: strict
+          files:
+            - "**/internal/app/**"
+            - "!**/internal/app/port/**"
+          allow:
+            - $gostd
+            - github.com/kukv/hedgehug/internal/domain
+            - github.com/kukv/hedgehug/internal/app
+        infra:
+          list-mode: lax
+          files:
+            - "**/internal/infra/**"
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/adapter
+              desc: infra は adapter を import しない(設計書 2 節)
+        adapter:
+          list-mode: lax
+          files:
+            - "**/internal/adapter/**"
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/infra
+              desc: adapter は infra を import しない(設計書 2 節)
+  exclusions:
+    rules:
+      - linters:
+          - revive
+        text: "^(exported|unused-parameter):"
+      - path: (_test\.go|internal/app/apptest/)
+        linters:
+          - gosec
+          - funlen
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
