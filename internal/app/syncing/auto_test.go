@@ -114,7 +114,7 @@ func TestAutoWaitsWhileATabHolds(t *testing.T) {
 }
 
 // 決定 C2-18b: オフラインのあいだは、どの契機でも試さない(エラーを記録しない)。つながったら、間隔を待たずに、
-// 対象のすべての Store。オフラインの知らせは 30 秒で切れる。
+// 対象のすべての Store。オフラインの知らせは 2 分で切れる(決定 S2)。
 func TestAutoWaitsWhileOfflineAndSyncsWhenBackOnline(t *testing.T) {
 	f, a, _ := newAuto(t)
 	a.Network("tab-1", false)
@@ -144,6 +144,11 @@ func TestAutoWaitsWhileOfflineAndSyncsWhenBackOnline(t *testing.T) {
 	}
 	a.Wrote("S1")
 	a.Network("tab-2", false)
+	f.clock.Advance(time.Minute + 30*time.Second) // 見えないタブの間引き(1 分に 1 回)より長く持つ
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 1 {
+		t.Fatalf("offline expired too early: %v", n)
+	}
 	f.clock.Advance(31 * time.Second)
 	step(t, a)
 	if n := f.syncs(); n["S1"] != 2 {

@@ -13,6 +13,10 @@ import (
 // holdFor は、タブの「待つ条件にある」知らせが有効な時間(決定 C2-18)。タブは続くあいだ 10 秒ごとに知らせ直す。
 const holdFor = 30 * time.Second
 
+// offlineFor は、タブの「オフラインです」の知らせが有効な時間(C2 画面の決定 S2)。ブラウザは見えないタブの
+// タイマーを 1 分に 1 回ほどに間引くので、待つ条件より長くする。
+const offlineFor = 2 * time.Minute
+
 // Auto は、自動の同期(06「自動で同期する」)。契機は、間隔、アプリを開いたとき(作ったとき)、オンライン復帰
 // (Network)、書き込み後(Wrote)。見えているタブが待つ条件にあるあいだ(Hold)と、オフラインのタブがある
 // あいだ(Network)は始めない。結果は捨てる(自動の同期はトーストもアクティビティも出さない。決定 C2-24)。
@@ -35,14 +39,14 @@ func NewAuto(svc *Service, settings port.SyncSettings) *Auto {
 	}
 }
 
-// Network は、タブ tab がネットワークにつながっているか(online)を知らせる(決定 C2-18b)。オフラインを
+// Network は、タブ tab がネットワークにつながっているか(online)を知らせる(決定 C2-18b。期限は C2 画面の決定 S2)。オフラインを
 // 知らせていたタブがつながったら、「オンライン復帰」の契機にする。
 func (a *Auto) Network(tab string, online bool) {
 	now := a.Service.Clock.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !online {
-		a.offline[tab] = now.Add(holdFor)
+		a.offline[tab] = now.Add(offlineFor)
 		return
 	}
 	if _, was := a.offline[tab]; was {
