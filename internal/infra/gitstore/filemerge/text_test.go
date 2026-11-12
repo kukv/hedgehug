@@ -21,6 +21,21 @@ func TestMergeText(t *testing.T) {
 	}
 }
 
+func TestMergeTextOverlappingChanges(t *testing.T) {
+	cases := []struct {
+		name, base, older, newer, want string
+	}{
+		{"both insert at the same position", "a\nb\n", "a\nx\nb\n", "a\ny\nb\n", "a\nx\n-----\ny\nb\n"},
+		{"partially overlapping replacements form one conflict", "a\nb\nc\nd\n", "a\nX\nd\n", "a\nb\nY\n", "a\nX\nd\n-----\nb\nY\n"},
+		{"insertion next to a replacement is not a conflict", "a\nb\nc\n", "a\nb\nX\nc\n", "a\nY\nc\n", "a\nY\nX\nc\n"},
+	}
+	for _, c := range cases {
+		if got := MergeText(c.base, c.older, c.newer); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestMergeTextFromEmptyBase(t *testing.T) {
 	// 説明のなかったものに、2 人が別々に書いた。同じ箇所なので両方を残す。
 	if got := MergeText("", "x\n", "y\n"); got != "x\n-----\ny\n" {

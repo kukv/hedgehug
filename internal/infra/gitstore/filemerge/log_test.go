@@ -42,8 +42,13 @@ func TestMergeLogDropsMalformedLines(t *testing.T) {
 func TestMergeLogSameIDDifferentBytesIsDeterministic(t *testing.T) {
 	a := []byte(`{"id":"X","at":"2026-11-12T10:00:00.000Z","v":2}` + "\n")
 	b := []byte(`{"id":"X","at":"2026-11-12T10:00:00.000Z","v":1}` + "\n")
-	if string(MergeLog(a, b)) != string(MergeLog(b, a)) {
-		t.Error("the result depends on the order")
+	// 同じ id で中身が違うときは、バイト列として小さいほうを残す。
+	want := `{"id":"X","at":"2026-11-12T10:00:00.000Z","v":1}` + "\n"
+	if got := string(MergeLog(a, b)); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := string(MergeLog(b, a)); got != want {
+		t.Errorf("the result depends on the order: %q", got)
 	}
 }
 
