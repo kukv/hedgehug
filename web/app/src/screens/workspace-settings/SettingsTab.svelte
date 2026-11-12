@@ -3,6 +3,7 @@
   import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
   import { workspaceSettings } from "../../wire";
   import GeneralPanel from "./GeneralPanel.svelte";
+  import ValuesPanel from "./ValuesPanel.svelte";
 
   // 設定タブの枠(03「範囲と画面の構成」)。サブタブはアドレスに入れず、履歴にも積まない。
   interface Props {
@@ -33,6 +34,12 @@
     {/if}
     {#if $state.tab === "general"}
       <GeneralPanel state={$state} />
+    {:else if $state.tab === "statuses"}
+      <ValuesPanel state={$state} list="statuses" />
+    {:else if $state.tab === "priorities"}
+      <ValuesPanel state={$state} list="priorities" />
+    {:else if $state.tab === "systems"}
+      <ValuesPanel state={$state} list="systems" />
     {/if}
   </div>
 {/if}

@@ -78,6 +78,17 @@ export {
   settingsTabs,
   type WorkspaceSettingsScreen,
 } from "./features/workspaces/settings";
+export {
+  categoryLabels,
+  colors,
+  type DeleteDialogModel,
+  deleteDialog,
+  statusHelp,
+  type ValueRow,
+  valueListLabel,
+  valueRows,
+  valuesHelp,
+} from "./features/workspaces/values";
 export { NotFound, Refused } from "./model/errors";
 export type { Item, Kind, NewItem } from "./model/item";
 export type { Member } from "./model/member";
