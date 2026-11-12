@@ -36,6 +36,8 @@ func TestSetPropertyWritesTheValueText(t *testing.T) {
 	cases := []struct{ prop, in, want string }{
 		{"assignee", `"taro"`, "HH-2 の担当者を taro に変更"},
 		{"assignee", `""`, "HH-2 の担当者を なし に変更"},
+		// メンバーにいない人は「不明なユーザー」(01「画面の移り方と、共通の表示」)
+		{"assignee", `"jiro"`, "HH-2 の担当者を 不明なユーザー に変更"},
 		{"start", `"2026-11-11"`, "HH-2 の開始日を 11/11 に変更"},
 		{"estimate", `"1.25"`, "HH-2 の見積もり時間を 1.25 時間 に変更"},
 		{"points", `"3"`, "HH-2 のポイントを 3 に変更"},

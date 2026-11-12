@@ -11,7 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// Names は、ログイン名から人の表示名を返す(メンバーにいなければログイン名)。
+// Names は、ログイン名から人の表示名を返す(メンバーにいなければ「不明なユーザー」)。
 type Names func(login string) string
 
 const deletedValue = "(削除された値)"

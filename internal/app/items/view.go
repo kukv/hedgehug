@@ -48,7 +48,7 @@ func (s Service) editContext(ctx context.Context, store port.StoreID, id item.ID
 				if n, ok := names[strings.ToLower(login)]; ok {
 					return n
 				}
-				return login
+				return "不明なユーザー" // 01「画面の移り方と、共通の表示」
 			},
 		}
 		return nil
