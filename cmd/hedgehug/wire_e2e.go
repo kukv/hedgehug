@@ -54,6 +54,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Events:     hub,
 		Clock:      apptest.NewClock(time.Now()),
 	}
+	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
 	return httpapi.Deps{
 		Stores:   stores,
