@@ -137,3 +137,40 @@ func TestValueActivitySummaries(t *testing.T) {
 		}
 	}
 }
+
+// テンプレートのアクティビティの文は仕様 03 の文字どおり。
+func TestTemplateActivitySummaries(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, err := s.Create(ctx, store, "Web", "HH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{Stores: s.Stores}
+	s.Stores = rec
+	tpl, err := s.CreateTemplate(ctx, store, w.ID, workspace.Template{Name: "調査", Kind: "Task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, err := range []error{
+		s.UpdateTemplate(ctx, store, w.ID, tpl.ID, workspace.Template{Name: "調査 2", Kind: "Task"}),
+		s.SetTemplateDefault(ctx, store, w.ID, "Task", tpl.ID),
+		s.DeleteTemplate(ctx, store, w.ID, tpl.ID),
+	} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{
+		"テンプレート「調査」を作成",
+		"テンプレート「調査 2」を編集",
+		"Task の既定のテンプレートを変更",
+		"テンプレート「調査 2」を削除",
+	}
+	got := rec.summaries[len(rec.summaries)-len(want):]
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("summary %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
