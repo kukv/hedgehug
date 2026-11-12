@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { tick } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import { text } from "../test-snippet";
 import Dialog from "./Dialog.svelte";
@@ -54,27 +53,6 @@ describe("Menu", () => {
     render(Menu, { props: { open: true, x: 0, y: 0, items, onselect: vi.fn(), onclose } });
     await fireEvent.keyDown(window, { key: "Escape" });
     expect(onclose).toHaveBeenCalledOnce();
-  });
-
-  // 画面の下端の近くで開いても、メニューの下が画面の外に出ないよう上へ寄せる。
-  it("stays inside the window near the bottom edge", async () => {
-    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(140);
-    try {
-      render(Menu, {
-        props: {
-          open: true,
-          x: 0,
-          y: window.innerHeight - 20,
-          items,
-          onselect: vi.fn(),
-          onclose: vi.fn(),
-        },
-      });
-      await tick();
-      expect(screen.getByRole("menu").style.top).toBe(`${window.innerHeight - 140 - 4}px`);
-    } finally {
-      height.mockRestore();
-    }
   });
 });
 

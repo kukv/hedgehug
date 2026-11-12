@@ -12,14 +12,6 @@
 
   let { open, x, y, items, onselect, onclose }: Props = $props();
   let element: HTMLDivElement | undefined = $state();
-  let innerHeight = $state(0);
-  let height = $state(0);
-
-  // 画面の下端の近くで開いたら、メニューの下が画面の外に出ないよう上へ寄せる。
-  $effect(() => {
-    height = element?.offsetHeight ?? 0;
-  });
-  const top = $derived(Math.max(0, Math.min(y, innerHeight - height - 4)));
 
   function onkeydown(event: KeyboardEvent) {
     if (open && event.key === "Escape") onclose();
@@ -31,10 +23,10 @@
   }
 </script>
 
-<svelte:window {onkeydown} {onpointerdown} bind:innerHeight />
+<svelte:window {onkeydown} {onpointerdown} />
 
 {#if open}
-  <div class="menu-pop" role="menu" style:left="{x}px" style:top="{top}px" bind:this={element}>
+  <div class="menu-pop" role="menu" style:left="{x}px" style:top="{y}px" bind:this={element}>
     {#each items as item, i (i)}
       {#if "separator" in item}
         <hr class="menu-sep">
