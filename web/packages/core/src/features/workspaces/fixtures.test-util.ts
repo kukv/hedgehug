@@ -35,7 +35,7 @@ export function defaultDetail(storeId: string, id: string): WorkspaceDetail {
       properties: [
         builtin("status", "ステータス", "status"),
         builtin("priority", "優先度", "priority"),
-        builtin("owner", "担当者", "user"),
+        builtin("assignee", "担当者", "user"),
         builtin("start", "開始日", "date"),
         builtin("end", "終了日", "date"),
         builtin("estimate", "見積もり時間", "duration"),

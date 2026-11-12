@@ -11,6 +11,7 @@
   import { Button, ConfirmDialog, IconButton, KindIcon, type KindName } from "@hedgehug/ui";
   import { workspaceSettings } from "../../wire";
   import KindDefaults from "./KindDefaults.svelte";
+  import TemplateDialog from "./TemplateDialog.svelte";
 
   // テンプレートのタブ(03「テンプレート」)。
   interface Props {
@@ -19,12 +20,15 @@
 
   let { state: s }: Props = $props();
 
-  // 編集ダイアログは Task 13 でつなぐ。ID は編集、"new" は新規。
+  // 編集ダイアログを開いているテンプレート。ID は編集、"new" は新規。
   let editing = $state<string | "new" | null>(null);
   let deleting = $state<string | null>(null);
 
   const rows = $derived(templateRows(s.detail.settings));
   const title = $derived(s.readOnly ? readOnlyNote : undefined);
+  const editingTemplate = $derived(
+    s.detail.settings.templates.find((t) => t.id === editing) ?? null,
+  );
   const deletingName = $derived(rows.find((r) => r.id === deleting)?.name ?? "");
 
   // 断りはエラーのトーストなので、ダイアログを閉じてから run する。
@@ -67,6 +71,10 @@
     >
   </div>
 </div>
+
+{#if editing !== null}
+  <TemplateDialog state={s} template={editingTemplate} onclose={() => (editing = null)} />
+{/if}
 
 {#if deleting !== null}
   <ConfirmDialog

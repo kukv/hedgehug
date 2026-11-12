@@ -152,6 +152,21 @@ export {
   type WorkspaceMover,
 } from "./features/workspaces/sidebarMenu";
 export {
+  type ChildForm,
+  childKinds,
+  emptyTemplateForm,
+  formOfTemplate,
+  kindChangeNote,
+  type StepForm,
+  type Structure,
+  stepAssigneeOptions,
+  structureOf,
+  type TemplateForm,
+  toTemplateInput,
+  type ValueField,
+  valueFields,
+} from "./features/workspaces/templateForm";
+export {
   deleteTemplateBody,
   deleteTemplateTitle,
   type KindDefault,
