@@ -103,6 +103,33 @@ describe("createDetail", () => {
     await opening;
     expect(get(detail.view)?.item.id).toBe(s1.id);
   });
+
+  it("reload reads the open item again (C2 画面の決定 S10)", async () => {
+    const { detail, items, task } = await setup();
+    await detail.open("S1", task.id);
+    const i = items.all.findIndex((x) => x.id === task.id);
+    items.all[i] = { ...task, title: "別の画面で変えたタイトル" };
+    expect(get(detail.view)?.item.title).toBe("画面");
+    await detail.reload();
+    expect(get(detail.view)?.item.title).toBe("別の画面で変えたタイトル");
+  });
+
+  it("reload closes the panel when the item is gone (06「反映で変わる画面」)", async () => {
+    const { detail, items, task } = await setup();
+    await detail.open("S1", task.id);
+    items.all.splice(
+      items.all.findIndex((x) => x.id === task.id),
+      1,
+    );
+    await detail.reload();
+    expect(get(detail.view)).toBeNull();
+  });
+
+  it("reload does nothing when the panel is closed", async () => {
+    const { detail } = await setup();
+    await detail.reload();
+    expect(get(detail.view)).toBeNull();
+  });
 });
 
 describe("titles and copy messages", () => {

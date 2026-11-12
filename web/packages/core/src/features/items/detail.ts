@@ -34,6 +34,9 @@ export interface Detail {
   addStep(title: string): Promise<boolean>;
   // moveUp は、Step を直前の Step と入れ替える。先頭なら何もしない。
   moveUp(itemId: string): Promise<void>;
+  // reload は、開いているアイテムを読み直す(画面への反映)。開いていなければ何もしない。
+  // なくなっていたら、パネルを閉じる(06「反映で変わる画面」)。
+  reload(): Promise<void>;
 }
 
 export interface DetailDeps {
@@ -157,6 +160,10 @@ export function createDetail(deps: DetailDeps): Detail {
         return;
       }
       await saved(gen);
+    },
+    async reload() {
+      const v = get(view);
+      if (v) await load(v.store.id, v.item.id);
     },
   };
 }
