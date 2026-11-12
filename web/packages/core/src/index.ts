@@ -70,6 +70,13 @@ export {
   type ToastItem,
   type Toasts,
 } from "./features/toasts/toasts";
+export {
+  createWorkspaceDialog,
+  prefixPreviewHelp,
+  type WorkspaceDialog,
+  type WorkspaceDialogState,
+  type WorkspaceForm,
+} from "./features/workspaces/createDialog";
 export { prefixConfirm, prefixExamples, prefixHelp } from "./features/workspaces/general";
 export {
   addableTypes,
@@ -90,6 +97,11 @@ export {
   settingsTabs,
   type WorkspaceSettingsScreen,
 } from "./features/workspaces/settings";
+export {
+  canMoveWorkspace,
+  createWorkspaceMover,
+  type WorkspaceMover,
+} from "./features/workspaces/sidebarMenu";
 export {
   categoryLabels,
   colors,

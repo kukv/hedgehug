@@ -3,6 +3,7 @@
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
   import DetailPanel from "./screens/item/DetailPanel.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
+  import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
   import { catalog, itemDialog, links, screen, shell, system, toasts } from "./wire";
@@ -35,5 +36,6 @@
   <DetailPanel />
 </AppFrame>
 <CreateProjectDialog />
+<CreateWorkspaceDialog />
 <CreateItemDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

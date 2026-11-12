@@ -1,10 +1,16 @@
 <script lang="ts">
-  import { readOnlyNote, type StoreNode, type WorkspaceNode } from "@hedgehug/core";
+  import {
+    canMoveWorkspace,
+    get,
+    readOnlyNote,
+    routeOfWorkspace,
+    type StoreNode,
+    type WorkspaceNode,
+  } from "@hedgehug/core";
   import { IconButton, Menu } from "@hedgehug/ui";
-  import { projectDialog } from "../wire";
+  import { catalog, navigation, projectDialog, workspaceMover } from "../wire";
 
-  // サイドバーのワークスペースのメニュー(04「ワークスペースのメニュー」)。A2 は「プロジェクトを作成」だけを置き、
-  // ほかの項目はトラック B2 が足す(トラック B の計画の未決 1)。
+  // サイドバーのワークスペースのメニュー(04「ワークスペースのメニュー」)。「削除…」はトラック B5 が足す。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;
@@ -26,7 +32,16 @@
   function select(id: string) {
     open = false;
     if (id === "create-project") void projectDialog.open(workspace.id);
+    if (id === "settings") {
+      navigation.go(routeOfWorkspace(get(catalog.stores), store.id, workspace.id, "settings"));
+    }
+    if (id === "up" || id === "down") void workspaceMover.move(store.id, workspace.id, id);
   }
+
+  const move = (direction: "up" | "down") => ({
+    disabled: !canMoveWorkspace(store, workspace.id, direction),
+    hint: store.readOnly ? readOnlyNote : undefined,
+  });
 </script>
 
 <IconButton label="ワークスペースのメニュー" size="xs" onclick={show}>⋯</IconButton>
@@ -41,6 +56,9 @@
       disabled: store.readOnly,
       hint: store.readOnly ? readOnlyNote : undefined,
     },
+    { id: "settings", label: "設定を開く" },
+    { id: "up", label: "上へ移動", ...move("up") },
+    { id: "down", label: "下へ移動", ...move("down") },
   ]}
   onselect={select}
   onclose={() => (open = false)}

@@ -2,6 +2,7 @@
   import { projectCategory, type Resolved, type Route, type StoreNode } from "@hedgehug/core";
   import { StatusDot, StoreBadge } from "@hedgehug/ui";
   import type { Links } from "../links";
+  import StoreMenu from "./StoreMenu.svelte";
   import WorkspaceMenu from "./WorkspaceMenu.svelte";
 
   // サイドバーの Store ごとのブロック(04「Store ごとのブロック」)。
@@ -35,7 +36,9 @@
 </script>
 
 <section class="side-sec" aria-label={store.name}>
-  <div class="side-head"><StoreBadge name={store.name} color={store.color} /></div>
+  <div class="side-head">
+    <StoreBadge name={store.name} color={store.color} /><StoreMenu {store} />
+  </div>
   {#each store.workspaces as w (w.id)}
     <div class="ws-row">
       <button
@@ -90,6 +93,7 @@
   .side-head {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 0 4px 4px;
   }
   .ws-row {
