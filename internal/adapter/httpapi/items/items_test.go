@@ -56,6 +56,10 @@ func TestRefusals(t *testing.T) {
 	if res := api.Post("/api/stores/S1/items", map[string]any{"project": "x", "kind": "Saga", "title": "x"}); res.Code != http.StatusUnprocessableEntity {
 		t.Errorf("bad kind: %d", res.Code)
 	}
+	res = api.Post("/api/stores/S1/items", map[string]any{"project": "01OTHERPR00000000000000001", "parent": string(apptest.SampleEpic), "kind": "Task", "title": "画面"})
+	if res.Code != http.StatusUnprocessableEntity {
+		t.Errorf("parent elsewhere: %d %s", res.Code, res.Body)
+	}
 	if res := api.Get("/api/stores/S1/items/01NOPE00000000000000000000"); res.Code != http.StatusNotFound {
 		t.Errorf("unknown: %d", res.Code)
 	}

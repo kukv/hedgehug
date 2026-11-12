@@ -3,6 +3,7 @@ package items
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -84,6 +85,10 @@ func Register(api huma.API, svc appitems.Service) {
 				req.Parent = &p
 			}
 			it, err := svc.Create(ctx, req)
+			if errors.Is(err, appitems.ErrParentElsewhere) {
+				// 画面の親の候補は同じプロジェクトだけなので、呼び出しの誤り。仕様の文言はない
+				return nil, huma.Error422UnprocessableEntity(err.Error())
+			}
 			if err != nil {
 				return nil, apierr.From(err)
 			}

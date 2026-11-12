@@ -31,6 +31,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (project.Project, e
 	if err != nil {
 		return project.Project{}, err
 	}
+	if in.Status != "" && !project.ValidStatus(in.Status) {
+		return project.Project{}, fmt.Errorf("unknown project status %q", in.Status)
+	}
 	title := strings.TrimSpace(in.Title)
 	// 保存するタイトルは前後の空白だけを除く(02)。アクティビティの 1 行は 1 行でなければならないので、
 	// 改行を含む連続する空白を 1 つの空白にまとめて書く。

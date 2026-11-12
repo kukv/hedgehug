@@ -112,6 +112,13 @@ func TestCreateRefuses(t *testing.T) {
 	}
 }
 
+func TestCreateRefusesUnknownStatus(t *testing.T) {
+	svc := setup(t)
+	if _, err := svc.Create(t.Context(), projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "決済", Status: "Review"}); err == nil {
+		t.Error("an unknown status was accepted")
+	}
+}
+
 func TestCreateInUnknownWorkspace(t *testing.T) {
 	svc := setup(t)
 	_, err := svc.Create(t.Context(), projects.CreateInput{Store: store, Workspace: "01NOPE00000000000000000000", Title: "決済"})
