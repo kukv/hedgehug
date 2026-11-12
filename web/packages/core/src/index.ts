@@ -152,6 +152,15 @@ export {
   type WorkspaceMover,
 } from "./features/workspaces/sidebarMenu";
 export {
+  type ApplyMode,
+  type ApplyState,
+  applyTemplate,
+  defaultTemplate,
+  type StructureRow,
+  templateStructure,
+  usableTemplates,
+} from "./features/workspaces/templateApply";
+export {
   type ChildForm,
   childKinds,
   emptyTemplateForm,
