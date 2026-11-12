@@ -22,7 +22,7 @@
 |---|---|---|---|
 | 共通 | 1 | `feat/foundation-base` | すぐ |
 | Go | 2 → 3 → 4 → 5 → 6 → 7 → 8 | `feat/foundation-go-<タスク番号>` | Task 1 が develop に入ったら |
-| 画面 | 9 → 11 → 10 → 12 | `feat/foundation-web-<タスク番号>` | Task 1 が develop に入ったら。Task 10 は Task 8 が、Task 12 は Task 7・8 が develop に入ってから |
+| 画面 | 9 → 11 → 10 → 12 | `feat/foundation-web-<タスク番号>` | Task 1 が develop に入ったら。Task 10 は Task 8 が、Task 12 は Task 8 が develop に入ってから |
 
 - Go のラインが触るのは `internal/`・`cmd/`・`api/`・`go.mod`・`go.sum`・`web/embed.go`・`web/dist/.gitkeep`・`.github/workflows/ci-backend.yaml` だけ。画面のラインが触るのは `web/`(`embed.go` を除く)・`Makefile`・`.github/workflows/ci-frontend.yaml` だけ。Task 1 のあとは、2 つのラインが同じファイルを触らない。
 - 前のタスクの PR が develop に入る前に次のタスクを始めるときは、前のタスクのブランチから切り、前の PR が入ったら develop に rebase する。
@@ -66,8 +66,8 @@
 | 10 | 土台の API は `GET /api/system`(版を返す)の 1 つだけ。orval の生成と、トークン付きの呼び出しを通しで確かめるため | 機能の API は各トラック |
 | 11 | release(goreleaser)のワークフローは土台に入れない。最初に配る前に、ライセンスの書き出し(前回の `tools/licenses`)と一緒に足す | 配るものがまだない。前回の release はライセンスの書き出しに依存する |
 | 12 | 画面の幅の切り替えは、モックの 860px を、全体の枠のコンテナクエリで行う | 6 節「コンテナクエリ」。モックは画面の幅で切り替えている |
-| 14 | 土台を、共通(Task 1)・Go(Task 2〜8)・画面(Task 9〜12)の 3 つのラインに分け、Task 1 のあとは Go と画面を別のセッションで同時に進める | ユーザーの決定(2026-11-12)。設計書 8 節も合わせて直した |
 | 13 | e2e 用のビルド(`-tags e2e`)は、Stores に `apptest` の偽物とサンプルデータを差し込み、トークンを環境変数 `HEDGEHUG_TOKEN`、待ち受けを `HEDGEHUG_ADDR` で決める | 6 節「画面のテスト」 |
+| 14 | 土台を、共通(Task 1)・Go(Task 2〜8)・画面(Task 9〜12)の 3 つのラインに分け、Task 1 のあとは Go と画面を別のセッションで同時に進める | ユーザーの決定(2026-11-12)。設計書 8 節も合わせて直した |
 
 **ユーザーに伝える食い違い(土台では直さない):** 設計書 3 節は `MachineSettings` の実装を `infra/statedb` としているが、保存形式の設計「このマシンに持つもの」は、ログイン名・Store の一覧・アカウントを `config.yaml` に置き、`state.db` には置かない。トラック G の計画を書くときに、どちらに合わせるか決める。
 
