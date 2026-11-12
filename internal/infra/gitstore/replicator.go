@@ -45,7 +45,10 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 	if err != nil {
 		return port.SyncResult{}, err
 	}
-	s := syncRun{r: r, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash()}
+	s := syncRun{
+		r: r, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash(),
+		seen: parseSeen(remote.Seen), receiveOnly: remote.ReceiveOnly,
+	}
 	// 2 回目からの試みが失敗しても(断る理由のエラーでも、ErrSendConflict と同じく)、前の試みで作った
 	// 合わせたコミットはこのマシンに残る。それは受け取ったものを正しく合わせたもので、次の同期で続ける。
 	for range maxSendTries {
@@ -66,12 +69,22 @@ type syncRun struct {
 	link   link
 	branch plumbing.ReferenceName
 	start  plumbing.Hash
+
+	// seen は、前の同期で同じ remote から受け取った位置(ゼロなら確かめない)。receiveOnly なら送らない。
+	seen        plumbing.Hash
+	receiveOnly bool
 }
 
 // once は、受け取り・合わせる・送るを 1 回行う。送信が拒否されたら errRejected。
 func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 	theirs, err := s.link.fetch(ctx, s.repo, s.branch)
+	if errors.Is(err, port.ErrNoCommonHistory) && !s.seen.IsZero() {
+		return port.SyncResult{}, port.ErrRemoteRewritten // 前に受け取ったブランチが消えた(決定 C2-12)
+	}
 	if err != nil {
+		return port.SyncResult{}, err
+	}
+	if err := s.checkSeen(theirs); err != nil {
 		return port.SyncResult{}, err
 	}
 	if !theirs.IsZero() {
@@ -82,19 +95,33 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 			return port.SyncResult{}, err
 		}
 	}
+	if s.receiveOnly {
+		return s.result(theirs, theirs, false)
+	}
+	head, err := s.push(ctx, theirs)
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	return s.result(theirs, head, true)
+}
+
+// push は、自分の先端を remote へ送り、送った先端を返す。
+func (s syncRun) push(ctx context.Context, theirs plumbing.Hash) (plumbing.Hash, error) {
 	if s.r.beforeSend != nil {
 		if err := s.r.beforeSend(); err != nil {
-			return port.SyncResult{}, err
+			return plumbing.ZeroHash, err
 		}
 	}
 	head, err := s.repo.Head()
 	if err != nil {
-		return port.SyncResult{}, err
+		return plumbing.ZeroHash, err
 	}
 	if err := s.link.send(ctx, s.branch, theirs, head.Hash()); err != nil {
-		return port.SyncResult{}, err
+		return plumbing.ZeroHash, err
 	}
-	return s.result(theirs)
+	// 送ったので、remote の先端は自分の先端になった。未送信の数え方(Unsent)の基準を進める。
+	ref := plumbing.NewHashReference(plumbing.ReferenceName(remotePrefix+s.branch.Short()), head.Hash())
+	return head.Hash(), s.repo.Storer.SetReference(ref)
 }
 
 // integrate は、自分の先端に remote の先端 theirs を取り込む。
@@ -209,19 +236,26 @@ func (s syncRun) apply(wt *git.Worktree, ours plumbing.Hash, from, to tree, fini
 	return nil
 }
 
-// result は、送った保存(remote の先端 theirs になかったもの)と、受け取った保存(始めたときの自分になかったもの)を数える。
-func (s syncRun) result(theirs plumbing.Hash) (port.SyncResult, error) {
-	head, err := s.repo.Head()
-	if err != nil {
-		return port.SyncResult{}, err
+// result は、送った保存(remote の先端 theirs になかったもの)と、受け取った保存(始めたときの自分になかったもの)を
+// 数える。now は同期のあとに remote が持つ先端(Seen になる)。sent が false なら、送った数は 0。
+func (s syncRun) result(theirs, now plumbing.Hash, sent bool) (port.SyncResult, error) {
+	var res port.SyncResult
+	if !now.IsZero() {
+		res.Seen = now.String()
 	}
-	sent, err := countSaves(s.repo, head.Hash(), theirs)
-	if err != nil {
-		return port.SyncResult{}, err
+	if sent {
+		head, err := s.repo.Head()
+		if err != nil {
+			return port.SyncResult{}, err
+		}
+		if res.Sent, err = countSaves(s.repo, head.Hash(), theirs); err != nil {
+			return port.SyncResult{}, err
+		}
 	}
 	received, err := countSaves(s.repo, theirs, s.start)
 	if err != nil {
 		return port.SyncResult{}, err
 	}
-	return port.SyncResult{Sent: sent, Received: received}, nil
+	res.Received = received
+	return res, nil
 }
