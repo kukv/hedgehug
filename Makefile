@@ -43,4 +43,6 @@ check: tidy-check lint fmt-check test web-check
 # 画面を確かめる: Biome、型、単体テスト、依存の向き、大きさの上限(CI の web と同じ)。
 web-check:
 	cd web && pnpm install --frozen-lockfile
+	cd web && pnpm gen
+	git diff --exit-code -- web/packages/api/src/generated.ts
 	cd web && pnpm lint && pnpm check && pnpm test && pnpm deps && pnpm size
