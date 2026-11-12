@@ -68,8 +68,9 @@
 | 12 | 画面の幅の切り替えは、モックの 860px を、全体の枠のコンテナクエリで行う | 6 節「コンテナクエリ」。モックは画面の幅で切り替えている |
 | 13 | e2e 用のビルド(`-tags e2e`)は、Stores に `apptest` の偽物とサンプルデータを差し込み、トークンを環境変数 `HEDGEHUG_TOKEN`、待ち受けを `HEDGEHUG_ADDR` で決める | 6 節「画面のテスト」 |
 | 14 | 土台を、共通(Task 1)・Go(Task 2〜8)・画面(Task 9〜12)の 3 つのラインに分け、Task 1 のあとは Go と画面を別のセッションで同時に進める | ユーザーの決定(2026-11-12)。設計書 8 節も合わせて直した |
+| 15 | 新しく作る Store のブランチは `main`(Task 6 の `Create`) | ユーザーの決定(2026-11-12) |
 
-**ユーザーに伝える食い違い(土台では直さない):** 設計書 3 節は `MachineSettings` の実装を `infra/statedb` としているが、保存形式の設計「このマシンに持つもの」は、ログイン名・Store の一覧・アカウントを `config.yaml` に置き、`state.db` には置かない。トラック G の計画を書くときに、どちらに合わせるか決める。
+**決着した食い違い:** `MachineSettings`(ログイン名・同期のタイミング・Store の一覧・アカウント)は `config.yaml` 1 つに置き、実装は `infra/machineconfig`(2026-11-12 決定。設計書 3 節を直した)。
 
 ---
 
@@ -2938,6 +2939,9 @@ func TestCreateWritesStoreYAMLInOneCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 最初のコミットは保存ではないので Hedgehug-Op を持たない(保存形式「.hedgehug/store.yaml」)。
+	if head.Name() != "refs/heads/main" {
+		t.Errorf("branch = %s, want refs/heads/main", head.Name())
+	}
 	if c.Author.Name != "hedgehug[bot]" || c.Author.Email != "bot@hedgehug.invalid" || c.NumParents() != 0 || c.Message != "Store を作成\n" {
 		t.Errorf("commit = %+v", c)
 	}
@@ -3044,6 +3048,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -3074,7 +3079,10 @@ func Create(dir string, id port.StoreID, at time.Time) error {
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		return fmt.Errorf("create store in %s: the folder is not empty", dir)
 	}
-	repo, err := git.PlainInit(dir, false)
+	// ブランチは GitHub の既定に合わせて main にする(2026-11-12 決定)。
+	repo, err := git.PlainInitWithOptions(dir, &git.PlainInitOptions{
+		InitOptions: git.InitOptions{DefaultBranch: plumbing.NewBranchReferenceName("main")},
+	})
 	if err != nil {
 		return fmt.Errorf("create store: %w", err)
 	}
@@ -6807,5 +6815,4 @@ git commit -m "feat(web): 画面の全体の枠を組み立て、3 つの幅の�
 ## 土台のあと
 
 - 土台の最後の PR が develop に入ったら、トラック A・B・C・D の計画を書く(設計書 8 節。この計画の実装中に並べて書いてよい)。各計画の冒頭に、持ち場のフォルダと、待つトラックを書く。
-- トラック G の計画で、`MachineSettings` の置き場所(`config.yaml` か `state.db` か)を決める(この計画の冒頭の「ユーザーに伝える食い違い」)。
 - release のワークフローは、最初に配る前に、ライセンスの書き出しと一緒に足す(決定 11)。

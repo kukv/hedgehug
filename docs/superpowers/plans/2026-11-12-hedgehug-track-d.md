@@ -204,7 +204,8 @@ D の口と、口が使う domain の型と、`apptest` の偽物・照合テス
 | `gh_token_missing` | gh CLI のトークンが見つかりません。端末で `gh auth login` を実行してください |
 | `gh_timeout` | gh CLI から応答がありません。端末で `gh auth status` を確かめてください |
 | `env_missing` | 環境変数 GH_TOKEN が設定されていません |
-| `keychain_missing` | OS のキーチェーンにトークンが見つかりません |
+| `keychain_missing` | OS のキーチェーンに、サービス hedgehug・アカウント github.com/{Login} のトークンが見つかりません |
+| `keychain_unavailable` | このマシンでは OS のキーチェーンを使えません。gh CLI のトークンか環境変数を使ってください |
 | `forbidden` | (内部の種類。D3 以降で `repo_unreadable`・`app_not_installed`・`no_write` に分ける。分けずに残ったときは、Repo があれば `repo_unreadable`、なければ `unreachable` の文言) |
 
 {時刻} は、解除の時刻を分に切り上げ、このマシンの時刻帯で「HH:MM」にする。解除が `now` の翌日以降なら、前に日付と半角スペースを足す(今年なら「11/13 09:00」、ほかの年なら「2027/01/03 09:00」。01「日付と時刻」)。
@@ -355,7 +356,8 @@ func TestMessages(t *testing.T) {
 		{&ghcall.Failure{Kind: ghcall.GhTokenMissing}, "gh CLI のトークンが見つかりません。端末で `gh auth login` を実行してください"},
 		{&ghcall.Failure{Kind: ghcall.GhTimeout}, "gh CLI から応答がありません。端末で `gh auth status` を確かめてください"},
 		{&ghcall.Failure{Kind: ghcall.EnvMissing}, "環境変数 GH_TOKEN が設定されていません"},
-		{&ghcall.Failure{Kind: ghcall.KeychainMissing}, "OS のキーチェーンにトークンが見つかりません"},
+		{&ghcall.Failure{Kind: ghcall.KeychainMissing, Login: "taro"}, "OS のキーチェーンに、サービス hedgehug・アカウント github.com/taro のトークンが見つかりません"},
+		{&ghcall.Failure{Kind: ghcall.KeychainUnavailable}, "このマシンでは OS のキーチェーンを使えません。gh CLI のトークンか環境変数を使ってください"},
 		{&ghcall.Failure{Kind: ghcall.Forbidden, Repo: "org/web"}, "org/web を読めません。リポジトリの権限と、使うアカウントを確かめてください"},
 		{&ghcall.Failure{Kind: ghcall.Forbidden}, "GitHub に接続できません。接続を確かめて、もう一度お試しください"},
 	}
@@ -523,6 +525,8 @@ const (
 	GhTimeout       Kind = "gh_timeout"
 	EnvMissing      Kind = "env_missing"
 	KeychainMissing Kind = "keychain_missing"
+	// KeychainUnavailable は、このマシンに OS のキーチェーンがない(WSL など)。
+	KeychainUnavailable Kind = "keychain_unavailable"
 	// Forbidden は、403 で利用上限でないもの。リポジトリを読む操作で、RepoUnreadable・AppNotInstalled・
 	// NoWrite に分ける(D3 以降)。
 	Forbidden Kind = "forbidden"
@@ -532,7 +536,7 @@ const (
 type Failure struct {
 	Kind    Kind
 	Name    string    // アカウントの表示名(AuthError)
-	Login   string    // アカウントのログイン名(AuthError)、実際のログイン名(LoginMismatch)
+	Login   string    // アカウントのログイン名(AuthError・KeychainMissing)、実際のログイン名(LoginMismatch)
 	Repo    string    // owner/name
 	Org     string    // 組織名(AppNotInstalled)
 	Number  int       // PR・Issue の番号(NotFound)
@@ -600,6 +604,8 @@ func message(f *Failure, now time.Time) string {
 		return f.Repo + " を読めるアカウントがありません。設定の「Store」で GitHub に使うアカウントを選んでください"
 	case LoginMismatch:
 		return "このトークンは @" + f.Login + " のものです。ログイン名を直してください"
+	case KeychainMissing:
+		return "OS のキーチェーンに、サービス hedgehug・アカウント github.com/" + f.Login + " のトークンが見つかりません"
 	case Forbidden:
 		if f.Repo != "" {
 			return message(&Failure{Kind: RepoUnreadable, Repo: f.Repo}, now)
@@ -619,7 +625,7 @@ var fixedText = map[Kind]string{
 	GhTokenMissing:  "gh CLI のトークンが見つかりません。端末で `gh auth login` を実行してください",
 	GhTimeout:       "gh CLI から応答がありません。端末で `gh auth status` を確かめてください",
 	EnvMissing:      "環境変数 GH_TOKEN が設定されていません",
-	KeychainMissing: "OS のキーチェーンにトークンが見つかりません",
+	KeychainUnavailable: "このマシンでは OS のキーチェーンを使えません。gh CLI のトークンか環境変数を使ってください",
 }
 
 // rateLimited は 07 の利用上限の文言。時刻は分に切り上げ、翌日以降なら日付を前に足す(01「日付と時刻」)。
@@ -747,7 +753,7 @@ func (s *Secrets) Token(_ context.Context, a account.Account) (string, error) {
 	}
 	tok, ok := s.Tokens[a.Login]
 	if !ok {
-		return "", &ghcall.Failure{Kind: ghcall.KeychainMissing}
+		return "", &ghcall.Failure{Kind: ghcall.KeychainMissing, Login: a.Login}
 	}
 	return tok, nil
 }
@@ -1179,9 +1185,12 @@ import (
 type fakeKeyring map[string]string
 
 func (k fakeKeyring) Get(service, user string) (string, error) {
+	if k == nil {
+		return "", errors.New("no secret service on this machine")
+	}
 	v, ok := k[service+"|"+user]
 	if !ok {
-		return "", errors.New("secret not found in keyring")
+		return "", ErrNotFound
 	}
 	return v, nil
 }
@@ -1248,6 +1257,10 @@ func TestKeychainToken(t *testing.T) {
 	s.Keyring = fakeKeyring{}
 	if _, err := s.Token(context.Background(), acc(account.Keychain)); !ghcall.Is(err, ghcall.KeychainMissing) {
 		t.Errorf("absent: %v", err)
+	}
+	s.Keyring = fakeKeyring(nil)
+	if _, err := s.Token(context.Background(), acc(account.Keychain)); !ghcall.Is(err, ghcall.KeychainUnavailable) {
+		t.Errorf("no keychain: %v", err)
 	}
 }
 
@@ -1323,8 +1336,12 @@ func (s *Source) Token(ctx context.Context, a account.Account) (string, error) {
 		return "", &ghcall.Failure{Kind: ghcall.EnvMissing}
 	case account.Keychain:
 		v, err := s.Keyring.Get(Service, KeychainKey(a.Login))
-		if err != nil || strings.TrimSpace(v) == "" {
-			return "", &ghcall.Failure{Kind: ghcall.KeychainMissing}
+		switch {
+		case err != nil && !errors.Is(err, ErrNotFound):
+			// 見つからない以外の失敗は、キーチェーンそのものが使えない(WSL など。前回の実装と同じ扱い)。
+			return "", &ghcall.Failure{Kind: ghcall.KeychainUnavailable}
+		case err != nil || strings.TrimSpace(v) == "":
+			return "", &ghcall.Failure{Kind: ghcall.KeychainMissing, Login: a.Login}
 		}
 		return strings.TrimSpace(v), nil
 	}
@@ -1356,12 +1373,25 @@ func run(ctx context.Context, name string, args ...string) ([]byte, error) {
 ```go
 package secret
 
-import "github.com/zalando/go-keyring"
+import (
+	"errors"
+
+	"github.com/zalando/go-keyring"
+)
+
+// ErrNotFound は、キーチェーンに項目がないこと。ほかの失敗は、キーチェーンそのものが使えないこと。
+var ErrNotFound = errors.New("not in the keychain")
 
 // osKeyring は OS のキーチェーン(macOS のキーチェーン、Linux の Secret Service)。
 type osKeyring struct{}
 
-func (osKeyring) Get(service, user string) (string, error) { return keyring.Get(service, user) }
+func (osKeyring) Get(service, user string) (string, error) {
+	v, err := keyring.Get(service, user)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", ErrNotFound
+	}
+	return v, err
+}
 ```
 
 - [ ] **Step 5: テストが通ることを確かめる**
@@ -1705,7 +1735,7 @@ func TestAddAccountRefusesAndAddsNothing(t *testing.T) {
 		{"input", github.AddAccountInput{Name: "", Login: "taro", Method: account.GhCLI}, nil,
 			"表示名とログイン名を入力してください"},
 		{"no token", github.AddAccountInput{Name: "w", Login: "saburo", Method: account.Keychain}, nil,
-			"OS のキーチェーンにトークンが見つかりません"},
+			"OS のキーチェーンに、サービス hedgehug・アカウント github.com/saburo のトークンが見つかりません"},
 		{"token rejected", github.AddAccountInput{Name: "w", Login: "taro", Method: account.GhCLI},
 			func(f fixture) { f.gh.Users = map[string]string{} },
 			"トークンが GitHub に受け付けられませんでした。認証方法を確かめてください"},
@@ -2302,7 +2332,7 @@ PR の説明に、リポジトリの設定で secret `HEDGEHUG_LIVE_TOKEN`(読�
 
 ## D1 のあと
 
-- D2 の計画を、D1 が develop に入ってから書く。D2 の前に、未決の点 2・3 の答えが要る。
+- D2 の計画を、D1 が develop に入ってから書く(未決の点 1〜3 は決定済み)。
 - D1 の時点では、画面からアカウントを登録する入口はない(API だけ)。
 
 ---
@@ -2313,6 +2343,6 @@ PR の説明に、リポジトリの設定で secret `HEDGEHUG_LIVE_TOKEN`(読�
 
 | # | 点 | 推奨案 | 要る時期 |
 |---|---|---|---|
-| 1 | アカウントの一覧の置き場所。設計書 3 節は `MachineSettings` を `infra/statedb` に置き、保存形式の設計は `config.yaml` に置く(土台の計画で伝えた食い違い)。D は G より先にアカウントの一覧が要る | 保存形式の設計どおり `config.yaml`。D1 が `infra/machineconfig` を作り、G が同じパッケージに Store の一覧などを足す。設計書 3 節の `MachineSettings` の実装の欄を `infra/machineconfig` に直す | D1 の Task 4 の前 |
-| 2 | 「OS のキーチェーン」で、どこに置いたトークンを読むか。仕様に、利用者への伝え方の文言がない | 前回と同じ、サービス `hedgehug`・アカウント `github.com/{ログイン名}`。「アカウントを追加」で認証方法にキーチェーンを選んだとき、その場所を 1 行で添える(文言はユーザーが決める) | D2 の前(D1 は読む場所だけを使う) |
-| 3 | デバイスフローに使う GitHub App(client ID)。仕様は「hedgehug の GitHub App」を前提にするが、どの App か、client ID をどう持つかが決まっていない(前回は設定ファイルに書かせていた) | hedgehug 用の GitHub App を 1 つ作り、その client ID をビルドのときに `-ldflags` で埋め込む。e2e と開発では偽の GitHub を使う | D2 の前 |
+| 1 | アカウントの一覧の置き場所。設計書 3 節は `MachineSettings` を `infra/statedb` に置き、保存形式の設計は `config.yaml` に置く(土台の計画で伝えた食い違い)。D は G より先にアカウントの一覧が要る | **決定(2026-11-12): `config.yaml` 1 つ。** D1 が `infra/machineconfig` を作り、G が同じパッケージに Store の一覧などを足す。設計書 3 節は直した | 決定済み |
+| 2 | 「OS のキーチェーン」で、どこに置いたトークンを読むか。仕様に、利用者への伝え方の文言がない | **決定(2026-11-12): 前回の実装どおり。** サービス `hedgehug`・アカウント `github.com/{ログイン名}`。見つからないときの文言に場所を出し、キーチェーンのない環境では gh CLI か環境変数を案内する(仕様 07「認証の確認」に反映)。画面からキーチェーンへ入れる入口は持たない | 決定済み |
+| 3 | デバイスフローに使う GitHub App(client ID)。仕様は「hedgehug の GitHub App」を前提にするが、どの App か、client ID をどう持つかが決まっていない(前回は設定ファイルに書かせていた) | **決定(2026-11-12): 環境変数 `HEDGEHUG_GITHUB_CLIENT_ID` で渡し、組み込まない。** ないときは「アカウントを追加」で断る(仕様 07「デバイスフロー」に反映) | 決定済み |
