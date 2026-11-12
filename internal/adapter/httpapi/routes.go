@@ -8,13 +8,17 @@ import (
 
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
+	appmembers "github.com/kukv/hedgehug/internal/app/members"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
+	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
 )
 
@@ -24,6 +28,9 @@ type Deps struct {
 	Stores   port.Stores
 	IDs      port.IDs
 	Identity port.Identity
+
+	// トラック A2(Store の一覧。本物はトラック G)
+	StoreList port.StoreList
 
 	// トラック D(GitHub)
 	Accounts    port.Accounts
@@ -47,6 +54,8 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	api := humago.New(mux, cfg)
 
 	system.Register(api, deps.Version)
+	stores.Register(api, appstores.Service{Stores: deps.StoreList})
+	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})

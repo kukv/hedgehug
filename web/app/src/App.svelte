@@ -1,34 +1,39 @@
 <script lang="ts">
-  import { AppFrame, Brand, PageHead } from "@hedgehug/ui";
-  import { shell, system } from "./wire";
+  import { AppFrame, Toasts } from "@hedgehug/ui";
+  import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
+  import DetailPanel from "./screens/item/DetailPanel.svelte";
+  import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
+  import Screen from "./shell/Screen.svelte";
+  import Sidebar from "./shell/Sidebar.svelte";
+  import { catalog, itemDialog, links, screen, shell, system, toasts } from "./wire";
 
   const drawerOpen = shell.drawerOpen;
   const version = system.version;
+  const toastList = toasts.list;
+  const stores = catalog.stores;
+  const current = screen.current;
   system.load();
+
+  // C キーで作成ダイアログを開く。入力中とダイアログを開いているときは使えない(02「開き方と初期値」)。
+  function onkeydown(event: KeyboardEvent) {
+    if (event.key.toLowerCase() !== "c" || event.ctrlKey || event.metaKey || event.altKey) return;
+    const t = event.target as HTMLElement | null;
+    const typing = t?.closest("input, textarea, select, [contenteditable='true']");
+    if (typing || document.querySelector('[aria-modal="true"]')) return;
+    event.preventDefault();
+    void itemDialog.open();
+  }
 </script>
+
+<svelte:window {onkeydown} />
 
 <AppFrame drawerOpen={$drawerOpen} onclosedrawer={shell.closeDrawer}>
   {#snippet sidebar()}
-    <Brand />
+    <Sidebar stores={$stores} current={$current} {links} />
   {/snippet}
-  <PageHead title="hedgehug" ondrawer={shell.openDrawer} />
-  <div class="content">
-    {#if $version}
-      <p class="version">{$version}</p>
-    {/if}
-  </div>
+  <Screen current={$current} stores={$stores} version={$version} ondrawer={shell.openDrawer} />
+  <DetailPanel />
 </AppFrame>
-
-<style>
-  .content {
-    flex: 1;
-    overflow: auto;
-    padding: 16px 24px 40px;
-    min-height: 0;
-  }
-  .version {
-    color: var(--muted);
-    font-family: var(--font-mono);
-    margin: 0;
-  }
-</style>
+<CreateProjectDialog />
+<CreateItemDialog />
+<Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

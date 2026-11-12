@@ -27,12 +27,17 @@ type CreateInput struct {
 
 // Create は、アイテムを作る(02「作成したあと」)。
 func (s Service) Create(ctx context.Context, in CreateInput) (item.Item, error) {
+	return s.create(ctx, in, fmt.Sprintf("%s「%s」を作成", in.Kind, item.NormalizeTitle(in.Title)))
+}
+
+// create は、作成と Step の追加が共用する本体。summary はアクティビティの 1 行。
+func (s Service) create(ctx context.Context, in CreateInput, summary string) (item.Item, error) {
 	me, err := s.Identity.Me(ctx, in.Store)
 	if err != nil {
 		return item.Item{}, err
 	}
 	title := item.NormalizeTitle(in.Title)
-	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s「%s」を作成", in.Kind, title)}
+	op := port.Operation{Actor: change.User(me), Summary: summary}
 	var id item.ID
 	err = s.Stores.Write(ctx, in.Store, op, func(tx port.Tx) error {
 		created, err := s.build(tx, in, title, me)

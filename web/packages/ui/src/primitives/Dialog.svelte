@@ -15,7 +15,7 @@
   const titleId = $props.id();
 
   function onkeydown(event: KeyboardEvent) {
-    if (open && event.key === "Escape") onclose();
+    if (open && event.key === "Escape" && !event.isComposing) onclose();
   }
 
   // ダイアログの外(暗くした背景)を押したときだけ閉じる。
@@ -47,7 +47,8 @@
     position: fixed;
     inset: 0;
     background: var(--scrim);
-    z-index: 40;
+    /* サイドバーの引き出し(50)から開くダイアログもあるので、その上に重ねる。メニュー(60)より下。 */
+    z-index: 55;
     display: flex;
     align-items: flex-start;
     justify-content: center;

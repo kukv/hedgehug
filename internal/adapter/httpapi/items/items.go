@@ -77,6 +77,12 @@ type listInput struct {
 
 // Register は、アイテムの API を登録する。
 func Register(api huma.API, svc appitems.Service) {
+	registerCreateRead(api, svc)
+	registerEdit(api, svc)
+	registerNumbers(api, svc)
+}
+
+func registerCreateRead(api huma.API, svc appitems.Service) {
 	huma.Register(api, huma.Operation{OperationID: "create-item", Method: http.MethodPost, Path: "/api/stores/{store}/items", Summary: "アイテムを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
 			req := appitems.CreateInput{Store: port.StoreID(in.Store), Project: project.ID(in.Body.Project), Kind: item.Kind(in.Body.Kind), Title: in.Body.Title}

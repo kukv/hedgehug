@@ -30,6 +30,7 @@ func wire(context.Context) (httpapi.Deps, error) {
 		Stores:      stores,
 		IDs:         sysclock.IDs{},
 		Identity:    noIdentity{},
+		StoreList:   noStores{},
 		Accounts:    file.Accounts(),
 		Secrets:     secret.New(),
 		GitHub:      gh,
@@ -39,6 +40,11 @@ func wire(context.Context) (httpapi.Deps, error) {
 		Clock:       sysclock.Clock{},
 	}, nil
 }
+
+// noStores は、Store の一覧(トラック G)が入るまでの仮。表示する Store はない。
+type noStores struct{}
+
+func (noStores) List(context.Context) ([]port.StoreInfo, error) { return []port.StoreInfo{}, nil }
 
 // noIdentity は、「あなた」を決める仕組み(トラック G)が入るまでの仮。保存する操作は断る。
 type noIdentity struct{}
