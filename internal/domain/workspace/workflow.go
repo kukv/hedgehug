@@ -49,9 +49,9 @@ func (s Settings) Allowed(from change.ID) ([]change.ID, bool) {
 }
 
 // CheckTransition は、from から to への変更を遷移の制約で検査する(B3-2)。同じステータス、
-// from が空、制限のない行は通す。
+// from が空、from がいまの一覧にない(削除された値のまま。02「ステータスの変更」)、制限のない行は通す。
 func CheckTransition(s Settings, from, to change.ID) error {
-	if from == "" || from == to {
+	if from == "" || from == to || !hasValue(s.Statuses, from) {
 		return nil
 	}
 	allowed, restricted := s.Allowed(from)
