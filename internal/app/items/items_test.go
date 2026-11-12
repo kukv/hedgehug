@@ -124,12 +124,13 @@ func TestCreateWritesGivenValues(t *testing.T) {
 		Store: store, Project: apptest.SampleProject, Parent: &epic, Kind: item.Task, Title: "x",
 		Values: map[change.ID]json.RawMessage{
 			"status":   raw(`"` + string(apptest.SampleStatusInProgress) + `"`),
-			"assignee": raw(`"taro"`), "end": raw(`"2026-11-20"`), "estimate": raw(`"2"`),
+			"assignee": raw(`"taro"`), "start": raw(`"2026-11-18"`), "end": raw(`"2026-11-20"`),
+			"points": raw(`"3"`), "estimate": raw(`"2"`),
 			"systems": raw(`["` + string(apptest.SampleSystemWeb) + `"]`),
 		},
 	})
 	if err != nil || it.Status != apptest.SampleStatusInProgress || it.Assignee != "taro" ||
-		it.End != "2026-11-20" || it.Estimate == nil || *it.Estimate != 2 || len(it.Systems) != 1 {
+		it.Start != "2026-11-18" || it.End != "2026-11-20" || it.Points == nil || *it.Points != 3 || it.Estimate == nil || *it.Estimate != 2 || len(it.Systems) != 1 {
 		t.Errorf("Create = %+v, %v", it, err)
 	}
 }

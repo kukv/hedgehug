@@ -48,7 +48,7 @@ func CheckCreate(kind Kind, title string, projectChosen bool, parent *Kind) erro
 // ほかの値も ParseInput で読んで、ログに書く値にして返す。関連システムと複数選択は ID の配列のまま返す。
 // タイトル・プロジェクト・親の検査(CheckCreate)は、呼ぶ側が先に行う。
 func CheckInputs(st workspace.Settings, in map[change.ID]json.RawMessage) (map[change.ID]json.RawMessage, error) {
-	if err := CheckDates(text(in["start"]), text(in["end"])); err != nil {
+	if err := checkDateInputs(in); err != nil {
 		return nil, err
 	}
 	out := map[change.ID]json.RawMessage{}
@@ -71,6 +71,23 @@ func CheckInputs(st workspace.Settings, in map[change.ID]json.RawMessage) (map[c
 	return out, nil
 }
 
+// checkDateInputs は、開始日と終了日を読んでから(前後の空白は除く)順序を確かめる。入力のないほうは空として扱う。
+func checkDateInputs(in map[change.ID]json.RawMessage) error {
+	var start, end string
+	for id, dst := range map[change.ID]*string{"start": &start, "end": &end} {
+		v, ok := in[id]
+		if !ok {
+			continue
+		}
+		s, err := readText(v)
+		if err != nil {
+			return err
+		}
+		*dst = s
+	}
+	return CheckDates(start, end)
+}
+
 // parseCreateValue は、複数の値(関連システム・複数選択)を ID の配列で、ほかは ParseInput で読む。
 func parseCreateValue(p workspace.Property, v json.RawMessage, st workspace.Settings) (json.RawMessage, error) {
 	if p.Type != workspace.TypeSystems && p.Type != workspace.TypeMulti {
@@ -90,13 +107,6 @@ func parseCreateValue(p workspace.Property, v json.RawMessage, st workspace.Sett
 		}
 	}
 	return change.Value(ids), nil
-}
-
-// text は、入力の文字列。なし・null・文字列でない値は空(日付の検査は空を飛ばす)。
-func text(v json.RawMessage) string {
-	var s string
-	_ = json.Unmarshal(v, &s)
-	return s
 }
 
 // keysExcept は、in のキーのうち skip にないものを辞書順で返す(結果を決まった順にする)。

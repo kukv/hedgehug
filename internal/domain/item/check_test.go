@@ -88,3 +88,15 @@ func TestCheckInputsOrder(t *testing.T) {
 		t.Errorf("CheckInputs = %v, %v", got, err)
 	}
 }
+
+// 前後に空白のある日付も、読んだあとの値で比べる。逆転した範囲は保存しない。
+func TestCheckInputsTrimsDatesBeforeComparing(t *testing.T) {
+	st := workspace.DefaultSettings(seqIDs())
+	in := map[change.ID]json.RawMessage{"start": raw(`" 2026-11-12"`), "end": raw(`"2026-11-11 "`), "points": raw(`"-1"`)}
+	_, err := item.CheckInputs(st, in)
+	refusedWith(t, err, "終了日は開始日以降にしてください")
+	in["start"] = raw(`5`)
+	if _, err = item.CheckInputs(st, in); !errors.Is(err, item.ErrBadInput) {
+		t.Errorf("malformed start = %v", err)
+	}
+}
