@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Resolved, StoreNode } from "@hedgehug/core";
   import { PageHead } from "@hedgehug/ui";
+  import ProjectScreen from "../screens/project/ProjectScreen.svelte";
   import WorkspaceScreen from "../screens/workspace/WorkspaceScreen.svelte";
 
   // いまの画面を出す。画面が替わるたびに作り直すので、本文は先頭から出る(01「画面の移り方」)。
@@ -24,7 +25,14 @@
 </script>
 
 {#key current}
-  {#if store && workspace}
+  {#if current?.name === "project"}
+    <ProjectScreen
+      storeId={current.storeId}
+      projectId={current.projectId}
+      tab={current.tab}
+      {ondrawer}
+    />
+  {:else if store && workspace}
     <WorkspaceScreen {store} {workspace} {ondrawer} />
   {:else}
     <!-- ホーム。マイタスク(トラック E)が入ったら替える(A2 の計画の決定 6)。 -->

@@ -47,7 +47,8 @@
     position: fixed;
     inset: 0;
     background: var(--scrim);
-    z-index: 40;
+    /* サイドバーの引き出し(50)から開くダイアログもあるので、その上に重ねる。メニュー(60)より下。 */
+    z-index: 55;
     display: flex;
     align-items: flex-start;
     justify-content: center;

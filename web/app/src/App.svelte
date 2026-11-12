@@ -1,5 +1,6 @@
 <script lang="ts">
   import { AppFrame, Toasts } from "@hedgehug/ui";
+  import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
   import { catalog, links, screen, shell, system, toasts } from "./wire";
@@ -18,4 +19,5 @@
   {/snippet}
   <Screen current={$current} stores={$stores} version={$version} ondrawer={shell.openDrawer} />
 </AppFrame>
+<CreateProjectDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

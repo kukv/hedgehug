@@ -7,7 +7,21 @@ export {
   writableWorkspaces,
 } from "./features/catalog/catalog";
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
+export { formatDay } from "./features/dates/date";
 export { ancestorsOf, buildTree, compareSiblings, type TreeNode } from "./features/items/tree";
+export {
+  createProjectDialog,
+  type Option,
+  type ProjectDialog,
+  type ProjectDialogState,
+  type ProjectForm,
+} from "./features/projects/createDialog";
+export {
+  createProjectScreen,
+  ownerName,
+  type ProjectScreen,
+  type ProjectView,
+} from "./features/projects/screen";
 export {
   type ProjectCategory,
   projectCategory,

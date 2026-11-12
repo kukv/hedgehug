@@ -2,6 +2,8 @@
   interface Props {
     value?: string;
     label: string;
+    // type は、入力の種類。date は日付の入力欄(値は YYYY-MM-DD)。
+    type?: "text" | "date";
     placeholder?: string;
     size?: "md" | "sm";
     mono?: boolean;
@@ -10,8 +12,9 @@
     disabled?: boolean;
     title?: string;
     id?: string;
-    // autofocus は、出たときにフォーカスを置く(ダイアログのタイトルの欄など)。
-    autofocus?: boolean;
+    // focusOnMount は、出たときにフォーカスを置く(ダイアログのタイトルの欄など)。autofocus という名前は、
+    // 使う側のマークアップで Biome の a11y/noAutofocus に当たるので使わない。
+    focusOnMount?: boolean;
     onblur?: (event: FocusEvent) => void;
     onkeydown?: (event: KeyboardEvent) => void;
   }
@@ -19,6 +22,7 @@
   let {
     value = $bindable(""),
     label,
+    type = "text",
     placeholder,
     size = "md",
     mono = false,
@@ -26,7 +30,7 @@
     disabled = false,
     title,
     id,
-    autofocus = false,
+    focusOnMount = false,
     onblur,
     onkeydown,
   }: Props = $props();
@@ -35,7 +39,7 @@
 
   // autofocus 属性は a11y の警告になるので、出たときに focus を呼ぶ。
   $effect(() => {
-    if (autofocus) element?.focus();
+    if (focusOnMount) element?.focus();
   });
 </script>
 
@@ -45,6 +49,7 @@
   class:mono
   class:heading
   aria-label={label}
+  {type}
   {id}
   {placeholder}
   {disabled}

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { readOnlyBand, type StoreNode, type WorkspaceNode } from "@hedgehug/core";
-  import { PageHead, ReadOnlyBand, StoreBadge } from "@hedgehug/ui";
+  import { readOnlyBand, readOnlyNote, type StoreNode, type WorkspaceNode } from "@hedgehug/core";
+  import { Button, PageHead, ReadOnlyBand, StoreBadge } from "@hedgehug/ui";
+  import { projectDialog } from "../../wire";
 
   // ワークスペースの画面の見出しだけの枠(A2 の計画の持ち場)。タブの中身はトラック B・E・F が足す。
   interface Props {
@@ -16,6 +17,14 @@
   {#snippet crumbs()}
     <StoreBadge name={store.name} color={store.color} />
     <code class="prefix">{workspace.prefix}</code>
+  {/snippet}
+  {#snippet actions()}
+    <Button
+      disabled={store.readOnly}
+      title={store.readOnly ? readOnlyNote : undefined}
+      onclick={() => void projectDialog.open(workspace.id)}
+      >プロジェクト</Button
+    >
   {/snippet}
 </PageHead>
 <div class="content">

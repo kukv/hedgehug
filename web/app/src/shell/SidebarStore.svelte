@@ -2,6 +2,7 @@
   import { projectCategory, type Resolved, type Route, type StoreNode } from "@hedgehug/core";
   import { StatusDot, StoreBadge } from "@hedgehug/ui";
   import type { Links } from "../links";
+  import WorkspaceMenu from "./WorkspaceMenu.svelte";
 
   // サイドバーの Store ごとのブロック(04「Store ごとのブロック」)。
   interface Props {
@@ -52,6 +53,7 @@
         >{w.name}</a
       >
       <code class="prefix">{w.prefix}</code>
+      <WorkspaceMenu {store} workspace={w} />
     </div>
     {#if !collapsed.has(w.id)}
       {#each w.projects as p (p.id)}

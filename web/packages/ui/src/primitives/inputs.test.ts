@@ -8,7 +8,7 @@ describe("Input", () => {
     const onblur = vi.fn();
     const onkeydown = vi.fn();
     render(Input, {
-      props: { label: "タイトル", value: "認証", autofocus: true, onblur, onkeydown },
+      props: { label: "タイトル", value: "認証", focusOnMount: true, onblur, onkeydown },
     });
     const input = screen.getByRole("textbox", { name: "タイトル" });
     expect(input).toHaveValue("認証");
@@ -22,6 +22,13 @@ describe("Input", () => {
   it("does not take focus unless asked", () => {
     render(Input, { props: { label: "タイトル" } });
     expect(screen.getByRole("textbox", { name: "タイトル" })).not.toHaveFocus();
+  });
+
+  it("is a date field when asked", () => {
+    render(Input, { props: { label: "開始日", type: "date", value: "2026-11-13" } });
+    const input = screen.getByLabelText("開始日");
+    expect(input).toHaveAttribute("type", "date");
+    expect(input).toHaveValue("2026-11-13");
   });
 
   it("is disabled with the note", () => {

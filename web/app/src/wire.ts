@@ -1,6 +1,7 @@
 import {
   createCatalogPort,
   createItemsPort,
+  createProjectsPort,
   createSystemPort,
   rememberToken,
   setToken,
@@ -8,10 +9,14 @@ import {
 import {
   createCatalog,
   createNavigation,
+  createProjectDialog,
+  createProjectScreen,
   createScreen,
   createShell,
   createSystemInfo,
   createToasts,
+  get,
+  routeOfProject,
 } from "@hedgehug/core";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
@@ -33,7 +38,17 @@ export const toasts = createToasts({
 });
 
 const itemsPort = createItemsPort();
-export const catalog = createCatalog(createCatalogPort());
+const catalogPort = createCatalogPort();
+export const catalog = createCatalog(catalogPort);
+export const projectScreen = createProjectScreen(catalog, catalogPort, itemsPort);
+export const projectDialog = createProjectDialog({
+  catalog,
+  catalogPort,
+  projects: createProjectsPort(),
+  // 作ったら、そのプロジェクトの概要を開く。トーストは出さない(02「作成」)。
+  onCreated: (storeId, project) =>
+    navigation.go(routeOfProject(get(catalog.stores), storeId, project.id, "overview")),
+});
 export const screen = createScreen({
   navigation,
   catalog,
