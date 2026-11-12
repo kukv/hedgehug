@@ -102,3 +102,26 @@ func TestToggleSystems(t *testing.T) {
 		t.Errorf("RemoveValue = %+v, %v, %q", it, err, last(rec))
 	}
 }
+
+func TestCheckStep(t *testing.T) {
+	svc, rec := setupRec(t)
+	step, err := svc.AddStep(t.Context(), store, apptest.SampleTask, "確認")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetProperty(t.Context(), store, step.ID, "status", raw(`"`+string(apptest.SampleStatusInProgress)+`"`)); err != nil {
+		t.Fatal(err)
+	}
+	it, err := svc.CheckStep(t.Context(), store, step.ID, true)
+	if err != nil || it.Status != apptest.SampleStatusDone || last(rec) != "HH-3 のステータスを Done に変更" {
+		t.Fatalf("check = %+v, %v, %q", it, err, last(rec))
+	}
+	// 進行中から完了にして外すと、未着手の既定に戻る(02「Step のチェック」)。
+	it, err = svc.CheckStep(t.Context(), store, step.ID, false)
+	if err != nil || it.Status != apptest.SampleStatusTodo {
+		t.Errorf("uncheck = %+v, %v", it, err)
+	}
+	if _, err := svc.CheckStep(t.Context(), store, apptest.SampleTask, true); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("a Task is not a Step: %v", err)
+	}
+}

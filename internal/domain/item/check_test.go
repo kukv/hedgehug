@@ -1,11 +1,14 @@
 package item_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 func message(err error) string {
@@ -61,5 +64,27 @@ func TestCheckCreate(t *testing.T) {
 func TestPlaceMessageAtProjectRoot(t *testing.T) {
 	if got := item.PlaceMessage(item.Task, nil); got != "プロジェクトの直下には Epic だけを置けます" {
 		t.Errorf("PlaceMessage = %q", got)
+	}
+}
+
+// 検査は 02「入力の検査」の表の順。日付 → ポイント → 見積もり時間。
+func TestCheckInputsOrder(t *testing.T) {
+	st := workspace.DefaultSettings(seqIDs())
+	in := map[change.ID]json.RawMessage{
+		"start": raw(`"2026-11-11"`), "end": raw(`"2026-11-10"`),
+		"points": raw(`"-1"`), "estimate": raw(`"0.123"`),
+	}
+	_, err := item.CheckInputs(st, in)
+	refusedWith(t, err, "終了日は開始日以降にしてください")
+	in["end"] = raw(`"2026-11-12"`)
+	_, err = item.CheckInputs(st, in)
+	refusedWith(t, err, "ポイントは 0 以上の数で入力してください")
+	in["points"] = raw(`"1"`)
+	_, err = item.CheckInputs(st, in)
+	refusedWith(t, err, "見積もり時間は小数第 2 位までで入力してください")
+	in["estimate"] = raw(`"0.5"`)
+	got, err := item.CheckInputs(st, in)
+	if err != nil || string(got["estimate"]) != "0.5" || string(got["points"]) != "1" {
+		t.Errorf("CheckInputs = %v, %v", got, err)
 	}
 }

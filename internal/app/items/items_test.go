@@ -2,6 +2,7 @@ package items_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/items"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
@@ -104,5 +106,52 @@ func TestCreateWithParentInAnotherProject(t *testing.T) {
 func TestGetUnknown(t *testing.T) {
 	if _, err := setup(t).Get(t.Context(), store, "01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCreateUsesInitialStatusAndPriority(t *testing.T) {
+	svc, _ := setupRec(t)
+	it, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "新しい"})
+	if err != nil || it.Status != apptest.SampleStatusTodo || it.Priority != apptest.SamplePriorityMedium {
+		t.Errorf("Create = %+v, %v", it, err)
+	}
+}
+
+func TestCreateWritesGivenValues(t *testing.T) {
+	svc, _ := setupRec(t)
+	epic := apptest.SampleEpic
+	it, err := svc.Create(t.Context(), items.CreateInput{
+		Store: store, Project: apptest.SampleProject, Parent: &epic, Kind: item.Task, Title: "x",
+		Values: map[change.ID]json.RawMessage{
+			"status":   raw(`"` + string(apptest.SampleStatusInProgress) + `"`),
+			"assignee": raw(`"taro"`), "end": raw(`"2026-11-20"`), "estimate": raw(`"2"`),
+			"systems": raw(`["` + string(apptest.SampleSystemWeb) + `"]`),
+		},
+	})
+	if err != nil || it.Status != apptest.SampleStatusInProgress || it.Assignee != "taro" ||
+		it.End != "2026-11-20" || it.Estimate == nil || *it.Estimate != 2 || len(it.Systems) != 1 {
+		t.Errorf("Create = %+v, %v", it, err)
+	}
+}
+
+func TestCreateChecksValuesAfterTheParent(t *testing.T) {
+	svc, _ := setupRec(t)
+	_, err := svc.Create(t.Context(), items.CreateInput{
+		Store: store, Project: apptest.SampleProject, Kind: item.Task, Title: "x",
+		Values: map[change.ID]json.RawMessage{"points": raw(`"-1"`)},
+	})
+	if message(err) != "親になる Epic を選んでください" {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAddStepTakesTheParentsAssignee(t *testing.T) {
+	svc, _ := setupRec(t)
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "assignee", raw(`"taro"`)); err != nil {
+		t.Fatal(err)
+	}
+	st, err := svc.AddStep(t.Context(), store, apptest.SampleTask, "確認")
+	if err != nil || st.Assignee != "taro" || st.Status != apptest.SampleStatusTodo || st.Priority != apptest.SamplePriorityMedium {
+		t.Errorf("AddStep = %+v, %v", st, err)
 	}
 }

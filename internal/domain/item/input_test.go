@@ -12,6 +12,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
+func raw(s string) json.RawMessage { return json.RawMessage(s) }
+
 func seqIDs() func() change.ID {
 	n := 0
 	return func() change.ID { n++; return change.ID(fmt.Sprintf("01SEQ%021d", n)) }
