@@ -138,16 +138,21 @@ func TestPropertyNotFound(t *testing.T) {
 }
 
 // 追加プロパティを消すと、アイテムの値も消える(03「削除」)。
-// 値は AddValue(Task 5)がないので、ID を直接使ってアイテムに書く。Task 5 で AddValue を使う形に直す。
 func TestDeleteProperty(t *testing.T) {
 	s := setup(t)
 	w, _ := s.Create(t.Context(), store, "Web", "HH")
 	tags, _ := s.AddProperty(t.Context(), store, w.ID, workspaces.NewProperty{Name: "タグ", Key: "tags", Type: workspace.TypeMulti})
 	one, _ := s.AddProperty(t.Context(), store, w.ID, workspaces.NewProperty{Name: "顧客", Key: "customer", Type: workspace.TypeSingle})
+	a, _ := s.AddValue(t.Context(), store, w.ID, workspace.ParseList(string(tags.ID)), "A")
+	b, _ := s.AddValue(t.Context(), store, w.ID, workspace.ParseList(string(tags.ID)), "B")
+	c, _ := s.AddValue(t.Context(), store, w.ID, workspace.ParseList(string(one.ID)), "C")
 	id := putItem(t, s, w.ID,
-		change.NewAdd(item.FieldKey(tags.ID), change.ID("A")),
-		change.NewAdd(item.FieldKey(tags.ID), change.ID("B")),
-		change.NewSet(item.FieldKey(one.ID), nil, change.ID("C")))
+		change.NewAdd(item.FieldKey(tags.ID), a.ID),
+		change.NewAdd(item.FieldKey(tags.ID), b.ID),
+		change.NewSet(item.FieldKey(one.ID), nil, c.ID))
+	if it := itemOf(t, s, id); len(it.Choices[tags.ID]) != 2 || len(it.Choices[one.ID]) != 1 {
+		t.Fatalf("precondition: choices = %v", it.Choices)
+	}
 	for _, p := range []change.ID{tags.ID, one.ID} {
 		if err := s.DeleteProperty(t.Context(), store, w.ID, p); err != nil {
 			t.Fatal(err)
