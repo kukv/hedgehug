@@ -31,13 +31,24 @@ func TestCheckCreate(t *testing.T) {
 		{workspace.Workspace{ID: "N", Name: "web", Prefix: "WEB"}, ""},
 	}
 	for _, c := range cases {
-		err := workspace.CheckCreate(c.w, others)
-		var r *refusal.Refusal
-		switch {
-		case c.msg == "" && err != nil, c.msg != "" && (!errors.As(err, &r) || r.Message != c.msg):
-			t.Errorf("CheckCreate(%+v) = %v, want %q", c.w, err, c.msg)
-		}
+		t.Run(c.w.Name+"/"+c.w.Prefix, func(t *testing.T) {
+			if got := messageOf(workspace.CheckCreate(c.w, others)); got != c.msg {
+				t.Errorf("message = %q, want %q", got, c.msg)
+			}
+		})
 	}
+}
+
+// messageOf は、断りの文言を返す。断りでなければ err の文言、nil なら空文字。
+func messageOf(err error) string {
+	var r *refusal.Refusal
+	switch {
+	case err == nil:
+		return ""
+	case errors.As(err, &r):
+		return r.Message
+	}
+	return err.Error()
 }
 
 func TestTakenIgnoresSelf(t *testing.T) {
