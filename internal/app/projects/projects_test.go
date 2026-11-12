@@ -54,6 +54,19 @@ func TestCreateNumbersAndPlacesAtTheEnd(t *testing.T) {
 	}
 }
 
+// タイトルは前後の空白だけを除いて保存する(02)。途中の改行は残し、アクティビティの 1 行には空白にまとめて書く。
+func TestCreateKeepsNewlineInTitle(t *testing.T) {
+	svc := setup(t)
+	p, err := svc.Create(t.Context(), projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: " a\nb \r\n c "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Get(t.Context(), store, p.ID)
+	if err != nil || got.Title != "a\nb \r\n c" {
+		t.Errorf("Get = %+v, %v", got, err)
+	}
+}
+
 func TestCreateWritesOneSaveByMe(t *testing.T) {
 	svc := setup(t)
 	p, err := svc.Create(t.Context(), projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "決済"})
