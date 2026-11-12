@@ -8,6 +8,14 @@ export {
 } from "./features/catalog/catalog";
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
 export { formatDay } from "./features/dates/date";
+export { type CreateContext, childKindOf, type Here } from "./features/items/createDefaults";
+export {
+  createItemDialog,
+  type ItemDialog,
+  type ItemDialogState,
+  type ItemForm,
+  kinds,
+} from "./features/items/createDialog";
 export { ancestorsOf, buildTree, compareSiblings, type TreeNode } from "./features/items/tree";
 export {
   createProjectDialog,

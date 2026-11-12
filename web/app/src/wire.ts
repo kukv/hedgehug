@@ -8,6 +8,7 @@ import {
 } from "@hedgehug/api";
 import {
   createCatalog,
+  createItemDialog,
   createNavigation,
   createProjectDialog,
   createProjectScreen,
@@ -16,6 +17,7 @@ import {
   createSystemInfo,
   createToasts,
   get,
+  type Here,
   routeOfProject,
 } from "@hedgehug/core";
 import { browserHistory } from "./history";
@@ -55,6 +57,28 @@ export const screen = createScreen({
   items: itemsPort,
   // 詳細パネルは Task 10 で足す。それまでアイテムの入口は、プロジェクトのツリーを開くだけ。
   openItem: () => {},
+});
+
+// here は、作成ダイアログの初期値に使う、いま開いている画面のワークスペースとプロジェクト(02)。
+function here(): Here {
+  const c = get(screen.current);
+  if (c?.name === "workspace") return { workspaceId: c.workspaceId };
+  if (c?.name === "project") {
+    return {
+      workspaceId: catalog.project(c.storeId, c.projectId)?.workspaceId,
+      projectId: c.projectId,
+    };
+  }
+  return {};
+}
+
+export const itemDialog = createItemDialog({
+  catalog,
+  items: itemsPort,
+  toasts,
+  here,
+  openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),
+  onCreated: () => void projectScreen.reload(),
 });
 
 // 画面を移ったら、サイドバーのドロワーを閉じる(01「画面の移り方」)。

@@ -1,13 +1,20 @@
 <script lang="ts">
-  import { formatDay, itemDisplayId, ownerName, type ProjectView } from "@hedgehug/core";
-  import { KindIcon } from "@hedgehug/ui";
+  import {
+    formatDay,
+    itemDisplayId,
+    ownerName,
+    type ProjectView,
+    readOnlyNote,
+  } from "@hedgehug/core";
+  import { Button, KindIcon } from "@hedgehug/ui";
 
   // プロジェクトの「概要」のタブ。A2 では「Epic」の区画と、プロパティの表示だけ(A2 の計画の決定 16)。
   interface Props {
     view: ProjectView;
+    onaddepic: () => void;
   }
 
-  let { view }: Props = $props();
+  let { view, onaddepic }: Props = $props();
 
   const year = new Date().getFullYear();
   const p = $derived(view.project);
@@ -18,6 +25,15 @@
     <section class="card-sec" aria-label="Epic">
       <div class="sec-head">
         <h2>Epic</h2>
+        <span class="grow"></span>
+        <Button
+          size="sm"
+          disabled={view.store.readOnly}
+          title={view.store.readOnly ? readOnlyNote : undefined}
+          onclick={onaddepic}
+          ><span aria-hidden="true">+</span>
+          Epic を追加</Button
+        >
       </div>
       {#each view.epics as e (e.id)}
         <div class="list-row">
@@ -60,6 +76,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .grow {
+    flex: 1;
   }
   h2 {
     font-size: 14px;

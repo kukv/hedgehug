@@ -1,7 +1,13 @@
 <script lang="ts">
-  import { type ProjectTab, projectCategory, type Route, readOnlyBand } from "@hedgehug/core";
-  import { PageHead, ReadOnlyBand, StatusDot, StoreBadge, Tabs } from "@hedgehug/ui";
-  import { links, navigation, projectScreen } from "../../wire";
+  import {
+    type ProjectTab,
+    projectCategory,
+    type Route,
+    readOnlyBand,
+    readOnlyNote,
+  } from "@hedgehug/core";
+  import { Button, PageHead, ReadOnlyBand, StatusDot, StoreBadge, Tabs } from "@hedgehug/ui";
+  import { itemDialog, links, navigation, projectScreen } from "../../wire";
   import ProjectOverview from "./ProjectOverview.svelte";
   import ProjectTree from "./ProjectTree.svelte";
 
@@ -37,6 +43,15 @@
       tab: next,
     });
   }
+  // addEpic は、このプロジェクトを親にした Epic の作成ダイアログを開く(02「画面の見出しと構成」)。
+  function addEpic() {
+    if (!$view) return;
+    void itemDialog.open({
+      workspaceId: $view.workspace.id,
+      projectId: $view.project.id,
+      kind: "Epic",
+    });
+  }
 </script>
 
 {#if $view && $view.store.id === storeId && $view.project.id === projectId && wsRoute}
@@ -56,6 +71,14 @@
       <span class="status-pill">
         <StatusDot category={projectCategory(p.status)} label={p.status} />{p.status}
       </span>
+      <Button
+        variant="primary"
+        disabled={$view.store.readOnly}
+        title={$view.store.readOnly ? readOnlyNote : undefined}
+        onclick={addEpic}
+        ><span aria-hidden="true">+</span>
+        Epic</Button
+      >
     {/snippet}
   </PageHead>
   <Tabs {tabs} current={tab} onselect={select} />
@@ -66,7 +89,7 @@
     {#if tab === "tree"}
       <ProjectTree view={$view} />
     {:else}
-      <ProjectOverview view={$view} />
+      <ProjectOverview view={$view} onaddepic={addEpic} />
     {/if}
   </div>
 {/if}

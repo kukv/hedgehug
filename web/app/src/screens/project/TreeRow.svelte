@@ -1,6 +1,12 @@
 <script lang="ts">
-  import { itemDisplayId, type TreeNode } from "@hedgehug/core";
-  import { KindIcon } from "@hedgehug/ui";
+  import {
+    childKindOf,
+    type Item,
+    itemDisplayId,
+    readOnlyNote,
+    type TreeNode,
+  } from "@hedgehug/core";
+  import { IconButton, KindIcon } from "@hedgehug/ui";
   import Self from "./TreeRow.svelte";
 
   // ツリーの 1 行と、その下の行(04「ツリー」の「行」のうち、A2 の計画の決定 17 の分)。
@@ -9,13 +15,17 @@
     prefix: string;
     depth: number;
     collapsed: Set<string>;
+    readOnly: boolean;
     ontoggle: (id: string) => void;
+    // onadd は、行の「+」(その行を親にした作成ダイアログ)。
+    onadd: (parent: Item) => void;
   }
 
-  let { node, prefix, depth, collapsed, ontoggle }: Props = $props();
+  let { node, prefix, depth, collapsed, readOnly, ontoggle, onadd }: Props = $props();
 
   const it = $derived(node.item);
   const open = $derived(!collapsed.has(it.id));
+  const child = $derived(childKindOf(it.kind));
 </script>
 
 <li class="tree-row" style:--d={depth}>
@@ -36,10 +46,20 @@
   <KindIcon kind={it.kind} />
   <code class="id">{itemDisplayId(prefix, it.number)}</code>
   <span class="row-title">{it.title}</span>
+  {#if child}
+    <IconButton
+      label="{child} を追加"
+      size="xs"
+      disabled={readOnly}
+      title={readOnly ? readOnlyNote : undefined}
+      onclick={() => onadd(it)}
+      >+</IconButton
+    >
+  {/if}
 </li>
 {#if open}
   {#each node.children as c (c.item.id)}
-    <Self node={c} {prefix} depth={depth + 1} {collapsed} {ontoggle} />
+    <Self node={c} {prefix} depth={depth + 1} {collapsed} {readOnly} {ontoggle} {onadd} />
   {/each}
 {/if}
 
