@@ -159,9 +159,22 @@ export const syncNow = readonly(now);
 const onlineState = writable(isOnline());
 export const online = readonly(onlineState);
 
-// startSync は、出来事の受け取り・知らせ・時刻の更新を始める。最初の一覧を読んだあとに 1 回呼ぶ(つないだときの
-// 読み直しが最初の解決より先に走らないように)。
+// started は、startSync のあとか。つながり方の変化は、一覧を読み終える前でも帯に出すので、リスナーはモジュールを
+// 読んだときに付ける。知らせと反映は、startSync のあとだけ行う(つないだときの読み直しが最初の解決より先に走らないように)。
+let started = false;
+const network = () => {
+  onlineState.set(isOnline());
+  if (started) {
+    signals.check();
+    reflection.wake();
+  }
+};
+window.addEventListener("online", network);
+window.addEventListener("offline", network);
+
+// startSync は、出来事の受け取り・知らせ・時刻の更新を始める。最初の一覧を読んだあとに 1 回呼ぶ。
 function startSync() {
+  started = true;
   reflection.start();
   void sync.load();
   const recheck = () => {
@@ -173,12 +186,6 @@ function startSync() {
   document.addEventListener("visibilitychange", recheck);
   document.addEventListener("focusout", () => setTimeout(recheck, 0));
   document.addEventListener("focusin", () => signals.check());
-  const network = () => {
-    onlineState.set(isOnline());
-    recheck();
-  };
-  window.addEventListener("online", network);
-  window.addEventListener("offline", network);
 }
 
 // 一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID を解決できない)。

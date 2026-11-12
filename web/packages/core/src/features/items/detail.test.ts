@@ -125,6 +125,15 @@ describe("createDetail", () => {
     expect(get(detail.view)).toBeNull();
   });
 
+  it("reload does not bring back the old item while another is opening", async () => {
+    const { detail, task, s1 } = await setup();
+    await detail.open("S1", task.id);
+    const opening = detail.open("S1", s1.id);
+    await detail.reload();
+    await opening;
+    expect(get(detail.view)?.item.id).toBe(s1.id);
+  });
+
   it("reload does nothing when the panel is closed", async () => {
     const { detail } = await setup();
     await detail.reload();

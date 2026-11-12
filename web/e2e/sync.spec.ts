@@ -10,16 +10,6 @@ async function status(page: Page, body: unknown) {
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
-// gotoSynced は、同期の状態を読み終えるまで待つ。画面は一覧を読んだあとに online・offline の受け取りを始めるので、
-// その前に出来事を送ると取りこぼす。
-async function gotoSynced(page: Page) {
-  const loaded = page.waitForResponse(
-    (r) => r.url().endsWith("/api/sync") && r.request().method() === "GET",
-  );
-  await page.goto(tokenUrl());
-  await loaded;
-}
-
 // goOffline は、navigator.onLine を差し替えて offline の出来事を送る(setOffline は localhost も止める)。
 async function goOffline(page: Page) {
   await page.evaluate(() => {
@@ -171,7 +161,7 @@ test("offline shows the band, tells the server and refuses a manual sync", async
     sent.push(route.request().postDataJSON());
     await route.fulfill({ status: 204 });
   });
-  await gotoSynced(page);
+  await page.goto(tokenUrl());
   await goOffline(page);
   await expect(
     page.getByText(
@@ -210,11 +200,25 @@ test("the band follows the automatic sync setting", async ({ page }) => {
       },
     ],
   });
-  await gotoSynced(page);
+  await page.goto(tokenUrl());
   await goOffline(page);
   await expect(
     page.getByText("オフラインです。変更はこのマシンにコミットし、つながったら push します。"),
   ).toBeVisible();
+});
+
+test("a change in another tab shows within a few seconds", async ({ page, context }, info) => {
+  await page.goto(tokenUrl("/s/e2e/w/HH"));
+  const side = await sidebar(page, info);
+  const other = await context.newPage();
+  await other.goto(tokenUrl("/s/e2e/w/HH"));
+  const name = unique(info, "反映のプロジェクト");
+  await other.getByRole("button", { name: "プロジェクト", exact: true }).click();
+  const dialog = other.getByRole("dialog", { name: "プロジェクトを作成" });
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill(name);
+  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(side.getByRole("link", { name })).toBeVisible({ timeout: 3000 });
 });
 
 test("a held tab tells the server and waits to apply", async ({ page }) => {

@@ -60,10 +60,13 @@ export function createDetail(deps: DetailDeps): Detail {
   const view = writable<DetailView | null>(null);
   const full = writable(false);
   let latest = 0;
+  // target は、開いている(開こうとしている)アイテム。reload が、開いている途中の別のアイテムを古い表示で上書きしないために持つ。
+  let target: { storeId: string; itemId: string } | null = null;
 
   async function load(storeId: string, itemId: string) {
     latest += 1;
     const mine = latest;
+    target = { storeId, itemId };
     try {
       const item = await deps.items.get(storeId, itemId);
       const all = await deps.items.list(storeId, item.projectId);
@@ -111,6 +114,7 @@ export function createDetail(deps: DetailDeps): Detail {
     open: load,
     close() {
       latest += 1;
+      target = null;
       view.set(null);
       full.set(false);
     },
@@ -162,8 +166,7 @@ export function createDetail(deps: DetailDeps): Detail {
       await saved(gen);
     },
     async reload() {
-      const v = get(view);
-      if (v) await load(v.store.id, v.item.id);
+      if (target) await load(target.storeId, target.itemId);
     },
   };
 }
