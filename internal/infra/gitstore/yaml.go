@@ -46,9 +46,14 @@ type itemYAML struct {
 	Title     string      `yaml:"title"`
 	Created   createdYAML `yaml:"created,flow"`
 	Status    *yaml.Node  `yaml:"status"`
+	Assignee  *string     `yaml:"assignee"`
 	Priority  *yaml.Node  `yaml:"priority"`
+	Start     *string     `yaml:"start"`
+	End       *string     `yaml:"end"`
+	Points    *float64    `yaml:"points"`
 	Systems   *yaml.Node  `yaml:"systems"`
 	Fields    *yaml.Node  `yaml:"fields"`
+	Estimate  *float64    `yaml:"estimate"`
 	Watchers  []string    `yaml:"watchers,flow"`
 }
 
