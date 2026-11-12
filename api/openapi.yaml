@@ -243,6 +243,25 @@ components:
       required:
         - accounts
       type: object
+    Me:
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+      required:
+        - login
+      type: object
+    Member:
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+        name:
+          type: string
+      required:
+        - login
+        - name
+      type: object
     Project:
       additionalProperties: false
       properties:
@@ -356,6 +375,24 @@ components:
         - state
         - message
         - interval
+      type: object
+    StoreInfo:
+      additionalProperties: false
+      properties:
+        color:
+          description: 画面のトークン --t-<色> の名前
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        readOnly:
+          type: boolean
+      required:
+        - id
+        - name
+        - color
+        - readOnly
       type: object
     SystemInfo:
       additionalProperties: false
@@ -845,6 +882,26 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: サインインが許可されたかを GitHub に 1 回聞く
+  /api/stores:
+    get:
+      operationId: list-stores
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/StoreInfo"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 表示中の Store をサイドバーの並びで返す
   /api/stores/{store}/items:
     post:
       operationId: create-item
@@ -902,6 +959,55 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムを返す
+  /api/stores/{store}/me:
+    get:
+      operationId: get-me
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Store での「あなた」のログイン名を返す
+  /api/stores/{store}/members:
+    get:
+      operationId: list-members
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Member"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Store のメンバーを返す
   /api/stores/{store}/projects/{project}:
     get:
       operationId: get-project

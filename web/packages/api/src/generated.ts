@@ -175,6 +175,15 @@ export interface ListOutputBody {
   accounts: AccountRow[] | null;
 }
 
+export interface Me {
+  login: string;
+}
+
+export interface Member {
+  login: string;
+  name: string;
+}
+
 export type ProjectStatus = typeof ProjectStatus[keyof typeof ProjectStatus];
 
 
@@ -243,6 +252,14 @@ export interface SignInResult {
   interval: number;
   message: string;
   state: SignInResultState;
+}
+
+export interface StoreInfo {
+  /** 画面のトークン --t-<色> の名前 */
+  color: string;
+  id: string;
+  name: string;
+  readOnly: boolean;
 }
 
 export interface SystemInfo {
@@ -646,6 +663,30 @@ export const pollSignIn = async (id: string, options?: Parameters<typeof fetcher
 
 
 
+export const getListStoresUrl = () => {
+
+
+
+
+  return `/api/stores`
+}
+
+/**
+ * @summary 表示中の Store をサイドバーの並びで返す
+ */
+export const listStores = async ( options?: Parameters<typeof fetcher>[1]): Promise<StoreInfo[] | null> => {
+
+  return fetcher<StoreInfo[] | null>(getListStoresUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getCreateItemUrl = (store: string,) => {
 
 
@@ -701,6 +742,54 @@ export const getItem = async (store: string,
     item: string, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
 
   return fetcher<Item>(getGetItemUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getGetMeUrl = (store: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/me`
+}
+
+/**
+ * @summary Store での「あなた」のログイン名を返す
+ */
+export const getMe = async (store: string, options?: Parameters<typeof fetcher>[1]): Promise<Me> => {
+
+  return fetcher<Me>(getGetMeUrl(store),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListMembersUrl = (store: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/members`
+}
+
+/**
+ * @summary Store のメンバーを返す
+ */
+export const listMembers = async (store: string, options?: Parameters<typeof fetcher>[1]): Promise<Member[] | null> => {
+
+  return fetcher<Member[] | null>(getListMembersUrl(store),
   {
     ...options,
     method: 'GET'

@@ -15,8 +15,11 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 )
 
-// e2eStore は、e2e 用のビルドのサンプルデータを入れた Store の ID。
-const e2eStore = "01E2ESTORE0000000000000001"
+// e2e 用のビルドの Store の ID。どちらにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。
+const (
+	e2eStore      = "01E2ESTORE0000000000000001"
+	readonlyStore = "01E2ESTORE0000000000000002"
+)
 
 // wire は、Playwright の通しのテスト用に、口に apptest の偽物とサンプルデータを差し込む(設計書 6 節)。
 // トークンか待ち受けが空なら起動しない(空のトークンでは誰でも API を使え、空の待ち受けは全アドレスで待つため)。
@@ -30,14 +33,20 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	}
 	ids := apptest.NewIDs()
 	stores := apptest.NewStores(apptest.NewClock(time.Now()), ids)
-	stores.AddStore(e2eStore)
-	if err := apptest.Sample(ctx, stores, e2eStore); err != nil {
-		return httpapi.Deps{}, err
+	for _, id := range []port.StoreID{e2eStore, readonlyStore} {
+		stores.AddStore(id)
+		if err := apptest.Sample(ctx, stores, id); err != nil {
+			return httpapi.Deps{}, err
+		}
 	}
 	return httpapi.Deps{
-		Stores:      stores,
-		IDs:         ids,
-		Identity:    apptest.Identity{Login: "taro"},
+		Stores:   stores,
+		IDs:      ids,
+		Identity: apptest.Identity{Login: "taro"},
+		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
+			{ID: e2eStore, Name: "e2e", Color: "sky"},
+			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
+		}},
 		Accounts:    apptest.NewAccounts(),
 		Secrets:     &apptest.Secrets{Tokens: map[string]string{"taro": "e2e-gh-token"}},
 		GitHub:      &apptest.GitHub{Users: map[string]string{"e2e-gh-token": "taro"}},
