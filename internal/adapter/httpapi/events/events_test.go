@@ -67,17 +67,24 @@ func TestPublishWithoutListeners(t *testing.T) {
 	}
 }
 
-// 決定 C2-27: Close で、つないでいる流れを終える(サーバーをすぐ止められるように)。Close のあとにつないだ
-// 流れも、すぐ終わる。
-func TestCloseEndsStreams(t *testing.T) {
-	hub := events.NewHub()
-	mux := http.NewServeMux()
-	events.Register(humago.New(mux, huma.DefaultConfig("t", "0")), hub)
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
+// waitListeners は、つないでいる画面が want になるまで待つ。
+func waitListeners(t *testing.T, hub *events.Hub, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for hub.Listeners() != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("listeners = %d, want %d", hub.Listeners(), want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// drain は、url の流れを読み切るまでの結果を返す。ctx が切れたら、読みは止まる。
+func drain(ctx context.Context, url string) <-chan error {
 	ended := make(chan error, 1)
 	go func() {
-		res, err := http.Get(srv.URL + "/api/events") //nolint:noctx // テストの中だけ
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			ended <- err
 			return
@@ -86,28 +93,48 @@ func TestCloseEndsStreams(t *testing.T) {
 		_ = res.Body.Close()
 		ended <- err
 	}()
-	deadline := time.Now().Add(2 * time.Second)
-	for hub.Listeners() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("no listener")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	return ended
+}
+
+// 決定 C2-27: Close で、つないでいる流れを終える(サーバーをすぐ止められるように)。Close のあとにつないだ
+// 流れも、すぐ終わる。壊れたときはハングせずに失敗する。
+func TestCloseEndsStreams(t *testing.T) {
+	hub := events.NewHub()
+	mux := http.NewServeMux()
+	events.Register(humago.New(mux, huma.DefaultConfig("t", "0")), hub)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel) // srv.Close より先に、読みを止める
+	first := drain(ctx, srv.URL+"/api/events")
+	waitListeners(t, hub, 1)
 	hub.Close()
-	select {
-	case err := <-ended:
-		if err != nil {
-			t.Errorf("stream ended with %v", err)
+	for i, ended := range []<-chan error{first, nil} {
+		if i == 1 {
+			ended = drain(ctx, srv.URL+"/api/events")
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the stream did not end")
+		select {
+		case err := <-ended:
+			if err != nil {
+				t.Errorf("stream %d ended with %v", i, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("stream %d did not end", i)
+		}
 	}
-	res, err := http.Get(srv.URL + "/api/events") //nolint:noctx // テストの中だけ
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if _, err := io.Copy(io.Discard, res.Body); err != nil {
-		t.Errorf("after Close: %v", err)
-	}
+}
+
+// 画面が切れたら、数えるのをやめる。
+func TestDisconnectDropsListener(t *testing.T) {
+	hub := events.NewHub()
+	mux := http.NewServeMux()
+	events.Register(humago.New(mux, huma.DefaultConfig("t", "0")), hub)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	_ = drain(ctx, srv.URL+"/api/events")
+	waitListeners(t, hub, 1)
+	cancel()
+	waitListeners(t, hub, 0)
 }
