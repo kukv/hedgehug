@@ -2,7 +2,7 @@
 // 失敗は、断りなら Refused、ないものなら NotFound、それ以外はそのまま投げる。
 // 区画ごとのタスクが、自分のメソッドをここに足す。
 
-import type { Comment } from "../model/notes";
+import type { Comment, Worklog } from "../model/notes";
 
 // NoteTarget は、対象のアイテムかプロジェクト(内部 ID)。
 export interface NoteTarget {
@@ -28,4 +28,9 @@ export interface NotesPort {
   postComment(target: NoteTarget, body: string): Promise<Comment>;
   editComment(target: NoteTarget, commentId: string, body: string): Promise<Comment>;
   deleteComment(target: NoteTarget, commentId: string): Promise<void>;
+  // listWorklogs は、アイテムの作業時間の記録を古い順にすべて返す。
+  listWorklogs(storeId: string, itemId: string): Promise<Worklog[]>;
+  // addWorklog は、作業時間を記録する。hours は入力のままの文字列で、サーバーも検査する(断りは Refused)。
+  addWorklog(storeId: string, itemId: string, hours: string, memo: string): Promise<Worklog>;
+  deleteWorklog(storeId: string, itemId: string, worklogId: string): Promise<void>;
 }

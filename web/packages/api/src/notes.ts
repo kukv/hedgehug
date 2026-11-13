@@ -1,9 +1,12 @@
-import type { Comment, NotesPort } from "@hedgehug/core";
+import type { Comment, NotesPort, Worklog } from "@hedgehug/core";
 import { call } from "./errors";
 import {
   type Comment as ApiComment,
+  type Worklog as ApiWorklog,
+  addWorklog,
   deleteItemComment,
   deleteProjectComment,
+  deleteWorklog,
   describeItem,
   describeProject,
   editItemComment,
@@ -12,12 +15,17 @@ import {
   getProjectDescription,
   listItemComments,
   listProjectComments,
+  listWorklogs,
   postItemComment,
   postProjectComment,
 } from "./generated";
 
 function toComment(c: ApiComment): Comment {
   return { id: c.id, by: c.by, byName: c.byName, at: c.at, body: c.body, edited: c.edited };
+}
+
+function toWorklog(w: ApiWorklog): Worklog {
+  return { id: w.id, by: w.by, byName: w.byName, date: w.date, hours: w.hours, memo: w.memo };
 }
 
 // 説明・コメント・作業時間・関連・履歴の口の実装。区画ごとのタスクが、自分のメソッドをここに足す。
@@ -68,6 +76,14 @@ export function createNotesPort(): NotesPort {
       call(async () => {
         if (t.kind === "item") await deleteItemComment(t.storeId, t.id, commentId);
         else await deleteProjectComment(t.storeId, t.id, commentId);
+      }),
+    listWorklogs: (storeId, itemId) =>
+      call(async () => ((await listWorklogs(storeId, itemId)) ?? []).map(toWorklog)),
+    addWorklog: (storeId, itemId, hours, memo) =>
+      call(async () => toWorklog(await addWorklog(storeId, itemId, { hours, memo }))),
+    deleteWorklog: (storeId, itemId, worklogId) =>
+      call(async () => {
+        await deleteWorklog(storeId, itemId, worklogId);
       }),
   };
 }

@@ -116,3 +116,42 @@ describe("notes port: comments", () => {
     await expect(createNotesPort().listComments(item)).rejects.toBeInstanceOf(NotFound);
   });
 });
+
+describe("notes port: worklogs", () => {
+  const apiWorklog = {
+    id: "W1",
+    by: "hanako",
+    byName: "花子",
+    date: "2026-11-13",
+    hours: "1.25",
+    memo: "下書き",
+  };
+
+  it("lists the worklogs of an item, reading null as empty", async () => {
+    const fetch = respond(200, [apiWorklog]);
+    await expect(createNotesPort().listWorklogs("S1", "I1")).resolves.toEqual([apiWorklog]);
+    expect(call(fetch)[0]).toBe("/api/stores/S1/items/I1/worklogs");
+    respond(200, null);
+    await expect(createNotesPort().listWorklogs("S1", "I1")).resolves.toEqual([]);
+  });
+
+  it("adds with the hours as typed, and deletes", async () => {
+    const added = respond(200, apiWorklog);
+    await createNotesPort().addWorklog("S1", "I1", "1.25", "下書き");
+    expect(call(added)[1].method).toBe("POST");
+    expect(JSON.parse(String(call(added)[1].body))).toEqual({ hours: "1.25", memo: "下書き" });
+    const deleted = respond(204, undefined);
+    await expect(createNotesPort().deleteWorklog("S1", "I1", "W1")).resolves.toBeUndefined();
+    expect(call(deleted)[0]).toBe("/api/stores/S1/items/I1/worklogs/W1");
+    expect(call(deleted)[1].method).toBe("DELETE");
+  });
+
+  it("turns a 422 into Refused with the words of the spec", async () => {
+    respond(422, { title: "Unprocessable Entity", status: 422, detail: "時間を入力してください" });
+    const err = await createNotesPort()
+      .addWorklog("S1", "I1", "", "")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Refused);
+    expect((err as Refused).message).toBe("時間を入力してください");
+  });
+});

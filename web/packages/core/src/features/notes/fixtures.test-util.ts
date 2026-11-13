@@ -57,5 +57,14 @@ export function fakeNotesPort(initial: Record<string, string> = {}): FakeNotes {
     async deleteComment() {
       throw new Error("deleteComment is not faked");
     },
+    async listWorklogs() {
+      return [];
+    },
+    async addWorklog() {
+      throw new Error("addWorklog is not faked");
+    },
+    async deleteWorklog() {
+      throw new Error("deleteWorklog is not faked");
+    },
   };
 }
