@@ -211,8 +211,8 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
         createdBy: "taro",
       });
     },
-    async moveUp(_s, id) {
-      calls.push(`moveUp ${id}`);
+    async reorder(_s, id, anchorId, after) {
+      calls.push(`reorder ${id} ${after ? "after" : "before"} ${anchorId}`);
     },
     async nextNumber() {
       return next();

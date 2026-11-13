@@ -800,6 +800,20 @@ components:
       required:
         - name
       type: object
+    ReorderItem:
+      additionalProperties: false
+      properties:
+        after:
+          description: true なら基準の直後、false なら直前に置く
+          type: boolean
+        anchor:
+          description: 基準にする兄弟の内部 ID。絞り込み中は、見えている兄弟
+          minLength: 1
+          type: string
+      required:
+        - anchor
+        - after
+      type: object
     SaveItemAsTemplate:
       additionalProperties: false
       properties:
@@ -2326,30 +2340,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの履歴を新しい順で返す
-  /api/stores/{store}/items/{item}/move-up:
-    post:
-      operationId: move-item-up
-      parameters:
-        - in: path
-          name: store
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: item
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: アイテムを直前の兄弟と入れ替える
   /api/stores/{store}/items/{item}/properties/{property}:
     put:
       operationId: set-item-property
@@ -2595,6 +2585,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 関連を外す
+  /api/stores/{store}/items/{item}/reorder:
+    post:
+      operationId: reorder-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを、同じ親の兄弟の直前か直後に置く
   /api/stores/{store}/items/{item}/save-as-template:
     post:
       operationId: save-item-as-template

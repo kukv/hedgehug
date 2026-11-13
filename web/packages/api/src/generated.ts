@@ -527,6 +527,16 @@ export interface RenameWorkspaceValue {
   name: string;
 }
 
+export interface ReorderItem {
+  /** true なら基準の直後、false なら直前に置く */
+  after: boolean;
+  /**
+     * 基準にする兄弟の内部 ID。絞り込み中は、見えている兄弟
+     * @minLength 1
+     */
+  anchor: string;
+}
+
 export interface SaveItemAsTemplate {
   name: string;
   /** 子と Step を含める */
@@ -1807,32 +1817,6 @@ export const getItemHistory = async (store: string,
 
 
 
-export const getMoveItemUpUrl = (store: string,
-    item: string,) => {
-
-
-
-
-  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-up`
-}
-
-/**
- * @summary アイテムを直前の兄弟と入れ替える
- */
-export const moveItemUp = async (store: string,
-    item: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
-
-  return fetcher<void>(getMoveItemUpUrl(store,item),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
 export const getSetItemPropertyUrl = (store: string,
     item: string,
     property: string,) => {
@@ -2074,6 +2058,47 @@ return fetcher<void>(getRemoveRelationUrl(store,item),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(relationInput)
+  }
+);}
+
+
+
+export const getReorderItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/reorder`
+}
+
+/**
+ * @summary アイテムを、同じ親の兄弟の直前か直後に置く
+ */
+export const reorderItem = async (store: string,
+    item: string,
+    reorderItemBody: ReorderItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getReorderItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reorderItemBody)
   }
 );}
 

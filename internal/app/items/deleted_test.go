@@ -143,8 +143,8 @@ func TestStepsDoneDoesNotRunOnADeletedParent(t *testing.T) {
 	}
 }
 
-// 上へ移動は、削除済みの兄弟を飛ばす(A4b-5。MoveUp は Task 5 の Reorder に置き換わる)。
-func TestMoveUpSkipsDeletedSiblings(t *testing.T) {
+// 並べ替えは、削除済みの兄弟をいないものとして数える(A4b-5)。
+func TestReorderSkipsDeletedSiblings(t *testing.T) {
 	svc := setup(t)
 	ctx := t.Context()
 	in := items.CreateInput{Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: item.Task, Title: "画面"}
@@ -153,16 +153,19 @@ func TestMoveUpSkipsDeletedSiblings(t *testing.T) {
 	if err := apptest.DeleteItems(ctx, svc.Stores, store, mid.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.MoveUp(ctx, store, last.ID); err != nil {
+	if err := svc.Reorder(ctx, store, last.ID, apptest.SampleTask, false); err != nil {
 		t.Fatal(err)
 	}
 	moved := must(t)(svc.Get(ctx, store, last.ID))
 	first := must(t)(svc.Get(ctx, store, apptest.SampleTask))
-	if moved.Rank != "V" || first.Rank == "V" {
-		t.Errorf("moved = %q, HH-2 = %q; the last one must swap with HH-2, not with the deleted HH-3", moved.Rank, first.Rank)
+	if moved.Rank >= first.Rank {
+		t.Errorf("moved = %q, HH-2 = %q; the last one must come before HH-2", moved.Rank, first.Rank)
 	}
 	if n := len(records(t, svc.Stores, mid.ID)); n != 2 {
-		t.Errorf("the deleted sibling got %d rows, want 2 (create and delete)", n)
+		t.Errorf("the deleted sibling got %d rows, want 2 (create and delete; the rank is untouched)", n)
+	}
+	if err := svc.Reorder(ctx, store, last.ID, mid.ID, false); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("a deleted anchor: %v", err)
 	}
 }
 

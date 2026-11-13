@@ -9,10 +9,10 @@ import {
   findItemByNumber,
   getItem,
   listProjectItems,
-  moveItemUp,
   nextItemNumber,
   removeItemValue,
   renameItem,
+  reorderItem,
   setItemProperty,
 } from "./generated";
 
@@ -84,9 +84,9 @@ export function createItemsPort(): ItemsPort {
       ),
     checkStep: (storeId, itemId, done) =>
       call(async () => toItem(storeId, await checkStep(storeId, itemId, { done }))),
-    moveUp: (storeId, itemId) =>
+    reorder: (storeId, itemId, anchorId, after) =>
       call(async () => {
-        await moveItemUp(storeId, itemId);
+        await reorderItem(storeId, itemId, { anchor: anchorId, after });
       }),
     nextNumber: (storeId, workspaceId) =>
       call(async () => (await nextItemNumber(storeId, workspaceId)).number),

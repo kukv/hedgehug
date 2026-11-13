@@ -43,7 +43,7 @@ export interface Detail {
   rename(title: string): Promise<boolean>;
   // addStep は、Step を末尾に作る。true なら、入力欄を空にする。
   addStep(title: string): Promise<boolean>;
-  // moveUp は、Step を直前の Step と入れ替える。先頭なら何もしない。
+  // moveUp は、Step を直前の Step の直前に置く(並びは入れ替えと同じ)。先頭なら何もしない。
   moveUp(itemId: string): Promise<void>;
   // setProperty は、プロパティの値を 1 つ保存する。false なら、入力欄を保存済みの値に戻す。
   // itemId が開いているアイテムでもその子でもなければ、保存せずに false。
@@ -217,9 +217,12 @@ export function createDetail(deps: DetailDeps): Detail {
     },
     async moveUp(itemId) {
       const v = get(view);
-      if (!v || v.children[0]?.id === itemId) return;
+      if (!v) return;
+      // 直前の子の直前に置く。先頭と、子でないものは何もしない。
+      const prev = v.children[v.children.findIndex((c) => c.id === itemId) - 1];
+      if (!prev) return;
       try {
-        await deps.items.moveUp(v.store.id, itemId);
+        await deps.items.reorder(v.store.id, itemId, prev.id, false);
       } catch (e) {
         refusedToast(e);
         return;

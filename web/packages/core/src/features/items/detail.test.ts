@@ -86,12 +86,13 @@ describe("createDetail", () => {
     expect(get(detail.view)?.children.map((c) => c.title)).toContain("確認");
   });
 
-  it("moves a Step up, doing nothing for the first", async () => {
+  it("moves a Step up by putting it before the previous Step, doing nothing for the first", async () => {
     const { detail, items, task, s1, s2 } = await setup();
     await detail.open("S1", task.id);
-    await detail.moveUp(s2.id);
+    await detail.moveUp(s2.id); // 先頭の Step
     await detail.moveUp(s1.id);
-    expect(items.calls).toEqual([`moveUp ${s1.id}`]);
+    await detail.moveUp("not-a-child");
+    expect(items.calls).toEqual([`reorder ${s1.id} before ${s2.id}`]);
   });
 
   it("loads settings, members and property rows with the item", async () => {
