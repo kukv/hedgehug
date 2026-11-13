@@ -153,8 +153,20 @@ test("取り直しの失敗の文言が、開き直しても残り、次の成�
   await expect(await link(page, github, "PR", repo, "8")).toBeHidden();
   const failed = `状態を更新できませんでした: ${repo}#8 が見つかりません`;
   await gh(page, { repo, number: "8", gone: "1" });
+  // 画面は github の知らせで一覧(GET …/links)を読み直す。その URL で、あとから置いた文言を確かめる
+  const listed = page.waitForResponse(
+    (r) =>
+      r.request().method() === "GET" && /\/items\/[^/]+\/links$/.test(new URL(r.url()).pathname),
+  );
   await githubRead(page.request);
+  const listPath = new URL((await listed).url()).pathname;
   await expect(github.getByRole("alert")).toHaveText(failed);
+  // 開き直すと取り直しも走るので、その前に、取り直さない一覧の API で、文言がこのマシンに置かれたことを確かめる
+  const res = await page.request.get(listPath, {
+    headers: { Authorization: "Bearer e2e-token" },
+  });
+  expect(res.status()).toBe(200);
+  expect((await res.json()).map((r: { error: string }) => r.error)).toEqual([failed]);
   await page.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
   const section = page
     .getByRole("region", { name: "詳細パネル" })
