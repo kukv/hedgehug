@@ -57,6 +57,20 @@ func (r transfers) List() ([]transfer.Record, error) {
 	return append(slices.Clone(r.v.baseTransfers), r.v.transfers...), nil
 }
 
+type transferWriter struct{ t *tx }
+
+func (w transferWriter) Append(r transfer.Record) error {
+	if err := port.CheckTransfer(r); err != nil {
+		return err
+	}
+	if r.At.IsZero() {
+		r.At = w.t.meta.At
+	}
+	r.ID, r.Op, r.By = w.t.ids.New(), w.t.meta.Op, w.t.meta.Actor.By()
+	w.t.transfers = append(w.t.transfers, r)
+	return nil
+}
+
 type purged struct{ v *view }
 
 func (r purged) List() ([]port.Purged, error) { return slices.Clone(r.v.purged), nil }

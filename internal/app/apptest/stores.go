@@ -285,17 +285,3 @@ func (w itemWriter) Remove(id item.ID) error {
 	w.t.removed[ref] = true
 	return nil
 }
-
-type transferWriter struct{ t *tx }
-
-func (w transferWriter) Append(r transfer.Record) error {
-	if err := port.CheckTransfer(r); err != nil {
-		return err
-	}
-	if r.At.IsZero() {
-		r.At = w.t.meta.At
-	}
-	r.ID, r.Op, r.By = w.t.ids.New(), w.t.meta.Op, w.t.meta.Actor.By()
-	w.t.transfers = append(w.t.transfers, r)
-	return nil
-}
