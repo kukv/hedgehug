@@ -11,7 +11,8 @@ import (
 )
 
 // editProperty は、プロパティ id に当てる 1 回の変更。ない ID と、op が使えないプロパティ(allow が偽)は ErrNotFound。
-// 別の画面で削除されたプロパティなら、削除を取り消して変更を残す(editAt)。text は読んだ設定のプロパティからアクティビティの文を作り、rows は書く Tx の中のプロパティから行を作る。
+// 別の画面で削除されたプロパティなら、削除を取り消して変更を残す(editAt)。
+// text は読んだ設定のプロパティからアクティビティの文を作り、rows は書く Tx の中のプロパティから行を作る。
 func (s Service) editProperty(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID,
 	allow func(workspace.Property) bool,
 	text func(workspace.Property) string,

@@ -53,7 +53,7 @@ func writeReviving(ctx context.Context, tx port.Tx, ws workspace.ID,
 	targets func([]change.Record) []string,
 	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
 ) error {
-	fs, revived, err := reviveTargets(ctx, tx, ws, targets)
+	revived, err := reviveTargets(ctx, tx, ws, targets)
 	if err != nil {
 		return err
 	}
@@ -65,14 +65,14 @@ func writeReviving(ctx context.Context, tx port.Tx, ws workspace.ID,
 	if err != nil {
 		return err
 	}
-	if revived && len(ds) == 0 {
+	if len(revived) > 0 && len(ds) == 0 {
 		return port.ErrNotFound
 	}
 	if err := tx.WriteWorkspaces().Append(ws, ds...); err != nil {
 		return err
 	}
-	if revived {
-		return checkRevivedNames(tx, ws, fs)
+	if len(revived) > 0 {
+		return checkRevivedNames(tx, ws, revived)
 	}
 	return nil
 }
@@ -94,28 +94,29 @@ func settingsReviving(r port.Reader, ws workspace.ID, targets func([]change.Reco
 }
 
 // reviveTargets は、tx の中で読んだログから targets の項目名を作り、そのそれぞれに port.ReviveSetting を呼ぶ。
-// その項目名と、取り消したものがあったかを返す。
-func reviveTargets(ctx context.Context, tx port.Tx, ws workspace.ID, targets func([]change.Record) []string) ([]string, bool, error) {
+// 削除を取り消した項目名を返す。
+func reviveTargets(ctx context.Context, tx port.Tx, ws workspace.ID, targets func([]change.Record) []string) ([]string, error) {
 	if targets == nil {
-		return nil, false, nil
+		return nil, nil
 	}
 	log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	fs := targets(log)
-	revived := false
-	for _, f := range fs {
+	var revived []string
+	for _, f := range targets(log) {
 		ok, err := port.ReviveSetting(ctx, tx, ws, f)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		revived = revived || ok
+		if ok {
+			revived = append(revived, f)
+		}
 	}
-	return fs, revived, nil
+	return revived, nil
 }
 
-// checkRevivedNames は、行を書いたあとの設定で、取り消した fs のそれぞれの名前が重ならないかを確かめる(決定 R4)。
+// checkRevivedNames は、行を書いたあとの設定で、削除を取り消した fs のそれぞれの名前が重ならないかを確かめる(決定 R4)。
 func checkRevivedNames(tx port.Tx, ws workspace.ID, fs []string) error {
 	st, err := tx.Workspaces().Settings(ws)
 	if err != nil {

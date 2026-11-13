@@ -87,35 +87,35 @@ func TestChangeDeletedValueRevives(t *testing.T) {
 	}
 	tests := []struct {
 		name     string
-		list     func(s workspaces.Service, ws workspace.ID) workspace.List
+		list     func(t *testing.T, s workspaces.Service, ws workspace.ID) workspace.List
 		value    string // 足して削除する値の名前
 		change   valueOp
-		want     func(v workspace.Value) bool
+		want     func(vs []workspace.Value, v workspace.Value) bool
 		wantName string // 設定に戻った値の名前
 	}{
 		{"status name", fixed(statuses), "Review", rename, nil, "Reviewing"},
-		{"status color", fixed(statuses), "Review", color("red"), func(v workspace.Value) bool { return v.Color == "red" }, "Review"},
+		{"status color", fixed(statuses), "Review", color("red"), func(_ []workspace.Value, v workspace.Value) bool { return v.Color == "red" }, "Review"},
 		{
 			"status move", fixed(statuses), "Review",
 			func(ctx context.Context, s workspaces.Service, ws workspace.ID, l workspace.List, id change.ID) error {
 				return s.MoveValue(ctx, store, ws, l, id, true)
-			}, nil, "Review",
+			}, secondToLast, "Review",
 		},
 		{
 			"status category", fixed(statuses), "Review",
 			func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.List, id change.ID) error {
 				return s.SetStatusCategory(ctx, store, ws, id, workspace.CategoryDoing)
-			}, func(v workspace.Value) bool { return v.Category == workspace.CategoryDoing }, "Review",
+			}, func(_ []workspace.Value, v workspace.Value) bool { return v.Category == workspace.CategoryDoing }, "Review",
 		},
-		{"priority color", fixed(priorities), "Urgent", color("red"), func(v workspace.Value) bool { return v.Color == "red" }, "Urgent"},
+		{"priority color", fixed(priorities), "Urgent", color("red"), func(_ []workspace.Value, v workspace.Value) bool { return v.Color == "red" }, "Urgent"},
 		{"system name", fixed(systems), "Review", rename, nil, "Reviewing"},
-		{"choice color", choiceList, "A", color("red"), func(v workspace.Value) bool { return v.Color == "red" }, "A"},
+		{"choice color", choiceList, "A", color("red"), func(_ []workspace.Value, v workspace.Value) bool { return v.Color == "red" }, "A"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := setup(t)
 			w, _ := s.Create(t.Context(), store, "Web", "HH")
-			l := tt.list(s, w.ID)
+			l := tt.list(t, s, w.ID)
 			v := addValue(t, s, w.ID, l, tt.value)
 			deleteValue(t, s, w.ID, l, v.ID)
 			ctx := port.WithRevived(t.Context())
@@ -123,8 +123,9 @@ func TestChangeDeletedValueRevives(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, ok := valueIn(t, s, w.ID, l, v.ID)
-			if !ok || got.Name != tt.wantName || (tt.want != nil && !tt.want(got)) {
-				t.Errorf("value = %+v, %v", got, ok)
+			vs, _ := settingsOf(t, s, w.ID).Values(l)
+			if !ok || got.Name != tt.wantName || (tt.want != nil && !tt.want(vs, got)) {
+				t.Errorf("value = %+v, %v; list = %+v", got, ok, vs)
 			}
 			if want := []port.Revival{{Kind: port.RevivedName, Text: tt.value}}; !slices.Equal(port.Revived(ctx), want) {
 				t.Errorf("Revived = %v, want %v", port.Revived(ctx), want)
@@ -133,15 +134,21 @@ func TestChangeDeletedValueRevives(t *testing.T) {
 	}
 }
 
-func fixed(l workspace.List) func(workspaces.Service, workspace.ID) workspace.List {
-	return func(workspaces.Service, workspace.ID) workspace.List { return l }
+func fixed(l workspace.List) func(*testing.T, workspaces.Service, workspace.ID) workspace.List {
+	return func(*testing.T, workspaces.Service, workspace.ID) workspace.List { return l }
+}
+
+// secondToLast は、末尾に足した値が 1 つ上へ動き(隣と rank を入れ替え)、末尾から 2 番目にあるか。
+func secondToLast(vs []workspace.Value, v workspace.Value) bool {
+	return len(vs) >= 2 && vs[len(vs)-2].ID == v.ID
 }
 
 // choiceList は、ws に単一選択のプロパティを足し、その選択肢の一覧を返す。
-func choiceList(s workspaces.Service, ws workspace.ID) workspace.List {
-	p, err := s.AddProperty(context.Background(), store, ws, workspaces.NewProperty{Name: "顧客", Key: "customer", Type: workspace.TypeSingle})
+func choiceList(t *testing.T, s workspaces.Service, ws workspace.ID) workspace.List {
+	t.Helper()
+	p, err := s.AddProperty(t.Context(), store, ws, workspaces.NewProperty{Name: "顧客", Key: "customer", Type: workspace.TypeSingle})
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return workspace.List{Kind: workspace.ListChoices, Property: p.ID}
 }
@@ -202,17 +209,20 @@ func TestChangeDeletedPropertyRevives(t *testing.T) {
 	tests := []struct {
 		name   string
 		change func(ctx context.Context, s workspaces.Service, ws workspace.ID, id change.ID) error
-		want   func(p workspace.Property) bool
+		want   func(st workspace.Settings, p workspace.Property) bool
 	}{
 		{"name", func(ctx context.Context, s workspaces.Service, ws workspace.ID, id change.ID) error {
 			return s.RenameProperty(ctx, store, ws, id, "備考")
-		}, func(p workspace.Property) bool { return p.Name == "備考" }},
+		}, func(_ workspace.Settings, p workspace.Property) bool { return p.Name == "備考" }},
 		{"kinds", func(ctx context.Context, s workspaces.Service, ws workspace.ID, id change.ID) error {
 			return s.SetPropertyKinds(ctx, store, ws, id, []string{"Task"})
-		}, func(p workspace.Property) bool { return slices.Equal(p.Kinds, []string{"Task"}) }},
+		}, func(_ workspace.Settings, p workspace.Property) bool { return slices.Equal(p.Kinds, []string{"Task"}) }},
 		{"move", func(ctx context.Context, s workspaces.Service, ws workspace.ID, id change.ID) error {
 			return s.MoveProperty(ctx, store, ws, id, true)
-		}, func(p workspace.Property) bool { return p.Name == "メモ" }},
+		}, func(st workspace.Settings, p workspace.Property) bool {
+			// 末尾に足したプロパティが 1 つ上へ動き(隣と rank を入れ替え)、末尾から 2 番目にある
+			return len(st.Properties) >= 2 && st.Properties[len(st.Properties)-2].ID == p.ID
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -221,8 +231,9 @@ func TestChangeDeletedPropertyRevives(t *testing.T) {
 			if err := tt.change(ctx, s, w.ID, memo.ID); err != nil {
 				t.Fatal(err)
 			}
-			if p, ok := settingsOf(t, s, w.ID).Property(memo.ID); !ok || !tt.want(p) {
-				t.Errorf("property = %+v, %v", p, ok)
+			st := settingsOf(t, s, w.ID)
+			if p, ok := st.Property(memo.ID); !ok || !tt.want(st, p) {
+				t.Errorf("property = %+v, %v; properties = %+v", p, ok, st.Properties)
 			}
 			if got := itemOf(t, s, id).Fields; len(got) != 1 {
 				t.Errorf("item fields = %v, want the value back", got)
@@ -346,7 +357,7 @@ func TestChoiceOfDeletedPropertyIsNotFound(t *testing.T) {
 	s := setup(t)
 	ctx := port.WithRevived(t.Context())
 	w, _ := s.Create(ctx, store, "Web", "HH")
-	l := choiceList(s, w.ID)
+	l := choiceList(t, s, w.ID)
 	a := addValue(t, s, w.ID, l, "A")
 	if err := s.DeleteProperty(ctx, store, w.ID, l.Property); err != nil {
 		t.Fatal(err)
