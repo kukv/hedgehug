@@ -58,6 +58,8 @@ func addFacts(f repair.Facts, m *object.Commit) error {
 	if err != nil {
 		return err
 	}
+	// 共通の祖先が複数あっても、1 つ目だけを使う。merge(integrate)も 1 つ目を祖先にして合わせたので、
+	// Facts はその合わせが「共通の祖先にない」とした行と同じになる。
 	var base map[change.ID]bool
 	if len(bases) > 0 {
 		if base, err = logIDs(bases[0]); err != nil {
@@ -104,11 +106,21 @@ func logIDs(c *object.Commit) (map[change.ID]bool, error) {
 	return out, err
 }
 
-// repair は、修復(Replicator.Repair)を、持っている Store のロックの中で呼ぶ。Repair が nil なら何もしない。
-func (s syncRun) repair(ctx context.Context, f repair.Facts) error {
+// repairUnsent は、修復(Replicator.Repair)があり、まだ送っていない合わせがあれば、修復する。
+// 修復がなければ、修復の材料(unsentFacts)も作らない。
+func (s syncRun) repairUnsent(ctx context.Context, theirs plumbing.Hash) error {
 	if s.r.Repair == nil {
 		return nil
 	}
+	f, ok, err := s.unsentFacts(theirs)
+	if err != nil || !ok {
+		return err
+	}
+	return s.repair(ctx, f)
+}
+
+// repair は、修復(Replicator.Repair)を、持っている Store のロックの中で呼ぶ。
+func (s syncRun) repair(ctx context.Context, f repair.Facts) error {
 	return s.r.Repair(ctx, repairWriter{stores: s.r.stores, root: s.root, facts: f})
 }
 

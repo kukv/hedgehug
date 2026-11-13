@@ -107,11 +107,7 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 		return s.result(theirs, theirs, false)
 	}
 	// 修復は送る前に書く。送ったあとに書くと、相手のマシンが修復していない合わせた結果を受け取る(決定 C3a-2)。
-	f, ok, err := s.unsentFacts(theirs)
-	if err == nil && ok {
-		err = s.repair(ctx, f)
-	}
-	if err != nil {
+	if err := s.repairUnsent(ctx, theirs); err != nil {
 		return port.SyncResult{}, err
 	}
 	head, err := s.push(ctx, theirs)

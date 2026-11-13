@@ -14,6 +14,10 @@ func TestFactsSide(t *testing.T) {
 			t.Errorf("Side(%s) = %d, want %d", id, got, want)
 		}
 	}
+	both := repair.Facts{Ours: map[change.ID]bool{"b": true}, Theirs: map[change.ID]bool{"b": true}}
+	if got := both.Side("b"); got != 0 {
+		t.Errorf("Side of a row on both sides = %d, want 0", got)
+	}
 	if got := (repair.Facts{}).Side("o"); got != 0 {
 		t.Errorf("empty Side = %d", got)
 	}

@@ -10,12 +10,14 @@ type Facts struct {
 	Ours, Theirs map[change.ID]bool
 }
 
-// Side は、行 id がどちらの側にあるか。自分の側なら 1、remote の側なら 2、どちらでもなければ 0。
+// Side は、行 id がどちらの側で足されたか。自分の側だけなら 1、remote の側だけなら 2、どちらでもなければ 0。
+// 両方の側にある行は、片方で足されたものではない(どちらの側も持っている)ので 0。
 func (f Facts) Side(id change.ID) int {
+	ours, theirs := f.Ours[id], f.Theirs[id]
 	switch {
-	case f.Ours[id]:
+	case ours && !theirs:
 		return 1
-	case f.Theirs[id]:
+	case theirs && !ours:
 		return 2
 	}
 	return 0
