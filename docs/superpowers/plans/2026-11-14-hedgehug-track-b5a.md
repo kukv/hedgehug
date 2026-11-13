@@ -41,7 +41,7 @@
 | B5a-7 | 使わないステータスへの変更を断るのは `items.SetProperty`(詳細パネル・ツリー・概要のメニュー、Step のチェック。のちのカンバン・セル・一括変更・パレットもここを通る)と `items.Create`(作成ダイアログのステータス)。文言は「このプロジェクトでは「{ステータス}」を使いません」。値の削除の置き換え(`replaceRows`)・「制約を無視して…」(`applyStatus`)・移動は、この判定を通らないことをテストで押さえる | 02 の 98 行、03 の 160 行(断らない経路) |
 | B5a-8 | 作成で、選んだテンプレートがそのプロジェクトで使えないときは `port.ErrNotFound`(種類が合わないときと同じ扱い。`createtemplate.go:18`) | 画面は使えるテンプレートしか出さないので、ふつうは起きない(B4-6 と同じ考え方) |
 | B5a-9 | 使えるテンプレート = 種類が合い、かつ(プロジェクトの `templates` のうち、いまあるテンプレートが 0 件なら全部、そうでなければその中)。種類ごとの既定 = プロジェクトの `template_default` が `@none` なら「なし」、テンプレート ID ならそれが使えるときはそれ・使えないときは「なし」、未設定ならワークスペースの既定が使えるときはそれ・使えないときは「なし」 | 03「プロジェクトのテンプレート」2・3 段落目。使えない既定は警告なしで「なし」 |
-| B5a-10 | 専用ルールは `automation.Rule.Scope project.ID` を持ち、`rules/<ID>/scope` に作成のときだけ書く。編集で `Scope` は変えない。専用ルールのきっかけとすることのステータスは、そのプロジェクトで使うもの(`Uses`)でなければ `ErrNotFound` | 保存形式 316 行(ワークスペースのルールに `scope`)。03「専用ルール」(選択肢は使うステータス)。B4-6 |
+| B5a-10 | 専用ルールは `automation.Rule.Scope project.ID` を持ち、`rules/<ID>/scope` に作成のときだけ書く。編集で `Scope` は変えない。専用ルールのきっかけとすることのステータスは、そのプロジェクトで使うもの(`Uses`)でなければ `ErrNotFound`。編集では、変えたきっかけ・することのステータスだけを確かめる(ステータスの削除の書き換えなどで使わないステータスを指したままのルールも改名できる) | 保存形式 316 行(ワークスペースのルールに `scope`)。03「専用ルール」(選択肢は使うステータス)。B4-6 |
 | B5a-11 | `automation.RunAll(s, set, rules, it, evs)` に `projectrule.Set` を足す。専用ルールは `Scope == it.Place.Project` のときだけ、アイテムのプロジェクトの `disabled_rules` に入るルールは対象にしない。することのステータスが使わないものなら止め、`Stopped` を「このプロジェクトでは「{ステータス}」を使いません」にする(遷移の検査より先に見る)。`app/items/automate.go` と `app/githublink/fire.go` の両方が `Set` を渡す。「Step がすべて完了したとき」は親の項目で判定する(いまのまま。親の `Place.Project` を使う) | 03「実行の規則」4 つ目の箇条、「制約で止まったとき」。使わないステータスはメニューに出ないので、遷移より先に断る |
 | B5a-12 | 「使うステータス」の操作で、外すのを断るのは: 初期ステータス(「初期ステータスのため外せません」)、分類の既定(「{分類}の既定のため外せません」)、両方(「初期ステータスで、{分類}の既定でもあるため外せません」)、専用ルールが使う(「「{ステータス}」はこのプロジェクトだけのルール「{ルール名}」が使っているため、使わないことにできません。先にルールを変えてください」)。前の 3 つは画面ではチェックを無効にするので、サーバーの断りは同じ文で持つだけ。{分類} は「未着手」「進行中」「完了」「中止」 | 03「使うステータス」2・3 段落目 |
 | B5a-13 | プロジェクトの遷移の表で、ワークスペースの制約が許さないセルにチェックを付ける操作は「ワークスペースの制約で変更できません」で断る(画面では無効) | 03「プロジェクトの遷移の制約」1 段落目 |
@@ -244,7 +244,7 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 **Interfaces:**
 - Produces:
   - `func Run(s workspace.Settings, set projectrule.Set, rules []Rule, it item.Item, ev Event) []Outcome`、`RunAll` も同じ引数の並び
-  - `func Valid(s workspace.Settings, set projectrule.Set, logins []string, r Rule) bool` — `Scope` があれば、ステータスは `projectrule.Uses(s, set.Of(r.Scope), …)` も満たす(B5a-10)
+  - `func Valid(s workspace.Settings, set projectrule.Set, logins []string, old, r Rule) bool` — `Scope` があれば、old(編集前のルール。作成ならゼロ値)から変えたステータスは `projectrule.Uses(s, set.Of(r.Scope), …)` も満たす(B5a-10)
   - `func Statuses(r Rule) []change.ID`(きっかけ・することのステータス。Task 9 の `ScopedRule` を作るのに使う)
 
 - [ ] **Step 1: 失敗するテストを書く** — `TestRunSkipsOtherProjectsScopedRule`、`TestRunSkipsDisabledInProject`、`TestRunStopsOnUnusedStatus`(`Stopped` = 「このプロジェクトでは「Pending」を使いません」、`Draft` なし)、`TestDraftsWriteScopeOnlyOnCreate`、`TestFromLogReadsScope`、`TestValidRejectsUnusedStatusForScopedRule`。app 側: `TestStatusChangeRunsScopedRuleOnlyInItsProject`(サンプルに 2 つ目のプロジェクトを作り、そのプロジェクトの専用ルールがサンプルのタスクでは動かない)、githublink の `fire` のテストに `disabled_rules` で止まる場面を 1 つ。

@@ -139,12 +139,17 @@ func TestValidRejectsUnusedStatusForScopedRule(t *testing.T) {
 func TestValidChecksOnlyChangedStatusesOfScopedRule(t *testing.T) {
 	s := settings()
 	s.InitialStatus = "TODO"
-	set := projectrule.Set{"P": {Hidden: []change.ID{"CANCEL"}}}
+	set := projectrule.Set{"P": {Hidden: []change.ID{"CANCEL", "DOING"}}}
 	old := automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionStatus, Value: "CANCEL", Scope: "P"}
 	renamed := old
 	renamed.Name = "改名"
 	if !automation.Valid(s, set, nil, old, renamed) {
 		t.Error("変えていない使わないステータスで、改名が断られた")
+	}
+	another := old
+	another.Value = "DOING"
+	if automation.Valid(s, set, nil, old, another) {
+		t.Error("ほかの使わないステータスに変えたのに通った")
 	}
 	addTrigger := old
 	addTrigger.Trigger, addTrigger.TriggerStatus = automation.TriggerStatus, "CANCEL"
