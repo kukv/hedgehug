@@ -381,3 +381,36 @@ func TestCreateScopedRuleOnDeletedProjectInDeletedWorkspace(t *testing.T) {
 		t.Error("the workspace was revived")
 	}
 }
+
+// 取り消すとワークスペースの名前が、削除されていないワークスペースと重なるなら、08「復元」の文言で断り、何も残さない
+// (決定 R11)。
+func TestCreateRuleInDeletedWorkspaceNameTaken(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	deleteWorkspace(t, rec)
+	if err := apptest.SampleMobile(ctx, rec.Stores, store); err != nil {
+		t.Fatal(err)
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "名前を変更"}
+	if err := rec.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleMobileWorkspace, change.NewSet("name", "Mobile", "Web"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
+	if want := "同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください"; message(err) != want {
+		t.Errorf("err = %v, want %q", err, want)
+	}
+	if ws, p := workspaceDeleted(t, rec); !ws || !p {
+		t.Errorf("deleted = %v/%v", ws, p)
+	}
+	if err := rec.Read(ctx, store, func(rd port.Reader) error {
+		log, err := rd.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace})
+		if rules := automation.FromLog(log); len(rules) != 0 {
+			t.Errorf("rules = %+v", rules)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

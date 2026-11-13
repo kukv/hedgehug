@@ -14,7 +14,8 @@ import (
 )
 
 // Create は、ルールを作る(03「ルールの一覧」の「ルールを作成」)。有効で始まる。in.Scope があれば、そのプロジェクトだけの
-// ルールで、プロジェクトはこのワークスペースの削除済みでないもの(B5a-10)。
+// ルールで、プロジェクトはこのワークスペースの削除済みでないもの(B5a-10)か、ワークスペースと一緒に削除されたもの
+// (保存でワークスペースと一緒に戻る。決定 R11)。
 func (s Service) Create(ctx context.Context, store port.StoreID, ws workspace.ID, in automation.Rule) (automation.Rule, error) {
 	in.ID, in.Enabled = s.IDs.New(), true
 	in = automation.Normalize(in)
