@@ -38,6 +38,7 @@ export {
   transferIntro,
   transferredMessage,
 } from "./features/transfers/dialogText";
+export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
 export type { MoveCandidate } from "./model/itemAction";
 export type {

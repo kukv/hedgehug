@@ -5,6 +5,8 @@ import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { fakeItemsPort, flush } from "../items/fixtures.test-util";
 import { fakeHistory } from "../router/history.test-util";
 import { createNavigation } from "../router/navigation";
+import { createToasts } from "../toasts/toasts";
+import { fakeTransfers } from "../transfers/transfers.test-util";
 import { createScreen } from "./screen";
 
 // 開いているプロジェクトが、同期・ほかのタブ・ほかのプログラムで削除されたときの画面(A4b-22)。
@@ -26,6 +28,9 @@ async function setup(start: string) {
     navigation,
     catalog,
     items: fakeItemsPort(),
+    transfers: fakeTransfers(),
+    toasts: createToasts({ set: () => 0, clear: () => undefined }),
+    now: () => new Date(),
     openItem: () => {},
   });
   screen.start();

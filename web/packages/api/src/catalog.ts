@@ -22,6 +22,7 @@ export function createCatalogPort(): CatalogPort {
           storeId,
           name: w.name,
           prefix: w.prefix,
+          oldPrefixes: w.oldPrefixes ?? [],
         })),
       ),
     listProjects: (storeId, workspaceId) =>

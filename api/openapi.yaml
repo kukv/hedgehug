@@ -1728,11 +1728,11 @@ components:
         settings:
           $ref: "#/components/schemas/WorkspaceSettings"
       required:
-        - oldPrefixes
         - settings
         - id
         - name
         - prefix
+        - oldPrefixes
       type: object
     WorkspaceProperty:
       additionalProperties: false
@@ -1831,12 +1831,17 @@ components:
           type: string
         name:
           type: string
+        oldPrefixes:
+          items:
+            type: string
+          type: array
         prefix:
           type: string
       required:
         - id
         - name
         - prefix
+        - oldPrefixes
       type: object
     WorkspaceTemplate:
       additionalProperties: false

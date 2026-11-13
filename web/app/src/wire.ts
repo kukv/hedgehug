@@ -15,6 +15,7 @@ import {
   createComments,
   createDetail,
   createItemDialog,
+  createMovedNotice,
   createNavigation,
   createProjectDialog,
   createProjectScreen,
@@ -122,6 +123,8 @@ export const detail = createDetail({
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: leaveItem,
 });
+// 旧 ID から開いたときの詳細パネルの上部の 1 行(A5a-16)。
+export const movedNotice = createMovedNotice({ detail, now: () => new Date() });
 // 詳細パネルとプロジェクトの概要は、同時に開くので、コメントの状態を別々に持つ(入力が混ざらない)。
 export const itemComments = createComments({ notes, catalogPort, toasts, drafts, scope: "item" });
 export const projectComments = createComments({
@@ -144,7 +147,13 @@ export const screen = createScreen({
   navigation,
   catalog,
   items: itemsPort,
-  openItem: (storeId, itemId) => void detail.open(storeId, itemId),
+  transfers: transfersPort,
+  toasts,
+  now: () => new Date(),
+  openItem: (storeId, itemId, movedFrom) => {
+    if (movedFrom) movedNotice.show(storeId, itemId, movedFrom);
+    void detail.open(storeId, itemId);
+  },
 });
 
 export const itemDialog = createItemDialog({

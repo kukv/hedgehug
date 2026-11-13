@@ -114,9 +114,13 @@ describe("items port", () => {
 
 describe("catalog port", () => {
   it("adds the store ID to workspaces and reads null lists as empty", async () => {
-    respond(200, [{ id: "W1", name: "Web", prefix: "HH" }]);
+    respond(200, [{ id: "W1", name: "Web", prefix: "WEB", oldPrefixes: ["HH"] }]);
     await expect(createCatalogPort().listWorkspaces("S1")).resolves.toEqual([
-      { id: "W1", storeId: "S1", name: "Web", prefix: "HH" },
+      { id: "W1", storeId: "S1", name: "Web", prefix: "WEB", oldPrefixes: ["HH"] },
+    ]);
+    respond(200, [{ id: "W1", name: "Web", prefix: "HH", oldPrefixes: null }]);
+    await expect(createCatalogPort().listWorkspaces("S1")).resolves.toEqual([
+      { id: "W1", storeId: "S1", name: "Web", prefix: "HH", oldPrefixes: [] },
     ]);
     respond(200, null);
     await expect(createCatalogPort().listStores()).resolves.toEqual([]);

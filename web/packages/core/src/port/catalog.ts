@@ -7,7 +7,8 @@ import type { Workspace } from "../model/workspace";
 // 失敗は、断りなら Refused、ないものなら NotFound、それ以外はそのまま投げる。
 export interface CatalogPort {
   listStores(): Promise<StoreInfo[]>;
-  listWorkspaces(storeId: string): Promise<Workspace[]>;
+  // listWorkspaces の oldPrefixes は、旧い接頭辞(画面のアドレスの旧い接頭辞のため。A5a-21)。
+  listWorkspaces(storeId: string): Promise<(Workspace & { oldPrefixes?: string[] })[]>;
   listProjects(storeId: string, workspaceId: string): Promise<Project[]>;
   listMembers(storeId: string): Promise<Member[]>;
   // me は、その Store での「あなた」のログイン名。

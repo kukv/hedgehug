@@ -1337,6 +1337,7 @@ export interface WorkspaceDetail {
 export interface WorkspaceSummary {
   id: string;
   name: string;
+  oldPrefixes: string[];
   prefix: string;
 }
 

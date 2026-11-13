@@ -10,7 +10,7 @@ export {
   writableWorkspaces,
 } from "./features/catalog/catalog";
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
-export { formatDay } from "./features/dates/date";
+export { formatDateTime, formatDay } from "./features/dates/date";
 export { olderThanADay, relativeTime } from "./features/dates/relative";
 export { type CreateContext, childKindOf, type Here } from "./features/items/createDefaults";
 export {
