@@ -23,7 +23,10 @@ func setup(t *testing.T) (apphistory.Service, *apptest.Stores) {
 	if err := apptest.Sample(t.Context(), s, store); err != nil {
 		t.Fatal(err)
 	}
-	return apphistory.Service{Stores: s, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))}, s
+	return apphistory.Service{
+		Stores: s, StoreList: apptest.StoreList{Stores: []port.StoreInfo{{ID: store, Name: "main"}}},
+		Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)),
+	}, s
 }
 
 func write(t *testing.T, s port.Stores, login string, fn func(tx port.Tx) error) {
