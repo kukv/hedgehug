@@ -295,3 +295,41 @@ func sameSet(a, b map[change.ID]bool) bool {
 	}
 	return true
 }
+
+// SyncSave も、受け取って合わせたあと、保存の前に修復する。修復は送られる。送信が断られたら保存だけを捨て、修復は残す。
+func TestSyncSaveRepairsBeforeSaving(t *testing.T) {
+	remote, b := diverged(t)
+	calls := 0
+	b.rep.Repair = titleToR(&calls)
+	b.rep.beforeSend = func() error { return port.ErrWriteDenied }
+	if _, err := b.rep.SyncSave(t.Context(), b.id, remote, saveOp, createMoved); !errors.Is(err, port.ErrWriteDenied) {
+		t.Fatalf("refused SyncSave = %v", err)
+	}
+	if calls != 1 || title(t, b) != "R" || hasMoved(t, b) {
+		t.Fatalf("after a refused send: calls = %d, title = %q, moved = %v", calls, title(t, b), hasMoved(t, b))
+	}
+	b.rep.beforeSend = nil
+	if _, err := b.rep.SyncSave(t.Context(), b.id, remote, saveOp, createMoved); err != nil {
+		t.Fatal(err)
+	}
+	c := cloneMachine(t, remote, "C", t0)
+	if title(t, c) != "R" || !hasMoved(t, c) {
+		t.Errorf("remote: title = %q, moved = %v", title(t, c), hasMoved(t, c))
+	}
+}
+
+// 修復が失敗したら、保存しない(fn を呼ばない)。修復の失敗は通信の失敗ではないので *port.SaveError で包み
+// (Deliver は理由にせず error で返す)、中の種類(ErrNotFound・ErrInvalidOperation)は外から読めない
+// (移動の画面が 404・400 と読まず「移動できませんでした」を出すため)。
+func TestSyncSaveRepairFailureDoesNotSave(t *testing.T) {
+	for _, inner := range []error{errors.New("boom"), port.ErrNotFound, port.ErrInvalidOperation} {
+		remote, b := diverged(t)
+		b.rep.Repair = func(context.Context, port.RepairWriter) error { return inner }
+		called := false
+		_, err := b.rep.SyncSave(t.Context(), b.id, remote, saveOp, func(port.Tx) error { called = true; return nil })
+		var se *port.SaveError
+		if !errors.As(err, &se) || errors.Is(err, port.ErrNotFound) || errors.Is(err, port.ErrInvalidOperation) || called {
+			t.Errorf("%v: err = %v, fn called %v, want an opaque SaveError and no call", inner, err, called)
+		}
+	}
+}

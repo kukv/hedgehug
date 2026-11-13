@@ -186,6 +186,10 @@ func Revived(ctx context.Context) []string {
 	return slices.Clone(v.ids)
 }
 
+// NoteRevived は、ReviveItem を通さずに削除を取り消したものの表示 ID を積む(別の Store への移動は、写した行の削除を
+// 移動先の保存で取り消し、移動元と移動先の両方の保存が済んでから積む)。
+func NoteRevived(ctx context.Context, display string) { noteRevived(ctx, display) }
+
 // noteRevived は、入れ物に表示 ID を積む(同じ ID は 1 つ)。入れ物がなければ捨てる。
 func noteRevived(ctx context.Context, display string) {
 	if v, _ := ctx.Value(revivedKey{}).(*revived); v != nil && !slices.Contains(v.ids, display) {

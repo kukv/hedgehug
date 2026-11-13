@@ -32,7 +32,7 @@ func newHistoryAPI(t *testing.T) humatest.TestAPI {
 		t.Fatal(err)
 	}
 	_, api := humatest.New(t)
-	notes.Register(api, notes.Services{History: apphistory.Service{Stores: s, Clock: clock}})
+	notes.Register(api, notes.Services{History: apphistory.Service{Stores: s, StoreList: apptest.StoreList{Stores: []port.StoreInfo{{ID: "S1", Name: "main"}}}, Clock: clock}})
 	return api
 }
 

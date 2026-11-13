@@ -1,13 +1,9 @@
 package gitstore
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -228,23 +224,16 @@ func readPurgeState(root string) (purgeState, error) {
 	return st, err
 }
 
-// purgedTargets は、purged.jsonl の行の target。ファイルがなければ空。形の違う行は読み飛ばす。
+// purgedTargets は、purged.jsonl の行の target。読み方は Reader.Purged と同じ(files.go の purged.List。ファイルが
+// なければ空、読めない行は読み飛ばす)。
 func purgedTargets(root string) (map[change.ID]bool, error) {
-	out := map[change.ID]bool{}
-	b, err := os.ReadFile(filepath.Join(root, "purged.jsonl")) //nolint:gosec // G304: パスは Store の根と決まったファイル名から作る
-	if errors.Is(err, os.ErrNotExist) {
-		return out, nil
-	}
+	ps, err := purged{&view{root: root}}.List()
 	if err != nil {
 		return nil, err
 	}
-	for _, l := range bytes.Split(b, []byte("\n")) {
-		var v struct {
-			Target change.ID `json:"target"`
-		}
-		if json.Unmarshal(l, &v) == nil && v.Target != "" {
-			out[v.Target] = true
-		}
+	out := make(map[change.ID]bool, len(ps))
+	for _, p := range ps {
+		out[p.Target] = true
 	}
 	return out, nil
 }

@@ -1,5 +1,6 @@
 import { createItemActionsPort } from "@hedgehug/api";
 import {
+  createAfterMoved,
   createCopyId,
   createItemDelete,
   createItemDuplicate,
@@ -8,11 +9,13 @@ import {
   createItemMove,
   createItemRefresh,
   createProjectDelete,
+  createTransferDialog,
   createWorkspaceDelete,
   leaveDeletedProject,
   leaveDeletedWorkspace,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
+import { online as isOnline } from "./tab";
 import {
   catalog,
   detail,
@@ -22,6 +25,7 @@ import {
   projectScreen,
   relations,
   toasts,
+  transfersPort,
   workspacesPort,
 } from "./wire";
 
@@ -49,6 +53,18 @@ export const itemMove = createItemMove({
   catalog,
   toasts,
   refresh: itemRefresh,
+});
+
+// 「別のワークスペースへ移動…」のダイアログ(02「別のワークスペースと別の Store への移動」)。開くのは itemTransfer.open(item)。
+export const itemTransfer = createTransferDialog({
+  transfers: transfersPort,
+  catalog,
+  toasts,
+  refresh: itemRefresh,
+  detail,
+  drafts,
+  online: isOnline,
+  afterMoved: createAfterMoved({ detail, refresh: itemRefresh, route: navigation.route }),
 });
 
 // 「種類を変更…」の種類のメニューと確認ダイアログ(02「種類の変更」)。開くのは itemKind.open(item, x, y)。
@@ -87,6 +103,7 @@ export const itemMenuHost = createItemMenuHost({
   remove: itemDelete,
   move: itemMove,
   kind: itemKind,
+  transfer: itemTransfer,
   duplicate: itemDuplicate,
   copyId: copyItemId,
 });
@@ -117,6 +134,7 @@ navigation.route.subscribe(() => {
   itemMove.close();
   itemMove.cancelMove();
   itemKind.cancel();
+  itemTransfer.cancel();
   itemMenuHost.close();
   itemMenuHost.closeTemplate();
 });

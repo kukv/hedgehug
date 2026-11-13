@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -33,6 +34,9 @@ type view struct {
 	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースに
 	// あると分かっているプロジェクトをログから作り直さない。Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
 	projectPlaces map[project.ID]workspace.ID
+	// removed は同じ Tx で消したアイテムのフォルダ(読み取りでは、もうない)、transfers は同じ Tx で書いた転送記録。
+	removed   map[change.Ref]bool
+	transfers []transfer.Record
 	// gone は、同じ Tx で完全に削除したもの。ログは空として読み、ids に出さない。
 	gone map[change.Ref]bool
 }
@@ -40,7 +44,7 @@ type view struct {
 // log は、呼び出し側が変えても、覚えた作業ツリーの行(base)とまだ書いていない行(pending)が
 // 変わらないように、どちらも深く写して返す。ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。
 func (v *view) log(ref change.Ref) ([]change.Record, error) {
-	if !ref.Valid() || v.gone[ref] {
+	if !ref.Valid() || v.removed[ref] || v.gone[ref] {
 		return nil, nil
 	}
 	base, ok := v.base[ref]
@@ -95,6 +99,8 @@ func (v *view) Projects() port.ProjectReader     { return projects{v} }
 func (v *view) Items() port.ItemReader           { return items{v} }
 func (v *view) Members() port.MemberReader       { return members{v} }
 func (v *view) Changes() port.ChangeReader       { return changes{v} }
+func (v *view) Transfers() port.TransferReader   { return transfers{v} }
+func (v *view) Purged() port.PurgedReader        { return purged{v} }
 
 // RetentionDays は、store.yaml の保持日数。ない(0 以下)ときは既定の 30。
 func (v *view) RetentionDays() (int, error) {

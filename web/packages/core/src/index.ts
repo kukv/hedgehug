@@ -10,7 +10,7 @@ export {
   writableWorkspaces,
 } from "./features/catalog/catalog";
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
-export { formatDay } from "./features/dates/date";
+export { formatDateTime, formatDay } from "./features/dates/date";
 export { olderThanADay, relativeTime } from "./features/dates/relative";
 export { type CreateContext, childKindOf, type Here } from "./features/items/createDefaults";
 export {
@@ -113,7 +113,7 @@ export {
   type Toasts,
 } from "./features/toasts/toasts";
 export * from "./githubIndex";
-export { NotFound, Refused } from "./model/errors";
+export { NotFound, Refused, TransferUndoFailed } from "./model/errors";
 export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";
 export type { NewProject, Project, ProjectStatus } from "./model/project";

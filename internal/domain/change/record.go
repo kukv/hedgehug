@@ -34,6 +34,8 @@ const (
 	// Comment・Worklog は、コメントと作業時間の追加・編集・削除。f は内部 ID、削除は to が null。
 	Comment Type = "comment"
 	Worklog Type = "worklog"
+	// MovedIn は、別の Store から移ってきた(保存形式「変更記録」。f は持たず、to に移動元と値の名前)。
+	MovedIn Type = "moved_in"
 )
 
 // TimeLayout は記録の時刻の書き方(ミリ秒までの RFC 3339、このマシンの時刻帯付き)。

@@ -7,6 +7,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 // open は、Store のロックを取り、途中で止まった保存が残っていれば戻す。
@@ -49,17 +51,17 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 }
 
 // runTx は、Write の中身(fn を動かし、行か説明があれば 1 つのコミットにする)。Store のロックは呼んだ側が持つ
-// (Sync の中の修復も、ロックを取り直さずにこれで書く)。
+// (Sync の中の修復と SyncSave の保存も、ロックを取り直さずにこれで書く)。
 func (s *Stores) runTx(root string, op port.Operation, fn func(port.Tx) error) error {
 	t := &tx{
-		view: view{root: root, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
+		view: view{root: root, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, removed: map[change.Ref]bool{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
 		ids:  s.ids,
 	}
 	if err := fn(t); err != nil {
 		return err
 	}
-	if len(t.pending) == 0 && len(t.texts) == 0 && len(t.purges) == 0 {
+	if len(t.pending) == 0 && len(t.texts) == 0 && len(t.removed) == 0 && len(t.transfers) == 0 && len(t.purges) == 0 {
 		return nil
 	}
 	// Summary はコミットメッセージの 1 行目、ログイン名はコミットの作者になる。
@@ -174,8 +176,9 @@ func (t *tx) describe(ref change.Ref, text string) error {
 
 func (t *tx) WriteWorkspaces() port.WorkspaceWriter { return idWriter{t, change.KindWorkspace} }
 func (t *tx) WriteProjects() port.ProjectWriter     { return idWriter{t, change.KindProject} }
-func (t *tx) WriteItems() port.ItemWriter           { return idWriter{t, change.KindItem} }
+func (t *tx) WriteItems() port.ItemWriter           { return itemWriter{idWriter{t, change.KindItem}} }
 func (t *tx) WriteMembers() port.MemberWriter       { return membersWriter{t} }
+func (t *tx) WriteTransfers() port.TransferWriter   { return transferWriter{t} }
 
 type idWriter struct {
 	t    *tx
@@ -194,4 +197,63 @@ type membersWriter struct{ t *tx }
 
 func (w membersWriter) Append(drafts ...change.Draft) error {
 	return w.t.append(change.Ref{Kind: change.KindMembers}, drafts)
+}
+
+type itemWriter struct{ idWriter }
+
+// Import は、行を写して pending にする(コミットのときにフォルダを作る)。説明があれば texts にする。
+func (w itemWriter) Import(id item.ID, log []change.Record, description string) error {
+	ref := change.Ref{Kind: change.KindItem, ID: id}
+	if !ref.Valid() || len(log) == 0 || w.t.removed[ref] || w.t.gone[ref] {
+		return fmt.Errorf("%w: cannot import item %q", port.ErrInvalidOperation, id)
+	}
+	if have, err := w.t.log(ref); err != nil {
+		return err
+	} else if len(have) > 0 {
+		return fmt.Errorf("%w: item %q already exists", port.ErrInvalidOperation, id)
+	}
+	recs := make([]change.Record, 0, len(log))
+	for _, r := range log {
+		recs = append(recs, cloneRecord(r))
+	}
+	w.t.pending[ref] = recs
+	delete(w.t.places, id)
+	if description != "" {
+		w.t.texts[ref] = description
+	}
+	return nil
+}
+
+// Remove は、同じ Tx で書いた行と説明を捨て、フォルダを消す印を付ける(コミットのときに消す)。
+func (w itemWriter) Remove(id item.ID) error {
+	ref := change.Ref{Kind: change.KindItem, ID: id}
+	if !ref.Valid() {
+		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, id)
+	}
+	log, err := w.t.log(ref)
+	if err != nil {
+		return err
+	}
+	if len(log) == 0 {
+		return port.ErrNotFound
+	}
+	delete(w.t.pending, ref)
+	delete(w.t.texts, ref)
+	delete(w.t.places, id)
+	w.t.removed[ref] = true
+	return nil
+}
+
+type transferWriter struct{ t *tx }
+
+func (w transferWriter) Append(r transfer.Record) error {
+	if err := port.CheckTransfer(r); err != nil {
+		return err
+	}
+	if r.At.IsZero() {
+		r.At = w.t.meta.At
+	}
+	r.ID, r.Op, r.By = w.t.ids.New(), w.t.meta.Op, w.t.meta.Actor.By()
+	w.t.transfers = append(w.t.transfers, r)
+	return nil
 }
