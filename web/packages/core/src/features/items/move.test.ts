@@ -1,61 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { MoveCandidate } from "../../model/itemAction";
 import { get } from "../../reactive/store";
-import { createCatalog } from "../catalog/catalog";
-import { fakeCatalogPort } from "../catalog/fixtures.test-util";
-import { createToasts } from "../toasts/toasts";
-import { fakeItemActions } from "./actions.test-util";
 import { flush, gate, item } from "./fixtures.test-util";
-import { createItemMove, moveFailedMessage } from "./move";
-
-// 「プロジェクト 1」(S1-P1)の Task HH-2 を動かす。候補は、同じプロジェクトの Epic HH-1、別のプロジェクトの Epic HH-9。
-const epic: MoveCandidate = {
-  kind: "item",
-  id: "S1-I1",
-  display: "HH-1",
-  title: "認証",
-  projectId: "S1-P1",
-  projectTitle: "プロジェクト 1",
-};
-const far: MoveCandidate = {
-  kind: "item",
-  id: "S1-I9",
-  display: "HH-9",
-  title: "決済",
-  projectId: "S1-P2",
-  projectTitle: "プロジェクト 2",
-};
-const project: MoveCandidate = {
-  kind: "project",
-  id: "S1-P2",
-  display: "HH-P2",
-  title: "プロジェクト 2",
-  projectId: "S1-P2",
-  projectTitle: "",
-};
-
-async function setup() {
-  const catalog = createCatalog(fakeCatalogPort());
-  await catalog.load();
-  const actions = fakeItemActions();
-  actions.candidates = [epic, far];
-  const toasts = createToasts({ set: () => 0, clear: () => {} });
-  const refreshed: string[] = [];
-  const move = createItemMove({
-    actions,
-    catalog,
-    toasts,
-    refresh: {
-      afterChange: async () => {
-        refreshed.push("change");
-      },
-    },
-  });
-  const task = item("S1", "S1-P1", 2, "Task", "S1-I1", "画面");
-  const ro = item("S2", "S2-P1", 1, "Task", null, "閲覧のみ");
-  const messages = () => get(toasts.list).map((t) => `${t.error ? "!" : ""}${t.text}`);
-  return { move, actions, refreshed, messages, task, ro };
-}
+import { moveFailedMessage } from "./move";
+import { epic, far, project, setup } from "./move.test-util";
 
 describe("createItemMove", () => {
   it("opens at the given place, loads the candidates, and filters them by the query", async () => {

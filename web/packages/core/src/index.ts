@@ -39,6 +39,7 @@ export {
   type ItemValues,
   type People,
   type PropertyRow as ItemPropertyRow,
+  projectStatusOptions,
   propertyRows as itemPropertyRows,
   statusOptions,
   type ValueOption,
@@ -128,6 +129,7 @@ export type {
   Category,
   ChildKind,
   NewProperty,
+  ProjectRules,
   PropertyType,
   SaveAsTemplateInput,
   TemplateChild,
@@ -150,7 +152,7 @@ export * from "./notesIndex";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
-export type { ProjectsPort } from "./port/projects";
+export type { ProjectsPort, RulesSection } from "./port/projects";
 export type { SyncPort, Watching } from "./port/sync";
 export type { SystemPort } from "./port/system";
 export type { Direction, WorkspacesPort } from "./port/workspaces";

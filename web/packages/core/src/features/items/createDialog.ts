@@ -6,7 +6,7 @@ import { parentCandidates, pickParent, startValues } from "./createDefaults";
 import { createContextLoader, type WorkspaceContext } from "./createDialogLoad";
 import { carried, missing, parentOptions, viewOf, wsOptions } from "./createDialogOptions";
 import type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
-import { applyDefault, applyToForm, othersOf } from "./createTemplate";
+import { applyDefault, applyToForm, narrowToProject, othersOf } from "./createTemplate";
 import { initialValues, shownValues, switchWorkspace } from "./createValues";
 
 // アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。型は createDialogTypes.ts。検査はサーバーに任せ、断りを赤字で出す
@@ -79,7 +79,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
   // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトル・「続けて作成」・値・種類・親は
   // 残す(決定 27)。親は、読み直したプロジェクトの候補から選び直す。ワークスペースが変わったときは、
   // そのいまの値に新しいワークスペースへの切り替えを当てる。
-  async function reloaded(form: ItemForm, error = "") {
+  async function reloaded(form: ItemForm, error = "", reprojected = false) {
     const gen = ++seq;
     const loaded = await refresh(form, error);
     const now = get(state);
@@ -99,7 +99,9 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       parentId: parent.parentId,
     };
     // ワークスペースを変えたら、テンプレートを「なし」にしてから新しいワークスペースの既定を当てはめる(A3b-14)。
-    if (switched) kept = applyDefault(kept, loaded.ctx.settings);
+    if (switched) kept = applyDefault(kept, loaded.ctx.settings, kept.projectId);
+    // プロジェクトだけを変えたら、新しいプロジェクトで使わないステータス・テンプレートを戻す(B5a-21)。
+    else if (reprojected) kept = narrowToProject(kept, loaded.ctx.settings);
     current = loaded.ctx;
     state.set({ ...loaded.next, ...parent, form: kept, ...viewOf(loaded.ctx, kept) });
   }
@@ -175,7 +177,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       if (!store) return;
       const loadedCtx = await load(store.id, form.workspaceId);
       form.values = initialValues(loadedCtx.settings);
-      form = applyDefault(form, loadedCtx.settings);
+      form = applyDefault(form, loadedCtx.settings, form.projectId);
       const loaded = await refresh(form);
       if (gen !== seq) return;
       current = loaded?.ctx ?? null;
@@ -192,7 +194,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         return;
       }
       if (patch.projectId !== undefined && patch.projectId !== s.form.projectId) {
-        await reloaded(form, s.error);
+        await reloaded(form, s.error, true);
         return;
       }
       if (patch.kind !== undefined && patch.kind !== s.form.kind) {
@@ -200,7 +202,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         const parent = byKind(wsOf(form.workspaceId)?.prefix ?? "", form.kind, form.parentId);
         form.parentId = parent.parentId;
         // テンプレートを「なし」にしてから新しい種類の既定を当てはめる(A3b-14)。
-        if (current) form = applyDefault(form, current.settings);
+        if (current) form = applyDefault(form, current.settings, form.projectId);
         state.set({ ...s, ...parent, form, ...(current ? viewOf(current, form) : {}) });
         return;
       }

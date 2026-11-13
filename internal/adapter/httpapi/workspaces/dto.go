@@ -2,8 +2,10 @@ package workspaces
 
 import (
 	"encoding/json"
+	"maps"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -40,16 +42,26 @@ type WorkspaceProperty struct {
 
 // WorkspaceSettings は、ワークスペースの設定。
 type WorkspaceSettings struct {
-	Properties       []WorkspaceProperty `json:"properties" nullable:"false"`
-	Statuses         []WorkspaceValue    `json:"statuses" nullable:"false"`
-	Priorities       []WorkspaceValue    `json:"priorities" nullable:"false"`
-	Systems          []WorkspaceValue    `json:"systems" nullable:"false"`
-	InitialStatus    string              `json:"initialStatus"`
-	InitialPriority  string              `json:"initialPriority"`
-	CategoryDefaults map[string]string   `json:"categoryDefaults"`
-	Workflow         map[string][]string `json:"workflow" doc:"From のステータス ID → 許可する To(ステータスの並び)。制限のない From は入れない"`
-	Templates        []WorkspaceTemplate `json:"templates" nullable:"false"`
-	TemplateDefaults map[string]string   `json:"templateDefaults" doc:"種類 → 既定のテンプレート ID。なしの種類は入れない"`
+	Properties       []WorkspaceProperty     `json:"properties" nullable:"false"`
+	Statuses         []WorkspaceValue        `json:"statuses" nullable:"false"`
+	Priorities       []WorkspaceValue        `json:"priorities" nullable:"false"`
+	Systems          []WorkspaceValue        `json:"systems" nullable:"false"`
+	InitialStatus    string                  `json:"initialStatus"`
+	InitialPriority  string                  `json:"initialPriority"`
+	CategoryDefaults map[string]string       `json:"categoryDefaults"`
+	Workflow         map[string][]string     `json:"workflow" doc:"From のステータス ID → 許可する To(ステータスの並び)。制限のない From は入れない"`
+	Templates        []WorkspaceTemplate     `json:"templates" nullable:"false"`
+	TemplateDefaults map[string]string       `json:"templateDefaults" doc:"種類 → 既定のテンプレート ID。なしの種類は入れない"`
+	ProjectRules     map[string]ProjectRules `json:"projectRules" doc:"プロジェクトの内部 ID → そのプロジェクトのルール。ルールのないプロジェクトは入れない"`
+}
+
+// ProjectRules は、1 つのプロジェクトのルール(B5a-18)。どれも空ならワークスペースの設定のまま。
+type ProjectRules struct {
+	HiddenStatuses   []string            `json:"hiddenStatuses" nullable:"false" doc:"使わないステータスの ID"`
+	Workflow         map[string][]string `json:"workflow" doc:"From のステータス ID → このプロジェクトで変更できる To。制限のない From は入れない"`
+	Templates        []string            `json:"templates" nullable:"false" doc:"使うテンプレートの ID。空ならすべて使う"`
+	TemplateDefaults map[string]string   `json:"templateDefaults" doc:"種類 → 既定のテンプレート ID か @none。決めていない種類は入れない"`
+	DisabledRules    []string            `json:"disabledRules" nullable:"false" doc:"動かさないワークスペースのルールの ID"`
 }
 
 // WorkspaceTemplateStep は、テンプレートの Step。
@@ -105,12 +117,37 @@ func toValues(vs []workspace.Value) []WorkspaceValue {
 	return out
 }
 
+func toIDs(ids []change.ID) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, string(id))
+	}
+	return out
+}
+
+func toProjectRules(set projectrule.Set) map[string]ProjectRules {
+	out := make(map[string]ProjectRules, len(set))
+	for p, r := range set {
+		pr := ProjectRules{
+			HiddenStatuses: toIDs(r.Hidden), Workflow: map[string][]string{}, Templates: toIDs(r.Templates),
+			TemplateDefaults: map[string]string{}, DisabledRules: toIDs(r.Disabled),
+		}
+		for from, to := range r.Workflow {
+			pr.Workflow[string(from)] = toIDs(to)
+		}
+		maps.Copy(pr.TemplateDefaults, r.TemplateDefaults)
+		out[string(p)] = pr
+	}
+	return out
+}
+
 func toSettings(s workspace.Settings) WorkspaceSettings {
 	out := WorkspaceSettings{
 		Statuses: toValues(s.Statuses), Priorities: toValues(s.Priorities), Systems: toValues(s.Systems),
 		InitialStatus: string(s.InitialStatus), InitialPriority: string(s.InitialPriority),
 		CategoryDefaults: map[string]string{}, Properties: []WorkspaceProperty{},
 		Workflow: map[string][]string{}, Templates: []WorkspaceTemplate{}, TemplateDefaults: map[string]string{},
+		ProjectRules: map[string]ProjectRules{},
 	}
 	for c, id := range s.CategoryDefaults {
 		out.CategoryDefaults[string(c)] = string(id)

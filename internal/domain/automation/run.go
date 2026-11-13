@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -28,20 +29,23 @@ type Outcome struct {
 
 // Run は、it に起きた ev で、有効なルールを一覧の順に実行する(03「実行の規則」)。it は利用者の操作のあとの値。
 // 1 つのルールがステータスを変えたら、次のルールはそのあとの値から検査する。何もしないルール(同じ値、
-// 担当者を使わない種類、なくなった値)は結果に入れない。自動化の変更は、ほかのきっかけを起こさない(呼ぶ側で起こさない)。
-func Run(s workspace.Settings, rules []Rule, it item.Item, ev Event) []Outcome {
-	return RunAll(s, rules, it, []Event{ev})
+// 担当者を使わない種類、なくなった値)は結果に入れない。専用ルールは it のプロジェクトのものだけ、
+// it のプロジェクトが「動かさない」と指定したルールは対象にしない(B5a-11)。自動化の変更は、ほかのきっかけを起こさない(呼ぶ側で起こさない)。
+func Run(s workspace.Settings, set projectrule.Set, rules []Rule, it item.Item, ev Event) []Outcome {
+	return RunAll(s, set, rules, it, []Event{ev})
 }
 
 // RunAll は、1 回の変更で it に同時に起きた evs で、有効なルールを一覧の順に 1 回だけ通して実行する
 // (03「実行の規則」の「一覧の上から順に」)。evs のどれかに合うルールを動かす。順と値の引き継ぎは Run と同じ。
-func RunAll(s workspace.Settings, rules []Rule, it item.Item, evs []Event) []Outcome {
+func RunAll(s workspace.Settings, set projectrule.Set, rules []Rule, it item.Item, evs []Event) []Outcome {
 	var out []Outcome
+	pr := set.Of(it.Place.Project)
 	for _, r := range rules {
-		if !r.Enabled || !slices.ContainsFunc(evs, func(ev Event) bool { return matches(r, ev) }) {
+		if !r.Enabled || (r.Scope != "" && r.Scope != it.Place.Project) || slices.Contains(pr.Disabled, r.ID) ||
+			!slices.ContainsFunc(evs, func(ev Event) bool { return matches(r, ev) }) {
 			continue
 		}
-		if o, ok := apply(s, r, &it); ok {
+		if o, ok := apply(s, pr, r, &it); ok {
 			out = append(out, o)
 		}
 	}
@@ -61,7 +65,7 @@ func matches(r Rule, ev Event) bool {
 }
 
 // apply は、r のすることを it に当てる。変えたら it を変えたあとの値にする。
-func apply(s workspace.Settings, r Rule, it *item.Item) (Outcome, bool) {
+func apply(s workspace.Settings, pr projectrule.Rules, r Rule, it *item.Item) (Outcome, bool) {
 	p, ok := s.Property(change.ID(r.Action))
 	if !ok || (r.Action == ActionAssignee && !slices.Contains(p.Kinds, string(it.Kind))) {
 		return Outcome{}, false
@@ -77,7 +81,12 @@ func apply(s workspace.Settings, r Rule, it *item.Item) (Outcome, bool) {
 	}
 	o := Outcome{Rule: r, Prop: p, To: to}
 	if r.Action == ActionStatus {
-		if err := workspace.CheckTransition(s, it.Status, change.ID(value)); err != nil {
+		// 使わないステータスは、遷移の制約より先に見る(B5a-11)
+		err := projectrule.CheckUse(s, pr, change.ID(value))
+		if err == nil {
+			err = projectrule.CheckTransition(s, pr, it.Status, change.ID(value))
+		}
+		if err != nil {
 			o.Stopped = err.Error()
 			return o, true
 		}

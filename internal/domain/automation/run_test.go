@@ -6,6 +6,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -35,7 +37,7 @@ func TestRunAppliesMatchingRulesInOrder(t *testing.T) {
 	off.Enabled = false
 	rules = append(rules, off)
 	it := item.Item{ID: "I1", Kind: item.Task, Status: "DONE", Assignee: "hanako"}
-	got := automation.Run(s, rules, it, automation.Event{Trigger: automation.TriggerStatus, Status: "DONE"})
+	got := automation.Run(s, nil, rules, it, automation.Event{Trigger: automation.TriggerStatus, Status: "DONE"})
 	if len(got) != 2 || got[0].Rule.ID != "R1" || got[1].Rule.ID != "R3" {
 		t.Fatalf("Run = %+v", got)
 	}
@@ -52,11 +54,11 @@ func TestRunSkipsRulesThatChangeNothing(t *testing.T) {
 		rule("R2", automation.TriggerStepsDone, "", automation.ActionStatus, "DONE"),
 	}
 	epic := item.Item{ID: "E1", Kind: item.Epic, Status: "DONE"} // Epic は担当者を使わない・すでに Done
-	if got := automation.Run(s, rules, epic, automation.Event{Trigger: automation.TriggerStepsDone}); len(got) != 0 {
+	if got := automation.Run(s, nil, rules, epic, automation.Event{Trigger: automation.TriggerStepsDone}); len(got) != 0 {
 		t.Errorf("Run = %+v", got)
 	}
 	task := item.Item{ID: "T1", Kind: item.Task, Status: "DOING", Assignee: "taro"}
-	got := automation.Run(s, rules, task, automation.Event{Trigger: automation.TriggerStepsDone})
+	got := automation.Run(s, nil, rules, task, automation.Event{Trigger: automation.TriggerStepsDone})
 	if len(got) != 1 || got[0].Rule.ID != "R2" {
 		t.Errorf("Run = %+v", got)
 	}
@@ -71,7 +73,7 @@ func TestRunStopsOnTheWorkflowAndGoesOn(t *testing.T) {
 		rule("R3", automation.TriggerPROpen, "", automation.ActionStatus, "DONE"), // DOING からは通る
 	}
 	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
-	got := automation.Run(s, rules, it, automation.Event{Trigger: automation.TriggerPROpen})
+	got := automation.Run(s, nil, rules, it, automation.Event{Trigger: automation.TriggerPROpen})
 	if len(got) != 3 {
 		t.Fatalf("Run = %+v", got)
 	}
@@ -88,10 +90,10 @@ func TestRunMergedCondition(t *testing.T) {
 	r := rule("R1", automation.TriggerPRMerged, "", automation.ActionStatus, "DONE")
 	r.AllMerged = true
 	it := item.Item{ID: "T1", Kind: item.Task, Status: "DOING"}
-	if got := automation.Run(s, []automation.Rule{r}, it, automation.Event{Trigger: automation.TriggerPRMerged}); len(got) != 0 {
+	if got := automation.Run(s, nil, []automation.Rule{r}, it, automation.Event{Trigger: automation.TriggerPRMerged}); len(got) != 0 {
 		t.Errorf("not all merged: %+v", got)
 	}
-	if got := automation.Run(s, []automation.Rule{r}, it, automation.Event{Trigger: automation.TriggerPRMerged, AllMerged: true}); len(got) != 1 {
+	if got := automation.Run(s, nil, []automation.Rule{r}, it, automation.Event{Trigger: automation.TriggerPRMerged, AllMerged: true}); len(got) != 1 {
 		t.Errorf("all merged: %+v", got)
 	}
 }
@@ -123,7 +125,7 @@ func TestRunAllRunsInListOrderAcrossEvents(t *testing.T) {
 	}
 	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
 	evs := []automation.Event{{Trigger: automation.TriggerPROpen}, {Trigger: automation.TriggerReview}}
-	got := automation.RunAll(s, rules, it, evs)
+	got := automation.RunAll(s, nil, rules, it, evs)
 	if len(got) != 2 || got[0].Rule.ID != "R1" || got[1].Rule.ID != "R3" {
 		t.Fatalf("RunAll = %+v, want R1 then R3 (list order, not event order)", got)
 	}
@@ -142,11 +144,67 @@ func TestRunAllLaterRuleJudgesFromTheOldStatusWhenStopped(t *testing.T) {
 	}
 	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
 	evs := []automation.Event{{Trigger: automation.TriggerPROpen}, {Trigger: automation.TriggerReview}}
-	got := automation.RunAll(s, rules, it, evs)
+	got := automation.RunAll(s, nil, rules, it, evs)
 	if len(got) != 2 || got[0].Draft != nil || got[0].Stopped == "" {
 		t.Fatalf("RunAll = %+v", got)
 	}
 	if got[1].Draft == nil || string(got[1].Draft.From) != `"TODO"` {
 		t.Errorf("R2 = %+v / %+v, want it judged from Todo", got[1], got[1].Draft)
+	}
+}
+
+func inProject(p string, r automation.Rule) automation.Rule {
+	r.Scope = project.ID(p)
+	return r
+}
+
+func TestRunSkipsOtherProjectsScopedRule(t *testing.T) {
+	s := runSettings()
+	rules := []automation.Rule{
+		inProject("Q", rule("R1", automation.TriggerStatus, "DONE", automation.ActionAssignee, "taro")),
+		inProject("P", rule("R2", automation.TriggerStatus, "DONE", automation.ActionAssignee, "jiro")),
+		rule("R3", automation.TriggerStatus, "DONE", automation.ActionAssignee, "saburo"),
+	}
+	it := item.Item{ID: "I1", Kind: item.Task, Status: "DONE", Place: item.Place{Project: "P"}}
+	got := automation.Run(s, nil, rules, it, automation.Event{Trigger: automation.TriggerStatus, Status: "DONE"})
+	if len(got) != 2 || got[0].Rule.ID != "R2" || got[1].Rule.ID != "R3" {
+		t.Fatalf("Run = %+v", got)
+	}
+}
+
+func TestRunSkipsDisabledInProject(t *testing.T) {
+	s := runSettings()
+	set := projectrule.Set{"P": {Disabled: []change.ID{"R1"}}}
+	rules := []automation.Rule{
+		rule("R1", automation.TriggerStatus, "DONE", automation.ActionAssignee, "taro"),
+		rule("R2", automation.TriggerStatus, "DONE", automation.ActionAssignee, "jiro"),
+	}
+	ev := automation.Event{Trigger: automation.TriggerStatus, Status: "DONE"}
+	in := func(p string) item.Item {
+		return item.Item{ID: "I1", Kind: item.Task, Status: "DONE", Place: item.Place{Project: project.ID(p)}}
+	}
+	if got := automation.Run(s, set, rules, in("P"), ev); len(got) != 1 || got[0].Rule.ID != "R2" {
+		t.Errorf("P: Run = %+v", got)
+	}
+	if got := automation.Run(s, set, rules, in("Q"), ev); len(got) != 2 {
+		t.Errorf("Q: Run = %+v", got) // 外す指定はそのプロジェクトだけ
+	}
+}
+
+func TestRunStopsOnUnusedStatus(t *testing.T) {
+	s := runSettings()
+	s.InitialStatus = "TODO"
+	set := projectrule.Set{"P": {Hidden: []change.ID{"CANCEL"}, Workflow: map[change.ID][]change.ID{"DOING": {"DONE"}}}}
+	r := rule("R1", automation.TriggerPROpen, "", automation.ActionStatus, "CANCEL")
+	it := item.Item{ID: "I1", Kind: item.Task, Status: "DOING", Place: item.Place{Project: "P"}}
+	got := automation.Run(s, set, []automation.Rule{r}, it, automation.Event{Trigger: automation.TriggerPROpen})
+	if len(got) != 1 || got[0].Draft != nil || got[0].Stopped != "このプロジェクトでは「Cancel」を使いません" {
+		t.Fatalf("Run = %+v", got) // 遷移の制約(Done のみ)より先に使わないステータスで止まる
+	}
+	// 使うステータスでも、プロジェクトの遷移の制約で止まる
+	r2 := rule("R2", automation.TriggerPROpen, "", automation.ActionStatus, "TODO")
+	got = automation.Run(s, set, []automation.Rule{r2}, it, automation.Event{Trigger: automation.TriggerPROpen})
+	if len(got) != 1 || got[0].Draft != nil || got[0].Stopped == "" {
+		t.Fatalf("Run = %+v", got)
 	}
 }

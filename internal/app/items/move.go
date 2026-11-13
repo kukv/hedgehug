@@ -14,10 +14,12 @@ import (
 )
 
 // MoveInput は、移す先。Parent か Project のどちらか一方を選ぶ。Epic はほかのプロジェクト(Project)、
-// それ以外は新しい親(Parent)。
+// それ以外は新しい親(Parent)。Statuses は、プロジェクトが変わるときの、移動先が使わないステータス →
+// 置き換え先(B5a-19)。指定のない使わないステータスは、同じ分類の移動先の既定になる。
 type MoveInput struct {
-	Parent  *item.ID
-	Project *project.ID
+	Parent   *item.ID
+	Project  *project.ID
+	Statuses map[change.ID]change.ID
 }
 
 // destination は、移したあとの場所。parent は新しい親(Epic の移動では nil)。
@@ -55,7 +57,7 @@ func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in Mo
 		if err != nil || !move {
 			return err
 		}
-		return writeMove(tx, it, to)
+		return writeMove(tx, it, to, in.Statuses)
 	})
 }
 
@@ -131,8 +133,8 @@ func parentDestination(r port.Reader, it item.Item, parent item.ID) (destination
 }
 
 // writeMove は、移すアイテムの place と rank(新しい親の子の末尾)、プロジェクトが変わるときは下のものの place を、
-// 同じ操作で書く(A4b-3・11)。
-func writeMove(tx port.Tx, it item.Item, to destination) error {
+// 同じ操作で書く(A4b-3・11)。プロジェクトが変わるときは、移動先が使わないステータスの置き換えも同じ操作で書く(B5a-19)。
+func writeMove(tx port.Tx, it item.Item, to destination, picks map[change.ID]change.ID) error {
 	siblings, err := port.LiveItems(tx, to.project.ID)
 	if err != nil {
 		return err
@@ -145,6 +147,10 @@ func writeMove(tx port.Tx, it item.Item, to destination) error {
 			return err
 		}
 		below = item.Descendants(it.ID, old)
+	}
+	replaced, err := statusReplacements(tx, append([]item.Item{it}, below...), to.project.ID, picks)
+	if err != nil {
+		return err
 	}
 	place := it.Place
 	place.Project, place.Parent = to.project.ID, nil
@@ -160,6 +166,9 @@ func writeMove(tx port.Tx, it item.Item, to destination) error {
 		moved := d.Place
 		moved.Project = to.project.ID
 		errs = append(errs, tx.WriteItems().Append(d.ID, change.NewSet("place", d.Place, moved)))
+	}
+	for _, d := range replaced {
+		errs = append(errs, tx.WriteItems().Append(d.id, change.NewSet("status", d.from, d.to)))
 	}
 	return errors.Join(errs...)
 }

@@ -180,4 +180,15 @@ describe("workspaces port: automation", () => {
     await port.updateRule("S1", "W1", "R1", apiRule as never);
     expect(JSON.parse(String(call(update)[1].body))).toEqual(input);
   });
+
+  it("sends the scope of a project-only rule on create, and never on update", async () => {
+    const port = createWorkspacesPort();
+    const create = respond(200, { ...apiRule, scope: "P1" });
+    const made = await port.createRule("S1", "W1", { ...input, scope: "P1" });
+    expect(made.scope).toBe("P1");
+    expect(JSON.parse(String(call(create)[1].body))).toEqual({ ...input, scope: "P1" });
+    const update = respond(204, undefined);
+    await port.updateRule("S1", "W1", "R1", { ...input, scope: "P1" });
+    expect(JSON.parse(String(call(update)[1].body))).toEqual(input);
+  });
 });

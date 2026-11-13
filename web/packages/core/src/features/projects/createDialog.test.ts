@@ -31,6 +31,12 @@ async function setup() {
     setDate: unused,
     addRepo: unused,
     removeRepo: unused,
+    setStatusUsed: unused,
+    setTransition: unused,
+    setTemplateUsed: unused,
+    setTemplateDefault: unused,
+    setRuleRuns: unused,
+    resetRules: unused,
   };
   const created: string[] = [];
   const dialog = createProjectDialog({

@@ -7,6 +7,7 @@
   import DetailPanel from "./screens/item/DetailPanel.svelte";
   import ItemMenuHost from "./screens/item/ItemMenuHost.svelte";
   import MoveMenu from "./screens/item/MoveMenu.svelte";
+  import MoveStatusDialog from "./screens/item/MoveStatusDialog.svelte";
   import DiscardDialog from "./screens/notes/DiscardDialog.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
   import DeleteProjectDialog from "./screens/project/DeleteProjectDialog.svelte";
@@ -88,6 +89,7 @@
 <CreateWorkspaceDialog />
 <CreateItemDialog />
 <DeleteItemDialog />
+<MoveStatusDialog />
 <MoveMenu />
 <ChangeKindDialog />
 <ItemMenuHost />

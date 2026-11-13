@@ -2,12 +2,14 @@ package items_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/items"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -66,5 +68,67 @@ func TestCreateAndAddStepIgnoreTheWorkflow(t *testing.T) {
 	}
 	if _, err := svc.AddStep(t.Context(), store, apptest.SampleTask, "確認"); err != nil {
 		t.Errorf("AddStep = %v", err)
+	}
+}
+
+// appendRows は、サンプルのワークスペースのログに、プロジェクト別のルールの行を書く。
+func appendRows(t *testing.T, rec *recorder, ds ...change.Draft) {
+	t.Helper()
+	err := rec.Stores.Write(t.Context(), store, port.Operation{Actor: change.User("hanako"), Summary: "プロジェクト別のルールを変更"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+const refusedPending = "このプロジェクトでは「Pending」を使いません"
+
+func TestSetStatusRefusesUnusedStatus(t *testing.T) {
+	svc, rec := setupRec(t)
+	appendRows(t, rec, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusPending))
+	before := logLen(t, rec, apptest.SampleTask)
+	_, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "status", quoted(apptest.SampleStatusPending))
+	if message(err) != refusedPending || logLen(t, rec, apptest.SampleTask) != before {
+		t.Errorf("SetProperty = %v; log %d → %d", err, before, logLen(t, rec, apptest.SampleTask))
+	}
+}
+
+func TestSetStatusChecksProjectWorkflow(t *testing.T) {
+	svc, rec := setupRec(t)
+	appendRows(t, rec, change.NewAdd(projectrule.WorkflowField(apptest.SampleProject, apptest.SampleStatusTodo), apptest.SampleStatusInProgress))
+	_, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "status", quoted(apptest.SampleStatusDone))
+	if message(err) != refusedTodoToDone {
+		t.Errorf("SetProperty = %v", err)
+	}
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "status", quoted(apptest.SampleStatusInProgress)); err != nil {
+		t.Errorf("an allowed status must be saved: %v", err)
+	}
+}
+
+func TestCreateRefusesUnusedStatus(t *testing.T) {
+	svc, rec := setupRec(t)
+	appendRows(t, rec, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusPending))
+	_, err := svc.Create(t.Context(), items.CreateInput{
+		Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: "Task", Title: "保留で作る",
+		Values: map[change.ID]json.RawMessage{"status": quoted(apptest.SampleStatusPending)},
+	})
+	if message(err) != refusedPending {
+		t.Errorf("Create = %v", err)
+	}
+}
+
+func TestCreateRefusesTemplateTheProjectDoesNotUse(t *testing.T) {
+	svc, rec := setupRec(t)
+	used := saveTemplate(t, svc, rec, workspace.Template{Name: "使う", Kind: "Task", Title: "A"})
+	other := saveTemplate(t, svc, rec, workspace.Template{Name: "使わない", Kind: "Task", Title: "B"})
+	appendRows(t, rec, change.NewAdd(projectrule.TemplatesField(apptest.SampleProject), used.ID))
+	in := items.CreateInput{Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: "Task", Title: "作る", Template: &other.ID}
+	if _, err := svc.Create(t.Context(), in); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Create with an unusable template = %v", err)
+	}
+	in.Template = &used.ID
+	if _, err := svc.Create(t.Context(), in); err != nil {
+		t.Errorf("Create with a usable template = %v", err)
 	}
 }

@@ -1,3 +1,4 @@
+import type { Kind } from "../model/item";
 import type { NewProject, Project, ProjectStatus } from "../model/project";
 
 // プロジェクトの口。実装は api パッケージにある。
@@ -18,4 +19,26 @@ export interface ProjectsPort {
   ): Promise<Project>;
   addRepo(storeId: string, projectId: string, repo: string): Promise<Project>;
   removeRepo(storeId: string, projectId: string, repo: string): Promise<Project>;
+  // プロジェクト別のルール(03「プロジェクト別のルール」)。1 回の操作が 1 回の保存。検査と断りはサーバーが行う。
+  setStatusUsed(storeId: string, projectId: string, statusId: string, used: boolean): Promise<void>;
+  setTransition(
+    storeId: string,
+    projectId: string,
+    from: string,
+    to: string,
+    allowed: boolean,
+  ): Promise<void>;
+  setTemplateUsed(
+    storeId: string,
+    projectId: string,
+    templateId: string,
+    used: boolean,
+  ): Promise<void>;
+  // setTemplateDefault の value は、"" (ワークスペースの既定に戻す)・"@none"・テンプレートの ID。
+  setTemplateDefault(storeId: string, projectId: string, kind: Kind, value: string): Promise<void>;
+  setRuleRuns(storeId: string, projectId: string, ruleId: string, runs: boolean): Promise<void>;
+  // resetRules は、区画をワークスペースの設定に戻す(自動化では専用ルールも消す)。
+  resetRules(storeId: string, projectId: string, section: RulesSection): Promise<void>;
 }
+
+export type RulesSection = "statuses" | "workflow" | "templates" | "automation";

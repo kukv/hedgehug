@@ -71,6 +71,7 @@ export function defaultDetail(storeId: string, id: string): WorkspaceDetail {
       workflow: {},
       templates: [],
       templateDefaults: {},
+      projectRules: {},
     },
   };
 }

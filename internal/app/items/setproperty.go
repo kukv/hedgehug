@@ -10,11 +10,12 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // SetProperty は、1 つのプロパティの値を変える(02「入力の方法と保存」)。前と同じなら何も保存しない。
-// アクティビティは「{ID} の{プロパティ名}を {値} に変更」。ステータスは、保存の中で遷移の制約を検査する(A3b-1)。
+// アクティビティは「{ID} の{プロパティ名}を {値} に変更」。ステータスは、保存の中で使わないステータスと、ワークスペースとプロジェクトの両方の遷移の制約を検査する(A3b-1、B5a-7)。
 func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID, prop change.ID, value json.RawMessage) (item.Item, error) {
 	ec, err := s.editContext(ctx, store, id)
 	if err != nil {
@@ -72,7 +73,7 @@ func parseValue(ec editContext, p workspace.Property, value json.RawMessage) (js
 	return to, checkDatePair(ec.item, p, to)
 }
 
-// checkStatus は、ステータスを変えるとき、保存の中で読み直したアイテムと設定で遷移の制約を検査する(A3b-1)。
+// checkStatus は、ステータスを変えるとき、保存の中で読み直したアイテムと設定で使わないステータスと、ワークスペースとプロジェクトの両方の遷移の制約を検査する(A3b-1、B5a-7)。
 func checkStatus(tx port.Tx, it item.Item, p workspace.Property, to json.RawMessage) error {
 	if p.Type != workspace.TypeStatus {
 		return nil
@@ -81,9 +82,17 @@ func checkStatus(tx port.Tx, it item.Item, p workspace.Property, to json.RawMess
 	if err != nil {
 		return err
 	}
+	log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: it.Place.Workspace})
+	if err != nil {
+		return err
+	}
+	rules := projectrule.FromLog(log).Of(it.Place.Project)
 	var next change.ID
 	_ = json.Unmarshal(to, &next)
-	return workspace.CheckTransition(st, it.Status, next)
+	if err := projectrule.CheckUse(st, rules, next); err != nil {
+		return err
+	}
+	return projectrule.CheckTransition(st, rules, it.Status, next)
 }
 
 // checkDatePair は、開始日か終了日を変えるとき、保存済みのもう片方と比べる(決定 16)。

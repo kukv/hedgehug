@@ -76,6 +76,11 @@ export {
   type ProjectEditor,
   type ProjectEditorDeps,
 } from "./features/projects/editor";
+export {
+  createRulesEditor,
+  type RulesEditor,
+  type RulesEditorDeps,
+} from "./features/projects/rulesEditor";
 export type { HistoryRow } from "./model/history";
 export type { Comment, Worklog } from "./model/notes";
 export {

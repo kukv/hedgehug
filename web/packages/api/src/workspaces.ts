@@ -1,6 +1,8 @@
 import {
   type AutomationRule,
+  type AutomationRuleInput,
   type ChildKind,
+  type ProjectRules,
   type PropertyType,
   ruleForm,
   type TemplateChild,
@@ -17,6 +19,7 @@ import { call } from "./errors";
 import {
   type AddWorkspaceProperty,
   type WorkspaceDetail as ApiDetail,
+  type ProjectRules as ApiProjectRules,
   type WorkspaceProperty as ApiProperty,
   type AutomationRule as ApiRule,
   type WorkspaceTemplate as ApiTemplate,
@@ -83,6 +86,16 @@ const toChild = (c: ApiTemplateChild): TemplateChild => ({
   steps: (c.steps ?? []).map(toStep),
 });
 
+const toProjectRules = (r: ApiProjectRules | null): ProjectRules => ({
+  hiddenStatuses: r?.hiddenStatuses ?? [],
+  workflow: Object.fromEntries(
+    Object.entries(r?.workflow ?? {}).map(([from, tos]) => [from, tos ?? []]),
+  ),
+  templates: r?.templates ?? [],
+  templateDefaults: r?.templateDefaults ?? {},
+  disabledRules: r?.disabledRules ?? [],
+});
+
 const toTemplate = (t: ApiTemplate): WorkspaceTemplate => ({
   ...t,
   values: t.values ?? {},
@@ -111,6 +124,9 @@ function toDetail(storeId: string, d: ApiDetail): WorkspaceDetail {
       ),
       templates: (s.templates ?? []).map(toTemplate),
       templateDefaults: s.templateDefaults ?? {},
+      projectRules: Object.fromEntries(
+        Object.entries(s.projectRules ?? {}).map(([p, r]) => [p, toProjectRules(r)]),
+      ),
     },
   };
 }
@@ -124,11 +140,17 @@ const toUsage = (u: ApiUsage): WorkspaceUsage => ({
 
 const toTemplateBody = (input: TemplateInput) => input as ApiTemplateInput;
 
-// API の列挙(きっかけ・すること)は core の型と同じ文字列。
+// API の列挙(きっかけ・すること)は core の型と同じ文字列。scope は空ならワークスペース全体(API は空を省く)。
 const toRule = (r: ApiRule): AutomationRule => r;
 
 // 入力は 6 項目だけを送る。API の入力は追加の項目(id・enabled)を断る。
 const toRuleBody = ruleForm;
+
+// 作成だけは、プロジェクト専用のルールの scope も送る(編集では変えられないので送らない)。
+const toCreateRuleBody = (input: AutomationRuleInput) => ({
+  ...ruleForm(input),
+  ...(input.scope ? { scope: input.scope } : {}),
+});
 
 export function createWorkspacesPort(): WorkspacesPort {
   return {
@@ -206,7 +228,7 @@ export function createWorkspacesPort(): WorkspacesPort {
         };
       }),
     createRule: (s, w, input) =>
-      call(async () => toRule(await createAutomationRule(s, w, toRuleBody(input)))),
+      call(async () => toRule(await createAutomationRule(s, w, toCreateRuleBody(input)))),
     updateRule: (s, w, id, input) => call(() => updateAutomationRule(s, w, id, toRuleBody(input))),
     deleteRule: (s, w, id) => call(() => deleteAutomationRule(s, w, id)),
     setRuleEnabled: (s, w, id, enabled) =>

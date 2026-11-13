@@ -5,13 +5,25 @@
     label: string;
     disabled?: boolean;
     title?: string;
+    // onchange を渡したら、押しても見た目を変えず、次の値を渡すだけにする(保存のあとの読み直しで checked が変わる)。
+    onchange?: (checked: boolean) => void;
   }
 
-  let { checked = $bindable(false), label, disabled = false, title }: Props = $props();
+  let { checked = $bindable(false), label, disabled = false, title, onchange }: Props = $props();
+
+  function changed(e: Event & { currentTarget: HTMLInputElement }) {
+    const next = e.currentTarget.checked;
+    if (!onchange) {
+      checked = next;
+      return;
+    }
+    e.currentTarget.checked = checked;
+    onchange(next);
+  }
 </script>
 
 <label class="check" class:disabled {title}>
-  <input type="checkbox" {disabled} bind:checked>
+  <input type="checkbox" {disabled} {checked} onchange={changed}>
   <span>{label}</span>
 </label>
 
