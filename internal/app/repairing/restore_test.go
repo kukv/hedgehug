@@ -485,6 +485,23 @@ func TestWorkspaceDeleteKeptWhenChildIsAdded(t *testing.T) {
 	if d := e.item(added).Deleted; d == nil || d.Op != wsOp || d.Root {
 		t.Errorf("HH-3 deleted = %+v, want op %s root false", d, wsOp)
 	}
+	wantSampleDeleted(e, wsOp)
+}
+
+// wantSampleDeleted は、もとからある HH-P1・HH-P2・HH-1・HH-2 が、op の削除で削除済みのままかを確かめる。
+func wantSampleDeleted(e *env, op change.ID) {
+	e.t.Helper()
+	deleted := map[string]*change.Deletion{
+		"HH-P1": e.project(apptest.SampleProject).Deleted,
+		"HH-P2": e.project(project2).Deleted,
+		"HH-1":  e.item(apptest.SampleEpic).Deleted,
+		"HH-2":  e.item(apptest.SampleTask).Deleted,
+	}
+	for id, d := range deleted {
+		if d == nil || d.Op != op {
+			e.t.Errorf("%s deleted = %+v, want op %s", id, d, op)
+		}
+	}
 }
 
 // ワークスペースの削除と同時に、そのワークスペースにプロジェクトを作っても、ワークスペースの削除は残り、
@@ -515,4 +532,5 @@ func TestWorkspaceDeleteKeptWhenProjectIsAdded(t *testing.T) {
 	if d := e.item(under).Deleted; d == nil || d.Op != wsOp || d.Root {
 		t.Errorf("HH-3 deleted = %+v, want op %s root false", d, wsOp)
 	}
+	wantSampleDeleted(e, wsOp)
 }
