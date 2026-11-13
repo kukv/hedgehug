@@ -56,7 +56,8 @@ type Deps struct {
 	Hosts       port.Hosts
 	StoreGitHub port.StoreGitHub
 	Clock       port.Clock
-	Checks      port.Checks // このマシンが読んだ PR のチェックの結果(D3)
+	Checks      port.Checks      // このマシンが読んだ PR のチェックの結果(D3)
+	GitHubReads port.GitHubReads // GitHub を読んだ記録と、取り直しの失敗の文言(D4a)
 
 	// トラック C(同期)。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。
 	Sync   *appsyncing.Service
@@ -128,7 +129,7 @@ func githubServices(d Deps, hub port.Events) ghapi.Services {
 		},
 		Links: githublink.Links{
 			Stores: d.Stores, Identity: d.Identity, Tokens: conn, GitHub: d.GitHub, Accounts: d.Accounts,
-			StoreGH: d.StoreGitHub, Checks: d.Checks, Inbox: d.Inbox, Events: hub, Clock: d.Clock,
+			StoreGH: d.StoreGitHub, Checks: d.Checks, Reads: d.GitHubReads, Inbox: d.Inbox, Events: hub, Clock: d.Clock,
 		},
 	}
 }

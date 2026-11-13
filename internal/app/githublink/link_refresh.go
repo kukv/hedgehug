@@ -27,45 +27,61 @@ func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]L
 	if err != nil {
 		return nil, err
 	}
-	errs, checksChanged, err := l.refreshAll(ctx, store, id, v)
+	changed, err := l.refreshAll(ctx, store, id, v)
 	if err != nil {
 		return nil, err
 	}
-	if checksChanged {
+	if changed {
 		l.Events.Publish(port.Event{Kind: port.EventGitHub, Store: store})
 	}
-	rows, err := l.List(ctx, store, id)
-	for i := range rows {
-		rows[i].Error = errs[rows[i].Key()]
-	}
-	return rows, err
+	return l.List(ctx, store, id)
 }
 
-// refreshAll は、リンクを 1 本ずつ取り直し、失敗した行の文言(Ref.Key() から引く)と、チェックの結果が
-// 変わったかを返す。利用上限に当たったら、残りのリンクは問い合わせず、同じ文言を付ける。
-func (l Links) refreshAll(ctx context.Context, store port.StoreID, id item.ID, v itemView) (map[string]string, bool, error) {
-	errs := map[string]string{}
+// refreshAll は、リンクを 1 本ずつ取り直し、失敗した行には文言を置き、取り直せた行の文言は消す(D4a-11)。
+// チェックの結果か失敗の文言が変わったら true。利用上限に当たったら、残りのリンクは問い合わせず、同じ文言を置く。
+func (l Links) refreshAll(ctx context.Context, store port.StoreID, id item.ID, v itemView) (bool, error) {
 	changed, limited := false, ""
 	for _, link := range v.links.Links {
-		if limited != "" {
-			errs[link.Key()] = limited
-			continue
-		}
-		f, err := l.lookup(ctx, store, link.Repo, link.Number)
-		if err != nil {
-			errs[link.Key()] = l.failText(err)
-			if ghcall.Is(err, ghcall.RateLimited) {
-				limited = errs[link.Key()]
+		text := limited
+		if text == "" {
+			c, err := l.refreshLink(ctx, store, id, v, link)
+			if err != nil {
+				return false, err
 			}
-			continue
+			changed = changed || c.changed
+			text = c.text
+			if c.limited {
+				limited = text
+			}
 		}
-		c, err := l.refreshOne(ctx, store, id, v, link, f)
+		c, err := l.setFailure(ctx, store, link.Key(), text)
 		if err != nil {
-			return nil, false, err
+			return false, err
 		}
 		changed = changed || c
 	}
-	return errs, changed, nil
+	return changed, nil
+}
+
+// linkResult は、1 本のリンクの取り直しの結果。text が空でなければ失敗(limited は利用上限)。
+type linkResult struct {
+	changed bool // チェックの結果が変わった
+	text    string
+	limited bool
+}
+
+func (l Links) refreshLink(ctx context.Context, store port.StoreID, id item.ID, v itemView, link itemlink.Link) (linkResult, error) {
+	f, err := l.lookup(ctx, store, link.Repo, link.Number)
+	if err != nil {
+		return linkResult{text: l.failText(err), limited: ghcall.Is(err, ghcall.RateLimited)}, nil
+	}
+	c, err := l.refreshOne(ctx, store, id, v, link, f)
+	return linkResult{changed: c}, err
+}
+
+// setFailure は、リンク key の取り直しの失敗の文言を置く。text が空なら消す。前と変わったら true(D4a-11)。
+func (l Links) setFailure(ctx context.Context, store port.StoreID, key, text string) (bool, error) {
+	return l.Reads.SetFailure(ctx, store, key, text)
 }
 
 // skipRefresh は、問い合わせないときか(D3-9)。

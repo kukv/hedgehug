@@ -26,7 +26,7 @@ type Links struct {
 	Accounts port.Accounts    // skipRefresh(このマシンにアカウントが 1 つもない)
 	StoreGH  port.StoreGitHub // 閲覧のみの判定と、Issue の 1 対 1 の Store の一覧
 	Checks   port.Checks
-	Reads    port.GitHubReads // Task 10 から使う
+	Reads    port.GitHubReads // 取り直しの失敗の文言(D4a-11)
 	Inbox    port.Inbox       // Task 11 から使う
 	Events   port.Events
 	Clock    port.Clock

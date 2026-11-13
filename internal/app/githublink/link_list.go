@@ -7,7 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
-// List は、アイテムのリンクを、リンクした順に、このマシンが読んだチェックの結果とともに返す(07「表示と更新」)。
+// List は、アイテムのリンクを、リンクした順に、このマシンが読んだチェックの結果と取り直しの失敗の文言とともに返す(07「表示と更新」)。
 // GitHub には問い合わせない。アイテムがなければ port.ErrNotFound。
 func (l Links) List(ctx context.Context, store port.StoreID, id item.ID) ([]LinkRow, error) {
 	v, err := l.view(ctx, store, id)
@@ -18,5 +18,9 @@ func (l Links) List(ctx context.Context, store port.StoreID, id item.ID) ([]Link
 	if err != nil {
 		return nil, err
 	}
-	return rowsOf(v.links.Links, checks, nil), nil
+	failures, err := l.Reads.Failures(ctx, store)
+	if err != nil {
+		return nil, err
+	}
+	return rowsOf(v.links.Links, checks, failures), nil
 }

@@ -1,6 +1,8 @@
 package github_test
 
 import (
+	"context"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -102,7 +104,29 @@ func linkServices(t *testing.T) ghapi.Services {
 			GitHub: gh, Stores: infos, Clock: clock,
 		},
 		GitHub: gh, Accounts: accounts, StoreGH: infos,
-		Checks: apptest.NewChecks(), Events: &apptest.Events{}, Clock: clock,
+		Checks: apptest.NewChecks(), Reads: &memFailures{rows: map[string]string{}}, Events: &apptest.Events{}, Clock: clock,
 	}
 	return svc
+}
+
+// memFailures は、port.GitHubReads のうち取り直しの失敗の文言だけを持つ偽物(Store は 1 つだけ使う)。
+type memFailures struct {
+	port.GitHubReads
+	rows map[string]string
+}
+
+func (m *memFailures) Failures(context.Context, port.StoreID) (map[string]string, error) {
+	return maps.Clone(m.rows), nil
+}
+
+func (m *memFailures) SetFailure(_ context.Context, _ port.StoreID, key, text string) (bool, error) {
+	if m.rows[key] == text {
+		return false, nil
+	}
+	if text == "" {
+		delete(m.rows, key)
+	} else {
+		m.rows[key] = text
+	}
+	return true, nil
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
@@ -16,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/syncing"
 	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
 // e2e 用のビルドの Store の ID。どちらにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。
@@ -48,6 +50,10 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
 		return httpapi.Deps{}, err
 	}
+	reads, err := e2eReads(ctx)
+	if err != nil {
+		return httpapi.Deps{}, err
+	}
 	hub := events.NewHub()
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
 	syncSvc := &syncing.Service{
@@ -72,12 +78,13 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
 		}},
-		Accounts:   accounts,
-		Checks:     apptest.NewChecks(),
-		Secrets:    &apptest.Secrets{Tokens: e2eTokens},
-		GitHub:     e2eGitHub,
-		DeviceFlow: e2eDeviceFlow,
-		Hosts:      apptest.Hosts{ID: "e2e-client"},
+		Accounts:    accounts,
+		Checks:      apptest.NewChecks(),
+		GitHubReads: reads,
+		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
+		GitHub:      e2eGitHub,
+		DeviceFlow:  e2eDeviceFlow,
+		Hosts:       apptest.Hosts{ID: "e2e-client"},
 		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
 			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
 			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
@@ -105,4 +112,22 @@ func checkLoopback(addr string) error {
 // tokenAndAddr は、テストが決めたトークン(HEDGEHUG_TOKEN)と待ち受け(HEDGEHUG_ADDR)を返す。
 func tokenAndAddr() (token, addr string) {
 	return os.Getenv("HEDGEHUG_TOKEN"), os.Getenv("HEDGEHUG_ADDR")
+}
+
+// e2eReads は、取り直しの失敗の文言を持つ state.db を、使い捨ての場所に開く。止めるときに閉じて消す。
+func e2eReads(ctx context.Context) (port.GitHubReads, error) {
+	dir, err := os.MkdirTemp("", "hedgehug-e2e-state-")
+	if err != nil {
+		return nil, err
+	}
+	db, err := statedb.Open(filepath.Join(dir, "state.db"))
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		return nil, err
+	}
+	context.AfterFunc(ctx, func() {
+		_ = db.Close()
+		_ = os.RemoveAll(dir)
+	})
+	return db.GitHubReads(), nil
 }
