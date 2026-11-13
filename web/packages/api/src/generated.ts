@@ -159,6 +159,25 @@ export interface CreateWorkspace {
   prefix: string;
 }
 
+export interface DescribeBody {
+  /** 編集を始めたときの説明。保存するときの共通の祖先になる */
+  base: string;
+  /** 入力した説明。空白だけは空として保存する(説明を消す) */
+  text: string;
+}
+
+export interface DescribeResult {
+  /** 同じ箇所が同時に編集されて、両方の版を残したとき true */
+  conflict: boolean;
+  /** 保存したあとの説明 */
+  text: string;
+}
+
+export interface DescriptionText {
+  /** 説明の本文(Markdown)。説明がなければ空 */
+  text: string;
+}
+
 export interface ErrorDetail {
   /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
   location?: string;
@@ -1211,6 +1230,73 @@ return fetcher<Item>(getCheckStepUrl(store,item),
 
 
 
+export const getGetItemDescriptionUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/description`
+}
+
+/**
+ * @summary アイテムの説明を返す
+ */
+export const getItemDescription = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<DescriptionText> => {
+
+  return fetcher<DescriptionText>(getGetItemDescriptionUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getDescribeItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/description`
+}
+
+/**
+ * @summary アイテムの説明を保存する
+ */
+export const describeItem = async (store: string,
+    item: string,
+    describeBody: DescribeBody, options?: Parameters<typeof fetcher>[1]): Promise<DescribeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<DescribeResult>(getDescribeItemUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(describeBody)
+  }
+);}
+
+
+
 export const getMoveItemUpUrl = (store: string,
     item: string,) => {
 
@@ -1532,6 +1618,73 @@ export const getProject = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getGetProjectDescriptionUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/description`
+}
+
+/**
+ * @summary プロジェクトの説明を返す
+ */
+export const getProjectDescription = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<DescriptionText> => {
+
+  return fetcher<DescriptionText>(getGetProjectDescriptionUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getDescribeProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/description`
+}
+
+/**
+ * @summary プロジェクトの説明を保存する
+ */
+export const describeProject = async (store: string,
+    project: string,
+    describeBody: DescribeBody, options?: Parameters<typeof fetcher>[1]): Promise<DescribeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<DescribeResult>(getDescribeProjectUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(describeBody)
   }
 );}
 

@@ -189,6 +189,41 @@ components:
         - name
         - prefix
       type: object
+    DescribeBody:
+      additionalProperties: false
+      properties:
+        base:
+          description: 編集を始めたときの説明。保存するときの共通の祖先になる
+          type: string
+        text:
+          description: 入力した説明。空白だけは空として保存する(説明を消す)
+          type: string
+      required:
+        - base
+        - text
+      type: object
+    DescribeResult:
+      additionalProperties: false
+      properties:
+        conflict:
+          description: 同じ箇所が同時に編集されて、両方の版を残したとき true
+          type: boolean
+        text:
+          description: 保存したあとの説明
+          type: string
+      required:
+        - text
+        - conflict
+      type: object
+    DescriptionText:
+      additionalProperties: false
+      properties:
+        text:
+          description: 説明の本文(Markdown)。説明がなければ空
+          type: string
+      required:
+        - text
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -1579,6 +1614,67 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Step のチェックを入り切りする
+  /api/stores/{store}/items/{item}/description:
+    get:
+      operationId: get-item-description
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescriptionText"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの説明を返す
+    put:
+      operationId: describe-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DescribeBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescribeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの説明を保存する
   /api/stores/{store}/items/{item}/move-up:
     post:
       operationId: move-item-up
@@ -1896,6 +1992,67 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトを返す
+  /api/stores/{store}/projects/{project}/description:
+    get:
+      operationId: get-project-description
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescriptionText"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの説明を返す
+    put:
+      operationId: describe-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DescribeBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescribeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの説明を保存する
   /api/stores/{store}/projects/{project}/items:
     get:
       operationId: list-project-items
