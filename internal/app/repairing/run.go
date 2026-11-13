@@ -18,6 +18,7 @@ var steps = []step{
 	cascadeDeleted,     // 削除済みの親の下の子
 	renumberCollisions, // 同じワークスペースで重なった番号
 	breakCycles,        // 親の循環
+	matchProjects,      // 親とプロジェクトが違う子
 }
 
 // syncActor は、修復の保存の実行者。
