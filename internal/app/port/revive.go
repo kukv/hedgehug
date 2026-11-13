@@ -94,7 +94,7 @@ func ReviveItem(ctx context.Context, tx Tx, id item.ID) error {
 }
 
 // ReviveProject は、tx の中で読み直し、削除済み(root: true)のプロジェクトなら、その削除の操作の行を、
-// プロジェクト自身とそのアイテムのログから取り消す。
+// プロジェクト自身とそのアイテムのログから取り消す。同じ名前の削除されていないプロジェクトがあれば断る(決定 S11)。
 func ReviveProject(ctx context.Context, tx Tx, id project.ID) error {
 	p, err := EditableProject(tx, id)
 	if errors.Is(err, ErrNotFound) || (err == nil && p.Deleted == nil) {
@@ -106,6 +106,13 @@ func ReviveProject(ctx context.Context, tx Tx, id project.ID) error {
 	ws, err := tx.Workspaces().Get(p.Place.Workspace)
 	if err != nil {
 		return err
+	}
+	live, err := LiveProjects(tx, p.Place.Workspace)
+	if err != nil {
+		return err
+	}
+	if err := project.CheckRevive(p.Title, live); err != nil {
+		return err // 同じ名前の削除されていないプロジェクトがあれば、取り消さない(決定 S11)
 	}
 	log, err := tx.Changes().Of(change.Ref{Kind: change.KindProject, ID: p.ID})
 	if err != nil {

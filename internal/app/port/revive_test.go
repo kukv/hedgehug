@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
 const reviveStore port.StoreID = "team"
@@ -286,5 +287,26 @@ func TestEditableItemLiveItemUnderDeletedParent(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 削除したプロジェクトと同じ名前の、削除されていないプロジェクトがあれば、ReviveProject は取り消さずに断る(決定 S11)。
+func TestReviveProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
+	s := reviveStores(t)
+	deleteIn(t, s, nil, map[project.ID]bool{apptest.SampleProject: true})
+	other := project.Project{ID: "01OTHERPR00000000000000001", Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2}, Rank: "W", Title: "ログイン", Status: project.Todo}
+	if err := s.Write(t.Context(), reviveStore, user, func(tx port.Tx) error {
+		return tx.WriteProjects().Append(other.ID, project.Create(other))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := port.WithRevived(t.Context())
+	err := s.Write(ctx, reviveStore, user, func(tx port.Tx) error { return port.ReviveProject(ctx, tx, apptest.SampleProject) })
+	var r *refusal.Refusal
+	if !errors.As(err, &r) || r.Message != "同じ名前のプロジェクトがあります。先にそのプロジェクトの名前を変更してください" {
+		t.Fatalf("err = %v", err)
+	}
+	if n := restoreRows(t, s, change.Ref{Kind: change.KindProject, ID: apptest.SampleProject}); n != 0 {
+		t.Errorf("restore rows = %d, want 0", n)
 	}
 }

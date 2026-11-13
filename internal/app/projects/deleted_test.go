@@ -93,23 +93,56 @@ func TestEditProjectDeletedWithoutRootIsNotFound(t *testing.T) {
 
 // 別のタブで削除された(root: true)プロジェクトに変更を保存すると、変更を残して、下のアイテムと一緒に削除を取り消す。
 func TestEditDeletedProjectRevives(t *testing.T) {
-	for name, edit := range reviveCases() {
-		t.Run(name, func(t *testing.T) { checkRevives(t, name == "リポジトリの解除", edit) })
+	for name, c := range reviveCases() {
+		t.Run(name, func(t *testing.T) { checkRevives(t, c) })
 	}
 }
 
-// checkRevives は、プロジェクトを(withRepo なら、リポジトリを結びつけてから)削除し、edit で保存して、削除が取り消されたことを確かめる。
-func checkRevives(t *testing.T, withRepo bool, edit editFunc) {
+type editFunc = func(svc projects.Service, ctx context.Context) (project.Project, error)
+
+// reviveCase は、プロジェクトの保存 1 種類。withRepo は削除の前にリポジトリを結びつけておくか、kept は保存した値が残ったか。
+type reviveCase struct {
+	withRepo bool
+	edit     editFunc
+	kept     func(p project.Project) bool
+}
+
+// reviveCases は、プロジェクトの保存の種類ごとの操作。
+func reviveCases() map[string]reviveCase {
+	return map[string]reviveCase{
+		"タイトル": {edit: func(svc projects.Service, ctx context.Context) (project.Project, error) {
+			return svc.Rename(ctx, store, apptest.SampleProject, "新しい")
+		}, kept: func(p project.Project) bool { return p.Title == "新しい" }},
+		"ステータス": {edit: func(svc projects.Service, ctx context.Context) (project.Project, error) {
+			return svc.SetStatus(ctx, store, apptest.SampleProject, project.InProgress)
+		}, kept: func(p project.Project) bool { return p.Status == project.InProgress }},
+		"オーナー": {edit: func(svc projects.Service, ctx context.Context) (project.Project, error) {
+			return svc.SetOwner(ctx, store, apptest.SampleProject, "hanako")
+		}, kept: func(p project.Project) bool { return p.Owner == "hanako" }},
+		"開始日": {edit: func(svc projects.Service, ctx context.Context) (project.Project, error) {
+			return svc.SetDate(ctx, store, apptest.SampleProject, projects.StartDate, "2026-12-01")
+		}, kept: func(p project.Project) bool { return p.Start == "2026-12-01" }},
+		"リポジトリの追加": {edit: func(svc projects.Service, ctx context.Context) (project.Project, error) {
+			return svc.AddRepo(ctx, store, apptest.SampleProject, "kukv/hedgehug")
+		}, kept: func(p project.Project) bool { return slices.Equal(p.Repos, []string{"kukv/hedgehug"}) }},
+		"リポジトリの解除": {withRepo: true, edit: func(svc projects.Service, ctx context.Context) (project.Project, error) {
+			return svc.RemoveRepo(ctx, store, apptest.SampleProject, "kukv/hedgehug")
+		}, kept: func(p project.Project) bool { return len(p.Repos) == 0 }},
+	}
+}
+
+// checkRevives は、プロジェクトを削除し、c.edit で保存して、変更が残り、削除が取り消されたことを確かめる。
+func checkRevives(t *testing.T, c reviveCase) {
 	svc := setupClock(t)
-	if withRepo {
+	if c.withRepo {
 		if _, err := svc.AddRepo(t.Context(), store, apptest.SampleProject, "kukv/hedgehug"); err != nil {
 			t.Fatal(err)
 		}
 	}
 	deleteWithItems(t, svc, true)
 	ctx := port.WithRevived(t.Context())
-	got, err := edit(svc, ctx)
-	if err != nil || got.Deleted != nil {
+	got, err := c.edit(svc, ctx)
+	if err != nil || got.Deleted != nil || !c.kept(got) {
 		t.Fatalf("保存 = %+v, %v", got, err)
 	}
 	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-P1"}) {
@@ -120,31 +153,24 @@ func checkRevives(t *testing.T, withRepo bool, edit editFunc) {
 	}
 }
 
-// reviveCases は、プロジェクトの保存の種類ごとの操作。
-type editFunc = func(svc projects.Service, ctx context.Context) (project.Project, error)
-
-func reviveCases() map[string]editFunc {
-	cases := map[string]editFunc{
-		"タイトル": func(svc projects.Service, ctx context.Context) (project.Project, error) {
-			return svc.Rename(ctx, store, apptest.SampleProject, "新しい")
-		},
-		"ステータス": func(svc projects.Service, ctx context.Context) (project.Project, error) {
-			return svc.SetStatus(ctx, store, apptest.SampleProject, project.InProgress)
-		},
-		"オーナー": func(svc projects.Service, ctx context.Context) (project.Project, error) {
-			return svc.SetOwner(ctx, store, apptest.SampleProject, "hanako")
-		},
-		"開始日": func(svc projects.Service, ctx context.Context) (project.Project, error) {
-			return svc.SetDate(ctx, store, apptest.SampleProject, projects.StartDate, "2026-12-01")
-		},
-		"リポジトリの追加": func(svc projects.Service, ctx context.Context) (project.Project, error) {
-			return svc.AddRepo(ctx, store, apptest.SampleProject, "kukv/hedgehug")
-		},
-		"リポジトリの解除": func(svc projects.Service, ctx context.Context) (project.Project, error) {
-			return svc.RemoveRepo(ctx, store, apptest.SampleProject, "kukv/hedgehug")
-		},
+// 同じ名前の削除されていないプロジェクトがあるときは、保存しても削除を取り消さず、断る(決定 S11)。
+func TestEditDeletedProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
+	svc := setupClock(t)
+	ctx := t.Context()
+	deleteWithItems(t, svc, true)
+	if _, err := svc.Create(ctx, projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "ログイン"}); err != nil {
+		t.Fatal(err)
 	}
-	return cases
+	_, err := svc.SetStatus(ctx, store, apptest.SampleProject, project.InProgress)
+	if message(err) != "同じ名前のプロジェクトがあります。先にそのプロジェクトの名前を変更してください" {
+		t.Fatalf("err = %v", err)
+	}
+	if p, e, task := restored(t, svc); p || e || task {
+		t.Errorf("断られたのに restore を書いた: %v %v %v", p, e, task)
+	}
+	if _, err := svc.Get(ctx, store, apptest.SampleProject); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("削除済みのままでない: %v", err)
+	}
 }
 
 // 何も変わらない保存・断られる保存は、削除済み(root: true)なら削除を取り消さず、削除済みのままになる(決定 S4)。
@@ -202,7 +228,7 @@ func TestEditDeletedProjectRefusedKeepsDeleted(t *testing.T) {
 
 // 名前の重複と、並びの末尾の決め方は、削除済みのプロジェクトを数えない。番号は削除済みも数える(A4b-5)。
 func TestDeletedProjectsAreNotComparedForNamesAndRanks(t *testing.T) {
-	svc := setupClock(t)
+	svc := setup(t)
 	ctx := t.Context()
 	in := projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "決済"}
 	gone, err := svc.Create(ctx, in) // HH-P2(W)
