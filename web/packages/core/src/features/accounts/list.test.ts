@@ -170,4 +170,53 @@ describe("createAccountList", () => {
     await list.open();
     expect(get(list.state).still).toEqual({});
   });
+
+  it("reloads the row as an auth error when the recheck is refused because the token was rejected", async () => {
+    const { f, list } = setup([row("A1", { status: "app_missing", orgs: ["a"] })]);
+    await list.open();
+    const message = "トークンが GitHub に拒否されました";
+    f.port.recheck = async () => {
+      const r = f.rows[0] as AccountRow;
+      r.status = "auth_error";
+      r.reason = message;
+      r.orgs = [];
+      throw new Refused(message);
+    };
+    await list.recheck(row("A1", { status: "app_missing", orgs: ["a"] }));
+    expect(get(list.state).rows[0]?.status).toBe("auth_error");
+    expect(get(list.state).errors).toEqual({ A1: message });
+    expect(get(list.state).asking).toEqual([]);
+  });
+
+  it("clears the red text and the still orgs of the previous row when another row is operated", async () => {
+    const { f, list } = setup([
+      row("A1", { status: "app_missing", orgs: ["a"] }),
+      row("A2", { status: "app_missing", orgs: ["b"] }),
+    ]);
+    await list.open();
+    f.rechecks.push({ cleared: [], still: ["a"] });
+    await list.recheck(f.rows[0] as AccountRow);
+    expect(get(list.state).still).toEqual({ A1: ["a"] });
+    f.rechecks.push({ cleared: [], still: ["b"] });
+    await list.recheck(f.rows[1] as AccountRow);
+    expect(get(list.state).still).toEqual({ A2: ["b"] });
+    f.refuse.recheck = "x";
+    await list.recheck(f.rows[0] as AccountRow);
+    expect(get(list.state).errors).toEqual({ A1: "x" });
+    delete f.refuse.recheck;
+    await list.recheck(f.rows[1] as AccountRow);
+    expect(get(list.state).errors).toEqual({});
+  });
+
+  it("reloads the rows when the account of the recheck is gone", async () => {
+    const { f, list, texts } = setup([row("A1", { status: "app_missing", orgs: ["a"] })]);
+    await list.open();
+    const gone = f.rows[0] as AccountRow;
+    f.rows.splice(0, 1);
+    await list.recheck(gone);
+    expect(get(list.state).rows).toEqual([]);
+    expect(get(list.state).errors).toEqual({});
+    expect(get(list.state).asking).toEqual([]);
+    expect(texts()).toEqual([]);
+  });
 });

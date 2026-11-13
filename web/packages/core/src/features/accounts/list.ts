@@ -63,6 +63,11 @@ export function createAccountList(deps: AccountListDeps): AccountList {
     });
   }
 
+  // clearMarks は、「再認証」「再確認」を押したとき、どの行の赤字と「まだ読めません」も消す。
+  function clearMarks() {
+    patch({ errors: {}, still: {} });
+  }
+
   function setAsking(id: string, on: boolean) {
     state.update((s) => ({
       ...s,
@@ -94,7 +99,7 @@ export function createAccountList(deps: AccountListDeps): AccountList {
     async reauth(id) {
       const row = get(state).rows.find((r) => r.id === id);
       if (!row || get(state).asking.includes(id)) return;
-      setError(id, "");
+      clearMarks();
       setAsking(id, true);
       try {
         await ask(row);
@@ -108,7 +113,7 @@ export function createAccountList(deps: AccountListDeps): AccountList {
     },
     async recheck(row) {
       if (get(state).asking.includes(row.id)) return;
-      setError(row.id, "");
+      clearMarks();
       setAsking(row.id, true);
       try {
         const r = await deps.accounts.recheck(row.id);
@@ -116,8 +121,11 @@ export function createAccountList(deps: AccountListDeps): AccountList {
         state.update((s) => ({ ...s, still: { ...s.still, [row.id]: r.still } }));
         await reload();
       } catch (e) {
-        if (e instanceof Refused) setError(row.id, e.message);
-        else if (e instanceof NotFound) await reload();
+        if (e instanceof Refused) {
+          // 認証エラーで断られたとき、サーバーは行を認証エラーにしている。赤字を置いて読み直す。
+          setError(row.id, e.message);
+          await reload();
+        } else if (e instanceof NotFound) await reload();
         else throw e;
       } finally {
         setAsking(row.id, false);
