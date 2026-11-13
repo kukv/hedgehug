@@ -200,7 +200,7 @@ func TestRestoreItemWithChildren(t *testing.T) {
 	e := newEnv(t)
 	del := deleteEpic(e)
 	title := e.appendItem(taro, apptest.SampleEpic, change.NewSet("title", "認証", "ログイン"))
-	wantOps(t, e.run(title, del), "HH-1 の削除を取り消し")
+	wantOps(t, e.run(del, title), "HH-1 の削除を取り消し")
 	for _, id := range []item.ID{apptest.SampleEpic, apptest.SampleTask} {
 		if it := e.item(id); it.Deleted != nil {
 			t.Errorf("%s is still deleted", id)
@@ -325,4 +325,19 @@ func TestRestoreStatus(t *testing.T) {
 	if it := e.item(apptest.SampleTask); it.Status != review {
 		t.Errorf("HH-2 status = %s, want Review", it.Status)
 	}
+}
+
+// 名前に改行や続いた空白があっても、アクティビティの文は 1 行にする(保存の Summary は 1 行だけ書ける)。
+func TestRestoreSummaryOnOneLine(t *testing.T) {
+	e := newEnv(t)
+	e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet(statuses.Field(review, "name"), "Review", "Re\nview  中"))
+	})
+	del := e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDelete(reviewRef))
+	})
+	color := e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet(statuses.Field(review, "color"), "blue", "green"))
+	})
+	wantOps(t, e.run(del, color), "「Re view 中」の削除を取り消し")
 }

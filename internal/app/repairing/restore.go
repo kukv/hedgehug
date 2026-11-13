@@ -79,13 +79,15 @@ func undo(w port.RepairWriter, s snapshot, f found) error {
 	})
 }
 
-// summary は、取り消しのアクティビティの文(計画の「アクティビティの文」)。
+// summary は、取り消しのアクティビティの文(計画の「アクティビティの文」)。名前は、改行と続いた空白を
+// 1 つの空白にする(保存の Summary は 1 行だけ書ける。名前は合わせたログから読むので、ここでそろえる)。
 func summary(s snapshot, f found) string {
 	e := s.entities[f.at]
 	if f.F == change.DeletedField {
 		return e.display + " の削除を取り消し"
 	}
-	return "「" + workspace.NameOfDeleted(e.log, f.F) + "」の削除を取り消し"
+	name := strings.Join(strings.Fields(workspace.NameOfDeleted(e.log, f.F)), " ")
+	return "「" + name + "」の削除を取り消し"
 }
 
 // incidentals は、ほかのものへの操作で一緒に書いた行を見分ける材料(決定 C3a-9)。
