@@ -6,9 +6,11 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/transfers"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 // teamHistory は、team(S2)に移したアイテム id の履歴の行を「実行者: 文」で返す(いまの設定は Team)。
@@ -47,6 +49,35 @@ func TestMoveAcrossStoresKeepsTheHistoryOfAnEarlierMoveWithinTheStore(t *testing
 	}
 	if got := teamHistory(t, f, apptest.SampleTask); !slices.Equal(got, want) {
 		t.Errorf("移動先の履歴 =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// 下のもの(Step HH-4)の moved_in の moves は、同じ操作の記録のうち、そのアイテム自身の記録の旧 ID を持つ(親の HH-2 ではない)。
+func TestMoveAcrossStoresKeepsEachItemsOwnEarlierMove(t *testing.T) {
+	f := newFixture(t)
+	withSteps(t, f)
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err != nil {
+		t.Fatal(err)
+	}
+	mi := transfer.MovedInOf(logOf(t, f.rec, store2, change.Ref{Kind: change.KindItem, ID: stepLiveID}))
+	if len(mi) != 1 || len(mi[0].Moves) != 1 || mi[0].Moves[0].Old != "HH-4" {
+		t.Errorf("Step の moved_in = %+v", mi)
+	}
+}
+
+// 別の Store へ移したものを、さらに別の Store へ移せる(team → main へ戻す)。行に現れる前の Store のワークスペースは
+// 移動先の Store にないので、names を引く設定から外す。
+func TestMoveAcrossStoresTwiceAndBack(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err != nil {
+		t.Fatal(err)
+	}
+	back := transfers.MoveInput{ToStore: store1, ToWorkspace: mobileWS, ToProject: mobileProject, ToParent: ptr(mobileEpic)}
+	if got, err := f.svc.Move(t.Context(), store2, apptest.SampleTask, back); err != nil || got.Display != "MB-2" {
+		t.Fatalf("戻す: %+v, %v", got, err)
 	}
 }
 

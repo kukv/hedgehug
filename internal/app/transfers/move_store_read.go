@@ -67,7 +67,7 @@ func gather(r port.Reader, id item.ID) (crossSource, error) {
 		if c.descs[it.ID], err = r.Items().Description(it.ID); err != nil {
 			return crossSource{}, err
 		}
-		if c.moves[it.ID], err = earlierMoves(r, c.logs[it.ID], recs); err != nil {
+		if c.moves[it.ID], err = earlierMoves(r, it.ID, c.logs[it.ID], recs); err != nil {
 			return crossSource{}, err
 		}
 	}
@@ -75,13 +75,15 @@ func gather(r port.Reader, id item.ID) (crossSource, error) {
 	return c, err
 }
 
-// earlierMoves は、行 log の、ワークスペースが変わる場所の set のうち、同じ操作の転送記録が recs にあるもの(この Store の
-// 中で別のワークスペースへ移したとき)の、旧 ID と移動元の名前。名前が引けなければ空にする。
-func earlierMoves(r port.Reader, log []change.Record, recs []transfer.Record) ([]transfer.Move, error) {
+// earlierMoves は、アイテム id の行 log の、ワークスペースが変わる場所の set のうち、同じ操作の id の転送記録が recs に
+// あるもの(この Store の中で別のワークスペースへ移したとき)の、旧 ID と移動元の名前。名前が引けなければ空にする。
+func earlierMoves(r port.Reader, id item.ID, log []change.Record, recs []transfer.Record) ([]transfer.Move, error) {
 	var out []transfer.Move
 	for _, row := range log {
 		from, to, ok := placesOf(row)
-		i := slices.IndexFunc(recs, func(t transfer.Record) bool { return t.Op == row.Op && t.Entity == transfer.EntityItem })
+		i := slices.IndexFunc(recs, func(t transfer.Record) bool {
+			return t.Op == row.Op && t.Entity == transfer.EntityItem && t.Target == id
+		})
 		if !ok || from.Workspace == to.Workspace || i < 0 {
 			continue
 		}
