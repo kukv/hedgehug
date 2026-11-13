@@ -67,6 +67,18 @@ func TestCascadeStopsWithoutProgress(t *testing.T) {
 	}
 }
 
+// 削除済みのワークスペースの下の生きているプロジェクトへの書き込みが反映されないときも、止まらずに止めてエラーを返す。
+func TestCascadeStopsWithoutProgressUnderDeletedWorkspace(t *testing.T) {
+	e := newEnv(t)
+	if err := apptest.DeleteWorkspace(e.ctx, e.s, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "削除済みの親の下の子の修復が進みません") {
+		t.Errorf("Run error = %v", err)
+	}
+}
+
 // 削除済みのワークスペースの下に残ったプロジェクトは、ワークスペースの削除の op で削除済みになり、
 // その下のアイテムも同じ Run の中で続く(B5b-6)。すでに削除済みの HH-P2 には書かない。
 func TestCascadeUnderDeletedWorkspace(t *testing.T) {
