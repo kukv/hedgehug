@@ -14,7 +14,7 @@ import type { ItemRefresh } from "./refresh";
 // アイテムの削除の確認ダイアログ(02「削除」)。Step の一覧の「×」とアイテムのメニューの「削除…」が同じものを開く。
 // 予告(下にあるものの件数と保持日数)をサーバーから読んでから出し、実行したら、トースト・パネルを閉じる・読み直しまでを行う。
 
-// 仕様にない文言(通信の失敗など、断りでも「ない」でもない失敗のとき)。決まったら差し替える。
+// 断りでも「ない」でもない失敗(通信の失敗など)のときの文言。
 export const itemDeleteFailedMessage = "削除できませんでした";
 export const itemDeletedMessage = (displayId: string) => `${displayId} を削除しました`;
 
@@ -87,11 +87,7 @@ export function createItemDelete(deps: ItemDeleteDeps): ItemDelete {
         panel !== null &&
         (panel.item.id === item.id || panel.ancestors.some((a) => a.id === item.id));
       const gen = ++seq;
-      if (inPanel && !(await deps.drafts.confirmLeave(isItemDraft))) {
-        // 聞いているあいだに別の open があれば、そちらを生かす。
-        if (gen === seq) state.set(null);
-        return;
-      }
+      if (inPanel && !(await deps.drafts.confirmLeave(isItemDraft))) return;
       if (gen !== seq) return;
       let preview: DeletePreview;
       try {

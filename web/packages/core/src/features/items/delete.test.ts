@@ -3,15 +3,15 @@ import type { Item } from "../../model/item";
 import { get, writable } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { isItemDraft } from "../drafts/drafts";
 import { createToasts } from "../toasts/toasts";
 import { fakeItemActions } from "./actions.test-util";
-import {
-  createItemDelete,
-  itemDeleteDialog,
-  itemDeletedMessage,
-  itemDeleteFailedMessage,
-} from "./delete";
+import { createItemDelete, itemDeleteDialog, itemDeleteFailedMessage } from "./delete";
+import type { DetailView } from "./detail";
 import { flush, gate, item } from "./fixtures.test-util";
+
+// viewOf は、delete が見る item と ancestors だけを持つ詳細パネルの表示。
+const viewOf = (it: Item, ancestors: Item[]) => ({ item: it, ancestors }) as unknown as DetailView;
 
 async function setup() {
   const catalog = createCatalog(fakeCatalogPort());
@@ -19,17 +19,17 @@ async function setup() {
   const actions = fakeItemActions();
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   const refreshed: string[] = [];
-  const confirms: string[] = [];
+  const confirms: unknown[] = [];
   let allow = true;
-  const panel = writable<{ item: Item; ancestors: Item[] } | null>(null);
+  const panel = writable<DetailView | null>(null);
   const del = createItemDelete({
     actions,
     catalog,
     toasts,
-    detail: { view: panel as never },
+    detail: { view: panel },
     drafts: {
       confirmLeave: async (only) => {
-        confirms.push(typeof only);
+        confirms.push(only);
         return allow;
       },
     },
@@ -117,7 +117,6 @@ describe("createItemDelete", () => {
     await del.confirm();
     expect(actions.calls).toEqual([`deletePreview ${task.id}`, `deleteItem ${task.id}`]);
     expect(get(del.state)).toBeNull();
-    expect(messages()).toEqual([itemDeletedMessage("HH-2")]);
     expect(messages()).toEqual(["HH-2 を削除しました"]);
     expect(refreshed).toEqual([task.id]);
   });
@@ -210,21 +209,21 @@ describe("createItemDelete", () => {
 
   it("asks to discard the input first when the open panel is the item or its ancestor", async () => {
     const { del, actions, task, epic, panel, confirms, deny } = await setup();
-    panel.set({ item: task, ancestors: [epic] });
+    panel.set(viewOf(task, [epic]));
     await del.open(epic);
-    expect(confirms).toEqual(["function"]);
+    expect(confirms).toEqual([isItemDraft]);
     expect(get(del.state)?.item.id).toBe(epic.id);
     del.cancel();
     deny();
     await del.open(task);
-    expect(confirms).toEqual(["function", "function"]);
+    expect(confirms).toEqual([isItemDraft, isItemDraft]);
     expect(get(del.state)).toBeNull();
     expect(actions.calls).toEqual([`deletePreview ${epic.id}`]);
   });
 
   it("does not ask when the open panel is unrelated to the item", async () => {
     const { del, task, epic, panel, confirms } = await setup();
-    panel.set({ item: epic, ancestors: [] });
+    panel.set(viewOf(epic, []));
     await del.open(task);
     expect(confirms).toEqual([]);
     expect(get(del.state)?.item.id).toBe(task.id);
