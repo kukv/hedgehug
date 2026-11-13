@@ -301,3 +301,77 @@ func TestRepairRemovesRelationToPurged(t *testing.T) {
 		t.Errorf("%d commits %q", n, want)
 	}
 }
+
+func TestPurgedRefRefusesWrites(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	head := headCommit(t, a.dir).Hash
+	op := port.Operation{Actor: change.User("taro"), Summary: "完全に削除"}
+	err := a.stores.Write(t.Context(), a.id, op, func(ptx port.Tx) error {
+		if err := ptx.(*tx).purge(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}, "HH-2"); err != nil {
+			return err
+		}
+		if err := ptx.WriteItems().Append(apptest.SampleTask, change.NewSet("title", "x", "y")); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("Append after purge: %v", err)
+		}
+		if err := ptx.WriteItems().Describe(apptest.SampleTask, "本文"); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("Describe after purge: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasDir(a, apptest.SampleTask) {
+		t.Error("the folder came back")
+	}
+	if headCommit(t, a.dir).Hash == head {
+		t.Error("the purge was not committed")
+	}
+}
+
+// sampleLoose は、B がプロジェクトの直下に作る Epic(HH-3)。
+const sampleLoose item.ID = "01SAMPLELOOSE0000000000001"
+
+// ワークスペースとプロジェクトが完全に削除され、もう一方がその下にアイテムを作ったら、そのアイテムも消す。
+// ワークスペースが読めないので、purged.jsonl の display は内部 ID。
+func TestRepairPurgesUnderPurgedWorkspace(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0)
+	b.rep.Repair = noRepair
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを完全に削除"}
+	if err := a.stores.Write(t.Context(), a.id, op, func(ptx port.Tx) error {
+		x := ptx.(*tx)
+		return errors.Join(
+			x.purge(change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace}, "Web"),
+			x.purge(change.Ref{Kind: change.KindProject, ID: apptest.SampleProject}, "HH-P1"),
+			x.purge(change.Ref{Kind: change.KindItem, ID: apptest.SampleEpic}, "HH-1"),
+			x.purge(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}, "HH-2"),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b.write(t, "Epic を作る", func(tx port.Tx) error {
+		epic := item.Item{
+			ID: sampleLoose, Kind: item.Epic, Rank: rank.First, Title: "別の Epic",
+			Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 3},
+		}
+		return tx.WriteItems().Append(epic.ID, item.Create(epic))
+	})
+	a.sync(t, remote)
+	b.sync(t, remote)
+	a.sync(t, port.Remote{URL: remote.URL})
+	sameFiles(t, a, b)
+	if hasDir(b, sampleLoose) {
+		t.Error("the item is still there")
+	}
+	got := purgedLines(t, b, sampleLoose)
+	if len(got) != 1 || !strings.HasSuffix(got[0], `"display":"`+string(sampleLoose)+`"}`) {
+		t.Errorf("lines = %v", got)
+	}
+	want := string(sampleLoose) + " を完全に削除(祖先が完全に削除)"
+	if n := count(subjects(t, b.dir), want); n != 1 {
+		t.Errorf("%d commits %q", n, want)
+	}
+}

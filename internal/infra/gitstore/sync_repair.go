@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,7 +157,11 @@ func (s *Stores) repairPurged(root string) error {
 		display := st.display[id]
 		op := port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: display + " を完全に削除(祖先が完全に削除)"}
 		err := s.runTx(root, op, func(ptx port.Tx) error {
-			return ptx.(*tx).purge(change.Ref{Kind: change.KindItem, ID: id}, display)
+			x, ok := ptx.(*tx)
+			if !ok {
+				return fmt.Errorf("purge needs a gitstore tx, got %T", ptx)
+			}
+			return x.purge(change.Ref{Kind: change.KindItem, ID: id}, display)
 		})
 		if err != nil {
 			return err

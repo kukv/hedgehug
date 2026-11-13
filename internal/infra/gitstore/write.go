@@ -123,6 +123,10 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	if !ref.Valid() {
 		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, ref.ID)
 	}
+	// 同じ Tx で完全に削除したものには書けない(書くと、消したフォルダがまたできる)。
+	if t.gone[ref] {
+		return port.ErrNotFound
+	}
 	// 行がなければ pending に足さない。足すと、空のコミットや空の log.jsonl ができる。
 	if len(drafts) == 0 {
 		return nil
