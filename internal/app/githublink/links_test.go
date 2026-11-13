@@ -372,6 +372,40 @@ func TestRelinkClearsTheOldFailure(t *testing.T) {
 	}
 }
 
+// githubEvents は、store について EventGitHub を知らせた回数。
+func (f *linkFixture) githubEvents(store port.StoreID) int {
+	n := 0
+	for _, e := range f.events.List() {
+		if e == (port.Event{Kind: port.EventGitHub, Store: store}) {
+			n++
+		}
+	}
+	return n
+}
+
+// リンクで、置いてあった失敗の文言を消したか、チェックの結果を置いたら、EventGitHub を知らせる(Refresh と同じ)。
+func TestAddPublishesGitHubWhenItChanges(t *testing.T) {
+	f := newLinks(t)
+	quiet := port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 43, Values: itemlink.Values{Title: "q", State: itemlink.Open, Review: itemlink.NoReview}}
+	f.gh.Put("org/web", quiet)
+	f.gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 44, Values: quiet.Values})
+	if _, err := f.reads.SetFailure(t.Context(), linkStore, "pr:org/web#43", "状態を更新できませんでした: x"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		number string
+		want   int
+	}{{"43", 1}, {"41", 1}, {"44", 0}} { // 文言を消す・チェックの結果を置く・どちらも変わらない
+		base := f.githubEvents(linkStore)
+		if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", c.number, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.githubEvents(linkStore) - base; got != c.want {
+			t.Errorf("#%s: published %d, want %d", c.number, got, c.want)
+		}
+	}
+}
+
 func TestLinksOfMissingItem(t *testing.T) {
 	f := newLinks(t)
 	if _, err := f.links.List(t.Context(), linkStore, "01TESTIT0000000000000000NO"); !errors.Is(err, port.ErrNotFound) {

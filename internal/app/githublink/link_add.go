@@ -38,7 +38,7 @@ type addPlan struct {
 // 操作した人)、保存のあとに動いたルールの通知を書く。
 // アクティビティの文(「(プロジェクトのリポジトリにも追加)」の有無)は保存の前の値で決まる。保存の中で、
 // 同時に誰かがそのリポジトリをプロジェクトに足していたら、断らずに黙って足さない(文はそのまま。この狭い
-// 競合は受け入れる)。チェックの結果は、保存できたあとに置く。
+// 競合は受け入れる)。チェックの結果は、保存できたあとに置く。チェックの結果か失敗の文言が変わったら EventGitHub を流す。
 func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLinkInput) error {
 	if in.Kind != itemlink.PR && in.Kind != itemlink.Issue {
 		return port.ErrNotFound
@@ -63,9 +63,12 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 	}
 	// 通知を先に書く(チェックの結果を置くのに失敗しても、保存したルールの通知は失わない)
 	nerr := l.notify(ctx, store, fs)
-	_, cerr := l.saveChecks(ctx, store, plan.ref, plan.checks)
+	cc, cerr := l.saveChecks(ctx, store, plan.ref, plan.checks)
 	// 解除する前に置いた取り直しの失敗の文言を消す(いま GitHub から読めた。D4a-11)
-	_, ferr := l.setFailure(ctx, store, plan.ref.Key(), "")
+	fc, ferr := l.setFailure(ctx, store, plan.ref.Key(), "")
+	if cc || fc { // Refresh と同じく、このマシンが読んだ値が変わったら知らせる
+		l.Events.Publish(port.Event{Kind: port.EventGitHub, Store: store})
+	}
 	return errors.Join(nerr, cerr, ferr)
 }
 
