@@ -21,6 +21,7 @@ const overview = (active: Sprint | null): PlanningOverview => ({
   sprints: active ? [active] : [],
   releases: [],
   today: "2026-11-14",
+  retentionDays: 30,
 });
 
 describe("activeLabel", () => {

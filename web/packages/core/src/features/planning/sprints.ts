@@ -43,7 +43,7 @@ export function pill(s: Sprint, today: string): string | null {
 
 // ポイントは、詳細パネルのポイントと同じ書き方(数をそのまま)。小数の足し算の誤差(0.1 + 0.2)は出さない。
 // ポイントの小数の桁に上限はないので、決まった桁では丸めない。
-const pt = (n: number) => String(Number(n.toPrecision(12)));
+export const pt = (n: number) => String(Number(n.toPrecision(12)));
 
 // progressText は、進捗のバーの横の文。中止は API が除いて数えている。完了したスプリントには確定値を続ける。
 export function progressText(c: SprintCard): string {

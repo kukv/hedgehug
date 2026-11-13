@@ -45,6 +45,7 @@ const toOverview = (o: ApiOverview): PlanningOverview => ({
   sprints: (o.sprints ?? []).map(toSprint),
   releases: (o.releases ?? []).map(toRelease),
   today: o.today,
+  retentionDays: o.retentionDays,
 });
 
 const toSprintCard = (c: ApiSprintCard): SprintCard => ({

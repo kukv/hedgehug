@@ -59,6 +59,7 @@ describe("planning port: reads", () => {
       sprints: [sprint],
       releases: [release],
       today: "2026-11-14",
+      retentionDays: 14,
     });
     const o = await createPlanningPort().overview("S1", "W1");
     expect(call(fetch).url).toBe(`${base}/planning`);
@@ -68,6 +69,7 @@ describe("planning port: reads", () => {
       sprints: [sprint],
       releases: [release],
       today: "2026-11-14",
+      retentionDays: 14,
     });
   });
 

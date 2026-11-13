@@ -18,6 +18,8 @@ type Overview struct {
 	Active   *planning.Sprint // 実行中のスプリント。なければ nil
 	Defaults SprintInput      // スプリントの作成の既定(F1-7)
 	Today    string
+	// RetentionDays は、その Store の削除済みの保持日数(スプリントの削除の確認の文。05)。
+	RetentionDays int
 }
 
 // Row は、カードのアイテムの 1 行。
@@ -67,7 +69,8 @@ func (s Service) Overview(ctx context.Context, store port.StoreID, ws workspace.
 		ov.Today = planning.Today(s.Clock.Now())
 		name, start, end := planning.SprintDefaults(live, ov.Today)
 		ov.Defaults = SprintInput{Name: name, Start: start, End: end}
-		return nil
+		ov.RetentionDays, err = r.RetentionDays()
+		return err
 	})
 	return ov, err
 }

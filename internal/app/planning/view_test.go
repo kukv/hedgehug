@@ -229,13 +229,18 @@ func TestOverview(t *testing.T) {
 }
 
 func TestOverviewNoActive(t *testing.T) {
-	svc, _ := setup(t)
+	svc, rec := setup(t)
+	rec.Stores.(*apptest.Stores).SetRetentionDays(store, 14)
 	ov, err := svc.Overview(t.Context(), store, apptest.SampleWorkspace)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ov.Active != nil || len(ov.Sprints) != 0 || ov.Defaults.Name != "Sprint 1" || ov.Defaults.Start != ov.Today {
 		t.Errorf("Overview = %+v", ov)
+	}
+	// スプリントの削除の確認の文に使う、その Store の削除済みの保持日数。
+	if ov.RetentionDays != 14 {
+		t.Errorf("RetentionDays = %d", ov.RetentionDays)
 	}
 }
 

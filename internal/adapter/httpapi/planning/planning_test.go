@@ -60,7 +60,7 @@ func idOf(t *testing.T, res *httptest.ResponseRecorder) string {
 func TestEmptyPlanning(t *testing.T) {
 	api := newAPI(t)
 	check(t, "overview", api.Get(base+"/planning"), http.StatusOK,
-		`{"sprints":[],"releases":[],"active":null,"defaults":{"name":"Sprint 1","start":"2026-11-13","end":"2026-11-26"},"today":"2026-11-13"}`)
+		`{"sprints":[],"releases":[],"active":null,"defaults":{"name":"Sprint 1","start":"2026-11-13","end":"2026-11-26"},"today":"2026-11-13","retentionDays":30}`)
 	check(t, "sprints", api.Get(base+"/sprints"), http.StatusOK, `[]`)
 	check(t, "releases", api.Get(base+"/releases"), http.StatusOK, `[]`)
 	check(t, "unknown workspace", api.Get("/api/stores/S1/workspaces/01NOPE0000000000000000000/planning"), http.StatusNotFound, "")

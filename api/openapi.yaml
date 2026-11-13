@@ -856,6 +856,10 @@ components:
           items:
             $ref: "#/components/schemas/Release"
           type: array
+        retentionDays:
+          description: その Store の削除済みの保持日数
+          format: int64
+          type: integer
         sprints:
           items:
             $ref: "#/components/schemas/Sprint"
@@ -869,6 +873,7 @@ components:
         - active
         - defaults
         - today
+        - retentionDays
       type: object
     PlanningRow:
       additionalProperties: false

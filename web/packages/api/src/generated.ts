@@ -671,6 +671,8 @@ export interface PlanningOverview {
   active: ActiveSprint | null;
   defaults: SprintDefaults;
   releases: Release[];
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
   sprints: Sprint[];
   /** YYYY-MM-DD */
   today: string;
