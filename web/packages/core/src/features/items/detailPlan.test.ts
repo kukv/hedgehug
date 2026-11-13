@@ -62,6 +62,19 @@ describe("createDetail sprint and release", () => {
     });
   });
 
+  it("shows other failures as the save-failed toast and tells the field to revert", async () => {
+    const { detail, planning, toasts, changed } = await setup();
+    planning.failNext(new Error("404"));
+    expect(await detail.setSprint("SP1")).toBe(false);
+    planning.failNext(new Error("network"));
+    expect(await detail.setRelease("R1")).toBe(false);
+    expect(get(toasts.list).map((t) => [t.text, t.error])).toEqual([
+      ["保存できませんでした", true],
+      ["保存できませんでした", true],
+    ]);
+    expect(changed()).toBe(0);
+  });
+
   it("does not rewrite a deleted sprint shown as the backlog when the backlog is picked", async () => {
     const { detail, planning, changed } = await setup("gone", "gone");
     expect(await detail.setSprint("")).toBe(true);

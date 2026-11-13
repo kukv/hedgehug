@@ -60,7 +60,7 @@ func idOf(t *testing.T, res *httptest.ResponseRecorder) string {
 func TestEmptyPlanning(t *testing.T) {
 	api := newAPI(t)
 	check(t, "overview", api.Get(base+"/planning"), http.StatusOK,
-		`{"sprints":[],"releases":[],"active":null,"defaults":{"name":"Sprint 1","start":"2026-11-13","end":"2026-11-26"},"today":"2026-11-13","retentionDays":30}`)
+		`{"sprints":[],"releases":[],"active":null,"defaults":{"name":"Sprint 1","start":"2026-11-13","end":"2026-11-26"},"retentionDays":30}`)
 	check(t, "sprints", api.Get(base+"/sprints"), http.StatusOK, `[]`)
 	check(t, "releases", api.Get(base+"/releases"), http.StatusOK, `[]`)
 	check(t, "unknown workspace", api.Get("/api/stores/S1/workspaces/01NOPE0000000000000000000/planning"), http.StatusNotFound, "")
@@ -74,9 +74,13 @@ func TestSprintAPI(t *testing.T) {
 	sp := idOf(t, res)
 	check(t, "duplicate", api.Post(base+"/sprints", in), http.StatusUnprocessableEntity, "同じ名前のスプリントがあります")
 	check(t, "bad date", api.Post(base+"/sprints", map[string]any{"name": "Sprint 2", "start": "11/13", "end": "", "goal": ""}), http.StatusUnprocessableEntity, "")
+	// 形だけ合う、暦にない日付も断る。
+	check(t, "impossible date", api.Post(base+"/sprints", map[string]any{"name": "Sprint 2", "start": "", "end": "2026-13-45", "goal": ""}), http.StatusUnprocessableEntity, "not a date: 2026-13-45")
+	check(t, "update impossible date", api.Put(base+"/sprints/"+sp, map[string]any{"name": "Sprint 1", "start": "2026-02-30", "end": "", "goal": ""}), http.StatusUnprocessableEntity, "not a date: 2026-02-30")
 	in["goal"] = "認証"
 	check(t, "update", api.Put(base+"/sprints/"+sp, in), http.StatusNoContent, "")
 	check(t, "start bad date", api.Post(base+"/sprints/"+sp+"/start", map[string]any{"start": "x", "end": "2026-11-26"}), http.StatusUnprocessableEntity, "")
+	check(t, "start impossible date", api.Post(base+"/sprints/"+sp+"/start", map[string]any{"start": "2026-11-13", "end": "2026-11-31"}), http.StatusUnprocessableEntity, "not a date: 2026-11-31")
 	check(t, "start", api.Post(base+"/sprints/"+sp+"/start", map[string]any{"start": "2026-11-13", "end": "2026-11-26"}), http.StatusNoContent, "")
 	check(t, "card", api.Get(base+"/sprints"), http.StatusOK, `"goal":"認証"`)
 	check(t, "active", api.Get(base+"/planning"), http.StatusOK, `"active":{"id":"`+sp+`"`)
@@ -111,6 +115,8 @@ func TestReleaseAPI(t *testing.T) {
 	rel := idOf(t, res)
 	check(t, "duplicate", api.Post(base+"/releases", in), http.StatusUnprocessableEntity, "同じ名前のリリースがあります")
 	check(t, "bad date", api.Post(base+"/releases", map[string]any{"name": "v2", "date": "2026/12/01", "description": ""}), http.StatusUnprocessableEntity, "")
+	check(t, "impossible date", api.Post(base+"/releases", map[string]any{"name": "v2", "date": "2026-13-45", "description": ""}), http.StatusUnprocessableEntity, "not a date: 2026-13-45")
+	check(t, "update impossible date", api.Put(base+"/releases/"+rel, map[string]any{"name": "v1.0.0", "date": "2026-02-30", "description": ""}), http.StatusUnprocessableEntity, "not a date: 2026-02-30")
 	in["description"] = "初版"
 	check(t, "update", api.Put(base+"/releases/"+rel, in), http.StatusNoContent, "")
 	check(t, "state", api.Put(base+"/releases/"+rel+"/state", map[string]any{"state": "released"}), http.StatusNoContent, "")

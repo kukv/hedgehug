@@ -10,13 +10,14 @@ import {
 import { overviewOf, releaseOf, sprintOf } from "./fixtures.test-util";
 
 // アイテムのスプリント・リリースの選択肢(02「スプリント・リリース」、05、F1-5・F1-15・F1-21)。
+// 概要のスプリントは API が並べた順(実行中、計画中を開始日の早い順・期間未定は最後、完了)。
 const sprints = [
-  sprintOf({ id: "S0", name: "Sprint 0", state: "closed", start: "2026-10-01" }),
-  sprintOf({ id: "S3", name: "Sprint 3", state: "planned" }),
-  sprintOf({ id: "S2b", name: "Sprint 2b", state: "planned", start: "2026-11-16" }),
-  sprintOf({ id: "S2a", name: "Sprint 2a", state: "planned", start: "2026-11-16" }),
   sprintOf({ id: "S1", name: "Sprint 1", state: "active", start: "2026-11-02" }),
+  sprintOf({ id: "S2a", name: "Sprint 2a", state: "planned", start: "2026-11-16" }),
+  sprintOf({ id: "S2b", name: "Sprint 2b", state: "planned", start: "2026-11-16" }),
   sprintOf({ id: "S4", name: "Sprint 4", state: "planned", start: "2026-11-30" }),
+  sprintOf({ id: "S3", name: "Sprint 3", state: "planned" }),
+  sprintOf({ id: "S0", name: "Sprint 0", state: "closed", start: "2026-10-01" }),
 ];
 const o = overviewOf(sprints, [
   releaseOf({ id: "R1", name: "v1.0", state: "released" }),
@@ -34,6 +35,14 @@ describe("sprintChoices", () => {
       { id: "S4", label: "Sprint 4" },
       { id: "S3", label: "Sprint 3" },
     ]);
+  });
+
+  it("keeps the API order instead of sorting again (the server compares names as UTF-8 bytes)", () => {
+    const api = overviewOf([
+      sprintOf({ id: "FW", name: "\uFF21", state: "planned", start: "2026-11-16" }),
+      sprintOf({ id: "EM", name: "\u{1F600}", state: "planned", start: "2026-11-16" }),
+    ]);
+    expect(sprintChoices(api, "").map((c) => c.id)).toEqual(["", "FW", "EM"]);
   });
 
   it("keeps the closed sprint the item is in", () => {

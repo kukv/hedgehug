@@ -52,6 +52,9 @@ func registerReleases(api huma.API, svc appplanning.Service) {
 		Summary: "リリースを作成", DefaultStatus: http.StatusCreated,
 	},
 		func(ctx context.Context, in *createReleaseInput) (*releaseOutput, error) {
+			if err := apierr.CheckDates(in.Body.Date); err != nil {
+				return nil, err
+			}
 			store, ws := wsOf(in.Store, in.Workspace)
 			r, err := svc.CreateRelease(ctx, store, ws, in.Body.app())
 			if err != nil {
@@ -64,6 +67,9 @@ func registerReleases(api huma.API, svc appplanning.Service) {
 		Summary: "リリースを編集", DefaultStatus: http.StatusNoContent,
 	},
 		func(ctx context.Context, in *updateReleaseInput) (*struct{}, error) {
+			if err := apierr.CheckDates(in.Body.Date); err != nil {
+				return nil, err
+			}
 			store, ws, id := idsOf(in.Store, in.Workspace, in.Release)
 			return nil, apierr.From(svc.UpdateRelease(ctx, store, ws, id, in.Body.app()))
 		})

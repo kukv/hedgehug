@@ -127,6 +127,9 @@ func registerSprints(api huma.API, svc appplanning.Service) {
 		Summary: "スプリントを作成", DefaultStatus: http.StatusCreated,
 	},
 		func(ctx context.Context, in *createSprintInput) (*sprintOutput, error) {
+			if err := apierr.CheckDates(in.Body.Start, in.Body.End); err != nil {
+				return nil, err
+			}
 			store, ws := wsOf(in.Store, in.Workspace)
 			sp, err := svc.CreateSprint(ctx, store, ws, in.Body.app())
 			if err != nil {
@@ -139,6 +142,9 @@ func registerSprints(api huma.API, svc appplanning.Service) {
 		Summary: "スプリントを編集", DefaultStatus: http.StatusNoContent,
 	},
 		func(ctx context.Context, in *updateSprintInput) (*struct{}, error) {
+			if err := apierr.CheckDates(in.Body.Start, in.Body.End); err != nil {
+				return nil, err
+			}
 			store, ws, id := idsOf(in.Store, in.Workspace, in.Sprint)
 			return nil, apierr.From(svc.UpdateSprint(ctx, store, ws, id, in.Body.app()))
 		})
@@ -166,6 +172,9 @@ func registerSprintStates(api huma.API, svc appplanning.Service) {
 		Summary: "計画中のスプリントを開始", DefaultStatus: http.StatusNoContent,
 	},
 		func(ctx context.Context, in *startInput) (*struct{}, error) {
+			if err := apierr.CheckDates(in.Body.Start, in.Body.End); err != nil {
+				return nil, err
+			}
 			store, ws, id := idsOf(in.Store, in.Workspace, in.Sprint)
 			return nil, apierr.From(svc.StartSprint(ctx, store, ws, id, in.Body.Start, in.Body.End))
 		})

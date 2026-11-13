@@ -20,7 +20,6 @@ const overview = (active: Sprint | null): PlanningOverview => ({
   defaults: { name: "Sprint 5", start: "2026-11-16", end: "2026-11-29" },
   sprints: active ? [active] : [],
   releases: [],
-  today: "2026-11-14",
   retentionDays: 30,
 });
 

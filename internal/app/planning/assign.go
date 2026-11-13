@@ -11,7 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/rank"
-	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
 // errSameRef は、アイテムのスプリントかリリースがすでに同じで保存しないことを伝える。
@@ -25,7 +24,8 @@ type assignment struct {
 }
 
 // SetSprint は、アイテム id のスプリントを sprint(nil ならバックログ)にする(F1-11・F1-15・F1-16)。
-// 同じ保存で、rank を移動先の枠の末尾にする。枠が空なら rank は変えない。
+// 同じ保存で、rank を移動先の枠の末尾にする。枠が空なら rank は変えない。使えないスプリントへの参照は
+// バックログと同じ値として扱い、書き換えない(F1-5。スプリントを戻せばアイテムも戻る)。
 func (s Service) SetSprint(ctx context.Context, store port.StoreID, id item.ID, sprint *change.ID) error {
 	return s.assign(ctx, store, id, func(r port.Reader, it item.Item, p planning.Plan) (assignment, error) {
 		if !planning.IsWork(it.Kind) {
@@ -34,13 +34,13 @@ func (s Service) SetSprint(ctx context.Context, store port.StoreID, id item.ID, 
 		a := assignment{label: "スプリント", name: "バックログ"}
 		var to change.ID
 		if sprint != nil {
-			sp, err := sprintFor(p, it, *sprint)
+			sp, err := planning.AssignableSprint(p, *sprint, it.Kind, it.Sprint)
 			if err != nil {
-				return assignment{}, err
+				return assignment{}, sprintErr(err)
 			}
 			to, a.name = sp.ID, oneLine(sp.Name)
 		}
-		if to == it.Sprint {
+		if _, ok := p.UsableSprint(it.Sprint); to == it.Sprint || to == "" && !ok {
 			return assignment{}, errSameRef
 		}
 		end, err := frameEnd(r, it, to, p)
@@ -56,6 +56,7 @@ func (s Service) SetSprint(ctx context.Context, store port.StoreID, id item.ID, 
 }
 
 // SetRelease は、アイテム id のリリースを release(nil ならなし)にする(F1-15・F1-16)。rank は変えない。
+// 使えないリリースへの参照は「なし」と同じ値として扱い、書き換えない(F1-5)。
 func (s Service) SetRelease(ctx context.Context, store port.StoreID, id item.ID, release *change.ID) error {
 	return s.assign(ctx, store, id, func(_ port.Reader, it item.Item, p planning.Plan) (assignment, error) {
 		if it.Kind == item.Step {
@@ -73,7 +74,7 @@ func (s Service) SetRelease(ctx context.Context, store port.StoreID, id item.ID,
 			}
 			to, a.name = r.ID, oneLine(r.Name)
 		}
-		if to == it.Release {
+		if _, ok := p.UsableRelease(it.Release); to == it.Release || to == "" && !ok {
 			return assignment{}, errSameRef
 		}
 		a.drafts = []change.Draft{change.NewSet(item.ReleaseField, refValue(it.Release), refValue(to))}
@@ -81,37 +82,30 @@ func (s Service) SetRelease(ctx context.Context, store port.StoreID, id item.ID,
 	})
 }
 
-// sprintFor は、アイテム it を入れられるスプリント id。削除済みかなければ ErrNotFound。
-// 完了したスプリントは、いま入っているときだけ返す。
-func sprintFor(p planning.Plan, it item.Item, id change.ID) (planning.Sprint, error) {
-	sp, ok := p.UsableSprint(id)
-	if !ok {
-		return planning.Sprint{}, port.ErrNotFound
+// sprintErr は、planning.AssignableSprint の断りでないエラーを、保存の口のエラーにする。
+func sprintErr(err error) error {
+	switch {
+	case errors.Is(err, planning.ErrNotWork):
+		return fmt.Errorf("%w: %w", port.ErrInvalidOperation, err)
+	case errors.Is(err, planning.ErrNoSprint):
+		return port.ErrNotFound
 	}
-	if sp.State == planning.Closed && it.Sprint != sp.ID {
-		return planning.Sprint{}, refusal.New("完了したスプリントには入れられません")
-	}
-	return sp, nil
+	return err
 }
 
-// frameEnd は、アイテム it を除いた、移動先の枠(sprint が空ならバックログ)の末尾の rank。
+// frameEnd は、移動先の枠(sprint が空ならバックログ)の末尾の rank。アイテム it は移動先の枠に入っていない
+// (同じ参照は保存しない)。
 func frameEnd(r port.Reader, it item.Item, sprint change.ID, p planning.Plan) (string, error) {
 	ws := it.Place.Workspace
 	st, err := r.Workspaces().Settings(ws)
 	if err != nil {
 		return "", err
 	}
-	all, err := works(r, ws)
+	its, err := items(r, ws)
 	if err != nil {
 		return "", err
 	}
-	others := make([]planning.Work, 0, len(all))
-	for _, w := range all {
-		if w.Item.ID != it.ID {
-			others = append(others, w)
-		}
-	}
-	return planning.FrameEnd(others, ws, sprint, p, st), nil
+	return planning.FrameEnd(its, ws, sprint, p, st), nil
 }
 
 // refValue は、参照の値。空は null。

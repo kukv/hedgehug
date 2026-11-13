@@ -73,7 +73,6 @@ type PlanningOverview struct {
 	Releases []Release      `json:"releases" nullable:"false"`
 	Active   *ActiveSprint  `json:"active"`
 	Defaults SprintDefaults `json:"defaults"`
-	Today    string         `json:"today" doc:"YYYY-MM-DD"`
 	// RetentionDays は、スプリントの削除の確認の文に使う(05「削除」)。
 	RetentionDays int `json:"retentionDays" doc:"その Store の削除済みの保持日数"`
 }
@@ -140,7 +139,7 @@ func toRelease(r planning.Release) Release {
 
 func toOverview(v appplanning.Overview) PlanningOverview {
 	out := PlanningOverview{
-		Sprints: []Sprint{}, Releases: []Release{}, Today: v.Today, RetentionDays: v.RetentionDays,
+		Sprints: []Sprint{}, Releases: []Release{}, RetentionDays: v.RetentionDays,
 		Defaults: SprintDefaults{Name: v.Defaults.Name, Start: v.Defaults.Start, End: v.Defaults.End},
 	}
 	for _, s := range v.Sprints {

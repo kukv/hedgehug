@@ -23,6 +23,17 @@ export function sprintForm(s: Sprint): SprintInput {
   return { name: s.name, goal: s.goal, start: s.start, end: s.end };
 }
 
+export type SprintDialogKind = "create" | "edit" | "start" | "close" | "delete";
+
+// overviewFirst は、ダイアログを出す前に概要を読み直すか。作成は、既定(開始日は今日から決まる)が古く
+// ならないよう毎回。完了・削除は、移動先・保持日数を使うので、まだ読めていなければ(loaded が false)。
+export const overviewFirst = (kind: SprintDialogKind, loaded: boolean): boolean =>
+  kind === "create" || (!loaded && (kind === "close" || kind === "delete"));
+
+// currentSprintCard は、いまのカード cards の中の、スプリント id のカード。なくなっていれば null。
+export const currentSprintCard = (cards: SprintCard[] | undefined, id: string): SprintCard | null =>
+  cards?.find((c) => c.sprint.id === id) ?? null;
+
 // startBody は、開始のダイアログの本文。件数とポイントは中止を除く(API が除いて数えている)。
 export function startBody(c: SprintCard): string {
   return `${c.total.count} 件・${pt(c.total.points)} pt で始めます。`;
@@ -53,17 +64,10 @@ export interface CloseDestination {
   label: string;
 }
 
-// closeDestinations は、未完了のアイテムの移動先。計画中のスプリントを開始日の早い順(期間未定は最後。
-// 同じ開始日は概要の並びのまま)に並べ、最後に「バックログ」。closing は完了するスプリントの ID。
+// closeDestinations は、未完了のアイテムの移動先。計画中のスプリントを概要の並び(API が開始日の早い順・
+// 期間未定は最後・同じは名前の昇順に並べている)のまま出し、最後に「バックログ」。closing は完了するスプリントの ID。
 export function closeDestinations(o: PlanningOverview, closing: string): CloseDestination[] {
-  const planned = o.sprints
-    .filter((s) => s.state === "planned" && s.id !== closing)
-    .sort((a, b) => {
-      if (a.start === b.start) return 0;
-      if (a.start === "") return 1;
-      if (b.start === "") return -1;
-      return a.start < b.start ? -1 : 1;
-    });
+  const planned = o.sprints.filter((s) => s.state === "planned" && s.id !== closing);
   return [...planned.map((s) => ({ id: s.id, label: s.name })), { id: null, label: "バックログ" }];
 }
 

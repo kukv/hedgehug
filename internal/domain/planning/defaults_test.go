@@ -63,18 +63,6 @@ func TestSprintDefaultsExcludesDeletedByCaller(t *testing.T) {
 	}
 }
 
-func TestRemainingDays(t *testing.T) {
-	if n, over := planning.RemainingDays("2026-11-14", "2026-11-14"); n != 1 || over {
-		t.Fatalf("当日 = %d %v", n, over)
-	}
-	if n, over := planning.RemainingDays("2026-11-15", "2026-11-14"); n != 2 || over {
-		t.Fatalf("明日 = %d %v", n, over)
-	}
-	if _, over := planning.RemainingDays("2026-11-13", "2026-11-14"); !over {
-		t.Fatal("昨日は期限切れ")
-	}
-}
-
 func TestTodayAndAddDays(t *testing.T) {
 	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.Local)
 	if got := planning.Today(now); got != "2026-11-14" {

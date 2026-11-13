@@ -29,7 +29,6 @@ export const overviewOf = (sprints: Sprint[] = [], releases: Release[] = []): Pl
   defaults: { name: "Sprint 9", start: "2026-11-16", end: "2026-11-29" },
   sprints,
   releases,
-  today: "2026-11-14",
   retentionDays: 30,
 });
 
@@ -39,23 +38,28 @@ export interface FakePlanning extends PlanningPort {
   overviews: Record<string, PlanningOverview>;
   // refuseNext は、次の setItemSprint か setItemRelease を、この文言の断りにする(1 回だけ)。
   refuseNext(message: string): void;
+  // failNext は、次の setItemSprint か setItemRelease を、断りでない失敗 e にする(1 回だけ)。
+  failNext(e: Error): void;
 }
 
 // fakePlanningPort は、概要とアイテムの所属だけを答える口。ほかの操作は呼ばれたら失敗する。
 export function fakePlanningPort(overviews: Record<string, PlanningOverview> = {}): FakePlanning {
   const calls: string[] = [];
-  let refusal = "";
+  let failure: Error | null = null;
   const take = () => {
-    const m = refusal;
-    refusal = "";
-    if (m) throw new Refused(m);
+    const e = failure;
+    failure = null;
+    if (e) throw e;
   };
   const unused = () => Promise.reject(new Error("not used"));
   return {
     calls,
     overviews,
     refuseNext(m) {
-      refusal = m;
+      failure = new Refused(m);
+    },
+    failNext(e) {
+      failure = e;
     },
     async overview(_s, w) {
       calls.push(`overview ${w}`);

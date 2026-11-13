@@ -70,12 +70,11 @@ func (s Service) DeleteRelease(ctx context.Context, store port.StoreID, ws works
 
 // clearRefs は、ワークスペース ws の削除済みでないアイテムのうち、ref が id のものの項目 f を null にする。
 func clearRefs(tx port.Tx, ws workspace.ID, f string, id change.ID, ref func(item.Item) change.ID) error {
-	all, err := works(tx, ws)
+	its, err := items(tx, ws)
 	if err != nil {
 		return err
 	}
-	for _, w := range all {
-		it := w.Item
+	for _, it := range its {
 		if it.Deleted != nil || it.Place.Workspace != ws || ref(it) != id {
 			continue
 		}

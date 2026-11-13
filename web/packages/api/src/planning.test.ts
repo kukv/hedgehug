@@ -59,7 +59,6 @@ describe("planning port: reads", () => {
       defaults: { name: "Sprint 5", start: "2026-11-16", end: "2026-11-29" },
       sprints: [sprint],
       releases: [release],
-      today: "2026-11-14",
       retentionDays: 14,
     });
     const o = await createPlanningPort().overview("S1", "W1");
@@ -69,7 +68,6 @@ describe("planning port: reads", () => {
       defaults: { name: "Sprint 5", start: "2026-11-16", end: "2026-11-29" },
       sprints: [sprint],
       releases: [release],
-      today: "2026-11-14",
       retentionDays: 14,
     });
   });

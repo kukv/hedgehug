@@ -29,17 +29,6 @@ func ScreenOrder(live []Sprint) []Sprint {
 	return out
 }
 
-// PlannedOrder は、計画中のスプリントだけを ScreenOrder の計画中の順にしたもの。
-func PlannedOrder(live []Sprint) []Sprint {
-	var out []Sprint
-	for _, s := range ScreenOrder(live) {
-		if s.State == Planned {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // ReleaseOrder は、リリースの並び。状態(未リリース、リリース済み、アーカイブ)、予定日の早い順(なしは同じ状態の最後)、名前の昇順。
 func ReleaseOrder(live []Release) []Release {
 	out := slices.Clone(live)

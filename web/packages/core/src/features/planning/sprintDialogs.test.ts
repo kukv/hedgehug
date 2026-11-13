@@ -5,9 +5,11 @@ import {
   closeBody,
   closeDefault,
   closeDestinations,
+  currentSprintCard,
   deleteBody,
   keptDestination,
   newSprintForm,
+  overviewFirst,
   runSprintAction,
   sprintClosed,
   sprintCreated,
@@ -45,7 +47,6 @@ const overview = (sprints: Sprint[]): PlanningOverview => ({
   defaults: { name: "Sprint 5", start: "2026-11-16", end: "2026-11-29" },
   sprints,
   releases: [],
-  today: "2026-11-14",
   retentionDays: 30,
 });
 
@@ -121,14 +122,24 @@ describe("closeBody", () => {
 });
 
 describe("closeDestinations", () => {
+  // 概要のスプリントは API が並べた順(実行中、計画中を開始日の早い順・期間未定は最後、完了)。
   const list = [
     sprint({ id: "A", name: "Sprint 4", state: "active" }),
-    sprint({ id: "U", name: "未定", start: "", end: "" }),
-    sprint({ id: "L", name: "Sprint 7", start: "2026-12-01", end: "2026-12-14" }),
     sprint({ id: "E", name: "Sprint 5", start: "2026-11-16", end: "2026-11-29" }),
-    sprint({ id: "C", name: "Sprint 3", state: "closed" }),
     sprint({ id: "E2", name: "Sprint 6", start: "2026-11-16", end: "" }),
+    sprint({ id: "L", name: "Sprint 7", start: "2026-12-01", end: "2026-12-14" }),
+    sprint({ id: "U", name: "未定", start: "", end: "" }),
+    sprint({ id: "C", name: "Sprint 3", state: "closed" }),
   ];
+
+  it("keeps the API order instead of sorting again (the server compares names as UTF-8 bytes)", () => {
+    const api = overview([
+      sprint({ id: "A", state: "active" }),
+      sprint({ id: "FW", name: "\uFF21", start: "2026-11-16", end: "" }),
+      sprint({ id: "EM", name: "\u{1F600}", start: "2026-11-16", end: "" }),
+    ]);
+    expect(closeDestinations(api, "A").map((d) => d.id)).toEqual(["FW", "EM", null]);
+  });
 
   it("lists planned sprints by start date, undecided last, then the backlog", () => {
     expect(closeDestinations(overview(list), "A")).toEqual([
@@ -155,6 +166,31 @@ describe("closeDestinations", () => {
     const o = overview([sprint({ id: "A", state: "active" })]);
     expect(closeDestinations(o, "A")).toEqual([{ id: null, label: "バックログ" }]);
     expect(closeDefault(o, "A")).toBeNull();
+  });
+});
+
+describe("overviewFirst", () => {
+  it("always reads the overview again before the create dialog (the defaults may be from yesterday)", () => {
+    expect(overviewFirst("create", true)).toBe(true);
+    expect(overviewFirst("create", false)).toBe(true);
+  });
+
+  it("reads it before close and delete only when it is not loaded yet", () => {
+    expect(overviewFirst("close", false)).toBe(true);
+    expect(overviewFirst("delete", false)).toBe(true);
+    expect(overviewFirst("close", true)).toBe(false);
+    expect(overviewFirst("delete", true)).toBe(false);
+    expect(overviewFirst("edit", false)).toBe(false);
+    expect(overviewFirst("start", false)).toBe(false);
+  });
+});
+
+describe("currentSprintCard", () => {
+  it("finds the card of the sprint in the current cards, or null when it is gone", () => {
+    const now = card({ sprint: sprint({ id: "SP4" }), undone: 1 });
+    expect(currentSprintCard([card({ sprint: sprint({ id: "SP1" }) }), now], "SP4")).toBe(now);
+    expect(currentSprintCard([now], "SP9")).toBeNull();
+    expect(currentSprintCard(undefined, "SP4")).toBeNull();
   });
 });
 

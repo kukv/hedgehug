@@ -2,24 +2,21 @@
   import {
     activeLabel,
     dayOf,
-    newSprintForm,
+    overviewFirst,
     readOnlyBand,
     readOnlyNote,
     type SprintCard,
+    type SprintDialogKind,
     type StoreNode,
-    sprintForm,
     type WorkspaceNode,
     type WorkspaceTab,
     workspaceTabOf,
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
   import { navigation, planning, projectDialog, syncNow } from "../../wire";
-  import CloseSprintDialog from "../planning/CloseSprintDialog.svelte";
-  import DeleteSprintDialog from "../planning/DeleteSprintDialog.svelte";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
-  import SprintDialog from "../planning/SprintDialog.svelte";
+  import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
-  import StartSprintDialog from "../planning/StartSprintDialog.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
 
   // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「設定」。
@@ -67,16 +64,15 @@
   const active = $derived(ov ? activeLabel(ov, $syncNow.getFullYear()) : null);
 
   // スプリントのダイアログ(05)。開いたワークスペースのものだけ出す(別のワークスペースへ移ったら出さない)。
-  // 作成・完了・削除は概要(既定・移動先・保持日数)を使うので、まだ読めていなければ読み直してから出す。
+  // 作成・完了・削除は概要(既定・移動先・保持日数)を使うので、読み直してから出す(overviewFirst)。
   // 読み直しても読めなければ出さない(概要の読み込みは断りを出さない。A2 の決定 29)。
-  type SprintDialogKind = "create" | "edit" | "start" | "close" | "delete";
   let dialog = $state<{ kind: SprintDialogKind; card: SprintCard | null; wid: string } | null>(
     null,
   );
   async function openSprint(kind: SprintDialogKind, card: SprintCard | null = null) {
     const opening = wid;
     const needs = kind !== "edit" && kind !== "start";
-    if (needs && !ov) await planning.reload();
+    if (overviewFirst(kind, ov !== null)) await planning.reload();
     if (opening === wid && (!needs || ov)) dialog = { kind, card, wid: opening };
   }
   const closeSprint = () => (dialog = null);
@@ -85,7 +81,6 @@
   $effect(() => {
     if (dialog && !shown) dialog = null;
   });
-  const card = $derived(shown?.card ?? null);
 </script>
 
 <PageHead title={workspace.name} {ondrawer} {alert}>
@@ -132,38 +127,14 @@
       readOnly={store.readOnly}
     />
   {/if}
-  {#if shown?.kind === "create" && ov}
-    <SprintDialog
+  {#if shown}
+    <SprintDialogs
       storeId={sid}
       workspaceId={wid}
-      sprint={null}
-      initial={newSprintForm(ov)}
-      onclose={closeSprint}
-    />
-  {:else if shown?.kind === "edit" && card}
-    <SprintDialog
-      storeId={sid}
-      workspaceId={wid}
-      sprint={card.sprint}
-      initial={sprintForm(card.sprint)}
-      onclose={closeSprint}
-    />
-  {:else if shown?.kind === "start" && card}
-    <StartSprintDialog
-      storeId={sid}
-      workspaceId={wid}
-      {card}
+      kind={shown.kind}
+      card={shown.card}
+      overview={ov}
       today={dayOf($syncNow)}
-      onclose={closeSprint}
-    />
-  {:else if shown?.kind === "close" && card && ov}
-    <CloseSprintDialog storeId={sid} workspaceId={wid} {card} overview={ov} onclose={closeSprint} />
-  {:else if shown?.kind === "delete" && card && ov}
-    <DeleteSprintDialog
-      storeId={sid}
-      workspaceId={wid}
-      {card}
-      retentionDays={ov.retentionDays}
       onclose={closeSprint}
     />
   {/if}

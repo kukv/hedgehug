@@ -220,8 +220,8 @@ func TestOverview(t *testing.T) {
 	}
 	today := dp.Today(svc.Clock.Now())
 	name, start, end := dp.SprintDefaults(ov.Sprints, today)
-	if ov.Defaults != (planning.SprintInput{Name: name, Start: start, End: end}) || ov.Today != today {
-		t.Errorf("Defaults = %+v, Today = %s", ov.Defaults, ov.Today)
+	if ov.Defaults != (planning.SprintInput{Name: name, Start: start, End: end}) {
+		t.Errorf("Defaults = %+v", ov.Defaults)
 	}
 	if name != "Sprint 3" {
 		t.Errorf("既定の名前 = %q(削除済みは数えない)", name)
@@ -235,7 +235,7 @@ func TestOverviewNoActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ov.Active != nil || len(ov.Sprints) != 0 || ov.Defaults.Name != "Sprint 1" || ov.Defaults.Start != ov.Today {
+	if ov.Active != nil || len(ov.Sprints) != 0 || ov.Defaults.Name != "Sprint 1" || ov.Defaults.Start != dp.Today(svc.Clock.Now()) {
 		t.Errorf("Overview = %+v", ov)
 	}
 	// スプリントの削除の確認の文に使う、その Store の削除済みの保持日数。

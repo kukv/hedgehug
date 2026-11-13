@@ -3,12 +3,14 @@ import type { Item } from "../../model/item";
 import type { PlanningOverview } from "../../model/planning";
 import type { PlanningPort } from "../../port/planning";
 import { chosen, releaseChoices, sprintChoices } from "../planning/choices";
+import { sprintSaveFailed } from "../planning/sprintDialogs";
 import type { Toasts } from "../toasts/toasts";
 
 // 詳細パネルのスプリント・リリースの保存(02「スプリント・リリース」、F1-15)。detail.ts が 300 行の上限に近いので分けた。
 
 // assignPlan は、アイテムのスプリント(key が "sprint")かリリースを id にする(空はバックログ・「なし」)。
-// 表示している値と同じなら送らずに null(使えない参照を書き換えない。F1-5)。断られたらエラーのトーストを出して false。
+// 表示している値と同じなら送らずに null(使えない参照を書き換えない。F1-5)。断られたらその文の、
+// ほかの失敗(404・通信の失敗など)は「保存できませんでした」のエラーのトーストを出して false(F1-18)。
 export async function assignPlan(
   deps: { planning: PlanningPort; toasts: Toasts },
   storeId: string,
@@ -23,8 +25,7 @@ export async function assignPlan(
   try {
     await deps.planning[write](storeId, item.id, id || null);
   } catch (e) {
-    if (!(e instanceof Refused)) throw e;
-    deps.toasts.show(e.message, { error: true });
+    deps.toasts.show(e instanceof Refused ? e.message : sprintSaveFailed, { error: true });
     return false;
   }
   return true;

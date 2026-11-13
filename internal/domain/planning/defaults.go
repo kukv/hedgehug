@@ -17,17 +17,6 @@ func AddDays(ymd string, n int) string {
 	return t.AddDate(0, 0, n).Format(time.DateOnly)
 }
 
-// RemainingDays は、今日から終了日までの日数(終了日の当日は 1)。終了日を過ぎていたら overdue。
-// 読めない終了日は overdue とする(日付は保存のときに検査済みのため)。
-func RemainingDays(end, today string) (n int, overdue bool) {
-	e, err1 := time.Parse(time.DateOnly, end)
-	t, err2 := time.Parse(time.DateOnly, today)
-	if err1 != nil || err2 != nil || e.Before(t) {
-		return 0, true
-	}
-	return int(e.Sub(t).Hours()/24) + 1, false
-}
-
 // SprintDefaults は、作成の既定の名前・開始日・終了日(F1-7)。live は削除済みを除いたスプリント。
 func SprintDefaults(live []Sprint, today string) (name, start, end string) {
 	base, ok := baseSprint(live)

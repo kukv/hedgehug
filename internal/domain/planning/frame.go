@@ -9,11 +9,11 @@ import (
 // FrameEnd は、移動先の枠の末尾の rank(枠のアイテムの最大の rank。F1-11)。空の枠は空文字。
 // sprint が空ならバックログの枠(使えるスプリントに入っていない、未着手か進行中の作業項目)。
 // スプリントの枠は、そのスプリントの削除済みでない作業項目(分類を問わない)。
-func FrameEnd(works []Work, ws workspace.ID, sprint change.ID, plan Plan, st workspace.Settings) string {
+func FrameEnd(its []item.Item, ws workspace.ID, sprint change.ID, plan Plan, st workspace.Settings) string {
 	end := ""
-	for _, w := range works {
-		if counted(w.Item, ws) && inFrame(w.Item, sprint, plan, st) && w.Item.Rank > end {
-			end = w.Item.Rank
+	for _, it := range its {
+		if counted(it, ws) && inFrame(it, sprint, plan, st) && it.Rank > end {
+			end = it.Rank
 		}
 	}
 	return end

@@ -39,7 +39,11 @@ func (s Service) CloseSprint(ctx context.Context, store port.StoreID, ws workspa
 			}
 			// 確定値は、アイテムを移す前の値で求める。
 			done := planning.Confirm(all, ws, old, st, s.Clock.Now())
-			if err := moveUndone(tx, all, ws, old.ID, dest, p, st); err != nil {
+			its := make([]item.Item, 0, len(all))
+			for _, w := range all {
+				its = append(its, w.Item)
+			}
+			if err := moveUndone(tx, its, ws, old.ID, dest, p, st); err != nil {
 				return err
 			}
 			sp := old
@@ -64,7 +68,7 @@ func closable(p planning.Plan, id change.ID, dest *change.ID) (planning.Sprint, 
 
 // moveUndone は、スプリント id の未完了(分類が未着手か進行中、削除済みを除く)を、いまの並び順のまま
 // 移動先の枠の末尾へ移す。枠が空なら rank は変えない(F1-11)。
-func moveUndone(tx port.Tx, all []planning.Work, ws workspace.ID, id change.ID, dest *change.ID,
+func moveUndone(tx port.Tx, all []item.Item, ws workspace.ID, id change.ID, dest *change.ID,
 	p planning.Plan, st workspace.Settings,
 ) error {
 	var to any // バックログは null
@@ -87,10 +91,9 @@ func moveUndone(tx port.Tx, all []planning.Work, ws workspace.ID, id change.ID, 
 }
 
 // undone は、スプリント id に入っている未完了の作業項目を、ワークスペースの並び順で返す。
-func undone(all []planning.Work, ws workspace.ID, id change.ID, st workspace.Settings) []item.Item {
+func undone(all []item.Item, ws workspace.ID, id change.ID, st workspace.Settings) []item.Item {
 	var out []item.Item
-	for _, w := range all {
-		it := w.Item
+	for _, it := range all {
 		if it.Deleted != nil || it.Place.Workspace != ws || !planning.IsWork(it.Kind) || it.Sprint != id {
 			continue
 		}

@@ -14,7 +14,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/rank"
-	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -140,23 +139,21 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 	return created, nil
 }
 
-// sprintOf は、作成で入れるスプリント(F1-5)。選べるのは作業項目で、計画中か実行中の使えるスプリントだけ。
-// 種類が合わなければ ErrInvalidOperation、完了は断り、削除済み・ない・別のワークスペースは ErrNotFound。
+// sprintOf は、作成で入れるスプリント(F1-5)。決まりは planning.AssignableSprint(作成では、いま入っている
+// スプリントはないので、完了は断る)。種類が合わなければ ErrInvalidOperation、削除済み・ない・別の
+// ワークスペースは ErrNotFound。
 func sprintOf(in CreateInput, p planning.Plan) (change.ID, error) {
 	if in.Sprint == nil || *in.Sprint == "" {
 		return "", nil
 	}
-	if !planning.IsWork(in.Kind) {
-		return "", fmt.Errorf("%w: %s はスプリントに入れられない", port.ErrInvalidOperation, in.Kind)
-	}
-	sp, ok := p.UsableSprint(*in.Sprint)
-	if !ok {
+	sp, err := planning.AssignableSprint(p, *in.Sprint, in.Kind, "")
+	switch {
+	case errors.Is(err, planning.ErrNotWork):
+		return "", fmt.Errorf("%w: %w", port.ErrInvalidOperation, err)
+	case errors.Is(err, planning.ErrNoSprint):
 		return "", port.ErrNotFound
 	}
-	if sp.State == planning.Closed {
-		return "", refusal.New("完了したスプリントには入れられません")
-	}
-	return sp.ID, nil
+	return sp.ID, err
 }
 
 // checkValues は、プロジェクトのワークスペースの設定で作成の値を検査して読む。ステータスはプロジェクトが使うものに限る(B5a-7)(親の検査のあと)。

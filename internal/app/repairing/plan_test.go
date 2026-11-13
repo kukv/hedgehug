@@ -1,11 +1,13 @@
 package repairing_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 )
 
@@ -62,8 +64,13 @@ func TestWorkspaceDeleteKeptWhenPlanChanges(t *testing.T) {
 func TestSprintDeleteUndoneByRename(t *testing.T) {
 	e := newEnv(t)
 	withPlan(e)
+	e.appendItem(taro, apptest.SampleTask, change.NewSet(item.SprintField, nil, sprint1))
+	// 削除は、入っているアイテムからスプリントを外す行を同じ保存で書く(F1-13)。
 	del := e.write(taro, func(tx port.Tx) error {
-		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.DeleteSprint(sprint1))
+		return errors.Join(
+			tx.WriteItems().Append(apptest.SampleTask, change.NewSet(item.SprintField, sprint1, nil)),
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.DeleteSprint(sprint1)),
+		)
 	})
 	sp := planning.Sprint{ID: sprint1, Name: "Sprint 1", State: planning.Active}
 	renamed := sp
@@ -83,5 +90,31 @@ func TestSprintDeleteUndoneByRename(t *testing.T) {
 	}
 	if live := p.LiveSprints(); len(live) != 1 || live[0].Name != "Sprint 9" {
 		t.Errorf("live sprints = %+v", live)
+	}
+	if it := e.item(apptest.SampleTask); it.Sprint != sprint1 {
+		t.Errorf("HH-2 sprint = %q, want %q", it.Sprint, sprint1)
+	}
+}
+
+// アイテムの削除と、そのアイテムが入っているスプリントの完了が重なっても、完了は削除済みのアイテムに
+// 触れないので、削除は取り消さない(05「完了」。完了で一緒に書いたスプリント・順位の行は変更に数えない)。
+func TestItemDeleteKeptWhenSprintCloses(t *testing.T) {
+	e := newEnv(t)
+	withPlan(e)
+	e.appendItem(taro, apptest.SampleTask, change.NewSet(item.SprintField, nil, sprint1))
+	del := e.appendItem(taro, apptest.SampleTask, change.NewDeleteEntity(true))
+	sp := planning.Sprint{ID: sprint1, Name: "Sprint 1", State: planning.Active}
+	closed := sp
+	closed.State = planning.Closed
+	task := e.item(apptest.SampleTask)
+	theirs := e.write(taro, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteItems().Append(apptest.SampleTask, change.NewSet(item.SprintField, sprint1, nil), change.NewSet("rank", task.Rank, task.Rank+"0")),
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, append([]change.Draft{planning.CloseDraft(sprint1, planning.Confirmed{})}, planning.SprintDrafts(sp, closed)...)...),
+		)
+	})
+	wantOps(t, e.run(del, theirs))
+	if it := e.item(apptest.SampleTask); it.Deleted == nil {
+		t.Error("HH-2 was restored")
 	}
 }

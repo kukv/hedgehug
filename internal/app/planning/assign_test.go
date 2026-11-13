@@ -119,17 +119,46 @@ func TestSetSprintToEmptyFrame(t *testing.T) {
 	}
 }
 
-// 使えないスプリントに入っているアイテムはバックログの枠にあるが、末尾は自分を除いて求める。
-func TestSetSprintFromUnusableExcludesItself(t *testing.T) {
-	svc, _ := setup(t)
+// 使えないスプリント・リリースへの参照は、バックログ・「なし」と同じ値として扱い、書き換えない(F1-5)。
+// 残した参照で、スプリント・リリースを戻せばアイテムも戻る。
+func TestSetKeepsUnusableRef(t *testing.T) {
+	svc, rec := setup(t)
 	ctx := t.Context()
-	addItem(t, svc, itemZ, 5, item.Task, "Z", "")
-	addItem(t, svc, itemStory, 3, item.Story, "ZZ", "01NOSUCHSPRINT0000000000")
-	if err := svc.SetSprint(ctx, store, itemStory, nil); err != nil {
+	sp, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Sprint 1"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if it, _ := getItem(t, svc, itemStory); it.Sprint != "" || it.Rank != rank.After("Z") {
-		t.Errorf("バックログへ: %s/%s", it.Sprint, it.Rank)
+	r, err := svc.CreateRelease(ctx, store, apptest.SampleWorkspace, planning.ReleaseInput{Name: "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteSprint(ctx, store, apptest.SampleWorkspace, sp.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteRelease(ctx, store, apptest.SampleWorkspace, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	// 別の画面が、削除を知らずに参照を書いた形。
+	setRef(t, svc, apptest.SampleTask, item.SprintField, sp.ID)
+	setRef(t, svc, apptest.SampleTask, item.ReleaseField, r.ID)
+	n := len(rec.summaries)
+	if err := svc.SetSprint(ctx, store, apptest.SampleTask, nil); err != nil {
+		t.Errorf("バックログへ: %v", err)
+	}
+	if err := svc.SetRelease(ctx, store, apptest.SampleTask, nil); err != nil {
+		t.Errorf("なしへ: %v", err)
+	}
+	if len(rec.summaries) != n {
+		t.Errorf("使えない参照を書き換えた: %v", rec.summaries[n:])
+	}
+	if err := svc.RestoreSprint(ctx, store, apptest.SampleWorkspace, sp.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RestoreRelease(ctx, store, apptest.SampleWorkspace, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if it, _ := getItem(t, svc, apptest.SampleTask); it.Sprint != sp.ID || it.Release != r.ID {
+		t.Errorf("戻したあと: sprint %s, release %s", it.Sprint, it.Release)
 	}
 }
 

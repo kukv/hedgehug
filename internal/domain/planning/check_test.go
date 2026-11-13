@@ -4,9 +4,36 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
+
+// アイテムを入れられるスプリント(F1-5・F1-15)。作成と詳細パネルの保存が同じ決まりを使う。
+func TestAssignableSprint(t *testing.T) {
+	p := planning.Plan{Sprints: []planning.Sprint{
+		{ID: "S1", Name: "Sprint 1", State: planning.Planned},
+		{ID: "S2", Name: "Sprint 2", State: planning.Closed},
+		{ID: "S3", Name: "Sprint 3", State: planning.Active, Deleted: &change.Deletion{}},
+	}}
+	if sp, err := planning.AssignableSprint(p, "S1", item.Task, ""); err != nil || sp.ID != "S1" {
+		t.Errorf("計画中: %+v, %v", sp, err)
+	}
+	if _, err := planning.AssignableSprint(p, "S1", item.Epic, ""); !errors.Is(err, planning.ErrNotWork) {
+		t.Errorf("Epic: %v", err)
+	}
+	for _, id := range []change.ID{"S3", "S9"} {
+		if _, err := planning.AssignableSprint(p, id, item.Task, ""); !errors.Is(err, planning.ErrNoSprint) {
+			t.Errorf("%s: %v", id, err)
+		}
+	}
+	_, err := planning.AssignableSprint(p, "S2", item.Bug, "")
+	wantRefusal(t, err, "完了したスプリントには入れられません")
+	if sp, err := planning.AssignableSprint(p, "S2", item.Bug, "S2"); err != nil || sp.ID != "S2" {
+		t.Errorf("いま入っている完了: %+v, %v", sp, err)
+	}
+}
 
 func wantRefusal(t *testing.T, err error, msg string) {
 	t.Helper()

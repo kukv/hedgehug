@@ -70,7 +70,6 @@ export interface PlanningOverview {
   defaults: SprintDefaults;
   sprints: Sprint[];
   releases: Release[];
-  today: string;
   // retentionDays は、その Store の削除済みの保持日数(スプリントの削除の確認の文)。
   retentionDays: number;
 }

@@ -57,10 +57,6 @@ func TestScreenOrder(t *testing.T) {
 	if !slices.Equal(in, orig) {
 		t.Fatal("入力を並べ替えない")
 	}
-	wantPlanned := []string{"p-same-a", "p-same-b", "p-late", "p-undecided-a", "p-undecided-b"}
-	if got := names(planning.PlannedOrder(in)); !slices.Equal(got, wantPlanned) {
-		t.Fatalf("PlannedOrder = %v, want %v", got, wantPlanned)
-	}
 }
 
 func TestReleaseOrder(t *testing.T) {

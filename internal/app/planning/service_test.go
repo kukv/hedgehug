@@ -27,6 +27,9 @@ func TestWorksAndPlanOf(t *testing.T) {
 		if len(ws) != 2 || len(ws[0].Log) == 0 {
 			t.Errorf("works = %d 件 %+v", len(ws), ws)
 		}
+		if its, err := items(r, apptest.SampleWorkspace); err != nil || len(its) != 2 {
+			t.Errorf("items = %d 件, %v", len(its), err)
+		}
 		if _, err := planOf(r, apptest.SampleWorkspace); err != nil {
 			t.Errorf("planOf: %v", err)
 		}

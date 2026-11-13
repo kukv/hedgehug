@@ -705,8 +705,6 @@ export interface PlanningOverview {
   /** その Store の削除済みの保持日数 */
   retentionDays: number;
   sprints: Sprint[];
-  /** YYYY-MM-DD */
-  today: string;
 }
 
 export type PlanningRowKind = typeof PlanningRowKind[keyof typeof PlanningRowKind];

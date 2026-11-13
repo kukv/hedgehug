@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -38,25 +39,36 @@ func logPlan(r port.Reader, ws workspace.ID) (planning.Plan, error) {
 	return planning.FromLog(log), nil
 }
 
-// works は、ワークスペースの全プロジェクトの全アイテムと、そのログ。削除済みも含む(絞るのは呼ぶ側)。
-func works(r port.Reader, ws workspace.ID) ([]planning.Work, error) {
+// items は、ワークスペースの全プロジェクトの全アイテム。削除済みも含む(絞るのは呼ぶ側)。
+func items(r port.Reader, ws workspace.ID) ([]item.Item, error) {
 	ps, err := r.Projects().List(ws)
 	if err != nil {
 		return nil, err
 	}
-	var out []planning.Work
+	var out []item.Item
 	for _, p := range ps {
 		its, err := r.Items().List(p.ID)
 		if err != nil {
 			return nil, err
 		}
-		for _, it := range its {
-			log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, planning.Work{Item: it, Log: log})
+		out = append(out, its...)
+	}
+	return out, nil
+}
+
+// works は、items に、それぞれのログを添えたもの(確定値や取り消しにログが要るときだけ使う)。
+func works(r port.Reader, ws workspace.ID) ([]planning.Work, error) {
+	its, err := items(r, ws)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]planning.Work, 0, len(its))
+	for _, it := range its {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
+		if err != nil {
+			return nil, err
 		}
+		out = append(out, planning.Work{Item: it, Log: log})
 	}
 	return out, nil
 }

@@ -27,18 +27,18 @@ func TestFrameEnd(t *testing.T) {
 		created(day1, item.Item{ID: "J", Status: "Canceled", Rank: "v"}),
 		created(day1, item.Item{ID: "K", Kind: item.Epic, Status: "Todo", Rank: "u"}),
 	}
-	var works []planning.Work
+	var its []item.Item
 	for _, log := range logs {
-		works = append(works, work(t, log))
+		its = append(its, work(t, log).Item)
 	}
 	st := settings()
-	if got := planning.FrameEnd(works, "W", "S1", plan, st); got != "f" {
+	if got := planning.FrameEnd(its, "W", "S1", plan, st); got != "f" {
 		t.Fatalf("S1 の枠 = %q, want f", got)
 	}
-	if got := planning.FrameEnd(works, "W", "", plan, st); got != "e" {
+	if got := planning.FrameEnd(its, "W", "", plan, st); got != "e" {
 		t.Fatalf("バックログの枠 = %q, want e", got)
 	}
-	if got := planning.FrameEnd(works, "W", "S2", plan, st); got != "" {
+	if got := planning.FrameEnd(its, "W", "S2", plan, st); got != "" {
 		t.Fatalf("空の枠 = %q, want 空", got)
 	}
 	if got := planning.FrameEnd(nil, "W", "", plan, st); got != "" {

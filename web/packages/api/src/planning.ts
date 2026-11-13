@@ -44,7 +44,6 @@ const toOverview = (o: ApiOverview): PlanningOverview => ({
   defaults: o.defaults,
   sprints: (o.sprints ?? []).map(toSprint),
   releases: (o.releases ?? []).map(toRelease),
-  today: o.today,
   retentionDays: o.retentionDays,
 });
 
