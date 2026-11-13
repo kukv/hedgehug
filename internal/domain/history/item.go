@@ -14,6 +14,7 @@ import (
 // ItemRows は、アイテムの履歴を新しい順で返す(02「履歴」の表)。出すのは、作成・説明の変更・タイトル・種類・親・
 // プロパティの変更(関連システムと複数選択の追加・取り除きを含む)だけで、コメント・作業時間・関連・ウォッチ・削除と、知らない種類の行は出さない。
 func ItemRows(log []change.Record, c Context) []Row {
+	log = byPrev(log)
 	var rows []Row
 	for i, r := range log {
 		if c.Hidden[r.Op] {
@@ -86,7 +87,39 @@ func setText(r change.Record, c Context) (string, bool) {
 	}
 	from := item.Display(p, r.From, c.Settings, c.Names, c.Today)
 	to := item.Display(p, r.To, c.Settings, c.Names, c.Today)
+	if from == to {
+		return "", false
+	}
 	return fmt.Sprintf("%sを %s → %s", p.Name, from, to), true
+}
+
+// byPrev は、各行を、その prev に挙がった行よりあとに置いた並びにする。それ以外は、ファイルの並びを保つ。
+// 同期のマージは at と id の順に並べ直すので、時計がずれていると、prev の行より先に並ぶ行ができる。
+func byPrev(log []change.Record) []change.Record {
+	index := make(map[change.ID]int, len(log))
+	for i, r := range log {
+		index[r.ID] = i
+	}
+	out := make([]change.Record, 0, len(log))
+	state := make([]byte, len(log)) // 0: 未, 1: 途中(循環の検出), 2: 済
+	var visit func(i int)
+	visit = func(i int) {
+		if state[i] != 0 {
+			return
+		}
+		state[i] = 1
+		for _, p := range log[i].Prev {
+			if j, ok := index[p]; ok {
+				visit(j)
+			}
+		}
+		state[i] = 2
+		out = append(out, log[i])
+	}
+	for i := range log {
+		visit(i)
+	}
+	return out
 }
 
 // placeText は、親かプロジェクトが変わった場所の変更を「親を変更」にする。番号だけが変わる行
