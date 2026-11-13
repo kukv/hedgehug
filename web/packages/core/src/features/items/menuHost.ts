@@ -5,6 +5,7 @@ import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import { itemDisplayId } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
+import type { TransferDialog } from "../transfers/dialog";
 import type { TemplateSubject } from "../workspaces/saveAsTemplate";
 import { childKindOf } from "./createDefaults";
 import type { ItemDialog } from "./createDialogTypes";
@@ -19,7 +20,7 @@ import { visibleNeighbors } from "./siblings";
 
 // アイテムのメニューを開く、全体で 1 つの口(02「上から順の構成」、04「ツリー」の「行」)。詳細パネルの「⋯」、
 // ツリーの行の「⋯」、メニューキー・Shift+F10 が、同じ itemMenuHost.open(item, ctx, x, y) を呼ぶ。
-// 項目は core の itemMenu、選んだあとの動きは、操作ごとの controller(削除・移動・種類の変更・複製)に渡す。
+// 項目は core の itemMenu、選んだあとの動きは、操作ごとの controller(削除・移動・別のワークスペースへの移動・種類の変更・複製)に渡す。
 
 // 断りでも「ない」でもない失敗(通信の失敗など)のときの文言。
 export const reorderFailedMessage = "順番を変更できませんでした";
@@ -60,6 +61,7 @@ export interface ItemMenuHostDeps {
   remove: Pick<ItemDelete, "open">;
   move: Pick<ItemMove, "open">;
   kind: Pick<ItemKind, "open">;
+  transfer: Pick<TransferDialog, "open">;
   duplicate: Pick<ItemDuplicate, "run">;
   copyId(displayId: string): Promise<void>;
 }
@@ -133,6 +135,8 @@ export function createItemMenuHost(deps: ItemMenuHostDeps): ItemMenuHost {
         return void (await reorder(item, ctx.rows, id === "move-up" ? "up" : "down"));
       case "move":
         return deps.move.open(item, x, y);
+      case "transfer":
+        return deps.transfer.open(item);
       case "change-kind":
         return deps.kind.open(item, x, y);
       case "duplicate":

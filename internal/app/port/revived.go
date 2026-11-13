@@ -39,7 +39,8 @@ func Revived(ctx context.Context) []Revival {
 	return slices.Clone(v.list)
 }
 
-// NoteRevived は、入れ物に r を積む(同じものは 1 つ)。入れ物がなければ捨てる。
+// NoteRevived は、入れ物に r を積む(同じものは 1 つ)。入れ物がなければ捨てる。ReviveItem などを通さずに取り消したもの
+// (別の Store への移動は、写した行の削除を移動先の保存で取り消し、移動元と移動先の両方の保存が済んでから積む)も、これで積む。
 func NoteRevived(ctx context.Context, r Revival) {
 	if v, _ := ctx.Value(revivedKey{}).(*revived); v != nil && !slices.Contains(v.list, r) {
 		v.list = append(v.list, r)

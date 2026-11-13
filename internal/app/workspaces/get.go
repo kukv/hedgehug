@@ -18,11 +18,30 @@ type Detail struct {
 	ProjectRules projectrule.Set
 }
 
+// Listed は、一覧のワークスペースと、その旧い接頭辞(辞書順。画面のアドレスの旧い接頭辞のため。A5a-21)。
+type Listed struct {
+	workspace.Workspace
+	OldPrefixes []string
+}
+
+// List は、store の削除されていないワークスペースを並びの順(rank、同じなら内部 ID の順。rank のないものは先頭)に返す(B2-7)。
+func (s Service) List(ctx context.Context, store port.StoreID) ([]Listed, error) {
+	var out []Listed
+	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
+		list, err := orderedLiveWorkspaces(r)
+		for _, w := range list {
+			out = append(out, Listed{w.Workspace, w.oldPrefixes})
+		}
+		return err
+	})
+	return out, err
+}
+
 // Get は、ワークスペースと設定と旧い接頭辞とプロジェクト別のルールを返す。
 func (s Service) Get(ctx context.Context, store port.StoreID, id workspace.ID) (Detail, error) {
 	var out Detail
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		w, err := r.Workspaces().Get(id)
+		w, err := port.LiveWorkspace(r, id)
 		if err != nil {
 			return err
 		}

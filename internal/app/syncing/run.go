@@ -12,25 +12,19 @@ import (
 // 受け取り・合わせ・送り、記録し、ミラーへ送る。エラーは、このマシンの状態を読み書きできないときだけ返す。
 func (s *Service) run(ctx context.Context, t port.SyncTarget) (Outcome, error) {
 	out := Outcome{Store: t.ID, Name: t.Name}
-	switch {
-	case t.Remote == "":
+	if t.Remote == "" {
 		out.Skipped = true
-		return out, nil
-	case t.Account == "":
-		out.Reason = syncstatus.NoAccount // 記録しない。状態は Status が導く(決定 C2-16)
 		return out, nil
 	}
 	at := s.Clock.Now()
-	tok, err := s.Tokens.StoreToken(ctx, t.ID)
-	if err != nil {
-		r, ok := tokenReason(err)
-		switch {
-		case !ok:
-			return out, err
-		case r == syncstatus.NoAccount:
-			out.Reason = r
-			return out, nil
-		}
+	tok, r, err := s.token(ctx, t)
+	switch {
+	case err != nil:
+		return out, err
+	case r == syncstatus.NoAccount:
+		out.Reason = r // 記録しない。状態は Status が導く(決定 C2-16)
+		return out, nil
+	case r != "":
 		return s.failed(ctx, out, at, r)
 	}
 	key := remoteKey(t.Remote)
@@ -60,6 +54,23 @@ func (s *Service) run(ctx context.Context, t port.SyncTarget) (Outcome, error) {
 	}
 	s.publish(t.ID)
 	return out, nil
+}
+
+// token は、t の remote に使うトークン。アカウントがなければ理由 syncstatus.NoAccount、得られなければその理由。
+// error は、このマシンの失敗(理由で表せない)だけ。
+func (s *Service) token(ctx context.Context, t port.SyncTarget) (tok string, r syncstatus.Reason, err error) {
+	if t.Account == "" {
+		return "", syncstatus.NoAccount, nil
+	}
+	tok, err = s.Tokens.StoreToken(ctx, t.ID)
+	if err != nil {
+		r, ok := tokenReason(err)
+		if !ok {
+			return "", "", err
+		}
+		return "", r, nil
+	}
+	return tok, "", nil
 }
 
 func (s *Service) failed(ctx context.Context, out Outcome, at time.Time, r syncstatus.Reason) (Outcome, error) {

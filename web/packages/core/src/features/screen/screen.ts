@@ -1,11 +1,16 @@
+import type { MovedFrom } from "../../model/transfer";
 import type { ItemsPort } from "../../port/items";
+import type { TransfersPort } from "../../port/transfers";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import type { Navigation } from "../router/navigation";
 import { type Resolved, resolveRoute, routeOfProject, routeOfWorkspace } from "../router/resolve";
+import type { Toasts } from "../toasts/toasts";
+import { goneText } from "../transfers/movedText";
 
 // いま出す画面。アドレスを一覧の状態で内部 ID にする(A2 の計画の決定 7)。
 // アイテムの入口は、そのアイテムのプロジェクトの「ツリー」に替え(履歴に積まない)、詳細パネルを開く(01)。
+// 旧 ID で開けないもの(削除済み・完全に削除・見えない Store)は、理由をトーストで出してホームに替える(02)。
 
 export interface Screen {
   // current は、出す画面。アドレスを解決しているあいだは、前の画面のまま。最初の解決までは null。
@@ -18,8 +23,11 @@ export interface ScreenDeps {
   navigation: Navigation;
   catalog: Catalog;
   items: ItemsPort;
-  // openItem は、アイテムの入口で開いたアイテムの詳細パネルを開く。
-  openItem(storeId: string, itemId: string): void;
+  transfers: Pick<TransfersPort, "locate">;
+  toasts: Toasts;
+  now(): Date;
+  // openItem は、アイテムの入口で開いたアイテムの詳細パネルを開く。旧 ID から開いたときは movedFrom を添える。
+  openItem(storeId: string, itemId: string, movedFrom?: MovedFrom): void;
 }
 
 // ShownProject は、いま出しているプロジェクトの画面。store・project は、そのアドレスの Store 名と ID(アドレスの解決は
@@ -51,9 +59,14 @@ export function createScreen(deps: ScreenDeps): Screen {
     const mine = latest;
     const stores = get(deps.catalog.stores);
     const route = get(deps.navigation.route);
-    const r = await resolveRoute(route, stores, deps.items);
+    const r = await resolveRoute(route, stores, deps.items, deps.transfers);
     if (mine < applied || get(deps.navigation.route) !== route) return;
     applied = mine;
+    // 置き換えたホームの解決は gone を持たないので、同じトーストを 2 度出さない。
+    if (r.name === "home" && r.gone) {
+      deps.toasts.show(goneText(r.gone, deps.now()));
+      return deps.navigation.replace({ name: "home" });
+    }
     // 出していたプロジェクトが、同期・別のタブ・別のプログラムで削除されたときは、ワークスペースの概要へ移る
     // (A4b-22。履歴には積まない。ワークスペースもなければホーム)。アドレスを打ち込んだだけの解決できないものはホームのまま。
     // 別の Store の同じ ID に解決された場合も、消えたものとして移る。
@@ -79,7 +92,7 @@ export function createScreen(deps: ScreenDeps): Screen {
     }
     if (r.name === "item") {
       deps.navigation.replace(routeOfProject(stores, r.storeId, r.projectId, "tree"));
-      deps.openItem(r.storeId, r.itemId);
+      deps.openItem(r.storeId, r.itemId, r.movedFrom);
       return;
     }
     // 前と同じ画面なら出し直さない(出し直すと、画面が作り直されて入力中の文字やスクロールが消える)。

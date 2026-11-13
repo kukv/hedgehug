@@ -1,5 +1,6 @@
 import { createItemActionsPort } from "@hedgehug/api";
 import {
+  createAfterMoved,
   createCopyId,
   createItemDelete,
   createItemDuplicate,
@@ -8,9 +9,13 @@ import {
   createItemMove,
   createItemRefresh,
   createProjectDelete,
+  createTransferDialog,
+  createWorkspaceDelete,
   leaveDeletedProject,
+  leaveDeletedWorkspace,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
+import { online as isOnline } from "./tab";
 import {
   catalog,
   detail,
@@ -20,6 +25,7 @@ import {
   projectScreen,
   relations,
   toasts,
+  transfersPort,
   workspacesPort,
 } from "./wire";
 
@@ -47,6 +53,18 @@ export const itemMove = createItemMove({
   catalog,
   toasts,
   refresh: itemRefresh,
+});
+
+// 「別のワークスペースへ移動…」のダイアログ(02「別のワークスペースと別の Store への移動」)。開くのは itemTransfer.open(item)。
+export const itemTransfer = createTransferDialog({
+  transfers: transfersPort,
+  catalog,
+  toasts,
+  refresh: itemRefresh,
+  detail,
+  drafts,
+  online: isOnline,
+  afterMoved: createAfterMoved({ detail, refresh: itemRefresh, route: navigation.route }),
 });
 
 // 「種類を変更…」の種類のメニューと確認ダイアログ(02「種類の変更」)。開くのは itemKind.open(item, x, y)。
@@ -85,6 +103,7 @@ export const itemMenuHost = createItemMenuHost({
   remove: itemDelete,
   move: itemMove,
   kind: itemKind,
+  transfer: itemTransfer,
   duplicate: itemDuplicate,
   copyId: copyItemId,
 });
@@ -98,13 +117,24 @@ export const projectDelete = createProjectDelete({
   afterDelete: (project) => leaveDeletedProject({ navigation, catalog }, project),
 });
 
+// ワークスペースの削除(03「削除」)。「一般」の「ワークスペースを削除…」とサイドバーのメニューの「削除…」が開く。
+// 削除できたあとの移り先(ホームへ replace、詳細パネルを閉じ、一覧を読み直す)は core の leaveDeletedWorkspace。
+export const workspaceDelete = createWorkspaceDelete({
+  actions: workspacesPort,
+  catalog,
+  toasts,
+  afterDelete: (ws) => leaveDeletedWorkspace({ navigation, catalog, detail }, ws),
+});
+
 // 画面を移ったら、出している確認ダイアログとメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
   projectDelete.cancel();
+  workspaceDelete.cancel();
   itemDelete.cancel();
   itemMove.close();
   itemMove.cancelMove();
   itemKind.cancel();
+  itemTransfer.cancel();
   itemMenuHost.close();
   itemMenuHost.closeTemplate();
 });

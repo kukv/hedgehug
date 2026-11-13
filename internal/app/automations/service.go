@@ -24,7 +24,7 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // rulesOf は、ワークスペースのルール。target(項目名)があれば、それを覆う削除の行がないものとして読む。空なら、いまのルール。
 func rulesOf(r port.Reader, ws workspace.ID, target string) ([]automation.Rule, error) {
-	if _, err := r.Workspaces().Get(ws); err != nil {
+	if _, err := port.LiveWorkspace(r, ws); err != nil {
 		return nil, err
 	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})

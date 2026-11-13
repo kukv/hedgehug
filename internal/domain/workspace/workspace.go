@@ -18,6 +18,19 @@ type Workspace struct {
 	ID     ID
 	Name   string
 	Prefix string
+	// Deleted は、削除済みの印(B5b)。保存の口は削除済みも返し、除くのは app の側で Live を通す。
+	Deleted *change.Deletion
+}
+
+// Live は、削除済みを除いたワークスペースを、順を保って返す。
+func Live(ws []Workspace) []Workspace {
+	out := make([]Workspace, 0, len(ws))
+	for _, w := range ws {
+		if w.Deleted == nil {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 var prefixPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{0,9}$`)
@@ -88,5 +101,6 @@ func FromLog(log []change.Record) (Workspace, bool) {
 	_ = json.Unmarshal(s.Values["id"], &w.ID)
 	_ = json.Unmarshal(s.Values["name"], &w.Name)
 	_ = json.Unmarshal(s.Values["prefix"], &w.Prefix)
+	w.Deleted = change.DeletionOf(log)
 	return w, true
 }

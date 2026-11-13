@@ -257,7 +257,7 @@ func TestUpdateTemplateWithUnchangedDeletedChild(t *testing.T) {
 	w, _ := s.Create(t.Context(), store, "Web", "HH")
 	tpl := release(t, s, w.ID)
 	deleteChild(t, s, w.ID, tpl, 1)
-	before := len(logOf(t, s, w.ID))
+	before := len(wsLogOf(t, s, w.ID))
 	ctx := port.WithRevived(t.Context())
 	in := tpl
 	in.Name = "リリース 2"
@@ -269,7 +269,7 @@ func TestUpdateTemplateWithUnchangedDeletedChild(t *testing.T) {
 		t.Errorf("template = %+v", got)
 	}
 	prefix := workspace.TemplateField(tpl.ID, "children", string(tpl.Children[1].ID)) + "/"
-	for _, r := range logOf(t, s, w.ID)[before:] {
+	for _, r := range wsLogOf(t, s, w.ID)[before:] {
 		if strings.HasPrefix(r.F, prefix) || r.T == change.Restore {
 			t.Errorf("unexpected row %+v", r)
 		}
@@ -329,11 +329,11 @@ func TestUpdateDeletedTemplateNameTaken(t *testing.T) {
 	if _, err := s.CreateTemplate(t.Context(), store, w.ID, workspace.Template{Name: "リリース", Kind: "Task"}); err != nil {
 		t.Fatal(err)
 	}
-	before := len(logOf(t, s, w.ID))
+	before := len(wsLogOf(t, s, w.ID))
 	in := tpl
 	in.Title = "リリース作業"
 	rejected(t, s.UpdateTemplate(port.WithRevived(t.Context()), store, w.ID, tpl.ID, in), "同じ名前のテンプレートがあります")
-	if after := len(logOf(t, s, w.ID)); after != before {
+	if after := len(wsLogOf(t, s, w.ID)); after != before {
 		t.Errorf("log rows %d -> %d; nothing must be saved", before, after)
 	}
 }

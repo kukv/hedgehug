@@ -13,6 +13,18 @@ import (
 type Replicator interface {
 	// Sync は、remote から受け取り、合わせ、送る(ReceiveOnly なら送らない)。
 	Sync(ctx context.Context, storeID StoreID, remote Remote) (SyncResult, error)
+	// SyncSave は、1 つのロックの中で、受け取り・修復・保存・送信を行う(02「保存」)。修復は Sync と同じく、合わせた
+	// あと送る前に RepairFunc が保存する(決定 C3a-2)。受け取りか修復が失敗したら保存しない(fn を呼ばない)。
+	// 修復の失敗は通信の失敗ではないので *SaveError で包み、中のエラーの種類(ErrNotFound など)は外から読めない形に
+	// する(移動の断りや「ない」と読まれないため。Sync は修復の失敗を包まない)。送れなければ保存のコミットだけを
+	// 捨てて、受け取って合わせた結果は残す。送信が他の人の更新と重なったら、保存を捨てて受け取り直し、fn を呼び直す
+	// (最大 3 回)。そのため fn は試みごとに呼ばれ、
+	// 毎回新しい Tx を受け取る(前の呼び出しの書き込みは残っていない)。fn は読む値を毎回その Tx から読む。
+	// 保存の失敗(修復の失敗・fn のエラー・op.Check・コミットの失敗)は *SaveError、通信の失敗は Err* のどれか。
+	// 送れなかった保存のコミットを捨てられなかったときは、送信のエラーに ErrSaveNotDiscarded を Join して返す
+	// (やり直さない。保存は残り、次の同期で送られるかもしれない)。
+	// ReceiveOnly の remote には保存せず、ErrInvalidOperation を返す。
+	SyncSave(ctx context.Context, storeID StoreID, remote Remote, op Operation, fn func(tx Tx) error) (SyncResult, error)
 	// Mirror は、Store の保存をミラーへ送るだけで、受け取らない(保存形式「同期」の手順 7)。
 	// ミラーが空なら最初の送信として送る。共通の履歴がなければ ErrMirrorUnrelated、ミラーにだけ保存が
 	// あれば ErrMirrorAhead。どちらも送らない。
@@ -31,6 +43,15 @@ type Remote struct {
 	// ReceiveOnly なら、受け取って合わせるだけで、送らない(閲覧のみの Store)。
 	ReceiveOnly bool
 }
+
+// SaveError は、SyncSave の保存の失敗(修復の失敗・fn のエラー・op.Check・コミットの失敗)。通信の失敗は包まない。
+type SaveError struct{ Err error }
+
+func (e *SaveError) Error() string { return "save: " + e.Err.Error() }
+func (e *SaveError) Unwrap() error { return e.Err }
+
+// ErrSaveNotDiscarded は、SyncSave で送れなかった保存のコミットを捨てられなかったこと。保存はこのマシンに残る。
+var ErrSaveNotDiscarded = errors.New("the save that could not be sent was not discarded")
 
 // RepairFunc は、同期で合わせたあと、送る前に呼ぶ修復(保存形式「同期の修復」)。まだ送っていない合わせが
 // あるときだけ呼び、ReceiveOnly の同期では呼ばない。エラーを返すと、Sync はそのエラーを返して送らない。

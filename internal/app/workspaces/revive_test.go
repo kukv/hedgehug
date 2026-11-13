@@ -19,8 +19,8 @@ var (
 	systems    = workspace.List{Kind: workspace.ListSystems}
 )
 
-// logOf は、ワークスペース ws のログ。
-func logOf(t *testing.T, s workspaces.Service, ws workspace.ID) []change.Record {
+// wsLogOf は、ワークスペース ws のログ。
+func wsLogOf(t *testing.T, s workspaces.Service, ws workspace.ID) []change.Record {
 	t.Helper()
 	var log []change.Record
 	if err := s.Stores.Read(t.Context(), store, func(r port.Reader) error {
@@ -37,7 +37,7 @@ func logOf(t *testing.T, s workspaces.Service, ws workspace.ID) []change.Record 
 func restores(t *testing.T, s workspaces.Service, ws workspace.ID) int {
 	t.Helper()
 	n := 0
-	for _, r := range logOf(t, s, ws) {
+	for _, r := range wsLogOf(t, s, ws) {
 		if r.T == change.Restore {
 			n++
 		}
@@ -287,9 +287,9 @@ func TestChangeDeletedValueNameTaken(t *testing.T) {
 	old := addValue(t, s, w.ID, statuses, "Review")
 	deleteValue(t, s, w.ID, statuses, old.ID)
 	addValue(t, s, w.ID, statuses, "Review")
-	before := len(logOf(t, s, w.ID))
+	before := len(wsLogOf(t, s, w.ID))
 	rejected(t, s.SetValueColor(ctx, store, w.ID, statuses, old.ID, "red"), "同じ名前の値があります")
-	if after := len(logOf(t, s, w.ID)); after != before {
+	if after := len(wsLogOf(t, s, w.ID)); after != before {
 		t.Errorf("log rows %d -> %d; nothing must be saved", before, after)
 	}
 	if err := s.RenameValue(ctx, store, w.ID, statuses, old.ID, "Review 2"); err != nil {
@@ -306,9 +306,9 @@ func TestChangeDeletedValueNameTaken(t *testing.T) {
 	if _, err := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "メモ", Key: "memo2", Type: workspace.TypeText}); err != nil {
 		t.Fatal(err)
 	}
-	before = len(logOf(t, s, w.ID))
+	before = len(wsLogOf(t, s, w.ID))
 	rejected(t, s.SetPropertyKinds(ctx, store, w.ID, memo.ID, []string{"Task"}), "同じ名前のプロパティがあります")
-	if after := len(logOf(t, s, w.ID)); after != before {
+	if after := len(wsLogOf(t, s, w.ID)); after != before {
 		t.Errorf("log rows %d -> %d; nothing must be saved", before, after)
 	}
 	if err := s.RenameProperty(ctx, store, w.ID, memo.ID, "メモ 2"); err != nil {

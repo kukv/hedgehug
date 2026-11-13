@@ -22,18 +22,18 @@ func (s Service) ChangePrefix(ctx context.Context, store port.StoreID, id worksp
 	var current workspace.Workspace
 	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		current, err = r.Workspaces().Get(id)
+		current, err = port.LiveWorkspace(r, id)
 		return err
 	}); err != nil {
 		return err
 	}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("接頭辞を %s から %s に変更", current.Prefix, prefix)}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		w, err := tx.Workspaces().Get(id)
+		w, err := port.LiveWorkspace(tx, id)
 		if err != nil {
 			return err
 		}
-		others, err := tx.Workspaces().List()
+		others, err := port.LiveWorkspaces(tx)
 		if err != nil {
 			return err
 		}

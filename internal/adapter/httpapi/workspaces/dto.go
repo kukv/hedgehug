@@ -13,11 +13,12 @@ import (
 // 型の名前は OpenAPI のスキーマ名になるので、機能の名前を付けて公開する。
 // 埋め込む型も公開名にする(huma は公開されていない埋め込みを読み飛ばす)。
 
-// WorkspaceSummary は、一覧と作成が返すワークスペース。
+// WorkspaceSummary は、一覧・詳細・作成が返すワークスペース。OldPrefixes は旧い接頭辞(辞書順。空は [])。
 type WorkspaceSummary struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Prefix string `json:"prefix"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Prefix      string   `json:"prefix"`
+	OldPrefixes []string `json:"oldPrefixes" nullable:"false"`
 }
 
 // WorkspaceValue は、ステータス・優先度・システムの値。
@@ -101,12 +102,14 @@ type WorkspaceTemplate struct {
 // WorkspaceDetail は、詳細が返すワークスペースと設定。
 type WorkspaceDetail struct {
 	WorkspaceSummary
-	OldPrefixes []string          `json:"oldPrefixes" nullable:"false"`
-	Settings    WorkspaceSettings `json:"settings"`
+	Settings WorkspaceSettings `json:"settings"`
 }
 
-func toSummary(w workspace.Workspace) WorkspaceSummary {
-	return WorkspaceSummary{ID: string(w.ID), Name: w.Name, Prefix: w.Prefix}
+func toSummary(w workspace.Workspace, oldPrefixes []string) WorkspaceSummary {
+	if oldPrefixes == nil {
+		oldPrefixes = []string{}
+	}
+	return WorkspaceSummary{ID: string(w.ID), Name: w.Name, Prefix: w.Prefix, OldPrefixes: oldPrefixes}
 }
 
 func toValues(vs []workspace.Value) []WorkspaceValue {

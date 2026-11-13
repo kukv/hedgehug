@@ -19,6 +19,8 @@ type Service struct {
 	State      port.SyncState
 	Events     port.Events
 	Clock      port.Clock
+	// Stores は、Deliver が remote のない Store に保存する口。配線では NotifyWrites で包んだものを渡す。
+	Stores port.Stores
 	// AfterSuccess は、書き込めて、表示中の Store の同期に成功した直後に呼ぶ(06「同期のあとの完全な削除」。
 	// 決定 C2-22)。nil なら呼ばない。
 	AfterSuccess func(ctx context.Context, store port.StoreID)

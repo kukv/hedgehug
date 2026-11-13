@@ -26,6 +26,7 @@ type Context struct {
 	Names    item.Names
 	Hidden   map[change.ID]bool // 出さない操作(HiddenOps)
 	Today    time.Time          // 日付の年を決める
+	Origin   Origin             // 別のワークスペースから移ってきたときの材料(A5a-17)
 }
 
 const unknownUser = "不明なユーザー"

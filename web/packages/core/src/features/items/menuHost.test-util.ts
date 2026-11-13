@@ -47,6 +47,7 @@ export async function setup() {
     remove: { open: async (it: Item) => void log.push(`delete ${it.id}`) },
     move: { open: async (it: Item, x, y) => void log.push(`move ${it.id} ${x},${y}`) },
     kind: { open: (it: Item, x, y) => void log.push(`kind ${it.id} ${x},${y}`) },
+    transfer: { open: async (it: Item) => void log.push(`transfer ${it.id}`) },
     duplicate: { run: async (it: Item) => void log.push(`duplicate ${it.id}`) },
     copyId: async (id) => void log.push(`copy ${id}`),
   });

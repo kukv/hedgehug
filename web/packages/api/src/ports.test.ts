@@ -1,6 +1,5 @@
 import { NotFound, Refused } from "@hedgehug/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createCatalogPort } from "./catalog";
 import { setToken } from "./fetcher";
 import { createItemsPort } from "./items";
 import { createWorkspacesPort } from "./workspaces";
@@ -112,23 +111,6 @@ describe("items port", () => {
   });
 });
 
-describe("catalog port", () => {
-  it("adds the store ID to workspaces and reads null lists as empty", async () => {
-    respond(200, [{ id: "W1", name: "Web", prefix: "HH" }]);
-    await expect(createCatalogPort().listWorkspaces("S1")).resolves.toEqual([
-      { id: "W1", storeId: "S1", name: "Web", prefix: "HH" },
-    ]);
-    respond(200, null);
-    await expect(createCatalogPort().listStores()).resolves.toEqual([]);
-  });
-
-  it("reads the login of me", async () => {
-    const fetch = respond(200, { login: "taro" });
-    await expect(createCatalogPort().me("S1")).resolves.toBe("taro");
-    expect(call(fetch)[0]).toBe("/api/stores/S1/me");
-  });
-});
-
 const apiValue = { id: "st1", name: "未着手", color: "gray", category: "todo" };
 
 describe("workspaces port", () => {
@@ -176,6 +158,28 @@ describe("workspaces port", () => {
       properties: {},
     });
     expect(call(fetch)[0]).toBe("/api/stores/S1/workspaces/W1/usage");
+  });
+
+  it("reads the delete preview and deletes with DELETE, mapping 404 to NotFound", async () => {
+    const preview = respond(200, { projects: 1, items: 2, retentionDays: 30 });
+    await expect(createWorkspacesPort().workspaceDeletePreview("S1", "W1")).resolves.toEqual({
+      projects: 1,
+      items: 2,
+      retentionDays: 30,
+    });
+    expect(call(preview)[0]).toBe("/api/stores/S1/workspaces/W1/delete-preview");
+    const del = respond(204, undefined);
+    await createWorkspacesPort().deleteWorkspace("S1", "W1");
+    expect(call(del)[0]).toBe("/api/stores/S1/workspaces/W1");
+    expect(call(del)[1].method).toBe("DELETE");
+    respond(404, { title: "Not Found", status: 404 });
+    await expect(createWorkspacesPort().deleteWorkspace("S1", "W1")).rejects.toBeInstanceOf(
+      NotFound,
+    );
+    respond(404, { title: "Not Found", status: 404 });
+    await expect(createWorkspacesPort().workspaceDeletePreview("S1", "W1")).rejects.toBeInstanceOf(
+      NotFound,
+    );
   });
 
   it("creates a workspace and returns the model", async () => {

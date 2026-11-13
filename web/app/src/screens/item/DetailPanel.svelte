@@ -1,7 +1,7 @@
 <script lang="ts">
   import { readOnlyBand, readOnlyNote } from "@hedgehug/core";
   import { BlockedBadge, IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
-  import { descriptionSaves, detail } from "../../wire";
+  import { descriptionSaves, detail, movedNotice } from "../../wire";
   import { copyItemId } from "../../wireActions";
   import LinkSection from "../github/LinkSection.svelte";
   import CommentsSection from "../notes/CommentsSection.svelte";
@@ -16,6 +16,7 @@
   // アイテムの詳細パネル(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
   const view = detail.view;
   const full = detail.full;
+  const moved = movedNotice.text;
 
   // タイトルの入力欄。開いたアイテムが変わったら、そのタイトルに戻す。同じアイテムの読み直し(画面への
   // 反映)では、入力欄にフォーカスがあるあいだは書き換えない(06「編集中の入力欄の内容は書き換えない」)。
@@ -58,6 +59,9 @@
     {@const v = $view}
     {#if v.readOnly}
       <ReadOnlyBand text={readOnlyBand(v.store.name)} inset />
+    {/if}
+    {#if $moved}
+      <p class="moved">{$moved}</p>
     {/if}
     <div class="kind-row">
       <KindIcon kind={v.item.kind} />
@@ -113,6 +117,11 @@
 </SidePanel>
 
 <style>
+  .moved {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
   .kind-row {
     display: flex;
     align-items: center;

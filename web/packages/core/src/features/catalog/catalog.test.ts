@@ -85,6 +85,16 @@ describe("catalog", () => {
     await second;
   });
 
+  it("puts the old prefixes of a workspace on its node, empty when the port gives none", async () => {
+    const port = fakeCatalogPort();
+    const list = port.listWorkspaces.bind(port);
+    port.listWorkspaces = async (s) =>
+      (await list(s)).map((w) => (s === "S1" ? { ...w, prefix: "WEB", oldPrefixes: ["HH"] } : w));
+    const catalog = createCatalog(port);
+    await catalog.load();
+    expect(get(catalog.stores).map((s) => s.workspaces[0]?.oldPrefixes)).toEqual([["HH"], []]);
+  });
+
   it("lists the workspaces of writable stores only", async () => {
     const catalog = createCatalog(fakeCatalogPort());
     await catalog.load();

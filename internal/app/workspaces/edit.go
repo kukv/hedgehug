@@ -34,6 +34,9 @@ func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID
 	}
 	var st workspace.Settings
 	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
+		if _, err := port.LiveWorkspace(r, ws); err != nil {
+			return err
+		}
 		var err error
 		st, err = settingsReviving(r, ws, targets)
 		return err
@@ -45,6 +48,9 @@ func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID
 		return err
 	}
 	return s.Stores.Write(ctx, store, port.Operation{Actor: actor, Summary: text}, func(tx port.Tx) error {
+		if _, err := port.LiveWorkspace(tx, ws); err != nil {
+			return err
+		}
 		return writeReviving(ctx, tx, ws, targets, rows)
 	})
 }

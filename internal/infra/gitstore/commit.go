@@ -89,6 +89,9 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 	if err := rewriteStale(wt, t, sc, stale); err != nil {
 		return err
 	}
+	if err := writeExtras(wt, t); err != nil {
+		return err
+	}
 	if err := writePurges(wt, t); err != nil {
 		return err
 	}

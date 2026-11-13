@@ -82,6 +82,17 @@ func TestRenameAndPrefix(t *testing.T) {
 	if !strings.Contains(body, `"name":"フロント"`) || !strings.Contains(body, `"oldPrefixes":["HH"]`) {
 		t.Errorf("after: %s", body)
 	}
+	if list := api.Get(base).Body.String(); !strings.Contains(list, `"oldPrefixes":["HH"]`) {
+		t.Errorf("list after the prefix change: %s", list)
+	}
+}
+
+func TestListHasEmptyOldPrefixes(t *testing.T) {
+	api := newAPI(t)
+	create(t, api, "Web", "HH")
+	if list := api.Get(base).Body.String(); !strings.Contains(list, `"oldPrefixes":[]`) {
+		t.Errorf("list: %s", list)
+	}
 }
 
 func TestNotFound(t *testing.T) {
@@ -131,5 +142,41 @@ func TestRenameAndPrefixRefusalsAre422WithTheSpecText(t *testing.T) {
 				t.Errorf("%d %s", res.Code, res.Body)
 			}
 		})
+	}
+}
+
+// サンプルのワークスペースには、プロジェクト 1 件とアイテム 2 件(Epic と Task)がある。
+func TestDeleteWorkspaceAPI(t *testing.T) {
+	ids := apptest.NewIDs()
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), ids)
+	s.AddStore("S1")
+	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	_, api := humatest.New(t)
+	workspaces.Register(api, appworkspaces.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}})
+	one := base + "/" + string(apptest.SampleWorkspace)
+
+	res := api.Get(one + "/delete-preview")
+	if res.Code != http.StatusOK || strings.TrimSpace(res.Body.String()) != `{"projects":1,"items":2,"retentionDays":30}` {
+		t.Fatalf("preview: %d %s", res.Code, res.Body)
+	}
+	if res := api.Delete(one); res.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", res.Code, res.Body)
+	}
+	if res := api.Get(one + "/delete-preview"); res.Code != http.StatusNotFound {
+		t.Errorf("preview after delete: %d", res.Code)
+	}
+	if res := api.Delete(one); res.Code != http.StatusNotFound {
+		t.Errorf("delete twice: %d", res.Code)
+	}
+	if res := api.Get(one); res.Code != http.StatusNotFound {
+		t.Errorf("get after delete: %d", res.Code)
+	}
+	if res := api.Get(base); res.Code != http.StatusOK || strings.Contains(res.Body.String(), string(apptest.SampleWorkspace)) {
+		t.Errorf("list after delete: %d %s", res.Code, res.Body)
+	}
+	if res := api.Delete(base + "/01NOPE00000000000000000000"); res.Code != http.StatusNotFound {
+		t.Errorf("delete unknown: %d", res.Code)
 	}
 }

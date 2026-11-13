@@ -54,3 +54,36 @@ func TestFromLogIgnoresInvalidCreate(t *testing.T) {
 		t.Errorf("FromLog = %+v, want none", w)
 	}
 }
+
+func TestFromLogMarksDeleted(t *testing.T) {
+	d, err := workspace.Create(workspace.Workspace{ID: "W", Name: "Web", Prefix: "HH"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	stamp := func(log []change.Record, op change.ID, at time.Time, d change.Draft) []change.Record {
+		meta := change.Meta{Op: op, At: at, Actor: change.User("taro")}
+		return append(log, change.Stamp(log, []change.Draft{d}, meta, func() change.ID { return "c" + op })...)
+	}
+	log := stamp(nil, "o0", ts, d)
+	if w, ok := workspace.FromLog(log); !ok || w.Deleted != nil {
+		t.Fatalf("a live workspace has Deleted = %+v", w.Deleted)
+	}
+	log = stamp(log, "o1", ts.Add(time.Second), change.NewDeleteEntity(true))
+	w, ok := workspace.FromLog(log)
+	if !ok || w.Deleted == nil || w.Deleted.Op != "o1" || !w.Deleted.Root {
+		t.Fatalf("FromLog after delete = %+v, %v", w.Deleted, ok)
+	}
+	log = stamp(log, "o2", ts.Add(2*time.Second), change.NewRestore(change.DeletedField, "o1"))
+	if w, ok := workspace.FromLog(log); !ok || w.Deleted != nil {
+		t.Errorf("FromLog after restore has Deleted = %+v", w.Deleted)
+	}
+}
+
+func TestLiveSkipsDeleted(t *testing.T) {
+	ws := []workspace.Workspace{{ID: "A"}, {ID: "B", Deleted: &change.Deletion{Op: "o1", Root: true}}, {ID: "C"}}
+	got := workspace.Live(ws)
+	if len(got) != 2 || got[0].ID != "A" || got[1].ID != "C" {
+		t.Errorf("Live = %+v", got)
+	}
+}

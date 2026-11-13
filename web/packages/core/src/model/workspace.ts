@@ -77,6 +77,13 @@ export interface WorkspaceDetail extends Workspace {
   settings: WorkspaceSettings;
 }
 
+// ワークスペースの削除の確認ダイアログの中身。件数は削除されていないものだけ。
+export interface WorkspaceDeletePreview {
+  projects: number;
+  items: number;
+  retentionDays: number;
+}
+
 export interface WorkspaceUsage {
   items: number;
   firstNumbers: number[];
