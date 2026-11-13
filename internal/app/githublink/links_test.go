@@ -107,6 +107,7 @@ type linkFixture struct {
 	checks   *apptest.Checks
 	events   *apptest.Events
 	reads    *memReads
+	inbox    *apptest.Inbox
 }
 
 var (
@@ -136,12 +137,12 @@ func newLinks(t *testing.T) *linkFixture {
 	infos := &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
 		{ID: linkStore, Name: "main", Account: "A1"}, {ID: otherStore, Name: "other", Account: "A1"},
 	}}
-	f := &linkFixture{stores: &linkRecorder{Stores: s}, gh: gh, accounts: accounts, infos: infos, checks: apptest.NewChecks(), events: &apptest.Events{}, reads: newMemReads()}
+	f := &linkFixture{stores: &linkRecorder{Stores: s}, gh: gh, accounts: accounts, infos: infos, checks: apptest.NewChecks(), events: &apptest.Events{}, reads: newMemReads(), inbox: &apptest.Inbox{}}
 	f.tokens = &fakeTokens{infos: infos, accounts: accounts, token: "tok"}
 	f.links = githublink.Links{
 		Stores: f.stores, Identity: apptest.Identity{Login: "hanako"},
 		Tokens: f.tokens, GitHub: gh, Accounts: accounts, StoreGH: infos,
-		Checks: f.checks, Reads: f.reads, Events: f.events, Clock: clock,
+		Checks: f.checks, Reads: f.reads, Inbox: f.inbox, Events: f.events, Clock: clock,
 	}
 	return f
 }

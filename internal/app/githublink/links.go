@@ -27,7 +27,7 @@ type Links struct {
 	StoreGH  port.StoreGitHub // 閲覧のみの判定と、Issue の 1 対 1 の Store の一覧
 	Checks   port.Checks
 	Reads    port.GitHubReads // 取り直しの失敗の文言(D4a-11)
-	Inbox    port.Inbox       // Task 11 から使う
+	Inbox    port.Inbox       // 動いたルールの通知(D4a-17)
 	Events   port.Events
 	Clock    port.Clock
 }
