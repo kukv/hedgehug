@@ -1,12 +1,14 @@
 import type { Item, Kind, PropertyInput } from "../../model/item";
 import type { Member } from "../../model/member";
 import type { WorkspaceProperty, WorkspaceSettings, WorkspaceValue } from "../../model/workspace";
+import { rulesOf, usesIn } from "../workspaces/projectRules";
 import { categoryLabels } from "../workspaces/values";
 import { transitionRefusal } from "../workspaces/workflow";
 
 // 詳細パネルと作成ダイアログのプロパティの行(02「プロパティの入力と保存」、決定 19〜21)。
 
 export const deletedValue = "(削除された値)";
+const unusedHint = "このプロジェクトでは使わない";
 
 export interface ValueOption {
   id: string;
@@ -89,23 +91,37 @@ function listOf(settings: WorkspaceSettings, p: WorkspaceProperty): WorkspaceVal
 
 // statusOptions は、ステータスのメニューの項目(決定 21)。workflow なら、遷移の制約で移れない項目を無効にし、
 // 理由を添える(02「ステータスの変更」、A3b-4)。作成ダイアログは制約を適用しないので false。
-// 使わないステータスの扱いは B5 の後(決定 3)。
+// project があれば、そのプロジェクトが使うステータスだけを並べる。いまの値が使わないものなら、その 1 項目を
+// チェックつきで残し、「このプロジェクトでは使わない」と添える(03「使うステータス」)。
 export function statusOptions(
   settings: WorkspaceSettings,
   current: string,
   workflow = false,
+  project?: string,
 ): ValueOption[] {
-  return settings.statuses.map((s) => {
-    const reason = workflow ? transitionRefusal(settings, current, s.id) : null;
-    return {
-      id: s.id,
-      label: s.name,
-      hint: s.category ? categoryLabels[s.category] : undefined,
-      checked: s.id === current,
-      ...(reason ? { disabled: true, reason } : {}),
-    };
-  });
+  const rules = project === undefined ? undefined : rulesOf(settings, project);
+  const unused = (id: string) => rules !== undefined && !usesIn(settings, rules, id);
+  return settings.statuses
+    .filter((s) => !unused(s.id) || s.id === current)
+    .map((s) => {
+      const reason = workflow ? transitionRefusal(settings, current, s.id, project) : null;
+      return {
+        id: s.id,
+        label: s.name,
+        hint: unused(s.id) ? unusedHint : s.category ? categoryLabels[s.category] : undefined,
+        checked: s.id === current,
+        ...(reason ? { disabled: true, reason } : {}),
+      };
+    });
 }
+
+// projectStatusOptions は、プロジェクトが使うステータスのメニュー。
+export const projectStatusOptions = (
+  settings: WorkspaceSettings,
+  project: string,
+  current: string,
+  workflow = false,
+): ValueOption[] => statusOptions(settings, current, workflow, project);
 
 export const unknownUser = "不明なユーザー";
 
