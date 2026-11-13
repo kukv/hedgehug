@@ -69,10 +69,6 @@ func TestE2EGitHubHandler(t *testing.T) {
 	if !errors.As(err, &fail) || fail.Kind != ghcall.NotFound {
 		t.Errorf("gone の Lookup = %v", err)
 	}
-	// 間隔ごとの取り直しでは、消した番号は答えにない番号(Missing)になる(問い合わせ全体を失敗させない)
-	if b, err := e2eGitHub.ReadMany(t.Context(), "e2e-bot-token", "org/h-web", []int{7}); err != nil || len(b.Missing) != 1 || b.Missing[0] != 7 {
-		t.Errorf("gone の ReadMany = %+v, %v", b, err)
-	}
 	if got := do(http.MethodPost, put, "Bearer tok"); got != http.StatusNoContent {
 		t.Fatalf("restore: %d", got)
 	}
@@ -129,6 +125,23 @@ func readLinks(t *testing.T) (githublink.Links, *apptest.GitHub) {
 }
 
 // /e2e/github-read は、間隔によらず読む(force。D4a-19): 記録ではまだ読む時期でないリポジトリも読む。
+// 間隔ごとの取り直しでは、gone で消した番号は答えにない番号(Missing)になる(問い合わせ全体を失敗させない)。
+func TestE2EGitHubGoneIsMissing(t *testing.T) {
+	h := githubHandler("tok", http.NotFoundHandler())
+	r := httptest.NewRequest(http.MethodPost, "/e2e/github?repo=org/h-gone&number=3&gone=1", nil)
+	r.Header.Set("Authorization", "Bearer tok")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	t.Cleanup(func() { e2eGitHub.Fail("org/h-gone", 3, nil) })
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("gone: %d", w.Code)
+	}
+	b, err := e2eGitHub.ReadMany(t.Context(), "e2e-bot-token", "org/h-gone", []int{3})
+	if err != nil || len(b.Missing) != 1 || b.Missing[0] != 3 {
+		t.Errorf("ReadMany = %+v, %v", b, err)
+	}
+}
+
 func TestE2EGitHubReadHandler(t *testing.T) {
 	links, gh := readLinks(t)
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })

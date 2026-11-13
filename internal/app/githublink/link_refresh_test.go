@@ -349,11 +349,11 @@ func TestListHidesFailureWhenNotRefreshed(t *testing.T) {
 // 解除したリンクの取り直しの失敗の文言は消し、消したら EventGitHub を流す。
 func TestRemoveClearsFailure(t *testing.T) {
 	f := newLinks(t)
-	f.linkAt(t, 12)
-	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	f.linkAt(t, 13)
+	f.gh.Fail("org/web", 13, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 13})
 	f.refresh(t)
 	base := f.githubEvents(linkStore)
-	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 12}
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 13}
 	if err := f.links.Remove(t.Context(), linkStore, linkTask, ref); err != nil {
 		t.Fatal(err)
 	}
