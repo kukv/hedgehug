@@ -33,6 +33,8 @@ const headingLine = /^(#{1,3})\s+(\S.*)$/;
 const listLine = /^\s*(?:[-*]|(\d+\.))\s+(.*)$/;
 const checkLine = /^\[( |x)\](?:\s+(.*))?$/;
 const fenceLine = /^\s*```/;
+// 開きの行は、``` のあとにバッククォートがない行だけ(```foo``` のように 1 行で閉じる行は段落にする)。
+const fenceOpen = /^\s*`{3,}[^`]*$/;
 
 // isMemberOf は、メンバーのログイン名と大文字小文字を区別せずに一致するかを返す関数を作る。
 export const isMemberOf = (members: Member[]) => {
@@ -90,7 +92,7 @@ export function tokenize(text: string, isMember: (login: string) => boolean): Bl
   let i = 0;
   while (i < lines.length) {
     const line = lines[i++] ?? "";
-    if (fenceLine.test(line)) {
+    if (fenceOpen.test(line)) {
       const body: string[] = [];
       while (i < lines.length && !fenceLine.test(lines[i] ?? "")) body.push(lines[i++] ?? "");
       i++; // 閉じの行(なければ最後まで読んでいる)

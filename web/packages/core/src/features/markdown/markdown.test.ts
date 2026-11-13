@@ -48,6 +48,13 @@ describe("tokenize blocks", () => {
     expect(tokenize("```\n```", nobody)).toEqual([{ kind: "code", text: "" }]);
   });
 
+  it("does not open a fence on a line that also closes it (```foo```)", () => {
+    expect(tokenize("```foo```\n後", nobody)).toEqual([
+      { kind: "paragraph", inlines: [text("``"), { kind: "code", text: "foo" }, text("``")] },
+      { kind: "paragraph", inlines: [text("後")] },
+    ]);
+  });
+
   it("makes one paragraph per other line and skips blank lines and CRLF", () => {
     expect(tokenize("一行目\r\n\r\n二行目\n   \n三行目", nobody)).toEqual([
       { kind: "paragraph", inlines: [text("一行目")] },
