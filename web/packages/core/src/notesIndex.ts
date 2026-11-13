@@ -7,6 +7,7 @@ export {
   type Drafts,
   type LeaveGuard,
 } from "./features/drafts/drafts";
+export { epicProgress, progressPercent } from "./features/items/progress";
 export {
   type Block as MarkdownBlock,
   type Inline as MarkdownInline,

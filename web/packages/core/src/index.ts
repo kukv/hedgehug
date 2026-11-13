@@ -59,8 +59,6 @@ export {
   categoryOf,
   childCount,
   dueLabel,
-  epicProgress,
-  progressPercent,
   stepProgress,
 } from "./features/items/progress";
 export {

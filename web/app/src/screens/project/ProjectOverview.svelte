@@ -6,16 +6,17 @@
     type Route,
     readOnlyNote,
   } from "@hedgehug/core";
-  import { Button, KindIcon } from "@hedgehug/ui";
-  import { descriptionSaves, detail, links } from "../../wire";
+  import { Button } from "@hedgehug/ui";
+  import { descriptionSaves, detail, links, projectScreen } from "../../wire";
   import CommentsSection from "../notes/CommentsSection.svelte";
   import DescriptionSection from "../notes/DescriptionSection.svelte";
   import HistorySection from "../notes/HistorySection.svelte";
+  import EpicRow from "./EpicRow.svelte";
   import OverviewProps from "./OverviewProps.svelte";
   import OverviewRepos from "./OverviewRepos.svelte";
 
   // プロジェクトの「概要」のタブ(02「概要の編集」)。左の列に説明・Epic・リポジトリ・コメント・履歴、右の列に項目の編集。
-  // 「PR と Issue」の区画は D3・D4 が、Epic の期限・進捗・担当者の列は別のトラックが足す。
+  // 「PR と Issue」の区画は D3・D4 が足す。Epic の行(期限・進捗・ステータス・担当者)は EpicRow.svelte。
   interface Props {
     view: ProjectView;
     onaddepic: () => void;
@@ -23,6 +24,8 @@
 
   let { view, onaddepic }: Props = $props();
 
+  // 期限の判定に使う今日は、画面を出したときの日付(ツリーと同じ)。
+  const today = new Date();
   const p = $derived(view.project);
   const readonly = $derived(view.store.readOnly);
   const target = $derived({ kind: "project" as const, storeId: view.store.id, id: p.id });
@@ -50,18 +53,19 @@
           >
         </div>
         {#each view.epics as e (e.id)}
-          <div class="list-row">
-            <KindIcon kind="Epic" />
-            <code class="id">{id(e)}</code>
-            <a
-              class="row-title"
-              href={links.href(route(e))}
-              onclick={(ev) =>
-                links.click(ev, route(e), () => void detail.open(view.store.id, e.id))}
-              onauxclick={(ev) => links.click(ev, route(e))}
-              >{e.title}</a
-            >
-          </div>
+          <EpicRow
+            epic={e}
+            displayId={id(e)}
+            href={links.href(route(e))}
+            items={view.items}
+            settings={view.settings}
+            members={view.members}
+            {today}
+            readOnly={readonly}
+            onopen={(ev) => links.click(ev, route(e), () => void detail.open(view.store.id, e.id))}
+            onauxopen={(ev) => links.click(ev, route(e))}
+            onstatus={(statusId) => void projectScreen.setStatus(e.id, statusId)}
+          />
         {:else}
           <p class="empty">Epic はまだありません。Epic の下に Story・Task・Bug を作れます。</p>
         {/each}
@@ -107,24 +111,6 @@
   h2 {
     font-size: 14px;
     margin: 0 0 8px;
-  }
-  .list-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 34px;
-    border-bottom: 1px solid var(--line);
-  }
-  .id {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .row-title {
-    color: var(--ink);
-    text-decoration: none;
-    flex: 1;
-    min-width: 0;
   }
   .empty {
     color: var(--muted);
