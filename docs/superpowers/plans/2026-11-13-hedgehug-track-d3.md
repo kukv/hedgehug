@@ -58,7 +58,7 @@
 | D3-19 | 「PR 用の印をコピー」は GitHub の欄の見出しの横に置き(位置は仕様にない。概要の「リポジトリを追加」と同じく見出しの横)、`hedgehug:{内部 ID}` をコピーする。閲覧のみでも押せる | 02:440・331、01:51 |
 | D3-20 | GitHub の欄の行は「{種別のチップ} {状態のチップ} [レビュー] [チェック] {owner/name}#{番号} — {タイトル}」と解除の「×」。外部リンク(`https://github.com/{repo}/pull/{n}`・`/issues/{n}`)を `{owner/name}#{番号} — {タイトル}` に付け、新しいタブで開く。取り直しに失敗した行は、その下に「状態を更新できませんでした: {理由}」を赤字で出す | 07「表示と更新」、02:331(外部リンクは閲覧のみでも使える) |
 | D3-21 | プロジェクトの概要の「PR と Issue」は、A4a の `OverviewRepos.svelte` の「リポジトリと PR」区画の下段に置く。行の ID は詳細パネルを開くリンク。「PR を探せませんでした: {理由}」(自動リンクの読み取りの失敗)は D4 | 02:553・554、A4a の計画 51 行 |
-| D3-22 | 解除が断り(Refused)以外で失敗したときの文言は、仕様にないので仮に「リンクを解除できませんでした」とする(A4a の `relationFailedMessage` と同じ扱い)。ユーザーの確認待ち | 仕様にない |
+| D3-22 | 解除が断り(Refused)以外で失敗したときの文言は、仕様にないので仮に「リンクを解除できませんでした」とする(A4a の `relationFailedMessage` と同じ扱い)。ユーザー承認済み(2026-11-13) | 仕様にない |
 | D3-23 | e2e では、偽の GitHub(`apptest.GitHub`)に PR・Issue を持たせる入口 `POST /e2e/github`(`cmd/hedgehug/links_e2e.go`)を足し、Store `e2e` と `readonly` にアカウント `e2e-account`(ログイン名 `e2e-bot`)を割り当てる。アカウント 0 件の表示は `page.route("**/api/accounts")` の差し替えで確かめる(D2 画面の決定 S23 と同じ) | e2e の偽物はプロセスの中の Go の偽物 |
 
 ## 範囲の外にしたもの(このトラックの別の小計画が作る)
@@ -5260,3 +5260,5 @@ git commit -m "test(e2e): PR・Issue のリンク・解除・断り・取り直�
 - D4 は、この計画の `itemlink`(`Set.Attach` は自動リンクにも使える)、`port.GitHub.Lookup`、`port.Checks`、`Links.refreshOne`(間隔ごとの取り直し)を使う。自動化のきっかけ(D3-13)は D4 で、`app/items` の `automate` の入口を domain に移してから足す。手でリンクしたときのきっかけも D4 で足す(07:301「手でリンクしたときと同じに」)。
 - GitHub App 未導入の見分け(D3-5 で「リポジトリを読めない」にしている GraphQL の `FORBIDDEN`)は D4。
 - 本物のアプリでリンクできるのは、トラック G が本物の `StoreGitHub` を作ってから(`noStoreGitHub` は Store を返さない)。
+- トラック G へ: 本物の `StoreGitHub` は `StoreGitHubInfo.ReadOnly` を埋める(閲覧のみの Store の取り直しを止めるため。D3-9)。
+- アイテムの削除を作るトラックへ: Issue の 1 対 1 の検査(`findIssue`)が削除済みのアイテムも数えることを、受け入れ条件として確かめる。
