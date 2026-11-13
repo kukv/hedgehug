@@ -1,9 +1,11 @@
 package apptest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"maps"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -14,6 +16,8 @@ import (
 // Stores は port.Stores のメモリ上の偽物。同じ Store の Write は 1 つずつ順に行い、Read と重ねない。
 // 同じ Store の Read どうしと、別の Store どうしは互いを待たない(通しのテストのサーバーは、多くの画面の読み取りを
 // 同時に受けるので、Read を 1 つずつにすると、読み取りが列に並んで画面の反映が遅れる)。
+// 同じ goroutine の中で同じ Store の Read・Write を入れ子にすると panic する(本物は Read も Write もファイルロックを
+// 取るので止まる。偽物で通さないため)。
 type Stores struct {
 	mu     sync.Mutex // stores の出し入れだけを守る。Store の中身は store.mu が守る
 	clock  port.Clock
@@ -31,6 +35,36 @@ type store struct {
 	writes int
 	// retentionDays は、削除済みの保持日数。
 	retentionDays int
+	// holders は、この Store の Read・Write を実行中の goroutine。holdersMu が守る。
+	holdersMu sync.Mutex
+	holders   map[uint64]bool
+}
+
+// enter は、いまの goroutine を、この Store の Read・Write の実行中に入れ、出す関数を返す。すでに入っていれば panic する。
+func (st *store) enter(id port.StoreID) (leave func()) {
+	g := goroutineID()
+	st.holdersMu.Lock()
+	defer st.holdersMu.Unlock()
+	if st.holders[g] {
+		panic(fmt.Sprintf("apptest: nested Read or Write of store %q in one goroutine (gitstore would deadlock)", id))
+	}
+	st.holders[g] = true
+	return func() {
+		st.holdersMu.Lock()
+		defer st.holdersMu.Unlock()
+		delete(st.holders, g)
+	}
+}
+
+// goroutineID は、いまの goroutine の番号(スタックの先頭の行「goroutine N [...]」から読む)。
+func goroutineID() uint64 {
+	var buf [64]byte
+	line := bytes.TrimPrefix(buf[:runtime.Stack(buf[:], false)], []byte("goroutine "))
+	n, err := strconv.ParseUint(string(line[:bytes.IndexByte(line, ' ')]), 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("apptest: goroutine id: %v", err))
+	}
+	return n
 }
 
 // defaultRetentionDays は、保持日数の既定(gitstore と同じ。08「保持日数」)。
@@ -48,7 +82,7 @@ func (s *Stores) AddStore(id port.StoreID) {
 	if _, ok := s.stores[id]; ok {
 		panic(fmt.Sprintf("apptest: AddStore: store %q already exists", id))
 	}
-	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, retentionDays: defaultRetentionDays}
+	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, retentionDays: defaultRetentionDays, holders: map[uint64]bool{}}
 }
 
 // SetRetentionDays は、Store の削除済みの保持日数を変える(テスト用。本物は store.yaml の retention_days)。
@@ -78,6 +112,7 @@ func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader)
 	if err != nil {
 		return err
 	}
+	defer st.enter(id)()
 	st.mu.RLock()
 	defer st.mu.RUnlock()
 	return fn(&view{base: st.logs, baseTexts: st.texts, retentionDays: st.retentionDays})
@@ -88,6 +123,7 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	if err != nil {
 		return err
 	}
+	defer st.enter(id)()
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	logs := st.logs

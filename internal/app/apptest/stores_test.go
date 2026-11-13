@@ -6,6 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
 func TestFakeStores(t *testing.T) {
@@ -129,6 +130,44 @@ func TestReadsOfOneStoreRunTogether(t *testing.T) {
 	}
 	if err := <-wrote; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 本物(gitstore)の Read と Write は Store のファイルロック(LOCK_EX)を取るので、同じ goroutine の中で同じ Store を
+// 入れ子に読み書きすると止まる。偽物は黙って通さず、panic で知らせる。別の Store なら入れ子でよい。
+func TestNestedCallsOfOneStorePanic(t *testing.T) {
+	ctx := t.Context()
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	s.AddStore("S2")
+	op := port.Operation{Actor: change.User("taro"), Summary: "入れ子"}
+	read := func(id port.StoreID) error { return s.Read(ctx, id, func(port.Reader) error { return nil }) }
+	write := func(id port.StoreID) error { return s.Write(ctx, id, op, func(port.Tx) error { return nil }) }
+	inRead := func(inner func(port.StoreID) error) func() error {
+		return func() error { return s.Read(ctx, "S1", func(port.Reader) error { return inner("S1") }) }
+	}
+	inWrite := func(inner func(port.StoreID) error) func() error {
+		return func() error { return s.Write(ctx, "S1", op, func(port.Tx) error { return inner("S1") }) }
+	}
+	for name, call := range map[string]func() error{
+		"Read_in_Read": inRead(read), "Write_in_Read": inRead(write),
+		"Read_in_Write": inWrite(read), "Write_in_Write": inWrite(write),
+	} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("did not panic")
+				}
+			}()
+			_ = call()
+		})
+	}
+	// panic のあとも、ロックを残さず読み書きできる。
+	if err := s.Read(ctx, "S1", func(port.Reader) error { return read("S2") }); err != nil {
+		t.Errorf("Read of another store in a Read = %v", err)
+	}
+	if err := write("S1"); err != nil {
+		t.Errorf("Write after the panics = %v", err)
 	}
 }
 
