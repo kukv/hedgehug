@@ -62,14 +62,15 @@
     if (dialog && !shown) dialog = null;
   });
   const card = $derived(shown?.card ?? null);
-  // 確認は、いまのカードで出す(読み直しで未完了の数が変わる)。リリースがなくなったら閉じる。
+  // 確認はいまのカードで出す。リリースか未完了がなくなったら、保存せずに閉じる(押し直せば確認なしで変わる)。
   const confirming = $derived(
     shown?.kind === "confirm"
       ? (view?.cards.find((c) => c.release.id === shown.card?.release.id) ?? null)
       : null,
   );
+  const confirmText = $derived(confirming ? releaseConfirm(confirming) : null);
   $effect(() => {
-    if (shown?.kind === "confirm" && !confirming) dialog = null;
+    if (shown?.kind === "confirm" && !confirmText) dialog = null;
   });
 
   // 状態の変更。リリース済みにするときだけ、未完了が残れば確認する(05「状態」)。断りはエラーのトースト。
@@ -159,10 +160,10 @@
     retentionDays={ov.retentionDays}
     onclose={closeDialog}
   />
-{:else if confirming}
+{:else if confirmText}
   <ConfirmDialog
     title="リリース済みにする"
-    lines={[releaseConfirm(confirming) ?? ""]}
+    lines={[confirmText]}
     ok="リリース済みにする"
     onok={confirmed}
     oncancel={closeDialog}
