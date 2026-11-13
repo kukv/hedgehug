@@ -2,6 +2,7 @@
   import { hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
   import { AppFrame, OfflineBand, Toasts } from "@hedgehug/ui";
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
+  import DeleteItemDialog from "./screens/item/DeleteItemDialog.svelte";
   import DetailPanel from "./screens/item/DetailPanel.svelte";
   import DiscardDialog from "./screens/notes/DiscardDialog.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
@@ -82,5 +83,6 @@
 <CreateProjectDialog />
 <CreateWorkspaceDialog />
 <CreateItemDialog />
+<DeleteItemDialog />
 <DiscardDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

@@ -12,7 +12,7 @@
   import StatusButton from "./StatusButton.svelte";
   import StepRow from "./StepRow.svelte";
 
-  // 詳細パネルの「子」(02「子と Step」。Step の「×」は A4)。
+  // 詳細パネルの「子」(02「子と Step」)。
   interface Props {
     v: DetailView;
   }

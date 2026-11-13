@@ -2,6 +2,15 @@
 // (index.ts は 300 行の上限なので、A4b の分はここに足す)。
 
 export {
+  createItemDelete,
+  type DeleteDialogState,
+  type ItemDelete,
+  type ItemDeleteDeps,
+  itemDeleteDialog,
+  itemDeletedMessage,
+  itemDeleteFailedMessage,
+} from "./features/items/delete";
+export {
   type ItemMenuContext,
   type ItemMenuId,
   itemMenu,
