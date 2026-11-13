@@ -293,15 +293,20 @@ func TestMoveAcrossStoresRefusesAParentThatIsNotAnEpicOfTheDestination(t *testin
 	}
 }
 
+// failWrite は、Store store への Write を errBoom で失敗させる。before があれば、失敗させる前に呼ぶ。
 type failWrite struct {
 	port.Stores
-	store port.StoreID
+	store  port.StoreID
+	before func()
 }
 
 var errBoom = errors.New("boom")
 
 func (w failWrite) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
 	if id == w.store {
+		if w.before != nil {
+			w.before()
+		}
 		return errBoom
 	}
 	return w.Stores.Write(ctx, id, op, fn)
@@ -353,6 +358,54 @@ func TestMoveAcrossStoresRollsBackTheDestinationWhenTheSourceSaveFails(t *testin
 		t.Fatalf("err = %v", err)
 	}
 	assertRolledBack(t, f, srcBefore, membersBefore)
+	// 外した hanako の表示名(移動で「花子」にした)も戻すので、あとで足し直すとログイン名で出る。
+	write(t, f.rec, store2, func(tx port.Tx) error { return tx.WriteMembers().Append(member.Join("hanako")) })
+	if name := displayNameOf(t, f.rec, "hanako"); name != "hanako" {
+		t.Errorf("足し直した hanako の表示名 = %q, want hanako", name)
+	}
+}
+
+// 移動先の保存と戻しのあいだに、別の操作が同じ人(大文字小文字だけが違う綴りを含む)を足していたら、戻しでは外さない。
+func TestMoveAcrossStoresRollbackKeepsAMemberAddedAgainByAnotherOperation(t *testing.T) {
+	f := crossFixture(t)
+	f.svc.Stores = failWrite{Stores: f.rec, store: store1, before: func() {
+		write(t, f.rec, store2, func(tx port.Tx) error { return tx.WriteMembers().Append(member.Join("Hanako")) })
+	}}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if got := loginsOf(t, f.rec); !slices.Equal(got, []string{"Taro", "hanako"}) {
+		t.Errorf("移動先のメンバー = %v(あとから足した人は外さない)", got)
+	}
+	if exists(t, f.rec, store2, apptest.SampleTask) {
+		t.Error("移動先に Task が残っている")
+	}
+}
+
+// (0) で読んだあと (4) の前に、移動元で移すものの下に子が足されたら、移動は失敗し、移動先を戻し、移動元はそのまま(子も親も残る)。
+func TestMoveAcrossStoresFailsWhenTheSourceGainsAChildMeanwhile(t *testing.T) {
+	f := crossFixture(t)
+	srcBefore := len(logOf(t, f.rec, store1, change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}))
+	membersBefore := loginsOf(t, f.rec)
+	const newStep item.ID = "01TESTIT000000000000000013"
+	added := false
+	f.deliver.inside = func(port.StoreID) {
+		if added {
+			return
+		}
+		added = true
+		addItem(t, f.rec, item.Item{ID: newStep, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: ptr(apptest.SampleTask), Number: 6}, Kind: item.Step, Rank: "Y", Title: "あとから"})
+	}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err == nil {
+		t.Fatal("移動が成功した")
+	}
+	assertRolledBack(t, f, srcBefore, membersBefore)
+	if it := itemOf(t, f.rec, store1, newStep); it.Place.Parent == nil || *it.Place.Parent != apptest.SampleTask {
+		t.Errorf("足した子 = %+v", it.Place)
+	}
+	if exists(t, f.rec, store2, newStep) {
+		t.Error("足した子が移動先にある")
+	}
 }
 
 // 移動先の保存が送れず、捨てられもしなかった(保存されたかもしれない)ときは、移動元を保存せず、移動先を戻してエラーを返す。

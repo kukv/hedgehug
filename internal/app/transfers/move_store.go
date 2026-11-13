@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
-	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
@@ -38,82 +38,9 @@ type crossMove struct {
 	meTo     string
 
 	moved   Moved
-	added   []string // 移動先のメンバーに足した人のログイン名
+	added   []member.Member // 移動先のメンバーに足した人
 	numbers map[item.ID]int
 	prefix  string // 移動先のワークスペースの接頭辞
-}
-
-// crossSource は、別の Store へ移すときに (0) で移動元から読むもの。set の Outside は、移動元の Store 全体
-// (削除済みを含む)との関連。logs・descs は移すアイテムごとの行と説明。
-type crossSource struct {
-	source
-	project project.Project
-	logs    map[item.ID][]change.Record
-	descs   map[item.ID]string
-	members []member.Member
-}
-
-// logList は、移すアイテムの行を、items の順で返す。
-func (c crossSource) logList() [][]change.Record {
-	out := make([][]change.Record, 0, len(c.logs))
-	for _, it := range c.items() {
-		out = append(out, c.logs[it.ID])
-	}
-	return out
-}
-
-// gather は、移動元から移すもの・行・説明・メンバーを読む。検査は readSource と同じ。
-func gather(r port.Reader, id item.ID) (crossSource, error) {
-	src, err := readSource(r, id)
-	if err != nil {
-		return crossSource{}, err
-	}
-	all, err := storeItems(r)
-	if err != nil {
-		return crossSource{}, err
-	}
-	if src.set, err = transfer.Collect(id, all); err != nil {
-		return crossSource{}, err
-	}
-	c := crossSource{source: src, logs: map[item.ID][]change.Record{}, descs: map[item.ID]string{}}
-	if c.project, err = r.Projects().Get(src.set.Root.Place.Project); err != nil {
-		return crossSource{}, err
-	}
-	if c.members, err = r.Members().List(); err != nil {
-		return crossSource{}, err
-	}
-	for _, it := range src.items() {
-		if c.logs[it.ID], err = r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID}); err != nil {
-			return crossSource{}, err
-		}
-		if c.descs[it.ID], err = r.Items().Description(it.ID); err != nil {
-			return crossSource{}, err
-		}
-	}
-	return c, nil
-}
-
-// storeItems は、Store のすべてのアイテム(全ワークスペース・全プロジェクト・削除済みを含む)。
-func storeItems(r port.Reader) ([]item.Item, error) {
-	wss, err := r.Workspaces().List()
-	if err != nil {
-		return nil, err
-	}
-	var all []item.Item
-	for _, ws := range wss {
-		ps, err := r.Projects().List(ws.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range ps {
-			its, err := r.Items().List(p.ID)
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, its...)
-		}
-	}
-	return all, nil
 }
 
 // moveAcross は、アイテム id を別の Store のワークスペースへ移す(A5a-4・A5a-6)。(0) 移動元を読み、(1)〜(3) 移動先を
@@ -199,10 +126,7 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 	}
 	errs = append(errs, tx.WriteWorkspaces().Append(dst.ws.ID, numberLines(numbers)...))
 	m.numbers, m.prefix = numbers, dst.ws.Prefix
-	m.added = m.added[:0]
-	for _, p := range add {
-		m.added = append(m.added, p.Login)
-	}
+	m.added = add
 	m.moved = Moved{ToStore: m.in.ToStore, Item: root.ID, Display: displayID(dst.ws.Prefix, numbers[root.ID]), Emptied: emptiedOf(remaps, m.src.settings)}
 	return errors.Join(errs...)
 }
@@ -239,9 +163,16 @@ func (m *crossMove) importItem(tx port.Tx, it item.Item, lines []change.Draft) e
 	return tx.WriteItems().Append(it.ID, drafts...)
 }
 
+// errSourceChanged は、(0) で読んだあと、移動元で移すもの(移すアイテムと下のすべて)が変わったこと。
+var errSourceChanged = errors.New("transfers: the items to move changed in the source store")
+
 // writeSource は、移動元の保存の fn: 移すアイテムのフォルダを消し、外のアイテムが持つ関連を remove し、転送記録を
-// アイテムごとに 1 行足す。移すアイテムがもうない(別の経路で消えた・移った)なら port.ErrNotFound で、保存しない。
+// アイテムごとに 1 行足す。移すアイテムがもうない(別の経路で消えた・移った)なら port.ErrNotFound、移すものが (0) と
+// 違う(子が足された・移った)なら errSourceChanged で、保存しない(02「保存」の、失敗したら元のまま)。
 func (m *crossMove) writeSource(tx port.Tx) error {
+	if err := m.checkSource(tx); err != nil {
+		return err
+	}
 	items := m.src.items()
 	for _, it := range items {
 		if err := tx.WriteItems().Remove(it.ID); err != nil {
@@ -263,30 +194,31 @@ func (m *crossMove) writeSource(tx port.Tx) error {
 	return errors.Join(errs...)
 }
 
-// rollback は、移動先の保存を戻す(A5a-6): 写したフォルダを消し、足したメンバーを外す。number の行は戻さない。
-// cause を返す。戻しも失敗したら errors.Join(cause, 戻しのエラー)。
-func (s Service) rollback(ctx context.Context, m *crossMove, cause error) error {
-	op := port.Operation{Actor: change.User(m.meTo), Summary: m.moved.Display + " の移動を取り消し"}
-	reason, err := s.Delivery.Deliver(ctx, m.in.ToStore, op, m.undo)
-	if err == nil && reason != "" {
-		err = &SendError{Store: m.to.Name, Reason: reason}
+// checkSource は、移動元の移すもの(削除済みを含む)を tx から集め直し、(0) で集めたものと同じかを確かめる。
+func (m *crossMove) checkSource(tx port.Tx) error {
+	all, err := storeItems(tx)
+	if err != nil {
+		return err
+	}
+	set, err := transfer.Collect(m.src.set.Root.ID, all)
+	if errors.Is(err, transfer.ErrNotFound) {
+		return port.ErrNotFound
 	}
 	if err != nil {
-		return errors.Join(cause, err)
+		return err
 	}
-	return cause
+	if !slices.Equal(idsIn(set), idsIn(m.src.set)) {
+		return errSourceChanged
+	}
+	return nil
 }
 
-// undo は、戻しの保存の fn。保存されなかった(port.ErrSaveNotDiscarded で、捨てられていた)フォルダは飛ばす。
-func (m *crossMove) undo(tx port.Tx) error {
-	for _, it := range m.src.items() {
-		if err := tx.WriteItems().Remove(it.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
-			return err
-		}
+// idsIn は、移すものの内部 ID(辞書順)。
+func idsIn(s transfer.Set) []item.ID {
+	ids := []item.ID{s.Root.ID}
+	for _, it := range s.Below {
+		ids = append(ids, it.ID)
 	}
-	ds := make([]change.Draft, 0, len(m.added))
-	for _, login := range m.added {
-		ds = append(ds, change.NewRemove("members", login))
-	}
-	return tx.WriteMembers().Append(ds...)
+	slices.Sort(ids)
+	return ids
 }
