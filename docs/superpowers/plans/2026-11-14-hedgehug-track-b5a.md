@@ -57,6 +57,7 @@
 | B5a-23 | カンバン・コマンドパレット・一括変更・検索とビューのカンバンは develop にまだないので、この計画では作らない。それらを作るトラックは、ステータスの選択肢と断りに `projectrule`(サーバー)・core の `projectStatusOptions`(画面)を使い、変更は `items.SetProperty` を通す。トラック B の計画の漏れの表に持ち場(E・A5)を書く(Task 1) | 画面がないものに判定を足せない。判定の関数は B5a が用意する |
 | B5a-24 | `workspace.yaml` に `project_rules`(プロジェクト ID ごとに `hidden_statuses`・`workflow`・`templates`・`template_defaults`・`disabled_rules`。値は ID と行末の名前の注釈)を書き、ルールの行に `scope` を書く | 保存形式 42 行 |
 | B5a-25 | 同期で重なったときの「上書き」の通知(06 の 228 行)と、削除された値・なくなったプロジェクトを指すルールの修復(保存形式「同期の修復」の (7)・(8))はトラック C(C3・C4)の持ち場。B5a は手の操作と追従だけを作る | トラック B の計画の決定 10 |
+| B5a-26 | 別のワークスペース・別の Store への移動(A5a)で「移動先のプロジェクトが使うステータス」を決める `transfer.UsableStatuses(to workspace.Settings, p project.ID) []change.ID`(`internal/domain/transfer/remap.go`)は、B5a の `projectrule.UsedStatuses` で決める。develop にあとから入る方が合わせる: B5a があとなら Task 21 で develop を取り込んだときに `UsableStatuses` の中身を、移動先のワークスペースのログから読んだ `projectrule.Set` で `UsedStatuses` を呼ぶ形に差し替え(引数が足りなければ呼ぶ側の `Unmatched`・`Remap` まで直す)、テストを足す。A5a があとなら A5a がそうする | A5a のセッションからの連絡(2026-11-14、ユーザー了承済み)。仕様 02「移す先の選び方」「値の引き直し」の「移動先のプロジェクトが使わないもの」 |
 
 ## Review Focus
 
@@ -474,6 +475,7 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 
 ### Task 21: 全体の確認と PR
 
+- [ ] **Step 0: develop を取り込む。A5a が先に入っていれば、B5a-26 のとおり `transfer.UsableStatuses` を差し替える(テストを書いてから)**
 - [ ] **Step 1: `make check` と `make web-check` と e2e 全体を 1 回流し、緑を確かめる**
 - [ ] **Step 2: 最終レビュー(superpowers:requesting-code-review)で出たものを直す。直したことは、この計画の末尾の「実装で計画から変えたこと」に書く**
-- [ ] **Step 3: push して PR を出す** — 向き先 develop、タイトル「feat: トラック B5a(プロジェクト別のルール)」。本文に、できること・決めたこと(B5a-1〜B5a-25)・A3b-14 と A4b の未決 8・9 をどう片付けたか・確認の結果を書く。
+- [ ] **Step 3: push して PR を出す** — 向き先 develop、タイトル「feat: トラック B5a(プロジェクト別のルール)」。本文に、できること・決めたこと(B5a-1〜B5a-26)・A3b-14 と A4b の未決 8・9 をどう片付けたか・確認の結果を書く。
