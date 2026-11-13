@@ -22,6 +22,7 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 // 別の画面で削除されたそれらへの保存として、削除を取り消して変更を残す(06「他の書き手との重なり」)。
 // 保存の前の読みは、取り消す削除の行がないものとして作った設定(決定 R10)。取り消したのに行がなければ
 // ErrNotFound(決定 R3)、取り消したものの名前が削除されていないものと重なれば断る(決定 R4)。どちらも何も残さない。
+// targets は、保存の前の読みで 1 回、書く Tx の中で 1 回呼ぶ。Tx の中では rows より先に呼ぶ。
 func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID,
 	targets func(log []change.Record) []string,
 	summary func(workspace.Settings) (string, error),

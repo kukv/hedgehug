@@ -279,6 +279,29 @@ func TestUpdateTemplateWithUnchangedDeletedChild(t *testing.T) {
 	}
 }
 
+// 別のタブで削除された子の Step の題名だけを変えて保存すると、成功し、子は削除済みのままで取り消さない
+// (子の Step の項目名は子の項目名の下にない。同期と同じ規則 R1)。
+func TestUpdateTemplateWithEditedStepOfDeletedChild(t *testing.T) {
+	s := setup(t)
+	w, _ := s.Create(t.Context(), store, "Web", "HH")
+	tpl := release(t, s, w.ID)
+	deleteChild(t, s, w.ID, tpl, 0)
+	ctx := port.WithRevived(t.Context())
+	in := tpl
+	in.Children = slices.Clone(tpl.Children)
+	in.Children[0].Steps = []workspace.TemplateStep{{ID: tpl.Children[0].Steps[0].ID, Title: "再確認"}}
+	if err := s.UpdateTemplate(ctx, store, w.ID, tpl.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := settingsOf(t, s, w.ID).Template(tpl.ID)
+	if slices.ContainsFunc(got.Children, func(c workspace.TemplateChild) bool { return c.ID == tpl.Children[0].ID }) {
+		t.Errorf("QA must stay deleted: %+v", got.Children)
+	}
+	if n := restores(t, s, w.ID); n != 0 || len(port.Revived(ctx)) != 0 {
+		t.Errorf("restore rows = %d, Revived = %v; want none", n, port.Revived(ctx))
+	}
+}
+
 // 削除済みのテンプレートを、削除の前と同じ内容で保存すると、取り消さず ErrNotFound(決定 R3)。
 func TestUpdateDeletedTemplateUnchangedIsNotFound(t *testing.T) {
 	s := setup(t)

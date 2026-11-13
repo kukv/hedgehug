@@ -149,6 +149,8 @@ func TestRevivedTemplate(t *testing.T) {
 		{"changed deleted step", []string{sf}, edit(func(in *workspace.Template) { in.Children[0].Steps[0].Title = "再確認" }), "A[S] C[]", []string{tf, sf}},
 		{"deleted template", []string{tf}, rename, "A[S] C[]", []string{tf}},
 		{"deleted child, then template", []string{cf, tf}, rename, "A[S]", []string{tf}},
+		// 子の Step の項目名は子の項目名の下にないので、子の変更に数えない(同期と同じ規則 R1)
+		{"step of deleted child", []string{workspace.TemplateField(tid, "children", string(a))}, edit(func(in *workspace.Template) { in.Children[0].Steps[0].Title = "再確認" }), "C[]", []string{tf}},
 		{"unchanged deleted top-level step", []string{taskStep}, task, "", []string{workspace.TemplateField(taskID)}},
 		{"changed deleted top-level step", []string{taskStep}, retitled, "[T]", []string{workspace.TemplateField(taskID), taskStep}},
 	}

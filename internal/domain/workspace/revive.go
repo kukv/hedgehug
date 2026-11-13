@@ -70,6 +70,8 @@ func changedOf(log []change.Record, in Template, gone []string) ([]string, map[s
 		return nil, nil
 	}
 	st, _ := SettingsReviving(log, append([]string{TemplateField(in.ID)}, gone...)...)
+	// 見つからなければ old はゼロ値で、TemplateDrafts は作成扱いになり、何も除かない。そのときは Tx の中の
+	// 保存(UpdateTemplate の rows)がテンプレートを見つけられず ErrNotFound で断る。
 	old, _ := st.Template(in.ID)
 	ds := TemplateDrafts(old, NormalizeTemplate(st, MergeTemplate(old, in)).Ranked())
 	var kept []string
