@@ -74,6 +74,9 @@ type Item struct {
 	Relations []Relation
 	// Blocked は、ブロック中か(A4a-13)。保存しない派生の値で、app/items の Get・List が埋める。
 	Blocked bool
+	// Deleted は、削除済みの印(A4b-2)。保存の口(gitstore・偽物)は削除済みも返し、ここを埋める。
+	// 除くのは app の側で、Live を通す(A4b-3)。削除されていなければ nil。
+	Deleted *change.Deletion
 
 	// 値は内部 ID で指す(保存形式「アイテムの例」)。初期値と変更の操作は A3 が足す(B2-1)。
 	Status   change.ID                 // なければ空
@@ -146,5 +149,6 @@ func FromLog(log []change.Record) (Item, bool) {
 		}
 	}
 	readValues(&it, s)
+	it.Deleted = change.DeletionOf(log)
 	return it, true
 }

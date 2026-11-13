@@ -119,6 +119,7 @@ estimate: null
 watchers: [taro]
 comments: []
 worklogs: []
+deleted: null
 `
 	if string(b) != want {
 		t.Errorf("item.yaml =\n%s\nwant\n%s", b, want)

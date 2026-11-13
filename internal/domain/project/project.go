@@ -51,6 +51,8 @@ type Project struct {
 	Start  string // YYYY-MM-DD。空は「なし」
 	End    string
 	Repos  []string // owner/name。大文字小文字を区別しない辞書順(A4a-19)
+	// Deleted は、削除済みの印(A4b-2)。保存の口は削除済みも返し、除くのは app の側で Live を通す(A4b-3)。
+	Deleted *change.Deletion
 }
 
 // DisplayID は、画面の ID(HH-P1)。
@@ -88,5 +90,17 @@ func FromLog(log []change.Record) (Project, bool) {
 		}
 	}
 	slices.SortFunc(p.Repos, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	p.Deleted = change.DeletionOf(log)
 	return p, true
+}
+
+// Live は、削除済みを除いたプロジェクトを、順を保って返す。
+func Live(ps []Project) []Project {
+	out := make([]Project, 0, len(ps))
+	for _, p := range ps {
+		if p.Deleted == nil {
+			out = append(out, p)
+		}
+	}
+	return out
 }

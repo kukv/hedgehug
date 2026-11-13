@@ -35,6 +35,7 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 		Watchers:  it.Watchers,
 		Comments:  commentsNode(commentlog.FromLog(log)),
 		Worklogs:  worklogsNode(worklog.FromLog(log)),
+		Deleted:   deletedToYAML(it.Deleted),
 	}
 	y.Status.LineComment = comment(valueName(st.Statuses, it.Status))
 	y.Priority.LineComment = comment(valueName(st.Priorities, it.Priority))

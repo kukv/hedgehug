@@ -39,6 +39,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"item list follows a move in the same write", contractListFollowsMove},
 		{"workspace settings round trip", contractSettings},
 		{"item values and deletes round trip", contractItemValues},
+		{"deleted items and projects carry a mark and are still listed", contractDeleted},
 		{"descriptions round trip", contractDescription},
 		{"a failed write leaves the description", contractDescriptionRollback},
 		{"describing needs an existing entity and a summary", contractDescriptionRules},

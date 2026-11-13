@@ -20,16 +20,31 @@ type memberYAML struct {
 }
 
 type projectYAML struct {
-	ID        string   `yaml:"id"`
-	Workspace string   `yaml:"workspace"`
-	Number    int      `yaml:"number"`
-	Rank      string   `yaml:"rank"`
-	Title     string   `yaml:"title"`
-	Owner     string   `yaml:"owner"`
-	Status    string   `yaml:"status"`
-	Start     string   `yaml:"start"`
-	End       string   `yaml:"end"`
-	Repos     []string `yaml:"repos,flow"`
+	ID        string       `yaml:"id"`
+	Workspace string       `yaml:"workspace"`
+	Number    int          `yaml:"number"`
+	Rank      string       `yaml:"rank"`
+	Title     string       `yaml:"title"`
+	Owner     string       `yaml:"owner"`
+	Status    string       `yaml:"status"`
+	Start     string       `yaml:"start"`
+	End       string       `yaml:"end"`
+	Repos     []string     `yaml:"repos,flow"`
+	Deleted   *deletedYAML `yaml:"deleted,flow"`
+}
+
+// deletedYAML は、削除済みの印(読む用の写し。正本は delete の行)。削除されていなければ書かず、null になる(A4b-2)。
+type deletedYAML struct {
+	Op   string `yaml:"op"`
+	At   string `yaml:"at"`
+	Root bool   `yaml:"root"`
+}
+
+func deletedToYAML(d *change.Deletion) *deletedYAML {
+	if d == nil {
+		return nil
+	}
+	return &deletedYAML{Op: string(d.Op), At: d.At.Format(change.TimeLayout), Root: d.Root}
 }
 
 type createdYAML struct {
@@ -38,28 +53,29 @@ type createdYAML struct {
 }
 
 type itemYAML struct {
-	ID        string      `yaml:"id"`
-	Workspace string      `yaml:"workspace"`
-	Project   string      `yaml:"project"`
-	Parent    *string     `yaml:"parent"`
-	Number    int         `yaml:"number"`
-	Kind      string      `yaml:"kind"`
-	Rank      string      `yaml:"rank"`
-	Title     string      `yaml:"title"`
-	Created   createdYAML `yaml:"created,flow"`
-	Status    *yaml.Node  `yaml:"status"`
-	Assignee  *string     `yaml:"assignee"`
-	Priority  *yaml.Node  `yaml:"priority"`
-	Start     *string     `yaml:"start"`
-	End       *string     `yaml:"end"`
-	Points    *float64    `yaml:"points"`
-	Systems   *yaml.Node  `yaml:"systems"`
-	Fields    *yaml.Node  `yaml:"fields"`
-	Relations *yaml.Node  `yaml:"relations"`
-	Estimate  *float64    `yaml:"estimate"`
-	Watchers  []string    `yaml:"watchers,flow"`
-	Comments  *yaml.Node  `yaml:"comments"`
-	Worklogs  *yaml.Node  `yaml:"worklogs"`
+	ID        string       `yaml:"id"`
+	Workspace string       `yaml:"workspace"`
+	Project   string       `yaml:"project"`
+	Parent    *string      `yaml:"parent"`
+	Number    int          `yaml:"number"`
+	Kind      string       `yaml:"kind"`
+	Rank      string       `yaml:"rank"`
+	Title     string       `yaml:"title"`
+	Created   createdYAML  `yaml:"created,flow"`
+	Status    *yaml.Node   `yaml:"status"`
+	Assignee  *string      `yaml:"assignee"`
+	Priority  *yaml.Node   `yaml:"priority"`
+	Start     *string      `yaml:"start"`
+	End       *string      `yaml:"end"`
+	Points    *float64     `yaml:"points"`
+	Systems   *yaml.Node   `yaml:"systems"`
+	Fields    *yaml.Node   `yaml:"fields"`
+	Relations *yaml.Node   `yaml:"relations"`
+	Estimate  *float64     `yaml:"estimate"`
+	Watchers  []string     `yaml:"watchers,flow"`
+	Comments  *yaml.Node   `yaml:"comments"`
+	Worklogs  *yaml.Node   `yaml:"worklogs"`
+	Deleted   *deletedYAML `yaml:"deleted,flow"`
 }
 
 // renderYAML は、エンティティのログから読む用の YAML を作る。作成の行がなければ nil。
@@ -87,6 +103,7 @@ func renderYAML(kind change.Kind, log []change.Record, settings settingsOf) ([]b
 		v = projectYAML{
 			ID: string(p.ID), Workspace: string(p.Place.Workspace), Number: p.Place.Number, Rank: p.Rank,
 			Title: p.Title, Owner: p.Owner, Status: string(p.Status), Start: p.Start, End: p.End, Repos: p.Repos,
+			Deleted: deletedToYAML(p.Deleted),
 		}
 	case change.KindItem:
 		it, ok := item.FromLog(log)
