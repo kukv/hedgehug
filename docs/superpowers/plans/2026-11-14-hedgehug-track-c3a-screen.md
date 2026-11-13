@@ -91,7 +91,7 @@
 
 **Interfaces:**
 - Produces:
-  - `func EditableItem(r Reader, id item.ID) (item.Item, error)` — 削除されていないか、`Deleted.Root` が true のアイテムを返す。ない・`root: false`・祖先のアイテム(`Place.Parent` をたどる)かプロジェクトが削除済みなら `ErrNotFound`(決定 S9)。
+  - `func EditableItem(r Reader, id item.ID) (item.Item, error)` — 削除されていないか、`Deleted.Root` が true のアイテムを返す。ない・`root: false` なら `ErrNotFound`。削除済み(`root: true`)のときだけ祖先のアイテム(`Place.Parent` をたどる)とプロジェクトを確かめ、どれかが削除済みなら `ErrNotFound`(決定 S9。生きているアイテムは祖先を見ない。`LiveItem` と同じ)。
   - `func EditableProject(r Reader, id project.ID) (project.Project, error)` — 削除されていないか、`Deleted.Root` が true のプロジェクト。ない・`root: false` なら `ErrNotFound`。
   - `func ReviveItem(ctx context.Context, tx Tx, id item.ID) error` — tx の中で読み直し、削除済み(`root: true`)なら、そのプロジェクトのアイテムすべて(`tx.Items().List(プロジェクト)`)のうち、ログに削除の op の行があるものへ `change.Undo(log, op)` を書き、表示 ID を context の入れ物に積む。削除されていなければ何もしない。
   - `func ReviveProject(ctx context.Context, tx Tx, id project.ID) error` — プロジェクト自身とそのアイテムに同じことをする。
