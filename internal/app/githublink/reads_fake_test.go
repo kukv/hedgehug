@@ -2,23 +2,35 @@ package githublink_test
 
 import (
 	"context"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghread"
 )
 
-// memReads は、port.GitHubReads のメモリ上の偽物。このパッケージのテストは取り直しの失敗の文言だけを使う。
+// memReads は、port.GitHubReads のメモリ上の偽物。
 type memReads struct {
+	records  map[port.StoreID]map[string]ghread.Record
 	failures map[port.StoreID]map[string]string
 }
 
-func newMemReads() *memReads { return &memReads{failures: map[port.StoreID]map[string]string{}} }
-
-func (m *memReads) Records(context.Context, port.StoreID) (map[string]ghread.Record, error) {
-	return map[string]ghread.Record{}, nil
+func newMemReads() *memReads {
+	return &memReads{records: map[port.StoreID]map[string]ghread.Record{}, failures: map[port.StoreID]map[string]string{}}
 }
 
-func (m *memReads) SaveRecord(context.Context, port.StoreID, string, ghread.Record) error {
+func (m *memReads) Records(_ context.Context, store port.StoreID) (map[string]ghread.Record, error) {
+	out := map[string]ghread.Record{}
+	for k, v := range m.records[store] {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (m *memReads) SaveRecord(_ context.Context, store port.StoreID, repo string, r ghread.Record) error {
+	if m.records[store] == nil {
+		m.records[store] = map[string]ghread.Record{}
+	}
+	m.records[store][strings.ToLower(repo)] = r
 	return nil
 }
 
