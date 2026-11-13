@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
 // e2e のビルドは、このマシンの中(ループバック)でしか待ち受けない。
@@ -102,14 +104,46 @@ func TestE2EWireMovesItemsWithinAndAcrossStores(t *testing.T) {
 		path string
 		body map[string]any
 		want string
+		left left
 	}{
-		{transfer(e2eStore, string(apptest.SampleTask)), map[string]any{"toStore": e2eStore, "toWorkspace": apptest.SampleMobileWorkspace, "toProject": apptest.SampleMobileProject, "toParent": apptest.SampleMobileEpic, "statusChoices": none}, `"display":"MB-2"`},
-		{transfer(e2eStore, string(apptest.SampleTask)), map[string]any{"toStore": teamStore, "toWorkspace": apptest.SampleTeamWorkspace, "toProject": apptest.SampleTeamProject, "toParent": apptest.SampleTeamEpic, "statusChoices": none}, `"display":"TM-2"`},
-		{transfer(teamStore, string(apptest.SampleTask)), map[string]any{"toStore": e2eStore, "toWorkspace": apptest.SampleWorkspace, "toProject": apptest.SampleProject, "toParent": apptest.SampleEpic, "statusChoices": none}, `"display":"HH-3"`},
+		{transfer(e2eStore, string(apptest.SampleTask)), map[string]any{"toStore": e2eStore, "toWorkspace": apptest.SampleMobileWorkspace, "toProject": apptest.SampleMobileProject, "toParent": apptest.SampleMobileEpic, "statusChoices": none}, `"display":"MB-2"`, left{e2eStore, apptest.SampleProject, 2, false}},
+		{transfer(e2eStore, string(apptest.SampleTask)), map[string]any{"toStore": teamStore, "toWorkspace": apptest.SampleTeamWorkspace, "toProject": apptest.SampleTeamProject, "toParent": apptest.SampleTeamEpic, "statusChoices": none}, `"display":"TM-2"`, left{e2eStore, apptest.SampleMobileProject, 2, true}},
+		{transfer(teamStore, string(apptest.SampleTask)), map[string]any{"toStore": e2eStore, "toWorkspace": apptest.SampleWorkspace, "toProject": apptest.SampleProject, "toParent": apptest.SampleEpic, "statusChoices": none}, `"display":"HH-3"`, left{teamStore, apptest.SampleTeamProject, 2, true}},
 	}
 	for i, s := range steps {
 		if rec := post(s.path, s.body); rec.Code != 200 || !strings.Contains(rec.Body.String(), s.want) {
 			t.Fatalf("手順 %d: %d %s", i+1, rec.Code, rec.Body)
 		}
+		s.left.check(t, deps.Stores, i+1)
+	}
+}
+
+// left は、移したあとの移動元。移動元のプロジェクトに旧い番号のアイテムがない。cross(別の Store への移動)なら、
+// 移動元の Store にアイテムがない。
+type left struct {
+	store   port.StoreID
+	project project.ID
+	number  int
+	cross   bool
+}
+
+func (l left) check(t *testing.T, s port.Stores, step int) {
+	t.Helper()
+	if err := s.Read(t.Context(), l.store, func(r port.Reader) error {
+		all, err := r.Items().List(l.project)
+		if err != nil {
+			return err
+		}
+		for _, it := range all {
+			if it.Place.Number == l.number {
+				t.Errorf("手順 %d: 移動元に旧い番号 %d のアイテムが残っている: %+v", step, l.number, it)
+			}
+		}
+		if _, err := r.Items().Get(apptest.SampleTask); l.cross && !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("手順 %d: 別の Store へ移したのに移動元で読める: %v", step, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
