@@ -28,8 +28,9 @@ type readManyAnswer struct {
 		Repository map[string]json.RawMessage `json:"repository"`
 	} `json:"data"`
 	Errors []struct {
-		Type string `json:"type"`
-		Path []any  `json:"path"`
+		Type    string `json:"type"`
+		Path    []any  `json:"path"`
+		Message string `json:"message"`
 	} `json:"errors"`
 }
 
@@ -39,15 +40,9 @@ func (c *Client) ReadMany(ctx context.Context, token, repo string, numbers []int
 	if numbers = unique(numbers); len(numbers) == 0 {
 		return port.Batch{Repo: repo}, nil
 	}
-	b, err := c.readManyOnce(ctx, token, repo, numbers)
-	if !ghcall.Is(err, ghcall.RepoUnreadable) {
-		return b, err
-	}
-	moved, ok := c.renamed(ctx, token, repo)
-	if !ok {
-		return b, err
-	}
-	return c.readManyOnce(ctx, token, moved, numbers)
+	return attempt(ctx, c, token, repo, func(repo string) (port.Batch, error) {
+		return c.readManyOnce(ctx, token, repo, numbers)
+	})
 }
 
 func (c *Client) readManyOnce(ctx context.Context, token, repo string, numbers []int) (port.Batch, error) {
@@ -111,6 +106,8 @@ func (a readManyAnswer) failure(repo string, reset time.Time) *ghcall.Failure {
 		switch {
 		case e.Type == "RATE_LIMITED":
 			return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: reset}
+		case hiddenByApp(e.Type, e.Message):
+			return appMissing(repo)
 		case (e.Type == "NOT_FOUND" || e.Type == "FORBIDDEN") && len(e.Path) == 1:
 			return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
 		}

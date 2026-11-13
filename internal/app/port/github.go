@@ -20,6 +20,9 @@ type GitHub interface {
 	// 番号がなかったものは Batch.Missing に入れ、失敗にしない。リポジトリを読めなければ RepoUnreadable、
 	// 利用上限で断られたら RateLimited。
 	ReadMany(ctx context.Context, token, repo string, numbers []int) (Batch, error)
+	// CheckRepo は、repo を読めるかを確かめる(「再確認」)。読めれば nil。失敗は Lookup と同じ種類
+	// (読めなければ RepoUnreadable、GitHub App が入っていなければ AppNotInstalled)。
+	CheckRepo(ctx context.Context, token, repo string) error
 }
 
 // Found は、GitHub から読んだ PR・Issue。
