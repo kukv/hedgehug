@@ -264,6 +264,13 @@ export interface DeleteItemPreview {
   retentionDays: number;
 }
 
+export interface DeleteProjectPreview {
+  /** 下にある、削除されていないアイテムの数(Epic から Step まで全部) */
+  items: number;
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+}
+
 export interface DescribeBody {
   /** 編集を始めたときの説明。保存するときの共通の祖先になる */
   base: string;
@@ -2379,6 +2386,32 @@ export const listMembers = async (store: string, options?: Parameters<typeof fet
 
 
 
+export const getDeleteProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}`
+}
+
+/**
+ * @summary プロジェクトと、その下のアイテムを削除する
+ */
+export const deleteProject = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteProjectUrl(store,project),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getGetProjectUrl = (store: string,
     project: string,) => {
 
@@ -2579,6 +2612,32 @@ return fetcher<Project>(getSetProjectDateUrl(store,project),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setProjectDateBody)
+  }
+);}
+
+
+
+export const getGetProjectDeletePreviewUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/delete-preview`
+}
+
+/**
+ * @summary プロジェクトを削除したときに一緒に消えるアイテムの数と保持日数を返す
+ */
+export const getProjectDeletePreview = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<DeleteProjectPreview> => {
+
+  return fetcher<DeleteProjectPreview>(getGetProjectDeletePreviewUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

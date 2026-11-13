@@ -115,4 +115,5 @@ func Register(api huma.API, svc appprojects.Service) {
 			return &oneOutput{Body: toAPI(p)}, nil
 		})
 	registerEdit(api, svc)
+	registerDelete(api, svc)
 }
