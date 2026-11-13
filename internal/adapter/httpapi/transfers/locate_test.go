@@ -24,7 +24,7 @@ func TestLocate(t *testing.T) {
 	}
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil ||
 		got.Kind != "found" || got.StoreID != "S2" || got.ItemID != task || got.ProjectID != string(apptest.SampleTeamProject) ||
-		got.MovedFrom.Old != "HH-2" || got.MovedFrom.Display != "TM-2" || got.MovedFrom.Current != "TM-2" || !strings.HasPrefix(got.MovedFrom.At, "2026-11-12T09:00:") {
+		got.MovedFrom.Old != "HH-2" || got.MovedFrom.Display != "TM-2" || got.MovedFrom.Current != "TM-2" || !strings.HasPrefix(got.MovedFrom.At, "2026-11-13T09:00:") {
 		t.Errorf("旧 ID: %d %s", res.Code, res.Body)
 	}
 	if err := apptest.DeleteItems(t.Context(), e.stores, "S2", apptest.SampleTask); err != nil {
@@ -33,7 +33,7 @@ func TestLocate(t *testing.T) {
 	res = e.api.Get("/api/locate?store=main&id=HH-2") // 削除済みは、画面を開かず理由と材料を返す(文は画面が作る)
 	var gone struct{ Kind, Reason, Old, At, NewDisplay string }
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &gone) != nil ||
-		gone.Kind != "gone" || gone.Reason != "deleted" || gone.Old != "HH-2" || gone.NewDisplay != "TM-2" || !strings.HasPrefix(gone.At, "2026-11-12T09:00:") {
+		gone.Kind != "gone" || gone.Reason != "deleted" || gone.Old != "HH-2" || gone.NewDisplay != "TM-2" || !strings.HasPrefix(gone.At, "2026-11-13T09:00:") {
 		t.Errorf("削除済み: %d %s", res.Code, res.Body)
 	}
 	if body := res.Body.String(); strings.Contains(body, "message") || strings.Contains(body, "storeName") || strings.Contains(body, "itemId") {
