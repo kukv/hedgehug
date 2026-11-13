@@ -1,0 +1,207 @@
+package transfers
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/refusal"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
+)
+
+// MoveInput は、移す先。ToParent は移動先のプロジェクトの Epic(Epic を移すときは nil)。StatusChoices は、
+// 移動先で使えない移動元のステータス → 選んだ置き換え先。
+type MoveInput struct {
+	ToStore       port.StoreID
+	ToWorkspace   workspace.ID
+	ToProject     project.ID
+	ToParent      *item.ID
+	StatusChoices map[change.ID]change.ID
+}
+
+// Moved は、移した結果。Item は移したアイテムの内部 ID(変わらない)、Display は新しい ID、Emptied は合う値がなく
+// 空になった項目の名前(移動元のプロパティの定義の順)。
+type Moved struct {
+	ToStore port.StoreID
+	Item    item.ID
+	Display string
+	Emptied []string
+}
+
+// Move は、アイテム id を、下のもの(削除済みを含む)ごと別のワークスペースへ移す(02「別のワークスペースと別の
+// Store への移動」、A5a-3)。同じ Store の中は 1 回の保存で、番号を振り直し、値を引き直し、転送記録を残す。
+// 移すアイテムは移動先の親(Epic ならプロジェクト)の削除されていない子の末尾に入り、下のものの親子と順位は
+// 変えない。自動化は動かさない(03「自動化」)。移動元の Store が閲覧のみなら「閲覧のみの Store です」で断る。
+// 移動先の Store が表示中でないなら port.ErrStoreNotFound、閲覧のみ・選べない移すもの・移動先なら port.ErrNotFound。
+// 別の Store への移動はまだなく port.ErrStoreNotFound。
+func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in MoveInput) (Moved, error) {
+	info, err := s.storeInfo(ctx, store)
+	if err != nil {
+		return Moved{}, err
+	}
+	if info.ReadOnly {
+		return Moved{}, refusal.New("閲覧のみの Store です")
+	}
+	if err := s.checkDestination(ctx, in.ToStore); err != nil {
+		return Moved{}, err
+	}
+	if in.ToStore != store {
+		return Moved{}, port.ErrStoreNotFound
+	}
+	var summary string
+	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
+		p, err := plan(r, id, in)
+		summary = p.summary()
+		return err
+	})
+	if err != nil {
+		return Moved{}, err
+	}
+	me, err := s.Identity.Me(ctx, store)
+	if err != nil {
+		return Moved{}, err
+	}
+	var moved Moved
+	op := port.Operation{Actor: change.User(me), Summary: summary}
+	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		p, err := plan(tx, id, in)
+		if err != nil {
+			return err
+		}
+		moved = Moved{ToStore: store, Item: id, Display: p.display(p.src.set.Root), Emptied: p.emptied()}
+		return writeWithin(tx, p, store)
+	})
+	if err != nil {
+		return Moved{}, err
+	}
+	return moved, nil
+}
+
+// movePlan は、移動の材料。保存の前(アクティビティの 1 行)と保存の中の両方で plan が作る。
+type movePlan struct {
+	src     source
+	dst     destination
+	parent  *item.ID
+	rank    string
+	numbers map[item.ID]int
+	remaps  map[item.ID]transfer.RemapResult
+}
+
+// plan は、移すものと移動先を検査して読む。移動先が移動元と同じワークスペース、Epic に ToParent がある、Epic 以外で
+// ToParent が移動先のプロジェクトの削除されていない Epic でないなら port.ErrNotFound。
+func plan(r port.Reader, id item.ID, in MoveInput) (movePlan, error) {
+	src, err := readSource(r, id)
+	if err != nil {
+		return movePlan{}, err
+	}
+	dst, err := readDestination(r, in)
+	if err != nil {
+		return movePlan{}, err
+	}
+	if dst.ws.ID == src.ws.ID {
+		return movePlan{}, port.ErrNotFound
+	}
+	if err := checkParent(r, src.set.Root, in); err != nil {
+		return movePlan{}, err
+	}
+	siblings, err := port.LiveItems(r, dst.project.ID)
+	if err != nil {
+		return movePlan{}, err
+	}
+	p := movePlan{
+		src: src, dst: dst, parent: in.ToParent, rank: rank.After(lastRank(siblings, in.ToParent)),
+		numbers: transfer.Number(src.set.Root, src.set.Below, dst.next), remaps: map[item.ID]transfer.RemapResult{},
+	}
+	for _, it := range src.items() {
+		p.remaps[it.ID] = transfer.Remap(it, src.settings, dst.settings, dst.project.ID, nil, in.StatusChoices)
+	}
+	return p, nil
+}
+
+// checkParent は、移す先の親を確かめる。
+func checkParent(r port.Reader, root item.Item, in MoveInput) error {
+	if root.Kind == item.Epic {
+		if in.ToParent != nil {
+			return port.ErrNotFound
+		}
+		return nil
+	}
+	if in.ToParent == nil {
+		return port.ErrNotFound
+	}
+	e, err := port.LiveItem(r, *in.ToParent)
+	if err != nil {
+		return err
+	}
+	if e.Kind != item.Epic || e.Place.Project != in.ToProject {
+		return port.ErrNotFound
+	}
+	return nil
+}
+
+// summary は、アクティビティの 1 行「{旧 ID} を {移動元} から {移動先} へ移動」(A5a-11)。
+func (p movePlan) summary() string {
+	root := p.src.set.Root
+	return fmt.Sprintf("%s を %s から %s へ移動", root.DisplayID(p.src.ws.Prefix), p.src.ws.Name, p.dst.ws.Name)
+}
+
+// display は、移したあとの it の ID。
+func (p movePlan) display(it item.Item) string { return displayID(p.dst.ws.Prefix, p.numbers[it.ID]) }
+
+// emptied は、すべての引き直しで空になった項目の名前を、移動元のプロパティの定義の順で返す。
+func (p movePlan) emptied() []string {
+	got := map[string]bool{}
+	for _, r := range p.remaps {
+		for _, name := range r.Emptied {
+			got[name] = true
+		}
+	}
+	var out []string
+	for _, prop := range p.src.settings.Properties {
+		if got[prop.Name] {
+			out = append(out, prop.Name)
+			delete(got, prop.Name)
+		}
+	}
+	return out
+}
+
+// writeWithin は、同じ Store の中の移動の行を書く(A5a-3): アイテムごとに place(移すアイテムだけ rank も)と
+// 引き直しの行、移動先のワークスペースに番号ごとの number の行、アイテムごとに転送記録。
+func writeWithin(tx port.Tx, p movePlan, store port.StoreID) error {
+	var errs []error
+	var used []int
+	for _, it := range p.src.items() {
+		place := item.Place{Workspace: p.dst.ws.ID, Project: p.dst.project.ID, Parent: it.Place.Parent, Number: p.numbers[it.ID]}
+		var drafts []change.Draft
+		if it.ID == p.src.set.Root.ID {
+			place.Parent = p.parent
+			drafts = append(drafts, change.NewSet("place", it.Place, place), change.NewSet("rank", it.Rank, p.rank))
+		} else {
+			drafts = append(drafts, change.NewSet("place", it.Place, place))
+		}
+		drafts = append(drafts, p.remaps[it.ID].Drafts...)
+		errs = append(errs, tx.WriteItems().Append(it.ID, drafts...))
+		used = append(used, place.Number)
+	}
+	slices.Sort(used)
+	numbers := make([]change.Draft, 0, len(used))
+	for _, n := range used {
+		numbers = append(numbers, numbering.Draft(numbering.Items, n))
+	}
+	errs = append(errs, tx.WriteWorkspaces().Append(p.dst.ws.ID, numbers...))
+	for _, it := range p.src.items() {
+		errs = append(errs, tx.WriteTransfers().Append(transfer.Record{
+			Entity: transfer.EntityItem, Target: it.ID, Old: it.DisplayID(p.src.ws.Prefix), New: p.display(it), ToStore: string(store),
+		}))
+	}
+	return errors.Join(errs...)
+}
