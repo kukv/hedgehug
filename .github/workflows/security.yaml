@@ -55,6 +55,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # fetch-depth: 0 は他ブランチも取得し、gitleaks は既定で全 ref を走査する。
+      # 除外リスト(.gitleaksignore)は checkout したブランチのものしか効かないため、
+      # --log-opts=HEAD で走査をこのブランチの履歴に絞る
       - name: gitleaks
         run: |
           docker run --rm \
@@ -63,7 +66,7 @@ jobs:
             --env GIT_CONFIG_KEY_0=safe.directory \
             --env GIT_CONFIG_VALUE_0=/repo \
             "ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION}" \
-            git /repo --redact --verbose --exit-code 1
+            git /repo --redact --verbose --exit-code 1 --log-opts=HEAD
 
   # 検知時に PR へメンション付きでコメントする。書き込み権限を検査ジョブから
   # 切り離すため別ジョブにしている
