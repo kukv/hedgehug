@@ -48,23 +48,27 @@ type reading struct {
 	limited map[account.ID]limit
 }
 
-// limit は、利用上限で断られたときの文言と、読まない期限。
+// limit は、利用上限で断られたときの文言(07 の表の文。前置きなし)と、読まない期限。
 type limit struct {
 	text      string
 	notBefore time.Time
 }
 
-// repoResult は、1 つのリポジトリを読んだ結果。text が空でなければ、リポジトリ全体の失敗の文言。
+// repoResult は、1 つのリポジトリを読んだ結果。text が空でなければ、取り直しのリポジトリ全体の失敗の文言。
+// pulls は探して見つけた PR、scanText は探せなかったときの文言(07 の表の文。D4b-4)。
 // cause は、ghcall の失敗でないエラー(行の文言は「接続できません」にし、ReadOnce のエラーにも入れる)。
 type repoResult struct {
-	repo  *repoLinks
-	text  string
-	batch port.Batch
-	cause error
+	repo     *repoLinks
+	text     string
+	batch    port.Batch
+	pulls    port.Pulls
+	scanText string
+	cause    error
 }
 
-// readStore は、Store s の読む時期が来たリポジトリを読み、記録を置いてから、リンクを書く。
-// チェックの結果か失敗の文言が変わったら true。ghcall の失敗でないエラーは、書いたあとでまとめて返す(Reader がログに出す)。
+// readStore は、Store s の読む時期が来たリポジトリを読み(取り直しと PR の探索)、記録を置いてから、リンクを書き、
+// そのあとで PR を自動でリンクする(D4b-8)。チェックの結果か失敗の文言が変わったか、自動でリンクしたら true。
+// ghcall の失敗でないエラーは、書いたあとでまとめて返す(Reader がログに出す)。
 func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool, error) {
 	repos, err := rd.l.collect(ctx, s.ID)
 	if errors.Is(err, port.ErrStoreNotFound) {
@@ -77,6 +81,10 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 	if err != nil {
 		return false, err
 	}
+	scans, err := rd.l.Scans.Scans(ctx, s.ID)
+	if err != nil {
+		return false, err
+	}
 	p := newPass()
 	var results []repoResult
 	var causes []error
@@ -85,7 +93,8 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 		if !rd.force && !ghread.Due(rd.now, rec, rd.every) {
 			continue
 		}
-		res, rec := rd.fetch(ctx, s, r, rec, p)
+		res, next := rd.fetch(ctx, s, r, rec, p)
+		rec = rd.scanInto(ctx, s, &res, scans[r.key], rec, next)
 		if err := rd.l.Reads.SaveRecord(ctx, s.ID, r.key, rec); err != nil {
 			return false, err
 		}
@@ -93,29 +102,33 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 		causes = append(causes, res.cause)
 	}
 	changed, err := rd.l.writeResults(ctx, s.ID, results, p)
+	if err == nil {
+		var c bool
+		c, err = rd.l.writeScans(ctx, s.ID, results, scans, p)
+		changed = changed || c
+	}
 	return changed, errors.Join(append(causes, err)...)
 }
 
 // fetch は、リポジトリ r を読み、結果と、置く記録を返す(D4a-5・6)。読めた値は p.fetched に入れる。
 // 利用上限で断られたら、試した時刻は進めずに読まない期限を置く(期限が間隔より早くても、期限に読めるように)。
 // 同じアカウントがこの読み取りで断られていれば、問い合わせずに同じ文言と期限にする。
+// 取り直す番号がなければ(探すだけのリポジトリ)問い合わせず、前の記録に試した時刻だけを置く。
 func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLinks, rec ghread.Record, p *pass) (repoResult, ghread.Record) {
 	if lim, ok := rd.limited[s.Account]; ok {
 		rec.Failed, rec.NotBefore = true, lim.notBefore
-		return repoResult{repo: r, text: lim.text}, rec
+		return repoResult{repo: r, text: refreshText(lim.text)}, rec
+	}
+	if len(r.numbers) == 0 {
+		rec.Attempt, rec.Failed, rec.NotBefore = rd.now, false, time.Time{}
+		return repoResult{repo: r}, rec
 	}
 	b, err := rd.l.readMany(ctx, s.ID, r)
 	var f *ghcall.Failure
 	if ghcall.Is(err, ghcall.RateLimited) && errors.As(err, &f) {
-		nb := ghread.Limited(rd.now, f.ResetAt)
-		if !nb.After(rd.now) {
-			// このマシンの時計が進んでいて戻る時刻が過ぎているときも、すぐには読み直さない(分からないときと同じ 1 分後)
-			nb = rd.now.Add(time.Minute)
-		}
-		lim := limit{text: rd.l.failText(err), notBefore: nb}
-		rd.limited[s.Account] = lim
+		lim := rd.limit(s.Account, err, f)
 		rec.Failed, rec.NotBefore = true, lim.notBefore
-		return repoResult{repo: r, text: lim.text}, rec
+		return repoResult{repo: r, text: refreshText(lim.text)}, rec
 	}
 	if err != nil {
 		rec.Attempt, rec.Failed, rec.NotBefore = rd.now, true, time.Time{}
@@ -136,16 +149,16 @@ func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLin
 
 // readMany は、Store のアカウントで r の番号をまとめて読む。トークンが拒否されたら認証エラーにする(07「状態」)。
 func (l Links) readMany(ctx context.Context, store port.StoreID, r *repoLinks) (port.Batch, error) {
-	tok, a, err := l.Tokens.TokenFor(ctx, store, r.repo)
+	var b port.Batch
+	err := l.call(ctx, store, r.repo, func(tok string) (string, error) {
+		var err error
+		b, err = l.GitHub.ReadMany(ctx, tok, r.repo, r.numbers)
+		return b.Repo, err
+	})
 	if err != nil {
 		return port.Batch{}, err
 	}
-	b, err := l.GitHub.ReadMany(ctx, tok, r.repo, r.numbers)
-	if ghcall.Is(err, ghcall.TokenRejected) {
-		l.Tokens.Rejected(a.ID)
-		return port.Batch{}, authError(a)
-	}
-	return b, err
+	return b, nil
 }
 
 // writeResults は、読んだ結果をリンクごとに書く(D4a-12)。保存に失敗したら、残りは書かずに返す。

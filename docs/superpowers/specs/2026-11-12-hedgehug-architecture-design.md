@@ -141,7 +141,7 @@ type Tx interface {
 | `StoreProvisioner` | Store を作る・clone する・フォルダから探す・このマシンから外す |
 
 - 画面は、サーバーから「この Store で使える機能」を受け取り、使えない機能を出さない。git 版ではすべて使える。
-- 合わせたあとの修復(親の循環など)は、`domain/repair` の規則を `app/sync` が呼び、Stores.Write(実行者「同期」)で保存する。項目ごとの後勝ちで合わせる処理は `infra/gitstore` の中に置く。
+- 合わせたあとの修復(親の循環など)は、`domain/repair` の規則を `app/repairing` が `port.RepairWriter`(実行者「同期」)で保存する。`infra/gitstore` の `Replicator.Sync` が、合わせたあと・送る前に、Store のロックを持ったまま呼ぶ。完全に削除したものと重なったときのフォルダの削除は gitstore が行う。項目ごとの後勝ちで合わせる処理は `infra/gitstore` の中に置く。
 - Git でない版の口の中身は、整理ができてから決める。
 
 ### このマシンと外部の口

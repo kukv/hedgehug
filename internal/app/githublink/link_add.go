@@ -39,27 +39,28 @@ type addPlan struct {
 // アクティビティの文(「(プロジェクトのリポジトリにも追加)」の有無)は保存の前の値で決まる。保存の中で、
 // 同時に誰かがそのリポジトリをプロジェクトに足していたら、断らずに黙って足さない(文はそのまま。この狭い
 // 競合は受け入れる)。チェックの結果は、保存できたあとに置く。チェックの結果か失敗の文言が変わったら EventGitHub を流す。
-func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLinkInput) error {
+// added は、プロジェクトのリポジトリに足したリポジトリ(保存した書き方)。足さなければ空(D4b-9 の探索に使う)。
+func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLinkInput) (added string, err error) {
 	if in.Kind != itemlink.PR && in.Kind != itemlink.Issue {
-		return port.ErrNotFound
+		return "", port.ErrNotFound
 	}
 	plan, err := l.plan(ctx, store, id, in)
 	if err != nil {
-		return err
+		return "", err
 	}
 	me, err := l.Identity.Me(ctx, store)
 	if err != nil {
-		return err
+		return "", err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: plan.summary}
 	var fs []fired
 	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
 		var err error
-		fs, err = saveLink(tx, id, plan)
+		fs, added, err = saveLink(tx, id, plan)
 		return err
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	// 通知を先に書く(チェックの結果を置くのに失敗しても、保存したルールの通知は失わない)
 	nerr := l.notify(ctx, store, fs)
@@ -69,27 +70,30 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 	if cc || fc { // Refresh と同じく、このマシンが読んだ値が変わったら知らせる
 		l.Events.Publish(port.Event{Kind: port.EventGitHub, Store: store})
 	}
-	return errors.Join(nerr, cerr, ferr)
+	return added, errors.Join(nerr, cerr, ferr)
 }
 
 // saveLink は、保存 tx の中で確かめ直してリンクを書き、同じ保存の中できっかけを動かす。
-func saveLink(tx port.Tx, id item.ID, plan addPlan) ([]fired, error) {
+// added は、プロジェクトのリポジトリに足したリポジトリ(足さなければ空)。
+func saveLink(tx port.Tx, id item.ID, plan addPlan) (fs []fired, added string, err error) {
 	cur, err := readItem(tx, id)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := checkItem(tx, cur, plan.ref, id); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := tx.WriteItems().Append(id, cur.links.Attach(plan.ref, plan.values)...); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if plan.toProject && project.IndexRepo(cur.project.Repos, plan.ref.Repo) < 0 {
 		if err := tx.WriteProjects().Append(cur.project.ID, change.NewAdd("repos", plan.ref.Repo)); err != nil {
-			return nil, err
+			return nil, "", err
 		}
+		added = plan.ref.Repo
 	}
-	return fire(tx, id, nil, itemlink.Link{Ref: plan.ref, Values: plan.values}, nil)
+	fs, err = fire(tx, id, nil, itemlink.Link{Ref: plan.ref, Values: plan.values}, nil)
+	return fs, added, err
 }
 
 // plan は、入力の形・重なり・GitHub・Issue の 1 対 1 を、07 の表の順に確かめる。

@@ -272,3 +272,12 @@ func contractRuleRowsRefused(t *testing.T, s port.Stores, id port.StoreID) {
 		refuseWrite(t, s, id, c.name, c.op, extra, true)
 	}
 }
+
+// Op を持つ行は、同期の操作だけが書ける。人の操作が別の操作の op を名乗ると、何も残らない。
+func contractOpRows(t *testing.T, s port.Stores, id port.StoreID) {
+	row := change.NewSet("status", nil, "X").InOp("01OP00000000000000000000A")
+	extra := func(tx port.Tx) error { return tx.WriteItems().Append(cItem.ID, row) }
+	refuseWrite(t, s, id, "person", taro, extra, true)
+	badOp := func(tx port.Tx) error { return tx.WriteItems().Append(cItem.ID, row.InOp("bad id!")) }
+	refuseWrite(t, s, id, "malformed op", port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "同期の修復"}, badOp, true)
+}

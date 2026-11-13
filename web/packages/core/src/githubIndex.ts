@@ -10,6 +10,12 @@ export {
   type ProjectLinksState,
 } from "./features/github/projectLinks";
 export {
+  createRepoFailures,
+  type RepoFailures,
+  type RepoFailuresState,
+  scanFailedText,
+} from "./features/github/repoFailures";
+export {
   checksLabel,
   kindLabel,
   linkDialogTitle,
@@ -34,5 +40,6 @@ export type {
   LinkState,
   LinkTarget,
   ProjectLinkRow,
+  RepoFailure,
 } from "./model/link";
 export type { LinksPort } from "./port/links";

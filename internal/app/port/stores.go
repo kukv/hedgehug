@@ -31,6 +31,20 @@ func CheckRuleDrafts(actor change.Actor, drafts []change.Draft) error {
 	return nil
 }
 
+// CheckOpDrafts は、操作の op と別の op を持つ行(Draft.Op)を書けるかを確かめる(C3a-11)。
+// 書けるのは同期の操作だけで、op は change.ValidID。合わなければ ErrInvalidOperation を包んだエラー。
+func CheckOpDrafts(actor change.Actor, drafts []change.Draft) error {
+	for _, d := range drafts {
+		if d.Op == "" {
+			continue
+		}
+		if actor.Kind != change.ActorSync || !change.ValidID(d.Op) {
+			return fmt.Errorf("%w: op row %q by %+v", ErrInvalidOperation, d.Op, actor)
+		}
+	}
+	return nil
+}
+
 // 口は削除済みのアイテム・プロジェクトも返す(item.Item.Deleted・project.Project.Deleted の印つき。A4b-3)。
 // 利用者に見せる・操作する側は、下の 4 つで読む。削除済みを返さず、Get は port.ErrNotFound にする(A4b-4)。
 // 削除済みも要る読み方(番号の採番、プロジェクトが変わる移動の下のもの、値の置き換え、自動化の最近の実行、

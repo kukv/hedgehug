@@ -27,6 +27,46 @@ type GitHub struct {
 	Lookups   int
 	Rate      port.Rate
 	many      map[string]int
+	pulls     map[string][]port.Pull // 小文字のリポジトリ名から引く。PutPull で入れる
+	pullCalls map[string]int
+	missed    map[string]bool   // App 未導入の owner(小文字)
+	movedTo   map[string]string // ReadPulls の答えのリポジトリ名(小文字の問い合わせの名前から引く。MovePulls で入れる)
+}
+
+// MissApp は、owner のリポジトリの問い合わせ(Lookup・ReadMany・ReadPulls・CheckRepo)が
+// AppNotInstalled を返すようにする(false で戻す)。
+func (g *GitHub) MissApp(owner string, missing bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.missed == nil {
+		g.missed = map[string]bool{}
+	}
+	g.missed[strings.ToLower(owner)] = missing
+}
+
+// appMissing は、repo の owner が App 未導入なら、その失敗(Org は repo の書き方のまま)。g.mu を持って呼ぶ。
+func (g *GitHub) appMissing(repo string) error {
+	owner, _, _ := strings.Cut(repo, "/")
+	if g.missed[strings.ToLower(owner)] {
+		return &ghcall.Failure{Kind: ghcall.AppNotInstalled, Org: owner, Repo: repo}
+	}
+	return nil
+}
+
+// CheckRepo は、repo を読めるか。Fail(repo, 0, err) があればその失敗、なければ nil。
+func (g *GitHub) CheckRepo(_ context.Context, token, repo string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.Err != nil {
+		return g.Err
+	}
+	if _, ok := g.Users[token]; !ok {
+		return &ghcall.Failure{Kind: ghcall.TokenRejected}
+	}
+	if err := g.appMissing(repo); err != nil {
+		return err
+	}
+	return g.LookupErr[itemKey(repo, 0)]
 }
 
 func itemKey(repo string, number int) string {
@@ -67,6 +107,9 @@ func (g *GitHub) Lookup(_ context.Context, token, repo string, number int) (port
 	if _, ok := g.Users[token]; !ok {
 		return port.Found{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
 	}
+	if err := g.appMissing(repo); err != nil {
+		return port.Found{}, err
+	}
 	if err := g.LookupErr[itemKey(repo, number)]; err != nil {
 		return port.Found{}, err
 	}
@@ -90,6 +133,9 @@ func (g *GitHub) ReadMany(_ context.Context, token, repo string, numbers []int) 
 	}
 	if _, ok := g.Users[token]; !ok {
 		return port.Batch{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
+	}
+	if err := g.appMissing(repo); err != nil {
+		return port.Batch{}, err
 	}
 	if err := g.LookupErr[itemKey(repo, 0)]; err != nil {
 		return port.Batch{}, err

@@ -43,12 +43,14 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"project rules round trip", contractProjectRules},
 		{"item values and deletes round trip", contractItemValues},
 		{"deleted items and projects carry a mark and are still listed", contractDeleted},
+		{"a restore row cancels the deletion it points at", contractRestored},
 		{"descriptions round trip", contractDescription},
 		{"a failed write leaves the description", contractDescriptionRollback},
 		{"describing needs an existing entity and a summary", contractDescriptionRules},
 		{"automation rows share the operation", contractRuleRows},
 		{"automation rows in a GitHub operation are by the bot", contractRuleRowsGitHub},
 		{"automation rows need a person or GitHub and a valid rule id", contractRuleRowsRefused},
+		{"op rows are for sync operations only", contractOpRows},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -83,3 +83,56 @@ func TestDeletionOfTieBreak(t *testing.T) {
 		}
 	}
 }
+
+func TestNewRestore(t *testing.T) {
+	d := change.NewRestore(change.DeletedField, "op1")
+	if d.T != change.Restore || d.F != change.DeletedField || d.From != nil || d.Root != nil || string(d.To) != `"op1"` {
+		t.Fatalf("NewRestore = %+v", d)
+	}
+}
+
+// restore の行は、f が同じで to が自分の op の削除だけを取り消す。もう一度削除すれば、また削除済みになる(C3a-7)。
+func TestDeletionOfSkipsRestored(t *testing.T) {
+	at := func(h int) time.Time { return time.Date(2026, 11, 13, h, 0, 0, 0, jst) }
+	root := true
+	del := func(id, op string, h int) change.Record {
+		return change.Record{ID: change.ID(id), Op: change.ID(op), At: at(h), By: "taro", Actor: change.User("taro"), T: change.Delete, F: change.DeletedField, Root: &root}
+	}
+	restore := func(f, to string) change.Record {
+		return change.Record{ID: "r1", Op: "op2", At: at(10), By: "taro", Actor: change.User("taro"), T: change.Restore, F: f, To: change.Value(change.ID(to))}
+	}
+	d1 := del("d1", "op1", 9)
+	if got := change.DeletionOf([]change.Record{d1, restore(change.DeletedField, "op1")}); got != nil {
+		t.Fatalf("restored deletion = %+v, want nil", got)
+	}
+	again := del("d2", "op3", 11)
+	if got := change.DeletionOf([]change.Record{d1, restore(change.DeletedField, "op1"), again}); got == nil || got.Op != "op3" {
+		t.Fatalf("deleted again = %+v, want op3", got)
+	}
+	// 別の op の削除を指す restore や、別の f の restore は取り消さない。
+	if change.DeletionOf([]change.Record{d1, restore(change.DeletedField, "other")}) == nil {
+		t.Error("restore of another op must not undo the deletion")
+	}
+	if change.DeletionOf([]change.Record{d1, restore("statuses/X", "op1")}) == nil {
+		t.Error("restore of another f must not undo the deletion")
+	}
+	// 取り消された削除より前の、取り消されていない削除は残る。
+	older := del("d0", "op0", 8)
+	if got := change.DeletionOf([]change.Record{older, d1, restore(change.DeletedField, "op1")}); got == nil || got.Op != "op0" {
+		t.Errorf("older live deletion = %+v, want op0", got)
+	}
+}
+
+func TestRestored(t *testing.T) {
+	d := change.Record{ID: "d1", Op: "op1", T: change.Delete, F: "statuses/S"}
+	r := change.Record{ID: "r1", Op: "op2", T: change.Restore, F: "statuses/S", To: change.Value(change.ID("op1"))}
+	if !change.Restored([]change.Record{d, r})(d) {
+		t.Error("restored delete must be reported")
+	}
+	if change.Restored([]change.Record{d})(d) {
+		t.Error("a delete without restore must not be reported")
+	}
+	if change.Restored([]change.Record{d, r})(r) {
+		t.Error("a non-delete row must not be reported")
+	}
+}

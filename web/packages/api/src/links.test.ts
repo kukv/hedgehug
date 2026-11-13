@@ -75,6 +75,18 @@ describe("links port", () => {
     expect(await createLinksPort().listProject("S1", "P1")).toEqual([]);
   });
 
+  it("reads the repo failures of the project and an empty answer", async () => {
+    const fetch = respond(200, { failures: [{ repo: "org/web", text: "x" }] });
+    expect(await createLinksPort().listRepoFailures("S1", "P1")).toEqual([
+      { repo: "org/web", text: "x" },
+    ]);
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toContain(
+      "/api/stores/S1/projects/P1/repo-failures",
+    );
+    respond(200, { failures: null });
+    expect(await createLinksPort().listRepoFailures("S1", "P1")).toEqual([]);
+  });
+
   it("turns 422 into Refused and 404 into NotFound", async () => {
     respond(422, { detail: "番号を入力してください" });
     await expect(

@@ -31,3 +31,14 @@ export const askingText = "GitHub に問い合わせています";
 export const waitingText = "許可を待っています";
 export const expiredText = "コードの期限が切れました";
 export const deniedText = "GitHub で許可が拒否されました";
+
+// 「GitHub App 未導入」の帯と「再確認」(07「GitHub App が入っていない組織」)。
+export const appMissingBandText = (name: string, org: string) =>
+  `${name}: ${org} に GitHub App が入っていないため、PR と Issue を読めません。`;
+export const installRequestText = (org: string, login: string) =>
+  `${org} に GitHub App をインストールしてください(@${login} が使います)`;
+export const recheckedText = (name: string, orgs: string[]) =>
+  `${name}: ${orgs.join("・")} を読めるようになりました`;
+export const copiedText = "コピーしました";
+export const copyFailedText = "コピーできませんでした。文を選択してコピーしてください";
+export const stillUnreadableText = "まだ読めません";

@@ -16,14 +16,15 @@ import (
 
 // Services は、GitHub 連携の API が使う usecase。
 type Services struct {
-	List   ghapp.ListAccounts
-	Add    ghapp.AddAccount
-	Edit   ghapp.EditAccount
-	Delete ghapp.DeleteAccount
-	Reauth ghapp.Reauth
-	Impact ghapp.Impact
-	SignIn ghapp.SignIn
-	Links  githublink.Links
+	List    ghapp.ListAccounts
+	Add     ghapp.AddAccount
+	Edit    ghapp.EditAccount
+	Delete  ghapp.DeleteAccount
+	Reauth  ghapp.Reauth
+	Recheck ghapp.RecheckOrgs
+	Impact  ghapp.Impact
+	SignIn  ghapp.SignIn
+	Links   githublink.Links
 }
 
 type accountBody struct {
@@ -40,17 +41,25 @@ func toBody(a account.Account) accountBody {
 // accountRow は一覧の 1 行(07「状態」)。reason は「認証エラー」の下の赤字(なければ空)。
 // huma は埋め込みの構造体をスキーマに展開しないので、accountBody を埋め込まず欄を並べる。
 type accountRow struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Login  string `json:"login"`
-	Method string `json:"method" enum:"device,gh,env,keychain"`
-	Status string `json:"status" enum:"ok,auth_error"`
-	Reason string `json:"reason"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Login  string   `json:"login"`
+	Method string   `json:"method" enum:"device,gh,env,keychain"`
+	Status string   `json:"status" enum:"ok,auth_error,app_missing"`
+	Reason string   `json:"reason"`
+	Orgs   []string `json:"orgs" doc:"GitHub App が入っていない組織(認証エラーのときは空)"`
 }
 
 type listOutput struct {
 	Body struct {
 		Accounts []accountRow `json:"accounts"`
+	}
+}
+
+type recheckOutput struct {
+	Body struct {
+		Cleared []string `json:"cleared" doc:"読めるようになった組織"`
+		Still   []string `json:"still" doc:"まだ読めない組織"`
 	}
 }
 
@@ -109,12 +118,15 @@ func registerAccounts(api huma.API, s Services) {
 		out.Body.Accounts = make([]accountRow, 0, len(rows))
 		for _, r := range rows {
 			status := "ok"
-			if r.AuthError {
+			switch {
+			case r.AuthError:
 				status = "auth_error"
+			case len(r.Orgs) > 0:
+				status = "app_missing"
 			}
 			out.Body.Accounts = append(out.Body.Accounts, accountRow{
 				ID: string(r.Account.ID), Name: r.Account.Name, Login: r.Account.Login, Method: string(r.Account.Method),
-				Status: status, Reason: r.Reason,
+				Status: status, Reason: r.Reason, Orgs: append([]string{}, r.Orgs...),
 			})
 		}
 		return out, nil
@@ -163,6 +175,19 @@ func registerManage(api huma.API, s Services) {
 			return nil, fromErr(err)
 		}
 		return &accountOutput{Body: toBody(a)}, nil
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "recheck-account", Method: http.MethodPost, Path: "/api/accounts/{id}/recheck",
+		Summary: "GitHub App 未導入の組織を読み直し、読めたものの記録を消す",
+		Errors:  []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+	}, func(ctx context.Context, in *idInput) (*recheckOutput, error) {
+		r, err := s.Recheck.Do(ctx, account.ID(in.ID))
+		if err != nil {
+			return nil, apierr.From(err)
+		}
+		out := &recheckOutput{}
+		out.Body.Cleared, out.Body.Still = r.Cleared, r.Still
+		return out, nil
 	})
 	huma.Register(api, huma.Operation{
 		OperationID: "account-delete-impact", Method: http.MethodGet, Path: "/api/accounts/{id}/delete-impact",

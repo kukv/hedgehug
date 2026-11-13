@@ -3,10 +3,13 @@
 package gitstore
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"golang.org/x/sys/unix"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -60,4 +63,26 @@ func (s *Stores) dir(id port.StoreID) (string, error) {
 
 func signature(name, email string, at time.Time) *object.Signature {
 	return &object.Signature{Name: name, Email: email, When: at}
+}
+
+// lock は、Store ごとのファイルロックをかける。1 回の操作のあいだ持つ。画面のサーバーと CLI が
+// 同じ Store に書いても、コミットは 1 つずつ順に作られる(保存形式「技術構成」)。
+// flock はファイルを開くごとに働くので、同じプロセスの中の 2 つの操作も順になる。
+func lock(root string) (unlock func(), err error) {
+	f, err := os.OpenFile(filepath.Join(root, ".git", "hedgehug.lock"), os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // G304: パスは Store の根と決まったファイル名から作る
+	if err != nil {
+		return nil, err
+	}
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	// unlock は 2 回呼んでもよい(閉じたあとのファイルに Flock しない)。
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
+			_ = f.Close()
+		})
+	}, nil
 }
