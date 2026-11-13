@@ -21,18 +21,16 @@ type Service struct {
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// planOf は、ワークスペースのスプリントとリリース(と、読んだログ)。ワークスペースがなければ ErrNotFound。
-//
-//nolint:unparam // ログは、リリースや完了の操作が確定値の読みに使う(Task 6 の操作は計画だけ)
-func planOf(r port.Reader, ws workspace.ID) (planning.Plan, []change.Record, error) {
+// planOf は、ワークスペースのスプリントとリリース。ワークスペースがなければ ErrNotFound。
+func planOf(r port.Reader, ws workspace.ID) (planning.Plan, error) {
 	if _, err := r.Workspaces().Get(ws); err != nil {
-		return planning.Plan{}, nil, err
+		return planning.Plan{}, err
 	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
 	if err != nil {
-		return planning.Plan{}, nil, err
+		return planning.Plan{}, err
 	}
-	return planning.FromLog(log), log, nil
+	return planning.FromLog(log), nil
 }
 
 // works は、ワークスペースの全プロジェクトの全アイテムと、そのログ。削除済みも含む(絞るのは呼ぶ側)。
@@ -69,7 +67,7 @@ func (s Service) editPlan(ctx context.Context, store port.StoreID, ws workspace.
 	}
 	var text string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
-		p, _, err := planOf(r, ws)
+		p, err := planOf(r, ws)
 		if err != nil {
 			return err
 		}
@@ -80,7 +78,7 @@ func (s Service) editPlan(ctx context.Context, store port.StoreID, ws workspace.
 		return err
 	}
 	return s.Stores.Write(ctx, store, port.Operation{Actor: change.User(me), Summary: text}, func(tx port.Tx) error {
-		p, _, err := planOf(tx, ws)
+		p, err := planOf(tx, ws)
 		if err != nil {
 			return err
 		}

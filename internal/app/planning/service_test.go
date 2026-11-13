@@ -27,10 +27,10 @@ func TestWorksAndPlanOf(t *testing.T) {
 		if len(ws) != 2 || len(ws[0].Log) == 0 {
 			t.Errorf("works = %d 件 %+v", len(ws), ws)
 		}
-		if _, _, err := planOf(r, apptest.SampleWorkspace); err != nil {
+		if _, err := planOf(r, apptest.SampleWorkspace); err != nil {
 			t.Errorf("planOf: %v", err)
 		}
-		if _, _, err := planOf(r, "01NOSUCHWS00000000000000"); err == nil {
+		if _, err := planOf(r, "01NOSUCHWS00000000000000"); err == nil {
 			t.Error("planOf(unknown) = nil")
 		}
 		return nil

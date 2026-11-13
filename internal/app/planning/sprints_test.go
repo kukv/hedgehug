@@ -23,8 +23,11 @@ type recorder struct {
 }
 
 func (r *recorder) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(port.Tx) error) error {
-	r.summaries = append(r.summaries, op.Summary)
-	return r.Stores.Write(ctx, id, op, fn)
+	err := r.Stores.Write(ctx, id, op, fn)
+	if err == nil {
+		r.summaries = append(r.summaries, op.Summary)
+	}
+	return err
 }
 
 func setup(t *testing.T) (planning.Service, *recorder) {
@@ -87,6 +90,66 @@ func TestCreateSprint(t *testing.T) {
 	}
 	if got := sprints(t, svc); len(got) != 1 {
 		t.Errorf("duplicate saved: %+v", got)
+	}
+}
+
+func TestCreateSprintInputs(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	for _, c := range []struct {
+		name string
+		in   planning.SprintInput
+		want string
+	}{
+		{"名前が空", planning.SprintInput{Name: "  "}, "名前を入力してください"},
+		{"終了が開始より前", planning.SprintInput{Name: "A", Start: "2026-11-10", End: "2026-11-09"}, "終了日は開始日以降にしてください"},
+		{"未来の開始は計画中なら通る", planning.SprintInput{Name: "B", Start: "2026-12-01", End: "2026-12-14"}, ""},
+	} {
+		_, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, c.in)
+		if message(err) != c.want || (c.want == "" && err != nil) {
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+	if got := sprints(t, svc); len(got) != 1 || got[0].Name != "B" || got[0].State != dp.Planned || got[0].Start != "2026-12-01" {
+		t.Errorf("stored = %+v", got)
+	}
+	// 名前の改行は、アクティビティの文では 1 行にまとめる。
+	if _, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "C\nD"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := lastSummary(rec); got != "スプリント「C D」を作成" {
+		t.Errorf("summary = %q", got)
+	}
+}
+
+func TestStartSprintInputs(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	a, _ := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Sprint 1"})
+	for _, c := range [][2]string{{"", "2026-11-27"}, {"2026-11-13", ""}} {
+		err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, a.ID, c[0], c[1])
+		if message(err) != "開始日と終了日を入力してください" {
+			t.Errorf("%v: %v", c, err)
+		}
+	}
+	err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, "01NOSUCHSPRINT0000000000", "2026-11-13", "2026-11-27")
+	if !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("unknown: %v", err)
+	}
+}
+
+// 実行中がある間は、開始日の検査より先に実行中の断りを返す。
+func TestStartSprintActiveCheckComesFirst(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	a, _ := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Sprint 1"})
+	b, _ := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Sprint 2"})
+	if err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, a.ID, "2026-11-13", "2026-11-27"); err != nil {
+		t.Fatal(err)
+	}
+	err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, b.ID, "2026-11-20", "2026-12-04")
+	if message(err) != "実行中のスプリントがあります。先に完了してください" {
+		t.Errorf("= %v", err)
 	}
 }
 
