@@ -19,7 +19,7 @@ func (s Service) ChangeKind(ctx context.Context, store port.StoreID, id item.ID,
 	if kind != item.Story && kind != item.Task && kind != item.Bug {
 		return port.ErrNotFound
 	}
-	_, display, err := s.withID(ctx, store, id)
+	_, display, err := s.editableID(ctx, store, id)
 	if err != nil {
 		return err
 	}
@@ -28,24 +28,33 @@ func (s Service) ChangeKind(ctx context.Context, store port.StoreID, id item.ID,
 		return err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s の種類を %s に変更", display, kind)}
-	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := port.LiveItem(tx, id)
+	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error { return changeKind(ctx, tx, id, kind) })
+}
+
+// changeKind は、tx の中で、削除済み(root: true)なら削除を取り消してから、種類を書く。
+func changeKind(ctx context.Context, tx port.Tx, id item.ID, kind item.Kind) error {
+	if _, err := port.EditableItem(tx, id); err != nil {
+		return err
+	}
+	if err := port.ReviveItem(ctx, tx, id); err != nil {
+		return err
+	}
+	it, err := port.LiveItem(tx, id)
+	if err != nil {
+		return err
+	}
+	if it.Kind == item.Epic || it.Kind == kind {
+		return port.ErrNotFound
+	}
+	drafts := []change.Draft{change.NewSet("kind", string(it.Kind), string(kind))}
+	if it.Kind == item.Step {
+		promote, err := promotion(tx, it)
 		if err != nil {
 			return err
 		}
-		if it.Kind == item.Epic || it.Kind == kind {
-			return port.ErrNotFound
-		}
-		drafts := []change.Draft{change.NewSet("kind", string(it.Kind), string(kind))}
-		if it.Kind == item.Step {
-			promote, err := promotion(tx, it)
-			if err != nil {
-				return err
-			}
-			drafts = append(drafts, promote...)
-		}
-		return tx.WriteItems().Append(id, drafts...)
-	})
+		drafts = append(drafts, promote...)
+	}
+	return tx.WriteItems().Append(id, drafts...)
 }
 
 // promotion は、Step を親の親(Epic)の子の末尾へ移す place と rank。
