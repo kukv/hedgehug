@@ -7,6 +7,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -99,4 +100,28 @@ func templateDefaultsNode(s workspace.Settings) *yaml.Node {
 		}
 	}
 	return mapping(true, kv...)
+}
+
+// rulesNode は、自動化のルール(作った順)。ステータスの値は行末に名前の注釈。
+func rulesNode(s workspace.Settings, rules []automation.Rule) *yaml.Node {
+	items := make([]*yaml.Node, 0, len(rules))
+	for _, r := range rules {
+		ts := idNode(r.TriggerStatus)
+		ts.LineComment = comment(valueName(s.Statuses, r.TriggerStatus))
+		v := strNode(r.Value)
+		if r.Action == automation.ActionStatus {
+			v.LineComment = comment(valueName(s.Statuses, change.ID(r.Value)))
+		}
+		items = append(items, mapping(false,
+			key("id"), strNode(string(r.ID)),
+			key("name"), strNode(r.Name),
+			key("trigger"), strNode(string(r.Trigger)),
+			key("trigger_status"), ts,
+			key("all_merged"), boolNode(r.AllMerged),
+			key("action"), strNode(string(r.Action)),
+			key("value"), v,
+			key("enabled"), boolNode(r.Enabled),
+		))
+	}
+	return seqOf(items)
 }

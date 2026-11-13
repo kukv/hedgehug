@@ -207,3 +207,47 @@ func contractNestedStores(t *testing.T, s port.Stores, a, b port.StoreID) {
 		})
 	}
 }
+
+// 自動化の行は、同じ保存の中で automation:<ルール> の実行者として読める(B4-1)。
+func contractRuleRows(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	const rule change.ID = "01RULE0000000000000000001"
+	op := port.Operation{Actor: change.User("taro"), Summary: "HH-1 のステータスを変更"}
+	mustWrite(t, s, id, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(cItem.ID,
+			change.NewSet("status", nil, "Done"),
+			change.NewSet("assignee", nil, "taro").ByRule(rule))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		recs, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		if err != nil || len(recs) < 3 {
+			t.Fatalf("log = %+v, %v", recs, err)
+		}
+		last, before := recs[len(recs)-1], recs[len(recs)-2]
+		if last.Actor.Kind != change.ActorAutomation || last.Actor.Rule != rule || last.By != "taro" {
+			t.Errorf("rule row = %+v", last)
+		}
+		if before.Actor != change.User("taro") || before.Op != last.Op {
+			t.Errorf("the rule row must be in the same operation as the user row: %+v, %+v", before, last)
+		}
+		return nil
+	})
+}
+
+// 人でない実行者の操作と、使えないルールの ID では、自動化の行を書けない。
+func contractRuleRowsRefused(t *testing.T, s port.Stores, id port.StoreID) {
+	cases := []struct {
+		name string
+		op   port.Operation
+		rule change.ID
+	}{
+		{"sync actor", port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "同期の修復"}, "01RULE0000000000000000001"},
+		{"malformed rule id", taro, "bad/id"},
+	}
+	for _, c := range cases {
+		extra := func(tx port.Tx) error {
+			return tx.WriteItems().Append(cItem.ID, change.NewSet("status", nil, "X").ByRule(c.rule))
+		}
+		refuseWrite(t, s, id, c.name, c.op, extra, true)
+	}
+}

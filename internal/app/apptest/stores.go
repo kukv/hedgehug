@@ -123,6 +123,9 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	if len(drafts) == 0 {
 		return nil
 	}
+	if err := port.CheckRuleDrafts(t.meta.Actor, drafts); err != nil {
+		return err
+	}
 	recs := change.Stamp(t.log(ref), drafts, t.meta, t.ids.New)
 	t.pending[ref] = append(t.pending[ref], recs...)
 	return nil

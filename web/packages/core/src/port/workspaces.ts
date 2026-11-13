@@ -1,10 +1,13 @@
 import type {
+  AutomationRule,
+  AutomationRuleInput,
   Category,
   NewProperty,
   SaveAsTemplateInput,
   TemplateInput,
   ValueList,
   Workspace,
+  WorkspaceAutomation,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspaceTemplate,
@@ -128,4 +131,23 @@ export interface WorkspacesPort {
     itemId: string,
     input: SaveAsTemplateInput,
   ): Promise<WorkspaceTemplate>;
+  automation(storeId: string, workspaceId: string): Promise<WorkspaceAutomation>;
+  createRule(
+    storeId: string,
+    workspaceId: string,
+    input: AutomationRuleInput,
+  ): Promise<AutomationRule>;
+  updateRule(
+    storeId: string,
+    workspaceId: string,
+    ruleId: string,
+    input: AutomationRuleInput,
+  ): Promise<void>;
+  deleteRule(storeId: string, workspaceId: string, ruleId: string): Promise<void>;
+  setRuleEnabled(
+    storeId: string,
+    workspaceId: string,
+    ruleId: string,
+    enabled: boolean,
+  ): Promise<void>;
 }

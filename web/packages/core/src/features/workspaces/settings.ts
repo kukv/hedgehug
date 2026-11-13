@@ -1,6 +1,11 @@
 import { Refused } from "../../model/errors";
 import type { Member } from "../../model/member";
-import type { ValueList, WorkspaceDetail, WorkspaceUsage } from "../../model/workspace";
+import type {
+  ValueList,
+  WorkspaceAutomation,
+  WorkspaceDetail,
+  WorkspaceUsage,
+} from "../../model/workspace";
 import type { WorkspacesPort } from "../../port/workspaces";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
@@ -40,6 +45,8 @@ export interface SettingsState {
   usage: WorkspaceUsage;
   // Store のメンバー。テンプレートの担当者の選択肢(B3-19)。
   members: Member[];
+  // 自動化のサブタブを開いているときだけ読む(B4-22)。
+  automation: WorkspaceAutomation | null;
 }
 
 export interface WorkspaceSettingsScreen {
@@ -81,10 +88,11 @@ export function createWorkspaceSettings(deps: {
     const { storeId, workspaceId } = current;
     latest += 1;
     const mine = latest;
-    const [detail, usage, members] = await Promise.all([
+    const [detail, usage, members, automation] = await Promise.all([
       port.get(storeId, workspaceId),
       port.usage(storeId, workspaceId),
       listMembers(storeId),
+      tab === "automation" ? port.automation(storeId, workspaceId) : null,
     ]);
     if (mine !== latest) return;
     state.set({
@@ -94,6 +102,7 @@ export function createWorkspaceSettings(deps: {
       detail,
       usage,
       members,
+      automation,
     });
   }
 
@@ -132,6 +141,7 @@ export function createWorkspaceSettings(deps: {
     selectTab(next) {
       tab = next;
       state.update((s) => (s ? { ...s, tab } : s));
+      if (next === "automation") void reload();
     },
     reload,
     askPrefix(prefix) {

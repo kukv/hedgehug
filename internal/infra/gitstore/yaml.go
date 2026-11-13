@@ -3,6 +3,7 @@ package gitstore
 import (
 	"go.yaml.in/yaml/v4"
 
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
@@ -73,7 +74,7 @@ func renderYAML(kind change.Kind, log []change.Record, settings settingsOf) ([]b
 			return nil, nil
 		}
 		st, _ := workspace.SettingsFromLog(log)
-		v = workspaceToYAML(w, workspace.RankOf(log), st)
+		v = workspaceToYAML(w, workspace.RankOf(log), st, automation.FromLog(log))
 	case change.KindProject:
 		p, ok := project.FromLog(log)
 		if !ok {

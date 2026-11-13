@@ -5,8 +5,10 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/workspaces"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -148,5 +150,55 @@ func TestDeleteValueReplaces(t *testing.T) {
 	st = settingsOf(t, s, w.ID)
 	if len(st.Statuses) != 4 || len(st.Priorities) != 4 || len(st.Systems) != 5 {
 		t.Errorf("settings = %+v", st)
+	}
+}
+
+// ステータスの削除で、ルールのきっかけ・することを書き換え、同じになれば無効にし、削除した人に通知する(B4-17)。
+func TestDeleteStatusRewritesRules(t *testing.T) {
+	s := setup(t)
+	inbox := &apptest.Inbox{}
+	s.Inbox = inbox
+	ctx := t.Context()
+	w, _ := s.Create(ctx, store, "Web", "HH")
+	// 既定のステータスは削除できないので、足した「Review」を消す側にする。
+	review, err := s.AddValue(ctx, store, w.ID, workspace.ParseList("statuses"), "Review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	todo, doing := settingsOf(t, s, w.ID).Statuses[0].ID, review.ID
+	r1 := automation.Rule{
+		ID: "01RULE1", Name: "着手で外す", Trigger: automation.TriggerStatus, TriggerStatus: doing,
+		Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: true,
+	}
+	r2 := automation.Rule{
+		ID: "01RULE2", Name: "Todo で着手", Trigger: automation.TriggerStatus, TriggerStatus: todo,
+		Action: automation.ActionStatus, Value: string(doing), Enabled: true,
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "ルール"}
+	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(w.ID, append(automation.Drafts(automation.Rule{}, r1), automation.Drafts(automation.Rule{}, r2)...)...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteValue(ctx, store, w.ID, workspace.List{Kind: workspace.ListStatuses}, doing, todo); err != nil {
+		t.Fatal(err)
+	}
+	var rules []automation.Rule
+	_ = s.Stores.Read(ctx, store, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: w.ID})
+		rules = automation.FromLog(log)
+		return err
+	})
+	if rules[0].TriggerStatus != todo || !rules[0].Enabled || rules[1].Value != string(todo) || rules[1].Enabled {
+		t.Errorf("rules = %+v", rules)
+	}
+	ns := inbox.Notices()
+	want := []string{
+		"自動化「着手で外す」は、ステータス「Review」の削除で、きっかけのステータスを「Todo」に書き換えました",
+		"自動化「Todo で着手」は、ステータスの削除で、きっかけと同じステータスへの変更になったため、無効にしました",
+	}
+	if len(ns) != 2 || ns[0].Text != want[0] || ns[1].Text != want[1] || ns[0].Kind != port.NoticeAutomation || ns[0].Item != "" {
+		t.Errorf("notices = %+v", ns)
 	}
 }

@@ -8,6 +8,7 @@ import type {
   WorkspaceValue,
 } from "../../model/workspace";
 import type { Direction, WorkspacesPort } from "../../port/workspaces";
+import { fakeAutomation } from "./automation.fixtures.test-util";
 
 export interface FakeWorkspacesPort extends WorkspacesPort {
   // 呼ばれた操作の名前(読む操作も含む)
@@ -257,6 +258,7 @@ export function fakeWorkspacesPort(): FakeWorkspacesPort {
     updateTemplate: (_s, _w, _id, _input) => write("updateTemplate", () => undefined),
     deleteTemplate: (_s, _w, _id) => write("deleteTemplate", () => undefined),
     setTemplateDefault: (_s, _w, _kind, _id) => write("setTemplateDefault", () => undefined),
+    ...fakeAutomation(calls, write, newId),
     saveItemAsTemplate: (_s, _item, input) =>
       write(
         "saveItemAsTemplate",

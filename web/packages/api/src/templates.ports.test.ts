@@ -114,3 +114,70 @@ describe("workspaces port: templates, workflow and transitions", () => {
     });
   });
 });
+
+describe("workspaces port: automation", () => {
+  const apiRule = {
+    id: "R1",
+    name: "PR マージで完了",
+    trigger: "pr_merged",
+    triggerStatus: "",
+    allMerged: false,
+    action: "status",
+    value: "st4",
+    enabled: true,
+  };
+  const input = {
+    name: apiRule.name,
+    trigger: "pr_merged",
+    triggerStatus: "",
+    allMerged: false,
+    action: "status",
+    value: "st4",
+  } as const;
+
+  it("reads the rules and recent runs, with null lists as empty and the time as a Date", async () => {
+    const fetch = respond(200, {
+      rules: [apiRule],
+      recent: [{ at: "2026-11-13T08:55:00Z", item: "I1", display: "HH-2", text: "t" }],
+    });
+    const a = await createWorkspacesPort().automation("S1", "W1");
+    expect(call(fetch)[0]).toBe("/api/stores/S1/workspaces/W1/automation");
+    expect(a.rules).toEqual([apiRule]);
+    expect(a.recent[0]?.at).toEqual(new Date("2026-11-13T08:55:00Z"));
+    respond(200, { rules: null, recent: null });
+    await expect(createWorkspacesPort().automation("S1", "W1")).resolves.toEqual({
+      rules: [],
+      recent: [],
+    });
+  });
+
+  it("creates, updates, deletes and switches a rule", async () => {
+    const port = createWorkspacesPort();
+    const create = respond(200, apiRule);
+    await expect(port.createRule("S1", "W1", input)).resolves.toEqual(apiRule);
+    expect(call(create)[0]).toBe("/api/stores/S1/workspaces/W1/automation/rules");
+    expect(JSON.parse(String(call(create)[1].body))).toEqual(input);
+    const update = respond(204, undefined);
+    await port.updateRule("S1", "W1", "R1", input);
+    expect(call(update)[0]).toBe("/api/stores/S1/workspaces/W1/automation/rules/R1");
+    expect(call(update)[1].method).toBe("PUT");
+    const del = respond(204, undefined);
+    await port.deleteRule("S1", "W1", "R1");
+    expect(call(del)[1].method).toBe("DELETE");
+    const sw = respond(204, undefined);
+    await port.setRuleEnabled("S1", "W1", "R1", false);
+    expect(call(sw)[0]).toBe("/api/stores/S1/workspaces/W1/automation/rules/R1/enabled");
+    expect(JSON.parse(String(call(sw)[1].body))).toEqual({ enabled: false });
+  });
+
+  it("sends only the six input fields, even when given a whole rule", async () => {
+    // 入力の型は追加の項目を断る(additionalProperties: false)。id と enabled を送ると 422 になる。
+    const port = createWorkspacesPort();
+    const create = respond(200, apiRule);
+    await port.createRule("S1", "W1", apiRule as never);
+    expect(JSON.parse(String(call(create)[1].body))).toEqual(input);
+    const update = respond(204, undefined);
+    await port.updateRule("S1", "W1", "R1", apiRule as never);
+    expect(JSON.parse(String(call(update)[1].body))).toEqual(input);
+  });
+});

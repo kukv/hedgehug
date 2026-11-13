@@ -3,6 +3,7 @@ package gitstore
 import (
 	"go.yaml.in/yaml/v4"
 
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -50,7 +51,7 @@ func mapping(flow bool, kv ...*yaml.Node) *yaml.Node {
 func key(k string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k} }
 
 // workspaceToYAML は、workspace.yaml の中身(保存形式「ファイル構成」。キーの並びはこの順)。
-func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings) *yaml.Node {
+func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, rules []automation.Rule) *yaml.Node {
 	statusName := valueName(s.Statuses, s.InitialStatus)
 	prioName := valueName(s.Priorities, s.InitialPriority)
 	initStatus, initPrio := idNode(s.InitialStatus), idNode(s.InitialPriority)
@@ -70,6 +71,7 @@ func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings) *
 		key("workflow"), workflowNode(s),
 		key("templates"), templatesNode(s.Templates),
 		key("template_defaults"), templateDefaultsNode(s),
+		key("rules"), rulesNode(s, rules),
 	)
 }
 

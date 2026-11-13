@@ -6,6 +6,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/automations"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
@@ -15,6 +16,7 @@ import (
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
+	appautomations "github.com/kukv/hedgehug/internal/app/automations"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
@@ -34,6 +36,9 @@ type Deps struct {
 
 	// トラック A2(Store の一覧。本物はトラック G)
 	StoreList port.StoreList
+
+	// トラック B(自動化・通知)
+	Inbox port.Inbox // 受信箱(本物は C4)
 
 	// トラック D(GitHub)
 	Accounts    port.Accounts
@@ -67,8 +72,9 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
-	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
-	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
+	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox})
+	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: deps.Inbox})
+	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))
 	hub := deps.Events
 	if hub == nil {

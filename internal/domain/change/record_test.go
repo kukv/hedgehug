@@ -2,6 +2,7 @@ package change_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -185,5 +186,22 @@ func TestDeleteRoundTrip(t *testing.T) {
 	// Resolve は削除の行を値として読まない(削除を読むのは、エンティティごとの FromLog)。
 	if s := change.Resolve([]change.Record{r}, change.Options{}); s.Created != nil || len(s.Values) != 0 {
 		t.Errorf("resolve = %+v", s)
+	}
+}
+
+// 自動化の行は、実行者が automation:<ルール>、by は操作の人になる。ほかの行は操作の実行者のまま。
+func TestStampWritesTheRuleActor(t *testing.T) {
+	meta := change.Meta{Op: "OP1", At: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), Actor: change.User("hanako")}
+	n := 0
+	newID := func() change.ID { n++; return change.ID(fmt.Sprintf("R%d", n)) }
+	user := change.NewSet("status", "A", "B")
+	auto := change.NewSet("assignee", "taro", nil).ByRule("RULE1")
+	recs := change.Stamp(nil, []change.Draft{user, auto}, meta, newID)
+	if recs[0].Actor != change.User("hanako") || recs[0].By != "hanako" {
+		t.Errorf("user row = %+v", recs[0])
+	}
+	want := change.Actor{Kind: change.ActorAutomation, Login: "hanako", Rule: "RULE1"}
+	if recs[1].Actor != want || recs[1].By != "hanako" || recs[1].Op != "OP1" {
+		t.Errorf("rule row = %+v", recs[1])
 	}
 }
