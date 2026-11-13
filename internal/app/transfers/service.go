@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -69,11 +70,13 @@ func readSource(r port.Reader, id item.ID) (source, error) {
 	return source{set: set, ws: ws, settings: st}, err
 }
 
-// destination は、移動先のワークスペースとプロジェクト。next は移動先のワークスペースの次の番号。
+// destination は、移動先のワークスペースとプロジェクト。rules は移動先のプロジェクトのプロジェクト別のルール
+// (使うステータス。transfer.UsableStatuses)、next は移動先のワークスペースの次の番号。
 type destination struct {
 	ws       workspace.Workspace
 	settings workspace.Settings
 	project  project.Project
+	rules    projectrule.Rules
 	next     int
 }
 
@@ -99,7 +102,7 @@ func readDestination(r port.Reader, in MoveInput) (destination, error) {
 	if err != nil {
 		return destination{}, err
 	}
-	return destination{ws: ws, settings: st, project: pr, next: numbering.Next(log, numbering.Items)}, nil
+	return destination{ws: ws, settings: st, project: pr, rules: projectrule.FromLog(log).Of(pr.ID), next: numbering.Next(log, numbering.Items)}, nil
 }
 
 // storeInfo は、表示中の Store id を返す。表示中でない(非表示・このマシンにない)なら port.ErrStoreNotFound。

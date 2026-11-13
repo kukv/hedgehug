@@ -117,7 +117,7 @@ func plan(r port.Reader, id item.ID, in MoveInput) (movePlan, error) {
 		numbers: transfer.Number(src.set.Root, src.set.Below, dst.next), remaps: map[item.ID]transfer.RemapResult{},
 	}
 	for _, it := range src.items() {
-		p.remaps[it.ID] = transfer.Remap(it, src.settings, dst.settings, dst.project.ID, nil, in.StatusChoices)
+		p.remaps[it.ID] = transfer.Remap(it, src.settings, dst.settings, dst.rules, nil, in.StatusChoices)
 	}
 	return p, nil
 }

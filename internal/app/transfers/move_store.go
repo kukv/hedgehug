@@ -121,7 +121,7 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 	remaps := map[item.ID]transfer.RemapResult{}
 	errs := []error{m.join(tx, add)}
 	for _, it := range m.src.items() {
-		remaps[it.ID] = transfer.Remap(it, m.src.settings, dst.settings, dst.project.ID, people, m.in.StatusChoices)
+		remaps[it.ID] = transfer.Remap(it, m.src.settings, dst.settings, dst.rules, people, m.in.StatusChoices)
 		lines := placeLines(it, it.ID == root.ID, dst, m.in.ToParent, numbers[it.ID], newRank)
 		errs = append(errs, m.importItem(tx, it, append(lines, remaps[it.ID].Drafts...)))
 	}

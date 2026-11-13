@@ -5,7 +5,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
-	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -15,11 +15,13 @@ type RemapResult struct {
 	Emptied []string // 移動元のプロパティの名前。from.Properties の並びで、同じ名前は 1 回
 }
 
-// UsableStatuses は、移動先のプロジェクトが使うステータスの内部 ID(並びのまま)。
-// いまはワークスペースのステータスすべてを返す。プロジェクト別のルール(B5)が、この関数だけを差し替える。
-func UsableStatuses(to workspace.Settings, _ project.ID) []change.ID {
-	ids := make([]change.ID, 0, len(to.Statuses))
-	for _, v := range to.Statuses {
+// UsableStatuses は、移動先のプロジェクトが使うステータスの内部 ID(並びのまま)。toRules は移動先のプロジェクトの
+// プロジェクト別のルールで、使うかの判定はプロジェクト別のルール(B5)の projectrule.UsedStatuses に任せる
+// (外したステータスは使わない。初期ステータスと分類ごとの既定は外す印があっても使う)。
+func UsableStatuses(to workspace.Settings, toRules projectrule.Rules) []change.ID {
+	used := projectrule.UsedStatuses(to, toRules)
+	ids := make([]change.ID, 0, len(used))
+	for _, v := range used {
 		ids = append(ids, v.ID)
 	}
 	return ids
@@ -27,14 +29,14 @@ func UsableStatuses(to workspace.Settings, _ project.ID) []change.ID {
 
 // Unmatched は、statuses のうち、移動元にいて、名前が移動先で使えるどのステータスの名前とも一致しないものを、
 // statuses の並びのまま返す。移動元にいない内部 ID は返さない(Remap は移動先の初期ステータスにする)。
-func Unmatched(statuses []change.ID, from, to workspace.Settings, toProject project.ID) []change.ID {
+func Unmatched(statuses []change.ID, from, to workspace.Settings, toRules projectrule.Rules) []change.ID {
 	var out []change.ID
 	for _, id := range statuses {
 		v, ok := valueByID(from.Statuses, id)
 		if !ok {
 			continue
 		}
-		if _, ok := usableByName(to, toProject, v.Name); !ok {
+		if _, ok := usableByName(to, toRules, v.Name); !ok {
 			out = append(out, id)
 		}
 	}
@@ -44,9 +46,10 @@ func Unmatched(statuses []change.ID, from, to workspace.Settings, toProject proj
 // Remap は、アイテム 1 件の値を、移動先のワークスペースの定義に引き直す(02「値の引き直し」)。
 // 行の並びは from.Properties の並びでプロパティごと(組み込みが先、続いて追加プロパティ)、ウォッチは最後。
 // people が nil なら同じ Store(担当者・ユーザー型・ウォッチはそのまま)、nil でなければ別の Store。
-// statusChoice は、移動先で使えない移動元のステータス → 選んだ置き換え先。
-func Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult {
-	r := &remapper{it: it, from: from, to: to, project: toProject, people: people, choice: statusChoice}
+// toRules は移動先のプロジェクトのプロジェクト別のルール(UsableStatuses)。statusChoice は、移動先で使えない
+// 移動元のステータス → 選んだ置き換え先。
+func Remap(it item.Item, from, to workspace.Settings, toRules projectrule.Rules, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult {
+	r := &remapper{it: it, from: from, to: to, rules: toRules, people: people, choice: statusChoice}
 	for _, p := range from.Properties {
 		if p.Builtin {
 			r.builtin(p)
@@ -61,7 +64,7 @@ func Remap(it item.Item, from, to workspace.Settings, toProject project.ID, peop
 type remapper struct {
 	it       item.Item
 	from, to workspace.Settings
-	project  project.ID
+	rules    projectrule.Rules
 	people   PeopleMap
 	choice   map[change.ID]change.ID
 	res      RemapResult
@@ -103,10 +106,10 @@ func (r *remapper) statusTarget(id change.ID) change.ID {
 	if !ok {
 		return r.to.InitialStatus
 	}
-	if to, ok := usableByName(r.to, r.project, v.Name); ok {
+	if to, ok := usableByName(r.to, r.rules, v.Name); ok {
 		return to
 	}
-	if c, ok := r.choice[id]; ok && slices.Contains(UsableStatuses(r.to, r.project), c) {
+	if c, ok := r.choice[id]; ok && slices.Contains(UsableStatuses(r.to, r.rules), c) {
 		return c
 	}
 	if d := r.to.CategoryDefaults[v.Category]; d != "" {
@@ -166,8 +169,8 @@ func matchName(from, to []workspace.Value, id change.ID) (change.ID, bool) {
 }
 
 // usableByName は、名前が name と完全に一致する、移動先で使えるステータスの内部 ID。
-func usableByName(to workspace.Settings, p project.ID, name string) (change.ID, bool) {
-	usable := UsableStatuses(to, p)
+func usableByName(to workspace.Settings, rules projectrule.Rules, name string) (change.ID, bool) {
+	usable := UsableStatuses(to, rules)
 	for _, v := range to.Statuses {
 		if v.Name == name && slices.Contains(usable, v.ID) {
 			return v.ID, true

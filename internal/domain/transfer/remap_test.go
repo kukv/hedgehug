@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -52,6 +53,9 @@ func pair() (from, to workspace.Settings) {
 	return from, to
 }
 
+// none は、プロジェクト別のルールを持たない移動先のプロジェクト。
+var none = projectrule.Rules{}
+
 func show(r transfer.RemapResult) []string {
 	var out []string
 	for _, d := range r.Drafts {
@@ -76,7 +80,7 @@ func fullItem() item.Item {
 // 同じ Store(people が nil): 担当者・ユーザー型・ウォッチはそのまま。
 func TestRemapSameStore(t *testing.T) {
 	from, to := pair()
-	got := transfer.Remap(fullItem(), from, to, "P1", nil, nil)
+	got := transfer.Remap(fullItem(), from, to, none, nil, nil)
 	want := []string{
 		`set status "FV04">"TV01"`,                                                // Pending は移動先になく、同じ分類(未着手)の既定 Todo
 		`set priority "FV10">"TV08"`,                                              // Lowest は移動先になく、初期優先度 Medium
@@ -101,7 +105,7 @@ func TestRemapSameStore(t *testing.T) {
 func TestRemapOtherStoreReplacesPeople(t *testing.T) {
 	from, to := pair()
 	people := transfer.PeopleMap{"taro": "taro", "hanako": "hanako2", "jiro": "jiro"}
-	got := show(transfer.Remap(fullItem(), from, to, "P1", people, nil))
+	got := show(transfer.Remap(fullItem(), from, to, none, people, nil))
 	for _, w := range []string{
 		`set assignee "Taro">"taro"`, `set fields/TP5 null>"jiro"`, `remove watchers "Hanako">`, `add watchers >"hanako2"`,
 	} {
@@ -123,7 +127,7 @@ func TestRemapOtherStoreReplacesPeople(t *testing.T) {
 func TestRemapOtherStoreKeepsUnchangedAndUnknownPeople(t *testing.T) {
 	from, to := pair()
 	it := item.Item{ID: "I1", Assignee: "Taro", Watchers: []string{"Hanako", "hanako", "Stranger"}}
-	got := show(transfer.Remap(it, from, to, "P1", transfer.PeopleMap{"taro": "Taro", "hanako": "hanako"}, nil))
+	got := show(transfer.Remap(it, from, to, none, transfer.PeopleMap{"taro": "Taro", "hanako": "hanako"}, nil))
 	if want := []string{`remove watchers "Hanako">`}; !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q", got, want)
 	}
@@ -132,7 +136,7 @@ func TestRemapOtherStoreKeepsUnchangedAndUnknownPeople(t *testing.T) {
 func TestRemapStatus(t *testing.T) {
 	from, to := pair()
 	remap := func(status change.ID, choice map[change.ID]change.ID) []string {
-		return show(transfer.Remap(item.Item{ID: "I1", Status: status}, from, to, "P1", nil, choice))
+		return show(transfer.Remap(item.Item{ID: "I1", Status: status}, from, to, none, nil, choice))
 	}
 	// 名前が一致して使えるものはそのまま(選択は使わない)。
 	if got := remap("FV03", map[change.ID]change.ID{"FV03": "TV02"}); !slices.Equal(got, []string{`set status "FV03">"TV03"`}) {
@@ -155,10 +159,10 @@ func TestRemapStatus(t *testing.T) {
 	}
 }
 
-func TestUsableStatusesIsEveryStatusOfTheWorkspace(t *testing.T) {
+func TestUsableStatusesWithoutRulesIsEveryStatusOfTheWorkspace(t *testing.T) {
 	_, to := pair()
 	want := []change.ID{"TV01", "TV02", "TV03", "TV04", "TV05"}
-	if got := transfer.UsableStatuses(to, "P1"); !slices.Equal(got, want) {
+	if got := transfer.UsableStatuses(to, none); !slices.Equal(got, want) {
 		t.Errorf("UsableStatuses = %v, want %v", got, want)
 	}
 }
@@ -166,11 +170,11 @@ func TestUsableStatusesIsEveryStatusOfTheWorkspace(t *testing.T) {
 // 移動先にない名前(Pending は移動先で Hold)だけを、渡した並びのまま返す。移動元にいない ID は返さない。
 func TestUnmatchedReturnsOnlyTheStatusesTheDestinationCannotUse(t *testing.T) {
 	from, to := pair()
-	got := transfer.Unmatched([]change.ID{"FV05", "FV04", "FV01", "FGONE"}, from, to, "P1")
+	got := transfer.Unmatched([]change.ID{"FV05", "FV04", "FV01", "FGONE"}, from, to, none)
 	if want := []change.ID{"FV04"}; !slices.Equal(got, want) {
 		t.Errorf("Unmatched = %v, want %v", got, want)
 	}
-	if got := transfer.Unmatched(nil, from, to, "P1"); len(got) != 0 {
+	if got := transfer.Unmatched(nil, from, to, none); len(got) != 0 {
 		t.Errorf("Unmatched(nil) = %v", got)
 	}
 }
@@ -182,9 +186,9 @@ func TestUnmatchedAgreesWithRemap(t *testing.T) {
 	for _, v := range from.Statuses {
 		all = append(all, v.ID)
 	}
-	unmatched := transfer.Unmatched(all, from, to, "P1")
+	unmatched := transfer.Unmatched(all, from, to, none)
 	for _, id := range all {
-		got := show(transfer.Remap(item.Item{ID: "I1", Status: id}, from, to, "P1", nil, map[change.ID]change.ID{id: "TV04"}))
+		got := show(transfer.Remap(item.Item{ID: "I1", Status: id}, from, to, none, nil, map[change.ID]change.ID{id: "TV04"}))
 		chosen := slices.Contains(got, `set status "`+string(id)+`">"TV04"`)
 		if inUnmatched := slices.Contains(unmatched, id); chosen != inUnmatched {
 			t.Errorf("%s: 選んだ置き換え先になった = %v, Unmatched にある = %v", id, chosen, inUnmatched)
@@ -198,7 +202,7 @@ func TestRemapSkipsEmptyValues(t *testing.T) {
 	it := item.Item{ID: "I1", Fields: map[change.ID]json.RawMessage{
 		"FP1": json.RawMessage(`""`), "FP2": json.RawMessage(`null`), "FP6": json.RawMessage(`false`),
 	}}
-	got := transfer.Remap(it, from, to, "P1", nil, nil)
+	got := transfer.Remap(it, from, to, none, nil, nil)
 	if len(got.Drafts) != 0 || len(got.Emptied) != 0 {
 		t.Errorf("rows = %q, Emptied = %v, want none", show(got), got.Emptied)
 	}
@@ -221,7 +225,7 @@ func TestRemapMergesValuesMatchingTheSameDestinationValue(t *testing.T) {
 		`remove systems "FV11">`, `remove systems "FDUP">`, `add systems >"TV11"`,
 		`remove fields/FP4 "FT1">`, `remove fields/FP4 "FT4">`, `add fields/TP4 >"TT1"`,
 	}
-	if got := show(transfer.Remap(it, from, to, "P1", nil, nil)); !slices.Equal(got, want) {
+	if got := show(transfer.Remap(it, from, to, none, nil, nil)); !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q", got, want)
 	}
 }
@@ -231,7 +235,7 @@ func TestRemapStatusWithoutCategoryDefaultUsesInitialStatus(t *testing.T) {
 	from, to := pair()
 	delete(to.CategoryDefaults, workspace.CategoryTodo)
 	to.InitialStatus = "TV02"
-	got := show(transfer.Remap(item.Item{ID: "I1", Status: "FV04"}, from, to, "P1", nil, nil))
+	got := show(transfer.Remap(item.Item{ID: "I1", Status: "FV04"}, from, to, none, nil, nil))
 	if want := []string{`set status "FV04">"TV02"`}; !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q", got, want)
 	}
@@ -240,11 +244,57 @@ func TestRemapStatusWithoutCategoryDefaultUsesInitialStatus(t *testing.T) {
 // 移動元にない優先度の ID は、名前が引けないので、初期優先度にして「優先度」を空になった項目に並べる。
 func TestRemapPriorityUnknownInSourceUsesInitialPriority(t *testing.T) {
 	from, to := pair()
-	got := transfer.Remap(item.Item{ID: "I1", Priority: "FGONE"}, from, to, "P1", nil, nil)
+	got := transfer.Remap(item.Item{ID: "I1", Priority: "FGONE"}, from, to, none, nil, nil)
 	if want := []string{`set priority "FGONE">"TV08"`}; !slices.Equal(show(got), want) {
 		t.Errorf("rows = %q, want %q", show(got), want)
 	}
 	if want := []string{"優先度"}; !slices.Equal(got.Emptied, want) {
 		t.Errorf("Emptied = %v, want %v", got.Emptied, want)
+	}
+}
+
+// withReview は、移動元と移動先の両方に、名前が同じステータス Review(進行中)を足す(移動元 FR・移動先 TR)。
+func withReview() (from, to workspace.Settings) {
+	from, to = pair()
+	from.Statuses = append(from.Statuses, workspace.Value{ID: "FR", Name: "Review", Category: workspace.CategoryDoing})
+	to.Statuses = append(to.Statuses, workspace.Value{ID: "TR", Name: "Review", Category: workspace.CategoryDoing})
+	return from, to
+}
+
+// 移動先のプロジェクトが使わないステータス(B5 の hidden_statuses)は使えない。初期ステータスと分類ごとの既定は、
+// 外す印があっても使う(projectrule.Uses)。
+func TestUsableStatusesLeavesOutWhatTheProjectDoesNotUse(t *testing.T) {
+	_, to := withReview()
+	rules := projectrule.Rules{Hidden: []change.ID{"TR", "TV01", "TV02"}}
+	if got, want := transfer.UsableStatuses(to, rules), []change.ID{"TV01", "TV02", "TV03", "TV04", "TV05"}; !slices.Equal(got, want) {
+		t.Errorf("UsableStatuses = %v, want %v", got, want)
+	}
+}
+
+// 02「値の引き直し」: 名前が移動先にあっても、移動先のプロジェクトが使わないステータスは置き換えの対象。選んだ置き換え先が
+// 使わないステータスなら選ばなかったのと同じ(同じ分類の既定)。使えるステータスを選べばそれ。
+func TestHiddenStatusIsReplacedLikeAMissingOne(t *testing.T) {
+	from, to := withReview()
+	rules := projectrule.Rules{Hidden: []change.ID{"TR"}}
+	if got := transfer.Unmatched([]change.ID{"FR", "FV02"}, from, to, rules); !slices.Equal(got, []change.ID{"FR"}) {
+		t.Errorf("Unmatched = %v, want [FR]", got)
+	}
+	if got := transfer.Unmatched([]change.ID{"FR"}, from, to, none); len(got) != 0 {
+		t.Errorf("Unmatched without rules = %v, want none", got)
+	}
+	remap := func(choice map[change.ID]change.ID) []string {
+		return show(transfer.Remap(item.Item{ID: "I1", Status: "FR"}, from, to, rules, nil, choice))
+	}
+	for _, c := range []struct {
+		choice map[change.ID]change.ID
+		want   string
+	}{
+		{nil, `set status "FR">"TV02"`},
+		{map[change.ID]change.ID{"FR": "TR"}, `set status "FR">"TV02"`},
+		{map[change.ID]change.ID{"FR": "TV04"}, `set status "FR">"TV04"`},
+	} {
+		if got := remap(c.choice); !slices.Equal(got, []string{c.want}) {
+			t.Errorf("choice %v: rows = %q, want %s", c.choice, got, c.want)
+		}
 	}
 }

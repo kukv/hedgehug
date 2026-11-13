@@ -86,13 +86,13 @@ func replacements(src source, dst destination) []StatusRow {
 		}
 	}
 	var choices []workspace.Value
-	for _, id := range transfer.UsableStatuses(dst.settings, dst.project.ID) {
+	for _, id := range transfer.UsableStatuses(dst.settings, dst.rules) {
 		if v, ok := valueOf(dst.settings.Statuses, id); ok {
 			choices = append(choices, v)
 		}
 	}
 	var rows []StatusRow
-	for _, id := range transfer.Unmatched(present, src.settings, dst.settings, dst.project.ID) {
+	for _, id := range transfer.Unmatched(present, src.settings, dst.settings, dst.rules) {
 		v, _ := valueOf(src.settings.Statuses, id)
 		def := dst.settings.CategoryDefaults[v.Category]
 		if def == "" {
