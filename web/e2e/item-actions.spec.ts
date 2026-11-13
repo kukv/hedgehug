@@ -32,6 +32,9 @@ async function closeMenu(page: Page) {
 test("moves, duplicates, changes the kind of and deletes items from the tree's row menu", async ({
   page,
 }, info) => {
+  // 1 つのテストでワークスペースを作り、アイテムを 6〜7 件作ってから順に確かめる(Store を大きくしないため)ので、
+  // 全体を並列で流すと、既定の 30 秒を越えることがある(単独では 4 秒ほど)。期待の待ち時間は既定のまま。
+  test.setTimeout(60_000);
   const t = (s: string) => unique(info, s);
   const prefix = prefixOf(info);
   await createWorkspace(page, info, unique(info, "操作"), prefix);
