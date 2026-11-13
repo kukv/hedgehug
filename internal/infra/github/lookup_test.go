@@ -189,6 +189,18 @@ func TestLookupDoesNotFollowAMalformedRename(t *testing.T) {
 	}
 }
 
+func TestLookupDoesNotAskRenameOfAMalformedRepo(t *testing.T) {
+	paths := []string{}
+	c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"]}]}`))
+	})
+	_, err := c.Lookup(context.Background(), fakeToken, "../../user", 41)
+	if !ghcall.Is(err, ghcall.RepoUnreadable) || strings.Join(paths, ",") != "/graphql" {
+		t.Errorf("err = %v, paths %v, want only /graphql", err, paths)
+	}
+}
+
 func TestLookupHTTPNotFoundAndForbiddenAreRepoUnreadable(t *testing.T) {
 	for _, code := range []int{http.StatusNotFound, http.StatusForbidden} {
 		c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {

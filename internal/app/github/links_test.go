@@ -324,6 +324,11 @@ func TestAddLinkTooLargeNumberIsNotFound(t *testing.T) {
 	if got := refusalText(err); got != "org/web#2147483648 が見つかりません" || f.gh.Lookups != asked {
 		t.Errorf("%q (%v), lookups %d", got, err, f.gh.Lookups-asked)
 	}
+	// int に入らない桁の数は、番号として読めないので「番号を入力してください」のまま
+	err = f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "99999999999999999999", false)
+	if got := refusalText(err); got != "番号を入力してください" || f.gh.Lookups != asked {
+		t.Errorf("%q (%v), lookups %d", got, err, f.gh.Lookups-asked)
+	}
 }
 
 func TestAddLinkSavesChecksOnlyAfterTheWrite(t *testing.T) {

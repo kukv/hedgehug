@@ -128,18 +128,27 @@ func answerFailure(a lookupAnswer, repo string, number int, reset time.Time) *gh
 }
 
 // renamed は、repo が改名・移管されていれば、いまの名前を返す(REST はリダイレクトで移動先を返す)。
-// いまの名前が owner/name の形でなければ、改名とみなさない(問い合わせない)。
+// repo が owner/name の形でなければ問い合わせない。いまの名前が owner/name の形でなければ、改名とみなさない。
 func (c *Client) renamed(ctx context.Context, token, repo string) (string, bool) {
+	if !wellFormed(repo) {
+		return "", false
+	}
 	var r struct {
 		FullName string `json:"full_name"`
 	}
 	if err := c.get(ctx, token, "/repos/"+repo, &r); err != nil || r.FullName == "" || strings.EqualFold(r.FullName, repo) {
 		return "", false
 	}
-	if moved, err := project.NormalizeRepo(r.FullName); err != nil || moved != r.FullName {
+	if !wellFormed(r.FullName) {
 		return "", false
 	}
 	return r.FullName, true
+}
+
+// wellFormed は、repo が前後の空白なしで owner/name の形か。
+func wellFormed(repo string) bool {
+	r, err := project.NormalizeRepo(repo)
+	return err == nil && r == repo
 }
 
 func found(repo string, n *node) port.Found {
