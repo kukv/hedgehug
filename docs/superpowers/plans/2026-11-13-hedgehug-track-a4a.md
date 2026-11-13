@@ -4,7 +4,7 @@
 
 **Goal:** 詳細パネルの説明・Markdown・メンションの表示・関連・作業時間・コメント・ウォッチ・履歴と、作成ダイアログの説明、プロジェクトの概要の編集・リポジトリの追加と削除を、仕様どおりに保存し表示する。
 
-**Architecture:** 説明は `description.md` に本文を置き、`desc` の行で履歴に残す。保存の口(`port`)に説明の読み書きを足し、保存のときの 3 方向の行マージは domain の `textmerge` に移して、同期(gitstore)と保存(app)で同じ関数を使う。コメント・作業時間は `comment`・`worklog` の行、関連・ウォッチ・リポジトリは `add`・`remove` の行で持つ。`internal/app/items` は 19 ファイルで上限(20)に近いので、新しい操作は機能ごとの新しい app パッケージ(`descriptions`・`comments`・`worklogs`・`relations`・`watching`・`history`)に置き、プロジェクトの概要の編集は `app/projects` に足す。画面は core に状態と規則(Markdown の字句分け、書きかけの判定、作業時間の検査と表記)を置き、ui は見た目だけ、app は結び付けだけにする。
+**Architecture:** 説明は `description.md` に本文を置き、`desc` の行で履歴に残す。保存の口(`port`)に説明の読み書きを足し、保存のときの 3 方向の行マージは domain の `textmerge` に移して、同期(gitstore)と保存(app)で同じ関数を使う。コメント・作業時間は `comment`・`worklog` の行、関連・ウォッチ・リポジトリは `add`・`remove` の行で持つ。新しい操作は機能ごとの新しい app パッケージ(`descriptions`・`comments`・`worklogs`・`relations`・`watching`・`history`)に置き、プロジェクトの概要の編集は `app/projects` に足す。画面は core に状態と規則(Markdown の字句分け、書きかけの判定、作業時間の検査と表記)を置き、ui は見た目だけ、app は結び付けだけにする。
 
 **Tech Stack:** Go(huma・domain/app/infra/adapter の層)、TypeScript(core・api の orval)、Svelte 5(ui・app)、Vitest、Playwright。
 
@@ -15,7 +15,7 @@
 ## Global Constraints
 
 - 依存は追加しない(Markdown も自前で字句に分ける。足すときは版を明記し、公開から 7 日以上の版だけ)。
-- 大きさの上限: Go ファイル 300 行(テスト 600 行)・関数 60 行・認知的複雑度 15・パッケージ 20 ファイル、Svelte 200 行、TS 300 行。超えたら分ける。いま `internal/app/items` は 19 ファイル、`web/packages/core/src/features/items/detail.ts` は 256 行、`web/app/src/screens/item/PropertyField.svelte` は 194 行、`TreeRow.svelte` は 196 行。
+- 大きさの上限: Go ファイル 300 行(テスト 600 行)・関数 60 行・認知的複雑度 15・パッケージ 20 ファイル、Svelte 200 行、TS 300 行。超えたら分ける。パッケージのファイル数はテストを除いて数える。上限の 20 にいる `internal/infra/gitstore`・`internal/app/workspaces`・`internal/app/apptest` には新しいファイルを足さず、既存のファイルに足す(`internal/app/items` は 13)。`web/packages/core/src/features/items/detail.ts` は 256 行、`web/app/src/screens/item/PropertyField.svelte` は 194 行、`TreeRow.svelte` は 196 行。
 - 向き: adapter→app→domain、infra→app/port。app の機能どうしは import しない(テストも)。
 - 画面の文言は仕様の文字どおり。モックの動きは写さない(見た目だけ参考: モック版 19 の `detail.js`・`screens.js`)。
 - 通知(メンション・ウォッチ・オーナー・「上書き」)は作らない。受信箱と通知の判定は C4 が、同期で受け取った行から作る。A4a は行を正しく書くだけ。
@@ -168,7 +168,7 @@
 | `list-project-comments`・`post-project-comment`・`edit-project-comment`・`delete-project-comment` | 同じ形で `projects/{project}/comments` | 同上 | 9 |
 | `list-worklogs`・`add-worklog`・`delete-worklog` | GET・POST `items/{item}/worklogs`、DELETE `items/{item}/worklogs/{worklog}` | `{hours: string, memo}` → `Worklog{id, by, byName, date, hours: string}`(`hours` は `worklog.Format` の文字列)。削除は 204 | 11 |
 | `list-relations` | GET `items/{item}/relations` | → `RelationRow{label, id, display, title, workspaceName, statusName, statusColor}[]`(`workspaceName` は別のワークスペースのときだけ) | 13 |
-| `list-relation-candidates` | GET `items/{item}/relation-candidates?label=&q=` | → `Candidate{id, display, title, workspaceName, disabledReason}[]` | 13 |
+| `list-relation-candidates` | GET `items/{item}/relation-candidates?label=&q=` | → `RelationCandidate{id, display, title, workspaceName, disabledReason}[]` | 13 |
 | `add-relation`・`remove-relation` | POST `items/{item}/relations`、POST `items/{item}/relations/remove` | `{label, other}` → 204 | 13 |
 | `set-watch` | PUT `items/{item}/watch` | `{on}` → `Item` | 15 |
 | `get-item-history`・`get-project-history` | GET `items/{item}/history`、`projects/{project}/history` | → `HistoryRow{who, text, at}[]`(新しい順) | 16 |
@@ -213,7 +213,15 @@
 - `item.Item.Blocked` は保存しない派生の値で、`app/items` の `Get`・`List`・`FindByNumber` が埋める。
 - `project.Project.Repos` を足すので、`Project` を `==` で比べているテスト 5 か所を `reflect.DeepEqual` にする(Task 18)。
 
-画面の名前: 区画の名前、入力欄とボタンの名前、`data-mention="{小文字のログイン名}"`、ウォッチのボタンの「ウォッチ」「ウォッチ中」、関連の解除の「{相手の ID} の関連を解除」は、Task 22 の冒頭の表に合わせて作る。変えるなら Task 22 の表も直す。
+画面の名前: 区画の名前、入力欄とボタンの名前は、各タスクの本文のとおりに作る。Task 22 の冒頭の表は先に推測で書いたものなので、Task 22 が実際に作られた名前に合わせて直す(前のタスクを表に合わせて作り直さない)。ただし `data-mention="{小文字のログイン名}"` は Task 5 の `Markdown.svelte` がメンションの要素に付ける(本文のテストは `class="mention"` だけを見ているので、属性とテストを足す)。
+
+計画のコードの確かめ具合: Task 1〜4・9〜12・15 の Go と core の TS は、書き手が作業用の複製でテストを通した。Task 5 の `tokenize` も通した。Task 13・14・16・17(書き直した履歴の決め方を含む)・18・19・20・21・22 と、すべての Svelte のファイルは一度も走らせていない。そこでは仕様とこの節・「タスク間の名前」の表が正で、計画のコードは下書きとして扱う。計画から変えたことは、最後に「実装で計画から変えたこと」に書く。
+
+ほかに、各タスクの本文に足すこと:
+
+- Task 3: プロジェクトの説明のアクティビティ「{タイトル} の説明を変更」のタイトルは、Task 18 の `label` と同じく、空白と改行を 1 つの空白にまとめてから書く(`Operation.Check` は複数行の Summary を断る)。
+- Task 4: `create-item` の本文の `description` は省略できる(`omitempty`)。Task 8 は空のとき送らない。
+- Task 22: 概要の Epic の行(Task 21)の確認を足す。進捗の「100%」、棒の title「1 / 1」、ステータスの変更。
 
 同期と別のタブの反映(`wire.ts` の `reflect()`)では、コメント・作業時間・関連・履歴の区画も読み直す(Task 10・12・14・17 がそれぞれ足す)。
 
@@ -18957,7 +18965,7 @@ superpowers:requesting-code-review(または `code-review high`)で、`develop` 
 この計画の末尾に、次の 2 節を足す。実装した結果で書く(この計画を書いた時点では、まだ中身がない)。
 
 - 「実装で計画から変えたこと」: テスト・補助関数の名前を既存に合わせたこと、タスクの分け方を変えたこと、仕様で決めていなくて実装で決めたこと(「骨組みへの指摘」と「仕様で決まっていなくて決めたこと」に書いた、概要の編集の断りの出し方、リポジトリの並び、アクティビティの {タイトル} の旧新、`project.yaml` の `repos`、e2e のロケーターの実際の名前)。
-- 「A4b・C4 への申し送り」: A4b は、プロジェクトのメニューの「名前を変更…」ダイアログと設定の「名前」の区画が `projectEditor.rename`(`rename-project`)をそのまま使えること、`internal/app/items` の 19 ファイルの上限、`detail.ts` などの行数。C4 は、書いた行(`desc`・`comment`・`worklog`・`add`・`remove`・`repos`)と、通知を作る材料(メンション・ウォッチ・オーナー・「上書き」)がどの行にあるか、`textmerge.Merge` の `conflict` が「上書き」の通知の材料であること。
+- 「A4b・C4 への申し送り」: A4b は、プロジェクトのメニューの「名前を変更…」ダイアログと設定の「名前」の区画が `projectEditor.rename`(`rename-project`)をそのまま使えること、上限の 20 ファイルにいる `gitstore`・`app/workspaces`・`apptest`、`detail.ts` などの行数。C4 は、書いた行(`desc`・`comment`・`worklog`・`add`・`remove`・`repos`)と、通知を作る材料(メンション・ウォッチ・オーナー・「上書き」)がどの行にあるか、`textmerge.Merge` の `conflict` が「上書き」の通知の材料であること。
 
 ```bash
 git add docs/superpowers/plans/2026-11-13-hedgehug-track-a4a.md
