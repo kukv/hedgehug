@@ -2,7 +2,6 @@ package apptest
 
 import (
 	"errors"
-	"reflect"
 	"slices"
 	"testing"
 
@@ -58,6 +57,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"remove deletes an item folder", contractRemove},
 		{"remove and import refuse in the same write", contractRemoveImportRules},
 		{"op rows are for sync operations only", contractOpRows},
+		{"remove deletes a project folder", contractProjectRemove},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -72,6 +72,10 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 	t.Run("import copies an item folder between stores", func(t *testing.T) {
 		s, a, b := newStores(t)
 		contractImport(t, s, a, b)
+	})
+	t.Run("import copies a project folder between stores", func(t *testing.T) {
+		s, a, b := newStores(t)
+		contractProjectImport(t, s, a, b)
 	})
 }
 
@@ -107,17 +111,6 @@ func mustRead(t *testing.T, s port.Stores, id port.StoreID, fn func(r port.Reade
 	t.Helper()
 	if err := s.Read(t.Context(), id, fn); err != nil {
 		t.Fatalf("Read: %v", err)
-	}
-}
-
-func sameItem(a, b item.Item) bool {
-	a.Created, b.Created = item.Stamp{}, item.Stamp{}
-	return reflect.DeepEqual(a, b)
-}
-
-func setTitle(id item.ID, from, to string) func(tx port.Tx) error {
-	return func(tx port.Tx) error {
-		return tx.WriteItems().Append(id, change.NewSet("title", from, to))
 	}
 }
 
@@ -206,6 +199,40 @@ func contractImport(t *testing.T, s port.Stores, a, b port.StoreID) {
 	} {
 		if err := s.Write(t.Context(), b, taro, call); !errors.Is(err, port.ErrInvalidOperation) {
 			t.Errorf("Import (%s) = %v, want ErrInvalidOperation", name, err)
+		}
+	}
+}
+
+// Import は、プロジェクトの行と説明を変えずに写す。写したプロジェクトに、同じ Tx で行を足せる。
+func contractProjectImport(t *testing.T, s port.Stores, a, b port.StoreID) {
+	ref := change.Ref{Kind: change.KindProject, ID: cProject.ID}
+	mustWrite(t, s, a, taro, writeFixture)
+	mustWrite(t, s, a, taro, func(tx port.Tx) error { return tx.WriteProjects().Describe(cProject.ID, "説明") })
+	var log []change.Record
+	mustRead(t, s, a, func(r port.Reader) (err error) { log, err = r.Changes().Of(ref); return })
+	moved := cProject.Place
+	moved.Number = 2
+	mustWrite(t, s, b, taro, func(tx port.Tx) error {
+		return errors.Join(tx.WriteProjects().Import(cProject.ID, log, "説明"),
+			tx.WriteProjects().Append(cProject.ID, change.NewSet("place", cProject.Place, moved)))
+	})
+	mustRead(t, s, b, func(r port.Reader) error {
+		got, err := r.Changes().Of(ref)
+		p, perr := r.Projects().Get(cProject.ID)
+		d, _ := r.Projects().Description(cProject.ID)
+		if err != nil || perr != nil || len(got) != len(log)+1 || got[0].ID != log[0].ID || p.Place != moved || d != "説明" ||
+			!slices.Equal(got[len(log)].Prev, []change.ID{log[len(log)-1].ID}) {
+			t.Errorf("rows %d (want %d), %v, project %+v (%v), description %q", len(got), len(log)+1, err, p, perr, d)
+		}
+		return nil
+	})
+	for name, call := range map[string]func(tx port.Tx) error{
+		"existing folder": func(tx port.Tx) error { return tx.WriteProjects().Import(cProject.ID, log, "") },
+		"empty log":       func(tx port.Tx) error { return tx.WriteProjects().Import("01CONTRACTPR00000000000009", nil, "") },
+		"bad id":          func(tx port.Tx) error { return tx.WriteProjects().Import("bad id", log, "") },
+	} {
+		if err := s.Write(t.Context(), b, taro, call); !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("Import project (%s) = %v, want ErrInvalidOperation", name, err)
 		}
 	}
 }

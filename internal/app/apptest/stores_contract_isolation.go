@@ -2,6 +2,7 @@ package apptest
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
@@ -283,4 +285,15 @@ func contractUserRestoreSeenInTx(t *testing.T, s port.Stores, id port.StoreID) {
 		}
 		return nil
 	})
+}
+
+func sameItem(a, b item.Item) bool {
+	a.Created, b.Created = item.Stamp{}, item.Stamp{}
+	return reflect.DeepEqual(a, b)
+}
+
+func setTitle(id item.ID, from, to string) func(tx port.Tx) error {
+	return func(tx port.Tx) error {
+		return tx.WriteItems().Append(id, change.NewSet("title", from, to))
+	}
 }
