@@ -2,6 +2,7 @@ package gitstore
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,8 +10,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 // kindDirs は、種類ごとのフォルダと、読む用の YAML の名前。
@@ -128,4 +132,67 @@ func readDescription(root string, ref change.Ref) (string, error) {
 		return "", nil
 	}
 	return string(b), err
+}
+
+// transfersFile・purgedFile は、転送記録と、完全に削除したものの記録(Store の根からの相対パス)。
+const (
+	transfersFile = "transfers.jsonl"
+	purgedFile    = "purged.jsonl"
+)
+
+type transfers struct{ v *view }
+
+// List は、transfers.jsonl の行と、同じ Tx で書いた行を、この順で返す。
+func (r transfers) List() ([]transfer.Record, error) {
+	b, err := os.ReadFile(filepath.Join(r.v.root, transfersFile))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	return append(transfer.ParseRecords(b), r.v.transfers...), nil
+}
+
+type purged struct{ v *view }
+
+// List は、purged.jsonl の行を返す。JSON として読めない行・id が空の行・at が RFC 3339 でない行は飛ばす。
+func (r purged) List() ([]port.Purged, error) {
+	b, err := os.ReadFile(filepath.Join(r.v.root, purgedFile))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	var out []port.Purged
+	for _, raw := range bytes.Split(b, []byte("\n")) {
+		var l struct {
+			ID      string    `json:"id"`
+			At      string    `json:"at"`
+			Entity  string    `json:"entity"`
+			Target  change.ID `json:"target"`
+			Display string    `json:"display"`
+		}
+		if json.Unmarshal(raw, &l) != nil || l.ID == "" {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, l.At)
+		if err != nil {
+			continue
+		}
+		out = append(out, port.Purged{Entity: l.Entity, Target: l.Target, Display: l.Display, At: at})
+	}
+	return out, nil
+}
+
+// appendTransfers は、transfers.jsonl に行を足す(なければ作る)。
+func appendTransfers(root string, recs []transfer.Record) error {
+	var b []byte
+	for _, r := range recs {
+		b = append(append(b, r.JSON()...), '\n')
+	}
+	f, err := os.OpenFile(filepath.Join(root, transfersFile), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302・G304: パスは Store の根から作り、中身は共有するもので秘密ではない
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }

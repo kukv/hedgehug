@@ -1,16 +1,16 @@
 package apptest
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"maps"
-	"runtime"
 	"strconv"
 	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 // Stores は port.Stores のメモリ上の偽物。同じ Store の Write は 1 つずつ順に行い、Read と重ねない。
@@ -35,40 +35,11 @@ type store struct {
 	writes int
 	// retentionDays は、削除済みの保持日数。
 	retentionDays int
-	// holders は、この Store の Read・Write を実行中の goroutine。holdersMu が守る。
-	holdersMu sync.Mutex
-	holders   map[uint64]bool
-}
-
-// enter は、いまの goroutine を、この Store の Read・Write の実行中に入れ、出す関数を返す。すでに入っていれば panic する。
-func (st *store) enter(id port.StoreID) (leave func()) {
-	g := goroutineID()
-	st.holdersMu.Lock()
-	defer st.holdersMu.Unlock()
-	if st.holders[g] {
-		panic(fmt.Sprintf("apptest: nested Read or Write of store %q in one goroutine (gitstore would deadlock)", id))
-	}
-	st.holders[g] = true
-	return func() {
-		st.holdersMu.Lock()
-		defer st.holdersMu.Unlock()
-		delete(st.holders, g)
-	}
-}
-
-// goroutineID は、いまの goroutine の番号(スタックの先頭の行「goroutine N [...]」から読む)。
-func goroutineID() uint64 {
-	var buf [64]byte
-	line := bytes.TrimPrefix(buf[:runtime.Stack(buf[:], false)], []byte("goroutine "))
-	end := bytes.IndexByte(line, ' ')
-	if end < 0 {
-		panic(fmt.Sprintf("apptest: goroutine id: unexpected stack line %q", line))
-	}
-	n, err := strconv.ParseUint(string(line[:end]), 10, 64)
-	if err != nil {
-		panic(fmt.Sprintf("apptest: goroutine id: %v", err))
-	}
-	return n
+	// transfers は転送記録、purged は完全に削除したものの記録(Stores.AddPurged)。
+	transfers []transfer.Record
+	purged    []port.Purged
+	// guard は、同じ goroutine の中の入れ子の Read・Write を見つける。
+	guard guard
 }
 
 // defaultRetentionDays は、保持日数の既定(gitstore と同じ。08「保持日数」)。
@@ -86,7 +57,7 @@ func (s *Stores) AddStore(id port.StoreID) {
 	if _, ok := s.stores[id]; ok {
 		panic(fmt.Sprintf("apptest: AddStore: store %q already exists", id))
 	}
-	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, retentionDays: defaultRetentionDays, holders: map[uint64]bool{}}
+	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, retentionDays: defaultRetentionDays}
 }
 
 // SetRetentionDays は、Store の削除済みの保持日数を変える(テスト用。本物は store.yaml の retention_days)。
@@ -98,6 +69,17 @@ func (s *Stores) SetRetentionDays(id port.StoreID, days int) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	st.retentionDays = days
+}
+
+// AddPurged は、Store の完全に削除したものの記録に 1 行足す(テスト用。本物は purged.jsonl)。
+func (s *Stores) AddPurged(id port.StoreID, p port.Purged) {
+	st, err := s.find(id)
+	if err != nil {
+		panic(fmt.Sprintf("apptest: AddPurged: %v", err))
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.purged = append(st.purged, p)
 }
 
 // find は、Store を返す。ロックは呼んだ側が取る。
@@ -116,38 +98,62 @@ func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader)
 	if err != nil {
 		return err
 	}
-	defer st.enter(id)()
+	defer st.guard.enter(id)()
 	st.mu.RLock()
 	defer st.mu.RUnlock()
-	return fn(&view{base: st.logs, baseTexts: st.texts, retentionDays: st.retentionDays})
+	return fn(st.view())
+}
+
+// view は、保存済みの中身を読む view。ロックは呼んだ側が取る。
+func (st *store) view() *view {
+	return &view{base: st.logs, baseTexts: st.texts, baseTransfers: st.transfers, purged: st.purged, retentionDays: st.retentionDays}
 }
 
 func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	return s.write(id, op, fn, nil)
+}
+
+// write は Write の本体。send は、op を確かめたあと、反映の前に呼ぶ(nil なら呼ばない)。send がエラーなら、
+// 何も反映せずにそのエラーを返す。
+func (s *Stores) write(id port.StoreID, op port.Operation, fn func(tx port.Tx) error, send func() error) error {
 	st, err := s.find(id)
 	if err != nil {
 		return err
 	}
-	defer st.enter(id)()
+	defer st.guard.enter(id)()
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	logs := st.logs
-	t := &tx{
-		view: view{base: logs, baseTexts: st.texts, retentionDays: st.retentionDays, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
-		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
-		ids:  s.ids,
-	}
+	v := st.view()
+	v.pending, v.texts, v.removed = map[change.Ref][]change.Record{}, map[change.Ref]string{}, map[change.Ref]bool{}
+	t := &tx{view: *v, meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor}, ids: s.ids}
 	if err := fn(t); err != nil {
 		return err
 	}
-	if len(t.pending) == 0 && len(t.texts) == 0 {
+	if len(t.pending) == 0 && len(t.texts) == 0 && len(t.removed) == 0 && len(t.transfers) == 0 {
 		return nil
 	}
 	if err := op.Check(); err != nil {
 		return err
 	}
-	for ref, recs := range t.pending {
-		logs[ref] = append(logs[ref], recs...)
+	if send != nil {
+		if err := send(); err != nil {
+			return err
+		}
 	}
+	st.apply(t)
+	return nil
+}
+
+// apply は、Tx で書いたものを Store に反映する。行・消したフォルダ・転送記録・説明の順。
+func (st *store) apply(t *tx) {
+	for ref, recs := range t.pending {
+		st.logs[ref] = append(st.logs[ref], recs...)
+	}
+	for ref := range t.removed {
+		delete(st.logs, ref)
+		delete(st.texts, ref)
+	}
+	st.transfers = append(st.transfers, t.transfers...)
 	for ref, text := range t.texts {
 		if text == "" {
 			delete(st.texts, ref)
@@ -156,7 +162,6 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 		}
 	}
 	st.writes++
-	return nil
 }
 
 // Versions は port.StoreVersions。版の印は、その Store の保存が成功した回数。
@@ -222,8 +227,9 @@ func (t *tx) describe(ref change.Ref, text string) error {
 
 func (t *tx) WriteWorkspaces() port.WorkspaceWriter { return idWriter{t, change.KindWorkspace} }
 func (t *tx) WriteProjects() port.ProjectWriter     { return idWriter{t, change.KindProject} }
-func (t *tx) WriteItems() port.ItemWriter           { return idWriter{t, change.KindItem} }
+func (t *tx) WriteItems() port.ItemWriter           { return itemWriter{idWriter{t, change.KindItem}} }
 func (t *tx) WriteMembers() port.MemberWriter       { return membersWriter{t} }
+func (t *tx) WriteTransfers() port.TransferWriter   { return transferWriter{t} }
 
 type idWriter struct {
 	t    *tx
@@ -242,4 +248,51 @@ type membersWriter struct{ t *tx }
 
 func (w membersWriter) Append(drafts ...change.Draft) error {
 	return w.t.append(change.Ref{Kind: change.KindMembers}, drafts)
+}
+
+type itemWriter struct{ idWriter }
+
+// Import は、行を写して pending にする。説明があれば texts にする。
+func (w itemWriter) Import(id item.ID, log []change.Record, description string) error {
+	ref := change.Ref{Kind: change.KindItem, ID: id}
+	if !ref.Valid() || len(log) == 0 || w.t.removed[ref] || len(w.t.log(ref)) > 0 {
+		return fmt.Errorf("%w: cannot import item %q", port.ErrInvalidOperation, id)
+	}
+	recs := make([]change.Record, 0, len(log))
+	for _, r := range log {
+		recs = append(recs, cloneRecord(r))
+	}
+	w.t.pending[ref] = recs
+	delete(w.t.places, id)
+	if description != "" {
+		w.t.texts[ref] = description
+	}
+	return nil
+}
+
+// Remove は、同じ Tx で書いた行と説明を捨て、フォルダを消す印を付ける。
+func (w itemWriter) Remove(id item.ID) error {
+	ref := change.Ref{Kind: change.KindItem, ID: id}
+	if !ref.Valid() {
+		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, id)
+	}
+	if len(w.t.log(ref)) == 0 {
+		return port.ErrNotFound
+	}
+	delete(w.t.pending, ref)
+	delete(w.t.texts, ref)
+	delete(w.t.places, id)
+	w.t.removed[ref] = true
+	return nil
+}
+
+type transferWriter struct{ t *tx }
+
+func (w transferWriter) Append(r transfer.Record) error {
+	if err := port.CheckTransfer(r); err != nil {
+		return err
+	}
+	r.ID, r.Op, r.At, r.By = w.t.ids.New(), w.t.meta.Op, w.t.meta.At, w.t.meta.Actor.By()
+	w.t.transfers = append(w.t.transfers, r)
+	return nil
 }

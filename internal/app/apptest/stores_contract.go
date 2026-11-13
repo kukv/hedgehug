@@ -3,6 +3,7 @@ package apptest
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -48,6 +49,9 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"automation rows share the operation", contractRuleRows},
 		{"automation rows in a GitHub operation are by the bot", contractRuleRowsGitHub},
 		{"automation rows need a person or GitHub and a valid rule id", contractRuleRowsRefused},
+		{"transfer records are appended and listed", contractTransfers},
+		{"purged is empty without a purge", contractPurgedEmpty},
+		{"remove deletes an item folder", contractRemove},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -58,6 +62,10 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 	t.Run("a write to another store inside a write", func(t *testing.T) {
 		s, a, b := newStores(t)
 		contractNestedStores(t, s, a, b)
+	})
+	t.Run("import copies an item folder between stores", func(t *testing.T) {
+		s, a, b := newStores(t)
+		contractImport(t, s, a, b)
 	})
 }
 
@@ -104,5 +112,116 @@ func sameItem(a, b item.Item) bool {
 func setTitle(id item.ID, from, to string) func(tx port.Tx) error {
 	return func(tx port.Tx) error {
 		return tx.WriteItems().Append(id, change.NewSet("title", from, to))
+	}
+}
+
+// Remove は、アイテムのフォルダを消す。同じ Tx から読むと、もうない。説明も一緒に消える。
+func contractRemove(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error { return tx.WriteItems().Describe(cItem.ID, "説明") })
+	boom := errors.New("boom")
+	if err := s.Write(t.Context(), id, taro, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Remove(cItem.ID), boom)
+	}); !errors.Is(err, boom) {
+		t.Fatalf("failing write = %v", err)
+	}
+	mustRead(t, s, id, func(r port.Reader) error {
+		if d, err := r.Items().Description(cItem.ID); err != nil || d != "説明" {
+			t.Errorf("after the failed write: %q, %v", d, err)
+		}
+		return nil
+	})
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if err := tx.WriteItems().Remove(cItem.ID); err != nil {
+			return err
+		}
+		if _, err := tx.Items().Get(cItem.ID); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("Get in the tx = %v", err)
+		}
+		if err := tx.WriteItems().Import(cItem.ID, []change.Record{{ID: "x"}}, ""); !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("Import after Remove = %v, want ErrInvalidOperation", err)
+		}
+		return nil
+	})
+	mustRead(t, s, id, func(r port.Reader) error { checkRemoved(t, r); return nil })
+	if err := s.Write(t.Context(), id, taro, func(tx port.Tx) error { return tx.WriteItems().Remove(cItem.ID) }); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Remove of a missing item = %v, want ErrNotFound", err)
+	}
+	if err := s.Write(t.Context(), id, taro, func(tx port.Tx) error { return tx.WriteItems().Remove("bad id") }); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Remove of a bad id = %v, want ErrInvalidOperation", err)
+	}
+}
+
+// checkRemoved は、消したアイテムが、どの読み方でももうなく、プロジェクトは残っていることを確かめる。
+func checkRemoved(t *testing.T, r port.Reader) {
+	if _, err := r.Items().Get(cItem.ID); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Get = %v", err)
+	}
+	if _, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID}); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Changes().Of = %v", err)
+	}
+	if _, err := r.Items().Description(cItem.ID); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Description = %v", err)
+	}
+	if its, err := r.Items().List(cProject.ID); err != nil || len(its) != 0 {
+		t.Errorf("List = %+v, %v", its, err)
+	}
+	if _, err := r.Projects().Get(cProject.ID); err != nil {
+		t.Errorf("the project went too: %v", err)
+	}
+}
+
+// Import は、別の Store のアイテムの行と説明を、行を変えずに写す。続けて書く行は、写した行の先端につながる。
+func contractImport(t *testing.T, s port.Stores, a, b port.StoreID) {
+	ref := change.Ref{Kind: change.KindItem, ID: cItem.ID}
+	mustWrite(t, s, a, taro, writeFixture)
+	mustWrite(t, s, a, taro, func(tx port.Tx) error { return tx.WriteItems().Describe(cItem.ID, "説明") })
+	var log []change.Record
+	var text string
+	mustRead(t, s, a, func(r port.Reader) error {
+		var err error
+		if log, err = r.Changes().Of(ref); err != nil {
+			return err
+		}
+		text, err = r.Items().Description(cItem.ID)
+		return err
+	})
+	mustWrite(t, s, b, taro, func(tx port.Tx) error {
+		if err := tx.WriteItems().Import(cItem.ID, log, text); err != nil {
+			return err
+		}
+		return tx.WriteItems().Append(cItem.ID, change.NewSet("title", "認証", "移動先で変えた"))
+	})
+	mustRead(t, s, b, func(r port.Reader) error { checkImported(t, r, log); return nil })
+	for name, call := range map[string]func(tx port.Tx) error{
+		"existing folder": func(tx port.Tx) error { return tx.WriteItems().Import(cItem.ID, log, "") },
+		"empty log":       func(tx port.Tx) error { return tx.WriteItems().Import("01CONTRACTIT00000000000009", nil, "") },
+		"bad id":          func(tx port.Tx) error { return tx.WriteItems().Import("bad id", log, "") },
+	} {
+		if err := s.Write(t.Context(), b, taro, call); !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("Import (%s) = %v, want ErrInvalidOperation", name, err)
+		}
+	}
+}
+
+// checkImported は、写した行が元の行と同じで、続けて書いた 1 行が写した行の先端につながっていることを確かめる。
+func checkImported(t *testing.T, r port.Reader, log []change.Record) {
+	got, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+	if err != nil || len(got) != len(log)+1 {
+		t.Fatalf("rows = %d, %v, want %d", len(got), err, len(log)+1)
+	}
+	for i, w := range log {
+		g := got[i]
+		if g.ID != w.ID || g.Op != w.Op || !g.At.Equal(w.At) || g.By != w.By || g.Actor != w.Actor || g.T != w.T || g.F != w.F ||
+			string(g.From) != string(w.From) || string(g.To) != string(w.To) || !slices.Equal(g.Prev, w.Prev) {
+			t.Errorf("row %d = %+v, want %+v (行は変えずに写す)", i, g, w)
+		}
+	}
+	if last := got[len(got)-1]; !slices.Equal(last.Prev, []change.ID{log[0].ID}) {
+		t.Errorf("the row after the import has prev %v, want [%s]", last.Prev, log[0].ID)
+	}
+	it, err := r.Items().Get(cItem.ID)
+	if d, _ := r.Items().Description(cItem.ID); err != nil || it.Title != "移動先で変えた" || d != "説明" {
+		t.Errorf("item = %+v (%v), description %q", it, err, d)
 	}
 }

@@ -1,15 +1,21 @@
 package apptest
 
 import (
+	"bytes"
 	"cmp"
+	"fmt"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -33,14 +39,34 @@ type view struct {
 	projectPlaces map[project.ID]workspace.ID
 	// retentionDays は、Store の削除済みの保持日数(Stores.SetRetentionDays。既定は 30)。
 	retentionDays int
+	// removed は、同じ Tx で消したアイテムのフォルダ。読み取りでは、もうない。
+	removed map[change.Ref]bool
+	// baseTransfers は保存済みの転送記録、transfers は同じ Tx で書いた転送記録。
+	baseTransfers []transfer.Record
+	transfers     []transfer.Record
+	// purged は、完全に削除したものの記録。
+	purged []port.Purged
 }
+
+func (v *view) Transfers() port.TransferReader { return transfers{v} }
+func (v *view) Purged() port.PurgedReader      { return purged{v} }
+
+type transfers struct{ v *view }
+
+func (r transfers) List() ([]transfer.Record, error) {
+	return append(slices.Clone(r.v.baseTransfers), r.v.transfers...), nil
+}
+
+type purged struct{ v *view }
+
+func (r purged) List() ([]port.Purged, error) { return slices.Clone(r.v.purged), nil }
 
 func (v *view) RetentionDays() (int, error) { return v.retentionDays, nil }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
 // ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。
 func (v *view) log(ref change.Ref) []change.Record {
-	if !ref.Valid() {
+	if !ref.Valid() || v.removed[ref] {
 		return nil
 	}
 	out := make([]change.Record, 0, len(v.base[ref])+len(v.pending[ref]))
@@ -211,4 +237,44 @@ func (r changes) Of(ref change.Ref) ([]change.Record, error) {
 		return nil, port.ErrNotFound
 	}
 	return log, nil
+}
+
+// guard は、Store の Read・Write を実行中の goroutine を覚え、同じ goroutine の入れ子を見つける。ゼロ値で使える。
+type guard struct {
+	mu      sync.Mutex
+	holders map[uint64]bool
+}
+
+// enter は、いまの goroutine を、この Store の Read・Write の実行中に入れ、出す関数を返す。すでに入っていれば panic する。
+func (g *guard) enter(id port.StoreID) (leave func()) {
+	n := goroutineID()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.holders[n] {
+		panic(fmt.Sprintf("apptest: nested Read or Write of store %q in one goroutine (gitstore would deadlock)", id))
+	}
+	if g.holders == nil {
+		g.holders = map[uint64]bool{}
+	}
+	g.holders[n] = true
+	return func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		delete(g.holders, n)
+	}
+}
+
+// goroutineID は、いまの goroutine の番号(スタックの先頭の行「goroutine N [...]」から読む)。
+func goroutineID() uint64 {
+	var buf [64]byte
+	line := bytes.TrimPrefix(buf[:runtime.Stack(buf[:], false)], []byte("goroutine "))
+	end := bytes.IndexByte(line, ' ')
+	if end < 0 {
+		panic(fmt.Sprintf("apptest: goroutine id: unexpected stack line %q", line))
+	}
+	n, err := strconv.ParseUint(string(line[:end]), 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("apptest: goroutine id: %v", err))
+	}
+	return n
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 // fixtureParts は、fixtureSeen が数える writeFixture の部分の数。
@@ -125,4 +126,71 @@ func wait(t *testing.T, ch <-chan struct{}, timeout time.Duration, msg string) {
 	case <-time.After(timeout):
 		t.Fatal(msg)
 	}
+}
+
+// 転送記録は、同じ操作の行と同じ op・at を持ち、同じ Tx の中から読める。失敗した Write は残さない。
+func contractTransfers(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	rec := transfer.Record{
+		Entity: transfer.EntityItem, Target: cItem.ID, Old: "HH-1", New: "MB-3",
+		ToStore: "01OTHERSTORE", ToStoreName: "team", ToRemote: "https://github.com/org/team",
+	}
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if err := tx.WriteTransfers().Append(rec); err != nil {
+			return err
+		}
+		if got, err := tx.Transfers().List(); err != nil || len(got) != 1 {
+			t.Errorf("in the tx: %+v, %v", got, err)
+		}
+		return tx.WriteItems().Append(cItem.ID, change.NewSet("title", "認証", "移動した"))
+	})
+	boom := errors.New("boom")
+	if err := s.Write(t.Context(), id, taro, func(tx port.Tx) error {
+		return errors.Join(tx.WriteTransfers().Append(rec), boom)
+	}); !errors.Is(err, boom) {
+		t.Fatalf("failing write = %v", err)
+	}
+	mustRead(t, s, id, func(r port.Reader) error { checkTransferStamped(t, r, rec); return nil })
+	checkTransferRefused(t, s, id, rec)
+}
+
+// checkTransferStamped は、保存した 1 行が、最後の操作の op・at と実行者で埋まり、ほかは書いたとおりであることを確かめる。
+func checkTransferStamped(t *testing.T, r port.Reader, rec transfer.Record) {
+	got, err := r.Transfers().List()
+	log, _ := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+	if err != nil || len(got) != 1 || len(log) < 2 {
+		t.Fatalf("transfers = %+v (%v), log = %d rows", got, err, len(log))
+	}
+	row := log[len(log)-1]
+	g := got[0]
+	if g.ID == "" || g.Op != row.Op || !g.At.Equal(row.At) || g.By != "taro" {
+		t.Errorf("stamped = %+v, want op %s at %v by taro", g, row.Op, row.At)
+	}
+	g.ID, g.Op, g.At, g.By = "", "", rec.At, ""
+	if g != rec {
+		t.Errorf("record = %+v, want %+v", g, rec)
+	}
+}
+
+// checkTransferRefused は、転送記録だけを書く Write も Summary が要り、使えない行は書けないことを確かめる。
+func checkTransferRefused(t *testing.T, s port.Stores, id port.StoreID, rec transfer.Record) {
+	noSummary := port.Operation{Actor: change.User("taro")}
+	if err := s.Write(t.Context(), id, noSummary, func(tx port.Tx) error { return tx.WriteTransfers().Append(rec) }); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("no summary = %v, want ErrInvalidOperation", err)
+	}
+	for _, bad := range []transfer.Record{{Entity: "sprint", Target: cItem.ID, ToStore: "S"}, {Entity: "item", Target: "bad id", ToStore: "S"}, {Entity: "item", Target: cItem.ID}} {
+		if err := s.Write(t.Context(), id, taro, func(tx port.Tx) error { return tx.WriteTransfers().Append(bad) }); !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("Append(%+v) = %v, want ErrInvalidOperation", bad, err)
+		}
+	}
+}
+
+func contractPurgedEmpty(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	mustRead(t, s, id, func(r port.Reader) error {
+		if got, err := r.Purged().List(); err != nil || len(got) != 0 {
+			t.Errorf("Purged = %+v, %v", got, err)
+		}
+		return nil
+	})
 }

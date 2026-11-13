@@ -188,3 +188,20 @@ func TestSetRetentionDays(t *testing.T) {
 		}
 	}
 }
+
+func TestFakeAddPurged(t *testing.T) {
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	p := port.Purged{Entity: "item", Target: "01PURGEDIT0000000000000001", Display: "HH-12", At: time.Date(2026, 12, 12, 0, 0, 5, 0, time.UTC)}
+	s.AddPurged("S1", p)
+	err := s.Read(t.Context(), "S1", func(r port.Reader) error {
+		got, err := r.Purged().List()
+		if err != nil || len(got) != 1 || got[0] != p {
+			t.Errorf("Purged = %+v, %v", got, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
