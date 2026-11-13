@@ -41,6 +41,8 @@ const apiItem = {
   blocked: false,
   createdAt: "2026-11-13T09:00:00.000Z",
   createdBy: "taro",
+  sprint: "SP1",
+  release: "",
 };
 
 describe("items port", () => {
@@ -63,6 +65,22 @@ describe("items port", () => {
       values: {},
     });
     expect(it).toMatchObject({ id: "I1", storeId: "S1", parentId: null, watchers: [] });
+    expect(it).toMatchObject({ sprint: "SP1", release: "" });
+  });
+
+  it("sends the sprint when creating, and omits it when none", async () => {
+    const fetch = respond(200, apiItem);
+    const input = {
+      projectId: "P1",
+      parentId: null,
+      kind: "Epic" as const,
+      title: "認証",
+      values: {},
+    };
+    await createItemsPort().create("S1", { ...input, sprint: "SP1" });
+    expect(JSON.parse(String(call(fetch)[1].body))).toMatchObject({ sprint: "SP1" });
+    await createItemsPort().create("S1", { ...input, sprint: "" });
+    expect(JSON.parse(String(call(fetch, 1)[1].body))).not.toHaveProperty("sprint");
   });
 
   it("sends the template id when creating, and omits it when none", async () => {

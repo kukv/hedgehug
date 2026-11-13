@@ -2,6 +2,7 @@ import {
   createCatalogPort,
   createItemsPort,
   createNotesPort,
+  createPlanningPort,
   createProjectsPort,
   createSyncPort,
   createSystemPort,
@@ -15,6 +16,7 @@ import {
   createDetail,
   createItemDialog,
   createNavigation,
+  createPlanning,
   createProjectDialog,
   createProjectScreen,
   createReflection,
@@ -100,6 +102,9 @@ export const workspaceDialog = createWorkspaceDialog({
   onCreated: (storeId, workspace) =>
     navigation.go(routeOfWorkspace(get(catalog.stores), storeId, workspace.id, "overview")),
 });
+// スプリントとリリースの口と、開いているワークスペースの概要(見出しの「実行中」)。
+export const planningPort = createPlanningPort();
+export const planning = createPlanning(planningPort);
 export const workspaceMover = createWorkspaceMover({ catalog, port: workspacesPort, toasts });
 const saveAsTemplateCore = createSaveAsTemplate({ port: workspacesPort, toasts });
 // 保存できたら、開いている設定の画面を読み直す(開いていなければ何もしない)。
@@ -190,6 +195,7 @@ async function reflect(kinds: SyncEventKind[]) {
           Promise.all([
             projectScreen.reload(),
             detail.reload(),
+            planning.reload(),
             ...[itemComments, projectComments, worklogs, relations, ...lists].map((section) =>
               section.reload(),
             ),

@@ -7,7 +7,7 @@
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree" | "settings";
-export type WorkspaceTab = "overview" | "settings";
+export type WorkspaceTab = "overview" | "sprints" | "releases" | "settings";
 
 export type SettingsTab = "accounts";
 
@@ -19,7 +19,12 @@ export type Route =
   | { name: "settings"; tab: SettingsTab };
 
 const projectTabs: readonly string[] = ["overview", "tree", "settings"] satisfies ProjectTab[];
-const workspaceTabs: readonly string[] = ["overview", "settings"] satisfies WorkspaceTab[];
+const workspaceTabs: readonly string[] = [
+  "overview",
+  "sprints",
+  "releases",
+  "settings",
+] satisfies WorkspaceTab[];
 const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];
 
 function decode(segment: string): string | null {
@@ -33,6 +38,11 @@ function decode(segment: string): string | null {
 // projectTabOf は、タブの ID(Tabs が返す文字列)をプロジェクトのタブにする。知らない ID は概要。
 export function projectTabOf(id: string): ProjectTab {
   return projectTabs.includes(id) ? (id as ProjectTab) : "overview";
+}
+
+// workspaceTabOf は、タブの ID をワークスペースのタブにする。知らない ID は概要。
+export function workspaceTabOf(id: string): WorkspaceTab {
+  return workspaceTabs.includes(id) ? (id as WorkspaceTab) : "overview";
 }
 
 export function parseRoute(path: string): Route {

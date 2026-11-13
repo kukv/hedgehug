@@ -1,16 +1,18 @@
 <script lang="ts">
   import {
+    activeLabel,
     readOnlyBand,
     readOnlyNote,
     type StoreNode,
     type WorkspaceNode,
     type WorkspaceTab,
+    workspaceTabOf,
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
-  import { navigation, projectDialog } from "../../wire";
+  import { navigation, planning, projectDialog, syncNow } from "../../wire";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
 
-  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」と「設定」。
+  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「設定」。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;
@@ -21,9 +23,11 @@
 
   let { store, workspace, tab, ondrawer, alert }: Props = $props();
 
-  // タブは「概要」「設定」だけ(B2 の計画の決定 15)。履歴に積む(01)。
+  // タブは作ったものだけ(B2 の計画の決定 15、F1-20)。履歴に積む(01)。
   const tabs = [
     { id: "overview", label: "概要" },
+    { id: "sprints", label: "スプリント" },
+    { id: "releases", label: "リリース" },
     { id: "settings", label: "設定" },
   ];
   function select(id: string) {
@@ -31,15 +35,32 @@
       name: "workspace",
       store: store.name,
       prefix: workspace.prefix,
-      tab: id === "settings" ? "settings" : "overview",
+      tab: workspaceTabOf(id),
     });
   }
+
+  // 見出しの「実行中」は、実行中のスプリントがあるときだけ出す(05)。Store の出来事で読み直す(wire.ts)。
+  // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない。
+  const overview = planning.state;
+  const sid = $derived(store.id);
+  const wid = $derived(workspace.id);
+  $effect(() => {
+    void planning.open(sid, wid);
+  });
+  const active = $derived(
+    $overview && $overview.storeId === store.id && $overview.workspaceId === workspace.id
+      ? activeLabel($overview.overview, $syncNow.getFullYear())
+      : null,
+  );
 </script>
 
 <PageHead title={workspace.name} {ondrawer} {alert}>
   {#snippet crumbs()}
     <StoreBadge name={store.name} color={store.color} />
     <code class="prefix">{workspace.prefix}</code>
+    {#if active}
+      <span>{active}</span>
+    {/if}
   {/snippet}
   {#snippet actions()}
     <Button

@@ -82,6 +82,7 @@ export {
   type Route,
   type SettingsTab,
   type WorkspaceTab,
+  workspaceTabOf,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { createShell, type Shell } from "./features/shell/shell";
@@ -147,6 +148,7 @@ export {
   stepParent,
 } from "./model/workspace";
 export * from "./notesIndex";
+export * from "./planningIndex";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
