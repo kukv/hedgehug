@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 )
 
 func TestApplyIgnoringWorkflow(t *testing.T) {
@@ -43,5 +44,21 @@ func TestApplyIgnoringWorkflow(t *testing.T) {
 	}
 	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, "01NOSTATUS"); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("no status: %v", err)
+	}
+}
+
+// 使わないステータスにも「制約を無視して…」で変えられる(判定を通らない。B5a-7)。
+func TestApplyIgnoringWorkflowToAHiddenStatus(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	r, _ := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
+	err := rec.Stores.Write(ctx, store, port.Operation{Actor: change.User("hanako"), Summary: "プロジェクト別のルールを変更"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusDone))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); err != nil {
+		t.Errorf("ApplyIgnoringWorkflow to a hidden status = %v", err)
 	}
 }

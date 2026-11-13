@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -200,5 +201,24 @@ func TestDeleteStatusRewritesRules(t *testing.T) {
 	}
 	if len(ns) != 2 || ns[0].Text != want[0] || ns[1].Text != want[1] || ns[0].Kind != port.NoticeAutomation || ns[0].Item != "" {
 		t.Errorf("notices = %+v", ns)
+	}
+}
+
+// 使わないステータスは、値の削除の置き換え先にできる(置き換えは使うかどうかを見ない。B5a-7)。
+func TestDeleteValueReplacementMayBeAHiddenStatus(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, _ := s.Create(ctx, store, "Web", "HH")
+	statuses := workspace.ParseList("statuses")
+	review, _ := s.AddValue(ctx, store, w.ID, statuses, "Review")
+	pending := settingsOf(t, s, w.ID).Statuses[3].ID
+	err := s.Stores.Write(ctx, store, port.Operation{Actor: change.User("taro"), Summary: "プロジェクト別のルールを変更"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(w.ID, change.NewAdd(projectrule.HiddenField("01PROJECT"), pending))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteValue(ctx, store, w.ID, statuses, review.ID, pending); err != nil {
+		t.Errorf("DeleteValue with a hidden replacement = %v", err)
 	}
 }
