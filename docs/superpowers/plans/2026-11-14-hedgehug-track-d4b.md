@@ -21,6 +21,7 @@
 
 - トラック A4b(PR #177)は develop に入った(2026-11-14)。D4b は A4b の削除済みでない読み手 `port.LiveItem`・`port.LiveProjects`・`port.LiveItems` を使う(D4b-6)。
 - A4b は D4a の計画の末尾「A4b が入ったときに足すもの」の 3 行のうち、`readItem` を削除済みで 404 にする行だけを入れた(A4b-4)。残りの 2 行(`fire` と `collectProject` の削除済みの判定)は、この計画の Task 0 で入れる。
+- 実装で計画から変えたこと: Task 0 は、実装中に develop に入った PR #198(D4a の続き。`collectProject` は削除済みを読まず、`fire` は呼ぶ側の `readItem` に任せる)と同じ内容になったので、載せ直しのときに捨てた。
 
 ## Global Constraints
 
