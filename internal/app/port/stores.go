@@ -109,6 +109,16 @@ func EditableWorkspace(r Reader, id workspace.ID) (workspace.Workspace, error) {
 	return r.Workspaces().Get(id)
 }
 
+// DeletedWithWorkspace は、プロジェクト p がワークスペースの削除で一緒に削除された(root: false で、ワークスペースの
+// 削除と同じ op)なら true。そのワークスペースへの保存で、プロジェクトも一緒に戻る(決定 R11)。
+func DeletedWithWorkspace(r Reader, p project.Project) (bool, error) {
+	if p.Deleted == nil || p.Deleted.Root {
+		return false, nil
+	}
+	w, err := r.Workspaces().Get(p.Place.Workspace)
+	return err == nil && w.Deleted != nil && w.Deleted.Op == p.Deleted.Op, err
+}
+
 // LiveWorkspaces は、削除済みでないワークスペースを、内部 ID の順で返す。
 func LiveWorkspaces(r Reader) ([]workspace.Workspace, error) {
 	ws, err := r.Workspaces().List()

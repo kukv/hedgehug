@@ -1,6 +1,14 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createWorkspace, newProject, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
+import {
+  createWorkspace,
+  newProject,
+  newTaskUnder,
+  prefixOf,
+  sidebar,
+  tokenUrl,
+  unique,
+} from "./helpers";
 
 // 別のタブで削除されたものに、このタブから保存したときの通しのテスト(C3a-screen・C3c)。
 // このタブは説明・設定の値の名前・コメントを編集しているあいだ(06「反映を待つとき」)なので、
@@ -178,6 +186,49 @@ test("editing a comment deleted in another tab restores it", async ({ page }, in
     await other.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
     await expect(others).toHaveCount(1);
     await expect(others.first()).toContainText("別のタブで削除されたあとの本文");
+  } finally {
+    await other.close();
+  }
+});
+
+test("changing a setting of a workspace deleted in another tab restores it", async ({
+  page,
+}, info) => {
+  const prefix = prefixOf(info);
+  const name = unique(info, "別で削除 ワークスペース");
+  const renamed = unique(info, "別で削除 戻した");
+  await createWorkspace(page, info, name, prefix);
+  await page.goto(tokenUrl(`/s/e2e/w/${prefix}/settings`));
+  // 名前の入力欄は、Enter かカーソルが離れたときに保存する。入力だけして、カーソルを置いたままにする。
+  const input = page.getByRole("textbox", { name: "名前", exact: true });
+  await expect(input).toHaveValue(name);
+  await input.fill(renamed);
+
+  const other = await page.context().newPage();
+  try {
+    // 別のタブで、設定の「一般」から同じワークスペースを削除する(B5b)。
+    await other.goto(tokenUrl(`/s/e2e/w/${prefix}/settings`));
+    await other.getByRole("button", { name: "ワークスペースを削除…", exact: true }).click();
+    const dialog = other.getByRole("dialog", { name: "ワークスペースを削除" });
+    await dialog
+      .getByRole("textbox", { name: "確認のため、ワークスペースの名前を入力してください" })
+      .fill(name);
+    await dialog.getByRole("button", { name: "削除", exact: true }).click();
+    await expect(other.getByText(`「${name}」を削除しました`)).toBeVisible();
+
+    // このタブで Enter を押すと、削除が取り消され、トーストに削除の前の名前が出る。
+    await input.press("Enter");
+    await expect(
+      page.getByText(
+        `「${name}」は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました`,
+        { exact: true },
+      ),
+    ).toBeVisible();
+
+    // 別のタブで開き直すと、サイドバーに新しい名前のワークスペースが出る。
+    await other.goto(tokenUrl());
+    const side = await sidebar(other, info);
+    await expect(side.getByRole("link", { name: renamed, exact: true })).toBeVisible();
   } finally {
     await other.close();
   }

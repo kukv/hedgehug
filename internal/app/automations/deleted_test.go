@@ -1,6 +1,7 @@
 package automations_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -256,5 +257,127 @@ func TestUpdateDeletedRuleSameIsNotFound(t *testing.T) {
 	}
 	if _, _, found := revivedState(t, rec, r.ID); found {
 		t.Error("the rule was revived")
+	}
+}
+
+// deleteWorkspace は、ワークスペースを削除する(B5b と同じく、プロジェクトは root: false で同じ op)。
+func deleteWorkspace(t *testing.T, rec *recorder) {
+	t.Helper()
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを削除"}
+	if err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDeleteEntity(true)),
+			tx.WriteProjects().Append(apptest.SampleProject, change.NewDeleteEntity(false)),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// workspaceDeleted は、ワークスペースとプロジェクトが削除済みかどうか。
+func workspaceDeleted(t *testing.T, rec *recorder) (ws, p bool) {
+	t.Helper()
+	if err := rec.Read(t.Context(), store, func(rd port.Reader) error {
+		w, err := rd.Workspaces().Get(apptest.SampleWorkspace)
+		if err != nil {
+			return err
+		}
+		pr, err := rd.Projects().Get(apptest.SampleProject)
+		ws, p = w.Deleted != nil, pr.Deleted != nil
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return ws, p
+}
+
+// checkRevived は、保存の結果 err が、revives ならワークスペースの削除を取り消した成功、そうでなければ削除済みのままの
+// ErrNotFound であることを確かめる。revived は保存の入れ物に積まれたもの。
+func checkRevived(t *testing.T, rec *recorder, err error, revives bool, revived []port.Revival) {
+	t.Helper()
+	ws, p := workspaceDeleted(t, rec)
+	if !revives {
+		if !errors.Is(err, port.ErrNotFound) || !ws || !p {
+			t.Errorf("err = %v, deleted = %v/%v", err, ws, p)
+		}
+		return
+	}
+	if err != nil || ws || p {
+		t.Fatalf("err = %v, deleted = %v/%v", err, ws, p)
+	}
+	if want := []port.Revival{{Kind: port.RevivedName, Text: "Web"}}; !slices.Equal(revived, want) {
+		t.Errorf("Revived = %v, want %v", revived, want)
+	}
+}
+
+// 別の画面で削除されたワークスペースのルールの作成・編集・有効と無効の切り替えは、変更を残してワークスペースの削除を
+// 取り消す(決定 R11)。ルールの削除と、行を書かない保存は取り消さず 404。
+func TestChangeRuleInDeletedWorkspaceRevives(t *testing.T) {
+	scoped := doneRule()
+	scoped.Name = "専用"
+	scoped.Scope = apptest.SampleProject
+	for name, tt := range map[string]struct {
+		change  func(svc automations.Service, ctx context.Context, id change.ID) error
+		revives bool
+	}{
+		"create": {func(svc automations.Service, ctx context.Context, _ change.ID) error {
+			r := doneRule()
+			r.Name = "別のルール"
+			_, err := svc.Create(ctx, store, apptest.SampleWorkspace, r)
+			return err
+		}, true},
+		"create scoped": {func(svc automations.Service, ctx context.Context, _ change.ID) error {
+			_, err := svc.Create(ctx, store, apptest.SampleWorkspace, scoped)
+			return err
+		}, true},
+		"update": {func(svc automations.Service, ctx context.Context, id change.ID) error {
+			r := doneRule()
+			r.Value = "taro"
+			return svc.Update(ctx, store, apptest.SampleWorkspace, id, r)
+		}, true},
+		"enable": {func(svc automations.Service, ctx context.Context, id change.ID) error {
+			return svc.SetEnabled(ctx, store, apptest.SampleWorkspace, id, false)
+		}, true},
+		"enable same": {func(svc automations.Service, ctx context.Context, id change.ID) error {
+			return svc.SetEnabled(ctx, store, apptest.SampleWorkspace, id, true)
+		}, false},
+		"update same": {func(svc automations.Service, ctx context.Context, id change.ID) error {
+			return svc.Update(ctx, store, apptest.SampleWorkspace, id, doneRule())
+		}, false},
+		"delete": {func(svc automations.Service, ctx context.Context, id change.ID) error {
+			return svc.Delete(ctx, store, apptest.SampleWorkspace, id)
+		}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			svc, rec := setup(t)
+			r, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, doneRule())
+			if err != nil {
+				t.Fatal(err)
+			}
+			deleteWorkspace(t, rec)
+			ctx := port.WithRevived(t.Context())
+			err = tt.change(svc, ctx, r.ID)
+			checkRevived(t, rec, err, tt.revives, port.Revived(ctx))
+		})
+	}
+}
+
+// 自分で削除された(root: true)プロジェクトの専用ルールの作成は、ワークスペースが削除済みでも取り消さず 404。
+func TestCreateScopedRuleOnDeletedProjectInDeletedWorkspace(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteProject(ctx, rec.Stores, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteWorkspace(ctx, rec.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	r := doneRule()
+	r.Scope = apptest.SampleProject
+	if _, err := svc.Create(ctx, store, apptest.SampleWorkspace, r); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("err = %v, want port.ErrNotFound", err)
+	}
+	if ws, _ := workspaceDeleted(t, rec); !ws {
+		t.Error("the workspace was revived")
 	}
 }

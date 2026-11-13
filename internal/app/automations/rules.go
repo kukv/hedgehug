@@ -79,7 +79,7 @@ func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID
 
 // Delete は、ルールを消す。
 func (s Service) Delete(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.edit(ctx, store, ws, "",
+	return s.remove(ctx, store, ws,
 		func(rd port.Reader, rules []automation.Rule) (string, error) {
 			r, err := find(rules, id)
 			if err != nil {
@@ -124,10 +124,20 @@ func (s Service) SetEnabled(ctx context.Context, store port.StoreID, ws workspac
 func ruleField(id change.ID) string { return automation.DeleteDraft(id).F }
 
 // liveScope は、専用ルールの範囲が、このワークスペースの削除済みでないプロジェクトであることを確かめる。
+// ワークスペースと一緒に削除されたプロジェクトは、保存でワークスペースと一緒に戻るので通す(決定 R11)。
 func liveScope(r port.Reader, ws workspace.ID, scope project.ID) error {
-	p, err := port.LiveProject(r, scope)
+	p, err := r.Projects().Get(scope)
 	if err != nil {
 		return err
+	}
+	if p.Deleted != nil {
+		ok, err := port.DeletedWithWorkspace(r, p)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return port.ErrNotFound
+		}
 	}
 	if p.Place.Workspace != ws {
 		return port.ErrNotFound
