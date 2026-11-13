@@ -38,10 +38,10 @@ export interface TransferDialogDeps {
   detail: Pick<Detail, "view">;
   drafts: Pick<Drafts, "confirmLeave">;
   online(): boolean;
-  // afterMoved は、移したあとのパネルの切り替えと読み直し。panelItem は「移動」を押したときにパネルが出していた
-  // アイテムの内部 ID(from かその下のもの。なければ undefined)。下のものも新しい ID になるので、送っているあいだに
-  // 読み直しでパネルが閉じても、そのアイテムを開き直せるように渡す(02「保存」)。
-  afterMoved(from: Item, to: TransferResult, panelItem: string | undefined): Promise<void>;
+  // afterMoved は、移したあとのパネルの切り替えと読み直し。「移動」を押したときに呼び、成功したら返った関数に結果を
+  // 渡す。panelItem は押したときにパネルが出していたアイテムの内部 ID(from かその下のもの。なければ undefined)。
+  // 下のものも新しい ID になるので、送っているあいだに読み直しでパネルが閉じても、開き直せるように渡す(02「保存」)。
+  afterMoved(from: Item, panelItem: string | undefined): (to: TransferResult) => Promise<void>;
 }
 
 export interface TransferDialog {
@@ -122,7 +122,7 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
       deps.toasts.show(offlineMessage(t.storeName), { error: true });
       return;
     }
-    const panelItem = shownUnder(c.item);
+    const after = deps.afterMoved(c.item, shownUnder(c.item));
     const input: TransferInput = {
       toStore: t.storeId,
       toWorkspace: t.workspaceId,
@@ -147,7 +147,7 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
     c.busy = false;
     if (cur === c) close();
     deps.toasts.show(transferredMessage(c.displayId, result.display, result.emptied));
-    await deps.afterMoved(c.item, result, panelItem);
+    await after(result);
   }
 
   return {

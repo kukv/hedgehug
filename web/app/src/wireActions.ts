@@ -60,7 +60,7 @@ export const itemTransfer = createTransferDialog({
   detail,
   drafts,
   online: isOnline,
-  afterMoved: createAfterMoved({ detail, refresh: itemRefresh }),
+  afterMoved: createAfterMoved({ detail, refresh: itemRefresh, route: navigation.route }),
 });
 
 // 「種類を変更…」の種類のメニューと確認ダイアログ(02「種類の変更」)。開くのは itemKind.open(item, x, y)。

@@ -75,7 +75,7 @@ export async function setup() {
       },
     },
     online: () => env.online,
-    afterMoved: async (from, to, panelItem) => {
+    afterMoved: (from, panelItem) => async (to) => {
       moved.push(`${itemDisplayId("HH", from.number)} → ${to.toStore}/${to.itemId}`);
       shown.push(panelItem);
     },

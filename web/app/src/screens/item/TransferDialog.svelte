@@ -36,20 +36,22 @@
           onchange={(v) => void itemTransfer.setProject(v)}
         />
       </div>
-      {#if s.parents !== null}
+      {#if s.parents !== null && s.noEpic}
+        <!-- Epic がないときは、文を項目名「親の Epic」のグループに入れて、読み上げで結び付ける。 -->
+        <fieldset class="field">
+          <legend>親の Epic</legend>
+          <p class="form-error">{s.noEpic}</p>
+        </fieldset>
+      {:else if s.parents !== null}
         <div class="field">
           <span>親の Epic</span>
-          {#if s.noEpic}
-            <p class="form-error">{s.noEpic}</p>
-          {:else}
-            <Select
-              label="親の Epic"
-              options={s.parents}
-              value={s.form.parent}
-              disabled={s.busy}
-              onchange={(v) => itemTransfer.setParent(v)}
-            />
-          {/if}
+          <Select
+            label="親の Epic"
+            options={s.parents}
+            value={s.form.parent}
+            disabled={s.busy}
+            onchange={(v) => itemTransfer.setParent(v)}
+          />
         </div>
       {/if}
       {#if !s.loading}
@@ -105,7 +107,17 @@
     flex-direction: column;
     gap: 4px;
   }
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  legend {
+    padding: 0;
+  }
   .field > span,
+  .field > legend,
   .replacement > span {
     font-size: 12.5px;
     color: var(--muted);
