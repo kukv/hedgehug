@@ -117,7 +117,8 @@ export function createAccountList(deps: AccountListDeps): AccountList {
         await reload();
       } catch (e) {
         if (e instanceof Refused) {
-          // 認証エラーで断られたとき、サーバーは行を認証エラーにしている。赤字を置いて読み直す。
+          // 認証エラー(サーバーは行を認証エラーにしている)のほか、接続できない・利用上限の断りもここに来る。
+          // 赤字を置き、一覧を読み直す(断られる前に読めた組織の記録は消えているので、その帯も消える)。
           setError(row.id, e.message);
           await reload();
         } else if (e instanceof NotFound) await reload();
