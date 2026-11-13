@@ -17,7 +17,7 @@ func TestDuplicateItem(t *testing.T) {
 		t.Fatalf("duplicate: %d %s", res.Code, res.Body)
 	}
 	got := api.Get("/api/stores/S1/items/" + out.ID)
-	if !strings.Contains(got.Body.String(), "のコピー") {
+	if !strings.Contains(got.Body.String(), `"title":"ログイン画面を作る のコピー"`) || !strings.Contains(got.Body.String(), `"number":3`) {
 		t.Errorf("duplicated: %s", got.Body)
 	}
 	if res := api.Post("/api/stores/S1/items/01NOPE00000000000000000000/duplicate"); res.Code != http.StatusNotFound {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -40,7 +39,7 @@ func TestDuplicateCopiesTheValuesAndResetsTheRest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := last(rec); !strings.HasSuffix(got, " を複製") {
+	if got := last(rec); got != "HH-3 を複製" {
 		t.Errorf("summary = %q", got)
 	}
 	dup, err := svc.Get(t.Context(), store, id)
@@ -54,7 +53,7 @@ func TestDuplicateCopiesTheValuesAndResetsTheRest(t *testing.T) {
 		!slices.Equal(dup.Systems, []change.ID{apptest.SampleSystemWeb}) || !slices.Equal(dup.Choices[pick.ID], []change.ID{vs[1]}) {
 		t.Errorf("values = %+v", dup)
 	}
-	if len(dup.Watchers) != 1 || dup.Watchers[0] != src.Watchers[0] {
+	if !slices.Equal(dup.Watchers, []string{"hanako"}) {
 		t.Errorf("watchers = %v", dup.Watchers)
 	}
 	if len(dup.Relations) != 1 || dup.Relations[0] != (item.Relation{Type: "clones", To: src.ID}) {
@@ -96,5 +95,35 @@ func TestDuplicateNotFound(t *testing.T) {
 		if _, err := svc.Duplicate(t.Context(), store, id); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("%s: %v", id, err)
 		}
+	}
+}
+
+func TestDuplicateWatchersAreOnlyTheActor(t *testing.T) {
+	svc, _ := setupRec(t)
+	id, err := svc.Duplicate(t.Context(), store, apptest.SampleTask) // 複製元は taro がウォッチ中
+	if err != nil {
+		t.Fatal(err)
+	}
+	dup, err := svc.Get(t.Context(), store, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(dup.Watchers, []string{"hanako"}) {
+		t.Errorf("watchers = %v", dup.Watchers)
+	}
+}
+
+func TestDuplicateIgnoresDeletedSiblingsForTheLastRank(t *testing.T) {
+	svc, rec := setupRec(t)
+	live := mustCreate(t, svc, apptest.SampleProject, ptr(apptest.SampleEpic), item.Task, "残る子")
+	gone := mustCreate(t, svc, apptest.SampleProject, ptr(apptest.SampleEpic), item.Task, "消した子")
+	markDeleted(t, rec, gone.ID, true)
+	id, err := svc.Duplicate(t.Context(), store, apptest.SampleTask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 削除済みの順位は比べず、残る子のあとに入る。比べていたら消した子より後ろに入る。
+	if dup := storedItem(t, rec, id); dup.Rank <= live.Rank || dup.Rank > gone.Rank {
+		t.Errorf("rank = %q (live %q, gone %q)", dup.Rank, live.Rank, gone.Rank)
 	}
 }
