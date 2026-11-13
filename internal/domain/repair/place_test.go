@@ -35,6 +35,24 @@ func TestProjectMismatchShallowFirst(t *testing.T) {
 	}
 }
 
+// 同じ深さの子が複数あるときは、内部 ID の小さいものが先。
+func TestProjectMismatchSameDepthByID(t *testing.T) {
+	items := []item.Item{at("a", "w1", "p2", ""), at("z", "w1", "p1", "a"), at("c", "w1", "p1", "a")}
+	got, ok := repair.ProjectMismatch(items)
+	if !ok || got.Child != "c" {
+		t.Errorf("ProjectMismatch = %v %v, want child c", got, ok)
+	}
+}
+
+// 親が輪になっていても止まる。深さは同じ(1)なので、内部 ID の小さい a を、親 b のプロジェクトへ移す。
+func TestProjectMismatchCyclicParents(t *testing.T) {
+	items := []item.Item{at("b", "w1", "p2", "a"), at("a", "w1", "p1", "b")}
+	got, ok := repair.ProjectMismatch(items)
+	if !ok || got != (repair.Mismatch{Child: "a", Project: "p2"}) {
+		t.Errorf("ProjectMismatch = %v %v, want {a p2}", got, ok)
+	}
+}
+
 func TestProjectMismatchSkips(t *testing.T) {
 	deleted := func(it item.Item) item.Item {
 		it.Deleted = &change.Deletion{}
