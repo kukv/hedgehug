@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
 func TestAccountsAreRegistered(t *testing.T) {
@@ -158,4 +161,61 @@ func TestOpenAPIIsNotServed(t *testing.T) {
 			t.Errorf("%s: status %d, want 404", path, rec.Code)
 		}
 	}
+}
+
+// revivingHandler は、削除済みのアイテム HH-2 の削除を取り消してから、finish で応答する Handler。
+func revivingHandler(t *testing.T, finish func(w http.ResponseWriter)) http.HandlerFunc {
+	t.Helper()
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), s, "S1", apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		op := port.Operation{Actor: change.User("taro"), Summary: "保存"}
+		if err := s.Write(r.Context(), "S1", op, func(tx port.Tx) error { return port.ReviveItem(r.Context(), tx, apptest.SampleTask) }); err != nil {
+			t.Error(err)
+		}
+		finish(w)
+	}
+}
+
+// serveRestored は、restoredHeader で包んだ h の応答を返す。
+func serveRestored(t *testing.T, h http.HandlerFunc) http.Header {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	httpapi.RestoredHeader(h).ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/", nil))
+	return rec.Header()
+}
+
+func TestRestoredHeaderOnSuccess(t *testing.T) {
+	finishes := map[string]func(w http.ResponseWriter){
+		"本文を書く":     func(w http.ResponseWriter) { _, _ = io.WriteString(w, "ok") },
+		"200":       func(w http.ResponseWriter) { w.WriteHeader(http.StatusOK) },
+		"本文なしの 204": func(w http.ResponseWriter) { w.WriteHeader(http.StatusNoContent) },
+	}
+	for name, finish := range finishes {
+		h := serveRestored(t, revivingHandler(t, finish))
+		if got := h.Values("Hedgehug-Restored"); !slices.Equal(got, []string{"HH-2"}) {
+			t.Errorf("%s: %v", name, got)
+		}
+	}
+}
+
+func TestRestoredHeaderNotOnFailure(t *testing.T) {
+	h := serveRestored(t, revivingHandler(t, func(w http.ResponseWriter) { w.WriteHeader(http.StatusUnprocessableEntity) }))
+	if got := h.Values("Hedgehug-Restored"); len(got) != 0 {
+		t.Errorf("422: %v", got)
+	}
+}
+
+func TestRestoredHeaderKeepsFlusher(t *testing.T) {
+	_ = serveRestored(t, func(w http.ResponseWriter, _ *http.Request) {
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Errorf("flush: %v", err)
+		}
+	})
 }
