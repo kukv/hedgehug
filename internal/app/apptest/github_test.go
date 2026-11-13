@@ -89,9 +89,16 @@ func TestFakeGitHubReadMany(t *testing.T) {
 	if g.ReadManyCalls("org/web") != 1 {
 		t.Errorf("ReadManyCalls = %d", g.ReadManyCalls("org/web"))
 	}
+	// 番号ごとの NotFound は、問い合わせ全体を失敗させず、その番号を Missing にする(port.GitHub.ReadMany の約束)
 	g.Fail("org/web", 2, &ghcall.Failure{Kind: ghcall.NotFound})
+	b, err = g.ReadMany(t.Context(), "tok-taro", "org/web", []int{1, 2})
+	if _, found := b.Found[2]; err != nil || found || len(b.Found) != 1 || len(b.Missing) != 1 || b.Missing[0] != 2 {
+		t.Errorf("per-number NotFound: %+v, %v", b, err)
+	}
+	// 番号ごとの NotFound 以外の失敗は、問い合わせ全体の失敗にする
+	g.Fail("org/web", 2, &ghcall.Failure{Kind: ghcall.Unreachable})
 	var f *ghcall.Failure
-	if _, err := g.ReadMany(t.Context(), "tok-taro", "org/web", []int{1, 2}); !errors.As(err, &f) || f.Kind != ghcall.NotFound {
+	if _, err := g.ReadMany(t.Context(), "tok-taro", "org/web", []int{1, 2}); !errors.As(err, &f) || f.Kind != ghcall.Unreachable {
 		t.Errorf("per-number failure: err = %v", err)
 	}
 	g.Fail("org/web", 2, nil)
@@ -99,7 +106,7 @@ func TestFakeGitHubReadMany(t *testing.T) {
 	if _, err := g.ReadMany(t.Context(), "tok-taro", "org/web", []int{1}); !errors.As(err, &f) || f.Kind != ghcall.RateLimited {
 		t.Errorf("repo failure: err = %v", err)
 	}
-	if g.ReadManyCalls("org/web") != 3 {
-		t.Errorf("ReadManyCalls = %d, want 3", g.ReadManyCalls("org/web"))
+	if g.ReadManyCalls("org/web") != 4 {
+		t.Errorf("ReadManyCalls = %d, want 4", g.ReadManyCalls("org/web"))
 	}
 }

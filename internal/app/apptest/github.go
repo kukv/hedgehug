@@ -16,7 +16,8 @@ import (
 // GitHub は port.GitHub の偽物。Users はトークンからログイン名への対応。Err があれば、どの問い合わせもそれを返す。
 // Items は Lookup の答え(キーは小文字のリポジトリ名と番号。Put で入れる)。LookupErr は同じキーの失敗。
 // Lookups は Lookup を呼んだ回数。Rate は ReadMany が返す利用上限。
-// ReadMany は、Fail(repo, n, err) があればその番号でその失敗を返す。Fail(repo, 0, err) はリポジトリ全体の失敗。
+// ReadMany では、Fail(repo, 0, err) はリポジトリ全体の失敗。Fail(repo, n, err) は、err が NotFound ならその番号を
+// Missing にし(port.GitHub.ReadMany の約束)、それ以外の失敗なら問い合わせ全体をその失敗にする。
 type GitHub struct {
 	mu        sync.Mutex
 	Users     map[string]string
@@ -76,7 +77,7 @@ func (g *GitHub) Lookup(_ context.Context, token, repo string, number int) (port
 	return f, nil
 }
 
-// ReadMany は、numbers を Put した値から引く。Put になければ Missing。
+// ReadMany は、numbers を Put した値から引く。Put になければ Missing(NotFound の Fail も Missing)。
 func (g *GitHub) ReadMany(_ context.Context, token, repo string, numbers []int) (port.Batch, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -95,11 +96,12 @@ func (g *GitHub) ReadMany(_ context.Context, token, repo string, numbers []int) 
 	}
 	b := port.Batch{Repo: repo, Found: map[int]port.Found{}, Rate: g.Rate}
 	for _, n := range numbers {
-		if err := g.LookupErr[itemKey(repo, n)]; err != nil {
+		err := g.LookupErr[itemKey(repo, n)]
+		if err != nil && !ghcall.Is(err, ghcall.NotFound) {
 			return port.Batch{}, err
 		}
 		f, ok := g.Items[itemKey(repo, n)]
-		if !ok {
+		if err != nil || !ok {
 			b.Missing = append(b.Missing, n)
 			continue
 		}

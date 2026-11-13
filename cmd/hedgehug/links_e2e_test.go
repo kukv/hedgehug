@@ -69,6 +69,10 @@ func TestE2EGitHubHandler(t *testing.T) {
 	if !errors.As(err, &fail) || fail.Kind != ghcall.NotFound {
 		t.Errorf("gone の Lookup = %v", err)
 	}
+	// 間隔ごとの取り直しでは、消した番号は答えにない番号(Missing)になる(問い合わせ全体を失敗させない)
+	if b, err := e2eGitHub.ReadMany(t.Context(), "e2e-bot-token", "org/h-web", []int{7}); err != nil || len(b.Missing) != 1 || b.Missing[0] != 7 {
+		t.Errorf("gone の ReadMany = %+v, %v", b, err)
+	}
 	if got := do(http.MethodPost, put, "Bearer tok"); got != http.StatusNoContent {
 		t.Fatalf("restore: %d", got)
 	}
