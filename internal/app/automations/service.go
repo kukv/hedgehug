@@ -22,32 +22,19 @@ type Service struct {
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// rulesOf は、ワークスペースのルール。
-func rulesOf(r port.Reader, ws workspace.ID) ([]automation.Rule, error) {
+// rulesOf は、ワークスペースのルール。target(項目名)があれば、それを覆う削除の行がないものとして読む。空なら、いまのルール。
+func rulesOf(r port.Reader, ws workspace.ID, target string) ([]automation.Rule, error) {
 	if _, err := r.Workspaces().Get(ws); err != nil {
 		return nil, err
 	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
 	if err != nil {
 		return nil, err
+	}
+	if target != "" {
+		log = workspace.WithoutCovering(log, target)
 	}
 	return automation.FromLog(log), nil
-}
-
-// rulesReviving は、target の項目名を覆う削除の行がないものとして読んだルール。target が空なら、いまのルール。
-func rulesReviving(r port.Reader, ws workspace.ID, target string) ([]automation.Rule, error) {
-	if target == "" {
-		return rulesOf(r, ws)
-	}
-	if _, err := r.Workspaces().Get(ws); err != nil {
-		return nil, err
-	}
-	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
-	if err != nil {
-		return nil, err
-	}
-	kept := workspace.WithoutCovering(log, target)
-	return automation.FromLog(kept), nil
 }
 
 func logins(r port.Reader) ([]string, error) {
@@ -76,7 +63,7 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID, 
 	}
 	var text string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
-		rules, err := rulesReviving(r, ws, target)
+		rules, err := rulesOf(r, ws, target)
 		if err != nil {
 			return err
 		}
@@ -102,7 +89,7 @@ func writeRules(ctx context.Context, tx port.Tx, ws workspace.ID, target string,
 			return err
 		}
 	}
-	rules, err := rulesOf(tx, ws)
+	rules, err := rulesOf(tx, ws, "")
 	if err != nil {
 		return err
 	}
@@ -137,7 +124,7 @@ func writeRules(ctx context.Context, tx port.Tx, ws workspace.ID, target string,
 // checkRevivedName は、行を書いたあとのルールで、削除を取り消した target のルールの名前が、ほかのルールと重ならないか
 // 確かめる(決定 R4)。
 func checkRevivedName(tx port.Tx, ws workspace.ID, target string) error {
-	rules, err := rulesOf(tx, ws)
+	rules, err := rulesOf(tx, ws, "")
 	if err != nil {
 		return err
 	}

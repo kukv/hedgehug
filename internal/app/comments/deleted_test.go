@@ -250,7 +250,7 @@ func postAndDelete(t *testing.T, svc comments.Service, tg comments.Target, body 
 func TestEditDeletedCommentRevives(t *testing.T) {
 	for _, o := range owners {
 		t.Run(o.name, func(t *testing.T) {
-			svc, _ := setup(t, "hanako")
+			svc, rec := setup(t, "hanako")
 			id := postAndDelete(t, svc, o.target, "前")
 			ctx := port.WithRevived(t.Context())
 			v, err := svc.Edit(ctx, store, o.target, id, "後")
@@ -263,6 +263,9 @@ func TestEditDeletedCommentRevives(t *testing.T) {
 			list, err := svc.List(t.Context(), store, o.target)
 			if err != nil || len(list) != 1 || list[0].Body != "後" {
 				t.Errorf("List = %+v, %v", list, err)
+			}
+			if last := rec.summaries[len(rec.summaries)-1]; last != "コメントを編集" {
+				t.Errorf("アクティビティ = %q, want コメントを編集", last)
 			}
 		})
 	}

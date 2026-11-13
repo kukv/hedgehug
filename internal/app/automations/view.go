@@ -43,7 +43,7 @@ type Run struct {
 func (s Service) List(ctx context.Context, store port.StoreID, ws workspace.ID) (View, error) {
 	var v View
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		rules, err := rulesOf(r, ws)
+		rules, err := rulesOf(r, ws, "")
 		if err != nil {
 			return err
 		}
