@@ -55,10 +55,12 @@ function portOf(answers: Promise<PlanningOverview>[]) {
 // later は、あとで決める答え。
 function later() {
   let resolve: (o: PlanningOverview) => void = () => {};
-  const promise = new Promise<PlanningOverview>((r) => {
-    resolve = r;
+  let reject: (e: Error) => void = () => {};
+  const promise = new Promise<PlanningOverview>((ok, ng) => {
+    resolve = ok;
+    reject = ng;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 describe("createPlanning", () => {
@@ -113,5 +115,50 @@ describe("createPlanning", () => {
     first.resolve(overview(sprint()));
     await opening;
     expect(get(p.state)?.overview.active).toBeNull();
+  });
+
+  it("keeps the state while reading the same workspace again", async () => {
+    const second = later();
+    const { port } = portOf([Promise.resolve(overview(sprint())), second.promise]);
+    const p = createPlanning(port);
+    await p.open("S1", "W1");
+    const opening = p.open("S1", "W1");
+    expect(get(p.state)?.overview.active?.name).toBe("Sprint 4");
+    second.resolve(overview(null));
+    await opening;
+  });
+
+  it("does not throw when the overview cannot be read, and shows no label", async () => {
+    const failing = later();
+    const { port } = portOf([failing.promise]);
+    const p = createPlanning(port);
+    const opening = p.open("S1", "W1");
+    failing.reject(new Error("offline"));
+    await expect(opening).resolves.toBeUndefined();
+    expect(get(p.state)).toBeNull();
+  });
+
+  it("keeps the last overview when a reload fails", async () => {
+    const failing = later();
+    const { port } = portOf([Promise.resolve(overview(sprint())), failing.promise]);
+    const p = createPlanning(port);
+    await p.open("S1", "W1");
+    const reloading = p.reload();
+    failing.reject(new Error("offline"));
+    await expect(reloading).resolves.toBeUndefined();
+    expect(get(p.state)?.overview.active?.name).toBe("Sprint 4");
+  });
+
+  it("stops reading after close", async () => {
+    const first = later();
+    const { port, calls } = portOf([first.promise]);
+    const p = createPlanning(port);
+    const opening = p.open("S1", "W1");
+    p.close();
+    first.resolve(overview(sprint()));
+    await opening;
+    await p.reload();
+    expect(calls).toEqual(["S1/W1"]);
+    expect(get(p.state)).toBeNull();
   });
 });

@@ -44,8 +44,10 @@
   const overview = planning.state;
   const sid = $derived(store.id);
   const wid = $derived(workspace.id);
+  // 画面を閉じたら(別のワークスペースへ移るときも)、前のワークスペースを読み直さない。
   $effect(() => {
     void planning.open(sid, wid);
+    return () => planning.close();
   });
   const active = $derived(
     $overview && $overview.storeId === store.id && $overview.workspaceId === workspace.id
@@ -59,7 +61,7 @@
     <StoreBadge name={store.name} color={store.color} />
     <code class="prefix">{workspace.prefix}</code>
     {#if active}
-      <span>{active}</span>
+      <span class="running">{active}</span>
     {/if}
   {/snippet}
   {#snippet actions()}
@@ -89,6 +91,10 @@
   }
   .prefix {
     font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .running {
     font-size: 12px;
     color: var(--muted);
   }

@@ -22,8 +22,10 @@ export interface Planning {
   state: Readable<PlanningState | null>;
   // 別のワークスペースなら、state を消してから読み込む(古いワークスペースを新しいアドレスの下に出さない)。
   open(storeId: string, workspaceId: string): Promise<void>;
-  // 開いていなければ何もしない。
+  // 開いていなければ何もしない。読めなかったときは、前の state のまま(断りは出さない。A2 の決定 29)。
   reload(): Promise<void>;
+  // 画面を閉じたら、読み直しをやめる。
+  close(): void;
 }
 
 export function createPlanning(port: PlanningPort): Planning {
@@ -37,8 +39,12 @@ export function createPlanning(port: PlanningPort): Planning {
     const { storeId, workspaceId } = current;
     latest += 1;
     const mine = latest;
-    const overview = await port.overview(storeId, workspaceId);
-    if (mine === latest) state.set({ storeId, workspaceId, overview });
+    try {
+      const overview = await port.overview(storeId, workspaceId);
+      if (mine === latest) state.set({ storeId, workspaceId, overview });
+    } catch {
+      // 見出しの補足なので、読めなければ前のまま(別のワークスペースなら出さない)。
+    }
   }
 
   return {
@@ -49,5 +55,10 @@ export function createPlanning(port: PlanningPort): Planning {
       await reload();
     },
     reload,
+    close() {
+      current = null;
+      latest += 1;
+      state.set(null);
+    },
   };
 }
