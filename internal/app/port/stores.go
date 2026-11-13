@@ -119,6 +119,9 @@ type Reader interface {
 	Items() ItemReader
 	Members() MemberReader
 	Changes() ChangeReader // 履歴とアクティビティ
+	// RetentionDays は、削除済みの保持日数(.hedgehug/store.yaml の retention_days。ないときは 30)。
+	// 変えるのは設定の「削除済み」(G)で、ここは読むだけ。
+	RetentionDays() (int, error)
 }
 
 // Tx は 1 回の Write の中の読み書き。読み取りは、同じ Tx で書いたものを含む。

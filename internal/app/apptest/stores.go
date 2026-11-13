@@ -28,7 +28,12 @@ type store struct {
 	texts map[change.Ref]string
 	// writes は、保存が成功した回数(Versions の印)。
 	writes int
+	// retentionDays は、削除済みの保持日数。
+	retentionDays int
 }
+
+// defaultRetentionDays は、保持日数の既定(gitstore と同じ。08「保持日数」)。
+const defaultRetentionDays = 30
 
 func NewStores(clock port.Clock, ids port.IDs) *Stores {
 	return &Stores{clock: clock, ids: ids, stores: map[port.StoreID]*store{}}
@@ -42,7 +47,17 @@ func (s *Stores) AddStore(id port.StoreID) {
 	if _, ok := s.stores[id]; ok {
 		panic(fmt.Sprintf("apptest: AddStore: store %q already exists", id))
 	}
-	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}}
+	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, retentionDays: defaultRetentionDays}
+}
+
+// SetRetentionDays は、Store の削除済みの保持日数を変える(テスト用。本物は store.yaml の retention_days)。
+func (s *Stores) SetRetentionDays(id port.StoreID, days int) {
+	st, err := s.open(id)
+	if err != nil {
+		panic(fmt.Sprintf("apptest: SetRetentionDays: %v", err))
+	}
+	defer st.mu.Unlock()
+	st.retentionDays = days
 }
 
 // open は、Store のロックを取って返す。呼んだ側が st.mu.Unlock する。
@@ -63,7 +78,7 @@ func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader)
 		return err
 	}
 	defer st.mu.Unlock()
-	return fn(&view{base: st.logs, baseTexts: st.texts})
+	return fn(&view{base: st.logs, baseTexts: st.texts, retentionDays: st.retentionDays})
 }
 
 func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
@@ -74,7 +89,7 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	defer st.mu.Unlock()
 	logs := st.logs
 	t := &tx{
-		view: view{base: logs, baseTexts: st.texts, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
+		view: view{base: logs, baseTexts: st.texts, retentionDays: st.retentionDays, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
 		ids:  s.ids,
 	}

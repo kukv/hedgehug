@@ -26,6 +26,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"failed write leaves nothing", contractFailedWrite},
 		{"tx sees its own writes", contractTxSeesOwn},
 		{"not found", contractNotFound},
+		{"retention days default to 30", contractRetentionDays},
 		{"writes are serialized", contractSerialized},
 		{"workspaces are listed in id order", contractList},
 		{"reads never see a write in progress", contractReadIsolated},

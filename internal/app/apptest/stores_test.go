@@ -97,3 +97,21 @@ func TestAddStoreTwicePanics(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSetRetentionDays(t *testing.T) {
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	s.AddStore("S2")
+	s.SetRetentionDays("S1", 7)
+	for id, want := range map[port.StoreID]int{"S1": 7, "S2": 30} {
+		err := s.Read(t.Context(), id, func(r port.Reader) error {
+			if days, err := r.RetentionDays(); err != nil || days != want {
+				t.Errorf("%s: RetentionDays = %d, %v; want %d", id, days, err, want)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}

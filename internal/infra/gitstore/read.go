@@ -90,6 +90,18 @@ func (v *view) Items() port.ItemReader           { return items{v} }
 func (v *view) Members() port.MemberReader       { return members{v} }
 func (v *view) Changes() port.ChangeReader       { return changes{v} }
 
+// RetentionDays は、store.yaml の保持日数。ない(0 以下)ときは既定の 30。
+func (v *view) RetentionDays() (int, error) {
+	y, err := readStoreYAML(v.root)
+	if err != nil {
+		return 0, err
+	}
+	if y.RetentionDays <= 0 {
+		return defaultRetentionDays, nil
+	}
+	return y.RetentionDays, nil
+}
+
 // description は、エンティティの説明を返す。ログがなければ port.ErrNotFound。同じ Tx で書いた説明(texts)を含む。
 func (v *view) description(ref change.Ref) (string, error) {
 	log, err := v.log(ref)

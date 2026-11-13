@@ -100,6 +100,17 @@ func contractTxSeesOwn(t *testing.T, s port.Stores, id port.StoreID) {
 	})
 }
 
+// 削除済みの保持日数は、変えていない Store では 30(08「保持日数」)。変える側は G で、
+// 本物の store.yaml を書き換えるテストは gitstore に、偽物は Stores.SetRetentionDays にある。
+func contractRetentionDays(t *testing.T, s port.Stores, id port.StoreID) {
+	mustRead(t, s, id, func(r port.Reader) error {
+		if days, err := r.RetentionDays(); err != nil || days != 30 {
+			t.Errorf("RetentionDays = %d, %v; want 30", days, err)
+		}
+		return nil
+	})
+}
+
 func contractNotFound(t *testing.T, s port.Stores, id port.StoreID) {
 	mustRead(t, s, id, func(r port.Reader) error {
 		if _, err := r.Workspaces().Get("01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {

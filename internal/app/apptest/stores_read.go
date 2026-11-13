@@ -26,7 +26,11 @@ type view struct {
 	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
 	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す(gitstore と同じ)。
 	places map[item.ID]project.ID
+	// retentionDays は、Store の削除済みの保持日数(Stores.SetRetentionDays。既定は 30)。
+	retentionDays int
 }
+
+func (v *view) RetentionDays() (int, error) { return v.retentionDays, nil }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
 // ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。
