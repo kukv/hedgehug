@@ -14,7 +14,7 @@ import (
 )
 
 // SetProperty は、1 つのプロパティの値を変える(02「入力の方法と保存」)。前と同じなら何も保存しない。
-// アクティビティは「{ID} の{プロパティ名}を {値} に変更」。遷移の制約は後半(A3b)でここに足す(決定 2)。
+// アクティビティは「{ID} の{プロパティ名}を {値} に変更」。ステータスは、保存の中で遷移の制約を検査する(A3b-1)。
 func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID, prop change.ID, value json.RawMessage) (item.Item, error) {
 	ec, err := s.editContext(ctx, store, id)
 	if err != nil {
@@ -27,25 +27,22 @@ func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID
 	if p.Type == workspace.TypeSystems || p.Type == workspace.TypeMulti {
 		return item.Item{}, port.ErrNotFound // 入り切りは AddValue・RemoveValue
 	}
-	to, err := item.ParseInput(p, value, ec.settings)
-	if errors.Is(err, item.ErrNoSuchValue) {
-		return item.Item{}, port.ErrNotFound
-	}
+	to, err := parseValue(ec, p, value)
 	if err != nil {
-		return item.Item{}, err
-	}
-	if err := checkDatePair(ec.item, p, to); err != nil {
 		return item.Item{}, err
 	}
 	summary := fmt.Sprintf("%s の%sを %s に変更", ec.display, p.Name, item.Display(p, to, ec.settings, ec.names, s.Clock.Now()))
 	var fs []fired
 	isStatus := p.Builtin && p.Key == "status"
-	_, err = s.writeValue(ctx, store, id, summary, func(it item.Item) []change.Draft {
+	_, err = s.writeValue(ctx, store, id, summary, func(tx port.Tx, it item.Item) ([]change.Draft, error) {
 		from := item.Current(it, p)
 		if bytes.Equal(from, to) {
-			return nil
+			return nil, nil
 		}
-		return []change.Draft{change.NewSet(item.Field(p), from, to)}
+		if err := checkStatus(tx, it, p, to); err != nil {
+			return nil, err
+		}
+		return []change.Draft{change.NewSet(item.Field(p), from, to)}, nil
 	}, func(tx port.Tx, before item.Item) error {
 		if !isStatus {
 			return nil
@@ -63,6 +60,32 @@ func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID
 	return s.Get(ctx, store, id)
 }
 
+// parseValue は、入力を保存する値にして検査する。ない値は port.ErrNotFound。
+func parseValue(ec editContext, p workspace.Property, value json.RawMessage) (json.RawMessage, error) {
+	to, err := item.ParseInput(p, value, ec.settings)
+	if errors.Is(err, item.ErrNoSuchValue) {
+		return nil, port.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return to, checkDatePair(ec.item, p, to)
+}
+
+// checkStatus は、ステータスを変えるとき、保存の中で読み直したアイテムと設定で遷移の制約を検査する(A3b-1)。
+func checkStatus(tx port.Tx, it item.Item, p workspace.Property, to json.RawMessage) error {
+	if p.Type != workspace.TypeStatus {
+		return nil
+	}
+	st, err := tx.Workspaces().Settings(it.Place.Workspace)
+	if err != nil {
+		return err
+	}
+	var next change.ID
+	_ = json.Unmarshal(to, &next)
+	return workspace.CheckTransition(st, it.Status, next)
+}
+
 // checkDatePair は、開始日か終了日を変えるとき、保存済みのもう片方と比べる(決定 16)。
 func checkDatePair(it item.Item, p workspace.Property, to json.RawMessage) error {
 	if !p.Builtin || (p.Key != "start" && p.Key != "end") {
@@ -77,9 +100,10 @@ func checkDatePair(it item.Item, p workspace.Property, to json.RawMessage) error
 }
 
 // writeValue は、保存の中でいまのアイテムを読み直し、drafts が返す行を 1 回で保存する。行がなければ何も残さない。
-// after は、行を書いたときだけ同じ保存の中で呼ぶ(before は書く前のアイテム)。nil なら呼ばない。
+// drafts が断ったら何も保存しない。after は、行を書いたときだけ同じ保存の中で呼ぶ(before は書く前のアイテム)。
+// nil なら呼ばない。
 func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID, summary string,
-	drafts func(item.Item) []change.Draft, after func(tx port.Tx, before item.Item) error,
+	drafts func(tx port.Tx, it item.Item) ([]change.Draft, error), after func(tx port.Tx, before item.Item) error,
 ) (item.Item, error) {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
@@ -91,7 +115,10 @@ func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID,
 		if err != nil {
 			return err
 		}
-		ds := drafts(it)
+		ds, err := drafts(tx, it)
+		if err != nil {
+			return err
+		}
 		if err := tx.WriteItems().Append(id, ds...); err != nil {
 			return err
 		}

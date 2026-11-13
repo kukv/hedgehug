@@ -68,12 +68,20 @@
         role="menuitemcheckbox"
         aria-checked={o.checked}
         class="menu-item"
-        onclick={() => choose(o.id)}
+        disabled={o.disabled}
+        title={o.reason}
+        onclick={() => {
+          // 押せない間は onselect を呼ばない(合成イベントでも)。
+          if (!o.disabled) choose(o.id);
+        }}
       >
         <span class="check" aria-hidden="true">{o.checked ? "✓" : ""}</span>
         <span class="menu-label">{o.label}</span>
         {#if o.hint}
           <span class="menu-hint">{o.hint}</span>
+        {/if}
+        {#if o.reason}
+          <span class="menu-reason">{o.reason}</span>
         {/if}
       </button>
     {/each}
@@ -96,6 +104,7 @@
   }
   .menu-item {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     border: 0;
@@ -105,8 +114,18 @@
     text-align: left;
     min-height: 32px;
   }
-  .menu-item:hover {
+  .menu-item:hover:not(:disabled) {
     background: var(--hover);
+  }
+  .menu-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .menu-reason {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: normal;
   }
   .menu-label {
     flex: 1;

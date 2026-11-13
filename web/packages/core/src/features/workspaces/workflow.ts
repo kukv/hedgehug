@@ -52,7 +52,8 @@ export function transitionRefusal(
   from: string,
   to: string,
 ): string | null {
-  if (from === "" || from === to) return null;
+  // いまのステータスが一覧にない(削除された値のまま)ときは検査しない(02「ステータスの変更」、A3b-2)。
+  if (from === "" || from === to || !settings.statuses.some((v) => v.id === from)) return null;
   const ok = allowed(settings, from);
   if (ok.length === 0 || ok.includes(to)) return null;
   const name = (id: string) => settings.statuses.find((v) => v.id === id)?.name ?? "";

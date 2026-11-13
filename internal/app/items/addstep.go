@@ -23,5 +23,5 @@ func (s Service) AddStep(ctx context.Context, store port.StoreID, parent item.ID
 	if p.Assignee != "" {
 		in.Values = map[change.ID]json.RawMessage{"assignee": change.Value(p.Assignee)}
 	}
-	return s.create(ctx, in, fmt.Sprintf("%s に Step「%s」を追加", display, item.NormalizeTitle(title)))
+	return s.create(ctx, in, nil, fmt.Sprintf("%s に Step「%s」を追加", display, item.NormalizeTitle(title)))
 }

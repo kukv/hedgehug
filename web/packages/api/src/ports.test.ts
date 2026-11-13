@@ -64,6 +64,21 @@ describe("items port", () => {
     expect(it).toMatchObject({ id: "I1", storeId: "S1", parentId: null, watchers: [] });
   });
 
+  it("sends the template id when creating, and omits it when none", async () => {
+    const fetch = respond(200, apiItem);
+    const input = {
+      projectId: "P1",
+      parentId: "E1",
+      kind: "Task" as const,
+      title: "調査",
+      values: {},
+    };
+    await createItemsPort().create("S1", { ...input, templateId: "T1" });
+    expect(JSON.parse(String(call(fetch)[1].body))).toMatchObject({ template: "T1" });
+    await createItemsPort().create("S1", input);
+    expect(JSON.parse(String(call(fetch, 1)[1].body))).not.toHaveProperty("template");
+  });
+
   it("turns a 422 into Refused with the words of the spec", async () => {
     respond(422, {
       title: "Unprocessable Entity",

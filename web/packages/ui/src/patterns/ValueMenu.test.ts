@@ -57,4 +57,25 @@ describe("ValueMenu", () => {
     await fireEvent.pointerDown(document.body);
     expect(onclose).toHaveBeenCalledTimes(2);
   });
+
+  it("disables an option and shows its reason", async () => {
+    const onselect = vi.fn();
+    const reason = "ワークフローの制約: Todo から Done には変更できません(InProgress のみ)";
+    render(ValueMenu, {
+      props: {
+        ...base,
+        onselect,
+        onclose: vi.fn(),
+        options: [
+          { id: "a", label: "Todo", checked: true },
+          { id: "b", label: "Done", checked: false, disabled: true, reason },
+        ],
+      },
+    });
+    const done = screen.getByRole("menuitemcheckbox", { name: /Done/ });
+    expect(done).toBeDisabled();
+    expect(screen.getByText(reason)).toBeInTheDocument();
+    await fireEvent.click(done);
+    expect(onselect).not.toHaveBeenCalled();
+  });
 });
