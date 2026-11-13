@@ -1,6 +1,9 @@
 package change
 
-import "slices"
+import (
+	"encoding/json"
+	"slices"
+)
 
 // Undo は、log の中の操作 op の行を取り消す下書きを、log の行の順に返す(C3a-8)。
 // delete は restore、set・add・remove は、その行が項目の先端(Tips に入る)のときだけ逆の変更にする。
@@ -29,13 +32,21 @@ func undoRow(log []Record, r Record, restored func(Record) bool) (Draft, bool) {
 	}
 	switch r.T {
 	case Set:
-		return Draft{T: Set, F: r.F, From: r.To, To: r.From}, true
+		return Draft{T: Set, F: r.F, From: orNull(r.To), To: orNull(r.From)}, true
 	case Add:
-		return Draft{T: Remove, F: r.F, From: r.To}, true
+		return Draft{T: Remove, F: r.F, From: orNull(r.To)}, true
 	case Remove:
-		return Draft{T: Add, F: r.F, To: r.From}, true
+		return Draft{T: Add, F: r.F, To: orNull(r.From)}, true
 	}
 	return Draft{}, false
+}
+
+// orNull は、空の値を JSON の null にする。空のままだと log.jsonl に書くときにキーが落ちる。
+func orNull(v json.RawMessage) json.RawMessage {
+	if len(v) == 0 {
+		return Value(nil)
+	}
+	return v
 }
 
 // isTip は、行 r が、同じ項目の先端かを答える。

@@ -53,6 +53,14 @@ func TestUndoAddNotTipAfterRemove(t *testing.T) {
 	}
 }
 
+func TestUndoSetWithEmptyFromWritesNull(t *testing.T) {
+	s := opRow("s1", "op1", change.Draft{T: change.Set, F: "status", To: change.Value("B")})
+	got := change.Undo([]change.Record{create(map[string]any{}), s}, "op1")
+	if len(got) != 1 || string(got[0].To) != "null" || string(got[0].From) != `"B"` {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestUndoSkipsAlreadyRestoredAndOtherKinds(t *testing.T) {
 	d := opRow("d", "op1", change.NewDeleteEntity(true))
 	res := opRow("r", "op2", change.NewRestore(change.DeletedField, "op1"))
