@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import Checkbox from "./Checkbox.svelte";
 import Input from "./Input.svelte";
+import Switch from "./Switch.svelte";
 
 describe("Input", () => {
   it("reports blur and keydown, and takes focus when asked", async () => {
@@ -62,5 +63,25 @@ describe("Input onfocus", () => {
     render(Input, { props: { label: "タイトル", onfocus } });
     await fireEvent.focus(screen.getByLabelText("タイトル"));
     expect(onfocus).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Switch", () => {
+  it("with onchange stays as given and reports the next value", async () => {
+    const seen: boolean[] = [];
+    render(Switch, {
+      props: { label: "有効", checked: false, onchange: (v: boolean) => seen.push(v) },
+    });
+    const sw = screen.getByRole("switch", { name: "有効" });
+    await fireEvent.click(sw);
+    expect(seen).toEqual([true]);
+    expect(sw).not.toBeChecked();
+  });
+
+  it("without onchange toggles as before", async () => {
+    render(Switch, { props: { label: "有効" } });
+    const sw = screen.getByRole("switch", { name: "有効" });
+    await fireEvent.click(sw);
+    expect(sw).toBeChecked();
   });
 });

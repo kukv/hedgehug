@@ -2,6 +2,7 @@
   import { readOnlyBand, type WorkspaceSettingsTab, workspaceSettingsTabs } from "@hedgehug/core";
   import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
   import { workspaceSettings } from "../../wire";
+  import AutomationPanel from "./AutomationPanel.svelte";
   import GeneralPanel from "./GeneralPanel.svelte";
   import PropertiesPanel from "./PropertiesPanel.svelte";
   import TemplatesPanel from "./TemplatesPanel.svelte";
@@ -52,6 +53,8 @@
       <WorkflowPanel state={$settings} />
     {:else if $settings.tab === "templates"}
       <TemplatesPanel state={$settings} />
+    {:else if $settings.tab === "automation"}
+      <AutomationPanel state={$settings} />
     {/if}
   </div>
 {/if}
