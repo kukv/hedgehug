@@ -1,6 +1,7 @@
 package comments_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -50,6 +51,17 @@ var owners = []struct {
 	{"プロジェクト", onProject, "HH-P1"},
 }
 
+// wantRevived は、display の持ち主の削除が取り消され(Revived に積まれ、restore の行がある)たことを確かめる。
+func wantRevived(ctx context.Context, t *testing.T, s port.Stores, tg comments.Target, display string) {
+	t.Helper()
+	if r := port.Revived(ctx); !slices.Equal(r, []string{display}) {
+		t.Errorf("Revived = %v", r)
+	}
+	if !hasRestore(t, s, tg) {
+		t.Error("restore の行がない")
+	}
+}
+
 // 別のタブで削除された(root: true)持ち主へコメントを投稿すると、コメントを残して削除を取り消す。
 func TestPostCommentDeletedRevives(t *testing.T) {
 	for _, o := range owners {
@@ -61,12 +73,7 @@ func TestPostCommentDeletedRevives(t *testing.T) {
 			if err != nil || v.Body != "戻して投稿" {
 				t.Fatalf("Post = %+v, %v", v, err)
 			}
-			if r := port.Revived(ctx); !slices.Equal(r, []string{o.display}) {
-				t.Errorf("Revived = %v", r)
-			}
-			if !hasRestore(t, rec, o.target) {
-				t.Error("restore の行がない")
-			}
+			wantRevived(ctx, t, rec, o.target, o.display)
 			if _, err := svc.List(ctx, store, o.target); err != nil {
 				t.Errorf("List = %v", err)
 			}
@@ -96,12 +103,7 @@ func TestEditCommentDeletedRevives(t *testing.T) {
 			if err != nil || v.Body != "後" || !v.Edited {
 				t.Fatalf("Edit = %+v, %v", v, err)
 			}
-			if r := port.Revived(ctx); !slices.Equal(r, []string{o.display}) {
-				t.Errorf("Revived = %v", r)
-			}
-			if !hasRestore(t, rec, o.target) {
-				t.Error("restore の行がない")
-			}
+			wantRevived(ctx, t, rec, o.target, o.display)
 		})
 	}
 }
@@ -120,12 +122,7 @@ func TestDeleteCommentDeletedRevives(t *testing.T) {
 			if err := svc.Delete(ctx, store, o.target, posted.ID); err != nil {
 				t.Fatal(err)
 			}
-			if r := port.Revived(ctx); !slices.Equal(r, []string{o.display}) {
-				t.Errorf("Revived = %v", r)
-			}
-			if !hasRestore(t, rec, o.target) {
-				t.Error("restore の行がない")
-			}
+			wantRevived(ctx, t, rec, o.target, o.display)
 			list, err := svc.List(ctx, store, o.target)
 			if err != nil || len(list) != 0 {
 				t.Errorf("List = %+v, %v", list, err)
