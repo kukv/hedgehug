@@ -133,10 +133,11 @@ func TestSetSprintFromUnusableExcludesItself(t *testing.T) {
 	}
 }
 
-// otherWorkspaceSprint は、別のワークスペースを作り、そこにスプリントを作る。
-func otherWorkspaceSprint(t *testing.T, svc planning.Service) change.ID {
+const other workspace.ID = "01OTHERWS00000000000000001"
+
+// otherWorkspace は、別のワークスペース other を作る。
+func otherWorkspace(t *testing.T, svc planning.Service) {
 	t.Helper()
-	const other workspace.ID = "01OTHERWS00000000000000001"
 	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを作成"}
 	err := svc.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
 		n := 0
@@ -153,11 +154,6 @@ func otherWorkspaceSprint(t *testing.T, svc planning.Service) change.ID {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := svc.CreateSprint(t.Context(), store, other, planning.SprintInput{Name: "Other"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sp.ID
 }
 
 func TestSetSprintRefusals(t *testing.T) {
@@ -177,7 +173,11 @@ func TestSetSprintRefusals(t *testing.T) {
 	if err := svc.DeleteSprint(ctx, store, apptest.SampleWorkspace, s3.ID); err != nil {
 		t.Fatal(err)
 	}
-	other := otherWorkspaceSprint(t, svc)
+	otherWorkspace(t, svc)
+	elsewhere, err := svc.CreateSprint(ctx, store, other, planning.SprintInput{Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	addItem(t, svc, itemZ, 6, item.Task, "Z", "")
 	if err := apptest.DeleteItems(ctx, svc.Stores, store, itemZ); err != nil {
 		t.Fatal(err)
@@ -209,7 +209,7 @@ func TestSetSprintRefusals(t *testing.T) {
 	}{
 		{"削除済みのスプリント", apptest.SampleTask, &s3.ID},
 		{"ないスプリント", apptest.SampleTask, &unknown},
-		{"別のワークスペースのスプリント", apptest.SampleTask, &other},
+		{"別のワークスペースのスプリント", apptest.SampleTask, &elsewhere.ID},
 		{"削除済みのアイテム", itemZ, nil},
 		{"ないアイテム", "01NOSUCHITEM000000000000", nil},
 	} {
@@ -273,6 +273,11 @@ func TestSetReleaseRefusals(t *testing.T) {
 	if err := svc.DeleteRelease(ctx, store, apptest.SampleWorkspace, gone.ID); err != nil {
 		t.Fatal(err)
 	}
+	otherWorkspace(t, svc)
+	elsewhere, err := svc.CreateRelease(ctx, store, other, planning.ReleaseInput{Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	addItem(t, svc, itemStep, 3, item.Step, "S", "")
 	n := len(rec.summaries)
 
@@ -292,7 +297,7 @@ func TestSetReleaseRefusals(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		id   *change.ID
-	}{{"削除済みのリリース", &gone.ID}, {"ないリリース", &unknown}} {
+	}{{"削除済みのリリース", &gone.ID}, {"ないリリース", &unknown}, {"別のワークスペースのリリース", &elsewhere.ID}} {
 		if err := svc.SetRelease(ctx, store, apptest.SampleTask, c.id); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("%s: %v", c.name, err)
 		}
