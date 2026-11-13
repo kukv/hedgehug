@@ -2,6 +2,7 @@ package githublink_test
 
 import (
 	"context"
+	"maps"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -62,10 +63,31 @@ func (m *memReads) SetFailure(_ context.Context, store port.StoreID, key, text s
 
 // memScans は、port.PRScans のメモリ上の偽物。
 type memScans struct {
-	rows map[port.StoreID]map[string]port.ScanRecord
+	rows    map[port.StoreID]map[string]port.ScanRecord
+	renames map[port.StoreID]map[string]string
 }
 
-func newMemScans() *memScans { return &memScans{rows: map[port.StoreID]map[string]port.ScanRecord{}} }
+func newMemScans() *memScans {
+	return &memScans{rows: map[port.StoreID]map[string]port.ScanRecord{}, renames: map[port.StoreID]map[string]string{}}
+}
+
+func (m *memScans) Renames(_ context.Context, store port.StoreID) (map[string]string, error) {
+	return maps.Clone(m.renames[store]), nil
+}
+
+// SaveRename は、本物と同じに小文字で持ち、改名先から先の対応を消す。
+func (m *memScans) SaveRename(_ context.Context, store port.StoreID, from, to string) error {
+	from, to = strings.ToLower(from), strings.ToLower(to)
+	if from == to {
+		return nil
+	}
+	if m.renames[store] == nil {
+		m.renames[store] = map[string]string{}
+	}
+	delete(m.renames[store], to)
+	m.renames[store][from] = to
+	return nil
+}
 
 func (m *memScans) Scans(_ context.Context, store port.StoreID) (map[string]port.ScanRecord, error) {
 	out := map[string]port.ScanRecord{}

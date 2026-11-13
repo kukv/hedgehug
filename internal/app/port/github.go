@@ -99,13 +99,18 @@ type ScanRecord struct {
 	Failure string    // 前回の失敗の文言(07 の表の文。空なら成功)
 }
 
-// PRScans は、PR を探した記録の口(D4b-4)。実装は infra/statedb。
+// PRScans は、PR を探した記録と、リポジトリの改名の対応の口(D4b-4、D4b 最終レビュー R-1)。実装は infra/statedb。
 type PRScans interface {
 	// Scans は、Store のリポジトリ(小文字)から引く記録を返す。
 	Scans(ctx context.Context, store StoreID) (map[string]ScanRecord, error)
 	// SaveScan は、repo の記録を、いまの記録と合わせて置く(同時に動いた探索が古い読み取りで書いても戻らないように):
 	// Read は論理和、Since は大きい方、Failure は r のもの。合わせた値が前と変わったら changed。
 	SaveScan(ctx context.Context, store StoreID, repo string, r ScanRecord) (changed bool, err error)
+	// Renames は、Store のリポジトリの改名・移管の対応(旧い名前の小文字 → いまの名前の小文字)を返す。
+	Renames(ctx context.Context, store StoreID) (map[string]string, error)
+	// SaveRename は、from が to に改名・移管されたことを小文字で記録する。大文字小文字だけの違いは記録しない。
+	// to から先の対応は消す(元の名前に戻す改名で輪にしない)。
+	SaveRename(ctx context.Context, store StoreID, from, to string) error
 }
 
 // MissingOrg は、App 未導入の組織の記録(D4b-12)。

@@ -14,7 +14,8 @@ import (
 // (改名・移管のあとの名前。分からなければ空)を返す。トークンが拒否されたら認証エラーにする(D4a の lookup・
 // readMany と同じ)。AppNotInstalled なら記録を置き、成功なら、問い合わせた名前か答えの名前を記録した記録だけを
 // 消す(同じ組織のほかのリポジトリが読めても消さない。改名のあとの記録は答えの名前で置かれる)。記録が変わったら
-// EventGitHub(Store は空)を流す。
+// EventGitHub(Store は空)を流す。成功で答えの名前が問い合わせた名前と違えば、Store の改名の対応を記録する
+// (自動リンクの重なりの判定。D4b 最終レビュー R-1)。
 func (l Links) call(ctx context.Context, store port.StoreID, repo string, f func(token string) (string, error)) error {
 	tok, a, err := l.Tokens.TokenFor(ctx, store, repo)
 	if err != nil {
@@ -31,6 +32,9 @@ func (l Links) call(ctx context.Context, store port.StoreID, repo string, f func
 	switch {
 	case err == nil:
 		changed, recErr = l.clearMissing(ctx, a.ID, repo, answer)
+		if answer != "" && !strings.EqualFold(answer, repo) {
+			recErr = errors.Join(recErr, l.Scans.SaveRename(ctx, store, repo, answer))
+		}
 	case ghcall.Is(err, ghcall.AppNotInstalled) && errors.As(err, &fail):
 		changed, recErr = l.Missing.Put(ctx, a.ID, port.MissingOrg{Org: fail.Org, Repo: fail.Repo})
 	}

@@ -154,10 +154,22 @@ func (m *memScans) Scans(context.Context, port.StoreID) (map[string]port.ScanRec
 func (m *memScans) SaveScan(_ context.Context, _ port.StoreID, repo string, r port.ScanRecord) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	old, ok := m.rows[strings.ToLower(repo)]
-	m.rows[strings.ToLower(repo)] = r
+	key := strings.ToLower(repo)
+	old, ok := m.rows[key]
+	if ok { // いまの記録と合わせる(本物の SaveScan と同じ: Read は論理和、Since は大きい方、Failure は書く側)
+		r.Read = r.Read || old.Read
+		if old.Since.After(r.Since) {
+			r.Since = old.Since
+		}
+	}
+	m.rows[key] = r
 	return !ok || old != r, nil
 }
+
+// Renames と SaveRename は、改名の対応を持たない(このパッケージのテストは改名を使わない)。
+func (m *memScans) Renames(context.Context, port.StoreID) (map[string]string, error) { return nil, nil }
+
+func (m *memScans) SaveRename(context.Context, port.StoreID, string, string) error { return nil }
 
 // waitPullsCalls は、gh が repo の ReadPulls を n 回呼ぶまで待つ(裏の探索)。
 func waitPullsCalls(t *testing.T, gh *apptest.GitHub, repo string, n int) {

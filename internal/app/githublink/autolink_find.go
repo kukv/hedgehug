@@ -12,6 +12,8 @@ import (
 type storeItems struct {
 	byID map[string]item.ID // 「WEB-1」→ 内部の ID
 	live map[item.ID]string // 内部の ID → 表示の ID
+	// renames は、このマシンが知ったリポジトリの改名の対応(port.PRScans.Renames。自動リンクの重なりの判定に使う)
+	renames map[string]string
 }
 
 // readStoreItems は、ワークスペースのいまの接頭辞と、削除済みでないプロジェクトの削除済みでないアイテムから表を作る。

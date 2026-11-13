@@ -109,7 +109,7 @@ func (l Links) writeScan(ctx context.Context, store port.StoreID, res repoResult
 	linked := false
 	if res.scanText == "" {
 		var err error
-		if linked, err = l.linkPulls(ctx, store, res.repo.repo, res.pulls, items, !old.Read, p); err != nil {
+		if linked, err = l.linkPulls(ctx, store, res.pulls, items, !old.Read, p); err != nil {
 			return linked, err
 		}
 		next.Read, next.Since = true, latest(old.Since, res.pulls.Pulls)
@@ -120,7 +120,8 @@ func (l Links) writeScan(ctx context.Context, store port.StoreID, res repoResult
 	return linked || next.Failure != old.Failure, nil
 }
 
-// readStoreItems は、Store の削除済みでないアイテムの表を読む。
+// readStoreItems は、Store の削除済みでないアイテムの表と、リポジトリの改名の対応を読む。読み取りのあとに読むので、
+// 同じ読み取りで知った改名も入る(D4b 最終レビュー R-1)。
 func (l Links) readStoreItems(ctx context.Context, store port.StoreID) (storeItems, error) {
 	var items storeItems
 	err := l.Stores.Read(ctx, store, func(r port.Reader) error {
@@ -128,15 +129,18 @@ func (l Links) readStoreItems(ctx context.Context, store port.StoreID) (storeIte
 		items, err = readStoreItems(r)
 		return err
 	})
+	if err != nil {
+		return items, err
+	}
+	items.renames, err = l.Scans.Renames(ctx, store)
 	return items, err
 }
 
-// linkPulls は、見つけた PR をそれぞれ自動でリンクする。asked は問い合わせた名前(ps.Repo は答えの名前)。
-// first はそのリポジトリを初めて探したか(D4b-7)。
-func (l Links) linkPulls(ctx context.Context, store port.StoreID, asked string, ps port.Pulls, items storeItems, first bool, p *pass) (bool, error) {
+// linkPulls は、見つけた PR をそれぞれ自動でリンクする。first はそのリポジトリを初めて探したか(D4b-7)。
+func (l Links) linkPulls(ctx context.Context, store port.StoreID, ps port.Pulls, items storeItems, first bool, p *pass) (bool, error) {
 	changed := false
 	for _, pull := range ps.Pulls {
-		c, err := l.autoLink(ctx, store, asked, ps.Repo, pull, items, first, p)
+		c, err := l.autoLink(ctx, store, ps.Repo, pull, items, first, p)
 		changed = changed || c
 		if err != nil {
 			return changed, err
