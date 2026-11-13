@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
 // lookupQuery は、1 つの番号の PR か Issue を読む GraphQL(D3-4)。レビューは reviewDecision と各レビュアーの
@@ -86,7 +87,7 @@ func (c *Client) lookupOnce(ctx context.Context, token, repo string, number int)
 	var a lookupAnswer
 	h, err := c.do(ctx, http.MethodPost, token, "/graphql", bytes.NewReader(body), &a)
 	if err != nil {
-		return port.Found{}, withRepo(err, repo, 0)
+		return port.Found{}, withRepo(err, repo)
 	}
 	if f := answerFailure(a, repo, number, c.resetAt(h)); f != nil {
 		return port.Found{}, f
@@ -96,9 +97,9 @@ func (c *Client) lookupOnce(ctx context.Context, token, repo string, number int)
 }
 
 // withRepo は、Forbidden・NotFound(HTTP の 403・404)をリポジトリを読めない失敗にする。
-func withRepo(err error, repo string, number int) error {
+func withRepo(err error, repo string) error {
 	if ghcall.Is(err, ghcall.Forbidden) || ghcall.Is(err, ghcall.NotFound) {
-		return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo, Number: number}
+		return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
 	}
 	return err
 }
@@ -127,11 +128,15 @@ func answerFailure(a lookupAnswer, repo string, number int, reset time.Time) *gh
 }
 
 // renamed は、repo が改名・移管されていれば、いまの名前を返す(REST はリダイレクトで移動先を返す)。
+// いまの名前が owner/name の形でなければ、改名とみなさない(問い合わせない)。
 func (c *Client) renamed(ctx context.Context, token, repo string) (string, bool) {
 	var r struct {
 		FullName string `json:"full_name"`
 	}
 	if err := c.get(ctx, token, "/repos/"+repo, &r); err != nil || r.FullName == "" || strings.EqualFold(r.FullName, repo) {
+		return "", false
+	}
+	if moved, err := project.NormalizeRepo(r.FullName); err != nil || moved != r.FullName {
 		return "", false
 	}
 	return r.FullName, true

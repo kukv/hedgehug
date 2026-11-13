@@ -149,6 +149,10 @@ func TestLookupFollowsRename(t *testing.T) {
 		case "/repos/old/web":
 			http.Redirect(w, r, "/repositories/99", http.StatusMovedPermanently)
 		case "/repositories/99":
+			if r.Header.Get("Authorization") != "Bearer "+fakeToken { // リダイレクト先にもトークンが届く
+				http.Error(w, "no token", http.StatusNotFound)
+				return
+			}
 			_, _ = w.Write([]byte(`{"full_name":"new-org/web2"}`))
 		case "/graphql":
 			graphQL(t, func(owner, name string, _ int) string {
@@ -163,6 +167,42 @@ func TestLookupFollowsRename(t *testing.T) {
 	got, err := c.Lookup(context.Background(), fakeToken, "old/web", 41)
 	if err != nil || got.Repo != "new-org/web2" || strings.Join(asked, ",") != "old/web,new-org/web2" {
 		t.Errorf("Lookup = %+v, %v, asked %v", got, err, asked)
+	}
+}
+
+func TestLookupDoesNotFollowAMalformedRename(t *testing.T) {
+	asked := []string{}
+	c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/old/web":
+			_, _ = w.Write([]byte(`{"full_name":"../../user"}`))
+		case "/graphql":
+			graphQL(t, func(owner, name string, _ int) string {
+				asked = append(asked, owner+"/"+name)
+				return `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"]}]}`
+			})(w, r)
+		}
+	})
+	_, err := c.Lookup(context.Background(), fakeToken, "old/web", 41)
+	if !ghcall.Is(err, ghcall.RepoUnreadable) || strings.Join(asked, ",") != "old/web" {
+		t.Errorf("err = %v, asked %v, want only old/web", err, asked)
+	}
+}
+
+func TestLookupHTTPNotFoundAndForbiddenAreRepoUnreadable(t *testing.T) {
+	for _, code := range []int{http.StatusNotFound, http.StatusForbidden} {
+		c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/repos/org/web" {
+				_, _ = w.Write([]byte(`{"full_name":"org/web"}`))
+				return
+			}
+			http.Error(w, "x", code)
+		})
+		_, err := c.Lookup(context.Background(), fakeToken, "org/web", 7)
+		var f *ghcall.Failure
+		if !asFailure(err, &f) || f.Kind != ghcall.RepoUnreadable || f.Repo != "org/web" {
+			t.Errorf("HTTP %d: %v", code, err)
+		}
 	}
 }
 
