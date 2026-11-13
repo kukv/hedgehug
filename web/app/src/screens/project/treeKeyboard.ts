@@ -8,6 +8,7 @@ import {
   type TreeKeyAction,
   treeKeyAction,
 } from "@hedgehug/core";
+import { tick } from "svelte";
 import { detail, links } from "../../wire";
 
 // ツリーのキー操作(04「ツリーのキー操作」、A4b-20)。キーの割り当ては core の treeKeyAction。
@@ -16,13 +17,13 @@ import { detail, links } from "../../wire";
 export interface TreeKeyboard {
   focus: TreeFocus;
   onkeydown(event: KeyboardEvent): void;
-  // onfocus は、ツリー自身にフォーカスが入ったとき(Tab)。先頭の行にフォーカスを付ける。
+  // onfocus は、ツリー自身にフォーカスが入ったとき(Tab)。先頭の行にフォーカスを付ける(押したとき・メニューから戻ったときを除く)。
   onfocus(event: FocusEvent): void;
-  // onfocusout は、ツリーからフォーカスが出たとき。メニューへ移るのでなければ、ツリーに戻ったとき先頭の行にフォーカスを付ける。
+  // onfocusout は、ツリーの中からフォーカスが出たとき。メニューへ移るなら、戻ったときにいまの行を動かさない印を付ける。
   onfocusout(event: FocusEvent): void;
   // onpointerdown は、行の中を押したとき。その行にフォーカスを付ける。
   onpointerdown(event: PointerEvent): void;
-  // scrollTo は、行が見える位置までスクロールする。
+  // scrollTo は、行が見える位置までスクロールする(キーで行を移ったとき。読み直しでは動かさない)。
   scrollTo(id: string): void;
 }
 
@@ -43,15 +44,31 @@ function blocked(event: KeyboardEvent): boolean {
 
 export function createTreeKeyboard(deps: Deps): TreeKeyboard {
   const focus = createTreeFocus();
-  // returning は、キーでメニューを開いたあと、閉じてツリーに戻ったとき、いまの行を先頭に戻さないための印。
-  // メニューのあいだ(メニューから別のメニューへ移るときも)は残し、ほかへ出たときに捨てる(onfocusout)。
+  // returning は、メニューを開いたあと、閉じてツリーに戻ったとき、いまの行を先頭に戻さないための印。
+  // メニューへ移るときに付け(メニューから別のメニューへ移るときも、いったん戻ったツリーから付け直す)、
+  // ツリーに戻ったとき(onfocus)と、メニュー以外へ出たとき(onfocusout)に捨てる。
   let returning = false;
-  // pressing は、マウス・タッチで押した直後(そのとき `<ul>` に入るフォーカスは、押した行を動かさない)。
+  // pressing は、マウス・タッチで押してから click まで(そのとき `<ul>` に入るフォーカスは、押した行を動かさない)。
+  // タッチでは、互換の mousedown とフォーカスが pointerup のあとに来るので、click(または pointercancel)まで残す。
   let pressing = false;
+  // refocusing は、行の中のボタンにフォーカスがあるときの移動のキーで、フォーカスを `<ul>` へ移しているあいだ。
+  let refocusing = false;
+  const inMenu = (el: EventTarget | null) =>
+    el instanceof Element && el.closest("[role='menu']") !== null;
 
   const rowEl = (id: string) =>
     deps.list()?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"]`) ?? null;
   const rowRect = (id: string) => rowEl(id)?.getBoundingClientRect() ?? { left: 0, bottom: 0 };
+
+  function scrollTo(id: string) {
+    rowEl(id)?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  function releasePress() {
+    pressing = false;
+    window.removeEventListener("click", releasePress, true);
+    window.removeEventListener("pointercancel", releasePress, true);
+  }
 
   const popups: ReadonlySet<TreeKeyAction> = new Set(["menu"]);
 
@@ -63,6 +80,10 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
       case "right":
       case "left":
         focus.move(action);
+        void tick().then(() => {
+          const id = get(focus.state).currentId;
+          if (id) scrollTo(id);
+        });
         break;
       case "open":
         void detail.open(view.store.id, row.id);
@@ -85,35 +106,40 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
       const action = treeKeyAction(event, row);
       if (!action || !row) return;
       // 行の中のリンクやボタンにフォーカスがあるときの Enter は、その部品の働き(開く・押す)に任せる。
-      if (action === "open" && event.target !== event.currentTarget) return;
+      const inner = event.target !== event.currentTarget;
+      if (action === "open" && inner) return;
       // ツリーが受けたキーは、ここで止める。
       event.preventDefault();
       event.stopPropagation();
+      // 行の中のボタン(押した開閉・ステータス・「⋯」)にフォーカスがあるまま行を移ると、枠は移った行に、フォーカスは
+      // 元の行のボタンに残り、次の Enter が元の行に効く。フォーカスを `<ul>` に移す(いまの行は動かさない)。
+      if (inner && ["up", "down", "right", "left"].includes(action)) {
+        refocusing = true;
+        (event.currentTarget as HTMLElement).focus();
+        refocusing = false;
+      }
       run(action, row, deps.view());
     },
     onfocus(event) {
       if (event.target !== event.currentTarget) return;
       // 押して入ったときは、押した行(onpointerdown が付けた)を動かさない。先頭へ動かすと、画面の外の先頭へスクロールして、
-      // 押した行ではなく別の行に click が当たる。
-      focus.enter(returning || pressing);
+      // 押した行ではなく別の行に click が当たる。メニューから戻ったとき(前のフォーカスがメニューか、閉じて消えたとき)も動かさない。
+      const back = returning && (event.relatedTarget === null || inMenu(event.relatedTarget));
+      focus.enter(back || pressing || refocusing);
+      returning = false;
     },
     onfocusout(event) {
-      // メニューの中から出るとき(閉じて部品が消えるときを含む)は、戻ってくるので捨てない。
-      const from = event.target as HTMLElement;
-      const to = event.relatedTarget as HTMLElement | null;
-      if (!from.closest("[role='menu']") && !to?.closest("[role='menu']")) returning = false;
+      // メニューへ移るときは印を付ける。ツリーの中のメニュー(ステータス)の中で動くときは、印をそのままにする。
+      if (inMenu(event.relatedTarget)) returning = true;
+      else if (!inMenu(event.target)) returning = false;
     },
     onpointerdown(event) {
       const id = (event.target as HTMLElement).closest<HTMLElement>("[data-row]")?.dataset.row;
       if (id) focus.focus(id);
-      // フォーカスの移動は、押した直後の同じ作業の中で起きる。次の作業で印を外す。
       pressing = true;
-      setTimeout(() => {
-        pressing = false;
-      }, 0);
+      window.addEventListener("click", releasePress, true);
+      window.addEventListener("pointercancel", releasePress, true);
     },
-    scrollTo(id) {
-      rowEl(id)?.scrollIntoView?.({ block: "nearest" });
-    },
+    scrollTo,
   };
 }

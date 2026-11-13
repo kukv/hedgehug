@@ -38,9 +38,6 @@
   const focus = keyboard.focus.state;
   // ツリーが変わったとき(読み直し・削除・移動)は、見えている行とフォーカスのある行を直す。描く前に済ませる。
   $effect.pre(() => keyboard.focus.setTree(view.tree));
-  $effect(() => {
-    if ($focus.currentId) keyboard.scrollTo($focus.currentId);
-  });
   const href = (it: Item) => links.href(route(it));
   const open = (e: MouseEvent, it: Item) =>
     links.click(e, route(it), () => void detail.open(view.store.id, it.id));
