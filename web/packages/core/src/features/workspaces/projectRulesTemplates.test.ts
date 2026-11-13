@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectRules, WorkspaceSettings, WorkspaceTemplate } from "../../model/workspace";
+import type {
+  AutomationRule,
+  ProjectRules,
+  WorkspaceSettings,
+  WorkspaceTemplate,
+} from "../../model/workspace";
 import { rulesHeading, rulesProjects, templateDeleteLines } from "./projectRules";
 import { P, review, rules, sample } from "./projectRules.fixtures.test-util";
 import { defaultTemplate, usableTemplates } from "./templateApply";
@@ -124,6 +129,18 @@ describe("rules projects and heading", () => {
   it("reads the automation section from disabledRules", () => {
     const a = { ...s, projectRules: { pa: rules({ disabledRules: ["r1"] }) } };
     expect(rulesProjects(a, "automation", projects)?.projects.map((p) => p.id)).toEqual(["pa"]);
+  });
+
+  it("counts projects with dedicated rules in the automation section", () => {
+    const own = [{ scope: "pc" }, { scope: "pz" }, {}] as unknown as AutomationRule[];
+    const a = { ...s, projectRules: { pa: rules({ disabledRules: ["r1"] }) } };
+    expect(rulesProjects(a, "automation", projects, own)?.projects.map((p) => p.id)).toEqual([
+      "pa",
+      "pc",
+    ]);
+    expect(rulesProjects(s, "automation", projects, own)?.projects.map((p) => p.id)).toEqual([
+      "pc",
+    ]);
   });
 
   it("says the heading", () => {

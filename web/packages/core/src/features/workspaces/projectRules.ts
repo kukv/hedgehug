@@ -1,4 +1,5 @@
 import type {
+  AutomationRule,
   Category,
   ProjectRules,
   WorkspaceSettings,
@@ -199,13 +200,16 @@ function hasRules(r: ProjectRules, section: RuleSection): boolean {
 }
 
 // rulesProjects は、サブタブの区画に設定を持つプロジェクトの 1 行(03「一覧」)。ルールが空のプロジェクトと、
-// projects にない(削除済みの)プロジェクトは除く。なければ null。
+// projects にない(削除済みの)プロジェクトは除く。自動化の区画は、専用ルール(rules の scope)を持つプロジェクトも
+// 数える。なければ null。
 export function rulesProjects(
   settings: WorkspaceSettings,
   section: RuleSection,
   projects: readonly RuleProject[],
+  rules: readonly AutomationRule[] = [],
 ): { projects: RuleProject[]; text: string } | null {
   const found = projects.filter((p) => {
+    if (section === "automation" && rules.some((x) => x.scope === p.id)) return true;
     const r = settings.projectRules[p.id];
     return r !== undefined && hasRules(r, section);
   });
