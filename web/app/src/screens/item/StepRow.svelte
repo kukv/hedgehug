@@ -8,9 +8,10 @@
   } from "@hedgehug/core";
   import { Avatar, IconButton } from "@hedgehug/ui";
   import { detail, links } from "../../wire";
+  import { itemDelete } from "../../wireActions";
   import StatusButton from "./StatusButton.svelte";
 
-  // Step の 1 行(02「子と Step」の「Step の行」。「×」は A4)。チェックがオンなのは分類が完了のときだけ。
+  // Step の 1 行(02「子と Step」の「Step の行」)。チェックがオンなのは分類が完了のときだけ。
   interface Props {
     v: DetailView;
     c: Item;
@@ -66,6 +67,14 @@
     title={note}
     onclick={() => void detail.moveUp(c.id)}
     >↑</IconButton
+  >
+  <IconButton
+    label="Step を削除"
+    size="xs"
+    disabled={v.readOnly}
+    title={note}
+    onclick={() => void itemDelete.open(c)}
+    >×</IconButton
   >
 </div>
 

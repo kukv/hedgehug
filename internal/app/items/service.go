@@ -24,7 +24,7 @@ func (s Service) withID(ctx context.Context, store port.StoreID, id item.ID) (it
 	var display string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		if it, err = r.Items().Get(id); err != nil {
+		if it, err = port.LiveItem(r, id); err != nil {
 			return err
 		}
 		w, err := r.Workspaces().Get(it.Place.Workspace)

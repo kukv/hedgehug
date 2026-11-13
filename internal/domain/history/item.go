@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -39,11 +40,19 @@ func itemText(log []change.Record, i int, c Context) (string, bool) {
 	case change.Desc:
 		return "説明を変更", true
 	case change.Set:
+		if r.F == "place" && sameOpSetsKind(log, r.Op) {
+			return "", false // Step から昇格した行は「種類を … に変更」の 1 行だけにする
+		}
 		return setText(r, c)
 	case change.Add, change.Remove:
 		return listText(log, i, c)
 	}
 	return "", false
+}
+
+// sameOpSetsKind は、op に種類を変える行があるか。
+func sameOpSetsKind(log []change.Record, op change.ID) bool {
+	return slices.ContainsFunc(log, func(r change.Record) bool { return r.Op == op && r.T == change.Set && r.F == "kind" })
 }
 
 // listText は、関連システムと複数選択の追加・取り除きを「{プロパティ名}を {旧} → {新}」にする。旧は log[:i]、
@@ -126,16 +135,19 @@ func byPrev(log []change.Record) []change.Record {
 	return out
 }
 
-// placeText は、親かプロジェクトが変わった場所の変更を「親を変更」にする。番号だけが変わる行
+// placeText は、親が変わった場所の変更を「親を変更」にする。親が両方ない(Epic)なら、プロジェクトが変わったとき。
+// 親が同じでプロジェクトだけが変わる行(プロジェクトが変わる移動で一緒に移る下のもの)と、番号だけが変わる行
 // (同期の修復)は出さない。
 func placeText(r change.Record) (string, bool) {
 	var from, to item.Place
 	if json.Unmarshal(r.From, &from) != nil || json.Unmarshal(r.To, &to) != nil {
 		return "", false
 	}
-	sameParent := (from.Parent == nil && to.Parent == nil) ||
-		(from.Parent != nil && to.Parent != nil && *from.Parent == *to.Parent)
-	if sameParent && from.Project == to.Project {
+	changed := from.Project != to.Project
+	if from.Parent != nil || to.Parent != nil {
+		changed = from.Parent == nil || to.Parent == nil || *from.Parent != *to.Parent
+	}
+	if !changed {
 		return "", false
 	}
 	return "親を変更", true

@@ -22,7 +22,7 @@ type Service struct {
 func (s Service) Item(ctx context.Context, store port.StoreID, id item.ID) ([]dhistory.Row, error) {
 	var rows []dhistory.Row
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := r.Items().Get(id)
+		it, err := port.LiveItem(r, id)
 		if err != nil {
 			return err
 		}
@@ -54,7 +54,7 @@ func (s Service) Item(ctx context.Context, store port.StoreID, id item.ID) ([]dh
 func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID) ([]dhistory.Row, error) {
 	var rows []dhistory.Row
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		if _, err := r.Projects().Get(id); err != nil {
+		if _, err := port.LiveProject(r, id); err != nil {
 			return err
 		}
 		log, err := r.Changes().Of(change.Ref{Kind: change.KindProject, ID: id})

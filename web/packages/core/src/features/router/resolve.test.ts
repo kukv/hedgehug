@@ -28,7 +28,7 @@ function itemsIn(storeId: string): ItemsPort {
     addValue: unused,
     removeValue: unused,
     checkStep: unused,
-    moveUp: unused,
+    reorder: unused,
     nextNumber: unused,
     async findByNumber(s, w, n) {
       if (s !== storeId || n !== 12) throw new NotFound("not found");

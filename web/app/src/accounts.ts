@@ -1,7 +1,8 @@
 import { createAccountsPort } from "@hedgehug/api";
 import { createAccountForm, createAccountList, createSignIn } from "@hedgehug/core";
 import { githubReloads } from "./reloads";
-import { navigation, timer, toasts } from "./wire";
+import { navigation } from "./wire";
+import { timer, toasts } from "./wireBase";
 
 // 設定「アカウントとメンバー」の GitHub アカウント(07)。wire.ts が 300 行なので、ここで作る。
 // 3 つは互いを呼ぶので、呼ぶのは作ったあと。

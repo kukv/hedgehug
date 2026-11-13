@@ -22,7 +22,7 @@ var projectFields = map[string]string{
 }
 
 // ProjectRows は、プロジェクトの履歴を新しい順で返す(02「概要の編集」の履歴)。作成・説明の変更・項目の変更だけ。
-// 移動と復元は、その行を書くトラックが足す。
+// 移動と復元の行は出さない。
 func ProjectRows(log []change.Record, c ProjectContext) []Row {
 	var rows []Row
 	for _, r := range log {

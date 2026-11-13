@@ -47,8 +47,9 @@ type itemView struct {
 	project project.Project
 }
 
+// readItem は、削除済みでないアイテムと、そのプロジェクトを読む。どちらかが削除済みなら port.ErrNotFound(A4b-4)。
 func readItem(r port.Reader, id item.ID) (itemView, error) {
-	it, err := r.Items().Get(id)
+	it, err := port.LiveItem(r, id)
 	if err != nil {
 		return itemView{}, err
 	}
@@ -60,7 +61,7 @@ func readItem(r port.Reader, id item.ID) (itemView, error) {
 	if err != nil {
 		return itemView{}, err
 	}
-	p, err := r.Projects().Get(it.Place.Project)
+	p, err := port.LiveProject(r, it.Place.Project)
 	if err != nil {
 		return itemView{}, err
 	}
@@ -133,6 +134,7 @@ func (l Links) issueOwner(ctx context.Context, store port.StoreID, ref itemlink.
 }
 
 // findIssue は、r の Store の、self 以外のアイテムで、ref の Issue にリンクしているものを探す。
+// 削除済みのアイテム・プロジェクトも調べる(07「追加」)。
 func findIssue(r port.Reader, ref itemlink.Ref, self item.ID) (string, bool, error) {
 	wss, err := r.Workspaces().List()
 	if err != nil {

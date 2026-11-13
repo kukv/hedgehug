@@ -18,7 +18,7 @@ func (s Service) save(ctx context.Context, store port.StoreID, id project.ID, su
 	}
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		p, err := tx.Projects().Get(id)
+		p, err := port.LiveProject(tx, id)
 		if err != nil {
 			return err
 		}

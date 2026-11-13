@@ -2,6 +2,7 @@
   import {
     type ProjectTab,
     projectCategory,
+    projectTabOf,
     type Route,
     readOnlyBand,
     readOnlyNote,
@@ -9,9 +10,10 @@
   import { Button, PageHead, ReadOnlyBand, StatusDot, StoreBadge, Tabs } from "@hedgehug/ui";
   import { itemDialog, links, navigation, projectScreen } from "../../wire";
   import ProjectOverview from "./ProjectOverview.svelte";
+  import ProjectSettings from "./ProjectSettings.svelte";
   import ProjectTree from "./ProjectTree.svelte";
 
-  // プロジェクトの画面(02「画面の見出しと構成」)。タブは「概要」「ツリー」だけ(A2 の計画の決定 15)。
+  // プロジェクトの画面(02「画面の見出しと構成」)。タブは「概要」「ツリー」「設定」(A2 の計画の決定 15。「設定」は A4b)。
   interface Props {
     storeId: string;
     projectId: string;
@@ -30,6 +32,7 @@
   const tabs = [
     { id: "overview", label: "概要" },
     { id: "tree", label: "ツリー" },
+    { id: "settings", label: "設定" },
   ];
   const wsRoute = $derived<Route | null>(
     $view
@@ -43,12 +46,11 @@
   );
   function select(id: string) {
     if (!$view) return;
-    const next = id === "tree" ? "tree" : "overview";
     navigation.go({
       name: "project",
       store: $view.store.name,
       project: $view.project.displayId,
-      tab: next,
+      tab: projectTabOf(id),
     });
   }
   // addEpic は、このプロジェクトを親にした Epic の作成ダイアログを開く(02「画面の見出しと構成」)。
@@ -96,6 +98,8 @@
     {/if}
     {#if tab === "tree"}
       <ProjectTree view={$view} />
+    {:else if tab === "settings"}
+      <ProjectSettings view={$view} />
     {:else}
       <ProjectOverview view={$view} onaddepic={addEpic} />
     {/if}

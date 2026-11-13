@@ -60,8 +60,7 @@ type Relation struct {
 	To   ID     `json:"to"`
 }
 
-// Item は、いま扱う項目だけを持つ。ステータス・優先度・関連システム・選択肢の値は B2 で足した。
-// 担当者・日付などは、まだ持たない(足すトラックが加える)。
+// Item は、アイテムの項目。スプリントとリリースは持たない。
 type Item struct {
 	ID       ID
 	Place    Place
@@ -74,8 +73,11 @@ type Item struct {
 	Relations []Relation
 	// Blocked は、ブロック中か(A4a-13)。保存しない派生の値で、app/items の Get・List が埋める。
 	Blocked bool
+	// Deleted は、削除済みの印(A4b-2)。保存の口(gitstore・偽物)は削除済みも返し、ここを埋める。
+	// 除くのは app の側で、Live を通す(A4b-3)。削除されていなければ nil。
+	Deleted *change.Deletion
 
-	// 値は内部 ID で指す(保存形式「アイテムの例」)。初期値と変更の操作は A3 が足す(B2-1)。
+	// 値は内部 ID で指す(保存形式「アイテムの例」。B2-1)。
 	Status   change.ID                 // なければ空
 	Priority change.ID                 // なければ空
 	Systems  []change.ID               // 関連システム
@@ -146,5 +148,6 @@ func FromLog(log []change.Record) (Item, bool) {
 		}
 	}
 	readValues(&it, s)
+	it.Deleted = change.DeletionOf(log)
 	return it, true
 }

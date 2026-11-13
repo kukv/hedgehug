@@ -165,6 +165,19 @@ export interface AutomationRun {
   text: string;
 }
 
+export type ChangeKindKind = typeof ChangeKindKind[keyof typeof ChangeKindKind];
+
+
+export const ChangeKindKind = {
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+} as const;
+
+export interface ChangeKind {
+  kind: ChangeKindKind;
+}
+
 export interface ChangeWorkspacePrefix {
   prefix: string;
 }
@@ -255,6 +268,22 @@ export interface CreateWorkspace {
   prefix: string;
 }
 
+export interface DeleteItemPreview {
+  /** 下にある、削除されていないアイテムの数 */
+  count: number;
+  /** 下にあるものの種類。Epic・Story・Task・Bug・Step の順で重ねない */
+  kinds: string[];
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+}
+
+export interface DeleteProjectPreview {
+  /** 下にある、削除されていないアイテムの数(Epic から Step まで全部) */
+  items: number;
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+}
+
 export interface DescribeBody {
   /** 編集を始めたときの説明。保存するときの共通の祖先になる */
   base: string;
@@ -272,6 +301,11 @@ export interface DescribeResult {
 export interface DescriptionText {
   /** 説明の本文(Markdown)。説明がなければ空 */
   text: string;
+}
+
+export interface Duplicated {
+  /** 新しいアイテムの内部 ID */
+  id: string;
 }
 
 export interface ErrorDetail {
@@ -481,6 +515,38 @@ export interface Member {
   name: string;
 }
 
+/**
+ * item はアイテム(親になる Epic・Story・Task・Bug)、project はプロジェクト(Epic の移し先)
+ */
+export type MoveCandidateKind = typeof MoveCandidateKind[keyof typeof MoveCandidateKind];
+
+
+export const MoveCandidateKind = {
+  item: 'item',
+  project: 'project',
+} as const;
+
+export interface MoveCandidate {
+  /** 画面の ID(HH-12・HH-P2) */
+  display: string;
+  /** アイテムかプロジェクトの内部 ID */
+  id: string;
+  /** item はアイテム(親になる Epic・Story・Task・Bug)、project はプロジェクト(Epic の移し先) */
+  kind: MoveCandidateKind;
+  /** 移したあとのプロジェクトの内部 ID。アイテムの候補なら属するプロジェクト、プロジェクトの候補なら自分 */
+  projectId: string;
+  /** アイテムの候補が属するプロジェクトの名前。プロジェクトの候補では空 */
+  projectTitle: string;
+  title: string;
+}
+
+export interface MoveItem {
+  /** 新しい親の内部 ID(Epic 以外) */
+  parent?: string;
+  /** 移し先のプロジェクトの内部 ID(Epic) */
+  project?: string;
+}
+
 export type MoveWorkspaceItemDirection = typeof MoveWorkspaceItemDirection[keyof typeof MoveWorkspaceItemDirection];
 
 
@@ -662,6 +728,16 @@ export interface RenameWorkspaceValue {
      * @pattern ^[^\r\n]*$
      */
   name: string;
+}
+
+export interface ReorderItem {
+  /** true なら基準の直後、false なら直前に置く */
+  after: boolean;
+  /**
+     * 基準にする兄弟の内部 ID。絞り込み中は、見えている兄弟
+     * @minLength 1
+     */
+  anchor: string;
 }
 
 export interface SaveItemAsTemplate {
@@ -1551,6 +1627,32 @@ return fetcher<Item>(getCreateItemUrl(store),
 
 
 
+export const getDeleteItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}`
+}
+
+/**
+ * @summary アイテムと、その下のものを削除する
+ */
+export const deleteItem = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteItemUrl(store,item),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getGetItemUrl = (store: string,
     item: string,) => {
 
@@ -1799,6 +1901,32 @@ return fetcher<Comment>(getEditItemCommentUrl(store,item,comment),
 
 
 
+export const getGetItemDeletePreviewUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/delete-preview`
+}
+
+/**
+ * @summary アイテムを削除したときに一緒に消えるものと保持日数を返す
+ */
+export const getItemDeletePreview = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<DeleteItemPreview> => {
+
+  return fetcher<DeleteItemPreview>(getGetItemDeletePreviewUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getGetItemDescriptionUrl = (store: string,
     item: string,) => {
 
@@ -1866,6 +1994,32 @@ return fetcher<DescribeResult>(getDescribeItemUrl(store,item),
 
 
 
+export const getDuplicateItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/duplicate`
+}
+
+/**
+ * @summary アイテムを複製する
+ */
+export const duplicateItem = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Duplicated> => {
+
+  return fetcher<Duplicated>(getDuplicateItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
 export const getGetItemHistoryUrl = (store: string,
     item: string,) => {
 
@@ -1887,6 +2041,47 @@ export const getItemHistory = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getChangeItemKindUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/kind`
+}
+
+/**
+ * @summary アイテムの種類を変える
+ */
+export const changeItemKind = async (store: string,
+    item: string,
+    changeKind: ChangeKind, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getChangeItemKindUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changeKind)
   }
 );}
 
@@ -2026,25 +2221,66 @@ return fetcher<void>(getRemoveLinkUrl(store,item),
 
 
 
-export const getMoveItemUpUrl = (store: string,
+export const getMoveItemUrl = (store: string,
     item: string,) => {
 
 
 
 
-  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-up`
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move`
 }
 
 /**
- * @summary アイテムを直前の兄弟と入れ替える
+ * @summary 同じワークスペースの中でアイテムを移す
  */
-export const moveItemUp = async (store: string,
-    item: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+export const moveItem = async (store: string,
+    item: string,
+    moveItemBody: MoveItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
 
-  return fetcher<void>(getMoveItemUpUrl(store,item),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getMoveItemUrl(store,item),
   {
     ...options,
-    method: 'POST'
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(moveItemBody)
+  }
+);}
+
+
+
+export const getListMoveCandidatesUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-candidates`
+}
+
+/**
+ * @summary 「移動…」の移し先の候補を返す
+ */
+export const listMoveCandidates = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<MoveCandidate[] | null> => {
+
+  return fetcher<MoveCandidate[] | null>(getListMoveCandidatesUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
 
 
   }
@@ -2293,6 +2529,47 @@ return fetcher<void>(getRemoveRelationUrl(store,item),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(relationInput)
+  }
+);}
+
+
+
+export const getReorderItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/reorder`
+}
+
+/**
+ * @summary アイテムを、同じ親の兄弟の直前か直後に置く
+ */
+export const reorderItem = async (store: string,
+    item: string,
+    reorderItemBody: ReorderItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getReorderItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reorderItemBody)
   }
 );}
 
@@ -2605,6 +2882,32 @@ export const listMembers = async (store: string, options?: Parameters<typeof fet
 
 
 
+export const getDeleteProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}`
+}
+
+/**
+ * @summary プロジェクトと、その下のアイテムを削除する
+ */
+export const deleteProject = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteProjectUrl(store,project),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getGetProjectUrl = (store: string,
     project: string,) => {
 
@@ -2805,6 +3108,32 @@ return fetcher<Project>(getSetProjectDateUrl(store,project),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setProjectDateBody)
+  }
+);}
+
+
+
+export const getGetProjectDeletePreviewUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/delete-preview`
+}
+
+/**
+ * @summary プロジェクトを削除したときに一緒に消えるアイテムの数と保持日数を返す
+ */
+export const getProjectDeletePreview = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<DeleteProjectPreview> => {
+
+  return fetcher<DeleteProjectPreview>(getGetProjectDeletePreviewUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

@@ -1,10 +1,15 @@
 <script lang="ts">
   import { hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
   import { AppFrame, OfflineBand, Toasts } from "@hedgehug/ui";
+  import ChangeKindDialog from "./screens/item/ChangeKindDialog.svelte";
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
+  import DeleteItemDialog from "./screens/item/DeleteItemDialog.svelte";
   import DetailPanel from "./screens/item/DetailPanel.svelte";
+  import ItemMenuHost from "./screens/item/ItemMenuHost.svelte";
+  import MoveMenu from "./screens/item/MoveMenu.svelte";
   import DiscardDialog from "./screens/notes/DiscardDialog.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
+  import DeleteProjectDialog from "./screens/project/DeleteProjectDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
@@ -82,5 +87,10 @@
 <CreateProjectDialog />
 <CreateWorkspaceDialog />
 <CreateItemDialog />
+<DeleteItemDialog />
+<MoveMenu />
+<ChangeKindDialog />
+<ItemMenuHost />
+<DeleteProjectDialog />
 <DiscardDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

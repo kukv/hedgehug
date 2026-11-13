@@ -45,7 +45,7 @@ func Register(api huma.API, svc appmembers.Service) {
 			}
 			return out, nil
 		})
-	// 「あなた」が決まらない(本物の Identity がまだない)ときは、エラーをそのまま返し 500 になる。
+	// 「あなた」が決まらないときは、エラーをそのまま返し 500 になる。
 	huma.Register(api, huma.Operation{OperationID: "get-me", Method: http.MethodGet, Path: "/api/stores/{store}/me", Summary: "Store での「あなた」のログイン名を返す"},
 		func(ctx context.Context, in *storePath) (*meOutput, error) {
 			login, err := svc.Me(ctx, port.StoreID(in.Store))

@@ -205,3 +205,32 @@ func TestLockIsExclusive(t *testing.T) {
 	unlock()
 	<-got
 }
+
+// 保持日数は store.yaml の retention_days を読む。ない・0 以下のときは 30(A4b-6)。
+func TestRetentionDaysReadsStoreYAML(t *testing.T) {
+	s, id, dir := newStore(t)
+	cases := []struct {
+		name, body string
+		want       int
+	}{
+		{"as written", "store: 01STORE0000000000000000001\nformat: 1\nretention_days: 7\n", 7},
+		{"missing", "store: 01STORE0000000000000000001\nformat: 1\n", 30},
+		{"zero", "store: 01STORE0000000000000000001\nformat: 1\nretention_days: 0\n", 30},
+		{"negative", "store: 01STORE0000000000000000001\nformat: 1\nretention_days: -3\n", 30},
+	}
+	for _, c := range cases {
+		if err := os.WriteFile(filepath.Join(dir, ".hedgehug", "store.yaml"), []byte(c.body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		err := s.Read(t.Context(), id, func(r port.Reader) error {
+			days, err := r.RetentionDays()
+			if err != nil || days != c.want {
+				t.Errorf("%s: RetentionDays = %d, %v; want %d", c.name, days, err, c.want)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}

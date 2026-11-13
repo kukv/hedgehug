@@ -16,8 +16,7 @@ type StoreGitHubInfo struct {
 	Hidden   bool       // 非表示の Store か(08。GitHub を自動で読まない。D4a-9)
 }
 
-// StoreGitHub は、Store の一覧のうち GitHub に関わる値と、マシンの設定「ログイン名」の口。
-// 本物の実装はトラック G が足す(トラック D の決定 1)。
+// StoreGitHub は、Store の一覧のうち GitHub に関わる値と、マシンの設定「ログイン名」の口(トラック D の決定 1)。
 type StoreGitHub interface {
 	// List は、このマシンのすべての Store(非表示・閲覧のみを含む)を返す。
 	List(ctx context.Context) ([]StoreGitHubInfo, error)

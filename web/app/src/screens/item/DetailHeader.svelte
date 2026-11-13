@@ -6,7 +6,7 @@
   import WatchButton from "./WatchButton.svelte";
 
   // 詳細パネルのヘッダー: パンくず(Store・ワークスペース・プロジェクト・祖先)、全画面、閉じる(02「上から順の構成」)。
-  // メニューのほかの項目は A4b。メニューの枠と「テンプレートとして保存…」は B3(B3-17)。
+  // メニューは ItemMenu.svelte(本体は App.svelte の ItemMenuHost.svelte)。
   interface Props {
     v: DetailView;
     full: boolean;

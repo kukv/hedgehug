@@ -5,6 +5,7 @@ import {
   parseDisplayId,
   parseRoute,
   projectDisplayId,
+  projectTabOf,
   type Route,
 } from "./route";
 
@@ -18,6 +19,10 @@ describe("parseRoute and formatRoute", () => {
       { name: "project", store: "work", project: "HH-P1", tab: "overview" },
     ],
     ["/s/work/p/HH-P1/tree", { name: "project", store: "work", project: "HH-P1", tab: "tree" }],
+    [
+      "/s/work/p/HH-P1/settings",
+      { name: "project", store: "work", project: "HH-P1", tab: "settings" },
+    ],
     ["/s/work/i/HH-12", { name: "item", store: "work", item: "HH-12" }],
   ];
 
@@ -46,6 +51,13 @@ describe("parseRoute and formatRoute", () => {
       project: "HH-P1",
       tab: "overview",
     });
+  });
+
+  it("turns a tab ID into a project tab, falling back to the overview", () => {
+    expect(projectTabOf("settings")).toBe("settings");
+    expect(projectTabOf("tree")).toBe("tree");
+    expect(projectTabOf("overview")).toBe("overview");
+    expect(projectTabOf("kanban")).toBe("overview");
   });
 
   it("encodes and decodes each part", () => {

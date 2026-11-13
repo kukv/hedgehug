@@ -6,7 +6,7 @@ import type { Catalog } from "../catalog/catalog";
 
 // ワークスペースの作成ダイアログ(03「ワークスペースの作成」)。検査はサーバーに任せ、断りの文言を赤字で出す。
 // 作ったら一覧を読み直し、onCreated でそのワークスペースの概要を開く。
-// 非表示の Store と既定の Store は、まだない(トラック G が足す。B2-18)。
+// 非表示の Store と既定の Store は扱わない(B2-18)。
 
 export interface WorkspaceForm {
   storeId: string;

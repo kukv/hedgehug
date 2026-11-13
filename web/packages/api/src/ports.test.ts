@@ -98,13 +98,17 @@ describe("items port", () => {
     await expect(createItemsPort().findByNumber("S1", "W1", 99)).rejects.toBeInstanceOf(NotFound);
   });
 
-  it("reads the next number and moves up", async () => {
+  it("reads the next number and reorders", async () => {
     const fetch = respond(200, { number: 14 });
     await expect(createItemsPort().nextNumber("S1", "W1")).resolves.toBe(14);
     expect(call(fetch)[0]).toBe("/api/stores/S1/workspaces/W1/next-item-number");
     const moved = respond(204, undefined);
-    await expect(createItemsPort().moveUp("S1", "I1")).resolves.toBeUndefined();
-    expect(call(moved)[0]).toBe("/api/stores/S1/items/I1/move-up");
+    await expect(createItemsPort().reorder("S1", "I1", "I0", true)).resolves.toBeUndefined();
+    expect(call(moved)[0]).toBe("/api/stores/S1/items/I1/reorder");
+    expect(call(moved)[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ anchor: "I0", after: true }),
+    });
   });
 });
 

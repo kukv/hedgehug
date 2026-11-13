@@ -1,9 +1,11 @@
 package apptest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"maps"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -11,8 +13,11 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
-// Stores は port.Stores のメモリ上の偽物。同じ Store の Read と Write は 1 つずつ順に行い、
-// 別の Store どうしは互いを待たない。
+// Stores は port.Stores のメモリ上の偽物。同じ Store の Write は 1 つずつ順に行い、Read と重ねない。
+// 同じ Store の Read どうしと、別の Store どうしは互いを待たない(通しのテストのサーバーは、多くの画面の読み取りを
+// 同時に受けるので、Read を 1 つずつにすると、読み取りが列に並んで画面の反映が遅れる)。
+// 同じ goroutine の中で同じ Store の Read・Write を入れ子にすると panic する(本物は Read も Write もファイルロックを
+// 取るので止まる。偽物で通さないため)。
 type Stores struct {
 	mu     sync.Mutex // stores の出し入れだけを守る。Store の中身は store.mu が守る
 	clock  port.Clock
@@ -20,15 +25,54 @@ type Stores struct {
 	stores map[port.StoreID]*store
 }
 
-// store は 1 つの Store。mu を持っているあいだだけ logs を読み書きする。
+// store は 1 つの Store。mu の読み取りのロックで logs を読み、書き込みのロックで書く。
 type store struct {
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	logs map[change.Ref][]change.Record
 	// texts は、説明の本文(ない説明は入れない)。
 	texts map[change.Ref]string
 	// writes は、保存が成功した回数(Versions の印)。
 	writes int
+	// retentionDays は、削除済みの保持日数。
+	retentionDays int
+	// holders は、この Store の Read・Write を実行中の goroutine。holdersMu が守る。
+	holdersMu sync.Mutex
+	holders   map[uint64]bool
 }
+
+// enter は、いまの goroutine を、この Store の Read・Write の実行中に入れ、出す関数を返す。すでに入っていれば panic する。
+func (st *store) enter(id port.StoreID) (leave func()) {
+	g := goroutineID()
+	st.holdersMu.Lock()
+	defer st.holdersMu.Unlock()
+	if st.holders[g] {
+		panic(fmt.Sprintf("apptest: nested Read or Write of store %q in one goroutine (gitstore would deadlock)", id))
+	}
+	st.holders[g] = true
+	return func() {
+		st.holdersMu.Lock()
+		defer st.holdersMu.Unlock()
+		delete(st.holders, g)
+	}
+}
+
+// goroutineID は、いまの goroutine の番号(スタックの先頭の行「goroutine N [...]」から読む)。
+func goroutineID() uint64 {
+	var buf [64]byte
+	line := bytes.TrimPrefix(buf[:runtime.Stack(buf[:], false)], []byte("goroutine "))
+	end := bytes.IndexByte(line, ' ')
+	if end < 0 {
+		panic(fmt.Sprintf("apptest: goroutine id: unexpected stack line %q", line))
+	}
+	n, err := strconv.ParseUint(string(line[:end]), 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("apptest: goroutine id: %v", err))
+	}
+	return n
+}
+
+// defaultRetentionDays は、保持日数の既定(gitstore と同じ。08「保持日数」)。
+const defaultRetentionDays = 30
 
 func NewStores(clock port.Clock, ids port.IDs) *Stores {
 	return &Stores{clock: clock, ids: ids, stores: map[port.StoreID]*store{}}
@@ -42,39 +86,53 @@ func (s *Stores) AddStore(id port.StoreID) {
 	if _, ok := s.stores[id]; ok {
 		panic(fmt.Sprintf("apptest: AddStore: store %q already exists", id))
 	}
-	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}}
+	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, retentionDays: defaultRetentionDays, holders: map[uint64]bool{}}
 }
 
-// open は、Store のロックを取って返す。呼んだ側が st.mu.Unlock する。
-func (s *Stores) open(id port.StoreID) (*store, error) {
+// SetRetentionDays は、Store の削除済みの保持日数を変える(テスト用。本物は store.yaml の retention_days)。
+func (s *Stores) SetRetentionDays(id port.StoreID, days int) {
+	st, err := s.find(id)
+	if err != nil {
+		panic(fmt.Sprintf("apptest: SetRetentionDays: %v", err))
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.retentionDays = days
+}
+
+// find は、Store を返す。ロックは呼んだ側が取る。
+func (s *Stores) find(id port.StoreID) (*store, error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	st, ok := s.stores[id]
-	s.mu.Unlock()
 	if !ok {
 		return nil, port.ErrStoreNotFound
 	}
-	st.mu.Lock()
 	return st, nil
 }
 
 func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader) error) error {
-	st, err := s.open(id)
+	st, err := s.find(id)
 	if err != nil {
 		return err
 	}
-	defer st.mu.Unlock()
-	return fn(&view{base: st.logs, baseTexts: st.texts})
+	defer st.enter(id)()
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return fn(&view{base: st.logs, baseTexts: st.texts, retentionDays: st.retentionDays})
 }
 
 func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
-	st, err := s.open(id)
+	st, err := s.find(id)
 	if err != nil {
 		return err
 	}
+	defer st.enter(id)()
+	st.mu.Lock()
 	defer st.mu.Unlock()
 	logs := st.logs
 	t := &tx{
-		view: view{base: logs, baseTexts: st.texts, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
+		view: view{base: logs, baseTexts: st.texts, retentionDays: st.retentionDays, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
 		ids:  s.ids,
 	}
@@ -109,9 +167,9 @@ func (s *Stores) Versions(context.Context) (map[port.StoreID]string, error) {
 	s.mu.Unlock()
 	out := make(map[port.StoreID]string, len(ids))
 	for id, st := range ids {
-		st.mu.Lock()
+		st.mu.RLock()
 		out[id] = strconv.Itoa(st.writes)
-		st.mu.Unlock()
+		st.mu.RUnlock()
 	}
 	return out, nil
 }

@@ -16,7 +16,7 @@ func (s Service) List(ctx context.Context, store port.StoreID, ws workspace.ID) 
 			return err
 		}
 		var err error
-		out, err = r.Projects().List(ws)
+		out, err = port.LiveProjects(r, ws)
 		return err
 	})
 	return out, err

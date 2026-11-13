@@ -49,6 +49,20 @@ describe("Menu", () => {
     expect(onselect).toHaveBeenCalledExactlyOnceWith("copy");
   });
 
+  it("shows a head above the items, and a press inside the head does not close the menu", async () => {
+    const onclose = vi.fn();
+    render(Menu, {
+      props: { open: true, x: 0, y: 0, items, onselect: vi.fn(), onclose, head: text("検索") },
+    });
+    const head = screen.getByText("検索");
+    const first = screen.getAllByRole("menuitem")[0] as HTMLElement;
+    expect(head.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await fireEvent.pointerDown(head);
+    expect(onclose).not.toHaveBeenCalled();
+    await fireEvent.pointerDown(document.body);
+    expect(onclose).toHaveBeenCalledOnce();
+  });
+
   it("closes on Escape", async () => {
     const onclose = vi.fn();
     render(Menu, { props: { open: true, x: 0, y: 0, items, onselect: vi.fn(), onclose } });
@@ -71,7 +85,9 @@ describe("Menu", () => {
         },
       });
       await tick();
-      expect(screen.getByRole("menu").style.top).toBe(`${window.innerHeight - 140 - 4}px`);
+      // 位置は、項目(role="menu")と head を囲む浮いた枠に付く。
+      const pop = screen.getByRole("menu").parentElement as HTMLElement;
+      expect(pop.style.top).toBe(`${window.innerHeight - 140 - 4}px`);
     } finally {
       height.mockRestore();
     }

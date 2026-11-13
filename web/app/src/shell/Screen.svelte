@@ -41,7 +41,7 @@
   {:else if store && workspace}
     <WorkspaceScreen {store} {workspace} tab={workspaceTab} {ondrawer} {alert} />
   {:else}
-    <!-- ホーム。マイタスク(トラック E)が入ったら替える(A2 の計画の決定 6)。 -->
+    <!-- ホーム(A2 の計画の決定 6)。 -->
     <PageHead title="hedgehug" {ondrawer} {alert} />
     <div class="content">
       {#if version}

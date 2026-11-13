@@ -5,9 +5,12 @@ import type { DetailView } from "../items/detail";
 import type { Toasts } from "../toasts/toasts";
 import { templateCreated } from "./templates";
 
-// 詳細パネルのメニューの「テンプレートとして保存…」(03「アイテムからテンプレートを作る」、B3-17)。
+// アイテムのメニューの「テンプレートとして保存…」(03「アイテムからテンプレートを作る」、B3-17)。
 
 export const saveAsTemplateLabel = "テンプレートとして保存…";
+
+// TemplateSubject は、テンプレートにするアイテムと、その Store・子。詳細パネルの DetailView も、ツリーの行も、これを渡せる。
+export type TemplateSubject = Pick<DetailView, "store" | "item" | "children">;
 
 export interface SaveAsTemplateModel {
   // name・title は、ダイアログの初期値(アイテムのタイトル)。
@@ -17,7 +20,7 @@ export interface SaveAsTemplateModel {
   showStructure: boolean;
 }
 
-export function saveAsTemplateDialog(view: DetailView): SaveAsTemplateModel {
+export function saveAsTemplateDialog(view: TemplateSubject): SaveAsTemplateModel {
   return {
     name: view.item.title,
     title: view.item.title,
@@ -28,7 +31,7 @@ export function saveAsTemplateDialog(view: DetailView): SaveAsTemplateModel {
 export interface SaveAsTemplate {
   // save は、保存してトースト「テンプレートを作成しました」を出す。断りは onRefused に渡し、false を返す。
   save(
-    view: DetailView,
+    view: TemplateSubject,
     input: SaveAsTemplateInput,
     onRefused: (message: string) => void,
   ): Promise<boolean>;

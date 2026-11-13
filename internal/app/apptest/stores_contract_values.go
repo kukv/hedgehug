@@ -210,3 +210,68 @@ func contractLists(t *testing.T, s port.Stores, id port.StoreID) {
 		return nil
 	})
 }
+
+// contractDeleted は、削除の行(delete・f が deleted)が、アイテムとプロジェクトの Deleted の印として読め、
+// 削除済みも Get と List が返すことを確かめる(A4b-2・A4b-3)。root と op は行のとおりで、下のものは root が false。
+func contractDeleted(t *testing.T, s port.Stores, id port.StoreID) {
+	parent := cItem.ID
+	child := item.Item{ID: "01CONTRACTIT00000000000002", Place: item.Place{Workspace: cWorkspace.ID, Project: cProject.ID, Parent: &parent, Number: 2}, Kind: item.Task, Rank: "a", Title: "下"}
+	other := item.Item{ID: "01CONTRACTIT00000000000003", Place: item.Place{Workspace: cWorkspace.ID, Project: cProject.ID, Number: 3}, Kind: item.Epic, Rank: "b", Title: "別"}
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Append(child.ID, item.Create(child)), tx.WriteItems().Append(other.ID, item.Create(other)))
+	})
+	mustWrite(t, s, id, port.Operation{Actor: change.User("taro"), Summary: "削除"}, func(tx port.Tx) error {
+		err := errors.Join(
+			tx.WriteItems().Append(cItem.ID, change.NewDeleteEntity(true)),
+			tx.WriteItems().Append(child.ID, change.NewDeleteEntity(false)),
+		)
+		if got, gerr := tx.Items().Get(cItem.ID); gerr != nil || got.Deleted == nil {
+			t.Errorf("a tx must see its own delete: %+v, %v", got.Deleted, gerr)
+		}
+		return err
+	})
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		return tx.WriteProjects().Append(cProject.ID, change.NewDeleteEntity(true))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		wantDeletedItems(t, r, child.ID)
+		wantDeletedProject(t, r)
+		return nil
+	})
+}
+
+// wantDeletedItems は、削除済みのアイテムも List が返し、親(root: true)と子(root: false)が同じ op を持つことを確かめる。
+func wantDeletedItems(t *testing.T, r port.Reader, child item.ID) {
+	t.Helper()
+	its, err := r.Items().List(cProject.ID)
+	if err != nil || len(its) != 3 {
+		t.Fatalf("Items().List must return deleted items too: %+v, %v", its, err)
+	}
+	log, _ := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+	del := log[len(log)-1]
+	d0, d1, d2 := its[0].Deleted, its[1].Deleted, its[2].Deleted
+	if d0 == nil || !d0.Root || d0.Op != del.Op || !d0.At.Equal(del.At) {
+		t.Errorf("deleted parent = %+v, want op %s at %s root", d0, del.Op, del.At)
+	}
+	if d1 == nil || d1.Root || d1.Op != del.Op {
+		t.Errorf("deleted child = %+v, want the parent's op and root false", d1)
+	}
+	if d2 != nil {
+		t.Errorf("a live item has Deleted = %+v", d2)
+	}
+	if got, err := r.Items().Get(child); err != nil || got.Deleted == nil || got.Title != "下" {
+		t.Errorf("Items().Get(deleted) = %+v, %v", got, err)
+	}
+}
+
+func wantDeletedProject(t *testing.T, r port.Reader) {
+	t.Helper()
+	ps, err := r.Projects().List(cWorkspace.ID)
+	if err != nil || len(ps) != 1 || ps[0].Deleted == nil || !ps[0].Deleted.Root {
+		t.Errorf("Projects().List must return the deleted project: %+v, %v", ps, err)
+	}
+	if p, err := r.Projects().Get(cProject.ID); err != nil || p.Deleted == nil || p.Title != "ログイン" {
+		t.Errorf("Projects().Get(deleted) = %+v, %v", p, err)
+	}
+}

@@ -207,6 +207,18 @@ components:
         - display
         - text
       type: object
+    ChangeKind:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - Story
+            - Task
+            - Bug
+          type: string
+      required:
+        - kind
+      type: object
     ChangeWorkspacePrefix:
       additionalProperties: false
       properties:
@@ -331,6 +343,42 @@ components:
         - name
         - prefix
       type: object
+    DeleteItemPreview:
+      additionalProperties: false
+      properties:
+        count:
+          description: 下にある、削除されていないアイテムの数
+          format: int64
+          type: integer
+        kinds:
+          description: 下にあるものの種類。Epic・Story・Task・Bug・Step の順で重ねない
+          items:
+            type: string
+          type: array
+        retentionDays:
+          description: その Store の削除済みの保持日数
+          format: int64
+          type: integer
+      required:
+        - count
+        - kinds
+        - retentionDays
+      type: object
+    DeleteProjectPreview:
+      additionalProperties: false
+      properties:
+        items:
+          description: 下にある、削除されていないアイテムの数(Epic から Step まで全部)
+          format: int64
+          type: integer
+        retentionDays:
+          description: その Store の削除済みの保持日数
+          format: int64
+          type: integer
+      required:
+        - items
+        - retentionDays
+      type: object
     DescribeBody:
       additionalProperties: false
       properties:
@@ -365,6 +413,15 @@ components:
           type: string
       required:
         - text
+      type: object
+    Duplicated:
+      additionalProperties: false
+      properties:
+        id:
+          description: 新しいアイテムの内部 ID
+          type: string
+      required:
+        - id
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -664,6 +721,47 @@ components:
         - login
         - name
       type: object
+    MoveCandidate:
+      additionalProperties: false
+      properties:
+        display:
+          description: 画面の ID(HH-12・HH-P2)
+          type: string
+        id:
+          description: アイテムかプロジェクトの内部 ID
+          type: string
+        kind:
+          description: item はアイテム(親になる Epic・Story・Task・Bug)、project はプロジェクト(Epic の移し先)
+          enum:
+            - item
+            - project
+          type: string
+        projectId:
+          description: 移したあとのプロジェクトの内部 ID。アイテムの候補なら属するプロジェクト、プロジェクトの候補なら自分
+          type: string
+        projectTitle:
+          description: アイテムの候補が属するプロジェクトの名前。プロジェクトの候補では空
+          type: string
+        title:
+          type: string
+      required:
+        - kind
+        - id
+        - display
+        - title
+        - projectId
+        - projectTitle
+      type: object
+    MoveItem:
+      additionalProperties: false
+      properties:
+        parent:
+          description: 新しい親の内部 ID(Epic 以外)
+          type: string
+        project:
+          description: 移し先のプロジェクトの内部 ID(Epic)
+          type: string
+      type: object
     MoveWorkspaceItem:
       additionalProperties: false
       properties:
@@ -915,6 +1013,20 @@ components:
           type: string
       required:
         - name
+      type: object
+    ReorderItem:
+      additionalProperties: false
+      properties:
+        after:
+          description: true なら基準の直後、false なら直前に置く
+          type: boolean
+        anchor:
+          description: 基準にする兄弟の内部 ID。絞り込み中は、見えている兄弟
+          minLength: 1
+          type: string
+      required:
+        - anchor
+        - after
       type: object
     SaveItemAsTemplate:
       additionalProperties: false
@@ -2072,6 +2184,29 @@ paths:
           description: Error
       summary: アイテムを作成
   /api/stores/{store}/items/{item}:
+    delete:
+      operationId: delete-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムと、その下のものを削除する
     get:
       operationId: get-item
       parameters:
@@ -2299,6 +2434,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムのコメントを編集する
+  /api/stores/{store}/items/{item}/delete-preview:
+    get:
+      operationId: get-item-delete-preview
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteItemPreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを削除したときに一緒に消えるものと保持日数を返す
   /api/stores/{store}/items/{item}/description:
     get:
       operationId: get-item-description
@@ -2360,6 +2523,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの説明を保存する
+  /api/stores/{store}/items/{item}/duplicate:
+    post:
+      operationId: duplicate-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Duplicated"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを複製する
   /api/stores/{store}/items/{item}/history:
     get:
       operationId: get-item-history
@@ -2391,6 +2582,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの履歴を新しい順で返す
+  /api/stores/{store}/items/{item}/kind:
+    put:
+      operationId: change-item-kind
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeKind"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの種類を変える
   /api/stores/{store}/items/{item}/links:
     get:
       operationId: list-links
@@ -2512,9 +2733,39 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: リンクを外す(PR は解除の記録に入る)
-  /api/stores/{store}/items/{item}/move-up:
+  /api/stores/{store}/items/{item}/move:
     post:
-      operationId: move-item-up
+      operationId: move-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 同じワークスペースの中でアイテムを移す
+  /api/stores/{store}/items/{item}/move-candidates:
+    get:
+      operationId: list-move-candidates
       parameters:
         - in: path
           name: store
@@ -2527,15 +2778,22 @@ paths:
           schema:
             type: string
       responses:
-        "204":
-          description: No Content
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/MoveCandidate"
+                nullable: true
+                type: array
+          description: OK
         default:
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: アイテムを直前の兄弟と入れ替える
+      summary: 「移動…」の移し先の候補を返す
   /api/stores/{store}/items/{item}/properties/{property}:
     put:
       operationId: set-item-property
@@ -2781,6 +3039,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 関連を外す
+  /api/stores/{store}/items/{item}/reorder:
+    post:
+      operationId: reorder-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを、同じ親の兄弟の直前か直後に置く
   /api/stores/{store}/items/{item}/save-as-template:
     post:
       operationId: save-item-as-template
@@ -3060,6 +3348,29 @@ paths:
           description: Error
       summary: Store のメンバーを返す
   /api/stores/{store}/projects/{project}:
+    delete:
+      operationId: delete-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトと、その下のアイテムを削除する
     get:
       operationId: get-project
       parameters:
@@ -3252,6 +3563,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトの開始日か終了日を変える
+  /api/stores/{store}/projects/{project}/delete-preview:
+    get:
+      operationId: get-project-delete-preview
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteProjectPreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトを削除したときに一緒に消えるアイテムの数と保持日数を返す
   /api/stores/{store}/projects/{project}/description:
     get:
       operationId: get-project-description

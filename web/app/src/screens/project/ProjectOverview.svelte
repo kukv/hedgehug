@@ -16,7 +16,7 @@
   import OverviewRepos from "./OverviewRepos.svelte";
 
   // プロジェクトの「概要」のタブ(02「概要の編集」)。左の列に説明・Epic・リポジトリ・コメント・履歴、右の列に項目の編集。
-  // 「PR と Issue」の区画は D3・D4 が足す。Epic の行(期限・進捗・ステータス・担当者)は EpicRow.svelte。
+  // 「PR と Issue」の区画は OverviewRepos.svelte の下段。Epic の行(期限・進捗・ステータス・担当者)は EpicRow.svelte。
   interface Props {
     view: ProjectView;
     onaddepic: () => void;

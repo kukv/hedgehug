@@ -124,7 +124,7 @@ test("the workspace menu opens the settings and moves the workspace down", async
     const prev = (await order()).join("\n");
     await (await menuOf(first)).click();
     const down = page.getByRole("menuitem", { name: "下へ移動" });
-    // 末尾なら押せない(すでに first の方が下のとき。今はほかのテストと同時には動かないので、ふつうは起きない)。
+    // 末尾なら押せない(すでに first の方が下のとき。ほかのテストと同時には動かないので、ふつうは起きない)。
     if (await down.isDisabled()) {
       await page.keyboard.press("Escape");
       break;

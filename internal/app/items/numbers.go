@@ -33,12 +33,12 @@ func (s Service) NextNumber(ctx context.Context, store port.StoreID, ws workspac
 func (s Service) FindByNumber(ctx context.Context, store port.StoreID, ws workspace.ID, number int) (item.Item, error) {
 	var found item.Item
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		ps, err := r.Projects().List(ws)
+		ps, err := port.LiveProjects(r, ws)
 		if err != nil {
 			return err
 		}
 		for _, p := range ps {
-			its, err := r.Items().List(p.ID)
+			its, err := port.LiveItems(r, p.ID)
 			if err != nil {
 				return err
 			}

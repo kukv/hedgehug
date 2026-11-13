@@ -10,7 +10,7 @@ import (
 )
 
 // 本物の GitHub に問い合わせる(github-live)。リポジトリに設定済みの secret HEDGEHUG_LIVE_TOKEN と
-// 変数 HEDGEHUG_LIVE_ORG(検証用の組織。リポジトリを読む操作は D3 から確かめる)が要る。
+// 変数 HEDGEHUG_LIVE_ORG(検証用の組織。その hh-live リポジトリを読む)が要る。
 func liveToken(t *testing.T) string {
 	t.Helper()
 	token, org := os.Getenv("HEDGEHUG_LIVE_TOKEN"), os.Getenv("HEDGEHUG_LIVE_ORG")

@@ -25,7 +25,7 @@ import (
 )
 
 // wire は、本物の部品を口に差し込み、自動の同期と GitHub の自動の読み取りと Store の見張りを ctx が終わるまで動かす。
-// Store の一覧の読み込みはトラック G が足す(この計画の決定 6、C2 の決定 C2-2)。
+// Store の一覧は読まない(この計画の決定 6、C2 の決定 C2-2)。
 func wire(ctx context.Context) (httpapi.Deps, error) {
 	clock, ids := sysclock.Clock{}, sysclock.IDs{}
 	stores := gitstore.New(clock, ids)
@@ -42,7 +42,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		return httpapi.Deps{}, err
 	}
 	file := machineconfig.Open(cfg)
-	gh := github.New(nil) // 時計のずれはトラック C(C5)が受け取る(トラック D の計画の決定 3)
+	gh := github.New(nil) // 時計のずれは受け取らない(トラック D の計画の決定 3)
 	secrets := secret.New()
 	session := ghapp.NewSession()
 	hub := events.NewHub()
@@ -84,19 +84,19 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	return deps, nil
 }
 
-// noStores は、Store の一覧(トラック G)が入るまでの仮。表示する Store はない。
+// noStores は、表示する Store を返さない。
 type noStores struct{}
 
 func (noStores) List(context.Context) ([]port.StoreInfo, error) { return []port.StoreInfo{}, nil }
 
-// noIdentity は、「あなた」を決める仕組み(トラック G)が入るまでの仮。保存する操作は断る。
+// noIdentity は、「あなた」を決めない。保存する操作は断る。
 type noIdentity struct{}
 
 func (noIdentity) Me(context.Context, port.StoreID) (string, error) {
 	return "", errors.New("このマシンのログイン名が未設定です")
 }
 
-// noInbox は、受信箱(C4)が入るまでの仮。通知を捨てる(B4-12)。
+// noInbox は、通知を捨てる(B4-12)。
 type noInbox struct{}
 
 func (noInbox) Add(context.Context, port.Notice) error { return nil }

@@ -40,7 +40,7 @@ type View struct {
 func display(r port.Reader, t Target) (string, error) {
 	switch t.Kind {
 	case change.KindItem:
-		it, err := r.Items().Get(t.ID)
+		it, err := port.LiveItem(r, t.ID)
 		if err != nil {
 			return "", err
 		}
@@ -50,7 +50,7 @@ func display(r port.Reader, t Target) (string, error) {
 		}
 		return it.DisplayID(w.Prefix), nil
 	case change.KindProject:
-		p, err := r.Projects().Get(t.ID)
+		p, err := port.LiveProject(r, t.ID)
 		if err != nil {
 			return "", err
 		}

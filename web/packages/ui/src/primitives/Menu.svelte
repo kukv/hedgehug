@@ -1,5 +1,7 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import type { MenuItem } from "../types";
+  import { menuFocus } from "./menuFocus";
 
   interface Props {
     open: boolean;
@@ -8,9 +10,11 @@
     items: MenuItem[];
     onselect: (id: string) => void;
     onclose: () => void;
+    // head は、項目の上に置く欄(「移動…」の検索欄など)。項目をスクロールしても上に残る。
+    head?: Snippet;
   }
 
-  let { open, x, y, items, onselect, onclose }: Props = $props();
+  let { open, x, y, items, onselect, onclose, head }: Props = $props();
   let element: HTMLDivElement | undefined = $state();
   let innerHeight = $state(0);
   let height = $state(0);
@@ -20,6 +24,12 @@
     height = element?.offsetHeight ?? 0;
   });
   const top = $derived(Math.max(0, Math.min(y, innerHeight - height - 4)));
+
+  // shownFrom は、開く前のフォーカス(閉じたら戻す先)。head の欄は出たときにフォーカスを取るので、その前に読む。
+  let shownFrom = $state.raw<Element | null>(null);
+  $effect.pre(() => {
+    if (open) shownFrom = document.activeElement;
+  });
 
   function onkeydown(event: KeyboardEvent) {
     if (open && event.key === "Escape") onclose();
@@ -34,29 +44,43 @@
 <svelte:window {onkeydown} {onpointerdown} bind:innerHeight />
 
 {#if open}
-  <div class="menu-pop" role="menu" style:left="{x}px" style:top="{top}px" bind:this={element}>
-    {#each items as item, i (i)}
-      {#if "separator" in item}
-        <hr class="menu-sep">
-      {:else}
-        <button
-          type="button"
-          role="menuitem"
-          class="menu-item"
-          class:danger={item.danger}
-          disabled={item.disabled}
-          onclick={() => {
-            // 押せない間は onselect を呼ばない(合成イベントでも)。
-            if (!item.disabled) onselect(item.id);
-          }}
-        >
-          <span class="menu-label">{item.label}</span>
-          {#if item.hint}
-            <span class="menu-hint">{item.hint}</span>
-          {/if}
-        </button>
-      {/if}
-    {/each}
+  <!-- role="menu" の中に置けるのは項目だけなので、head(検索欄など)は同じ浮いた枠の中で、その外に置く。
+       data-menu は、head も含めて「メニューの中」と見分けるための印(ツリーのキー操作が使う) -->
+  <div
+    class="menu-pop"
+    data-menu
+    style:left="{x}px"
+    style:top="{top}px"
+    bind:this={element}
+    use:menuFocus={shownFrom}
+  >
+    {#if head}
+      <div class="menu-head">{@render head()}</div>
+    {/if}
+    <div class="menu-list" role="menu">
+      {#each items as item, i (i)}
+        {#if "separator" in item}
+          <hr class="menu-sep">
+        {:else}
+          <button
+            type="button"
+            role="menuitem"
+            class="menu-item"
+            class:danger={item.danger}
+            disabled={item.disabled}
+            onclick={() => {
+              // 押せない間は onselect を呼ばない(合成イベントでも)。
+              if (!item.disabled) onselect(item.id);
+            }}
+          >
+            <span class="menu-label">{item.label}</span>
+            {#if item.hint}
+              <span class="menu-hint">{item.hint}</span>
+            {/if}
+          </button>
+        {/if}
+      {/each}
+    </div>
   </div>
 {/if}
 
@@ -73,6 +97,18 @@
     flex-direction: column;
     max-height: 420px;
     overflow-y: auto;
+  }
+  .menu-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .menu-head {
+    position: sticky;
+    top: -4px;
+    z-index: 1;
+    min-width: 260px;
+    padding: 2px 2px 6px;
+    background: var(--raised);
   }
   .menu-item {
     display: flex;

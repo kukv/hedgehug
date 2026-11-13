@@ -25,7 +25,6 @@ import {
   createSync,
   createSystemInfo,
   createTabSignals,
-  createToasts,
   createWatch,
   createWorklogs,
   createWorkspaceDialog,
@@ -46,6 +45,7 @@ import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
 import { githubReloads, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
+import { toasts } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 
@@ -60,13 +60,9 @@ export { drafts };
 export const navigation = createNavigation(browserHistory(), drafts);
 navigation.start();
 export const links = createLinks(navigation, token);
-export const timer = {
-  set: (fn: () => void, ms: number) => setTimeout(fn, ms),
-  clear: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-};
-export const toasts = createToasts(timer);
+export { toasts };
 
-const itemsPort = createItemsPort();
+export const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
 // 詳細パネルとプロジェクトの概要の、説明・コメントなどの口と、メンションの表示に使うメンバーの一覧。
 export const notes = createNotesPort();

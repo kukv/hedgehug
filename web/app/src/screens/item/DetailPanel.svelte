@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
+  import { readOnlyBand, readOnlyNote } from "@hedgehug/core";
   import { BlockedBadge, IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
-  import { descriptionSaves, detail, toasts } from "../../wire";
+  import { descriptionSaves, detail } from "../../wire";
+  import { copyItemId } from "../../wireActions";
   import LinkSection from "../github/LinkSection.svelte";
   import CommentsSection from "../notes/CommentsSection.svelte";
   import DescriptionSection from "../notes/DescriptionSection.svelte";
@@ -40,15 +41,6 @@
     // Enter でもフォーカスを外して保存する。
     if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
   }
-
-  async function copy(id: string) {
-    try {
-      await navigator.clipboard.writeText(id);
-      toasts.show(copiedMessage(id));
-    } catch {
-      toasts.show(copyFailedMessage(id), { error: true });
-    }
-  }
 </script>
 
 <SidePanel
@@ -71,7 +63,7 @@
       <KindIcon kind={v.item.kind} />
       <span>{v.item.kind}</span>
       <code class="id">{v.displayId}</code>
-      <IconButton label="ID をコピー" size="xs" onclick={() => void copy(v.displayId)}
+      <IconButton label="ID をコピー" size="xs" onclick={() => void copyItemId(v.displayId)}
         >⧉</IconButton
       >
       {#if v.item.blocked}

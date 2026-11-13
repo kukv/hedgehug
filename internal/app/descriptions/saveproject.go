@@ -15,7 +15,7 @@ import (
 func (s Service) SaveProject(ctx context.Context, store port.StoreID, id project.ID, base, text string) (Result, error) {
 	var title string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		p, err := r.Projects().Get(id)
+		p, err := port.LiveProject(r, id)
 		title = p.Title
 		return err
 	})

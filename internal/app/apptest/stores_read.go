@@ -26,10 +26,16 @@ type view struct {
 	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
 	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す(gitstore と同じ)。
 	places map[item.ID]project.ID
-	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースに
-	// あると分かっているプロジェクトをログから作り直さない。Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
+	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースにあると
+	// 分かっているプロジェクトをログから作り直さない(ワークスペースごとに List を呼ぶ読み取りが、プロジェクトの数の
+	// 2 乗にならないように。通しのテストのサーバーは、ワークスペースが多い Store を、アイテムを読むたびに全部読む)。
+	// Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
 	projectPlaces map[project.ID]workspace.ID
+	// retentionDays は、Store の削除済みの保持日数(Stores.SetRetentionDays。既定は 30)。
+	retentionDays int
 }
+
+func (v *view) RetentionDays() (int, error) { return v.retentionDays, nil }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
 // ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。

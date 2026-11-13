@@ -17,8 +17,8 @@ type ProjectLinkRow struct {
 	Display string
 }
 
-// ProjectLinks は、プロジェクトの下のアイテムのリンクを、アイテムの番号順、同じアイテムの中はリンクした順に返す。
-// GitHub には問い合わせない。プロジェクトがなければ port.ErrNotFound。
+// ProjectLinks は、プロジェクトの下の削除済みでないアイテムのリンクを、アイテムの番号順、同じアイテムの中はリンクした順に返す。
+// GitHub には問い合わせない。プロジェクトがないか削除済みなら port.ErrNotFound。
 func (l Links) ProjectLinks(ctx context.Context, store port.StoreID, id project.ID) ([]ProjectLinkRow, error) {
 	var out []ProjectLinkRow
 	err := l.Stores.Read(ctx, store, func(r port.Reader) error {
@@ -36,9 +36,10 @@ func (l Links) ProjectLinks(ctx context.Context, store port.StoreID, id project.
 	return out, err
 }
 
-// projectLinks は、プロジェクトの下のアイテムのリンクを読む。
+// projectLinks は、プロジェクトの下の、削除済みでないアイテムのリンクを読む。プロジェクトが削除済みなら
+// port.ErrNotFound(A4b-4)。
 func projectLinks(r port.Reader, id project.ID) ([]ProjectLinkRow, error) {
-	p, err := r.Projects().Get(id)
+	p, err := port.LiveProject(r, id)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +47,7 @@ func projectLinks(r port.Reader, id project.ID) ([]ProjectLinkRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	its, err := r.Items().List(id)
+	its, err := port.LiveItems(r, id)
 	if err != nil {
 		return nil, err
 	}

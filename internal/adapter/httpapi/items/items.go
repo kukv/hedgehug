@@ -110,8 +110,12 @@ type listInput struct {
 func Register(api huma.API, svc appitems.Service) {
 	registerCreateRead(api, svc)
 	registerEdit(api, svc)
+	registerDelete(api, svc)
 	registerNumbers(api, svc)
 	registerValues(api, svc)
+	registerMove(api, svc)
+	registerKind(api, svc)
+	registerDuplicate(api, svc)
 }
 
 func registerCreateRead(api huma.API, svc appitems.Service) {

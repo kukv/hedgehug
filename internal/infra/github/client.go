@@ -29,7 +29,7 @@ type Client struct {
 	WebURL  string // デバイスフローの宛先(github.com)
 	HTTP    *http.Client
 	Now     func() time.Time
-	// OnSkew は、応答の Date からこのマシンの時計を引いたずれを、応答のたびに受け取る(トラック C が記録する)。
+	// OnSkew は、応答の Date からこのマシンの時計を引いたずれを、応答のたびに受け取る。nil なら渡さない。
 	OnSkew func(time.Duration)
 }
 

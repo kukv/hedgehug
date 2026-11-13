@@ -22,6 +22,18 @@ type AddStep struct {
 	Title string `json:"title"`
 }
 
+// ReorderItem は、並べ替えの本文。Anchor は、同じ親の削除されていない兄弟の内部 ID。
+type ReorderItem struct {
+	Anchor string `json:"anchor" minLength:"1" doc:"基準にする兄弟の内部 ID。絞り込み中は、見えている兄弟"`
+	After  bool   `json:"after" doc:"true なら基準の直後、false なら直前に置く"`
+}
+
+type reorderInput struct {
+	Store string `path:"store"`
+	Item  string `path:"item"`
+	Body  ReorderItem
+}
+
 type renameInput struct {
 	Store string `path:"store"`
 	Item  string `path:"item"`
@@ -51,9 +63,9 @@ func registerEdit(api huma.API, svc appitems.Service) {
 			}
 			return &oneOutput{Body: toAPI(it)}, nil
 		})
-	huma.Register(api, huma.Operation{OperationID: "move-item-up", Method: http.MethodPost, Path: "/api/stores/{store}/items/{item}/move-up", Summary: "アイテムを直前の兄弟と入れ替える", DefaultStatus: http.StatusNoContent},
-		func(ctx context.Context, in *getInput) (*struct{}, error) {
-			if err := svc.MoveUp(ctx, port.StoreID(in.Store), item.ID(in.Item)); err != nil {
+	huma.Register(api, huma.Operation{OperationID: "reorder-item", Method: http.MethodPost, Path: "/api/stores/{store}/items/{item}/reorder", Summary: "アイテムを、同じ親の兄弟の直前か直後に置く", DefaultStatus: http.StatusNoContent},
+		func(ctx context.Context, in *reorderInput) (*struct{}, error) {
+			if err := svc.Reorder(ctx, port.StoreID(in.Store), item.ID(in.Item), item.ID(in.Body.Anchor), in.Body.After); err != nil {
 				return nil, apierr.From(err)
 			}
 			return nil, nil //nolint:nilnil // 204 は本文なし

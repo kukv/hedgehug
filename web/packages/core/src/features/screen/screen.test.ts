@@ -37,7 +37,7 @@ async function setup(start: string, begin = true) {
     screen.start();
     await flush();
   }
-  return { screen, navigation, history, opened, catalog };
+  return { screen, navigation, history, opened, catalog, items };
 }
 
 describe("createScreen", () => {
@@ -76,6 +76,28 @@ describe("createScreen", () => {
     await flush();
     expect(history.paths).toEqual(["/s/work/p/HH-P1/tree"]);
     expect(get(screen.current)).toMatchObject({ name: "project", projectId: "S1-P1", tab: "tree" });
+    expect(opened).toEqual(["S1/S1-I12"]);
+  });
+
+  // 一覧の読み直し(画面への反映)が、アイテムを探すより短い間隔で続いても、アイテムの入口は開く。
+  // 新しい解決を始めるたびに前の結果を捨てると、いつまでも開かない。
+  it("opens an item entry even while the catalog keeps reloading during the lookup", async () => {
+    const { screen, history, opened, catalog, items } = await setup("/s/work/i/HH-12", false);
+    const find = items.findByNumber.bind(items);
+    const pending: (() => void)[] = [];
+    items.findByNumber = (...a) =>
+      new Promise((resolve) => {
+        pending.push(() => void find(...a).then(resolve));
+      });
+    screen.start();
+    await flush();
+    for (let i = 0; i < 3; i++) {
+      await catalog.load();
+      await flush();
+      pending.shift()?.();
+      await flush();
+    }
+    expect(history.paths).toEqual(["/s/work/p/HH-P1/tree"]);
     expect(opened).toEqual(["S1/S1-I12"]);
   });
 

@@ -20,7 +20,7 @@ export async function sidebar(page: Page, info: TestInfo) {
 
 // unique は、作るものの名前に幅の名前とやり直しの回数を入れる(A2 の計画の決定 21)。
 // e2e のサーバーは worker ごとに起動し(fixtures.ts)、worker は 1 つの幅しか流さない。テストが落ちると worker は
-// 作り直され、やり直し(CI の retries)は新しいサーバーで流れる。なので今は重なりを避けるためには要らないが、
+// 作り直され、やり直し(CI の retries)は新しいサーバーで流れる。なので重なりを避けるためには要らないが、
 // どの幅・何回目で作ったものかを名前で見分けられるように残す。
 export const unique = (info: TestInfo, title: string) =>
   `${title} ${info.project.name}-${info.retry}`;
@@ -137,6 +137,36 @@ export async function taskUnderEpic(page: Page, info: TestInfo, epicId: string, 
   await createTaskFrom(page, panel, unique(info, title));
   return panel;
 }
+
+// addEpic は、プロジェクト(接頭辞-P1)のツリーの「Epic」ボタンから Epic を作る(projectWithEpic の 2 つ目以降)。作った Epic のタイトルを返す。
+export async function addEpic(page: Page, info: TestInfo, prefix: string, title: string) {
+  const name = unique(info, title);
+  await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/tree`));
+  await page.getByRole("button", { name: "Epic", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "新規作成" });
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill(name);
+  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
+  await expect(dialog).toBeHidden();
+  // 保存して読み直すと、作った Epic の詳細パネルが開く(待たずにツリーを開き直すと、保存の前の一覧を読むことがある)。
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(name);
+  return name;
+}
+
+// treeOf は、プロジェクト(接頭辞-P1)のツリーを開いて返す。
+export async function treeOf(page: Page, prefix: string) {
+  await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/tree`));
+  const tree = page.getByRole("list", { name: "ツリー" });
+  await expect(tree).toBeVisible();
+  return tree;
+}
+
+// treeRow は、表示の ID のツリーの行。
+export const treeRow = (tree: Locator, id: string) =>
+  tree.getByRole("listitem").filter({ has: tree.page().getByText(id, { exact: true }) });
+
+// treeTitles は、ツリーの行のタイトルを上から順に返す(並びの確認に使う)。
+export const treeTitles = (tree: Locator) => tree.getByRole("link").allTextContents();
 
 // githubRead は、e2e のサーバーに、GitHub を読む間隔によらない 1 回の読み取りをさせる(D4a-19)。
 // そのサーバーのすべての Store を読むので、呼んだテストのリンクだけでなく、同じサーバーを使うほかのテスト

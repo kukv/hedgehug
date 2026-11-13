@@ -17,7 +17,7 @@ type SyncTarget struct {
 	ReadOnly bool
 }
 
-// SyncTargets は、同期に要る Store の設定の口。本物の実装はトラック G が足す。
+// SyncTargets は、同期に要る Store の設定の口。
 type SyncTargets interface {
 	// List は、このマシンのすべての Store(非表示・閲覧のみ・remote なしを含む)を、サイドバーの並びで返す。
 	List(ctx context.Context) ([]SyncTarget, error)

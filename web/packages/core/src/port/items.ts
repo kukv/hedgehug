@@ -20,7 +20,8 @@ export interface ItemsPort {
   removeValue(storeId: string, itemId: string, propertyId: string, valueId: string): Promise<Item>;
   // checkStep は、Step のチェックを入れ切りする(ステータスが変わる)。
   checkStep(storeId: string, itemId: string, done: boolean): Promise<Item>;
-  moveUp(storeId: string, itemId: string): Promise<void>;
+  // reorder は、アイテムを、同じ親の兄弟 anchorId の直前(after なら直後)に置く。動くのは itemId の 1 件だけ。
+  reorder(storeId: string, itemId: string, anchorId: string, after: boolean): Promise<void>;
   // nextNumber は、ID の予告に出す番号(ワークスペースの連番の次)。
   nextNumber(storeId: string, workspaceId: string): Promise<number>;
   findByNumber(storeId: string, workspaceId: string, number: number): Promise<Item>;

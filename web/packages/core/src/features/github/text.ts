@@ -8,7 +8,7 @@ import type {
 } from "../../model/link";
 
 // GitHub の欄の文言(07「PR と Issue のリンク」「GitHub を使わない場合」、02「GitHub」)。
-// unlinkFailedMessage は、仕様にない文言なので、関連の relationFailedMessage と同じ扱いで決めた(D3-22)。
+// unlinkFailedMessage は、解除が断りでも「ない」でもない失敗(通信の失敗など)のときのエラーのトースト(07「解除」)。
 
 export const noLinksText = "リンクはありません";
 export const unlinkedMessage = "リンクを解除しました";

@@ -13,7 +13,7 @@ import (
 // ID はワークスペースの内部 ID。
 type ID = change.ID
 
-// Workspace は、土台が扱う項目だけを持つ。プロパティ・ワークフローなどはトラック B が足す。
+// Workspace は、ワークスペースの名前と接頭辞。プロパティ・ワークフローなどの設定は Settings が持つ。
 type Workspace struct {
 	ID     ID
 	Name   string

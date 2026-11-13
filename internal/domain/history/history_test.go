@@ -211,6 +211,47 @@ func TestNamesOfIgnoresCaseAndFallsBack(t *testing.T) {
 	}
 }
 
+// 「親を変更」は親が変わったときだけ出す。親が両方ない(Epic)なら、プロジェクトが変わったときに出す。
+// プロジェクトが変わる移動で一緒に移る下のもの(親は同じ)の行は出さない(02「同じワークスペースの中での移動」)。
+func TestPlaceRowsShowOnlyAParentChange(t *testing.T) {
+	parent, other := item.ID("E1"), item.ID("E2")
+	cases := []struct {
+		name     string
+		from, to item.Place
+		want     []string
+	}{
+		{"親が変わる", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "P", Parent: &other}, []string{"太郎: 親を変更"}},
+		{"親とプロジェクトが変わる", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "Q", Parent: &other}, []string{"太郎: 親を変更"}},
+		{"Epic のプロジェクトが変わる", item.Place{Project: "P"}, item.Place{Project: "Q"}, []string{"太郎: 親を変更"}},
+		{"親がなくなる", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "P"}, []string{"太郎: 親を変更"}},
+		{"親が同じでプロジェクトだけ変わる(下のもの)", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "Q", Parent: &parent}, nil},
+	}
+	for _, c := range cases {
+		log := logOf(step{"O1", at(0), taro, change.NewSet("place", c.from, c.to)})
+		if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, c.want) {
+			t.Errorf("%s: rows = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// Step から昇格した行(同じ op に set kind と set place)は「種類を … に変更」の 1 行だけにする。
+// 種類を変えない別の op の set place は、これまでどおり「親を変更」と出る。
+func TestPlaceRowIsHiddenWhenTheSameOpChangesTheKind(t *testing.T) {
+	parent, epic := item.ID("T1"), item.ID("E1")
+	from, to := item.Place{Project: "P", Parent: &parent}, item.Place{Project: "P", Parent: &epic}
+	n := 0
+	newID := func() change.ID { n++; return change.ID(fmt.Sprintf("R%03d", n)) }
+	log := change.Stamp(nil, []change.Draft{
+		change.NewSet("kind", "Step", "Story"), change.NewSet("place", from, to), change.NewSet("rank", "V", "W"),
+	}, change.Meta{Op: "O1", At: at(0), Actor: taro}, newID)
+	log = append(log, change.Stamp(log, []change.Draft{change.NewSet("place", to, from)},
+		change.Meta{Op: "O2", At: at(1), Actor: taro}, newID)...)
+	want := []string{"太郎: 親を変更", "太郎: 種類を Step から Story に変更"}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
+
 func TestItemRowsShowGitHubLinkRows(t *testing.T) {
 	gh := change.Actor{Kind: change.ActorGitHub}
 	pr := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}

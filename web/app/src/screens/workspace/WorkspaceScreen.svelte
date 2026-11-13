@@ -10,7 +10,7 @@
   import { navigation, projectDialog } from "../../wire";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
 
-  // ワークスペースの画面の見出しだけの枠(A2 の計画の持ち場)。タブの中身はトラック B・E・F が足す。
+  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」と「設定」。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;

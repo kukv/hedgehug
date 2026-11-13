@@ -24,7 +24,7 @@ func PlaceMessage(child Kind, parent *Kind) string {
 }
 
 // CheckCreate は、作成の検査を 02「入力の検査」の表の順に行い、最初に合わなかった 1 つを返す。
-// parent は選んだ親の種類で、選んでいなければ nil。日付・ポイント・見積もり時間の検査は A3 で足す。
+// parent は選んだ親の種類で、選んでいなければ nil。日付・ポイント・見積もり時間の検査は CheckInputs が行う。
 func CheckCreate(kind Kind, title string, projectChosen bool, parent *Kind) error {
 	if NormalizeTitle(title) == "" {
 		return refusal.New("タイトルを入力してください")

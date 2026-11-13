@@ -123,36 +123,6 @@ func TestAddStepRefuses(t *testing.T) {
 	}
 }
 
-func TestMoveUpSwapsWithThePreviousSibling(t *testing.T) {
-	svc, rec := setupRec(t)
-	a, _ := svc.AddStep(t.Context(), store, apptest.SampleTask, "1")
-	b, _ := svc.AddStep(t.Context(), store, apptest.SampleTask, "2")
-	if err := svc.MoveUp(t.Context(), store, b.ID); err != nil {
-		t.Fatal(err)
-	}
-	if got := last(rec); got != "HH-4 の順位を変更" {
-		t.Errorf("summary = %q", got)
-	}
-	a2, _ := svc.Get(t.Context(), store, a.ID)
-	b2, _ := svc.Get(t.Context(), store, b.ID)
-	if b2.Rank != a.Rank || a2.Rank != b.Rank {
-		t.Errorf("ranks: a %q→%q, b %q→%q", a.Rank, a2.Rank, b.Rank, b2.Rank)
-	}
-}
-
-func TestMoveUpAtTheTopSavesNothing(t *testing.T) {
-	svc, rec := setupRec(t)
-	a, _ := svc.AddStep(t.Context(), store, apptest.SampleTask, "1")
-	before := logLen(t, rec, a.ID)
-	if err := svc.MoveUp(t.Context(), store, a.ID); err != nil || logLen(t, rec, a.ID) != before {
-		t.Errorf("MoveUp = %v; log %d → %d", err, before, logLen(t, rec, a.ID))
-	}
-	// Epic はプロジェクトの直下の兄弟の中で動く。サンプルの Epic は 1 つだけなので先頭。
-	if err := svc.MoveUp(t.Context(), store, apptest.SampleEpic); err != nil {
-		t.Errorf("epic: %v", err)
-	}
-}
-
 func TestNextNumberAndFindByNumber(t *testing.T) {
 	svc, _ := setupRec(t)
 	if n, err := svc.NextNumber(t.Context(), store, apptest.SampleWorkspace); err != nil || n != 3 {

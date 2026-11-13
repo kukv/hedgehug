@@ -24,7 +24,7 @@ type editContext struct {
 func (s Service) editContext(ctx context.Context, store port.StoreID, id item.ID) (editContext, error) {
 	var ec editContext
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := r.Items().Get(id)
+		it, err := port.LiveItem(r, id)
 		if err != nil {
 			return err
 		}
@@ -77,12 +77,12 @@ func blockedSet(r port.Reader) (map[item.ID]bool, error) {
 	}
 	var all []item.Item
 	for _, w := range wss {
-		ps, err := r.Projects().List(w.ID)
+		ps, err := port.LiveProjects(r, w.ID)
 		if err != nil {
 			return nil, err
 		}
 		for _, p := range ps {
-			its, err := r.Items().List(p.ID)
+			its, err := port.LiveItems(r, p.ID)
 			if err != nil {
 				return nil, err
 			}

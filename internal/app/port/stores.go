@@ -1,6 +1,6 @@
 // Package port は、usecase が外に触るための口を決める。口は「何をしたいか」の言葉で決め、
 // git の言葉(コミット、ブランチ、clone)を使わない(設計書 3 節)。
-// 口は 1 つ 1 ファイルに置く。新しい口は、使うトラックが足す。
+// 口は 1 つ 1 ファイルに置く。
 package port
 
 import (
@@ -29,6 +29,41 @@ func CheckRuleDrafts(actor change.Actor, drafts []change.Draft) error {
 		}
 	}
 	return nil
+}
+
+// 口は削除済みのアイテム・プロジェクトも返す(item.Item.Deleted・project.Project.Deleted の印つき。A4b-3)。
+// 利用者に見せる・操作する側は、下の 4 つで読む。削除済みを返さず、Get は port.ErrNotFound にする(A4b-4)。
+// 削除済みも要る読み方(番号の採番、プロジェクトが変わる移動の下のもの、値の置き換え、自動化の最近の実行、
+// 自動化で親が削除済みかの確認、Issue がすでに別のアイテムにリンクされているかの確認(07「追加」))は、口を直接呼ぶ。
+
+// LiveItem は、削除済みでないアイテムを返す。ないか削除済みなら ErrNotFound。
+func LiveItem(r Reader, id item.ID) (item.Item, error) {
+	it, err := r.Items().Get(id)
+	if err == nil && it.Deleted != nil {
+		return item.Item{}, ErrNotFound
+	}
+	return it, err
+}
+
+// LiveItems は、プロジェクトの削除済みでないアイテムを、番号の順で返す。
+func LiveItems(r Reader, p project.ID) ([]item.Item, error) {
+	its, err := r.Items().List(p)
+	return item.Live(its), err
+}
+
+// LiveProject は、削除済みでないプロジェクトを返す。ないか削除済みなら ErrNotFound。
+func LiveProject(r Reader, id project.ID) (project.Project, error) {
+	p, err := r.Projects().Get(id)
+	if err == nil && p.Deleted != nil {
+		return project.Project{}, ErrNotFound
+	}
+	return p, err
+}
+
+// LiveProjects は、ワークスペースの削除済みでないプロジェクトを、並び順で返す。
+func LiveProjects(r Reader, ws workspace.ID) ([]project.Project, error) {
+	ps, err := r.Projects().List(ws)
+	return project.Live(ps), err
 }
 
 // StoreID は Store ID(.hedgehug/store.yaml の store)。
@@ -85,6 +120,9 @@ type Reader interface {
 	Items() ItemReader
 	Members() MemberReader
 	Changes() ChangeReader // 履歴とアクティビティ
+	// RetentionDays は、削除済みの保持日数(.hedgehug/store.yaml の retention_days。ないときは 30)。
+	// 変えるのは設定の「削除済み」(G)で、ここは読むだけ。
+	RetentionDays() (int, error)
 }
 
 // Tx は 1 回の Write の中の読み書き。読み取りは、同じ Tx で書いたものを含む。

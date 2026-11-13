@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { menuFocus } from "../primitives/menuFocus";
   import type { ValueOption } from "../types";
 
   // 値を選ぶメニュー(02「入力の方法と保存」)。いまの値にチェックを付け、7 件以上で検索欄を出す。
@@ -50,41 +51,44 @@
 <svelte:window {onkeydown} {onpointerdown} bind:innerHeight />
 
 {#if open}
+  <!-- role="menu" の中に置けるのは項目だけなので、検索欄は同じ浮いた枠の中で、その外に置く(Menu と同じ。data-menu も) -->
   <div
     class="menu-pop"
-    role="menu"
-    aria-label={label}
+    data-menu
     style:left="{x}px"
     style:top="{top}px"
     bind:this={element}
+    use:menuFocus
   >
     {#if options.length >= 7}
       <!-- 「検索」は読み上げの名前で、画面に出る文言ではない -->
       <input class="menu-search" type="search" aria-label="検索" bind:value={query}>
     {/if}
-    {#each shown as o (o.id)}
-      <button
-        type="button"
-        role="menuitemcheckbox"
-        aria-checked={o.checked}
-        class="menu-item"
-        disabled={o.disabled}
-        title={o.reason}
-        onclick={() => {
-          // 押せない間は onselect を呼ばない(合成イベントでも)。
-          if (!o.disabled) choose(o.id);
-        }}
-      >
-        <span class="check" aria-hidden="true">{o.checked ? "✓" : ""}</span>
-        <span class="menu-label">{o.label}</span>
-        {#if o.hint}
-          <span class="menu-hint">{o.hint}</span>
-        {/if}
-        {#if o.reason}
-          <span class="menu-reason">{o.reason}</span>
-        {/if}
-      </button>
-    {/each}
+    <div class="menu-list" role="menu" aria-label={label}>
+      {#each shown as o (o.id)}
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={o.checked}
+          class="menu-item"
+          disabled={o.disabled}
+          title={o.reason}
+          onclick={() => {
+            // 押せない間は onselect を呼ばない(合成イベントでも)。
+            if (!o.disabled) choose(o.id);
+          }}
+        >
+          <span class="check" aria-hidden="true">{o.checked ? "✓" : ""}</span>
+          <span class="menu-label">{o.label}</span>
+          {#if o.hint}
+            <span class="menu-hint">{o.hint}</span>
+          {/if}
+          {#if o.reason}
+            <span class="menu-reason">{o.reason}</span>
+          {/if}
+        </button>
+      {/each}
+    </div>
   </div>
 {/if}
 
@@ -101,6 +105,10 @@
     flex-direction: column;
     max-height: 420px;
     overflow-y: auto;
+  }
+  .menu-list {
+    display: flex;
+    flex-direction: column;
   }
   .menu-item {
     display: flex;

@@ -154,7 +154,7 @@ func firstMachine(t *testing.T, remote port.Remote) machine {
 	return m
 }
 
-// cloneMachine は、remote を写して取り付けたマシン(Store の追加の仕組みはトラック G が作る)。
+// cloneMachine は、remote を写して取り付けたマシン。
 func cloneMachine(t *testing.T, remote port.Remote, letter string, start time.Time) machine {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), letter)

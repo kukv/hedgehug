@@ -3,7 +3,7 @@ import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
-import { copiedMessage, copyFailedMessage, createDetail, normalizeTitle } from "./detail";
+import { createDetail } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 import { fakeWorkspaces } from "./settings.test-util";
 
@@ -86,12 +86,13 @@ describe("createDetail", () => {
     expect(get(detail.view)?.children.map((c) => c.title)).toContain("確認");
   });
 
-  it("moves a Step up, doing nothing for the first", async () => {
+  it("moves a Step up by putting it before the previous Step, doing nothing for the first", async () => {
     const { detail, items, task, s1, s2 } = await setup();
     await detail.open("S1", task.id);
-    await detail.moveUp(s2.id);
+    await detail.moveUp(s2.id); // 先頭の Step
     await detail.moveUp(s1.id);
-    expect(items.calls).toEqual([`moveUp ${s1.id}`]);
+    await detail.moveUp("not-a-child");
+    expect(items.calls).toEqual([`reorder ${s1.id} before ${s2.id}`]);
   });
 
   it("loads settings, members and property rows with the item", async () => {
@@ -283,18 +284,5 @@ describe("createDetail", () => {
     const { detail } = await setup();
     await detail.reload();
     expect(get(detail.view)).toBeNull();
-  });
-});
-
-describe("titles and copy messages", () => {
-  it("normalizes spaces and line breaks", () => {
-    expect(normalizeTitle("  a \n\t b  ")).toBe("a b");
-  });
-
-  it("says what was copied", () => {
-    expect(copiedMessage("HH-2")).toBe("コピーしました: HH-2");
-    expect(copyFailedMessage("HH-2")).toBe(
-      "コピーできませんでした。HH-2 を選択してコピーしてください",
-    );
   });
 });
