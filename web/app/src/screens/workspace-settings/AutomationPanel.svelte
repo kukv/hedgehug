@@ -4,7 +4,6 @@
     automationHelp,
     deleteRuleBody,
     deleteRuleTitle,
-    type RuleProject,
     readOnlyNote,
     recentEmpty,
     recentRows,
@@ -22,18 +21,15 @@
   // 自動化のタブ(03「自動化」)。
   interface Props {
     state: SettingsState;
-    projects: RuleProject[];
   }
 
-  let { state: s, projects }: Props = $props();
+  let { state: s }: Props = $props();
 
   let editing = $state<string | "new" | null>(null);
   let deleting = $state<string | null>(null);
 
   const automation = $derived(s.automation);
-  const rows = $derived(
-    automation ? ruleRows(automation, s.detail.settings, s.members, projects) : [],
-  );
+  const rows = $derived(automation ? ruleRows(automation, s.detail.settings, s.members) : []);
   const recent = $derived(automation ? recentRows(automation, new Date()) : []);
   const title = $derived(s.readOnly ? readOnlyNote : undefined);
   const editingRule = $derived(automation?.rules.find((r) => r.id === editing) ?? null);
@@ -83,8 +79,8 @@
             onchange={(on) => toggle(row.id, on)}
           />
           <span class="name">{row.name}</span>
-          {#if row.deleted}
-            <span class="summary">{row.deleted}</span>
+          {#if row.scope}
+            <span class="summary">{row.scope}</span>
           {/if}
           <span class="summary">{row.summary}</span>
           <span class="grow"></span>

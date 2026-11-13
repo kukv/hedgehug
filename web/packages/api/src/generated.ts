@@ -121,6 +121,10 @@ export interface AutomationRule {
   name: string;
   /** このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない */
   scope?: string;
+  /** 専用ルールの持ち主のプロジェクトが削除済みか。一覧でだけ埋める */
+  scopeDeleted?: boolean;
+  /** 専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)。一覧でだけ埋める */
+  scopeLabel?: string;
   trigger: AutomationRuleTrigger;
   /** きっかけが status のときのステータスの ID。ほかは空 */
   triggerStatus: string;

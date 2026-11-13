@@ -133,6 +133,11 @@ test("a project-only rule shows in the workspace automation tab and its line ope
   await expect(
     page.getByText("ステータスが InProgress になったとき → 担当者を 未割り当て に"),
   ).toBeVisible();
+  // 専用ルールの行には、名前のあとに持ち主のプロジェクトの ID を添える。
+  const row = page
+    .locator(".row")
+    .filter({ has: page.getByRole("switch", { name: "着手で外す を有効にする" }) });
+  await expect(row).toContainText(`${prefix}-P1`);
   const title = unique(info, `計画 ${prefix} 1`);
   const line = page.getByTestId("rules-projects-line");
   await expect(line).toHaveText(

@@ -131,6 +131,12 @@ components:
         scope:
           description: このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない
           type: string
+        scopeDeleted:
+          description: 専用ルールの持ち主のプロジェクトが削除済みか。一覧でだけ埋める
+          type: boolean
+        scopeLabel:
+          description: 専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)。一覧でだけ埋める
+          type: string
         trigger:
           enum:
             - pr_open

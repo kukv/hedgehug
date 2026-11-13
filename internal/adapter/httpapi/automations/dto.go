@@ -24,7 +24,9 @@ type AutomationRuleInput struct {
 type AutomationRule struct {
 	ID string `json:"id"`
 	AutomationRuleInput
-	Enabled bool `json:"enabled"`
+	Enabled      bool   `json:"enabled"`
+	ScopeLabel   string `json:"scopeLabel,omitempty" doc:"専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)。一覧でだけ埋める"`
+	ScopeDeleted bool   `json:"scopeDeleted,omitempty" doc:"専用ルールの持ち主のプロジェクトが削除済みか。一覧でだけ埋める"`
 }
 
 // AutomationRun は、最近の実行の 1 行。
@@ -68,7 +70,9 @@ func toRule(r automation.Rule) AutomationRule {
 func toView(v appautomations.View) WorkspaceAutomation {
 	out := WorkspaceAutomation{Rules: []AutomationRule{}, Recent: []AutomationRun{}}
 	for _, r := range v.Rules {
-		out.Rules = append(out.Rules, toRule(r))
+		rule := toRule(r)
+		rule.ScopeLabel, rule.ScopeDeleted = v.Scopes[r.Scope].Label, v.Scopes[r.Scope].Deleted
+		out.Rules = append(out.Rules, rule)
 	}
 	for _, r := range v.Recent {
 		out.Recent = append(out.Recent, AutomationRun{At: r.At, Item: string(r.Item), Display: r.Display, Text: r.Text})

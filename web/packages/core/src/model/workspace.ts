@@ -161,6 +161,9 @@ export interface AutomationRuleInput {
 export interface AutomationRule extends AutomationRuleInput {
   id: string;
   enabled: boolean;
+  // 専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)と、削除済みか。一覧でだけ埋まる
+  scopeLabel?: string;
+  scopeDeleted?: boolean;
 }
 
 export interface AutomationRun {

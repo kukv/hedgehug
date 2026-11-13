@@ -46,7 +46,7 @@
 | B5a-12 | 「使うステータス」の操作で、外すのを断るのは: 初期ステータス(「初期ステータスのため外せません」)、分類の既定(「{分類}の既定のため外せません」)、両方(「初期ステータスで、{分類}の既定でもあるため外せません」)、専用ルールが使う(「「{ステータス}」はこのプロジェクトだけのルール「{ルール名}」が使っているため、使わないことにできません。先にルールを変えてください」)。前の 3 つは画面ではチェックを無効にするので、サーバーの断りは同じ文で持つだけ。{分類} は「未着手」「進行中」「完了」「中止」 | 03「使うステータス」2・3 段落目 |
 | B5a-13 | プロジェクトの遷移の表で、ワークスペースの制約が許さないセルにチェックを付ける操作は「ワークスペースの制約で変更できません」で断る(画面では無効) | 03「プロジェクトの遷移の制約」1 段落目 |
 | B5a-14 | 「ワークスペースの設定に戻す」は区画ごとに 1 回の保存。使うステータス = `hidden_statuses` をすべて remove、ワークフローの制約 = `workflow/*` をすべて remove、テンプレート = `templates` をすべて remove し `template_default/*` を null に set、自動化 = `disabled_rules` をすべて remove し専用ルールをすべて delete。その区画に行がないときは `ErrNotFound`(画面ではボタンが無効)。確認の本文の「このプロジェクトだけのルール {N} 件も削除します。」は N が 1 以上のときだけ続ける | 03「ワークスペースの設定に戻す」。0 件のときに「0 件も削除します」と出さないのは、B3 の「変わるプロジェクトがあるときだけ添える」と同じ扱い |
-| B5a-15 | 削除済みのプロジェクトへのルールの操作は `ErrNotFound`。ワークスペースの自動化の一覧では、`Scope` が削除済みのプロジェクトの専用ルールに「(削除済み)」を添える。サブタブの上の 1 行は、削除済みのプロジェクトを出さず数えない | 03「移動・削除・復元」最後の箇条、「範囲と画面の構成」4 段落目 |
+| B5a-15 | 削除済みのプロジェクトへのルールの操作は `ErrNotFound`。ワークスペースの自動化の一覧では、専用ルールの名前のあとに持ち主のプロジェクトの ID を「HH-P1」と添え、削除済みなら「HH-P1(削除済み)」とする(印はサーバーが一覧の `scopeLabel`・`scopeDeleted` で渡す)。サブタブの上の 1 行は、削除済みのプロジェクトを出さず数えない | 03「移動・削除・復元」最後の箇条、「範囲と画面の構成」4 段落目、「ルールの一覧」(464 行) |
 | B5a-16 | 追従: ステータスの削除は、すべてのプロジェクトの `hidden_statuses` から remove し、プロジェクトの遷移は `WorkflowDeleteDrafts` と同じ規則で remove する(専用ルールは B4 の `StatusDeleteDrafts` が、全ルールを対象にすでに書き換える)。テンプレートの削除は、すべてのプロジェクトの `templates` から remove し、そのテンプレートを指す `template_default/*` を null にする。テンプレートの種類の変更も同じ行を書く | 03「値の編集 / 削除」のプロジェクト別のルールの箇条、「プロジェクトのテンプレート」3 段落目 |
 | B5a-17 | テンプレートの削除の確認の「{N} 件のプロジェクト別のルールからも削除されます。」「{ID} は、すべてのテンプレートを使えるようになります。」は、画面(core)がワークスペースの詳細の `projectRules` から数える。{ID} は削除済みでないプロジェクトの表示 ID(複数なら「・」でつなぐ) | 03「一覧と編集」の削除。サーバーに予告の口を足さずに済む(ルールは詳細に載っている) |
 | B5a-18 | 画面への載せ方: `GET workspace` の `settings` に `projectRules`(プロジェクト ID → `{hiddenStatuses, workflow, templates, templateDefaults, disabledRules}`)を足す。自動化のルールの DTO に `scope`(空はワークスペース全体)を足す。core はこの 2 つから、プロジェクトごとの選択肢を作る | 詳細パネル・作成ダイアログ・プロジェクトの画面はすでに `workspaces.get` を読んでいるので、ルールの変更は、保存のあとの画面への反映(`reflect` → `detail.reload`、作成ダイアログは開くたびに読み直す `createDialog.ts:172`)で効く |
@@ -447,7 +447,7 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 
 **Files:**
 - Create: `web/app/src/screens/workspace-settings/RulesProjectsLine.svelte`(「ステータス」「ワークフロー」「テンプレート」「自動化」のサブタブの上。名前を押すと B5a-22 の「開く区画」を置いてプロジェクトの設定タブへ)
-- Modify: `SettingsTab.svelte`(1 行を置く)、`AutomationPanel.svelte`(専用ルールの行に「(削除済み)」。ルール名にプロジェクトは添えない)、`TemplatesPanel.svelte`(削除の確認に `templateDeleteLines`)、`ProjectSettings.svelte`(「開く区画」を読んで `scrollIntoView` とフォーカス)、`web/packages/core/src/features/navigation`(`openSection: string | null` を一度だけ読む関数 `takeSection()`)
+- Modify: `SettingsTab.svelte`(1 行を置く)、`AutomationPanel.svelte`(専用ルールの行に、名前のあとに「HH-P1」、削除済みなら「HH-P1(削除済み)」)、`TemplatesPanel.svelte`(削除の確認に `templateDeleteLines`)、`ProjectSettings.svelte`(「開く区画」を読んで `scrollIntoView` とフォーカス)、`web/packages/core/src/features/navigation`(`openSection: string | null` を一度だけ読む関数 `takeSection()`)
 
 - [ ] **Step 1: 失敗するテストを書く** — core: `takeSection` は 2 回目に `null`。`ruleRows` が削除済みのプロジェクトの専用ルールに「(削除済み)」を付ける。
 - [ ] **Step 2〜4**

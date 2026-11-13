@@ -144,7 +144,7 @@ describe("the list", () => {
         },
       ],
     };
-    expect(ruleRows(a, settings, members, [])[0]).toEqual({
+    expect(ruleRows(a, settings, members)[0]).toEqual({
       id: "R1",
       name: "PR マージで完了",
       summary: "リンクした PR がマージされたとき → ステータスを Done に",
@@ -155,21 +155,20 @@ describe("the list", () => {
     ]);
   });
 
-  it("marks dedicated rules of deleted projects", () => {
+  it("marks dedicated rules with their project's ID, and deleted projects", () => {
     const base = { ...newRuleForm(settings), enabled: true };
     const a = {
       rules: [
         { ...base, id: "R1", name: "全体" },
-        { ...base, id: "R2", name: "生きている", scope: "P1" },
-        { ...base, id: "R3", name: "消えた", scope: "P9" },
+        { ...base, id: "R2", name: "生きている", scope: "P1", scopeLabel: "HH-P1" },
+        { ...base, id: "R3", name: "消えた", scope: "P9", scopeLabel: "HH-P9", scopeDeleted: true },
       ],
       recent: [],
     };
-    const live = [{ id: "P1", display: "HH-P1", title: "A" }];
-    expect(ruleRows(a, settings, members, live).map((r) => r.deleted)).toEqual([
+    expect(ruleRows(a, settings, members).map((r) => r.scope)).toEqual([
       undefined,
-      undefined,
-      "(削除済み)",
+      "HH-P1",
+      "HH-P9(削除済み)",
     ]);
   });
 });

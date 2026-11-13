@@ -32,6 +32,11 @@ func TestRuleScope(t *testing.T) {
 	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"scope":"`+string(apptest.SampleProject)+`"`) {
 		t.Fatalf("scoped: %d %s", res.Code, res.Body)
 	}
+	// 一覧は、持ち主のプロジェクトの表示 ID を添える(削除済みでないので scopeDeleted は出さない)。
+	list := api.Get(wsBase + "/" + string(apptest.SampleWorkspace) + "/automation").Body.String()
+	if !strings.Contains(list, `"scopeLabel":"HH-P1"`) || strings.Contains(list, `"scopeDeleted"`) {
+		t.Errorf("list: %s", list)
+	}
 	rule["scope"] = "01NOPE00000000000000000000"
 	if res := api.Post(url, rule); res.Code != http.StatusNotFound {
 		t.Errorf("unknown scope: %d %s", res.Code, res.Body)

@@ -84,7 +84,7 @@
     {:else if $settings.tab === "templates"}
       <TemplatesPanel state={$settings} {projects} />
     {:else if $settings.tab === "automation"}
-      <AutomationPanel state={$settings} {projects} />
+      <AutomationPanel state={$settings} />
     {/if}
   </div>
 {/if}
