@@ -75,7 +75,8 @@ func (a *Auto) Hold(tab string, hold bool) {
 	delete(a.holds, tab)
 }
 
-// Waiting は、見えているタブが待つ条件にあるか、オフラインのタブがあるか(06。D4a-8)。期限の切れた知らせは数えない。
+// Waiting は、見えているタブが待つ条件にあるか、オフラインのタブがあるか(06。D4a-8)。期限の切れた知らせは数えず、
+// take と同じく消す。
 func (a *Auto) Waiting() bool {
 	now := a.Service.Clock.Now()
 	a.mu.Lock()

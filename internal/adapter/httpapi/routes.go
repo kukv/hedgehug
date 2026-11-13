@@ -58,7 +58,9 @@ type Deps struct {
 	Clock       port.Clock
 	Checks      port.Checks      // このマシンが読んだ PR のチェックの結果(D3)
 	GitHubReads port.GitHubReads // GitHub を読んだ記録と、取り直しの失敗の文言(D4a)
-	// Links は、リンクの操作。cmd が 1 つ作り、GitHub を自動で読む Reader と共用する(D4a)。
+	// Links は、リンクの操作。cmd が 1 つ作り、GitHub を自動で読む Reader と共用する(D4a)。リンクの API は
+	// これを使うので、リンクの API を使うなら必ず入れる。入れるときは、Tokens を GitHubSession と同じ Session で組む
+	// (認証エラーの状態を、アカウントの API と分け合うため)。
 	Links githublink.Links
 
 	// トラック C(同期)。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。

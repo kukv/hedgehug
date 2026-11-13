@@ -62,6 +62,21 @@ func TestReaderStopsWhenAutoOff(t *testing.T) {
 	}
 }
 
+// 自動の同期をオンに戻したら、最初の Step で確かめ直しと読み取りを 1 回ずつ行う。
+func TestReaderReadsWhenAutoTurnsOn(t *testing.T) {
+	f := newReader(t)
+	f.settings.Value.Auto = false
+	for range 3600 {
+		f.step(t)
+		f.advance(time.Second)
+	}
+	f.settings.Value.Auto = true
+	f.step(t)
+	if f.infos.lists != 1 || f.tokens.rechecks != 1 || f.gh.ReadManyCalls("org/web") != 1 {
+		t.Errorf("lists %d, rechecks %d, ReadMany %d", f.infos.lists, f.tokens.rechecks, f.gh.ReadManyCalls("org/web"))
+	}
+}
+
 // 待つ条件のあいだは始めず、解けた次の Step で読む(D4a-8)。
 func TestReaderWaits(t *testing.T) {
 	f := newReader(t)

@@ -13,7 +13,10 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
+	"github.com/kukv/hedgehug/internal/domain/ghread"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
@@ -74,31 +77,67 @@ func TestE2EGitHubHandler(t *testing.T) {
 	}
 }
 
-// countingStoreGitHub は、List を呼んだ回数を数える(ReadOnce は 1 回ごとに 1 度だけ List を呼ぶ)。
-type countingStoreGitHub struct {
-	apptest.StoreGitHub
-	lists int
+// readTokens は、どの Store にもアカウント e2e-bot のトークンを返す port.GitHubTokens。
+type readTokens struct{}
+
+func (readTokens) TokenFor(context.Context, port.StoreID, string) (string, account.Account, error) {
+	return "e2e-bot-token", account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}, nil
+}
+func (readTokens) Rejected(account.ID)                   {}
+func (readTokens) Recheck(context.Context) (bool, error) { return false, nil }
+
+// readLinks は、e2eStore の HH-2 に org/h-web#7(Open)をリンクし、その読み取りの記録を「いま試した」にした組み立て。
+// 間隔では、まだ読む時期ではない。
+func readLinks(t *testing.T) (githublink.Links, *apptest.GitHub) {
+	t.Helper()
+	clock := apptest.NewClock(time.Now())
+	stores := apptest.NewStores(clock, apptest.NewIDs())
+	stores.AddStore(e2eStore)
+	if err := apptest.Sample(t.Context(), stores, e2eStore); err != nil {
+		t.Fatal(err)
+	}
+	pr := port.Found{Kind: itemlink.PR, Repo: "org/h-web", Number: 7, Values: itemlink.Values{Title: "Add", State: itemlink.Open, Review: itemlink.NoReview}}
+	err := stores.Write(t.Context(), e2eStore, port.Operation{Actor: change.User("taro"), Summary: "リンク"}, func(tx port.Tx) error {
+		log, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask})
+		if err != nil {
+			return err
+		}
+		ref := itemlink.Ref{Kind: itemlink.PR, Repo: pr.Repo, Number: pr.Number}
+		return tx.WriteItems().Append(apptest.SampleTask, itemlink.FromLog(log).Attach(ref, pr.Values)...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gh := &apptest.GitHub{}
+	gh.Put("org/h-web", pr)
+	reads, err := e2eReads(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reads.SaveRecord(t.Context(), e2eStore, "org/h-web", ghread.Record{Attempt: clock.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	return githublink.Links{
+		Stores: stores, Identity: apptest.Identity{Login: "taro"}, Tokens: readTokens{}, GitHub: gh,
+		StoreGH: &apptest.StoreGitHub{Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "e2e", Account: e2eAccount}}},
+		Checks:  apptest.NewChecks(), Reads: reads, Inbox: &apptest.Inbox{}, Events: &apptest.Events{}, Clock: clock,
+	}, gh
 }
 
-func (c *countingStoreGitHub) List(ctx context.Context) ([]port.StoreGitHubInfo, error) {
-	c.lists++
-	return c.StoreGitHub.List(ctx)
-}
-
+// /e2e/github-read は、間隔によらず読む(force。D4a-19): 記録ではまだ読む時期でないリポジトリも読む。
 func TestE2EGitHubReadHandler(t *testing.T) {
-	infos := &countingStoreGitHub{}
-	links := githublink.Links{StoreGH: infos, Clock: apptest.NewClock(time.Now())}
+	links, gh := readLinks(t)
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
 	h := githubReadHandler("tok", links, next)
 	for _, tc := range []struct {
 		name, method, target, auth string
-		want, lists                int
+		want, reads                int
 	}{
 		{"他のパスは次へ", http.MethodPost, "/e2e/github", "Bearer tok", http.StatusTeapot, 0},
 		{"認証なし", http.MethodPost, "/e2e/github-read", "", http.StatusUnauthorized, 0},
 		{"誤ったトークン", http.MethodPost, "/e2e/github-read", "Bearer nope", http.StatusUnauthorized, 0},
 		{"GET", http.MethodGet, "/e2e/github-read", "Bearer tok", http.StatusMethodNotAllowed, 0},
-		{"読む", http.MethodPost, "/e2e/github-read", "Bearer tok", http.StatusNoContent, 1},
+		{"時期の前でも読む", http.MethodPost, "/e2e/github-read", "Bearer tok", http.StatusNoContent, 1},
 	} {
 		r := httptest.NewRequest(tc.method, tc.target, nil)
 		if tc.auth != "" {
@@ -106,8 +145,8 @@ func TestE2EGitHubReadHandler(t *testing.T) {
 		}
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		if w.Code != tc.want || infos.lists != tc.lists {
-			t.Errorf("%s: %d (lists %d), want %d (lists %d)", tc.name, w.Code, infos.lists, tc.want, tc.lists)
+		if got := gh.ReadManyCalls("org/h-web"); w.Code != tc.want || got != tc.reads {
+			t.Errorf("%s: %d (ReadMany %d), want %d (ReadMany %d)", tc.name, w.Code, got, tc.want, tc.reads)
 		}
 	}
 }
