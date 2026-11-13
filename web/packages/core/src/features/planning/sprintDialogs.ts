@@ -72,6 +72,17 @@ export function closeDefault(o: PlanningOverview, closing: string): string | nul
   return closeDestinations(o, closing)[0]?.id ?? null;
 }
 
+// keptDestination は、概要を読み直したあとの移動先。選んでいたもの(null はバックログ)がまだ選択肢にあれば
+// そのまま、なければ既定に戻す(削除・開始された計画中のスプリントを選んだままにしない)。
+export function keptDestination(
+  o: PlanningOverview,
+  closing: string,
+  current: string | null,
+): string | null {
+  const list = closeDestinations(o, closing);
+  return list.some((d) => d.id === current) ? current : (list[0]?.id ?? null);
+}
+
 // deleteBody は、削除の確認ダイアログの本文(05「削除」)。items は入っているアイテムの数(完了・中止を含む)、
 // retentionDays は、その Store の削除済みの保持日数。
 export function deleteBody(name: string, items: number, retentionDays: number): string {

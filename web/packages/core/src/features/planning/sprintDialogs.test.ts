@@ -6,6 +6,7 @@ import {
   closeDefault,
   closeDestinations,
   deleteBody,
+  keptDestination,
   newSprintForm,
   runSprintAction,
   sprintClosed,
@@ -141,6 +142,13 @@ describe("closeDestinations", () => {
 
   it("defaults to the earliest planned sprint", () => {
     expect(closeDefault(overview(list), "A")).toBe("E");
+  });
+
+  it("keeps the chosen destination while it is still listed, else falls back to the default", () => {
+    expect(keptDestination(overview(list), "A", "L")).toBe("L");
+    expect(keptDestination(overview(list), "A", null)).toBeNull();
+    expect(keptDestination(overview(list), "A", "GONE")).toBe("E");
+    expect(keptDestination(overview([sprint({ id: "A", state: "active" })]), "A", "E")).toBeNull();
   });
 
   it("offers only the backlog when no sprint is planned", () => {

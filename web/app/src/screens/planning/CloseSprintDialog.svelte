@@ -3,6 +3,7 @@
     closeBody,
     closeDefault,
     closeDestinations,
+    keptDestination,
     type PlanningOverview,
     type SprintCard,
     sprintClosed,
@@ -30,6 +31,11 @@
   );
   const initial = () => closeDefault(overview, card.sprint.id) ?? "";
   let destination = $state(initial());
+  // 概要の読み直しで、選んでいたスプリントが選択肢から消えたら、既定に戻す。
+  $effect(() => {
+    const kept = keptDestination(overview, s.id, destination === "" ? null : destination) ?? "";
+    if (kept !== destination) destination = kept;
+  });
   let error = $state("");
   let busy = $state(false);
 

@@ -12,6 +12,7 @@ export {
   closeDefault,
   closeDestinations,
   deleteBody,
+  keptDestination,
   newSprintForm,
   runSprintAction,
   type SprintActionDeps,
