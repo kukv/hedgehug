@@ -80,6 +80,9 @@ func (g *GitHub) ReadPulls(_ context.Context, token, repo string, since time.Tim
 	all := slices.Clone(g.pulls[strings.ToLower(repo)])
 	slices.SortStableFunc(all, func(a, b port.Pull) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 	out := port.Pulls{Repo: repo, Rate: g.Rate}
+	if to, ok := g.movedTo[strings.ToLower(repo)]; ok {
+		out.Repo = to
+	}
 	for _, p := range all {
 		if (since.IsZero() && len(out.Pulls) == 100) || (!since.IsZero() && p.UpdatedAt.Before(since)) {
 			break
@@ -87,6 +90,16 @@ func (g *GitHub) ReadPulls(_ context.Context, token, repo string, since time.Tim
 		out.Pulls = append(out.Pulls, p)
 	}
 	return out, nil
+}
+
+// MovePulls は、repo の ReadPulls の答えのリポジトリ名を to にする(改名・移管のあと。PR は repo のものを返す)。
+func (g *GitHub) MovePulls(repo, to string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.movedTo == nil {
+		g.movedTo = map[string]string{}
+	}
+	g.movedTo[strings.ToLower(repo)] = to
 }
 
 // ReadPullsCalls は、repo(大文字小文字を問わない)で ReadPulls を呼んだ回数。

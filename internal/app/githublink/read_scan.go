@@ -84,7 +84,7 @@ func (l Links) readPulls(ctx context.Context, store port.StoreID, repo string, s
 // 残りを書かずに返す(次の読み取りで同じ PR を見直す)。
 func (l Links) writeScans(ctx context.Context, store port.StoreID, results []repoResult, scans map[string]port.ScanRecord, p *pass) (bool, error) {
 	var items storeItems
-	if slices.ContainsFunc(results, func(r repoResult) bool { return r.repo.scan && len(r.pulls.Pulls) > 0 }) {
+	if slices.ContainsFunc(results, func(r repoResult) bool { return len(r.pulls.Pulls) > 0 }) {
 		var err error
 		if items, err = l.readStoreItems(ctx, store); err != nil {
 			return false, err
@@ -92,9 +92,6 @@ func (l Links) writeScans(ctx context.Context, store port.StoreID, results []rep
 	}
 	changed := false
 	for _, res := range results {
-		if !res.repo.scan {
-			continue
-		}
 		c, err := l.writeScan(ctx, store, res, scans[res.repo.key], items, p)
 		changed = changed || c
 		if err != nil {
@@ -112,7 +109,7 @@ func (l Links) writeScan(ctx context.Context, store port.StoreID, res repoResult
 	linked := false
 	if res.scanText == "" {
 		var err error
-		if linked, err = l.linkPulls(ctx, store, res.pulls, items, !old.Read, p); err != nil {
+		if linked, err = l.linkPulls(ctx, store, res.repo.repo, res.pulls, items, !old.Read, p); err != nil {
 			return linked, err
 		}
 		next.Read, next.Since = true, latest(old.Since, res.pulls.Pulls)
@@ -134,11 +131,12 @@ func (l Links) readStoreItems(ctx context.Context, store port.StoreID) (storeIte
 	return items, err
 }
 
-// linkPulls は、見つけた PR をそれぞれ自動でリンクする。first はそのリポジトリを初めて探したか(D4b-7)。
-func (l Links) linkPulls(ctx context.Context, store port.StoreID, ps port.Pulls, items storeItems, first bool, p *pass) (bool, error) {
+// linkPulls は、見つけた PR をそれぞれ自動でリンクする。asked は問い合わせた名前(ps.Repo は答えの名前)。
+// first はそのリポジトリを初めて探したか(D4b-7)。
+func (l Links) linkPulls(ctx context.Context, store port.StoreID, asked string, ps port.Pulls, items storeItems, first bool, p *pass) (bool, error) {
 	changed := false
 	for _, pull := range ps.Pulls {
-		c, err := l.autoLink(ctx, store, ps.Repo, pull, items, first, p)
+		c, err := l.autoLink(ctx, store, asked, ps.Repo, pull, items, first, p)
 		changed = changed || c
 		if err != nil {
 			return changed, err

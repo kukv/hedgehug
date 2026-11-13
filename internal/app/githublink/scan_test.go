@@ -151,3 +151,38 @@ func TestRepoFailuresDeletedProject(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
+
+// 改名・移管したリポジトリの PR は、答えの名前が変わっても、問い合わせた名前で解除した PR を付け直さない
+// (D4b 最終レビュー I-3)。
+func TestScanRenamedRepoKeepsUnlinked(t *testing.T) {
+	f := newScanRead(t)
+	f.addRepo(t, linkStore, "example-org/web")
+	at := time.Date(2026, 11, 12, 8, 0, 0, 0, time.UTC)
+	f.gh.PutPull("example-org/web", scanPull(5, itemlink.Open, "hh/WEB-1", at))
+	f.scanWeb(t, linkStore)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "example-org/web", Number: 5}
+	if err := f.links.Remove(t.Context(), linkStore, linkEpic, ref); err != nil {
+		t.Fatal(err)
+	}
+	f.gh.MovePulls("example-org/web", "example-org/site")
+	f.gh.PutPull("example-org/web", scanPull(5, itemlink.Open, "hh/WEB-1", at.Add(time.Hour)))
+	f.scanWeb(t, linkStore)
+	if rows := f.list(t, linkStore, linkEpic); len(rows) != 0 {
+		t.Errorf("rows = %q, want none (unlinked under the old name)", displays(rows))
+	}
+}
+
+// Merged のリンク(取り直さない)があるアイテムに、改名後の名前で同じ PR を重ねない(D4b 最終レビュー I-3)。
+func TestScanRenamedRepoNoDoubleLink(t *testing.T) {
+	f := newScanRead(t)
+	f.addRepo(t, linkStore, "example-org/web")
+	at := time.Date(2026, 11, 12, 8, 0, 0, 0, time.UTC)
+	f.gh.PutPull("example-org/web", scanPull(5, itemlink.Merged, "hh/WEB-1", at))
+	f.scanWeb(t, linkStore)
+	f.gh.MovePulls("example-org/web", "example-org/site")
+	f.gh.PutPull("example-org/web", scanPull(5, itemlink.Merged, "hh/WEB-1", at.Add(time.Hour)))
+	f.scanWeb(t, linkStore)
+	if got := displays(f.list(t, linkStore, linkEpic)); !slices.Equal(got, []string{"pr example-org/web#5 Add login form merged"}) {
+		t.Errorf("rows = %q, want the one link", got)
+	}
+}

@@ -11,14 +11,13 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
-// repoLinks は、1 つのリポジトリの、間隔ごとに取り直すリンク(D4a-3)と、PR を探すか(D4b-3)。
+// repoLinks は、1 つのリポジトリの、間隔ごとに取り直すリンク(D4a-3)。集めたリポジトリはどれも PR を探す(D4b-3)。
 type repoLinks struct {
 	key     string // リポジトリ名の小文字(読み取りの記録のキー。D4a-5)
 	repo    string // 問い合わせる名前(最初に見つけた書き方)
 	numbers []int  // 頼む番号(重なりなし)
 	asked   map[int]bool
 	targets []target
-	scan    bool // PR を探す(プロジェクトのリポジトリか、リンクのあるリポジトリ)
 }
 
 // target は、取り直す 1 本のリンクと、それを持つアイテム。
@@ -33,12 +32,12 @@ type collector struct {
 	index map[string]*repoLinks
 }
 
-// repo は、repo(大文字小文字を区別しない)の要素。なければ、この書き方で足す。どれも PR を探す(D4b-3)。
+// repo は、repo(大文字小文字を区別しない)の要素。なければ、この書き方で足す。
 func (c *collector) repo(repo string) *repoLinks {
 	key := strings.ToLower(repo)
 	r := c.index[key]
 	if r == nil {
-		r = &repoLinks{key: key, repo: repo, asked: map[int]bool{}, scan: true}
+		r = &repoLinks{key: key, repo: repo, asked: map[int]bool{}}
 		c.index[key] = r
 		c.repos = append(c.repos, r)
 	}

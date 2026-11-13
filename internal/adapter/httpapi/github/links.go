@@ -96,7 +96,7 @@ func registerLinks(api huma.API, svc githublink.Links) {
 			added, err := svc.Add(ctx, port.StoreID(in.Store), item.ID(in.Item), githublink.AddLinkInput{
 				Kind: itemlink.Kind(b.Kind), Repo: b.Repo, Number: b.Number, AddToProject: b.AddToProject,
 			})
-			if err == nil && added != "" {
+			if added != "" { // 保存のあとの失敗(通知・チェックの結果)でも、足したリポジトリは探す
 				ScanLater(svc)(ctx, port.StoreID(in.Store), added)
 			}
 			return nil, apierr.From(err)

@@ -23,7 +23,7 @@ func (l Links) ScanRepo(ctx context.Context, store port.StoreID, repo string) er
 		return err
 	}
 	rd := &reading{l: l, now: l.now(), limited: map[account.ID]limit{}}
-	r := &repoLinks{key: strings.ToLower(repo), repo: repo, scan: true}
+	r := &repoLinks{key: strings.ToLower(repo), repo: repo}
 	res := repoResult{repo: r}
 	res.pulls, res.scanText, res.cause = rd.scan(ctx, s, r, scans[r.key])
 	changed, err := l.writeScans(ctx, store, []repoResult{res}, scans, newPass())

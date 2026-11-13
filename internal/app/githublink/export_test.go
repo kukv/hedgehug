@@ -18,5 +18,5 @@ func (l Links) AutoLink(ctx context.Context, store port.StoreID, repo string, pu
 	if err != nil {
 		return false, err
 	}
-	return l.autoLink(ctx, store, repo, pull, items, first, p)
+	return l.autoLink(ctx, store, repo, repo, pull, items, first, p)
 }

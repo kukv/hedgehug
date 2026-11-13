@@ -65,7 +65,9 @@ func (c *Client) readPullsOnce(ctx context.Context, token, repo string, since ti
 		}
 		r := a.Data.Repository
 		out.Repo = r.NameWithOwner
-		out.Rate = a.Data.RateLimit.port()
+		if a.Data.RateLimit != nil { // ないページで前のページの値を消さない
+			out.Rate = a.Data.RateLimit.port()
+		}
 		reached := false
 		for i := range r.PullRequests.Nodes {
 			n := &r.PullRequests.Nodes[i]

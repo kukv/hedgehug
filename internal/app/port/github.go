@@ -41,7 +41,7 @@ type Pull struct {
 	UpdatedAt time.Time // GitHub の時刻
 }
 
-// Pulls は、ReadPulls の答え。Repo は GitHub の nameWithOwner。Rate は最後のページの rateLimit。
+// Pulls は、ReadPulls の答え。Repo は GitHub の nameWithOwner。Rate は rateLimit のあった最後のページの値。
 type Pulls struct {
 	Repo  string
 	Pulls []Pull

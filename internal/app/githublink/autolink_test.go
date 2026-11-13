@@ -1,6 +1,7 @@
 package githublink_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -229,6 +230,29 @@ func TestAutoLinkManyItems(t *testing.T) {
 		if got := displays(f.list(t, linkStore, id)); !slices.Equal(got, []string{"pr example-org/web#5 Add login form open"}) {
 			t.Errorf("%s: rows = %q", id, got)
 		}
+	}
+}
+
+// 2 つ目のアイテムの保存に失敗しても、1 つ目に書いたリンクのチェックの結果は置く(D4b 最終レビュー M-2)。
+func TestAutoLinkSavesChecksWhenALaterSaveFails(t *testing.T) {
+	f := newAutoLinks(t)
+	n := 0
+	f.stores.failOn = func(port.Operation) error {
+		if n++; n == 2 {
+			return errors.New("保存できない")
+		}
+		return nil
+	}
+	ok, err := f.links.AutoLink(t.Context(), linkStore, autoRepo, autoPull(5, itemlink.Open, prlink.Text{Title: "WEB-1 と WEB-2"}), false, nil)
+	if !ok || err == nil {
+		t.Fatalf("AutoLink = %v, %v; want linked and the error", ok, err)
+	}
+	got, err := f.checks.Read(t.Context(), linkStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key := (itemlink.Ref{Kind: itemlink.PR, Repo: autoRepo, Number: 5}).Key(); got[key] != itemlink.Running {
+		t.Errorf("checks = %v, want %s running", got, key)
 	}
 }
 

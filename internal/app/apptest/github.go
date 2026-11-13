@@ -29,7 +29,8 @@ type GitHub struct {
 	many      map[string]int
 	pulls     map[string][]port.Pull // 小文字のリポジトリ名から引く。PutPull で入れる
 	pullCalls map[string]int
-	missed    map[string]bool // App 未導入の owner(小文字)
+	missed    map[string]bool   // App 未導入の owner(小文字)
+	movedTo   map[string]string // ReadPulls の答えのリポジトリ名(小文字の問い合わせの名前から引く。MovePulls で入れる)
 }
 
 // MissApp は、owner のリポジトリの問い合わせ(Lookup・ReadMany・ReadPulls・CheckRepo)が

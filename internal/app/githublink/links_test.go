@@ -27,16 +27,23 @@ const (
 )
 
 // linkRecorder は、Write に渡した操作を覚える。before があれば、次の Write の前に 1 回だけ呼ぶ(同時の変更)。
+// failOn があれば Write の前に呼び、エラーを返したらその保存を失敗させる。
 type linkRecorder struct {
 	*apptest.Stores
 	ops    []port.Operation
 	before func()
+	failOn func(op port.Operation) error
 }
 
 func (r *linkRecorder) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
 	if b := r.before; b != nil {
 		r.before = nil
 		b()
+	}
+	if r.failOn != nil {
+		if err := r.failOn(op); err != nil {
+			return err
+		}
 	}
 	r.ops = append(r.ops, op)
 	return r.Stores.Write(ctx, id, op, fn)

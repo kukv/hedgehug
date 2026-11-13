@@ -94,10 +94,7 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 			continue
 		}
 		res, next := rd.fetch(ctx, s, r, rec, p)
-		if r.scan {
-			next = rd.scanInto(ctx, s, &res, scans[r.key], rec, next)
-		}
-		rec = next
+		rec = rd.scanInto(ctx, s, &res, scans[r.key], rec, next)
 		if err := rd.l.Reads.SaveRecord(ctx, s.ID, r.key, rec); err != nil {
 			return false, err
 		}

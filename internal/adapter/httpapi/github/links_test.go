@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"net/http"
 	"strings"
@@ -180,6 +181,29 @@ func TestAddLinkToProjectStartsScan(t *testing.T) {
 	base := "/api/stores/S1/items/" + string(apptest.SampleTask) + "/links"
 	if res := api.Post(base, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": true}); res.Code != http.StatusNoContent {
 		t.Fatalf("add: %d %s", res.Code, res.Body)
+	}
+	waitPullsCalls(t, gh, "org/web", 1)
+}
+
+// failingChecks は、チェックの結果を置けない port.Checks。
+type failingChecks struct{ port.Checks }
+
+func (failingChecks) Save(context.Context, port.StoreID, string, itemlink.Checks) (bool, error) {
+	return false, errors.New("state.db を書けない")
+}
+
+// リンクとリポジトリを保存したあとで失敗しても(チェックの結果を置けない)、足したリポジトリは探す
+// (D4b 最終レビュー M-1)。
+func TestAddLinkToProjectScansEvenAfterALaterError(t *testing.T) {
+	_, api := humatest.New(t)
+	svc := linkServices(t)
+	svc.Links.Scans = &memScans{rows: map[string]port.ScanRecord{}}
+	svc.Links.Checks = failingChecks{svc.Links.Checks}
+	ghapi.Register(api, svc)
+	gh, _ := svc.Links.GitHub.(*apptest.GitHub)
+	base := "/api/stores/S1/items/" + string(apptest.SampleTask) + "/links"
+	if res := api.Post(base, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": true}); res.Code < 500 {
+		t.Fatalf("add: %d %s, want the error", res.Code, res.Body)
 	}
 	waitPullsCalls(t, gh, "org/web", 1)
 }

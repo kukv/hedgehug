@@ -139,6 +139,25 @@ func TestReadPullsRate(t *testing.T) {
 	}
 }
 
+// rateLimit のないページ(GitHub が省いたとき)は、前のページの値をゼロで上書きしない(D4b 最終レビュー M-5)。
+func TestReadPullsRateKeptWhenAPageLacksIt(t *testing.T) {
+	var queries []string
+	since := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	c, _ := newClient(t, readManyServer(t, &queries, func(_, _ string, call int) string {
+		if call == 1 {
+			return pullsPageJSON(true, "c", pullJSON(1, since.Add(time.Hour), ""))
+		}
+		return strings.Replace(pullsPageJSON(false, "", pullJSON(2, since, "")), rateJSON+",", "", 1)
+	}))
+	got, err := c.ReadPulls(context.Background(), fakeToken, "org/web", since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Rate.Limit != 5000 || got.Rate.Remaining != 4321 {
+		t.Errorf("Rate = %+v, want the first page's", got.Rate)
+	}
+}
+
 func TestReadPullsRateLimited(t *testing.T) {
 	var queries []string
 	c, _ := newClient(t, readManyServer(t, &queries, func(_, _ string, _ int) string {

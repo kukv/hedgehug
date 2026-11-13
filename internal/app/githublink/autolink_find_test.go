@@ -104,6 +104,10 @@ func TestStoreItemsUseCurrentPrefixOnly(t *testing.T) {
 	if got := targetsOf(t, s, pullOf(prlink.Text{Title: "HHX-1"})); !slices.Equal(got, []item.ID{apptest.SampleEpic}) {
 		t.Errorf("new prefix: targets = %v", got)
 	}
+	// 印は接頭辞によらないので、接頭辞を変えたあとも引ける。
+	if got := targetsOf(t, s, pullOf(prlink.Text{Body: "hh:" + string(apptest.SampleTask)})); !slices.Equal(got, []item.ID{apptest.SampleTask}) {
+		t.Errorf("mark after prefix change: targets = %v", got)
+	}
 }
 
 func TestStoreItemsSkipDeleted(t *testing.T) {
