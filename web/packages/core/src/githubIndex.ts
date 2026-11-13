@@ -5,6 +5,11 @@ export {
 } from "./features/github/linkDialog";
 export { createLinkList, type LinkList, type LinkListState } from "./features/github/links";
 export {
+  createProjectLinks,
+  type ProjectLinks,
+  type ProjectLinksState,
+} from "./features/github/projectLinks";
+export {
   checksLabel,
   kindLabel,
   linkDialogTitle,
