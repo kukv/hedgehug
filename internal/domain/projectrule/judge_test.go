@@ -148,17 +148,19 @@ func TestCheckTransitionPassesMissingFrom(t *testing.T) {
 	}
 }
 
+func templateIDs(ts []workspace.Template) []change.ID {
+	var out []change.ID
+	for _, x := range ts {
+		out = append(out, x.ID)
+	}
+	return out
+}
+
 func TestUsableTemplatesAndDefault(t *testing.T) {
 	s := sample()
 	s.Templates = []workspace.Template{{ID: "T1", Kind: "Task"}, {ID: "T2", Kind: "Task"}, {ID: "T3", Kind: "Bug"}}
 	s.TemplateDefaults = map[string]change.ID{"Task": "T2"}
-	ids := func(ts []workspace.Template) []change.ID {
-		var out []change.ID
-		for _, x := range ts {
-			out = append(out, x.ID)
-		}
-		return out
-	}
+	ids := templateIDs
 	if got := ids(projectrule.UsableTemplates(s, projectrule.Rules{}, "Task")); !reflect.DeepEqual(got, []change.ID{"T1", "T2"}) {
 		t.Fatalf("制限なし: %v", got)
 	}
