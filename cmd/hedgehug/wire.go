@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/syncing"
 	"github.com/kukv/hedgehug/internal/infra/github"
@@ -23,7 +24,7 @@ import (
 	"github.com/kukv/hedgehug/internal/infra/sysclock"
 )
 
-// wire は、本物の部品を口に差し込み、自動の同期と Store の見張りを ctx が終わるまで動かす。
+// wire は、本物の部品を口に差し込み、自動の同期と GitHub の自動の読み取りと Store の見張りを ctx が終わるまで動かす。
 // Store の一覧は読まない(この計画の決定 6、C2 の決定 C2-2)。
 func wire(ctx context.Context) (httpapi.Deps, error) {
 	clock, ids := sysclock.Clock{}, sysclock.IDs{}
@@ -45,12 +46,12 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	secrets := secret.New()
 	session := ghapp.NewSession()
 	hub := events.NewHub()
+	conn := ghapp.Connector{
+		Session: session, Accounts: file.Accounts(), Secrets: secrets, GitHub: gh, Device: gh,
+		Hosts: file.Hosts(), Stores: noStoreGitHub{}, Clock: clock,
+	}
 	svc := &syncing.Service{
-		Targets: noSyncTargets{},
-		Tokens: ghapp.Connector{
-			Session: session, Accounts: file.Accounts(), Secrets: secrets, GitHub: gh, Device: gh,
-			Hosts: file.Hosts(), Stores: noStoreGitHub{}, Clock: clock,
-		},
+		Targets: noSyncTargets{}, Tokens: conn,
 		Replicator: gitstore.NewReplicator(stores), State: db.SyncState(), Events: hub, Clock: clock,
 	}
 	auto := syncing.NewAuto(svc, file.SyncSettings())
@@ -58,7 +59,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	go auto.Run(ctx)
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	// state.db は閉じない。プロセスが終わるときに閉じる。サーバーを止める 5 秒のあいだも、動いている同期が記録できるようにするため。
-	return httpapi.Deps{
+	deps := httpapi.Deps{
 		Stores:        syncing.NotifyWrites(stores, auto.Wrote),
 		IDs:           ids,
 		Identity:      noIdentity{},
@@ -71,12 +72,16 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Hosts:         file.Hosts(),
 		StoreGitHub:   noStoreGitHub{},
 		Checks:        db.Checks(),
+		GitHubReads:   db.GitHubReads(),
 		Clock:         clock,
 		Sync:          svc,
 		Auto:          auto,
 		Events:        hub,
 		GitHubSession: session,
-	}, nil
+	}
+	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
+	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
+	return deps, nil
 }
 
 // noStores は、表示する Store を返さない。
@@ -106,4 +111,4 @@ func newToken() string {
 }
 
 // wrap は、本物のビルドでは何も足さない(e2e のビルドだけが、テストの入口を足す)。
-func wrap(_ string, h http.Handler) http.Handler { return h }
+func wrap(_ string, _ httpapi.Deps, h http.Handler) http.Handler { return h }

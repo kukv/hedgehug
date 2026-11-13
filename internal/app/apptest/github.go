@@ -15,7 +15,9 @@ import (
 
 // GitHub は port.GitHub の偽物。Users はトークンからログイン名への対応。Err があれば、どの問い合わせもそれを返す。
 // Items は Lookup の答え(キーは小文字のリポジトリ名と番号。Put で入れる)。LookupErr は同じキーの失敗。
-// Lookups は Lookup を呼んだ回数。
+// Lookups は Lookup を呼んだ回数。Rate は ReadMany が返す利用上限。
+// ReadMany では、Fail(repo, 0, err) はリポジトリ全体の失敗。Fail(repo, n, err) は、err が NotFound ならその番号を
+// Missing にし(port.GitHub.ReadMany の約束)、それ以外の失敗なら問い合わせ全体をその失敗にする。
 type GitHub struct {
 	mu        sync.Mutex
 	Users     map[string]string
@@ -23,6 +25,8 @@ type GitHub struct {
 	Items     map[string]port.Found
 	LookupErr map[string]error
 	Lookups   int
+	Rate      port.Rate
+	many      map[string]int
 }
 
 func itemKey(repo string, number int) string {
@@ -71,6 +75,47 @@ func (g *GitHub) Lookup(_ context.Context, token, repo string, number int) (port
 		return port.Found{}, &ghcall.Failure{Kind: ghcall.NotFound, Repo: repo, Number: number}
 	}
 	return f, nil
+}
+
+// ReadMany は、numbers を Put した値から引く。Put になければ Missing(NotFound の Fail も Missing)。
+func (g *GitHub) ReadMany(_ context.Context, token, repo string, numbers []int) (port.Batch, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.many == nil {
+		g.many = map[string]int{}
+	}
+	g.many[strings.ToLower(repo)]++
+	if g.Err != nil {
+		return port.Batch{}, g.Err
+	}
+	if _, ok := g.Users[token]; !ok {
+		return port.Batch{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
+	}
+	if err := g.LookupErr[itemKey(repo, 0)]; err != nil {
+		return port.Batch{}, err
+	}
+	b := port.Batch{Repo: repo, Found: map[int]port.Found{}, Rate: g.Rate}
+	for _, n := range numbers {
+		err := g.LookupErr[itemKey(repo, n)]
+		if err != nil && !ghcall.Is(err, ghcall.NotFound) {
+			return port.Batch{}, err
+		}
+		f, ok := g.Items[itemKey(repo, n)]
+		if err != nil || !ok {
+			b.Missing = append(b.Missing, n)
+			continue
+		}
+		b.Repo = f.Repo
+		b.Found[n] = f
+	}
+	return b, nil
+}
+
+// ReadManyCalls は、repo(大文字小文字を問わない)で ReadMany を呼んだ回数。
+func (g *GitHub) ReadManyCalls(repo string) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.many[strings.ToLower(repo)]
 }
 
 func (g *GitHub) Viewer(_ context.Context, token string) (string, error) {

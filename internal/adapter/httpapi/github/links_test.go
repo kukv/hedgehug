@@ -1,6 +1,8 @@
 package github_test
 
 import (
+	"context"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,6 +13,7 @@ import (
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
@@ -53,7 +56,7 @@ func TestLinksRefreshAnswer(t *testing.T) {
 	_, api := humatest.New(t)
 	svc := linkServices(t)
 	ghapi.Register(api, svc)
-	gh, _ := svc.Links.Connector.GitHub.(*apptest.GitHub)
+	gh, _ := svc.Links.GitHub.(*apptest.GitHub)
 	base := "/api/stores/S1/items/" + string(apptest.SampleTask) + "/links"
 	if res := api.Post(base, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": false}); res.Code != http.StatusNoContent {
 		t.Fatalf("add: %d %s", res.Code, res.Body)
@@ -93,13 +96,37 @@ func linkServices(t *testing.T) ghapi.Services {
 	if err := accounts.Add(t.Context(), account.Account{ID: "A1", Name: "work", Login: "taro", Method: account.EnvVar}); err != nil {
 		t.Fatal(err)
 	}
-	svc.Links = ghapp.Links{
+	infos := &apptest.StoreGitHub{Stores: []port.StoreGitHubInfo{{ID: "S1", Name: "チーム", Account: "A1"}}}
+	svc.Links = githublink.Links{
 		Stores: s, Identity: apptest.Identity{Login: "taro"},
-		Connector: ghapp.Connector{
+		Tokens: ghapp.Connector{
 			Session: ghapp.NewSession(), Accounts: accounts, Secrets: &apptest.Secrets{Tokens: map[string]string{"taro": "tok-taro"}},
-			GitHub: gh, Stores: &apptest.StoreGitHub{Stores: []port.StoreGitHubInfo{{ID: "S1", Name: "チーム", Account: "A1"}}}, Clock: clock,
+			GitHub: gh, Stores: infos, Clock: clock,
 		},
-		Checks: apptest.NewChecks(), Events: &apptest.Events{},
+		GitHub: gh, Accounts: accounts, StoreGH: infos,
+		Checks: apptest.NewChecks(), Reads: &memFailures{rows: map[string]string{}}, Events: &apptest.Events{}, Clock: clock,
 	}
 	return svc
+}
+
+// memFailures は、port.GitHubReads のうち取り直しの失敗の文言だけを持つ偽物(Store は 1 つだけ使う)。
+type memFailures struct {
+	port.GitHubReads
+	rows map[string]string
+}
+
+func (m *memFailures) Failures(context.Context, port.StoreID) (map[string]string, error) {
+	return maps.Clone(m.rows), nil
+}
+
+func (m *memFailures) SetFailure(_ context.Context, _ port.StoreID, key, text string) (bool, error) {
+	if m.rows[key] == text {
+		return false, nil
+	}
+	if text == "" {
+		delete(m.rows, key)
+	} else {
+		m.rows[key] = text
+	}
+	return true, nil
 }

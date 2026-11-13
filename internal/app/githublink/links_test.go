@@ -1,4 +1,4 @@
-package github_test
+package githublink_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
-	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -57,14 +57,63 @@ func (f *linkFixture) attachNow(t *testing.T, id item.ID, ref itemlink.Ref, v it
 	}
 }
 
+// fakeTokens は、port.GitHubTokens の偽物。Store の割り当ては infos と accounts から引き(テストの途中の変更も
+// そのまま見える)、Rejected で知らされたアカウントを覚えて、以後は認証エラーにする。Recheck は呼ばれた回数を
+// 数え、recovered を返す。
+type fakeTokens struct {
+	infos     *apptest.StoreGitHub
+	accounts  *apptest.Accounts
+	token     string
+	rejected  []account.ID
+	rechecks  int
+	recovered bool
+}
+
+func (f *fakeTokens) TokenFor(ctx context.Context, store port.StoreID, repo string) (string, account.Account, error) {
+	stores, err := f.infos.List(ctx)
+	if err != nil {
+		return "", account.Account{}, err
+	}
+	var id account.ID
+	for _, s := range stores {
+		if s.ID == store {
+			id = s.Account
+		}
+	}
+	all, err := f.accounts.List(ctx)
+	if err != nil {
+		return "", account.Account{}, err
+	}
+	for _, a := range all {
+		if id == "" || a.ID != id {
+			continue
+		}
+		if slices.Contains(f.rejected, a.ID) {
+			return "", a, &ghcall.Failure{Kind: ghcall.AuthError, Name: a.Name, Login: a.Login}
+		}
+		return f.token, a, nil
+	}
+	return "", account.Account{}, &ghcall.Failure{Kind: ghcall.NoAccount, Repo: repo}
+}
+
+func (f *fakeTokens) Rejected(id account.ID) { f.rejected = append(f.rejected, id) }
+
+func (f *fakeTokens) Recheck(context.Context) (bool, error) {
+	f.rechecks++
+	return f.recovered, nil
+}
+
 type linkFixture struct {
-	links    ghapp.Links
+	links    githublink.Links
 	stores   *linkRecorder
 	gh       *apptest.GitHub
 	accounts *apptest.Accounts
 	infos    *apptest.StoreGitHub
+	tokens   *fakeTokens
 	checks   *apptest.Checks
 	events   *apptest.Events
+	reads    *memReads
+	inbox    *apptest.Inbox
 }
 
 var (
@@ -94,25 +143,23 @@ func newLinks(t *testing.T) *linkFixture {
 	infos := &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
 		{ID: linkStore, Name: "main", Account: "A1"}, {ID: otherStore, Name: "other", Account: "A1"},
 	}}
-	f := &linkFixture{stores: &linkRecorder{Stores: s}, gh: gh, accounts: accounts, infos: infos, checks: apptest.NewChecks(), events: &apptest.Events{}}
-	f.links = ghapp.Links{
+	f := &linkFixture{stores: &linkRecorder{Stores: s}, gh: gh, accounts: accounts, infos: infos, checks: apptest.NewChecks(), events: &apptest.Events{}, reads: newMemReads(), inbox: &apptest.Inbox{}}
+	f.tokens = &fakeTokens{infos: infos, accounts: accounts, token: "tok"}
+	f.links = githublink.Links{
 		Stores: f.stores, Identity: apptest.Identity{Login: "hanako"},
-		Connector: ghapp.Connector{
-			Session: ghapp.NewSession(), Accounts: accounts, Secrets: &apptest.Secrets{Tokens: map[string]string{"taro": "tok"}},
-			GitHub: gh, Stores: infos, Clock: clock,
-		},
-		Checks: f.checks, Events: f.events,
+		Tokens: f.tokens, GitHub: gh, Accounts: accounts, StoreGH: infos,
+		Checks: f.checks, Reads: f.reads, Inbox: f.inbox, Events: f.events, Clock: clock,
 	}
 	return f
 }
 
 func (f *linkFixture) add(t *testing.T, store port.StoreID, id item.ID, kind itemlink.Kind, repo, number string, toProject bool) error {
 	t.Helper()
-	return f.links.Add(t.Context(), store, id, ghapp.AddLinkInput{Kind: kind, Repo: repo, Number: number, AddToProject: toProject})
+	return f.links.Add(t.Context(), store, id, githublink.AddLinkInput{Kind: kind, Repo: repo, Number: number, AddToProject: toProject})
 }
 
 //nolint:unparam // Task 9 のテストが別の Store でも使う
-func (f *linkFixture) list(t *testing.T, store port.StoreID, id item.ID) []ghapp.LinkRow {
+func (f *linkFixture) list(t *testing.T, store port.StoreID, id item.ID) []githublink.LinkRow {
 	t.Helper()
 	rows, err := f.links.List(t.Context(), store, id)
 	if err != nil {
@@ -137,7 +184,7 @@ func refusalText(err error) string {
 	return ""
 }
 
-func displays(rows []ghapp.LinkRow) []string {
+func displays(rows []githublink.LinkRow) []string {
 	out := make([]string, len(rows))
 	for i, r := range rows {
 		out[i] = string(r.Kind) + " " + r.Display() + " " + r.Title + " " + string(r.State)
@@ -237,6 +284,9 @@ func TestAddLinkGitHubFailures(t *testing.T) {
 	if got := refusalText(f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false)); got != "work(@taro)の認証エラーのため、GitHub に接続できません。設定の「アカウントとメンバー」で再認証してください" {
 		t.Errorf("rejected: %q", got)
 	}
+	if !slices.Equal(f.tokens.rejected, []account.ID{"A1"}) {
+		t.Errorf("rejected = %v, want A1 told to the tokens", f.tokens.rejected)
+	}
 }
 
 func TestAddLinkToProject(t *testing.T) {
@@ -304,6 +354,55 @@ func TestRemoveLink(t *testing.T) {
 	}
 	if rows := f.list(t, linkStore, linkTask); len(rows) != 1 {
 		t.Errorf("rows = %v", rows)
+	}
+}
+
+// 解除する前に置いた取り直しの失敗の文言は、リンクし直したら出さない(リンクで GitHub から読めたので。D4a-11)。
+func TestRelinkClearsTheOldFailure(t *testing.T) {
+	f := newLinks(t)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	if _, err := f.reads.SetFailure(t.Context(), linkStore, ref.Key(), "状態を更新できませんでした: x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if rows := f.list(t, linkStore, linkTask); len(rows) != 1 || rows[0].Error != "" {
+		t.Errorf("rows = %+v, want no error", rows)
+	}
+}
+
+// githubEvents は、store について EventGitHub を知らせた回数。
+func (f *linkFixture) githubEvents(store port.StoreID) int {
+	n := 0
+	for _, e := range f.events.List() {
+		if e == (port.Event{Kind: port.EventGitHub, Store: store}) {
+			n++
+		}
+	}
+	return n
+}
+
+// リンクで、置いてあった失敗の文言を消したか、チェックの結果を置いたら、EventGitHub を知らせる(Refresh と同じ)。
+func TestAddPublishesGitHubWhenItChanges(t *testing.T) {
+	f := newLinks(t)
+	quiet := port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 43, Values: itemlink.Values{Title: "q", State: itemlink.Open, Review: itemlink.NoReview}}
+	f.gh.Put("org/web", quiet)
+	f.gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 44, Values: quiet.Values})
+	if _, err := f.reads.SetFailure(t.Context(), linkStore, "pr:org/web#43", "状態を更新できませんでした: x"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		number string
+		want   int
+	}{{"43", 1}, {"41", 1}, {"44", 0}} { // 文言を消す・チェックの結果を置く・どちらも変わらない
+		base := f.githubEvents(linkStore)
+		if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", c.number, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.githubEvents(linkStore) - base; got != c.want {
+			t.Errorf("#%s: published %d, want %d", c.number, got, c.want)
+		}
 	}
 }
 

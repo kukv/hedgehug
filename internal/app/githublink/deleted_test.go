@@ -1,4 +1,4 @@
-package github_test
+package githublink_test
 
 import (
 	"errors"

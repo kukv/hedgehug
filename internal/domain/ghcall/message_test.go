@@ -64,6 +64,9 @@ func TestRateLimitTime(t *testing.T) {
 		{"next day", time.Date(2026, 11, 13, 9, 0, 0, 0, jst), head + "11/13 09:00 以降にもう一度お試しください"},
 		{"next year", time.Date(2027, 1, 3, 9, 0, 0, 0, jst), head + "2027/01/03 09:00 以降にもう一度お試しください"},
 		{"unknown", time.Time{}, head + "しばらくしてからもう一度お試しください"},
+		// このマシンの時計が GitHub より進んでいて、戻る時刻がもう過ぎている: 過ぎた時刻は出さない
+		{"past", time.Date(2026, 11, 12, 9, 59, 0, 0, jst), head + "しばらくしてからもう一度お試しください"},
+		{"now", now, head + "しばらくしてからもう一度お試しください"},
 	}
 	for _, c := range cases {
 		got := refused(t, &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: c.reset}, now)

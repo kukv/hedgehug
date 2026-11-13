@@ -1,11 +1,13 @@
-package github_test
+package githublink_test
 
 import (
 	"slices"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
-	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
@@ -13,7 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
-func (f *linkFixture) refresh(t *testing.T) []ghapp.LinkRow {
+func (f *linkFixture) refresh(t *testing.T) []githublink.LinkRow {
 	t.Helper()
 	rows, err := f.links.Refresh(t.Context(), linkStore, linkTask)
 	if err != nil {
@@ -160,14 +162,16 @@ func TestRefreshStopsAtTheRateLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.RateLimited})
+	// 戻る時刻がもう過ぎている(このマシンの時計が進んでいる): 過ぎた時刻は出さない
+	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: time.Date(2026, 11, 13, 8, 0, 0, 0, time.UTC)})
 	asked := f.gh.Lookups
 	rows := f.refresh(t)
 	if f.gh.Lookups-asked != 1 {
 		t.Errorf("lookups = %d, want 1 (stop at the rate limit)", f.gh.Lookups-asked)
 	}
-	if len(rows) != 2 || rows[0].Error == "" || rows[1].Error != rows[0].Error {
-		t.Errorf("rows = %+v, want the same error on both", rows)
+	want := failed("GitHub の利用上限に達しました。しばらくしてからもう一度お試しください")
+	if len(rows) != 2 || rows[0].Error != want || rows[1].Error != want {
+		t.Errorf("rows = %+v, want %q on both", rows, want)
 	}
 }
 
@@ -207,8 +211,16 @@ func TestRefreshSkips(t *testing.T) {
 	if err := f.accounts.Remove(t.Context(), "A1"); err != nil {
 		t.Fatal(err)
 	}
+	// 取り直さないときは、置いてある文言を行に出さない(消しもしない。次に取り直せたときに消す。D4a-11)。
 	if rows := f.refresh(t); rows[0].Error != "" || f.gh.Lookups != asked {
 		t.Errorf("no accounts on this machine: row %+v", rows[0])
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 1 {
+		t.Errorf("the stored text was cleared by a skipped refresh: %v", got)
+	}
+	f.infos.Stores[0].ReadOnly = true
+	if rows := f.refresh(t); rows[0].Error != "" {
+		t.Errorf("read-only: row %+v", rows[0])
 	}
 }
 
@@ -235,5 +247,127 @@ func TestProjectLinks(t *testing.T) {
 	}
 	if want := []string{"HH-1 org/web#42", "HH-2 org/web#41", "HH-2 org/api#12"}; !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q (item number, then link order)", got, want)
+	}
+}
+
+const gone12 = "状態を更新できませんでした: org/web#12 が見つかりません"
+
+// linkAt は、org/web の n 番の PR を linkTask にリンクする。
+func (f *linkFixture) linkAt(t *testing.T, n int) {
+	t.Helper()
+	f.gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: n, Values: itemlink.Values{Title: "x", State: itemlink.Open, Review: itemlink.NoReview}})
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", strconv.Itoa(n), false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRefreshFailureIsKept(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 12)
+	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	if rows := f.refresh(t); rows[0].Error != gone12 {
+		t.Fatalf("refresh error = %q", rows[0].Error)
+	}
+	asked := f.gh.Lookups
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error != gone12 {
+		t.Errorf("list error = %q, want the stored text", rows[0].Error)
+	}
+	if f.gh.Lookups != asked {
+		t.Error("List asked GitHub")
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 1 {
+		t.Errorf("stored = %v", got)
+	}
+}
+
+func TestRefreshSuccessClearsFailure(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 12)
+	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	f.refresh(t)
+	f.gh.Fail("org/web", 12, nil)
+	if rows := f.refresh(t); rows[0].Error != "" {
+		t.Errorf("refresh error = %q", rows[0].Error)
+	}
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error != "" {
+		t.Errorf("list error = %q", rows[0].Error)
+	}
+}
+
+func TestRefreshFailurePublishes(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 12)
+	published := func() int {
+		n := 0
+		for _, e := range f.events.List() {
+			if e == (port.Event{Kind: port.EventGitHub, Store: linkStore}) {
+				n++
+			}
+		}
+		return n
+	}
+	f.refresh(t) // 値もチェックも変わらず、失敗もない
+	base := published()
+	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	f.refresh(t)
+	if got := published() - base; got != 1 {
+		t.Fatalf("on failure published %d, want 1", got)
+	}
+	f.refresh(t) // 同じ文言のまま
+	if got := published() - base; got != 1 {
+		t.Errorf("same text published again: %d", got)
+	}
+	f.gh.Fail("org/web", 12, nil)
+	f.refresh(t)
+	if got := published() - base; got != 2 {
+		t.Errorf("on clear published %d, want 2", got)
+	}
+}
+
+// 取り直さない Store(閲覧のみ・このマシンにアカウントがない)では、一覧も置いてある文言を出さない(Refresh と同じ)。
+func TestListHidesFailureWhenNotRefreshed(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 12)
+	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	f.refresh(t)
+	f.infos.Stores[0].ReadOnly = true
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error != "" {
+		t.Errorf("read-only: list error = %q", rows[0].Error)
+	}
+	f.infos.Stores[0].ReadOnly = false
+	if err := f.accounts.Remove(t.Context(), "A1"); err != nil {
+		t.Fatal(err)
+	}
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error != "" {
+		t.Errorf("no accounts: list error = %q", rows[0].Error)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 1 {
+		t.Errorf("stored = %v, want the text kept", got)
+	}
+}
+
+// 解除したリンクの取り直しの失敗の文言は消し、消したら EventGitHub を流す。
+func TestRemoveClearsFailure(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 13)
+	f.gh.Fail("org/web", 13, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 13})
+	f.refresh(t)
+	base := f.githubEvents(linkStore)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 13}
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, ref); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 0 {
+		t.Errorf("failures = %v, want the removed link's text cleared", got)
+	}
+	if got := f.githubEvents(linkStore) - base; got != 1 {
+		t.Errorf("published %d, want 1", got)
+	}
+	// ないリンクの解除では、何も知らせない
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, ref); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.githubEvents(linkStore) - base; got != 1 {
+		t.Errorf("published %d after removing a missing link, want 1", got)
 	}
 }

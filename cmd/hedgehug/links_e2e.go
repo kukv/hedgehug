@@ -6,7 +6,9 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
@@ -50,6 +52,34 @@ func githubHandler(token string, next http.Handler) http.Handler {
 			Values: itemlink.Values{Title: q.Get("title"), State: itemlink.State(q.Get("state")), Review: review},
 			Checks: itemlink.Checks(q.Get("checks")),
 		})
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// e2eGitHubEvery は、e2e の入口の読み取りに渡す「GitHub を読む間隔」(既定の 5 分。D4a-7)。
+const e2eGitHubEvery = 5 * time.Minute
+
+// githubReadHandler は、POST /e2e/github-read を受け、間隔によらず 1 回の読み取り(ReadOnce)を行う(D4a-19)。
+// ほかの要求は next に渡す。API と同じトークンを求める。
+func githubReadHandler(token string, links githublink.Links, next http.Handler) http.Handler {
+	want := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/e2e/github-read" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := links.ReadOnce(r.Context(), e2eGitHubEvery, true); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

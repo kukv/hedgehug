@@ -22,7 +22,8 @@ func Stamp(log []Record, drafts []Draft, meta Meta, newID func() ID) []Record {
 	for _, d := range drafts {
 		actor := meta.Actor
 		if d.Rule != "" {
-			actor = Actor{Kind: ActorAutomation, Login: meta.Actor.Login, Rule: d.Rule}
+			// by は、きっかけになった操作をした人。人でない実行者の操作では hedgehug[bot](D4a-15)。
+			actor = Actor{Kind: ActorAutomation, Login: meta.Actor.By(), Rule: d.Rule}
 		}
 		r := Record{
 			ID: newID(), Op: meta.Op, At: meta.At, By: actor.By(), Actor: actor,
