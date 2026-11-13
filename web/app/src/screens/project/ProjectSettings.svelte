@@ -4,7 +4,9 @@
   import { untrack } from "svelte";
   import { projectEditor } from "../../projectEditor";
   import { projectDelete } from "../../wireActions";
+  import RulesAutomation from "./RulesAutomation.svelte";
   import RulesStatuses from "./RulesStatuses.svelte";
+  import RulesTemplates from "./RulesTemplates.svelte";
   import RulesWorkflow from "./RulesWorkflow.svelte";
 
   // プロジェクトの設定タブ(02「画面の見出しと構成」)。区画の並びは 02 の「設定のタブ」。
@@ -67,6 +69,8 @@
   </section>
   <RulesStatuses {view} />
   <RulesWorkflow {view} />
+  <RulesTemplates {view} />
+  <RulesAutomation {view} />
   <section class="sec danger">
     <h2>削除</h2>
     {#if $note?.projectId === p.id}

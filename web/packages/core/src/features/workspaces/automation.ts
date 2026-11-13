@@ -8,6 +8,7 @@ import type {
   WorkspaceSettings,
 } from "../../model/workspace";
 import { relativeTime } from "../dates/relative";
+import { rulesOf } from "./projectRules";
 
 // 自動化のタブ(03「自動化」)。文言は 03 の文字どおり。
 
@@ -85,6 +86,48 @@ export function ruleRows(
     summary: ruleSummary(s, members, r),
     enabled: r.enabled,
   }));
+}
+
+export interface ProjectRuleRow extends RuleRow {
+  // 出どころ「ワークスペース」「このプロジェクトだけ」
+  origin: string;
+  // このプロジェクトだけのルール(編集・削除が付く)
+  own: boolean;
+  // スイッチを動かせない(ワークスペースで無効のルール)
+  locked: boolean;
+  note?: string;
+}
+
+export const originWorkspace = "ワークスペース";
+export const originProject = "このプロジェクトだけ";
+export const disabledInWorkspace = "ワークスペースで無効";
+
+// projectRuleRows は、プロジェクトの「自動化」の区画の行(03「プロジェクトの自動化」)。判定されるルール
+// (ワークスペース全体と、このプロジェクトだけ)を、渡された順に。ワークスペースのルールのスイッチは「ここで
+// 動く」(無効のルールは OFF で動かせない)、専用ルールのスイッチは有効・無効。
+export function projectRuleRows(
+  a: WorkspaceAutomation,
+  s: WorkspaceSettings,
+  members: Member[],
+  projectId: string,
+): ProjectRuleRow[] {
+  const excluded = rulesOf(s, projectId).disabledRules;
+  return a.rules
+    .filter((r) => !r.scope || r.scope === projectId)
+    .map((r) => {
+      const own = r.scope === projectId;
+      const locked = !own && !r.enabled;
+      return {
+        id: r.id,
+        name: r.name,
+        summary: ruleSummary(s, members, r),
+        enabled: own ? r.enabled : r.enabled && !excluded.includes(r.id),
+        origin: own ? originProject : originWorkspace,
+        own,
+        locked,
+        ...(locked ? { note: disabledInWorkspace } : {}),
+      };
+    });
 }
 
 const doneDefault = (s: WorkspaceSettings) => s.categoryDefaults.done ?? s.statuses[0]?.id ?? "";

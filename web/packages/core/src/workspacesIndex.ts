@@ -25,6 +25,12 @@ export {
   usesStatus,
 } from "./features/workspaces/projectRules";
 export {
+  type ProjectKindDefault,
+  type ProjectTemplateView,
+  projectTemplateView,
+  type TemplateUse,
+} from "./features/workspaces/projectTemplates";
+export {
   addableTypes,
   deletePropertyBody,
   keyHint,

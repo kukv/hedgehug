@@ -6,6 +6,8 @@ export {
   deleteRuleBody,
   deleteRuleTitle,
   newRuleForm,
+  type ProjectRuleRow,
+  projectRuleRows,
   type RecentRow,
   type RuleRow,
   recentEmpty,
