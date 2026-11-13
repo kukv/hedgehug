@@ -1,11 +1,18 @@
 import { createAccountsPort, createLinksPort } from "@hedgehug/api";
-import { createLinkDialog, createLinkList, createProjectLinks } from "@hedgehug/core";
-import { reloads } from "./reloads";
+import {
+  createLinkDialog,
+  createLinkList,
+  createProjectLinks,
+  createRepoFailures,
+} from "@hedgehug/core";
+import { githubReloads, reloads } from "./reloads";
 import { catalog, detail, navigation, toasts } from "./wire";
 
 // GitHub の欄(07「PR と Issue のリンク」)。wire.ts が 300 行なので、ここで作る。
 const port = createLinksPort();
 export const projectLinks = createProjectLinks({ links: port });
+// 概要のリポジトリの行の下の「PR を探せませんでした」。探索の結果は github の知らせで変わる(D4b-9)。
+export const repoFailures = createRepoFailures({ links: port });
 export const linkList = createLinkList({
   links: port,
   accounts: createAccountsPort(),
@@ -25,5 +32,6 @@ export const linkDialog = createLinkDialog({
 });
 reloads.add(() => linkList.reload());
 reloads.add(() => projectLinks.reload());
+githubReloads.add(() => repoFailures.reload());
 // 画面を移ったら、ダイアログを閉じる(01「画面の移り方」。前のアイテム宛てのダイアログを残さない)。
 navigation.route.subscribe(() => linkDialog.close());

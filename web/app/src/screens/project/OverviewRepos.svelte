@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { type ProjectView, readOnlyNote } from "@hedgehug/core";
+  import { type ProjectView, readOnlyNote, scanFailedText } from "@hedgehug/core";
   import { Button, IconButton, Input } from "@hedgehug/ui";
+  import { onDestroy } from "svelte";
+  import { repoFailures } from "../../github";
   import { projectEditor } from "../../projectEditor";
   import ProjectLinks from "../github/ProjectLinks.svelte";
 
@@ -14,6 +16,14 @@
   const p = $derived(view.project);
   const disabled = $derived(view.store.readOnly);
   const hint = $derived(disabled ? readOnlyNote : undefined);
+
+  // 失敗の文言は、リポジトリの行の下に出す。$failures を読むことで、読み直しに追随する。
+  const failures = repoFailures.state;
+  const failureOf = (repo: string) => ($failures.loaded ? repoFailures.failureOf(repo) : "");
+  $effect(() => {
+    void repoFailures.load(view.store.id, p.id);
+  });
+  onDestroy(() => repoFailures.reset());
 
   // 追加の入力欄は、「リポジトリを追加」で開く。断られたら開いたまま、断りの文言を欄の下に出す。
   let adding = $state(false);
@@ -71,16 +81,21 @@
     <ul class="repos" aria-label="リポジトリ">
       {#each p.repos as repo (repo)}
         <li class="repo">
-          <code>{repo}</code>
-          <span class="grow"></span>
-          <IconButton
-            label="{repo} を削除"
-            size="xs"
-            {disabled}
-            title={hint}
-            onclick={() => void projectEditor.removeRepo(p, repo)}
-            >×</IconButton
-          >
+          <div class="repo-line">
+            <code>{repo}</code>
+            <span class="grow"></span>
+            <IconButton
+              label="{repo} を削除"
+              size="xs"
+              {disabled}
+              title={hint}
+              onclick={() => void projectEditor.removeRepo(p, repo)}
+              >×</IconButton
+            >
+          </div>
+          {#if failureOf(repo) !== ""}
+            <p class="error scan-failed">{scanFailedText(failureOf(repo))}</p>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -122,11 +137,16 @@
     padding: 0;
   }
   .repo {
+    border-bottom: 1px solid var(--line);
+  }
+  .repo-line {
     display: flex;
     align-items: center;
     gap: 8px;
     min-height: 34px;
-    border-bottom: 1px solid var(--line);
+  }
+  .scan-failed {
+    margin: 0 0 6px;
   }
   code {
     font-family: var(--font-mono);

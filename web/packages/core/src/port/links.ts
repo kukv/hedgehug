@@ -1,4 +1,4 @@
-import type { LinkInput, LinkRow, LinkTarget, ProjectLinkRow } from "../model/link";
+import type { LinkInput, LinkRow, LinkTarget, ProjectLinkRow, RepoFailure } from "../model/link";
 
 // リンクの口。実装は api パッケージにある。断りは Refused、ないものは NotFound で投げる。
 export interface LinksPort {
@@ -7,4 +7,5 @@ export interface LinksPort {
   add(storeId: string, itemId: string, input: LinkInput): Promise<void>;
   remove(storeId: string, itemId: string, target: LinkTarget): Promise<void>;
   listProject(storeId: string, projectId: string): Promise<ProjectLinkRow[]>;
+  listRepoFailures(storeId: string, projectId: string): Promise<RepoFailure[]>;
 }
