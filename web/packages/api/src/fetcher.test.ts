@@ -10,7 +10,7 @@ function respond(status: number, headers: Record<string, string> = {}): void {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  onRestored(() => {});
+  onRestored(null);
 });
 
 describe("fetcher の Hedgehug-Restored", () => {

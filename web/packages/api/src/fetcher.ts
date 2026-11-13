@@ -36,7 +36,7 @@ function detailOf(text: string): string | null {
 let restoredListener: ((ids: string[]) => void) | null = null;
 
 // onRestored は、削除を取り消した保存の応答(Hedgehug-Restored ヘッダー)を受ける受け手を 1 つ置く。
-export function onRestored(listener: (ids: string[]) => void): void {
+export function onRestored(listener: ((ids: string[]) => void) | null): void {
   restoredListener = listener;
 }
 
