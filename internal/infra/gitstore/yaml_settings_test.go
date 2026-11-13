@@ -250,8 +250,10 @@ func TestWorkspaceYAMLHasRules(t *testing.T) {
 	mustContain(t, "workspace.yaml", readFileString(t, dir, path), "rules: []\n")
 
 	done := st.Statuses[2].ID
-	r := automation.Rule{ID: "01RULE1", Name: "完了で外す", Trigger: automation.TriggerStatus, TriggerStatus: done,
-		Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: true}
+	r := automation.Rule{
+		ID: "01RULE1", Name: "完了で外す", Trigger: automation.TriggerStatus, TriggerStatus: done,
+		Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: true,
+	}
 	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "準備"}, func(tx port.Tx) error {
 		return tx.WriteWorkspaces().Append(yWS, automation.Drafts(automation.Rule{}, r)...)
 	})
