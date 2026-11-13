@@ -43,7 +43,7 @@ test("Shift+Ctrl+S syncs while typing in the title", async ({ page }) => {
   ).toBeVisible();
   await expect(title).toHaveValue("入力中のタイトル");
   await expect(title).toBeFocused();
-  // サーバーは 3 つの幅とほかのテストで共有なので、元のタイトルに戻してから離れる(保存されない)。
+  // サーバーは同じ worker のほかのテストと共有なので、元のタイトルに戻してから離れる(保存されない)。
   await title.fill("ログイン画面を作る");
   await title.blur();
 });

@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures";
 import { newTask } from "./helpers";
 
-// 詳細パネルの説明(A4a)。サーバーは 3 つの幅で共有なので、Task の名前は毎回変える(helpers の newTask)。
+// 詳細パネルの説明(A4a)。サーバーは同じ worker のほかのテストと共有なので、Task は毎回作る(helpers の newTask)。
 const body = "## 手順\n- 一つ目\n**太字** と https://example.com/guide を見る";
 
 test("writes a description, shows it as Markdown and asks before discarding a change", async ({

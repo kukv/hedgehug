@@ -37,5 +37,5 @@
 - 依存ライブラリを `@latest` や版なしで入れない。`go get <module>@vX.Y.Z`・`pnpm add -E <pkg>@X.Y.Z` のように版を明記し、公開から 7 日以上たった版だけを使う(Go は `go list -m -json <module>@<ver>` の Time で確かめる)。計画やサブエージェントへの指示にもこの規則を書く。
 - 計画やテストに、トークンらしい値(`ghp_` などで始まる文字列)を書かない。gitleaks が止める。
 - e2e のビルドも CI で lint する。本物の組み立てだけで使う関数は `//go:build !e2e` のファイルに置く。
-- e2e は Playwright の worker ごとに `bin/hedgehug-e2e` を空いた番号で起動する(`web/e2e/fixtures.ts`)。ほかの worktree のセッションと番号は重ならない。`--repeat-each` は同じ名前のワークスペースが重なるので、繰り返しの確認には使えない。
+- e2e は Playwright の worker ごとに `bin/hedgehug-e2e` を空いた番号で起動する(`web/e2e/fixtures.ts`)。ほかの worktree のセッションと番号は重ならない。worker は 1 つの幅しか流さず、`--repeat-each` の各回とテストが落ちたあとのやり直しも新しい worker(新しいサーバー)で流れるので、名前は重ならない。
 - 手元の検証は 1 回で足りる(CI でも流れる)。同じテストを何度も流す計画にしない。
