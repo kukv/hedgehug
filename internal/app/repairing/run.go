@@ -17,6 +17,7 @@ var steps = []step{
 	restoreOverlaps,    // 削除と変更の重なり
 	cascadeDeleted,     // 削除済みの親の下の子
 	renumberCollisions, // 同じワークスペースで重なった番号
+	breakCycles,        // 親の循環
 }
 
 // syncActor は、修復の保存の実行者。
