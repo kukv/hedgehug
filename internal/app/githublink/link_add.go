@@ -64,7 +64,9 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 	// 通知を先に書く(チェックの結果を置くのに失敗しても、保存したルールの通知は失わない)
 	nerr := l.notify(ctx, store, fs)
 	_, cerr := l.saveChecks(ctx, store, plan.ref, plan.checks)
-	return errors.Join(nerr, cerr)
+	// 解除する前に置いた取り直しの失敗の文言を消す(いま GitHub から読めた。D4a-11)
+	_, ferr := l.setFailure(ctx, store, plan.ref.Key(), "")
+	return errors.Join(nerr, cerr, ferr)
 }
 
 // saveLink は、保存 tx の中で確かめ直してリンクを書き、同じ保存の中できっかけを動かす。

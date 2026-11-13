@@ -32,5 +32,3 @@ export interface LinkInput {
 }
 
 export type LinkTarget = Pick<LinkRow, "kind" | "repo" | "number">;
-
-export const linkKey = (r: LinkTarget) => `${r.kind}:${r.repo}#${r.number}`;

@@ -357,6 +357,21 @@ func TestRemoveLink(t *testing.T) {
 	}
 }
 
+// 解除する前に置いた取り直しの失敗の文言は、リンクし直したら出さない(リンクで GitHub から読めたので。D4a-11)。
+func TestRelinkClearsTheOldFailure(t *testing.T) {
+	f := newLinks(t)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	if _, err := f.reads.SetFailure(t.Context(), linkStore, ref.Key(), "状態を更新できませんでした: x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if rows := f.list(t, linkStore, linkTask); len(rows) != 1 || rows[0].Error != "" {
+		t.Errorf("rows = %+v, want no error", rows)
+	}
+}
+
 func TestLinksOfMissingItem(t *testing.T) {
 	f := newLinks(t)
 	if _, err := f.links.List(t.Context(), linkStore, "01TESTIT0000000000000000NO"); !errors.Is(err, port.ErrNotFound) {
