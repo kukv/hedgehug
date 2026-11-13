@@ -65,6 +65,8 @@
     <Textarea
       bind:this={area}
       label="コメントを編集"
+      disabled={readOnly}
+      title={note}
       focusOnMount
       {onkeydown}
       bind:value={() => editing.body, comments.setEditing}
@@ -74,7 +76,8 @@
       <Button
         size="sm"
         variant="primary"
-        disabled={s.busy}
+        disabled={readOnly || s.busy}
+        title={note}
         onclick={() => void comments.saveEdit()}
       >
         保存

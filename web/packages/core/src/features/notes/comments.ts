@@ -16,6 +16,8 @@ export const commentDeleteDialog = {
   lines: ["このコメントを削除します。"],
   ok: "削除",
 };
+// 断りでも「ない」でもない失敗(通信の失敗など)のときの文言。仕様にない文言なので、決まったら差し替える。
+export const commentFailedMessage = "コメントを保存できませんでした";
 const unknownUser = "不明なユーザー";
 
 export interface CommentsState {
@@ -99,18 +101,33 @@ export function createComments(deps: CommentsDeps): Comments {
         deps.catalogPort.me(target.storeId).catch(() => ""),
       ]);
       // 待っているあいだに別の持ち主へ移った(または閉じた)なら、この結果は捨てる。
-      if (isOpen(target)) patch({ rows, members, me });
+      if (!isOpen(target)) return;
+      // 読み直したら消えていたコメントの編集と削除の確認は、続けられないので外す(見えない書きかけを残さない)。
+      const alive = (id: string | undefined) => rows.some((r) => r.id === id);
+      state.update((s) => ({
+        ...s,
+        rows,
+        members,
+        me,
+        editing: s.editing && alive(s.editing.id) ? s.editing : null,
+        deleting: alive(s.deleting ?? undefined) ? s.deleting : null,
+      }));
     } catch (e) {
       // 持ち主がなくなっていたら、詳細パネルが閉じるので何もしない。
       if (!(e instanceof NotFound)) throw e;
     }
   }
 
-  // refusedToast は、断りをエラーのトーストで出す。断り以外は投げる。
-  function refusedToast(e: unknown) {
-    if (!(e instanceof Refused)) throw e;
-    deps.toasts.show(e.message, { error: true });
+  // failed は、書き込みの失敗の始末。ないものは黙って読み直し、断りはその文言を、ほかはエラーのトーストを出す。
+  async function failed(e: unknown, target: NoteTarget) {
+    if (e instanceof NotFound) await load(target);
+    else deps.toasts.show(e instanceof Refused ? e.message : commentFailedMessage, { error: true });
   }
+
+  // settled は、書き込みが終わったときの送信中の印の戻し。別の持ち主へ移っていたら、そちらの印を触らない。
+  const settled = (target: NoteTarget) => {
+    if (isOpen(target)) patch({ busy: false });
+  };
 
   const original = (id: string) => get(state).rows.find((r) => r.id === id)?.body ?? "";
 
@@ -145,12 +162,13 @@ export function createComments(deps: CommentsDeps): Comments {
     try {
       await deps.notes.postComment(target, body);
     } catch (e) {
-      refusedToast(e);
+      settled(target);
+      await failed(e, target);
       return false;
-    } finally {
-      patch({ busy: false });
     }
-    if (isOpen(target)) patch({ newBody: "" });
+    settled(target);
+    // 送っているあいだに打ち足した文字は残す(送った入力のままのときだけ空にする)。
+    if (isOpen(target) && get(state).newBody === newBody) patch({ newBody: "" });
     await load(target);
     return true;
   }
@@ -167,12 +185,13 @@ export function createComments(deps: CommentsDeps): Comments {
     try {
       await deps.notes.editComment(target, editing.id, body);
     } catch (e) {
-      refusedToast(e);
+      settled(target);
+      await failed(e, target);
       return false;
-    } finally {
-      patch({ busy: false });
     }
-    if (isOpen(target)) patch({ editing: null });
+    settled(target);
+    // 保存しているあいだに打ち足した文字は残す(保存した入力のままのときだけ閉じる)。
+    if (isOpen(target) && get(state).editing?.body === editing.body) patch({ editing: null });
     await load(target);
     return true;
   }
@@ -185,11 +204,7 @@ export function createComments(deps: CommentsDeps): Comments {
       await deps.notes.deleteComment(target, deleting);
     } catch (e) {
       // ほかで消えていたら、読み直すだけにする。
-      if (!(e instanceof NotFound)) {
-        refusedToast(e);
-        return;
-      }
-      await load(target);
+      await failed(e, target);
       return;
     }
     deps.toasts.show(commentDeletedMessage);
