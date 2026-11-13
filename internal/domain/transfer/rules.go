@@ -1,7 +1,6 @@
 package transfer
 
 import (
-	"maps"
 	"slices"
 	"strings"
 
@@ -95,12 +94,11 @@ func (c *carrier) toStatus(id change.ID) (change.ID, bool) {
 }
 
 func (c *carrier) hidden() {
-	for _, id := range c.in.Rules.Hidden {
-		v, ok := valueByID(c.in.From.Statuses, id)
-		if !ok {
+	for _, v := range c.in.From.Statuses { // 移動元のステータスの並び
+		if !slices.Contains(c.in.Rules.Hidden, v.ID) {
 			continue
 		}
-		to, ok := c.toStatus(id)
+		to, ok := c.toStatus(v.ID)
 		switch {
 		case !ok:
 			c.notCarried(NotCarried{Kind: NotCarriedHidden, Name: v.Name})
@@ -158,8 +156,11 @@ func (c *carrier) toTemplate(id change.ID) (to change.ID, from workspace.Templat
 }
 
 func (c *carrier) templates() {
-	for _, id := range c.in.Rules.Templates {
-		to, from, ok := c.toTemplate(id)
+	for _, t := range c.in.From.Templates { // 移動元のテンプレートの並び
+		if !slices.Contains(c.in.Rules.Templates, t.ID) {
+			continue
+		}
+		to, from, ok := c.toTemplate(t.ID)
 		switch {
 		case ok:
 			c.draft(change.NewAdd(projectrule.TemplatesField(c.in.Project), to))
@@ -170,8 +171,11 @@ func (c *carrier) templates() {
 }
 
 func (c *carrier) templateDefaults() {
-	for _, kind := range slices.Sorted(maps.Keys(c.in.Rules.TemplateDefaults)) {
-		v := c.in.Rules.TemplateDefaults[kind]
+	for _, kind := range workspace.Kinds { // 種類の並び
+		v, ok := c.in.Rules.TemplateDefaults[kind]
+		if !ok {
+			continue
+		}
 		field := projectrule.TemplateDefaultField(c.in.Project, kind)
 		if v == projectrule.None {
 			c.draft(change.NewSet(field, nil, projectrule.None))

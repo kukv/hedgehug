@@ -78,18 +78,16 @@ func IsFixedStatus(s workspace.Settings, status change.ID) bool {
 }
 
 func checkCanHide(s workspace.Settings, status change.ID, own []ScopedRule) error {
-	if IsFixedStatus(s, status) {
-		initial := s.InitialStatus == status
-		cat, isDefault := s.DefaultCategory(status)
-		label := workspace.CategoryName(cat)
-		switch {
-		case initial && isDefault:
-			return refusal.New("初期ステータスで、" + label + "の既定でもあるため外せません")
-		case initial:
-			return refusal.New("初期ステータスのため外せません")
-		default:
-			return refusal.New(label + "の既定のため外せません")
-		}
+	initial := s.InitialStatus == status
+	cat, isDefault := s.DefaultCategory(status)
+	label := workspace.CategoryName(cat)
+	switch {
+	case initial && isDefault:
+		return refusal.New("初期ステータスで、" + label + "の既定でもあるため外せません")
+	case initial:
+		return refusal.New("初期ステータスのため外せません")
+	case isDefault:
+		return refusal.New(label + "の既定のため外せません")
 	}
 	for _, rule := range own {
 		if slices.Contains(rule.Statuses, status) {

@@ -31,7 +31,9 @@ func ruleSettings() (from, to workspace.Settings) {
 			workspace.CategoryTodo: "FTodo", workspace.CategoryDoing: "FProg", workspace.CategoryDone: "FDone",
 		},
 		Templates: []workspace.Template{
-			{ID: "FT1", Name: "Bug 報告", Kind: "Bug"}, {ID: "FT2", Name: "仕様", Kind: "Story"},
+			{ID: "FT1", Name: "Bug 報告", Kind: "Bug"},
+			{ID: "FT2", Name: "仕様", Kind: "Story"},
+			{ID: "FT3", Name: "Task 雛形", Kind: "Task"},
 		},
 	}
 	to = workspace.Settings{
@@ -97,6 +99,24 @@ func TestCarryRulesTemplatesByNameAndKind(t *testing.T) {
 	eq(t, c.Destination, []change.Draft(nil))
 }
 
+// 移らないものの各種類の中は、Rules の持つ順ではなく移動元の設定の並び(A5b-8)。
+func TestCarryRulesNotCarriedOrder(t *testing.T) {
+	// ステータスは移動元の並び(Todo が Pending より先)。hidden と hiddenFixed は混ぜる。
+	c := carry(transfer.CarryInput{Rules: projectrule.Rules{Hidden: []change.ID{"FPend", "FTodo"}}})
+	eq(t, c.NotCarried, []transfer.NotCarried{{Kind: "hiddenFixed", Name: "Todo"}, {Kind: "hidden", Name: "Pending"}})
+
+	// テンプレートは移動元のテンプレートの並び(Bug 報告 が Task 雛形 より先)。
+	c = carry(transfer.CarryInput{Rules: projectrule.Rules{Templates: []change.ID{"FT3", "FT1"}}})
+	eq(t, c.NotCarried, []transfer.NotCarried{{Kind: "template", Name: "Bug 報告"}, {Kind: "template", Name: "Task 雛形"}})
+
+	// 種類の既定は種類の並び(Kinds の Epic, Story, Task, Bug, Step の順なので Task が Bug より先)。
+	c = carry(transfer.CarryInput{Rules: projectrule.Rules{TemplateDefaults: map[string]string{"Bug": "FT1", "Task": "FT3"}}})
+	eq(t, c.NotCarried, []transfer.NotCarried{
+		{Kind: "templateDefault", Name: "Task", Missing: []string{"Task 雛形"}},
+		{Kind: "templateDefault", Name: "Bug", Missing: []string{"Bug 報告"}},
+	})
+}
+
 func TestCarryRulesTemplateDefaults(t *testing.T) {
 	c := carry(transfer.CarryInput{Rules: projectrule.Rules{TemplateDefaults: map[string]string{
 		"Bug": "FT1", "Story": "FT2", "Task": projectrule.None,
@@ -133,6 +153,7 @@ func TestCarryRulesOwnRulesGetNewIDsAndStatuses(t *testing.T) {
 	eq(t, c.Destination, automation.Drafts(automation.Rule{}, want))
 
 	// 選択がなく、名前も合わなければ、同じ分類(進行中)の移動先の既定。なければ初期ステータス。
+	// 実際の設定では分類ごとの既定が必ずあるので、既定のない設定での初期ステータスは Remap と同じ保険の枝。
 	c = carry(transfer.CarryInput{Own: []automation.Rule{ownRule()}})
 	eq(t, c.Created[0].TriggerStatus, change.ID("TTodo"))
 	_, to := ruleSettings()
@@ -149,6 +170,11 @@ func TestCarryRulesOwnRuleAssigneeAcrossStores(t *testing.T) {
 	r.Value = automation.Unassigned
 	c = carry(transfer.CarryInput{Own: []automation.Rule{r}, People: transfer.PeopleMap{"taro": "TARO"}})
 	eq(t, c.Created[0].Value, automation.Unassigned)
+
+	// People にない担当者は、そのまま残る。
+	r.Value = "Jiro"
+	c = carry(transfer.CarryInput{Own: []automation.Rule{r}, People: transfer.PeopleMap{"taro": "TARO"}})
+	eq(t, c.Created[0].Value, "Jiro")
 
 	r.Value = "Taro"
 	c = carry(transfer.CarryInput{Own: []automation.Rule{r}})
