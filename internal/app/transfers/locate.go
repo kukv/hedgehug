@@ -96,7 +96,8 @@ func (s Service) Locate(ctx context.Context, storeName, display string) (Located
 }
 
 // OldIDs は、旧 ID display に当たる削除されていないアイテムを、Locate の (b)・(c) と同じ規則と順ですべて返す
-// (いまの ID で見つかるものは含めない。Locate は、いまの ID でなければ、この先頭を開く)。
+// (いまの ID で見つかるものは含めない。Locate は、いまの ID でなければ、この先頭を開く)。display が
+// 「接頭辞-番号」として読めなければ、当たるものはないので nil, nil を返す(検索は、ID でない語でも呼ぶ)。
 func (s Service) OldIDs(ctx context.Context, display string) ([]OldID, error) {
 	prefix, n, ok := parseDisplay(display)
 	if !ok {
