@@ -35,12 +35,13 @@ func Resolve(log []Record, opt Options) State {
 	if multi == nil {
 		multi = func(string) bool { return false }
 	}
+	g := groupAll(valid)
 	for f := range fields(valid, initial) {
 		if multi(f) {
-			if vs := resolveList(valid, f, initial[f]); len(vs) > 0 {
+			if vs := resolveList(valid, g, f, initial[f]); len(vs) > 0 {
 				s.Lists[f] = vs
 			}
-		} else if v, ok := resolveValue(valid, f, initial); ok {
+		} else if v, ok := resolveValue(g, f, initial); ok {
 			s.Values[f] = v
 		}
 	}
@@ -81,8 +82,8 @@ func fields(log []Record, initial map[string]json.RawMessage) map[string]bool {
 	return fs
 }
 
-func resolveValue(log []Record, f string, initial map[string]json.RawMessage) (json.RawMessage, bool) {
-	w := winner(tipsOf(group(log, key(Record{T: Set, F: f}))))
+func resolveValue(g groups, f string, initial map[string]json.RawMessage) (json.RawMessage, bool) {
+	w := winner(tipsOf(g.of(key(Record{T: Set, F: f}))))
 	if w == nil {
 		return nil, false // 先端がない(prev が輪になっている)項目は、値なし
 	}
@@ -93,7 +94,7 @@ func resolveValue(log []Record, f string, initial map[string]json.RawMessage) (j
 	return w.To, true
 }
 
-func resolveList(log []Record, f string, initial json.RawMessage) []json.RawMessage {
+func resolveList(log []Record, g groups, f string, initial json.RawMessage) []json.RawMessage {
 	var start []json.RawMessage
 	_ = json.Unmarshal(initial, &start)
 	inStart := map[string]bool{}
@@ -112,7 +113,7 @@ func resolveList(log []Record, f string, initial json.RawMessage) []json.RawMess
 	}
 	var out []json.RawMessage
 	for c := range cands {
-		w := winner(tipsOf(group(log, "list\x00"+f+"\x00"+c)))
+		w := winner(tipsOf(g.of("list\x00" + f + "\x00" + c)))
 		if w != nil && (w.T == Add || (w.T == Create && inStart[c])) {
 			out = append(out, json.RawMessage(c))
 		}
