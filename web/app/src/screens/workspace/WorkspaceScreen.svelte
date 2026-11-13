@@ -16,6 +16,7 @@
   import { navigation, planning, projectDialog, syncNow } from "../../wire";
   import CloseSprintDialog from "../planning/CloseSprintDialog.svelte";
   import DeleteSprintDialog from "../planning/DeleteSprintDialog.svelte";
+  import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialog from "../planning/SprintDialog.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
   import StartSprintDialog from "../planning/StartSprintDialog.svelte";
@@ -122,6 +123,13 @@
       onclose={(c) => void openSprint("close", c)}
       onedit={(c) => void openSprint("edit", c)}
       ondelete={(c) => void openSprint("delete", c)}
+    />
+  {:else if tab === "releases"}
+    <ReleasesTab
+      storeId={store.id}
+      storeName={store.name}
+      workspaceId={workspace.id}
+      readOnly={store.readOnly}
     />
   {/if}
   {#if shown?.kind === "create" && ov}

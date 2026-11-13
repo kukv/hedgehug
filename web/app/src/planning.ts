@@ -1,5 +1,5 @@
 import { createWorkspacesPort } from "@hedgehug/api";
-import { createSprints, runSprintAction } from "@hedgehug/core";
+import { createReleases, createSprints, runSprintAction } from "@hedgehug/core";
 import { reloads } from "./reloads";
 import { listMembers, planning, planningPort, toasts } from "./wire";
 
@@ -20,6 +20,28 @@ export const sprintAction = (op: () => Promise<string | null>, onRefused: (m: st
       toasts,
       reload: async () => {
         await Promise.all([sprints.reload(), planning.reload()]);
+      },
+    },
+    op,
+    onRefused,
+  );
+
+// リリースの画面(05「リリース」)。読み方はスプリントの画面と同じ。
+export const releases = createReleases({
+  port: planningPort,
+  workspaces: createWorkspacesPort(),
+  listMembers,
+});
+reloads.add(() => releases.reload());
+
+// releaseAction は、リリースの保存(core の runSprintAction)。保存のあとは、カードと概要(アイテムの
+// 「リリース」の選択肢)をすぐ読み直す。
+export const releaseAction = (op: () => Promise<string | null>, onRefused: (m: string) => void) =>
+  runSprintAction(
+    {
+      toasts,
+      reload: async () => {
+        await Promise.all([releases.reload(), planning.reload()]);
       },
     },
     op,
