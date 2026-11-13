@@ -15,7 +15,7 @@ import (
 func (s Service) SaveProject(ctx context.Context, store port.StoreID, id project.ID, base, text string) (Result, error) {
 	var title string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		p, err := port.LiveProject(r, id)
+		p, err := port.EditableProject(r, id)
 		title = p.Title
 		return err
 	})
@@ -25,6 +25,13 @@ func (s Service) SaveProject(ctx context.Context, store port.StoreID, id project
 	// アクティビティの 1 行は 1 行でなければならないので、改行を含む空白を 1 つの空白にまとめる。
 	label := strings.Join(strings.Fields(title), " ")
 	return s.save(ctx, store, label+" の説明を変更", base, text, slot{
+		revive: func(ctx context.Context, tx port.Tx) (*change.Deletion, error) {
+			p, err := port.EditableProject(tx, id)
+			if err != nil {
+				return nil, err
+			}
+			return p.Deleted, port.ReviveProject(ctx, tx, id)
+		},
 		read: func(r port.Reader) (string, error) { return r.Projects().Description(id) },
 		write: func(tx port.Tx, merged string) error {
 			return errors.Join(tx.WriteProjects().Describe(id, merged), tx.WriteProjects().Append(id, change.NewDesc()))

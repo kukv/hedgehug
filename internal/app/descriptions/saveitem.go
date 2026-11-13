@@ -17,6 +17,13 @@ func (s Service) SaveItem(ctx context.Context, store port.StoreID, id item.ID, b
 		return Result{}, err
 	}
 	return s.save(ctx, store, display+" の説明を変更", base, text, slot{
+		revive: func(ctx context.Context, tx port.Tx) (*change.Deletion, error) {
+			it, err := port.EditableItem(tx, id)
+			if err != nil {
+				return nil, err
+			}
+			return it.Deleted, port.ReviveItem(ctx, tx, id)
+		},
 		read: func(r port.Reader) (string, error) { return r.Items().Description(id) },
 		write: func(tx port.Tx, merged string) error {
 			return errors.Join(tx.WriteItems().Describe(id, merged), tx.WriteItems().Append(id, change.NewDesc()))
@@ -24,11 +31,11 @@ func (s Service) SaveItem(ctx context.Context, store port.StoreID, id item.ID, b
 	})
 }
 
-// displayID は、アクティビティの 1 行に書く、アイテムの画面の ID(HH-12)。保存の前に決めるので別に読む。
+// displayID は、アクティビティの 1 行に書く、アイテムの画面の ID(HH-12)。保存の前に決めるので別に読む。削除済み(root: true)のアイテムも読める。
 func (s Service) displayID(ctx context.Context, store port.StoreID, id item.ID) (string, error) {
 	var display string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := port.LiveItem(r, id)
+		it, err := port.EditableItem(r, id)
 		if err != nil {
 			return err
 		}
