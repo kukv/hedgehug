@@ -38,8 +38,8 @@ type lookupAnswer struct {
 		} `json:"repository"`
 	} `json:"data"`
 	Errors []struct {
-		Type string   `json:"type"`
-		Path []string `json:"path"`
+		Type string `json:"type"`
+		Path []any  `json:"path"`
 	} `json:"errors"`
 }
 

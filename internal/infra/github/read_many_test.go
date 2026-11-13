@@ -148,3 +148,58 @@ func TestReadManyNoNumbers(t *testing.T) {
 		t.Errorf("Batch = %+v, %v", b, err)
 	}
 }
+
+// パスに整数(リストの添字)を含む入れ子のエラーがあっても、null でない node は読める。
+func TestReadManyNestedErrorWithIntegerPath(t *testing.T) {
+	c, _ := newClient(t, readManyServer(t, new([]string), func(string, string, int) string {
+		return `{"data":{` + rateJSON + `,"repository":{"nameWithOwner":"org/web","n0":` + nodeJSON(1) + `}},` +
+			`"errors":[{"type":"INTERNAL","path":["repository","n0","commits","nodes",0,"commit","statusCheckRollup"]}]}`
+	}))
+	b, err := c.ReadMany(context.Background(), fakeToken, "org/web", []int{1})
+	if err != nil || len(b.Found) != 1 || b.Found[1].Title != "t1" {
+		t.Errorf("Batch = %+v, %v", b, err)
+	}
+}
+
+func TestReadManySecondChunkRateLimited(t *testing.T) {
+	c, _ := newClient(t, readManyServer(t, new([]string), func(_, _ string, call int) string {
+		if call == 1 {
+			return answerRange(1, 100)
+		}
+		return `{"errors":[{"type":"RATE_LIMITED","message":"x"}]}`
+	}))
+	numbers := make([]int, 150)
+	for i := range numbers {
+		numbers[i] = i + 1
+	}
+	b, err := c.ReadMany(context.Background(), fakeToken, "org/web", numbers)
+	if !ghcall.Is(err, ghcall.RateLimited) || b.Found != nil || b.Repo != "" || b.Missing != nil {
+		t.Errorf("Batch = %+v, %v", b, err)
+	}
+}
+
+func TestReadManyRepositoryForbidden(t *testing.T) {
+	c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/org/web" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"repository":null},"errors":[{"type":"FORBIDDEN","path":["repository"]}]}`))
+	})
+	_, err := c.ReadMany(context.Background(), fakeToken, "org/web", []int{1})
+	var f *ghcall.Failure
+	if !asFailure(err, &f) || f.Kind != ghcall.RepoUnreadable || f.Repo != "org/web" {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestReadManyDeduplicatesNumbers(t *testing.T) {
+	var queries []string
+	c, _ := newClient(t, readManyServer(t, &queries, func(string, string, int) string {
+		return `{"data":{` + rateJSON + `,"repository":{"nameWithOwner":"org/web","n0":null,"n1":` + nodeJSON(5) + `}}}`
+	}))
+	b, err := c.ReadMany(context.Background(), fakeToken, "org/web", []int{3, 5, 3, 5})
+	if err != nil || !slices.Equal(b.Missing, []int{3}) || len(b.Found) != 1 || strings.Contains(queries[0], "n2:") {
+		t.Errorf("Batch = %+v, %v, query %s", b, err, queries[0])
+	}
+}

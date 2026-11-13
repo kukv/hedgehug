@@ -219,3 +219,14 @@ func TestLookupHTTPNotFoundAndForbiddenAreRepoUnreadable(t *testing.T) {
 }
 
 func asFailure(err error, f **ghcall.Failure) bool { return errors.As(err, f) }
+
+// パスに整数(リストの添字)を含む入れ子のエラーがあっても、node があれば読める。
+func TestLookupNestedErrorWithIntegerPath(t *testing.T) {
+	c, _ := newClient(t, graphQL(t, func(string, string, int) string {
+		return strings.TrimSuffix(prJSON, "}") + `,"errors":[{"type":"INTERNAL","path":["repository","issueOrPullRequest","commits","nodes",0,"commit"]}]}`
+	}))
+	got, err := c.Lookup(context.Background(), fakeToken, "org/web", 41)
+	if err != nil || got.Number != 41 {
+		t.Errorf("Lookup = %+v, %v", got, err)
+	}
+}

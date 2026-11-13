@@ -28,15 +28,15 @@ type readManyAnswer struct {
 		Repository map[string]json.RawMessage `json:"repository"`
 	} `json:"data"`
 	Errors []struct {
-		Type string   `json:"type"`
-		Path []string `json:"path"`
+		Type string `json:"type"`
+		Path []any  `json:"path"`
 	} `json:"errors"`
 }
 
 // ReadMany は port.GitHub.ReadMany。リポジトリを読めなければ、REST で改名・移管を確かめ、名前が変わっていれば
 // 新しい名前で 1 回だけ読み直す。
 func (c *Client) ReadMany(ctx context.Context, token, repo string, numbers []int) (port.Batch, error) {
-	if len(numbers) == 0 {
+	if numbers = unique(numbers); len(numbers) == 0 {
 		return port.Batch{Repo: repo}, nil
 	}
 	b, err := c.readManyOnce(ctx, token, repo, numbers)
@@ -122,4 +122,17 @@ func (a readManyAnswer) failure(repo string, reset time.Time) *ghcall.Failure {
 		return &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
 	return nil
+}
+
+// unique は、numbers から重複を除く(最初に出た順)。
+func unique(numbers []int) []int {
+	seen := make(map[int]bool, len(numbers))
+	out := make([]int, 0, len(numbers))
+	for _, n := range numbers {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
 }
