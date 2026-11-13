@@ -45,6 +45,9 @@ func NewRemove(f string, v any) Draft { return Draft{T: Remove, F: f, From: Valu
 // NewDelete は、f が指すものの削除。from も to も持たない。
 func NewDelete(f string) Draft { return Draft{T: Delete, F: f} }
 
+// NewRestore は、op の削除の取り消し。f はその削除の f、to は op。
+func NewRestore(f string, op ID) Draft { return Draft{T: Restore, F: f, To: Value(op)} }
+
 // DeletedField は、アイテム・プロジェクトの削除の行の f(item.yaml・project.yaml の deleted と同じ名前)。
 const DeletedField = "deleted"
 

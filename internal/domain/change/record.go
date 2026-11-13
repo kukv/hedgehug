@@ -26,6 +26,9 @@ const (
 	Remove Type = "remove"
 	// Delete は削除。f は消すもの(値なら "statuses/<ID>"、プロパティなら "properties/<ID>")。
 	Delete Type = "delete"
+	// Restore は、削除の取り消し。f は削除と同じ f、to は取り消す削除の op(C3a-7)。読む側は、
+	// 取り消された delete の行を、なかったものとして扱う。
+	Restore Type = "restore"
 	// Desc は説明を保存した(本文は description.md。f も from も to も持たない)。
 	Desc Type = "desc"
 	// Comment・Worklog は、コメントと作業時間の追加・編集・削除。f は内部 ID、削除は to が null。

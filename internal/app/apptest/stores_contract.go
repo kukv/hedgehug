@@ -42,6 +42,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"workspace settings round trip", contractSettings},
 		{"item values and deletes round trip", contractItemValues},
 		{"deleted items and projects carry a mark and are still listed", contractDeleted},
+		{"a restore row cancels the deletion it points at", contractRestored},
 		{"descriptions round trip", contractDescription},
 		{"a failed write leaves the description", contractDescriptionRollback},
 		{"describing needs an existing entity and a summary", contractDescriptionRules},

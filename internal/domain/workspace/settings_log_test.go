@@ -69,3 +69,28 @@ func TestSettingsAddsAndDeletes(t *testing.T) {
 		t.Error("deleted property is still there")
 	}
 }
+
+// 削除の行を取り消す restore の行(f が同じで、to が削除の op)があれば、そのステータスは一覧に戻る(C3a-7)。
+func TestSettingsReadsRestoredDelete(t *testing.T) {
+	w := workspace.Workspace{ID: "01WS0000000000000000000000", Name: "Web", Prefix: "HH"}
+	s := workspace.DefaultSettings(seqIDs())
+	create, err := workspace.CreateWithSettings(w, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review := workspace.Value{ID: "01STATUS00000000000000000R", Name: "Review", Color: "blue", Category: workspace.CategoryDoing, Rank: "a"}
+	list := workspace.ParseList("statuses")
+	drafts := []change.Draft{create}
+	drafts = append(drafts, workspace.ValueDrafts(list, review)...)
+	drafts = append(drafts, change.NewDelete(list.Ref(review.ID)))
+	log := rows(drafts...)
+	del := log[len(log)-1]
+	got, _ := workspace.SettingsFromLog(log)
+	if last := got.Statuses[len(got.Statuses)-1]; last == review {
+		t.Fatalf("deleted status is still listed: %+v", got.Statuses)
+	}
+	got, _ = workspace.SettingsFromLog(rows(append(drafts, change.NewRestore(list.Ref(review.ID), del.Op))...))
+	if last := got.Statuses[len(got.Statuses)-1]; last != review {
+		t.Errorf("restored status is not listed: %+v", got.Statuses)
+	}
+}

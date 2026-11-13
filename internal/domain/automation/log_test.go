@@ -55,3 +55,18 @@ func TestRulesRoundTrip(t *testing.T) {
 		t.Errorf("Names = %v", names)
 	}
 }
+
+// 消したルールの削除の行を取り消す restore の行があれば、ルールは戻る(C3a-7)。
+func TestRestoredRuleComesBack(t *testing.T) {
+	log := stamp(nil, change.NewCreate(map[string]any{"id": "W"}))
+	log = stamp(log, automation.Drafts(automation.Rule{}, done())...)
+	del := stamp(log, automation.DeleteDraft(done().ID))
+	if got := automation.FromLog(del); len(got) != 0 {
+		t.Fatalf("deleted rule = %+v", got)
+	}
+	op := del[len(del)-1].Op
+	back := stamp(del, change.NewRestore("rules/"+string(done().ID), op))
+	if got := automation.FromLog(back); len(got) != 1 || got[0] != done() {
+		t.Errorf("restored rule = %+v", got)
+	}
+}

@@ -48,8 +48,9 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 		return Settings{}, false
 	}
 	b := newBuilder()
+	restored := change.Restored(log)
 	for _, r := range log { // Resolve は削除の行を読み飛ばすので、生のログから集める
-		if r.T == change.Delete {
+		if r.T == change.Delete && !restored(r) {
 			b.deleted[r.F] = true
 		}
 	}
