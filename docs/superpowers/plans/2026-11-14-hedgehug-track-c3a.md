@@ -366,7 +366,7 @@ Expected: FAIL(`Replicator.Repair` がない)
 
 - [ ] **Step 3: 実装する**
 
-`unsentFacts` は、自分の先端から辿れて `theirs` から辿れないコミットのうち、親が 2 つのものごとに、1 つ目の親・2 つ目の親・その共通の祖先のツリーから、`log.jsonl` で終わるすべてのファイルの行の ID を集め(`parseLog`)、共通の祖先にないものを Ours・Theirs に足す。`theirs` がゼロなら、自分の先端から辿れるすべてのコミットを見る。`repairWriter.Write` は `s.r.stores.runTx(root, op, fn)`、`Read` は `fn(&view{root: root})`。
+`unsentFacts` は、自分の先端から辿れて `theirs` から辿れないコミットのうち、親が 2 つのものごとに、1 つ目の親・2 つ目の親・その共通の祖先のツリーから、`log.jsonl` で終わるすべてのファイルの行の ID を集め(`parseLog`)、共通の祖先にないものを Ours・Theirs に足す。`theirs` がゼロ(remote が空)のときと、自分の先端が `theirs` と同じときは、履歴を辿らずに ok=false を返す。`repairWriter.Write` は `s.r.stores.runTx(root, op, fn)`、`Read` は `fn(&view{root: root})`。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -796,3 +796,4 @@ git commit -am "docs: C3a の実装で計画から変えたことを残す"
 - 修復の Summary の名前は 1 行にする。改行を含む名前だと `op.Check` が断り、その Store の同期が毎回失敗するため。
 - 削除の取り消しの文では、値の名前の改行をそろえ、テストの側を計画に合わせた。上の 1 行の Summary にする決定と同じ理由。
 - `change.Undo` は、戻す set の空の値を `null` で書く。空のまま書くと、戻した行が値なしと読み分けられないため。
+- remote が空(新しい remote)のときと、合わせがない同期では修復しない。古い合わせの重なりを、新しい remote で掘り起こさないため。

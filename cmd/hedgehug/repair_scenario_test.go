@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/repair"
@@ -267,4 +268,27 @@ func TestRepairScenarioProjectMismatch(t *testing.T) {
 			}
 		}
 	})
+}
+
+// 新しい remote: 修復のない版で、削除と変更の重なりを合わせて送ったマシンが、修復のある版で新しい空の remote へ
+// 同期しても、昔の合わせの削除を取り消さない(remote が空なら、合わせはないので修復しない)。
+func TestRepairScenarioOldMergeOnNewRemote(t *testing.T) {
+	remote := newBareRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", scenarioStart.Add(time.Hour))
+	b.rep.Repair = nil
+	if err := apptest.DeleteItems(t.Context(), a.stores, a.id, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	setTitle(apptest.SampleTask, "B のタイトル")(t, b)
+	a.sync(t, remote)
+	b.sync(t, remote) // 修復せずに合わせて送る。HH-2 は削除済みのまま
+	wantLive(t, b, false, apptest.SampleTask)
+	b.rep.Repair = repairing.Run
+	before := head(t, b.dir)
+	b.sync(t, newBareRemote(t))
+	if got := head(t, b.dir); got != before {
+		t.Errorf("sync to a new remote wrote: %s -> %s", before, got)
+	}
+	wantLive(t, b, false, apptest.SampleTask)
 }

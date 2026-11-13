@@ -23,17 +23,20 @@ import (
 
 // unsentFacts は、自分の先端から辿れて remote の先端 theirs から辿れない、親が 2 つのコミット(まだ送っていない
 // 合わせ)ごとに、共通の祖先にない行の ID を、1 つ目の親の側(Ours)と 2 つ目の親の側(Theirs)に集める(決定 C3a-4)。
-// theirs がゼロなら、自分の先端から辿れるすべてのコミットを見る。まだ送っていない合わせがなければ ok は false。
+// まだ送っていない合わせがなければ ok は false。theirs がゼロ(remote が空)なら、この同期で合わせはないので
+// 見ない(前に別の remote と合わせた古い重なりを、新しい remote で掘り起こさない)。自分の先端が theirs と
+// 同じときも、送っていないものがないので履歴を辿らない(合わせたあとの先端は theirs の祖先にならない)。
 func (s syncRun) unsentFacts(theirs plumbing.Hash) (repair.Facts, bool, error) {
+	if theirs.IsZero() {
+		return repair.Facts{}, false, nil
+	}
 	head, err := s.repo.Head()
-	if err != nil {
+	if err != nil || head.Hash() == theirs {
 		return repair.Facts{}, false, err
 	}
 	sent := map[plumbing.Hash]bool{}
-	if !theirs.IsZero() {
-		if err := walk(s.repo, theirs, func(c *object.Commit) { sent[c.Hash] = true }); err != nil {
-			return repair.Facts{}, false, err
-		}
+	if err := walk(s.repo, theirs, func(c *object.Commit) { sent[c.Hash] = true }); err != nil {
+		return repair.Facts{}, false, err
 	}
 	var merges []*object.Commit
 	err = walk(s.repo, head.Hash(), func(c *object.Commit) {

@@ -224,9 +224,9 @@ func TestRepairAfterRemoteMovedCoversBothMerges(t *testing.T) {
 	}
 }
 
-// remote が空(theirs がゼロ)なら、手元の履歴のすべてが送っていないものなので、前に別の remote へ送った
-// 合わせでも修復を呼ぶ(修復は 2 回目に何も書かない)。送ったあとの同期では呼ばない。
-func TestRepairOnEmptyRemoteRunsOnceThenStops(t *testing.T) {
+// remote が空(theirs がゼロ)なら、この同期で合わせはないので、前に別の remote へ送った合わせがあっても
+// 修復を呼ばない(古い合わせの重なりを、新しい remote で掘り起こさない)。
+func TestRepairNotCalledOnEmptyRemote(t *testing.T) {
 	remote, b := diverged(t)
 	calls := 0
 	b.rep.Repair = titleToR(&calls)
@@ -236,15 +236,12 @@ func TestRepairOnEmptyRemoteRunsOnceThenStops(t *testing.T) {
 	if res := b.sync(t, empty); res.Sent == 0 {
 		t.Fatalf("nothing sent to the empty remote: %+v", res)
 	}
-	if calls != 2 {
-		t.Fatalf("repair called %d times, want 2 (the merge is unsent to the empty remote)", calls)
+	b.sync(t, empty)
+	if calls != 1 {
+		t.Fatalf("repair called %d times, want 1 (only for the merge with the first remote)", calls)
 	}
 	if got := headCommit(t, b.dir).Hash; got != head {
-		t.Errorf("repair wrote again on the empty remote: %s -> %s", head, got)
-	}
-	b.sync(t, empty)
-	if calls != 2 {
-		t.Fatalf("repair called %d times after the merge was sent, want 2", calls)
+		t.Errorf("sync to the empty remote wrote: %s -> %s", head, got)
 	}
 }
 
