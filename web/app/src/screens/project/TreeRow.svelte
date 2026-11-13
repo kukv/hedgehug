@@ -11,7 +11,7 @@
     type TreeNode,
     type WorkspaceSettings,
   } from "@hedgehug/core";
-  import { Avatar, IconButton, KindIcon } from "@hedgehug/ui";
+  import { Avatar, BlockedBadge, IconButton, KindIcon } from "@hedgehug/ui";
   import StatusButton from "../item/StatusButton.svelte";
   import Self from "./TreeRow.svelte";
 
@@ -86,6 +86,9 @@
     onauxclick={(e) => onopen(e, it)}
     >{it.title}</a
   >
+  {#if it.blocked}
+    <BlockedBadge />
+  {/if}
   {#if progress}
     <span class="progress">{progress.done}/{progress.total}</span>
   {/if}

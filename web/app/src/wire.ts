@@ -21,6 +21,7 @@ import {
   createProjectDialog,
   createProjectScreen,
   createReflection,
+  createRelations,
   createSaveAsTemplate,
   createScreen,
   createShell,
@@ -34,7 +35,6 @@ import {
   createWorkspaceMover,
   createWorkspaceSettings,
   get,
-  type Here,
   readonly,
   routeOfProject,
   routeOfWorkspace,
@@ -43,6 +43,7 @@ import {
   writable,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
+import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { held, online as isOnline, tabId, visible } from "./tab";
@@ -133,6 +134,12 @@ export const projectComments = createComments({
   scope: "project",
 });
 export const worklogs = createWorklogs({ notes, toasts, now: () => new Date() });
+export const relations = createRelations({
+  notes,
+  toasts,
+  // 関連を足す・外すと「ブロック中」が変わるので、ツリーと開いている詳細パネルを読み直す。
+  onChanged: () => void Promise.all([detail.reload(), projectScreen.reload()]),
+});
 export const screen = createScreen({
   navigation,
   catalog,
@@ -161,26 +168,13 @@ export const signIn = createSignIn({
   onDone: () => void accountList.reload(),
 });
 
-// here は、作成ダイアログの初期値に使う、いま開いている画面のワークスペースとプロジェクト(02)。
-function here(): Here {
-  const c = get(screen.current);
-  if (c?.name === "workspace") return { workspaceId: c.workspaceId };
-  if (c?.name === "project") {
-    return {
-      workspaceId: catalog.project(c.storeId, c.projectId)?.workspaceId,
-      projectId: c.projectId,
-    };
-  }
-  return {};
-}
-
 export const itemDialog = createItemDialog({
   catalog,
   items: itemsPort,
   workspaces: workspacesPort,
   catalogPort,
   toasts,
-  here,
+  here: () => hereOf(screen, catalog),
   openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),
   // 「続けて作成」がオフなら、作ったアイテムの詳細パネルを開く(02「作成したあと」)。
   onCreated: (item, keptOpen) => {
@@ -222,7 +216,9 @@ async function reflect(kinds: SyncEventKind[]) {
           Promise.all([
             projectScreen.reload(),
             detail.reload(),
-            ...[itemComments, projectComments, worklogs].map((section) => section.reload()),
+            ...[itemComments, projectComments, worklogs, relations].map((section) =>
+              section.reload(),
+            ),
           ]),
         ),
     );

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
-  import { IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
+  import { BlockedBadge, IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
   import { detail, toasts } from "../../wire";
   import CommentsSection from "../notes/CommentsSection.svelte";
   import DescriptionSection from "../notes/DescriptionSection.svelte";
   import DetailChildren from "./DetailChildren.svelte";
   import DetailHeader from "./DetailHeader.svelte";
   import DetailProperties from "./DetailProperties.svelte";
+  import RelationsSection from "./RelationsSection.svelte";
   import WorklogSection from "./WorklogSection.svelte";
 
   // アイテムの詳細パネル(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
@@ -71,6 +72,9 @@
       <IconButton label="ID をコピー" size="xs" onclick={() => void copy(v.displayId)}
         >⧉</IconButton
       >
+      {#if v.item.blocked}
+        <BlockedBadge />
+      {/if}
     </div>
     <Input
       label="タイトル"
@@ -100,6 +104,7 @@
     {#if v.item.kind !== "Step"}
       <DetailChildren {v} />
     {/if}
+    <RelationsSection {v} />
     <section class="peek-sec" aria-label="GitHub">
       <h3>GitHub</h3>
       <p class="muted">リンクはありません</p>
