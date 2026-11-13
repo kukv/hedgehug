@@ -32,6 +32,13 @@ export {
   descriptionConflictMessage,
 } from "./features/notes/description";
 export {
+  createHistory,
+  type History,
+  type HistoryDeps,
+  type HistoryState,
+  historyLimit,
+} from "./features/notes/history";
+export {
   formatHours,
   hoursOf,
   type ParsedHours,
@@ -62,6 +69,7 @@ export {
   worklogDeleteDialog,
   worklogDeletedMessage,
 } from "./features/notes/worklogs";
+export type { HistoryRow } from "./model/history";
 export type { Comment, Worklog } from "./model/notes";
 export {
   type RelationCandidate,

@@ -2,6 +2,7 @@
 // 失敗は、断りなら Refused、ないものなら NotFound、それ以外はそのまま投げる。
 // 区画ごとのタスクが、自分のメソッドをここに足す。
 
+import type { HistoryRow } from "../model/history";
 import type { Item } from "../model/item";
 import type { Comment, Worklog } from "../model/notes";
 import type { RelationCandidate, RelationLabel, RelationRow } from "../model/relation";
@@ -21,6 +22,8 @@ export interface DescribeResult {
 }
 
 export interface NotesPort {
+  // history は、アイテムかプロジェクトの履歴を、新しい順にすべて返す。
+  history(target: NoteTarget): Promise<HistoryRow[]>;
   // description は、保存してある説明(なければ "")。
   description(target: NoteTarget): Promise<string>;
   // describe は、説明を保存する。base は編集を始めたときの説明(行マージの共通の祖先)。
