@@ -10,7 +10,7 @@ import type { ItemRefresh } from "./refresh";
 
 // 「移動…」の候補のメニュー(02「同じワークスペースの中での移動」)。メニューを開いたら候補を読み、検索語で絞り、
 // 選んだら移す。移したあとはトーストを出し、ツリーと詳細パネルを読み直す(応答のアイテムは使わない)。
-// 移動の確認ダイアログの「ステータスの置き換え」は B5 が足す(A4b の持ち場の外)。
+// 移動に確認ダイアログは挟まず、選んだらすぐ移す。
 
 // 断りでも「ない」でもない失敗のときの文言。
 export const moveFailedMessage = "移動できませんでした";
@@ -70,7 +70,7 @@ export function createItemMove(deps: ItemMoveDeps): ItemMove {
     deps.toasts.show(e instanceof Refused ? e.message : moveFailedMessage, { error: true });
 
   async function moveTo(item: Item, c: MoveCandidate): Promise<boolean> {
-    if (busy) return false;
+    if (busy || deps.catalog.store(item.storeId)?.readOnly) return false;
     busy = true;
     try {
       const to = c.kind === "project" ? { project: c.id } : { parent: c.id };
@@ -95,8 +95,9 @@ export function createItemMove(deps: ItemMoveDeps): ItemMove {
       const gen = ++seq;
       all = [];
       state.set({ item, x, y, loading: true, query: "", shown: [] });
+      let loaded: MoveCandidate[];
       try {
-        all = await deps.actions.moveCandidates(item.storeId, item.id);
+        loaded = await deps.actions.moveCandidates(item.storeId, item.id);
       } catch (e) {
         if (gen !== seq) return;
         state.set(null);
@@ -105,8 +106,11 @@ export function createItemMove(deps: ItemMoveDeps): ItemMove {
         else failed(e);
         return;
       }
+      // 古い読み込みの結果は、新しい候補を上書きしないよう捨てる。
+      if (gen !== seq) return;
+      all = loaded;
       const s = get(state);
-      if (gen !== seq || !s) return;
+      if (!s) return;
       state.set({ ...s, loading: false, shown: filterMoveCandidates(all, s.query) });
     },
     setQuery(query) {

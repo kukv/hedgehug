@@ -104,6 +104,33 @@ describe("createItemMove", () => {
     expect(messages().at(-1)).toBe("プロジェクト 1 に移動しました");
   });
 
+  it("moveTo does nothing in a read-only Store", async () => {
+    const { move, actions, ro, messages } = await setup();
+    expect(await move.moveTo(ro, epic)).toBe(false);
+    expect(actions.calls).toEqual([]);
+    expect(messages()).toEqual([]);
+  });
+
+  it("keeps the candidates of the later open when an earlier open answers last", async () => {
+    const { move, actions, task } = await setup();
+    const other = item("S1", "S1-P1", 3, "Task", "S1-I1", "別");
+    const a = gate();
+    const b = gate();
+    actions.moveCandidates = async (_s, id) => {
+      await (id === task.id ? a : b).wait;
+      return id === task.id ? [epic] : [far];
+    };
+    const openA = move.open(task, 0, 0);
+    const openB = move.open(other, 0, 0);
+    b.release();
+    await openB;
+    a.release();
+    await openA;
+    move.setQuery("");
+    expect(get(move.state)?.item).toBe(other);
+    expect(get(move.state)?.shown).toEqual([far]);
+  });
+
   it("moveTo returns whether the move happened", async () => {
     const { move, actions, task } = await setup();
     expect(await move.moveTo(task, epic)).toBe(true);
