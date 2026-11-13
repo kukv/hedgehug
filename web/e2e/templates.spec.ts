@@ -1,34 +1,8 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
-import { sidebar, tokenUrl, unique } from "./helpers";
+import { expect, test } from "@playwright/test";
+import { createWorkspace, openSettings, prefixOf, tokenUrl, unique } from "./helpers";
 
 // ワークフローとテンプレートの通しのテスト(B3)。サーバーは 3 つの幅で共有なので、
 // ワークスペースの名前・接頭辞・テンプレートの名前は、幅とやり直しの回数、乱数で毎回変える。
-
-// 接頭辞は英大文字で始まる 10 文字以内の英大文字と数字。
-const prefixOf = (info: TestInfo) =>
-  `Z${info.project.name[0]?.toUpperCase()}${info.retry}${Math.floor(Math.random() * 1e5)}`;
-
-// 作成ダイアログから、書き込める Store「e2e」にワークスペースを作る。
-async function createWorkspace(page: Page, info: TestInfo, name: string, prefix: string) {
-  await page.goto(tokenUrl());
-  const side = await sidebar(page, info);
-  await side
-    .getByRole("region", { name: "e2e" })
-    .getByRole("button", { name: "ワークスペースを追加" })
-    .click();
-  const dialog = page.getByRole("dialog", { name: "ワークスペースを追加" });
-  await dialog.getByRole("textbox", { name: "名前" }).fill(name);
-  await dialog.getByRole("textbox", { name: "接頭辞" }).fill(prefix);
-  await dialog.getByRole("button", { name: "作成" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("heading", { name })).toBeVisible();
-}
-
-// ワークスペースの設定タブを、アドレスから開く。
-async function openSettings(page: Page, prefix: string, subtab: string) {
-  await page.goto(tokenUrl(`/s/e2e/w/${prefix}/settings`));
-  await page.getByRole("tab", { name: subtab, exact: true }).click();
-}
 
 test("the workflow tab restricts and frees a status's transitions", async ({ page }, info) => {
   const prefix = prefixOf(info);

@@ -14,7 +14,7 @@ import (
 )
 
 // SetProperty は、1 つのプロパティの値を変える(02「入力の方法と保存」)。前と同じなら何も保存しない。
-// アクティビティは「{ID} の{プロパティ名}を {値} に変更」。遷移の制約は後半(A3b)でここに足す(決定 2)。
+// アクティビティは「{ID} の{プロパティ名}を {値} に変更」。ステータスは、保存の中で遷移の制約を検査する(A3b-1)。
 func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID, prop change.ID, value json.RawMessage) (item.Item, error) {
 	ec, err := s.editContext(ctx, store, id)
 	if err != nil {
@@ -38,13 +38,30 @@ func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID
 		return item.Item{}, err
 	}
 	summary := fmt.Sprintf("%s の%sを %s に変更", ec.display, p.Name, item.Display(p, to, ec.settings, ec.names, s.Clock.Now()))
-	return s.writeValue(ctx, store, id, summary, func(it item.Item) []change.Draft {
+	return s.writeValue(ctx, store, id, summary, func(tx port.Tx, it item.Item) ([]change.Draft, error) {
 		from := item.Current(it, p)
 		if bytes.Equal(from, to) {
-			return nil
+			return nil, nil
 		}
-		return []change.Draft{change.NewSet(item.Field(p), from, to)}
+		if err := checkStatus(tx, it, p, to); err != nil {
+			return nil, err
+		}
+		return []change.Draft{change.NewSet(item.Field(p), from, to)}, nil
 	})
+}
+
+// checkStatus は、ステータスを変えるとき、保存の中で読み直したアイテムと設定で遷移の制約を検査する(A3b-1)。
+func checkStatus(tx port.Tx, it item.Item, p workspace.Property, to json.RawMessage) error {
+	if p.Type != workspace.TypeStatus {
+		return nil
+	}
+	st, err := tx.Workspaces().Settings(it.Place.Workspace)
+	if err != nil {
+		return err
+	}
+	var next change.ID
+	_ = json.Unmarshal(to, &next)
+	return workspace.CheckTransition(st, it.Status, next)
 }
 
 // checkDatePair は、開始日か終了日を変えるとき、保存済みのもう片方と比べる(決定 16)。
@@ -61,7 +78,8 @@ func checkDatePair(it item.Item, p workspace.Property, to json.RawMessage) error
 }
 
 // writeValue は、保存の中でいまのアイテムを読み直し、drafts が返す行を 1 回で保存する。行がなければ何も残さない。
-func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID, summary string, drafts func(item.Item) []change.Draft) (item.Item, error) {
+// drafts が断ったら何も保存しない。
+func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID, summary string, drafts func(tx port.Tx, it item.Item) ([]change.Draft, error)) (item.Item, error) {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
 		return item.Item{}, err
@@ -72,7 +90,11 @@ func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID,
 		if err != nil {
 			return err
 		}
-		return tx.WriteItems().Append(id, drafts(it)...)
+		ds, err := drafts(tx, it)
+		if err != nil {
+			return err
+		}
+		return tx.WriteItems().Append(id, ds...)
 	})
 	if err != nil {
 		return item.Item{}, err

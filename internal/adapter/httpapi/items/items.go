@@ -81,7 +81,8 @@ type CreateItem struct {
 	Kind    string `json:"kind" enum:"Epic,Story,Task,Bug,Step"`
 	Title   string `json:"title"`
 
-	Values map[string]json.RawMessage `json:"values,omitempty" doc:"プロパティの値(キーはプロパティの内部 ID。組み込みはキー)"`
+	Values   map[string]json.RawMessage `json:"values,omitempty" doc:"プロパティの値(キーはプロパティの内部 ID。組み込みはキー)"`
+	Template string                     `json:"template,omitempty" doc:"一緒に作るテンプレートの内部 ID。空は「なし」"`
 }
 
 type createInput struct {
@@ -124,6 +125,10 @@ func registerCreateRead(api huma.API, svc appitems.Service) {
 			if in.Body.Parent != "" {
 				p := item.ID(in.Body.Parent)
 				req.Parent = &p
+			}
+			if in.Body.Template != "" {
+				tid := change.ID(in.Body.Template)
+				req.Template = &tid
 			}
 			return one(svc.Create(ctx, req))
 		})

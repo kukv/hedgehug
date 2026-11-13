@@ -77,6 +77,18 @@ func keepValues(s Settings, kind string, vs map[change.ID]json.RawMessage) map[c
 	return out
 }
 
+// TemplateValuesFor は、テンプレートの値のうち、kind の種類で使い、表示中で、値の参照が正しいものだけ
+// (A3b-9。03「表示中でなくなったプロパティや、その種類で使わないプロパティは適用しない」)。
+func TemplateValuesFor(s Settings, kind string, vs map[change.ID]json.RawMessage) map[change.ID]json.RawMessage {
+	out := map[change.ID]json.RawMessage{}
+	for id, v := range keepValues(s, kind, vs) {
+		if p, _ := s.Property(id); !p.Hidden && validValue(s, p, v) {
+			out[id] = v
+		}
+	}
+	return out
+}
+
 func emptyValue(v json.RawMessage) bool {
 	s := strings.TrimSpace(string(v))
 	return s == "" || s == "null" || s == "[]" || s == `""`

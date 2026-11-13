@@ -122,3 +122,13 @@ func TestWorkflowDeleteDrafts(t *testing.T) {
 		t.Error("a row whose only target was deleted must be unrestricted")
 	}
 }
+
+func TestCheckTransitionSkipsADeletedCurrentStatus(t *testing.T) {
+	s := workflowSettings(t, func(workspace.Settings) []change.Draft { return nil })
+	gone := change.ID("01GONE000000000000000000001")
+	// 削除されたステータスの行が同期で残っていても、いまの値が一覧にないなら検査しない(02「ステータスの変更」)。
+	s.Workflow = map[change.ID][]change.ID{gone: {s.Statuses[1].ID}}
+	if err := workspace.CheckTransition(s, gone, s.Statuses[2].ID); err != nil {
+		t.Errorf("CheckTransition from a deleted status = %v, want nil", err)
+	}
+}

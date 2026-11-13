@@ -4,8 +4,9 @@
   import { Input, Select } from "@hedgehug/ui";
   import { itemDialog } from "../../wire";
   import CreatePropertyFields from "./CreatePropertyFields.svelte";
+  import CreateStructure from "./CreateStructure.svelte";
 
-  // 作成ダイアログの項目(02「ダイアログの項目」のうち A2 の分: 種類・ワークスペース・プロジェクト・親・タイトル)。
+  // 作成ダイアログの項目(02「ダイアログの項目」のうち、種類・ワークスペース・プロジェクト・親・テンプレート・タイトル・一緒に作るもの)。
   interface Props {
     s: ItemDialogState;
   }
@@ -59,6 +60,16 @@
       {/if}
     </div>
   {/if}
+  {#if s.templates.length > 0}
+    <div class="field">
+      <span>テンプレート</span>
+      <Select
+        label="テンプレート"
+        options={s.templates}
+        bind:value={() => s.form.templateId, (v) => void itemDialog.update({ templateId: v })}
+      />
+    </div>
+  {/if}
 </div>
 <div class="field">
   <span>タイトル</span>
@@ -71,6 +82,9 @@
   />
 </div>
 <CreatePropertyFields {s} />
+{#if s.structure}
+  <CreateStructure structure={s.structure} />
+{/if}
 
 <style>
   .grid {

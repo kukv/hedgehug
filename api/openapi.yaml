@@ -135,6 +135,9 @@ components:
         project:
           description: 空はプロジェクトを選んでいない
           type: string
+        template:
+          description: 一緒に作るテンプレートの内部 ID。空は「なし」
+          type: string
         title:
           type: string
         values:

@@ -37,4 +37,12 @@ describe("transition refusal", () => {
     expect(transitionRefusal(s, done as string, todo as string)).toBeNull();
     expect(transitionRefusal(s, todo as string, todo as string)).toBeNull();
   });
+
+  it("does not check a current status that is no longer in the list", () => {
+    const base = settingsWith({});
+    const done = base.statuses[3]?.id as string;
+    expect(
+      transitionRefusal(settingsWith({ gone: [done] }), "gone", base.statuses[0]?.id as string),
+    ).toBeNull();
+  });
 });

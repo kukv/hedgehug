@@ -19,23 +19,32 @@ import (
 var ErrParentElsewhere = errors.New("the parent is in another project")
 
 // CreateInput は、作成ダイアログの入力。Values はプロパティの値(キーはプロパティの ID。組み込みはキー)。
-// テンプレートは A3 の後で足す。
+// Template は、一緒に作る構成を持つテンプレート(nil は「なし」。A3b-6)。
 type CreateInput struct {
-	Store   port.StoreID
-	Project project.ID
-	Parent  *item.ID
-	Kind    item.Kind
-	Title   string
-	Values  map[change.ID]json.RawMessage
+	Store    port.StoreID
+	Project  project.ID
+	Parent   *item.ID
+	Kind     item.Kind
+	Title    string
+	Values   map[change.ID]json.RawMessage
+	Template *change.ID
 }
 
-// Create は、アイテムを作る(02「作成したあと」)。
+// Create は、アイテムを作る(02「作成したあと」)。テンプレートが子や Step を持つときは、それらも同じ 1 回の保存で作る。
 func (s Service) Create(ctx context.Context, in CreateInput) (item.Item, error) {
-	return s.create(ctx, in, fmt.Sprintf("%s「%s」を作成", in.Kind, item.NormalizeTitle(in.Title)))
+	t, err := s.templateOf(ctx, in)
+	if err != nil {
+		return item.Item{}, err
+	}
+	summary := fmt.Sprintf("%s「%s」を作成", in.Kind, item.NormalizeTitle(in.Title))
+	if t != nil && others(*t) > 0 {
+		summary = fmt.Sprintf("%s「%s」ほか %d 件を作成", in.Kind, item.NormalizeTitle(in.Title), others(*t))
+	}
+	return s.create(ctx, in, t, summary)
 }
 
-// create は、作成と Step の追加が共用する本体。summary はアクティビティの 1 行。
-func (s Service) create(ctx context.Context, in CreateInput, summary string) (item.Item, error) {
+// create は、作成と Step の追加が共用する本体。summary はアクティビティの 1 行。t は一緒に作るテンプレート(nil はなし)。
+func (s Service) create(ctx context.Context, in CreateInput, t *workspace.Template, summary string) (item.Item, error) {
 	me, err := s.Identity.Me(ctx, in.Store)
 	if err != nil {
 		return item.Item{}, err
@@ -48,16 +57,29 @@ func (s Service) create(ctx context.Context, in CreateInput, summary string) (it
 		if err != nil {
 			return err
 		}
+		all, err := s.withTemplate(tx, in, t, created, me)
+		if err != nil {
+			return err
+		}
 		id = created.ID
-		return errors.Join(
-			tx.WriteWorkspaces().Append(created.Place.Workspace, numbering.Draft(numbering.Items, created.Place.Number)),
-			tx.WriteItems().Append(created.ID, item.Create(created)),
-		)
+		return writeCreated(tx, all)
 	})
 	if err != nil {
 		return item.Item{}, err
 	}
 	return s.Get(ctx, in.Store, id)
+}
+
+// writeCreated は、作るアイテムを番号の順に書く。番号の行も 1 つずつ書く(A3b-11)。
+func writeCreated(tx port.Tx, all []item.Item) error {
+	var errs []error
+	for _, it := range all {
+		errs = append(errs,
+			tx.WriteWorkspaces().Append(it.Place.Workspace, numbering.Draft(numbering.Items, it.Place.Number)),
+			tx.WriteItems().Append(it.ID, item.Create(it)),
+		)
+	}
+	return errors.Join(errs...)
 }
 
 // build は、検査をして、作るアイテムを決める。
