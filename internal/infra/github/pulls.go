@@ -1,15 +1,11 @@
 package github
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
-	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/prlink"
 )
 
@@ -36,11 +32,7 @@ type pullNode struct {
 
 type pullsAnswer struct {
 	Data struct {
-		RateLimit *struct {
-			Limit     int       `json:"limit"`
-			Remaining int       `json:"remaining"`
-			ResetAt   time.Time `json:"resetAt"`
-		} `json:"rateLimit"`
+		RateLimit  *gqlRate `json:"rateLimit"`
 		Repository *struct {
 			NameWithOwner string `json:"nameWithOwner"`
 			PullRequests  struct {
@@ -52,11 +44,7 @@ type pullsAnswer struct {
 			} `json:"pullRequests"`
 		} `json:"repository"`
 	} `json:"data"`
-	Errors []struct {
-		Type    string `json:"type"`
-		Path    []any  `json:"path"`
-		Message string `json:"message"`
-	} `json:"errors"`
+	Errors []gqlError `json:"errors"`
 }
 
 // ReadPulls は port.GitHub.ReadPulls。リポジトリを読めなければ、Lookup と同じに改名・移管を追い、App 未導入を確かめる(attempt)。
@@ -77,9 +65,7 @@ func (c *Client) readPullsOnce(ctx context.Context, token, repo string, since ti
 		}
 		r := a.Data.Repository
 		out.Repo = r.NameWithOwner
-		if rl := a.Data.RateLimit; rl != nil {
-			out.Rate = port.Rate{Limit: rl.Limit, Remaining: rl.Remaining, ResetAt: rl.ResetAt}
-		}
+		out.Rate = a.Data.RateLimit.port()
 		reached := false
 		for i := range r.PullRequests.Nodes {
 			n := &r.PullRequests.Nodes[i]
@@ -103,13 +89,12 @@ func (c *Client) pullsPage(ctx context.Context, token, repo, after string) (pull
 	if after != "" {
 		vars["after"] = after
 	}
-	body, _ := json.Marshal(map[string]any{"query": pullsQuery, "variables": vars})
 	var a pullsAnswer
-	h, err := c.do(ctx, http.MethodPost, token, "/graphql", bytes.NewReader(body), &a)
+	h, err := c.graphql(ctx, token, repo, map[string]any{"query": pullsQuery, "variables": vars}, &a)
 	if err != nil {
-		return a, withRepo(err, repo)
+		return a, err
 	}
-	if f := a.failure(repo, c.resetAt(h)); f != nil {
+	if f := gqlFailure(a.Errors, a.Data.Repository == nil, repo, c.resetAt(h)); f != nil {
 		return a, f
 	}
 	return a, nil
@@ -125,25 +110,4 @@ func (n *pullNode) pull() port.Pull {
 		p.Comments = append(p.Comments, c.Body)
 	}
 	return p
-}
-
-// failure は、答えの失敗(D3-5)。PR の一覧には番号がないので、NotFound は出さない。
-func (a pullsAnswer) failure(repo string, reset time.Time) *ghcall.Failure {
-	for _, e := range a.Errors {
-		switch {
-		case e.Type == "RATE_LIMITED":
-			return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: reset}
-		case hiddenByApp(e.Type, e.Path, e.Message):
-			return appMissing(repo)
-		case (e.Type == "NOT_FOUND" || e.Type == "FORBIDDEN") && len(e.Path) == 1:
-			return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
-		}
-	}
-	switch {
-	case a.Data.Repository == nil && len(a.Errors) == 0:
-		return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
-	case a.Data.Repository == nil:
-		return &ghcall.Failure{Kind: ghcall.Unreachable}
-	}
-	return nil
 }

@@ -81,7 +81,7 @@ func (g *GitHub) ReadPulls(_ context.Context, token, repo string, since time.Tim
 	slices.SortStableFunc(all, func(a, b port.Pull) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 	out := port.Pulls{Repo: repo, Rate: g.Rate}
 	for _, p := range all {
-		if since.IsZero() && len(out.Pulls) == 100 || !since.IsZero() && p.UpdatedAt.Before(since) {
+		if (since.IsZero() && len(out.Pulls) == 100) || (!since.IsZero() && p.UpdatedAt.Before(since)) {
 			break
 		}
 		out.Pulls = append(out.Pulls, p)

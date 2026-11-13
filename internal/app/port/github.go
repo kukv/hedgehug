@@ -26,6 +26,7 @@ type GitHub interface {
 	CheckRepo(ctx context.Context, token, repo string) error
 	// ReadPulls は repo の PR を更新の新しい順に読む。since がゼロなら最初の 100 件だけ、そうでなければ
 	// UpdatedAt が since 以上のものを最後まで(100 件ずつめくる)。改名・移管は Lookup と同じに追う。
+	// めくっている間に PR が更新されると、同じ番号が 2 回返ることがある。
 	// 失敗は Lookup と同じ種類(App 未導入の見分けを含む)。
 	ReadPulls(ctx context.Context, token, repo string, since time.Time) (Pulls, error)
 }
