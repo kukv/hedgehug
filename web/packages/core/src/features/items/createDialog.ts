@@ -1,16 +1,24 @@
 import { Refused } from "../../model/errors";
 import type { Item, Kind } from "../../model/item";
 import { get, readonly, writable } from "../../reactive/store";
+import { showSprint } from "../planning/choices";
 import { itemDisplayId } from "../router/route";
 import { parentCandidates, pickParent, startValues } from "./createDefaults";
 import { createContextLoader, type WorkspaceContext } from "./createDialogLoad";
-import { carried, missing, parentOptions, viewOf, wsOptions } from "./createDialogOptions";
+import {
+  carried,
+  keptSprint,
+  missing,
+  parentOptions,
+  viewOf,
+  wsOptions,
+} from "./createDialogOptions";
 import type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
 import { applyDefault, applyToForm, othersOf } from "./createTemplate";
 import { initialValues, shownValues, switchWorkspace } from "./createValues";
 
 // アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。型は createDialogTypes.ts。検査はサーバーに任せ、断りを赤字で出す
-// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F。
+// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F1-21。
 
 export type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
 
@@ -25,7 +33,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
   // busy は、送信中。そのあいだは submit を受けない。
   let busy = false;
   // load は、ワークスペースの設定とメンバーを読む(ダイアログを開いているあいだだけ覚える)。current は、いま出している分。
-  let load = createContextLoader(deps.workspaces, deps.catalogPort);
+  let load = createContextLoader(deps.workspaces, deps.catalogPort, deps.planning);
   let current: WorkspaceContext | null = null;
 
   const stores = () => get(deps.catalog.stores);
@@ -94,9 +102,11 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         )
       : now.form.values;
     const parent = byKind(wsOf(form.workspaceId)?.prefix ?? "", now.form.kind, now.form.parentId);
+    // スプリントは、ワークスペースを変えたら「バックログ」に戻し、ほかは選んでいたものを残す(F1-21)。
     let kept: ItemForm = {
       ...carried(loaded.next.form, now.form, values),
       parentId: parent.parentId,
+      sprint: switched ? "" : keptSprint(loaded.ctx, now.form.sprint),
     };
     // ワークスペースを変えたら、テンプレートを「なし」にしてから新しいワークスペースの既定を当てはめる(A3b-14)。
     if (switched) kept = applyDefault(kept, loaded.ctx.settings);
@@ -121,6 +131,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         description: s.form.description,
         values: shownValues(s.form.values, s.settings, kind),
         ...(s.form.templateId ? { templateId: s.form.templateId } : {}),
+        ...(showSprint(kind) && s.form.sprint ? { sprint: s.form.sprint } : {}),
       });
     } catch (e) {
       if (!(e instanceof Refused)) throw e;
@@ -168,8 +179,9 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         templateId: "",
         description: "",
         templateDescription: "",
+        sprint: "",
       };
-      load = createContextLoader(deps.workspaces, deps.catalogPort);
+      load = createContextLoader(deps.workspaces, deps.catalogPort, deps.planning);
       const gen = ++seq;
       const store = storeOf(form.workspaceId);
       if (!store) return;
@@ -199,6 +211,8 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         // 種類を変えたら、親を新しい種類の候補から選び直す。タイトルは残す。
         const parent = byKind(wsOf(form.workspaceId)?.prefix ?? "", form.kind, form.parentId);
         form.parentId = parent.parentId;
+        // Epic・Step に切り替えたら、スプリントを「バックログ」に戻す(02「ダイアログの中での連動」)。
+        if (!showSprint(form.kind)) form.sprint = "";
         // テンプレートを「なし」にしてから新しい種類の既定を当てはめる(A3b-14)。
         if (current) form = applyDefault(form, current.settings);
         state.set({ ...s, ...parent, form, ...(current ? viewOf(current, form) : {}) });

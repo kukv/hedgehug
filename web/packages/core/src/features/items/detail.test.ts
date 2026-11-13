@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createDetail } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
@@ -26,6 +27,7 @@ async function setup() {
     return getWorkspace(...a);
   };
   const detail = createDetail({
+    planning: fakePlanningPort(),
     catalog,
     items,
     toasts,

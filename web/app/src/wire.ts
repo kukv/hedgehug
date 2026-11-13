@@ -120,6 +120,7 @@ export const detail = createDetail({
   items: itemsPort,
   workspaces: workspacesPort,
   catalogPort,
+  planning: planningPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
@@ -155,6 +156,7 @@ export const itemDialog = createItemDialog({
   items: itemsPort,
   workspaces: workspacesPort,
   catalogPort,
+  planning: planningPort,
   toasts,
   here: () => hereOf(screen, catalog),
   openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),

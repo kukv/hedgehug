@@ -1,5 +1,6 @@
 import type { Item, Kind } from "../../model/item";
 import type { StoreNode } from "../catalog/catalog";
+import { chosen, sprintChoices } from "../planning/choices";
 import type { Option } from "../projects/createDialog";
 import { itemDisplayId } from "../router/route";
 import { parentMissing } from "./createDefaults";
@@ -27,12 +28,17 @@ export const parentOptions = (prefix: string, candidates: Item[]): Option[] =>
 export const missing = (kind: Kind, candidates: Item[]): string =>
   kind !== "Epic" && candidates.length === 0 ? parentMissing(kind) : "";
 
-// viewOf は、入力から作り直す欄(プロパティの行・テンプレートの欄・一緒に作るもの)。
+// viewOf は、入力から作り直す欄(プロパティの行・テンプレートの欄・一緒に作るもの・スプリントの選択肢)。
 export const viewOf = (ctx: WorkspaceContext, form: TemplateForm) => ({
   rows: rowsFor(ctx, form),
   templates: templateOptions(ctx.settings, form.kind),
   structure: structureOf(ctx.settings, form, ctx.people.members),
+  sprints: sprintChoices(ctx.plan, "").map((c) => ({ value: c.id, label: c.label })),
 });
+
+// keptSprint は、読み直したあとのスプリント。選んでいたものが選択肢になければ「バックログ」(完了・削除されたもの)。
+export const keptSprint = (ctx: WorkspaceContext, sprint: string): string =>
+  chosen(sprintChoices(ctx.plan, ""), sprint);
 
 // carried は、読み直しを待つあいだに入力された分(タイトル・説明・種類・テンプレート・「続けて作成」)を、読み直した
 // 入力へ引き継ぐ(決定 27)。値は、呼び出し側が決めたもの。

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createDetail } from "./detail";
 import { fakeItemsPort, item } from "./fixtures.test-util";
@@ -18,6 +19,7 @@ async function setup() {
   const s1 = { ...item("S1", "S1-P1", 3, "Step", task.id, "設計"), rank: "W" };
   const s2 = { ...item("S1", "S1-P1", 4, "Step", task.id, "実装"), rank: "V" };
   const detail = createDetail({
+    planning: fakePlanningPort(),
     catalog,
     items: fakeItemsPort([epic, otherEpic, task, s1, s2]),
     toasts: createToasts({ set: () => 0, clear: () => {} }),

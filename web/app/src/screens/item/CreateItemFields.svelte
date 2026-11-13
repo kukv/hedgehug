@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ItemDialogState, Kind } from "@hedgehug/core";
-  import { kinds } from "@hedgehug/core";
+  import { kinds, showSprint } from "@hedgehug/core";
   import { Input, Select, Textarea } from "@hedgehug/ui";
   import { itemDialog } from "../../wire";
   import CreatePropertyFields from "./CreatePropertyFields.svelte";
@@ -67,6 +67,16 @@
         label="テンプレート"
         options={s.templates}
         bind:value={() => s.form.templateId, (v) => void itemDialog.update({ templateId: v })}
+      />
+    </div>
+  {/if}
+  {#if showSprint(s.form.kind)}
+    <div class="field">
+      <span>スプリント</span>
+      <Select
+        label="スプリント"
+        options={s.sprints}
+        bind:value={() => s.form.sprint, (v) => void itemDialog.update({ sprint: v })}
       />
     </div>
   {/if}

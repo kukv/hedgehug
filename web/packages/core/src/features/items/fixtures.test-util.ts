@@ -187,7 +187,7 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
         blocked: false,
         createdAt: new Date(Date.UTC(2026, 10, 13, 10, 0, all.length)).toISOString(),
         createdBy: "taro",
-        sprint: "",
+        sprint: input.sprint ?? "",
         release: "",
       });
     },

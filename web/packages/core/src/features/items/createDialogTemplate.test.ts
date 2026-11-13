@@ -3,6 +3,7 @@ import type { WorkspaceSettings } from "../../model/workspace";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createItemDialog } from "./createDialog";
 import { fakeItemsPort, item } from "./fixtures.test-util";
@@ -67,6 +68,7 @@ async function setup() {
   const items = fakeItemsPort([item("S1", "S1-P1", 1, "Epic", null, "認証")]);
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   const dialog = createItemDialog({
+    planning: fakePlanningPort(),
     catalog,
     items,
     toasts,
