@@ -19143,7 +19143,8 @@ EOF
 
 - プロジェクトのメニューの「名前を変更…」ダイアログと設定の「名前」の区画は、`projectEditor.rename`(`rename-project`)をそのまま使える(空・重複の断りも同じ)。
 - 上限の 20 ファイル(テストを除く)にいるのは `internal/infra/gitstore`・`internal/app/workspaces`・`internal/app/apptest` の 3 つ。`internal/app/items` は 14、`internal/app/projects` は 11。ここに足すときは既存のファイルに足すか、パッケージを分ける。
-- `web/app/src/wire.ts` と `web/packages/core/src/index.ts` は、どちらもちょうど 300 行(TS の上限)。A4b の配線と export は、別のモジュール(`notesIndex.ts` のように束ねたもの)に置くか、分けてから足す。`detail.ts` は 269 行。
+- `web/app/src/wire.ts` と `web/packages/core/src/index.ts` は、どちらもちょうど 300 行(TS の上限)。A4b の配線と export は、別のモジュール(`notesIndex.ts` のように束ねたもの)に置くか、分けてから足す。`detail.ts` は 269 行。`web/app/src/screens/project/TreeRow.svelte` は 199 行(Svelte の上限 200)、`web/packages/core/src/features/items/createDialog.ts` は 299 行(TS の上限 300)で、どちらも 1 行も足せない。
+- アイテムを変える API(値の変更・関連・作成など)の応答の `blocked` は、いつも `false`。ブロック中を埋めるのは Get・List・FindByNumber と set-watch の応答だけ。A4b で変更の応答をそのまま画面に使うなら、ブロック中を埋めるか、読み直す。
 - 画面の全幅の 2 列の詳細(左に本文、右にプロパティ)は、SidePanel にはない。概要の 2 列(`ProjectOverview`)は幅の container query で作ってある。
 - 削除済みを件数・候補・一覧から除くこと(PR の「回したもの」のとおり)。
 - 履歴の「スプリントを変更」「リリースを変更」「復元」「{旧 ID} から移動」の文は、元になる行(A4b・F・A5・G)が入ったときに足す。知らない種類の行は、いまは出さない。
@@ -19158,5 +19159,5 @@ EOF
 
 **A4b・C4 共通**
 
-- Store が大きいと、`sync.spec.ts` の 3 秒・5 秒の窓が足りなくなる。アイテムを読むたびに Store 全体を読む作り(A4a-11)のため、e2e の Store にワークスペースとアイテムが増えるほど 1 回の操作が遅くなる(新しい通しを足す前の 180 件は workers=2 で 3.5 分で全部通り、足したあとは 6 分余りで、後ろの desktop で時間の窓があるテストが落ちることがある)。通しの数を増やす前に、読み方を軽くするか窓を見直す。
+- Store が大きいと、`sync.spec.ts` の 3 秒・5 秒の窓が足りなくなる。アイテムを読むたびに Store 全体を読む作り(A4a-11)のため、e2e の Store にワークスペースとアイテムが増えるほど 1 回の操作が遅くなる(新しい通しを足す前の 180 件は workers=2 で 3.5 分で全部通り、足したあとは 6 分余りで、後ろの desktop で時間の窓があるテストが落ちることがある)。最終レビューの直しで、gitstore と偽物(e2e のサーバーは偽物の Stores を使う)の view に「アイテム→プロジェクト」の覚えを入れ、`Items().List` がプロジェクトごとに全アイテムをログから作り直すのをやめた。201 件が workers=2 で 4.6 分(277 秒)で全部通るようになったが、desktop の合計は phone の約 3 倍で、Store の大きさに比例する分はまだ残る。通しの数を増やす前に、ほかの読み方(`ids` の一覧・ログの写し)を軽くするか窓を見直す。
 - 概要で項目を続けて編集すると、直前の保存の読み直しが終わる前の値と比べるので、「変わっていない」と判定されて保存が送られないことがある(Task 19 の「rapid double edits ordering」)。人の操作の速さでは起きにくい。通しのテストは、履歴に行が出るのを待ってから次を編集している。
