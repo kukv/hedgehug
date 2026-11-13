@@ -61,6 +61,20 @@ func (s Service) editPlan(ctx context.Context, store port.StoreID, ws workspace.
 	summary func(p planning.Plan) (string, error),
 	drafts func(p planning.Plan) ([]change.Draft, error),
 ) error {
+	return s.writePlan(ctx, store, ws, summary, func(tx port.Tx, p planning.Plan) error {
+		ds, err := drafts(p)
+		if err != nil {
+			return err
+		}
+		return tx.WriteWorkspaces().Append(ws, ds...)
+	})
+}
+
+// writePlan は、summary で決めた文で 1 回保存する。write は保存の中のいまの計画を見て書く。
+func (s Service) writePlan(ctx context.Context, store port.StoreID, ws workspace.ID,
+	summary func(p planning.Plan) (string, error),
+	write func(tx port.Tx, p planning.Plan) error,
+) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
 		return err
@@ -82,10 +96,6 @@ func (s Service) editPlan(ctx context.Context, store port.StoreID, ws workspace.
 		if err != nil {
 			return err
 		}
-		ds, err := drafts(p)
-		if err != nil {
-			return err
-		}
-		return tx.WriteWorkspaces().Append(ws, ds...)
+		return write(tx, p)
 	})
 }
