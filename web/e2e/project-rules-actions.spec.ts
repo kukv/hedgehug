@@ -69,6 +69,7 @@ test("resets a section to the workspace settings after a confirmation", async ({
   await expect(page.getByText("ワークスペースの設定に戻しました")).toBeVisible();
   await expect(statuses.locator("#rules-statuses")).toContainText("5 / 5");
   await expect(statuses.getByRole("checkbox", { checked: false })).toHaveCount(0);
+  await select.selectOption({ label: "InProgress" });
   await expect(reset).toBeDisabled();
 });
 
@@ -111,13 +112,15 @@ test("moving an epic to a project that does not use its status asks for a replac
   await expect(dialog.getByText("Pending(1 件)")).toBeVisible();
   const select = dialog.getByRole("combobox", { name: "Pending(1 件)" });
   await expect(select.locator("option", { hasText: "Pending" })).toHaveCount(0);
+  // 既定(Todo)ではなく、選び直した InProgress に置き換わる。
+  await select.selectOption({ label: "InProgress" });
   await dialog.getByRole("button", { name: "移動", exact: true }).click();
   await expect(page.getByText(`${t2} に移動しました`)).toBeVisible();
 
   await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P2/tree`));
   const tree2 = page.getByRole("list", { name: "ツリー" });
   await expect(statusButton(treeRow(tree2, `${prefix}-1`))).toHaveAccessibleName(
-    "ステータス: Todo",
+    "ステータス: InProgress",
   );
 });
 
