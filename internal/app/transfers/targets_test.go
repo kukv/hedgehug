@@ -40,7 +40,7 @@ func TestTargetsExcludeOwnWorkspaceReadOnlyStoresAndEmptyWorkspaces(t *testing.T
 func TestTargetsOfAStepOrADeletedItemIsNotFound(t *testing.T) {
 	f := newFixture(t)
 	parent := apptest.SampleTask
-	step := addItem(t, f.rec, item.Item{ID: "01TESTIT000000000000000010", Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3}, Kind: item.Step, Rank: "V", Title: "下書き"})
+	step := addItem(t, f.rec, store1, item.Item{ID: "01TESTIT000000000000000010", Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3}, Kind: item.Step, Rank: "V", Title: "下書き"})
 	if _, err := f.svc.Targets(t.Context(), store1, step.ID); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("Step: %v", err)
 	}

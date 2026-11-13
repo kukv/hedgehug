@@ -21,7 +21,7 @@ func TestPreviewCountsAndStatusRows(t *testing.T) {
 	f := newFixtureWith(t, withoutPending)
 	parent := apptest.SampleTask
 	mk := func(id item.ID, n int, status change.ID) item.Item {
-		return addItem(t, f.rec, item.Item{ID: id, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: n}, Kind: item.Step, Rank: "V", Title: "s", Status: status})
+		return addItem(t, f.rec, store1, item.Item{ID: id, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: n}, Kind: item.Step, Rank: "V", Title: "s", Status: status})
 	}
 	mk("01TESTIT000000000000000010", 3, apptest.SampleStatusPending)
 	gone := mk("01TESTIT000000000000000011", 4, apptest.SampleStatusPending)
@@ -60,7 +60,7 @@ func TestPreviewAcrossStoresWarnsWhenOnlyTheSourceHasARemote(t *testing.T) {
 func TestPreviewRowsAreExactlyTheStatusesMoveReplaces(t *testing.T) {
 	f := newFixtureWith(t, withoutPending)
 	parent := apptest.SampleTask
-	step := addItem(t, f.rec, item.Item{ID: "01TESTIT000000000000000010", Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3}, Kind: item.Step, Rank: "V", Title: "s", Status: apptest.SampleStatusInProgress})
+	step := addItem(t, f.rec, store1, item.Item{ID: "01TESTIT000000000000000010", Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3}, Kind: item.Step, Rank: "V", Title: "s", Status: apptest.SampleStatusInProgress})
 	write(t, f.rec, store1, func(tx port.Tx) error {
 		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusPending))
 	})

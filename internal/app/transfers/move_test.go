@@ -30,7 +30,7 @@ func withSteps(t *testing.T, f fixture) {
 	t.Helper()
 	parent := apptest.SampleTask
 	for i, id := range []item.ID{stepGoneID, stepLiveID} {
-		addItem(t, f.rec, item.Item{ID: id, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3 + i}, Kind: item.Step, Rank: "V", Title: "s"})
+		addItem(t, f.rec, store1, item.Item{ID: id, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3 + i}, Kind: item.Step, Rank: "V", Title: "s"})
 	}
 	if err := apptest.DeleteItems(t.Context(), f.rec, store1, stepGoneID); err != nil {
 		t.Fatal(err)
@@ -209,7 +209,7 @@ func TestMovePlacesTheItemAfterTheLastLiveChildOfTheNewParent(t *testing.T) {
 	f := newFixture(t)
 	parent := mobileEpic
 	mk := func(id item.ID, n int, r string) item.Item {
-		return addItem(t, f.rec, item.Item{ID: id, Place: item.Place{Workspace: mobileWS, Project: mobileProject, Parent: &parent, Number: n}, Kind: item.Task, Rank: r, Title: "t"})
+		return addItem(t, f.rec, store1, item.Item{ID: id, Place: item.Place{Workspace: mobileWS, Project: mobileProject, Parent: &parent, Number: n}, Kind: item.Task, Rank: r, Title: "t"})
 	}
 	mk("01TESTIT000000000000000020", 2, "V")
 	gone := mk("01TESTIT000000000000000021", 3, "X")

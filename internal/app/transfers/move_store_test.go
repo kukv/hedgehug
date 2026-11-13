@@ -75,7 +75,7 @@ func crossFixture(t *testing.T) fixture {
 	t.Helper()
 	f := newFixture(t)
 	withSteps(t, f)
-	outside := addItem(t, f.rec, item.Item{ID: outsideGoneID, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Number: 5}, Kind: item.Task, Rank: "X", Title: "外"})
+	outside := addItem(t, f.rec, store1, item.Item{ID: outsideGoneID, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Number: 5}, Kind: item.Task, Rank: "X", Title: "外"})
 	addRelation(t, f.rec, apptest.SampleEpic, apptest.SampleTask, "relates")
 	addRelation(t, f.rec, apptest.SampleTask, apptest.SampleEpic, "blocks")
 	addRelation(t, f.rec, apptest.SampleTask, stepLiveID, "relates")
@@ -394,7 +394,7 @@ func TestMoveAcrossStoresFailsWhenTheSourceGainsAChildMeanwhile(t *testing.T) {
 			return
 		}
 		added = true
-		addItem(t, f.rec, item.Item{ID: newStep, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: ptr(apptest.SampleTask), Number: 6}, Kind: item.Step, Rank: "Y", Title: "あとから"})
+		addItem(t, f.rec, store1, item.Item{ID: newStep, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: ptr(apptest.SampleTask), Number: 6}, Kind: item.Step, Rank: "Y", Title: "あとから"})
 	}
 	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err == nil {
 		t.Fatal("移動が成功した")

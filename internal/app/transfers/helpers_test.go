@@ -194,10 +194,10 @@ func addWorkspace(t *testing.T, s port.Stores, store port.StoreID, ws workspace.
 	})
 }
 
-// addItem は、main(S1)にアイテムを作る(作成の行と、番号の行)。
-func addItem(t *testing.T, s port.Stores, it item.Item) item.Item {
+// addItem は、Store store にアイテムを作る(作成の行と、番号の行)。
+func addItem(t *testing.T, s port.Stores, store port.StoreID, it item.Item) item.Item {
 	t.Helper()
-	write(t, s, store1, func(tx port.Tx) error {
+	write(t, s, store, func(tx port.Tx) error {
 		return errors.Join(
 			tx.WriteItems().Append(it.ID, item.Create(it)),
 			tx.WriteWorkspaces().Append(it.Place.Workspace, numbering.Draft(numbering.Items, it.Place.Number)),
