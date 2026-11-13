@@ -11,15 +11,20 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
+	"github.com/kukv/hedgehug/internal/app/port"
 )
 
-func newAPI(t *testing.T) humatest.TestAPI {
+// newAPI は、サンプルを書いた Store S1 の API。setup は、サンプルのあとにデータを足す。
+func newAPI(t *testing.T, setup ...func(t *testing.T, s port.Stores)) humatest.TestAPI {
 	t.Helper()
 	ids := apptest.NewIDs()
 	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), ids)
 	s.AddStore("S1")
 	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
 		t.Fatal(err)
+	}
+	for _, f := range setup {
+		f(t, s)
 	}
 	_, api := humatest.New(t)
 	items.Register(api, appitems.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))})

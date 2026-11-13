@@ -6,13 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 
-	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/app/apptest"
-	appitems "github.com/kukv/hedgehug/internal/app/items"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
@@ -21,15 +18,9 @@ import (
 
 const secondProject = "01TESTPR000000000000000002"
 
-// newAPIWithSecondProject は、サンプルのワークスペースに 2 つ目のプロジェクト HH-P2「決済」を足した API。
-func newAPIWithSecondProject(t *testing.T) humatest.TestAPI {
+// addSecondProject は、サンプルのワークスペースに 2 つ目のプロジェクト HH-P2「決済」を足す。
+func addSecondProject(t *testing.T, s port.Stores) {
 	t.Helper()
-	ids := apptest.NewIDs()
-	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), ids)
-	s.AddStore("S1")
-	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
-		t.Fatal(err)
-	}
 	pr := project.Project{ID: secondProject, Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2}, Rank: "W", Title: "決済", Status: project.Todo}
 	op := port.Operation{Actor: change.User("taro"), Summary: "プロジェクトを作成"}
 	if err := s.Write(t.Context(), "S1", op, func(tx port.Tx) error {
@@ -40,9 +31,6 @@ func newAPIWithSecondProject(t *testing.T) humatest.TestAPI {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, api := humatest.New(t)
-	items.Register(api, appitems.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))})
-	return api
 }
 
 // createItem は、アイテムを作って内部 ID を返す。
@@ -81,7 +69,7 @@ func TestMoveCandidatesAndMove(t *testing.T) {
 }
 
 func TestMoveAnEpicToAnotherProject(t *testing.T) {
-	api := newAPIWithSecondProject(t)
+	api := newAPI(t, addSecondProject)
 	epic := "/api/stores/S1/items/" + string(apptest.SampleEpic)
 	res := api.Get(epic + "/move-candidates")
 	want := `[{"kind":"project","id":"` + secondProject + `","display":"HH-P2","title":"決済","projectId":"` + secondProject + `","projectTitle":""}]`
