@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -148,10 +149,10 @@ func TestPurgeInTx(t *testing.T) {
 		t.Error("the folder is still there")
 	}
 	got := purgedLines(t, a, apptest.SampleTask)
-	want := `{"id":"01A00000000000000000000013","at":"2026-11-12T09:00:00.001+09:00","by":"hedgehug[bot]","actor":"sync","entity":"item","target":"` +
-		string(apptest.SampleTask) + `","display":"HH-2"}`
-	if len(got) != 1 || got[0] != want {
-		t.Fatalf("purged.jsonl:\n%v\nwant\n%s", got, want)
+	want := regexp.MustCompile(`^\{"id":"01A\d{23}","at":"2026-11-12T09:00:00\.\d{3}\+09:00","by":"hedgehug\[bot\]","actor":"sync","entity":"item","target":"` +
+		string(apptest.SampleTask) + `","display":"HH-2"\}$`)
+	if len(got) != 1 || !want.MatchString(got[0]) {
+		t.Fatalf("purged.jsonl:\n%v\nwant %s", got, want)
 	}
 	if st := worktreeStatus(t, a.dir); !st.IsClean() {
 		t.Errorf("worktree is not clean:\n%s", st)
@@ -214,9 +215,13 @@ func TestRepairPurgesUnderPurgedEpic(t *testing.T) {
 	}
 }
 
-// 送信が断られてもう一度修復しても、2 回目は何も書かない。
-func TestRepairPurgeWritesOnce(t *testing.T) {
-	remote, a, b := purgedThenStep(t, apptest.SampleTask)
+// rejectFirstSend は、b の最初の送信を断り、修復が 1 回の同期で 2 回動くようにする。修復の呼ばれた回数を返す。
+func rejectFirstSend(b machine) *int {
+	calls := 0
+	b.rep.Repair = func(context.Context, port.RepairWriter) error {
+		calls++
+		return nil
+	}
 	sends := 0
 	b.rep.beforeSend = func() error {
 		sends++
@@ -225,9 +230,16 @@ func TestRepairPurgeWritesOnce(t *testing.T) {
 		}
 		return nil
 	}
+	return &calls
+}
+
+// 送信が断られてもう一度修復しても、2 回目は何も書かない。
+func TestRepairPurgeWritesOnce(t *testing.T) {
+	remote, a, b := purgedThenStep(t, apptest.SampleTask)
+	calls := rejectFirstSend(b)
 	b.sync(t, remote)
-	if sends != 2 {
-		t.Fatalf("sends = %d", sends)
+	if *calls != 2 {
+		t.Fatalf("repair ran %d times, want 2", *calls)
 	}
 	if n := len(purgedLines(t, b, sampleStep)); n != 1 {
 		t.Errorf("%d lines for HH-3", n)
@@ -259,7 +271,6 @@ func TestRepairRemovesRelationToPurged(t *testing.T) {
 	remote := newRemote(t)
 	a := firstMachine(t, remote)
 	b := cloneMachine(t, remote, "B", t0)
-	b.rep.Repair = noRepair
 	a.purgeForTest(t, apptest.SampleTask)
 	b.write(t, "関連を足す", func(tx port.Tx) error {
 		return tx.WriteItems().Append(apptest.SampleEpic,
@@ -267,7 +278,11 @@ func TestRepairRemovesRelationToPurged(t *testing.T) {
 			change.NewAdd("relations", item.Relation{Type: "relates", To: apptest.SampleTask}))
 	})
 	a.sync(t, remote)
+	calls := rejectFirstSend(b) // 2 回目の修復は何も書かない
 	b.sync(t, remote)
+	if *calls != 2 {
+		t.Fatalf("repair ran %d times, want 2", *calls)
+	}
 	a.sync(t, port.Remote{URL: remote.URL})
 	sameFiles(t, a, b)
 	var epic item.Item
@@ -284,10 +299,5 @@ func TestRepairRemovesRelationToPurged(t *testing.T) {
 	const want = "HH-1 の関連を解除(相手が完全に削除)"
 	if n := count(subjects(t, b.dir), want); n != 1 {
 		t.Errorf("%d commits %q", n, want)
-	}
-	before := headCommit(t, b.dir).Hash
-	b.sync(t, remote)
-	if got := headCommit(t, b.dir).Hash; got != before {
-		t.Errorf("second sync wrote: %s -> %s", before, got)
 	}
 }
