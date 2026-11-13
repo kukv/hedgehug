@@ -6,6 +6,7 @@
     type AutomationTrigger,
     actionOptions,
     allMergedLabel,
+    keepStatus,
     type Member,
     newRuleForm,
     readOnlyNote,
@@ -34,11 +35,15 @@
 
   let { settings, members, readOnly, rules, rule, statuses, onsave, onclose }: Props = $props();
 
-  const start = (): AutomationRuleInput => (rule ? ruleForm(rule) : newRuleForm(settings));
+  const start = (): AutomationRuleInput =>
+    rule ? ruleForm(rule) : newRuleForm(settings, statuses);
   let form = $state(start());
   let error = $state("");
   const disabled = $derived(readOnly);
   const title = $derived(readOnly ? readOnlyNote : undefined);
+  // 保存済みのルールが選択肢にないステータスを指しているときも、いまの値として選択肢に残す。
+  const triggerStatuses = $derived(keepStatus(settings, statuses, rule?.triggerStatus ?? ""));
+  const valueStatuses = $derived(keepStatus(settings, statuses, rule?.value ?? ""));
 
   async function save() {
     const refusal = ruleFormRefusal(form, rules, rule?.id ?? "");
@@ -61,13 +66,13 @@
       options={triggerOptions}
       {disabled}
       {title}
-      onchange={(v) => (form = withTrigger(form, v as AutomationTrigger, settings))}
+      onchange={(v) => (form = withTrigger(form, v as AutomationTrigger, settings, statuses))}
     />
     {#if form.trigger === "status"}
       <Select
         label="ステータス"
         value={form.triggerStatus}
-        options={statuses}
+        options={triggerStatuses}
         {disabled}
         {title}
         onchange={(v) => (form = { ...form, triggerStatus: v })}
@@ -82,12 +87,12 @@
       options={actionOptions}
       {disabled}
       {title}
-      onchange={(v) => (form = withAction(form, v as AutomationAction, settings))}
+      onchange={(v) => (form = withAction(form, v as AutomationAction, settings, statuses))}
     />
     <Select
       label="値"
       value={form.value}
-      options={valueOptions(form, settings, members, statuses)}
+      options={valueOptions(form, settings, members, valueStatuses)}
       {disabled}
       {title}
       onchange={(v) => (form = { ...form, value: v })}

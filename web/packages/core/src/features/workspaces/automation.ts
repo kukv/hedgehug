@@ -1,3 +1,4 @@
+import { NotFound, Refused } from "../../model/errors";
 import type { Member } from "../../model/member";
 import type {
   AutomationAction,
@@ -8,7 +9,7 @@ import type {
   WorkspaceSettings,
 } from "../../model/workspace";
 import { relativeTime } from "../dates/relative";
-import { rulesOf } from "./projectRules";
+import { rulesOf, usesStatus } from "./projectRules";
 
 // 自動化のタブ(03「自動化」)。文言は 03 の文字どおり。
 
@@ -135,18 +136,51 @@ export function projectRuleRows(
     });
 }
 
-const doneDefault = (s: WorkspaceSettings) => s.categoryDefaults.done ?? s.statuses[0]?.id ?? "";
-const firstStatus = (s: WorkspaceSettings) => s.statuses[0]?.id ?? "";
+export interface StatusOption {
+  value: string;
+  label: string;
+}
 
-// newRuleForm は、作成ダイアログの初期値(03)。
-export function newRuleForm(s: WorkspaceSettings): AutomationRuleInput {
+const allStatuses = (s: WorkspaceSettings): StatusOption[] =>
+  s.statuses.map((v) => ({ value: v.id, label: v.name }));
+
+// scopeStatuses は、ダイアログのステータスの選択肢。専用ルール(scope あり)は、そのプロジェクトで使うものだけ
+// (03「プロジェクトの自動化」)。
+export function scopeStatuses(s: WorkspaceSettings, scope?: string): StatusOption[] {
+  const used = scope ? s.statuses.filter((v) => usesStatus(s, scope, v.id)) : s.statuses;
+  return used.map((v) => ({ value: v.id, label: v.name }));
+}
+
+// keepStatus は、保存済みのルールのステータス id が選択肢にないとき(ステータスの削除の書き換えで、使わない
+// ステータスを指しているとき)、いまの値を見せるために、定義の順で選択肢に足す。
+export function keepStatus(
+  s: WorkspaceSettings,
+  options: readonly StatusOption[],
+  id: string,
+): StatusOption[] {
+  if (options.some((o) => o.value === id) || !s.statuses.some((v) => v.id === id)) {
+    return [...options];
+  }
+  const keep = new Set([...options.map((o) => o.value), id]);
+  return allStatuses(s).filter((o) => keep.has(o.value));
+}
+
+const firstOf = (s: WorkspaceSettings, statuses: readonly StatusOption[]) =>
+  statuses[0]?.value ?? s.statuses[0]?.id ?? "";
+
+// newRuleForm は、作成ダイアログの初期値(03)。値は完了の既定、選択肢になければ選択肢の先頭。
+export function newRuleForm(
+  s: WorkspaceSettings,
+  statuses: readonly StatusOption[] = allStatuses(s),
+): AutomationRuleInput {
+  const done = s.categoryDefaults.done;
   return {
     name: "",
     trigger: "pr_merged",
     triggerStatus: "",
     allMerged: false,
     action: "status",
-    value: doneDefault(s),
+    value: done && statuses.some((o) => o.value === done) ? done : firstOf(s, statuses),
   };
 }
 
@@ -156,40 +190,52 @@ export function ruleForm(r: AutomationRuleInput): AutomationRuleInput {
   return { name, trigger, triggerStatus, allMerged, action, value };
 }
 
-// withTrigger は、きっかけを変える。条件は pr_merged のときだけ残し、ステータスのきっかけには先頭のステータス(B4-19)。
+// withTrigger は、きっかけを変える。条件は pr_merged のときだけ残し、ステータスのきっかけには選択肢の先頭(B4-19)。
 export function withTrigger(
   f: AutomationRuleInput,
   trigger: AutomationTrigger,
   s: WorkspaceSettings,
+  statuses: readonly StatusOption[] = allStatuses(s),
 ): AutomationRuleInput {
   return {
     ...f,
     trigger,
-    triggerStatus: trigger === "status" ? f.triggerStatus || firstStatus(s) : "",
+    triggerStatus: trigger === "status" ? f.triggerStatus || firstOf(s, statuses) : "",
     allMerged: trigger === "pr_merged" ? f.allMerged : false,
   };
 }
 
-// withAction は、することを変え、値を初期化する(ステータスなら先頭、担当者なら未割り当て)。
+// withAction は、することを変え、値を初期化する(ステータスなら選択肢の先頭、担当者なら未割り当て)。
 export function withAction(
   f: AutomationRuleInput,
   action: AutomationAction,
   s: WorkspaceSettings,
+  statuses: readonly StatusOption[] = allStatuses(s),
 ): AutomationRuleInput {
-  return { ...f, action, value: action === "status" ? firstStatus(s) : unassigned };
+  return { ...f, action, value: action === "status" ? firstOf(s, statuses) : unassigned };
 }
 
 export function valueOptions(
   f: AutomationRuleInput,
   s: WorkspaceSettings,
   members: Member[],
-  statuses = s.statuses.map((v) => ({ value: v.id, label: v.name })),
-): { value: string; label: string }[] {
-  if (f.action === "status") return statuses;
+  statuses: readonly StatusOption[] = allStatuses(s),
+): StatusOption[] {
+  if (f.action === "status") return [...statuses];
   return [
     { value: unassigned, label: unassignedOption },
     ...members.map((m) => ({ value: m.login, label: m.name || m.login })),
   ];
+}
+
+export const ruleSaveFailed = "ルールを保存できませんでした";
+
+// ruleSaveRefusal は、ルールの保存の失敗を、ダイアログの中に出す文にする。断りはその文言、指したものがない
+// (ほかで消された・使わないステータスになった)ときは ruleSaveFailed。ほかの失敗は投げ直す。
+export function ruleSaveRefusal(e: unknown): string {
+  if (e instanceof Refused) return e.message;
+  if (e instanceof NotFound) return ruleSaveFailed;
+  throw e;
 }
 
 const sameStatusRule = (r: AutomationRuleInput) =>

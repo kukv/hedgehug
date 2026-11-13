@@ -4,16 +4,17 @@
     deleteRuleBody,
     deleteRuleTitle,
     hasRules,
+    NotFound,
     type ProjectView,
     projectRuleRows,
-    Refused,
     readOnlyNote,
     ruleCreated,
     ruleDeleted,
+    ruleSaveRefusal,
     rulesEmpty,
     rulesOf,
+    scopeStatuses,
     switchOnRefusal,
-    usedStatusRows,
     type WorkspaceAutomation,
   } from "@hedgehug/core";
   import { Button, ConfirmDialog, IconButton, Switch } from "@hedgehug/ui";
@@ -55,11 +56,7 @@
   const extra = $derived(
     own > 0 ? `このプロジェクトだけのルール ${own} 件も削除します。` : undefined,
   );
-  const statuses = $derived(
-    usedStatusRows(view.settings, p.id, view.items)
-      .rows.filter((r) => r.checked)
-      .map((r) => ({ value: r.id, label: r.name })),
-  );
+  const statuses = $derived(scopeStatuses(view.settings, p.id));
   const editingRule = $derived(automation?.rules.find((r) => r.id === editing) ?? null);
   const deletingName = $derived(rows.find((r) => r.id === deleting)?.name ?? "");
 
@@ -90,8 +87,8 @@
       if (id) await workspacesPort.updateRule(p.storeId, p.workspaceId, id, input);
       else await workspacesPort.createRule(p.storeId, p.workspaceId, { ...input, scope: p.id });
     } catch (e) {
-      if (e instanceof Refused) return e.message;
-      throw e;
+      if (e instanceof NotFound) await Promise.all([onChanged(), load()]);
+      return ruleSaveRefusal(e);
     }
     await Promise.all([onChanged(), load()]);
     if (!id) toasts.show(ruleCreated);

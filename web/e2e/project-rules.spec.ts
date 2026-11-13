@@ -112,6 +112,10 @@ test("a project-only rule shows in the workspace automation tab and its line ope
   await createWorkspace(page, info, unique(info, "専用ルール"), prefix);
   await newProject(page, info, prefix);
   await settingsOf(page, prefix);
+  await section(page, "rules-statuses")
+    .getByRole("checkbox", { name: "Pending", exact: true })
+    .click();
+  await expect(page.locator("#rules-statuses")).toContainText("4 / 5");
   await createOwnRule(page, "着手で外す", async (dialog) => {
     await dialog
       .getByRole("combobox", { name: "きっかけ" })
@@ -138,6 +142,16 @@ test("a project-only rule shows in the workspace automation tab and its line ope
     .locator(".row")
     .filter({ has: page.getByRole("switch", { name: "着手で外す を有効にする" }) });
   await expect(row).toContainText(`${prefix}-P1`);
+  // ここで編集しても、ステータスの選択肢はそのプロジェクトが使うものだけ。
+  await row.getByRole("button", { name: "編集" }).click();
+  const edit = page.getByRole("dialog", { name: "ルールの編集" });
+  await expect(edit.getByRole("combobox", { name: "ステータス" }).locator("option")).toHaveText([
+    "Todo",
+    "InProgress",
+    "Done",
+    "Cancel",
+  ]);
+  await edit.getByRole("button", { name: "キャンセル" }).click();
   const title = unique(info, `計画 ${prefix} 1`);
   const line = page.getByTestId("rules-projects-line");
   await expect(line).toHaveText(

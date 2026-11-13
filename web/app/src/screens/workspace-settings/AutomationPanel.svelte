@@ -10,8 +10,10 @@
     ruleCreated,
     ruleDeleted,
     ruleRows,
+    ruleSaveRefusal,
     rulesEmpty,
     type SettingsState,
+    scopeStatuses,
     switchOnRefusal,
   } from "@hedgehug/core";
   import { Button, ConfirmDialog, IconButton, Switch } from "@hedgehug/ui";
@@ -49,11 +51,14 @@
   async function save(input: AutomationRuleInput): Promise<string | null> {
     const id = editingRule?.id;
     let refusal: string | null = null;
-    const ok = await workspaceSettings.run(
-      (p, st, w) => (id ? p.updateRule(st, w, id, input) : p.createRule(st, w, input)),
-      id ? undefined : ruleCreated,
-      (message) => (refusal = message),
-    );
+    const ok = await workspaceSettings
+      .run(
+        (p, st, w) => (id ? p.updateRule(st, w, id, input) : p.createRule(st, w, input)),
+        id ? undefined : ruleCreated,
+        (message) => (refusal = message),
+      )
+      .catch(ruleSaveRefusal);
+    if (typeof ok === "string") return ok;
     return ok ? null : (refusal ?? "");
   }
 
@@ -123,7 +128,7 @@
     readOnly={s.readOnly}
     rules={automation.rules}
     rule={editingRule}
-    statuses={s.detail.settings.statuses.map((v) => ({ value: v.id, label: v.name }))}
+    statuses={scopeStatuses(s.detail.settings, editingRule?.scope)}
     onsave={save}
     onclose={() => (editing = null)}
   />

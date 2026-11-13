@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { NotFound, Refused } from "../../model/errors";
 import type { WorkspaceSettings } from "../../model/workspace";
 import {
+  keepStatus,
   newRuleForm,
   recentRows,
   ruleForm,
   ruleFormRefusal,
   ruleRows,
+  ruleSaveRefusal,
   ruleSummary,
+  scopeStatuses,
   switchOnRefusal,
   valueOptions,
   withAction,
@@ -96,6 +100,68 @@ describe("the rule form", () => {
     const f = withTrigger({ ...newRuleForm(settings), allMerged: true }, "status", settings);
     expect(f.triggerStatus).toBe(settings.statuses[0]?.id);
     expect(f.allMerged).toBe(false);
+  });
+  it("takes the default statuses from the given statuses", () => {
+    const used = [
+      { value: id("InProgress"), label: "InProgress" },
+      { value: id("Pending"), label: "Pending" },
+    ];
+    expect(newRuleForm(settings, used).value).toBe(id("InProgress"));
+    expect(newRuleForm(settings, [...used, { value: id("Done"), label: "Done" }]).value).toBe(
+      id("Done"),
+    );
+    const f = newRuleForm(settings, used);
+    expect(withTrigger(f, "status", settings, used).triggerStatus).toBe(id("InProgress"));
+    const assignee = withAction(f, "assignee", settings, used);
+    expect(withAction(assignee, "status", settings, used).value).toBe(id("InProgress"));
+  });
+  it("lists the statuses a dedicated rule's project uses", () => {
+    const hidden: WorkspaceSettings = {
+      ...settings,
+      initialStatus: id("Todo"),
+      projectRules: {
+        P1: {
+          hiddenStatuses: [id("Pending")],
+          workflow: {},
+          templates: [],
+          templateDefaults: {},
+          disabledRules: [],
+        },
+      },
+    };
+    expect(scopeStatuses(hidden, "P1").map((o) => o.label)).toEqual([
+      "Todo",
+      "InProgress",
+      "Done",
+      "Cancel",
+    ]);
+    expect(scopeStatuses(hidden).map((o) => o.label)).toEqual(names);
+  });
+  it("keeps the stored status as an extra choice when the project does not use it", () => {
+    const used = [
+      { value: id("Todo"), label: "Todo" },
+      { value: id("Done"), label: "Done" },
+    ];
+    expect(keepStatus(settings, used, id("Pending")).map((o) => o.label)).toEqual([
+      "Todo",
+      "Done",
+      "Pending",
+    ]);
+    expect(keepStatus(settings, used, id("InProgress")).map((o) => o.label)).toEqual([
+      "Todo",
+      "InProgress",
+      "Done",
+    ]);
+    expect(keepStatus(settings, used, id("Done"))).toEqual(used);
+    expect(keepStatus(settings, used, "tanaka")).toEqual(used);
+  });
+  it("turns a failed save into the message shown in the dialog", () => {
+    expect(ruleSaveRefusal(new Refused("同じ名前のルールがあります"))).toBe(
+      "同じ名前のルールがあります",
+    );
+    expect(ruleSaveRefusal(new NotFound("R1"))).toBe("ルールを保存できませんでした");
+    const other = new Error("boom");
+    expect(() => ruleSaveRefusal(other)).toThrow(other);
   });
   it("refuses like the server", () => {
     const rules = [{ ...newRuleForm(settings), id: "R1", name: "完了で外す", enabled: true }];
