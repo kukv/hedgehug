@@ -106,6 +106,42 @@ describe("properties", () => {
     });
   });
 
+  describe("with a project's rules", () => {
+    const ruled = {
+      ...settings,
+      categoryDefaults: { todo: "st1", done: "st3", canceled: "st4" },
+      projectRules: {
+        P1: {
+          hiddenStatuses: ["st2"],
+          workflow: {},
+          templates: [],
+          templateDefaults: {},
+          disabledRules: [],
+        },
+      },
+    };
+    it("lists only the statuses the project uses, in the property row too", () => {
+      expect(statusOptions(ruled, "st1", true, "P1").map((o) => o.id)).toEqual([
+        "st1",
+        "st3",
+        "st4",
+      ]);
+      const row = propertyRows(ruled, "Task", () => "st1", people, "P1").find(
+        (r) => r.property.id === "status",
+      );
+      expect(row?.options.map((o) => o.id)).toEqual(["st1", "st3", "st4"]);
+    });
+    it("keeps an unused current status as one checked item", () => {
+      const row = propertyRows(ruled, "Task", () => "st2", people, "P1").find(
+        (r) => r.property.id === "status",
+      );
+      expect(row?.options.find((o) => o.checked)).toMatchObject({
+        id: "st2",
+        hint: "このプロジェクトでは使わない",
+      });
+    });
+  });
+
   const rowsFor = (over: object) => {
     const it = { ...task, ...over };
     return propertyRows(settings, "Task", (p) => valueOf(it, p), people);

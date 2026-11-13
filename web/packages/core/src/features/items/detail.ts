@@ -146,7 +146,13 @@ export function createDetail(deps: DetailDeps): Detail {
         readOnly: store.readOnly,
         settings: settings,
         people,
-        rows: propertyRows(settings, item.kind, (p) => valueOfItem(item, p), people),
+        rows: propertyRows(
+          settings,
+          item.kind,
+          (p) => valueOfItem(item, p),
+          people,
+          item.projectId,
+        ),
       });
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。

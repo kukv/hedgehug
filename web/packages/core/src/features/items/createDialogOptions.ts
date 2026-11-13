@@ -28,9 +28,9 @@ export const missing = (kind: Kind, candidates: Item[]): string =>
   kind !== "Epic" && candidates.length === 0 ? parentMissing(kind) : "";
 
 // viewOf は、入力から作り直す欄(プロパティの行・テンプレートの欄・一緒に作るもの)。
-export const viewOf = (ctx: WorkspaceContext, form: TemplateForm) => ({
+export const viewOf = (ctx: WorkspaceContext, form: TemplateForm & { projectId: string }) => ({
   rows: rowsFor(ctx, form),
-  templates: templateOptions(ctx.settings, form.kind),
+  templates: templateOptions(ctx.settings, form.kind, form.projectId),
   structure: structureOf(ctx.settings, form, ctx.people.members),
 });
 

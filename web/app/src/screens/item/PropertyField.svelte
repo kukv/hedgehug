@@ -12,10 +12,11 @@
   // 1 つのプロパティの入力(02「入力の方法と保存」の表、決定 20)。onchange は、選ぶもの・チェックは選んだとき、
   // 入力欄はフォーカスが外れたとき(Enter でも)。ontoggle は関連システム・複数選択の入り切り。
   // statusSelect なら、ステータスをセレクトで出す(作成ダイアログ。02「ダイアログの項目」)。
-  // itemId は、詳細パネルで値を持つアイテム。入力欄は、フォーカスしたときの itemId を onchange に添える。
+  // itemId は、詳細パネルで値を持つアイテム。project は、そのプロジェクト(ステータスのメニューを絞る)。入力欄は、フォーカスしたときの itemId を onchange に添える。
   interface Props {
     row: ItemPropertyRow;
     itemId?: string;
+    project?: string;
     settings: WorkspaceSettings;
     disabled: boolean;
     statusSelect?: boolean;
@@ -26,6 +27,7 @@
   let {
     row,
     itemId,
+    project = "",
     settings,
     disabled,
     statusSelect = false,
@@ -99,7 +101,7 @@
 </script>
 
 {#if p.type === "status" && !statusSelect}
-  <StatusButton status={String(row.value)} {settings} {disabled} onchange={(id) => onchange(id)} />
+  <StatusButton status={String(row.value)} {settings} {project} {disabled} {onchange} />
 {:else if p.type === "status" || p.type === "user"}
   <Select
     label={p.name}

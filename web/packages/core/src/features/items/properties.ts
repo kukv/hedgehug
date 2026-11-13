@@ -143,7 +143,12 @@ function peopleOptions(people: People, current: string): ValueOption[] {
   return options;
 }
 
-function choiceRow(settings: WorkspaceSettings, p: WorkspaceProperty, value: PropertyInput) {
+function choiceRow(
+  settings: WorkspaceSettings,
+  p: WorkspaceProperty,
+  value: PropertyInput,
+  project?: string,
+) {
   const list = listOf(settings, p);
   const ids = Array.isArray(value) ? value : value ? [String(value)] : [];
   const names = ids.map((id) => list.find((v) => v.id === id)?.name);
@@ -152,7 +157,7 @@ function choiceRow(settings: WorkspaceSettings, p: WorkspaceProperty, value: Pro
   const text = deleted ? deletedValue : names.length > 0 ? names.join(", ") : "なし";
   const options =
     p.type === "status"
-      ? statusOptions(settings, ids[0] ?? "")
+      ? statusOptions(settings, ids[0] ?? "", false, project)
       : list.map((v) => ({ id: v.id, label: v.name, checked: ids.includes(v.id) }));
   if (p.type === "single") options.unshift({ id: "", label: "なし", checked: ids.length === 0 });
   return { text, deleted, options };
@@ -164,11 +169,12 @@ export function propertyRows(
   kind: Kind,
   values: (p: WorkspaceProperty) => PropertyInput,
   people: People,
+  project?: string,
 ): PropertyRow[] {
   return visibleProperties(settings, kind).map((p) => {
     const value = values(p);
     const base = { property: p, extra: !p.builtin, value };
-    if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value) };
+    if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value, project) };
     if (p.type === "user") {
       const options = peopleOptions(people, String(value));
       const text = options.find((o) => o.checked)?.label ?? "";

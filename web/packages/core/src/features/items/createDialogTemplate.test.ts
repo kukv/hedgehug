@@ -61,7 +61,7 @@ const ws2: WorkspaceSettings = {
   templateDefaults: { Task: "X1" },
 };
 
-async function setup() {
+async function setup(s1: WorkspaceSettings = ws1) {
   const catalog = createCatalog(fakeCatalogPort());
   await catalog.load();
   const items = fakeItemsPort([item("S1", "S1-P1", 1, "Epic", null, "認証")]);
@@ -72,7 +72,7 @@ async function setup() {
     toasts,
     here: () => ({ workspaceId: "S1-W1", projectId: "S1-P1" }),
     openProjectDialog: () => {},
-    workspaces: fakeWorkspaces({ "S1-W1": ws1, "S2-W1": ws2 }),
+    workspaces: fakeWorkspaces({ "S1-W1": s1, "S2-W1": ws2 }),
     catalogPort: {
       ...fakeCatalogPort(),
       listMembers: async () => [
@@ -145,13 +145,6 @@ describe("create dialog templates", () => {
     await dialog.submit();
     expect(items.createdTemplates.at(-1)).toBeUndefined();
     expect(shown().at(-1)).toMatch(/^HH-\d+ を作成しました$/);
-  });
-
-  it("keeps the template when the project changes (B5 narrows it later)", async () => {
-    const { dialog } = await setup();
-    await dialog.update({ templateId: "T2" });
-    await dialog.update({ projectId: "S1-P2" });
-    expect(get(dialog.state)?.form.templateId).toBe("T2");
   });
 
   it("keeps the kind and the template together when the kind changes during a reload", async () => {
