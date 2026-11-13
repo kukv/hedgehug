@@ -33,6 +33,9 @@ func TestOverlaps(t *testing.T) {
 	title := row("c1", "op2", change.Set, "title", user)
 	restore := row("r1", "op3", change.Restore, "deleted", user)
 	restore.To = json.RawMessage(`"op1"`)
+	otherFRestore := row("r2", "op3", change.Restore, "statuses/Z", user)
+	otherFRestore.To = json.RawMessage(`"op1"`)
+	var overlapNone []repair.Overlap
 	wsDel := del("d3", "op1", "statuses/X", true)
 	always := func(change.Record) bool { return true }
 	overlap1 := []repair.Overlap{{Op: "op1", F: "deleted"}}
@@ -63,6 +66,22 @@ func TestOverlaps(t *testing.T) {
 			idSet("d3"), idSet("c5"), nil, nil,
 		},
 		{"common ancestor", []change.Record{itemDel, title}, nil, nil, nil, nil},
+		{"change on both sides", []change.Record{itemDel, title}, idSet("d1", "c1"), idSet("c1"), nil, overlapNone},
+		{
+			"restore with different f",
+			[]change.Record{itemDel, title, otherFRestore},
+			idSet("d1"), idSet("c1"), nil, overlap1,
+		},
+		{
+			"two deletes in one op",
+			[]change.Record{
+				del("d5", "op1", "statuses/B", true), del("d4", "op1", "statuses/A", true),
+				row("c7", "op2", change.Set, "statuses/A/name", user),
+				row("c8", "op2", change.Set, "statuses/B/name", user),
+			},
+			idSet("d4", "d5"), idSet("c7", "c8"), nil,
+			[]repair.Overlap{{Op: "op1", F: "statuses/A"}},
+		},
 		{
 			"non-human actors",
 			[]change.Record{
