@@ -250,23 +250,15 @@ func TestCloseSprintRefusals(t *testing.T) {
 	if err := svc.CloseSprint(ctx, store, apptest.SampleWorkspace, s1.ID, nil); err != nil {
 		t.Fatal(err)
 	}
+	if err := svc.CloseSprint(ctx, store, apptest.SampleWorkspace, s1.ID, nil); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("完了済みのスプリント: %v", err)
+	}
+	if err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, s2.ID, "2026-11-13", "2026-11-27"); err != nil {
+		t.Fatal(err)
+	}
 	closed := s1.ID
-	for _, c := range []struct {
-		name string
-		id   change.ID
-		dest *change.ID
-	}{
-		{"完了済みのスプリント", s1.ID, nil},
-		{"移動先が完了", s2.ID, &closed},
-	} {
-		if c.id == s2.ID {
-			if err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, s2.ID, "2026-11-13", "2026-11-27"); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err := svc.CloseSprint(ctx, store, apptest.SampleWorkspace, c.id, c.dest); !errors.Is(err, port.ErrNotFound) {
-			t.Errorf("%s: %v", c.name, err)
-		}
+	if err := svc.CloseSprint(ctx, store, apptest.SampleWorkspace, s2.ID, &closed); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("移動先が完了: %v", err)
 	}
 }
 
