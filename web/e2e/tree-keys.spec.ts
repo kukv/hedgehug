@@ -22,9 +22,6 @@ test("moves around, opens, changes and reorders the tree with the keyboard", asy
   page,
   context,
 }, info) => {
-  // 1 つのテストでワークスペースを作り、アイテムを 6〜7 件作ってから順に確かめる(Store を大きくしないため)ので、
-  // 全体を並列で流すと、既定の 30 秒を越えることがある(単独では 4 秒ほど)。期待の待ち時間は既定のまま。
-  test.setTimeout(60_000);
   const t = (s: string) => unique(info, s);
   const prefix = prefixOf(info);
   await createWorkspace(page, info, unique(info, "キー"), prefix);
