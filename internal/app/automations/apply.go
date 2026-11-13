@@ -29,7 +29,7 @@ func (s Service) ApplyIgnoringWorkflow(ctx context.Context, store port.StoreID, 
 func (s Service) ruleName(ctx context.Context, store port.StoreID, id item.ID, rule change.ID) (string, error) {
 	var name string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := r.Items().Get(id)
+		it, err := port.LiveItem(r, id)
 		if err != nil {
 			return err
 		}
@@ -49,7 +49,7 @@ func (s Service) ruleName(ctx context.Context, store port.StoreID, id item.ID, r
 
 // applyStatus は、アイテムのステータスを status にする行を、ルール rule の変更として足す。同じ値なら何も足さない。
 func applyStatus(tx port.Tx, id item.ID, rule, status change.ID) error {
-	it, err := tx.Items().Get(id)
+	it, err := port.LiveItem(tx, id)
 	if err != nil {
 		return err
 	}

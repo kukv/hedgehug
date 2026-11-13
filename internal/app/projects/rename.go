@@ -20,7 +20,7 @@ func (s Service) Rename(ctx context.Context, store port.StoreID, id project.ID, 
 	}
 	summary := fmt.Sprintf("%s のタイトルを %s に変更", label(p.Title), label(title))
 	return s.save(ctx, store, id, summary, func(tx port.Tx, cur project.Project) ([]change.Draft, error) {
-		siblings, err := tx.Projects().List(cur.Place.Workspace)
+		siblings, err := port.LiveProjects(tx, cur.Place.Workspace)
 		if err != nil {
 			return nil, err
 		}

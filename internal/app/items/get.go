@@ -12,7 +12,7 @@ func (s Service) Get(ctx context.Context, store port.StoreID, id item.ID) (item.
 	var it item.Item
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		if it, err = r.Items().Get(id); err != nil {
+		if it, err = port.LiveItem(r, id); err != nil {
 			return err
 		}
 		blocked, err := blockedSet(r)

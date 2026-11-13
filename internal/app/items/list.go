@@ -12,11 +12,11 @@ import (
 func (s Service) List(ctx context.Context, store port.StoreID, p project.ID) ([]item.Item, error) {
 	var out []item.Item
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		if _, err := r.Projects().Get(p); err != nil {
+		if _, err := port.LiveProject(r, p); err != nil {
 			return err
 		}
 		var err error
-		if out, err = r.Items().List(p); err != nil {
+		if out, err = port.LiveItems(r, p); err != nil {
 			return err
 		}
 		blocked, err := blockedSet(r)

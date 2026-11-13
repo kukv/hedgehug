@@ -21,7 +21,7 @@ func (s Service) templateOf(ctx context.Context, in CreateInput) (*workspace.Tem
 	}
 	var found *workspace.Template
 	err := s.Stores.Read(ctx, in.Store, func(r port.Reader) error {
-		p, err := r.Projects().Get(in.Project)
+		p, err := port.LiveProject(r, in.Project)
 		if err != nil {
 			return err
 		}

@@ -24,7 +24,7 @@ func (s Service) CreateTemplateFromItem(ctx context.Context, store port.StoreID,
 	var t workspace.Template
 	var ws workspace.ID
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := r.Items().Get(id)
+		it, err := port.LiveItem(r, id)
 		if err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func (s Service) CreateTemplateFromItem(ctx context.Context, store port.StoreID,
 		}
 		var family []item.Item
 		if in.Structure {
-			if family, err = r.Items().List(it.Place.Project); err != nil {
+			if family, err = port.LiveItems(r, it.Place.Project); err != nil {
 				return err
 			}
 		}

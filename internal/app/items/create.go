@@ -102,11 +102,11 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 	if err := item.CheckCreate(in.Kind, in.Title, in.Project != "", parentKind); err != nil {
 		return item.Item{}, err
 	}
-	p, err := tx.Projects().Get(in.Project)
+	p, err := port.LiveProject(tx, in.Project)
 	if err != nil {
 		return item.Item{}, err
 	}
-	all, err := tx.Items().List(in.Project)
+	all, err := port.LiveItems(tx, in.Project)
 	if err != nil {
 		return item.Item{}, err
 	}
@@ -191,7 +191,7 @@ func kindOf(tx port.Tx, parent *item.ID, p project.ID) (*item.Kind, error) {
 	if parent == nil {
 		return nil, nil //nolint:nilnil // 親なしは正しい結果
 	}
-	it, err := tx.Items().Get(*parent)
+	it, err := port.LiveItem(tx, *parent)
 	if err != nil {
 		return nil, err
 	}

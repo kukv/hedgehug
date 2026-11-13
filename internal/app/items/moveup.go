@@ -25,11 +25,11 @@ func (s Service) MoveUp(ctx context.Context, store port.StoreID, id item.ID) err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s の順位を変更", display)}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := tx.Items().Get(id)
+		it, err := port.LiveItem(tx, id)
 		if err != nil {
 			return err
 		}
-		all, err := tx.Items().List(it.Place.Project)
+		all, err := port.LiveItems(tx, it.Place.Project)
 		if err != nil {
 			return err
 		}

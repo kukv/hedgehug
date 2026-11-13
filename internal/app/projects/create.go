@@ -44,7 +44,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (project.Project, e
 		if _, err := tx.Workspaces().Get(in.Workspace); err != nil {
 			return err
 		}
-		siblings, err := tx.Projects().List(in.Workspace)
+		siblings, err := port.LiveProjects(tx, in.Workspace)
 		if err != nil {
 			return err
 		}

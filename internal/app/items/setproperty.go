@@ -111,7 +111,7 @@ func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID,
 	}
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := tx.Items().Get(id)
+		it, err := port.LiveItem(tx, id)
 		if err != nil {
 			return err
 		}

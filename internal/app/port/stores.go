@@ -30,6 +30,40 @@ func CheckRuleDrafts(actor change.Actor, drafts []change.Draft) error {
 	return nil
 }
 
+// 口は削除済みのアイテム・プロジェクトも返す(item.Item.Deleted・project.Project.Deleted の印つき。A4b-3)。
+// 利用者に見せる・操作する側は、下の 4 つで読む。削除済みを返さず、Get は port.ErrNotFound にする(A4b-4)。
+// 削除済みも要る読み方(番号の採番、プロジェクトが変わる移動の下のもの、値の置き換え)は、口を直接呼ぶ。
+
+// LiveItem は、削除済みでないアイテムを返す。ないか削除済みなら ErrNotFound。
+func LiveItem(r Reader, id item.ID) (item.Item, error) {
+	it, err := r.Items().Get(id)
+	if err == nil && it.Deleted != nil {
+		return item.Item{}, ErrNotFound
+	}
+	return it, err
+}
+
+// LiveItems は、プロジェクトの削除済みでないアイテムを、番号の順で返す。
+func LiveItems(r Reader, p project.ID) ([]item.Item, error) {
+	its, err := r.Items().List(p)
+	return item.Live(its), err
+}
+
+// LiveProject は、削除済みでないプロジェクトを返す。ないか削除済みなら ErrNotFound。
+func LiveProject(r Reader, id project.ID) (project.Project, error) {
+	p, err := r.Projects().Get(id)
+	if err == nil && p.Deleted != nil {
+		return project.Project{}, ErrNotFound
+	}
+	return p, err
+}
+
+// LiveProjects は、ワークスペースの削除済みでないプロジェクトを、並び順で返す。
+func LiveProjects(r Reader, ws workspace.ID) ([]project.Project, error) {
+	ps, err := r.Projects().List(ws)
+	return project.Live(ps), err
+}
+
 // StoreID は Store ID(.hedgehug/store.yaml の store)。
 type StoreID string
 

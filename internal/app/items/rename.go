@@ -27,7 +27,7 @@ func (s Service) Rename(ctx context.Context, store port.StoreID, id item.ID, tit
 	}
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s のタイトルを変更", display)}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := tx.Items().Get(id)
+		it, err := port.LiveItem(tx, id)
 		if err != nil {
 			return err
 		}

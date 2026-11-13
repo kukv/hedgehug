@@ -29,7 +29,7 @@ type View struct {
 
 // display は、アイテムの画面の ID(HH-12)。アイテムがなければ port.ErrNotFound。
 func display(r port.Reader, id item.ID) (string, error) {
-	it, err := r.Items().Get(id)
+	it, err := port.LiveItem(r, id)
 	if err != nil {
 		return "", err
 	}

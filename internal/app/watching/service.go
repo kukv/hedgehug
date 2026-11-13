@@ -18,7 +18,7 @@ type Service struct {
 func (s Service) displayOf(ctx context.Context, store port.StoreID, id item.ID) (string, error) {
 	var shown string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := r.Items().Get(id)
+		it, err := port.LiveItem(r, id)
 		if err != nil {
 			return err
 		}

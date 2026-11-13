@@ -68,3 +68,24 @@ func Sample(ctx context.Context, s port.Stores, id port.StoreID) error {
 		)
 	})
 }
+
+// DeleteItems は、アイテム root と、その下の below を、1 回の保存で削除済みにする(テスト用。A4b)。
+// root は利用者が選んだもの(root: true)、below は下にあるもの(root: false)。
+func DeleteItems(ctx context.Context, s port.Stores, id port.StoreID, root item.ID, below ...item.ID) error {
+	op := port.Operation{Actor: change.User("taro"), Summary: "アイテムを削除"}
+	return s.Write(ctx, id, op, func(tx port.Tx) error {
+		errs := []error{tx.WriteItems().Append(root, change.NewDeleteEntity(true))}
+		for _, b := range below {
+			errs = append(errs, tx.WriteItems().Append(b, change.NewDeleteEntity(false)))
+		}
+		return errors.Join(errs...)
+	})
+}
+
+// DeleteProject は、プロジェクトを削除済みにする(テスト用。A4b)。下のアイテムには書かない。
+func DeleteProject(ctx context.Context, s port.Stores, id port.StoreID, p project.ID) error {
+	op := port.Operation{Actor: change.User("taro"), Summary: "プロジェクトを削除"}
+	return s.Write(ctx, id, op, func(tx port.Tx) error {
+		return tx.WriteProjects().Append(p, change.NewDeleteEntity(true))
+	})
+}

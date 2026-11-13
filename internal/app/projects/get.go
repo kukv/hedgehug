@@ -12,7 +12,7 @@ func (s Service) Get(ctx context.Context, store port.StoreID, id project.ID) (pr
 	var p project.Project
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		p, err = r.Projects().Get(id)
+		p, err = port.LiveProject(r, id)
 		return err
 	})
 	return p, err

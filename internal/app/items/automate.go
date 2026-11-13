@@ -19,7 +19,7 @@ type fired struct {
 // automate は、利用者がアイテム id のステータスを from から変えたあとに、同じ保存の中で自動化を動かす
 // (03「実行の規則」)。止まった実行は何も書かない。結果は保存のあとの通知に使う。
 func automate(tx port.Tx, st workspace.Settings, id item.ID, from change.ID) ([]fired, error) {
-	it, err := tx.Items().Get(id)
+	it, err := port.LiveItem(tx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +39,9 @@ func automate(tx port.Tx, st workspace.Settings, id item.ID, from change.ID) ([]
 	parent, err := tx.Items().Get(*it.Place.Parent)
 	if err != nil {
 		return nil, err
+	}
+	if parent.Deleted != nil {
+		return out, nil // 削除済みのアイテムには動かない(03「実行の規則」)
 	}
 	more, err := runOn(tx, st, rules, parent, automation.Event{Trigger: automation.TriggerStepsDone})
 	return append(out, more...), err
@@ -61,7 +64,7 @@ func runOn(tx port.Tx, st workspace.Settings, rules []automation.Rule, it item.I
 
 // stepsOf は、it と同じ親の Step。it は利用者が変えた値で数える(自動化の変更を入れない。B4-8)。
 func stepsOf(tx port.Tx, it item.Item) ([]item.Item, error) {
-	all, err := tx.Items().List(it.Place.Project)
+	all, err := port.LiveItems(tx, it.Place.Project)
 	if err != nil {
 		return nil, err
 	}

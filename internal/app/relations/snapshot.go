@@ -12,7 +12,8 @@ import (
 )
 
 // snapshot は、Store のすべてのアイテムと、表示に要るワークスペースの情報(A4a-11)。
-// ワークスペース → プロジェクト → アイテムの順に、既存の口で読む。
+// ワークスペース → プロジェクト → アイテムの順に、既存の口で読む。削除済みのアイテム・プロジェクトは入れない
+// (一覧・候補・循環の検査・追加と解除の相手から外れる。関連の行そのものは消さない。A4b-5)。
 type snapshot struct {
 	order    []workspace.ID // ワークスペースの並び
 	names    map[workspace.ID]string
@@ -38,12 +39,12 @@ func readSnapshot(r port.Reader) (snapshot, error) {
 		}
 		s.order = append(s.order, w.ID)
 		s.names[w.ID], s.prefixes[w.ID], s.settings[w.ID] = w.Name, w.Prefix, st
-		ps, err := r.Projects().List(w.ID)
+		ps, err := port.LiveProjects(r, w.ID)
 		if err != nil {
 			return snapshot{}, err
 		}
 		for _, p := range ps {
-			its, err := r.Items().List(p.ID)
+			its, err := port.LiveItems(r, p.ID)
 			if err != nil {
 				return snapshot{}, err
 			}

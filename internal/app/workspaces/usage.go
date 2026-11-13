@@ -25,7 +25,7 @@ func (s Service) Usage(ctx context.Context, store port.StoreID, ws workspace.ID)
 		if _, err := r.Workspaces().Get(ws); err != nil {
 			return err
 		}
-		items, err := workspaceItems(r, ws)
+		items, err := liveWorkspaceItems(r, ws)
 		if err != nil {
 			return err
 		}
