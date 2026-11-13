@@ -61,12 +61,6 @@ func projectTargets(s workspace.Settings, r Rules, from change.ID) []change.ID {
 	return to
 }
 
-// ProjectRowRestricted は、from のプロジェクトの行が制限になっているか。使うステータス同士の
-// チェックが 1 つ以上あるときだけ(B5a-6)。
-func ProjectRowRestricted(s workspace.Settings, r Rules, from change.ID) bool {
-	return len(projectTargets(s, r, from)) > 0
-}
-
 // Allowed は、from から変更できる To をステータスの並びで返す(B5a-6)。ワークスペースの許す To と
 // プロジェクトの許す To の両方に入るもので、使わないステータスと from は除く。両方の行に制限がなければ
 // false(使う先すべて)。

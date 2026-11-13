@@ -126,14 +126,14 @@ func TestCheckTransitionNoCommonTarget(t *testing.T) {
 
 func TestProjectRowOfUnusedOnlyIsUnrestricted(t *testing.T) {
 	r := projectrule.Rules{Hidden: []change.ID{pending}, Workflow: map[change.ID][]change.ID{todo: {pending}}}
-	if projectrule.ProjectRowRestricted(sample(), r, todo) {
+	if _, restricted := projectrule.Allowed(sample(), r, todo); restricted {
 		t.Fatal("使わないステータスだけの行は制限でない")
 	}
 	if err := projectrule.CheckTransition(sample(), r, todo, done); err != nil {
 		t.Fatal(err)
 	}
 	r.Workflow[todo] = []change.ID{doing}
-	if !projectrule.ProjectRowRestricted(sample(), r, todo) {
+	if _, restricted := projectrule.Allowed(sample(), r, todo); !restricted {
 		t.Fatal("使うステータスのチェックがあれば制限")
 	}
 }

@@ -168,7 +168,6 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
   - `func UsedStatuses(s workspace.Settings, r Rules) []workspace.Value`(定義順)
   - `func Allowed(s workspace.Settings, r Rules, from change.ID) (to []change.ID, restricted bool)`(B5a-6。ステータスの並び)
   - `func CheckTransition(s workspace.Settings, r Rules, from, to change.ID) error`
-  - `func ProjectRowRestricted(s workspace.Settings, r Rules, from change.ID) bool`(使うステータス同士のチェックが 1 つ以上)
   - `func UsableTemplates(s workspace.Settings, r Rules, kind string) []workspace.Template`
   - `func DefaultTemplate(s workspace.Settings, r Rules, kind string) (change.ID, bool)`(B5a-9)
 
@@ -227,9 +226,9 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 - Produces:
   - `func StatusDeleteDrafts(set Set, id change.ID) []change.Draft`(B5a-16。プロジェクト ID の順に、`hidden_statuses` の remove、`workflow/<id>` の全 To の remove、ほかの行の `id` の remove)
   - `func TemplateDropDrafts(set Set, id change.ID) []change.Draft`(`templates` の remove、`template_default/*` が id なら null)
-  - `type TemplateImpact struct { Projects []project.ID; Unlimited []project.ID }` と `func TemplateDeleteImpact(set Set, id change.ID) TemplateImpact`(ルールが変わるプロジェクトと、使うテンプレートが 0 件になるプロジェクト。core の B5a-17 と同じ数え方。サーバーのテストで数え方を固定する)
+  - `func RuleDeleteDrafts(set Set, rule change.ID) []change.Draft`(ワークスペースのルールの削除で、プロジェクト ID の順に `disabled_rules` から rule を remove。`automations.Delete` が同じ保存に足す)
 
-- [ ] **Step 1: 失敗するテストを書く** — 2 つのプロジェクトのルールで、`StatusDeleteDrafts` の行の並びと中身を `reflect.DeepEqual` で。`TemplateDropDrafts` は、既定だけで指しているプロジェクトにも行が出る。`TemplateDeleteImpact` は、`Templates: [T1]` のプロジェクトが `Unlimited` に、`Templates: [T1, T2]` は `Projects` だけに入る。
+- [ ] **Step 1: 失敗するテストを書く** — 2 つのプロジェクトのルールで、`StatusDeleteDrafts` の行の並びと中身を `reflect.DeepEqual` で。`TemplateDropDrafts` は、既定だけで指しているプロジェクトにも行が出る。`RuleDeleteDrafts` は、外しているプロジェクトだけに行が出る。
 - [ ] **Step 2〜4**
 - [ ] **Step 5: Commit** — `feat: ステータス・テンプレートの削除にプロジェクト別のルールを追従させる行`
 
@@ -449,7 +448,7 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 - Create: `web/app/src/screens/workspace-settings/RulesProjectsLine.svelte`(「ステータス」「ワークフロー」「テンプレート」「自動化」のサブタブの上。名前を押すと B5a-22 の「開く区画」を置いてプロジェクトの設定タブへ)
 - Modify: `SettingsTab.svelte`(1 行を置く)、`AutomationPanel.svelte`(専用ルールの行に、名前のあとに「HH-P1」、削除済みなら「HH-P1(削除済み)」)、`TemplatesPanel.svelte`(削除の確認に `templateDeleteLines`)、`ProjectSettings.svelte`(「開く区画」を読んで `scrollIntoView` とフォーカス)、`web/packages/core/src/features/navigation`(`openSection: string | null` を一度だけ読む関数 `takeSection()`)
 
-- [ ] **Step 1: 失敗するテストを書く** — core: `takeSection` は 2 回目に `null`。`ruleRows` が削除済みのプロジェクトの専用ルールに「(削除済み)」を付ける。
+- [ ] **Step 1: 失敗するテストを書く** — core: `takeSection` は 2 回目に `null`。`ruleRows` が専用ルールに「HH-P1」、削除済みのプロジェクトなら「HH-P1(削除済み)」を付ける。
 - [ ] **Step 2〜4**
 - [ ] **Step 5: Commit** — `feat: 設定のサブタブにプロジェクト別のルールがあるプロジェクトを出し、削除の確認に影響を添える`
 
@@ -464,7 +463,7 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
   1. プロジェクトの設定タブで「Pending」のチェックを外すと、件数が「4 / 5」になり、ツリーのタスクのステータスのメニューに Pending が出ない(保存のあと、画面を読み直さずに)。Todo の行は無効で「初期ステータスで、未着手の既定でもあるため外せません」。
   2. プロジェクトのワークフローで Todo → InProgress だけにすると、メニューの Done が無効で、理由が「ワークフローの制約: Todo から Done には変更できません(InProgress のみ)」。
   3. 使うテンプレートを 1 つにすると、作成ダイアログのテンプレートの選択肢がそれと「なし」だけになる。
-  4. 専用ルールを作り(「ステータスが次になったとき InProgress → 担当者を 未割り当て に」)、ワークスペースの自動化のサブタブにも出る。ステータスのサブタブの上に「プロジェクト別のルールがあるプロジェクト: …(1 件)」が出て、押すとプロジェクトの設定タブのその区画が開く。
+  4. 専用ルールを作り(「ステータスが次になったとき InProgress → 担当者を 未割り当て に」)、ワークスペースの自動化のサブタブにも、名前のあとに「HH-P1」を添えて出る。そこで編集しても、ステータスの選択肢はそのプロジェクトが使うものだけ。ステータスのサブタブの上に「プロジェクト別のルールがあるプロジェクト: …(1 件)」が出て、押すとプロジェクトの設定タブのその区画が開く。
   5. 「ワークスペースの設定に戻す…」で、確認の本文が出て、「戻す」のあとトースト「ワークスペースの設定に戻しました」、チェックがすべて付く。
   6. Epic を Pending を外したプロジェクトへ「移動…」すると、確認ダイアログに「Pending(1 件)」が出て、「移動」のあと Pending が置き換わる。
   7. 閲覧のみの Store のプロジェクトの設定タブで、4 つの区画の入力が無効で「閲覧のみの Store です」。
@@ -479,3 +478,19 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 - [ ] **Step 1: `make check` と `make web-check` と e2e 全体を 1 回流し、緑を確かめる**
 - [ ] **Step 2: 最終レビュー(superpowers:requesting-code-review)で出たものを直す。直したことは、この計画の末尾の「実装で計画から変えたこと」に書く**
 - [ ] **Step 3: push して PR を出す** — 向き先 develop、タイトル「feat: トラック B5a(プロジェクト別のルール)」。本文に、できること・決めたこと(B5a-1〜B5a-26)・A3b-14 と A4b の未決 8・9 をどう片付けたか・確認の結果を書く。
+
+---
+
+## 実装で計画から変えたこと
+
+- B5a-9: プロジェクトの既定のテンプレートが使えないときは、仕様(03「プロジェクトのテンプレート」)のとおり「なし」にする。ワークスペースの既定には戻らない。
+- `TemplateDeleteImpact` は `workspace.Settings` も受ける形にした(削除済みのテンプレートの残りを数えないため)。そのあと、画面(core の `templateDeleteLines`)だけが数えるので(B5a-17)、`TemplateDeleteImpact`・`TemplateImpact` と、使われていなかった `ProjectRowRestricted` は消した。`UsedStatuses`(B5a-26)と `projectStatusOptions`(B5a-23)は残す。
+- 移動の予告 `movePreview` は、`ItemActionsPort` に `MoveTarget`(プロジェクトか親)を受ける形で置いた。
+- ui の `Checkbox` に、制御された `onchange` を足した(B4-23 の `Switch` と同じ。渡すと押しても自分では変わらず `checked` に従うので、断られたチェックが保存済みの値に戻る。`{#key}` の描き直しはフォーカスを失うのでやめた)。
+- 移動の確認ダイアログの「ステータスの置き換え」のセレクトは、最初の描画から値を持つ束縛にした(e2e で見つけた)。
+- 最終レビューで直したこと:
+  1. ワークスペースの自動化の一覧で、専用ルールの名前のあとに持ち主のプロジェクトの ID「HH-P1」、削除済みなら「HH-P1(削除済み)」を添える(03 の 464 行)。計画にあった「ルール名にプロジェクトは添えない」は、通知の文の規則(03 の 572 行)の読み違いだった。印は、一覧の API の `scopeLabel`・`scopeDeleted` でサーバーが渡す。
+  2. 専用ルールのダイアログ: ワークスペースの自動化のサブタブで編集するときも、ステータスの選択肢をそのプロジェクトが使うものにする。きっかけ・することを変えたときの初期のステータスは、選択肢の先頭にする。保存済みのルールが使わないステータスを指しているとき(ステータスの削除の書き換えなど)は、いまの値として選択肢に残す。サーバーの編集は、変えたきっかけ・することのステータスだけを使うものか確かめる(`automation.Valid` が編集前のルールを受ける)。保存で 404 になったときは、ダイアログの中に「ルールを保存できませんでした」と出す。
+  3. ワークスペースのルールを消すと、同じ保存で、プロジェクトの `disabled_rules` からもその ID を除く(`projectrule.RuleDeleteDrafts`)。
+  4. ワークスペースの制約が許さない To へのプロジェクトのチェック(ワークスペースの制約を後から変えて残ったもの)は数えず、表ではチェックなしの無効のセルにする(03 の 553 行)。そのチェックだけの行は「ワークスペースと同じ」。消すのは「ワークスペースの設定に戻す」でできる。Go の `projectTargets` と core の `projectTargets` を同じにした。
+  5. 使われていない `projectrule.TemplateDeleteImpact`・`ProjectRowRestricted` を消した(上のとおり)。

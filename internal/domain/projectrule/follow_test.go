@@ -7,7 +7,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
-	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 const (
@@ -83,28 +82,5 @@ func TestTemplateDropDrafts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
-	}
-}
-
-func TestTemplateDeleteImpact(t *testing.T) {
-	s := workspace.Settings{Templates: []workspace.Template{{ID: "T1"}, {ID: "T2"}}}
-	set := projectrule.Set{
-		pc:  {Templates: []change.ID{"T1", "T2"}},
-		pb:  {Templates: []change.ID{"T1"}},
-		pa:  {TemplateDefaults: map[string]string{"Task": "T1"}},
-		"D": {Templates: []change.ID{"T2"}},
-		"E": {Templates: []change.ID{"T1", "Gone"}}, // Gone は削除済みのテンプレートの残り
-		"F": {TemplateDefaults: map[string]string{"Task": projectrule.None}},
-	}
-	got := projectrule.TemplateDeleteImpact(s, set, "T1")
-	want := projectrule.TemplateImpact{
-		Projects:  []project.ID{pa, pb, pc, "E"},
-		Unlimited: []project.ID{pb, "E"},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %+v\nwant %+v", got, want)
-	}
-	if got := projectrule.TemplateDeleteImpact(s, set, "Nope"); len(got.Projects) != 0 || len(got.Unlimited) != 0 {
-		t.Fatalf("%+v", got)
 	}
 }
