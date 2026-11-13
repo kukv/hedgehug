@@ -27,6 +27,7 @@ import (
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
+	appworklogs "github.com/kukv/hedgehug/internal/app/worklogs"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
 )
 
@@ -80,6 +81,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	notes.Register(api, notes.Services{
 		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity},
 		Comments:     appcomments.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity},
+		Worklogs:     appworklogs.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock},
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))

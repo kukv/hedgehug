@@ -668,6 +668,25 @@ export interface ValuesBody {
   name: string;
 }
 
+export interface Worklog {
+  /** 記録した人のログイン名 */
+  by: string;
+  /** 記録した人の表示名。メンバーにいなければ「不明なユーザー」 */
+  byName: string;
+  /** 記録した日(YYYY-MM-DD) */
+  date: string;
+  /** 1.25 のような表記 */
+  hours: string;
+  id: string;
+  memo: string;
+}
+
+export interface WorklogInput {
+  /** 時間。小数第 2 位まで */
+  hours: string;
+  memo?: string;
+}
+
 export interface WorkspaceAutomation {
   /** @nullable */
   recent: AutomationRun[] | null;
@@ -1832,6 +1851,101 @@ return fetcher<Item>(getRenameItemUrl(store,item),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(renameItemBody)
+  }
+);}
+
+
+
+export const getListWorklogsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/worklogs`
+}
+
+/**
+ * @summary アイテムの作業時間の記録を古い順に返す
+ */
+export const listWorklogs = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Worklog[] | null> => {
+
+  return fetcher<Worklog[] | null>(getListWorklogsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAddWorklogUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/worklogs`
+}
+
+/**
+ * @summary 作業時間を記録する
+ */
+export const addWorklog = async (store: string,
+    item: string,
+    worklogInput: WorklogInput, options?: Parameters<typeof fetcher>[1]): Promise<Worklog> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Worklog>(getAddWorklogUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(worklogInput)
+  }
+);}
+
+
+
+export const getDeleteWorklogUrl = (store: string,
+    item: string,
+    worklog: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/worklogs/${encodeURIComponent(String(worklog))}`
+}
+
+/**
+ * @summary 作業時間の記録を削除する
+ */
+export const deleteWorklog = async (store: string,
+    item: string,
+    worklog: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteWorklogUrl(store,item,worklog),
+  {
+    ...options,
+    method: 'DELETE'
+
+
   }
 );}
 

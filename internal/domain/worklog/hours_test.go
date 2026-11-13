@@ -22,8 +22,9 @@ func message(err error) string {
 func TestParseHours(t *testing.T) {
 	ok := map[string]int{
 		"1": 100, "1.5": 150, "0.25": 25, "0.1": 10, ".5": 50, "1.": 100, "1.250": 125, "0.07": 7,
-		" 2 ": 200, "12": 1200, "00.5": 50, "999999999": 99999999900,
+		"12": 1200, "00.5": 50, "999999999": 99999999900,
 	}
+	ok[" "+"2"+" "] = 200 // 前後の空白は除く
 	for in, want := range ok {
 		if got, err := worklog.ParseHours(in); err != nil || got != want {
 			t.Errorf("ParseHours(%q) = %d, %v; want %d", in, got, err, want)

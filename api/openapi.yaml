@@ -980,6 +980,44 @@ components:
         - login
         - method
       type: object
+    Worklog:
+      additionalProperties: false
+      properties:
+        by:
+          description: 記録した人のログイン名
+          type: string
+        byName:
+          description: 記録した人の表示名。メンバーにいなければ「不明なユーザー」
+          type: string
+        date:
+          description: 記録した日(YYYY-MM-DD)
+          type: string
+        hours:
+          description: 1.25 のような表記
+          type: string
+        id:
+          type: string
+        memo:
+          type: string
+      required:
+        - id
+        - by
+        - byName
+        - date
+        - hours
+        - memo
+      type: object
+    WorklogInput:
+      additionalProperties: false
+      properties:
+        hours:
+          description: 時間。小数第 2 位まで
+          type: string
+        memo:
+          type: string
+      required:
+        - hours
+      type: object
     WorkspaceAutomation:
       additionalProperties: false
       properties:
@@ -2248,6 +2286,99 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムのタイトルを変える
+  /api/stores/{store}/items/{item}/worklogs:
+    get:
+      operationId: list-worklogs
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Worklog"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの作業時間の記録を古い順に返す
+    post:
+      operationId: add-worklog
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorklogInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Worklog"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 作業時間を記録する
+  /api/stores/{store}/items/{item}/worklogs/{worklog}:
+    delete:
+      operationId: delete-worklog
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: worklog
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 作業時間の記録を削除する
   /api/stores/{store}/me:
     get:
       operationId: get-me
