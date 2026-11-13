@@ -2,8 +2,12 @@
   interface Props {
     value?: string;
     label: string;
-    // type は、入力の種類。date は日付の入力欄(値は YYYY-MM-DD)。
-    type?: "text" | "date";
+    // type は、入力の種類。date は日付の入力欄(値は YYYY-MM-DD)。number は数の入力欄で、値は打った文字列のまま
+    // 返す(bind:value に任せると数に直され、「1.50」が「1.5」になる)。
+    type?: "text" | "date" | "number";
+    // step と min は、number の増減の刻みと下限。
+    step?: string;
+    min?: string;
     placeholder?: string;
     size?: "md" | "sm";
     mono?: boolean;
@@ -24,6 +28,8 @@
     value = $bindable(""),
     label,
     type = "text",
+    step,
+    min,
     placeholder,
     size = "md",
     mono = false,
@@ -52,6 +58,8 @@
   class:heading
   aria-label={label}
   {type}
+  {step}
+  {min}
   {id}
   {placeholder}
   {disabled}
@@ -59,7 +67,10 @@
   {onfocus}
   {onblur}
   {onkeydown}
-  bind:value
+  {value}
+  oninput={(event) => {
+    value = event.currentTarget.value;
+  }}
 >
 
 <style>

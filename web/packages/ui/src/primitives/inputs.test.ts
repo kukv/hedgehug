@@ -32,6 +32,29 @@ describe("Input", () => {
     expect(input).toHaveValue("2026-11-13");
   });
 
+  it("is a number field with a step and a minimum, and hands back what was typed as a string", async () => {
+    const seen: unknown[] = [];
+    render(Input, {
+      props: {
+        label: "時間",
+        type: "number",
+        step: "0.25",
+        min: "0",
+        get value() {
+          return "";
+        },
+        set value(v: string) {
+          seen.push(v);
+        },
+      },
+    });
+    const input = screen.getByRole("spinbutton", { name: "時間" });
+    expect(input).toHaveAttribute("step", "0.25");
+    expect(input).toHaveAttribute("min", "0");
+    await fireEvent.input(input, { target: { value: "1.50" } });
+    expect(seen).toEqual(["1.50"]);
+  });
+
   it("is disabled with the note", () => {
     render(Input, {
       props: { label: "タイトル", heading: true, disabled: true, title: "閲覧のみの Store です" },
