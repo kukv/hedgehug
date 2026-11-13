@@ -27,13 +27,12 @@ func (u DeleteAccount) Do(ctx context.Context, id account.ID) error {
 	if err := u.Stores.Unassign(ctx, id); err != nil {
 		return err
 	}
-	// App 未導入の記録も先に消す(同じ ID で作り直したアカウントに引き継がない)。
-	if err := u.Missing.Forget(ctx, id); err != nil {
-		return err
-	}
 	if err := u.Accounts.Remove(ctx, id); err != nil {
 		return err
 	}
+	// App 未導入の記録は、削除できたあとで消す(削除に失敗したアカウントの帯を消さない)。消せなくても削除は成功として
+	// 返す(消えたアカウントの記録は一覧に出ず、アカウントの ID は使い回さない)。
+	_ = u.Missing.Forget(ctx, id)
 	u.Session.forget(id)
 	if a.Method == account.DeviceFlow {
 		_ = u.Secrets.DeleteDeviceToken(ctx, a.Login)

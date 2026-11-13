@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -12,9 +13,10 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 )
 
-// memMissing は port.AppMissing の偽物(記録の順を保つ)。
+// memMissing は port.AppMissing の偽物(記録の順を保つ)。forgetErr があれば Forget は消さずにそれを返す。
 type memMissing struct {
-	rows map[account.ID][]port.MissingOrg
+	rows      map[account.ID][]port.MissingOrg
+	forgetErr error
 }
 
 func (m *memMissing) List(context.Context) (map[account.ID][]port.MissingOrg, error) {
@@ -41,6 +43,9 @@ func (m *memMissing) Clear(_ context.Context, a account.ID, org, repo string) (b
 }
 
 func (m *memMissing) Forget(_ context.Context, a account.ID) error {
+	if m.forgetErr != nil {
+		return m.forgetErr
+	}
 	delete(m.rows, a)
 	return nil
 }
@@ -174,5 +179,35 @@ func TestDeleteAccountForgetsAppMissing(t *testing.T) {
 	}
 	if len(got["A1"]) != 0 || len(got["A2"]) != 1 {
 		t.Errorf("records = %v", got)
+	}
+}
+
+// removeFails は、アカウントの削除(Remove)が失敗する port.Accounts。
+type removeFails struct{ port.Accounts }
+
+func (removeFails) Remove(context.Context, account.ID) error { return errors.New("disk full") }
+
+// アカウントの削除に失敗したら、App 未導入の記録は消さない(D4b 最終レビュー R-3)。
+func TestDeleteAccountKeepsAppMissingWhenRemoveFails(t *testing.T) {
+	f := newRecheck(t)
+	del := github.DeleteAccount{Session: f.session, Accounts: removeFails{f.accounts}, Secrets: f.secrets, Stores: f.stores, Missing: f.missing}
+	if err := del.Do(t.Context(), "A1"); err == nil {
+		t.Fatal("err = nil, want the Remove failure")
+	}
+	if got, _ := f.missing.List(t.Context()); len(got["A1"]) == 0 {
+		t.Errorf("records = %v, want kept", got)
+	}
+}
+
+// アカウントを削除したあとで記録を消せなくても、削除は成功として返す(消えたアカウントの記録は一覧に出ない)。
+func TestDeleteAccountSucceedsWhenForgetFails(t *testing.T) {
+	f := newRecheck(t)
+	f.missing.forgetErr = errors.New("disk full")
+	del := github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores, Missing: f.missing}
+	if err := del.Do(t.Context(), "A1"); err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if list, _ := f.accounts.List(t.Context()); slices.ContainsFunc(list, func(a account.Account) bool { return a.ID == "A1" }) {
+		t.Errorf("accounts = %v, want A1 removed", list)
 	}
 }
