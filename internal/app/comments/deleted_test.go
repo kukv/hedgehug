@@ -233,3 +233,105 @@ func TestPostCommentDeletedUnderDeletedAncestorIsNotFound(t *testing.T) {
 		t.Error("断ったのに削除を取り消した")
 	}
 }
+
+func postAndDelete(t *testing.T, svc comments.Service, tg comments.Target, body string) change.ID {
+	t.Helper()
+	posted, err := svc.Post(t.Context(), store, tg, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Delete(t.Context(), store, tg, posted.ID); err != nil {
+		t.Fatal(err)
+	}
+	return posted.ID
+}
+
+// 別のタブで削除された自分のコメントを編集すると、コメントが戻って本文が新しくなる。
+func TestEditDeletedCommentRevives(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, _ := setup(t, "hanako")
+			id := postAndDelete(t, svc, o.target, "前")
+			ctx := port.WithRevived(t.Context())
+			v, err := svc.Edit(ctx, store, o.target, id, "後")
+			if err != nil || v.Body != "後" {
+				t.Fatalf("Edit = %+v, %v", v, err)
+			}
+			if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedComment, Text: o.display}}) {
+				t.Errorf("Revived = %v", r)
+			}
+			list, err := svc.List(t.Context(), store, o.target)
+			if err != nil || len(list) != 1 || list[0].Body != "後" {
+				t.Errorf("List = %+v, %v", list, err)
+			}
+		})
+	}
+}
+
+// 削除の前と同じ本文なら、戻さずに断る。
+func TestEditDeletedCommentSameBodyIsNotFound(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, _ := setup(t, "hanako")
+			id := postAndDelete(t, svc, o.target, "前")
+			ctx := port.WithRevived(t.Context())
+			if _, err := svc.Edit(ctx, store, o.target, id, "前"); !errors.Is(err, port.ErrNotFound) {
+				t.Errorf("Edit = %v, want port.ErrNotFound", err)
+			}
+			list, err := svc.List(t.Context(), store, o.target)
+			if err != nil || len(list) != 0 {
+				t.Errorf("List = %+v, %v", list, err)
+			}
+		})
+	}
+}
+
+// 他人の削除済みのコメントは、編集できない。
+func TestEditDeletedCommentOfOthersIsNotFound(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, _ := setup(t, "hanako")
+			taro := svc
+			taro.Identity = apptest.Identity{Login: "taro"}
+			id := postAndDelete(t, taro, o.target, "taro のコメント")
+			if _, err := svc.Edit(t.Context(), store, o.target, id, "後"); !errors.Is(err, port.ErrNotFound) {
+				t.Errorf("Edit = %v, want port.ErrNotFound", err)
+			}
+		})
+	}
+}
+
+// 持ち主も削除されていれば、持ち主とコメントの両方が戻る。
+func TestEditDeletedCommentOnDeletedOwnerRevivesBoth(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, rec := setup(t, "hanako")
+			id := postAndDelete(t, svc, o.target, "前")
+			markDeleted(t, rec, o.target, true)
+			ctx := port.WithRevived(t.Context())
+			if _, err := svc.Edit(ctx, store, o.target, id, "後"); err != nil {
+				t.Fatal(err)
+			}
+			want := []port.Revival{{Kind: port.RevivedID, Text: o.display}, {Kind: port.RevivedComment, Text: o.display}}
+			if r := port.Revived(ctx); !slices.Equal(r, want) {
+				t.Errorf("Revived = %v, want %v", r, want)
+			}
+			if !hasRestore(t, rec, o.target) {
+				t.Error("restore の行がない")
+			}
+		})
+	}
+}
+
+// 削除済みのコメントの削除は、いまのまま断る。
+func TestDeleteDeletedCommentIsNotFound(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, _ := setup(t, "hanako")
+			id := postAndDelete(t, svc, o.target, "前")
+			if err := svc.Delete(t.Context(), store, o.target, id); !errors.Is(err, port.ErrNotFound) {
+				t.Errorf("Delete = %v, want port.ErrNotFound", err)
+			}
+		})
+	}
+}
