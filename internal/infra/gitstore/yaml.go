@@ -20,15 +20,16 @@ type memberYAML struct {
 }
 
 type projectYAML struct {
-	ID        string `yaml:"id"`
-	Workspace string `yaml:"workspace"`
-	Number    int    `yaml:"number"`
-	Rank      string `yaml:"rank"`
-	Title     string `yaml:"title"`
-	Owner     string `yaml:"owner"`
-	Status    string `yaml:"status"`
-	Start     string `yaml:"start"`
-	End       string `yaml:"end"`
+	ID        string   `yaml:"id"`
+	Workspace string   `yaml:"workspace"`
+	Number    int      `yaml:"number"`
+	Rank      string   `yaml:"rank"`
+	Title     string   `yaml:"title"`
+	Owner     string   `yaml:"owner"`
+	Status    string   `yaml:"status"`
+	Start     string   `yaml:"start"`
+	End       string   `yaml:"end"`
+	Repos     []string `yaml:"repos,flow"`
 }
 
 type createdYAML struct {
@@ -82,7 +83,7 @@ func renderYAML(kind change.Kind, log []change.Record, settings settingsOf) ([]b
 		}
 		v = projectYAML{
 			ID: string(p.ID), Workspace: string(p.Place.Workspace), Number: p.Place.Number, Rank: p.Rank,
-			Title: p.Title, Owner: p.Owner, Status: string(p.Status), Start: p.Start, End: p.End,
+			Title: p.Title, Owner: p.Owner, Status: string(p.Status), Start: p.Start, End: p.End, Repos: p.Repos,
 		}
 	case change.KindItem:
 		it, ok := item.FromLog(log)
