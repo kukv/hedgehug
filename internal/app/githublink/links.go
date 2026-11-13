@@ -27,6 +27,8 @@ type Links struct {
 	StoreGH  port.StoreGitHub // 閲覧のみの判定と、Issue の 1 対 1 の Store の一覧
 	Checks   port.Checks
 	Reads    port.GitHubReads // 取り直しの失敗の文言(D4a-11)
+	Scans    port.PRScans     // PR を探した記録(D4b-4)
+	Missing  port.AppMissing  // GitHub App 未導入の組織の記録(D4b-12)
 	Inbox    port.Inbox       // 動いたルールの通知(D4a-17)
 	Events   port.Events
 	Clock    port.Clock
@@ -80,16 +82,16 @@ func (l Links) view(ctx context.Context, store port.StoreID, id item.ID) (itemVi
 
 // lookup は、Store のアカウントで repo の number を読む。トークンが拒否されたら認証エラーにする(07「状態」)。
 func (l Links) lookup(ctx context.Context, store port.StoreID, repo string, number int) (port.Found, error) {
-	tok, a, err := l.Tokens.TokenFor(ctx, store, repo)
+	var found port.Found
+	err := l.call(ctx, store, repo, func(tok string) error {
+		var err error
+		found, err = l.GitHub.Lookup(ctx, tok, repo, number)
+		return err
+	})
 	if err != nil {
 		return port.Found{}, err
 	}
-	f, err := l.GitHub.Lookup(ctx, tok, repo, number)
-	if ghcall.Is(err, ghcall.TokenRejected) {
-		l.Tokens.Rejected(a.ID)
-		return port.Found{}, authError(a)
-	}
-	return f, err
+	return found, nil
 }
 
 func (l Links) now() time.Time { return l.Clock.Now() }

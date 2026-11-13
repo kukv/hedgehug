@@ -73,6 +73,8 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		StoreGitHub:   noStoreGitHub{},
 		Checks:        db.Checks(),
 		GitHubReads:   db.GitHubReads(),
+		PRScans:       db.PRScans(),
+		AppMissing:    db.AppMissing(),
 		Clock:         clock,
 		Sync:          svc,
 		Auto:          auto,

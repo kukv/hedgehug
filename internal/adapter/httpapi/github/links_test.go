@@ -104,7 +104,7 @@ func linkServices(t *testing.T) ghapi.Services {
 			GitHub: gh, Stores: infos, Clock: clock,
 		},
 		GitHub: gh, Accounts: accounts, StoreGH: infos,
-		Checks: apptest.NewChecks(), Reads: &memFailures{rows: map[string]string{}}, Events: &apptest.Events{}, Clock: clock,
+		Checks: apptest.NewChecks(), Reads: &memFailures{rows: map[string]string{}}, Missing: noMissing{}, Events: &apptest.Events{}, Clock: clock,
 	}
 	return svc
 }
@@ -130,3 +130,8 @@ func (m *memFailures) SetFailure(_ context.Context, _ port.StoreID, key, text st
 	}
 	return true, nil
 }
+
+// noMissing は、port.AppMissing のうち、消すだけを受ける偽物(この API のテストは App 未導入を使わない)。
+type noMissing struct{ port.AppMissing }
+
+func (noMissing) Clear(context.Context, account.ID, string) (bool, error) { return false, nil }

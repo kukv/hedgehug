@@ -110,17 +110,17 @@ func readLinks(t *testing.T) (githublink.Links, *apptest.GitHub) {
 	}
 	gh := &apptest.GitHub{}
 	gh.Put("org/h-web", pr)
-	reads, err := e2eReads(t.Context())
+	state, err := e2eReads(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reads.SaveRecord(t.Context(), e2eStore, "org/h-web", ghread.Record{Attempt: clock.Now()}); err != nil {
+	if err := state.GitHubReads().SaveRecord(t.Context(), e2eStore, "org/h-web", ghread.Record{Attempt: clock.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	return githublink.Links{
 		Stores: stores, Identity: apptest.Identity{Login: "taro"}, Tokens: readTokens{}, GitHub: gh,
 		StoreGH: &apptest.StoreGitHub{Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "e2e", Account: e2eAccount}}},
-		Checks:  apptest.NewChecks(), Reads: reads, Inbox: &apptest.Inbox{}, Events: &apptest.Events{}, Clock: clock,
+		Checks:  apptest.NewChecks(), Reads: state.GitHubReads(), Scans: state.PRScans(), Missing: state.AppMissing(), Inbox: &apptest.Inbox{}, Events: &apptest.Events{}, Clock: clock,
 	}, gh
 }
 

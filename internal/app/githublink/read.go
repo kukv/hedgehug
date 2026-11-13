@@ -136,16 +136,16 @@ func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLin
 
 // readMany は、Store のアカウントで r の番号をまとめて読む。トークンが拒否されたら認証エラーにする(07「状態」)。
 func (l Links) readMany(ctx context.Context, store port.StoreID, r *repoLinks) (port.Batch, error) {
-	tok, a, err := l.Tokens.TokenFor(ctx, store, r.repo)
+	var b port.Batch
+	err := l.call(ctx, store, r.repo, func(tok string) error {
+		var err error
+		b, err = l.GitHub.ReadMany(ctx, tok, r.repo, r.numbers)
+		return err
+	})
 	if err != nil {
 		return port.Batch{}, err
 	}
-	b, err := l.GitHub.ReadMany(ctx, tok, r.repo, r.numbers)
-	if ghcall.Is(err, ghcall.TokenRejected) {
-		l.Tokens.Rejected(a.ID)
-		return port.Batch{}, authError(a)
-	}
-	return b, err
+	return b, nil
 }
 
 // writeResults は、読んだ結果をリンクごとに書く(D4a-12)。保存に失敗したら、残りは書かずに返す。

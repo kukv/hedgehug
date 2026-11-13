@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/ghread"
 )
 
@@ -57,4 +58,65 @@ func (m *memReads) SetFailure(_ context.Context, store port.StoreID, key, text s
 		rows[key] = text
 	}
 	return true, nil
+}
+
+// memScans は、port.PRScans のメモリ上の偽物。
+type memScans struct {
+	rows map[port.StoreID]map[string]port.ScanRecord
+}
+
+func newMemScans() *memScans { return &memScans{rows: map[port.StoreID]map[string]port.ScanRecord{}} }
+
+func (m *memScans) Scans(_ context.Context, store port.StoreID) (map[string]port.ScanRecord, error) {
+	out := map[string]port.ScanRecord{}
+	for k, v := range m.rows[store] {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (m *memScans) SaveScan(_ context.Context, store port.StoreID, repo string, r port.ScanRecord) (bool, error) {
+	if m.rows[store] == nil {
+		m.rows[store] = map[string]port.ScanRecord{}
+	}
+	key := strings.ToLower(repo)
+	old, ok := m.rows[store][key]
+	m.rows[store][key] = r
+	return !ok || old != r, nil
+}
+
+// memMissing は、port.AppMissing のメモリ上の偽物。
+type memMissing struct {
+	rows map[account.ID][]port.MissingOrg
+}
+
+func newMemMissing() *memMissing { return &memMissing{rows: map[account.ID][]port.MissingOrg{}} }
+
+func (m *memMissing) List(context.Context) (map[account.ID][]port.MissingOrg, error) {
+	out := map[account.ID][]port.MissingOrg{}
+	for k, v := range m.rows {
+		out[k] = append([]port.MissingOrg(nil), v...)
+	}
+	return out, nil
+}
+
+func (m *memMissing) Put(_ context.Context, a account.ID, o port.MissingOrg) (bool, error) {
+	for i, x := range m.rows[a] {
+		if strings.EqualFold(x.Org, o.Org) {
+			m.rows[a][i].Repo = o.Repo
+			return false, nil
+		}
+	}
+	m.rows[a] = append(m.rows[a], o)
+	return true, nil
+}
+
+func (m *memMissing) Clear(_ context.Context, a account.ID, org string) (bool, error) {
+	for i, x := range m.rows[a] {
+		if strings.EqualFold(x.Org, org) {
+			m.rows[a] = append(m.rows[a][:i:i], m.rows[a][i+1:]...)
+			return true, nil
+		}
+	}
+	return false, nil
 }
