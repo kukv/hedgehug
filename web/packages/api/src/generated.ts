@@ -500,6 +500,11 @@ export interface SetItemProperty {
   value: unknown;
 }
 
+export interface SetWatch {
+  /** あなたがウォッチ中にするか */
+  on: boolean;
+}
+
 export interface SetWorkspacePropertyHidden {
   hidden: boolean;
 }
@@ -2034,6 +2039,47 @@ return fetcher<Item>(getRenameItemUrl(store,item),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(renameItemBody)
+  }
+);}
+
+
+
+export const getSetWatchUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/watch`
+}
+
+/**
+ * @summary あなたのウォッチを入り切りする
+ */
+export const setWatch = async (store: string,
+    item: string,
+    setWatchBody: SetWatch, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getSetWatchUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setWatchBody)
   }
 );}
 

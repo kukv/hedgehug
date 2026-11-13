@@ -752,6 +752,15 @@ components:
       required:
         - value
       type: object
+    SetWatch:
+      additionalProperties: false
+      properties:
+        "on":
+          description: あなたがウォッチ中にするか
+          type: boolean
+      required:
+        - "on"
+      type: object
     SetWorkspacePropertyHidden:
       additionalProperties: false
       properties:
@@ -2488,6 +2497,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムのタイトルを変える
+  /api/stores/{store}/items/{item}/watch:
+    put:
+      operationId: set-watch
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWatch"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: あなたのウォッチを入り切りする
   /api/stores/{store}/items/{item}/worklogs:
     get:
       operationId: list-worklogs

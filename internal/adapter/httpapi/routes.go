@@ -28,6 +28,7 @@ import (
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
+	appwatching "github.com/kukv/hedgehug/internal/app/watching"
 	appworklogs "github.com/kukv/hedgehug/internal/app/worklogs"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
 )
@@ -77,7 +78,9 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
-	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox})
+	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
+	items.Register(api, itemsSvc)
+	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: deps.Inbox})
 	notes.Register(api, notes.Services{
 		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity},
