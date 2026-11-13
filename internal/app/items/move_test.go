@@ -80,6 +80,15 @@ func TestMoveAcrossProjectsTakesEveryDescendantIncludingDeleted(t *testing.T) {
 	if !slices.Equal(moved.Relations, before.Relations) || moved.Status != before.Status || moved.Title != before.Title {
 		t.Errorf("関連・ステータス・タイトルは変えない: %+v", moved)
 	}
+	// ツリーは一覧で読み直すので、一覧でも移った先に出て、元のプロジェクトからは消える。
+	oldList, err := svc.List(t.Context(), store, apptest.SampleProject)
+	if err != nil || len(oldList) != 1 || oldList[0].ID != apptest.SampleEpic {
+		t.Errorf("元のプロジェクトの一覧 = %+v, %v", oldList, err)
+	}
+	newList, err := svc.List(t.Context(), store, otherProject)
+	if err != nil || len(newList) != 3 || newList[0].ID != apptest.SampleTask || newList[1].ID != epic2.ID || newList[2].ID != live.ID {
+		t.Errorf("移った先の一覧 = %+v, %v", newList, err)
+	}
 	op := lastOps(t, rec, apptest.SampleTask, 1)[0]
 	if lastOps(t, rec, live.ID, 1)[0] != op || lastOps(t, rec, gone.ID, 1)[0] != op {
 		t.Error("下のものも同じ操作で移る")
