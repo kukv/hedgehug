@@ -1,6 +1,7 @@
 package itemlink_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -93,5 +94,25 @@ func TestFromLogDropsRemovedAndOrdersRelinkLast(t *testing.T) {
 	}
 	if _, ok := itemlink.FromLog(logOf(change.NewAdd("links", pr41), change.NewRemove("links", pr41))).Find(pr41); ok {
 		t.Error("a removed link is still found")
+	}
+}
+
+func TestChecksValues(t *testing.T) {
+	got := []itemlink.Checks{itemlink.NoChecks, itemlink.Success, itemlink.Failure, itemlink.Running}
+	if !slices.Equal(got, []itemlink.Checks{"", "success", "failure", "pending"}) {
+		t.Errorf("Checks = %q", got)
+	}
+}
+
+func TestFindAndHasIssueWithoutAMatch(t *testing.T) {
+	s := itemlink.FromLog(logOf(change.NewAdd("links", pr41)))
+	if _, ok := s.Find(pr40); ok {
+		t.Error("Find(40) found a link")
+	}
+	if _, ok := s.Find(itemlink.Ref{Kind: itemlink.PR, Repo: "org/api", Number: 41}); ok {
+		t.Error("Find(another repo's 41) found a link")
+	}
+	if _, ok := s.HasIssue(); ok {
+		t.Error("HasIssue is true without an issue")
 	}
 }

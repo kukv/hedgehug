@@ -58,3 +58,12 @@ func TestRefreshSummaryIsOneLine(t *testing.T) {
 		t.Errorf("%q", got)
 	}
 }
+
+func TestRefreshSummaryForAnIssue(t *testing.T) {
+	old := itemlink.Link{Ref: iss12, Values: itemlink.Values{Title: "A", State: itemlink.Open, Review: itemlink.NoReview}}
+	got := itemlink.RefreshSummary("HH-2", old, "org/api2", itemlink.Values{Title: "A", State: itemlink.Closed, Review: itemlink.Approved})
+	want := "HH-2 のリンクを org/api#12 から org/api2#12 に更新、HH-2 の org/api2#12 の状態を Closed に変更"
+	if got != want {
+		t.Errorf("%q\nwant %q (an issue has no review sentence)", got, want)
+	}
+}

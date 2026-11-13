@@ -50,7 +50,7 @@ func linkSetText(r change.Record) (string, bool) {
 	case "review":
 		return fmt.Sprintf("%s のレビューを %s に変更", target, itemlink.ReviewText(itemlink.Review(to))), true
 	case "title":
-		return fmt.Sprintf("%s のタイトルを「%s」に変更", target, to), true
+		return fmt.Sprintf("%s のタイトルを「%s」に変更", target, strings.Join(strings.Fields(to), " ")), true
 	}
 	return "", false
 }

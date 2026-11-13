@@ -103,3 +103,17 @@ func TestRenameMovesTheLink(t *testing.T) {
 		t.Errorf("Rename =\n%q\nwant\n%q", got, want)
 	}
 }
+
+func TestAttachWritesNoneForAnUnrecordedReview(t *testing.T) {
+	s := itemlink.FromLog(logOf(
+		change.NewAdd("links", pr41),
+		change.NewSet(itemlink.ValueField(pr41, "title"), nil, "A"),
+		change.NewSet(itemlink.ValueField(pr41, "state"), nil, "open"),
+		change.NewRemove("links", pr41),
+	))
+	got := rows(s.Attach(pr41, itemlink.Values{Title: "A", State: itemlink.Open, Review: itemlink.NoReview}))
+	want := []string{"add links →" + refJSON(pr41), `set links/pr:org/web#41/review null→"none"`}
+	if !slices.Equal(got, want) {
+		t.Errorf("Attach =\n%q\nwant\n%q", got, want)
+	}
+}

@@ -30,7 +30,7 @@ func ItemRows(log []change.Record, c Context) []Row {
 
 func itemText(log []change.Record, i int, c Context) (string, bool) {
 	r := log[i]
-	if r.Actor.Kind == change.ActorGitHub && strings.HasPrefix(r.F, itemlink.LinksField) {
+	if r.Actor.Kind == change.ActorGitHub && (r.F == itemlink.LinksField || strings.HasPrefix(r.F, itemlink.LinksField+"/")) {
 		return linkText(log, i)
 	}
 	switch r.T {

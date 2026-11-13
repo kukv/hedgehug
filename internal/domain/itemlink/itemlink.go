@@ -104,32 +104,18 @@ func FromLog(log []change.Record) Set {
 	st := change.Resolve(log, change.Options{Multi: func(f string) bool { return f == LinksField || f == OffField }})
 	s := Set{known: knownValues(st.Values)}
 	for _, raw := range st.Lists[LinksField] {
-		var r Ref
-		if json.Unmarshal(raw, &r) == nil && r.Number > 0 {
+		if r, ok := refOf(raw); ok {
 			s.Links = append(s.Links, Link{Ref: r, Values: s.valuesOf(r)})
 		}
 	}
 	for _, raw := range st.Lists[OffField] {
-		var r Ref
-		if json.Unmarshal(raw, &r) == nil && r.Number > 0 {
+		if r, ok := refOf(raw); ok {
 			s.Off = append(s.Off, r)
 		}
 	}
-	order := addedAt(log)
-	slices.SortStableFunc(s.Links, func(a, b Link) int { return order[a.Ref] - order[b.Ref] })
+	places := placesOf(log)
+	slices.SortStableFunc(s.Links, func(a, b Link) int { return places[a.Ref].compare(places[b.Ref]) })
 	return s
-}
-
-// addedAt は、各リンクの最後の add の行が、ログの何番目か。
-func addedAt(log []change.Record) map[Ref]int {
-	out := map[Ref]int{}
-	for i, r := range log {
-		var ref Ref
-		if r.T == change.Add && r.F == LinksField && json.Unmarshal(r.To, &ref) == nil {
-			out[ref] = i
-		}
-	}
-	return out
 }
 
 // knownValues は、set の項目 links/<key>/<name> の値を、key ごとにまとめる。
@@ -152,13 +138,29 @@ func knownValues(values map[string]json.RawMessage) map[string]Values {
 		case "title":
 			cur.Title = v
 		case "state":
-			cur.State = State(v)
+			cur.State = knownState(v)
 		case "review":
-			cur.Review = Review(v)
+			cur.Review = knownReview(v)
 		}
 		out[key] = cur
 	}
 	return out
+}
+
+// knownState は、v が状態の値でなければ空。
+func knownState(v string) State {
+	if s := State(v); slices.Contains([]State{Open, Draft, Merged, Closed}, s) {
+		return s
+	}
+	return ""
+}
+
+// knownReview は、v がレビューの状態の値でなければ空(valuesOf が NoReview にする)。
+func knownReview(v string) Review {
+	if r := Review(v); slices.Contains([]Review{NoReview, Pending, Approved, ChangesRequested}, r) {
+		return r
+	}
+	return ""
 }
 
 // valuesOf は、r の値。レビューの値がなければ NoReview。

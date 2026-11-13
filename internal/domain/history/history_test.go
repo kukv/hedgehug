@@ -241,3 +241,17 @@ func TestItemRowsShowGitHubLinkRows(t *testing.T) {
 		t.Errorf("rows =\n%q\nwant\n%q", got, want)
 	}
 }
+
+func TestItemRowsGitHubLinkTitleIsOneLineAndOnlyLinksFields(t *testing.T) {
+	gh := change.Actor{Kind: change.ActorGitHub}
+	pr := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	log := logOf(
+		step{"O1", at(0), taro, item.Create(item.Item{ID: "T", Place: item.Place{Workspace: "W", Project: "P", Number: 1}, Kind: item.Task, Rank: "V", Title: "画面"})},
+		step{"O2", at(1), gh, change.NewSet(itemlink.ValueField(pr, "title"), "A", "B\n  C")},
+		step{"O3", at(2), gh, change.NewSet("linksX/pr:org/web#41/state", "open", "merged")}, // links の項目ではない
+	)
+	want := []string{"GitHub: org/web#41 のタイトルを「B C」に変更", "太郎: 作成"}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
+	}
+}
