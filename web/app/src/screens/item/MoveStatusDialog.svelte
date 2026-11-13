@@ -6,6 +6,7 @@
   // アイテムがあるときだけ、「移動…」と Alt+Shift+↑↓ が出す。中身・実行は core の itemMove が持つ。
   const dialog = itemMove.moveConfirm;
   // values は、行ごとに選んでいる置き換え先。ダイアログが開くたびに、初めの値(予告の既定)へ戻す。
+  // 最初の描画では values がまだ空なので、bind は row.value を読む(bind:value に undefined は渡せない)。
   let values = $state<Record<string, string>>({});
   $effect(() => {
     values = Object.fromEntries(($dialog?.rows ?? []).map((r) => [r.status, r.value]));
@@ -21,7 +22,7 @@
         <span class="name">{row.label}</span>
         <Select
           label={row.label}
-          bind:value={values[row.status]}
+          bind:value={() => values[row.status] ?? row.value, (v) => (values[row.status] = v)}
           options={row.options.map((o) => ({ value: o.id, label: o.label }))}
         />
       </div>
