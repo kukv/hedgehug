@@ -208,9 +208,16 @@ func TestRefreshSkips(t *testing.T) {
 	if err := f.accounts.Remove(t.Context(), "A1"); err != nil {
 		t.Fatal(err)
 	}
-	// 問い合わせない取り直しは、置いてある文言を消さない(次に取り直せたときに消す。D4a-11)。
-	if rows := f.refresh(t); rows[0].Error == "" || f.gh.Lookups != asked {
+	// 取り直さないときは、置いてある文言を行に出さない(消しもしない。次に取り直せたときに消す。D4a-11)。
+	if rows := f.refresh(t); rows[0].Error != "" || f.gh.Lookups != asked {
 		t.Errorf("no accounts on this machine: row %+v", rows[0])
+	}
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error == "" {
+		t.Errorf("the stored text was cleared by a skipped refresh: %+v", rows[0])
+	}
+	f.infos.Stores[0].ReadOnly = true
+	if rows := f.refresh(t); rows[0].Error != "" {
+		t.Errorf("read-only: row %+v", rows[0])
 	}
 }
 

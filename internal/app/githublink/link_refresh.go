@@ -14,14 +14,19 @@ import (
 
 // Refresh は、詳細パネルを開いたときに、アイテムのリンクを GitHub から取り直す(07「表示と更新」。D3-8)。
 // 値が変わったリンクは、リンクごとに実行者「GitHub」で保存する(D3-10)。失敗した行には理由を添える。
-// 閲覧のみの Store と、このマシンにアカウントが 1 つもないときは問い合わせない(D3-9)。
+// 閲覧のみの Store と、このマシンにアカウントが 1 つもないときは問い合わせず、失敗の文言も出さない(D3-9)。
 func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]LinkRow, error) {
 	skip, err := l.skipRefresh(ctx, store)
 	if err != nil {
 		return nil, err
 	}
 	if skip {
-		return l.List(ctx, store, id)
+		// 取り直しをしないので、置いてある失敗の文言は出さない(消しもしない)。
+		rows, err := l.List(ctx, store, id)
+		for i := range rows {
+			rows[i].Error = ""
+		}
+		return rows, err
 	}
 	v, err := l.view(ctx, store, id)
 	if err != nil {
