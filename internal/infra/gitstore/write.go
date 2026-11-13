@@ -78,6 +78,9 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	if len(drafts) == 0 {
 		return nil
 	}
+	if err := port.CheckRuleDrafts(t.meta.Actor, drafts); err != nil {
+		return err
+	}
 	log, err := t.log(ref)
 	if err != nil {
 		return err

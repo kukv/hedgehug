@@ -16,6 +16,20 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
+// CheckRuleDrafts は、自動化の行(Draft.Rule)を書けるかを確かめる(B4-1)。自動化の行は人の操作の中でだけ書け、
+// ルールの ID は change.ValidID。合わなければ ErrInvalidOperation を包んだエラー。
+func CheckRuleDrafts(actor change.Actor, drafts []change.Draft) error {
+	for _, d := range drafts {
+		if d.Rule == "" {
+			continue
+		}
+		if actor.Kind != change.ActorUser || !change.ValidID(d.Rule) {
+			return fmt.Errorf("%w: rule row %q by %+v", ErrInvalidOperation, d.Rule, actor)
+		}
+	}
+	return nil
+}
+
 // StoreID は Store ID(.hedgehug/store.yaml の store)。
 type StoreID string
 

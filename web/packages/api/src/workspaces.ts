@@ -1,21 +1,24 @@
-import type {
-  ChildKind,
-  PropertyType,
-  TemplateChild,
-  TemplateInput,
-  TemplateStep,
-  WorkspaceDetail,
-  WorkspaceProperty,
-  WorkspacesPort,
-  WorkspaceTemplate,
-  WorkspaceUsage,
-  WorkspaceValue,
+import {
+  type AutomationRule,
+  type ChildKind,
+  type PropertyType,
+  ruleForm,
+  type TemplateChild,
+  type TemplateInput,
+  type TemplateStep,
+  type WorkspaceDetail,
+  type WorkspaceProperty,
+  type WorkspacesPort,
+  type WorkspaceTemplate,
+  type WorkspaceUsage,
+  type WorkspaceValue,
 } from "@hedgehug/core";
 import { call } from "./errors";
 import {
   type AddWorkspaceProperty,
   type WorkspaceDetail as ApiDetail,
   type WorkspaceProperty as ApiProperty,
+  type AutomationRule as ApiRule,
   type WorkspaceTemplate as ApiTemplate,
   type WorkspaceTemplateChild as ApiTemplateChild,
   type WorkspaceTemplateInput as ApiTemplateInput,
@@ -25,12 +28,15 @@ import {
   addWorkspaceProperty,
   addWorkspaceValue,
   changeWorkspacePrefix,
+  createAutomationRule,
   createWorkspace,
   createWorkspaceTemplate,
+  deleteAutomationRule,
   deleteWorkspaceProperty,
   deleteWorkspaceTemplate,
   deleteWorkspaceValue,
   getWorkspace,
+  getWorkspaceAutomation,
   getWorkspaceUsage,
   moveWorkspace,
   moveWorkspaceProperty,
@@ -40,6 +46,7 @@ import {
   renameWorkspaceValue,
   type SetWorkspaceValueColorColor,
   saveItemAsTemplate,
+  setAutomationRuleEnabled,
   setWorkspaceCategoryDefault,
   setWorkspaceInitialPriority,
   setWorkspaceInitialStatus,
@@ -49,6 +56,7 @@ import {
   setWorkspaceTemplateDefault,
   setWorkspaceTransition,
   setWorkspaceValueColor,
+  updateAutomationRule,
   updateWorkspaceTemplate,
 } from "./generated";
 
@@ -115,6 +123,12 @@ const toUsage = (u: ApiUsage): WorkspaceUsage => ({
 });
 
 const toTemplateBody = (input: TemplateInput) => input as ApiTemplateInput;
+
+// API の列挙(きっかけ・すること)は core の型と同じ文字列。
+const toRule = (r: ApiRule): AutomationRule => r;
+
+// 入力は 6 項目だけを送る。API の入力は追加の項目(id・enabled)を断る。
+const toRuleBody = ruleForm;
 
 export function createWorkspacesPort(): WorkspacesPort {
   return {
@@ -183,5 +197,19 @@ export function createWorkspacesPort(): WorkspacesPort {
       ),
     saveItemAsTemplate: (s, item, input) =>
       call(async () => toTemplate(await saveItemAsTemplate(s, item, input))),
+    automation: (s, w) =>
+      call(async () => {
+        const v = await getWorkspaceAutomation(s, w);
+        return {
+          rules: (v.rules ?? []).map(toRule),
+          recent: (v.recent ?? []).map((r) => ({ ...r, at: new Date(r.at) })),
+        };
+      }),
+    createRule: (s, w, input) =>
+      call(async () => toRule(await createAutomationRule(s, w, toRuleBody(input)))),
+    updateRule: (s, w, id, input) => call(() => updateAutomationRule(s, w, id, toRuleBody(input))),
+    deleteRule: (s, w, id) => call(() => deleteAutomationRule(s, w, id)),
+    setRuleEnabled: (s, w, id, enabled) =>
+      call(() => setAutomationRuleEnabled(s, w, id, { enabled })),
   };
 }

@@ -87,6 +87,84 @@ export interface AddWorkspaceValue {
   name: string;
 }
 
+export interface ApplyAutomationIgnoringWorkflow {
+  /** 変えるステータスの ID(通知の Status) */
+  status: string;
+}
+
+export type AutomationRuleAction = typeof AutomationRuleAction[keyof typeof AutomationRuleAction];
+
+
+export const AutomationRuleAction = {
+  status: 'status',
+  assignee: 'assignee',
+} as const;
+
+export type AutomationRuleTrigger = typeof AutomationRuleTrigger[keyof typeof AutomationRuleTrigger];
+
+
+export const AutomationRuleTrigger = {
+  pr_open: 'pr_open',
+  review_requested: 'review_requested',
+  pr_merged: 'pr_merged',
+  issue_closed: 'issue_closed',
+  status: 'status',
+  steps_done: 'steps_done',
+} as const;
+
+export interface AutomationRule {
+  action: AutomationRuleAction;
+  /** きっかけが pr_merged のときの条件 */
+  allMerged: boolean;
+  enabled: boolean;
+  id: string;
+  name: string;
+  trigger: AutomationRuleTrigger;
+  /** きっかけが status のときのステータスの ID。ほかは空 */
+  triggerStatus: string;
+  /** ステータスの ID、ログイン名、または @none(未割り当て) */
+  value: string;
+}
+
+export type AutomationRuleInputAction = typeof AutomationRuleInputAction[keyof typeof AutomationRuleInputAction];
+
+
+export const AutomationRuleInputAction = {
+  status: 'status',
+  assignee: 'assignee',
+} as const;
+
+export type AutomationRuleInputTrigger = typeof AutomationRuleInputTrigger[keyof typeof AutomationRuleInputTrigger];
+
+
+export const AutomationRuleInputTrigger = {
+  pr_open: 'pr_open',
+  review_requested: 'review_requested',
+  pr_merged: 'pr_merged',
+  issue_closed: 'issue_closed',
+  status: 'status',
+  steps_done: 'steps_done',
+} as const;
+
+export interface AutomationRuleInput {
+  action: AutomationRuleInputAction;
+  /** きっかけが pr_merged のときの条件 */
+  allMerged: boolean;
+  name: string;
+  trigger: AutomationRuleInputTrigger;
+  /** きっかけが status のときのステータスの ID。ほかは空 */
+  triggerStatus: string;
+  /** ステータスの ID、ログイン名、または @none(未割り当て) */
+  value: string;
+}
+
+export interface AutomationRun {
+  at: string;
+  display: string;
+  item: string;
+  text: string;
+}
+
 export interface ChangeWorkspacePrefix {
   prefix: string;
 }
@@ -362,6 +440,10 @@ export interface SaveItemAsTemplate {
   title: string;
 }
 
+export interface SetAutomationRuleEnabled {
+  enabled: boolean;
+}
+
 export interface SetItemProperty {
   /** 新しい値。null と空の文字列は値を空にする */
   value: unknown;
@@ -568,6 +650,13 @@ export interface ValuesBody {
   /** デバイスフローはサインインの API で登録・保存する */
   method: ValuesBodyMethod;
   name: string;
+}
+
+export interface WorkspaceAutomation {
+  /** @nullable */
+  recent: AutomationRun[] | null;
+  /** @nullable */
+  rules: AutomationRule[] | null;
 }
 
 /**
@@ -1186,6 +1275,49 @@ export const getItem = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getApplyAutomationIgnoringWorkflowUrl = (store: string,
+    item: string,
+    rule: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/automation/${encodeURIComponent(String(rule))}/apply`
+}
+
+/**
+ * @summary 止まった自動化の変更を、制約を無視して適用
+ */
+export const applyAutomationIgnoringWorkflow = async (store: string,
+    item: string,
+    rule: string,
+    applyAutomationIgnoringWorkflowBody: ApplyAutomationIgnoringWorkflow, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getApplyAutomationIgnoringWorkflowUrl(store,item,rule),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(applyAutomationIgnoringWorkflowBody)
   }
 );}
 
@@ -1826,6 +1958,187 @@ export const getWorkspace = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getGetWorkspaceAutomationUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/automation`
+}
+
+/**
+ * @summary 自動化のルールと最近の実行
+ */
+export const getWorkspaceAutomation = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceAutomation> => {
+
+  return fetcher<WorkspaceAutomation>(getGetWorkspaceAutomationUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getCreateAutomationRuleUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/automation/rules`
+}
+
+/**
+ * @summary ルールを作成
+ */
+export const createAutomationRule = async (store: string,
+    workspace: string,
+    automationRuleInput: AutomationRuleInput, options?: Parameters<typeof fetcher>[1]): Promise<AutomationRule> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<AutomationRule>(getCreateAutomationRuleUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(automationRuleInput)
+  }
+);}
+
+
+
+export const getDeleteAutomationRuleUrl = (store: string,
+    workspace: string,
+    rule: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/automation/rules/${encodeURIComponent(String(rule))}`
+}
+
+/**
+ * @summary ルールを削除
+ */
+export const deleteAutomationRule = async (store: string,
+    workspace: string,
+    rule: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteAutomationRuleUrl(store,workspace,rule),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getUpdateAutomationRuleUrl = (store: string,
+    workspace: string,
+    rule: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/automation/rules/${encodeURIComponent(String(rule))}`
+}
+
+/**
+ * @summary ルールを編集
+ */
+export const updateAutomationRule = async (store: string,
+    workspace: string,
+    rule: string,
+    automationRuleInput: AutomationRuleInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getUpdateAutomationRuleUrl(store,workspace,rule),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(automationRuleInput)
+  }
+);}
+
+
+
+export const getSetAutomationRuleEnabledUrl = (store: string,
+    workspace: string,
+    rule: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/automation/rules/${encodeURIComponent(String(rule))}/enabled`
+}
+
+/**
+ * @summary ルールを有効・無効にする
+ */
+export const setAutomationRuleEnabled = async (store: string,
+    workspace: string,
+    rule: string,
+    setAutomationRuleEnabledBody: SetAutomationRuleEnabled, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetAutomationRuleEnabledUrl(store,workspace,rule),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setAutomationRuleEnabledBody)
   }
 );}
 

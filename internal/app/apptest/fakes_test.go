@@ -2,6 +2,7 @@ package apptest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -41,5 +42,20 @@ func TestFakeStoreGitHubUnassign(t *testing.T) {
 	got, _ := s.List(context.Background())
 	if got[0].Account != "" || got[1].Account != "A2" || got[2].Account != "" {
 		t.Errorf("List = %+v", got)
+	}
+}
+
+func TestInboxKeepsNotices(t *testing.T) {
+	var in apptest.Inbox
+	n := port.Notice{Kind: port.NoticeAutomation, Store: "S1", Text: "「完了で外す」で担当者を なし に変更しました"}
+	if err := in.Add(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	if got := in.Notices(); len(got) != 1 || got[0] != n {
+		t.Errorf("Notices = %+v", got)
+	}
+	in.Err = errors.New("full")
+	if err := in.Add(t.Context(), n); err == nil || len(in.Notices()) != 1 {
+		t.Errorf("Add with Err = %v, %d", err, len(in.Notices()))
 	}
 }

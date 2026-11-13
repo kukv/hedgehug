@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -239,5 +240,29 @@ func TestWorkspaceYAMLHasWorkflowAndTemplates(t *testing.T) {
 		"workflow:\n", "  "+string(todo)+": ["+string(doing)+"] # Todo → InProgress\n",
 		"templates:\n", "name: リリース作業\n", "kind: Epic\n", "children:\n", "title: QA",
 		"assignee: '@parent'", "template_defaults: {Epic: 01YTPL00000000000000000001}",
+	)
+}
+
+func TestWorkspaceYAMLHasRules(t *testing.T) {
+	s, id, dir, st := ySeed(t)
+	path := "workspaces/" + string(yWS) + "/workspace.yaml"
+	// ルールがないワークスペースは、テンプレートと同じく空の一覧を 1 行で書く。
+	mustContain(t, "workspace.yaml", readFileString(t, dir, path), "rules: []\n")
+
+	done := st.Statuses[2].ID
+	r := automation.Rule{
+		ID: "01RULE1", Name: "完了で外す", Trigger: automation.TriggerStatus, TriggerStatus: done,
+		Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: true,
+	}
+	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "準備"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(yWS, automation.Drafts(automation.Rule{}, r)...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, "workspace.yaml", readFileString(t, dir, path),
+		"rules:\n", "name: 完了で外す\n", "trigger: status\n",
+		"trigger_status: "+string(done)+" # "+st.Statuses[2].Name+"\n",
+		"action: assignee\n", "value: '@none'\n", "enabled: true\n",
 	)
 }

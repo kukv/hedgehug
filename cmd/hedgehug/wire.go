@@ -62,6 +62,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Stores:        syncing.NotifyWrites(stores, auto.Wrote),
 		IDs:           ids,
 		Identity:      noIdentity{},
+		Inbox:         noInbox{},
 		StoreList:     noStores{},
 		Accounts:      file.Accounts(),
 		Secrets:       secrets,
@@ -88,6 +89,11 @@ type noIdentity struct{}
 func (noIdentity) Me(context.Context, port.StoreID) (string, error) {
 	return "", errors.New("このマシンのログイン名が未設定です")
 }
+
+// noInbox は、受信箱(C4)が入るまでの仮。通知を捨てる(B4-12)。
+type noInbox struct{}
+
+func (noInbox) Add(context.Context, port.Notice) error { return nil }
 
 // tokenAndAddr は、起動ごとのトークンと、127.0.0.1 の空いた番号を返す。
 func tokenAndAddr() (token, addr string) { return newToken(), "127.0.0.1:0" }

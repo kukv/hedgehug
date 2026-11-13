@@ -1,0 +1,112 @@
+// Package automations は、自動化のルールの操作(仕様 03「自動化」)を持つ。
+package automations
+
+import (
+	"context"
+	"strings"
+
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
+)
+
+// Service は、自動化の操作が使う口。
+type Service struct {
+	Stores   port.Stores
+	IDs      port.IDs
+	Identity port.Identity
+	Clock    port.Clock
+}
+
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// rulesOf は、ワークスペースのルール。
+func rulesOf(r port.Reader, ws workspace.ID) ([]automation.Rule, error) {
+	if _, err := r.Workspaces().Get(ws); err != nil {
+		return nil, err
+	}
+	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
+	if err != nil {
+		return nil, err
+	}
+	return automation.FromLog(log), nil
+}
+
+func logins(r port.Reader) ([]string, error) {
+	ms, err := r.Members().List()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m.Login)
+	}
+	return out, nil
+}
+
+// edit は、summary で決めた文で 1 回保存する。drafts は保存の中のいまのルールから行を作る。
+func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
+	summary func(rules []automation.Rule) (string, error),
+	drafts func(st workspace.Settings, rules []automation.Rule, members []string) ([]change.Draft, error),
+) error {
+	me, err := s.Identity.Me(ctx, store)
+	if err != nil {
+		return err
+	}
+	var text string
+	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
+		rules, err := rulesOf(r, ws)
+		if err != nil {
+			return err
+		}
+		text, err = summary(rules)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return s.Stores.Write(ctx, store, port.Operation{Actor: change.User(me), Summary: text}, func(tx port.Tx) error {
+		rules, err := rulesOf(tx, ws)
+		if err != nil {
+			return err
+		}
+		st, err := tx.Workspaces().Settings(ws)
+		if err != nil {
+			return err
+		}
+		ms, err := logins(tx)
+		if err != nil {
+			return err
+		}
+		ds, err := drafts(st, rules, ms)
+		if err != nil {
+			return err
+		}
+		return tx.WriteWorkspaces().Append(ws, ds...)
+	})
+}
+
+func find(rules []automation.Rule, id change.ID) (automation.Rule, error) {
+	for _, r := range rules {
+		if r.ID == id {
+			return r, nil
+		}
+	}
+	return automation.Rule{}, port.ErrNotFound
+}
+
+// canonicalLogin は、担当者を入れるルールの値を、メンバーの保存どおりの綴りにする。
+// Valid は大文字小文字を区別しないが、実行は区別して比べるため。
+func canonicalLogin(r automation.Rule, ms []string) automation.Rule {
+	if r.Action != automation.ActionAssignee || r.Value == automation.Unassigned {
+		return r
+	}
+	for _, l := range ms {
+		if strings.EqualFold(l, r.Value) {
+			r.Value = l
+			break
+		}
+	}
+	return r
+}

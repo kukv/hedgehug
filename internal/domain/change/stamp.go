@@ -20,8 +20,12 @@ func Stamp(log []Record, drafts []Draft, meta Meta, newID func() ID) []Record {
 	all := slices.Clone(log)
 	out := make([]Record, 0, len(drafts))
 	for _, d := range drafts {
+		actor := meta.Actor
+		if d.Rule != "" {
+			actor = Actor{Kind: ActorAutomation, Login: meta.Actor.Login, Rule: d.Rule}
+		}
 		r := Record{
-			ID: newID(), Op: meta.Op, At: meta.At, By: meta.Actor.By(), Actor: meta.Actor,
+			ID: newID(), Op: meta.Op, At: meta.At, By: actor.By(), Actor: actor,
 			T: d.T, F: d.F, From: d.From, To: d.To, Root: d.Root,
 		}
 		if r.T != Create {

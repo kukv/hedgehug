@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -14,32 +15,86 @@ import (
 // DeleteValue は、値を消す(03「削除」)。使っているアイテムは、代わりの値に置き換わるか値が外れる。
 // replacement が空なら、ステータス・優先度は初期値、単一選択は「なし」。
 func (s Service) DeleteValue(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id, replacement change.ID) error {
-	return s.editValue(ctx, store, ws, l, id,
+	var changes []automation.RuleChange
+	var names [2]string // 削除した値、置き換え先
+	err := s.editValue(ctx, store, ws, l, id,
 		func(st workspace.Settings, v workspace.Value) string {
 			return fmt.Sprintf("%s「%s」を削除", st.Label(l), oneLine(v.Name))
 		},
-		func(tx port.Tx, st workspace.Settings, vs []workspace.Value, _ workspace.Value) ([]change.Draft, error) {
+		func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error) {
 			repl, err := deleteChecked(st, l, vs, id, replacement)
 			if err != nil {
 				return nil, err
 			}
-			its, err := workspaceItems(tx, ws)
-			if err != nil {
+			if err := replaceItems(tx, st, l, ws, id, repl); err != nil {
 				return nil, err
-			}
-			for _, it := range its {
-				if ds := replaceRows(st, l, it, id, repl); len(ds) > 0 {
-					if err := tx.WriteItems().Append(it.ID, ds...); err != nil {
-						return nil, err
-					}
-				}
 			}
 			ds := []change.Draft{change.NewDelete(l.Ref(id))}
 			if l.Kind == workspace.ListStatuses {
 				ds = append(ds, workspace.WorkflowDeleteDrafts(st, id)...)
+				rds, rcs, err := ruleDrafts(tx, ws, id, repl)
+				if err != nil {
+					return nil, err
+				}
+				ds, changes = append(ds, rds...), rcs
+				names = [2]string{v.Name, valueName(vs, repl)}
 			}
 			return append(ds, workspace.TemplateValueDrafts(st, l, id, repl)...), nil
 		})
+	if err != nil {
+		return err
+	}
+	return s.notifyRules(ctx, store, ws, changes, names)
+}
+
+// replaceItems は、使っているアイテムの値を置き換える・外す(B2-8)。
+func replaceItems(tx port.Tx, st workspace.Settings, l workspace.List, ws workspace.ID, id, repl change.ID) error {
+	its, err := workspaceItems(tx, ws)
+	if err != nil {
+		return err
+	}
+	for _, it := range its {
+		if ds := replaceRows(st, l, it, id, repl); len(ds) > 0 {
+			if err := tx.WriteItems().Append(it.ID, ds...); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ruleDrafts は、ステータス id を指すルールの書き換え(03「削除」の自動化)。
+func ruleDrafts(tx port.Tx, ws workspace.ID, id, repl change.ID) ([]change.Draft, []automation.RuleChange, error) {
+	log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
+	if err != nil {
+		return nil, nil, err
+	}
+	ds, rcs := automation.StatusDeleteDrafts(automation.FromLog(log), id, repl)
+	return ds, rcs, nil
+}
+
+func valueName(vs []workspace.Value, id change.ID) string {
+	for _, v := range vs {
+		if v.ID == id {
+			return v.Name
+		}
+	}
+	return ""
+}
+
+// notifyRules は、変わったルールごとに、削除した人の受信箱へ通知を 1 件書く(B4-17)。
+func (s Service) notifyRules(ctx context.Context, store port.StoreID, ws workspace.ID, changes []automation.RuleChange, names [2]string) error {
+	for _, c := range changes {
+		text := automation.RewrittenText(c.Rule.Name, names[0], c.Part, names[1])
+		if c.Disabled {
+			text = automation.DisabledByDeleteText(c.Rule.Name)
+		}
+		n := port.Notice{Kind: port.NoticeAutomation, Store: store, Workspace: ws, Rule: c.Rule.ID, Text: text}
+		if err := s.Inbox.Add(ctx, n); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // deleteChecked は、削除の検査をして、置き換える値を決める(B2-12)。
