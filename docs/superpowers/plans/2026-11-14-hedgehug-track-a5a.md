@@ -29,11 +29,12 @@
 - 本物の組み立てだけで使う関数は `//go:build !e2e` のファイルに置く。e2e のビルドも CI で lint する。
 - 確認のコマンド: Go は `go test ./internal/... ./cmd/...`、全体は `make check`、画面は `pnpm -C web test`・`pnpm -C web check`、API の型は `make generate` のあと `pnpm -C web gen`、e2e は `pnpm -C web e2e`(`web/e2e/fixtures.ts` が worker ごとに空いた番号で `bin/hedgehug-e2e` を起動する)。手元の検証は 1 回で足りる。
 - `api/openapi.yaml`・`web/packages/api/src/generated.ts` は手でマージしない。API を変えたタスクで `make generate` → `pnpm -C web gen` で作り直してコミットする。
+- 本文のテストとコードは下書きで、どれもコンパイル・実行していない。各タスクの「失敗を確かめる」の期待も、実行せずに書いた。仕様と「決めたこと」が正。
 
 ## Review Focus
 
 1. **送信の失敗で移動先に何も残らない**: 移動先に remote があり、受け取りは通って送信が断られた(書き込みの拒否・重なりの繰り返し・途中で切れた)とき、移動先の Store に移したアイテムのフォルダもコミットも残らず、移動元もそのまま。テストは Task 3(`SyncSave` の送信失敗)と Task 6(移動の全体)。
-2. **向きの逆の移動が同時に起きても止まらない**: Store A → B の移動と B → A の移動を同時に流しても、ロックを入れ子に取らないので、どちらも終わる(片方が失敗してもよいが、止まらない)。テストは Task 6。
+2. **向きの逆の移動が同時に起きても止まらない**: Store A → B の移動と B → A の移動を同時に流しても、ロックを入れ子に取らないので、どちらも終わる(片方が失敗してもよいが、止まらない)。テストは Task 6(偽の `Stores` は Store ごとの本物のロックを持つ。2 つの移動が両方とも移動先のロックを持った状態で `fn` に入るまで待たせるので、`fn` が移動元を読む実装は止まる)と Task 4(本物の gitstore で、`SyncSave` の `fn` のあいだ持つのはその Store のロックだけ)。
 3. **何度も移したものの旧 ID**: A → B → C、A → B → A(番号は再利用しない)、同じものを 2 人が別々に移して記録が 2 件、のどれでも旧 ID がいまの場所に辿り着く。テストは Task 7。
 4. **削除済みの子と、移すものの外との関連**: 削除済みの子が、削除済みのまま元の削除日時で移り、番号は同じ親の削除されていない子のあと。別の Store へ移すときは、外のアイテム(削除済みを含む)との関連が両方の側から消え、中の関連は残る。テストは Task 5・6。
 5. **移動先にない人**: 担当者・ユーザー型の値・ウォッチ・作成者・コメントと作業時間の書き手・履歴の操作者のうち、移動先のメンバーにいない人(大文字小文字だけが違う人は同じ人)が、移動先の保存の中で 1 人 1 行の `join` として足される(アクティビティの「メンバー {ログイン名} を追加」は、この行から C4 の画面が作る。A5a-11)。テストは Task 1・6。
@@ -50,7 +51,7 @@
 | 同じ Store の別のワークスペースへの移動(1 回の保存、番号の振り直し、値の引き直し、転送記録) | 02「移すもの」「値の引き直し」「保存」、保存形式「移動・番号・旧 ID」 |
 | 別の Store への移動(移動先の受け取り・保存・送信 → 移動元の保存、失敗で元のまま、`moved_in`、関連の解除、メンバーの追加) | 02「関連・転送記録・旧 ID」「保存」 |
 | 転送記録 `transfers.jsonl` の読み書き、`purged.jsonl` の読み取り | 保存形式「移動・番号・旧 ID」「削除・復元・完全に削除」 |
-| 旧 ID の解決: 画面のアドレス(移動前の ID・旧い接頭辞の ID)、見つからないときのトースト 4 種、旧 ID から開いたときの「{旧 ID} は {日時} に {新 ID} へ移動しました」 | 02「旧 ID から辿れる場所」「見つからないとき」「移した日時の表示」、01「画面のアドレス」、03「接頭辞」 |
+| 旧 ID の解決: 画面のアドレス(移動前の ID・旧い接頭辞の ID。ワークスペース・プロジェクトのアドレスの旧い接頭辞も)、見つからないときのトースト 4 種、旧 ID から開いたときの「{旧 ID} は {日時} に {新 ID} へ移動しました」(そのあとさらに移したときは「…へ移動し、その後 {いまの ID} へ移動しました」) | 02「旧 ID から辿れる場所」「見つからないとき」「移した日時の表示」、01「画面のアドレス」、03「接頭辞」 |
 | 履歴の「{旧 ID} から移動」(移動元の Store・ワークスペース・プロジェクト・日時)と、`moved_in` の `names` による値の名前 | 02「関連・転送記録・旧 ID」、保存形式「アクティビティと履歴」 |
 | アクティビティ「{旧 ID} を {移動元} から {移動先} へ移動」「メンバー {ログイン名} を追加」、トースト「{旧 ID} は {新 ID} になりました」(空になった項目つき) | 02「保存」「値の引き直し」 |
 | 移したあと、詳細パネルを新しい ID のアイテムに切り替える。ほかの書き手が移したときはパネルを閉じる | 02「保存」、06 |
@@ -59,9 +60,9 @@
 |---|---|---|
 | プロジェクトの移動(設定タブの「別のワークスペースへ移動」の区画) | A5b | ユーザーの決定(2026-11-14、A5 を 3 本に分ける)。A5b は A5a の `domain/transfer`・口・`Delivery`・`Locate` を使う |
 | コマンドパレット(「別のワークスペースへ移動…」の候補、旧 ID の候補と「旧 ID・{日付} に移動」の添え書き) | A5c | 同上。A5c は `Locate` と `transfers` の API を使う |
-| 移動先のプロジェクトが使わないステータス(「ステータスの置き換え」の対象のうち、名前は移動先にあるがプロジェクトが使わないもの) | B5 | プロジェクト別のルールは B5。A5a は「移動先のプロジェクトが使うステータス」を `transfer.UsableStatuses` 1 か所で決め、いまはワークスペースのステータスすべてを返す。B5 がこの関数だけを差し替える(A4b の「入れないもの」と同じ扱い) |
+| 移動先のプロジェクトが使わないステータス(「ステータスの置き換え」の対象のうち、名前は移動先にあるがプロジェクトが使わないもの) | B5 | プロジェクト別のルールは B5。A5a は「移動先のプロジェクトが使うステータス」を `transfer.UsableStatuses` 1 か所で決め、いまはワークスペースのステータスすべてを返す。B5 がこの関数だけを差し替える(A4b の「入れないもの」と同じ扱い)。A5a と B5 のうち develop にあとから入る方が合わせる: B5 があとなら `transfer.UsableStatuses` を差し替え、A5a があとなら B5 の「プロジェクトが使うステータス」の関数を `UsableStatuses` から呼ぶ |
 | スプリントとリリースを外す(ダイアログの「スプリントとリリースは外す」の行は出す) | F | アイテムにスプリント・リリースの項目がまだない(A4b の「入れないもの」)。F が項目を足すときに、`transfer` の引き直しで外す行を足す |
-| 同期の修復(5)のワークスペースの追従(「ダイアログを出せない経路」) | C3 | 同期の修復は C3。C3 は `transfer.Remap`(置き換えを渡さないと同じ分類の既定にする)と `transfer.Number` を使う |
+| 同期の修復(5)のワークスペースの追従(「ダイアログを出せない経路」) | C3 | 同期の修復は C3。C3 は `transfer.Remap`(置き換えを渡さないと同じ分類の既定にする)と `transfer.Number` を使う。A5a と C3 のうち develop にあとから入る方が合わせる: C3 があとなら `transfer.UsableStatuses` を差し替え、A5a があとなら C3 の「プロジェクトが使うステータス」の関数を `UsableStatuses` から呼ぶ(B5 と同じ) |
 | 検索(自由テキスト・`parent:`・`project:`・関連のキー)での旧 ID | E | 検索は E。E は `Locate` と同じ規則で旧 ID を引く(`transfers.OldIDs` を使う) |
 | アクティビティの画面と受信箱の旧 ID のリンク、移動先の保存のメンバーの `join` の行から「メンバー {ログイン名} を追加」を 1 人 1 行で出すこと(A5a-11) | アクティビティの画面と受信箱を作るトラック(C4) | 画面がまだない。リンクを開くときは、A5a の画面のアドレスの解決(`locate-item`)に旧 ID を渡せば辿れる |
 | 別の Store へ移したものと、移動元で他の人の変更が重なったときの合わせ方と通知の文 | C2(合わせ方は入っている: `underTransferred` とフォルダの削除が勝つ)、C4(通知の文) | |
@@ -76,22 +77,25 @@
 | A5a-2 | `moved_in` の行は、アイテムごとに 1 行、写した行のあとに同じ操作で書く。`f` は空、`to` に `{"old":"HH-12","from_store":"<Store ID>","from_store_name":"…","from_workspace":"<内部 ID>","from_workspace_name":"…","from_project":"<内部 ID>","from_project_title":"…","at":"…","names":{"<値・プロパティの内部 ID>":"名前"}}`。`names` は写した行の `from`・`to` に現れる、移動元のワークスペースの値とプロパティの内部 ID すべて | 保存形式「変更記録」の `moved_in`、「アクティビティと履歴」 |
 | A5a-3 | 同じ Store の中の移動は、移すアイテムそれぞれに `set place`(ワークスペース・プロジェクト・親・新しい番号)を書き、移動先のワークスペースに `number` の行を番号ごとに書き、引き直した値を `set`(`add`・`remove`)で書き、`transfers.jsonl` にアイテムごとに 1 行足す。すべて 1 回の `Write` | 保存形式「移動・番号・旧 ID」の「別のワークスペース(同じ Store)」 |
 | A5a-4 | 別の Store への移動は、移動先に、移すアイテムのフォルダ(`log.jsonl` の全行をそのまま・`description.md`)を `ItemWriter.Import` で写し、続けて同じ操作で `moved_in`・`set place`・引き直しの `set`・`number` を書く。移動元は `ItemWriter.Remove` でフォルダを消し、外の相手のアイテムに関連の `remove` を書き、`transfers.jsonl` に 1 行ずつ足す | 保存形式「移動・番号・旧 ID」の「別の Store」 |
-| A5a-5 | 新しい口 `Replicator.SyncSave(ctx, storeID, remote, op, fn) (SyncResult, error)`: 1 つのロックの中で、受け取って合わせ、`fn` で保存し、送る。送れなければ(何度試しても重なる場合も)、保存のコミットだけを捨てて、受け取って合わせた結果は残す。受け取りで失敗したら保存しない。`app/syncing` に `Service.Deliver(ctx, storeID, op, fn) (syncstatus.Reason, error)` を足し(理由が空なら保存できた)、remote がなければ `Stores.Write` だけ、あれば `SyncSave` を呼び、トークン・受け取った位置・同期の状態の記録を `run` と同じに扱う。失敗の理由は `syncstatus.Reason` で返し、error は理由で表せない失敗(このマシンの状態を読み書きできないなど)だけ。`app/transfers` の口 `Delivery` は同じ形なので、`syncing.Service` をそのまま渡せる | 02「保存」の (1)〜(3) と「どれかが失敗したら、何も変えずに元のままにする」。`Write` と `Sync` を続けて呼ぶと、あいだでロックが外れ、送れなかった保存を取り消せない |
-| A5a-6 | 別の Store への移動の順は、(0) 移動元を読んで移すものを決める(ロックは読むあいだだけ)、(1)〜(3) 移動先を `Delivery.Deliver`、(4) 移動元を `Stores.Write`。ロックを入れ子に取らない。(4) が失敗したら、移動先に、写したフォルダを `Remove` する保存を `Deliver` で書いて戻し(アクティビティの文は「{新 ID} の移動を取り消し」)、エラーを返す | 02「保存」。向きの逆の 2 つの移動が互いを待たないため(Review Focus 2) |
-| A5a-7 | 値の引き直しは `transfer.Remap(it item.Item, from, to workspace.Settings, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult` の 1 か所。仕様の表どおり(ステータスは名前の完全一致で `UsableStatuses` にあるもの、なければ `statusChoice`、それもなければ同じ分類の移動先の既定。優先度・関連システム・単一選択・複数選択は名前の完全一致、優先度が空になれば移動先の初期優先度。テキスト・数値・日付・チェック・URL はキーと型が同じなら残す。担当者・ユーザー型・ウォッチは同じ Store ならそのまま、別の Store なら `people`)。`RemapResult` は書く行と、空になった項目の名前(トーストの順はプロパティの定義の順。優先度を初期優先度にしたら「優先度」) | 02「値の引き直し」 |
+| A5a-5 | 新しい口 `Replicator.SyncSave(ctx, storeID, remote, op, fn) (SyncResult, error)`: 1 つのロックの中で、受け取って合わせ、`fn` で保存し、送る。送れなければ(何度試しても重なる場合も)、保存のコミットだけを捨てて、受け取って合わせた結果は残す。受け取りで失敗したら保存しない。送信が他の人の更新と重なったときは、保存を捨てて受け取り直し、`fn` を呼び直す(最大 3 回)。そのため **`fn` は、番号・メンバー・値の引き直しを、毎回 `fn` に渡された `Tx` から読んで決める**(前の試みで読んだ値を使わない)。`fn` の失敗(`fn` のエラー・`op.Check`・コミットの失敗)は `*port.SaveError` で包み、通信の失敗と区別する。`app/syncing` に `Service.Deliver(ctx, storeID, op, fn) (syncstatus.Reason, error)` を足す(理由が空なら保存できた)。`Service` に保存の口 `Stores port.Stores` を足し(配線では、ほかの機能と同じく `NotifyWrites` で包んだものを渡す。remote のない移動先の保存も画面に知らせるため)、`Deliver` は閲覧のみの Store を `port.ErrInvalidOperation` で断り、remote がなければ `Stores.Write` だけ、あれば `SyncSave` を呼ぶ。トークン・受け取った位置・同期の状態の記録は `run` と同じに扱い、成功したらミラーへ送って `EventSync` を知らせる(`AfterSuccess` は呼ばない)。失敗の理由は `syncstatus.Reason` で返し、`SaveError` なら中のエラーをそのまま error で返す(error は、理由で表せない失敗だけ)。`app/transfers` の口 `Delivery` は同じ形なので、`syncing.Service` をそのまま渡せる | 02「保存」の (1)〜(3) と「どれかが失敗したら、何も変えずに元のままにする」。`Write` と `Sync` を続けて呼ぶと、あいだでロックが外れ、送れなかった保存を取り消せない |
+| A5a-6 | 別の Store への移動の順は、(0) 移動元を読んで移すものを決める(ロックは読むあいだだけ)、(1)〜(3) 移動先を `Delivery.Deliver`、(4) 移動元を `Stores.Write`。ロックを入れ子に取らない(`Deliver` に渡す `fn` は移動元を読まない。移動元を読むのは (0) と (4) だけ)。(4) が失敗したら、移動先に、写したフォルダを `Remove` し、その移動で足したメンバーを `change.NewRemove("members", login)` で外す保存を `Deliver` で書いて戻し(アクティビティの文は「{新 ID} の移動を取り消し」)、エラーを返す。`number` の行は残す(番号は再利用しないので害がない)。移動先の保存と移動元の保存のあいだでプロセスが落ちたときは、両方の Store に同じ内部 ID のアイテムが残る。保存を 2 つの Store にまたいで 1 つにする仕組みは持たない(仕様は Store ごとに 1 回の保存と決めている)。この状態では `Import` が同じ内部 ID を断るので移し直せず、利用者はどちらかを削除して直す。プロセスが落ちるときだけの端の場面なので、これ以上は扱わない | 02「保存」。向きの逆の 2 つの移動が互いを待たないため(Review Focus 2) |
+| A5a-7 | 値の引き直しは `transfer.Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult` の 1 か所。`people == nil` は同じ Store(人はそのまま)、nil でなければ別の Store。仕様の表どおり(ステータスは名前の完全一致で `UsableStatuses` にあるもの、なければ `statusChoice`、それもなければ同じ分類の移動先の既定。優先度・関連システム・単一選択・複数選択は名前の完全一致、優先度が空になれば移動先の初期優先度。テキスト・数値・日付・チェック・URL はキーと型が同じなら残す。担当者・ユーザー型・ウォッチは同じ Store ならそのまま、別の Store なら `people`)。`RemapResult` は書く行と、空になった項目の名前(トーストの順はプロパティの定義の順。優先度を初期優先度にしたら「優先度」)。予告の「ステータスの置き換え」の行と `Remap` が同じ規則を使うよう、移動先で使えないステータスを返す `transfer.Unmatched(statuses []change.ID, from, to workspace.Settings, toProject project.ID) []change.ID`(名前が移動先にない・`UsableStatuses` にないものだけ)を Task 2 が作り、Task 5 の `preview.go` も使う | 02「値の引き直し」 |
 | A5a-8 | 「移動先のプロジェクトが使うステータス」は `transfer.UsableStatuses(to workspace.Settings, p project.ID) []change.ID`。いまはワークスペースのステータスすべて(B5 が差し替える) | 持ち場と境目 |
 | A5a-9 | 番号は `transfer.Number(root item.Item, below []item.Item, next int) map[item.ID]int`: 移すアイテムが `next`、続いて子・孫を並び順に深さ優先、削除済みの子は同じ親の下の削除されていない子のあと(削除済みどうしは並び順) | 02「移すもの」 |
-| A5a-10 | 移動先のメンバーに足す人は `transfer.People(items, logs, members) []member.Member`(担当者・ユーザー型の値・ウォッチ・作成者・コメントと作業時間の書き手・行の `by`。`hedgehug[bot]` を除く。ログイン名は大文字小文字を区別せずに比べ、移動先にいる人は移動先の書き方に置き換える。足す人の表示名とログイン名は移動元のメンバーと同じ)。足す行は既存の `member.Join` | 02「保存」のメンバー、「値の引き直し」の担当者 |
-| A5a-11 | アクティビティの文(保存の Summary): 移動の操作は「{旧 ID} を {移動元} から {移動先} へ移動」。{移動元}・{移動先} はワークスペース名で、別の Store のときは「{Store 名} の {ワークスペース名}」。移動先・移動元の両方の保存に同じ文。メンバーの追加(`member.Join`)は移動先の同じ保存に入れる(別の保存にすると、移動が失敗したときにメンバーだけが残り「元のまま」にならない)。「メンバー {ログイン名} を追加」の行は、アクティビティの画面が、その保存のメンバーの `join` の行から 1 人 1 行で作る(アクティビティの画面を作るトラックへ。持ち場と境目) | 02「保存」。「どれかが失敗したら、何も変えずに元のままにする」を、アクティビティの 1 コミット 1 行より優先する |
-| A5a-12 | トースト: 「{旧 ID} は {新 ID} になりました」、空になった項目があれば「。合う値がなく空になった項目: A・B」を続ける。失敗は「{移動先の Store 名} に送信できないため移動できません: {理由}」(理由は 06 の短い理由。`syncstatus` の文を使う)、オフラインは「オフラインのため {移動先の Store 名} へ移動できません」、それ以外の失敗(断りでない保存の失敗)は「移動できませんでした」(仮。A4b の失敗のトーストと同じ扱い)。オフラインかは画面が決める: 移動先に remote があり、ブラウザがオフライン(`navigator.onLine === false`)なら、送らずにオフラインの文を出す。サーバーが `unreachable` を返したときは「…送信できないため移動できません: remote に接続できません」 | 02「保存」。サーバーはこのマシンにあるので、オフラインを知るのはブラウザ |
-| A5a-13 | 移す先の候補は、表示中の Store のうち閲覧のみでないもの(`StoreList`)の、サイドバーで非表示でなく、削除済みでないプロジェクトが 1 つ以上あるワークスペース(自分のワークスペースを除く)。並びは Store の並び → ワークスペースの並び。候補がなければダイアログを開かずトースト「移せるワークスペースがありません(プロジェクトのある、書き込めるワークスペースが要ります)」 | 02「移す先の選び方」。ワークスペースの非表示は B の持ち場で、`StoreList`・カタログの既存の値を使う(Task 4 が確かめる) |
-| A5a-14 | ダイアログの予告はサーバーの `GET items/{item}/transfer-preview?toStore=&toWorkspace=&toProject=` が返す: 下の削除済みでない件数 N・削除済みの件数 M・移動先の次の番号の ID(「HH-13 からの番号に振り直されます」の HH-13)・別の Store か・remote の注意を出すか・ステータスの置き換えの行(`{status, name, count, choices[], default}`)。行の並びは移動元のワークスペースのステータスの並び | 02「移す先の選び方」。下の孫・削除済みは画面が読んでいない |
-| A5a-15 | 旧 ID の解決は `transfers.Service.Locate(ctx, storeName, display string) (Located, error)`。順: (a) いまの ID で見つかる(Store 名の Store → サイドバーの順)ならそれ。(b) 旧い接頭辞で見つかる(いまの接頭辞のワークスペースが優先。03)。(c) 表示中のすべての Store の転送記録から `old` が一致する行を集め、`at` の新しい順に、`target` の内部 ID を表示中のすべての Store から探す。見つかれば開く(旧 ID から開いた印と、最初に一致した行の日時・新 ID を添える)。見つからなければ、削除済み → 完全に削除(`purged.jsonl` に `target`)→ 移動先の Store が表示中でない → いまの場所が記録の移動先と違う、の順で文を選ぶ。どれでもなければ見つからない(ホームへ) | 02「関連・転送記録・旧 ID」、01「画面のアドレス」、03「接頭辞」 |
-| A5a-16 | 旧 ID から開いたときの「{旧 ID} は {日時} に {新 ID} へ移動しました」は、詳細パネルの上部(タイトルの上)に 1 行で出し、パネルを閉じるか別のアイテムを開けば消える。普通に開いたときは出さない | 02「移した日時の表示」。場所は仕様にないので、プロジェクトの概要の上部(02「名前の変更・移動・削除」)に合わせた |
-| A5a-17 | 履歴の「{旧 ID} から移動」は、`moved_in` の行(別の Store)と、転送記録のうち `target` がこのアイテムの行(同じ Store)から作る。文は「{旧 ID} から移動({移動元の Store 名} / {ワークスペース名} / {プロジェクト名})」で、時刻は行の `at`(01 の書き方)。同じ Store の中の移動の `set place` の行は「親を変更」に出さない | 02「関連・転送記録・旧 ID」、A4b の「親を変更」の直し |
-| A5a-18 | 自分で移したとき、詳細パネルを開いていれば新しいアイテム(新しい Store・内部 ID)に切り替える。ほかの書き手(同期・別のタブ・別のプログラム)が移したときは、パネルの読み直しで、内部 ID が同じでもワークスペースが変わっていれば閉じ、404 なら閉じる(A4b-22) | 02「保存」、06 |
-| A5a-19 | API(`/api/…`): `GET stores/{store}/items/{item}/transfer-targets`(候補)、`GET stores/{store}/items/{item}/transfer-preview`、`POST stores/{store}/items/{item}/transfer`(本文 `{toStore, toWorkspace, toProject, toParent?, statusChoices: {from: to}}` → `{toStore, itemId, display, emptied: string[]}`)、`GET locate?store=&id=`(→ `{kind: "found", storeId, projectId, itemId, movedFrom?: {old, at, display}}` か `{kind: "gone", message}` か 404)。失敗の理由は既存の `apierr` の形で返す | |
+| A5a-10 | 移動先のメンバーに足す人は `transfer.People(from workspace.Settings, items []item.Item, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap)`(担当者・ユーザー型の値・ウォッチ・作成者・コメントと作業時間の書き手・行の `by`。`hedgehug[bot]` を除く。ログイン名は大文字小文字を区別せずに比べ、移動先にいる人は移動先の書き方に置き換える)。1 つ目は移動先に足す人(小文字のログイン名の順)、2 つ目 `PeopleMap` は数えたすべての人の対応(移動元のログイン名の小文字 → 移動先の綴り。足す人も入る)。足す人の綴りは、移動元のメンバーにいればその綴り、いなければ見つけた綴りのうち辞書順で先頭、表示名は移動元のメンバーの表示名(いなければログイン名)。Task 6 は、足す人を `member.Join(ログイン名)` と、表示名がログイン名と違うときの `member.Rename(ログイン名, ログイン名, 表示名)` で書き、`PeopleMap` を自分では作らず `Remap` に渡す | 02「保存」のメンバー、「値の引き直し」の担当者 |
+| A5a-11 | アクティビティの文(保存の Summary): 移動の操作は「{旧 ID} を {移動元} から {移動先} へ移動」。{移動元}・{移動先} はワークスペース名で、別の Store のときは「{Store 名} の {ワークスペース名}」。移動先・移動元の両方の保存に同じ文。メンバーの追加(`member.Join`)は移動先の同じ保存に入れる(別の保存にすると、移動が失敗したときにメンバーだけが残り「元のまま」にならない)。「メンバー {ログイン名} を追加」の行は、アクティビティの画面を作るトラック(C4)が、その保存のメンバーの `join` の行から 1 人 1 行で作る。この分け方はユーザーが承認した(2026-11-14) | 02「保存」。「どれかが失敗したら、何も変えずに元のままにする」を、アクティビティの 1 コミット 1 行より優先する |
+| A5a-12 | トースト: 「{旧 ID} は {新 ID} になりました」、空になった項目があれば「。合う値がなく空になった項目: A・B」を続ける。失敗は「{移動先の Store 名} に送信できないため移動できません: {理由}」(理由は 06 の短い理由。`syncstatus` の文を使う)、オフラインは「オフラインのため {移動先の Store 名} へ移動できません」、それ以外の失敗(断りでない保存の失敗)は「移動できませんでした」(仮。A4b の失敗のトーストと同じ扱い)。オフラインかは画面が決める: 移動先に remote があり、ブラウザがオフライン(`navigator.onLine === false`)なら、送らずにオフラインの文を出す。サーバーが `unreachable` を返したときは「…送信できないため移動できません: remote に接続できません」。移動の送信が失敗したときは、トーストを出してダイアログを開いたままにする(移動先を選び直して再び押せるように)。`NotFound`(移すアイテムが別の経路で消えた)のときだけダイアログを閉じて、画面を読み直す | 02「保存」。サーバーはこのマシンにあるので、オフラインを知るのはブラウザ |
+| A5a-13 | 移す先の候補は、表示中の Store のうち閲覧のみでないもの(`StoreList`。サイドバーで非表示の Store は `StoreList` が除く。ワークスペース単位の非表示はない)の、削除済みでないプロジェクトが 1 つ以上ある、自分のワークスペースを除くワークスペース。並びは Store の並び → ワークスペースの並び(`workspace.RankOf(ログ)` の昇順、同じなら内部 ID の順)。候補がなければダイアログを開かずトースト「移せるワークスペースがありません(プロジェクトのある、書き込めるワークスペースが要ります)」 | 02「移す先の選び方」 |
+| A5a-14 | ダイアログの予告はサーバーの `GET items/{item}/transfer-preview?toStore=&toWorkspace=&toProject=` が返す: 下の削除済みでない件数 `below`・削除済みの件数 `deleted`・移動先の次の番号の ID `nextDisplay`(「HH-13 からの番号に振り直されます」の HH-13)・別の Store か `crossStore`・remote の注意を出すか `remoteNotice`(別の Store で、移動先に remote がなく移動元にある)・移動先の Store に remote があるか `destinationHasRemote`(A5a-12 のオフラインの判断に画面が使う)・ステータスの置き換えの行 `replacements`(`{status, name, count, choices: [{id, name}], default}`)。行の並びは移動元のワークスペースのステータスの並び | 02「移す先の選び方」。下の孫・削除済みは画面が読んでいない |
+| A5a-15 | 旧 ID の解決は `transfers.Service.Locate(ctx, storeName, display string) (Located, error)`。順: (a) いまの ID で見つかる(Store 名の Store → サイドバーの順)ならそれ。(b) 旧い接頭辞で見つかる(いまの接頭辞のワークスペースが優先。03)。(c) 表示中のすべての Store の転送記録から `old` が一致する行を集め、`at` の新しい順に、`target` の内部 ID を表示中のすべての Store から探す。見つかれば開く(旧 ID から開いた印 `MovedFrom{Old, At, Display, Current}` を添える。`Old`・`At`・`Display` は、旧 ID が一致した最初の行(`at` が最も新しいもの)の旧 ID・日時・新 ID、`Current` は開くアイテムのいまの ID)。見つからなければ、削除済み → 完全に削除(`purged.jsonl` に `target`)→ 移動先の Store が表示中でない → より新しい記録の移動先の Store が表示中でない(B から C へ移した、その C が見えない)、の順で `Gone{Reason, Old, At, NewDisplay, StoreName}` を返す(`Reason` は `deleted`・`purged`・`hidden`・`elsewhere`)。どれでもなければ見つからない(ホームへ)。文はサーバーで作らず、画面が `formatDateTime` で作る(日時の書き方を Go と TS に 2 つ持たないため。A5c のパレットの「旧 ID・{日付} に移動」も TS で作る) | 02「関連・転送記録・旧 ID」、01「画面のアドレス」、03「接頭辞」 |
+| A5a-16 | 旧 ID から開いたときの 1 行は、詳細パネルの上部(タイトルの上)に出し、パネルを閉じるか別のアイテムを開けば消える。普通に開いたときは出さない。旧 ID が一致した記録の新 ID(`MovedFrom.Display`)が、開いたアイテムのいまの ID(`MovedFrom.Current`)と同じなら「{旧 ID} は {日時} に {新 ID} へ移動しました」、違う(そのあとさらに移した。A → B → C)なら「{旧 ID} は {日時} に {B の新 ID} へ移動し、その後 {C のいまの ID} へ移動しました」。{日時} は旧 ID が一致した記録の日時。画面が `formatDateTime` で作る | 02「移した日時の表示」。ユーザーの決定(2026-11-14)。場所は仕様にないので、プロジェクトの概要の上部(02「名前の変更・移動・削除」)に合わせた |
+| A5a-17 | 履歴の「{旧 ID} から移動」は、`moved_in` の行(別の Store)と、場所の `set` の行(同じ Store。`from` に移動元の内部 ID があり、旧 ID は同じ `op` の転送記録の `old` から取る)から作る。文は「{旧 ID} から移動({移動元の Store 名} / {ワークスペース名} / {プロジェクト名})」で、時刻は行の `at`(01 の書き方)。同じ Store の中の移動の `set place` の行は「親を変更」に出さない。`history.Context` に `Origin` を、`apphistory.Service` に `StoreList` を足す(Task 7) | 02「関連・転送記録・旧 ID」、A4b の「親を変更」の直し |
+| A5a-18 | 自分で移したとき、詳細パネルを開いていれば新しいアイテム(新しい Store のアイテム)に切り替える。別の Store へ移しても内部 ID は変わらない(`Import` はフォルダを同じ名前で写す。`Moved.Item` は元の内部 ID。移動先に同じ内部 ID があれば `Import` が断る)。ほかの書き手(同期・別のタブ・別のプログラム)が移したときは、パネルの読み直しで、内部 ID が同じでもワークスペースが変わっていれば閉じ、404 なら閉じる(A4b-22) | 02「保存」、06 |
+| A5a-19 | API(`/api/…`): `GET stores/{store}/items/{item}/transfer-targets`(候補)、`GET stores/{store}/items/{item}/transfer-preview`(A5a-14)、`POST stores/{store}/items/{item}/transfer`(本文 `{toStore, toWorkspace, toProject, toParent?, statusChoices: {from: to}}` → 200 `{toStore, itemId, display, emptied: string[]}`。送れなかったときは 422 で `detail` に「{移動先の Store 名} に送信できないため移動できません: {理由}」の全文)、`GET locate?store=&id=`(→ `{kind: "found", storeId, projectId, itemId, movedFrom?: {old, at, display, current}}` か `{kind: "gone", reason, old, at, newDisplay, storeName?}` か 404。`at` は `change.TimeLayout`)。失敗の理由は既存の `apierr` の形で返す |  |
 | A5a-20 | e2e のビルドに、書き込める 3 つ目の Store `team`(remote なし、サンプルデータ、ワークスペース「Team」接頭辞 `TM`)と、`e2e` の Store に 2 つ目のワークスペース「Mobile」(接頭辞 `MB`、プロジェクト 1 つ、Epic 1 つ)を足す。remote ありの経路は Go のテスト(偽の `Replicator`)で確かめる | 通しのテストで、同じ Store と別の Store の両方を流すため |
+| A5a-21 | 画面のアドレスの、旧い接頭辞でのワークスペース(`/s/{store}/w/{旧い接頭辞}`)とプロジェクト(`{旧い接頭辞}-P{番号}`)も、そのワークスペース・プロジェクトを開く(いまの接頭辞が優先)。旧い接頭辞は、`list-workspaces` の応答の `oldPrefixes`(空は `[]`)でカタログのワークスペースに載せる。アイテムの旧い接頭辞は `Locate` の (b) が扱う。転送記録でのプロジェクトの旧 ID は A5b(プロジェクトの移動) | 03「接頭辞」。A2 の計画が「旧い接頭辞は A5 で一緒に足す」としていたもの |
+| A5a-22 | 移動元が閲覧のみなら `refusal.New("閲覧のみの Store です")`。Step と、選べない移動先は `port.ErrNotFound`。メニューの Step の行・パネルには「別のワークスペースへ移動…」を出さない(仕様に Step の無効の理由の文言がなく、Step は単独で移せない) | 02「移すもの」、「詳細パネル」のメニュー |
+| A5a-23 | 仕様にない文言(ダイアログのタイトル・項目名・「移動先で変わること」の各行・ワークスペースの選択肢の書き方・「移動できませんでした」・「{新 ID} の移動を取り消し」)は、Task 12 で仕様 02 に書き足し、PR の本文に一覧で出す |  |
 
 ---
 
@@ -99,37 +103,41 @@
 
 | 場所 | 新規・変更 | 役割 |
 |---|---|---|
-| `internal/domain/transfer/` | 新規 | `Record`・`MovedIn`(行の形と読み書き)、`Remap`・`UsableStatuses`、`Number`、`People`、`Collect`(移すものと外との関連) |
+| `internal/domain/transfer/` | 新規 | `Record`・`MovedIn`(行の形と読み書き)、`Remap`・`Unmatched`・`UsableStatuses`(`remap.go`・`remap_fields.go`)、`Number`、`People`、`Collect`(移すものと外との関連) |
 | `internal/domain/change/` | 変更 | `MovedIn` の種類(`t: moved_in`)の定数 |
 | `internal/domain/history/` | 変更 | 「{旧 ID} から移動」、`moved_in` の `names` で値の名前を引く |
 | `internal/app/port/` | 変更 | `Reader.Transfers()`・`Reader.Purged()`、`Tx.WriteTransfers()`、`ItemWriter.Import`・`Remove`、`Replicator.SyncSave` |
 | `internal/infra/gitstore/` | 変更 | 上の口の実装(新しいファイルを足さない) |
-| `internal/app/apptest/` | 変更 | 偽物と照合テスト、`Replicator.SyncSave` の偽物 |
-| `internal/app/syncing/` | 変更 | `Deliver` |
+| `internal/app/apptest/` | 変更 | 偽物と照合テスト、`Replicator.SyncSave` の偽物、`AddPurged`、e2e とテストのサンプル(`SampleMobile`・`SampleTeam`)。`reentry/` は `stores.go` から出した下位のパッケージ |
+| `internal/app/syncing/` | 変更 | `Deliver`、`Service.Stores` |
+| `internal/app/history/` | 変更 | `Service.StoreList`(同じ Store の移動の履歴の材料) |
+| `internal/app/workspaces/` | 変更 | `List` が旧い接頭辞を返す(新しいファイルを足さない) |
+| `internal/adapter/httpapi/workspaces/` | 変更 | `WorkspaceSummary` に `oldPrefixes` |
 | `internal/app/transfers/` | 新規 | `Service`・`Delivery`、`Targets`・`Preview`・`Move`・`Locate` |
 | `internal/adapter/httpapi/transfers/` | 新規 | API |
 | `cmd/hedgehug/` | 変更 | 配線、e2e のビルドの Store とサンプル |
-| `web/packages/core/src/port/transfers.ts`・`web/packages/api/src/transfers.ts` | 新規 | 口と api の実装 |
-| `web/packages/core/src/features/transfers/` | 新規 | ダイアログのモデル(候補・選び直し・置き換えの行・文)、旧 ID の解決 |
+| `web/packages/core/src/port/transfers.ts`・`web/packages/api/src/transfers.ts`・`web/packages/core/src/model/transfer.ts` | 新規 | 口・api の実装・型 |
+| `web/packages/core/src/features/transfers/` | 新規 | ダイアログのモデル(`dialog.ts`・`dialogText.ts`)、移したあとの切り替え(`afterMoved.ts`)、旧 ID の文(`movedText.ts`)とパネルの上部の 1 行(`movedNotice.ts`) |
 | `web/packages/core/src/features/items/menu.ts` | 変更 | 「別のワークスペースへ移動…」 |
-| `web/packages/core/src/features/router/resolve.ts` | 変更 | `locate` に渡す |
-| `web/app/src/screens/item/TransferDialog.svelte` ほか | 新規・変更 | ダイアログ、パネルの上部の 1 行 |
+| `web/packages/core/src/features/router/resolve.ts`・`features/catalog/catalog.ts`・`features/screen/screen.ts` | 変更 | `locate` に渡す、旧い接頭辞でのワークスペース・プロジェクトのアドレス、`gone` のトースト |
+| `web/packages/core/src/features/items/detail.ts`・`features/dates/date.ts` | 変更 | ほかの書き手が移したときにパネルを閉じる、`formatDateTime` |
+| `web/app/src/screens/item/TransferDialog.svelte` ほか・`web/app/src/wire.ts` | 新規・変更 | ダイアログ、パネルの上部の 1 行、`transfersPort`・`movedNotice` |
 
 ## タスクの一覧
 
 | # | タスク | 待つもの |
 |---|---|---|
 | 1 | `domain/transfer`: `Record`・`MovedIn`・`Number`・`People`・`Collect` | — |
-| 2 | `domain/transfer`: `Remap`・`UsableStatuses` | 1 |
+| 2 | `domain/transfer`: `Remap`・`Unmatched`・`UsableStatuses` | 1(Task 3 と並べてよい) |
 | 3 | 口と保存: `Transfers`・`Purged`・`WriteTransfers`・`Import`・`Remove`(gitstore・偽物・照合テスト) | 1 |
-| 4 | 口と同期: `Replicator.SyncSave`(gitstore・偽物)と `syncing.Service.Deliver` | 3 |
+| 4 | 口と同期: `Replicator.SyncSave`(gitstore・偽物)と `syncing.Service.Deliver` | 3(どちらも gitstore と apptest を触るので、直列) |
 | 5 | `app/transfers`: 候補・予告・同じ Store の中の移動 | 2・3 |
 | 6 | `app/transfers`: 別の Store への移動(`Delivery`、メンバー、関連の解除、戻し) | 4・5 |
 | 7 | `app/transfers`: `Locate` と履歴の「{旧 ID} から移動」 | 3・5 |
 | 8 | API と配線(`httpapi/transfers`、`cmd/hedgehug`、e2e のビルドの Store とサンプル) | 5〜7 |
 | 9 | 画面の口とダイアログのモデル(core) | 8 |
 | 10 | ダイアログ・メニュー・トースト・パネルの切り替え(app) | 9 |
-| 11 | 画面のアドレスの旧 ID の解決と、パネルの上部の 1 行 | 9 |
+| 11 | 画面のアドレスの旧 ID・旧い接頭辞の解決(サーバーの `oldPrefixes` を含む)と、パネルの上部の 1 行 | 9 |
 | 12 | 通しのテスト(e2e)と PR | すべて |
 
 ## タスク間の名前
@@ -139,30 +147,32 @@
 | 名前 | 置き場所 | 形 |
 |---|---|---|
 | `change.MovedIn` | `internal/domain/change/record.go` | `const MovedIn Type = "moved_in"` |
-| `transfer.Record` | `internal/domain/transfer/record.go` | A5a-1。`func ParseRecords(b []byte) []Record`(読めない行は飛ばす)、`func (r Record) JSON() []byte` |
+| `transfer.Record` | `internal/domain/transfer/record.go` | A5a-1。`func ParseRecords(b []byte) []Record`(読めない行は飛ばす)、`func (r Record) JSON() []byte`、`const EntityItem`・`EntityProject`・`EntityWorkspace` |
 | `transfer.MovedInInfo`・`transfer.NewMovedIn`・`transfer.MovedInOf` | `internal/domain/transfer/movedin.go` | `type MovedInInfo struct { Old, FromStore, FromStoreName string; FromWorkspace change.ID; FromWorkspaceName string; FromProject change.ID; FromProjectTitle string; At time.Time; Names map[change.ID]string }`、`func NewMovedIn(m MovedInInfo) change.Draft`、`func MovedInOf(log []change.Record) []MovedInInfo`(書いた順) |
 | `transfer.Number` | `internal/domain/transfer/number.go` | A5a-9 |
-| `transfer.Set`・`transfer.Collect` | `internal/domain/transfer/collect.go` | `type Set struct { Root item.Item; Below []item.Item; Outside []Cut }`、`type Cut struct { From, To item.ID; Type string }`(外の相手との関連。両方の側)。`func Collect(root item.ID, all []item.Item) (Set, error)` |
-| `transfer.People` | `internal/domain/transfer/people.go` | A5a-10。`type PeopleMap map[string]string`(移動元のログイン名の小文字 → 移動先のログイン名) |
-| `transfer.Remap`・`transfer.RemapResult`・`transfer.UsableStatuses` | `internal/domain/transfer/remap.go` | A5a-7・A5a-8。`type RemapResult struct { Drafts []change.Draft; Emptied []string }` |
+| `transfer.Set`・`transfer.Collect` | `internal/domain/transfer/collect.go` | `type Set struct { Root item.Item; Below []item.Item; Outside []Cut }`、`type Cut struct { From, To item.ID; Type string }`(外の相手との関連。両方の側)、`func (s Set) Contains(id item.ID) bool`、`var ErrNotFound`・`ErrStep`、`func Collect(root item.ID, all []item.Item) (Set, error)` |
+| `transfer.People` | `internal/domain/transfer/people.go` | A5a-10。`type PeopleMap map[string]string`(移動元のログイン名の小文字 → 移動先のログイン名)、`func People(from workspace.Settings, items []item.Item, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap)` |
+| `transfer.Remap`・`transfer.RemapResult`・`transfer.Unmatched`・`transfer.UsableStatuses` | `internal/domain/transfer/remap.go` | A5a-7・A5a-8。`type RemapResult struct { Drafts []change.Draft; Emptied []string }`、`func Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult`(`people == nil` は同じ Store)、`func Unmatched(statuses []change.ID, from, to workspace.Settings, toProject project.ID) []change.ID` |
 | `port.TransferReader`・`port.TransferWriter`・`port.PurgedReader`・`port.Purged` | `internal/app/port/stores.go` | `Reader.Transfers() TransferReader { List() ([]transfer.Record, error) }`、`Reader.Purged() PurgedReader { List() ([]Purged, error) }`(`type Purged struct { Entity string; Target change.ID; Display string; At time.Time }`)、`Tx.WriteTransfers() TransferWriter { Append(r transfer.Record) error }`(`ID`・`Op`・`At`・`By` は Tx が埋める) |
 | `ItemWriter.Import`・`ItemWriter.Remove` | 同上 | `Import(id item.ID, log []change.Record, description string) error`(フォルダがあれば `ErrInvalidOperation`。行はそのまま書き、`*.yaml` は作り直す)、`Remove(id item.ID) error`(フォルダを消す。なければ `ErrNotFound`) |
-| `port.Replicator.SyncSave` | `internal/app/port/replicator.go` | `SyncSave(ctx, storeID StoreID, remote Remote, op Operation, fn func(tx Tx) error) (SyncResult, error)` |
-| `(syncing.Service) Deliver` | `internal/app/syncing/deliver.go` | `Deliver(ctx, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error)`(A5a-5) |
-| `transfers.Service`・`transfers.Delivery` | `internal/app/transfers/service.go` | `type Delivery interface { Deliver(ctx, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error) }`。`Service{ Stores port.Stores; StoreList port.StoreList; Delivery Delivery; Clock port.Clock; IDs port.IDs; Me func(ctx) (string, error) }`(既存の機能の Service に合わせて Task 5 が決める) |
+| `port.Replicator.SyncSave`・`port.SaveError` | `internal/app/port/replicator.go` | `SyncSave(ctx, storeID StoreID, remote Remote, op Operation, fn func(tx Tx) error) (SyncResult, error)`、`type SaveError struct{ Err error }`(`fn` の失敗を包む。通信の失敗は包まない) |
+| `(syncing.Service) Deliver`・`syncing.Service.Stores` | `internal/app/syncing/deliver.go` | `Deliver(ctx, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error)`(A5a-5)。`Service` に `Stores port.Stores`(配線では `NotifyWrites` で包んだもの) |
+| `transfers.Service`・`transfers.Delivery` | `internal/app/transfers/service.go` | `type Delivery interface { Deliver(ctx, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error) }`。`Service{ Stores port.Stores; StoreList port.StoreList; Delivery Delivery; Identity port.Identity; Targets port.SyncTargets; Clock port.Clock }`(`Targets` は移動先の remote の有無と URL。`IDs` は持たない) |
 | `transfers.Target`・`(Service) Targets` | `internal/app/transfers/targets.go` | `type Target struct { Store port.StoreInfo; Workspace workspace.Workspace; Projects []project.Project; Epics map[project.ID][]item.Item }`、`Targets(ctx, store, id) ([]Target, error)` |
-| `transfers.Preview`・`(Service) Preview` | `internal/app/transfers/preview.go` | A5a-14 |
+| `transfers.Preview`・`(Service) Preview` | `internal/app/transfers/preview.go` | A5a-14。`type Preview struct { Below, Deleted int; NextDisplay string; CrossStore, RemoteNotice, DestinationHasRemote bool; Replacements []StatusRow }` |
 | `transfers.MoveInput`・`transfers.Moved`・`(Service) Move` | `internal/app/transfers/move.go`(同じ Store)・`move_store.go`(別の Store) | `type MoveInput struct { ToStore port.StoreID; ToWorkspace workspace.ID; ToProject project.ID; ToParent *item.ID; StatusChoices map[change.ID]change.ID }`、`type Moved struct { ToStore port.StoreID; Item item.ID; Display string; Emptied []string }`、送れなかったときは `*transfers.SendError{Store string; Reason syncstatus.Reason}`(`errors.As` で取る) |
-| `transfers.Located`・`(Service) Locate`・`transfers.OldIDs` | `internal/app/transfers/locate.go` | A5a-15。`type Located struct { Found bool; Store port.StoreID; Project project.ID; Item item.ID; MovedFrom *MovedFrom; Message string }`、`type MovedFrom struct { Old string; At time.Time; Display string }` |
+| `transfers.Located`・`(Service) Locate`・`transfers.OldIDs` | `internal/app/transfers/locate.go` | A5a-15。`type Located struct { Found bool; Store port.StoreID; Project project.ID; Item item.ID; MovedFrom *MovedFrom; Gone *Gone }`、`type MovedFrom struct { Old string; At time.Time; Display, Current string }`、`type Gone struct { Reason string; Old string; At time.Time; NewDisplay, StoreName string }`(`Reason` は `deleted`・`purged`・`hidden`・`elsewhere`) |
+| `apptest` の偽物 | `internal/app/apptest/` | `(*Stores).AddPurged(id port.StoreID, p port.Purged)`(Task 3。`purged.jsonl` の行を足すテスト用)、`Replicator` の `Stores`・`SendErrs`・`ReplicatorCall.Save`(Task 4)、`SampleMobile`・`SampleTeam`(Task 8。内部 ID は `Sample` と分ける。e2e のサンプルは Store 名 `team`、Mobile の Epic は `MB-1`) |
 
 ### HTTP API
 
 | operationId | メソッドとパス | 本文 → 応答 | タスク |
 |---|---|---|---|
 | `list-transfer-targets` | GET `/api/stores/{store}/items/{item}/transfer-targets` | → `{storeId, storeName, workspaceId, workspaceName, prefix, projects: {id, title, epics: {id, display, title}[]}[]}[]` | 8 |
-| `get-transfer-preview` | GET `/api/stores/{store}/items/{item}/transfer-preview` | query `toStore, toWorkspace, toProject` → A5a-14 | 8 |
-| `transfer-item` | POST `/api/stores/{store}/items/{item}/transfer` | A5a-19 | 8 |
-| `locate-item` | GET `/api/locate` | query `store, id` → A5a-19 | 8 |
+| `get-transfer-preview` | GET `/api/stores/{store}/items/{item}/transfer-preview` | query `toStore, toWorkspace, toProject` → `{below, deleted, nextDisplay, crossStore, remoteNotice, destinationHasRemote, replacements: [{status, name, count, choices: [{id, name}], default}]}`(A5a-14。空は `[]`) | 8 |
+| `transfer-item` | POST `/api/stores/{store}/items/{item}/transfer` | A5a-19 → 200 `{toStore, itemId, display, emptied}`。送れなかったときは 422 で `detail` に「{移動先の Store 名} に送信できないため移動できません: {理由}」の全文 | 8 |
+| `locate-item` | GET `/api/locate` | query `store, id` → `{kind: "found", storeId, projectId, itemId, movedFrom?: {old, at, display, current}}` か `{kind: "gone", reason, old, at, newDisplay, storeName?}`(A5a-19)。どれでもなければ 404 | 8 |
+| `list-workspaces` | GET `/api/stores/{store}/workspaces` | 既存。応答の各ワークスペースに `oldPrefixes: string[]`(空は `[]`)を足す(A5a-21) | 11 |
 
 ### 画面
 
@@ -171,62 +181,12 @@
 | `TransfersPort` | `web/packages/core/src/port/transfers.ts` | `targets(storeId, itemId)`・`preview(storeId, itemId, to)`・`transfer(storeId, itemId, input)`・`locate(storeName, id)`。api の実装 `web/packages/api/src/transfers.ts`、偽物 `web/packages/core/src/features/transfers/transfers.test-util.ts` |
 | `createTransferDialog` | `web/packages/core/src/features/transfers/dialog.ts` | Task 9 が決める(候補・選んだ値・予告・置き換えの選択・文・送信) |
 | `itemTransfer` | `web/app/src/wireActions.ts` | `itemTransfer.open(item)` |
+| `Located`・`MovedFrom`・`Gone` | `web/packages/core/src/model/transfer.ts` | Task 9。`goneText(g, now)`・`movedLine(m, now)` は `features/transfers/movedText.ts`(Task 11) |
 | `ItemMenuId` の `"transfer"` | `web/packages/core/src/features/items/menu.ts` | 「移動…」の次、「種類を変更…」の前 |
 
 ---
 
-## 本文より優先する直し(3 人の書き手の指摘をまとめたもの)
-
-この節は、上の「決めたこと」「タスク間の名前」と、各タスクの本文より優先する。指摘の原文は末尾の「付録」にある。
-
-**決めたことの直し**
-
-- A5a-6 の戻し: 移動元の保存が失敗したときの移動先の戻しは、写したフォルダの `Remove` に加えて、その移動で足したメンバーを `change.NewRemove("members", login)` で外す(`member.Join` は `members` への `add`)。`number` の行は残す(番号は再利用しないので害がない)。**Task 6**。
-- A5a-6 の補足: 移動先の保存と移動元の保存のあいだでプロセスが落ちたときは、両方の Store に同じ内部 ID のアイテムが残る。保存を 2 つの Store にまたいで 1 つにする仕組みは持たない(仕様は Store ごとに 1 回の保存と決めている)。この状態では `Import` が同じ内部 ID を断るので移し直せない。利用者はどちらかを削除して直す。プロセスが落ちる場合だけの端の場面なので、これ以上は扱わない。
-- A5a-5 の補足: `SyncSave` は送信が重なると受け取り直して `fn` を呼び直す(最大 3 回)。**Task 6 の `fn` は、番号・メンバー・値の引き直しを、毎回 `fn` に渡された `Tx` から読んで決める**(前の試みで読んだ値を使わない)。
-- A5a-5 の `syncing.Service` には保存の口 `Stores port.Stores` を足す。配線では、ほかの機能と同じく `NotifyWrites` で包んだ `Stores` を渡す(remote のない移動先の保存も画面に知らせるため)。`SyncSave` の経路は `Deliver` が `EventSync` を知らせる。`Deliver` は閲覧のみの Store を `port.ErrInvalidOperation` で断り、成功したらミラーへ送る。`AfterSuccess` は呼ばない。**Task 4・8**。
-- A5a-5 の補足: `fn` の失敗と送信の失敗を分けるため、`port.SaveError`(`fn` の失敗を包む型)を足す。`Deliver` は `SaveError` なら中のエラーをそのまま返し、理由にしない。**Task 4**。
-- A5a-7: `Remap` に移動先のプロジェクトを渡す。形は `Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult`。`people == nil` は同じ Store(人はそのまま)。予告の「ステータスの置き換え」の行と `Remap` が同じ規則を使うよう、`transfer.Unmatched(statuses []change.ID, from, to workspace.Settings, toProject project.ID) []change.ID`(移動先で使えないステータス)を Task 2 が作り、Task 5 の `preview.go` も使う。**Task 2・5**。
-- A5a-10: `People` の形は Task 1 の本文のもの `People(from workspace.Settings, items []item.Item, logs map[item.ID][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap)` にする(足す人と、移動元のログイン名から移動先の書き方への対応の両方を返す)。Task 6 は自分で `PeopleMap` を作らず、これを使う。**Task 1・6**。
-- A5a-13: ワークスペースの非表示はなく、非表示は Store 単位(`StoreList` が除く)。ワークスペースの並びは `workspace.RankOf(ログ)` の昇順(同じなら内部 ID の順)。
-- A5a-15・A5a-19 の見つからないとき: 文はサーバーで作らず、画面が作る(日時の書き方を Go と TS に 2 つ持たないため。A5c のパレットの「旧 ID・{日付} に移動」も TS で作る)。`Located` は `Gone *Gone`(`type Gone struct { Reason string; Old string; At time.Time; NewDisplay string; StoreName string; NowDisplay string }`、`Reason` は `deleted`・`purged`・`hidden`・`elsewhere`)を持ち、`Message` は持たない。API は `{kind: "gone", reason, old, at, newDisplay, storeName?, nowDisplay?}`。画面の `formatDateTime`(Task 11)で 4 つの文を作る。`whenText`(Task 7 の本文)は作らない。4 つ目の文(`elsewhere`)の当てはめは Task 7 の本文のとおり(より新しい記録の移動先の Store が表示中でない)。**Task 7・8・9・11**。
-- A5a-15 の `MovedFrom`: `Display` は開くアイテムのいまの ID、`At` は旧 ID が一致した記録の日時。A → B → C で A の旧 ID から開くと「HH-2 は {A→B の日時} に {C のいまの ID} へ移動しました」。**Task 7・11**。
-- A5a-16 に足す: 画面のアドレスの、旧い接頭辞でのワークスペース(`/s/{store}/w/{旧い接頭辞}`)とプロジェクト(`{旧い接頭辞}-P{番号}`)も、そのワークスペース・プロジェクトを開く(03「接頭辞」。いまの接頭辞が優先)。A2 の計画が「旧い接頭辞は A5 で一緒に足す」としていたもの。旧い接頭辞はカタログのワークスペースに無ければ足す(`get-workspace` の `oldPrefixes` と同じ値)。転送記録でのプロジェクトの旧 ID は A5b(プロジェクトの移動)。**Task 11**。
-- A5a-17: 同じ Store の移動の履歴は、`set place` の行(`from` に移動元の内部 ID)と、同じ `op` の転送記録の `old` から作る。`history.Context` に `Origin` を、`apphistory.Service` に `StoreList` を足す(Task 7 の本文のとおり)。
-- 移動元が閲覧のみなら `refusal.New("閲覧のみの Store です")`、Step と選べない移動先は `port.ErrNotFound`(Task 5 の本文のとおり)。Step のメニューには「別のワークスペースへ移動…」を出さない(仕様に Step の無効の理由の文言がなく、Step は単独で移せない)。
-- 移動の送信が失敗したときは、ダイアログを開いたままにしてトーストを出す(選び直して再び押せるように)。`NotFound` のときだけ閉じる。**Task 10**。
-- 仕様にない文言(ダイアログのタイトル・項目名・「移動先で変わること」の各行・ワークスペースの選択肢の書き方・「移動できませんでした」・「{新 ID} の移動を取り消し」)は、Task 12 で仕様 02 に書き足し、PR の本文に一覧で出す。
-
-**名前の直し**
-
-| もの | 作るタスク | あとのタスク |
-|---|---|---|
-| `transfers.Service` の欄 | 5 | `Stores port.Stores`・`StoreList port.StoreList`・`Delivery Delivery`・`Identity port.Identity`・`Targets port.SyncTargets`(移動先の remote の有無と URL)・`Clock port.Clock`。`IDs` は持たない |
-| 予告の応答のキー | 8 | 画面(Task 9)の名前に揃える: `{below, deleted, nextDisplay, crossStore, remoteNotice, destinationHasRemote, replacements: [{status, name, count, choices: [{id, name}], default}]}`。`destinationHasRemote` はオフラインの判断(A5a-12)に使う |
-| 移動の応答 | 8 | `{toStore, itemId, display, emptied}`(200)。送れなかったときは 422 で `detail` に「{移動先の Store 名} に送信できないため移動できません: {理由}」の全文 |
-| 別の Store へ移したあとの内部 ID | 6 | `Import` は内部 ID を変えない。`Moved.Item` は元の内部 ID。e2e のサンプルの `SampleMobile`・`SampleTeam` の内部 ID は `Sample` と分ける |
-| 偽物の `(*apptest.Stores).AddPurged(id port.StoreID, p port.Purged)` | 3 | 7 |
-| `apptest.Replicator` の `Stores`・`SendErrs`、`ReplicatorCall.Save` | 4 | 6 |
-| `internal/app/apptest/reentry`(`stores.go` から出す下位のパッケージ) | 3 | |
-| `transfer.Set.Contains`・`transfer.ErrStep`・`transfer.Entity*` | 1 | 5・6 |
-| e2e のサンプル: Store 名 `team`、Mobile の Epic は `MB-1` | 8 | 12(ずれたら Task 12 の Step 1 で本文の値を直す) |
-
-**待つもの**: Task 4 は Task 3 のあと(どちらも gitstore と apptest を触る)。Task 2 は Task 3 と並べてよい。
-
-**ファイルの地図に足すもの**: `internal/app/apptest/reentry/`、`internal/app/history`(`StoreList`)、`web/packages/core/src/model/transfer.ts`、`features/transfers/` の `dialogText.ts`・`afterMoved.ts`・`movedNotice.ts`(名前は本文のとおり)、`features/dates` の `formatDateTime`、`features/items/detail.ts`・`features/screen/screen.ts`、`web/app/src/wire.ts`。
-
-**計画のコードの確かめ具合**: 本文のテストとコードは下書きで、どれもコンパイル・実行していない。各タスクの「失敗を確かめる」の期待は実行せずに書いた。この節と仕様が正。
-
----
-
-> 骨組み `2026-11-14-hedgehug-track-a5a.md` の「タスクの一覧」の Task 1〜4 の本文。骨組みに差し込む。骨組みと違う形にした所は、末尾の「骨組みへの指摘」に理由を書いた(本文は、その直した形で書いてある所と、骨組みのままの所がある。直した所には本文の中に「(指摘 n)」と付けた)。
-
----
-
 ### Task 1: `domain/transfer`: `Record`・`MovedIn`・`Number`・`People`・`Collect`
-
-> **この Task への上書き**(「本文より優先する直し」): `People` は本文の形のまま(Task 6 が使う)。`Set.Contains`・`ErrStep`・`Entity*` を作る。
-
 
 移動の規則のうち、入出力のない部分を `internal/domain/transfer` に置く: 転送記録の 1 行、`moved_in` の行、番号の順、移動先のメンバーに足す人、移すものと外との関連。値の引き直しは Task 2。
 
@@ -249,8 +209,8 @@
   - `type transfer.Record struct { ID, Op change.ID; At time.Time; By string; Entity string; Target change.ID; Old, New string; ToStore, ToStoreName, ToRemote string }`、`const EntityItem = "item"`・`EntityProject = "project"`・`EntityWorkspace = "workspace"`、`func ParseRecords(b []byte) []Record`、`func (r Record) JSON() []byte`(末尾の改行なし)
   - `type transfer.MovedInInfo struct { Old, FromStore, FromStoreName string; FromWorkspace change.ID; FromWorkspaceName string; FromProject change.ID; FromProjectTitle string; At time.Time; Names map[change.ID]string }`、`func NewMovedIn(m MovedInInfo) change.Draft`(`T: change.MovedIn`、`F` なし、`to` に A5a-2 の形)、`func MovedInOf(log []change.Record) []MovedInInfo`(書いた順。読めない行は飛ばす)
   - `func transfer.Number(root item.Item, below []item.Item, next int) map[item.ID]int`
-  - `type transfer.Cut struct { From, To item.ID; Type string }`、`type transfer.Set struct { Root item.Item; Below []item.Item; Outside []Cut }`、`func (s Set) Contains(id item.ID) bool`(指摘 3)、`var transfer.ErrNotFound`・`transfer.ErrStep`、`func Collect(root item.ID, all []item.Item) (Set, error)`
-  - `type transfer.PeopleMap map[string]string`(移動元のログイン名の小文字 → 移動先のログイン名)、`func People(from workspace.Settings, items []item.Item, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap)`(指摘 2。1 つ目は移動先に足す人を小文字のログイン名の順で。2 つ目は、数えたすべての人の対応で、足す人も入る)
+  - `type transfer.Cut struct { From, To item.ID; Type string }`、`type transfer.Set struct { Root item.Item; Below []item.Item; Outside []Cut }`、`func (s Set) Contains(id item.ID) bool`、`var transfer.ErrNotFound`・`transfer.ErrStep`、`func Collect(root item.ID, all []item.Item) (Set, error)`
+  - `type transfer.PeopleMap map[string]string`(移動元のログイン名の小文字 → 移動先のログイン名)、`func People(from workspace.Settings, items []item.Item, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap)`(`logs` は移すアイテムごとのログ。1 つ目は移動先に足す人を小文字のログイン名の順で。2 つ目は、数えたすべての人の対応で、足す人も入る)
 
 - [ ] **Step 1: 失敗するテストを書く(`Record`)**
 
@@ -600,10 +560,7 @@ EOF
 
 ---
 
-### Task 2: `transfer.Remap`・`UsableStatuses`
-
-> **この Task への上書き**(「本文より優先する直し」): `Remap` に `toProject project.ID` を足す。`people == nil` は同じ Store のテストを入れる。`transfer.Unmatched` を作る。
-
+### Task 2: `transfer.Remap`・`Unmatched`・`UsableStatuses`
 
 アイテム 1 件の値を、移動先のワークスペースの定義に引き直す(02「値の引き直し」。A5a-7・A5a-8)。`app/transfers` が、移すアイテムごとに呼んで、返る行を移動先の保存に書く。
 
@@ -617,17 +574,19 @@ EOF
 - 関連システム・複数選択: 一致したものだけを足す。元の値が 1 つ以上あって 1 つも一致しないときだけ、空になった項目に並べる(1 つでも残れば並べない)。単一選択・テキスト・数値・日付・チェック・URL・ユーザーは、残せなければ並べる。
 - `people` が nil なら同じ Store(担当者・ユーザー型・ウォッチはそのまま)。nil でなければ別の Store で、ログインを小文字にして `people` で引いた移動先の綴りに書き換える(綴りが変わらなければ行を書かない。`people` にいないログインはそのまま)。ウォッチで、置き換えたログインがすでにウォッチにいるときは、足さない。
 - 空になった項目の名前は、移動元のプロパティの名前(`Property.Name`)で、`from.Properties` の並び。1 件のアイテムの結果に同じ名前は 1 回。
+- `Unmatched`: `statuses` のうち、`from.Statuses` にいて、名前が `UsableStatuses(to, toProject)` のどの値の名前とも一致しないものを、`statuses` の並びのまま返す。`from.Statuses` にいない ID は返さない(`Remap` はそれを移動先の初期ステータスにする)。予告の「ステータスの置き換え」の行(Task 5)が使い、`Remap` のステータスの判定も同じ規則(名前の引き当て)を共有する。
 
 **Files:**
-- Create: `internal/domain/transfer/remap.go`(`Remap`・`RemapResult`・`UsableStatuses`・ステータスと優先度・関連システム)、`internal/domain/transfer/remap_fields.go`(追加プロパティと人。指摘 1)
+- Create: `internal/domain/transfer/remap.go`(`Remap`・`RemapResult`・`Unmatched`・`UsableStatuses`・ステータスと優先度・関連システム)、`internal/domain/transfer/remap_fields.go`(追加プロパティと人)
 - Test: `internal/domain/transfer/remap_test.go`(新規)
 
 **Interfaces:**
 - Consumes: Task 1 の `transfer.PeopleMap`、`item.Item`・`item.FieldKey`・`item.Field`・`workspace.Settings`・`workspace.Property`・`workspace.Value`・`workspace.Category*`・`workspace.Type*`・`change.NewSet`・`change.NewAdd`・`change.NewRemove`・`project.ID`
 - Produces:
   - `type transfer.RemapResult struct { Drafts []change.Draft; Emptied []string }`
-  - `func transfer.Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult`(指摘 1)
+  - `func transfer.Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people PeopleMap, statusChoice map[change.ID]change.ID) RemapResult`
   - `func transfer.UsableStatuses(to workspace.Settings, p project.ID) []change.ID`(いまは `to.Statuses` の ID すべてを並びのまま。B5 がこの関数だけを差し替える)
+  - `func transfer.Unmatched(statuses []change.ID, from, to workspace.Settings, toProject project.ID) []change.ID`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -787,6 +746,35 @@ func TestUsableStatusesIsEveryStatusOfTheWorkspace(t *testing.T) {
 		t.Errorf("UsableStatuses = %v, want %v", got, want)
 	}
 }
+
+// 移動先にない名前(Pending は移動先で Hold)だけを、渡した並びのまま返す。移動元にいない ID は返さない。
+func TestUnmatchedReturnsOnlyTheStatusesTheDestinationCannotUse(t *testing.T) {
+	from, to := pair()
+	got := transfer.Unmatched([]change.ID{"FV05", "FV04", "FV01", "FGONE"}, from, to, "P1")
+	if want := []change.ID{"FV04"}; !slices.Equal(got, want) {
+		t.Errorf("Unmatched = %v, want %v", got, want)
+	}
+	if got := transfer.Unmatched(nil, from, to, "P1"); len(got) != 0 {
+		t.Errorf("Unmatched(nil) = %v", got)
+	}
+}
+
+// 予告の置き換えの行(Unmatched)と Remap は、同じ規則で分ける。選んだ置き換え先(Hold = TV04)になるのは、Unmatched にあるものだけ。
+func TestUnmatchedAgreesWithRemap(t *testing.T) {
+	from, to := pair()
+	var all []change.ID
+	for _, v := range from.Statuses {
+		all = append(all, v.ID)
+	}
+	unmatched := transfer.Unmatched(all, from, to, "P1")
+	for _, id := range all {
+		got := show(transfer.Remap(item.Item{ID: "I1", Status: id}, from, to, "P1", nil, map[change.ID]change.ID{id: "TV04"}))
+		chosen := slices.Contains(got, `set status "`+string(id)+`">"TV04"`)
+		if chosen != slices.Contains(unmatched, id) {
+			t.Errorf("%s: 選んだ置き換え先になった = %v, Unmatched にある = %v", id, chosen, !chosen)
+		}
+	}
+}
 ```
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -796,7 +784,7 @@ Expected: コンパイルエラー(`undefined: transfer.Remap`)。
 
 - [ ] **Step 3: 実装する**
 
-`remap.go`: 上の「決めること」の順で、プロパティごとの小さな関数に分ける(1 つの関数に全部を入れない。認知的複雑度 15・関数 60 行の上限)。`Remap` は、`from.Properties` を順に回し、組み込みなら `status`・`assignee`・`priority`・`systems` の関数、追加なら `remap_fields.go` の関数を呼んで `RemapResult` に足す。最後にウォッチを足す。名前での引き当ては、`workspace.Value.Name` の完全一致(大文字小文字も区別する)。`remap_fields.go`: 追加プロパティ(`Builtin` でないもの)の型ごとの引き直しと、人の置き換え(`people`)。
+`remap.go`: 上の「決めること」の順で、プロパティごとの小さな関数に分ける(ステータスの判定は `Unmatched` と共有する)(1 つの関数に全部を入れない。認知的複雑度 15・関数 60 行の上限)。`Remap` は、`from.Properties` を順に回し、組み込みなら `status`・`assignee`・`priority`・`systems` の関数、追加なら `remap_fields.go` の関数を呼んで `RemapResult` に足す。最後にウォッチを足す。名前での引き当ては、`workspace.Value.Name` の完全一致(大文字小文字も区別する)。`remap_fields.go`: 追加プロパティ(`Builtin` でないもの)の型ごとの引き直しと、人の置き換え(`people`)。
 
 - [ ] **Step 4: 通す**
 
@@ -819,9 +807,6 @@ EOF
 
 ### Task 3: 口と保存: `Reader.Transfers`・`Reader.Purged`・`Tx.WriteTransfers`・`ItemWriter.Import`・`Remove`
 
-> **この Task への上書き**(「本文より優先する直し」): `AddPurged`・`reentry` は本文のとおり。Task 4 はこの Task のあと。
-
-
 転送記録 `transfers.jsonl` の読み書き、`purged.jsonl` の読み取り、アイテムのフォルダごとの写しと削除を、保存の口に足す。本物(`internal/infra/gitstore`)・偽物(`internal/app/apptest`)・照合テスト(`RunStoresContract`)が同じ振る舞いになるようにする。
 
 **この Task が決めること:**
@@ -829,7 +814,7 @@ EOF
 - `ItemWriter.Import(id, log, description)`: `log` の行を、`id` のアイテムのフォルダの `log.jsonl` に、**そのまま**(`id`・`op`・`at`・`by`・`actor`・`prev` を変えずに)書く。`description` が空でなければ `description.md` にする。`*.yaml` は保存のたびに作り直す(本物)。同じ Tx で続けて `Append` すると、`prev` は Import した行の先端につながる。`id` が `change.ValidID` でない・`log` が空・そのフォルダに行がすでにある(同じ Tx で書いたものを含む)・同じ Tx で `Remove` したものは、何も書かず `port.ErrInvalidOperation` を包んだエラー。`log` の中身(作成の行があるか)は調べない。
 - `ItemWriter.Remove(id)`: アイテムのフォルダ(`log.jsonl`・`item.yaml`・`description.md`)を消す。ないものは `port.ErrNotFound`、`id` が使えなければ `ErrInvalidOperation`。同じ Tx で `Append`・`Describe` していた分は捨てる。同じ Tx で読むと、`Items().Get` と `Changes().Of` は `ErrNotFound`、`Items().List` に出ない。消すだけの Write も、行を書く Write と同じに `op.Check` する(Summary が必要)。
 - `Tx.WriteTransfers().Append(r)`: `ID`・`Op`・`At`・`By` は Tx が埋める(`ID` は `IDs.New()`、`Op`・`At` はその操作のもの、`By` は `meta.Actor.By()`)。`Entity` が 3 種のどれでもない・`Target` が `change.ValidID` でない・`ToStore` が空なら `ErrInvalidOperation`。転送記録だけを書く Write も `op.Check` する。同じ Tx の `Transfers().List()` は、書いた分を、ファイルにある分のあとに含む。
-- `Reader.Purged().List()`: `purged.jsonl` の行(`id`・`at`・`entity`・`target`・`display`)を、ファイルの並びで返す。読めない行は飛ばす。ファイルがなければ空。書く口は持たない(G)。偽物には、テスト用に `(*Stores).AddPurged(id, p)` を足す(指摘 6)。
+- `Reader.Purged().List()`: `purged.jsonl` の行(`id`・`at`・`entity`・`target`・`display`)を、ファイルの並びで返す。読めない行は飛ばす。ファイルがなければ空。書く口は持たない(G)。偽物には、テスト用に `(*Stores).AddPurged(id, p)` を足す。
 - 失敗した Write(`fn` のエラー・コミットの失敗)は、`Import`・`Remove`・`WriteTransfers` の分も含めて何も残さない。
 
 **置き場所と行数**(`internal/infra/gitstore` と `internal/app/apptest` は 20 ファイルで、足せない):
@@ -1333,9 +1318,6 @@ EOF
 
 ### Task 4: 口と同期: `Replicator.SyncSave`(gitstore・偽物)と `syncing.Service.Deliver`
 
-> **この Task への上書き**(「本文より優先する直し」): `syncing.Service.Stores` は `NotifyWrites` で包んだものを配線で渡す。`port.SaveError` を作る。
-
-
 移動先に remote があるとき、「受け取る → 保存する → 送る」を 1 つのロックの中で行い、送れなければ保存のコミットだけを捨てる口を足す(A5a-5。Review Focus 1)。`app/syncing` には、トークン・受け取った位置・同期の状態の記録を `run` と同じに扱って、この口を呼ぶ `Deliver` を足す。
 
 **この Task が決めること:**
@@ -1345,7 +1327,7 @@ EOF
 - 受け取りで `port.ErrRemoteRewritten` になったときは、`Sync` と同じく `restoreSeen` を足す。`Remote.ReceiveOnly` の `SyncSave` は `port.ErrInvalidOperation` を包んで断る(閲覧のみの Store には保存しない)。
 - 偽物: `apptest.Replicator` に `Stores *Stores`(`fn` を実行する Store)と `SendErrs map[port.StoreID]error`(送信の失敗)を足す。`SyncSave` は、`Errs[id]` があれば `fn` を呼ばずにそれを返し(受け取りの失敗)、なければ `Stores.write(..., send)` で保存する。`send` は `SendErrs[id]` を返し、あればその Store に何も反映しない。反映できたら `Results[id]` を返す。`fn` などの保存の失敗は `*port.SaveError`。呼び出しは `ReplicatorCall{Save: true}` で覚える。
 - `syncing.Service.Deliver(ctx, id, op, fn)`: Store が `Targets` にいなければ `port.ErrStoreNotFound`。閲覧のみなら `port.ErrInvalidOperation` を包んで断る。`Remote` がなければ `Service.Stores.Write` だけ(`Replicator` は呼ばない)。あれば、アカウントがなければ `syncstatus.NoAccount`(保存しない。状態は記録しない)、トークンを得られなければ `run` と同じ理由、あれば `State.Seen` を渡して `Replicator.SyncSave` を呼ぶ。通信の失敗は `remoteReason` で理由にして `State.Failed` に記録し、`syncstatus.Reason` を返す(error は nil)。`*port.SaveError` は、理由にせず、そのまま error で返す(状態には記録しない)。成功したら `State.Succeeded(…, res.Seen)`、ミラーへ送り(`run` と同じ `mirror`)、`EventSync` を知らせる。`AfterSuccess` は呼ばない。
-- `Service` に `Stores port.Stores` を足す(指摘 5)。配線では、`NotifyWrites` で包む前の `Stores` を渡す(包むと、書いたあとに自動の同期が起き、`SyncSave` がいま送ったものをもう一度送りに行く)。
+- `Service` に `Stores port.Stores` を足す。配線では、ほかの機能と同じく `NotifyWrites` で包んだ `Stores` を渡す(remote のない移動先の保存も画面に知らせるため。remote のある移動先は `SyncSave` を通り、`Deliver` が `EventSync` を知らせる)。
 - `run` の「アカウントがない・トークンを得られない」の部分を、`Deliver` と共有する `func (s *Service) token(ctx, t port.SyncTarget) (tok string, r syncstatus.Reason, err error)` に出す(`run` のふるまいは変えない。既存のテストで確かめる)。
 
 **置き場所と行数:**
@@ -1407,6 +1389,7 @@ package gitstore
 
 import (
 	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -1548,6 +1531,45 @@ func TestSyncSaveWrapsFnErrorsAndSendsNothing(t *testing.T) {
 	}
 	if res := b.sync(t, remote); res != (port.SyncResult{}) {
 		t.Errorf("b received %+v, want nothing", res)
+	}
+}
+
+// Review Focus 2: ロックは Store ごと。SyncSave の fn のあいだ(Store A のロックを持っている)、別の Store B には書け、
+// A への書き込みは fn が終わるまで待たされる。fn が別の Store を読んで待つ実装が、向きの逆の 2 つの移動で止まらないことの土台。
+func TestSyncSaveHoldsOnlyTheLockOfItsOwnStore(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	dirB := filepath.Join(t.TempDir(), "b")
+	if err := Create(dirB, "01STORE0000000000000000002", t0); err != nil {
+		t.Fatal(err)
+	}
+	idB, err := a.stores.Attach(dirB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeA := func() error {
+		return a.stores.Write(t.Context(), a.id, saveOp, func(tx port.Tx) error {
+			return tx.WriteItems().Append("01SAMPLEIT0000000000000002", change.NewSet("title", nil, "別の書き込み"))
+		})
+	}
+	blocked := make(chan error, 1)
+	var otherStore error
+	_, err = a.rep.SyncSave(t.Context(), a.id, remote, saveOp, func(tx port.Tx) error {
+		go func() { blocked <- writeA() }()
+		// 別の Store(B)には、いま書ける。
+		otherStore = a.stores.Write(t.Context(), idB, saveOp, func(tx port.Tx) error { return createMoved(tx) })
+		select {
+		case err := <-blocked:
+			t.Errorf("fn の中で A に書けた(%v)。SyncSave が A のロックを持っていない", err)
+		case <-time.After(300 * time.Millisecond):
+		}
+		return createMoved(tx)
+	})
+	if err != nil || otherStore != nil {
+		t.Fatalf("SyncSave = %v, 別の Store への書き込み = %v", err, otherStore)
+	}
+	if err := <-blocked; err != nil { // fn が終わったあとに通る
+		t.Errorf("fn のあとの A への書き込み = %v", err)
 	}
 }
 
@@ -1787,7 +1809,7 @@ func (s syncRun) discard(base plumbing.Hash) error
 
 - [ ] **Step 8: 実装する(`syncing`)**
 
-1. `service.go`: `Service` に `Stores port.Stores` を足す(コメント: `Deliver` が使う。`NotifyWrites` で包む前のもの)。
+1. `service.go`: `Service` に `Stores port.Stores` を足す(コメント: `Deliver` が使う。配線では `NotifyWrites` で包んだもの)。
 2. `run.go`: `token` を出して `run` が使う。ふるまいは変えない。
 3. `deliver.go`(新規): 上の「決めること」のとおりに `Deliver` を書く。`once` の「動いている同期を待つ」仕組みは使わない(保存を共有できない)。
 
@@ -1810,12 +1832,7 @@ EOF
 
 ---
 
----
-
 ### Task 5: `app/transfers` — 候補・予告・同じ Store の中の移動
-
-> **この Task への上書き**(「本文より優先する直し」): `Service` の欄は「名前の直し」のとおり。予告のステータスの置き換えは `transfer.Unmatched` を使う。
-
 
 決定 A5a-3・A5a-7(の呼び出し側)・A5a-9・A5a-11・A5a-13・A5a-14 を実装する。Task 2(`transfer.Remap`・`UsableStatuses`)と Task 3(口)に依存する。このタスクで `internal/app/transfers` を作る(1 ファイル 1 操作)。
 
@@ -1827,30 +1844,30 @@ EOF
 
 **Interfaces:**
 - Consumes:
-  - `transfer.Collect(root item.ID, all []item.Item) (transfer.Set, error)`、`transfer.Number(root item.Item, below []item.Item, next int) map[item.ID]int`、`transfer.Remap(it item.Item, from, to workspace.Settings, people transfer.PeopleMap, statusChoice map[change.ID]change.ID) transfer.RemapResult`(`people` が `nil` のときは同じ Store として、人の値をそのまま残す。指摘 3)、`transfer.UsableStatuses(to workspace.Settings, p project.ID) []change.ID`、`transfer.Record`(A5a-1)
+  - `transfer.Collect(root item.ID, all []item.Item) (transfer.Set, error)`、`transfer.Number(root item.Item, below []item.Item, next int) map[item.ID]int`、`transfer.Remap(it item.Item, from, to workspace.Settings, toProject project.ID, people transfer.PeopleMap, statusChoice map[change.ID]change.ID) transfer.RemapResult`(`people` が `nil` のときは同じ Store として、人の値をそのまま残す)、`transfer.Unmatched(statuses []change.ID, from, to workspace.Settings, toProject project.ID) []change.ID`、`transfer.UsableStatuses(to workspace.Settings, p project.ID) []change.ID`、`transfer.Record`(A5a-1)
   - `port.Tx.WriteTransfers() port.TransferWriter`(`Append(r transfer.Record) error`)、`port.Reader.Transfers()`(Task 3)
   - 既存: `port.LiveItem`・`port.LiveProject`・`port.LiveProjects`・`port.LiveItems`、`numbering.Next`・`numbering.Draft`、`workspace.RankOf`、`rank.After`、`item.Descendants`・`item.SortSiblings`・`item.Live`、`refusal.New`
 - Produces:
   - `transfers.Delivery`(`Deliver(ctx, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error)`)と
-    `transfers.Service{Stores port.Stores; StoreList port.StoreList; Targets port.SyncTargets; Delivery Delivery; Identity port.Identity; Clock port.Clock}`(`Me`・`IDs` は持たない。指摘 1)
+    `transfers.Service{Stores port.Stores; StoreList port.StoreList; Targets port.SyncTargets; Delivery Delivery; Identity port.Identity; Clock port.Clock}`(`Me`・`IDs` は持たない)
   - `transfers.Target{Store port.StoreInfo; Workspace workspace.Workspace; Projects []project.Project; Epics map[project.ID][]item.Item}`、`(Service) Targets(ctx, store port.StoreID, id item.ID) ([]Target, error)`
   - `transfers.StatusRow{Status change.ID; Name string; Count int; Choices []workspace.Value; Default change.ID}`、
-    `transfers.Preview{Below, Deleted int; NextID string; AcrossStores, RemoteNote bool; Statuses []StatusRow}`、
+    `transfers.Preview{Below, Deleted int; NextDisplay string; CrossStore, RemoteNotice, DestinationHasRemote bool; Replacements []StatusRow}`、
     `(Service) Preview(ctx, store port.StoreID, id item.ID, in MoveInput) (Preview, error)`(`in` の `ToParent`・`StatusChoices` は使わない)
   - `transfers.MoveInput{ToStore port.StoreID; ToWorkspace workspace.ID; ToProject project.ID; ToParent *item.ID; StatusChoices map[change.ID]change.ID}`、`transfers.Moved{ToStore port.StoreID; Item item.ID; Display string; Emptied []string}`、
     `(Service) Move(ctx, store port.StoreID, id item.ID, in MoveInput) (Moved, error)`。このタスクは `in.ToStore == store` だけを扱い、ほかは `port.ErrStoreNotFound`(Task 6 が差し替える)
   - ログに書く行(同じ Store): 移すアイテムごとに `set place`(ワークスペース・プロジェクト・親・新しい番号)、移すアイテムだけに `set rank`、`Remap` の行。移動先のワークスペースのログに `number` の行を番号ごとに。`transfers.jsonl` にアイテムごとに 1 行(`Entity: "item"`・`Target`・`Old`・`New`・`ToStore` は自分の Store ID、`ToStoreName`・`ToRemote` は空)。すべて 1 回の `Write`
   - アクティビティ(A5a-11): 「{旧 ID} を {移動元のワークスペース名} から {移動先のワークスペース名} へ移動」(例: 「HH-2 を Web から Mobile へ移動」)
 
-**決めごと(骨組みの決定を実装に落としたもの):**
+**決めごと(「決めたこと」を実装に落としたもの):**
 - 移せるもの: 削除されていない Epic・Story・Task・Bug。Step・ないもの・削除済みは `port.ErrNotFound`(Step は親と一緒に移る。02)。移す先のワークスペース・プロジェクト・親が、ないか削除済み、プロジェクトが移動先のワークスペースのものでない、移動元と同じワークスペース、Epic に `ToParent` がある、Epic 以外で `ToParent` が移動先のプロジェクトの削除されていない Epic でない、のどれかなら `port.ErrNotFound`。
 - 移動先の Store が `StoreList` にない(非表示を含む)なら `port.ErrStoreNotFound`、閲覧のみなら `port.ErrNotFound`(候補に出さないものは選べない)。移動元の Store が閲覧のみなら `refusal.New("閲覧のみの Store です")`。
 - 読む処理は 1 つの関数(`plan`)にし、`Read` でアクティビティの 1 行を決めるときと `Write` の中で書くときの両方で呼ぶ(A4b の `items.Move` と同じ)。`plan` が返すのは、移すもの(`transfer.Set`)・番号(`transfer.Number`)・移動元と移動先の設定・`Remap` の結果。移動先の次の番号は `numbering.Next(移動先のワークスペースのログ, numbering.Items)` を、`Write` の中の読み取りで取る。
 - 移すアイテムの順位は、移動先の同じ親(Epic ならプロジェクト)の、削除されていない子の最後のあと(`rank.After(最後の順位)`。子がなければ `rank.After("")`)。下のものの順位・親は変えない。
 - `Moved.Display` は移したアイテムの新しい ID(移動先の接頭辞と番号)、`Moved.Item` は内部 ID のまま(同じ Store では内部 ID は変わらない)。`Emptied` は、移したすべてのアイテムの `RemapResult.Emptied` の和集合を、移動元のワークスペースのプロパティの定義の順に並べたもの。
-- 移動先の「ステータスの置き換え」の行(`StatusRow`)の対象は、移すアイテム(下のもの・削除済みを含む)のステータスのうち、名前が `UsableStatuses(移動先, プロジェクト)` のどの値の名前とも一致しないもの。行の並びは移動元のステータスの定義の順、`Count` はそのステータスのアイテム数、`Choices` は `UsableStatuses` の値、`Default` は移動先の `CategoryDefaults[元のステータスの分類]`。`Remap` と同じ判定なので、変えるときは両方を直す(指摘 3)。
-- `Targets` の対象は、`StoreList` の閲覧のみでない Store の、削除されていないプロジェクトが 1 つ以上ある、自分のワークスペース(`store` と同じ Store の移動元のワークスペース)以外のワークスペース。Store の並び → ワークスペースの並び(`workspace.RankOf(ログ)` の昇順、同じなら内部 ID の順)。`Epics` は削除されていない Epic を `item.SortSiblings` の順で。Store のワークスペースの非表示は Store 単位で `StoreList` が既に除く(指摘 6)。
-- `Preview.NextID` は移動先の接頭辞と次の番号(例「MB-2」)。`AcrossStores` は `in.ToStore != store`。`RemoteNote` は、別の Store で、`Targets` の移動先に remote がなく移動元に remote があるとき。
+- 移動先の「ステータスの置き換え」の行(`StatusRow`)の対象は、移すアイテム(下のもの・削除済みを含む)のステータスのうち、名前が `UsableStatuses(移動先, プロジェクト)` のどの値の名前とも一致しないもの。行の並びは移動元のステータスの定義の順、`Count` はそのステータスのアイテム数、`Choices` は `UsableStatuses` の値、`Default` は移動先の `CategoryDefaults[元のステータスの分類]`。`transfer.Unmatched` で決める(`Remap` と同じ規則を 1 か所に持つ)。
+- `Targets` の対象は、`StoreList` の閲覧のみでない Store の、削除されていないプロジェクトが 1 つ以上ある、自分のワークスペース(`store` と同じ Store の移動元のワークスペース)以外のワークスペース。Store の並び → ワークスペースの並び(`workspace.RankOf(ログ)` の昇順、同じなら内部 ID の順)。`Epics` は削除されていない Epic を `item.SortSiblings` の順で。ワークスペース単位の非表示はなく、非表示の Store は `StoreList` が既に除く。
+- `Preview.NextDisplay` は移動先の接頭辞と次の番号(例「MB-2」)。`CrossStore` は `in.ToStore != store`。`RemoteNotice` は、別の Store で、`Targets` の移動先に remote がなく移動元に remote があるとき。`DestinationHasRemote` は、`Targets` の移動先に remote があるか(同じ Store でも、その Store に remote があれば真。画面がオフラインの判断に使う)。
 
 #### 5-1 テストの補助
 
@@ -1933,11 +1950,13 @@ func (r *recorder) summaries(id port.StoreID) []string {
 }
 
 // stubDelivery は Delivery の偽物。reasons に理由を置いた Store は、保存を捨てて理由を返す(送れなかった)。
-// gate は Deliver の最初に呼ぶ(向きの逆の 2 つの移動を重ねるため)。
+// gate は Deliver の最初に、inside は移動先の Store のロックを持った状態で fn を呼ぶ前に、呼ぶ(向きの逆の 2 つの移動を重ねるため)。
+// 偽の Stores は Store ごとの本物のロックを持つので、fn が別の Store を読むと、重なった相手のロックを待って止まる。
 type stubDelivery struct {
 	stores  port.Stores
 	reasons map[port.StoreID]syncstatus.Reason
 	gate    func(port.StoreID)
+	inside  func(port.StoreID)
 }
 
 var errNotSent = errors.New("not sent")
@@ -1948,6 +1967,9 @@ func (d *stubDelivery) Deliver(ctx context.Context, id port.StoreID, op port.Ope
 	}
 	r := d.reasons[id]
 	err := d.stores.Write(ctx, id, op, func(tx port.Tx) error {
+		if d.inside != nil {
+			d.inside(id)
+		}
 		if err := fn(tx); err != nil {
 			return err
 		}
@@ -2214,6 +2236,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/transfers"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
@@ -2240,14 +2263,15 @@ func TestPreviewCountsAndStatusRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Below != 1 || got.Deleted != 1 || got.NextID != "MB-2" || got.AcrossStores || got.RemoteNote {
+	// main(S1)には remote があるので、同じ Store の移動でも移動先に remote がある。
+	if got.Below != 1 || got.Deleted != 1 || got.NextDisplay != "MB-2" || got.CrossStore || got.RemoteNotice || !got.DestinationHasRemote {
 		t.Errorf("preview = %+v", got)
 	}
 	todo := valueID(t, f.rec, store1, mobileWS, "status", "Todo")
-	if len(got.Statuses) != 1 {
-		t.Fatalf("rows = %+v", got.Statuses)
+	if len(got.Replacements) != 1 {
+		t.Fatalf("rows = %+v", got.Replacements)
 	}
-	row := got.Statuses[0]
+	row := got.Replacements[0]
 	if row.Status != apptest.SampleStatusPending || row.Name != "Pending" || row.Count != 2 || row.Default != todo || len(row.Choices) != 4 {
 		t.Errorf("row = %+v", row)
 	}
@@ -2257,8 +2281,35 @@ func TestPreviewCountsAndStatusRows(t *testing.T) {
 func TestPreviewAcrossStoresWarnsWhenOnlyTheSourceHasARemote(t *testing.T) {
 	f := newFixture(t)
 	got, err := f.svc.Preview(t.Context(), store1, apptest.SampleTask, transfers.MoveInput{ToStore: store2, ToWorkspace: teamWS, ToProject: teamProject})
-	if err != nil || !got.AcrossStores || !got.RemoteNote || got.NextID != "TM-2" {
+	if err != nil || !got.CrossStore || !got.RemoteNotice || got.DestinationHasRemote || got.NextDisplay != "TM-2" {
 		t.Errorf("preview = %+v, %v", got, err)
+	}
+}
+
+// 予告の置き換えの行(Unmatched)と、実際の移動(Remap)は、同じ規則で分ける。行にあるステータス(Pending)だけが選んだ置き換え先(Done)になり、
+// 行にないステータス(InProgress)は、置き換え先を渡しても名前の一致が使われる。
+func TestPreviewRowsAreExactlyTheStatusesMoveReplaces(t *testing.T) {
+	f := newFixtureWith(t, withoutPending)
+	parent := apptest.SampleTask
+	step := addItem(t, f.rec, store1, item.Item{ID: "01TESTIT000000000000000010", Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3}, Kind: item.Step, Rank: "V", Title: "s", Status: apptest.SampleStatusInProgress})
+	write(t, f.rec, store1, "taro", func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusPending))
+	})
+	in := toMobile()
+	preview, err := f.svc.Preview(t.Context(), store1, apptest.SampleTask, in)
+	if err != nil || len(preview.Replacements) != 1 || preview.Replacements[0].Status != apptest.SampleStatusPending {
+		t.Fatalf("rows = %+v, %v", preview.Replacements, err)
+	}
+	done := valueID(t, f.rec, store1, mobileWS, "status", "Done")
+	in.StatusChoices = map[change.ID]change.ID{apptest.SampleStatusPending: done, apptest.SampleStatusInProgress: done}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, in); err != nil {
+		t.Fatal(err)
+	}
+	if got := itemOf(t, f.rec, store1, apptest.SampleTask).Status; got != done {
+		t.Errorf("行にある Pending = %q, want 選んだ Done", got)
+	}
+	if got := itemOf(t, f.rec, store1, step.ID).Status; got != valueID(t, f.rec, store1, mobileWS, "status", "InProgress") {
+		t.Errorf("行にない InProgress = %q, want 名前の一致", got)
 	}
 }
 ```
@@ -2492,7 +2543,7 @@ func TestMoveRefusesWhatCannotBeChosen(t *testing.T) {
 
 - `service.go`: `Delivery`・`Service`(上の Produces のとおり)。`allWorkspaceItems`ではなく、この Task が読むのは移すアイテムのプロジェクトの `Items().List`(削除済みを含む)だけ。`Collect(id, そのプロジェクトのアイテム)` で移すものを決める。`lastRank(items []item.Item, parent *item.ID) string` はここに置く(`app/items` の同名の関数は import できないので写す)。
 - `targets.go`: `Target`・`Targets`。`StoreList.List` を順に、閲覧のみを飛ばし、`Stores.Read` で `Workspaces().List()` → `port.LiveProjects` → 1 つ以上あるものだけ。読み取りを入れ子にしない(Store ごとに 1 回ずつ順に読む)。
-- `preview.go`: `Preview`・`StatusRow`・`(Service) Preview`。ステータスの判定は上の「決めごと」。
+- `preview.go`: `Preview`・`StatusRow`・`(Service) Preview`。置き換えの行の対象は上の「決めごと」のとおり `transfer.Unmatched` で決める。
 - `move.go`: `MoveInput`・`Moved`・`(Service) Move`。`in.ToStore != store` は `port.ErrStoreNotFound`。`plan(r port.Reader, ...)` が検査と材料の読み取り(上の「決めごと」の順で `ErrNotFound` を返す)、`Read` で `plan` を呼んでアクティビティを決め、`Identity.Me(ctx, store)` で実行者を作り、`Write` の中でもう一度 `plan` を呼んで行を書く。書く順は、アイテムごとの `Append(id, place[, rank], remap.Drafts...)`、ワークスペースの `number` の行、`WriteTransfers().Append`。移動先のワークスペースの次の番号は `Write` の中で `tx` から読む。関数は 60 行以内に収めるため、書く部分は `writeWithin(tx, p plan) error` に分ける。
 
 - [ ] **Step 4: 通す**
@@ -2511,9 +2562,6 @@ git commit -m "feat: アイテムの別のワークスペースへの移動(同�
 
 ### Task 6: `app/transfers` — 別の Store への移動
 
-> **この Task への上書き**(「本文より優先する直し」): `fn` の中で毎回 `Tx` から読む。戻しで足したメンバーも外す。`PeopleMap` は `transfer.People` の戻り値を使う。
-
-
 決定 A5a-4・A5a-5(呼ぶ側)・A5a-6・A5a-10(呼ぶ側)・A5a-11・A5a-12(サーバーの文)を実装する。Task 4(`Deliver`)と Task 5 に依存する。Review Focus 1・2・4・5 のテストを入れる。
 
 **Files:**
@@ -2524,24 +2572,24 @@ git commit -m "feat: アイテムの別のワークスペースへの移動(同�
 **Interfaces:**
 - Consumes:
   - Task 5 のすべて、`transfer.Set`・`transfer.Cut`・`transfer.NewMovedIn`・`transfer.MovedInInfo`・`transfer.MovedInOf`・`transfer.PeopleMap`
-  - `transfer.People(items []item.Item, logs map[item.ID][]change.Record, from workspace.Settings, source, dest []member.Member) []member.Member`(移動先にいない人を、移動元の表示名・ログイン名で返す。指摘 2)
+  - `transfer.People(from workspace.Settings, items []item.Item, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, transfer.PeopleMap)`(Task 1。足す人と、`Remap` に渡す `PeopleMap` を返す)
   - `port.ItemWriter.Import(id item.ID, log []change.Record, description string) error`・`Remove(id item.ID) error`(Task 3)
   - `Delivery.Deliver`(Task 5。`syncing.Service` がそのまま満たす。Task 4)
 - Produces:
   - `*transfers.SendError{Store string; Reason syncstatus.Reason}`。`Error()` は「{Store} に送信できないため移動できません: {Reason の短い理由}」(A5a-12)。例: 「team に送信できないため移動できません: remote への書き込みが許可されていません」
   - `(Service) Move` が `in.ToStore != store` のときに別の Store へ移す(戻り値は Task 5 と同じ形。`Moved.Item` は内部 ID のまま)
-  - 移動先に書く行(1 回の `Deliver`): 移すアイテムごとに、`Import`(`log.jsonl` の全行をそのまま・`description.md`)→ `moved_in`(`transfer.NewMovedIn`)→ `set place`(移すアイテムは `set rank` も)→ `Remap` の行 → 中のアイテムが持つ、外の相手との関連の `remove`。ワークスペースの `number` の行、足す人の `member.Join`。アクティビティは移動元・移動先とも「{旧 ID} を {Store 名} の {移動元のワークスペース名} から {Store 名} の {移動先のワークスペース名} へ移動」(例: 「HH-2 を main の Web から team の Team へ移動」。指摘 9)
+  - 移動先に書く行(1 回の `Deliver`): 移すアイテムごとに、`Import`(`log.jsonl` の全行をそのまま・`description.md`)→ `moved_in`(`transfer.NewMovedIn`)→ `set place`(移すアイテムは `set rank` も)→ `Remap` の行 → 中のアイテムが持つ、外の相手との関連の `remove`。ワークスペースの `number` の行、足す人の `member.Join`。アクティビティは移動元・移動先とも「{旧 ID} を {Store 名} の {移動元のワークスペース名} から {Store 名} の {移動先のワークスペース名} へ移動」(例: 「HH-2 を main の Web から team の Team へ移動」)
   - 移動元に書く行(`Stores.Write`): 移すアイテムごとに `Remove`、外のアイテムが持つ関連の `remove`、`transfers.jsonl` にアイテムごとに 1 行(`Entity: "item"`・`Target`・`Old`・`New`・`ToStore`・`ToStoreName`(このマシンでの移動先の Store 名)・`ToRemote`(移動先の remote。なければ空))
-  - 戻し(A5a-6): 移動元の保存が失敗したら、移動先に「{新 ID} の移動を取り消し」の保存(写したフォルダの `Remove`)を `Deliver` で書く
+  - 戻し(A5a-6): 移動元の保存が失敗したら、移動先に「{新 ID} の移動を取り消し」の保存(写したフォルダの `Remove` と、その移動で足したメンバーの `change.NewRemove("members", login)`)を `Deliver` で書く
 
-**決めごと(骨組みの決定を実装に落としたもの):**
-- 順(A5a-6): (0) 移動元を `Read` して移すもの・ログ・説明・メンバーを集める(ロックは読むあいだだけ)、(1)〜(3) 移動先を `Delivery.Deliver`(中で移動先を検査し、番号を取る)、(4) 移動元を `Stores.Write`。どの段階でも、片方の Store のロックを持ったまま、もう片方に触らない(向きの逆の 2 つの移動が止まらない)。`Deliver` の実行者は `Identity.Me(ctx, 移動先)`、移動元の保存は `Identity.Me(ctx, 移動元)`。
+**決めごと(「決めたこと」を実装に落としたもの):**
+- 順(A5a-6): (0) 移動元を `Read` して移すもの・ログ・説明・メンバーを集める(ロックは読むあいだだけ)、(1)〜(3) 移動先を `Delivery.Deliver`(中で移動先を検査し、番号を取る)、(4) 移動元を `Stores.Write`。どの段階でも、片方の Store のロックを持ったまま、もう片方に触らない(向きの逆の 2 つの移動が止まらない)。**`Deliver` に渡す `fn` は移動元の Store を読まない**(移動元を読むのは (0) と (4) だけ。(0) で集めた移すもの・ログ・説明・移動元のメンバー・移動元の設定は `fn` に持ち込んでよい)。移動先の番号・メンバー・`Remap` の結果は、毎回 `fn` に渡された `Tx` から決める(A5a-5)。`Deliver` の実行者は `Identity.Me(ctx, 移動先)`、移動元の保存は `Identity.Me(ctx, 移動元)`。
 - `Deliver` が理由(`Reason`)を返したら `&SendError{Store: 移動先の Store 名, Reason: r}`。`fn` が返したエラー(`ErrNotFound`・断り)は、そのまま返る。`Deliver` のエラーは理由で表せない失敗なので、そのまま返す。
 - 外との関連(Review Focus 4): `transfer.Collect` の `Outside` の各 `Cut` で、持つ側(`From`)が移すものの中なら移動先で、そのアイテムの `relations` を `remove` する。持つ側が外なら移動元で、その外のアイテム(削除済みを含む)の `relations` に `remove` を書く。中のアイテム同士の関連は残す。
-- 人(Review Focus 5): `transfer.People(...)` が返した人(1 人 1 回)を、移動先の同じ保存で `member.Join` する。`PeopleMap` は「移動先のメンバー(`Deliver` の中で `tx.Members().List()`)と足す人の、ログイン名の小文字 → 移動先での綴り」で作る(移動元のログイン名がここに引けなければ、`Remap` が値を捨てる)。
+- 人(Review Focus 5): `fn` の中で、(0) で集めたアイテム・ログ・移動元のメンバー・移動元の設定と、`tx.Members().List()`(移動先のメンバー)で `transfer.People(...)` を呼ぶ。返った人(1 人 1 回)を、移動先の同じ保存で `member.Join(ログイン名)` と、表示名がログイン名と違うときの `member.Rename(ログイン名, ログイン名, 表示名)` で足す。返った `PeopleMap` をそのまま `Remap` に渡す(移動元のログイン名がここに引けなければ、`Remap` が値を捨てる)。
 - `moved_in` の `Names`(`names.go` の `namesOf(log []change.Record, from workspace.Settings) map[change.ID]string`): 写す行の `f` が指すプロパティの内部 ID(組み込みは `f` がキー、追加は `fields/<ID>`、`systems`・`status`・`priority` を含む)と名前、行の `from`・`to` の JSON の文字列(配列なら要素。`create` の行は見ない)のうち、`from` の値の内部 ID(ステータス・優先度・関連システム・各選択肢)と一致するものと、その名前。
 - 移動元の保存の中で、移すアイテムの `Remove` が `ErrNotFound`(別の経路で先に消えた・移った)なら、その保存は失敗として扱い、戻す。
-- 戻しも失敗したら `errors.Join(元のエラー, 戻しのエラー)` を返す。戻しは、写したフォルダだけを消す。足したメンバーと `number` の行は戻さない(指摘 10)。
+- 戻しは、写したフォルダの `Remove` と、その移動で足したメンバー(`fn` が最後に呼ばれたときに `People` が返した人)の `change.NewRemove("members", login)`。`number` の行は戻さない(番号は再利用しないので害がない)。戻しも失敗したら `errors.Join(元のエラー, 戻しのエラー)` を返す。
 
 #### 6-1 移動先の保存・移動元の保存・外との関連・人
 
@@ -2575,6 +2623,26 @@ func toTeam() transfers.MoveInput {
 	return transfers.MoveInput{ToStore: store2, ToWorkspace: teamWS, ToProject: teamProject, ToParent: ptr(teamEpic)}
 }
 
+// loginsOf は、Store のメンバーのログイン名を、辞書順で返す。
+func loginsOf(t *testing.T, s port.Stores, store port.StoreID) []string {
+	t.Helper()
+	var logins []string
+	if err := s.Read(t.Context(), store, func(r port.Reader) error {
+		ms, err := r.Members().List()
+		for _, m := range ms {
+			logins = append(logins, m.Login)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(logins)
+	return logins
+}
+
+// displayNameOf は、Store のメンバー login の表示名(いなければ "")。loginsOf と同じく Members().List() で読む。
+func displayNameOf(t *testing.T, s port.Stores, store port.StoreID, login string) string
+
 // crossFixture は、Task HH-2 を、上の構成にしたフィクスチャ。
 func crossFixture(t *testing.T) fixture {
 	t.Helper()
@@ -2591,6 +2659,7 @@ func crossFixture(t *testing.T) fixture {
 	op := port.Operation{Actor: change.User("hanako"), Summary: "テスト"}
 	err := f.rec.Write(t.Context(), store1, op, func(tx port.Tx) error {
 		return errors.Join(
+			tx.WriteMembers().Append(member.Rename("hanako", "hanako", "花子")),
 			tx.WriteItems().Append(apptest.SampleTask, change.NewSet("assignee", nil, "hanako"),
 				change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusInProgress),
 				change.NewComment("01TESTCM000000000000000001", nil, comment.Value("確認しました"))))
@@ -2683,16 +2752,7 @@ func TestMoveAcrossStoresAddsMissingPeopleOnceAndMapsCaseInsensitively(t *testin
 	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err != nil {
 		t.Fatal(err)
 	}
-	var logins []string
-	_ = f.rec.Read(t.Context(), store2, func(r port.Reader) error {
-		ms, err := r.Members().List()
-		for _, m := range ms {
-			logins = append(logins, m.Login)
-		}
-		return err
-	})
-	slices.Sort(logins)
-	if !slices.Equal(logins, []string{"Taro", "hanako"}) {
+	if logins := loginsOf(t, f.rec, store2); !slices.Equal(logins, []string{"Taro", "hanako"}) {
 		t.Errorf("移動先のメンバー = %v", logins)
 	}
 	moved := itemOf(t, f.rec, store2, apptest.SampleTask)
@@ -2714,6 +2774,10 @@ func TestMoveAcrossStoresAddsMissingPeopleOnceAndMapsCaseInsensitively(t *testin
 	}
 	if joinOp == "" || joinOp != movedOp {
 		t.Errorf("メンバーの追加の操作 %q と moved_in の操作 %q は同じ", joinOp, movedOp)
+	}
+	// 足した人の表示名は移動元のメンバーと同じ(02「保存」)。移動元で hanako の表示名を「花子」にしておく(crossFixture)。
+	if name := displayNameOf(t, f.rec, store2, "hanako"); name != "花子" {
+		t.Errorf("移動先の hanako の表示名 = %q", name)
 	}
 }
 
@@ -2762,9 +2826,10 @@ func (w failWrite) Write(ctx context.Context, id port.StoreID, op port.Operation
 	return w.Stores.Write(ctx, id, op, fn)
 }
 
-// 移動元の保存が失敗したら、移動先に写したフォルダを消して戻し、エラーを返す。
+// 移動元の保存が失敗したら、移動先に写したフォルダを消し、足したメンバー(hanako)も外して戻し、エラーを返す。
 func TestMoveAcrossStoresRollsBackTheDestinationWhenTheSourceSaveFails(t *testing.T) {
 	f := crossFixture(t)
+	membersBefore := loginsOf(t, f.rec, store2)
 	f.svc.Stores = failWrite{Stores: f.rec, store: store1}
 	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v", err)
@@ -2780,10 +2845,13 @@ func TestMoveAcrossStoresRollsBackTheDestinationWhenTheSourceSaveFails(t *testin
 	if s := f.rec.summaries(store2); s[len(s)-1] != "TM-2 の移動を取り消し" {
 		t.Errorf("移動先のアクティビティ = %q", s)
 	}
+	if got := loginsOf(t, f.rec, store2); !slices.Equal(got, membersBefore) {
+		t.Errorf("移動先のメンバー = %v, want 移動前の %v(足した hanako を外す)", got, membersBefore)
+	}
 }
 ```
 
-`internal/app/transfers/move_store_race_test.go`(Review Focus 2)。Store S1 の Task を S2 へ、S2 の Epic(TM-1)を S1 へ、同時に移す。`Deliver` の入口で 2 つの移動を揃えるので、片方の Store のロックを持ったまま `Deliver` を呼ぶ実装は、互いを待って止まる。
+`internal/app/transfers/move_store_race_test.go`(Review Focus 2)。Store S1 の Task を S2 へ、S2 の Epic(TM-1)を S1 へ、同時に移す。`Deliver` の入口で 2 つの移動を揃え(`gate`)、さらに、2 つの移動が両方とも移動先の Store のロックを持って `fn` に入るまで待たせる(`inside`)。偽の `Stores` は Store ごとの本物のロックを持つので、片方の Store のロックを持ったまま `Deliver` を呼ぶ実装と、`fn` が移動元の Store を読む実装は、互いを待って止まる。
 
 ```go
 package transfers_test
@@ -2798,7 +2866,8 @@ import (
 
 func TestOppositeMovesBetweenTwoStoresDoNotStall(t *testing.T) {
 	f := newFixture(t)
-	f.deliver.gate = newBarrier(2) // 2 つの移動が両方 Deliver に入るまで待つ
+	f.deliver.gate = newBarrier(2)   // 2 つの移動が両方 Deliver に入るまで待つ
+	f.deliver.inside = newBarrier(2) // 2 つの移動が両方、移動先のロックを持って fn に入るまで待つ
 	toWeb := transfers.MoveInput{ToStore: store1, ToWorkspace: apptest.SampleWorkspace, ToProject: apptest.SampleProject}
 	done := make(chan error, 2)
 	go func() { _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); done <- err }()
@@ -2833,7 +2902,7 @@ func TestOppositeMovesBetweenTwoStoresDoNotStall(t *testing.T) {
 
 - [ ] **Step 4: 通す**
 
-`go test ./internal/app/transfers/` → PASS。`go test -race ./internal/app/transfers/ -run Opposite -count=20` も通る(止まらない)。
+`go test ./internal/app/transfers/` → PASS。`go test -race ./internal/app/transfers/ -run Opposite` も通る(止まらない)。
 
 - [ ] **Step 5: コミット**
 
@@ -2846,9 +2915,6 @@ git commit -m "feat: アイテムの別の Store への移動(受け取り・保
 ---
 
 ### Task 7: `Locate`(旧 ID の解決)と、履歴の「{旧 ID} から移動」
-
-> **この Task への上書き**(「本文より優先する直し」): 見つからないときは文を作らず `Gone` を返す。`MovedFrom.Display` はいまの ID。`whenText` は作らない。
-
 
 決定 A5a-15・A5a-17 を実装する。7-1 で `app/transfers` に `Locate`、7-2 で `domain/history` に「{旧 ID} から移動」と `moved_in` の `names` での値の名前、7-3 で `app/history` に材料を渡す。Task 3(口)と Task 5 に依存する(Task 6 には依存しない。別の Store の記録は、テストで `WriteTransfers` から直接書く)。Review Focus 3 のテストを入れる。
 
@@ -2863,19 +2929,18 @@ git commit -m "feat: アイテムの別の Store への移動(受け取り・保
 **Interfaces:**
 - Consumes:
   - `port.Reader.Transfers().List()`・`port.Reader.Purged().List()`(Task 3)、`transfer.Record`・`transfer.MovedInOf`・`transfer.MovedInInfo`・`transfer.NewMovedIn`(Task 1)、`workspace.OldPrefixes`・`workspace.RankOf`、`apptest.StoreList`
-  - `(*apptest.Stores).AddPurged(id port.StoreID, p port.Purged)`(Task 3 が偽物に足す。`purged.jsonl` の行を足すテスト用。指摘 4)
+  - `(*apptest.Stores).AddPurged(id port.StoreID, p port.Purged)`(Task 3 が偽物に足す。`purged.jsonl` の行を足すテスト用)
 - Produces:
-  - `transfers.Located{Found bool; Store port.StoreID; Project project.ID; Item item.ID; MovedFrom *MovedFrom; Message string}`、`transfers.MovedFrom{Old string; At time.Time; Display string}`、`(Service) Locate(ctx, storeName, display string) (Located, error)`。いまの ID・旧い接頭辞で見つかったら `Found`(`MovedFrom` なし)、転送記録で見つかったら `Found` と `MovedFrom`、見つからず理由があれば `Found: false` と `Message`(エラーなし)、理由もなければ `port.ErrNotFound`
+  - `transfers.Located{Found bool; Store port.StoreID; Project project.ID; Item item.ID; MovedFrom *MovedFrom; Gone *Gone}`、`transfers.MovedFrom{Old string; At time.Time; Display, Current string}`、`transfers.Gone{Reason string; Old string; At time.Time; NewDisplay, StoreName string}`、`(Service) Locate(ctx, storeName, display string) (Located, error)`。いまの ID・旧い接頭辞で見つかったら `Found`(`MovedFrom` なし)、転送記録で見つかったら `Found` と `MovedFrom`、見つからず理由があれば `Found: false` と `Gone`(エラーなし)、理由もなければ `port.ErrNotFound`。見つからないときの文はここでは作らない(画面が `formatDateTime` で作る。Task 11)
   - `transfers.OldIDs`(E が検索で使う): `func (s Service) OldIDs(ctx context.Context, display string) ([]OldID, error)`、`type OldID struct{ Store port.StoreID; Item item.ID }`。`Locate` の (b)・(c) と同じ規則で、旧 ID に当たる削除されていないアイテムをすべて返す(`Locate` はその先頭を開く)
   - `history.Origin`(下)と `history.Context.Origin`。`apphistory.Service.StoreList port.StoreList`
   - 履歴の文: 「{旧 ID} から移動({移動元の Store 名} / {ワークスペース名} / {プロジェクト名})」。時刻は行の `at`
 
-**決めごと(骨組みの決定を実装に落としたもの):**
+**決めごと(「決めたこと」を実装に落としたもの):**
 - `display` は「接頭辞-番号」(最後の `-` で分け、番号は数字だけ)。読めなければ `port.ErrNotFound`。
-- 順(A5a-15): (a) いまの ID: 表示中の Store を、名前が `storeName` の Store を先頭、残りは `StoreList` の順に見て、削除されていないアイテムのうち、ワークスペースのいまの接頭辞と番号が一致する先頭。(b) 旧い接頭辞: (a) で見つからなければ、`workspace.OldPrefixes` に接頭辞があるワークスペースの、同じ番号の削除されていないアイテム。(c) 転送記録: すべての表示中の Store の `transfers.jsonl` のうち `Entity == "item"` かつ `Old == display` の行を集め、`At` の新しい順に、`Target` の内部 ID を表示中のすべての Store から探して、削除されていないものがあれば `Found`(`MovedFrom` は最初に一致した行の `Old`・`At`・`New`)。
-- (c) で削除されていないものがなければ、最初に一致した行を `rec` として、次の順で `Message` を決める。(1) `rec.Target` が表示中のどこかの Store で削除済み: 「{旧 ID} は {日時} に {rec.New} へ移動しましたが、削除されています。設定の「削除済み」から復元できます」。(2) 表示中のどこかの Store の `purged.jsonl` に `Target == rec.Target`: 「{旧 ID} は {日時} に {rec.New} へ移動しましたが、完全に削除されました」。(3) `rec.ToStore` が表示中の Store でない: 「{旧 ID} は {日時} に {Store 名} へ移動しました。この Store はいま表示できません」。(4) `rec.Target` を指す、より新しい記録 `later`(表示中のすべての Store の `transfers.jsonl` のうち、`Target` が同じで `At` が `rec` より後の最新のもの)があり、`later.ToStore` が `rec.ToStore` と違い、表示中の Store でない: 「{旧 ID} は {日時} に {rec.New} へ移動し、いまは {later.New} にあります」。(5) どれでもなければ `port.ErrNotFound`。(4) の当てはめは骨組みの文だけでは決まらないので、この計画で決めた(指摘 8)。
-- {Store 名}: `rec.ToStore` の Store がこのマシンの `StoreList` にあればその名前、なければ `rec.ToStoreName`。
-- {日時}: 01「日付と時刻」の日付と時刻。今年(`Clock.Now()` の年)なら「M/D HH:MM」(例: 「11/12 09:00」)、それ以外の年なら「YYYY/MM/DD HH:MM」(例: 「2026/11/12 09:00」)。時刻帯は `Clock.Now()` のもの。`locate.go` の `whenText(at, now time.Time) string`。
+- 順(A5a-15): (a) いまの ID: 表示中の Store を、名前が `storeName` の Store を先頭、残りは `StoreList` の順に見て、削除されていないアイテムのうち、ワークスペースのいまの接頭辞と番号が一致する先頭。(b) 旧い接頭辞: (a) で見つからなければ、`workspace.OldPrefixes` に接頭辞があるワークスペースの、同じ番号の削除されていないアイテム。(c) 転送記録: すべての表示中の Store の `transfers.jsonl` のうち `Entity == "item"` かつ `Old == display` の行を集め、`At` の新しい順に、`Target` の内部 ID を表示中のすべての Store から探して、削除されていないものがあれば `Found`(`MovedFrom` は、最初に一致した行の `Old`・`At`・`New` を `Old`・`At`・`Display` に、開くアイテムのいまの ID(ワークスペースのいまの接頭辞と番号)を `Current` に入れる)。
+- (c) で削除されていないものがなければ、最初に一致した行を `rec` として、次の順で `Gone` を決める。`Old` は `rec.Old`、`At` は `rec.At`、`NewDisplay` は `rec.New`。(1) `rec.Target` が表示中のどこかの Store で削除済み: `Reason` は `deleted`。(2) 表示中のどこかの Store の `purged.jsonl` に `Target == rec.Target`: `Reason` は `purged`。(3) `rec.ToStore` が表示中の Store でない: `Reason` は `hidden`、`StoreName` は {Store 名}。(4) `rec.Target` を指す、より新しい記録 `later`(表示中のすべての Store の `transfers.jsonl` のうち、`Target` が同じで `At` が `rec` より後の最新のもの)があり、`later.ToStore` が `rec.ToStore` と違い、表示中の Store でない(B から C へ移した、その C が見えない): `Reason` は `elsewhere`、`StoreName` は `later` の {Store 名}(`NewDisplay` は B の新 ID)。(5) どれでもなければ `port.ErrNotFound`。(4) の当てはめは、仕様の文だけでは決まらないので、この計画で決めた。文(仕様 02「見つからないとき」)は画面が作る(Task 11)。
+- {Store 名}: 記録の `ToStore`((4) では `later.ToStore`)の Store がこのマシンの `StoreList` にあればその名前、なければ記録の `ToStoreName`。
 - 履歴の移動の行(7-2): 次のどちらかが、1 行の「{旧 ID} から移動(…)」になる。(i) `moved_in` の行(別の Store から。旧 ID・Store 名・ワークスペース名・プロジェクト名は行の値)。(ii) 同じ Store の中の移動: 場所の `set` の行で、`from` と `to` のワークスペースが違い、同じ操作の `moved_in` の行がないもの。旧 ID は `Origin.Transfers` の、その行と同じ `Op` の行の `Old`(なければ、その行を出さない)、Store 名は `Origin.StoreName`、ワークスペース名とプロジェクト名は `from` の内部 ID を `Origin.WorkspaceName`・`Origin.ProjectTitle` で引く。ワークスペースが変わる場所の `set` の行は、「親を変更」に出さない(同じ操作の `moved_in` の行が文を持つ)。
 - 履歴の値の名前(7-2): 行を書いたときにアイテムがいたワークスペースの定義で引く。ワークスペースは、ログの作成と場所の `set` の `to` から追う。`from` の値は、その操作の最初の場所の `set` の `from` のワークスペース(場所の `set` がなければ、その行の直前のワークスペース)、`to` の値は、その操作の最後の場所の `set` の `to` のワークスペースの定義で引く。いまのワークスペースは `Context.Settings`、このほかのワークスペースで同じ Store にあるものは `Origin.Settings(id)`、どちらにもない(別の Store から来た)ものは、その行より後で最初の `moved_in` の `Names` で引く。`Names` にもない値は「(削除された値)」。`Names` で引くときの値の型は、いまのワークスペースの同じ内部 ID のプロパティから決め(組み込みは内部 ID がキー)、そのプロパティがなければ、値の文字列が `Names` にあればその名前、なければそのまま出す。
 
@@ -2970,14 +3035,26 @@ func TestLocateOfAnItemMovedAwayAndBack(t *testing.T) {
 	recs := recordsOf(t, f.rec, store1) // HH-2 → MB-2、MB-2 → HH-3
 	first := locate(t, f, "main", "HH-2")
 	if !first.Found || first.Item != apptest.SampleTask || first.MovedFrom == nil ||
-		first.MovedFrom.Old != "HH-2" || first.MovedFrom.Display != "MB-2" || !first.MovedFrom.At.Equal(recs[0].At) {
+		first.MovedFrom.Old != "HH-2" || first.MovedFrom.Display != "MB-2" || first.MovedFrom.Current != "HH-3" || !first.MovedFrom.At.Equal(recs[0].At) {
 		t.Errorf("HH-2: %+v", first)
 	}
-	if got := locate(t, f, "main", "MB-2"); got.Item != apptest.SampleTask || got.MovedFrom.Display != "HH-3" {
+	if got := locate(t, f, "main", "MB-2"); got.Item != apptest.SampleTask || got.MovedFrom.Display != "HH-3" || got.MovedFrom.Current != "HH-3" {
 		t.Errorf("MB-2: %+v", got)
 	}
 	if got := locate(t, f, "main", "HH-3"); got.Item != apptest.SampleTask || got.MovedFrom != nil {
 		t.Errorf("HH-3(いまの ID): %+v", got)
+	}
+}
+
+// 1 回だけ移したとき、記録の新 ID(Display)といまの ID(Current)は同じ。画面は「…へ移動しました」の 1 文にする。
+func TestLocateAfterASingleMoveHasTheSameDisplayAndCurrent(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	got := locate(t, f, "main", "HH-2")
+	if got.MovedFrom == nil || got.MovedFrom.Old != "HH-2" || got.MovedFrom.Display != "MB-2" || got.MovedFrom.Current != "MB-2" {
+		t.Errorf("HH-2: %+v", got.MovedFrom)
 	}
 }
 
@@ -2989,33 +3066,35 @@ func TestLocateFollowsAChainAcrossStores(t *testing.T) {
 	putRecord(t, f, store1, roamer, "HH-2", "TM-2", store2, "team")
 	putRecord(t, f, store2, roamer, "TM-2", "AR-7", store3, "readonly")
 	got := locate(t, f, "main", "HH-2")
-	if !got.Found || got.Store != store3 || got.Item != roamer || got.Project != archiveProj || got.MovedFrom.Display != "TM-2" {
+	if !got.Found || got.Store != store3 || got.Item != roamer || got.Project != archiveProj || got.MovedFrom.Display != "TM-2" || got.MovedFrom.Current != "AR-7" {
 		t.Errorf("HH-2: %+v", got)
 	}
-	if got := locate(t, f, "main", "TM-2"); got.Store != store3 || got.MovedFrom.Display != "AR-7" {
+	if got := locate(t, f, "main", "TM-2"); got.Store != store3 || got.MovedFrom.Display != "AR-7" || got.MovedFrom.Current != "AR-7" {
 		t.Errorf("TM-2: %+v", got)
 	}
 }
 
 // Review Focus 3: 同じものを 2 人が別々に移して、記録が 2 件(TM-2 と AR-7)。内部 ID の現在地(team)に辿り着く。
-// 添える日時と新 ID は、最初に一致した行(新しい方の記録)のもの。
+// 添える日時と記録の新 ID(Display)は、最初に一致した行(新しい方の記録)のもの。いまの ID(Current)はアイテムのいる team の TM-2。
 func TestLocateWithTwoRecordsOfTheSameItem(t *testing.T) {
 	f := newFixture(t)
 	addItem(t, f.rec, store2, item.Item{ID: roamer, Place: item.Place{Workspace: teamWS, Project: teamProject, Parent: ptr(teamEpic), Number: 2}, Kind: item.Task, Rank: "V", Title: "旅"})
 	putRecord(t, f, store1, roamer, "HH-2", "TM-2", store2, "team")
 	putRecord(t, f, store1, roamer, "HH-2", "AR-7", store3, "readonly")
-	if got := locate(t, f, "main", "HH-2"); got.Store != store2 || got.Item != roamer || got.MovedFrom.Display != "AR-7" {
+	if got := locate(t, f, "main", "HH-2"); got.Store != store2 || got.Item != roamer || got.MovedFrom.Display != "AR-7" || got.MovedFrom.Current != "TM-2" {
 		t.Errorf("HH-2: %+v", got)
 	}
 }
 
-// 見つからないとき(画面は開かず、4 つの文を言い分ける)。{日時} は今年なら M/D HH:MM。
-func TestLocateMessagesWhenTheItemIsNotFound(t *testing.T) {
+// 見つからないとき(画面は開かず、4 つの文を言い分ける)。ここでは理由と材料だけを確かめる(文は Task 11)。
+// 記録の日時は、偽の `Stores` の時計(2026-11-12 09:00 ごろ)。
+func TestLocateGoneReasons(t *testing.T) {
 	const gone item.ID = "01TESTIT000000000000000030"
+	nineAM := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
 	cases := []struct {
 		name  string
 		setup func(t *testing.T, f fixture)
-		want  string
+		want  transfers.Gone
 	}{
 		{"削除済み", func(t *testing.T, f fixture) {
 			if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
@@ -3024,18 +3103,18 @@ func TestLocateMessagesWhenTheItemIsNotFound(t *testing.T) {
 			if err := apptest.DeleteItems(t.Context(), f.rec, store1, apptest.SampleTask); err != nil {
 				t.Fatal(err)
 			}
-		}, "HH-2 は 11/12 09:00 に MB-2 へ移動しましたが、削除されています。設定の「削除済み」から復元できます"},
+		}, transfers.Gone{Reason: "deleted", Old: "HH-2", At: nineAM, NewDisplay: "MB-2"}},
 		{"完全に削除", func(t *testing.T, f fixture) {
 			putRecord(t, f, store1, gone, "HH-2", "TM-2", store2, "team")
 			f.rec.AddPurged(store2, port.Purged{Entity: "item", Target: gone, Display: "TM-2", At: time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)})
-		}, "HH-2 は 11/12 09:00 に TM-2 へ移動しましたが、完全に削除されました"},
+		}, transfers.Gone{Reason: "purged", Old: "HH-2", At: nineAM, NewDisplay: "TM-2"}},
 		{"移動先の Store が表示中でない", func(t *testing.T, f fixture) {
 			putRecord(t, f, store1, gone, "HH-2", "WEB-31", "S9", "elsewhere")
-		}, "HH-2 は 11/12 09:00 に elsewhere へ移動しました。この Store はいま表示できません"},
-		{"いまの場所が記録の移動先と違う", func(t *testing.T, f fixture) {
+		}, transfers.Gone{Reason: "hidden", Old: "HH-2", At: nineAM, NewDisplay: "WEB-31", StoreName: "elsewhere"}},
+		{"より新しい記録の移動先の Store が表示中でない", func(t *testing.T, f fixture) {
 			putRecord(t, f, store1, gone, "HH-2", "WEB-31", store2, "team")
 			putRecord(t, f, store2, gone, "WEB-31", "TM-5", "S9", "elsewhere")
-		}, "HH-2 は 11/12 09:00 に WEB-31 へ移動し、いまは TM-5 にあります"},
+		}, transfers.Gone{Reason: "elsewhere", Old: "HH-2", At: nineAM, NewDisplay: "WEB-31", StoreName: "elsewhere"}},
 	}
 	for _, c := range cases {
 		f := newFixture(t)
@@ -3046,20 +3125,18 @@ func TestLocateMessagesWhenTheItemIsNotFound(t *testing.T) {
 		}
 		c.setup(t, f)
 		got, err := f.svc.Locate(t.Context(), "main", "HH-2")
-		if err != nil || got.Found || got.Message != c.want {
-			t.Errorf("%s: %+v, %v\nwant message %q", c.name, got, err, c.want)
+		if err != nil || got.Found || got.Gone == nil {
+			t.Errorf("%s: %+v, %v", c.name, got, err)
+			continue
 		}
-	}
-}
-
-// 今年でない日時は YYYY/MM/DD HH:MM。
-func TestLocateMessageDateOfAnotherYear(t *testing.T) {
-	f := newFixture(t)
-	f.svc.Clock = apptest.NewClock(time.Date(2027, 1, 5, 9, 0, 0, 0, time.UTC))
-	putRecord(t, f, store1, "01TESTIT000000000000000030", "ZZ-9", "WEB-31", "S9", "elsewhere")
-	got, err := f.svc.Locate(t.Context(), "main", "ZZ-9")
-	if err != nil || got.Message != "ZZ-9 は 2026/11/12 09:00 に elsewhere へ移動しました。この Store はいま表示できません" {
-		t.Errorf("%+v, %v", got, err)
+		g := *got.Gone
+		if !g.At.Truncate(time.Minute).Equal(nineAM) {
+			t.Errorf("%s: 日時 = %v, want 09:00 ごろ(旧 ID が一致した記録の日時)", c.name, g.At)
+		}
+		g.At = nineAM
+		if g != c.want {
+			t.Errorf("%s: Gone = %+v, want %+v", c.name, g, c.want)
+		}
 	}
 }
 
@@ -3086,7 +3163,7 @@ func TestLocateNotFound(t *testing.T) {
 
 - [ ] **Step 3: 実装する**
 
-`locate.go`: `Located`・`MovedFrom`・`OldID`・`Locate`・`OldIDs`・`whenText`。Store ごとに `Stores.Read` を 1 回ずつ順に使い(入れ子にしない)、各 Store の `Workspaces`・`Projects`・`Items`・`Transfers`・`Purged` を集めた中間の値(`snapshot`)にしてから、(a)〜(c)・(1)〜(5) を純粋な関数で決める(60 行・複雑度 15 に収まるように、`currentID`・`oldPrefix`・`byRecords`・`whyGone` に分ける)。
+`locate.go`: `Located`・`MovedFrom`・`Gone`・`OldID`・`Locate`・`OldIDs`。Store ごとに `Stores.Read` を 1 回ずつ順に使い(入れ子にしない)、各 Store の `Workspaces`・`Projects`・`Items`・`Transfers`・`Purged` を集めた中間の値(`snapshot`)にしてから、(a)〜(c)・(1)〜(5) を純粋な関数で決める(60 行・複雑度 15 に収まるように、`currentID`・`oldPrefix`・`byRecords`・`whyGone` に分ける)。
 
 - [ ] **Step 4: 通す**
 
@@ -3289,9 +3366,6 @@ git commit -m "feat: アイテムの履歴に、同じ Store の移動の元の�
 
 ### Task 8: API と配線(`httpapi/transfers`、`cmd/hedgehug`、e2e のビルドの Store とサンプル)
 
-> **この Task への上書き**(「本文より優先する直し」): 予告・移動・`locate-item` の応答のキーは「名前の直し」のとおり(`gone` は `reason` ほか)。
-
-
 決定 A5a-19・A5a-20 を実装する。8-1 でサンプル(Mobile・Team)、8-2 で API、8-3 で `routes.go`・`wire.go`・`wire_e2e.go` をつなぐ。Task 5〜7 に依存する。
 
 **Files:**
@@ -3308,11 +3382,11 @@ git commit -m "feat: アイテムの履歴に、同じ Store の移動の元の�
 - Produces:
   - `apptest.SampleMobile(ctx, s port.Stores, id port.StoreID) error`: サンプルの Store(`Sample` のあと)に、ワークスペース「Mobile」(接頭辞 `MB`)、プロジェクト「アプリ」(MB-P1)、Epic「iOS」(MB-1)を 1 回の保存で足す。`apptest.SampleTeam(ctx, s, id) error`: 空の Store に、メンバー taro・hanako、ワークスペース「Team」(接頭辞 `TM`)、プロジェクト「運営」(TM-P1)、Epic「チーム運営」(TM-1)を書く。内部 ID は `Sample` と重ならない(別の Store へ移すとき、同じ内部 ID があると写せないため)。値の内部 ID も別(`01SAMPLEMBV`・`01SAMPLETMV` に 15 桁の連番)。定数 `SampleMobileWorkspace`・`SampleMobileProject`・`SampleMobileEpic`(`01SAMPLEWS0000000000000002`・`01SAMPLEPR0000000000000002`・`01SAMPLEIT0000000000000003`)、`SampleTeamWorkspace`・`SampleTeamProject`・`SampleTeamEpic`(`01SAMPLEWS0000000000000003`・`01SAMPLEPR0000000000000003`・`01SAMPLEIT0000000000000004`)
   - `transfers.Register(api huma.API, svc apptransfers.Service)`(`internal/adapter/httpapi/transfers`)
-  - HTTP(骨組みの表のとおり):
+  - HTTP(「HTTP API」の表のとおり):
     - `list-transfer-targets` → `[{storeId, storeName, workspaceId, workspaceName, prefix, projects: [{id, title, epics: [{id, display, title}]}]}]`(空は `[]`)
-    - `get-transfer-preview`(query `toStore`・`toWorkspace`・`toProject`)→ `{below, deleted, nextId, acrossStores, remoteNote, statuses: [{status, name, count, choices: [{id, name}], default}]}`(空は `[]`)
+    - `get-transfer-preview`(query `toStore`・`toWorkspace`・`toProject`)→ `{below, deleted, nextDisplay, crossStore, remoteNotice, destinationHasRemote, replacements: [{status, name, count, choices: [{id, name}], default}]}`(空は `[]`。キーの並びはこのとおり)
     - `transfer-item`(本文 `{toStore, toWorkspace, toProject, toParent?, statusChoices}`)→ 200 `{toStore, itemId, display, emptied}`(`emptied` の空は `[]`)。断りは 422、`port.ErrNotFound`・`port.ErrStoreNotFound` は 404、`*transfers.SendError` は 422 で `detail` に `Error()` の文
-    - `locate-item`(GET `/api/locate`、query `store`・`id`)→ `{kind: "found", storeId, projectId, itemId, movedFrom?: {old, at, display}}` か `{kind: "gone", message}`。見つからなければ 404。`at` は `change.TimeLayout`
+    - `locate-item`(GET `/api/locate`、query `store`・`id`)→ `{kind: "found", storeId, projectId, itemId, movedFrom?: {old, at, display, current}}` か `{kind: "gone", reason, old, at, newDisplay, storeName?}`(`reason` は `deleted`・`purged`・`hidden`・`elsewhere`。`storeName` は `hidden`・`elsewhere` のときだけ)。見つからなければ 404。`at` は `change.TimeLayout`
   - `httpapi.Deps` に `Delivery apptransfers.Delivery`・`SyncTargets port.SyncTargets`(`cmd/hedgehug` が `syncing.Service` を `Delivery` に渡す。app の機能どうしを import しないため)。履歴の API に `StoreList` を渡す
 
 #### 8-1 サンプル(Mobile・Team)
@@ -3441,13 +3515,13 @@ func TestPreview(t *testing.T) {
 	e := newEnv(t)
 	q := "?toStore=S1&toWorkspace=" + string(apptest.SampleMobileWorkspace) + "&toProject=" + string(apptest.SampleMobileProject)
 	res := e.api.Get("/api/stores/S1/items/" + string(apptest.SampleTask) + "/transfer-preview" + q)
-	want := `{"below":0,"deleted":0,"nextId":"MB-2","acrossStores":false,"remoteNote":false,"statuses":[]}`
+	want := `{"below":0,"deleted":0,"nextDisplay":"MB-2","crossStore":false,"remoteNotice":false,"destinationHasRemote":true,"replacements":[]}`
 	if res.Code != 200 || strings.TrimSpace(res.Body.String()) != want {
 		t.Errorf("%d %s", res.Code, res.Body)
 	}
 	q = "?toStore=S2&toWorkspace=" + string(apptest.SampleTeamWorkspace) + "&toProject=" + string(apptest.SampleTeamProject)
 	res = e.api.Get("/api/stores/S1/items/" + string(apptest.SampleTask) + "/transfer-preview" + q)
-	if !strings.Contains(res.Body.String(), `"nextId":"TM-2","acrossStores":true,"remoteNote":true`) {
+	if !strings.Contains(res.Body.String(), `"nextDisplay":"TM-2","crossStore":true,"remoteNotice":true,"destinationHasRemote":false`) {
 		t.Errorf("別の Store: %s", res.Body)
 	}
 }
@@ -3524,20 +3598,24 @@ func TestLocate(t *testing.T) {
 	res = e.api.Get("/api/locate?store=main&id=HH-2") // 旧 ID は team へ辿り着く
 	var got struct {
 		Kind, StoreID, ProjectID, ItemID string
-		MovedFrom                        struct{ Old, At, Display string }
+		MovedFrom                        struct{ Old, At, Display, Current string }
 	}
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil ||
 		got.Kind != "found" || got.StoreID != "S2" || got.ItemID != task || got.ProjectID != string(apptest.SampleTeamProject) ||
-		got.MovedFrom.Old != "HH-2" || got.MovedFrom.Display != "TM-2" || !strings.HasPrefix(got.MovedFrom.At, "2026-11-12T09:00:") {
+		got.MovedFrom.Old != "HH-2" || got.MovedFrom.Display != "TM-2" || got.MovedFrom.Current != "TM-2" || !strings.HasPrefix(got.MovedFrom.At, "2026-11-12T09:00:") {
 		t.Errorf("旧 ID: %d %s", res.Code, res.Body)
 	}
 	if err := apptest.DeleteItems(t.Context(), e.stores, "S2", apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
-	res = e.api.Get("/api/locate?store=main&id=HH-2") // 削除済みは、画面を開かず文を返す
-	want := `{"kind":"gone","message":"HH-2 は 11/12 09:00 に TM-2 へ移動しましたが、削除されています。設定の「削除済み」から復元できます"}`
-	if res.Code != 200 || strings.TrimSpace(res.Body.String()) != want {
+	res = e.api.Get("/api/locate?store=main&id=HH-2") // 削除済みは、画面を開かず理由と材料を返す(文は画面が作る)
+	var gone struct{ Kind, Reason, Old, At, NewDisplay string }
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &gone) != nil ||
+		gone.Kind != "gone" || gone.Reason != "deleted" || gone.Old != "HH-2" || gone.NewDisplay != "TM-2" || !strings.HasPrefix(gone.At, "2026-11-12T09:00:") {
 		t.Errorf("削除済み: %d %s", res.Code, res.Body)
+	}
+	if body := res.Body.String(); strings.Contains(body, "message") || strings.Contains(body, "storeName") {
+		t.Errorf("deleted に message と storeName は出さない: %s", body)
 	}
 	if res := e.api.Get("/api/locate?store=main&id=ZZ-9"); res.Code != 404 {
 		t.Errorf("見つからない: %d", res.Code)
@@ -3551,7 +3629,7 @@ func TestLocate(t *testing.T) {
 
 - [ ] **Step 3: 実装する**
 
-`items/move.go` の書き方に合わせる(本文の型には機能の名前を付ける: `TransferTarget`・`TransferPreview`・`TransferItem`・`TransferResult`・`Located`。空の配列は `[]`、`omitempty` は `movedFrom` と `Located` の任意の項目だけ)。`transfer-item` の応答は 200 で本文あり。エラーは `apierr.From` に任せるが、`*apptransfers.SendError` は `errors.As` で拾って `huma.Error422UnprocessableEntity(se.Error())`(`apierr` は変えない。この API だけの扱い)。`locate-item` は `Located.Found` なら `kind: "found"`(`message` は出さない)、そうでなければ `kind: "gone"` と `message`。`at` は `MovedFrom.At.Format(change.TimeLayout)`。
+`items/move.go` の書き方に合わせる(本文の型には機能の名前を付ける: `TransferTarget`・`TransferPreview`・`TransferItem`・`TransferResult`・`Located`。空の配列は `[]`、`omitempty` は `movedFrom` と `Located` の任意の項目だけ)。`transfer-item` の応答は 200 で本文あり。エラーは `apierr.From` に任せるが、`*apptransfers.SendError` は `errors.As` で拾って `huma.Error422UnprocessableEntity(se.Error())`(`apierr` は変えない。この API だけの扱い)。`locate-item` は `Located.Found` なら `kind: "found"`、そうでなければ `kind: "gone"` と `Gone` の欄(`reason`・`old`・`at`・`newDisplay`、`storeName` は空なら出さない)。`at` は `MovedFrom.At`・`Gone.At` を `Format(change.TimeLayout)` したもの。
 
 - [ ] **Step 4: 通す**
 
@@ -3610,7 +3688,7 @@ func TestE2EWireMovesItemsWithinAndAcrossStores(t *testing.T) {
 - [ ] **Step 3: 実装する**
 
 - `routes.go`: `Deps` に `Delivery apptransfers.Delivery` と `SyncTargets port.SyncTargets` を足す(コメント: `cmd` が `syncing.Service` を渡す)。`NewAPI` に `transfers.Register(api, apptransfers.Service{Stores: deps.Stores, StoreList: deps.StoreList, Targets: deps.SyncTargets, Delivery: deps.Delivery, Identity: deps.Identity, Clock: deps.Clock})` を足し、`apphistory.Service{... StoreList: deps.StoreList}` にする。
-- `wire.go`: `svc` に、Task 4 が足した保存の口(`Stores`)を `syncing.NotifyWrites(stores, auto.Wrote)` で渡す(`auto` は `svc` から作るので、`auto` を作った直後に代入する。指摘 5)。`deps` に `Delivery: svc`・`SyncTargets: noSyncTargets{}`。
+- `wire.go`: `svc` に、Task 4 が足した保存の口(`Stores`)を `syncing.NotifyWrites(stores, auto.Wrote)` で渡す(`auto` は `svc` から作るので、`auto` を作った直後に代入する)。`deps` に `Delivery: svc`・`SyncTargets: noSyncTargets{}`。
 - `wire_e2e.go`: 定数 `teamStore = "01E2ESTORE0000000000000003"`。Store の組み立てのループを、`e2eStore` と `readonlyStore` に `Sample`、`e2eStore` にだけ `SampleMobile`、`teamStore` に `SampleTeam` に直す。`StoreList` に `{ID: teamStore, Name: "team", Color: "green"}`。`e2eSync(hub, stores)` に Store を渡し、`Targets` に remote なしの `team` を足し、`Stores: stores` を入れる。`Deps` に `Delivery: syncSvc`・`SyncTargets: syncSvc.Targets`。
 - `make generate` → `pnpm -C web gen` で `api/openapi.yaml`・`generated.ts` を作り直す。
 
@@ -3632,12 +3710,7 @@ git commit -m "feat: アイテムの移動と旧 ID の解決の API をつな�
 
 ---
 
----
-
 ### Task 9: 画面の口とダイアログのモデル(core)
-
-> **この Task への上書き**(「本文より優先する直し」): `Located` の `gone` は `{reason, old, at, newDisplay, storeName?, nowDisplay?}`。
-
 
 Task 8 がサーバーに足した 4 本の API を画面の口 `TransfersPort` に載せ、api の実装・偽物・ダイアログのモデル `createTransferDialog` を作る。ダイアログの部品(Svelte)・メニュー・パネルの切り替えは Task 10、画面のアドレスの解決は Task 11。
 
@@ -3646,9 +3719,9 @@ Task 8 がサーバーに足した 4 本の API を画面の口 `TransfersPort` 
 - ダイアログの選択肢の値は `{Store の ID}/{ワークスペースの ID}`(内部 ID に `/` は含まれない)。選択肢の見え方は「{Store 名} / {ワークスペース名}」(履歴の「{旧 ID} から移動」の書き方に合わせる。A5a-17)。
 - 予告(`TransferPreview`)は、移動先のワークスペースかプロジェクトが変わるたびに読み直す。親の Epic を選び直しても読み直さない(予告は親に依存しない)。古い読み込みの結果は捨てる。
 - 書き込める Store・非表示でない・プロジェクトがあるワークスペースの絞り込みはサーバー(`transfer-targets`、A5a-13)が済ませて返す。画面は並びをそのまま使う。
-- ボタン「移動」を押したときの失敗は、トーストを出して**ダイアログを開いたままにする**(移動先を選び直して送り直せるため)。削除・移動(A4b)が閉じるのと違うので、骨組みへの指摘 6 に書いた。ただし `NotFound`(移すアイテムが別の経路で消えた)は閉じて画面を読み直す。
+- ボタン「移動」を押したときの失敗は、トーストを出して**ダイアログを開いたままにする**(移動先を選び直して送り直せるため)。削除・移動(A4b)が閉じるのとは違う(A5a-12)。ただし `NotFound`(移すアイテムが別の経路で消えた)は閉じて画面を読み直す。
 - 移したあとの詳細パネルの切り替えと読み直しは、口 `afterMoved(from, to)` に任せる(Task 10 が作り、wire でつなぐ)。モデルは「トーストを出す → `afterMoved` を呼ぶ」までを持つ。
-- API の応答のキー(`generated.ts`)は、骨組みの A5a-14・A5a-19 にキー名がないので、この Task が決め、Task 8 が合わせる(骨組みへの指摘 1)。
+- API の応答のキーは、A5a-14・A5a-19 と「HTTP API」の表のとおり(Task 8 が作る。Step 1 が `generated.ts` で確かめる)。
 
 **Files:**
 - Create: `web/packages/core/src/model/transfer.ts`・`web/packages/core/src/port/transfers.ts`
@@ -3660,7 +3733,7 @@ Task 8 がサーバーに足した 4 本の API を画面の口 `TransfersPort` 
 - Modify: `web/packages/core/src/actionsIndex.ts`(24 行。型と `createTransferDialog` を足す)
 
 **Interfaces:**
-- Consumes: Task 8 の 4 本の API(骨組みの「HTTP API」の表)。`call`(api の `errors.ts`)。core の `Catalog`・`Toasts`・`Detail`・`Drafts`・`ItemRefresh`・`Option`(`features/projects/createDialog`)・`itemDisplayId`・`isItemDraft`・`readOnlyNote`・`Refused`・`NotFound`。
+- Consumes: Task 8 の 4 本の API(「HTTP API」の表)。`call`(api の `errors.ts`)。core の `Catalog`・`Toasts`・`Detail`・`Drafts`・`ItemRefresh`・`Option`(`features/projects/createDialog`)・`itemDisplayId`・`isItemDraft`・`readOnlyNote`・`Refused`・`NotFound`。
 - Produces:
   - `model/transfer.ts`(すべて `@hedgehug/core` から export):
 
@@ -3684,7 +3757,7 @@ Task 8 がサーバーに足した 4 本の API を画面の口 `TransfersPort` 
       nextDisplay: string;            // 移動先の次の番号の ID(HH-13)
       crossStore: boolean;            // 別の Store か
       remoteNotice: boolean;          // 「移動先に remote がないため…」を出すか
-      destinationHasRemote: boolean;  // 移動先の Store に remote があるか(オフラインの判断に使う。指摘 1)
+      destinationHasRemote: boolean;  // 移動先の Store に remote があるか(オフラインの判断に使う)
       replacements: StatusReplacement[]; // 移動元のワークスペースのステータスの並び
     }
     export interface TransferInput {
@@ -3693,10 +3766,21 @@ Task 8 がサーバーに足した 4 本の API を画面の口 `TransfersPort` 
       statusChoices: Record<string, string>; // 元のステータスの内部 ID → 移動先のステータスの内部 ID
     }
     export interface TransferResult { toStore: string; itemId: string; display: string; emptied: string[] }
-    export interface MovedFrom { old: string; at: string; display: string } // at は ISO 8601
+    export interface MovedFrom {
+      old: string; at: string;  // 旧 ID と、旧 ID が一致した記録の日時(ISO 8601)
+      display: string;          // その記録の新 ID
+      current: string;          // 開いたアイテムのいまの ID(display と同じなら、そのあとは移していない)
+    }
+    export type GoneReason = "deleted" | "purged" | "hidden" | "elsewhere";
+    export interface Gone {
+      reason: GoneReason;
+      old: string; at: string;  // 旧 ID と、旧 ID が一致した記録の日時(ISO 8601)
+      newDisplay: string;       // その記録の新 ID
+      storeName?: string;       // hidden: 記録の移動先の Store 名、elsewhere: より新しい記録の移動先の Store 名
+    }
     export type Located =
       | { kind: "found"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }
-      | { kind: "gone"; message: string };
+      | ({ kind: "gone" } & Gone);
     ```
   - `port/transfers.ts`:
 
@@ -3817,13 +3901,17 @@ describe("transfers port", () => {
     await expect(createTransfersPort().targets("S1", "I1")).rejects.toBeInstanceOf(NotFound);
   });
 
-  it("locates an address: found with movedFrom, gone with the message, 404 as NotFound", async () => {
-    const found = { kind: "found", storeId: "S3", projectId: "P9", itemId: "N1", movedFrom: { old: "HH-5", at: "2026-11-13T00:05:00Z", display: "TM-4" } };
+  it("locates an address: found with movedFrom, gone with the reason, 404 as NotFound", async () => {
+    const found = { kind: "found", storeId: "S3", projectId: "P9", itemId: "N1", movedFrom: { old: "HH-5", at: "2026-11-13T00:05:00Z", display: "TM-4", current: "AR-7" } };
     const fetch = respond(200, found);
     expect(await createTransfersPort().locate("work", "HH-5")).toEqual(found);
     expect(call(fetch)[0]).toBe("/api/locate?store=work&id=HH-5");
-    respond(200, { kind: "gone", message: "HH-5 は 11/13 09:05 に TM-4 へ移動しましたが、完全に削除されました" });
-    expect(await createTransfersPort().locate("work", "HH-5")).toEqual({ kind: "gone", message: "HH-5 は 11/13 09:05 に TM-4 へ移動しましたが、完全に削除されました" });
+    const deleted = { kind: "gone", reason: "deleted", old: "HH-5", at: "2026-11-13T00:05:00Z", newDisplay: "TM-4" };
+    respond(200, deleted);
+    expect(await createTransfersPort().locate("work", "HH-5")).toEqual(deleted);
+    const elsewhere = { kind: "gone", reason: "elsewhere", old: "HH-5", at: "2026-11-13T00:05:00Z", newDisplay: "TM-4", storeName: "far" };
+    respond(200, elsewhere);
+    expect(await createTransfersPort().locate("work", "HH-5")).toEqual(elsewhere);
     respond(404, { title: "Not Found", status: 404, detail: "not found" });
     await expect(createTransfersPort().locate("work", "HH-5")).rejects.toBeInstanceOf(NotFound);
   });
@@ -4127,12 +4215,9 @@ EOF
 
 ### Task 10: ダイアログの部品・メニュー・パネルの切り替え(app)
 
-> **この Task への上書き**(「本文より優先する直し」): 送信の失敗ではダイアログを開いたまま。
-
-
 **この Task が決めること:**
 
-- メニューの項目 `"transfer"`、ラベル「別のワークスペースへ移動…」、順は「移動…」の次・「種類を変更…」の前(骨組みの「画面」の表)。閲覧のみの Store では無効で「閲覧のみの Store です」を添える(`writes` に足す)。**Step の行・パネルには出さない**(仕様 02 に「Step は単独では移せない」とあるが、Step の理由の文言がないため。骨組みへの指摘 4)。候補がないことでは無効にしない(選んだら、ダイアログを開かずトースト。Task 9 のモデルが出す)。
+- メニューの項目 `"transfer"`、ラベル「別のワークスペースへ移動…」、順は「移動…」の次・「種類を変更…」の前(「画面」の表)。閲覧のみの Store では無効で「閲覧のみの Store です」を添える(`writes` に足す)。**Step の行・パネルには出さない**(仕様 02 に「Step は単独では移せない」とあるが、Step の理由の文言がないため。A5a-22)。候補がないことでは無効にしない(選んだら、ダイアログを開かずトースト。Task 9 のモデルが出す)。
 - ダイアログの部品の読み上げの名前(Task 12 の e2e が使う): ダイアログのタイトル「別のワークスペースへ移動」、セレクトは「移動先のワークスペース」「プロジェクト」「親の Epic」、ステータスの行のセレクトは「{ステータス名} の置き換え先」、ボタンは「移動」「キャンセル」。見出しは `changesHeading`・`replacementsHeading`。
 - 移したあと(`afterMoved`)は、開いているパネルが移したアイテム自身なら、閉じて(確認なし)から新しい Store・内部 ID で開き直し、そのあとツリー・パネル・区画を読み直す。パネルが別のアイテムなら読み直すだけ(移したものの子孫なら、読み直しで閉じる)。
 - ほかの書き手が移したとき(A5a-18): `Detail.reload` が、開いているアイテムと同じ内部 ID で**ワークスペースが違う**アイテムを読んだら、確認を出さずに閉じる。別の Store へ移されたときは、いまも 404 で閉じる。
@@ -4338,33 +4423,43 @@ EOF
 
 ---
 
-### Task 11: 画面のアドレスの旧 ID の解決と、パネルの上部の 1 行
-
-> **この Task への上書き**(「本文より優先する直し」): 見つからないときの 4 つの文を `formatDateTime` で作る。旧い接頭辞でのワークスペース・プロジェクトのアドレスも足す。
-
+### Task 11: 画面のアドレスの旧 ID・旧い接頭辞の解決と、パネルの上部の 1 行
 
 **この Task が決めること:**
 
 - アイテムの入口(`/s/{Store 名}/i/{ID}`)は、まず今までどおり、いまの ID(Store 名の Store → サイドバーの並び)で探す。見つからなかったときだけ `locate`(旧 ID・旧い接頭辞・転送記録。A5a-15)を呼ぶ。普通の経路で `locate` を呼ばない。
-- `locate` の答え: `found` ならそのアイテムを開く(`movedFrom` があれば、パネルの上部の 1 行用に渡す)。`gone` なら、`message` をトーストで出し(エラーの色にしない)、アドレスをホームに置き換える(`navigation.replace`。再び解決しても同じトーストを出さない)。`NotFound`(どの旧 ID でもない)は今までどおりホーム(トーストなし)。
-- 見つからないときの 4 つの文は、サーバーが `message` に作る(Task 7・8)。画面は文を作らず、そのまま出す。文は仕様 02「見つからないとき」のとおり: 「{旧 ID} は {日時} に {新 ID} へ移動しましたが、削除されています。設定の「削除済み」から復元できます」/「…移動しましたが、完全に削除されました」/「{旧 ID} は {日時} に {Store 名} へ移動しました。この Store はいま表示できません」/「{旧 ID} は {日時} に {B の新 ID} へ移動し、いまは {C の新 ID} にあります」。
-- 旧 ID から開いたときの 1 行(A5a-16): 「{旧 ID} は {日時} に {新 ID} へ移動しました」。詳細パネルの上部(種類の行の上)に 1 行。パネルを閉じるか別のアイテムを開けば消える。普通に開いたときは出さない。日時は「今年なら M/D、それ以外は YYYY/MM/DD」と「HH:MM」を空白でつなぐ(01「日付と時刻」)。`features/dates/date.ts` に `formatDateTime` を足す。
+- `locate` の答え: `found` ならそのアイテムを開く(`movedFrom` があれば、パネルの上部の 1 行用に渡す)。`gone` なら、`goneText`(下)の文をトーストで出し(エラーの色にしない)、アドレスをホームに置き換える(`navigation.replace`。再び解決しても同じトーストを出さない)。`NotFound`(どの旧 ID でもない)は今までどおりホーム(トーストなし)。
+- 見つからないときの 4 つの文は、サーバーが返す `Gone`(`reason`・`old`・`at`・`newDisplay`・`storeName`)から、画面が `goneText` で作る(日時の書き方を Go と TS に 2 つ持たないため)。{日時} は `formatDateTime`、文は仕様 02「見つからないとき」のとおり:
+  - `deleted`: 「{旧 ID} は {日時} に {新 ID} へ移動しましたが、削除されています。設定の「削除済み」から復元できます」
+  - `purged`: 「{旧 ID} は {日時} に {新 ID} へ移動しましたが、完全に削除されました」
+  - `hidden`: 「{旧 ID} は {日時} に {Store 名} へ移動しました。この Store はいま表示できません」
+  - `elsewhere`: 「{旧 ID} は {日時} に {B の新 ID} へ移動し、その後 {Store 名} へ移動しました。この Store はいま表示できません」
+- 旧 ID から開いたときの 1 行(A5a-16): 詳細パネルの上部(種類の行の上)に 1 行。パネルを閉じるか別のアイテムを開けば消える。普通に開いたときは出さない。`movedLine` が、`display` が `current` と同じなら「{旧 ID} は {日時} に {新 ID} へ移動しました」、違うなら「{旧 ID} は {日時} に {B の新 ID} へ移動し、その後 {C のいまの ID} へ移動しました」を作る。日時は「今年なら M/D、それ以外は YYYY/MM/DD」と「HH:MM」を空白でつなぐ(01「日付と時刻」)。`features/dates/date.ts` に `formatDateTime` を足す。
+- 旧い接頭辞でのワークスペース・プロジェクトのアドレス(A5a-21): ワークスペース(`/s/{store}/w/{接頭辞}`)は、いまの接頭辞のワークスペースを(Store 名の Store → サイドバーの並びで)先に探し、なければ `oldPrefixes` にその接頭辞があるワークスペースを開く。プロジェクト(`{接頭辞}-P{番号}`)は、いまの表示 ID の完全一致を先に探し、なければ `oldPrefixes` にその接頭辞があるワークスペースの、番号が同じプロジェクトを開く。旧い接頭辞は、`list-workspaces` の `oldPrefixes` をカタログのワークスペースに載せて引く(サーバーは `workspaces.Service.List` が `workspace.OldPrefixes` を返す。`internal/app/workspaces` は 20 ファイルなので、新しいファイルを足さない)。
 - 行には `role="status"` を付けない(トーストが `status` で、e2e が数える)。
 
 **Files:**
+- Modify: `internal/app/workspaces/list.go`・`order.go`(`ranked` に旧い接頭辞)・`list_test.go`
+- Modify: `internal/adapter/httpapi/workspaces/dto.go`・`workspaces.go`・`workspaces_test.go`
+- Generated: `api/openapi.yaml`・`web/packages/api/src/generated.ts`(`make generate` → `pnpm -C web gen`)
+- Modify: `web/packages/api/src/catalog.ts`・`ports.test.ts`
+- Modify: `web/packages/core/src/port/catalog.ts`・`web/packages/core/src/features/catalog/catalog.ts`・`catalog.test.ts`
 - Modify: `web/packages/core/src/features/dates/date.ts`・`date.test.ts`
-- Create: `web/packages/core/src/features/transfers/movedNotice.ts`・`movedNotice.test.ts`
+- Create: `web/packages/core/src/features/transfers/movedText.ts`・`movedText.test.ts`・`movedNotice.ts`・`movedNotice.test.ts`
 - Modify: `web/packages/core/src/features/router/resolve.ts`・`resolve.test.ts`
 - Modify: `web/packages/core/src/features/screen/screen.ts`・既存の screen のテスト
 - Modify: `web/packages/core/src/actionsIndex.ts`(`createMovedNotice`)・`web/packages/core/src/index.ts`(`formatDateTime`。166 行)
 - Modify: `web/app/src/wire.ts`・`web/app/src/screens/item/DetailPanel.svelte`(126 行)
 
 **Interfaces:**
-- Consumes: Task 9 の `TransfersPort.locate`・`Located`・`MovedFrom`。`ItemsPort.findByNumber`・`parseDisplayId`・`Toasts`・`Navigation`・`Detail.view`
+- Consumes: Task 9 の `TransfersPort.locate`・`Located`・`MovedFrom`・`Gone`。`ItemsPort.findByNumber`・`parseDisplayId`・`Toasts`・`Navigation`・`Detail.view`。`workspace.OldPrefixes`
 - Produces:
+  - Go: `type workspaces.Listed struct { Workspace workspace.Workspace; OldPrefixes []string }`、`(Service) List(ctx, store port.StoreID) ([]Listed, error)`(並びは今までどおり)。API: `WorkspaceSummary` に `OldPrefixes []string`(`json:"oldPrefixes" nullable:"false"`。空は `[]`)。`WorkspaceDetail` の `OldPrefixes` は `WorkspaceSummary` から来るので消す。`toSummary(w workspace.Workspace, oldPrefixes []string)`(作成の応答は空の `[]`)
+  - `CatalogPort.listWorkspaces` が返す各ワークスペースに `oldPrefixes?: string[]`(api は常に付ける)。`WorkspaceNode` に `oldPrefixes: string[]`(ないときは空)
   - `formatDateTime(at: Date, now: Date): string`(例: `2026-11-13 09:05` で今年なら `11/13 09:05`、去年なら `2025/12/31 23:59`)
-  - `resolveRoute(route, stores, items, transfers: Pick<TransfersPort, "locate">): Promise<Resolved>`。`Resolved` の `item` に `movedFrom?: MovedFrom`、`home` に `gone?: string` を足す
-  - `ScreenDeps` に `transfers: Pick<TransfersPort, "locate">`・`toasts: Toasts` を足し、`openItem(storeId, itemId, movedFrom?: MovedFrom)` にする
+  - `movedLine(m: MovedFrom, now: Date): string`・`goneText(g: Gone, now: Date): string`(`features/transfers/movedText.ts`)
+  - `resolveRoute(route, stores, items, transfers: Pick<TransfersPort, "locate">): Promise<Resolved>`。`Resolved` の `item` に `movedFrom?: MovedFrom`、`home` に `gone?: Gone`(`kind` を除いたもの)を足す
+  - `ScreenDeps` に `transfers: Pick<TransfersPort, "locate">`・`toasts: Toasts`・`now(): Date` を足し、`openItem(storeId, itemId, movedFrom?: MovedFrom)` にする
   - `createMovedNotice(deps: { detail: Pick<Detail, "view">; now(): Date }): MovedNotice`。`MovedNotice` は `{ text: Readable<string>; show(storeId: string, itemId: string, m: MovedFrom): void }`。`text` は、開いているパネルが `show` したアイテムのときだけ文、それ以外は空
 
 - [ ] **Step 1: 日時の失敗するテストを書く**
@@ -4391,9 +4486,64 @@ Expected: FAIL(`formatDateTime` がない)
 Run: `pnpm -C web --filter @hedgehug/core test -- dates/date`
 Expected: PASS
 
-- [ ] **Step 3: パネルの上部の 1 行の失敗するテストを書く**
+- [ ] **Step 3: 旧 ID の文の失敗するテストを書く(`movedText`)**
 
-`movedNotice.test.ts`。`detail.view` は `writable<DetailView | null>(null)`、`now` は `() => new Date(2026, 10, 14, 12, 0)`。移動の記録は `{ old: "HH-5", at: new Date(2026, 10, 13, 9, 5).toISOString(), display: "WEB-1" }`。
+`web/packages/core/src/features/transfers/movedText.test.ts`(新規)。
+
+```ts
+import { describe, expect, it } from "vitest";
+import { goneText, movedLine } from "./movedText";
+
+const now = new Date(2026, 10, 14, 12, 0);
+
+describe("goneText (02「見つからないとき」の 4 つの文)", () => {
+  const at = new Date(2026, 10, 12, 9, 0).toISOString(); // 今年なので 11/12 09:00
+  it.each([
+    [{ reason: "deleted", newDisplay: "MB-2" },
+      "HH-2 は 11/12 09:00 に MB-2 へ移動しましたが、削除されています。設定の「削除済み」から復元できます"],
+    [{ reason: "purged", newDisplay: "TM-2" },
+      "HH-2 は 11/12 09:00 に TM-2 へ移動しましたが、完全に削除されました"],
+    [{ reason: "hidden", newDisplay: "WEB-31", storeName: "elsewhere" },
+      "HH-2 は 11/12 09:00 に elsewhere へ移動しました。この Store はいま表示できません"],
+    [{ reason: "elsewhere", newDisplay: "WEB-31", storeName: "elsewhere" },
+      "HH-2 は 11/12 09:00 に WEB-31 へ移動し、その後 elsewhere へ移動しました。この Store はいま表示できません"],
+  ] as const)("%j", (g, want) => {
+    expect(goneText({ ...g, old: "HH-2", at }, now)).toBe(want);
+  });
+
+  it("writes the year when the move was in another year", () => {
+    const last = new Date(2025, 11, 31, 23, 59).toISOString();
+    expect(goneText({ reason: "purged", old: "HH-2", at: last, newDisplay: "TM-2" }, now)).toBe(
+      "HH-2 は 2025/12/31 23:59 に TM-2 へ移動しましたが、完全に削除されました");
+  });
+});
+
+describe("movedLine (02「移した日時の表示」)", () => {
+  const at = new Date(2026, 10, 13, 9, 5).toISOString();
+  it("says one move when the item has not moved since", () => {
+    expect(movedLine({ old: "HH-5", at, display: "WEB-1", current: "WEB-1" }, now)).toBe(
+      "HH-5 は 11/13 09:05 に WEB-1 へ移動しました");
+  });
+  it("says the later move too when the item moved again (A → B → C)", () => {
+    expect(movedLine({ old: "HH-5", at, display: "TM-4", current: "AR-7" }, now)).toBe(
+      "HH-5 は 11/13 09:05 に TM-4 へ移動し、その後 AR-7 へ移動しました");
+  });
+});
+```
+
+Run: `pnpm -C web --filter @hedgehug/core test -- movedText`
+Expected: FAIL(`./movedText` がない)
+
+- [ ] **Step 4: 旧 ID の文を実装する**
+
+`movedText.ts`: `movedLine`・`goneText`(上の「決めること」の文。日時は `formatDateTime(new Date(at), now)`)。
+
+Run: `pnpm -C web --filter @hedgehug/core test -- movedText`
+Expected: PASS 6 件
+
+- [ ] **Step 5: パネルの上部の 1 行の失敗するテストを書く**
+
+`movedNotice.test.ts`。`detail.view` は `writable<DetailView | null>(null)`、`now` は `() => new Date(2026, 10, 14, 12, 0)`。移動の記録は `{ old: "HH-5", at: new Date(2026, 10, 13, 9, 5).toISOString(), display: "WEB-1", current: "WEB-1" }`。
 
 ```ts
 const line = "HH-5 は 11/13 09:05 に WEB-1 へ移動しました";
@@ -4403,6 +4553,12 @@ it("shows the line once the panel shows the item, not before", () => {
   expect(get(notice.text)).toBe("");
   view.set({ item: { storeId: "S1", id: "I5" } } as DetailView);
   expect(get(notice.text)).toBe(line);
+});
+
+it("also says the later move when the item moved again after the recorded one", () => {
+  notice.show("S1", "I5", { ...moved, display: "TM-4", current: "AR-7" });
+  view.set({ item: { storeId: "S1", id: "I5" } } as DetailView);
+  expect(get(notice.text)).toBe("HH-5 は 11/13 09:05 に TM-4 へ移動し、その後 AR-7 へ移動しました");
 });
 
 it("clears when another item is opened, and stays cleared when the first one is opened again", () => {
@@ -4425,7 +4581,7 @@ it("does not mix up the same internal ID of another Store, and a later show repl
   notice.show("S1", "I5", moved);
   view.set({ item: { storeId: "S2", id: "I5" } } as DetailView);
   expect(get(notice.text)).toBe("");
-  notice.show("S2", "I5", { ...moved, old: "HH-7", display: "WEB-2" });
+  notice.show("S2", "I5", { ...moved, old: "HH-7", display: "WEB-2", current: "WEB-2" });
   view.set({ item: { storeId: "S2", id: "I5" } } as DetailView);
   expect(get(notice.text)).toBe("HH-7 は 11/13 09:05 に WEB-2 へ移動しました");
 });
@@ -4434,14 +4590,98 @@ it("does not mix up the same internal ID of another Store, and a later show repl
 Run: `pnpm -C web --filter @hedgehug/core test -- movedNotice`
 Expected: FAIL(`./movedNotice` がない)
 
-- [ ] **Step 4: 1 行を実装する**
+- [ ] **Step 6: 1 行を実装する**
 
-`movedNotice.ts`: `createMovedNotice`。`show` したアイテムが一度パネルに出たあとで、別のアイテムか閉じた状態になったら消す(出る前の `null` では消さない。画面のアドレスの解決は、画面を移る購読がパネルを閉じたあとでパネルを開くので)。`actionsIndex.ts` に `createMovedNotice` と `type MovedNotice` を足す。
+`movedNotice.ts`: `createMovedNotice`。文は `movedLine(m, deps.now())`。`show` したアイテムが一度パネルに出たあとで、別のアイテムか閉じた状態になったら消す(出る前の `null` では消さない。画面のアドレスの解決は、画面を移る購読がパネルを閉じたあとでパネルを開くので)。`actionsIndex.ts` に `createMovedNotice` と `type MovedNotice` を足す。
 
 Run: `pnpm -C web --filter @hedgehug/core test -- movedNotice`
-Expected: PASS 4 件
+Expected: PASS 5 件
 
-- [ ] **Step 5: アドレスの解決の失敗するテストを書く**
+- [ ] **Step 7: 旧い接頭辞をサーバーとカタログに載せる(失敗するテスト)**
+
+`internal/app/workspaces/list_test.go`(`TestList` の比較を `Listed` の `Workspace` に直し、1 件足す):
+
+```go
+func TestList(t *testing.T) {
+	s := setup(t)
+	a, _ := s.Create(t.Context(), store, "Web", "HH")
+	b, _ := s.Create(t.Context(), store, "API", "API")
+	list, err := s.List(t.Context(), store)
+	if err != nil || len(list) != 2 || list[0].Workspace != a || list[1].Workspace != b || len(list[0].OldPrefixes) != 0 {
+		t.Errorf("List = %+v, %v", list, err)
+	}
+}
+
+// 画面のアドレスの旧い接頭辞(03「接頭辞」)のため、一覧が旧い接頭辞を返す。
+func TestListHasTheOldPrefixes(t *testing.T) {
+	s := setup(t)
+	w, _ := s.Create(t.Context(), store, "Web", "HH")
+	if err := s.ChangePrefix(t.Context(), store, w.ID, "web"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.List(t.Context(), store)
+	if err != nil || len(list) != 1 || list[0].Workspace.Prefix != "WEB" || !reflect.DeepEqual(list[0].OldPrefixes, []string{"HH"}) {
+		t.Errorf("List = %+v, %v", list, err)
+	}
+}
+```
+(`list_test.go` の import に `reflect` を足す。)
+
+`internal/adapter/httpapi/workspaces/workspaces_test.go` の `TestRenameAndPrefix` の最後に足し、1 件足す(`base` は一覧のパス):
+
+```go
+	if list := api.Get(base).Body.String(); !strings.Contains(list, `"oldPrefixes":["HH"]`) {
+		t.Errorf("list after the prefix change: %s", list)
+	}
+```
+
+```go
+func TestListHasEmptyOldPrefixes(t *testing.T) {
+	api := newAPI(t)
+	create(t, api, "Web", "HH")
+	if list := api.Get(base).Body.String(); !strings.Contains(list, `"oldPrefixes":[]`) {
+		t.Errorf("list: %s", list)
+	}
+}
+```
+
+`web/packages/api/src/ports.test.ts` の「catalog port」の最初のテストを、`oldPrefixes` つきに直す。
+
+```ts
+    respond(200, [{ id: "W1", name: "Web", prefix: "WEB", oldPrefixes: ["HH"] }]);
+    await expect(createCatalogPort().listWorkspaces("S1")).resolves.toEqual([
+      { id: "W1", storeId: "S1", name: "Web", prefix: "WEB", oldPrefixes: ["HH"] },
+    ]);
+```
+(1 行目の `respond(200, [{ id: "W1", name: "Web", prefix: "HH" }])` と、その `toEqual` の中身を置き換える。`oldPrefixes` が null や欠けているときは `[]` にする)
+
+`web/packages/core/src/features/catalog/catalog.test.ts` に足す:
+
+```ts
+it("puts the old prefixes of a workspace on its node, empty when the port gives none", async () => {
+  const port = fakeCatalogPort();
+  const list = port.listWorkspaces.bind(port);
+  port.listWorkspaces = async (s) =>
+    (await list(s)).map((w) => (s === "S1" ? { ...w, prefix: "WEB", oldPrefixes: ["HH"] } : w));
+  const catalog = createCatalog(port);
+  await catalog.load();
+  expect(get(catalog.stores).map((s) => s.workspaces[0]?.oldPrefixes)).toEqual([["HH"], []]);
+});
+```
+
+Run: `go test ./internal/app/workspaces/ ./internal/adapter/httpapi/workspaces/` と `pnpm -C web --filter @hedgehug/core test -- catalog` と `pnpm -C web --filter @hedgehug/api test -- ports`
+Expected: FAIL(`list[0].Workspace undefined`・`oldPrefixes` がない)
+
+- [ ] **Step 8: 旧い接頭辞を実装する**
+
+Go: `order.go` の `ranked` に旧い接頭辞(`[]string`)を足し、`orderedWorkspaces` が、すでに読んでいる同じログから `workspace.OldPrefixes(log)` を詰める(ログを読み直さない)。`list.go` の `List` は `Listed`(上の Produces)を返す。`dto.go` の `WorkspaceSummary` に `OldPrefixes`、`WorkspaceDetail` の `OldPrefixes` を消し、`toSummary` に旧い接頭辞を渡す(`workspaces.go` の一覧・詳細・作成の呼び出しを合わせる)。`make generate` → `pnpm -C web gen` で `api/openapi.yaml`・`generated.ts` を作り直す。
+
+画面: `web/packages/api/src/catalog.ts` の `listWorkspaces` に `oldPrefixes: w.oldPrefixes ?? []` を足す。`port/catalog.ts` の `listWorkspaces` の戻り値を `(Workspace & { oldPrefixes?: string[] })[]` にする(`Workspace` のモデルそのものには足さない。ほかのテストの偽物を直さないため)。`features/catalog/catalog.ts` の `WorkspaceNode` に `oldPrefixes: string[]` を足し、`loadWorkspace` が `w.oldPrefixes ?? []` を入れる。
+
+Run: `go test ./internal/... && pnpm -C web --filter @hedgehug/core test -- catalog && pnpm -C web --filter @hedgehug/api test -- ports && pnpm -C web check`
+Expected: PASS、エラーなし(`internal/app/workspaces` が 20 ファイルのまま)
+
+- [ ] **Step 9: アドレスの解決の失敗するテストを書く**
 
 `resolve.test.ts` の `resolveRoute` の既存の呼び出しすべてに、第 4 引数 `fakeTransfers()` を足す。足すテスト:
 
@@ -4453,12 +4693,11 @@ it("does not call locate when the current ID is found", async () => {
 });
 
 it("asks locate with the Store name and the ID when the ID is not found, and opens what it finds with the moved-from note", async () => {
-  transfers.located = { kind: "found", storeId: "S3", projectId: "S3-P1", itemId: "S3-I9",
-    movedFrom: { old: "HH-5", at: "2026-11-13T00:05:00.000Z", display: "TM-4" } };
+  const movedFrom = { old: "HH-5", at: "2026-11-13T00:05:00.000Z", display: "TM-4", current: "AR-7" };
+  transfers.located = { kind: "found", storeId: "S3", projectId: "S3-P1", itemId: "S3-I9", movedFrom };
   const r = await resolveRoute({ name: "item", store: "work", item: "HH-5" }, stores, items, transfers);
   expect(transfers.calls).toEqual(["locate work HH-5"]);
-  expect(r).toEqual({ name: "item", storeId: "S3", projectId: "S3-P1", itemId: "S3-I9",
-    movedFrom: { old: "HH-5", at: "2026-11-13T00:05:00.000Z", display: "TM-4" } });
+  expect(r).toEqual({ name: "item", storeId: "S3", projectId: "S3-P1", itemId: "S3-I9", movedFrom });
 });
 
 it("opens a found item without movedFrom when locate gives none (an old prefix)", async () => {
@@ -4467,10 +4706,11 @@ it("opens a found item without movedFrom when locate gives none (an old prefix)"
   expect(r).toEqual({ name: "item", storeId: "S1", projectId: "S1-P1", itemId: "S1-I2" });
 });
 
-it("gives the message of a gone item with home", async () => {
-  transfers.located = { kind: "gone", message: "HH-5 は 11/13 09:05 に TM-4 へ移動しましたが、完全に削除されました" };
+it("gives the Gone of a gone item with home", async () => {
+  const gone = { reason: "purged", old: "HH-5", at: "2026-11-13T00:05:00.000Z", newDisplay: "TM-4" } as const;
+  transfers.located = { kind: "gone", ...gone };
   expect(await resolveRoute({ name: "item", store: "work", item: "HH-5" }, stores, items, transfers))
-    .toEqual({ name: "home", gone: "HH-5 は 11/13 09:05 に TM-4 へ移動しましたが、完全に削除されました" });
+    .toEqual({ name: "home", gone });
 });
 
 it("is plain home when locate has nothing (NotFound), and does not ask for an unreadable ID", async () => {
@@ -4484,10 +4724,43 @@ it("is plain home when locate has nothing (NotFound), and does not ask for an un
 
 (`fakeTransfers` の `locate` は、`missing` に引数の ID が入っていれば `NotFound` にする。Task 9 の偽物はこの動きを持つ。)
 
-screen のテストに足す(`createScreen` の依存に `transfers`・`toasts` を足し、`openItem` の呼び出しを記録する)。
+旧い接頭辞でのワークスペース・プロジェクト(A5a-21)。Store を直接組み立てる(既存の `stores()` の中身に依らない)。
+
+```ts
+// 1 つの Store「work」に、ワークスペースを並べた一覧。プロジェクトは各ワークスペースに 1 つ(番号 1)。
+const ws = (id: string, prefix: string, oldPrefixes: string[]) =>
+  ({ id, storeId: "S1", name: id, prefix, oldPrefixes, projects: [{ id: `${id}-P1`, displayId: `${prefix}-P1` }] }) as WorkspaceNode;
+const one = (...list: WorkspaceNode[]) => [{ id: "S1", name: "work", color: "teal", readOnly: false, workspaces: list }] as StoreNode[];
+
+it("opens the workspace of an old prefix, and the project by its old display ID", async () => {
+  const nodes = one(ws("W1", "WEB", ["HH"]));
+  expect(await resolveRoute({ name: "workspace", store: "work", prefix: "HH", tab: "overview" }, nodes, itemsIn("S1"), transfers))
+    .toEqual({ name: "workspace", storeId: "S1", workspaceId: "W1", tab: "overview" });
+  expect(await resolveRoute({ name: "project", store: "work", project: "HH-P1", tab: "tree" }, nodes, itemsIn("S1"), transfers))
+    .toEqual({ name: "project", storeId: "S1", projectId: "W1-P1", tab: "tree" });
+});
+
+it("prefers the workspace that uses the prefix now over the one that used it before", async () => {
+  const nodes = one(ws("W1", "WEB", ["HH"]), ws("W2", "HH", []));
+  expect(await resolveRoute({ name: "workspace", store: "work", prefix: "HH", tab: "overview" }, nodes, itemsIn("S1"), transfers))
+    .toEqual({ name: "workspace", storeId: "S1", workspaceId: "W2", tab: "overview" });
+  expect(await resolveRoute({ name: "project", store: "work", project: "HH-P1", tab: "tree" }, nodes, itemsIn("S1"), transfers))
+    .toEqual({ name: "project", storeId: "S1", projectId: "W2-P1", tab: "tree" });
+});
+
+it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
+  const nodes = one(ws("W1", "WEB", ["HH"]));
+  expect(await resolveRoute({ name: "workspace", store: "work", prefix: "ZZ", tab: "overview" }, nodes, itemsIn("S1"), transfers)).toEqual({ name: "home" });
+  expect(await resolveRoute({ name: "project", store: "work", project: "HH-P9", tab: "tree" }, nodes, itemsIn("S1"), transfers)).toEqual({ name: "home" });
+});
+```
+(`WorkspaceNode` は `../catalog/catalog` から type import を足す。)
+
+screen のテストに足す(`createScreen` の依存に `transfers`・`toasts`・`now: () => new Date(2026, 10, 14, 12, 0)` を足し、`openItem` の呼び出しを記録する)。
 
 ```ts
 it("opens the found item with its moved-from note after replacing the address with the project tree", async () => {
+  const movedFrom = { old: "HH-5", at: "2026-11-13T00:05:00.000Z", display: "TM-4", current: "TM-4" };
   transfers.located = { kind: "found", storeId: "S1", projectId: "S1-P1", itemId: "S1-I9", movedFrom };
   navigation.replace({ name: "item", store: "work", item: "HH-5" });
   await flush();
@@ -4495,8 +4768,8 @@ it("opens the found item with its moved-from note after replacing the address wi
   expect(formatRoute(get(navigation.route))).toBe("/s/work/p/HH-P1/tree");
 });
 
-it("toasts a gone message once, as a plain toast, and replaces the address with home", async () => {
-  transfers.located = { kind: "gone", message: "HH-5 は 11/13 09:05 に TM-4 へ移動しましたが、削除されています。設定の「削除済み」から復元できます" };
+it("toasts the sentence of a gone item once, as a plain toast, and replaces the address with home", async () => {
+  transfers.located = { kind: "gone", reason: "deleted", old: "HH-5", at: new Date(2026, 10, 13, 9, 5).toISOString(), newDisplay: "TM-4" };
   navigation.replace({ name: "item", store: "work", item: "HH-5" });
   await flush();
   await catalog.load();
@@ -4509,16 +4782,16 @@ it("toasts a gone message once, as a plain toast, and replaces the address with 
 Run: `pnpm -C web --filter @hedgehug/core test -- router/resolve screen`
 Expected: FAIL
 
-- [ ] **Step 6: アドレスの解決を実装する**
+- [ ] **Step 10: アドレスの解決を実装する**
 
-`resolve.ts`: `Resolved` に `movedFrom?` と `gone?` を足し、`resolveRoute` の第 4 引数に `transfers`、`findItem` はいまの ID で見つからなかった(最後の `return home` の手前で、`d?.kind === "item"` のとき)だけ `transfers.locate(store, id)` を呼ぶ。冒頭のコメントの「旧い接頭辞(B1)と転送の記録(A5)はたどらない。」を、いまの ID で見つからないときだけ `locate` に渡すことの説明に直す。`screen.ts`: `resolveRoute` に `deps.transfers` を渡し、`r.name === "home" && r.gone` のときは `deps.toasts.show(r.gone)` のあと `deps.navigation.replace({ name: "home" })` して返す。アイテムの入口は `deps.openItem(r.storeId, r.itemId, r.movedFrom)` にする(`navigation.replace` のあとに呼ぶ今までの順を変えない)。
+`resolve.ts`: `Resolved` に `movedFrom?` と `gone?` を足し、`resolveRoute` の第 4 引数に `transfers`。`findItem` は、いまの ID で見つからなかった(最後の `return home` の手前で、`d?.kind === "item"` のとき)だけ `transfers.locate(store, id)` を呼ぶ。`workspace`・`project` のアドレスは、いまの接頭辞・いまの表示 ID を `inOrder` の順に探し、見つからなければ `oldPrefixes` で探す(プロジェクトは `parseDisplayId` の番号と、そのワークスペースのプロジェクトの番号が同じもの)。冒頭のコメントの「旧い接頭辞(B1)と転送の記録(A5)はたどらない。」を、いまの ID・接頭辞で見つからないときだけ旧い接頭辞と `locate` に渡すことの説明に直す。`screen.ts`: `resolveRoute` に `deps.transfers` を渡し、`r.name === "home" && r.gone` のときは `deps.toasts.show(goneText(r.gone, deps.now()))` のあと `deps.navigation.replace({ name: "home" })` して返す。アイテムの入口は `deps.openItem(r.storeId, r.itemId, r.movedFrom)` にする(`navigation.replace` のあとに呼ぶ今までの順を変えない)。
 
 Run: `pnpm -C web --filter @hedgehug/core test`
 Expected: PASS
 
-- [ ] **Step 7: 組み立てて、パネルに出す**
+- [ ] **Step 11: 組み立てて、パネルに出す**
 
-`wire.ts`: `createMovedNotice` を import し、`detail` の次に `export const movedNotice = createMovedNotice({ detail, now: () => new Date() });` を足す。`createScreen` の呼び出しに `transfers: transfersPort, toasts,` を足し、`openItem` を次にする。
+`wire.ts`: `createMovedNotice` を import し、`detail` の次に `export const movedNotice = createMovedNotice({ detail, now: () => new Date() });` を足す。`createScreen` の呼び出しに `transfers: transfersPort, toasts, now: () => new Date(),` を足し、`openItem` を次にする。
 
 ```ts
 openItem: (storeId, itemId, movedFrom) => {
@@ -4538,12 +4811,12 @@ wc -l web/app/src/wire.ts web/app/src/screens/item/DetailPanel.svelte web/packag
 
 Expected: エラーなし、すべて通る。`wire.ts` が 300 を超えるときは、`movedNotice` を `wireBase.ts` に移さず、`wireActions.ts` の `createScreen` の組み立てごとは動かせないので、`wire.ts` の `itemsPort` 周りの `export` を `wireBase.ts` の再公開に寄せて行を減らす(A4b の Task 9 と同じ分け方)。
 
-- [ ] **Step 8: コミットする**
+- [ ] **Step 12: コミットする**
 
 ```bash
-git add web
+git add internal api web
 git commit -m "$(cat <<'EOF'
-feat: 画面のアドレスの旧 ID を転送記録でたどり、パネルの上部に移した日時を出す
+feat: 画面のアドレスの旧 ID と旧い接頭辞を解決し、パネルの上部に移した日時を出す
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
@@ -4553,9 +4826,6 @@ EOF
 ---
 
 ### Task 12: 通しのテスト(e2e)と PR
-
-> **この Task への上書き**(「本文より優先する直し」): 仕様にない文言を仕様 02 に足し、PR の本文に一覧で出す。
-
 
 A5a の全部を Playwright で 3 つの幅(スマホ・タブレット・デスクトップ)の通しで確かめ、`make check` を通し、PR を 1 本出す。e2e のサーバーは worker ごと(`web/e2e/fixtures.ts`)で、同じ worker のほかのテストと Store を共有する。サンプルを書き換えると壊れるので、`createWorkspace` で自分のワークスペースを作って使う。移動先に使う `e2e` の Store のワークスペース「Mobile」(`MB`、プロジェクト `MB-P1`、Epic `MB-1`)と `team` の Store(ワークスペース「Team」、`TM`)は、A5a-20 のとおりサンプルにある(`cmd/hedgehug/wire_e2e.go`)。サンプルへの書き込みは、移動先に増える分だけで、ほかのテストは Mobile・Team を使わない。
 
@@ -4731,53 +5001,3 @@ gh pr create --base develop --head feat/track-a5a \
 ```
 
 Expected: PR の URL が返る。PR はトラックで 1 本(Task 1〜12 すべてを含む)。force push は拒否されるので、載せ直すときは別名のブランチで出す。「確かめたこと」には、`make check` の件数と、e2e を流した回数(1 回)・件数を書く。
-
----
-
----
-
-## 付録: 書き手の骨組みへの指摘(原文)
-
-### 骨組みへの指摘(Task 1〜4)
-
-1. **`transfer.Remap` に移動先のプロジェクトを渡す引数が要る。** 骨組みの形 `Remap(it, from, to, people, statusChoice)` では、`UsableStatuses(to, p project.ID)` を呼べない(A5a-8 は `p` を取り、B5 が差し替える)。本文は `Remap(it, from, to, toProject project.ID, people, statusChoice)`。「タスク間の名前」と A5a-7 を直す。あわせて、`people == nil` は同じ Store、非 nil は別の Store(別の引数を足さない)とした。追加プロパティと人の置き換えは `remap_fields.go` に分けた(`remap.go` が 300 行を超えないため)。「ファイルの地図」の `domain/transfer` に `remap_fields.go` を足す。
-2. **`transfer.People` の形。** 骨組みは `People(items, logs, members) []member.Member` と `PeopleMap` の型だけ。これでは、(a) 追加プロパティのうちユーザー型のものが分からない(`workspace.Settings` が要る)、(b) 移動先にいる人の綴りへの置き換え(`PeopleMap`)を作る人がいない、(c) 移動元と移動先のメンバーの両方が要る。本文は `People(from workspace.Settings, items, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap)`。Task 6 は、1 つ目を「`member.Join(ログイン名)` と、表示名がログイン名と違うときの `member.Rename(ログイン名, ログイン名, 表示名)`」で書き、2 つ目を `Remap` に渡す。
-3. **`domain/transfer` の足したもの。** `Set.Contains(id)`(Task 6 が、関連の持つ側が移すものの中か外かで、移動先の `remove` と移動元の外の相手への `remove` を分けるため)、`ErrNotFound`・`ErrStep`(`Collect` の断り。Task 5 が `port.ErrNotFound` と 02 の文言に直す)、`EntityItem` などの定数。「タスク間の名前」に足す。
-4. **`port.SaveError`(新しい型)が要る。** `SyncSave` は、保存の失敗(`fn` のエラー・`op.Check`・コミット)と通信の失敗を、呼び出し側が分けられなければ、`fn` の失敗が「remote に接続できません」になってしまう(`remoteReason` の既定)。本文は `port/replicator.go` に `SaveError` を足し、`Deliver` は `SaveError` を理由にせず error で返す。A5a-5 の「error は理由で表せない失敗だけ」と合う。「タスク間の名前」に足す。
-5. **`syncing.Service` に `Stores port.Stores` が要る。** 骨組みの A5a-5 は「remote がなければ `Stores.Write` だけ」と書くが、`Service` には `Stores` の項目がない。本文は項目を足し、配線(Task 8)では `NotifyWrites` で包む前の `Stores` を渡す(包むと、`SyncSave` が送ったあとに自動の同期がもう一度走る)。`Deliver` は閲覧のみの Store を `ErrInvalidOperation` で断り(`Targets` の `ReadOnly`)、`run` と同じくミラーへ送り、`EventSync` を知らせ、`AfterSuccess` は呼ばない。`app/transfers` が閲覧のみを先に断ること(A5a-13)とは別に、口の側でも断る。
-6. **A5a-5 の「送れなければ保存を捨てる」の細部と、`fn` を何度も呼ぶこと。** 送信が重なったとき、骨組みの文だけでは、保存を残したまま取り込み直すのか分からない。本文は、毎回保存を捨てて取り込み直し、`fn` を呼び直す。理由は、移動先の「次の番号」が取り込み直しで変わるため。Task 6 の `fn` は、番号・メンバー・`transfers.Number` の結果を、`fn` の中の `Tx` から読んで決める(外で決めた値を使い回さない)。この前提を A5a-5 と Task 6 の冒頭に書く。保存の途中でプロセスが落ちた場合の、移動先だけに残る状態は扱わない(A5a-6 の「(4) の失敗で戻す」は、落ちたときには働かない)。
-7. **置き場所。** `SyncSave` は `gitstore/write.go` に置く(`replicator.go` は 264 行で、足すと 300 を超える)。`apptest/stores.go` は足すと約 310 になるので、`holders`・`enter`・`goroutineID`(約 37 行)を新しい下位のパッケージ `internal/app/apptest/reentry` に出す。転送・取り込み・削除の照合は `stores_contract_isolation.go`(128 行)に足す(名前は「分離」だが、行に余裕があるのはここだけ)。「ファイルの地図」の `apptest/` の行に `reentry/` を足す。
-8. **偽物の足したもの。** `apptest.Replicator` に `Stores`・`SendErrs`、`ReplicatorCall.Save`、`apptest.Stores.AddPurged`(`purged.jsonl` に書く口がなく、テストで置けないため。書くのは G)。Task 7 の `Locate` のテストが使う。
-9. **A5a-1 の JSON の細部。** `entity` は常に書く(ない行は `item` として読む)、`to_store_name`・`to_remote` は空なら書かない。同期の `transferTargets` は `target`・`to_store` だけを読むので、そのまま動く。
-10. **`Import` の決め。** `Remove` したあとの同じ Tx での `Import` は `ErrInvalidOperation`(A5a-6 の「戻し」は別の `Deliver` で書くので、同じ Tx では起きない)。`Import` は行の中身(作成の行があるか)を調べない。A5a-4 の「`ErrInvalidOperation`(フォルダがあれば)」に、「`id` が使えない・`log` が空」を足す。
-11. **Task の待つもの。** Task 4 は Task 3 の `writeLocked`(gitstore)・`write`(偽物)を使い、同じファイル(`write.go`・`stores.go`・`sync.go` の隣)を触るので、骨組みどおり 3 のあとに直列で行う。Task 2 は Task 1 の `PeopleMap` だけを使うので、Task 3 と並べてよい。
-
-### 骨組みへの指摘(Task 5〜8)
-
-本文は骨組みの形に従って書いた。次の点は、骨組みのままでは実装担当が決められない、または違う形の方がよいと分かったもの。
-
-1. **`Service` の欄**(骨組みの「タスク間の名前」): `Me func(ctx) (string, error)` は、既存の機能の `Identity port.Identity`(Store ごとの `Me(ctx, store)`)に合わせた。`IDs` は使い道がない(ID・操作・時刻は `Tx` が付ける)ので外し、移動先の remote の有無・URL を知るための `Targets port.SyncTargets` を足した(転送記録の `to_remote` と、予告の remote の注意に要る)。`cmd/hedgehug` は `noSyncTargets{}`(本物)・`syncSvc.Targets`(e2e)を渡す。
-2. **`transfer.People` の引数**: `People(items, logs, members)` では、(a) ユーザー型のプロパティの値の人を見つけるための移動元のワークスペースの設定、(b) 足す人の表示名を移動元のメンバーから取ること、(c) 移動先にいる人を除くための移動先のメンバー、が足りない。Task 6 は `People(items []item.Item, logs map[item.ID][]change.Record, from workspace.Settings, source, dest []member.Member) []member.Member` として呼ぶ(Task 1 の書き手に伝える)。`PeopleMap` は、`People` の結果と移動先のメンバーから Task 6 が作る(`People` が `PeopleMap` を返す必要はない)。
-3. **`transfer.Remap` と予告の重なり**: (a) `UsableStatuses(to, p)` を使うには、`Remap` に移動先のプロジェクト `p` が要る。いまは「ワークスペースのステータスすべて」で `p` を使わないので骨組みの形で書いたが、B5 が `UsableStatuses` を差し替えるときに引数が足りなくなる。`Remap` に `toProject project.ID` を足す方がよい。(b) 予告の「ステータスの置き換え」の行は `Remap` と同じ判定(名前が `UsableStatuses` のどれとも違う)で作るので、Task 5 の `preview.go` と `Remap` に同じ規則が 2 か所できる。`transfer` に未対応のステータスを返す関数を 1 つ置いて両方が使う形にする案もある(Task 2 の書き手の判断)。(c) `people` が `nil` のときは「同じ Store としてそのまま残す」と決めて Task 5 のテストが期待している(Task 2 のテストにも入れてほしい)。
-4. **偽物の `purged.jsonl`**: `Reader.Purged()` を読むだけなので、Task 7 の「完全に削除されました」のテストが記録を置く入口がない。Task 3 が `(*apptest.Stores).AddPurged(id port.StoreID, p port.Purged)` を偽物に足す(G が本物の書き込みを足すまでのテスト用)。
-5. **`syncing.Service` の保存の口**: `Deliver` は remote がなければ `Stores.Write` を呼ぶので、`syncing.Service` に保存の口を持たせる必要がある。Task 8 は、そのフィールド名を `Stores port.Stores` と仮定している(Task 4 の書き手と揃える)。本物の組み立てでは `NotifyWrites` で包んだ Stores を渡す。
-6. **A5a-13 のワークスペースの非表示**: 「サイドバーで非表示」は Store 単位の設定で、`StoreList` が非表示の Store をすでに除く。ワークスペース単位の非表示はないので、「Task 4 が確かめる」は不要。ワークスペースの並びは `workspace.RankOf(ログ)` の昇順(同じなら内部 ID の順)に決めた。
-7. **A5a-17 の履歴の元**: 同じ Store の移動の履歴は、「転送記録の `target`」だけでは移動元のワークスペース名・プロジェクト名が分からない(`Record` に持たない)。場所の `set` の行(`from` に移動元の内部 ID がある)から作り、旧 ID だけを転送記録(同じ `Op`)から取る形にした。そのため `history.Context` に `Origin`(移動元の設定・名前・Store 名・記録)を足し、`apphistory.Service` に `StoreList` を足している(`routes.go` で渡す)。A5a-17 の「`moved_in` の行(別の Store)と転送記録(同じ Store)から作る」の言い換え。
-8. **A5a-15 の 4 つ目の文**: 「いまの場所が記録の移動先と違う」は、見つかれば開くので、見つからないときの文にはなりえない。「同じアイテムを指す、より新しい記録の移動先の Store が表示中でない(B から C へ移した、その C が見えない)」ときに、この文を出す形に当てはめた(`rec.ToStore` が見えないときは 3 つ目の文)。
-9. **A5a-11 のワークスペース名**: 別の Store のとき「{Store 名} の {ワークスペース名}」を移動元・移動先の両方に付けた(例「HH-2 を main の Web から team の Team へ移動」)。片方だけの読み方もできるので、違えば直す。
-10. **戻し(A5a-6)**: 移動先に足したメンバーとワークスペースの `number` の行は、フォルダの `Remove` だけの戻しでは残る(`number` は再利用しないので害はない。メンバーは、移動元の保存が失敗した場合だけ、使われないまま残る)。メンバーを外す操作がないため。
-11. **A5a-18 の「新しい内部 ID」**: 別の Store へ移しても、`Import` は内部 ID を変えない(同じフォルダ名で写す)ので、`Moved.Item` は内部 ID のまま。画面が切り替えるのは Store とワークスペースだけ。移動先に同じ内部 ID があれば `Import` が `ErrInvalidOperation` で断る(e2e のサンプルは、そのために `SampleMobile`・`SampleTeam` の内部 ID を `Sample` と分けた)。
-12. **`MovedFrom.Display`**: 骨組みどおり「最初に一致した行の新 ID」にした。A → B → C の旧 ID(HH-2)で C のアイテムを開くと、パネルの 1 行は「HH-2 は {日時} に TM-2 へ移動しました」(B の ID)と読める。いまの ID(C)にする方が自然かもしれないので、Task 11 で画面を作るときに決める。
-13. **Step・閲覧のみの移動元**: Step の移動と、選べない移動先は `port.ErrNotFound`、移動元が閲覧のみのときは `refusal.New("閲覧のみの Store です")` にした(骨組みには書かれていない)。
-
-### 骨組みへの指摘(Task 9〜12)
-
-1. **A5a-14・A5a-19 にキー名がなく、「移動先に remote があるか」が足りない。** 本文は予告を `{below, deleted, nextDisplay, crossStore, remoteNotice, destinationHasRemote, replacements: [{status, name, count, choices: [{id, name}], default}]}` とし、候補を `list-transfer-targets` の表のとおり、`transfer-item` の応答を `{toStore, itemId, display, emptied}`、`locate-item` を `{kind: "found"|"gone", storeId, projectId, itemId, movedFrom?: {old, at(ISO 8601), display}, message}` で書いた。Task 8 がこのキーに合わせる(Task 9 の Step 1 が `generated.ts` で確かめる)。`destinationHasRemote` は、A5a-12 のオフラインの判断(移動先に remote があり、ブラウザがオフラインなら送らずに断る)に画面が要る。A5a-14 の「remote の注意を出すか」(移動先に remote がなく、移動元にある)とは別の値。
-2. **`gone` の `message` をサーバーが作ると、日時の書き方(01)が Go と TS の二重になる。** 本文は A5a-19 に従い、画面は `message` をそのままトーストに出す。直すなら、`gone` を `{kind: "gone", reason, old, at, newDisplay, storeName?, currentDisplay?}` で返し、画面が `formatDateTime` で 4 つの文を組む形が 1 か所で済む。旧 ID から開いたときの 1 行(A5a-16)は、すでに画面が `formatDateTime` で作る。
-3. **送信の失敗の文(A5a-12)は、サーバーが 422 の `detail` に全文(「{Store 名} に送信できないため移動できません: {理由}」)を入れる前提。** 画面は `Refused` の文をそのまま出す。Task 8 が満たすこと。
-4. **Step の行・パネルのメニューに「別のワークスペースへ移動…」を出さない。** 仕様 02 は「Step は単独では移せない」とあるが、Step で無効にする理由の文言がなく、メニューの無効の理由は 4 種類しか定めていない。新しい文言を作らず、項目を出さないことにした。無効にして理由を足す形がよければ仕様に文言を足してから直す。
-5. **仕様に文の指定がなく、本文で決めた文言**(Task 12 の Step 4 で仕様 02 に足し、差分で承認を取る): ダイアログのタイトル「別のワークスペースへ移動」、セレクトの名前「移動先のワークスペース」「プロジェクト」「親の Epic」「{ステータス名} の置き換え先」、ワークスペースの選択肢「{Store 名} / {ワークスペース名}」、「移動先で変わること」の 7 行(「ID は {ID} からの番号に振り直されます」「スプリントとリリースは外されます」「優先度・関連システムなどは、…」「移さないアイテムとの関連は解除されます。…」「移動先のメンバーにいない人は、…」「移動先に remote がないため、…」(これだけ仕様の文)「移動元に転送の記録(移した日時を含む)を残し、…」)。
-6. **移動の送信が失敗したら、ダイアログを開いたままにする**(削除・移動(A4b)は閉じる)。移動先を選び直して送り直せるため。`NotFound` だけ閉じる。
-7. **画面のアドレスの旧い接頭辞でのワークスペース・プロジェクトのアドレス**(03 の 113・115 行、「ワークスペースの旧い画面のアドレスを開くと「このワークスペースは {日時} に {Store 名} へ移動しました」」)は、骨組みのどの Task にもない(`locate` はアイテムの入口だけ)。ワークスペース・プロジェクトの移動は A5b なので、A5b の持ち場に「旧い接頭辞と転送記録でのワークスペース・プロジェクトのアドレス」を足す必要がある。
-8. **ファイルの地図に足りないもの:** `web/packages/core/src/features/items/detail.ts`(A5a-18 の「ワークスペースが変わっていたら閉じる」)、`web/packages/core/src/features/screen/screen.ts`(`transfers`・`toasts` の依存と `openItem` の第 3 引数)、`features/dates/date.ts`(`formatDateTime`)、`features/transfers/`(`dialogText.ts`・`afterMoved.ts`・`movedNotice.ts`)、`web/app/src/wire.ts`(`transfersPort`・`movedNotice`)。
-9. **e2e のサンプルの前提:** Mobile の Epic が `MB-1`(次の番号が `MB-2`)、Team の Store の名前が `team`。Task 8 のサンプルとずれたら、Task 12 の Step 1 で本文の値を直す。remote ありの経路と「移動先に remote がないため…」の行、ステータスの置き換えの行は、e2e ではなく Go のテストと Task 9 のモデルのテストで確かめる。
