@@ -132,6 +132,46 @@ describe("createLinkList", () => {
     });
   });
 
+  it("forgets a row's refresh error when it is removed and linked again", async () => {
+    const t = setup();
+    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" })];
+    await t.list.load("S1", "I1");
+    await t.list.remove(row()); // 解除
+    await t.list.reload(); // 付け直したあとの読み直し(偽の一覧は同じ行を返す)
+    expect(get(t.list.state).rows[0]?.error).toBe("");
+  });
+
+  it("forgets every refresh error with forgetAll", async () => {
+    const t = setup();
+    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" })];
+    await t.list.load("S1", "I1");
+    t.list.forgetAll();
+    await t.list.reload();
+    expect(get(t.list.state).rows[0]?.error).toBe("");
+  });
+
+  it("shows no rows when the item is gone on refresh or reload", async () => {
+    const t = setup();
+    t.links.port.refresh = async () => {
+      throw new NotFound();
+    };
+    await t.list.load("S1", "I1");
+    expect(get(t.list.state)).toMatchObject({ loaded: true, rows: [] });
+    t.links.rows = [row()];
+    await t.list.reload();
+    expect(get(t.list.state).rows).toHaveLength(1);
+    t.links.fail = new NotFound();
+    await t.list.reload();
+    expect(get(t.list.state)).toMatchObject({ loaded: true, rows: [] });
+  });
+
+  it("assumes an account again after reset", async () => {
+    const t = setup([]);
+    await t.list.load("S1", "I1");
+    t.list.reset();
+    expect(get(t.list.state).hasAccount).toBe(true);
+  });
+
   it("drops answers for an item that is no longer open", async () => {
     const t = setup();
     const first = t.list.load("S1", "I1");

@@ -38,15 +38,45 @@ describe("createLinkDialog", () => {
     expect(t.links.calls).toEqual(["add S1 I1 issue org/api 12 true"]);
   });
 
-  it("takes repositories that arrive after opening, unless one is already typed", () => {
+  it("takes repositories that arrive after opening, keeping a typed one only if it is a choice", () => {
     const t = setup();
     t.dialog.open("pr", "S1", "I1", []);
     t.dialog.setRepos(["org/web"]);
     expect(get(t.dialog.state)).toMatchObject({ repos: ["org/web"], repo: "org/web" });
     t.dialog.open("pr", "S1", "I1", []);
-    t.dialog.update({ repo: "org/api" });
+    t.dialog.update({ repo: "org/api" }); // 選択肢にない: 先頭を選ぶ
     t.dialog.setRepos(["org/web"]);
-    expect(get(t.dialog.state)).toMatchObject({ repos: ["org/web"], repo: "org/api" });
+    expect(get(t.dialog.state)).toMatchObject({ repos: ["org/web"], repo: "org/web" });
+    t.dialog.open("pr", "S1", "I1", []);
+    t.dialog.update({ repo: "ORG/API" }); // 大文字小文字だけ違う: その選択肢を選ぶ
+    t.dialog.setRepos(["org/web", "org/api"]);
+    expect(get(t.dialog.state)).toMatchObject({ repo: "org/api" });
+  });
+
+  it("sends false when the add-to-project check is cleared", async () => {
+    const t = setup();
+    t.dialog.open("pr", "S1", "I1", []);
+    t.dialog.update({ repo: "org/web", number: "41", addToProject: false });
+    await t.dialog.submit();
+    expect(t.links.calls).toEqual(["add S1 I1 pr org/web 41 false"]);
+  });
+
+  it("does not let an old answer close a dialog opened again", async () => {
+    const t = setup();
+    let release: () => void = () => undefined;
+    t.links.port.add = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    t.dialog.open("pr", "S1", "I1", ["org/web"]);
+    t.dialog.update({ number: "41" });
+    const first = t.dialog.submit();
+    t.dialog.close();
+    t.dialog.open("issue", "S1", "I1", ["org/web"]);
+    release();
+    await first;
+    expect(get(t.dialog.state)).toMatchObject({ kind: "issue", asking: false });
+    expect(t.added()).toBe(0);
   });
 
   it("ignores repositories while closed", () => {

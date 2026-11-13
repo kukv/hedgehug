@@ -21,7 +21,8 @@ export interface LinkDialog {
   state: Readable<LinkDialogState | null>;
   open(kind: LinkKind, storeId: string, itemId: string, repos: string[]): void;
   update(p: Partial<Pick<LinkDialogState, "repo" | "number" | "addToProject">>): void;
-  // setRepos は、開いたあとに読み直しで届いたプロジェクトのリポジトリを取り込む。入力済みの repo は変えない。
+  // setRepos は、開いたあとに読み直しで届いたプロジェクトのリポジトリを取り込む。入力済みの repo は、選択肢に
+  // あれば(大文字小文字を区別しない)その選択肢に、なければ先頭にする(セレクトに無い値を残さない)。
   setRepos(repos: string[]): void;
   submit(): Promise<void>;
   close(): void;
@@ -31,6 +32,13 @@ export interface LinkDialogDeps {
   links: LinksPort;
   // onAdded は、リンクしたあと(GitHub の欄と概要の一覧を読み直す)。
   onAdded(): void;
+}
+
+// choose は、repos が届いたときの repo。repos が空なら入力のまま。
+function choose(repo: string, repos: string[]): string {
+  if (repos.length === 0) return repo;
+  const typed = repo.trim().toLowerCase();
+  return repos.find((r) => r.toLowerCase() === typed) ?? repos[0] ?? "";
 }
 
 export function createLinkDialog(deps: LinkDialogDeps): LinkDialog {
@@ -67,7 +75,7 @@ export function createLinkDialog(deps: LinkDialogDeps): LinkDialog {
       state.update((s) => {
         if (!s || (s.repos.length === repos.length && s.repos.every((r, i) => r === repos[i])))
           return s;
-        return { ...s, repos, repo: s.repo === "" ? (repos[0] ?? "") : s.repo };
+        return { ...s, repos, repo: choose(s.repo, repos) };
       });
     },
     async submit() {

@@ -55,6 +55,26 @@ describe("links port", () => {
     });
   });
 
+  it("sends only the link reference to remove, from a whole row", async () => {
+    const fetch = respond(204, undefined);
+    await createLinksPort().remove("S1", "I1", row as never);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/stores/S1/items/I1/links/remove");
+    expect(JSON.parse(String(init.body))).toEqual({ kind: "pr", repo: "org/web", number: 41 });
+  });
+
+  it("reads the project's rows and an empty answer", async () => {
+    const fetch = respond(200, [{ ...row, item: "I1", display: "HH-2" }]);
+    expect(await createLinksPort().listProject("S1", "P1")).toEqual([
+      { ...row, item: "I1", display: "HH-2" },
+    ]);
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toContain(
+      "/api/stores/S1/projects/P1/links",
+    );
+    respond(200, null);
+    expect(await createLinksPort().listProject("S1", "P1")).toEqual([]);
+  });
+
   it("turns 422 into Refused and 404 into NotFound", async () => {
     respond(422, { detail: "番号を入力してください" });
     await expect(

@@ -23,6 +23,9 @@ export interface LinkList {
   // reload は、一覧だけを読む(画面への反映)。
   reload(): Promise<void>;
   remove(row: LinkRow): Promise<void>;
+  // forgetAll は、覚えた取り直しの失敗の文言をすべて消す(リンクしたあと、読み直す前に呼ぶ。付け直した行に
+  // 前の失敗を残さない)。
+  forgetAll(): void;
   reset(): void;
 }
 
@@ -108,6 +111,7 @@ export function createLinkList(deps: LinkListDeps): LinkList {
       if (!target) return;
       try {
         await deps.links.remove(target.storeId, target.itemId, row);
+        errors.delete(linkKey(row));
         deps.toasts.show(unlinkedMessage);
       } catch (e) {
         if (!(e instanceof NotFound)) {
@@ -116,6 +120,9 @@ export function createLinkList(deps: LinkListDeps): LinkList {
       }
       await list();
       deps.onChanged();
+    },
+    forgetAll() {
+      errors = new Map();
     },
     reset() {
       target = null;

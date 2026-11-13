@@ -14,14 +14,17 @@ export const linkList = createLinkList({
 });
 // リンクしたら、一覧と、プロジェクトのリポジトリ(「プロジェクトのリポジトリにも追加する」で増え、次に開く
 // ダイアログの選択肢になる)を読み直す。projectEditor.ts と同じく、カタログを読んでから詳細パネルを読み直す。
+// 読み直す前に、覚えた取り直しの失敗を消す(付け直した行に前の失敗を残さない)。
 export const linkDialog = createLinkDialog({
   links: port,
-  onAdded: () =>
+  onAdded: () => {
+    linkList.forgetAll();
     void Promise.all([
       linkList.reload(),
       projectLinks.reload(),
       catalog.load().then(() => detail.reload()),
-    ]),
+    ]);
+  },
 });
 reloads.add(() => linkList.reload());
 reloads.add(() => projectLinks.reload());
