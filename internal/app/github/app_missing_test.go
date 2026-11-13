@@ -30,14 +30,19 @@ func (m *memMissing) Put(_ context.Context, a account.ID, o port.MissingOrg) (bo
 	return true, nil
 }
 
-func (m *memMissing) Clear(_ context.Context, a account.ID, org string) (bool, error) {
+func (m *memMissing) Clear(_ context.Context, a account.ID, org, repo string) (bool, error) {
 	for i, x := range m.rows[a] {
-		if strings.EqualFold(x.Org, org) {
+		if strings.EqualFold(x.Org, org) && strings.EqualFold(x.Repo, repo) {
 			m.rows[a] = slices.Delete(slices.Clone(m.rows[a]), i, i+1)
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+func (m *memMissing) Forget(_ context.Context, a account.ID) error {
+	delete(m.rows, a)
+	return nil
 }
 
 type recheckFixture struct {

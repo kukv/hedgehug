@@ -56,8 +56,8 @@ func TestReadPullsFirst(t *testing.T) {
 		}
 	}
 	p := got.Pulls[0]
-	if p.Number != 1 || p.Branch != "hh/web-1" || p.Text.Title != "t1" || p.Values.Title != "t1" || p.Body != "body1" || !p.UpdatedAt.Equal(t0) ||
-		len(p.Comments) != 2 || p.Comments[0] != "c1-1" || p.Comments[1] != "c1-2" {
+	if p.Number != 1 || p.Text.Branch != "hh/web-1" || p.Text.Title != "t1" || p.Title != "t1" || p.Text.Body != "body1" || !p.UpdatedAt.Equal(t0) ||
+		len(p.Text.Comments) != 2 || p.Text.Comments[0] != "c1-1" || p.Text.Comments[1] != "c1-2" {
 		t.Errorf("Pull = %+v", p)
 	}
 	for i, want := range []itemlink.State{itemlink.Draft, itemlink.Merged, itemlink.Open} {

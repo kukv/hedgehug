@@ -136,7 +136,7 @@ func (m *memFailures) SetFailure(_ context.Context, _ port.StoreID, key, text st
 // noMissing は、port.AppMissing のうち、消すだけを受ける偽物(この API のテストは App 未導入を使わない)。
 type noMissing struct{ port.AppMissing }
 
-func (noMissing) Clear(context.Context, account.ID, string) (bool, error) { return false, nil }
+func (noMissing) Clear(context.Context, account.ID, string, string) (bool, error) { return false, nil }
 
 // memScans は、port.PRScans のメモリ上の偽物(Store は 1 つだけ使う)。裏の探索から呼ばれるので、ロックで守る。
 type memScans struct {

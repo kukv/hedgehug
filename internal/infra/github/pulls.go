@@ -107,7 +107,7 @@ func (n *pullNode) pull() port.Pull {
 		Text: prlink.Text{Branch: n.HeadRefName, Title: n.Title, Body: n.Body},
 	}
 	for _, c := range n.Comments.Nodes {
-		p.Comments = append(p.Comments, c.Body)
+		p.Text.Comments = append(p.Text.Comments, c.Body)
 	}
 	return p
 }

@@ -1,11 +1,13 @@
 package githublink_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
@@ -92,9 +94,60 @@ func TestCallOtherOwnerDoesNotClear(t *testing.T) {
 	if _, err := f.missing.Put(t.Context(), "A1", port.MissingOrg{Org: "other-org", Repo: "other-org/x"}); err != nil {
 		t.Fatal(err)
 	}
+	before := len(f.events.List())
 	f.refresh(t) // org/web は読める
 	got := f.listMissing(t)
 	if !slices.Equal(got["A1"], []port.MissingOrg{{Org: "other-org", Repo: "other-org/x"}}) {
 		t.Errorf("missing = %+v, want kept", got)
 	}
+	if n := countEvents(f.events.List()[before:], port.Event{Kind: port.EventGitHub}); n != 0 {
+		t.Errorf("EventGitHub (no store) = %d, want 0", n)
+	}
+}
+
+// 記録の保存に失敗したら、問い合わせが成功していても失敗として返す(行の文言は「接続できません」の文)。
+func TestCallReturnsRecordError(t *testing.T) {
+	f := appMissingFixture(t)
+	f.missing.err = errors.New("state.db を書けない")
+	rows := f.refresh(t)
+	if want := "状態を更新できませんでした: GitHub に接続できません。接続を確かめて、もう一度お試しください"; rows[0].Error != want {
+		t.Errorf("error = %q, want %q", rows[0].Error, want)
+	}
+}
+
+// 同じ組織で、記録したリポジトリ(org/web)が読めず、別のリポジトリ(org/api)は読めるとき、記録は消えず、
+// 記録を置いたときの 1 回のほかに EventGitHub を流さない(D4b 最終レビュー I-1)。
+func TestCallOtherRepoOfSameOrgDoesNotClear(t *testing.T) {
+	f := appMissingFixture(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.Issue, "org/api", "12", false); err != nil {
+		t.Fatal(err)
+	}
+	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.AppNotInstalled, Org: "org", Repo: "org/web"})
+	before := len(f.events.List())
+	f.refresh(t)
+	got := f.listMissing(t)
+	if !slices.Equal(got["A1"], []port.MissingOrg{{Org: "org", Repo: "org/web"}}) {
+		t.Errorf("missing = %+v, want kept", got)
+	}
+	if n := countEvents(f.events.List()[before:], port.Event{Kind: port.EventGitHub}); n != 1 {
+		t.Errorf("EventGitHub (no store) = %d, want 1", n)
+	}
+	before = len(f.events.List())
+	f.refresh(t)
+	if got := f.listMissing(t); len(got["A1"]) != 1 {
+		t.Errorf("missing after 2nd = %+v, want kept", got)
+	}
+	if n := countEvents(f.events.List()[before:], port.Event{Kind: port.EventGitHub}); n != 0 {
+		t.Errorf("EventGitHub (no store) on 2nd = %d, want 0", n)
+	}
+}
+
+func countEvents(ev []port.Event, want port.Event) int {
+	n := 0
+	for _, e := range ev {
+		if e == want {
+			n++
+		}
+	}
+	return n
 }

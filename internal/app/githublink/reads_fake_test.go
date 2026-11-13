@@ -81,13 +81,20 @@ func (m *memScans) SaveScan(_ context.Context, store port.StoreID, repo string, 
 	}
 	key := strings.ToLower(repo)
 	old, ok := m.rows[store][key]
+	if ok { // いまの記録と合わせる(port.PRScans.SaveScan)
+		r.Read = r.Read || old.Read
+		if old.Since.After(r.Since) {
+			r.Since = old.Since
+		}
+	}
 	m.rows[store][key] = r
 	return !ok || old != r, nil
 }
 
-// memMissing は、port.AppMissing のメモリ上の偽物。
+// memMissing は、port.AppMissing のメモリ上の偽物。err があれば Put と Clear はそれを返す(記録の保存の失敗)。
 type memMissing struct {
 	rows map[account.ID][]port.MissingOrg
+	err  error
 }
 
 func newMemMissing() *memMissing { return &memMissing{rows: map[account.ID][]port.MissingOrg{}} }
@@ -101,6 +108,9 @@ func (m *memMissing) List(context.Context) (map[account.ID][]port.MissingOrg, er
 }
 
 func (m *memMissing) Put(_ context.Context, a account.ID, o port.MissingOrg) (bool, error) {
+	if m.err != nil {
+		return false, m.err
+	}
 	for i, x := range m.rows[a] {
 		if strings.EqualFold(x.Org, o.Org) {
 			m.rows[a][i].Repo = o.Repo
@@ -111,12 +121,20 @@ func (m *memMissing) Put(_ context.Context, a account.ID, o port.MissingOrg) (bo
 	return true, nil
 }
 
-func (m *memMissing) Clear(_ context.Context, a account.ID, org string) (bool, error) {
+func (m *memMissing) Clear(_ context.Context, a account.ID, org, repo string) (bool, error) {
+	if m.err != nil {
+		return false, m.err
+	}
 	for i, x := range m.rows[a] {
-		if strings.EqualFold(x.Org, org) {
+		if strings.EqualFold(x.Org, org) && strings.EqualFold(x.Repo, repo) {
 			m.rows[a] = append(m.rows[a][:i:i], m.rows[a][i+1:]...)
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+func (m *memMissing) Forget(_ context.Context, a account.ID) error {
+	delete(m.rows, a)
+	return nil
 }

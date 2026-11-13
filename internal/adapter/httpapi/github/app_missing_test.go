@@ -30,15 +30,20 @@ func (m *oneMissing) Put(_ context.Context, a account.ID, o port.MissingOrg) (bo
 	return true, nil
 }
 
-func (m *oneMissing) Clear(_ context.Context, a account.ID, org string) (bool, error) {
+func (m *oneMissing) Clear(_ context.Context, a account.ID, org, repo string) (bool, error) {
 	kept := m.rows[a][:0:0]
 	for _, x := range m.rows[a] {
-		if !strings.EqualFold(x.Org, org) {
+		if !strings.EqualFold(x.Org, org) || !strings.EqualFold(x.Repo, repo) {
 			kept = append(kept, x)
 		}
 	}
 	m.rows[a] = kept
 	return true, nil
+}
+
+func (m *oneMissing) Forget(_ context.Context, a account.ID) error {
+	delete(m.rows, a)
+	return nil
 }
 
 // newMissingAPI は、example-org が App 未導入のアカウントを 1 つ登録した API と、その ID。

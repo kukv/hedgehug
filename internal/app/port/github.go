@@ -34,8 +34,8 @@ type GitHub interface {
 
 // Pull は、自動リンクのために読んだ PR(07「PR の自動リンク」)。
 type Pull struct {
-	Number      int
-	prlink.Text // ブランチ名・タイトル・本文・コメント(古い順に 100 件まで)
+	Number int
+	Text   prlink.Text // ブランチ名・タイトル・本文・コメント(古い順に 100 件まで)
 	itemlink.Values
 	Checks    itemlink.Checks
 	UpdatedAt time.Time // GitHub の時刻
@@ -103,7 +103,8 @@ type ScanRecord struct {
 type PRScans interface {
 	// Scans は、Store のリポジトリ(小文字)から引く記録を返す。
 	Scans(ctx context.Context, store StoreID) (map[string]ScanRecord, error)
-	// SaveScan は、repo の記録を置く。前と変わったら changed。
+	// SaveScan は、repo の記録を、いまの記録と合わせて置く(同時に動いた探索が古い読み取りで書いても戻らないように):
+	// Read は論理和、Since は大きい方、Failure は r のもの。合わせた値が前と変わったら changed。
 	SaveScan(ctx context.Context, store StoreID, repo string, r ScanRecord) (changed bool, err error)
 }
 
@@ -119,6 +120,9 @@ type AppMissing interface {
 	List(ctx context.Context) (map[account.ID][]MissingOrg, error)
 	// Put は記録する。同じ組織(小文字)なら Repo だけ置き換え、changed は false。
 	Put(ctx context.Context, a account.ID, m MissingOrg) (changed bool, err error)
-	// Clear は記録を消す。org は大文字と小文字を区別しない。
-	Clear(ctx context.Context, a account.ID, org string) (changed bool, err error)
+	// Clear は、記録した組織 org のリポジトリが repo のときだけ記録を消す(同じ組織のほかのリポジトリが読めても
+	// 消さない)。org と repo は大文字と小文字を区別しない。
+	Clear(ctx context.Context, a account.ID, org, repo string) (changed bool, err error)
+	// Forget は、アカウント a の記録をすべて消す(アカウントの削除)。
+	Forget(ctx context.Context, a account.ID) error
 }

@@ -68,16 +68,27 @@ func (p prScans) SaveScan(ctx context.Context, store port.StoreID, repo string, 
 	return changed, tx.Commit()
 }
 
+// saveScanIn は、いまの行と r を合わせて書く(port.PRScans.SaveScan)。
 func saveScanIn(ctx context.Context, tx *sql.Tx, store port.StoreID, repo string, r port.ScanRecord) (bool, error) {
-	var read bool
-	var since, failure string
+	var old port.ScanRecord
+	var since string
 	err := tx.QueryRowContext(ctx, `SELECT read, since, failure FROM github_scans WHERE store = ? AND repo = ?`,
-		string(store), repo).Scan(&read, &since, &failure)
-	if err == nil && read == r.Read && since == timeText(r.Since) && failure == r.Failure {
-		return false, nil
-	}
+		string(store), repo).Scan(&old.Read, &since, &old.Failure)
+	found := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
+	}
+	if found {
+		if old.Since, err = parseTime(since); err != nil {
+			return false, err
+		}
+		r.Read = r.Read || old.Read
+		if old.Since.After(r.Since) {
+			r.Since = old.Since
+		}
+		if r.Read == old.Read && r.Since.Equal(old.Since) && r.Failure == old.Failure {
+			return false, nil
+		}
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO github_scans (store, repo, read, since, failure) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (store, repo) DO UPDATE SET read = excluded.read, since = excluded.since, failure = excluded.failure`,
@@ -135,11 +146,17 @@ func putMissingIn(ctx context.Context, tx *sql.Tx, id account.ID, m port.Missing
 	return err == nil, err
 }
 
-func (a appMissing) Clear(ctx context.Context, id account.ID, org string) (bool, error) {
-	res, err := a.db.ExecContext(ctx, `DELETE FROM github_app_missing WHERE account = ? AND org_key = ?`, string(id), strings.ToLower(org))
+func (a appMissing) Clear(ctx context.Context, id account.ID, org, repo string) (bool, error) {
+	res, err := a.db.ExecContext(ctx, `DELETE FROM github_app_missing WHERE account = ? AND org_key = ? AND lower(repo) = ?`,
+		string(id), strings.ToLower(org), strings.ToLower(repo))
 	if err != nil {
 		return false, err
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+func (a appMissing) Forget(ctx context.Context, id account.ID) error {
+	_, err := a.db.ExecContext(ctx, `DELETE FROM github_app_missing WHERE account = ?`, string(id))
+	return err
 }

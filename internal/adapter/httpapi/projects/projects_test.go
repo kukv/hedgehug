@@ -76,7 +76,7 @@ func (tokens) Recheck(context.Context) (bool, error) { return false, nil }
 // noMissing は、port.AppMissing のうち、消すだけを受ける偽物。
 type noMissing struct{ port.AppMissing }
 
-func (noMissing) Clear(context.Context, account.ID, string) (bool, error) { return false, nil }
+func (noMissing) Clear(context.Context, account.ID, string, string) (bool, error) { return false, nil }
 
 // scans は、port.PRScans のメモリ上の偽物(Store は 1 つだけ使う)。裏の探索から呼ばれるので、ロックで守る。
 type scans struct {

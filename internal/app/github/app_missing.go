@@ -45,7 +45,7 @@ func (u RecheckOrgs) Do(ctx context.Context, id account.ID) (RecheckResult, erro
 		err := u.GitHub.CheckRepo(ctx, tok, m.Repo)
 		switch {
 		case err == nil:
-			if _, err := u.Missing.Clear(ctx, a.ID, m.Org); err != nil {
+			if _, err := u.Missing.Clear(ctx, a.ID, m.Org, m.Repo); err != nil {
 				return res, err
 			}
 			res.Cleared = append(res.Cleared, m.Org)
