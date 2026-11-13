@@ -10,7 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
-// SaveProject は、プロジェクトの説明を保存する。決まりは SaveItem と同じで、
+// SaveProject は、プロジェクトの説明を保存する。編集を始めたときの説明(base)と行ごとに合わせるのは SaveItem と同じで、
 // アクティビティは「{タイトル} の説明を変更」(A4a-18)。
 func (s Service) SaveProject(ctx context.Context, store port.StoreID, id project.ID, base, text string) (Result, error) {
 	var title string

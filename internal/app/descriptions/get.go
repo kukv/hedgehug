@@ -19,7 +19,7 @@ func (s Service) GetItem(ctx context.Context, store port.StoreID, id item.ID) (s
 	return text, err
 }
 
-// GetProject は、プロジェクトの説明の本文を返す。決まりは GetItem と同じ。
+// GetProject は、プロジェクトの説明の本文を返す。説明がなければ ""。プロジェクトがなければ port.ErrNotFound。
 func (s Service) GetProject(ctx context.Context, store port.StoreID, id project.ID) (string, error) {
 	var text string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {

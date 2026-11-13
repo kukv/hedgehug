@@ -107,7 +107,8 @@ type ProjectReader interface {
 	Get(id project.ID) (project.Project, error)
 	// List は、ワークスペースのプロジェクトを、並び順の値の順(同じなら内部 ID の順)で返す。
 	List(ws workspace.ID) ([]project.Project, error)
-	// Description は、プロジェクトの説明の本文を返す。アイテムと同じ決まり。
+	// Description は、プロジェクトの説明の本文を返す(description.md)。説明がなければ ""。
+	// プロジェクトがなければ ErrNotFound。同じ Tx で書いた説明を含む。
 	Description(id project.ID) (string, error)
 }
 
@@ -144,7 +145,7 @@ type ProjectWriter interface {
 
 type ItemWriter interface {
 	Append(id item.ID, drafts ...change.Draft) error
-	// Describe は ProjectWriter.Describe と同じ決まりで、アイテムの説明を書く。
+	// Describe は、アイテムの説明を書く。空の本文・ないアイテム・不正な ID の扱いは ProjectWriter.Describe と同じ。
 	Describe(id item.ID, text string) error
 }
 
