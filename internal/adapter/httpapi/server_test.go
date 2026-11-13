@@ -1,6 +1,8 @@
 package httpapi_test
 
 import (
+	"bufio"
+	"context"
 	"io"
 	"io/fs"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -214,8 +217,45 @@ func TestRestoredHeaderNotOnFailure(t *testing.T) {
 
 func TestRestoredHeaderKeepsFlusher(t *testing.T) {
 	_ = serveRestored(t, func(w http.ResponseWriter, _ *http.Request) {
-		if err := http.NewResponseController(w).Flush(); err != nil {
-			t.Errorf("flush: %v", err)
+		f, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("包んだ ResponseWriter が http.Flusher を満たさない")
+			return
 		}
+		f.Flush()
 	})
+	// Flush が最初の送信になるときも、取り消した ID を付ける。
+	h := serveRestored(t, revivingHandler(t, func(w http.ResponseWriter) { w.(http.Flusher).Flush() }))
+	if got := h.Values("Hedgehug-Restored"); !slices.Equal(got, []string{"HH-2"}) {
+		t.Errorf("flush first: %v", got)
+	}
+}
+
+// 本物の組み立て(httpapi.New)を通しても、出来事の読み続けは接続直後に終わらず、出来事を送れる。
+func TestEventsStreamThroughNew(t *testing.T) {
+	hub := events.NewHub()
+	srv := httptest.NewServer(httpapi.New("secret", fstest.MapFS{}, httpapi.Deps{Version: "test", Events: hub}))
+	t.Cleanup(srv.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer secret")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	for deadline := time.Now().Add(2 * time.Second); hub.Listeners() == 0; time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("接続直後に終わった(listener がいない)")
+		}
+	}
+	hub.Publish(port.Event{Kind: port.EventStore, Store: "S1"})
+	sc := bufio.NewScanner(res.Body)
+	if !sc.Scan() || sc.Text() != "event: store" {
+		t.Errorf("first line = %q", sc.Text())
+	}
 }

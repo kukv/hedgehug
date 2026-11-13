@@ -39,15 +39,24 @@ type restoredWriter struct {
 }
 
 func (w *restoredWriter) WriteHeader(status int) {
-	if !w.sent {
+	if !w.sent && status >= 200 { // 1xx は最終の応答ではないので、その後の応答に付ける
 		w.sent = true
-		if status >= 200 && status < 300 {
+		if status < 300 {
 			for _, id := range port.Revived(w.ctx) {
 				w.Header().Add("Hedgehug-Restored", id)
 			}
 		}
 	}
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// Flush は、出来事の読み続け(SSE)が w.(http.Flusher) で型を確かめて呼ぶ。Flush は暗黙に 200 を送るので、
+// まだ送っていなければ先に WriteHeader を通す。
+func (w *restoredWriter) Flush() {
+	if !w.sent {
+		w.WriteHeader(http.StatusOK)
+	}
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
 }
 
 func (w *restoredWriter) Write(b []byte) (int, error) {
