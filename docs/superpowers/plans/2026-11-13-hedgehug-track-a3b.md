@@ -1715,3 +1715,18 @@ git commit -m "test(e2e): テンプレートでまとめて作る・遷移の制
 
 - 仕様の対応: 02「ステータスの変更」→ Task 1・2・5。02「Step のチェック」→ Task 2・9。02「開き方と初期値」(既定のテンプレート)→ Task 6・7。02「ダイアログの項目」(テンプレート・一緒に作るもの)→ Task 7・8。02「ダイアログの中での連動」(種類・ワークスペース・プロジェクト・テンプレート)→ Task 7。02「入力の検査」(作成は制約を適用しない、子と Step のタイトルの整え方)→ Task 2・3。02「作成したあと」(一緒に作るもの・番号・アクティビティ・表示・ダイアログ)→ Task 3・7。03「適用するときの規則」→ Task 3・6。説明・プロジェクト別のルール・スプリント・通知は「持ち場と境目」の表で回した。
 - 名前の一貫: `CreateInput.Template`(Task 3)= API `template`(Task 4)= `NewItem.templateId`(Task 4・7)。`statusOptions(settings, current, workflow)`(Task 5)。`TemplateForm.templateId`(Task 6)= `ItemForm.templateId`(Task 7)。
+
+## 実装で計画から変えたこと
+
+- テストの補助関数・偽物の名前は、既存のもの(`workflowSettings(t, drafts)`・`newAPI`・`ports.test.ts` の `respond`/`call`・`get(toasts.list)` ほか)に合わせた。期待する振る舞いと文言は変えていない。
+- `index.ts` には `structureOf`・`TemplateForm` が別のものとしてすでにあるので、`createTemplate.ts` の関数は export しない(画面は `state.templates`・`state.structure` を読む)。
+- `createDialog.ts` が整形後に 300 行を超えたので、`wsOptions`・`parentOptions`・`missing` に加えて、行・テンプレートの欄・一緒に作るものを作り直す `viewOf` も `createDialogOptions.ts` に移した。
+- 読み直しを待つあいだに種類を変えると、種類が読み直し前に戻る(A2 からの不具合)。このままだと種類とテンプレートが食い違って送られるので、`reloaded` で種類が変わっていたら既定のテンプレートを当てはめ直すようにした。種類が戻る不具合そのものは直していない。
+- app に部品のテストの基盤がないので、Task 8 の画面の確認は e2e(Task 9)で行った。
+- e2e: 無効の項目は読み上げ名に理由が入るので `/^Done/` で引く。設定の保存の応答を待ってから画面を移る。プロジェクト名に接頭辞を入れる(project.spec.ts と重ならないように)。`prefixOf`・`createWorkspace`・`openSettings` を `helpers.ts` に移した。
+
+## A4・B5 への申し送り
+
+- A4: 説明を足すとき、`applyDefault` は `"auto"` モードで当てはめる(いまは `"select"`。説明を扱わないので違いが出ない)。
+- B5 ほか: 「一緒に作るもの」の子の担当者は、テンプレートの値をそのまま出す。サーバーは `TemplateValuesFor` で、非表示のプロパティや正しくない値を捨てるので、プレビューと保存がずれることがある。直すなら、プレビューも同じ絞り込みを通す。
+- `internal/app/items` は 19 ファイル(上限 20)、`createDialog.ts` は 288 行(上限 300)。次に足すときは先に分ける。
