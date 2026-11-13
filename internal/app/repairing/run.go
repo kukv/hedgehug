@@ -15,6 +15,7 @@ type step func(ctx context.Context, w port.RepairWriter) error
 // steps は、修復の順(決定 C3a-5)。(1) は gitstore が Run の前に直す。
 var steps = []step{
 	restoreOverlaps, // 削除と変更の重なり
+	cascadeDeleted,  // 削除済みの親の下の子
 }
 
 // syncActor は、修復の保存の実行者。
