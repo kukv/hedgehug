@@ -117,8 +117,8 @@ D4a の範囲・待つもの・完成の条件は、この計画の Goal と D4a
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/superpowers/plans/2026-11-12-hedgehug-track-d.md docs/superpowers/plans/2026-11-13-hedgehug-track-d4a.md
-git commit -m "docs(plan): D4 を D4a・D4b に分け、D4a の計画を書く"
+git add docs/superpowers/plans/2026-11-12-hedgehug-track-d.md
+git commit -m "docs(plan): トラック D の一覧で D4 を D4a・D4b に分ける"
 ```
 
 ---
