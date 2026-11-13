@@ -26,6 +26,9 @@ type view struct {
 	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
 	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す(gitstore と同じ)。
 	places map[item.ID]project.ID
+	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースに
+	// あると分かっているプロジェクトをログから作り直さない。Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
+	projectPlaces map[project.ID]workspace.ID
 }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
@@ -127,7 +130,18 @@ func (r projects) Get(id project.ID) (project.Project, error) {
 func (r projects) List(ws workspace.ID) ([]project.Project, error) {
 	var out []project.Project
 	for _, id := range r.v.ids(change.KindProject) {
-		if p, err := r.Get(id); err == nil && p.Place.Workspace == ws {
+		if q, ok := r.v.projectPlaces[id]; ok && q != ws {
+			continue
+		}
+		p, err := r.Get(id)
+		if err != nil {
+			continue
+		}
+		if r.v.projectPlaces == nil {
+			r.v.projectPlaces = map[project.ID]workspace.ID{}
+		}
+		r.v.projectPlaces[id] = p.Place.Workspace
+		if p.Place.Workspace == ws {
 			out = append(out, p)
 		}
 	}
