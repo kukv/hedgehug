@@ -34,7 +34,7 @@
               {:else}
                 <Checkbox
                   label={`${row.name} から ${cell.name}`}
-                  disabled={readOnly || ("disabled" in cell && cell.disabled)}
+                  disabled={readOnly || ("disabled" in cell && cell.disabled === true)}
                   title={readOnly ? readOnlyNote : "reason" in cell ? cell.reason : undefined}
                   bind:checked={() => cell.checked, (v) => onchange(row.from, cell.to, v)}
                 />

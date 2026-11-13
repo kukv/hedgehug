@@ -135,8 +135,9 @@ export function valueOptions(
   f: AutomationRuleInput,
   s: WorkspaceSettings,
   members: Member[],
+  statuses = s.statuses.map((v) => ({ value: v.id, label: v.name })),
 ): { value: string; label: string }[] {
-  if (f.action === "status") return s.statuses.map((v) => ({ value: v.id, label: v.name }));
+  if (f.action === "status") return statuses;
   return [
     { value: unassigned, label: unassignedOption },
     ...members.map((m) => ({ value: m.login, label: m.name || m.login })),

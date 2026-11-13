@@ -87,7 +87,7 @@
     <Select
       label="値"
       value={form.value}
-      options={valueOptions(form, settings, members)}
+      options={valueOptions(form, settings, members, statuses)}
       {disabled}
       {title}
       onchange={(v) => (form = { ...form, value: v })}

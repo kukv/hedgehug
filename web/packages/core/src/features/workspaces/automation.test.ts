@@ -8,6 +8,7 @@ import {
   ruleRows,
   ruleSummary,
   switchOnRefusal,
+  valueOptions,
   withAction,
   withTrigger,
 } from "./automation";
@@ -74,6 +75,13 @@ describe("the rule form", () => {
       action: "status",
       value: id("Done"),
     });
+  });
+  it("takes the status choices of the action value from the given statuses", () => {
+    const form = newRuleForm(settings);
+    const all = valueOptions(form, settings, []);
+    expect(all.length).toBe(settings.statuses.length);
+    const narrowed = [{ value: id("Done"), label: "Done" }];
+    expect(valueOptions(form, settings, [], narrowed)).toEqual(narrowed);
   });
   it("starts an edit with only the six input fields of the rule", () => {
     const rule = { ...newRuleForm(settings), id: "R1", name: "完了", enabled: false };
