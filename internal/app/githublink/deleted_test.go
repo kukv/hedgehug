@@ -87,3 +87,61 @@ func TestLinksOfADeletedProjectAreNotFound(t *testing.T) {
 		t.Errorf("wrote %d times", len(f.stores.ops)-before)
 	}
 }
+
+// 間隔ごとの取り直しは、削除済みのアイテムのリンクを GitHub に頼まず、書きもしない(D4a-10)。
+func TestReadOnceSkipsDeletedItems(t *testing.T) {
+	f := newRead(t)
+	ctx := t.Context()
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.linkIn(t, linkStore, linkEpic, readPR("org/web", 2, itemlink.Open))
+	f.linkIn(t, linkStore, linkEpic, readPR("org/web", 3, itemlink.Open))
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 3, itemlink.Open))
+	for _, n := range []int{1, 2, 3} {
+		f.gh.Put("org/web", readPR("org/web", n, itemlink.Merged))
+	}
+	// 偽の GitHub は頼まれた番号を覚えていないので、#1 を頼めば失敗になるようにして、頼んでいないことを確かめる
+	f.gh.Fail("org/web", 1, errors.New("boom"))
+	if err := apptest.DeleteItems(ctx, f.stores.Stores, linkStore, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	before := len(f.taskLog(t))
+	f.read(t, every, false)
+	if n := f.gh.ReadManyCalls("org/web"); n != 1 {
+		t.Errorf("calls = %d, want 1", n)
+	}
+	rows, err := f.links.List(ctx, linkStore, linkEpic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v, want 2", rows)
+	}
+	for _, r := range rows {
+		if r.State != itemlink.Merged {
+			t.Errorf("#%d state = %v, want Merged", r.Number, r.State)
+		}
+	}
+	if after := len(f.taskLog(t)); after != before {
+		t.Errorf("deleted item's log grew by %d", after-before)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 0 {
+		t.Errorf("failures = %v, want none", got)
+	}
+}
+
+// 間隔ごとの取り直しは、削除済みのプロジェクトの下のアイテムのリンクを頼まない(D4a-10)。
+func TestReadOnceSkipsDeletedProject(t *testing.T) {
+	f := newRead(t)
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.gh.Put("org/web", readPR("org/web", 1, itemlink.Merged))
+	if err := apptest.DeleteProject(t.Context(), f.stores.Stores, linkStore, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	f.read(t, every, false)
+	if n := f.gh.ReadManyCalls("org/web"); n != 0 {
+		t.Errorf("calls = %d, want none", n)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 0 {
+		t.Errorf("failures = %v, want none", got)
+	}
+}
