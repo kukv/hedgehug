@@ -52,6 +52,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"transfer records are appended and listed", contractTransfers},
 		{"purged is empty without a purge", contractPurgedEmpty},
 		{"remove deletes an item folder", contractRemove},
+		{"remove and import refuse in the same write", contractRemoveImportRules},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -223,5 +224,40 @@ func checkImported(t *testing.T, r port.Reader, log []change.Record) {
 	it, err := r.Items().Get(cItem.ID)
 	if d, _ := r.Items().Description(cItem.ID); err != nil || it.Title != "移動先で変えた" || d != "説明" {
 		t.Errorf("item = %+v (%v), description %q", it, err, d)
+	}
+}
+
+// Remove だけの Write も Summary が要る。同じ Tx で行を足してから消しても、もうない。同じ Tx で作ったものには Import できない。
+func contractRemoveImportRules(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	noSummary := port.Operation{Actor: change.User("taro")}
+	if err := s.Write(t.Context(), id, noSummary, func(tx port.Tx) error { return tx.WriteItems().Remove(cItem.ID) }); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Remove without a summary = %v, want ErrInvalidOperation", err)
+	}
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if err := tx.WriteItems().Append(cItem.ID, change.NewSet("title", "認証", "消す前")); err != nil {
+			return err
+		}
+		if err := tx.WriteItems().Remove(cItem.ID); err != nil {
+			return err
+		}
+		if _, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID}); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("Changes().Of after Append and Remove = %v, want ErrNotFound", err)
+		}
+		if its, err := tx.Items().List(cProject.ID); err != nil || len(its) != 0 {
+			t.Errorf("List after Append and Remove = %+v, %v", its, err)
+		}
+		return nil
+	})
+	created := cItem
+	created.ID = "01CONTRACTIT00000000000002"
+	err := s.Write(t.Context(), id, taro, func(tx port.Tx) error {
+		if err := tx.WriteItems().Append(created.ID, item.Create(created)); err != nil {
+			return err
+		}
+		return tx.WriteItems().Import(created.ID, []change.Record{{ID: "x"}}, "")
+	})
+	if !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Import after Append in the same write = %v, want ErrInvalidOperation", err)
 	}
 }
