@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/planning"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	dp "github.com/kukv/hedgehug/internal/domain/planning"
 )
@@ -160,7 +161,7 @@ func TestRestoreSprintNameTaken(t *testing.T) {
 	if err := svc.DeleteSprint(ctx, store, apptest.SampleWorkspace, s1.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Sprint 1"}); err != nil {
+	if _, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: " Sprint 1 "}); err != nil {
 		t.Fatal(err)
 	}
 	n := len(rec.summaries)
@@ -195,6 +196,17 @@ func TestRestoreSprintKeepsConcurrentAdd(t *testing.T) {
 	if b, _ := getItem(t, svc, itemB); b.Sprint != s1.ID {
 		t.Errorf("B=%s", b.Sprint)
 	}
+}
+
+// releaseChanges は、アイテムの履歴の「リリースを変更」の行の数。
+func releaseChanges(log []change.Record) int {
+	n := 0
+	for _, r := range history.ItemRows(log, history.Context{Names: history.NamesOf(nil)}) {
+		if r.Text == "リリースを変更" {
+			n++
+		}
+	}
+	return n
 }
 
 func releaseOf(t *testing.T, svc planning.Service, id change.ID) (dp.Release, bool) {
@@ -237,6 +249,8 @@ func TestDeleteRelease(t *testing.T) {
 	svc, rec := setup(t)
 	ctx := t.Context()
 	r1 := releasedWorks(t, svc)
+	_, aBefore := getItem(t, svc, itemA)
+	_, bBefore := getItem(t, svc, itemB)
 	_, cLog := getItem(t, svc, itemC)
 	if err := svc.DeleteRelease(ctx, store, apptest.SampleWorkspace, r1.ID); err != nil {
 		t.Fatal(err)
@@ -247,10 +261,14 @@ func TestDeleteRelease(t *testing.T) {
 	if _, ok := releaseOf(t, svc, r1.ID); ok {
 		t.Error("R1 が削除済みでない")
 	}
-	a, _ := getItem(t, svc, itemA)
-	b, _ := getItem(t, svc, itemB)
+	a, aLog := getItem(t, svc, itemA)
+	b, bLog := getItem(t, svc, itemB)
 	if a.Release != "" || b.Release != "" || a.Rank != "B" || b.Rank != "C" {
 		t.Errorf("A=%s/%s B=%s/%s", a.Release, a.Rank, b.Release, b.Rank)
+	}
+	// 入れたときの 1 件に、削除の 1 件が足される。
+	if releaseChanges(aLog)-releaseChanges(aBefore) != 1 || releaseChanges(bLog)-releaseChanges(bBefore) != 1 {
+		t.Errorf("履歴: A=%d→%d B=%d→%d", releaseChanges(aBefore), releaseChanges(aLog), releaseChanges(bBefore), releaseChanges(bLog))
 	}
 	if c, log := getItem(t, svc, itemC); c.Release != r1.ID || len(log) != len(cLog) {
 		t.Errorf("C に触れた: %s %d→%d", c.Release, len(cLog), len(log))
@@ -312,7 +330,7 @@ func TestRestoreReleaseNameTaken(t *testing.T) {
 	if err := svc.DeleteRelease(ctx, store, apptest.SampleWorkspace, r1.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CreateRelease(ctx, store, apptest.SampleWorkspace, planning.ReleaseInput{Name: "v1"}); err != nil {
+	if _, err := svc.CreateRelease(ctx, store, apptest.SampleWorkspace, planning.ReleaseInput{Name: " v1 "}); err != nil {
 		t.Fatal(err)
 	}
 	n := len(rec.summaries)
