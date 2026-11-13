@@ -2,7 +2,10 @@ package gitstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -47,6 +50,69 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	}
 	defer unlock()
 	return s.writeLocked(root, op, fn)
+}
+
+// SyncSave は、1 つのロックの中で、受け取り・保存・送信を行う(port.Replicator)。送信が他の人の更新と
+// 重なったら、保存を捨てて受け取りからやり直す(Sync と同じく最大 maxSendTries 回)。
+func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
+	if remote.ReceiveOnly {
+		return port.SyncResult{}, fmt.Errorf("%w: cannot save to a receive-only store", port.ErrInvalidOperation)
+	}
+	s, unlock, err := r.begin(id, remote)
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	defer unlock()
+	for range maxSendTries {
+		res, err := s.saveOnce(ctx, op, fn)
+		if errors.Is(err, errRejected) {
+			continue
+		}
+		if errors.Is(err, port.ErrRemoteRewritten) {
+			err = errors.Join(err, s.restoreSeen())
+		}
+		return res, err
+	}
+	return port.SyncResult{}, port.ErrSendConflict
+}
+
+// saveOnce は、受け取り → 保存 → 送信を 1 回行う。送信が断られたら、保存のコミットを捨てる
+// (受け取って合わせた結果は残す)。送信が拒否されたら errRejected。
+func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
+	theirs, err := s.receive(ctx)
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	head, err := s.repo.Head()
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	base := head.Hash()
+	if err := s.r.stores.writeLocked(s.root, op, fn); err != nil {
+		return port.SyncResult{}, &port.SaveError{Err: err}
+	}
+	now, err := s.push(ctx, theirs)
+	if err != nil {
+		if derr := s.discard(base); derr != nil {
+			// 捨てられなかったときは、やり直さない(保存のコミットの上に受け取り直さない)。印が残り、次の操作が戻す。
+			if errors.Is(err, errRejected) {
+				err = port.ErrSendConflict
+			}
+			return port.SyncResult{}, errors.Join(err, derr)
+		}
+		return port.SyncResult{}, err
+	}
+	return s.result(theirs, now, true)
+}
+
+// discard は、先端を base に戻し、作業ツリーとインデックスを合わせる(base にないファイルとフォルダを消す)。
+// 途中で止まったら印が残り、次の操作の recoverInterrupted が、そのときの先端に作業ツリーを合わせる。
+func (s syncRun) discard(base plumbing.Hash) error {
+	wt, err := s.repo.Worktree()
+	if err != nil {
+		return err
+	}
+	return s.guarded(func() error { return rollback(wt, base) })
 }
 
 // writeLocked は、Store のロックを持っているあいだの Write の本体。

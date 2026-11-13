@@ -10,6 +10,13 @@ import (
 type Replicator interface {
 	// Sync は、remote から受け取り、合わせ、送る(ReceiveOnly なら送らない)。
 	Sync(ctx context.Context, storeID StoreID, remote Remote) (SyncResult, error)
+	// SyncSave は、1 つのロックの中で、受け取り・保存・送信を行う(02「保存」)。受け取りが失敗したら保存しない
+	// (fn を呼ばない)。送れなければ保存のコミットだけを捨てて、受け取って合わせた結果は残す。送信が他の人の
+	// 更新と重なったら、保存を捨てて受け取り直し、fn を呼び直す(最大 3 回)。そのため fn は試みごとに呼ばれ、
+	// 毎回新しい Tx を受け取る(前の呼び出しの書き込みは残っていない)。fn は読む値を毎回その Tx から読む。
+	// 保存の失敗(fn のエラー・op.Check・コミットの失敗)は *SaveError、通信の失敗は Err* のどれか。
+	// ReceiveOnly の remote には保存せず、ErrInvalidOperation を返す。
+	SyncSave(ctx context.Context, storeID StoreID, remote Remote, op Operation, fn func(tx Tx) error) (SyncResult, error)
 	// Mirror は、Store の保存をミラーへ送るだけで、受け取らない(保存形式「同期」の手順 7)。
 	// ミラーが空なら最初の送信として送る。共通の履歴がなければ ErrMirrorUnrelated、ミラーにだけ保存が
 	// あれば ErrMirrorAhead。どちらも送らない。
@@ -28,6 +35,12 @@ type Remote struct {
 	// ReceiveOnly なら、受け取って合わせるだけで、送らない(閲覧のみの Store)。
 	ReceiveOnly bool
 }
+
+// SaveError は、SyncSave の保存の失敗(fn のエラー・op.Check・コミットの失敗)。通信の失敗は包まない。
+type SaveError struct{ Err error }
+
+func (e *SaveError) Error() string { return "save: " + e.Err.Error() }
+func (e *SaveError) Unwrap() error { return e.Err }
 
 // SyncResult は、送った保存と受け取った保存の数(06「同期の結果」)と、今回受け取った位置。
 // Seen は、次の同期の Remote.Seen に渡す。remote が空のまま終わったら空。

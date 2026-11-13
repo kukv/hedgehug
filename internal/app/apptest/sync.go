@@ -14,15 +14,20 @@ type ReplicatorCall struct {
 	Store  port.StoreID
 	Remote port.Remote
 	Mirror bool // Mirror の呼び出しなら true
+	Save   bool // SyncSave の呼び出しなら true
 }
 
 // Replicator は port.Replicator の偽物。Sync は Results・Errs に置いた値を返す。Gate が nil でなければ、
 // Sync はそこから 1 つ受け取るまで待つ(同期が動いているあいだを作るため)。
+// SyncSave は、Errs にあれば fn を呼ばずにそれを返し(受け取りの失敗)、なければ Stores に保存する。
+// SendErrs にあれば送信の失敗として返し、Store に何も反映しない。
 type Replicator struct {
 	mu         sync.Mutex
+	Stores     *Stores // SyncSave の fn を実行する Store
 	Results    map[port.StoreID]port.SyncResult
 	Errs       map[port.StoreID]error
-	MirrorErrs map[string]error // ミラーの URL → エラー
+	SendErrs   map[port.StoreID]error // SyncSave の送信の失敗
+	MirrorErrs map[string]error       // ミラーの URL → エラー
 	UnsentN    map[port.StoreID]int
 	UnsentErrs map[port.StoreID]error // Unsent が返すエラー
 	Gate       chan struct{}
@@ -46,6 +51,34 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 	if err := r.Errs[id]; err != nil {
 		return port.SyncResult{}, err
 	}
+	return r.Results[id], nil
+}
+
+// SyncSave は、受け取りの失敗(Errs)がなければ、Stores に保存して送る。ロックは Store のものだけを持つ
+// (r.mu は fn のあいだ持たない)。
+func (r *Replicator) SyncSave(_ context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
+	r.mu.Lock()
+	r.calls = append(r.calls, ReplicatorCall{Store: id, Remote: remote, Save: true})
+	recvErr := r.Errs[id]
+	r.mu.Unlock()
+	if recvErr != nil {
+		return port.SyncResult{}, recvErr
+	}
+	var sendErr error
+	err := r.Stores.write(id, op, fn, func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		sendErr = r.SendErrs[id]
+		return sendErr
+	})
+	switch {
+	case sendErr != nil:
+		return port.SyncResult{}, sendErr
+	case err != nil:
+		return port.SyncResult{}, &port.SaveError{Err: err}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.Results[id], nil
 }
 
