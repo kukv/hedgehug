@@ -63,8 +63,9 @@ var fixedText = map[Kind]string{ //nolint:gosec // G101: 利用者に見せる�
 }
 
 // rateLimited は 07 の利用上限の文言。時刻は分に切り上げ、翌日以降なら日付を前に足す(01「日付と時刻」)。
+// 戻る時刻が分からないときと、もう過ぎているとき(このマシンの時計が GitHub より進んでいる)は、時刻を出さない。
 func rateLimited(reset, now time.Time) string {
-	if reset.IsZero() {
+	if reset.IsZero() || !reset.After(now) {
 		return "GitHub の利用上限に達しました。しばらくしてからもう一度お試しください"
 	}
 	at := reset.In(now.Location())

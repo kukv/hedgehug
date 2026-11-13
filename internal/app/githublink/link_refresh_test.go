@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/githublink"
@@ -161,14 +162,16 @@ func TestRefreshStopsAtTheRateLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.RateLimited})
+	// 戻る時刻がもう過ぎている(このマシンの時計が進んでいる): 過ぎた時刻は出さない
+	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: time.Date(2026, 11, 13, 8, 0, 0, 0, time.UTC)})
 	asked := f.gh.Lookups
 	rows := f.refresh(t)
 	if f.gh.Lookups-asked != 1 {
 		t.Errorf("lookups = %d, want 1 (stop at the rate limit)", f.gh.Lookups-asked)
 	}
-	if len(rows) != 2 || rows[0].Error == "" || rows[1].Error != rows[0].Error {
-		t.Errorf("rows = %+v, want the same error on both", rows)
+	want := failed("GitHub の利用上限に達しました。しばらくしてからもう一度お試しください")
+	if len(rows) != 2 || rows[0].Error != want || rows[1].Error != want {
+		t.Errorf("rows = %+v, want %q on both", rows, want)
 	}
 }
 

@@ -264,6 +264,9 @@ func TestReadOnceRateLimitedPastResetWaitsAMinute(t *testing.T) {
 	// このマシンの時計が GitHub より進んでいて、戻る時刻がもう過ぎている
 	f.gh.Fail("org/web", 0, &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: f.clock.now.Add(-time.Second)})
 	f.read(t, every, false)
+	if r := f.row(t, linkStore, 1); r.Error != failed("GitHub の利用上限に達しました。しばらくしてからもう一度お試しください") {
+		t.Errorf("error = %q, want no past time", r.Error)
+	}
 	f.read(t, every, false)
 	if n := f.gh.ReadManyCalls("org/web"); n != 1 {
 		t.Fatalf("calls = %d, want no retry right away", n)
