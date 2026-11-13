@@ -137,6 +137,7 @@ export type {
   TemplateStep,
   ValueList,
   Workspace,
+  WorkspaceDeletePreview,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspaceSettings,

@@ -1133,6 +1133,15 @@ export interface WorkspaceAutomation {
   rules: AutomationRule[] | null;
 }
 
+export interface WorkspaceDeletePreview {
+  /** その下の、削除されていないアイテムの数(Epic から Step まで全部) */
+  items: number;
+  /** 削除されていないプロジェクトの数 */
+  projects: number;
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+}
+
 /**
  * ステータスの分類(todo・doing・done・canceled)
  */
@@ -4026,6 +4035,32 @@ return fetcher<WorkspaceSummary>(getCreateWorkspaceUrl(store),
 
 
 
+export const getDeleteWorkspaceUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}`
+}
+
+/**
+ * @summary ワークスペースと、その下のプロジェクト・アイテムを削除する
+ */
+export const deleteWorkspace = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteWorkspaceUrl(store,workspace),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getGetWorkspaceUrl = (store: string,
     workspace: string,) => {
 
@@ -4271,6 +4306,32 @@ return fetcher<void>(getSetWorkspaceCategoryDefaultUrl(store,workspace,category)
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setWorkspaceValueRef)
+  }
+);}
+
+
+
+export const getGetWorkspaceDeletePreviewUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/delete-preview`
+}
+
+/**
+ * @summary ワークスペースを削除したときに一緒に消えるプロジェクトとアイテムの数と保持日数を返す
+ */
+export const getWorkspaceDeletePreview = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceDeletePreview> => {
+
+  return fetcher<WorkspaceDeletePreview>(getGetWorkspaceDeletePreviewUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
