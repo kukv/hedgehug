@@ -198,6 +198,30 @@ func TestUpdateRefusesAStatusTheRulesProjectHides(t *testing.T) {
 	}
 }
 
+// ステータスの削除の書き換えなどで、することが使わないステータスを指したままの専用ルールも改名できる。
+// 変えたきっかけが使わないステータスなら ErrNotFound。
+func TestUpdateChecksOnlyChangedStatuses(t *testing.T) {
+	svc, rec := setup(t)
+	r := seedScoped(t, rec)
+	op := port.Operation{Actor: change.User("taro"), Summary: "書き換え"}
+	if err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		n := r
+		n.Value = string(apptest.SampleStatusPending)
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, automation.Drafts(r, n)...)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	edit := r
+	edit.Name, edit.Value = "専用 5", string(apptest.SampleStatusPending)
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	edit.Trigger, edit.TriggerStatus = automation.TriggerStatus, apptest.SampleStatusPending
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("hidden trigger: %v, want ErrNotFound", err)
+	}
+}
+
 func TestUpdateKeepsTheStoredScope(t *testing.T) {
 	svc, rec := setup(t)
 	r := seedScoped(t, rec)

@@ -34,7 +34,7 @@ func (s Service) Create(ctx context.Context, store port.StoreID, ws workspace.ID
 				}
 			}
 			in = canonicalLogin(in, ms)
-			if !automation.Valid(st, set, ms, in) {
+			if !automation.Valid(st, set, ms, automation.Rule{}, in) {
 				return nil, port.ErrNotFound
 			}
 			if err := automation.Check(rules, in); err != nil {
@@ -67,7 +67,7 @@ func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID
 			}
 			in.Enabled, in.Scope = old.Enabled, old.Scope // 編集で Scope は変えない(B5a-10)
 			in = canonicalLogin(in, ms)
-			if !automation.Valid(st, set, ms, in) {
+			if !automation.Valid(st, set, ms, old, in) {
 				return nil, port.ErrNotFound
 			}
 			if err := automation.Check(rules, in); err != nil {

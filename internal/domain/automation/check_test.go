@@ -44,7 +44,7 @@ func TestValid(t *testing.T) {
 		{Trigger: automation.TriggerStepsDone, Action: automation.ActionAssignee, Value: "Taro"}, // ログイン名は大文字と小文字を区別しない
 	}
 	for _, r := range ok {
-		if !automation.Valid(s, nil, logins, r) {
+		if !automation.Valid(s, nil, logins, automation.Rule{}, r) {
 			t.Errorf("Valid(%+v) = false", r)
 		}
 	}
@@ -56,7 +56,7 @@ func TestValid(t *testing.T) {
 		{Trigger: automation.TriggerPROpen, Action: "nope", Value: "DONE"},
 	}
 	for _, r := range bad {
-		if automation.Valid(s, nil, logins, r) {
+		if automation.Valid(s, nil, logins, automation.Rule{}, r) {
 			t.Errorf("Valid(%+v) = true", r)
 		}
 	}
@@ -118,10 +118,10 @@ func TestValidRejectsUnusedStatusForScopedRule(t *testing.T) {
 	toCancel := automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionStatus, Value: "CANCEL"}
 	fromCancel := automation.Rule{Trigger: automation.TriggerStatus, TriggerStatus: "CANCEL", Action: automation.ActionAssignee, Value: automation.Unassigned}
 	for _, r := range []automation.Rule{toCancel, fromCancel} {
-		if automation.Valid(s, set, nil, scoped("P", r)) {
+		if automation.Valid(s, set, nil, automation.Rule{}, scoped("P", r)) {
 			t.Errorf("使わないステータスの専用ルールが通った: %+v", r)
 		}
-		if !automation.Valid(s, set, nil, scoped("Q", r)) || !automation.Valid(s, set, nil, r) {
+		if !automation.Valid(s, set, nil, automation.Rule{}, scoped("Q", r)) || !automation.Valid(s, set, nil, automation.Rule{}, r) {
 			t.Errorf("ほかのプロジェクト・全体のルールは通る: %+v", r)
 		}
 	}
@@ -134,11 +134,36 @@ func TestValidRejectsUnusedStatusForScopedRule(t *testing.T) {
 	}
 }
 
+// 編集では、変えたきっかけ・することのステータスだけを、使うものか確かめる。ステータスの削除の書き換えなどで
+// 使わないステータスを指したままのルールも、そのまま改名できる。
+func TestValidChecksOnlyChangedStatusesOfScopedRule(t *testing.T) {
+	s := settings()
+	s.InitialStatus = "TODO"
+	set := projectrule.Set{"P": {Hidden: []change.ID{"CANCEL"}}}
+	old := automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionStatus, Value: "CANCEL", Scope: "P"}
+	renamed := old
+	renamed.Name = "改名"
+	if !automation.Valid(s, set, nil, old, renamed) {
+		t.Error("変えていない使わないステータスで、改名が断られた")
+	}
+	addTrigger := old
+	addTrigger.Trigger, addTrigger.TriggerStatus = automation.TriggerStatus, "CANCEL"
+	if automation.Valid(s, set, nil, old, addTrigger) {
+		t.Error("きっかけを使わないステータスに変えたのに通った")
+	}
+	fromTrigger := automation.Rule{Trigger: automation.TriggerStatus, TriggerStatus: "CANCEL", Action: automation.ActionAssignee, Value: automation.Unassigned, Scope: "P"}
+	toStatus := fromTrigger
+	toStatus.Action, toStatus.Value = automation.ActionStatus, "CANCEL"
+	if automation.Valid(s, set, nil, fromTrigger, toStatus) {
+		t.Error("することを使わないステータスに変えたのに通った")
+	}
+}
+
 // 集合にないプロジェクトの専用ルールは、そのプロジェクトの規則がないものとして、使うステータスを通す。
 func TestValidScopedToProjectAbsentFromSet(t *testing.T) {
 	s := settings()
 	r := automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionStatus, Value: "DONE", Scope: "Z"}
-	if !automation.Valid(s, projectrule.Set{"P": {Hidden: []change.ID{"DONE"}}}, nil, r) || !automation.Valid(s, nil, nil, r) {
+	if !automation.Valid(s, projectrule.Set{"P": {Hidden: []change.ID{"DONE"}}}, nil, automation.Rule{}, r) || !automation.Valid(s, nil, nil, automation.Rule{}, r) {
 		t.Errorf("Valid(%+v) = false", r)
 	}
 }
