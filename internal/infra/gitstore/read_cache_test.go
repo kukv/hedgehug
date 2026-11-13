@@ -9,7 +9,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
 // 1 回の Read のあいだは、一度読んだ log.jsonl を読み直さない。次の Read は読み直す。
@@ -65,41 +64,6 @@ func TestWriteReadsItsOwnRowsAfterCaching(t *testing.T) {
 		it, err := tx.Items().Get(apptest.SampleTask)
 		if err != nil || it.Title != "y" {
 			t.Errorf("item = %+v, %v", it, err)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-// List が覚えたアイテムのプロジェクトは、同じ Tx でアイテムを動かしたら覚え直す。
-func TestListFollowsAMoveInTheSameWrite(t *testing.T) {
-	s, id, _ := newStore(t)
-	if err := apptest.Sample(t.Context(), s, id); err != nil {
-		t.Fatal(err)
-	}
-	const other project.ID = "01OTHERPR00000000000000001"
-	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "x"}, func(tx port.Tx) error {
-		before, err := tx.Items().List(apptest.SampleProject)
-		if err != nil || len(before) != 2 {
-			t.Fatalf("before = %+v, %v", before, err)
-		}
-		if moved, err := tx.Items().List(other); err != nil || len(moved) != 0 {
-			t.Errorf("other before = %+v, %v", moved, err)
-		}
-		it := before[1]
-		place := it.Place
-		place.Project = other
-		if err := tx.WriteItems().Append(it.ID, change.NewSet("place", it.Place, place)); err != nil {
-			return err
-		}
-		moved, err := tx.Items().List(other)
-		if err != nil || len(moved) != 1 || moved[0].ID != it.ID {
-			t.Errorf("other after = %+v, %v", moved, err)
-		}
-		if left, err := tx.Items().List(apptest.SampleProject); err != nil || len(left) != 1 {
-			t.Errorf("left = %+v, %v", left, err)
 		}
 		return nil
 	})

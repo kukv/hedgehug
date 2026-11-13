@@ -23,6 +23,9 @@ type view struct {
 	// baseTexts は保存済みの説明、texts は同じ Tx で書いた説明(ない説明は "")。
 	baseTexts map[change.Ref]string
 	texts     map[change.Ref]string
+	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
+	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す(gitstore と同じ)。
+	places map[item.ID]project.ID
 }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
@@ -147,7 +150,18 @@ func (r items) Get(id item.ID) (item.Item, error) {
 func (r items) List(p project.ID) ([]item.Item, error) {
 	var out []item.Item
 	for _, id := range r.v.ids(change.KindItem) {
-		if it, err := r.Get(id); err == nil && it.Place.Project == p {
+		if q, ok := r.v.places[id]; ok && q != p {
+			continue
+		}
+		it, err := r.Get(id)
+		if err != nil {
+			continue
+		}
+		if r.v.places == nil {
+			r.v.places = map[item.ID]project.ID{}
+		}
+		r.v.places[id] = it.Place.Project
+		if it.Place.Project == p {
 			out = append(out, it)
 		}
 	}
