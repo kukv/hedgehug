@@ -22,6 +22,7 @@ type Services struct {
 	Reauth ghapp.Reauth
 	Impact ghapp.Impact
 	SignIn ghapp.SignIn
+	Links  ghapp.Links
 }
 
 type accountBody struct {
@@ -91,6 +92,7 @@ func Register(api huma.API, s Services) {
 	registerAccounts(api, s)
 	registerManage(api, s)
 	registerSignIn(api, s.SignIn)
+	registerLinks(api, s.Links)
 }
 
 func registerAccounts(api huma.API, s Services) {

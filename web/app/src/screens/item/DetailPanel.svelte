@@ -2,6 +2,7 @@
   import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
   import { BlockedBadge, IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
   import { descriptionSaves, detail, toasts } from "../../wire";
+  import LinkSection from "../github/LinkSection.svelte";
   import CommentsSection from "../notes/CommentsSection.svelte";
   import DescriptionSection from "../notes/DescriptionSection.svelte";
   import HistorySection from "../notes/HistorySection.svelte";
@@ -106,10 +107,7 @@
       <DetailChildren {v} />
     {/if}
     <RelationsSection {v} />
-    <section class="peek-sec" aria-label="GitHub">
-      <h3>GitHub</h3>
-      <p class="muted">リンクはありません</p>
-    </section>
+    <LinkSection {v} />
     <WorklogSection {v} />
     <CommentsSection
       target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
@@ -132,14 +130,5 @@
   .id {
     font-family: var(--font-mono);
     color: var(--muted);
-  }
-  .peek-sec h3 {
-    font-size: 13px;
-    margin: 0 0 6px;
-  }
-  .muted {
-    color: var(--muted);
-    font-size: 12.5px;
-    margin: 0;
   }
 </style>

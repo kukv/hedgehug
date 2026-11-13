@@ -377,6 +377,96 @@ export interface Item {
   workspace: string;
 }
 
+export type LinkInputKind = typeof LinkInputKind[keyof typeof LinkInputKind];
+
+
+export const LinkInputKind = {
+  pr: 'pr',
+  issue: 'issue',
+} as const;
+
+export interface LinkInput {
+  /** プロジェクトのリポジトリにも追加する */
+  addToProject: boolean;
+  kind: LinkInputKind;
+  /** 入力のまま。正の整数でなければ断る */
+  number: string;
+  repo: string;
+}
+
+export type LinkRefKind = typeof LinkRefKind[keyof typeof LinkRefKind];
+
+
+export const LinkRefKind = {
+  pr: 'pr',
+  issue: 'issue',
+} as const;
+
+export interface LinkRef {
+  kind: LinkRefKind;
+  number: number;
+  repo: string;
+}
+
+/**
+ * このマシンが読んだ PR のチェックの結果。なければ空
+ */
+export type LinkRowChecks = typeof LinkRowChecks[keyof typeof LinkRowChecks];
+
+
+export const LinkRowChecks = {
+  '': '',
+  success: 'success',
+  failure: 'failure',
+  pending: 'pending',
+} as const;
+
+export type LinkRowKind = typeof LinkRowKind[keyof typeof LinkRowKind];
+
+
+export const LinkRowKind = {
+  pr: 'pr',
+  issue: 'issue',
+} as const;
+
+/**
+ * Issue は none
+ */
+export type LinkRowReview = typeof LinkRowReview[keyof typeof LinkRowReview];
+
+
+export const LinkRowReview = {
+  none: 'none',
+  pending: 'pending',
+  approved: 'approved',
+  changes_requested: 'changes_requested',
+} as const;
+
+export type LinkRowState = typeof LinkRowState[keyof typeof LinkRowState];
+
+
+export const LinkRowState = {
+  open: 'open',
+  draft: 'draft',
+  merged: 'merged',
+  closed: 'closed',
+} as const;
+
+export interface LinkRow {
+  /** このマシンが読んだ PR のチェックの結果。なければ空 */
+  checks: LinkRowChecks;
+  /** 取り直しの失敗(「状態を更新できませんでした: …」)。なければ空 */
+  error: string;
+  kind: LinkRowKind;
+  number: number;
+  /** owner/name */
+  repo: string;
+  /** Issue は none */
+  review: LinkRowReview;
+  state: LinkRowState;
+  title: string;
+}
+
 export interface ListOutputBody {
   /** @nullable */
   accounts: AccountRow[] | null;
@@ -435,6 +525,69 @@ export interface Project {
   status: ProjectStatus;
   title: string;
   workspace: string;
+}
+
+/**
+ * このマシンが読んだ PR のチェックの結果。なければ空
+ */
+export type ProjectLinkRowChecks = typeof ProjectLinkRowChecks[keyof typeof ProjectLinkRowChecks];
+
+
+export const ProjectLinkRowChecks = {
+  '': '',
+  success: 'success',
+  failure: 'failure',
+  pending: 'pending',
+} as const;
+
+export type ProjectLinkRowKind = typeof ProjectLinkRowKind[keyof typeof ProjectLinkRowKind];
+
+
+export const ProjectLinkRowKind = {
+  pr: 'pr',
+  issue: 'issue',
+} as const;
+
+/**
+ * Issue は none
+ */
+export type ProjectLinkRowReview = typeof ProjectLinkRowReview[keyof typeof ProjectLinkRowReview];
+
+
+export const ProjectLinkRowReview = {
+  none: 'none',
+  pending: 'pending',
+  approved: 'approved',
+  changes_requested: 'changes_requested',
+} as const;
+
+export type ProjectLinkRowState = typeof ProjectLinkRowState[keyof typeof ProjectLinkRowState];
+
+
+export const ProjectLinkRowState = {
+  open: 'open',
+  draft: 'draft',
+  merged: 'merged',
+  closed: 'closed',
+} as const;
+
+export interface ProjectLinkRow {
+  /** このマシンが読んだ PR のチェックの結果。なければ空 */
+  checks: ProjectLinkRowChecks;
+  /** アイテムの画面の ID(HH-2) */
+  display: string;
+  /** 取り直しの失敗(「状態を更新できませんでした: …」)。なければ空 */
+  error: string;
+  /** アイテムの内部 ID */
+  item: string;
+  kind: ProjectLinkRowKind;
+  number: number;
+  /** owner/name */
+  repo: string;
+  /** Issue は none */
+  review: ProjectLinkRowReview;
+  state: ProjectLinkRowState;
+  title: string;
 }
 
 export interface ProjectRepo {
@@ -1233,7 +1386,7 @@ export const getWatchEventsUrl = () => {
 }
 
 /**
- * 出来事ごとに `event: store` または `event: sync` の行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
+ * 出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
  * @summary Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
  */
 export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
@@ -1734,6 +1887,140 @@ export const getItemHistory = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListLinksUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/links`
+}
+
+/**
+ * @summary アイテムの PR・Issue のリンクを、リンクした順に返す(GitHub には問い合わせない)
+ */
+export const listLinks = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<LinkRow[] | null> => {
+
+  return fetcher<LinkRow[] | null>(getListLinksUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAddLinkUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/links`
+}
+
+/**
+ * @summary PR か Issue を GitHub で確かめてリンクする
+ */
+export const addLink = async (store: string,
+    item: string,
+    linkInput: LinkInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getAddLinkUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(linkInput)
+  }
+);}
+
+
+
+export const getRefreshLinksUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/links/refresh`
+}
+
+/**
+ * @summary アイテムのリンクを GitHub から取り直し、一覧を返す
+ */
+export const refreshLinks = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<LinkRow[] | null> => {
+
+  return fetcher<LinkRow[] | null>(getRefreshLinksUrl(store,item),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getRemoveLinkUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/links/remove`
+}
+
+/**
+ * @summary リンクを外す(PR は解除の記録に入る)
+ */
+export const removeLink = async (store: string,
+    item: string,
+    linkRef: LinkRef, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getRemoveLinkUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(linkRef)
   }
 );}
 
@@ -2632,6 +2919,32 @@ export const listProjectItems = async (store: string,
     project: string, options?: Parameters<typeof fetcher>[1]): Promise<Item[] | null> => {
 
   return fetcher<Item[] | null>(getListProjectItemsUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListProjectLinksUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/links`
+}
+
+/**
+ * @summary プロジェクトの下のアイテムのリンクを、アイテムの番号順に返す
+ */
+export const listProjectLinks = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<ProjectLinkRow[] | null> => {
+
+  return fetcher<ProjectLinkRow[] | null>(getListProjectLinksUrl(store,project),
   {
     ...options,
     method: 'GET'

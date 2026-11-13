@@ -12,7 +12,7 @@ export interface ReflectionDeps {
   held(): boolean;
   // visible は、このタブが見えているか。
   visible(): boolean;
-  // apply は、溜めた種類の画面を読み直す。順は store、sync。
+  // apply は、溜めた種類の画面を読み直す。順は store、sync、github。
   apply(kinds: SyncEventKind[]): Promise<void>;
 }
 
@@ -29,7 +29,7 @@ export interface Reflection {
 const retryMs = 500;
 const firstBackoff = 1000;
 const maxBackoff = 10_000;
-const order: SyncEventKind[] = ["store", "sync"];
+const order: SyncEventKind[] = ["store", "sync", "github"];
 
 export function createReflection(deps: ReflectionDeps): Reflection {
   const pending = new Set<SyncEventKind>();

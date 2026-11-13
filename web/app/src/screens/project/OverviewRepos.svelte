@@ -2,8 +2,9 @@
   import { type ProjectView, readOnlyNote } from "@hedgehug/core";
   import { Button, IconButton, Input } from "@hedgehug/ui";
   import { projectEditor } from "../../projectEditor";
+  import ProjectLinks from "../github/ProjectLinks.svelte";
 
-  // 「リポジトリと PR」の区画の上段(02「概要の編集」「リポジトリの追加と削除」)。
+  // 「リポジトリと PR」の区画の上段(02「概要の編集」「リポジトリの追加と削除」)。下段の「PR と Issue」は ProjectLinks。
   interface Props {
     view: ProjectView;
   }
@@ -84,6 +85,7 @@
       {/each}
     </ul>
   {/if}
+  <ProjectLinks {view} />
 </section>
 
 <style>

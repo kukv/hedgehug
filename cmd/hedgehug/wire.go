@@ -70,6 +70,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		DeviceFlow:    gh,
 		Hosts:         file.Hosts(),
 		StoreGitHub:   noStoreGitHub{},
+		Checks:        db.Checks(),
 		Clock:         clock,
 		Sync:          svc,
 		Auto:          auto,

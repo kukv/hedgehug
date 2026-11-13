@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
+	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
 func TestFakeSecretsDeviceToken(t *testing.T) {
@@ -46,4 +48,30 @@ func TestFakeSecretsNoKeychainStillDeletes(t *testing.T) {
 	if err := s.DeleteDeviceToken(context.Background(), "taro"); err != nil {
 		t.Errorf("DeleteDeviceToken with NoKeychain = %v", err)
 	}
+}
+
+func TestGitHubLookup(t *testing.T) {
+	g := &apptest.GitHub{Users: map[string]string{"tok": "taro"}}
+	f := port.Found{
+		Kind: itemlink.PR, Repo: "org/web2", Number: 41,
+		Values: itemlink.Values{Title: "A", State: itemlink.Open, Review: itemlink.Pending}, Checks: itemlink.Success,
+	}
+	g.Put("Org/Web", f) // 改名前の名前で引いても、いまの名前で返る
+	got, err := g.Lookup(t.Context(), "tok", "org/web", 41)
+	if err != nil || got != f {
+		t.Errorf("Lookup = %+v, %v", got, err)
+	}
+	if _, err := g.Lookup(t.Context(), "tok", "org/web", 42); !ghcall.Is(err, ghcall.NotFound) {
+		t.Errorf("missing number: %v", err)
+	}
+	if _, err := g.Lookup(t.Context(), "bad", "org/web", 41); !ghcall.Is(err, ghcall.TokenRejected) {
+		t.Errorf("unknown token: %v", err)
+	}
+	if g.Lookups != 3 {
+		t.Errorf("Lookups = %d", g.Lookups)
+	}
+}
+
+func TestChecksContract(t *testing.T) {
+	apptest.RunChecksContract(t, func(*testing.T) port.Checks { return apptest.NewChecks() })
 }

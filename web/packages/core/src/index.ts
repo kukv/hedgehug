@@ -1,33 +1,5 @@
+export * from "./accountsIndex";
 export * from "./automation";
-export {
-  type AccountForm,
-  type AccountFormState,
-  createAccountForm,
-} from "./features/accounts/form";
-export {
-  type AccountList,
-  type AccountListState,
-  createAccountList,
-} from "./features/accounts/list";
-export {
-  createSignIn,
-  type SignIn,
-  type SignInDialogState,
-  type SignInEnd,
-} from "./features/accounts/signIn";
-export {
-  addedMessage,
-  askingText,
-  changedMessage,
-  deletedMessage,
-  deniedText,
-  expiredText,
-  methodChoices,
-  methodLine,
-  reauthedMessage,
-  signedInMessage,
-  waitingText,
-} from "./features/accounts/text";
 export {
   type Catalog,
   createCatalog,
@@ -230,21 +202,7 @@ export {
   workflowHelp,
   workflowRows,
 } from "./features/workspaces/workflow";
-export type {
-  Account,
-  AccountRow,
-  AccountValues,
-  AuthMethod,
-  SignInCode,
-  SignInFailure,
-  SignInPurpose,
-  SignInResult,
-  SignInStart,
-  SignInStatus,
-  SignInTarget,
-  TokenMethod,
-  TokenValues,
-} from "./model/account";
+export * from "./githubIndex";
 export { NotFound, Refused } from "./model/errors";
 export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";
@@ -281,7 +239,6 @@ export {
   stepParent,
 } from "./model/workspace";
 export * from "./notesIndex";
-export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";

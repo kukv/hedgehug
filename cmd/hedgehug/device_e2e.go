@@ -28,8 +28,8 @@ var (
 // e2eLogins は、gh CLI などのトークンで確かめられるログイン名とトークン。taro と、
 // 3 つの幅 × やり直し 2 回 × 2 人(gh-{幅}-{回数}-{a か b})。
 func e2eLogins() (tokens, users map[string]string) {
-	tokens = map[string]string{"taro": "e2e-gh-token"}
-	users = map[string]string{"e2e-gh-token": "taro"}
+	tokens = map[string]string{"taro": "e2e-gh-token", "e2e-bot": "e2e-bot-token"}
+	users = map[string]string{"e2e-gh-token": "taro", "e2e-bot-token": "e2e-bot"}
 	for _, width := range []string{"phone", "tablet", "desktop"} {
 		for _, retry := range []string{"0", "1"} {
 			for _, who := range []string{"a", "b"} {
@@ -131,4 +131,6 @@ func (d *e2eDevice) handler(token string, next http.Handler) http.Handler {
 }
 
 // wrap は、通しのテストがデバイスフローの答えを決める入口を足す。
-func wrap(token string, h http.Handler) http.Handler { return e2eDeviceFlow.handler(token, h) }
+func wrap(token string, h http.Handler) http.Handler {
+	return githubHandler(token, e2eDeviceFlow.handler(token, h))
+}

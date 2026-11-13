@@ -116,6 +116,8 @@ systems: []
 fields: {}
 relations: []
 estimate: null
+links: []
+links_off: []
 watchers: [taro]
 comments: []
 worklogs: []

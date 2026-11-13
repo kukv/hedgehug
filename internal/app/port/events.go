@@ -4,8 +4,9 @@ package port
 type EventKind string
 
 const (
-	EventStore EventKind = "store" // Store の中身が変わった(書き手を問わない)
-	EventSync  EventKind = "sync"  // Store の同期の状態が変わった
+	EventStore  EventKind = "store"  // Store の中身が変わった(書き手を問わない)
+	EventSync   EventKind = "sync"   // Store の同期の状態が変わった
+	EventGitHub EventKind = "github" // このマシンが読んだ GitHub の値(チェックの結果)が変わった
 )
 
 // Event は、画面に知らせる出来事。

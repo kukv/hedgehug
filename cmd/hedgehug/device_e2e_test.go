@@ -75,7 +75,7 @@ func TestE2EDeviceHandler(t *testing.T) {
 
 func TestE2ELoginsHaveTokens(t *testing.T) {
 	tokens, users := e2eLogins()
-	if users[tokens["gh-desktop-1-b"]] != "gh-desktop-1-b" || users[tokens["taro"]] != "taro" || len(tokens) != 13 {
+	if users[tokens["gh-desktop-1-b"]] != "gh-desktop-1-b" || users[tokens["taro"]] != "taro" || users[tokens["e2e-bot"]] != "e2e-bot" || len(tokens) != 14 {
 		t.Errorf("tokens %v users %v", tokens, users)
 	}
 }

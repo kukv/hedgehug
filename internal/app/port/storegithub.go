@@ -8,10 +8,11 @@ import (
 
 // StoreGitHubInfo は、Store の GitHub に関わる値(08「GitHub に使うアカウント」)。
 type StoreGitHubInfo struct {
-	ID      StoreID
-	Name    string
-	Account account.ID // 割り当てたアカウント。「なし」なら空
-	Remote  bool       // remote を持つか
+	ID       StoreID
+	Name     string
+	Account  account.ID // 割り当てたアカウント。「なし」なら空
+	Remote   bool       // remote を持つか
+	ReadOnly bool       // 閲覧のみの Store か(01。リンクの取り直しをしない。D3-14)
 }
 
 // StoreGitHub は、Store の一覧のうち GitHub に関わる値と、マシンの設定「ログイン名」の口。

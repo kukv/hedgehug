@@ -8,7 +8,8 @@
     waitingText,
   } from "@hedgehug/core";
   import { Button, Dialog } from "@hedgehug/ui";
-  import { signIn, toasts } from "../../wire";
+  import { signIn } from "../../accounts";
+  import { toasts } from "../../wire";
 
   // 「GitHub にサインイン」(07「デバイスフロー」)。許可を待つ問い合わせは core の signIn が行う。
   const dialog = signIn.state;

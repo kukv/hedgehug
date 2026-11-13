@@ -57,6 +57,8 @@ type itemYAML struct {
 	Fields    *yaml.Node  `yaml:"fields"`
 	Relations *yaml.Node  `yaml:"relations"`
 	Estimate  *float64    `yaml:"estimate"`
+	Links     *yaml.Node  `yaml:"links"`
+	LinksOff  *yaml.Node  `yaml:"links_off"`
 	Watchers  []string    `yaml:"watchers,flow"`
 	Comments  *yaml.Node  `yaml:"comments"`
 	Worklogs  *yaml.Node  `yaml:"worklogs"`
