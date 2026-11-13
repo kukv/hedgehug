@@ -168,6 +168,7 @@ func TestReleaseCards(t *testing.T) {
 		viewItem{itemC, 5, item.Task, "C", apptest.SampleStatusCancel, "", r1.ID, 1},
 		viewItem{itemD, 6, item.Step, "D", apptest.SampleStatusTodo, "", r1.ID, -1}, // あり得ない値
 		viewItem{itemE, 7, item.Bug, "E", apptest.SampleStatusInProgress, "", r3.ID, -1},
+		viewItem{itemX, 8, item.Task, "F", apptest.SampleStatusInProgress, "", r1.ID, -1},
 	)
 	cards, err := svc.ReleaseCards(ctx, store, apptest.SampleWorkspace)
 	if err != nil {
@@ -177,10 +178,10 @@ func TestReleaseCards(t *testing.T) {
 		t.Fatalf("cards = %+v", cards)
 	}
 	c := cards[0]
-	if c.Target != 1 || c.Done != 1 || c.Undone != 0 {
+	if c.Target != 2 || c.Done != 1 || c.Undone != 1 {
 		t.Errorf("counts = %d %d %d", c.Target, c.Done, c.Undone)
 	}
-	if got := rowIDs(c.Items); !sameIDs(got, itemA, itemB, itemC) {
+	if got := rowIDs(c.Items); !sameIDs(got, itemA, itemB, itemC, itemX) {
 		t.Errorf("Items = %v", got)
 	}
 	if cards[1].Target != 0 || len(cards[1].Items) != 0 {
@@ -235,5 +236,43 @@ func TestOverviewNoActive(t *testing.T) {
 	}
 	if ov.Active != nil || len(ov.Sprints) != 0 || ov.Defaults.Name != "Sprint 1" || ov.Defaults.Start != ov.Today {
 		t.Errorf("Overview = %+v", ov)
+	}
+}
+
+// 別のワークスペースへ移ったアイテムは、参照がこのワークスペースのスプリント・リリースを指したままでも、カードに入らない。
+func TestCardsExcludeMovedItems(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	s1, _ := activeSprint(t, svc)
+	r1, err := svc.CreateRelease(ctx, store, apptest.SampleWorkspace, planning.ReleaseInput{Name: "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherWorkspace(t, svc)
+	addViewItems(t, svc, viewItem{itemA, 3, item.Task, "A", apptest.SampleStatusTodo, s1.ID, r1.ID, 1})
+	moved := item.Item{
+		ID:    itemB,
+		Place: item.Place{Workspace: other, Project: apptest.SampleProject, Number: 1},
+		Kind:  item.Task, Rank: "B", Title: "moved", Status: apptest.SampleStatusTodo, Sprint: s1.ID, Release: r1.ID,
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "アイテムを作成"}
+	if err := svc.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(itemB, item.Create(moved))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sc, err := svc.SprintCards(ctx, store, apptest.SampleWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rowIDs(sc[0].Items); !sameIDs(got, itemA) || sc[0].Total.Count != 1 {
+		t.Errorf("スプリントのカード = %v, %+v", got, sc[0].Total)
+	}
+	rc, err := svc.ReleaseCards(ctx, store, apptest.SampleWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rowIDs(rc[0].Items); !sameIDs(got, itemA) || rc[0].Target != 1 {
+		t.Errorf("リリースのカード = %v, %d", got, rc[0].Target)
 	}
 }
