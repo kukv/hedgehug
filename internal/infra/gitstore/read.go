@@ -27,6 +27,9 @@ type view struct {
 	// base は、この view で読んだ作業ツリーのログ。ロックを持っている 1 回の Read/Write のあいだ、
 	// 作業ツリーは変わらないので、プロジェクトごとに全アイテムを読む List で読み直さない。pending は入れない。
 	base map[change.Ref][]change.Record
+	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
+	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す。
+	places map[item.ID]project.ID
 }
 
 // log は、呼び出し側が変えても、覚えた作業ツリーの行(base)とまだ書いていない行(pending)が
@@ -166,9 +169,28 @@ func (r items) Get(id item.ID) (item.Item, error) {
 }
 
 func (r items) List(p project.ID) ([]item.Item, error) {
-	out, err := list(r.v, change.KindItem, r.Get, func(it item.Item) bool { return it.Place.Project == p })
+	out, err := list(r.v, change.KindItem, r.inProject(p), func(it item.Item) bool { return it.Place.Project == p })
 	slices.SortFunc(out, func(a, b item.Item) int { return cmp.Compare(a.Place.Number, b.Place.Number) })
 	return out, err
+}
+
+// inProject は Get と同じだが、この view で p と別のプロジェクトにあると分かっているアイテムは、ログから
+// 作らずに port.ErrNotFound(list は飛ばす)を返す。作ったアイテムのプロジェクトは覚える。
+func (r items) inProject(p project.ID) func(item.ID) (item.Item, error) {
+	return func(id item.ID) (item.Item, error) {
+		if q, ok := r.v.places[id]; ok && q != p {
+			return item.Item{}, port.ErrNotFound
+		}
+		it, err := r.Get(id)
+		if err != nil {
+			return it, err
+		}
+		if r.v.places == nil {
+			r.v.places = map[item.ID]project.ID{}
+		}
+		r.v.places[id] = it.Place.Project
+		return it, nil
+	}
 }
 
 // list は、kind のすべてのうち keep に合うものを返す。作成の行がないものは飛ばす。
