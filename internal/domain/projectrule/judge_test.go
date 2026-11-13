@@ -181,7 +181,7 @@ func TestUsableTemplatesAndDefault(t *testing.T) {
 		t.Fatal("使えない既定はワークスペースの既定も使えず、なし")
 	}
 	r.Templates = nil
-	if _, ok := projectrule.DefaultTemplate(s, r, "Task"); ok {
+	if id, ok := projectrule.DefaultTemplate(s, r, "Task"); ok || id != "" {
 		t.Fatal("使えない既定は、ワークスペースの既定があってもなし")
 	}
 	r.TemplateDefaults = nil

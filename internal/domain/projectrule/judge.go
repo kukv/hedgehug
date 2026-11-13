@@ -128,7 +128,10 @@ func DefaultTemplate(s workspace.Settings, r Rules, kind string) (change.ID, boo
 	case own == None:
 		return "", false
 	case own != "":
-		return change.ID(own), has(change.ID(own))
+		if has(change.ID(own)) {
+			return change.ID(own), true
+		}
+		return "", false
 	}
 	if id := s.TemplateDefaults[kind]; id != "" && has(id) {
 		return id, true
