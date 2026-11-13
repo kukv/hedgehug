@@ -8,6 +8,7 @@ type field struct {
 }
 
 // drafts は、fields から set の行を作る。fresh なら作成で、すべての項目を from: null で書く。ほかは変わった項目だけ。
+// from/to の != の比べは、項目がどれも比べられる文字列の型であることに頼る。
 func drafts(prefix string, id change.ID, fresh bool, fields []field) []change.Draft {
 	var ds []change.Draft
 	for _, f := range fields {

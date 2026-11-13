@@ -117,9 +117,9 @@ func TestFromLogClose(t *testing.T) {
 	c2 := planning.Confirmed{Committed: planning.Totals{Points: 9, Count: 4}}
 	a := stampOp(log, "oa", planning.CloseDraft("S1", c))
 	b := stampOp(log, "ob", planning.CloseDraft("S1", c2))
-	later := b[len(log)]
-	later.At = later.At.Add(time.Hour)
-	merged := append(append([]change.Record{}, a...), later)
+	a[len(log)].At = time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)
+	b[len(log)].At = time.Date(2026, 11, 14, 11, 0, 0, 0, time.UTC)
+	merged := append(append([]change.Record{}, a...), b[len(log)])
 	if got := planning.FromLog(merged).Sprints[0].Confirmed; got == nil || *got != c2 {
 		t.Fatalf("あとの行の値: %+v", got)
 	}

@@ -79,7 +79,6 @@ type Plan struct {
 // FromLog は、ワークスペースのログのスプリントとリリース。名前のないものは除く。
 func FromLog(log []change.Record) Plan {
 	values := change.Resolve(log, change.Options{}).Values
-	deleted := deletions(log)
 	sprints := map[change.ID]*Sprint{}
 	releases := map[change.ID]*Release{}
 	for f, raw := range values {
@@ -102,7 +101,7 @@ func FromLog(log []change.Record) Plan {
 		if s.Name == "" {
 			continue
 		}
-		s.Deleted = deleted[sprintPrefix+string(id)]
+		s.Deleted = deletionOf(log, sprintPrefix+string(id))
 		s.Confirmed = confirmedOf(log, id)
 		p.Sprints = append(p.Sprints, *s)
 	}
@@ -110,7 +109,7 @@ func FromLog(log []change.Record) Plan {
 		if r.Name == "" {
 			continue
 		}
-		r.Deleted = deleted[releasePrefix+string(id)]
+		r.Deleted = deletionOf(log, releasePrefix+string(id))
 		p.Releases = append(p.Releases, *r)
 	}
 	slices.SortFunc(p.Sprints, func(a, b Sprint) int { return strings.Compare(string(a.ID), string(b.ID)) })
@@ -154,44 +153,14 @@ func setRelease(r *Release, field string, raw json.RawMessage) {
 	}
 }
 
-// deletions は、取り消されていない削除の行から、f(sprints/<ID>・releases/<ID>)ごとの削除の印を作る。
-// 複数あれば、change.Resolve と同じ順(at → by → id)で最もあとの行を取る。
-func deletions(log []change.Record) map[string]*change.Deletion {
-	restored := change.Restored(log)
-	last := map[string]change.Record{}
-	for _, r := range log {
-		if r.T != change.Delete || restored(r) || !isEntity(r.F) {
-			continue
-		}
-		if prev, ok := last[r.F]; !ok || later(r, prev) {
-			last[r.F] = r
-		}
+// deletionOf は、f(sprints/<ID>・releases/<ID>)の削除の印。
+// NewDelete は root を書かないが、スプリント・リリースの削除はどれも利用者が選んだもの(F1-14)なので Root は true。
+func deletionOf(log []change.Record, f string) *change.Deletion {
+	d := change.DeletionOfField(log, f)
+	if d != nil {
+		d.Root = true
 	}
-	out := make(map[string]*change.Deletion, len(last))
-	for f, r := range last {
-		out[f] = &change.Deletion{Op: r.Op, At: r.At, Root: true}
-	}
-	return out
-}
-
-func isEntity(f string) bool {
-	for _, p := range []string{sprintPrefix, releasePrefix} {
-		if id, ok := strings.CutPrefix(f, p); ok {
-			return id != "" && !strings.Contains(id, "/")
-		}
-	}
-	return false
-}
-
-// later は、a が b よりあとか。at(UTC)、by(小文字)、id の順に比べる(change.Resolve と同じ)。
-func later(a, b change.Record) bool {
-	if !a.At.Equal(b.At) {
-		return a.At.After(b.At)
-	}
-	if la, lb := strings.ToLower(a.By), strings.ToLower(b.By); la != lb {
-		return la > lb
-	}
-	return a.ID > b.ID
+	return d
 }
 
 // confirmedOf は、スプリント id の完了の確定値。同時に 2 回完了していれば、change.Current が 1 つに決める。
