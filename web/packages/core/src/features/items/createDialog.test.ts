@@ -177,6 +177,27 @@ describe("createItemDialog", () => {
     });
   });
 
+  it("keeps the kind changed while the projects reload", async () => {
+    const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
+    await dialog.open();
+    const { wait, release } = gate();
+    const list = items.list.bind(items);
+    items.list = async (...a) => {
+      await wait;
+      return list(...a);
+    };
+    const switching = dialog.update({ projectId: "S1-P2" });
+    await flush();
+    await dialog.update({ kind: "Step" });
+    release();
+    await switching;
+    const s = get(dialog.state);
+    expect(s?.form).toMatchObject({ projectId: "S1-P2", kind: "Step", parentId: null });
+    expect(s?.parentMissing).toBe(
+      "このプロジェクトには Story・Task・Bug がありません。先に作ってください",
+    );
+  });
+
   it("stays closed when closed while the projects reload", async () => {
     const { dialog, items } = await setup({ workspaceId: "S1-W1", projectId: "S1-P1" });
     await dialog.open();

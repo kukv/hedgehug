@@ -127,6 +127,7 @@ describe("create dialog templates", () => {
     await dialog.update({ kind: "Bug" });
     await reloading;
     const s = get(dialog.state);
+    expect(s?.form).toMatchObject({ kind: "Bug", templateId: "B1" });
     const usable = (s?.templates ?? []).map((o) => o.value);
     expect(s?.form.templateId === "" || usable.includes(s?.form.templateId ?? "")).toBe(true);
     expect(
