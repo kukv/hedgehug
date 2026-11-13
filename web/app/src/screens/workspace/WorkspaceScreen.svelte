@@ -80,6 +80,10 @@
   }
   const closeSprint = () => (dialog = null);
   const shown = $derived(dialog && dialog.wid === wid && tab === "sprints" ? dialog : null);
+  // タブやワークスペースを離れたら閉じる(戻ったときに古いカードで出し直さない)。
+  $effect(() => {
+    if (dialog && !shown) dialog = null;
+  });
   const card = $derived(shown?.card ?? null);
 </script>
 
