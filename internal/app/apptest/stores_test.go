@@ -1,6 +1,7 @@
 package apptest_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -202,6 +203,54 @@ func TestFakeAddPurged(t *testing.T) {
 		return nil
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSampleMobileAndTeamDoNotShareInternalIDsWithTheSample(t *testing.T) {
+	ctx := t.Context()
+	s := apptest.NewStores(apptest.NewClock(time.Now()), apptest.NewIDs())
+	s.AddStore("A")
+	s.AddStore("B")
+	if err := errors.Join(apptest.Sample(ctx, s, "A"), apptest.SampleMobile(ctx, s, "A"), apptest.SampleTeam(ctx, s, "B")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Read(ctx, "A", func(r port.Reader) error {
+		ws, err := r.Workspaces().List()
+		if err != nil || len(ws) != 2 {
+			t.Errorf("A のワークスペース = %+v, %v", ws, err)
+		}
+		mobile, err := r.Workspaces().Get(apptest.SampleMobileWorkspace)
+		if err != nil || mobile.Name != "Mobile" || mobile.Prefix != "MB" {
+			t.Errorf("Mobile = %+v, %v", mobile, err)
+		}
+		epic, err := r.Items().Get(apptest.SampleMobileEpic)
+		if err != nil || epic.Place.Number != 1 || epic.Place.Project != apptest.SampleMobileProject || epic.Title != "iOS" {
+			t.Errorf("MB-1 = %+v, %v", epic, err)
+		}
+		st, err := r.Workspaces().Settings(apptest.SampleMobileWorkspace)
+		if err != nil || st.Statuses[0].ID == apptest.SampleStatusTodo || epic.Status != st.Statuses[0].ID {
+			t.Errorf("値の内部 ID が Web と同じか、Epic のステータスが Mobile の値でない: %+v, %v", st.Statuses, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	checkSampleTeam(t, s, "B")
+}
+
+// checkSampleTeam は、Store id の SampleTeam を確かめる。
+func checkSampleTeam(t *testing.T, s port.Stores, id port.StoreID) {
+	t.Helper()
+	if err := s.Read(t.Context(), id, func(r port.Reader) error {
+		ms, _ := r.Members().List()
+		team, err := r.Workspaces().Get(apptest.SampleTeamWorkspace)
+		epic, _ := r.Items().Get(apptest.SampleTeamEpic)
+		if len(ms) != 2 || err != nil || team.Prefix != "TM" || epic.Place.Number != 1 || epic.Title != "チーム運営" {
+			t.Errorf("Team: %+v %+v %+v, %v", ms, team, epic, err)
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 }

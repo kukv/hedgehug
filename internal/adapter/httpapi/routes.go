@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/transfers"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
 	appcomments "github.com/kukv/hedgehug/internal/app/comments"
@@ -30,6 +31,7 @@ import (
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
+	apptransfers "github.com/kukv/hedgehug/internal/app/transfers"
 	appwatching "github.com/kukv/hedgehug/internal/app/watching"
 	appworklogs "github.com/kukv/hedgehug/internal/app/worklogs"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
@@ -69,6 +71,11 @@ type Deps struct {
 	Events *events.Hub // nil なら NewAPI が作る(知らせる者がいない)
 	// GitHubSession は、GitHub の API と、同期・リンクの操作のトークンの入口で共用する Session。nil なら githubServices が作る。
 	GitHubSession *ghapp.Session
+
+	// アイテムの移動(A5a)。Delivery は、cmd が syncing.Service を渡す(app の機能どうしを import しないため)。
+	// SyncTargets は、移動先・移動元の remote の有無と URL を知るため。
+	Delivery    apptransfers.Delivery
+	SyncTargets port.SyncTargets
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -101,6 +108,10 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		Worklogs:     appworklogs.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock},
 		Relations:    apprelations.Service{Stores: deps.Stores, Identity: deps.Identity},
 		History:      apphistory.Service{Stores: deps.Stores, StoreList: deps.StoreList, Clock: deps.Clock},
+	})
+	transfers.Register(api, apptransfers.Service{
+		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Delivery: deps.Delivery,
+		Identity: deps.Identity, Clock: deps.Clock,
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))

@@ -34,11 +34,33 @@ const (
 	SampleSystemWeb        change.ID = "01SAMPLEVAL000000000000011"
 )
 
-func sampleValueIDs() func() change.ID {
+// Mobile・Team のサンプルの内部 ID。Sample と重ならない(別の Store へ移すとき、同じ内部 ID があると写せないため)。
+const (
+	SampleMobileWorkspace workspace.ID = "01SAMPLEWS0000000000000002"
+	SampleMobileProject   project.ID   = "01SAMPLEPR0000000000000002"
+	SampleMobileEpic      item.ID      = "01SAMPLEIT0000000000000003"
+	SampleTeamWorkspace   workspace.ID = "01SAMPLEWS0000000000000003"
+	SampleTeamProject     project.ID   = "01SAMPLEPR0000000000000003"
+	SampleTeamEpic        item.ID      = "01SAMPLEIT0000000000000004"
+)
+
+// 値の内部 ID の接頭辞(続けて 15 桁の連番)。ワークスペースごとに分ける。
+const (
+	sampleValues       = "01SAMPLEVAL"
+	sampleMobileValues = "01SAMPLEMBV"
+	sampleTeamValues   = "01SAMPLETMV"
+)
+
+// valueID は、値の内部 ID の接頭辞 prefix の n 番目(DefaultSettings が振る順。1 は Todo、8 は優先度 Medium)。
+func valueID(prefix string, n int) change.ID {
+	return change.ID(fmt.Sprintf("%s%015d", prefix, n))
+}
+
+func valueIDs(prefix string) func() change.ID {
 	n := 0
 	return func() change.ID {
 		n++
-		return change.ID(fmt.Sprintf("01SAMPLEVAL%015d", n))
+		return valueID(prefix, n)
 	}
 }
 
@@ -52,7 +74,7 @@ func Sample(ctx context.Context, s port.Stores, id port.StoreID) error {
 	task := item.Item{ID: SampleTask, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Parent: &parent, Number: 2}, Kind: item.Task, Rank: rank.First, Title: "ログイン画面を作る", Watchers: []string{"taro"}, Status: SampleStatusTodo, Priority: SamplePriorityMedium}
 	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
 	return s.Write(ctx, id, op, func(tx port.Tx) error {
-		d, err := workspace.CreateWithSettings(ws, workspace.DefaultSettings(sampleValueIDs()))
+		d, err := workspace.CreateWithSettings(ws, workspace.DefaultSettings(valueIDs(sampleValues)))
 		if err != nil {
 			return err
 		}
@@ -67,6 +89,60 @@ func Sample(ctx context.Context, s port.Stores, id port.StoreID) error {
 			tx.WriteItems().Append(task.ID, item.Create(task)),
 		)
 	})
+}
+
+// SampleMobile は、Sample のあとの Store id に、ワークスペース「Mobile」(MB)、プロジェクト MB-P1「アプリ」、
+// Epic MB-1「iOS」を、1 回の保存で足す。メンバーは Sample のもの。
+func SampleMobile(ctx context.Context, s port.Stores, id port.StoreID) error {
+	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
+	return s.Write(ctx, id, op, func(tx port.Tx) error {
+		return writeSampleWorkspace(tx, sampleWorkspace{
+			ws:      workspace.Workspace{ID: SampleMobileWorkspace, Name: "Mobile", Prefix: "MB"},
+			project: SampleMobileProject, projectTitle: "アプリ", epic: SampleMobileEpic, epicTitle: "iOS", values: sampleMobileValues,
+		})
+	})
+}
+
+// SampleTeam は、空の Store id に、メンバー 2 人(taro・hanako)、ワークスペース「Team」(TM)、プロジェクト
+// TM-P1「運営」、Epic TM-1「チーム運営」を、1 回の保存で書く。
+func SampleTeam(ctx context.Context, s port.Stores, id port.StoreID) error {
+	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
+	return s.Write(ctx, id, op, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteMembers().Append(member.Init(), member.Join("taro"), member.Join("hanako")),
+			writeSampleWorkspace(tx, sampleWorkspace{
+				ws:      workspace.Workspace{ID: SampleTeamWorkspace, Name: "Team", Prefix: "TM"},
+				project: SampleTeamProject, projectTitle: "運営", epic: SampleTeamEpic, epicTitle: "チーム運営", values: sampleTeamValues,
+			}),
+		)
+	})
+}
+
+// sampleWorkspace は、ワークスペースと、その中のプロジェクト(番号 1)と Epic(番号 1)。values は値の内部 ID の接頭辞。
+type sampleWorkspace struct {
+	ws                      workspace.Workspace
+	project                 project.ID
+	projectTitle, epicTitle string
+	epic                    item.ID
+	values                  string
+}
+
+// writeSampleWorkspace は、w を既定の設定で書く。Epic は Todo・優先度 Medium で、taro がウォッチする。
+func writeSampleWorkspace(tx port.Tx, w sampleWorkspace) error {
+	d, err := workspace.CreateWithSettings(w.ws, workspace.DefaultSettings(valueIDs(w.values)))
+	if err != nil {
+		return err
+	}
+	pr := project.Project{ID: w.project, Place: project.Place{Workspace: w.ws.ID, Number: 1}, Rank: "V", Title: w.projectTitle, Owner: "taro", Status: project.Todo}
+	epic := item.Item{
+		ID: w.epic, Place: item.Place{Workspace: w.ws.ID, Project: pr.ID, Number: 1}, Kind: item.Epic, Rank: rank.First, Title: w.epicTitle,
+		Watchers: []string{"taro"}, Status: valueID(w.values, 1), Priority: valueID(w.values, 8),
+	}
+	return errors.Join(
+		tx.WriteWorkspaces().Append(w.ws.ID, d, numbering.Draft(numbering.Projects, 1), numbering.Draft(numbering.Items, 1)),
+		tx.WriteProjects().Append(pr.ID, project.Create(pr)),
+		tx.WriteItems().Append(epic.ID, item.Create(epic)),
+	)
 }
 
 // DeleteItems は、アイテム root と、その下の below を、1 回の保存で削除済みにする(テスト用。A4b)。

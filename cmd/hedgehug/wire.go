@@ -55,12 +55,15 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Replicator: gitstore.NewReplicator(stores), State: db.SyncState(), Events: hub, Clock: clock,
 	}
 	auto := syncing.NewAuto(svc, file.SyncSettings())
+	notified := syncing.NotifyWrites(stores, auto.Wrote)
+	// 移動先への保存(Deliver)も、ほかの保存と同じく自動の同期と画面に知らせる
+	svc.Stores = notified
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
 	go auto.Run(ctx)
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	// state.db は閉じない。プロセスが終わるときに閉じる。サーバーを止める 5 秒のあいだも、動いている同期が記録できるようにするため。
 	deps := httpapi.Deps{
-		Stores:        syncing.NotifyWrites(stores, auto.Wrote),
+		Stores:        notified,
 		IDs:           ids,
 		Identity:      noIdentity{},
 		Inbox:         noInbox{},
@@ -78,6 +81,8 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Auto:          auto,
 		Events:        hub,
 		GitHubSession: session,
+		Delivery:      svc,
+		SyncTargets:   svc.Targets,
 	}
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)

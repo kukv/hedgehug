@@ -21,10 +21,12 @@ import (
 	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
-// e2e 用のビルドの Store の ID。どちらにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。
+// e2e 用のビルドの Store の ID。どれにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。teamStore は
+// remote のない書き込める Store(別の Store への移動を通しのテストで流すため。A5a-20)。
 const (
 	e2eStore      = "01E2ESTORE0000000000000001"
 	readonlyStore = "01E2ESTORE0000000000000002"
+	teamStore     = "01E2ESTORE0000000000000003"
 	// e2eAccount は、最初から入っているアカウント(login e2e-bot)。2 つの Store に割り当て、リンクの取り直しが GitHub に届くようにする。
 	e2eAccount = "e2e-account"
 )
@@ -41,12 +43,9 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		return httpapi.Deps{}, err
 	}
 	ids := apptest.NewIDs()
-	stores := apptest.NewStores(apptest.NewClock(time.Now()), ids)
-	for _, id := range []port.StoreID{e2eStore, readonlyStore} {
-		stores.AddStore(id)
-		if err := apptest.Sample(ctx, stores, id); err != nil {
-			return httpapi.Deps{}, err
-		}
+	stores, err := e2eStores(ctx, ids)
+	if err != nil {
+		return httpapi.Deps{}, err
 	}
 	accounts := apptest.NewAccounts()
 	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
@@ -58,7 +57,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	}
 	hub := events.NewHub()
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
-	syncSvc := e2eSync(hub)
+	syncSvc := e2eSync(hub, stores)
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
 	return e2eWithLinks(httpapi.Deps{
@@ -69,6 +68,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
+			{ID: teamStore, Name: "team", Color: "green"},
 		}},
 		Accounts:    accounts,
 		Checks:      apptest.NewChecks(),
@@ -81,22 +81,48 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
 			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
 		}},
-		Clock:  apptest.NewClock(time.Now()),
-		Sync:   syncSvc,
-		Auto:   auto,
-		Events: hub,
+		Clock:       apptest.NewClock(time.Now()),
+		Sync:        syncSvc,
+		Auto:        auto,
+		Events:      hub,
+		Delivery:    syncSvc,
+		SyncTargets: syncSvc.Targets,
 	}), nil
 }
 
-// e2eSync は、2 つの Store を偽の remote と同期する(手での同期の確かめに使う)。
-func e2eSync(hub *events.Hub) *syncing.Service {
+// e2eStores は、e2e と readonly の Store にサンプル(e2e にはワークスペース Mobile も)、team の Store に Team の
+// サンプルを入れる。
+func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
+	stores := apptest.NewStores(apptest.NewClock(time.Now()), ids)
+	for _, id := range []port.StoreID{e2eStore, readonlyStore, teamStore} {
+		stores.AddStore(id)
+	}
+	for _, f := range []func() error{
+		func() error { return apptest.Sample(ctx, stores, e2eStore) },
+		func() error { return apptest.SampleMobile(ctx, stores, e2eStore) },
+		func() error { return apptest.Sample(ctx, stores, readonlyStore) },
+		func() error { return apptest.SampleTeam(ctx, stores, teamStore) },
+	} {
+		if err := f(); err != nil {
+			return nil, err
+		}
+	}
+	return stores, nil
+}
+
+// e2eSync は、e2e と readonly の Store を偽の remote と同期する(手での同期の確かめに使う)。team の Store は remote が
+// ない。移動先への保存(Deliver)は stores に書く(remote があれば偽の Replicator が stores に書く)。stores は、ほかの機能と
+// 同じく NotifyWrites で包まない(e2e のビルドは自動の同期を動かさず、画面への知らせは Watch が出す)。
+func e2eSync(hub *events.Hub, stores *apptest.Stores) *syncing.Service {
 	return &syncing.Service{
 		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: e2eAccount},
 			{ID: readonlyStore, Name: "readonly", Remote: "https://example.invalid/readonly.git", Account: e2eAccount, ReadOnly: true},
+			{ID: teamStore, Name: "team"},
 		}},
 		Tokens:     &apptest.SyncTokens{Tokens: map[port.StoreID]string{e2eStore: "e2e-gh-token", readonlyStore: "e2e-gh-token"}},
-		Replicator: &apptest.Replicator{},
+		Replicator: &apptest.Replicator{Stores: stores},
+		Stores:     stores,
 		State:      apptest.NewSyncState(),
 		Events:     hub,
 		Clock:      apptest.NewClock(time.Now()),
