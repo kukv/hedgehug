@@ -1,5 +1,6 @@
 export { createAccountsPort } from "./accounts";
 export { createCatalogPort } from "./catalog";
+export type { Restored } from "./fetcher";
 export { ApiError, onRestored, setToken } from "./fetcher";
 export { createItemActionsPort } from "./itemActions";
 export { createItemsPort } from "./items";
