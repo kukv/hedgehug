@@ -72,6 +72,24 @@ func TestScanByNewNameKeepsOldLinks(t *testing.T) {
 	}
 }
 
+// 同じ読み取りで知った改名も使う: 取り直し(web#7 → site#7)と site の探索が同じ ReadOnce でも、解除した web#5 を
+// site#5 として付けない(改名の対応は、読み取りのあとで読む)。
+func TestReadOnceUsesRenameLearnedInSamePass(t *testing.T) {
+	f := newScanRead(t)
+	f.addRepo(t, linkStore, "example-org/site")
+	f.linkIn(t, linkStore, linkEpic, readPR("example-org/web", 5, itemlink.Open))
+	if err := f.links.Remove(t.Context(), linkStore, linkEpic, itemlink.Ref{Kind: itemlink.PR, Repo: "example-org/web", Number: 5}); err != nil {
+		t.Fatal(err)
+	}
+	f.linkIn(t, linkStore, linkEpic, readPR("example-org/web", 7, itemlink.Open))
+	f.gh.Put("example-org/web", readPR("example-org/site", 7, itemlink.Open))
+	f.gh.PutPull("example-org/site", scanPull(5, itemlink.Open, "hh/WEB-1", time.Date(2026, 11, 13, 8, 30, 0, 0, time.UTC)))
+	f.read(t, every, false)
+	if got := displays(f.list(t, linkStore, linkEpic)); !slices.Equal(got, []string{"pr example-org/site#7 PR open"}) {
+		t.Errorf("rows = %q", got)
+	}
+}
+
 // 改名を知らないとき(対応がない)は、解除した名前と違う名前の PR として付ける。
 func TestScanWithoutRenameLinks(t *testing.T) {
 	f := newScanRead(t)
