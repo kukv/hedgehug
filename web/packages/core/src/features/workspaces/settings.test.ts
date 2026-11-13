@@ -61,6 +61,22 @@ describe("workspace settings", () => {
     expect(get(screen.state)?.tab).toBe("statuses");
   });
 
+  it("reads the automation only while the 自動化 sub tab is open", async () => {
+    const { screen, port } = await setup();
+    await screen.open("S1", "S1-W1");
+    expect(get(screen.state)?.automation).toBeNull();
+    expect(port.calls).not.toContain("automation");
+    screen.selectTab("automation");
+    await vi.waitFor(() =>
+      expect(get(screen.state)?.automation).toEqual({ rules: [], recent: [] }),
+    );
+    expect(port.calls.filter((c) => c === "automation")).toHaveLength(1);
+    screen.selectTab("statuses");
+    await screen.reload();
+    expect(get(screen.state)?.automation).toBeNull();
+    expect(port.calls.filter((c) => c === "automation")).toHaveLength(1);
+  });
+
   it("opens on 一般 and keeps the sub tab while the workspace stays", async () => {
     const { screen } = await setup();
     await screen.open("S1", "S1-W1");

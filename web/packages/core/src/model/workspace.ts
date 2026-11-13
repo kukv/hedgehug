@@ -116,3 +116,41 @@ export interface SaveAsTemplateInput {
   title: string;
   structure: boolean;
 }
+
+export type AutomationTrigger =
+  | "pr_open"
+  | "review_requested"
+  | "pr_merged"
+  | "issue_closed"
+  | "status"
+  | "steps_done";
+export type AutomationAction = "status" | "assignee";
+
+export interface AutomationRuleInput {
+  name: string;
+  trigger: AutomationTrigger;
+  // きっかけが status のときのステータスの ID。ほかは空
+  triggerStatus: string;
+  // きっかけが pr_merged のときの条件
+  allMerged: boolean;
+  action: AutomationAction;
+  // ステータスの ID、ログイン名、または @none(未割り当て)
+  value: string;
+}
+
+export interface AutomationRule extends AutomationRuleInput {
+  id: string;
+  enabled: boolean;
+}
+
+export interface AutomationRun {
+  at: Date;
+  item: string;
+  display: string;
+  text: string;
+}
+
+export interface WorkspaceAutomation {
+  rules: AutomationRule[];
+  recent: AutomationRun[];
+}
