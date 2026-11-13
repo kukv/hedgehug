@@ -13,12 +13,20 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// cascadeDeleted は、削除済みの親の下に残ったアイテムを、親の削除の op で削除済みにする(決定 C3a-10・C3a-11)。
-// 1 件ごとに 1 回保存する。子の子は、読み直した次の回で見つかるので、なくなるまで繰り返す。
+// cascade は、削除済みに入れるプロジェクトかアイテム 1 つと、削除に使う op(親の削除の op)と、画面の ID。
+type cascade struct {
+	ref     change.Ref
+	op      change.ID
+	display string
+}
+
+// cascadeDeleted は、削除済みの親の下に残ったプロジェクトとアイテムを、親の削除の op で削除済みにする
+// (決定 C3a-10・C3a-11・B5b-6)。1 件ごとに 1 回保存し、プロジェクトを先に書く。子の子(削除済みにした
+// プロジェクトの下のアイテムを含む)は、読み直した次の回で見つかるので、なくなるまで繰り返す。
 func cascadeDeleted(ctx context.Context, w port.RepairWriter) error {
-	var prev []repair.Cascade
+	var prev []cascade
 	for {
-		cs, display, err := readCascades(w)
+		cs, err := readCascades(w)
 		if err != nil || len(cs) == 0 {
 			return err
 		}
@@ -30,9 +38,9 @@ func cascadeDeleted(ctx context.Context, w port.RepairWriter) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			op := port.Operation{Actor: syncActor, Summary: display[c.Child] + " を削除"}
+			op := port.Operation{Actor: syncActor, Summary: c.display + " を削除"}
 			err := w.Write(op, func(tx port.Tx) error {
-				return tx.WriteItems().Append(c.Child, change.NewDeleteEntity(false).InOp(c.Op))
+				return appendTo(tx, c.ref, change.NewDeleteEntity(false).InOp(c.op))
 			})
 			if err != nil {
 				return err
@@ -41,16 +49,16 @@ func cascadeDeleted(ctx context.Context, w port.RepairWriter) error {
 	}
 }
 
-// readCascades は、いまの Store から、削除に入れるアイテムと、アイテムの画面の ID を読む。
-func readCascades(w port.RepairWriter) ([]repair.Cascade, map[item.ID]string, error) {
-	var items []item.Item
-	var projects []project.Project
-	display := map[item.ID]string{}
+// readCascades は、いまの Store から、削除に入れるプロジェクト(先)とアイテム(後)を読む。
+func readCascades(w port.RepairWriter) ([]cascade, error) {
+	var out []cascade
 	err := w.Read(func(r port.Reader) error {
 		wss, err := r.Workspaces().List()
 		if err != nil {
 			return err
 		}
+		var projects []project.Project
+		var items []item.Item
 		prefixes := map[workspace.ID]string{}
 		for _, ws := range wss {
 			prefixes[ws.ID] = ws.Prefix
@@ -65,12 +73,32 @@ func readCascades(w port.RepairWriter) ([]repair.Cascade, map[item.ID]string, er
 			}
 			items = append(items, its...)
 		}
-		for _, it := range items {
-			display[it.ID] = it.DisplayID(prefixes[it.Place.Workspace])
-		}
+		out = cascadesOf(wss, projects, items, prefixes)
 		return nil
 	})
-	return repair.Cascades(items, projects), display, err
+	return out, err
+}
+
+// cascadesOf は、repair の ProjectCascades と Cascades を、画面の ID を付けて 1 つの並びにする。
+func cascadesOf(wss []workspace.Workspace, projects []project.Project, items []item.Item, prefixes map[workspace.ID]string) []cascade {
+	var out []cascade
+	byProject := map[project.ID]project.Project{}
+	for _, p := range projects {
+		byProject[p.ID] = p
+	}
+	for _, c := range repair.ProjectCascades(wss, projects) {
+		p := byProject[c.Project]
+		out = append(out, cascade{ref: change.Ref{Kind: change.KindProject, ID: p.ID}, op: c.Op, display: p.DisplayID(prefixes[p.Place.Workspace])})
+	}
+	byItem := map[item.ID]item.Item{}
+	for _, it := range items {
+		byItem[it.ID] = it
+	}
+	for _, c := range repair.Cascades(items, projects) {
+		it := byItem[c.Child]
+		out = append(out, cascade{ref: change.Ref{Kind: change.KindItem, ID: it.ID}, op: c.Op, display: it.DisplayID(prefixes[it.Place.Workspace])})
+	}
+	return out
 }
 
 // itemsOf は、プロジェクト ps のアイテムを読む。

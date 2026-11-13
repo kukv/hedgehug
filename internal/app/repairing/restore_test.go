@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -404,4 +405,114 @@ func TestRestoreSummaryOnOneLine(t *testing.T) {
 		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet(statuses.Field(review, "color"), "blue", "green"))
 	})
 	wantOps(t, e.run(del, color), "「Re view 中」の削除を取り消し")
+}
+
+// workspace は、サンプルのワークスペースを読む(削除済みも)。
+func (e *env) workspace() workspace.Workspace {
+	e.t.Helper()
+	var w workspace.Workspace
+	err := e.s.Read(e.ctx, store, func(r port.Reader) error {
+		var err error
+		w, err = r.Workspaces().Get(apptest.SampleWorkspace)
+		return err
+	})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return w
+}
+
+// deleteWorkspace は、workspaces の Delete と同じ行(ワークスペースに root: true、中のプロジェクトとアイテムに
+// root: false)を 1 回の保存で書く(B5b-1)。
+func deleteWorkspace(e *env) map[change.ID]bool {
+	return e.write(taro, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDeleteEntity(true)),
+			tx.WriteProjects().Append(apptest.SampleProject, change.NewDeleteEntity(false)),
+			tx.WriteProjects().Append(project2, change.NewDeleteEntity(false)),
+			tx.WriteItems().Append(apptest.SampleEpic, change.NewDeleteEntity(false)),
+			tx.WriteItems().Append(apptest.SampleTask, change.NewDeleteEntity(false)),
+		)
+	})
+}
+
+// newItem は、プロジェクト p の下に Epic を作る行と、ワークスペースのログの採番の行を書く(items の作成の書き方)。
+func newItem(tx port.Tx, id item.ID, p project.ID, n int) error {
+	it := item.Item{ID: id, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: p, Number: n}, Kind: item.Epic, Rank: "z", Title: "追加", Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium}
+	return errors.Join(
+		tx.WriteItems().Append(id, item.Create(it)),
+		tx.WriteWorkspaces().Append(apptest.SampleWorkspace, numbering.Draft(numbering.Items, n)),
+	)
+}
+
+// ワークスペースの削除と、そのワークスペースの設定の変更が重なったら、変更を残して、ワークスペースと
+// 一緒に削除したプロジェクト・アイテムの削除を取り消す(06 193・209 行。B5b-7・B5b-8)。
+func TestWorkspaceDeleteUndoneBySettingsChange(t *testing.T) {
+	e := newEnv(t)
+	del := deleteWorkspace(e)
+	prop := workspace.Property{ID: "01PROP00000000000000000001", Key: "due", Name: "期日", Type: workspace.TypeDate, Rank: "z"}
+	added := e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, workspace.PropertyDrafts(prop)...)
+	})
+	wantOps(t, e.run(del, added), "ワークスペース「Web」の削除を取り消し")
+	if w := e.workspace(); w.Deleted != nil {
+		t.Errorf("workspace deleted = %+v", w.Deleted)
+	}
+	for _, id := range []project.ID{apptest.SampleProject, project2} {
+		if p := e.project(id); p.Deleted != nil {
+			t.Errorf("%s is still deleted", id)
+		}
+	}
+	for _, id := range []item.ID{apptest.SampleEpic, apptest.SampleTask} {
+		if it := e.item(id); it.Deleted != nil {
+			t.Errorf("%s is still deleted", id)
+		}
+	}
+}
+
+// ワークスペースの削除と同時に、そのワークスペースにアイテムを作っても、採番の行は変更に数えないので
+// ワークスペースの削除は残り、作ったアイテムも削除済みになる(B5b-6・B5b-7)。
+func TestWorkspaceDeleteKeptWhenChildIsAdded(t *testing.T) {
+	const added item.ID = "01SAMPLEIT0000000000000009"
+	e := newEnv(t)
+	del := deleteWorkspace(e)
+	wsOp := e.workspace().Deleted.Op
+	theirs := e.write(taro, func(tx port.Tx) error { return newItem(tx, added, apptest.SampleProject, 3) })
+	wantOps(t, e.run(del, theirs), "HH-3 を削除")
+	if w := e.workspace(); w.Deleted == nil {
+		t.Error("workspace was restored")
+	}
+	if d := e.item(added).Deleted; d == nil || d.Op != wsOp || d.Root {
+		t.Errorf("HH-3 deleted = %+v, want op %s root false", d, wsOp)
+	}
+}
+
+// ワークスペースの削除と同時に、そのワークスペースにプロジェクトを作っても、ワークスペースの削除は残り、
+// 作ったプロジェクトとその下のアイテムも削除済みになる(B5b-6・B5b-7)。
+func TestWorkspaceDeleteKeptWhenProjectIsAdded(t *testing.T) {
+	const (
+		p3    project.ID = "01SAMPLEPR0000000000000003"
+		under item.ID    = "01SAMPLEIT0000000000000009"
+	)
+	e := newEnv(t)
+	del := deleteWorkspace(e)
+	wsOp := e.workspace().Deleted.Op
+	theirs := e.write(taro, func(tx port.Tx) error {
+		p := project.Project{ID: p3, Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 3}, Rank: "X", Title: "追加", Owner: "taro", Status: project.Todo}
+		return errors.Join(
+			tx.WriteProjects().Append(p3, project.Create(p)),
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, numbering.Draft(numbering.Projects, 3)),
+			newItem(tx, under, p3, 3),
+		)
+	})
+	wantOps(t, e.run(del, theirs), "HH-P3 を削除", "HH-3 を削除")
+	if w := e.workspace(); w.Deleted == nil {
+		t.Error("workspace was restored")
+	}
+	if d := e.project(p3).Deleted; d == nil || d.Op != wsOp || d.Root {
+		t.Errorf("HH-P3 deleted = %+v, want op %s root false", d, wsOp)
+	}
+	if d := e.item(under).Deleted; d == nil || d.Op != wsOp || d.Root {
+		t.Errorf("HH-3 deleted = %+v, want op %s root false", d, wsOp)
+	}
 }
