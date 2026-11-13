@@ -95,6 +95,16 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
   const stores = () => get(deps.catalog.stores);
   const storeOf = (wsId: string) => stores().find((s) => s.workspaces.some((w) => w.id === wsId));
   const wsOf = (wsId: string) => storeOf(wsId)?.workspaces.find((w) => w.id === wsId);
+  // byKind は、種類で決まる親・親の選択肢・赤字を、読んであるプロジェクトのアイテムから作る。
+  function byKind(prefix: string, kind: Kind, wanted: string | null) {
+    const candidates = parentCandidates(projectItems, kind);
+    return {
+      parentId: kind === "Epic" ? null : pickParent(candidates, wanted),
+      parents: parentOptions(prefix, candidates),
+      parentMissing: missing(kind, candidates),
+    };
+  }
+
   // refresh は、ワークスペース・プロジェクト・種類から、選択肢・親・ID の予告を作り直す。
   async function refresh(
     form: ItemForm,
@@ -109,15 +119,14 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       load(store.id, ws.id),
     ]);
     projectItems = list;
-    const candidates = parentCandidates(list, form.kind);
-    const parentId = form.kind === "Epic" ? null : pickParent(candidates, form.parentId);
+    const { parentId, parents, parentMissing } = byKind(ws.prefix, form.kind, form.parentId);
     const shown = { ...form, parentId };
     const next: ItemDialogState = {
       form: shown,
       workspaces: wsOptions(stores()),
       projects: ws.projects.map((p) => ({ value: p.id, label: p.title })),
-      parents: parentOptions(ws.prefix, candidates),
-      parentMissing: missing(form.kind, candidates),
+      parents,
+      parentMissing,
       preview: `ID は ${itemDisplayId(ws.prefix, nextNo)} になります。`,
       ...viewOf(ctx, shown),
       settings: ctx.settings,
@@ -131,15 +140,16 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     storeOf(from)?.id === storeOf(to)?.id ||
     ctx.people.members.some((m) => m.login.toLowerCase() === login.toLowerCase());
 
-  // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトル・「続けて作成」・値は残す
-  // (決定 27)。ワークスペースが変わったときは、そのいまの値に新しいワークスペースへの切り替えを当てる。
+  // reloaded は、読み直した結果を出す。待っているあいだに入力されたタイトル・「続けて作成」・値・種類・親は
+  // 残す(決定 27)。親は、読み直したプロジェクトの候補から選び直す。ワークスペースが変わったときは、
+  // そのいまの値に新しいワークスペースへの切り替えを当てる。
   async function reloaded(form: ItemForm, error = "") {
     const gen = ++seq;
     const loaded = await refresh(form, error);
     const now = get(state);
     if (gen !== seq || !now) return;
     if (!loaded) return void state.set(null);
-    const { title, keepOpen, templateId } = now.form;
+    const { title, keepOpen, templateId, kind } = now.form;
     const switched = now.form.workspaceId !== form.workspaceId;
     const values = switched
       ? switchWorkspace(
@@ -148,12 +158,21 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
           memberCheck(now.form.workspaceId, form.workspaceId, loaded.ctx),
         )
       : now.form.values;
-    let kept: ItemForm = { ...loaded.next.form, title, keepOpen, values, templateId };
+    const parent = byKind(wsOf(form.workspaceId)?.prefix ?? "", kind, now.form.parentId);
+    const { parentId } = parent;
+    let kept: ItemForm = {
+      ...loaded.next.form,
+      title,
+      keepOpen,
+      values,
+      templateId,
+      kind,
+      parentId,
+    };
     // ワークスペースを変えたら、テンプレートを「なし」にしてから新しいワークスペースの既定を当てはめる(A3b-14)。
-    // 待っているあいだに種類が変わっていたら、読み直した種類にテンプレートを合わせる。
-    if (switched || now.form.kind !== kept.kind) kept = applyDefault(kept, loaded.ctx.settings);
+    if (switched) kept = applyDefault(kept, loaded.ctx.settings);
     current = loaded.ctx;
-    state.set({ ...loaded.next, form: kept, ...viewOf(loaded.ctx, kept) });
+    state.set({ ...loaded.next, ...parent, form: kept, ...viewOf(loaded.ctx, kept) });
   }
 
   // send は、アイテムを作る。作ったあと、「続けて作成」ならタイトルを空にして読み直し、でなければ閉じる。
@@ -246,18 +265,11 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
       }
       if (patch.kind !== undefined && patch.kind !== s.form.kind) {
         // 種類を変えたら、親を新しい種類の候補から選び直す。タイトルは残す。
-        const candidates = parentCandidates(projectItems, form.kind);
-        const ws = wsOf(form.workspaceId);
-        form.parentId = form.kind === "Epic" ? null : pickParent(candidates, form.parentId);
+        const parent = byKind(wsOf(form.workspaceId)?.prefix ?? "", form.kind, form.parentId);
+        form.parentId = parent.parentId;
         // テンプレートを「なし」にしてから新しい種類の既定を当てはめる(A3b-14)。
         if (current) form = applyDefault(form, current.settings);
-        state.set({
-          ...s,
-          form,
-          parents: parentOptions(ws?.prefix ?? "", candidates),
-          parentMissing: missing(form.kind, candidates),
-          ...(current ? viewOf(current, form) : {}),
-        });
+        state.set({ ...s, ...parent, form, ...(current ? viewOf(current, form) : {}) });
         return;
       }
       if (patch.templateId !== undefined && patch.templateId !== s.form.templateId && current) {
