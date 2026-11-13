@@ -160,7 +160,12 @@ func TestPurgeInTx(t *testing.T) {
 	if s := subjects(t, a.dir); s[0] != "HH-2 を完全に削除" {
 		t.Errorf("subject = %q", s[0])
 	}
-	// 書いた行は、Reader.Purged(A5a の旧 ID の解決が読む)で読める。
+	wantPurgedRead(t, a)
+}
+
+// wantPurgedRead は、purge が書いた行を、Reader.Purged(A5a の旧 ID の解決が読む)で読めることを確かめる。
+func wantPurgedRead(t *testing.T, a machine) {
+	t.Helper()
 	if err := a.stores.Read(t.Context(), a.id, func(r port.Reader) error {
 		ps, err := r.Purged().List()
 		if err != nil || len(ps) != 1 || ps[0].Entity != "item" || ps[0].Target != apptest.SampleTask || ps[0].Display != "HH-2" || ps[0].At.IsZero() {

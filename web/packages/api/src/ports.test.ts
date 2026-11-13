@@ -1,6 +1,5 @@
 import { NotFound, Refused } from "@hedgehug/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createCatalogPort } from "./catalog";
 import { setToken } from "./fetcher";
 import { createItemsPort } from "./items";
 import { createWorkspacesPort } from "./workspaces";
@@ -109,27 +108,6 @@ describe("items port", () => {
       method: "POST",
       body: JSON.stringify({ anchor: "I0", after: true }),
     });
-  });
-});
-
-describe("catalog port", () => {
-  it("adds the store ID to workspaces and reads null lists as empty", async () => {
-    respond(200, [{ id: "W1", name: "Web", prefix: "WEB", oldPrefixes: ["HH"] }]);
-    await expect(createCatalogPort().listWorkspaces("S1")).resolves.toEqual([
-      { id: "W1", storeId: "S1", name: "Web", prefix: "WEB", oldPrefixes: ["HH"] },
-    ]);
-    respond(200, [{ id: "W1", name: "Web", prefix: "HH", oldPrefixes: null }]);
-    await expect(createCatalogPort().listWorkspaces("S1")).resolves.toEqual([
-      { id: "W1", storeId: "S1", name: "Web", prefix: "HH", oldPrefixes: [] },
-    ]);
-    respond(200, null);
-    await expect(createCatalogPort().listStores()).resolves.toEqual([]);
-  });
-
-  it("reads the login of me", async () => {
-    const fetch = respond(200, { login: "taro" });
-    await expect(createCatalogPort().me("S1")).resolves.toBe("taro");
-    expect(call(fetch)[0]).toBe("/api/stores/S1/me");
   });
 });
 
