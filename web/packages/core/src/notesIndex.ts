@@ -5,6 +5,7 @@ export {
   createDrafts,
   type DiscardPrompt,
   type Drafts,
+  isItemDraft,
   type LeaveGuard,
 } from "./features/drafts/drafts";
 export { epicProgress, progressPercent } from "./features/items/progress";

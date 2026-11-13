@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { get } from "../../reactive/store";
-import { createDrafts } from "./drafts";
+import { createDrafts, isItemDraft } from "./drafts";
 
 describe("drafts", () => {
   it("holds only a non-empty input that differs; dirty is any difference", () => {
@@ -74,5 +74,25 @@ describe("drafts", () => {
     expect(get(d.prompt)?.lines).toEqual(["保存していないコメントを破棄します。"]);
     d.answer(false);
     expect(await asked).toBe(false);
+  });
+
+  it("asks only about the keys the predicate picks (the detail panel looks at item drafts only)", async () => {
+    const d = createDrafts();
+    d.register("description:project/P1", () => true);
+    d.register("comment:new:project", () => true);
+    expect(await d.confirmLeave(isItemDraft)).toBe(true);
+    expect(get(d.prompt)).toBeNull();
+    d.register("comment:edit:item", () => true);
+    const asked = d.confirmLeave(isItemDraft);
+    expect(get(d.prompt)?.lines).toEqual(["保存していないコメントを破棄します。"]);
+    d.answer(false);
+    expect(await asked).toBe(false);
+  });
+
+  it("tells item drafts from project drafts by key", () => {
+    const keys = ["description:item/I1", "comment:new:item", "comment:edit:item"];
+    expect(keys.map(isItemDraft)).toEqual([true, true, true]);
+    const others = ["description:project/P1", "comment:new:project", "comment:edit:project"];
+    expect(others.map(isItemDraft)).toEqual([false, false, false]);
   });
 });

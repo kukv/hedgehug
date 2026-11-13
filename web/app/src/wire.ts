@@ -43,7 +43,7 @@ import {
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
-import { drafts } from "./drafts";
+import { drafts, leaveItem } from "./drafts";
 import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
@@ -124,8 +124,8 @@ export const detail = createDetail({
   catalogPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
-  // 別のアイテムを開く・パネルを閉じるとき、書きかけがあれば「入力を破棄」を出す(02「説明」)。
-  leave: () => drafts.confirmLeave(),
+  // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
+  leave: leaveItem,
 });
 // 詳細パネルとプロジェクトの概要は、同時に開くので、コメントの状態を別々に持つ(入力が混ざらない)。
 export const itemComments = createComments({ notes, catalogPort, toasts, drafts, scope: "item" });

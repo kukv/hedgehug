@@ -28,7 +28,8 @@ export interface Drafts extends LeaveGuard {
   // anyHeld は、空でない書きかけがあるか(自動の同期と画面の反映を待つ条件)。
   anyHeld(): boolean;
   // confirmLeave は、違う入力があれば確認を出し、「破棄」なら true を返す。key を渡すと、その入力だけを見る。
-  confirmLeave(key?: string): Promise<boolean>;
+  // 関数を渡すと、それが true を返す key の入力だけを見る(詳細パネルは isItemDraft)。
+  confirmLeave(only?: string | ((key: string) => boolean)): Promise<boolean>;
   // prompt は、出している確認(なければ null)。answer は、そのボタン(true が「破棄」)。
   prompt: Readable<DiscardPrompt | null>;
   answer(discard: boolean): void;
@@ -39,7 +40,15 @@ interface Entry {
   held(): boolean;
 }
 
+// isItemDraft は、アイテムの書きかけか(説明は "description:item/…"、コメントは "comment:new:item" と
+// "comment:edit:item")。詳細パネルを閉じる・別のアイテムを開くときは、プロジェクトの概要の書きかけを見ない。
+export const isItemDraft = (key: string) =>
+  key.startsWith("description:item/") || /^comment:[a-z]+:item$/.test(key);
+
 const lineOf = (key: string) => (key.split(":")[0] === "comment" ? commentLine : descriptionLine);
+
+const picks = (only: string | ((key: string) => boolean) | undefined, key: string) =>
+  only === undefined || (typeof only === "string" ? key === only : only(key));
 
 export function createDrafts(): Drafts {
   const entries = new Map<string, Entry>();
@@ -47,9 +56,9 @@ export function createDrafts(): Drafts {
   // waiting は、いま出している確認の答えを待つ関数。asking は、そのあいだに重ねて聞かれたときに返す同じ Promise。
   let waiting = null as ((discard: boolean) => void) | null;
   let asking: Promise<boolean> | null = null;
-  const dirtyKeys = (only?: string) =>
+  const dirtyKeys = (only?: string | ((key: string) => boolean)) =>
     [...entries]
-      .filter(([key, e]) => (only === undefined || key === only) && e.dirty())
+      .filter(([key, e]) => picks(only, key) && e.dirty())
       .map(([key]) => key);
 
   return {
@@ -63,8 +72,8 @@ export function createDrafts(): Drafts {
     },
     anyHeld: () => [...entries.values()].some((e) => e.held()),
     anyDirty: () => dirtyKeys().length > 0,
-    confirmLeave(key) {
-      const keys = dirtyKeys(key);
+    confirmLeave(only) {
+      const keys = dirtyKeys(only);
       if (keys.length === 0) return Promise.resolve(true);
       asking ??= new Promise<boolean>((resolve) => {
         waiting = resolve;
