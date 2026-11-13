@@ -112,6 +112,15 @@ describe("releaseMenu", () => {
     ]);
   });
 
+  it("disables only the state entries while the state is being saved", () => {
+    expect(releaseMenu(release(), false, true)).toEqual([
+      { id: "edit", label: "編集…", disabled: false },
+      { id: "released", label: "リリース済みにする", disabled: true },
+      { id: "archived", label: "アーカイブにする", disabled: true },
+      { id: "delete", label: "削除…", disabled: false },
+    ]);
+  });
+
   it("disables every entry in a read-only Store", () => {
     const menu = releaseMenu(release(), true);
     expect(menu.every((e) => e.disabled && e.hint === "閲覧のみの Store です")).toBe(true);

@@ -25,6 +25,7 @@
     settings: WorkspaceSettings;
     members: Member[];
     readOnly: boolean;
+    saving: boolean; // 状態を保存しているあいだ。状態を変える操作を無効にする。
     // today は、このマシンの時刻帯での今日(YYYY-MM-DD)。日付が変わると「予定日を過ぎています」が変わる。
     today: string;
     thisYear: number;
@@ -40,6 +41,7 @@
     settings,
     members,
     readOnly,
+    saving,
     today,
     thisYear,
     onstate,
@@ -79,7 +81,7 @@
       {#if r.state === "unreleased"}
         <Button
           size="sm"
-          disabled={readOnly}
+          disabled={readOnly || saving}
           title={readOnly ? readOnlyNote : undefined}
           onclick={() => onstate(card, "released")}
           >リリース済みにする</Button
@@ -126,7 +128,7 @@
   open={menu !== null}
   x={menu?.x ?? 0}
   y={menu?.y ?? 0}
-  items={releaseMenu(r, readOnly)}
+  items={releaseMenu(r, readOnly, saving)}
   onselect={select}
   onclose={() => (menu = null)}
 />

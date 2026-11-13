@@ -62,17 +62,27 @@
     if (dialog && !shown) dialog = null;
   });
   const card = $derived(shown?.card ?? null);
+  // 確認は、いまのカードで出す(読み直しで未完了の数が変わる)。リリースがなくなったら閉じる。
+  const confirming = $derived(
+    shown?.kind === "confirm"
+      ? (view?.cards.find((c) => c.release.id === shown.card?.release.id) ?? null)
+      : null,
+  );
+  $effect(() => {
+    if (shown?.kind === "confirm" && !confirming) dialog = null;
+  });
 
   // 状態の変更。リリース済みにするときだけ、未完了が残れば確認する(05「状態」)。断りはエラーのトースト。
-  let changing = $state(false);
+  // 保存中のリリースの ID。同じリリースは重ねて変えない(ほかのカードは変えられる)。
+  let changing = $state<Record<string, boolean>>({});
   function onstate(c: Card, to: ReleaseState) {
     if (to === "released" && releaseConfirm(c)) void openDialog("confirm", c);
     else void change(c, to);
   }
   async function change(c: Card, to: ReleaseState) {
-    if (changing) return;
-    changing = true;
     const { id, name } = c.release;
+    if (changing[id]) return;
+    changing[id] = true;
     await releaseAction(
       async () => {
         await planningPort.setReleaseState(storeId, workspaceId, id, to);
@@ -80,10 +90,10 @@
       },
       (message) => toasts.show(message, { error: true }),
     );
-    changing = false;
+    delete changing[id];
   }
   function confirmed() {
-    const c = card;
+    const c = confirming;
     dialog = null;
     if (c) void change(c, "released");
   }
@@ -114,6 +124,7 @@
           settings={view.settings}
           members={view.members}
           {readOnly}
+          saving={changing[c.release.id] ?? false}
           {today}
           {thisYear}
           {onstate}
@@ -148,10 +159,10 @@
     retentionDays={ov.retentionDays}
     onclose={closeDialog}
   />
-{:else if shown?.kind === "confirm" && card}
+{:else if confirming}
   <ConfirmDialog
     title="リリース済みにする"
-    lines={[releaseConfirm(card) ?? ""]}
+    lines={[releaseConfirm(confirming) ?? ""]}
     ok="リリース済みにする"
     onok={confirmed}
     oncancel={closeDialog}

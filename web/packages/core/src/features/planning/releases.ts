@@ -66,12 +66,13 @@ export interface ReleaseMenuEntry {
 }
 
 // releaseMenu は、カードのメニュー。「編集…」、状態 2 つ、「削除…」。閲覧のみの Store では、すべて無効にする(01)。
-export function releaseMenu(r: Release, readOnly: boolean): ReleaseMenuEntry[] {
-  const entry = (id: ReleaseMenuEntry["id"], label: string): ReleaseMenuEntry =>
-    readOnly ? { id, label, disabled: true, hint: readOnlyNote } : { id, label, disabled: false };
+// saving は、そのリリースの状態を保存しているあいだ。状態の 2 つだけを無効にする(重ねて変えない)。
+export function releaseMenu(r: Release, readOnly: boolean, saving = false): ReleaseMenuEntry[] {
+  const entry = (id: ReleaseMenuEntry["id"], label: string, busy = false): ReleaseMenuEntry =>
+    readOnly ? { id, label, disabled: true, hint: readOnlyNote } : { id, label, disabled: busy };
   return [
     entry("edit", "編集…"),
-    ...stateMenu(r).map((m) => entry(m.to, m.label)),
+    ...stateMenu(r).map((m) => entry(m.to, m.label, saving)),
     entry("delete", "削除…"),
   ];
 }
