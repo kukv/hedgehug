@@ -7,7 +7,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 // entity は、ログを持つエンティティ 1 つ(ワークスペース・プロジェクト・アイテム)。
@@ -21,7 +20,6 @@ type entity struct {
 type snapshot struct {
 	// entities は、ワークスペース、プロジェクト、アイテムの順で、それぞれ内部 ID の順。
 	entities []entity
-	items    map[item.ID]item.Item
 }
 
 // readSnapshot は、すべてのワークスペース・プロジェクト・アイテムと、そのログを読む。
@@ -46,7 +44,7 @@ func readSnapshot(w port.RepairWriter) (snapshot, error) {
 
 // readEntities は、ログを持つエンティティを並べる。ログはまだ読まない。
 func readEntities(r port.Reader) (snapshot, error) {
-	s := snapshot{items: map[item.ID]item.Item{}}
+	var s snapshot
 	wss, err := r.Workspaces().List()
 	if err != nil {
 		return s, err
@@ -66,7 +64,6 @@ func readEntities(r port.Reader) (snapshot, error) {
 			}
 			for _, it := range its {
 				items = append(items, entity{ref: change.Ref{Kind: change.KindItem, ID: it.ID}, display: it.DisplayID(ws.Prefix)})
-				s.items[it.ID] = it
 			}
 		}
 	}

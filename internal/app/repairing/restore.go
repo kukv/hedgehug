@@ -12,8 +12,11 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// placeField は、アイテムの場所の項目名。
-const placeField = "place"
+// placeField・rankField は、アイテムの場所と順位の項目名。
+const (
+	placeField = "place"
+	rankField  = "rank"
+)
 
 // found は、取り消す削除 1 つと、それを見つけたログのエンティティ(snapshot.entities の位置)。
 type found struct {
@@ -91,63 +94,52 @@ func summary(s snapshot, f found) string {
 }
 
 // incidentals は、ほかのものへの操作で一緒に書いた行を見分ける材料(決定 C3a-9)。
+// 合わせたいまの木には頼らない(もう片側が親を変えていることがある)。行と op だけで決める。
 type incidentals struct {
 	deleteOps map[change.ID]bool             // ワークスペースのログに delete の行を書いた op
 	placed    map[change.ID]map[item.ID]bool // op ごとの、set place を書いたアイテム
-	items     map[item.ID]item.Item          // 祖先をたどるためのアイテム
+	ranked    map[change.ID]map[item.ID]bool // op ごとの、set rank を書いたアイテム
 }
 
 func newIncidentals(s snapshot) incidentals {
-	in := incidentals{deleteOps: map[change.ID]bool{}, placed: map[change.ID]map[item.ID]bool{}, items: s.items}
+	in := incidentals{deleteOps: map[change.ID]bool{}, placed: map[change.ID]map[item.ID]bool{}, ranked: map[change.ID]map[item.ID]bool{}}
 	for _, e := range s.entities {
 		for _, r := range e.log {
 			switch {
 			case e.ref.Kind == change.KindWorkspace && r.T == change.Delete:
 				in.deleteOps[r.Op] = true
 			case e.ref.Kind == change.KindItem && r.T == change.Set && r.F == placeField:
-				if in.placed[r.Op] == nil {
-					in.placed[r.Op] = map[item.ID]bool{}
-				}
-				in.placed[r.Op][e.ref.ID] = true
+				mark(in.placed, r.Op, e.ref.ID)
+			case e.ref.Kind == change.KindItem && r.T == change.Set && r.F == rankField:
+				mark(in.ranked, r.Op, e.ref.ID)
 			}
 		}
 	}
 	return in
 }
 
+func mark(m map[change.ID]map[item.ID]bool, op change.ID, id item.ID) {
+	if m[op] == nil {
+		m[op] = map[item.ID]bool{}
+	}
+	m[op][id] = true
+}
+
 // of は、ref のログの行が、ほかのものへの操作で一緒に書いた行かを答える関数。
-// 値・プロパティの削除でほかのエンティティに書いた置き換え(アイテム・プロジェクトのログの行で、同じ op で
-// ワークスペースのログに delete の行がある)と、親の移動で下のものに書いた場所(同じ op で祖先のアイテムにも
-// set place がある)。ワークスペースのログの行はこの op の見方では数えない(テンプレートの保存は、名前の変更と
-// 子の削除を 1 回で書く)。ワークスペースのログでは、削除の f の下の行かだけで重なりを決める。
+// (a) 値・プロパティの削除でほかのエンティティに書いた置き換え(アイテム・プロジェクトのログの行で、同じ op で
+// ワークスペースのログに delete の行がある)。ワークスペースのログの行はこの見方では数えない(テンプレートの
+// 保存は、名前の変更と子の削除を 1 回で書く)。ワークスペースのログでは、削除の f の下の行かだけで重なりを決める。
+// (b) 親の移動で一緒に運ばれた下のものの場所。アイテムの移動は、動かしたアイテムに place と rank を、
+// 一緒に運ぶ下のものに place だけを書く。そこで、同じ op がほかのアイテムにも set place を書き、
+// このアイテムには set rank を書いていない set place の行を、一緒に書いた行とする。
 func (in incidentals) of(ref change.Ref) func(change.Record) bool {
 	return func(c change.Record) bool {
 		if ref.Kind != change.KindWorkspace && in.deleteOps[c.Op] {
 			return true
 		}
-		return ref.Kind == change.KindItem && c.T == change.Set && c.F == placeField && in.ancestorPlaced(ref.ID, c.Op)
-	}
-}
-
-// ancestorPlaced は、アイテム id の祖先(いまの親をたどる)のどれかに、op が set place を書いたか。
-// 親が循環していても止まる。
-func (in incidentals) ancestorPlaced(id item.ID, op change.ID) bool {
-	seen := map[item.ID]bool{id: true}
-	it := in.items[id]
-	for it.Place.Parent != nil {
-		p := *it.Place.Parent
-		if seen[p] {
+		if ref.Kind != change.KindItem || c.T != change.Set || c.F != placeField {
 			return false
 		}
-		seen[p] = true
-		if in.placed[op][p] {
-			return true
-		}
-		next, ok := in.items[p]
-		if !ok {
-			return false
-		}
-		it = next
+		return len(in.placed[c.Op]) > 1 && !in.ranked[c.Op][ref.ID]
 	}
-	return false
 }

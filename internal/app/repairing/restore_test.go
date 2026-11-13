@@ -236,8 +236,8 @@ func TestNoRestoreForIncidentalChanges(t *testing.T) {
 		{"parent moved to another project", func(e *env) map[change.ID]bool {
 			return e.write(taro, func(tx port.Tx) error {
 				return errors.Join(
-					movePlace(tx, apptest.SampleEpic, project2),
-					movePlace(tx, apptest.SampleTask, project2),
+					movePlace(tx, apptest.SampleEpic, true),
+					movePlace(tx, apptest.SampleTask, false),
 				)
 			})
 		}},
@@ -262,15 +262,42 @@ func TestNoRestoreForIncidentalChanges(t *testing.T) {
 	}
 }
 
-// movePlace は、アイテムのプロジェクトを p にする set place の行を書く。
-func movePlace(tx port.Tx, id item.ID, p project.ID) error {
+// movePlace は、アイテムのプロジェクトを HH-P2 にする set place の行を書く。moved なら、動かしたアイテム
+// として順位の行も書く(items の移動の書き方。一緒に運ばれた下のものは場所だけ)。
+func movePlace(tx port.Tx, id item.ID, moved bool) error {
 	it, err := tx.Items().Get(id)
 	if err != nil {
 		return err
 	}
 	next := it.Place
-	next.Project = p
-	return tx.WriteItems().Append(id, change.NewSet("place", it.Place, next))
+	next.Project = project2
+	ds := []change.Draft{change.NewSet("place", it.Place, next)}
+	if moved {
+		ds = append(ds, change.NewSet("rank", it.Rank, "z"))
+	}
+	return tx.WriteItems().Append(id, ds...)
+}
+
+// 片側が親を別のプロジェクトへ移して子も運び、もう片側がその子を別の親へ動かしてから削除しても、
+// 運ばれた子の場所の行は一緒に書いた行なので、子を戻さない(合わせたいまの親によらない)。
+func TestNoRestoreForCarriedChildMovedElsewhere(t *testing.T) {
+	e := newEnv(t)
+	carried := e.write(taro, func(tx port.Tx) error {
+		return errors.Join(
+			movePlace(tx, apptest.SampleEpic, true),
+			movePlace(tx, apptest.SampleTask, false),
+		)
+	})
+	task := e.item(apptest.SampleTask)
+	top := item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: task.Place.Number}
+	ours := union(
+		e.appendItem(taro, apptest.SampleTask, change.NewSet("place", task.Place, top), change.NewSet("rank", task.Rank, "z")),
+		e.appendItem(taro, apptest.SampleTask, change.NewDeleteEntity(true)),
+	)
+	wantOps(t, e.run(ours, carried))
+	if it := e.item(apptest.SampleTask); it.Deleted == nil || it.Place.Parent != nil {
+		t.Errorf("HH-2 = deleted %v, parent %v", it.Deleted, it.Place.Parent)
+	}
 }
 
 // プロジェクトの削除の取り消しは、一緒に削除した下のアイテムも戻す。
