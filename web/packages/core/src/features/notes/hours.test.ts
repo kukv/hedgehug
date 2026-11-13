@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Worklog } from "../../model/notes";
-import { formatHours, hoursOf, parseHours, stepHours, worklogHeading } from "./hours";
+import { formatHours, hoursOf, parseHours, worklogHeading } from "./hours";
 
 const empty = "時間を入力してください";
 const scale = "時間は小数第 2 位までで入力してください";
@@ -74,18 +74,6 @@ describe("formatHours", () => {
     expect(hoursOf(6)).toBe("6");
     expect(hoursOf(1.5)).toBe("1.5");
     expect(hoursOf(0.29)).toBe("0.29");
-  });
-});
-
-describe("stepHours", () => {
-  it("moves by a quarter hour and never below zero", () => {
-    expect(stepHours("", 1)).toBe("0.25");
-    expect(stepHours("1", 1)).toBe("1.25");
-    expect(stepHours("1.25", -1)).toBe("1");
-    expect(stepHours("0.25", -1)).toBe("");
-    expect(stepHours("0", -1)).toBe("");
-    expect(stepHours("abc", 1)).toBe("0.25");
-    expect(stepHours("0.1", 1)).toBe("0.35");
   });
 });
 

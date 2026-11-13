@@ -39,14 +39,6 @@ export function formatHours(hundredths: number): string {
 // hoursOf は、見積もり時間のような時間の数を、同じ表記にする。
 export const hoursOf = (hours: number): string => formatHours(Math.round(hours * 100));
 
-// stepHours は、時間の欄の入力を 0.25 時間ずつ増減する(steps は 1 か -1)。0 以下になるときは空にする。
-// 読めない入力は 0 として数える。
-export function stepHours(text: string, steps: number): string {
-  const parsed = parseHours(text);
-  const next = Math.max(0, (parsed.ok ? parsed.hundredths : 0) + steps * 25);
-  return next === 0 ? "" : formatHours(next);
-}
-
 function sum(rows: Worklog[]): number {
   let total = 0;
   for (const r of rows) {

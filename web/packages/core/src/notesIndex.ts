@@ -36,7 +36,6 @@ export {
   hoursOf,
   type ParsedHours,
   parseHours,
-  stepHours,
   worklogHeading,
 } from "./features/notes/hours";
 export { appendMention, mentionTargets } from "./features/notes/mentions";

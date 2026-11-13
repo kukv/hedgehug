@@ -81,20 +81,6 @@ describe("createWorklogs", () => {
     expect(get(worklogs.state)).toMatchObject({ hours: "1", error: "時間を入力してください" });
   });
 
-  it("steps the hours by a quarter hour and clears the error", async () => {
-    const { worklogs } = setup();
-    await worklogs.open("S1", "I1");
-    worklogs.setHours("x");
-    await worklogs.add();
-    worklogs.step(1);
-    expect(get(worklogs.state)).toMatchObject({ hours: "0.25", error: "" });
-    worklogs.step(1);
-    expect(get(worklogs.state).hours).toBe("0.5");
-    worklogs.step(-1);
-    worklogs.step(-1);
-    expect(get(worklogs.state).hours).toBe("");
-  });
-
   it("asks with the date and hours, then deletes, shows the toast and reloads", async () => {
     const { worklogs, calls, toasts } = setup();
     await worklogs.open("S1", "I1");

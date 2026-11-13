@@ -4,7 +4,7 @@ import type { NotesPort } from "../../port/notes";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import { formatDay } from "../dates/date";
 import type { Toasts } from "../toasts/toasts";
-import { parseHours, stepHours } from "./hours";
+import { parseHours } from "./hours";
 
 // 作業時間の区画の状態(02「作業時間」)。アイテムの詳細パネルだけが持つ。
 
@@ -40,8 +40,6 @@ export interface Worklogs {
   close(): void;
   setHours(text: string): void;
   setMemo(text: string): void;
-  // step は、時間の欄を 0.25 時間ずつ増減する(1 か -1)。
-  step(steps: number): void;
   // add は、記録する。時間が不正なら、赤字を出して送らない(false)。
   add(): Promise<boolean>;
   askDelete(id: string): void;
@@ -160,7 +158,6 @@ export function createWorklogs(deps: WorklogsDeps): Worklogs {
     },
     setHours: (text) => patch({ hours: text, error: "" }),
     setMemo: (text) => patch({ memo: text }),
-    step: (steps) => patch({ hours: stepHours(get(state).hours, steps), error: "" }),
     add,
     askDelete(id) {
       const row = get(state).rows.find((r) => r.id === id);
