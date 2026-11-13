@@ -59,7 +59,7 @@ func (s *Stores) runTx(root string, op port.Operation, fn func(port.Tx) error) e
 	if err := fn(t); err != nil {
 		return err
 	}
-	if len(t.pending) == 0 && len(t.texts) == 0 {
+	if len(t.pending) == 0 && len(t.texts) == 0 && len(t.purges) == 0 {
 		return nil
 	}
 	// Summary はコミットメッセージの 1 行目、ログイン名はコミットの作者になる。
@@ -75,6 +75,48 @@ type tx struct {
 	view
 	meta change.Meta
 	ids  port.IDs
+	// purges は、この Tx で完全に削除したエンティティの purged.jsonl の行(purge を呼んだ順)。
+	purges []purgedLine
+}
+
+// purgedLine は purged.jsonl の 1 行。キーの並びは保存形式「削除・復元・完全に削除」の例と同じ。
+type purgedLine struct {
+	ID      change.ID   `json:"id"`
+	At      string      `json:"at"`
+	By      string      `json:"by"`
+	Actor   string      `json:"actor"`
+	Entity  change.Kind `json:"entity"`
+	Target  change.ID   `json:"target"`
+	Display string      `json:"display"`
+}
+
+// purge は、エンティティ ref を完全に削除する(コミットのときに、フォルダのファイルを消し、purged.jsonl に
+// 1 行足す。決定 C3a-6)。display は、行の display(ワークスペースの接頭辞の ID か、内部 ID)。
+// この Tx の中では、消したものは読めない(Get は port.ErrNotFound)。この Tx で書いた行と説明も捨てる。
+func (t *tx) purge(ref change.Ref, display string) error {
+	if !ref.Valid() || ref.Kind == change.KindMembers {
+		return fmt.Errorf("%w: cannot purge %+v", port.ErrInvalidOperation, ref)
+	}
+	log, err := t.log(ref)
+	if err != nil {
+		return err
+	}
+	if len(log) == 0 {
+		return port.ErrNotFound
+	}
+	if t.gone == nil {
+		t.gone = map[change.Ref]bool{}
+	}
+	t.gone[ref] = true
+	delete(t.pending, ref)
+	delete(t.texts, ref)
+	delete(t.places, ref.ID)
+	delete(t.projectPlaces, ref.ID)
+	t.purges = append(t.purges, purgedLine{
+		ID: t.ids.New(), At: t.meta.At.Format(change.TimeLayout), By: t.meta.Actor.By(), Actor: t.meta.Actor.Code(),
+		Entity: ref.Kind, Target: ref.ID, Display: display,
+	})
+	return nil
 }
 
 func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
