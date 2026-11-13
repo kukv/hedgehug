@@ -1,6 +1,6 @@
 import type { Kind } from "../../model/item";
 import type { WorkspaceSettings } from "../../model/workspace";
-import { defaultIn, noTemplate, rulesOf, usableIn } from "./projectRules";
+import { defaultIn, noTemplate, rulesOf, templateDefaultOf, usableIn } from "./projectRules";
 import { propertyKinds } from "./properties";
 
 // プロジェクトの「テンプレート」の区画(03「プロジェクトのテンプレート」)の材料。
@@ -40,7 +40,7 @@ export function projectTemplateView(
   const defaults = propertyKinds.map((kind): ProjectKindDefault => {
     const usable = usableIn(settings, r, kind);
     const inherited = defaultIn(settings, { ...r, templateDefaults: {} }, kind);
-    const own = (r.templateDefaults as Partial<Record<string, string>>)[kind] ?? "";
+    const own = templateDefaultOf(r, kind) ?? "";
     // 使えないテンプレートの既定は「なし」と同じ扱い(B5a-9)
     const value = own === "" || usable.some((t) => t.id === own) ? own : noTemplate;
     return {

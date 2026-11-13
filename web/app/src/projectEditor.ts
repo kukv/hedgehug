@@ -6,7 +6,7 @@ import { catalog, projectScreen, toasts } from "./wire";
 export const projectsPort = createProjectsPort();
 
 // 保存したら、一覧(サイドバーと見出しはここから出る)と開いているプロジェクトを読み直す。
-const onChanged = async () => {
+export const onChanged = async () => {
   await catalog.load();
   await projectScreen.reload();
 };

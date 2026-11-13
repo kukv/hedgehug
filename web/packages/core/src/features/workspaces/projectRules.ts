@@ -27,6 +27,11 @@ export function rulesOf(settings: WorkspaceSettings, projectId: string): Project
   return settings.projectRules[projectId] ?? emptyRules;
 }
 
+// templateDefaultOf は、プロジェクトの種類 kind の既定(未設定なら undefined)。
+export function templateDefaultOf(r: ProjectRules, kind: string): string | undefined {
+  return Object.entries(r.templateDefaults).find(([k]) => k === kind)?.[1];
+}
+
 const categories: Category[] = ["todo", "doing", "done", "canceled"];
 
 // defaultCategory は、id を既定のステータスにしている分類(分類の並びで最初のもの)。
@@ -118,7 +123,7 @@ export function defaultIn(
   kind: string,
 ): WorkspaceTemplate | null {
   const usable = usableIn(settings, r, kind);
-  const own = (r.templateDefaults as Partial<Record<string, string>>)[kind];
+  const own = templateDefaultOf(r, kind);
   const id = own === undefined || own === "" ? settings.templateDefaults[kind] : own;
   if (id === undefined || id === noTemplate) return null;
   return usable.find((t) => t.id === id) ?? null;

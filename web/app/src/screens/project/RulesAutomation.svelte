@@ -18,7 +18,7 @@
   } from "@hedgehug/core";
   import { Button, ConfirmDialog, IconButton, Switch } from "@hedgehug/ui";
   import { untrack } from "svelte";
-  import { projectsPort, rulesEditor } from "../../projectEditor";
+  import { onChanged, projectsPort, rulesEditor } from "../../projectEditor";
   import { toasts, workspacesPort } from "../../wire";
   import RuleDialog from "../workspace-settings/RuleDialog.svelte";
   import ResetRulesButton from "./ResetRulesButton.svelte";
@@ -93,7 +93,7 @@
       if (e instanceof Refused) return e.message;
       throw e;
     }
-    await load();
+    await Promise.all([onChanged(), load()]);
     if (!id) toasts.show(ruleCreated);
     return null;
   }
@@ -118,9 +118,10 @@
           {title}
           onchange={(on) => toggle(row.id, row.own, on)}
         />
+        <span class="summary">{row.note ?? ""}</span>
         <span class="summary">{row.summary}</span>
         <strong>{row.name}</strong>
-        <span class="summary">{row.origin}{row.note ? `(${row.note})` : ""}</span>
+        <span class="summary">{row.origin}</span>
         <span class="grow"></span>
         {#if row.own}
           <Button {disabled} {title} onclick={() => (editing = row.id)}>編集</Button>
