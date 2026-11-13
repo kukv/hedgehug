@@ -462,3 +462,18 @@ func TestReadOnceAllMergedCountsValueStoredMeanwhile(t *testing.T) {
 		t.Errorf("status = %s", it.Status)
 	}
 }
+
+// ghcall の失敗でないエラー(キーチェーンの読み出しなど)は、行には「接続できません」の文言を置き、ReadOnce の
+// エラーにも入れる(Reader がログに出す)。
+func TestReadOnceReturnsNonGitHubErrors(t *testing.T) {
+	f := newRead(t)
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	boom := errors.New("keychain: read failed")
+	f.gh.Err = boom
+	if err := f.links.ReadOnce(t.Context(), every, false); !errors.Is(err, boom) {
+		t.Errorf("err = %v, want the underlying error", err)
+	}
+	if r := f.row(t, linkStore, 1); r.Error != failed("GitHub に接続できません。接続を確かめて、もう一度お試しください") {
+		t.Errorf("error = %q", r.Error)
+	}
+}

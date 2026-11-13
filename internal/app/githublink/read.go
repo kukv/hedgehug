@@ -55,14 +55,16 @@ type limit struct {
 }
 
 // repoResult は、1 つのリポジトリを読んだ結果。text が空でなければ、リポジトリ全体の失敗の文言。
+// cause は、ghcall の失敗でないエラー(行の文言は「接続できません」にし、ReadOnce のエラーにも入れる)。
 type repoResult struct {
 	repo  *repoLinks
 	text  string
 	batch port.Batch
+	cause error
 }
 
 // readStore は、Store s の読む時期が来たリポジトリを読み、記録を置いてから、リンクを書く。
-// チェックの結果か失敗の文言が変わったら true。
+// チェックの結果か失敗の文言が変わったら true。ghcall の失敗でないエラーは、書いたあとでまとめて返す(Reader がログに出す)。
 func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool, error) {
 	repos, err := rd.l.collect(ctx, s.ID)
 	if errors.Is(err, port.ErrStoreNotFound) {
@@ -77,6 +79,7 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 	}
 	p := newPass()
 	var results []repoResult
+	var causes []error
 	for _, r := range repos {
 		rec := records[r.key]
 		if !rd.force && !ghread.Due(rd.now, rec, rd.every) {
@@ -87,8 +90,10 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 			return false, err
 		}
 		results = append(results, res)
+		causes = append(causes, res.cause)
 	}
-	return rd.l.writeResults(ctx, s.ID, results, p)
+	changed, err := rd.l.writeResults(ctx, s.ID, results, p)
+	return changed, errors.Join(append(causes, err)...)
 }
 
 // fetch は、リポジトリ r を読み、結果と、置く記録を返す(D4a-5・6)。読めた値は p.fetched に入れる。
@@ -114,7 +119,11 @@ func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLin
 	}
 	if err != nil {
 		rec.Attempt, rec.Failed, rec.NotBefore = rd.now, true, time.Time{}
-		return repoResult{repo: r, text: rd.l.failText(err)}, rec
+		res := repoResult{repo: r, text: rd.l.failText(err)}
+		if !errors.As(err, &f) {
+			res.cause = err
+		}
+		return res, rec
 	}
 	for _, t := range r.targets {
 		if found, ok := b.Found[t.link.Number]; ok {
