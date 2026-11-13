@@ -5,7 +5,6 @@ package transfers
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -141,8 +140,10 @@ func (s Service) hasRemote(ctx context.Context, id port.StoreID) (bool, error) {
 	return false, nil
 }
 
-// displayID は、接頭辞と番号の画面の ID(HH-12)。
-func displayID(prefix string, n int) string { return prefix + "-" + strconv.Itoa(n) }
+// displayID は、接頭辞と番号の画面の ID(HH-12)。書式は item.Item.DisplayID の 1 か所に持つ。
+func displayID(prefix string, n int) string {
+	return item.Item{Place: item.Place{Number: n}}.DisplayID(prefix)
+}
 
 // lastRank は、all のうち親が parent(nil ならプロジェクトの直下)のものの、最後の順位。なければ空
 // (app/items の同名の関数の写し。app の機能どうしは import しない)。

@@ -59,8 +59,11 @@ func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in Mo
 	var summary string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
 		p, err := plan(r, id, in)
+		if err != nil {
+			return err
+		}
 		summary = p.summary()
-		return err
+		return nil
 	})
 	if err != nil {
 		return Moved{}, err
@@ -181,12 +184,13 @@ func writeWithin(tx port.Tx, p movePlan, store port.StoreID) error {
 	var used []int
 	for _, it := range p.src.items() {
 		place := item.Place{Workspace: p.dst.ws.ID, Project: p.dst.project.ID, Parent: it.Place.Parent, Number: p.numbers[it.ID]}
-		var drafts []change.Draft
-		if it.ID == p.src.set.Root.ID {
+		root := it.ID == p.src.set.Root.ID
+		if root {
 			place.Parent = p.parent
-			drafts = append(drafts, change.NewSet("place", it.Place, place), change.NewSet("rank", it.Rank, p.rank))
-		} else {
-			drafts = append(drafts, change.NewSet("place", it.Place, place))
+		}
+		drafts := []change.Draft{change.NewSet("place", it.Place, place)}
+		if root && it.Rank != p.rank {
+			drafts = append(drafts, change.NewSet("rank", it.Rank, p.rank))
 		}
 		drafts = append(drafts, p.remaps[it.ID].Drafts...)
 		errs = append(errs, tx.WriteItems().Append(it.ID, drafts...))

@@ -81,3 +81,22 @@ func TestPreviewRowsAreExactlyTheStatusesMoveReplaces(t *testing.T) {
 		t.Errorf("行にない InProgress = %q, want 名前の一致", got)
 	}
 }
+
+// 移動先に元の分類(Pending は未着手)の既定がないときは、Remap と同じく移動先の初期ステータスを初めの値にする。
+func TestPreviewDefaultFallsBackToTheInitialStatus(t *testing.T) {
+	f := newFixtureWith(t, func(st *workspace.Settings) {
+		withoutPending(st)
+		delete(st.CategoryDefaults, workspace.CategoryTodo)
+		st.InitialStatus = st.Statuses[1].ID // InProgress
+	})
+	write(t, f.rec, store1, func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusPending))
+	})
+	got, err := f.svc.Preview(t.Context(), store1, apptest.SampleTask, toMobile())
+	if err != nil || len(got.Replacements) != 1 {
+		t.Fatalf("preview = %+v, %v", got, err)
+	}
+	if want := valueID(t, f.rec, "status", "InProgress"); got.Replacements[0].Default != want {
+		t.Errorf("default = %q, want 初期ステータス %q", got.Replacements[0].Default, want)
+	}
+}

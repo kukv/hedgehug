@@ -203,3 +203,36 @@ func TestMoveRefusesWhatCannotBeChosen(t *testing.T) {
 		t.Errorf("移動元が閲覧のみ: %v", err)
 	}
 }
+
+// 移すアイテムは、移動先の親の削除されていない子の末尾に入る。削除済みの子(順位が後ろの X)は数えない。
+func TestMovePlacesTheItemAfterTheLastLiveChildOfTheNewParent(t *testing.T) {
+	f := newFixture(t)
+	parent := mobileEpic
+	mk := func(id item.ID, n int, r string) item.Item {
+		return addItem(t, f.rec, item.Item{ID: id, Place: item.Place{Workspace: mobileWS, Project: mobileProject, Parent: &parent, Number: n}, Kind: item.Task, Rank: r, Title: "t"})
+	}
+	mk("01TESTIT000000000000000020", 2, "V")
+	gone := mk("01TESTIT000000000000000021", 3, "X")
+	if err := apptest.DeleteItems(t.Context(), f.rec, store1, gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := itemOf(t, f.rec, apptest.SampleTask).Rank, rank.After("V"); got != want {
+		t.Errorf("rank = %q, want %q(生きている子 V のあと)", got, want)
+	}
+}
+
+// 順位が変わらない(移動先の親に子がなく、いまも rank.First)ときは、rank の行を書かない。
+func TestMoveDoesNotWriteAnUnchangedRank(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range logOf(t, f.rec, store1, change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}) {
+		if r.T == change.Set && r.F == "rank" {
+			t.Errorf("rank の行を書いた: %+v", r)
+		}
+	}
+}

@@ -94,7 +94,11 @@ func replacements(src source, dst destination) []StatusRow {
 	var rows []StatusRow
 	for _, id := range transfer.Unmatched(present, src.settings, dst.settings, dst.project.ID) {
 		v, _ := valueOf(src.settings.Statuses, id)
-		rows = append(rows, StatusRow{Status: id, Name: v.Name, Count: counts[id], Choices: choices, Default: dst.settings.CategoryDefaults[v.Category]})
+		def := dst.settings.CategoryDefaults[v.Category]
+		if def == "" {
+			def = dst.settings.InitialStatus // Remap と同じく、分類の既定がなければ初期ステータス
+		}
+		rows = append(rows, StatusRow{Status: id, Name: v.Name, Count: counts[id], Choices: choices, Default: def})
 	}
 	return rows
 }
