@@ -37,7 +37,7 @@
 2. **戻しでルールが移動先に残る**: 移動先の保存のあと移動元の保存が失敗したとき、移動先から、写したプロジェクト・アイテムのフォルダと足したメンバーだけでなく、移動先のワークスペースのログに書いたプロジェクト別のルールの行と作った専用ルールも戻す。テストは Task 6。
 3. **プロジェクトが隠しているステータスの置き換え**: プロジェクトが「使わない」にしているステータスをアイテムがまだ持っているとき、そのステータスの名前が移動先のワークスペースにあれば置き換えない(ルールと一緒に移るので、移動の前と同じ状態になる)。置き換えの対象は「移動先のワークスペースにない名前」だけ。テストは Task 2(`StatusRows`)と Task 5。
 4. **アイテムのないプロジェクトと、削除済みの Epic**: アイテムが 0 件のプロジェクトも移せる(番号の行はプロジェクトの分だけ)。削除済みの Epic とその下は、削除済みのまま元の削除日時で移り、番号は削除されていない Epic の下をすべて振ったあと。テストは Task 1・5。
-5. **旧 ID のアドレスのタブ**: `/s/{store}/p/{旧 ID}/tree` は、移したプロジェクトのツリーのタブを開き、見出しの下に 1 行を出す。タブを変えると 1 行は消える。いまの ID で開いたときは出さない。テストは Task 11 と Task 12。
+5. **旧 ID のアドレスのタブ**: `/s/{store}/p/{旧 ID}/tree` は、移したプロジェクトのツリーのタブを開き、見出しの下に 1 行を出す。タブを変えると 1 行は消える。いまの ID で開いたときは出さない。テストは Task 11(`screen.test.ts`)と Task 12。
 
 ---
 
@@ -73,25 +73,26 @@
 | A5b-2 | プロジェクトの旧 ID のアドレス(`/s/{store}/p/{旧 ID}/{タブ}`)から開いたときは、開いたタブのまま移したプロジェクトを開き、プロジェクトの見出し(ID とタイトル)の下・タブの上に「{旧 ID} は {日時} に {新 ID} へ移動しました」を出す(そのあとさらに移したときは A5a-16 の「…へ移動し、その後 {いまの ID} へ移動しました」)。タブを変える・別の画面を開くと消える。普通に開いたときは出さない。仕様 02 の「プロジェクトの概要の上部」を「プロジェクトの画面の見出しの下」に直す(Task 12) | ユーザーの決定(2026-11-14) |
 | A5b-3 | 移す集まりは `transfer.CollectProject(p project.ID, all []item.Item) ProjectSet`: プロジェクトの下のすべてのアイテム(削除済みを含む)を、Epic の並び(削除されていない Epic を順位の順 → 削除済みの Epic を順位の順)ごとに、Epic → その下(`transfer.Number` と同じ深さ優先)の順に並べる。「外」は、`all` にいて集まりにいないアイテムとの関連(両方の側。A5a の `Cut`) | 02 **移動**「番号は、Epic を並び順に、それぞれ同じ規則で振る」「関連の解除(移すアイテムの集まりの外との関連)」、02「移すもの」の削除済みの子の規則を Epic にも当てる |
 | A5b-4 | 番号は `transfer.NumberProject(set ProjectSet, next int) map[item.ID]int`: Epic ごとに `transfer.Number(epic, その下, next)` を呼び、`next` を使った数だけ進める。プロジェクトの番号は、移動先のワークスペースの `numbering.Next(log, numbering.Projects)` | 02 **移動**、保存形式「使った最大番号」 |
-| A5b-5 | ステータスの置き換えの対象は、移すアイテム(削除済みを含む)のステータスと、このプロジェクトの専用ルールが使うステータス(`automation.Statuses`)のうち、名前が移動先のワークスペースにないもの。`transfer.Unmatched` と `transfer.Remap` に渡す `toRules` は空の `projectrule.Rules{}`(ルールは一緒に移るので、移動先のワークスペースのすべてのステータスが使える)。行の並びは移動元のワークスペースのステータスの並び。件数はアイテムの数で、ルールだけが使うものは 0(画面は件数を出さない)。選択肢は移動先のワークスペースのすべてのステータス、初めの値は同じ分類の移動先の既定 | 02 **移動** の 3 つ目の点(A5a の「移動先のプロジェクトが使わないもの」はここでは対象にしない)、Review Focus 3 |
-| A5b-6 | ルールの引き継ぎは `transfer.CarryRules(in CarryInput) Carried` の 1 か所。移動先に合わせる規則は 03「移動・削除・復元」のとおり: 使わないステータスは名前の一致、遷移のチェックは From と To の両方が名前で一致、使うテンプレートは名前と種類の一致(1 件も合わなければ何も書かない = 限定なし)、種類ごとの既定は名前と種類の一致(`projectrule.None` はそのまま、合わなければ書かない = ワークスペースと同じ)、動かさない指定は引き継がない。専用ルールはすべて移り、移動先では **新しい内部 ID**(`port.IDs`)で作る(同じ ID で作ると、前に同じワークスペースから移したときの `delete` の行が残っていて削除済みと読まれるため)。きっかけ・することのステータスは、名前が移動先にあればその値、なければ `statusChoice`、なければ同じ分類の移動先の既定。担当者の値は、別の Store なら `PeopleMap` で置き換える(`automation.Unassigned` はそのまま)。名前・有効・きっかけの種類はそのまま | 03「移動・削除・復元」、保存形式「移動・番号・旧 ID」 |
+| A5b-5 | ステータスの置き換えの対象は、移すアイテム(削除済みを含む)のステータスと、このプロジェクトの専用ルールが使うステータス(`automation.Statuses`)のうち、名前が移動先のワークスペースにないもの。`transfer.Unmatched` と `transfer.Remap` に渡す `toRules` は空の `projectrule.Rules{}`(ルールは一緒に移るので、移動先のワークスペースのすべてのステータスが使える)。行の並びは移動元のワークスペースのステータスの並び。件数はアイテムの数で、ルールだけが使うものは 0(画面は件数を出さない)。選択肢は、移動先のワークスペースのステータスのうち、引き継ぐ「使わないステータス」(A5b-6)に入らないもの(`transfer.UsableStatuses(to, carried)`。使わないステータスへ置き換えると、移したあとのアイテムや専用ルールがプロジェクトの使わないステータスを持つため)。初めの値は同じ分類の移動先の既定(既定は使わないことにできないので、必ず選択肢にある)。送られた置き換え先が選択肢にないときは、初めの値にする(`Remap`・`CarryRules` に渡す前に、app が選択肢にないものを捨てる) | 02 **移動** の 3 つ目の点(A5a の「移動先のプロジェクトが使わないもの」はここでは対象にしない)、Review Focus 3 |
+| A5b-6 | ルールの引き継ぎは `transfer.CarryRules(in CarryInput) Carried` の 1 か所。移動先に合わせる規則は 03「移動・削除・復元」のとおり: 使わないステータスは名前の一致(ただし、移動先の初期ステータスか分類ごとの既定のもの、つまり `projectrule` の `checkCanHide` が断るものは移さず、「移らないもの」の `hiddenFixed` に出す。B5a の「使わないことにできない」規則を移動でも守るため)、遷移のチェックは From と To の両方が名前で一致、使うテンプレートは名前と種類の一致(1 件も合わなければ何も書かない = 限定なし)、種類ごとの既定は名前と種類の一致(`projectrule.None` はそのまま、合わなければ書かない = ワークスペースと同じ)、動かさない指定は引き継がない。専用ルールはすべて移り、移動先では **新しい内部 ID**(`port.IDs`)で作る(同じ ID で作ると、前に同じワークスペースから移したときの `delete` の行が残っていて削除済みと読まれるため)。きっかけ・することのステータスは、名前が移動先にあればその値、なければ `statusChoice`、なければ同じ分類の移動先の既定。担当者の値は、別の Store なら `PeopleMap` で置き換える(`automation.Unassigned` はそのまま)。名前・有効・きっかけの種類はそのまま | 03「移動・削除・復元」、保存形式「移動・番号・旧 ID」 |
 | A5b-7 | 移動元のルールの行は、移動の保存の中で消す: `projectrule.ResetDrafts` の 4 つの区画の行と、専用ルールごとの `automation.DeleteDraft`。移動先には、合ったものの `add`・`set` と専用ルールの作成の行(`automation.Drafts(automation.Rule{}, r)`)を書く。同じ Store では、両方を同じ `Write` で書く | 03「移動元の分は、移動の保存の中で削除する」、保存形式 |
-| A5b-8 | 「移らないもの」は、サーバーが `[]transfer.NotCarried{Kind, Name, Missing []string, Count int}` で返し、文は画面が作る。`Kind` は `hidden`(「使わないステータス「{Name}」(移動先にありません)」)・`workflow`(Name は「{From} から {To}」、「遷移のチェック「{Name}」(移動先に「{Missing[0]}」がありません)」。両方ないときは「移動先に「{From}」「{To}」がありません」)・`template`(「使うテンプレート「{Name}」(移動先にありません)」)・`templateDefault`(Name は種類、「{種類} の既定のテンプレート「{テンプレート名}」(移動先にありません)」。テンプレート名は `Missing[0]`)・`disabled`(「ルールを動かさない指定 {Count} 件(移動先のルールには引き継ぎません)」、0 件なら行を出さない)。並びは hidden → workflow → template → templateDefault → disabled、各種類の中は移動元の設定の並び | 02 **移動** の 3 つ目の点の例 |
+| A5b-8 | 「移らないもの」は、サーバーが `[]transfer.NotCarried{Kind, Name, Missing []string, Count int}` で返し、文は画面が作る。`Kind` は `hidden`(「使わないステータス「{Name}」(移動先にありません)」)・`workflow`(Name は「{From} から {To}」、「遷移のチェック「{Name}」(移動先に「{Missing[0]}」がありません)」。両方ないときは「移動先に「{From}」「{To}」がありません」)・`template`(「使うテンプレート「{Name}」(移動先にありません)」)・`templateDefault`(Name は種類、「{種類} の既定のテンプレート「{テンプレート名}」(移動先にありません)」。テンプレート名は `Missing[0]`)・`hiddenFixed`(「使わないステータス「{Name}」(移動先では使わないことにできません)」)・`disabled`(「ルールを動かさない指定 {Count} 件(移動先のルールには引き継ぎません)」、0 件なら行を出さない)。並びは hidden・hiddenFixed(移動元の並びで混ぜる) → workflow → template → templateDefault → disabled、各種類の中は移動元の設定の並び | 02 **移動** の 3 つ目の点の例 |
 | A5b-9 | 断り: 移動先のワークスペースに同じ名前の削除されていないプロジェクトがある → `refusal.New("{移動先} には同じ名前のプロジェクトがあります")`(比べ方は `project.CheckRename` と同じ)。移動先のワークスペースに、移す専用ルールと同じ名前の削除されていないルールがある → `refusal.New("{移動先} には同じ名前のルールがあります: {名前}。先にルールの名前を変えてください")`(複数なら移動元の並びで最初の 1 つ)。順はプロジェクト → ルール。別の Store では、`prepare`(送る前)と `fn` の中(`Tx` から読み直して)の両方で調べる。{移動先} は A5b-10 の書き方 | 02 **移動** の 2・3 つ目の点、Review Focus 1 |
 | A5b-10 | {移動元}・{移動先} の書き方は A5a-11 と同じ: ワークスペース名、別の Store のときは「{Store 名} の {ワークスペース名}」。確認ダイアログの本文・断り・アクティビティ・トーストのすべてで使う。アクティビティは「プロジェクト「{タイトル}」を {移動元} から {移動先} へ移動」(移動先・移動元の両方の保存に同じ文)、戻しは「{新 ID} の移動を取り消し」(新 ID はプロジェクトの新 ID)、トーストは「{移動先} へ移動しました」 | 02 **移動** の 6・7 つ目の点、A5a-11 |
 | A5b-11 | 同じ Store の中の移動の行(1 回の `Write`): プロジェクトに `set place`(ワークスペースと新しい番号)と、順位が変わるなら `set rank`(移動先のワークスペースの削除されていないプロジェクトの末尾)。アイテムごとに `set place`(ワークスペースと新しい番号。プロジェクト・親・順位は変えない)と `transfer.Remap` の行。移動先のワークスペースに `number` の行(プロジェクトの番号を `numbering.Projects`、アイテムの番号を `numbering.Items`)とルールの行(A5b-7)、移動元のワークスペースにルールを消す行。転送記録はプロジェクト(`entity: project`、`old` は `HH-P1`、`new` は `MB-P2`)とアイテムごとに 1 行(`to_store` は自分) | 保存形式「移動・番号・旧 ID」 |
-| A5b-12 | 別の Store への移動の行: 移動先に、プロジェクトのフォルダ(`log.jsonl`・`description.md`)を `ProjectWriter.Import` で、アイテムのフォルダを `ItemWriter.Import` で写し、プロジェクトに `moved_in`(`FromProject` はそのプロジェクト自身、`Names` は空)・`set place`・`set rank`・オーナーが変わるなら `set owner`、アイテムに A5a と同じ `moved_in`・`set place`・`Remap` の行・外との関連の `remove`、移動先のワークスペースに `number` の行とルールの行、メンバーの `join`(A5a-11 と同じく同じ保存)。移動元は、アイテムとプロジェクトのフォルダを `Remove`、外のアイテムに関連の `remove`、移動元のワークスペースにルールを消す行、転送記録をプロジェクトとアイテムごとに 1 行。順と失敗の扱いは A5a-6(移動元の保存の直前に集まりを集め直し、違えば失敗して戻す) | 保存形式「移動・番号・旧 ID」の「別の Store」、02「保存」 |
+| A5b-12 | 別の Store への移動の行: 移動先に、プロジェクトのフォルダ(`log.jsonl`・`description.md`)を `ProjectWriter.Import` で、アイテムのフォルダを `ItemWriter.Import` で写し、プロジェクトに `moved_in`(`FromProject` はそのプロジェクト自身、`Names` は空)・`set place`・`set rank`・オーナーが変わるなら `set owner`、アイテムに A5a と同じ `moved_in`・`set place`・`Remap` の行・外との関連の `remove`、移動先のワークスペースに `number` の行とルールの行、メンバーの `join`(A5a-11 と同じく同じ保存)。移動元は、アイテムとプロジェクトのフォルダを `Remove`、外のアイテムに関連の `remove`、移動元のワークスペースにルールを消す行、転送記録をプロジェクトとアイテムごとに 1 行。順と失敗の扱いは A5a-6(移動元の保存の直前に集まりを集め直し、違えば失敗して戻す)。移動元の保存では、プロジェクト別のルールと専用ルールも `Tx` から読み直し、`prepare` で読んだものと違えば(あいだに別の書き手がルールを変えた)同じく `errSourceChanged` で失敗して戻す(読み直さずに消すと、あいだに足された専用ルールが移動元に残り、移動先にも移らない) | 保存形式「移動・番号・旧 ID」の「別の Store」、02「保存」 |
 | A5b-13 | 移動先に足す人は、A5a の `transfer.People` に `extra []string` を足して数える(プロジェクトのオーナー、専用ルールの担当者の値。`logs` にプロジェクトのログも入れるので、プロジェクトのコメントの書き手と履歴の操作者は `by` で数える)。A5a の呼び出しは `nil` を渡す | 02 **移動** の 4 つ目の点の「移すものに現れるすべての人」 |
 | A5b-14 | 戻し(移動元の保存が失敗したとき)は A5a-6 に加えて、移動先のワークスペースのログに書いたルールの行を戻す: 足した `add` を `remove`、`set` した種類ごとの既定を `set`(なし)、作った専用ルールを `automation.DeleteDraft`。移動先にプロジェクトの `moved_in` がない(保存されていなかった)なら何も書かない(A5a の `unjoin` と同じ判定を、プロジェクトのログで行う) | Review Focus 2 |
 | A5b-15 | 別の画面で利用者が削除したプロジェクト(`port.EditableProject` を通るもの)を移すときは、A5a-12 と同じく削除を取り消してから移し、06 のトースト「{旧 ID} は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました」を出す(応答の `Hedgehug-Restored`)。同じ Store は保存の中で `port.ReviveProject`、別の Store は写した行のその削除の操作の行を移動先の同じ保存で `change.Undo` で取り消し、両方の保存が済んでから `port.NoteRevived`(プロジェクトの旧 ID) | 06「他の書き手との重なり」、A5a-12 |
 | A5b-16 | 候補は `ProjectTargets`: 表示中の Store のうち閲覧のみでないもの(`StoreList`)の、自分のワークスペースと削除済みのワークスペースを除くすべてのワークスペース(プロジェクトの有無を問わない)。並びは A5a-13 と同じ(Store の並び → `workspace.RankOf` → 内部 ID)。候補がないときは、セレクトの代わりに「移せるワークスペースがありません」を出し、「移動」を無効にする | 02 **移動** の候補(アイテムの「プロジェクトが 1 つ以上」は付けない) |
 | A5b-17 | 旧 ID の解決は `transfers.Service.LocateProject(ctx, storeName, display string) (LocatedProject, error)`。A5a-15 と同じ順(Store 名の Store を先に、(a) いまの ID、(b) 旧い接頭辞、(c) その Store の転送記録の `entity: project` の行を `at` の新しい順に、`target` を表示中のすべての Store から探す)で、プロジェクトを探す。削除済みのプロジェクト・削除済みのワークスペースのプロジェクトは開かない。見つからないときの `Gone` は A5a-15 と同じ 4 つ(`deleted`・`purged`・`hidden`・`elsewhere`)。`display` の形は `{接頭辞}-P{番号}` | 02 **移動** の 5 つ目の点「解決の規則はアイテムと同じ」 |
-| A5b-18 | 仕様にない文言: 区画の説明文「このプロジェクトと、その下のすべてのアイテム(削除済みを含む)を、別のワークスペースへ移します。」、セレクトの名前「移動先のワークスペース」、確認ダイアログのタイトル「プロジェクトを移動」、ボタン「移動」「キャンセル」、「移らないもの」の `workflow` の両方ないときの文と `templateDefault` の文(A5b-8)、失敗のトースト(A5a-12 と同じ文: 「{移動先の Store 名} に送信できないため移動できません: {理由}」「オフラインのため {移動先の Store 名} へ移動できません」「移動できませんでした」、取り消しもできなかったとき「{旧 ID} を {移動先の Store 名} の {新 ID} に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください」)。Task 12 で仕様 02 に書き足し、PR の本文に一覧で出す | A5a-23 と同じ扱い |
-| A5b-19 | 移したあと、画面は移したプロジェクトの新しいアドレスの「設定」タブへ移る(履歴に積まない `replace`)。サイドバーの一覧を読み直す。ほかの書き手が移したときは、プロジェクトの画面の読み直しで見つからなくなるので、いまの扱い(A4b のプロジェクトがないときの移り先)のまま | A5a-18(自分で移したときは移した先を開く)をプロジェクトの画面に当てた |
+| A5b-18 | 仕様にない文言: {移動元}・{移動先} の書き方(A5b-10)、「移らないもの」の `hiddenFixed` の文(A5b-8)、区画の説明文「このプロジェクトと、その下のすべてのアイテム(削除済みを含む)を、別のワークスペースへ移します。」、セレクトの名前「移動先のワークスペース」、確認ダイアログのタイトル「プロジェクトを移動」、ボタン「移動」「キャンセル」、「移らないもの」の `workflow` の両方ないときの文と `templateDefault` の文(A5b-8)、失敗のトースト(A5a-12 と同じ文: 「{移動先の Store 名} に送信できないため移動できません: {理由}」「オフラインのため {移動先の Store 名} へ移動できません」「移動できませんでした」、取り消しもできなかったとき「{旧 ID} を {移動先の Store 名} の {新 ID} に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください」)。Task 12 で仕様 02 に書き足し、PR の本文に一覧で出す | A5a-23 と同じ扱い |
+| A5b-19 | 移したあと、画面は移したプロジェクトの新しいアドレスの「設定」タブへ移り(履歴に積まない `replace`)、**そのあとで**サイドバーの一覧を読み直す(先に読み直すと、古いアドレスが「出していたプロジェクトが消えた」と見られ、ワークスペースの概要へ移ってしまう。`screen.ts` の `shown`)。新しいアドレスは、一覧を読み直すまでは `locateProject` のいまの ID で解決するので、1 行は出ない。ほかの書き手(同期・別のタブ・別のプログラム)が移したときは、いまの扱い(A4b-22: ワークスペースの概要へ移る)のまま: `screen.ts` は、出していたプロジェクトのアドレスを読み直すときは `locateProject` を呼ばない | A5a-18(自分で移したときは移した先を開き、ほかの書き手のときは切り替えない)をプロジェクトの画面に当てた |
 | A5b-20 | 失敗の扱いは A5a-12 と同じ: 送れない・オフライン・断り(A5b-9)・それ以外はトーストを出してダイアログを開いたまま。`NotFound` と取り消しもできなかったときは、ダイアログを閉じて画面を読み直す。オフラインは、移動先に remote があり `navigator.onLine === false` のとき画面が決める | A5a-12 |
 | A5b-21 | プロジェクトの履歴は、`set place` の行でワークスペースが変わったもの(同じ Store)と `moved_in` の行(別の Store)を「{移動元のワークスペース名} から移動」と出す。同じ Store の名前は `ProjectContext.WorkspaceName`(削除済み・ないワークスペースは「(削除された値)」)、別の Store は `moved_in` の `FromWorkspaceName`。同じ操作に `moved_in` があれば `set place` は出さない。`set owner`(人の置き換え)は、ほかの変更と同じく出す | 02 **移動** の 5 つ目の点、「履歴」の表 |
 | A5b-22 | API(`/api/…`): `GET stores/{store}/projects/{project}/transfer-targets` → `[{storeId, storeName, workspaceId, workspaceName}]`、`GET stores/{store}/projects/{project}/transfer-preview?toStore=&toWorkspace=` → A5b-23、`POST stores/{store}/projects/{project}/transfer`(本文 `{toStore, toWorkspace, statusChoices}` → 200 `{toStore, projectId, display, destination}`。`destination` は {移動先} の文)。送れなかったときは 422、取り消しもできなかったときは 409(A5a-19 と同じ)。`GET locate-project?store=&id=` → `{kind: "found", storeId, projectId, movedFrom?}` か `{kind: "gone", …}`(A5a-19 と同じ形)か 404 | A5a-19 に合わせる |
 | A5b-23 | 予告 `ProjectPreview`: `items`(削除されていないアイテムの数 N)・`deleted`(削除済みのアイテムの数 M)・`prefix`(移動先の接頭辞)・`source`・`destination`(A5b-10 の {移動元}・{移動先} の文)・`crossStore`・`remoteNotice`・`destinationHasRemote`・`hasRules`(プロジェクト別のルールか専用ルールがあるか)・`notCarried`(A5b-8)・`replacements`(A5a の `StatusRow` と同じ形。A5b-5)。空の配列は `[]` | 02 **移動** の 1〜3 つ目の点 |
+| A5b-24 | 旧 ID の 1 行の持ち方: `resolveRoute` はプロジェクトの旧 ID の解決で `movedFrom` を添えて返し、`screen.ts` は、それを `Screen.projectMoved: Readable<{storeId, projectId, tab, moved: MovedFrom} \| null>` に置いてから、アドレスを新しいプロジェクトのもの(同じタブ)に替える(履歴に積まない)。`current` の `Resolved` には `movedFrom` を入れない(同じ画面の判定 `sameScreen` を変えないため)。`projectMoved` は、そのあと出す画面が別のプロジェクトか別のタブになったら null にする。`ProjectScreen.svelte` は、出しているプロジェクトとタブが `projectMoved` と同じときだけ `movedLine` を出す | A5b-2。アドレスを替えると解決し直すので、route に持つと消える(アイテムは `movedNotice` に持つのと同じ考え) |
 
 ---
 
@@ -111,7 +112,7 @@
 | `cmd/hedgehug/wire.go`・`wire_e2e.go` | 変更 | `IDs` の配線 |
 | `web/packages/core/src/model/transfer.ts`・`port/transfers.ts`・`web/packages/api/src/transfers.ts` | 変更 | 型・口・api の実装 |
 | `web/packages/core/src/features/transfers/projectDialog.ts`・`projectDialogText.ts` | 新規 | 区画と確認ダイアログのモデル・文 |
-| `web/packages/core/src/features/router/resolve.ts` | 変更 | プロジェクトの旧 ID |
+| `web/packages/core/src/features/router/resolve.ts`・`features/screen/screen.ts` | 変更 | プロジェクトの旧 ID、`projectMoved`(A5b-24) |
 | `web/app/src/screens/project/ProjectTransfer.svelte`・`ProjectTransferDialog.svelte`・`ProjectSettings.svelte`・`ProjectScreen.svelte`・`web/app/src/wireActions.ts` | 新規・変更 | 区画・ダイアログ・見出しの下の 1 行 |
 | `web/e2e/project-transfer.spec.ts` | 新規 | 通しのテスト |
 
@@ -125,7 +126,7 @@
 | 4 | `app/transfers`: `ProjectTargets`・`ProjectPreview` | 1・2 |
 | 5 | `app/transfers`: 同じ Store の中のプロジェクトの移動 | 3・4 |
 | 6 | `app/transfers`: 別の Store へのプロジェクトの移動と戻し | 5 |
-| 7 | `LocateProject` と、プロジェクトの履歴の「{ワークスペース名} から移動」 | 5 |
+| 7 | `LocateProject` と、プロジェクトの履歴の「{ワークスペース名} から移動」 | 6(テストで別の Store へ移すため) |
 | 8 | API と配線 | 4〜7 |
 | 9 | 画面の口と区画・ダイアログのモデル(core) | 8 |
 | 10 | 区画・ダイアログの部品と、移したあとの移り先(app) | 9 |
@@ -169,7 +170,7 @@
 | `createProjectTransfer` | `web/packages/core/src/features/transfers/projectDialog.ts` | 区画(候補・選んだ移動先)と確認ダイアログ(予告・置き換えの選択・送信)。Task 9 |
 | `projectTransferIntro`・`notCarriedLine`・`projectMovedMessage` | `web/packages/core/src/features/transfers/projectDialogText.ts` | Task 9 |
 | `projectTransfer` | `web/app/src/wireActions.ts` | `createProjectTransfer` の組み立て |
-| route の `movedFrom` | `web/packages/core/src/features/router/resolve.ts` | `{ name: "project"; storeId; projectId; tab; movedFrom?: MovedFrom }` |
+| `resolveRoute` のプロジェクトの `movedFrom`・`Screen.projectMoved` | `web/packages/core/src/features/router/resolve.ts`・`features/screen/screen.ts` | `{ name: "project"; storeId; projectId; tab; movedFrom?: MovedFrom }`(`resolveRoute` の戻り値だけ。`current` には入れない)、`projectMoved: Readable<{ storeId: string; projectId: string; tab: ProjectTab; moved: MovedFrom } \| null>` |
 
 ---
 
@@ -240,6 +241,8 @@ git commit -m "feat: プロジェクトの下のすべてのアイテムを移�
 - `TestCarryRulesOwnRulesGetNewIDsAndStatuses`: 専用ルール「レビュー待ち」(きっかけ: ステータスが `Review`、すること: ステータスを `Done`)、`StatusChoice{Review: 移動先の InProgress}` → `Created` は新しい ID(`NewID` の値)・`Scope` は同じプロジェクト・きっかけ `移動先の InProgress`・値 `移動先の Done`。`Destination` に `automation.Drafts(automation.Rule{}, created)` の行。選択がなければ同じ分類の移動先の既定。
 - `TestCarryRulesOwnRuleAssigneeAcrossStores`: することが担当者 `Taro` で `People{"taro": "TARO"}` → 値は `TARO`。`automation.Unassigned` は変えない。`People == nil` なら変えない。
 - `TestCarryRulesSourceRemovesEverything`: `Source` が `projectrule.ResetDrafts` の 4 区画の行と、専用ルールごとの `automation.DeleteDraft`。
+- `TestCarryRulesHiddenThatCannotBeHidden`: 使わない `Todo` の名前が移動先の初期ステータス、`Done` の名前が移動先の「完了」の既定 → どちらも移動先に書かず、`NotCarried` に `{hiddenFixed, "Todo"}`・`{hiddenFixed, "Done"}`。
+- `TestCarryRulesKeepsRuleWhenStatusesCollapse`: きっかけ `Review`・すること `Pending` の専用ルールで、両方を移動先の `InProgress` に置き換える(きっかけとすることが同じになる)→ ルールは削除も無効化もせず、そのまま作る(03「ルールは、削除も無効化もしない」。ステータスの削除の追従が無効にするのとは違う)。
 - `TestRuleStatuses`: きっかけとすることのステータスを重複なく返す。担当者のルールの値は入らない。
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -268,7 +271,7 @@ git commit -m "feat: プロジェクトの移動でプロジェクト別のル�
 ### Task 3: 口と保存: `ProjectWriter.Import`・`Remove`
 
 **Files:**
-- Modify: `internal/app/port/stores.go`、`internal/infra/gitstore/write.go`、`internal/app/apptest/stores.go`・`sync.go`、照合テストのある `internal/app/apptest/stores_contract_*.go` のうち行数に余裕のあるもの(`stores_contract_cases.go` は 269 行)
+- Modify: `internal/app/port/stores.go`、`internal/infra/gitstore/write.go`、`internal/app/apptest/stores.go`・`sync.go`、`internal/app/apptest/stores_contract.go`(268 行。いまの `contractImport` とアイテムの `Import` の断りのケースを、種類(アイテム・プロジェクト)で回す形にして、行を増やしすぎない。300 行を超えるなら、まとまりを同じパッケージの既存の `stores_contract_cases.go` へ移す)
 - Test: 照合テスト(gitstore と偽物の両方で流れる)
 
 **Interfaces:**
@@ -277,6 +280,7 @@ git commit -m "feat: プロジェクトの移動でプロジェクト別のル�
 - [ ] **Step 1: 失敗する照合テストを書く**
 
 - `ImportProject`: 別のプロジェクトのログと説明を `Import` すると、コミットのあと `Projects().Get` と `Description` で読め、`project.yaml` が作り直される。同じ ID がすでにあれば `ErrInvalidOperation`。
+- `ImportProjectThenAppend`: 写したプロジェクトに、同じ Tx で `moved_in`・`set place` の行を足せる(gitstore と偽物の両方)。
 - `RemoveProject`: `Remove` すると、コミットのあと `Projects().Get` が `ErrNotFound`、`List` に出ない。下のアイテムのフォルダは消さない(呼ぶ側がアイテムごとに消す)。ないものは `ErrNotFound`。
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -368,6 +372,7 @@ git commit -m "feat: プロジェクトの移動先の候補と確認ダイア�
 - `TestMoveProjectWithoutItems`: アイテム 0 件のプロジェクトを移せる。`number` の行は `projects` の 1 行だけ。
 - `TestMoveProjectRevivesDeletedElsewhere`: 別の画面で削除したプロジェクト(root: true)を移すと、プロジェクトと下のアイテムの削除が取り消され、`port.WithRevived` に旧 ID が積まれる。
 - `TestMoveProjectRefusals`: 閲覧のみの Store → 「閲覧のみの Store です」。移動先が同じワークスペース・削除済みのワークスペース・閲覧のみの Store → `port.ErrNotFound`。表示中でない Store → `port.ErrStoreNotFound`。
+- `TestMoveProjectRoundTripCarriesRulesBack`: Web → Mobile → Web と移すと、使わないステータス・遷移のチェック・使うテンプレートが Web に戻り(前の移動の `remove` のあとの `add` が効く)、専用ルールも Web に(3 つ目の新しい ID で)戻って削除済みと読まれない。
 - `TestMoveProjectKeepsDeletedItemsDeleted`: 削除済みの Epic と下のものが、削除済みのまま、元の削除の操作のまま移り、番号は削除されていない Epic の下のあと。
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -414,6 +419,7 @@ A5a の `move_store_test.go` の偽の `Delivery` と Store ごとのロック�
 - `TestMoveProjectAcrossSendFails`: 送れない → `*SendError`、移動元は変わらない。
 - `TestMoveProjectAcrossRollsBack`: 移動元の保存が失敗 → 移動先からフォルダ・足したメンバー・ルールの行・作った専用ルールが消える(`projectrule.FromLog(...).Of(p)` が空、`automation.FromLog` にない)。アクティビティは「MB-P2 の移動を取り消し」。戻しも失敗 → `*UndoError{Old: "HH-P1", NewDisplay: "TM-P2"}`。
 - `TestMoveProjectAcrossSourceChanged`: `prepare` のあと移動元のプロジェクトにアイテムを足すと、移動元の保存が失敗して戻す。
+- `TestMoveProjectAcrossRulesChanged`: `prepare` のあと移動元のワークスペースにこのプロジェクトの専用ルールを足すと、移動元の保存が失敗して戻す(移動元にルールが残り、移動先にはない)。
 - `TestMoveProjectAcrossRevives`: 別の画面で削除されたプロジェクトは、移動先で削除が取り消され、両方の保存のあとで旧 ID が積まれる。
 - `TestMoveProjectAcrossOppositeDirections`: A → B と B → A のプロジェクトの移動を同時に流しても止まらない(A5a の Review Focus 2 のテストと同じ組み立て)。
 
@@ -448,7 +454,7 @@ git commit -m "feat: プロジェクトを別の Store のワークスペース�
 - Test: `internal/app/transfers/project_locate_test.go`(新規)、`internal/domain/history/project_test.go`
 
 **Interfaces:**
-- Consumes: A5a の `snapshot`・`whyGone`・`storeName`・`splitNamed`、Task 5・6
+- Consumes: A5a の `snapshot`・`whyGone`・`storeName`・`splitNamed`、Task 5・6(Task 6 のあとに始める)
 - Produces: `LocatedProject`・`LocateProject`、`ProjectContext.WorkspaceName`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -540,7 +546,7 @@ git commit -m "feat: プロジェクトの移動と旧 ID の解決の API を�
 `projectDialogText.test.ts`:
 
 - `projectTransferIntro`: 「「Web」を Web から Mobile へ移動します。3 件のアイテムは MB の番号になります。」、`deleted: 1` で「削除済みの 1 件も一緒に移ります。」を続ける。`crossStore` で「移さないアイテムとの関連を解除します。移すもの同士の関連は残ります。移動先のメンバーにいない人は、移動先のメンバーに加わります。」、`remoteNotice` で「移動先に remote がないため、ほかの人の Store からは見えなくなります。」、`hasRules` で「このプロジェクトのルールは、移動先の同じ名前のステータス・テンプレートに合わせて移ります。」。
-- `notCarriedLine`: A5b-8 の 5 種類と、遷移のチェックの両方ないときの文。
+- `notCarriedLine`: A5b-8 の 6 種類(`hiddenFixed` を含む)と、遷移のチェックの両方ないときの文。
 - 置き換えの行の見出し: 件数があれば「Review(2 件)」、0 なら「Pending」。
 - `projectMovedMessage("Mobile")` が「Mobile へ移動しました」。
 
@@ -606,18 +612,20 @@ git commit -m "feat: プロジェクトの設定に別のワークスペース�
 ### Task 11: プロジェクトの旧 ID のアドレスと見出しの下の 1 行
 
 **Files:**
-- Modify: `web/packages/core/src/features/router/resolve.ts`(と、そのテスト)、`web/app/src/screens/project/ProjectScreen.svelte`
-- Test: `web/packages/core/src/features/router/resolve.test.ts`
+- Modify: `web/packages/core/src/features/router/resolve.ts`、`web/packages/core/src/features/screen/screen.ts`(`projectMoved`。A5b-19・A5b-24)、`web/app/src/wire.ts`(`screen` の組み立てに `locateProject`)、`web/app/src/screens/project/ProjectScreen.svelte`
+- Test: `web/packages/core/src/features/router/resolve.test.ts`・`web/packages/core/src/features/screen/screen.test.ts
 
 **Interfaces:**
 - Consumes: `TransfersPort.locateProject`、A5a の `movedLine`・`goneText`
-- Produces: route の `movedFrom`(「タスク間の名前」)
+- Produces: `resolveRoute` のプロジェクトの結果の `movedFrom`、`Screen.projectMoved`(A5b-24)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - カタログ(いまの接頭辞・旧い接頭辞)で見つかるプロジェクトのアドレスは、`locateProject` を呼ばない。
 - 見つからなければ `locateProject` を呼び、`found` なら `{name: "project", storeId, projectId, tab: <アドレスのタブ>, movedFrom}`。`gone` は `goneText` のトーストとホーム。404 はホーム。
-- 見つかったあと、アドレスは新しいプロジェクトのもの(同じタブ)に替わる(アイテムの旧 ID と同じ置き換え)。
+- `screen.test.ts`: 旧 ID のアドレスで開くと、`projectMoved` に `{storeId, projectId, tab: "tree", moved}` が入り、アドレスが新しいプロジェクトの同じタブに替わる(`replace`)。替えたあとの解決でも `projectMoved` は残り、タブを「概要」に変えると null になる。
+- `screen.test.ts`: 出していたプロジェクトのアドレスを読み直したとき(一覧の読み直しで、そのプロジェクトがほかの書き手に移されて見つからない)は `locateProject` を呼ばず、いまの扱いどおりワークスペースの概要へ移る。
+- `screen.test.ts`: 自分で移したあと(A5b-19 の順: 新しいアドレスへ `replace` してから一覧を読み直す)は、`projectMoved` が null のままで、ワークスペースの概要へも移らない。
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -626,7 +634,7 @@ Expected: FAIL
 
 - [ ] **Step 3: 実装する**
 
-`ProjectScreen.svelte` は、route に `movedFrom` があれば見出しの下・タブの上に `<p>{movedLine(m, now)}</p>` を出す。タブを変えると route が新しくなり `movedFrom` がないので消える(A5b-2)。
+A5b-24。`ProjectScreen.svelte` は、`projectMoved` が出しているプロジェクトとタブと同じときだけ、見出しの下・タブの上に `<p>{movedLine(m, now)}</p>` を出す(A5b-2)。
 
 - [ ] **Step 4: 通す**
 
@@ -648,11 +656,11 @@ git commit -m "feat: プロジェクトの旧 ID のアドレスから移した�
 - Create: `web/e2e/project-transfer.spec.ts`
 - Modify: `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/02-items-projects.md`(A5b-2 の「プロジェクトの画面の見出しの下」と A5b-18 の文言)、この計画の末尾(「実装で計画から変えたこと」)
 
-**増やす数: spec 1 ファイル・テスト 2 件(3 幅で 6 回)。** 移動先は A5a のサンプル(`e2e` の Store のワークスペース「Mobile」、`team` の Store のワークスペース「Team」)。自分のワークスペースを `createWorkspace` で作って使う。
+**増やす数: spec 1 ファイル・テスト 2 件(3 幅で 6 回)。** e2e のサーバーは worker ごとで、ほかの spec と Store を共有する。A5a の `transfer.spec.ts` はサンプルの「Mobile」の次の番号を `MB-2` と決め打ちしているので、**同じ Store の移動先には「Mobile」を使わず**、`createWorkspace` で移動元と移動先の 2 つのワークスペースを作って使う。別の Store の移動先は `team` の Store のワークスペース「Team」(A5a の spec は `TM-\d+` で受けるので重ならない)。
 
 | テスト | 確かめること |
 |---|---|
-| 1 件目 | 設定の区画で「e2e / Mobile」を選び、確認ダイアログの本文を見て「移動」→ トースト「Mobile へ移動しました」、アドレスが `MB-P…/settings`。続けて「team / Team」へ移す → トースト「team の Team へ移動しました」。旧 ID の `/s/e2e/p/{prefix}-P1/tree` がツリーのタブで開き、見出しの下に「{prefix}-P1 は … に MB-P… へ移動し、その後 TM-P… へ移動しました」。タブを「概要」に変えると消える。移したアイテムの旧 ID `/s/e2e/i/{prefix}-1` も開く |
+| 1 件目 | 移動元のワークスペース(接頭辞 `{prefix}`)にプロジェクト・Epic・Task を作り、設定の区画で「e2e / {移動先のワークスペース名}」を選び、確認ダイアログの本文を見て「移動」→ トースト「{移動先のワークスペース名} へ移動しました」、アドレスが `{移動先の接頭辞}-P1/settings` で、見出しの下に 1 行が出ない。続けて「team / Team」へ移す → トースト「team の Team へ移動しました」。旧 ID の `/s/e2e/p/{prefix}-P1/tree` がツリーのタブで開き、見出しの下に「{prefix}-P1 は … に {移動先の接頭辞}-P1 へ移動し、その後 TM-P… へ移動しました」。タブを「概要」に変えると消える。移したアイテムの旧 ID `/s/e2e/i/{prefix}-1` も開く |
 | 2 件目 | 閲覧のみの Store のプロジェクトの設定で、区画のセレクトと「移動」が無効で「閲覧のみの Store です」が添う |
 
 - [ ] **Step 1: 部品の名前を突き合わせる**
