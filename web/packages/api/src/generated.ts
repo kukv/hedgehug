@@ -740,6 +740,18 @@ export interface ReorderItem {
   anchor: string;
 }
 
+export interface RepoFailure {
+  /** プロジェクトのリポジトリの書き方のまま */
+  repo: string;
+  /** 「PR を探せませんでした: 」に続ける文言 */
+  text: string;
+}
+
+export interface RepoFailures {
+  /** リポジトリの大文字小文字を区別しない辞書順。失敗のないリポジトリは入れない */
+  failures: RepoFailure[];
+}
+
 export interface SaveItemAsTemplate {
   name: string;
   /** 子と Step を含める */
@@ -3320,6 +3332,32 @@ return fetcher<Project>(getSetProjectOwnerUrl(store,project),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setProjectOwnerBody)
+  }
+);}
+
+
+
+export const getListRepoFailuresUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repo-failures`
+}
+
+/**
+ * @summary プロジェクトのリポジトリごとの、PR を探せなかった理由を返す
+ */
+export const listRepoFailures = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<RepoFailures> => {
+
+  return fetcher<RepoFailures>(getListRepoFailuresUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 )
@@ -45,6 +46,23 @@ func TestEditEndpoints(t *testing.T) {
 	check(t, "add the same repo", api.Post(one+"/repos", map[string]any{"repo": "Example-Org/WEB"}), http.StatusUnprocessableEntity, "もう追加されています")
 	check(t, "add a bad repo", api.Post(one+"/repos", map[string]any{"repo": "web"}), http.StatusUnprocessableEntity, "リポジトリは owner/name の形式で入力してください")
 	check(t, "remove repo", api.Post(one+"/repos/remove", map[string]any{"repo": "example-org/web"}), http.StatusOK, `"repos":[]`)
+}
+
+// リポジトリを追加したら、そのリポジトリをすぐ探す(D4b-9)。断られたら探さない。
+func TestAddRepoStartsScan(t *testing.T) {
+	api, gh := newAPIWithGitHub(t)
+	check(t, "add a bad repo", api.Post(one+"/repos", map[string]any{"repo": "web"}), http.StatusUnprocessableEntity, "")
+	check(t, "add repo", api.Post(one+"/repos", map[string]any{"repo": " example-org/web "}), http.StatusOK, `"repos":["example-org/web"]`)
+	deadline := time.Now().Add(5 * time.Second)
+	for gh.ReadPullsCalls("example-org/web") < 1 {
+		if time.Now().After(deadline) {
+			t.Fatalf("ReadPulls calls = %d, want 1", gh.ReadPullsCalls("example-org/web"))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := gh.ReadPullsCalls("web"); n != 0 {
+		t.Errorf("refused repo was scanned: %d", n)
+	}
 }
 
 func TestEditMissingProjectIs404(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/apierr"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -78,8 +79,8 @@ type getInput struct {
 	Project string `path:"project"`
 }
 
-// Register は、プロジェクトの API を登録する。
-func Register(api huma.API, svc appprojects.Service) {
+// Register は、プロジェクトの API を登録する。links は、リポジトリを足したあとの PR の探索に使う(D4b-9)。
+func Register(api huma.API, svc appprojects.Service, links githublink.Links) {
 	huma.Register(api, huma.Operation{OperationID: "create-project", Method: http.MethodPost, Path: "/api/stores/{store}/workspaces/{workspace}/projects", Summary: "プロジェクトを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
 			if err := checkDates(in.Body.Start, in.Body.End); err != nil {
@@ -114,6 +115,6 @@ func Register(api huma.API, svc appprojects.Service) {
 			}
 			return &oneOutput{Body: toAPI(p)}, nil
 		})
-	registerEdit(api, svc)
+	registerEdit(api, svc, links)
 	registerDelete(api, svc)
 }

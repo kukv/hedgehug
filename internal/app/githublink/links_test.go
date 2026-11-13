@@ -160,7 +160,6 @@ func (f *linkFixture) add(t *testing.T, store port.StoreID, id item.ID, kind ite
 	return f.links.Add(t.Context(), store, id, githublink.AddLinkInput{Kind: kind, Repo: repo, Number: number, AddToProject: toProject})
 }
 
-//nolint:unparam // Task 9 のテストが別の Store でも使う
 func (f *linkFixture) list(t *testing.T, store port.StoreID, id item.ID) []githublink.LinkRow {
 	t.Helper()
 	rows, err := f.links.List(t.Context(), store, id)

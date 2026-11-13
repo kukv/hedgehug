@@ -2,11 +2,14 @@ package projects
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/apierr"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -78,7 +81,18 @@ func one(p project.Project, err error) (*oneOutput, error) {
 	return &oneOutput{Body: toAPI(p)}, nil
 }
 
-func registerEdit(api huma.API, svc appprojects.Service) {
+// scanLater は、プロジェクトに足したリポジトリ repo を、応答を待たせずに裏で探す(D4b-9)。失敗はログに出す。
+func scanLater(ctx context.Context, links githublink.Links, store port.StoreID, repo string) {
+	repo = strings.TrimSpace(repo)
+	go func() {
+		if err := links.ScanRepo(context.WithoutCancel(ctx), store, repo); err != nil {
+			slog.Warn("リポジトリの PR を探せませんでした", "store", store, "repo", repo, "err", err)
+		}
+	}()
+}
+
+// registerEdit は、プロジェクトの編集の API を登録する。links は、リポジトリを足したあとの PR の探索に使う。
+func registerEdit(api huma.API, svc appprojects.Service, links githublink.Links) {
 	const path = "/api/stores/{store}/projects/{project}"
 	huma.Register(api, huma.Operation{OperationID: "rename-project", Method: http.MethodPut, Path: path + "/title", Summary: "プロジェクトのタイトルを変える"},
 		func(ctx context.Context, in *renameInput) (*oneOutput, error) {
@@ -101,7 +115,11 @@ func registerEdit(api huma.API, svc appprojects.Service) {
 		})
 	huma.Register(api, huma.Operation{OperationID: "add-project-repo", Method: http.MethodPost, Path: path + "/repos", Summary: "プロジェクトにリポジトリを結びつける"},
 		func(ctx context.Context, in *repoInput) (*oneOutput, error) {
-			return one(svc.AddRepo(ctx, port.StoreID(in.Store), project.ID(in.Project), in.Body.Repo))
+			p, err := svc.AddRepo(ctx, port.StoreID(in.Store), project.ID(in.Project), in.Body.Repo)
+			if err == nil {
+				scanLater(ctx, links, port.StoreID(in.Store), in.Body.Repo)
+			}
+			return one(p, err)
 		})
 	huma.Register(api, huma.Operation{OperationID: "remove-project-repo", Method: http.MethodPost, Path: path + "/repos/remove", Summary: "プロジェクトからリポジトリを外す"},
 		func(ctx context.Context, in *repoInput) (*oneOutput, error) {

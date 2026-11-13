@@ -2,7 +2,11 @@ package github
 
 import (
 	"context"
+	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -92,6 +96,9 @@ func registerLinks(api huma.API, svc githublink.Links) {
 			err := svc.Add(ctx, port.StoreID(in.Store), item.ID(in.Item), githublink.AddLinkInput{
 				Kind: itemlink.Kind(b.Kind), Repo: b.Repo, Number: b.Number, AddToProject: b.AddToProject,
 			})
+			if err == nil && b.AddToProject {
+				scanLater(ctx, svc, port.StoreID(in.Store), b.Repo)
+			}
 			return nil, apierr.From(err)
 		})
 	huma.Register(api, huma.Operation{OperationID: "remove-link", Method: http.MethodPost, Path: path + "/remove", DefaultStatus: http.StatusNoContent, Summary: "リンクを外す(PR は解除の記録に入る)"},
@@ -112,6 +119,47 @@ func registerLinks(api huma.API, svc githublink.Links) {
 			}
 			return out, nil
 		})
+	registerRepoFailures(api, svc)
+}
+
+// RepoFailure は、プロジェクトの概要の「PR を探せませんでした: {text}」の 1 行。
+type RepoFailure struct {
+	Repo string `json:"repo" doc:"プロジェクトのリポジトリの書き方のまま"`
+	Text string `json:"text" doc:"「PR を探せませんでした: 」に続ける文言"`
+}
+
+// RepoFailures は、プロジェクトのリポジトリの、PR を探せなかった理由の一覧。
+type RepoFailures struct {
+	Failures []RepoFailure `json:"failures" nullable:"false" doc:"リポジトリの大文字小文字を区別しない辞書順。失敗のないリポジトリは入れない"`
+}
+
+type repoFailuresOutput struct{ Body RepoFailures }
+
+func registerRepoFailures(api huma.API, svc githublink.Links) {
+	huma.Register(api, huma.Operation{OperationID: "list-repo-failures", Method: http.MethodGet, Path: "/api/stores/{store}/projects/{project}/repo-failures", Summary: "プロジェクトのリポジトリごとの、PR を探せなかった理由を返す"},
+		func(ctx context.Context, in *projectLinksPath) (*repoFailuresOutput, error) {
+			m, err := svc.RepoFailures(ctx, port.StoreID(in.Store), project.ID(in.Project))
+			if err != nil {
+				return nil, apierr.From(err)
+			}
+			out := &repoFailuresOutput{Body: RepoFailures{Failures: []RepoFailure{}}}
+			for _, repo := range slices.SortedFunc(maps.Keys(m), func(a, b string) int {
+				return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+			}) {
+				out.Body.Failures = append(out.Body.Failures, RepoFailure{Repo: repo, Text: m[repo]})
+			}
+			return out, nil
+		})
+}
+
+// scanLater は、プロジェクトに足したリポジトリ repo を、応答を待たせずに裏で探す(D4b-9)。失敗はログに出す。
+func scanLater(ctx context.Context, svc githublink.Links, store port.StoreID, repo string) {
+	repo = strings.TrimSpace(repo)
+	go func() {
+		if err := svc.ScanRepo(context.WithoutCancel(ctx), store, repo); err != nil {
+			slog.Warn("リポジトリの PR を探せませんでした", "store", store, "repo", repo, "err", err)
+		}
+	}()
 }
 
 func linkRows(rows []githublink.LinkRow, err error) (*linkRowsOutput, error) {

@@ -1,8 +1,11 @@
 package projects_test
 
 import (
+	"context"
+	"maps"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,23 +13,78 @@ import (
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/githublink"
+	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
+	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
 func newAPI(t *testing.T) humatest.TestAPI {
 	t.Helper()
+	api, _ := newAPIWithGitHub(t)
+	return api
+}
+
+// newAPIWithGitHub は、newAPI の組み立てと、リポジトリを足したときの探索(Links)が問い合わせる偽の GitHub。
+// Store S1 にはアカウント A1 を割り当てる。
+func newAPIWithGitHub(t *testing.T) (humatest.TestAPI, *apptest.GitHub) {
+	t.Helper()
 	ids := apptest.NewIDs()
-	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), ids)
+	clock := apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC))
+	s := apptest.NewStores(clock, ids)
 	s.AddStore("S1")
 	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
 		t.Fatal(err)
+	}
+	gh := &apptest.GitHub{Users: map[string]string{"tok": "taro"}}
+	links := githublink.Links{
+		Stores: s, Identity: apptest.Identity{Login: "taro"}, Tokens: tokens{}, GitHub: gh,
+		StoreGH: &apptest.StoreGitHub{Stores: []port.StoreGitHubInfo{{ID: "S1", Name: "チーム", Account: "A1"}}},
+		Checks:  apptest.NewChecks(), Scans: &scans{rows: map[string]port.ScanRecord{}}, Missing: noMissing{},
+		Events: &apptest.Events{}, Clock: clock,
 	}
 	_, api := humatest.New(t)
 	projects.Register(api, appprojects.Service{
 		Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"},
 		Clock: apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)),
-	})
-	return api
+	}, links)
+	return api, gh
+}
+
+// tokens は、どの Store にもアカウント A1 のトークン「tok」を返す偽物。
+type tokens struct{}
+
+func (tokens) TokenFor(context.Context, port.StoreID, string) (string, account.Account, error) {
+	return "tok", account.Account{ID: "A1", Name: "work", Login: "taro"}, nil
+}
+
+func (tokens) Rejected(account.ID) {}
+
+func (tokens) Recheck(context.Context) (bool, error) { return false, nil }
+
+// noMissing は、port.AppMissing のうち、消すだけを受ける偽物。
+type noMissing struct{ port.AppMissing }
+
+func (noMissing) Clear(context.Context, account.ID, string) (bool, error) { return false, nil }
+
+// scans は、port.PRScans のメモリ上の偽物(Store は 1 つだけ使う)。裏の探索から呼ばれるので、ロックで守る。
+type scans struct {
+	mu   sync.Mutex
+	rows map[string]port.ScanRecord
+}
+
+func (m *scans) Scans(context.Context, port.StoreID) (map[string]port.ScanRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return maps.Clone(m.rows), nil
+}
+
+func (m *scans) SaveScan(_ context.Context, _ port.StoreID, repo string, r port.ScanRecord) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	old, ok := m.rows[strings.ToLower(repo)]
+	m.rows[strings.ToLower(repo)] = r
+	return !ok || old != r, nil
 }
 
 const base = "/api/stores/S1/workspaces/" + string(apptest.SampleWorkspace) + "/projects"

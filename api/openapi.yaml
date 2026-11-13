@@ -1028,6 +1028,30 @@ components:
         - anchor
         - after
       type: object
+    RepoFailure:
+      additionalProperties: false
+      properties:
+        repo:
+          description: プロジェクトのリポジトリの書き方のまま
+          type: string
+        text:
+          description: "「PR を探せませんでした: 」に続ける文言"
+          type: string
+      required:
+        - repo
+        - text
+      type: object
+    RepoFailures:
+      additionalProperties: false
+      properties:
+        failures:
+          description: リポジトリの大文字小文字を区別しない辞書順。失敗のないリポジトリは入れない
+          items:
+            $ref: "#/components/schemas/RepoFailure"
+          type: array
+      required:
+        - failures
+      type: object
     SaveItemAsTemplate:
       additionalProperties: false
       properties:
@@ -3779,6 +3803,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトのオーナーを変える
+  /api/stores/{store}/projects/{project}/repo-failures:
+    get:
+      operationId: list-repo-failures
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoFailures"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのリポジトリごとの、PR を探せなかった理由を返す
   /api/stores/{store}/projects/{project}/repos:
     post:
       operationId: add-project-repo
