@@ -63,6 +63,7 @@ test("creates a task with its template's steps in one go", async ({ page }, info
   await template.getByRole("textbox", { name: "名前" }).fill("手順つき");
   await template.getByRole("combobox", { name: "種類" }).selectOption({ label: "Task" });
   await template.getByRole("textbox", { name: "タイトルの書き出し" }).fill("手順: ");
+  await template.getByRole("textbox", { name: "説明" }).fill("## 準備\n手順書を読む");
   await template.getByRole("button", { name: "Step を追加" }).click();
   await template.getByRole("textbox", { name: "Step のタイトル" }).nth(0).fill("準備");
   await template.getByRole("button", { name: "Step を追加" }).click();
@@ -91,6 +92,7 @@ test("creates a task with its template's steps in one go", async ({ page }, info
   const dialog = page.getByRole("dialog", { name: "新規作成" });
   await expect(dialog.getByRole("combobox", { name: "テンプレート" })).toHaveValue(/.+/);
   await expect(dialog.getByRole("textbox", { name: "タイトル" })).toHaveValue("手順: ");
+  await expect(dialog.getByRole("textbox", { name: "説明" })).toHaveValue("## 準備\n手順書を読む");
   await expect(dialog.getByRole("region", { name: "一緒に作るもの: Step 2 件" })).toBeVisible();
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("手順: ログイン");
   await dialog.getByRole("button", { name: "作成" }).click();
@@ -101,6 +103,7 @@ test("creates a task with its template's steps in one go", async ({ page }, info
   await expect(steps.getByRole("link")).toHaveText(["準備", "記録"]);
   await expect(steps.getByText(`${prefix}-3`, { exact: true })).toBeVisible();
   await expect(steps.getByText(`${prefix}-4`, { exact: true })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "準備" })).toBeVisible();
 });
 
 test("the status menu disables a status the workflow forbids and tells why", async ({

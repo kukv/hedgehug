@@ -41,4 +41,6 @@ export interface NewItem {
   values: Record<string, PropertyInput>;
   // templateId は、一緒に作るテンプレート(空かなしは「なし」)。
   templateId?: string;
+  // description は、作るアイテムの説明(空・なしは説明なし)。
+  description?: string;
 }

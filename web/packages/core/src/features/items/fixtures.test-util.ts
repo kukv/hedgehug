@@ -69,6 +69,8 @@ export interface FakeItems extends ItemsPort {
   createdValues: Record<string, PropertyInput>[];
   // createdTemplates は、create に渡された templateId の記録。
   createdTemplates: (string | undefined)[];
+  // createdDescriptions は、create に渡された description の記録(なければ "")。
+  createdDescriptions: string[];
 }
 
 export function fakeItemsPort(initial: Item[] = []): FakeItems {
@@ -90,6 +92,7 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
   let hold: Promise<void> | null = null;
   const createdValues: Record<string, PropertyInput>[] = [];
   const createdTemplates: (string | undefined)[] = [];
+  const createdDescriptions: string[] = [];
   // takeRefusal は、refuseNext で決めた断りを 1 回だけ投げる。
   const takeRefusal = () => {
     if (refusal === "") return;
@@ -122,6 +125,7 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
     },
     createdValues,
     createdTemplates,
+    createdDescriptions,
     async setProperty(_s, id, propertyId, value) {
       calls.push(`setProperty ${id} ${propertyId} ${JSON.stringify(value)}`);
       takeRefusal();
@@ -164,6 +168,7 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
       checkTitle(input.title);
       createdValues.push(input.values);
       createdTemplates.push(input.templateId);
+      createdDescriptions.push(input.description ?? "");
       const given = input.values;
       return add(storeId, {
         ...initialValues,

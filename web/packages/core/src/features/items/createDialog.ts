@@ -18,13 +18,13 @@ import {
   startValues,
 } from "./createDefaults";
 import { createContextLoader, type WorkspaceContext } from "./createDialogLoad";
-import { missing, parentOptions, viewOf, wsOptions } from "./createDialogOptions";
+import { carried, missing, parentOptions, viewOf, wsOptions } from "./createDialogOptions";
 import { applyDefault, applyToForm, othersOf } from "./createTemplate";
 import { initialValues, shownValues, switchWorkspace, type Values } from "./createValues";
 import type { PropertyRow } from "./properties";
 
 // アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。検査はサーバーに任せ、断りを赤字で出す
-// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F、説明は A4。
+// (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F。
 
 export interface ItemForm {
   workspaceId: string;
@@ -37,6 +37,9 @@ export interface ItemForm {
   values: Values;
   // templateId は、当てはめているテンプレート。空は「なし」。
   templateId: string;
+  // description は説明の欄。templateDescription は、いま当てはめているテンプレートの説明(なければ空)。
+  description: string;
+  templateDescription: string;
 }
 
 export interface ItemDialogState {
@@ -139,7 +142,6 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     const now = get(state);
     if (gen !== seq || !now) return;
     if (!loaded) return void state.set(null);
-    const { title, keepOpen, templateId } = now.form;
     const switched = now.form.workspaceId !== form.workspaceId;
     const values = switched
       ? switchWorkspace(
@@ -148,7 +150,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
           memberCheck(now.form.workspaceId, form.workspaceId, loaded.ctx),
         )
       : now.form.values;
-    let kept: ItemForm = { ...loaded.next.form, title, keepOpen, values, templateId };
+    let kept = carried(loaded.next.form, now.form, values);
     // ワークスペースを変えたら、テンプレートを「なし」にしてから新しいワークスペースの既定を当てはめる(A3b-14)。
     // 待っているあいだに種類が変わっていたら、読み直した種類にテンプレートを合わせる。
     if (switched || now.form.kind !== kept.kind) kept = applyDefault(kept, loaded.ctx.settings);
@@ -170,6 +172,7 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         parentId,
         kind,
         title,
+        description: s.form.description,
         values: shownValues(s.form.values, s.settings, kind),
         ...(s.form.templateId ? { templateId: s.form.templateId } : {}),
       });
@@ -185,10 +188,10 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
     const id = itemDisplayId(ws.prefix, created.number);
     deps.toasts.show(others > 0 ? `${id} ほか ${others} 件を作成しました` : `${id} を作成しました`);
     if (s.form.keepOpen) {
-      // 続けて作成: タイトルとエラーだけを空にし、ほかは残す(02「作成したあと」)。
+      // 続けて作成: タイトル・説明・エラーだけを空にし、ほかは残す(02「作成したあと」)。
       const now = get(state);
       if (now) {
-        const form = { ...now.form, title: "" };
+        const form = { ...now.form, title: "", description: "" };
         state.set({ ...now, form, error: "" });
         await reloaded(form);
       }
@@ -217,6 +220,8 @@ export function createItemDialog(deps: ItemDialogDeps): ItemDialog {
         keepOpen: false,
         values: {},
         templateId: "",
+        description: "",
+        templateDescription: "",
       };
       load = createContextLoader(deps.workspaces, deps.catalogPort);
       const gen = ++seq;

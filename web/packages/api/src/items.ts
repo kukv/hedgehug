@@ -62,6 +62,7 @@ export function createItemsPort(): ItemsPort {
             kind: input.kind,
             title: input.title,
             values: input.values,
+            ...(input.description ? { description: input.description } : {}),
             ...(input.templateId ? { template: input.templateId } : {}),
           }),
         ),
