@@ -35,6 +35,9 @@ interface Deps {
   openMenu(item: Item, rect: { left: number; bottom: number }): void;
 }
 
+// moves は、行を移るキーの操作。
+const moves: ReadonlySet<TreeKeyAction> = new Set(["up", "down", "right", "left"]);
+
 // 入力欄の中、ダイアログを開いているあいだ、メニューを開いているあいだは、ツリーのキーを使わない。
 function blocked(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
@@ -113,9 +116,10 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
       event.stopPropagation();
       // 行の中のボタン(押した開閉・ステータス・「⋯」)にフォーカスがあるまま行を移ると、枠は移った行に、フォーカスは
       // 元の行のボタンに残り、次の Enter が元の行に効く。フォーカスを `<ul>` に移す(いまの行は動かさない)。
-      if (inner && ["up", "down", "right", "left"].includes(action)) {
+      if (inner && moves.has(action)) {
         refocusing = true;
-        (event.currentTarget as HTMLElement).focus();
+        // スクロールは移動のあとの scrollTo が行う。
+        (event.currentTarget as HTMLElement).focus({ preventScroll: true });
         refocusing = false;
       }
       run(action, row, deps.view());
@@ -136,6 +140,8 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
     onpointerdown(event) {
       const id = (event.target as HTMLElement).closest<HTMLElement>("[data-row]")?.dataset.row;
       if (id) focus.focus(id);
+      // 右・中ボタンでは click も pointercancel も来ず印が残るので、主ボタン(タッチ・ペンも 0)のときだけ付ける。
+      if (event.button !== 0) return;
       pressing = true;
       window.addEventListener("click", releasePress, true);
       window.addEventListener("pointercancel", releasePress, true);
