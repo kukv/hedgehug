@@ -66,7 +66,7 @@
 | S5 | 関連の相手が削除済みなら、いまのまま 404。取り消すのは、操作したアイテム(経路の `{item}`)だけ。 | 相手は候補から選んだもので、変更の対象ではない。削除済みを指す関連を作らない |
 | S6 | 取り消しの知らせは、応答ヘッダー `Hedgehug-Restored`(表示 ID)で返す。`httpapi.New` が API の Handler を包むミドルウェアで、context に入れ物を置き、2xx の応答のときだけヘッダーを付ける。画面は `fetcher` で読み、登録した 1 つの受け手(`wireBase.ts` でトーストを出す)に渡す。 | 経路ごとに応答の形が違う。DTO に欄を足すと 30 経路と 30 か所の画面を直すことになる |
 | S7 | `ReviveItem`・`ReviveProject` は ID を受け取り、tx の中で読み直して決める(同じ保存の中で 2 回呼んでも、2 回目は何も書かない)。 | ステータスの変更は自動化で同じアイテムをもう一度読む(`items/automate.go`)。C3a の `undo` と同じく、保存の中で読み直したログで決める |
-| S8 | 調べて見つかった、tx の中で削除済みを確かめていない 4 か所のうち、コメントの編集・削除、作業時間の削除、説明の保存は、この計画の `EditableItem`・`EditableProject` で直る(Task 4)。save-as-template の tx の中の読み(`workspaces/edit.go:35`)は、ユーザーの承認を得たら Task 5 の Step 3 で `port.LiveItem` を足す(承認待ち)。 | 調べた結果。前の読みと保存のあいだに別のタブが削除すると、削除済みのものに行を書いて、取り消さないまま残る |
+| S8 | 調べて見つかった、tx の中で削除済みを確かめていない 4 か所のうち、コメントの編集・削除、作業時間の削除、説明の保存は、この計画の `EditableItem`・`EditableProject` で直る(Task 4)。save-as-template の tx の中の読み(`workspaces/edit.go:35`)は、Task 5 の Step 3 で `port.LiveItem` を足す(ユーザーの承認、2026-11-14)。 | 調べた結果。前の読みと保存のあいだに別のタブが削除すると、削除済みのものに行を書いて、取り消さないまま残る |
 | S9 | 削除済み(`root: true`)のアイテムでも、祖先のアイテムかプロジェクトが削除済み(別の操作の削除)なら、取り消さず 404。プロジェクトは、ワークスペースが読めることだけを確かめる(ワークスペースの削除はまだない。C3a-10)。 | 08 の決定の表「親が削除済みのときの復元」(アイテムだけ断る)。取り消すと、06「親が削除されたとき」の、削除済みの親の下に生きた子がある状態を作る |
 | S10 | 各 usecase の tx は、最初に `EditableItem`(`EditableProject`)で読んだ削除の印を覚え、すぐ `ReviveItem`(`ReviveProject`)を呼んでから、いまの処理(`LiveItem` などの読み直しを含む)を続ける。何も書かずに返す分かれ道は `return port.Unchanged(覚えた印)` にする。印があればエラーなので、保存ごと取り消しの行も残らない。 | tx は自分の書いたものを読む(`port.Tx`)ので、取り消したあとは既存の読み・重なりの確かめ(関連の snapshot など)がそのまま使える。「行を書く直前に呼ぶ」は、分かれ道の多い usecase(関連・移動)で置き場所がぶれる |
 
@@ -299,7 +299,7 @@ Expected: FAIL
 
 - 関連: snapshot は生きているものだけを持つ(`snapshot.go:42,47`)。前の読み(`service.go:26-29`)では、自分(経路の `{item}`)を `EditableItem` で確かめ、相手は snapshot のまま確かめる。tx の中は、最初に自分を `EditableItem`・`ReviveItem` してから snapshot を作る(取り消した自分が snapshot に入り、重なりの確かめはいまのまま働く)。外すとき(`remove.go:36-37` の分かれ道)は `port.Unchanged(覚えた印)`。
 - リンク: `readItem`(`links.go:54`)に、自分を `EditableItem` で読む版 `readEditableItem` を足し、追加(`link_add.go:79`)と外す(`link_remove.go:29`)の tx の最初で `ReviveItem` を呼んでから使う。プロジェクト(`links.go:66`)は `LiveProject` のまま。祖先やプロジェクトが削除済みのアイテムは `EditableItem` が断る(決定 S9)。取り直し(`write.go:71`)は `readItem` のまま。`link_remove.go:34-35` の分かれ道は `Unchanged`。
-- テンプレートとして保存(ユーザーの承認を得た場合だけ。決定 S8): tx の中(`workspaces/edit.go:35` の前)で、元のアイテムを `port.LiveItem` で読み直す。承認がなければ、Step 1 の `TestSaveAsTemplateDeletedInTxIsNotFound` も書かない。
+- テンプレートとして保存(決定 S8): tx の中(`workspaces/edit.go:35` の前)で、元のアイテムを `port.LiveItem` で読み直す。
 
 - [ ] **Step 4: 通ることを確かめる**
 
