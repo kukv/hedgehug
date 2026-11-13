@@ -21,6 +21,7 @@ export { default as Menu } from "./primitives/Menu.svelte";
 export { default as Select } from "./primitives/Select.svelte";
 export { default as Switch } from "./primitives/Switch.svelte";
 export { default as Tabs } from "./primitives/Tabs.svelte";
+export { default as Textarea } from "./primitives/Textarea.svelte";
 export { default as Toasts } from "./primitives/Toasts.svelte";
 export type {
   Category,

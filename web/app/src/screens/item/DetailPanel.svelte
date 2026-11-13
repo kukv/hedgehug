@@ -2,6 +2,7 @@
   import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
   import { IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
   import { detail, toasts } from "../../wire";
+  import DescriptionSection from "../notes/DescriptionSection.svelte";
   import DetailChildren from "./DetailChildren.svelte";
   import DetailHeader from "./DetailHeader.svelte";
   import DetailProperties from "./DetailProperties.svelte";
@@ -87,6 +88,13 @@
       bind:value={title}
     />
     <DetailProperties {v} />
+    <!-- 開いたアイテムが変わったら、入力欄の状態ごと作り直す。反映(v の読み直し)では作り直さず、target だけ新しくなる。 -->
+    {#key v.item.id}
+      <DescriptionSection
+        target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
+        readonly={v.readOnly}
+      />
+    {/key}
     {#if v.item.kind !== "Step"}
       <DetailChildren {v} />
     {/if}

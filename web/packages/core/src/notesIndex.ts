@@ -13,3 +13,11 @@ export {
   isMemberOf,
   tokenize,
 } from "./features/markdown/markdown";
+export {
+  createDescriptionEditor,
+  type DescriptionDeps,
+  type DescriptionEditor,
+  type DescriptionState,
+  descriptionConflictMessage,
+} from "./features/notes/description";
+export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";

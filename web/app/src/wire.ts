@@ -2,6 +2,7 @@ import {
   createAccountsPort,
   createCatalogPort,
   createItemsPort,
+  createNotesPort,
   createProjectsPort,
   createSyncPort,
   createSystemPort,
@@ -65,6 +66,9 @@ export const toasts = createToasts(timer);
 
 const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
+// 詳細パネルとプロジェクトの概要の、説明・コメントなどの口と、メンションの表示に使うメンバーの一覧。
+export const notes = createNotesPort();
+export const listMembers = (storeId: string) => catalogPort.listMembers(storeId);
 export const catalog = createCatalog(catalogPort);
 const workspacesPort = createWorkspacesPort();
 // ツリーでステータスを変えたら、開いている詳細パネルも読み直す。detail は後で作るので、呼ぶときに引く。
