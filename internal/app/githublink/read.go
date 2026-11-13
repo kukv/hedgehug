@@ -150,10 +150,10 @@ func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLin
 // readMany は、Store のアカウントで r の番号をまとめて読む。トークンが拒否されたら認証エラーにする(07「状態」)。
 func (l Links) readMany(ctx context.Context, store port.StoreID, r *repoLinks) (port.Batch, error) {
 	var b port.Batch
-	err := l.call(ctx, store, r.repo, func(tok string) error {
+	err := l.call(ctx, store, r.repo, func(tok string) (string, error) {
 		var err error
 		b, err = l.GitHub.ReadMany(ctx, tok, r.repo, r.numbers)
-		return err
+		return b.Repo, err
 	})
 	if err != nil {
 		return port.Batch{}, err

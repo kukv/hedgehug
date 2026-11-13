@@ -151,3 +151,22 @@ func countEvents(ev []port.Event, want port.Event) int {
 	}
 	return n
 }
+
+// 改名・移管したリポジトリでは、記録は答えの名前(org/site)で置かれる。問い合わせた名前(org/web)で読めたら、
+// 答えの名前でも当てて消す(D4b 最終レビュー I-1)。
+func TestCallClearsRenamedRepo(t *testing.T) {
+	f := appMissingFixture(t)
+	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.AppNotInstalled, Org: "org", Repo: "org/site"})
+	f.refresh(t)
+	if got := f.listMissing(t); !slices.Equal(got["A1"], []port.MissingOrg{{Org: "org", Repo: "org/site"}}) {
+		t.Fatalf("missing = %+v", got)
+	}
+	f.gh.Fail("org/web", 41, nil)
+	moved := pr41
+	moved.Repo = "org/site"
+	f.gh.Put("org/web", moved)
+	f.refresh(t)
+	if got := f.listMissing(t); len(got["A1"]) != 0 {
+		t.Errorf("missing = %+v, want cleared", got)
+	}
+}

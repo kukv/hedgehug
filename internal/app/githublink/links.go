@@ -83,10 +83,10 @@ func (l Links) view(ctx context.Context, store port.StoreID, id item.ID) (itemVi
 // lookup は、Store のアカウントで repo の number を読む。トークンが拒否されたら認証エラーにする(07「状態」)。
 func (l Links) lookup(ctx context.Context, store port.StoreID, repo string, number int) (port.Found, error) {
 	var found port.Found
-	err := l.call(ctx, store, repo, func(tok string) error {
+	err := l.call(ctx, store, repo, func(tok string) (string, error) {
 		var err error
 		found, err = l.GitHub.Lookup(ctx, tok, repo, number)
-		return err
+		return found.Repo, err
 	})
 	if err != nil {
 		return port.Found{}, err

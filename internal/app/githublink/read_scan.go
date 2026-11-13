@@ -71,10 +71,10 @@ func (rd *reading) scan(ctx context.Context, s port.StoreGitHubInfo, r *repoLink
 // readPulls は、Store のアカウントで repo の PR を読む(D4b-12 の call を通す)。
 func (l Links) readPulls(ctx context.Context, store port.StoreID, repo string, since time.Time) (port.Pulls, error) {
 	var ps port.Pulls
-	err := l.call(ctx, store, repo, func(tok string) error {
+	err := l.call(ctx, store, repo, func(tok string) (string, error) {
 		var err error
 		ps, err = l.GitHub.ReadPulls(ctx, tok, repo, since)
-		return err
+		return ps.Repo, err
 	})
 	return ps, err
 }
