@@ -18,9 +18,6 @@ async function setup(page: Page, info: TestInfo) {
   return { prefix, panel, repo, github: panel.getByRole("region", { name: "GitHub" }) };
 }
 
-const panelGithub = (page: Page) =>
-  page.getByRole("region", { name: "詳細パネル" }).getByRole("region", { name: "GitHub" });
-
 async function link(
   page: Page,
   section: Locator,
@@ -77,7 +74,7 @@ test("PR をリンクし、プロジェクトのリポジトリにも追加し�
 });
 
 test("リンクの断り方(07「追加」の表)", async ({ page }, info) => {
-  const { prefix, github, repo } = await setup(page, info);
+  const { github, repo } = await setup(page, info);
   await gh(page, { repo, number: "1", kind: "issue", title: "落ちる", state: "open" });
   await gh(page, { repo, number: "2", kind: "pr", title: "直す", state: "draft" });
   let dialog = await link(page, github, "PR", "org/*", "1");
@@ -98,9 +95,7 @@ test("リンクの断り方(07「追加」の表)", async ({ page }, info) => {
   // 1 本目の Issue は付き、プロジェクトにリポジトリができたので 2 回目からは選ぶ
   dialog = await link(page, github, "Issue", repo, "1");
   await expect(dialog).toBeHidden();
-  // リンクの直後は、プロジェクトのリポジトリの読み直しが終わっていないことがあるので、開き直してから開く
-  await page.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
-  dialog = await link(page, panelGithub(page), "Issue", null, "2");
+  dialog = await link(page, github, "Issue", null, "2");
   await expect(dialog.getByRole("alert")).toHaveText(`${repo}#2 は Issue ではなく PR です`);
   await dialog.getByRole("textbox", { name: "番号" }).fill("1");
   await dialog.getByRole("button", { name: "リンク" }).click();
