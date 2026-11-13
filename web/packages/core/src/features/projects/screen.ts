@@ -54,11 +54,25 @@ export function createProjectScreen(
   const view = writable<ProjectView | null>(null);
   let shown: { storeId: string; projectId: string } | null = null;
   let latest = 0;
+  // newest は、最後に始めた読み込み。
+  let newest: Promise<void> = Promise.resolve();
 
+  // load は、読み込みを始め、後から始めた読み込みに結果を譲ったときは、その読み込みが終わるまで返さない
+  // (返すと、呼んだ側が古い画面のまま次の操作を始める。たとえばツリーのキーの順番待ち)。
   async function load(storeId: string, projectId: string) {
     shown = { storeId, projectId };
     latest += 1;
-    const mine = latest;
+    const run = read(storeId, projectId, latest);
+    newest = run;
+    await run;
+    let waiting: Promise<void>;
+    do {
+      waiting = newest;
+      await waiting.catch(() => {});
+    } while (waiting !== newest);
+  }
+
+  async function read(storeId: string, projectId: string, mine: number) {
     const store = catalog.store(storeId);
     const project = catalog.project(storeId, projectId);
     const workspace = project && catalog.workspace(storeId, project.workspaceId);

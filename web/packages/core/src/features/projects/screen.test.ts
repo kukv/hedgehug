@@ -73,6 +73,36 @@ describe("createProjectScreen", () => {
     expect(changed()).toBe(0);
   });
 
+  // 後から始めた読み直しに結果を譲ったときは、その読み直しが終わるまで返さない。返すと、呼んだ側(キーの順番待ちなど)が
+  // 古い行で次の操作を始める。
+  it("does not return before a newer load that superseded it has finished", async () => {
+    const { screen, items } = await setup();
+    await screen.load("S1", "S1-P1");
+    const list = items.list.bind(items);
+    let release = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let calls = 0;
+    items.list = async (...a) => {
+      calls += 1;
+      const n = calls;
+      const out = await list(...a);
+      if (n === 2) await gate;
+      return out;
+    };
+    let olderDone = false;
+    const older = screen.reload().then(() => {
+      olderDone = true;
+    });
+    const newer = screen.reload();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(olderDone).toBe(false);
+    release();
+    await Promise.all([older, newer]);
+    expect(olderDone).toBe(true);
+  });
+
   it("reloads the shown project and is null for a project not in the catalog", async () => {
     const { screen, items } = await setup();
     await screen.load("S1", "S1-P1");
