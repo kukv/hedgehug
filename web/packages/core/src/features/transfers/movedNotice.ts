@@ -12,6 +12,8 @@ export interface MovedNotice {
   // text は、開いているパネルが show したアイテムのときだけ文、それ以外は空。
   text: Readable<string>;
   show(storeId: string, itemId: string, m: MovedFrom): void;
+  // clear は、show したものを捨てる(パネルがそのアイテムを開けなかったとき。次に普通に開いても出さない)。
+  clear(): void;
 }
 
 export interface MovedNoticeDeps {
@@ -46,6 +48,10 @@ export function createMovedNotice(deps: MovedNoticeDeps): MovedNotice {
     text: readonly(text),
     show(storeId, itemId, moved) {
       entry = { storeId, itemId, moved, seen: false };
+      text.set("");
+    },
+    clear() {
+      entry = null;
       text.set("");
     },
   };

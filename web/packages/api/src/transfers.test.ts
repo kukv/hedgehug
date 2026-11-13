@@ -211,6 +211,21 @@ describe("transfers port", () => {
       { kind: "gone", reason: "deleted", at: "2026-11-13T00:05:00Z", newDisplay: "TM-4" },
       { kind: "gone", reason: "deleted", old: "HH-5", newDisplay: "TM-4" },
       { kind: "gone", reason: "deleted", old: "HH-5", at: "2026-11-13T00:05:00Z" },
+      // hidden・elsewhere は、文に Store 名を書くので storeName が要る。
+      {
+        kind: "gone",
+        reason: "hidden",
+        old: "HH-5",
+        at: "2026-11-13T00:05:00Z",
+        newDisplay: "TM-4",
+      },
+      {
+        kind: "gone",
+        reason: "elsewhere",
+        old: "HH-5",
+        at: "2026-11-13T00:05:00Z",
+        newDisplay: "TM-4",
+      },
       { kind: "other" },
     ];
     for (const body of bad) {

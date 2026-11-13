@@ -74,14 +74,16 @@ export interface MovedFrom {
 }
 // GoneReason は、旧 ID で開けない理由(A5a-15)。
 export type GoneReason = "deleted" | "purged" | "hidden" | "elsewhere";
-// Gone は、旧 ID が見つかったが開けないときの中身(文は画面が作る)。
-export interface Gone {
-  reason: GoneReason;
+interface GoneBase {
   old: string;
   at: string; // 旧 ID と、旧 ID が一致した記録の日時(ISO 8601)
   newDisplay: string; // その記録の新 ID
-  storeName?: string; // hidden: 記録の移動先の Store 名、elsewhere: より新しい記録の移動先の Store 名
 }
+// Gone は、旧 ID が見つかったが開けないときの中身(文は画面が作る)。storeName は、hidden なら記録の移動先の
+// Store 名、elsewhere ならより新しい記録の移動先の Store 名で、どちらも文に書くので必ずある。
+export type Gone =
+  | (GoneBase & { reason: "deleted" | "purged"; storeName?: string })
+  | (GoneBase & { reason: "hidden" | "elsewhere"; storeName: string });
 // Located は、画面のアドレスの Store 名と ID の解決の結果。
 export type Located =
   | { kind: "found"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }

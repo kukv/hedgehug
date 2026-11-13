@@ -24,8 +24,8 @@ export function goneText(g: Gone, now: Date): string {
     case "purged":
       return `${head} ${g.newDisplay} へ移動しましたが、完全に削除されました`;
     case "hidden":
-      return `${head} ${g.storeName ?? ""} へ移動しました。${unseen}`;
+      return `${head} ${g.storeName} へ移動しました。${unseen}`;
     case "elsewhere":
-      return `${head} ${g.newDisplay} へ移動し、その後 ${g.storeName ?? ""} へ移動しました。${unseen}`;
+      return `${head} ${g.newDisplay} へ移動し、その後 ${g.storeName} へ移動しました。${unseen}`;
   }
 }

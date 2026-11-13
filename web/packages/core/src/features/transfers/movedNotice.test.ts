@@ -74,4 +74,11 @@ describe("createMovedNotice", () => {
     view.set(shown("S1", "I5"));
     expect(get(notice.text)).toBe("");
   });
+
+  it("does not show the line on a later plain open when the panel could not open the item after show", () => {
+    notice.show("S1", "I5", moved);
+    notice.clear();
+    view.set(shown("S1", "I5"));
+    expect(get(notice.text)).toBe("");
+  });
 });

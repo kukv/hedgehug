@@ -151,8 +151,13 @@ export const screen = createScreen({
   toasts,
   now: () => new Date(),
   openItem: (storeId, itemId, movedFrom) => {
-    if (movedFrom) movedNotice.show(storeId, itemId, movedFrom);
-    void detail.open(storeId, itemId);
+    if (!movedFrom) return void detail.open(storeId, itemId);
+    movedNotice.show(storeId, itemId, movedFrom);
+    // 開けなかったときは 1 行を捨てる(あとで同じアイテムを普通に開いても出さない)。
+    void detail.open(storeId, itemId).finally(() => {
+      const v = get(detail.view);
+      if (v?.item.storeId !== storeId || v.item.id !== itemId) movedNotice.clear();
+    });
   },
 });
 

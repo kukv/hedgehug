@@ -1,4 +1,4 @@
-import type { GoneReason, Located, TransfersPort } from "@hedgehug/core";
+import type { Located, TransfersPort } from "@hedgehug/core";
 import { call } from "./errors";
 import { getTransferPreview, listTransferTargets, locateItem, transferItem } from "./generated";
 
@@ -32,15 +32,14 @@ function located(a: Answer): Located {
   if (a.kind === "gone") {
     if (!a.reason || !reasons.includes(a.reason) || !a.old || !a.at || !a.newDisplay)
       throw badResponse();
-    const g: Located = {
-      kind: "gone",
-      reason: a.reason as GoneReason,
-      old: a.old,
-      at: a.at,
-      newDisplay: a.newDisplay,
-    };
-    if (a.storeName) g.storeName = a.storeName;
-    return g;
+    const base = { kind: "gone", old: a.old, at: a.at, newDisplay: a.newDisplay } as const;
+    // hidden・elsewhere は文に Store 名を書くので、storeName のない応答は不正とする。
+    if (a.reason === "hidden" || a.reason === "elsewhere") {
+      if (!a.storeName) throw badResponse();
+      return { ...base, reason: a.reason, storeName: a.storeName };
+    }
+    const reason = a.reason as "deleted" | "purged";
+    return a.storeName ? { ...base, reason, storeName: a.storeName } : { ...base, reason };
   }
   throw badResponse();
 }
