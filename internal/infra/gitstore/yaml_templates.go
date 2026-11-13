@@ -134,8 +134,12 @@ func rulesNode(s workspace.Settings, rules []automation.Rule, prefix string, pro
 	return seqOf(items)
 }
 
-// projectLabel は、プロジェクトの画面の ID(HH-P1)。ログがなければ空(注釈を付けない)。
+// projectLabel は、プロジェクトの画面の ID(HH-P1)。ログがない・引く手段がなければ空(注釈を付けない)。
+// プロジェクトの番号が変わるのは workspace のログも書く操作のときだけなので、workspace.yaml は作り直され注釈は古くならない。
 func projectLabel(prefix string, projects projectOf, id project.ID) string {
+	if projects == nil {
+		return ""
+	}
 	if p, ok := projects(id); ok {
 		return p.DisplayID(prefix)
 	}

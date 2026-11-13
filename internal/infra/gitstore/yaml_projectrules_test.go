@@ -16,6 +16,12 @@ const (
 	yRule change.ID = "01YRULE0000000000000000001"
 )
 
+func TestProjectLabelWithoutLookup(t *testing.T) {
+	if got := projectLabel("HH", nil, yProj); got != "" {
+		t.Errorf("projectLabel = %q", got)
+	}
+}
+
 func TestWorkspaceYAMLHasProjectRules(t *testing.T) {
 	s, id, dir, st := ySeed(t)
 	path := "workspaces/" + string(yWS) + "/workspace.yaml"
