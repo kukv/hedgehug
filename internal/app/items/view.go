@@ -13,7 +13,7 @@ import (
 )
 
 // editContext は、値の操作が保存の前に読むもの。withID にワークスペースの設定とメンバーの表示名を足したもの。
-// アクティビティの 1 行を保存の前に決めるために使う。
+// アクティビティの 1 行を保存の前に決めるために使う。読みは port.EditableItem(別の画面で削除された root: true のアイテムも読める)。
 type editContext struct {
 	item     item.Item
 	display  string
@@ -24,7 +24,7 @@ type editContext struct {
 func (s Service) editContext(ctx context.Context, store port.StoreID, id item.ID) (editContext, error) {
 	var ec editContext
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := port.LiveItem(r, id)
+		it, err := port.EditableItem(r, id)
 		if err != nil {
 			return err
 		}

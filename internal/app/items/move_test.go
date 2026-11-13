@@ -187,7 +187,7 @@ func TestMoveNotFound(t *testing.T) {
 	addSecondProject(t, rec)
 	epic2 := mustCreate(t, svc, apptest.SampleProject, nil, item.Epic, "決済")
 	trashed := mustCreate(t, svc, apptest.SampleProject, nil, item.Epic, "削除した Epic")
-	markDeleted(t, rec, trashed.ID, true)
+	markDeleted(t, rec, trashed.ID, false) // 親と一緒に削除されたもの(root: true なら保存で削除を取り消す)
 	markProjectDeleted(t, rec)
 	addOtherWorkspace(t, rec)
 	unknown := item.ID("01NOPE00000000000000000000")

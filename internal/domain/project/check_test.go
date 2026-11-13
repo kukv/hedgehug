@@ -61,6 +61,33 @@ func TestCheckRename(t *testing.T) {
 	}
 }
 
+// 08「復元」: 同じワークスペースの削除されていないプロジェクトに同じ名前があれば断る。比べ方は作成・名前の変更と同じ(完全一致)。
+func TestCheckRevive(t *testing.T) {
+	const dup = "同じ名前のプロジェクトがあります。先にそのプロジェクトの名前を変更してください"
+	siblings := []project.Project{{ID: "A", Title: "ログイン"}, {ID: "B", Title: "Login"}}
+	cases := []struct {
+		name     string
+		title    string
+		siblings []project.Project
+		want     string
+	}{
+		{"same name", "ログイン", siblings, dup},
+		{"another same name", "Login", siblings, dup},
+		{"different name", "決済", siblings, ""},
+		{"no siblings", "ログイン", nil, ""},
+		{"empty siblings", "ログイン", []project.Project{}, ""},
+		{"case differs", "login", siblings, ""},
+		{"extra space differs", "ログイン ", siblings, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := message(project.CheckRevive(c.title, c.siblings)); got != c.want {
+				t.Errorf("CheckRevive(%q) = %q, want %q", c.title, got, c.want)
+			}
+		})
+	}
+}
+
 // 開始日と終了日が同じ日は認める。どちらかが空なら比べない。
 func TestCheckDates(t *testing.T) {
 	cases := []struct{ name, start, end, want string }{

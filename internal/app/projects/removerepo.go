@@ -14,7 +14,7 @@ import (
 // 行は、保存してある綴りで書く(大文字と小文字を区別しない)。アクティビティは「{タイトル} からリポジトリ {owner/name} を削除」。
 func (s Service) RemoveRepo(ctx context.Context, store port.StoreID, id project.ID, input string) (project.Project, error) {
 	repo := strings.TrimSpace(input)
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}

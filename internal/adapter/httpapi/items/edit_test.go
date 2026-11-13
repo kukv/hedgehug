@@ -1,11 +1,17 @@
 package items_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 )
 
@@ -21,6 +27,53 @@ func TestRenameItem(t *testing.T) {
 	}
 	if res := api.Put("/api/stores/S1/items/01NOPE00000000000000000000/title", map[string]any{"title": "x"}); res.Code != http.StatusNotFound {
 		t.Errorf("unknown: %d", res.Code)
+	}
+}
+
+// putTitle は、組み立てた本物のサーバーへ PUT …/title を送り、状態と Hedgehug-Restored を返す。
+func putTitle(t *testing.T, srv *httptest.Server, id, title string) (int, []string) {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"title": title})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, srv.URL+"/api/stores/S1/items/"+id+"/title", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer secret")
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	return res.StatusCode, res.Header.Values("Hedgehug-Restored")
+}
+
+// 別のタブで削除された(root: true)アイテムの名前を変えて保存すると、削除を取り消し、応答に表示 ID を付ける。
+// 同じタイトルで断られたとき(404)は付けない。
+func TestRenameDeletedItemSetsRestoredHeader(t *testing.T) {
+	ids := apptest.NewIDs()
+	clock := apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC))
+	s := apptest.NewStores(clock, ids)
+	s.AddStore("S1")
+	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), s, "S1", apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(httpapi.New("secret", fstest.MapFS{}, httpapi.Deps{
+		Version: "test", Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}, Clock: clock,
+	}))
+	t.Cleanup(srv.Close)
+	id := string(apptest.SampleTask)
+	if code, got := putTitle(t, srv, id, "ログイン画面を作る"); code != http.StatusNotFound || len(got) != 0 {
+		t.Errorf("same title: %d %v", code, got)
+	}
+	if code, got := putTitle(t, srv, id, "ログイン画面を直す"); code != http.StatusOK || !slices.Equal(got, []string{"HH-2"}) {
+		t.Errorf("rename: %d %v", code, got)
 	}
 }
 

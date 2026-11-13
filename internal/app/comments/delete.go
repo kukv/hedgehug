@@ -19,6 +19,9 @@ func (s Service) Delete(ctx context.Context, store port.StoreID, t Target, id ch
 	}
 	op := port.Operation{Actor: change.User(me), Summary: "コメントを削除"}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		if _, err := reviveOwner(ctx, tx, t); err != nil {
+			return err
+		}
 		cur, err := currentOf(tx, t, id)
 		if err != nil {
 			return err

@@ -15,19 +15,39 @@ import (
 
 // CreateTemplate は、テンプレートを作る(03「一覧と編集」の「テンプレートを作成」)。作ったものを返す。
 func (s Service) CreateTemplate(ctx context.Context, store port.StoreID, ws workspace.ID, in workspace.Template) (workspace.Template, error) {
-	in.ID = s.IDs.New()
+	return s.createTemplate(ctx, store, ws, in, nil)
+}
+
+// newTemplate は、作るテンプレート in に ID を振り、値を整える。
+func (s Service) newTemplate(in workspace.Template, id change.ID) workspace.Template {
+	in.ID = id
 	in = s.withIDs(in)
 	in.Values = mergeValues(nil, in.Values)
 	for i := range in.Children {
 		in.Children[i].Values = mergeValues(nil, in.Children[i].Values)
 	}
+	return in
+}
+
+// createTemplate は CreateTemplate と同じ。reread があれば、書く保存の中で最初に呼び、返したテンプレートで
+// 作り直す(エラーなら何も保存しない)。
+func (s Service) createTemplate(ctx context.Context, store port.StoreID, ws workspace.ID, in workspace.Template, reread func(tx port.Tx) (workspace.Template, error)) (workspace.Template, error) {
+	in = s.newTemplate(in, s.IDs.New())
 	var saved workspace.Template
 	err := s.edit(ctx, store, ws,
 		func(workspace.Settings) (string, error) {
 			return fmt.Sprintf("テンプレート「%s」を作成", oneLine(workspace.NormalizeName(in.Name))), nil
 		},
-		func(_ port.Tx, st workspace.Settings) ([]change.Draft, error) {
-			t, err := prepare(st, in)
+		func(tx port.Tx, st workspace.Settings) ([]change.Draft, error) {
+			cur := in
+			if reread != nil {
+				fresh, err := reread(tx)
+				if err != nil {
+					return nil, err
+				}
+				cur = s.newTemplate(fresh, in.ID)
+			}
+			t, err := prepare(st, cur)
 			if err != nil {
 				return nil, err
 			}

@@ -15,7 +15,7 @@ import (
 // SetOwner は、オーナーを変える(02「概要の編集」)。login が空なら「なし」。メンバーでなければ port.ErrNotFound。
 // ログイン名は大文字と小文字を区別せずに比べ、保存するのはメンバーのログイン名。前と同じなら何も保存しない。
 func (s Service) SetOwner(ctx context.Context, store port.StoreID, id project.ID, login string) (project.Project, error) {
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}

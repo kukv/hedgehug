@@ -1,6 +1,7 @@
 package workspaces_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -209,5 +210,66 @@ func TestCreateAfterDeleteDoesNotReuseRank(t *testing.T) {
 	})
 	if err != nil || ranks[c.ID] <= ranks[b.ID] {
 		t.Errorf("ranks B=%q C=%q, %v; want C > B", ranks[b.ID], ranks[c.ID], err)
+	}
+}
+
+// beforeWrite は、次の Write の前に 1 回だけ before を呼ぶ(読んだあとの同時の変更)。
+type beforeWrite struct {
+	*apptest.Stores
+	before func()
+}
+
+func (b *beforeWrite) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	if f := b.before; f != nil {
+		b.before = nil
+		f()
+	}
+	return b.Stores.Write(ctx, id, op, fn)
+}
+
+// 元のアイテムを読んだあと、テンプレートを書く前に別の画面が削除したら、書かずに断る(決定 S8)。
+func TestCreateTemplateFromItemDeletedBeforeWriteIsNotFound(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, _ := s.Create(ctx, store, "Web", "HH")
+	epic := putItem(t, s, w.ID)
+	stores := &beforeWrite{Stores: s.Stores.(*apptest.Stores)}
+	s.Stores = stores
+	stores.before = func() {
+		if err := apptest.DeleteItems(ctx, stores.Stores, store, epic); err != nil {
+			t.Error(err)
+		}
+	}
+	_, err := s.CreateTemplateFromItem(ctx, store, epic, workspaces.FromItem{Name: "構成", Title: "x"})
+	if !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("CreateTemplateFromItem = %v, want port.ErrNotFound", err)
+	}
+	if got := settingsOf(t, s, w.ID); len(got.Templates) != 0 {
+		t.Errorf("templates = %+v; nothing must be saved", got.Templates)
+	}
+}
+
+// 前の読みのあと、書く前に子が削除されたら、その子はテンプレートに入らない(決定 S8)。
+func TestCreateTemplateFromItemSkipsChildDeletedBeforeWrite(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, _ := s.Create(ctx, store, "Web", "HH")
+	p := project.Project{ID: s.IDs.New(), Place: project.Place{Workspace: w.ID, Number: 1}, Rank: "V", Title: "p", Status: project.Todo}
+	epic := putItemIn(t, s, p, 1)
+	putChild(t, s, p, epic, item.Story, 2, "V", "残す")
+	gone := putChild(t, s, p, epic, item.Story, 3, "W", "消す")
+	stores := &beforeWrite{Stores: s.Stores.(*apptest.Stores)}
+	s.Stores = stores
+	stores.before = func() {
+		if err := apptest.DeleteItems(ctx, stores.Stores, store, gone); err != nil {
+			t.Error(err)
+		}
+	}
+	tpl, err := s.CreateTemplateFromItem(ctx, store, epic, workspaces.FromItem{Name: "構成", Title: "x", Structure: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := settingsOf(t, s, w.ID).Template(tpl.ID); len(got.Children) != 1 || got.Children[0].Title != "残す" {
+		t.Errorf("children = %+v", got.Children)
 	}
 }
