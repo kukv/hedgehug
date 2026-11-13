@@ -1,16 +1,17 @@
-import type {
-  AutomationRule,
-  ChildKind,
-  PropertyType,
-  TemplateChild,
-  TemplateInput,
-  TemplateStep,
-  WorkspaceDetail,
-  WorkspaceProperty,
-  WorkspacesPort,
-  WorkspaceTemplate,
-  WorkspaceUsage,
-  WorkspaceValue,
+import {
+  type AutomationRule,
+  type ChildKind,
+  type PropertyType,
+  ruleForm,
+  type TemplateChild,
+  type TemplateInput,
+  type TemplateStep,
+  type WorkspaceDetail,
+  type WorkspaceProperty,
+  type WorkspacesPort,
+  type WorkspaceTemplate,
+  type WorkspaceUsage,
+  type WorkspaceValue,
 } from "@hedgehug/core";
 import { call } from "./errors";
 import {
@@ -126,6 +127,9 @@ const toTemplateBody = (input: TemplateInput) => input as ApiTemplateInput;
 // API の列挙(きっかけ・すること)は core の型と同じ文字列。
 const toRule = (r: ApiRule): AutomationRule => r;
 
+// 入力は 6 項目だけを送る。API の入力は追加の項目(id・enabled)を断る。
+const toRuleBody = ruleForm;
+
 export function createWorkspacesPort(): WorkspacesPort {
   return {
     get: (s, w) => call(async () => toDetail(s, await getWorkspace(s, w))),
@@ -201,8 +205,9 @@ export function createWorkspacesPort(): WorkspacesPort {
           recent: (v.recent ?? []).map((r) => ({ ...r, at: new Date(r.at) })),
         };
       }),
-    createRule: (s, w, input) => call(async () => toRule(await createAutomationRule(s, w, input))),
-    updateRule: (s, w, id, input) => call(() => updateAutomationRule(s, w, id, input)),
+    createRule: (s, w, input) =>
+      call(async () => toRule(await createAutomationRule(s, w, toRuleBody(input)))),
+    updateRule: (s, w, id, input) => call(() => updateAutomationRule(s, w, id, toRuleBody(input))),
     deleteRule: (s, w, id) => call(() => deleteAutomationRule(s, w, id)),
     setRuleEnabled: (s, w, id, enabled) =>
       call(() => setAutomationRuleEnabled(s, w, id, { enabled })),

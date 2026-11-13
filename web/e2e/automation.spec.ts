@@ -90,15 +90,16 @@ test("a rule runs on a status change and shows in recent runs", async ({ page },
     page.getByText("ステータスが Done になったとき → 担当者を 未割り当て に"),
   ).toBeVisible();
 
+  const getTask = async () =>
+    (await page.request.get(`/api/stores/${e2eStore}/items/${task}`, { headers: auth })).json();
+  // 応答の assignee をそのまま見る(項目がなければ失敗する)。
+  expect(await getTask()).toHaveProperty("assignee", "taro");
   const res = await page.request.put(`/api/stores/${e2eStore}/items/${task}/properties/status`, {
     headers: auth,
     data: { value: status("Done") },
   });
   expect(res.ok()).toBeTruthy();
-  const it = await (
-    await page.request.get(`/api/stores/${e2eStore}/items/${task}`, { headers: auth })
-  ).json();
-  expect(it.assignee ?? "").toBe("");
+  expect(await getTask()).toHaveProperty("assignee", "");
 
   await openAutomation(page, prefix);
   const recent = page.getByRole("region", { name: "最近の実行" });
@@ -126,4 +127,25 @@ test("refuses a duplicate name and switches a rule off", async ({ page }, info) 
   await expect(sw).toBeChecked();
   await sw.click();
   await expect(sw).not.toBeChecked();
+});
+
+test("edits a rule's name from the dialog", async ({ page }, info) => {
+  const prefix = prefixOf(info);
+  await createWorkspace(page, info, unique(info, "自動化の編集"), prefix);
+  await openAutomation(page, prefix);
+  await page.getByRole("button", { name: "ルールを作成" }).click();
+  const create = page.getByRole("dialog", { name: "ルールを作成" });
+  await create.getByRole("textbox", { name: "名前" }).fill("前の名前");
+  await create.getByRole("button", { name: "保存" }).click();
+  await expect(create).toBeHidden();
+
+  await page.getByRole("button", { name: "編集", exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "ルールの編集" });
+  await edit.getByRole("textbox", { name: "名前" }).fill("後の名前");
+  await edit.getByRole("button", { name: "保存" }).click();
+  // 保存に失敗すると、ダイアログは閉じず赤字の断りが出る。
+  await expect(edit.getByRole("alert")).toHaveCount(0);
+  await expect(edit).toBeHidden();
+  await expect(page.getByRole("switch", { name: "後の名前 を有効にする" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "前の名前 を有効にする" })).toHaveCount(0);
 });

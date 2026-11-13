@@ -3,6 +3,7 @@ import type { WorkspaceSettings } from "../../model/workspace";
 import {
   newRuleForm,
   recentRows,
+  ruleForm,
   ruleFormRefusal,
   ruleRows,
   ruleSummary,
@@ -73,6 +74,10 @@ describe("the rule form", () => {
       action: "status",
       value: id("Done"),
     });
+  });
+  it("starts an edit with only the six input fields of the rule", () => {
+    const rule = { ...newRuleForm(settings), id: "R1", name: "完了", enabled: false };
+    expect(ruleForm(rule)).toEqual({ ...newRuleForm(settings), name: "完了" });
   });
   it("resets the value when the action changes", () => {
     const f = withAction(newRuleForm(settings), "assignee", settings);

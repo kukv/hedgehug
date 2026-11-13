@@ -102,6 +102,12 @@ export function newRuleForm(s: WorkspaceSettings): AutomationRuleInput {
   };
 }
 
+// ruleForm は、編集ダイアログの初期値。入力の 6 項目だけを持つ(id・enabled は送らない)。
+export function ruleForm(r: AutomationRuleInput): AutomationRuleInput {
+  const { name, trigger, triggerStatus, allMerged, action, value } = r;
+  return { name, trigger, triggerStatus, allMerged, action, value };
+}
+
 // withTrigger は、きっかけを変える。条件は pr_merged のときだけ残し、ステータスのきっかけには先頭のステータス(B4-19)。
 export function withTrigger(
   f: AutomationRuleInput,

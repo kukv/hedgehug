@@ -12,6 +12,7 @@ export {
   recentRows,
   ruleCreated,
   ruleDeleted,
+  ruleForm,
   ruleFormRefusal,
   ruleRows,
   ruleSummary,

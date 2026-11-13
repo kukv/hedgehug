@@ -169,4 +169,15 @@ describe("workspaces port: automation", () => {
     expect(call(sw)[0]).toBe("/api/stores/S1/workspaces/W1/automation/rules/R1/enabled");
     expect(JSON.parse(String(call(sw)[1].body))).toEqual({ enabled: false });
   });
+
+  it("sends only the six input fields, even when given a whole rule", async () => {
+    // 入力の型は追加の項目を断る(additionalProperties: false)。id と enabled を送ると 422 になる。
+    const port = createWorkspacesPort();
+    const create = respond(200, apiRule);
+    await port.createRule("S1", "W1", apiRule as never);
+    expect(JSON.parse(String(call(create)[1].body))).toEqual(input);
+    const update = respond(204, undefined);
+    await port.updateRule("S1", "W1", "R1", apiRule as never);
+    expect(JSON.parse(String(call(update)[1].body))).toEqual(input);
+  });
 });

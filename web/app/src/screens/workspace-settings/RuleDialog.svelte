@@ -9,6 +9,7 @@
     newRuleForm,
     readOnlyNote,
     ruleCreated,
+    ruleForm,
     ruleFormRefusal,
     type SettingsState,
     triggerOptions,
@@ -30,7 +31,7 @@
   let { state: s, rules, rule, onclose }: Props = $props();
 
   const settings = $derived(s.detail.settings);
-  const start = (): AutomationRuleInput => (rule ? { ...rule } : newRuleForm(s.detail.settings));
+  const start = (): AutomationRuleInput => (rule ? ruleForm(rule) : newRuleForm(s.detail.settings));
   let form = $state(start());
   let error = $state("");
   const disabled = $derived(s.readOnly);
