@@ -2,10 +2,20 @@
 // (index.ts は 300 行の上限なので、A4b の分はここに足す)。
 
 export {
+  type ItemMenuContext,
+  type ItemMenuId,
+  itemMenu,
+  itemMenuContext,
+  type MenuEntry,
+  menuReasons,
+} from "./features/items/menu";
+export { filterMoveCandidates } from "./features/items/moveCandidates";
+export {
   createItemRefresh,
   type ItemRefresh,
   type ItemRefreshDeps,
 } from "./features/items/refresh";
+export { visibleNeighbors, visibleRows } from "./features/items/siblings";
 export type {
   DeletePreview,
   MoveCandidate,

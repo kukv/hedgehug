@@ -23,6 +23,8 @@ export interface DetailView {
   ancestors: Item[];
   // children は、子(Epic なら Story・Task・Bug、Story・Task・Bug なら Step)を並び順で。
   children: Item[];
+  // siblings は、同じ親の下の自分を含む兄弟を並び順で(メニューの「上へ移動」「下へ移動」。詳細パネルに絞り込みはない)。
+  siblings: Item[];
   readOnly: boolean;
   // settings・people・rows は、プロパティの区画(02「プロパティの入力と保存」)。
   settings: WorkspaceSettings;
@@ -135,6 +137,7 @@ export function createDetail(deps: DetailDeps): Detail {
         displayId: itemDisplayId(workspace.prefix, item.number),
         ancestors: ancestorsOf(all, item.id),
         children: all.filter((it) => it.parentId === item.id).sort(compareSiblings),
+        siblings: all.filter((it) => it.parentId === item.parentId).sort(compareSiblings),
         readOnly: store.readOnly,
         settings: settings,
         people,
