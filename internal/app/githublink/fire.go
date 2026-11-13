@@ -66,8 +66,8 @@ type fired struct {
 }
 
 // fire は、保存 tx の中で、アイテム id のリンクが before から after になったきっかけでルールを動かし、
-// 変えた行を書く。p が nil なら 1 回きりの操作(手でのリンク)。削除済みのアイテムで動かさない判定は、
-// 削除の印とともに A4b が足す(計画 D4a「A4b が入ったときに足すもの」)。
+// 変えた行を書く。p が nil なら 1 回きりの操作(手でのリンク)。削除済みのアイテム(プロジェクト)は、
+// 呼ぶ側が保存の中の readItem で port.ErrNotFound にするので、ここには来ない(03「削除済みのアイテムには動かない」、A4b-4)。
 // 呼ぶのはリンクの行を書いたあと(tx の読み取りは書いた行を含む)。
 // before は、tx の中で書く前に読んだリンク(いまリンクしたなら nil)、after は書いたあとの値。
 // 1 回の変更で起きたきっかけのルールは、一覧の上から順に 1 回で動かす(03「実行の規則」)。
@@ -76,7 +76,6 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 	if len(ts) == 0 {
 		return nil, nil
 	}
-	// 削除済みのアイテムでは動かさない(03)。削除の印は A4b が足す(計画 D4a「A4b が入ったときに足すもの」)
 	it, err := tx.Items().Get(id)
 	if err != nil {
 		return nil, err
