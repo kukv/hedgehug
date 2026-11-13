@@ -1,6 +1,7 @@
 // スプリントとリリース(05)の core の export。index.ts が全部を再公開する(index.ts の行数を抑えるため分けた)。
 
 export {
+  asOptions,
   chosen,
   type PlanChoice,
   releaseChoices,

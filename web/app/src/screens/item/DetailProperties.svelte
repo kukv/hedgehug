@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    asOptions,
     chosen,
     type DetailView,
     type PropertyInput,
@@ -32,8 +33,6 @@
   // スプリント・リリースの選択肢(02「スプリント・リリース」)。使えない参照はバックログ・「なし」と出す(F1-5)。
   const sprints = $derived(sprintChoices(v.plan, v.item.sprint));
   const releases = $derived(releaseChoices(v.plan, v.item.release));
-  const options = (cs: { id: string; label: string }[]) =>
-    cs.map((c) => ({ value: c.id, label: c.label }));
   // assign は、スプリント・リリースを保存する。保存できなかったら、セレクトを保存済みの値に戻す。
   async function assign(save: Promise<boolean>) {
     if (!(await save)) version += 1;
@@ -71,7 +70,7 @@
         <dd>
           <Select
             label="スプリント"
-            options={options(sprints)}
+            options={asOptions(sprints)}
             value={chosen(sprints, v.item.sprint)}
             disabled={v.readOnly}
             title={v.readOnly ? readOnlyNote : undefined}
@@ -84,7 +83,7 @@
         <dd>
           <Select
             label="リリース"
-            options={options(releases)}
+            options={asOptions(releases)}
             value={chosen(releases, v.item.release)}
             disabled={v.readOnly}
             title={v.readOnly ? readOnlyNote : undefined}

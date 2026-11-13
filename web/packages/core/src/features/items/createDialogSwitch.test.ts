@@ -5,8 +5,9 @@ import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { fakePlanningPort, overviewOf, sprintOf } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createItemDialog } from "./createDialog";
+import { keptSprint } from "./createDialogOptions";
 import { fakeItemsPort, item } from "./fixtures.test-util";
-import { fakeWorkspaces, settings2 } from "./settings.test-util";
+import { fakeWorkspaces, settings, settings2 } from "./settings.test-util";
 
 // ワークスペースの切り替えと値の連動(02「ダイアログの中での連動」、決定 25)。S2-W1 は別の Store の設定 settings2。
 async function setupSwitch(members2: { login: string; name: string }[]) {
@@ -129,5 +130,19 @@ describe("create dialog sprint", () => {
     await dialog.update({ title: "画面", sprint: "SP1" });
     await dialog.submit();
     expect(dialog.items.all.find((it) => it.title === "画面")?.sprint).toBe("SP1");
+  });
+});
+
+// 読み直したときのスプリント。ダイアログを開いているあいだ概要は覚えたものを使うので、ここでは関数を直接確かめる。
+describe("keptSprint", () => {
+  it("falls back to the backlog when the picked sprint was closed or deleted", () => {
+    const ctx = (sprints: ReturnType<typeof sprintOf>[]) => ({
+      settings,
+      people: { members: [], me: "" },
+      plan: overviewOf(sprints),
+    });
+    expect(keptSprint(ctx([sprintOf({ id: "SP1" })]), "SP1")).toBe("SP1");
+    expect(keptSprint(ctx([sprintOf({ id: "SP1", state: "closed" })]), "SP1")).toBe("");
+    expect(keptSprint(ctx([]), "SP1")).toBe("");
   });
 });

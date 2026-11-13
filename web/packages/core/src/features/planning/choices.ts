@@ -50,3 +50,7 @@ export function releaseChoices(o: PlanningOverview, current: string): PlanChoice
 // chosen は、選択肢に出す値。current が選択肢になければ、バックログ・「なし」(空)。
 export const chosen = (choices: PlanChoice[], current: string): string =>
   choices.some((c) => c.id === current) ? current : "";
+
+// asOptions は、選択肢をセレクトの選択肢(value・label)にする。
+export const asOptions = (choices: PlanChoice[]): { value: string; label: string }[] =>
+  choices.map((c) => ({ value: c.id, label: c.label }));

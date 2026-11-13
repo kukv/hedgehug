@@ -1,6 +1,6 @@
 import type { Item, Kind } from "../../model/item";
 import type { StoreNode } from "../catalog/catalog";
-import { chosen, sprintChoices } from "../planning/choices";
+import { asOptions, chosen, sprintChoices } from "../planning/choices";
 import type { Option } from "../projects/createDialog";
 import { itemDisplayId } from "../router/route";
 import { parentMissing } from "./createDefaults";
@@ -33,7 +33,7 @@ export const viewOf = (ctx: WorkspaceContext, form: TemplateForm) => ({
   rows: rowsFor(ctx, form),
   templates: templateOptions(ctx.settings, form.kind),
   structure: structureOf(ctx.settings, form, ctx.people.members),
-  sprints: sprintChoices(ctx.plan, "").map((c) => ({ value: c.id, label: c.label })),
+  sprints: asOptions(sprintChoices(ctx.plan, "")),
 });
 
 // keptSprint は、読み直したあとのスプリント。選んでいたものが選択肢になければ「バックログ」(完了・削除されたもの)。

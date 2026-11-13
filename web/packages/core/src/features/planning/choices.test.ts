@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chosen, releaseChoices, showRelease, showSprint, sprintChoices } from "./choices";
+import {
+  asOptions,
+  chosen,
+  releaseChoices,
+  showRelease,
+  showSprint,
+  sprintChoices,
+} from "./choices";
 import { overviewOf, releaseOf, sprintOf } from "./fixtures.test-util";
 
 // アイテムのスプリント・リリースの選択肢(02「スプリント・リリース」、05、F1-5・F1-15・F1-21)。
@@ -62,5 +69,15 @@ describe("showSprint and showRelease", () => {
     const kinds = ["Epic", "Story", "Task", "Bug", "Step"] as const;
     expect(kinds.map(showSprint)).toEqual([false, true, true, true, false]);
     expect(kinds.map(showRelease)).toEqual([true, true, true, true, false]);
+  });
+});
+
+describe("asOptions", () => {
+  it("turns choices into select options", () => {
+    expect(asOptions(releaseChoices(o, ""))).toEqual([
+      { value: "", label: "なし" },
+      { value: "R1", label: "v1.0" },
+      { value: "R2", label: "v1.1" },
+    ]);
   });
 });
