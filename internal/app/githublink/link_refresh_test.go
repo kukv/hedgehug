@@ -342,3 +342,29 @@ func TestListHidesFailureWhenNotRefreshed(t *testing.T) {
 		t.Errorf("stored = %v, want the text kept", got)
 	}
 }
+
+// 解除したリンクの取り直しの失敗の文言は消し、消したら EventGitHub を流す。
+func TestRemoveClearsFailure(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 12)
+	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	f.refresh(t)
+	base := f.githubEvents(linkStore)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 12}
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, ref); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 0 {
+		t.Errorf("failures = %v, want the removed link's text cleared", got)
+	}
+	if got := f.githubEvents(linkStore) - base; got != 1 {
+		t.Errorf("published %d, want 1", got)
+	}
+	// ないリンクの解除では、何も知らせない
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, ref); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.githubEvents(linkStore) - base; got != 1 {
+		t.Errorf("published %d after removing a missing link, want 1", got)
+	}
+}
