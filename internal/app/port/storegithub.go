@@ -13,6 +13,7 @@ type StoreGitHubInfo struct {
 	Account  account.ID // 割り当てたアカウント。「なし」なら空
 	Remote   bool       // remote を持つか
 	ReadOnly bool       // 閲覧のみの Store か(01。リンクの取り直しをしない。D3-14)
+	Hidden   bool       // 非表示の Store か(08。GitHub を自動で読まない。D4a-9)
 }
 
 // StoreGitHub は、Store の一覧のうち GitHub に関わる値と、マシンの設定「ログイン名」の口。

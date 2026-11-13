@@ -2,7 +2,9 @@ package port
 
 import (
 	"context"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/domain/ghread"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
@@ -25,6 +27,20 @@ type Found struct {
 	Checks itemlink.Checks // PR のチェックの結果。Issue は NoChecks
 }
 
+// Batch は、ReadMany の答え。ReadMany は GitHub のインターフェースに、実装の infra/github.Client と同時に足す。
+type Batch struct {
+	Repo    string        // GitHub のいまの名前
+	Found   map[int]Found // 番号から引く
+	Missing []int         // 答えになかった番号
+	Rate    Rate          // 最後の答えの rateLimit
+}
+
+// Rate は、GitHub の利用上限(GraphQL の rateLimit)。
+type Rate struct {
+	Limit, Remaining int
+	ResetAt          time.Time
+}
+
 // Checks は、このマシンが読んだ PR のチェックの結果(07「表示と更新」。Store に保存しない)の口。
 // 実装は infra/statedb。
 type Checks interface {
@@ -32,4 +48,16 @@ type Checks interface {
 	Read(ctx context.Context, store StoreID) (map[string]itemlink.Checks, error)
 	// Save は、結果を置く。NoChecks なら消す。前と変わったら changed。
 	Save(ctx context.Context, store StoreID, key string, c itemlink.Checks) (changed bool, err error)
+}
+
+// GitHubReads は、GitHub を読んだ記録と、取り直しの失敗の文言の口(D4a-5・D4a-11)。実装は infra/statedb。
+type GitHubReads interface {
+	// Records は、Store のリポジトリ(小文字)から引く、前回の読み取りの記録。
+	Records(ctx context.Context, store StoreID) (map[string]ghread.Record, error)
+	// SaveRecord は、repo(小文字)の記録を置く。
+	SaveRecord(ctx context.Context, store StoreID, repo string, r ghread.Record) error
+	// Failures は、Store のリンクの Ref.Key() から引く、取り直しの失敗の文言。
+	Failures(ctx context.Context, store StoreID) (map[string]string, error)
+	// SetFailure は、文言を置く。空なら消す。前と変わったら changed。
+	SetFailure(ctx context.Context, store StoreID, key, text string) (changed bool, err error)
 }
