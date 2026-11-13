@@ -54,7 +54,7 @@ func deletedRow(t *testing.T, s port.Stores, ref change.Ref) *change.Record {
 	err := s.Read(t.Context(), store, func(r port.Reader) error {
 		log, err := r.Changes().Of(ref)
 		for _, rec := range log {
-			if rec.T == change.Delete && rec.F == "deleted" {
+			if rec.T == change.Delete && rec.F == change.DeletedField {
 				out = &rec
 			}
 		}
@@ -88,7 +88,7 @@ func TestDeleteWritesOneRowPerLiveItemInOneOperation(t *testing.T) {
 		t.Errorf("summary = %q", got)
 	}
 	pr := deletedRow(t, rec, change.Ref{Kind: change.KindProject, ID: apptest.SampleProject})
-	if pr == nil || pr.Root == nil || !*pr.Root {
+	if pr == nil || pr.Root == nil || !*pr.Root || pr.From != nil || pr.To != nil {
 		t.Fatalf("project row = %+v", pr)
 	}
 	for _, id := range []item.ID{apptest.SampleEpic, apptest.SampleTask, storyID, stepID} {
