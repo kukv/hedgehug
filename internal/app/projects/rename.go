@@ -14,7 +14,7 @@ import (
 // アクティビティは「{変える前のタイトル} のタイトルを {新しいタイトル} に変更」。
 func (s Service) Rename(ctx context.Context, store port.StoreID, id project.ID, title string) (project.Project, error) {
 	title = strings.TrimSpace(title)
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}
