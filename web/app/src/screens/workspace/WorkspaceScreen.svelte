@@ -10,6 +10,7 @@
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
   import { navigation, planning, projectDialog, syncNow } from "../../wire";
+  import SprintsTab from "../planning/SprintsTab.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
 
   // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「設定」。
@@ -79,6 +80,20 @@
     <SettingsTab storeId={store.id} workspaceId={workspace.id} storeName={store.name} />
   {:else if store.readOnly}
     <ReadOnlyBand text={readOnlyBand(store.name)} />
+  {/if}
+  {#if tab === "sprints"}
+    <!-- 作成・開始・完了・編集・削除のダイアログは Task 16 でつなぐ -->
+    <SprintsTab
+      storeId={store.id}
+      storeName={store.name}
+      workspaceId={workspace.id}
+      readOnly={store.readOnly}
+      oncreate={() => {}}
+      onstart={() => {}}
+      onclose={() => {}}
+      onedit={() => {}}
+      ondelete={() => {}}
+    />
   {/if}
 </div>
 

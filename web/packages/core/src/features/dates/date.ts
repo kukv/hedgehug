@@ -8,3 +8,10 @@ export function formatDay(ymd: string, thisYear: number): string {
   if (Number(y) === thisYear) return `${Number(mo)}/${Number(d)}`;
   return `${y}/${mo}/${d}`;
 }
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// dayOf は、このマシンの時刻帯での d の日付(YYYY-MM-DD)。
+export function dayOf(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
