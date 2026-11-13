@@ -5,12 +5,12 @@ import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { fakeItemActions } from "./actions.test-util";
 import { createItemDuplicate, duplicateFailedMessage } from "./duplicate";
-import { flush, item } from "./fixtures.test-util";
+import { flush, gate, item } from "./fixtures.test-util";
 
 const task = item("S1", "S1-P1", 2, "Task", null, "画面");
 const ro = item("S2", "S2-P1", 1, "Task", null, "閲覧のみ");
 
-async function setup() {
+async function setup(open?: () => Promise<void>) {
   const catalog = createCatalog(fakeCatalogPort());
   await catalog.load();
   const actions = fakeItemActions();
@@ -24,6 +24,7 @@ async function setup() {
     detail: {
       open: async (store, id) => {
         order.push(`open ${store}/${id}`);
+        await open?.();
       },
     },
     refresh: {
@@ -88,5 +89,27 @@ describe("createItemDuplicate", () => {
     await duplicate.run(task);
     expect(messages()).toEqual([]);
     expect(order).toEqual(["change"]);
+  });
+
+  it("makes no second duplicate while the panel switch waits for a confirmation", async () => {
+    const g = gate();
+    const { duplicate, actions, order } = await setup(() => g.wait);
+    const first = duplicate.run(task);
+    await flush();
+    await duplicate.run(task);
+    expect(actions.calls).toEqual([`duplicate ${task.id}`]);
+    g.release();
+    await first;
+    expect(order).toEqual([`open S1/S1-copy-of-${task.id}`, "change"]);
+    await duplicate.run(task);
+    expect(actions.calls).toHaveLength(2);
+  });
+
+  it("still reloads when the switch is cancelled (open resolves without switching)", async () => {
+    const { duplicate, actions, order, messages } = await setup(async () => {});
+    await duplicate.run(task);
+    expect(actions.calls).toEqual([`duplicate ${task.id}`]);
+    expect(order).toEqual([`open S1/S1-copy-of-${task.id}`, "change"]);
+    expect(messages()).toEqual([]);
   });
 });

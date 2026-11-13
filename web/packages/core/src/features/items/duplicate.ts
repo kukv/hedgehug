@@ -33,23 +33,26 @@ export function createItemDuplicate(deps: ItemDuplicateDeps): ItemDuplicate {
     async run(item) {
       if (busy || deps.catalog.store(item.storeId)?.readOnly) return;
       busy = true;
-      let created: string;
       try {
-        created = await deps.actions.duplicate(item.storeId, item.id);
-      } catch (e) {
-        // すでに消えているのは、画面を読み直して消す(トーストなし)。
-        if (e instanceof NotFound) await deps.refresh.afterChange();
-        else
-          deps.toasts.show(e instanceof Refused ? e.message : duplicateFailedMessage, {
-            error: true,
-          });
-        return;
+        let created: string;
+        try {
+          created = await deps.actions.duplicate(item.storeId, item.id);
+        } catch (e) {
+          // すでに消えているのは、画面を読み直して消す(トーストなし)。
+          if (e instanceof NotFound) await deps.refresh.afterChange();
+          else
+            deps.toasts.show(e instanceof Refused ? e.message : duplicateFailedMessage, {
+              error: true,
+            });
+          return;
+        }
+        // 書きかけの確認で「キャンセル」されたときは、パネルは元のアイテムのまま(複製はできている)。
+        // 確認の待ちのあいだも busy のままにして、2 つ目を作らせない。
+        await deps.detail.open(item.storeId, created);
+        await deps.refresh.afterChange();
       } finally {
         busy = false;
       }
-      // 書きかけの確認で「キャンセル」されたときは、パネルは元のアイテムのまま(複製はできている)。
-      await deps.detail.open(item.storeId, created);
-      await deps.refresh.afterChange();
     },
   };
 }
