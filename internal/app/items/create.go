@@ -20,14 +20,16 @@ var ErrParentElsewhere = errors.New("the parent is in another project")
 
 // CreateInput は、作成ダイアログの入力。Values はプロパティの値(キーはプロパティの ID。組み込みはキー)。
 // Template は、一緒に作る構成を持つテンプレート(nil は「なし」。A3b-6)。
+// Description は、もとになるアイテムの説明(空白だけは説明なし。A4a-4)。
 type CreateInput struct {
-	Store    port.StoreID
-	Project  project.ID
-	Parent   *item.ID
-	Kind     item.Kind
-	Title    string
-	Values   map[change.ID]json.RawMessage
-	Template *change.ID
+	Store       port.StoreID
+	Project     project.ID
+	Parent      *item.ID
+	Kind        item.Kind
+	Title       string
+	Description string
+	Values      map[change.ID]json.RawMessage
+	Template    *change.ID
 }
 
 // Create は、アイテムを作る(02「作成したあと」)。テンプレートが子や Step を持つときは、それらも同じ 1 回の保存で作る。
@@ -57,12 +59,12 @@ func (s Service) create(ctx context.Context, in CreateInput, t *workspace.Templa
 		if err != nil {
 			return err
 		}
-		all, err := s.withTemplate(tx, in, t, created, me)
+		all, texts, err := s.withTemplate(tx, in, t, created, me)
 		if err != nil {
 			return err
 		}
 		id = created.ID
-		return writeCreated(tx, all)
+		return writeCreated(tx, all, texts)
 	})
 	if err != nil {
 		return item.Item{}, err
@@ -70,14 +72,18 @@ func (s Service) create(ctx context.Context, in CreateInput, t *workspace.Templa
 	return s.Get(ctx, in.Store, id)
 }
 
-// writeCreated は、作るアイテムを番号の順に書く。番号の行も 1 つずつ書く(A3b-11)。
-func writeCreated(tx port.Tx, all []item.Item) error {
+// writeCreated は、作るアイテムを番号の順に書く。番号の行も 1 つずつ書く(A3b-11)。説明は、そのアイテムの
+// 作成の行を書いたあとに本文だけを書く(履歴は「作成」の 1 行。desc の行は書かない。A4a-4)。
+func writeCreated(tx port.Tx, all []item.Item, texts descTexts) error {
 	var errs []error
 	for _, it := range all {
 		errs = append(errs,
 			tx.WriteWorkspaces().Append(it.Place.Workspace, numbering.Draft(numbering.Items, it.Place.Number)),
 			tx.WriteItems().Append(it.ID, item.Create(it)),
 		)
+		if text := texts[it.ID]; text != "" {
+			errs = append(errs, tx.WriteItems().Describe(it.ID, text))
+		}
 	}
 	return errors.Join(errs...)
 }

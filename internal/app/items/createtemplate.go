@@ -3,6 +3,7 @@ package items
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -36,6 +37,16 @@ func (s Service) templateOf(ctx context.Context, in CreateInput) (*workspace.Tem
 	return found, err
 }
 
+// descTexts は、作るアイテムの説明の本文(内部 ID → 本文)。
+type descTexts map[item.ID]string
+
+// set は、空白だけでない説明を入れる(空の説明はファイルを置かない。A4a-1)。
+func (d descTexts) set(id item.ID, text string) {
+	if strings.TrimSpace(text) != "" {
+		d[id] = text
+	}
+}
+
 // others は、テンプレートと一緒に作る子と Step の数。
 func others(t workspace.Template) int {
 	n := len(t.Children) + len(t.Steps)
@@ -46,17 +57,21 @@ func others(t workspace.Template) int {
 }
 
 // withTemplate は、もとになるアイテム root と、テンプレートの構成から作る子と Step を、番号の順に返す。
+// 2 つ目の値は、作るアイテムの説明(説明のないアイテムは入れない)。もとになるアイテムは入力の説明、
+// 子はテンプレートの子の説明、Step は説明を持たない(A4a-4)。
 // テンプレートを選んだのに読めなかったときは、ほかの検査のあとで ErrNotFound にする(A3b-7)。
-func (s Service) withTemplate(tx port.Tx, in CreateInput, t *workspace.Template, root item.Item, me string) ([]item.Item, error) {
+func (s Service) withTemplate(tx port.Tx, in CreateInput, t *workspace.Template, root item.Item, me string) ([]item.Item, descTexts, error) {
+	texts := descTexts{}
+	texts.set(root.ID, in.Description)
 	if in.Template == nil {
-		return []item.Item{root}, nil
+		return []item.Item{root}, texts, nil
 	}
 	if t == nil {
-		return nil, port.ErrNotFound
+		return nil, nil, port.ErrNotFound
 	}
 	st, err := tx.Workspaces().Settings(root.Place.Workspace)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	e := expander{st: st, me: me, newID: s.IDs.New, next: root.Place.Number, out: []item.Item{root}}
 	e.steps(root, t.Steps)
@@ -64,9 +79,10 @@ func (s Service) withTemplate(tx port.Tx, in CreateInput, t *workspace.Template,
 	for _, c := range t.Children {
 		r = rank.After(r)
 		child := e.add(item.Kind(c.Kind), root, c.Title, r, workspace.TemplateValuesFor(st, c.Kind, c.Values))
+		texts.set(child.ID, c.Description)
 		e.steps(child, c.Steps)
 	}
-	return e.out, nil
+	return e.out, texts, nil
 }
 
 // expander は、テンプレートの構成からアイテムを深さ優先の番号で作る(A3b-10・A3b-11)。
