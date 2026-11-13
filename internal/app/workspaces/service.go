@@ -13,6 +13,7 @@ type Service struct {
 	Stores   port.Stores
 	IDs      port.IDs
 	Identity port.Identity
+	Inbox    port.Inbox // ステータスの削除でルールが変わった通知(B4-17)
 }
 
 // me は、store の「あなた」を実行者にする。ワークスペースの操作が共通で使う。
