@@ -4,6 +4,7 @@
   import { accountForm, accountList } from "../../accounts";
   import AccountDialog from "./AccountDialog.svelte";
   import AccountItem from "./AccountItem.svelte";
+  import AppMissingBand from "./AppMissingBand.svelte";
   import SignInDialog from "./SignInDialog.svelte";
 
   // 「GitHub アカウント」の区画(07「アカウント」)。開くたびに行の赤字を消して読み直す(決定 S14)。
@@ -19,6 +20,16 @@
     <span class="grow"></span>
     <Button size="sm" onclick={accountForm.openAdd}>追加</Button>
   </div>
+  {#each $list.rows.filter((r) => r.status === "app_missing") as row (row.id)}
+    {#each row.orgs as org (org)}
+      <AppMissingBand
+        name={row.name}
+        login={row.login}
+        {org}
+        still={$list.still[row.id]?.includes(org) ?? false}
+      />
+    {/each}
+  {/each}
   <ul class="rows" aria-label="GitHub アカウント">
     {#each $list.rows as row (row.id)}
       <AccountItem
@@ -26,6 +37,7 @@
         error={$list.errors[row.id] ?? ""}
         asking={$list.asking.includes(row.id)}
         onreauth={() => void accountList.reauth(row.id)}
+        onrecheck={() => void accountList.recheck(row)}
         onedit={() => {
           accountList.touch(row.id);
           accountForm.openEdit(row);

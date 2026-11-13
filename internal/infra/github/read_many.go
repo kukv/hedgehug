@@ -1,11 +1,9 @@
 package github
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -19,35 +17,22 @@ const readManySize = 100
 
 type readManyAnswer struct {
 	Data struct {
-		RateLimit *struct {
-			Limit     int       `json:"limit"`
-			Remaining int       `json:"remaining"`
-			ResetAt   time.Time `json:"resetAt"`
-		} `json:"rateLimit"`
+		RateLimit *gqlRate `json:"rateLimit"`
 		// Repository は、nameWithOwner と別名 n0, n1, … の値(null か node)を持つ。
 		Repository map[string]json.RawMessage `json:"repository"`
 	} `json:"data"`
-	Errors []struct {
-		Type string `json:"type"`
-		Path []any  `json:"path"`
-	} `json:"errors"`
+	Errors []gqlError `json:"errors"`
 }
 
 // ReadMany は port.GitHub.ReadMany。リポジトリを読めなければ、REST で改名・移管を確かめ、名前が変わっていれば
-// 新しい名前で 1 回だけ読み直す。
+// 新しい名前で 1 回だけ読み直す。なお読めなければ、App 未導入かを確かめる(attempt・explain。D4b-11 の (3))。
 func (c *Client) ReadMany(ctx context.Context, token, repo string, numbers []int) (port.Batch, error) {
 	if numbers = unique(numbers); len(numbers) == 0 {
 		return port.Batch{Repo: repo}, nil
 	}
-	b, err := c.readManyOnce(ctx, token, repo, numbers)
-	if !ghcall.Is(err, ghcall.RepoUnreadable) {
-		return b, err
-	}
-	moved, ok := c.renamed(ctx, token, repo)
-	if !ok {
-		return b, err
-	}
-	return c.readManyOnce(ctx, token, moved, numbers)
+	return attempt(ctx, c, token, repo, func(repo string) (port.Batch, error) {
+		return c.readManyOnce(ctx, token, repo, numbers)
+	})
 }
 
 func (c *Client) readManyOnce(ctx context.Context, token, repo string, numbers []int) (port.Batch, error) {
@@ -64,13 +49,12 @@ func (c *Client) readManyOnce(ctx context.Context, token, repo string, numbers [
 // readChunk は、chunk の番号を 1 回の問い合わせで読み、batch に足す。
 func (c *Client) readChunk(ctx context.Context, token, repo string, chunk []int, batch *port.Batch) error {
 	owner, name, _ := strings.Cut(repo, "/")
-	body, _ := json.Marshal(map[string]any{
-		"query": readManyQuery(chunk), "variables": map[string]any{"owner": owner, "name": name},
-	})
 	var a readManyAnswer
-	h, err := c.do(ctx, http.MethodPost, token, "/graphql", bytes.NewReader(body), &a)
+	h, err := c.graphql(ctx, token, repo, map[string]any{
+		"query": readManyQuery(chunk), "variables": map[string]any{"owner": owner, "name": name},
+	}, &a)
 	if err != nil {
-		return withRepo(err, repo)
+		return err
 	}
 	if f := a.failure(repo, c.resetAt(h)); f != nil {
 		return f
@@ -87,8 +71,8 @@ func (c *Client) readChunk(ctx context.Context, token, repo string, chunk []int,
 		}
 		batch.Found[number] = found(full, n)
 	}
-	if r := a.Data.RateLimit; r != nil {
-		batch.Rate = port.Rate{Limit: r.Limit, Remaining: r.Remaining, ResetAt: r.ResetAt}
+	if a.Data.RateLimit != nil {
+		batch.Rate = a.Data.RateLimit.port()
 	}
 	return nil
 }
@@ -107,21 +91,7 @@ func readManyQuery(numbers []int) string {
 
 // failure は、答えの失敗(D3-5)。別名のパスの NOT_FOUND(長さ 2)は、その番号が Missing になるだけで失敗ではない。
 func (a readManyAnswer) failure(repo string, reset time.Time) *ghcall.Failure {
-	for _, e := range a.Errors {
-		switch {
-		case e.Type == "RATE_LIMITED":
-			return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: reset}
-		case (e.Type == "NOT_FOUND" || e.Type == "FORBIDDEN") && len(e.Path) == 1:
-			return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
-		}
-	}
-	switch {
-	case a.Data.Repository == nil && len(a.Errors) == 0:
-		return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
-	case a.Data.Repository == nil:
-		return &ghcall.Failure{Kind: ghcall.Unreachable}
-	}
-	return nil
+	return gqlFailure(a.Errors, a.Data.Repository == nil, repo, reset)
 }
 
 // unique は、numbers から重複を除く(最初に出た順)。

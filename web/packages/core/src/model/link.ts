@@ -32,3 +32,9 @@ export interface LinkInput {
 }
 
 export type LinkTarget = Pick<LinkRow, "kind" | "repo" | "number">;
+
+// RepoFailure は、プロジェクトのリポジトリの前回の探索の失敗。repo は書き方のまま、text は理由。
+export interface RepoFailure {
+  repo: string;
+  text: string;
+}

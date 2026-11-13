@@ -78,8 +78,11 @@ type getInput struct {
 	Project string `path:"project"`
 }
 
-// Register は、プロジェクトの API を登録する。
-func Register(api huma.API, svc appprojects.Service) {
+// ScanFunc は、プロジェクトに足したリポジトリ repo の PR を、応答を待たせずに探し始める関数(D4b-9)。
+type ScanFunc func(ctx context.Context, store port.StoreID, repo string)
+
+// Register は、プロジェクトの API を登録する。scan は、リポジトリを足したあとの PR の探索(nil なら探さない)。
+func Register(api huma.API, svc appprojects.Service, scan ScanFunc) {
 	huma.Register(api, huma.Operation{OperationID: "create-project", Method: http.MethodPost, Path: "/api/stores/{store}/workspaces/{workspace}/projects", Summary: "プロジェクトを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
 			if err := checkDates(in.Body.Start, in.Body.End); err != nil {
@@ -114,6 +117,6 @@ func Register(api huma.API, svc appprojects.Service) {
 			}
 			return &oneOutput{Body: toAPI(p)}, nil
 		})
-	registerEdit(api, svc)
+	registerEdit(api, svc, scan)
 	registerDelete(api, svc)
 }

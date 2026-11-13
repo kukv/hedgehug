@@ -11,6 +11,7 @@ import {
   listAccounts,
   pollSignIn,
   reauthAccount,
+  recheckAccount,
   startSignIn,
 } from "./generated";
 
@@ -29,12 +30,22 @@ export function createAccountsPort(): AccountsPort {
     list: () =>
       call(async () =>
         ((await listAccounts()).accounts ?? []).map(
-          (r): AccountRow => ({ ...toAccount(r), status: r.status, reason: r.reason }),
+          (r): AccountRow => ({
+            ...toAccount(r),
+            status: r.status,
+            reason: r.reason,
+            orgs: r.orgs ?? [],
+          }),
         ),
       ),
     add: (values) => call(async () => toAccount(await addAccount(values))),
     edit: (id, values) => call(async () => toAccount(await editAccount(id, values))),
     reauth: (id) => call(async () => toAccount(await reauthAccount(id))),
+    recheck: (id) =>
+      call(async () => {
+        const r = await recheckAccount(id);
+        return { cleared: r.cleared ?? [], still: r.still ?? [] };
+      }),
     remove: (id) => call(() => deleteAccount(id)),
     deleteImpact: (id) => call(async () => (await accountDeleteImpact(id)).lines ?? []),
     editImpact: (id, login) =>

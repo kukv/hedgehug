@@ -10,6 +10,7 @@ import (
 func linksOf(d httpapi.Deps, tokens port.GitHubTokens) githublink.Links {
 	return githublink.Links{
 		Stores: d.Stores, Identity: d.Identity, Tokens: tokens, GitHub: d.GitHub, Accounts: d.Accounts,
-		StoreGH: d.StoreGitHub, Checks: d.Checks, Reads: d.GitHubReads, Inbox: d.Inbox, Events: d.Events, Clock: d.Clock,
+		StoreGH: d.StoreGitHub, Checks: d.Checks, Reads: d.GitHubReads, Scans: d.PRScans, Missing: d.AppMissing,
+		Inbox: d.Inbox, Events: d.Events, Clock: d.Clock,
 	}
 }

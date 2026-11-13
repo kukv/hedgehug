@@ -38,6 +38,7 @@ export type AccountRowStatus = typeof AccountRowStatus[keyof typeof AccountRowSt
 export const AccountRowStatus = {
   ok: 'ok',
   auth_error: 'auth_error',
+  app_missing: 'app_missing',
 } as const;
 
 export interface AccountRow {
@@ -45,6 +46,11 @@ export interface AccountRow {
   login: string;
   method: AccountRowMethod;
   name: string;
+  /**
+     * GitHub App が入っていない組織(認証エラーのときは空)
+     * @nullable
+     */
+  orgs: string[] | null;
   reason: string;
   status: AccountRowStatus;
 }
@@ -661,6 +667,19 @@ export interface ProjectRepo {
   repo: string;
 }
 
+export interface RecheckOutputBody {
+  /**
+     * 読めるようになった組織
+     * @nullable
+     */
+  cleared: string[] | null;
+  /**
+     * まだ読めない組織
+     * @nullable
+     */
+  still: string[] | null;
+}
+
 export interface RelationCandidate {
   /** 選べない理由。選べるなら空 */
   disabledReason: string;
@@ -738,6 +757,18 @@ export interface ReorderItem {
      * @minLength 1
      */
   anchor: string;
+}
+
+export interface RepoFailure {
+  /** プロジェクトのリポジトリの書き方のまま */
+  repo: string;
+  /** 「PR を探せませんでした: 」に続ける文言 */
+  text: string;
+}
+
+export interface RepoFailures {
+  /** リポジトリの大文字小文字を区別しない辞書順。失敗のないリポジトリは入れない */
+  failures: RepoFailure[];
 }
 
 export interface SaveItemAsTemplate {
@@ -1443,6 +1474,30 @@ export const getReauthAccountUrl = (id: string,) => {
 export const reauthAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
 
   return fetcher<AccountBody>(getReauthAccountUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getRecheckAccountUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}/recheck`
+}
+
+/**
+ * @summary GitHub App 未導入の組織を読み直し、読めたものの記録を消す
+ */
+export const recheckAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<RecheckOutputBody> => {
+
+  return fetcher<RecheckOutputBody>(getRecheckAccountUrl(id),
   {
     ...options,
     method: 'POST'
@@ -3320,6 +3375,32 @@ return fetcher<Project>(getSetProjectOwnerUrl(store,project),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setProjectOwnerBody)
+  }
+);}
+
+
+
+export const getListRepoFailuresUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repo-failures`
+}
+
+/**
+ * @summary プロジェクトのリポジトリごとの、PR を探せなかった理由を返す
+ */
+export const listRepoFailures = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<RepoFailures> => {
+
+  return fetcher<RepoFailures>(getListRepoFailuresUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

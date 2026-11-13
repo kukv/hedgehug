@@ -8,11 +8,12 @@
     error: string;
     asking: boolean;
     onreauth: () => void;
+    onrecheck: () => void;
     onedit: () => void;
     ondelete: () => void;
   }
 
-  let { row, error, asking, onreauth, onedit, ondelete }: Props = $props();
+  let { row, error, asking, onreauth, onrecheck, onedit, ondelete }: Props = $props();
 </script>
 
 <li class="row" aria-label={row.name}>
@@ -23,6 +24,10 @@
     {#if row.status === "auth_error"}
       <span class="pill bad">認証エラー</span>
       <Button size="xs" disabled={asking} onclick={onreauth}>再認証</Button>
+    {:else if row.status === "app_missing"}
+      <span class="pill warn">GitHub App 未導入</span>
+      <span class="muted">{row.orgs.join("・")}</span>
+      <Button size="xs" disabled={asking} onclick={onrecheck}>再確認</Button>
     {:else}
       <span class="pill ok">利用可能</span>
     {/if}
@@ -72,6 +77,10 @@
   .ok {
     background: var(--c-green-bg);
     color: var(--c-green-fg);
+  }
+  .warn {
+    background: var(--c-orange-bg);
+    color: var(--c-orange-fg);
   }
   .bad {
     background: var(--c-red-bg);

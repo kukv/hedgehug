@@ -15,6 +15,7 @@ type DeleteAccount struct {
 	Accounts port.Accounts
 	Secrets  port.Secrets
 	Stores   port.StoreGitHub
+	Missing  port.AppMissing // GitHub App 未導入の記録(D4b-12)。アカウントの記録を消す
 }
 
 func (u DeleteAccount) Do(ctx context.Context, id account.ID) error {
@@ -29,6 +30,9 @@ func (u DeleteAccount) Do(ctx context.Context, id account.ID) error {
 	if err := u.Accounts.Remove(ctx, id); err != nil {
 		return err
 	}
+	// App 未導入の記録は、削除できたあとで消す(削除に失敗したアカウントの帯を消さない)。消せなくても削除は成功として
+	// 返す(消えたアカウントの記録は一覧に出ず、アカウントの ID は使い回さない)。
+	_ = u.Missing.Forget(ctx, id)
 	u.Session.forget(id)
 	if a.Method == account.DeviceFlow {
 		_ = u.Secrets.DeleteDeviceToken(ctx, a.Login)

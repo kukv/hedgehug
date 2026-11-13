@@ -177,3 +177,39 @@ export async function githubRead(request: APIRequestContext) {
   });
   if (res.status() !== 204) throw new Error(`githubRead: ${res.status()} ${await res.text()}`);
 }
+
+// e2ePost は、e2e のサーバーの入口(偽の GitHub の答えを決めるもの)に POST する。
+async function e2ePost(request: APIRequestContext, path: string, q: Record<string, string>) {
+  const res = await request.post(`${path}?${new URLSearchParams(q)}`, {
+    headers: { Authorization: "Bearer e2e-token" },
+  });
+  if (res.status() !== 204) throw new Error(`${path}: ${res.status()} ${await res.text()}`);
+}
+
+// githubPull は、偽の GitHub に PR を置く(D4b-16)。branch・title・body・state・comment・updated を渡せる。
+export const githubPull = (
+  request: APIRequestContext,
+  q: { repo: string; number: string } & Record<string, string>,
+) => e2ePost(request, "/e2e/github-pull", q);
+
+// githubApp は、owner のリポジトリを GitHub App 未導入にする(missing が false なら戻す)。
+export const githubApp = (request: APIRequestContext, owner: string, missing: boolean) =>
+  e2ePost(request, "/e2e/github-app", { owner, missing: missing ? "1" : "0" });
+
+// githubRepo は、リポジトリ全体を読めなくする(unreadable が false なら戻す)。
+export const githubRepo = (request: APIRequestContext, repo: string, unreadable: boolean) =>
+  e2ePost(request, "/e2e/github-repo", { repo, unreadable: unreadable ? "1" : "0" });
+
+// addRepo は、プロジェクト(接頭辞-P1)の概要を開き、「リポジトリを追加」でリポジトリを足す。足したリポジトリは
+// 裏ですぐに探す(D4b-9)。概要の「リポジトリと PR」の区画を返す。
+export async function addRepo(page: Page, prefix: string, repo: string) {
+  await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/overview`));
+  const section = page.getByRole("region", { name: "リポジトリと PR" });
+  await section.getByRole("button", { name: "リポジトリを追加" }).click();
+  await section.getByRole("textbox", { name: "リポジトリ" }).fill(repo);
+  await section.getByRole("button", { name: "追加", exact: true }).click();
+  await expect(
+    section.getByRole("list", { name: "リポジトリ" }).getByText(repo, { exact: true }),
+  ).toBeVisible();
+  return section;
+}

@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { methodChoices, methodLine, reauthedMessage, signedInMessage } from "./text";
+import {
+  appMissingBandText,
+  copiedText,
+  copyFailedText,
+  installRequestText,
+  methodChoices,
+  methodLine,
+  reauthedMessage,
+  recheckedText,
+  signedInMessage,
+  stillUnreadableText,
+} from "./text";
 
 describe("account texts", () => {
   it("lists the four methods in the order of 07, the device flow first", () => {
@@ -23,5 +34,18 @@ describe("account texts", () => {
     expect(reauthedMessage({ name: "work", login: "taro" })).toBe(
       "work: @taro として再認証しました",
     );
+  });
+
+  it("writes the texts of the app missing band", () => {
+    expect(appMissingBandText("work", "acme")).toBe(
+      "work: acme に GitHub App が入っていないため、PR と Issue を読めません。",
+    );
+    expect(installRequestText("acme", "taro")).toBe(
+      "acme に GitHub App をインストールしてください(@taro が使います)",
+    );
+    expect(recheckedText("work", ["a", "b"])).toBe("work: a・b を読めるようになりました");
+    expect(copiedText).toBe("コピーしました");
+    expect(copyFailedText).toBe("コピーできませんでした。文を選択してコピーしてください");
+    expect(stillUnreadableText).toBe("まだ読めません");
   });
 });
