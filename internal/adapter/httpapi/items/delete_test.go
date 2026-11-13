@@ -25,6 +25,9 @@ func TestDeletePreviewAndDelete(t *testing.T) {
 	if res := api.Delete(epic); res.Code != http.StatusNoContent {
 		t.Errorf("delete: %d %s", res.Code, res.Body)
 	}
+	if res := api.Get(epic); res.Code != http.StatusNotFound {
+		t.Errorf("get after delete: %d", res.Code)
+	}
 	if res := api.Get(epic + "/delete-preview"); res.Code != http.StatusNotFound {
 		t.Errorf("preview after delete: %d", res.Code)
 	}

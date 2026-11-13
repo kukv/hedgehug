@@ -202,3 +202,32 @@ func TestDeleteSummaryIsOneLine(t *testing.T) {
 		t.Errorf("summary = %q", got)
 	}
 }
+
+// 削除済みの子の下にいる削除されていないものは、親を削除するときに行を書く(A4b-1)。件数と予告にも入る。
+// 削除済みの子には行を足さない。
+func TestDeleteReachesALiveItemUnderADeletedChild(t *testing.T) {
+	svc, rec := setupRec(t)
+	_, steps := deleteTree(t, svc)
+	if err := apptest.DeleteItems(t.Context(), rec, store, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	earlier := deletedRows(t, rec, apptest.SampleTask)
+	preview, err := svc.DeletePreview(t.Context(), store, apptest.SampleEpic)
+	if err != nil || preview.Count != 3 || !slices.Equal(preview.Kinds, []item.Kind{item.Story, item.Step}) {
+		t.Fatalf("preview = %+v, %v", preview, err)
+	}
+	if err := svc.Delete(t.Context(), store, apptest.SampleEpic); err != nil {
+		t.Fatal(err)
+	}
+	if got := last(rec); got != "HH-1 認証 ほか 3 件を削除" {
+		t.Errorf("summary = %q", got)
+	}
+	if after := deletedRows(t, rec, apptest.SampleTask); len(after) != 1 || after[0].Op != earlier[0].Op {
+		t.Errorf("the deleted child got a row: %+v", after)
+	}
+	for _, s := range steps {
+		if rows := deletedRows(t, rec, s.ID); len(rows) != 1 || rows[0].Root == nil || *rows[0].Root {
+			t.Errorf("%s: rows %+v, want one root:false", s.ID, rows)
+		}
+	}
+}
