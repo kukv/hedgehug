@@ -3,6 +3,7 @@ package workspace
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -149,6 +150,36 @@ func stepDrafts(ds []change.Draft, t, parent change.ID, old, next []TemplateStep
 		}
 	}
 	return ds
+}
+
+// MergeTemplate は、編集の入力 in の値を、いまのテンプレート old の値に重ねる(B3-9)。子は同じ ID のものに重ねる。
+func MergeTemplate(old, in Template) Template {
+	in.Values = MergeValues(old.Values, in.Values)
+	in.Children = slices.Clone(in.Children)
+	for i, c := range in.Children {
+		var prev map[change.ID]json.RawMessage
+		if j := slices.IndexFunc(old.Children, func(o TemplateChild) bool { return o.ID == c.ID }); j >= 0 {
+			prev = old.Children[j].Values
+		}
+		in.Children[i].Values = MergeValues(prev, c.Values)
+	}
+	return in
+}
+
+// MergeValues は、old に in を重ねる。in の null は外す。
+func MergeValues(old, in map[change.ID]json.RawMessage) map[change.ID]json.RawMessage {
+	out := maps.Clone(old)
+	for k, v := range in {
+		if string(v) == "null" {
+			delete(out, k)
+			continue
+		}
+		if out == nil {
+			out = map[change.ID]json.RawMessage{}
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // TemplateDeleteDrafts は、テンプレート id の削除の行と、id を指していた種類ごとの既定を「なし」にする行(B3-12)。

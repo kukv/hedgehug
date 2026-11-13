@@ -2,9 +2,7 @@ package workspaces
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -22,9 +20,9 @@ func (s Service) CreateTemplate(ctx context.Context, store port.StoreID, ws work
 func (s Service) newTemplate(in workspace.Template, id change.ID) workspace.Template {
 	in.ID = id
 	in = s.withIDs(in)
-	in.Values = mergeValues(nil, in.Values)
+	in.Values = workspace.MergeValues(nil, in.Values)
 	for i := range in.Children {
-		in.Children[i].Values = mergeValues(nil, in.Children[i].Values)
+		in.Children[i].Values = workspace.MergeValues(nil, in.Children[i].Values)
 	}
 	return in
 }
@@ -61,10 +59,19 @@ func (s Service) createTemplate(ctx context.Context, store port.StoreID, ws work
 }
 
 // UpdateTemplate は、テンプレートを直す(B3-9)。種類を変えたら、前の種類の既定から外す(B3-12)。
+// 別の画面で削除されたテンプレート・子・Step への保存は、変更のあるものの削除を取り消す。変更のない
+// 削除済みの子・Step は、送られた内容から除く(決定 R5)。除いた内容は、取り消すものを決めたのと同じログ
+// (書く Tx の中で読み直したもの)から決め、行はそれから作る。
 func (s Service) UpdateTemplate(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, in workspace.Template) error {
 	in.ID = id
 	in = s.withIDs(in)
-	return s.edit(ctx, store, ws,
+	sent := in
+	return s.editAt(ctx, store, ws,
+		func(log []change.Record) []string {
+			var fs []string
+			in, fs = workspace.RevivedTemplate(log, sent)
+			return fs
+		},
 		func(st workspace.Settings) (string, error) {
 			if _, ok := st.Template(id); !ok {
 				return "", port.ErrNotFound
@@ -76,7 +83,7 @@ func (s Service) UpdateTemplate(ctx context.Context, store port.StoreID, ws work
 			if !ok {
 				return nil, port.ErrNotFound
 			}
-			t, err := prepare(st, merged(old, in))
+			t, err := prepare(st, workspace.MergeTemplate(old, in))
 			if err != nil {
 				return nil, err
 			}
@@ -163,35 +170,6 @@ func prepare(st workspace.Settings, in workspace.Template) (workspace.Template, 
 		return workspace.Template{}, err
 	}
 	return t, nil
-}
-
-// merged は、編集の入力の値を、いまの値に重ねる(B3-9)。子は同じ ID のものに重ねる。
-func merged(old, in workspace.Template) workspace.Template {
-	in.Values = mergeValues(old.Values, in.Values)
-	for i, c := range in.Children {
-		var prev map[change.ID]json.RawMessage
-		if j := slices.IndexFunc(old.Children, func(o workspace.TemplateChild) bool { return o.ID == c.ID }); j >= 0 {
-			prev = old.Children[j].Values
-		}
-		in.Children[i].Values = mergeValues(prev, c.Values)
-	}
-	return in
-}
-
-// mergeValues は、old に in を重ねる。in の null は外す。
-func mergeValues(old, in map[change.ID]json.RawMessage) map[change.ID]json.RawMessage {
-	out := maps.Clone(old)
-	for k, v := range in {
-		if string(v) == "null" {
-			delete(out, k)
-			continue
-		}
-		if out == nil {
-			out = map[change.ID]json.RawMessage{}
-		}
-		out[k] = v
-	}
-	return out
 }
 
 // withIDs は、ID のない子と Step に新しい ID を振る(入力の配列は書き換えない)。
