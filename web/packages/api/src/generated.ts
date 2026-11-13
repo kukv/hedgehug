@@ -303,6 +303,11 @@ export interface DescriptionText {
   text: string;
 }
 
+export interface Duplicated {
+  /** 新しいアイテムの内部 ID */
+  id: string;
+}
+
 export interface ErrorDetail {
   /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
   location?: string;
@@ -1831,6 +1836,32 @@ return fetcher<DescribeResult>(getDescribeItemUrl(store,item),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(describeBody)
+  }
+);}
+
+
+
+export const getDuplicateItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/duplicate`
+}
+
+/**
+ * @summary アイテムを複製する
+ */
+export const duplicateItem = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Duplicated> => {
+
+  return fetcher<Duplicated>(getDuplicateItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 

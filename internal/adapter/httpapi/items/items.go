@@ -115,6 +115,7 @@ func Register(api huma.API, svc appitems.Service) {
 	registerValues(api, svc)
 	registerMove(api, svc)
 	registerKind(api, svc)
+	registerDuplicate(api, svc)
 }
 
 func registerCreateRead(api huma.API, svc appitems.Service) {

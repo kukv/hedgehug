@@ -414,6 +414,15 @@ components:
       required:
         - text
       type: object
+    Duplicated:
+      additionalProperties: false
+      properties:
+        id:
+          description: 新しいアイテムの内部 ID
+          type: string
+      required:
+        - id
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -2362,6 +2371,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの説明を保存する
+  /api/stores/{store}/items/{item}/duplicate:
+    post:
+      operationId: duplicate-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Duplicated"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを複製する
   /api/stores/{store}/items/{item}/history:
     get:
       operationId: get-item-history
