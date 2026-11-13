@@ -29,7 +29,25 @@ func (s Service) editValue(ctx context.Context, store port.StoreID, ws workspace
 	text func(st workspace.Settings, v workspace.Value) string,
 	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
 ) error {
-	return s.edit(ctx, store, ws,
+	return s.valueAt(ctx, store, ws, l, id, nil, text, rows)
+}
+
+// changeValue は editValue と同じで、別の画面で削除された値なら、削除を取り消して変更を残す(editAt)。
+// 値そのものを変える操作(名前・色・並べ替え・分類)が使う。
+func (s Service) changeValue(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID,
+	text func(st workspace.Settings, v workspace.Value) string,
+	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
+) error {
+	return s.valueAt(ctx, store, ws, l, id, func([]change.Record) []string { return []string{l.Ref(id)} }, text, rows)
+}
+
+// valueAt は、editValue・changeValue の中身。targets は editAt のもの。
+func (s Service) valueAt(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID,
+	targets func([]change.Record) []string,
+	text func(st workspace.Settings, v workspace.Value) string,
+	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
+) error {
+	return s.editAt(ctx, store, ws, targets,
 		func(st workspace.Settings) (string, error) {
 			_, v, err := valueOf(st, l, id)
 			if err != nil {

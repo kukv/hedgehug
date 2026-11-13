@@ -15,6 +15,18 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 	summary func(workspace.Settings) (string, error),
 	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
 ) error {
+	return s.editAt(ctx, store, ws, nil, summary, rows)
+}
+
+// editAt は edit と同じで、targets(ワークスペースのログから、取り消してよい項目名の頭を返す)があれば、
+// 別の画面で削除されたそれらへの保存として、削除を取り消して変更を残す(06「他の書き手との重なり」)。
+// 保存の前の読みは、取り消す削除の行がないものとして作った設定(決定 R10)。取り消したのに行がなければ
+// ErrNotFound(決定 R3)、取り消したものの名前が削除されていないものと重なれば断る(決定 R4)。どちらも何も残さない。
+func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID,
+	targets func(log []change.Record) []string,
+	summary func(workspace.Settings) (string, error),
+	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
+) error {
 	actor, err := s.me(ctx, store)
 	if err != nil {
 		return err
@@ -22,7 +34,7 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 	var st workspace.Settings
 	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		st, err = r.Workspaces().Settings(ws)
+		st, err = settingsReviving(r, ws, targets)
 		return err
 	}); err != nil {
 		return err
@@ -32,14 +44,87 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 		return err
 	}
 	return s.Stores.Write(ctx, store, port.Operation{Actor: actor, Summary: text}, func(tx port.Tx) error {
-		st, err := tx.Workspaces().Settings(ws)
-		if err != nil {
-			return err
-		}
-		ds, err := rows(tx, st)
-		if err != nil {
-			return err
-		}
-		return tx.WriteWorkspaces().Append(ws, ds...)
+		return writeReviving(ctx, tx, ws, targets, rows)
 	})
+}
+
+// writeReviving は、editAt の書く Tx の中身。targets のものの削除を取り消し、読み直した設定から rows で行を書く。
+func writeReviving(ctx context.Context, tx port.Tx, ws workspace.ID,
+	targets func([]change.Record) []string,
+	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
+) error {
+	fs, revived, err := reviveTargets(ctx, tx, ws, targets)
+	if err != nil {
+		return err
+	}
+	st, err := tx.Workspaces().Settings(ws)
+	if err != nil {
+		return err
+	}
+	ds, err := rows(tx, st)
+	if err != nil {
+		return err
+	}
+	if revived && len(ds) == 0 {
+		return port.ErrNotFound
+	}
+	if err := tx.WriteWorkspaces().Append(ws, ds...); err != nil {
+		return err
+	}
+	if revived {
+		return checkRevivedNames(tx, ws, fs)
+	}
+	return nil
+}
+
+// settingsReviving は、targets の項目名を覆う削除の行がないものとして読んだ設定。targets がなければ、いまの設定。
+func settingsReviving(r port.Reader, ws workspace.ID, targets func([]change.Record) []string) (workspace.Settings, error) {
+	if targets == nil {
+		return r.Workspaces().Settings(ws)
+	}
+	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
+	if err != nil {
+		return workspace.Settings{}, err
+	}
+	st, ok := workspace.SettingsReviving(log, targets(log)...)
+	if !ok {
+		return workspace.Settings{}, port.ErrNotFound
+	}
+	return st, nil
+}
+
+// reviveTargets は、tx の中で読んだログから targets の項目名を作り、そのそれぞれに port.ReviveSetting を呼ぶ。
+// その項目名と、取り消したものがあったかを返す。
+func reviveTargets(ctx context.Context, tx port.Tx, ws workspace.ID, targets func([]change.Record) []string) ([]string, bool, error) {
+	if targets == nil {
+		return nil, false, nil
+	}
+	log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
+	if err != nil {
+		return nil, false, err
+	}
+	fs := targets(log)
+	revived := false
+	for _, f := range fs {
+		ok, err := port.ReviveSetting(ctx, tx, ws, f)
+		if err != nil {
+			return nil, false, err
+		}
+		revived = revived || ok
+	}
+	return fs, revived, nil
+}
+
+// checkRevivedNames は、行を書いたあとの設定で、取り消した fs のそれぞれの名前が重ならないかを確かめる(決定 R4)。
+func checkRevivedNames(tx port.Tx, ws workspace.ID, fs []string) error {
+	st, err := tx.Workspaces().Settings(ws)
+	if err != nil {
+		return err
+	}
+	for _, f := range fs {
+		if err := workspace.CheckRevivedName(st, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
