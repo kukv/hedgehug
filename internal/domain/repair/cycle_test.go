@@ -117,3 +117,14 @@ func TestEpicID(t *testing.T) {
 		t.Errorf("EpicID all used = %s, want empty", got)
 	}
 }
+
+// 輪に入らないと分かった鎖に着いたものも輪ではなく、そのあとの輪は見つかる。
+func TestCycleAfterChains(t *testing.T) {
+	items := []item.Item{
+		node("a", 1, item.Task, "b"), node("b", 2, item.Epic, ""), node("e", 3, item.Step, "a"),
+		node("f", 4, item.Task, "g"), node("g", 5, item.Task, "f"),
+	}
+	if ring, ok := repair.Cycle(items); !ok || !reflect.DeepEqual(ring, []item.ID{"f", "g"}) {
+		t.Errorf("Cycle = %v %v, want [f g]", ring, ok)
+	}
+}

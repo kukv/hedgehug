@@ -122,11 +122,15 @@ func misplaced(ring []item.ID, all []item.Item, done map[item.ID]bool) (item.ID,
 
 // moveOut は、id を行き先へ動かす修復を 1 回保存する。プロジェクトが読めなければ、何も書かずに false を返す。
 func moveOut(w port.RepairWriter, id item.ID) (bool, error) {
+	purged, err := w.Purged()
+	if err != nil {
+		return false, err
+	}
 	var m move
 	var ok bool
-	err := w.Read(func(r port.Reader) error {
+	err = w.Read(func(r port.Reader) error {
 		var err error
-		m, ok, err = planMove(r, id)
+		m, ok, err = planMove(r, id, purged)
 		return err
 	})
 	if err != nil || !ok {
@@ -150,7 +154,8 @@ func moveOut(w port.RepairWriter, id item.ID) (bool, error) {
 }
 
 // planMove は、id の行き先(08「親がない」)を決める。プロジェクトが読めなければ(port.ErrNotFound)false。
-func planMove(r port.Reader, id item.ID) (move, bool, error) {
+// purged は、完全に削除したものの内部 ID(作る Epic の内部 ID に使わない)。
+func planMove(r port.Reader, id item.ID, purged map[change.ID]bool) (move, bool, error) {
 	it, err := r.Items().Get(id)
 	if err != nil {
 		return move{}, false, err
@@ -174,7 +179,7 @@ func planMove(r port.Reader, id item.ID) (move, bool, error) {
 	d := repair.DestinationOf(it, its)
 	switch {
 	case d.NeedEpic:
-		epic, err := newEpic(r, p, its)
+		epic, err := newEpic(r, p, its, purged)
 		if err != nil {
 			return move{}, false, err
 		}
@@ -191,7 +196,8 @@ func planMove(r port.Reader, id item.ID) (move, bool, error) {
 
 // newEpic は、プロジェクト p に作る「修復で作った Epic」(決定 C3a-15)。番号はワークスペースの次の番号、
 // 順位はプロジェクトの直下の削除されていないものの末尾。ステータスと優先度は、作成と同じく初期値にする。
-func newEpic(r port.Reader, p project.Project, its []item.Item) (item.Item, error) {
+// 内部 ID は、アイテムがある(削除済みを含む)か、完全に削除したもの(purged)なら使わない。
+func newEpic(r port.Reader, p project.Project, its []item.Item, purged map[change.ID]bool) (item.Item, error) {
 	wsLog, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: p.Place.Workspace})
 	if err != nil {
 		return item.Item{}, err
@@ -201,6 +207,9 @@ func newEpic(r port.Reader, p project.Project, its []item.Item) (item.Item, erro
 		return item.Item{}, err
 	}
 	id := repair.EpicID(p.ID, func(id change.ID) bool {
+		if purged[id] {
+			return true
+		}
 		_, err := r.Items().Get(id)
 		return !errors.Is(err, port.ErrNotFound)
 	})

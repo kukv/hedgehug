@@ -74,17 +74,21 @@ func (r *Replicator) Calls() []ReplicatorCall {
 	return slices.Clone(r.calls)
 }
 
-// RepairWriter は port.RepairWriter の偽物。Facts は F を返し、Read・Write は Stores の Store に渡す。
+// RepairWriter は port.RepairWriter の偽物。Facts は F を、Purged は PurgedIDs を返し、Read・Write は Stores の Store に渡す。
 // Write が行を 1 つ以上残したときだけ、その op を Ops に足す(修復の件名を確かめるため)。行を残したかは、
 // fn の中で 1 つ以上の行を渡した Append が成功し、Write もエラーを返さなかったことで見る。
 type RepairWriter struct {
 	Stores port.Stores
 	Store  port.StoreID
 	F      repair.Facts
-	Ops    []port.Operation
+	// PurgedIDs は、完全に削除したものとして Purged が返す内部 ID。
+	PurgedIDs map[change.ID]bool
+	Ops       []port.Operation
 }
 
 func (w *RepairWriter) Facts() repair.Facts { return w.F }
+
+func (w *RepairWriter) Purged() (map[change.ID]bool, error) { return w.PurgedIDs, nil }
 
 func (w *RepairWriter) Read(fn func(r port.Reader) error) error {
 	return w.Stores.Read(context.Background(), w.Store, fn)

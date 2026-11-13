@@ -28,8 +28,10 @@ func Cycle(items []item.Item) (ring []item.ID, ok bool) {
 	}
 	slices.Sort(ids)
 	// 内部 ID の順に、自分に戻るかを見る。最初に見つかったものは、その輪の最小の内部 ID。
+	// 輪に入らないと分かったものは noRing に覚え、たどり直さない。
+	noRing := map[item.ID]bool{}
 	for _, id := range ids {
-		if ring := ringFrom(id, parent, len(live)); ring != nil {
+		if ring := ringFrom(id, parent, noRing); ring != nil {
 			slices.Sort(ring)
 			return ring, true
 		}
@@ -37,22 +39,30 @@ func Cycle(items []item.Item) (ring []item.ID, ok bool) {
 	return nil, false
 }
 
-// ringFrom は、start から親を limit 回までたどって start に戻れば、通ったものを返す。戻らなければ nil。
-func ringFrom(start item.ID, parent map[item.ID]item.ID, limit int) []item.ID {
-	ring := []item.ID{start}
-	cur := start
-	for range limit {
+// ringFrom は、start から親をたどって start に戻れば、通ったものを返す。戻らなければ nil。
+// 親がないか輪に入らないものに着いたら、通ったものはどれも輪に入らないので noRing に入れる。
+// start に戻らずに通ったものに戻ったら、start はほかの輪へ続く尾なので、start だけを noRing に入れる。
+func ringFrom(start item.ID, parent map[item.ID]item.ID, noRing map[item.ID]bool) []item.ID {
+	path := []item.ID{start}
+	seen := map[item.ID]bool{start: true}
+	for cur := start; ; {
 		next, ok := parent[cur]
-		if !ok {
+		switch {
+		case !ok || noRing[next]:
+			for _, id := range path {
+				noRing[id] = true
+			}
+			return nil
+		case next == start:
+			return path
+		case seen[next]:
+			noRing[start] = true
 			return nil
 		}
-		if next == start {
-			return ring
-		}
-		ring = append(ring, next)
+		seen[next] = true
+		path = append(path, next)
 		cur = next
 	}
-	return nil
 }
 
 // Mover は、輪の中で動かすもの。番号が最も大きいもの、同じなら内部 ID の辞書順であとのもの(決定 C3a-14)。

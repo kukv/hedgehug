@@ -375,3 +375,18 @@ func TestRepairPurgesUnderPurgedWorkspace(t *testing.T) {
 		t.Errorf("%d commits %q", n, want)
 	}
 }
+
+// repairWriter.Purged は、purged.jsonl の target を返す。ファイルがなければ空。
+func TestRepairWriterPurged(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	w := repairWriter{stores: a.stores, root: a.dir}
+	if got, err := w.Purged(); err != nil || len(got) != 0 {
+		t.Fatalf("Purged before = %v, %v", got, err)
+	}
+	a.purgeForTest(t, apptest.SampleTask)
+	got, err := w.Purged()
+	if err != nil || len(got) != 1 || !got[apptest.SampleTask] {
+		t.Errorf("Purged = %v, %v, want %s", got, err, apptest.SampleTask)
+	}
+}

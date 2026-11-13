@@ -97,6 +97,24 @@ func TestCycleRepairEpicIDInUse(t *testing.T) {
 	}
 }
 
+// 「修復で作った Epic」の内部 ID が完全に削除したもの(purged.jsonl の target)なら、使わずに次の文字に替える。
+func TestCycleRepairEpicIDPurged(t *testing.T) {
+	e := newEnv(t)
+	purged := map[change.ID]bool{repairEpicID(): true}
+	e.reparent(apptest.SampleEpic, apptest.SampleTask, change.NewSet("kind", item.Epic, item.Story))
+	for i, want := range [][]string{{"HH-2 を HH-3 の下へ移動(親の循環)", "HH-1 を HH-3 の下へ移動(親の循環)"}, nil} {
+		w := &apptest.RepairWriter{Stores: e.s, Store: store, PurgedIDs: purged}
+		if err := repairing.Run(e.ctx, w); err != nil {
+			t.Fatalf("Run %d: %v", i, err)
+		}
+		wantOps(t, w.Ops, want...)
+	}
+	next := change.ID("S" + string(repairEpicID()[1:]))
+	if it := e.item(next); it.Title != repair.RepairEpicTitle || it.Place.Number != 3 {
+		t.Errorf("repair epic = %+v", it)
+	}
+}
+
 // hiddenProject は、Projects().Get で hidden を読めない(完全に削除された)ように見せる。
 type hiddenProject struct {
 	*apptest.RepairWriter

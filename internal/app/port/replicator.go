@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 )
 
@@ -40,6 +41,10 @@ type RepairFunc func(ctx context.Context, w RepairWriter) error
 type RepairWriter interface {
 	// Facts は、まだ送っていない合わせの、共通の祖先にない行の ID を、自分の側と remote の側に分けたもの。
 	Facts() repair.Facts
+	// Purged は、完全に削除したエンティティの内部 ID(purged.jsonl の行の target)。完全に削除したものは
+	// ログもフォルダもないので Read では見えない。同じ内部 ID で作り直すと、次の同期の (1) で消されてしまうため、
+	// 修復で内部 ID を決めるときに、これも使われているものとして扱う。
+	Purged() (map[change.ID]bool, error)
 	Read(fn func(r Reader) error) error
 	// Write の約束は Stores.Write と同じ(行も説明の書き換えもなければ何も残さない、op.Check、fn のエラーで何も残さない)。
 	// 1 回の Write が 1 つの保存になる。
