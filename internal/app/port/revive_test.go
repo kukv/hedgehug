@@ -484,3 +484,19 @@ func TestReviveSettingTemplateChild(t *testing.T) {
 		t.Errorf("template = %+v, %v", back, found)
 	}
 }
+
+// 名前の改行と続いた空白は、1 つの空白にして積む。
+func TestReviveSettingNameIsOneLine(t *testing.T) {
+	s := reviveStores(t)
+	v := workspace.Value{ID: "01MULTILINE000000000000001", Name: "Re\n  view", Color: "blue", Category: workspace.CategoryDoing, Rank: "a"}
+	writeAs(t, s, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, workspace.ValueDrafts(statuses, v)...)
+	})
+	writeAs(t, s, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDelete(statuses.Ref(v.ID)))
+	})
+	_, got := reviveSetting(t, s, statuses.Ref(v.ID))
+	if want := []port.Revival{{Kind: port.RevivedName, Text: "Re view"}}; !slices.Equal(got, want) {
+		t.Errorf("Revived = %+v, want %+v", got, want)
+	}
+}

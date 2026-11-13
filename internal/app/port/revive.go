@@ -178,13 +178,14 @@ func ReviveSetting(ctx context.Context, tx Tx, ws workspace.ID, f string) (bool,
 	if err != nil {
 		return false, err
 	}
+	refs = append([]change.Ref{wref}, refs...)
 	done := map[change.ID]bool{}
 	for _, d := range covering {
 		if done[d.Op] {
 			continue
 		}
 		done[d.Op] = true
-		if err := undoAcross(tx, append([]change.Ref{wref}, refs...), d.Op); err != nil {
+		if err := undoAcross(tx, refs, d.Op); err != nil {
 			return false, err
 		}
 		NoteRevived(ctx, Revival{Kind: RevivedName, Text: strings.Join(strings.Fields(workspace.NameOfDeleted(log, d.F)), " ")})

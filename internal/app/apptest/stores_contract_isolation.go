@@ -204,16 +204,8 @@ func contractUserSettingRestoreSeenInTx(t *testing.T, s port.Stores, id port.Sto
 		return tx.WriteWorkspaces().Append(cWorkspace.ID, change.NewDelete(f))
 	})
 	mustWrite(t, s, id, taro, func(tx port.Tx) error {
-		ctx := port.WithRevived(t.Context())
-		if _, err := port.ReviveSetting(ctx, tx, cWorkspace.ID, f); err != nil {
-			return err
-		}
-		st, err := tx.Workspaces().Settings(cWorkspace.ID)
-		if err != nil || !slices.ContainsFunc(st.Statuses, func(v workspace.Value) bool { return v.ID == review.ID }) {
-			t.Errorf("in the same write: statuses = %+v, %v", st.Statuses, err)
-		}
-		_, err = port.ReviveSetting(ctx, tx, cWorkspace.ID, f)
-		return err
+		reviveSettingTwice(t, tx, f, review.ID)
+		return nil
 	})
 	mustRead(t, s, id, func(r port.Reader) error {
 		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: cWorkspace.ID})
@@ -228,4 +220,21 @@ func contractUserSettingRestoreSeenInTx(t *testing.T, s port.Stores, id port.Sto
 		}
 		return nil
 	})
+}
+
+// reviveSettingTwice は、同じ tx の中で f に ReviveSetting を 2 回呼ぶ。1 回目は true で、そのあとの設定の読み取りに
+// 値 v があり、2 回目は false であることを確かめる。
+func reviveSettingTwice(t *testing.T, tx port.Tx, f string, v change.ID) {
+	t.Helper()
+	ctx := port.WithRevived(t.Context())
+	if ok, err := port.ReviveSetting(ctx, tx, cWorkspace.ID, f); err != nil || !ok {
+		t.Errorf("first ReviveSetting = %v, %v", ok, err)
+	}
+	st, err := tx.Workspaces().Settings(cWorkspace.ID)
+	if err != nil || !slices.ContainsFunc(st.Statuses, func(x workspace.Value) bool { return x.ID == v }) {
+		t.Errorf("in the same write: statuses = %+v, %v", st.Statuses, err)
+	}
+	if ok, err := port.ReviveSetting(ctx, tx, cWorkspace.ID, f); err != nil || ok {
+		t.Errorf("second ReviveSetting = %v, %v", ok, err)
+	}
 }
