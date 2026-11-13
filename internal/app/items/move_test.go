@@ -43,8 +43,9 @@ func TestMoveIgnoresDeletedSiblingsForTheLastRank(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 削除済みの順位は比べず、削除されていない兄弟の末尾(残る子のあと)に入る。
-	if moved := storedItem(t, rec, apptest.SampleTask); moved.Rank <= live.Rank {
-		t.Errorf("rank = %q (live %q)", moved.Rank, live.Rank)
+	// 削除済みの兄弟の順位と比べていたら、消した子より後ろに入る。
+	if moved := storedItem(t, rec, apptest.SampleTask); moved.Rank <= live.Rank || moved.Rank > gone.Rank {
+		t.Errorf("rank = %q (live %q, gone %q)", moved.Rank, live.Rank, gone.Rank)
 	}
 }
 
