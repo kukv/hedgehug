@@ -5,6 +5,7 @@ export { default as SidePanel } from "./layout/SidePanel.svelte";
 export { default as Avatar } from "./patterns/Avatar.svelte";
 export { default as ConfirmDialog } from "./patterns/ConfirmDialog.svelte";
 export { default as KindIcon } from "./patterns/KindIcon.svelte";
+export { default as Markdown } from "./patterns/Markdown.svelte";
 export { default as OfflineBand } from "./patterns/OfflineBand.svelte";
 export { default as ReadOnlyBand } from "./patterns/ReadOnlyBand.svelte";
 export { default as StatusDot } from "./patterns/StatusDot.svelte";
@@ -24,6 +25,9 @@ export { default as Toasts } from "./primitives/Toasts.svelte";
 export type {
   Category,
   KindName,
+  MarkdownBlock,
+  MarkdownInline,
+  MarkdownListItem,
   MenuItem,
   SelectOption,
   SyncCardView,

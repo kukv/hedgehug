@@ -279,6 +279,7 @@ export {
   stepNone,
   stepParent,
 } from "./model/workspace";
+export * from "./notesIndex";
 export type { AccountsPort } from "./port/accounts";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";

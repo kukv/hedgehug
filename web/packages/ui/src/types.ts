@@ -47,3 +47,23 @@ export interface SyncCardView {
   stale: string | null;
   rows: { storeId: string; name: string; summary: string; time: string; stale: boolean }[];
 }
+
+// Markdown の表示(Markdown.svelte)に渡す形。core の markdown.ts の Block・Inline と同じ形で、ui は core を
+// import できないのでここに持つ。app が core の字句分けの結果をそのまま渡す。
+export type MarkdownInline =
+  | { kind: "text"; text: string }
+  | { kind: "bold"; text: string }
+  | { kind: "code"; text: string }
+  | { kind: "link"; url: string }
+  | { kind: "mention"; login: string };
+
+export interface MarkdownListItem {
+  check: "none" | "unchecked" | "checked";
+  inlines: MarkdownInline[];
+}
+
+export type MarkdownBlock =
+  | { kind: "heading"; level: 1 | 2 | 3; inlines: MarkdownInline[] }
+  | { kind: "list"; ordered: boolean; items: MarkdownListItem[] }
+  | { kind: "code"; text: string }
+  | { kind: "paragraph"; inlines: MarkdownInline[] };
