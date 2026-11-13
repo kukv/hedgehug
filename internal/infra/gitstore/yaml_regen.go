@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -45,6 +46,15 @@ func (c *txSettings) lookup(id workspace.ID) (workspace.Settings, bool) {
 	s, ok := workspace.SettingsFromLog(log)
 	c.cache[id] = settingsEntry{s, ok}
 	return s, ok
+}
+
+// project は、プロジェクトをこの Tx の書く行を含めて引く(workspace.yaml の注釈用)。
+func (c *txSettings) project(id project.ID) (project.Project, bool) {
+	log, err := c.t.log(change.Ref{Kind: change.KindProject, ID: id})
+	if err != nil && c.err == nil {
+		c.err = err
+	}
+	return project.FromLog(log)
 }
 
 // changedWorkspaces は、この Tx で設定が変わるワークスペース。採番の行だけを足すような保存では変わらない。
@@ -105,7 +115,7 @@ func rewriteItemYAML(t *tx, id change.ID, settings settingsOf) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	y, err := renderYAML(change.KindItem, log, settings)
+	y, err := renderYAML(change.KindItem, log, settings, nil)
 	if err != nil || y == nil {
 		return "", err
 	}

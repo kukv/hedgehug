@@ -70,7 +70,7 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 		return strings.Compare(string(a.Kind)+"/"+string(a.ID), string(b.Kind)+"/"+string(b.ID))
 	})
 	for _, ref := range refs {
-		paths, err := writeEntity(t, ref, sc.lookup)
+		paths, err := writeEntity(t, ref, sc.lookup, sc.project)
 		if err != nil {
 			return err
 		}
@@ -163,7 +163,7 @@ func (s *Stores) hook(f func() error) error {
 
 // writeEntity は、1 つのエンティティの log.jsonl に行を足し、読む用の YAML を作り直す。
 // 書いたファイル(Store の根からの相対パス)を返す。
-func writeEntity(t *tx, ref change.Ref, settings settingsOf) ([]string, error) {
+func writeEntity(t *tx, ref change.Ref, settings settingsOf, projects projectOf) ([]string, error) {
 	d, err := dirOf(ref)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func writeEntity(t *tx, ref change.Ref, settings settingsOf) ([]string, error) {
 		return nil, err
 	}
 	paths := []string{filepath.Join(d, "log.jsonl")}
-	y, err := renderYAML(ref.Kind, append(base, t.pending[ref]...), settings)
+	y, err := renderYAML(ref.Kind, append(base, t.pending[ref]...), settings, projects)
 	if err != nil || y == nil {
 		return paths, err
 	}
