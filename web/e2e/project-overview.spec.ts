@@ -52,24 +52,31 @@ test("edits the overview's properties, one save per item, and shows the history"
   await title.press("Enter");
   await expect(page.getByRole("heading", { name: `${prefix}-P1 ${renamed}` })).toBeVisible();
 
+  // 履歴に出るまで待つのは、画面が保存の結果を読み直したあとで次の操作をするため(読み直す前の値と比べて、保存が飛ばされない)。
+  const history = page.getByRole("region", { name: "履歴", exact: true });
+
   // ステータスとオーナー。
   await props.getByRole("combobox", { name: "ステータス" }).selectOption("InProgress");
-  await expect(props.getByRole("combobox", { name: "ステータス" })).toHaveValue("InProgress");
+  await expect(history).toContainText("ステータスを InProgress に変更");
   await props.getByRole("combobox", { name: "オーナー" }).selectOption("hanako");
+  await expect(history).toContainText("オーナーを hanako に変更");
 
   // 日付: 終了日が開始日より前なら断って元に戻す。同じ日は認める。空にすることは常にできる。
   const start = props.getByLabel("開始日", { exact: true });
   const end = props.getByLabel("終了日", { exact: true });
   await start.fill("2026-11-20");
   await start.blur();
+  await expect(history).toContainText(/開始日を (2026\/)?11\/20 に変更/);
   await end.fill("2026-11-19");
   await end.blur();
   await expect(page.getByText("終了日は開始日以降にしてください")).toBeVisible();
   await expect(end).toHaveValue("");
   await end.fill("2026-11-20");
   await end.blur();
+  await expect(history).toContainText(/終了日を (2026\/)?11\/20 に変更/);
   await start.fill("");
   await start.blur();
+  await expect(history).toContainText("開始日を なし に変更");
 
   // 読み直しても残り、履歴に「作成」と項目の変更が出る。
   await page.goto(overview(prefix));
@@ -77,12 +84,13 @@ test("edits the overview's properties, one save per item, and shows the history"
   await expect(props.getByRole("combobox", { name: "オーナー" })).toHaveValue("hanako");
   await expect(start).toHaveValue("");
   await expect(end).toHaveValue("2026-11-20");
-  const history = page.getByRole("region", { name: "履歴", exact: true });
   await expect(history).toContainText("作成");
   await expect(history).toContainText("ステータスを InProgress に変更");
 });
 
-test("edits the description and posts a comment on the overview", async ({ page }, info) => {
+test("edits the description, posts a comment and edits repositories on the overview", async ({
+  page,
+}, info) => {
   const prefix = prefixOf(info);
   await createWorkspace(page, info, unique(info, "概要の説明"), prefix);
   await newProject(page, info, prefix);
@@ -105,12 +113,8 @@ test("edits the description and posts a comment on the overview", async ({ page 
   await expect(comments).toContainText("プロジェクトのコメント");
   // 説明の保存は、履歴に「説明を変更」として出る。
   await expect(page.getByRole("region", { name: "履歴", exact: true })).toContainText("説明を変更");
-});
 
-test("adds and removes repositories", async ({ page }, info) => {
-  const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "リポジトリ"), prefix);
-  await newProject(page, info, prefix);
+  // リポジトリの追加と削除。
   const repos = page.getByRole("region", { name: "リポジトリと PR", exact: true });
   const input = repos.getByRole("textbox", { name: "リポジトリ" });
   const list = repos.getByRole("list", { name: "リポジトリ" });
@@ -145,6 +149,8 @@ test("adds and removes repositories", async ({ page }, info) => {
 });
 
 test("an Epic row shows its progress and changes status from the row", async ({ page }, info) => {
+  // Task を 2 件作るので、全部を並列で回すときに 30 秒を超えることがある。
+  test.slow();
   const prefix = prefixOf(info);
   await createWorkspace(page, info, unique(info, "Epic の行"), prefix);
   // Epic(接頭辞-1)の下に Task(接頭辞-2)を 1 件作り、その Task を Done にする。
@@ -178,7 +184,7 @@ test("an Epic row shows its progress and changes status from the row", async ({ 
   await page.goto(overview(prefix));
   await expect(row.getByRole("button", { name: "ステータス: InProgress" })).toBeVisible();
 
-  // 2 件目の Task(Todo)を足すと、1 / 2、50% に変わる。
+  // もう 1 件 Task(Todo)を足すと、1 / 2、50% に変わる。
   await taskUnderEpic(page, info, `${prefix}-1`, "もう一つ");
   await page.goto(overview(prefix));
   await expect(bar).toHaveAttribute("title", "1 / 2");

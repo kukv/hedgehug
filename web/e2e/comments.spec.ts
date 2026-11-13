@@ -5,7 +5,7 @@ import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./hel
 
 const placeholder = "コメントを書く。@ログイン名 でメンション。Ctrl+Enter で送信";
 
-test("posts, edits and deletes a comment, and the mention button adds the login", async ({
+test("posts, edits and deletes a comment, adds a mention, and toggles watching", async ({
   page,
 }, info) => {
   const prefix = prefixOf(info);
@@ -71,22 +71,17 @@ test("posts, edits and deletes a comment, and the mention button adds the login"
       .getByRole("region", { name: "コメント", exact: true })
       .getByRole("article"),
   ).toHaveCount(1);
-});
 
-test("toggles watching from the header", async ({ page }, info) => {
-  const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "ウォッチ"), prefix);
-  const panel = await newTaskUnder(page, info, prefix);
+  // ウォッチ: 押すたびに「ウォッチ」と「ウォッチ中」が入れ替わり(aria-pressed も)、読み直しても残る。
   const watching = panel.getByRole("button", { name: "ウォッチ中", exact: true });
   const idle = panel.getByRole("button", { name: "ウォッチ", exact: true });
-  // 押すたびに「ウォッチ」と「ウォッチ中」が入れ替わり(aria-pressed も)、読み直しても残る。
   const startsWatching = (await watching.count()) > 0;
-  const [first, second] = startsWatching ? [watching, idle] : [idle, watching];
-  await first.click();
-  await expect(second).toBeVisible();
-  await expect(second).toHaveAttribute("aria-pressed", startsWatching ? "false" : "true");
+  const [before, after] = startsWatching ? [watching, idle] : [idle, watching];
+  await before.click();
+  await expect(after).toBeVisible();
+  await expect(after).toHaveAttribute("aria-pressed", startsWatching ? "false" : "true");
   await page.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
-  await expect(second).toBeVisible();
-  await second.click();
-  await expect(first).toBeVisible();
+  await expect(after).toBeVisible();
+  await after.click();
+  await expect(before).toBeVisible();
 });

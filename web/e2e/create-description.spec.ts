@@ -4,7 +4,7 @@ import { createWorkspace, openSettings, prefixOf, projectWithEpic, saved, unique
 // 作成ダイアログの説明の欄と、テンプレートの説明の当てはめの通しのテスト(A4a)。
 // 既定のテンプレートの説明が最初から入ることは create-template.spec.ts が通す。
 
-test("the template picker fills and clears the description, and keeps what the user typed", async ({
+test("the template picker fills and clears the description, and create another empties it", async ({
   page,
 }, info) => {
   const prefix = prefixOf(info);
@@ -55,38 +55,17 @@ test("the template picker fills and clears the description, and keeps what the u
       .getByRole("region", { name: "説明", exact: true })
       .getByRole("heading", { name: "手順" }),
   ).toBeVisible();
-});
 
-test("create another keeps the template and empties the title and description", async ({
-  page,
-}, info) => {
-  const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "続けて作成"), prefix);
-  await openSettings(page, prefix, "テンプレート");
-  await page.getByRole("button", { name: "テンプレートを作成" }).click();
-  const template = page.getByRole("dialog", { name: "テンプレートを作成" });
-  await template.getByRole("textbox", { name: "名前" }).fill("説明つき");
-  await template.getByRole("combobox", { name: "種類" }).selectOption({ label: "Task" });
-  await template.getByRole("textbox", { name: "説明" }).fill("テンプレートの説明");
-  await Promise.all([
-    saved(page, "/templates"),
-    template.getByRole("button", { name: "保存", exact: true }).click(),
-  ]);
-  await expect(template).toBeHidden();
-
-  const panel = await projectWithEpic(page, info, prefix);
+  // 「続けて作成」: 作ったあと、タイトルと説明だけが空になり、テンプレートは残る。
   await page.keyboard.press("Escape");
-  await expect(panel).toBeHidden();
   await page.keyboard.press("c");
-  const dialog = page.getByRole("dialog", { name: "新規作成" });
-  const description = dialog.getByRole("textbox", { name: "説明" });
-  const picker = dialog.getByRole("combobox", { name: "テンプレート" });
   await dialog.getByRole("combobox", { name: "種類" }).selectOption({ label: "Task" });
   await dialog.getByRole("checkbox", { name: "続けて作成" }).check();
   await picker.selectOption({ label: "説明つき" });
+  await expect(description).toHaveValue("テンプレートの説明");
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("続けて作る Task");
   await dialog.getByRole("button", { name: "作成" }).click();
-  await expect(page.getByText(`${prefix}-2 を作成しました`)).toBeVisible();
+  await expect(page.getByText(`${prefix}-3 を作成しました`)).toBeVisible();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("textbox", { name: "タイトル" })).toHaveValue("");
   await expect(description).toHaveValue("");

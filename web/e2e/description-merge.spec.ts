@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
-// 説明の Markdown・メンションの表示と、同じ行の保存の通しのテスト(A4a)。
+// 説明の Markdown・メンションの表示と、別のタブと同じ行を変えたときの保存の通しのテスト(A4a)。
 // 書き方・破棄の確認は description.spec.ts が通す。ワークスペースは毎回作る(サーバーは 3 つの幅で共有)。
 
-test("renders Markdown with mentions of members only", async ({ page }, info) => {
+test("renders Markdown with mentions of members only, and keeps both when two tabs change a line", async ({
+  page,
+}, info) => {
   const prefix = prefixOf(info);
   await createWorkspace(page, info, unique(info, "説明の Markdown"), prefix);
   const panel = await newTaskUnder(page, info, prefix);
@@ -24,15 +26,10 @@ test("renders Markdown with mentions of members only", async ({ page }, info) =>
   // メンションの印が付くのは、Store のメンバーだけ。
   await expect(section.locator("[data-mention]")).toHaveCount(1);
   await expect(section.locator('[data-mention="hanako"]')).toHaveText("@hanako");
-});
 
-test("saving over a line another tab changed keeps both and says so", async ({ page }, info) => {
-  const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "説明の競合"), prefix);
-  const panel = await newTaskUnder(page, info, prefix);
-  const section = panel.getByRole("region", { name: "説明", exact: true });
+  // 同じ行の保存: 説明を 2 行にしてから、別のタブと同じ行を変えて保存する。
   const edit = section.getByRole("textbox", { name: "説明" });
-  await section.getByRole("button", { name: "説明を追加" }).click();
+  await section.getByRole("button", { name: "説明を編集" }).click();
   await edit.fill("1行目\n2行目");
   await edit.press("Control+Enter");
   await expect(edit).toBeHidden();
