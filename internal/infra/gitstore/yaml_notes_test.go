@@ -2,6 +2,7 @@ package gitstore
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	commentlog "github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/worklog"
 )
 
@@ -137,5 +139,44 @@ func TestWritingNotesShowsInItemYAML(t *testing.T) {
 	}
 	if string(tr[name]) != written {
 		t.Errorf("同期の作り直しが書く道と違う:\n--- 同期\n%s\n--- 書く道\n%s", tr[name], written)
+	}
+}
+
+func TestItemYAMLWritesLinks(t *testing.T) {
+	pr41 := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	pr40 := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 40}
+	iss := itemlink.Ref{Kind: itemlink.Issue, Repo: "org/api", Number: 12}
+	var log []change.Record
+	n := 0
+	newID := func() change.ID { n++; return noteID(fmt.Sprintf("L%d", n)) }
+	add := func(minute int, ds ...change.Draft) {
+		meta := change.Meta{Op: noteID(fmt.Sprintf("P%d", minute)), At: time.Date(2026, 11, 13, 9, minute, 0, 0, time.UTC), Actor: change.User("taro")}
+		log = append(log, change.Stamp(log, ds, meta, newID)...)
+	}
+	add(0, item.Create(item.Item{ID: noteID("A1"), Place: item.Place{Workspace: yWS, Project: yProj, Number: 1}, Kind: item.Task, Rank: "V", Title: "t"}))
+	add(1,
+		change.NewAdd("links", pr41),
+		change.NewSet(itemlink.ValueField(pr41, "title"), nil, "Add login form"),
+		change.NewSet(itemlink.ValueField(pr41, "state"), nil, "open"),
+		change.NewSet(itemlink.ValueField(pr41, "review"), nil, "pending"),
+		change.NewAdd("links", iss),
+		change.NewSet(itemlink.ValueField(iss, "title"), nil, "落ちる"),
+		change.NewSet(itemlink.ValueField(iss, "state"), nil, "closed"),
+	)
+	add(2, change.NewAdd("links_off", pr40))
+	out, err := renderYAML(change.KindItem, log, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "links:\n" +
+		"  - {kind: pr, repo: org/web, number: 41, title: Add login form, state: open, review: pending}\n" +
+		"  - {kind: issue, repo: org/api, number: 12, title: 落ちる, state: closed}\n" +
+		"links_off:\n" +
+		"  - {kind: pr, repo: org/web, number: 40}\n"
+	if !strings.Contains(string(out), want) {
+		t.Errorf("item.yaml =\n%s\nwant to contain\n%s", out, want)
+	}
+	if i, j := strings.Index(string(out), "estimate:"), strings.Index(string(out), "links:"); i < 0 || j < i {
+		t.Errorf("links must come after estimate:\n%s", out)
 	}
 }
