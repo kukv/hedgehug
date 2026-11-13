@@ -86,7 +86,8 @@ func (s Service) recent(r port.Reader, ws workspace.ID, names map[change.ID]stri
 	return out, nil
 }
 
-// ruleRows は、自動化の行を新しい順に並べる。同じアイテム・項目・変更前・変更後の行は、最も早い 1 行だけ残す。
+// ruleRows は、自動化の行を新しい順に並べる。同じ変更の重なり(同じアイテム・項目・変更前・変更後・prev の行)は、
+// 最も早い 1 行だけ残す。
 func ruleRows(r port.Reader, ws workspace.ID) ([]ruleRow, error) {
 	ps, err := r.Projects().List(ws)
 	if err != nil {
@@ -110,7 +111,9 @@ func ruleRows(r port.Reader, ws workspace.ID) ([]ruleRow, error) {
 	return rows, nil
 }
 
-// earliest は、アイテムのログの自動化の行。同じ変更は最も早い 1 行だけ。新しい行を先にする。
+// earliest は、アイテムのログの自動化の行。同じ変更の重なりは最も早い 1 行だけ。新しい行を先にする。
+// 重なりは、複数のマシンが同じ先端から同じ変更を保存したもので、prev が同じになる(06)。
+// 順に 2 回動いたものは prev が違うので、それぞれ 1 行にする。
 func earliest(it item.Item, log []change.Record) []ruleRow {
 	var out []ruleRow
 	for i := len(log) - 1; i >= 0; i-- {
@@ -118,9 +121,7 @@ func earliest(it item.Item, log []change.Record) []ruleRow {
 		if rec.Actor.Kind != change.ActorAutomation {
 			continue
 		}
-		dup := slices.IndexFunc(out, func(o ruleRow) bool {
-			return o.rec.F == rec.F && bytes.Equal(o.rec.From, rec.From) && bytes.Equal(o.rec.To, rec.To)
-		})
+		dup := slices.IndexFunc(out, func(o ruleRow) bool { return sameChange(o.rec, rec) })
 		if dup >= 0 {
 			out[dup].rec = rec // 古いほうへ置き換える(ログは古い順なので、さかのぼるほど早い)
 			continue
@@ -128,6 +129,12 @@ func earliest(it item.Item, log []change.Record) []ruleRow {
 		out = append(out, ruleRow{rec: rec, item: it})
 	}
 	return out
+}
+
+// sameChange は、2 行が同じ変更の重なりかどうか。prev は並びを問わず、集合で比べる。
+func sameChange(a, b change.Record) bool {
+	return a.F == b.F && bytes.Equal(a.From, b.From) && bytes.Equal(a.To, b.To) &&
+		slices.Equal(slices.Sorted(slices.Values(a.Prev)), slices.Sorted(slices.Values(b.Prev)))
 }
 
 func propertyOf(st workspace.Settings, f string) workspace.Property {
