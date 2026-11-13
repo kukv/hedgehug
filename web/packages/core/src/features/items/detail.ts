@@ -35,6 +35,9 @@ export interface Detail {
   full: Readable<boolean>;
   open(storeId: string, itemId: string): Promise<void>;
   close(): void;
+  // requestClose は、入力中のものがあれば「入力を破棄」の確認をしてから閉じる(「×」・Esc)。断ったら開いたまま。
+  // close は確認しない(画面の移り変わりと、反映でアイテムがなくなったときの閉じ方)。
+  requestClose(): Promise<void>;
   toggleFull(): void;
   // rename は、タイトルを保存する。false なら、入力欄を元のタイトルに戻す。
   rename(title: string): Promise<boolean>;
@@ -62,6 +65,8 @@ export interface DetailDeps {
   toasts: Toasts;
   // onChanged は、保存したあと(開いているプロジェクトの画面を読み直す)。
   onChanged(): void;
+  // leave は、入力中のものがあるとき、捨ててよいかを聞く(別のアイテムを開く・パネルを閉じる)。ないときは常に true。
+  leave?: () => Promise<boolean>;
 }
 
 // normalizeTitle は、連続する空白と改行を 1 つの空白にまとめ、前後の空白を取り除く(02「タイトル」)。
@@ -161,13 +166,21 @@ export function createDetail(deps: DetailDeps): Detail {
   return {
     view: readonly(view),
     full: readonly(full),
-    open: (storeId, itemId) => load(storeId, itemId),
+    async open(storeId, itemId) {
+      // 別のアイテムが開いているときは、入力中のものを捨ててよいかを先に聞く(02「説明」)。
+      const other = target !== null && (target.storeId !== storeId || target.itemId !== itemId);
+      if (other && deps.leave && !(await deps.leave())) return;
+      await load(storeId, itemId);
+    },
     close() {
       latest += 1;
       target = null;
       contexts = new Map();
       view.set(null);
       full.set(false);
+    },
+    async requestClose() {
+      if (!deps.leave || (await deps.leave())) this.close();
     },
     toggleFull: () => full.update((f) => !f),
     async rename(title) {

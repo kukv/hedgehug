@@ -64,7 +64,7 @@
   >{full ? "⤡" : "⤢"}</IconButton
 >
 <ItemMenu {v} />
-<IconButton label="閉じる" size="sm" onclick={detail.close}>×</IconButton>
+<IconButton label="閉じる" size="sm" onclick={() => void detail.requestClose()}>×</IconButton>
 
 <style>
   .crumbs {

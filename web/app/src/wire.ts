@@ -39,6 +39,7 @@ import {
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
+import { drafts } from "./drafts";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { held, online as isOnline, tabId, visible } from "./tab";
@@ -51,7 +52,9 @@ setToken(token);
 
 export const shell = createShell();
 export const system = createSystemInfo(createSystemPort());
-export const navigation = createNavigation(browserHistory());
+// drafts は書きかけの登録簿(実体は drafts.ts。tab.ts との循環を避けるため wire.ts の外に置く)。
+export { drafts };
+export const navigation = createNavigation(browserHistory(), drafts);
 navigation.start();
 export const links = createLinks(navigation, token);
 const timer = {
@@ -111,6 +114,8 @@ export const detail = createDetail({
   catalogPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
+  // 別のアイテムを開く・パネルを閉じるとき、書きかけがあれば「入力を破棄」を出す(02「説明」)。
+  leave: () => drafts.confirmLeave(),
 });
 export const screen = createScreen({
   navigation,

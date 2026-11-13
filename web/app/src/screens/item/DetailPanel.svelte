@@ -45,7 +45,12 @@
   }
 </script>
 
-<SidePanel open={$view !== null} full={$full} label="詳細パネル" onclose={detail.close}>
+<SidePanel
+  open={$view !== null}
+  full={$full}
+  label="詳細パネル"
+  onclose={() => void detail.requestClose()}
+>
   {#snippet head()}
     {#if $view}
       <DetailHeader v={$view} full={$full} />
