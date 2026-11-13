@@ -138,7 +138,7 @@ func hasEntity(dirs map[string]bool, id string) bool {
 
 // rebuildYAML は、合わせた log.jsonl から、読む用の YAML を作り直す。
 func rebuildYAML(t tree) error {
-	settings := treeSettings(t)
+	settings, projects := treeSettings(t), treeProjects(t)
 	for _, p := range sortedKeys(t) {
 		if !strings.HasSuffix(p, "/log.jsonl") {
 			continue
@@ -148,7 +148,7 @@ func rebuildYAML(t tree) error {
 		if !ok {
 			continue
 		}
-		y, err := renderYAML(kind, parseLog(t[p]), settings)
+		y, err := renderYAML(kind, parseLog(t[p]), settings, projects)
 		if err != nil {
 			return err
 		}
@@ -169,6 +169,13 @@ func treeSettings(t tree) settingsOf {
 		s, ok := workspace.SettingsFromLog(parseLog(t["workspaces/"+string(id)+"/log.jsonl"]))
 		cache[id] = settingsEntry{s, ok}
 		return s, ok
+	}
+}
+
+// treeProjects は、木の projects/<ID>/log.jsonl からプロジェクトを引く。
+func treeProjects(t tree) projectOf {
+	return func(id project.ID) (project.Project, bool) {
+		return project.FromLog(parseLog(t["projects/"+string(id)+"/log.jsonl"]))
 	}
 }
 

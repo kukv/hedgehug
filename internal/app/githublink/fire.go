@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -79,7 +80,7 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 	if err != nil {
 		return nil, err
 	}
-	rules, st, all, err := fireInputs(tx, it, p)
+	rules, set, st, all, err := fireInputs(tx, it, p)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 	for i, t := range ts {
 		evs[i] = automation.Event{Trigger: t, AllMerged: all}
 	}
-	os := automation.RunAll(st, rules, it, evs)
+	os := automation.RunAll(st, set, rules, it, evs)
 	var ds []change.Draft
 	for _, o := range os {
 		if o.Draft != nil {
@@ -104,20 +105,20 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 	return []fired{{item: it, outcomes: os, settings: st, names: names}}, err
 }
 
-// fireInputs は、ルール・ワークスペースの設定と、「すべてマージ済み」か(D4a-13・14)。リンクは tx の中で読む
+// fireInputs は、ルール・プロジェクト別のルール・ワークスペースの設定と、「すべてマージ済み」か(D4a-13・14)。リンクは tx の中で読む
 // (書いたリンクの行を含む)。まだ書いていない同じアイテムのリンクは、今回読んだ値(p.fetched)で数える。
-func fireInputs(tx port.Tx, it item.Item, p *pass) ([]automation.Rule, workspace.Settings, bool, error) {
+func fireInputs(tx port.Tx, it item.Item, p *pass) ([]automation.Rule, projectrule.Set, workspace.Settings, bool, error) {
 	wlog, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: it.Place.Workspace})
 	if err != nil {
-		return nil, workspace.Settings{}, false, err
+		return nil, nil, workspace.Settings{}, false, err
 	}
 	st, err := tx.Workspaces().Settings(it.Place.Workspace)
 	if err != nil {
-		return nil, workspace.Settings{}, false, err
+		return nil, nil, workspace.Settings{}, false, err
 	}
 	ilog, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
 	if err != nil {
-		return nil, workspace.Settings{}, false, err
+		return nil, nil, workspace.Settings{}, false, err
 	}
 	links := itemlink.FromLog(ilog).Links
 	for i, l := range links {
@@ -125,7 +126,7 @@ func fireInputs(tx port.Tx, it item.Item, p *pass) ([]automation.Rule, workspace
 			links[i].Values = v
 		}
 	}
-	return automation.FromLog(wlog), st, automation.AllMerged(links), nil
+	return automation.FromLog(wlog), projectrule.FromLog(wlog), st, automation.AllMerged(links), nil
 }
 
 // valueOf は、今回 GitHub から読んだ、アイテム id のリンク l(いま保存してある値)の値。p が nil なら読んでいない。

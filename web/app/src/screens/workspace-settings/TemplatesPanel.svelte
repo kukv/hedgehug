@@ -2,9 +2,11 @@
   import {
     deleteTemplateBody,
     deleteTemplateTitle,
+    type RuleProject,
     readOnlyNote,
     type SettingsState,
     templateDeleted,
+    templateDeleteLines,
     templateRows,
     templatesEmpty,
   } from "@hedgehug/core";
@@ -16,9 +18,10 @@
   // テンプレートのタブ(03「テンプレート」)。
   interface Props {
     state: SettingsState;
+    projects: RuleProject[];
   }
 
-  let { state: s }: Props = $props();
+  let { state: s, projects }: Props = $props();
 
   // 編集ダイアログを開いているテンプレート。ID は編集、"new" は新規。
   let editing = $state<string | "new" | null>(null);
@@ -79,7 +82,10 @@
 {#if deleting !== null}
   <ConfirmDialog
     title={deleteTemplateTitle}
-    lines={[deleteTemplateBody(deletingName)]}
+    lines={[
+      deleteTemplateBody(deletingName),
+      ...templateDeleteLines(s.detail.settings, deleting, projects),
+    ]}
     ok="削除"
     danger
     onok={remove}

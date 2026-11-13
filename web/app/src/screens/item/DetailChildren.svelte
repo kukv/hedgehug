@@ -63,6 +63,7 @@
         <StatusButton
           status={c.status}
           settings={v.settings}
+          project={c.projectId}
           disabled={v.readOnly}
           onchange={(s) => void detail.setProperty(c.id, "status", s)}
         />

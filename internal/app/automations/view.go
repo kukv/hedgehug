@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -20,7 +21,14 @@ const recentMax = 8
 // View は、自動化のサブタブの中身。
 type View struct {
 	Rules  []automation.Rule
+	Scopes map[project.ID]Scope // 専用ルールの持ち主のプロジェクト(Rules の Scope ごと)
 	Recent []Run
+}
+
+// Scope は、専用ルールの持ち主のプロジェクトの印(03「ルールの一覧」の「HH-P1」「HH-P1(削除済み)」)。
+type Scope struct {
+	Label   string // 表示 ID(HH-P1)
+	Deleted bool
 }
 
 // Run は、最近の実行の 1 行(B4-15)。
@@ -44,10 +52,33 @@ func (s Service) List(ctx context.Context, store port.StoreID, ws workspace.ID) 
 			return err
 		}
 		v.Rules = rules
+		if v.Scopes, err = scopes(r, ws, rules); err != nil {
+			return err
+		}
 		v.Recent, err = s.recent(r, ws, automation.Names(log))
 		return err
 	})
 	return v, err
+}
+
+// scopes は、専用ルールの持ち主のプロジェクトの印。削除済みのプロジェクトも引く(B5a-15)。
+func scopes(r port.Reader, ws workspace.ID, rules []automation.Rule) (map[project.ID]Scope, error) {
+	w, err := r.Workspaces().Get(ws)
+	if err != nil {
+		return nil, err
+	}
+	out := map[project.ID]Scope{}
+	for _, rule := range rules {
+		if rule.Scope == "" {
+			continue
+		}
+		p, err := r.Projects().Get(rule.Scope)
+		if err != nil {
+			return nil, err
+		}
+		out[rule.Scope] = Scope{Label: p.DisplayID(w.Prefix), Deleted: p.Deleted != nil}
+	}
+	return out, nil
 }
 
 type ruleRow struct {

@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -63,14 +64,14 @@ func replaceItems(tx port.Tx, st workspace.Settings, l workspace.List, ws worksp
 	return nil
 }
 
-// ruleDrafts は、ステータス id を指すルールの書き換え(03「削除」の自動化)。
+// ruleDrafts は、ステータス id を指すルールの書き換え(03「削除」の自動化)と、プロジェクト別のルールの追従(B5a-16)。
 func ruleDrafts(tx port.Tx, ws workspace.ID, id, repl change.ID) ([]change.Draft, []automation.RuleChange, error) {
 	log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
 	if err != nil {
 		return nil, nil, err
 	}
 	ds, rcs := automation.StatusDeleteDrafts(automation.FromLog(log), id, repl)
-	return ds, rcs, nil
+	return append(ds, projectrule.StatusDeleteDrafts(projectrule.FromLog(log), id)...), rcs, nil
 }
 
 func valueName(vs []workspace.Value, id change.ID) string {

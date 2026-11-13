@@ -8,13 +8,14 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // templateOf は、作成で使うテンプレートを、保存の前に読む(A3b-6)。アクティビティの件数と作る構成は、
 // この同じ中身から決める。テンプレートを選んでいない、またはプロジェクトがなければ nil(プロジェクトの
-// 断りは保存の中で出す)。ないか種類が違うときも nil を返し、保存の中で ErrNotFound にする(A3b-7)。
+// 断りは保存の中で出す)。ないか種類が違うか、プロジェクトが使えないときも nil を返し、保存の中で ErrNotFound にする(A3b-7)。
 func (s Service) templateOf(ctx context.Context, in CreateInput) (*workspace.Template, error) {
 	if in.Template == nil || in.Project == "" {
 		return nil, nil //nolint:nilnil // テンプレートなしは正しい結果
@@ -29,8 +30,16 @@ func (s Service) templateOf(ctx context.Context, in CreateInput) (*workspace.Tem
 		if err != nil {
 			return err
 		}
-		if t, ok := st.Template(*in.Template); ok && t.Kind == string(in.Kind) {
-			found = &t
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: p.Place.Workspace})
+		if err != nil {
+			return err
+		}
+		usable := projectrule.UsableTemplates(st, projectrule.FromLog(log).Of(p.ID), string(in.Kind))
+		for _, t := range usable {
+			if t.ID == *in.Template {
+				found = &t
+				break
+			}
 		}
 		return nil
 	})

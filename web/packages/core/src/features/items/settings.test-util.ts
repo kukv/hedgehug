@@ -53,6 +53,7 @@ export const settings: WorkspaceSettings = {
   workflow: {},
   templates: [],
   templateDefaults: {},
+  projectRules: {},
 };
 
 // settings2 は、別のワークスペースの設定(初期値が違う)。

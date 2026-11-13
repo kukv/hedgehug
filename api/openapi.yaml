@@ -136,6 +136,15 @@ components:
           type: string
         name:
           type: string
+        scope:
+          description: このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない
+          type: string
+        scopeDeleted:
+          description: 専用ルールの持ち主のプロジェクトが削除済みか。一覧でだけ埋める
+          type: boolean
+        scopeLabel:
+          description: 専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)。一覧でだけ埋める
+          type: string
         trigger:
           enum:
             - pr_open
@@ -173,6 +182,9 @@ components:
           description: きっかけが pr_merged のときの条件
           type: boolean
         name:
+          type: string
+        scope:
+          description: このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない
           type: string
         trigger:
           enum:
@@ -769,6 +781,45 @@ components:
         project:
           description: 移し先のプロジェクトの内部 ID(Epic)
           type: string
+        statuses:
+          additionalProperties:
+            type: string
+          description: プロジェクトが変わるときの、移動先が使わないステータスの ID → 置き換え先のステータスの ID。指定のないものは同じ分類の移動先の既定になる
+          type: object
+      type: object
+    MovePreview:
+      additionalProperties: false
+      properties:
+        below:
+          description: 下のもの(削除済みを除く)の件数
+          format: int64
+          type: integer
+        statuses:
+          description: 移動先が使わないステータス。ワークスペースのステータスの順。なければ空
+          items:
+            $ref: "#/components/schemas/MovePreviewStatus"
+          type: array
+      required:
+        - below
+        - statuses
+      type: object
+    MovePreviewStatus:
+      additionalProperties: false
+      properties:
+        count:
+          description: そのステータスを持つ移すアイテム(削除済みと自分自身を含む)の件数
+          format: int64
+          type: integer
+        default:
+          description: 置き換えの初めの値。同じ分類の、移動先の既定のステータスの ID
+          type: string
+        status:
+          description: ステータスの ID
+          type: string
+      required:
+        - status
+        - count
+        - default
       type: object
     MoveWorkspaceItem:
       additionalProperties: false
@@ -906,6 +957,44 @@ components:
           type: string
       required:
         - repo
+      type: object
+    ProjectRules:
+      additionalProperties: false
+      properties:
+        disabledRules:
+          description: 動かさないワークスペースのルールの ID
+          items:
+            type: string
+          type: array
+        hiddenStatuses:
+          description: 使わないステータスの ID
+          items:
+            type: string
+          type: array
+        templateDefaults:
+          additionalProperties:
+            type: string
+          description: 種類 → 既定のテンプレート ID か @none。決めていない種類は入れない
+          type: object
+        templates:
+          description: 使うテンプレートの ID。空ならすべて使う
+          items:
+            type: string
+          type: array
+        workflow:
+          additionalProperties:
+            items:
+              type: string
+            nullable: true
+            type: array
+          description: From のステータス ID → このプロジェクトで変更できる To。制限のない From は入れない
+          type: object
+      required:
+        - hiddenStatuses
+        - workflow
+        - templates
+        - templateDefaults
+        - disabledRules
       type: object
     RecheckOutputBody:
       additionalProperties: false
@@ -1135,6 +1224,14 @@ components:
       required:
         - owner
       type: object
+    SetProjectRuleRuns:
+      additionalProperties: false
+      properties:
+        runs:
+          type: boolean
+      required:
+        - runs
+      type: object
     SetProjectStatus:
       additionalProperties: false
       properties:
@@ -1148,6 +1245,39 @@ components:
           type: string
       required:
         - status
+      type: object
+    SetProjectStatusUsed:
+      additionalProperties: false
+      properties:
+        used:
+          type: boolean
+      required:
+        - used
+      type: object
+    SetProjectTemplateDefault:
+      additionalProperties: false
+      properties:
+        template:
+          description: テンプレートの ID。空ならワークスペースの既定に戻す。@none なら「なし」
+          type: string
+      required:
+        - template
+      type: object
+    SetProjectTemplateUsed:
+      additionalProperties: false
+      properties:
+        used:
+          type: boolean
+      required:
+        - used
+      type: object
+    SetProjectTransition:
+      additionalProperties: false
+      properties:
+        allowed:
+          type: boolean
+      required:
+        - allowed
       type: object
     SetWatch:
       additionalProperties: false
@@ -1583,6 +1713,11 @@ components:
           items:
             $ref: "#/components/schemas/WorkspaceValue"
           type: array
+        projectRules:
+          additionalProperties:
+            $ref: "#/components/schemas/ProjectRules"
+          description: プロジェクトの内部 ID → そのプロジェクトのルール。ルールのないプロジェクトは入れない
+          type: object
         properties:
           items:
             $ref: "#/components/schemas/WorkspaceProperty"
@@ -1623,6 +1758,7 @@ components:
         - workflow
         - templates
         - templateDefaults
+        - projectRules
       type: object
     WorkspaceSummary:
       additionalProperties: false
@@ -2880,6 +3016,48 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 「移動…」の移し先の候補を返す
+  /api/stores/{store}/items/{item}/move-preview:
+    get:
+      operationId: preview-item-move
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - description: 移し先のプロジェクトの内部 ID(Epic)
+          explode: false
+          in: query
+          name: project
+          schema:
+            description: 移し先のプロジェクトの内部 ID(Epic)
+            type: string
+        - description: 新しい親の内部 ID(Epic 以外)
+          explode: false
+          in: query
+          name: parent
+          schema:
+            description: 新しい親の内部 ID(Epic 以外)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovePreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 移動の確認ダイアログに出す件数を返す(保存しない)
   /api/stores/{store}/items/{item}/properties/{property}:
     put:
       operationId: set-item-property
@@ -3961,6 +4139,223 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトからリポジトリを外す
+  /api/stores/{store}/projects/{project}/rules/automation/{rule}:
+    put:
+      operationId: set-project-rule-runs
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectRuleRuns"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトでワークスペースのルールを動かす・動かさないを変更
+  /api/stores/{store}/projects/{project}/rules/statuses/{status}:
+    put:
+      operationId: set-project-status-used
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: status
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectStatusUsed"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトで使うステータスを変更
+  /api/stores/{store}/projects/{project}/rules/template-defaults/{kind}:
+    put:
+      operationId: set-project-template-default
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: kind
+          required: true
+          schema:
+            enum:
+              - Epic
+              - Story
+              - Task
+              - Bug
+              - Step
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectTemplateDefault"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの種類ごとの既定のテンプレートを変更
+  /api/stores/{store}/projects/{project}/rules/templates/{template}:
+    put:
+      operationId: set-project-template-used
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: template
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectTemplateUsed"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトで使うテンプレートを変更
+  /api/stores/{store}/projects/{project}/rules/workflow/{from}/{to}:
+    put:
+      operationId: set-project-transition
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: from
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: to
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectTransition"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの遷移の制約のセルを変更
+  /api/stores/{store}/projects/{project}/rules/{section}/reset:
+    post:
+      operationId: reset-project-rules
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - description: statuses・workflow・templates・automation。ほかは見つからない
+          in: path
+          name: section
+          required: true
+          schema:
+            description: statuses・workflow・templates・automation。ほかは見つからない
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 区画をワークスペースの設定に戻す
   /api/stores/{store}/projects/{project}/status:
     put:
       operationId: set-project-status

@@ -59,7 +59,7 @@ func notesLog() []change.Record {
 }
 
 func TestItemYAMLHasRelationsCommentsWorklogs(t *testing.T) {
-	out, err := renderYAML(change.KindItem, notesLog(), nil)
+	out, err := renderYAML(change.KindItem, notesLog(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestItemYAMLNotesAreEmptyLists(t *testing.T) {
 	it := item.Item{ID: noteID("A1"), Place: item.Place{Workspace: yWS, Project: yProj, Number: 1}, Kind: item.Task, Rank: "V", Title: "t"}
 	meta := change.Meta{Op: noteID("O1"), At: time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), Actor: change.User("taro")}
 	log := change.Stamp(nil, []change.Draft{item.Create(it)}, meta, yIDs())
-	out, err := renderYAML(change.KindItem, log, nil)
+	out, err := renderYAML(change.KindItem, log, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestItemYAMLWritesLinks(t *testing.T) {
 		change.NewSet(itemlink.ValueField(iss, "state"), nil, "closed"),
 	)
 	add(2, change.NewAdd("links_off", pr40))
-	out, err := renderYAML(change.KindItem, log, nil)
+	out, err := renderYAML(change.KindItem, log, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
