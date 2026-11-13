@@ -1,5 +1,6 @@
 import { createItemActionsPort } from "@hedgehug/api";
 import {
+  createAfterMoved,
   createCopyId,
   createItemDelete,
   createItemDuplicate,
@@ -8,9 +9,11 @@ import {
   createItemMove,
   createItemRefresh,
   createProjectDelete,
+  createTransferDialog,
   leaveDeletedProject,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
+import { online as isOnline } from "./tab";
 import {
   catalog,
   detail,
@@ -20,6 +23,7 @@ import {
   projectScreen,
   relations,
   toasts,
+  transfersPort,
 } from "./wire";
 
 // アイテム・プロジェクトの操作(A4b)の組み立て。wire.ts が 300 行の上限なので、A4b の分はここに足す。
@@ -45,6 +49,18 @@ export const itemMove = createItemMove({
   catalog,
   toasts,
   refresh: itemRefresh,
+});
+
+// 「別のワークスペースへ移動…」のダイアログ(02「別のワークスペースと別の Store への移動」)。開くのは itemTransfer.open(item)。
+export const itemTransfer = createTransferDialog({
+  transfers: transfersPort,
+  catalog,
+  toasts,
+  refresh: itemRefresh,
+  detail,
+  drafts,
+  online: isOnline,
+  afterMoved: createAfterMoved({ detail, refresh: itemRefresh }),
 });
 
 // 「種類を変更…」の種類のメニューと確認ダイアログ(02「種類の変更」)。開くのは itemKind.open(item, x, y)。
@@ -83,6 +99,7 @@ export const itemMenuHost = createItemMenuHost({
   remove: itemDelete,
   move: itemMove,
   kind: itemKind,
+  transfer: itemTransfer,
   duplicate: itemDuplicate,
   copyId: copyItemId,
 });
@@ -102,6 +119,7 @@ navigation.route.subscribe(() => {
   itemDelete.cancel();
   itemMove.close();
   itemKind.cancel();
+  itemTransfer.cancel();
   itemMenuHost.close();
   itemMenuHost.closeTemplate();
 });

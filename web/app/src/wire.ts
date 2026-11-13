@@ -5,6 +5,7 @@ import {
   createProjectsPort,
   createSyncPort,
   createSystemPort,
+  createTransfersPort,
   createWorkspacesPort,
   rememberToken,
   setToken,
@@ -63,6 +64,7 @@ export const links = createLinks(navigation, token);
 export { toasts };
 
 export const itemsPort = createItemsPort();
+export const transfersPort = createTransfersPort();
 const catalogPort = createCatalogPort();
 // 詳細パネルとプロジェクトの概要の、説明・コメントなどの口と、メンションの表示に使うメンバーの一覧。
 export const notes = createNotesPort();

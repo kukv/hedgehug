@@ -125,6 +125,13 @@ export function createDetail(deps: DetailDeps): Detail {
     target = { storeId, itemId };
     try {
       const item = await deps.items.get(storeId, itemId);
+      // ほかの書き手が別のワークスペースへ移していたら、確認なしで閉じる(A5a-18。自分で移したときは開き直す)。
+      const shown = get(view)?.item;
+      const moved = shown?.storeId === storeId && shown.id === item.id;
+      if (refresh && moved && shown.workspaceId !== item.workspaceId) {
+        if (mine === latest) shut();
+        return;
+      }
       const [all, { settings, people }] = await Promise.all([
         deps.items.list(storeId, item.projectId),
         contextOf(storeId, item.workspaceId, refresh),

@@ -20,6 +20,7 @@ describe("createItemMenuHost", () => {
       ["move-up", false],
       ["move-down", false],
       ["move", false],
+      ["transfer", false],
       ["change-kind", false],
       ["duplicate", false],
       ["save-as-template", false],
@@ -112,6 +113,20 @@ describe("createItemMenuHost", () => {
     const { host } = await setup();
     host.open(item("S9", "S9-P1", 1, "Task", null), ctx, 0, 0);
     expect(get(host.state)).toBeNull();
+  });
+
+  it("opens the transfer dialog for the item when 'transfer' is selected", async () => {
+    const { host, log } = await setup();
+    host.open(t3, ctx, 10, 20);
+    await host.select("transfer");
+    expect(log).toEqual(["transfer S1-I3"]);
+  });
+
+  it("does not run 'transfer' in a read-only Store", async () => {
+    const { host, log } = await setup();
+    host.open(ro, ctx, 10, 20);
+    await host.select("transfer");
+    expect(log).toEqual([]);
   });
 
   it("hands move, change kind, duplicate, copy ID and delete to their controllers", async () => {

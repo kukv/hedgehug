@@ -19,6 +19,7 @@ export {
 export { createTreeWrites } from "./features/items/treeWrites";
 export { createProjectDelete, leaveDeletedProject } from "./features/projects/delete";
 export { projectTabOf } from "./features/router/route";
+export { createAfterMoved } from "./features/transfers/afterMoved";
 export {
   createTransferDialog,
   type ReplacementRow,
