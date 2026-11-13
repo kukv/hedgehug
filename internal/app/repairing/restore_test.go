@@ -327,6 +327,43 @@ func TestRestoreStatus(t *testing.T) {
 	}
 }
 
+// テンプレートの名前の変更と子を外すのを 1 回で保存した変更は、ワークスペースのログの行なので
+// 一緒に書いた行として数えず、もう片側で削除したテンプレートを戻す。
+func TestRestoreTemplateEditedWithChildRemoved(t *testing.T) {
+	const tpl, child = "01TPL00000000000000000001", "01TCH00000000000000000001"
+	e := newEnv(t)
+	e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace,
+			change.NewSet(workspace.TemplateField(tpl, "name"), nil, "不具合"),
+			change.NewSet(workspace.TemplateField(tpl, "kind"), nil, "Task"),
+			change.NewSet(workspace.TemplateField(tpl, "children", child, "kind"), nil, "Step"),
+			change.NewSet(workspace.TemplateField(tpl, "children", child, "title"), nil, "調べる"),
+		)
+	})
+	del := e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDelete(workspace.TemplateField(tpl)))
+	})
+	edit := e.write(taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace,
+			change.NewSet(workspace.TemplateField(tpl, "name"), "不具合", "障害"),
+			change.NewDelete(workspace.TemplateField(tpl, "children", child)),
+		)
+	})
+	wantOps(t, e.run(del, edit), "「障害」の削除を取り消し")
+	var st workspace.Settings
+	err := e.s.Read(e.ctx, store, func(r port.Reader) error {
+		var err error
+		st, err = r.Workspaces().Settings(apptest.SampleWorkspace)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := st.Template(tpl); !ok || got.Name != "障害" {
+		t.Errorf("template = %+v, %v", got, ok)
+	}
+}
+
 // 名前に改行や続いた空白があっても、アクティビティの文は 1 行にする(保存の Summary は 1 行だけ書ける)。
 func TestRestoreSummaryOnOneLine(t *testing.T) {
 	e := newEnv(t)

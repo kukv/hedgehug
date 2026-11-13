@@ -116,11 +116,13 @@ func newIncidentals(s snapshot) incidentals {
 }
 
 // of は、ref のログの行が、ほかのものへの操作で一緒に書いた行かを答える関数。
-// 値・プロパティの削除の置き換え(同じ op でワークスペースのログに delete の行がある)と、
-// 親の移動で下のものに書いた場所(同じ op で祖先のアイテムにも set place がある)。
+// 値・プロパティの削除でほかのエンティティに書いた置き換え(アイテム・プロジェクトのログの行で、同じ op で
+// ワークスペースのログに delete の行がある)と、親の移動で下のものに書いた場所(同じ op で祖先のアイテムにも
+// set place がある)。ワークスペースのログの行はこの op の見方では数えない(テンプレートの保存は、名前の変更と
+// 子の削除を 1 回で書く)。ワークスペースのログでは、削除の f の下の行かだけで重なりを決める。
 func (in incidentals) of(ref change.Ref) func(change.Record) bool {
 	return func(c change.Record) bool {
-		if in.deleteOps[c.Op] {
+		if ref.Kind != change.KindWorkspace && in.deleteOps[c.Op] {
 			return true
 		}
 		return ref.Kind == change.KindItem && c.T == change.Set && c.F == placeField && in.ancestorPlaced(ref.ID, c.Op)
