@@ -22,6 +22,9 @@ func (s Service) Delete(ctx context.Context, store port.StoreID, id item.ID, w c
 	}
 	op := port.Operation{Actor: change.User(me), Summary: shown + " の作業時間を削除"}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		if err := revive(ctx, tx, id); err != nil {
+			return err
+		}
 		log, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: id})
 		if err != nil {
 			return err
