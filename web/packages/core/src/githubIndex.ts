@@ -1,3 +1,8 @@
+export {
+  createLinkDialog,
+  type LinkDialog,
+  type LinkDialogState,
+} from "./features/github/linkDialog";
 export { createLinkList, type LinkList, type LinkListState } from "./features/github/links";
 export {
   checksLabel,
