@@ -78,7 +78,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
-	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
+	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
 	items.Register(api, itemsSvc)
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})

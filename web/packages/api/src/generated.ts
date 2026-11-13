@@ -425,11 +425,21 @@ export interface Project {
   /** ログイン名。空は「なし」 */
   owner: string;
   rank: string;
+  /**
+     * 結びつけた GitHub のリポジトリ(owner/name)。大文字小文字を区別しない辞書順
+     * @nullable
+     */
+  repos: string[] | null;
   /** YYYY-MM-DD。空は「なし」 */
   start: string;
   status: ProjectStatus;
   title: string;
   workspace: string;
+}
+
+export interface ProjectRepo {
+  /** owner/name。前後の空白は除く */
+  repo: string;
 }
 
 export interface RelationCandidate {
@@ -466,6 +476,14 @@ export interface RelationRow {
 }
 
 export interface RenameItem {
+  title: string;
+}
+
+export interface RenameProject {
+  /**
+     * 1 行。改行は入れられない
+     * @pattern ^[^\r\n]*$
+     */
   title: string;
 }
 
@@ -507,6 +525,43 @@ export interface SetAutomationRuleEnabled {
 export interface SetItemProperty {
   /** 新しい値。null と空の文字列は値を空にする */
   value: unknown;
+}
+
+export type SetProjectDateField = typeof SetProjectDateField[keyof typeof SetProjectDateField];
+
+
+export const SetProjectDateField = {
+  start: 'start',
+  end: 'end',
+} as const;
+
+export interface SetProjectDate {
+  field: SetProjectDateField;
+  /**
+     * YYYY-MM-DD。空は「なし」
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  value: string;
+}
+
+export interface SetProjectOwner {
+  /** ログイン名。空は「なし」。メンバーでなければ 404 */
+  owner: string;
+}
+
+export type SetProjectStatusStatus = typeof SetProjectStatusStatus[keyof typeof SetProjectStatusStatus];
+
+
+export const SetProjectStatusStatus = {
+  Todo: 'Todo',
+  InProgress: 'InProgress',
+  Done: 'Done',
+  Pending: 'Pending',
+  Cancel: 'Cancel',
+} as const;
+
+export interface SetProjectStatus {
+  status: SetProjectStatusStatus;
 }
 
 export interface SetWatch {
@@ -2427,6 +2482,47 @@ return fetcher<Comment>(getEditProjectCommentUrl(store,project,comment),
 
 
 
+export const getSetProjectDateUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/date`
+}
+
+/**
+ * @summary プロジェクトの開始日か終了日を変える
+ */
+export const setProjectDate = async (store: string,
+    project: string,
+    setProjectDateBody: SetProjectDate, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getSetProjectDateUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectDateBody)
+  }
+);}
+
+
+
 export const getGetProjectDescriptionUrl = (store: string,
     project: string,) => {
 
@@ -2541,6 +2637,211 @@ export const listProjectItems = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getSetProjectOwnerUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/owner`
+}
+
+/**
+ * @summary プロジェクトのオーナーを変える
+ */
+export const setProjectOwner = async (store: string,
+    project: string,
+    setProjectOwnerBody: SetProjectOwner, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getSetProjectOwnerUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectOwnerBody)
+  }
+);}
+
+
+
+export const getAddProjectRepoUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repos`
+}
+
+/**
+ * @summary プロジェクトにリポジトリを結びつける
+ */
+export const addProjectRepo = async (store: string,
+    project: string,
+    projectRepo: ProjectRepo, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getAddProjectRepoUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(projectRepo)
+  }
+);}
+
+
+
+export const getRemoveProjectRepoUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repos/remove`
+}
+
+/**
+ * @summary プロジェクトからリポジトリを外す
+ */
+export const removeProjectRepo = async (store: string,
+    project: string,
+    projectRepo: ProjectRepo, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getRemoveProjectRepoUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(projectRepo)
+  }
+);}
+
+
+
+export const getSetProjectStatusUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/status`
+}
+
+/**
+ * @summary プロジェクトのステータスを変える
+ */
+export const setProjectStatus = async (store: string,
+    project: string,
+    setProjectStatusBody: SetProjectStatus, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getSetProjectStatusUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectStatusBody)
+  }
+);}
+
+
+
+export const getRenameProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/title`
+}
+
+/**
+ * @summary プロジェクトのタイトルを変える
+ */
+export const renameProject = async (store: string,
+    project: string,
+    renameProjectBody: RenameProject, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getRenameProjectUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameProjectBody)
   }
 );}
 
