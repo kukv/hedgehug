@@ -93,6 +93,26 @@ func TestToggleValueDeletedItemRevives(t *testing.T) {
 	}
 }
 
+// 関連システムが入っている Task を削除したあと、その値を外すと、値が外れて削除を取り消す。
+func TestRemoveValueDeletedItemRevives(t *testing.T) {
+	svc, rec := setupRec(t)
+	if _, err := svc.AddValue(t.Context(), store, apptest.SampleTask, "systems", apptest.SampleSystemWeb); err != nil {
+		t.Fatal(err)
+	}
+	markDeleted(t, rec, apptest.SampleTask, true)
+	ctx := port.WithRevived(t.Context())
+	got, err := svc.RemoveValue(ctx, store, apptest.SampleTask, "systems", apptest.SampleSystemWeb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Deleted != nil || len(got.Systems) != 0 {
+		t.Errorf("RemoveValue = %+v", got)
+	}
+	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+		t.Errorf("Revived = %v", r)
+	}
+}
+
 // 値が同じなら何も保存せず、削除済みのまま 404 になる(決定 S4)。
 func TestSetPropertyDeletedItemSameValueIsNotFound(t *testing.T) {
 	svc, rec := setupRec(t)

@@ -173,6 +173,46 @@ func TestEditDeletedProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
 	}
 }
 
+// タイトルの変更は、変更後のタイトルで同じ名前を判定する(決定 S11)。
+// 削除済みの「ログイン」と同じ名前の新しいプロジェクトがあっても、「ログイン旧」に変えれば重ならないので取り消せる。
+func TestRenameDeletedProjectChecksNewTitle(t *testing.T) {
+	svc := setupClock(t)
+	ctx := port.WithRevived(t.Context())
+	deleteWithItems(t, svc, true)
+	if _, err := svc.Create(ctx, projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "ログイン"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Rename(ctx, store, apptest.SampleProject, "ログイン旧")
+	if err != nil || got.Deleted != nil || got.Title != "ログイン旧" {
+		t.Fatalf("Rename = %+v, %v", got, err)
+	}
+	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-P1"}) {
+		t.Errorf("Revived = %v", r)
+	}
+	if p, _, _ := restored(t, svc); !p {
+		t.Error("restore の行がない")
+	}
+}
+
+// 変更後のタイトルが削除されていないプロジェクトと重なるなら、断り、削除を取り消さない。
+func TestRenameDeletedProjectToLiveTitleIsRefused(t *testing.T) {
+	svc := setupClock(t)
+	ctx := t.Context()
+	deleteWithItems(t, svc, true)
+	if _, err := svc.Create(ctx, projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "別名"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Rename(ctx, store, apptest.SampleProject, "別名"); message(err) == "" {
+		t.Fatalf("err = %v, want 同じ名前の断り", err)
+	}
+	if p, e, task := restored(t, svc); p || e || task {
+		t.Errorf("断られたのに restore を書いた: %v %v %v", p, e, task)
+	}
+	if _, err := svc.Get(ctx, store, apptest.SampleProject); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("削除済みのままでない: %v", err)
+	}
+}
+
 // 何も変わらない保存・断られる保存は、削除済み(root: true)なら削除を取り消さず、削除済みのままになる(決定 S4)。
 func TestEditDeletedProjectRefusedKeepsDeleted(t *testing.T) {
 	cases := map[string]struct {

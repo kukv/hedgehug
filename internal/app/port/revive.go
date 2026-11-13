@@ -96,6 +96,12 @@ func ReviveItem(ctx context.Context, tx Tx, id item.ID) error {
 // ReviveProject は、tx の中で読み直し、削除済み(root: true)のプロジェクトなら、その削除の操作の行を、
 // プロジェクト自身とそのアイテムのログから取り消す。同じ名前の削除されていないプロジェクトがあれば断る(決定 S11)。
 func ReviveProject(ctx context.Context, tx Tx, id project.ID) error {
+	return ReviveProjectAs(ctx, tx, id, "")
+}
+
+// ReviveProjectAs は、ReviveProject の同じ名前の判定を、title(空なら、いまのタイトル)で行う版。
+// タイトルを変える保存が、変更後のタイトルで判定するのに使う(決定 S11)。
+func ReviveProjectAs(ctx context.Context, tx Tx, id project.ID, title string) error {
 	p, err := EditableProject(tx, id)
 	if errors.Is(err, ErrNotFound) || (err == nil && p.Deleted == nil) {
 		return nil
@@ -111,7 +117,10 @@ func ReviveProject(ctx context.Context, tx Tx, id project.ID) error {
 	if err != nil {
 		return err
 	}
-	if err := project.CheckRevive(p.Title, live); err != nil {
+	if title == "" {
+		title = p.Title
+	}
+	if err := project.CheckRevive(title, live); err != nil {
 		return err // 同じ名前の削除されていないプロジェクトがあれば、取り消さない(決定 S11)
 	}
 	log, err := tx.Changes().Of(change.Ref{Kind: change.KindProject, ID: p.ID})

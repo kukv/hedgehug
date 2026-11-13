@@ -12,6 +12,11 @@ import (
 // save は、保存の中でいまのプロジェクトを読み直し、drafts が返す行を 1 回で保存する(02「概要の編集」)。
 // 削除済み(root: true)なら、先に削除を取り消す(06「他の書き手との重なり」)。行がなければ何も残さず、削除済みなら断る。drafts が断ったら何も保存しない。summary はアクティビティの 1 行で、保存の前に決める。
 func (s Service) save(ctx context.Context, store port.StoreID, id project.ID, summary string, drafts func(tx port.Tx, p project.Project) ([]change.Draft, error)) (project.Project, error) {
+	return s.saveAs(ctx, store, id, "", summary, drafts)
+}
+
+// saveAs は、save の、取り消しの同じ名前の判定を title(空なら、いまのタイトル)で行う版。タイトルの変更が使う。
+func (s Service) saveAs(ctx context.Context, store port.StoreID, id project.ID, title, summary string, drafts func(tx port.Tx, p project.Project) ([]change.Draft, error)) (project.Project, error) {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
 		return project.Project{}, err
@@ -22,7 +27,7 @@ func (s Service) save(ctx context.Context, store port.StoreID, id project.ID, su
 		if err != nil {
 			return err
 		}
-		if err := port.ReviveProject(ctx, tx, id); err != nil {
+		if err := port.ReviveProjectAs(ctx, tx, id, title); err != nil {
 			return err
 		}
 		ds, err := drafts(tx, p)
