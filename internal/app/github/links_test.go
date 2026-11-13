@@ -191,6 +191,17 @@ func TestAddIssueTakenInAnotherStore(t *testing.T) {
 	}
 }
 
+func TestAddIssueTakenBySameInternalIDInAnotherStore(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, otherStore, linkTask, itemlink.Issue, "org/api", "12", false); err != nil {
+		t.Fatal(err)
+	}
+	err := f.add(t, linkStore, linkTask, itemlink.Issue, "org/api", "12", false)
+	if got := refusalText(err); got != "org/api#12 は HH-2 にリンクされています" {
+		t.Errorf("%q (%v)", got, err)
+	}
+}
+
 func TestAddLinkGitHubFailures(t *testing.T) {
 	f := newLinks(t)
 	f.infos.Stores[0].Account = ""

@@ -84,7 +84,7 @@ func (l Links) plan(ctx context.Context, store port.StoreID, id item.ID, in AddL
 		return addPlan{}, l.refused(err)
 	}
 	ref := itemlink.Ref{Kind: f.Kind, Repo: f.Repo, Number: f.Number}
-	if err := l.checkFound(ctx, v, ref, in.Kind, id); err != nil {
+	if err := l.checkFound(ctx, store, v, ref, in.Kind, id); err != nil {
 		return addPlan{}, err
 	}
 	if _, err := l.saveChecks(ctx, store, ref, f.Checks); err != nil {
@@ -95,7 +95,7 @@ func (l Links) plan(ctx context.Context, store port.StoreID, id item.ID, in AddL
 }
 
 // checkFound は、GitHub から読んだあとの検査(種別の違い・重なり・Issue の 1 対 1)。
-func (l Links) checkFound(ctx context.Context, v itemView, ref itemlink.Ref, want itemlink.Kind, id item.ID) error {
+func (l Links) checkFound(ctx context.Context, store port.StoreID, v itemView, ref itemlink.Ref, want itemlink.Kind, id item.ID) error {
 	if ref.Kind != want {
 		return refusal.New(itemlink.MsgWrongKind(ref, want))
 	}
@@ -105,7 +105,7 @@ func (l Links) checkFound(ctx context.Context, v itemView, ref itemlink.Ref, wan
 	if ref.Kind != itemlink.Issue {
 		return nil
 	}
-	owner, taken, err := l.issueOwner(ctx, ref, id)
+	owner, taken, err := l.issueOwner(ctx, store, ref, id)
 	if err != nil {
 		return err
 	}

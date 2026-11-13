@@ -89,9 +89,9 @@ func (l Links) saveChecks(ctx context.Context, store port.StoreID, r itemlink.Re
 	return l.Checks.Save(ctx, store, r.Key(), c)
 }
 
-// issueOwner は、ref の Issue にリンクしているアイテム(self 以外)を、このマシンのすべての Store から探し、
-// その画面の ID を返す(07「追加」。D3-15)。
-func (l Links) issueOwner(ctx context.Context, ref itemlink.Ref, self item.ID) (string, bool, error) {
+// issueOwner は、ref の Issue にリンクしているアイテム(store の self 以外)を、このマシンのすべての Store から探し、
+// その画面の ID を返す(07「追加」。D3-15)。self を除くのは store の中だけ(別の Store に同じ内部 ID があっても別のアイテム)。
+func (l Links) issueOwner(ctx context.Context, store port.StoreID, ref itemlink.Ref, self item.ID) (string, bool, error) {
 	infos, err := l.Connector.Stores.List(ctx)
 	if err != nil {
 		return "", false, err
@@ -99,9 +99,13 @@ func (l Links) issueOwner(ctx context.Context, ref itemlink.Ref, self item.ID) (
 	for _, s := range infos {
 		var id string
 		var found bool
+		skip := item.ID("")
+		if s.ID == store {
+			skip = self
+		}
 		err := l.Stores.Read(ctx, s.ID, func(r port.Reader) error {
 			var err error
-			id, found, err = findIssue(r, ref, self)
+			id, found, err = findIssue(r, ref, skip)
 			return err
 		})
 		if errors.Is(err, port.ErrStoreNotFound) {
