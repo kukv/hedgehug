@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/planning"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
@@ -25,6 +26,7 @@ import (
 	apphistory "github.com/kukv/hedgehug/internal/app/history"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
+	appplanning "github.com/kukv/hedgehug/internal/app/planning"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
@@ -109,6 +111,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		History:      apphistory.Service{Stores: deps.Stores, Clock: deps.Clock},
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
+	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})

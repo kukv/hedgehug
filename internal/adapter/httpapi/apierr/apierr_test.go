@@ -21,6 +21,9 @@ func TestFrom(t *testing.T) {
 	if err := apierr.From(port.ErrStoreNotFound); !errors.As(err, &se) || se.GetStatus() != http.StatusNotFound {
 		t.Errorf("not found: %v", err)
 	}
+	if err := apierr.From(fmt.Errorf("x: %w", port.ErrInvalidOperation)); !errors.As(err, &se) || se.GetStatus() != http.StatusBadRequest {
+		t.Errorf("invalid operation: %v", err)
+	}
 	boom := errors.New("boom")
 	if err := apierr.From(boom); err != boom {
 		t.Errorf("other: %v", err)
