@@ -20,6 +20,7 @@ import {
   postProjectComment,
   setWatch,
 } from "./generated";
+import { historyCalls } from "./historyPort";
 import { toItem } from "./items";
 import { relationCalls } from "./relationsPort";
 
@@ -34,6 +35,7 @@ function toWorklog(w: ApiWorklog): Worklog {
 // 説明・コメント・作業時間・関連・履歴の口の実装。区画ごとのタスクが、自分のメソッドをここに足す。
 export function createNotesPort(): NotesPort {
   return {
+    ...historyCalls(),
     ...relationCalls(),
     description: (t) =>
       call(async () => {
