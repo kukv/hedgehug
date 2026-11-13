@@ -92,15 +92,18 @@ const cases: Case[] = [
 ];
 
 describe("projects port: overview edits", () => {
-  it.each(cases)("$name goes to its own endpoint and returns the project with its repos", async (c) => {
-    const fetch = respond(200, apiProject);
-    const project = await c.run(createProjectsPort());
-    const [url, init] = call(fetch);
-    expect(url).toBe(c.url);
-    expect(init.method).toBe(c.method);
-    expect(JSON.parse(String(init.body))).toEqual(c.body);
-    expect(project.repos).toEqual(["example-org/web"]);
-  });
+  it.each(cases)(
+    "$name goes to its own endpoint and returns the project with its repos",
+    async (c) => {
+      const fetch = respond(200, apiProject);
+      const project = await c.run(createProjectsPort());
+      const [url, init] = call(fetch);
+      expect(url).toBe(c.url);
+      expect(init.method).toBe(c.method);
+      expect(JSON.parse(String(init.body))).toEqual(c.body);
+      expect(project.repos).toEqual(["example-org/web"]);
+    },
+  );
 
   it("reads a null list of repos as empty", async () => {
     respond(200, { ...apiProject, repos: null });

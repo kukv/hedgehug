@@ -69,6 +69,11 @@ export {
   worklogDeleteDialog,
   worklogDeletedMessage,
 } from "./features/notes/worklogs";
+export {
+  createProjectEditor,
+  type ProjectEditor,
+  type ProjectEditorDeps,
+} from "./features/projects/editor";
 export type { HistoryRow } from "./model/history";
 export type { Comment, Worklog } from "./model/notes";
 export {
@@ -78,8 +83,3 @@ export {
   relationLabels,
 } from "./model/relation";
 export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";
-export {
-  createProjectEditor,
-  type ProjectEditor,
-  type ProjectEditorDeps,
-} from "./features/projects/editor";
