@@ -1,92 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { NotFound, Refused } from "../../model/errors";
 import type { Comment } from "../../model/notes";
-import type { NoteTarget } from "../../port/notes";
 import { get } from "../../reactive/store";
-import { createToasts } from "../toasts/toasts";
 import {
   commentAvatar,
   commentDeleteDialog,
   commentDeletedMessage,
   commentPlaceholder,
-  createComments,
   isMine,
 } from "./comments";
+import { setup as baseSetup, comment, members, other, target } from "./commentsFixtures.test-util";
 
-const target: NoteTarget = { kind: "item", storeId: "S1", id: "I1" };
-const other: NoteTarget = { kind: "item", storeId: "S1", id: "I2" };
-const members = [
-  { login: "taro", name: "太郎" },
-  { login: "hanako", name: "花子" },
-];
-
-function comment(id: string, by: string, body: string, edited = false): Comment {
-  return {
-    id,
-    by,
-    byName: by === "ghost" ? "不明なユーザー" : by,
-    at: "2026-11-13T09:00:00.000Z",
-    body,
-    edited,
-  };
-}
-
-function setup(initial: Comment[] = [comment("K1", "hanako", "前")]) {
-  let rows = initial;
-  const calls: string[] = [];
-  const notes = {
-    listComments: vi.fn(async (_t: NoteTarget) => rows),
-    postComment: vi.fn(async (_t: NoteTarget, body: string) => {
-      calls.push(`post:${body}`);
-      const c = comment(`K${rows.length + 1}`, "hanako", body);
-      rows = [...rows, c];
-      return c;
-    }),
-    editComment: vi.fn(async (_t: NoteTarget, id: string, body: string) => {
-      calls.push(`edit:${id}:${body}`);
-      rows = rows.map((r) => (r.id === id ? { ...r, body, edited: true } : r));
-      return rows.find((r) => r.id === id) as Comment;
-    }),
-    deleteComment: vi.fn(async (_t: NoteTarget, id: string) => {
-      calls.push(`delete:${id}`);
-      rows = rows.filter((r) => r.id !== id);
-    }),
-  };
-  const toasts = createToasts({ set: () => 0, clear: () => {} });
-  const dirty: Record<string, () => boolean> = {};
-  const held: Record<string, () => boolean> = {};
-  const confirmLeave = vi.fn(async (_key?: string) => true);
-  const drafts = {
-    register: (key: string, d: () => boolean, h: () => boolean = d) => {
-      dirty[key] = d;
-      held[key] = h;
-      return () => {
-        delete dirty[key];
-        delete held[key];
-      };
-    },
-    confirmLeave,
-  };
-  const comments = createComments({
-    notes,
-    catalogPort: { listMembers: async () => members, me: async () => "hanako" },
-    toasts,
-    drafts,
-    scope: "item",
-  });
-  return {
-    comments,
-    notes,
-    toasts,
-    dirty,
-    held,
-    confirmLeave,
-    calls,
-    setRows: (r: Comment[]) => {
-      rows = r;
-    },
-  };
-}
+const setup = (rows?: Comment[]) => baseSetup(vi.fn, rows);
 
 describe("createComments", () => {
   it("opens a target with its comments, members and me", async () => {
@@ -219,67 +144,6 @@ describe("createComments", () => {
     await comments.confirmDelete();
     expect(get(comments.state).rows).toEqual([]);
     expect(get(toasts.list)).toEqual([]);
-  });
-
-  it("registers a draft only for a non-blank new comment and a changed edit", async () => {
-    const { comments, dirty, held } = setup();
-    await comments.open(target);
-    expect(dirty["comment:new:item"]?.()).toBe(false);
-    comments.setNew("   ");
-    expect(dirty["comment:new:item"]?.()).toBe(false);
-    comments.setNew("書きかけ");
-    expect(dirty["comment:new:item"]?.()).toBe(true);
-    expect(dirty["comment:edit:item"]?.()).toBe(false);
-    comments.startEdit("K1");
-    expect(dirty["comment:edit:item"]?.()).toBe(false);
-    comments.setEditing("");
-    expect(dirty["comment:edit:item"]?.()).toBe(true);
-    // 空にした編集は、保存と違うが、失うものがないので反映は待たない。
-    expect(held["comment:edit:item"]?.()).toBe(false);
-    comments.setEditing("変えた");
-    expect(held["comment:edit:item"]?.()).toBe(true);
-  });
-
-  it("unregisters the drafts when closed", async () => {
-    const { comments, dirty } = setup();
-    await comments.open(target);
-    expect(Object.keys(dirty).sort()).toEqual(["comment:edit:item", "comment:new:item"]);
-    comments.close();
-    expect(Object.keys(dirty)).toEqual([]);
-    await comments.open(target);
-    expect(Object.keys(dirty).sort()).toEqual(["comment:edit:item", "comment:new:item"]);
-  });
-
-  it("asks before discarding a new comment on Escape, only when there is something to lose", async () => {
-    const { comments, confirmLeave } = setup();
-    await comments.open(target);
-    await comments.escapeNew();
-    expect(confirmLeave).not.toHaveBeenCalled();
-    comments.setNew("書きかけ");
-    confirmLeave.mockResolvedValueOnce(false);
-    await comments.escapeNew();
-    expect(get(comments.state).newBody).toBe("書きかけ");
-    await comments.escapeNew();
-    expect(confirmLeave).toHaveBeenCalledTimes(2);
-    expect(confirmLeave).toHaveBeenCalledWith("comment:new:item");
-    expect(get(comments.state).newBody).toBe("");
-  });
-
-  it("closes an unchanged edit on Escape without asking, and asks for a changed one", async () => {
-    const { comments, confirmLeave } = setup();
-    await comments.open(target);
-    comments.startEdit("K1");
-    await comments.escapeEdit();
-    expect(confirmLeave).not.toHaveBeenCalled();
-    expect(get(comments.state).editing).toBeNull();
-    comments.startEdit("K1");
-    comments.setEditing("変えた");
-    confirmLeave.mockResolvedValueOnce(false);
-    await comments.escapeEdit();
-    expect(get(comments.state).editing).not.toBeNull();
-    await comments.escapeEdit();
-    expect(confirmLeave).toHaveBeenCalledWith("comment:edit:item");
-    expect(get(comments.state).editing).toBeNull();
   });
 
   it("drops the input and the rows when closed", async () => {

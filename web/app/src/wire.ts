@@ -14,6 +14,7 @@ import {
   createAccountForm,
   createAccountList,
   createCatalog,
+  createComments,
   createDetail,
   createItemDialog,
   createNavigation,
@@ -121,6 +122,15 @@ export const detail = createDetail({
   // 別のアイテムを開く・パネルを閉じるとき、書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: () => drafts.confirmLeave(),
 });
+// 詳細パネルとプロジェクトの概要は、同時に開くので、コメントの状態を別々に持つ(入力が混ざらない)。
+export const itemComments = createComments({ notes, catalogPort, toasts, drafts, scope: "item" });
+export const projectComments = createComments({
+  notes,
+  catalogPort,
+  toasts,
+  drafts,
+  scope: "project",
+});
 export const screen = createScreen({
   navigation,
   catalog,
@@ -203,7 +213,18 @@ const syncPort = createSyncPort();
 async function reflect(kinds: SyncEventKind[]) {
   const jobs: Promise<unknown>[] = [sync.load()];
   if (kinds.includes("store")) {
-    jobs.push(catalog.load().then(() => Promise.all([projectScreen.reload(), detail.reload()])));
+    jobs.push(
+      catalog
+        .load()
+        .then(() =>
+          Promise.all([
+            projectScreen.reload(),
+            detail.reload(),
+            itemComments.reload(),
+            projectComments.reload(),
+          ]),
+        ),
+    );
   }
   await Promise.allSettled(jobs);
 }
