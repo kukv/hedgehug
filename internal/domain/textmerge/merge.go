@@ -1,4 +1,6 @@
-package filemerge
+// Package textmerge は、説明(description.md)の 3 方向の行マージの規則を持つ。入出力をしない。
+// 保存(app)と同期(infra)が同じ関数を使う(06「同時に編集したとき」)。
+package textmerge
 
 import (
 	"slices"
@@ -8,14 +10,20 @@ import (
 // conflictSeparator は、同じ箇所を両方が変えたときに、2 つの版のあいだにはさむ行(06「同時に編集したとき」)。
 const conflictSeparator = "-----"
 
-// MergeText は、base から older と newer に分かれた説明を、行ごとに合わせる。別々の行の変更は両方残す。
-// 同じ箇所を両方が変えたときは、older の版、「-----」、newer の版の順に両方を残す。
+// MergeText は、Merge の合わせた文字列だけを返す。
 func MergeText(base, older, newer string) string {
+	merged, _ := Merge(base, older, newer)
+	return merged
+}
+
+// Merge は、base から older と newer に分かれた説明を、行ごとに合わせる。別々の行の変更は両方残す。
+// 同じ箇所を両方が変えたときは、older の版、「-----」、newer の版の順に両方を残し、conflict を true にする。
+func Merge(base, older, newer string) (merged string, conflict bool) {
 	switch {
 	case older == newer, newer == base:
-		return older
+		return older, false
 	case older == base:
-		return newer
+		return newer, false
 	}
 	b, o, n := strings.Split(base, "\n"), strings.Split(older, "\n"), strings.Split(newer, "\n")
 	hunks := slices.Concat(diffHunks(b, o, true), diffHunks(b, n, false))
@@ -29,11 +37,13 @@ func MergeText(base, older, newer string) string {
 	pos := 0
 	for _, c := range clusters(hunks) {
 		out = append(out, b[pos:c.start]...)
-		out = append(out, mergeChunk(b[c.start:c.end], c.apply(b, true), c.apply(b, false))...)
+		chunk, both := mergeChunk(b[c.start:c.end], c.apply(b, true), c.apply(b, false))
+		out = append(out, chunk...)
+		conflict = conflict || both
 		pos = c.end
 	}
 	out = append(out, b[pos:]...)
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), conflict
 }
 
 // hunk は、base の [start, end) の行を、片方の版が repl に置き換えたことを表す(start == end なら挿入)。
@@ -103,16 +113,16 @@ func (c cluster) apply(base []string, isOlder bool) []string {
 	return append(out, base[pos:c.end]...)
 }
 
-// mergeChunk は、安定な行のあいだの 1 区間を合わせる。
-func mergeChunk(base, o, n []string) []string {
+// mergeChunk は、安定な行のあいだの 1 区間を合わせる。両方を残したときは true。
+func mergeChunk(base, o, n []string) ([]string, bool) {
 	switch {
 	case slices.Equal(o, n), slices.Equal(n, base):
-		return o
+		return o, false
 	case slices.Equal(o, base):
-		return n
+		return n, false
 	}
 	// 説明のなかった末尾に両方が書いたときなど、空の行だけの版は無視しない。
-	return slices.Concat(o, []string{conflictSeparator}, n)
+	return slices.Concat(o, []string{conflictSeparator}, n), true
 }
 
 // matchLines は、最長共通部分列で base の各行に対応する other の行の位置を返す(対応しなければ -1)。

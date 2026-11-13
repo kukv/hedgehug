@@ -11,8 +11,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/textmerge"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
-	"github.com/kukv/hedgehug/internal/infra/gitstore/filemerge"
 )
 
 // descType は、説明を保存した変更記録の種類(保存形式「変更記録」の desc)。型はトラック A が足す。
@@ -26,9 +26,9 @@ func mergeDescription(p string, base, a, b tree) string {
 	atB := lastDesc(b[logPath], base[logPath])
 	aOlder := atA.Before(atB) || (atA.Equal(atB) && textA <= textB)
 	if aOlder {
-		return filemerge.MergeText(string(base[p]), textA, textB)
+		return textmerge.MergeText(string(base[p]), textA, textB)
 	}
-	return filemerge.MergeText(string(base[p]), textB, textA)
+	return textmerge.MergeText(string(base[p]), textB, textA)
 }
 
 // lastDesc は、side で足された(base にない)desc の行のうち、最大の at。
