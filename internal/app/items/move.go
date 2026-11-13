@@ -49,13 +49,23 @@ func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in Mo
 	}
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		was, err := port.EditableItem(tx, id)
+		if err != nil {
+			return err
+		}
+		if err := port.ReviveItem(ctx, tx, id); err != nil {
+			return err
+		}
 		it, err := port.LiveItem(tx, id)
 		if err != nil {
 			return err
 		}
 		to, move, err := destinationOf(tx, it, in)
-		if err != nil || !move {
+		if err != nil {
 			return err
+		}
+		if !move {
+			return port.Unchanged(was.Deleted)
 		}
 		return writeMove(tx, it, to, in.Statuses)
 	})
@@ -66,13 +76,16 @@ func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in Mo
 func (s Service) moveSummary(ctx context.Context, store port.StoreID, id item.ID, in MoveInput) (string, error) {
 	var summary string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := port.LiveItem(r, id)
+		it, err := port.EditableItem(r, id)
 		if err != nil {
 			return err
 		}
 		to, move, err := destinationOf(r, it, in)
-		if err != nil || !move {
+		if err != nil {
 			return err
+		}
+		if !move {
+			return port.Unchanged(it.Deleted)
 		}
 		w, err := r.Workspaces().Get(it.Place.Workspace)
 		if err != nil {

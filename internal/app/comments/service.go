@@ -8,6 +8,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/comment"
+	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
 const (
@@ -36,11 +38,24 @@ type View struct {
 	ByName string
 }
 
-// display は、持ち主の画面の ID(HH-12・HH-P1)。持ち主がなければ port.ErrNotFound。
+// display は、持ち主の画面の ID(HH-12・HH-P1)。持ち主がなければ、削除済みでも port.ErrNotFound。
 func display(r port.Reader, t Target) (string, error) {
+	return ownerDisplay(r, t, port.LiveItem, port.LiveProject)
+}
+
+// editableDisplay は、display と同じだが、利用者が選んで削除した(root: true)持ち主も返す。書き込みだけが使う。
+func editableDisplay(r port.Reader, t Target) (string, error) {
+	return ownerDisplay(r, t, port.EditableItem, port.EditableProject)
+}
+
+// ownerDisplay は、getItem・getProject が返した持ち主の画面の ID。
+func ownerDisplay(r port.Reader, t Target,
+	getItem func(port.Reader, item.ID) (item.Item, error),
+	getProject func(port.Reader, project.ID) (project.Project, error),
+) (string, error) {
 	switch t.Kind {
 	case change.KindItem:
-		it, err := port.LiveItem(r, t.ID)
+		it, err := getItem(r, t.ID)
 		if err != nil {
 			return "", err
 		}
@@ -50,7 +65,7 @@ func display(r port.Reader, t Target) (string, error) {
 		}
 		return it.DisplayID(w.Prefix), nil
 	case change.KindProject:
-		p, err := port.LiveProject(r, t.ID)
+		p, err := getProject(r, t.ID)
 		if err != nil {
 			return "", err
 		}
@@ -61,6 +76,26 @@ func display(r port.Reader, t Target) (string, error) {
 		return p.DisplayID(w.Prefix), nil
 	}
 	return "", port.ErrNotFound
+}
+
+// reviveOwner は、保存の中で最初に呼ぶ。持ち主が削除済み(root: true)なら削除を取り消し、取り消す前の削除の印を返す。
+// 保存できない(ない・root: false・祖先が削除済み)なら port.ErrNotFound。何も書かずに返す分かれ道は port.Unchanged に印を渡す。
+func reviveOwner(ctx context.Context, tx port.Tx, t Target) (*change.Deletion, error) {
+	switch t.Kind {
+	case change.KindItem:
+		it, err := port.EditableItem(tx, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		return it.Deleted, port.ReviveItem(ctx, tx, t.ID)
+	case change.KindProject:
+		p, err := port.EditableProject(tx, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		return p.Deleted, port.ReviveProject(ctx, tx, t.ID)
+	}
+	return nil, port.ErrNotFound
 }
 
 // appendTo は、持ち主のログに行を足す。
@@ -74,12 +109,12 @@ func appendTo(tx port.Tx, t Target, drafts ...change.Draft) error {
 	return port.ErrNotFound
 }
 
-// displayOf は、アクティビティの 1 行に書く持ち主の ID。保存の前に読む。
+// displayOf は、アクティビティの 1 行に書く持ち主の ID。保存の前に読む(書き込みだけが使う)。
 func (s Service) displayOf(ctx context.Context, store port.StoreID, t Target) (string, error) {
 	var shown string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		shown, err = display(r, t)
+		shown, err = editableDisplay(r, t)
 		return err
 	})
 	return shown, err

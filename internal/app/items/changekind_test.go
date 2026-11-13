@@ -81,7 +81,7 @@ func TestChangeKindRefuses(t *testing.T) {
 	svc, rec := setupRec(t)
 	step, _ := svc.AddStep(t.Context(), store, apptest.SampleTask, "下書き")
 	gone := mustCreate(t, svc, apptest.SampleProject, ptr(apptest.SampleEpic), item.Task, "消した Task")
-	markDeleted(t, rec, gone.ID, true)
+	markDeleted(t, rec, gone.ID, false) // 親と一緒に削除されたもの(root: true なら保存で削除を取り消す)
 	cases := []struct {
 		name string
 		id   item.ID

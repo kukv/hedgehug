@@ -28,7 +28,7 @@ func (s Service) Post(ctx context.Context, store port.StoreID, t Target, body st
 	id := s.IDs.New()
 	op := port.Operation{Actor: change.User(me), Summary: shown + " にコメント"}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		if _, err := display(tx, t); err != nil {
+		if _, err := reviveOwner(ctx, tx, t); err != nil {
 			return err
 		}
 		return appendTo(tx, t, change.NewComment(id, nil, comment.Value(body)))

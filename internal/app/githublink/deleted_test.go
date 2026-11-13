@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
@@ -24,9 +26,7 @@ func TestLinksOfADeletedItemAreNotFound(t *testing.T) {
 	before, asked := len(f.stores.ops), f.gh.Lookups
 	_, listErr := f.links.List(ctx, linkStore, linkTask)
 	_, refreshErr := f.links.Refresh(ctx, linkStore, linkTask)
-	addErr := f.add(t, linkStore, linkTask, itemlink.Issue, "org/api", "12", false)
-	removeErr := f.links.Remove(ctx, linkStore, linkTask, itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41})
-	for name, err := range map[string]error{"List": listErr, "Refresh": refreshErr, "Add": addErr, "Remove": removeErr} {
+	for name, err := range map[string]error{"List": listErr, "Refresh": refreshErr} {
 		if !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("%s of a deleted item = %v, want port.ErrNotFound", name, err)
 		}
@@ -211,5 +211,138 @@ func TestReadOnceItemDeletedBeforeWrite(t *testing.T) {
 	}
 	if ns := f.inbox.Notices(); len(ns) != 0 {
 		t.Errorf("notices = %+v, want none", ns)
+	}
+}
+
+// taskRestored は、HH-2 のログに restore の行があるか。
+func (f *linkFixture) taskRestored(t *testing.T) bool {
+	t.Helper()
+	return slices.ContainsFunc(f.taskLog(t), func(r change.Record) bool { return r.T == change.Restore })
+}
+
+// 別のタブで削除された(root: true)アイテムに PR をリンクすると、リンクを残して削除を取り消す。
+func TestAddLinkDeletedItemRevives(t *testing.T) {
+	f := newLinks(t)
+	if err := apptest.DeleteItems(t.Context(), f.stores.Stores, linkStore, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	ctx := port.WithRevived(t.Context())
+	if _, err := f.links.Add(ctx, linkStore, linkTask, githublink.AddLinkInput{Kind: itemlink.PR, Repo: "org/web", Number: "41"}); err != nil {
+		t.Fatal(err)
+	}
+	if f.taskItem(t).Deleted != nil || !f.taskRestored(t) {
+		t.Error("削除を取り消していない")
+	}
+	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-2"}) {
+		t.Errorf("Revived = %v", got)
+	}
+	if rows := f.list(t, linkStore, linkTask); len(rows) != 1 || rows[0].Number != 41 {
+		t.Errorf("rows = %+v", rows)
+	}
+}
+
+// 別のタブで削除されたアイテムのリンクを外すと、外して削除を取り消す。外すものがなければ断って削除済みのまま。
+func TestRemoveLinkDeletedItemRevives(t *testing.T) {
+	f := newLinks(t)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), f.stores.Stores, linkStore, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	ctx := port.WithRevived(t.Context())
+	if err := f.links.Remove(ctx, linkStore, linkTask, ref); err != nil {
+		t.Fatal(err)
+	}
+	if f.taskItem(t).Deleted != nil || !f.taskRestored(t) {
+		t.Error("削除を取り消していない")
+	}
+	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-2"}) {
+		t.Errorf("Revived = %v", got)
+	}
+	if rows := f.list(t, linkStore, linkTask); len(rows) != 0 {
+		t.Errorf("rows = %+v", rows)
+	}
+	// 外すものがない保存は、削除済みのままにして断る(決定 S4)
+	if err := apptest.DeleteItems(t.Context(), f.stores.Stores, linkStore, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	restores := len(f.taskLog(t))
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, ref); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Remove with nothing to remove = %v, want port.ErrNotFound", err)
+	}
+	if f.taskItem(t).Deleted == nil || len(f.taskLog(t)) != restores {
+		t.Error("外すものがないのに削除を取り消した")
+	}
+}
+
+// 親と一緒に削除された(root: false)アイテムは、リンクの追加も解除も断り、削除済みのまま。
+func TestLinksOfItemDeletedWithParentAreNotFound(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), f.stores.Stores, linkStore, linkEpic, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	before, asked := len(f.stores.ops), f.gh.Lookups
+	addErr := f.add(t, linkStore, linkTask, itemlink.Issue, "org/api", "12", false)
+	removeErr := f.links.Remove(t.Context(), linkStore, linkTask, itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41})
+	for name, err := range map[string]error{"Add": addErr, "Remove": removeErr} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s = %v, want port.ErrNotFound", name, err)
+		}
+	}
+	if len(f.stores.ops) != before || f.gh.Lookups != asked {
+		t.Errorf("wrote %d times, asked GitHub %d times", len(f.stores.ops)-before, f.gh.Lookups-asked)
+	}
+	if f.taskItem(t).Deleted == nil || f.taskRestored(t) {
+		t.Error("削除を取り消した")
+	}
+}
+
+// 削除済みのプロジェクトの下のアイテム(削除済み、root: true)は、リンクの追加も解除も断り、削除済みのまま(決定 S9)。
+func TestAddLinkItemInDeletedProjectIsNotFound(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), f.stores.Stores, linkStore, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteProject(t.Context(), f.stores.Stores, linkStore, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	before, asked := len(f.stores.ops), f.gh.Lookups
+	addErr := f.add(t, linkStore, linkTask, itemlink.Issue, "org/api", "12", false)
+	removeErr := f.links.Remove(t.Context(), linkStore, linkTask, itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41})
+	for name, err := range map[string]error{"Add": addErr, "Remove": removeErr} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s = %v, want port.ErrNotFound", name, err)
+		}
+	}
+	if len(f.stores.ops) != before || f.gh.Lookups != asked {
+		t.Errorf("wrote %d times, asked GitHub %d times", len(f.stores.ops)-before, f.gh.Lookups-asked)
+	}
+	if f.taskItem(t).Deleted == nil || f.taskRestored(t) {
+		t.Error("削除を取り消した")
+	}
+}
+
+// 取り直しは、削除済み(root: true)のアイテムを、いまのまま断る(実行者 GitHub は取り消さない)。
+func TestRefreshLinksDeletedItemIsNotFound(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), f.stores.Stores, linkStore, linkTask); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.links.Refresh(t.Context(), linkStore, linkTask); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Refresh = %v, want port.ErrNotFound", err)
+	}
+	if f.taskItem(t).Deleted == nil || f.taskRestored(t) {
+		t.Error("削除を取り消した")
 	}
 }

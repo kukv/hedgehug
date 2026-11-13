@@ -14,12 +14,12 @@ import (
 // アクティビティは「{変える前のタイトル} のタイトルを {新しいタイトル} に変更」。
 func (s Service) Rename(ctx context.Context, store port.StoreID, id project.ID, title string) (project.Project, error) {
 	title = strings.TrimSpace(title)
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}
 	summary := fmt.Sprintf("%s のタイトルを %s に変更", label(p.Title), label(title))
-	return s.save(ctx, store, id, summary, func(tx port.Tx, cur project.Project) ([]change.Draft, error) {
+	return s.saveAs(ctx, store, id, title, summary, func(tx port.Tx, cur project.Project) ([]change.Draft, error) {
 		siblings, err := port.LiveProjects(tx, cur.Place.Workspace)
 		if err != nil {
 			return nil, err
