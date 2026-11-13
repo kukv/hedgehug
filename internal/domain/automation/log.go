@@ -11,8 +11,9 @@ import (
 // collect は、ログのすべてのルール(消したものを含む)と、消したルールの ID。
 func collect(log []change.Record) (map[change.ID]*Rule, map[change.ID]bool) {
 	deleted := map[change.ID]bool{}
+	restored := change.Restored(log)
 	for _, r := range log { // Resolve は削除の行を読み飛ばすので、生のログから集める
-		if id, ok := strings.CutPrefix(r.F, prefix); ok && r.T == change.Delete && !strings.Contains(id, "/") {
+		if id, ok := strings.CutPrefix(r.F, prefix); ok && r.T == change.Delete && !restored(r) && !strings.Contains(id, "/") {
 			deleted[change.ID(id)] = true
 		}
 	}

@@ -126,3 +126,33 @@ func wait(t *testing.T, ch <-chan struct{}, timeout time.Duration, msg string) {
 		t.Fatal(msg)
 	}
 }
+
+// contractRestored は、削除の行を取り消す restore の行(f が同じで、to が削除の op)を足すと、
+// アイテムの Deleted の印が外れることを確かめる(C3a-7)。
+func contractRestored(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	if err := DeleteItems(t.Context(), s, id, cItem.ID); err != nil {
+		t.Fatal(err)
+	}
+	var op change.ID
+	mustRead(t, s, id, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		if err != nil || log[len(log)-1].T != change.Delete {
+			t.Fatalf("log = %+v, %v", log, err)
+		}
+		op = log[len(log)-1].Op
+		if got, gerr := r.Items().Get(cItem.ID); gerr != nil || got.Deleted == nil {
+			t.Fatalf("deleted item = %+v, %v", got.Deleted, gerr)
+		}
+		return nil
+	})
+	mustWrite(t, s, id, port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "復元"}, func(tx port.Tx) error {
+		return tx.WriteItems().Append(cItem.ID, change.NewRestore(change.DeletedField, op))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		if got, err := r.Items().Get(cItem.ID); err != nil || got.Deleted != nil {
+			t.Errorf("restored item Deleted = %+v, %v", got.Deleted, err)
+		}
+		return nil
+	})
+}

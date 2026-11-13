@@ -11,6 +11,15 @@ type Draft struct {
 	Root *bool
 	// Rule は、自動化のルールが書いた行のルール(B4-1)。空なら操作の実行者の行。
 	Rule ID
+	// Op は、この行だけ操作の op と別の op で書くときの op(C3a-11)。空なら操作の op。
+	// 書けるのは同期の操作だけ(port.CheckOpDrafts)。
+	Op ID
+}
+
+// InOp は、この行を op の行として書く。同期の修復が、親の削除と同じ op で子の削除を書くのに使う。
+func (d Draft) InOp(op ID) Draft {
+	d.Op = op
+	return d
 }
 
 // ByRule は、自動化のルール rule が書いた行にする。
@@ -44,6 +53,9 @@ func NewRemove(f string, v any) Draft { return Draft{T: Remove, F: f, From: Valu
 
 // NewDelete は、f が指すものの削除。from も to も持たない。
 func NewDelete(f string) Draft { return Draft{T: Delete, F: f} }
+
+// NewRestore は、op の削除の取り消し。f はその削除の f、to は op。
+func NewRestore(f string, op ID) Draft { return Draft{T: Restore, F: f, To: Value(op)} }
 
 // DeletedField は、アイテム・プロジェクトの削除の行の f(item.yaml・project.yaml の deleted と同じ名前)。
 const DeletedField = "deleted"

@@ -33,12 +33,14 @@ type view struct {
 	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースに
 	// あると分かっているプロジェクトをログから作り直さない。Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
 	projectPlaces map[project.ID]workspace.ID
+	// gone は、同じ Tx で完全に削除したもの。ログは空として読み、ids に出さない。
+	gone map[change.Ref]bool
 }
 
 // log は、呼び出し側が変えても、覚えた作業ツリーの行(base)とまだ書いていない行(pending)が
 // 変わらないように、どちらも深く写して返す。ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。
 func (v *view) log(ref change.Ref) ([]change.Record, error) {
-	if !ref.Valid() {
+	if !ref.Valid() || v.gone[ref] {
 		return nil, nil
 	}
 	base, ok := v.base[ref]
@@ -83,6 +85,7 @@ func (v *view) ids(kind change.Kind) ([]change.ID, error) {
 			ids = append(ids, ref.ID)
 		}
 	}
+	ids = slices.DeleteFunc(ids, func(id change.ID) bool { return v.gone[change.Ref{Kind: kind, ID: id}] })
 	slices.Sort(ids)
 	return ids, nil
 }
