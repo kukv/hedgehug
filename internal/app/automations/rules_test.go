@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
@@ -281,6 +282,46 @@ func TestCreateScopedRuleNeedsALiveProject(t *testing.T) {
 	in.Scope = apptest.SampleProject
 	if _, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, in); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("deleted project: %v", err)
+	}
+}
+
+// 別のワークスペースのプロジェクトは範囲にできない。
+func TestCreateScopedRuleRefusesAnotherWorkspacesProject(t *testing.T) {
+	svc, rec := setup(t)
+	other := project.Project{ID: "01OTHERPR0000000000000001", Place: project.Place{Workspace: "01OTHERWS0000000000000001", Number: 1}, Rank: "V", Title: "別", Status: project.Todo}
+	op := port.Operation{Actor: change.User("taro"), Summary: "準備"}
+	if err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return tx.WriteProjects().Append(other.ID, project.Create(other))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	in := doneRule()
+	in.Scope = other.ID
+	if _, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, in); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("another workspace's project: %v", err)
+	}
+}
+
+// プロジェクトが削除済みの専用ルールも、編集・削除できる。活動の文はそのプロジェクトの名前を添える。
+func TestDeletedProjectsRuleCanBeEditedAndDeleted(t *testing.T) {
+	svc, rec := setup(t)
+	r := seedScoped(t, rec)
+	title := projectTitle(t, rec)
+	if err := apptest.DeleteProject(t.Context(), rec.Stores, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	edit := r
+	edit.Name = "専用 4"
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit); err != nil {
+		t.Fatalf("Update = %v", err)
+	}
+	if err := svc.Delete(t.Context(), store, apptest.SampleWorkspace, r.ID); err != nil {
+		t.Fatalf("Delete = %v", err)
+	}
+	n := len(rec.summaries)
+	want := []string{"プロジェクト「" + title + "」の自動化「専用 4」を編集", "プロジェクト「" + title + "」の自動化「専用 4」を削除"}
+	if got := rec.summaries[n-2:]; got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("summaries = %q, want %q", got, want)
 	}
 }
 

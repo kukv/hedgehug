@@ -112,6 +112,7 @@ func TestDeleteStatusFollowsProjectRules(t *testing.T) {
 	ds := automation.Drafts(automation.Rule{}, scoped)
 	ds = append(ds,
 		change.NewAdd(projectrule.HiddenField(p.ID), review.ID),
+		change.NewAdd(projectrule.HiddenField(p.ID), pending),
 		change.NewAdd(projectrule.WorkflowField(p.ID, todo), review.ID),
 		change.NewAdd(projectrule.WorkflowField(p.ID, review.ID), todo),
 	)
@@ -120,7 +121,7 @@ func TestDeleteStatusFollowsProjectRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := projectRulesOf(t, s, w.ID).Of(p.ID)
-	if len(r.Hidden) != 0 || len(r.Workflow[todo]) != 0 || len(r.Workflow[review.ID]) != 0 {
+	if len(r.Hidden) != 1 || r.Hidden[0] != pending || len(r.Workflow[todo]) != 0 || len(r.Workflow[review.ID]) != 0 {
 		t.Errorf("project rules = %+v", r)
 	}
 	var rules []automation.Rule
