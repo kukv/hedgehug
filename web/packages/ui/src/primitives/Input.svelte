@@ -20,6 +20,8 @@
     // 使う側のマークアップで Biome の a11y/noAutofocus に当たるので使わない。
     focusOnMount?: boolean;
     onfocus?: (event: FocusEvent) => void;
+    // oninput は、入力のたびに、いまの値を渡す(候補を探すときなど)。
+    oninput?: (value: string) => void;
     onblur?: (event: FocusEvent) => void;
     onkeydown?: (event: KeyboardEvent) => void;
   }
@@ -39,6 +41,7 @@
     id,
     focusOnMount = false,
     onfocus,
+    oninput,
     onblur,
     onkeydown,
   }: Props = $props();
@@ -77,10 +80,19 @@
     {value}
     oninput={(event) => {
       value = event.currentTarget.value;
+      oninput?.(value);
     }}
   >
 {:else}
-  <input bind:this={element} class="input {size}" class:mono class:heading {...attrs} bind:value>
+  <input
+    bind:this={element}
+    class="input {size}"
+    class:mono
+    class:heading
+    {...attrs}
+    bind:value
+    oninput={(event) => oninput?.(event.currentTarget.value)}
+  >
 {/if}
 
 <style>

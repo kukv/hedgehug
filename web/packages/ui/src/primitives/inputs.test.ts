@@ -5,6 +5,15 @@ import Input from "./Input.svelte";
 import Switch from "./Switch.svelte";
 
 describe("Input", () => {
+  it("reports the typed value as it changes", async () => {
+    const oninput = vi.fn();
+    render(Input, { props: { label: "相手", oninput } });
+    await fireEvent.input(screen.getByRole("textbox", { name: "相手" }), {
+      target: { value: "HH" },
+    });
+    expect(oninput).toHaveBeenCalledWith("HH");
+  });
+
   it("reports blur and keydown, and takes focus when asked", async () => {
     const onblur = vi.fn();
     const onkeydown = vi.fn();

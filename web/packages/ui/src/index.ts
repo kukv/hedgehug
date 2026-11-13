@@ -3,6 +3,7 @@ export { default as Brand } from "./layout/Brand.svelte";
 export { default as PageHead } from "./layout/PageHead.svelte";
 export { default as SidePanel } from "./layout/SidePanel.svelte";
 export { default as Avatar } from "./patterns/Avatar.svelte";
+export { default as BlockedBadge } from "./patterns/BlockedBadge.svelte";
 export { default as ConfirmDialog } from "./patterns/ConfirmDialog.svelte";
 export { default as KindIcon } from "./patterns/KindIcon.svelte";
 export { default as Markdown } from "./patterns/Markdown.svelte";

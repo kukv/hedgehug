@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
+import BlockedBadge from "./BlockedBadge.svelte";
 import KindIcon from "./KindIcon.svelte";
 import ReadOnlyBand from "./ReadOnlyBand.svelte";
 import StatusDot from "./StatusDot.svelte";
@@ -35,5 +36,12 @@ describe("ReadOnlyBand", () => {
   it("shows the text as a note", () => {
     render(ReadOnlyBand, { props: { text: "ro は閲覧のみの Store です。" } });
     expect(screen.getByRole("note")).toHaveTextContent("ro は閲覧のみの Store です。");
+  });
+});
+
+describe("BlockedBadge", () => {
+  it("says the item is blocked", () => {
+    render(BlockedBadge);
+    expect(screen.getByText("ブロック中")).toBeInTheDocument();
   });
 });
