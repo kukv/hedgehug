@@ -63,4 +63,26 @@ describe("navigation", () => {
     nav.go({ name: "home" });
     expect(nav.takeSection()).toBeNull();
   });
+
+  it("forgets a section on replace", () => {
+    const nav = createNavigation(fakeHistory("/").history);
+    nav.go(
+      { name: "project", store: "work", project: "HH-P1", tab: "settings" },
+      "rules-templates",
+    );
+    nav.replace({ name: "project", store: "work", project: "HH-P1", tab: "tree" });
+    expect(nav.takeSection()).toBeNull();
+  });
+
+  it("forgets a section on back", () => {
+    const { history, back } = fakeHistory("/");
+    const nav = createNavigation(history);
+    nav.start();
+    nav.go(
+      { name: "project", store: "work", project: "HH-P1", tab: "settings" },
+      "rules-templates",
+    );
+    back();
+    expect(nav.takeSection()).toBeNull();
+  });
 });

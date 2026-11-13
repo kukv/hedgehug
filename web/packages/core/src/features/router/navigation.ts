@@ -47,12 +47,14 @@ export function createNavigation(history: HistoryPort, guard?: LeaveGuard): Navi
       });
     },
     replace(next) {
+      section = null;
       const path = formatRoute(next);
       history.replace(path);
       show(path);
     },
     start() {
       return history.onPop(() => {
+        section = null;
         const path = history.path();
         if (!guard?.anyDirty()) return show(path);
         // ブラウザのアドレスはもう変わっている。断ったら、いまの画面のアドレスを積み直して留まる。

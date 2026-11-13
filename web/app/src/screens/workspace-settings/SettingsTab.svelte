@@ -61,7 +61,7 @@
     {#if $settings.readOnly}
       <ReadOnlyBand text={readOnlyBand(storeName)} />
     {/if}
-    {#if section}
+    {#if section && (section !== "automation" || $settings.automation)}
       <RulesProjectsLine
         state={$settings}
         {section}
