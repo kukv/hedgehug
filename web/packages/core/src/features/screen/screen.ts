@@ -38,8 +38,11 @@ function sameScreen(a: Resolved | null, b: Resolved): boolean {
 
 export function createScreen(deps: ScreenDeps): Screen {
   const current = writable<Resolved | null>(null);
-  // 解決が重なったときは、最後に始めたものの結果だけを使う。
+  // 解決が重なったときは、始めた順に結果を使い、後から始めたものをもう使っていれば、前のものは捨てる。アドレスが
+  // 変わっていたら捨てる。最後に始めたものだけを使うと、一覧の読み直し(画面への反映)が解決より短い間隔で続いたとき、
+  // いつまでも画面が出ない。
   let latest = 0;
+  let applied = 0;
   // shown は、前の解決で出したプロジェクトの画面。同じアドレスがそのプロジェクトに解決しなくなったら、消えたと見る。
   let shown: ShownProject | null = null;
 
@@ -49,7 +52,8 @@ export function createScreen(deps: ScreenDeps): Screen {
     const stores = get(deps.catalog.stores);
     const route = get(deps.navigation.route);
     const r = await resolveRoute(route, stores, deps.items);
-    if (mine !== latest) return;
+    if (mine < applied || get(deps.navigation.route) !== route) return;
+    applied = mine;
     // 出していたプロジェクトが、同期・別のタブ・別のプログラムで削除されたときは、ワークスペースの概要へ移る
     // (A4b-22。履歴には積まない。ワークスペースもなければホーム)。アドレスを打ち込んだだけの解決できないものはホームのまま。
     // 別の Store の同じ ID に解決された場合も、消えたものとして移る。
