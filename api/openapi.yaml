@@ -38,12 +38,19 @@ components:
           type: string
         name:
           type: string
+        orgs:
+          description: GitHub App が入っていない組織(認証エラーのときは空)
+          items:
+            type: string
+          nullable: true
+          type: array
         reason:
           type: string
         status:
           enum:
             - ok
             - auth_error
+            - app_missing
           type: string
       required:
         - id
@@ -52,6 +59,7 @@ components:
         - method
         - status
         - reason
+        - orgs
       type: object
     AddStep:
       additionalProperties: false
@@ -898,6 +906,25 @@ components:
           type: string
       required:
         - repo
+      type: object
+    RecheckOutputBody:
+      additionalProperties: false
+      properties:
+        cleared:
+          description: 読めるようになった組織
+          items:
+            type: string
+          nullable: true
+          type: array
+        still:
+          description: まだ読めない組織
+          items:
+            type: string
+          nullable: true
+          type: array
+      required:
+        - cleared
+        - still
       type: object
     RelationCandidate:
       additionalProperties: false
@@ -2052,6 +2079,41 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: gh CLI・環境変数・OS のキーチェーンのアカウントの認証の確認をやり直す
+  /api/accounts/{id}/recheck:
+    post:
+      operationId: recheck-account
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecheckOutputBody"
+          description: OK
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: GitHub App 未導入の組織を読み直し、読めたものの記録を消す
   /api/events:
     get:
       description: "出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"

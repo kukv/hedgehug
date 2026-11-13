@@ -38,6 +38,7 @@ export type AccountRowStatus = typeof AccountRowStatus[keyof typeof AccountRowSt
 export const AccountRowStatus = {
   ok: 'ok',
   auth_error: 'auth_error',
+  app_missing: 'app_missing',
 } as const;
 
 export interface AccountRow {
@@ -45,6 +46,11 @@ export interface AccountRow {
   login: string;
   method: AccountRowMethod;
   name: string;
+  /**
+     * GitHub App が入っていない組織(認証エラーのときは空)
+     * @nullable
+     */
+  orgs: string[] | null;
   reason: string;
   status: AccountRowStatus;
 }
@@ -659,6 +665,19 @@ export interface ProjectLinkRow {
 export interface ProjectRepo {
   /** owner/name。前後の空白は除く */
   repo: string;
+}
+
+export interface RecheckOutputBody {
+  /**
+     * 読めるようになった組織
+     * @nullable
+     */
+  cleared: string[] | null;
+  /**
+     * まだ読めない組織
+     * @nullable
+     */
+  still: string[] | null;
 }
 
 export interface RelationCandidate {
@@ -1455,6 +1474,30 @@ export const getReauthAccountUrl = (id: string,) => {
 export const reauthAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
 
   return fetcher<AccountBody>(getReauthAccountUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getRecheckAccountUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}/recheck`
+}
+
+/**
+ * @summary GitHub App 未導入の組織を読み直し、読めたものの記録を消す
+ */
+export const recheckAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<RecheckOutputBody> => {
+
+  return fetcher<RecheckOutputBody>(getRecheckAccountUrl(id),
   {
     ...options,
     method: 'POST'

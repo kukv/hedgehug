@@ -12,6 +12,7 @@ export function row(id: string, patch: Partial<AccountRow> = {}): AccountRow {
     method: "gh",
     status: "ok",
     reason: "",
+    orgs: [],
     ...patch,
   };
 }

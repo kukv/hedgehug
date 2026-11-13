@@ -29,7 +29,12 @@ export function createAccountsPort(): AccountsPort {
     list: () =>
       call(async () =>
         ((await listAccounts()).accounts ?? []).map(
-          (r): AccountRow => ({ ...toAccount(r), status: r.status, reason: r.reason }),
+          (r): AccountRow => ({
+            ...toAccount(r),
+            status: r.status,
+            reason: r.reason,
+            orgs: r.orgs ?? [],
+          }),
         ),
       ),
     add: (values) => call(async () => toAccount(await addAccount(values))),

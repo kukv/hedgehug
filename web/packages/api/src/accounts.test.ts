@@ -28,10 +28,12 @@ const work = { id: "A1", name: "work", login: "taro", method: "device" };
 describe("accounts port", () => {
   it("lists the rows with their state, and reads null as none", async () => {
     const fetch = respond(200, {
-      accounts: [{ ...work, method: "gh", status: "auth_error", reason: "x" }],
+      accounts: [
+        { ...work, method: "gh", status: "app_missing", reason: "x", orgs: ["example-org"] },
+      ],
     });
     expect(await createAccountsPort().list()).toEqual([
-      { ...work, method: "gh", status: "auth_error", reason: "x" },
+      { ...work, method: "gh", status: "app_missing", reason: "x", orgs: ["example-org"] },
     ]);
     expect(sent(fetch)[0]).toBe("/api/accounts");
     respond(200, { accounts: null });
