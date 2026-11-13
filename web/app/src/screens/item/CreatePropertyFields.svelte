@@ -25,6 +25,7 @@
       <span>{row.property.name}</span>
       <PropertyField
         {row}
+        project={s.form.projectId}
         settings={s.settings}
         disabled={false}
         statusSelect

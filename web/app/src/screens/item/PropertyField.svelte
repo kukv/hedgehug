@@ -16,7 +16,7 @@
   interface Props {
     row: ItemPropertyRow;
     itemId?: string;
-    project?: string;
+    project: string;
     settings: WorkspaceSettings;
     disabled: boolean;
     statusSelect?: boolean;
@@ -27,7 +27,7 @@
   let {
     row,
     itemId,
-    project = "",
+    project,
     settings,
     disabled,
     statusSelect = false,
