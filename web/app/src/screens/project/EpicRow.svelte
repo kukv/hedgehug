@@ -60,7 +60,13 @@
     >
   {/if}
   <ProgressBar percent={progressPercent(progress)} detail="{progress.done} / {progress.total}" />
-  <StatusButton status={epic.status} {settings} disabled={readOnly} onchange={onstatus} />
+  <StatusButton
+    status={epic.status}
+    {settings}
+    project={epic.projectId}
+    disabled={readOnly}
+    onchange={onstatus}
+  />
   {#if epic.assignee}
     <Avatar name={member?.name ?? ""} title={member?.name ?? "不明なユーザー"} />
   {/if}

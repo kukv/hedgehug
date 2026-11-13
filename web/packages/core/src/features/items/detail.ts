@@ -157,7 +157,13 @@ export function createDetail(deps: DetailDeps): Detail {
         readOnly: store.readOnly,
         settings: settings,
         people,
-        rows: propertyRows(settings, item.kind, (p) => valueOfItem(item, p), people),
+        rows: propertyRows(
+          settings,
+          item.kind,
+          (p) => valueOfItem(item, p),
+          people,
+          item.projectId,
+        ),
         plan,
       });
     } catch (e) {

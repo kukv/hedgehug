@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -27,9 +28,26 @@ func Normalize(r Rule) Rule {
 	return r
 }
 
+// Statuses は、r のきっかけとすることが指すステータス(Trigger が status のときのきっかけ、Action が status のときの値)。
+func Statuses(r Rule) []change.ID {
+	var out []change.ID
+	if r.Trigger == TriggerStatus {
+		out = append(out, r.TriggerStatus)
+	}
+	if r.Action == ActionStatus {
+		out = append(out, change.ID(r.Value))
+	}
+	return out
+}
+
 // Valid は、きっかけ・すること・値の参照が正しいか。false は ErrNotFound にする(B4-6)。logins は Store のメンバー。
-func Valid(s workspace.Settings, logins []string, r Rule) bool {
+// old は編集前のルール(作成ならゼロ値)。専用ルールのステータスは、そのプロジェクトで使うものでなければならない
+// (B5a-10)。ただし編集で変えていないものは見ない(ステータスの削除の書き換えで使わないものを指したままでも直せる)。
+func Valid(s workspace.Settings, set projectrule.Set, logins []string, old, r Rule) bool {
 	if !slices.Contains(Triggers, r.Trigger) || (r.Trigger == TriggerStatus && !hasStatus(s, r.TriggerStatus)) {
+		return false
+	}
+	if r.Scope != "" && slices.ContainsFunc(changedStatuses(old, r), func(id change.ID) bool { return !projectrule.Uses(s, set.Of(r.Scope), id) }) {
 		return false
 	}
 	switch r.Action {
@@ -39,6 +57,18 @@ func Valid(s workspace.Settings, logins []string, r Rule) bool {
 		return r.Value == Unassigned || slices.ContainsFunc(logins, func(l string) bool { return strings.EqualFold(l, r.Value) })
 	}
 	return false
+}
+
+// changedStatuses は、r のきっかけとすることのステータスのうち、old から変わったもの。
+func changedStatuses(old, r Rule) []change.ID {
+	var out []change.ID
+	if r.Trigger == TriggerStatus && (old.Trigger != TriggerStatus || old.TriggerStatus != r.TriggerStatus) {
+		out = append(out, r.TriggerStatus)
+	}
+	if r.Action == ActionStatus && (old.Action != ActionStatus || old.Value != r.Value) {
+		out = append(out, change.ID(r.Value))
+	}
+	return out
 }
 
 func hasStatus(s workspace.Settings, id change.ID) bool {

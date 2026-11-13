@@ -9,6 +9,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -26,6 +28,9 @@ func wsInfoFromLog(log []change.Record) (wsInfo, bool) {
 	s, ok := workspace.SettingsFromLog(log)
 	return wsInfo{Settings: s, Plan: planning.FromLog(log)}, ok
 }
+
+// projectOf は、プロジェクトを引く(画面の ID の注釈用)。ログがなければ false(注釈は付けない)。
+type projectOf func(project.ID) (project.Project, bool)
 
 func strNode(s string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: s}
@@ -67,12 +72,13 @@ func mapping(flow bool, kv ...*yaml.Node) *yaml.Node {
 func key(k string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k} }
 
 // workspaceToYAML は、workspace.yaml の中身(保存形式「ファイル構成」。キーの並びはこの順)。
-func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, rules []automation.Rule, plan planning.Plan) *yaml.Node {
+// project_rules は、ルールを持つプロジェクトがあるときだけ、自動化のあとに書く。
+func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, rules []automation.Rule, set projectrule.Set, projects projectOf, plan planning.Plan) *yaml.Node {
 	statusName := valueName(s.Statuses, s.InitialStatus)
 	prioName := valueName(s.Priorities, s.InitialPriority)
 	initStatus, initPrio := idNode(s.InitialStatus), idNode(s.InitialPriority)
 	initStatus.LineComment, initPrio.LineComment = comment(statusName), comment(prioName)
-	return mapping(false,
+	kv := []*yaml.Node{
 		key("id"), strNode(string(w.ID)),
 		key("name"), strNode(w.Name),
 		key("prefix"), strNode(w.Prefix),
@@ -87,10 +93,16 @@ func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, r
 		key("workflow"), workflowNode(s),
 		key("templates"), templatesNode(s.Templates),
 		key("template_defaults"), templateDefaultsNode(s),
-		key("rules"), rulesNode(s, rules),
+		key("rules"), rulesNode(s, rules, w.Prefix, projects),
+	}
+	if len(set) > 0 {
+		kv = append(kv, key("project_rules"), projectRulesNode(s, rules, set, w.Prefix, projects))
+	}
+	kv = append(kv,
 		key("sprints"), sprintsNode(plan.Sprints),
 		key("releases"), releasesNode(plan.Releases),
 	)
+	return mapping(false, kv...)
 }
 
 // sprintsNode は、スプリント(内部 ID の順、削除済みも)を 1 件 1 行で書く。確定値は完了したものだけにあり、ほかは null。

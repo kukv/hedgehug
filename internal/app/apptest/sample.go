@@ -82,6 +82,14 @@ func DeleteItems(ctx context.Context, s port.Stores, id port.StoreID, root item.
 	})
 }
 
+// DeleteWorkspace は、ワークスペースを削除済みにする(テスト用。B5b)。中のプロジェクト・アイテムには書かない。
+func DeleteWorkspace(ctx context.Context, s port.Stores, id port.StoreID, ws workspace.ID) error {
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを削除"}
+	return s.Write(ctx, id, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(ws, change.NewDeleteEntity(true))
+	})
+}
+
 // DeleteProject は、プロジェクトを削除済みにする(テスト用。A4b)。下のアイテムには書かない。
 func DeleteProject(ctx context.Context, s port.Stores, id port.StoreID, p project.ID) error {
 	op := port.Operation{Actor: change.User("taro"), Summary: "プロジェクトを削除"}

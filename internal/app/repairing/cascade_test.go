@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/repairing"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
@@ -63,5 +64,37 @@ func TestCascadeStopsWithoutProgress(t *testing.T) {
 	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
 	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "進みません") {
 		t.Errorf("Run error = %v", err)
+	}
+}
+
+// 削除済みのワークスペースの下の生きているプロジェクトへの書き込みが反映されないときも、止まらずに止めてエラーを返す。
+func TestCascadeStopsWithoutProgressUnderDeletedWorkspace(t *testing.T) {
+	e := newEnv(t)
+	if err := apptest.DeleteWorkspace(e.ctx, e.s, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "削除済みの親の下の子の修復が進みません") {
+		t.Errorf("Run error = %v", err)
+	}
+}
+
+// 削除済みのワークスペースの下に残ったプロジェクトは、ワークスペースの削除の op で削除済みになり、
+// その下のアイテムも同じ Run の中で続く(B5b-6)。すでに削除済みの HH-P2 には書かない。
+func TestCascadeUnderDeletedWorkspace(t *testing.T) {
+	e := newEnv(t)
+	if err := apptest.DeleteProject(e.ctx, e.s, store, project2); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteWorkspace(e.ctx, e.s, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	wsOp := e.workspace().Deleted.Op
+	wantOps(t, e.run(nil, nil), "HH-P1 を削除", "HH-1 を削除", "HH-2 を削除")
+	deleted := []*change.Deletion{e.project(apptest.SampleProject).Deleted, e.item(apptest.SampleEpic).Deleted, e.item(apptest.SampleTask).Deleted}
+	for i, d := range deleted {
+		if d == nil || d.Op != wsOp || d.Root {
+			t.Errorf("deleted[%d] = %+v, want op %s root false", i, d, wsOp)
+		}
 	}
 }

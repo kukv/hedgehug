@@ -41,8 +41,6 @@ const apiItem = {
   blocked: false,
   createdAt: "2026-11-13T09:00:00.000Z",
   createdBy: "taro",
-  sprint: "SP1",
-  release: "",
 };
 
 describe("items port", () => {
@@ -65,22 +63,6 @@ describe("items port", () => {
       values: {},
     });
     expect(it).toMatchObject({ id: "I1", storeId: "S1", parentId: null, watchers: [] });
-    expect(it).toMatchObject({ sprint: "SP1", release: "" });
-  });
-
-  it("sends the sprint when creating, and omits it when none", async () => {
-    const fetch = respond(200, apiItem);
-    const input = {
-      projectId: "P1",
-      parentId: null,
-      kind: "Epic" as const,
-      title: "認証",
-      values: {},
-    };
-    await createItemsPort().create("S1", { ...input, sprint: "SP1" });
-    expect(JSON.parse(String(call(fetch)[1].body))).toMatchObject({ sprint: "SP1" });
-    await createItemsPort().create("S1", { ...input, sprint: "" });
-    expect(JSON.parse(String(call(fetch, 1)[1].body))).not.toHaveProperty("sprint");
   });
 
   it("sends the template id when creating, and omits it when none", async () => {
@@ -194,6 +176,28 @@ describe("workspaces port", () => {
       properties: {},
     });
     expect(call(fetch)[0]).toBe("/api/stores/S1/workspaces/W1/usage");
+  });
+
+  it("reads the delete preview and deletes with DELETE, mapping 404 to NotFound", async () => {
+    const preview = respond(200, { projects: 1, items: 2, retentionDays: 30 });
+    await expect(createWorkspacesPort().workspaceDeletePreview("S1", "W1")).resolves.toEqual({
+      projects: 1,
+      items: 2,
+      retentionDays: 30,
+    });
+    expect(call(preview)[0]).toBe("/api/stores/S1/workspaces/W1/delete-preview");
+    const del = respond(204, undefined);
+    await createWorkspacesPort().deleteWorkspace("S1", "W1");
+    expect(call(del)[0]).toBe("/api/stores/S1/workspaces/W1");
+    expect(call(del)[1].method).toBe("DELETE");
+    respond(404, { title: "Not Found", status: 404 });
+    await expect(createWorkspacesPort().deleteWorkspace("S1", "W1")).rejects.toBeInstanceOf(
+      NotFound,
+    );
+    respond(404, { title: "Not Found", status: 404 });
+    await expect(createWorkspacesPort().workspaceDeletePreview("S1", "W1")).rejects.toBeInstanceOf(
+      NotFound,
+    );
   });
 
   it("creates a workspace and returns the model", async () => {

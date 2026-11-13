@@ -56,7 +56,7 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 	var fs []fired
 	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
 		var err error
-		fs, added, err = saveLink(tx, id, plan)
+		fs, added, err = saveLink(ctx, tx, id, plan)
 		return err
 	})
 	if err != nil {
@@ -75,7 +75,14 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 
 // saveLink は、保存 tx の中で確かめ直してリンクを書き、同じ保存の中できっかけを動かす。
 // added は、プロジェクトのリポジトリに足したリポジトリ(足さなければ空)。
-func saveLink(tx port.Tx, id item.ID, plan addPlan) (fs []fired, added string, err error) {
+// 別の画面で削除された(root: true)アイテムは、最初に削除を取り消す(決定 S10)。
+func saveLink(ctx context.Context, tx port.Tx, id item.ID, plan addPlan) (fs []fired, added string, err error) {
+	if _, err := port.EditableItem(tx, id); err != nil {
+		return nil, "", err
+	}
+	if err := port.ReviveItem(ctx, tx, id); err != nil {
+		return nil, "", err
+	}
 	cur, err := readItem(tx, id)
 	if err != nil {
 		return nil, "", err
@@ -106,7 +113,7 @@ func (l Links) plan(ctx context.Context, store port.StoreID, id item.ID, in AddL
 	if err != nil || n <= 0 {
 		return addPlan{}, refusal.New(itemlink.MsgNumber)
 	}
-	v, err := l.view(ctx, store, id)
+	v, err := l.editableView(ctx, store, id)
 	if err != nil {
 		return addPlan{}, err
 	}

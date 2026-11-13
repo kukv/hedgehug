@@ -71,7 +71,7 @@ export const notes = createNotesPort();
 export const { itemHistory, projectHistory, lists, descriptionSaves } = createNoteHistory(notes);
 export const listMembers = (storeId: string) => catalogPort.listMembers(storeId);
 export const catalog = createCatalog(catalogPort);
-const workspacesPort = createWorkspacesPort();
+export const workspacesPort = createWorkspacesPort();
 // ツリーでステータスを変えたら、開いている詳細パネルも読み直す。detail は後で作るので、呼ぶときに引く。
 export const projectScreen = createProjectScreen(
   catalog,

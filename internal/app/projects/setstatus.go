@@ -14,7 +14,7 @@ func (s Service) SetStatus(ctx context.Context, store port.StoreID, id project.I
 	if !project.ValidStatus(status) {
 		return project.Project{}, fmt.Errorf("unknown project status %q", status)
 	}
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}

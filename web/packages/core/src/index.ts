@@ -39,6 +39,7 @@ export {
   type ItemValues,
   type People,
   type PropertyRow as ItemPropertyRow,
+  projectStatusOptions,
   propertyRows as itemPropertyRows,
   statusOptions,
   type ValueOption,
@@ -97,6 +98,7 @@ export {
   syncCard,
 } from "./features/sync/card";
 export { createReflection, type Reflection, type ReflectionDeps } from "./features/sync/reflection";
+export { restoredToast } from "./features/sync/restored";
 export {
   createTabSignals,
   resendMs,
@@ -129,6 +131,7 @@ export type {
   Category,
   ChildKind,
   NewProperty,
+  ProjectRules,
   PropertyType,
   SaveAsTemplateInput,
   TemplateChild,
@@ -136,6 +139,7 @@ export type {
   TemplateStep,
   ValueList,
   Workspace,
+  WorkspaceDeletePreview,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspaceSettings,
@@ -152,7 +156,7 @@ export * from "./planningIndex";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
-export type { ProjectsPort } from "./port/projects";
+export type { ProjectsPort, RulesSection } from "./port/projects";
 export type { SyncPort, Watching } from "./port/sync";
 export type { SystemPort } from "./port/system";
 export type { Direction, WorkspacesPort } from "./port/workspaces";

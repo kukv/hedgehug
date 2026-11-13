@@ -46,7 +46,13 @@ export function createContextLoader(
 // rowsFor は、いまの種類・値でのプロパティの行。
 export function rowsFor(
   ctx: WorkspaceContext,
-  form: { kind: Kind; values: Values },
+  form: { kind: Kind; values: Values; projectId: string },
 ): PropertyRow[] {
-  return propertyRows(ctx.settings, form.kind, (p) => form.values[p.id] ?? "", ctx.people);
+  return propertyRows(
+    ctx.settings,
+    form.kind,
+    (p) => form.values[p.id] ?? "",
+    ctx.people,
+    form.projectId,
+  );
 }

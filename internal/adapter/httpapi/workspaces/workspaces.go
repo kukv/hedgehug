@@ -69,6 +69,7 @@ func Register(api huma.API, svc appworkspaces.Service) {
 	registerProperties(api, svc)
 	registerValues(api, svc)
 	registerUsage(api, svc)
+	registerDelete(api, svc)
 	registerTemplates(api, svc)
 }
 
@@ -99,8 +100,10 @@ func registerRead(api huma.API, svc appworkspaces.Service) {
 		if old == nil {
 			old = []string{}
 		}
+		settings := toSettings(got.Settings)
+		settings.ProjectRules = toProjectRules(got.ProjectRules)
 		return &getOutput{Body: WorkspaceDetail{
-			WorkspaceSummary: toSummary(got.Workspace), OldPrefixes: old, Settings: toSettings(got.Settings),
+			WorkspaceSummary: toSummary(got.Workspace), OldPrefixes: old, Settings: settings,
 		}}, nil
 	})
 }

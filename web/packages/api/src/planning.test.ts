@@ -1,6 +1,7 @@
 import { NotFound, Refused } from "@hedgehug/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "./fetcher";
+import { createItemsPort } from "./items";
 import { createPlanningPort } from "./planning";
 
 afterEach(() => {
@@ -150,5 +151,46 @@ describe("planning port: writes", () => {
     );
     respond(404, { detail: "not found" });
     await expect(createPlanningPort().overview("S1", "W1")).rejects.toBeInstanceOf(NotFound);
+  });
+});
+
+// アイテムの作成で送るスプリントと、読むスプリント・リリース(F1-5)。
+describe("items port: sprint and release", () => {
+  const apiItem = {
+    id: "I1",
+    workspace: "W1",
+    project: "P1",
+    parent: null,
+    number: 13,
+    kind: "Epic",
+    rank: "V",
+    title: "認証",
+    watchers: null,
+    blocked: false,
+    createdAt: "2026-11-13T09:00:00.000Z",
+    createdBy: "taro",
+    sprint: "SP1",
+    release: "",
+  };
+  const input = {
+    projectId: "P1",
+    parentId: null,
+    kind: "Epic" as const,
+    title: "認証",
+    values: {},
+  };
+
+  it("reads the sprint and the release of an item", async () => {
+    respond(200, apiItem);
+    const it = await createItemsPort().create("S1", input);
+    expect(it).toMatchObject({ sprint: "SP1", release: "" });
+  });
+
+  it("sends the sprint when creating, and omits it when none", async () => {
+    const fetch = respond(200, apiItem);
+    await createItemsPort().create("S1", { ...input, sprint: "SP1" });
+    expect(call(fetch).body).toMatchObject({ sprint: "SP1" });
+    await createItemsPort().create("S1", { ...input, sprint: "" });
+    expect(call(fetch, 1).body).not.toHaveProperty("sprint");
   });
 });

@@ -19,6 +19,14 @@ export {
 export { createTreeWrites } from "./features/items/treeWrites";
 export { createProjectDelete, leaveDeletedProject } from "./features/projects/delete";
 export { projectTabOf } from "./features/router/route";
+export {
+  createWorkspaceDelete,
+  type DeleteWorkspaceTarget,
+  leaveDeletedWorkspace,
+  type WorkspaceDelete,
+  type WorkspaceDeleteState,
+} from "./features/workspaces/delete";
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
-export type { MoveCandidate } from "./model/itemAction";
+export { deleteMenuItem } from "./features/workspaces/sidebarMenu";
+export type { MoveCandidate, MovePreview, MovePreviewStatus } from "./model/itemAction";
 export type { ItemActionsPort } from "./port/itemActions";

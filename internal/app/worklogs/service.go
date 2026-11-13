@@ -40,15 +40,32 @@ func display(r port.Reader, id item.ID) (string, error) {
 	return it.DisplayID(w.Prefix), nil
 }
 
-// displayOf は、アクティビティの 1 行に書くアイテムの ID。保存の前に読む。
+// displayOf は、アクティビティの 1 行に書くアイテムの ID。保存の前に読む(書き込みだけが使う)。
+// 別の画面で削除された(root: true)アイテムも読める。
 func (s Service) displayOf(ctx context.Context, store port.StoreID, id item.ID) (string, error) {
 	var shown string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		var err error
-		shown, err = display(r, id)
-		return err
+		it, err := port.EditableItem(r, id)
+		if err != nil {
+			return err
+		}
+		w, err := r.Workspaces().Get(it.Place.Workspace)
+		if err != nil {
+			return err
+		}
+		shown = it.DisplayID(w.Prefix)
+		return nil
 	})
 	return shown, err
+}
+
+// revive は、保存の中で最初に呼ぶ。削除済み(root: true)のアイテムなら削除を取り消す。
+// 保存できない(ない・root: false・祖先が削除済み)なら port.ErrNotFound。
+func revive(ctx context.Context, tx port.Tx, id item.ID) error {
+	if _, err := port.EditableItem(tx, id); err != nil {
+		return err
+	}
+	return port.ReviveItem(ctx, tx, id)
 }
 
 // names は、ログイン名から表示名を引く関数(大文字と小文字を区別しない。メンバーにいなければ「不明なユーザー」)。

@@ -21,7 +21,7 @@ import (
 // anchor が、id と同じ親の削除されていない別の兄弟でなければ port.ErrNotFound。すでにその位置なら何も保存しない。
 // 前後の兄弟の順位が同じで間の値が作れないとき(同期で重なったとき)も何も保存しない。重なりは直さない。
 func (s Service) Reorder(ctx context.Context, store port.StoreID, id, anchor item.ID, after bool) error {
-	_, display, err := s.withID(ctx, store, id)
+	_, display, err := s.editableID(ctx, store, id)
 	if err != nil {
 		return err
 	}
@@ -30,30 +30,40 @@ func (s Service) Reorder(ctx context.Context, store port.StoreID, id, anchor ite
 		return err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s の順位を変更", display)}
-	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := port.LiveItem(tx, id)
-		if err != nil {
-			return err
-		}
-		if id == anchor {
-			return port.ErrNotFound
-		}
-		all, err := port.LiveItems(tx, it.Place.Project)
-		if err != nil {
-			return err
-		}
-		sib := siblings(all, it.Place.Parent)
-		item.SortSiblings(sib)
-		i, j := indexOf(sib, id), indexOf(sib, anchor)
-		if i < 0 || j < 0 {
-			return port.ErrNotFound
-		}
-		lo, hi, ok := gap(sib, i, j, after)
-		if !ok {
-			return nil // 行のない Write は何も残さない
-		}
-		return tx.WriteItems().Append(id, change.NewSet("rank", it.Rank, rank.Between(lo, hi)))
-	})
+	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error { return reorder(ctx, tx, id, anchor, after) })
+}
+
+// reorder は、tx の中で、削除済み(root: true)なら削除を取り消してから、順位を書く。
+func reorder(ctx context.Context, tx port.Tx, id, anchor item.ID, after bool) error {
+	was, err := port.EditableItem(tx, id)
+	if err != nil {
+		return err
+	}
+	if err := port.ReviveItem(ctx, tx, id); err != nil {
+		return err
+	}
+	it, err := port.LiveItem(tx, id)
+	if err != nil {
+		return err
+	}
+	if id == anchor {
+		return port.ErrNotFound
+	}
+	all, err := port.LiveItems(tx, it.Place.Project)
+	if err != nil {
+		return err
+	}
+	sib := siblings(all, it.Place.Parent)
+	item.SortSiblings(sib)
+	i, j := indexOf(sib, id), indexOf(sib, anchor)
+	if i < 0 || j < 0 {
+		return port.ErrNotFound
+	}
+	lo, hi, ok := gap(sib, i, j, after)
+	if !ok {
+		return port.Unchanged(was.Deleted) // 行のない Write は何も残さない
+	}
+	return tx.WriteItems().Append(id, change.NewSet("rank", it.Rank, rank.Between(lo, hi)))
 }
 
 // gap は、sib の i 番目を j 番目(基準)の直前(after なら直後)に置くときの、間に入る値の下と上を返す。

@@ -31,7 +31,7 @@ func (s Service) Add(ctx context.Context, store port.StoreID, id item.ID, hours,
 	date := s.Clock.Now().Format("2006-01-02")
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s に %s 時間を記録", shown, worklog.Format(h))}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		if _, err := display(tx, id); err != nil {
+		if err := revive(ctx, tx, id); err != nil {
 			return err
 		}
 		return tx.WriteItems().Append(id, change.NewWorklog(w, nil, worklog.Value(h, strings.TrimSpace(memo), date)))

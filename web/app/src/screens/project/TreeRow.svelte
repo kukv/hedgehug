@@ -96,6 +96,7 @@
   <StatusButton
     status={it.status}
     {settings}
+    project={it.projectId}
     disabled={readOnly}
     onchange={(id) => onstatus(it, id)}
   />

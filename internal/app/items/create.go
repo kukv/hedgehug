@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -158,7 +159,7 @@ func sprintOf(in CreateInput, p planning.Plan) (change.ID, error) {
 	return sp.ID, nil
 }
 
-// checkValues は、プロジェクトのワークスペースの設定で作成の値を検査して読む(親の検査のあと)。
+// checkValues は、プロジェクトのワークスペースの設定で作成の値を検査して読む。ステータスはプロジェクトが使うものに限る(B5a-7)(親の検査のあと)。
 func (s Service) checkValues(tx port.Tx, p project.Project, in map[change.ID]json.RawMessage) (map[change.ID]json.RawMessage, workspace.Settings, error) {
 	st, err := tx.Workspaces().Settings(p.Place.Workspace)
 	if err != nil {
@@ -168,7 +169,21 @@ func (s Service) checkValues(tx port.Tx, p project.Project, in map[change.ID]jso
 	if errors.Is(err, item.ErrNoSuchValue) {
 		return nil, st, port.ErrNotFound
 	}
-	return vals, st, err
+	if err != nil {
+		return vals, st, err
+	}
+	if raw, ok := vals["status"]; ok {
+		log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: p.Place.Workspace})
+		if err != nil {
+			return nil, st, err
+		}
+		var status change.ID
+		_ = json.Unmarshal(raw, &status)
+		if status != "" {
+			return vals, st, projectrule.CheckUse(st, projectrule.FromLog(log).Of(p.ID), status)
+		}
+	}
+	return vals, st, nil
 }
 
 // applyValues は、読んだ値をアイテムに入れ、ステータスと優先度がなければ初期値にする(決定 10)。

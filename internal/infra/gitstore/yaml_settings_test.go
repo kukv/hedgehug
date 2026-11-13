@@ -200,7 +200,7 @@ func TestItemYAMLHasPlainValues(t *testing.T) {
 	}
 	meta := change.Meta{Op: "01OP", At: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), Actor: change.User("taro")}
 	log := change.Stamp(nil, []change.Draft{item.Create(it)}, meta, yIDs())
-	out, err := renderYAML(change.KindItem, log, nil)
+	out, err := renderYAML(change.KindItem, log, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestWorkspaceYAMLSprints(t *testing.T) {
 	at := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
 	log := change.Stamp(nil, ds, change.Meta{Op: "01OP1", At: at, Actor: change.User("taro")}, yIDs())
 	log = append(log, change.Stamp(log, []change.Draft{planning.DeleteRelease(yRelease)}, change.Meta{Op: "01OP2", At: at, Actor: change.User("taro")}, yIDs())...)
-	out, err := renderYAML(change.KindWorkspace, log, nil)
+	out, err := renderYAML(change.KindWorkspace, log, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

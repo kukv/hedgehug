@@ -4,7 +4,7 @@ import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { fakeWorkspacesPort } from "./fixtures.test-util";
-import { canMoveWorkspace, createWorkspaceMover } from "./sidebarMenu";
+import { canMoveWorkspace, createWorkspaceMover, deleteMenuItem } from "./sidebarMenu";
 
 async function setup() {
   const catalog = createCatalog({
@@ -47,5 +47,21 @@ describe("workspace menu", () => {
     expect(get(toasts.list).map((t) => [t.text, t.error])).toEqual([
       ["並びを変えられませんでした", true],
     ]);
+  });
+});
+
+describe("workspace menu delete item", () => {
+  it("is 削除… and disabled with a hint in a read-only store", async () => {
+    const { catalog } = await setup();
+    const work = catalog.store("S1");
+    const ro = catalog.store("S2");
+    if (!work || !ro) throw new Error("fixture");
+    expect(deleteMenuItem(work)).toEqual({ id: "delete", label: "削除…", disabled: false });
+    expect(deleteMenuItem(ro)).toEqual({
+      id: "delete",
+      label: "削除…",
+      disabled: true,
+      hint: "閲覧のみの Store です",
+    });
   });
 });

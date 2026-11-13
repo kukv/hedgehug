@@ -10,6 +10,7 @@
   } from "@hedgehug/core";
   import { Button, Input } from "@hedgehug/ui";
   import { catalog, navigation, workspaceSettings } from "../../wire";
+  import { workspaceDelete } from "../../wireActions";
   import PrefixDialog from "./PrefixDialog.svelte";
 
   // 「一般」の名前と接頭辞(03「名前」「接頭辞」)。入力の途中の値だけを持ち、操作は core の run に渡す。
@@ -32,6 +33,14 @@
   const examples = $derived(prefixExamples(s.detail.prefix, s.usage.firstNumbers));
   const title = $derived(s.readOnly ? readOnlyNote : undefined);
 
+  function askDelete() {
+    void workspaceDelete.open({
+      storeId: s.storeId,
+      id: s.detail.id,
+      name: s.detail.name,
+      prefix: s.detail.prefix,
+    });
+  }
   function commitName() {
     if (name === s.detail.name) return;
     const value = name;
@@ -103,6 +112,11 @@
     </p>
     <p class="hint">{prefixHelp}</p>
   </div>
+  <div class="field danger-zone">
+    <Button variant="danger" disabled={s.readOnly} {title} onclick={askDelete}>
+      ワークスペースを削除…
+    </Button>
+  </div>
 </div>
 
 {#if confirming !== null}
@@ -128,6 +142,9 @@
   .field > label {
     font-size: 12.5px;
     color: var(--muted);
+  }
+  .danger-zone {
+    align-items: flex-start;
   }
   .row {
     display: flex;

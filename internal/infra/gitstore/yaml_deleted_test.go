@@ -26,11 +26,11 @@ func TestYAMLWritesTheDeletionMark(t *testing.T) {
 	live := change.Stamp(nil, []change.Draft{project.Create(p)}, meta("o1", 9), yIDs())
 	deleted := slices.Concat(live, change.Stamp(live, []change.Draft{change.NewDeleteEntity(true)}, meta("o2", 10), yIDs()))
 
-	out, err := renderYAML(change.KindProject, live, nil)
+	out, err := renderYAML(change.KindProject, live, nil, nil)
 	if err != nil || !strings.Contains(string(out), "\ndeleted: null\n") {
 		t.Errorf("a live project.yaml =\n%s\n%v", out, err)
 	}
-	out, err = renderYAML(change.KindProject, deleted, nil)
+	out, err = renderYAML(change.KindProject, deleted, nil, nil)
 	if err != nil || !strings.Contains(string(out), "\ndeleted: {op: o2, at: \"2026-11-13T10:00:00.000+09:00\", root: true}\n") {
 		t.Errorf("a deleted project.yaml =\n%s\n%v", out, err)
 	}
@@ -38,7 +38,7 @@ func TestYAMLWritesTheDeletionMark(t *testing.T) {
 	it := item.Item{ID: yItem, Place: item.Place{Workspace: yWS, Project: yProj, Number: 1}, Kind: item.Epic, Rank: "V", Title: "認証"}
 	ilog := change.Stamp(nil, []change.Draft{item.Create(it)}, meta("o1", 9), yIDs())
 	ilog = slices.Concat(ilog, change.Stamp(ilog, []change.Draft{change.NewDeleteEntity(false)}, meta("o2", 10), yIDs()))
-	out, err = renderYAML(change.KindItem, ilog, nil)
+	out, err = renderYAML(change.KindItem, ilog, nil, nil)
 	if err != nil || !strings.Contains(string(out), "\ndeleted: {op: o2, at: \"2026-11-13T10:00:00.000+09:00\", root: false}\n") {
 		t.Errorf("a deleted item.yaml =\n%s\n%v", out, err)
 	}

@@ -9,6 +9,7 @@ import {
   getProjectDeletePreview,
   listMoveCandidates,
   moveItem,
+  previewItemMove,
 } from "./generated";
 
 // アイテムとプロジェクトの操作(A4b)。変更の応答は使わないので、どれも値を返さない(duplicate だけ新しい ID)。
@@ -44,9 +45,21 @@ export function createItemActionsPort(): ItemActionsPort {
           projectTitle: c.projectTitle,
         })),
       ),
-    move: (storeId, itemId, to) =>
+    movePreview: (storeId, itemId, to) =>
       call(async () => {
-        await moveItem(storeId, itemId, to);
+        const p = await previewItemMove(storeId, itemId, to);
+        return {
+          below: p.below,
+          statuses: (p.statuses ?? []).map((s) => ({
+            status: s.status,
+            count: s.count,
+            default: s.default,
+          })),
+        };
+      }),
+    move: (storeId, itemId, to, statuses) =>
+      call(async () => {
+        await moveItem(storeId, itemId, statuses ? { ...to, statuses } : to);
       }),
     changeKind: (storeId, itemId, kind) =>
       call(async () => {

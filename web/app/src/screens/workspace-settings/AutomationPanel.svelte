@@ -1,15 +1,19 @@
 <script lang="ts">
   import {
+    type AutomationRuleInput,
     automationHelp,
     deleteRuleBody,
     deleteRuleTitle,
     readOnlyNote,
     recentEmpty,
     recentRows,
+    ruleCreated,
     ruleDeleted,
     ruleRows,
+    ruleSaveRefusal,
     rulesEmpty,
     type SettingsState,
+    scopeStatuses,
     switchOnRefusal,
   } from "@hedgehug/core";
   import { Button, ConfirmDialog, IconButton, Switch } from "@hedgehug/ui";
@@ -43,6 +47,21 @@
     void workspaceSettings.run((p, st, w) => p.setRuleEnabled(st, w, id, on));
   }
 
+  // ダイアログの保存。断られたら、その文言を返してダイアログの中に出す。
+  async function save(input: AutomationRuleInput): Promise<string | null> {
+    const id = editingRule?.id;
+    let refusal: string | null = null;
+    const ok = await workspaceSettings
+      .run(
+        (p, st, w) => (id ? p.updateRule(st, w, id, input) : p.createRule(st, w, input)),
+        id ? undefined : ruleCreated,
+        (message) => (refusal = message),
+      )
+      .catch(ruleSaveRefusal);
+    if (typeof ok === "string") return ok;
+    return ok ? null : (refusal ?? "");
+  }
+
   function remove() {
     const id = deleting;
     deleting = null;
@@ -65,6 +84,9 @@
             onchange={(on) => toggle(row.id, on)}
           />
           <span class="name">{row.name}</span>
+          {#if row.scope}
+            <span class="summary">{row.scope}</span>
+          {/if}
           <span class="summary">{row.summary}</span>
           <span class="grow"></span>
           <Button onclick={() => (editing = row.id)}>編集</Button>
@@ -101,9 +123,13 @@
 
 {#if editing !== null && automation}
   <RuleDialog
-    state={s}
+    settings={s.detail.settings}
+    members={s.members}
+    readOnly={s.readOnly}
     rules={automation.rules}
     rule={editingRule}
+    statuses={scopeStatuses(s.detail.settings, editingRule?.scope)}
+    onsave={save}
     onclose={() => (editing = null)}
   />
 {/if}

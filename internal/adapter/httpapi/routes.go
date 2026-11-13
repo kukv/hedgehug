@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/planning"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/projectrules"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
@@ -28,6 +29,7 @@ import (
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
 	appplanning "github.com/kukv/hedgehug/internal/app/planning"
 	"github.com/kukv/hedgehug/internal/app/port"
+	appprojectrules "github.com/kukv/hedgehug/internal/app/projectrules"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
@@ -99,6 +101,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		scan = ghapi.ScanLater(deps.Links)
 	}
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}, scan)
+	projectrules.Register(api, appprojectrules.Service{Stores: deps.Stores, Identity: deps.Identity})
 	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
 	items.Register(api, itemsSvc)
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})

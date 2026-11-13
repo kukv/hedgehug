@@ -55,7 +55,22 @@ func readItem(r port.Reader, id item.ID) (itemView, error) {
 	if err != nil {
 		return itemView{}, err
 	}
-	log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: id})
+	return viewOf(r, it)
+}
+
+// readEditableItem は、readItem と同じ値を、利用者が選んで削除した(root: true)アイテムでも読む。
+// 親と一緒に削除された・祖先かプロジェクトが削除済みなら port.ErrNotFound(決定 S9)。
+func readEditableItem(r port.Reader, id item.ID) (itemView, error) {
+	it, err := port.EditableItem(r, id)
+	if err != nil {
+		return itemView{}, err
+	}
+	return viewOf(r, it)
+}
+
+// viewOf は、it のリンクと表示 ID、プロジェクトを読む。プロジェクトが削除済みなら port.ErrNotFound。
+func viewOf(r port.Reader, it item.Item) (itemView, error) {
+	log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
 	if err != nil {
 		return itemView{}, err
 	}
@@ -71,10 +86,20 @@ func readItem(r port.Reader, id item.ID) (itemView, error) {
 }
 
 func (l Links) view(ctx context.Context, store port.StoreID, id item.ID) (itemView, error) {
+	return l.viewWith(ctx, store, id, readItem)
+}
+
+// editableView は、view と同じで、別の画面で削除された(root: true)アイテムも読む。
+// 追加と解除が、保存の中で削除を取り消すために使う。
+func (l Links) editableView(ctx context.Context, store port.StoreID, id item.ID) (itemView, error) {
+	return l.viewWith(ctx, store, id, readEditableItem)
+}
+
+func (l Links) viewWith(ctx context.Context, store port.StoreID, id item.ID, read func(port.Reader, item.ID) (itemView, error)) (itemView, error) {
 	var v itemView
 	err := l.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		v, err = readItem(r, id)
+		v, err = read(r, id)
 		return err
 	})
 	return v, err

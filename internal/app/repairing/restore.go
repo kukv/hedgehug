@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -82,15 +83,24 @@ func undo(w port.RepairWriter, s snapshot, f found) error {
 	})
 }
 
-// summary は、取り消しのアクティビティの文(計画の「アクティビティの文」)。名前は、改行と続いた空白を
-// 1 つの空白にする(保存の Summary は 1 行だけ書ける。名前は合わせたログから読むので、ここでそろえる)。
+// summary は、取り消しのアクティビティの文(計画の「アクティビティの文」。ワークスペースは決定 B5b-8)。
+// 名前は、改行と続いた空白を 1 つの空白にする(保存の Summary は 1 行だけ書ける。名前は合わせたログから
+// 読むので、ここでそろえる)。
 func summary(s snapshot, f found) string {
 	e := s.entities[f.at]
-	if f.F == change.DeletedField {
+	switch {
+	case f.F == change.DeletedField && e.ref.Kind == change.KindWorkspace:
+		w, _ := workspace.FromLog(e.log)
+		return "ワークスペース「" + oneLine(w.Name) + "」の削除を取り消し"
+	case f.F == change.DeletedField:
 		return e.display + " の削除を取り消し"
 	}
-	name := strings.Join(strings.Fields(workspace.NameOfDeleted(e.log, f.F)), " ")
-	return "「" + name + "」の削除を取り消し"
+	return "「" + oneLine(workspace.NameOfDeleted(e.log, f.F)) + "」の削除を取り消し"
+}
+
+// oneLine は、改行と続いた空白を 1 つの空白にする。
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // incidentals は、ほかのものへの操作で一緒に書いた行を見分ける材料(決定 C3a-9)。
@@ -128,13 +138,18 @@ func mark(m map[change.ID]map[item.ID]bool, op change.ID, id item.ID) {
 // of は、ref のログの行が、ほかのものへの操作で一緒に書いた行かを答える関数。
 // (a) 値・プロパティの削除でほかのエンティティに書いた置き換え(アイテム・プロジェクトのログの行で、同じ op で
 // ワークスペースのログに delete の行がある)。ワークスペースのログの行はこの見方では数えない(テンプレートの
-// 保存は、名前の変更と子の削除を 1 回で書く)。ワークスペースのログでは、削除の f の下の行かだけで重なりを決める。
+// 保存は、名前の変更と子の削除を 1 回で書く)。ワークスペースのログでは、(c) を除き、削除の f の下の行かだけで重なりを決める。
 // (b) 親の移動で一緒に運ばれた下のものの場所。アイテムの移動は、動かしたアイテムに place と rank を、
 // 一緒に運ぶ下のものに place だけを書く。そこで、同じ op がほかのアイテムにも set place を書き、
 // このアイテムには set rank を書いていない set place の行を、一緒に書いた行とする。
+// (c) ワークスペースのログの採番の行。プロジェクトやアイテムの作成で一緒に書く行で、子の追加は修復 (2) で
+// 削除済みに入れるので、ワークスペースの削除を取り消さない(決定 B5b-7)。
 func (in incidentals) of(ref change.Ref) func(change.Record) bool {
 	return func(c change.Record) bool {
 		if ref.Kind != change.KindWorkspace && in.deleteOps[c.Op] {
+			return true
+		}
+		if ref.Kind == change.KindWorkspace && c.T == numbering.Type {
 			return true
 		}
 		if ref.Kind != change.KindItem || c.T != change.Set || c.F != placeField {

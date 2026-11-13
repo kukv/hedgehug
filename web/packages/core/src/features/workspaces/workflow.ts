@@ -1,4 +1,5 @@
 import type { Category, WorkspaceSettings } from "../../model/workspace";
+import { allowedIn, projectTargets, rulesOf, usesIn, workspaceAllowed } from "./projectRules";
 
 // ワークフローのタブ(03「遷移の制約」)。
 
@@ -21,15 +22,9 @@ export interface WorkflowRow {
   note: "どこへでも" | "制限あり";
 }
 
-// allowed は、from から変えられる To(ステータスの並び。いまあるものだけ)。空なら制限なし。
-function allowed(settings: WorkspaceSettings, from: string): string[] {
-  const set = settings.workflow[from] ?? [];
-  return settings.statuses.map((v) => v.id).filter((id) => id !== from && set.includes(id));
-}
-
 export function workflowRows(settings: WorkspaceSettings): WorkflowRow[] {
   return settings.statuses.map((v) => {
-    const ok = allowed(settings, v.id);
+    const ok = workspaceAllowed(settings, v.id);
     return {
       from: v.id,
       name: v.name,
@@ -46,16 +41,74 @@ export function workflowRows(settings: WorkspaceSettings): WorkflowRow[] {
   });
 }
 
-// Go の CheckTransition と同じ判定と文言。通るなら null。
+export const sameAsWorkspace = "ワークスペースと同じ";
+const forbidden = "ワークスペースの制約で変更できません";
+
+export interface ProjectWorkflowCell extends WorkflowCell {
+  // ワークスペースの制約が許さないセルは、チェックなしで無効にし、理由を添える
+  disabled?: boolean;
+  reason?: string;
+}
+
+export interface ProjectWorkflowRow extends Omit<WorkflowRow, "cells" | "note"> {
+  cells: ProjectWorkflowCell[];
+  note: typeof sameAsWorkspace | "制限あり";
+  // 両方が許す To がないときの添え書き
+  blocked?: string;
+}
+
+// projectWorkflowRows は、プロジェクトの「ワークフローの制約」の表(03「プロジェクトの遷移の制約」)。
+// 使うステータスだけを並べ、チェックはプロジェクトのもの。
+export function projectWorkflowRows(
+  settings: WorkspaceSettings,
+  projectId: string,
+): ProjectWorkflowRow[] {
+  const r = rulesOf(settings, projectId);
+  const used = settings.statuses.filter((v) => usesIn(settings, r, v.id));
+  return used.map((v) => {
+    const ws = workspaceAllowed(settings, v.id);
+    const checks = projectTargets(settings, r, v.id);
+    const { to, restricted } = allowedIn(settings, r, v.id);
+    return {
+      from: v.id,
+      name: v.name,
+      color: v.color,
+      category: v.category ?? "todo",
+      cells: used.map((t): ProjectWorkflowCell => {
+        const blocked = ws.length > 0 && t.id !== v.id && !ws.includes(t.id);
+        return {
+          to: t.id,
+          name: t.name,
+          self: t.id === v.id,
+          checked: checks.includes(t.id),
+          ...(blocked ? { disabled: true, reason: forbidden } : {}),
+        };
+      }),
+      note: checks.length > 0 ? "制限あり" : sameAsWorkspace,
+      ...(restricted && to.length === 0 ? { blocked: "変更できる先がありません" } : {}),
+    };
+  });
+}
+
+// Go の CheckTransition と同じ判定と文言。通るなら null。project があれば、そのプロジェクトのルールも
+// 重ねる(B5a-6)。
 export function transitionRefusal(
   settings: WorkspaceSettings,
   from: string,
   to: string,
+  project?: string,
 ): string | null {
   // いまのステータスが一覧にない(削除された値のまま)ときは検査しない(02「ステータスの変更」、A3b-2)。
   if (from === "" || from === to || !settings.statuses.some((v) => v.id === from)) return null;
-  const ok = allowed(settings, from);
-  if (ok.length === 0 || ok.includes(to)) return null;
+  const rules = project === undefined ? undefined : rulesOf(settings, project);
+  const { to: ok, restricted } = rules
+    ? allowedIn(settings, rules, from)
+    : {
+        to: workspaceAllowed(settings, from),
+        restricted: workspaceAllowed(settings, from).length > 0,
+      };
+  if (!restricted || ok.includes(to)) return null;
   const name = (id: string) => settings.statuses.find((v) => v.id === id)?.name ?? "";
-  return `ワークフローの制約: ${name(from)} から ${name(to)} には変更できません(${ok.map(name).join("・")} のみ)`;
+  const tail = ok.length > 0 ? `${ok.map(name).join("・")} のみ` : "変更できる先がありません";
+  return `ワークフローの制約: ${name(from)} から ${name(to)} には変更できません(${tail})`;
 }

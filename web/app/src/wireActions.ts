@@ -8,7 +8,9 @@ import {
   createItemMove,
   createItemRefresh,
   createProjectDelete,
+  createWorkspaceDelete,
   leaveDeletedProject,
+  leaveDeletedWorkspace,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
 import {
@@ -20,6 +22,7 @@ import {
   projectScreen,
   relations,
   toasts,
+  workspacesPort,
 } from "./wire";
 
 // アイテム・プロジェクトの操作(A4b)の組み立て。wire.ts が 300 行の上限なので、A4b の分はここに足す。
@@ -42,6 +45,7 @@ export const itemDelete = createItemDelete({
 // 「移動…」の候補のメニュー(02「同じワークスペースの中での移動」)。開くのは itemMove.open(item, x, y)。
 export const itemMove = createItemMove({
   actions: itemActions,
+  workspaces: workspacesPort,
   catalog,
   toasts,
   refresh: itemRefresh,
@@ -96,11 +100,22 @@ export const projectDelete = createProjectDelete({
   afterDelete: (project) => leaveDeletedProject({ navigation, catalog }, project),
 });
 
+// ワークスペースの削除(03「削除」)。「一般」の「ワークスペースを削除…」とサイドバーのメニューの「削除…」が開く。
+// 削除できたあとの移り先(ホームへ replace、詳細パネルを閉じ、一覧を読み直す)は core の leaveDeletedWorkspace。
+export const workspaceDelete = createWorkspaceDelete({
+  actions: workspacesPort,
+  catalog,
+  toasts,
+  afterDelete: (ws) => leaveDeletedWorkspace({ navigation, catalog, detail }, ws),
+});
+
 // 画面を移ったら、出している確認ダイアログとメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
   projectDelete.cancel();
+  workspaceDelete.cancel();
   itemDelete.cancel();
   itemMove.close();
+  itemMove.cancelMove();
   itemKind.cancel();
   itemMenuHost.close();
   itemMenuHost.closeTemplate();

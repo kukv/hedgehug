@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { type ProjectView, readOnlyNote } from "@hedgehug/core";
+  import { type ProjectView, readOnlyNote, rulesHeading } from "@hedgehug/core";
   import { Button, Input } from "@hedgehug/ui";
-  import { untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { projectEditor } from "../../projectEditor";
+  import { navigation } from "../../wire";
   import { projectDelete } from "../../wireActions";
+  import RulesAutomation from "./RulesAutomation.svelte";
+  import RulesStatuses from "./RulesStatuses.svelte";
+  import RulesTemplates from "./RulesTemplates.svelte";
+  import RulesWorkflow from "./RulesWorkflow.svelte";
 
-  // プロジェクトの設定タブ(02「画面の見出しと構成」)。区画は「名前」と「削除」の 2 つ。
+  // プロジェクトの設定タブ(02「画面の見出しと構成」)。区画の並びは 02 の「設定のタブ」。
   interface Props {
     view: ProjectView;
   }
@@ -37,6 +42,14 @@
     if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
   }
 
+  // ワークスペースの設定の 1 行から来たときは、一度だけ読む「開く区画」の見出しまでスクロールしてフォーカスする。
+  onMount(() => {
+    const id = navigation.takeSection();
+    const el = id ? document.getElementById(id) : null;
+    el?.scrollIntoView?.({ block: "start" });
+    el?.focus();
+  });
+
   // 「削除」の区画の説明の件数と保持日数は、サーバーの予告から読む。別のプロジェクトになったときと、アイテムの数が
   // 変わったときだけ読み直す(p は読み直しのたびに新しいオブジェクトになるので、値で比べる $derived を見る)。
   const projectKey = $derived(`${p.storeId}/${p.id}`);
@@ -49,6 +62,7 @@
 </script>
 
 <div class="settings">
+  <p class="heading">{rulesHeading(view.workspace.name)}</p>
   <section class="sec">
     <h2>名前</h2>
     <Input
@@ -62,6 +76,10 @@
       {onkeydown}
     />
   </section>
+  <RulesStatuses {view} />
+  <RulesWorkflow {view} />
+  <RulesTemplates {view} />
+  <RulesAutomation {view} />
   <section class="sec danger">
     <h2>削除</h2>
     {#if $note?.projectId === p.id}
@@ -90,6 +108,11 @@
   h2 {
     font-size: 14px;
     margin: 0;
+  }
+  .heading {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--muted);
   }
   .text {
     margin: 0;

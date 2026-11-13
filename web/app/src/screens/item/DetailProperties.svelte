@@ -57,6 +57,7 @@
         <PropertyField
           {row}
           itemId={v.item.id}
+          project={v.item.projectId}
           settings={v.settings}
           disabled={v.readOnly}
           onchange={(value, at) => void change(row.property.id, value, at)}

@@ -196,7 +196,7 @@ func seedSprint(t *testing.T, s port.Stores, ws workspace.ID, sp planning.Sprint
 	if deleted {
 		ds = append(ds, planning.DeleteSprint(sp.ID))
 	}
-	writeWorkspace(t, s, ws, ds)
+	writePlan(t, s, ws, ds)
 }
 
 // seedRelease は、サンプルのワークスペースにリリースを書く。deleted なら、そのあと削除する。
@@ -206,10 +206,10 @@ func seedRelease(t *testing.T, s port.Stores, r planning.Release, deleted bool) 
 	if deleted {
 		ds = append(ds, planning.DeleteRelease(r.ID))
 	}
-	writeWorkspace(t, s, apptest.SampleWorkspace, ds)
+	writePlan(t, s, apptest.SampleWorkspace, ds)
 }
 
-func writeWorkspace(t *testing.T, s port.Stores, ws workspace.ID, ds []change.Draft) {
+func writePlan(t *testing.T, s port.Stores, ws workspace.ID, ds []change.Draft) {
 	t.Helper()
 	op := port.Operation{Actor: change.User("taro"), Summary: "計画を用意"}
 	err := s.Write(t.Context(), store, op, func(tx port.Tx) error { return tx.WriteWorkspaces().Append(ws, ds...) })

@@ -46,9 +46,19 @@ linters:
           list-mode: strict
           files:
             - "**/internal/app/port/**"
+            - "!$test"
           allow:
             - $gostd
             - github.com/kukv/hedgehug/internal/domain
+        port-test:
+          list-mode: strict
+          files:
+            - "**/internal/app/port/**/*_test.go"
+          allow:
+            - $gostd
+            - github.com/kukv/hedgehug/internal/domain
+            - github.com/kukv/hedgehug/internal/app/port
+            - github.com/kukv/hedgehug/internal/app/apptest
         app:
           list-mode: strict
           files:
