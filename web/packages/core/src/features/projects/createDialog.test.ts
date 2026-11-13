@@ -7,6 +7,10 @@ import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort, project } from "../catalog/fixtures.test-util";
 import { createProjectDialog } from "./createDialog";
 
+const unused = async (): Promise<never> => {
+  throw new Error("unused");
+};
+
 async function setup() {
   const port = fakeCatalogPort();
   const catalog = createCatalog(port);
@@ -21,6 +25,12 @@ async function setup() {
       sent.push({ storeId, workspaceId, input });
       return { ...project(storeId, workspaceId, 3), title: input.title };
     },
+    rename: unused,
+    setStatus: unused,
+    setOwner: unused,
+    setDate: unused,
+    addRepo: unused,
+    removeRepo: unused,
   };
   const created: string[] = [];
   const dialog = createProjectDialog({

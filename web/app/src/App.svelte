@@ -3,6 +3,7 @@
   import { AppFrame, OfflineBand, Toasts } from "@hedgehug/ui";
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
   import DetailPanel from "./screens/item/DetailPanel.svelte";
+  import DiscardDialog from "./screens/notes/DiscardDialog.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import Screen from "./shell/Screen.svelte";
@@ -81,4 +82,5 @@
 <CreateProjectDialog />
 <CreateWorkspaceDialog />
 <CreateItemDialog />
+<DiscardDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

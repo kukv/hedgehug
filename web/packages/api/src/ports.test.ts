@@ -38,6 +38,7 @@ const apiItem = {
   rank: "V",
   title: "認証",
   watchers: null,
+  blocked: false,
   createdAt: "2026-11-13T09:00:00.000Z",
   createdBy: "taro",
 };

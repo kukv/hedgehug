@@ -36,8 +36,12 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"malformed ids are not found and not written", contractMalformedIDs},
 		{"members have one log with an empty id", contractRefs},
 		{"projects and items are listed", contractLists},
+		{"item list follows a move in the same write", contractListFollowsMove},
 		{"workspace settings round trip", contractSettings},
 		{"item values and deletes round trip", contractItemValues},
+		{"descriptions round trip", contractDescription},
+		{"a failed write leaves the description", contractDescriptionRollback},
+		{"describing needs an existing entity and a summary", contractDescriptionRules},
 		{"automation rows share the operation", contractRuleRows},
 		{"automation rows need a person and a valid rule id", contractRuleRowsRefused},
 	}

@@ -1,10 +1,15 @@
 <script lang="ts">
   import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
-  import { IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
-  import { detail, toasts } from "../../wire";
+  import { BlockedBadge, IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
+  import { descriptionSaves, detail, toasts } from "../../wire";
+  import CommentsSection from "../notes/CommentsSection.svelte";
+  import DescriptionSection from "../notes/DescriptionSection.svelte";
+  import HistorySection from "../notes/HistorySection.svelte";
   import DetailChildren from "./DetailChildren.svelte";
   import DetailHeader from "./DetailHeader.svelte";
   import DetailProperties from "./DetailProperties.svelte";
+  import RelationsSection from "./RelationsSection.svelte";
+  import WorklogSection from "./WorklogSection.svelte";
 
   // アイテムの詳細パネル(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
   const view = detail.view;
@@ -45,7 +50,12 @@
   }
 </script>
 
-<SidePanel open={$view !== null} full={$full} label="詳細パネル" onclose={detail.close}>
+<SidePanel
+  open={$view !== null}
+  full={$full}
+  label="詳細パネル"
+  onclose={() => void detail.requestClose()}
+>
   {#snippet head()}
     {#if $view}
       <DetailHeader v={$view} full={$full} />
@@ -63,6 +73,9 @@
       <IconButton label="ID をコピー" size="xs" onclick={() => void copy(v.displayId)}
         >⧉</IconButton
       >
+      {#if v.item.blocked}
+        <BlockedBadge />
+      {/if}
     </div>
     <Input
       label="タイトル"
@@ -82,13 +95,30 @@
       bind:value={title}
     />
     <DetailProperties {v} />
+    <!-- 開いたアイテムが変わったら、入力欄の状態ごと作り直す。反映(v の読み直し)では作り直さず、target だけ新しくなる。 -->
+    {#key v.item.id}
+      <DescriptionSection
+        target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
+        readonly={v.readOnly}
+      />
+    {/key}
     {#if v.item.kind !== "Step"}
       <DetailChildren {v} />
     {/if}
+    <RelationsSection {v} />
     <section class="peek-sec" aria-label="GitHub">
       <h3>GitHub</h3>
       <p class="muted">リンクはありません</p>
     </section>
+    <WorklogSection {v} />
+    <CommentsSection
+      target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
+      readonly={v.readOnly}
+    />
+    <HistorySection
+      target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
+      refresh={[v.item, $descriptionSaves]}
+    />
   {/if}
 </SidePanel>
 

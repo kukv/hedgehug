@@ -5,6 +5,15 @@ import Input from "./Input.svelte";
 import Switch from "./Switch.svelte";
 
 describe("Input", () => {
+  it("reports the typed value as it changes", async () => {
+    const oninput = vi.fn();
+    render(Input, { props: { label: "相手", oninput } });
+    await fireEvent.input(screen.getByRole("textbox", { name: "相手" }), {
+      target: { value: "HH" },
+    });
+    expect(oninput).toHaveBeenCalledWith("HH");
+  });
+
   it("reports blur and keydown, and takes focus when asked", async () => {
     const onblur = vi.fn();
     const onkeydown = vi.fn();
@@ -30,6 +39,44 @@ describe("Input", () => {
     const input = screen.getByLabelText("開始日");
     expect(input).toHaveAttribute("type", "date");
     expect(input).toHaveValue("2026-11-13");
+  });
+
+  it("is a number field with a step and a minimum, and hands back what was typed as a string", async () => {
+    const seen: unknown[] = [];
+    render(Input, {
+      props: {
+        label: "時間",
+        type: "number",
+        step: "0.25",
+        min: "0",
+        get value() {
+          return "";
+        },
+        set value(v: string) {
+          seen.push(v);
+        },
+      },
+    });
+    const input = screen.getByRole("spinbutton", { name: "時間" });
+    expect(input).toHaveAttribute("step", "0.25");
+    expect(input).toHaveAttribute("min", "0");
+    await fireEvent.input(input, { target: { value: "1.50" } });
+    expect(seen).toEqual(["1.50"]);
+  });
+
+  it("shows the value the parent keeps when the parent changes what was typed", async () => {
+    render(Input, {
+      props: {
+        label: "接頭辞",
+        get value() {
+          return "A";
+        },
+        set value(_v: string) {},
+      },
+    });
+    const input = screen.getByRole("textbox", { name: "接頭辞" });
+    await fireEvent.input(input, { target: { value: "a" } });
+    expect(input).toHaveValue("A");
   });
 
   it("is disabled with the note", () => {

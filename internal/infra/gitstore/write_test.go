@@ -114,8 +114,11 @@ end: null
 points: null
 systems: []
 fields: {}
+relations: []
 estimate: null
 watchers: [taro]
+comments: []
+worklogs: []
 `
 	if string(b) != want {
 		t.Errorf("item.yaml =\n%s\nwant\n%s", b, want)

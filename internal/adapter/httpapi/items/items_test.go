@@ -35,7 +35,7 @@ func TestCreateGetList(t *testing.T) {
 	if res.Code != http.StatusOK || !strings.Contains(body, `"number":3`) || !strings.Contains(body, `"watchers":["taro"]`) || !strings.Contains(body, `"createdBy":"taro"`) {
 		t.Fatalf("create: %d %s", res.Code, body)
 	}
-	if res := api.Get("/api/stores/S1/items/" + string(apptest.SampleEpic)); res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"parent":null`) {
+	if res := api.Get("/api/stores/S1/items/" + string(apptest.SampleEpic)); res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"parent":null`) || !strings.Contains(res.Body.String(), `"blocked":false`) {
 		t.Errorf("get: %d %s", res.Code, res.Body)
 	}
 	if res := api.Get("/api/stores/S1/projects/" + string(apptest.SampleProject) + "/items"); res.Code != http.StatusOK || strings.Count(res.Body.String(), `"kind":`) != 3 {

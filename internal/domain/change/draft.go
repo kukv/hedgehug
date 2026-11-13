@@ -44,3 +44,16 @@ func NewRemove(f string, v any) Draft { return Draft{T: Remove, F: f, From: Valu
 
 // NewDelete は、f が指すものの削除。from も to も持たない。
 func NewDelete(f string) Draft { return Draft{T: Delete, F: f} }
+
+// NewDesc は、説明を保存した記録。本文は Describe で別に書く(description.md)。
+func NewDesc() Draft { return Draft{T: Desc} }
+
+// NewComment は、コメント id の追加・編集・削除。to が nil なら削除(to は null で書く)。
+func NewComment(id ID, from, to any) Draft {
+	return Draft{T: Comment, F: string(id), From: Value(from), To: Value(to)}
+}
+
+// NewWorklog は、作業時間の記録 id の追加・編集・削除。to が nil なら削除。
+func NewWorklog(id ID, from, to any) Draft {
+	return Draft{T: Worklog, F: string(id), From: Value(from), To: Value(to)}
+}

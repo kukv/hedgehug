@@ -44,8 +44,8 @@ var (
 type Stores interface {
 	Read(ctx context.Context, storeID StoreID, fn func(r Reader) error) error
 	// Write は fn がエラーなら何も残さず、errors.Is で同じエラーと分かるエラーを返す(包んでよい)。
-	// 行を 1 つ以上書くときに op.Check がエラーなら、何も残さずそのエラーを返す。行のない Write は
-	// 何も残さず、op を確かめない(Summary が空でもよい)。
+	// 行を 1 つ以上書くとき、または説明を書き換えるときに op.Check がエラーなら、何も残さずそのエラーを返す。
+	// 行も説明の書き換えもない Write は何も残さず、op を確かめない(Summary が空でもよい)。
 	// 同じ Store への Write は 1 つずつ順に行う。別の Store への Write は互いを待たない(Write の中から
 	// 別の Store に書いてよい)。
 	Write(ctx context.Context, storeID StoreID, op Operation, fn func(tx Tx) error) error
@@ -107,12 +107,18 @@ type ProjectReader interface {
 	Get(id project.ID) (project.Project, error)
 	// List は、ワークスペースのプロジェクトを、並び順の値の順(同じなら内部 ID の順)で返す。
 	List(ws workspace.ID) ([]project.Project, error)
+	// Description は、プロジェクトの説明の本文を返す(description.md)。説明がなければ ""。
+	// プロジェクトがなければ ErrNotFound。同じ Tx で書いた説明を含む。
+	Description(id project.ID) (string, error)
 }
 
 type ItemReader interface {
 	Get(id item.ID) (item.Item, error)
 	// List は、プロジェクトのすべてのアイテムを、番号の順で返す。
 	List(p project.ID) ([]item.Item, error)
+	// Description は、アイテムの説明の本文を返す(description.md)。説明がなければ ""。
+	// アイテムがなければ ErrNotFound。同じ Tx で書いた説明を含む。
+	Description(id item.ID) (string, error)
 }
 
 type MemberReader interface {
@@ -131,10 +137,16 @@ type WorkspaceWriter interface {
 
 type ProjectWriter interface {
 	Append(id project.ID, drafts ...change.Draft) error
+	// Describe は、説明の本文を書く。空の本文はファイルを消す。いまと同じなら何もしない。
+	// 履歴の desc の行は書かない(Append で change.NewDesc を足す)。ないプロジェクトは ErrNotFound、
+	// change.ValidID でない ID は ErrInvalidOperation を包んだエラー。ほかの Append と同じ 1 回の Write で残る。
+	Describe(id project.ID, text string) error
 }
 
 type ItemWriter interface {
 	Append(id item.ID, drafts ...change.Draft) error
+	// Describe は、アイテムの説明を書く。空の本文・ないアイテム・不正な ID の扱いは ProjectWriter.Describe と同じ。
+	Describe(id item.ID, text string) error
 }
 
 type MemberWriter interface {

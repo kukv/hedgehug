@@ -18,7 +18,7 @@ func MultiChoice(log []change.Record, p change.ID) bool { return multi(log)(Fiel
 // multi は、値を複数持つ項目か。fields/<ID> は、その項目に add・remove の行があるか、作成の値が
 // 配列なら複数選択(B2-2)。domain/item はプロパティの型を知らないので、行の形で決める。
 func multi(log []change.Record) func(f string) bool {
-	lists := map[string]bool{"watchers": true, "systems": true}
+	lists := map[string]bool{"watchers": true, "systems": true, "relations": true}
 	for _, r := range log {
 		switch {
 		case (r.T == change.Add || r.T == change.Remove) && strings.HasPrefix(r.F, fieldsPrefix):

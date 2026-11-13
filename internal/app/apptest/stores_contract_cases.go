@@ -3,6 +3,7 @@ package apptest
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -21,7 +23,7 @@ func contractWriteRead(t *testing.T, s port.Stores, id port.StoreID) {
 			t.Errorf("workspace = %+v, %v", w, err)
 		}
 		p, err := r.Projects().Get(cProject.ID)
-		if err != nil || p != cProject {
+		if err != nil || !reflect.DeepEqual(p, cProject) {
 			t.Errorf("project = %+v, %v", p, err)
 		}
 		it, err := r.Items().Get(cItem.ID)
@@ -170,6 +172,34 @@ func contractList(t *testing.T, s port.Stores, id port.StoreID) {
 		ws, err := r.Workspaces().List()
 		if err != nil || !slices.Equal(ws, []workspace.Workspace{second, cWorkspace}) {
 			t.Errorf("List = %+v, %v", ws, err)
+		}
+		return nil
+	})
+}
+
+// contractListFollowsMove は、Items().List で一度読んだアイテムを同じ Tx で別のプロジェクトへ動かすと、
+// そのあとの List が動いた先で返すことを確かめる(実装がアイテムのプロジェクトを覚えていても)。
+func contractListFollowsMove(t *testing.T, s port.Stores, id port.StoreID) {
+	const other project.ID = "01CONTRACTPR00000000000009"
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if its, err := tx.Items().List(other); err != nil || len(its) != 0 {
+			t.Errorf("other before = %+v, %v", its, err)
+		}
+		before, err := tx.Items().List(cProject.ID)
+		if err != nil || len(before) != 1 {
+			t.Fatalf("before = %+v, %v", before, err)
+		}
+		place := before[0].Place
+		place.Project = other
+		if err := tx.WriteItems().Append(cItem.ID, change.NewSet("place", before[0].Place, place)); err != nil {
+			return err
+		}
+		if its, err := tx.Items().List(other); err != nil || len(its) != 1 || its[0].ID != cItem.ID {
+			t.Errorf("other after = %+v, %v", its, err)
+		}
+		if its, err := tx.Items().List(cProject.ID); err != nil || len(its) != 0 {
+			t.Errorf("left = %+v, %v", its, err)
 		}
 		return nil
 	})

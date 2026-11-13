@@ -23,6 +23,33 @@ export function stepProgress(items: Item[], parentId: string, settings: Workspac
   return c.total === 0 ? null : c;
 }
 
+// epicProgress は、概要の Epic の行の「完了/対象」(04「集計の定義」)。Epic の下の、Step を除くすべてのアイテムを数え、
+// 中止は分母にも分子にも入れない。対象が 0 件なら { done: 0, total: 0 }。
+export function epicProgress(items: Item[], epicId: string, settings: WorkspaceSettings) {
+  const byParent = new Map<string, Item[]>();
+  for (const it of items) {
+    if (it.parentId === null) continue;
+    byParent.set(it.parentId, [...(byParent.get(it.parentId) ?? []), it]);
+  }
+  const found: Item[] = [];
+  const seen = new Set([epicId]);
+  const queue = [epicId];
+  for (let id = queue.pop(); id !== undefined; id = queue.pop()) {
+    for (const c of byParent.get(id) ?? []) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      queue.push(c.id);
+      if (c.kind !== "Step") found.push(c);
+    }
+  }
+  return childCount(found, settings);
+}
+
+// progressPercent は、進捗のパーセント(四捨五入。対象が 0 件なら 0。04「集計の定義」)。
+export function progressPercent(p: { done: number; total: number }): number {
+  return p.total === 0 ? 0 : Math.round((p.done / p.total) * 100);
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 // dueLabel は、期限の表示。未完了で期限切れ・今日なら強調する(04「集計の定義」)。

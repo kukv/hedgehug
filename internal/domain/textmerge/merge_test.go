@@ -1,4 +1,4 @@
-package filemerge
+package textmerge
 
 import "testing"
 

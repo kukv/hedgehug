@@ -45,14 +45,14 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	}
 	defer unlock()
 	t := &tx{
-		view: view{root: root, pending: map[change.Ref][]change.Record{}},
+		view: view{root: root, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
 		ids:  s.ids,
 	}
 	if err := fn(t); err != nil {
 		return err
 	}
-	if len(t.pending) == 0 {
+	if len(t.pending) == 0 && len(t.texts) == 0 {
 		return nil
 	}
 	// Summary はコミットメッセージの 1 行目、ログイン名はコミットの作者になる。
@@ -86,6 +86,33 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 		return err
 	}
 	t.pending[ref] = append(t.pending[ref], change.Stamp(log, drafts, t.meta, t.ids.New)...)
+	if ref.Kind == change.KindItem {
+		delete(t.places, ref.ID) // 動いたかもしれない
+	}
+	return nil
+}
+
+// describe は、説明を書く(コミットのときにファイルにする)。作業ツリーと同じなら何もしない。
+func (t *tx) describe(ref change.Ref, text string) error {
+	if !ref.Valid() {
+		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, ref.ID)
+	}
+	log, err := t.log(ref)
+	if err != nil {
+		return err
+	}
+	if len(log) == 0 {
+		return port.ErrNotFound
+	}
+	saved, err := readDescription(t.root, ref)
+	if err != nil {
+		return err
+	}
+	if text == saved {
+		delete(t.texts, ref)
+		return nil
+	}
+	t.texts[ref] = text
 	return nil
 }
 
@@ -101,6 +128,10 @@ type idWriter struct {
 
 func (w idWriter) Append(id change.ID, drafts ...change.Draft) error {
 	return w.t.append(change.Ref{Kind: w.kind, ID: id}, drafts)
+}
+
+func (w idWriter) Describe(id change.ID, text string) error {
+	return w.t.describe(change.Ref{Kind: w.kind, ID: id}, text)
 }
 
 type membersWriter struct{ t *tx }

@@ -20,6 +20,7 @@ function item(
     rank,
     title: id,
     watchers: ["taro"],
+    blocked: false,
     status: "st1",
     priority: "pr2",
     assignee: "",

@@ -23,6 +23,16 @@ describe("Button", () => {
     expect(onclick).not.toHaveBeenCalled();
     expect(button).toHaveAttribute("title", "閲覧のみの Store です");
   });
+
+  it("reports a pressed state only when given one", () => {
+    render(Button, { props: { pressed: true, children: text("ウォッチ中") } });
+    render(Button, { props: { children: text("ほか") } });
+    expect(screen.getByRole("button", { name: "ウォッチ中" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "ほか" })).not.toHaveAttribute("aria-pressed");
+  });
 });
 
 describe("IconButton", () => {

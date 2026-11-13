@@ -8,7 +8,9 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
+	commentlog "github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/worklog"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -27,9 +29,12 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 		Priority: idNode(it.Priority),
 		Assignee: optString(it.Assignee), Start: optString(it.Start), End: optString(it.End),
 		Points: it.Points, Estimate: it.Estimate,
-		Systems:  systemsNode(it.Systems, st),
-		Fields:   fieldsNode(it, log, st),
-		Watchers: it.Watchers,
+		Systems:   systemsNode(it.Systems, st),
+		Fields:    fieldsNode(it, log, st),
+		Relations: relationsNode(it.Relations),
+		Watchers:  it.Watchers,
+		Comments:  commentsNode(commentlog.FromLog(log)),
+		Worklogs:  worklogsNode(worklog.FromLog(log)),
 	}
 	y.Status.LineComment = comment(valueName(st.Statuses, it.Status))
 	y.Priority.LineComment = comment(valueName(st.Priorities, it.Priority))
@@ -127,4 +132,46 @@ func fieldComment(st workspace.Settings, p change.ID, vs []change.ID) string {
 		return ""
 	}
 	return comment(prop.Name + ": " + strings.Join(names, ", "))
+}
+
+// relationsNode は、このアイテムが持つ関連を 1 件 1 行で書く(足した側だけが持つ)。行末の注釈は付けない
+// (相手は別のワークスペースのこともあり、表示の ID はそのワークスペースの接頭辞で決まるため)。
+func relationsNode(rs []item.Relation) *yaml.Node {
+	rows := make([]*yaml.Node, len(rs))
+	for i, r := range rs {
+		rows[i] = mapping(true, key("type"), strNode(r.Type), key("to"), strNode(string(r.To)))
+	}
+	return seqOf(rows)
+}
+
+// commentsNode は、いまのコメントを投稿の古い順に 1 件 1 行で書く。by・at は最初の行のもの。
+func commentsNode(cs []commentlog.Comment) *yaml.Node {
+	rows := make([]*yaml.Node, len(cs))
+	for i, c := range cs {
+		rows[i] = mapping(true,
+			key("id"), strNode(string(c.ID)),
+			key("by"), strNode(c.By),
+			key("at"), strNode(c.At.Format(change.TimeLayout)),
+			key("body"), strNode(c.Body),
+			key("edited"), boolNode(c.Edited),
+		)
+	}
+	return seqOf(rows)
+}
+
+// worklogsNode は、いまの作業時間を記録の古い順に 1 件 1 行で書く。時間は小数(1.5・2)。
+func worklogsNode(es []worklog.Entry) *yaml.Node {
+	rows := make([]*yaml.Node, len(es))
+	for i, e := range es {
+		hours := &yaml.Node{}
+		_ = hours.Encode(float64(e.Hundredths) / 100)
+		rows[i] = mapping(true,
+			key("id"), strNode(string(e.ID)),
+			key("by"), strNode(e.By),
+			key("date"), strNode(e.Date),
+			key("hours"), hours,
+			key("memo"), strNode(e.Memo),
+		)
+	}
+	return seqOf(rows)
 }

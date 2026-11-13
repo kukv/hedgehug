@@ -3,6 +3,7 @@ package projects_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -45,11 +46,11 @@ func TestCreateNumbersAndPlacesAtTheEnd(t *testing.T) {
 		t.Errorf("created %+v", p)
 	}
 	list, err := svc.List(t.Context(), store, apptest.SampleWorkspace)
-	if err != nil || len(list) != 2 || list[1] != p {
+	if err != nil || len(list) != 2 || !reflect.DeepEqual(list[1], p) {
 		t.Errorf("List = %+v, %v", list, err)
 	}
 	got, err := svc.Get(t.Context(), store, p.ID)
-	if err != nil || got != p {
+	if err != nil || !reflect.DeepEqual(got, p) {
 		t.Errorf("Get = %+v, %v", got, err)
 	}
 }

@@ -2,6 +2,7 @@ import {
   createAccountsPort,
   createCatalogPort,
   createItemsPort,
+  createNotesPort,
   createProjectsPort,
   createSyncPort,
   createSystemPort,
@@ -13,12 +14,14 @@ import {
   createAccountForm,
   createAccountList,
   createCatalog,
+  createComments,
   createDetail,
   createItemDialog,
   createNavigation,
   createProjectDialog,
   createProjectScreen,
   createReflection,
+  createRelations,
   createSaveAsTemplate,
   createScreen,
   createShell,
@@ -27,11 +30,12 @@ import {
   createSystemInfo,
   createTabSignals,
   createToasts,
+  createWatch,
+  createWorklogs,
   createWorkspaceDialog,
   createWorkspaceMover,
   createWorkspaceSettings,
   get,
-  type Here,
   readonly,
   routeOfProject,
   routeOfWorkspace,
@@ -39,8 +43,11 @@ import {
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
+import { drafts, leaveItem } from "./drafts";
+import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
+import { createNoteHistory } from "./noteHistory";
 import { held, online as isOnline, tabId, visible } from "./tab";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
@@ -51,7 +58,9 @@ setToken(token);
 
 export const shell = createShell();
 export const system = createSystemInfo(createSystemPort());
-export const navigation = createNavigation(browserHistory());
+// drafts は書きかけの登録簿(実体は drafts.ts。tab.ts との循環を避けるため wire.ts の外に置く)。
+export { drafts };
+export const navigation = createNavigation(browserHistory(), drafts);
 navigation.start();
 export const links = createLinks(navigation, token);
 const timer = {
@@ -62,6 +71,10 @@ export const toasts = createToasts(timer);
 
 const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
+// 詳細パネルとプロジェクトの概要の、説明・コメントなどの口と、メンションの表示に使うメンバーの一覧。
+export const notes = createNotesPort();
+export const { itemHistory, projectHistory, lists, descriptionSaves } = createNoteHistory(notes);
+export const listMembers = (storeId: string) => catalogPort.listMembers(storeId);
 export const catalog = createCatalog(catalogPort);
 const workspacesPort = createWorkspacesPort();
 // ツリーでステータスを変えたら、開いている詳細パネルも読み直す。detail は後で作るので、呼ぶときに引く。
@@ -111,7 +124,27 @@ export const detail = createDetail({
   catalogPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
+  // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
+  leave: leaveItem,
 });
+// 詳細パネルとプロジェクトの概要は、同時に開くので、コメントの状態を別々に持つ(入力が混ざらない)。
+export const itemComments = createComments({ notes, catalogPort, toasts, drafts, scope: "item" });
+export const projectComments = createComments({
+  notes,
+  catalogPort,
+  toasts,
+  drafts,
+  scope: "project",
+});
+export const worklogs = createWorklogs({ notes, toasts, now: () => new Date() });
+export const relations = createRelations({
+  notes,
+  toasts,
+  // 関連を足す・外すと「ブロック中」が変わるので、ツリーと開いている詳細パネルを読み直す。
+  onChanged: () => void Promise.all([detail.reload(), projectScreen.reload()]),
+});
+// ウォッチを変えたら、開いている詳細パネルを読み直す(ウォッチ中の人の一覧が変わる)。
+export const watch = createWatch({ notes, toasts, onChanged: () => void detail.reload() });
 export const screen = createScreen({
   navigation,
   catalog,
@@ -140,26 +173,13 @@ export const signIn = createSignIn({
   onDone: () => void accountList.reload(),
 });
 
-// here は、作成ダイアログの初期値に使う、いま開いている画面のワークスペースとプロジェクト(02)。
-function here(): Here {
-  const c = get(screen.current);
-  if (c?.name === "workspace") return { workspaceId: c.workspaceId };
-  if (c?.name === "project") {
-    return {
-      workspaceId: catalog.project(c.storeId, c.projectId)?.workspaceId,
-      projectId: c.projectId,
-    };
-  }
-  return {};
-}
-
 export const itemDialog = createItemDialog({
   catalog,
   items: itemsPort,
   workspaces: workspacesPort,
   catalogPort,
   toasts,
-  here,
+  here: () => hereOf(screen, catalog),
   openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),
   // 「続けて作成」がオフなら、作ったアイテムの詳細パネルを開く(02「作成したあと」)。
   onCreated: (item, keptOpen) => {
@@ -194,7 +214,19 @@ const syncPort = createSyncPort();
 async function reflect(kinds: SyncEventKind[]) {
   const jobs: Promise<unknown>[] = [sync.load()];
   if (kinds.includes("store")) {
-    jobs.push(catalog.load().then(() => Promise.all([projectScreen.reload(), detail.reload()])));
+    jobs.push(
+      catalog
+        .load()
+        .then(() =>
+          Promise.all([
+            projectScreen.reload(),
+            detail.reload(),
+            ...[itemComments, projectComments, worklogs, relations, ...lists].map((section) =>
+              section.reload(),
+            ),
+          ]),
+        ),
+    );
   }
   await Promise.allSettled(jobs);
 }

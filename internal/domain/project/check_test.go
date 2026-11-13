@@ -39,3 +39,39 @@ func TestCheckCreate(t *testing.T) {
 		t.Errorf("upper and lower case must differ: %q", got)
 	}
 }
+
+// 02「概要の編集」: タイトルは、空だと「タイトルは空にできません」(作成の文言とは違う)。
+// 同じワークスペースの別のプロジェクトと同じ名前は断り、自分と同じ名前は断らない。
+func TestCheckRename(t *testing.T) {
+	siblings := []project.Project{{ID: "A", Title: "ログイン"}, {ID: "B", Title: "決済"}}
+	cases := []struct {
+		name, title string
+		self        project.ID
+		want        string
+	}{
+		{"ok", "請求", "A", ""},
+		{"empty", "", "A", "タイトルは空にできません"},
+		{"duplicate of another", "決済", "A", "このワークスペースには同じ名前のプロジェクトがあります"},
+		{"the same title as itself", "ログイン", "A", ""},
+	}
+	for _, c := range cases {
+		if got := message(project.CheckRename(c.title, c.self, siblings)); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// 開始日と終了日が同じ日は認める。どちらかが空なら比べない。
+func TestCheckDates(t *testing.T) {
+	cases := []struct{ name, start, end, want string }{
+		{"same day", "2026-11-01", "2026-11-01", ""},
+		{"only start", "2026-11-01", "", ""},
+		{"only end", "", "2026-11-01", ""},
+		{"end before start", "2026-11-02", "2026-11-01", "終了日は開始日以降にしてください"},
+	}
+	for _, c := range cases {
+		if got := message(project.CheckDates(c.start, c.end)); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}

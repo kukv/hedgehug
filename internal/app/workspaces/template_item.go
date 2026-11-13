@@ -18,7 +18,8 @@ type FromItem struct {
 }
 
 // CreateTemplateFromItem は、アイテム id をもとに、そのワークスペースにテンプレートを作る。
-// 種類・値・(Structure なら)子と Step を、並び順のまま写す(B3-16)。保存と検査は CreateTemplate と同じ。
+// 種類・説明・値・(Structure なら)子(説明を含む)と Step を、並び順のまま写す(B3-16、A4a-5)。
+// 保存と検査は CreateTemplate と同じ。
 func (s Service) CreateTemplateFromItem(ctx context.Context, store port.StoreID, id item.ID, in FromItem) (workspace.Template, error) {
 	var t workspace.Template
 	var ws workspace.ID
@@ -37,7 +38,11 @@ func (s Service) CreateTemplateFromItem(ctx context.Context, store port.StoreID,
 				return err
 			}
 		}
-		ws, t = it.Place.Workspace, templateOf(st, it, family, in)
+		texts, err := descriptionsOf(r, it, family)
+		if err != nil {
+			return err
+		}
+		ws, t = it.Place.Workspace, templateOf(st, it, family, texts, in)
 		return nil
 	})
 	if err != nil {
@@ -46,13 +51,32 @@ func (s Service) CreateTemplateFromItem(ctx context.Context, store port.StoreID,
 	return s.CreateTemplate(ctx, store, ws, t)
 }
 
-func templateOf(st workspace.Settings, it item.Item, family []item.Item, in FromItem) workspace.Template {
-	t := workspace.Template{Name: in.Name, Kind: string(it.Kind), Title: in.Title, Values: valuesOf(st, it)}
+// descriptionsOf は、テンプレートに写す説明(アイテムと、含める子。Step は説明を持たない)。
+func descriptionsOf(r port.Reader, it item.Item, family []item.Item) (map[item.ID]string, error) {
+	ids := []item.ID{it.ID}
+	if it.Kind == item.Epic {
+		for _, c := range childrenOf(family, it.ID) {
+			ids = append(ids, c.ID)
+		}
+	}
+	out := make(map[item.ID]string, len(ids))
+	for _, id := range ids {
+		text, err := r.Items().Description(id)
+		if err != nil {
+			return nil, err
+		}
+		out[id] = text
+	}
+	return out, nil
+}
+
+func templateOf(st workspace.Settings, it item.Item, family []item.Item, texts map[item.ID]string, in FromItem) workspace.Template {
+	t := workspace.Template{Name: in.Name, Kind: string(it.Kind), Title: in.Title, Description: texts[it.ID], Values: valuesOf(st, it)}
 	for _, c := range childrenOf(family, it.ID) {
 		switch {
 		case it.Kind == item.Epic:
 			t.Children = append(t.Children, workspace.TemplateChild{
-				Kind: string(c.Kind), Title: c.Title, Values: valuesOf(st, c), Steps: stepsOf(family, c),
+				Kind: string(c.Kind), Title: c.Title, Description: texts[c.ID], Values: valuesOf(st, c), Steps: stepsOf(family, c),
 			})
 		case c.Kind == item.Step:
 			t.Steps = append(t.Steps, stepOf(it, c))

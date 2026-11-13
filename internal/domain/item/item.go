@@ -53,6 +53,13 @@ type Stamp struct {
 	By string
 }
 
+// Relation は、関連の 1 つ(保存形式「アイテムの例」の relations の値)。持つのは足した側のアイテムで、
+// To が相手の内部 ID。Type は blocks・causes・duplicates・relates・clones で、意味は domain/relation が決める。
+type Relation struct {
+	Type string `json:"type"`
+	To   ID     `json:"to"`
+}
+
 // Item は、いま扱う項目だけを持つ。ステータス・優先度・関連システム・選択肢の値は B2 で足した。
 // 担当者・日付などは、まだ持たない(足すトラックが加える)。
 type Item struct {
@@ -63,6 +70,10 @@ type Item struct {
 	Title    string
 	Created  Stamp
 	Watchers []string // ウォッチ中の人のログイン名
+	// Relations は、このアイテムが持つ関連(足した側)。相手の側の逆向きの表記は relation.Rows が作る(A4a-10)。
+	Relations []Relation
+	// Blocked は、ブロック中か(A4a-13)。保存しない派生の値で、app/items の Get・List が埋める。
+	Blocked bool
 
 	// 値は内部 ID で指す(保存形式「アイテムの例」)。初期値と変更の操作は A3 が足す(B2-1)。
 	Status   change.ID                 // なければ空
@@ -126,6 +137,12 @@ func FromLog(log []change.Record) (Item, bool) {
 		var login string
 		if json.Unmarshal(raw, &login) == nil {
 			it.Watchers = append(it.Watchers, login)
+		}
+	}
+	for _, raw := range s.Lists["relations"] {
+		var r Relation
+		if json.Unmarshal(raw, &r) == nil && r.Type != "" && change.ValidID(r.To) {
+			it.Relations = append(it.Relations, r)
 		}
 	}
 	readValues(&it, s)

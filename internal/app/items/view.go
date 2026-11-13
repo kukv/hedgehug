@@ -2,11 +2,13 @@ package items
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/relation"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -63,4 +65,36 @@ func (ec editContext) property(id change.ID) (workspace.Property, error) {
 		return workspace.Property{}, port.ErrNotFound
 	}
 	return p, nil
+}
+
+// blockedSet は、Store のブロック中のアイテムの内部 ID(A4a-13)。関連はワークスペースをまたぐので、
+// ワークスペース → プロジェクト → アイテムの順にすべて読む。ステータスの分類は、そのアイテムのワークスペースの設定で決める。
+func blockedSet(r port.Reader) (map[item.ID]bool, error) {
+	wss, err := r.Workspaces().List()
+	if err != nil {
+		return nil, err
+	}
+	var all []item.Item
+	finished := map[item.ID]bool{}
+	for _, w := range wss {
+		st, err := r.Workspaces().Settings(w.ID)
+		if err != nil && !errors.Is(err, port.ErrNotFound) {
+			return nil, err
+		}
+		ps, err := r.Projects().List(w.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range ps {
+			its, err := r.Items().List(p.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, it := range its {
+				finished[it.ID] = st.Finished(it.Status)
+			}
+			all = append(all, its...)
+		}
+	}
+	return relation.BlockedSet(all, func(it item.Item) bool { return finished[it.ID] }), nil
 }

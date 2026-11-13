@@ -11,19 +11,26 @@ import (
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
+	appcomments "github.com/kukv/hedgehug/internal/app/comments"
+	appdescriptions "github.com/kukv/hedgehug/internal/app/descriptions"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	apphistory "github.com/kukv/hedgehug/internal/app/history"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
+	apprelations "github.com/kukv/hedgehug/internal/app/relations"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
+	appwatching "github.com/kukv/hedgehug/internal/app/watching"
+	appworklogs "github.com/kukv/hedgehug/internal/app/worklogs"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
 )
 
@@ -71,9 +78,18 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
-	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity})
-	items.Register(api, appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox})
+	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
+	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
+	items.Register(api, itemsSvc)
+	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: deps.Inbox})
+	notes.Register(api, notes.Services{
+		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity},
+		Comments:     appcomments.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity},
+		Worklogs:     appworklogs.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock},
+		Relations:    apprelations.Service{Stores: deps.Stores, Identity: deps.Identity},
+		History:      apphistory.Service{Stores: deps.Stores, Clock: deps.Clock},
+	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))
 	hub := deps.Events

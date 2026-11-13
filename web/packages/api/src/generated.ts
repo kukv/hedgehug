@@ -173,6 +173,22 @@ export interface CheckStep {
   done: boolean;
 }
 
+export interface Comment {
+  /** 投稿した時刻(RFC 3339) */
+  at: string;
+  body: string;
+  /** 投稿者のログイン名 */
+  by: string;
+  /** 投稿者の表示名。メンバーにいなければ「不明なユーザー」 */
+  byName: string;
+  edited: boolean;
+  id: string;
+}
+
+export interface CommentText {
+  body: string;
+}
+
 export type CreateItemKind = typeof CreateItemKind[keyof typeof CreateItemKind];
 
 
@@ -190,6 +206,8 @@ export const CreateItemKind = {
 export type CreateItemValues = {[key: string]: unknown};
 
 export interface CreateItem {
+  /** もとになるアイテムの説明(Markdown)。空は説明なし。子の説明はテンプレートのものを使う */
+  description?: string;
   kind: CreateItemKind;
   /** 空は親を選んでいない */
   parent?: string;
@@ -237,6 +255,25 @@ export interface CreateWorkspace {
   prefix: string;
 }
 
+export interface DescribeBody {
+  /** 編集を始めたときの説明。保存するときの共通の祖先になる */
+  base: string;
+  /** 入力した説明。空白だけは空として保存する(説明を消す) */
+  text: string;
+}
+
+export interface DescribeResult {
+  /** 同じ箇所が同時に編集されて、両方の版を残したとき true */
+  conflict: boolean;
+  /** 保存したあとの説明 */
+  text: string;
+}
+
+export interface DescriptionText {
+  /** 説明の本文(Markdown)。説明がなければ空 */
+  text: string;
+}
+
 export interface ErrorDetail {
   /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
   location?: string;
@@ -262,6 +299,15 @@ export interface ErrorModel {
   title?: string;
   /** A URI reference to human-readable documentation for the error. */
   type?: string;
+}
+
+export interface HistoryRow {
+  /** 時刻(ミリ秒までの RFC 3339) */
+  at: string;
+  /** 変更の文(作成・タイトルを「…」に変更 など) */
+  text: string;
+  /** 操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー) */
+  who: string;
 }
 
 export interface ImpactOutputBody {
@@ -293,6 +339,8 @@ export const ItemKind = {
 export interface Item {
   /** ログイン名。空は未割り当て */
   assignee: string;
+  /** ブロック中か。ブロックしている相手に、完了・中止でないものがある */
+  blocked: boolean;
   /** 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID) */
   choices: ItemChoices;
   createdAt: string;
@@ -377,6 +425,11 @@ export interface Project {
   /** ログイン名。空は「なし」 */
   owner: string;
   rank: string;
+  /**
+     * 結びつけた GitHub のリポジトリ(owner/name)。大文字小文字を区別しない辞書順
+     * @nullable
+     */
+  repos: string[] | null;
   /** YYYY-MM-DD。空は「なし」 */
   start: string;
   status: ProjectStatus;
@@ -384,7 +437,53 @@ export interface Project {
   workspace: string;
 }
 
+export interface ProjectRepo {
+  /** owner/name。前後の空白は除く */
+  repo: string;
+}
+
+export interface RelationCandidate {
+  /** 選べない理由。選べるなら空 */
+  disabledReason: string;
+  display: string;
+  /** 相手の内部 ID */
+  id: string;
+  title: string;
+  /** 別のワークスペースの候補だけ。同じなら空 */
+  workspaceName: string;
+}
+
+export interface RelationInput {
+  label: string;
+  /** 相手の内部 ID */
+  other: string;
+}
+
+export interface RelationRow {
+  /** 相手の画面の ID(HH-3) */
+  display: string;
+  /** 相手の内部 ID */
+  id: string;
+  /** 表記(blocks・blocked by・causes・caused by・duplicates・duplicated by・relates to・clones・cloned by) */
+  label: string;
+  /** ステータスの色の名前。値がなければ空 */
+  statusColor: string;
+  /** 相手のステータスの名前。値がなければ空 */
+  statusName: string;
+  title: string;
+  /** 相手が別のワークスペースのときだけ。同じなら空 */
+  workspaceName: string;
+}
+
 export interface RenameItem {
+  title: string;
+}
+
+export interface RenameProject {
+  /**
+     * 1 行。改行は入れられない
+     * @pattern ^[^\r\n]*$
+     */
   title: string;
 }
 
@@ -426,6 +525,48 @@ export interface SetAutomationRuleEnabled {
 export interface SetItemProperty {
   /** 新しい値。null と空の文字列は値を空にする */
   value: unknown;
+}
+
+export type SetProjectDateField = typeof SetProjectDateField[keyof typeof SetProjectDateField];
+
+
+export const SetProjectDateField = {
+  start: 'start',
+  end: 'end',
+} as const;
+
+export interface SetProjectDate {
+  field: SetProjectDateField;
+  /**
+     * YYYY-MM-DD。空は「なし」
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  value: string;
+}
+
+export interface SetProjectOwner {
+  /** ログイン名。空は「なし」。メンバーでなければ 404 */
+  owner: string;
+}
+
+export type SetProjectStatusStatus = typeof SetProjectStatusStatus[keyof typeof SetProjectStatusStatus];
+
+
+export const SetProjectStatusStatus = {
+  Todo: 'Todo',
+  InProgress: 'InProgress',
+  Done: 'Done',
+  Pending: 'Pending',
+  Cancel: 'Cancel',
+} as const;
+
+export interface SetProjectStatus {
+  status: SetProjectStatusStatus;
+}
+
+export interface SetWatch {
+  /** あなたがウォッチ中にするか */
+  on: boolean;
 }
 
 export interface SetWorkspacePropertyHidden {
@@ -629,6 +770,25 @@ export interface ValuesBody {
   /** デバイスフローはサインインの API で登録・保存する */
   method: ValuesBodyMethod;
   name: string;
+}
+
+export interface Worklog {
+  /** 記録した人のログイン名 */
+  by: string;
+  /** 記録した人の表示名。メンバーにいなければ「不明なユーザー」 */
+  byName: string;
+  /** 記録した日(YYYY-MM-DD) */
+  date: string;
+  /** 1.25 のような表記 */
+  hours: string;
+  id: string;
+  memo: string;
+}
+
+export interface WorklogInput {
+  /** 時間。小数第 2 位まで */
+  hours: string;
+  memo?: string;
 }
 
 export interface WorkspaceAutomation {
@@ -846,6 +1006,11 @@ export interface WorkspaceUsage {
 
 export type AccountEditImpactParams = {
   login?: string;
+};
+
+export type ListRelationCandidatesParams = {
+  label?: string;
+  q?: string;
 };
 
 export type DeleteWorkspaceValueParams = {
@@ -1343,6 +1508,237 @@ return fetcher<Item>(getCheckStepUrl(store,item),
 
 
 
+export const getListItemCommentsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments`
+}
+
+/**
+ * @summary アイテムのコメントを古い順に返す
+ */
+export const listItemComments = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Comment[] | null> => {
+
+  return fetcher<Comment[] | null>(getListItemCommentsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPostItemCommentUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments`
+}
+
+/**
+ * @summary アイテムにコメントを投稿する
+ */
+export const postItemComment = async (store: string,
+    item: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getPostItemCommentUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getDeleteItemCommentUrl = (store: string,
+    item: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary アイテムのコメントを削除する
+ */
+export const deleteItemComment = async (store: string,
+    item: string,
+    comment: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteItemCommentUrl(store,item,comment),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getEditItemCommentUrl = (store: string,
+    item: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary アイテムのコメントを編集する
+ */
+export const editItemComment = async (store: string,
+    item: string,
+    comment: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getEditItemCommentUrl(store,item,comment),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getGetItemDescriptionUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/description`
+}
+
+/**
+ * @summary アイテムの説明を返す
+ */
+export const getItemDescription = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<DescriptionText> => {
+
+  return fetcher<DescriptionText>(getGetItemDescriptionUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getDescribeItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/description`
+}
+
+/**
+ * @summary アイテムの説明を保存する
+ */
+export const describeItem = async (store: string,
+    item: string,
+    describeBody: DescribeBody, options?: Parameters<typeof fetcher>[1]): Promise<DescribeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<DescribeResult>(getDescribeItemUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(describeBody)
+  }
+);}
+
+
+
+export const getGetItemHistoryUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/history`
+}
+
+/**
+ * @summary アイテムの履歴を新しい順で返す
+ */
+export const getItemHistory = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<HistoryRow[] | null> => {
+
+  return fetcher<HistoryRow[] | null>(getGetItemHistoryUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getMoveItemUpUrl = (store: string,
     item: string,) => {
 
@@ -1472,6 +1868,149 @@ export const addItemValue = async (store: string,
 
 
 
+export const getListRelationCandidatesUrl = (store: string,
+    item: string,
+    params?: ListRelationCandidatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relation-candidates?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relation-candidates`
+}
+
+/**
+ * @summary 関連の相手の候補を返す(ID かタイトルで絞る。20 件まで)
+ */
+export const listRelationCandidates = async (store: string,
+    item: string,
+    params?: ListRelationCandidatesParams, options?: Parameters<typeof fetcher>[1]): Promise<RelationCandidate[] | null> => {
+
+  return fetcher<RelationCandidate[] | null>(getListRelationCandidatesUrl(store,item,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListRelationsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relations`
+}
+
+/**
+ * @summary アイテムの関連を、表記の順で返す(逆向きの表記を含む)
+ */
+export const listRelations = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<RelationRow[] | null> => {
+
+  return fetcher<RelationRow[] | null>(getListRelationsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAddRelationUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relations`
+}
+
+/**
+ * @summary 関連を足す
+ */
+export const addRelation = async (store: string,
+    item: string,
+    relationInput: RelationInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getAddRelationUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(relationInput)
+  }
+);}
+
+
+
+export const getRemoveRelationUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relations/remove`
+}
+
+/**
+ * @summary 関連を外す
+ */
+export const removeRelation = async (store: string,
+    item: string,
+    relationInput: RelationInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getRemoveRelationUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(relationInput)
+  }
+);}
+
+
+
 export const getSaveItemAsTemplateUrl = (store: string,
     item: string,) => {
 
@@ -1595,6 +2134,142 @@ return fetcher<Item>(getRenameItemUrl(store,item),
 
 
 
+export const getSetWatchUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/watch`
+}
+
+/**
+ * @summary あなたのウォッチを入り切りする
+ */
+export const setWatch = async (store: string,
+    item: string,
+    setWatchBody: SetWatch, options?: Parameters<typeof fetcher>[1]): Promise<Item> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Item>(getSetWatchUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setWatchBody)
+  }
+);}
+
+
+
+export const getListWorklogsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/worklogs`
+}
+
+/**
+ * @summary アイテムの作業時間の記録を古い順に返す
+ */
+export const listWorklogs = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Worklog[] | null> => {
+
+  return fetcher<Worklog[] | null>(getListWorklogsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAddWorklogUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/worklogs`
+}
+
+/**
+ * @summary 作業時間を記録する
+ */
+export const addWorklog = async (store: string,
+    item: string,
+    worklogInput: WorklogInput, options?: Parameters<typeof fetcher>[1]): Promise<Worklog> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Worklog>(getAddWorklogUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(worklogInput)
+  }
+);}
+
+
+
+export const getDeleteWorklogUrl = (store: string,
+    item: string,
+    worklog: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/worklogs/${encodeURIComponent(String(worklog))}`
+}
+
+/**
+ * @summary 作業時間の記録を削除する
+ */
+export const deleteWorklog = async (store: string,
+    item: string,
+    worklog: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteWorklogUrl(store,item,worklog),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getGetMeUrl = (store: string,) => {
 
 
@@ -1669,6 +2344,278 @@ export const getProject = async (store: string,
 
 
 
+export const getListProjectCommentsUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments`
+}
+
+/**
+ * @summary プロジェクトのコメントを古い順に返す
+ */
+export const listProjectComments = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<Comment[] | null> => {
+
+  return fetcher<Comment[] | null>(getListProjectCommentsUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPostProjectCommentUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments`
+}
+
+/**
+ * @summary プロジェクトにコメントを投稿する
+ */
+export const postProjectComment = async (store: string,
+    project: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getPostProjectCommentUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getDeleteProjectCommentUrl = (store: string,
+    project: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary プロジェクトのコメントを削除する
+ */
+export const deleteProjectComment = async (store: string,
+    project: string,
+    comment: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteProjectCommentUrl(store,project,comment),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getEditProjectCommentUrl = (store: string,
+    project: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary プロジェクトのコメントを編集する
+ */
+export const editProjectComment = async (store: string,
+    project: string,
+    comment: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getEditProjectCommentUrl(store,project,comment),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getSetProjectDateUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/date`
+}
+
+/**
+ * @summary プロジェクトの開始日か終了日を変える
+ */
+export const setProjectDate = async (store: string,
+    project: string,
+    setProjectDateBody: SetProjectDate, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getSetProjectDateUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectDateBody)
+  }
+);}
+
+
+
+export const getGetProjectDescriptionUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/description`
+}
+
+/**
+ * @summary プロジェクトの説明を返す
+ */
+export const getProjectDescription = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<DescriptionText> => {
+
+  return fetcher<DescriptionText>(getGetProjectDescriptionUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getDescribeProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/description`
+}
+
+/**
+ * @summary プロジェクトの説明を保存する
+ */
+export const describeProject = async (store: string,
+    project: string,
+    describeBody: DescribeBody, options?: Parameters<typeof fetcher>[1]): Promise<DescribeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<DescribeResult>(getDescribeProjectUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(describeBody)
+  }
+);}
+
+
+
+export const getGetProjectHistoryUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/history`
+}
+
+/**
+ * @summary プロジェクトの履歴を新しい順で返す
+ */
+export const getProjectHistory = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<HistoryRow[] | null> => {
+
+  return fetcher<HistoryRow[] | null>(getGetProjectHistoryUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getListProjectItemsUrl = (store: string,
     project: string,) => {
 
@@ -1690,6 +2637,211 @@ export const listProjectItems = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getSetProjectOwnerUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/owner`
+}
+
+/**
+ * @summary プロジェクトのオーナーを変える
+ */
+export const setProjectOwner = async (store: string,
+    project: string,
+    setProjectOwnerBody: SetProjectOwner, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getSetProjectOwnerUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectOwnerBody)
+  }
+);}
+
+
+
+export const getAddProjectRepoUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repos`
+}
+
+/**
+ * @summary プロジェクトにリポジトリを結びつける
+ */
+export const addProjectRepo = async (store: string,
+    project: string,
+    projectRepo: ProjectRepo, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getAddProjectRepoUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(projectRepo)
+  }
+);}
+
+
+
+export const getRemoveProjectRepoUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repos/remove`
+}
+
+/**
+ * @summary プロジェクトからリポジトリを外す
+ */
+export const removeProjectRepo = async (store: string,
+    project: string,
+    projectRepo: ProjectRepo, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getRemoveProjectRepoUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(projectRepo)
+  }
+);}
+
+
+
+export const getSetProjectStatusUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/status`
+}
+
+/**
+ * @summary プロジェクトのステータスを変える
+ */
+export const setProjectStatus = async (store: string,
+    project: string,
+    setProjectStatusBody: SetProjectStatus, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getSetProjectStatusUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectStatusBody)
+  }
+);}
+
+
+
+export const getRenameProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/title`
+}
+
+/**
+ * @summary プロジェクトのタイトルを変える
+ */
+export const renameProject = async (store: string,
+    project: string,
+    renameProjectBody: RenameProject, options?: Parameters<typeof fetcher>[1]): Promise<Project> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Project>(getRenameProjectUrl(store,project),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameProjectBody)
   }
 );}
 

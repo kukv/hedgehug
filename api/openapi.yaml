@@ -223,9 +223,46 @@ components:
       required:
         - done
       type: object
+    Comment:
+      additionalProperties: false
+      properties:
+        at:
+          description: 投稿した時刻(RFC 3339)
+          type: string
+        body:
+          type: string
+        by:
+          description: 投稿者のログイン名
+          type: string
+        byName:
+          description: 投稿者の表示名。メンバーにいなければ「不明なユーザー」
+          type: string
+        edited:
+          type: boolean
+        id:
+          type: string
+      required:
+        - id
+        - by
+        - byName
+        - at
+        - body
+        - edited
+      type: object
+    CommentText:
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+      required:
+        - body
+      type: object
     CreateItem:
       additionalProperties: false
       properties:
+        description:
+          description: もとになるアイテムの説明(Markdown)。空は説明なし。子の説明はテンプレートのものを使う
+          type: string
         kind:
           enum:
             - Epic
@@ -294,6 +331,41 @@ components:
         - name
         - prefix
       type: object
+    DescribeBody:
+      additionalProperties: false
+      properties:
+        base:
+          description: 編集を始めたときの説明。保存するときの共通の祖先になる
+          type: string
+        text:
+          description: 入力した説明。空白だけは空として保存する(説明を消す)
+          type: string
+      required:
+        - base
+        - text
+      type: object
+    DescribeResult:
+      additionalProperties: false
+      properties:
+        conflict:
+          description: 同じ箇所が同時に編集されて、両方の版を残したとき true
+          type: boolean
+        text:
+          description: 保存したあとの説明
+          type: string
+      required:
+        - text
+        - conflict
+      type: object
+    DescriptionText:
+      additionalProperties: false
+      properties:
+        text:
+          description: 説明の本文(Markdown)。説明がなければ空
+          type: string
+      required:
+        - text
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -340,6 +412,23 @@ components:
           format: uri
           type: string
       type: object
+    HistoryRow:
+      additionalProperties: false
+      properties:
+        at:
+          description: 時刻(ミリ秒までの RFC 3339)
+          type: string
+        text:
+          description: 変更の文(作成・タイトルを「…」に変更 など)
+          type: string
+        who:
+          description: 操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー)
+          type: string
+      required:
+        - who
+        - text
+        - at
+      type: object
     ImpactOutputBody:
       additionalProperties: false
       properties:
@@ -357,6 +446,9 @@ components:
         assignee:
           description: ログイン名。空は未割り当て
           type: string
+        blocked:
+          description: ブロック中か。ブロックしている相手に、完了・中止でないものがある
+          type: boolean
         choices:
           additionalProperties:
             items:
@@ -436,6 +528,7 @@ components:
         - rank
         - title
         - watchers
+        - blocked
         - createdAt
         - createdBy
         - status
@@ -514,6 +607,12 @@ components:
           type: string
         rank:
           type: string
+        repos:
+          description: 結びつけた GitHub のリポジトリ(owner/name)。大文字小文字を区別しない辞書順
+          items:
+            type: string
+          nullable: true
+          type: array
         start:
           description: YYYY-MM-DD。空は「なし」
           type: string
@@ -539,11 +638,98 @@ components:
         - status
         - start
         - end
+        - repos
+      type: object
+    ProjectRepo:
+      additionalProperties: false
+      properties:
+        repo:
+          description: owner/name。前後の空白は除く
+          type: string
+      required:
+        - repo
+      type: object
+    RelationCandidate:
+      additionalProperties: false
+      properties:
+        disabledReason:
+          description: 選べない理由。選べるなら空
+          type: string
+        display:
+          type: string
+        id:
+          description: 相手の内部 ID
+          type: string
+        title:
+          type: string
+        workspaceName:
+          description: 別のワークスペースの候補だけ。同じなら空
+          type: string
+      required:
+        - id
+        - display
+        - title
+        - workspaceName
+        - disabledReason
+      type: object
+    RelationInput:
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+        other:
+          description: 相手の内部 ID
+          type: string
+      required:
+        - label
+        - other
+      type: object
+    RelationRow:
+      additionalProperties: false
+      properties:
+        display:
+          description: 相手の画面の ID(HH-3)
+          type: string
+        id:
+          description: 相手の内部 ID
+          type: string
+        label:
+          description: 表記(blocks・blocked by・causes・caused by・duplicates・duplicated by・relates to・clones・cloned by)
+          type: string
+        statusColor:
+          description: ステータスの色の名前。値がなければ空
+          type: string
+        statusName:
+          description: 相手のステータスの名前。値がなければ空
+          type: string
+        title:
+          type: string
+        workspaceName:
+          description: 相手が別のワークスペースのときだけ。同じなら空
+          type: string
+      required:
+        - label
+        - id
+        - display
+        - title
+        - workspaceName
+        - statusName
+        - statusColor
       type: object
     RenameItem:
       additionalProperties: false
       properties:
         title:
+          type: string
+      required:
+        - title
+      type: object
+    RenameProject:
+      additionalProperties: false
+      properties:
+        title:
+          description: 1 行。改行は入れられない
+          pattern: ^[^\r\n]*$
           type: string
       required:
         - title
@@ -608,6 +794,54 @@ components:
           description: 新しい値。null と空の文字列は値を空にする
       required:
         - value
+      type: object
+    SetProjectDate:
+      additionalProperties: false
+      properties:
+        field:
+          enum:
+            - start
+            - end
+          type: string
+        value:
+          description: YYYY-MM-DD。空は「なし」
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+      required:
+        - field
+        - value
+      type: object
+    SetProjectOwner:
+      additionalProperties: false
+      properties:
+        owner:
+          description: ログイン名。空は「なし」。メンバーでなければ 404
+          type: string
+      required:
+        - owner
+      type: object
+    SetProjectStatus:
+      additionalProperties: false
+      properties:
+        status:
+          enum:
+            - Todo
+            - InProgress
+            - Done
+            - Pending
+            - Cancel
+          type: string
+      required:
+        - status
+      type: object
+    SetWatch:
+      additionalProperties: false
+      properties:
+        "on":
+          description: あなたがウォッチ中にするか
+          type: boolean
+      required:
+        - "on"
       type: object
     SetWorkspacePropertyHidden:
       additionalProperties: false
@@ -907,6 +1141,44 @@ components:
         - name
         - login
         - method
+      type: object
+    Worklog:
+      additionalProperties: false
+      properties:
+        by:
+          description: 記録した人のログイン名
+          type: string
+        byName:
+          description: 記録した人の表示名。メンバーにいなければ「不明なユーザー」
+          type: string
+        date:
+          description: 記録した日(YYYY-MM-DD)
+          type: string
+        hours:
+          description: 1.25 のような表記
+          type: string
+        id:
+          type: string
+        memo:
+          type: string
+      required:
+        - id
+        - by
+        - byName
+        - date
+        - hours
+        - memo
+      type: object
+    WorklogInput:
+      additionalProperties: false
+      properties:
+        hours:
+          description: 時間。小数第 2 位まで
+          type: string
+        memo:
+          type: string
+      required:
+        - hours
       type: object
     WorkspaceAutomation:
       additionalProperties: false
@@ -1744,6 +2016,229 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Step のチェックを入り切りする
+  /api/stores/{store}/items/{item}/comments:
+    get:
+      operationId: list-item-comments
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Comment"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのコメントを古い順に返す
+    post:
+      operationId: post-item-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムにコメントを投稿する
+  /api/stores/{store}/items/{item}/comments/{comment}:
+    delete:
+      operationId: delete-item-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのコメントを削除する
+    put:
+      operationId: edit-item-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのコメントを編集する
+  /api/stores/{store}/items/{item}/description:
+    get:
+      operationId: get-item-description
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescriptionText"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの説明を返す
+    put:
+      operationId: describe-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DescribeBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescribeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの説明を保存する
+  /api/stores/{store}/items/{item}/history:
+    get:
+      operationId: get-item-history
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/HistoryRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの履歴を新しい順で返す
   /api/stores/{store}/items/{item}/move-up:
     post:
       operationId: move-item-up
@@ -1882,6 +2377,137 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 関連システム・複数選択に値を足す
+  /api/stores/{store}/items/{item}/relation-candidates:
+    get:
+      operationId: list-relation-candidates
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: label
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RelationCandidate"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連の相手の候補を返す(ID かタイトルで絞る。20 件まで)
+  /api/stores/{store}/items/{item}/relations:
+    get:
+      operationId: list-relations
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RelationRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの関連を、表記の順で返す(逆向きの表記を含む)
+    post:
+      operationId: add-relation
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連を足す
+  /api/stores/{store}/items/{item}/relations/remove:
+    post:
+      operationId: remove-relation
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連を外す
   /api/stores/{store}/items/{item}/save-as-template:
     post:
       operationId: save-item-as-template
@@ -1984,6 +2610,133 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムのタイトルを変える
+  /api/stores/{store}/items/{item}/watch:
+    put:
+      operationId: set-watch
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWatch"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: あなたのウォッチを入り切りする
+  /api/stores/{store}/items/{item}/worklogs:
+    get:
+      operationId: list-worklogs
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Worklog"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの作業時間の記録を古い順に返す
+    post:
+      operationId: add-worklog
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorklogInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Worklog"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 作業時間を記録する
+  /api/stores/{store}/items/{item}/worklogs/{worklog}:
+    delete:
+      operationId: delete-worklog
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: worklog
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 作業時間の記録を削除する
   /api/stores/{store}/me:
     get:
       operationId: get-me
@@ -2061,6 +2814,263 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトを返す
+  /api/stores/{store}/projects/{project}/comments:
+    get:
+      operationId: list-project-comments
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Comment"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのコメントを古い順に返す
+    post:
+      operationId: post-project-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトにコメントを投稿する
+  /api/stores/{store}/projects/{project}/comments/{comment}:
+    delete:
+      operationId: delete-project-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのコメントを削除する
+    put:
+      operationId: edit-project-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのコメントを編集する
+  /api/stores/{store}/projects/{project}/date:
+    put:
+      operationId: set-project-date
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectDate"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの開始日か終了日を変える
+  /api/stores/{store}/projects/{project}/description:
+    get:
+      operationId: get-project-description
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescriptionText"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの説明を返す
+    put:
+      operationId: describe-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DescribeBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DescribeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの説明を保存する
+  /api/stores/{store}/projects/{project}/history:
+    get:
+      operationId: get-project-history
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/HistoryRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの履歴を新しい順で返す
   /api/stores/{store}/projects/{project}/items:
     get:
       operationId: list-project-items
@@ -2092,6 +3102,176 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトのすべてのアイテムを番号の順で返す
+  /api/stores/{store}/projects/{project}/owner:
+    put:
+      operationId: set-project-owner
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectOwner"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのオーナーを変える
+  /api/stores/{store}/projects/{project}/repos:
+    post:
+      operationId: add-project-repo
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectRepo"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトにリポジトリを結びつける
+  /api/stores/{store}/projects/{project}/repos/remove:
+    post:
+      operationId: remove-project-repo
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectRepo"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトからリポジトリを外す
+  /api/stores/{store}/projects/{project}/status:
+    put:
+      operationId: set-project-status
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProjectStatus"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのステータスを変える
+  /api/stores/{store}/projects/{project}/title:
+    put:
+      operationId: rename-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameProject"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのタイトルを変える
   /api/stores/{store}/sync:
     post:
       operationId: sync-store

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceTemplate } from "../../model/workspace";
-import { applyTemplate, templateStructure } from "./templateApply";
+import { applyTemplate, nextDescription, templateStructure } from "./templateApply";
 
 const tpl = (id: string, extra: Partial<WorkspaceTemplate>): WorkspaceTemplate => ({
   id,
@@ -21,6 +21,26 @@ const taskT = tpl("task", {
 const bugT = tpl("bug", { kind: "Bug", description: "## 概要" });
 const all = () => true;
 const empty = { title: "", description: "", values: {}, template: null };
+
+describe("nextDescription", () => {
+  const next = taskT; // 説明は "## 手順"
+  it("auto: fills an empty description, keeps a typed one, replaces the applied template's own", () => {
+    expect(nextDescription("", "", next, "auto")).toBe("## 手順");
+    expect(nextDescription("メモ", "", next, "auto")).toBe("メモ");
+    expect(nextDescription("## 概要", "## 概要", next, "auto")).toBe("## 手順");
+    expect(nextDescription("## 概要!", "## 概要", next, "auto")).toBe("## 概要!");
+  });
+
+  it("select: always the template's description", () => {
+    expect(nextDescription("メモ", "", next, "select")).toBe("## 手順");
+  });
+
+  it("なし: clears a template's description and keeps a typed one", () => {
+    expect(nextDescription("## 手順", "## 手順", null, "select")).toBe("");
+    expect(nextDescription("メモ", "## 手順", null, "select")).toBe("メモ");
+    expect(nextDescription("", "", null, "auto")).toBe("");
+  });
+});
 
 describe("apply template", () => {
   it("fills an empty title and keeps a typed one", () => {

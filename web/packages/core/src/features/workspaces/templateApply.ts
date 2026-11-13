@@ -27,29 +27,32 @@ export interface ApplyState {
 
 export type ApplyMode = "auto" | "select";
 
+// nextDescription は、テンプレートを当てはめたあとの説明。applied は、いま当てはめているテンプレートの説明
+// (当てはめていなければ "")。説明が空か applied と一字一句同じなら、テンプレート由来とみなす。
+export function nextDescription(
+  current: string,
+  applied: string,
+  next: WorkspaceTemplate | null,
+  mode: ApplyMode,
+): string {
+  const derived = current === "" || current === applied;
+  if (next === null) return derived ? "" : current;
+  return mode === "select" || derived ? next.description : current;
+}
+
 export function applyTemplate(
   state: ApplyState,
   next: WorkspaceTemplate | null,
   mode: ApplyMode,
   visible: (propertyId: string) => boolean,
 ): ApplyState {
-  // 説明が空か、いまのテンプレートの説明と一字一句同じなら、テンプレート由来とみなす。
-  const derived =
-    state.description === "" ||
-    (state.template !== null && state.description === state.template.description);
-  let description = state.description;
-  if (next === null) {
-    if (derived) description = "";
-  } else if (mode === "select" || derived) {
-    description = next.description;
-  }
   const values = { ...state.values };
   for (const [id, v] of Object.entries(next?.values ?? {})) {
     if (visible(id)) values[id] = v;
   }
   return {
     title: state.title.trim() === "" && next !== null ? next.title : state.title,
-    description,
+    description: nextDescription(state.description, state.template?.description ?? "", next, mode),
     values,
     template: next,
   };

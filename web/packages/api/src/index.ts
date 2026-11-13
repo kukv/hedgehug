@@ -2,6 +2,7 @@ export { createAccountsPort } from "./accounts";
 export { createCatalogPort } from "./catalog";
 export { ApiError, setToken } from "./fetcher";
 export { createItemsPort } from "./items";
+export { createNotesPort } from "./notes";
 export { createProjectsPort } from "./projects";
 export { createSyncPort } from "./sync";
 export { createSystemPort } from "./system";

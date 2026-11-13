@@ -81,6 +81,9 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 			return err
 		}
 	}
+	if err := writeTexts(wt, t); err != nil {
+		return err
+	}
 	if err := rewriteStale(wt, t, sc, stale); err != nil {
 		return err
 	}
@@ -99,6 +102,38 @@ func addPaths(wt *git.Worktree, paths ...string) error {
 			continue
 		}
 		if err := wt.AddWithOptions(&git.AddOptions{Path: p, SkipStatus: true}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeTexts は、この Tx で書いた説明を description.md にする(空なら消す)。エンティティのフォルダを
+// 作ったあと(writeEntity のあと)に呼ぶ。
+func writeTexts(wt *git.Worktree, t *tx) error {
+	refs := make([]change.Ref, 0, len(t.texts))
+	for ref := range t.texts {
+		refs = append(refs, ref)
+	}
+	slices.SortFunc(refs, func(a, b change.Ref) int {
+		return strings.Compare(string(a.Kind)+"/"+string(a.ID), string(b.Kind)+"/"+string(b.ID))
+	})
+	for _, ref := range refs {
+		p, err := descriptionPath(ref)
+		if err != nil {
+			return err
+		}
+		if t.texts[ref] == "" {
+			// describe は、作業ツリーと同じ説明を入れないので、空のときはファイルがある。
+			if _, err := wt.Remove(p); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(t.root, p), []byte(t.texts[ref]), 0o644); err != nil { //nolint:gosec // G306: Store のファイルは共有するもので秘密ではない
+			return err
+		}
+		if err := addPaths(wt, p); err != nil {
 			return err
 		}
 	}

@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { ItemDialogState, Kind } from "@hedgehug/core";
   import { kinds } from "@hedgehug/core";
-  import { Input, Select } from "@hedgehug/ui";
+  import { Input, Select, Textarea } from "@hedgehug/ui";
   import { itemDialog } from "../../wire";
   import CreatePropertyFields from "./CreatePropertyFields.svelte";
   import CreateStructure from "./CreateStructure.svelte";
 
-  // 作成ダイアログの項目(02「ダイアログの項目」のうち、種類・ワークスペース・プロジェクト・親・テンプレート・タイトル・一緒に作るもの)。
+  // 作成ダイアログの項目(02「ダイアログの項目」のうち、種類・ワークスペース・プロジェクト・親・テンプレート・タイトル・説明・一緒に作るもの)。
   interface Props {
     s: ItemDialogState;
   }
@@ -82,6 +82,14 @@
   />
 </div>
 <CreatePropertyFields {s} />
+<div class="field">
+  <span>説明</span>
+  <Textarea
+    label="説明"
+    rows={4}
+    bind:value={() => s.form.description, (v) => void itemDialog.update({ description: v })}
+  />
+</div>
 {#if s.structure}
   <CreateStructure structure={s.structure} />
 {/if}

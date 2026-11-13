@@ -12,6 +12,8 @@ export interface Item {
   rank: string;
   title: string;
   watchers: string[];
+  // blocked は、ブロック中か(ブロックしている相手に、完了・中止でないものがある。サーバーが決める)。
+  blocked: boolean;
   createdAt: string;
   createdBy: string;
   // status・priority は値の ID。assignee はログイン名、start・end は YYYY-MM-DD(空は未設定)。
@@ -41,4 +43,6 @@ export interface NewItem {
   values: Record<string, PropertyInput>;
   // templateId は、一緒に作るテンプレート(空かなしは「なし」)。
   templateId?: string;
+  // description は、作るアイテムの説明(空・なしは説明なし)。
+  description?: string;
 }

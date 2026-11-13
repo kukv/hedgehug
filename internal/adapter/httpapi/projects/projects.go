@@ -17,22 +17,34 @@ import (
 
 // Project は、API が返すプロジェクト。
 type Project struct {
-	ID        string `json:"id"`
-	Workspace string `json:"workspace"`
-	Number    int    `json:"number"`
-	Rank      string `json:"rank"`
-	Title     string `json:"title"`
-	Owner     string `json:"owner" doc:"ログイン名。空は「なし」"`
-	Status    string `json:"status" enum:"Todo,InProgress,Done,Pending,Cancel"`
-	Start     string `json:"start" doc:"YYYY-MM-DD。空は「なし」"`
-	End       string `json:"end"`
+	ID        string   `json:"id"`
+	Workspace string   `json:"workspace"`
+	Number    int      `json:"number"`
+	Rank      string   `json:"rank"`
+	Title     string   `json:"title"`
+	Owner     string   `json:"owner" doc:"ログイン名。空は「なし」"`
+	Status    string   `json:"status" enum:"Todo,InProgress,Done,Pending,Cancel"`
+	Start     string   `json:"start" doc:"YYYY-MM-DD。空は「なし」"`
+	End       string   `json:"end"`
+	Repos     []string `json:"repos" doc:"結びつけた GitHub のリポジトリ(owner/name)。大文字小文字を区別しない辞書順"`
 }
 
 func toAPI(p project.Project) Project {
 	return Project{
 		ID: string(p.ID), Workspace: string(p.Place.Workspace), Number: p.Place.Number, Rank: p.Rank,
 		Title: p.Title, Owner: p.Owner, Status: string(p.Status), Start: p.Start, End: p.End,
+		Repos: append([]string{}, p.Repos...),
 	}
+}
+
+// checkDates は、形(pattern)だけでは通る 2026-02-30 のような無い日付を、暦の上の日付かで断る。
+func checkDates(ds ...string) error {
+	for _, d := range ds {
+		if _, err := time.Parse(time.DateOnly, d); d != "" && err != nil {
+			return huma.Error422UnprocessableEntity("not a date: " + d)
+		}
+	}
+	return nil
 }
 
 type wsPath struct {
@@ -70,11 +82,8 @@ type getInput struct {
 func Register(api huma.API, svc appprojects.Service) {
 	huma.Register(api, huma.Operation{OperationID: "create-project", Method: http.MethodPost, Path: "/api/stores/{store}/workspaces/{workspace}/projects", Summary: "プロジェクトを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
-			// 形(pattern)だけでは 2026-02-30 のような無い日付を通すので、暦の上の日付かを確かめる
-			for _, d := range []string{in.Body.Start, in.Body.End} {
-				if _, err := time.Parse(time.DateOnly, d); d != "" && err != nil {
-					return nil, huma.Error422UnprocessableEntity("not a date: " + d)
-				}
+			if err := checkDates(in.Body.Start, in.Body.End); err != nil {
+				return nil, err
 			}
 			p, err := svc.Create(ctx, appprojects.CreateInput{
 				Store: port.StoreID(in.Store), Workspace: workspace.ID(in.Workspace), Title: in.Body.Title,
@@ -105,4 +114,5 @@ func Register(api huma.API, svc appprojects.Service) {
 			}
 			return &oneOutput{Body: toAPI(p)}, nil
 		})
+	registerEdit(api, svc)
 }

@@ -64,6 +64,8 @@ const form = (f: Partial<TemplateForm> = {}): TemplateForm => ({
   title: "",
   values: { status: "st1", priority: "pr2" },
   templateId: "",
+  description: "",
+  templateDescription: "",
   ...f,
 });
 
@@ -136,5 +138,65 @@ describe("structureOf and othersOf", () => {
     expect(structureOf(withTemplates, form({ templateId: "T1" }), [])).toBeNull();
     expect(othersOf(withTemplates, "E1")).toBe(3);
     expect(othersOf(withTemplates, "")).toBe(0);
+  });
+});
+
+// 説明のあるテンプレート: D1・D2 は Task、DB は Bug。
+const d1 = tpl({ id: "D1", kind: "Task", description: "## 手順" });
+const d2 = tpl({ id: "D2", kind: "Task", description: "## 別の手順" });
+const dBug = tpl({ id: "DB", kind: "Bug", description: "## 概要" });
+const withDescriptions: WorkspaceSettings = {
+  ...settings,
+  templates: [d1, d2, dBug],
+  templateDefaults: { Task: "D1", Bug: "DB" },
+};
+
+describe("the template's description", () => {
+  it("select replaces whatever is typed, and remembers the template's description", () => {
+    const out = applyToForm(form({ description: "メモ" }), withDescriptions, "D1");
+    expect(out).toMatchObject({
+      description: "## 手順",
+      templateDescription: "## 手順",
+      templateId: "D1",
+    });
+    expect(applyToForm(out, withDescriptions, "D2").description).toBe("## 別の手順");
+  });
+
+  it("the default fills an empty description, keeps a typed one, replaces the template's own", () => {
+    const filled = applyDefault(form(), withDescriptions);
+    expect(filled.description).toBe("## 手順");
+    // 種類を Bug に切り替えた: テンプレート由来なので、新しい既定の説明に置き換わる。
+    expect(applyDefault({ ...filled, kind: "Bug" }, withDescriptions).description).toBe("## 概要");
+    // 1 文字足していれば、利用者の入力として残る。
+    const typed = { ...filled, kind: "Bug" as const, description: "## 手順!" };
+    expect(applyDefault(typed, withDescriptions)).toMatchObject({
+      description: "## 手順!",
+      templateDescription: "## 概要",
+      templateId: "DB",
+    });
+  });
+
+  it("compares with the template that was applied, even when the new settings do not have it", () => {
+    // ワークスペースを変えた: 前のワークスペースのテンプレート D1 は、新しい設定にない。
+    const applied = applyDefault(form(), withDescriptions);
+    const other: WorkspaceSettings = {
+      ...settings,
+      templates: [tpl({ id: "X1", kind: "Task", description: "## 別" })],
+      templateDefaults: { Task: "X1" },
+    };
+    expect(applyDefault(applied, other).description).toBe("## 別");
+  });
+
+  it("なし clears a template's description and keeps a typed one", () => {
+    const applied = applyToForm(form(), withDescriptions, "D1");
+    expect(applyToForm(applied, withDescriptions, "")).toMatchObject({
+      description: "",
+      templateDescription: "",
+      templateId: "",
+    });
+    expect(applyToForm({ ...applied, description: "メモ" }, withDescriptions, "")).toMatchObject({
+      description: "メモ",
+      templateId: "",
+    });
   });
 });

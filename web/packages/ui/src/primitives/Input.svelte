@@ -2,8 +2,12 @@
   interface Props {
     value?: string;
     label: string;
-    // type は、入力の種類。date は日付の入力欄(値は YYYY-MM-DD)。
-    type?: "text" | "date";
+    // type は、入力の種類。date は日付の入力欄(値は YYYY-MM-DD)。number は数の入力欄で、値は打った文字列のまま
+    // 返す(bind:value に任せると数に直され、「1.50」が「1.5」になる)。
+    type?: "text" | "date" | "number";
+    // step と min は、number の増減の刻みと下限。
+    step?: string;
+    min?: string;
     placeholder?: string;
     size?: "md" | "sm";
     mono?: boolean;
@@ -16,6 +20,8 @@
     // 使う側のマークアップで Biome の a11y/noAutofocus に当たるので使わない。
     focusOnMount?: boolean;
     onfocus?: (event: FocusEvent) => void;
+    // oninput は、入力のたびに、いまの値を渡す(候補を探すときなど)。
+    oninput?: (value: string) => void;
     onblur?: (event: FocusEvent) => void;
     onkeydown?: (event: KeyboardEvent) => void;
   }
@@ -24,6 +30,8 @@
     value = $bindable(""),
     label,
     type = "text",
+    step,
+    min,
     placeholder,
     size = "md",
     mono = false,
@@ -33,11 +41,26 @@
     id,
     focusOnMount = false,
     onfocus,
+    oninput,
     onblur,
     onkeydown,
   }: Props = $props();
 
   let element: HTMLInputElement | undefined = $state();
+
+  const attrs = $derived({
+    "aria-label": label,
+    type,
+    step,
+    min,
+    id,
+    placeholder,
+    disabled,
+    title,
+    onfocus,
+    onblur,
+    onkeydown,
+  });
 
   // autofocus 属性は a11y の警告になるので、出たときに focus を呼ぶ。
   $effect(() => {
@@ -45,22 +68,32 @@
   });
 </script>
 
-<input
-  bind:this={element}
-  class="input {size}"
-  class:mono
-  class:heading
-  aria-label={label}
-  {type}
-  {id}
-  {placeholder}
-  {disabled}
-  {title}
-  {onfocus}
-  {onblur}
-  {onkeydown}
-  bind:value
->
+<!-- number だけ、値を文字列のまま返す(bind:value は数に直すので使わない)。それ以外は bind:value で、親が値を
+     変えたときに入力欄の表示も直る(接頭辞を大文字にする欄など)。 -->
+{#if type === "number"}
+  <input
+    bind:this={element}
+    class="input {size}"
+    class:mono
+    class:heading
+    {...attrs}
+    {value}
+    oninput={(event) => {
+      value = event.currentTarget.value;
+      oninput?.(value);
+    }}
+  >
+{:else}
+  <input
+    bind:this={element}
+    class="input {size}"
+    class:mono
+    class:heading
+    {...attrs}
+    bind:value
+    oninput={(event) => oninput?.(event.currentTarget.value)}
+  >
+{/if}
 
 <style>
   .input {
