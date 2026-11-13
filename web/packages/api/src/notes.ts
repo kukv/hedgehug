@@ -19,6 +19,7 @@ import {
   postItemComment,
   postProjectComment,
 } from "./generated";
+import { relationCalls } from "./relationsPort";
 
 function toComment(c: ApiComment): Comment {
   return { id: c.id, by: c.by, byName: c.byName, at: c.at, body: c.body, edited: c.edited };
@@ -31,6 +32,7 @@ function toWorklog(w: ApiWorklog): Worklog {
 // 説明・コメント・作業時間・関連・履歴の口の実装。区画ごとのタスクが、自分のメソッドをここに足す。
 export function createNotesPort(): NotesPort {
   return {
+    ...relationCalls(),
     description: (t) =>
       call(async () => {
         const read =
