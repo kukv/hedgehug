@@ -2,6 +2,7 @@ package workspaces_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -134,7 +135,7 @@ func TestDeleteKeepsSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := settingsOf(t, s, w.ID)
-	if len(after.Statuses) == 0 || len(after.Statuses) != len(before.Statuses) || after.Statuses[0] != before.Statuses[0] {
+	if !reflect.DeepEqual(before, after) {
 		t.Errorf("settings changed: %+v -> %+v", before, after)
 	}
 }
