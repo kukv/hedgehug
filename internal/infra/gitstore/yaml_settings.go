@@ -1,15 +1,31 @@
 package gitstore
 
 import (
+	"math"
+	"strconv"
+
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// settingsOf は、ワークスペースの設定を引く。ログがなければ false(そのアイテムの注釈は付けない)。
-type settingsOf func(workspace.ID) (workspace.Settings, bool)
+// settingsOf は、ワークスペースの設定とスプリント・リリースを引く。ログがなければ false(そのアイテムの注釈は付けない)。
+type settingsOf func(workspace.ID) (wsInfo, bool)
+
+// wsInfo は、item.yaml の注釈に使う、ワークスペースのログから決まるもの。
+type wsInfo struct {
+	Settings workspace.Settings
+	Plan     planning.Plan
+}
+
+// wsInfoFromLog は、ワークスペースのログの wsInfo。書く道と同期の道で同じものを作る。
+func wsInfoFromLog(log []change.Record) (wsInfo, bool) {
+	s, ok := workspace.SettingsFromLog(log)
+	return wsInfo{Settings: s, Plan: planning.FromLog(log)}, ok
+}
 
 func strNode(s string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: s}
@@ -51,7 +67,7 @@ func mapping(flow bool, kv ...*yaml.Node) *yaml.Node {
 func key(k string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k} }
 
 // workspaceToYAML は、workspace.yaml の中身(保存形式「ファイル構成」。キーの並びはこの順)。
-func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, rules []automation.Rule) *yaml.Node {
+func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, rules []automation.Rule, plan planning.Plan) *yaml.Node {
 	statusName := valueName(s.Statuses, s.InitialStatus)
 	prioName := valueName(s.Priorities, s.InitialPriority)
 	initStatus, initPrio := idNode(s.InitialStatus), idNode(s.InitialPriority)
@@ -72,6 +88,69 @@ func workspaceToYAML(w workspace.Workspace, rank string, s workspace.Settings, r
 		key("templates"), templatesNode(s.Templates),
 		key("template_defaults"), templateDefaultsNode(s),
 		key("rules"), rulesNode(s, rules),
+		key("sprints"), sprintsNode(plan.Sprints),
+		key("releases"), releasesNode(plan.Releases),
+	)
+}
+
+// sprintsNode は、スプリント(内部 ID の順、削除済みも)を 1 件 1 行で書く。確定値は完了したものだけにあり、ほかは null。
+func sprintsNode(ss []planning.Sprint) *yaml.Node {
+	rows := make([]*yaml.Node, len(ss))
+	for i, s := range ss {
+		committed, completed := idNode(""), idNode("")
+		if c := s.Confirmed; c != nil {
+			committed, completed = totalsNode(c.Committed), totalsNode(c.Completed)
+		}
+		rows[i] = mapping(true,
+			key("id"), strNode(string(s.ID)),
+			key("name"), strNode(s.Name),
+			key("state"), strNode(string(s.State)),
+			key("start"), strNode(s.Start),
+			key("end"), strNode(s.End),
+			key("goal"), strNode(s.Goal),
+			key("committed"), committed,
+			key("completed"), completed,
+			key("deleted"), deletedNode(s.Deleted),
+		)
+	}
+	return seqOf(rows)
+}
+
+// releasesNode は、リリース(内部 ID の順、削除済みも)を 1 件 1 行で書く。
+func releasesNode(rs []planning.Release) *yaml.Node {
+	rows := make([]*yaml.Node, len(rs))
+	for i, r := range rs {
+		rows[i] = mapping(true,
+			key("id"), strNode(string(r.ID)),
+			key("name"), strNode(r.Name),
+			key("state"), strNode(string(r.State)),
+			key("date"), strNode(r.Date),
+			key("description"), strNode(r.Description),
+			key("deleted"), deletedNode(r.Deleted),
+		)
+	}
+	return seqOf(rows)
+}
+
+// totalsNode は、確定値の 1 つ({points, count})。
+func totalsNode(t planning.Totals) *yaml.Node {
+	points := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!float", Value: strconv.FormatFloat(t.Points, 'f', -1, 64)}
+	if t.Points == math.Trunc(t.Points) {
+		points.Tag = "!!int"
+	}
+	count := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(t.Count)}
+	return mapping(true, key("points"), points, key("count"), count)
+}
+
+// deletedNode は、削除の印({op, at, root}。deletedYAML と同じ形)。削除されていなければ null。
+func deletedNode(d *change.Deletion) *yaml.Node {
+	if d == nil {
+		return idNode("")
+	}
+	return mapping(true,
+		key("op"), strNode(string(d.Op)),
+		key("at"), strNode(d.At.Format(change.TimeLayout)),
+		key("root"), boolNode(d.Root),
 	)
 }
 

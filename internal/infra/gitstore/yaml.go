@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -69,6 +70,8 @@ type itemYAML struct {
 	End       *string      `yaml:"end"`
 	Points    *float64     `yaml:"points"`
 	Systems   *yaml.Node   `yaml:"systems"`
+	Sprint    *yaml.Node   `yaml:"sprint"`
+	Release   *yaml.Node   `yaml:"release"`
 	Fields    *yaml.Node   `yaml:"fields"`
 	Relations *yaml.Node   `yaml:"relations"`
 	Estimate  *float64     `yaml:"estimate"`
@@ -96,7 +99,7 @@ func renderYAML(kind change.Kind, log []change.Record, settings settingsOf) ([]b
 			return nil, nil
 		}
 		st, _ := workspace.SettingsFromLog(log)
-		v = workspaceToYAML(w, workspace.RankOf(log), st, automation.FromLog(log))
+		v = workspaceToYAML(w, workspace.RankOf(log), st, automation.FromLog(log), planning.FromLog(log))
 	case change.KindProject:
 		p, ok := project.FromLog(log)
 		if !ok {

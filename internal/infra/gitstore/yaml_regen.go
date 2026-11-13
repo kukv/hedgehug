@@ -1,12 +1,14 @@
 package gitstore
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -19,7 +21,7 @@ type txSettings struct {
 }
 
 type settingsEntry struct {
-	s  workspace.Settings
+	s  wsInfo
 	ok bool
 }
 
@@ -34,7 +36,7 @@ func newTxSettings(t *tx) (*txSettings, error) {
 	return c, c.err
 }
 
-func (c *txSettings) lookup(id workspace.ID) (workspace.Settings, bool) {
+func (c *txSettings) lookup(id workspace.ID) (wsInfo, bool) {
 	if e, ok := c.cache[id]; ok {
 		return e.s, e.ok
 	}
@@ -42,12 +44,13 @@ func (c *txSettings) lookup(id workspace.ID) (workspace.Settings, bool) {
 	if err != nil && c.err == nil {
 		c.err = err
 	}
-	s, ok := workspace.SettingsFromLog(log)
+	s, ok := wsInfoFromLog(log)
 	c.cache[id] = settingsEntry{s, ok}
 	return s, ok
 }
 
-// changedWorkspaces は、この Tx で設定が変わるワークスペース。採番の行だけを足すような保存では変わらない。
+// changedWorkspaces は、この Tx で設定か、スプリント・リリースの注釈が変わるワークスペース。採番の行だけを
+// 足すような保存や、スプリント・リリースの状態・日付だけを変える保存では変わらない。
 func (c *txSettings) changedWorkspaces() (map[workspace.ID]bool, error) {
 	out := map[workspace.ID]bool{}
 	for ref := range c.t.pending {
@@ -58,12 +61,30 @@ func (c *txSettings) changedWorkspaces() (map[workspace.ID]bool, error) {
 		if err != nil {
 			return nil, err
 		}
-		before, ok := workspace.SettingsFromLog(base)
-		if after, _ := c.lookup(ref.ID); ok && !reflect.DeepEqual(before, after) {
+		before, ok := wsInfoFromLog(base)
+		after, _ := c.lookup(ref.ID)
+		if ok && (!reflect.DeepEqual(before.Settings, after.Settings) || !maps.Equal(planNames(before.Plan), planNames(after.Plan))) {
 			out[ref.ID] = true
 		}
 	}
 	return out, c.err
+}
+
+// planNames は、item.yaml の sprint・release の行末に書く名前(内部 ID ごと)。削除済みのものは使えず(F1-5)
+// 注釈を付けないので入れない。名前の変更のほか、削除・復元・完全な削除でも変わる。
+func planNames(p planning.Plan) map[change.ID]string {
+	out := map[change.ID]string{}
+	for _, s := range p.Sprints {
+		if s.Deleted == nil {
+			out[s.ID] = s.Name
+		}
+	}
+	for _, r := range p.Releases {
+		if r.Deleted == nil {
+			out[r.ID] = r.Name
+		}
+	}
+	return out
 }
 
 // staleItems は、設定が変わるワークスペースのアイテムのうち、この Tx では書かないもの(item.yaml の

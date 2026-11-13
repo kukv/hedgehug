@@ -5,14 +5,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 	"go.yaml.in/yaml/v4"
@@ -265,4 +268,232 @@ func TestWorkspaceYAMLHasRules(t *testing.T) {
 		"trigger_status: "+string(done)+" # "+st.Statuses[2].Name+"\n",
 		"action: assignee\n", "value: '@none'\n", "enabled: true\n",
 	)
+}
+
+const (
+	ySprint  change.ID = "01YSPR00000000000000000001"
+	yPlanned change.ID = "01YSPR00000000000000000002"
+	yRelease change.ID = "01YREL00000000000000000001"
+)
+
+func TestWorkspaceYAMLSprints(t *testing.T) {
+	st, _ := ySettings()
+	d, err := workspace.CreateWithRank(workspace.Workspace{ID: yWS, Name: "Web", Prefix: "HH"}, st, "V")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := planning.Sprint{ID: ySprint, Name: "Sprint 4", State: planning.Closed, Start: "2026-11-01", End: "2026-11-14", Goal: "ログイン"}
+	r := planning.Release{ID: yRelease, Name: "v1.0", State: planning.Unreleased}
+	c := planning.Confirmed{Committed: planning.Totals{Points: 5, Count: 2}, Completed: planning.Totals{Points: 3.5, Count: 1}}
+	ds := append([]change.Draft{d}, planning.SprintDrafts(planning.Sprint{}, s)...)
+	ds = append(ds, planning.CloseDraft(ySprint, c))
+	ds = append(ds, planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: yPlanned, Name: "Sprint 5", State: planning.Planned})...)
+	ds = append(ds, planning.ReleaseDrafts(planning.Release{}, r)...)
+	at := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	log := change.Stamp(nil, ds, change.Meta{Op: "01OP1", At: at, Actor: change.User("taro")}, yIDs())
+	log = append(log, change.Stamp(log, []change.Draft{planning.DeleteRelease(yRelease)}, change.Meta{Op: "01OP2", At: at, Actor: change.User("taro")}, yIDs())...)
+	out, err := renderYAML(change.KindWorkspace, log, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "rules: []\n" +
+		"sprints:\n" +
+		"  - {id: 01YSPR00000000000000000001, name: Sprint 4, state: closed, start: \"2026-11-01\", end: \"2026-11-14\", goal: ログイン, committed: {points: 5, count: 2}, completed: {points: 3.5, count: 1}, deleted: null}\n" +
+		"  - {id: 01YSPR00000000000000000002, name: Sprint 5, state: planned, start: \"\", end: \"\", goal: \"\", committed: null, completed: null, deleted: null}\n" +
+		"releases:\n" +
+		"  - {id: 01YREL00000000000000000001, name: v1.0, state: unreleased, date: \"\", description: \"\", deleted: {op: 01OP2, at: \"2026-11-13T09:00:00.000Z\", root: true}}\n"
+	if !strings.HasSuffix(string(out), want) {
+		t.Errorf("workspace.yaml =\n%s\nwant to end with\n%s", out, want)
+	}
+}
+
+// writeSprint は、ySeed の Store のスプリントを old から sp に変える(ds も同じ保存で書く)。old が空なら作成で、アイテムも入れる。
+func writeSprint(t *testing.T, s *Stores, id port.StoreID, old, sp planning.Sprint, ds ...change.Draft) {
+	t.Helper()
+	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "スプリント"}, func(tx port.Tx) error {
+		if err := tx.WriteWorkspaces().Append(yWS, append(planning.SprintDrafts(old, sp), ds...)...); err != nil {
+			return err
+		}
+		if old.ID != "" {
+			return nil
+		}
+		return tx.WriteItems().Append(yItem, change.NewSet(item.SprintField, nil, sp.ID))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRenameSprintRewritesItemYAML(t *testing.T) {
+	s, id, dir, _ := ySeed(t)
+	sp := planning.Sprint{ID: ySprint, Name: "Sprint 4", State: planning.Planned}
+	writeSprint(t, s, id, planning.Sprint{}, sp)
+	itemDir := "items/" + string(yItem)
+	mustContain(t, "item.yaml", readFileString(t, dir, itemDir+"/item.yaml"), "sprint: "+string(ySprint)+" # Sprint 4\n")
+	log := readFileString(t, dir, itemDir+"/log.jsonl")
+
+	renamed := sp
+	renamed.Name = "Sprint 5"
+	writeSprint(t, s, id, sp, renamed)
+	mustContain(t, "item.yaml", readFileString(t, dir, itemDir+"/item.yaml"), "sprint: "+string(ySprint)+" # Sprint 5\n")
+	if got := readFileString(t, dir, itemDir+"/log.jsonl"); got != log {
+		t.Errorf("アイテムの log.jsonl が変わった:\n%s", got)
+	}
+	if !worktreeStatus(t, dir).IsClean() {
+		t.Error("作業ツリーがきれいでない(item.yaml が同じコミットに入っていない)")
+	}
+}
+
+// TestDeleteSprintKeepsItemYAMLFresh は、スプリントの削除だけを書く保存(名前は変わらない)でも、注釈が
+// 消えた item.yaml を同じコミットで作り直すこと(同期で作り直したものと同じになる)。
+func TestDeleteSprintKeepsItemYAMLFresh(t *testing.T) {
+	s, id, dir, _ := ySeed(t)
+	sp := planning.Sprint{ID: ySprint, Name: "Sprint 4", State: planning.Planned}
+	writeSprint(t, s, id, planning.Sprint{}, sp)
+	err := s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "削除"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(yWS, planning.DeleteSprint(ySprint))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "items/" + string(yItem) + "/item.yaml"
+	tr := committedTree(t, dir)
+	want := string(tr[path])
+	if err := rebuildYAML(tr); err != nil {
+		t.Fatal(err)
+	}
+	if string(tr[path]) != want {
+		t.Errorf("item.yaml が作り直したものと違う:\n--- 作り直し\n%s\n--- コミット\n%s", tr[path], want)
+	}
+	mustContain(t, "item.yaml", want, "sprint: "+string(ySprint)+"\n")
+}
+
+// TestSprintStateChangeKeepsItemYAML は、スプリントの状態と日付だけを変える保存では、item.yaml を作り直さない
+// (注釈の名前は変わらないので、コミットに入らない)こと。
+func TestSprintStateChangeKeepsItemYAML(t *testing.T) {
+	s, id, dir, _ := ySeed(t)
+	sp := planning.Sprint{ID: ySprint, Name: "Sprint 4", State: planning.Planned, Start: "2026-11-01", End: "2026-11-14"}
+	writeSprint(t, s, id, planning.Sprint{}, sp)
+	itemYAML := filepath.Join(dir, "items", string(yItem), "item.yaml")
+	before, err := os.Stat(itemYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active := sp
+	active.State, active.End = planning.Active, "2026-11-21"
+	writeSprint(t, s, id, sp, active)
+	// 作り直しても中身は同じでコミットには出ないので、書いたかどうかは更新時刻で見る。
+	if after, err := os.Stat(itemYAML); err != nil || !after.ModTime().Equal(before.ModTime()) {
+		t.Errorf("item.yaml を書き直した(err %v)", err)
+	}
+	stats, err := headCommit(t, dir).Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, st := range stats {
+		names = append(names, st.Name)
+	}
+	if !slices.Contains(names, "workspaces/"+string(yWS)+"/log.jsonl") || slices.Contains(names, "items/"+string(yItem)+"/item.yaml") {
+		t.Errorf("コミットのファイル = %v(ワークスペースのログだけで、item.yaml は入らない)", names)
+	}
+}
+
+// TestRestoreSprintBringsBackComment は、削除したスプリントを復元すると、item.yaml の注釈が戻ること。
+func TestRestoreSprintBringsBackComment(t *testing.T) {
+	s, id, dir, _ := ySeed(t)
+	writeSprint(t, s, id, planning.Sprint{}, planning.Sprint{ID: ySprint, Name: "Sprint 4", State: planning.Planned})
+	op := port.Operation{Actor: change.User("taro"), Summary: "削除"}
+	err := s.Write(t.Context(), id, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(yWS, planning.DeleteSprint(ySprint))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "items/" + string(yItem) + "/item.yaml"
+	mustContain(t, "item.yaml", readFileString(t, dir, path), "sprint: "+string(ySprint)+"\n")
+	err = s.Write(t.Context(), id, port.Operation{Actor: change.User("taro"), Summary: "復元"}, func(tx port.Tx) error {
+		log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: yWS})
+		if err != nil {
+			return err
+		}
+		var undo []change.Draft
+		for _, r := range log {
+			if r.T == change.Delete && r.F == "sprints/"+string(ySprint) {
+				undo = change.Undo(log, r.Op)
+			}
+		}
+		if len(undo) == 0 {
+			return fmt.Errorf("削除の行がない")
+		}
+		return tx.WriteWorkspaces().Append(yWS, undo...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, "item.yaml", readFileString(t, dir, path), "sprint: "+string(ySprint)+" # Sprint 4\n")
+	if !worktreeStatus(t, dir).IsClean() {
+		t.Error("作業ツリーがきれいでない(item.yaml が同じコミットに入っていない)")
+	}
+}
+
+func TestSyncRenameRewritesItemYAML(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	sp := planning.Sprint{ID: ySprint, Name: "Sprint 1", State: planning.Planned}
+	a.write(t, "スプリント", func(tx port.Tx) error {
+		if err := tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.SprintDrafts(planning.Sprint{}, sp)...); err != nil {
+			return err
+		}
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet(item.SprintField, nil, ySprint))
+	})
+	a.sync(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	renamed := sp
+	renamed.Name = "Sprint 2"
+	a.write(t, "改名", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.SprintDrafts(sp, renamed)...)
+	})
+	// b も同じアイテムを変え、受け取るときに合わせる(早送りでなく、合わせた木から作り直す)。
+	b.write(t, "タイトル", set("title", "ログイン画面を作る", "ログイン"))
+	a.sync(t, remote)
+	b.sync(t, remote)
+	got := readFileString(t, b.dir, "items/"+string(apptest.SampleTask)+"/item.yaml")
+	mustContain(t, "item.yaml", got, "sprint: "+string(ySprint)+" # Sprint 2\n", "title: ログイン\n")
+	a.sync(t, remote)
+	sameFiles(t, a, b)
+}
+
+func TestCloseSprintRowRoundTrip(t *testing.T) {
+	s, id, _, _ := ySeed(t)
+	sp := planning.Sprint{ID: ySprint, Name: "Sprint 4", State: planning.Active, Start: "2026-11-01", End: "2026-11-14"}
+	c := planning.Confirmed{Committed: planning.Totals{Points: 5, Count: 2}, Completed: planning.Totals{Points: 3.5, Count: 1}}
+	closed := sp
+	closed.State = planning.Closed
+	writeSprint(t, s, id, planning.Sprint{}, sp)
+	writeSprint(t, s, id, sp, closed, planning.CloseDraft(ySprint, c))
+	want := planning.CloseDraft(ySprint, c)
+	err := s.Read(t.Context(), id, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: yWS})
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, rec := range log {
+			if rec.T == want.T && rec.F == want.F {
+				found = string(rec.To) == string(want.To)
+			}
+		}
+		if !found {
+			t.Errorf("完了の行 %s %s が読み戻せない", want.T, want.F)
+		}
+		got := planning.FromLog(log).Sprints
+		if len(got) != 1 || got[0].Confirmed == nil || *got[0].Confirmed != c || got[0].State != planning.Closed {
+			t.Errorf("sprints = %+v, want confirmed %+v", got, c)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }

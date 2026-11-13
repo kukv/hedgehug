@@ -13,7 +13,9 @@ import (
 	commentlog "github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/worklog"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // noteID は、26 文字の内部 ID(先頭に 01N を付け、s を右に寄せて 0 で埋める)。
@@ -179,4 +181,39 @@ func TestItemYAMLWritesLinks(t *testing.T) {
 	if i, j := strings.Index(string(out), "estimate:"), strings.Index(string(out), "links:"); i < 0 || j < i {
 		t.Errorf("links must come after estimate:\n%s", out)
 	}
+}
+
+func TestItemYAMLSprintComment(t *testing.T) {
+	sprint, gone, rel := noteID("SP4"), noteID("SP5"), noteID("RL1")
+	plan := planning.Plan{
+		Sprints:  []planning.Sprint{{ID: sprint, Name: "Sprint 4"}, {ID: gone, Name: "Sprint 5", Deleted: &change.Deletion{Op: "01OP"}}},
+		Releases: []planning.Release{{ID: rel, Name: "v1"}},
+	}
+	settings := func(id workspace.ID) (wsInfo, bool) {
+		if id != yWS {
+			return wsInfo{}, false
+		}
+		return wsInfo{Plan: plan}, true
+	}
+	render := func(it item.Item) string {
+		t.Helper()
+		meta := change.Meta{Op: "01OP", At: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), Actor: change.User("taro")}
+		out, err := renderYAML(change.KindItem, change.Stamp(nil, []change.Draft{item.Create(it)}, meta, yIDs()), settings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+	it := item.Item{ID: noteID("A1"), Place: item.Place{Workspace: yWS, Project: yProj, Number: 1}, Kind: item.Task, Rank: "V", Title: "t", Sprint: sprint}
+	mustContain(t, "item.yaml", render(it), "systems: []\nsprint: "+string(sprint)+" # Sprint 4\nrelease: null\nfields:")
+
+	// 使えない参照(削除済み・ない・別のワークスペースのもの)には注釈を付けない。
+	it.Sprint, it.Release = gone, noteID("RL9")
+	mustContain(t, "item.yaml", render(it), "sprint: "+string(gone)+"\nrelease: "+string(noteID("RL9"))+"\n")
+	it.Place.Workspace = "01OTHERWS00000000000000001"
+	it.Sprint, it.Release = sprint, rel
+	mustContain(t, "item.yaml", render(it), "sprint: "+string(sprint)+"\nrelease: "+string(rel)+"\n")
+	// 同じワークスペースの使えるリリースには注釈を付ける。
+	it.Place.Workspace = yWS
+	mustContain(t, "item.yaml", render(it), "release: "+string(rel)+" # v1\n")
 }

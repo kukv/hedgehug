@@ -113,6 +113,8 @@ start: null
 end: null
 points: null
 systems: []
+sprint: null
+release: null
 fields: {}
 relations: []
 estimate: null
