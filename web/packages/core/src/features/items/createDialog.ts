@@ -9,10 +9,10 @@ import type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./cr
 import { applyDefault, applyToForm, othersOf } from "./createTemplate";
 import { initialValues, shownValues, switchWorkspace } from "./createValues";
 
-export type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
-
 // アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。型は createDialogTypes.ts。検査はサーバーに任せ、断りを赤字で出す
 // (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F。
+
+export type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
 
 export const kinds: Kind[] = ["Epic", "Story", "Task", "Bug", "Step"];
 
