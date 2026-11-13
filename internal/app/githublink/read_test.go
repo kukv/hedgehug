@@ -204,6 +204,7 @@ func TestReadOnceRateLimitedStopsAccount(t *testing.T) {
 	f := newRead(t)
 	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
 	f.linkIn(t, linkStore, linkTask, readPR("org/api", 3, itemlink.Open))
+	f.linkIn(t, otherStore, linkTask, readPR("org/api", 3, itemlink.Open)) // 同じアカウントの別の Store
 	f.gh.Put("org/web", readPR("org/web", 1, itemlink.Open))
 	f.gh.Put("org/api", readPR("org/api", 3, itemlink.Open))
 	reset := f.clock.now.Add(23 * time.Minute)
@@ -218,6 +219,9 @@ func TestReadOnceRateLimitedStopsAccount(t *testing.T) {
 			t.Errorf("#%d error = %q, want %q", n, r.Error, want)
 		}
 	}
+	if r := f.row(t, otherStore, 3); r.Error != want {
+		t.Errorf("other store error = %q, want %q", r.Error, want)
+	}
 	f.gh.Fail("org/web", 0, nil)
 	f.advance(22 * time.Minute)
 	f.read(t, every, false)
@@ -226,7 +230,7 @@ func TestReadOnceRateLimitedStopsAccount(t *testing.T) {
 	}
 	f.advance(time.Minute)
 	f.read(t, every, false)
-	if got := f.calls(); got != [2]int{2, 1} {
+	if got := f.calls(); got != [2]int{2, 2} {
 		t.Errorf("calls = %v, want both at the reset", got)
 	}
 }
@@ -250,6 +254,42 @@ func TestReadOnceRateLimitedWithoutResetWaitsAMinute(t *testing.T) {
 	f.read(t, every, false)
 	if n := f.gh.ReadManyCalls("org/web"); n != 2 {
 		t.Errorf("calls = %d, want a read after a minute", n)
+	}
+}
+
+func TestReadOnceRateLimitedPastResetWaitsAMinute(t *testing.T) {
+	f := newRead(t)
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.gh.Put("org/web", readPR("org/web", 1, itemlink.Open))
+	// このマシンの時計が GitHub より進んでいて、戻る時刻がもう過ぎている
+	f.gh.Fail("org/web", 0, &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: f.clock.now.Add(-time.Second)})
+	f.read(t, every, false)
+	f.read(t, every, false)
+	if n := f.gh.ReadManyCalls("org/web"); n != 1 {
+		t.Fatalf("calls = %d, want no retry right away", n)
+	}
+	f.advance(time.Minute)
+	f.read(t, every, false)
+	if n := f.gh.ReadManyCalls("org/web"); n != 2 {
+		t.Errorf("calls = %d, want a read after a minute", n)
+	}
+}
+
+func TestReadOnceAllMergedAcrossRepos(t *testing.T) {
+	f := newRead(t)
+	r := statusRule(ruleMerged, "すべてマージで完了", automation.TriggerPRMerged, apptest.SampleStatusDone)
+	r.AllMerged = true
+	f.withRules(t, r)
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.linkIn(t, linkStore, linkTask, readPR("org/api", 3, itemlink.Open))
+	f.gh.Put("org/web", readPR("org/web", 1, itemlink.Merged))
+	f.gh.Put("org/api", readPR("org/api", 3, itemlink.Merged))
+	f.read(t, every, false)
+	if rows := ruleRows(f.taskLog(t)); len(rows) != 1 || len(f.inbox.Notices()) != 1 {
+		t.Errorf("rule rows = %+v, notices = %+v", rows, f.inbox.Notices())
+	}
+	if it := f.taskItem(t); it.Status != apptest.SampleStatusDone {
+		t.Errorf("status = %s", it.Status)
 	}
 }
 

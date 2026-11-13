@@ -102,7 +102,12 @@ func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLin
 	b, err := rd.l.readMany(ctx, s.ID, r)
 	var f *ghcall.Failure
 	if ghcall.Is(err, ghcall.RateLimited) && errors.As(err, &f) {
-		lim := limit{text: rd.l.failText(err), notBefore: ghread.Limited(rd.now, f.ResetAt)}
+		nb := ghread.Limited(rd.now, f.ResetAt)
+		if !nb.After(rd.now) {
+			// このマシンの時計が進んでいて戻る時刻が過ぎているときも、すぐには読み直さない(分からないときと同じ 1 分後)
+			nb = rd.now.Add(time.Minute)
+		}
+		lim := limit{text: rd.l.failText(err), notBefore: nb}
 		rd.limited[s.Account] = lim
 		rec.Failed, rec.NotBefore = true, lim.notBefore
 		return repoResult{repo: r, text: lim.text}, rec
