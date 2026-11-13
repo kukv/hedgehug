@@ -33,6 +33,7 @@ import {
   createWorkspaceMover,
   createWorkspaceSettings,
   get,
+  openMoved,
   readonly,
   routeOfProject,
   routeOfWorkspace,
@@ -152,13 +153,7 @@ export const screen = createScreen({
   now: () => new Date(),
   openItem: (storeId, itemId, movedFrom) => {
     if (!movedFrom) return void detail.open(storeId, itemId);
-    movedNotice.show(storeId, itemId, movedFrom);
-    // 開けなかったときは 1 行を捨てる(あとで同じアイテムを普通に開いても出さない)。開く途中を画面への反映の読み直しが
-    // 追い越したときは、パネルはまだ出ていないが同じアイテムを開こうとしたままなので、捨てない(読み直しが出す)。
-    void detail.open(storeId, itemId).finally(() => {
-      const t = detail.target();
-      if (t?.storeId !== storeId || t.itemId !== itemId) movedNotice.clear();
-    });
+    void openMoved({ detail, notice: movedNotice }, storeId, itemId, movedFrom);
   },
 });
 
