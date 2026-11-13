@@ -29,48 +29,58 @@ export interface ProjectEditorDeps {
 }
 
 export function createProjectEditor(deps: ProjectEditorDeps): ProjectEditor {
-  // 保存のあとの読み直しが終わるまで、画面のプロジェクトは保存の前の値のままになる。そのあいだは、この画面で保存した
-  // 値(saved)と比べる(保存の前の値と比べると、保存した値をすぐ元に戻す変更が「同じ」に見えて送られない)。
-  // reloading は、終わっていない読み直しの数。すべて終わったら saved を捨てる。
-  let reloading = 0;
-  const saved = new Map<string, string>();
+  // 保存の返事と、そのあとの読み直しが終わるまで、画面のプロジェクトは保存の前の値のままになる。そのあいだは、この
+  // 画面で送った値(sent)と比べる(保存の前の値と比べると、送った値をすぐ元に戻す変更が「同じ」に見えて送られない)。
+  // 送る前に sent に置き、断られた・失敗したら送る前の値に戻す。busy は、終わっていない保存と読み直しの数。
+  // すべて終わったら sent を捨てる。
+  let busy = 0;
+  const sent = new Map<string, string>();
   const keyOf = (p: Project, field: Field) => `${p.storeId}/${p.id}/${field}`;
   const same = (p: Project, field: Field, value: string) => {
     const key = keyOf(p, field);
-    return value === (reloading > 0 && saved.has(key) ? saved.get(key) : p[field]);
+    return value === (sent.has(key) ? sent.get(key) : p[field]);
   };
 
-  // attempt は、保存を 1 回行う。断られたらその文言を返し(読み直さない)、保存できたら done を呼び、読み直して null を
-  // 返す。断り以外のエラーはそのまま投げる。
-  async function attempt(save: () => Promise<unknown>, done = () => {}): Promise<string | null> {
+  // attempt は、保存を 1 回行う。断られたらその文言を返し(読み直さない)、保存できたら読み直して null を返す。
+  // 断り以外のエラーはそのまま投げる。保存が断られた・失敗したら、undo を呼ぶ。
+  async function attempt(save: () => Promise<unknown>, undo = () => {}): Promise<string | null> {
+    busy += 1;
     try {
-      await save();
-    } catch (e) {
-      if (e instanceof Refused) return e.message;
-      throw e;
-    }
-    done();
-    reloading += 1;
-    try {
+      try {
+        await save();
+      } catch (e) {
+        undo();
+        if (e instanceof Refused) return e.message;
+        throw e;
+      }
       await deps.onChanged();
+      return null;
     } finally {
-      reloading -= 1;
-      if (reloading === 0) saved.clear();
+      busy -= 1;
+      if (busy === 0) sent.clear();
     }
-    return null;
   }
 
   // attemptWithToast は、断りをエラーのトーストで出す。保存できたら true。
-  async function attemptWithToast(save: () => Promise<unknown>, done?: () => void) {
-    const message = await attempt(save, done);
+  async function attemptWithToast(save: () => Promise<unknown>, undo?: () => void) {
+    const message = await attempt(save, undo);
     if (message !== null) deps.toasts.show(message, { error: true });
     return message === null;
   }
 
-  // setField は、値が前と同じなら送らず、違えば保存する。
+  // setField は、値が前と同じなら送らず、違えば送る値を sent に置いて保存する。断られた・失敗したら、sent を送る前に
+  // 戻す(そのあいだに同じ欄へ別の値を送っていたら、そちらを残す)。
   function setField(p: Project, field: Field, value: string, save: () => Promise<unknown>) {
     if (same(p, field, value)) return Promise.resolve(true);
-    return attemptWithToast(save, () => saved.set(keyOf(p, field), value));
+    const key = keyOf(p, field);
+    const before = sent.get(key);
+    const undo = () => {
+      if (sent.get(key) !== value) return;
+      if (before === undefined) sent.delete(key);
+      else sent.set(key, before);
+    };
+    sent.set(key, value);
+    return attemptWithToast(save, undo);
   }
 
   return {

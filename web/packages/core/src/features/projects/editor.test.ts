@@ -7,18 +7,21 @@ import { project } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createProjectEditor } from "./editor";
 
-// 偽の口: 呼び出しを覚え、断らせることができる。reload は、保存のあとの読み直し(既定はすぐ終わる)。
+// 偽の口: 呼び出しを覚え、断らせる・失敗させる・返事を止めることができる。reload は、保存のあとの読み直し
+// (既定はすぐ終わる)。
 function setup(reload: () => Promise<void> = async () => {}) {
   const calls: string[] = [];
-  let refusal: string | null = null;
+  let failure: Error | null = null;
+  let held: Promise<void> | null = null;
   const base: Project = { ...project("S1", "S1-W1", 1), repos: [] };
   const done = async (call: string) => {
     calls.push(call);
-    if (refusal !== null) {
-      const message = refusal;
-      refusal = null;
-      throw new Refused(message);
-    }
+    const fail = failure;
+    const wait = held;
+    failure = null;
+    held = null;
+    if (wait !== null) await wait;
+    if (fail !== null) throw fail;
     return base;
   };
   const projects: ProjectsPort = {
@@ -52,9 +55,25 @@ function setup(reload: () => Promise<void> = async () => {}) {
     toasts,
     changed: () => changed,
     refuseNext: (message: string) => {
-      refusal = message;
+      failure = new Refused(message);
+    },
+    failNext: (message: string) => {
+      failure = new Error(message);
+    },
+    // holdNext は、次の呼び出しの返事を、返した関数を呼ぶまで止める。
+    holdNext: () => {
+      let release = () => {};
+      held = new Promise<void>((r) => {
+        release = r;
+      });
+      return release;
     },
   };
+}
+
+// flush は、終わっている非同期の続きを流す。
+async function flush() {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 describe("createProjectEditor", () => {
@@ -100,6 +119,40 @@ describe("createProjectEditor", () => {
     // 読み直しが終わったら、画面のプロジェクトの値と比べる。
     expect(await editor.setDate(base, "start", base.start)).toBe(true);
     expect(calls).toHaveLength(2);
+  });
+
+  // 保存の返事を待つあいだも、送った値と比べる(日付を入れて欄を離れ、返事の前に消して離れると、消した値が送られない)。
+  it("compares with the value being sent while the save is in flight", async () => {
+    const { editor, base, calls, holdNext } = setup();
+    const release = holdNext();
+    const saving = editor.setDate(base, "start", "2026-11-20");
+    await flush();
+    const clearing = editor.setDate(base, "start", base.start);
+    await flush();
+    expect(calls).toEqual(["setDate S1 S1-P1 start 2026-11-20", "setDate S1 S1-P1 start "]);
+    release();
+    expect(await Promise.all([saving, clearing])).toEqual([true, true]);
+  });
+
+  // 断られた・失敗した値は、送らなかったことに戻す(ほかの保存が途中でも、画面のプロジェクトの値と比べる)。
+  it("rolls the value back when the save is refused or fails", async () => {
+    const { editor, base, calls, holdNext, refuseNext, failNext } = setup();
+    const release = holdNext();
+    const renaming = editor.rename(base, "決済");
+    await flush();
+    refuseNext("終了日は開始日以降にしてください");
+    expect(await editor.setDate(base, "end", "2026-11-01")).toBe(false);
+    failNext("network");
+    await expect(editor.setDate(base, "start", "2026-11-20")).rejects.toThrow("network");
+    expect(await editor.setDate(base, "end", base.end)).toBe(true);
+    expect(await editor.setDate(base, "start", base.start)).toBe(true);
+    expect(calls).toEqual([
+      "rename S1 S1-P1 決済",
+      "setDate S1 S1-P1 end 2026-11-01",
+      "setDate S1 S1-P1 start 2026-11-20",
+    ]);
+    release();
+    expect(await renaming).toBe(true);
   });
 
   it("shows the server's refusal as an error toast and returns false", async () => {
