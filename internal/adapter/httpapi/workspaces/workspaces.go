@@ -84,7 +84,7 @@ func registerRead(api huma.API, svc appworkspaces.Service) {
 		}
 		out := &listOutput{Body: []WorkspaceSummary{}}
 		for _, w := range list {
-			out.Body = append(out.Body, toSummary(w))
+			out.Body = append(out.Body, toSummary(w.Workspace, w.OldPrefixes))
 		}
 		return out, nil
 	})
@@ -96,14 +96,10 @@ func registerRead(api huma.API, svc appworkspaces.Service) {
 		if err != nil {
 			return nil, apierr.From(err)
 		}
-		old := got.OldPrefixes
-		if old == nil {
-			old = []string{}
-		}
 		settings := toSettings(got.Settings)
 		settings.ProjectRules = toProjectRules(got.ProjectRules)
 		return &getOutput{Body: WorkspaceDetail{
-			WorkspaceSummary: toSummary(got.Workspace), OldPrefixes: old, Settings: settings,
+			WorkspaceSummary: toSummary(got.Workspace, got.OldPrefixes), Settings: settings,
 		}}, nil
 	})
 }
@@ -117,7 +113,7 @@ func registerWrite(api huma.API, svc appworkspaces.Service) {
 		if err != nil {
 			return nil, apierr.From(err)
 		}
-		return &oneOutput{Body: toSummary(w)}, nil
+		return &oneOutput{Body: toSummary(w, nil)}, nil
 	})
 	huma.Register(api, huma.Operation{
 		OperationID: "rename-workspace", Method: http.MethodPut, Path: "/api/stores/{store}/workspaces/{workspace}/name",

@@ -5,6 +5,9 @@ import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { fakeItemsPort, flush, item } from "../items/fixtures.test-util";
 import { createNavigation } from "../router/navigation";
+import { formatRoute } from "../router/route";
+import { createToasts } from "../toasts/toasts";
+import { fakeTransfers } from "../transfers/transfers.test-util";
 import { createScreen } from "./screen";
 
 function memoryHistory(start: string): HistoryPort & { paths: string[] } {
@@ -26,18 +29,23 @@ async function setup(start: string, begin = true) {
   const catalog = createCatalog(fakeCatalogPort());
   await catalog.load();
   const items = fakeItemsPort([item("S1", "S1-P1", 12, "Task", null)]);
-  const opened: string[] = [];
+  const opened: unknown[][] = [];
+  const transfers = fakeTransfers();
+  const toasts = createToasts({ set: () => 0, clear: () => undefined });
   const screen = createScreen({
     navigation,
     catalog,
     items,
-    openItem: (s, i) => void opened.push(`${s}/${i}`),
+    transfers,
+    toasts,
+    now: () => new Date(2026, 10, 14, 12, 0),
+    openItem: (...a) => void opened.push(a),
   });
   if (begin) {
     screen.start();
     await flush();
   }
-  return { screen, navigation, history, opened, catalog, items };
+  return { screen, navigation, history, opened, catalog, items, transfers, toasts };
 }
 
 describe("createScreen", () => {
@@ -76,7 +84,7 @@ describe("createScreen", () => {
     await flush();
     expect(history.paths).toEqual(["/s/work/p/HH-P1/tree"]);
     expect(get(screen.current)).toMatchObject({ name: "project", projectId: "S1-P1", tab: "tree" });
-    expect(opened).toEqual(["S1/S1-I12"]);
+    expect(opened).toEqual([["S1", "S1-I12", undefined]]);
   });
 
   // 一覧の読み直し(画面への反映)が、アイテムを探すより短い間隔で続いても、アイテムの入口は開く。
@@ -98,11 +106,60 @@ describe("createScreen", () => {
       await flush();
     }
     expect(history.paths).toEqual(["/s/work/p/HH-P1/tree"]);
-    expect(opened).toEqual(["S1/S1-I12"]);
+    expect(opened).toEqual([["S1", "S1-I12", undefined]]);
   });
 
   it("shows home for an address it cannot resolve", async () => {
     const { screen } = await setup("/s/work/p/HH-P9/overview");
     expect(get(screen.current)).toEqual({ name: "home" });
+  });
+
+  it("opens the found item with its moved-from note after replacing the address with the project tree", async () => {
+    const { navigation, opened, transfers } = await setup("/");
+    const movedFrom = {
+      old: "HH-5",
+      at: "2026-11-13T00:05:00.000Z",
+      display: "TM-4",
+      current: "TM-4",
+    };
+    transfers.located = {
+      kind: "found",
+      storeId: "S1",
+      projectId: "S1-P1",
+      itemId: "S1-I9",
+      movedFrom,
+    };
+    navigation.replace({ name: "item", store: "work", item: "HH-5" });
+    await flush();
+    expect(opened).toEqual([["S1", "S1-I9", movedFrom]]);
+    expect(formatRoute(get(navigation.route))).toBe("/s/work/p/HH-P1/tree");
+  });
+
+  it("toasts the sentence of a gone item once, as a plain toast, and replaces the address with home", async () => {
+    const { screen, navigation, transfers, toasts, catalog, opened } = await setup(
+      "/s/work/i/HH-5",
+      false,
+    );
+    transfers.located = {
+      kind: "gone",
+      reason: "deleted",
+      old: "HH-5",
+      at: new Date(2026, 10, 13, 9, 5).toISOString(),
+      newDisplay: "TM-4",
+    };
+    // start は、アドレスと一覧の購読で 2 回解決する。どちらも locate に聞くが、トーストは 1 回だけ。
+    screen.start();
+    await flush();
+    await catalog.load();
+    await flush();
+    expect(get(toasts.list).map((t) => [t.text, t.error])).toEqual([
+      [
+        "HH-5 は 11/13 09:05 に TM-4 へ移動しましたが、削除されています。設定の「削除済み」から復元できます",
+        false,
+      ],
+    ]);
+    expect(formatRoute(get(navigation.route))).toBe("/");
+    expect(get(screen.current)).toEqual({ name: "home" });
+    expect(opened).toEqual([]);
   });
 });

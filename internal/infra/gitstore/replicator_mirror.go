@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -169,4 +170,72 @@ func (r *Replicator) Unsent(_ context.Context, id port.StoreID) (int, error) {
 		return 0, err
 	}
 	return countSaves(repo, head.Hash(), theirs)
+}
+
+// SyncSave は、1 つのロックの中で、受け取り・修復・保存・送信を行う(port.Replicator)。送信が他の人の更新と
+// 重なったら、保存を捨てて受け取りからやり直す(Sync と同じく最大 maxSendTries 回)。
+func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
+	if remote.ReceiveOnly {
+		return port.SyncResult{}, fmt.Errorf("%w: cannot save to a receive-only store", port.ErrInvalidOperation)
+	}
+	s, unlock, err := r.begin(id, remote)
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	defer unlock()
+	for range maxSendTries {
+		res, err := s.saveOnce(ctx, op, fn)
+		if errors.Is(err, errRejected) {
+			continue
+		}
+		if errors.Is(err, port.ErrRemoteRewritten) {
+			err = errors.Join(err, s.restoreSeen())
+		}
+		return res, err
+	}
+	return port.SyncResult{}, port.ErrSendConflict
+}
+
+// saveOnce は、受け取り → 修復 → 保存 → 送信を 1 回行う。送信が断られたら、保存のコミットを捨てる
+// (受け取って合わせた結果と修復は残す。Sync と同じく、修復は送る前に書く。決定 C3a-2。修復の失敗は *port.SaveError)。送信が拒否されたら errRejected。
+func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
+	theirs, err := s.receive(ctx)
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	if err := s.repairUnsent(ctx, theirs); err != nil {
+		// 通信の失敗ではない(保存していない)。中の種類(ErrNotFound など)は外に読ませない(%v で包む)。
+		return port.SyncResult{}, &port.SaveError{Err: fmt.Errorf("sync repair: %v", err)} //nolint:errorlint // 種類を読ませないため
+	}
+	head, err := s.repo.Head()
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	base := head.Hash()
+	if err := s.r.stores.runTx(s.root, op, fn); err != nil {
+		return port.SyncResult{}, &port.SaveError{Err: err}
+	}
+	now, err := s.push(ctx, theirs)
+	if err != nil {
+		if derr := s.discard(base); derr != nil {
+			// 捨てられなかったときは、やり直さない(保存のコミットの上に受け取り直さない)。印が残り、次の操作が
+			// そのときの先端に作業ツリーを合わせる。保存のコミットが残ったかもしれないので、目印を付ける。
+			if errors.Is(err, errRejected) {
+				err = port.ErrSendConflict
+			}
+			return port.SyncResult{}, errors.Join(err, port.ErrSaveNotDiscarded, derr)
+		}
+		return port.SyncResult{}, err
+	}
+	return s.result(theirs, now, true)
+}
+
+// discard は、先端を base に戻し、作業ツリーとインデックスを合わせる(base にないファイルとフォルダを消す)。
+// 途中で止まったら印が残り、次の操作の recoverInterrupted が、そのときの先端に作業ツリーを合わせる。
+func (s syncRun) discard(base plumbing.Hash) error {
+	wt, err := s.repo.Worktree()
+	if err != nil {
+		return err
+	}
+	return s.guarded(func() error { return rollback(wt, base) })
 }

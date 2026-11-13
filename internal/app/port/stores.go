@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -27,6 +29,17 @@ func CheckRuleDrafts(actor change.Actor, drafts []change.Draft) error {
 		if (actor.Kind != change.ActorUser && actor.Kind != change.ActorGitHub) || !change.ValidID(d.Rule) {
 			return fmt.Errorf("%w: rule row %q by %+v", ErrInvalidOperation, d.Rule, actor)
 		}
+	}
+	return nil
+}
+
+// CheckTransfer は、転送記録の行を書けるかを確かめる。Entity が transfer.EntityItem・EntityProject・
+// EntityWorkspace のどれでもない・Target が change.ValidID でない・ToStore が空なら、ErrInvalidOperation を包んだエラー。
+func CheckTransfer(r transfer.Record) error {
+	switch {
+	case r.Entity != transfer.EntityItem && r.Entity != transfer.EntityProject && r.Entity != transfer.EntityWorkspace,
+		!change.ValidID(r.Target), r.ToStore == "":
+		return fmt.Errorf("%w: transfer record %+v", ErrInvalidOperation, r)
 	}
 	return nil
 }
@@ -110,8 +123,8 @@ var (
 type Stores interface {
 	Read(ctx context.Context, storeID StoreID, fn func(r Reader) error) error
 	// Write は fn がエラーなら何も残さず、errors.Is で同じエラーと分かるエラーを返す(包んでよい)。
-	// 行を 1 つ以上書くとき、または説明を書き換えるときに op.Check がエラーなら、何も残さずそのエラーを返す。
-	// 行も説明の書き換えもない Write は何も残さず、op を確かめない(Summary が空でもよい)。
+	// 行を 1 つ以上書くとき、説明を書き換えるとき、アイテムのフォルダを消すとき、または転送記録を書くときに
+	// op.Check がエラーなら、何も残さずそのエラーを返す。どれもない Write は何も残さず、op を確かめない(Summary が空でもよい)。
 	// 同じ Store への Write は 1 つずつ順に行う。別の Store への Write は互いを待たない(Write の中から
 	// 別の Store に書いてよい)。
 	Write(ctx context.Context, storeID StoreID, op Operation, fn func(tx Tx) error) error
@@ -153,6 +166,8 @@ type Reader interface {
 	// RetentionDays は、削除済みの保持日数(.hedgehug/store.yaml の retention_days。ないときは 30)。
 	// 変えるのは設定の「削除済み」(G)で、ここは読むだけ。
 	RetentionDays() (int, error)
+	Transfers() TransferReader
+	Purged() PurgedReader
 }
 
 // Tx は 1 回の Write の中の読み書き。読み取りは、同じ Tx で書いたものを含む。
@@ -164,6 +179,7 @@ type Tx interface {
 	WriteProjects() ProjectWriter
 	WriteItems() ItemWriter
 	WriteMembers() MemberWriter
+	WriteTransfers() TransferWriter
 }
 
 type WorkspaceReader interface {
@@ -216,8 +232,45 @@ type ItemWriter interface {
 	Append(id item.ID, drafts ...change.Draft) error
 	// Describe は、アイテムの説明を書く。空の本文・ないアイテム・不正な ID の扱いは ProjectWriter.Describe と同じ。
 	Describe(id item.ID, text string) error
+	// Import は、別の Store のアイテムの行(log)を、id のフォルダに変えずに(id・op・at・by・actor・prev を
+	// そのまま)書く。description が空でなければ説明にする。同じ Tx で続けて Append した行は、写した行の先端に
+	// つながる。id が change.ValidID でない・log が空・そのアイテムの行がもうある(同じ Tx で書いたものを含む)・
+	// 同じ Tx で Remove したものは、何も書かず ErrInvalidOperation を包んだエラー。log の中身は調べない。
+	Import(id item.ID, log []change.Record, description string) error
+	// Remove は、アイテムのフォルダ(行・説明)を消す。同じ Tx で書いた行と説明も捨てる。同じ Tx から読むと、
+	// もうない。ないアイテムは ErrNotFound、change.ValidID でない ID は ErrInvalidOperation を包んだエラー。
+	Remove(id item.ID) error
 }
 
 type MemberWriter interface {
 	Append(drafts ...change.Draft) error
+}
+
+// TransferReader は、転送記録(transfers.jsonl)を読む。
+type TransferReader interface {
+	// List は、ファイルの並びで返す。同じ Tx で書いた分は、そのあとに並ぶ。
+	List() ([]transfer.Record, error)
+}
+
+// TransferWriter は、転送記録に行を足す。
+type TransferWriter interface {
+	// Append は、行を足す。ID・Op・By は Tx が埋める(Op はその操作のもの、By は実行者)。At は、空ならその操作の
+	// 時刻を、渡せばその時刻を書く(別の Store への移動は、移動先の moved_in と同じ時刻を渡す)。
+	// Entity が transfer.EntityItem・EntityProject・EntityWorkspace のどれでもない・Target が change.ValidID で
+	// ない・ToStore が空なら、何も足さず ErrInvalidOperation を包んだエラー。
+	Append(r transfer.Record) error
+}
+
+// PurgedReader は、完全に削除したものの記録(purged.jsonl)を読む。書くのは設定の「削除済み」(G)。
+type PurgedReader interface {
+	// List は、ファイルの並びで返す。読めない行は飛ばす。ファイルがなければ空。
+	List() ([]Purged, error)
+}
+
+// Purged は、purged.jsonl の 1 行。
+type Purged struct {
+	Entity  string // item・project・workspace・sprint・release
+	Target  change.ID
+	Display string
+	At      time.Time
 }

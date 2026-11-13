@@ -13,6 +13,8 @@ export interface ProjectNode extends Project {
 }
 
 export interface WorkspaceNode extends Workspace {
+  // oldPrefixes は、旧い接頭辞(画面のアドレスの旧い接頭辞で開くため。A5a-21)。ないときは空。
+  oldPrefixes: string[];
   projects: ProjectNode[];
 }
 
@@ -35,10 +37,14 @@ export function createCatalog(port: CatalogPort): Catalog {
   let latest = 0;
   let newest: Promise<void> = Promise.resolve();
 
-  async function loadWorkspace(storeId: string, w: Workspace): Promise<WorkspaceNode> {
+  async function loadWorkspace(
+    storeId: string,
+    w: Workspace & { oldPrefixes?: string[] },
+  ): Promise<WorkspaceNode> {
     const projects = await port.listProjects(storeId, w.id);
     return {
       ...w,
+      oldPrefixes: w.oldPrefixes ?? [],
       projects: projects.map((p) => ({ ...p, displayId: projectDisplayId(w.prefix, p.number) })),
     };
   }

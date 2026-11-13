@@ -111,7 +111,7 @@ func (c *txSettings) staleItems() ([]change.ID, error) {
 	var out []change.ID
 	for _, id := range ids {
 		ref := change.Ref{Kind: change.KindItem, ID: id}
-		if _, writing := c.t.pending[ref]; writing {
+		if _, writing := c.t.pending[ref]; writing || c.t.removed[ref] {
 			continue
 		}
 		log, err := readLog(c.t.root, ref)

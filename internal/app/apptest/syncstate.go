@@ -3,6 +3,7 @@ package apptest
 import (
 	"cmp"
 	"context"
+	"maps"
 	"slices"
 	"sync"
 	"testing"
@@ -163,4 +164,42 @@ func must(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// StoreVersions は port.StoreVersions の偽物。
+type StoreVersions struct {
+	mu    sync.Mutex
+	Value map[port.StoreID]string
+}
+
+func (s *StoreVersions) Versions(context.Context) (map[port.StoreID]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return maps.Clone(s.Value), nil
+}
+
+// Set は、版を入れ替える。
+func (s *StoreVersions) Set(v map[port.StoreID]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Value = v
+}
+
+// Events は port.Events の偽物。知らされた出来事を覚える。
+type Events struct {
+	mu   sync.Mutex
+	list []port.Event
+}
+
+func (e *Events) Publish(ev port.Event) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.list = append(e.list, ev)
+}
+
+// List は、知らされた出来事を順に返す。
+func (e *Events) List() []port.Event {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return slices.Clone(e.list)
 }

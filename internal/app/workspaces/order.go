@@ -12,10 +12,11 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// ranked は、並びの rank を添えたワークスペース。rank が空なら、まだ並びを持たない(B2-7)。
+// ranked は、並びの rank と旧い接頭辞を添えたワークスペース。rank が空なら、まだ並びを持たない(B2-7)。
 type ranked struct {
 	workspace.Workspace
-	rank string
+	rank        string
+	oldPrefixes []string
 }
 
 // orderedWorkspaces は、削除済みも含めたワークスペースを rank の順(同じなら内部 ID の順)で返す。rank のないものは先頭。
@@ -45,7 +46,7 @@ func rankedInOrder(r port.Reader, list []workspace.Workspace) ([]ranked, error) 
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ranked{w, workspace.RankOf(log)})
+		out = append(out, ranked{w, workspace.RankOf(log), workspace.OldPrefixes(log)})
 	}
 	slices.SortFunc(out, func(a, b ranked) int {
 		return cmp.Or(cmp.Compare(a.rank, b.rank), cmp.Compare(a.ID, b.ID))

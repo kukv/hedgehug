@@ -19,6 +19,27 @@ export {
 export { createTreeWrites } from "./features/items/treeWrites";
 export { createProjectDelete, leaveDeletedProject } from "./features/projects/delete";
 export { projectTabOf } from "./features/router/route";
+export { createAfterMoved } from "./features/transfers/afterMoved";
+export {
+  createTransferDialog,
+  type ReplacementRow,
+  type TransferDialog,
+  type TransferDialogDeps,
+  type TransferDialogState,
+} from "./features/transfers/dialog";
+export {
+  changeRows,
+  changesHeading,
+  noEpicMessage,
+  noTargetsMessage,
+  offlineMessage,
+  replacementsHeading,
+  transferFailedMessage,
+  transferIntro,
+  transferredMessage,
+} from "./features/transfers/dialogText";
+export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
+export { openMoved } from "./features/transfers/openMoved";
 export {
   createWorkspaceDelete,
   type DeleteWorkspaceTarget,
@@ -29,4 +50,20 @@ export {
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
 export { deleteMenuItem } from "./features/workspaces/sidebarMenu";
 export type { MoveCandidate, MovePreview, MovePreviewStatus } from "./model/itemAction";
+export type {
+  Gone,
+  GoneReason,
+  Located,
+  MovedFrom,
+  StatusChoice,
+  StatusReplacement,
+  TransferDestination,
+  TransferEpic,
+  TransferInput,
+  TransferPreview,
+  TransferProject,
+  TransferResult,
+  TransferTarget,
+} from "./model/transfer";
 export type { ItemActionsPort } from "./port/itemActions";
+export type { TransfersPort } from "./port/transfers";

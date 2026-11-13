@@ -21,6 +21,7 @@ describe("itemMenu", () => {
       ["move-up", "上へ移動"],
       ["move-down", "下へ移動"],
       ["move", "移動…"],
+      ["transfer", "別のワークスペースへ移動…"],
       ["change-kind", "種類を変更…"],
       ["duplicate", "複製"],
       ["save-as-template", "テンプレートとして保存…"],
@@ -44,12 +45,17 @@ describe("itemMenu", () => {
       expect(head(kind)[1]).toEqual(["add-child", "Step を追加"]);
       expect(childKindOf(kind)).toBe("Step");
     }
-    expect(itemMenu(ctx({ kind: "Task", row: true })).length).toBe(10);
+    expect(itemMenu(ctx({ kind: "Task", row: true })).length).toBe(11);
   });
 
   it("has no 'add a child' for a Step row, and neither entry in the detail menu", () => {
     const step = itemMenu(ctx({ kind: "Step", row: true })).map((e) => e.id);
-    expect(step).toEqual(["open", ...itemMenu(ctx()).map((e) => e.id)]);
+    expect(step).toEqual([
+      "open",
+      ...itemMenu(ctx())
+        .map((e) => e.id)
+        .filter((id) => id !== "transfer"),
+    ]);
     const detail = itemMenu(ctx({ kind: "Epic" })).map((e) => e.id);
     expect(detail).not.toContain("open");
     expect(detail).not.toContain("add-child");
@@ -97,6 +103,7 @@ describe("itemMenu", () => {
       "move-up",
       "move-down",
       "move",
+      "transfer",
       "change-kind",
       "duplicate",
       "save-as-template",
@@ -105,6 +112,23 @@ describe("itemMenu", () => {
       expect(entries[id], id).toMatchObject({ disabled: true, hint: "閲覧のみの Store です" });
     }
     expect(entries["copy-id"]).toEqual({ id: "copy-id", label: "ID をコピー", disabled: false });
+  });
+
+  it("disables 'transfer' only in a read-only Store, with the read-only note", () => {
+    expect(byId(ctx({ readOnly: true })).transfer).toEqual({
+      id: "transfer",
+      label: "別のワークスペースへ移動…",
+      disabled: true,
+      hint: "閲覧のみの Store です",
+    });
+    for (const kind of ["Epic", "Story", "Task", "Bug"] as const) {
+      expect(byId(ctx({ kind, hasOtherProjects: false })).transfer?.disabled).toBe(false);
+    }
+  });
+
+  it("has no 'transfer' for a Step", () => {
+    expect(itemMenu(ctx({ kind: "Step" })).map((e) => e.id)).not.toContain("transfer");
+    expect(itemMenu(ctx({ kind: "Step", row: true })).map((e) => e.id)).not.toContain("transfer");
   });
 });
 

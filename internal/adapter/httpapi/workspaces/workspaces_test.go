@@ -82,6 +82,17 @@ func TestRenameAndPrefix(t *testing.T) {
 	if !strings.Contains(body, `"name":"フロント"`) || !strings.Contains(body, `"oldPrefixes":["HH"]`) {
 		t.Errorf("after: %s", body)
 	}
+	if list := api.Get(base).Body.String(); !strings.Contains(list, `"oldPrefixes":["HH"]`) {
+		t.Errorf("list after the prefix change: %s", list)
+	}
+}
+
+func TestListHasEmptyOldPrefixes(t *testing.T) {
+	api := newAPI(t)
+	create(t, api, "Web", "HH")
+	if list := api.Get(base).Body.String(); !strings.Contains(list, `"oldPrefixes":[]`) {
+		t.Errorf("list: %s", list)
+	}
 }
 
 func TestNotFound(t *testing.T) {

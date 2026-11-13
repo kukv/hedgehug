@@ -15,3 +15,8 @@ const pad = (n: number) => String(n).padStart(2, "0");
 export function dayOf(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+// formatDateTime は、日時を「日付 HH:MM」にする(日付は formatDay と同じ形)。どちらもこのマシンの時刻帯で見る。
+export function formatDateTime(at: Date, now: Date): string {
+  return `${formatDay(dayOf(at), now.getFullYear())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}

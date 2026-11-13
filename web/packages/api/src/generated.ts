@@ -574,6 +574,60 @@ export interface ListOutputBody {
   accounts: AccountRow[] | null;
 }
 
+export type LocatedKind = typeof LocatedKind[keyof typeof LocatedKind];
+
+
+export const LocatedKind = {
+  found: 'found',
+  gone: 'gone',
+} as const;
+
+/**
+ * gone のとき。deleted は移した先で削除済み、purged は完全に削除、hidden は移動先の Store が表示中でない、elsewhere はそのあと表示中でない Store へ移した
+ */
+export type LocatedReason = typeof LocatedReason[keyof typeof LocatedReason];
+
+
+export const LocatedReason = {
+  deleted: 'deleted',
+  purged: 'purged',
+  hidden: 'hidden',
+  elsewhere: 'elsewhere',
+} as const;
+
+export interface LocatedMovedFrom {
+  /** 旧 ID が一致した記録の日時 */
+  at: string;
+  /** 開くアイテムのいまの ID */
+  current: string;
+  /** 旧 ID が一致した記録の新 ID */
+  display: string;
+  /** 旧 ID(HH-2) */
+  old: string;
+}
+
+export interface Located {
+  /** gone のとき。旧 ID が一致した記録の日時 */
+  at?: string;
+  /** found のとき */
+  itemId?: string;
+  kind: LocatedKind;
+  /** found で、転送記録から見つけたとき */
+  movedFrom?: LocatedMovedFrom;
+  /** gone のとき。旧 ID が一致した記録の新 ID */
+  newDisplay?: string;
+  /** gone のとき。旧 ID */
+  old?: string;
+  /** found のとき */
+  projectId?: string;
+  /** gone のとき。deleted は移した先で削除済み、purged は完全に削除、hidden は移動先の Store が表示中でない、elsewhere はそのあと表示中でない Store へ移した */
+  reason?: LocatedReason;
+  /** found のとき。開くアイテムの Store */
+  storeId?: string;
+  /** gone の hidden・elsewhere のとき。表示中でない Store の名前 */
+  storeName?: string;
+}
+
 export interface Me {
   login: string;
 }
@@ -1304,6 +1358,106 @@ export interface SystemInfo {
   version: string;
 }
 
+export interface TransferChoice {
+  id: string;
+  name: string;
+}
+
+export interface TransferEpic {
+  /** 画面の ID(MB-1) */
+  display: string;
+  id: string;
+  title: string;
+}
+
+/**
+ * ステータスの置き換え(移動元のステータスの内部 ID → 移動先のステータスの内部 ID)
+ */
+export type TransferItemStatusChoices = {[key: string]: string};
+
+export interface TransferItem {
+  /** ステータスの置き換え(移動元のステータスの内部 ID → 移動先のステータスの内部 ID) */
+  statusChoices: TransferItemStatusChoices;
+  /** 移動先の親(Epic)の内部 ID。省略するとプロジェクトの直下(Epic は省略する) */
+  toParent?: string;
+  /** 移動先のプロジェクトの内部 ID */
+  toProject: string;
+  /** 移動先の Store の ID */
+  toStore: string;
+  /** 移動先のワークスペースの内部 ID */
+  toWorkspace: string;
+}
+
+export interface TransferReplacement {
+  /**
+     * 移動先のプロジェクトが使うステータス
+     * @nullable
+     */
+  choices: TransferChoice[] | null;
+  /** そのステータスの移すアイテム(下のもの・削除済みを含む)の数 */
+  count: number;
+  /** 同じ分類の移動先の既定 */
+  default: string;
+  /** 移動元のステータスの名前 */
+  name: string;
+  /** 移動元のステータスの内部 ID */
+  status: string;
+}
+
+export interface TransferPreview {
+  /** 下の削除されていないものの数 */
+  below: number;
+  /** 別の Store への移動か */
+  crossStore: boolean;
+  /** 下の削除済みのものの数 */
+  deleted: number;
+  /** 移動先の Store に remote があるか */
+  destinationHasRemote: boolean;
+  /** 移動先の次の番号の ID(MB-2) */
+  nextDisplay: string;
+  /** 別の Store で、移動先に remote がなく移動元にあるか */
+  remoteNotice: boolean;
+  /**
+     * 行の並びは移動元のワークスペースのステータスの並び
+     * @nullable
+     */
+  replacements: TransferReplacement[] | null;
+}
+
+export interface TransferProject {
+  /**
+     * 削除されていない Epic(並び順)
+     * @nullable
+     */
+  epics: TransferEpic[] | null;
+  id: string;
+  title: string;
+}
+
+export interface TransferResult {
+  /** 移したアイテムの新しい ID(MB-2) */
+  display: string;
+  /**
+     * 合う値がなく空になった項目の名前(プロパティの定義の順)
+     * @nullable
+     */
+  emptied: string[] | null;
+  /** 移したアイテムの内部 ID(別の Store へ移しても変わらない) */
+  itemId: string;
+  /** 移動先の Store の ID */
+  toStore: string;
+}
+
+export interface TransferTarget {
+  prefix: string;
+  /** @nullable */
+  projects: TransferProject[] | null;
+  storeId: string;
+  storeName: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+
 /**
  * デバイスフローはサインインの API で登録・保存する
  */
@@ -1521,6 +1675,7 @@ export interface WorkspaceDetail {
 export interface WorkspaceSummary {
   id: string;
   name: string;
+  oldPrefixes: string[];
   prefix: string;
 }
 
@@ -1575,6 +1730,13 @@ export type AccountEditImpactParams = {
   login?: string;
 };
 
+export type LocateItemParams = {
+  /** 画面のアドレスの Store 名 */
+  store: string;
+  /** 画面のアドレスの ID(HH-2) */
+  id: string;
+};
+
 export type PreviewItemMoveParams = {
   /** 移し先のプロジェクトの内部 ID(Epic) */
   project?: string;
@@ -1585,6 +1747,12 @@ export type PreviewItemMoveParams = {
 export type ListRelationCandidatesParams = {
   label?: string;
   q?: string;
+};
+
+export type GetTransferPreviewParams = {
+  toStore: string;
+  toWorkspace: string;
+  toProject: string;
 };
 
 export type DeleteWorkspaceValueParams = {
@@ -1837,6 +2005,37 @@ export const getWatchEventsUrl = () => {
 export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
 
   return fetcher<string>(getWatchEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getLocateItemUrl = (params: LocateItemParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locate?${stringifiedParams}` : `/api/locate`
+}
+
+/**
+ * @summary 画面のアドレスの ID(旧 ID を含む)が指すアイテムを探す
+ */
+export const locateItem = async (params: LocateItemParams, options?: Parameters<typeof fetcher>[1]): Promise<Located> => {
+
+  return fetcher<Located>(getLocateItemUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3179,6 +3378,108 @@ return fetcher<Item>(getRenameItemUrl(store,item),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(renameItemBody)
+  }
+);}
+
+
+
+export const getTransferItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/transfer`
+}
+
+/**
+ * @summary アイテムを別のワークスペース・別の Store へ移す
+ */
+export const transferItem = async (store: string,
+    item: string,
+    transferItemBody: TransferItem, options?: Parameters<typeof fetcher>[1]): Promise<TransferResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<TransferResult>(getTransferItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transferItemBody)
+  }
+);}
+
+
+
+export const getGetTransferPreviewUrl = (store: string,
+    item: string,
+    params: GetTransferPreviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/transfer-preview?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/transfer-preview`
+}
+
+/**
+ * @summary 移動のダイアログの予告を返す
+ */
+export const getTransferPreview = async (store: string,
+    item: string,
+    params: GetTransferPreviewParams, options?: Parameters<typeof fetcher>[1]): Promise<TransferPreview> => {
+
+  return fetcher<TransferPreview>(getGetTransferPreviewUrl(store,item,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListTransferTargetsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/transfer-targets`
+}
+
+/**
+ * @summary 「別のワークスペースへ移動…」の移す先の候補を返す
+ */
+export const listTransferTargets = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<TransferTarget[] | null> => {
+
+  return fetcher<TransferTarget[] | null>(getListTransferTargetsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

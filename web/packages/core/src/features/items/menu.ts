@@ -6,7 +6,7 @@ import { visibleNeighbors } from "./siblings";
 
 // アイテムのメニュー(02「上から順の構成」)の項目と、無効にするときの理由(A4b-16)。詳細パネルのメニューと
 // ツリーの行のメニューが同じ項目を使う。ツリーの行のメニューだけ、先頭に「詳細を開く」「{種類} を追加」が付く。
-// 「別のワークスペースへ移動…」は、その操作がないので出さない。
+// 「別のワークスペースへ移動…」は、Step には出さない(Step は単独では移せず、無効の理由の文言もない。A5a-22)。
 
 export type ItemMenuId =
   | "open"
@@ -14,6 +14,7 @@ export type ItemMenuId =
   | "move-up"
   | "move-down"
   | "move"
+  | "transfer"
   | "change-kind"
   | "duplicate"
   | "save-as-template"
@@ -48,12 +49,15 @@ export const menuReasons = {
   noProject: "移せるプロジェクトがありません",
 };
 
+export const transferLabel = "別のワークスペースへ移動…";
+
 // 閲覧のみの Store で無効にする項目(「詳細を開く」「ID をコピー」は使える)。
 const writes: ReadonlySet<ItemMenuId> = new Set([
   "add-child",
   "move-up",
   "move-down",
   "move",
+  "transfer",
   "change-kind",
   "duplicate",
   "save-as-template",
@@ -78,6 +82,7 @@ export function itemMenu(ctx: ItemMenuContext): MenuEntry[] {
     entry("move-up", "上へ移動", ctx.hasPrev ? "" : menuReasons.atTop),
     entry("move-down", "下へ移動", ctx.hasNext ? "" : menuReasons.atBottom),
     entry("move", "移動…", epic && !ctx.hasOtherProjects ? menuReasons.noProject : ""),
+    ...(ctx.kind === "Step" ? [] : [entry("transfer", transferLabel)]),
     entry("change-kind", "種類を変更…", epic ? menuReasons.epicKind : ""),
     entry("duplicate", "複製"),
     entry("save-as-template", saveAsTemplateLabel),

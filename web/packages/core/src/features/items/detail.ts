@@ -10,6 +10,7 @@ import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog, ProjectNode, StoreNode, WorkspaceNode } from "../catalog/catalog";
 import { itemDisplayId } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
+import { createContexts } from "./detailContext";
 import { assignPlan } from "./detailPlan";
 import { type People, type PropertyRow, propertyRows, valueOf as valueOfItem } from "./properties";
 import { ancestorsOf, compareSiblings } from "./tree";
@@ -66,6 +67,9 @@ export interface Detail {
   // reload は、開いているアイテムを読み直す(画面への反映)。開いていなければ何もしない。
   // なくなっていたら、パネルを閉じる(06「反映で変わる画面」)。
   reload(): Promise<void>;
+  // target は、開いている(開こうとしている)アイテム。開けなかったときと閉じたときは null。読み直しが開く途中を
+  // 追い越しても、同じアイテムのまま(旧 ID から開いたときの上部の 1 行を、開けなかったときだけ捨てるのに使う)。
+  target(): { storeId: string; itemId: string } | null;
 }
 
 export interface DetailDeps {
@@ -97,35 +101,14 @@ export function createDetail(deps: DetailDeps): Detail {
   // target は、開いている(開こうとしている)アイテム。reload が、開いている途中の別のアイテムを古い表示で上書きしないために持つ。
   let target: { storeId: string; itemId: string } | null = null;
 
-  // context は、ワークスペースごとの設定とメンバー。一度読んだら使い回し、画面への反映(reload)と
-  // 詳細パネルを閉じたときに読み直す(A3 前半の決定 29)。
-  type Context = { settings: WorkspaceSettings; people: People; plan: PlanningOverview };
-  let contexts = new Map<string, Promise<Context>>();
-  function contextOf(storeId: string, workspaceId: string, refresh: boolean): Promise<Context> {
-    const key = `${storeId}/${workspaceId}`;
-    const cached = contexts.get(key);
-    if (cached && !refresh) return cached;
-    const read = (async () => {
-      const [ws, members, me, plan] = await Promise.all([
-        deps.workspaces.get(storeId, workspaceId),
-        deps.catalogPort.listMembers(storeId).catch(() => []),
-        // me が決まらないときは空(A2 の決定 3)。
-        deps.catalogPort.me(storeId).catch(() => ""),
-        deps.planning.overview(storeId, workspaceId),
-      ]);
-      return { settings: ws.settings, people: { members, me }, plan };
-    })();
-    contexts.set(key, read);
-    // 読めなかったら、次のときに読み直せるよう残さない。
-    read.catch(() => contexts.get(key) === read && contexts.delete(key));
-    return read;
-  }
+  // contexts は、ワークスペースごとの設定・メンバー・スプリントとリリースの概要。
+  let contexts = createContexts(deps);
 
   // shut は、パネルを閉じる(確認なし)。全画面も解除する。close と、読み直しでアイテムやプロジェクトがなくなっていたときの閉じ方が同じ。
   function shut() {
     latest += 1;
     target = null;
-    contexts = new Map();
+    contexts = createContexts(deps);
     view.set(null);
     full.set(false);
   }
@@ -136,9 +119,16 @@ export function createDetail(deps: DetailDeps): Detail {
     target = { storeId, itemId };
     try {
       const item = await deps.items.get(storeId, itemId);
+      // ほかの書き手が別のワークスペースへ移していたら、確認なしで閉じる(A5a-18。自分で移したときは開き直す)。
+      const shown = get(view)?.item;
+      const moved = shown?.storeId === storeId && shown.id === item.id;
+      if (refresh && moved && shown.workspaceId !== item.workspaceId) {
+        if (mine === latest) shut();
+        return;
+      }
       const [all, { settings, people, plan }] = await Promise.all([
         deps.items.list(storeId, item.projectId),
-        contextOf(storeId, item.workspaceId, refresh),
+        contexts.of(storeId, item.workspaceId, refresh),
       ]);
       const store = deps.catalog.store(storeId);
       const project = deps.catalog.project(storeId, item.projectId);
@@ -205,6 +195,7 @@ export function createDetail(deps: DetailDeps): Detail {
       await load(storeId, itemId);
     },
     close: shut,
+    target: () => (target ? { ...target } : null),
     async requestClose() {
       if (!deps.leave || (await deps.leave())) this.close();
     },

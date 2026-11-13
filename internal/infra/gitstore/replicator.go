@@ -3,6 +3,7 @@ package gitstore
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -30,28 +31,11 @@ func NewReplicator(s *Stores) *Replicator { return &Replicator{stores: s} }
 
 // Sync は、受け取り、合わせ、修復し、送る。合わせ、修復しているあいだは、Store のロックを持つ。
 func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remote) (port.SyncResult, error) {
-	root, err := r.stores.dir(id)
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	// Read・Write と同じく、途中で止まった保存の跡を戻してから合わせる(跡を合わせたコミットに入れない)。
-	unlock, err := open(root)
+	s, unlock, err := r.begin(id, remote)
 	if err != nil {
 		return port.SyncResult{}, err
 	}
 	defer unlock()
-	repo, err := git.PlainOpen(root)
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	head, err := repo.Head()
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	s := syncRun{
-		r: r, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash(),
-		seen: parseSeen(remote.Seen), receiveOnly: remote.ReceiveOnly,
-	}
 	// 2 回目からの試みが失敗しても(断る理由のエラーでも、ErrSendConflict と同じく)、前の試みで作った
 	// 合わせたコミットはこのマシンに残る。それは受け取ったものを正しく合わせたもので、次の同期で続ける。
 	// 修復が失敗したときも(最初の試みでも)、合わせたコミットと、それまでに書いた修復は残る。合わせはまだ
@@ -67,6 +51,33 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 		return res, err
 	}
 	return port.SyncResult{}, port.ErrSendConflict
+}
+
+// begin は、Store のロックを取り、1 回の同期の状態を作る。unlock は呼ぶ側が呼ぶ。
+func (r *Replicator) begin(id port.StoreID, remote port.Remote) (s syncRun, unlock func(), err error) {
+	root, err := r.stores.dir(id)
+	if err != nil {
+		return syncRun{}, nil, err
+	}
+	// Read・Write と同じく、途中で止まった保存の跡を戻してから合わせる(跡を合わせたコミットに入れない)。
+	unlock, err = open(root)
+	if err != nil {
+		return syncRun{}, nil, err
+	}
+	repo, err := git.PlainOpen(root)
+	if err != nil {
+		unlock()
+		return syncRun{}, nil, err
+	}
+	head, err := repo.Head()
+	if err != nil {
+		unlock()
+		return syncRun{}, nil, err
+	}
+	return syncRun{
+		r: r, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash(),
+		seen: parseSeen(remote.Seen), receiveOnly: remote.ReceiveOnly,
+	}, unlock, nil
 }
 
 // syncRun は、1 回の Sync の状態。start は、同期を始めたときの自分の先端(受け取った数を数える基準)。
@@ -85,23 +96,9 @@ type syncRun struct {
 
 // once は、受け取り・合わせる・修復する・送るを 1 回行う。送信が拒否されたら errRejected。
 func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
-	theirs, err := s.link.fetch(ctx, s.repo, s.branch)
-	if errors.Is(err, port.ErrNoCommonHistory) && !s.seen.IsZero() {
-		return port.SyncResult{}, port.ErrRemoteRewritten // 前に受け取ったブランチが消えた(決定 C2-12)
-	}
+	theirs, err := s.receive(ctx)
 	if err != nil {
 		return port.SyncResult{}, err
-	}
-	if err := s.checkSeen(theirs); err != nil {
-		return port.SyncResult{}, err
-	}
-	if !theirs.IsZero() {
-		if err := checkRemoteStore(s.repo, theirs); err != nil {
-			return port.SyncResult{}, err
-		}
-		if err := s.integrate(theirs); err != nil {
-			return port.SyncResult{}, err
-		}
 	}
 	if s.receiveOnly {
 		return s.result(theirs, theirs, false)
@@ -117,7 +114,29 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 	return s.result(theirs, head, true)
 }
 
-// push は、自分の先端を remote へ送り、送った先端を返す。
+// receive は、remote から受け取り、自分の先端に取り込む。remote の先端 theirs を返す(空ならゼロ)。
+func (s syncRun) receive(ctx context.Context) (plumbing.Hash, error) {
+	theirs, err := s.link.fetch(ctx, s.repo, s.branch)
+	if errors.Is(err, port.ErrNoCommonHistory) && !s.seen.IsZero() {
+		return plumbing.ZeroHash, port.ErrRemoteRewritten // 前に受け取ったブランチが消えた(決定 C2-12)
+	}
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	if err := s.checkSeen(theirs); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	if theirs.IsZero() {
+		return theirs, nil
+	}
+	if err := checkRemoteStore(s.repo, theirs); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return theirs, s.integrate(theirs)
+}
+
+// push は、自分の先端を remote へ送り、送った先端を返す。error は送れなかったときだけ返す(送れたあとの
+// 記録の失敗はログに残すだけ。SyncSave が送れた保存を捨てないため)。
 func (s syncRun) push(ctx context.Context, theirs plumbing.Hash) (plumbing.Hash, error) {
 	if s.r.beforeSend != nil {
 		if err := s.r.beforeSend(); err != nil {
@@ -132,8 +151,12 @@ func (s syncRun) push(ctx context.Context, theirs plumbing.Hash) (plumbing.Hash,
 		return plumbing.ZeroHash, err
 	}
 	// 送ったので、remote の先端は自分の先端になった。未送信の数え方(Unsent)の基準を進める。
+	// 進められなくても、未送信の数が次の同期まで多く見えるだけ(次の受け取りが基準を進める)。
 	ref := plumbing.NewHashReference(plumbing.ReferenceName(remotePrefix+s.branch.Short()), head.Hash())
-	return head.Hash(), s.repo.Storer.SetReference(ref)
+	if err := s.repo.Storer.SetReference(ref); err != nil {
+		slog.Warn("送ったあとに remote の位置を記録できませんでした", "store", s.root, "error", err)
+	}
+	return head.Hash(), nil
 }
 
 // integrate は、自分の先端に remote の先端 theirs を取り込む。
