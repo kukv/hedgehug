@@ -3,9 +3,31 @@ package planning_test
 import (
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 )
+
+func TestWorkOrder(t *testing.T) {
+	at := func(m int) item.Stamp { return item.Stamp{At: time.Date(2026, 11, 1, 0, m, 0, 0, time.UTC)} }
+	in := []item.Item{
+		{ID: "d", Rank: "B", Created: at(5)},
+		{ID: "c", Rank: "B", Created: at(1)},
+		{ID: "b", Rank: "B", Created: at(1)},
+		{ID: "a", Rank: "A", Created: at(9)},
+	}
+	var got []item.ID
+	for _, it := range planning.WorkOrder(in) {
+		got = append(got, it.ID)
+	}
+	if want := []item.ID{"a", "b", "c", "d"}; !slices.Equal(got, want) {
+		t.Fatalf("WorkOrder = %v, want %v", got, want)
+	}
+	if in[0].ID != "d" || in[3].ID != "a" {
+		t.Fatal("入力を並べ替えない")
+	}
+}
 
 func names(ss []planning.Sprint) []string {
 	var out []string

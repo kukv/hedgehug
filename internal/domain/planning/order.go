@@ -3,6 +3,8 @@ package planning
 import (
 	"cmp"
 	"slices"
+
+	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 // ScreenOrder は、スプリントの画面の並び。実行中、計画中(開始日の早い順・期間未定は最後)、完了(終了日の新しい順)。同じ日付は名前の昇順。
@@ -84,4 +86,11 @@ func cmpEmptyLast(a, b string) int {
 		return -1
 	}
 	return cmp.Compare(a, b)
+}
+
+// WorkOrder は、アイテムのワークスペース全体の並び。item.SortSiblings(並び順の値、作成の時刻、内部 ID)をそのまま全体に当てる。
+func WorkOrder(its []item.Item) []item.Item {
+	out := slices.Clone(its)
+	item.SortSiblings(out)
+	return out
 }
