@@ -14,12 +14,7 @@ func NewPass() *Pass { return newPass() }
 
 // AutoLink は、Store の削除済みでないアイテムを読んでから autoLink を呼ぶ(テストの口)。
 func (l Links) AutoLink(ctx context.Context, store port.StoreID, repo string, pull port.Pull, first bool, p *Pass) (bool, error) {
-	var items storeItems
-	err := l.Stores.Read(ctx, store, func(r port.Reader) error {
-		var err error
-		items, err = readStoreItems(r)
-		return err
-	})
+	items, err := l.readStoreItems(ctx, store)
 	if err != nil {
 		return false, err
 	}

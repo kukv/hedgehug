@@ -190,10 +190,17 @@ func rowsOf(ls []itemlink.Link, checks map[string]itemlink.Checks, errs map[stri
 }
 
 // failText は、取り直しの失敗の行の文言(07「表示と更新」)。
-func (l Links) failText(err error) string {
+func (l Links) failText(err error) string { return refreshText(l.failMessage(err)) }
+
+// refreshText は、07 の表の文 msg を、取り直しの失敗の行の文言にする。
+func refreshText(msg string) string { return "状態を更新できませんでした: " + msg }
+
+// failMessage は、GitHub の失敗の 07 の表の文(前置きなし。PR を探した記録に置く)。ghcall の失敗でなければ
+// 「接続できません」の文。
+func (l Links) failMessage(err error) string {
 	var r *refusal.Refusal
 	if !errors.As(l.refused(err), &r) {
 		errors.As(l.refused(&ghcall.Failure{Kind: ghcall.Unreachable}), &r)
 	}
-	return "状態を更新できませんでした: " + r.Message
+	return r.Message
 }
