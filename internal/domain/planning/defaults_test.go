@@ -27,6 +27,7 @@ func TestSprintDefaults(t *testing.T) {
 			{ID: "b", Name: "x", End: "2026-11-02"},
 			{ID: "c", Name: "リリース前", End: "2026-11-20"},
 		}, "Sprint 4", "2026-11-21", "2026-12-04"},
+		{"基準の名前の末尾の空白は除く", []planning.Sprint{{ID: "a", Name: "Sprint 7 ", End: "2026-11-15"}}, "Sprint 8", "2026-11-16", "2026-11-29"},
 		{"桁を保つ(先頭 0)", []planning.Sprint{{ID: "a", Name: "Sprint 07", End: "2026-11-15"}}, "Sprint 08", "2026-11-16", "2026-11-29"},
 		{"桁が増える", []planning.Sprint{{ID: "a", Name: "S-099", End: "2026-11-15"}}, "S-100", "2026-11-16", "2026-11-29"},
 		{"9 の繰り上がり", []planning.Sprint{{ID: "a", Name: "Sprint 9", End: "2026-11-15"}}, "Sprint 10", "2026-11-16", "2026-11-29"},

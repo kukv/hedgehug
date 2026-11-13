@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/domain/planning"
@@ -15,7 +16,8 @@ func wantRefusal(t *testing.T, err error, msg string) {
 		}
 		return
 	}
-	r, ok := err.(*refusal.Refusal)
+	var r *refusal.Refusal
+	ok := errors.As(err, &r)
 	if !ok || r.Message != msg {
 		t.Fatalf("err = %v, want 断り %q", err, msg)
 	}

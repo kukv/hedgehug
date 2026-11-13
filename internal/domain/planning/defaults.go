@@ -18,6 +18,7 @@ func AddDays(ymd string, n int) string {
 }
 
 // RemainingDays は、今日から終了日までの日数(終了日の当日は 1)。終了日を過ぎていたら overdue。
+// 読めない終了日は overdue とする(日付は保存のときに検査済みのため)。
 func RemainingDays(end, today string) (n int, overdue bool) {
 	e, err1 := time.Parse(time.DateOnly, end)
 	t, err2 := time.Parse(time.DateOnly, today)
@@ -36,7 +37,7 @@ func SprintDefaults(live []Sprint, today string) (name, start, end string) {
 	}
 	end = AddDays(start, 13)
 	name = "Sprint " + strconv.Itoa(len(live)+1)
-	if next, found := nextNumber(base.Name); ok && found {
+	if next, found := nextNumber(NormalizeName(base.Name)); ok && found {
 		name = next
 	}
 	for taken(name, live) {
