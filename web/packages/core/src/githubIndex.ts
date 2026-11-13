@@ -35,5 +35,4 @@ export type {
   LinkTarget,
   ProjectLinkRow,
 } from "./model/link";
-export { linkKey } from "./model/link";
 export type { LinksPort } from "./port/links";

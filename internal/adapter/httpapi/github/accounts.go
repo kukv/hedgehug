@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/apierr"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
@@ -22,7 +23,7 @@ type Services struct {
 	Reauth ghapp.Reauth
 	Impact ghapp.Impact
 	SignIn ghapp.SignIn
-	Links  ghapp.Links
+	Links  githublink.Links
 }
 
 type accountBody struct {

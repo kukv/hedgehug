@@ -8,14 +8,17 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/syncing"
 	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
 // e2e 用のビルドの Store の ID。どちらにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。
@@ -29,6 +32,7 @@ const (
 // wire は、Playwright の通しのテスト用に、口に apptest の偽物とサンプルデータを差し込む(設計書 6 節)。
 // トークンか待ち受けが空なら起動しない(空のトークンでは誰でも API を使え、空の待ち受けは全アドレスで待つため)。
 // 待ち受けがこのマシンの中(ループバック)でなければ起動しない(固定のトークンを外に見せないため)。
+// 自動の同期と同じく、GitHub の自動の読み取り(Reader)も動かさない。読み取りは入口 POST /e2e/github-read で行う(D4a-19)。
 func wire(ctx context.Context) (httpapi.Deps, error) {
 	if os.Getenv("HEDGEHUG_TOKEN") == "" || os.Getenv("HEDGEHUG_ADDR") == "" {
 		return httpapi.Deps{}, errors.New("e2e のビルドには HEDGEHUG_TOKEN と HEDGEHUG_ADDR が要る")
@@ -48,9 +52,45 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
 		return httpapi.Deps{}, err
 	}
+	reads, err := e2eReads(ctx)
+	if err != nil {
+		return httpapi.Deps{}, err
+	}
 	hub := events.NewHub()
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
-	syncSvc := &syncing.Service{
+	syncSvc := e2eSync(hub)
+	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
+	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
+	return e2eWithLinks(httpapi.Deps{
+		Stores:   stores,
+		IDs:      ids,
+		Identity: apptest.Identity{Login: "taro"},
+		Inbox:    &apptest.Inbox{},
+		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
+			{ID: e2eStore, Name: "e2e", Color: "sky"},
+			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
+		}},
+		Accounts:    accounts,
+		Checks:      apptest.NewChecks(),
+		GitHubReads: reads,
+		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
+		GitHub:      e2eGitHub,
+		DeviceFlow:  e2eDeviceFlow,
+		Hosts:       apptest.Hosts{ID: "e2e-client"},
+		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
+			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
+			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
+		}},
+		Clock:  apptest.NewClock(time.Now()),
+		Sync:   syncSvc,
+		Auto:   auto,
+		Events: hub,
+	}), nil
+}
+
+// e2eSync は、2 つの Store を偽の remote と同期する(手での同期の確かめに使う)。
+func e2eSync(hub *events.Hub) *syncing.Service {
+	return &syncing.Service{
 		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: e2eAccount},
 			{ID: readonlyStore, Name: "readonly", Remote: "https://example.invalid/readonly.git", Account: e2eAccount, ReadOnly: true},
@@ -61,32 +101,16 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Events:     hub,
 		Clock:      apptest.NewClock(time.Now()),
 	}
-	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
-	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
-	return httpapi.Deps{
-		Stores:   stores,
-		IDs:      ids,
-		Identity: apptest.Identity{Login: "taro"},
-		Inbox:    &apptest.Inbox{},
-		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
-			{ID: e2eStore, Name: "e2e", Color: "sky"},
-			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
-		}},
-		Accounts:   accounts,
-		Checks:     apptest.NewChecks(),
-		Secrets:    &apptest.Secrets{Tokens: e2eTokens},
-		GitHub:     e2eGitHub,
-		DeviceFlow: e2eDeviceFlow,
-		Hosts:      apptest.Hosts{ID: "e2e-client"},
-		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
-			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
-			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
-		}},
-		Clock:  apptest.NewClock(time.Now()),
-		Sync:   syncSvc,
-		Auto:   auto,
-		Events: hub,
-	}, nil
+}
+
+// e2eWithLinks は、d に、API と共用する Session と、その Session のトークンの入口で組んだリンクの操作を足す。
+func e2eWithLinks(d httpapi.Deps) httpapi.Deps {
+	d.GitHubSession = ghapp.NewSession()
+	d.Links = linksOf(d, ghapp.Connector{
+		Session: d.GitHubSession, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
+		Hosts: d.Hosts, Stores: d.StoreGitHub, Clock: d.Clock,
+	})
+	return d
 }
 
 // checkLoopback は、addr の host が 127.0.0.1・::1・localhost でなければエラーを返す。
@@ -105,4 +129,22 @@ func checkLoopback(addr string) error {
 // tokenAndAddr は、テストが決めたトークン(HEDGEHUG_TOKEN)と待ち受け(HEDGEHUG_ADDR)を返す。
 func tokenAndAddr() (token, addr string) {
 	return os.Getenv("HEDGEHUG_TOKEN"), os.Getenv("HEDGEHUG_ADDR")
+}
+
+// e2eReads は、取り直しの失敗の文言を持つ state.db を、使い捨ての場所に開く。止めるときに閉じて消す。
+func e2eReads(ctx context.Context) (port.GitHubReads, error) {
+	dir, err := os.MkdirTemp("", "hedgehug-e2e-state-")
+	if err != nil {
+		return nil, err
+	}
+	db, err := statedb.Open(filepath.Join(dir, "state.db"))
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		return nil, err
+	}
+	context.AfterFunc(ctx, func() {
+		_ = db.Close()
+		_ = os.RemoveAll(dir)
+	})
+	return db.GitHubReads(), nil
 }

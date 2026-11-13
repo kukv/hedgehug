@@ -76,12 +76,18 @@ describe("createLinkList", () => {
     });
   });
 
-  it("keeps the refresh errors when the list is read again", async () => {
+  // 取り直しの失敗の文言はサーバーが持ち、一覧に添えて返す(D4a-11)。一覧を読み直したら、その答えのとおりに出す。
+  it("shows the list's error, and clears it when a later list has none", async () => {
     const t = setup();
-    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" })];
+    const failed = row({ error: "状態を更新できませんでした: x" });
+    t.links.rows = [failed];
+    t.links.refreshed = [failed];
     await t.list.load("S1", "I1");
     await t.list.reload();
     expect(get(t.list.state).rows[0]?.error).toBe("状態を更新できませんでした: x");
+    t.links.rows = [row()]; // 裏の取り直しが成功して、文言を消した
+    await t.list.reload();
+    expect(get(t.list.state).rows[0]?.error).toBe("");
   });
 
   it("knows when this machine has no account", async () => {
@@ -130,45 +136,6 @@ describe("createLinkList", () => {
       state: "merged",
       error: "状態を更新できませんでした: x",
     });
-  });
-
-  it("forgets a row's refresh error when it is removed and linked again", async () => {
-    const t = setup();
-    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" })];
-    await t.list.load("S1", "I1");
-    t.links.rows = [];
-    await t.list.remove(row()); // 解除(そのあとの一覧に行がない)
-    t.links.rows = [row()];
-    await t.list.reload(); // 付け直したあとの読み直し
-    expect(get(t.list.state).rows[0]?.error).toBe("");
-  });
-
-  it("keeps another row's refresh error when a link is added", async () => {
-    const t = setup();
-    const pr42 = row({ number: 42 });
-    t.links.rows = [row(), pr42];
-    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" }), pr42];
-    await t.list.load("S1", "I1");
-    t.links.rows = [row(), pr42, row({ number: 43 })]; // 別のリンクを足した
-    await t.list.reload();
-    expect(get(t.list.state).rows.map((r) => r.error)).toEqual([
-      "状態を更新できませんでした: x",
-      "",
-      "",
-    ]);
-  });
-
-  it("forgets the error of a link removed in another tab, so relinking shows none", async () => {
-    const t = setup();
-    const pr42 = row({ number: 42 });
-    t.links.rows = [row(), pr42];
-    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" }), pr42];
-    await t.list.load("S1", "I1");
-    t.links.rows = [pr42]; // 別のタブで外された
-    await t.list.reload();
-    t.links.rows = [pr42, row()]; // 付け直した
-    await t.list.reload();
-    expect(get(t.list.state).rows.map((r) => r.error)).toEqual(["", ""]);
   });
 
   it("shows no rows when the item is gone on refresh or reload", async () => {

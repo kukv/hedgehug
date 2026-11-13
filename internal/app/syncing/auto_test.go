@@ -240,3 +240,23 @@ func TestAutoOffStopsEverything(t *testing.T) {
 		t.Errorf("synced while off: %+v", f.rep.Calls())
 	}
 }
+
+// Waiting は、待つ条件のタブかオフラインのタブがあるあいだ true(D4a-8)。期限の切れた知らせは数えない。
+func TestAutoWaiting(t *testing.T) {
+	f, a, _ := newAuto(t)
+	if a.Waiting() {
+		t.Fatal("waiting without any tab")
+	}
+	a.Hold("t1", true)
+	if !a.Waiting() {
+		t.Error("not waiting while t1 holds")
+	}
+	f.clock.Advance(30 * time.Second)
+	if a.Waiting() {
+		t.Error("waiting after the hold expired")
+	}
+	a.Network("t1", false)
+	if !a.Waiting() {
+		t.Error("not waiting while t1 is offline")
+	}
+}

@@ -1,6 +1,14 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
+import {
+  createWorkspace,
+  githubRead,
+  newTaskUnder,
+  openSettings,
+  prefixOf,
+  tokenUrl,
+  unique,
+} from "./helpers";
 
 // gh は、e2e のサーバーの偽の GitHub に PR・Issue を置く(D3-23)。
 async function gh(page: Page, q: Record<string, string>) {
@@ -126,6 +134,89 @@ test("開いたときに取り直し、改名を追い、失敗を行に出す",
     `状態を更新できませんでした: ${moved}#5 が見つかりません`,
   );
   await expect(section.getByText("PR Merged")).toBeVisible();
+});
+
+test("間隔ごとの取り直しで、詳細パネルのリンクの行が変わる", async ({ page }, info) => {
+  const { github, repo } = await setup(page, info);
+  await gh(page, { repo, number: "7", kind: "pr", title: "B", state: "open" });
+  await expect(await link(page, github, "PR", repo, "7")).toBeHidden();
+  await expect(github.getByText("PR Open")).toBeVisible();
+  // 詳細パネルを開いたまま、GitHub でマージされ、裏で読む(画面は github の知らせで読み直す)
+  await gh(page, { repo, number: "7", kind: "pr", title: "B", state: "merged" });
+  await githubRead(page.request);
+  await expect(github.getByText("PR Merged")).toBeVisible();
+});
+
+test("取り直しの失敗の文言が、開き直しても残り、次の成功で消える", async ({ page }, info) => {
+  const { prefix, github, repo } = await setup(page, info);
+  await gh(page, { repo, number: "8", kind: "pr", title: "C", state: "open" });
+  await expect(await link(page, github, "PR", repo, "8")).toBeHidden();
+  const failed = `状態を更新できませんでした: ${repo}#8 が見つかりません`;
+  await gh(page, { repo, number: "8", gone: "1" });
+  // 画面は github の知らせで一覧(GET …/links)を読み直す。その URL で、あとから置いた文言を確かめる
+  const listed = page.waitForResponse(
+    (r) =>
+      r.request().method() === "GET" && /\/items\/[^/]+\/links$/.test(new URL(r.url()).pathname),
+  );
+  await githubRead(page.request);
+  const listPath = new URL((await listed).url()).pathname;
+  await expect(github.getByRole("alert")).toHaveText(failed);
+  // 開き直すと取り直しも走るので、その前に、取り直さない一覧の API で、文言がこのマシンに置かれたことを確かめる
+  const res = await page.request.get(listPath, {
+    headers: { Authorization: "Bearer e2e-token" },
+  });
+  expect(res.status()).toBe(200);
+  expect((await res.json()).map((r: { error: string }) => r.error)).toEqual([failed]);
+  await page.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
+  const section = page
+    .getByRole("region", { name: "詳細パネル" })
+    .getByRole("region", { name: "GitHub" });
+  await expect(section.getByRole("alert")).toHaveText(failed);
+  // 値を戻して読むと、文言は消える
+  await gh(page, { repo, number: "8", kind: "pr", title: "C", state: "open" });
+  await githubRead(page.request);
+  await expect(section.getByRole("alert")).toBeHidden();
+  await expect(section.getByText("PR Open")).toBeVisible();
+});
+
+test("PR のマージで自動化が動く", async ({ page }, info) => {
+  const { prefix, repo } = await setup(page, info);
+  await openSettings(page, prefix, "自動化");
+  await page.getByRole("button", { name: "ルールを作成" }).click();
+  const dialog = page.getByRole("dialog", { name: "ルールを作成" });
+  await dialog.getByRole("textbox", { name: "名前" }).fill("マージで完了");
+  await dialog
+    .getByRole("combobox", { name: "きっかけ" })
+    .selectOption({ label: "リンクした PR がマージされたとき" });
+  await dialog
+    .getByRole("combobox", { name: "すること" })
+    .selectOption({ label: "ステータスを変更" });
+  await dialog.getByRole("combobox", { name: "値" }).selectOption({ label: "Done" });
+  await dialog.getByRole("button", { name: "保存" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByText("リンクした PR がマージされたとき → ステータスを Done に"),
+  ).toBeVisible();
+  // Open の PR をリンクしたアイテムで、PR がマージされ、裏で読む
+  await page.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  const github = panel.getByRole("region", { name: "GitHub" });
+  const props = panel.getByRole("region", { name: "プロパティ" });
+  await gh(page, { repo, number: "9", kind: "pr", title: "D", state: "open" });
+  await expect(await link(page, github, "PR", repo, "9")).toBeHidden();
+  await expect(props.getByRole("button", { name: "ステータス: Todo" })).toBeVisible();
+  await gh(page, { repo, number: "9", kind: "pr", title: "D", state: "merged" });
+  await githubRead(page.request);
+  await expect(props.getByRole("button", { name: "ステータス: Done" })).toBeVisible();
+  // アイテムの履歴は実行者「自動化」の行で出し、ルール名の入った文は自動化のサブタブの最近の実行に出す
+  const history = panel.getByRole("region", { name: "履歴" });
+  await expect(
+    history.getByRole("listitem").filter({ hasText: "ステータスを Todo → Done" }),
+  ).toContainText("自動化");
+  await openSettings(page, prefix, "自動化");
+  await expect(page.getByRole("region", { name: "最近の実行" })).toContainText(
+    "「マージで完了」でステータスを Done に変更",
+  );
 });
 
 test("アカウントが 1 つもなければ、リンクの追加を無効にする", async ({ page }, info) => {

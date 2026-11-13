@@ -1,7 +1,8 @@
-package github
+package githublink
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -33,10 +34,11 @@ type addPlan struct {
 }
 
 // Add は、PR か Issue を GitHub で確かめてリンクする(07「追加」)。確かめる順は 07 の表のとおり。
-// ダイアログは閉じ、トーストは出さない(画面)。手でのリンクでは自動化のきっかけを起こさない(D3-13)。
+// ダイアログは閉じ、トーストは出さない(画面)。同じ保存の中で自動化のきっかけを起こし(D4a-16。行の by は
+// 操作した人)、保存のあとに動いたルールの通知を書く。
 // アクティビティの文(「(プロジェクトのリポジトリにも追加)」の有無)は保存の前の値で決まる。保存の中で、
 // 同時に誰かがそのリポジトリをプロジェクトに足していたら、断らずに黙って足さない(文はそのまま。この狭い
-// 競合は受け入れる)。チェックの結果は、保存できたあとに置く。
+// 競合は受け入れる)。チェックの結果は、保存できたあとに置く。チェックの結果か失敗の文言が変わったら EventGitHub を流す。
 func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLinkInput) error {
 	if in.Kind != itemlink.PR && in.Kind != itemlink.Issue {
 		return port.ErrNotFound
@@ -50,27 +52,44 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 		return err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: plan.summary}
+	var fs []fired
 	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		cur, err := readItem(tx, id)
-		if err != nil {
-			return err
-		}
-		if err := checkItem(tx, cur, plan.ref, id); err != nil {
-			return err
-		}
-		if err := tx.WriteItems().Append(id, cur.links.Attach(plan.ref, plan.values)...); err != nil {
-			return err
-		}
-		if plan.toProject && project.IndexRepo(cur.project.Repos, plan.ref.Repo) < 0 {
-			return tx.WriteProjects().Append(cur.project.ID, change.NewAdd("repos", plan.ref.Repo))
-		}
-		return nil
+		var err error
+		fs, err = saveLink(tx, id, plan)
+		return err
 	})
 	if err != nil {
 		return err
 	}
-	_, err = l.saveChecks(ctx, store, plan.ref, plan.checks)
-	return err
+	// 通知を先に書く(チェックの結果を置くのに失敗しても、保存したルールの通知は失わない)
+	nerr := l.notify(ctx, store, fs)
+	cc, cerr := l.saveChecks(ctx, store, plan.ref, plan.checks)
+	// 解除する前に置いた取り直しの失敗の文言を消す(いま GitHub から読めた。D4a-11)
+	fc, ferr := l.setFailure(ctx, store, plan.ref.Key(), "")
+	if cc || fc { // Refresh と同じく、このマシンが読んだ値が変わったら知らせる
+		l.Events.Publish(port.Event{Kind: port.EventGitHub, Store: store})
+	}
+	return errors.Join(nerr, cerr, ferr)
+}
+
+// saveLink は、保存 tx の中で確かめ直してリンクを書き、同じ保存の中できっかけを動かす。
+func saveLink(tx port.Tx, id item.ID, plan addPlan) ([]fired, error) {
+	cur, err := readItem(tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkItem(tx, cur, plan.ref, id); err != nil {
+		return nil, err
+	}
+	if err := tx.WriteItems().Append(id, cur.links.Attach(plan.ref, plan.values)...); err != nil {
+		return nil, err
+	}
+	if plan.toProject && project.IndexRepo(cur.project.Repos, plan.ref.Repo) < 0 {
+		if err := tx.WriteProjects().Append(cur.project.ID, change.NewAdd("repos", plan.ref.Repo)); err != nil {
+			return nil, err
+		}
+	}
+	return fire(tx, id, nil, itemlink.Link{Ref: plan.ref, Values: plan.values}, nil)
 }
 
 // plan は、入力の形・重なり・GitHub・Issue の 1 対 1 を、07 の表の順に確かめる。

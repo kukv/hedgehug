@@ -12,10 +12,12 @@ type syncYAML struct {
 	Auto         *bool `yaml:"auto,omitempty"`
 	Interval     int   `yaml:"interval,omitempty"`      // 間隔(秒)
 	PushInterval int   `yaml:"push_interval,omitempty"` // 書き込みのあと同期するまで(秒)
+
+	GitHubInterval int `yaml:"github_interval,omitempty"` // GitHub を読む間隔(秒。D4a-7)
 }
 
 // 06「自動で同期する」の初期値。
-var defaultTiming = port.SyncTiming{Auto: true, Interval: 5 * time.Minute, AfterWrite: 30 * time.Second}
+var defaultTiming = port.SyncTiming{Auto: true, Interval: 5 * time.Minute, AfterWrite: 30 * time.Second, GitHubEvery: 5 * time.Minute}
 
 // SyncSettings は、config.yaml の sync を読む port.SyncSettings。
 func (f *File) SyncSettings() port.SyncSettings { return syncSettings{f} }
@@ -36,6 +38,9 @@ func (s syncSettings) Timing(context.Context) (port.SyncTiming, error) {
 	}
 	if c.Sync.PushInterval > 0 {
 		t.AfterWrite = time.Duration(c.Sync.PushInterval) * time.Second
+	}
+	if c.Sync.GitHubInterval > 0 {
+		t.GitHubEvery = time.Duration(c.Sync.GitHubInterval) * time.Second
 	}
 	return t, nil
 }

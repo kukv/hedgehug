@@ -137,3 +137,13 @@ export async function taskUnderEpic(page: Page, info: TestInfo, epicId: string, 
   await createTaskFrom(page, panel, unique(info, title));
   return panel;
 }
+
+// githubRead は、e2e のサーバーに、GitHub を読む間隔によらない 1 回の読み取りをさせる(D4a-19)。
+// そのサーバーのすべての Store を読むので、呼んだテストのリンクだけでなく、同じサーバーを使うほかのテスト
+// (worker ごとに 1 つのサーバー。fixtures.ts。同じ worker で先に流れたもの)のリンクも取り直す。
+export async function githubRead(request: APIRequestContext) {
+  const res = await request.post("/e2e/github-read", {
+    headers: { Authorization: "Bearer e2e-token" },
+  });
+  if (res.status() !== 204) throw new Error(`githubRead: ${res.status()} ${await res.text()}`);
+}

@@ -234,7 +234,28 @@ func contractRuleRows(t *testing.T, s port.Stores, id port.StoreID) {
 	})
 }
 
-// 人でない実行者の操作と、使えないルールの ID では、自動化の行を書けない。
+// GitHub の操作の中の自動化の行は、by が hedgehug[bot] で読める(D4a-15)。
+func contractRuleRowsGitHub(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	const rule change.ID = "01RULE0000000000000000001"
+	op := port.Operation{Actor: change.Actor{Kind: change.ActorGitHub}, Summary: "PR がマージされた"}
+	mustWrite(t, s, id, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(cItem.ID, change.NewSet("assignee", nil, "taro").ByRule(rule))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		recs, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		if err != nil || len(recs) == 0 {
+			t.Fatalf("log = %+v, %v", recs, err)
+		}
+		last := recs[len(recs)-1]
+		if last.Actor.Kind != change.ActorAutomation || last.Actor.Rule != rule || last.By != change.BotLogin {
+			t.Errorf("rule row = %+v", last)
+		}
+		return nil
+	})
+}
+
+// 同期などの操作と、使えないルールの ID では、自動化の行を書けない。
 func contractRuleRowsRefused(t *testing.T, s port.Stores, id port.StoreID) {
 	cases := []struct {
 		name string

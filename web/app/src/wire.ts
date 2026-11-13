@@ -44,7 +44,7 @@ import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { reloads } from "./reloads";
+import { githubReloads, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
@@ -203,6 +203,9 @@ async function reflect(kinds: SyncEventKind[]) {
   }
   if (kinds.includes("store") || kinds.includes("github")) {
     jobs.push(...[...reloads].map((reload) => reload()));
+  }
+  if (kinds.includes("github")) {
+    jobs.push(...[...githubReloads].map((reload) => reload()));
   }
   await Promise.allSettled(jobs);
 }
