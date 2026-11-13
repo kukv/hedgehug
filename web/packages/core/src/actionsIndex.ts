@@ -34,6 +34,15 @@ export {
   menuReasons,
 } from "./features/items/menu";
 export {
+  createItemMenuHost,
+  type ItemMenuHost,
+  type ItemMenuHostContext,
+  type ItemMenuHostDeps,
+  type ItemMenuState,
+  menuAt,
+  reorderFailedMessage,
+} from "./features/items/menuHost";
+export {
   createItemMove,
   type ItemMove,
   type ItemMoveDeps,
@@ -49,6 +58,7 @@ export {
   type ItemRefreshDeps,
 } from "./features/items/refresh";
 export { visibleNeighbors, visibleRows } from "./features/items/siblings";
+export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
 export type {
   DeletePreview,
   MoveCandidate,

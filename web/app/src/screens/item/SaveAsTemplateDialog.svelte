@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { type DetailView, saveAsTemplateDialog } from "@hedgehug/core";
+  import { saveAsTemplateDialog, type TemplateSubject } from "@hedgehug/core";
   import { Button, Checkbox, Dialog, Input } from "@hedgehug/ui";
   import { saveAsTemplate } from "../../wire";
 
   // 「テンプレートとして保存」のダイアログ(03「アイテムからテンプレートを作る」)。
   interface Props {
-    v: DetailView;
+    v: TemplateSubject;
     onclose: () => void;
   }
 

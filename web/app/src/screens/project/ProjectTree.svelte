@@ -3,11 +3,14 @@
     childKindOf,
     type Item,
     itemDisplayId,
+    menuAt,
     type ProjectView,
     type Route,
+    visibleRows,
   } from "@hedgehug/core";
   import { SvelteSet } from "svelte/reactivity";
   import { detail, itemDialog, links, projectScreen } from "../../wire";
+  import { itemMenuHost } from "../../wireActions";
   import TreeRow from "./TreeRow.svelte";
 
   // プロジェクトの「ツリー」のタブ。Epic を一番上の階層に並べる(04「ツリー」の「行」)。
@@ -43,6 +46,14 @@
       parentId: parent.id,
     });
   }
+  // openMenu は、行のアイテムのメニューを開く。見えている兄弟は、いま見えている行(閉じている行の下は入らない)から決める。
+  // rect は、メニューを出す基準のボタン・行の getBoundingClientRect()(行の「⋯」とメニューキーが同じ関数を使う)。
+  function openMenu(it: Item, rect: { left: number; bottom: number }) {
+    const { x, y } = menuAt(rect);
+    const rows = visibleRows(view.tree, collapsed);
+    const children = view.items.filter((c) => c.parentId === it.id);
+    itemMenuHost.open(it, { rows, children, row: true }, x, y);
+  }
 </script>
 
 <ul class="tree" aria-label="ツリー">
@@ -62,6 +73,7 @@
       items={view.items}
       {today}
       onstatus={(it, id) => void projectScreen.setStatus(it.id, id)}
+      onmenu={(e, it) => openMenu(it, (e.currentTarget as HTMLElement).getBoundingClientRect())}
     />
   {/each}
 </ul>

@@ -31,6 +31,8 @@
     items: Item[];
     today: Date;
     onstatus: (item: Item, statusId: string) => void;
+    // onmenu は、行の「⋯」(アイテムのメニュー)。
+    onmenu: (event: MouseEvent, item: Item) => void;
   }
 
   let {
@@ -48,6 +50,7 @@
     items,
     today,
     onstatus,
+    onmenu,
   }: Props = $props();
 
   const it = $derived(node.item);
@@ -100,6 +103,12 @@
       >+</IconButton
     >
   {/if}
+  <IconButton
+    label="{itemDisplayId(prefix, it.number)} のメニュー"
+    size="xs"
+    onclick={(e) => onmenu(e, it)}
+    >⋯</IconButton
+  >
 </li>
 {#if open}
   {#each node.children as c (c.item.id)}
@@ -118,6 +127,7 @@
       {items}
       {today}
       {onstatus}
+      {onmenu}
     />
   {/each}
 {/if}
