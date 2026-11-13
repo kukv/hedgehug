@@ -2,11 +2,19 @@ package workspaces_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"testing/fstest"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/humatest"
+
+	"github.com/kukv/hedgehug/internal/adapter/httpapi"
+	"github.com/kukv/hedgehug/internal/app/apptest"
 )
 
 type detailBody struct {
@@ -164,5 +172,56 @@ func TestMoveWorkspaceAPI(t *testing.T) {
 	res := api.Get(base)
 	if strings.Index(res.Body.String(), `"name":"B"`) > strings.Index(res.Body.String(), `"name":"A"`) {
 		t.Errorf("order: %s", res.Body)
+	}
+}
+
+// 別の画面で削除された値の名前を変えると、削除を取り消して 204 を返し、Hedgehug-Restored-Name に削除の前の名前が付く。
+func TestRenameDeletedValueSetsRestoredNameHeader(t *testing.T) {
+	ids := apptest.NewIDs()
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), ids)
+	s.AddStore("S1")
+	srv := httptest.NewServer(httpapi.New("secret", fstest.MapFS{}, httpapi.Deps{
+		Version: "test", Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"},
+	}))
+	t.Cleanup(srv.Close)
+	do := func(method, path, body string) (int, http.Header, []byte) {
+		req, err := http.NewRequestWithContext(t.Context(), method, srv.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer secret")
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.StatusCode, res.Header, b
+	}
+	code, _, b := do(http.MethodPost, base, `{"name":"Web","prefix":"HH"}`)
+	if code != http.StatusCreated {
+		t.Fatalf("create: %d %s", code, b)
+	}
+	ws := idOf(t, b)
+	const name = "レビュー, 待ち"
+	code, _, b = do(http.MethodPost, base+"/"+ws+"/lists/statuses/values", `{"name":"`+name+`"}`)
+	if code != http.StatusCreated {
+		t.Fatalf("add value: %d %s", code, b)
+	}
+	vv := base + "/" + ws + "/lists/statuses/values/" + idOf(t, b)
+	if code, _, b = do(http.MethodDelete, vv, ""); code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", code, b)
+	}
+	code, h, b := do(http.MethodPut, vv+"/name", `{"name":"別名"}`)
+	if code != http.StatusNoContent {
+		t.Fatalf("rename: %d %s", code, b)
+	}
+	got := h.Get("Hedgehug-Restored-Name")
+	if back, err := url.PathUnescape(got); err != nil || back != name {
+		t.Errorf("Hedgehug-Restored-Name = %q (%q, %v)", got, back, err)
 	}
 }

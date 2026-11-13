@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -43,8 +44,13 @@ func (w *restoredWriter) WriteHeader(status int) {
 		w.sent = true
 		if status < 300 {
 			for _, r := range port.Revived(w.ctx) {
-				if r.Kind == port.RevivedID {
+				switch r.Kind {
+				case port.RevivedID:
 					w.Header().Add("Hedgehug-Restored", r.Text)
+				case port.RevivedName: // 名前はコンマや空白を含みうるので、画面が url.PathUnescape で戻せる形にする
+					w.Header().Add("Hedgehug-Restored-Name", url.PathEscape(r.Text))
+				case port.RevivedComment:
+					w.Header().Add("Hedgehug-Restored-Comment", r.Text)
 				}
 			}
 		}
