@@ -1,10 +1,12 @@
 package repairing_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
@@ -45,5 +47,21 @@ func TestCascadeUnderDeletedProject(t *testing.T) {
 	wantOps(t, e.run(nil, nil), "HH-1 を削除", "HH-2 を削除")
 	if d := e.item(apptest.SampleEpic).Deleted; d == nil || d.Op != projectOp || d.Root != false {
 		t.Errorf("HH-1 deleted = %+v, want op %s", d, projectOp)
+	}
+}
+
+// 書いても削除済みにならず、同じ子が残り続けるときは、止まらずに止めてエラーを返す。
+type noopWriter struct{ *apptest.RepairWriter }
+
+func (noopWriter) Write(port.Operation, func(port.Tx) error) error { return nil }
+
+func TestCascadeStopsWithoutProgress(t *testing.T) {
+	e := newEnv(t)
+	if err := apptest.DeleteProject(e.ctx, e.s, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "進みません") {
+		t.Errorf("Run error = %v", err)
 	}
 }

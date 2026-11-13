@@ -39,3 +39,15 @@ func TestCascades(t *testing.T) {
 		t.Errorf("Cascades = %v, want %v", got, want)
 	}
 }
+
+// 親が復元済み(削除されていない)なら子は入らない。親がリストになく、プロジェクトも生きているなら入らない。
+func TestCascadesNotNeeded(t *testing.T) {
+	epic, missing := item.ID("e1"), item.ID("zz")
+	restored := under("e1", "p1", nil, nil)
+	child := under("t1", "p1", &epic, nil)
+	orphan := under("t2", "p1", &missing, nil)
+	got := repair.Cascades([]item.Item{restored, child, orphan}, []project.Project{{ID: "p1"}})
+	if len(got) != 0 {
+		t.Errorf("Cascades = %v, want none", got)
+	}
+}
