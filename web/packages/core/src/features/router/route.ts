@@ -6,7 +6,7 @@
 //   /settings/{タブ}                設定(D2 画面の計画の決定 S3)
 // 解釈できないアドレスはホームにする(決定 6)。
 
-export type ProjectTab = "overview" | "tree";
+export type ProjectTab = "overview" | "tree" | "settings";
 export type WorkspaceTab = "overview" | "settings";
 
 export type SettingsTab = "accounts";
@@ -18,7 +18,7 @@ export type Route =
   | { name: "item"; store: string; item: string }
   | { name: "settings"; tab: SettingsTab };
 
-const projectTabs: readonly string[] = ["overview", "tree"] satisfies ProjectTab[];
+const projectTabs: readonly string[] = ["overview", "tree", "settings"] satisfies ProjectTab[];
 const workspaceTabs: readonly string[] = ["overview", "settings"] satisfies WorkspaceTab[];
 const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];
 
@@ -28,6 +28,11 @@ function decode(segment: string): string | null {
   } catch {
     return null;
   }
+}
+
+// projectTabOf は、タブの ID(Tabs が返す文字列)をプロジェクトのタブにする。知らない ID は概要。
+export function projectTabOf(id: string): ProjectTab {
+  return projectTabs.includes(id) ? (id as ProjectTab) : "overview";
 }
 
 export function parseRoute(path: string): Route {

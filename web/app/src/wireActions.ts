@@ -7,6 +7,9 @@ import {
   createItemMenuHost,
   createItemMove,
   createItemRefresh,
+  createProjectDelete,
+  get,
+  routeOfWorkspace,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
 import {
@@ -85,8 +88,24 @@ export const itemMenuHost = createItemMenuHost({
   copyId: copyItemId,
 });
 
+// プロジェクトの削除(02「名前の変更・移動・削除」の削除)。設定タブの「プロジェクトを削除」が開く。
+// 削除できたら、ワークスペースの概要へ移り(履歴には積まない。戻るで削除済みのアドレスに戻らない)、サイドバーの
+// 一覧を読み直す。先に移るのは、一覧を先に読み直すと、消えたプロジェクトのアドレスがホームに解決されるため。
+export const projectDelete = createProjectDelete({
+  actions: itemActions,
+  catalog,
+  toasts,
+  afterDelete: async (project) => {
+    navigation.replace(
+      routeOfWorkspace(get(catalog.stores), project.storeId, project.workspaceId, "overview"),
+    );
+    await catalog.load().catch(() => {});
+  },
+});
+
 // 画面を移ったら、出している確認ダイアログとメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
+  projectDelete.cancel();
   itemDelete.cancel();
   itemMove.close();
   itemKind.cancel();

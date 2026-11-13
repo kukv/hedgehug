@@ -9,6 +9,7 @@
   import MoveMenu from "./screens/item/MoveMenu.svelte";
   import DiscardDialog from "./screens/notes/DiscardDialog.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
+  import DeleteProjectDialog from "./screens/project/DeleteProjectDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
@@ -90,5 +91,6 @@
 <MoveMenu />
 <ChangeKindDialog />
 <ItemMenuHost />
+<DeleteProjectDialog />
 <DiscardDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

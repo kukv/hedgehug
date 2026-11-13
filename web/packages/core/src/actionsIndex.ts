@@ -58,6 +58,17 @@ export {
   type ItemRefreshDeps,
 } from "./features/items/refresh";
 export { visibleNeighbors, visibleRows } from "./features/items/siblings";
+export {
+  createProjectDelete,
+  type DeleteTarget,
+  type ProjectDelete,
+  type ProjectDeleteDeps,
+  type ProjectDeleteDialogState,
+  projectDeleteDialog,
+  projectDeletedMessage,
+  projectDeleteNote,
+} from "./features/projects/delete";
+export { projectTabOf } from "./features/router/route";
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
 export type {
   DeletePreview,
