@@ -89,7 +89,8 @@ export function createItemMenuHost(deps: ItemMenuHostDeps): ItemMenuHost {
   let busy = false;
 
   // reorder は、見えている直前(「上」)・直後(「下」)の兄弟を基準に、item の 1 件だけを動かす。成功してもトーストは
-  // 出さない(02「上から順の構成」: アクティビティだけ)。基準の兄弟がないときは何もしない。
+  // 出さない(02「上から順の構成」: アクティビティだけ)。基準の兄弟がないときは何もしない。読み直しが終わるまで
+  // busy のままにする(読み直す前の並びを基準に、次を動かさない)。
   async function reorder(item: Item, rows: readonly Item[], dir: "up" | "down"): Promise<boolean> {
     if (busy || deps.catalog.store(item.storeId)?.readOnly) return false;
     const { prev, next } = visibleNeighbors(rows, item.id);
@@ -97,18 +98,22 @@ export function createItemMenuHost(deps: ItemMenuHostDeps): ItemMenuHost {
     if (!anchor) return false;
     busy = true;
     try {
-      await deps.items.reorder(item.storeId, item.id, anchor.id, dir === "down");
-    } catch (e) {
-      // すでに消えているのは、画面を読み直して消す(トーストなし)。
-      if (e instanceof NotFound) await deps.refresh.afterChange();
-      else
-        deps.toasts.show(e instanceof Refused ? e.message : reorderFailedMessage, { error: true });
-      return false;
+      try {
+        await deps.items.reorder(item.storeId, item.id, anchor.id, dir === "down");
+      } catch (e) {
+        // すでに消えているのは、画面を読み直して消す(トーストなし)。
+        if (e instanceof NotFound) await deps.refresh.afterChange();
+        else
+          deps.toasts.show(e instanceof Refused ? e.message : reorderFailedMessage, {
+            error: true,
+          });
+        return false;
+      }
+      await deps.refresh.afterChange();
+      return true;
     } finally {
       busy = false;
     }
-    await deps.refresh.afterChange();
-    return true;
   }
 
   // run は、選んだ項目の操作を始める(メニューはもう閉じている)。
