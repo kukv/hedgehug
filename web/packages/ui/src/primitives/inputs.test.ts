@@ -113,6 +113,28 @@ describe("Input onfocus", () => {
   });
 });
 
+describe("Checkbox with onchange", () => {
+  it("stays as given until the checked prop changes", async () => {
+    const seen: boolean[] = [];
+    const { rerender } = render(Checkbox, {
+      props: { label: "使う", checked: false, onchange: (v: boolean) => seen.push(v) },
+    });
+    const box = screen.getByRole("checkbox", { name: "使う" });
+    await fireEvent.click(box);
+    expect(seen).toEqual([true]);
+    expect(box).not.toBeChecked();
+    await rerender({ checked: true });
+    expect(box).toBeChecked();
+  });
+
+  it("without onchange toggles as before", async () => {
+    render(Checkbox, { props: { label: "使う" } });
+    const box = screen.getByRole("checkbox", { name: "使う" });
+    await fireEvent.click(box);
+    expect(box).toBeChecked();
+  });
+});
+
 describe("Switch", () => {
   it("with onchange stays as given and reports the next value", async () => {
     const seen: boolean[] = [];

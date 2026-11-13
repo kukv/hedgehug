@@ -22,12 +22,9 @@
   const data = $derived(usedStatusRows(view.settings, view.project.id, view.items));
   const empty = $derived(!hasRules(rulesOf(view.settings, view.project.id), "statuses"));
 
-  // 断られたとき、チェックを保存済みの値に戻すため、操作のたびに行を作り直す(値が変わらないと DOM が戻らない)。
-  let round = $state(0);
-  async function change(statusId: string, used: boolean) {
+  function change(statusId: string, used: boolean) {
     const p = view.project;
-    await rulesEditor.run(() => projectsPort.setStatusUsed(p.storeId, p.id, statusId, used));
-    round += 1;
+    void rulesEditor.run(() => projectsPort.setStatusUsed(p.storeId, p.id, statusId, used));
   }
 </script>
 
@@ -37,29 +34,28 @@
     チェックを外したステータスは、このプロジェクトのステータスのメニュー・作成ダイアログ・カンバンの列に出ません。外しても、そのステータスのアイテムは変わりません。
   </p>
   <ul class="rows">
-    {#key round}
-      {#each data.rows as row (row.id)}
-        <li>
-          <span class="box">
-            <Checkbox
-              label={row.name}
-              disabled={disabled || row.disabled}
-              title={disabled ? readOnlyNote : row.note}
-              bind:checked={() => row.checked, (v) => void change(row.id, v)}
-            />
-          </span>
-          <i class="dot" style:background="var(--c-{row.color}-dot)"></i>
-          <span class="name">{row.name}</span>
-          <span class="cat">{categoryLabels[row.category]}</span>
-          {#if row.note}
-            <span class="note">{row.note}</span>
-          {/if}
-          {#if row.usage}
-            <span class="note">{row.usage}</span>
-          {/if}
-        </li>
-      {/each}
-    {/key}
+    {#each data.rows as row (row.id)}
+      <li>
+        <span class="box">
+          <Checkbox
+            label={row.name}
+            disabled={disabled || row.disabled}
+            title={disabled ? readOnlyNote : row.note}
+            checked={row.checked}
+            onchange={(v) => change(row.id, v)}
+          />
+        </span>
+        <i class="dot" style:background="var(--c-{row.color}-dot)"></i>
+        <span class="name">{row.name}</span>
+        <span class="cat">{categoryLabels[row.category]}</span>
+        {#if row.note}
+          <span class="note">{row.note}</span>
+        {/if}
+        {#if row.usage}
+          <span class="note">{row.usage}</span>
+        {/if}
+      </li>
+    {/each}
   </ul>
   <ResetRulesButton {view} section="statuses" label="使うステータス" {empty} />
 </section>
