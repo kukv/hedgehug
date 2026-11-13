@@ -472,6 +472,20 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
 
 ---
 
+### Task 22: 同期の修復 (5) でのステータスの置き換え
+
+develop の C3a(PR #199)が、06「親と別のワークスペース・プロジェクトにある子」のうちステータスの置き換えを B5 の持ち場として残した(C3a-16)。B5a で使わないステータスを作ったので、この PR に入れる(ユーザーの決定、2026-11-14)。
+
+**Files:**
+- Modify: `internal/app/repairing/place.go`(`moveToProject`)
+- Test: `internal/app/repairing/place_test.go`
+
+- [ ] **Step 1: 失敗するテストを書く** — `TestMatchProjectsReplacesUnusedStatus`: 親 Epic がプロジェクト P2(`hidden_statuses` に Pending)にあり、子 Task が P1 で Pending。修復のあと、子は P2 に移り、ステータスは同じ分類(未着手)の既定の Todo になる。置き換えは移動と同じ保存(同じ `op`)で、実行者は同期。`TestMatchProjectsKeepsUsedStatus`: 子のステータスを P2 が使うなら変えない。
+- [ ] **Step 2: 流して落ちるのを見る**
+- [ ] **Step 3: 実装する** — `moveToProject` は、ワークスペースのログから `projectrule.FromLog` を読み、`projectrule.Uses(st, set.Of(m.Project), it.Status)` が false なら、`st.CategoryDefaults[その分類]` への `set status` を place の行と同じ `Append` に足す(06 の 315 行)。
+- [ ] **Step 4: 流して通るのを見る**
+- [ ] **Step 5: Commit** — `fix: 親に合わせてプロジェクトを移す同期の修復で、移動先が使わないステータスを置き換える`
+
 ### Task 21: 全体の確認と PR
 
 - [ ] **Step 0: develop を取り込む。A5a が先に入っていれば、B5a-26 のとおり `transfer.UsableStatuses` を差し替える(テストを書いてから)**
