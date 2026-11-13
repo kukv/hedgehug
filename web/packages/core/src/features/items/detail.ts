@@ -110,6 +110,15 @@ export function createDetail(deps: DetailDeps): Detail {
     return read;
   }
 
+  // shut は、パネルを閉じる(確認なし)。全画面も解除する。close と、読み直しでアイテムやプロジェクトがなくなっていたときの閉じ方が同じ。
+  function shut() {
+    latest += 1;
+    target = null;
+    contexts = new Map();
+    view.set(null);
+    full.set(false);
+  }
+
   async function load(storeId: string, itemId: string, refresh = false) {
     latest += 1;
     const mine = latest;
@@ -124,11 +133,7 @@ export function createDetail(deps: DetailDeps): Detail {
       const project = deps.catalog.project(storeId, item.projectId);
       const workspace = project && deps.catalog.workspace(storeId, project.workspaceId);
       if (mine !== latest) return;
-      if (!store || !project || !workspace) {
-        target = null;
-        view.set(null);
-        return;
-      }
+      if (!store || !project || !workspace) return shut();
       view.set({
         store,
         workspace,
@@ -146,10 +151,7 @@ export function createDetail(deps: DetailDeps): Detail {
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
       if (!(e instanceof NotFound)) throw e;
-      if (mine === latest) {
-        target = null;
-        view.set(null);
-      }
+      if (mine === latest) shut();
     }
   }
 
@@ -175,13 +177,7 @@ export function createDetail(deps: DetailDeps): Detail {
       if (other && deps.leave && !(await deps.leave())) return;
       await load(storeId, itemId);
     },
-    close() {
-      latest += 1;
-      target = null;
-      contexts = new Map();
-      view.set(null);
-      full.set(false);
-    },
+    close: shut,
     async requestClose() {
       if (!deps.leave || (await deps.leave())) this.close();
     },

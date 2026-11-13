@@ -2,7 +2,7 @@ import type { ItemsPort } from "../../port/items";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import type { Navigation } from "../router/navigation";
-import { type Resolved, resolveRoute, routeOfProject } from "../router/resolve";
+import { type Resolved, resolveRoute, routeOfProject, routeOfWorkspace } from "../router/resolve";
 
 // いま出す画面。アドレスを一覧の状態で内部 ID にする(A2 の計画の決定 7)。
 // アイテムの入口は、そのアイテムのプロジェクトの「ツリー」に替え(履歴に積まない)、詳細パネルを開く(01)。
@@ -22,6 +22,16 @@ export interface ScreenDeps {
   openItem(storeId: string, itemId: string): void;
 }
 
+// ShownProject は、いま出しているプロジェクトの画面。store・project は、そのアドレスの Store 名と ID(アドレスの解決は
+// 別の Store へも広がるので、解決した結果の storeId・projectId とは別に持つ)。workspaceId は、消えたときの移り先。
+interface ShownProject {
+  store: string;
+  project: string;
+  storeId: string;
+  projectId: string;
+  workspaceId: string;
+}
+
 function sameScreen(a: Resolved | null, b: Resolved): boolean {
   return a !== null && JSON.stringify(a) === JSON.stringify(b);
 }
@@ -30,13 +40,39 @@ export function createScreen(deps: ScreenDeps): Screen {
   const current = writable<Resolved | null>(null);
   // 解決が重なったときは、最後に始めたものの結果だけを使う。
   let latest = 0;
+  // shown は、前の解決で出したプロジェクトの画面。同じアドレスがそのプロジェクトに解決しなくなったら、消えたと見る。
+  let shown: ShownProject | null = null;
 
   async function resolve() {
     latest += 1;
     const mine = latest;
     const stores = get(deps.catalog.stores);
-    const r = await resolveRoute(get(deps.navigation.route), stores, deps.items);
+    const route = get(deps.navigation.route);
+    const r = await resolveRoute(route, stores, deps.items);
     if (mine !== latest) return;
+    // 出していたプロジェクトが、同期・別のタブ・別のプログラムで削除されたときは、ワークスペースの概要へ移る
+    // (A4b-22。履歴には積まない。ワークスペースもなければホーム)。アドレスを打ち込んだだけの解決できないものはホームのまま。
+    // 別の Store の同じ ID に解決された場合も、消えたものとして移る。
+    const was = shown;
+    shown = null;
+    if (
+      was &&
+      route.name === "project" &&
+      route.store === was.store &&
+      route.project === was.project &&
+      !(r.name === "project" && r.storeId === was.storeId && r.projectId === was.projectId)
+    )
+      return deps.navigation.replace(routeOfWorkspace(stores, was.storeId, was.workspaceId));
+    if (r.name === "project" && route.name === "project") {
+      const workspaceId = deps.catalog.project(r.storeId, r.projectId)?.workspaceId ?? "";
+      shown = {
+        store: route.store,
+        project: route.project,
+        storeId: r.storeId,
+        projectId: r.projectId,
+        workspaceId,
+      };
+    }
     if (r.name === "item") {
       deps.navigation.replace(routeOfProject(stores, r.storeId, r.projectId, "tree"));
       deps.openItem(r.storeId, r.itemId);
