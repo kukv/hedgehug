@@ -3,8 +3,7 @@
   import { IconButton, Menu } from "@hedgehug/ui";
   import { workspaceDialog } from "../wire";
 
-  // サイドバーの Store のメニュー(04「Store のメニュー」)。B2 は「ワークスペースを追加」だけを置き、
-  // ほかの項目はトラック C・G が足す(B2-17)。
+  // サイドバーの Store のメニュー(04「Store のメニュー」)。項目は「ワークスペースを追加」だけ(B2-17)。
   interface Props {
     store: StoreNode;
   }

@@ -21,7 +21,7 @@
   const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
 
-  // 開閉は、このタブのあいだだけ覚える(このマシンに残すのはトラック G のマシンの設定が入ってから)。
+  // 開閉は、このタブのあいだだけ覚える。
   const collapsed = new SvelteSet<string>();
   function toggle(id: string) {
     if (collapsed.has(id)) collapsed.delete(id);

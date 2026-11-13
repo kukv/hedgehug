@@ -19,7 +19,7 @@ import (
 // アクティビティは「{ID} の順位を変更」。
 //
 // anchor が、id と同じ親の削除されていない別の兄弟でなければ port.ErrNotFound。すでにその位置なら何も保存しない。
-// 前後の兄弟の順位が同じで間の値が作れないとき(同期で重なったとき)も何も保存しない。重なりの修復はトラック C。
+// 前後の兄弟の順位が同じで間の値が作れないとき(同期で重なったとき)も何も保存しない。重なりは直さない。
 func (s Service) Reorder(ctx context.Context, store port.StoreID, id, anchor item.ID, after bool) error {
 	_, display, err := s.withID(ctx, store, id)
 	if err != nil {

@@ -27,7 +27,7 @@ test("deletes a project from its settings tab and goes back to the workspace", a
   await expect(page).toHaveURL(new RegExp(`/s/e2e/w/${prefix}`));
   const side = await sidebar(page, info);
   await expect(side.getByRole("link", { name: projectTitle })).toHaveCount(0);
-  // 削除したプロジェクトのアドレスは開けず、マイタスク(いまはホーム)を開く(01「画面のアドレス」)。
+  // 削除したプロジェクトのアドレスは開けず、ホーム(見出し「hedgehug」)を開く(01「画面のアドレス」)。
   await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/overview`));
   await expect(page.getByRole("heading", { name: "hedgehug" })).toBeVisible();
   await expect(page.getByRole("heading", { name: new RegExp(`^${prefix}-P1 `) })).toHaveCount(0);

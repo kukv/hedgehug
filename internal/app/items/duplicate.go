@@ -18,7 +18,7 @@ import (
 // ワークスペースの初期ステータス(ワークフローの制約は検査しない)、ウォッチ中の人はあなただけ。
 // 複製元の関連・子・コメントなどは写さず、新しいアイテムから複製元へ clones の関連を 1 つ書く。
 // 作成と同じ 1 回の保存で書く。アクティビティは「{複製元の ID} を複製」。ないか削除済みなら port.ErrNotFound。
-// スプリントとリリースはまだ項目がないので扱わない(F)。
+// スプリントとリリースは Item の項目にないので写さない。
 func (s Service) Duplicate(ctx context.Context, store port.StoreID, id item.ID) (item.ID, error) {
 	_, display, err := s.withID(ctx, store, id)
 	if err != nil {

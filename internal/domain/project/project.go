@@ -40,7 +40,7 @@ type Place struct {
 	Number    int          `json:"number"`
 }
 
-// Project は、プロジェクトの固定の項目(02「プロジェクト」)。説明はトラック A の A4 で足す。
+// Project は、プロジェクトの固定の項目(02「プロジェクト」)。説明は持たない(app/descriptions が読む)。
 type Project struct {
 	ID     ID
 	Place  Place

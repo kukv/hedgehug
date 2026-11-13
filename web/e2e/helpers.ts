@@ -20,7 +20,7 @@ export async function sidebar(page: Page, info: TestInfo) {
 
 // unique は、作るものの名前に幅の名前とやり直しの回数を入れる(A2 の計画の決定 21)。
 // e2e のサーバーは worker ごとに起動し(fixtures.ts)、worker は 1 つの幅しか流さない。テストが落ちると worker は
-// 作り直され、やり直し(CI の retries)は新しいサーバーで流れる。なので今は重なりを避けるためには要らないが、
+// 作り直され、やり直し(CI の retries)は新しいサーバーで流れる。なので重なりを避けるためには要らないが、
 // どの幅・何回目で作ったものかを名前で見分けられるように残す。
 export const unique = (info: TestInfo, title: string) =>
   `${title} ${info.project.name}-${info.retry}`;

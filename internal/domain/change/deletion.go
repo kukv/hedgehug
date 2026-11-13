@@ -11,7 +11,7 @@ type Deletion struct {
 
 // DeletionOf は、ログの削除の印を返す。t が delete で f が deleted の行がなければ nil。複数あれば、
 // いまの値の決め方(Resolve)と同じ順で最もあとの行(at → by → id)を取るので、行の並びによらない。
-// restore の行の扱いはトラック G が足す。
+// restore の行は見ない。
 func DeletionOf(log []Record) *Deletion {
 	var last *Record
 	for i := range log {

@@ -7,7 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
-// AccountState は、一覧の 1 行(07「状態」)。GitHub App 未導入は D4 が足す。
+// AccountState は、一覧の 1 行(07「状態」)。
 type AccountState struct {
 	Account   account.Account
 	AuthError bool

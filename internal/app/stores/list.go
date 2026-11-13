@@ -1,4 +1,4 @@
-// Package stores は、このマシンの Store の一覧の操作を持つ。Store の追加・削除はトラック G が足す。
+// Package stores は、このマシンの Store の一覧を読む操作を持つ。
 package stores
 
 import (

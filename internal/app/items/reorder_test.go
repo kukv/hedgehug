@@ -215,7 +215,7 @@ func TestReorderRefuses(t *testing.T) {
 	}
 }
 
-// 隣どうしの順位が同じで間の値が作れないとき(同期で重なったとき)は何も保存しない。修復はトラック C。
+// 隣どうしの順位が同じで間の値が作れないとき(同期で重なったとき)は何も保存しない。重なりは直さない。
 func TestReorderBetweenEqualRanksSavesNothing(t *testing.T) {
 	svc, rec := setupRec(t)
 	st := addSteps(t, svc, "x", "y", "z")

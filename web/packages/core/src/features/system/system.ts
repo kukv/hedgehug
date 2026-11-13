@@ -1,7 +1,7 @@
 import type { SystemPort } from "../../port/system";
 import { type Readable, readonly, writable } from "../../reactive/store";
 
-// サーバーの版。読めなかったときは null のまま(つながらないときの画面はトラック G)。
+// サーバーの版。読めなかったときは null のまま。
 export interface SystemInfoState {
   version: Readable<string | null>;
   load(): Promise<boolean>;

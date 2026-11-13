@@ -8,7 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// NoticeKind は、通知の種類(06「通知の種類」)。B4 は自動化の 2 つだけを書く。ほかは C4 が足す。
+// NoticeKind は、通知の種類(06「通知の種類」)。書くのは自動化の 2 つ。
 type NoticeKind string
 
 const (
@@ -28,7 +28,7 @@ type Notice struct {
 	Status    change.ID // 止まった実行が変えようとしたステータス(「制約を無視して…」に使う)
 }
 
-// Inbox は、受信箱の口(B4-12)。実装は C4(infra/statedb)。既読と一覧は C4 が足す。
+// Inbox は、受信箱の口(B4-12)。通知を足すだけを持つ。
 type Inbox interface {
 	Add(ctx context.Context, n Notice) error
 }

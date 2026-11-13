@@ -12,7 +12,7 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-// config は config.yaml の中身。項目は、持つトラックが足す(トラック G が Store の一覧などを足す)。
+// config は config.yaml の中身。
 type config struct {
 	Accounts []accountYAML `yaml:"accounts"`
 	Hosts    []hostYAML    `yaml:"hosts,omitempty"`

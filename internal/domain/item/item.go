@@ -60,8 +60,7 @@ type Relation struct {
 	To   ID     `json:"to"`
 }
 
-// Item は、いま扱う項目だけを持つ。ステータス・優先度・関連システム・選択肢の値は B2 で足した。
-// 担当者・日付などは、まだ持たない(足すトラックが加える)。
+// Item は、アイテムの項目。スプリントとリリースは持たない。
 type Item struct {
 	ID       ID
 	Place    Place
@@ -78,7 +77,7 @@ type Item struct {
 	// 除くのは app の側で、Live を通す(A4b-3)。削除されていなければ nil。
 	Deleted *change.Deletion
 
-	// 値は内部 ID で指す(保存形式「アイテムの例」)。初期値と変更の操作は A3 が足す(B2-1)。
+	// 値は内部 ID で指す(保存形式「アイテムの例」。B2-1)。
 	Status   change.ID                 // なければ空
 	Priority change.ID                 // なければ空
 	Systems  []change.ID               // 関連システム

@@ -41,13 +41,13 @@ type Deps struct {
 	IDs      port.IDs
 	Identity port.Identity
 
-	// トラック A2(Store の一覧。本物はトラック G)
+	// Store の一覧
 	StoreList port.StoreList
 
-	// トラック B(自動化・通知)
-	Inbox port.Inbox // 受信箱(本物は C4)
+	// 自動化・通知
+	Inbox port.Inbox // 受信箱
 
-	// トラック D(GitHub)
+	// GitHub
 	Accounts    port.Accounts
 	Secrets     port.Secrets
 	GitHub      port.GitHub
@@ -57,7 +57,7 @@ type Deps struct {
 	Clock       port.Clock
 	Checks      port.Checks // このマシンが読んだ PR のチェックの結果(D3)
 
-	// トラック C(同期)。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。
+	// 同期。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。
 	Sync   *appsyncing.Service
 	Auto   *appsyncing.Auto
 	Events *events.Hub // nil なら NewAPI が作る(知らせる者がいない)

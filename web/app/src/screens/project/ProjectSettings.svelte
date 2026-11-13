@@ -4,8 +4,7 @@
   import { projectEditor } from "../../projectEditor";
   import { projectDelete } from "../../wireActions";
 
-  // プロジェクトの設定タブ(02「画面の見出しと構成」)。A4b は「名前」「削除」の 2 区画だけ。「使うステータス」
-  // 「ワークフローの制約」「テンプレート」「自動化」と見出しの下の 1 行は B5、「別のワークスペースへ移動」は A5 が足す。
+  // プロジェクトの設定タブ(02「画面の見出しと構成」)。区画は「名前」と「削除」の 2 つ。
   interface Props {
     view: ProjectView;
   }

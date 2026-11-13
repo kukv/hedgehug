@@ -1,4 +1,4 @@
-// Package members は、Store のメンバーの操作を持つ。メンバーへの追加と表示名の変更はトラック G が足す。
+// Package members は、Store のメンバーの一覧と「あなた」を読む操作を持つ。
 package members
 
 import (

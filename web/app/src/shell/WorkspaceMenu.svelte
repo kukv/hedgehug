@@ -10,7 +10,7 @@
   import { IconButton, Menu } from "@hedgehug/ui";
   import { catalog, navigation, projectDialog, workspaceMover } from "../wire";
 
-  // サイドバーのワークスペースのメニュー(04「ワークスペースのメニュー」)。「削除…」はトラック B5 が足す。
+  // サイドバーのワークスペースのメニュー(04「ワークスペースのメニュー」)。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;

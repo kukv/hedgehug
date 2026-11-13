@@ -15,8 +15,7 @@ type StoreGitHubInfo struct {
 	ReadOnly bool       // 閲覧のみの Store か(01。リンクの取り直しをしない。D3-14)
 }
 
-// StoreGitHub は、Store の一覧のうち GitHub に関わる値と、マシンの設定「ログイン名」の口。
-// 本物の実装はトラック G が足す(トラック D の決定 1)。
+// StoreGitHub は、Store の一覧のうち GitHub に関わる値と、マシンの設定「ログイン名」の口(トラック D の決定 1)。
 type StoreGitHub interface {
 	// List は、このマシンのすべての Store(非表示・閲覧のみを含む)を返す。
 	List(ctx context.Context) ([]StoreGitHubInfo, error)

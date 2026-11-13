@@ -11,8 +11,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// 読む用の YAML の形。キーの並びは保存形式「アイテムの例」と同じ。行末の注釈(値の名前・表示の ID)は
-// トラック A・B が足す。
+// 読む用の YAML の形。キーの並びは保存形式「アイテムの例」と同じ。行末の注釈(値の名前・表示の ID)は、
+// 種類ごとの yaml_*.go が付ける。
 
 type memberYAML struct {
 	Login string `yaml:"login"`

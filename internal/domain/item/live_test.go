@@ -76,7 +76,7 @@ func TestDescendants(t *testing.T) {
 	if all[1].ID != "01T2" {
 		t.Error("Descendants reordered its argument")
 	}
-	// 親をたどると輪になっていても終わる(同期で入れ違った親。修復はトラック C)。
+	// 親をたどると輪になっていても終わる(同期で入れ違った親)。
 	loop := []item.Item{
 		{ID: "01A", Place: item.Place{Parent: p("01B")}},
 		{ID: "01B", Place: item.Place{Parent: p("01A")}},

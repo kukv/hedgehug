@@ -10,7 +10,7 @@ type StoreInfo struct {
 	ReadOnly bool
 }
 
-// StoreList は、表示中の Store の一覧の口。本物の実装はトラック G が足す。
+// StoreList は、表示中の Store の一覧の口。
 type StoreList interface {
 	// List は、表示中の Store を、サイドバーの並びで返す。非表示の Store は返さない。
 	List(ctx context.Context) ([]StoreInfo, error)

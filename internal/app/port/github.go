@@ -6,7 +6,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
-// GitHub は GitHub の API の口。失敗は *ghcall.Failure で返す。トラック D が、使う操作だけを足していく。
+// GitHub は GitHub の API の口。失敗は *ghcall.Failure で返す。使う操作だけを持つ。
 type GitHub interface {
 	// Viewer は、token の持ち主のログイン名を返す(07「認証の確認」)。
 	Viewer(ctx context.Context, token string) (login string, err error)
