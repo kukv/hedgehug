@@ -24,8 +24,13 @@
   let area: ReturnType<typeof Textarea> | undefined = $state();
 
   // 開いたとき、画面への反映で target が新しくなるたびに、保存してある説明を読み直す(編集中の入力欄は書き換えない)。
+  // 対象そのもの(Store・種類・ID)が変わったときは、前の説明と入力を捨ててから読む(呼び出し側の {#key} には頼らない)。
+  // shown は $state にしない(自分で書いた値で effect が走り直さないため)。
+  let shown: string | undefined;
   $effect(() => {
-    void target;
+    const identity = `${target.storeId}/${target.kind}/${target.id}`;
+    if (shown !== undefined && shown !== identity) editor.reset();
+    shown = identity;
     void editor.load();
   });
 
@@ -66,7 +71,7 @@
         <Button variant="primary" disabled={$view.saving} onclick={() => void editor.save()}>
           保存
         </Button>
-        <Button onclick={editor.cancel}>キャンセル</Button>
+        <Button disabled={$view.saving} onclick={editor.cancel}>キャンセル</Button>
       </div>
     {:else if $view.text === ""}
       <button type="button" class="add" disabled={readonly} title={note} onclick={editor.start}>

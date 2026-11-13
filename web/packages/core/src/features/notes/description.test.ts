@@ -142,4 +142,37 @@ describe("description editor", () => {
     await editor.load();
     expect(get(editor.state).loaded).toBe(false);
   });
+
+  it("forgets the previous target's text and input on reset, and reads the new one", async () => {
+    const other = { kind: "item", storeId: "S1", id: "I2" } as const;
+    const notes = fakeNotesPort({ [keyOf(target)]: first, [keyOf(other)]: "別の説明" });
+    let now: typeof target | typeof other = target;
+    const toasts = createToasts({ set: () => 0, clear: () => {} });
+    const editor = createDescriptionEditor({
+      port: notes,
+      toasts,
+      target: () => now,
+      members: async () => [],
+    });
+    await editor.load();
+    editor.start();
+    editor.setInput("前の入力");
+    now = other;
+    editor.reset();
+    expect(get(editor.state)).toMatchObject({
+      loaded: false,
+      text: "",
+      editing: false,
+      input: "",
+      base: "",
+    });
+    expect([editor.dirty(), editor.held()]).toEqual([false, false]);
+    await editor.load();
+    expect(get(editor.state)).toMatchObject({
+      loaded: true,
+      text: "別の説明",
+      editing: false,
+      input: "",
+    });
+  });
 });

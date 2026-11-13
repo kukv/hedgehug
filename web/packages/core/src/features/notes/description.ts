@@ -36,6 +36,8 @@ export interface DescriptionEditor {
   state: Readable<DescriptionState>;
   // load は、保存してある説明を読む(開いたとき・画面への反映のとき)。編集中の入力欄は書き換えない。
   load(): Promise<void>;
+  // reset は、対象が別のものに変わったとき、前の説明・入力・読み取りの待ちをすべて捨てて読む前に戻す。
+  reset(): void;
   start(): void;
   setInput(text: string): void;
   cancel(): void;
@@ -118,6 +120,10 @@ export function createDescriptionEditor(deps: DescriptionDeps): DescriptionEdito
   return {
     state: readonly(state),
     load,
+    reset() {
+      latest += 1;
+      state.set(idle);
+    },
     start() {
       const s = get(state);
       if (!s.loaded || s.editing) return;
