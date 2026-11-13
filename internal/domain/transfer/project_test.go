@@ -80,3 +80,35 @@ func TestNumberProjectChainsEpics(t *testing.T) {
 		t.Errorf("NumberProject = %v, want %v", got, want)
 	}
 }
+
+// 削除済みのアイテムの外との関連も数える。同じ関連が重なっていても 1 つにする。
+func TestCollectProjectCountsDeletedAndDeduplicates(t *testing.T) {
+	all := projectItems()
+	for i := range all {
+		switch all[i].ID {
+		case "T2": // 削除済み
+			all[i] = related(all[i], "blocks", "X")
+		case "T1":
+			all[i] = related(related(all[i], "blocks", "X"), "blocks", "X") // 重複
+		}
+	}
+	all = append(all, node("X", "", "z", false))
+
+	s := transfer.CollectProject("P", all)
+	want := []transfer.Cut{{From: "T1", To: "X", Type: "blocks"}, {From: "T2", To: "X", Type: "blocks"}}
+	if !reflect.DeepEqual(s.Outside, want) {
+		t.Errorf("Outside = %v, want %v", s.Outside, want)
+	}
+}
+
+// 親のない Step は移せない形なので、集めない(Collect が断る)。
+func TestCollectProjectSkipsParentlessStep(t *testing.T) {
+	all := projectItems()
+	step := node("S", "", "c", false)
+	step.Kind = item.Step
+	step.Place.Project = "P"
+	s := transfer.CollectProject("P", append(all, step))
+	if s.Contains("S") || len(s.Epics) != 3 {
+		t.Errorf("Epics = %d, Contains(S) = %v", len(s.Epics), s.Contains("S"))
+	}
+}

@@ -73,3 +73,16 @@ func TestPeopleIgnoresBuiltinUserProperties(t *testing.T) {
 		t.Errorf("add = %+v, map = %v", add, people)
 	}
 }
+
+// プロジェクトのオーナーや専用ルールの担当者(extra)も人として数える。ログイン名に使えない値と空は数えない。
+func TestPeopleCountsExtra(t *testing.T) {
+	toMembers := []member.Member{{Login: "taro", Name: "taro"}}
+	add, people := transfer.People(workspace.Settings{}, nil, nil, []string{"Hanako", "@none", ""}, nil, toMembers)
+	want := []member.Member{{Login: "Hanako", Name: "Hanako"}}
+	if !reflect.DeepEqual(add, want) {
+		t.Errorf("add = %+v, want %+v", add, want)
+	}
+	if !reflect.DeepEqual(people, transfer.PeopleMap{"hanako": "Hanako"}) {
+		t.Errorf("map = %v (@none と空の人は入らない)", people)
+	}
+}
