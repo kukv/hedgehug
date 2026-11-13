@@ -194,4 +194,47 @@ describe("createItemKind", () => {
     expect(get(kind.state)).toBeNull();
     expect(refreshed).toEqual(["change"]);
   });
+
+  it("reloads without a toast or a dialog when the lookup of a Step fails", async () => {
+    const { kind, items, refreshed, messages } = await setup();
+    items.list = async () => {
+      throw new Error("network");
+    };
+    kind.open(step, 0, 0);
+    await kind.choose("Story");
+    expect(get(kind.state)).toBeNull();
+    expect(refreshed).toEqual(["change"]);
+    expect(messages()).toEqual([]);
+  });
+
+  it("drops the lookup of a Step when a new menu was opened meanwhile", async () => {
+    const { kind, items } = await setup();
+    const g = gate();
+    const read = items.list.bind(items);
+    items.list = async (s, p) => {
+      await g.wait;
+      return read(s, p);
+    };
+    kind.open(step, 0, 0);
+    const choosing = kind.choose("Story");
+    await flush();
+    kind.open(task, 5, 6);
+    g.release();
+    await choosing;
+    expect(get(kind.state)).toMatchObject({ step: "menu", item: task });
+  });
+
+  it("does not close a new menu opened while the change was running", async () => {
+    const { kind, actions } = await setup();
+    kind.open(task, 0, 0);
+    await kind.choose("Bug");
+    const hold = actions.holdNext();
+    const confirming = kind.confirm();
+    await flush();
+    kind.cancel();
+    kind.open(task, 7, 8);
+    hold.release();
+    await confirming;
+    expect(get(kind.state)).toMatchObject({ step: "menu", x: 7, y: 8 });
+  });
 });

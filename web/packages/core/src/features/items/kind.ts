@@ -101,11 +101,16 @@ export function createItemKind(deps: ItemKindDeps): ItemKind {
       const s = get(state);
       if (s?.step !== "confirm" || busy) return;
       busy = true;
+      // 実行のあいだに閉じて開き直されていたら、新しいメニューを閉じない。
+      const gen = seq;
+      const close = () => {
+        if (gen === seq) state.set(null);
+      };
       try {
         await deps.actions.changeKind(s.item.storeId, s.item.id, s.to);
-        state.set(null);
+        close();
       } catch (e) {
-        state.set(null);
+        close();
         // すでに消えているのは、画面を読み直して消す(トーストなし)。
         if (e instanceof NotFound) await deps.refresh.afterChange();
         else
