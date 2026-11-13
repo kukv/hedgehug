@@ -93,3 +93,48 @@ test("creates, starts, closes and deletes sprints", async ({ page }, info) => {
   await create.getByRole("button", { name: "作成", exact: true }).click();
   await expect(create.getByText("同じ名前のスプリントがあります")).toBeVisible();
 });
+
+// 完了のダイアログは、いまのカードで出す。開いているあいだに別のタブが未完了を足し、保存に失敗して
+// 読み直したら、未完了の件数と移動先のセレクトが出る(開いたときのカードのままにしない)。
+test("the close dialog follows the cards read again while it is open", async ({ page }, info) => {
+  const prefix = prefixOf(info);
+  await createWorkspace(page, info, unique(info, "読み直し"), prefix);
+  await projectWithEpic(page, info, prefix);
+  await storyUnderEpic(page, info, `${prefix}-1`, "検索");
+  await page.goto(tokenUrl(`/s/e2e/w/${prefix}/sprints`));
+  await createSprint(page, "Sprint 1");
+  const s1 = page.getByRole("article", { name: "Sprint 1" });
+  await s1.getByRole("button", { name: "開始", exact: true }).click();
+  const start = page.getByRole("dialog", { name: "Sprint 1" });
+  await start.getByRole("button", { name: "開始", exact: true }).click();
+  await expect(start).toBeHidden();
+
+  // 未完了 0 件で開く。移動先は出ない。
+  await s1.getByRole("button", { name: "完了…" }).click();
+  const close = page.getByRole("dialog", { name: "Sprint 1" });
+  await expect(close.getByText("完了 0 件・未完了 0 件です。")).toBeVisible();
+  await expect(close.getByRole("combobox")).toHaveCount(0);
+
+  // 別のタブで、Story(接頭辞-2)を Sprint 1 に入れる(このタブはダイアログのあいだ反映を待つ)。
+  const other = await page.context().newPage();
+  try {
+    await other.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
+    const assigned = saved(other, "/sprint");
+    await other
+      .getByRole("region", { name: "詳細パネル" })
+      .getByRole("combobox", { name: "スプリント" })
+      .selectOption({ label: "Sprint 1(実行中)" });
+    await assigned;
+  } finally {
+    await other.close();
+  }
+
+  // 完了の保存が失敗すると、エラーのトーストを出してカードを読み直す。ダイアログはいまのカードで出し直す。
+  const closing = /\/sprints\/[^/]+\/close$/;
+  await page.route(closing, (route) => route.fulfill({ status: 500 }));
+  await close.getByRole("button", { name: "完了", exact: true }).click();
+  await expect(page.getByText("保存できませんでした")).toBeVisible();
+  await expect(close.getByText("完了 0 件・未完了 1 件です。")).toBeVisible();
+  await expect(close.getByRole("combobox", { name: "未完了の 1 件の移動先" })).toBeVisible();
+  await page.unroute(closing);
+});
