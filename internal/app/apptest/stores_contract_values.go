@@ -197,7 +197,7 @@ func contractLists(t *testing.T, s port.Stores, id port.StoreID) {
 	})
 	mustRead(t, s, id, func(r port.Reader) error {
 		ps, err := r.Projects().List(cWorkspace.ID)
-		if err != nil || len(ps) != 2 || ps[0] != early || ps[1] != cProject {
+		if err != nil || len(ps) != 2 || !reflect.DeepEqual(ps[0], early) || !reflect.DeepEqual(ps[1], cProject) {
 			t.Errorf("Projects().List = %+v, %v", ps, err)
 		}
 		its, err := r.Items().List(cProject.ID)

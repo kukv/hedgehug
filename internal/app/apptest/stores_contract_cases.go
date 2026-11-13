@@ -3,6 +3,7 @@ package apptest
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -21,7 +22,7 @@ func contractWriteRead(t *testing.T, s port.Stores, id port.StoreID) {
 			t.Errorf("workspace = %+v, %v", w, err)
 		}
 		p, err := r.Projects().Get(cProject.ID)
-		if err != nil || p != cProject {
+		if err != nil || !reflect.DeepEqual(p, cProject) {
 			t.Errorf("project = %+v, %v", p, err)
 		}
 		it, err := r.Items().Get(cItem.ID)

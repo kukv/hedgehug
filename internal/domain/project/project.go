@@ -3,7 +3,9 @@ package project
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -48,6 +50,7 @@ type Project struct {
 	Status Status
 	Start  string // YYYY-MM-DD。空は「なし」
 	End    string
+	Repos  []string // owner/name。大文字小文字を区別しない辞書順(A4a-19)
 }
 
 // DisplayID は、画面の ID(HH-P1)。
@@ -65,7 +68,7 @@ func Create(p Project) change.Draft {
 
 // FromLog は、プロジェクトのログからいまの値を作る。作成の行がなければ false。
 func FromLog(log []change.Record) (Project, bool) {
-	s := change.Resolve(log, change.Options{})
+	s := change.Resolve(log, change.Options{Multi: func(f string) bool { return f == "repos" }})
 	if s.Created == nil {
 		return Project{}, false
 	}
@@ -78,5 +81,12 @@ func FromLog(log []change.Record) (Project, bool) {
 			_ = json.Unmarshal(v, dst)
 		}
 	}
+	for _, raw := range s.Lists["repos"] {
+		var repo string
+		if json.Unmarshal(raw, &repo) == nil {
+			p.Repos = append(p.Repos, repo)
+		}
+	}
+	slices.SortFunc(p.Repos, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
 	return p, true
 }
