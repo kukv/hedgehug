@@ -11,6 +11,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 
+	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/githublink"
@@ -19,15 +20,21 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
+// newAPI は、リポジトリを足しても探さない(探索の関数が nil の)組み立て。
 func newAPI(t *testing.T) humatest.TestAPI {
 	t.Helper()
-	api, _ := newAPIWithGitHub(t)
+	api, _ := build(t, false)
 	return api
 }
 
-// newAPIWithGitHub は、newAPI の組み立てと、リポジトリを足したときの探索(Links)が問い合わせる偽の GitHub。
+// newAPIWithGitHub は、リポジトリを足したら ghapi.ScanLater で探す組み立てと、探索が問い合わせる偽の GitHub。
 // Store S1 にはアカウント A1 を割り当てる。
 func newAPIWithGitHub(t *testing.T) (humatest.TestAPI, *apptest.GitHub) {
+	t.Helper()
+	return build(t, true)
+}
+
+func build(t *testing.T, withScan bool) (humatest.TestAPI, *apptest.GitHub) {
 	t.Helper()
 	ids := apptest.NewIDs()
 	clock := apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC))
@@ -43,11 +50,15 @@ func newAPIWithGitHub(t *testing.T) (humatest.TestAPI, *apptest.GitHub) {
 		Checks:  apptest.NewChecks(), Scans: &scans{rows: map[string]port.ScanRecord{}}, Missing: noMissing{},
 		Events: &apptest.Events{}, Clock: clock,
 	}
+	var scan projects.ScanFunc
+	if withScan {
+		scan = ghapi.ScanLater(links)
+	}
 	_, api := humatest.New(t)
 	projects.Register(api, appprojects.Service{
 		Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"},
 		Clock: apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)),
-	}, links)
+	}, scan)
 	return api, gh
 }
 

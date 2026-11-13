@@ -92,7 +92,11 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
-	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}, deps.Links)
+	var scan projects.ScanFunc // Links がなければ(リンクの API を使わない組み立て)探さない
+	if deps.Links != (githublink.Links{}) {
+		scan = ghapi.ScanLater(deps.Links)
+	}
+	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}, scan)
 	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
 	items.Register(api, itemsSvc)
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})

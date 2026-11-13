@@ -184,6 +184,42 @@ func TestAddLinkToProjectStartsScan(t *testing.T) {
 	waitPullsCalls(t, gh, "org/web", 1)
 }
 
+// プロジェクトに足さなかったとき(addToProject が偽・断られた・もうプロジェクトにある)は探さない。
+// 最後に別のリポジトリを足して探すのを待ち、それまでに探していないことを確かめる。
+func TestAddLinkWithoutProjectNoScan(t *testing.T) {
+	_, api := humatest.New(t)
+	svc := linkServices(t)
+	svc.Links.Scans = &memScans{rows: map[string]port.ScanRecord{}}
+	ghapi.Register(api, svc)
+	gh, _ := svc.Links.GitHub.(*apptest.GitHub)
+	gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 42, Values: itemlink.Values{Title: "b", State: itemlink.Open, Review: itemlink.NoReview}})
+	gh.Put("org/api", port.Found{Kind: itemlink.PR, Repo: "org/api", Number: 7, Values: itemlink.Values{Title: "c", State: itemlink.Open, Review: itemlink.NoReview}})
+	task := "/api/stores/S1/items/" + string(apptest.SampleTask) + "/links"
+	epic := "/api/stores/S1/items/" + string(apptest.SampleEpic) + "/links"
+	if res := api.Post(task, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": false}); res.Code != http.StatusNoContent {
+		t.Fatalf("add without project: %d %s", res.Code, res.Body)
+	}
+	if res := api.Post(task, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": true}); res.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("refused add: %d %s", res.Code, res.Body)
+	}
+	err := svc.Links.Stores.Write(t.Context(), "S1", port.Operation{Actor: change.User("taro"), Summary: "準備"}, func(tx port.Tx) error {
+		return tx.WriteProjects().Append(apptest.SampleProject, change.NewAdd("repos", "org/web"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := api.Post(epic, map[string]any{"kind": "pr", "repo": "org/web", "number": "42", "addToProject": true}); res.Code != http.StatusNoContent {
+		t.Fatalf("add with the repo in the project: %d %s", res.Code, res.Body)
+	}
+	if res := api.Post(epic, map[string]any{"kind": "pr", "repo": "org/api", "number": "7", "addToProject": true}); res.Code != http.StatusNoContent {
+		t.Fatalf("add org/api: %d %s", res.Code, res.Body)
+	}
+	waitPullsCalls(t, gh, "org/api", 1)
+	if n := gh.ReadPullsCalls("org/web"); n != 0 {
+		t.Errorf("ReadPulls calls for org/web = %d, want none", n)
+	}
+}
+
 func TestListRepoFailures(t *testing.T) {
 	_, api := humatest.New(t)
 	svc := linkServices(t)

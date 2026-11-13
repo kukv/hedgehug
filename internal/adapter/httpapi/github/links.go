@@ -93,11 +93,11 @@ func registerLinks(api huma.API, svc githublink.Links) {
 	huma.Register(api, huma.Operation{OperationID: "add-link", Method: http.MethodPost, Path: path, DefaultStatus: http.StatusNoContent, Summary: "PR か Issue を GitHub で確かめてリンクする"},
 		func(ctx context.Context, in *addLinkInput) (*struct{}, error) {
 			b := in.Body
-			err := svc.Add(ctx, port.StoreID(in.Store), item.ID(in.Item), githublink.AddLinkInput{
+			added, err := svc.Add(ctx, port.StoreID(in.Store), item.ID(in.Item), githublink.AddLinkInput{
 				Kind: itemlink.Kind(b.Kind), Repo: b.Repo, Number: b.Number, AddToProject: b.AddToProject,
 			})
-			if err == nil && b.AddToProject {
-				scanLater(ctx, svc, port.StoreID(in.Store), b.Repo)
+			if err == nil && added != "" {
+				ScanLater(svc)(ctx, port.StoreID(in.Store), added)
 			}
 			return nil, apierr.From(err)
 		})
@@ -152,14 +152,16 @@ func registerRepoFailures(api huma.API, svc githublink.Links) {
 		})
 }
 
-// scanLater は、プロジェクトに足したリポジトリ repo を、応答を待たせずに裏で探す(D4b-9)。失敗はログに出す。
-func scanLater(ctx context.Context, svc githublink.Links, store port.StoreID, repo string) {
-	repo = strings.TrimSpace(repo)
-	go func() {
-		if err := svc.ScanRepo(context.WithoutCancel(ctx), store, repo); err != nil {
-			slog.Warn("リポジトリの PR を探せませんでした", "store", store, "repo", repo, "err", err)
-		}
-	}()
+// ScanLater は、プロジェクトに足したリポジトリ repo を、応答を待たせずに裏で svc で探す関数を返す(D4b-9)。
+// 失敗はログに出す。「リポジトリを追加」(httpapi/projects)にも渡す。
+func ScanLater(svc githublink.Links) func(ctx context.Context, store port.StoreID, repo string) {
+	return func(ctx context.Context, store port.StoreID, repo string) {
+		go func() {
+			if err := svc.ScanRepo(context.WithoutCancel(ctx), store, repo); err != nil {
+				slog.Warn("リポジトリの PR を探せませんでした", "store", store, "repo", repo, "err", err)
+			}
+		}()
+	}
 }
 
 func linkRows(rows []githublink.LinkRow, err error) (*linkRowsOutput, error) {

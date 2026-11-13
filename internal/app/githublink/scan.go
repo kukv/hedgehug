@@ -45,13 +45,13 @@ func (l Links) RepoFailures(ctx context.Context, store port.StoreID, id project.
 	if err != nil {
 		return nil, err
 	}
-	s, _, err := l.storeInfo(ctx, store)
+	s, ok, err := l.storeInfo(ctx, store)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]string{}
 	switch {
-	case s.ReadOnly:
+	case !ok || s.ReadOnly: // 一覧にない Store は ScanRepo と同じく探さないので、文言も出さない
 		return out, nil
 	case s.Account == "" && !s.Hidden:
 		// 読めるアカウントがない: 記録を置かずに、その場で作る

@@ -157,6 +157,13 @@ func newLinks(t *testing.T) *linkFixture {
 
 func (f *linkFixture) add(t *testing.T, store port.StoreID, id item.ID, kind itemlink.Kind, repo, number string, toProject bool) error {
 	t.Helper()
+	_, err := f.addRepoToo(t, store, id, kind, repo, number, toProject)
+	return err
+}
+
+// addRepoToo は add と同じで、プロジェクトに足したリポジトリ(足さなければ空)も返す。
+func (f *linkFixture) addRepoToo(t *testing.T, store port.StoreID, id item.ID, kind itemlink.Kind, repo, number string, toProject bool) (string, error) {
+	t.Helper()
 	return f.links.Add(t.Context(), store, id, githublink.AddLinkInput{Kind: kind, Repo: repo, Number: number, AddToProject: toProject})
 }
 
@@ -292,8 +299,12 @@ func TestAddLinkGitHubFailures(t *testing.T) {
 
 func TestAddLinkToProject(t *testing.T) {
 	f := newLinks(t)
-	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", true); err != nil {
+	added, err := f.addRepoToo(t, linkStore, linkTask, itemlink.PR, " org/web ", "41", true)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if added != "org/web" {
+		t.Errorf("added = %q", added)
 	}
 	if f.lastSummary() != "HH-2 に org/web#41 をリンク(プロジェクトのリポジトリにも追加)" {
 		t.Errorf("summary = %q", f.lastSummary())
@@ -309,8 +320,12 @@ func TestAddLinkToProject(t *testing.T) {
 	}
 	// プロジェクトにもうあるリポジトリは足さない
 	f.gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 42, Values: itemlink.Values{Title: "b", State: itemlink.Open, Review: itemlink.NoReview}})
-	if err := f.add(t, linkStore, linkEpic, itemlink.PR, "ORG/web", "42", true); err != nil {
+	added, err = f.addRepoToo(t, linkStore, linkEpic, itemlink.PR, "ORG/web", "42", true)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if added != "" {
+		t.Errorf("added = %q, want none for a repo already in the project", added)
 	}
 	if f.lastSummary() != "HH-1 に org/web#42 をリンク" {
 		t.Errorf("summary = %q", f.lastSummary())

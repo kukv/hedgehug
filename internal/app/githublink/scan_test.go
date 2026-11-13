@@ -135,6 +135,11 @@ func TestRepoFailures(t *testing.T) {
 	if got := f.repoFailures(t); len(got) != 0 {
 		t.Errorf("read only: failures = %q", got)
 	}
+	// GitHub の設定の一覧にない Store は、ScanRepo と同じく何も出さない
+	f.infos.Stores = f.infos.Stores[1:]
+	if got := f.repoFailures(t); len(got) != 0 {
+		t.Errorf("unlisted store: failures = %q", got)
+	}
 }
 
 func TestRepoFailuresDeletedProject(t *testing.T) {
