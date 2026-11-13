@@ -47,7 +47,7 @@
 | D3-8 | 詳細パネルを開いたときの取り直しは、画面が一覧(`GET .../links`)を出したあとに `POST .../links/refresh` を呼ぶ。取り直しは Merged の PR も含めて、開いたアイテムのリンクをすべて読む(Merged を除くのは間隔ごとの取り直しだけ。D4) | 07「表示と更新」の 1 つ目と 2 つ目の箇条 |
 | D3-9 | 取り直しをしないとき: 閲覧のみの Store(01)、このマシンにアカウントが 1 つもないとき(07「GitHub を使わない場合」の「更新はしない」。行に失敗の文言も出さない)。アカウントはあるが Store に割り当てがないときは、問い合わせずに、各行に「状態を更新できませんでした: {リポジトリ} を読めるアカウントがありません。…」を出す(07「GitHub との通信に使うアカウント」) | 07:21 と 07:160 は表示が違う |
 | D3-10 | 取り直しで値が変わったリンクは、リンクごとに 1 回の保存にする(実行者「GitHub」)。1 回の保存の中では、変わった項目ごとに `set` の行を書く。アクティビティの 1 行(`Operation.Summary`。コミットの件名)は、06 の文(改名、状態、レビュー、タイトルの順)を「、」でつないだもの。アクティビティの画面は変更記録から 1 行ずつ作る(保存形式 263 行)ので、06:538 の「最も早い 1 行」は変更記録の単位で成り立つ | 01:100「1 回の操作が 1 回の保存」。取り直しは操作でないため、リンクを単位にした |
-| D3-11 | 改名・移管の追従は、同じ保存で、旧い `Ref` の `remove`、新しい `Ref` の `add`、新しい項目の `set`(タイトル・状態・レビュー)を書く。書き換えると、同じアイテムの別のリンク、または別のアイテム(このマシンのすべての Store)の Issue のリンクと同じになるときは書き換えず、旧い名前のまま値だけを取り直す。解除の記録(`links_off`)は書き換えない(07 は「保存したリポジトリ名」=リンクだけを書き換えると書いている) | 07「表示と更新」の最後から 2 つ目の段落 |
+| D3-11 | 改名・移管の追従は、同じ保存で、旧い `Ref` の `remove`、新しい `Ref` の `add`、新しい項目の `set`(タイトル・状態・レビューのすべて。from は旧いリンクの値)を書く。書き換えると、同じアイテムの別のリンク、または別のアイテム(このマシンのすべての Store)の Issue のリンクと同じになるときは書き換えず、旧い名前のまま値だけを取り直す。解除の記録(`links_off`)は書き換えない(07 は「保存したリポジトリ名」=リンクだけを書き換えると書いている) | 07「表示と更新」の最後から 2 つ目の段落 |
 | D3-12 | 履歴(詳細パネル)には、手での追加と解除を出さない。実行者「GitHub」の行だけを出す: `set links/.../state`(「{リポジトリ}#{番号} の状態を {状態} に変更」)、`/review`(「…のレビューを {レビュー} に変更」)、`/title`(「…のタイトルを「{タイトル}」に変更」)、同じ保存に `remove` がある `add`(「リンクを {旧}#{番号} から {新}#{番号} に更新」)、`remove` のない `add`(「{リポジトリ}#{番号} を自動でリンク」。D4 が書く)。`from` が null の `set`(リンクしたときの初めの値)と、`from` と `to` が同じ `set` は出さない | 02:490・673・674、保存形式 266 行。07:372 の「履歴に」は、02 と保存形式に合わせて手での追加・解除には当てない |
 | D3-13 | 手でリンクしたときの自動化のきっかけ(03:472〜475)は、この小計画では起こさない。きっかけの入口は `app/items` の `automate` にあり、`app/github` からは import できない(app の機能どうしは import しない)。D4「PR・Issue の状態で動く自動化」で、入口を domain に移してから足す | 設計書 4 節。トラック D の小計画の一覧で、きっかけは D4 |
 | D3-14 | 閲覧のみの Store への書き込みは、サーバーでは断らない(既存の操作と同じ。画面で無効にする)。取り直しだけはサーバーが `StoreGitHubInfo.ReadOnly` を見て問い合わせない(自動の書き込みなので画面では止められない)。`port.StoreGitHubInfo` に `ReadOnly` を足す | 01:122。A2 の計画 837 行 |
@@ -55,7 +55,7 @@
 | D3-16 | 「プロジェクトのリポジトリにも追加する」は、チェックがオンで、プロジェクトのリポジトリに同じ名前(大文字小文字を区別しない)がないときだけ、同じ保存でプロジェクトの `repos` に GitHub の名前を `add` する。アクティビティは「…をリンク(プロジェクトのリポジトリにも追加)」。プロジェクトの履歴には出ない(既存の履歴はリポジトリの add を出さない) | 07「追加」、02:566 |
 | D3-17 | API: `GET /api/stores/{store}/items/{item}/links`(list-links)、`POST .../links/refresh`(refresh-links)、`POST .../links`(add-link)、`POST .../links/remove`(remove-link)、`GET /api/stores/{store}/projects/{project}/links`(list-project-links)。番号は文字列で受け取り、サーバーが「番号を入力してください」を判定する(検査はサーバーに任せる。D2 画面の決定 S15) | A4a のリポジトリの API と同じ形 |
 | D3-18 | 「GitHub のアカウントを登録すると使えます」(07「GitHub を使わない場合」)は、GitHub の欄が `listAccounts` を読み、0 件なら「PR をリンク」「Issue をリンク」を無効にして `title` に添える(閲覧のみの「閲覧のみの Store です」と同じ出し方)。閲覧のみのときは閲覧のみの文言を優先する | D2 画面の決定 S2(入口を作るトラックが作る) |
-| D3-19 | 「PR 用の印をコピー」は GitHub の欄の見出しの横に置き、`hedgehug:{内部 ID}` をコピーする。閲覧のみでも押せる | 02:440・331、01:51 |
+| D3-19 | 「PR 用の印をコピー」は GitHub の欄の見出しの横に置き(位置は仕様にない。概要の「リポジトリを追加」と同じく見出しの横)、`hedgehug:{内部 ID}` をコピーする。閲覧のみでも押せる | 02:440・331、01:51 |
 | D3-20 | GitHub の欄の行は「{種別のチップ} {状態のチップ} [レビュー] [チェック] {owner/name}#{番号} — {タイトル}」と解除の「×」。外部リンク(`https://github.com/{repo}/pull/{n}`・`/issues/{n}`)を `{owner/name}#{番号} — {タイトル}` に付け、新しいタブで開く。取り直しに失敗した行は、その下に「状態を更新できませんでした: {理由}」を赤字で出す | 07「表示と更新」、02:331(外部リンクは閲覧のみでも使える) |
 | D3-21 | プロジェクトの概要の「PR と Issue」は、A4a の `OverviewRepos.svelte` の「リポジトリと PR」区画の下段に置く。行の ID は詳細パネルを開くリンク。「PR を探せませんでした: {理由}」(自動リンクの読み取りの失敗)は D4 | 02:553・554、A4a の計画 51 行 |
 | D3-22 | 解除が断り(Refused)以外で失敗したときの文言は、仕様にないので仮に「リンクを解除できませんでした」とする(A4a の `relationFailedMessage` と同じ扱い)。ユーザーの確認待ち | 仕様にない |
@@ -65,7 +65,7 @@
 
 | もの | 小計画 | 理由 |
 |---|---|---|
-| 手でリンクしたときの自動化のきっかけ | D4 | D3-13 |
+| 手でリンクしたときの自動化のきっかけ、条件「リンク中の PR がすべてマージ済みのときだけ」(`AllMerged`)の判定 | D4 | D3-13。`AllMerged` はいまルールの値として持つだけで、判定に使うリンクの値は D3 が足す itemlink から読む |
 | GitHub を読む間隔ごとの取り直し、PR の自動リンク、「PR を探せませんでした」、GitHub App 未導入の見分け | D4 | 小計画の一覧 |
 | 同期で Issue の 1 対 1 が崩れたときの修復、診断の「Issue の二重リンク」 | C5 | トラック C の計画 67 行 |
 | 本物のアプリでのリンク | G | 本物の `StoreGitHub` は G が作る。いまの `noStoreGitHub` は Store を返さないので、本物のアプリでは「読めるアカウントがありません」になる(e2e と usecase のテストで確かめる) |
@@ -579,13 +579,13 @@ func TestRenameMovesTheLink(t *testing.T) {
 	))
 	l, _ := s.Find(pr41)
 	moved := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web2", Number: 41}
-	got := rows(s.Rename(l, "org/web2", itemlink.Values{Title: "A", State: itemlink.Open, Review: itemlink.NoReview}))
+	got := rows(s.Rename(l, "org/web2", itemlink.Values{Title: "A", State: itemlink.Merged, Review: itemlink.NoReview}))
 	want := []string{
 		"remove links " + refJSON(pr41) + "→",
 		"add links →" + refJSON(moved),
-		`set links/pr:org/web2#41/title null→"A"`,
-		`set links/pr:org/web2#41/state null→"open"`,
-		`set links/pr:org/web2#41/review null→"none"`,
+		`set links/pr:org/web2#41/title "A"→"A"`,
+		`set links/pr:org/web2#41/state "open"→"merged"`,
+		`set links/pr:org/web2#41/review "none"→"none"`,
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("Rename =\n%q\nwant\n%q", got, want)
@@ -685,11 +685,19 @@ func (s Set) Detach(l Link) []change.Draft {
 // Refresh は、GitHub から読んだ v のうち、l の値と違う項目の行(07「表示と更新」)。
 func (s Set) Refresh(l Link, v Values) []change.Draft { return s.valueDrafts(l.Ref, v) }
 
-// Rename は、改名・移管を追って、l を repo のリンクに書き換える行(D3-11)。
+// Rename は、改名・移管を追って、l を repo のリンクに書き換える行(D3-11)。新しい項目の値は、変わらない項目も
+// すべて書き、from は旧いリンクの値にする(履歴は from と to が同じ行を出さず、変わった項目だけが
+// 「…の状態を {状態} に変更」として出る。D4 の自動化のきっかけもこの行で判定する)。
 func (s Set) Rename(l Link, repo string, v Values) []change.Draft {
 	moved := Ref{Kind: l.Kind, Repo: repo, Number: l.Number}
 	out := []change.Draft{change.NewRemove(LinksField, l.Ref), change.NewAdd(LinksField, moved)}
-	return append(out, s.valueDrafts(moved, v)...)
+	out = append(out,
+		change.NewSet(ValueField(moved, "title"), l.Title, v.Title),
+		change.NewSet(ValueField(moved, "state"), string(l.State), string(v.State)))
+	if l.Kind == PR {
+		out = append(out, change.NewSet(ValueField(moved, "review"), string(l.Review), string(v.Review)))
+	}
+	return out
 }
 
 // valueDrafts は、r の値の項目のうち、いまの値と違うものの set。from は、いまの値がなければ null。
@@ -860,14 +868,22 @@ git commit -m "feat(domain): リンクの追加・解除・取り直し・改名
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`yaml_notes_test.go` の既存のテストの形(アイテムを作ってログを書き、`renderYAML` の結果を文字列で比べる)に合わせて足す。既存のテストのヘルパー名は、ファイルの先頭の関数を見て揃える。
+`yaml_notes_test.go` に足す(`noteID`・`yWS`・`yProj` は同じパッケージのテストにある。import に `itemlink` と `strings` を足す)。
 
 ```go
 func TestItemYAMLWritesLinks(t *testing.T) {
 	pr41 := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
 	pr40 := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 40}
 	iss := itemlink.Ref{Kind: itemlink.Issue, Repo: "org/api", Number: 12}
-	log := itemLogWith(t, // 既存のヘルパー: 作成の行のあとに下書きを足したログ(なければこのファイルに作る)
+	var log []change.Record
+	n := 0
+	newID := func() change.ID { n++; return noteID(fmt.Sprintf("L%d", n)) }
+	add := func(minute int, ds ...change.Draft) {
+		meta := change.Meta{Op: noteID(fmt.Sprintf("P%d", minute)), At: time.Date(2026, 11, 13, 9, minute, 0, 0, time.UTC), Actor: change.User("taro")}
+		log = append(log, change.Stamp(log, ds, meta, newID)...)
+	}
+	add(0, item.Create(item.Item{ID: noteID("A1"), Place: item.Place{Workspace: yWS, Project: yProj, Number: 1}, Kind: item.Task, Rank: "V", Title: "t"}))
+	add(1,
 		change.NewAdd("links", pr41),
 		change.NewSet(itemlink.ValueField(pr41, "title"), nil, "Add login form"),
 		change.NewSet(itemlink.ValueField(pr41, "state"), nil, "open"),
@@ -875,8 +891,8 @@ func TestItemYAMLWritesLinks(t *testing.T) {
 		change.NewAdd("links", iss),
 		change.NewSet(itemlink.ValueField(iss, "title"), nil, "落ちる"),
 		change.NewSet(itemlink.ValueField(iss, "state"), nil, "closed"),
-		change.NewAdd("links_off", pr40),
 	)
+	add(2, change.NewAdd("links_off", pr40))
 	out, err := renderYAML(change.KindItem, log, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1007,13 +1023,15 @@ func TestItemRowsShowGitHubLinkRows(t *testing.T) {
 		step{"O4", at(3), gh, change.NewSet(itemlink.ValueField(pr, "title"), "A", "B")},
 		step{"O5", at(4), gh, change.NewRemove("links", pr)},
 		step{"O5", at(4), gh, change.NewAdd("links", moved)},
-		step{"O5", at(4), gh, change.NewSet(itemlink.ValueField(moved, "state"), nil, "open")},
+		step{"O5", at(4), gh, change.NewSet(itemlink.ValueField(moved, "title"), "B", "B")},
+		step{"O5", at(4), gh, change.NewSet(itemlink.ValueField(moved, "state"), "open", "closed")},
 		step{"O6", at(5), gh, change.NewAdd("links", itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 50})},
 		step{"O7", at(6), taro, change.NewRemove("links", moved)}, // 手での解除: 出さない
 		step{"O8", at(7), gh, change.NewSet(itemlink.ValueField(moved, "state"), "open", "open")},
 	)
 	want := []string{
 		"GitHub: org/web#50 を自動でリンク",
+		"GitHub: org/web2#41 の状態を Closed に変更",
 		"GitHub: リンクを org/web#41 から org/web2#41 に更新",
 		"GitHub: org/web#41 のタイトルを「B」に変更",
 		"GitHub: org/web#41 のレビューを 承認済み に変更",
@@ -1152,7 +1170,7 @@ git commit -m "feat(history): GitHub が取り直したリンクの値・改名�
   	itemlink.Values
   	Checks itemlink.Checks
   }
-  // GitHub に足すメソッド
+  // GitHub に足すメソッド(Task 6 で足す。Task 5 で足すと infra/github がビルドできなくなるため)
   Lookup(ctx context.Context, token, repo string, number int) (Found, error)
 
   type Checks interface {
@@ -1228,10 +1246,6 @@ import (
 type GitHub interface {
 	// Viewer は、token の持ち主のログイン名を返す(07「認証の確認」)。
 	Viewer(ctx context.Context, token string) (login string, err error)
-	// Lookup は、repo(owner/name)の番号 number の PR か Issue を読む(07「追加」「表示と更新」)。
-	// 改名・移管されたリポジトリは移動先で読み、Found.Repo に移動先の名前を入れる。
-	// リポジトリを読めなければ RepoUnreadable、番号がなければ NotFound(どちらも Repo・Number 付き)。
-	Lookup(ctx context.Context, token, repo string, number int) (Found, error)
 }
 
 // Found は、GitHub から読んだ PR・Issue。
@@ -1394,12 +1408,12 @@ func RunChecksContract(t *testing.T, open func(t *testing.T) port.Checks) {
 
 `apptest/github.go` が 300 行を超えるときは、`Secrets` の偽物を同じパッケージの既存の小さなファイル(`accounts.go` など)へ移す(ファイルを増やさない)。
 
-`go build ./...` が、`port.GitHub` を満たさなくなった型(`infra/github.Client`)で落ちる。Task 6 で `Lookup` を足すまで落ちたままにしないため、このタスクで `internal/infra/github/lookup.go` に仮の実装を置かない。代わりに、Task 5 と Task 6 を続けて実装し、Task 5 のコミットでは `cmd/hedgehug` のビルドが落ちないことを `go vet ./internal/app/...` で確かめる。`make check` は Task 6 のあとで流す。
+`port.GitHub` の interface には、このタスクでは `Lookup` を足さない(足すと `infra/github.Client` が口を満たさずビルドが落ちる)。偽物の `Lookup` は先に置き、口への追加は Task 6 で実装と一緒に行う。
 
 - [ ] **Step 4: 通ることを確かめる**
 
-Run: `go test ./internal/app/... ./internal/domain/...`
-Expected: PASS(`cmd/hedgehug` と `infra/github` は Task 6 まで `Lookup` がなくてビルドできない)
+Run: `go test ./internal/app/... ./internal/domain/... && make check`
+Expected: PASS
 
 - [ ] **Step 5: コミット**
 
@@ -1845,6 +1859,15 @@ func (n *node) checks() itemlink.Checks {
 }
 ```
 
+`port/github.go` の `GitHub` の interface に、`Viewer` の次へ足す:
+
+```go
+	// Lookup は、repo(owner/name)の番号 number の PR か Issue を読む(07「追加」「表示と更新」)。
+	// 改名・移管されたリポジトリは移動先で読み、Found.Repo に移動先の名前を入れる。
+	// リポジトリを読めなければ RepoUnreadable、番号がなければ NotFound(どちらも Repo・Number 付き)。
+	Lookup(ctx context.Context, token, repo string, number int) (Found, error)
+```
+
 `answerFailure` の引数 `reset` のために import に `time` を足す。`c.resetAt(h)` は `h` が nil でも `h.Get` が空を返すので動く。GraphQL は利用上限でも 200 で返すことがあるので、`do` が成功を返した答えの `RATE_LIMITED` も見る。HTTP の 403・429 の利用上限は `classify` が先に `RateLimited` にする。
 
 - [ ] **Step 4: 通ることを確かめる**
@@ -1855,7 +1878,7 @@ Expected: PASS(Task 5 の口を満たし、`cmd/hedgehug` もビルドできる)
 - [ ] **Step 5: コミット**
 
 ```bash
-git add internal/infra/github
+git add internal/infra/github internal/app/port/github.go
 git commit -m "feat(github): PR・Issue を GraphQL で読み、改名・移管を REST のリダイレクトで追う(D3 Task 6)"
 ```
 
@@ -3151,7 +3174,7 @@ git commit -m "feat(app): 詳細パネルを開いたときのリンクの取り
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`links_test.go`(既存の `accounts_test.go` の組み立て(`humatest` の API と偽物)を見て、同じヘルパーで書く。ここでは要る形を示す):
+`internal/adapter/httpapi/github/links_test.go`(`accounts_test.go` の `newServices` を使う):
 
 ```go
 package github_test
@@ -3160,19 +3183,21 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 
-	"github.com/kukv/hedgehug/internal/adapter/httpapi/github"
+	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
 func TestLinksAPI(t *testing.T) {
 	_, api := humatest.New(t)
-	svc := linkServices(t) // accounts_test.go の組み立てに Links を足したもの(下の注)
-	github.Register(api, svc)
+	ghapi.Register(api, linkServices(t))
 	base := "/api/stores/S1/items/" + string(apptest.SampleTask) + "/links"
 
 	res := api.Post(base, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": false})
@@ -3200,12 +3225,41 @@ func TestLinksAPI(t *testing.T) {
 	if res = api.Get("/api/stores/S1/items/01TESTIT0000000000000000NO/links"); res.Code != http.StatusNotFound {
 		t.Errorf("missing item: %d", res.Code)
 	}
-	_ = itemlink.PR
-	_ = port.StoreID("")
 }
 ```
 
-注: `linkServices(t)` は、`accounts_test.go` の Services の組み立てに、Task 8 の `newLinks` と同じ偽物(Store S1 にサンプル、アカウント A1、`apptest.GitHub` に `org/web#41`、`apptest.StoreGitHub` で S1 に A1)で作った `ghapp.Links` を `Links` に入れたもの。使わない import は書かない(上の `_ =` の 2 行は消す)。
+`linkServices` は同じファイルに置く:
+
+```go
+// linkServices は、accounts_test.go の newServices に、Store S1(サンプル)と、S1 に割り当てたアカウント A1(@taro)と、
+// org/web#41 を持つ偽の GitHub で作った Links を足したもの。
+func linkServices(t *testing.T) ghapi.Services {
+	t.Helper()
+	gh := &apptest.GitHub{Users: map[string]string{"tok-taro": "taro"}}
+	gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 41,
+		Values: itemlink.Values{Title: "Add login form", State: itemlink.Open, Review: itemlink.Pending}, Checks: itemlink.Running})
+	svc := newServices(gh)
+	clock := apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))
+	s := apptest.NewStores(clock, apptest.NewIDs())
+	s.AddStore("S1")
+	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	accounts := apptest.NewAccounts()
+	if err := accounts.Add(t.Context(), account.Account{ID: "A1", Name: "work", Login: "taro", Method: account.EnvVar}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Links = ghapp.Links{
+		Stores: s, Identity: apptest.Identity{Login: "taro"},
+		Connector: ghapp.Connector{
+			Session: ghapp.NewSession(), Accounts: accounts, Secrets: &apptest.Secrets{Tokens: map[string]string{"taro": "tok-taro"}},
+			GitHub: gh, Stores: &apptest.StoreGitHub{Stores: []port.StoreGitHubInfo{{ID: "S1", Name: "チーム", Account: "A1"}}}, Clock: clock,
+		},
+		Checks: apptest.NewChecks(), Events: &apptest.Events{},
+	}
+	return svc
+}
+```
 
 `internal/adapter/httpapi/events/events_test.go` に、`port.EventGitHub` を `event: github` で書くテストを足す(既存の `writeFrame` のテストの形に合わせる):
 
@@ -3366,8 +3420,6 @@ func linkRow(r ghapp.LinkRow) LinkRow {
 }
 ```
 
-`DefaultStatus` と 204 の返し方、`*struct{}` の戻り値は、既存の `notes/relations.go` の追加・解除の登録に合わせる(違えばそちらの書き方に直す)。
-
 `accounts.go`: `Services` に `Links ghapp.Links` を足し、`Register` の最後に `registerLinks(api, s.Links)` を足す。
 
 `events.go` の `writeFrame`:
@@ -3485,7 +3537,8 @@ func githubHandler(token string, next http.Handler) http.Handler {
 func TestLiveLookup(t *testing.T) {
 	token := liveToken(t)
 	org := os.Getenv("HEDGEHUG_LIVE_ORG")
-	// hh-live の #1 があることだけを前提にする(PR か Issue かは問わない)。
+	// hh-live の #1 があることだけを前提にする(PR か Issue かは問わない。前回の github-live も hh-live の
+	// PR と開いている Issue があることを前提にしていた)。
 	f, err := New(nil).Lookup(context.Background(), token, org+"/hh-live", 1)
 	if err != nil || f.Number != 1 || f.Title == "" || !strings.EqualFold(f.Repo, org+"/hh-live") {
 		t.Errorf("Lookup = %+v, %v", f, err)
@@ -3651,7 +3704,7 @@ git commit -m "refactor(web): アカウントの状態と公開を別のファ�
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`packages/api/src/links.test.ts`(既存の api のテスト(例 `relationsPort.test.ts` か `accounts.test.ts`)が `fetch` をどう差し替えているかを見て、同じ形にする。ここでは確かめることを示す):
+`packages/api/src/links.test.ts`(`accounts.test.ts` と同じ `fetch` の差し替え):
 
 ```ts
 import { NotFound, Refused } from "@hedgehug/core";
@@ -3659,40 +3712,65 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "./fetcher";
 import { createLinksPort } from "./links";
 
-function answer(status: number, body: unknown) {
-  return vi.fn(async () => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function respond(status: number, body: unknown) {
+  const fetch = vi.fn(
+    async () =>
+      new Response(body === undefined ? null : JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  setToken("tok");
+  return fetch;
 }
 
-describe("createLinksPort", () => {
-  afterEach(() => vi.unstubAllGlobals());
-  setToken("t");
+const row = { kind: "pr", repo: "org/web", number: 41, title: "A", state: "open", review: "pending", checks: "", error: "" };
 
+describe("links port", () => {
   it("reads rows with the narrow types", async () => {
-    const row = { kind: "pr", repo: "org/web", number: 41, title: "A", state: "open", review: "pending", checks: "", error: "" };
-    vi.stubGlobal("fetch", answer(200, [row]));
+    respond(200, [row]);
     expect(await createLinksPort().list("S1", "I1")).toEqual([row]);
   });
 
+  it("sends the add body and reads 204", async () => {
+    const fetch = respond(204, undefined);
+    await createLinksPort().add("S1", "I1", { kind: "pr", repo: "org/web", number: "41", addToProject: true });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/stores/S1/items/I1/links");
+    expect(JSON.parse(String(init.body))).toEqual({ kind: "pr", repo: "org/web", number: "41", addToProject: true });
+  });
+
   it("turns 422 into Refused and 404 into NotFound", async () => {
-    vi.stubGlobal("fetch", answer(422, { detail: "番号を入力してください" }));
-    await expect(createLinksPort().add("S1", "I1", { kind: "pr", repo: "org/web", number: "x", addToProject: false })).rejects.toEqual(new Refused("番号を入力してください"));
-    vi.stubGlobal("fetch", answer(404, { detail: "not found" }));
+    respond(422, { detail: "番号を入力してください" });
+    await expect(
+      createLinksPort().add("S1", "I1", { kind: "pr", repo: "org/web", number: "x", addToProject: false }),
+    ).rejects.toEqual(new Refused("番号を入力してください"));
+    respond(404, { detail: "not found" });
     await expect(createLinksPort().refresh("S1", "I1")).rejects.toBeInstanceOf(NotFound);
   });
 });
 ```
 
-`reflection.test.ts` に足す(既存の `t.s.send` の形で):
+`reflection.test.ts` に足す:
 
 ```ts
-  it("applies github events after store and sync", async () => {
-    const t = setup(); // 既存のテストの組み立て
+  it("applies a github event", async () => {
+    const t = setup();
+    t.r.start();
+    t.s.open();
+    await t.advance(0);
     t.s.send("github");
-    t.s.send("store");
-    await t.flush(); // 既存のテストの待ち方に合わせる
-    expect(t.applied.at(-1)).toEqual(["store", "github"]);
+    await t.advance(0);
+    expect(t.applied.at(-1)).toEqual(["github"]);
   });
 ```
+
+つないだとき・すべてを読み直すときの既存の期待値 `["store", "sync"]` は、並びに `"github"` を足すので `["store", "sync", "github"]` に直す(`order` をすべて当てる場面。`reflection.ts` の 77 行と 123 行)。
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -3975,6 +4053,21 @@ describe("createLinkList", () => {
     ]);
   });
 
+  it("keeps the refreshed rows when the list is read during the refresh", async () => {
+    const t = setup();
+    let release: () => void = () => undefined;
+    t.links.port.refresh = () =>
+      new Promise((resolve) => {
+        release = () => resolve([row({ state: "merged", error: "状態を更新できませんでした: x" })]);
+      });
+    const loading = t.list.load("S1", "I1");
+    await new Promise((r) => setTimeout(r, 0)); // 一覧を出し、取り直しを待つところまで進める
+    await t.list.reload(); // 取り直しの途中の画面への反映
+    release();
+    await loading;
+    expect(get(t.list.state).rows[0]).toMatchObject({ state: "merged", error: "状態を更新できませんでした: x" });
+  });
+
   it("drops answers for an item that is no longer open", async () => {
     const t = setup();
     const first = t.list.load("S1", "I1");
@@ -4040,27 +4133,46 @@ export function createLinkList(deps: LinkListDeps): LinkList {
   let target: { storeId: string; itemId: string } | null = null;
   // errors は、最後の取り直しの失敗の文言(一覧だけを読み直しても、行に残す)。
   let errors = new Map<string, string>();
-  let loads = 0;
+  // lists・refreshes は、古い答えを捨てるための通し番号。一覧と取り直しは別に数える(取り直しの途中に画面への
+  // 反映の一覧が入っても、取り直しの答えと失敗の文言を捨てない)。取り直しの答えを出したら、それより前に
+  // 出した一覧の答え(古い値)も捨てる。
+  let lists = 0;
+  let refreshes = 0;
 
-  const withErrors = (rows: LinkRow[]) => rows.map((r) => ({ ...r, error: r.error || errors.get(linkKey(r)) || "" }));
+  const withErrors = (rows: LinkRow[]) =>
+    rows.map((r) => ({ ...r, error: r.error || errors.get(linkKey(r)) || "" }));
+  const show = (rows: LinkRow[]) => state.update((s) => ({ ...s, loaded: true, rows: withErrors(rows) }));
 
-  // read は、一覧か取り直しの答えを出す。古い答えと、失敗は捨てる(画面への反映は失敗を出さない。A2 の決定 29)。
-  async function read(fetch: (t: { storeId: string; itemId: string }) => Promise<LinkRow[]>, refreshed = false) {
+  // list は、一覧を出す。失敗は出さない(画面への反映は失敗を出さない。A2 の決定 29)。
+  async function list() {
     if (!target) return;
     const t = target;
-    loads += 1;
-    const mine = loads;
+    lists += 1;
+    const mine = lists;
     try {
-      const rows = await fetch(t);
-      if (mine !== loads) return;
-      if (refreshed) errors = new Map(rows.filter((r) => r.error).map((r) => [linkKey(r), r.error]));
-      state.update((s) => ({ ...s, loaded: true, rows: withErrors(rows) }));
+      const rows = await deps.links.list(t.storeId, t.itemId);
+      if (mine === lists && target === t) show(rows);
     } catch (e) {
-      if (e instanceof NotFound && mine === loads) state.update((s) => ({ ...s, loaded: true, rows: [] }));
+      if (e instanceof NotFound && mine === lists && target === t) show([]);
     }
   }
 
-  const list = () => read((t) => deps.links.list(t.storeId, t.itemId));
+  // refresh は、GitHub から取り直した一覧を出し、失敗の文言を覚える。
+  async function refresh() {
+    if (!target) return;
+    const t = target;
+    refreshes += 1;
+    const mine = refreshes;
+    try {
+      const rows = await deps.links.refresh(t.storeId, t.itemId);
+      if (mine !== refreshes || target !== t) return;
+      lists += 1;
+      errors = new Map(rows.filter((r) => r.error).map((r) => [linkKey(r), r.error]));
+      show(rows);
+    } catch (e) {
+      if (e instanceof NotFound && mine === refreshes && target === t) show([]);
+    }
+  }
 
   async function readAccounts() {
     try {
@@ -4080,7 +4192,7 @@ export function createLinkList(deps: LinkListDeps): LinkList {
         state.set(blank);
       }
       await Promise.all([list(), readAccounts()]);
-      await read((t) => deps.links.refresh(t.storeId, t.itemId), true);
+      await refresh();
     },
     reload: list,
     async remove(row) {
@@ -4098,7 +4210,8 @@ export function createLinkList(deps: LinkListDeps): LinkList {
     },
     reset() {
       target = null;
-      loads += 1;
+      lists += 1;
+      refreshes += 1;
       errors = new Map();
       state.set(blank);
     },
@@ -4374,7 +4487,7 @@ app には部品のテストの基盤がない(A3b の記録)。状態と規則�
 import { createAccountsPort, createLinksPort } from "@hedgehug/api";
 import { createLinkDialog, createLinkList } from "@hedgehug/core";
 import { reloads } from "./reloads";
-import { toasts } from "./wire";
+import { catalog, detail, navigation, toasts } from "./wire";
 
 // GitHub の欄(07「PR と Issue のリンク」)。wire.ts が 300 行なので、ここで作る。
 const port = createLinksPort();
@@ -4384,8 +4497,15 @@ export const linkList = createLinkList({
   toasts,
   onChanged: () => undefined, // Task 16 で概要の一覧の読み直しにする
 });
-export const linkDialog = createLinkDialog({ links: port, onAdded: () => void linkList.reload() });
+// リンクしたら、一覧と、プロジェクトのリポジトリ(「プロジェクトのリポジトリにも追加する」で増え、次に開く
+// ダイアログの選択肢になる)を読み直す。projectEditor.ts と同じく、カタログを読んでから詳細パネルを読み直す。
+export const linkDialog = createLinkDialog({
+  links: port,
+  onAdded: () => void Promise.all([linkList.reload(), catalog.load().then(() => detail.reload())]),
+});
 reloads.add(() => linkList.reload());
+// 画面を移ったら、ダイアログを閉じる(01「画面の移り方」。前のアイテム宛てのダイアログを残さない)。
+navigation.route.subscribe(() => linkDialog.close());
 ```
 
 - [ ] **Step 2: 部品を書く**
@@ -4854,11 +4974,12 @@ reloads.add(() => projectLinks.reload());
 ```ts
 export const linkDialog = createLinkDialog({
   links: port,
-  onAdded: () => void Promise.all([linkList.reload(), projectLinks.reload()]),
+  onAdded: () =>
+    void Promise.all([linkList.reload(), projectLinks.reload(), catalog.load().then(() => detail.reload())]),
 });
 ```
 
-(`projectLinks` を `linkList` より前に作る。)「プロジェクトのリポジトリにも追加する」で加えたリポジトリは、Store の出来事(`store`)で開いている概要とカタログが読み直されて出る(wire.ts の `reflect`)。
+(`projectLinks` を `linkList` より前に作る。)
 
 `ProjectLinks.svelte`:
 
@@ -4999,7 +5120,9 @@ async function setup(page: Page, info: TestInfo) {
 async function link(page: Page, section: ReturnType<Page["getByRole"]>, kind: "PR" | "Issue", repo: string | null, n: string) {
   await section.getByRole("button", { name: `${kind} をリンク` }).click();
   const dialog = page.getByRole("dialog", { name: `${kind} をリンク` });
-  if (repo !== null) await dialog.getByRole("textbox", { name: "リポジトリ" }).fill(repo);
+  // repo が null なら、プロジェクトのリポジトリから選ぶ(セレクトが出るのを待つ)
+  if (repo === null) await expect(dialog.getByRole("combobox", { name: "リポジトリ" })).toBeVisible();
+  else await dialog.getByRole("textbox", { name: "リポジトリ" }).fill(repo);
   await dialog.getByRole("textbox", { name: "番号" }).fill(n);
   await dialog.getByRole("button", { name: "リンク" }).click();
   return dialog;
