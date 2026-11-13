@@ -13,6 +13,7 @@ import (
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
@@ -45,6 +46,30 @@ func TestLinksAPI(t *testing.T) {
 	}
 	if res = api.Get("/api/stores/S1/items/01TESTIT0000000000000000NO/links"); res.Code != http.StatusNotFound {
 		t.Errorf("missing item: %d", res.Code)
+	}
+}
+
+func TestLinksRefreshAnswer(t *testing.T) {
+	_, api := humatest.New(t)
+	svc := linkServices(t)
+	ghapi.Register(api, svc)
+	gh, _ := svc.Links.Connector.GitHub.(*apptest.GitHub)
+	base := "/api/stores/S1/items/" + string(apptest.SampleTask) + "/links"
+	if res := api.Post(base, map[string]any{"kind": "pr", "repo": "org/web", "number": "41", "addToProject": false}); res.Code != http.StatusNoContent {
+		t.Fatalf("add: %d %s", res.Code, res.Body)
+	}
+	gh.Put("org/web", port.Found{
+		Kind: itemlink.PR, Repo: "org/web", Number: 41,
+		Values: itemlink.Values{Title: "Add login form", State: itemlink.Merged, Review: itemlink.Approved}, Checks: itemlink.Success,
+	})
+	res := api.Post(base+"/refresh", map[string]any{})
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"state":"merged","review":"approved","checks":"success","error":""`) {
+		t.Errorf("refresh: %d %s", res.Code, res.Body)
+	}
+	gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.Unreachable})
+	res = api.Post(base+"/refresh", map[string]any{})
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"checks":"success","error":"状態を更新できませんでした: GitHub に接続できません。接続を確かめて、もう一度お試しください"`) {
+		t.Errorf("refresh failure: %d %s", res.Code, res.Body)
 	}
 }
 

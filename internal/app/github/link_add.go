@@ -2,11 +2,13 @@ package github
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -25,12 +27,16 @@ type AddLinkInput struct {
 type addPlan struct {
 	ref       itemlink.Ref
 	values    itemlink.Values
+	checks    itemlink.Checks
 	toProject bool
 	summary   string
 }
 
 // Add は、PR か Issue を GitHub で確かめてリンクする(07「追加」)。確かめる順は 07 の表のとおり。
 // ダイアログは閉じ、トーストは出さない(画面)。手でのリンクでは自動化のきっかけを起こさない(D3-13)。
+// アクティビティの文(「(プロジェクトのリポジトリにも追加)」の有無)は保存の前の値で決まる。保存の中で、
+// 同時に誰かがそのリポジトリをプロジェクトに足していたら、断らずに黙って足さない(文はそのまま。この狭い
+// 競合は受け入れる)。チェックの結果は、保存できたあとに置く。
 func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLinkInput) error {
 	if in.Kind != itemlink.PR && in.Kind != itemlink.Issue {
 		return port.ErrNotFound
@@ -44,7 +50,7 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 		return err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: plan.summary}
-	return l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
 		cur, err := readItem(tx, id)
 		if err != nil {
 			return err
@@ -60,6 +66,11 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	_, err = l.saveChecks(ctx, store, plan.ref, plan.checks)
+	return err
 }
 
 // plan は、入力の形・重なり・GitHub・Issue の 1 対 1 を、07 の表の順に確かめる。
@@ -79,6 +90,9 @@ func (l Links) plan(ctx context.Context, store port.StoreID, id item.ID, in AddL
 	if _, ok := v.links.Find(itemlink.Ref{Kind: in.Kind, Repo: repo, Number: n}); ok {
 		return addPlan{}, refusal.New(itemlink.MsgAlready)
 	}
+	if n > math.MaxInt32 { // GitHub の番号の上限を超える: 問い合わせずに見つからないとする
+		return addPlan{}, l.refused(&ghcall.Failure{Kind: ghcall.NotFound, Repo: repo, Number: n})
+	}
 	f, err := l.lookup(ctx, store, repo, n)
 	if err != nil {
 		return addPlan{}, l.refused(err)
@@ -87,11 +101,8 @@ func (l Links) plan(ctx context.Context, store port.StoreID, id item.ID, in AddL
 	if err := l.checkFound(ctx, store, v, ref, in.Kind, id); err != nil {
 		return addPlan{}, err
 	}
-	if _, err := l.saveChecks(ctx, store, ref, f.Checks); err != nil {
-		return addPlan{}, err
-	}
 	toProject := in.AddToProject && project.IndexRepo(v.project.Repos, f.Repo) < 0
-	return addPlan{ref: ref, values: f.Values, toProject: toProject, summary: itemlink.AddSummary(v.display, ref, toProject)}, nil
+	return addPlan{ref: ref, values: f.Values, checks: f.Checks, toProject: toProject, summary: itemlink.AddSummary(v.display, ref, toProject)}, nil
 }
 
 // checkFound は、GitHub から読んだあとの検査(種別の違い・重なり・Issue の 1 対 1)。

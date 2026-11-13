@@ -2,10 +2,12 @@ package github
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
@@ -25,23 +27,9 @@ func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]L
 	if err != nil {
 		return nil, err
 	}
-	errs := map[string]string{}
-	checksChanged := false
-	for _, link := range v.links.Links {
-		f, err := l.lookup(ctx, store, link.Repo, link.Number)
-		if err != nil {
-			errs[link.Key()] = l.failText(err)
-			continue
-		}
-		ref, err := l.refreshOne(ctx, store, id, v, link, f)
-		if err != nil {
-			return nil, err
-		}
-		changed, err := l.saveChecks(ctx, store, ref, f.Checks)
-		if err != nil {
-			return nil, err
-		}
-		checksChanged = checksChanged || changed
+	errs, checksChanged, err := l.refreshAll(ctx, store, id, v)
+	if err != nil {
+		return nil, err
 	}
 	if checksChanged {
 		l.Events.Publish(port.Event{Kind: port.EventGitHub, Store: store})
@@ -51,6 +39,33 @@ func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]L
 		rows[i].Error = errs[rows[i].Key()]
 	}
 	return rows, err
+}
+
+// refreshAll は、リンクを 1 本ずつ取り直し、失敗した行の文言(Ref.Key() から引く)と、チェックの結果が
+// 変わったかを返す。利用上限に当たったら、残りのリンクは問い合わせず、同じ文言を付ける。
+func (l Links) refreshAll(ctx context.Context, store port.StoreID, id item.ID, v itemView) (map[string]string, bool, error) {
+	errs := map[string]string{}
+	changed, limited := false, ""
+	for _, link := range v.links.Links {
+		if limited != "" {
+			errs[link.Key()] = limited
+			continue
+		}
+		f, err := l.lookup(ctx, store, link.Repo, link.Number)
+		if err != nil {
+			errs[link.Key()] = l.failText(err)
+			if ghcall.Is(err, ghcall.RateLimited) {
+				limited = errs[link.Key()]
+			}
+			continue
+		}
+		c, err := l.refreshOne(ctx, store, id, v, link, f)
+		if err != nil {
+			return nil, false, err
+		}
+		changed = changed || c
+	}
+	return errs, changed, nil
 }
 
 // skipRefresh は、問い合わせないときか(D3-9)。
@@ -68,34 +83,64 @@ func (l Links) skipRefresh(ctx context.Context, store port.StoreID) (bool, error
 	return len(accounts) == 0, err
 }
 
-// refreshOne は、1 本のリンクを f の値にそろえて保存し、そのあとのリンクの Ref を返す。値が同じなら保存しない。
-func (l Links) refreshOne(ctx context.Context, store port.StoreID, id item.ID, v itemView, link itemlink.Link, f port.Found) (itemlink.Ref, error) {
+// errRenameTaken は、保存の中で、改名先が同じアイテムの別のリンクと重なったこと(改名せずに値だけ取り直す)。
+var errRenameTaken = errors.New("github: rename target is already linked")
+
+// refreshOne は、1 本のリンクを f の値にそろえて保存し、チェックの結果を置く。改名したら、古い名前の
+// チェックの結果を消す。チェックの結果が変わったら true。取り直すあいだに外されたリンクは何もしない。
+func (l Links) refreshOne(ctx context.Context, store port.StoreID, id item.ID, v itemView, link itemlink.Link, f port.Found) (bool, error) {
 	repo, err := l.renameTo(ctx, store, v, link, f.Repo)
 	if err != nil {
-		return itemlink.Ref{}, err
+		return false, err
 	}
-	summary := itemlink.RefreshSummary(v.display, link, repo, f.Values)
-	after := itemlink.Ref{Kind: link.Kind, Repo: repo, Number: link.Number}
+	kept, err := l.writeRefresh(ctx, store, id, v.display, link, repo, f.Values)
+	if errors.Is(err, errRenameTaken) {
+		repo = link.Repo
+		kept, err = l.writeRefresh(ctx, store, id, v.display, link, repo, f.Values)
+	}
+	if err != nil || !kept {
+		return false, err
+	}
+	cleared := false
+	if repo != link.Repo {
+		if cleared, err = l.saveChecks(ctx, store, link.Ref, itemlink.NoChecks); err != nil {
+			return false, err
+		}
+	}
+	saved, err := l.saveChecks(ctx, store, itemlink.Ref{Kind: link.Kind, Repo: repo, Number: link.Number}, f.Checks)
+	return cleared || saved, err
+}
+
+// writeRefresh は、link を値 v で(repo が違えば改名して)実行者「GitHub」で保存する。値が同じなら保存しない。
+// 取り直すあいだに外された・書き換えられたリンクなら何もせず false。改名先が、保存の中で同じアイテムの
+// 別のリンクと重なれば errRenameTaken(何も保存しない)。
+func (l Links) writeRefresh(ctx context.Context, store port.StoreID, id item.ID, display string, link itemlink.Link, repo string, v itemlink.Values) (bool, error) {
+	summary := itemlink.RefreshSummary(display, link, repo, v)
 	if summary == "" {
-		return after, nil
+		return true, nil
 	}
+	kept := false
 	op := port.Operation{Actor: change.Actor{Kind: change.ActorGitHub}, Summary: summary}
-	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+	err := l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		kept = false
 		cur, err := readItem(tx, id)
 		if err != nil {
 			return err
 		}
 		now, ok := cur.links.Find(link.Ref)
 		if !ok || now.Repo != link.Repo || now.Kind != link.Kind {
-			return nil // 取り直すあいだに外された・書き換えられた
+			return nil
 		}
-		drafts := cur.links.Refresh(now, f.Values)
-		if repo != now.Repo {
-			drafts = cur.links.Rename(now, repo, f.Values)
+		kept = true
+		if repo == now.Repo {
+			return tx.WriteItems().Append(id, cur.links.Refresh(now, v)...)
 		}
-		return tx.WriteItems().Append(id, drafts...)
+		if _, taken := cur.links.Find(itemlink.Ref{Kind: now.Kind, Repo: repo, Number: now.Number}); taken {
+			return errRenameTaken
+		}
+		return tx.WriteItems().Append(id, cur.links.Rename(now, repo, v)...)
 	})
-	return after, err
+	return kept, err
 }
 
 // renameTo は、書き換えるリポジトリ名。改名・移管がない(大文字小文字だけの違いを含む)か、書き換えると

@@ -81,6 +81,89 @@ func TestRefreshKeepsOldNameWhenRenameCollides(t *testing.T) {
 	if got := displays(rows); !slices.Contains(got, "pr org/web#41 Add login form closed") {
 		t.Errorf("rows = %q (the old name stays, values are refreshed)", got)
 	}
+	for _, r := range rows {
+		if r.Error != "" {
+			t.Errorf("row %s has an error %q", r.Display(), r.Error)
+		}
+	}
+	if s := f.lastSummary(); s != "HH-2 の org/web#41 の状態を Closed に変更" {
+		t.Errorf("summary = %q, want no rename", s)
+	}
+}
+
+func TestRefreshKeepsOldNameWhenRenamedIssueIsTaken(t *testing.T) {
+	f := newLinks(t)
+	moved := iss12
+	moved.Repo = "org/api2"
+	f.gh.Put("org/api2", moved)
+	if err := f.add(t, linkStore, linkEpic, itemlink.Issue, "org/api2", "12", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.add(t, linkStore, linkTask, itemlink.Issue, "org/api", "12", false); err != nil {
+		t.Fatal(err)
+	}
+	moved.State = itemlink.Closed
+	f.gh.Put("org/api", moved)
+	rows := f.refresh(t)
+	if got := displays(rows); !slices.Equal(got, []string{"issue org/api#12 落ちる closed"}) || rows[0].Error != "" {
+		t.Errorf("rows = %q %+v (the old name stays, values are refreshed)", got, rows)
+	}
+	if s := f.lastSummary(); s != "HH-2 の org/api#12 の状態を Closed に変更" {
+		t.Errorf("summary = %q, want no rename", s)
+	}
+}
+
+func TestRefreshDoesNotRenameOntoALinkAddedMeanwhile(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	moved := pr41
+	moved.Repo, moved.State = "org/web2", itemlink.Closed
+	f.gh.Put("org/web", moved)
+	web2 := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web2", Number: 41}
+	f.stores.before = func() { f.attachNow(t, linkTask, web2, moved.Values) } // 取り直すあいだに誰かが付けた
+	rows := f.refresh(t)
+	if got := displays(rows); !slices.Equal(got, []string{"pr org/web#41 Add login form closed", "pr org/web2#41 Add login form closed"}) {
+		t.Errorf("rows = %q (no rename onto the new link; values are refreshed)", got)
+	}
+	if s := f.lastSummary(); s != "HH-2 の org/web#41 の状態を Closed に変更" {
+		t.Errorf("summary = %q, want no rename", s)
+	}
+}
+
+func TestRefreshMovesChecksWithTheRename(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	moved := pr41
+	moved.Repo, moved.Checks = "org/web2", itemlink.Success
+	f.gh.Put("org/web", moved)
+	f.refresh(t)
+	got, _ := f.checks.Read(t.Context(), linkStore)
+	if len(got) != 1 || got["pr:org/web2#41"] != itemlink.Success {
+		t.Errorf("checks = %v, want only the new name", got)
+	}
+}
+
+func TestRefreshStopsAtTheRateLimit(t *testing.T) {
+	f := newLinks(t)
+	f.gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 42, Values: itemlink.Values{Title: "b", State: itemlink.Open, Review: itemlink.NoReview}})
+	for _, n := range []string{"41", "42"} {
+		if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", n, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.gh.Fail("org/web", 41, &ghcall.Failure{Kind: ghcall.RateLimited})
+	asked := f.gh.Lookups
+	rows := f.refresh(t)
+	if f.gh.Lookups-asked != 1 {
+		t.Errorf("lookups = %d, want 1 (stop at the rate limit)", f.gh.Lookups-asked)
+	}
+	if len(rows) != 2 || rows[0].Error == "" || rows[1].Error != rows[0].Error {
+		t.Errorf("rows = %+v, want the same error on both", rows)
+	}
 }
 
 func TestRefreshFailureShowsOnTheRow(t *testing.T) {

@@ -52,8 +52,8 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
 	syncSvc := &syncing.Service{
 		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{
-			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: "e2e-account"},
-			{ID: readonlyStore, Name: "readonly", Remote: "https://example.invalid/readonly.git", Account: "e2e-account", ReadOnly: true},
+			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: e2eAccount},
+			{ID: readonlyStore, Name: "readonly", Remote: "https://example.invalid/readonly.git", Account: e2eAccount, ReadOnly: true},
 		}},
 		Tokens:     &apptest.SyncTokens{Tokens: map[port.StoreID]string{e2eStore: "e2e-gh-token", readonlyStore: "e2e-gh-token"}},
 		Replicator: &apptest.Replicator{},

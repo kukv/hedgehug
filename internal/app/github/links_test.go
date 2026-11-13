@@ -26,15 +26,35 @@ const (
 	linkEpic                = apptest.SampleEpic // HH-1
 )
 
-// linkRecorder は、Write に渡した操作を覚える。
+// linkRecorder は、Write に渡した操作を覚える。before があれば、次の Write の前に 1 回だけ呼ぶ(同時の変更)。
 type linkRecorder struct {
 	*apptest.Stores
-	ops []port.Operation
+	ops    []port.Operation
+	before func()
 }
 
 func (r *linkRecorder) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	if b := r.before; b != nil {
+		r.before = nil
+		b()
+	}
 	r.ops = append(r.ops, op)
 	return r.Stores.Write(ctx, id, op, fn)
+}
+
+// attachNow は、ref を値 v で、記録を残さずに(linkRecorder を通さずに)id にリンクする。
+func (f *linkFixture) attachNow(t *testing.T, id item.ID, ref itemlink.Ref, v itemlink.Values) {
+	t.Helper()
+	err := f.stores.Stores.Write(t.Context(), linkStore, port.Operation{Actor: change.User("jiro"), Summary: "同時のリンク"}, func(tx port.Tx) error {
+		log, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: id})
+		if err != nil {
+			return err
+		}
+		return tx.WriteItems().Append(id, itemlink.FromLog(log).Attach(ref, v)...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 type linkFixture struct {
@@ -294,5 +314,39 @@ func TestLinksOfMissingItem(t *testing.T) {
 	}
 	if err := f.add(t, linkStore, "01TESTIT0000000000000000NO", itemlink.PR, "org/web", "41", false); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("Add = %v", err)
+	}
+}
+
+func TestAddLinkTooLargeNumberIsNotFound(t *testing.T) {
+	f := newLinks(t)
+	asked := f.gh.Lookups
+	err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "2147483648", false)
+	if got := refusalText(err); got != "org/web#2147483648 が見つかりません" || f.gh.Lookups != asked {
+		t.Errorf("%q (%v), lookups %d", got, err, f.gh.Lookups-asked)
+	}
+}
+
+func TestAddLinkSavesChecksOnlyAfterTheWrite(t *testing.T) {
+	f := newLinks(t)
+	ref := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	f.stores.before = func() { f.attachNow(t, linkTask, ref, pr41.Values) } // 確かめたあと、保存の前に誰かがリンクした
+	if got := refusalText(f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false)); got != "もうリンクしています" {
+		t.Fatalf("%q", got)
+	}
+	if got, _ := f.checks.Read(t.Context(), linkStore); len(got) != 0 {
+		t.Errorf("checks = %v, want nothing saved for a refused write", got)
+	}
+}
+
+func TestRemoveLinkClearsItsChecks(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, itemlink.Ref{Kind: itemlink.PR, Repo: "ORG/web", Number: 41}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := f.checks.Read(t.Context(), linkStore); len(got) != 0 {
+		t.Errorf("checks = %v, want the removed link's checks cleared", got)
 	}
 }

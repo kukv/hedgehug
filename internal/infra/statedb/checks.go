@@ -42,9 +42,22 @@ func (c checks) Read(ctx context.Context, store port.StoreID) (map[string]itemli
 	return out, rows.Err()
 }
 
+// Save は、読んで比べてから書くまでを 1 つのトランザクションで行う(同時に置いても「変わった」を重ねない)。
 func (c checks) Save(ctx context.Context, store port.StoreID, key string, v itemlink.Checks) (bool, error) {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	changed, err := saveIn(ctx, tx, store, key, v)
+	if err != nil {
+		return false, errors.Join(err, tx.Rollback())
+	}
+	return changed, tx.Commit()
+}
+
+func saveIn(ctx context.Context, tx *sql.Tx, store port.StoreID, key string, v itemlink.Checks) (bool, error) {
 	var old string
-	err := c.db.QueryRowContext(ctx, `SELECT checks FROM github_checks WHERE store = ? AND link = ?`, string(store), key).Scan(&old)
+	err := tx.QueryRowContext(ctx, `SELECT checks FROM github_checks WHERE store = ? AND link = ?`, string(store), key).Scan(&old)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		old = ""
@@ -55,10 +68,10 @@ func (c checks) Save(ctx context.Context, store port.StoreID, key string, v item
 		return false, nil
 	}
 	if v == itemlink.NoChecks {
-		_, err = c.db.ExecContext(ctx, `DELETE FROM github_checks WHERE store = ? AND link = ?`, string(store), key)
+		_, err = tx.ExecContext(ctx, `DELETE FROM github_checks WHERE store = ? AND link = ?`, string(store), key)
 		return err == nil, err
 	}
-	_, err = c.db.ExecContext(ctx, `INSERT INTO github_checks (store, link, checks, at) VALUES (?, ?, ?, ?)
+	_, err = tx.ExecContext(ctx, `INSERT INTO github_checks (store, link, checks, at) VALUES (?, ?, ?, ?)
 		ON CONFLICT (store, link) DO UPDATE SET checks = excluded.checks, at = excluded.at`,
 		string(store), key, string(v), timeText(time.Now()))
 	return err == nil, err

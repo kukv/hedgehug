@@ -10,7 +10,7 @@ import (
 )
 
 // Remove は、リンクを確認なしで外す(07「解除」)。PR は解除の記録に入る。ないリンクなら何も保存しない。
-// アイテムがなければ port.ErrNotFound。
+// アイテムがなければ port.ErrNotFound。外したリンクのチェックの結果は消す。
 func (l Links) Remove(ctx context.Context, store port.StoreID, id item.ID, ref itemlink.Ref) error {
 	v, err := l.view(ctx, store, id)
 	if err != nil {
@@ -21,7 +21,9 @@ func (l Links) Remove(ctx context.Context, store port.StoreID, id item.ID, ref i
 		return err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: itemlink.RemoveSummary(v.display)}
-	return l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+	var removed *itemlink.Ref
+	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		removed = nil
 		cur, err := readItem(tx, id)
 		if err != nil {
 			return err
@@ -30,6 +32,12 @@ func (l Links) Remove(ctx context.Context, store port.StoreID, id item.ID, ref i
 		if !ok || link.Kind != ref.Kind {
 			return nil
 		}
+		removed = &link.Ref
 		return tx.WriteItems().Append(id, cur.links.Detach(link)...)
 	})
+	if err != nil || removed == nil {
+		return err
+	}
+	_, err = l.saveChecks(ctx, store, *removed, itemlink.NoChecks)
+	return err
 }
