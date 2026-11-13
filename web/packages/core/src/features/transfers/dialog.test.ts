@@ -158,7 +158,7 @@ describe("transfer dialog: opening and choosing (02「移す先の選び方」)"
     expect(get(dialog.state)).toBeNull();
   });
 
-  it("closes with a toast when the preview cannot be read, and reloads when the item is gone", async () => {
+  it("shows a toast when the candidates cannot be read, and reloads when the item is gone", async () => {
     const { dialog, fake, task, toasts, env } = await setup();
     fake.refuseNext("閲覧のみの Store です");
     await dialog.open(task);
@@ -166,6 +166,23 @@ describe("transfer dialog: opening and choosing (02「移す先の選び方」)"
     expect(toasts()).toEqual([{ text: "閲覧のみの Store です", error: true }]);
     fake.missing.add("S1-I3");
     await dialog.open(task);
+    expect(get(dialog.state)).toBeNull();
+    expect(toasts().at(-1)).toEqual({ text: "移動できませんでした", error: true });
+    expect(env.refreshed).toBe(1);
+  });
+
+  it("closes with a toast when the preview cannot be read, and reloads when the item is gone", async () => {
+    const { dialog, fake, task, toasts, env } = await setup();
+    await dialog.open(task);
+    fake.refuseNext("閲覧のみの Store です");
+    await dialog.setWorkspace("S3/S3-W1");
+    expect(fake.calls.at(-1)).toBe("preview S1-I3 S3/S3-W1/S3-W1-P1");
+    expect(get(dialog.state)).toBeNull();
+    expect(toasts()).toEqual([{ text: "閲覧のみの Store です", error: true }]);
+    await dialog.open(task);
+    fake.missing.add("S1-I3");
+    await dialog.setProject("S1-W2-P2");
+    expect(fake.calls.at(-1)).toBe("preview S1-I3 S1/S1-W2/S1-W2-P2");
     expect(get(dialog.state)).toBeNull();
     expect(toasts().at(-1)).toEqual({ text: "移動できませんでした", error: true });
     expect(env.refreshed).toBe(1);
@@ -188,7 +205,8 @@ describe("transfer dialog: opening and choosing (02「移す先の選び方」)"
     await dialog.open(epic);
     expect(confirms).toHaveLength(1);
     dialog.cancel();
-    panel.set(viewOf(item("S2", "S2-P1", 3, "Task", null)));
+    // 内部 ID が同じでも、別の Store のアイテムは別のもの。
+    panel.set(viewOf({ ...task, storeId: "S2" }));
     await dialog.open(task);
     expect(confirms).toHaveLength(1);
     expect(get(dialog.state)).not.toBeNull();

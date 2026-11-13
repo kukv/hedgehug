@@ -65,6 +65,14 @@ describe("transfer dialog: sending (02「保存」、A5a-12)", () => {
     expect(shown).toEqual([true]);
   });
 
+  it("tells afterMoved false when the panel shows the same internal ID in another Store", async () => {
+    const { dialog, task, panel, shown } = await setup();
+    panel.set(viewOf({ ...task, storeId: "S2" }));
+    await dialog.open(task);
+    await dialog.submit();
+    expect(shown).toEqual([false]);
+  });
+
   it("shows a refusal as it is, keeps the dialog open, and does not call afterMoved", async () => {
     const { dialog, fake, task, toasts, moved } = await setup();
     await dialog.open(task);
