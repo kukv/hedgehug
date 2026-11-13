@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     canMoveWorkspace,
+    deleteMenuItem,
     get,
     readOnlyNote,
     routeOfWorkspace,
@@ -9,6 +10,7 @@
   } from "@hedgehug/core";
   import { IconButton, Menu } from "@hedgehug/ui";
   import { catalog, navigation, projectDialog, workspaceMover } from "../wire";
+  import { workspaceDelete } from "../wireActions";
 
   // サイドバーのワークスペースのメニュー(04「ワークスペースのメニュー」)。
   interface Props {
@@ -35,6 +37,14 @@
     if (id === "settings") {
       navigation.go(routeOfWorkspace(get(catalog.stores), store.id, workspace.id, "settings"));
     }
+    if (id === "delete") {
+      void workspaceDelete.open({
+        storeId: store.id,
+        id: workspace.id,
+        name: workspace.name,
+        prefix: workspace.prefix,
+      });
+    }
     if (id === "up" || id === "down") void workspaceMover.move(store.id, workspace.id, id);
   }
 
@@ -59,6 +69,7 @@
     { id: "settings", label: "設定を開く" },
     { id: "up", label: "上へ移動", ...move("up") },
     { id: "down", label: "下へ移動", ...move("down") },
+    { ...deleteMenuItem(store), danger: true },
   ]}
   onselect={select}
   onclose={() => (open = false)}

@@ -8,7 +8,9 @@ import {
   createItemMove,
   createItemRefresh,
   createProjectDelete,
+  createWorkspaceDelete,
   leaveDeletedProject,
+  leaveDeletedWorkspace,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
 import {
@@ -98,9 +100,19 @@ export const projectDelete = createProjectDelete({
   afterDelete: (project) => leaveDeletedProject({ navigation, catalog }, project),
 });
 
+// ワークスペースの削除(03「削除」)。「一般」の「ワークスペースを削除…」とサイドバーのメニューの「削除…」が開く。
+// 削除できたあとの移り先(ホームへ replace、詳細パネルを閉じ、一覧を読み直す)は core の leaveDeletedWorkspace。
+export const workspaceDelete = createWorkspaceDelete({
+  actions: workspacesPort,
+  catalog,
+  toasts,
+  afterDelete: (ws) => leaveDeletedWorkspace({ navigation, catalog, detail }, ws),
+});
+
 // 画面を移ったら、出している確認ダイアログとメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
   projectDelete.cancel();
+  workspaceDelete.cancel();
   itemDelete.cancel();
   itemMove.close();
   itemMove.cancelMove();
