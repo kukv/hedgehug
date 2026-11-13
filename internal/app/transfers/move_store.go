@@ -124,7 +124,7 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 	if err != nil {
 		return err
 	}
-	add, people := transfer.People(m.src.settings, m.src.items(), m.src.logList(), m.src.members, toMembers)
+	add, people := transfer.People(m.src.settings, m.src.items(), m.src.logList(), nil, m.src.members, toMembers)
 	numbers := transfer.Number(root, m.src.set.Below, dst.next)
 	remaps := map[item.ID]transfer.RemapResult{}
 	errs := []error{m.join(tx, add)}
