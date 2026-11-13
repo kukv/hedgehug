@@ -60,7 +60,11 @@ func (st *store) enter(id port.StoreID) (leave func()) {
 func goroutineID() uint64 {
 	var buf [64]byte
 	line := bytes.TrimPrefix(buf[:runtime.Stack(buf[:], false)], []byte("goroutine "))
-	n, err := strconv.ParseUint(string(line[:bytes.IndexByte(line, ' ')]), 10, 64)
+	end := bytes.IndexByte(line, ' ')
+	if end < 0 {
+		panic(fmt.Sprintf("apptest: goroutine id: unexpected stack line %q", line))
+	}
+	n, err := strconv.ParseUint(string(line[:end]), 10, 64)
 	if err != nil {
 		panic(fmt.Sprintf("apptest: goroutine id: %v", err))
 	}

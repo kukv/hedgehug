@@ -155,6 +155,37 @@ describe("createProjectEditor", () => {
     expect(await renaming).toBe(true);
   });
 
+  // 同じ欄に送った 2 つがどちらも断られたら、断られた値ではなく画面のプロジェクトの値と比べる。
+  it("falls back past every refused value of the same field", async () => {
+    const { editor, base, calls, holdNext, refuseNext } = setup();
+    const releaseTitle = holdNext();
+    const renaming = editor.rename(base, "決済");
+    await flush();
+    refuseNext("終了日は開始日以降にしてください");
+    const releaseFirst = holdNext();
+    const first = editor.setDate(base, "end", "2026-11-01");
+    await flush();
+    refuseNext("終了日は開始日以降にしてください");
+    const releaseSecond = holdNext();
+    const second = editor.setDate(base, "end", "2026-11-02");
+    await flush();
+    releaseFirst();
+    expect(await first).toBe(false);
+    releaseSecond();
+    expect(await second).toBe(false);
+    // 断られた 2026-11-01 を戻し先にしない: 画面の値(空)なら送らず、2026-11-01 なら送る。
+    expect(await editor.setDate(base, "end", base.end)).toBe(true);
+    expect(await editor.setDate(base, "end", "2026-11-01")).toBe(true);
+    expect(calls).toEqual([
+      "rename S1 S1-P1 決済",
+      "setDate S1 S1-P1 end 2026-11-01",
+      "setDate S1 S1-P1 end 2026-11-02",
+      "setDate S1 S1-P1 end 2026-11-01",
+    ]);
+    releaseTitle();
+    expect(await renaming).toBe(true);
+  });
+
   it("shows the server's refusal as an error toast and returns false", async () => {
     const { editor, base, toasts, changed, refuseNext } = setup();
     refuseNext("タイトルは空にできません");

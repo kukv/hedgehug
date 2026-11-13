@@ -31,14 +31,15 @@ export interface ProjectEditorDeps {
 export function createProjectEditor(deps: ProjectEditorDeps): ProjectEditor {
   // 保存の返事と、そのあとの読み直しが終わるまで、画面のプロジェクトは保存の前の値のままになる。そのあいだは、この
   // 画面で送った値(sent)と比べる(保存の前の値と比べると、送った値をすぐ元に戻す変更が「同じ」に見えて送られない)。
-  // 送る前に sent に置き、断られた・失敗したら送る前の値に戻す。busy は、終わっていない保存と読み直しの数。
-  // すべて終わったら sent を捨てる。
+  // sent は、欄ごとに、送った順の値のうち断られていない・失敗していないもの。比べるのはその最後の値で、なければ画面の
+  // プロジェクトの値。送る前に足し、断られた・失敗したらその 1 つを外す(同じ欄に送った値がいくつ断られても、
+  // 断られた値を比べる先にしない)。busy は、終わっていない保存と読み直しの数。すべて終わったら sent を捨てる。
   let busy = 0;
-  const sent = new Map<string, string>();
+  const sent = new Map<string, { value: string }[]>();
   const keyOf = (p: Project, field: Field) => `${p.storeId}/${p.id}/${field}`;
   const same = (p: Project, field: Field, value: string) => {
-    const key = keyOf(p, field);
-    return value === (sent.has(key) ? sent.get(key) : p[field]);
+    const last = sent.get(keyOf(p, field))?.at(-1);
+    return value === (last ? last.value : p[field]);
   };
 
   // attempt は、保存を 1 回行う。断られたらその文言を返し(読み直さない)、保存できたら読み直して null を返す。
@@ -68,18 +69,22 @@ export function createProjectEditor(deps: ProjectEditorDeps): ProjectEditor {
     return message === null;
   }
 
-  // setField は、値が前と同じなら送らず、違えば送る値を sent に置いて保存する。断られた・失敗したら、sent を送る前に
-  // 戻す(そのあいだに同じ欄へ別の値を送っていたら、そちらを残す)。
+  // setField は、値が前と同じなら送らず、違えば送る値を sent に足して保存する。断られた・失敗したら、その値を sent から
+  // 外す。
   function setField(p: Project, field: Field, value: string, save: () => Promise<unknown>) {
     if (same(p, field, value)) return Promise.resolve(true);
     const key = keyOf(p, field);
-    const before = sent.get(key);
+    const entry = { value };
+    const list = sent.get(key) ?? [];
+    list.push(entry);
+    sent.set(key, list);
     const undo = () => {
-      if (sent.get(key) !== value) return;
-      if (before === undefined) sent.delete(key);
-      else sent.set(key, before);
+      const now = sent.get(key);
+      if (!now) return;
+      const rest = now.filter((e) => e !== entry);
+      if (rest.length > 0) sent.set(key, rest);
+      else sent.delete(key);
     };
-    sent.set(key, value);
     return attemptWithToast(save, undo);
   }
 
