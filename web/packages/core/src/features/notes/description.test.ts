@@ -8,7 +8,7 @@ import { fakeNotesPort, keyOf } from "./fixtures.test-util";
 const target = { kind: "item", storeId: "S1", id: "I1" } as const;
 const first = "## 手順\n@taro を見る";
 
-function setup() {
+function setup(onSaved?: () => void) {
   const notes = fakeNotesPort({ [keyOf(target)]: first });
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   const editor = createDescriptionEditor({
@@ -16,12 +16,26 @@ function setup() {
     toasts,
     target: () => target,
     members: async () => [{ login: "taro", name: "太郎" }],
+    onSaved,
   });
   const shown = () => get(toasts.list).map((t) => t.text);
   return { notes, toasts, editor, shown };
 }
 
 describe("description editor", () => {
+  it("calls onSaved after a save, and not when nothing was saved", async () => {
+    let saved = 0;
+    const { editor } = setup(() => void saved++);
+    await editor.load();
+    editor.start();
+    await editor.save(); // 変更なし
+    expect(saved).toBe(0);
+    editor.start();
+    editor.setInput("書き換えた");
+    await editor.save();
+    expect(saved).toBe(1);
+  });
+
   it("shows nothing until it has loaded, then the text and its Markdown with member mentions", async () => {
     const { editor } = setup();
     expect(get(editor.state)).toMatchObject({ loaded: false, text: "", blocks: [] });

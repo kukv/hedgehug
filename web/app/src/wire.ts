@@ -47,6 +47,7 @@ import { drafts } from "./drafts";
 import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
+import { createNoteHistory } from "./noteHistory";
 import { held, online as isOnline, tabId, visible } from "./tab";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
@@ -72,6 +73,7 @@ const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
 // 詳細パネルとプロジェクトの概要の、説明・コメントなどの口と、メンションの表示に使うメンバーの一覧。
 export const notes = createNotesPort();
+export const { itemHistory, projectHistory, lists, descriptionSaves } = createNoteHistory(notes);
 export const listMembers = (storeId: string) => catalogPort.listMembers(storeId);
 export const catalog = createCatalog(catalogPort);
 const workspacesPort = createWorkspacesPort();
@@ -219,7 +221,7 @@ async function reflect(kinds: SyncEventKind[]) {
           Promise.all([
             projectScreen.reload(),
             detail.reload(),
-            ...[itemComments, projectComments, worklogs, relations].map((section) =>
+            ...[itemComments, projectComments, worklogs, relations, ...lists].map((section) =>
               section.reload(),
             ),
           ]),

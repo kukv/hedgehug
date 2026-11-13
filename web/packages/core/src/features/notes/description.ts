@@ -30,6 +30,8 @@ export interface DescriptionDeps {
   // target は、いまの対象。画面への反映で対象の値が新しくなるので、呼ぶたびに引く。
   target(): NoteTarget;
   members(storeId: string): Promise<Member[]>;
+  // onSaved は、説明を保存できたあと(履歴の読み直しなどに使う)。保存しなかったとき(変更なし・断り)は呼ばない。
+  onSaved?(): void;
 }
 
 export interface DescriptionEditor {
@@ -119,6 +121,7 @@ export function createDescriptionEditor(deps: DescriptionDeps): DescriptionEdito
       base: "",
       saving: false,
     }));
+    deps.onSaved?.();
     if (result.conflict) deps.toasts.show(descriptionConflictMessage);
   }
 

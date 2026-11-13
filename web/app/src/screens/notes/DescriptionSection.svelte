@@ -2,7 +2,7 @@
   import { createDescriptionEditor, type NoteTarget, readOnlyNote } from "@hedgehug/core";
   import { Button, Markdown, Textarea } from "@hedgehug/ui";
   import { drafts } from "../../drafts";
-  import { listMembers, notes, toasts } from "../../wire";
+  import { descriptionSaves, listMembers, notes, toasts } from "../../wire";
 
   // 説明の区画(02「説明」)。アイテムの詳細パネルとプロジェクトの概要の両方で使う。状態と規則は core の
   // createDescriptionEditor が持ち、ここは結び付けと見た目だけ。
@@ -18,6 +18,7 @@
     toasts,
     target: () => target,
     members: listMembers,
+    onSaved: () => descriptionSaves.update((n) => n + 1),
   });
   const view = editor.state;
   const note = $derived(readonly ? readOnlyNote : undefined);

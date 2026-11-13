@@ -1,9 +1,10 @@
 <script lang="ts">
   import { copiedMessage, copyFailedMessage, readOnlyBand, readOnlyNote } from "@hedgehug/core";
   import { BlockedBadge, IconButton, Input, KindIcon, ReadOnlyBand, SidePanel } from "@hedgehug/ui";
-  import { detail, toasts } from "../../wire";
+  import { descriptionSaves, detail, toasts } from "../../wire";
   import CommentsSection from "../notes/CommentsSection.svelte";
   import DescriptionSection from "../notes/DescriptionSection.svelte";
+  import HistorySection from "../notes/HistorySection.svelte";
   import DetailChildren from "./DetailChildren.svelte";
   import DetailHeader from "./DetailHeader.svelte";
   import DetailProperties from "./DetailProperties.svelte";
@@ -113,6 +114,10 @@
     <CommentsSection
       target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
       readonly={v.readOnly}
+    />
+    <HistorySection
+      target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
+      refresh={[v.item, $descriptionSaves]}
     />
   {/if}
 </SidePanel>
