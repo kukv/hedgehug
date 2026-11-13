@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
 // Links は、アイテムの PR・Issue のリンクの操作(07「PR と Issue のリンク」)が使う口。1 ファイル 1 操作。
@@ -169,4 +170,13 @@ func rowsOf(ls []itemlink.Link, checks map[string]itemlink.Checks, errs map[stri
 		out[i] = LinkRow{Link: l, Checks: checks[l.Key()], Error: errs[l.Key()]}
 	}
 	return out
+}
+
+// failText は、取り直しの失敗の行の文言(07「表示と更新」)。
+func (l Links) failText(err error) string {
+	var r *refusal.Refusal
+	if !errors.As(l.refused(err), &r) {
+		errors.As(l.refused(&ghcall.Failure{Kind: ghcall.Unreachable}), &r)
+	}
+	return "状態を更新できませんでした: " + r.Message
 }
