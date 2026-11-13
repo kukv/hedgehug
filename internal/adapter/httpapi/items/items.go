@@ -113,6 +113,7 @@ func Register(api huma.API, svc appitems.Service) {
 	registerDelete(api, svc)
 	registerNumbers(api, svc)
 	registerValues(api, svc)
+	registerMove(api, svc)
 }
 
 func registerCreateRead(api huma.API, svc appitems.Service) {

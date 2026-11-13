@@ -608,6 +608,47 @@ components:
         - login
         - name
       type: object
+    MoveCandidate:
+      additionalProperties: false
+      properties:
+        display:
+          description: 画面の ID(HH-12・HH-P2)
+          type: string
+        id:
+          description: アイテムかプロジェクトの内部 ID
+          type: string
+        kind:
+          description: item はアイテム(親になる Epic・Story・Task・Bug)、project はプロジェクト(Epic の移し先)
+          enum:
+            - item
+            - project
+          type: string
+        projectId:
+          description: 移したあとのプロジェクトの内部 ID。アイテムの候補なら属するプロジェクト、プロジェクトの候補なら自分
+          type: string
+        projectTitle:
+          description: アイテムの候補が属するプロジェクトの名前。プロジェクトの候補では空
+          type: string
+        title:
+          type: string
+      required:
+        - kind
+        - id
+        - display
+        - title
+        - projectId
+        - projectTitle
+      type: object
+    MoveItem:
+      additionalProperties: false
+      properties:
+        parent:
+          description: 新しい親の内部 ID(Epic 以外)
+          type: string
+        project:
+          description: 移し先のプロジェクトの内部 ID(Epic)
+          type: string
+      type: object
     MoveWorkspaceItem:
       additionalProperties: false
       properties:
@@ -2340,6 +2381,67 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの履歴を新しい順で返す
+  /api/stores/{store}/items/{item}/move:
+    post:
+      operationId: move-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 同じワークスペースの中でアイテムを移す
+  /api/stores/{store}/items/{item}/move-candidates:
+    get:
+      operationId: list-move-candidates
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/MoveCandidate"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 「移動…」の移し先の候補を返す
   /api/stores/{store}/items/{item}/properties/{property}:
     put:
       operationId: set-item-property

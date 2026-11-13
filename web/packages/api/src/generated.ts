@@ -407,6 +407,38 @@ export interface Member {
   name: string;
 }
 
+/**
+ * item はアイテム(親になる Epic・Story・Task・Bug)、project はプロジェクト(Epic の移し先)
+ */
+export type MoveCandidateKind = typeof MoveCandidateKind[keyof typeof MoveCandidateKind];
+
+
+export const MoveCandidateKind = {
+  item: 'item',
+  project: 'project',
+} as const;
+
+export interface MoveCandidate {
+  /** 画面の ID(HH-12・HH-P2) */
+  display: string;
+  /** アイテムかプロジェクトの内部 ID */
+  id: string;
+  /** item はアイテム(親になる Epic・Story・Task・Bug)、project はプロジェクト(Epic の移し先) */
+  kind: MoveCandidateKind;
+  /** 移したあとのプロジェクトの内部 ID。アイテムの候補なら属するプロジェクト、プロジェクトの候補なら自分 */
+  projectId: string;
+  /** アイテムの候補が属するプロジェクトの名前。プロジェクトの候補では空 */
+  projectTitle: string;
+  title: string;
+}
+
+export interface MoveItem {
+  /** 新しい親の内部 ID(Epic 以外) */
+  parent?: string;
+  /** 移し先のプロジェクトの内部 ID(Epic) */
+  project?: string;
+}
+
 export type MoveWorkspaceItemDirection = typeof MoveWorkspaceItemDirection[keyof typeof MoveWorkspaceItemDirection];
 
 
@@ -1807,6 +1839,73 @@ export const getItemHistory = async (store: string,
     item: string, options?: Parameters<typeof fetcher>[1]): Promise<HistoryRow[] | null> => {
 
   return fetcher<HistoryRow[] | null>(getGetItemHistoryUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getMoveItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move`
+}
+
+/**
+ * @summary 同じワークスペースの中でアイテムを移す
+ */
+export const moveItem = async (store: string,
+    item: string,
+    moveItemBody: MoveItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getMoveItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(moveItemBody)
+  }
+);}
+
+
+
+export const getListMoveCandidatesUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-candidates`
+}
+
+/**
+ * @summary 「移動…」の移し先の候補を返す
+ */
+export const listMoveCandidates = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<MoveCandidate[] | null> => {
+
+  return fetcher<MoveCandidate[] | null>(getListMoveCandidatesUrl(store,item),
   {
     ...options,
     method: 'GET'
