@@ -31,10 +31,14 @@ var p = apptest.SampleProject
 type recorder struct {
 	port.Stores
 	summaries []string
+	before    func() // Write の直前に呼ぶ(読んでから書くまでの間のほかの保存を真似る)
 }
 
 func (r *recorder) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(port.Tx) error) error {
 	r.summaries = append(r.summaries, op.Summary)
+	if r.before != nil {
+		r.before()
+	}
 	return r.Stores.Write(ctx, id, op, fn)
 }
 
@@ -144,6 +148,12 @@ func TestNoOpDoesNotSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := svc.SetTemplateDefault(ctx, store, p, "Task", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetTransition(ctx, store, p, apptest.SampleStatusTodo, apptest.SampleStatusDone, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetTemplateUsed(ctx, store, p, tpl, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(rec.summaries) != 0 {
@@ -269,6 +279,56 @@ func TestResetSections(t *testing.T) {
 	}
 	if got := rulesOf(t, svc); len(got.Templates) != 0 || len(got.TemplateDefaults) != 0 {
 		t.Errorf("rules = %+v", got)
+	}
+}
+
+func TestResetStatusesAndWorkflowActivity(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	if err := svc.SetTransition(ctx, store, p, apptest.SampleStatusTodo, apptest.SampleStatusDone, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Reset(ctx, store, p, projectrule.SectionAutomation); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetStatusUsed(ctx, store, p, apptest.SampleStatusPending, false); err != nil {
+		t.Fatal(err)
+	}
+	rec.summaries = nil
+	for _, sec := range []projectrule.Section{projectrule.SectionStatuses, projectrule.SectionWorkflow} {
+		if err := svc.Reset(ctx, store, p, sec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{
+		"プロジェクト「ログイン」の使うステータスをワークスペースの設定に戻す",
+		"プロジェクト「ログイン」のワークフローの制約をワークスペースの設定に戻す",
+	}
+	if !reflect.DeepEqual(rec.summaries, want) || !rulesOf(t, svc).Empty() {
+		t.Errorf("summaries = %v, rules = %+v", rec.summaries, rulesOf(t, svc))
+	}
+}
+
+// 読んでから書くまでの間にほかの保存で同じ状態になったら、断りにせず、行を足さない。
+// 保存の口は行が 0 件の Append を何もしないものとして扱うので、service.go の 0 件の分岐を外してもこのテストは
+// 落ちない(分岐は口の扱いに頼らないための明示)。断りにならないことと二重に書かれないことを確かめる。
+func TestStateChangedBetweenReadAndWrite(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	rec.before = func() {
+		rec.before = nil
+		err := rec.Stores.Write(ctx, store, port.Operation{Actor: change.User("taro"), Summary: "割り込み"}, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.DisabledField(p), wsRul))
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := svc.SetRuleRuns(ctx, store, p, wsRul, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := rulesOf(t, svc).Disabled; !reflect.DeepEqual(got, []change.ID{wsRul}) {
+		t.Errorf("disabled = %v", got)
 	}
 }
 

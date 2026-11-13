@@ -103,6 +103,10 @@ func (s Service) edit(ctx context.Context, store port.StoreID, p project.ID, bui
 		if err != nil {
 			return notFound(err)
 		}
+		if len(now.drafts) == 0 {
+			// 読んでから書くまでの間に、ほかの保存で同じ状態になった
+			return nil
+		}
 		return tx.WriteWorkspaces().Append(ws, now.drafts...)
 	})
 }
