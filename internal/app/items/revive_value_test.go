@@ -110,3 +110,45 @@ func TestSetPropertyDeletedItemSameValueIsNotFound(t *testing.T) {
 		t.Error("何も変わらない保存で削除を取り消した")
 	}
 }
+
+// 親の Epic と一緒に削除された(root: false)Task は、利用者が選んで削除していないので保存できない。
+func TestSetPropertyItemDeletedWithParentIsNotFound(t *testing.T) {
+	svc, rec := setupRec(t)
+	if err := apptest.DeleteItems(t.Context(), rec, store, apptest.SampleEpic, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "assignee", raw(`"taro"`)); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("SetProperty = %v, want port.ErrNotFound", err)
+	}
+	if hasRestore(t, rec) || storedItem(t, rec, apptest.SampleTask).Deleted == nil {
+		t.Error("root: false の削除を取り消した")
+	}
+}
+
+// Task を削除したあと、親の Epic も別の保存で削除された。Task は祖先が削除済みなので保存できない(決定 S9)。
+func TestSetPropertyUnderParentDeletedLaterIsNotFound(t *testing.T) {
+	svc, rec := setupRec(t)
+	markDeleted(t, rec, apptest.SampleTask, true)
+	markDeleted(t, rec, apptest.SampleEpic, true)
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "assignee", raw(`"taro"`)); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("SetProperty = %v, want port.ErrNotFound", err)
+	}
+	if hasRestore(t, rec) || storedItem(t, rec, apptest.SampleTask).Deleted == nil {
+		t.Error("祖先が削除済みなのに削除を取り消した")
+	}
+}
+
+// 開始日を終了日より後にする保存は、削除済み(root: true)でも断られ、削除を取り消さない。
+func TestSetPropertyDeletedItemRefusedDatesKeepsDeletion(t *testing.T) {
+	svc, rec := setupRec(t)
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "end", raw(`"2026-11-10"`)); err != nil {
+		t.Fatal(err)
+	}
+	markDeleted(t, rec, apptest.SampleTask, true)
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "start", raw(`"2026-11-20"`)); err == nil {
+		t.Fatal("終了日より後の開始日が保存できた")
+	}
+	if hasRestore(t, rec) || storedItem(t, rec, apptest.SampleTask).Deleted == nil {
+		t.Error("断られた保存で削除を取り消した")
+	}
+}
