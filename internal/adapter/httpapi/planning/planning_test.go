@@ -87,6 +87,10 @@ func TestSprintAPI(t *testing.T) {
 	check(t, "deleted", api.Get(base+"/sprints"), http.StatusOK, `[]`)
 	check(t, "restore", api.Post(base+"/sprints/"+sp+"/restore"), http.StatusNoContent, "")
 	check(t, "restored", api.Get(base+"/sprints"), http.StatusOK, `"id":"`+sp+`"`)
+	check(t, "delete again", api.Delete(base+"/sprints/"+sp), http.StatusNoContent, "")
+	check(t, "same name", api.Post(base+"/sprints", in), http.StatusCreated, "")
+	check(t, "restore with same name", api.Post(base+"/sprints/"+sp+"/restore"), http.StatusUnprocessableEntity,
+		"同じ名前のスプリントがあります。先にそのスプリントの名前を変えてください")
 }
 
 func TestCloseSprintToDestination(t *testing.T) {
@@ -117,6 +121,10 @@ func TestReleaseAPI(t *testing.T) {
 	check(t, "deleted", api.Get(base+"/releases"), http.StatusOK, `[]`)
 	check(t, "restore", api.Post(base+"/releases/"+rel+"/restore"), http.StatusNoContent, "")
 	check(t, "restore again", api.Post(base+"/releases/"+rel+"/restore"), http.StatusNotFound, "")
+	check(t, "delete again", api.Delete(base+"/releases/"+rel), http.StatusNoContent, "")
+	check(t, "same name", api.Post(base+"/releases", in), http.StatusCreated, "")
+	check(t, "restore with same name", api.Post(base+"/releases/"+rel+"/restore"), http.StatusUnprocessableEntity,
+		"同じ名前のリリースがあります。先にそのリリースの名前を変えてください")
 }
 
 func TestItemSprintAPI(t *testing.T) {
@@ -163,4 +171,8 @@ func TestCreateItemInSprint(t *testing.T) {
 	check(t, "null", create(map[string]any{"sprint": nil}), http.StatusOK, `"sprint":""`)
 	check(t, "absent", create(nil), http.StatusOK, `"sprint":""`)
 	check(t, "unknown", create(map[string]any{"sprint": "01NOPE0000000000000000000"}), http.StatusNotFound, "")
+	check(t, "epic", create(map[string]any{"kind": "Epic", "parent": "", "sprint": sp}), http.StatusBadRequest, "")
+	check(t, "start", api.Post(base+"/sprints/"+sp+"/start", map[string]any{"start": "2026-11-13", "end": "2026-11-26"}), http.StatusNoContent, "")
+	check(t, "close", api.Post(base+"/sprints/"+sp+"/close", map[string]any{"destination": nil}), http.StatusNoContent, "")
+	check(t, "closed", create(map[string]any{"kind": "Story", "sprint": sp}), http.StatusUnprocessableEntity, "完了したスプリントには入れられません")
 }
