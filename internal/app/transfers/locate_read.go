@@ -127,7 +127,7 @@ func (snap snapshot) live(id item.ID) (hit, bool) {
 	return hit{}, false
 }
 
-// hasDeleted は、内部 ID id のアイテムが、削除済み(アイテムかプロジェクトが削除済み)であるか。
+// hasDeleted は、内部 ID id のアイテムが、削除済み(アイテム・プロジェクト・ワークスペースのどれかが削除済み)であるか。
 func (snap snapshot) hasDeleted(id item.ID) bool {
 	return slices.ContainsFunc(snap.items, func(e itemEntry) bool { return !e.live && e.it.ID == id })
 }

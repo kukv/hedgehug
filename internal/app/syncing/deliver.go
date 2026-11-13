@@ -13,12 +13,13 @@ import (
 // Deliver は、Store id に fn で保存し、remote があれば同じロックの中で受け取って送る(02「保存」の (1)〜(3))。
 // 送れなければ保存しない。理由が空なら保存できた。失敗の理由は syncstatus.Reason で返し、同期の状態に記録する
 // (アカウントがないときは記録しない)。error は、理由で表せない失敗だけ: Store がない(port.ErrStoreNotFound)、
-// 閲覧のみ(port.ErrInvalidOperation)、fn・同期の修復などの保存の失敗(中のエラーをそのまま)、このマシンの状態を読み書き
-// できない、送れなかった保存を捨てられなかった(port.ErrSaveNotDiscarded)。呼ぶ側は、ErrSaveNotDiscarded の
-// error を「保存されたかもしれない」(このマシンに残り、次の同期で送られうる)と扱う。それ以外の error と理由は
-// 「保存されていない」。保存して送れたあとに状態の記録やミラーの記録が失敗しても、ログに残すだけで成功を返す
-// (保存は送られている。状態は次の同期で直る)。remote があれば fn は送信が重なるたびに呼ばれ直す(port.Replicator.SyncSave)。同期の始めた要求が切れても
-// 最後まで続けるのと同じく(決定 C2-17)、ctx が切れても続ける。AfterSuccess は呼ばない。
+// 閲覧のみ(port.ErrInvalidOperation)、fn・同期の修復などの保存の失敗(中のエラーをそのまま)、このマシンの
+// 状態を読み書きできない、送れなかった保存を捨てられなかった(port.ErrSaveNotDiscarded)。呼ぶ側は、
+// ErrSaveNotDiscarded の error を「保存されたかもしれない」(このマシンに残り、次の同期で送られうる)と扱う。
+// それ以外の error と理由は「保存されていない」。保存して送れたあとに状態の記録やミラーの記録が失敗しても、
+// ログに残すだけで成功を返す(保存は送られている。状態は次の同期で直る)。remote があれば fn は送信が重なる
+// たびに呼ばれ直す(port.Replicator.SyncSave)。同期の始めた要求が切れても最後まで続けるのと同じく(決定 C2-17)、
+// ctx が切れても続ける。AfterSuccess は呼ばない。
 func (s *Service) Deliver(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error) {
 	ctx = context.WithoutCancel(ctx)
 	targets, err := s.Targets.List(ctx)

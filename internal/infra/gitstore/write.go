@@ -204,7 +204,7 @@ type itemWriter struct{ idWriter }
 // Import は、行を写して pending にする(コミットのときにフォルダを作る)。説明があれば texts にする。
 func (w itemWriter) Import(id item.ID, log []change.Record, description string) error {
 	ref := change.Ref{Kind: change.KindItem, ID: id}
-	if !ref.Valid() || len(log) == 0 || w.t.removed[ref] {
+	if !ref.Valid() || len(log) == 0 || w.t.removed[ref] || w.t.gone[ref] {
 		return fmt.Errorf("%w: cannot import item %q", port.ErrInvalidOperation, id)
 	}
 	if have, err := w.t.log(ref); err != nil {

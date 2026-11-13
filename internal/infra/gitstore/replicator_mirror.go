@@ -204,7 +204,8 @@ func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx por
 		return port.SyncResult{}, err
 	}
 	if err := s.repairUnsent(ctx, theirs); err != nil {
-		return port.SyncResult{}, &port.SaveError{Err: err} // 通信の失敗ではない(保存していない)
+		// 通信の失敗ではない(保存していない)。中の種類(ErrNotFound など)は外に読ませない(%v で包む)。
+		return port.SyncResult{}, &port.SaveError{Err: fmt.Errorf("sync repair: %v", err)} //nolint:errorlint // 種類を読ませないため
 	}
 	head, err := s.repo.Head()
 	if err != nil {

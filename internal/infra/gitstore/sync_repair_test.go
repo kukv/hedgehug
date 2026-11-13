@@ -318,16 +318,18 @@ func TestSyncSaveRepairsBeforeSaving(t *testing.T) {
 	}
 }
 
-// 修復が失敗したら、保存しない(fn を呼ばない)。修復の失敗は通信の失敗ではないので *port.SaveError で包む
-// (Deliver は理由にせず error で返す)。
+// 修復が失敗したら、保存しない(fn を呼ばない)。修復の失敗は通信の失敗ではないので *port.SaveError で包み
+// (Deliver は理由にせず error で返す)、中の種類(ErrNotFound・ErrInvalidOperation)は外から読めない
+// (移動の画面が 404・400 と読まず「移動できませんでした」を出すため)。
 func TestSyncSaveRepairFailureDoesNotSave(t *testing.T) {
-	remote, b := diverged(t)
-	boom := errors.New("boom")
-	b.rep.Repair = func(context.Context, port.RepairWriter) error { return boom }
-	called := false
-	_, err := b.rep.SyncSave(t.Context(), b.id, remote, saveOp, func(port.Tx) error { called = true; return nil })
-	var se *port.SaveError
-	if !errors.As(err, &se) || !errors.Is(err, boom) || called {
-		t.Errorf("err = %v, fn called %v, want a SaveError around boom and no call", err, called)
+	for _, inner := range []error{errors.New("boom"), port.ErrNotFound, port.ErrInvalidOperation} {
+		remote, b := diverged(t)
+		b.rep.Repair = func(context.Context, port.RepairWriter) error { return inner }
+		called := false
+		_, err := b.rep.SyncSave(t.Context(), b.id, remote, saveOp, func(port.Tx) error { called = true; return nil })
+		var se *port.SaveError
+		if !errors.As(err, &se) || errors.Is(err, port.ErrNotFound) || errors.Is(err, port.ErrInvalidOperation) || called {
+			t.Errorf("%v: err = %v, fn called %v, want an opaque SaveError and no call", inner, err, called)
+		}
 	}
 }

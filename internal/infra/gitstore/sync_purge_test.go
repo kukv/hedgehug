@@ -163,6 +163,31 @@ func TestPurgeInTx(t *testing.T) {
 	wantPurgedRead(t, a)
 }
 
+// 同じ Tx で完全に削除したものは、同じ Tx で写し直せない(Import は ErrInvalidOperation。Remove したものと同じ)。
+func TestImportRefusesWhatWasPurgedInTheSameTx(t *testing.T) {
+	a := firstMachine(t, newRemote(t))
+	op := port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "HH-2 を完全に削除"}
+	err := a.stores.Write(t.Context(), a.id, op, func(ptx port.Tx) error {
+		log, err := ptx.Changes().Of(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask})
+		if err != nil {
+			return err
+		}
+		if err := ptx.(*tx).purge(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}, "HH-2"); err != nil {
+			return err
+		}
+		if err := ptx.WriteItems().Import(apptest.SampleTask, log, ""); !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("Import after purge = %v, want ErrInvalidOperation", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasDir(a, apptest.SampleTask) {
+		t.Error("the purged folder is back")
+	}
+}
+
 // wantPurgedRead は、purge が書いた行を、Reader.Purged(A5a の旧 ID の解決が読む)で読めることを確かめる。
 func wantPurgedRead(t *testing.T, a machine) {
 	t.Helper()
