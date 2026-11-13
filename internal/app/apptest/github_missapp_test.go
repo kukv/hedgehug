@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -27,6 +28,8 @@ func TestFakeGitHubMissApp(t *testing.T) {
 	check("Lookup", err, true)
 	_, err = g.ReadMany(ctx, "tok-taro", "Example-Org/web", []int{1})
 	check("ReadMany", err, true)
+	_, err = g.ReadPulls(ctx, "tok-taro", "Example-Org/web", time.Time{})
+	check("ReadPulls", err, true)
 	check("CheckRepo", g.CheckRepo(ctx, "tok-taro", "Example-Org/web"), true)
 	if err := g.CheckRepo(ctx, "tok-taro", "other/web"); err != nil {
 		t.Errorf("other owner: %v", err)

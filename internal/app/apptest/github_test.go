@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -69,6 +70,33 @@ func TestGitHubLookup(t *testing.T) {
 	}
 	if g.Lookups != 3 {
 		t.Errorf("Lookups = %d", g.Lookups)
+	}
+}
+
+func TestGitHubReadPulls(t *testing.T) {
+	g := &apptest.GitHub{}
+	g.AddUser("tok-taro", "taro")
+	t1 := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	t2 := t1.Add(time.Hour)
+	g.PutPull("o/web", port.Pull{Number: 3, UpdatedAt: t1})
+	g.PutPull("o/web", port.Pull{Number: 4, UpdatedAt: t2})
+	got, err := g.ReadPulls(t.Context(), "tok-taro", "O/Web", time.Time{})
+	if err != nil || len(got.Pulls) != 2 || got.Pulls[0].Number != 4 || got.Pulls[1].Number != 3 || got.Repo != "O/Web" {
+		t.Fatalf("ReadPulls = %+v, %v", got, err)
+	}
+	got, err = g.ReadPulls(t.Context(), "tok-taro", "o/web", t2)
+	if err != nil || len(got.Pulls) != 1 || got.Pulls[0].Number != 4 {
+		t.Errorf("since = t2: %+v, %v", got, err)
+	}
+	if g.ReadPullsCalls("o/web") != 2 {
+		t.Errorf("ReadPullsCalls = %d, want 2", g.ReadPullsCalls("o/web"))
+	}
+	if _, err := g.ReadPulls(t.Context(), "bad", "o/web", time.Time{}); !ghcall.Is(err, ghcall.TokenRejected) {
+		t.Errorf("unknown token: %v", err)
+	}
+	g.Fail("o/web", 0, &ghcall.Failure{Kind: ghcall.RepoUnreadable})
+	if _, err := g.ReadPulls(t.Context(), "tok-taro", "o/web", time.Time{}); !ghcall.Is(err, ghcall.RepoUnreadable) {
+		t.Errorf("Fail: %v", err)
 	}
 }
 

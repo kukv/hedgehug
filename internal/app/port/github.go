@@ -6,6 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/ghread"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/prlink"
 )
 
 // GitHub は GitHub の API の口。失敗は *ghcall.Failure で返す。使う操作だけを持つ。
@@ -23,6 +24,26 @@ type GitHub interface {
 	// CheckRepo は、repo を読めるかを確かめる(「再確認」)。読めれば nil。失敗は Lookup と同じ種類
 	// (読めなければ RepoUnreadable、GitHub App が入っていなければ AppNotInstalled)。
 	CheckRepo(ctx context.Context, token, repo string) error
+	// ReadPulls は repo の PR を更新の新しい順に読む。since がゼロなら最初の 100 件だけ、そうでなければ
+	// UpdatedAt が since 以上のものを最後まで(100 件ずつめくる)。改名・移管は Lookup と同じに追う。
+	// 失敗は Lookup と同じ種類(App 未導入の見分けを含む)。
+	ReadPulls(ctx context.Context, token, repo string, since time.Time) (Pulls, error)
+}
+
+// Pull は、自動リンクのために読んだ PR(07「PR の自動リンク」)。
+type Pull struct {
+	Number      int
+	prlink.Text // ブランチ名・タイトル・本文・コメント(古い順に 100 件まで)
+	itemlink.Values
+	Checks    itemlink.Checks
+	UpdatedAt time.Time // GitHub の時刻
+}
+
+// Pulls は、ReadPulls の答え。Repo は GitHub の nameWithOwner。Rate は最後のページの rateLimit。
+type Pulls struct {
+	Repo  string
+	Pulls []Pull
+	Rate  Rate
 }
 
 // Found は、GitHub から読んだ PR・Issue。

@@ -27,10 +27,12 @@ type GitHub struct {
 	Lookups   int
 	Rate      port.Rate
 	many      map[string]int
+	pulls     map[string][]port.Pull // 小文字のリポジトリ名から引く。PutPull で入れる
+	pullCalls map[string]int
 	missed    map[string]bool // App 未導入の owner(小文字)
 }
 
-// MissApp は、owner のリポジトリの問い合わせ(Lookup・ReadMany・CheckRepo、Task 3 で ReadPulls)が
+// MissApp は、owner のリポジトリの問い合わせ(Lookup・ReadMany・ReadPulls・CheckRepo)が
 // AppNotInstalled を返すようにする(false で戻す)。
 func (g *GitHub) MissApp(owner string, missing bool) {
 	g.mu.Lock()
