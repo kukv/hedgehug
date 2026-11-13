@@ -16,7 +16,7 @@ var idPattern = regexp.MustCompile(`^[0-9A-Za-z]+$`)
 // ValidID は、エンティティの内部 ID に使えるか(空でなく、英数字だけ。Store ではフォルダの名前になる)。
 func ValidID(id ID) bool { return idPattern.MatchString(string(id)) }
 
-// Type は変更の種類(保存形式「変更記録」の t)。下の 5 つ(delete を含む)を扱い、ほかの種類はトラックが足す。
+// Type は変更の種類(保存形式「変更記録」の t)。下の種類を扱い、ほかの種類はトラックが足す。
 type Type string
 
 const (
@@ -26,6 +26,11 @@ const (
 	Remove Type = "remove"
 	// Delete は削除。f は消すもの(値なら "statuses/<ID>"、プロパティなら "properties/<ID>")。
 	Delete Type = "delete"
+	// Desc は説明を保存した(本文は description.md。f も from も to も持たない)。
+	Desc Type = "desc"
+	// Comment・Worklog は、コメントと作業時間の追加・編集・削除。f は内部 ID、削除は to が null。
+	Comment Type = "comment"
+	Worklog Type = "worklog"
 )
 
 // TimeLayout は記録の時刻の書き方(ミリ秒までの RFC 3339、このマシンの時刻帯付き)。

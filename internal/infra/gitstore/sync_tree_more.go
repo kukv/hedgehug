@@ -15,9 +15,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// descType は、説明を保存した変更記録の種類(保存形式「変更記録」の desc)。型はトラック A が足す。
-const descType change.Type = "desc"
-
 // mergeDescription は、説明を行ごとに合わせる。保存の古い版を先にする(この計画の決定 8)。
 func mergeDescription(p string, base, a, b tree) string {
 	logPath := entityDir(p) + "/log.jsonl"
@@ -40,7 +37,7 @@ func lastDesc(side, base []byte) time.Time {
 	}
 	var last time.Time
 	for _, r := range parseLog(side) {
-		if r.T == descType && !inBase[r.ID] && r.At.After(last) {
+		if r.T == change.Desc && !inBase[r.ID] && r.At.After(last) {
 			last = r.At
 		}
 	}
