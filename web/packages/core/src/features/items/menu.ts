@@ -40,7 +40,7 @@ export interface ItemMenuContext {
   hasOtherProjects: boolean;
 }
 
-// 無効の理由の文言。端と Epic の文言は仕様にないので、項目の働きから短く決めた(A4b-16)。
+// 無効の理由の文言(02「詳細パネル」のメニューの項目。A4b-16)。
 export const menuReasons = {
   atTop: "先頭です",
   atBottom: "末尾です",
