@@ -5,9 +5,11 @@ import { fakeCatalogPort, project } from "../catalog/fixtures.test-util";
 import { fakeItemActions } from "../items/actions.test-util";
 import { itemDeleteFailedMessage } from "../items/delete";
 import { flush, gate } from "../items/fixtures.test-util";
+import type { Route } from "../router/route";
 import { createToasts } from "../toasts/toasts";
 import {
   createProjectDelete,
+  leaveDeletedProject,
   projectDeleteDialog,
   projectDeletedMessage,
   projectDeleteNote,
@@ -92,6 +94,17 @@ describe("createProjectDelete", () => {
     );
   });
 
+  it("shows a failure to read the preview as an error toast and opens nothing", async () => {
+    const { del, actions, after, messages } = await setup();
+    actions.projectDeletePreview = async () => {
+      throw new Error("network");
+    };
+    await del.open(p1);
+    expect(messages()).toEqual([`!${itemDeleteFailedMessage}`]);
+    expect(get(del.state)).toBeNull();
+    expect(after).toEqual([]);
+  });
+
   it("does nothing in a read-only Store", async () => {
     const { del, actions } = await setup();
     await del.open(ro);
@@ -106,7 +119,6 @@ describe("createProjectDelete", () => {
     expect(actions.calls).toEqual([`projectDeletePreview ${p1.id}`, `deleteProject ${p1.id}`]);
     expect(get(del.state)).toBeNull();
     expect(messages()).toEqual([projectDeletedMessage]);
-    expect(messages()).toEqual(["プロジェクトを削除しました"]);
     expect(after).toEqual([p1.id]);
   });
 
@@ -174,5 +186,45 @@ describe("createProjectDelete", () => {
     await del.open(p1);
     expect(get(del.state)).toBeNull();
     expect(after).toEqual([p1.id, p1.id]);
+  });
+});
+
+describe("leaveDeletedProject", () => {
+  async function leaveSetup(loadFails = false) {
+    const catalog = createCatalog(fakeCatalogPort());
+    await catalog.load();
+    const events: string[] = [];
+    const routes: Route[] = [];
+    const load = catalog.load;
+    const deps = {
+      navigation: {
+        replace: (r: Route) => {
+          events.push("replace");
+          routes.push(r);
+        },
+      },
+      catalog: {
+        stores: catalog.stores,
+        load: async () => {
+          events.push("load");
+          if (loadFails) throw new Error("network");
+          await load();
+        },
+      },
+    };
+    return { deps, events, routes };
+  }
+
+  it("replaces to the workspace overview first, then reloads the list", async () => {
+    const { deps, events, routes } = await leaveSetup();
+    await leaveDeletedProject(deps, p1);
+    expect(events).toEqual(["replace", "load"]);
+    expect(routes[0]).toMatchObject({ name: "workspace", tab: "overview" });
+  });
+
+  it("does not throw when the reload fails", async () => {
+    const { deps, events } = await leaveSetup(true);
+    await expect(leaveDeletedProject(deps, p1)).resolves.toBeUndefined();
+    expect(events).toEqual(["replace", "load"]);
   });
 });

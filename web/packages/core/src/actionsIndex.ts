@@ -61,6 +61,8 @@ export { visibleNeighbors, visibleRows } from "./features/items/siblings";
 export {
   createProjectDelete,
   type DeleteTarget,
+  type LeaveDeletedDeps,
+  leaveDeletedProject,
   type ProjectDelete,
   type ProjectDeleteDeps,
   type ProjectDeleteDialogState,

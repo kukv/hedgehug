@@ -5,6 +5,8 @@ import type { ItemActionsPort } from "../../port/itemActions";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import { itemDeleteFailedMessage } from "../items/delete";
+import type { Navigation } from "../router/navigation";
+import { routeOfWorkspace } from "../router/resolve";
 import type { Toasts } from "../toasts/toasts";
 
 // プロジェクトの削除(02「名前の変更・移動・削除」の削除)。設定タブの「削除」の区画の説明と、確認ダイアログ。
@@ -41,6 +43,24 @@ export function projectDeleteDialog(
     lines: [`「${project.title}」と、その下の ${p.items} 件のアイテムを削除します。`, restore(p)],
     ok: "削除",
   };
+}
+
+export interface LeaveDeletedDeps {
+  navigation: Pick<Navigation, "replace">;
+  catalog: Pick<Catalog, "stores" | "load">;
+}
+
+// leaveDeletedProject は、削除できたあとの移り先。ワークスペースの概要へ移り(履歴には積まない。戻るで削除済みの
+// アドレスに戻らない)、サイドバーの一覧を読み直す。先に移るのは、一覧を先に読み直すと、消えたプロジェクトの
+// アドレスがホームに解決されるため。読み直しの失敗は、削除はできているので投げない(次の同期の読み直しで直る)。
+export async function leaveDeletedProject(
+  deps: LeaveDeletedDeps,
+  project: DeleteTarget,
+): Promise<void> {
+  deps.navigation.replace(
+    routeOfWorkspace(get(deps.catalog.stores), project.storeId, project.workspaceId, "overview"),
+  );
+  await deps.catalog.load().catch(() => {});
 }
 
 export interface ProjectDeleteDeps {
