@@ -34,7 +34,7 @@ export const viewOf = (ctx: WorkspaceContext, form: TemplateForm) => ({
   structure: structureOf(ctx.settings, form, ctx.people.members),
 });
 
-// carried は、読み直しを待つあいだに入力された分(タイトル・説明・テンプレート・「続けて作成」)を、読み直した
+// carried は、読み直しを待つあいだに入力された分(タイトル・説明・種類・テンプレート・「続けて作成」)を、読み直した
 // 入力へ引き継ぐ(決定 27)。値は、呼び出し側が決めたもの。
 export const carried = <F extends TemplateForm & { keepOpen: boolean }>(
   loaded: F,
@@ -43,6 +43,7 @@ export const carried = <F extends TemplateForm & { keepOpen: boolean }>(
 ): F => ({
   ...loaded,
   title: now.title,
+  kind: now.kind,
   description: now.description,
   templateId: now.templateId,
   templateDescription: now.templateDescription,
