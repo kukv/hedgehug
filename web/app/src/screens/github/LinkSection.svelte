@@ -36,6 +36,8 @@
     void linkList.load(storeId, itemId);
   });
   onDestroy(() => linkList.reset());
+  // リンク直後の読み直しで届くプロジェクトのリポジトリを、開いているダイアログにも渡す。
+  $effect(() => linkDialog.setRepos(v.project.repos));
 
   function open(kind: LinkKind) {
     linkDialog.open(kind, storeId, itemId, v.project.repos);

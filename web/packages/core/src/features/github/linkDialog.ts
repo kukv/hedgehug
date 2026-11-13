@@ -21,6 +21,8 @@ export interface LinkDialog {
   state: Readable<LinkDialogState | null>;
   open(kind: LinkKind, storeId: string, itemId: string, repos: string[]): void;
   update(p: Partial<Pick<LinkDialogState, "repo" | "number" | "addToProject">>): void;
+  // setRepos は、開いたあとに読み直しで届いたプロジェクトのリポジトリを取り込む。入力済みの repo は変えない。
+  setRepos(repos: string[]): void;
   submit(): Promise<void>;
   close(): void;
 }
@@ -61,6 +63,13 @@ export function createLinkDialog(deps: LinkDialogDeps): LinkDialog {
       });
     },
     update: patch,
+    setRepos(repos) {
+      state.update((s) => {
+        if (!s || (s.repos.length === repos.length && s.repos.every((r, i) => r === repos[i])))
+          return s;
+        return { ...s, repos, repo: s.repo === "" ? (repos[0] ?? "") : s.repo };
+      });
+    },
     async submit() {
       const s = get(state);
       if (!s || !target || s.asking) return;

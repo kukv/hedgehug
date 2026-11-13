@@ -38,6 +38,23 @@ describe("createLinkDialog", () => {
     expect(t.links.calls).toEqual(["add S1 I1 issue org/api 12 true"]);
   });
 
+  it("takes repositories that arrive after opening, unless one is already typed", () => {
+    const t = setup();
+    t.dialog.open("pr", "S1", "I1", []);
+    t.dialog.setRepos(["org/web"]);
+    expect(get(t.dialog.state)).toMatchObject({ repos: ["org/web"], repo: "org/web" });
+    t.dialog.open("pr", "S1", "I1", []);
+    t.dialog.update({ repo: "org/api" });
+    t.dialog.setRepos(["org/web"]);
+    expect(get(t.dialog.state)).toMatchObject({ repos: ["org/web"], repo: "org/api" });
+  });
+
+  it("ignores repositories while closed", () => {
+    const t = setup();
+    t.dialog.setRepos(["org/web"]);
+    expect(get(t.dialog.state)).toBeNull();
+  });
+
   it("keeps the dialog open with the refusal", async () => {
     const t = setup();
     t.dialog.open("pr", "S1", "I1", []);
