@@ -36,9 +36,28 @@ func Create(w Workspace) (change.Draft, error) {
 	return change.NewCreate(map[string]any{"id": w.ID, "name": w.Name, "prefix": w.Prefix}), nil
 }
 
-var opts = change.Options{
-	Multi: func(f string) bool { return strings.HasSuffix(f, "/kinds") || strings.HasPrefix(f, workflowPrefix) },
-	Valid: valid,
+var opts = change.Options{Multi: IsMulti, Valid: valid}
+
+// IsMulti は、ワークスペースのログで f が値を複数持つ項目(add・remove)か。
+func IsMulti(f string) bool {
+	return strings.HasSuffix(f, "/kinds") || strings.HasPrefix(f, workflowPrefix) || projectRuleList(f)
+}
+
+// projectRuleList は、プロジェクト別のルールの add・remove の項目か。
+// projectrule は workspace を使うので import できず、projectrule.IsMulti と同じ判定をここに持つ(テストで一致を確かめる)。
+func projectRuleList(f string) bool {
+	body, ok := strings.CutPrefix(f, "project_rules/")
+	if !ok {
+		return false
+	}
+	parts := strings.Split(body, "/")
+	switch {
+	case len(parts) == 2:
+		return parts[0] != "" && (parts[1] == "hidden_statuses" || parts[1] == "templates" || parts[1] == "disabled_rules")
+	case len(parts) == 3:
+		return parts[0] != "" && parts[1] == "workflow" && parts[2] != ""
+	}
+	return false
 }
 
 func valid(r change.Record) bool {
