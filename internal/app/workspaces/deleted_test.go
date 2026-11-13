@@ -120,7 +120,7 @@ func TestCreateTemplateFromItemSkipsDeleted(t *testing.T) {
 
 // 削除済みのワークスペースは、一覧にも Get にも出ず、使われ方も読めない(変更の保存は削除を取り消す。決定 R11)。
 // 並べ替えでは、削除済みを飛ばして隣と入れ替わる(B5b-4)。
-func TestDeletedWorkspaceIsHiddenAndCannotBeChanged(t *testing.T) {
+func TestDeletedWorkspaceIsHidden(t *testing.T) {
 	s := setup(t)
 	ctx := t.Context()
 	a, _ := s.Create(ctx, store, "A", "AA")

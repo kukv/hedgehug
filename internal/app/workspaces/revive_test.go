@@ -549,3 +549,17 @@ func TestRenameDeletedWorkspaceNameTaken(t *testing.T) {
 		t.Error("workspace still deleted after renaming")
 	}
 }
+
+// 名前・接頭辞の入力の検査で断る保存は、取り消しの判定(08 の断り)より先に断る。
+func TestInvalidInputInDeletedWorkspaceIsRefusedFirst(t *testing.T) {
+	s, w, _ := deletedWorkspace(t)
+	ctx := t.Context()
+	if _, err := s.Create(ctx, store, "Web", "WN"); err != nil { // 取り消すと名前が重なる
+		t.Fatal(err)
+	}
+	rejected(t, s.Rename(ctx, store, w.ID, " "), "名前は空にできません")
+	rejected(t, s.ChangePrefix(ctx, store, w.ID, "1x"), "接頭辞は英大文字で始まる 10 文字以内の英大文字と数字にしてください")
+	if workspaceLive(t, s, w.ID) {
+		t.Error("workspace revived by a refused save")
+	}
+}

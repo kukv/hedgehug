@@ -19,6 +19,10 @@ func (s Service) Rename(ctx context.Context, store port.StoreID, id workspace.ID
 	}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("ワークスペースの名前を「%s」に変更", oneLine(name))}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		// 入力の検査で断るものは、取り消しの判定(08 の断り)より先に断る
+		if err := workspace.CheckRename(workspace.Workspace{ID: id, Name: name}, nil); err != nil {
+			return err
+		}
 		revived, err := port.ReviveWorkspace(ctx, tx, id, name, "")
 		if err != nil {
 			return err

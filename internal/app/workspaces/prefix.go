@@ -30,6 +30,10 @@ func (s Service) ChangePrefix(ctx context.Context, store port.StoreID, id worksp
 	}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("接頭辞を %s から %s に変更", current.Prefix, prefix)}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		// 入力の検査で断るものは、取り消しの判定(08 の断り)より先に断る
+		if err := workspace.CheckPrefix(workspace.Workspace{ID: id, Prefix: prefix}, nil); err != nil {
+			return err
+		}
 		revived, err := port.ReviveWorkspace(ctx, tx, id, "", prefix)
 		if err != nil {
 			return err
