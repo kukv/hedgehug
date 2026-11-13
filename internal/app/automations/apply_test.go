@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 )
 
@@ -53,12 +54,20 @@ func TestApplyIgnoringWorkflowToAHiddenStatus(t *testing.T) {
 	ctx := t.Context()
 	r, _ := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
 	err := rec.Stores.Write(ctx, store, port.Operation{Actor: change.User("hanako"), Summary: "プロジェクト別のルールを変更"}, func(tx port.Tx) error {
-		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusDone))
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusPending))
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); err != nil {
-		t.Errorf("ApplyIgnoringWorkflow to a hidden status = %v", err)
+	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusPending); err != nil {
+		t.Fatalf("ApplyIgnoringWorkflow to a hidden status = %v", err)
+	}
+	var it item.Item
+	_ = rec.Read(ctx, store, func(rd port.Reader) error {
+		it, _ = rd.Items().Get(apptest.SampleTask)
+		return nil
+	})
+	if it.Status != apptest.SampleStatusPending {
+		t.Errorf("status = %q, want Pending", it.Status)
 	}
 }

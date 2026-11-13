@@ -38,6 +38,7 @@ func (s Service) templateOf(ctx context.Context, in CreateInput) (*workspace.Tem
 		for _, t := range usable {
 			if t.ID == *in.Template {
 				found = &t
+				break
 			}
 		}
 		return nil

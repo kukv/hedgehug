@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -212,13 +213,18 @@ func TestDeleteValueReplacementMayBeAHiddenStatus(t *testing.T) {
 	statuses := workspace.ParseList("statuses")
 	review, _ := s.AddValue(ctx, store, w.ID, statuses, "Review")
 	pending := settingsOf(t, s, w.ID).Statuses[3].ID
+	p := project.Project{ID: s.IDs.New(), Place: project.Place{Workspace: w.ID, Number: 1}, Rank: "V", Title: "p", Status: project.Todo}
+	id := putItemIn(t, s, p, 1, change.NewSet("status", nil, review.ID))
 	err := s.Stores.Write(ctx, store, port.Operation{Actor: change.User("taro"), Summary: "プロジェクト別のルールを変更"}, func(tx port.Tx) error {
-		return tx.WriteWorkspaces().Append(w.ID, change.NewAdd(projectrule.HiddenField("01PROJECT"), pending))
+		return tx.WriteWorkspaces().Append(w.ID, change.NewAdd(projectrule.HiddenField(p.ID), pending))
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DeleteValue(ctx, store, w.ID, statuses, review.ID, pending); err != nil {
-		t.Errorf("DeleteValue with a hidden replacement = %v", err)
+		t.Fatalf("DeleteValue with a hidden replacement = %v", err)
+	}
+	if got := itemOf(t, s, id); got.Status != pending {
+		t.Errorf("status = %q, want the hidden replacement %q", got.Status, pending)
 	}
 }
