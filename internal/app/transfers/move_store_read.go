@@ -36,9 +36,9 @@ func (c crossSource) logList() [][]change.Record {
 	return out
 }
 
-// gather は、移動元から移すもの・行・説明・メンバーを読む。検査は readSource と同じ。
+// gather は、移動元から移すもの・行・説明・メンバーを読む。検査は readMovable と同じ(別の画面で削除されたものも読む)。
 func gather(r port.Reader, id item.ID) (crossSource, error) {
-	src, err := readSource(r, id)
+	src, err := readMovable(r, id)
 	if err != nil {
 		return crossSource{}, err
 	}

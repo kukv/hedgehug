@@ -59,7 +59,7 @@ func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in Mo
 	}
 	var summary string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
-		p, err := plan(r, id, in)
+		p, err := plan(r, id, in, readMovable)
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,11 @@ func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in Mo
 	var moved Moved
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		p, err := plan(tx, id, in)
+		// 別の画面で削除されていたら、同じワークスペースの中の移動(items.Move)と同じく、削除を取り消してから移す(06)。
+		if err := port.ReviveItem(ctx, tx, id); err != nil {
+			return err
+		}
+		p, err := plan(tx, id, in, readSource)
 		if err != nil {
 			return err
 		}
@@ -99,9 +103,10 @@ type movePlan struct {
 	remaps  map[item.ID]transfer.RemapResult
 }
 
-// plan は、移すものと移動先を検査して読む。移動先が移動元と同じワークスペースなら port.ErrNotFound(ほかの検査は target)。
-func plan(r port.Reader, id item.ID, in MoveInput) (movePlan, error) {
-	src, err := readSource(r, id)
+// plan は、移すもの(read で読む)と移動先を検査して読む。移動先が移動元と同じワークスペースなら port.ErrNotFound
+// (ほかの検査は target)。
+func plan(r port.Reader, id item.ID, in MoveInput, read func(port.Reader, item.ID) (source, error)) (movePlan, error) {
+	src, err := read(r, id)
 	if err != nil {
 		return movePlan{}, err
 	}

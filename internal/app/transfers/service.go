@@ -47,7 +47,18 @@ func (s source) items() []item.Item {
 
 // readSource は、移すものを読む。移すアイテムがない・削除済み・Step なら port.ErrNotFound(Step は親と一緒に移る。02)。
 func readSource(r port.Reader, id item.ID) (source, error) {
-	it, err := port.LiveItem(r, id)
+	return readSourceWith(r, id, port.LiveItem)
+}
+
+// readMovable は、移すときの readSource。別の画面で利用者が削除したもの(port.EditableItem。root: true で祖先が
+// 削除されていない)も読む。移すときに、同じワークスペースの中の移動と同じく削除を取り消す(06「他の書き手との重なり」)。
+func readMovable(r port.Reader, id item.ID) (source, error) {
+	return readSourceWith(r, id, port.EditableItem)
+}
+
+// readSourceWith は、移すアイテムを get で読んで、移すものを読む。
+func readSourceWith(r port.Reader, id item.ID, get func(port.Reader, item.ID) (item.Item, error)) (source, error) {
+	it, err := get(r, id)
 	if err != nil {
 		return source{}, err
 	}

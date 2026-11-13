@@ -36,6 +36,8 @@ type crossMove struct {
 	summary  string
 	meFrom   string
 	meTo     string
+	// revive は、移すアイテムが別の画面で削除されていたときの、その削除の操作(取り消す)。削除されていなければ空。
+	revive change.ID
 
 	moved   Moved
 	added   []member.Member // 移動先のメンバーに足した人
@@ -66,6 +68,9 @@ func (s Service) moveAcross(ctx context.Context, store port.StoreID, id item.ID,
 	if err := s.Stores.Write(ctx, store, op, m.writeSource); err != nil {
 		return Moved{}, s.rollback(ctx, m, err)
 	}
+	if m.revive != "" {
+		port.NoteRevived(ctx, m.src.set.Root.DisplayID(m.src.ws.Prefix))
+	}
 	return m.moved, nil
 }
 
@@ -81,6 +86,9 @@ func (s Service) prepare(ctx context.Context, store port.StoreID, id item.ID, in
 	}
 	if err := s.Stores.Read(ctx, store, func(r port.Reader) (err error) { m.src, err = gather(r, id); return }); err != nil {
 		return nil, err
+	}
+	if d := m.src.set.Root.Deleted; d != nil {
+		m.revive = d.Op
 	}
 	var dst destination
 	if err := s.Stores.Read(ctx, in.ToStore, func(r port.Reader) (err error) {
@@ -124,12 +132,23 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 		remaps[it.ID] = transfer.Remap(it, m.src.settings, dst.settings, dst.rules, people, m.in.StatusChoices)
 		lines := placeLines(it, it.ID == root.ID, dst, m.in.ToParent, numbers[it.ID], newRank)
 		errs = append(errs, m.importItem(tx, it, append(lines, remaps[it.ID].Drafts...)))
+		errs = append(errs, m.reviveItem(tx, it.ID))
 	}
 	errs = append(errs, tx.WriteWorkspaces().Append(dst.ws.ID, numberLines(numbers)...))
 	m.numbers, m.prefix = numbers, dst.ws.Prefix
 	m.added = add
 	m.moved = Moved{ToStore: m.in.ToStore, Item: root.ID, Display: displayID(dst.ws.Prefix, numbers[root.ID]), Emptied: emptiedOf(remaps, m.src.settings)}
 	return errors.Join(errs...)
+}
+
+// reviveItem は、移すアイテムが別の画面で削除されていたとき、写した行のうちその削除の操作の行を取り消す
+// (port.ReviveItem と同じく、その操作の行を持つものすべて。同じ操作で一緒に削除された下のものも)。
+func (m *crossMove) reviveItem(tx port.Tx, id item.ID) error {
+	log := m.src.logs[id]
+	if m.revive == "" || !slices.ContainsFunc(log, func(r change.Record) bool { return r.Op == m.revive }) {
+		return nil
+	}
+	return tx.WriteItems().Append(id, change.Undo(log, m.revive)...)
 }
 
 // join は、移動先のメンバーに add を足す。表示名がログイン名と違えば、表示名も書く。

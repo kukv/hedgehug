@@ -113,6 +113,55 @@ test("moves items to another workspace and another Store, and follows the old ID
   });
 });
 
+// 06「他の書き手との重なり」: ダイアログを開いたあとに別のタブで削除されたアイテムを移すと、削除を取り消して移す。
+// ダイアログはツリーの行のメニューから開く(詳細パネルは、別のタブの削除が反映されると閉じるため)。
+test("moving an item deleted in another tab restores it", async ({ page }, info) => {
+  const prefix = prefixOf(info);
+  await createWorkspace(page, info, unique(info, "別で削除 移動元"), prefix);
+  await projectWithEpic(page, info, prefix);
+  await taskUnderEpic(page, info, `${prefix}-1`, "A");
+  const rowMenu = (p: Page) =>
+    p
+      .getByRole("list", { name: "ツリー" })
+      .getByRole("listitem")
+      .filter({ has: p.getByText(`${prefix}-2`, { exact: true }) })
+      .getByRole("button", { name: / のメニュー$/ });
+
+  await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/tree`));
+  await rowMenu(page).click();
+  await page.getByRole("menuitem", { name: /^別のワークスペースへ移動…/ }).click();
+  const dialog = page.getByRole("dialog", { name: "別のワークスペースへ移動" });
+  await dialog
+    .getByRole("combobox", { name: "移動先のワークスペース" })
+    .selectOption({ label: "e2e / Mobile" });
+  await expect(dialog.getByRole("heading", { name: "移動先で変わること" })).toBeVisible();
+
+  const other = await page.context().newPage();
+  try {
+    await other.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/tree`));
+    await rowMenu(other).click();
+    await other.getByRole("menuitem", { name: /^削除…/ }).click();
+    await other
+      .getByRole("dialog", { name: "Task を削除" })
+      .getByRole("button", { name: "削除", exact: true })
+      .click();
+    await expect(other.getByText(`${prefix}-2 を削除しました`, { exact: true })).toBeVisible();
+  } finally {
+    await other.close();
+  }
+
+  await dialog.getByRole("button", { name: "移動", exact: true }).click();
+  await expect(
+    page.getByText(
+      `${prefix}-2 は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました`,
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").getByText(new RegExp(`^${prefix}-2 は MB-\\d+ になりました$`)),
+  ).toBeVisible();
+});
+
 test("disables the transfer item in a read-only Store with the reason", async ({ page }) => {
   await page.goto(tokenUrl("/s/readonly/p/HH-P1/tree"));
   await page.getByRole("list", { name: "ツリー" }).getByRole("link", { name: "認証" }).click();
