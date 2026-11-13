@@ -66,7 +66,7 @@
 | C3a-18 | 通知(C4)は、修復のコミット(実行者 `sync`)の件名・行と、対象のログから宛先を決める。C3a は通知の材料を別に記録しない。1 件の修復を 1 コミットにする(Global Constraints)ので、コミット 1 つが通知 1 件に対応する。(2) の行は op が親の削除のもので、コミットの `Hedgehug-Op` と違うので、C4 のアクティビティは修復のコミットを件名から作る(remote の履歴へののせ直しと同じ扱い) | 06「同期の修復」の通知は、受け取ったマシンが自分宛てに作る。受け取る側は自分で修復していないので、修復の結果だけから作れる必要がある |
 | C3a-19 | `Replicator.Sync` の結果の送った数には、修復のコミットも入る(送った保存) | 修復は保存(01「書き込みの単位」)。06「同期の結果」の送った数は保存の数 |
 | C3a-21 | 06 の表の最後の行の「設定・スプリント・リリース・コメント・作業時間などの削除」のうち、コメントと作業時間は、`change.Current` がすでに「生きている先端があればそれを取る」ので、編集と削除が重なると編集が残る(修復は要らない。作業時間には編集がない)。設定の値・プロパティ・テンプレート・ルールは C3a-9 で取り消す。スプリントとリリースは、それを作るトラック F が、削除を `delete` の行(`f` は `sprints/<ID>` のような形)で書き、読むときに `change.Restored` を使えば、C3a-9 と `change.Undo` でそのまま取り消せる(Task 1 でトラック C の計画の F への申し送りの表に書く) | 調べた結果(`domain/change/current.go`)。F の計画はまだない |
-| C3a-20 | 2 台の場面テストは `cmd/hedgehug/repair_scenario_test.go` に置く。本物の gitstore と `app/repairing` の両方を import できるのは cmd だけ(archtest)。remote は一時フォルダの bare リポジトリをパスで渡す(go-git のファイルの通信。試して動くことを確かめた) | 設計書 2 節の依存の向き。gitstore のテストの `https://remote.invalid` の仕組みは gitstore の _test にしかない |
+| C3a-20 | 2 台の場面テストは `cmd/hedgehug/repair_scenario_test.go` に置く。本物の gitstore と `app/repairing` の両方を import できるのは cmd だけ(archtest)。remote は一時フォルダの bare リポジトリをパスで渡す。go-git のファイルの通信は git の実行ファイル(git-upload-pack など)を呼び、CI の test-without-git で落ちるので、テストの中でパスの通信をプロセスの中の git サーバーに差し替える(gitstore のテストと同じく、知らない have を除く) | 設計書 2 節の依存の向き。gitstore のテストの `https://remote.invalid` の仕組みは gitstore の _test にしかない |
 
 ## Review Focus
 
