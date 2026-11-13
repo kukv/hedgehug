@@ -56,6 +56,12 @@
   const percent = $derived(Math.round(progressRatio(card) * 100));
   const startWhy = $derived(readOnly ? readOnlyNote : startReason);
   let menu = $state<{ x: number; y: number } | null>(null);
+  // 実行中だけ開いておく。読み直しで開閉を戻さないよう、状態が変わったときだけ合わせる。
+  const running = $derived(s.state === "active");
+  let open = $state(false);
+  $effect.pre(() => {
+    open = running;
+  });
 
   function select(id: string) {
     menu = null;
@@ -114,7 +120,7 @@
     </span>
     <span class="text">{progress}</span>
   </div>
-  <details open={s.state === "active"}>
+  <details bind:open>
     <summary>アイテム {card.items.length} 件</summary>
     <PlanItems rows={card.items} {storeId} {storeName} {settings} {members} />
   </details>

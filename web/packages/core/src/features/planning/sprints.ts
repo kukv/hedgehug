@@ -57,9 +57,9 @@ export function progressRatio(c: SprintCard): number {
   return c.total.points === 0 ? 0 : c.done.points / c.total.points;
 }
 
-// periodText は、カードの期間。開始日か終了日がなければ「期間未定」。
+// periodText は、カードの期間。両方なければ「期間未定」。計画中は片方だけのこともあり、ない方は「なし」(01)。
 export function periodText(s: Sprint, thisYear: number): string {
-  if (s.start === "" || s.end === "") return "期間未定";
+  if (s.start === "" && s.end === "") return "期間未定";
   return `${formatDay(s.start, thisYear)} 〜 ${formatDay(s.end, thisYear)}`;
 }
 

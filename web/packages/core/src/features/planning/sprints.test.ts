@@ -124,6 +124,11 @@ describe("periodText", () => {
   it("shows 期間未定 without the days", () => {
     expect(periodText(sprint({ state: "planned", start: "", end: "" }), 2026)).toBe("期間未定");
   });
+
+  it("shows なし for the missing one of a planned sprint", () => {
+    expect(periodText(sprint({ state: "planned", end: "" }), 2026)).toBe("11/2 〜 なし");
+    expect(periodText(sprint({ state: "planned", start: "" }), 2026)).toBe("なし 〜 11/15");
+  });
 });
 
 describe("startDisabledReason", () => {
