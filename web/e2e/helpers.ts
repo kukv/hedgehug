@@ -1,4 +1,10 @@
-import { type APIRequestContext, expect, type Page, type TestInfo } from "@playwright/test";
+import {
+  type APIRequestContext,
+  expect,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 // 通しのテストの共通の手順。
 
@@ -71,4 +77,61 @@ export async function addProperty(
     { headers: { Authorization: "Bearer e2e-token" }, data: { ...body, kinds: [] } },
   );
   if (!res.ok()) throw new Error(`addProperty: ${res.status()} ${await res.text()}`);
+}
+
+// saved は、設定の保存の応答を待つ。待たずにアドレスで移ると、保存が終わる前に次の画面を読むことがある。
+export const saved = (page: Page, path: string) =>
+  page.waitForResponse((r) => r.url().includes(path) && r.request().method() !== "GET" && r.ok());
+
+// newProject は、ワークスペース prefix に n 番目のプロジェクト(接頭辞-Pn)を作り、その概要を開いた状態にする。
+// 作ったプロジェクトのタイトルを返す。
+export async function newProject(page: Page, info: TestInfo, prefix: string, n = 1) {
+  const title = unique(info, `計画 ${prefix} ${n}`);
+  await page.goto(tokenUrl(`/s/e2e/w/${prefix}`));
+  await page.getByRole("button", { name: "プロジェクト", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "プロジェクトを作成" });
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill(title);
+  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("heading", { name: `${prefix}-P${n} ${title}` })).toBeVisible();
+  return title;
+}
+
+// projectWithEpic は、プロジェクト(接頭辞-P1)と Epic(接頭辞-1)を作り、Epic の詳細パネルを開いた状態にする。
+export async function projectWithEpic(page: Page, info: TestInfo, prefix: string) {
+  await newProject(page, info, prefix);
+  const epic = unique(info, "通知");
+  await page.getByRole("button", { name: "Epic", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "新規作成" });
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill(epic);
+  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText(`${prefix}-1 を作成しました`)).toBeVisible();
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(epic);
+  return panel;
+}
+
+// createTaskFrom は、Epic の詳細パネルの「Task」から Task を作り、作った Task の詳細パネルが開くのを待つ。
+async function createTaskFrom(page: Page, panel: Locator, name: string) {
+  await panel.getByRole("button", { name: "Task" }).click();
+  const dialog = page.getByRole("dialog", { name: "新規作成" });
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill(name);
+  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(name);
+}
+
+// newTaskUnder は、projectWithEpic のあと、Epic の下に Task(接頭辞-2)を作り、その詳細パネルを開いた状態にする。
+export async function newTaskUnder(page: Page, info: TestInfo, prefix: string) {
+  const panel = await projectWithEpic(page, info, prefix);
+  await createTaskFrom(page, panel, unique(info, "ログイン"));
+  return panel;
+}
+
+// taskUnderEpic は、Epic(epicId は表示の ID)の詳細パネルを開き、その下に Task を作って、その詳細パネルを開いた状態にする。
+export async function taskUnderEpic(page: Page, info: TestInfo, epicId: string, title: string) {
+  await page.goto(tokenUrl(`/s/e2e/i/${epicId}`));
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await createTaskFrom(page, panel, unique(info, title));
+  return panel;
 }

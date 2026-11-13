@@ -1,12 +1,16 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
-import { createWorkspace, openSettings, prefixOf, tokenUrl, unique } from "./helpers";
+import { expect, type Page, test } from "@playwright/test";
+import {
+  createWorkspace,
+  newTaskUnder,
+  openSettings,
+  prefixOf,
+  projectWithEpic,
+  saved,
+  unique,
+} from "./helpers";
 
 // テンプレートでまとめて作る・遷移の制約の通しのテスト(A3b)。サーバーは 3 つの幅で共有なので、
 // 名前と接頭辞は毎回変える。
-
-// saved は、設定の保存の応答を待つ。待たずにアドレスで移ると、保存が終わる前に次の画面を読むことがある。
-const saved = (page: Page, path: string) =>
-  page.waitForResponse((r) => r.url().includes(path) && r.request().method() !== "GET" && r.ok());
 
 // restrictTodo は、ワークフローのタブで Todo から移れる先を InProgress だけにする。
 async function restrictTodo(page: Page, prefix: string) {
@@ -15,42 +19,6 @@ async function restrictTodo(page: Page, prefix: string) {
     saved(page, "/workflow/"),
     page.getByRole("checkbox", { name: "Todo から InProgress", exact: true }).click(),
   ]);
-}
-
-// プロジェクト(接頭辞-P1)と Epic(接頭辞-1)を作り、Epic の詳細パネルを開いた状態にする
-// (project.spec.ts・create.spec.ts と同じ操作)。
-async function projectWithEpic(page: Page, info: TestInfo, prefix: string) {
-  const project = unique(info, `テンプレの計画 ${prefix}`);
-  await page.goto(tokenUrl(`/s/e2e/w/${prefix}`));
-  await page.getByRole("button", { name: "プロジェクト", exact: true }).click();
-  const create = page.getByRole("dialog", { name: "プロジェクトを作成" });
-  await create.getByRole("textbox", { name: "タイトル" }).fill(project);
-  await create.getByRole("textbox", { name: "タイトル" }).press("Enter");
-  await expect(create).toBeHidden();
-  await expect(page.getByRole("heading", { name: `${prefix}-P1 ${project}` })).toBeVisible();
-
-  const epic = unique(info, "通知");
-  await page.getByRole("button", { name: "Epic", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "新規作成" });
-  await dialog.getByRole("textbox", { name: "タイトル" }).fill(epic);
-  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
-  await expect(dialog).toBeHidden();
-  await expect(page.getByText(`${prefix}-1 を作成しました`)).toBeVisible();
-  const panel = page.getByRole("region", { name: "詳細パネル" });
-  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(epic);
-  return panel;
-}
-
-// Epic の詳細パネルから Task を作り、その詳細パネルを開いた状態にする(helpers.ts の newTask と同じ操作)。
-async function newTaskUnder(page: Page, info: TestInfo, prefix: string) {
-  const panel = await projectWithEpic(page, info, prefix);
-  const name = unique(info, "ログイン");
-  await panel.getByRole("button", { name: "Task" }).click();
-  const dialog = page.getByRole("dialog", { name: "新規作成" });
-  await dialog.getByRole("textbox", { name: "タイトル" }).fill(name);
-  await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
-  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(name);
-  return panel;
 }
 
 test("creates a task with its template's steps in one go", async ({ page }, info) => {
