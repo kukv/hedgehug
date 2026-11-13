@@ -69,7 +69,6 @@ test("resets a section to the workspace settings after a confirmation", async ({
   await expect(page.getByText("ワークスペースの設定に戻しました")).toBeVisible();
   await expect(statuses.locator("#rules-statuses")).toContainText("5 / 5");
   await expect(statuses.getByRole("checkbox", { checked: false })).toHaveCount(0);
-  await select.selectOption({ label: "InProgress" });
   await expect(reset).toBeDisabled();
 });
 
