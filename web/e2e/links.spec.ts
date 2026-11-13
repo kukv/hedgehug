@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, type TestInfo, test } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import {
   createWorkspace,
   githubRead,

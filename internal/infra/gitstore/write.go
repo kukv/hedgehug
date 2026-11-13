@@ -86,8 +86,11 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 		return err
 	}
 	t.pending[ref] = append(t.pending[ref], change.Stamp(log, drafts, t.meta, t.ids.New)...)
-	if ref.Kind == change.KindItem {
+	switch ref.Kind {
+	case change.KindItem:
 		delete(t.places, ref.ID) // 動いたかもしれない
+	case change.KindProject:
+		delete(t.projectPlaces, ref.ID) // 動いたかもしれない
 	}
 	return nil
 }

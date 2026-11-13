@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
 // 作業時間の通しのテスト(A4a)。関連は relations.spec.ts が通す。

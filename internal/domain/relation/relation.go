@@ -149,16 +149,21 @@ func WouldCycle(from, to item.ID, all []item.Item) bool {
 
 // BlockedSet は、ブロック中のアイテムの内部 ID。ブロックしている相手のうち、closed(完了か中止)でないものが
 // 1 つでもあるとき(02「上から順の構成」)。削除済みを除くのは呼ぶ側(A4b)。
+// closed は、blocks の関連を 1 つ以上持つアイテムにだけ呼ぶ(呼ぶ側が、判定に要る設定を要るときだけ読めるように)。
 func BlockedSet(all []item.Item, closed func(item.Item) bool) map[item.ID]bool {
 	out := map[item.ID]bool{}
 	for _, it := range all {
-		if closed(it) {
-			continue
-		}
+		var targets []item.ID
 		for _, rel := range it.Relations {
 			if rel.Type == TypeBlocks {
-				out[rel.To] = true
+				targets = append(targets, rel.To)
 			}
+		}
+		if len(targets) == 0 || closed(it) {
+			continue
+		}
+		for _, to := range targets {
+			out[to] = true
 		}
 	}
 	return out

@@ -132,3 +132,22 @@ func TestBlocked(t *testing.T) {
 		t.Errorf("ブロッカーがすべて終わっていれば誰もブロック中でない: %v", got)
 	}
 }
+
+func TestBlockedSetAsksClosedOnlyForBlockers(t *testing.T) {
+	all := []item.Item{
+		{ID: "A", Relations: []item.Relation{rel("blocks", "B")}},
+		{ID: "B"},
+		{ID: "C", Relations: []item.Relation{rel("relates", "A")}},
+	}
+	var asked []item.ID
+	got := relation.BlockedSet(all, func(it item.Item) bool {
+		asked = append(asked, it.ID)
+		return false
+	})
+	if len(got) != 1 || !got["B"] {
+		t.Errorf("BlockedSet = %v, want {B}", got)
+	}
+	if !slices.Equal(asked, []item.ID{"A"}) {
+		t.Errorf("closed を呼んだアイテム = %v: blocks を持つ A だけに呼ぶ", asked)
+	}
+}

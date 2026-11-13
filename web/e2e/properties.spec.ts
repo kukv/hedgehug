@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { addProperty, newTask, tokenUrl, unique } from "./helpers";
 
-// 値を変えるテストは、3 つの幅が 1 つのサーバーを共有するので、自分の Task を作ってから使う。
+// 値を変えるテストは、同じ worker のほかのテストとサーバーを共有するので、自分の Task を作ってから使う。
 // 保存の応答は、エンドポイントまで合わせて待つ。別の保存の応答に当たらないようにする。
 type Res = { url: () => string; ok: () => boolean; request: () => { method: () => string } };
 const itemProps = /\/api\/stores\/[^/]+\/items\/[^/]+\/properties\/[^/]+/;

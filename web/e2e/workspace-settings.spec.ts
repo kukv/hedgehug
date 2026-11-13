@@ -1,8 +1,8 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
-// ワークスペースの設定の通しのテスト(B2)。サーバーは 3 つの幅で共有なので、
-// 名前と接頭辞は幅とやり直しの回数、乱数で毎回変える。
+// ワークスペースの設定の通しのテスト(B2)。サーバーは同じ worker のほかのテストと共有なので、名前と接頭辞は幅とやり直しの回数、乱数で毎回変える。
 
 // 接頭辞は英大文字で始まる 10 文字以内の英大文字と数字。
 const prefixOf = (info: TestInfo) =>
@@ -93,7 +93,7 @@ test("the workspace menu opens the settings and moves the workspace down", async
   const second = unique(info, "移動 B");
   await createWorkspace(page, info, first, prefixOf(info));
   await createWorkspace(page, info, second, prefixOf(info));
-  // 並びの確認は、このテストが作った 2 つの相対の順だけを見る(ほかの幅が同じ Store で動かすため)。
+  // 並びの確認は、このテストが作った 2 つの相対の順だけを見る(同じ worker のほかのテストが作ったワークスペースも並ぶため)。
   // 狭い幅の引き出しの開閉は動きがあって当てにならないので、毎回開き直したページで開く。
   const block = async () => {
     await page.goto(tokenUrl());
@@ -124,7 +124,7 @@ test("the workspace menu opens the settings and moves the workspace down", async
     const prev = (await order()).join("\n");
     await (await menuOf(first)).click();
     const down = page.getByRole("menuitem", { name: "下へ移動" });
-    // 末尾なら押せない(ほかの幅が second を先に動かして、すでに first の方が下のとき)。
+    // 末尾なら押せない(すでに first の方が下のとき。今はほかのテストと同時には動かないので、ふつうは起きない)。
     if (await down.isDisabled()) {
       await page.keyboard.press("Escape");
       break;

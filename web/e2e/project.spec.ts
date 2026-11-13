@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
 test("opens a project's overview and tree from the sidebar", async ({ page }, info) => {

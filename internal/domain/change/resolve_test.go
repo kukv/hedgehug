@@ -227,3 +227,49 @@ func TestTipsPerField(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveKeepsInitialValueOfAFieldWithoutRows(t *testing.T) {
+	// a にだけ set の行がある。行のない b は、create の初期値のまま。
+	log := []change.Record{
+		create(map[string]any{"a": 1, "b": 2}),
+		rec("A", at(1), "ann", change.NewSet("a", 1, 3), "c"),
+	}
+	s := change.Resolve(log, opts)
+	if got := value(t, s, "a"); got != "3" {
+		t.Errorf("a = %s, want 3", got)
+	}
+	if got := value(t, s, "b"); got != "2" {
+		t.Errorf("b = %s, want 2", got)
+	}
+}
+
+func TestResolveKeepsInitialListValuesBesideOtherRows(t *testing.T) {
+	// 初期値 x の値に行はない。別の値 y の add の行だけがあっても、x は残る。
+	log := []change.Record{
+		create(map[string]any{"tags": []string{"x"}}),
+		rec("A", at(1), "ann", change.NewAdd("tags", "y"), "c"),
+	}
+	tagOpts := change.Options{Multi: func(f string) bool { return f == "tags" }}
+	if got := list(change.Resolve(log, tagOpts), "tags"); got != `"x","y"` {
+		t.Errorf("tags = %s, want x,y", got)
+	}
+}
+
+func BenchmarkResolveLongLog(b *testing.B) {
+	initial := map[string]any{}
+	for i := range 200 {
+		initial[fmt.Sprintf("f%d", i)] = "v"
+	}
+	log := []change.Record{create(initial)}
+	for i := range 200 {
+		f := fmt.Sprintf("f%d", i)
+		log = append(log, rec(fmt.Sprintf("s%d", i), at(1), "ann", change.NewSet(f, "v", "w"), "c"))
+	}
+	for i := range 50 {
+		log = append(log, rec(fmt.Sprintf("a%d", i), at(2), "ann", change.NewAdd("systems", fmt.Sprintf("Y%d", i)), "c"))
+	}
+	b.ResetTimer()
+	for range b.N {
+		change.Resolve(log, opts)
+	}
+}

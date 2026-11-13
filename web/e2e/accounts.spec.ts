@@ -1,8 +1,10 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { tokenUrl } from "./helpers";
 
-// アカウントはマシンに 1 つの一覧で、3 つの幅が 1 つのサーバーを共有する。表示名とログイン名には幅とやり直しの
-// 回数を入れる。gh CLI のトークンで確かめられるのは gh-{幅}-{回数}-a・-b だけ(D2 画面の計画の決定 S22)。
+// アカウントはサーバーに 1 つの一覧で、同じ worker のほかのテストと共有する。表示名とログイン名には幅とやり直しの
+// 回数を入れる。gh CLI のトークンで確かめられるのは gh-{幅}-{回数}-a・-b だけなので、この形は崩せない
+// (D2 画面の計画の決定 S22。cmd/hedgehug/device_e2e.go)。
 const tag = (info: TestInfo) => `${info.project.name}-${info.retry}`;
 
 // answer は、e2e のサーバーに、デバイスフローのコードの答えを決めさせる(決定 S21)。

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { tokenUrl } from "./helpers";
 
 // 閲覧のみの Store では、書く操作を無効にして「閲覧のみの Store です」を添える(02「詳細パネル」の冒頭)。
