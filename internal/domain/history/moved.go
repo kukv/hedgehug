@@ -30,14 +30,17 @@ func (o Origin) settings(id workspace.ID) (workspace.Settings, bool) {
 	return o.Settings(id)
 }
 
-// workspaceName・projectTitle は、引けなければ内部 ID をそのまま返す(手で書き換えたときだけ起きる)。
+// deletedName は、名前が引けない(完全に削除した)ワークスペース・プロジェクトの表示(01・保存形式「アクティビティと履歴」)。
+const deletedName = "(削除された値)"
+
+// workspaceName・projectTitle は、引けなければ「(削除された値)」を返す。
 func (o Origin) workspaceName(id workspace.ID) string {
 	if o.WorkspaceName != nil {
 		if name, ok := o.WorkspaceName(id); ok {
 			return name
 		}
 	}
-	return string(id)
+	return deletedName
 }
 
 func (o Origin) projectTitle(id project.ID) string {
@@ -46,7 +49,7 @@ func (o Origin) projectTitle(id project.ID) string {
 			return title
 		}
 	}
-	return string(id)
+	return deletedName
 }
 
 const movedFormat = "%s から移動(%s / %s / %s)"
@@ -99,9 +102,11 @@ type trail struct {
 	movedIn []movedInAt                // moved_in の行
 }
 
+// movedInAt は、moved_in の行 i。names の持ち主は、移動元のワークスペース from。
 type movedInAt struct {
 	i     int
 	op    change.ID
+	from  workspace.ID
 	names map[change.ID]string
 }
 
@@ -133,7 +138,7 @@ func (t *trail) read(i int, r change.Record) {
 		t.opTo[r.Op], t.current = to.Workspace, to.Workspace
 	case change.MovedIn:
 		if ms := transfer.MovedInOf([]change.Record{r}); len(ms) == 1 {
-			t.movedIn = append(t.movedIn, movedInAt{i: i, op: r.Op, names: ms[0].Names})
+			t.movedIn = append(t.movedIn, movedInAt{i: i, op: r.Op, from: ms[0].FromWorkspace, names: ms[0].Names})
 		}
 	}
 }
@@ -159,8 +164,8 @@ func (t trail) vocabs(i int, r change.Record, c Context) (vocab, vocab) {
 }
 
 // vocab は、ワークスペース ws の定義。いまのワークスペース(追えないときも)は Context.Settings、同じ Store の
-// ほかのワークスペースは Origin.Settings、どちらにもないもの(別の Store から来た)は、同じ操作か行 i より後で
-// 最初の moved_in の names。
+// ほかのワークスペースは Origin.Settings、どちらにもないもの(別の Store から来た)は、ws から移した moved_in の
+// うち、同じ操作か行 i より後で最初のものの names(A → B → C と移したとき、B の値は B から C への moved_in が持つ)。
 func (t trail) vocab(ws workspace.ID, i int, op change.ID, c Context) vocab {
 	if ws == "" || ws == t.current {
 		return vocab{settings: c.Settings}
@@ -169,7 +174,7 @@ func (t trail) vocab(ws workspace.ID, i int, op change.ID, c Context) vocab {
 		return vocab{settings: st}
 	}
 	v := vocab{settings: c.Settings, byNames: true}
-	if j := slices.IndexFunc(t.movedIn, func(m movedInAt) bool { return m.op == op || m.i > i }); j >= 0 {
+	if j := slices.IndexFunc(t.movedIn, func(m movedInAt) bool { return m.from == ws && (m.op == op || m.i > i) }); j >= 0 {
 		v.names = t.movedIn[j].names
 	}
 	return v

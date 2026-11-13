@@ -160,3 +160,49 @@ func TestItemRowsMovedInSystemsAreOneRowPerProperty(t *testing.T) {
 		}
 	}
 }
+
+// A → B → C と 2 回、別の Store へ移した。B にいたあいだの値は、B から C への moved_in の names で引き、A から B への
+// 引き直しの行の to(B の値)も同じ names で引く(名前が同じなので出ない)。
+func TestItemRowsMovedInTwiceAcrossStores(t *testing.T) {
+	a, b, c := taskIn("WA", "PA"), taskIn("WB", "PB"), taskIn("WC", "PC")
+	fromB := transfer.MovedInInfo{
+		Old: "TM-2", FromStore: "S2", FromStoreName: "team", FromWorkspace: "WB", FromWorkspaceName: "Team",
+		FromProject: "PB", FromProjectTitle: "アプリ", At: at(3), Names: map[change.ID]string{"B01": "Todo", "B02": "InProgress"},
+	}
+	log := logOf(
+		step{"O1", at(0), taro, item.Create(a)},
+		step{"O2", at(1), taro, transfer.NewMovedIn(movedInFromMain(map[change.ID]string{"A01": "Todo"}))},
+		step{"O2", at(1), taro, change.NewSet("place", a.Place, b.Place)},
+		step{"O2", at(1), taro, change.NewSet("status", "A01", "B01")},
+		step{"O3", at(2), taro, change.NewSet("status", "B01", "B02")},
+		step{"O4", at(3), taro, transfer.NewMovedIn(fromB)},
+		step{"O4", at(3), taro, change.NewSet("place", b.Place, c.Place)},
+		step{"O4", at(3), taro, change.NewSet("status", "B02", "V02")},
+	)
+	want := []string{
+		"太郎: TM-2 から移動(team / Team / アプリ)",
+		"太郎: ステータスを Todo → InProgress",
+		"太郎: HH-2 から移動(main / Web / ログイン)",
+		"太郎: 作成",
+	}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// 同じ Store の中の移動で、移動元のワークスペース・プロジェクトの名前が引けない(完全に削除した)ときは「(削除された値)」。
+func TestItemRowsMovedWithinTheStoreFromAPurgedWorkspace(t *testing.T) {
+	from, to := taskIn("WA", "PA"), taskIn("WB", "PB")
+	log := logOf(step{"O1", at(0), taro, item.Create(from)}, step{"O2", at(1), taro, change.NewSet("place", from.Place, to.Place)})
+	c := ctx()
+	c.Origin = history.Origin{
+		WorkspaceName: func(workspace.ID) (string, bool) { return "", false },
+		ProjectTitle:  func(project.ID) (string, bool) { return "", false },
+		StoreName:     "main",
+		Transfers:     []transfer.Record{{Op: "O2", Target: "T", Old: "HH-2", New: "MB-2"}},
+	}
+	want := []string{"太郎: HH-2 から移動(main / (削除された値) / (削除された値))", "太郎: 作成"}
+	if got := texts(history.ItemRows(log, c)); !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
