@@ -58,12 +58,15 @@ func (f *linkFixture) attachNow(t *testing.T, id item.ID, ref itemlink.Ref, v it
 }
 
 // fakeTokens は、port.GitHubTokens の偽物。Store の割り当ては infos と accounts から引き(テストの途中の変更も
-// そのまま見える)、Rejected で知らされたアカウントを覚えて、以後は認証エラーにする。
+// そのまま見える)、Rejected で知らされたアカウントを覚えて、以後は認証エラーにする。Recheck は呼ばれた回数を
+// 数え、recovered を返す。
 type fakeTokens struct {
-	infos    *apptest.StoreGitHub
-	accounts *apptest.Accounts
-	token    string
-	rejected []account.ID
+	infos     *apptest.StoreGitHub
+	accounts  *apptest.Accounts
+	token     string
+	rejected  []account.ID
+	rechecks  int
+	recovered bool
 }
 
 func (f *fakeTokens) TokenFor(ctx context.Context, store port.StoreID, repo string) (string, account.Account, error) {
@@ -95,7 +98,10 @@ func (f *fakeTokens) TokenFor(ctx context.Context, store port.StoreID, repo stri
 
 func (f *fakeTokens) Rejected(id account.ID) { f.rejected = append(f.rejected, id) }
 
-func (f *fakeTokens) Recheck(context.Context) (bool, error) { return false, nil }
+func (f *fakeTokens) Recheck(context.Context) (bool, error) {
+	f.rechecks++
+	return f.recovered, nil
+}
 
 type linkFixture struct {
 	links    githublink.Links

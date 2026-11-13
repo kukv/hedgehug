@@ -75,6 +75,16 @@ func (a *Auto) Hold(tab string, hold bool) {
 	delete(a.holds, tab)
 }
 
+// Waiting は、見えているタブが待つ条件にあるか、オフラインのタブがあるか(06。D4a-8)。期限の切れた知らせは数えない。
+func (a *Auto) Waiting() bool {
+	now := a.Service.Clock.Now()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	held := waiting(a.holds, now)
+	offline := waiting(a.offline, now)
+	return held || offline
+}
+
 // Run は、ctx が終わるまで、1 秒ごとに Step を呼ぶ。Step の失敗は、ログに出して、次の Step でやり直す。
 func (a *Auto) Run(ctx context.Context) {
 	tick := time.NewTicker(time.Second)

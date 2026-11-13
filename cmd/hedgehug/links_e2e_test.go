@@ -3,11 +3,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/githublink"
+	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
@@ -66,5 +71,43 @@ func TestE2EGitHubHandler(t *testing.T) {
 	}
 	if _, err := e2eGitHub.Lookup(t.Context(), "e2e-bot-token", "org/h-web", 7); err != nil {
 		t.Errorf("gone を戻したあと: %v", err)
+	}
+}
+
+// countingStoreGitHub は、List を呼んだ回数を数える(ReadOnce は 1 回ごとに 1 度だけ List を呼ぶ)。
+type countingStoreGitHub struct {
+	apptest.StoreGitHub
+	lists int
+}
+
+func (c *countingStoreGitHub) List(ctx context.Context) ([]port.StoreGitHubInfo, error) {
+	c.lists++
+	return c.StoreGitHub.List(ctx)
+}
+
+func TestE2EGitHubReadHandler(t *testing.T) {
+	infos := &countingStoreGitHub{}
+	links := githublink.Links{StoreGH: infos, Clock: apptest.NewClock(time.Now())}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	h := githubReadHandler("tok", links, next)
+	for _, tc := range []struct {
+		name, method, target, auth string
+		want, lists                int
+	}{
+		{"他のパスは次へ", http.MethodPost, "/e2e/github", "Bearer tok", http.StatusTeapot, 0},
+		{"認証なし", http.MethodPost, "/e2e/github-read", "", http.StatusUnauthorized, 0},
+		{"誤ったトークン", http.MethodPost, "/e2e/github-read", "Bearer nope", http.StatusUnauthorized, 0},
+		{"GET", http.MethodGet, "/e2e/github-read", "Bearer tok", http.StatusMethodNotAllowed, 0},
+		{"読む", http.MethodPost, "/e2e/github-read", "Bearer tok", http.StatusNoContent, 1},
+	} {
+		r := httptest.NewRequest(tc.method, tc.target, nil)
+		if tc.auth != "" {
+			r.Header.Set("Authorization", tc.auth)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.want || infos.lists != tc.lists {
+			t.Errorf("%s: %d (lists %d), want %d (lists %d)", tc.name, w.Code, infos.lists, tc.want, tc.lists)
+		}
 	}
 }

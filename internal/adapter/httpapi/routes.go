@@ -58,12 +58,14 @@ type Deps struct {
 	Clock       port.Clock
 	Checks      port.Checks      // このマシンが読んだ PR のチェックの結果(D3)
 	GitHubReads port.GitHubReads // GitHub を読んだ記録と、取り直しの失敗の文言(D4a)
+	// Links は、リンクの操作。cmd が 1 つ作り、GitHub を自動で読む Reader と共用する(D4a)。
+	Links githublink.Links
 
 	// トラック C(同期)。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。
 	Sync   *appsyncing.Service
 	Auto   *appsyncing.Auto
 	Events *events.Hub // nil なら NewAPI が作る(知らせる者がいない)
-	// GitHubSession は、GitHub の API と同期のトークンの入口で共用する Session。nil なら githubServices が作る。
+	// GitHubSession は、GitHub の API と、同期・リンクの操作のトークンの入口で共用する Session。nil なら githubServices が作る。
 	GitHubSession *ghapp.Session
 }
 
@@ -99,7 +101,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		History:      apphistory.Service{Stores: deps.Stores, Clock: deps.Clock},
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
-	ghapi.Register(api, githubServices(deps, hub))
+	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})
 
@@ -107,14 +109,10 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 }
 
 // githubServices は、GitHub 連携の usecase を組む。Session はサーバーに 1 つ(アプリを開いているあいだの状態)。
-func githubServices(d Deps, hub port.Events) ghapi.Services {
+func githubServices(d Deps) ghapi.Services {
 	s := d.GitHubSession
 	if s == nil {
 		s = ghapp.NewSession()
-	}
-	conn := ghapp.Connector{
-		Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
-		Hosts: d.Hosts, Stores: d.StoreGitHub, Clock: d.Clock,
 	}
 	return ghapi.Services{
 		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s},
@@ -127,9 +125,6 @@ func githubServices(d Deps, hub port.Events) ghapi.Services {
 			Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
 			Hosts: d.Hosts, IDs: d.IDs, Clock: d.Clock,
 		},
-		Links: githublink.Links{
-			Stores: d.Stores, Identity: d.Identity, Tokens: conn, GitHub: d.GitHub, Accounts: d.Accounts,
-			StoreGH: d.StoreGitHub, Checks: d.Checks, Reads: d.GitHubReads, Inbox: d.Inbox, Events: hub, Clock: d.Clock,
-		},
+		Links: d.Links,
 	}
 }

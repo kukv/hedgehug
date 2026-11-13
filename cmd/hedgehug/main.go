@@ -42,7 +42,7 @@ func run() error {
 		return err
 	}
 	fmt.Printf("http://%s/#token=%s\n", ln.Addr(), token)
-	return serve(ctx, ln, wrap(token, httpapi.New(token, web.Dist(), deps)))
+	return serve(ctx, ln, wrap(token, deps, httpapi.New(token, web.Dist(), deps)))
 }
 
 // serve は、ctx が終わるまで ln で待ち受ける。終わったら、処理中の要求を(最大 5 秒)待ってから戻る。

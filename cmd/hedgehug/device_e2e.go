@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
@@ -130,7 +131,7 @@ func (d *e2eDevice) handler(token string, next http.Handler) http.Handler {
 	})
 }
 
-// wrap は、通しのテストがデバイスフローの答えを決める入口を足す。
-func wrap(token string, h http.Handler) http.Handler {
-	return githubHandler(token, e2eDeviceFlow.handler(token, h))
+// wrap は、通しのテストが偽の GitHub とデバイスフローの答えを決める入口と、1 回の読み取りの入口を足す。
+func wrap(token string, deps httpapi.Deps, h http.Handler) http.Handler {
+	return githubReadHandler(token, deps.Links, githubHandler(token, e2eDeviceFlow.handler(token, h)))
 }
