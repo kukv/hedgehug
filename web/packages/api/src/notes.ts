@@ -1,11 +1,24 @@
-import type { NotesPort } from "@hedgehug/core";
+import type { Comment, NotesPort } from "@hedgehug/core";
 import { call } from "./errors";
 import {
+  type Comment as ApiComment,
+  deleteItemComment,
+  deleteProjectComment,
   describeItem,
   describeProject,
+  editItemComment,
+  editProjectComment,
   getItemDescription,
   getProjectDescription,
+  listItemComments,
+  listProjectComments,
+  postItemComment,
+  postProjectComment,
 } from "./generated";
+
+function toComment(c: ApiComment): Comment {
+  return { id: c.id, by: c.by, byName: c.byName, at: c.at, body: c.body, edited: c.edited };
+}
 
 // 説明・コメント・作業時間・関連・履歴の口の実装。区画ごとのタスクが、自分のメソッドをここに足す。
 export function createNotesPort(): NotesPort {
@@ -26,6 +39,35 @@ export function createNotesPort(): NotesPort {
             ? await describeItem(t.storeId, t.id, body)
             : await describeProject(t.storeId, t.id, body);
         return { text: saved.text, conflict: saved.conflict };
+      }),
+    listComments: (t) =>
+      call(async () => {
+        const list =
+          t.kind === "item"
+            ? await listItemComments(t.storeId, t.id)
+            : await listProjectComments(t.storeId, t.id);
+        return (list ?? []).map(toComment);
+      }),
+    postComment: (t, body) =>
+      call(async () =>
+        toComment(
+          t.kind === "item"
+            ? await postItemComment(t.storeId, t.id, { body })
+            : await postProjectComment(t.storeId, t.id, { body }),
+        ),
+      ),
+    editComment: (t, commentId, body) =>
+      call(async () =>
+        toComment(
+          t.kind === "item"
+            ? await editItemComment(t.storeId, t.id, commentId, { body })
+            : await editProjectComment(t.storeId, t.id, commentId, { body }),
+        ),
+      ),
+    deleteComment: (t, commentId) =>
+      call(async () => {
+        if (t.kind === "item") await deleteItemComment(t.storeId, t.id, commentId);
+        else await deleteProjectComment(t.storeId, t.id, commentId);
       }),
   };
 }

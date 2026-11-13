@@ -45,5 +45,17 @@ export function fakeNotesPort(initial: Record<string, string> = {}): FakeNotes {
       texts.set(keyOf(t), saved);
       return { text: saved, conflict };
     },
+    async listComments() {
+      return [];
+    },
+    async postComment() {
+      throw new Error("postComment is not faked");
+    },
+    async editComment() {
+      throw new Error("editComment is not faked");
+    },
+    async deleteComment() {
+      throw new Error("deleteComment is not faked");
+    },
   };
 }

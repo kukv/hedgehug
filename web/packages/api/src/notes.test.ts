@@ -1,4 +1,4 @@
-import { Refused } from "@hedgehug/core";
+import { NotFound, Refused } from "@hedgehug/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "./fetcher";
 import { createNotesPort } from "./notes";
@@ -59,5 +59,60 @@ describe("notes port: description", () => {
   it("turns a 422 into a refusal with the server's message", async () => {
     respond(422, { detail: "閲覧のみの Store です" });
     await expect(createNotesPort().describe(item, "", "x")).rejects.toThrow(Refused);
+  });
+});
+
+const apiComment = {
+  id: "K1",
+  by: "hanako",
+  byName: "花子",
+  at: "2026-11-13T09:00:00.000Z",
+  body: "見てください",
+  edited: false,
+};
+
+describe("notes port: comments", () => {
+  it("lists the comments of an item and of a project, reading null as empty", async () => {
+    const fetch = respond(200, [apiComment]);
+    await expect(createNotesPort().listComments(item)).resolves.toEqual([apiComment]);
+    expect(call(fetch)[0]).toBe("/api/stores/S1/items/I1/comments");
+    const none = respond(200, null);
+    await expect(createNotesPort().listComments(project)).resolves.toEqual([]);
+    expect(call(none)[0]).toBe("/api/stores/S1/projects/P1/comments");
+  });
+
+  it("posts, edits and deletes", async () => {
+    const posted = respond(200, apiComment);
+    await createNotesPort().postComment(item, "見てください");
+    expect(call(posted)[0]).toBe("/api/stores/S1/items/I1/comments");
+    expect(call(posted)[1].method).toBe("POST");
+    expect(JSON.parse(String(call(posted)[1].body))).toEqual({ body: "見てください" });
+
+    const edited = respond(200, { ...apiComment, edited: true });
+    await expect(createNotesPort().editComment(project, "K1", "直した")).resolves.toMatchObject({
+      edited: true,
+    });
+    expect(call(edited)[0]).toBe("/api/stores/S1/projects/P1/comments/K1");
+    expect(call(edited)[1].method).toBe("PUT");
+
+    const deleted = respond(204, undefined);
+    await expect(createNotesPort().deleteComment(item, "K1")).resolves.toBeUndefined();
+    expect(call(deleted)[0]).toBe("/api/stores/S1/items/I1/comments/K1");
+    expect(call(deleted)[1].method).toBe("DELETE");
+  });
+
+  it("turns a 422 into Refused and a 404 into NotFound", async () => {
+    respond(422, {
+      title: "Unprocessable Entity",
+      status: 422,
+      detail: "コメントを入力してください",
+    });
+    const err = await createNotesPort()
+      .postComment(item, " ")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Refused);
+    expect((err as Refused).message).toBe("コメントを入力してください");
+    respond(404, { title: "Not Found", status: 404, detail: "not found" });
+    await expect(createNotesPort().listComments(item)).rejects.toBeInstanceOf(NotFound);
   });
 });
