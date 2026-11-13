@@ -60,3 +60,26 @@ func TestDeletionOf(t *testing.T) {
 		}
 	}
 }
+
+// at が同じなら by(小文字)、さらに同じなら id の大きい行が勝つ(Resolve と同じ順)。
+func TestDeletionOfTieBreak(t *testing.T) {
+	at := time.Date(2026, 11, 13, 9, 0, 0, 0, jst)
+	create := change.Record{ID: "c", Op: "o0", At: at, By: "taro", Actor: change.User("taro"), T: change.Create}
+	root := true
+	del := func(id, op, by string) change.Record {
+		return change.Record{ID: change.ID(id), Op: change.ID(op), At: at, By: by, Actor: change.User(by), T: change.Delete, F: change.DeletedField, Root: &root}
+	}
+	for _, c := range []struct {
+		name string
+		a, b change.Record
+	}{
+		{"by", del("a", "oa", "Hanako"), del("b", "ob", "taro")},
+		{"id", del("a", "oa", "taro"), del("b", "ob", "taro")},
+	} {
+		for _, log := range [][]change.Record{{create, c.a, c.b}, {c.b, c.a, create}} {
+			if got := change.DeletionOf(log); got == nil || got.Op != "ob" {
+				t.Errorf("tie-break by %s = %+v, want op ob", c.name, got)
+			}
+		}
+	}
+}
