@@ -155,3 +155,44 @@ describe("notes port: worklogs", () => {
     expect((err as Refused).message).toBe("時間を入力してください");
   });
 });
+
+describe("notes port: watch", () => {
+  const apiItem = {
+    id: "I1",
+    workspace: "W1",
+    project: "P1",
+    parent: null,
+    number: 13,
+    kind: "Epic",
+    rank: "V",
+    title: "認証",
+    watchers: ["hanako", "taro"],
+    blocked: false,
+    createdAt: "2026-11-13T09:00:00.000Z",
+    createdBy: "taro",
+    status: "st1",
+    priority: "pr2",
+    assignee: "",
+    start: "",
+    end: "",
+    points: null,
+    estimate: null,
+    systems: [],
+    choices: {},
+    fields: {},
+  };
+
+  it("sends the state and returns the item", async () => {
+    const fetch = respond(200, apiItem);
+    const it = await createNotesPort().setWatch("S1", "I1", true);
+    expect(it).toMatchObject({ id: "I1", storeId: "S1", watchers: ["hanako", "taro"] });
+    expect(call(fetch)[0]).toBe("/api/stores/S1/items/I1/watch");
+    expect(call(fetch)[1].method).toBe("PUT");
+    expect(JSON.parse(String(call(fetch)[1].body))).toEqual({ on: true });
+  });
+
+  it("turns a 404 into NotFound", async () => {
+    respond(404, { title: "Not Found", status: 404, detail: "not found" });
+    await expect(createNotesPort().setWatch("S1", "I1", false)).rejects.toBeInstanceOf(NotFound);
+  });
+});

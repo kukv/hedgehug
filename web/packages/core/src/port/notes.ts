@@ -2,6 +2,7 @@
 // 失敗は、断りなら Refused、ないものなら NotFound、それ以外はそのまま投げる。
 // 区画ごとのタスクが、自分のメソッドをここに足す。
 
+import type { Item } from "../model/item";
 import type { Comment, Worklog } from "../model/notes";
 import type { RelationCandidate, RelationLabel, RelationRow } from "../model/relation";
 
@@ -54,4 +55,6 @@ export interface NotesPort {
     label: RelationLabel,
     otherId: string,
   ): Promise<void>;
+  // setWatch は、あなたのウォッチを入り切りして、変えたあとのアイテムを返す。
+  setWatch(storeId: string, itemId: string, on: boolean): Promise<Item>;
 }

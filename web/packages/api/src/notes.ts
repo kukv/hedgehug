@@ -1,5 +1,6 @@
 import type { Comment, NotesPort, Worklog } from "@hedgehug/core";
 import { call } from "./errors";
+import { toItem } from "./items";
 import {
   type Comment as ApiComment,
   type Worklog as ApiWorklog,
@@ -18,6 +19,7 @@ import {
   listWorklogs,
   postItemComment,
   postProjectComment,
+  setWatch,
 } from "./generated";
 import { relationCalls } from "./relationsPort";
 
@@ -87,5 +89,7 @@ export function createNotesPort(): NotesPort {
       call(async () => {
         await deleteWorklog(storeId, itemId, worklogId);
       }),
+    setWatch: (storeId, itemId, on) =>
+      call(async () => toItem(storeId, await setWatch(storeId, itemId, { on }))),
   };
 }

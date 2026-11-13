@@ -63,3 +63,4 @@ export {
   relationLabels,
 } from "./model/relation";
 export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";
+export { createWatch, type Watch, type WatchDeps, type WatchView, watchView } from "./features/notes/watch";

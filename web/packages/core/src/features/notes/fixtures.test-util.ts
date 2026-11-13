@@ -78,5 +78,8 @@ export function fakeNotesPort(initial: Record<string, string> = {}): FakeNotes {
     async removeRelation() {
       throw new Error("removeRelation is not faked");
     },
+    async setWatch() {
+      throw new Error("setWatch is not faked");
+    },
   };
 }
