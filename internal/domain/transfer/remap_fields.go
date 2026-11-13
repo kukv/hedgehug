@@ -54,10 +54,10 @@ func (r *remapper) plain(p, to workspace.Property, found bool) {
 	r.draft(change.NewSet(item.FieldKey(p.ID), raw, nil))
 }
 
-// hasValue は、値が入っているか。チェックは true だけを入っているとする。
+// hasValue は、値が入っているか。チェックは true だけ、文字列は空でないものだけを入っているとする。
 func hasValue(p workspace.Property, raw json.RawMessage) bool {
 	s := strings.TrimSpace(string(raw))
-	if s == "" || s == "null" {
+	if s == "" || s == "null" || s == `""` {
 		return false
 	}
 	return p.Type != workspace.TypeCheck || s != "false"

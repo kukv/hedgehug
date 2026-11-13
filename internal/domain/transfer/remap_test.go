@@ -191,3 +191,60 @@ func TestUnmatchedAgreesWithRemap(t *testing.T) {
 		}
 	}
 }
+
+// 値が入っていないものは、何も書かず、空になった項目にも並べない(空文字列のテキスト、false のチェック)。
+func TestRemapSkipsEmptyValues(t *testing.T) {
+	from, to := pair()
+	it := item.Item{ID: "I1", Fields: map[change.ID]json.RawMessage{
+		"FP1": json.RawMessage(`""`), "FP2": json.RawMessage(`null`), "FP6": json.RawMessage(`false`),
+	}}
+	got := transfer.Remap(it, from, to, "P1", nil, nil)
+	if len(got.Drafts) != 0 || len(got.Emptied) != 0 {
+		t.Errorf("rows = %q, Emptied = %v, want none", show(got), got.Emptied)
+	}
+}
+
+// 移動先の同じ値に当たる 2 つの値は、足す行が 1 つになる(取り除く行は 2 つ)。
+func TestRemapMergesValuesMatchingTheSameDestinationValue(t *testing.T) {
+	from, to := pair()
+	from.Systems = append(from.Systems, workspace.Value{ID: "FDUP", Name: "Web"})
+	for i := range from.Properties {
+		if from.Properties[i].ID == "FP4" {
+			from.Properties[i].Choices = append(from.Properties[i].Choices, workspace.Value{ID: "FT4", Name: "A"})
+		}
+	}
+	it := item.Item{
+		ID: "I1", Systems: []change.ID{"FV11", "FDUP"},
+		Choices: map[change.ID][]change.ID{"FP4": {"FT1", "FT4"}},
+	}
+	want := []string{
+		`remove systems "FV11">`, `remove systems "FDUP">`, `add systems >"TV11"`,
+		`remove fields/FP4 "FT1">`, `remove fields/FP4 "FT4">`, `add fields/TP4 >"TT1"`,
+	}
+	if got := show(transfer.Remap(it, from, to, "P1", nil, nil)); !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
+
+// 分類の既定がないときは、移動先の初期ステータス。
+func TestRemapStatusWithoutCategoryDefaultUsesInitialStatus(t *testing.T) {
+	from, to := pair()
+	delete(to.CategoryDefaults, workspace.CategoryTodo)
+	to.InitialStatus = "TV02"
+	got := show(transfer.Remap(item.Item{ID: "I1", Status: "FV04"}, from, to, "P1", nil, nil))
+	if want := []string{`set status "FV04">"TV02"`}; !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
+
+// 移動元にない優先度の ID は、名前が引けないので、初期優先度にして「優先度」を空になった項目に並べる。
+func TestRemapPriorityUnknownInSourceUsesInitialPriority(t *testing.T) {
+	from, to := pair()
+	got := transfer.Remap(item.Item{ID: "I1", Priority: "FGONE"}, from, to, "P1", nil, nil)
+	if want := []string{`set priority "FGONE">"TV08"`}; !slices.Equal(show(got), want) {
+		t.Errorf("rows = %q, want %q", show(got), want)
+	}
+	if want := []string{"優先度"}; !slices.Equal(got.Emptied, want) {
+		t.Errorf("Emptied = %v, want %v", got.Emptied, want)
+	}
+}
