@@ -140,8 +140,8 @@ func namedFirst(snaps []snapshot, name string) []snapshot {
 // currentID は、(a) いまの接頭辞と番号が一致する、削除されていないアイテム。
 func currentID(snaps []snapshot, prefix string, n int) (hit, bool) {
 	for _, snap := range snaps {
-		if h, ok := snap.numbered(n, func(w wsEntry) bool { return w.ws.Prefix == prefix }); ok {
-			return h, true
+		if hs := snap.numbered(n, func(w wsEntry) bool { return w.ws.Prefix == prefix }); len(hs) > 0 {
+			return hs[0], true
 		}
 	}
 	return hit{}, false
@@ -163,7 +163,7 @@ func oldHits(snaps []snapshot, prefix string, n int, recs []transfer.Record) []o
 		}
 	}
 	for _, snap := range snaps {
-		if h, ok := snap.numbered(n, func(w wsEntry) bool { return slices.Contains(w.old, prefix) }); ok {
+		for _, h := range snap.numbered(n, func(w wsEntry) bool { return slices.Contains(w.old, prefix) }) {
 			add(h, false)
 		}
 	}

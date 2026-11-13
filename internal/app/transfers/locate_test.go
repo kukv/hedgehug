@@ -197,7 +197,7 @@ func checkGone(t *testing.T, name string, got transfers.Located, err error, want
 
 // {Store 名} は、移動先の Store がこのマシンにあれば(非表示でも)いまの名前で、記録の ToStoreName ではない。
 // このマシンにない Store は記録の ToStoreName(TestLocateGoneReasons の S9)。
-func TestLocateGoneStoreNameComesFromTheStoreList(t *testing.T) {
+func TestLocateGoneStoreNameIsTheNameOnThisMachine(t *testing.T) {
 	f := newFixture(t)
 	const gone item.ID = "01TESTIT000000000000000030"
 	putRecord(t, f, store1, gone, "HH-9", "WEB-31", store2, "team")
@@ -226,16 +226,22 @@ func TestLocateNotFound(t *testing.T) {
 }
 
 // OldIDs は、旧い接頭辞と転送記録で旧 ID に当たる、削除されていないアイテムをすべて返す(いまの ID は含めない)。
+// 同じ Store の 2 つのワークスペースが同じ旧い接頭辞を持てば、両方を返す(ワークスペースの並び)。
 func TestOldIDs(t *testing.T) {
 	f := newFixture(t)
 	write(t, f.rec, store1, func(tx port.Tx) error {
-		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet("prefix", "HH", "WEB"))
+		return errors.Join( // Web(HH → WEB)と Mobile(MB → HH → MX)の両方が、旧い接頭辞に HH を持つ
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet("prefix", "HH", "WEB")),
+			tx.WriteWorkspaces().Append(mobileWS, change.NewSet("prefix", "MB", "HH")),
+			tx.WriteWorkspaces().Append(mobileWS, change.NewSet("prefix", "HH", "MX")),
+		)
 	})
+	mobileTask := addItem(t, f.rec, store1, item.Item{ID: "01TESTIT000000000000000023", Place: item.Place{Workspace: mobileWS, Project: mobileProject, Parent: ptr(mobileEpic), Number: 2}, Kind: item.Task, Rank: "V", Title: "Mobile の 2"})
 	addItem(t, f.rec, store3, item.Item{ID: roamer, Place: item.Place{Workspace: archiveWS, Project: archiveProj, Parent: ptr(archiveEpic), Number: 7}, Kind: item.Task, Rank: "V", Title: "旅"})
 	putRecord(t, f, store2, roamer, "HH-2", "AR-7", store3, "readonly")
 	putRecord(t, f, store2, "01TESTIT000000000000000030", "HH-2", "TM-9", store2, "team") // 移した先にない
 	got, err := f.svc.OldIDs(t.Context(), "HH-2")
-	want := []transfers.OldID{{Store: store1, Item: apptest.SampleTask}, {Store: store3, Item: roamer}}
+	want := []transfers.OldID{{Store: store1, Item: apptest.SampleTask}, {Store: store1, Item: mobileTask.ID}, {Store: store3, Item: roamer}}
 	if err != nil || !slices.Equal(got, want) {
 		t.Errorf("OldIDs(HH-2) = %+v, %v, want %+v", got, err, want)
 	}

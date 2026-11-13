@@ -100,19 +100,21 @@ func appendItems(r port.Reader, ws workspace.ID, out []itemEntry) ([]itemEntry, 
 	return out, nil
 }
 
-// numbered は、接頭辞が合う(match)ワークスペースの、番号 n の削除されていないアイテム。
-func (snap snapshot) numbered(n int, match func(wsEntry) bool) (hit, bool) {
+// numbered は、接頭辞が合う(match)ワークスペースごとの、番号 n の削除されていないアイテムを、ワークスペースの並びで返す。
+func (snap snapshot) numbered(n int, match func(wsEntry) bool) []hit {
+	var out []hit
 	for _, w := range snap.workspaces {
 		if !match(w) {
 			continue
 		}
 		for _, e := range snap.items {
 			if e.live && e.it.Place.Workspace == w.ws.ID && e.it.Place.Number == n {
-				return snap.hit(e.it), true
+				out = append(out, snap.hit(e.it))
+				break
 			}
 		}
 	}
-	return hit{}, false
+	return out
 }
 
 // live は、内部 ID id の削除されていないアイテム。
