@@ -27,6 +27,7 @@ type Item struct {
 	Rank      string   `json:"rank"`
 	Title     string   `json:"title"`
 	Watchers  []string `json:"watchers"`
+	Blocked   bool     `json:"blocked" doc:"ブロック中か。ブロックしている相手に、完了・中止でないものがある"`
 	CreatedAt string   `json:"createdAt"`
 	CreatedBy string   `json:"createdBy"`
 
@@ -45,7 +46,7 @@ type Item struct {
 func toAPI(it item.Item) Item {
 	out := Item{
 		ID: string(it.ID), Workspace: string(it.Place.Workspace), Project: string(it.Place.Project),
-		Number: it.Place.Number, Kind: string(it.Kind), Rank: it.Rank, Title: it.Title, Watchers: it.Watchers,
+		Number: it.Place.Number, Kind: string(it.Kind), Rank: it.Rank, Title: it.Title, Watchers: it.Watchers, Blocked: it.Blocked,
 		CreatedAt: it.Created.At.Format(change.TimeLayout), CreatedBy: it.Created.By,
 		Status: string(it.Status), Priority: string(it.Priority), Assignee: it.Assignee, Start: it.Start, End: it.End,
 		Points: it.Points, Estimate: it.Estimate, Systems: []string{}, Choices: map[string][]string{}, Fields: map[string]json.RawMessage{},

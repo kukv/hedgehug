@@ -16,11 +16,15 @@ func TestParseAndLabelOf(t *testing.T) {
 		typ     string
 		reverse bool
 	}{
-		{relation.Blocks, "blocks", false}, {relation.BlockedBy, "blocks", true},
-		{relation.Causes, "causes", false}, {relation.CausedBy, "causes", true},
-		{relation.Duplicates, "duplicates", false}, {relation.DuplicatedBy, "duplicates", true},
+		{relation.Blocks, "blocks", false},
+		{relation.BlockedBy, "blocks", true},
+		{relation.Causes, "causes", false},
+		{relation.CausedBy, "causes", true},
+		{relation.Duplicates, "duplicates", false},
+		{relation.DuplicatedBy, "duplicates", true},
 		{relation.RelatesTo, "relates", false},
-		{relation.Clones, "clones", false}, {relation.ClonedBy, "clones", true},
+		{relation.Clones, "clones", false},
+		{relation.ClonedBy, "clones", true},
 	}
 	for _, c := range cases {
 		typ, reverse, ok := relation.Parse(c.label)
@@ -49,7 +53,7 @@ func TestRowsShowBothSidesInLabelOrder(t *testing.T) {
 		{ID: "C", Relations: []item.Relation{rel("relates", "A")}}, // 両側が持っても 1 行
 		{ID: "D"},
 		{ID: "E", Relations: []item.Relation{rel("blocks", "A"), rel("friends", "A")}}, // 知らない種類は読み飛ばす
-		{ID: "F", Relations: []item.Relation{rel("blocks", "GONE")}},                    // 相手がいない関連は出さない
+		{ID: "F", Relations: []item.Relation{rel("blocks", "GONE")}},                   // 相手がいない関連は出さない
 	}
 	want := []relation.Row{
 		{Label: relation.Blocks, Other: "B"},
@@ -112,7 +116,9 @@ func TestBlocked(t *testing.T) {
 	all := []item.Item{
 		{ID: "A", Relations: []item.Relation{rel("blocks", "B"), rel("causes", "D")}},
 		{ID: "C", Relations: []item.Relation{rel("blocks", "B"), rel("blocks", "E")}},
-		{ID: "B"}, {ID: "D"}, {ID: "E"},
+		{ID: "B"},
+		{ID: "D"},
+		{ID: "E"},
 	}
 	closed := func(it item.Item) bool { return it.ID == "C" } // C は完了
 	got := relation.BlockedSet(all, closed)

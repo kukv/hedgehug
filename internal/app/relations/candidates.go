@@ -43,28 +43,40 @@ func (s Service) Candidates(ctx context.Context, store port.StoreID, self item.I
 		if q == "" {
 			return nil
 		}
-		its := slices.Clone(snap.all)
-		slices.SortStableFunc(its, func(a, b item.Item) int {
-			if c := slices.Index(snap.order, a.Place.Workspace) - slices.Index(snap.order, b.Place.Workspace); c != 0 {
-				return c
-			}
-			return a.Place.Number - b.Place.Number
-		})
-		for _, it := range its {
-			display := snap.display(it)
-			matches := strings.HasPrefix(strings.ToLower(display), q) || strings.Contains(strings.ToLower(it.Title), q)
-			if it.ID == self || it.Kind == item.Step || !matches {
-				continue
-			}
-			out = append(out, Candidate{
-				Item: it, Display: display, WorkspaceName: snap.workspaceNameFor(me, it),
-				DisabledReason: snap.reason(self, it.ID, label, typ, reverse),
-			})
+		for _, it := range snap.sorted() {
 			if len(out) == maxCandidates {
 				break
 			}
+			if !snap.matches(it, self, q) {
+				continue
+			}
+			out = append(out, Candidate{
+				Item: it, Display: snap.display(it), WorkspaceName: snap.workspaceNameFor(me, it),
+				DisabledReason: snap.reason(self, it.ID, label, typ, reverse),
+			})
 		}
 		return nil
 	})
 	return out, err
+}
+
+// sorted は、すべてのアイテムを、ワークスペースの並び → 番号の順にしたもの。
+func (s snapshot) sorted() []item.Item {
+	its := slices.Clone(s.all)
+	slices.SortStableFunc(its, func(a, b item.Item) int {
+		if c := slices.Index(s.order, a.Place.Workspace) - slices.Index(s.order, b.Place.Workspace); c != 0 {
+			return c
+		}
+		return a.Place.Number - b.Place.Number
+	})
+	return its
+}
+
+// matches は、it が self の候補になるか。自分と Step は外し、画面の ID の前方一致か、タイトルの部分一致で絞る。
+// q は小文字にしてあること。
+func (s snapshot) matches(it item.Item, self item.ID, q string) bool {
+	if it.ID == self || it.Kind == item.Step {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(s.display(it)), q) || strings.Contains(strings.ToLower(it.Title), q)
 }

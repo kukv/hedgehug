@@ -330,6 +330,8 @@ export const ItemKind = {
 export interface Item {
   /** ログイン名。空は未割り当て */
   assignee: string;
+  /** ブロック中か。ブロックしている相手に、完了・中止でないものがある */
+  blocked: boolean;
   /** 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID) */
   choices: ItemChoices;
   createdAt: string;
@@ -419,6 +421,39 @@ export interface Project {
   status: ProjectStatus;
   title: string;
   workspace: string;
+}
+
+export interface RelationCandidate {
+  /** 選べない理由。選べるなら空 */
+  disabledReason: string;
+  display: string;
+  /** 相手の内部 ID */
+  id: string;
+  title: string;
+  /** 別のワークスペースの候補だけ。同じなら空 */
+  workspaceName: string;
+}
+
+export interface RelationInput {
+  label: string;
+  /** 相手の内部 ID */
+  other: string;
+}
+
+export interface RelationRow {
+  /** 相手の画面の ID(HH-3) */
+  display: string;
+  /** 相手の内部 ID */
+  id: string;
+  /** 表記(blocks・blocked by・causes・caused by・duplicates・duplicated by・relates to・clones・cloned by) */
+  label: string;
+  /** ステータスの色の名前。値がなければ空 */
+  statusColor: string;
+  /** 相手のステータスの名前。値がなければ空 */
+  statusName: string;
+  title: string;
+  /** 相手が別のワークスペースのときだけ。同じなら空 */
+  workspaceName: string;
 }
 
 export interface RenameItem {
@@ -902,6 +937,11 @@ export interface WorkspaceUsage {
 
 export type AccountEditImpactParams = {
   login?: string;
+};
+
+export type ListRelationCandidatesParams = {
+  label?: string;
+  q?: string;
 };
 
 export type DeleteWorkspaceValueParams = {
@@ -1728,6 +1768,149 @@ export const addItemValue = async (store: string,
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export const getListRelationCandidatesUrl = (store: string,
+    item: string,
+    params?: ListRelationCandidatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relation-candidates?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relation-candidates`
+}
+
+/**
+ * @summary 関連の相手の候補を返す(ID かタイトルで絞る。20 件まで)
+ */
+export const listRelationCandidates = async (store: string,
+    item: string,
+    params?: ListRelationCandidatesParams, options?: Parameters<typeof fetcher>[1]): Promise<RelationCandidate[] | null> => {
+
+  return fetcher<RelationCandidate[] | null>(getListRelationCandidatesUrl(store,item,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListRelationsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relations`
+}
+
+/**
+ * @summary アイテムの関連を、表記の順で返す(逆向きの表記を含む)
+ */
+export const listRelations = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<RelationRow[] | null> => {
+
+  return fetcher<RelationRow[] | null>(getListRelationsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getAddRelationUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relations`
+}
+
+/**
+ * @summary 関連を足す
+ */
+export const addRelation = async (store: string,
+    item: string,
+    relationInput: RelationInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getAddRelationUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(relationInput)
+  }
+);}
+
+
+
+export const getRemoveRelationUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/relations/remove`
+}
+
+/**
+ * @summary 関連を外す
+ */
+export const removeRelation = async (store: string,
+    item: string,
+    relationInput: RelationInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getRemoveRelationUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(relationInput)
   }
 );}
 

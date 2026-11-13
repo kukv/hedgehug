@@ -72,10 +72,10 @@ func TestAddRefuses(t *testing.T) {
 		}
 	}
 	for name, err := range map[string]error{
-		"自分自身":   svc.Add(ctx, store, apptest.SampleEpic, relation.Causes, apptest.SampleEpic),
+		"自分自身":     svc.Add(ctx, store, apptest.SampleEpic, relation.Causes, apptest.SampleEpic),
 		"相手が Step": svc.Add(ctx, store, apptest.SampleEpic, relation.Causes, itStep),
-		"ないアイテム": svc.Add(ctx, store, apptest.SampleEpic, relation.Causes, "01NOPE00000000000000000000"),
-		"知らない表記": svc.Add(ctx, store, apptest.SampleEpic, "friends with", itDone),
+		"ないアイテム":   svc.Add(ctx, store, apptest.SampleEpic, relation.Causes, "01NOPE00000000000000000000"),
+		"知らない表記":   svc.Add(ctx, store, apptest.SampleEpic, "friends with", itDone),
 	} {
 		if !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("%s: %v", name, err)

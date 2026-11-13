@@ -429,6 +429,9 @@ components:
         assignee:
           description: ログイン名。空は未割り当て
           type: string
+        blocked:
+          description: ブロック中か。ブロックしている相手に、完了・中止でないものがある
+          type: boolean
         choices:
           additionalProperties:
             items:
@@ -508,6 +511,7 @@ components:
         - rank
         - title
         - watchers
+        - blocked
         - createdAt
         - createdBy
         - status
@@ -611,6 +615,73 @@ components:
         - status
         - start
         - end
+      type: object
+    RelationCandidate:
+      additionalProperties: false
+      properties:
+        disabledReason:
+          description: 選べない理由。選べるなら空
+          type: string
+        display:
+          type: string
+        id:
+          description: 相手の内部 ID
+          type: string
+        title:
+          type: string
+        workspaceName:
+          description: 別のワークスペースの候補だけ。同じなら空
+          type: string
+      required:
+        - id
+        - display
+        - title
+        - workspaceName
+        - disabledReason
+      type: object
+    RelationInput:
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+        other:
+          description: 相手の内部 ID
+          type: string
+      required:
+        - label
+        - other
+      type: object
+    RelationRow:
+      additionalProperties: false
+      properties:
+        display:
+          description: 相手の画面の ID(HH-3)
+          type: string
+        id:
+          description: 相手の内部 ID
+          type: string
+        label:
+          description: 表記(blocks・blocked by・causes・caused by・duplicates・duplicated by・relates to・clones・cloned by)
+          type: string
+        statusColor:
+          description: ステータスの色の名前。値がなければ空
+          type: string
+        statusName:
+          description: 相手のステータスの名前。値がなければ空
+          type: string
+        title:
+          type: string
+        workspaceName:
+          description: 相手が別のワークスペースのときだけ。同じなら空
+          type: string
+      required:
+        - label
+        - id
+        - display
+        - title
+        - workspaceName
+        - statusName
+        - statusColor
       type: object
     RenameItem:
       additionalProperties: false
@@ -2184,6 +2255,137 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 関連システム・複数選択に値を足す
+  /api/stores/{store}/items/{item}/relation-candidates:
+    get:
+      operationId: list-relation-candidates
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: label
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RelationCandidate"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連の相手の候補を返す(ID かタイトルで絞る。20 件まで)
+  /api/stores/{store}/items/{item}/relations:
+    get:
+      operationId: list-relations
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RelationRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの関連を、表記の順で返す(逆向きの表記を含む)
+    post:
+      operationId: add-relation
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連を足す
+  /api/stores/{store}/items/{item}/relations/remove:
+    post:
+      operationId: remove-relation
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 関連を外す
   /api/stores/{store}/items/{item}/save-as-template:
     post:
       operationId: save-item-as-template
