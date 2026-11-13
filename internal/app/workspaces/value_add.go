@@ -29,7 +29,15 @@ func (s Service) editValue(ctx context.Context, store port.StoreID, ws workspace
 	text func(st workspace.Settings, v workspace.Value) string,
 	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
 ) error {
-	return s.valueAt(ctx, store, ws, l, id, nil, text, rows)
+	return s.valueAt(ctx, store, ws, l, id, true, nil, text, rows)
+}
+
+// removeValue は editValue と同じで、値の削除が使う。削除済みのワークスペースは取り消さずに ErrNotFound(決定 R11)。
+func (s Service) removeValue(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID,
+	text func(st workspace.Settings, v workspace.Value) string,
+	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
+) error {
+	return s.valueAt(ctx, store, ws, l, id, false, nil, text, rows)
 }
 
 // changeValue は editValue と同じで、別の画面で削除された値なら、削除を取り消して変更を残す(editAt)。
@@ -38,16 +46,16 @@ func (s Service) changeValue(ctx context.Context, store port.StoreID, ws workspa
 	text func(st workspace.Settings, v workspace.Value) string,
 	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
 ) error {
-	return s.valueAt(ctx, store, ws, l, id, func([]change.Record) []string { return []string{l.Ref(id)} }, text, rows)
+	return s.valueAt(ctx, store, ws, l, id, true, func([]change.Record) []string { return []string{l.Ref(id)} }, text, rows)
 }
 
-// valueAt は、editValue・changeValue の中身。targets は editAt のもの。
-func (s Service) valueAt(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID,
+// valueAt は、editValue・changeValue・removeValue の中身。revive・targets は save のもの。
+func (s Service) valueAt(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID, revive bool,
 	targets func([]change.Record) []string,
 	text func(st workspace.Settings, v workspace.Value) string,
 	rows func(tx port.Tx, st workspace.Settings, vs []workspace.Value, v workspace.Value) ([]change.Draft, error),
 ) error {
-	return s.editAt(ctx, store, ws, targets,
+	return s.save(ctx, store, ws, revive, targets,
 		func(st workspace.Settings) (string, error) {
 			_, v, err := valueOf(st, l, id)
 			if err != nil {

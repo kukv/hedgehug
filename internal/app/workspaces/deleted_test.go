@@ -118,7 +118,7 @@ func TestCreateTemplateFromItemSkipsDeleted(t *testing.T) {
 	}
 }
 
-// 削除済みのワークスペースは、一覧にも Get にも出ず、使われ方・名前・接頭辞・設定・並びの変更もできない。
+// 削除済みのワークスペースは、一覧にも Get にも出ず、使われ方も読めない(変更の保存は削除を取り消す。決定 R11)。
 // 並べ替えでは、削除済みを飛ばして隣と入れ替わる(B5b-4)。
 func TestDeletedWorkspaceIsHiddenAndCannotBeChanged(t *testing.T) {
 	s := setup(t)
@@ -135,13 +135,7 @@ func TestDeletedWorkspaceIsHiddenAndCannotBeChanged(t *testing.T) {
 	}
 	_, getErr := s.Get(ctx, store, b.ID)
 	_, usageErr := s.Usage(ctx, store, b.ID)
-	_, addErr := s.AddProperty(ctx, store, b.ID, workspaces.NewProperty{Name: "メモ", Key: "memo", Type: workspace.TypeText})
-	for name, err := range map[string]error{
-		"Get": getErr, "Usage": usageErr, "AddProperty": addErr,
-		"Rename":        s.Rename(ctx, store, b.ID, "B2"),
-		"ChangePrefix":  s.ChangePrefix(ctx, store, b.ID, "ZZ"),
-		"MoveWorkspace": s.MoveWorkspace(ctx, store, b.ID, true),
-	} {
+	for name, err := range map[string]error{"Get": getErr, "Usage": usageErr} {
 		if !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("%s of a deleted workspace: %v, want port.ErrNotFound", name, err)
 		}

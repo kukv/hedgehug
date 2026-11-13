@@ -23,7 +23,26 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 // 保存の前の読みは、取り消す削除の行がないものとして作った設定(決定 R10)。取り消したのに行がなければ
 // ErrNotFound(決定 R3)、取り消したものの名前が削除されていないものと重なれば断る(決定 R4)。どちらも何も残さない。
 // targets は、保存の前の読みで 1 回、書く Tx の中で 1 回呼ぶ。Tx の中では rows より先に呼ぶ。
+// ワークスペースが別の画面で削除されていれば、その削除も取り消す(決定 R11)。
 func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID,
+	targets func(log []change.Record) []string,
+	summary func(workspace.Settings) (string, error),
+	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
+) error {
+	return s.save(ctx, store, ws, true, targets, summary, rows)
+}
+
+// remove は edit と同じで、削除の操作(値・プロパティ・テンプレートの削除)が使う。削除済みのワークスペースは
+// 取り消さずに ErrNotFound(決定 R11)。
+func (s Service) remove(ctx context.Context, store port.StoreID, ws workspace.ID,
+	summary func(workspace.Settings) (string, error),
+	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
+) error {
+	return s.save(ctx, store, ws, false, nil, summary, rows)
+}
+
+// save は、editAt・remove の中身。revive が真なら、削除済みのワークスペースの削除を取り消す。
+func (s Service) save(ctx context.Context, store port.StoreID, ws workspace.ID, revive bool,
 	targets func(log []change.Record) []string,
 	summary func(workspace.Settings) (string, error),
 	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
@@ -34,7 +53,7 @@ func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID
 	}
 	var st workspace.Settings
 	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		if _, err := port.LiveWorkspace(r, ws); err != nil {
+		if _, err := workspaceToSave(r, ws, revive); err != nil {
 			return err
 		}
 		var err error
@@ -48,18 +67,38 @@ func (s Service) editAt(ctx context.Context, store port.StoreID, ws workspace.ID
 		return err
 	}
 	return s.Stores.Write(ctx, store, port.Operation{Actor: actor, Summary: text}, func(tx port.Tx) error {
-		if _, err := port.LiveWorkspace(tx, ws); err != nil {
-			return err
-		}
-		return writeReviving(ctx, tx, ws, targets, rows)
+		return writeReviving(ctx, tx, ws, revive, targets, rows)
 	})
 }
 
-// writeReviving は、editAt の書く Tx の中身。targets のものの削除を取り消し、読み直した設定から rows で行を書く。
-func writeReviving(ctx context.Context, tx port.Tx, ws workspace.ID,
+// workspaceToSave は、保存の前の読みで、ワークスペース ws を返す。revive なら削除済みも返す。
+func workspaceToSave(r port.Reader, ws workspace.ID, revive bool) (workspace.Workspace, error) {
+	if revive {
+		return port.EditableWorkspace(r, ws)
+	}
+	return port.LiveWorkspace(r, ws)
+}
+
+// reviveWorkspace は、書く Tx の中で、revive ならワークスペース ws の削除を取り消し(取り消したら true)、
+// そうでなければ削除済みを ErrNotFound で断る。
+func reviveWorkspace(ctx context.Context, tx port.Tx, ws workspace.ID, revive bool) (bool, error) {
+	if revive {
+		return port.ReviveWorkspace(ctx, tx, ws, "", "")
+	}
+	_, err := port.LiveWorkspace(tx, ws)
+	return false, err
+}
+
+// writeReviving は、save の書く Tx の中身。ワークスペース(revive のとき)と targets のものの削除を取り消し、
+// 読み直した設定から rows で行を書く。
+func writeReviving(ctx context.Context, tx port.Tx, ws workspace.ID, revive bool,
 	targets func([]change.Record) []string,
 	rows func(tx port.Tx, st workspace.Settings) ([]change.Draft, error),
 ) error {
+	wsRevived, err := reviveWorkspace(ctx, tx, ws, revive)
+	if err != nil {
+		return err
+	}
 	revived, err := reviveTargets(ctx, tx, ws, targets)
 	if err != nil {
 		return err
@@ -72,7 +111,7 @@ func writeReviving(ctx context.Context, tx port.Tx, ws workspace.ID,
 	if err != nil {
 		return err
 	}
-	if len(revived) > 0 && len(ds) == 0 {
+	if (wsRevived || len(revived) > 0) && len(ds) == 0 {
 		return port.ErrNotFound
 	}
 	if err := tx.WriteWorkspaces().Append(ws, ds...); err != nil {

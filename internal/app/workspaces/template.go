@@ -102,7 +102,7 @@ func (s Service) UpdateTemplate(ctx context.Context, store port.StoreID, ws work
 
 // DeleteTemplate は、テンプレートを消す。種類ごとの既定からも外す。作ったアイテムは変えない。
 func (s Service) DeleteTemplate(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.edit(ctx, store, ws,
+	return s.remove(ctx, store, ws,
 		func(st workspace.Settings) (string, error) {
 			t, ok := st.Template(id)
 			if !ok {

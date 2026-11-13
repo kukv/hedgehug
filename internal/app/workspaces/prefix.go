@@ -11,6 +11,7 @@ import (
 
 // ChangePrefix は、接頭辞を変える(03「一般」の「接頭辞」)。番号は変わらず、旧い接頭辞はログに残る。
 // 同じ接頭辞なら何もしない(保存しない)。確認ダイアログは画面が出す。
+// 削除済みのワークスペースなら、変更後の接頭辞で判定して削除を取り消す。同じ接頭辞なら ErrNotFound(決定 R11)。
 func (s Service) ChangePrefix(ctx context.Context, store port.StoreID, id workspace.ID, prefix string) error {
 	prefix = workspace.NormalizePrefix(prefix)
 	actor, err := s.me(ctx, store)
@@ -22,13 +23,17 @@ func (s Service) ChangePrefix(ctx context.Context, store port.StoreID, id worksp
 	var current workspace.Workspace
 	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		var err error
-		current, err = port.LiveWorkspace(r, id)
+		current, err = port.EditableWorkspace(r, id)
 		return err
 	}); err != nil {
 		return err
 	}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("接頭辞を %s から %s に変更", current.Prefix, prefix)}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		revived, err := port.ReviveWorkspace(ctx, tx, id, "", prefix)
+		if err != nil {
+			return err
+		}
 		w, err := port.LiveWorkspace(tx, id)
 		if err != nil {
 			return err
@@ -42,7 +47,7 @@ func (s Service) ChangePrefix(ctx context.Context, store port.StoreID, id worksp
 			return err
 		}
 		if prefix == w.Prefix {
-			return nil
+			return unchanged(revived)
 		}
 		return tx.WriteWorkspaces().Append(id, change.NewSet("prefix", w.Prefix, prefix))
 	})

@@ -56,17 +56,26 @@ func rankedInOrder(r port.Reader, list []workspace.Workspace) ([]ranked, error) 
 
 // MoveWorkspace は、ワークスペースを 1 つ上(up)か下へ動かす(04「並び順と並べ替え」)。端なら何もしない。
 // 位置が変わるのは動かした 1 件だけで、その rank を新しい隣どうしのあいだの値にする(B2-6)。
+// 削除済みのワークスペースなら、削除を取り消してから動かす。端で動かないなら ErrNotFound(決定 R11)。
 func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, ws workspace.ID, up bool) error {
 	actor, err := s.me(ctx, store)
 	if err != nil {
 		return err
 	}
-	d, err := s.Get(ctx, store, ws)
-	if err != nil {
+	var w workspace.Workspace
+	if err := s.Stores.Read(ctx, store, func(r port.Reader) error {
+		var err error
+		w, err = port.EditableWorkspace(r, ws)
+		return err
+	}); err != nil {
 		return err
 	}
-	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("%s の並びを変更", oneLine(d.Workspace.Name))}
+	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("%s の並びを変更", oneLine(w.Name))}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		revived, err := port.ReviveWorkspace(ctx, tx, ws, "", "")
+		if err != nil {
+			return err
+		}
 		list, err := orderedLiveWorkspaces(tx)
 		if err != nil {
 			return err
@@ -76,7 +85,7 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, ws works
 			return port.ErrNotFound
 		}
 		if (up && i == 0) || (!up && i == len(list)-1) {
-			return nil
+			return unchanged(revived)
 		}
 		if err := fillRanks(tx, list); err != nil {
 			return err

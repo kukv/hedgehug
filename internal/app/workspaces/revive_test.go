@@ -375,3 +375,177 @@ func TestChoiceOfDeletedPropertyIsNotFound(t *testing.T) {
 		t.Errorf("restore rows = %d, want 0", n)
 	}
 }
+
+// deletedWorkspace は、ワークスペース「Web」(HH)とその後ろの「Other」(OT)を作り、Web にプロジェクトとアイテム、
+// プロパティ「メモ」、テンプレート「調査」を足してから、Web を削除する。Web と、そのアイテムを返す。
+func deletedWorkspace(t *testing.T) (workspaces.Service, workspace.Workspace, item.ID) {
+	t.Helper()
+	s := setup(t)
+	ctx := t.Context()
+	w, err := s.Create(ctx, store, "Web", "HH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create(ctx, store, "Other", "OT"); err != nil {
+		t.Fatal(err)
+	}
+	it := putItemIn(t, s, newProject(s, w.ID), 1)
+	if _, err := s.AddProperty(ctx, store, w.ID, workspaces.NewProperty{Name: "メモ", Key: "memo", Type: workspace.TypeText}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTemplate(ctx, store, w.ID, workspace.Template{Name: "調査", Kind: "Task"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(ctx, store, w.ID); err != nil {
+		t.Fatal(err)
+	}
+	return s, w, it
+}
+
+// workspaceLive は、ワークスペース ws が削除されていないか。
+func workspaceLive(t *testing.T, s workspaces.Service, ws workspace.ID) bool {
+	t.Helper()
+	_, err := s.Get(t.Context(), store, ws)
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
+		t.Fatal(err)
+	}
+	return err == nil
+}
+
+// otherColor は、値 v のいまの色と違う色。
+func otherColor(v workspace.Value) workspace.Color {
+	if v.Color == workspace.Colors[0] {
+		return workspace.Colors[1]
+	}
+	return workspace.Colors[0]
+}
+
+type wsOp func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error
+
+// 別のタブで削除されたワークスペースに、このタブから設定の変更を保存すると、ワークスペースの削除を取り消して
+// 変更を残す。一緒に削除されたプロジェクト・アイテムも戻る(決定 R11)。
+func TestChangeInDeletedWorkspaceRevives(t *testing.T) {
+	for name, op := range map[string]wsOp{
+		"名前の変更": func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.Settings) error {
+			return s.Rename(ctx, store, ws, "Web2")
+		},
+		"接頭辞の変更": func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.Settings) error {
+			return s.ChangePrefix(ctx, store, ws, "WB")
+		},
+		"並べ替え": func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.Settings) error {
+			return s.MoveWorkspace(ctx, store, ws, false)
+		},
+		"ステータスの色": func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error {
+			return s.SetValueColor(ctx, store, ws, statuses, st.Statuses[0].ID, otherColor(st.Statuses[0]))
+		},
+		"プロパティの追加": func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.Settings) error {
+			_, err := s.AddProperty(ctx, store, ws, workspaces.NewProperty{Name: "期限", Key: "due", Type: workspace.TypeText})
+			return err
+		},
+		"値の追加": func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.Settings) error {
+			_, err := s.AddValue(ctx, store, ws, statuses, "Review")
+			return err
+		},
+		"初期ステータス": func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error {
+			return s.SetInitialStatus(ctx, store, ws, st.Statuses[1].ID)
+		},
+		"遷移の制約": func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error {
+			return s.SetTransition(ctx, store, ws, st.Statuses[1].ID, st.Statuses[2].ID, true)
+		},
+		"テンプレートの作成": func(ctx context.Context, s workspaces.Service, ws workspace.ID, _ workspace.Settings) error {
+			_, err := s.CreateTemplate(ctx, store, ws, workspace.Template{Name: "別", Kind: "Task"})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, w, it := deletedWorkspace(t)
+			ctx := port.WithRevived(t.Context())
+			if err := op(ctx, s, w.ID, settingsOf(t, s, w.ID)); err != nil {
+				t.Fatal(err)
+			}
+			assertWorkspaceRevived(t, s, w.ID, it)
+			if want := []port.Revival{{Kind: port.RevivedName, Text: "Web"}}; !slices.Equal(port.Revived(ctx), want) {
+				t.Errorf("Revived = %v, want %v", port.Revived(ctx), want)
+			}
+		})
+	}
+}
+
+// assertWorkspaceRevived は、ワークスペース ws と、一緒に削除されたアイテム it とそのプロジェクトが戻ったかを確かめる。
+func assertWorkspaceRevived(t *testing.T, s workspaces.Service, ws workspace.ID, it item.ID) {
+	t.Helper()
+	if !workspaceLive(t, s, ws) {
+		t.Error("workspace still deleted")
+	}
+	got := itemOf(t, s, it)
+	if got.Deleted != nil {
+		t.Errorf("item still deleted: %+v", got.Deleted)
+	}
+	if err := s.Stores.Read(t.Context(), store, func(r port.Reader) error {
+		_, err := port.LiveProject(r, got.Place.Project)
+		return err
+	}); err != nil {
+		t.Errorf("project: %v", err)
+	}
+}
+
+// 削除の操作(値・プロパティ・テンプレートの削除)は、削除済みのワークスペースでは取り消さず ErrNotFound(決定 R11)。
+func TestDeleteInDeletedWorkspaceIsNotFound(t *testing.T) {
+	for name, op := range map[string]wsOp{
+		"値の削除": func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error {
+			return s.DeleteValue(ctx, store, ws, statuses, st.Statuses[1].ID, "")
+		},
+		"プロパティの削除": func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error {
+			return s.DeleteProperty(ctx, store, ws, st.Properties[len(st.Properties)-1].ID)
+		},
+		"テンプレートの削除": func(ctx context.Context, s workspaces.Service, ws workspace.ID, st workspace.Settings) error {
+			return s.DeleteTemplate(ctx, store, ws, st.Templates[0].ID)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, w, _ := deletedWorkspace(t)
+			if err := op(t.Context(), s, w.ID, settingsOf(t, s, w.ID)); !errors.Is(err, port.ErrNotFound) {
+				t.Errorf("err = %v, want port.ErrNotFound", err)
+			}
+			if workspaceLive(t, s, w.ID) {
+				t.Error("workspace revived")
+			}
+			if n := restores(t, s, w.ID); n != 0 {
+				t.Errorf("restore rows = %d, want 0", n)
+			}
+		})
+	}
+}
+
+// 行を書かない保存(同じ名前への変更)は、取り消さずに ErrNotFound(決定 R11)。
+func TestChangeInDeletedWorkspaceUnchangedIsNotFound(t *testing.T) {
+	s, w, _ := deletedWorkspace(t)
+	if err := s.Rename(t.Context(), store, w.ID, "Web"); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Rename to the same name = %v, want port.ErrNotFound", err)
+	}
+	if workspaceLive(t, s, w.ID) {
+		t.Error("workspace revived")
+	}
+}
+
+// 削除のあと同じ名前のワークスペースを作ると、古い方への設定の変更は 08 の文言で断る。名前を別の名前に変える
+// 保存は、変更後の名前で判定するので成功する(決定 R11)。
+func TestRenameDeletedWorkspaceNameTaken(t *testing.T) {
+	s, w, _ := deletedWorkspace(t)
+	ctx := t.Context()
+	if _, err := s.Create(ctx, store, "Web", "WN"); err != nil {
+		t.Fatal(err)
+	}
+	st := settingsOf(t, s, w.ID)
+	rejected(t, s.SetValueColor(ctx, store, w.ID, statuses, st.Statuses[0].ID, otherColor(st.Statuses[0])),
+		"同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください")
+	if workspaceLive(t, s, w.ID) {
+		t.Error("workspace revived by a refused save")
+	}
+	if err := s.Rename(ctx, store, w.ID, "Web3"); err != nil {
+		t.Fatal(err)
+	}
+	if !workspaceLive(t, s, w.ID) {
+		t.Error("workspace still deleted after renaming")
+	}
+}

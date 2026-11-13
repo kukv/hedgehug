@@ -103,6 +103,12 @@ func LiveWorkspace(r Reader, id workspace.ID) (workspace.Workspace, error) {
 	return w, err
 }
 
+// EditableWorkspace は、利用者が変更を保存できるワークスペースを返す。削除済みも返し(保存で削除を取り消す。
+// 決定 R11)、ないときだけ ErrNotFound。
+func EditableWorkspace(r Reader, id workspace.ID) (workspace.Workspace, error) {
+	return r.Workspaces().Get(id)
+}
+
 // LiveWorkspaces は、削除済みでないワークスペースを、内部 ID の順で返す。
 func LiveWorkspaces(r Reader) ([]workspace.Workspace, error) {
 	ws, err := r.Workspaces().List()

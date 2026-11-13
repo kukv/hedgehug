@@ -1,6 +1,7 @@
 package port
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -167,6 +168,35 @@ func reviveItemsOf(tx Tx, p project.ID, op change.ID) error {
 		}
 	}
 	return nil
+}
+
+// ReviveWorkspace は、tx の中で読み直し、削除済みのワークスペースなら、その削除の操作の行を、その行がある
+// ログ(ワークスペース、そのプロジェクトとアイテム)すべてで取り消し、削除の前の名前を WithRevived の入れ物に積んで
+// true を返す。名前 name・接頭辞 prefix(空なら、いまの値)が削除されていないワークスペースと重なれば断る(決定 R11)。
+// 削除されていなければ何もせず false。
+func ReviveWorkspace(ctx context.Context, tx Tx, id workspace.ID, name, prefix string) (bool, error) {
+	w, err := tx.Workspaces().Get(id)
+	if err != nil || w.Deleted == nil {
+		return false, err
+	}
+	next := workspace.Workspace{ID: id, Name: cmp.Or(name, w.Name), Prefix: cmp.Or(prefix, w.Prefix)}
+	live, err := LiveWorkspaces(tx)
+	if err != nil {
+		return false, err
+	}
+	if err := workspace.CheckRevive(next, live); err != nil {
+		return false, err
+	}
+	refs, err := workspaceRefs(tx, id)
+	if err != nil {
+		return false, err
+	}
+	refs = append([]change.Ref{{Kind: change.KindWorkspace, ID: id}}, refs...)
+	if err := undoAcross(tx, refs, w.Deleted.Op); err != nil {
+		return false, err
+	}
+	NoteRevived(ctx, Revival{Kind: RevivedName, Text: strings.Join(strings.Fields(w.Name), " ")})
+	return true, nil
 }
 
 // ReviveSetting は、tx の中でワークスペース ws のログを読み直し、項目名 f を覆う削除の行(workspace.Covering)の
