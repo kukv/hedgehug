@@ -49,3 +49,22 @@ describe("createDetail when the open item moved to another workspace", () => {
     expect(get(detail.view)?.item.title).toBe("新しい名前");
   });
 });
+
+// target は、パネルが開こうとしているアイテム。旧 ID から開いたときの上部の 1 行(A5a-16)を、開けなかったときだけ
+// 捨てるのに使う。開く途中で読み直し(画面への反映)が追い越しても、同じアイテムを開こうとしたままである。
+describe("createDetail target", () => {
+  it("keeps the item while a reload overtakes the open", async () => {
+    const { detail, task } = await setup();
+    const opening = detail.open("S1", task.id);
+    await detail.reload();
+    await opening;
+    expect(detail.target()).toEqual({ storeId: "S1", itemId: task.id });
+    expect(get(detail.view)?.item.id).toBe(task.id);
+  });
+
+  it("is null after the open finds nothing", async () => {
+    const { detail } = await setup();
+    await detail.open("S1", "S1-I99");
+    expect(detail.target()).toBeNull();
+  });
+});

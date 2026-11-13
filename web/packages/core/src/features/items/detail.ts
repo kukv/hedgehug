@@ -57,6 +57,9 @@ export interface Detail {
   // reload は、開いているアイテムを読み直す(画面への反映)。開いていなければ何もしない。
   // なくなっていたら、パネルを閉じる(06「反映で変わる画面」)。
   reload(): Promise<void>;
+  // target は、開いている(開こうとしている)アイテム。開けなかったときと閉じたときは null。読み直しが開く途中を
+  // 追い越しても、同じアイテムのまま(旧 ID から開いたときの上部の 1 行を、開けなかったときだけ捨てるのに使う)。
+  target(): { storeId: string; itemId: string } | null;
 }
 
 export interface DetailDeps {
@@ -185,6 +188,7 @@ export function createDetail(deps: DetailDeps): Detail {
       await load(storeId, itemId);
     },
     close: shut,
+    target: () => (target ? { ...target } : null),
     async requestClose() {
       if (!deps.leave || (await deps.leave())) this.close();
     },
