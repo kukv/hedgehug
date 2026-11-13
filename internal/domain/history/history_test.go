@@ -231,3 +231,21 @@ func TestPlaceRowsShowOnlyAParentChange(t *testing.T) {
 		}
 	}
 }
+
+// Step から昇格した行(同じ op に set kind と set place)は「種類を … に変更」の 1 行だけにする。
+// 種類を変えない別の op の set place は、これまでどおり「親を変更」と出る。
+func TestPlaceRowIsHiddenWhenTheSameOpChangesTheKind(t *testing.T) {
+	parent, epic := item.ID("T1"), item.ID("E1")
+	from, to := item.Place{Project: "P", Parent: &parent}, item.Place{Project: "P", Parent: &epic}
+	n := 0
+	newID := func() change.ID { n++; return change.ID(fmt.Sprintf("R%03d", n)) }
+	log := change.Stamp(nil, []change.Draft{
+		change.NewSet("kind", "Step", "Story"), change.NewSet("place", from, to), change.NewSet("rank", "V", "W"),
+	}, change.Meta{Op: "O1", At: at(0), Actor: taro}, newID)
+	log = append(log, change.Stamp(log, []change.Draft{change.NewSet("place", to, from)},
+		change.Meta{Op: "O2", At: at(1), Actor: taro}, newID)...)
+	want := []string{"太郎: 親を変更", "太郎: 種類を Step から Story に変更"}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}

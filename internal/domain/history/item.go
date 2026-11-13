@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -35,11 +36,19 @@ func itemText(log []change.Record, i int, c Context) (string, bool) {
 	case change.Desc:
 		return "説明を変更", true
 	case change.Set:
+		if r.F == "place" && sameOpSetsKind(log, r.Op) {
+			return "", false // Step から昇格した行は「種類を … に変更」の 1 行だけにする
+		}
 		return setText(r, c)
 	case change.Add, change.Remove:
 		return listText(log, i, c)
 	}
 	return "", false
+}
+
+// sameOpSetsKind は、op に種類を変える行があるか。
+func sameOpSetsKind(log []change.Record, op change.ID) bool {
+	return slices.ContainsFunc(log, func(r change.Record) bool { return r.Op == op && r.T == change.Set && r.F == "kind" })
 }
 
 // listText は、関連システムと複数選択の追加・取り除きを「{プロパティ名}を {旧} → {新}」にする。旧は log[:i]、
