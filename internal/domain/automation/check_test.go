@@ -133,3 +133,12 @@ func TestValidRejectsUnusedStatusForScopedRule(t *testing.T) {
 		t.Errorf("Statuses = %v", got)
 	}
 }
+
+// 集合にないプロジェクトの専用ルールは、そのプロジェクトの規則がないものとして、使うステータスを通す。
+func TestValidScopedToProjectAbsentFromSet(t *testing.T) {
+	s := settings()
+	r := automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionStatus, Value: "DONE", Scope: "Z"}
+	if !automation.Valid(s, projectrule.Set{"P": {Hidden: []change.ID{"DONE"}}}, nil, r) || !automation.Valid(s, nil, nil, r) {
+		t.Errorf("Valid(%+v) = false", r)
+	}
+}

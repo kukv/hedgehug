@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
@@ -164,5 +165,57 @@ func TestCreateStoresTheMembersLogin(t *testing.T) {
 	v, _ := svc.List(t.Context(), store, apptest.SampleWorkspace)
 	if len(v.Rules) != 1 || v.Rules[0].Value != "taro" {
 		t.Errorf("List = %+v", v.Rules)
+	}
+}
+
+// seedScoped は、サンプルのプロジェクトだけのルールを書き、Pending を使わないことにする。
+func seedScoped(t *testing.T, rec *recorder) automation.Rule {
+	t.Helper()
+	r := automation.Rule{
+		ID: "01SCOPED0000000000000000001", Name: "専用", Trigger: automation.TriggerPROpen,
+		Action: automation.ActionStatus, Value: string(apptest.SampleStatusDone), Enabled: true, Scope: apptest.SampleProject,
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "専用ルールを作成"}
+	err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		ds := append(automation.Drafts(automation.Rule{}, r), change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusPending))
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func TestUpdateRefusesAStatusTheRulesProjectHides(t *testing.T) {
+	svc, rec := setup(t)
+	r := seedScoped(t, rec)
+	edit := r
+	edit.Scope = "" // 編集で Scope は変えない。保存済みの Scope で検査する
+	edit.Value = string(apptest.SampleStatusPending)
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Update = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUpdateKeepsTheStoredScope(t *testing.T) {
+	svc, rec := setup(t)
+	r := seedScoped(t, rec)
+	edit := r
+	edit.Scope, edit.Name = "", "専用 2"
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit); err != nil {
+		t.Fatal(err)
+	}
+	var log []change.Record
+	err := rec.Read(t.Context(), store, func(rd port.Reader) error {
+		var err error
+		log, err = rd.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := automation.FromLog(log)
+	if len(got) != 1 || got[0].Scope != apptest.SampleProject || got[0].Name != "専用 2" {
+		t.Errorf("FromLog = %+v", got)
 	}
 }
