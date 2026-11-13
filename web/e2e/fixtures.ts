@@ -51,7 +51,9 @@ function start(): Promise<{ proc: ChildProcess; url: string }> {
         started = true;
         stderr = "";
         // 起動後の error(終了時の kill の失敗など)で、動いているサーバーを落とさない。
+        // リスナーがないと Node が例外にして worker が落ちるので、出すだけにする。
         proc.off("error", onError);
+        proc.on("error", (e) => process.stderr.write(`[hedgehug-e2e] ${e.message}\n`));
         proc.off("close", onClose);
         done({ proc, url: m[1] });
       }
