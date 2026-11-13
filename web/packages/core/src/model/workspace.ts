@@ -1,3 +1,5 @@
+import type { Kind } from "./item";
+
 export interface Workspace {
   id: string;
   storeId: string;
@@ -39,6 +41,20 @@ export interface WorkspaceProperty {
   choices: WorkspaceValue[];
 }
 
+// ProjectRules は、1 つのプロジェクトのルール(B5a-18)。どれも空ならワークスペースの設定のまま。
+export interface ProjectRules {
+  // 使わないステータスの ID
+  hiddenStatuses: string[];
+  // From → このプロジェクトで変更できる To(制限のない From はない)
+  workflow: Record<string, string[]>;
+  // 使うテンプレートの ID(空ならすべて使う)
+  templates: string[];
+  // 種類 → テンプレート ID か "@none"(決めていない種類はない)
+  templateDefaults: Partial<Record<Kind, string>>;
+  // 動かさないワークスペースのルールの ID
+  disabledRules: string[];
+}
+
 export interface WorkspaceSettings {
   properties: WorkspaceProperty[];
   statuses: WorkspaceValue[];
@@ -52,11 +68,20 @@ export interface WorkspaceSettings {
   templates: WorkspaceTemplate[];
   // 種類 → テンプレート ID
   templateDefaults: Partial<Record<string, string>>;
+  // プロジェクトの ID → そのプロジェクトのルール(ルールのないプロジェクトはない)
+  projectRules: Record<string, ProjectRules>;
 }
 
 export interface WorkspaceDetail extends Workspace {
   oldPrefixes: string[];
   settings: WorkspaceSettings;
+}
+
+// ワークスペースの削除の確認ダイアログの中身。件数は削除されていないものだけ。
+export interface WorkspaceDeletePreview {
+  projects: number;
+  items: number;
+  retentionDays: number;
 }
 
 export interface WorkspaceUsage {
@@ -136,11 +161,16 @@ export interface AutomationRuleInput {
   action: AutomationAction;
   // ステータスの ID、ログイン名、または @none(未割り当て)
   value: string;
+  // このプロジェクトだけのルールならプロジェクトの ID。空か未指定ならワークスペース全体。作成のときだけ送る
+  scope?: string;
 }
 
 export interface AutomationRule extends AutomationRuleInput {
   id: string;
   enabled: boolean;
+  // 専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)と、削除済みか。一覧でだけ埋まる
+  scopeLabel?: string;
+  scopeDeleted?: boolean;
 }
 
 export interface AutomationRun {

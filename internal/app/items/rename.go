@@ -17,7 +17,7 @@ func (s Service) Rename(ctx context.Context, store port.StoreID, id item.ID, tit
 	if title == "" {
 		return item.Item{}, refusal.New("タイトルは空にできません")
 	}
-	_, display, err := s.withID(ctx, store, id)
+	_, display, err := s.editableID(ctx, store, id)
 	if err != nil {
 		return item.Item{}, err
 	}
@@ -27,12 +27,15 @@ func (s Service) Rename(ctx context.Context, store port.StoreID, id item.ID, tit
 	}
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("%s のタイトルを変更", display)}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := port.LiveItem(tx, id)
+		it, err := port.EditableItem(tx, id)
 		if err != nil {
 			return err
 		}
 		if it.Title == title {
-			return nil // 行のない Write は何も残さない
+			return port.Unchanged(it.Deleted) // 行のない Write は何も残さない
+		}
+		if err := port.ReviveItem(ctx, tx, id); err != nil {
+			return err
 		}
 		return tx.WriteItems().Append(id, change.NewSet("title", it.Title, title))
 	})

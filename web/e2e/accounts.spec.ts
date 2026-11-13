@@ -1,6 +1,15 @@
 import type { Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { tokenUrl } from "./helpers";
+import {
+  addRepo,
+  createWorkspace,
+  githubApp,
+  githubRead,
+  newProject,
+  prefixOf,
+  tokenUrl,
+  unique,
+} from "./helpers";
 
 // アカウントはサーバーに 1 つの一覧で、同じ worker のほかのテストと共有する。表示名とログイン名には幅とやり直しの
 // 回数を入れる。gh CLI のトークンで確かめられるのは gh-{幅}-{回数}-a・-b だけなので、この形は崩せない
@@ -156,4 +165,42 @@ test("shows an authentication error in the row, and a failed reauth under it", a
   await expect(
     row.getByText("gh CLI のトークンが見つかりません。端末で `gh auth login` を実行してください"),
   ).toBeVisible();
+});
+
+test("shows the GitHub App band for an organization without the App, and rechecks it", async ({
+  page,
+  context,
+}, info) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Store「e2e」はアカウント「e2e」(@e2e-bot)で読む(cmd/hedgehug/wire_e2e.go)。そのプロジェクトに組織のリポジトリを足す。
+  const prefix = prefixOf(info);
+  await createWorkspace(page, info, unique(info, `App ${prefix}`), prefix);
+  await newProject(page, info, prefix);
+  const org = `app-${prefix.toLowerCase()}`;
+  await addRepo(page, prefix, `${org}/web`);
+  await githubApp(page.request, org, true);
+  await githubRead(page.request);
+
+  await page.goto(tokenUrl("/settings/accounts"));
+  const row = page.getByRole("listitem", { name: "e2e", exact: true });
+  await expect(row.getByText("GitHub App 未導入")).toBeVisible();
+  await expect(row.getByText(org, { exact: true })).toBeVisible();
+  const band = page.getByRole("status").filter({
+    hasText: `e2e: ${org} に GitHub App が入っていないため、PR と Issue を読めません。`,
+  });
+  await expect(band).toBeVisible();
+  await band.getByRole("button", { name: "管理者にインストールを依頼" }).click();
+  await expect(page.getByText("コピーしました", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    `${org} に GitHub App をインストールしてください(@e2e-bot が使います)`,
+  );
+
+  await row.getByRole("button", { name: "再確認" }).click();
+  await expect(band.getByText("まだ読めません")).toBeVisible();
+
+  await githubApp(page.request, org, false);
+  await row.getByRole("button", { name: "再確認" }).click();
+  await expect(page.getByText(`e2e: ${org} を読めるようになりました`)).toBeVisible();
+  await expect(band).toBeHidden();
+  await expect(row.getByText("利用可能")).toBeVisible();
 });

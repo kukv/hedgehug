@@ -13,6 +13,8 @@ export interface AccountsPort {
   add(values: TokenValues): Promise<Account>;
   edit(id: string, values: TokenValues): Promise<Account>;
   reauth(id: string): Promise<Account>;
+  // recheck は「再確認」。App が入った(読めるようになった)組織と、まだ読めない組織を返す。
+  recheck(id: string): Promise<{ cleared: string[]; still: string[] }>;
   remove(id: string): Promise<void>;
   // deleteImpact は「アカウントを削除」の本文の行、editImpact は「アカウントを変更」の本文の行(空なら確認を出さない)。
   deleteImpact(id: string): Promise<string[]>;

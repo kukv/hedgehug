@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/projectrules"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
@@ -27,6 +28,7 @@ import (
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
 	"github.com/kukv/hedgehug/internal/app/port"
+	appprojectrules "github.com/kukv/hedgehug/internal/app/projectrules"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
@@ -60,6 +62,8 @@ type Deps struct {
 	Clock       port.Clock
 	Checks      port.Checks      // このマシンが読んだ PR のチェックの結果(D3)
 	GitHubReads port.GitHubReads // GitHub を読んだ記録と、取り直しの失敗の文言(D4a)
+	PRScans     port.PRScans     // PR を探した記録(D4b)
+	AppMissing  port.AppMissing  // GitHub App 未導入の組織の記録(D4b)
 	// Links は、リンクの操作。cmd が 1 つ作り、GitHub を自動で読む Reader と共用する(D4a)。リンクの API は
 	// これを使うので、リンクの API を使うなら必ず入れる。入れるときは、Tokens を GitHubSession と同じ Session で組む
 	// (認証エラーの状態を、アカウントの API と分け合うため)。
@@ -97,7 +101,12 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
-	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
+	var scan projects.ScanFunc // Links がなければ(リンクの API を使わない組み立て)探さない
+	if deps.Links != (githublink.Links{}) {
+		scan = ghapi.ScanLater(deps.Links)
+	}
+	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}, scan)
+	projectrules.Register(api, appprojectrules.Service{Stores: deps.Stores, Identity: deps.Identity})
 	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
 	items.Register(api, itemsSvc)
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
@@ -128,11 +137,18 @@ func githubServices(d Deps) ghapi.Services {
 		s = ghapp.NewSession()
 	}
 	return ghapi.Services{
-		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s},
+		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s, Missing: d.AppMissing},
 		Add:    ghapp.AddAccount{Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, IDs: d.IDs, Clock: d.Clock},
 		Edit:   ghapp.EditAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Clock: d.Clock},
-		Delete: ghapp.DeleteAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, Stores: d.StoreGitHub},
+		Delete: ghapp.DeleteAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, Stores: d.StoreGitHub, Missing: d.AppMissing},
 		Reauth: ghapp.Reauth{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Clock: d.Clock},
+		Recheck: ghapp.RecheckOrgs{
+			Accounts: d.Accounts, GitHub: d.GitHub, Missing: d.AppMissing,
+			Conn: ghapp.Connector{
+				Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
+				Hosts: d.Hosts, Stores: d.StoreGitHub, Clock: d.Clock,
+			},
+		},
 		Impact: ghapp.Impact{Accounts: d.Accounts, Stores: d.StoreGitHub},
 		SignIn: ghapp.SignIn{
 			Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,

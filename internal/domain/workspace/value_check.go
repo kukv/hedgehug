@@ -38,7 +38,8 @@ func (s Settings) DefaultCategory(id change.ID) (Category, bool) {
 	return "", false
 }
 
-func statusName(s Settings, id change.ID) string {
+// StatusName は、ステータス id の名前。なければ空。
+func StatusName(s Settings, id change.ID) string {
 	for _, v := range s.Statuses {
 		if v.ID == id {
 			return v.Name
@@ -82,11 +83,11 @@ func CheckDeleteStatus(s Settings, id change.ID) error {
 	initial := id == s.InitialStatus
 	switch {
 	case isDefault && initial:
-		return bothText(statusName(s, id), def)
+		return bothText(StatusName(s, id), def)
 	case initial:
 		return refusal.New("初期ステータスは削除できません。先に別のステータスを初期ステータスにしてください")
 	case isDefault:
-		return defaultText(statusName(s, id), def)
+		return defaultText(StatusName(s, id), def)
 	}
 	return nil
 }

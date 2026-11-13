@@ -55,6 +55,34 @@ func registerUsage(api huma.API, svc appworkspaces.Service) {
 	})
 }
 
+// WorkspaceDeletePreview は、ワークスペースの削除の確認ダイアログの中身。
+type WorkspaceDeletePreview struct {
+	Projects      int `json:"projects" doc:"削除されていないプロジェクトの数"`
+	Items         int `json:"items" doc:"その下の、削除されていないアイテムの数(Epic から Step まで全部)"`
+	RetentionDays int `json:"retentionDays" doc:"その Store の削除済みの保持日数"`
+}
+
+type deletePreviewOutput struct{ Body WorkspaceDeletePreview }
+
+func registerDelete(api huma.API, svc appworkspaces.Service) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-workspace-delete-preview", Method: http.MethodGet, Path: wsPath + "/delete-preview",
+		Summary: "ワークスペースを削除したときに一緒に消えるプロジェクトとアイテムの数と保持日数を返す",
+	}, func(ctx context.Context, in *workspacePath) (*deletePreviewOutput, error) {
+		p, err := svc.DeletePreview(ctx, port.StoreID(in.Store), workspace.ID(in.Workspace))
+		if err != nil {
+			return nil, apierr.From(err)
+		}
+		return &deletePreviewOutput{Body: WorkspaceDeletePreview{Projects: p.Projects, Items: p.Items, RetentionDays: p.RetentionDays}}, nil
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-workspace", Method: http.MethodDelete, Path: wsPath,
+		Summary: "ワークスペースと、その下のプロジェクト・アイテムを削除する", DefaultStatus: http.StatusNoContent,
+	}, func(ctx context.Context, in *workspacePath) (*struct{}, error) {
+		return nil, apierr.From(svc.Delete(ctx, port.StoreID(in.Store), workspace.ID(in.Workspace)))
+	})
+}
+
 type moveWorkspaceInput struct {
 	Store     string `path:"store"`
 	Workspace string `path:"workspace"`

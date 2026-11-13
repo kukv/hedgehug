@@ -1,6 +1,13 @@
 import type { LinksPort } from "@hedgehug/core";
 import { call } from "./errors";
-import { addLink, listLinks, listProjectLinks, refreshLinks, removeLink } from "./generated";
+import {
+  addLink,
+  listLinks,
+  listProjectLinks,
+  listRepoFailures,
+  refreshLinks,
+  removeLink,
+} from "./generated";
 
 // createLinksPort は、PR・Issue のリンクの口(07)。生成された型が core の狭い型と同じ形なのでそのまま渡す。
 export function createLinksPort(): LinksPort {
@@ -21,5 +28,7 @@ export function createLinksPort(): LinksPort {
       }),
     listProject: (storeId, projectId) =>
       call(async () => (await listProjectLinks(storeId, projectId)) ?? []),
+    listRepoFailures: (storeId, projectId) =>
+      call(async () => (await listRepoFailures(storeId, projectId)).failures ?? []),
   };
 }

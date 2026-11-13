@@ -48,8 +48,9 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 		return Settings{}, false
 	}
 	b := newBuilder()
+	restored := change.Restored(log)
 	for _, r := range log { // Resolve は削除の行を読み飛ばすので、生のログから集める
-		if r.T == change.Delete {
+		if r.T == change.Delete && !restored(r) {
 			b.deleted[r.F] = true
 		}
 	}
@@ -61,6 +62,20 @@ func SettingsFromLog(log []change.Record) (Settings, bool) {
 		b.setWorkflow(f, list)
 	}
 	return b.settings(), true
+}
+
+// NameOfDeleted は、削除の行の f が指すもの(値・選択肢・プロパティ・テンプレート・ルール)の名前を、
+// 削除の行がないものとして読む(削除の取り消しのアクティビティ。C3a-9)。テンプレートの子と Step は題名を読む。
+// 見つからなければ空。
+func NameOfDeleted(log []change.Record, f string) string {
+	values := change.Resolve(log, opts).Values // Resolve は削除の行を読まない
+	for _, field := range []string{"name", "title"} {
+		var name string
+		if raw, ok := values[f+"/"+field]; ok && json.Unmarshal(raw, &name) == nil {
+			return name
+		}
+	}
+	return ""
 }
 
 // builder は、項目ごとの値を集めて Settings にする。

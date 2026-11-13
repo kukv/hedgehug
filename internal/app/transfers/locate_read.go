@@ -27,8 +27,8 @@ type wsEntry struct {
 	old []string // 旧い接頭辞
 }
 
-// itemEntry は、アイテム(削除済みを含む)。live は、アイテムもプロジェクトも削除されていないこと
-// (画面のアドレスの解決 items.FindByNumber と同じく、削除済みのプロジェクトのアイテムは開かない)。
+// itemEntry は、アイテム(削除済みを含む)。live は、アイテムもプロジェクトもワークスペースも削除されていないこと
+// (画面のアドレスの解決 items.FindByNumber と同じく、削除済みのプロジェクト・ワークスペース(B5b)のアイテムは開かない)。
 type itemEntry struct {
 	it   item.Item
 	live bool
@@ -68,7 +68,7 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 		}
 		ranks[w.ID] = workspace.RankOf(log)
 		snap.workspaces = append(snap.workspaces, wsEntry{ws: w, old: workspace.OldPrefixes(log)})
-		if snap.items, err = appendItems(r, w.ID, snap.items); err != nil {
+		if snap.items, err = appendItems(r, w, snap.items); err != nil {
 			return snap, err
 		}
 	}
@@ -83,8 +83,8 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 }
 
 // appendItems は、ワークスペース ws のすべてのプロジェクト(削除済みを含む)のアイテムを足す。
-func appendItems(r port.Reader, ws workspace.ID, out []itemEntry) ([]itemEntry, error) {
-	ps, err := r.Projects().List(ws)
+func appendItems(r port.Reader, ws workspace.Workspace, out []itemEntry) ([]itemEntry, error) {
+	ps, err := r.Projects().List(ws.ID)
 	if err != nil {
 		return out, err
 	}
@@ -94,7 +94,7 @@ func appendItems(r port.Reader, ws workspace.ID, out []itemEntry) ([]itemEntry, 
 			return out, err
 		}
 		for _, it := range its {
-			out = append(out, itemEntry{it: it, live: it.Deleted == nil && p.Deleted == nil})
+			out = append(out, itemEntry{it: it, live: it.Deleted == nil && p.Deleted == nil && ws.Deleted == nil})
 		}
 	}
 	return out, nil

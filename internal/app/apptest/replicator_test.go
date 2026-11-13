@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/repair"
 )
 
 func TestReplicatorRecordsCallsAndReturnsWhatWasSet(t *testing.T) {
@@ -76,5 +77,48 @@ func TestReplicatorSyncSave(t *testing.T) {
 	}
 	if calls := r.Calls(); len(calls) != 4 || !calls[0].Save || calls[0].Remote.Token != "tok" || calls[0].Mirror {
 		t.Errorf("Calls = %+v", calls)
+	}
+}
+
+func TestRepairWriterRecordsOpsThatLeftRows(t *testing.T) {
+	ctx := context.Background()
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	if err := apptest.Sample(ctx, s, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	w := &apptest.RepairWriter{Stores: s, Store: "S1", F: repair.Facts{Ours: map[change.ID]bool{"o": true}}}
+	var _ port.RepairWriter = w
+	if w.Facts().Side("o") != 1 {
+		t.Errorf("facts = %+v", w.Facts())
+	}
+	op := func(summary string) port.Operation {
+		return port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: summary}
+	}
+	if err := w.Write(op("行なし"), func(tx port.Tx) error { return tx.WriteItems().Append(apptest.SampleTask) }); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("boom")
+	if err := w.Write(op("失敗"), func(tx port.Tx) error {
+		_ = tx.WriteItems().Append(apptest.SampleTask, change.NewSet("title", "ログイン画面を作る", "X"))
+		return boom
+	}); !errors.Is(err, boom) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := w.Write(op("修復"), func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("title", "ログイン画面を作る", "R"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Ops) != 1 || w.Ops[0].Summary != "修復" {
+		t.Fatalf("ops = %+v", w.Ops)
+	}
+	var title string
+	if err := w.Read(func(r port.Reader) error {
+		it, err := r.Items().Get(apptest.SampleTask)
+		title = it.Title
+		return err
+	}); err != nil || title != "R" {
+		t.Fatalf("read title = %q, %v", title, err)
 	}
 }

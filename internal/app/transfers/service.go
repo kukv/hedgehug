@@ -80,7 +80,7 @@ type destination struct {
 // readDestination は、移動先を読む。ワークスペースがない・プロジェクトがないか削除済み・プロジェクトが
 // そのワークスペースのものでないなら port.ErrNotFound。
 func readDestination(r port.Reader, in MoveInput) (destination, error) {
-	ws, err := r.Workspaces().Get(in.ToWorkspace)
+	ws, err := port.LiveWorkspace(r, in.ToWorkspace)
 	if err != nil {
 		return destination{}, err
 	}

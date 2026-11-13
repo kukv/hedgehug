@@ -13,8 +13,9 @@ export interface Account {
 
 // AccountRow は一覧の 1 行。reason は「認証エラー」の下の赤字(なければ空)。
 export interface AccountRow extends Account {
-  status: "ok" | "auth_error";
+  status: "ok" | "auth_error" | "app_missing";
   reason: string;
+  orgs: string[]; // GitHub App が入っていない組織(認証エラーのときは空)
 }
 
 export interface AccountValues {

@@ -208,3 +208,79 @@ func contractPurgedEmpty(t *testing.T, s port.Stores, id port.StoreID) {
 		return nil
 	})
 }
+
+// contractRestored は、削除の行を取り消す restore の行(f が同じで、to が削除の op)を足すと、
+// アイテムの Deleted の印が外れることを確かめる(C3a-7)。
+func contractRestored(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	if err := DeleteItems(t.Context(), s, id, cItem.ID); err != nil {
+		t.Fatal(err)
+	}
+	var op change.ID
+	mustRead(t, s, id, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		if err != nil || log[len(log)-1].T != change.Delete {
+			t.Fatalf("log = %+v, %v", log, err)
+		}
+		op = log[len(log)-1].Op
+		if got, gerr := r.Items().Get(cItem.ID); gerr != nil || got.Deleted == nil {
+			t.Fatalf("deleted item = %+v, %v", got.Deleted, gerr)
+		}
+		return nil
+	})
+	mustWrite(t, s, id, port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "復元"}, func(tx port.Tx) error {
+		return tx.WriteItems().Append(cItem.ID, change.NewRestore(change.DeletedField, op))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		if got, err := r.Items().Get(cItem.ID); err != nil || got.Deleted != nil {
+			t.Errorf("restored item Deleted = %+v, %v", got.Deleted, err)
+		}
+		return nil
+	})
+}
+
+// wantDeletedWorkspace は、削除済みのワークスペースも Get と List が Deleted 付きで返し、Settings も読めることを確かめる(B5b)。
+func wantDeletedWorkspace(t *testing.T, r port.Reader) {
+	t.Helper()
+	if w, err := r.Workspaces().Get(cWorkspace.ID); err != nil || w.Deleted == nil || !w.Deleted.Root || w.Name != cWorkspace.Name {
+		t.Errorf("Workspaces().Get(deleted) = %+v, %v", w, err)
+	}
+	if ws, err := r.Workspaces().List(); err != nil || len(ws) != 1 || ws[0].Deleted == nil {
+		t.Errorf("Workspaces().List must return the deleted workspace: %+v, %v", ws, err)
+	}
+	if _, err := r.Workspaces().Settings(cWorkspace.ID); err != nil {
+		t.Errorf("Workspaces().Settings(deleted) = %v", err)
+	}
+}
+
+// contractUserRestoreSeenInTx は、利用者の操作の中で書いた restore の行を、同じ Write の中の読み取りが見ることを
+// 確かめる。ReviveItem を 2 回呼んでも、restore の行は 1 つだけ書く(C3a-screen)。
+func contractUserRestoreSeenInTx(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	if err := DeleteItems(t.Context(), s, id, cItem.ID); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		ctx := port.WithRevived(t.Context())
+		if err := port.ReviveItem(ctx, tx, cItem.ID); err != nil {
+			return err
+		}
+		if got, err := tx.Items().Get(cItem.ID); err != nil || got.Deleted != nil {
+			t.Errorf("in the same write: Deleted = %+v, %v", got.Deleted, err)
+		}
+		return port.ReviveItem(ctx, tx, cItem.ID)
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		n := 0
+		for _, rec := range log {
+			if rec.T == change.Restore {
+				n++
+			}
+		}
+		if err != nil || n != 1 {
+			t.Errorf("restore rows = %d, %v", n, err)
+		}
+		return nil
+	})
+}

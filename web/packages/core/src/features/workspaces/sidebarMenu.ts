@@ -1,6 +1,7 @@
 import { Refused } from "../../model/errors";
 import type { Direction, WorkspacesPort } from "../../port/workspaces";
 import type { Catalog, StoreNode } from "../catalog/catalog";
+import { readOnlyNote } from "../catalog/readonly";
 import type { Toasts } from "../toasts/toasts";
 
 // サイドバーのワークスペースのメニューの「上へ移動」「下へ移動」(04「並び順と並べ替え」)。
@@ -11,6 +12,16 @@ export function canMoveWorkspace(store: StoreNode, workspaceId: string, directio
   const index = store.workspaces.findIndex((w) => w.id === workspaceId);
   if (index < 0) return false;
   return direction === "up" ? index > 0 : index < store.workspaces.length - 1;
+}
+
+// deleteMenuItem は、メニュー末尾の「削除…」(B5b-11)。閲覧のみの Store では無効にして、その理由を添える。
+export function deleteMenuItem(store: StoreNode) {
+  return {
+    id: "delete",
+    label: "削除…",
+    disabled: store.readOnly,
+    hint: store.readOnly ? readOnlyNote : undefined,
+  };
 }
 
 export interface WorkspaceMoverDeps {

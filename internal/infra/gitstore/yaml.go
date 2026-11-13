@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -81,7 +82,7 @@ type itemYAML struct {
 }
 
 // renderYAML は、エンティティのログから読む用の YAML を作る。作成の行がなければ nil。
-func renderYAML(kind change.Kind, log []change.Record, settings settingsOf) ([]byte, error) {
+func renderYAML(kind change.Kind, log []change.Record, settings settingsOf, projects projectOf) ([]byte, error) {
 	var v any
 	switch kind {
 	case change.KindMembers:
@@ -96,7 +97,7 @@ func renderYAML(kind change.Kind, log []change.Record, settings settingsOf) ([]b
 			return nil, nil
 		}
 		st, _ := workspace.SettingsFromLog(log)
-		v = workspaceToYAML(w, workspace.RankOf(log), st, automation.FromLog(log))
+		v = workspaceToYAML(w, workspace.RankOf(log), st, automation.FromLog(log), projectrule.FromLog(log), projects)
 	case change.KindProject:
 		p, ok := project.FromLog(log)
 		if !ok {

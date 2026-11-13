@@ -1,21 +1,27 @@
 import type { Member } from "../../model/member";
 import type { WorkspaceSettings, WorkspaceTemplate } from "../../model/workspace";
 import { stepNone, stepParent } from "../../model/workspace";
+import { defaultIn, rulesOf, usableIn } from "./projectRules";
 import { templateSummary } from "./templates";
 
 // 作成ダイアログでのテンプレートの適用(03「適用するときの規則」、02「ダイアログの中での連動」)。
 // 作成ダイアログへのはめ込みは A3b(B3-18)。
 
-export function usableTemplates(settings: WorkspaceSettings, kind: string): WorkspaceTemplate[] {
-  return settings.templates.filter((t) => t.kind === kind);
+// project があれば、そのプロジェクトで使えるものと既定(B5a-9)。なければワークスペースのまま。
+export function usableTemplates(
+  settings: WorkspaceSettings,
+  kind: string,
+  project?: string,
+): WorkspaceTemplate[] {
+  return usableIn(settings, rulesOf(settings, project ?? ""), kind);
 }
 
 export function defaultTemplate(
   settings: WorkspaceSettings,
   kind: string,
+  project?: string,
 ): WorkspaceTemplate | null {
-  const id = settings.templateDefaults[kind];
-  return usableTemplates(settings, kind).find((t) => t.id === id) ?? null;
+  return defaultIn(settings, rulesOf(settings, project ?? ""), kind);
 }
 
 export interface ApplyState {

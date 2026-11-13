@@ -44,6 +44,7 @@ function settings(): WorkspaceSettings {
     workflow: {},
     templates: [],
     templateDefaults: {},
+    projectRules: {},
   };
 }
 

@@ -41,8 +41,11 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"item list follows a move in the same write", contractListFollowsMove},
 		{"project list follows a move in the same write", contractProjectListFollowsMove},
 		{"workspace settings round trip", contractSettings},
+		{"project rules round trip", contractProjectRules},
 		{"item values and deletes round trip", contractItemValues},
 		{"deleted items and projects carry a mark and are still listed", contractDeleted},
+		{"a restore row cancels the deletion it points at", contractRestored},
+		{"a person's restore is seen in the same write", contractUserRestoreSeenInTx},
 		{"descriptions round trip", contractDescription},
 		{"a failed write leaves the description", contractDescriptionRollback},
 		{"describing needs an existing entity and a summary", contractDescriptionRules},
@@ -54,6 +57,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"purged is empty without a purge", contractPurgedEmpty},
 		{"remove deletes an item folder", contractRemove},
 		{"remove and import refuse in the same write", contractRemoveImportRules},
+		{"op rows are for sync operations only", contractOpRows},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

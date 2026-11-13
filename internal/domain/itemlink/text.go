@@ -62,6 +62,11 @@ func AddSummary(id string, r Ref, toProject bool) string {
 	return s
 }
 
+// AutoSummary は、GitHub が PR を自動でリンクしたときのアクティビティ(06 の 524 行)。
+func AutoSummary(id string, r Ref) string {
+	return fmt.Sprintf("%s に %s を自動でリンク", id, r.Display())
+}
+
 // RemoveSummary は、解除のアクティビティ。
 func RemoveSummary(id string) string { return id + " のリンクを解除" }
 

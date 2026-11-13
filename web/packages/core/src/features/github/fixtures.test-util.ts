@@ -1,4 +1,4 @@
-import type { LinkRow } from "../../model/link";
+import type { LinkRow, RepoFailure } from "../../model/link";
 import type { LinksPort } from "../../port/links";
 
 export const row = (p: Partial<LinkRow> = {}): LinkRow => ({
@@ -20,6 +20,7 @@ export function fakeLinks() {
     calls,
     rows: [row()] as LinkRow[],
     refreshed: null as LinkRow[] | null,
+    failures: [] as RepoFailure[],
     fail: null as unknown,
     port: {} as LinksPort,
   };
@@ -49,6 +50,11 @@ export function fakeLinks() {
       calls.push(`project ${s} ${p}`);
       check();
       return [];
+    },
+    async listRepoFailures(s, p) {
+      calls.push(`failures ${s} ${p}`);
+      check();
+      return fake.failures;
     },
   };
   return fake;

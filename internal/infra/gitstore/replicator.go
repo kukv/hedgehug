@@ -20,13 +20,16 @@ const maxSendTries = 3
 type Replicator struct {
 	stores *Stores
 
+	// Repair は、合わせたあと、送る前に呼ぶ修復(決定 C3a-2・C3a-3)。cmd が置く。nil なら呼ばない。Mirror では使わない。
+	Repair port.RepairFunc
+
 	// beforeSend は、送る直前に呼ぶ。テストで、送信が他の人の更新と重なる場面を作るためのもの。
 	beforeSend func() error
 }
 
 func NewReplicator(s *Stores) *Replicator { return &Replicator{stores: s} }
 
-// Sync は、受け取り、合わせ、送る。合わせているあいだは、Store のロックを持つ。
+// Sync は、受け取り、合わせ、修復し、送る。合わせ、修復しているあいだは、Store のロックを持つ。
 func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remote) (port.SyncResult, error) {
 	s, unlock, err := r.begin(id, remote)
 	if err != nil {
@@ -35,6 +38,8 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 	defer unlock()
 	// 2 回目からの試みが失敗しても(断る理由のエラーでも、ErrSendConflict と同じく)、前の試みで作った
 	// 合わせたコミットはこのマシンに残る。それは受け取ったものを正しく合わせたもので、次の同期で続ける。
+	// 修復が失敗したときも(最初の試みでも)、合わせたコミットと、それまでに書いた修復は残る。合わせはまだ
+	// 送っていないので、次の同期がもう一度修復を呼ぶ(決定 C3a-4)。
 	for range maxSendTries {
 		res, err := s.once(ctx)
 		if errors.Is(err, errRejected) {
@@ -89,7 +94,7 @@ type syncRun struct {
 	receiveOnly bool
 }
 
-// once は、受け取り・合わせる・送るを 1 回行う。送信が拒否されたら errRejected。
+// once は、受け取り・合わせる・修復する・送るを 1 回行う。送信が拒否されたら errRejected。
 func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 	theirs, err := s.receive(ctx)
 	if err != nil {
@@ -97,6 +102,10 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 	}
 	if s.receiveOnly {
 		return s.result(theirs, theirs, false)
+	}
+	// 修復は送る前に書く。送ったあとに書くと、相手のマシンが修復していない合わせた結果を受け取る(決定 C3a-2)。
+	if err := s.repairUnsent(ctx, theirs); err != nil {
+		return port.SyncResult{}, err
 	}
 	head, err := s.push(ctx, theirs)
 	if err != nil {

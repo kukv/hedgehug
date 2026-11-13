@@ -12,11 +12,13 @@
   interface Props {
     status: string;
     settings: WorkspaceSettings;
+    // project は、アイテムのプロジェクト。そのプロジェクトの使うステータスだけを並べる(03「使うステータス」)。
+    project: string;
     disabled: boolean;
     onchange: (statusId: string) => void;
   }
 
-  let { status, settings, disabled, onchange }: Props = $props();
+  let { status, settings, project, disabled, onchange }: Props = $props();
   let menu = $state<{ x: number; y: number } | null>(null);
   // メニューは、外を押すと閉じる(ボタンを押したときも)。開いているときにボタンを押したら、開き直さず閉じたままにする。
   let wasOpen = false;
@@ -54,7 +56,7 @@
   x={menu?.x ?? 0}
   y={menu?.y ?? 0}
   label="ステータス"
-  options={statusOptions(settings, status, true)}
+  options={statusOptions(settings, status, true, project)}
   onselect={(id) => {
     if (id !== status) onchange(id);
   }}

@@ -24,7 +24,7 @@ func (s Service) SetDate(ctx context.Context, store port.StoreID, id project.ID,
 	if !ok {
 		return project.Project{}, fmt.Errorf("unknown date field %q", field)
 	}
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}

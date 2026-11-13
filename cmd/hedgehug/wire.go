@@ -15,6 +15,7 @@ import (
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/app/syncing"
 	"github.com/kukv/hedgehug/internal/infra/github"
 	"github.com/kukv/hedgehug/internal/infra/gitstore"
@@ -50,9 +51,11 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Session: session, Accounts: file.Accounts(), Secrets: secrets, GitHub: gh, Device: gh,
 		Hosts: file.Hosts(), Stores: noStoreGitHub{}, Clock: clock,
 	}
+	rep := gitstore.NewReplicator(stores)
+	rep.Repair = repairing.Run // 合わせたあと、送る前の修復(C3a の決定 C3a-3)
 	svc := &syncing.Service{
 		Targets: noSyncTargets{}, Tokens: conn,
-		Replicator: gitstore.NewReplicator(stores), State: db.SyncState(), Events: hub, Clock: clock,
+		Replicator: rep, State: db.SyncState(), Events: hub, Clock: clock,
 	}
 	auto := syncing.NewAuto(svc, file.SyncSettings())
 	notified := syncing.NotifyWrites(stores, auto.Wrote)
@@ -76,6 +79,8 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		StoreGitHub:   noStoreGitHub{},
 		Checks:        db.Checks(),
 		GitHubReads:   db.GitHubReads(),
+		PRScans:       db.PRScans(),
+		AppMissing:    db.AppMissing(),
 		Clock:         clock,
 		Sync:          svc,
 		Auto:          auto,

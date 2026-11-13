@@ -3,6 +3,7 @@ package projects
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -78,7 +79,8 @@ func one(p project.Project, err error) (*oneOutput, error) {
 	return &oneOutput{Body: toAPI(p)}, nil
 }
 
-func registerEdit(api huma.API, svc appprojects.Service) {
+// registerEdit は、プロジェクトの編集の API を登録する。scan は、リポジトリを足したあとの PR の探索(nil なら探さない)。
+func registerEdit(api huma.API, svc appprojects.Service, scan ScanFunc) {
 	const path = "/api/stores/{store}/projects/{project}"
 	huma.Register(api, huma.Operation{OperationID: "rename-project", Method: http.MethodPut, Path: path + "/title", Summary: "プロジェクトのタイトルを変える"},
 		func(ctx context.Context, in *renameInput) (*oneOutput, error) {
@@ -101,7 +103,12 @@ func registerEdit(api huma.API, svc appprojects.Service) {
 		})
 	huma.Register(api, huma.Operation{OperationID: "add-project-repo", Method: http.MethodPost, Path: path + "/repos", Summary: "プロジェクトにリポジトリを結びつける"},
 		func(ctx context.Context, in *repoInput) (*oneOutput, error) {
-			return one(svc.AddRepo(ctx, port.StoreID(in.Store), project.ID(in.Project), in.Body.Repo))
+			p, err := svc.AddRepo(ctx, port.StoreID(in.Store), project.ID(in.Project), in.Body.Repo)
+			if err == nil && scan != nil {
+				// 足したリポジトリは、プロジェクトに保存した書き方(前後の空白を除いたもの)で探す
+				scan(ctx, port.StoreID(in.Store), strings.TrimSpace(in.Body.Repo))
+			}
+			return one(p, err)
 		})
 	huma.Register(api, huma.Operation{OperationID: "remove-project-repo", Method: http.MethodPost, Path: path + "/repos/remove", Summary: "プロジェクトからリポジトリを外す"},
 		func(ctx context.Context, in *repoInput) (*oneOutput, error) {

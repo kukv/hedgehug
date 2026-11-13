@@ -10,6 +10,28 @@ export {
 } from "./features/workspaces/createDialog";
 export { prefixConfirm, prefixExamples, prefixHelp } from "./features/workspaces/general";
 export {
+  allowedTargets,
+  hasRules,
+  noTemplate,
+  type RuleProject,
+  type RuleSection,
+  rulesHeading,
+  rulesOf,
+  rulesProjects,
+  rulesProjectsLabel,
+  templateDeleteLines,
+  type UsedStatusRow,
+  unusedRefusal,
+  usedStatusRows,
+  usesStatus,
+} from "./features/workspaces/projectRules";
+export {
+  type ProjectKindDefault,
+  type ProjectTemplateView,
+  projectTemplateView,
+  type TemplateUse,
+} from "./features/workspaces/projectTemplates";
+export {
   addableTypes,
   deletePropertyBody,
   keyHint,
@@ -88,6 +110,10 @@ export {
   valuesHelp,
 } from "./features/workspaces/values";
 export {
+  type ProjectWorkflowCell,
+  type ProjectWorkflowRow,
+  projectWorkflowRows,
+  sameAsWorkspace,
   transitionRefusal,
   type WorkflowCell,
   type WorkflowRow,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/automations"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -104,5 +105,31 @@ func TestListShowsEachFiringOfTheSameChange(t *testing.T) {
 	}
 	if len(v.Recent) != 2 {
 		t.Errorf("Recent = %+v", v.Recent)
+	}
+}
+
+// 専用ルールの持ち主のプロジェクトは、表示 ID と削除済みかで返す(03「ルールの一覧」の「HH-P1」「HH-P1(削除済み)」)。
+func TestListShowsTheScopesProject(t *testing.T) {
+	svc, rec := setup(t)
+	seedScoped(t, rec)
+	if _, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, doneRule()); err != nil {
+		t.Fatal(err)
+	}
+	v, err := svc.List(t.Context(), store, apptest.SampleWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Scopes[apptest.SampleProject]; got != (automations.Scope{Label: "HH-P1"}) || len(v.Scopes) != 1 {
+		t.Errorf("Scopes = %+v", v.Scopes)
+	}
+	if err := apptest.DeleteProject(t.Context(), rec.Stores, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	v, err = svc.List(t.Context(), store, apptest.SampleWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Scopes[apptest.SampleProject]; got != (automations.Scope{Label: "HH-P1", Deleted: true}) {
+		t.Errorf("deleted: Scopes = %+v", v.Scopes)
 	}
 }

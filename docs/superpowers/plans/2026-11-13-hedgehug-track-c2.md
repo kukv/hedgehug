@@ -5278,7 +5278,7 @@ git commit -m "feat(cmd): 同期の usecase・自動の同期・Store の見張�
 
 - **C2 画面**(決定 C2-1): A2 の Task 5・6・7 が develop に入ったら、計画を書く。中身は、同期カード(要約・最終同期・24 時間・「すべて同期」のボタンと案内)、「Store ごとの同期状態」のメニュー、860px 以下の点、オフラインの帯(自動同期のオン・オフで文を替える)、手動の同期のトースト(`result` で種類を選ぶ。オフラインなら送らずに 06 の文言)、Shift+Ctrl+S、待つ条件の判定と `PUT /api/sync/hold`、`PUT /api/sync/network` の知らせ(オフラインのあいだ 10 秒ごと)、`GET /api/events` を fetch で読み続けて一覧の状態を読み直すこと(待つ条件のあいだは溜めて 1 回で)。core に置くロジック(要約の数え方、24 時間、待つ条件)は TS の単体テストで確かめる。
 - **トラック G**: `port.SyncTargets` と `port.StoreGitHub` の本物(config.yaml の Store の一覧)。Store を clone で追加したら `refs/hedgehug/remote/<ブランチ>` を作る(決定 C2-14)。Store をこのマシンから削除したら、state.db の `sync_status`・`mirror_status` のその Store の行を消す(保存形式「このマシンに持つもの」。`SyncState` に消す関数を足す)。`Service.AfterSuccess` に完全な削除を差し込む。設定の「一般」の同期のタイミングの書き換え。
-- **C3**: 同期の修復の保存は、`NotifyWrites` で包む前の `port.Stores` で書く(修復で「書き込み後」の同期を起こさないため)。`Service.run` の、`Succeeded` の前に修復を足す。
+- **C3a**: 同期の修復は、`Service.run` ではなく、`gitstore.Replicator.Sync` の中で、合わせたあと・送る前に書く(`port.RepairFunc`)。`NotifyWrites` を通らないので、修復で「書き込み後」の同期は起きない。
 - **C4**: アクティビティの同期の行は、`SyncState` に「成功した同期の行」を足して記録する(決定 C2-5)。受信箱の出来事は `port.EventKind` に `inbox` を足す。
 - **C5**: D の `github.New(onSkew)` に時計のずれの記録を差し込む。
 - **トラック G(最終レビューの引き継ぎ)**:

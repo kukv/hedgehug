@@ -4,7 +4,9 @@ package main
 
 import (
 	"crypto/subtle"
+	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/prlink"
 )
 
 // githubHandler は、POST /e2e/github?repo=…&number=…&kind=…&title=…&state=…&review=…&checks=…&moved=…&gone=… を受け、
@@ -54,6 +57,106 @@ func githubHandler(token string, next http.Handler) http.Handler {
 		})
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+// pullsHandler は、PR の自動リンクの通しのテストの入口を受ける(D4b-16)。ほかの要求は next に渡す。
+// API と同じトークンを求める。
+//   - POST /e2e/github-pull?repo&number&branch&title&body&state&comment&updated: 偽の PR を置く
+//     (updated は RFC 3339。なければいまの時刻)
+//   - POST /e2e/github-app?owner&missing=1|0: その owner のリポジトリを App 未導入にする・戻す
+//   - POST /e2e/github-repo?repo&unreadable=1|0: リポジトリ全体を読めなくする・戻す
+func pullsHandler(token string, next http.Handler) http.Handler {
+	want := []byte("Bearer " + token)
+	routes := map[string]func(url.Values) error{
+		"/e2e/github-pull": putPull,
+		"/e2e/github-app":  missApp,
+		"/e2e/github-repo": unreadableRepo,
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		route, ok := routes[r.URL.Path]
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := route(r.URL.Query()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// putPull は、偽の GitHub に PR を置く。
+func putPull(q url.Values) error {
+	n, err := strconv.Atoi(q.Get("number"))
+	if err != nil || q.Get("repo") == "" {
+		return errors.New("repo and number are required")
+	}
+	updated := time.Now()
+	if v := q.Get("updated"); v != "" {
+		if updated, err = time.Parse(time.RFC3339, v); err != nil {
+			return err
+		}
+	}
+	text := prlink.Text{Branch: q.Get("branch"), Title: q.Get("title"), Body: q.Get("body")}
+	if c := q.Get("comment"); c != "" {
+		text.Comments = []string{c}
+	}
+	e2eGitHub.PutPull(q.Get("repo"), port.Pull{
+		Number: n, Text: text, UpdatedAt: updated,
+		Values: itemlink.Values{Title: q.Get("title"), State: itemlink.State(q.Get("state")), Review: itemlink.NoReview},
+	})
+	return nil
+}
+
+// missApp は、owner のリポジトリを App 未導入にする(missing=0 で戻す)。
+func missApp(q url.Values) error {
+	on, err := flag(q, "missing")
+	if err != nil {
+		return err
+	}
+	if q.Get("owner") == "" {
+		return errors.New("owner is required")
+	}
+	e2eGitHub.MissApp(q.Get("owner"), on)
+	return nil
+}
+
+// unreadableRepo は、リポジトリ全体を読めなくする(unreadable=0 で戻す)。
+func unreadableRepo(q url.Values) error {
+	on, err := flag(q, "unreadable")
+	if err != nil {
+		return err
+	}
+	repo := q.Get("repo")
+	if repo == "" {
+		return errors.New("repo is required")
+	}
+	var fail error
+	if on {
+		fail = &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
+	}
+	e2eGitHub.Fail(repo, 0, fail)
+	return nil
+}
+
+// flag は、q の name が "1" なら真、"0" なら偽。ほかの値はエラー(打ち間違いで戻さない)。
+func flag(q url.Values, name string) (bool, error) {
+	switch q.Get(name) {
+	case "1":
+		return true, nil
+	case "0":
+		return false, nil
+	}
+	return false, errors.New(name + " must be 1 or 0")
 }
 
 // e2eGitHubEvery は、e2e の入口の読み取りに渡す「GitHub を読む間隔」(既定の 5 分。D4a-7)。

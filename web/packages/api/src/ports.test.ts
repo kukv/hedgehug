@@ -182,6 +182,28 @@ describe("workspaces port", () => {
     expect(call(fetch)[0]).toBe("/api/stores/S1/workspaces/W1/usage");
   });
 
+  it("reads the delete preview and deletes with DELETE, mapping 404 to NotFound", async () => {
+    const preview = respond(200, { projects: 1, items: 2, retentionDays: 30 });
+    await expect(createWorkspacesPort().workspaceDeletePreview("S1", "W1")).resolves.toEqual({
+      projects: 1,
+      items: 2,
+      retentionDays: 30,
+    });
+    expect(call(preview)[0]).toBe("/api/stores/S1/workspaces/W1/delete-preview");
+    const del = respond(204, undefined);
+    await createWorkspacesPort().deleteWorkspace("S1", "W1");
+    expect(call(del)[0]).toBe("/api/stores/S1/workspaces/W1");
+    expect(call(del)[1].method).toBe("DELETE");
+    respond(404, { title: "Not Found", status: 404 });
+    await expect(createWorkspacesPort().deleteWorkspace("S1", "W1")).rejects.toBeInstanceOf(
+      NotFound,
+    );
+    respond(404, { title: "Not Found", status: 404 });
+    await expect(createWorkspacesPort().workspaceDeletePreview("S1", "W1")).rejects.toBeInstanceOf(
+      NotFound,
+    );
+  });
+
   it("creates a workspace and returns the model", async () => {
     const fetch = respond(200, { id: "W2", name: "API", prefix: "AP" });
     const w = await createWorkspacesPort().create("S1", "API", "AP");

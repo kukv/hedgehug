@@ -8,6 +8,7 @@ import type {
   ValueList,
   Workspace,
   WorkspaceAutomation,
+  WorkspaceDeletePreview,
   WorkspaceDetail,
   WorkspaceProperty,
   WorkspaceTemplate,
@@ -25,6 +26,8 @@ export interface WorkspacesPort {
   rename(storeId: string, workspaceId: string, name: string): Promise<void>;
   changePrefix(storeId: string, workspaceId: string, prefix: string): Promise<void>;
   move(storeId: string, workspaceId: string, direction: Direction): Promise<void>;
+  workspaceDeletePreview(storeId: string, workspaceId: string): Promise<WorkspaceDeletePreview>;
+  deleteWorkspace(storeId: string, workspaceId: string): Promise<void>;
   addProperty(storeId: string, workspaceId: string, input: NewProperty): Promise<WorkspaceProperty>;
   renameProperty(
     storeId: string,

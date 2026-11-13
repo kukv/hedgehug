@@ -2,7 +2,10 @@
 // ルールはワークスペースの log.jsonl の項目 rules/<ID>/<項目> に持つ(B4-2)。
 package automation
 
-import "github.com/kukv/hedgehug/internal/domain/change"
+import (
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
+)
 
 // Trigger は、きっかけ(03「きっかけとすること」の 6 つ。B4-4)。
 type Trigger string
@@ -40,6 +43,7 @@ type Rule struct {
 	Action        Action
 	Value         string // ステータスの ID、メンバーのログイン名、Unassigned
 	Enabled       bool
+	Scope         project.ID // 空ならワークスペース全体。あれば、そのプロジェクトだけのルール(B5a-10)
 }
 
 const prefix = "rules/"

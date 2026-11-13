@@ -14,7 +14,7 @@ import (
 // (文言は Store とリンクごとなので、同じ PR をリンクしている別のアイテムの行からも、次に読むまで消える)。
 // 改名の前の名前で置いた文言は、ここでは消さない。
 func (l Links) Remove(ctx context.Context, store port.StoreID, id item.ID, ref itemlink.Ref) error {
-	v, err := l.view(ctx, store, id)
+	v, err := l.editableView(ctx, store, id)
 	if err != nil {
 		return err
 	}
@@ -26,13 +26,20 @@ func (l Links) Remove(ctx context.Context, store port.StoreID, id item.ID, ref i
 	var removed *itemlink.Link
 	err = l.Stores.Write(ctx, store, op, func(tx port.Tx) error {
 		removed = nil
+		before, err := readEditableItem(tx, id)
+		if err != nil {
+			return err
+		}
+		if err := port.ReviveItem(ctx, tx, id); err != nil { // 別の画面で削除されていたら、最初に取り消す(決定 S10)
+			return err
+		}
 		cur, err := readItem(tx, id)
 		if err != nil {
 			return err
 		}
 		link, ok := cur.links.Find(ref)
 		if !ok || link.Kind != ref.Kind {
-			return nil
+			return port.Unchanged(before.item.Deleted) // 削除済みのまま外すものがなければ、取り消さず断る
 		}
 		removed = &link
 		return tx.WriteItems().Append(id, cur.links.Detach(link)...)

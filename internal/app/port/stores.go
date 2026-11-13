@@ -44,8 +44,23 @@ func CheckTransfer(r transfer.Record) error {
 	return nil
 }
 
+// CheckOpDrafts は、操作の op と別の op を持つ行(Draft.Op)を書けるかを確かめる(C3a-11)。
+// 書けるのは同期の操作だけで、op は change.ValidID。合わなければ ErrInvalidOperation を包んだエラー。
+func CheckOpDrafts(actor change.Actor, drafts []change.Draft) error {
+	for _, d := range drafts {
+		if d.Op == "" {
+			continue
+		}
+		if actor.Kind != change.ActorSync || !change.ValidID(d.Op) {
+			return fmt.Errorf("%w: op row %q by %+v", ErrInvalidOperation, d.Op, actor)
+		}
+	}
+	return nil
+}
+
 // 口は削除済みのアイテム・プロジェクトも返す(item.Item.Deleted・project.Project.Deleted の印つき。A4b-3)。
-// 利用者に見せる・操作する側は、下の 4 つで読む。削除済みを返さず、Get は port.ErrNotFound にする(A4b-4)。
+// ワークスペースも同じで、workspace.Workspace.Deleted の印つきで返す(B5b)。
+// 利用者に見せる・操作する側は、下の Live… で読む。削除済みを返さず、Get は port.ErrNotFound にする(A4b-4)。
 // 削除済みも要る読み方(番号の採番、プロジェクトが変わる移動の下のもの、値の置き換え、自動化の最近の実行、
 // 自動化で親が削除済みかの確認、Issue がすでに別のアイテムにリンクされているかの確認(07「追加」))は、口を直接呼ぶ。
 
@@ -77,6 +92,21 @@ func LiveProject(r Reader, id project.ID) (project.Project, error) {
 func LiveProjects(r Reader, ws workspace.ID) ([]project.Project, error) {
 	ps, err := r.Projects().List(ws)
 	return project.Live(ps), err
+}
+
+// LiveWorkspace は、削除済みでないワークスペースを返す。ないか削除済みなら ErrNotFound。
+func LiveWorkspace(r Reader, id workspace.ID) (workspace.Workspace, error) {
+	w, err := r.Workspaces().Get(id)
+	if err == nil && w.Deleted != nil {
+		return workspace.Workspace{}, ErrNotFound
+	}
+	return w, err
+}
+
+// LiveWorkspaces は、削除済みでないワークスペースを、内部 ID の順で返す。
+func LiveWorkspaces(r Reader) ([]workspace.Workspace, error) {
+	ws, err := r.Workspaces().List()
+	return workspace.Live(ws), err
 }
 
 // StoreID は Store ID(.hedgehug/store.yaml の store)。

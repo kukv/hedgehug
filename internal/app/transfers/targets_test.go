@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/transfers"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -49,5 +50,25 @@ func TestTargetsOfAStepOrADeletedItemIsNotFound(t *testing.T) {
 	}
 	if _, err := f.svc.Targets(t.Context(), store1, apptest.SampleTask); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("削除済み: %v", err)
+	}
+}
+
+// 削除済みのワークスペース(B5b)は、候補に出さず、移動先に選べない(ErrNotFound)。中のプロジェクトがまだ
+// 削除済みでなくても同じ(同期の修復がまだ削除済みに入れていないとき)。
+func TestTargetsAndMoveSkipADeletedWorkspace(t *testing.T) {
+	f := newFixture(t)
+	if err := apptest.DeleteWorkspace(t.Context(), f.rec, store1, mobileWS); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.svc.Targets(t.Context(), store1, apptest.SampleTask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Workspace.ID != teamWS {
+		t.Errorf("targets = %+v, want only Team", got)
+	}
+	in := transfers.MoveInput{ToStore: store1, ToWorkspace: mobileWS, ToProject: mobileProject}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, in); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Move into the deleted workspace = %v, want ErrNotFound", err)
 	}
 }

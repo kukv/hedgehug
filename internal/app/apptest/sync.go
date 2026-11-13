@@ -2,11 +2,13 @@ package apptest
 
 import (
 	"context"
-	"maps"
 	"slices"
 	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/repair"
 )
 
 // ReplicatorCall は、Replicator の偽物が受けた 1 回の呼び出し。
@@ -105,6 +107,105 @@ func (r *Replicator) Calls() []ReplicatorCall {
 	return slices.Clone(r.calls)
 }
 
+// RepairWriter は port.RepairWriter の偽物。Facts は F を、Purged は PurgedIDs を返し、Read・Write は Stores の Store に渡す。
+// Write が行を 1 つ以上残したときだけ、その op を Ops に足す(修復の件名を確かめるため)。行を残したかは、
+// fn の中で 1 つ以上の行を渡した Append が成功し、Write もエラーを返さなかったことで見る。
+type RepairWriter struct {
+	Stores port.Stores
+	Store  port.StoreID
+	F      repair.Facts
+	// PurgedIDs は、完全に削除したものとして Purged が返す内部 ID。
+	PurgedIDs map[change.ID]bool
+	Ops       []port.Operation
+}
+
+func (w *RepairWriter) Facts() repair.Facts { return w.F }
+
+func (w *RepairWriter) Purged() (map[change.ID]bool, error) { return w.PurgedIDs, nil }
+
+func (w *RepairWriter) Read(fn func(r port.Reader) error) error {
+	return w.Stores.Read(context.Background(), w.Store, fn)
+}
+
+func (w *RepairWriter) Write(op port.Operation, fn func(tx port.Tx) error) error {
+	rows := false
+	err := w.Stores.Write(context.Background(), w.Store, op, func(tx port.Tx) error {
+		return fn(rowsTx{Tx: tx, rows: &rows})
+	})
+	if err == nil && rows {
+		w.Ops = append(w.Ops, op)
+	}
+	return err
+}
+
+// rowsTx は、行を 1 つ以上渡した Append が成功したら rows を true にする Tx。
+type rowsTx struct {
+	port.Tx
+	rows *bool
+}
+
+func (t rowsTx) WriteWorkspaces() port.WorkspaceWriter {
+	return rowsIDs{append: t.Tx.WriteWorkspaces().Append, rows: t.rows}
+}
+
+func (t rowsTx) WriteProjects() port.ProjectWriter {
+	w := t.Tx.WriteProjects()
+	return rowsIDs{append: w.Append, describe: w.Describe, rows: t.rows}
+}
+
+func (t rowsTx) WriteItems() port.ItemWriter {
+	return rowsItems{ItemWriter: t.Tx.WriteItems(), rows: t.rows}
+}
+
+func (t rowsTx) WriteMembers() port.MemberWriter {
+	return rowsMembers{w: t.Tx.WriteMembers(), rows: t.rows}
+}
+
+type rowsIDs struct {
+	append   func(id change.ID, drafts ...change.Draft) error
+	describe func(id change.ID, text string) error
+	rows     *bool
+}
+
+func (w rowsIDs) Append(id change.ID, drafts ...change.Draft) error {
+	return mark(w.rows, len(drafts) > 0, w.append(id, drafts...))
+}
+
+func (w rowsIDs) Describe(id change.ID, text string) error { return w.describe(id, text) }
+
+type rowsMembers struct {
+	w    port.MemberWriter
+	rows *bool
+}
+
+func (w rowsMembers) Append(drafts ...change.Draft) error {
+	return mark(w.rows, len(drafts) > 0, w.w.Append(drafts...))
+}
+
+// rowsItems は、アイテムの Append に加えて、Import・Remove が成功しても rows を true にする(どちらも保存を残す)。
+type rowsItems struct {
+	port.ItemWriter
+	rows *bool
+}
+
+func (w rowsItems) Append(id change.ID, drafts ...change.Draft) error {
+	return mark(w.rows, len(drafts) > 0, w.ItemWriter.Append(id, drafts...))
+}
+
+func (w rowsItems) Import(id item.ID, log []change.Record, description string) error {
+	return mark(w.rows, true, w.ItemWriter.Import(id, log, description))
+}
+
+func (w rowsItems) Remove(id item.ID) error { return mark(w.rows, true, w.ItemWriter.Remove(id)) }
+
+// mark は、err が nil で wrote なら rows を true にし、err をそのまま返す。
+func mark(rows *bool, wrote bool, err error) error {
+	if err == nil && wrote {
+		*rows = true
+	}
+	return err
+}
+
 // SyncTargets は port.SyncTargets の偽物。
 type SyncTargets struct {
 	mu      sync.Mutex
@@ -164,42 +265,4 @@ func (s *SyncTokens) Rejected() []port.StoreID {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.rejected)
-}
-
-// StoreVersions は port.StoreVersions の偽物。
-type StoreVersions struct {
-	mu    sync.Mutex
-	Value map[port.StoreID]string
-}
-
-func (s *StoreVersions) Versions(context.Context) (map[port.StoreID]string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return maps.Clone(s.Value), nil
-}
-
-// Set は、版を入れ替える。
-func (s *StoreVersions) Set(v map[port.StoreID]string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Value = v
-}
-
-// Events は port.Events の偽物。知らされた出来事を覚える。
-type Events struct {
-	mu   sync.Mutex
-	list []port.Event
-}
-
-func (e *Events) Publish(ev port.Event) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.list = append(e.list, ev)
-}
-
-// List は、知らされた出来事を順に返す。
-func (e *Events) List() []port.Event {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return slices.Clone(e.list)
 }

@@ -38,6 +38,7 @@ export type AccountRowStatus = typeof AccountRowStatus[keyof typeof AccountRowSt
 export const AccountRowStatus = {
   ok: 'ok',
   auth_error: 'auth_error',
+  app_missing: 'app_missing',
 } as const;
 
 export interface AccountRow {
@@ -45,6 +46,11 @@ export interface AccountRow {
   login: string;
   method: AccountRowMethod;
   name: string;
+  /**
+     * GitHub App が入っていない組織(認証エラーのときは空)
+     * @nullable
+     */
+  orgs: string[] | null;
   reason: string;
   status: AccountRowStatus;
 }
@@ -119,6 +125,12 @@ export interface AutomationRule {
   enabled: boolean;
   id: string;
   name: string;
+  /** このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない */
+  scope?: string;
+  /** 専用ルールの持ち主のプロジェクトが削除済みか。一覧でだけ埋める */
+  scopeDeleted?: boolean;
+  /** 専用ルールの持ち主のプロジェクトの表示 ID(HH-P1)。一覧でだけ埋める */
+  scopeLabel?: string;
   trigger: AutomationRuleTrigger;
   /** きっかけが status のときのステータスの ID。ほかは空 */
   triggerStatus: string;
@@ -151,6 +163,8 @@ export interface AutomationRuleInput {
   /** きっかけが pr_merged のときの条件 */
   allMerged: boolean;
   name: string;
+  /** このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない */
+  scope?: string;
   trigger: AutomationRuleInputTrigger;
   /** きっかけが status のときのステータスの ID。ほかは空 */
   triggerStatus: string;
@@ -594,11 +608,34 @@ export interface MoveCandidate {
   title: string;
 }
 
+/**
+ * プロジェクトが変わるときの、移動先が使わないステータスの ID → 置き換え先のステータスの ID。指定のないものは同じ分類の移動先の既定になる
+ */
+export type MoveItemStatuses = {[key: string]: string};
+
 export interface MoveItem {
   /** 新しい親の内部 ID(Epic 以外) */
   parent?: string;
   /** 移し先のプロジェクトの内部 ID(Epic) */
   project?: string;
+  /** プロジェクトが変わるときの、移動先が使わないステータスの ID → 置き換え先のステータスの ID。指定のないものは同じ分類の移動先の既定になる */
+  statuses?: MoveItemStatuses;
+}
+
+export interface MovePreviewStatus {
+  /** そのステータスを持つ移すアイテム(削除済みと自分自身を含む)の件数 */
+  count: number;
+  /** 置き換えの初めの値。同じ分類の、移動先の既定のステータスの ID */
+  default: string;
+  /** ステータスの ID */
+  status: string;
+}
+
+export interface MovePreview {
+  /** 下のもの(削除済みを除く)の件数 */
+  below: number;
+  /** 移動先が使わないステータス。ワークスペースのステータスの順。なければ空 */
+  statuses: MovePreviewStatus[];
 }
 
 export type MoveWorkspaceItemDirection = typeof MoveWorkspaceItemDirection[keyof typeof MoveWorkspaceItemDirection];
@@ -715,6 +752,42 @@ export interface ProjectRepo {
   repo: string;
 }
 
+/**
+ * 種類 → 既定のテンプレート ID か @none。決めていない種類は入れない
+ */
+export type ProjectRulesTemplateDefaults = {[key: string]: string};
+
+/**
+ * From のステータス ID → このプロジェクトで変更できる To。制限のない From は入れない
+ */
+export type ProjectRulesWorkflow = {[key: string]: string[] | null};
+
+export interface ProjectRules {
+  /** 動かさないワークスペースのルールの ID */
+  disabledRules: string[];
+  /** 使わないステータスの ID */
+  hiddenStatuses: string[];
+  /** 種類 → 既定のテンプレート ID か @none。決めていない種類は入れない */
+  templateDefaults: ProjectRulesTemplateDefaults;
+  /** 使うテンプレートの ID。空ならすべて使う */
+  templates: string[];
+  /** From のステータス ID → このプロジェクトで変更できる To。制限のない From は入れない */
+  workflow: ProjectRulesWorkflow;
+}
+
+export interface RecheckOutputBody {
+  /**
+     * 読めるようになった組織
+     * @nullable
+     */
+  cleared: string[] | null;
+  /**
+     * まだ読めない組織
+     * @nullable
+     */
+  still: string[] | null;
+}
+
 export interface RelationCandidate {
   /** 選べない理由。選べるなら空 */
   disabledReason: string;
@@ -794,6 +867,18 @@ export interface ReorderItem {
   anchor: string;
 }
 
+export interface RepoFailure {
+  /** プロジェクトのリポジトリの書き方のまま */
+  repo: string;
+  /** 「PR を探せませんでした: 」に続ける文言 */
+  text: string;
+}
+
+export interface RepoFailures {
+  /** リポジトリの大文字小文字を区別しない辞書順。失敗のないリポジトリは入れない */
+  failures: RepoFailure[];
+}
+
 export interface SaveItemAsTemplate {
   name: string;
   /** 子と Step を含める */
@@ -832,6 +917,10 @@ export interface SetProjectOwner {
   owner: string;
 }
 
+export interface SetProjectRuleRuns {
+  runs: boolean;
+}
+
 export type SetProjectStatusStatus = typeof SetProjectStatusStatus[keyof typeof SetProjectStatusStatus];
 
 
@@ -845,6 +934,23 @@ export const SetProjectStatusStatus = {
 
 export interface SetProjectStatus {
   status: SetProjectStatusStatus;
+}
+
+export interface SetProjectStatusUsed {
+  used: boolean;
+}
+
+export interface SetProjectTemplateDefault {
+  /** テンプレートの ID。空ならワークスペースの既定に戻す。@none なら「なし」 */
+  template: string;
+}
+
+export interface SetProjectTemplateUsed {
+  used: boolean;
+}
+
+export interface SetProjectTransition {
+  allowed: boolean;
 }
 
 export interface SetWatch {
@@ -1181,6 +1287,15 @@ export interface WorkspaceAutomation {
   rules: AutomationRule[] | null;
 }
 
+export interface WorkspaceDeletePreview {
+  /** その下の、削除されていないアイテムの数(Epic から Step まで全部) */
+  items: number;
+  /** 削除されていないプロジェクトの数 */
+  projects: number;
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+}
+
 /**
  * ステータスの分類(todo・doing・done・canceled)
  */
@@ -1302,6 +1417,11 @@ export interface WorkspaceTemplate {
 export type WorkspaceSettingsCategoryDefaults = {[key: string]: string};
 
 /**
+ * プロジェクトの内部 ID → そのプロジェクトのルール。ルールのないプロジェクトは入れない
+ */
+export type WorkspaceSettingsProjectRules = {[key: string]: ProjectRules};
+
+/**
  * 種類 → 既定のテンプレート ID。なしの種類は入れない
  */
 export type WorkspaceSettingsTemplateDefaults = {[key: string]: string};
@@ -1316,6 +1436,8 @@ export interface WorkspaceSettings {
   initialPriority: string;
   initialStatus: string;
   priorities: WorkspaceValue[];
+  /** プロジェクトの内部 ID → そのプロジェクトのルール。ルールのないプロジェクトは入れない */
+  projectRules: WorkspaceSettingsProjectRules;
   properties: WorkspaceProperty[];
   statuses: WorkspaceValue[];
   systems: WorkspaceValue[];
@@ -1397,6 +1519,13 @@ export type LocateItemParams = {
   store: string;
   /** 画面のアドレスの ID(HH-2) */
   id: string;
+};
+
+export type PreviewItemMoveParams = {
+  /** 移し先のプロジェクトの内部 ID(Epic) */
+  project?: string;
+  /** 新しい親の内部 ID(Epic 以外) */
+  parent?: string;
 };
 
 export type ListRelationCandidatesParams = {
@@ -1611,6 +1740,30 @@ export const getReauthAccountUrl = (id: string,) => {
 export const reauthAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<AccountBody> => {
 
   return fetcher<AccountBody>(getReauthAccountUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getRecheckAccountUrl = (id: string,) => {
+
+
+
+
+  return `/api/accounts/${encodeURIComponent(String(id))}/recheck`
+}
+
+/**
+ * @summary GitHub App 未導入の組織を読み直し、読めたものの記録を消す
+ */
+export const recheckAccount = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<RecheckOutputBody> => {
+
+  return fetcher<RecheckOutputBody>(getRecheckAccountUrl(id),
   {
     ...options,
     method: 'POST'
@@ -2477,6 +2630,41 @@ export const listMoveCandidates = async (store: string,
     item: string, options?: Parameters<typeof fetcher>[1]): Promise<MoveCandidate[] | null> => {
 
   return fetcher<MoveCandidate[] | null>(getListMoveCandidatesUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPreviewItemMoveUrl = (store: string,
+    item: string,
+    params?: PreviewItemMoveParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-preview?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/move-preview`
+}
+
+/**
+ * @summary 移動の確認ダイアログに出す件数を返す(保存しない)
+ */
+export const previewItemMove = async (store: string,
+    item: string,
+    params?: PreviewItemMoveParams, options?: Parameters<typeof fetcher>[1]): Promise<MovePreview> => {
+
+  return fetcher<MovePreview>(getPreviewItemMoveUrl(store,item,params),
   {
     ...options,
     method: 'GET'
@@ -3626,6 +3814,32 @@ return fetcher<Project>(getSetProjectOwnerUrl(store,project),
 
 
 
+export const getListRepoFailuresUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/repo-failures`
+}
+
+/**
+ * @summary プロジェクトのリポジトリごとの、PR を探せなかった理由を返す
+ */
+export const listRepoFailures = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<RepoFailures> => {
+
+  return fetcher<RepoFailures>(getListRepoFailuresUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getAddProjectRepoUrl = (store: string,
     project: string,) => {
 
@@ -3703,6 +3917,251 @@ return fetcher<Project>(getRemoveProjectRepoUrl(store,project),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(projectRepo)
+  }
+);}
+
+
+
+export const getSetProjectRuleRunsUrl = (store: string,
+    project: string,
+    rule: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/rules/automation/${encodeURIComponent(String(rule))}`
+}
+
+/**
+ * @summary プロジェクトでワークスペースのルールを動かす・動かさないを変更
+ */
+export const setProjectRuleRuns = async (store: string,
+    project: string,
+    rule: string,
+    setProjectRuleRunsBody: SetProjectRuleRuns, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetProjectRuleRunsUrl(store,project,rule),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectRuleRunsBody)
+  }
+);}
+
+
+
+export const getSetProjectStatusUsedUrl = (store: string,
+    project: string,
+    status: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/rules/statuses/${encodeURIComponent(String(status))}`
+}
+
+/**
+ * @summary プロジェクトで使うステータスを変更
+ */
+export const setProjectStatusUsed = async (store: string,
+    project: string,
+    status: string,
+    setProjectStatusUsedBody: SetProjectStatusUsed, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetProjectStatusUsedUrl(store,project,status),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectStatusUsedBody)
+  }
+);}
+
+
+
+export const getSetProjectTemplateDefaultUrl = (store: string,
+    project: string,
+    kind: 'Epic' | 'Story' | 'Task' | 'Bug' | 'Step',) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/rules/template-defaults/${encodeURIComponent(String(kind))}`
+}
+
+/**
+ * @summary プロジェクトの種類ごとの既定のテンプレートを変更
+ */
+export const setProjectTemplateDefault = async (store: string,
+    project: string,
+    kind: 'Epic' | 'Story' | 'Task' | 'Bug' | 'Step',
+    setProjectTemplateDefaultBody: SetProjectTemplateDefault, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetProjectTemplateDefaultUrl(store,project,kind),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectTemplateDefaultBody)
+  }
+);}
+
+
+
+export const getSetProjectTemplateUsedUrl = (store: string,
+    project: string,
+    template: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/rules/templates/${encodeURIComponent(String(template))}`
+}
+
+/**
+ * @summary プロジェクトで使うテンプレートを変更
+ */
+export const setProjectTemplateUsed = async (store: string,
+    project: string,
+    template: string,
+    setProjectTemplateUsedBody: SetProjectTemplateUsed, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetProjectTemplateUsedUrl(store,project,template),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectTemplateUsedBody)
+  }
+);}
+
+
+
+export const getSetProjectTransitionUrl = (store: string,
+    project: string,
+    from: string,
+    to: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/rules/workflow/${encodeURIComponent(String(from))}/${encodeURIComponent(String(to))}`
+}
+
+/**
+ * @summary プロジェクトの遷移の制約のセルを変更
+ */
+export const setProjectTransition = async (store: string,
+    project: string,
+    from: string,
+    to: string,
+    setProjectTransitionBody: SetProjectTransition, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetProjectTransitionUrl(store,project,from,to),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setProjectTransitionBody)
+  }
+);}
+
+
+
+export const getResetProjectRulesUrl = (store: string,
+    project: string,
+    section: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/rules/${encodeURIComponent(String(section))}/reset`
+}
+
+/**
+ * @summary 区画をワークスペースの設定に戻す
+ */
+export const resetProjectRules = async (store: string,
+    project: string,
+    section: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getResetProjectRulesUrl(store,project,section),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 
@@ -3872,6 +4331,32 @@ return fetcher<WorkspaceSummary>(getCreateWorkspaceUrl(store),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(createWorkspaceBody)
+  }
+);}
+
+
+
+export const getDeleteWorkspaceUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}`
+}
+
+/**
+ * @summary ワークスペースと、その下のプロジェクト・アイテムを削除する
+ */
+export const deleteWorkspace = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteWorkspaceUrl(store,workspace),
+  {
+    ...options,
+    method: 'DELETE'
+
+
   }
 );}
 
@@ -4122,6 +4607,32 @@ return fetcher<void>(getSetWorkspaceCategoryDefaultUrl(store,workspace,category)
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setWorkspaceValueRef)
+  }
+);}
+
+
+
+export const getGetWorkspaceDeletePreviewUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/delete-preview`
+}
+
+/**
+ * @summary ワークスペースを削除したときに一緒に消えるプロジェクトとアイテムの数と保持日数を返す
+ */
+export const getWorkspaceDeletePreview = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceDeletePreview> => {
+
+  return fetcher<WorkspaceDeletePreview>(getGetWorkspaceDeletePreviewUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

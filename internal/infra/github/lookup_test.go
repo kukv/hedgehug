@@ -120,6 +120,10 @@ func TestLookupFailures(t *testing.T) {
 				_, _ = w.Write([]byte(`{"full_name":"org/web"}`))
 				return
 			}
+			if r.URL.Path == "/user/installations" { // App のトークンでない
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			_, _ = w.Write([]byte(cs.body))
 		})
 		_, err := c.Lookup(context.Background(), fakeToken, "org/web", 7)
@@ -181,6 +185,8 @@ func TestLookupDoesNotFollowAMalformedRename(t *testing.T) {
 				asked = append(asked, owner+"/"+name)
 				return `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"]}]}`
 			})(w, r)
+		default: // App の導入の一覧など: App のトークンでない
+			http.NotFound(w, r)
 		}
 	})
 	_, err := c.Lookup(context.Background(), fakeToken, "old/web", 41)

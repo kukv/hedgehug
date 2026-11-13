@@ -38,8 +38,9 @@ type lookupAnswer struct {
 		} `json:"repository"`
 	} `json:"data"`
 	Errors []struct {
-		Type string `json:"type"`
-		Path []any  `json:"path"`
+		Type    string `json:"type"`
+		Path    []any  `json:"path"`
+		Message string `json:"message"`
 	} `json:"errors"`
 }
 
@@ -70,17 +71,11 @@ type node struct {
 }
 
 // Lookup は port.GitHub.Lookup。リポジトリが見つからなければ、REST で改名・移管を確かめ、名前が変わっていれば
-// 新しい名前で 1 回だけ問い合わせ直す。
+// 新しい名前で 1 回だけ問い合わせ直す。それでも読めなければ、App 未導入かを確かめる(attempt)。
 func (c *Client) Lookup(ctx context.Context, token, repo string, number int) (port.Found, error) {
-	f, err := c.lookupOnce(ctx, token, repo, number)
-	if !ghcall.Is(err, ghcall.RepoUnreadable) {
-		return f, err
-	}
-	moved, ok := c.renamed(ctx, token, repo)
-	if !ok {
-		return f, err
-	}
-	return c.lookupOnce(ctx, token, moved, number)
+	return attempt(ctx, c, token, repo, func(repo string) (port.Found, error) {
+		return c.lookupOnce(ctx, token, repo, number)
+	})
 }
 
 func (c *Client) lookupOnce(ctx context.Context, token, repo string, number int) (port.Found, error) {
@@ -114,6 +109,8 @@ func answerFailure(a lookupAnswer, repo string, number int, reset time.Time) *gh
 		switch {
 		case e.Type == "RATE_LIMITED":
 			return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: reset}
+		case hiddenByApp(e.Type, e.Path, e.Message):
+			return appMissing(repo)
 		case (e.Type == "NOT_FOUND" || e.Type == "FORBIDDEN") && len(e.Path) == 1:
 			return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
 		case e.Type == "NOT_FOUND" && len(e.Path) == 2:
@@ -133,20 +130,21 @@ func answerFailure(a lookupAnswer, repo string, number int, reset time.Time) *gh
 
 // renamed は、repo が改名・移管されていれば、いまの名前を返す(REST はリダイレクトで移動先を返す)。
 // repo が owner/name の形でなければ問い合わせない。いまの名前が owner/name の形でなければ、改名とみなさない。
-func (c *Client) renamed(ctx context.Context, token, repo string) (string, bool) {
+// 問い合わせの失敗は probeErr で返す(403・404 なら改名なしで nil)。
+func (c *Client) renamed(ctx context.Context, token, repo string) (string, bool, error) {
 	if !wellFormed(repo) {
-		return "", false
+		return "", false, nil
 	}
 	var r struct {
 		FullName string `json:"full_name"`
 	}
-	if err := c.get(ctx, token, "/repos/"+repo, &r); err != nil || r.FullName == "" || strings.EqualFold(r.FullName, repo) {
-		return "", false
+	if err := c.get(ctx, token, "/repos/"+repo, &r); err != nil {
+		return "", false, probeErr(err)
 	}
-	if !wellFormed(r.FullName) {
-		return "", false
+	if r.FullName == "" || strings.EqualFold(r.FullName, repo) || !wellFormed(r.FullName) {
+		return "", false, nil
 	}
-	return r.FullName, true
+	return r.FullName, true, nil
 }
 
 // wellFormed は、repo が前後の空白なしで owner/name の形か。

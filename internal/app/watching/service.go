@@ -14,11 +14,11 @@ type Service struct {
 	Identity port.Identity
 }
 
-// displayOf は、アクティビティの 1 行に書くアイテムの ID(HH-12)。保存の前に読む。
+// displayOf は、アクティビティの 1 行に書くアイテムの ID(HH-12)。保存の前に読む。別の画面で削除された(root: true)アイテムも読める。
 func (s Service) displayOf(ctx context.Context, store port.StoreID, id item.ID) (string, error) {
 	var shown string
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := port.LiveItem(r, id)
+		it, err := port.EditableItem(r, id)
 		if err != nil {
 			return err
 		}

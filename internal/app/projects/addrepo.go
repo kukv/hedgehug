@@ -18,7 +18,7 @@ func (s Service) AddRepo(ctx context.Context, store port.StoreID, id project.ID,
 	if err != nil {
 		return project.Project{}, err
 	}
-	p, err := s.Get(ctx, store, id)
+	p, err := s.editable(ctx, store, id)
 	if err != nil {
 		return project.Project{}, err
 	}

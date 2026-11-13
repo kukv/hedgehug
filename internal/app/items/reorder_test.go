@@ -170,9 +170,6 @@ func TestReorderIgnoresDeletedSiblings(t *testing.T) {
 	if err := svc.Reorder(t.Context(), store, st[2].ID, st[1].ID, false); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("a deleted anchor: %v", err)
 	}
-	if err := svc.Reorder(t.Context(), store, st[1].ID, st[0].ID, false); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("a deleted item: %v", err)
-	}
 }
 
 func TestReorderEpicsInTheProject(t *testing.T) {

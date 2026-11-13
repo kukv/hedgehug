@@ -38,10 +38,26 @@ func CheckDates(start, end string) error {
 }
 
 func checkSameName(title string, self ID, siblings []Project) error {
-	for _, s := range siblings {
-		if (self == "" || s.ID != self) && s.Title == title { // self が空なら(作成)、誰も除かない
-			return refusal.New("このワークスペースには同じ名前のプロジェクトがあります")
-		}
+	if sameName(title, self, siblings) {
+		return refusal.New("このワークスペースには同じ名前のプロジェクトがあります")
 	}
 	return nil
+}
+
+// CheckRevive は、削除済みのプロジェクト(タイトル title)の削除を取り消す検査(08「復元」)。
+// 同じワークスペースの削除されていないプロジェクト siblings に同じ名前があれば断る(作成・名前の変更と同じ比べ方)。
+func CheckRevive(title string, siblings []Project) error {
+	if sameName(title, "", siblings) {
+		return refusal.New("同じ名前のプロジェクトがあります。先にそのプロジェクトの名前を変更してください")
+	}
+	return nil
+}
+
+func sameName(title string, self ID, siblings []Project) bool {
+	for _, s := range siblings {
+		if (self == "" || s.ID != self) && s.Title == title { // self が空なら(作成)、誰も除かない
+			return true
+		}
+	}
+	return false
 }

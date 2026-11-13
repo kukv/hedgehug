@@ -1,12 +1,14 @@
 import type { Item, Kind, PropertyInput } from "../../model/item";
 import type { Member } from "../../model/member";
 import type { WorkspaceProperty, WorkspaceSettings, WorkspaceValue } from "../../model/workspace";
+import { rulesOf, usesIn } from "../workspaces/projectRules";
 import { categoryLabels } from "../workspaces/values";
 import { transitionRefusal } from "../workspaces/workflow";
 
 // 詳細パネルと作成ダイアログのプロパティの行(02「プロパティの入力と保存」、決定 19〜21)。
 
 export const deletedValue = "(削除された値)";
+const unusedHint = "このプロジェクトでは使わない";
 
 export interface ValueOption {
   id: string;
@@ -89,23 +91,37 @@ function listOf(settings: WorkspaceSettings, p: WorkspaceProperty): WorkspaceVal
 
 // statusOptions は、ステータスのメニューの項目(決定 21)。workflow なら、遷移の制約で移れない項目を無効にし、
 // 理由を添える(02「ステータスの変更」、A3b-4)。作成ダイアログは制約を適用しないので false。
-// 使わないステータスの扱いは B5 の後(決定 3)。
+// project があれば、そのプロジェクトが使うステータスだけを並べる。いまの値が使わないものなら、その 1 項目を
+// チェックつきで残し、「このプロジェクトでは使わない」と添える(03「使うステータス」)。
 export function statusOptions(
   settings: WorkspaceSettings,
   current: string,
   workflow = false,
+  project?: string,
 ): ValueOption[] {
-  return settings.statuses.map((s) => {
-    const reason = workflow ? transitionRefusal(settings, current, s.id) : null;
-    return {
-      id: s.id,
-      label: s.name,
-      hint: s.category ? categoryLabels[s.category] : undefined,
-      checked: s.id === current,
-      ...(reason ? { disabled: true, reason } : {}),
-    };
-  });
+  const rules = project === undefined ? undefined : rulesOf(settings, project);
+  const unused = (id: string) => rules !== undefined && !usesIn(settings, rules, id);
+  return settings.statuses
+    .filter((s) => !unused(s.id) || s.id === current)
+    .map((s) => {
+      const reason = workflow ? transitionRefusal(settings, current, s.id, project) : null;
+      return {
+        id: s.id,
+        label: s.name,
+        hint: unused(s.id) ? unusedHint : s.category ? categoryLabels[s.category] : undefined,
+        checked: s.id === current,
+        ...(reason ? { disabled: true, reason } : {}),
+      };
+    });
 }
+
+// projectStatusOptions は、プロジェクトが使うステータスのメニュー。
+export const projectStatusOptions = (
+  settings: WorkspaceSettings,
+  project: string,
+  current: string,
+  workflow = false,
+): ValueOption[] => statusOptions(settings, current, workflow, project);
 
 export const unknownUser = "不明なユーザー";
 
@@ -127,7 +143,12 @@ function peopleOptions(people: People, current: string): ValueOption[] {
   return options;
 }
 
-function choiceRow(settings: WorkspaceSettings, p: WorkspaceProperty, value: PropertyInput) {
+function choiceRow(
+  settings: WorkspaceSettings,
+  p: WorkspaceProperty,
+  value: PropertyInput,
+  project?: string,
+) {
   const list = listOf(settings, p);
   const ids = Array.isArray(value) ? value : value ? [String(value)] : [];
   const names = ids.map((id) => list.find((v) => v.id === id)?.name);
@@ -136,7 +157,7 @@ function choiceRow(settings: WorkspaceSettings, p: WorkspaceProperty, value: Pro
   const text = deleted ? deletedValue : names.length > 0 ? names.join(", ") : "なし";
   const options =
     p.type === "status"
-      ? statusOptions(settings, ids[0] ?? "")
+      ? statusOptions(settings, ids[0] ?? "", false, project)
       : list.map((v) => ({ id: v.id, label: v.name, checked: ids.includes(v.id) }));
   if (p.type === "single") options.unshift({ id: "", label: "なし", checked: ids.length === 0 });
   return { text, deleted, options };
@@ -148,11 +169,12 @@ export function propertyRows(
   kind: Kind,
   values: (p: WorkspaceProperty) => PropertyInput,
   people: People,
+  project?: string,
 ): PropertyRow[] {
   return visibleProperties(settings, kind).map((p) => {
     const value = values(p);
     const base = { property: p, extra: !p.builtin, value };
-    if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value) };
+    if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value, project) };
     if (p.type === "user") {
       const options = peopleOptions(people, String(value));
       const text = options.find((o) => o.checked)?.label ?? "";

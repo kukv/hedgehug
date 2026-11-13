@@ -16,15 +16,21 @@ export {
 } from "./features/accounts/signIn";
 export {
   addedMessage,
+  appMissingBandText,
   askingText,
   changedMessage,
+  copiedText,
+  copyFailedText,
   deletedMessage,
   deniedText,
   expiredText,
+  installRequestText,
   methodChoices,
   methodLine,
   reauthedMessage,
+  recheckedText,
   signedInMessage,
+  stillUnreadableText,
   waitingText,
 } from "./features/accounts/text";
 export type {

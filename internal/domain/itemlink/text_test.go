@@ -67,3 +67,10 @@ func TestRefreshSummaryForAnIssue(t *testing.T) {
 		t.Errorf("%q\nwant %q (an issue has no review sentence)", got, want)
 	}
 }
+
+func TestAutoSummary(t *testing.T) {
+	got := itemlink.AutoSummary("WEB-1", itemlink.Ref{Kind: itemlink.PR, Repo: "example-org/web", Number: 5})
+	if want := "WEB-1 に example-org/web#5 を自動でリンク"; got != want {
+		t.Errorf("%q, want %q", got, want)
+	}
+}

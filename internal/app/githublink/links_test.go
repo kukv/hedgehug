@@ -27,16 +27,23 @@ const (
 )
 
 // linkRecorder は、Write に渡した操作を覚える。before があれば、次の Write の前に 1 回だけ呼ぶ(同時の変更)。
+// failOn があれば Write の前に呼び、エラーを返したらその保存を失敗させる。
 type linkRecorder struct {
 	*apptest.Stores
 	ops    []port.Operation
 	before func()
+	failOn func(op port.Operation) error
 }
 
 func (r *linkRecorder) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
 	if b := r.before; b != nil {
 		r.before = nil
 		b()
+	}
+	if r.failOn != nil {
+		if err := r.failOn(op); err != nil {
+			return err
+		}
 	}
 	r.ops = append(r.ops, op)
 	return r.Stores.Write(ctx, id, op, fn)
@@ -113,6 +120,8 @@ type linkFixture struct {
 	checks   *apptest.Checks
 	events   *apptest.Events
 	reads    *memReads
+	scans    *memScans
+	missing  *memMissing
 	inbox    *apptest.Inbox
 }
 
@@ -143,22 +152,28 @@ func newLinks(t *testing.T) *linkFixture {
 	infos := &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
 		{ID: linkStore, Name: "main", Account: "A1"}, {ID: otherStore, Name: "other", Account: "A1"},
 	}}
-	f := &linkFixture{stores: &linkRecorder{Stores: s}, gh: gh, accounts: accounts, infos: infos, checks: apptest.NewChecks(), events: &apptest.Events{}, reads: newMemReads(), inbox: &apptest.Inbox{}}
+	f := &linkFixture{stores: &linkRecorder{Stores: s}, gh: gh, accounts: accounts, infos: infos, checks: apptest.NewChecks(), events: &apptest.Events{}, reads: newMemReads(), scans: newMemScans(), missing: newMemMissing(), inbox: &apptest.Inbox{}}
 	f.tokens = &fakeTokens{infos: infos, accounts: accounts, token: "tok"}
 	f.links = githublink.Links{
 		Stores: f.stores, Identity: apptest.Identity{Login: "hanako"},
 		Tokens: f.tokens, GitHub: gh, Accounts: accounts, StoreGH: infos,
-		Checks: f.checks, Reads: f.reads, Inbox: f.inbox, Events: f.events, Clock: clock,
+		Checks: f.checks, Reads: f.reads, Scans: f.scans, Missing: f.missing, Inbox: f.inbox, Events: f.events, Clock: clock,
 	}
 	return f
 }
 
 func (f *linkFixture) add(t *testing.T, store port.StoreID, id item.ID, kind itemlink.Kind, repo, number string, toProject bool) error {
 	t.Helper()
+	_, err := f.addRepoToo(t, store, id, kind, repo, number, toProject)
+	return err
+}
+
+// addRepoToo は add と同じで、プロジェクトに足したリポジトリ(足さなければ空)も返す。
+func (f *linkFixture) addRepoToo(t *testing.T, store port.StoreID, id item.ID, kind itemlink.Kind, repo, number string, toProject bool) (string, error) {
+	t.Helper()
 	return f.links.Add(t.Context(), store, id, githublink.AddLinkInput{Kind: kind, Repo: repo, Number: number, AddToProject: toProject})
 }
 
-//nolint:unparam // Task 9 のテストが別の Store でも使う
 func (f *linkFixture) list(t *testing.T, store port.StoreID, id item.ID) []githublink.LinkRow {
 	t.Helper()
 	rows, err := f.links.List(t.Context(), store, id)
@@ -291,8 +306,12 @@ func TestAddLinkGitHubFailures(t *testing.T) {
 
 func TestAddLinkToProject(t *testing.T) {
 	f := newLinks(t)
-	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", true); err != nil {
+	added, err := f.addRepoToo(t, linkStore, linkTask, itemlink.PR, " org/web ", "41", true)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if added != "org/web" {
+		t.Errorf("added = %q", added)
 	}
 	if f.lastSummary() != "HH-2 に org/web#41 をリンク(プロジェクトのリポジトリにも追加)" {
 		t.Errorf("summary = %q", f.lastSummary())
@@ -308,8 +327,12 @@ func TestAddLinkToProject(t *testing.T) {
 	}
 	// プロジェクトにもうあるリポジトリは足さない
 	f.gh.Put("org/web", port.Found{Kind: itemlink.PR, Repo: "org/web", Number: 42, Values: itemlink.Values{Title: "b", State: itemlink.Open, Review: itemlink.NoReview}})
-	if err := f.add(t, linkStore, linkEpic, itemlink.PR, "ORG/web", "42", true); err != nil {
+	added, err = f.addRepoToo(t, linkStore, linkEpic, itemlink.PR, "ORG/web", "42", true)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if added != "" {
+		t.Errorf("added = %q, want none for a repo already in the project", added)
 	}
 	if f.lastSummary() != "HH-1 に org/web#42 をリンク" {
 		t.Errorf("summary = %q", f.lastSummary())

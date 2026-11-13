@@ -18,11 +18,11 @@ func (s Service) Rename(ctx context.Context, store port.StoreID, id workspace.ID
 	}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("ワークスペースの名前を「%s」に変更", oneLine(name))}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		w, err := tx.Workspaces().Get(id)
+		w, err := port.LiveWorkspace(tx, id)
 		if err != nil {
 			return err
 		}
-		others, err := tx.Workspaces().List()
+		others, err := port.LiveWorkspaces(tx)
 		if err != nil {
 			return err
 		}

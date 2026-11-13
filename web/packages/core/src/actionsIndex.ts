@@ -40,8 +40,16 @@ export {
 } from "./features/transfers/dialogText";
 export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
 export { openMoved } from "./features/transfers/openMoved";
+export {
+  createWorkspaceDelete,
+  type DeleteWorkspaceTarget,
+  leaveDeletedWorkspace,
+  type WorkspaceDelete,
+  type WorkspaceDeleteState,
+} from "./features/workspaces/delete";
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
-export type { MoveCandidate } from "./model/itemAction";
+export { deleteMenuItem } from "./features/workspaces/sidebarMenu";
+export type { MoveCandidate, MovePreview, MovePreviewStatus } from "./model/itemAction";
 export type {
   Gone,
   GoneReason,

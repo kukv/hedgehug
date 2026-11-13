@@ -133,5 +133,5 @@ func (d *e2eDevice) handler(token string, next http.Handler) http.Handler {
 
 // wrap は、通しのテストが偽の GitHub とデバイスフローの答えを決める入口と、1 回の読み取りの入口を足す。
 func wrap(token string, deps httpapi.Deps, h http.Handler) http.Handler {
-	return githubReadHandler(token, deps.Links, githubHandler(token, e2eDeviceFlow.handler(token, h)))
+	return githubReadHandler(token, deps.Links, pullsHandler(token, githubHandler(token, e2eDeviceFlow.handler(token, h))))
 }

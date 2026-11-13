@@ -60,10 +60,10 @@ func CheckTransition(s Settings, from, to change.ID) error {
 	}
 	names := make([]string, 0, len(allowed))
 	for _, id := range allowed {
-		names = append(names, statusName(s, id))
+		names = append(names, StatusName(s, id))
 	}
 	return refusal.New(fmt.Sprintf("ワークフローの制約: %s から %s には変更できません(%s のみ)",
-		statusName(s, from), statusName(s, to), strings.Join(names, "・")))
+		StatusName(s, from), StatusName(s, to), strings.Join(names, "・")))
 }
 
 // WorkflowDeleteDrafts は、ステータス id を表から外す行(B3-15)。id の行の許可先と、ほかの行の id。

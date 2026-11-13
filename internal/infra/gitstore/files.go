@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
@@ -195,4 +197,48 @@ func appendTransfers(root string, recs []transfer.Record) error {
 		return err
 	}
 	return f.Close()
+}
+
+// writeExtras は、この Tx で消したアイテムのフォルダを消し、書いた転送記録を transfers.jsonl に足す。
+// 書き直し(rewriteStale)のあとに呼ぶ。
+func writeExtras(wt *git.Worktree, t *tx) error {
+	refs := make([]change.Ref, 0, len(t.removed))
+	for ref := range t.removed {
+		refs = append(refs, ref)
+	}
+	slices.SortFunc(refs, func(a, b change.Ref) int { return strings.Compare(string(a.ID), string(b.ID)) })
+	for _, ref := range refs {
+		if err := removeFolder(wt, t.root, ref); err != nil {
+			return err
+		}
+	}
+	if len(t.transfers) == 0 {
+		return nil
+	}
+	if err := appendTransfers(t.root, t.transfers); err != nil {
+		return err
+	}
+	return addPaths(wt, transfersFile)
+}
+
+// removeFolder は、エンティティのフォルダの中のファイルをインデックスと作業ツリーから消し、フォルダを消す。
+// フォルダがなければ(同じ Tx で写しただけのもの)何もしない。
+func removeFolder(wt *git.Worktree, root string, ref change.Ref) error {
+	d, err := dirOf(ref)
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Join(root, d))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if _, err := wt.Remove(filepath.Join(d, e.Name())); err != nil {
+			return err
+		}
+	}
+	return os.RemoveAll(filepath.Join(root, d))
 }

@@ -42,7 +42,7 @@
 | D4a-7 | 「GitHub を読む間隔」は config.yaml の `sync.github_interval`(秒)で読む。書かれていなければ 5 分。書き換える画面は設定「一般」を作るトラック G が足す | C2-4 の `sync.interval` と同じ書き方。設定「一般」は G(C2 画面の決定 S1) |
 | D4a-8 | 自動で読むのは、「裏で自動的に同期する」がオンで、見えているタブが待つ条件にもオフラインにもないときだけ。待つ条件とオフラインは、自動の同期(`syncing.Auto`)がすでに受けている知らせを使う(`Auto.Waiting`。cmd で `Reader.Waiting` に渡す)。アプリを開いた直後とオンラインに戻ったときは、間隔が過ぎたリポジトリがあれば、1 秒ごとの判定でそのまま読む | 07「GitHub を読む間隔」の箇条 7・8・9、06「自動で同期する」の待つ条件 |
 | D4a-9 | 自動で読む Store は、閲覧のみでなく、非表示でなく、アカウントを割り当てたもの。`port.StoreGitHubInfo` に `Hidden` を足す(本物は G。いまの仮 `noStoreGitHub` は Store を返さない)。remote の有無は問わない | 07「GitHub を読む間隔」の箇条 5・10、「表示と更新」の 257・267 行、「削除の影響」の 154 行(アカウントがなければ状態の更新は止まる) |
-| D4a-10 | 間隔ごとの取り直しの対象は、削除済みでないアイテムのリンク。削除済みのアイテムのリンクは、詳細パネルを開いたときだけ取り直す(D3 のまま) | 03「実行の規則」(削除済みのアイテムには動かない)、07「PR の自動リンク」の探すリポジトリ(削除済みでないアイテム)。ゴミ箱のアイテムのために上限を使わない |
+| D4a-10 | 間隔ごとの取り直しの対象は、削除済みでないプロジェクトの、削除済みでないアイテムのリンク。削除済みのアイテムのリンクは、詳細パネルを開いても取り直さない(A4b-4 で 404) | 03「実行の規則」(削除済みのアイテムには動かない)、A4b-4(削除済みのアイテムの読み取りは 404)、07「PR の自動リンク」の探すリポジトリ(削除済みでないアイテム)。ゴミ箱のアイテムのために上限を使わない |
 | D4a-11 | 取り直しの失敗の文言は、state.db の表 `github_link_failures`(Store・リンクの `Ref.Key()`・文言)に持つ。間隔ごとの取り直しと詳細パネルを開いたときの取り直しの両方で、失敗で置き、成功で消す。`Links.List` は置いた文言を行に添える。ただし取り直さない Store(閲覧のみ、このマシンにアカウントがない。D3-9)では、`List` も `Refresh` も置いた文言を出さず、消しもしない(最終レビュー)。文言が変わったら `EventGitHub` を流す | 07「表示と更新」263 行(次の取り直しで成功すれば消す)。裏で読んだ失敗は応答で返せないので、画面が読み直したときに出せるよう、このマシンに持つ |
 | D4a-12 | リポジトリごとの失敗(認証エラー・アカウントなし以外の通信の失敗・リポジトリを読めない・上限)は、そのリポジトリの読み取りの対象のリンクすべてに同じ文言を置く。答えに番号がなかったリンクには「{リポジトリ}#{番号} が見つかりません」の文言を置く。Store のアカウントが認証エラーなら、そのリポジトリのリンクに認証エラーの文言を置く | 07「表示と更新」263 行、「GitHub との通信に使うアカウント」160 行 |
 | D4a-13 | きっかけの判定は `automation.LinkEvents(before *itemlink.Link, after itemlink.Link)`。before が nil なら「PR をリンクして…のとき」、そうでなければ「…に変わったとき」の行(07 の 292〜299 行)。「リンクした PR がマージされたとき」の `AllMerged` は、保存のあとのそのアイテムのリンクで数える(`automation.AllMerged`。Closed の PR を除いて 1 件以上あり、すべて Merged) | 07「PR・Issue の状態で動く自動化」、`automation.Event.AllMerged` のコメント(B4) |
@@ -636,7 +636,7 @@ git commit -m "feat(app): 取り直しの失敗の文言をこのマシンに持
   func newPass() *pass
 
   // fire は、保存 tx の中で、アイテム id のリンクが before から after になったきっかけでルールを動かし、
-  // 変えた行を書く。p が nil なら 1 回きりの操作(手でのリンク)。削除済みのアイテムでは動かさない。
+  // 変えた行を書く。p が nil なら 1 回きりの操作(手でのリンク)。削除済みのアイテムは呼ぶ側が 404 にする。
   func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p *pass) ([]fired, error)
 
   // notify は、保存のあとに、動いたルールの通知を受信箱に書く(B4-10・B4-14 と同じ形)。
@@ -656,17 +656,16 @@ git commit -m "feat(app): 取り直しの失敗の文言をこのマシンに持
 - `TestRefreshAllMergedOrder`(Review Focus 2): 「すべてマージ済みのときだけ」のルールがあるアイテムに Open の PR が 2 本あり、取り直しで 2 本とも Merged になると、ルールは 1 回だけ動き、1 本目のリンクの保存の中で動く。2 本の並びを逆にしても 1 回だけ動く。
 - `TestRefreshSameTriggerOnce`: 同じアイテムの 2 本の PR が、1 回の取り直しで両方 Merged になったとき、`AllMerged` を付けないルールも 1 回だけ動く(通知も 1 件)。
 - `TestRefreshUnlinkedMeanwhile`(Review Focus 1): GitHub から読んだあと、書く前に、そのリンクを解除する(偽の `Stores` の書き込みの前に `Remove` を差し込む)と、値もきっかけも書かない。
-- `TestFireSkipsDeletedItem`: 削除済みのアイテムで取り直しても、値は書くがルールは動かない。
 - `TestRefreshStoppedNotifies`: ワークフローの制約で止まったルールは、何も書かず、受信箱に止まった理由つきの通知を 1 件書く。
 
 - [ ] **Step 2: テストが落ちることを確かめる**
 
-Run: `go test ./internal/app/githublink/ -run 'TestAdd.*Fire|TestRefresh(Merged|AllMerged|SameTrigger|Unlinked|Stopped)|TestFireSkips'`
+Run: `go test ./internal/app/githublink/ -run 'TestAdd.*Fire|TestRefresh(Merged|AllMerged|SameTrigger|Unlinked|Stopped)'`
 Expected: FAIL
 
 - [ ] **Step 3: `fire.go`・`write.go` を書き、`Add`・`Refresh` から使う**
 
-`fire` の流れ: `tx.Items().Get(id)` で削除済みなら何もしない → `automation.LinkEvents(before, after)` から、`p` が覚えている(アイテム・きっかけ)を除く → ワークスペースのログから `automation.FromLog` → 設定(`tx.Workspaces().Get(ws)` の設定)→ きっかけごとに `automation.Run(st, rules, it, automation.Event{Trigger: t, AllMerged: …})`。`AllMerged` は、保存のあとのアイテムのリンク(`itemlink.FromLog` で読み直したもの)の値を、`p.fetched` にある値で置き換えてから `automation.AllMerged` で数える。動いたルールの行(`o.Draft`)を `tx.WriteItems().Append` で書き、1 つ目のルールがステータスを変えたら、次のきっかけのルールは変えたあとのアイテムで判定する(`automation.Run` は it を値で受けるので、`o.Draft` を当てたあとの it を作り直す)。起こしたきっかけを `p.fired` に覚える。`Refresh` は、すべてのリンクを `lookup` してから(`p.fetched` に入れ)、リンクごとに `writeFound` で書く。
+`fire` の流れ: `tx.Items().Get(id)` で読む(削除済みのアイテムは呼ぶ側の readItem が 404 にするので、ここには来ない) → `automation.LinkEvents(before, after)` から、`p` が覚えている(アイテム・きっかけ)を除く → ワークスペースのログから `automation.FromLog` → 設定(`tx.Workspaces().Get(ws)` の設定)→ きっかけごとに `automation.Run(st, rules, it, automation.Event{Trigger: t, AllMerged: …})`。`AllMerged` は、保存のあとのアイテムのリンク(`itemlink.FromLog` で読み直したもの)の値を、`p.fetched` にある値で置き換えてから `automation.AllMerged` で数える。動いたルールの行(`o.Draft`)を `tx.WriteItems().Append` で書き、1 つ目のルールがステータスを変えたら、次のきっかけのルールは変えたあとのアイテムで判定する(`automation.Run` は it を値で受けるので、`o.Draft` を当てたあとの it を作り直す)。起こしたきっかけを `p.fired` に覚える。`Refresh` は、すべてのリンクを `lookup` してから(`p.fetched` に入れ)、リンクごとに `writeFound` で書く。
 
 - [ ] **Step 4: テストが通ることを確かめる**
 
@@ -841,10 +840,11 @@ Expected: すべて緑。
 
 ## A4b が入ったときに足すもの
 
-develop にはまだアイテムの削除の印がない(A4b が足す)。D4a は削除済みのアイテムを見分けられないので、A4b が develop に入ったら、次をこの順に足す。コードの「削除の印は A4b が足す」のコメントは、この節を指す。
+A4b が入ったあとの扱いは `2026-11-14-hedgehug-d4a-deleted-items.md` の DD-1〜DD-4 のとおり。
 
-| 場所 | 足すこと | 確かめるテスト |
+| 場所 | したこと | 確かめるテスト |
 |---|---|---|
-| `githublink.fire`(`fire.go`) | 削除済みのアイテムでは、ルールを動かさずに何も返さない(エラーにしない)。リンクの値は書く | `TestFireSkipsDeletedItem`(03「削除済みのアイテムには動かない」)。Task 11 の Step 1 の一覧にあるが、削除の印がないのでまだ書いていない。A4b が入ったときに書く |
-| `githublink.collectProject`(`read_collect.go`。`ReadOnce`) | アイテムの一覧を、削除済みを除いた読み手(A4b の live-items の読み手)で読み、削除済みのアイテムのリンクの番号を頼まない(D4a-10) | `ReadOnce` のテストを足す: 削除済みのアイテムだけがリンクしている番号は `ReadMany` に頼まず、文言も置かない |
-| `githublink.writeRefresh`・`readItem`(`write.go`・`links.go`。詳細パネルを開いたときの削除済みのアイテムの取り直し) | D4a-10 は「削除済みのアイテムのリンクも、詳細パネルを開いたときは取り直す」とする。一方 A4b-4 は「削除済みのアイテムの読み取りは 404」とする。どちらを採るかは A4b が決め、決めたほうに合わせて `readItem` と Refresh のテストを直す | A4b の決定に合わせて、Refresh の削除済みのアイテムのテストを足す |
+| `fire` | 判定は足さない(DD-1) | `TestLinksOfADeletedItemAreNotFound` |
+| `collect`・`collectProject` | `port.LiveProjects`・`LiveItems` で集める(DD-3) | `TestReadOnceSkipsDeletedItems`・`TestReadOnceSkipsDeletedProject` |
+| `writeTarget` | 読んだあとで削除されたら飛ばす(DD-4) | `TestReadOnceItemDeletedMeanwhile`・`TestReadOnceItemDeletedBeforeWrite` |
+| `readItem`・Refresh | A4b-4 の 404 を採った(DD-2) | `TestLinksOfADeletedItemAreNotFound` |

@@ -24,6 +24,9 @@ function setup(reload: () => Promise<void> = async () => {}) {
     if (fail !== null) throw fail;
     return base;
   };
+  const unused = async (): Promise<never> => {
+    throw new Error("unused");
+  };
   const projects: ProjectsPort = {
     get: async () => {
       throw new Error("unused");
@@ -37,6 +40,12 @@ function setup(reload: () => Promise<void> = async () => {}) {
     setDate: (s, p, field, value) => done(`setDate ${s} ${p} ${field} ${value}`),
     addRepo: (s, p, repo) => done(`addRepo ${s} ${p} ${repo}`),
     removeRepo: (s, p, repo) => done(`removeRepo ${s} ${p} ${repo}`),
+    setStatusUsed: unused,
+    setTransition: unused,
+    setTemplateUsed: unused,
+    setTemplateDefault: unused,
+    setRuleRuns: unused,
+    resetRules: unused,
   };
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   let changed = 0;

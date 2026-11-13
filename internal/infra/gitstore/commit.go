@@ -1,6 +1,8 @@
 package gitstore
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -70,7 +72,7 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 		return strings.Compare(string(a.Kind)+"/"+string(a.ID), string(b.Kind)+"/"+string(b.ID))
 	})
 	for _, ref := range refs {
-		paths, err := writeEntity(t, ref, sc.lookup)
+		paths, err := writeEntity(t, ref, sc.lookup, sc.project)
 		if err != nil {
 			return err
 		}
@@ -88,6 +90,9 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 		return err
 	}
 	if err := writeExtras(wt, t); err != nil {
+		return err
+	}
+	if err := writePurges(wt, t); err != nil {
 		return err
 	}
 	if err := s.hook(s.beforeCommit); err != nil {
@@ -143,50 +148,6 @@ func writeTexts(wt *git.Worktree, t *tx) error {
 	return nil
 }
 
-// writeExtras は、この Tx で消したアイテムのフォルダを消し、書いた転送記録を transfers.jsonl に足す。
-// 書き直し(rewriteStale)のあとに呼ぶ。
-func writeExtras(wt *git.Worktree, t *tx) error {
-	refs := make([]change.Ref, 0, len(t.removed))
-	for ref := range t.removed {
-		refs = append(refs, ref)
-	}
-	slices.SortFunc(refs, func(a, b change.Ref) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for _, ref := range refs {
-		if err := removeFolder(wt, t.root, ref); err != nil {
-			return err
-		}
-	}
-	if len(t.transfers) == 0 {
-		return nil
-	}
-	if err := appendTransfers(t.root, t.transfers); err != nil {
-		return err
-	}
-	return addPaths(wt, transfersFile)
-}
-
-// removeFolder は、エンティティのフォルダの中のファイルをインデックスと作業ツリーから消し、フォルダを消す。
-// フォルダがなければ(同じ Tx で写しただけのもの)何もしない。
-func removeFolder(wt *git.Worktree, root string, ref change.Ref) error {
-	d, err := dirOf(ref)
-	if err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(filepath.Join(root, d))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if _, err := wt.Remove(filepath.Join(d, e.Name())); err != nil {
-			return err
-		}
-	}
-	return os.RemoveAll(filepath.Join(root, d))
-}
-
 // rewriteStale は、設定が変わったワークスペースの、ほかのアイテムの item.yaml を同じコミットで作り直す(B2-19)。
 func rewriteStale(wt *git.Worktree, t *tx, sc *txSettings, stale []change.ID) error {
 	for _, id := range stale {
@@ -201,6 +162,45 @@ func rewriteStale(wt *git.Worktree, t *tx, sc *txSettings, stale []change.ID) er
 	return sc.err
 }
 
+// writePurges は、この Tx で完全に削除したエンティティのフォルダのファイルを消し、purged.jsonl に
+// 1 つにつき 1 行足す(保存形式「削除・復元・完全に削除」)。
+func writePurges(wt *git.Worktree, t *tx) error {
+	if len(t.purges) == 0 {
+		return nil
+	}
+	var b bytes.Buffer
+	for _, p := range t.purges {
+		d, err := dirOf(change.Ref{Kind: p.Entity, ID: p.Target})
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(filepath.Join(t.root, d)); err == nil {
+			if _, err := wt.Remove(d); err != nil {
+				return err
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		line, err := json.Marshal(p)
+		if err != nil {
+			return err
+		}
+		b.Write(append(line, '\n'))
+	}
+	f, err := os.OpenFile(filepath.Join(t.root, "purged.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302・G304: パスは Store の根と決まったファイル名で、中身は共有するもので秘密ではない
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(b.Bytes()); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return addPaths(wt, "purged.jsonl")
+}
+
 func (s *Stores) hook(f func() error) error {
 	if f == nil {
 		return nil
@@ -210,7 +210,7 @@ func (s *Stores) hook(f func() error) error {
 
 // writeEntity は、1 つのエンティティの log.jsonl に行を足し、読む用の YAML を作り直す。
 // 書いたファイル(Store の根からの相対パス)を返す。
-func writeEntity(t *tx, ref change.Ref, settings settingsOf) ([]string, error) {
+func writeEntity(t *tx, ref change.Ref, settings settingsOf, projects projectOf) ([]string, error) {
 	d, err := dirOf(ref)
 	if err != nil {
 		return nil, err
@@ -223,7 +223,7 @@ func writeEntity(t *tx, ref change.Ref, settings settingsOf) ([]string, error) {
 		return nil, err
 	}
 	paths := []string{filepath.Join(d, "log.jsonl")}
-	y, err := renderYAML(ref.Kind, append(base, t.pending[ref]...), settings)
+	y, err := renderYAML(ref.Kind, append(base, t.pending[ref]...), settings, projects)
 	if err != nil || y == nil {
 		return paths, err
 	}

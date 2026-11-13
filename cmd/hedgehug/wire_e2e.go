@@ -51,7 +51,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
 		return httpapi.Deps{}, err
 	}
-	reads, err := e2eReads(ctx)
+	state, err := e2eReads(ctx)
 	if err != nil {
 		return httpapi.Deps{}, err
 	}
@@ -72,7 +72,9 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		}},
 		Accounts:    accounts,
 		Checks:      apptest.NewChecks(),
-		GitHubReads: reads,
+		GitHubReads: state.GitHubReads(),
+		PRScans:     state.PRScans(),
+		AppMissing:  state.AppMissing(),
 		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
 		GitHub:      e2eGitHub,
 		DeviceFlow:  e2eDeviceFlow,
@@ -157,8 +159,8 @@ func tokenAndAddr() (token, addr string) {
 	return os.Getenv("HEDGEHUG_TOKEN"), os.Getenv("HEDGEHUG_ADDR")
 }
 
-// e2eReads は、取り直しの失敗の文言を持つ state.db を、使い捨ての場所に開く。止めるときに閉じて消す。
-func e2eReads(ctx context.Context) (port.GitHubReads, error) {
+// e2eReads は、GitHub の記録を持つ state.db を、使い捨ての場所に開く。止めるときに閉じて消す。
+func e2eReads(ctx context.Context) (*statedb.DB, error) {
 	dir, err := os.MkdirTemp("", "hedgehug-e2e-state-")
 	if err != nil {
 		return nil, err
@@ -172,5 +174,5 @@ func e2eReads(ctx context.Context) (port.GitHubReads, error) {
 		_ = db.Close()
 		_ = os.RemoveAll(dir)
 	})
-	return db.GitHubReads(), nil
+	return db, nil
 }

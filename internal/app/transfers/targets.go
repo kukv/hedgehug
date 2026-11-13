@@ -63,7 +63,7 @@ func (s Service) storeTargets(ctx context.Context, info port.StoreInfo, skip wor
 	var out []Target
 	ranks := map[workspace.ID]string{}
 	err := s.Stores.Read(ctx, info.ID, func(r port.Reader) error {
-		wss, err := r.Workspaces().List()
+		wss, err := port.LiveWorkspaces(r)
 		if err != nil {
 			return err
 		}

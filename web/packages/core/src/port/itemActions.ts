@@ -2,6 +2,7 @@ import type { Kind } from "../model/item";
 import type {
   DeletePreview,
   MoveCandidate,
+  MovePreview,
   MoveTarget,
   ProjectDeletePreview,
 } from "../model/itemAction";
@@ -18,7 +19,16 @@ export interface ItemActionsPort {
   deleteProject(storeId: string, projectId: string): Promise<void>;
   // moveCandidates は、「移動…」の候補をすべて返す(絞るのは画面)。
   moveCandidates(storeId: string, itemId: string): Promise<MoveCandidate[]>;
-  move(storeId: string, itemId: string, to: MoveTarget): Promise<void>;
+  // movePreview は、移動の確認ダイアログに出す件数を読む(保存しない。B5a-19)。
+  movePreview(storeId: string, itemId: string, to: MoveTarget): Promise<MovePreview>;
+  // move の statuses は、プロジェクトが変わるときの、移動先が使わないステータス → 置き換え先。指定のないものは、
+  // 同じ分類の移動先の既定になる。
+  move(
+    storeId: string,
+    itemId: string,
+    to: MoveTarget,
+    statuses?: Record<string, string>,
+  ): Promise<void>;
   changeKind(storeId: string, itemId: string, kind: Kind): Promise<void>;
   // duplicate は、新しいアイテムの内部 ID を返す。
   duplicate(storeId: string, itemId: string): Promise<string>;

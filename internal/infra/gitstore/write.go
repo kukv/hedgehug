@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
@@ -49,75 +47,12 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 		return err
 	}
 	defer unlock()
-	return s.writeLocked(root, op, fn)
+	return s.runTx(root, op, fn)
 }
 
-// SyncSave は、1 つのロックの中で、受け取り・保存・送信を行う(port.Replicator)。送信が他の人の更新と
-// 重なったら、保存を捨てて受け取りからやり直す(Sync と同じく最大 maxSendTries 回)。
-func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
-	if remote.ReceiveOnly {
-		return port.SyncResult{}, fmt.Errorf("%w: cannot save to a receive-only store", port.ErrInvalidOperation)
-	}
-	s, unlock, err := r.begin(id, remote)
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	defer unlock()
-	for range maxSendTries {
-		res, err := s.saveOnce(ctx, op, fn)
-		if errors.Is(err, errRejected) {
-			continue
-		}
-		if errors.Is(err, port.ErrRemoteRewritten) {
-			err = errors.Join(err, s.restoreSeen())
-		}
-		return res, err
-	}
-	return port.SyncResult{}, port.ErrSendConflict
-}
-
-// saveOnce は、受け取り → 保存 → 送信を 1 回行う。送信が断られたら、保存のコミットを捨てる
-// (受け取って合わせた結果は残す)。送信が拒否されたら errRejected。
-func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
-	theirs, err := s.receive(ctx)
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	head, err := s.repo.Head()
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	base := head.Hash()
-	if err := s.r.stores.writeLocked(s.root, op, fn); err != nil {
-		return port.SyncResult{}, &port.SaveError{Err: err}
-	}
-	now, err := s.push(ctx, theirs)
-	if err != nil {
-		if derr := s.discard(base); derr != nil {
-			// 捨てられなかったときは、やり直さない(保存のコミットの上に受け取り直さない)。印が残り、次の操作が
-			// そのときの先端に作業ツリーを合わせる。保存のコミットが残ったかもしれないので、目印を付ける。
-			if errors.Is(err, errRejected) {
-				err = port.ErrSendConflict
-			}
-			return port.SyncResult{}, errors.Join(err, port.ErrSaveNotDiscarded, derr)
-		}
-		return port.SyncResult{}, err
-	}
-	return s.result(theirs, now, true)
-}
-
-// discard は、先端を base に戻し、作業ツリーとインデックスを合わせる(base にないファイルとフォルダを消す)。
-// 途中で止まったら印が残り、次の操作の recoverInterrupted が、そのときの先端に作業ツリーを合わせる。
-func (s syncRun) discard(base plumbing.Hash) error {
-	wt, err := s.repo.Worktree()
-	if err != nil {
-		return err
-	}
-	return s.guarded(func() error { return rollback(wt, base) })
-}
-
-// writeLocked は、Store のロックを持っているあいだの Write の本体。
-func (s *Stores) writeLocked(root string, op port.Operation, fn func(tx port.Tx) error) error {
+// runTx は、Write の中身(fn を動かし、行か説明があれば 1 つのコミットにする)。Store のロックは呼んだ側が持つ
+// (Sync の中の修復と SyncSave の保存も、ロックを取り直さずにこれで書く)。
+func (s *Stores) runTx(root string, op port.Operation, fn func(port.Tx) error) error {
 	t := &tx{
 		view: view{root: root, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}, removed: map[change.Ref]bool{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
@@ -126,7 +61,7 @@ func (s *Stores) writeLocked(root string, op port.Operation, fn func(tx port.Tx)
 	if err := fn(t); err != nil {
 		return err
 	}
-	if len(t.pending) == 0 && len(t.texts) == 0 && len(t.removed) == 0 && len(t.transfers) == 0 {
+	if len(t.pending) == 0 && len(t.texts) == 0 && len(t.removed) == 0 && len(t.transfers) == 0 && len(t.purges) == 0 {
 		return nil
 	}
 	// Summary はコミットメッセージの 1 行目、ログイン名はコミットの作者になる。
@@ -142,17 +77,63 @@ type tx struct {
 	view
 	meta change.Meta
 	ids  port.IDs
+	// purges は、この Tx で完全に削除したエンティティの purged.jsonl の行(purge を呼んだ順)。
+	purges []purgedLine
+}
+
+// purgedLine は purged.jsonl の 1 行。キーの並びは保存形式「削除・復元・完全に削除」の例と同じ。
+type purgedLine struct {
+	ID      change.ID   `json:"id"`
+	At      string      `json:"at"`
+	By      string      `json:"by"`
+	Actor   string      `json:"actor"`
+	Entity  change.Kind `json:"entity"`
+	Target  change.ID   `json:"target"`
+	Display string      `json:"display"`
+}
+
+// purge は、エンティティ ref を完全に削除する(コミットのときに、フォルダのファイルを消し、purged.jsonl に
+// 1 行足す。決定 C3a-6)。display は、行の display(ワークスペースの接頭辞の ID か、内部 ID)。
+// この Tx の中では、消したものは読めない(Get は port.ErrNotFound)。この Tx で書いた行と説明も捨てる。
+func (t *tx) purge(ref change.Ref, display string) error {
+	if !ref.Valid() || ref.Kind == change.KindMembers {
+		return fmt.Errorf("%w: cannot purge %+v", port.ErrInvalidOperation, ref)
+	}
+	log, err := t.log(ref)
+	if err != nil {
+		return err
+	}
+	if len(log) == 0 {
+		return port.ErrNotFound
+	}
+	if t.gone == nil {
+		t.gone = map[change.Ref]bool{}
+	}
+	t.gone[ref] = true
+	delete(t.pending, ref)
+	delete(t.texts, ref)
+	delete(t.places, ref.ID)
+	delete(t.projectPlaces, ref.ID)
+	t.purges = append(t.purges, purgedLine{
+		ID: t.ids.New(), At: t.meta.At.Format(change.TimeLayout), By: t.meta.Actor.By(), Actor: t.meta.Actor.Code(),
+		Entity: ref.Kind, Target: ref.ID, Display: display,
+	})
+	return nil
 }
 
 func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	if !ref.Valid() {
 		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, ref.ID)
 	}
+	// 同じ Tx で完全に削除したものには書けない(書くと、消したフォルダがまたできる)。
+	if t.gone[ref] {
+		return port.ErrNotFound
+	}
 	// 行がなければ pending に足さない。足すと、空のコミットや空の log.jsonl ができる。
 	if len(drafts) == 0 {
 		return nil
 	}
-	if err := port.CheckRuleDrafts(t.meta.Actor, drafts); err != nil {
+	if err := errors.Join(port.CheckRuleDrafts(t.meta.Actor, drafts), port.CheckOpDrafts(t.meta.Actor, drafts)); err != nil {
 		return err
 	}
 	log, err := t.log(ref)

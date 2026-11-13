@@ -55,3 +55,55 @@ func TestRulesRoundTrip(t *testing.T) {
 		t.Errorf("Names = %v", names)
 	}
 }
+
+func TestDraftsWriteScopeOnlyOnCreate(t *testing.T) {
+	r := done()
+	r.Scope = "P"
+	create := automation.Drafts(automation.Rule{}, r)
+	has := func(ds []change.Draft, f string) bool {
+		for _, d := range ds {
+			if d.F == f {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(create, automation.Field(r.ID, "scope")) {
+		t.Errorf("作成に scope の行がない: %+v", create)
+	}
+	if ws := automation.Drafts(automation.Rule{}, done()); !has(ws, automation.Field(r.ID, "name")) || has(ws, automation.Field(r.ID, "scope")) {
+		t.Errorf("ワークスペース全体のルールの作成に scope を書いた: %+v", ws)
+	}
+	edited := r
+	edited.Name = "改名"
+	edited.Scope = "Q" // 編集で Scope は変えない
+	if ds := automation.Drafts(r, edited); has(ds, automation.Field(r.ID, "scope")) || len(ds) != 1 {
+		t.Errorf("編集の行 = %+v", ds)
+	}
+}
+
+func TestFromLogReadsScope(t *testing.T) {
+	r := done()
+	r.Scope = "P"
+	log := stamp(nil, change.NewCreate(map[string]any{"id": "W"}))
+	log = stamp(log, automation.Drafts(automation.Rule{}, r)...)
+	got := automation.FromLog(log)
+	if len(got) != 1 || got[0] != r {
+		t.Fatalf("FromLog = %+v", got)
+	}
+}
+
+// 消したルールの削除の行を取り消す restore の行があれば、ルールは戻る(C3a-7)。
+func TestRestoredRuleComesBack(t *testing.T) {
+	log := stamp(nil, change.NewCreate(map[string]any{"id": "W"}))
+	log = stamp(log, automation.Drafts(automation.Rule{}, done())...)
+	del := stamp(log, automation.DeleteDraft(done().ID))
+	if got := automation.FromLog(del); len(got) != 0 {
+		t.Fatalf("deleted rule = %+v", got)
+	}
+	op := del[len(del)-1].Op
+	back := stamp(del, change.NewRestore("rules/"+string(done().ID), op))
+	if got := automation.FromLog(back); len(got) != 1 || got[0] != done() {
+		t.Errorf("restored rule = %+v", got)
+	}
+}

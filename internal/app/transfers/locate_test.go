@@ -70,6 +70,22 @@ func TestLocateOldPrefix(t *testing.T) {
 	}
 }
 
+// 削除済みのワークスペース(B5b)のアイテムは開かない。同じ接頭辞で作り直したワークスペースの方を開く
+// (中のアイテムがまだ削除済みでなくても。同期の修復がまだ削除済みに入れていないとき)。
+func TestLocateSkipsADeletedWorkspace(t *testing.T) {
+	f := newFixture(t)
+	if err := apptest.DeleteWorkspace(t.Context(), f.rec, store1, mobileWS); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.svc.Locate(t.Context(), "main", "MB-1"); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("削除済みのワークスペースの MB-1: %+v, %v", got, err)
+	}
+	addWorkspace(t, f.rec, store1, workspace.Workspace{ID: "01TESTWS000000000000000024", Name: "Mobile", Prefix: "MB"}, "01TESTPR000000000000000024", "01TESTIT000000000000000024", nil)
+	if got := locate(t, f, "main", "MB-1"); !got.Found || got.Item != "01TESTIT000000000000000024" {
+		t.Errorf("作り直した MB-1: %+v", got)
+	}
+}
+
 // Review Focus 3: A → B → A(番号は再利用しないので、戻ったあとの ID は HH-3)。旧 ID はどちらも、いまの場所に辿り着く。
 func TestLocateOfAnItemMovedAwayAndBack(t *testing.T) {
 	f := newFixture(t)

@@ -99,6 +99,10 @@ func TestReadManyRepoUnreadable(t *testing.T) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		if r.URL.Path == "/user/installations" { // App のトークンでない
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		_, _ = w.Write([]byte(`{"data":{` + rateJSON + `,"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"]}]}`))
 	})
 	_, err := c.ReadMany(context.Background(), fakeToken, "org/web", []int{1})
@@ -181,6 +185,10 @@ func TestReadManySecondChunkRateLimited(t *testing.T) {
 func TestReadManyRepositoryForbidden(t *testing.T) {
 	c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/repos/org/web" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if r.URL.Path == "/user/installations" { // App のトークンでない
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
