@@ -40,6 +40,14 @@ export {
 } from "./features/notes/hours";
 export { appendMention, mentionTargets } from "./features/notes/mentions";
 export {
+  createRelations,
+  groupRelations,
+  type RelationGroup,
+  type Relations,
+  type RelationsDeps,
+  type RelationsState,
+} from "./features/notes/relations";
+export {
   createWorklogs,
   type Worklogs,
   type WorklogsDeps,
@@ -48,4 +56,10 @@ export {
   worklogDeletedMessage,
 } from "./features/notes/worklogs";
 export type { Comment, Worklog } from "./model/notes";
+export {
+  type RelationCandidate,
+  type RelationLabel,
+  type RelationRow,
+  relationLabels,
+} from "./model/relation";
 export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";

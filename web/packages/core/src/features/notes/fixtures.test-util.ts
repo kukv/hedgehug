@@ -66,5 +66,17 @@ export function fakeNotesPort(initial: Record<string, string> = {}): FakeNotes {
     async deleteWorklog() {
       throw new Error("deleteWorklog is not faked");
     },
+    async listRelations() {
+      return [];
+    },
+    async relationCandidates() {
+      return [];
+    },
+    async addRelation() {
+      throw new Error("addRelation is not faked");
+    },
+    async removeRelation() {
+      throw new Error("removeRelation is not faked");
+    },
   };
 }

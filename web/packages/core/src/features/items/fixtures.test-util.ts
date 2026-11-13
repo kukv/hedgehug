@@ -52,6 +52,7 @@ export function item(
     rank: "V",
     title,
     watchers: ["taro"],
+    blocked: false,
     createdAt: `2026-11-13T09:00:${String(n).padStart(2, "0")}.000Z`,
     createdBy: "taro",
     ...initialValues,
@@ -181,6 +182,7 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
         rank: "V",
         title: input.title,
         watchers: ["taro"],
+        blocked: false,
         createdAt: new Date(Date.UTC(2026, 10, 13, 10, 0, all.length)).toISOString(),
         createdBy: "taro",
       });
@@ -204,6 +206,7 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
         title,
         ...initialValues,
         watchers: ["taro"],
+        blocked: false,
         createdAt: new Date(Date.UTC(2026, 10, 13, 10, 0, all.length)).toISOString(),
         createdBy: "taro",
       });

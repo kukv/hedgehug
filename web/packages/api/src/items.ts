@@ -28,6 +28,7 @@ export function toItem(storeId: string, it: ApiItem): Item {
     rank: it.rank,
     title: it.title,
     watchers: it.watchers ?? [],
+    blocked: it.blocked,
     createdAt: it.createdAt,
     createdBy: it.createdBy,
     status: it.status,

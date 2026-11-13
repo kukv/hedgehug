@@ -3,6 +3,7 @@
 // 区画ごとのタスクが、自分のメソッドをここに足す。
 
 import type { Comment, Worklog } from "../model/notes";
+import type { RelationCandidate, RelationLabel, RelationRow } from "../model/relation";
 
 // NoteTarget は、対象のアイテムかプロジェクト(内部 ID)。
 export interface NoteTarget {
@@ -33,4 +34,24 @@ export interface NotesPort {
   // addWorklog は、作業時間を記録する。hours は入力のままの文字列で、サーバーも検査する(断りは Refused)。
   addWorklog(storeId: string, itemId: string, hours: string, memo: string): Promise<Worklog>;
   deleteWorklog(storeId: string, itemId: string, worklogId: string): Promise<void>;
+  // 関連(02「関連」)。label は、このアイテムから見た表記。
+  listRelations(storeId: string, itemId: string): Promise<RelationRow[]>;
+  relationCandidates(
+    storeId: string,
+    itemId: string,
+    label: RelationLabel,
+    query: string,
+  ): Promise<RelationCandidate[]>;
+  addRelation(
+    storeId: string,
+    itemId: string,
+    label: RelationLabel,
+    otherId: string,
+  ): Promise<void>;
+  removeRelation(
+    storeId: string,
+    itemId: string,
+    label: RelationLabel,
+    otherId: string,
+  ): Promise<void>;
 }
