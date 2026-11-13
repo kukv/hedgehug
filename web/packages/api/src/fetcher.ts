@@ -33,6 +33,21 @@ function detailOf(text: string): string | null {
   return null;
 }
 
+let restoredListener: ((ids: string[]) => void) | null = null;
+
+// onRestored は、削除を取り消した保存の応答(Hedgehug-Restored ヘッダー)を受ける受け手を 1 つ置く。
+export function onRestored(listener: (ids: string[]) => void): void {
+  restoredListener = listener;
+}
+
+function notifyRestored(res: Response): void {
+  const ids = (res.headers.get("Hedgehug-Restored") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id !== "");
+  if (ids.length > 0) restoredListener?.(ids);
+}
+
 export async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", authHeader());
@@ -41,5 +56,6 @@ export async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new ApiError(res.status, detailOf(text) ?? `${res.status} ${res.statusText}`);
   }
+  notifyRestored(res);
   return (text === "" ? undefined : JSON.parse(text)) as T;
 }
