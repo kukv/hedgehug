@@ -1,4 +1,4 @@
-import { NotFound, Refused } from "../../model/errors";
+import { NotFound, Refused, TransferUndoFailed } from "../../model/errors";
 import type { Item } from "../../model/item";
 import type {
   TransferInput,
@@ -26,7 +26,7 @@ export type { ReplacementRow, TransferDialogState } from "./dialogView";
 
 // 「別のワークスペースへ移動…」のダイアログ(02「移す先の選び方」「保存」、A5a-12〜A5a-14)。
 // 候補を読んで先頭のワークスペース・プロジェクト・Epic を選び、移動先が変わるたびに予告を読み直す。
-// 「移動」の失敗はトーストを出してダイアログを開いたままにする(NotFound だけは閉じて読み直す)。
+// 「移動」の失敗はトーストを出してダイアログを開いたままにする(NotFound と TransferUndoFailed は閉じて読み直す)。
 // 移したあとの詳細パネルの切り替えと読み直しは afterMoved に任せる。
 
 export interface TransferDialogDeps {
@@ -69,7 +69,10 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
     state.set(null);
   };
   const failed = (e: unknown) =>
-    deps.toasts.show(e instanceof Refused ? e.message : transferFailedMessage, { error: true });
+    deps.toasts.show(
+      e instanceof Refused || e instanceof TransferUndoFailed ? e.message : transferFailedMessage,
+      { error: true },
+    );
   // loadFailed は、候補・予告を読めなかったとき。閉じてトーストを出し、消えていたら画面を読み直す。
   async function loadFailed(e: unknown) {
     close();
@@ -138,7 +141,8 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
     } catch (e) {
       c.busy = false;
       failed(e);
-      if (e instanceof NotFound) {
+      // なくなっていた・取り消しもできなかった(両方の Store に残る)ときは、閉じて読み直す。
+      if (e instanceof NotFound || e instanceof TransferUndoFailed) {
         if (cur === c) close();
         await deps.refresh.afterChange();
       } else if (cur === c) render();

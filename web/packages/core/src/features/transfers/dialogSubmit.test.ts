@@ -150,6 +150,20 @@ describe("transfer dialog: sending (02「保存」、A5a-12)", () => {
     expect(moved).toEqual([]);
   });
 
+  // 移動元から取り除けず、取り消しもできなかった(両方の Store に残る)ときは、文をそのまま出し、閉じて読み直す(02「保存」)。
+  it("shows an undo failure as it is, closes, and reloads the screen", async () => {
+    const { dialog, fake, task, toasts, env, moved } = await setup();
+    await dialog.open(task);
+    const text =
+      "HH-2 を team の TM-2 に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください";
+    fake.undoFailNext(text);
+    await dialog.submit();
+    expect(get(dialog.state)).toBeNull();
+    expect(toasts()).toEqual([{ text, error: true }]);
+    expect(env.refreshed).toBe(1);
+    expect(moved).toEqual([]);
+  });
+
   it("sends only once while the first send is pending, and ignores destination changes meanwhile", async () => {
     const { dialog, fake, task } = await setup();
     await dialog.open(task);

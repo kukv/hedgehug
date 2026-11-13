@@ -24,11 +24,30 @@ import (
 
 // env は、S1「main」(Sample と SampleMobile。remote あり)と S2「team」(SampleTeam。remote なし)の API。
 // アイテムの API も登録する(移したあとのアイテムを読むため)。
+// failS1 を true にすると、S1 への保存(移動元の保存)が失敗する。deliver.undo に理由を置くと、2 回目の Deliver
+// (移動先の保存の取り消し)が送れない。
 type env struct {
 	api     humatest.TestAPI
 	stores  *apptest.Stores
 	list    *apptest.StoreList
 	reasons map[port.StoreID]syncstatus.Reason
+	failS1  bool
+	deliver *deliver
+}
+
+// failing は、*fail が true のあいだ、Store S1 への Write を失敗させる。
+type failing struct {
+	port.Stores
+	fail *bool
+}
+
+var errBoom = errors.New("boom")
+
+func (f failing) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	if *f.fail && id == "S1" {
+		return errBoom
+	}
+	return f.Stores.Write(ctx, id, op, fn)
 }
 
 // hide は、Store id をサイドバーで非表示にする(StoreList から除く)。
@@ -52,8 +71,9 @@ func newEnv(t *testing.T) *env {
 	_, e.api = humatest.New(t)
 	clock := apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))
 	me := apptest.Identity{Login: "taro"}
+	e.deliver = &deliver{stores: s, reasons: e.reasons}
 	transfers.Register(e.api, apptransfers.Service{
-		Stores: s, Delivery: &deliver{stores: s, reasons: e.reasons}, Identity: me, Clock: clock,
+		Stores: failing{Stores: s, fail: &e.failS1}, Delivery: e.deliver, Identity: me, Clock: clock,
 		StoreList: e.list,
 		SyncTargets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: "S1", Name: "main", Remote: "https://example.invalid/main.git"}, {ID: "S2", Name: "team"},
@@ -67,11 +87,17 @@ func newEnv(t *testing.T) *env {
 type deliver struct {
 	stores  port.Stores
 	reasons map[port.StoreID]syncstatus.Reason
+	undo    syncstatus.Reason
+	calls   int
 }
 
 var errNotSent = errors.New("not sent")
 
 func (d *deliver) Deliver(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error) {
+	d.calls++
+	if d.calls == 2 && d.undo != "" {
+		return d.undo, nil
+	}
 	r := d.reasons[id]
 	err := d.stores.Write(ctx, id, op, func(tx port.Tx) error {
 		if err := fn(tx); err != nil {

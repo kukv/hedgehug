@@ -50,6 +50,23 @@ func TestTransferThatCannotBeSent(t *testing.T) {
 	}
 }
 
+// 移動元の保存が失敗し、移動先の保存の取り消しも送れなかったとき: 409。文は「{旧 ID} を {移動先の Store 名} の {新 ID} に
+// 移しましたが…」で、送れなかったとき(422)の文ではない。アイテムは両方の Store に残る。
+func TestTransferWhoseUndoFailed(t *testing.T) {
+	e := newEnv(t)
+	e.failS1 = true
+	e.deliver.undo = syncstatus.Unreachable
+	task := "/api/stores/S1/items/" + string(apptest.SampleTask)
+	res := e.api.Post(task+"/transfer", body("S2", string(apptest.SampleTeamWorkspace), string(apptest.SampleTeamProject), string(apptest.SampleTeamEpic)))
+	want := `"detail":"HH-2 を team の TM-2 に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください"`
+	if res.Code != 409 || !strings.Contains(res.Body.String(), want) {
+		t.Errorf("%d %s", res.Code, res.Body)
+	}
+	if res := e.api.Get("/api/stores/S2/items/" + string(apptest.SampleTask)); res.Code != 200 {
+		t.Errorf("移動先にない: %d", res.Code)
+	}
+}
+
 func TestTransferNotFound(t *testing.T) {
 	e := newEnv(t)
 	epic := "/api/stores/S1/items/" + string(apptest.SampleEpic)

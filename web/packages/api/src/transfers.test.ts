@@ -1,4 +1,4 @@
-import { NotFound, Refused } from "@hedgehug/core";
+import { NotFound, Refused, TransferUndoFailed } from "@hedgehug/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "./fetcher";
 import { createTransfersPort } from "./transfers";
@@ -159,6 +159,20 @@ describe("transfers port", () => {
     ).rejects.toEqual(new Refused("team に送信できないため移動できません: 認証に失敗しました"));
     respond(404, { title: "Not Found", status: 404, detail: "not found" });
     await expect(createTransfersPort().targets("S1", "I1")).rejects.toBeInstanceOf(NotFound);
+  });
+
+  it("turns a 409 of the transfer into TransferUndoFailed with the message", async () => {
+    const text =
+      "HH-2 を team の TM-2 に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください";
+    respond(409, { title: "Conflict", status: 409, detail: text });
+    await expect(
+      createTransfersPort().transfer("S1", "I1", {
+        toStore: "S3",
+        toWorkspace: "W",
+        toProject: "P",
+        statusChoices: {},
+      }),
+    ).rejects.toEqual(new TransferUndoFailed(text));
   });
 
   it("locates an address: found with movedFrom, gone with the reason, 404 as NotFound", async () => {

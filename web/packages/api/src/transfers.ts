@@ -1,5 +1,6 @@
-import type { Located, TransfersPort } from "@hedgehug/core";
+import { type Located, TransferUndoFailed, type TransfersPort } from "@hedgehug/core";
 import { call } from "./errors";
+import { ApiError } from "./fetcher";
 import { getTransferPreview, listTransferTargets, locateItem, transferItem } from "./generated";
 
 // 別のワークスペース・別の Store への移動(A5a)。生成物の型名は import しない(Go の出力型の名前に左右されないため)。
@@ -84,15 +85,21 @@ export function createTransfersPort(): TransfersPort {
           })),
         };
       }),
+    // 409 は、移動元から取り除けず取り消しもできなかったこと(detail は 02「保存」の文の全文)。
     transfer: (storeId, itemId, input) =>
       call(async () => {
-        const r = await transferItem(storeId, itemId, input);
-        return {
-          toStore: r.toStore,
-          itemId: r.itemId,
-          display: r.display,
-          emptied: r.emptied ?? [],
-        };
+        try {
+          const r = await transferItem(storeId, itemId, input);
+          return {
+            toStore: r.toStore,
+            itemId: r.itemId,
+            display: r.display,
+            emptied: r.emptied ?? [],
+          };
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 409) throw new TransferUndoFailed(e.message);
+          throw e;
+        }
       }),
     locate: (storeName, id) =>
       call(async () => located(await locateItem({ store: storeName, id }))),

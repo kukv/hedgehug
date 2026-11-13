@@ -45,7 +45,8 @@ type crossMove struct {
 
 // moveAcross は、アイテム id を別の Store のワークスペースへ移す(A5a-4・A5a-6)。(0) 移動元を読み、(1)〜(3) 移動先を
 // Delivery.Deliver で保存して送り、(4) 移動元を Stores.Write で保存する。どの段階でも、片方の Store のロックを持ったまま
-// もう片方に触らない。送れなければ *SendError で、どちらの Store も変えない。(4) が失敗したら移動先を戻す。
+// もう片方に触らない。送れなければ *SendError で、どちらの Store も変えない。(4) が失敗したら移動先を戻す
+// (戻せなければ *UndoError)。
 func (s Service) moveAcross(ctx context.Context, store port.StoreID, id item.ID, in MoveInput) (Moved, error) {
 	m, err := s.prepare(ctx, store, id, in)
 	if err != nil {

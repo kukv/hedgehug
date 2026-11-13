@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -11,8 +12,24 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/member"
 )
 
+// UndoError は、別の Store への移動で、移動先の保存のあとに失敗し、移動先の保存の取り消しもできなかったこと(移したアイテムが
+// 移動先と移動元の両方にある。02「保存」)。Old は旧 ID、Store は移動先の Store 名、NewDisplay は移動先の新 ID。
+// Cause は取り消しの前の失敗(errors.Is で辿れる)、Undo は取り消しの失敗(送れなかったときは *SendError)。
+type UndoError struct {
+	Old, Store, NewDisplay string
+	Cause, Undo            error
+}
+
+func (e *UndoError) Error() string {
+	return fmt.Sprintf("%s を %s の %s に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください",
+		e.Old, e.Store, e.NewDisplay)
+}
+
+// Unwrap は、取り消しの前の失敗だけを返す(取り消しの *SendError を、移動の送信の失敗として読ませない)。
+func (e *UndoError) Unwrap() error { return e.Cause }
+
 // rollback は、移動先の保存を戻す(A5a-6): 写したフォルダを消し、足したメンバーを外す。number の行は戻さない。
-// cause を返す。戻しも失敗したら errors.Join(cause, 戻しのエラー)。
+// 戻せたら cause を返す。戻しが送れなかった・失敗したら *UndoError。
 func (s Service) rollback(ctx context.Context, m *crossMove, cause error) error {
 	op := port.Operation{Actor: change.User(m.meTo), Summary: m.moved.Display + " の移動を取り消し"}
 	reason, err := s.Delivery.Deliver(ctx, m.in.ToStore, op, m.undo)
@@ -20,7 +37,7 @@ func (s Service) rollback(ctx context.Context, m *crossMove, cause error) error 
 		err = &SendError{Store: m.to.Name, Reason: reason}
 	}
 	if err != nil {
-		return errors.Join(cause, err)
+		return &UndoError{Old: m.src.set.Root.DisplayID(m.src.ws.Prefix), Store: m.to.Name, NewDisplay: m.moved.Display, Cause: cause, Undo: err}
 	}
 	return cause
 }
