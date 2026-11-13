@@ -24,23 +24,36 @@ type view struct {
 	pending map[change.Ref][]change.Record
 	// texts は、同じ Tx で書いた説明(ない説明は "")。いまの作業ツリーと同じ説明は入れない。
 	texts map[change.Ref]string
+	// base は、この view で読んだ作業ツリーのログ。ロックを持っている 1 回の Read/Write のあいだ、
+	// 作業ツリーは変わらないので、プロジェクトごとに全アイテムを読む List で読み直さない。pending は入れない。
+	base map[change.Ref][]change.Record
 }
 
-// log は、呼び出し側が変えてもまだ書いていない行(pending)が変わらないように、pending の行を深く写して返す。
-// 作業ツリーの行は毎回ファイルから読むので写さない。ref が Valid でなければ空(読み取りは
-// port.ErrNotFound になる)。
+// log は、呼び出し側が変えても、覚えた作業ツリーの行(base)とまだ書いていない行(pending)が
+// 変わらないように、どちらも深く写して返す。ref が Valid でなければ空(読み取りは port.ErrNotFound になる)。
 func (v *view) log(ref change.Ref) ([]change.Record, error) {
 	if !ref.Valid() {
 		return nil, nil
 	}
-	base, err := readLog(v.root, ref)
-	if err != nil {
-		return nil, err
+	base, ok := v.base[ref]
+	if !ok {
+		var err error
+		if base, err = readLog(v.root, ref); err != nil {
+			return nil, err
+		}
+		if v.base == nil {
+			v.base = map[change.Ref][]change.Record{}
+		}
+		v.base[ref] = base
+	}
+	out := make([]change.Record, 0, len(base)+len(v.pending[ref]))
+	for _, r := range base {
+		out = append(out, cloneRecord(r))
 	}
 	for _, r := range v.pending[ref] {
-		base = append(base, cloneRecord(r))
+		out = append(out, cloneRecord(r))
 	}
-	return base, nil
+	return out, nil
 }
 
 func cloneRecord(r change.Record) change.Record {

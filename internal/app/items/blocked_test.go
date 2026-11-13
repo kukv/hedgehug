@@ -1,12 +1,16 @@
 package items_test
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 func writeLog(t *testing.T, s port.Stores, d change.Draft) {
@@ -67,5 +71,67 @@ func TestBlockedFollowsTheBlockersStatus(t *testing.T) {
 	writeLog(t, svc.Stores, change.NewSet("status", apptest.SampleStatusCancel, apptest.SampleStatusInProgress))
 	if blocked() != [3]bool{true, true, true} {
 		t.Errorf("進行中なら再びブロック中: %v", blocked())
+	}
+}
+
+// 別のワークスペースのブロッカーが完了・中止かは、ブロッカーのワークスペースの設定で決める(A4a-13)。
+// ワークスペース「Mobile」では、Web の「未着手」の ID が完了の分類、Web の「完了」の ID が未着手の分類になるようにする。
+func TestBlockedJudgesBlockerByItsOwnWorkspace(t *testing.T) {
+	svc := setup(t)
+	const (
+		wsMobile workspace.ID = "01TESTWS00000000000000002"
+		prMobile project.ID   = "01TESTPR00000000000000002"
+		itMobile item.ID      = "01TESTIT00000000000000005"
+	)
+	n := 0
+	valueIDs := func() change.ID {
+		n++
+		switch n {
+		case 1: // 未着手
+			return apptest.SampleStatusDone
+		case 3: // 完了
+			return apptest.SampleStatusTodo
+		}
+		return change.ID(fmt.Sprintf("01TESTVAL%016d", n))
+	}
+	d, err := workspace.CreateWithSettings(workspace.Workspace{ID: wsMobile, Name: "Mobile", Prefix: "MB"}, workspace.DefaultSettings(valueIDs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := project.Project{ID: prMobile, Place: project.Place{Workspace: wsMobile, Number: 1}, Rank: "V", Title: "アプリ", Status: project.Todo}
+	blocker := item.Item{
+		ID: itMobile, Kind: item.Epic, Rank: "V", Title: "iOS ログイン", Status: apptest.SampleStatusTodo,
+		Place: item.Place{Workspace: wsMobile, Project: prMobile, Number: 1},
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "テスト"}
+	err = svc.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(wsMobile, d),
+			tx.WriteProjects().Append(prMobile, project.Create(pr)),
+			tx.WriteItems().Append(itMobile, item.Create(blocker),
+				change.NewAdd("relations", item.Relation{Type: "blocks", To: apptest.SampleTask})),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := func() bool {
+		got, err := svc.Get(t.Context(), store, apptest.SampleTask)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.Blocked
+	}
+	if blocked() {
+		t.Error("Mobile で完了の分類のブロッカーではブロック中にならない")
+	}
+	err = svc.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(itMobile, change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusDone))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !blocked() {
+		t.Error("Mobile で未着手の分類のブロッカーならブロック中")
 	}
 }
