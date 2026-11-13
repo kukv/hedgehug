@@ -14,27 +14,39 @@ import (
 func TestApplyIgnoringWorkflowRefusesADeletedItem(t *testing.T) {
 	svc, rec := setup(t)
 	ctx := t.Context()
-	r, _ := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
+	r, err := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v, want port.ErrNotFound", err)
 	}
-	_ = rec.Read(ctx, store, func(rd port.Reader) error {
-		log, _ := rd.Changes().Of(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask})
+	err = rec.Read(ctx, store, func(rd port.Reader) error {
+		log, err := rd.Changes().Of(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask})
+		if err != nil {
+			return err
+		}
 		if last := log[len(log)-1]; last.T != change.Delete {
 			t.Errorf("a refused apply wrote %+v", last)
 		}
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // 最近の実行は、動いたときの記録なので、そのアイテムが削除されても残す(A4b-5。削除済みを除かない)。
 func TestRecentRunsKeepADeletedItemsRun(t *testing.T) {
 	svc, rec := setup(t)
 	ctx := t.Context()
-	r, _ := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
+	r, err := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
+	if err != nil {
+		t.Fatal(err)
+	}
 	writeRuleRow(t, rec.Stores, r.ID, nil, "taro")
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
 		t.Fatal(err)

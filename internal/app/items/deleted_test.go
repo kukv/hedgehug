@@ -94,7 +94,7 @@ func TestADeletedBlockerDoesNotBlock(t *testing.T) {
 	ctx := t.Context()
 	// HH-1(未着手)が HH-2 をブロックする。
 	writeLog(t, svc.Stores, change.NewAdd("relations", item.Relation{Type: "blocks", To: apptest.SampleTask}))
-	if got, _ := svc.Get(ctx, store, apptest.SampleTask); !got.Blocked {
+	if got := must(t)(svc.Get(ctx, store, apptest.SampleTask)); !got.Blocked {
 		t.Fatal("HH-2 は HH-1 にブロックされている")
 	}
 	if err := apptest.DeleteItems(ctx, svc.Stores, store, apptest.SampleEpic); err != nil {
@@ -104,8 +104,8 @@ func TestADeletedBlockerDoesNotBlock(t *testing.T) {
 	if err != nil || got.Blocked {
 		t.Errorf("Get = %+v, %v; a deleted blocker must not block", got, err)
 	}
-	if list, _ := svc.List(ctx, store, apptest.SampleProject); len(list) != 1 || list[0].Blocked {
-		t.Errorf("List = %+v", list)
+	if list, err := svc.List(ctx, store, apptest.SampleProject); err != nil || len(list) != 1 || list[0].Blocked {
+		t.Errorf("List = %+v, %v", list, err)
 	}
 }
 
@@ -113,15 +113,15 @@ func TestADeletedBlockerDoesNotBlock(t *testing.T) {
 func TestStepsDoneIgnoresDeletedSteps(t *testing.T) {
 	svc, _, inbox := setupAuto(t, autoRule("01RULE1", automation.TriggerStepsDone, "", automation.ActionStatus, string(apptest.SampleStatusDone)))
 	ctx := t.Context()
-	a, _ := svc.AddStep(ctx, store, apptest.SampleTask, "設計")
-	b, _ := svc.AddStep(ctx, store, apptest.SampleTask, "実装")
+	a := must(t)(svc.AddStep(ctx, store, apptest.SampleTask, "設計"))
+	b := must(t)(svc.AddStep(ctx, store, apptest.SampleTask, "実装"))
 	if err := apptest.DeleteItems(ctx, svc.Stores, store, b.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.CheckStep(ctx, store, a.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	task, _ := svc.Get(ctx, store, apptest.SampleTask)
+	task := must(t)(svc.Get(ctx, store, apptest.SampleTask))
 	if task.Status != apptest.SampleStatusDone || len(inbox.Notices()) != 1 {
 		t.Errorf("task = %+v, notices = %+v; the deleted step must not hold the rule back", task, inbox.Notices())
 	}
@@ -131,7 +131,7 @@ func TestStepsDoneIgnoresDeletedSteps(t *testing.T) {
 func TestStepsDoneDoesNotRunOnADeletedParent(t *testing.T) {
 	svc, rec, inbox := setupAuto(t, autoRule("01RULE1", automation.TriggerStepsDone, "", automation.ActionStatus, string(apptest.SampleStatusDone)))
 	ctx := t.Context()
-	a, _ := svc.AddStep(ctx, store, apptest.SampleTask, "設計")
+	a := must(t)(svc.AddStep(ctx, store, apptest.SampleTask, "設計"))
 	if err := apptest.DeleteItems(ctx, svc.Stores, store, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
@@ -148,20 +148,32 @@ func TestMoveUpSkipsDeletedSiblings(t *testing.T) {
 	svc := setup(t)
 	ctx := t.Context()
 	in := items.CreateInput{Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: item.Task, Title: "画面"}
-	mid, _ := svc.Create(ctx, in) // HH-3(W)
-	last, _ := svc.Create(ctx, in)
+	mid := must(t)(svc.Create(ctx, in)) // HH-3(W)
+	last := must(t)(svc.Create(ctx, in))
 	if err := apptest.DeleteItems(ctx, svc.Stores, store, mid.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.MoveUp(ctx, store, last.ID); err != nil {
 		t.Fatal(err)
 	}
-	moved, _ := svc.Get(ctx, store, last.ID)
-	first, _ := svc.Get(ctx, store, apptest.SampleTask)
+	moved := must(t)(svc.Get(ctx, store, last.ID))
+	first := must(t)(svc.Get(ctx, store, apptest.SampleTask))
 	if moved.Rank != "V" || first.Rank == "V" {
 		t.Errorf("moved = %q, HH-2 = %q; the last one must swap with HH-2, not with the deleted HH-3", moved.Rank, first.Rank)
 	}
 	if n := len(records(t, svc.Stores, mid.ID)); n != 2 {
 		t.Errorf("the deleted sibling got %d rows, want 2 (create and delete)", n)
+	}
+}
+
+// must は、準備の呼び出しの値を返す。エラーならテストを止める。
+func must(t *testing.T) func(item.Item, error) item.Item {
+	t.Helper()
+	return func(it item.Item, err error) item.Item {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return it
 	}
 }

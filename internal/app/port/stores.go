@@ -32,7 +32,8 @@ func CheckRuleDrafts(actor change.Actor, drafts []change.Draft) error {
 
 // 口は削除済みのアイテム・プロジェクトも返す(item.Item.Deleted・project.Project.Deleted の印つき。A4b-3)。
 // 利用者に見せる・操作する側は、下の 4 つで読む。削除済みを返さず、Get は port.ErrNotFound にする(A4b-4)。
-// 削除済みも要る読み方(番号の採番、プロジェクトが変わる移動の下のもの、値の置き換え)は、口を直接呼ぶ。
+// 削除済みも要る読み方(番号の採番、プロジェクトが変わる移動の下のもの、値の置き換え、自動化の最近の実行、
+// 自動化で親が削除済みかの確認)は、口を直接呼ぶ。
 
 // LiveItem は、削除済みでないアイテムを返す。ないか削除済みなら ErrNotFound。
 func LiveItem(r Reader, id item.ID) (item.Item, error) {

@@ -1,8 +1,11 @@
 package workspaces
 
 import (
+	"slices"
+
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -31,13 +34,13 @@ func liveWorkspaceItems(r port.Reader, ws workspace.ID) ([]item.Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []item.Item
-	for _, p := range ps {
-		its, err := port.LiveItems(r, p.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, its...)
+	all, err := workspaceItems(r, ws)
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	live := map[project.ID]bool{}
+	for _, p := range ps {
+		live[p.ID] = true
+	}
+	return slices.DeleteFunc(item.Live(all), func(it item.Item) bool { return !live[it.Place.Project] }), nil
 }
