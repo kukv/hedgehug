@@ -1,6 +1,5 @@
 import type { Comment, NotesPort, Worklog } from "@hedgehug/core";
 import { call } from "./errors";
-import { toItem } from "./items";
 import {
   type Comment as ApiComment,
   type Worklog as ApiWorklog,
@@ -21,6 +20,7 @@ import {
   postProjectComment,
   setWatch,
 } from "./generated";
+import { toItem } from "./items";
 import { relationCalls } from "./relationsPort";
 
 function toComment(c: ApiComment): Comment {

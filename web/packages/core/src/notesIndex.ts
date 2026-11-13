@@ -48,6 +48,13 @@ export {
   type RelationsState,
 } from "./features/notes/relations";
 export {
+  createWatch,
+  type Watch,
+  type WatchDeps,
+  type WatchView,
+  watchView,
+} from "./features/notes/watch";
+export {
   createWorklogs,
   type Worklogs,
   type WorklogsDeps,
@@ -63,4 +70,3 @@ export {
   relationLabels,
 } from "./model/relation";
 export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";
-export { createWatch, type Watch, type WatchDeps, type WatchView, watchView } from "./features/notes/watch";

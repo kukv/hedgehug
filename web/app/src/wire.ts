@@ -30,6 +30,7 @@ import {
   createSystemInfo,
   createTabSignals,
   createToasts,
+  createWatch,
   createWorklogs,
   createWorkspaceDialog,
   createWorkspaceMover,
@@ -140,6 +141,8 @@ export const relations = createRelations({
   // 関連を足す・外すと「ブロック中」が変わるので、ツリーと開いている詳細パネルを読み直す。
   onChanged: () => void Promise.all([detail.reload(), projectScreen.reload()]),
 });
+// ウォッチを変えたら、開いている詳細パネルを読み直す(ウォッチ中の人の一覧が変わる)。
+export const watch = createWatch({ notes, toasts, onChanged: () => void detail.reload() });
 export const screen = createScreen({
   navigation,
   catalog,

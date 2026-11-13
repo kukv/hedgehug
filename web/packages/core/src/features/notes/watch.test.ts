@@ -20,12 +20,21 @@ describe("watchView", () => {
       note: undefined,
     });
     expect(watchView(watched(["Taro"]), "taro", false).watching).toBe(true);
-    expect(watchView(watched(["hanako"]), "taro", false)).toMatchObject({ watching: false, label: "ウォッチ" });
+    expect(watchView(watched(["hanako"]), "taro", false)).toMatchObject({
+      watching: false,
+      label: "ウォッチ",
+    });
   });
 
   it("is disabled in a read-only Store, with the note, and when me is not decided", () => {
-    expect(watchView(watched([]), "taro", true)).toMatchObject({ disabled: true, note: "閲覧のみの Store です" });
-    expect(watchView(watched(["taro"]), "", false)).toMatchObject({ watching: false, disabled: true });
+    expect(watchView(watched([]), "taro", true)).toMatchObject({
+      disabled: true,
+      note: "閲覧のみの Store です",
+    });
+    expect(watchView(watched(["taro"]), "", false)).toMatchObject({
+      watching: false,
+      disabled: true,
+    });
   });
 });
 

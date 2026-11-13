@@ -26,7 +26,7 @@ func (r *recorder) Write(ctx context.Context, id port.StoreID, op port.Operation
 	return r.Stores.Write(ctx, id, op, fn)
 }
 
-func setup(t *testing.T, login string) (watching.Service, *recorder) {
+func setup(t *testing.T) (watching.Service, *recorder) {
 	t.Helper()
 	ids := apptest.NewIDs()
 	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)), ids)
@@ -35,7 +35,7 @@ func setup(t *testing.T, login string) (watching.Service, *recorder) {
 		t.Fatal(err)
 	}
 	rec := &recorder{Stores: s}
-	return watching.Service{Stores: rec, Identity: apptest.Identity{Login: login}}, rec
+	return watching.Service{Stores: rec, Identity: apptest.Identity{Login: "hanako"}}, rec
 }
 
 func watchers(t *testing.T, s port.Stores) []string {
@@ -67,7 +67,7 @@ func log(t *testing.T, s port.Stores) []change.Record {
 }
 
 func TestStartAndStopWatching(t *testing.T) {
-	svc, rec := setup(t, "hanako")
+	svc, rec := setup(t)
 	// サンプルのタスクは taro がウォッチ中。
 	if err := svc.Set(t.Context(), store, apptest.SampleTask, true); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestStartAndStopWatching(t *testing.T) {
 }
 
 func TestSettingTheStateItAlreadyHasSavesNothing(t *testing.T) {
-	svc, rec := setup(t, "hanako")
+	svc, rec := setup(t)
 	before := len(log(t, rec))
 	if err := svc.Set(t.Context(), store, apptest.SampleTask, false); err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestSettingTheStateItAlreadyHasSavesNothing(t *testing.T) {
 
 // ログイン名は大文字と小文字を区別せずに比べる。解除は、保存してある綴りで書く。
 func TestLoginsAreComparedWithoutCase(t *testing.T) {
-	svc, rec := setup(t, "hanako")
+	svc, rec := setup(t)
 	err := rec.Stores.Write(t.Context(), store, port.Operation{Actor: change.User("taro"), Summary: "ウォッチを足す"}, func(tx port.Tx) error {
 		return tx.WriteItems().Append(apptest.SampleTask, change.NewAdd("watchers", "Hanako"))
 	})
@@ -132,7 +132,7 @@ func TestLoginsAreComparedWithoutCase(t *testing.T) {
 }
 
 func TestUnknownItem(t *testing.T) {
-	svc, _ := setup(t, "hanako")
+	svc, _ := setup(t)
 	if err := svc.Set(t.Context(), store, "01NOPE00000000000000000000", true); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v", err)
 	}

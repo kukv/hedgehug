@@ -3,9 +3,10 @@
   import { IconButton, StoreBadge } from "@hedgehug/ui";
   import { detail, links } from "../../wire";
   import ItemMenu from "./ItemMenu.svelte";
+  import WatchButton from "./WatchButton.svelte";
 
   // 詳細パネルのヘッダー: パンくず(Store・ワークスペース・プロジェクト・祖先)、全画面、閉じる(02「上から順の構成」)。
-  // ウォッチと、メニューのほかの項目は A4。メニューの枠と「テンプレートとして保存…」は B3(B3-17)。
+  // メニューのほかの項目は A4b。メニューの枠と「テンプレートとして保存…」は B3(B3-17)。
   interface Props {
     v: DetailView;
     full: boolean;
@@ -60,6 +61,7 @@
   {/each}
 </nav>
 <span class="grow"></span>
+<WatchButton {v} />
 <IconButton label={full ? "パネルで表示" : "全画面で表示"} size="sm" onclick={detail.toggleFull}
   >{full ? "⤡" : "⤢"}</IconButton
 >

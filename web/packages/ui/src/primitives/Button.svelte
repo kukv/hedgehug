@@ -7,6 +7,7 @@
     type?: "button" | "submit";
     disabled?: boolean;
     title?: string;
+    pressed?: boolean;
     onclick?: (event: MouseEvent) => void;
     children: Snippet;
   }
@@ -17,6 +18,7 @@
     type = "button",
     disabled = false,
     title,
+    pressed,
     onclick,
     children,
   }: Props = $props();
@@ -27,7 +29,14 @@
   }
 </script>
 
-<button {type} class="btn {variant} {size}" {disabled} {title} onclick={guarded}>
+<button
+  {type}
+  class="btn {variant} {size}"
+  {disabled}
+  {title}
+  aria-pressed={pressed}
+  onclick={guarded}
+>
   {@render children()}
 </button>
 
