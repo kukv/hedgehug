@@ -44,7 +44,8 @@ func SettingsReviving(log []change.Record, fs ...string) (Settings, bool) {
 // RevivedTemplate は、テンプレートの保存(画面が送ったテンプレート in)で取り消すものを決める(決定 R5)。
 // in の子・Step のうち、それ自身の削除の行があるもの(テンプレートの削除の行だけで覆われるものは、テンプレートと
 // 一緒に戻るので数えない)を、削除の前の内容と比べ、行を書かないものを in から除く。除いた in と、取り消す
-// 項目名の頭(テンプレート自身と、残した削除済みの子・Step)を返す。
+// 項目名の頭(テンプレート自身と、残した削除済みの子・Step)を返す。除くと残りの並び(rank)が変わるので、
+// 除くものがなくなるまで比べ直す。
 func RevivedTemplate(log []change.Record, in Template) (Template, []string) {
 	tf := TemplateField(in.ID)
 	var gone []string
@@ -53,22 +54,34 @@ func RevivedTemplate(log []change.Record, in Template) (Template, []string) {
 			gone = append(gone, f)
 		}
 	}
-	targets := []string{tf}
-	if len(gone) == 0 {
-		return in, targets
+	for {
+		kept, drop := changedOf(log, in, gone)
+		if len(drop) == 0 {
+			return in, append([]string{tf}, kept...)
+		}
+		in, gone = without(in, drop), kept
 	}
-	st, _ := SettingsReviving(log, append([]string{tf}, gone...)...)
+}
+
+// changedOf は、削除済みの gone のうち、テンプレートと gone の削除を取り消して in を保存したら行を書くもの(kept)と、
+// 書かないもの(drop)。
+func changedOf(log []change.Record, in Template, gone []string) ([]string, map[string]bool) {
+	if len(gone) == 0 {
+		return nil, nil
+	}
+	st, _ := SettingsReviving(log, append([]string{TemplateField(in.ID)}, gone...)...)
 	old, _ := st.Template(in.ID)
 	ds := TemplateDrafts(old, NormalizeTemplate(st, MergeTemplate(old, in)).Ranked())
+	var kept []string
 	drop := map[string]bool{}
 	for _, f := range gone {
 		if slices.ContainsFunc(ds, func(d change.Draft) bool { return strings.HasPrefix(d.F, f+"/") }) {
-			targets = append(targets, f)
+			kept = append(kept, f)
 		} else {
 			drop[f] = true
 		}
 	}
-	return without(in, drop), targets
+	return kept, drop
 }
 
 // sentFields は、in の子と Step(子の Step も)の項目名の頭。

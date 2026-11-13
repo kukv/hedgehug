@@ -109,10 +109,17 @@ func TestRevivedTemplate(t *testing.T) {
 			{ID: c, Kind: "Task", Title: "本番反映"},
 		},
 	}.Ranked()
+	// task は、Step を直に持つ種類のテンプレート。
+	const taskID, step change.ID = "01TPL000000000000000000002", "01STEP0000000000000000000T"
+	task := workspace.Template{ID: taskID, Name: "調査", Kind: "Task", Steps: []workspace.TemplateStep{{ID: step, Title: "再現", Assignee: workspace.StepParent}}}.Ranked()
 	base := append([]change.Draft{create}, workspace.TemplateDrafts(workspace.Template{}, tpl)...)
+	base = append(base, workspace.TemplateDrafts(workspace.Template{}, task)...)
 	tf := workspace.TemplateField(tid)
 	cf := workspace.TemplateField(tid, "children", string(c))
 	sf := workspace.TemplateField(tid, "steps", string(s))
+	taskStep := workspace.TemplateField(taskID, "steps", string(step))
+	retitled := task
+	retitled.Steps = []workspace.TemplateStep{{ID: step, Title: "再現手順"}}
 	// edit は、画面が送る、tpl を f で変えたもの(rank は送らない)。
 	edit := func(f func(*workspace.Template)) workspace.Template {
 		in := tpl
@@ -142,6 +149,8 @@ func TestRevivedTemplate(t *testing.T) {
 		{"changed deleted step", []string{sf}, edit(func(in *workspace.Template) { in.Children[0].Steps[0].Title = "再確認" }), "A[S] C[]", []string{tf, sf}},
 		{"deleted template", []string{tf}, rename, "A[S] C[]", []string{tf}},
 		{"deleted child, then template", []string{cf, tf}, rename, "A[S]", []string{tf}},
+		{"unchanged deleted top-level step", []string{taskStep}, task, "", []string{workspace.TemplateField(taskID)}},
+		{"changed deleted top-level step", []string{taskStep}, retitled, "[T]", []string{workspace.TemplateField(taskID), taskStep}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -158,14 +167,21 @@ func TestRevivedTemplate(t *testing.T) {
 }
 
 // shape は、テンプレートの子と Step を、ID の末尾の 1 文字で「A[S] C[]」のように書いたもの。
+// 直の Step は、あれば末尾に「[T]」のように書く。
 func shape(t workspace.Template) string {
+	steps := func(ss []workspace.TemplateStep) string {
+		var out []string
+		for _, s := range ss {
+			out = append(out, string(s.ID[len(s.ID)-1:]))
+		}
+		return "[" + strings.Join(out, " ") + "]"
+	}
 	var out []string
 	for _, c := range t.Children {
-		var ss []string
-		for _, s := range c.Steps {
-			ss = append(ss, string(s.ID[len(s.ID)-1:]))
-		}
-		out = append(out, string(c.ID[len(c.ID)-1:])+"["+strings.Join(ss, " ")+"]")
+		out = append(out, string(c.ID[len(c.ID)-1:])+steps(c.Steps))
+	}
+	if len(t.Steps) > 0 {
+		out = append(out, steps(t.Steps))
 	}
 	return strings.Join(out, " ")
 }

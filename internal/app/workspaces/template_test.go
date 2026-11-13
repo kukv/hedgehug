@@ -121,7 +121,7 @@ func TestDeleteTemplateAndDefaults(t *testing.T) {
 	}
 }
 
-// release は、子「QA」(Step「確認」付き)と子「本番反映」の Epic のテンプレート「リリース」を作り、Epic の既定にする。
+// release は、子「QA」(Step「確認」付き)・子「本番反映」・子「告知」の Epic のテンプレート「リリース」を作り、Epic の既定にする。
 func release(t *testing.T, s workspaces.Service, ws workspace.ID) workspace.Template {
 	t.Helper()
 	tpl, err := s.CreateTemplate(t.Context(), store, ws, workspace.Template{
@@ -129,6 +129,7 @@ func release(t *testing.T, s workspaces.Service, ws workspace.ID) workspace.Temp
 		Children: []workspace.TemplateChild{
 			{Kind: "Task", Title: "QA", Steps: []workspace.TemplateStep{{Title: "確認"}}},
 			{Kind: "Task", Title: "本番反映"},
+			{Kind: "Task", Title: "告知"},
 		},
 	})
 	if err != nil {
@@ -143,10 +144,60 @@ func release(t *testing.T, s workspaces.Service, ws workspace.ID) workspace.Temp
 // deleteChild は、別のタブの保存に当たる、テンプレート tpl から子 i を除いた保存。
 func deleteChild(t *testing.T, s workspaces.Service, ws workspace.ID, tpl workspace.Template, i int) {
 	t.Helper()
+	keepChildren(t, s, ws, tpl, slices.Delete(slices.Clone(tpl.Children), i, i+1)...)
+}
+
+// keepChildren は、別のタブの保存に当たる、テンプレート tpl の子を cs だけにする保存。
+func keepChildren(t *testing.T, s workspaces.Service, ws workspace.ID, tpl workspace.Template, cs ...workspace.TemplateChild) {
+	t.Helper()
 	in := tpl
-	in.Children = slices.Delete(slices.Clone(tpl.Children), i, i+1)
+	in.Children = cs
 	if err := s.UpdateTemplate(t.Context(), store, ws, tpl.ID, in); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 別のタブで子を 1 つずつ削除して並びが詰まったあと、削除の前のまま全部を送っても、子は削除済みのまま。
+func TestUpdateTemplateWithChildrenDeletedOneByOne(t *testing.T) {
+	s := setup(t)
+	w, _ := s.Create(t.Context(), store, "Web", "HH")
+	tpl := release(t, s, w.ID)
+	deleteChild(t, s, w.ID, tpl, 1)                // 「告知」の rank が詰まる
+	keepChildren(t, s, w.ID, tpl, tpl.Children[0]) // 「告知」も削除
+	ctx := port.WithRevived(t.Context())
+	in := tpl
+	in.Name = "リリース 2"
+	if err := s.UpdateTemplate(ctx, store, w.ID, tpl.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := settingsOf(t, s, w.ID).Template(tpl.ID)
+	if got.Name != "リリース 2" || len(got.Children) != 1 {
+		t.Errorf("template = %+v", got)
+	}
+	if n := restores(t, s, w.ID); n != 0 || len(port.Revived(ctx)) != 0 {
+		t.Errorf("restore rows = %d, Revived = %v; want none", n, port.Revived(ctx))
+	}
+}
+
+// 別のタブの 1 回の保存で子 2 つを削除したあと、1 つだけを変えて保存すると、変えた子だけが戻る。
+func TestUpdateTemplateWithOneOfDeletedChildren(t *testing.T) {
+	s := setup(t)
+	w, _ := s.Create(t.Context(), store, "Web", "HH")
+	tpl := release(t, s, w.ID)
+	keepChildren(t, s, w.ID, tpl, tpl.Children[0])
+	ctx := port.WithRevived(t.Context())
+	in := tpl
+	in.Children = slices.Clone(tpl.Children)
+	in.Children[1].Title = "本番リリース"
+	if err := s.UpdateTemplate(ctx, store, w.ID, tpl.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := settingsOf(t, s, w.ID).Template(tpl.ID)
+	if len(got.Children) != 2 || got.Children[1].Title != "本番リリース" {
+		t.Errorf("children = %+v", got.Children)
+	}
+	if want := []port.Revival{{Kind: port.RevivedName, Text: "本番反映"}}; !slices.Equal(port.Revived(ctx), want) {
+		t.Errorf("Revived = %v, want %v", port.Revived(ctx), want)
 	}
 }
 
@@ -166,7 +217,7 @@ func TestUpdateDeletedTemplateRevives(t *testing.T) {
 	}
 	st := settingsOf(t, s, w.ID)
 	got, ok := st.Template(tpl.ID)
-	if !ok || got.Name != "リリース 2" || len(got.Children) != 2 || len(got.Children[0].Steps) != 1 {
+	if !ok || got.Name != "リリース 2" || len(got.Children) != 3 || len(got.Children[0].Steps) != 1 {
 		t.Errorf("template = %+v, %v", got, ok)
 	}
 	if st.TemplateDefaults["Epic"] != tpl.ID {
@@ -191,7 +242,7 @@ func TestUpdateTemplateWithEditedDeletedChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := settingsOf(t, s, w.ID).Template(tpl.ID)
-	if len(got.Children) != 2 || got.Children[1].ID != tpl.Children[1].ID || got.Children[1].Title != "本番リリース" {
+	if len(got.Children) != 3 || got.Children[1].ID != tpl.Children[1].ID || got.Children[1].Title != "本番リリース" {
 		t.Errorf("children = %+v", got.Children)
 	}
 	if want := []port.Revival{{Kind: port.RevivedName, Text: "本番反映"}}; !slices.Equal(port.Revived(ctx), want) {
@@ -214,7 +265,7 @@ func TestUpdateTemplateWithUnchangedDeletedChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := settingsOf(t, s, w.ID).Template(tpl.ID)
-	if got.Name != "リリース 2" || len(got.Children) != 1 || got.Children[0].ID != tpl.Children[0].ID {
+	if got.Name != "リリース 2" || len(got.Children) != 2 || got.Children[0].ID != tpl.Children[0].ID {
 		t.Errorf("template = %+v", got)
 	}
 	prefix := workspace.TemplateField(tpl.ID, "children", string(tpl.Children[1].ID)) + "/"
