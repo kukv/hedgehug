@@ -25,14 +25,15 @@ func (rd *reading) limit(a account.ID, err error, f *ghcall.Failure) limit {
 }
 
 // scanInto は、取り直しのあとで res のリポジトリの PR を探し(D4b-8)、結果を res に入れ、読み取りの記録 rec を直す。
-// 利用上限で断られたら(取り直しで断られたときを含む)、試した時刻は進めずに読まない期限を置く。成功なら
+// prev は読む前の記録。利用上限で断られたら(取り直しで断られたときを含む)、試した時刻は prev のまま進めずに
+// 読まない期限を置く(期限が間隔より早くても、期限に読めるように。D4a-6)。成功なら
 // 利用上限は探索の答えのものにする。取り直す番号のないリポジトリで失敗したら、失敗の印を置く。
-func (rd *reading) scanInto(ctx context.Context, s port.StoreGitHubInfo, res *repoResult, srec port.ScanRecord, rec ghread.Record) ghread.Record {
+func (rd *reading) scanInto(ctx context.Context, s port.StoreGitHubInfo, res *repoResult, srec port.ScanRecord, prev, rec ghread.Record) ghread.Record {
 	pulls, text, cause := rd.scan(ctx, s, res.repo, srec)
 	res.pulls, res.scanText, res.cause = pulls, text, errors.Join(res.cause, cause)
 	switch lim, limited := rd.limited[s.Account]; {
 	case limited:
-		rec.Failed, rec.NotBefore = true, lim.notBefore
+		rec.Attempt, rec.Failed, rec.NotBefore = prev.Attempt, true, lim.notBefore
 	case text == "":
 		rec.Limit, rec.Remaining, rec.ResetAt = pulls.Rate.Limit, pulls.Rate.Remaining, pulls.Rate.ResetAt
 	case len(res.repo.numbers) == 0:

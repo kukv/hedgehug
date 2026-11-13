@@ -1,6 +1,7 @@
 package githublink_test
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
@@ -204,5 +205,73 @@ func TestReadOnceNotDueNoScan(t *testing.T) {
 	f.read(t, every, false)
 	if n := f.gh.ReadPullsCalls("example-org/web"); n != 0 {
 		t.Errorf("ReadPulls calls = %d, want none inside the interval", n)
+	}
+}
+
+// pullsFail は、ReadPulls だけを err で断る GitHub(ReadMany はそのまま)。err が nil なら元の偽物に回す。
+type pullsFail struct {
+	*apptest.GitHub
+	err error
+}
+
+func (g *pullsFail) ReadPulls(ctx context.Context, token, repo string, since time.Time) (port.Pulls, error) {
+	if g.err != nil {
+		return port.Pulls{}, g.err
+	}
+	return g.GitHub.ReadPulls(ctx, token, repo, since)
+}
+
+// 探索が利用上限で断られたら、試した時刻は進めない: 期限が間隔より早ければ、期限に読む(D4a-6・D4b-8)。
+// 探すだけのリポジトリと、取り直しが成功したリポジトリの両方で確かめる。
+func TestReadOnceScanRateLimitedReadsAtReset(t *testing.T) {
+	const long = 15 * time.Minute
+	t.Run("scan only", func(t *testing.T) {
+		f := newScanRead(t)
+		f.addRepo(t, linkStore, "example-org/web")
+		f.scanLimitedThenReset(t, long)
+		if n := f.gh.ReadPullsCalls("example-org/web"); n != 1 {
+			t.Errorf("ReadPulls calls = %d, want a read at the reset", n)
+		}
+	})
+	t.Run("refreshed", func(t *testing.T) {
+		f := newScanRead(t)
+		f.linkIn(t, linkStore, linkTask, readPR("example-org/web", 1, itemlink.Open))
+		f.gh.Put("example-org/web", readPR("example-org/web", 1, itemlink.Open))
+		f.scanLimitedThenReset(t, long)
+		if n := f.gh.ReadManyCalls("example-org/web"); n != 2 {
+			t.Errorf("ReadMany calls = %d, want the refresh and a read at the reset", n)
+		}
+		if n := f.gh.ReadPullsCalls("example-org/web"); n != 1 {
+			t.Errorf("ReadPulls calls = %d, want a read at the reset", n)
+		}
+	})
+}
+
+// scanLimitedThenReset は、ReadPulls を「2 分後に戻る」利用上限で断らせて間隔 long で読み、断るのをやめて
+// 2 分進めて、もう一度読む。
+func (f *readFixture) scanLimitedThenReset(t *testing.T, long time.Duration) {
+	t.Helper()
+	g := &pullsFail{GitHub: f.gh, err: &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: f.clock.now.Add(2 * time.Minute)}}
+	f.links.GitHub = g
+	f.read(t, long, false)
+	g.err = nil
+	f.advance(2 * time.Minute)
+	f.read(t, long, false)
+}
+
+// 取り直しが利用上限で断られたら、探さずに、探した記録にも同じ文言を置く(D4b-8)。
+func TestReadOnceRefreshRateLimitedSkipsScan(t *testing.T) {
+	f := newScanRead(t)
+	f.linkIn(t, linkStore, linkTask, readPR("example-org/web", 1, itemlink.Open))
+	f.gh.Put("example-org/web", readPR("example-org/web", 1, itemlink.Open))
+	reset := f.clock.now.Add(23 * time.Minute)
+	f.gh.Fail("example-org/web", 0, &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: reset})
+	f.read(t, every, false)
+	if n := f.gh.ReadPullsCalls("example-org/web"); n != 0 {
+		t.Errorf("ReadPulls calls = %d, want none", n)
+	}
+	want := "GitHub の利用上限に達しました。" + resetText(reset, f.clock.now) + " 以降にもう一度お試しください"
+	if rec := f.scanRecord(linkStore, "example-org/web"); rec != (port.ScanRecord{Failure: want}) {
+		t.Errorf("record = %+v", rec)
 	}
 }

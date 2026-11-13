@@ -93,10 +93,11 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 		if !rd.force && !ghread.Due(rd.now, rec, rd.every) {
 			continue
 		}
-		res, rec := rd.fetch(ctx, s, r, rec, p)
+		res, next := rd.fetch(ctx, s, r, rec, p)
 		if r.scan {
-			rec = rd.scanInto(ctx, s, &res, scans[r.key], rec)
+			next = rd.scanInto(ctx, s, &res, scans[r.key], rec, next)
 		}
+		rec = next
 		if err := rd.l.Reads.SaveRecord(ctx, s.ID, r.key, rec); err != nil {
 			return false, err
 		}
@@ -115,14 +116,15 @@ func (rd *reading) readStore(ctx context.Context, s port.StoreGitHubInfo) (bool,
 // fetch は、リポジトリ r を読み、結果と、置く記録を返す(D4a-5・6)。読めた値は p.fetched に入れる。
 // 利用上限で断られたら、試した時刻は進めずに読まない期限を置く(期限が間隔より早くても、期限に読めるように)。
 // 同じアカウントがこの読み取りで断られていれば、問い合わせずに同じ文言と期限にする。
-// 取り直す番号がなければ(探すだけのリポジトリ)問い合わせず、試した時刻だけを置く。
+// 取り直す番号がなければ(探すだけのリポジトリ)問い合わせず、前の記録に試した時刻だけを置く。
 func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLinks, rec ghread.Record, p *pass) (repoResult, ghread.Record) {
 	if lim, ok := rd.limited[s.Account]; ok {
 		rec.Failed, rec.NotBefore = true, lim.notBefore
 		return repoResult{repo: r, text: refreshText(lim.text)}, rec
 	}
 	if len(r.numbers) == 0 {
-		return repoResult{repo: r}, ghread.Record{Attempt: rd.now}
+		rec.Attempt, rec.Failed, rec.NotBefore = rd.now, false, time.Time{}
+		return repoResult{repo: r}, rec
 	}
 	b, err := rd.l.readMany(ctx, s.ID, r)
 	var f *ghcall.Failure
