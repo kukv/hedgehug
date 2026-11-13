@@ -40,7 +40,7 @@
 | B5a-6 | 遷移の判定は `projectrule.CheckTransition(s, r, from, to)`。from が空・同じ・いまの一覧にないときは通す。許す To = ワークスペースの許す To(行に制限がなければすべて)∩ プロジェクトの許す To(行に使うステータスのチェックがなければすべて)から、使わないステータスと from を除いたもの。プロジェクトの行のチェックは、From と To の両方が使うステータスのものだけ数える。両方の行に制限がなければ通す。断りの文は「ワークフローの制約: A から B には変更できません(X・Y のみ)」、X・Y が空なら「(変更できる先がありません)」。`workspace.CheckTransition` を呼んでいた所(`app/items/setproperty.go`・`domain/automation/run.go`)はこの関数に替える | 03「遷移の制約」の断りの段落、「プロジェクトの遷移の制約」2 段落目。使わないステータスを X・Y から除くのは、ワークスペースだけの制約のときも同じにする(メニューに出ない先を「移れる先」として見せないため。02「ステータスの変更」の {移れる先}) |
 | B5a-7 | 使わないステータスへの変更を断るのは `items.SetProperty`(詳細パネル・ツリー・概要のメニュー、Step のチェック。のちのカンバン・セル・一括変更・パレットもここを通る)と `items.Create`(作成ダイアログのステータス)。文言は「このプロジェクトでは「{ステータス}」を使いません」。値の削除の置き換え(`replaceRows`)・「制約を無視して…」(`applyStatus`)・移動は、この判定を通らないことをテストで押さえる | 02 の 98 行、03 の 160 行(断らない経路) |
 | B5a-8 | 作成で、選んだテンプレートがそのプロジェクトで使えないときは `port.ErrNotFound`(種類が合わないときと同じ扱い。`createtemplate.go:18`) | 画面は使えるテンプレートしか出さないので、ふつうは起きない(B4-6 と同じ考え方) |
-| B5a-9 | 使えるテンプレート = 種類が合い、かつ(プロジェクトの `templates` のうち、いまあるテンプレートが 0 件なら全部、そうでなければその中)。種類ごとの既定 = プロジェクトの `template_default` が `@none` なら「なし」、テンプレート ID でそれが使えるならそれ、それ以外(未設定・使えない)はワークスペースの既定が使えるならそれ、なければ「なし」 | 03「プロジェクトのテンプレート」2・3 段落目。使えない既定は警告なしで「なし」 |
+| B5a-9 | 使えるテンプレート = 種類が合い、かつ(プロジェクトの `templates` のうち、いまあるテンプレートが 0 件なら全部、そうでなければその中)。種類ごとの既定 = プロジェクトの `template_default` が `@none` なら「なし」、テンプレート ID ならそれが使えるときはそれ・使えないときは「なし」、未設定ならワークスペースの既定が使えるときはそれ・使えないときは「なし」 | 03「プロジェクトのテンプレート」2・3 段落目。使えない既定は警告なしで「なし」 |
 | B5a-10 | 専用ルールは `automation.Rule.Scope project.ID` を持ち、`rules/<ID>/scope` に作成のときだけ書く。編集で `Scope` は変えない。専用ルールのきっかけとすることのステータスは、そのプロジェクトで使うもの(`Uses`)でなければ `ErrNotFound` | 保存形式 316 行(ワークスペースのルールに `scope`)。03「専用ルール」(選択肢は使うステータス)。B4-6 |
 | B5a-11 | `automation.RunAll(s, set, rules, it, evs)` に `projectrule.Set` を足す。専用ルールは `Scope == it.Place.Project` のときだけ、アイテムのプロジェクトの `disabled_rules` に入るルールは対象にしない。することのステータスが使わないものなら止め、`Stopped` を「このプロジェクトでは「{ステータス}」を使いません」にする(遷移の検査より先に見る)。`app/items/automate.go` と `app/githublink/fire.go` の両方が `Set` を渡す。「Step がすべて完了したとき」は親の項目で判定する(いまのまま。親の `Place.Project` を使う) | 03「実行の規則」4 つ目の箇条、「制約で止まったとき」。使わないステータスはメニューに出ないので、遷移より先に断る |
 | B5a-12 | 「使うステータス」の操作で、外すのを断るのは: 初期ステータス(「初期ステータスのため外せません」)、分類の既定(「{分類}の既定のため外せません」)、両方(「初期ステータスで、{分類}の既定でもあるため外せません」)、専用ルールが使う(「「{ステータス}」はこのプロジェクトだけのルール「{ルール名}」が使っているため、使わないことにできません。先にルールを変えてください」)。前の 3 つは画面ではチェックを無効にするので、サーバーの断りは同じ文で持つだけ。{分類} は「未着手」「進行中」「完了」「中止」 | 03「使うステータス」2・3 段落目 |
@@ -179,7 +179,7 @@ git commit -m "docs: B5 を B5a・B5b・B5c に分け、プロジェクトの遷
   - `TestProjectRowOfUnusedOnlyIsUnrestricted`: プロジェクト `Todo → [Pending]`、`Hidden: [Pending]`、ワークスペースは制限なしで `CheckTransition(Todo, Done)` が nil(Review Focus 2)。
   - `TestAllowedDropsUnused`: ワークスペース `Todo → [InProgress, Pending]`、`Hidden: [Pending]` で `Allowed` = `[InProgress], true`。
   - `TestCheckTransitionPassesMissingFrom`: from が一覧にない ID なら nil。
-  - `TestUsableTemplatesAndDefault`: Task のテンプレート T1・T2、ワークスペースの既定 T2。`Templates: [T1]` で使える = `[T1]`、既定 = なし(T2 が使えない)。`TemplateDefaults{"Task": T1}` で既定 = T1。`{"Task": "@none"}` でなし。`Templates: [消したテンプレートの ID]` だけなら全部使える。
+  - `TestUsableTemplatesAndDefault`: Task のテンプレート T1・T2、ワークスペースの既定 T2。`Templates: [T1]` で使える = `[T1]`、既定 = なし(T2 が使えない)。`TemplateDefaults{"Task": T1}` で既定 = T1。`{"Task": "@none"}` でなし。`Templates` を空にして `TemplateDefaults{"Task": 種類の違う T3}` なら、ワークスペースの既定 T2 があっても「なし」。`Templates: [消したテンプレートの ID]` だけなら全部使える。
 
 - [ ] **Step 2: 流して落ちるのを見る**
 
