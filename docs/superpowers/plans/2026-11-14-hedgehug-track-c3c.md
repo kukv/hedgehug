@@ -61,7 +61,7 @@
 |---|---|---|
 | 作業時間 | 対象なし | 追加と削除しかなく、編集の経路がない(`internal/app/worklogs`) |
 | メンバーの表示名・保持日数 | 対象なし | 削除がない |
-| ワークスペースの名前・接頭辞 | 対象なし | ワークスペースの削除は B5b。develop にあとから入る方が、削除済みのワークスペースの名前・接頭辞の変更での取り消しを足す(`port.ReviveSetting` と同じ形で、ワークスペースの削除の行を戻す) |
+| 削除済みのワークスペース(名前・接頭辞・並び・設定) | Task 10・11(決定 R11) | B5b が develop に先に入り、C3c に回した(ユーザーの決定、2026-11-14。B5b の計画「他のトラックとの合わせ」) |
 | スプリント・リリース | 対象なし | F1 がまだ develop にない。F1 はワークスペースのログに書く(F1 の計画)ので、develop にあとから入る方が、スプリント・リリースの編集の経路で `port.ReviveSetting` を呼ぶ(トーストは設定の値と同じ「「{名前}」は…」) |
 
 ## この計画で決めたこと
@@ -78,6 +78,7 @@
 | R8 | 応答ヘッダーは Global Constraints のとおり。名前は `url.PathEscape` で符号化する(空白は `%20`、`,` は `%2C` になり、`fetch` が同じ名前のヘッダーを `", "` でつないでも分けられる。`QueryEscape` は空白を `+` にし、`decodeURIComponent` で戻らないので使わない)。 | HTTP のヘッダーの値に日本語を生で入れると、`fetch` の `Headers.get` が Latin-1 として読み、文字化けする |
 | R9 | 06:193 のほかのものは、上の表のとおり。 | 調べた結果 |
 | R10 | アクティビティの文は、操作のもの(例: 「ステータス「Review」の分類を変更」)のまま。保存の前の読みは、取り消す削除の行を除いたログから作った設定(`workspace.SettingsReviving`)で行う。 | C3a-screen S3。いまの前の読みは削除済みを持たず、名前を読めない |
+| R11 | 削除済みのワークスペース(B5b の削除。ワークスペースのログの `deleted` の行、root: true)に、ワークスペースのログへ人の行を書く変更(名前・接頭辞・並び、プロパティ・値・ワークフロー・テンプレート・自動化のルールの追加と変更、初期値と既定、プロジェクト別のルール)を保存すると、変更を残し、ワークスペースの削除の op を、その op の行があるログ(ワークスペース・プロジェクト・アイテム)すべてで戻す。トーストは設定の値と同じ形で `{名前}` はワークスペースの名前(`Revival{RevivedName, 名前}`)。削除の操作(値・プロパティ・テンプレート・ルールの削除、ワークスペースの削除)は取り消さず、いまのまま 404。行を書かない保存は R3 と同じく 404。取り消すと名前・接頭辞が削除されていないワークスペースと重なるなら、08「復元」の文言「同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください」「同じ接頭辞のワークスペースがあります。先にそのワークスペースの接頭辞を変更してください」で保存ごと断る(名前・接頭辞を変える保存は変更後の値で判定)。プロジェクト別のルールは、プロジェクトがワークスペースと一緒に削除された(root: false で、ワークスペースと同じ op)ときだけワークスペースを取り消し(プロジェクトも一緒に戻る)、プロジェクトが自分で削除された(root: true)ならいまのまま 404。アイテム・プロジェクトへの保存は C3a-screen S9 のまま 404 | R1(`repair.hasChange` は、エンティティの削除にはそのログの人の変更の行をすべて数える)。06 185 行。08「名前が重なるときの復元」。06「プロジェクト別のルールの変更は、プロジェクトへの変更に数えない」(プロジェクトの削除は取り消さない) |
 
 ## Review Focus
 
@@ -436,3 +437,93 @@ git commit -m "test: 別のタブで削除した設定の値とコメントへ�
 git add docs/superpowers/plans/2026-11-12-hedgehug-track-c.md
 git commit -m "docs: トラック C の計画の C3c の行に計画のファイルを書く"
 ```
+
+Task 10・11 は、develop を取り込んだあと(B5b のワークスペースの削除が入った)に足した(決定 R11)。
+
+### Task 10: 削除済みのワークスペースの名前・接頭辞・並び・設定の変更
+
+**Files:**
+- Modify: `internal/app/port/revive.go`(`ReviveWorkspace` を足す。300 行を超えるなら、`ReviveSetting`・`workspaceRefs`・`undoAcross` を `internal/app/port/revived.go` へ移す。port のファイルは足さない)、`internal/app/port/stores.go`(`EditableWorkspace`)
+- Modify: `internal/app/workspaces/edit.go`、`rename.go`、`prefix.go`、`order.go`、削除の操作(`value_delete.go`・`property_delete.go`・`template.go` の `DeleteTemplate`)
+- Test: `internal/app/port/revive_test.go`、`internal/app/workspaces/revive_test.go`(600 行を超えるなら `delete_test.go` に足す)
+
+**Interfaces:**
+- Consumes: Task 1 の `NoteRevived`・`Revival`・`workspaceRefs`・`undoAcross`。B5b の `port.LiveWorkspace`・`port.LiveWorkspaces`・`apptest.DeleteWorkspace`・`workspaces.Service.Delete`。
+- Produces:
+  - `func EditableWorkspace(r Reader, id workspace.ID) (workspace.Workspace, error)` — 削除済みでも返す(ないときだけ `ErrNotFound`)。
+  - `func ReviveWorkspace(ctx context.Context, tx Tx, id workspace.ID, name, prefix string) (bool, error)` — tx の中で読み直し、削除済みなら、名前と接頭辞(空ならいまの値)を、削除されていないワークスペースと比べ(`workspace.CheckRename`・`CheckPrefix` と同じ比べ方)、重なれば 08 の文言の `refusal`。重ならなければ、削除の op を `workspaceRefs` のログ(ワークスペース自身を含む)へ `undoAcross` で戻し、`Revival{RevivedName, 名前(1 行にしたもの)}` を積んで true。削除されていなければ false。
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`port/revive_test.go`:
+- `TestReviveWorkspaceRestoresContents`: `apptest.DeleteWorkspace` で削除したあと、`ReviveWorkspace` でワークスペースと、一緒に削除されたプロジェクト・アイテムが戻る。前に自分で削除しておいたアイテム(別の op)は削除済みのまま。`Revived` がワークスペースの名前 1 つ。
+- `TestReviveWorkspaceNameTaken`・`TestReviveWorkspacePrefixTaken`: 削除のあと同じ名前(接頭辞)のワークスペースを作ると、08 の文言で断る。
+
+`workspaces/revive_test.go`(ワークスペースを `Service.Delete` で削除してから、`port.WithRevived` の context で呼ぶ):
+- `TestChangeInDeletedWorkspaceRevives`(表で回す): 名前の変更・接頭辞の変更・並べ替え・ステータスの色・プロパティの追加・値の追加・初期ステータス・遷移の制約・テンプレートの作成。成功し、ワークスペースと下のプロジェクトが戻り、`Revived` がワークスペースの名前 1 つ(名前の変更でも削除の前の名前)。
+- `TestDeleteInDeletedWorkspaceIsNotFound`(表で回す): 値・プロパティ・テンプレートの削除は `port.ErrNotFound`、ワークスペースは削除済みのまま、`restore` の行がない。
+- `TestChangeInDeletedWorkspaceUnchangedIsNotFound`: 同じ名前への変更は `port.ErrNotFound`、削除済みのまま。
+- `TestRenameDeletedWorkspaceNameTaken`: 削除のあと同じ名前のワークスペースを作ると、古い方の色の変更は「同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください」で断り、名前を別の名前に変える保存は成功する。
+
+- [ ] **Step 2: 失敗を確かめる**
+
+Run: `go test ./internal/app/port/ ./internal/app/workspaces/ -run 'Workspace'`
+Expected: FAIL
+
+- [ ] **Step 3: 書く**
+
+`editAt`・`Rename`・`ChangePrefix`・`MoveWorkspace` は、保存の前の読みを `EditableWorkspace` に、tx の最初を `ReviveWorkspace`(名前・接頭辞を変える保存は変更後の値を渡す)にする。取り消したのに行が 0 なら `port.ErrNotFound`(`Rename`・`ChangePrefix`・`MoveWorkspace` の「何もしない」分かれ道も同じ)。並べ替えの一覧(`orderedLiveWorkspaces`)は、取り消したあとに読む。削除の操作は、取り消さない版(いまの `port.LiveWorkspace` の確かめのまま)を通す。`editAt` に引数を足すか、削除の操作用の小さな関数を足すかは、60 行と複雑度 15 の上限に合う方を選ぶ。
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./internal/app/... && make lint`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/app/port internal/app/workspaces
+git commit -m "feat: 別の画面で削除されたワークスペースの設定を変更したら削除を取り消す"
+```
+
+### Task 11: 削除済みのワークスペースの自動化・プロジェクト別のルールと e2e
+
+**Files:**
+- Modify: `internal/app/automations/service.go`(`rulesOf`・`edit`)、`internal/app/projectrules/service.go`(`load`・`edit`)
+- Modify: `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/06-sync-notifications.md`(Task 7 で足した文の「設定の値(…)」に「ワークスペース」を足す)
+- Modify: `web/e2e/deleted-elsewhere.spec.ts`
+- Test: `internal/app/automations/deleted_test.go`、`internal/app/projectrules/service_test.go`
+
+**Interfaces:**
+- Consumes: Task 10 の `EditableWorkspace`・`ReviveWorkspace`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+- `TestChangeRuleInDeletedWorkspaceRevives`(automations): ワークスペースを削除したあと、ルールの作成・編集・有効と無効の切り替えで、ワークスペースが戻る。ルールの削除は `port.ErrNotFound` で削除済みのまま。
+- `TestProjectRuleInDeletedWorkspaceRevives`(projectrules): ワークスペースの削除で一緒に削除されたプロジェクトのステータスの使う・使わないを変えると、ワークスペースとプロジェクトが戻る。`TestProjectRuleOnDeletedProjectIsNotFound`: プロジェクトを自分で削除(root: true)したあとは、いまのまま `port.ErrNotFound`。
+- e2e `"changing a setting of a workspace deleted in another tab restores it"`: このタブでワークスペースの設定の「一般」の名前の入力欄に新しい名前を入れる(Enter はまだ)。別のタブで同じワークスペースを削除する(操作は B5b の e2e のものを使う)。このタブで Enter を押すと、トースト「「{削除の前の名前}」は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました」が完全一致で出る。別のタブでサイドバーに新しい名前のワークスペースが出る。
+
+- [ ] **Step 2: 失敗を確かめる**
+
+Run: `go test ./internal/app/automations/ ./internal/app/projectrules/ -run 'Deleted'`
+Expected: FAIL
+
+- [ ] **Step 3: 書く**
+
+automations: 保存の前の読みの `port.LiveWorkspace` を `EditableWorkspace` に、`writeRules` の最初で、`Delete` 以外は `ReviveWorkspace`(取り消したのに行が 0 なら `ErrNotFound`)。projectrules: tx の最初で、プロジェクトを `r.Projects().Get` で読み、`Deleted` が root: false で、ワークスペースが削除済み、かつプロジェクトの削除の op がワークスペースの削除の op と同じなら `ReviveWorkspace` を呼んでから、いまの `load`(`LiveProject`)を続ける。06 の文を直す。
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./internal/app/... && make lint && make e2e-bin && pnpm -C web e2e e2e/deleted-elsewhere.spec.ts`
+Expected: PASS(e2e は 5 テスト × 3 幅)
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/app/automations internal/app/projectrules docs/superpowers/specs web/e2e/deleted-elsewhere.spec.ts
+git commit -m "feat: 別の画面で削除されたワークスペースの自動化とプロジェクト別のルールを変更したら削除を取り消す"
+```
+
+### Task 12: 全体の検証(Task 10・11 のあと)
+
+- [ ] **Step 1:** `make lint && make test && golangci-lint run --build-tags e2e ./...`、`pnpm -C web test && pnpm -C web check && pnpm -C web lint` がすべて通る。
