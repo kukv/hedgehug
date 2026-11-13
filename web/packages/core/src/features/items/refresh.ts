@@ -32,7 +32,8 @@ export function createItemRefresh(deps: ItemRefreshDeps): ItemRefresh {
   return {
     afterChange,
     async afterDelete(item) {
-      if (get(deps.detail.view)?.item.id === item.id) deps.detail.close();
+      const open = get(deps.detail.view)?.item;
+      if (open?.storeId === item.storeId && open.id === item.id) deps.detail.close();
       await afterChange();
     },
   };

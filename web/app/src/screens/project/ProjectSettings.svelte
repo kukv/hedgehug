@@ -1,6 +1,7 @@
 <script lang="ts">
   import { type ProjectView, readOnlyNote } from "@hedgehug/core";
   import { Button, Input } from "@hedgehug/ui";
+  import { untrack } from "svelte";
   import { projectEditor } from "../../projectEditor";
   import { projectDelete } from "../../wireActions";
 
@@ -36,10 +37,14 @@
     if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
   }
 
-  // 「削除」の区画の説明の件数と保持日数は、サーバーの予告から読む。アイテムの数が変わったときも読み直す。
+  // 「削除」の区画の説明の件数と保持日数は、サーバーの予告から読む。別のプロジェクトになったときと、アイテムの数が
+  // 変わったときだけ読み直す(p は読み直しのたびに新しいオブジェクトになるので、値で比べる $derived を見る)。
+  const projectKey = $derived(`${p.storeId}/${p.id}`);
+  const itemCount = $derived(view.items.length);
   $effect(() => {
-    void view.items.length;
-    void projectDelete.load(p);
+    void projectKey;
+    void itemCount;
+    untrack(() => void projectDelete.load(p));
   });
 </script>
 

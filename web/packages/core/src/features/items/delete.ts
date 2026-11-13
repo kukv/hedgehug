@@ -81,10 +81,12 @@ export function createItemDelete(deps: ItemDeleteDeps): ItemDelete {
     async open(item) {
       const prefix = deps.catalog.workspace(item.storeId, item.workspaceId)?.prefix;
       if (prefix === undefined || deps.catalog.store(item.storeId)?.readOnly) return;
-      // 開いているパネルが item か、その祖先のものなら、書きかけの確認(「入力を破棄」)を先に聞く。
+      // 開いているパネルが item か、その祖先のものなら、書きかけの確認(「入力を破棄」)を先に聞く。内部 ID は Store の
+      // 中でだけ一意なので、Store も比べる(祖先はパネルのアイテムと同じ Store)。
       const panel = get(deps.detail.view);
       const inPanel =
         panel !== null &&
+        panel.item.storeId === item.storeId &&
         (panel.item.id === item.id || panel.ancestors.some((a) => a.id === item.id));
       const gen = ++seq;
       if (inPanel && !(await deps.drafts.confirmLeave(isItemDraft))) return;

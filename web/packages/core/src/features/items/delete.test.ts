@@ -228,4 +228,14 @@ describe("createItemDelete", () => {
     expect(confirms).toEqual([]);
     expect(get(del.state)?.item.id).toBe(task.id);
   });
+
+  // 内部 ID は Store の中でだけ一意。別の Store の同じ内部 ID のパネルは、関係のないパネルとみなす。
+  it("does not ask when the open panel has the same internal ID in another Store", async () => {
+    const { del, task, epic, panel, confirms } = await setup();
+    panel.set(viewOf({ ...task, storeId: "S2" }, [{ ...epic, storeId: "S2" }]));
+    await del.open(task);
+    await del.open(epic);
+    expect(confirms).toEqual([]);
+    expect(get(del.state)?.item.id).toBe(epic.id);
+  });
 });

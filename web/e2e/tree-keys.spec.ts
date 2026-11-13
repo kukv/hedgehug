@@ -162,6 +162,8 @@ test("moves around, opens, changes and reorders the tree with the keyboard", asy
     await panel.getByRole("button", { name: "閉じる" }).click();
     // D は、A・B・C と同じ Epic の下の末尾に入る。
     await expect.poll(order).toEqual([epic, t("A"), t("B"), t("C"), t("D"), epic2]);
+    // 作成のあとの読み直しでも、ダイアログのあいだに押した Space でステータスが変わっていない。
+    await expect(status(shown)).toHaveAccessibleName(before);
   });
 
   await test.step("Alt+↑↓ reorder, and quick presses are carried out one by one", async () => {

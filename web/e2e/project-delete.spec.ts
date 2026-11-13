@@ -24,7 +24,7 @@ test("deletes a project from its settings tab and goes back to the workspace", a
 
   // トーストが出て、ワークスペースの概要へ移り、サイドバーからプロジェクトが消える。
   await expect(page.getByText("プロジェクトを削除しました")).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/s/e2e/w/${prefix}`));
+  await expect(page).toHaveURL(new RegExp(`/s/e2e/w/${prefix}(\\/|$)`));
   const side = await sidebar(page, info);
   await expect(side.getByRole("link", { name: projectTitle })).toHaveCount(0);
   // 削除したプロジェクトのアドレスは開けず、ホーム(見出し「hedgehug」)を開く(01「画面のアドレス」)。

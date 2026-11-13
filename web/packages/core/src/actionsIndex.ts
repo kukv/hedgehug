@@ -1,105 +1,24 @@
 // アイテムとプロジェクトの操作(トラック A4b)の core の export。index.ts が全部を再公開する
-// (index.ts は 300 行の上限なので、A4b の分はここに足す)。
+// (index.ts は 300 行の上限なので、A4b の分はここに足す)。app と api が使うものだけを出す。
 
-export { type CopyIdDeps, createCopyId } from "./features/items/copyId";
-export {
-  createItemDelete,
-  type DeleteDialogState,
-  type ItemDelete,
-  type ItemDeleteDeps,
-  itemDeleteDialog,
-  itemDeletedMessage,
-  itemDeleteFailedMessage,
-} from "./features/items/delete";
-export {
-  createItemDuplicate,
-  duplicateFailedMessage,
-  type ItemDuplicate,
-  type ItemDuplicateDeps,
-} from "./features/items/duplicate";
-export { createKeyQueue, type KeyQueue, keepsQueue } from "./features/items/keyQueue";
-export {
-  createItemKind,
-  type ItemKind,
-  type ItemKindDeps,
-  type KindState,
-  kindFailedMessage,
-  kindOptions,
-} from "./features/items/kind";
-export {
-  type ItemMenuContext,
-  type ItemMenuId,
-  itemMenu,
-  itemMenuContext,
-  type MenuEntry,
-  menuReasons,
-} from "./features/items/menu";
-export {
-  createItemMenuHost,
-  type ItemMenuHost,
-  type ItemMenuHostContext,
-  type ItemMenuHostDeps,
-  type ItemMenuState,
-  menuAt,
-  reorderFailedMessage,
-} from "./features/items/menuHost";
-export {
-  createItemMove,
-  type ItemMove,
-  type ItemMoveDeps,
-  type MoveMenuState,
-  movedToProjectMessage,
-  movedUnderMessage,
-  moveFailedMessage,
-} from "./features/items/move";
-export { filterMoveCandidates } from "./features/items/moveCandidates";
-export {
-  createItemRefresh,
-  type ItemRefresh,
-  type ItemRefreshDeps,
-} from "./features/items/refresh";
-export { visibleNeighbors, visibleRows } from "./features/items/siblings";
-export {
-  createTreeFocus,
-  type TreeFocus,
-  type TreeFocusState,
-  type TreeMove,
-} from "./features/items/treeFocus";
+export { createCopyId } from "./features/items/copyId";
+export { createItemDelete } from "./features/items/delete";
+export { createItemDuplicate } from "./features/items/duplicate";
+export { keepsQueue } from "./features/items/keyQueue";
+export { createItemKind, type ItemKind, kindOptions } from "./features/items/kind";
+export { createItemMenuHost, type ItemMenuHost, menuAt } from "./features/items/menuHost";
+export { createItemMove } from "./features/items/move";
+export { createItemRefresh } from "./features/items/refresh";
+export { createTreeFocus, type TreeFocus } from "./features/items/treeFocus";
 export {
   isQueuedAction,
-  type KeyInput,
-  type KeyTarget,
   leftToTarget,
-  type QueuedKeyAction,
-  type ReadKeyAction,
   type TreeKeyAction,
   treeKeyAction,
-  type WriteKeyAction,
 } from "./features/items/treeKeys";
-export {
-  createTreeWrites,
-  type TreeScreen,
-  type TreeWrites,
-  type TreeWritesDeps,
-} from "./features/items/treeWrites";
-export {
-  createProjectDelete,
-  type DeleteTarget,
-  type LeaveDeletedDeps,
-  leaveDeletedProject,
-  type ProjectDelete,
-  type ProjectDeleteDeps,
-  type ProjectDeleteDialogState,
-  projectDeleteDialog,
-  projectDeletedMessage,
-  projectDeleteNote,
-} from "./features/projects/delete";
+export { createTreeWrites } from "./features/items/treeWrites";
+export { createProjectDelete, leaveDeletedProject } from "./features/projects/delete";
 export { projectTabOf } from "./features/router/route";
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
-export type {
-  DeletePreview,
-  MoveCandidate,
-  MoveTarget,
-  ProjectDeletePreview,
-} from "./model/itemAction";
+export type { MoveCandidate } from "./model/itemAction";
 export type { ItemActionsPort } from "./port/itemActions";

@@ -58,13 +58,25 @@ test("a read-only store's tree ignores the write keys and disables the menu's wr
 
   // メニューキーは使え、変更系の項目は無効で理由を添える。「詳細を開く」「ID をコピー」は使える。
   await page.keyboard.press("Shift+F10");
-  for (const name of [/^上へ移動/, /^下へ移動/, /^移動…/, /^種類を変更/, /^複製/, /^削除…/]) {
+  for (const name of [
+    /^上へ移動/,
+    /^下へ移動/,
+    /^移動…/,
+    /^種類を変更/,
+    /^複製/,
+    /^テンプレートとして保存…/,
+    /^削除…/,
+  ]) {
     const item = page.getByRole("menuitem", { name });
     await expect(item).toBeDisabled();
     await expect(item).toContainText(note);
   }
   await expect(page.getByRole("menuitem", { name: /^詳細を開く/ })).toBeEnabled();
   await expect(page.getByRole("menuitem", { name: /^ID をコピー/ })).toBeEnabled();
+  // メニューが開いたので、その前に押した書き込みのキーは処理し終えている。何も変わっていないことを確かめ直す。
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(status).toHaveAttribute("aria-label", statusName ?? "");
+  expect(await treeTitles(tree)).toEqual(before);
 });
 
 // マウスやタッチで行を押したとき、ツリーにフォーカスが入っても先頭の行へは動かない(動かすと、画面の外の先頭へスクロールして、

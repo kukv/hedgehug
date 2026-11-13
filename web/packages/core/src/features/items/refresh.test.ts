@@ -84,6 +84,13 @@ describe("item refresh", () => {
     expect(calls).toEqual(["detail", "tree", "relations"]);
   });
 
+  // 内部 ID は Store の中でだけ一意。別の Store の同じ内部 ID のパネルは閉じない。
+  it("keeps the panel of the same internal ID in another Store", async () => {
+    const { refresh, calls } = setup({ ...task, storeId: "S2" });
+    await refresh.afterDelete(task);
+    expect(calls).toEqual(["detail", "tree", "relations"]);
+  });
+
   it("reloads without closing when no panel is open", async () => {
     const { refresh, calls } = setup(null);
     await refresh.afterDelete(task);
