@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 )
 
 const (
@@ -365,6 +366,27 @@ func TestRefreshStoppedNotifies(t *testing.T) {
 	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomationStopped || ns[0].Text != "「マージで完了」が制約で止まりました" ||
 		ns[0].Reason != "ワークフローの制約: Todo から Done には変更できません(Pending のみ)" || ns[0].Status != apptest.SampleStatusDone {
 		t.Errorf("notices = %+v", ns)
+	}
+}
+
+// プロジェクトが「動かさない」と指定したルールは、リンクのきっかけでも動かない。
+func TestAddSkipsRuleDisabledInProject(t *testing.T) {
+	f := newLinks(t)
+	f.withRules(t, statusRule(ruleOpen, "PR が Open で In Progress", automation.TriggerPROpen, apptest.SampleStatusInProgress))
+	err := f.stores.Stores.Write(t.Context(), linkStore, port.Operation{Actor: change.User("taro"), Summary: "動かさない"}, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.DisabledField(apptest.SampleProject), ruleOpen))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	if it := f.taskItem(t); it.Status != apptest.SampleStatusTodo {
+		t.Errorf("status = %s, a disabled rule must not run", it.Status)
+	}
+	if rows := ruleRows(f.taskLog(t)); len(rows) != 0 || len(f.inbox.Notices()) != 0 {
+		t.Errorf("rule rows = %+v, notices = %+v", rows, f.inbox.Notices())
 	}
 }
 

@@ -49,6 +49,8 @@ func set(r *Rule, field string, raw json.RawMessage) {
 		_ = json.Unmarshal(raw, &r.Value)
 	case "enabled":
 		_ = json.Unmarshal(raw, &r.Enabled)
+	case "scope":
+		_ = json.Unmarshal(raw, &r.Scope)
 	}
 }
 
@@ -76,6 +78,7 @@ func Names(log []change.Record) map[change.ID]string {
 }
 
 // Drafts は、old から r への行。old がゼロ値なら作成で、すべての項目を書く。ほかは変わった項目だけ。
+// scope は作成のときだけ、専用ルールのときだけ書く(編集で Scope は変えない。B5a-10)。
 func Drafts(old, r Rule) []change.Draft {
 	fresh := old.ID == ""
 	fields := []struct {
@@ -91,6 +94,9 @@ func Drafts(old, r Rule) []change.Draft {
 		{"enabled", old.Enabled, r.Enabled},
 	}
 	var ds []change.Draft
+	if fresh && r.Scope != "" {
+		ds = append(ds, change.NewSet(Field(r.ID, "scope"), nil, r.Scope))
+	}
 	for _, f := range fields {
 		switch {
 		case fresh:

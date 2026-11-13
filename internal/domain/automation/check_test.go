@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/domain/automation"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -41,7 +44,7 @@ func TestValid(t *testing.T) {
 		{Trigger: automation.TriggerStepsDone, Action: automation.ActionAssignee, Value: "Taro"}, // ログイン名は大文字と小文字を区別しない
 	}
 	for _, r := range ok {
-		if !automation.Valid(s, logins, r) {
+		if !automation.Valid(s, nil, logins, r) {
 			t.Errorf("Valid(%+v) = false", r)
 		}
 	}
@@ -53,7 +56,7 @@ func TestValid(t *testing.T) {
 		{Trigger: automation.TriggerPROpen, Action: "nope", Value: "DONE"},
 	}
 	for _, r := range bad {
-		if automation.Valid(s, logins, r) {
+		if automation.Valid(s, nil, logins, r) {
 			t.Errorf("Valid(%+v) = true", r)
 		}
 	}
@@ -104,5 +107,29 @@ func TestTexts(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("%d: %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestValidRejectsUnusedStatusForScopedRule(t *testing.T) {
+	s := settings()
+	s.InitialStatus = "TODO"
+	set := projectrule.Set{"P": {Hidden: []change.ID{"CANCEL"}}}
+	scoped := func(p string, r automation.Rule) automation.Rule { r.Scope = project.ID(p); return r }
+	toCancel := automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionStatus, Value: "CANCEL"}
+	fromCancel := automation.Rule{Trigger: automation.TriggerStatus, TriggerStatus: "CANCEL", Action: automation.ActionAssignee, Value: automation.Unassigned}
+	for _, r := range []automation.Rule{toCancel, fromCancel} {
+		if automation.Valid(s, set, nil, scoped("P", r)) {
+			t.Errorf("使わないステータスの専用ルールが通った: %+v", r)
+		}
+		if !automation.Valid(s, set, nil, scoped("Q", r)) || !automation.Valid(s, set, nil, r) {
+			t.Errorf("ほかのプロジェクト・全体のルールは通る: %+v", r)
+		}
+	}
+	got := automation.Statuses(automation.Rule{Trigger: automation.TriggerStatus, TriggerStatus: "A", Action: automation.ActionStatus, Value: "B"})
+	if len(got) != 2 || got[0] != "A" || got[1] != "B" {
+		t.Errorf("Statuses = %v", got)
+	}
+	if got := automation.Statuses(automation.Rule{Trigger: automation.TriggerPROpen, Action: automation.ActionAssignee, Value: "x"}); len(got) != 0 {
+		t.Errorf("Statuses = %v", got)
 	}
 }

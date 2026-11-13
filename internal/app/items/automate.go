@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -27,8 +28,8 @@ func automate(tx port.Tx, st workspace.Settings, id item.ID, from change.ID) ([]
 	if err != nil {
 		return nil, err
 	}
-	rules := automation.FromLog(log)
-	out, err := runOn(tx, st, rules, it, automation.Event{Trigger: automation.TriggerStatus, Status: it.Status})
+	rules, set := automation.FromLog(log), projectrule.FromLog(log)
+	out, err := runOn(tx, st, set, rules, it, automation.Event{Trigger: automation.TriggerStatus, Status: it.Status})
 	if err != nil || it.Kind != item.Step || it.Place.Parent == nil {
 		return out, err
 	}
@@ -43,13 +44,13 @@ func automate(tx port.Tx, st workspace.Settings, id item.ID, from change.ID) ([]
 	if parent.Deleted != nil {
 		return out, nil // 削除済みのアイテムには動かない(03「実行の規則」)
 	}
-	more, err := runOn(tx, st, rules, parent, automation.Event{Trigger: automation.TriggerStepsDone})
+	more, err := runOn(tx, st, set, rules, parent, automation.Event{Trigger: automation.TriggerStepsDone})
 	return append(out, more...), err
 }
 
 // runOn は、it でルールを動かし、変えた行を書く。
-func runOn(tx port.Tx, st workspace.Settings, rules []automation.Rule, it item.Item, ev automation.Event) ([]fired, error) {
-	os := automation.Run(st, rules, it, ev)
+func runOn(tx port.Tx, st workspace.Settings, set projectrule.Set, rules []automation.Rule, it item.Item, ev automation.Event) ([]fired, error) {
+	os := automation.Run(st, set, rules, it, ev)
 	if len(os) == 0 {
 		return nil, nil
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -27,9 +28,25 @@ func Normalize(r Rule) Rule {
 	return r
 }
 
+// Statuses は、r のきっかけとすることが指すステータス(Trigger が status のときのきっかけ、Action が status のときの値)。
+func Statuses(r Rule) []change.ID {
+	var out []change.ID
+	if r.Trigger == TriggerStatus {
+		out = append(out, r.TriggerStatus)
+	}
+	if r.Action == ActionStatus {
+		out = append(out, change.ID(r.Value))
+	}
+	return out
+}
+
 // Valid は、きっかけ・すること・値の参照が正しいか。false は ErrNotFound にする(B4-6)。logins は Store のメンバー。
-func Valid(s workspace.Settings, logins []string, r Rule) bool {
+// 専用ルールのステータスは、そのプロジェクトで使うものでなければならない(B5a-10)。
+func Valid(s workspace.Settings, set projectrule.Set, logins []string, r Rule) bool {
 	if !slices.Contains(Triggers, r.Trigger) || (r.Trigger == TriggerStatus && !hasStatus(s, r.TriggerStatus)) {
+		return false
+	}
+	if r.Scope != "" && slices.ContainsFunc(Statuses(r), func(id change.ID) bool { return !projectrule.Uses(s, set.Of(r.Scope), id) }) {
 		return false
 	}
 	switch r.Action {

@@ -10,6 +10,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 )
 
 // setupAuto は、ルールを書いた Store と、通知を覚える受信箱。
@@ -137,5 +139,66 @@ func TestCreateDoesNotRunRules(t *testing.T) {
 	}
 	if n := len(inbox.Notices()); n != 0 {
 		t.Errorf("create must not run rules: %d", n)
+	}
+}
+
+// writeWorkspace は、サンプルのワークスペースのログに行を書く(プロジェクト別のルールの行など)。
+func writeWorkspace(t *testing.T, rec *recorder, ds ...change.Draft) {
+	t.Helper()
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースの設定を変更"}
+	err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStatusChangeRunsScopedRuleOnlyInItsProject(t *testing.T) {
+	scoped := func(id string, p project.ID) automation.Rule {
+		r := autoRule(id, automation.TriggerStatus, apptest.SampleStatusDone, automation.ActionAssignee, "taro")
+		r.Scope = p
+		return r
+	}
+	svc, rec, inbox := setupAuto(t, scoped("01RULE1", otherProject), scoped("01RULE2", apptest.SampleProject))
+	addSecondProject(t, rec.Stores)
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "status", raw(`"`+string(apptest.SampleStatusDone)+`"`)); err != nil {
+		t.Fatal(err)
+	}
+	ns := inbox.Notices()
+	if len(ns) != 1 || ns[0].Rule != "01RULE2" {
+		t.Errorf("notices = %+v, only the rule of the item's project runs", ns)
+	}
+	if it, _ := svc.Get(t.Context(), store, apptest.SampleTask); it.Assignee != "taro" {
+		t.Errorf("assignee = %q", it.Assignee)
+	}
+}
+
+func TestStatusChangeSkipsRuleDisabledInProject(t *testing.T) {
+	svc, rec, inbox := setupAuto(t, autoRule("01RULE1", automation.TriggerStatus, apptest.SampleStatusDone, automation.ActionAssignee, "taro"))
+	writeWorkspace(t, rec, change.NewAdd(projectrule.DisabledField(apptest.SampleProject), "01RULE1"))
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "status", raw(`"`+string(apptest.SampleStatusDone)+`"`)); err != nil {
+		t.Fatal(err)
+	}
+	if ns := inbox.Notices(); len(ns) != 0 {
+		t.Errorf("notices = %+v", ns)
+	}
+	if it, _ := svc.Get(t.Context(), store, apptest.SampleTask); it.Assignee != "" {
+		t.Errorf("assignee = %q, a disabled rule must not run", it.Assignee)
+	}
+}
+
+func TestStatusChangeStopsOnStatusTheProjectDoesNotUse(t *testing.T) {
+	svc, rec, inbox := setupAuto(t, autoRule("01RULE1", automation.TriggerStatus, apptest.SampleStatusInProgress, automation.ActionStatus, string(apptest.SampleStatusPending)))
+	writeWorkspace(t, rec, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), apptest.SampleStatusPending))
+	if _, err := svc.SetProperty(t.Context(), store, apptest.SampleTask, "status", raw(`"`+string(apptest.SampleStatusInProgress)+`"`)); err != nil {
+		t.Fatal(err)
+	}
+	ns := inbox.Notices()
+	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomationStopped || ns[0].Reason != "このプロジェクトでは「Pending」を使いません" || ns[0].Status != apptest.SampleStatusPending {
+		t.Errorf("notices = %+v", ns)
+	}
+	if it, _ := svc.Get(t.Context(), store, apptest.SampleTask); it.Status != apptest.SampleStatusInProgress {
+		t.Errorf("status = %s, a stopped run saves nothing", it.Status)
 	}
 }

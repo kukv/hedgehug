@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -48,7 +49,7 @@ func logins(r port.Reader) ([]string, error) {
 // edit は、summary で決めた文で 1 回保存する。drafts は保存の中のいまのルールから行を作る。
 func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 	summary func(rules []automation.Rule) (string, error),
-	drafts func(st workspace.Settings, rules []automation.Rule, members []string) ([]change.Draft, error),
+	drafts func(st workspace.Settings, set projectrule.Set, rules []automation.Rule, members []string) ([]change.Draft, error),
 ) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
@@ -79,7 +80,11 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 		if err != nil {
 			return err
 		}
-		ds, err := drafts(st, rules, ms)
+		log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
+		if err != nil {
+			return err
+		}
+		ds, err := drafts(st, projectrule.FromLog(log), rules, ms)
 		if err != nil {
 			return err
 		}

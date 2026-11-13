@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -19,9 +20,9 @@ func (s Service) Create(ctx context.Context, store port.StoreID, ws workspace.ID
 		func([]automation.Rule) (string, error) {
 			return fmt.Sprintf("自動化「%s」を作成", oneLine(in.Name)), nil
 		},
-		func(st workspace.Settings, rules []automation.Rule, ms []string) ([]change.Draft, error) {
+		func(st workspace.Settings, set projectrule.Set, rules []automation.Rule, ms []string) ([]change.Draft, error) {
 			in = canonicalLogin(in, ms)
-			if !automation.Valid(st, ms, in) {
+			if !automation.Valid(st, set, ms, in) {
 				return nil, port.ErrNotFound
 			}
 			if err := automation.Check(rules, in); err != nil {
@@ -46,14 +47,14 @@ func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID
 			}
 			return fmt.Sprintf("自動化「%s」を編集", oneLine(in.Name)), nil
 		},
-		func(st workspace.Settings, rules []automation.Rule, ms []string) ([]change.Draft, error) {
+		func(st workspace.Settings, set projectrule.Set, rules []automation.Rule, ms []string) ([]change.Draft, error) {
 			old, err := find(rules, id)
 			if err != nil {
 				return nil, err
 			}
 			in.Enabled = old.Enabled
 			in = canonicalLogin(in, ms)
-			if !automation.Valid(st, ms, in) {
+			if !automation.Valid(st, set, ms, in) {
 				return nil, port.ErrNotFound
 			}
 			if err := automation.Check(rules, in); err != nil {
@@ -70,7 +71,7 @@ func (s Service) Delete(ctx context.Context, store port.StoreID, ws workspace.ID
 			r, err := find(rules, id)
 			return fmt.Sprintf("自動化「%s」を削除", oneLine(r.Name)), err
 		},
-		func(_ workspace.Settings, rules []automation.Rule, _ []string) ([]change.Draft, error) {
+		func(_ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
 			if _, err := find(rules, id); err != nil {
 				return nil, err
 			}
@@ -89,7 +90,7 @@ func (s Service) SetEnabled(ctx context.Context, store port.StoreID, ws workspac
 			r, err := find(rules, id)
 			return fmt.Sprintf("自動化「%s」を%sにする", oneLine(r.Name), word), err
 		},
-		func(_ workspace.Settings, rules []automation.Rule, _ []string) ([]change.Draft, error) {
+		func(_ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
 			old, err := find(rules, id)
 			if err != nil {
 				return nil, err
