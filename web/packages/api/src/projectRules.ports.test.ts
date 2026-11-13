@@ -53,6 +53,13 @@ describe("projects port: project rules", () => {
     ]);
   });
 
+  it("sends an empty template default as it is to clear it", async () => {
+    const fetch = respond(204, undefined);
+    await createProjectsPort().setTemplateDefault("S1", "P1", "Task", "");
+    expect(call(fetch)[0]).toBe(`${rules}/template-defaults/Task`);
+    expect(JSON.parse(String(call(fetch)[1].body))).toEqual({ template: "" });
+  });
+
   it("turns a refusal into Refused and a missing project into NotFound", async () => {
     respond(422, {
       title: "Unprocessable Entity",
