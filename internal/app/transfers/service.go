@@ -128,16 +128,22 @@ func (s Service) checkDestination(ctx context.Context, id port.StoreID) error {
 
 // hasRemote は、Store id に remote があるか。
 func (s Service) hasRemote(ctx context.Context, id port.StoreID) (bool, error) {
+	remote, err := s.remoteOf(ctx, id)
+	return remote != "", err
+}
+
+// remoteOf は、Store id の remote の URL。なければ空。
+func (s Service) remoteOf(ctx context.Context, id port.StoreID) (string, error) {
 	ts, err := s.SyncTargets.List(ctx)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	for _, t := range ts {
 		if t.ID == id {
-			return t.Remote != "", nil
+			return t.Remote, nil
 		}
 	}
-	return false, nil
+	return "", nil
 }
 
 // displayID は、接頭辞と番号の画面の ID(HH-12)。書式は item.Item.DisplayID の 1 か所に持つ。

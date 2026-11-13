@@ -40,7 +40,7 @@ func withSteps(t *testing.T, f fixture) {
 func TestMoveToAnotherWorkspaceRenumbersDeletedChildrenAfterLiveOnes(t *testing.T) {
 	f := newFixture(t)
 	withSteps(t, f)
-	deletedAt := itemOf(t, f.rec, stepGoneID).Deleted.At
+	deletedAt := itemOf(t, f.rec, store1, stepGoneID).Deleted.At
 	got, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile())
 	if err != nil {
 		t.Fatal(err)
@@ -50,20 +50,20 @@ func TestMoveToAnotherWorkspaceRenumbersDeletedChildrenAfterLiveOnes(t *testing.
 	}
 	// 移すアイテムが MB-2、生きている子が MB-3、削除済みの子が MB-4(作った順では逆)。
 	for id, want := range map[item.ID]int{apptest.SampleTask: 2, stepLiveID: 3, stepGoneID: 4} {
-		it := itemOf(t, f.rec, id)
+		it := itemOf(t, f.rec, store1, id)
 		if it.Place.Workspace != mobileWS || it.Place.Project != mobileProject || it.Place.Number != want {
 			t.Errorf("%s の場所 = %+v, 番号は %d", id, it.Place, want)
 		}
 	}
-	task := itemOf(t, f.rec, apptest.SampleTask)
+	task := itemOf(t, f.rec, store1, apptest.SampleTask)
 	if task.Place.Parent == nil || *task.Place.Parent != mobileEpic || task.Rank != rank.First {
 		t.Errorf("移すアイテムの親と順位 = %v, %q(Mobile の Epic の子の末尾)", task.Place.Parent, task.Rank)
 	}
-	if step := itemOf(t, f.rec, stepLiveID); *step.Place.Parent != apptest.SampleTask || step.Rank != "V" {
+	if step := itemOf(t, f.rec, store1, stepLiveID); *step.Place.Parent != apptest.SampleTask || step.Rank != "V" {
 		t.Errorf("下のものの親と順位は変えない: %+v", step.Place)
 	}
 	// 削除済みのまま、元の削除日時。
-	if gone := itemOf(t, f.rec, stepGoneID); gone.Deleted == nil || !gone.Deleted.At.Equal(deletedAt) {
+	if gone := itemOf(t, f.rec, store1, stepGoneID); gone.Deleted == nil || !gone.Deleted.At.Equal(deletedAt) {
 		t.Errorf("削除済みの印 = %+v", gone.Deleted)
 	}
 	// 番号は移動先のワークスペースの次の番号から使い切る。移動元の番号は戻らない。
@@ -121,7 +121,7 @@ func TestMoveEpicIntoAnotherWorkspaceTakesItsTasks(t *testing.T) {
 	if err != nil || got.Display != "MB-2" {
 		t.Fatalf("moved = %+v, %v", got, err)
 	}
-	epic, task := itemOf(t, f.rec, apptest.SampleEpic), itemOf(t, f.rec, apptest.SampleTask)
+	epic, task := itemOf(t, f.rec, store1, apptest.SampleEpic), itemOf(t, f.rec, store1, apptest.SampleTask)
 	if epic.Place.Parent != nil || epic.Place.Number != 2 || epic.Rank <= "V" || task.Place.Number != 3 || *task.Place.Parent != apptest.SampleEpic || task.Place.Workspace != mobileWS {
 		t.Errorf("epic = %+v, task = %+v", epic, task)
 	}
@@ -144,7 +144,7 @@ func TestMoveRemapsValuesAndReportsEmptiedOnes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	it := itemOf(t, f.rec, apptest.SampleTask)
+	it := itemOf(t, f.rec, store1, apptest.SampleTask)
 	if it.Status != inProgress {
 		t.Errorf("ステータスは選んだ置き換え: %q", it.Status)
 	}
@@ -165,7 +165,7 @@ func TestMoveWithoutAStatusChoiceUsesTheDefaultOfTheSameCategory(t *testing.T) {
 	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
 		t.Fatal(err)
 	}
-	if it := itemOf(t, f.rec, apptest.SampleTask); it.Status != valueID(t, f.rec, "status", "Todo") {
+	if it := itemOf(t, f.rec, store1, apptest.SampleTask); it.Status != valueID(t, f.rec, "status", "Todo") {
 		t.Errorf("status = %q", it.Status)
 	}
 }
@@ -219,7 +219,7 @@ func TestMovePlacesTheItemAfterTheLastLiveChildOfTheNewParent(t *testing.T) {
 	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := itemOf(t, f.rec, apptest.SampleTask).Rank, rank.After("V"); got != want {
+	if got, want := itemOf(t, f.rec, store1, apptest.SampleTask).Rank, rank.After("V"); got != want {
 		t.Errorf("rank = %q, want %q(生きている子 V のあと)", got, want)
 	}
 }

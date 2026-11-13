@@ -74,10 +74,10 @@ func TestPreviewRowsAreExactlyTheStatusesMoveReplaces(t *testing.T) {
 	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, in); err != nil {
 		t.Fatal(err)
 	}
-	if got := itemOf(t, f.rec, apptest.SampleTask).Status; got != done {
+	if got := itemOf(t, f.rec, store1, apptest.SampleTask).Status; got != done {
 		t.Errorf("行にある Pending = %q, want 選んだ Done", got)
 	}
-	if got := itemOf(t, f.rec, step.ID).Status; got != valueID(t, f.rec, "status", "InProgress") {
+	if got := itemOf(t, f.rec, store1, step.ID).Status; got != valueID(t, f.rec, "status", "InProgress") {
 		t.Errorf("行にない InProgress = %q, want 名前の一致", got)
 	}
 }

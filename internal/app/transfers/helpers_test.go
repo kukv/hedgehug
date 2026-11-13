@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -58,13 +59,15 @@ func (r *recorder) Write(ctx context.Context, id port.StoreID, op port.Operation
 	return r.Stores.Write(ctx, id, op, fn)
 }
 
-// summaries は、すべての Store に書いたアクティビティの文を、書いた順に返す。
-func (r *recorder) summaries() []string {
+// summaries は、Store stores(なければすべての Store)に書いたアクティビティの文を、書いた順に返す。
+func (r *recorder) summaries(stores ...port.StoreID) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
 	for _, a := range r.got {
-		out = append(out, a.Summary)
+		if len(stores) == 0 || slices.Contains(stores, a.Store) {
+			out = append(out, a.Summary)
+		}
 	}
 	return out
 }
@@ -203,11 +206,11 @@ func addItem(t *testing.T, s port.Stores, it item.Item) item.Item {
 	return it
 }
 
-// itemOf は、main(S1)のアイテム(削除済みを含む)。
-func itemOf(t *testing.T, s port.Stores, id item.ID) item.Item {
+// itemOf は、Store のアイテム(削除済みを含む)。
+func itemOf(t *testing.T, s port.Stores, store port.StoreID, id item.ID) item.Item {
 	t.Helper()
 	var it item.Item
-	if err := s.Read(t.Context(), store1, func(r port.Reader) (err error) { it, err = r.Items().Get(id); return }); err != nil {
+	if err := s.Read(t.Context(), store, func(r port.Reader) (err error) { it, err = r.Items().Get(id); return }); err != nil {
 		t.Fatal(err)
 	}
 	return it
@@ -258,3 +261,27 @@ func valueID(t *testing.T, s port.Stores, kind, name string) change.ID {
 }
 
 func ptr(id item.ID) *item.ID { return &id }
+
+// addRelation は、main(S1)のアイテム from に、to との関連 typ を足す(持つのは from)。
+func addRelation(t *testing.T, s port.Stores, from, to item.ID, typ string) {
+	t.Helper()
+	write(t, s, store1, func(tx port.Tx) error {
+		return tx.WriteItems().Append(from, change.NewAdd("relations", item.Relation{Type: typ, To: to}))
+	})
+}
+
+// newBarrier は、n 回目に呼ばれるまで、呼んだものをすべて待たせる。そろったあとの呼び出しは待たない(1 回きり)。
+func newBarrier(n int) func(port.StoreID) {
+	var mu sync.Mutex
+	arrived := 0
+	all := make(chan struct{})
+	return func(port.StoreID) {
+		mu.Lock()
+		arrived++
+		if arrived == n {
+			close(all)
+		}
+		mu.Unlock()
+		<-all
+	}
+}
