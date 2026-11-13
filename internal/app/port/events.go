@@ -4,9 +4,11 @@ package port
 type EventKind string
 
 const (
-	EventStore  EventKind = "store"  // Store の中身が変わった(書き手を問わない)
-	EventSync   EventKind = "sync"   // Store の同期の状態が変わった
-	EventGitHub EventKind = "github" // このマシンが読んだ GitHub の値(チェックの結果)が変わった
+	EventStore EventKind = "store" // Store の中身が変わった(書き手を問わない)
+	EventSync  EventKind = "sync"  // Store の同期の状態が変わった
+	// EventGitHub は、このマシンが読んだ GitHub の値(チェックの結果・取り直しの失敗の文言)が変わったこと。
+	// Store が空なら、認証エラーから確かめ直しで戻ったアカウントがあったこと(設定の「アカウントとメンバー」が読み直す)。
+	EventGitHub EventKind = "github"
 )
 
 // Event は、画面に知らせる出来事。

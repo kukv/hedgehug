@@ -7,7 +7,7 @@ import "time"
 // Record は、Store のリポジトリ 1 つの、前回の読み取りの記録。ゼロ値は「まだ読んでいない」。
 type Record struct {
 	Attempt   time.Time // 前回に試した時刻(このマシンの時計)
-	Failed    bool      // 前回は失敗した
+	Failed    bool      // 前回は失敗した。判定には使わない(Due は成功でも失敗でも Attempt で数える)。調べるときのために残す
 	Limit     int       // 利用上限(0 は分からない)
 	Remaining int       // 利用上限の残り
 	ResetAt   time.Time // 上限が戻る時刻
