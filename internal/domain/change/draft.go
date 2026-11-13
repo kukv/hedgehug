@@ -11,6 +11,15 @@ type Draft struct {
 	Root *bool
 	// Rule は、自動化のルールが書いた行のルール(B4-1)。空なら操作の実行者の行。
 	Rule ID
+	// Op は、この行だけ操作の op と別の op で書くときの op(C3a-11)。空なら操作の op。
+	// 書けるのは同期の操作だけ(port.CheckOpDrafts)。
+	Op ID
+}
+
+// InOp は、この行を op の行として書く。同期の修復が、親の削除と同じ op で子の削除を書くのに使う。
+func (d Draft) InOp(op ID) Draft {
+	d.Op = op
+	return d
 }
 
 // ByRule は、自動化のルール rule が書いた行にする。

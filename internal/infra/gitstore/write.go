@@ -2,6 +2,7 @@ package gitstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -78,7 +79,7 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	if len(drafts) == 0 {
 		return nil
 	}
-	if err := port.CheckRuleDrafts(t.meta.Actor, drafts); err != nil {
+	if err := errors.Join(port.CheckRuleDrafts(t.meta.Actor, drafts), port.CheckOpDrafts(t.meta.Actor, drafts)); err != nil {
 		return err
 	}
 	log, err := t.log(ref)

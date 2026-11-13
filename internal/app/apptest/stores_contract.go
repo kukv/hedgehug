@@ -49,6 +49,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"automation rows share the operation", contractRuleRows},
 		{"automation rows in a GitHub operation are by the bot", contractRuleRowsGitHub},
 		{"automation rows need a person or GitHub and a valid rule id", contractRuleRowsRefused},
+		{"op rows are for sync operations only", contractOpRows},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
