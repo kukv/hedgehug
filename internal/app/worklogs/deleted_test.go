@@ -110,6 +110,18 @@ func TestWorklogsOfAnItemDeletedWithParentAreNotFound(t *testing.T) {
 	}
 }
 
+// 削除済み(root: true)の Task でも、存在しない作業時間の記録の削除は断り、削除済みのまま。
+func TestDeleteWorklogDeletedMissingIsNotFound(t *testing.T) {
+	svc, rec := setup(t)
+	markDeleted(t, rec, apptest.SampleTask)
+	if err := svc.Delete(t.Context(), store, apptest.SampleTask, "01NOPE00000000000000000000"); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Delete = %v, want port.ErrNotFound", err)
+	}
+	if hasRestore(t, rec) {
+		t.Error("断ったのに削除を取り消した")
+	}
+}
+
 // 削除済み(root: true)でも祖先の Epic が削除済みなら、記録を断り、削除済みのまま。
 func TestAddWorklogDeletedUnderDeletedAncestorIsNotFound(t *testing.T) {
 	svc, rec := setup(t)

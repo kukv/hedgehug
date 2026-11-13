@@ -175,6 +175,40 @@ func TestCommentsOnProjectDeletedWithParentAreNotFound(t *testing.T) {
 	}
 }
 
+// wantEditDeleteRefused は、コメント id の編集と削除がどちらも port.ErrNotFound で断られることを確かめる。
+func wantEditDeleteRefused(t *testing.T, svc comments.Service, tg comments.Target, id change.ID, name string) {
+	t.Helper()
+	_, editErr := svc.Edit(t.Context(), store, tg, id, "後")
+	deleteErr := svc.Delete(t.Context(), store, tg, id)
+	for op, err := range map[string]error{"Edit": editErr, "Delete": deleteErr} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s の %s = %v, want port.ErrNotFound", name, op, err)
+		}
+	}
+}
+
+// 削除済み(root: true)の持ち主でも、他人のコメントと存在しないコメントの編集・削除は断り、削除済みのまま。
+func TestEditDeleteCommentDeletedRefusesOthersAndMissing(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, rec := setup(t, "hanako")
+			taro := svc
+			taro.Identity = apptest.Identity{Login: "taro"}
+			others, err := taro.Post(t.Context(), store, o.target, "taro のコメント")
+			if err != nil {
+				t.Fatal(err)
+			}
+			markDeleted(t, rec, o.target, true)
+			for name, id := range map[string]change.ID{"他人のコメント": others.ID, "存在しないコメント": "01NOPE00000000000000000000"} {
+				wantEditDeleteRefused(t, svc, o.target, id, name)
+			}
+			if hasRestore(t, rec, o.target) {
+				t.Error("断ったのに削除を取り消した")
+			}
+		})
+	}
+}
+
 // 削除済みのアイテム・プロジェクトのコメントは、読めない(A4b-4)。
 func TestListCommentsOfADeletedOwnerIsNotFound(t *testing.T) {
 	svc, rec := setup(t, "hanako")
