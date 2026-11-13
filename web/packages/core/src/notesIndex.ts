@@ -31,6 +31,14 @@ export {
   type DescriptionState,
   descriptionConflictMessage,
 } from "./features/notes/description";
+export {
+  formatHours,
+  hoursOf,
+  type ParsedHours,
+  parseHours,
+  stepHours,
+  worklogHeading,
+} from "./features/notes/hours";
 export { appendMention, mentionTargets } from "./features/notes/mentions";
-export type { Comment } from "./model/notes";
+export type { Comment, Worklog } from "./model/notes";
 export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";
