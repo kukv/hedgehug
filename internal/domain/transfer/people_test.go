@@ -53,3 +53,23 @@ func TestPeopleWithNobodyMissing(t *testing.T) {
 		t.Errorf("add = %+v, map = %v", add, people)
 	}
 }
+
+// 移動元のメンバーにいない人が複数の綴りで現れたら、辞書順で先頭の綴りで足す。
+func TestPeopleSpellsAnUnknownPersonWithTheFirstInDictionaryOrder(t *testing.T) {
+	it := item.Item{ID: "I1", Assignee: "shiro", Watchers: []string{"Shiro"}}
+	add, people := transfer.People(workspace.Settings{}, []item.Item{it}, nil, nil, nil)
+	want := []member.Member{{Login: "Shiro", Name: "Shiro"}}
+	if !reflect.DeepEqual(add, want) || people["shiro"] != "Shiro" {
+		t.Errorf("add = %+v, map = %v", add, people)
+	}
+}
+
+// 組み込みのプロパティは、ユーザー型でも人として数えない。
+func TestPeopleIgnoresBuiltinUserProperties(t *testing.T) {
+	from := workspace.Settings{Properties: []workspace.Property{{ID: "PA", Key: "assignee", Type: workspace.TypeUser, Builtin: true}}}
+	it := item.Item{ID: "I1", Fields: map[change.ID]json.RawMessage{"PA": json.RawMessage(`"ghost"`)}}
+	add, people := transfer.People(from, []item.Item{it}, nil, nil, nil)
+	if len(add) != 0 || len(people) != 0 {
+		t.Errorf("add = %+v, map = %v", add, people)
+	}
+}
