@@ -2,6 +2,7 @@ package comments_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -10,30 +11,194 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
-// 削除済みのアイテム・プロジェクトのコメントは、読むことも書くこともできない(A4b-4)。
-func TestCommentsOfADeletedOwnerAreNotFound(t *testing.T) {
-	svc, rec := setup(t, "hanako")
-	ctx := t.Context()
-	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
+// markDeleted は、持ち主を削除済みにする(行を直接書く。root: true は利用者が選んだ削除)。
+func markDeleted(t *testing.T, s port.Stores, tg comments.Target, root bool) {
+	t.Helper()
+	op := port.Operation{Actor: change.User("taro"), Summary: "削除"}
+	if err := s.Write(t.Context(), store, op, func(tx port.Tx) error {
+		if tg.Kind == change.KindProject {
+			return tx.WriteProjects().Append(tg.ID, change.NewDeleteEntity(root))
+		}
+		return tx.WriteItems().Append(tg.ID, change.NewDeleteEntity(root))
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := apptest.DeleteProject(ctx, rec.Stores, store, apptest.SampleProject); err != nil {
+}
+
+// hasRestore は、持ち主のログに restore の行があるか。
+func hasRestore(t *testing.T, s port.Stores, tg comments.Target) bool {
+	t.Helper()
+	found := false
+	err := s.Read(t.Context(), store, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: tg.Kind, ID: tg.ID})
+		found = slices.ContainsFunc(log, func(rec change.Record) bool { return rec.T == change.Restore })
+		return err
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range []comments.Target{
-		{Kind: change.KindItem, ID: apptest.SampleTask},
-		{Kind: change.KindProject, ID: apptest.SampleProject},
-	} {
-		_, listErr := svc.List(ctx, store, target)
-		_, postErr := svc.Post(ctx, store, target, "確認")
-		for name, err := range map[string]error{"List": listErr, "Post": postErr} {
-			if !errors.Is(err, port.ErrNotFound) {
-				t.Errorf("%s of a deleted %s = %v, want port.ErrNotFound", name, target.Kind, err)
+	return found
+}
+
+// owners は、コメントの持ち主(Task と、プロジェクト)と、その表示 ID。
+var owners = []struct {
+	name    string
+	target  comments.Target
+	display string
+}{
+	{"Task", onTask, "HH-2"},
+	{"プロジェクト", onProject, "HH-P1"},
+}
+
+// 別のタブで削除された(root: true)持ち主へコメントを投稿すると、コメントを残して削除を取り消す。
+func TestPostCommentDeletedRevives(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, rec := setup(t, "hanako")
+			markDeleted(t, rec, o.target, true)
+			ctx := port.WithRevived(t.Context())
+			v, err := svc.Post(ctx, store, o.target, "戻して投稿")
+			if err != nil || v.Body != "戻して投稿" {
+				t.Fatalf("Post = %+v, %v", v, err)
 			}
+			if r := port.Revived(ctx); !slices.Equal(r, []string{o.display}) {
+				t.Errorf("Revived = %v", r)
+			}
+			if !hasRestore(t, rec, o.target) {
+				t.Error("restore の行がない")
+			}
+			if _, err := svc.List(ctx, store, o.target); err != nil {
+				t.Errorf("List = %v", err)
+			}
+		})
+	}
+}
+
+// 削除済みの持ち主の、自分のコメントを編集すると、削除を取り消す。本文が同じなら取り消さず断る。
+func TestEditCommentDeletedRevives(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, rec := setup(t, "hanako")
+			posted, err := svc.Post(t.Context(), store, o.target, "前")
+			if err != nil {
+				t.Fatal(err)
+			}
+			markDeleted(t, rec, o.target, true)
+			same := port.WithRevived(t.Context())
+			if _, err := svc.Edit(same, store, o.target, posted.ID, "前"); !errors.Is(err, port.ErrNotFound) {
+				t.Errorf("同じ本文の Edit = %v, want port.ErrNotFound", err)
+			}
+			if hasRestore(t, rec, o.target) {
+				t.Error("同じ本文の編集で削除を取り消した")
+			}
+			ctx := port.WithRevived(t.Context())
+			v, err := svc.Edit(ctx, store, o.target, posted.ID, "後")
+			if err != nil || v.Body != "後" || !v.Edited {
+				t.Fatalf("Edit = %+v, %v", v, err)
+			}
+			if r := port.Revived(ctx); !slices.Equal(r, []string{o.display}) {
+				t.Errorf("Revived = %v", r)
+			}
+			if !hasRestore(t, rec, o.target) {
+				t.Error("restore の行がない")
+			}
+		})
+	}
+}
+
+// 削除済みの持ち主の、自分のコメントを削除すると、削除を取り消す。
+func TestDeleteCommentDeletedRevives(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, rec := setup(t, "hanako")
+			posted, err := svc.Post(t.Context(), store, o.target, "消す")
+			if err != nil {
+				t.Fatal(err)
+			}
+			markDeleted(t, rec, o.target, true)
+			ctx := port.WithRevived(t.Context())
+			if err := svc.Delete(ctx, store, o.target, posted.ID); err != nil {
+				t.Fatal(err)
+			}
+			if r := port.Revived(ctx); !slices.Equal(r, []string{o.display}) {
+				t.Errorf("Revived = %v", r)
+			}
+			if !hasRestore(t, rec, o.target) {
+				t.Error("restore の行がない")
+			}
+			list, err := svc.List(ctx, store, o.target)
+			if err != nil || len(list) != 0 {
+				t.Errorf("List = %+v, %v", list, err)
+			}
+		})
+	}
+}
+
+// 親と一緒に削除された(root: false)持ち主のコメントは、投稿・編集・削除のどれも断り、削除済みのまま(決定 S8)。
+func TestEditCommentOnItemDeletedWithParentIsNotFound(t *testing.T) {
+	svc, rec := setup(t, "hanako")
+	posted, err := svc.Post(t.Context(), store, onTask, "前")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), rec, store, apptest.SampleEpic, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	_, postErr := svc.Post(t.Context(), store, onTask, "新しい")
+	_, editErr := svc.Edit(t.Context(), store, onTask, posted.ID, "後")
+	deleteErr := svc.Delete(t.Context(), store, onTask, posted.ID)
+	for name, err := range map[string]error{"Post": postErr, "Edit": editErr, "Delete": deleteErr} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s = %v, want port.ErrNotFound", name, err)
 		}
 	}
-	// 削除していないアイテムには今までどおり書ける。
-	if _, err := svc.Post(ctx, store, comments.Target{Kind: change.KindItem, ID: apptest.SampleEpic}, "確認"); err != nil {
-		t.Errorf("Post to a live item = %v", err)
+	if hasRestore(t, rec, onTask) {
+		t.Error("断ったのに削除を取り消した")
+	}
+}
+
+// 親と一緒に削除された(root: false)プロジェクトのコメントも、同じ。
+func TestCommentsOnProjectDeletedWithParentAreNotFound(t *testing.T) {
+	svc, rec := setup(t, "hanako")
+	posted, err := svc.Post(t.Context(), store, onProject, "前")
+	if err != nil {
+		t.Fatal(err)
+	}
+	markDeleted(t, rec, onProject, false)
+	_, postErr := svc.Post(t.Context(), store, onProject, "新しい")
+	_, editErr := svc.Edit(t.Context(), store, onProject, posted.ID, "後")
+	deleteErr := svc.Delete(t.Context(), store, onProject, posted.ID)
+	for name, err := range map[string]error{"Post": postErr, "Edit": editErr, "Delete": deleteErr} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s = %v, want port.ErrNotFound", name, err)
+		}
+	}
+	if hasRestore(t, rec, onProject) {
+		t.Error("断ったのに削除を取り消した")
+	}
+}
+
+// 削除済みのアイテム・プロジェクトのコメントは、読めない(A4b-4)。
+func TestListCommentsOfADeletedOwnerIsNotFound(t *testing.T) {
+	svc, rec := setup(t, "hanako")
+	markDeleted(t, rec, onTask, true)
+	markDeleted(t, rec, onProject, true)
+	for _, o := range owners {
+		if _, err := svc.List(t.Context(), store, o.target); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("List of a deleted %s = %v, want port.ErrNotFound", o.name, err)
+		}
+	}
+}
+
+// 削除済み(root: true)の Task でも、祖先の Epic が削除済みなら、投稿を断り、削除済みのまま。
+func TestPostCommentDeletedUnderDeletedAncestorIsNotFound(t *testing.T) {
+	svc, rec := setup(t, "hanako")
+	markDeleted(t, rec, comments.Target{Kind: change.KindItem, ID: apptest.SampleEpic}, true)
+	markDeleted(t, rec, onTask, true)
+	if _, err := svc.Post(t.Context(), store, onTask, "確認"); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Post = %v, want port.ErrNotFound", err)
+	}
+	if hasRestore(t, rec, onTask) {
+		t.Error("断ったのに削除を取り消した")
 	}
 }
