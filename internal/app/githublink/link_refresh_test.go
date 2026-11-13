@@ -1,11 +1,11 @@
-package github_test
+package githublink_test
 
 import (
 	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
-	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
@@ -13,7 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
-func (f *linkFixture) refresh(t *testing.T) []ghapp.LinkRow {
+func (f *linkFixture) refresh(t *testing.T) []githublink.LinkRow {
 	t.Helper()
 	rows, err := f.links.Refresh(t.Context(), linkStore, linkTask)
 	if err != nil {

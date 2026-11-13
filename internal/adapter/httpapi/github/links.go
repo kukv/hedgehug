@@ -7,7 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/apierr"
-	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
@@ -74,7 +74,7 @@ type linkRowsOutput struct{ Body []LinkRow }
 
 type projectLinkRowsOutput struct{ Body []ProjectLinkRow }
 
-func registerLinks(api huma.API, svc ghapp.Links) {
+func registerLinks(api huma.API, svc githublink.Links) {
 	const path = "/api/stores/{store}/items/{item}/links"
 	huma.Register(api, huma.Operation{OperationID: "list-links", Method: http.MethodGet, Path: path, Summary: "アイテムの PR・Issue のリンクを、リンクした順に返す(GitHub には問い合わせない)"},
 		func(ctx context.Context, in *linksPath) (*linkRowsOutput, error) {
@@ -89,7 +89,7 @@ func registerLinks(api huma.API, svc ghapp.Links) {
 	huma.Register(api, huma.Operation{OperationID: "add-link", Method: http.MethodPost, Path: path, DefaultStatus: http.StatusNoContent, Summary: "PR か Issue を GitHub で確かめてリンクする"},
 		func(ctx context.Context, in *addLinkInput) (*struct{}, error) {
 			b := in.Body
-			err := svc.Add(ctx, port.StoreID(in.Store), item.ID(in.Item), ghapp.AddLinkInput{
+			err := svc.Add(ctx, port.StoreID(in.Store), item.ID(in.Item), githublink.AddLinkInput{
 				Kind: itemlink.Kind(b.Kind), Repo: b.Repo, Number: b.Number, AddToProject: b.AddToProject,
 			})
 			return nil, apierr.From(err)
@@ -114,7 +114,7 @@ func registerLinks(api huma.API, svc ghapp.Links) {
 		})
 }
 
-func linkRows(rows []ghapp.LinkRow, err error) (*linkRowsOutput, error) {
+func linkRows(rows []githublink.LinkRow, err error) (*linkRowsOutput, error) {
 	if err != nil {
 		return nil, apierr.From(err)
 	}
@@ -125,7 +125,7 @@ func linkRows(rows []ghapp.LinkRow, err error) (*linkRowsOutput, error) {
 	return out, nil
 }
 
-func linkRow(r ghapp.LinkRow) LinkRow {
+func linkRow(r githublink.LinkRow) LinkRow {
 	return LinkRow{
 		Kind: string(r.Kind), Repo: r.Repo, Number: r.Number, Title: r.Title, State: string(r.State),
 		Review: string(r.Review), Checks: string(r.Checks), Error: r.Error,

@@ -1,4 +1,5 @@
-package github
+// Package githublink は、アイテムの PR・Issue のリンクの操作(仕様 07「PR と Issue のリンク」)を持つ。
+package githublink
 
 import (
 	"context"
@@ -6,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 	"github.com/kukv/hedgehug/internal/domain/item"
@@ -15,13 +17,19 @@ import (
 )
 
 // Links は、アイテムの PR・Issue のリンクの操作(07「PR と Issue のリンク」)が使う口。1 ファイル 1 操作。
-// GitHub への問い合わせは、その Store に割り当てたアカウントで行う(Connector.TokenFor)。
+// GitHub への問い合わせは、その Store に割り当てたアカウントで行う(Tokens.TokenFor。D4a-2)。
 type Links struct {
-	Stores    port.Stores
-	Identity  port.Identity
-	Connector Connector
-	Checks    port.Checks
-	Events    port.Events
+	Stores   port.Stores
+	Identity port.Identity
+	Tokens   port.GitHubTokens
+	GitHub   port.GitHub
+	Accounts port.Accounts    // skipRefresh(このマシンにアカウントが 1 つもない)
+	StoreGH  port.StoreGitHub // 閲覧のみの判定と、Issue の 1 対 1 の Store の一覧
+	Checks   port.Checks
+	Reads    port.GitHubReads // Task 10 から使う
+	Inbox    port.Inbox       // Task 11 から使う
+	Events   port.Events
+	Clock    port.Clock
 }
 
 // LinkRow は、リンクの一覧の 1 行。
@@ -71,19 +79,24 @@ func (l Links) view(ctx context.Context, store port.StoreID, id item.ID) (itemVi
 
 // lookup は、Store のアカウントで repo の number を読む。トークンが拒否されたら認証エラーにする(07「状態」)。
 func (l Links) lookup(ctx context.Context, store port.StoreID, repo string, number int) (port.Found, error) {
-	tok, a, err := l.Connector.TokenFor(ctx, store, repo)
+	tok, a, err := l.Tokens.TokenFor(ctx, store, repo)
 	if err != nil {
 		return port.Found{}, err
 	}
-	f, err := l.Connector.GitHub.Lookup(ctx, tok, repo, number)
+	f, err := l.GitHub.Lookup(ctx, tok, repo, number)
 	if ghcall.Is(err, ghcall.TokenRejected) {
-		l.Connector.Rejected(a.ID)
+		l.Tokens.Rejected(a.ID)
 		return port.Found{}, authError(a)
 	}
 	return f, err
 }
 
-func (l Links) now() time.Time { return l.Connector.Clock.Now() }
+func (l Links) now() time.Time { return l.Clock.Now() }
+
+// authError は、a の認証エラーの失敗(07「状態」)。
+func authError(a account.Account) error {
+	return &ghcall.Failure{Kind: ghcall.AuthError, Name: a.Name, Login: a.Login}
+}
 
 // saveChecks は、このマシンが読んだチェックの結果を置く。変わったら true(D3-7)。
 func (l Links) saveChecks(ctx context.Context, store port.StoreID, r itemlink.Ref, c itemlink.Checks) (bool, error) {
@@ -93,7 +106,7 @@ func (l Links) saveChecks(ctx context.Context, store port.StoreID, r itemlink.Re
 // issueOwner は、ref の Issue にリンクしているアイテム(store の self 以外)を、このマシンのすべての Store から探し、
 // その画面の ID を返す(07「追加」。D3-15)。self を除くのは store の中だけ(別の Store に同じ内部 ID があっても別のアイテム)。
 func (l Links) issueOwner(ctx context.Context, store port.StoreID, ref itemlink.Ref, self item.ID) (string, bool, error) {
-	infos, err := l.Connector.Stores.List(ctx)
+	infos, err := l.StoreGH.List(ctx)
 	if err != nil {
 		return "", false, err
 	}

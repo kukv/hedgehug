@@ -21,6 +21,7 @@ import (
 	appcomments "github.com/kukv/hedgehug/internal/app/comments"
 	appdescriptions "github.com/kukv/hedgehug/internal/app/descriptions"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
+	"github.com/kukv/hedgehug/internal/app/githublink"
 	apphistory "github.com/kukv/hedgehug/internal/app/history"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
@@ -125,6 +126,9 @@ func githubServices(d Deps, hub port.Events) ghapi.Services {
 			Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
 			Hosts: d.Hosts, IDs: d.IDs, Clock: d.Clock,
 		},
-		Links: ghapp.Links{Stores: d.Stores, Identity: d.Identity, Connector: conn, Checks: d.Checks, Events: hub},
+		Links: githublink.Links{
+			Stores: d.Stores, Identity: d.Identity, Tokens: conn, GitHub: d.GitHub, Accounts: d.Accounts,
+			StoreGH: d.StoreGitHub, Checks: d.Checks, Inbox: d.Inbox, Events: hub, Clock: d.Clock,
+		},
 	}
 }

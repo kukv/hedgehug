@@ -1,4 +1,4 @@
-package github
+package githublink
 
 import (
 	"context"
@@ -70,7 +70,7 @@ func (l Links) refreshAll(ctx context.Context, store port.StoreID, id item.ID, v
 
 // skipRefresh は、問い合わせないときか(D3-9)。
 func (l Links) skipRefresh(ctx context.Context, store port.StoreID) (bool, error) {
-	infos, err := l.Connector.Stores.List(ctx)
+	infos, err := l.StoreGH.List(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -79,7 +79,7 @@ func (l Links) skipRefresh(ctx context.Context, store port.StoreID) (bool, error
 			return true, nil
 		}
 	}
-	accounts, err := l.Connector.Accounts.List(ctx)
+	accounts, err := l.Accounts.List(ctx)
 	return len(accounts) == 0, err
 }
 
