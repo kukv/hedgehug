@@ -63,7 +63,9 @@ export function workspaceAllowed(settings: WorkspaceSettings, from: string): str
   return settings.statuses.map((v) => v.id).filter((id) => id !== from && set.includes(id));
 }
 
-// projectTargets は、from の行のプロジェクトのチェックのうち、From と To の両方が使うステータスのもの。
+// projectTargets は、from の行のプロジェクトのチェックのうち、From と To の両方が使うステータスで、ワークスペースの
+// 制約も許すもの。ワークスペースの制約が許さないセルのチェック(ワークスペースの制約を後から変えて残ったもの)は
+// 数えない(03「プロジェクトの遷移の制約」)。
 export function projectTargets(
   settings: WorkspaceSettings,
   r: ProjectRules,
@@ -71,9 +73,16 @@ export function projectTargets(
 ): string[] {
   if (!usesIn(settings, r, from)) return [];
   const set = r.workflow[from] ?? [];
+  const ws = workspaceAllowed(settings, from);
   return settings.statuses
     .map((v) => v.id)
-    .filter((id) => id !== from && usesIn(settings, r, id) && set.includes(id));
+    .filter(
+      (id) =>
+        id !== from &&
+        usesIn(settings, r, id) &&
+        set.includes(id) &&
+        (ws.length === 0 || ws.includes(id)),
+    );
 }
 
 // allowedIn は、from から変えられる To(ステータスの並び)と、制限があるか(B5a-6)。ワークスペースの

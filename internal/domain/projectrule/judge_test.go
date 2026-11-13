@@ -95,10 +95,29 @@ func TestCheckTransitionProjectOnly(t *testing.T) {
 	}
 }
 
-func TestCheckTransitionNoCommonTarget(t *testing.T) {
+// ワークスペースの制約が許さない To へのプロジェクトのチェック(ワークスペースの制約を後から変えて残ったもの)は
+// 数えない。そのチェックだけの行は「ワークスペースと同じ」(03「プロジェクトの遷移の制約」)。
+func TestWorkspaceForbiddenProjectChecksDoNotCount(t *testing.T) {
 	s := sample()
 	s.Workflow = map[change.ID][]change.ID{todo: {done}}
 	r := projectrule.Rules{Workflow: map[change.ID][]change.ID{todo: {doing}}}
+	if to, restricted := projectrule.Allowed(s, r, todo); !reflect.DeepEqual(to, []change.ID{done}) || !restricted {
+		t.Fatalf("got %v %v", to, restricted)
+	}
+	want := "ワークフローの制約: Todo から InProgress には変更できません(Done のみ)"
+	if got := refusalText(t, projectrule.CheckTransition(s, r, todo, doing)); got != want {
+		t.Fatalf("got %q", got)
+	}
+	r.Workflow[todo] = []change.ID{doing, done}
+	if to, _ := projectrule.Allowed(s, r, todo); !reflect.DeepEqual(to, []change.ID{done}) {
+		t.Fatalf("許すチェックは数える: %v", to)
+	}
+}
+
+func TestCheckTransitionNoCommonTarget(t *testing.T) {
+	s := sample()
+	s.Workflow = map[change.ID][]change.ID{todo: {pending}}
+	r := projectrule.Rules{Hidden: []change.ID{pending}}
 	want := "ワークフローの制約: Todo から Done には変更できません(変更できる先がありません)"
 	if got := refusalText(t, projectrule.CheckTransition(s, r, todo, done)); got != want {
 		t.Fatalf("got %q", got)

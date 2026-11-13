@@ -44,9 +44,19 @@ describe("transition refusal with a project", () => {
     );
   });
 
-  it("says there is no target when the two have none in common", () => {
-    const s = sample({ workflow: { [todo]: [doing] } }, { workflow: { [todo]: [done] } });
+  it("says there is no target when nothing the workspace allows is used", () => {
+    const s = sample({ hiddenStatuses: [review] }, { workflow: { [todo]: [review] } });
     expect(transitionRefusal(s, todo, done, P)).toBe(tail("変更できる先がありません"));
+  });
+
+  // ワークスペースの制約が許さない To へのプロジェクトのチェック(ワークスペースの制約を後から変えて残ったもの)は
+  // 数えない(Go の TestWorkspaceForbiddenProjectChecksDoNotCount と同じ)。
+  it("does not count project checks the workspace forbids", () => {
+    const s = sample({ workflow: { [todo]: [doing] } }, { workflow: { [todo]: [done] } });
+    expect(allowedTargets(s, P, todo)).toEqual({ to: [done], restricted: true });
+    expect(transitionRefusal(s, todo, done, P)).toBeNull();
+    const both = sample({ workflow: { [todo]: [doing, done] } }, { workflow: { [todo]: [done] } });
+    expect(allowedTargets(both, P, todo)).toEqual({ to: [done], restricted: true });
   });
 
   it("ignores a project row that checks only unused statuses", () => {
@@ -124,8 +134,16 @@ describe("project workflow rows", () => {
   });
 
   it("says blocked when nothing is allowed by both", () => {
-    const s = sample({ workflow: { [todo]: [doing] } }, { workflow: { [todo]: [done] } });
+    const s = sample({ hiddenStatuses: [review] }, { workflow: { [todo]: [review] } });
     expect(projectWorkflowRows(s, P)[0]?.blocked).toBe("変更できる先がありません");
+  });
+
+  it("shows a check the workspace forbids unchecked and disabled, and the row as 同じ", () => {
+    const s = sample({ workflow: { [todo]: [doing] } }, { workflow: { [todo]: [done] } });
+    const row = projectWorkflowRows(s, P)[0];
+    expect(row?.cells[1]).toMatchObject({ to: doing, checked: false, disabled: true });
+    expect(row?.note).toBe("ワークスペースと同じ");
+    expect(row?.blocked).toBeUndefined();
   });
 
   it("treats a row of unused checks as 同じ", () => {

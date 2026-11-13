@@ -43,14 +43,18 @@ func UsedStatuses(s workspace.Settings, r Rules) []workspace.Value {
 	return out
 }
 
-// projectTargets は、from の行のプロジェクトのチェックのうち、From と To の両方が使うステータスのもの。
+// projectTargets は、from の行のプロジェクトのチェックのうち、From と To の両方が使うステータスで、ワークスペースの
+// 制約も許すもの。ワークスペースの制約が許さないセルのチェック(ワークスペースの制約を後から変えて残ったもの)は
+// 数えない(03「プロジェクトの遷移の制約」)。
 func projectTargets(s workspace.Settings, r Rules, from change.ID) []change.ID {
 	if !Uses(s, r, from) {
 		return nil
 	}
+	ws, wsRestricted := s.Allowed(from)
 	var to []change.ID
 	for _, v := range s.Statuses {
-		if v.ID != from && Uses(s, r, v.ID) && slices.Contains(r.Workflow[from], v.ID) {
+		if v.ID != from && Uses(s, r, v.ID) && slices.Contains(r.Workflow[from], v.ID) &&
+			(!wsRestricted || slices.Contains(ws, v.ID)) {
 			to = append(to, v.ID)
 		}
 	}
