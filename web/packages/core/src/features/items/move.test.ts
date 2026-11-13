@@ -140,6 +140,19 @@ describe("createItemMove", () => {
     expect(await move.moveTo(task, epic)).toBe(false);
   });
 
+  it("moveTo refuses a second move while the first is in progress", async () => {
+    const { move, actions, task } = await setup();
+    const hold = actions.holdNext();
+    const first = move.moveTo(task, epic);
+    await flush();
+    expect(await move.moveTo(task, far)).toBe(false);
+    hold.release();
+    expect(await first).toBe(true);
+    expect(actions.calls.filter((c) => c.startsWith("move "))).toEqual([
+      `move ${task.id} {"parent":"S1-I1"}`,
+    ]);
+  });
+
   it("shows a refusal as an error toast with its words, and does not reload", async () => {
     const { move, actions, refreshed, messages, task } = await setup();
     await move.open(task, 0, 0);

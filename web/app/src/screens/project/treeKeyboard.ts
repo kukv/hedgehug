@@ -1,7 +1,10 @@
 import {
   createTreeFocus,
+  createTreeWrites,
   get,
   type Item,
+  keepsQueue,
+  menuAt,
   type ProjectView,
   type Route,
   type TreeFocus,
@@ -9,10 +12,11 @@ import {
   treeKeyAction,
 } from "@hedgehug/core";
 import { tick } from "svelte";
-import { detail, links } from "../../wire";
+import { detail, itemDialog, links, navigation, projectScreen, toasts } from "../../wire";
+import { itemActions, itemKind, itemMenuHost, itemMove, itemRefresh } from "../../wireActions";
 
-// ツリーのキー操作(04「ツリーのキー操作」、A4b-20)。キーの割り当ては core の treeKeyAction。
-// ここは、キーを受けて、画面の部品(詳細パネル・メニュー)につなぐ。
+// ツリーのキー操作(04「ツリーのキー操作」、A4b-20・21)。キーの割り当ては core の treeKeyAction、順番待ちと
+// 書き込みは core の createTreeWrites。ここは、キーを受けて、画面の部品(詳細パネル・メニュー・ダイアログ)につなぐ。
 
 export interface TreeKeyboard {
   focus: TreeFocus;
@@ -25,6 +29,8 @@ export interface TreeKeyboard {
   onpointerdown(event: PointerEvent): void;
   // scrollTo は、行が見える位置までスクロールする(キーで行を移ったとき。読み直しでは動かさない)。
   scrollTo(id: string): void;
+  // destroy は、ツリーを閉じるとき。待っている分を捨て、画面の移り変わりとキーの見張りをやめる。
+  destroy(): void;
 }
 
 interface Deps {
@@ -56,8 +62,11 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
   let pressing = false;
   // refocusing は、行の中のボタンにフォーカスがあるときの移動のキーで、フォーカスを `<ul>` へ移しているあいだ。
   let refocusing = false;
+  // data-menu は ui の Menu の浮いた枠(head の検索欄も含む)。
   const inMenu = (el: EventTarget | null) =>
-    el instanceof Element && el.closest("[role='menu']") !== null;
+    el instanceof Element && el.closest("[role='menu'], [data-menu]") !== null;
+  const inTree = (el: EventTarget | null) =>
+    el instanceof Node && deps.list()?.contains(el) === true;
 
   const rowEl = (id: string) =>
     deps.list()?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"]`) ?? null;
@@ -73,7 +82,81 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
     window.removeEventListener("pointercancel", releasePress, true);
   }
 
+  // keyOf は、押したキーのツリーの操作と、フォーカスのある行。ツリーの外・入力欄の中・ダイアログやメニューを
+  // 開いているあいだは、操作なし。
+  function keyOf(event: KeyboardEvent) {
+    const { rows, currentId } = get(focus.state);
+    const row = rows.find((r) => r.id === currentId) ?? null;
+    const action = inTree(event.target) && !blocked(event) ? treeKeyAction(event, row) : null;
+    return { action, row };
+  }
+
+  // onWindowKey は、どこで押したキーも見る。ほかのキーを押したら(ツリーの外・メニューの中を含む)、待っている分を捨てる。
+  function onWindowKey(event: KeyboardEvent) {
+    if (!keepsQueue(event, keyOf(event).action)) writes.clear();
+  }
+
+  const writes = createTreeWrites({
+    screen: () => {
+      const v = deps.view();
+      return {
+        storeId: v.store.id,
+        readOnly: v.store.readOnly,
+        settings: v.settings,
+        rows: get(focus.state).rows,
+      };
+    },
+    reorder: (item, rows, dir) => itemMenuHost.reorder(item, rows, dir),
+    moveCandidates: (store, id) => itemActions.moveCandidates(store, id),
+    moveTo: (item, candidate) => itemMove.moveTo(item, candidate),
+    setStatus: (id, status) => projectScreen.setStatus(id, status),
+    afterChange: () => itemRefresh.afterChange(),
+    settled: () => tick(),
+    expand: (id) => focus.expand(id),
+    toasts,
+  });
+  // 画面を移ったときは、待っている分を捨てる。
+  const stopRoute = navigation.route.subscribe(() => writes.clear());
+  window.addEventListener("keydown", onWindowKey, true);
+
   const popups: ReadonlySet<TreeKeyAction> = new Set(["menu"]);
+
+  function write(action: TreeKeyAction, row: Item, view: ProjectView) {
+    switch (action) {
+      case "toggle-done":
+        void writes.toggleDone(row.id);
+        break;
+      case "status-menu":
+        // 行のステータスのボタンを押すのと同じ(閲覧のみでは無効のボタンなので何も起きない)。
+        rowEl(row.id)
+          ?.querySelector<HTMLButtonElement>("button[aria-label^='ステータス']")
+          ?.click();
+        break;
+      case "change-kind": {
+        // 閲覧のみの Store と Epic では、itemKind.open が何もしない。
+        const { x, y } = menuAt(rowRect(row.id));
+        itemKind.open(row, x, y);
+        break;
+      }
+      case "create-sibling":
+        if (view.store.readOnly) break;
+        void itemDialog.open({
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          kind: row.kind,
+          parentId: row.parentId,
+        });
+        break;
+      case "move-up":
+      case "move-down":
+        writes.moveSibling(row.id, action === "move-up" ? "up" : "down");
+        break;
+      case "reparent-up":
+      case "reparent-down":
+        writes.changeParent(row.id, action === "reparent-up" ? "up" : "down");
+        break;
+    }
+  }
 
   function run(action: TreeKeyAction, row: Item, view: ProjectView) {
     if (popups.has(action)) returning = true;
@@ -97,21 +180,20 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
       case "menu":
         deps.openMenu(row, rowRect(row.id));
         break;
+      default:
+        write(action, row, view);
     }
   }
 
   return {
     focus,
     onkeydown(event) {
-      if (blocked(event)) return;
-      const { rows, currentId } = get(focus.state);
-      const row = rows.find((r) => r.id === currentId) ?? null;
-      const action = treeKeyAction(event, row);
+      const { action, row } = keyOf(event);
       if (!action || !row) return;
-      // 行の中のリンクやボタンにフォーカスがあるときの Enter は、その部品の働き(開く・押す)に任せる。
+      // 行の中のリンクやボタンにフォーカスがあるときの Enter・Space は、その部品の働き(開く・押す)に任せる。
       const inner = event.target !== event.currentTarget;
-      if (action === "open" && inner) return;
-      // ツリーが受けたキーは、ここで止める。
+      if ((action === "open" || action === "toggle-done") && inner) return;
+      // ツリーが受けたキーは、ここで止める(C キーは、App.svelte の「文脈なしで作成ダイアログを開く」へ届けない)。
       event.preventDefault();
       event.stopPropagation();
       // 行の中のボタン(押した開閉・ステータス・「⋯」)にフォーカスがあるまま行を移ると、枠は移った行に、フォーカスは
@@ -147,5 +229,11 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
       window.addEventListener("pointercancel", releasePress, true);
     },
     scrollTo,
+    destroy() {
+      stopRoute();
+      writes.clear();
+      releasePress();
+      window.removeEventListener("keydown", onWindowKey, true);
+    },
   };
 }

@@ -17,6 +17,7 @@ export {
   type ItemDuplicate,
   type ItemDuplicateDeps,
 } from "./features/items/duplicate";
+export { createKeyQueue, type KeyQueue, keepsQueue } from "./features/items/keyQueue";
 export {
   createItemKind,
   type ItemKind,
@@ -65,11 +66,20 @@ export {
   type TreeMove,
 } from "./features/items/treeFocus";
 export {
+  isQueuedAction,
   type KeyInput,
+  type QueuedKeyAction,
   type ReadKeyAction,
   type TreeKeyAction,
   treeKeyAction,
+  type WriteKeyAction,
 } from "./features/items/treeKeys";
+export {
+  createTreeWrites,
+  type TreeScreen,
+  type TreeWrites,
+  type TreeWritesDeps,
+} from "./features/items/treeWrites";
 export {
   createProjectDelete,
   type DeleteTarget,

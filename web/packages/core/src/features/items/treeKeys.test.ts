@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type KeyInput, treeKeyAction } from "./treeKeys";
+import { isQueuedAction, type KeyInput, treeKeyAction } from "./treeKeys";
 
 const key = (k: string, mods: Partial<KeyInput> = {}): KeyInput => ({
   key: k,
@@ -41,5 +41,55 @@ describe("treeKeyAction (read-only keys)", () => {
   it("does nothing without a focused row or while composing text", () => {
     expect(treeKeyAction(key("ArrowDown"), null)).toBeNull();
     expect(treeKeyAction(key("Enter", { isComposing: true }), task)).toBeNull();
+  });
+});
+
+describe("treeKeyAction (write keys)", () => {
+  it("maps Space, S, K and C, whatever the letter case", () => {
+    expect(treeKeyAction(key(" "), task)).toBe("toggle-done");
+    expect(treeKeyAction(key("s"), task)).toBe("status-menu");
+    expect(treeKeyAction(key("S", { shiftKey: true }), task)).toBe("status-menu");
+    expect(treeKeyAction(key("k"), task)).toBe("change-kind");
+    expect(treeKeyAction(key("K"), task)).toBe("change-kind");
+    expect(treeKeyAction(key("c"), task)).toBe("create-sibling");
+    expect(treeKeyAction(key("C"), task)).toBe("create-sibling");
+  });
+
+  it("ignores K on an Epic, but not the other keys", () => {
+    const epic = { kind: "Epic" } as const;
+    expect(treeKeyAction(key("k"), epic)).toBeNull();
+    expect(treeKeyAction(key("s"), epic)).toBe("status-menu");
+    expect(treeKeyAction(key("c"), epic)).toBe("create-sibling");
+  });
+
+  it("maps Alt+arrows to the sibling move and Alt+Shift+arrows to the parent change", () => {
+    expect(treeKeyAction(key("ArrowUp", { altKey: true }), task)).toBe("move-up");
+    expect(treeKeyAction(key("ArrowDown", { altKey: true }), task)).toBe("move-down");
+    expect(treeKeyAction(key("ArrowUp", { altKey: true, shiftKey: true }), task)).toBe(
+      "reparent-up",
+    );
+    expect(treeKeyAction(key("ArrowDown", { altKey: true, shiftKey: true }), task)).toBe(
+      "reparent-down",
+    );
+  });
+
+  it("leaves the shortcuts of the browser and the app alone", () => {
+    expect(treeKeyAction(key("c", { ctrlKey: true }), task)).toBeNull();
+    expect(treeKeyAction(key("c", { metaKey: true }), task)).toBeNull();
+    expect(treeKeyAction(key("s", { altKey: true }), task)).toBeNull();
+    expect(treeKeyAction(key(" ", { shiftKey: true }), task)).toBeNull();
+    expect(treeKeyAction(key("ArrowUp", { altKey: true, ctrlKey: true }), task)).toBeNull();
+    expect(treeKeyAction(key("ArrowUp", { ctrlKey: true }), task)).toBeNull();
+  });
+
+  it("knows which actions are queued", () => {
+    expect(
+      ["move-up", "move-down", "reparent-up", "reparent-down"].every((a) =>
+        isQueuedAction(a as never),
+      ),
+    ).toBe(true);
+    expect(isQueuedAction("toggle-done")).toBe(false);
+    expect(isQueuedAction("up")).toBe(false);
+    expect(isQueuedAction(null)).toBe(false);
   });
 });

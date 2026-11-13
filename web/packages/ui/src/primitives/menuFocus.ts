@@ -19,8 +19,24 @@ function target(key: string, at: number, count: number): number | null {
   return (at + dir + count) % count;
 }
 
-export function menuFocus(node: HTMLElement) {
-  const before = document.activeElement;
+// origins は、開いているメニューごとの、閉じたときにフォーカスを戻す先。
+const origins = new WeakMap<Element, Element | null>();
+
+// originOf は、メニューを開いたときのフォーカス el から、閉じたときに戻す先を決める。メニューの項目から別のメニューを
+// 開いたとき(アイテムのメニューの「移動…」など)は、その項目はすぐ消えるので、最初のメニューの戻す先を引き継ぐ。
+function originOf(el: Element | null): Element | null {
+  for (let at = el; at; at = at.parentElement) {
+    const origin = origins.get(at);
+    if (origin !== undefined) return origin;
+  }
+  return el;
+}
+
+// shownFrom は、メニューを出す前のフォーカス(Menu が読んで渡す)。head の欄は出たときにフォーカスを取り、そのあとで
+// ここが動くので、そのときのフォーカスは開いた元ではない。渡されなければ、いまのフォーカスを開いた元とする。
+export function menuFocus(node: HTMLElement, shownFrom?: Element | null) {
+  const before = originOf(shownFrom === undefined ? document.activeElement : shownFrom);
+  origins.set(node, before);
   queueMicrotask(() => {
     if (node.contains(document.activeElement)) return;
     enabledItems(node)[0]?.focus();

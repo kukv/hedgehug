@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { tick } from "svelte";
+import { createRawSnippet, tick } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import ValueMenu from "../patterns/ValueMenu.svelte";
 import Menu from "./Menu.svelte";
+import { menuFocus } from "./menuFocus";
 
 const items = [
   { id: "up", label: "上へ移動", disabled: true },
@@ -74,6 +75,58 @@ describe("menu focus", () => {
     expect(document.activeElement).toBe(copy);
     await fireEvent.keyDown(copy, { key: "End" });
     expect(document.activeElement).toBe(dup);
+  });
+
+  it("keeps a search field in the head outside the menu role, named, focused and linked to the items by the arrows", async () => {
+    const head = createRawSnippet(() => ({ render: () => `<input aria-label="移動先を検索">` }));
+    render(Menu, {
+      props: { open: true, x: 0, y: 0, items, onselect: vi.fn(), onclose: vi.fn(), head },
+    });
+    // 「移動…」の検索欄は、出たときにフォーカスを取る(Input の focusOnMount)。
+    const search = screen.getByRole("textbox", { name: "移動先を検索" });
+    search.focus();
+    await tick();
+    await Promise.resolve();
+    // role="menu" の中に置けるのは項目だけなので、検索欄はその外(同じ浮いた枠の中)に置く。
+    expect(screen.getByRole("menu").contains(search)).toBe(false);
+    expect(document.activeElement).toBe(search);
+    const copy = screen.getByRole("menuitem", { name: /ID をコピー/ });
+    const dup = screen.getByRole("menuitem", { name: /複製/ });
+    await fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(copy);
+    await fireEvent.keyDown(copy, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(dup);
+    await fireEvent.keyDown(dup, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(copy);
+    search.focus();
+    await fireEvent.keyDown(search, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(dup);
+  });
+
+  it("gives the focus back to where the first menu was opened from, when a menu opens another", async () => {
+    // アイテムのメニューの「移動…」: 項目にフォーカスがあるまま次のメニューが出て、そのあと最初のメニューが消える。
+    const opener = document.createElement("button");
+    const first = document.createElement("div");
+    const entry = document.createElement("button");
+    first.append(entry);
+    const second = document.createElement("div");
+    const search = document.createElement("input");
+    second.append(search);
+    document.body.append(opener, first, second);
+    opener.focus();
+    const a = menuFocus(first);
+    entry.focus();
+    // 次のメニュー(Menu)は、出す前のフォーカス(最初のメニューの項目)を読んでおき、head の検索欄が出たときに
+    // フォーカスを取ったあとで、それを menuFocus に渡す。
+    const shownFrom = document.activeElement;
+    a.destroy();
+    first.remove();
+    search.focus();
+    const b = menuFocus(second, shownFrom);
+    second.remove();
+    b.destroy();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
   });
 
   it("leaves Home and End to a search field in the menu", async () => {

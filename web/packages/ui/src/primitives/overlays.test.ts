@@ -85,7 +85,9 @@ describe("Menu", () => {
         },
       });
       await tick();
-      expect(screen.getByRole("menu").style.top).toBe(`${window.innerHeight - 140 - 4}px`);
+      // 位置は、項目(role="menu")と head を囲む浮いた枠に付く。
+      const pop = screen.getByRole("menu").parentElement as HTMLElement;
+      expect(pop.style.top).toBe(`${window.innerHeight - 140 - 4}px`);
     } finally {
       height.mockRestore();
     }

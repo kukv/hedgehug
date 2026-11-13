@@ -15,7 +15,25 @@ export interface KeyInput {
 
 // 読むだけのキー(閲覧のみの Store の行でも使える)。
 export type ReadKeyAction = "up" | "down" | "right" | "left" | "open" | "open-tab" | "menu";
-export type TreeKeyAction = ReadKeyAction;
+// 続けて押したとき 1 回ずつ順に実行するキー(Alt+↑↓、Alt+Shift+↑↓)。
+export type QueuedKeyAction = "move-up" | "move-down" | "reparent-up" | "reparent-down";
+// 書き込みのキー。閲覧のみの Store・無効のときは、実行する側が何もしない(トーストも出さない)。
+export type WriteKeyAction =
+  | QueuedKeyAction
+  | "toggle-done"
+  | "status-menu"
+  | "change-kind"
+  | "create-sibling";
+export type TreeKeyAction = ReadKeyAction | WriteKeyAction;
+
+const queued: ReadonlySet<TreeKeyAction> = new Set<TreeKeyAction>([
+  "move-up",
+  "move-down",
+  "reparent-up",
+  "reparent-down",
+]);
+export const isQueuedAction = (a: TreeKeyAction | null): a is QueuedKeyAction =>
+  a !== null && queued.has(a);
 
 const plainKeys: Record<string, TreeKeyAction> = {
   ArrowUp: "up",
@@ -24,17 +42,37 @@ const plainKeys: Record<string, TreeKeyAction> = {
   ArrowLeft: "left",
   Enter: "open",
   ContextMenu: "menu",
+  " ": "toggle-done",
+};
+// 文字のキーは、大文字小文字を区別しない(Caps Lock・Shift でも同じ)。Ctrl・Cmd・Alt つきは別のショートカットなので使わない。
+const letterKeys: Record<string, TreeKeyAction> = {
+  s: "status-menu",
+  k: "change-kind",
+  c: "create-sibling",
 };
 
 // treeKeyAction は、フォーカスのある行 row で押されたキーの操作を返す。ツリーのキーでなければ null。
+// Epic の種類は変えられないので、Epic の K は何もしない。
 export function treeKeyAction(
   event: KeyInput,
   row: Pick<Item, "kind"> | null,
 ): TreeKeyAction | null {
   if (!row || event.isComposing) return null;
   const { key, ctrlKey, metaKey, altKey, shiftKey } = event;
-  if (!ctrlKey && !metaKey && !altKey && !shiftKey) return plainKeys[key] ?? null;
+  const noModifier = !ctrlKey && !metaKey && !altKey;
+  if (noModifier) {
+    const action = (shiftKey ? undefined : plainKeys[key]) ?? letter(key, row);
+    if (action) return action;
+  }
+  if (altKey && !ctrlKey && !metaKey && (key === "ArrowUp" || key === "ArrowDown")) {
+    return `${shiftKey ? "reparent" : "move"}-${key === "ArrowUp" ? "up" : "down"}`;
+  }
   if (key === "Enter" && (ctrlKey || metaKey) && !altKey && !shiftKey) return "open-tab";
-  if (key === "F10" && shiftKey && !ctrlKey && !metaKey && !altKey) return "menu";
+  if (key === "F10" && shiftKey && noModifier) return "menu";
   return null;
+}
+
+function letter(key: string, row: Pick<Item, "kind">): TreeKeyAction | null {
+  const action = letterKeys[key.toLowerCase()];
+  return action === "change-kind" && row.kind === "Epic" ? null : (action ?? null);
 }

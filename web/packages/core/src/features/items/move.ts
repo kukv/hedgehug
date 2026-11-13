@@ -44,7 +44,8 @@ export interface ItemMove {
   setQuery(query: string): void;
   // choose は、メニューを閉じて、候補の下(Epic ならプロジェクトの直下)へ移す。
   choose(candidate: MoveCandidate): Promise<void>;
-  // moveTo は、メニューを介さずに item を候補の下へ移す(ドラッグの代わりの経路など)。移せたら true。
+  // moveTo は、メニューを介さずに item を候補の下へ移す(ツリーの Alt+Shift+↑↓)。移せたら true。
+  // 閲覧のみの Store・移している最中は何もしない(false)。
   moveTo(item: Item, candidate: MoveCandidate): Promise<boolean>;
   close(): void;
 }
