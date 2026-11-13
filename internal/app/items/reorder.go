@@ -3,6 +3,7 @@ package items
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -62,7 +63,7 @@ func gap(sib []item.Item, i, j int, after bool) (lo, hi string, ok bool) {
 	if (after && j == i-1) || (!after && j == i+1) {
 		return "", "", false
 	}
-	rest := append(append([]item.Item{}, sib[:i]...), sib[i+1:]...)
+	rest := slices.Delete(slices.Clone(sib), i, i+1)
 	if i < j {
 		j-- // 動かすものを除くと、基準が 1 つ前に詰まる
 	}
