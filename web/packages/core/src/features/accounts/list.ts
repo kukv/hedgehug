@@ -63,11 +63,6 @@ export function createAccountList(deps: AccountListDeps): AccountList {
     });
   }
 
-  // clearMarks は、「再認証」「再確認」を押したとき、どの行の赤字と「まだ読めません」も消す。
-  function clearMarks() {
-    patch({ errors: {}, still: {} });
-  }
-
   function setAsking(id: string, on: boolean) {
     state.update((s) => ({
       ...s,
@@ -99,7 +94,7 @@ export function createAccountList(deps: AccountListDeps): AccountList {
     async reauth(id) {
       const row = get(state).rows.find((r) => r.id === id);
       if (!row || get(state).asking.includes(id)) return;
-      clearMarks();
+      setError(id, "");
       setAsking(id, true);
       try {
         await ask(row);
@@ -113,7 +108,7 @@ export function createAccountList(deps: AccountListDeps): AccountList {
     },
     async recheck(row) {
       if (get(state).asking.includes(row.id)) return;
-      clearMarks();
+      setError(row.id, "");
       setAsking(row.id, true);
       try {
         const r = await deps.accounts.recheck(row.id);

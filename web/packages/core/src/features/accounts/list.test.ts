@@ -188,26 +188,29 @@ describe("createAccountList", () => {
     expect(get(list.state).asking).toEqual([]);
   });
 
-  it("clears the red text and the still orgs of the previous row when another row is operated", async () => {
+  it("keeps the red text and the still orgs of a row when another row is operated, until the row itself is operated", async () => {
     const { f, list } = setup([
       row("A1", { status: "app_missing", orgs: ["a"] }),
       row("A2", { status: "app_missing", orgs: ["b"] }),
     ]);
     await list.open();
+    const [a1, a2] = f.rows as [AccountRow, AccountRow];
     f.rechecks.push({ cleared: [], still: ["a"] });
-    await list.recheck(f.rows[0] as AccountRow);
-    expect(get(list.state).still).toEqual({ A1: ["a"] });
+    await list.recheck(a1);
     f.rechecks.push({ cleared: [], still: ["b"] });
-    await list.recheck(f.rows[1] as AccountRow);
-    expect(get(list.state).still).toEqual({ A2: ["b"] });
+    await list.recheck(a2);
+    expect(get(list.state).still).toEqual({ A1: ["a"], A2: ["b"] });
     f.refuse.recheck = "x";
-    await list.recheck(f.rows[0] as AccountRow);
-    expect(get(list.state).errors).toEqual({ A1: "x" });
+    await list.recheck(a2);
+    expect(get(list.state).still).toEqual({ A1: ["a"] });
+    expect(get(list.state).errors).toEqual({ A2: "x" });
     delete f.refuse.recheck;
-    await list.recheck(f.rows[1] as AccountRow);
+    await list.recheck(a1);
+    expect(get(list.state).still).toEqual({ A1: [] });
+    expect(get(list.state).errors).toEqual({ A2: "x" });
+    await list.recheck(a2);
     expect(get(list.state).errors).toEqual({});
   });
-
   it("reloads the rows when the account of the recheck is gone", async () => {
     const { f, list, texts } = setup([row("A1", { status: "app_missing", orgs: ["a"] })]);
     await list.open();
