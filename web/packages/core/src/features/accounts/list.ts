@@ -3,7 +3,7 @@ import { NotFound, Refused } from "../../model/errors";
 import type { AccountsPort } from "../../port/accounts";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Toasts } from "../toasts/toasts";
-import { deletedMessage, reauthedMessage } from "./text";
+import { deletedMessage, reauthedMessage, recheckedText } from "./text";
 
 // 設定「アカウントとメンバー」の「GitHub アカウント」の一覧(07「状態」「再認証」「削除の影響」)。
 
@@ -11,6 +11,8 @@ export interface AccountListState {
   rows: AccountRow[];
   // errors は、行の中(状態の下)の赤字。行の次の操作・画面を開き直す・成功のどれかで消す(D2 画面の計画の決定 S14)。
   errors: Record<string, string>;
+  // still は、「再確認」でまだ読めなかった組織(行の ID ごと)。帯の赤字「まだ読めません」に使う。
+  still: Record<string, string[]>;
   // asking は、GitHub に問い合わせている行の ID。そのあいだ「再認証」を無効にする。
   asking: string[];
   // deleting は、「アカウントを削除」の確認。開いていなければ null。
@@ -25,6 +27,8 @@ export interface AccountList {
   // touch は、行の「編集」などを押したときに、その行の赤字を消す。
   touch(id: string): void;
   reauth(id: string): Promise<void>;
+  // recheck は、App 未導入の行の「再確認」。成功で一覧を読み直し、読めるようになった組織があればトーストを出す。
+  recheck(row: AccountRow): Promise<void>;
   askDelete(id: string): Promise<void>;
   confirmDelete(): Promise<void>;
   cancelDelete(): void;
@@ -38,16 +42,24 @@ export interface AccountListDeps {
   reauthDevice(account: Account): Promise<void>;
 }
 
-const initial = (): AccountListState => ({ rows: [], errors: {}, asking: [], deleting: null });
+const initial = (): AccountListState => ({
+  rows: [],
+  errors: {},
+  still: {},
+  asking: [],
+  deleting: null,
+});
 
 export function createAccountList(deps: AccountListDeps): AccountList {
   const state = writable<AccountListState>(initial());
   const patch = (p: Partial<AccountListState>) => state.update((s) => ({ ...s, ...p }));
 
+  // setError は、行の赤字を置く(空なら消す)。その行の「まだ読めません」も、行の次の操作で消す。
   function setError(id: string, message: string) {
     state.update((s) => {
       const errors = Object.fromEntries(Object.entries(s.errors).filter(([k]) => k !== id));
-      return { ...s, errors: message === "" ? errors : { ...errors, [id]: message } };
+      const still = Object.fromEntries(Object.entries(s.still).filter(([k]) => k !== id));
+      return { ...s, still, errors: message === "" ? errors : { ...errors, [id]: message } };
     });
   }
 
@@ -92,6 +104,23 @@ export function createAccountList(deps: AccountListDeps): AccountList {
         else throw e;
       } finally {
         setAsking(id, false);
+      }
+    },
+    async recheck(row) {
+      if (get(state).asking.includes(row.id)) return;
+      setError(row.id, "");
+      setAsking(row.id, true);
+      try {
+        const r = await deps.accounts.recheck(row.id);
+        if (r.cleared.length > 0) deps.toasts.show(recheckedText(row.name, r.cleared));
+        state.update((s) => ({ ...s, still: { ...s.still, [row.id]: r.still } }));
+        await reload();
+      } catch (e) {
+        if (e instanceof Refused) setError(row.id, e.message);
+        else if (e instanceof NotFound) await reload();
+        else throw e;
+      } finally {
+        setAsking(row.id, false);
       }
     },
     async askDelete(id) {

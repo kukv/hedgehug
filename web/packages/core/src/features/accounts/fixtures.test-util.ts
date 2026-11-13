@@ -42,6 +42,8 @@ export function fakeAccounts(rows: AccountRow[] = []) {
   const refuse: Record<string, string> = {};
   const impacts = { delete: [] as string[], edit: [] as string[] };
   const polls: (SignInResult | Error)[] = [];
+  // rechecks は、recheck が返す答え。
+  const rechecks: { cleared: string[]; still: string[] }[] = [];
   let started = 0;
   function op(name: string, ...args: (string | undefined)[]) {
     calls.push([name, ...args.map((a) => a ?? "-")].join(" "));
@@ -80,6 +82,11 @@ export function fakeAccounts(rows: AccountRow[] = []) {
       r.reason = "";
       return toAccount(r);
     },
+    async recheck(id) {
+      op("recheck", id);
+      find(id);
+      return rechecks.shift() ?? { cleared: [], still: [] };
+    },
     async remove(id) {
       op("remove", id);
       find(id);
@@ -112,7 +119,7 @@ export function fakeAccounts(rows: AccountRow[] = []) {
       op("cancelSignIn", id);
     },
   };
-  return { port, rows, calls, refuse, impacts, polls };
+  return { port, rows, calls, refuse, impacts, polls, rechecks };
 }
 
 // fakeTimer は、時間を手で進める時計。
