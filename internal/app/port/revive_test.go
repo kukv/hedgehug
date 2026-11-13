@@ -290,16 +290,52 @@ func TestEditableItemLiveItemUnderDeletedParent(t *testing.T) {
 	}
 }
 
-// 削除したプロジェクトと同じ名前の、削除されていないプロジェクトがあれば、ReviveProject は取り消さずに断る(決定 S11)。
-func TestReviveProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
-	s := reviveStores(t)
-	deleteIn(t, s, nil, map[project.ID]bool{apptest.SampleProject: true})
+// addSameName は、サンプルのプロジェクト(HH-P1「ログイン」)と同じ名前のプロジェクト HH-P2 を作る。
+func addSameName(t *testing.T, s port.Stores) project.ID {
+	t.Helper()
 	other := project.Project{ID: "01OTHERPR00000000000000001", Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2}, Rank: "W", Title: "ログイン", Status: project.Todo}
 	if err := s.Write(t.Context(), reviveStore, user, func(tx port.Tx) error {
 		return tx.WriteProjects().Append(other.ID, project.Create(other))
 	}); err != nil {
 		t.Fatal(err)
 	}
+	return other.ID
+}
+
+// 同じ名前のプロジェクトが削除済みだけなら、ReviveProject は取り消せる(削除済みは名前を取らない)。
+func TestReviveProjectWithSameNameDeletedProjectRevives(t *testing.T) {
+	s := reviveStores(t)
+	other := addSameName(t, s)
+	deleteIn(t, s, nil, map[project.ID]bool{other: true})
+	deleteIn(t, s, nil, map[project.ID]bool{apptest.SampleProject: true})
+	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
+		return port.ReviveProject(ctx, tx, apptest.SampleProject)
+	})
+	if !slices.Equal(got, []string{"HH-P1"}) {
+		t.Errorf("Revived = %v", got)
+	}
+}
+
+// 同じ名前のプロジェクトがあっても、削除されていないプロジェクトへの ReviveProject は、何もせず断らない。
+func TestReviveLiveProjectWithSameNameDoesNothing(t *testing.T) {
+	s := reviveStores(t)
+	addSameName(t, s)
+	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
+		return port.ReviveProject(ctx, tx, apptest.SampleProject)
+	})
+	if len(got) != 0 {
+		t.Errorf("Revived = %v", got)
+	}
+	if n := restoreRows(t, s, change.Ref{Kind: change.KindProject, ID: apptest.SampleProject}); n != 0 {
+		t.Errorf("restore rows = %d, want 0", n)
+	}
+}
+
+// 削除したプロジェクトと同じ名前の、削除されていないプロジェクトがあれば、ReviveProject は取り消さずに断る(決定 S11)。
+func TestReviveProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
+	s := reviveStores(t)
+	deleteIn(t, s, nil, map[project.ID]bool{apptest.SampleProject: true})
+	addSameName(t, s)
 	ctx := port.WithRevived(t.Context())
 	err := s.Write(ctx, reviveStore, user, func(tx port.Tx) error { return port.ReviveProject(ctx, tx, apptest.SampleProject) })
 	var r *refusal.Refusal
