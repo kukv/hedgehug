@@ -11,6 +11,7 @@ const stopTimeout = 5_000;
 
 // start は、サーバーを起動し、標準出力の 1 行 `http://127.0.0.1:<番号>/#token=...`(cmd/hedgehug/main.go)から
 // 番号までの URL を取り出して返す。時間内に出ないか先に終わったら、標準エラーを付けて落とし、SIGKILL する。
+// 起動できたあとの標準エラーは、サーバー側の panic などを CI のログに残すため、接頭辞を付けて流す。
 function start(): Promise<{ proc: ChildProcess; url: string }> {
   const proc = spawn(bin, [], {
     env: { ...process.env, HEDGEHUG_ADDR: "127.0.0.1:0", HEDGEHUG_TOKEN: "e2e-token" },
@@ -18,8 +19,13 @@ function start(): Promise<{ proc: ChildProcess; url: string }> {
   });
   let stdout = "";
   let stderr = "";
+  let started = false;
   proc.stderr?.on("data", (chunk) => {
-    stderr += chunk;
+    if (!started) {
+      stderr += chunk;
+      return;
+    }
+    process.stderr.write(String(chunk).replace(/^(?=.)/gm, "[hedgehug-e2e] "));
   });
   return new Promise((done, fail) => {
     const failWith = (reason: string) => {
@@ -31,14 +37,22 @@ function start(): Promise<{ proc: ChildProcess; url: string }> {
       () => failWith(`${startTimeout / 1000} 秒以内に URL が出ない`),
       startTimeout,
     );
-    proc.on("error", (err) => failWith(err.message));
-    proc.on("exit", (code, signal) => failWith(`先に終了した。code=${code} signal=${signal}`));
+    // exit では標準エラーを読み切れていないことがあるので、close(入出力が閉じたあと)で判定する。
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) =>
+      failWith(`先に終了した。code=${code} signal=${signal}`);
+    const onError = (err: Error) => failWith(err.message);
+    proc.on("error", onError);
+    proc.on("close", onClose);
     proc.stdout?.on("data", (chunk) => {
       stdout += chunk;
       const m = stdout.match(/^(http:\/\/127\.0\.0\.1:\d+)\/#token=/m);
       if (m?.[1]) {
         clearTimeout(timer);
-        proc.removeAllListeners("exit");
+        started = true;
+        stderr = "";
+        // 起動後の error(終了時の kill の失敗など)で、動いているサーバーを落とさない。
+        proc.off("error", onError);
+        proc.off("close", onClose);
         done({ proc, url: m[1] });
       }
     });
