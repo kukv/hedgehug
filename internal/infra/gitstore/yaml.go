@@ -55,8 +55,11 @@ type itemYAML struct {
 	Points    *float64    `yaml:"points"`
 	Systems   *yaml.Node  `yaml:"systems"`
 	Fields    *yaml.Node  `yaml:"fields"`
+	Relations *yaml.Node  `yaml:"relations"`
 	Estimate  *float64    `yaml:"estimate"`
 	Watchers  []string    `yaml:"watchers,flow"`
+	Comments  *yaml.Node  `yaml:"comments"`
+	Worklogs  *yaml.Node  `yaml:"worklogs"`
 }
 
 // renderYAML は、エンティティのログから読む用の YAML を作る。作成の行がなければ nil。
