@@ -44,7 +44,8 @@ func Unmatched(statuses []change.ID, from, to workspace.Settings, toRules projec
 }
 
 // Remap は、アイテム 1 件の値を、移動先のワークスペースの定義に引き直す(02「値の引き直し」)。
-// 行の並びは from.Properties の並びでプロパティごと(組み込みが先、続いて追加プロパティ)、ウォッチは最後。
+// 行の並びは from.Properties の並びでプロパティごと(組み込みが先、続いて追加プロパティ)、スプリントとリリースを外す行、
+// ウォッチは最後。
 // people が nil なら同じ Store(担当者・ユーザー型・ウォッチはそのまま)、nil でなければ別の Store。
 // toRules は移動先のプロジェクトのプロジェクト別のルール(UsableStatuses)。statusChoice は、移動先で使えない
 // 移動元のステータス → 選んだ置き換え先。
@@ -57,6 +58,7 @@ func Remap(it item.Item, from, to workspace.Settings, toRules projectrule.Rules,
 			r.custom(p)
 		}
 	}
+	r.plan()
 	r.watchers()
 	return r.res
 }
@@ -76,6 +78,16 @@ func (r *remapper) draft(d change.Draft) { r.res.Drafts = append(r.res.Drafts, d
 func (r *remapper) empty(name string) {
 	if !slices.Contains(r.res.Emptied, name) {
 		r.res.Emptied = append(r.res.Emptied, name)
+	}
+}
+
+// plan は、スプリントとリリースを外す(02「移動先で変わること」。ワークスペースごとのものなので移動先では使えない)。
+func (r *remapper) plan() {
+	if r.it.Sprint != "" {
+		r.draft(change.NewSet(item.SprintField, r.it.Sprint, nil))
+	}
+	if r.it.Release != "" {
+		r.draft(change.NewSet(item.ReleaseField, r.it.Release, nil))
 	}
 }
 
