@@ -471,6 +471,39 @@ func TestChangeInDeletedWorkspaceRevives(t *testing.T) {
 	}
 }
 
+// 値「Review」を削除したあとでワークスペースも削除し、古いタブから「Review」の色を変更すると、ワークスペースと
+// 「Review」の両方が戻る。戻した名前はワークスペース、値の順に積む(決定 R11)。
+func TestColorDeletedStatusInDeletedWorkspaceRevivesBoth(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	w, err := s.Create(ctx, store, "Web", "HH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	todo := settingsOf(t, s, w.ID).Statuses[0].ID
+	review := addValue(t, s, w.ID, statuses, "Review")
+	if err := s.DeleteValue(ctx, store, w.ID, statuses, review.ID, todo); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(ctx, store, w.ID); err != nil {
+		t.Fatal(err)
+	}
+	rctx := port.WithRevived(ctx)
+	if err := s.SetValueColor(rctx, store, w.ID, statuses, review.ID, otherColor(review)); err != nil {
+		t.Fatal(err)
+	}
+	if !workspaceLive(t, s, w.ID) {
+		t.Error("workspace still deleted")
+	}
+	if _, ok := valueIn(t, s, w.ID, statuses, review.ID); !ok {
+		t.Error("Review still deleted")
+	}
+	want := []port.Revival{{Kind: port.RevivedName, Text: "Web"}, {Kind: port.RevivedName, Text: "Review"}}
+	if got := port.Revived(rctx); !slices.Equal(got, want) {
+		t.Errorf("Revived = %v, want %v", got, want)
+	}
+}
+
 // assertWorkspaceRevived は、ワークスペース ws と、一緒に削除されたアイテム it とそのプロジェクトが戻ったかを確かめる。
 func assertWorkspaceRevived(t *testing.T, s workspaces.Service, ws workspace.ID, it item.ID) {
 	t.Helper()
