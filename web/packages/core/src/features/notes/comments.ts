@@ -16,7 +16,7 @@ export const commentDeleteDialog = {
   lines: ["このコメントを削除します。"],
   ok: "削除",
 };
-// 断りでも「ない」でもない失敗(通信の失敗など)のときの文言。仕様にない文言なので、決まったら差し替える。
+// 断りでも「ない」でもない失敗(通信の失敗など)のときのエラーのトースト(02「コメント」)。
 export const commentFailedMessage = "コメントを保存できませんでした";
 const unknownUser = "不明なユーザー";
 

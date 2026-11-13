@@ -7,7 +7,7 @@ import type { Toasts } from "../toasts/toasts";
 
 // 詳細パネルの「関連」(02「関連」)の状態: 一覧、解除、追加の行(表記・相手の検索・選んだ相手)。
 
-// 断りでも「ない」でもない失敗(通信の失敗など)のときの文言。仕様にない文言なので、決まったら差し替える。
+// 断りでも「ない」でもない失敗(通信の失敗など)のときのエラーのトースト(02「関連」)。
 export const relationFailedMessage = "関連を保存できませんでした";
 
 export interface RelationGroup {

@@ -10,7 +10,7 @@ import { parseHours } from "./hours";
 
 export const worklogDeleteDialog = { title: "作業時間を削除", ok: "削除" };
 export const worklogDeletedMessage = "作業時間を削除しました";
-// 断りでも「ない」でもない失敗(通信の失敗など)のときの文言。仕様にない文言なので、決まったら差し替える。
+// 断りでも「ない」でもない失敗(通信の失敗など)のときのエラーのトースト(02「作業時間」)。
 export const worklogFailedMessage = "作業時間を保存できませんでした";
 
 interface Target {
