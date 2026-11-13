@@ -39,27 +39,37 @@ func New(onSkew func(time.Duration)) *Client {
 
 // get は、path を GET して、成功なら本文を out に読む。失敗は *ghcall.Failure。
 func (c *Client) get(ctx context.Context, token, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+	_, err := c.do(ctx, http.MethodGet, token, path, nil, out)
+	return err
+}
+
+// do は、問い合わせを 1 回行う。成功なら本文を out に読み、応答の見出しを返す(GraphQL の利用上限の時刻に使う)。
+// GET のリダイレクトは net/http が同じホストの中で追う(改名・移管の追従。D3-4)。
+func (c *Client) do(ctx context.Context, method, token, path string, body io.Reader, out any) (http.Header, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
 	if err != nil {
-		return &ghcall.Failure{Kind: ghcall.Unreachable}
+		return nil, &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		// net/http のエラーは URL を含むことがあるので、種類だけを返す。
-		return &ghcall.Failure{Kind: ghcall.Unreachable}
+		return nil, &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
 	defer func() { _ = res.Body.Close() }()
 	c.observeSkew(res.Header.Get("Date"))
 	if f := c.classify(res); f != nil {
-		return f
+		return res.Header, f
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, maxBody)).Decode(out); err != nil {
-		return &ghcall.Failure{Kind: ghcall.Unreachable}
+		return res.Header, &ghcall.Failure{Kind: ghcall.Unreachable}
 	}
-	return nil
+	return res.Header, nil
 }
 
 // classify は、成功でない応答を失敗の種類に分ける。成功なら nil。

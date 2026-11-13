@@ -10,6 +10,10 @@ import (
 type GitHub interface {
 	// Viewer は、token の持ち主のログイン名を返す(07「認証の確認」)。
 	Viewer(ctx context.Context, token string) (login string, err error)
+	// Lookup は、repo(owner/name)の番号 number の PR か Issue を読む(07「追加」「表示と更新」)。
+	// 改名・移管されたリポジトリは移動先で読み、Found.Repo に移動先の名前を入れる。
+	// リポジトリを読めなければ RepoUnreadable、番号がなければ NotFound(どちらも Repo・Number 付き)。
+	Lookup(ctx context.Context, token, repo string, number int) (Found, error)
 }
 
 // Found は、GitHub から読んだ PR・Issue。
