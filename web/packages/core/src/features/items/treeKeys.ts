@@ -72,6 +72,18 @@ export function treeKeyAction(
   return null;
 }
 
+// KeyTarget は、キーを受けた部品の種類。tree はツリー自身、button は行の中のボタン、other はそれ以外(タイトルのリンクなど)。
+// core は DOM の型を持たないので、app が決めて渡す。
+export type KeyTarget = "tree" | "button" | "other";
+
+// leftToTarget は、行の中の部品にフォーカスがあるとき、そのキーを部品の働きに任せるか。Enter はリンクもボタンも
+// 開く・押すので任せる。Space はボタンだけが押す(リンクの Space はページをスクロールするだけなので、ツリーが受ける)。
+export function leftToTarget(action: TreeKeyAction, target: KeyTarget): boolean {
+  if (target === "tree") return false;
+  if (action === "open") return true;
+  return action === "toggle-done" && target === "button";
+}
+
 function letter(key: string, row: Pick<Item, "kind">): TreeKeyAction | null {
   const action = letterKeys[key.toLowerCase()];
   return action === "change-kind" && row.kind === "Epic" ? null : (action ?? null);

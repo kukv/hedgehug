@@ -68,6 +68,8 @@ export {
 export {
   isQueuedAction,
   type KeyInput,
+  type KeyTarget,
+  leftToTarget,
   type QueuedKeyAction,
   type ReadKeyAction,
   type TreeKeyAction,

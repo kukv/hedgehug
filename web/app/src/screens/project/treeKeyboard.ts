@@ -5,6 +5,7 @@ import {
   type Item,
   isQueuedAction,
   keepsQueue,
+  leftToTarget,
   menuAt,
   type ProjectView,
   type Route,
@@ -191,9 +192,15 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
     onkeydown(event) {
       const { action, row } = keyOf(event);
       if (!action || !row) return;
-      // 行の中のリンクやボタンにフォーカスがあるときの Enter・Space は、その部品の働き(開く・押す)に任せる。
+      // 行の中のリンクやボタンにフォーカスがあるときの Enter と、ボタンにフォーカスがあるときの Space は、その部品の
+      // 働き(開く・押す)に任せる。
       const inner = event.target !== event.currentTarget;
-      if ((action === "open" || action === "toggle-done") && inner) return;
+      const target = !inner
+        ? "tree"
+        : event.target instanceof HTMLButtonElement
+          ? "button"
+          : "other";
+      if (leftToTarget(action, target)) return;
       // ツリーが受けたキーは、ここで止める(C キーは、App.svelte の「文脈なしで作成ダイアログを開く」へ届けない)。
       event.preventDefault();
       event.stopPropagation();

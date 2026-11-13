@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isQueuedAction, type KeyInput, treeKeyAction } from "./treeKeys";
+import { isQueuedAction, type KeyInput, leftToTarget, treeKeyAction } from "./treeKeys";
 
 const key = (k: string, mods: Partial<KeyInput> = {}): KeyInput => ({
   key: k,
@@ -91,5 +91,22 @@ describe("treeKeyAction (write keys)", () => {
     expect(isQueuedAction("toggle-done")).toBe(false);
     expect(isQueuedAction("up")).toBe(false);
     expect(isQueuedAction(null)).toBe(false);
+  });
+});
+
+describe("leftToTarget", () => {
+  it("leaves Enter to an inner link or button, and Space to an inner button only", () => {
+    expect(leftToTarget("open", "button")).toBe(true);
+    expect(leftToTarget("open", "other")).toBe(true);
+    expect(leftToTarget("toggle-done", "button")).toBe(true);
+    // リンクの Space はページをスクロールするだけなので、ツリーが完了の切り替えに使う。
+    expect(leftToTarget("toggle-done", "other")).toBe(false);
+  });
+
+  it("keeps every key on the tree itself, and the other keys on any target", () => {
+    expect(leftToTarget("open", "tree")).toBe(false);
+    expect(leftToTarget("toggle-done", "tree")).toBe(false);
+    expect(leftToTarget("down", "button")).toBe(false);
+    expect(leftToTarget("move-down", "button")).toBe(false);
   });
 });

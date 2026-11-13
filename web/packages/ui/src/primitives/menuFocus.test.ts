@@ -3,6 +3,7 @@ import { createRawSnippet, tick } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import ValueMenu from "../patterns/ValueMenu.svelte";
 import Menu from "./Menu.svelte";
+import MenuWithSearch from "./MenuWithSearch.fixture.svelte";
 import { menuFocus } from "./menuFocus";
 
 const items = [
@@ -125,6 +126,19 @@ describe("menu focus", () => {
     const b = menuFocus(second, shownFrom);
     second.remove();
     b.destroy();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  it("gives the focus back to the opener when the head field took it on mount", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const { rerender } = render(MenuWithSearch, { props: { open: true } });
+    await tick();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "移動先を検索" }));
+    await rerender({ open: false });
     expect(document.activeElement).toBe(opener);
     opener.remove();
   });
