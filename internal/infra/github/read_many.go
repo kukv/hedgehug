@@ -106,7 +106,7 @@ func (a readManyAnswer) failure(repo string, reset time.Time) *ghcall.Failure {
 		switch {
 		case e.Type == "RATE_LIMITED":
 			return &ghcall.Failure{Kind: ghcall.RateLimited, ResetAt: reset}
-		case hiddenByApp(e.Type, e.Message):
+		case hiddenByApp(e.Type, e.Path, e.Message):
 			return appMissing(repo)
 		case (e.Type == "NOT_FOUND" || e.Type == "FORBIDDEN") && len(e.Path) == 1:
 			return &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}

@@ -54,10 +54,20 @@ func TestLookupAppNotAccessible(t *testing.T) {
 }
 
 func TestLookupOAuthRestricted(t *testing.T) {
-	msg := "`example-org` forbids access via a personal access token (classic). The organization has enabled OAuth App access restrictions"
+	msg := "Although you appear to have the correct authorization credentials, the `example-org` organization has enabled OAuth App access restrictions, meaning that data access to third-parties is limited. For more information on these restrictions, including how to enable this app, visit https://docs.github.com/articles/restricting-access-to-your-organization-s-data/"
 	c, _ := newClient(t, githubServer(strings.Replace(forbiddenJSON, "%s", msg, 1), "", nil))
 	_, err := c.Lookup(context.Background(), fakeToken, "example-org/web", 1)
 	wantAppMissing(t, "OAuth App access restrictions", err)
+}
+
+// App が入っていて PR・Issue の権限がないとき、同じ文は repository.issueOrPullRequest(path が 2 つ)に来る。
+func TestLookupNotAccessibleOnTheIssueIsNotAppMissing(t *testing.T) {
+	body := `{"data":{"repository":{"nameWithOwner":"example-org/web","issueOrPullRequest":null}},"errors":[{"type":"FORBIDDEN","path":["repository","issueOrPullRequest"],"message":"Resource not accessible by integration"}]}`
+	c, _ := newClient(t, githubServer(body, installationsOf("example-org", "all"), nil))
+	_, err := c.Lookup(context.Background(), fakeToken, "example-org/web", 1)
+	if ghcall.Is(err, ghcall.AppNotInstalled) {
+		t.Errorf("err = %v, want not AppNotInstalled", err)
+	}
 }
 
 func TestLookupPlainForbiddenIsUnreadable(t *testing.T) {
@@ -132,7 +142,7 @@ func TestReadManyAppNotInstalled(t *testing.T) {
 		name, graphql, installations string
 	}{
 		{"not accessible", strings.Replace(forbiddenJSON, "%s", "Resource not accessible by integration", 1), ""},
-		{"oauth restricted", strings.Replace(forbiddenJSON, "%s", "OAuth App access restrictions", 1), ""},
+		{"oauth restricted", strings.Replace(forbiddenJSON, "%s", "Although you appear to have the correct authorization credentials, the `example-org` organization has enabled OAuth App access restrictions, meaning that data access to third-parties is limited. For more information on these restrictions, including how to enable this app, visit https://docs.github.com/articles/restricting-access-to-your-organization-s-data/", 1), ""},
 		{"hidden", notFoundJSON, installationsOf("other", "all")},
 	}
 	for _, cs := range cases {

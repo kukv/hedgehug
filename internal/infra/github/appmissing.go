@@ -11,9 +11,11 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
 )
 
-// App 未導入の見分け(D4b-11)。OAuth App の組織の制限(docs.github.com の「OAuth app access restrictions」)で
-// GitHub が返す文は、docs の本文から全体を確かめられなかった。そこで、文に `OAuth App access restrictions` を
-// 含むことだけを条件にする。
+// App 未導入の見分け(D4b-11)。OAuth App の組織の制限で GitHub が返す文は、docs.github.com の
+// 「About OAuth app access restrictions」に全文がない。文は利用者の報告から拾った:
+// https://answers.netlify.com/t/apierror-403-related-to-organization-has-enabled-oauth-application-access-restrictions/68385
+// 「...the `org` organization has enabled OAuth App access restrictions, meaning that data access to third-parties is
+// limited...」。そこで、文に `OAuth App access restrictions` を含むことだけを条件にする。
 const (
 	notAccessibleMessage = "Resource not accessible by integration"
 	oauthRestrictedText  = "OAuth App access restrictions"
@@ -21,8 +23,10 @@ const (
 )
 
 // hiddenByApp は、GraphQL のエラーが、App 未導入を示す FORBIDDEN の文(D4b-11 の (1)(2))か。
-func hiddenByApp(typ, message string) bool {
-	return typ == "FORBIDDEN" &&
+// リポジトリそのもの(path が repository の 1 つ)の失敗だけを見る。App が入っていて PR・Issue の権限がないときの
+// 同じ文は repository.issueOrPullRequest(path が 2 つ)に来るので、App 未導入にしない。
+func hiddenByApp(typ string, path []any, message string) bool {
+	return typ == "FORBIDDEN" && len(path) == 1 &&
 		(strings.Contains(message, notAccessibleMessage) || strings.Contains(message, oauthRestrictedText))
 }
 
