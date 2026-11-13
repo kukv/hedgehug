@@ -665,7 +665,7 @@ Expected: FAIL
 
 - [ ] **Step 3: `fire.go`・`write.go` を書き、`Add`・`Refresh` から使う**
 
-`fire` の流れ: `tx.Items().Get(id)` で削除済みなら何もしない → `automation.LinkEvents(before, after)` から、`p` が覚えている(アイテム・きっかけ)を除く → ワークスペースのログから `automation.FromLog` → 設定(`tx.Workspaces().Get(ws)` の設定)→ きっかけごとに `automation.Run(st, rules, it, automation.Event{Trigger: t, AllMerged: …})`。`AllMerged` は、保存のあとのアイテムのリンク(`itemlink.FromLog` で読み直したもの)の値を、`p.fetched` にある値で置き換えてから `automation.AllMerged` で数える。動いたルールの行(`o.Draft`)を `tx.WriteItems().Append` で書き、1 つ目のルールがステータスを変えたら、次のきっかけのルールは変えたあとのアイテムで判定する(`automation.Run` は it を値で受けるので、`o.Draft` を当てたあとの it を作り直す)。起こしたきっかけを `p.fired` に覚える。`Refresh` は、すべてのリンクを `lookup` してから(`p.fetched` に入れ)、リンクごとに `writeFound` で書く。
+`fire` の流れ: `tx.Items().Get(id)` で読む(削除済みのアイテムは呼ぶ側の readItem が 404 にするので、ここには来ない) → `automation.LinkEvents(before, after)` から、`p` が覚えている(アイテム・きっかけ)を除く → ワークスペースのログから `automation.FromLog` → 設定(`tx.Workspaces().Get(ws)` の設定)→ きっかけごとに `automation.Run(st, rules, it, automation.Event{Trigger: t, AllMerged: …})`。`AllMerged` は、保存のあとのアイテムのリンク(`itemlink.FromLog` で読み直したもの)の値を、`p.fetched` にある値で置き換えてから `automation.AllMerged` で数える。動いたルールの行(`o.Draft`)を `tx.WriteItems().Append` で書き、1 つ目のルールがステータスを変えたら、次のきっかけのルールは変えたあとのアイテムで判定する(`automation.Run` は it を値で受けるので、`o.Draft` を当てたあとの it を作り直す)。起こしたきっかけを `p.fired` に覚える。`Refresh` は、すべてのリンクを `lookup` してから(`p.fetched` に入れ)、リンクごとに `writeFound` で書く。
 
 - [ ] **Step 4: テストが通ることを確かめる**
 
