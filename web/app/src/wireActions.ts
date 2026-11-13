@@ -1,6 +1,8 @@
 import { createItemActionsPort } from "@hedgehug/api";
 import {
+  createCopyId,
   createItemDelete,
+  createItemDuplicate,
   createItemKind,
   createItemMove,
   createItemRefresh,
@@ -40,6 +42,21 @@ export const itemKind = createItemKind({
   catalog,
   toasts,
   refresh: itemRefresh,
+});
+
+// 「複製」(02「複製」)。実行すると詳細パネルが新しいアイテムに切り替わる。実行は itemDuplicate.run(item)。
+export const itemDuplicate = createItemDuplicate({
+  actions: itemActions,
+  catalog,
+  detail,
+  toasts,
+  refresh: itemRefresh,
+});
+
+// 「ID をコピー」(種類の行のボタンとアイテムのメニュー)。渡すのは ID の表記(HH-3)。
+export const copyItemId = createCopyId({
+  write: (text) => navigator.clipboard.writeText(text),
+  toasts,
 });
 
 // 画面を移ったら、出している確認ダイアログと候補のメニューを閉じる(01「画面の移り方」)。

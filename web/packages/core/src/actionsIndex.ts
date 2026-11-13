@@ -1,6 +1,7 @@
 // アイテムとプロジェクトの操作(トラック A4b)の core の export。index.ts が全部を再公開する
 // (index.ts は 300 行の上限なので、A4b の分はここに足す)。
 
+export { type CopyIdDeps, createCopyId } from "./features/items/copyId";
 export {
   createItemDelete,
   type DeleteDialogState,
@@ -10,6 +11,12 @@ export {
   itemDeletedMessage,
   itemDeleteFailedMessage,
 } from "./features/items/delete";
+export {
+  createItemDuplicate,
+  duplicateFailedMessage,
+  type ItemDuplicate,
+  type ItemDuplicateDeps,
+} from "./features/items/duplicate";
 export {
   createItemKind,
   type ItemKind,
