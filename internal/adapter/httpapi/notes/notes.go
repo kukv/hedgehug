@@ -5,15 +5,18 @@ package notes
 import (
 	"github.com/danielgtaylor/huma/v2"
 
+	appcomments "github.com/kukv/hedgehug/internal/app/comments"
 	appdescriptions "github.com/kukv/hedgehug/internal/app/descriptions"
 )
 
 // Services は、付録の API が使う usecase。区画のタスクが、自分のものを足す。
 type Services struct {
 	Descriptions appdescriptions.Service
+	Comments     appcomments.Service
 }
 
 // Register は、付録の API を登録する。
 func Register(api huma.API, s Services) {
 	registerDescriptions(api, s.Descriptions)
+	registerComments(api, s.Comments)
 }

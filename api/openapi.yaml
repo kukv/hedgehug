@@ -223,6 +223,40 @@ components:
       required:
         - done
       type: object
+    Comment:
+      additionalProperties: false
+      properties:
+        at:
+          description: 投稿した時刻(RFC 3339)
+          type: string
+        body:
+          type: string
+        by:
+          description: 投稿者のログイン名
+          type: string
+        byName:
+          description: 投稿者の表示名。メンバーにいなければ「不明なユーザー」
+          type: string
+        edited:
+          type: boolean
+        id:
+          type: string
+      required:
+        - id
+        - by
+        - byName
+        - at
+        - body
+        - edited
+      type: object
+    CommentText:
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+      required:
+        - body
+      type: object
     CreateItem:
       additionalProperties: false
       properties:
@@ -1782,6 +1816,137 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Step のチェックを入り切りする
+  /api/stores/{store}/items/{item}/comments:
+    get:
+      operationId: list-item-comments
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Comment"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのコメントを古い順に返す
+    post:
+      operationId: post-item-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムにコメントを投稿する
+  /api/stores/{store}/items/{item}/comments/{comment}:
+    delete:
+      operationId: delete-item-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのコメントを削除する
+    put:
+      operationId: edit-item-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのコメントを編集する
   /api/stores/{store}/items/{item}/description:
     get:
       operationId: get-item-description
@@ -2160,6 +2325,137 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトを返す
+  /api/stores/{store}/projects/{project}/comments:
+    get:
+      operationId: list-project-comments
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Comment"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのコメントを古い順に返す
+    post:
+      operationId: post-project-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトにコメントを投稿する
+  /api/stores/{store}/projects/{project}/comments/{comment}:
+    delete:
+      operationId: delete-project-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのコメントを削除する
+    put:
+      operationId: edit-project-comment
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentText"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトのコメントを編集する
   /api/stores/{store}/projects/{project}/description:
     get:
       operationId: get-project-description

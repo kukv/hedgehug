@@ -18,6 +18,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
+	appcomments "github.com/kukv/hedgehug/internal/app/comments"
 	appdescriptions "github.com/kukv/hedgehug/internal/app/descriptions"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
@@ -78,6 +79,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: deps.Inbox})
 	notes.Register(api, notes.Services{
 		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity},
+		Comments:     appcomments.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity},
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))

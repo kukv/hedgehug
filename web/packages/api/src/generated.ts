@@ -173,6 +173,22 @@ export interface CheckStep {
   done: boolean;
 }
 
+export interface Comment {
+  /** 投稿した時刻(RFC 3339) */
+  at: string;
+  body: string;
+  /** 投稿者のログイン名 */
+  by: string;
+  /** 投稿者の表示名。メンバーにいなければ「不明なユーザー」 */
+  byName: string;
+  edited: boolean;
+  id: string;
+}
+
+export interface CommentText {
+  body: string;
+}
+
 export type CreateItemKind = typeof CreateItemKind[keyof typeof CreateItemKind];
 
 
@@ -1364,6 +1380,144 @@ return fetcher<Item>(getCheckStepUrl(store,item),
 
 
 
+export const getListItemCommentsUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments`
+}
+
+/**
+ * @summary アイテムのコメントを古い順に返す
+ */
+export const listItemComments = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<Comment[] | null> => {
+
+  return fetcher<Comment[] | null>(getListItemCommentsUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPostItemCommentUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments`
+}
+
+/**
+ * @summary アイテムにコメントを投稿する
+ */
+export const postItemComment = async (store: string,
+    item: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getPostItemCommentUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getDeleteItemCommentUrl = (store: string,
+    item: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary アイテムのコメントを削除する
+ */
+export const deleteItemComment = async (store: string,
+    item: string,
+    comment: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteItemCommentUrl(store,item,comment),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getEditItemCommentUrl = (store: string,
+    item: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary アイテムのコメントを編集する
+ */
+export const editItemComment = async (store: string,
+    item: string,
+    comment: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getEditItemCommentUrl(store,item,comment),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
 export const getGetItemDescriptionUrl = (store: string,
     item: string,) => {
 
@@ -1752,6 +1906,144 @@ export const getProject = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListProjectCommentsUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments`
+}
+
+/**
+ * @summary プロジェクトのコメントを古い順に返す
+ */
+export const listProjectComments = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<Comment[] | null> => {
+
+  return fetcher<Comment[] | null>(getListProjectCommentsUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPostProjectCommentUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments`
+}
+
+/**
+ * @summary プロジェクトにコメントを投稿する
+ */
+export const postProjectComment = async (store: string,
+    project: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getPostProjectCommentUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getDeleteProjectCommentUrl = (store: string,
+    project: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary プロジェクトのコメントを削除する
+ */
+export const deleteProjectComment = async (store: string,
+    project: string,
+    comment: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteProjectCommentUrl(store,project,comment),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getEditProjectCommentUrl = (store: string,
+    project: string,
+    comment: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/comments/${encodeURIComponent(String(comment))}`
+}
+
+/**
+ * @summary プロジェクトのコメントを編集する
+ */
+export const editProjectComment = async (store: string,
+    project: string,
+    comment: string,
+    commentText: CommentText, options?: Parameters<typeof fetcher>[1]): Promise<Comment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Comment>(getEditProjectCommentUrl(store,project,comment),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(commentText)
   }
 );}
 
