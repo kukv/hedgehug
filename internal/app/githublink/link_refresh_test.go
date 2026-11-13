@@ -212,8 +212,8 @@ func TestRefreshSkips(t *testing.T) {
 	if rows := f.refresh(t); rows[0].Error != "" || f.gh.Lookups != asked {
 		t.Errorf("no accounts on this machine: row %+v", rows[0])
 	}
-	if rows := f.list(t, linkStore, linkTask); rows[0].Error == "" {
-		t.Errorf("the stored text was cleared by a skipped refresh: %+v", rows[0])
+	if got := f.reads.failures[linkStore]; len(got) != 1 {
+		t.Errorf("the stored text was cleared by a skipped refresh: %v", got)
 	}
 	f.infos.Stores[0].ReadOnly = true
 	if rows := f.refresh(t); rows[0].Error != "" {
@@ -318,5 +318,27 @@ func TestRefreshFailurePublishes(t *testing.T) {
 	f.refresh(t)
 	if got := published() - base; got != 2 {
 		t.Errorf("on clear published %d, want 2", got)
+	}
+}
+
+// 取り直さない Store(閲覧のみ・このマシンにアカウントがない)では、一覧も置いてある文言を出さない(Refresh と同じ)。
+func TestListHidesFailureWhenNotRefreshed(t *testing.T) {
+	f := newLinks(t)
+	f.linkAt(t, 12)
+	f.gh.Fail("org/web", 12, &ghcall.Failure{Kind: ghcall.NotFound, Repo: "org/web", Number: 12})
+	f.refresh(t)
+	f.infos.Stores[0].ReadOnly = true
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error != "" {
+		t.Errorf("read-only: list error = %q", rows[0].Error)
+	}
+	f.infos.Stores[0].ReadOnly = false
+	if err := f.accounts.Remove(t.Context(), "A1"); err != nil {
+		t.Fatal(err)
+	}
+	if rows := f.list(t, linkStore, linkTask); rows[0].Error != "" {
+		t.Errorf("no accounts: list error = %q", rows[0].Error)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 1 {
+		t.Errorf("stored = %v, want the text kept", got)
 	}
 }

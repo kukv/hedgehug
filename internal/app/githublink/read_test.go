@@ -358,9 +358,10 @@ func TestReadOnceSkipsStores(t *testing.T) {
 	if n := f.gh.ReadManyCalls("org/web"); n != 0 {
 		t.Errorf("calls = %d, want none", n)
 	}
+	// 一覧は閲覧のみの Store の文言を出さないので、置いた文言そのものを見る
 	for _, s := range []port.StoreID{linkStore, otherStore, third} {
-		if r := f.row(t, s, 1); r.Error != "" {
-			t.Errorf("%s error = %q", s, r.Error)
+		if got := f.reads.failures[s]; len(got) != 0 {
+			t.Errorf("%s failures = %v", s, got)
 		}
 	}
 }

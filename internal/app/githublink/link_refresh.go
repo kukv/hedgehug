@@ -19,11 +19,7 @@ func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]L
 	}
 	if skip {
 		// 取り直しをしないので、置いてある失敗の文言は出さない(消しもしない)。
-		rows, err := l.List(ctx, store, id)
-		for i := range rows {
-			rows[i].Error = ""
-		}
-		return rows, err
+		return l.rows(ctx, store, id, true)
 	}
 	v, err := l.view(ctx, store, id)
 	if err != nil {
@@ -36,7 +32,7 @@ func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]L
 	if changed {
 		l.Events.Publish(port.Event{Kind: port.EventGitHub, Store: store})
 	}
-	return l.List(ctx, store, id)
+	return l.rows(ctx, store, id, false)
 }
 
 // refreshAll は、まずリンクをすべて GitHub から読み、そのあとリンクごとに保存する(D4a-14)。失敗した行には文言を
