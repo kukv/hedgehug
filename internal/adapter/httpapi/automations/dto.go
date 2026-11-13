@@ -6,6 +6,7 @@ import (
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
 // AutomationRuleInput は、ルールの作成と編集の本文。
@@ -16,6 +17,7 @@ type AutomationRuleInput struct {
 	AllMerged     bool   `json:"allMerged" doc:"きっかけが pr_merged のときの条件"`
 	Action        string `json:"action" enum:"status,assignee"`
 	Value         string `json:"value" doc:"ステータスの ID、ログイン名、または @none(未割り当て)"`
+	Scope         string `json:"scope,omitempty" doc:"このプロジェクトだけのルールなら、プロジェクトの内部 ID。空ならワークスペース全体。作成のときだけ読み、編集では変えない"`
 }
 
 // AutomationRule は、ルール。
@@ -52,14 +54,14 @@ type ApplyAutomationIgnoringWorkflow struct {
 func fromInput(in AutomationRuleInput) automation.Rule {
 	return automation.Rule{
 		Name: in.Name, Trigger: automation.Trigger(in.Trigger), TriggerStatus: change.ID(in.TriggerStatus),
-		AllMerged: in.AllMerged, Action: automation.Action(in.Action), Value: in.Value,
+		AllMerged: in.AllMerged, Action: automation.Action(in.Action), Value: in.Value, Scope: project.ID(in.Scope),
 	}
 }
 
 func toRule(r automation.Rule) AutomationRule {
 	return AutomationRule{ID: string(r.ID), Enabled: r.Enabled, AutomationRuleInput: AutomationRuleInput{
 		Name: r.Name, Trigger: string(r.Trigger), TriggerStatus: string(r.TriggerStatus),
-		AllMerged: r.AllMerged, Action: string(r.Action), Value: r.Value,
+		AllMerged: r.AllMerged, Action: string(r.Action), Value: r.Value, Scope: string(r.Scope),
 	}}
 }
 

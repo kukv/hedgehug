@@ -29,5 +29,20 @@ export interface MoveCandidate {
   projectTitle: string;
 }
 
+// MovePreviewStatus は、移動先が使わないステータスと、それを持つ移すアイテム(削除済みと自分自身を含む)の件数。
+// default は、置き換えの初めの値(同じ分類の、移動先の既定のステータス)。
+export interface MovePreviewStatus {
+  status: string;
+  count: number;
+  default: string;
+}
+
+// MovePreview は、移動の確認ダイアログに出す件数(B5a-19)。below は下のもの(削除済みを除く)、statuses は
+// 移動先が使わないステータス(プロジェクトが変わらない移動なら空)。
+export interface MovePreview {
+  below: number;
+  statuses: MovePreviewStatus[];
+}
+
 // MoveTarget は、移動の移し先。Epic は project、ほかは parent のどちらか一方。
 export type MoveTarget = { parent: string } | { project: string };

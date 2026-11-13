@@ -7,9 +7,15 @@ import {
   getProject,
   removeProjectRepo,
   renameProject,
+  resetProjectRules,
   setProjectDate,
   setProjectOwner,
+  setProjectRuleRuns,
   setProjectStatus,
+  setProjectStatusUsed,
+  setProjectTemplateDefault,
+  setProjectTemplateUsed,
+  setProjectTransition,
 } from "./generated";
 
 export function toProject(storeId: string, p: ApiProject): Project {
@@ -48,5 +54,17 @@ export function createProjectsPort(): ProjectsPort {
       call(async () => toProject(storeId, await addProjectRepo(storeId, projectId, { repo }))),
     removeRepo: (storeId, projectId, repo) =>
       call(async () => toProject(storeId, await removeProjectRepo(storeId, projectId, { repo }))),
+    setStatusUsed: (storeId, projectId, statusId, used) =>
+      call(() => setProjectStatusUsed(storeId, projectId, statusId, { used })),
+    setTransition: (storeId, projectId, from, to, allowed) =>
+      call(() => setProjectTransition(storeId, projectId, from, to, { allowed })),
+    setTemplateUsed: (storeId, projectId, templateId, used) =>
+      call(() => setProjectTemplateUsed(storeId, projectId, templateId, { used })),
+    setTemplateDefault: (storeId, projectId, kind, value) =>
+      call(() => setProjectTemplateDefault(storeId, projectId, kind, { template: value })),
+    setRuleRuns: (storeId, projectId, ruleId, runs) =>
+      call(() => setProjectRuleRuns(storeId, projectId, ruleId, { runs })),
+    resetRules: (storeId, projectId, section) =>
+      call(() => resetProjectRules(storeId, projectId, section)),
   };
 }

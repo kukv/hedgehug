@@ -1,3 +1,5 @@
+import type { Kind } from "./item";
+
 export interface Workspace {
   id: string;
   storeId: string;
@@ -39,6 +41,20 @@ export interface WorkspaceProperty {
   choices: WorkspaceValue[];
 }
 
+// ProjectRules は、1 つのプロジェクトのルール(B5a-18)。どれも空ならワークスペースの設定のまま。
+export interface ProjectRules {
+  // 使わないステータスの ID
+  hiddenStatuses: string[];
+  // From → このプロジェクトで変更できる To(制限のない From はない)
+  workflow: Record<string, string[]>;
+  // 使うテンプレートの ID(空ならすべて使う)
+  templates: string[];
+  // 種類 → テンプレート ID か "@none"(決めていない種類はない)
+  templateDefaults: Partial<Record<Kind, string>>;
+  // 動かさないワークスペースのルールの ID
+  disabledRules: string[];
+}
+
 export interface WorkspaceSettings {
   properties: WorkspaceProperty[];
   statuses: WorkspaceValue[];
@@ -52,6 +68,8 @@ export interface WorkspaceSettings {
   templates: WorkspaceTemplate[];
   // 種類 → テンプレート ID
   templateDefaults: Partial<Record<string, string>>;
+  // プロジェクトの ID → そのプロジェクトのルール(ルールのないプロジェクトはない)
+  projectRules: Record<string, ProjectRules>;
 }
 
 export interface WorkspaceDetail extends Workspace {
@@ -141,6 +159,8 @@ export interface AutomationRuleInput {
 export interface AutomationRule extends AutomationRuleInput {
   id: string;
   enabled: boolean;
+  // このプロジェクトだけのルールならプロジェクトの ID。空か未指定ならワークスペース全体
+  scope?: string;
 }
 
 export interface AutomationRun {

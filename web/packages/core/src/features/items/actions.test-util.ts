@@ -84,6 +84,11 @@ export function fakeItemActions(): FakeItemActions {
       check(id);
       return self.candidates;
     },
+    async movePreview(_s, id, to) {
+      calls.push(`movePreview ${id} ${JSON.stringify(to)}`);
+      check(id);
+      return { below: 0, statuses: [] };
+    },
     move: (_s, id, to) => write(id, `move ${id} ${JSON.stringify(to)}`),
     changeKind: (_s, id, kind) => write(id, `changeKind ${id} ${kind}`),
     async duplicate(storeId, id) {
