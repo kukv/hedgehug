@@ -175,4 +175,33 @@ describe("description editor", () => {
       input: "",
     });
   });
+
+  it("drops a save that returns after the target changed (no old text, no toast)", async () => {
+    const { editor, notes, shown } = setup();
+    await editor.load();
+    editor.start();
+    editor.setInput("保存中の入力");
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const original = notes.describe;
+    notes.describe = async (t, base, text) => {
+      await gate;
+      return original(t, base, text);
+    };
+    notes.conflictNext("-----\n両方\n-----");
+    const saving = editor.save();
+    editor.reset();
+    release();
+    await saving;
+    expect(get(editor.state)).toMatchObject({
+      loaded: false,
+      text: "",
+      blocks: [],
+      editing: false,
+      saving: false,
+    });
+    expect(shown()).toEqual([]);
+  });
 });

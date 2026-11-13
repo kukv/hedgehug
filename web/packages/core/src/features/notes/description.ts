@@ -63,6 +63,8 @@ export function createDescriptionEditor(deps: DescriptionDeps): DescriptionEdito
   let members: Member[] = [];
   // latest は、読み直しの世代。保存や新しい読み直しのあとに、古い読み取りの結果を捨てる。
   let latest = 0;
+  // epoch は、対象が変わった(reset した)回数。待っていた保存が、別の対象のあとに返ったら捨てる。
+  let epoch = 0;
   const shown = (text: string) => ({ text, blocks: tokenize(text, isMemberOf(members)) });
 
   const dirty = () => {
@@ -95,16 +97,19 @@ export function createDescriptionEditor(deps: DescriptionDeps): DescriptionEdito
     if (!s.editing || s.saving) return;
     // 前と同じ(編集を始めたときのまま、または保存してあるものと同じ)なら、何も保存しない。
     if (s.input === s.base || s.input === s.text) return cancel();
+    const mine = epoch;
     state.update((x) => ({ ...x, saving: true }));
     let result: DescribeResult;
     try {
       result = await deps.port.describe(deps.target(), s.base, s.input);
     } catch (e) {
+      if (mine !== epoch) return;
       state.update((x) => ({ ...x, saving: false }));
       if (!(e instanceof Refused)) throw e;
       deps.toasts.show(e.message, { error: true });
       return;
     }
+    if (mine !== epoch) return;
     latest += 1;
     state.update((x) => ({
       ...x,
@@ -121,6 +126,7 @@ export function createDescriptionEditor(deps: DescriptionDeps): DescriptionEdito
     state: readonly(state),
     load,
     reset() {
+      epoch += 1;
       latest += 1;
       state.set(idle);
     },
