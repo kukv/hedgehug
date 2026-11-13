@@ -4,7 +4,7 @@
 
 **Goal:** 別のブラウザのタブ(や別のプログラム)で削除されたアイテム・プロジェクトに、このタブから変更を保存したとき、断らずに変更を保存して削除を取り消し、トースト「{ID} は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました」を出す。
 
-**Architecture:** usecase の読みを、削除済みを断る `port.LiveItem`・`port.LiveProject` から、`root: true` の削除済みも返す `port.EditableItem`・`port.EditableProject` に替える。行を書く直前に `port.ReviveItem`・`port.ReviveProject` を呼び、削除の op を持つすべてのログ(プロジェクトとそのアイテム)に `change.Undo` の行(C3a の `restore`)を、変更と同じ 1 回の保存で書く。取り消したものの表示 ID は context の入れ物に積み、`httpapi` のミドルウェアが成功した応答のヘッダー `Hedgehug-Restored` に載せる。画面は `fetcher` で 1 か所だけヘッダーを読み、トーストを出す。
+**Architecture:** usecase の読みを、削除済みを断る `port.LiveItem`・`port.LiveProject` から、`root: true` の削除済みも返す `port.EditableItem`・`port.EditableProject` に替える。保存(tx)の最初に `port.ReviveItem`・`port.ReviveProject` を呼び、削除の op を持つすべてのログ(プロジェクトとそのアイテム)に `change.Undo` の行(C3a の `restore`)を、変更と同じ 1 回の保存で書く。取り消したものの表示 ID は context の入れ物に積み、`httpapi` のミドルウェアが成功した応答のヘッダー `Hedgehug-Restored` に載せる。画面は `fetcher` で 1 か所だけヘッダーを読み、トーストを出す。
 
 **Tech Stack:** Go 1.27.3(huma v2、net/http)、TypeScript・Svelte(web/packages/api・core、web/app)、Playwright。依存ライブラリは足さない。
 
@@ -51,7 +51,7 @@
 | `PUT projects/{p}/description` | プロジェクト | 取り消す | 4 |
 | `POST projects/{p}/comments`、`PUT`・`DELETE …/comments/{c}` | プロジェクト | 取り消す | 4 |
 | `POST items/{item}/links/refresh` | アイテム | いまのまま 404(実行者が GitHub。C3a-9 は人の行だけを数える) | — |
-| `POST items/{item}/duplicate`、`…/save-as-template` | 複製元・元のアイテム | いまのまま 404(元のログに書かない) | —(save-as-template は Task 5 の Step 6 で tx の中の読みを足す) |
+| `POST items/{item}/duplicate`、`…/save-as-template` | 複製元・元のアイテム | いまのまま 404(元のログに書かない) | —(save-as-template の tx の中の読みは決定 S8) |
 | `POST items/{item}/steps`、`POST items`(親が削除済み) | 親 | いまのまま 404(親のログに書かない。06「親が削除されたとき」で子も削除済みに入る状態を作らない) | — |
 | `DELETE items/{item}`、`DELETE projects/{p}` | 削除済みのもの | いまのまま 404 | — |
 
@@ -66,7 +66,9 @@
 | S5 | 関連の相手が削除済みなら、いまのまま 404。取り消すのは、操作したアイテム(経路の `{item}`)だけ。 | 相手は候補から選んだもので、変更の対象ではない。削除済みを指す関連を作らない |
 | S6 | 取り消しの知らせは、応答ヘッダー `Hedgehug-Restored`(表示 ID)で返す。`httpapi.New` が API の Handler を包むミドルウェアで、context に入れ物を置き、2xx の応答のときだけヘッダーを付ける。画面は `fetcher` で読み、登録した 1 つの受け手(`wireBase.ts` でトーストを出す)に渡す。 | 経路ごとに応答の形が違う。DTO に欄を足すと 30 経路と 30 か所の画面を直すことになる |
 | S7 | `ReviveItem`・`ReviveProject` は ID を受け取り、tx の中で読み直して決める(同じ保存の中で 2 回呼んでも、2 回目は何も書かない)。 | ステータスの変更は自動化で同じアイテムをもう一度読む(`items/automate.go`)。C3a の `undo` と同じく、保存の中で読み直したログで決める |
-| S8 | 調べて見つかった、tx の中で削除済みを確かめていない 4 か所のうち、コメントの編集・削除、作業時間の削除、説明の保存は、この計画の `EditableItem`・`EditableProject` で直る(Task 4)。save-as-template の tx の中の読み(`workspaces/edit.go:35`)は、Task 5 の Step 6 で `port.LiveItem` を足す。 | 調べた結果。前の読みと保存のあいだに別のタブが削除すると、削除済みのものに行を書いて、取り消さないまま残る |
+| S8 | 調べて見つかった、tx の中で削除済みを確かめていない 4 か所のうち、コメントの編集・削除、作業時間の削除、説明の保存は、この計画の `EditableItem`・`EditableProject` で直る(Task 4)。save-as-template の tx の中の読み(`workspaces/edit.go:35`)は、ユーザーの承認を得たら Task 5 の Step 3 で `port.LiveItem` を足す(承認待ち)。 | 調べた結果。前の読みと保存のあいだに別のタブが削除すると、削除済みのものに行を書いて、取り消さないまま残る |
+| S9 | 削除済み(`root: true`)のアイテムでも、祖先のアイテムかプロジェクトが削除済み(別の操作の削除)なら、取り消さず 404。プロジェクトは、ワークスペースが読めることだけを確かめる(ワークスペースの削除はまだない。C3a-10)。 | 08 の決定の表「親が削除済みのときの復元」(アイテムだけ断る)。取り消すと、06「親が削除されたとき」の、削除済みの親の下に生きた子がある状態を作る |
+| S10 | 各 usecase の tx は、最初に `EditableItem`(`EditableProject`)で読んだ削除の印を覚え、すぐ `ReviveItem`(`ReviveProject`)を呼んでから、いまの処理(`LiveItem` などの読み直しを含む)を続ける。何も書かずに返す分かれ道は `return port.Unchanged(覚えた印)` にする。印があればエラーなので、保存ごと取り消しの行も残らない。 | tx は自分の書いたものを読む(`port.Tx`)ので、取り消したあとは既存の読み・重なりの確かめ(関連の snapshot など)がそのまま使える。「行を書く直前に呼ぶ」は、分かれ道の多い usecase(関連・移動)で置き場所がぶれる |
 
 ## Review Focus
 
@@ -85,11 +87,12 @@
 - Delete: `internal/app/port/ids.go`
 - Create: `internal/app/port/revive.go`
 - Test: `internal/app/port/revive_test.go`(パッケージ `port_test`。偽物の Store は `apptest`)
+- Modify: `internal/app/apptest/stores_contract_isolation.go`・`stores_contract.go`(契約の 1 行)
 
 **Interfaces:**
 - Produces:
-  - `func EditableItem(r Reader, id item.ID) (item.Item, error)` — 削除されていないか、`Deleted.Root` が true のアイテムを返す。ない・`root: false` なら `ErrNotFound`。
-  - `func EditableProject(r Reader, id project.ID) (project.Project, error)` — 同じ規則のプロジェクト。
+  - `func EditableItem(r Reader, id item.ID) (item.Item, error)` — 削除されていないか、`Deleted.Root` が true のアイテムを返す。ない・`root: false`・祖先のアイテム(`Place.Parent` をたどる)かプロジェクトが削除済みなら `ErrNotFound`(決定 S9)。
+  - `func EditableProject(r Reader, id project.ID) (project.Project, error)` — 削除されていないか、`Deleted.Root` が true のプロジェクト。ない・`root: false` なら `ErrNotFound`。
   - `func ReviveItem(ctx context.Context, tx Tx, id item.ID) error` — tx の中で読み直し、削除済み(`root: true`)なら、そのプロジェクトのアイテムすべて(`tx.Items().List(プロジェクト)`)のうち、ログに削除の op の行があるものへ `change.Undo(log, op)` を書き、表示 ID を context の入れ物に積む。削除されていなければ何もしない。
   - `func ReviveProject(ctx context.Context, tx Tx, id project.ID) error` — プロジェクト自身とそのアイテムに同じことをする。
   - `func Unchanged(d *change.Deletion) error` — `d` が nil なら nil、そうでなければ `ErrNotFound`(決定 S4 の分かれ道で使う)。
@@ -105,6 +108,13 @@
 - `TestReviveItemOnLiveDoesNothing`: 削除されていないアイテムで呼ぶと、行も `Revived` も増えない。
 - `TestReviveProjectRestoresItems`: プロジェクト(root: true)と下のアイテム(root: false)を同じ op で削除。`ReviveProject` のあと両方が戻り、`Revived` が `[]string{"HH-P1"}`。
 - `TestUnchanged`: `Unchanged(nil) == nil`、`errors.Is(Unchanged(&change.Deletion{}), port.ErrNotFound)`。
+- `TestEditableItemUnderParentDeletedByAnotherOp`: Task を root: true で削除(op1)、そのあと親の Epic を別の Write で root: true で削除(op2。Task には行を書かない)。`EditableItem(r, task)` は `port.ErrNotFound`。
+- `TestEditableItemInProjectDeletedByAnotherOp`: Task を root: true で削除(op1)、そのあとプロジェクトを別の Write で root: true で削除(op2)。`EditableItem(r, task)` は `port.ErrNotFound`。
+
+本物の gitstore でも、利用者の操作の `restore` の行が読めることを、Store の契約に足す(`internal/app/apptest/stores_contract_isolation.go` に書き足し、`stores_contract.go` の表に 1 行足す。apptest にファイルは足さない):
+- `contractUserRestoreSeenInTx`: アイテムを削除したあと、実行者 `change.User("taro")` の 1 回の Write の中で `ReviveItem` を 2 回呼ぶ。2 回目の前に `tx.Items().Get` の `Deleted == nil`、Write のあとログの `restore` の行は 1 つ。
+
+Run(Step 2・4 に加える): `go test ./internal/app/apptest/... ./internal/infra/gitstore/...`
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -123,7 +133,7 @@ Expected: PASS
 - [ ] **Step 5: コミット**
 
 ```bash
-git add internal/app/port
+git add internal/app/port internal/app/apptest
 git commit -m "feat: 削除済みのものへの変更で削除を取り消す口を足す"
 ```
 
@@ -147,16 +157,17 @@ git commit -m "feat: 削除済みのものへの変更で削除を取り消す�
 - `TestRenameDeletedEpicRevivesChildren`: Epic(root: true)と Task(root: false)を同じ op で削除し、Epic を `Rename`。Task も戻る。
 - `TestChangeKindDeletedItemRevives`、`TestReorderDeletedItemRevives`、`TestMoveDeletedItemRevives`: それぞれ成功して `Deleted == nil`。
 - `TestMoveToDeletedParentIsNotFound`: 移動先の親が削除済みなら `port.ErrNotFound`(移すアイテムは削除済みのまま変わらない)。
+- `TestRenameItemUnderParentDeletedLaterIsNotFound`: Task を削除(root: true)したあと、別の保存で親の Epic を削除。Task の `Rename` は `port.ErrNotFound`、Task のログに `restore` がない(決定 S9)。
 
 - [ ] **Step 2: 失敗を確かめる**
 
 Run: `go test ./internal/app/items/ -run 'Deleted|Revive'`
 Expected: FAIL(`ErrNotFound`)
 
-- [ ] **Step 3: 読みを替え、行を書く直前に取り消す**
+- [ ] **Step 3: 読みを替え、tx の最初で取り消す(決定 S10)**
 
-- `rename.go`・`changekind.go`・`reorder.go`: 前の読みを `editableID`、tx の中の自分の読みを `port.EditableItem` にする。行を書かずに返す分かれ道(`rename.go:34`・`reorder.go:52`)は `return port.Unchanged(it.Deleted)`。`Append` の直前に `port.ReviveItem(ctx, tx, id)`。
-- `move.go`: 自分の読み(`:50`・`:67`)だけを `EditableItem` にする。移動先の読み(`:97`・`:113`・`:126`)は `LiveItem`・`LiveProject` のまま。Summary が空で返す分かれ道(`:41`・`:55`)は、削除済みなら `port.ErrNotFound`。
+- `rename.go`・`changekind.go`・`reorder.go`: 前の読みを `editableID` にする。tx の最初で `it, err := port.EditableItem(tx, id)`・`port.ReviveItem(ctx, tx, id)` を呼び、そのあとの処理(`LiveItem` の読み直しを含む)は変えない。行を書かずに返す分かれ道(`rename.go:34`・`reorder.go:52`)は `return port.Unchanged(it.Deleted)`。
+- `move.go`: 前の読み(`:67`)を `EditableItem` に。tx の最初(`:50` の前)で同じく `EditableItem`・`ReviveItem`。移動先の読み(`:97`・`:113`・`:126`)は `LiveItem`・`LiveProject` のまま(削除済みなら 404 で、保存ごと取り消しも残らない)。Summary が空で返す分かれ道は、前の段(`:41`)では削除済みなら `port.ErrNotFound`、tx の中(`:55`)では `port.Unchanged(it.Deleted)`。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -193,9 +204,9 @@ git commit -m "feat: 別の画面で削除されたアイテムのタイトル�
 Run: `go test ./internal/app/items/ ./internal/app/automations/ -run 'Deleted|Revive'`
 Expected: FAIL
 
-- [ ] **Step 3: 読みを替え、行を書く直前に取り消す**
+- [ ] **Step 3: 読みを替え、tx の最初で取り消す(決定 S10)**
 
-`editContext`(`view.go:27`)と `writeValue`(`setproperty.go:114`)と `automate.go:22` の自分の読みを `EditableItem` に。行が 0 のとき(`setproperty.go:39-40`・`:122`、`togglevalue.go:47`)は `port.Unchanged(it.Deleted)`。行を書く直前に `ReviveItem`。`automate.go:39-45` の親の確かめ(削除済みの親は動かさない)は変えない。`automations/apply.go` は `:32`・`:52` を `EditableItem`、`:69-70` を `Unchanged`、`Append` の直前に `ReviveItem`。
+`editContext`(`view.go:27`。呼ぶのは書き込みの `setproperty.go`・`togglevalue.go`・`checkstep.go` だけ)を `EditableItem` に。`writeValue`(`setproperty.go:114`)の tx の最初で `EditableItem`・`ReviveItem` を呼び、`:114` の `LiveItem` はそのあとに残す。行が 0 のとき(`setproperty.go:39-40`・`:122`、`togglevalue.go:47`)は `port.Unchanged(覚えた印)`。`automate.go` は変えない(取り消したあとに呼ばれるので `LiveItem` で読める。`:39-45` の削除済みの親は動かさない)。`automations/apply.go` は `:32` を `EditableItem`、`applyStatus` の最初で `EditableItem`・`ReviveItem`、`:69-70` を `Unchanged`。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -237,11 +248,14 @@ git commit -m "feat: 別の画面で削除されたアイテムのプロパテ�
 Run: `go test ./internal/app/descriptions/ ./internal/app/comments/ ./internal/app/worklogs/ ./internal/app/watching/ -run 'Deleted|Revive'`
 Expected: FAIL
 
-- [ ] **Step 3: 読みを替え、行を書く直前に取り消す**
+- [ ] **Step 3: 読みを替え、tx の最初で取り消す(決定 S10)**
 
-- 前の読み: `descriptions/saveitem.go:31`・`saveproject.go:18`、`comments/service.go:43`・`:53`、`worklogs/service.go:32`、`watching/service.go:21` を `EditableItem`・`EditableProject` に。ただし、同じ関数を一覧・履歴などの読む経路も使っているなら、読む経路には `LiveItem`・`LiveProject` の版を残す(読む経路の 404 は変えない)。
-- tx の中: 説明は `save.go:29` の前に対象を `EditableItem`・`EditableProject` で読み、`:35-36` の分かれ道を `Unchanged`。コメントの編集・削除は `comments/service.go:89-99` の `currentOf` の前に対象を読む。作業時間の削除は `worklogs/delete.go:25` の前に読む。ウォッチは `set.go:29`、行が 0 なら `Unchanged`。
-- どれも `Append` の直前に `ReviveItem`・`ReviveProject`。
+- 前の読み(保存の前の `Stores.Read`):
+  - `descriptions/saveitem.go:31`・`saveproject.go:18` を `EditableItem`・`EditableProject` に(書き込みだけが使う)。`descriptions/get.go` は変えない。
+  - `comments/service.go` の `display(r, t)` は一覧(`list.go`)と投稿の tx(`post.go:31`)が使う。`display` は `LiveItem`・`LiveProject` のまま残し、隣に `editableDisplay(r Reader, t Target) (string, error)`(読みが `EditableItem`・`EditableProject`)を足す。`displayOf`(`:78`、書き込みだけが使う)は `editableDisplay` を呼ぶ。編集・削除(`edit.go`・`delete.go`)は保存の前に `displayOf` を呼んで対象を確かめる。
+  - `worklogs/service.go:32` の `display` は一覧と共用なので残し、`displayOf`(`:44`、追加と削除だけが使う)の中の読みを `EditableItem` にする。
+  - `watching/service.go:21` の `displayOf`(`set.go` だけが使う)を `EditableItem` に。
+- tx の中: どれも最初で `EditableItem`・`EditableProject` と `ReviveItem`・`ReviveProject` を呼ぶ。説明は `save.go:29` の前、コメントは投稿(`post.go:31`)・編集と削除(`service.go:89-99` の `currentOf` の前)、作業時間は追加(`add.go:34`)・削除(`delete.go:25` の前)、ウォッチは `set.go:29`。何も書かずに返す分かれ道(説明 `save.go:35-36`、コメントの編集 `edit.go:34-35`、ウォッチの行が 0)は `port.Unchanged(覚えた印)`。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -281,11 +295,11 @@ git commit -m "feat: 別の画面で削除されたものの説明・コメン�
 Run: `go test ./internal/app/relations/ ./internal/app/githublink/ ./internal/app/workspaces/ -run 'Deleted|Revive'`
 Expected: FAIL
 
-- [ ] **Step 3: 読みを替え、行を書く直前に取り消す**
+- [ ] **Step 3: 読みを替え、tx の最初で取り消す(決定 S10)**
 
-- 関連: snapshot は生きているものだけを持つ(`snapshot.go:42,47`)。自分(経路の `{item}`)だけを `EditableItem` で読み、相手は snapshot のまま確かめる。自分のログか相手のログに書く直前に `ReviveItem(ctx, tx, 自分)`。外すときは、持ち主のログに書く直前に自分を戻す。
-- リンク: `readItem`(`links.go:54`)の自分を `EditableItem` にし、`links.go:66` のプロジェクトは `LiveProject` のまま(`root: false` のアイテムは `EditableItem` が断るので、プロジェクトが削除済みのときはここまで来ない)。追加・外すの書き込みの直前に `ReviveItem`。取り直し(`write.go`)は `readItem` を使うので、取り直しの側だけ `LiveItem` の版を呼ぶ。
-- テンプレートとして保存: tx の中で、元のアイテムを `port.LiveItem` で読み直す(決定 S8)。
+- 関連: snapshot は生きているものだけを持つ(`snapshot.go:42,47`)。前の読み(`service.go:26-29`)では、自分(経路の `{item}`)を `EditableItem` で確かめ、相手は snapshot のまま確かめる。tx の中は、最初に自分を `EditableItem`・`ReviveItem` してから snapshot を作る(取り消した自分が snapshot に入り、重なりの確かめはいまのまま働く)。外すとき(`remove.go:36-37` の分かれ道)は `port.Unchanged(覚えた印)`。
+- リンク: `readItem`(`links.go:54`)に、自分を `EditableItem` で読む版 `readEditableItem` を足し、追加(`link_add.go:79`)と外す(`link_remove.go:29`)の tx の最初で `ReviveItem` を呼んでから使う。プロジェクト(`links.go:66`)は `LiveProject` のまま。祖先やプロジェクトが削除済みのアイテムは `EditableItem` が断る(決定 S9)。取り直し(`write.go:71`)は `readItem` のまま。`link_remove.go:34-35` の分かれ道は `Unchanged`。
+- テンプレートとして保存(ユーザーの承認を得た場合だけ。決定 S8): tx の中(`workspaces/edit.go:35` の前)で、元のアイテムを `port.LiveItem` で読み直す。承認がなければ、Step 1 の `TestSaveAsTemplateDeletedInTxIsNotFound` も書かない。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -318,9 +332,9 @@ git commit -m "feat: 別の画面で削除されたアイテムの関連とリ�
 Run: `go test ./internal/app/projects/ -run 'Deleted|Revive'`
 Expected: FAIL
 
-- [ ] **Step 3: 読みを替え、行を書く直前に取り消す**
+- [ ] **Step 3: 読みを替え、tx の最初で取り消す(決定 S10)**
 
-前の読み(各ファイルの `s.Get`)を `s.editable` に、`edit.go:21` を `EditableProject` に。何も変わらない分かれ道(`setdate.go:37-38`・`setowner.go:32-33`・`setstatus.go:23-24`・`rename.go:30-31`・`removerepo.go:24-25`)は `port.Unchanged(p.Deleted)`。`edit.go:29` の `Append` の直前に `ReviveProject`(行が 0 なら呼ばない)。`rename.go:23` の兄弟の読みは `LiveProjects` のまま。
+前の読み(各ファイルの `s.Get`)を `s.editable` に。何も変わらない分かれ道(`setdate.go:37-38`・`setowner.go:32-33`・`setstatus.go:23-24`・`rename.go:30-31`・`removerepo.go:24-25`)は前の段の値で決まるので `port.Unchanged(p.Deleted)`。`edit.go` の `save` は tx の最初(`:21`)で `EditableProject`・`ReviveProject` を呼び、行を作る関数が 0 行を返したとき(`:29` の前)は `port.Unchanged(覚えた印)`。`rename.go:23` の兄弟の読みは `LiveProjects` のまま。
 
 - [ ] **Step 4: 通ることを確かめる**
 
