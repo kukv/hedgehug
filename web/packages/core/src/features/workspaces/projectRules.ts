@@ -186,7 +186,9 @@ export interface RuleProject {
 
 export type RuleSection = "statuses" | "workflow" | "templates" | "automation";
 
-function hasRules(r: ProjectRules, section: RuleSection): boolean {
+// hasRules は、プロジェクトのルールに区画 section の行があるか(「ワークスペースの設定に戻す」の有効・無効)。
+// 自動化の専用ルールは含まない(ルールの一覧から数える)。
+export function hasRules(r: ProjectRules, section: RuleSection): boolean {
   switch (section) {
     case "statuses":
       return r.hiddenStatuses.length > 0;

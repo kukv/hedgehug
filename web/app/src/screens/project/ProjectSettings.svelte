@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { type ProjectView, readOnlyNote } from "@hedgehug/core";
+  import { type ProjectView, readOnlyNote, rulesHeading } from "@hedgehug/core";
   import { Button, Input } from "@hedgehug/ui";
   import { untrack } from "svelte";
   import { projectEditor } from "../../projectEditor";
   import { projectDelete } from "../../wireActions";
+  import RulesStatuses from "./RulesStatuses.svelte";
+  import RulesWorkflow from "./RulesWorkflow.svelte";
 
-  // プロジェクトの設定タブ(02「画面の見出しと構成」)。区画は「名前」と「削除」の 2 つ。
+  // プロジェクトの設定タブ(02「画面の見出しと構成」)。区画の並びは 02 の「設定のタブ」。
   interface Props {
     view: ProjectView;
   }
@@ -49,6 +51,7 @@
 </script>
 
 <div class="settings">
+  <p class="heading">{rulesHeading(view.workspace.name)}</p>
   <section class="sec">
     <h2>名前</h2>
     <Input
@@ -62,6 +65,9 @@
       {onkeydown}
     />
   </section>
+  <RulesStatuses {view} />
+  <RulesWorkflow {view} />
+  <!-- テンプレート・自動化・別のワークスペースへ移動の区画は、ここに並ぶ(この順で、削除の前)。 -->
   <section class="sec danger">
     <h2>削除</h2>
     {#if $note?.projectId === p.id}
@@ -90,6 +96,11 @@
   h2 {
     font-size: 14px;
     margin: 0;
+  }
+  .heading {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--muted);
   }
   .text {
     margin: 0;

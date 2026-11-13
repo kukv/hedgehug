@@ -11,6 +11,7 @@ export {
 export { prefixConfirm, prefixExamples, prefixHelp } from "./features/workspaces/general";
 export {
   allowedTargets,
+  hasRules,
   noTemplate,
   type RuleProject,
   type RuleSection,
