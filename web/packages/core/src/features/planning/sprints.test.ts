@@ -65,6 +65,10 @@ describe("pill", () => {
     );
   });
 
+  it("is null for a running sprint without the end day", () => {
+    expect(pill(sprint({ end: "" }), "2026-11-14")).toBeNull();
+  });
+
   it("says the end has passed after the end day", () => {
     expect(pill(sprint(), "2026-11-16")).toBe("期限を過ぎています");
   });
@@ -99,6 +103,22 @@ describe("progressText", () => {
   it("writes the points the way the detail panel does", () => {
     const c = card({ total: { count: 2, points: 2.5 }, done: { count: 1, points: 0.5 } });
     expect(progressText(c)).toBe("1 / 2 件 · 0.5 / 2.5 pt");
+  });
+
+  it("does not show the noise of adding decimals", () => {
+    const c = card({ total: { count: 2, points: 0.1 + 0.2 }, done: { count: 0, points: 0 } });
+    expect(progressText(c)).toBe("0 / 2 件 · 0 / 0.3 pt");
+    const closed = card(
+      { total: { count: 2, points: 0.1 + 0.2 }, done: { count: 2, points: 0.1 + 0.2 } },
+      {
+        state: "closed",
+        confirmed: {
+          committed: { count: 3, points: 0.7 + 0.1 },
+          completed: { count: 2, points: 0.1 + 0.2 },
+        },
+      },
+    );
+    expect(progressText(closed)).toBe("2 / 2 件 · 0.3 / 0.3 pt · 確定 0.3/0.8 pt");
   });
 });
 
@@ -148,6 +168,15 @@ describe("startDisabledReason", () => {
 
   it("is null without a running sprint", () => {
     expect(startDisabledReason(overview(null))).toBeNull();
+  });
+
+  it("looks at the cards before the overview is read", () => {
+    expect(startDisabledReason(null, [card({}, { state: "planned" })])).toBeNull();
+    expect(startDisabledReason(null, [card()])).toBe("実行中のスプリントを先に完了してください");
+  });
+
+  it("follows the overview once it is read", () => {
+    expect(startDisabledReason(overview(null), [card()])).toBeNull();
   });
 });
 

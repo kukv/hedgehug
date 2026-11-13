@@ -36,13 +36,14 @@ const dayNumber = (ymd: string) => {
 // pill は、実行中のカードの見出しに添えるピル。終了日の当日は「残り 1 日」。実行中でなければ null。
 // today は、このマシンの時刻帯での今日(YYYY-MM-DD)。
 export function pill(s: Sprint, today: string): string | null {
-  if (s.state !== "active") return null;
+  if (s.state !== "active" || s.end === "") return null;
   const left = dayNumber(s.end) - dayNumber(today) + 1;
   return left >= 1 ? `残り ${left} 日` : "期限を過ぎています";
 }
 
-// ポイントは、詳細パネルのポイントと同じ書き方(数をそのまま)。
-const pt = (n: number) => String(n);
+// ポイントは、詳細パネルのポイントと同じ書き方(数をそのまま)。小数の足し算の誤差(0.1 + 0.2)は出さない。
+// ポイントの小数の桁に上限はないので、決まった桁では丸めない。
+const pt = (n: number) => String(Number(n.toPrecision(12)));
 
 // progressText は、進捗のバーの横の文。中止は API が除いて数えている。完了したスプリントには確定値を続ける。
 export function progressText(c: SprintCard): string {
@@ -64,8 +65,13 @@ export function periodText(s: Sprint, thisYear: number): string {
 }
 
 // startDisabledReason は、「開始」を押せない理由(実行中のスプリントがあるとき)。押せるなら null。
-export function startDisabledReason(o: PlanningOverview): string | null {
-  return o.active ? "実行中のスプリントを先に完了してください" : null;
+// 概要 o をまだ読めていない(null)あいだは、見えているカードで決める。
+export function startDisabledReason(
+  o: PlanningOverview | null,
+  cards: SprintCard[] = [],
+): string | null {
+  const running = o ? o.active !== null : cards.some((c) => c.sprint.state === "active");
+  return running ? "実行中のスプリントを先に完了してください" : null;
 }
 
 export interface SprintMenuEntry {

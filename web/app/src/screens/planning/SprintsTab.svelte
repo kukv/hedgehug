@@ -48,10 +48,14 @@
     $loaded && $loaded.storeId === storeId && $loaded.workspaceId === workspaceId ? $loaded : null,
   );
   // 「開始」の理由は、見出しの「実行中」と同じ概要から決める(WorkspaceScreen が開いている)。
+  // 概要をまだ読めていないあいだは、見えているカードで決める。
   const startReason = $derived(
-    $overview && $overview.storeId === storeId && $overview.workspaceId === workspaceId
-      ? startDisabledReason($overview.overview)
-      : null,
+    startDisabledReason(
+      $overview && $overview.storeId === storeId && $overview.workspaceId === workspaceId
+        ? $overview.overview
+        : null,
+      view?.cards,
+    ),
   );
   // 日付は、時刻の更新(30 秒ごと)で読み直す。日付が変わると「残り N 日」が変わる(01「日付と時刻」)。
   const today = $derived(dayOf($syncNow));
