@@ -296,3 +296,17 @@ func TestItemRowsGitHubLinkTitleIsOneLineAndOnlyLinksFields(t *testing.T) {
 		t.Errorf("rows =\n%q\nwant\n%q", got, want)
 	}
 }
+
+func TestHistorySprintRelease(t *testing.T) {
+	log := logOf(
+		step{"O1", at(0), taro, item.Create(item.Item{ID: "T", Place: item.Place{Workspace: "W", Project: "P", Number: 1}, Kind: item.Task, Rank: "V", Title: "画面"})},
+		step{"O2", at(1), taro, change.NewSet("sprint", nil, "S1")},
+		step{"O2", at(1), taro, change.NewSet("rank", "V", "W")},
+		step{"O3", at(2), taro, change.NewSet("release", nil, "R1")},
+		step{"O4", at(3), taro, change.NewSet("sprint", "S1", nil)},
+	)
+	want := []string{"太郎: スプリントを変更", "太郎: リリースを変更", "太郎: スプリントを変更", "太郎: 作成"}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}

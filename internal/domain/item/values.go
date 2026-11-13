@@ -39,6 +39,8 @@ func multi(log []change.Record) func(f string) bool {
 func readValues(it *Item, s change.State) {
 	it.Status = id(s.Values["status"])
 	it.Priority = id(s.Values["priority"])
+	it.Sprint = id(s.Values[SprintField])
+	it.Release = id(s.Values[ReleaseField])
 	it.Systems = ids(s.Lists["systems"])
 	it.Assignee = str(s.Values["assignee"])
 	it.Start = str(s.Values["start"])

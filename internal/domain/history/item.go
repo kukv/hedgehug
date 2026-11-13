@@ -91,6 +91,10 @@ func setText(r change.Record, c Context) (string, bool) {
 		return fmt.Sprintf("種類を %s から %s に変更", from, to), true
 	case "place":
 		return placeText(r)
+	case item.SprintField:
+		return "スプリントを変更", true
+	case item.ReleaseField:
+		return "リリースを変更", true
 	case "rank":
 		return "", false
 	}
