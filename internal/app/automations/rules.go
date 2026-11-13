@@ -87,11 +87,11 @@ func (s Service) Delete(ctx context.Context, store port.StoreID, ws workspace.ID
 			}
 			return ruleText(rd, r.Scope, r.Name, "を削除")
 		},
-		func(_ port.Reader, _ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
+		func(_ port.Reader, _ workspace.Settings, set projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
 			if _, err := find(rules, id); err != nil {
 				return nil, err
 			}
-			return []change.Draft{automation.DeleteDraft(id)}, nil
+			return append([]change.Draft{automation.DeleteDraft(id)}, projectrule.RuleDeleteDrafts(set, id)...), nil
 		})
 }
 

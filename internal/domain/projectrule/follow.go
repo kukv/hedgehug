@@ -33,6 +33,18 @@ func StatusDeleteDrafts(set Set, id change.ID) []change.Draft {
 	return ds
 }
 
+// RuleDeleteDrafts は、ワークスペースのルール rule の削除に、プロジェクトの外すルールを追従させる行。
+// プロジェクト ID の順に、disabled_rules から rule を remove する。
+func RuleDeleteDrafts(set Set, rule change.ID) []change.Draft {
+	var ds []change.Draft
+	for _, p := range slices.Sorted(maps.Keys(set)) {
+		if slices.Contains(set[p].Disabled, rule) {
+			ds = append(ds, change.NewRemove(DisabledField(p), rule))
+		}
+	}
+	return ds
+}
+
 // TemplateDropDrafts は、テンプレート id の削除・種類の変更に、プロジェクト別のルールを追従させる行
 // (B5a-16)。プロジェクト ID の順に、使うテンプレートの remove、id を指す種類ごとの既定(種類の順)を
 // 設定なしに戻す set の順で出す。

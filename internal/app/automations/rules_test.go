@@ -222,6 +222,41 @@ func TestUpdateChecksOnlyChangedStatuses(t *testing.T) {
 	}
 }
 
+// ワークスペースのルールを消すと、同じ保存で、プロジェクトの「外すルール」からもその ID を除く。
+func TestDeleteRemovesTheRuleFromProjectsDisabledRules(t *testing.T) {
+	svc, rec := setup(t)
+	r, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, doneRule())
+	if err != nil {
+		t.Fatal(err)
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "外す"}
+	if err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.DisabledField(apptest.SampleProject), r.ID))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Delete(t.Context(), store, apptest.SampleWorkspace, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	err = rec.Read(t.Context(), store, func(rd port.Reader) error {
+		log, err := rd.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace})
+		if err != nil {
+			return err
+		}
+		if got := projectrule.FromLog(log).Of(apptest.SampleProject).Disabled; len(got) != 0 {
+			t.Errorf("Disabled = %v", got)
+		}
+		last := log[len(log)-1]
+		if last.F != projectrule.DisabledField(apptest.SampleProject) || last.Op != log[len(log)-2].Op {
+			t.Errorf("not in the same save: %+v", last)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUpdateKeepsTheStoredScope(t *testing.T) {
 	svc, rec := setup(t)
 	r := seedScoped(t, rec)
