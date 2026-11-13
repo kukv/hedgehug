@@ -331,6 +331,27 @@ components:
         - name
         - prefix
       type: object
+    DeleteItemPreview:
+      additionalProperties: false
+      properties:
+        count:
+          description: 下にある、削除されていないアイテムの数
+          format: int64
+          type: integer
+        kinds:
+          description: 下にあるものの種類。Epic・Story・Task・Bug・Step の順で重ねない
+          items:
+            type: string
+          type: array
+        retentionDays:
+          description: その Store の削除済みの保持日数
+          format: int64
+          type: integer
+      required:
+        - count
+        - kinds
+        - retentionDays
+      type: object
     DescribeBody:
       additionalProperties: false
       properties:
@@ -1920,6 +1941,29 @@ paths:
           description: Error
       summary: アイテムを作成
   /api/stores/{store}/items/{item}:
+    delete:
+      operationId: delete-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムと、その下のものを削除する
     get:
       operationId: get-item
       parameters:
@@ -2147,6 +2191,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムのコメントを編集する
+  /api/stores/{store}/items/{item}/delete-preview:
+    get:
+      operationId: get-item-delete-preview
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteItemPreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを削除したときに一緒に消えるものと保持日数を返す
   /api/stores/{store}/items/{item}/description:
     get:
       operationId: get-item-description

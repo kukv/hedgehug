@@ -255,6 +255,15 @@ export interface CreateWorkspace {
   prefix: string;
 }
 
+export interface DeleteItemPreview {
+  /** 下にある、削除されていないアイテムの数 */
+  count: number;
+  /** 下にあるものの種類。Epic・Story・Task・Bug・Step の順で重ねない */
+  kinds: string[];
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+}
+
 export interface DescribeBody {
   /** 編集を始めたときの説明。保存するときの共通の祖先になる */
   base: string;
@@ -1398,6 +1407,32 @@ return fetcher<Item>(getCreateItemUrl(store),
 
 
 
+export const getDeleteItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}`
+}
+
+/**
+ * @summary アイテムと、その下のものを削除する
+ */
+export const deleteItem = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteItemUrl(store,item),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getGetItemUrl = (store: string,
     item: string,) => {
 
@@ -1641,6 +1676,32 @@ return fetcher<Comment>(getEditItemCommentUrl(store,item,comment),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(commentText)
+  }
+);}
+
+
+
+export const getGetItemDeletePreviewUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/delete-preview`
+}
+
+/**
+ * @summary アイテムを削除したときに一緒に消えるものと保持日数を返す
+ */
+export const getItemDeletePreview = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<DeleteItemPreview> => {
+
+  return fetcher<DeleteItemPreview>(getGetItemDeletePreviewUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
