@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, openSettings, prefixOf, tokenUrl, unique } from "./helpers";
 
-// ワークフローとテンプレートの通しのテスト(B3)。サーバーは 3 つの幅で共有なので、
+// ワークフローとテンプレートの通しのテスト(B3)。サーバーは同じ worker のほかのテストと共有なので、
 // ワークスペースの名前・接頭辞・テンプレートの名前は、幅とやり直しの回数、乱数で毎回変える。
 
 test("the workflow tab restricts and frees a status's transitions", async ({ page }, info) => {

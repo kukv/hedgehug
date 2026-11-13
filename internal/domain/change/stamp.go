@@ -69,6 +69,36 @@ func group(log []Record, k string) []Record {
 	return g
 }
 
+// groups は、log の行を項目ごとに振り分けたもの。create 以外の行をキーごとに持ち、create の行は別に持つ。
+type groups struct {
+	rows    map[string][]Record
+	creates []Record
+}
+
+// groupAll は、log を 1 回だけ読んで、項目ごとに振り分ける。
+func groupAll(log []Record) groups {
+	g := groups{rows: map[string][]Record{}}
+	for _, r := range log {
+		if r.T == Create {
+			g.creates = append(g.creates, r)
+			continue
+		}
+		k := key(r)
+		g.rows[k] = append(g.rows[k], r)
+	}
+	return g
+}
+
+// of は、項目 k の行と、create の行。group(log, k) と同じ行の集まり(並びは先端の判定に関係しない)。
+// k の行がなければ、create の行だけ。
+func (g groups) of(k string) []Record {
+	rows := g.rows[k]
+	if len(rows) == 0 {
+		return g.creates
+	}
+	return append(slices.Clone(g.creates), rows...)
+}
+
 func tipsOf(g []Record) []Record {
 	seen := map[ID]bool{}
 	for _, r := range g {

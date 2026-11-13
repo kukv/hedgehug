@@ -37,6 +37,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"members have one log with an empty id", contractRefs},
 		{"projects and items are listed", contractLists},
 		{"item list follows a move in the same write", contractListFollowsMove},
+		{"project list follows a move in the same write", contractProjectListFollowsMove},
 		{"workspace settings round trip", contractSettings},
 		{"item values and deletes round trip", contractItemValues},
 		{"descriptions round trip", contractDescription},

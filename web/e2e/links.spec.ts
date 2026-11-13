@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, type TestInfo, test } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
 // gh は、e2e のサーバーの偽の GitHub に PR・Issue を置く(D3-23)。

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl } from "./helpers";
 
 test("the sidebar lists stores and opens a workspace that survives a reload", async ({

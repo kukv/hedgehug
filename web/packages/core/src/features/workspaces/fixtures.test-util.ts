@@ -253,7 +253,7 @@ export function fakeWorkspacesPort(): FakeWorkspacesPort {
         const without = tos.filter((t) => t !== to);
         wf[from] = allowed ? [...without, to] : without;
       }),
-    createTemplate: (s, w, input) =>
+    createTemplate: (_s, _w, input) =>
       write("createTemplate", (): WorkspaceTemplate => ({ id: "t-new", ...clone(input) })),
     updateTemplate: (_s, _w, _id, _input) => write("updateTemplate", () => undefined),
     deleteTemplate: (_s, _w, _id) => write("deleteTemplate", () => undefined),

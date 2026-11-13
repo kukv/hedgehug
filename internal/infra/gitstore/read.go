@@ -30,6 +30,9 @@ type view struct {
 	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
 	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す。
 	places map[item.ID]project.ID
+	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースに
+	// あると分かっているプロジェクトをログから作り直さない。Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
+	projectPlaces map[project.ID]workspace.ID
 }
 
 // log は、呼び出し側が変えても、覚えた作業ツリーの行(base)とまだ書いていない行(pending)が
@@ -155,11 +158,30 @@ func (r projects) Get(id project.ID) (project.Project, error) {
 }
 
 func (r projects) List(ws workspace.ID) ([]project.Project, error) {
-	out, err := list(r.v, change.KindProject, r.Get, func(p project.Project) bool { return p.Place.Workspace == ws })
+	out, err := list(r.v, change.KindProject, r.inWorkspace(ws), func(p project.Project) bool { return p.Place.Workspace == ws })
 	slices.SortFunc(out, func(a, b project.Project) int {
 		return cmp.Or(strings.Compare(a.Rank, b.Rank), strings.Compare(string(a.ID), string(b.ID)))
 	})
 	return out, err
+}
+
+// inWorkspace は Get と同じだが、この view で ws と別のワークスペースにあると分かっているプロジェクトは、ログから
+// 作らずに port.ErrNotFound(list は飛ばす)を返す。作ったプロジェクトのワークスペースは覚える。
+func (r projects) inWorkspace(ws workspace.ID) func(project.ID) (project.Project, error) {
+	return func(id project.ID) (project.Project, error) {
+		if q, ok := r.v.projectPlaces[id]; ok && q != ws {
+			return project.Project{}, port.ErrNotFound
+		}
+		p, err := r.Get(id)
+		if err != nil {
+			return p, err
+		}
+		if r.v.projectPlaces == nil {
+			r.v.projectPlaces = map[project.ID]workspace.ID{}
+		}
+		r.v.projectPlaces[id] = p.Place.Workspace
+		return p, nil
+	}
 }
 
 type items struct{ v *view }
