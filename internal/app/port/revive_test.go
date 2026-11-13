@@ -16,6 +16,9 @@ import (
 
 const reviveStore port.StoreID = "team"
 
+// missingProject は、Store にないプロジェクトの内部 ID。
+const missingProject project.ID = "01NOSUCHPR000000000000001"
+
 var user = port.Operation{Actor: change.User("taro"), Summary: "削除"}
 
 // reviveStores は、サンプル(Epic HH-1、その下の Task HH-2、プロジェクト HH-P1)を入れた偽物の Store。
@@ -119,7 +122,7 @@ func TestEditableProjectReturnsRootDeleted(t *testing.T) {
 		if p, err := port.EditableProject(r, apptest.SampleProject); err != nil || p.Deleted == nil {
 			t.Errorf("project = %+v, %v", p.Deleted, err)
 		}
-		if _, err := port.EditableProject(r, "01NOSUCHPR000000000000001"); !errors.Is(err, port.ErrNotFound) {
+		if _, err := port.EditableProject(r, missingProject); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("missing: err = %v, want ErrNotFound", err)
 		}
 		return nil
@@ -129,12 +132,14 @@ func TestEditableProjectReturnsRootDeleted(t *testing.T) {
 	}
 	s = reviveStores(t)
 	deleteIn(t, s, nil, map[project.ID]bool{apptest.SampleProject: false})
-	_ = s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+	if err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
 		if _, err := port.EditableProject(r, apptest.SampleProject); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("root: false: err = %v, want ErrNotFound", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReviveItemRestoresTheWholeOp(t *testing.T) {
@@ -234,24 +239,28 @@ func TestEditableItemUnderParentDeletedByAnotherOp(t *testing.T) {
 	s := reviveStores(t)
 	deleteIn(t, s, map[item.ID]bool{apptest.SampleTask: true}, nil)
 	deleteIn(t, s, map[item.ID]bool{apptest.SampleEpic: true}, nil)
-	_ = s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+	if err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
 		if _, err := port.EditableItem(r, apptest.SampleTask); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("err = %v, want ErrNotFound", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestEditableItemInProjectDeletedByAnotherOp(t *testing.T) {
 	s := reviveStores(t)
 	deleteIn(t, s, map[item.ID]bool{apptest.SampleTask: true}, nil)
 	deleteIn(t, s, nil, map[project.ID]bool{apptest.SampleProject: true})
-	_ = s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+	if err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
 		if _, err := port.EditableItem(r, apptest.SampleTask); !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("err = %v, want ErrNotFound", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReviveItemUnderDeletedParentDoesNothing(t *testing.T) {
