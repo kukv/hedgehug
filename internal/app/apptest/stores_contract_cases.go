@@ -215,3 +215,31 @@ func contractListFollowsMove(t *testing.T, s port.Stores, id port.StoreID) {
 		return nil
 	})
 }
+
+// contractProjectListFollowsMove は、Projects().List で一度読んだプロジェクトを同じ Tx で別のワークスペースへ動かすと、
+// そのあとの List が動いた先で返すことを確かめる(実装がプロジェクトのワークスペースを覚えていても)。
+func contractProjectListFollowsMove(t *testing.T, s port.Stores, id port.StoreID) {
+	const other workspace.ID = "01CONTRACTWS00000000000009"
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if ps, err := tx.Projects().List(other); err != nil || len(ps) != 0 {
+			t.Errorf("other before = %+v, %v", ps, err)
+		}
+		before, err := tx.Projects().List(cWorkspace.ID)
+		if err != nil || len(before) != 1 {
+			t.Fatalf("before = %+v, %v", before, err)
+		}
+		place := before[0].Place
+		place.Workspace = other
+		if err := tx.WriteProjects().Append(cProject.ID, change.NewSet("place", before[0].Place, place)); err != nil {
+			return err
+		}
+		if ps, err := tx.Projects().List(other); err != nil || len(ps) != 1 || ps[0].ID != cProject.ID {
+			t.Errorf("other after = %+v, %v", ps, err)
+		}
+		if ps, err := tx.Projects().List(cWorkspace.ID); err != nil || len(ps) != 0 {
+			t.Errorf("left = %+v, %v", ps, err)
+		}
+		return nil
+	})
+}

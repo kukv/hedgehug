@@ -26,6 +26,11 @@ type view struct {
 	// places は、この view で読んだアイテムのプロジェクト。items.List は、別のプロジェクトにあると分かっている
 	// アイテムをログから作り直さない。Tx でアイテムに行を足したら、そのアイテムの分を消す(gitstore と同じ)。
 	places map[item.ID]project.ID
+	// projectPlaces は、この view で読んだプロジェクトのワークスペース。projects.List は、別のワークスペースにあると
+	// 分かっているプロジェクトをログから作り直さない(ワークスペースごとに List を呼ぶ読み取りが、プロジェクトの数の
+	// 2 乗にならないように。通しのテストのサーバーは、ワークスペースが多い Store を、アイテムを読むたびに全部読む)。
+	// Tx でプロジェクトに行を足したら、そのプロジェクトの分を消す。
+	projectPlaces map[project.ID]workspace.ID
 	// retentionDays は、Store の削除済みの保持日数(Stores.SetRetentionDays。既定は 30)。
 	retentionDays int
 }
@@ -131,7 +136,18 @@ func (r projects) Get(id project.ID) (project.Project, error) {
 func (r projects) List(ws workspace.ID) ([]project.Project, error) {
 	var out []project.Project
 	for _, id := range r.v.ids(change.KindProject) {
-		if p, err := r.Get(id); err == nil && p.Place.Workspace == ws {
+		if w, ok := r.v.projectPlaces[id]; ok && w != ws {
+			continue
+		}
+		p, err := r.Get(id)
+		if err != nil {
+			continue
+		}
+		if r.v.projectPlaces == nil {
+			r.v.projectPlaces = map[project.ID]workspace.ID{}
+		}
+		r.v.projectPlaces[id] = p.Place.Workspace
+		if p.Place.Workspace == ws {
 			out = append(out, p)
 		}
 	}

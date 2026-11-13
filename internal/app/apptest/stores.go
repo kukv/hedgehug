@@ -11,8 +11,9 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
-// Stores は port.Stores のメモリ上の偽物。同じ Store の Read と Write は 1 つずつ順に行い、
-// 別の Store どうしは互いを待たない。
+// Stores は port.Stores のメモリ上の偽物。同じ Store の Write は 1 つずつ順に行い、Read と重ねない。
+// 同じ Store の Read どうしと、別の Store どうしは互いを待たない(通しのテストのサーバーは、多くの画面の読み取りを
+// 同時に受けるので、Read を 1 つずつにすると、読み取りが列に並んで画面の反映が遅れる)。
 type Stores struct {
 	mu     sync.Mutex // stores の出し入れだけを守る。Store の中身は store.mu が守る
 	clock  port.Clock
@@ -20,9 +21,9 @@ type Stores struct {
 	stores map[port.StoreID]*store
 }
 
-// store は 1 つの Store。mu を持っているあいだだけ logs を読み書きする。
+// store は 1 つの Store。mu の読み取りのロックで logs を読み、書き込みのロックで書く。
 type store struct {
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	logs map[change.Ref][]change.Record
 	// texts は、説明の本文(ない説明は入れない)。
 	texts map[change.Ref]string
@@ -52,40 +53,42 @@ func (s *Stores) AddStore(id port.StoreID) {
 
 // SetRetentionDays は、Store の削除済みの保持日数を変える(テスト用。本物は store.yaml の retention_days)。
 func (s *Stores) SetRetentionDays(id port.StoreID, days int) {
-	st, err := s.open(id)
+	st, err := s.find(id)
 	if err != nil {
 		panic(fmt.Sprintf("apptest: SetRetentionDays: %v", err))
 	}
+	st.mu.Lock()
 	defer st.mu.Unlock()
 	st.retentionDays = days
 }
 
-// open は、Store のロックを取って返す。呼んだ側が st.mu.Unlock する。
-func (s *Stores) open(id port.StoreID) (*store, error) {
+// find は、Store を返す。ロックは呼んだ側が取る。
+func (s *Stores) find(id port.StoreID) (*store, error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	st, ok := s.stores[id]
-	s.mu.Unlock()
 	if !ok {
 		return nil, port.ErrStoreNotFound
 	}
-	st.mu.Lock()
 	return st, nil
 }
 
 func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader) error) error {
-	st, err := s.open(id)
+	st, err := s.find(id)
 	if err != nil {
 		return err
 	}
-	defer st.mu.Unlock()
+	st.mu.RLock()
+	defer st.mu.RUnlock()
 	return fn(&view{base: st.logs, baseTexts: st.texts, retentionDays: st.retentionDays})
 }
 
 func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
-	st, err := s.open(id)
+	st, err := s.find(id)
 	if err != nil {
 		return err
 	}
+	st.mu.Lock()
 	defer st.mu.Unlock()
 	logs := st.logs
 	t := &tx{
@@ -124,9 +127,9 @@ func (s *Stores) Versions(context.Context) (map[port.StoreID]string, error) {
 	s.mu.Unlock()
 	out := make(map[port.StoreID]string, len(ids))
 	for id, st := range ids {
-		st.mu.Lock()
+		st.mu.RLock()
 		out[id] = strconv.Itoa(st.writes)
-		st.mu.Unlock()
+		st.mu.RUnlock()
 	}
 	return out, nil
 }
@@ -152,8 +155,11 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	}
 	recs := change.Stamp(t.log(ref), drafts, t.meta, t.ids.New)
 	t.pending[ref] = append(t.pending[ref], recs...)
-	if ref.Kind == change.KindItem {
+	switch ref.Kind {
+	case change.KindItem:
 		delete(t.places, ref.ID) // 動いたかもしれない
+	case change.KindProject:
+		delete(t.projectPlaces, ref.ID)
 	}
 	return nil
 }

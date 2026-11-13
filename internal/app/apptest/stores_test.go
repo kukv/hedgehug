@@ -98,6 +98,40 @@ func TestAddStoreTwicePanics(t *testing.T) {
 	}
 }
 
+// 同じ Store の Read どうしは互いを待たない(通しのテストのサーバーは、多くの画面の読み取りを同時に受ける)。
+// Write は Read と重ならない。
+func TestReadsOfOneStoreRunTogether(t *testing.T) {
+	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	s.AddStore("S1")
+	inner := make(chan error, 1)
+	wrote := make(chan error, 1)
+	err := s.Read(t.Context(), "S1", func(port.Reader) error {
+		go func() { inner <- s.Read(t.Context(), "S1", func(port.Reader) error { return nil }) }()
+		select {
+		case err := <-inner:
+			if err != nil {
+				return err
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("a second Read waited for the first one")
+		}
+		go func() { wrote <- apptest.Sample(t.Context(), s, "S1") }()
+		select {
+		case err := <-wrote:
+			t.Errorf("a Write ran while a Read was running (%v)", err)
+			wrote <- err
+		case <-time.After(50 * time.Millisecond):
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-wrote; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSetRetentionDays(t *testing.T) {
 	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
 	s.AddStore("S1")
