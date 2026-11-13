@@ -11,6 +11,14 @@ export {
   itemDeleteFailedMessage,
 } from "./features/items/delete";
 export {
+  createItemKind,
+  type ItemKind,
+  type ItemKindDeps,
+  type KindState,
+  kindFailedMessage,
+  kindOptions,
+} from "./features/items/kind";
+export {
   type ItemMenuContext,
   type ItemMenuId,
   itemMenu,

@@ -62,7 +62,7 @@ navigation.start();
 export const links = createLinks(navigation, token);
 export { toasts };
 
-const itemsPort = createItemsPort();
+export const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
 // 詳細パネルとプロジェクトの概要の、説明・コメントなどの口と、メンションの表示に使うメンバーの一覧。
 export const notes = createNotesPort();
