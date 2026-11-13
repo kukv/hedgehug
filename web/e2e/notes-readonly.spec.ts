@@ -64,3 +64,17 @@ test("a read-only store's overview disables the property fields and the reposito
       .first(),
   ).toBeDisabled();
 });
+
+test("a read-only store's panel disables adding and removing links, and copying the mark works", async ({
+  page,
+}) => {
+  await page.goto(tokenUrl("/s/readonly/i/HH-2"));
+  const github = page
+    .getByRole("region", { name: "詳細パネル" })
+    .getByRole("region", { name: "GitHub" });
+  for (const name of ["PR をリンク", "Issue をリンク"]) {
+    await expect(github.getByRole("button", { name })).toBeDisabled();
+    await expect(github.getByRole("button", { name })).toHaveAttribute("title", note);
+  }
+  await expect(github.getByRole("button", { name: "PR 用の印をコピー" })).toBeEnabled();
+});
