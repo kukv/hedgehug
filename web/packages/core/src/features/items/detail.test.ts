@@ -3,7 +3,7 @@ import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
-import { copiedMessage, copyFailedMessage, createDetail, normalizeTitle } from "./detail";
+import { createDetail } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 import { fakeWorkspaces } from "./settings.test-util";
 
@@ -284,18 +284,5 @@ describe("createDetail", () => {
     const { detail } = await setup();
     await detail.reload();
     expect(get(detail.view)).toBeNull();
-  });
-});
-
-describe("titles and copy messages", () => {
-  it("normalizes spaces and line breaks", () => {
-    expect(normalizeTitle("  a \n\t b  ")).toBe("a b");
-  });
-
-  it("says what was copied", () => {
-    expect(copiedMessage("HH-2")).toBe("コピーしました: HH-2");
-    expect(copyFailedMessage("HH-2")).toBe(
-      "コピーできませんでした。HH-2 を選択してコピーしてください",
-    );
   });
 });

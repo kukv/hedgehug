@@ -1,85 +1,18 @@
 import { Refused } from "../../model/errors";
 import type { Item, Kind } from "../../model/item";
-import type { WorkspaceSettings } from "../../model/workspace";
-import type { CatalogPort } from "../../port/catalog";
-import type { ItemsPort } from "../../port/items";
-import type { WorkspacesPort } from "../../port/workspaces";
-import { get, type Readable, readonly, writable } from "../../reactive/store";
-import type { Catalog } from "../catalog/catalog";
-import type { Option } from "../projects/createDialog";
+import { get, readonly, writable } from "../../reactive/store";
 import { itemDisplayId } from "../router/route";
-import type { Toasts } from "../toasts/toasts";
-import type { StructureRow } from "../workspaces/templateApply";
-import {
-  type CreateContext,
-  type Here,
-  parentCandidates,
-  pickParent,
-  startValues,
-} from "./createDefaults";
+import { parentCandidates, pickParent, startValues } from "./createDefaults";
 import { createContextLoader, type WorkspaceContext } from "./createDialogLoad";
 import { carried, missing, parentOptions, viewOf, wsOptions } from "./createDialogOptions";
+import type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
 import { applyDefault, applyToForm, othersOf } from "./createTemplate";
-import { initialValues, shownValues, switchWorkspace, type Values } from "./createValues";
-import type { PropertyRow } from "./properties";
+import { initialValues, shownValues, switchWorkspace } from "./createValues";
 
-// アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。検査はサーバーに任せ、断りを赤字で出す
+export type { ItemDialog, ItemDialogDeps, ItemDialogState, ItemForm } from "./createDialogTypes";
+
+// アイテムの作成ダイアログ(02「アイテムの作成」のうち A2 の分)。型は createDialogTypes.ts。検査はサーバーに任せ、断りを赤字で出す
 // (A2 の計画の決定 14)。プロパティの値は A3 前半(決定 25)。テンプレートは A3 後半(A3b)。スプリントは F。
-
-export interface ItemForm {
-  workspaceId: string;
-  projectId: string;
-  kind: Kind;
-  parentId: string | null;
-  title: string;
-  keepOpen: boolean;
-  // values は、プロパティの内部 ID → 入力。隠した欄の値も覚えておく。
-  values: Values;
-  // templateId は、当てはめているテンプレート。空は「なし」。
-  templateId: string;
-  // description は説明の欄。templateDescription は、いま当てはめているテンプレートの説明(なければ空)。
-  description: string;
-  templateDescription: string;
-}
-
-export interface ItemDialogState {
-  form: ItemForm;
-  workspaces: Option[];
-  projects: Option[];
-  parents: Option[];
-  // parentMissing は、親の候補がないときの赤字。Epic と、候補があるときは空。
-  parentMissing: string;
-  // preview は「ID は HH-13 になります。」。
-  preview: string;
-  // rows は、種類で使うプロパティの行。settings は、そのワークスペースの設定。
-  rows: PropertyRow[];
-  // templates は、テンプレートのセレクトの選択肢(使えるものがなければ空で、欄を出さない)。
-  templates: Option[];
-  // structure は「一緒に作るもの」。テンプレートが「なし」、または子も Step もないときは null。
-  structure: { heading: string; rows: StructureRow[] } | null;
-  settings: WorkspaceSettings;
-  error: string;
-}
-
-export interface ItemDialog {
-  state: Readable<ItemDialogState | null>;
-  open(ctx?: CreateContext): Promise<void>;
-  update(patch: Partial<ItemForm>): Promise<void>;
-  submit(): Promise<void>;
-  close(): void;
-}
-
-export interface ItemDialogDeps {
-  catalog: Catalog;
-  items: ItemsPort;
-  workspaces: WorkspacesPort;
-  catalogPort: CatalogPort;
-  toasts: Toasts;
-  here(): Here;
-  openProjectDialog(workspaceId: string): void;
-  // onCreated は、作ったあと。keptOpen は「続けて作成」がオンだったか。
-  onCreated(item: Item, keptOpen: boolean): void;
-}
 
 export const kinds: Kind[] = ["Epic", "Story", "Task", "Bug", "Step"];
 

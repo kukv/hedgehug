@@ -1,5 +1,4 @@
 import {
-  createAccountsPort,
   createCatalogPort,
   createItemsPort,
   createNotesPort,
@@ -11,8 +10,6 @@ import {
   setToken,
 } from "@hedgehug/api";
 import {
-  createAccountForm,
-  createAccountList,
   createCatalog,
   createComments,
   createDetail,
@@ -25,11 +22,9 @@ import {
   createSaveAsTemplate,
   createScreen,
   createShell,
-  createSignIn,
   createSync,
   createSystemInfo,
   createTabSignals,
-  createToasts,
   createWatch,
   createWorklogs,
   createWorkspaceDialog,
@@ -49,6 +44,8 @@ import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
 import { held, online as isOnline, tabId, visible } from "./tab";
+import { accountForm, accountList, signIn } from "./wireAccounts";
+import { toasts } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 
@@ -63,11 +60,7 @@ export { drafts };
 export const navigation = createNavigation(browserHistory(), drafts);
 navigation.start();
 export const links = createLinks(navigation, token);
-const timer = {
-  set: (fn: () => void, ms: number) => setTimeout(fn, ms),
-  clear: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-};
-export const toasts = createToasts(timer);
+export { toasts };
 
 const itemsPort = createItemsPort();
 const catalogPort = createCatalogPort();
@@ -152,26 +145,7 @@ export const screen = createScreen({
   openItem: (storeId, itemId) => void detail.open(storeId, itemId),
 });
 
-// 設定「アカウントとメンバー」の GitHub アカウント(07)。3 つは互いを呼ぶので、呼ぶのは作ったあと。
-const accountsPort = createAccountsPort();
-export const accountList = createAccountList({
-  accounts: accountsPort,
-  toasts,
-  reauthDevice: (account) => signIn.reauth(account),
-});
-export const accountForm = createAccountForm({
-  accounts: accountsPort,
-  toasts,
-  signIn: (target, code) => signIn.begin(target, code),
-  onSaved: () => void accountList.reload(),
-});
-export const signIn = createSignIn({
-  accounts: accountsPort,
-  toasts,
-  timer,
-  back: (target, failure) => accountForm.back(target, failure),
-  onDone: () => void accountList.reload(),
-});
+export { accountForm, accountList, signIn };
 
 export const itemDialog = createItemDialog({
   catalog,

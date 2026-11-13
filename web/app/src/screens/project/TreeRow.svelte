@@ -1,19 +1,17 @@
 <script lang="ts">
   import {
-    categoryOf,
     childKindOf,
-    dueLabel,
     type Item,
     itemDisplayId,
     type Member,
     readOnlyNote,
-    stepProgress,
     type TreeNode,
     type WorkspaceSettings,
   } from "@hedgehug/core";
-  import { Avatar, BlockedBadge, IconButton, KindIcon } from "@hedgehug/ui";
+  import { Avatar, IconButton, KindIcon } from "@hedgehug/ui";
   import StatusButton from "../item/StatusButton.svelte";
   import Self from "./TreeRow.svelte";
+  import TreeRowMeta from "./TreeRowMeta.svelte";
 
   // ツリーの 1 行と、その下の行(04「ツリー」の「行」のうち、A2 の計画の決定 17 の分)。
   interface Props {
@@ -55,10 +53,6 @@
   const it = $derived(node.item);
   const open = $derived(!collapsed.has(it.id));
   const child = $derived(childKindOf(it.kind));
-  const progress = $derived(
-    it.kind === "Epic" || it.kind === "Step" ? null : stepProgress(items, it.id, settings),
-  );
-  const due = $derived(dueLabel(it.end, categoryOf(settings, it.status), today));
   const member = $derived(members.find((x) => x.login.toLowerCase() === it.assignee.toLowerCase()));
 </script>
 
@@ -86,23 +80,7 @@
     onauxclick={(e) => onopen(e, it)}
     >{it.title}</a
   >
-  {#if it.blocked}
-    <BlockedBadge />
-  {/if}
-  {#if progress}
-    <span class="progress">{progress.done}/{progress.total}</span>
-  {/if}
-  {#if due}
-    <span
-      class="due"
-      class:overdue={due.emphasis === "overdue"}
-      class:today={due.emphasis === "today"}
-      >{due.text}</span
-    >
-  {/if}
-  {#if it.points !== null}
-    <span class="points">{it.points} pt</span>
-  {/if}
+  <TreeRowMeta {it} {items} {settings} {today} />
   <StatusButton
     status={it.status}
     {settings}
@@ -173,19 +151,6 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--muted);
-  }
-  .progress,
-  .due,
-  .points {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  .overdue {
-    color: var(--danger);
-  }
-  .today {
-    font-weight: 600;
   }
   .row-title {
     color: var(--ink);
