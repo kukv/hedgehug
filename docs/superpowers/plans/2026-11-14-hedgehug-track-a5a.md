@@ -2552,7 +2552,7 @@ git commit -m "feat: アイテムの別のワークスペースへの移動(同�
 - 人(Review Focus 5): `fn` の中で、(0) で集めたアイテム・ログ・移動元のメンバー・移動元の設定と、`tx.Members().List()`(移動先のメンバー)で `transfer.People(...)` を呼ぶ。返った人(1 人 1 回)を、移動先の同じ保存で `member.Join(ログイン名)` と、表示名がログイン名と違うときの `member.Rename(ログイン名, ログイン名, 表示名)` で足す。返った `PeopleMap` をそのまま `Remap` に渡す(移動元のログイン名がここに引けなければ、`Remap` が値を捨てる)。
 - `moved_in` の `Names`(`names.go` の `namesOf(log []change.Record, vocab []workspace.Settings) map[change.ID]string`。`vocab` は移動元のワークスペースの設定が先頭、続いて行の作成・場所の `set` に現れる移動元の Store のほかのワークスペースの設定。名前は先にあるものから引く): 写す行の `f` が指すプロパティの内部 ID(組み込みは `f` がキー、追加は `fields/<ID>`、`systems`・`status`・`priority` を含む)と名前、行の `from`・`to` の JSON の文字列(配列なら要素。`create` の行は見ない)のうち、`vocab` の値の内部 ID(ステータス・優先度・関連システム・各選択肢)と一致するものと、その名前。`Moves` は、移すアイテムの行の、ワークスペースの変わる場所の `set` のうち同じ操作の転送記録が移動元にあるものの、操作・旧 ID・移動元のワークスペース名・プロジェクト名(引けなければ空)。
 - 移動元の保存の中で、移すアイテムの `Remove` が `ErrNotFound`(別の経路で先に消えた・移った)なら、その保存は失敗として扱い、戻す。
-- 戻しは、写したフォルダの `Remove` と、その移動で足したメンバー(`fn` が最後に呼ばれたときに `People` が返した人)の `change.NewRemove("members", login)`。`number` の行は戻さない(番号は再利用しないので害がない)。戻しも失敗したら `errors.Join(元のエラー, 戻しのエラー)` を返す。
+- 戻しは、写したフォルダの `Remove` と、その移動で足したメンバー(`fn` が最後に呼ばれたときに `People` が返した人)の `change.NewRemove("members", login)`。`number` の行は戻さない(番号は再利用しないので害がない)。戻しが送れなかった・失敗したら `*transfers.UndoError` を返す(A5a-6)。
 
 #### 6-1 移動先の保存・移動元の保存・外との関連・人
 
