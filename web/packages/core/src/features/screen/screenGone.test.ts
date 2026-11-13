@@ -36,6 +36,8 @@ async function setup(start: string) {
 describe("createScreen when the shown project is gone", () => {
   it("moves to the overview of its workspace, without pushing history", async () => {
     const { screen, catalog, stack, gone } = await setup("/s/work/p/HH-P2/settings");
+    // 別の Store(ro)にも同じ HH-P2 がある。それに解決されず、概要へ移る。
+    expect(catalog.project("S2", "S2-P2")).toBeDefined();
     expect(get(screen.current)).toMatchObject({ name: "project", projectId: "S1-P2" });
     gone.add("S1-P2");
     await catalog.load();
@@ -59,13 +61,12 @@ describe("createScreen when the shown project is gone", () => {
     expect(stack).toEqual(["/"]);
   });
 
-  it("moves to the overview even when the same ID resolves in another Store", async () => {
-    const { screen, catalog, stack, gone } = await setup("/s/work/p/HH-P2/overview");
-    gone.add("S1-P2");
-    await catalog.load();
+  it("keeps showing the project when only the tab changes", async () => {
+    const { screen, navigation, stack } = await setup("/s/work/p/HH-P2/overview");
+    navigation.go({ name: "project", store: "work", project: "HH-P2", tab: "tree" });
     await flush();
-    expect(stack).toEqual(["/s/work/w/HH/overview"]);
-    expect(get(screen.current)).toMatchObject({ name: "workspace", storeId: "S1" });
+    expect(stack.at(-1)).toBe("/s/work/p/HH-P2/tree");
+    expect(get(screen.current)).toMatchObject({ name: "project", projectId: "S1-P2", tab: "tree" });
   });
 
   it("keeps showing a project that is still there", async () => {
