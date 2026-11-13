@@ -14,9 +14,17 @@ import (
 // tokyo は、テストのこのマシンの時刻帯(Asia/Tokyo。tzdata に頼らないよう固定の差で作る)。
 var tokyo = time.FixedZone("Asia/Tokyo", 9*60*60)
 
-// jst は、2026 年 11 月 day 日 hour:min(Asia/Tokyo)。Today が now.Local() を使うので、now には
-// UTC と日付が同じになる 9 時以降を使う。
+// jst は、2026 年 11 月 day 日 hour:min(Asia/Tokyo)。
 func jst(day, hour, minute int) time.Time { return time.Date(2026, 11, day, hour, minute, 0, 0, tokyo) }
+
+// localTokyo は、このテストの間だけ、このマシンの時刻帯(time.Local)を Asia/Tokyo にする。
+// time.Local を書き換えるので、このパッケージのテストは t.Parallel を使わない。
+func localTokyo(t *testing.T) {
+	t.Helper()
+	old := time.Local
+	time.Local = tokyo
+	t.Cleanup(func() { time.Local = old })
+}
 
 // stampAt は、drafts を時刻 when の op の行としてログの続きにする(テスト用)。
 func stampAt(log []change.Record, when time.Time, ds ...change.Draft) []change.Record {
@@ -136,6 +144,17 @@ func TestValueAtOrder(t *testing.T) {
 	}
 }
 
+func TestValueAtPrevAfterTUsesEarlierRow(t *testing.T) {
+	// 逆向きの時計のずれ: t より前の行の prev が、t 以降の行を指す。t 以降の行は除くので、
+	// 前の行は先端として残り、その値になる(いまの振る舞いを固定する)。
+	log := created(jst(1, 10, 0), item.Item{ID: "I1", Status: "Todo"})
+	log = setStatus(log, jst(3, 1, 0), "Todo", "Doing")
+	log = setStatus(log, jst(2, 12, 0), "Doing", "Done")
+	if v, ok := planning.ValueAt(log, "status", jst(3, 0, 0)); !ok || string(v) != `"Done"` {
+		t.Fatalf("t より前の行の値: %s %v", v, ok)
+	}
+}
+
 // confirmWorks は、TestConfirmCommitted の (a)〜(g) と、計画にも実績にも入る 4 pt のアイテム。
 func confirmWorks(t *testing.T) []planning.Work {
 	t.Helper()
@@ -163,6 +182,7 @@ func confirmWorks(t *testing.T) []planning.Work {
 }
 
 func TestConfirmCommitted(t *testing.T) {
+	localTokyo(t)
 	got := planning.Confirm(confirmWorks(t), "W", sprint1(), settings(), jst(15, 15, 0))
 	// 計画は (a) 3 pt・(g) 0 pt・2 日に足した 4 pt。(b)(c)(d)(e)(f) と Epic は入らない。
 	if want := (planning.Totals{Points: 3 + 0 + 4, Count: 3}); got.Committed != want {
@@ -175,6 +195,7 @@ func TestConfirmCommitted(t *testing.T) {
 }
 
 func TestConfirmCommittedStartAfterToday(t *testing.T) {
+	localTokyo(t)
 	// (h) 開始日が明日(同期で届いた場合)は、今日の終わりで数える。
 	s := sprint1()
 	s.Start = "2026-11-16"
@@ -190,6 +211,7 @@ func TestConfirmCommittedStartAfterToday(t *testing.T) {
 }
 
 func TestConfirmCompleted(t *testing.T) {
+	localTokyo(t)
 	day1 := jst(1, 10, 0)
 	done := created(day1, item.Item{ID: "A", Sprint: "S1", Status: "Done", Points: pt(3)})
 	canceled := created(day1, item.Item{ID: "B", Sprint: "S1", Status: "Canceled", Points: pt(2)})
@@ -207,6 +229,25 @@ func TestConfirmCompleted(t *testing.T) {
 	}
 	// 計画は中止を除く 4 件(設定にないステータスは未着手として数える)。
 	if want := (planning.Totals{Points: 3 + 5 + 1 + 8, Count: 4}); got.Committed != want {
+		t.Fatalf("Committed = %+v, want %+v", got.Committed, want)
+	}
+}
+
+func TestConfirmNowInUTC(t *testing.T) {
+	localTokyo(t)
+	// now を UTC で渡しても、今日と日の終わりはこのマシンの時刻帯(Asia/Tokyo)で決める。
+	// 11/16 8:00(JST)は UTC では 11/15。開始日 11/17 は今日(JST の 11/16)より後なので、11/16 の終わり(JST)で数える。
+	s := sprint1()
+	s.Start = "2026-11-17"
+	now := jst(16, 8, 0).In(time.UTC)
+	// JST の 11/16 20:00 に入れた行(時計の進んだマシン)。JST の 11/16 の終わりより前なので入る。
+	evening := created(jst(15, 10, 0), item.Item{ID: "A", Status: "Todo", Points: pt(3)})
+	evening = setSprint(evening, jst(16, 20, 0), nil, "S1")
+	// JST の 11/17 3:00 に入れた行。UTC の 11/16 の終わり(JST の 11/17 9:00)より前だが、JST の終わりより後なので入らない。
+	late := created(jst(15, 10, 0), item.Item{ID: "B", Status: "Todo", Points: pt(2)})
+	late = setSprint(late, jst(17, 3, 0), nil, "S1")
+	got := planning.Confirm([]planning.Work{work(t, evening), work(t, late)}, "W", s, settings(), now)
+	if want := (planning.Totals{Points: 3, Count: 1}); got.Committed != want {
 		t.Fatalf("Committed = %+v, want %+v", got.Committed, want)
 	}
 }

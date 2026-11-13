@@ -28,7 +28,7 @@ func Category(st workspace.Settings, status change.ID) workspace.Category {
 	return workspace.CategoryTodo
 }
 
-// EndOfDay は、日付 ymd の終わり時点(loc の翌日の 0 時。F1-9)。読めない日付は時刻ゼロ。
+// EndOfDay は、日付 ymd の終わり時点(loc の翌日の 0 時。F1-9 では loc はこのマシンの時刻帯)。読めない日付は時刻ゼロ。
 func EndOfDay(ymd string, loc *time.Location) time.Time {
 	d, err := time.ParseInLocation(time.DateOnly, ymd, loc)
 	if err != nil {
@@ -64,9 +64,10 @@ func Amount(it item.Item) float64 {
 // Confirm は、スプリント s の完了の確定値(F1-10)。works は削除済みを含んでよい。
 // 計画は、開始日(今日より後なら今日)の終わり時点でスプリントに入っていて、その時点の分類が中止でないもの。
 // 実績は、いまスプリントに入っていて分類が完了のもの。量はどちらもいまのポイント。
+// 今日も日の終わりも、now の時刻帯によらず、このマシンの時刻帯(time.Local)で決める(F1-9)。
 func Confirm(works []Work, ws workspace.ID, s Sprint, st workspace.Settings, now time.Time) Confirmed {
 	day := min(s.Start, Today(now))
-	t := EndOfDay(day, now.Location())
+	t := EndOfDay(day, time.Local)
 	var c Confirmed
 	for _, w := range works {
 		if !counted(w.Item, ws) {
