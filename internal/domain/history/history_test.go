@@ -121,7 +121,7 @@ func TestItemRowsOfASystemsListIncludingAConcurrentChange(t *testing.T) {
 	base := item.Item{ID: "T", Place: item.Place{Workspace: "W", Project: "P", Number: 1}, Kind: item.Task, Rank: "V", Title: "画面", Systems: []change.ID{web.ID}}
 	log := logOf(
 		step{"O1", at(0), taro, item.Create(base)},
-		step{"O2", at(1), taro, change.NewAdd("systems", api.ID)}, // R002。prev は作成の R001
+		step{"O2", at(1), taro, change.NewAdd("systems", api.ID)},                                   // R002。prev は作成の R001
 		step{"O9", at(5), taro, change.NewAdd("relations", item.Relation{Type: "blocks", To: "X"})}, // 出さない
 	)
 	// hanako が、taro の追加を見ずに(prev が作成だけ)api を取り除く。時刻はあと。

@@ -412,6 +412,23 @@ components:
           format: uri
           type: string
       type: object
+    HistoryRow:
+      additionalProperties: false
+      properties:
+        at:
+          description: 時刻(ミリ秒までの RFC 3339)
+          type: string
+        text:
+          description: 変更の文(作成・タイトルを「…」に変更 など)
+          type: string
+        who:
+          description: 操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー)
+          type: string
+      required:
+        - who
+        - text
+        - at
+      type: object
     ImpactOutputBody:
       additionalProperties: false
       properties:
@@ -2126,6 +2143,37 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの説明を保存する
+  /api/stores/{store}/items/{item}/history:
+    get:
+      operationId: get-item-history
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/HistoryRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの履歴を新しい順で返す
   /api/stores/{store}/items/{item}/move-up:
     post:
       operationId: move-item-up
@@ -2893,6 +2941,37 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトの説明を保存する
+  /api/stores/{store}/projects/{project}/history:
+    get:
+      operationId: get-project-history
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/HistoryRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの履歴を新しい順で返す
   /api/stores/{store}/projects/{project}/items:
     get:
       operationId: list-project-items

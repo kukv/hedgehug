@@ -301,6 +301,15 @@ export interface ErrorModel {
   type?: string;
 }
 
+export interface HistoryRow {
+  /** 時刻(ミリ秒までの RFC 3339) */
+  at: string;
+  /** 変更の文(作成・タイトルを「…」に変更 など) */
+  text: string;
+  /** 操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー) */
+  who: string;
+}
+
 export interface ImpactOutputBody {
   /** @nullable */
   lines: string[] | null;
@@ -1649,6 +1658,32 @@ return fetcher<DescribeResult>(getDescribeItemUrl(store,item),
 
 
 
+export const getGetItemHistoryUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/history`
+}
+
+/**
+ * @summary アイテムの履歴を新しい順で返す
+ */
+export const getItemHistory = async (store: string,
+    item: string, options?: Parameters<typeof fetcher>[1]): Promise<HistoryRow[] | null> => {
+
+  return fetcher<HistoryRow[] | null>(getGetItemHistoryUrl(store,item),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getMoveItemUpUrl = (store: string,
     item: string,) => {
 
@@ -2454,6 +2489,32 @@ return fetcher<DescribeResult>(getDescribeProjectUrl(store,project),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(describeBody)
+  }
+);}
+
+
+
+export const getGetProjectHistoryUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/history`
+}
+
+/**
+ * @summary プロジェクトの履歴を新しい順で返す
+ */
+export const getProjectHistory = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<HistoryRow[] | null> => {
+
+  return fetcher<HistoryRow[] | null>(getGetProjectHistoryUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
