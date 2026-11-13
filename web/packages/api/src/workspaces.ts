@@ -1,5 +1,6 @@
 import {
   type AutomationRule,
+  type AutomationRuleInput,
   type ChildKind,
   type ProjectRules,
   type PropertyType,
@@ -145,6 +146,12 @@ const toRule = (r: ApiRule): AutomationRule => r;
 // 入力は 6 項目だけを送る。API の入力は追加の項目(id・enabled)を断る。
 const toRuleBody = ruleForm;
 
+// 作成だけは、プロジェクト専用のルールの scope も送る(編集では変えられないので送らない)。
+const toCreateRuleBody = (input: AutomationRuleInput) => ({
+  ...ruleForm(input),
+  ...(input.scope ? { scope: input.scope } : {}),
+});
+
 export function createWorkspacesPort(): WorkspacesPort {
   return {
     get: (s, w) => call(async () => toDetail(s, await getWorkspace(s, w))),
@@ -221,7 +228,7 @@ export function createWorkspacesPort(): WorkspacesPort {
         };
       }),
     createRule: (s, w, input) =>
-      call(async () => toRule(await createAutomationRule(s, w, toRuleBody(input)))),
+      call(async () => toRule(await createAutomationRule(s, w, toCreateRuleBody(input)))),
     updateRule: (s, w, id, input) => call(() => updateAutomationRule(s, w, id, toRuleBody(input))),
     deleteRule: (s, w, id) => call(() => deleteAutomationRule(s, w, id)),
     setRuleEnabled: (s, w, id, enabled) =>

@@ -1,11 +1,13 @@
 <script lang="ts">
   import {
+    type AutomationRuleInput,
     automationHelp,
     deleteRuleBody,
     deleteRuleTitle,
     readOnlyNote,
     recentEmpty,
     recentRows,
+    ruleCreated,
     ruleDeleted,
     ruleRows,
     rulesEmpty,
@@ -41,6 +43,18 @@
       return;
     }
     void workspaceSettings.run((p, st, w) => p.setRuleEnabled(st, w, id, on));
+  }
+
+  // ダイアログの保存。断られたら、その文言を返してダイアログの中に出す。
+  async function save(input: AutomationRuleInput): Promise<string | null> {
+    const id = editingRule?.id;
+    let refusal: string | null = null;
+    const ok = await workspaceSettings.run(
+      (p, st, w) => (id ? p.updateRule(st, w, id, input) : p.createRule(st, w, input)),
+      id ? undefined : ruleCreated,
+      (message) => (refusal = message),
+    );
+    return ok ? null : (refusal ?? "");
   }
 
   function remove() {
@@ -101,9 +115,13 @@
 
 {#if editing !== null && automation}
   <RuleDialog
-    state={s}
+    settings={s.detail.settings}
+    members={s.members}
+    readOnly={s.readOnly}
     rules={automation.rules}
     rule={editingRule}
+    statuses={s.detail.settings.statuses.map((v) => ({ value: v.id, label: v.name }))}
+    onsave={save}
     onclose={() => (editing = null)}
   />
 {/if}

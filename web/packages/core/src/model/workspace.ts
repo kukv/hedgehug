@@ -154,13 +154,13 @@ export interface AutomationRuleInput {
   action: AutomationAction;
   // ステータスの ID、ログイン名、または @none(未割り当て)
   value: string;
+  // このプロジェクトだけのルールならプロジェクトの ID。空か未指定ならワークスペース全体。作成のときだけ送る
+  scope?: string;
 }
 
 export interface AutomationRule extends AutomationRuleInput {
   id: string;
   enabled: boolean;
-  // このプロジェクトだけのルールならプロジェクトの ID。空か未指定ならワークスペース全体
-  scope?: string;
 }
 
 export interface AutomationRun {

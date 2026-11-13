@@ -6,37 +6,39 @@
     type AutomationTrigger,
     actionOptions,
     allMergedLabel,
+    type Member,
     newRuleForm,
     readOnlyNote,
-    ruleCreated,
     ruleForm,
     ruleFormRefusal,
-    type SettingsState,
     triggerOptions,
     valueOptions,
+    type WorkspaceSettings,
     withAction,
     withTrigger,
   } from "@hedgehug/core";
   import { Button, Checkbox, Dialog, Input, Select } from "@hedgehug/ui";
-  import { workspaceSettings } from "../../wire";
 
   // ルールの作成と編集のダイアログ(03「きっかけとすること」)。断りはダイアログの中に赤字で出す。
+  // 保存の中身(どこへ送るか、scope)は呼び出し側の onsave が決め、断りの文言か、成功なら null を返す。
   interface Props {
-    state: SettingsState;
+    settings: WorkspaceSettings;
+    members: Member[];
+    readOnly: boolean;
     rules: AutomationRule[];
     rule: AutomationRule | null; // null は新規
+    statuses: { value: string; label: string }[]; // きっかけとすることのステータスの選択肢
+    onsave: (input: AutomationRuleInput) => Promise<string | null>;
     onclose: () => void;
   }
 
-  let { state: s, rules, rule, onclose }: Props = $props();
+  let { settings, members, readOnly, rules, rule, statuses, onsave, onclose }: Props = $props();
 
-  const settings = $derived(s.detail.settings);
-  const start = (): AutomationRuleInput => (rule ? ruleForm(rule) : newRuleForm(s.detail.settings));
+  const start = (): AutomationRuleInput => (rule ? ruleForm(rule) : newRuleForm(settings));
   let form = $state(start());
   let error = $state("");
-  const disabled = $derived(s.readOnly);
-  const title = $derived(s.readOnly ? readOnlyNote : undefined);
-  const statusOptions = $derived(settings.statuses.map((v) => ({ value: v.id, label: v.name })));
+  const disabled = $derived(readOnly);
+  const title = $derived(readOnly ? readOnlyNote : undefined);
 
   async function save() {
     const refusal = ruleFormRefusal(form, rules, rule?.id ?? "");
@@ -44,13 +46,9 @@
       error = refusal;
       return;
     }
-    const input = { ...form, name: form.name.trim() };
-    const ok = await workspaceSettings.run(
-      (p, st, w) => (rule ? p.updateRule(st, w, rule.id, input) : p.createRule(st, w, input)),
-      rule ? undefined : ruleCreated,
-      (message) => (error = message),
-    );
-    if (ok) onclose();
+    const message = await onsave({ ...form, name: form.name.trim() });
+    if (message === null) onclose();
+    else error = message;
   }
 </script>
 
@@ -69,7 +67,7 @@
       <Select
         label="ステータス"
         value={form.triggerStatus}
-        options={statusOptions}
+        options={statuses}
         {disabled}
         {title}
         onchange={(v) => (form = { ...form, triggerStatus: v })}
@@ -89,7 +87,7 @@
     <Select
       label="値"
       value={form.value}
-      options={valueOptions(form, settings, s.members)}
+      options={valueOptions(form, settings, members)}
       {disabled}
       {title}
       onchange={(v) => (form = { ...form, value: v })}
