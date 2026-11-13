@@ -50,7 +50,7 @@ func CollectProject(p project.ID, all []item.Item) ProjectSet {
 				continue
 			}
 			set, err := Collect(e.ID, all)
-			if err != nil { // 親のない Step は移せない形。集めない
+			if err != nil { // 親のない Step は Collect が断る。移せない形なので、下のものも含めて集めない
 				continue
 			}
 			set.Outside = nil
@@ -91,6 +91,7 @@ func NumberProject(s ProjectSet, next int) map[item.ID]int {
 		for id, n := range Number(e.Root, e.Below, next) {
 			out[id] = n
 		}
+		// Below は Descendants で集めた、Root から辿れる重複のないものだけ。Number は Root と Below の全員に 1 つずつ振る。
 		next += 1 + len(e.Below)
 	}
 	return out
