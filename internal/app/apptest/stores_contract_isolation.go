@@ -185,6 +185,20 @@ func checkTransferRefused(t *testing.T, s port.Stores, id port.StoreID, rec tran
 	}
 }
 
+// 時刻を渡した転送記録は、その時刻のまま残る(移動先の moved_in と同じ時刻にそろえるため)。
+func contractTransferAt(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	rec := transfer.Record{Entity: transfer.EntityItem, Target: cItem.ID, Old: "HH-1", New: "MB-3", ToStore: "01OTHERSTORE", At: at}
+	mustWrite(t, s, id, taro, func(tx port.Tx) error { return tx.WriteTransfers().Append(rec) })
+	mustRead(t, s, id, func(r port.Reader) error {
+		if got, err := r.Transfers().List(); err != nil || len(got) != 1 || !got[0].At.Equal(at) {
+			t.Errorf("transfers = %+v, %v, want at %v", got, err, at)
+		}
+		return nil
+	})
+}
+
 func contractPurgedEmpty(t *testing.T, s port.Stores, id port.StoreID) {
 	mustWrite(t, s, id, taro, writeFixture)
 	mustRead(t, s, id, func(r port.Reader) error {

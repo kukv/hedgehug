@@ -292,7 +292,10 @@ func (w transferWriter) Append(r transfer.Record) error {
 	if err := port.CheckTransfer(r); err != nil {
 		return err
 	}
-	r.ID, r.Op, r.At, r.By = w.t.ids.New(), w.t.meta.Op, w.t.meta.At, w.t.meta.Actor.By()
+	if r.At.IsZero() {
+		r.At = w.t.meta.At
+	}
+	r.ID, r.Op, r.By = w.t.ids.New(), w.t.meta.Op, w.t.meta.Actor.By()
 	w.t.transfers = append(w.t.transfers, r)
 	return nil
 }

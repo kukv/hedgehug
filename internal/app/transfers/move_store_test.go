@@ -170,6 +170,19 @@ func TestMoveAcrossStoresCopiesTheFolderAndRemovesTheSource(t *testing.T) {
 	}
 }
 
+// 移動元の転送記録の日時は、移動先の moved_in の日時と同じ(移した時刻は 1 つ)。
+func TestMoveAcrossStoresWritesTheSameTimeToTheRecordAndMovedIn(t *testing.T) {
+	f := crossFixture(t)
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err != nil {
+		t.Fatal(err)
+	}
+	mi := transfer.MovedInOf(logOf(t, f.rec, store2, change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}))
+	recs := recordsOf(t, f.rec, store1)
+	if len(mi) != 1 || len(recs) == 0 || !recs[0].At.Equal(mi[0].At) {
+		t.Errorf("記録 = %+v, moved_in = %+v(日時が同じ)", recs, mi)
+	}
+}
+
 // Review Focus 4: 移すものの外(削除済みを含む)との関連は両側から消え、中の関連は残る。
 func TestMoveAcrossStoresCutsRelationsToOutsideItemsOnBothSides(t *testing.T) {
 	f := crossFixture(t)

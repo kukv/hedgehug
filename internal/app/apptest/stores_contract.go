@@ -50,6 +50,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"automation rows in a GitHub operation are by the bot", contractRuleRowsGitHub},
 		{"automation rows need a person or GitHub and a valid rule id", contractRuleRowsRefused},
 		{"transfer records are appended and listed", contractTransfers},
+		{"a transfer record keeps the time it was given", contractTransferAt},
 		{"purged is empty without a purge", contractPurgedEmpty},
 		{"remove deletes an item folder", contractRemove},
 		{"remove and import refuse in the same write", contractRemoveImportRules},

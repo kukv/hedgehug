@@ -224,7 +224,8 @@ type TransferReader interface {
 
 // TransferWriter は、転送記録に行を足す。
 type TransferWriter interface {
-	// Append は、行を足す。ID・Op・At・By は Tx が埋める(Op・At はその操作のもの、By は実行者)。
+	// Append は、行を足す。ID・Op・By は Tx が埋める(Op はその操作のもの、By は実行者)。At は、空ならその操作の
+	// 時刻を、渡せばその時刻を書く(別の Store への移動は、移動先の moved_in と同じ時刻を渡す)。
 	// Entity が transfer.EntityItem・EntityProject・EntityWorkspace のどれでもない・Target が change.ValidID で
 	// ない・ToStore が空なら、何も足さず ErrInvalidOperation を包んだエラー。
 	Append(r transfer.Record) error

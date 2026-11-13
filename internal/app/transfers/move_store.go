@@ -190,7 +190,7 @@ func (m *crossMove) writeSource(tx port.Tx) error {
 	for _, it := range items {
 		errs = append(errs, tx.WriteTransfers().Append(transfer.Record{
 			Entity: transfer.EntityItem, Target: it.ID, Old: it.DisplayID(m.src.ws.Prefix), New: displayID(m.prefix, m.numbers[it.ID]),
-			ToStore: string(m.to.ID), ToStoreName: m.to.Name, ToRemote: m.remote,
+			ToStore: string(m.to.ID), ToStoreName: m.to.Name, ToRemote: m.remote, At: m.at,
 		}))
 	}
 	return errors.Join(errs...)
