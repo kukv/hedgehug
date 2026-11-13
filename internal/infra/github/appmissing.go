@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -51,8 +52,10 @@ func attempt[T any](ctx context.Context, c *Client, token, repo string, once fun
 }
 
 // explain は、リポジトリを読めない失敗 err を、App 未導入なら AppNotInstalled に置き換える(D4b-11 の (3))。
-// GitHub は App が入っていない非公開のリポジトリを 404 で隠す。導入の一覧を読めない(App のトークンでない)ときは、
-// 何も分からないので err のまま返す。
+// GitHub は App が入っていない非公開のリポジトリを 404 で隠す。確かめる問い合わせ(導入の一覧・選んだリポジトリの
+// 一覧・owner のアカウント)の失敗は、種類を問わず(App のトークンでない 403・404、トークンの拒否、利用上限、
+// 接続できない)握りつぶし、App 未導入とは言えないので err(RepoUnreadable)のまま返す。トークンの拒否と利用上限は、
+// 次の問い合わせで同じ失敗として返る。
 func (c *Client) explain(ctx context.Context, token, repo string, err error) error {
 	if !ghcall.Is(err, ghcall.RepoUnreadable) || !wellFormed(repo) {
 		return err
@@ -97,7 +100,7 @@ func (c *Client) appNotInstalled(ctx context.Context, token, owner, name string)
 		return false
 	}
 	if found == nil {
-		return true
+		return c.accountExists(ctx, token, owner)
 	}
 	if found.RepositorySelection != "selected" {
 		return false
@@ -110,6 +113,15 @@ func (c *Client) appNotInstalled(ctx context.Context, token, owner, name string)
 		return len(p.Repositories)
 	})
 	return err == nil && !listed
+}
+
+// accountExists は、owner のアカウント(ユーザーか組織)があるか。打ち間違えた owner を App 未導入にしないため
+// (D4b 最終レビュー I-2)。404 も、ほかの失敗も、あるとは言えないので偽。
+func (c *Client) accountExists(ctx context.Context, token, owner string) bool {
+	var u struct {
+		Login string `json:"login"`
+	}
+	return c.get(ctx, token, "/users/"+url.PathEscape(owner), &u) == nil
 }
 
 // paged は、100 件ずつの一覧を、page が受け取った件数が 100 に満たなくなるまでめくる。

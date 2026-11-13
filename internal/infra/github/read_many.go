@@ -25,7 +25,7 @@ type readManyAnswer struct {
 }
 
 // ReadMany は port.GitHub.ReadMany。リポジトリを読めなければ、REST で改名・移管を確かめ、名前が変わっていれば
-// 新しい名前で 1 回だけ読み直す。
+// 新しい名前で 1 回だけ読み直す。なお読めなければ、App 未導入かを確かめる(attempt・explain。D4b-11 の (3))。
 func (c *Client) ReadMany(ctx context.Context, token, repo string, numbers []int) (port.Batch, error) {
 	if numbers = unique(numbers); len(numbers) == 0 {
 		return port.Batch{Repo: repo}, nil

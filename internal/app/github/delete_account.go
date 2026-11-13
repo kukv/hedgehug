@@ -15,6 +15,7 @@ type DeleteAccount struct {
 	Accounts port.Accounts
 	Secrets  port.Secrets
 	Stores   port.StoreGitHub
+	Missing  port.AppMissing // GitHub App 未導入の記録(D4b-12)。アカウントの記録を消す
 }
 
 func (u DeleteAccount) Do(ctx context.Context, id account.ID) error {
@@ -24,6 +25,10 @@ func (u DeleteAccount) Do(ctx context.Context, id account.ID) error {
 	}
 	// 先に割り当てを外す。一覧から外したあとで失敗すると、どの Store にも見えない割り当てが残るため。
 	if err := u.Stores.Unassign(ctx, id); err != nil {
+		return err
+	}
+	// App 未導入の記録も先に消す(同じ ID で作り直したアカウントに引き継がない)。
+	if err := u.Missing.Forget(ctx, id); err != nil {
 		return err
 	}
 	if err := u.Accounts.Remove(ctx, id); err != nil {

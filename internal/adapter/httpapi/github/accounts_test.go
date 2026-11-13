@@ -37,7 +37,7 @@ func newServices(gh *apptest.GitHub) ghapi.Services {
 		List:   ghapp.ListAccounts{Accounts: accounts, Session: session},
 		Add:    ghapp.AddAccount{Accounts: accounts, Secrets: secrets, GitHub: gh, IDs: ids, Clock: clock},
 		Edit:   ghapp.EditAccount{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Clock: clock},
-		Delete: ghapp.DeleteAccount{Session: session, Accounts: accounts, Secrets: secrets, Stores: stores},
+		Delete: ghapp.DeleteAccount{Session: session, Accounts: accounts, Secrets: secrets, Stores: stores, Missing: &oneMissing{rows: map[account.ID][]port.MissingOrg{}}},
 		Reauth: ghapp.Reauth{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Clock: clock},
 		Impact: ghapp.Impact{Accounts: accounts, Stores: stores},
 		SignIn: ghapp.SignIn{Session: session, Accounts: accounts, Secrets: secrets, GitHub: gh, Device: device, Hosts: hosts, IDs: ids, Clock: clock},

@@ -124,15 +124,55 @@ func TestRecheckOrgsRejected(t *testing.T) {
 	}
 }
 
+// 通信の失敗は、その組織を残して残りの組織を続け、最後に 1 つ目の失敗を返す(D4b 最終レビュー I-2)。
 func TestRecheckOrgsUnreachable(t *testing.T) {
 	f := newRecheck(t)
 	f.gh.MissApp("org-a", false)
+	f.gh.MissApp("org-b", false)
 	f.gh.Fail("org-a/web", 0, &ghcall.Failure{Kind: ghcall.Unreachable})
-	_, err := f.do.Do(t.Context(), "A1")
+	got, err := f.do.Do(t.Context(), "A1")
 	if message(err) != "GitHub に接続できません。接続を確かめて、もう一度お試しください" {
 		t.Fatalf("err = %v", err)
 	}
-	if len(f.kept(t)) != 2 {
+	if !slices.Equal(got.Cleared, []string{"Org-B"}) || !slices.Equal(got.Still, []string{"org-a"}) {
+		t.Errorf("result = %+v", got)
+	}
+	if !slices.Equal(f.kept(t), []port.MissingOrg{{Org: "org-a", Repo: "org-a/web"}}) {
 		t.Errorf("records = %v", f.kept(t))
+	}
+}
+
+// 記録したリポジトリが App 未導入でなく、ただ読めない(打ち間違い・削除)なら、App はもう妨げていないので
+// 記録を消す(D4b 最終レビュー I-2)。
+func TestRecheckOrgsUnreadableClears(t *testing.T) {
+	f := newRecheck(t)
+	f.gh.MissApp("org-a", false)
+	f.gh.Fail("org-a/web", 0, &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: "org-a/web"})
+	got, err := f.do.Do(t.Context(), "A1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got.Cleared, []string{"org-a"}) || !slices.Equal(got.Still, []string{"Org-B"}) {
+		t.Errorf("result = %+v", got)
+	}
+	if !slices.Equal(f.kept(t), []port.MissingOrg{{Org: "Org-B", Repo: "Org-B/api"}}) {
+		t.Errorf("records = %v", f.kept(t))
+	}
+}
+
+// アカウントを削除したら、そのアカウントの App 未導入の記録も消す(D4b 最終レビュー I-2)。
+func TestDeleteAccountForgetsAppMissing(t *testing.T) {
+	f := newRecheck(t)
+	f.missing.rows["A2"] = []port.MissingOrg{{Org: "org-c", Repo: "org-c/x"}}
+	del := github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores, Missing: f.missing}
+	if err := del.Do(t.Context(), "A1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.missing.List(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got["A1"]) != 0 || len(got["A2"]) != 1 {
+		t.Errorf("records = %v", got)
 	}
 }

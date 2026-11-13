@@ -18,9 +18,14 @@ const (
 
 // githubServer は、GraphQL の答え graphql と、/user/installations 系の答えを返す偽の GitHub。
 // installations が空なら /user/installations は 403(App のトークンでない)。selected は選んだリポジトリの一覧(nil なら 404)。
+// アカウントは example-org だけがある(/users/example-org)。
 func githubServer(graphql, installations string, selected *string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/users/example-org":
+			_, _ = w.Write([]byte(`{"login":"example-org"}`))
+		case strings.HasPrefix(r.URL.Path, "/users/"):
+			http.NotFound(w, r)
 		case r.URL.Path == "/graphql":
 			_, _ = w.Write([]byte(graphql))
 		case r.URL.Path == "/user/installations" && installations != "":
@@ -82,6 +87,28 @@ func TestLookupHiddenByMissingApp(t *testing.T) {
 	c, _ := newClient(t, githubServer(notFoundJSON, installationsOf("other", "all"), nil))
 	_, err := c.Lookup(context.Background(), fakeToken, "example-org/web", 1)
 	wantAppMissing(t, "installation of another org", err)
+}
+
+// 導入の一覧に owner がなくても、owner のアカウントがなければ(打ち間違い)App 未導入にしない。アカウントを
+// 確かめられないとき(404 以外の失敗)も、リポジトリを読めないのまま(D4b 最終レビュー I-2)。
+func TestLookupHiddenOwnerMustExist(t *testing.T) {
+	c, _ := newClient(t, githubServer(notFoundJSON, installationsOf("other", "all"), nil))
+	_, err := c.Lookup(context.Background(), fakeToken, "no-such-org/web", 1)
+	if !ghcall.Is(err, ghcall.RepoUnreadable) {
+		t.Errorf("typo owner: err = %v, want RepoUnreadable", err)
+	}
+	base := githubServer(notFoundJSON, installationsOf("other", "all"), nil)
+	c, _ = newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/users/") {
+			http.Error(w, "x", http.StatusInternalServerError)
+			return
+		}
+		base(w, r)
+	})
+	_, err = c.Lookup(context.Background(), fakeToken, "example-org/web", 1)
+	if !ghcall.Is(err, ghcall.RepoUnreadable) {
+		t.Errorf("users fails: err = %v, want RepoUnreadable", err)
+	}
 }
 
 func TestLookupInstallationMatchesOwnerCaseInsensitively(t *testing.T) {
@@ -161,6 +188,8 @@ func TestAppNotInstalledUsesTheRenamedRepo(t *testing.T) {
 			_, _ = w.Write([]byte(`{"full_name":"example-org/web"}`))
 		case "/user/installations":
 			_, _ = w.Write([]byte(installationsOf("other", "all")))
+		case "/users/example-org":
+			_, _ = w.Write([]byte(`{"login":"example-org"}`))
 		}
 	})
 	_, err := c.Lookup(context.Background(), fakeToken, "old/web", 1)

@@ -126,7 +126,7 @@ func githubServices(d Deps) ghapi.Services {
 		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s, Missing: d.AppMissing},
 		Add:    ghapp.AddAccount{Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, IDs: d.IDs, Clock: d.Clock},
 		Edit:   ghapp.EditAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Clock: d.Clock},
-		Delete: ghapp.DeleteAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, Stores: d.StoreGitHub},
+		Delete: ghapp.DeleteAccount{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, Stores: d.StoreGitHub, Missing: d.AppMissing},
 		Reauth: ghapp.Reauth{Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Clock: d.Clock},
 		Recheck: ghapp.RecheckOrgs{
 			Accounts: d.Accounts, GitHub: d.GitHub, Missing: d.AppMissing,

@@ -180,7 +180,7 @@ func TestEditAccountKeepsTheOldTokenWhenVerifyFails(t *testing.T) {
 }
 
 func (f connFixture) del() github.DeleteAccount {
-	return github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores}
+	return github.DeleteAccount{Session: f.session, Accounts: f.accounts, Secrets: f.secrets, Stores: f.stores, Missing: &memMissing{rows: map[account.ID][]port.MissingOrg{}}}
 }
 
 func TestDeleteAccount(t *testing.T) {
