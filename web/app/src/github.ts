@@ -1,0 +1,22 @@
+import { createAccountsPort, createLinksPort } from "@hedgehug/api";
+import { createLinkDialog, createLinkList } from "@hedgehug/core";
+import { reloads } from "./reloads";
+import { catalog, detail, navigation, toasts } from "./wire";
+
+// GitHub の欄(07「PR と Issue のリンク」)。wire.ts が 300 行なので、ここで作る。
+const port = createLinksPort();
+export const linkList = createLinkList({
+  links: port,
+  accounts: createAccountsPort(),
+  toasts,
+  onChanged: () => undefined, // Task 16 で概要の一覧の読み直しにする
+});
+// リンクしたら、一覧と、プロジェクトのリポジトリ(「プロジェクトのリポジトリにも追加する」で増え、次に開く
+// ダイアログの選択肢になる)を読み直す。projectEditor.ts と同じく、カタログを読んでから詳細パネルを読み直す。
+export const linkDialog = createLinkDialog({
+  links: port,
+  onAdded: () => void Promise.all([linkList.reload(), catalog.load().then(() => detail.reload())]),
+});
+reloads.add(() => linkList.reload());
+// 画面を移ったら、ダイアログを閉じる(01「画面の移り方」。前のアイテム宛てのダイアログを残さない)。
+navigation.route.subscribe(() => linkDialog.close());
