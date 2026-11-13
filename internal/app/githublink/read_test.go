@@ -477,3 +477,26 @@ func TestReadOnceReturnsNonGitHubErrors(t *testing.T) {
 		t.Errorf("error = %q", r.Error)
 	}
 }
+
+// EventGitHub は、変わったものがあった Store ごとに 1 回だけ流し、何も変わらなければ流さない。
+func TestReadOnceGitHubEventPerStore(t *testing.T) {
+	f := newRead(t)
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 2, itemlink.Open))
+	f.linkIn(t, linkStore, linkEpic, readPR("org/api", 3, itemlink.Open))
+	f.linkIn(t, otherStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	for _, n := range []int{1, 2} {
+		pr := readPR("org/web", n, itemlink.Open)
+		pr.Checks = itemlink.Success
+		f.gh.Put("org/web", pr)
+	}
+	f.gh.Put("org/api", readPR("org/api", 3, itemlink.Closed))
+	f.read(t, every, false)
+	if s1, s2 := f.githubEvents(linkStore), f.githubEvents(otherStore); s1 != 1 || s2 != 1 {
+		t.Fatalf("events = %d, %d, want one per store", s1, s2)
+	}
+	f.read(t, every, true) // 値もチェックの結果も文言も変わらない
+	if s1, s2 := f.githubEvents(linkStore), f.githubEvents(otherStore); s1 != 1 || s2 != 1 {
+		t.Errorf("events = %d, %d, want none when nothing changed", s1, s2)
+	}
+}
