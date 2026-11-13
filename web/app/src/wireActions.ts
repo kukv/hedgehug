@@ -20,6 +20,7 @@ import {
   projectScreen,
   relations,
   toasts,
+  workspacesPort,
 } from "./wire";
 
 // アイテム・プロジェクトの操作(A4b)の組み立て。wire.ts が 300 行の上限なので、A4b の分はここに足す。
@@ -42,6 +43,7 @@ export const itemDelete = createItemDelete({
 // 「移動…」の候補のメニュー(02「同じワークスペースの中での移動」)。開くのは itemMove.open(item, x, y)。
 export const itemMove = createItemMove({
   actions: itemActions,
+  workspaces: workspacesPort,
   catalog,
   toasts,
   refresh: itemRefresh,
@@ -101,6 +103,7 @@ navigation.route.subscribe(() => {
   projectDelete.cancel();
   itemDelete.cancel();
   itemMove.close();
+  itemMove.cancelMove();
   itemKind.cancel();
   itemMenuHost.close();
   itemMenuHost.closeTemplate();

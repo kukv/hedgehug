@@ -1,5 +1,10 @@
 import { NotFound, Refused } from "../../model/errors";
-import type { DeletePreview, MoveCandidate, ProjectDeletePreview } from "../../model/itemAction";
+import type {
+  DeletePreview,
+  MoveCandidate,
+  MovePreview,
+  ProjectDeletePreview,
+} from "../../model/itemAction";
 import type { ItemActionsPort } from "../../port/itemActions";
 import { gate } from "./fixtures.test-util";
 
@@ -13,6 +18,8 @@ export interface FakeItemActions extends ItemActionsPort {
   preview: DeletePreview;
   projectPreview: ProjectDeletePreview;
   candidates: MoveCandidate[];
+  // movePreviewResult は、移動の予告の答え。
+  movePreviewResult: MovePreview;
   // refuseNext は、次の書く操作を、この文言の断りにする(1 回だけ)。failNext は、断りでない失敗にする。
   refuseNext(message: string): void;
   failNext(): void;
@@ -55,6 +62,7 @@ export function fakeItemActions(): FakeItemActions {
     preview: { count: 0, kinds: [], retentionDays: 30 },
     projectPreview: { items: 0, retentionDays: 30 },
     candidates: [],
+    movePreviewResult: { below: 0, statuses: [] },
     missing,
     refuseNext(message) {
       refusal = message;
@@ -87,9 +95,13 @@ export function fakeItemActions(): FakeItemActions {
     async movePreview(_s, id, to) {
       calls.push(`movePreview ${id} ${JSON.stringify(to)}`);
       check(id);
-      return { below: 0, statuses: [] };
+      return self.movePreviewResult;
     },
-    move: (_s, id, to) => write(id, `move ${id} ${JSON.stringify(to)}`),
+    move: (_s, id, to, statuses) =>
+      write(
+        id,
+        `move ${id} ${JSON.stringify(to)}${statuses ? ` ${JSON.stringify(statuses)}` : ""}`,
+      ),
     changeKind: (_s, id, kind) => write(id, `changeKind ${id} ${kind}`),
     async duplicate(storeId, id) {
       await write(id, `duplicate ${id}`);
