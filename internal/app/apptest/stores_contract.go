@@ -186,7 +186,7 @@ type entityKind struct {
 
 var (
 	movedPlace  = project.Place{Workspace: cWorkspace.ID, Number: 2}
-	movedIn     = transfer.NewMovedIn(transfer.MovedInInfo{Old: "HH-1", FromStore: "other", At: time.Unix(0, 0).UTC()})
+	movedIn     = transfer.NewMovedIn(transfer.MovedInInfo{Old: "HH-P1", FromStore: "other", At: time.Unix(0, 0).UTC()})
 	entityKinds = []entityKind{{
 		name: "item", kind: change.KindItem, id: cItem.ID, newID: "01CONTRACTIT00000000000002",
 		write:  func(tx port.Tx) entityWriter { return tx.WriteItems() },
