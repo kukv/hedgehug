@@ -16,7 +16,13 @@ func (s Service) List(ctx context.Context, store port.StoreID, p project.ID) ([]
 			return err
 		}
 		var err error
-		out, err = r.Items().List(p)
+		if out, err = r.Items().List(p); err != nil {
+			return err
+		}
+		blocked, err := blockedSet(r)
+		for i := range out {
+			out[i].Blocked = blocked[out[i].ID]
+		}
 		return err
 	})
 	return out, err

@@ -45,7 +45,9 @@ func (s Service) FindByNumber(ctx context.Context, store port.StoreID, ws worksp
 			for _, it := range its {
 				if it.Place.Workspace == ws && it.Place.Number == number {
 					found = it
-					return nil
+					blocked, err := blockedSet(r)
+					found.Blocked = blocked[it.ID]
+					return err
 				}
 			}
 		}
