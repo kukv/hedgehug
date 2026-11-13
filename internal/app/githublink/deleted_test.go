@@ -182,3 +182,34 @@ func TestReadOnceItemDeletedMeanwhile(t *testing.T) {
 		t.Errorf("notices = %+v, want 1", ns)
 	}
 }
+
+// 読んだあと、書く保存の直前に削除されたアイテムのリンクは、保存の中で削除済みと分かっても、何も書かずに飛ばす。
+// リンクが 1 本だけなので、writeFound の表示の読み取りは削除の前に終わり、飛ばす元は書く保存の中の読み取りになる。
+func TestReadOnceItemDeletedBeforeWrite(t *testing.T) {
+	f := newRead(t)
+	ctx := t.Context()
+	f.withRules(t, statusRule(ruleMerged, "マージで完了", automation.TriggerPRMerged, apptest.SampleStatusDone))
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.gh.Put("org/web", readPR("org/web", 1, itemlink.Merged))
+	var before int
+	// 表示の読み取りのあと、書く保存の前に HH-2 が削除される
+	f.stores.before = func() {
+		if err := apptest.DeleteItems(ctx, f.stores.Stores, linkStore, linkTask); err != nil {
+			t.Error(err)
+		}
+		before = len(f.taskLog(t))
+	}
+	f.read(t, every, false)
+	if before == 0 {
+		t.Fatal("the item was never deleted before the write")
+	}
+	if after := len(f.taskLog(t)); after != before {
+		t.Errorf("deleted item's log grew by %d", after-before)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 0 {
+		t.Errorf("failures = %v, want none", got)
+	}
+	if ns := f.inbox.Notices(); len(ns) != 0 {
+		t.Errorf("notices = %+v, want none", ns)
+	}
+}

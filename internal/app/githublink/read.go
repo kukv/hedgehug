@@ -165,6 +165,8 @@ func (l Links) writeResults(ctx context.Context, store port.StoreID, results []r
 
 // writeTarget は、1 本のリンクに、読んだ値を書いて文言を消すか、失敗の文言を置く。答えになかった番号は
 // 「見つかりません」の文言にする。読んだあとで削除されたアイテム(プロジェクト)のリンクは、何も書かずに飛ばす。
+// writeFound が返す port.ErrNotFound は、アイテムかそのプロジェクト(ワークスペース)が消えたことだけを表す。
+// writeFound が使うストア、受信箱、チェックは、それ以外では返さない。
 func (l Links) writeTarget(ctx context.Context, store port.StoreID, t target, res repoResult, p *pass) (bool, error) {
 	text, changed := res.text, false
 	if text == "" {
