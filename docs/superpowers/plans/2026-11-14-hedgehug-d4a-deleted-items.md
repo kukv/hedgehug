@@ -135,7 +135,7 @@ git commit -m "fix: 間隔ごとの取り直しで、読んだあとに削除さ
 - D4a-10 の決定の文を「間隔ごとの取り直しの対象は、削除済みでないプロジェクトの、削除済みでないアイテムのリンク。削除済みのアイテムのリンクは、詳細パネルを開いても取り直さない(A4b-4 で 404)」にし、根拠に A4b-4 を足す。
 - Task 11 の `fire` の Interfaces のコメント「削除済みのアイテムでは動かさない。」を「削除済みのアイテムは呼ぶ側が 404 にする。」に替える。
 - Task 11 の Step 1 から `TestFireSkipsDeletedItem` の箇条を消し、Run の正規表現から `|TestFireSkips` を消す。
-- 末尾の節「A4b が入ったときに足すもの」を、節の見出しは残したまま、「A4b が入ったあとの扱いは `2026-11-14-hedgehug-d4a-deleted-items.md` の DD-1〜DD-4」とする 3 行の表(場所・したこと・テスト)に置き換える:
+- 末尾の節「A4b が入ったときに足すもの」を、節の見出しは残したまま、「A4b が入ったあとの扱いは `2026-11-14-hedgehug-d4a-deleted-items.md` の DD-1〜DD-4」とする 4 行の表(場所・したこと・テスト)に置き換える:
   - `fire` … 判定は足さない(DD-1)… `TestLinksOfADeletedItemAreNotFound`
   - `collect`・`collectProject` … `port.LiveProjects`・`LiveItems` で集める(DD-3)… `TestReadOnceSkipsDeletedItems`・`TestReadOnceSkipsDeletedProject`
   - `writeTarget` … 読んだあとで削除されたら飛ばす(DD-4)… `TestReadOnceItemDeletedMeanwhile`
