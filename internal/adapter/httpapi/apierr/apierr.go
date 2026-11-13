@@ -1,4 +1,4 @@
-// Package apierr は、usecase のエラーを HTTP の状態に直す。機能の API のパッケージが使う。
+// Package apierr は、usecase のエラーと、入力の形の検査(日付など)の断りを HTTP の状態に直す。機能の API のパッケージが使う。
 package apierr
 
 import (
