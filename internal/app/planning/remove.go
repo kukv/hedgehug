@@ -87,9 +87,9 @@ func clearRefs(tx port.Tx, ws workspace.ID, f string, id change.ID, ref func(ite
 }
 
 // RestoreSprint は、削除済みのスプリント id を戻す(F1-14)。削除済みでなければ ErrNotFound。
-// 削除済みでない同じ名前のスプリントがあれば断る。
+// ワークスペースが削除済みか、削除済みでない同じ名前のスプリントがあれば断る。
 func (s Service) RestoreSprint(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.writePlan(ctx, store, ws,
+	return s.writePlanFrom(ctx, store, ws, restorePlan,
 		func(p planning.Plan) (string, error) {
 			sp, err := restorableSprint(p, id)
 			if err != nil {
@@ -104,6 +104,19 @@ func (s Service) RestoreSprint(ctx context.Context, store port.StoreID, ws works
 			}
 			return undoOp(tx, ws, sp.Deleted.Op)
 		})
+}
+
+// restorePlan は、復元の前に読む計画。ワークスペースがなければ ErrNotFound、削除済みなら、名前の重なりより
+// 先に断る(08「親が削除済みのときの復元」)。
+func restorePlan(r port.Reader, ws workspace.ID) (planning.Plan, error) {
+	w, err := r.Workspaces().Get(ws)
+	if err != nil {
+		return planning.Plan{}, err
+	}
+	if w.Deleted != nil {
+		return planning.Plan{}, refusal.New("ワークスペースも削除されています。先にワークスペースを復元してください")
+	}
+	return logPlan(r, ws)
 }
 
 func restorableSprint(p planning.Plan, id change.ID) (planning.Sprint, error) {
@@ -122,9 +135,9 @@ func restorableSprint(p planning.Plan, id change.ID) (planning.Sprint, error) {
 }
 
 // RestoreRelease は、削除済みのリリース id を戻す(F1-14)。削除済みでなければ ErrNotFound。
-// 削除済みでない同じ名前のリリースがあれば断る。
+// ワークスペースが削除済みか、削除済みでない同じ名前のリリースがあれば断る。
 func (s Service) RestoreRelease(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.writePlan(ctx, store, ws,
+	return s.writePlanFrom(ctx, store, ws, restorePlan,
 		func(p planning.Plan) (string, error) {
 			r, err := restorableRelease(p, id)
 			if err != nil {

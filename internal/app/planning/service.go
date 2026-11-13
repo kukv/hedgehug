@@ -21,11 +21,16 @@ type Service struct {
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// planOf は、ワークスペースのスプリントとリリース。ワークスペースがなければ ErrNotFound。
+// planOf は、ワークスペースのスプリントとリリース。ワークスペースがないか削除済みなら ErrNotFound(B5b-4)。
 func planOf(r port.Reader, ws workspace.ID) (planning.Plan, error) {
-	if _, err := r.Workspaces().Get(ws); err != nil {
+	if _, err := port.LiveWorkspace(r, ws); err != nil {
 		return planning.Plan{}, err
 	}
+	return logPlan(r, ws)
+}
+
+// logPlan は、ワークスペースのログのスプリントとリリース。ワークスペースが削除済みかは見ない。
+func logPlan(r port.Reader, ws workspace.ID) (planning.Plan, error) {
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
 	if err != nil {
 		return planning.Plan{}, err
@@ -75,13 +80,22 @@ func (s Service) writePlan(ctx context.Context, store port.StoreID, ws workspace
 	summary func(p planning.Plan) (string, error),
 	write func(tx port.Tx, p planning.Plan) error,
 ) error {
+	return s.writePlanFrom(ctx, store, ws, planOf, summary, write)
+}
+
+// writePlanFrom は、writePlan の、計画を plan で読む版。
+func (s Service) writePlanFrom(ctx context.Context, store port.StoreID, ws workspace.ID,
+	plan func(r port.Reader, ws workspace.ID) (planning.Plan, error),
+	summary func(p planning.Plan) (string, error),
+	write func(tx port.Tx, p planning.Plan) error,
+) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
 		return err
 	}
 	var text string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
-		p, err := planOf(r, ws)
+		p, err := plan(r, ws)
 		if err != nil {
 			return err
 		}
@@ -92,7 +106,7 @@ func (s Service) writePlan(ctx context.Context, store port.StoreID, ws workspace
 		return err
 	}
 	return s.Stores.Write(ctx, store, port.Operation{Actor: change.User(me), Summary: text}, func(tx port.Tx) error {
-		p, err := planOf(tx, ws)
+		p, err := plan(tx, ws)
 		if err != nil {
 			return err
 		}

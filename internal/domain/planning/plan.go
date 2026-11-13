@@ -37,6 +37,11 @@ const (
 	releasePrefix = "releases/"
 )
 
+// IsPlanRow は、ワークスペースのログの、スプリント・リリースの行(完了の確定値の行を含む)か。
+func IsPlanRow(r change.Record) bool {
+	return r.T == CloseSprint || strings.HasPrefix(r.F, sprintPrefix) || strings.HasPrefix(r.F, releasePrefix)
+}
+
 // Totals は、ポイントと件数の合計。
 type Totals struct {
 	Points float64 `json:"points"`

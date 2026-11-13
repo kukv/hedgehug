@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -123,6 +124,7 @@ func refValue(id change.ID) any {
 
 // assign は、decide が決めた変更を、アクティビティの文「{ID} の {label} を {name} に変更」で 1 回保存する。
 // decide は保存の前と保存の中の両方で、そのときのアイテムと計画を見て呼ぶ。同じ値なら何も保存しない。
+// 別の画面で削除された(root: true)アイテムは、保存するときだけ削除を取り消す(C3a-screen S1)。
 func (s Service) assign(ctx context.Context, store port.StoreID, id item.ID,
 	decide func(r port.Reader, it item.Item, p planning.Plan) (assignment, error),
 ) error {
@@ -132,17 +134,19 @@ func (s Service) assign(ctx context.Context, store port.StoreID, id item.ID,
 	}
 	var text string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
-		var err error
-		text, _, err = assignmentOf(r, id, decide)
+		it, err := port.EditableItem(r, id)
+		if err != nil {
+			return err
+		}
+		text, _, err = assignmentOf(r, it, decide)
+		if errors.Is(err, errSameRef) {
+			return cmp.Or(port.Unchanged(it.Deleted), err)
+		}
 		return err
 	})
 	if err == nil {
 		err = s.Stores.Write(ctx, store, port.Operation{Actor: change.User(me), Summary: text}, func(tx port.Tx) error {
-			_, ds, err := assignmentOf(tx, id, decide)
-			if err != nil {
-				return err
-			}
-			return tx.WriteItems().Append(id, ds...)
+			return reviveAndAssign(ctx, tx, id, decide)
 		})
 	}
 	if errors.Is(err, errSameRef) {
@@ -151,14 +155,36 @@ func (s Service) assign(ctx context.Context, store port.StoreID, id item.ID,
 	return err
 }
 
-// assignmentOf は、アクティビティの文と、書く行。
-func assignmentOf(r port.Reader, id item.ID,
+// reviveAndAssign は、保存の中で最初に、削除済み(root: true)なら削除を取り消してから、いまのアイテムを読み直し、
+// decide が決めた行を書く。同じ値なら、削除の印があれば port.ErrNotFound で断る(決定 S4・S10)。
+func reviveAndAssign(ctx context.Context, tx port.Tx, id item.ID,
+	decide func(r port.Reader, it item.Item, p planning.Plan) (assignment, error),
+) error {
+	editable, err := port.EditableItem(tx, id)
+	if err != nil {
+		return err
+	}
+	if err := port.ReviveItem(ctx, tx, id); err != nil {
+		return err
+	}
+	it, err := port.LiveItem(tx, id)
+	if err != nil {
+		return err
+	}
+	_, ds, err := assignmentOf(tx, it, decide)
+	if errors.Is(err, errSameRef) {
+		return cmp.Or(port.Unchanged(editable.Deleted), err)
+	}
+	if err != nil {
+		return err
+	}
+	return tx.WriteItems().Append(id, ds...)
+}
+
+// assignmentOf は、アイテム it のアクティビティの文と、書く行。
+func assignmentOf(r port.Reader, it item.Item,
 	decide func(r port.Reader, it item.Item, p planning.Plan) (assignment, error),
 ) (string, []change.Draft, error) {
-	it, err := port.LiveItem(r, id)
-	if err != nil {
-		return "", nil, err
-	}
 	w, err := r.Workspaces().Get(it.Place.Workspace)
 	if err != nil {
 		return "", nil, err

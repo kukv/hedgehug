@@ -144,3 +144,21 @@ func TestPlanFieldsWorkWithRepair(t *testing.T) {
 		t.Fatalf("Undo = %+v", undo)
 	}
 }
+
+func TestIsPlanRow(t *testing.T) {
+	for _, c := range []struct {
+		r    change.Record
+		want bool
+	}{
+		{change.Record{T: change.Set, F: "sprints/S1/name"}, true},
+		{change.Record{T: change.Delete, F: "sprints/S1"}, true},
+		{change.Record{T: planning.CloseSprint, F: "sprints/S1/close"}, true},
+		{change.Record{T: change.Set, F: "releases/R1/state"}, true},
+		{change.Record{T: change.Set, F: "name"}, false},
+		{change.Record{T: change.Set, F: "statuses/V1/name"}, false},
+	} {
+		if got := planning.IsPlanRow(c.r); got != c.want {
+			t.Errorf("IsPlanRow(%+v) = %v, want %v", c.r, got, c.want)
+		}
+	}
+}
