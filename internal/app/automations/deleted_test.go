@@ -56,3 +56,15 @@ func TestRecentRunsKeepADeletedItemsRun(t *testing.T) {
 		t.Errorf("Recent = %+v, %v", v.Recent, err)
 	}
 }
+
+// 削除済みのワークスペースの自動化の画面は、ワークスペースがないときと同じ(B5b-4)。
+func TestViewOfDeletedWorkspace(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteWorkspace(ctx, rec.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.List(ctx, store, apptest.SampleWorkspace); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("List = %v, want port.ErrNotFound", err)
+	}
+}

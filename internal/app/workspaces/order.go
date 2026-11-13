@@ -18,12 +18,27 @@ type ranked struct {
 	rank string
 }
 
-// orderedWorkspaces は、ワークスペースを rank の順(同じなら内部 ID の順)で返す。rank のないものは先頭。
+// orderedWorkspaces は、削除済みも含めたワークスペースを rank の順(同じなら内部 ID の順)で返す。rank のないものは先頭。
+// 作成の rank が削除済みの rank を使い回さないために使う(B5b-4)。
 func orderedWorkspaces(r port.Reader) ([]ranked, error) {
 	list, err := r.Workspaces().List()
 	if err != nil {
 		return nil, err
 	}
+	return rankedInOrder(r, list)
+}
+
+// orderedLiveWorkspaces は、削除済みでないワークスペースを rank の順で返す(サイドバーの List と MoveWorkspace)。
+func orderedLiveWorkspaces(r port.Reader) ([]ranked, error) {
+	list, err := port.LiveWorkspaces(r)
+	if err != nil {
+		return nil, err
+	}
+	return rankedInOrder(r, list)
+}
+
+// rankedInOrder は、list に rank を添え、rank の順(同じなら内部 ID の順)に並べる。
+func rankedInOrder(r port.Reader, list []workspace.Workspace) ([]ranked, error) {
 	out := make([]ranked, 0, len(list))
 	for _, w := range list {
 		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: w.ID})
@@ -51,7 +66,7 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, ws works
 	}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("%s の並びを変更", oneLine(d.Workspace.Name))}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		list, err := orderedWorkspaces(tx)
+		list, err := orderedLiveWorkspaces(tx)
 		if err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // 削除済みのアイテムは、一覧にも、Get・FindByNumber にも出ず、変更もできない(A4b-4)。
@@ -178,5 +179,40 @@ func must(t *testing.T) func(item.Item, error) item.Item {
 			t.Fatal(err)
 		}
 		return it
+	}
+}
+
+// 削除済みのワークスペースの次の番号は、ワークスペースがないときと同じ(B5b-4)。
+func TestNextNumberOfDeletedWorkspace(t *testing.T) {
+	svc := setup(t)
+	if err := apptest.DeleteWorkspace(t.Context(), svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.NextNumber(t.Context(), store, apptest.SampleWorkspace); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("NextNumber = %v, want port.ErrNotFound", err)
+	}
+}
+
+// 削除したワークスペースと同じ名前・接頭辞で作り直したワークスペースの採番は、新しいワークスペースのログで数えるので 1 から始まる。
+func TestNextNumberOfRecreatedWorkspace(t *testing.T) {
+	svc := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	again := workspace.Workspace{ID: svc.IDs.New(), Name: "Web", Prefix: "HH"}
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを作成"}
+	err := svc.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		d, err := workspace.CreateWithSettings(again, workspace.DefaultSettings(svc.IDs.New))
+		if err != nil {
+			return err
+		}
+		return tx.WriteWorkspaces().Append(again.ID, d)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.NextNumber(ctx, store, again.ID); err != nil || n != 1 {
+		t.Errorf("NextNumber = %d, %v, want 1", n, err)
 	}
 }

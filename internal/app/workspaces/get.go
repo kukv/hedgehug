@@ -22,11 +22,9 @@ type Detail struct {
 func (s Service) List(ctx context.Context, store port.StoreID) ([]workspace.Workspace, error) {
 	var out []workspace.Workspace
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		list, err := orderedWorkspaces(r)
+		list, err := orderedLiveWorkspaces(r)
 		for _, w := range list {
-			if w.Deleted == nil {
-				out = append(out, w.Workspace)
-			}
+			out = append(out, w.Workspace)
 		}
 		return err
 	})
@@ -37,7 +35,7 @@ func (s Service) List(ctx context.Context, store port.StoreID) ([]workspace.Work
 func (s Service) Get(ctx context.Context, store port.StoreID, id workspace.ID) (Detail, error) {
 	var out Detail
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		w, err := r.Workspaces().Get(id)
+		w, err := port.LiveWorkspace(r, id)
 		if err != nil {
 			return err
 		}
