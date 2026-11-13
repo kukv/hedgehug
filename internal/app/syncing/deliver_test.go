@@ -1,9 +1,11 @@
 package syncing_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -118,6 +120,40 @@ func TestDeliverRefusesAReadOnlyStore(t *testing.T) {
 	_, err := f.svc.Deliver(t.Context(), "S4", deliverOp, addTaro)
 	if !errors.Is(err, port.ErrInvalidOperation) || memberCount(t, stores, "S4") != 0 || len(f.rep.Calls()) != 0 {
 		t.Errorf("Deliver = %v, members %d, calls %+v", err, memberCount(t, stores, "S4"), f.rep.Calls())
+	}
+}
+
+// failingSucceeded は、Succeeded だけが失敗する同期の状態。
+type failingSucceeded struct{ *apptest.SyncState }
+
+func (failingSucceeded) Succeeded(context.Context, port.StoreID, time.Time, string, string) error {
+	return errors.New("disk full")
+}
+
+// 送れたあとに状態を記録できなくても、保存は送られているので成功を返す。
+func TestDeliverSucceedsWhenRecordingFailsAfterSending(t *testing.T) {
+	f, stores := newDeliverFixture(t)
+	f.svc.State = failingSucceeded{f.state}
+	reason, err := f.svc.Deliver(t.Context(), "S1", deliverOp, addTaro)
+	if reason != "" || err != nil || memberCount(t, stores, "S1") != 1 {
+		t.Fatalf("Deliver = %q, %v, members %d, want saved", reason, err, memberCount(t, stores, "S1"))
+	}
+	if calls := f.rep.Calls(); len(calls) != 2 || !calls[1].Mirror {
+		t.Errorf("calls = %+v, want the mirror too", calls)
+	}
+	if evs := f.events.List(); len(evs) != 1 {
+		t.Errorf("events = %+v", evs)
+	}
+}
+
+// 送れなかった保存を捨てられなかったときは、理由にせず error で返す(保存されたかもしれない)。
+func TestDeliverReturnsASaveThatWasNotDiscardedAsAnError(t *testing.T) {
+	f, _ := newDeliverFixture(t)
+	f.rep.SendErrs = map[port.StoreID]error{"S1": errors.Join(port.ErrSendConflict, port.ErrSaveNotDiscarded)}
+	reason, err := f.svc.Deliver(t.Context(), "S1", deliverOp, addTaro)
+	rs, _ := f.state.Records(t.Context())
+	if reason != "" || !errors.Is(err, port.ErrSaveNotDiscarded) || len(rs) != 0 {
+		t.Errorf("Deliver = %q, %v, records %+v", reason, err, rs)
 	}
 }
 

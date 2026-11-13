@@ -15,6 +15,8 @@ type Replicator interface {
 	// 更新と重なったら、保存を捨てて受け取り直し、fn を呼び直す(最大 3 回)。そのため fn は試みごとに呼ばれ、
 	// 毎回新しい Tx を受け取る(前の呼び出しの書き込みは残っていない)。fn は読む値を毎回その Tx から読む。
 	// 保存の失敗(fn のエラー・op.Check・コミットの失敗)は *SaveError、通信の失敗は Err* のどれか。
+	// 送れなかった保存のコミットを捨てられなかったときは、送信のエラーに ErrSaveNotDiscarded を Join して返す
+	// (やり直さない。保存は残り、次の同期で送られるかもしれない)。
 	// ReceiveOnly の remote には保存せず、ErrInvalidOperation を返す。
 	SyncSave(ctx context.Context, storeID StoreID, remote Remote, op Operation, fn func(tx Tx) error) (SyncResult, error)
 	// Mirror は、Store の保存をミラーへ送るだけで、受け取らない(保存形式「同期」の手順 7)。
@@ -41,6 +43,9 @@ type SaveError struct{ Err error }
 
 func (e *SaveError) Error() string { return "save: " + e.Err.Error() }
 func (e *SaveError) Unwrap() error { return e.Err }
+
+// ErrSaveNotDiscarded は、SyncSave で送れなかった保存のコミットを捨てられなかったこと。保存はこのマシンに残る。
+var ErrSaveNotDiscarded = errors.New("the save that could not be sent was not discarded")
 
 // SyncResult は、送った保存と受け取った保存の数(06「同期の結果」)と、今回受け取った位置。
 // Seen は、次の同期の Remote.Seen に渡す。remote が空のまま終わったら空。

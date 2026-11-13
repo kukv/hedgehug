@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
@@ -209,4 +211,96 @@ func TestSyncSaveRefusesReceiveOnly(t *testing.T) {
 		t.Errorf("err = %v, want ErrInvalidOperation", err)
 	}
 	unchanged(t, a, before)
+}
+
+// 受け取りで remote の書き換えを見つけたら、保存せず、受け取った位置の記録を戻す(未送信の数が動かない)。
+func TestSyncSaveStopsWhenTheRemoteWasRewritten(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	old := remoteHead(t, remote)
+	rename(t, a, "新しい名前")
+	res, err := a.rep.Sync(t.Context(), a.id, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setRemoteBranch(t, remote, old)
+	rename(t, a, "未送信の名前")
+	before, unsent := snap(t, a), unsentOf(t, a)
+	called := false
+	_, err = a.rep.SyncSave(t.Context(), a.id, port.Remote{URL: remote.URL, Seen: res.Seen}, saveOp, func(tx port.Tx) error {
+		called = true
+		return createMoved(tx)
+	})
+	if !errors.Is(err, port.ErrRemoteRewritten) || called {
+		t.Errorf("SyncSave = %v, fn called %v, want ErrRemoteRewritten and no call", err, called)
+	}
+	unchanged(t, a, before)
+	if n := unsentOf(t, a); n != unsent {
+		t.Errorf("Unsent = %d; want %d", n, unsent)
+	}
+}
+
+// 送れたあとに remote の位置を記録できなくても、送れた保存は捨てずに成功とする。
+func TestSyncSaveKeepsASentSaveWhenTheRemoteRefCannotBeRecorded(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	head := headRefName(t, a)
+	ref := filepath.Join(a.dir, ".git", filepath.FromSlash(remotePrefix+head))
+	a.rep.beforeSend = func() error {
+		// remote の位置のファイルをフォルダに替えて、書けなくする。
+		return errors.Join(os.RemoveAll(ref), os.MkdirAll(filepath.Join(ref, "x"), 0o700))
+	}
+	if _, err := a.rep.SyncSave(t.Context(), a.id, remote, saveOp, createMoved); err != nil {
+		t.Fatalf("SyncSave = %v, want success", err)
+	}
+	if !hasMoved(t, a) {
+		t.Error("the sent save was discarded")
+	}
+	b.sync(t, remote)
+	if !hasMoved(t, b) {
+		t.Error("the other machine did not get the sent save")
+	}
+}
+
+// 送れなかった保存を捨てられなかったら、やり直さず、ErrSendConflict と目印を返す。保存は残り、次の同期で送る。
+func TestSyncSaveStopsWhenTheSaveCannotBeDiscarded(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	sends := 0
+	a.rep.beforeSend = func() error {
+		sends++
+		// 保存の途中の印をフォルダにして、捨てる処理(guarded)が印を書けないようにする。
+		return errors.Join(errRejected, os.Mkdir(markerPath(a.dir), 0o700))
+	}
+	calls := 0
+	_, err := a.rep.SyncSave(t.Context(), a.id, remote, saveOp, func(tx port.Tx) error { calls++; return createMoved(tx) })
+	if !errors.Is(err, port.ErrSendConflict) || !errors.Is(err, port.ErrSaveNotDiscarded) || sends != 1 || calls != 1 {
+		t.Fatalf("err = %v after %d sends and %d calls, want ErrSendConflict and ErrSaveNotDiscarded, 1, 1", err, sends, calls)
+	}
+	if !hasMoved(t, a) {
+		t.Error("the save is gone though it could not be discarded")
+	}
+	a.rep.beforeSend = nil
+	a.sync(t, remote) // 印(空のフォルダ)を戻してから、残った保存を送る
+	b.sync(t, remote)
+	sameFiles(t, a, b)
+	if !hasMoved(t, b) {
+		t.Error("the save left behind was not sent by the next sync")
+	}
+}
+
+// headRefName は、m の先端のブランチの短い名前。
+func headRefName(t *testing.T, m machine) string {
+	t.Helper()
+	repo, err := git.PlainOpen(m.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := repo.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h.Name().Short()
 }

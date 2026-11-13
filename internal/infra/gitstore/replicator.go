@@ -3,6 +3,7 @@ package gitstore
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -125,7 +126,8 @@ func (s syncRun) receive(ctx context.Context) (plumbing.Hash, error) {
 	return theirs, s.integrate(theirs)
 }
 
-// push は、自分の先端を remote へ送り、送った先端を返す。
+// push は、自分の先端を remote へ送り、送った先端を返す。error は送れなかったときだけ返す(送れたあとの
+// 記録の失敗はログに残すだけ。SyncSave が送れた保存を捨てないため)。
 func (s syncRun) push(ctx context.Context, theirs plumbing.Hash) (plumbing.Hash, error) {
 	if s.r.beforeSend != nil {
 		if err := s.r.beforeSend(); err != nil {
@@ -140,8 +142,12 @@ func (s syncRun) push(ctx context.Context, theirs plumbing.Hash) (plumbing.Hash,
 		return plumbing.ZeroHash, err
 	}
 	// 送ったので、remote の先端は自分の先端になった。未送信の数え方(Unsent)の基準を進める。
+	// 進められなくても、未送信の数が次の同期まで多く見えるだけ(次の受け取りが基準を進める)。
 	ref := plumbing.NewHashReference(plumbing.ReferenceName(remotePrefix+s.branch.Short()), head.Hash())
-	return head.Hash(), s.repo.Storer.SetReference(ref)
+	if err := s.repo.Storer.SetReference(ref); err != nil {
+		slog.Warn("送ったあとに remote の位置を記録できませんでした", "store", s.root, "error", err)
+	}
+	return head.Hash(), nil
 }
 
 // integrate は、自分の先端に remote の先端 theirs を取り込む。

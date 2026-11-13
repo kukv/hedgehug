@@ -94,11 +94,12 @@ func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx por
 	now, err := s.push(ctx, theirs)
 	if err != nil {
 		if derr := s.discard(base); derr != nil {
-			// 捨てられなかったときは、やり直さない(保存のコミットの上に受け取り直さない)。印が残り、次の操作が戻す。
+			// 捨てられなかったときは、やり直さない(保存のコミットの上に受け取り直さない)。印が残り、次の操作が
+			// そのときの先端に作業ツリーを合わせる。保存のコミットが残ったかもしれないので、目印を付ける。
 			if errors.Is(err, errRejected) {
 				err = port.ErrSendConflict
 			}
-			return port.SyncResult{}, errors.Join(err, derr)
+			return port.SyncResult{}, errors.Join(err, port.ErrSaveNotDiscarded, derr)
 		}
 		return port.SyncResult{}, err
 	}
