@@ -3,7 +3,6 @@ package automations
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -47,10 +46,7 @@ func rulesReviving(r port.Reader, ws workspace.ID, target string) ([]automation.
 	if err != nil {
 		return nil, err
 	}
-	drop := workspace.Covering(log, target)
-	kept := slices.DeleteFunc(slices.Clone(log), func(rec change.Record) bool {
-		return slices.ContainsFunc(drop, func(d change.Record) bool { return d.ID == rec.ID })
-	})
+	kept := workspace.WithoutCovering(log, target)
 	return automation.FromLog(kept), nil
 }
 

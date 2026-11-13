@@ -42,6 +42,21 @@ func TestCovering(t *testing.T) {
 	}
 }
 
+func TestWithoutCovering(t *testing.T) {
+	log := rows(
+		change.NewDelete("statuses/A"),
+		change.NewDelete("templates/T"),
+		change.NewDelete("statuses/B"),
+	)
+	got := workspace.WithoutCovering(log, "statuses/A/color", "templates/T/steps/S")
+	if len(got) != 1 || got[0].F != "statuses/B" {
+		t.Errorf("WithoutCovering = %+v", got)
+	}
+	if len(log) != 3 || log[0].F != "statuses/A" {
+		t.Errorf("log was changed: %+v", log)
+	}
+}
+
 func TestSettingsReviving(t *testing.T) {
 	w := workspace.Workspace{ID: "01WS0000000000000000000000", Name: "Web", Prefix: "HH"}
 	create, err := workspace.CreateWithSettings(w, workspace.DefaultSettings(seqIDs()))

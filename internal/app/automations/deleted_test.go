@@ -218,3 +218,31 @@ func TestSetEnabledDeletedRuleNameTaken(t *testing.T) {
 		t.Error("the rule was revived")
 	}
 }
+
+// 削除のあとに同じ名前のルールができていたら、古い方の編集(名前を変えない)は断り、何も残さない(決定 R4)。
+func TestUpdateDeletedRuleNameTaken(t *testing.T) {
+	svc, rec, r := deletedRule(t)
+	if _, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, doneRule()); err != nil {
+		t.Fatal(err)
+	}
+	edit := doneRule()
+	edit.Value = "taro"
+	err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit)
+	if message(err) != "同じ名前のルールがあります" {
+		t.Errorf("err = %v", err)
+	}
+	if _, _, found := revivedState(t, rec, r.ID); found {
+		t.Error("the rule was revived")
+	}
+}
+
+// 削除の前と同じ内容なら何も保存せず、削除済みのまま 404 になる(決定 R3)。
+func TestUpdateDeletedRuleSameIsNotFound(t *testing.T) {
+	svc, rec, r := deletedRule(t)
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, doneRule()); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("err = %v, want port.ErrNotFound", err)
+	}
+	if _, _, found := revivedState(t, rec, r.ID); found {
+		t.Error("the rule was revived")
+	}
+}

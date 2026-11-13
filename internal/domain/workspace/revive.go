@@ -23,22 +23,21 @@ func Covering(log []change.Record, f string) []change.Record {
 	return out
 }
 
-// SettingsReviving は、fs のそれぞれを覆う削除の行がないものとして、ログから設定を作る。
-// 取り消す前の設定を、削除済みのものの名前を含めて読むのに使う。log は変えない。
-func SettingsReviving(log []change.Record, fs ...string) (Settings, bool) {
+// WithoutCovering は、log から、fs のそれぞれを覆う削除の行(Covering)を除いたもの。log は変えない。
+func WithoutCovering(log []change.Record, fs ...string) []change.Record {
 	var drop []change.ID
 	for _, f := range fs {
 		for _, r := range Covering(log, f) {
 			drop = append(drop, r.ID)
 		}
 	}
-	kept := make([]change.Record, 0, len(log))
-	for _, r := range log {
-		if !slices.Contains(drop, r.ID) {
-			kept = append(kept, r)
-		}
-	}
-	return SettingsFromLog(kept)
+	return slices.DeleteFunc(slices.Clone(log), func(r change.Record) bool { return slices.Contains(drop, r.ID) })
+}
+
+// SettingsReviving は、fs のそれぞれを覆う削除の行がないものとして、ログから設定を作る。
+// 取り消す前の設定を、削除済みのものの名前を含めて読むのに使う。log は変えない。
+func SettingsReviving(log []change.Record, fs ...string) (Settings, bool) {
+	return SettingsFromLog(WithoutCovering(log, fs...))
 }
 
 // RevivedTemplate は、テンプレートの保存(画面が送ったテンプレート in)で取り消すものを決める(決定 R5)。
