@@ -15,6 +15,7 @@ export function project(storeId: string, workspaceId: string, n: number): Projec
     status: "Todo",
     start: "",
     end: "",
+    repos: [],
   };
 }
 

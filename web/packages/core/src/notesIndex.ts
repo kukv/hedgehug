@@ -78,3 +78,8 @@ export {
   relationLabels,
 } from "./model/relation";
 export type { DescribeResult, NotesPort, NoteTarget } from "./port/notes";
+export {
+  createProjectEditor,
+  type ProjectEditor,
+  type ProjectEditorDeps,
+} from "./features/projects/editor";
