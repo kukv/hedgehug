@@ -166,11 +166,13 @@ func (m *crossMove) importItem(tx port.Tx, it item.Item, lines []change.Draft) e
 // errSourceChanged は、(0) で読んだあと、移動元で移すもの(移すアイテムと下のすべて)が変わったこと。
 var errSourceChanged = errors.New("transfers: the items to move changed in the source store")
 
-// writeSource は、移動元の保存の fn: 移すアイテムのフォルダを消し、外のアイテムが持つ関連を remove し、転送記録を
-// アイテムごとに 1 行足す。移すアイテムがもうない(別の経路で消えた・移った)なら port.ErrNotFound、移すものが (0) と
-// 違う(子が足された・移った)なら errSourceChanged で、保存しない(02「保存」の、失敗したら元のまま)。
+// writeSource は、移動元の保存の fn: 移すアイテムのフォルダを消し、外のアイテムが持つ関連(tx から集め直したもの。
+// (0) のあとに足された関連も含む)を remove し、転送記録をアイテムごとに 1 行足す。移すアイテムがもうない(別の経路で
+// 消えた・移った)なら port.ErrNotFound、移すものが (0) と違う(子が足された・移った)なら errSourceChanged で、保存しない
+// (02「保存」の、失敗したら元のまま)。
 func (m *crossMove) writeSource(tx port.Tx) error {
-	if err := m.checkSource(tx); err != nil {
+	now, err := m.checkSource(tx)
+	if err != nil {
 		return err
 	}
 	items := m.src.items()
@@ -180,8 +182,8 @@ func (m *crossMove) writeSource(tx port.Tx) error {
 		}
 	}
 	var errs []error
-	for _, c := range m.src.set.Outside {
-		if !m.src.set.Contains(c.From) {
+	for _, c := range now.Outside {
+		if !now.Contains(c.From) {
 			errs = append(errs, tx.WriteItems().Append(c.From, change.NewRemove("relations", item.Relation{Type: c.Type, To: c.To})))
 		}
 	}
@@ -194,23 +196,23 @@ func (m *crossMove) writeSource(tx port.Tx) error {
 	return errors.Join(errs...)
 }
 
-// checkSource は、移動元の移すもの(削除済みを含む)を tx から集め直し、(0) で集めたものと同じかを確かめる。
-func (m *crossMove) checkSource(tx port.Tx) error {
+// checkSource は、移動元の移すもの(削除済みを含む)を tx から集め直し、(0) で集めたものと同じかを確かめて、集め直したものを返す。
+func (m *crossMove) checkSource(tx port.Tx) (transfer.Set, error) {
 	all, err := storeItems(tx)
 	if err != nil {
-		return err
+		return transfer.Set{}, err
 	}
 	set, err := transfer.Collect(m.src.set.Root.ID, all)
 	if errors.Is(err, transfer.ErrNotFound) {
-		return port.ErrNotFound
+		return transfer.Set{}, port.ErrNotFound
 	}
 	if err != nil {
-		return err
+		return transfer.Set{}, err
 	}
 	if !slices.Equal(idsIn(set), idsIn(m.src.set)) {
-		return errSourceChanged
+		return transfer.Set{}, errSourceChanged
 	}
-	return nil
+	return set, nil
 }
 
 // idsIn は、移すものの内部 ID(辞書順)。

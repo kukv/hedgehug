@@ -187,6 +187,25 @@ func TestMoveAcrossStoresCutsRelationsToOutsideItemsOnBothSides(t *testing.T) {
 	}
 }
 
+// (0) で読んだあと (4) の前に、外のアイテムが移すものとの関連を足しても、移動元の保存でその関連も消す
+// (移したものを指す関連を移動元に残さない)。
+func TestMoveAcrossStoresCutsARelationAddedFromOutsideMeanwhile(t *testing.T) {
+	f := crossFixture(t)
+	added := false
+	f.deliver.inside = func(port.StoreID) {
+		if !added {
+			added = true
+			addRelation(t, f.rec, apptest.SampleEpic, stepLiveID, "duplicates")
+		}
+	}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); err != nil {
+		t.Fatal(err)
+	}
+	if rel := itemOf(t, f.rec, store1, apptest.SampleEpic).Relations; len(rel) != 0 {
+		t.Errorf("外の Epic の関連 = %+v(あとから足した関連も消える)", rel)
+	}
+}
+
 // Review Focus 5: 移動先のメンバーにいない人(hanako は担当者・コメント・保存の実行者に現れる)は 1 回だけ足され、
 // 大文字小文字だけが違う人(taro と Taro)は足さず、移動先の綴りに置き換わる。足す行は移動の操作と同じ操作。
 func TestMoveAcrossStoresAddsMissingPeopleOnceAndMapsCaseInsensitively(t *testing.T) {
