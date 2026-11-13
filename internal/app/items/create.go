@@ -10,8 +10,10 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -21,6 +23,7 @@ var ErrParentElsewhere = errors.New("the parent is in another project")
 // CreateInput は、作成ダイアログの入力。Values はプロパティの値(キーはプロパティの ID。組み込みはキー)。
 // Template は、一緒に作る構成を持つテンプレート(nil は「なし」。A3b-6)。
 // Description は、もとになるアイテムの説明(空白だけは説明なし。A4a-4)。
+// Sprint は、入れるスプリント(nil か空はバックログ。もとになるアイテムだけに入れる。F1-5)。
 type CreateInput struct {
 	Store       port.StoreID
 	Project     project.ID
@@ -30,6 +33,7 @@ type CreateInput struct {
 	Description string
 	Values      map[change.ID]json.RawMessage
 	Template    *change.ID
+	Sprint      *change.ID
 }
 
 // Create は、アイテムを作る(02「作成したあと」)。テンプレートが子や Step を持つときは、それらも同じ 1 回の保存で作る。
@@ -118,6 +122,10 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 	if err != nil {
 		return item.Item{}, err
 	}
+	sprint, err := sprintOf(in, planning.FromLog(wsLog))
+	if err != nil {
+		return item.Item{}, err
+	}
 	created := item.Item{
 		ID:       s.IDs.New(),
 		Place:    item.Place{Workspace: p.Place.Workspace, Project: p.ID, Parent: in.Parent, Number: numbering.Next(wsLog, numbering.Items)},
@@ -125,9 +133,29 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 		Rank:     rank.After(lastRank(all, in.Parent)),
 		Title:    title,
 		Watchers: []string{me},
+		Sprint:   sprint,
 	}
 	applyValues(&created, vals, st)
 	return created, nil
+}
+
+// sprintOf は、作成で入れるスプリント(F1-5)。選べるのは作業項目で、計画中か実行中の使えるスプリントだけ。
+// 種類が合わなければ ErrInvalidOperation、完了は断り、削除済み・ない・別のワークスペースは ErrNotFound。
+func sprintOf(in CreateInput, p planning.Plan) (change.ID, error) {
+	if in.Sprint == nil || *in.Sprint == "" {
+		return "", nil
+	}
+	if !planning.IsWork(in.Kind) {
+		return "", fmt.Errorf("%w: %s はスプリントに入れられない", port.ErrInvalidOperation, in.Kind)
+	}
+	sp, ok := p.UsableSprint(*in.Sprint)
+	if !ok {
+		return "", port.ErrNotFound
+	}
+	if sp.State == planning.Closed {
+		return "", refusal.New("完了したスプリントには入れられません")
+	}
+	return sp.ID, nil
 }
 
 // checkValues は、プロジェクトのワークスペースの設定で作成の値を検査して読む(親の検査のあと)。

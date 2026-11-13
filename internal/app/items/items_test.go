@@ -14,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -185,5 +186,88 @@ func TestCreateDoesNotWriteAFalseCheck(t *testing.T) {
 	on, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Kind: item.Epic, Title: "請求", Values: map[change.ID]json.RawMessage{p.ID: raw(`true`)}})
 	if err != nil || item.FieldValue(on, p) != true {
 		t.Errorf("true = %v, %v", item.FieldValue(on, p), err)
+	}
+}
+
+// seedSprint は、ワークスペース ws にスプリントを書く。deleted なら、そのあと削除する。
+func seedSprint(t *testing.T, s port.Stores, ws workspace.ID, sp planning.Sprint, deleted bool) {
+	t.Helper()
+	ds := planning.SprintDrafts(planning.Sprint{}, sp)
+	if deleted {
+		ds = append(ds, planning.DeleteSprint(sp.ID))
+	}
+	writeWorkspace(t, s, ws, ds)
+}
+
+// seedRelease は、サンプルのワークスペースにリリースを書く。deleted なら、そのあと削除する。
+func seedRelease(t *testing.T, s port.Stores, r planning.Release, deleted bool) {
+	t.Helper()
+	ds := planning.ReleaseDrafts(planning.Release{}, r)
+	if deleted {
+		ds = append(ds, planning.DeleteRelease(r.ID))
+	}
+	writeWorkspace(t, s, apptest.SampleWorkspace, ds)
+}
+
+func writeWorkspace(t *testing.T, s port.Stores, ws workspace.ID, ds []change.Draft) {
+	t.Helper()
+	op := port.Operation{Actor: change.User("taro"), Summary: "計画を用意"}
+	err := s.Write(t.Context(), store, op, func(tx port.Tx) error { return tx.WriteWorkspaces().Append(ws, ds...) })
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateWithSprint(t *testing.T) {
+	svc, rec := setupRec(t)
+	seedSprint(t, rec, apptest.SampleWorkspace, planning.Sprint{ID: "S1", Name: "Sprint 1", State: planning.Active}, false)
+	seedSprint(t, rec, apptest.SampleWorkspace, planning.Sprint{ID: "S3", Name: "Sprint 3", State: planning.Planned}, false)
+	seedSprint(t, rec, apptest.SampleWorkspace, planning.Sprint{ID: "S0", Name: "Sprint 0", State: planning.Closed}, false)
+	seedSprint(t, rec, apptest.SampleWorkspace, planning.Sprint{ID: "S2", Name: "Sprint 2", State: planning.Planned}, true)
+	addOtherWorkspace(t, rec)
+	seedSprint(t, rec, mobileWorkspace, planning.Sprint{ID: "SM", Name: "Mobile 1", State: planning.Active}, false)
+	in := func(kind item.Kind, sprint change.ID) items.CreateInput {
+		return items.CreateInput{Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: kind, Title: "新規", Sprint: &sprint}
+	}
+
+	for _, c := range []struct {
+		sprint change.ID
+		kind   item.Kind
+	}{{"S1", item.Story}, {"S3", item.Task}, {"S1", item.Bug}} {
+		it, err := svc.Create(t.Context(), in(c.kind, c.sprint))
+		if err != nil || it.Sprint != c.sprint {
+			t.Errorf("%s を %s で: sprint = %q, %v", c.kind, c.sprint, it.Sprint, err)
+		}
+	}
+	if it, err := svc.Create(t.Context(), in(item.Task, "")); err != nil || it.Sprint != "" {
+		t.Errorf("空はバックログ: %q, %v", it.Sprint, err)
+	}
+	none := in(item.Task, "")
+	none.Sprint = nil
+	if it, err := svc.Create(t.Context(), none); err != nil || it.Sprint != "" {
+		t.Errorf("nil はバックログ: %q, %v", it.Sprint, err)
+	}
+
+	before, _ := svc.List(t.Context(), store, apptest.SampleProject)
+	if _, err := svc.Create(t.Context(), in(item.Task, "S0")); message(err) != "完了したスプリントには入れられません" {
+		t.Errorf("完了: %v", err)
+	}
+	for _, id := range []change.ID{"S2", "SM", "NOPE"} {
+		if _, err := svc.Create(t.Context(), in(item.Task, id)); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s: %v", id, err)
+		}
+	}
+	epic := in(item.Epic, "S1")
+	epic.Parent = nil
+	if _, err := svc.Create(t.Context(), epic); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Epic: %v", err)
+	}
+	step := in(item.Step, "S1")
+	step.Parent = ptr(apptest.SampleTask)
+	if _, err := svc.Create(t.Context(), step); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Step: %v", err)
+	}
+	if after, _ := svc.List(t.Context(), store, apptest.SampleProject); len(after) != len(before) {
+		t.Error("断ったのに保存した")
 	}
 }
