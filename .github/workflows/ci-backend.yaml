@@ -124,7 +124,7 @@ jobs:
 
       # mise.toml に固定したツールのうち gotestsum だけを入れる。Node と pnpm は GUI のジョブ用で、
       # ここで入れると shard のジョブがそれぞれ遅くなる。Renovate の mise manager がバージョンを追う。
-      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           install_args: github:gotestyourself/gotestsum
 
@@ -285,7 +285,7 @@ jobs:
 
       # mise.toml に固定したツールのうち gotestsum だけを入れる。Node と pnpm は GUI のジョブ用で、
       # ここで入れると shard のジョブがそれぞれ遅くなる。Renovate の mise manager がバージョンを追う。
-      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           install_args: github:gotestyourself/gotestsum
 
