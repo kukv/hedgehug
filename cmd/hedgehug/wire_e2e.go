@@ -15,12 +15,15 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/syncing"
+	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
 // e2e 用のビルドの Store の ID。どちらにもサンプルデータを入れる。readonlyStore は閲覧のみの Store。
 const (
 	e2eStore      = "01E2ESTORE0000000000000001"
 	readonlyStore = "01E2ESTORE0000000000000002"
+	// e2eAccount は、最初から入っているアカウント(login e2e-bot)。2 つの Store に割り当て、リンクの取り直しが GitHub に届くようにする。
+	e2eAccount = "e2e-account"
 )
 
 // wire は、Playwright の通しのテスト用に、口に apptest の偽物とサンプルデータを差し込む(設計書 6 節)。
@@ -40,6 +43,10 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		if err := apptest.Sample(ctx, stores, id); err != nil {
 			return httpapi.Deps{}, err
 		}
+	}
+	accounts := apptest.NewAccounts()
+	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
+		return httpapi.Deps{}, err
 	}
 	hub := events.NewHub()
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
@@ -65,16 +72,20 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
 		}},
-		Accounts:    apptest.NewAccounts(),
-		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
-		GitHub:      e2eGitHub,
-		DeviceFlow:  e2eDeviceFlow,
-		Hosts:       apptest.Hosts{ID: "e2e-client"},
-		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{{ID: e2eStore, Name: "e2e", Remote: true}, {ID: readonlyStore, Name: "readonly"}}},
-		Clock:       apptest.NewClock(time.Now()),
-		Sync:        syncSvc,
-		Auto:        auto,
-		Events:      hub,
+		Accounts:   accounts,
+		Checks:     apptest.NewChecks(),
+		Secrets:    &apptest.Secrets{Tokens: e2eTokens},
+		GitHub:     e2eGitHub,
+		DeviceFlow: e2eDeviceFlow,
+		Hosts:      apptest.Hosts{ID: "e2e-client"},
+		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
+			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
+			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
+		}},
+		Clock:  apptest.NewClock(time.Now()),
+		Sync:   syncSvc,
+		Auto:   auto,
+		Events: hub,
 	}, nil
 }
 

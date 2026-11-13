@@ -29,6 +29,20 @@ func TestLiveViewer(t *testing.T) {
 	}
 }
 
+func TestLiveLookup(t *testing.T) {
+	token := liveToken(t)
+	org := os.Getenv("HEDGEHUG_LIVE_ORG")
+	// hh-live の #1 があることだけを前提にする(PR か Issue かは問わない。前回の github-live も hh-live の
+	// PR と開いている Issue があることを前提にしていた)。
+	f, err := New(nil).Lookup(context.Background(), token, org+"/hh-live", 1)
+	if err != nil || f.Number != 1 || f.Title == "" || !strings.EqualFold(f.Repo, org+"/hh-live") {
+		t.Errorf("Lookup = %+v, %v", f, err)
+	}
+	if _, err := New(nil).Lookup(context.Background(), token, org+"/hh-live", 999999); err == nil || !strings.Contains(err.Error(), "not_found") {
+		t.Errorf("missing number: %v", err)
+	}
+}
+
 func TestLiveRejectsBadToken(t *testing.T) {
 	liveToken(t)
 	_, err := New(nil).Viewer(context.Background(), "not-a-real-token")

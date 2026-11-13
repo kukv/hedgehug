@@ -55,6 +55,7 @@ type Deps struct {
 	Hosts       port.Hosts
 	StoreGitHub port.StoreGitHub
 	Clock       port.Clock
+	Checks      port.Checks // このマシンが読んだ PR のチェックの結果(D3)
 
 	// トラック C(同期)。Sync と Auto はサーバーに 1 つで、cmd が作る(自動の同期を動かすため)。
 	Sync   *appsyncing.Service
@@ -75,6 +76,11 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	cfg.CreateHooks = nil
 	api := humago.New(mux, cfg)
 
+	hub := deps.Events
+	if hub == nil {
+		hub = events.NewHub()
+	}
+
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
@@ -91,11 +97,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		History:      apphistory.Service{Stores: deps.Stores, Clock: deps.Clock},
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
-	ghapi.Register(api, githubServices(deps))
-	hub := deps.Events
-	if hub == nil {
-		hub = events.NewHub()
-	}
+	ghapi.Register(api, githubServices(deps, hub))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})
 
@@ -103,11 +105,14 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 }
 
 // githubServices は、GitHub 連携の usecase を組む。Session はサーバーに 1 つ(アプリを開いているあいだの状態)。
-// D3 で Connector を使う API を足すときは、同じ s から ghapp.Connector{Session: s, ...} を作る(Session を 2 つ作らない)。
-func githubServices(d Deps) ghapi.Services {
+func githubServices(d Deps, hub port.Events) ghapi.Services {
 	s := d.GitHubSession
 	if s == nil {
 		s = ghapp.NewSession()
+	}
+	conn := ghapp.Connector{
+		Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
+		Hosts: d.Hosts, Stores: d.StoreGitHub, Clock: d.Clock,
 	}
 	return ghapi.Services{
 		List:   ghapp.ListAccounts{Accounts: d.Accounts, Session: s},
@@ -120,5 +125,6 @@ func githubServices(d Deps) ghapi.Services {
 			Session: s, Accounts: d.Accounts, Secrets: d.Secrets, GitHub: d.GitHub, Device: d.DeviceFlow,
 			Hosts: d.Hosts, IDs: d.IDs, Clock: d.Clock,
 		},
+		Links: ghapp.Links{Stores: d.Stores, Identity: d.Identity, Connector: conn, Checks: d.Checks, Events: hub},
 	}
 }

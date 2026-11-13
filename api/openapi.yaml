@@ -542,6 +542,98 @@ components:
         - choices
         - fields
       type: object
+    LinkInput:
+      additionalProperties: false
+      properties:
+        addToProject:
+          description: プロジェクトのリポジトリにも追加する
+          type: boolean
+        kind:
+          enum:
+            - pr
+            - issue
+          type: string
+        number:
+          description: 入力のまま。正の整数でなければ断る
+          type: string
+        repo:
+          type: string
+      required:
+        - kind
+        - repo
+        - number
+        - addToProject
+      type: object
+    LinkRef:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - pr
+            - issue
+          type: string
+        number:
+          format: int64
+          type: integer
+        repo:
+          type: string
+      required:
+        - kind
+        - repo
+        - number
+      type: object
+    LinkRow:
+      additionalProperties: false
+      properties:
+        checks:
+          description: このマシンが読んだ PR のチェックの結果。なければ空
+          enum:
+            - ""
+            - success
+            - failure
+            - pending
+          type: string
+        error:
+          description: "取り直しの失敗(「状態を更新できませんでした: …」)。なければ空"
+          type: string
+        kind:
+          enum:
+            - pr
+            - issue
+          type: string
+        number:
+          format: int64
+          type: integer
+        repo:
+          description: owner/name
+          type: string
+        review:
+          description: Issue は none
+          enum:
+            - none
+            - pending
+            - approved
+            - changes_requested
+          type: string
+        state:
+          enum:
+            - open
+            - draft
+            - merged
+            - closed
+          type: string
+        title:
+          type: string
+      required:
+        - kind
+        - repo
+        - number
+        - title
+        - state
+        - review
+        - checks
+        - error
+      type: object
     ListOutputBody:
       additionalProperties: false
       properties:
@@ -639,6 +731,66 @@ components:
         - start
         - end
         - repos
+      type: object
+    ProjectLinkRow:
+      additionalProperties: false
+      properties:
+        checks:
+          description: このマシンが読んだ PR のチェックの結果。なければ空
+          enum:
+            - ""
+            - success
+            - failure
+            - pending
+          type: string
+        display:
+          description: アイテムの画面の ID(HH-2)
+          type: string
+        error:
+          description: "取り直しの失敗(「状態を更新できませんでした: …」)。なければ空"
+          type: string
+        item:
+          description: アイテムの内部 ID
+          type: string
+        kind:
+          enum:
+            - pr
+            - issue
+          type: string
+        number:
+          format: int64
+          type: integer
+        repo:
+          description: owner/name
+          type: string
+        review:
+          description: Issue は none
+          enum:
+            - none
+            - pending
+            - approved
+            - changes_requested
+          type: string
+        state:
+          enum:
+            - open
+            - draft
+            - merged
+            - closed
+          type: string
+        title:
+          type: string
+      required:
+        - item
+        - display
+        - kind
+        - repo
+        - number
+        - title
+        - state
+        - review
+        - checks
+        - error
       type: object
     ProjectRepo:
       additionalProperties: false
@@ -1766,7 +1918,7 @@ paths:
       summary: gh CLI・環境変数・OS のキーチェーンのアカウントの認証の確認をやり直す
   /api/events:
     get:
-      description: "出来事ごとに `event: store` または `event: sync` の行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"
+      description: "出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"
       operationId: watch-events
       responses:
         "200":
@@ -2239,6 +2391,127 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの履歴を新しい順で返す
+  /api/stores/{store}/items/{item}/links:
+    get:
+      operationId: list-links
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/LinkRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの PR・Issue のリンクを、リンクした順に返す(GitHub には問い合わせない)
+    post:
+      operationId: add-link
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: PR か Issue を GitHub で確かめてリンクする
+  /api/stores/{store}/items/{item}/links/refresh:
+    post:
+      operationId: refresh-links
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/LinkRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのリンクを GitHub から取り直し、一覧を返す
+  /api/stores/{store}/items/{item}/links/remove:
+    post:
+      operationId: remove-link
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkRef"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: リンクを外す(PR は解除の記録に入る)
   /api/stores/{store}/items/{item}/move-up:
     post:
       operationId: move-item-up
@@ -3102,6 +3375,37 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトのすべてのアイテムを番号の順で返す
+  /api/stores/{store}/projects/{project}/links:
+    get:
+      operationId: list-project-links
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/ProjectLinkRow"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの下のアイテムのリンクを、アイテムの番号順に返す
   /api/stores/{store}/projects/{project}/owner:
     put:
       operationId: set-project-owner
