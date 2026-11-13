@@ -80,9 +80,7 @@ func (a *Auto) Waiting() bool {
 	now := a.Service.Clock.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	held := waiting(a.holds, now)
-	offline := waiting(a.offline, now)
-	return held || offline
+	return waiting(a.holds, now) || waiting(a.offline, now) // take と同じ式(同じ知らせを消す)
 }
 
 // Run は、ctx が終わるまで、1 秒ごとに Step を呼ぶ。Step の失敗は、ログに出して、次の Step でやり直す。
