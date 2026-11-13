@@ -138,7 +138,7 @@ git commit -m "fix: 間隔ごとの取り直しで、読んだあとに削除さ
 - 末尾の節「A4b が入ったときに足すもの」を、節の見出しは残したまま、「A4b が入ったあとの扱いは `2026-11-14-hedgehug-d4a-deleted-items.md` の DD-1〜DD-4」とする 4 行の表(場所・したこと・テスト)に置き換える:
   - `fire` … 判定は足さない(DD-1)… `TestLinksOfADeletedItemAreNotFound`
   - `collect`・`collectProject` … `port.LiveProjects`・`LiveItems` で集める(DD-3)… `TestReadOnceSkipsDeletedItems`・`TestReadOnceSkipsDeletedProject`
-  - `writeTarget` … 読んだあとで削除されたら飛ばす(DD-4)… `TestReadOnceItemDeletedMeanwhile`
+  - `writeTarget` … 読んだあとで削除されたら飛ばす(DD-4)… `TestReadOnceItemDeletedMeanwhile`・`TestReadOnceItemDeletedBeforeWrite`(最終レビューで足した。書く保存の中の readItem で削除済みと分かる場合)
   - `readItem`・Refresh … A4b-4 の 404 を採った(DD-2)… `TestLinksOfADeletedItemAreNotFound`
 
 - [ ] **Step 3: 残りがないことを確かめる**

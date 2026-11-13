@@ -846,5 +846,5 @@ A4b が入ったあとの扱いは `2026-11-14-hedgehug-d4a-deleted-items.md` �
 |---|---|---|
 | `fire` | 判定は足さない(DD-1) | `TestLinksOfADeletedItemAreNotFound` |
 | `collect`・`collectProject` | `port.LiveProjects`・`LiveItems` で集める(DD-3) | `TestReadOnceSkipsDeletedItems`・`TestReadOnceSkipsDeletedProject` |
-| `writeTarget` | 読んだあとで削除されたら飛ばす(DD-4) | `TestReadOnceItemDeletedMeanwhile` |
+| `writeTarget` | 読んだあとで削除されたら飛ばす(DD-4) | `TestReadOnceItemDeletedMeanwhile`・`TestReadOnceItemDeletedBeforeWrite` |
 | `readItem`・Refresh | A4b-4 の 404 を採った(DD-2) | `TestLinksOfADeletedItemAreNotFound` |
