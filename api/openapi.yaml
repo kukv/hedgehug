@@ -102,6 +102,111 @@ components:
       required:
         - name
       type: object
+    ApplyAutomationIgnoringWorkflow:
+      additionalProperties: false
+      properties:
+        status:
+          description: 変えるステータスの ID(通知の Status)
+          type: string
+      required:
+        - status
+      type: object
+    AutomationRule:
+      additionalProperties: false
+      properties:
+        action:
+          enum:
+            - status
+            - assignee
+          type: string
+        allMerged:
+          description: きっかけが pr_merged のときの条件
+          type: boolean
+        enabled:
+          type: boolean
+        id:
+          type: string
+        name:
+          type: string
+        trigger:
+          enum:
+            - pr_open
+            - review_requested
+            - pr_merged
+            - issue_closed
+            - status
+            - steps_done
+          type: string
+        triggerStatus:
+          description: きっかけが status のときのステータスの ID。ほかは空
+          type: string
+        value:
+          description: ステータスの ID、ログイン名、または @none(未割り当て)
+          type: string
+      required:
+        - id
+        - enabled
+        - name
+        - trigger
+        - triggerStatus
+        - allMerged
+        - action
+        - value
+      type: object
+    AutomationRuleInput:
+      additionalProperties: false
+      properties:
+        action:
+          enum:
+            - status
+            - assignee
+          type: string
+        allMerged:
+          description: きっかけが pr_merged のときの条件
+          type: boolean
+        name:
+          type: string
+        trigger:
+          enum:
+            - pr_open
+            - review_requested
+            - pr_merged
+            - issue_closed
+            - status
+            - steps_done
+          type: string
+        triggerStatus:
+          description: きっかけが status のときのステータスの ID。ほかは空
+          type: string
+        value:
+          description: ステータスの ID、ログイン名、または @none(未割り当て)
+          type: string
+      required:
+        - name
+        - trigger
+        - triggerStatus
+        - allMerged
+        - action
+        - value
+      type: object
+    AutomationRun:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        display:
+          type: string
+        item:
+          type: string
+        text:
+          type: string
+      required:
+        - at
+        - item
+        - display
+        - text
+      type: object
     ChangeWorkspacePrefix:
       additionalProperties: false
       properties:
@@ -485,6 +590,14 @@ components:
         - title
         - structure
       type: object
+    SetAutomationRuleEnabled:
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+      required:
+        - enabled
+      type: object
     SetItemProperty:
       additionalProperties: false
       properties:
@@ -791,6 +904,23 @@ components:
         - name
         - login
         - method
+      type: object
+    WorkspaceAutomation:
+      additionalProperties: false
+      properties:
+        recent:
+          items:
+            $ref: "#/components/schemas/AutomationRun"
+          nullable: true
+          type: array
+        rules:
+          items:
+            $ref: "#/components/schemas/AutomationRule"
+          nullable: true
+          type: array
+      required:
+        - rules
+        - recent
       type: object
     WorkspaceDetail:
       additionalProperties: false
@@ -1542,6 +1672,41 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムを返す
+  /api/stores/{store}/items/{item}/automation/{rule}/apply:
+    post:
+      operationId: apply-automation-ignoring-workflow
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyAutomationIgnoringWorkflow"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 止まった自動化の変更を、制約を無視して適用
   /api/stores/{store}/items/{item}/check:
     post:
       operationId: check-step
@@ -2041,6 +2206,166 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: ワークスペースと設定
+  /api/stores/{store}/workspaces/{workspace}/automation:
+    get:
+      operationId: get-workspace-automation
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAutomation"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 自動化のルールと最近の実行
+  /api/stores/{store}/workspaces/{workspace}/automation/rules:
+    post:
+      operationId: create-automation-rule
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationRuleInput"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationRule"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ルールを作成
+  /api/stores/{store}/workspaces/{workspace}/automation/rules/{rule}:
+    delete:
+      operationId: delete-automation-rule
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ルールを削除
+    put:
+      operationId: update-automation-rule
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationRuleInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ルールを編集
+  /api/stores/{store}/workspaces/{workspace}/automation/rules/{rule}/enabled:
+    put:
+      operationId: set-automation-rule-enabled
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAutomationRuleEnabled"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ルールを有効・無効にする
   /api/stores/{store}/workspaces/{workspace}/category-defaults/{category}:
     put:
       operationId: set-workspace-category-default

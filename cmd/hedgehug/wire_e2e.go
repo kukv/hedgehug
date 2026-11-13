@@ -60,6 +60,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Stores:   stores,
 		IDs:      ids,
 		Identity: apptest.Identity{Login: "taro"},
+		Inbox:    &apptest.Inbox{},
 		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
