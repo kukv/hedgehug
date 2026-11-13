@@ -292,3 +292,19 @@ func TestDeletedProjectsAreNotComparedForNamesAndRanks(t *testing.T) {
 		t.Errorf("Rename = %+v, %v", renamed, err)
 	}
 }
+
+// 削除済みのワークスペースには、プロジェクトを作れず、一覧も読めない(B5b-4)。
+func TestProjectsOfDeletedWorkspace(t *testing.T) {
+	svc := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	_, createErr := svc.Create(ctx, projects.CreateInput{Store: store, Workspace: apptest.SampleWorkspace, Title: "新しい"})
+	_, listErr := svc.List(ctx, store, apptest.SampleWorkspace)
+	for name, err := range map[string]error{"Create": createErr, "List": listErr} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s in a deleted workspace: %v, want port.ErrNotFound", name, err)
+		}
+	}
+}

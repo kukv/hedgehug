@@ -10,6 +10,9 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // 削除済みのアイテムは、一覧にも、Get・FindByNumber にも出ず、変更もできない(A4b-4)。
@@ -176,5 +179,81 @@ func must(t *testing.T) func(item.Item, error) item.Item {
 			t.Fatal(err)
 		}
 		return it
+	}
+}
+
+// 削除済みのワークスペースの次の番号は、ワークスペースがないときと同じ(B5b-4)。
+func TestNextNumberOfDeletedWorkspace(t *testing.T) {
+	svc := setup(t)
+	if err := apptest.DeleteWorkspace(t.Context(), svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.NextNumber(t.Context(), store, apptest.SampleWorkspace); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("NextNumber = %v, want port.ErrNotFound", err)
+	}
+}
+
+// 削除したワークスペースと同じ名前・接頭辞で作り直したワークスペースの採番は、新しいワークスペースのログで数えるので 1 から始まる。
+func TestNextNumberOfRecreatedWorkspace(t *testing.T) {
+	svc := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	again := workspace.Workspace{ID: svc.IDs.New(), Name: "Web", Prefix: "HH"}
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを作成"}
+	err := svc.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		d, err := workspace.CreateWithSettings(again, workspace.DefaultSettings(svc.IDs.New))
+		if err != nil {
+			return err
+		}
+		return tx.WriteWorkspaces().Append(again.ID, d)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.NextNumber(ctx, store, again.ID); err != nil || n != 1 {
+		t.Errorf("NextNumber = %d, %v, want 1", n, err)
+	}
+}
+
+// 削除済みのワークスペースと同じ名前・接頭辞で作り直したワークスペースでは、番号 1 のアイテムは新しい方を返す。
+// 削除済みのワークスペースの ID では、番号で探しても見つからない。
+func TestFindByNumberOfRecreatedWorkspace(t *testing.T) {
+	svc := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteProject(ctx, svc.Stores, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(ctx, svc.Stores, store, apptest.SampleEpic, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	again := workspace.Workspace{ID: svc.IDs.New(), Name: "Web", Prefix: "HH"}
+	pr := project.Project{ID: svc.IDs.New(), Place: project.Place{Workspace: again.ID, Number: 1}, Rank: "V", Title: "ログイン", Status: project.Todo}
+	it := item.Item{ID: svc.IDs.New(), Place: item.Place{Workspace: again.ID, Project: pr.ID, Number: 1}, Kind: item.Epic, Rank: rank.First, Title: "認証", Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium}
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを作成"}
+	err := svc.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		d, err := workspace.CreateWithSettings(again, workspace.DefaultSettings(svc.IDs.New))
+		if err != nil {
+			return err
+		}
+		return errors.Join(
+			tx.WriteWorkspaces().Append(again.ID, d),
+			tx.WriteProjects().Append(pr.ID, project.Create(pr)),
+			tx.WriteItems().Append(it.ID, item.Create(it)),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.FindByNumber(ctx, store, again.ID, 1)
+	if err != nil || got.ID != it.ID {
+		t.Errorf("FindByNumber(新) = %+v, %v, want %s", got, err, it.ID)
+	}
+	if _, err := svc.FindByNumber(ctx, store, apptest.SampleWorkspace, 1); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("FindByNumber(削除済み) error = %v, want ErrNotFound", err)
 	}
 }

@@ -212,7 +212,7 @@ func contractLists(t *testing.T, s port.Stores, id port.StoreID) {
 	})
 }
 
-// contractDeleted は、削除の行(delete・f が deleted)が、アイテムとプロジェクトの Deleted の印として読め、
+// contractDeleted は、削除の行(delete・f が deleted)が、アイテム・プロジェクト・ワークスペースの Deleted の印として読め、
 // 削除済みも Get と List が返すことを確かめる(A4b-2・A4b-3)。root と op は行のとおりで、下のものは root が false。
 func contractDeleted(t *testing.T, s port.Stores, id port.StoreID) {
 	parent := cItem.ID
@@ -233,11 +233,12 @@ func contractDeleted(t *testing.T, s port.Stores, id port.StoreID) {
 		return err
 	})
 	mustWrite(t, s, id, taro, func(tx port.Tx) error {
-		return tx.WriteProjects().Append(cProject.ID, change.NewDeleteEntity(true))
+		return errors.Join(tx.WriteProjects().Append(cProject.ID, change.NewDeleteEntity(true)), tx.WriteWorkspaces().Append(cWorkspace.ID, change.NewDeleteEntity(true)))
 	})
 	mustRead(t, s, id, func(r port.Reader) error {
 		wantDeletedItems(t, r, child.ID)
 		wantDeletedProject(t, r)
+		wantDeletedWorkspace(t, r)
 		return nil
 	})
 }

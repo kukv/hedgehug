@@ -12,7 +12,7 @@ import (
 func (s Service) List(ctx context.Context, store port.StoreID, ws workspace.ID) ([]project.Project, error) {
 	var out []project.Project
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		if _, err := r.Workspaces().Get(ws); err != nil {
+		if _, err := port.LiveWorkspace(r, ws); err != nil {
 			return err
 		}
 		var err error

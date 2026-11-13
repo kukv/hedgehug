@@ -41,7 +41,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (project.Project, e
 	op := port.Operation{Actor: change.User(me), Summary: fmt.Sprintf("プロジェクト「%s」を作成", oneLine)}
 	var created project.Project
 	err = s.Stores.Write(ctx, in.Store, op, func(tx port.Tx) error {
-		if _, err := tx.Workspaces().Get(in.Workspace); err != nil {
+		if _, err := port.LiveWorkspace(tx, in.Workspace); err != nil {
 			return err
 		}
 		siblings, err := port.LiveProjects(tx, in.Workspace)

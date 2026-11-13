@@ -24,14 +24,14 @@ func (s Service) Create(ctx context.Context, store port.StoreID, name, prefix st
 	w := workspace.Workspace{ID: s.IDs.New(), Name: name, Prefix: prefix}
 	op := port.Operation{Actor: actor, Summary: fmt.Sprintf("ワークスペース「%s」を作成", oneLine(name))}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		others, err := tx.Workspaces().List()
+		others, err := port.LiveWorkspaces(tx)
 		if err != nil {
 			return err
 		}
 		if err := workspace.CheckCreate(w, others); err != nil {
 			return err
 		}
-		ordered, err := orderedWorkspaces(tx)
+		ordered, err := orderedWorkspaces(tx) // 削除済みも含める(rank を使い回さない)
 		if err != nil {
 			return err
 		}

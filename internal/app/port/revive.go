@@ -33,8 +33,11 @@ func EditableItem(r Reader, id item.ID) (item.Item, error) {
 	return it, nil
 }
 
-// aliveAbove は、it の祖先のアイテムとプロジェクトがどれも削除済みでないことを確かめる。
+// aliveAbove は、it の祖先のアイテム・プロジェクト・ワークスペースがどれも削除済みでないことを確かめる。
 func aliveAbove(r Reader, it item.Item) error {
+	if _, err := LiveWorkspace(r, it.Place.Workspace); err != nil {
+		return err
+	}
 	if _, err := LiveProject(r, it.Place.Project); err != nil {
 		return err
 	}
@@ -58,6 +61,12 @@ func EditableProject(r Reader, id project.ID) (project.Project, error) {
 	}
 	if p.Deleted != nil && !p.Deleted.Root {
 		return project.Project{}, ErrNotFound
+	}
+	if p.Deleted != nil {
+		// ワークスペースが別の操作で削除済みなら取り消さない(08「親が削除済みのときの復元」。B5b)。
+		if _, err := LiveWorkspace(r, p.Place.Workspace); err != nil {
+			return project.Project{}, err
+		}
 	}
 	return p, nil
 }

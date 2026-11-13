@@ -35,11 +35,13 @@ import {
   createWorkspace,
   createWorkspaceTemplate,
   deleteAutomationRule,
+  deleteWorkspace,
   deleteWorkspaceProperty,
   deleteWorkspaceTemplate,
   deleteWorkspaceValue,
   getWorkspace,
   getWorkspaceAutomation,
+  getWorkspaceDeletePreview,
   getWorkspaceUsage,
   moveWorkspace,
   moveWorkspaceProperty,
@@ -164,6 +166,15 @@ export function createWorkspacesPort(): WorkspacesPort {
     rename: (s, w, name) => call(() => renameWorkspace(s, w, { name })),
     changePrefix: (s, w, prefix) => call(() => changeWorkspacePrefix(s, w, { prefix })),
     move: (s, w, direction) => call(() => moveWorkspace(s, w, { direction })),
+    workspaceDeletePreview: (s, w) =>
+      call(async () => {
+        const p = await getWorkspaceDeletePreview(s, w);
+        return { projects: p.projects, items: p.items, retentionDays: p.retentionDays };
+      }),
+    deleteWorkspace: (s, w) =>
+      call(async () => {
+        await deleteWorkspace(s, w);
+      }),
     addProperty: (s, w, input) =>
       call(async () =>
         toProperty(

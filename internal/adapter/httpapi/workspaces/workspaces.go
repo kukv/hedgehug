@@ -69,6 +69,7 @@ func Register(api huma.API, svc appworkspaces.Service) {
 	registerProperties(api, svc)
 	registerValues(api, svc)
 	registerUsage(api, svc)
+	registerDelete(api, svc)
 	registerTemplates(api, svc)
 }
 

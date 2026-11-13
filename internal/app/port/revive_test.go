@@ -346,3 +346,24 @@ func TestReviveProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
 		t.Errorf("restore rows = %d, want 0", n)
 	}
 }
+
+// 利用者が削除したプロジェクト・アイテムでも、ワークスペースが別の操作で削除済みなら取り消さず 404(決定 S9、
+// 08「親が削除済みのときの復元」のワークスペースの行。B5b)。
+func TestEditableUnderDeletedWorkspace(t *testing.T) {
+	s := reviveStores(t)
+	deleteIn(t, s, map[item.ID]bool{apptest.SampleTask: true}, map[project.ID]bool{apptest.SampleProject: true})
+	if err := apptest.DeleteWorkspace(t.Context(), s, reviveStore, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+		if _, err := port.EditableProject(r, apptest.SampleProject); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("project: err = %v, want ErrNotFound", err)
+		}
+		if _, err := port.EditableItem(r, apptest.SampleTask); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("item: err = %v, want ErrNotFound", err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

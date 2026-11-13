@@ -22,7 +22,7 @@ type Usage struct {
 func (s Service) Usage(ctx context.Context, store port.StoreID, ws workspace.ID) (Usage, error) {
 	u := Usage{Values: map[change.ID]int{}, Properties: map[change.ID]int{}}
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		if _, err := r.Workspaces().Get(ws); err != nil {
+		if _, err := port.LiveWorkspace(r, ws); err != nil {
 			return err
 		}
 		items, err := liveWorkspaceItems(r, ws)

@@ -118,6 +118,101 @@ func TestCreateTemplateFromItemSkipsDeleted(t *testing.T) {
 	}
 }
 
+// 削除済みのワークスペースは、一覧にも Get にも出ず、使われ方・名前・接頭辞・設定・並びの変更もできない。
+// 並べ替えでは、削除済みを飛ばして隣と入れ替わる(B5b-4)。
+func TestDeletedWorkspaceIsHiddenAndCannotBeChanged(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	a, _ := s.Create(ctx, store, "A", "AA")
+	b, _ := s.Create(ctx, store, "B", "BB")
+	c, _ := s.Create(ctx, store, "C", "CC")
+	if err := apptest.DeleteWorkspace(ctx, s.Stores, store, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.List(ctx, store)
+	if err != nil || len(list) != 2 || list[0].ID != a.ID || list[1].ID != c.ID {
+		t.Fatalf("List = %+v, %v", list, err)
+	}
+	_, getErr := s.Get(ctx, store, b.ID)
+	_, usageErr := s.Usage(ctx, store, b.ID)
+	_, addErr := s.AddProperty(ctx, store, b.ID, workspaces.NewProperty{Name: "メモ", Key: "memo", Type: workspace.TypeText})
+	for name, err := range map[string]error{
+		"Get": getErr, "Usage": usageErr, "AddProperty": addErr,
+		"Rename":        s.Rename(ctx, store, b.ID, "B2"),
+		"ChangePrefix":  s.ChangePrefix(ctx, store, b.ID, "ZZ"),
+		"MoveWorkspace": s.MoveWorkspace(ctx, store, b.ID, true),
+	} {
+		if !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s of a deleted workspace: %v, want port.ErrNotFound", name, err)
+		}
+	}
+	if err := s.MoveWorkspace(ctx, store, c.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	list, err = s.List(ctx, store)
+	if err != nil || len(list) != 2 || list[0].ID != c.ID || list[1].ID != a.ID {
+		t.Errorf("List after moving C up = %+v, %v", list, err)
+	}
+}
+
+// 削除済みのワークスペースの名前と接頭辞は、重複の検査に入れない(03「名前の重複」)。
+func TestDeletedWorkspaceNameAndPrefixCanBeReused(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	gone, _ := s.Create(ctx, store, "Web", "HH")
+	other, _ := s.Create(ctx, store, "Other", "OT")
+	if err := apptest.DeleteWorkspace(ctx, s.Stores, store, gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename(ctx, store, other.ID, "Web"); err != nil {
+		t.Errorf("Rename to a deleted name: %v", err)
+	}
+	if err := s.ChangePrefix(ctx, store, other.ID, "HH"); err != nil {
+		t.Errorf("ChangePrefix to a deleted prefix: %v", err)
+	}
+	if _, err := s.Create(ctx, store, "Web2", "WB"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename(ctx, store, other.ID, "Other"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ChangePrefix(ctx, store, other.ID, "OT"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create(ctx, store, "Web", "HH"); err != nil {
+		t.Errorf("Create with a deleted name and prefix: %v", err)
+	}
+}
+
+// 作成の rank は削除済みも含めて計算するので、削除済みの rank を使い回さない(B5b-4)。
+func TestCreateAfterDeleteDoesNotReuseRank(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	_, _ = s.Create(ctx, store, "A", "AA")
+	b, _ := s.Create(ctx, store, "B", "BB")
+	if err := apptest.DeleteWorkspace(ctx, s.Stores, store, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Create(ctx, store, "C", "CC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranks := map[workspace.ID]string{}
+	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
+		for _, id := range []workspace.ID{b.ID, c.ID} {
+			log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: id})
+			if err != nil {
+				return err
+			}
+			ranks[id] = workspace.RankOf(log)
+		}
+		return nil
+	})
+	if err != nil || ranks[c.ID] <= ranks[b.ID] {
+		t.Errorf("ranks B=%q C=%q, %v; want C > B", ranks[b.ID], ranks[c.ID], err)
+	}
+}
+
 // beforeWrite は、次の Write の前に 1 回だけ before を呼ぶ(読んだあとの同時の変更)。
 type beforeWrite struct {
 	*apptest.Stores

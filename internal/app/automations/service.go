@@ -24,7 +24,7 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // rulesOf は、ワークスペースのルール。
 func rulesOf(r port.Reader, ws workspace.ID) ([]automation.Rule, error) {
-	if _, err := r.Workspaces().Get(ws); err != nil {
+	if _, err := port.LiveWorkspace(r, ws); err != nil {
 		return nil, err
 	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})

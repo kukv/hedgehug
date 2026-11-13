@@ -58,6 +58,18 @@ func TestRecentRunsKeepADeletedItemsRun(t *testing.T) {
 	}
 }
 
+// 削除済みのワークスペースの自動化の画面は、ワークスペースがないときと同じ(B5b-4)。
+func TestViewOfDeletedWorkspace(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteWorkspace(ctx, rec.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.List(ctx, store, apptest.SampleWorkspace); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("List = %v, want port.ErrNotFound", err)
+	}
+}
+
 // 削除済み(root: true)のアイテムへの「制約を無視して適用」は、変更を残して削除を取り消す(06「他の書き手との重なり」)。
 func TestApplyIgnoringWorkflowRevivesADeletedItem(t *testing.T) {
 	svc, rec := setup(t)

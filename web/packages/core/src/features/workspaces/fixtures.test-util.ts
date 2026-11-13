@@ -167,6 +167,11 @@ export function fakeWorkspacesPort(): FakeWorkspacesPort {
         d.prefix = prefix;
       }),
     move: (_s, _w, _direction) => write("move", () => undefined),
+    workspaceDeletePreview: async () => {
+      calls.push("workspaceDeletePreview");
+      return { projects: 0, items: 0, retentionDays: 30 };
+    },
+    deleteWorkspace: () => write("deleteWorkspace", () => undefined),
     addProperty: (s, w, input) =>
       write("addProperty", () => {
         const p: WorkspaceProperty = {
