@@ -171,3 +171,16 @@ func TestDeliverReturnsSaveErrors(t *testing.T) {
 		t.Errorf("unknown store = %v", err)
 	}
 }
+
+// SyncSave の中の同期の修復が失敗したとき(SaveError で返る)は、通信の失敗の理由(remote に接続できません)にせず、
+// error で返して、同期の失敗として記録しない。
+func TestDeliverReturnsARepairFailureAsAnError(t *testing.T) {
+	f, stores := newDeliverFixture(t)
+	boom := errors.New("repair failed")
+	f.rep.Errs = map[port.StoreID]error{"S1": &port.SaveError{Err: boom}}
+	reason, err := f.svc.Deliver(t.Context(), "S1", deliverOp, addTaro)
+	rs, _ := f.state.Records(t.Context())
+	if reason != "" || !errors.Is(err, boom) || len(rs) != 0 || memberCount(t, stores, "S1") != 0 {
+		t.Errorf("Deliver = %q, %v, records %+v", reason, err, rs)
+	}
+}

@@ -197,14 +197,14 @@ func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.
 }
 
 // saveOnce は、受け取り → 修復 → 保存 → 送信を 1 回行う。送信が断られたら、保存のコミットを捨てる
-// (受け取って合わせた結果と修復は残す。Sync と同じく、修復は送る前に書く。決定 C3a-2)。送信が拒否されたら errRejected。
+// (受け取って合わせた結果と修復は残す。Sync と同じく、修復は送る前に書く。決定 C3a-2。修復の失敗は *port.SaveError)。送信が拒否されたら errRejected。
 func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
 	theirs, err := s.receive(ctx)
 	if err != nil {
 		return port.SyncResult{}, err
 	}
 	if err := s.repairUnsent(ctx, theirs); err != nil {
-		return port.SyncResult{}, err
+		return port.SyncResult{}, &port.SaveError{Err: err} // 通信の失敗ではない(保存していない)
 	}
 	head, err := s.repo.Head()
 	if err != nil {

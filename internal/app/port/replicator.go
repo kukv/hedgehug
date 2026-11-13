@@ -15,10 +15,10 @@ type Replicator interface {
 	Sync(ctx context.Context, storeID StoreID, remote Remote) (SyncResult, error)
 	// SyncSave は、1 つのロックの中で、受け取り・修復・保存・送信を行う(02「保存」)。修復は Sync と同じく、合わせた
 	// あと送る前に RepairFunc が保存する(決定 C3a-2)。受け取りか修復が失敗したら保存しない(fn を呼ばない。
-	// 修復の失敗は *SaveError で包まない)。送れなければ保存のコミットだけを捨てて、受け取って合わせた結果は残す。送信が他の人の
+	// 修復の失敗は通信の失敗ではないので *SaveError で包む。Sync は修復の失敗を包まない)。送れなければ保存のコミットだけを捨てて、受け取って合わせた結果は残す。送信が他の人の
 	// 更新と重なったら、保存を捨てて受け取り直し、fn を呼び直す(最大 3 回)。そのため fn は試みごとに呼ばれ、
 	// 毎回新しい Tx を受け取る(前の呼び出しの書き込みは残っていない)。fn は読む値を毎回その Tx から読む。
-	// 保存の失敗(fn のエラー・op.Check・コミットの失敗)は *SaveError、通信の失敗は Err* のどれか。
+	// 保存の失敗(修復の失敗・fn のエラー・op.Check・コミットの失敗)は *SaveError、通信の失敗は Err* のどれか。
 	// 送れなかった保存のコミットを捨てられなかったときは、送信のエラーに ErrSaveNotDiscarded を Join して返す
 	// (やり直さない。保存は残り、次の同期で送られるかもしれない)。
 	// ReceiveOnly の remote には保存せず、ErrInvalidOperation を返す。
@@ -42,7 +42,7 @@ type Remote struct {
 	ReceiveOnly bool
 }
 
-// SaveError は、SyncSave の保存の失敗(fn のエラー・op.Check・コミットの失敗)。通信の失敗は包まない。
+// SaveError は、SyncSave の保存の失敗(修復の失敗・fn のエラー・op.Check・コミットの失敗)。通信の失敗は包まない。
 type SaveError struct{ Err error }
 
 func (e *SaveError) Error() string { return "save: " + e.Err.Error() }

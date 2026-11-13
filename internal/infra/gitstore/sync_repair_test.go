@@ -318,7 +318,8 @@ func TestSyncSaveRepairsBeforeSaving(t *testing.T) {
 	}
 }
 
-// 修復が失敗したら、保存しない(fn を呼ばない)。修復のエラーは *port.SaveError で包まない。
+// 修復が失敗したら、保存しない(fn を呼ばない)。修復の失敗は通信の失敗ではないので *port.SaveError で包む
+// (Deliver は理由にせず error で返す)。
 func TestSyncSaveRepairFailureDoesNotSave(t *testing.T) {
 	remote, b := diverged(t)
 	boom := errors.New("boom")
@@ -326,7 +327,7 @@ func TestSyncSaveRepairFailureDoesNotSave(t *testing.T) {
 	called := false
 	_, err := b.rep.SyncSave(t.Context(), b.id, remote, saveOp, func(port.Tx) error { called = true; return nil })
 	var se *port.SaveError
-	if !errors.Is(err, boom) || errors.As(err, &se) || called {
-		t.Errorf("err = %v, fn called %v, want boom (not a SaveError) and no call", err, called)
+	if !errors.As(err, &se) || !errors.Is(err, boom) || called {
+		t.Errorf("err = %v, fn called %v, want a SaveError around boom and no call", err, called)
 	}
 }
