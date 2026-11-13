@@ -7,8 +7,8 @@ import { project } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createProjectEditor } from "./editor";
 
-// 偽の口: 呼び出しを覚え、断らせることができる。
-function setup() {
+// 偽の口: 呼び出しを覚え、断らせることができる。reload は、保存のあとの読み直し(既定はすぐ終わる)。
+function setup(reload: () => Promise<void> = async () => {}) {
   const calls: string[] = [];
   let refusal: string | null = null;
   const base: Project = { ...project("S1", "S1-W1", 1), repos: [] };
@@ -42,6 +42,7 @@ function setup() {
     toasts,
     onChanged: async () => {
       changed += 1;
+      await reload();
     },
   });
   return {
@@ -72,6 +73,33 @@ describe("createProjectEditor", () => {
     expect(await editor.setDate(base, "start", base.start)).toBe(true);
     expect(calls).toEqual([]);
     expect(changed()).toBe(0);
+  });
+
+  // 保存のあとの読み直しが終わるまでは、画面のプロジェクトは保存の前の値のままなので、この画面で保存した値と比べる
+  // (たとえば開始日を入れてすぐ消すと、読み直しの前の値と同じに見えて、消した値が保存されない)。
+  it("compares with the value it saved while the reload after the save is running", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const { editor, base, calls } = setup(() => gate);
+    const saving = editor.setDate(base, "start", "2026-11-20");
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    // 保存した値のままの欄と、触っていない欄は送らない。
+    expect(await editor.setDate(base, "start", "2026-11-20")).toBe(true);
+    expect(await editor.rename(base, base.title)).toBe(true);
+    // 保存した値から戻す変更は、画面のプロジェクトの値と同じでも送る。
+    const clearing = editor.setDate(base, "start", base.start);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(calls).toEqual([
+      "setDate S1 S1-P1 start 2026-11-20",
+      `setDate S1 S1-P1 start ${base.start}`,
+    ]);
+    release();
+    expect(await Promise.all([saving, clearing])).toEqual([true, true]);
+    // 読み直しが終わったら、画面のプロジェクトの値と比べる。
+    expect(await editor.setDate(base, "start", base.start)).toBe(true);
+    expect(calls).toHaveLength(2);
   });
 
   it("shows the server's refusal as an error toast and returns false", async () => {
