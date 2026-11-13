@@ -56,7 +56,7 @@ export async function setup() {
   // confirms は confirmLeave に渡されたもの。env.allow が false なら「キャンセル」と答える。
   const confirms: unknown[] = [];
   const moved: string[] = [];
-  const shown: boolean[] = [];
+  const shown: (string | undefined)[] = [];
   const env = { online: true, refreshed: 0, allow: true };
   const dialog = createTransferDialog({
     transfers: fake,
@@ -75,9 +75,9 @@ export async function setup() {
       },
     },
     online: () => env.online,
-    afterMoved: async (from, to, panelShowed) => {
+    afterMoved: async (from, to, panelItem) => {
       moved.push(`${itemDisplayId("HH", from.number)} → ${to.toStore}/${to.itemId}`);
-      shown.push(panelShowed);
+      shown.push(panelItem);
     },
   });
   const task = item("S1", "S1-P1", 3, "Task", null, "決済");

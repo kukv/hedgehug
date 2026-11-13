@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { get } from "../../reactive/store";
-import { flush } from "../items/fixtures.test-util";
+import { flush, item } from "../items/fixtures.test-util";
 import { setup, viewOf } from "./dialog.test-util";
 
 const sent = (calls: string[]) => calls.filter((c) => c.startsWith("transfer"));
@@ -28,7 +28,7 @@ describe("transfer dialog: sending (02「保存」、A5a-12)", () => {
     );
     expect(toastTexts()).toEqual(["HH-3 は MB-2 になりました"]);
     expect(moved).toEqual(["HH-3 → S1/S1-I3"]);
-    expect(shown).toEqual([false]);
+    expect(shown).toEqual([undefined]);
     expect(get(dialog.state)).toBeNull();
   });
 
@@ -62,15 +62,24 @@ describe("transfer dialog: sending (02「保存」、A5a-12)", () => {
     panel.set(null);
     hold.release();
     await sending;
-    expect(shown).toEqual([true]);
+    expect(shown).toEqual(["S1-I3"]);
   });
 
-  it("tells afterMoved false when the panel shows the same internal ID in another Store", async () => {
+  it("tells afterMoved nothing when the panel shows the same internal ID in another Store", async () => {
     const { dialog, task, panel, shown } = await setup();
     panel.set(viewOf({ ...task, storeId: "S2" }));
     await dialog.open(task);
     await dialog.submit();
-    expect(shown).toEqual([false]);
+    expect(shown).toEqual([undefined]);
+  });
+
+  it("tells afterMoved the item below that the panel was showing (02「保存」)", async () => {
+    const { dialog, epic, panel, shown } = await setup();
+    const child = item("S1", "S1-P1", 4, "Task", epic.id, "子");
+    panel.set(viewOf(child, [epic]));
+    await dialog.open(epic);
+    await dialog.submit();
+    expect(shown).toEqual(["S1-I4"]);
   });
 
   it("shows a refusal as it is, keeps the dialog open, and does not call afterMoved", async () => {

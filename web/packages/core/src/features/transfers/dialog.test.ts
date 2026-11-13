@@ -107,6 +107,46 @@ describe("transfer dialog: opening and choosing (02「移す先の選び方」)"
     expect(fake.calls.at(-1)).toBe("preview S1-I3 S1/S1-W2/S1-W2-P2");
   });
 
+  it("takes a status choice only for a row of the preview and one of its options", async () => {
+    const { dialog, fake, task } = await setup();
+    fake.previewOf["S1/S1-W2/S1-W2-P1"] = {
+      ...fake.defaultPreview,
+      replacements: [
+        {
+          status: "st9",
+          name: "Review",
+          count: 1,
+          choices: [{ id: "st1", name: "Todo" }],
+          default: "st1",
+        },
+      ],
+    };
+    await dialog.open(task);
+    dialog.setReplacement("st9", "st7");
+    dialog.setReplacement("st8", "st1");
+    expect(get(dialog.state)?.replacements.map((r) => [r.status, r.value])).toEqual([
+      ["st9", "st1"],
+    ]);
+    await dialog.submit();
+    expect(fake.calls.at(-1)).toContain(
+      JSON.stringify({ statusChoices: { st9: "st1" } }).slice(1, -1),
+    );
+  });
+
+  it("uses only the later open when open is called again while the candidates load", async () => {
+    const { dialog, fake, task, epic } = await setup();
+    const first = dialog.open(task);
+    const second = dialog.open(epic);
+    await Promise.all([first, second]);
+    expect(get(dialog.state)?.displayId).toBe("HH-1");
+    expect(get(dialog.state)?.parents).toBeNull();
+    expect(fake.calls).toEqual([
+      "targets S1-I3",
+      "targets S1-I1",
+      "preview S1-I1 S1/S1-W2/S1-W2-P1",
+    ]);
+  });
+
   it("does not read the preview again when only the parent Epic changes", async () => {
     const { dialog, fake, task } = await setup();
     await dialog.open(task);

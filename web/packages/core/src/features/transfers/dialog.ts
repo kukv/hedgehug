@@ -38,9 +38,10 @@ export interface TransferDialogDeps {
   detail: Pick<Detail, "view">;
   drafts: Pick<Drafts, "confirmLeave">;
   online(): boolean;
-  // afterMoved は、移したあとのパネルの切り替えと読み直し。panelShowed は「移動」を押したときにパネルが from を
-  // 出していたか(送っているあいだに読み直しでパネルが閉じても、移したアイテムを開き直せるように)。
-  afterMoved(from: Item, to: TransferResult, panelShowed: boolean): Promise<void>;
+  // afterMoved は、移したあとのパネルの切り替えと読み直し。panelItem は「移動」を押したときにパネルが出していた
+  // アイテムの内部 ID(from かその下のもの。なければ undefined)。下のものも新しい ID になるので、送っているあいだに
+  // 読み直しでパネルが閉じても、そのアイテムを開き直せるように渡す(02「保存」)。
+  afterMoved(from: Item, to: TransferResult, panelItem: string | undefined): Promise<void>;
 }
 
 export interface TransferDialog {
@@ -100,13 +101,13 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
     render();
   }
 
-  // shows は、詳細パネルが item か、その祖先を出しているか(内部 ID は Store の中でだけ一意なので Store も比べる)。
-  function shows(item: Item, withAncestors: boolean): boolean {
+  // shownUnder は、詳細パネルが item か、その下のもの(子・孫)を出していれば、出しているアイテムの内部 ID
+  // (内部 ID は Store の中でだけ一意なので Store も比べる)。出していなければ undefined。
+  function shownUnder(item: Item): string | undefined {
     const panel = get(deps.detail.view);
-    if (panel === null || panel.item.storeId !== item.storeId) return false;
-    return (
-      panel.item.id === item.id || (withAncestors && panel.ancestors.some((a) => a.id === item.id))
-    );
+    if (panel === null || panel.item.storeId !== item.storeId) return undefined;
+    const under = panel.item.id === item.id || panel.ancestors.some((a) => a.id === item.id);
+    return under ? panel.item.id : undefined;
   }
 
   // editable は、選び直せる開いたダイアログ(送っているあいだは選び直さない)。
@@ -121,7 +122,7 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
       deps.toasts.show(offlineMessage(t.storeName), { error: true });
       return;
     }
-    const panelShowed = shows(c.item, false);
+    const panelItem = shownUnder(c.item);
     const input: TransferInput = {
       toStore: t.storeId,
       toWorkspace: t.workspaceId,
@@ -146,7 +147,7 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
     c.busy = false;
     if (cur === c) close();
     deps.toasts.show(transferredMessage(c.displayId, result.display, result.emptied));
-    await deps.afterMoved(c.item, result, panelShowed);
+    await deps.afterMoved(c.item, result, panelItem);
   }
 
   return {
@@ -156,7 +157,7 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
       if (prefix === undefined || deps.catalog.store(item.storeId)?.readOnly) return;
       const gen = ++seq;
       // 開いているパネルが item か、その祖先のものなら、書きかけの確認(「入力を破棄」)を先に聞く。
-      if (shows(item, true) && !(await deps.drafts.confirmLeave(isItemDraft))) return;
+      if (shownUnder(item) !== undefined && !(await deps.drafts.confirmLeave(isItemDraft))) return;
       if (gen !== seq) return;
       let targets: TransferTarget[];
       try {
@@ -207,7 +208,9 @@ export function createTransferDialog(deps: TransferDialogDeps): TransferDialog {
     },
     setReplacement(status, to) {
       const c = editable();
-      if (!c || c.preview === null) return;
+      // 予告の行にある元のステータスと、その行の選択肢にある値だけを受ける。
+      const row = c?.preview?.replacements.find((r) => r.status === status);
+      if (!c || !row?.choices.some((x) => x.id === to)) return;
       c.choices = { ...c.choices, [status]: to };
       render();
     },
