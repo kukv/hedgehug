@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl } from "./helpers";
 
 test("the gear in the sidebar opens the settings, and a reload keeps them", async ({

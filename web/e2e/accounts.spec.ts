@@ -1,4 +1,5 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { tokenUrl } from "./helpers";
 
 // アカウントはマシンに 1 つの一覧で、3 つの幅が 1 つのサーバーを共有する。表示名とログイン名には幅とやり直しの

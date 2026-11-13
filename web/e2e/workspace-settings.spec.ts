@@ -1,4 +1,5 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
 // ワークスペースの設定の通しのテスト(B2)。サーバーは 3 つの幅で共有なので、

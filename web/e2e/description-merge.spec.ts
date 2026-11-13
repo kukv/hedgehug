@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
 // 説明の Markdown・メンションの表示と、別のタブと同じ行を変えたときの保存の通しのテスト(A4a)。

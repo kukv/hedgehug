@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, openSettings, prefixOf, tokenUrl, unique } from "./helpers";
 
 // ワークフローとテンプレートの通しのテスト(B3)。サーバーは 3 つの幅で共有なので、

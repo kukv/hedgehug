@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
 // コメント・ウォッチの通しのテスト(A4a)。ワークスペースは毎回作る(サーバーは 3 つの幅で共有)。

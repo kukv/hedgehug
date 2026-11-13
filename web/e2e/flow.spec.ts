@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
 // A2 の完成の条件: プロジェクトを作り、Epic・Task・Step を作り、詳細パネルでタイトルを変えられる。

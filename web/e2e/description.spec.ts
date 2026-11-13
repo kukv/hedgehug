@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { newTask } from "./helpers";
 
 // 詳細パネルの説明(A4a)。サーバーは 3 つの幅で共有なので、Task の名前は毎回変える(helpers の newTask)。

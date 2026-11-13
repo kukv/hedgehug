@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { addProperty, newTask, tokenUrl, unique } from "./helpers";
 
 // 値を変えるテストは、3 つの幅が 1 つのサーバーを共有するので、自分の Task を作ってから使う。

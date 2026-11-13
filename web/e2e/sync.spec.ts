@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
 // status は、GET /api/sync の応答を差し替える(決定 S21)。

@@ -1,4 +1,5 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
 // 自動化の通しのテスト(B4)。ルールはテストごとのワークスペースに作る(ほかのテストの操作で動かないように)。
