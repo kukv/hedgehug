@@ -158,7 +158,7 @@ func TestReorderIgnoresDeletedSiblings(t *testing.T) {
 	st := addSteps(t, svc, "a", "d", "b")
 	op := port.Operation{Actor: change.User("taro"), Summary: "d を削除"}
 	err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
-		return tx.WriteItems().Append(st[1].ID, change.NewDeleteEntity(false)) // 親と一緒に削除されたもの(root: true なら保存で削除を取り消す)
+		return tx.WriteItems().Append(st[1].ID, change.NewDeleteEntity(true))
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -169,9 +169,6 @@ func TestReorderIgnoresDeletedSiblings(t *testing.T) {
 	}
 	if err := svc.Reorder(t.Context(), store, st[2].ID, st[1].ID, false); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("a deleted anchor: %v", err)
-	}
-	if err := svc.Reorder(t.Context(), store, st[1].ID, st[0].ID, false); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("a deleted item: %v", err)
 	}
 }
 

@@ -12,10 +12,10 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
-// hasRestore は、アイテムのログに restore の行があるか。
-func hasRestore(t *testing.T, s port.Stores, id item.ID) bool {
+// hasRestore は、Task(HH-2)のログに restore の行があるか。
+func hasRestore(t *testing.T, s port.Stores) bool {
 	t.Helper()
-	return slices.ContainsFunc(records(t, s, id), func(r change.Record) bool { return r.T == change.Restore })
+	return slices.ContainsFunc(records(t, s, apptest.SampleTask), func(r change.Record) bool { return r.T == change.Restore })
 }
 
 // 別のタブで削除された(root: true)Task のタイトルを保存すると、変更を残して削除を取り消す。
@@ -33,8 +33,11 @@ func TestRenameDeletedItemRevives(t *testing.T) {
 	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
 		t.Errorf("Revived = %v", r)
 	}
-	if s := last(rec); s != "HH-2 のタイトルを変更" {
-		t.Errorf("summary = %q", s)
+	if n := len(slices.DeleteFunc(slices.Clone(rec.summaries), func(s string) bool { return s != "HH-2 のタイトルを変更" })); n != 1 {
+		t.Errorf("summary の保存 = %d 件", n)
+	}
+	if !hasRestore(t, rec) {
+		t.Error("restore の行がない")
 	}
 }
 
@@ -47,7 +50,7 @@ func TestRenameDeletedItemSameTitleIsNotFound(t *testing.T) {
 	if _, err := svc.Rename(ctx, store, apptest.SampleTask, before.Title); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("Rename = %v, want port.ErrNotFound", err)
 	}
-	if hasRestore(t, rec, apptest.SampleTask) || storedItem(t, rec, apptest.SampleTask).Deleted == nil || len(port.Revived(ctx)) != 0 {
+	if hasRestore(t, rec) || storedItem(t, rec, apptest.SampleTask).Deleted == nil || len(port.Revived(ctx)) != 0 {
 		t.Error("同じタイトルの保存で削除を取り消した")
 	}
 }
@@ -136,7 +139,7 @@ func TestMoveToDeletedParentIsNotFound(t *testing.T) {
 	if err := svc.Move(ctx, store, apptest.SampleTask, items.MoveInput{Parent: &epic2.ID}); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("Move = %v, want port.ErrNotFound", err)
 	}
-	if got := storedItem(t, rec, apptest.SampleTask); got.Deleted == nil || hasRestore(t, rec, apptest.SampleTask) || len(port.Revived(ctx)) != 0 {
+	if got := storedItem(t, rec, apptest.SampleTask); got.Deleted == nil || hasRestore(t, rec) || len(port.Revived(ctx)) != 0 {
 		t.Errorf("移せなかったのに取り消した: %+v", got)
 	}
 }
@@ -149,7 +152,48 @@ func TestRenameItemUnderParentDeletedLaterIsNotFound(t *testing.T) {
 	if _, err := svc.Rename(t.Context(), store, apptest.SampleTask, "新しい"); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("Rename = %v, want port.ErrNotFound", err)
 	}
-	if hasRestore(t, rec, apptest.SampleTask) {
+	if hasRestore(t, rec) {
 		t.Error("祖先が削除済みなのに restore を書いた")
+	}
+}
+
+// 削除済み(root: true)でも、断られる保存は 404 のまま、削除を取り消さない。
+func TestChangeKindToTheSameKindOfDeletedItemIsNotFound(t *testing.T) {
+	svc, rec := setupRec(t)
+	markDeleted(t, rec, apptest.SampleTask, true)
+	ctx := port.WithRevived(t.Context())
+	if err := svc.ChangeKind(ctx, store, apptest.SampleTask, item.Task); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("ChangeKind = %v, want port.ErrNotFound", err)
+	}
+	if storedItem(t, rec, apptest.SampleTask).Deleted == nil || hasRestore(t, rec) {
+		t.Error("断られたのに削除を取り消した")
+	}
+}
+
+// 何も変わらない移動は、削除済み(root: true)なら 404 で、削除を取り消さない。
+func TestMoveDeletedItemToTheSameParentIsNotFound(t *testing.T) {
+	svc, rec := setupRec(t)
+	markDeleted(t, rec, apptest.SampleTask, true)
+	ctx := port.WithRevived(t.Context())
+	if err := svc.Move(ctx, store, apptest.SampleTask, items.MoveInput{Parent: ptr(apptest.SampleEpic)}); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Move = %v, want port.ErrNotFound", err)
+	}
+	if storedItem(t, rec, apptest.SampleTask).Deleted == nil || hasRestore(t, rec) || len(port.Revived(ctx)) != 0 {
+		t.Error("何も変わらない移動で削除を取り消した")
+	}
+}
+
+// すでにその位置への並べ替えは、削除済み(root: true)なら 404 で、削除を取り消さない。
+func TestReorderDeletedItemAlreadyInPlaceIsNotFound(t *testing.T) {
+	svc, rec := setupRec(t)
+	other := mustCreate(t, svc, apptest.SampleProject, ptr(apptest.SampleEpic), item.Task, "兄弟")
+	markDeleted(t, rec, apptest.SampleTask, true)
+	ctx := port.WithRevived(t.Context())
+	// HH-2 は兄弟の前にいるので、兄弟の直前はすでにその位置。
+	if err := svc.Reorder(ctx, store, apptest.SampleTask, other.ID, false); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Reorder = %v, want port.ErrNotFound", err)
+	}
+	if storedItem(t, rec, apptest.SampleTask).Deleted == nil || hasRestore(t, rec) {
+		t.Error("すでにその位置なのに削除を取り消した")
 	}
 }
