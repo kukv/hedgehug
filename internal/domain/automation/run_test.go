@@ -113,3 +113,40 @@ func TestStepsDone(t *testing.T) {
 		t.Error("no steps")
 	}
 }
+
+func TestRunAllRunsInListOrderAcrossEvents(t *testing.T) {
+	s := runSettings()
+	rules := []automation.Rule{
+		rule("R1", automation.TriggerReview, "", automation.ActionStatus, "DOING"),
+		rule("R2", automation.TriggerStatus, "DONE", automation.ActionStatus, "CANCEL"), // どのきっかけにも合わない
+		rule("R3", automation.TriggerPROpen, "", automation.ActionStatus, "DONE"),
+	}
+	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
+	evs := []automation.Event{{Trigger: automation.TriggerPROpen}, {Trigger: automation.TriggerReview}}
+	got := automation.RunAll(s, rules, it, evs)
+	if len(got) != 2 || got[0].Rule.ID != "R1" || got[1].Rule.ID != "R3" {
+		t.Fatalf("RunAll = %+v, want R1 then R3 (list order, not event order)", got)
+	}
+	// R3 は R1 が変えたあとの InProgress から判定する
+	if got[1].Draft == nil || string(got[1].Draft.From) != `"DOING"` {
+		t.Errorf("R3 = %+v / %+v", got[1], got[1].Draft)
+	}
+}
+
+func TestRunAllLaterRuleJudgesFromTheOldStatusWhenStopped(t *testing.T) {
+	s := runSettings()
+	s.Workflow = map[change.ID][]change.ID{"TODO": {"DOING"}}
+	rules := []automation.Rule{
+		rule("R1", automation.TriggerReview, "", automation.ActionStatus, "DONE"),  // Todo からは止まる
+		rule("R2", automation.TriggerPROpen, "", automation.ActionStatus, "DOING"), // Todo から通る
+	}
+	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
+	evs := []automation.Event{{Trigger: automation.TriggerPROpen}, {Trigger: automation.TriggerReview}}
+	got := automation.RunAll(s, rules, it, evs)
+	if len(got) != 2 || got[0].Draft != nil || got[0].Stopped == "" {
+		t.Fatalf("RunAll = %+v", got)
+	}
+	if got[1].Draft == nil || string(got[1].Draft.From) != `"TODO"` {
+		t.Errorf("R2 = %+v / %+v, want it judged from Todo", got[1], got[1].Draft)
+	}
+}

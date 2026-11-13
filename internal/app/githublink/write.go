@@ -19,7 +19,7 @@ var errRenameTaken = errors.New("github: rename target is already linked")
 // 値が変わらなければ保存もきっかけもない。チェックの結果はいまと同じに置く。
 // チェックの結果は保存のあとの名前で置き、古い名前のチェックの結果は消さない(同じ Store の別のアイテムが
 // 同じ PR をリンクしていることがある)。取り直すあいだに外されたリンクは何もしない。動いたルールの通知は、
-// 保存のあとにここで書く。
+// 保存のあとにここで、チェックの結果を置く前に書く(置くのに失敗しても通知は失わない)。
 func (l Links) writeFound(ctx context.Context, store port.StoreID, id item.ID, link itemlink.Link, f port.Found, p *pass) (checksChanged bool, err error) {
 	v, err := l.view(ctx, store, id)
 	if err != nil {
@@ -38,11 +38,9 @@ func (l Links) writeFound(ctx context.Context, store port.StoreID, id item.ID, l
 	if err != nil || !kept {
 		return false, err
 	}
-	checksChanged, err = l.saveChecks(ctx, store, itemlink.Ref{Kind: link.Kind, Repo: w.repo, Number: link.Number}, f.Checks)
-	if err != nil {
-		return false, err
-	}
-	return checksChanged, l.notify(ctx, store, fs)
+	nerr := l.notify(ctx, store, fs)
+	checksChanged, cerr := l.saveChecks(ctx, store, itemlink.Ref{Kind: link.Kind, Repo: w.repo, Number: link.Number}, f.Checks)
+	return checksChanged, errors.Join(nerr, cerr)
 }
 
 // foundWrite は、1 本のリンクの取り直しの保存の中身。

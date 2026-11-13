@@ -24,7 +24,8 @@ func newPass() *pass {
 }
 
 // fresh は、ts のうち、この読み取りでまだ id に起こしていないきっかけ。返したものは起こしたと覚える。
-// p が nil(1 回きりの操作)なら ts のまま。
+// p が nil(1 回きりの操作)なら ts のまま。覚えるのは保存の中(保存が成功する前)なので、保存が失敗したら、
+// その pass は捨てる(同じ pass で読み取りを続けると、保存されなかったきっかけを起こしたことにしてしまう)。
 func (p *pass) fresh(id item.ID, ts []automation.Trigger) []automation.Trigger {
 	if p == nil {
 		return ts
@@ -53,8 +54,10 @@ type fired struct {
 }
 
 // fire は、保存 tx の中で、アイテム id のリンクが before から after になったきっかけでルールを動かし、
-// 変えた行を書く。p が nil なら 1 回きりの操作(手でのリンク)。削除済みのアイテムでは動かさない。
-// before・after は、tx の中で読んだリンクと、書いたあとの値。
+// 変えた行を書く。p が nil なら 1 回きりの操作(手でのリンク)。削除済みのアイテムで動かさない判定は、
+// 削除の印とともに A4b が足す。呼ぶのはリンクの行を書いたあと(tx の読み取りは書いた行を含む)。
+// before は、tx の中で書く前に読んだリンク(いまリンクしたなら nil)、after は書いたあとの値。
+// 1 回の変更で起きたきっかけのルールは、一覧の上から順に 1 回で動かす(03「実行の規則」)。
 func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p *pass) ([]fired, error) {
 	ts := p.fresh(id, automation.LinkEvents(before, after))
 	if len(ts) == 0 {
@@ -65,19 +68,19 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 	if err != nil {
 		return nil, err
 	}
-	rules, st, all, err := fireInputs(tx, it, before, after, p)
+	rules, st, all, err := fireInputs(tx, it, p)
 	if err != nil {
 		return nil, err
 	}
-	var os []automation.Outcome
+	evs := make([]automation.Event, len(ts))
+	for i, t := range ts {
+		evs[i] = automation.Event{Trigger: t, AllMerged: all}
+	}
+	os := automation.RunAll(st, rules, it, evs)
 	var ds []change.Draft
-	for _, t := range ts {
-		for _, o := range automation.Run(st, rules, it, automation.Event{Trigger: t, AllMerged: all}) {
-			os = append(os, o)
-			if o.Draft != nil {
-				ds = append(ds, *o.Draft)
-				it = applied(it, o.Rule)
-			}
+	for _, o := range os {
+		if o.Draft != nil {
+			ds = append(ds, *o.Draft)
 		}
 	}
 	if len(os) == 0 {
@@ -90,8 +93,9 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 	return []fired{{item: it, outcomes: os, settings: st, names: names}}, err
 }
 
-// fireInputs は、ルール・ワークスペースの設定と、「すべてマージ済み」か(D4a-13・14)。
-func fireInputs(tx port.Tx, it item.Item, before *itemlink.Link, after itemlink.Link, p *pass) ([]automation.Rule, workspace.Settings, bool, error) {
+// fireInputs は、ルール・ワークスペースの設定と、「すべてマージ済み」か(D4a-13・14)。リンクは tx の中で読む
+// (書いたリンクの行を含む)。まだ書いていない同じアイテムのリンクは、今回読んだ値(p.fetched)で数える。
+func fireInputs(tx port.Tx, it item.Item, p *pass) ([]automation.Rule, workspace.Settings, bool, error) {
 	wlog, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: it.Place.Workspace})
 	if err != nil {
 		return nil, workspace.Settings{}, false, err
@@ -104,23 +108,13 @@ func fireInputs(tx port.Tx, it item.Item, before *itemlink.Link, after itemlink.
 	if err != nil {
 		return nil, workspace.Settings{}, false, err
 	}
-	return automation.FromLog(wlog), st, automation.AllMerged(linksAfter(itemlink.FromLog(ilog).Links, before, after, p)), nil
-}
-
-// linksAfter は、保存のあとのアイテムのリンク。tx の中で読んだリンク(書く前)の before を after に置き換え
-// (before が nil なら after を足し)、ほかのリンクは今回読んだ値(p.fetched)があればそれにする。
-func linksAfter(links []itemlink.Link, before *itemlink.Link, after itemlink.Link, p *pass) []itemlink.Link {
-	out := make([]itemlink.Link, 0, len(links)+1)
-	for _, l := range links {
-		if before != nil && l.Ref == before.Ref {
-			continue
-		}
+	links := itemlink.FromLog(ilog).Links
+	for i, l := range links {
 		if v, ok := p.valueOf(l.Ref); ok {
-			l.Values = v
+			links[i].Values = v
 		}
-		out = append(out, l)
 	}
-	return append(out, after)
+	return automation.FromLog(wlog), st, automation.AllMerged(links), nil
 }
 
 // valueOf は、今回 GitHub から読んだ r の値。p が nil なら読んでいない。
@@ -130,19 +124,6 @@ func (p *pass) valueOf(r itemlink.Ref) (itemlink.Values, bool) {
 	}
 	v, ok := p.fetched[r.Key()]
 	return v, ok
-}
-
-// applied は、ルール r が変えたあとの it(次のきっかけのルールは、変えたあとの値で判定する)。
-func applied(it item.Item, r automation.Rule) item.Item {
-	if r.Action == automation.ActionStatus {
-		it.Status = change.ID(r.Value)
-		return it
-	}
-	it.Assignee = r.Value
-	if r.Value == automation.Unassigned {
-		it.Assignee = ""
-	}
-	return it
 }
 
 // memberNames は、メンバーの表示名を引く関数(app/items の editContext と同じ)。

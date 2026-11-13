@@ -1,6 +1,8 @@
 package githublink_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -105,6 +107,48 @@ func TestAddOpenPRFires(t *testing.T) {
 	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomation || ns[0].Item != linkTask || ns[0].Rule != ruleOpen ||
 		ns[0].Text != "「PR が Open で In Progress」でステータスを InProgress に変更しました" {
 		t.Errorf("notices = %+v", ns)
+	}
+}
+
+func TestAddRunsRulesOfBothTriggersInListOrder(t *testing.T) {
+	// ルールは内部 ID の順に並ぶ。first が一覧の 1 つ目、second が 2 つ目。どちらも Todo から InProgress だけを許す制約の下で、
+	// 1 つ目が InProgress に、2 つ目が Done にする。きっかけの順(PR が Open → レビュー)によらず、一覧の順に動けば止まらない。
+	cases := []struct {
+		name          string
+		first, second automation.Trigger
+	}{
+		{"open first", automation.TriggerPROpen, automation.TriggerReview},
+		{"review first", automation.TriggerReview, automation.TriggerPROpen},
+	}
+	for _, c := range cases {
+		f := newLinks(t)
+		const r1, r2 = "01RULEA0000000000000000001", "01RULEB0000000000000000001"
+		f.withRules(t,
+			statusRule(r1, "1 つ目", c.first, apptest.SampleStatusInProgress),
+			statusRule(r2, "2 つ目", c.second, apptest.SampleStatusDone),
+		)
+		err := f.stores.Stores.Write(t.Context(), linkStore, port.Operation{Actor: change.User("taro"), Summary: "制約"}, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd("workflow/"+string(apptest.SampleStatusTodo), apptest.SampleStatusInProgress))
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// pr41 は Open でレビュー待ち: 2 つのきっかけが同時に起きる
+		if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+			t.Fatal(err)
+		}
+		rows := ruleRows(f.taskLog(t))
+		if len(rows) != 2 || rows[0].Actor.Rule != r1 || rows[1].Actor.Rule != r2 {
+			t.Errorf("%s: rule rows = %+v", c.name, rows)
+		}
+		if it := f.taskItem(t); it.Status != apptest.SampleStatusDone {
+			t.Errorf("%s: status = %s", c.name, it.Status)
+		}
+		for _, n := range f.inbox.Notices() {
+			if n.Kind != port.NoticeAutomation {
+				t.Errorf("%s: notice = %+v, want no stopped run", c.name, n)
+			}
+		}
 	}
 }
 
@@ -260,5 +304,36 @@ func TestRefreshStoppedNotifies(t *testing.T) {
 	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomationStopped || ns[0].Text != "「マージで完了」が制約で止まりました" ||
 		ns[0].Reason != "ワークフローの制約: Todo から Done には変更できません(Pending のみ)" || ns[0].Status != apptest.SampleStatusDone {
 		t.Errorf("notices = %+v", ns)
+	}
+}
+
+// failingChecks は、チェックの結果を置くと失敗する port.Checks。
+type failingChecks struct{ *apptest.Checks }
+
+var errChecks = errors.New("checks: save failed")
+
+func (failingChecks) Save(context.Context, port.StoreID, string, itemlink.Checks) (bool, error) {
+	return false, errChecks
+}
+
+func TestNoticeSurvivesChecksFailure(t *testing.T) {
+	f := newLinks(t)
+	f.withRules(t,
+		statusRule(ruleOpen, "PR が Open で In Progress", automation.TriggerPROpen, apptest.SampleStatusInProgress),
+		statusRule(ruleMerged, "マージで完了", automation.TriggerPRMerged, apptest.SampleStatusDone),
+	)
+	f.links.Checks = failingChecks{f.checks}
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); !errors.Is(err, errChecks) {
+		t.Fatalf("Add = %v", err)
+	}
+	if n := len(f.inbox.Notices()); n != 1 {
+		t.Errorf("Add: notices = %d, want the saved rule notified", n)
+	}
+	f.putPR(41, itemlink.Merged)
+	if _, err := f.links.Refresh(t.Context(), linkStore, linkTask); !errors.Is(err, errChecks) {
+		t.Fatalf("Refresh = %v", err)
+	}
+	if n := len(f.inbox.Notices()); n != 2 {
+		t.Errorf("Refresh: notices = %d, want the saved rule notified", n)
 	}
 }

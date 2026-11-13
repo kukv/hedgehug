@@ -30,9 +30,15 @@ type Outcome struct {
 // 1 つのルールがステータスを変えたら、次のルールはそのあとの値から検査する。何もしないルール(同じ値、
 // 担当者を使わない種類、なくなった値)は結果に入れない。自動化の変更は、ほかのきっかけを起こさない(呼ぶ側で起こさない)。
 func Run(s workspace.Settings, rules []Rule, it item.Item, ev Event) []Outcome {
+	return RunAll(s, rules, it, []Event{ev})
+}
+
+// RunAll は、1 回の変更で it に同時に起きた evs で、有効なルールを一覧の順に 1 回だけ通して実行する
+// (03「実行の規則」の「一覧の上から順に」)。evs のどれかに合うルールを動かす。順と値の引き継ぎは Run と同じ。
+func RunAll(s workspace.Settings, rules []Rule, it item.Item, evs []Event) []Outcome {
 	var out []Outcome
 	for _, r := range rules {
-		if !r.Enabled || !matches(r, ev) {
+		if !r.Enabled || !slices.ContainsFunc(evs, func(ev Event) bool { return matches(r, ev) }) {
 			continue
 		}
 		if o, ok := apply(s, r, &it); ok {

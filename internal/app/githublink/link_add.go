@@ -2,6 +2,7 @@ package githublink
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -60,10 +61,10 @@ func (l Links) Add(ctx context.Context, store port.StoreID, id item.ID, in AddLi
 	if err != nil {
 		return err
 	}
-	if _, err := l.saveChecks(ctx, store, plan.ref, plan.checks); err != nil {
-		return err
-	}
-	return l.notify(ctx, store, fs)
+	// 通知を先に書く(チェックの結果を置くのに失敗しても、保存したルールの通知は失わない)
+	nerr := l.notify(ctx, store, fs)
+	_, cerr := l.saveChecks(ctx, store, plan.ref, plan.checks)
+	return errors.Join(nerr, cerr)
 }
 
 // saveLink は、保存 tx の中で確かめ直してリンクを書き、同じ保存の中できっかけを動かす。
