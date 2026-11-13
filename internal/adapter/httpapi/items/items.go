@@ -81,8 +81,9 @@ type CreateItem struct {
 	Kind    string `json:"kind" enum:"Epic,Story,Task,Bug,Step"`
 	Title   string `json:"title"`
 
-	Values   map[string]json.RawMessage `json:"values,omitempty" doc:"プロパティの値(キーはプロパティの内部 ID。組み込みはキー)"`
-	Template string                     `json:"template,omitempty" doc:"一緒に作るテンプレートの内部 ID。空は「なし」"`
+	Description string                     `json:"description,omitempty" doc:"もとになるアイテムの説明(Markdown)。空は説明なし。子の説明はテンプレートのものを使う"`
+	Values      map[string]json.RawMessage `json:"values,omitempty" doc:"プロパティの値(キーはプロパティの内部 ID。組み込みはキー)"`
+	Template    string                     `json:"template,omitempty" doc:"一緒に作るテンプレートの内部 ID。空は「なし」"`
 }
 
 type createInput struct {
@@ -115,7 +116,7 @@ func Register(api huma.API, svc appitems.Service) {
 func registerCreateRead(api huma.API, svc appitems.Service) {
 	huma.Register(api, huma.Operation{OperationID: "create-item", Method: http.MethodPost, Path: "/api/stores/{store}/items", Summary: "アイテムを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
-			req := appitems.CreateInput{Store: port.StoreID(in.Store), Project: project.ID(in.Body.Project), Kind: item.Kind(in.Body.Kind), Title: in.Body.Title}
+			req := appitems.CreateInput{Store: port.StoreID(in.Store), Project: project.ID(in.Body.Project), Kind: item.Kind(in.Body.Kind), Title: in.Body.Title, Description: in.Body.Description}
 			if len(in.Body.Values) > 0 {
 				req.Values = make(map[change.ID]json.RawMessage, len(in.Body.Values))
 				for k, v := range in.Body.Values {

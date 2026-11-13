@@ -121,6 +121,9 @@ components:
     CreateItem:
       additionalProperties: false
       properties:
+        description:
+          description: もとになるアイテムの説明(Markdown)。空は説明なし。子の説明はテンプレートのものを使う
+          type: string
         kind:
           enum:
             - Epic

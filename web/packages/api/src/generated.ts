@@ -112,6 +112,8 @@ export const CreateItemKind = {
 export type CreateItemValues = {[key: string]: unknown};
 
 export interface CreateItem {
+  /** もとになるアイテムの説明(Markdown)。空は説明なし。子の説明はテンプレートのものを使う */
+  description?: string;
   kind: CreateItemKind;
   /** 空は親を選んでいない */
   parent?: string;
