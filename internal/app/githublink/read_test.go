@@ -353,7 +353,7 @@ func TestReadOnceSkipsStores(t *testing.T) {
 		{ID: otherStore, Name: "other", Account: "A1", Hidden: true},
 		{ID: third, Name: "third"},
 	}
-	// 削除済みのアイテムのリンクは頼まない(D4a-10)。削除の印は A4b が足す
+	// 削除済みのアイテムのリンクは頼まない(D4a-10)。削除の印は A4b が足す(計画 D4a「A4b が入ったときに足すもの」)
 	for _, s := range []port.StoreID{linkStore, otherStore, third} {
 		f.linkIn(t, s, linkTask, readPR("org/web", 1, itemlink.Open))
 	}

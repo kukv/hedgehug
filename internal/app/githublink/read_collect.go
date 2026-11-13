@@ -86,7 +86,7 @@ func collectProject(r port.Reader, p project.ID, c *collector) error {
 		return err
 	}
 	for _, it := range its {
-		// 削除済みのアイテムのリンクは頼まない(D4a-10)。削除の印は A4b が足す
+		// 削除済みのアイテムのリンクは頼まない(D4a-10)。削除の印は A4b が足す(計画 D4a「A4b が入ったときに足すもの」)
 		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
 		if err != nil {
 			return err
