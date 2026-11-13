@@ -208,3 +208,26 @@ func TestNamesOfIgnoresCaseAndFallsBack(t *testing.T) {
 		t.Errorf("NamesOf: %q %q %q", n("taro"), n("TARO"), n("jiro"))
 	}
 }
+
+// 「親を変更」は親が変わったときだけ出す。親が両方ない(Epic)なら、プロジェクトが変わったときに出す。
+// プロジェクトが変わる移動で一緒に移る下のもの(親は同じ)の行は出さない(02「同じワークスペースの中での移動」)。
+func TestPlaceRowsShowOnlyAParentChange(t *testing.T) {
+	parent, other := item.ID("E1"), item.ID("E2")
+	cases := []struct {
+		name     string
+		from, to item.Place
+		want     []string
+	}{
+		{"親が変わる", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "P", Parent: &other}, []string{"太郎: 親を変更"}},
+		{"親とプロジェクトが変わる", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "Q", Parent: &other}, []string{"太郎: 親を変更"}},
+		{"Epic のプロジェクトが変わる", item.Place{Project: "P"}, item.Place{Project: "Q"}, []string{"太郎: 親を変更"}},
+		{"親がなくなる", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "P"}, []string{"太郎: 親を変更"}},
+		{"親が同じでプロジェクトだけ変わる(下のもの)", item.Place{Project: "P", Parent: &parent}, item.Place{Project: "Q", Parent: &parent}, nil},
+	}
+	for _, c := range cases {
+		log := logOf(step{"O1", at(0), taro, change.NewSet("place", c.from, c.to)})
+		if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, c.want) {
+			t.Errorf("%s: rows = %q, want %q", c.name, got, c.want)
+		}
+	}
+}

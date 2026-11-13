@@ -122,16 +122,19 @@ func byPrev(log []change.Record) []change.Record {
 	return out
 }
 
-// placeText は、親かプロジェクトが変わった場所の変更を「親を変更」にする。番号だけが変わる行
+// placeText は、親が変わった場所の変更を「親を変更」にする。親が両方ない(Epic)なら、プロジェクトが変わったとき。
+// 親が同じでプロジェクトだけが変わる行(プロジェクトが変わる移動で一緒に移る下のもの)と、番号だけが変わる行
 // (同期の修復)は出さない。
 func placeText(r change.Record) (string, bool) {
 	var from, to item.Place
 	if json.Unmarshal(r.From, &from) != nil || json.Unmarshal(r.To, &to) != nil {
 		return "", false
 	}
-	sameParent := (from.Parent == nil && to.Parent == nil) ||
-		(from.Parent != nil && to.Parent != nil && *from.Parent == *to.Parent)
-	if sameParent && from.Project == to.Project {
+	changed := from.Project != to.Project
+	if from.Parent != nil || to.Parent != nil {
+		changed = from.Parent == nil || to.Parent == nil || *from.Parent != *to.Parent
+	}
+	if !changed {
 		return "", false
 	}
 	return "親を変更", true
