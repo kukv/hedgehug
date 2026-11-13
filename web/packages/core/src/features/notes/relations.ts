@@ -42,6 +42,8 @@ export interface Relations {
   state: Readable<RelationsState>;
   // load は、アイテムの関連を読む。同じアイテムの読み直しでは、追加の行を残す。
   load(storeId: string, itemId: string): Promise<void>;
+  // reload は、画面への反映(06)。一覧だけ読み直し、追加の行は書き換えない。開いていなければ何もしない。
+  reload(): Promise<void>;
   setLabel(label: RelationLabel): Promise<void>;
   setQuery(query: string): Promise<void>;
   // choose は、候補を選ぶ。選べない候補は無視する。
@@ -138,6 +140,7 @@ export function createRelations(deps: RelationsDeps): Relations {
       }
       await loadRows();
     },
+    reload: loadRows,
     async setLabel(label) {
       patch({ label });
       const picked = get(state).selected;
