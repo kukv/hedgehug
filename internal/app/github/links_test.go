@@ -343,15 +343,17 @@ func TestAddLinkSavesChecksOnlyAfterTheWrite(t *testing.T) {
 	}
 }
 
-func TestRemoveLinkClearsItsChecks(t *testing.T) {
+func TestRemoveLinkKeepsChecksOfAnotherItem(t *testing.T) {
 	f := newLinks(t)
-	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+	for _, id := range []item.ID{linkTask, linkEpic} {
+		if err := f.add(t, linkStore, id, itemlink.PR, "org/web", "41", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.links.Remove(t.Context(), linkStore, linkTask, itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.links.Remove(t.Context(), linkStore, linkTask, itemlink.Ref{Kind: itemlink.PR, Repo: "ORG/web", Number: 41}); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := f.checks.Read(t.Context(), linkStore); len(got) != 0 {
-		t.Errorf("checks = %v, want the removed link's checks cleared", got)
+	if rows := f.list(t, linkStore, linkEpic); len(rows) != 1 || rows[0].Checks != itemlink.Running {
+		t.Errorf("HH-1 rows = %+v, want its checks kept after HH-2 removed the same PR", rows)
 	}
 }

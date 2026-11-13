@@ -136,18 +136,39 @@ describe("createLinkList", () => {
     const t = setup();
     t.links.refreshed = [row({ error: "状態を更新できませんでした: x" })];
     await t.list.load("S1", "I1");
-    await t.list.remove(row()); // 解除
-    await t.list.reload(); // 付け直したあとの読み直し(偽の一覧は同じ行を返す)
+    t.links.rows = [];
+    await t.list.remove(row()); // 解除(そのあとの一覧に行がない)
+    t.links.rows = [row()];
+    await t.list.reload(); // 付け直したあとの読み直し
     expect(get(t.list.state).rows[0]?.error).toBe("");
   });
 
-  it("forgets every refresh error with forgetAll", async () => {
+  it("keeps another row's refresh error when a link is added", async () => {
     const t = setup();
-    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" })];
+    const pr42 = row({ number: 42 });
+    t.links.rows = [row(), pr42];
+    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" }), pr42];
     await t.list.load("S1", "I1");
-    t.list.forgetAll();
+    t.links.rows = [row(), pr42, row({ number: 43 })]; // 別のリンクを足した
     await t.list.reload();
-    expect(get(t.list.state).rows[0]?.error).toBe("");
+    expect(get(t.list.state).rows.map((r) => r.error)).toEqual([
+      "状態を更新できませんでした: x",
+      "",
+      "",
+    ]);
+  });
+
+  it("forgets the error of a link removed in another tab, so relinking shows none", async () => {
+    const t = setup();
+    const pr42 = row({ number: 42 });
+    t.links.rows = [row(), pr42];
+    t.links.refreshed = [row({ error: "状態を更新できませんでした: x" }), pr42];
+    await t.list.load("S1", "I1");
+    t.links.rows = [pr42]; // 別のタブで外された
+    await t.list.reload();
+    t.links.rows = [pr42, row()]; // 付け直した
+    await t.list.reload();
+    expect(get(t.list.state).rows.map((r) => r.error)).toEqual(["", ""]);
   });
 
   it("shows no rows when the item is gone on refresh or reload", async () => {

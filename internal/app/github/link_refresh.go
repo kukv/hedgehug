@@ -86,8 +86,9 @@ func (l Links) skipRefresh(ctx context.Context, store port.StoreID) (bool, error
 // errRenameTaken は、保存の中で、改名先が同じアイテムの別のリンクと重なったこと(改名せずに値だけ取り直す)。
 var errRenameTaken = errors.New("github: rename target is already linked")
 
-// refreshOne は、1 本のリンクを f の値にそろえて保存し、チェックの結果を置く。改名したら、古い名前の
-// チェックの結果を消す。チェックの結果が変わったら true。取り直すあいだに外されたリンクは何もしない。
+// refreshOne は、1 本のリンクを f の値にそろえて保存し、そのあとの名前でチェックの結果を置く。古い名前の
+// チェックの結果は消さない(同じ Store の別のアイテムが同じ PR をリンクしていることがある)。チェックの結果が
+// 変わったら true。取り直すあいだに外されたリンクは何もしない。
 func (l Links) refreshOne(ctx context.Context, store port.StoreID, id item.ID, v itemView, link itemlink.Link, f port.Found) (bool, error) {
 	repo, err := l.renameTo(ctx, store, v, link, f.Repo)
 	if err != nil {
@@ -101,14 +102,7 @@ func (l Links) refreshOne(ctx context.Context, store port.StoreID, id item.ID, v
 	if err != nil || !kept {
 		return false, err
 	}
-	cleared := false
-	if repo != link.Repo {
-		if cleared, err = l.saveChecks(ctx, store, link.Ref, itemlink.NoChecks); err != nil {
-			return false, err
-		}
-	}
-	saved, err := l.saveChecks(ctx, store, itemlink.Ref{Kind: link.Kind, Repo: repo, Number: link.Number}, f.Checks)
-	return cleared || saved, err
+	return l.saveChecks(ctx, store, itemlink.Ref{Kind: link.Kind, Repo: repo, Number: link.Number}, f.Checks)
 }
 
 // writeRefresh は、link を値 v で(repo が違えば改名して)実行者「GitHub」で保存する。値が同じなら保存しない。

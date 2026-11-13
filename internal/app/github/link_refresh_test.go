@@ -132,18 +132,23 @@ func TestRefreshDoesNotRenameOntoALinkAddedMeanwhile(t *testing.T) {
 	}
 }
 
-func TestRefreshMovesChecksWithTheRename(t *testing.T) {
+func TestRefreshRenameKeepsChecksOfAnotherItem(t *testing.T) {
 	f := newLinks(t)
-	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
-		t.Fatal(err)
+	for _, id := range []item.ID{linkTask, linkEpic} {
+		if err := f.add(t, linkStore, id, itemlink.PR, "org/web", "41", false); err != nil {
+			t.Fatal(err)
+		}
 	}
 	moved := pr41
 	moved.Repo, moved.Checks = "org/web2", itemlink.Success
 	f.gh.Put("org/web", moved)
-	f.refresh(t)
+	f.refresh(t) // HH-2 だけ改名を追う
 	got, _ := f.checks.Read(t.Context(), linkStore)
-	if len(got) != 1 || got["pr:org/web2#41"] != itemlink.Success {
-		t.Errorf("checks = %v, want only the new name", got)
+	if got["pr:org/web2#41"] != itemlink.Success || got["pr:org/web#41"] != itemlink.Running {
+		t.Errorf("checks = %v, want the new name and HH-1's old name both kept", got)
+	}
+	if rows := f.list(t, linkStore, linkEpic); len(rows) != 1 || rows[0].Checks != itemlink.Running {
+		t.Errorf("HH-1 rows = %+v", rows)
 	}
 }
 

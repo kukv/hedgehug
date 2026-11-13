@@ -23,9 +23,6 @@ export interface LinkList {
   // reload は、一覧だけを読む(画面への反映)。
   reload(): Promise<void>;
   remove(row: LinkRow): Promise<void>;
-  // forgetAll は、覚えた取り直しの失敗の文言をすべて消す(リンクしたあと、読み直す前に呼ぶ。付け直した行に
-  // 前の失敗を残さない)。
-  forgetAll(): void;
   reset(): void;
 }
 
@@ -42,7 +39,8 @@ const blank: LinkListState = { loaded: false, rows: [], hasAccount: true };
 export function createLinkList(deps: LinkListDeps): LinkList {
   const state = writable<LinkListState>(blank);
   let target: { storeId: string; itemId: string } | null = null;
-  // errors は、最後の取り直しの失敗の文言(一覧だけを読み直しても、行に残す)。
+  // errors は、最後の取り直しの失敗の文言(一覧だけを読み直しても、行に残す)。一覧の答えにないリンク(外された)の
+  // 文言は消す(付け直した行に前の失敗を残さない)。
   let errors = new Map<string, string>();
   // lists・refreshes は、古い答えを捨てるための通し番号。一覧と取り直しは別に数える(取り直しの途中に画面への
   // 反映の一覧が入っても、取り直しの答えと失敗の文言を捨てない)。取り直しの答えを出したら、それより前に
@@ -63,7 +61,10 @@ export function createLinkList(deps: LinkListDeps): LinkList {
     const mine = lists;
     try {
       const rows = await deps.links.list(t.storeId, t.itemId);
-      if (mine === lists && target === t) show(rows);
+      if (mine !== lists || target !== t) return;
+      const keys = new Set(rows.map(linkKey));
+      for (const k of [...errors.keys()]) if (!keys.has(k)) errors.delete(k);
+      show(rows);
     } catch (e) {
       if (e instanceof NotFound && mine === lists && target === t) show([]);
     }
@@ -111,7 +112,6 @@ export function createLinkList(deps: LinkListDeps): LinkList {
       if (!target) return;
       try {
         await deps.links.remove(target.storeId, target.itemId, row);
-        errors.delete(linkKey(row));
         deps.toasts.show(unlinkedMessage);
       } catch (e) {
         if (!(e instanceof NotFound)) {
@@ -120,9 +120,6 @@ export function createLinkList(deps: LinkListDeps): LinkList {
       }
       await list();
       deps.onChanged();
-    },
-    forgetAll() {
-      errors = new Map();
     },
     reset() {
       target = null;
