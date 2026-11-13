@@ -3,6 +3,7 @@ import {
   createTreeWrites,
   get,
   type Item,
+  isQueuedAction,
   keepsQueue,
   menuAt,
   type ProjectView,
@@ -197,8 +198,9 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
       event.preventDefault();
       event.stopPropagation();
       // 行の中のボタン(押した開閉・ステータス・「⋯」)にフォーカスがあるまま行を移ると、枠は移った行に、フォーカスは
-      // 元の行のボタンに残り、次の Enter が元の行に効く。フォーカスを `<ul>` に移す(いまの行は動かさない)。
-      if (inner && moves.has(action)) {
+      // 元の行のボタンに残り、次の Enter が元の行に効く。行を動かすキー(Alt+↑↓・Alt+Shift+↑↓)では、動かした行が
+      // 描き直されてボタンが消え、フォーカスがツリーの外に落ちる。どちらも、フォーカスを `<ul>` に移す(いまの行は動かさない)。
+      if (inner && (moves.has(action) || isQueuedAction(action))) {
         refocusing = true;
         // スクロールは移動のあとの scrollTo が行う。
         (event.currentTarget as HTMLElement).focus({ preventScroll: true });
