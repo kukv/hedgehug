@@ -153,7 +153,7 @@ func (m *crossMove) importItem(tx port.Tx, it item.Item, lines []change.Draft) e
 	drafts := []change.Draft{transfer.NewMovedIn(transfer.MovedInInfo{
 		Old: it.DisplayID(m.src.ws.Prefix), FromStore: string(m.from.ID), FromStoreName: m.from.Name,
 		FromWorkspace: m.src.ws.ID, FromWorkspaceName: m.src.ws.Name, FromProject: m.src.project.ID, FromProjectTitle: m.src.project.Title,
-		At: m.at, Names: namesOf(m.src.logs[it.ID], m.src.settings),
+		At: m.at, Names: namesOf(m.src.logs[it.ID], m.src.vocab), Moves: m.src.moves[it.ID],
 	})}
 	drafts = append(drafts, lines...)
 	for _, c := range m.src.set.Outside {

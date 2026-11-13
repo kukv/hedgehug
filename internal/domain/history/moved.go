@@ -65,18 +65,35 @@ func movedInText(r change.Record) (string, bool) {
 }
 
 // movedText は、ワークスペースが変わる場所の set の行の文。同じ操作に moved_in の行があれば(別の Store から)そちらが
-// 文を持つので出さない。同じ Store の中の移動は、同じ操作の転送記録の旧 ID で作り、記録がなければ出さない。
+// 文を持つので出さない。同じ Store の中の移動は、同じ操作の転送記録の旧 ID で作る。この Store に記録がなければ(前に
+// いた Store の中の移動)、その Store を出た moved_in の moves で作る。どちらにもなければ出さない。
 func movedText(log []change.Record, r change.Record, c Context) (string, bool) {
 	if slices.ContainsFunc(log, func(x change.Record) bool { return x.Op == r.Op && x.T == change.MovedIn }) {
 		return "", false
 	}
-	i := slices.IndexFunc(c.Origin.Transfers, func(t transfer.Record) bool { return t.Op == r.Op })
 	from, _, ok := places(r)
-	if i < 0 || !ok {
+	if !ok {
 		return "", false
 	}
-	return fmt.Sprintf(movedFormat, c.Origin.Transfers[i].Old, c.Origin.StoreName,
-		c.Origin.workspaceName(from.Workspace), c.Origin.projectTitle(from.Project)), true
+	if i := slices.IndexFunc(c.Origin.Transfers, func(t transfer.Record) bool { return t.Op == r.Op }); i >= 0 {
+		return fmt.Sprintf(movedFormat, c.Origin.Transfers[i].Old, c.Origin.StoreName,
+			c.Origin.workspaceName(from.Workspace), c.Origin.projectTitle(from.Project)), true
+	}
+	for _, m := range transfer.MovedInOf(log) {
+		if j := slices.IndexFunc(m.Moves, func(mv transfer.Move) bool { return mv.Op == r.Op }); j >= 0 {
+			mv := m.Moves[j]
+			return fmt.Sprintf(movedFormat, mv.Old, m.FromStoreName, orDeleted(mv.FromWorkspaceName), orDeleted(mv.FromProjectTitle)), true
+		}
+	}
+	return "", false
+}
+
+// orDeleted は、空の名前(引けなかった)を「(削除された値)」にする。
+func orDeleted(name string) string {
+	if name == "" {
+		return deletedName
+	}
+	return name
 }
 
 func places(r change.Record) (item.Place, item.Place, bool) {
@@ -166,6 +183,8 @@ func (t trail) vocabs(i int, r change.Record, c Context) (vocab, vocab) {
 // vocab は、ワークスペース ws の定義。いまのワークスペース(追えないときも)は Context.Settings、同じ Store の
 // ほかのワークスペースは Origin.Settings、どちらにもないもの(別の Store から来た)は、ws から移した moved_in の
 // うち、同じ操作か行 i より後で最初のものの names(A → B → C と移したとき、B の値は B から C への moved_in が持つ)。
+// ws から移した moved_in がなければ(前にいた Store の中で、さらに別のワークスペースへ移した)、同じ操作か行 i より後で
+// 最初の moved_in の names(その Store を出たときの names は、その Store の中でいたワークスペースの値も持つ)。
 func (t trail) vocab(ws workspace.ID, i int, op change.ID, c Context) vocab {
 	if ws == "" || ws == t.current {
 		return vocab{settings: c.Settings}
@@ -174,7 +193,12 @@ func (t trail) vocab(ws workspace.ID, i int, op change.ID, c Context) vocab {
 		return vocab{settings: st}
 	}
 	v := vocab{settings: c.Settings, byNames: true}
-	if j := slices.IndexFunc(t.movedIn, func(m movedInAt) bool { return m.from == ws && (m.op == op || m.i > i) }); j >= 0 {
+	after := func(m movedInAt) bool { return m.op == op || m.i > i }
+	j := slices.IndexFunc(t.movedIn, func(m movedInAt) bool { return m.from == ws && after(m) })
+	if j < 0 {
+		j = slices.IndexFunc(t.movedIn, after)
+	}
+	if j >= 0 {
 		v.names = t.movedIn[j].names
 	}
 	return v

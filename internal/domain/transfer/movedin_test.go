@@ -2,6 +2,7 @@ package transfer_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -49,6 +50,20 @@ func TestMovedInOfReadsInWrittenOrderAndSkipsBrokenRows(t *testing.T) {
 	if g.FromStore != "S1" || g.FromStoreName != "team-a" || g.FromWorkspace != "W1" || g.FromWorkspaceName != "Web" ||
 		g.FromProject != "P1" || g.FromProjectTitle != "ログイン" || !g.At.Equal(at) || g.Names["V2"] != "High" {
 		t.Errorf("first = %+v", g)
+	}
+}
+
+// 同じ Store の中で前に移した記録(moves)は、書いたとおりに読める。ないときは書かない(上の形)。
+func TestMovedInKeepsEarlierMovesWithinTheStore(t *testing.T) {
+	m := movedIn("MB-2")
+	m.Moves = []transfer.Move{{Op: "O1", Old: "HH-2", FromWorkspaceName: "Web", FromProjectTitle: "ログイン"}}
+	b, err := json.Marshal(stamp(transfer.NewMovedIn(m))[0])
+	if err != nil || !json.Valid(b) || !strings.Contains(string(b), `"moves":[{"op":"O1","old":"HH-2","from_workspace_name":"Web","from_project_title":"ログイン"}]`) {
+		t.Errorf("row = %s, %v", b, err)
+	}
+	got := transfer.MovedInOf(stamp(transfer.NewMovedIn(m)))
+	if len(got) != 1 || len(got[0].Moves) != 1 || got[0].Moves[0] != m.Moves[0] {
+		t.Errorf("MovedInOf = %+v", got)
 	}
 }
 

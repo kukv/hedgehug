@@ -206,3 +206,30 @@ func TestItemRowsMovedWithinTheStoreFromAPurgedWorkspace(t *testing.T) {
 		t.Errorf("rows = %q, want %q", got, want)
 	}
 }
+
+// 同じ Store の中で移した(WA → WM)あとに別の Store へ移した。前の移動の行は、moved_in の moves の旧 ID と名前で作り、
+// WA にいたあいだの値は、WA が移動元(WM)でなくても、その Store を出た moved_in の names で引く。
+func TestItemRowsMovedWithinAnEarlierStore(t *testing.T) {
+	a, m, b := taskIn("WA", "PA"), taskIn("WM", "PM"), taskIn("WB", "PB")
+	info := movedInFromMain(map[change.ID]string{"A01": "Todo", "A02": "InProgress", "M02": "InProgress"})
+	info.Old, info.FromWorkspace, info.FromWorkspaceName, info.FromProject, info.FromProjectTitle = "MB-2", "WM", "Mobile", "PM", "アプリ"
+	info.Moves = []transfer.Move{{Op: "O3", Old: "HH-2", FromWorkspaceName: "Web", FromProjectTitle: "ログイン"}}
+	log := logOf(
+		step{"O1", at(0), taro, item.Create(a)},
+		step{"O2", at(1), taro, change.NewSet("status", "A01", "A02")},
+		step{"O3", at(2), taro, change.NewSet("place", a.Place, m.Place)},
+		step{"O3", at(2), taro, change.NewSet("status", "A02", "M02")},
+		step{"O4", at(3), taro, transfer.NewMovedIn(info)},
+		step{"O4", at(3), taro, change.NewSet("place", m.Place, b.Place)},
+		step{"O4", at(3), taro, change.NewSet("status", "M02", "V02")},
+	)
+	want := []string{
+		"太郎: MB-2 から移動(main / Mobile / アプリ)",
+		"太郎: HH-2 から移動(main / Web / ログイン)",
+		"太郎: ステータスを Todo → InProgress",
+		"太郎: 作成",
+	}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
+	}
+}

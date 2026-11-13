@@ -2,6 +2,7 @@ package transfers
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -9,12 +10,15 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// namesOf は、moved_in の names(A5a-2): 写す行 log の f が指す、移動元のワークスペースのプロパティ(組み込みは
-// f がキー、追加は fields/<内部 ID>)の内部 ID と名前と、行の from・to の値(配列なら要素)のうち、移動元の値
-// (ステータス・優先度・関連システム・各選択肢)の内部 ID と名前。作成の行は、to の各キーを f、その値を値として同じに扱う
-// (作成のときにだけ設定した値も、移動の引き直しの行の from に現れるため)。
-func namesOf(log []change.Record, from workspace.Settings) map[change.ID]string {
-	n := nameSet{from: from, values: valueNames(from), names: map[change.ID]string{}}
+// namesOf は、moved_in の names(A5a-2): 写す行 log の f が指すプロパティ(組み込みは f がキー、追加は fields/<内部 ID>)の
+// 内部 ID と名前と、行の from・to の値(配列なら要素)の内部 ID と名前。名前は設定 vocab(移動元のワークスペースが先頭、
+// 続いて同じ Store の中で前にいたワークスペース)の、先にあるものから引く。作成の行は、to の各キーを f、その値を値として
+// 同じに扱う(作成のときにだけ設定した値も、移動の引き直しの行の from に現れるため)。
+func namesOf(log []change.Record, vocab []workspace.Settings) map[change.ID]string {
+	n := nameSet{vocab: vocab, values: map[change.ID]string{}, names: map[change.ID]string{}}
+	for i := len(vocab) - 1; i >= 0; i-- { // 先のものが勝つ
+		maps.Copy(n.values, valueNames(vocab[i]))
+	}
 	for _, r := range log {
 		if r.T != change.Create {
 			n.add(r.F, r.From, r.To)
@@ -31,15 +35,19 @@ func namesOf(log []change.Record, from workspace.Settings) map[change.ID]string 
 
 // nameSet は、namesOf が集める names。
 type nameSet struct {
-	from   workspace.Settings
+	vocab  []workspace.Settings
 	values map[change.ID]string
 	names  map[change.ID]string
 }
 
-// add は、項目名 f が指すプロパティと、raws に現れる移動元の値の名前を足す。
+// add は、項目名 f が指すプロパティと、raws に現れる値の名前を足す。
 func (n nameSet) add(f string, raws ...json.RawMessage) {
-	if p, ok := n.from.Property(change.ID(strings.TrimPrefix(f, item.FieldKey("")))); ok {
-		n.names[p.ID] = p.Name
+	id := change.ID(strings.TrimPrefix(f, item.FieldKey("")))
+	for _, st := range n.vocab {
+		if p, ok := st.Property(id); ok {
+			n.names[p.ID] = p.Name
+			break
+		}
 	}
 	for _, raw := range raws {
 		for _, id := range idsOf(raw) {
@@ -76,4 +84,29 @@ func idsOf(raw json.RawMessage) []change.ID {
 		return many
 	}
 	return nil
+}
+
+// placesOf は、場所の set の行の from と to。場所の set でなければ ok=false。
+func placesOf(r change.Record) (from, to item.Place, ok bool) {
+	if r.T != change.Set || r.F != "place" || json.Unmarshal(r.From, &from) != nil || json.Unmarshal(r.To, &to) != nil {
+		return from, to, false
+	}
+	return from, to, true
+}
+
+// workspacesIn は、行 log の作成の場所と、場所の set の from・to に現れるワークスペース(現れた順。重なりあり)。
+func workspacesIn(log []change.Record) []workspace.ID {
+	var out []workspace.ID
+	for _, r := range log {
+		if r.T == change.Create {
+			var v struct{ Place item.Place }
+			if json.Unmarshal(r.To, &v) == nil && v.Place.Workspace != "" {
+				out = append(out, v.Place.Workspace)
+			}
+		}
+		if from, to, ok := placesOf(r); ok {
+			out = append(out, from.Workspace, to.Workspace)
+		}
+	}
+	return out
 }
