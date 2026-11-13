@@ -323,6 +323,32 @@ func TestEditDeletedCommentOnDeletedOwnerRevivesBoth(t *testing.T) {
 	}
 }
 
+// 持ち主も削除済み(root: true)のとき、同じ本文の編集と、他人の削除済みコメントの編集は断り、持ち主も削除済みのまま。
+func TestEditDeletedCommentOnDeletedOwnerRefusedKeepsOwnerDeleted(t *testing.T) {
+	for _, o := range owners {
+		t.Run(o.name, func(t *testing.T) {
+			svc, rec := setup(t, "hanako")
+			taro := svc
+			taro.Identity = apptest.Identity{Login: "taro"}
+			mine := postAndDelete(t, svc, o.target, "前")
+			others := postAndDelete(t, taro, o.target, "taro のコメント")
+			markDeleted(t, rec, o.target, true)
+			for name, c := range map[string]struct {
+				id   change.ID
+				body string
+			}{"同じ本文": {mine, "前"}, "他人のコメント": {others, "後"}} {
+				ctx := port.WithRevived(t.Context())
+				if _, err := svc.Edit(ctx, store, o.target, c.id, c.body); !errors.Is(err, port.ErrNotFound) {
+					t.Errorf("%s の Edit = %v, want port.ErrNotFound", name, err)
+				}
+				if hasRestore(t, rec, o.target) {
+					t.Errorf("%s の Edit が持ち主の削除を取り消した", name)
+				}
+			}
+		})
+	}
+}
+
 // 削除済みのコメントの削除は、いまのまま断る。
 func TestDeleteDeletedCommentIsNotFound(t *testing.T) {
 	for _, o := range owners {
