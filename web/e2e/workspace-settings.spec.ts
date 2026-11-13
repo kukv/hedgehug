@@ -2,8 +2,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { sidebar, tokenUrl, unique } from "./helpers";
 
-// ワークスペースの設定の通しのテスト(B2)。サーバーは同じ worker のほかのテストと共有なので、
-// 名前と接頭辞は幅とやり直しの回数、乱数で毎回変える。
+// ワークスペースの設定の通しのテスト(B2)。サーバーは同じ worker のほかのテストと共有なので、名前と接頭辞は幅とやり直しの回数、乱数で毎回変える。
 
 // 接頭辞は英大文字で始まる 10 文字以内の英大文字と数字。
 const prefixOf = (info: TestInfo) =>
