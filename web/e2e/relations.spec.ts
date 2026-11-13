@@ -29,6 +29,15 @@ test("adds a blocked by relation, shows Blocked in the panel and the tree, and r
   await expect(rel.getByRole("button", { name: blocker.name })).toBeDisabled();
   await expect(rel.getByText("すでに blocked by の関連があります")).toBeVisible();
 
+  // 元の側(ブロックする Task)には、逆向きの「blocks」で出て、ブロックされる Task へのリンクがある。
+  await rel.getByRole("link", { name: blocker.name }).click();
+  const reverse = panel.getByRole("region", { name: "関連" });
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(blocker.name);
+  await expect(reverse.getByRole("heading", { name: "blocks", exact: true })).toBeVisible();
+  await expect(reverse.getByRole("link", { name: blocked.name })).toBeVisible();
+  await reverse.getByRole("link", { name: blocked.name }).click();
+  await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(blocked.name);
+
   await rel.getByRole("button", { name: /を解除$/ }).click();
   await expect(rel.getByText("関連はありません")).toBeVisible();
   await expect(panel.getByText("ブロック中")).toBeHidden();

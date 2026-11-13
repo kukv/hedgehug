@@ -164,6 +164,10 @@ test("an Epic row shows its progress and changes status from the row", async ({ 
     .getByRole("menuitemcheckbox", { name: /^Done/ })
     .click();
   await expect(page.getByRole("button", { name: "ステータス: Done" }).first()).toBeVisible();
+  // 保存が終わった印として、履歴に行が出るのを待ってから移る。
+  await expect(panel.getByRole("region", { name: "履歴", exact: true })).toContainText(
+    "ステータスを Todo → Done",
+  );
 
   await page.goto(overview(prefix));
   const row = page.getByRole("region", { name: "Epic", exact: true }).locator(".list-row");

@@ -37,7 +37,10 @@ test("posts, edits and deletes a comment, adds a mention, and toggles watching",
   await expect(comments.first()).not.toContainText("(編集済み)");
 
   // 「送信」ボタンでも投稿できる。空の本文は投稿しない。
-  await section.getByRole("button", { name: "送信" }).click();
+  const send = section.getByRole("button", { name: "送信" });
+  await send.click();
+  await expect(send).toBeEnabled();
+  await expect(box).toHaveValue("");
   await expect(comments).toHaveCount(1);
   await box.fill("二つ目");
   await section.getByRole("button", { name: "送信" }).click();
@@ -75,11 +78,13 @@ test("posts, edits and deletes a comment, adds a mention, and toggles watching",
   // ウォッチ: 押すたびに「ウォッチ」と「ウォッチ中」が入れ替わり(aria-pressed も)、読み直しても残る。
   const watching = panel.getByRole("button", { name: "ウォッチ中", exact: true });
   const idle = panel.getByRole("button", { name: "ウォッチ", exact: true });
-  const startsWatching = (await watching.count()) > 0;
-  const [before, after] = startsWatching ? [watching, idle] : [idle, watching];
+  // 作った人は、最初からウォッチ中。
+  await expect(watching).toBeVisible();
+  await expect(watching).toHaveAttribute("aria-pressed", "true");
+  const [before, after] = [watching, idle];
   await before.click();
   await expect(after).toBeVisible();
-  await expect(after).toHaveAttribute("aria-pressed", startsWatching ? "false" : "true");
+  await expect(after).toHaveAttribute("aria-pressed", "false");
   await page.goto(tokenUrl(`/s/e2e/i/${prefix}-2`));
   await expect(after).toBeVisible();
   await after.click();
