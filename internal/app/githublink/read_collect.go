@@ -54,6 +54,7 @@ func (c *collector) add(id item.ID, links []itemlink.Link) {
 }
 
 // collect は、store のすべてのワークスペース・プロジェクトのアイテムのリンクを、リポジトリごとに集める。
+// 削除済みのプロジェクトは読まない(D4a-10)。
 func (l Links) collect(ctx context.Context, store port.StoreID) ([]*repoLinks, error) {
 	var out []*repoLinks
 	err := l.Stores.Read(ctx, store, func(r port.Reader) error {
@@ -63,7 +64,7 @@ func (l Links) collect(ctx context.Context, store port.StoreID) ([]*repoLinks, e
 			return err
 		}
 		for _, w := range wss {
-			ps, err := r.Projects().List(w.ID)
+			ps, err := port.LiveProjects(r, w.ID)
 			if err != nil {
 				return err
 			}
@@ -79,14 +80,13 @@ func (l Links) collect(ctx context.Context, store port.StoreID) ([]*repoLinks, e
 	return out, err
 }
 
-// collectProject は、プロジェクトの中のアイテムのリンクを c に足す。
+// collectProject は、プロジェクトの中の、削除済みでないアイテムのリンクを c に足す(D4a-10)。
 func collectProject(r port.Reader, p project.ID, c *collector) error {
-	its, err := r.Items().List(p)
+	its, err := port.LiveItems(r, p)
 	if err != nil {
 		return err
 	}
 	for _, it := range its {
-		// 削除済みのアイテムのリンクは頼まない(D4a-10)。削除の印は A4b が足す(計画 D4a「A4b が入ったときに足すもの」)
 		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
 		if err != nil {
 			return err
