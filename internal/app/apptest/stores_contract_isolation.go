@@ -156,3 +156,17 @@ func contractRestored(t *testing.T, s port.Stores, id port.StoreID) {
 		return nil
 	})
 }
+
+// wantDeletedWorkspace は、削除済みのワークスペースも Get と List が Deleted 付きで返し、Settings も読めることを確かめる(B5b)。
+func wantDeletedWorkspace(t *testing.T, r port.Reader) {
+	t.Helper()
+	if w, err := r.Workspaces().Get(cWorkspace.ID); err != nil || w.Deleted == nil || !w.Deleted.Root || w.Name != cWorkspace.Name {
+		t.Errorf("Workspaces().Get(deleted) = %+v, %v", w, err)
+	}
+	if ws, err := r.Workspaces().List(); err != nil || len(ws) != 1 || ws[0].Deleted == nil {
+		t.Errorf("Workspaces().List must return the deleted workspace: %+v, %v", ws, err)
+	}
+	if _, err := r.Workspaces().Settings(cWorkspace.ID); err != nil {
+		t.Errorf("Workspaces().Settings(deleted) = %v", err)
+	}
+}
