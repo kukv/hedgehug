@@ -15,7 +15,8 @@ import (
 // 「blocked by HH-3」を足すと、HH-3 のログに「このアイテムをブロックする」関連を書く。アクティビティは
 // 「{ID} {表記} {ID}」。
 // 相手が自分・Step・ないアイテム、知らない表記なら port.ErrNotFound。同じ種類の関連がある(向きが逆でも)か、
-// blocks で循環になるときは断る。条件は保存の中で読み直して確かめる。
+// blocks で循環になるときは断る。条件は保存の中で読み直して確かめる。self が別の画面で削除された(root: true)
+// アイテムなら、関連を足すときに self の削除を取り消す(相手が削除済みなら足さずに断る)。
 func (s Service) Add(ctx context.Context, store port.StoreID, self item.ID, label relation.Label, other item.ID) error {
 	typ, reverse, ok := relation.Parse(label)
 	if !ok {
@@ -31,6 +32,9 @@ func (s Service) Add(ctx context.Context, store port.StoreID, self item.ID, labe
 	}
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		if _, err := reviveSelf(ctx, tx, self); err != nil {
+			return err
+		}
 		snap, err := readSnapshot(tx)
 		if err != nil {
 			return err

@@ -24,31 +24,42 @@ func (s Service) CreateTemplateFromItem(ctx context.Context, store port.StoreID,
 	var t workspace.Template
 	var ws workspace.ID
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
-		it, err := port.LiveItem(r, id)
-		if err != nil {
-			return err
-		}
-		st, err := r.Workspaces().Settings(it.Place.Workspace)
-		if err != nil {
-			return err
-		}
-		var family []item.Item
-		if in.Structure {
-			if family, err = port.LiveItems(r, it.Place.Project); err != nil {
-				return err
-			}
-		}
-		texts, err := descriptionsOf(r, it, family)
-		if err != nil {
-			return err
-		}
-		ws, t = it.Place.Workspace, templateOf(st, it, family, texts, in)
-		return nil
+		var err error
+		ws, t, err = readTemplate(r, id, in)
+		return err
 	})
 	if err != nil {
 		return workspace.Template{}, err
 	}
-	return s.CreateTemplate(ctx, store, ws, t)
+	// 読んだあと保存するまでのあいだに別の画面が削除していたら、写した値は古いので、保存の中で元のアイテムと
+	// 生きている子を読み直して作り直す(決定 S8)
+	return s.createTemplate(ctx, store, ws, t, func(tx port.Tx) (workspace.Template, error) {
+		_, fresh, err := readTemplate(tx, id, in)
+		return fresh, err
+	})
+}
+
+// readTemplate は、生きているアイテム id から、写すテンプレートと、そのワークスペースを読む。
+func readTemplate(r port.Reader, id item.ID, in FromItem) (workspace.ID, workspace.Template, error) {
+	it, err := port.LiveItem(r, id)
+	if err != nil {
+		return "", workspace.Template{}, err
+	}
+	st, err := r.Workspaces().Settings(it.Place.Workspace)
+	if err != nil {
+		return "", workspace.Template{}, err
+	}
+	var family []item.Item
+	if in.Structure {
+		if family, err = port.LiveItems(r, it.Place.Project); err != nil {
+			return "", workspace.Template{}, err
+		}
+	}
+	texts, err := descriptionsOf(r, it, family)
+	if err != nil {
+		return "", workspace.Template{}, err
+	}
+	return it.Place.Workspace, templateOf(st, it, family, texts, in), nil
 }
 
 // descriptionsOf は、テンプレートに写す説明(アイテムと、含める子。Step は説明を持たない)。
