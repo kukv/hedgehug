@@ -1,4 +1,4 @@
-import { NotFound, Refused } from "../../model/errors";
+import { Refused } from "../../model/errors";
 import type { Member } from "../../model/member";
 import type {
   ValueList,
@@ -12,9 +12,6 @@ import type { Catalog } from "../catalog/catalog";
 import type { Toasts } from "../toasts/toasts";
 import { prefixRefusal } from "./general";
 import { deleteRefusal } from "./values";
-
-// workspaceSaveFailed は、別の画面でワークスペースが削除されたあとの保存(API の 404)のトースト。
-export const workspaceSaveFailed = "保存できませんでした";
 
 // ワークスペースの設定の画面の状態(03「範囲と画面の構成」)。
 // 操作は run に渡す。断りはエラーのトーストにして、設定を読み直し、入力を元に戻す。
@@ -175,16 +172,12 @@ export function createWorkspaceSettings(deps: {
         succeeded = true;
         if (ok) toasts.show(ok);
       } catch (e) {
-        if (e instanceof NotFound) toasts.show(workspaceSaveFailed, { error: true });
-        else if (!(e instanceof Refused)) throw e;
-        else if (onRefused) onRefused(e.message);
+        if (!(e instanceof Refused)) throw e;
+        if (onRefused) onRefused(e.message);
         else toasts.show(e.message, { error: true });
       } finally {
         // 読み直しを先にする。サイドバーの読み直しが投げても、設定の読み直しを飛ばさない。
-        // 削除済みのワークスペースの読み直しは 404 になるが、トーストを出しているので、画面は前の表示のままにする。
-        await reload().catch((e) => {
-          if (!(e instanceof NotFound)) throw e;
-        });
+        await reload();
         if (catalogChanged) await catalog.load();
       }
       return succeeded;

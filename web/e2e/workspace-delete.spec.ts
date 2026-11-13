@@ -79,7 +79,7 @@ test("disables deleting in a read-only store", async ({ page }, info) => {
   await expect(page.getByRole("menuitem", { name: "削除…" })).toBeDisabled();
 });
 
-test("a second page that kept the settings open sees a save failure, then the home after a reload", async ({
+test("a second page that kept the settings open moves to the home when it comes back after the delete", async ({
   page,
   context,
 }, info) => {
@@ -87,11 +87,12 @@ test("a second page that kept the settings open sees a save failure, then the ho
   const name = unique(info, "別ページ削除");
   await createWorkspace(page, info, name, prefix);
 
+  // 2 つ目のページで設定の「一般」を開いておく(入力欄にはフォーカスを置かない)。
   const other = await context.newPage();
   await other.goto(tokenUrl(`/s/e2e/w/${prefix}/settings`));
-  const otherName = other.getByRole("textbox", { name: "名前", exact: true });
-  await expect(otherName).toHaveValue(name);
+  await expect(other.getByRole("textbox", { name: "名前", exact: true })).toHaveValue(name);
 
+  await page.bringToFront();
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}/settings`));
   await page.getByRole("button", { name: "ワークスペースを削除…", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "ワークスペースを削除" });
@@ -99,12 +100,7 @@ test("a second page that kept the settings open sees a save failure, then the ho
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByText(`「${name}」を削除しました`)).toBeVisible();
 
-  // 2 つ目のページで名前を変えて保存すると、エラーのトーストが出る。画面は壊れない。
+  // 2 つ目のページに戻ると、開いていた画面がなくなったので、ホームへ移る(01「画面のアドレス」)。
   await other.bringToFront();
-  await otherName.fill(`${name} 変更`);
-  await otherName.press("Enter");
-  await expect(other.getByText("保存できませんでした")).toBeVisible();
-
-  await other.reload();
   await expect(other.getByRole("heading", { name: "hedgehug" })).toBeVisible();
 });

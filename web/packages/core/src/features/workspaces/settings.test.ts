@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { NotFound } from "../../model/errors";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { fakeWorkspacesPort } from "./fixtures.test-util";
-import { createWorkspaceSettings, workspaceSaveFailed, workspaceSettingsTabs } from "./settings";
+import { createWorkspaceSettings, workspaceSettingsTabs } from "./settings";
 
 async function setup() {
   const catalogPort = fakeCatalogPort();
@@ -98,16 +97,6 @@ describe("workspace settings", () => {
       ["名前は空にできません", true],
     ]);
     expect(port.calls.filter((c) => c === "get")).toHaveLength(2); // 開いたときと、断りのあと
-  });
-
-  it("shows a save failure toast, without throwing, when the workspace was deleted elsewhere", async () => {
-    const { screen, port, toasts } = await setup();
-    await screen.open("S1", "S1-W1");
-    const gone = () => Promise.reject(new NotFound("workspace not found"));
-    port.get = gone;
-    const ok = await screen.run((p, s, w) => p.rename(s, w, "新しい名前").then(gone));
-    expect(ok).toBe(false);
-    expect(get(toasts.list).map((t) => [t.text, t.error])).toEqual([[workspaceSaveFailed, true]]);
   });
 
   it("hands a refusal to onRefused instead of the toast, for refusals shown in a dialog", async () => {
