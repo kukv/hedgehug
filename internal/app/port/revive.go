@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // 別の画面で削除されたものへの保存は、変更を残して削除を取り消す(06「他の書き手との重なり」)。
@@ -89,7 +91,7 @@ func ReviveItem(ctx context.Context, tx Tx, id item.ID) error {
 	if err := reviveItemsOf(tx, it.Place.Project, it.Deleted.Op); err != nil {
 		return err
 	}
-	noteRevived(ctx, it.DisplayID(ws.Prefix))
+	NoteRevived(ctx, Revival{Kind: RevivedID, Text: it.DisplayID(ws.Prefix)})
 	return nil
 }
 
@@ -133,7 +135,7 @@ func ReviveProjectAs(ctx context.Context, tx Tx, id project.ID, title string) er
 	if err := reviveItemsOf(tx, p.ID, p.Deleted.Op); err != nil {
 		return err
 	}
-	noteRevived(ctx, p.DisplayID(ws.Prefix))
+	NoteRevived(ctx, Revival{Kind: RevivedID, Text: p.DisplayID(ws.Prefix)})
 	return nil
 }
 
@@ -158,28 +160,80 @@ func reviveItemsOf(tx Tx, p project.ID, op change.ID) error {
 	return nil
 }
 
-type revivedKey struct{}
-
-// revived は、取り消したものの表示 ID を、積んだ順に持つ。
-type revived struct{ ids []string }
-
-// WithRevived は、取り消したものの表示 ID を積む入れ物を置いた context を返す。
-func WithRevived(ctx context.Context) context.Context {
-	return context.WithValue(ctx, revivedKey{}, &revived{})
+// ReviveSetting は、tx の中でワークスペース ws のログを読み直し、項目名 f を覆う削除の行(workspace.Covering)の
+// op ごとに、その op の行があるログ(ワークスペース、そのプロジェクトとアイテム)へ取り消しの行を書く
+// (値の削除で置き換えたアイテムの値も、先端なら戻る)。名前は WithRevived の入れ物に積む。
+// 取り消したものがあれば true。
+func ReviveSetting(ctx context.Context, tx Tx, ws workspace.ID, f string) (bool, error) {
+	wref := change.Ref{Kind: change.KindWorkspace, ID: ws}
+	log, err := tx.Changes().Of(wref)
+	if err != nil {
+		return false, err
+	}
+	covering := workspace.Covering(log, f)
+	if len(covering) == 0 {
+		return false, nil
+	}
+	refs, err := workspaceRefs(tx, ws)
+	if err != nil {
+		return false, err
+	}
+	done := map[change.ID]bool{}
+	for _, d := range covering {
+		if done[d.Op] {
+			continue
+		}
+		done[d.Op] = true
+		if err := undoAcross(tx, append([]change.Ref{wref}, refs...), d.Op); err != nil {
+			return false, err
+		}
+		NoteRevived(ctx, Revival{Kind: RevivedName, Text: strings.Join(strings.Fields(workspace.NameOfDeleted(log, d.F)), " ")})
+	}
+	return true, nil
 }
 
-// Revived は、入れ物に積んだ表示 ID を、積んだ順に返す。入れ物がなければ nil。
-func Revived(ctx context.Context) []string {
-	v, _ := ctx.Value(revivedKey{}).(*revived)
-	if v == nil {
-		return nil
+// workspaceRefs は、ワークスペースのプロジェクトとアイテム(削除済みも含む)のログを指す Ref。
+func workspaceRefs(tx Tx, ws workspace.ID) ([]change.Ref, error) {
+	ps, err := tx.Projects().List(ws)
+	if err != nil {
+		return nil, err
 	}
-	return slices.Clone(v.ids)
+	var refs []change.Ref
+	for _, p := range ps {
+		refs = append(refs, change.Ref{Kind: change.KindProject, ID: p.ID})
+		its, err := tx.Items().List(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range its {
+			refs = append(refs, change.Ref{Kind: change.KindItem, ID: it.ID})
+		}
+	}
+	return refs, nil
 }
 
-// noteRevived は、入れ物に表示 ID を積む(同じ ID は 1 つ)。入れ物がなければ捨てる。
-func noteRevived(ctx context.Context, display string) {
-	if v, _ := ctx.Value(revivedKey{}).(*revived); v != nil && !slices.Contains(v.ids, display) {
-		v.ids = append(v.ids, display)
+// undoAcross は、refs のログのうち操作 op の行があるものへ、読み直したログで、その取り消しの行を書く。
+func undoAcross(tx Tx, refs []change.Ref, op change.ID) error {
+	for _, ref := range refs {
+		log, err := tx.Changes().Of(ref)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(log, func(r change.Record) bool { return r.Op == op }) {
+			continue
+		}
+		drafts := change.Undo(log, op)
+		switch ref.Kind {
+		case change.KindWorkspace:
+			err = tx.WriteWorkspaces().Append(ref.ID, drafts...)
+		case change.KindProject:
+			err = tx.WriteProjects().Append(ref.ID, drafts...)
+		default:
+			err = tx.WriteItems().Append(ref.ID, drafts...)
+		}
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

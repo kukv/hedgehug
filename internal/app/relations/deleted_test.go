@@ -98,7 +98,7 @@ func wantTaskRevived(ctx context.Context, t *testing.T, s port.Stores) {
 	if taskDeleted(t, s) || !restored(t, s, apptest.SampleTask) {
 		t.Error("削除を取り消していない")
 	}
-	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-2"}) {
+	if got := port.Revived(ctx); !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 }

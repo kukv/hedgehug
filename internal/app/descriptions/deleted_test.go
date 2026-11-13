@@ -55,7 +55,7 @@ func TestSaveItemDescriptionDeletedRevives(t *testing.T) {
 	if err != nil || got.Text != "本文" {
 		t.Fatalf("SaveItem = %+v, %v", got, err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if !hasRestore(t, rec, taskRef) {
@@ -75,7 +75,7 @@ func TestSaveProjectDescriptionDeletedRevives(t *testing.T) {
 	if err != nil || got.Text != "本文" {
 		t.Fatalf("SaveProject = %+v, %v", got, err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-P1"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-P1"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if !hasRestore(t, rec, projectRef) {

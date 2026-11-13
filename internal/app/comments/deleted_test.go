@@ -54,7 +54,7 @@ var owners = []struct {
 // wantRevived は、display の持ち主の削除が取り消され(Revived に積まれ、restore の行がある)たことを確かめる。
 func wantRevived(ctx context.Context, t *testing.T, s port.Stores, tg comments.Target, display string) {
 	t.Helper()
-	if r := port.Revived(ctx); !slices.Equal(r, []string{display}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: display}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if !hasRestore(t, s, tg) {

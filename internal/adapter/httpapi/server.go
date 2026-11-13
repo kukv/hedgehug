@@ -42,8 +42,10 @@ func (w *restoredWriter) WriteHeader(status int) {
 	if !w.sent && status >= 200 { // 1xx は最終の応答ではないので、その後の応答に付ける
 		w.sent = true
 		if status < 300 {
-			for _, id := range port.Revived(w.ctx) {
-				w.Header().Add("Hedgehug-Restored", id)
+			for _, r := range port.Revived(w.ctx) {
+				if r.Kind == port.RevivedID {
+					w.Header().Add("Hedgehug-Restored", r.Text)
+				}
 			}
 		}
 	}

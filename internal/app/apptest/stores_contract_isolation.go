@@ -2,6 +2,7 @@ package apptest
 
 import (
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // fixtureParts は、fixtureSeen が数える writeFixture の部分の数。
@@ -176,6 +178,45 @@ func contractUserRestoreSeenInTx(t *testing.T, s port.Stores, id port.StoreID) {
 	})
 	mustRead(t, s, id, func(r port.Reader) error {
 		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		n := 0
+		for _, rec := range log {
+			if rec.T == change.Restore {
+				n++
+			}
+		}
+		if err != nil || n != 1 {
+			t.Errorf("restore rows = %d, %v", n, err)
+		}
+		return nil
+	})
+}
+
+// contractUserSettingRestoreSeenInTx は、利用者の操作の中で書いた設定の restore の行を、同じ Write の中の
+// 設定の読み取りが見ることを確かめる。ReviveSetting を 2 回呼んでも、restore の行は 1 つだけ書く(C3c)。
+func contractUserSettingRestoreSeenInTx(t *testing.T, s port.Stores, id port.StoreID) {
+	review := workspace.Value{ID: "01CONTRACTRV00000000000001", Name: "Review", Color: "blue", Category: workspace.CategoryDoing, Rank: "a"}
+	f := workspace.ParseList("statuses").Ref(review.ID)
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(cWorkspace.ID, workspace.ValueDrafts(workspace.ParseList("statuses"), review)...)
+	})
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(cWorkspace.ID, change.NewDelete(f))
+	})
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		ctx := port.WithRevived(t.Context())
+		if _, err := port.ReviveSetting(ctx, tx, cWorkspace.ID, f); err != nil {
+			return err
+		}
+		st, err := tx.Workspaces().Settings(cWorkspace.ID)
+		if err != nil || !slices.ContainsFunc(st.Statuses, func(v workspace.Value) bool { return v.ID == review.ID }) {
+			t.Errorf("in the same write: statuses = %+v, %v", st.Statuses, err)
+		}
+		_, err = port.ReviveSetting(ctx, tx, cWorkspace.ID, f)
+		return err
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: cWorkspace.ID})
 		n := 0
 		for _, rec := range log {
 			if rec.T == change.Restore {

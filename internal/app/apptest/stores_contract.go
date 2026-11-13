@@ -45,6 +45,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"deleted items and projects carry a mark and are still listed", contractDeleted},
 		{"a restore row cancels the deletion it points at", contractRestored},
 		{"a person's restore is seen in the same write", contractUserRestoreSeenInTx},
+		{"a person's setting restore is seen in the same write", contractUserSettingRestoreSeenInTx},
 		{"descriptions round trip", contractDescription},
 		{"a failed write leaves the description", contractDescriptionRollback},
 		{"describing needs an existing entity and a summary", contractDescriptionRules},

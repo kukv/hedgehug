@@ -82,7 +82,7 @@ func TestApplyIgnoringWorkflowRevivesADeletedItem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-2"}) {
+	if got := port.Revived(ctx); !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 }
