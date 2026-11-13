@@ -55,6 +55,21 @@ describe("Input", () => {
     expect(seen).toEqual(["1.50"]);
   });
 
+  it("shows the value the parent keeps when the parent changes what was typed", async () => {
+    render(Input, {
+      props: {
+        label: "接頭辞",
+        get value() {
+          return "A";
+        },
+        set value(_v: string) {},
+      },
+    });
+    const input = screen.getByRole("textbox", { name: "接頭辞" });
+    await fireEvent.input(input, { target: { value: "a" } });
+    expect(input).toHaveValue("A");
+  });
+
   it("is disabled with the note", () => {
     render(Input, {
       props: { label: "タイトル", heading: true, disabled: true, title: "閲覧のみの Store です" },

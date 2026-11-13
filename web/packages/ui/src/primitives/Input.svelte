@@ -45,33 +45,43 @@
 
   let element: HTMLInputElement | undefined = $state();
 
+  const attrs = $derived({
+    "aria-label": label,
+    type,
+    step,
+    min,
+    id,
+    placeholder,
+    disabled,
+    title,
+    onfocus,
+    onblur,
+    onkeydown,
+  });
+
   // autofocus 属性は a11y の警告になるので、出たときに focus を呼ぶ。
   $effect(() => {
     if (focusOnMount) element?.focus();
   });
 </script>
 
-<input
-  bind:this={element}
-  class="input {size}"
-  class:mono
-  class:heading
-  aria-label={label}
-  {type}
-  {step}
-  {min}
-  {id}
-  {placeholder}
-  {disabled}
-  {title}
-  {onfocus}
-  {onblur}
-  {onkeydown}
-  {value}
-  oninput={(event) => {
-    value = event.currentTarget.value;
-  }}
->
+<!-- number だけ、値を文字列のまま返す(bind:value は数に直すので使わない)。それ以外は bind:value で、親が値を
+     変えたときに入力欄の表示も直る(接頭辞を大文字にする欄など)。 -->
+{#if type === "number"}
+  <input
+    bind:this={element}
+    class="input {size}"
+    class:mono
+    class:heading
+    {...attrs}
+    {value}
+    oninput={(event) => {
+      value = event.currentTarget.value;
+    }}
+  >
+{:else}
+  <input bind:this={element} class="input {size}" class:mono class:heading {...attrs} bind:value>
+{/if}
 
 <style>
   .input {
