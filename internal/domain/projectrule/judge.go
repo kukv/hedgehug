@@ -29,7 +29,7 @@ func CheckUse(s workspace.Settings, r Rules, status change.ID) error {
 	if Uses(s, r, status) {
 		return nil
 	}
-	return refusal.New("このプロジェクトでは「" + statusName(s, status) + "」を使いません")
+	return refusal.New("このプロジェクトでは「" + workspace.StatusName(s, status) + "」を使いません")
 }
 
 // UsedStatuses は、使うステータスを定義の順に返す。
@@ -95,21 +95,12 @@ func CheckTransition(s workspace.Settings, r Rules, from, to change.ID) error {
 	if len(allowed) > 0 {
 		names := make([]string, 0, len(allowed))
 		for _, id := range allowed {
-			names = append(names, statusName(s, id))
+			names = append(names, workspace.StatusName(s, id))
 		}
 		tail = strings.Join(names, "・") + " のみ"
 	}
 	return refusal.New(fmt.Sprintf("ワークフローの制約: %s から %s には変更できません(%s)",
-		statusName(s, from), statusName(s, to), tail))
-}
-
-func statusName(s workspace.Settings, id change.ID) string {
-	for _, v := range s.Statuses {
-		if v.ID == id {
-			return v.Name
-		}
-	}
-	return ""
+		workspace.StatusName(s, from), workspace.StatusName(s, to), tail))
 }
 
 // UsableTemplates は、種類 kind のテンプレートのうち、プロジェクトで使えるもの(B5a-9)。プロジェクトの
@@ -126,7 +117,8 @@ func UsableTemplates(s workspace.Settings, r Rules, kind string) []workspace.Tem
 }
 
 // DefaultTemplate は、種類 kind の既定のテンプレート(B5a-9)。プロジェクトの既定が None なら「なし」、
-// 使えるテンプレートならそれ、それ以外はワークスペースの既定が使えるならそれ、なければ「なし」。
+// テンプレート ID ならそれが使えればそれ、使えなければ「なし」(ワークスペースの既定には戻らない)、
+// 未設定ならワークスペースの既定が使えるならそれ、なければ「なし」。
 func DefaultTemplate(s workspace.Settings, r Rules, kind string) (change.ID, bool) {
 	usable := UsableTemplates(s, r, kind)
 	has := func(id change.ID) bool {
@@ -135,8 +127,8 @@ func DefaultTemplate(s workspace.Settings, r Rules, kind string) (change.ID, boo
 	switch own := r.TemplateDefaults[kind]; {
 	case own == None:
 		return "", false
-	case own != "" && has(change.ID(own)):
-		return change.ID(own), true
+	case own != "":
+		return change.ID(own), has(change.ID(own))
 	}
 	if id := s.TemplateDefaults[kind]; id != "" && has(id) {
 		return id, true

@@ -87,6 +87,14 @@ func TestCheckTransitionBothMustAllow(t *testing.T) {
 	}
 }
 
+func TestCheckTransitionProjectOnly(t *testing.T) {
+	r := projectrule.Rules{Workflow: map[change.ID][]change.ID{todo: {doing}}}
+	want := "ワークフローの制約: Todo から Done には変更できません(InProgress のみ)"
+	if got := refusalText(t, projectrule.CheckTransition(sample(), r, todo, done)); got != want {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestCheckTransitionNoCommonTarget(t *testing.T) {
 	s := sample()
 	s.Workflow = map[change.ID][]change.ID{todo: {done}}
@@ -173,8 +181,12 @@ func TestUsableTemplatesAndDefault(t *testing.T) {
 		t.Fatal("使えない既定はワークスペースの既定も使えず、なし")
 	}
 	r.Templates = nil
+	if _, ok := projectrule.DefaultTemplate(s, r, "Task"); ok {
+		t.Fatal("使えない既定は、ワークスペースの既定があってもなし")
+	}
+	r.TemplateDefaults = nil
 	if id, ok := projectrule.DefaultTemplate(s, r, "Task"); !ok || id != "T2" {
-		t.Fatalf("使えない既定はワークスペースの既定に戻る: %v %v", id, ok)
+		t.Fatalf("未設定ならワークスペースの既定: %v %v", id, ok)
 	}
 	r = projectrule.Rules{TemplateDefaults: map[string]string{"Task": projectrule.None}}
 	if _, ok := projectrule.DefaultTemplate(s, r, "Task"); ok {
