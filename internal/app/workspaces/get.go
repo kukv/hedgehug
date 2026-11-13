@@ -5,6 +5,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -13,9 +14,11 @@ type Detail struct {
 	Workspace   workspace.Workspace
 	Settings    workspace.Settings
 	OldPrefixes []string
+	// ProjectRules は、プロジェクトごとのルール(B5a-18)。
+	ProjectRules projectrule.Set
 }
 
-// Get は、ワークスペースと設定と旧い接頭辞を返す。
+// Get は、ワークスペースと設定と旧い接頭辞とプロジェクト別のルールを返す。
 func (s Service) Get(ctx context.Context, store port.StoreID, id workspace.ID) (Detail, error) {
 	var out Detail
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
@@ -31,7 +34,7 @@ func (s Service) Get(ctx context.Context, store port.StoreID, id workspace.ID) (
 		if err != nil {
 			return err
 		}
-		out = Detail{Workspace: w, Settings: st, OldPrefixes: workspace.OldPrefixes(log)}
+		out = Detail{Workspace: w, Settings: st, OldPrefixes: workspace.OldPrefixes(log), ProjectRules: projectrule.FromLog(log)}
 		return nil
 	})
 	return out, err

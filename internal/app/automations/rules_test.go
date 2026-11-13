@@ -219,3 +219,82 @@ func TestUpdateKeepsTheStoredScope(t *testing.T) {
 		t.Errorf("FromLog = %+v", got)
 	}
 }
+
+// 専用ルールの作成は Scope を保存し、活動の文にプロジェクト名を添える。編集・削除の文も同じ(B5a-10・18)。
+func TestCreateScopedRuleSummary(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	in := doneRule()
+	in.Scope = apptest.SampleProject
+	r, err := svc.Create(ctx, store, apptest.SampleWorkspace, in)
+	if err != nil || r.Scope != apptest.SampleProject {
+		t.Fatalf("Create = %+v, %v", r, err)
+	}
+	edit := doneRule()
+	edit.Name, edit.Value = "専用 2", "taro"
+	if err := svc.Update(ctx, store, apptest.SampleWorkspace, r.ID, edit); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Delete(ctx, store, apptest.SampleWorkspace, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	title := projectTitle(t, rec)
+	want := []string{
+		"プロジェクト「" + title + "」の自動化「完了で外す」を作成",
+		"プロジェクト「" + title + "」の自動化「専用 2」を編集",
+		"プロジェクト「" + title + "」の自動化「専用 2」を削除",
+	}
+	if len(rec.summaries) != len(want) {
+		t.Fatalf("summaries = %q", rec.summaries)
+	}
+	for i := range want {
+		if rec.summaries[i] != want[i] {
+			t.Errorf("%d: %q, want %q", i, rec.summaries[i], want[i])
+		}
+	}
+}
+
+func projectTitle(t *testing.T, rec *recorder) string {
+	t.Helper()
+	var title string
+	if err := rec.Read(t.Context(), store, func(r port.Reader) error {
+		p, err := r.Projects().Get(apptest.SampleProject)
+		title = p.Title
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return title
+}
+
+// 専用ルールの範囲は、このワークスペースの削除済みでないプロジェクトだけ。ない・削除済みは ErrNotFound。
+func TestCreateScopedRuleNeedsALiveProject(t *testing.T) {
+	svc, rec := setup(t)
+	in := doneRule()
+	in.Scope = "01NOPE00000000000000000000"
+	if _, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, in); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("unknown project: %v", err)
+	}
+	if err := apptest.DeleteProject(t.Context(), rec.Stores, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	in.Scope = apptest.SampleProject
+	if _, err := svc.Create(t.Context(), store, apptest.SampleWorkspace, in); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("deleted project: %v", err)
+	}
+}
+
+// 編集・削除の活動の文は保存済みの Scope で決める。編集の入力の Scope は見ない。
+func TestUpdateKeepsScope(t *testing.T) {
+	svc, rec := setup(t)
+	r := seedScoped(t, rec)
+	edit := r
+	edit.Scope, edit.Name = "", "専用 3"
+	if err := svc.Update(t.Context(), store, apptest.SampleWorkspace, r.ID, edit); err != nil {
+		t.Fatal(err)
+	}
+	want := "プロジェクト「" + projectTitle(t, rec) + "」の自動化「専用 3」を編集"
+	if got := rec.summaries[len(rec.summaries)-1]; got != want {
+		t.Errorf("summary = %q, want %q", got, want)
+	}
+}

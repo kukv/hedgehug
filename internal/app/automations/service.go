@@ -46,10 +46,10 @@ func logins(r port.Reader) ([]string, error) {
 	return out, nil
 }
 
-// edit は、summary で決めた文で 1 回保存する。drafts は保存の中のいまのルールから行を作る。
+// edit は、summary で決めた文で 1 回保存する。drafts は保存の中のいまのルールから行を作る。どちらも読む口を受ける。
 func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
-	summary func(rules []automation.Rule) (string, error),
-	drafts func(st workspace.Settings, set projectrule.Set, rules []automation.Rule, members []string) ([]change.Draft, error),
+	summary func(r port.Reader, rules []automation.Rule) (string, error),
+	drafts func(r port.Reader, st workspace.Settings, set projectrule.Set, rules []automation.Rule, members []string) ([]change.Draft, error),
 ) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
@@ -61,7 +61,7 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 		if err != nil {
 			return err
 		}
-		text, err = summary(rules)
+		text, err = summary(r, rules)
 		return err
 	})
 	if err != nil {
@@ -84,7 +84,7 @@ func (s Service) edit(ctx context.Context, store port.StoreID, ws workspace.ID,
 		if err != nil {
 			return err
 		}
-		ds, err := drafts(st, projectrule.FromLog(log), rules, ms)
+		ds, err := drafts(tx, st, projectrule.FromLog(log), rules, ms)
 		if err != nil {
 			return err
 		}

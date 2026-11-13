@@ -7,20 +7,32 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// Create は、ワークスペース全体のルールを作る(03「ルールの一覧」の「ルールを作成」)。有効で始まる。
+// Create は、ルールを作る(03「ルールの一覧」の「ルールを作成」)。有効で始まる。in.Scope があれば、そのプロジェクトだけの
+// ルールで、プロジェクトはこのワークスペースの削除済みでないもの(B5a-10)。
 func (s Service) Create(ctx context.Context, store port.StoreID, ws workspace.ID, in automation.Rule) (automation.Rule, error) {
 	in.ID, in.Enabled = s.IDs.New(), true
 	in = automation.Normalize(in)
 	err := s.edit(ctx, store, ws,
-		func([]automation.Rule) (string, error) {
-			return fmt.Sprintf("自動化「%s」を作成", oneLine(in.Name)), nil
+		func(r port.Reader, _ []automation.Rule) (string, error) {
+			if in.Scope != "" {
+				if err := liveScope(r, ws, in.Scope); err != nil {
+					return "", err
+				}
+			}
+			return ruleText(r, in.Scope, in.Name, "を作成")
 		},
-		func(st workspace.Settings, set projectrule.Set, rules []automation.Rule, ms []string) ([]change.Draft, error) {
+		func(r port.Reader, st workspace.Settings, set projectrule.Set, rules []automation.Rule, ms []string) ([]change.Draft, error) {
+			if in.Scope != "" {
+				if err := liveScope(r, ws, in.Scope); err != nil {
+					return nil, err
+				}
+			}
 			in = canonicalLogin(in, ms)
 			if !automation.Valid(st, set, ms, in) {
 				return nil, port.ErrNotFound
@@ -41,13 +53,14 @@ func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID
 	in.ID = id
 	in = automation.Normalize(in)
 	return s.edit(ctx, store, ws,
-		func(rules []automation.Rule) (string, error) {
-			if _, err := find(rules, id); err != nil {
+		func(r port.Reader, rules []automation.Rule) (string, error) {
+			old, err := find(rules, id)
+			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("自動化「%s」を編集", oneLine(in.Name)), nil
+			return ruleText(r, old.Scope, in.Name, "を編集")
 		},
-		func(st workspace.Settings, set projectrule.Set, rules []automation.Rule, ms []string) ([]change.Draft, error) {
+		func(_ port.Reader, st workspace.Settings, set projectrule.Set, rules []automation.Rule, ms []string) ([]change.Draft, error) {
 			old, err := find(rules, id)
 			if err != nil {
 				return nil, err
@@ -67,11 +80,14 @@ func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID
 // Delete は、ルールを消す。
 func (s Service) Delete(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
 	return s.edit(ctx, store, ws,
-		func(rules []automation.Rule) (string, error) {
+		func(rd port.Reader, rules []automation.Rule) (string, error) {
 			r, err := find(rules, id)
-			return fmt.Sprintf("自動化「%s」を削除", oneLine(r.Name)), err
+			if err != nil {
+				return "", err
+			}
+			return ruleText(rd, r.Scope, r.Name, "を削除")
 		},
-		func(_ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
+		func(_ port.Reader, _ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
 			if _, err := find(rules, id); err != nil {
 				return nil, err
 			}
@@ -86,11 +102,11 @@ func (s Service) SetEnabled(ctx context.Context, store port.StoreID, ws workspac
 		word = "有効"
 	}
 	return s.edit(ctx, store, ws,
-		func(rules []automation.Rule) (string, error) {
+		func(_ port.Reader, rules []automation.Rule) (string, error) {
 			r, err := find(rules, id)
 			return fmt.Sprintf("自動化「%s」を%sにする", oneLine(r.Name), word), err
 		},
-		func(_ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
+		func(_ port.Reader, _ workspace.Settings, _ projectrule.Set, rules []automation.Rule, _ []string) ([]change.Draft, error) {
 			old, err := find(rules, id)
 			if err != nil {
 				return nil, err
@@ -102,4 +118,28 @@ func (s Service) SetEnabled(ctx context.Context, store port.StoreID, ws workspac
 			n.Enabled = on
 			return automation.Drafts(old, n), nil
 		})
+}
+
+// liveScope は、専用ルールの範囲が、このワークスペースの削除済みでないプロジェクトであることを確かめる。
+func liveScope(r port.Reader, ws workspace.ID, scope project.ID) error {
+	p, err := port.LiveProject(r, scope)
+	if err != nil {
+		return err
+	}
+	if p.Place.Workspace != ws {
+		return port.ErrNotFound
+	}
+	return nil
+}
+
+// ruleText は、ルールの操作のアクティビティの文。専用ルールならプロジェクトの名前を添える(03 の表)。
+func ruleText(r port.Reader, scope project.ID, name, verb string) (string, error) {
+	if scope == "" {
+		return fmt.Sprintf("自動化「%s」%s", oneLine(name), verb), nil
+	}
+	p, err := r.Projects().Get(scope)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("プロジェクト「%s」の自動化「%s」%s", oneLine(p.Title), oneLine(name), verb), nil
 }

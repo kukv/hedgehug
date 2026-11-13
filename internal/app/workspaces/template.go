@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -50,7 +51,7 @@ func (s Service) UpdateTemplate(ctx context.Context, store port.StoreID, ws work
 			}
 			return fmt.Sprintf("テンプレート「%s」を編集", oneLine(workspace.NormalizeName(in.Name))), nil
 		},
-		func(_ port.Tx, st workspace.Settings) ([]change.Draft, error) {
+		func(tx port.Tx, st workspace.Settings) ([]change.Draft, error) {
 			old, ok := st.Template(id)
 			if !ok {
 				return nil, port.ErrNotFound
@@ -62,6 +63,11 @@ func (s Service) UpdateTemplate(ctx context.Context, store port.StoreID, ws work
 			ds := workspace.TemplateDrafts(old, t)
 			if old.Kind != t.Kind {
 				ds = append(ds, workspace.DefaultClearDrafts(st, id, t.Kind)...)
+				rds, err := projectTemplateDrafts(tx, ws, id)
+				if err != nil {
+					return nil, err
+				}
+				ds = append(ds, rds...)
 			}
 			return ds, nil
 		})
@@ -77,12 +83,25 @@ func (s Service) DeleteTemplate(ctx context.Context, store port.StoreID, ws work
 			}
 			return fmt.Sprintf("テンプレート「%s」を削除", oneLine(t.Name)), nil
 		},
-		func(_ port.Tx, st workspace.Settings) ([]change.Draft, error) {
+		func(tx port.Tx, st workspace.Settings) ([]change.Draft, error) {
 			if _, ok := st.Template(id); !ok {
 				return nil, port.ErrNotFound
 			}
-			return workspace.TemplateDeleteDrafts(st, id), nil
+			rds, err := projectTemplateDrafts(tx, ws, id)
+			if err != nil {
+				return nil, err
+			}
+			return append(workspace.TemplateDeleteDrafts(st, id), rds...), nil
 		})
+}
+
+// projectTemplateDrafts は、テンプレート id の削除・種類の変更に、プロジェクト別のルールを追従させる行(B5a-16)。
+func projectTemplateDrafts(tx port.Tx, ws workspace.ID, id change.ID) ([]change.Draft, error) {
+	log, err := tx.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
+	if err != nil {
+		return nil, err
+	}
+	return projectrule.TemplateDropDrafts(projectrule.FromLog(log), id), nil
 }
 
 // SetTemplateDefault は、種類 kind の既定のテンプレートを変える(03「種類ごとの既定」)。id が空なら「なし」。
