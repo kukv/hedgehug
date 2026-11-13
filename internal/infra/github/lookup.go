@@ -14,17 +14,21 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
-// lookupQuery は、1 つの番号の PR か Issue を読む GraphQL(D3-4)。レビューは reviewDecision と各レビュアーの
+// nodeFragment は、PR・Issue から読むフィールド(Lookup と ReadMany で共通)。レビューは reviewDecision と各レビュアーの
 // 最新の意見から、チェックは最後のコミットの statusCheckRollup から決める(前回の実装と同じ)。
-const lookupQuery = `query Lookup($owner: String!, $name: String!, $number: Int!) {
-repository(owner: $owner, name: $name) { nameWithOwner issueOrPullRequest(number: $number) {
+const nodeFragment = `fragment F on IssueOrPullRequest {
 __typename
 ... on Issue { number title state }
 ... on PullRequest { number title state isDraft reviewDecision
 reviewRequests(first: 1) { totalCount }
 latestOpinionatedReviews(first: 100) { nodes { state } }
 commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
-} } }`
+}`
+
+// lookupQuery は、1 つの番号の PR か Issue を読む GraphQL(D3-4)。
+const lookupQuery = `query Lookup($owner: String!, $name: String!, $number: Int!) {
+repository(owner: $owner, name: $name) { nameWithOwner issueOrPullRequest(number: $number) { ...F } } }
+` + nodeFragment
 
 type lookupAnswer struct {
 	Data struct {

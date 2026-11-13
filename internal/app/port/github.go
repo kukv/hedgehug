@@ -16,6 +16,10 @@ type GitHub interface {
 	// 改名・移管されたリポジトリは移動先で読み、Found.Repo に移動先の名前を入れる。
 	// リポジトリを読めなければ RepoUnreadable、番号がなければ NotFound(RepoUnreadable は Repo 付き、NotFound は Repo・Number 付き)。
 	Lookup(ctx context.Context, token, repo string, number int) (Found, error)
+	// ReadMany は、repo の numbers の PR・Issue を、100 件ずつまとめて読む(D4a-3)。改名・移管は Lookup と同じに追う。
+	// 番号がなかったものは Batch.Missing に入れ、失敗にしない。リポジトリを読めなければ RepoUnreadable、
+	// 利用上限で断られたら RateLimited。
+	ReadMany(ctx context.Context, token, repo string, numbers []int) (Batch, error)
 }
 
 // Found は、GitHub から読んだ PR・Issue。
