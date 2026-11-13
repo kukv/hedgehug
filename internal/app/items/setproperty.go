@@ -38,13 +38,29 @@ func (s Service) SetProperty(ctx context.Context, store port.StoreID, id item.ID
 		return item.Item{}, err
 	}
 	summary := fmt.Sprintf("%s の%sを %s に変更", ec.display, p.Name, item.Display(p, to, ec.settings, ec.names, s.Clock.Now()))
-	return s.writeValue(ctx, store, id, summary, func(it item.Item) []change.Draft {
+	var fs []fired
+	isStatus := p.Builtin && p.Key == "status"
+	_, err = s.writeValue(ctx, store, id, summary, func(it item.Item) []change.Draft {
 		from := item.Current(it, p)
 		if bytes.Equal(from, to) {
 			return nil
 		}
 		return []change.Draft{change.NewSet(item.Field(p), from, to)}
+	}, func(tx port.Tx, before item.Item) error {
+		if !isStatus {
+			return nil
+		}
+		var err error
+		fs, err = automate(tx, ec.settings, id, before.Status)
+		return err
 	})
+	if err != nil {
+		return item.Item{}, err
+	}
+	if err := s.notify(ctx, store, ec, fs); err != nil {
+		return item.Item{}, err
+	}
+	return s.Get(ctx, store, id)
 }
 
 // checkDatePair は、開始日か終了日を変えるとき、保存済みのもう片方と比べる(決定 16)。
@@ -61,7 +77,10 @@ func checkDatePair(it item.Item, p workspace.Property, to json.RawMessage) error
 }
 
 // writeValue は、保存の中でいまのアイテムを読み直し、drafts が返す行を 1 回で保存する。行がなければ何も残さない。
-func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID, summary string, drafts func(item.Item) []change.Draft) (item.Item, error) {
+// after は、行を書いたときだけ同じ保存の中で呼ぶ(before は書く前のアイテム)。nil なら呼ばない。
+func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID, summary string,
+	drafts func(item.Item) []change.Draft, after func(tx port.Tx, before item.Item) error,
+) (item.Item, error) {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
 		return item.Item{}, err
@@ -72,7 +91,14 @@ func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID,
 		if err != nil {
 			return err
 		}
-		return tx.WriteItems().Append(id, drafts(it)...)
+		ds := drafts(it)
+		if err := tx.WriteItems().Append(id, ds...); err != nil {
+			return err
+		}
+		if len(ds) == 0 || after == nil {
+			return nil
+		}
+		return after(tx, it)
 	})
 	if err != nil {
 		return item.Item{}, err

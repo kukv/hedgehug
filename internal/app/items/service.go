@@ -14,6 +14,7 @@ type Service struct {
 	IDs      port.IDs
 	Identity port.Identity
 	Clock    port.Clock
+	Inbox    port.Inbox // 自動化の通知(B4)
 }
 
 // withID は、アイテムと、その画面の ID(HH-12)を返す。アクティビティの 1 行に ID を書く操作が使う。

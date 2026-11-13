@@ -45,7 +45,7 @@ func (s Service) toggle(ctx context.Context, store port.StoreID, id item.ID, pro
 			return []change.Draft{change.NewRemove(item.Field(p), value)}
 		}
 		return nil
-	})
+	}, nil)
 }
 
 func listOf(st workspace.Settings, p workspace.Property) ([]workspace.Value, bool) {
