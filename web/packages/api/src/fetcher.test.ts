@@ -65,6 +65,14 @@ describe("fetcher の Hedgehug-Restored", () => {
     ]);
   });
 
+  it("不正な % の名前はそのまま渡し、保存の成功を失敗にしない", async () => {
+    const listener = vi.fn();
+    onRestored(listener);
+    respond(200, { "Hedgehug-Restored-Name": "100%" });
+    await expect(fetcher("/x")).resolves.toEqual({});
+    expect(listener).toHaveBeenCalledWith([{ kind: "name", text: "100%" }]);
+  });
+
   it("ヘッダーがない応答では呼ばない", async () => {
     const listener = vi.fn();
     onRestored(listener);

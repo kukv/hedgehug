@@ -43,9 +43,18 @@ export function onRestored(listener: ((restored: Restored[]) => void) | null): v
   restoredListener = listener;
 }
 
+// 不正な % の並びは、保存の成功を失敗にしないよう、そのままの値を使う。
+function decodeName(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 const restoredHeaders: { name: string; kind: Restored["kind"]; decode: (v: string) => string }[] = [
   { name: "Hedgehug-Restored", kind: "id", decode: (v) => v },
-  { name: "Hedgehug-Restored-Name", kind: "name", decode: decodeURIComponent },
+  { name: "Hedgehug-Restored-Name", kind: "name", decode: decodeName },
   { name: "Hedgehug-Restored-Comment", kind: "comment", decode: (v) => v },
 ];
 
