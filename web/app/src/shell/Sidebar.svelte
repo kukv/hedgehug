@@ -7,7 +7,7 @@
   import { itemDialog, sync, syncNow } from "../wire";
   import SidebarStore from "./SidebarStore.svelte";
 
-  // サイドバー(04「サイドバー」)。A2 は、名前・「新規作成」・Store ごとのブロックだけを出す。
+  // サイドバー(04「サイドバー」)。名前と設定・「新規作成」・Store ごとのブロック・同期のカードを出す。
   interface Props {
     stores: StoreNode[];
     current: Resolved | null;

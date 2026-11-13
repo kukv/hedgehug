@@ -185,7 +185,7 @@ describe("createItemDelete", () => {
     expect(refreshed).toEqual([]);
   });
 
-  it("shows another failure with the provisional words", async () => {
+  it("shows another failure with the failure toast", async () => {
     const { del, actions, messages, task } = await setup();
     await del.open(task);
     actions.failNext();

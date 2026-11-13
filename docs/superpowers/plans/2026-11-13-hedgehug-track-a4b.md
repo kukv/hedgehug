@@ -14034,7 +14034,7 @@ EOF
 
 ### 不安定だった e2e(Task 18 から持ち越し)と、その原因
 
-Task 18 のあとの全体の並列の実行で、`project-overview.spec.ts:17`(このトラックの前から)と `sync.spec.ts:210`(3 秒の窓)が落ちていた。この Task で新しい spec を足したあとの、直す前の全体の実行(それまでの 201 件と新しい 15 件の 216 件)では、ほかに `description-merge`・`flow`・`worklog`・`sync.spec.ts:51` も落ちた(216 件中 7 件、4.5 分)。期待の待ち時間と sync.spec の時間の窓は広げず、下の 1・2・3・5 で原因を直した。4 は持ち時間を一時だけ延ばしたもので、#179 を取り込んだあとで既定に戻した。
+Task 18 のあとの全体の並列の実行で、`project-overview.spec.ts:17`(このトラックの前から)と `sync.spec.ts:210`(3 秒の窓)が落ちていた。この Task の、直す前の全体の実行(216 件。それまでの 201 件と新しい spec の 15 件)では、ほかに `description-merge`・`flow`・`worklog`・`sync.spec.ts:51` も落ちた(216 件中 7 件、4.5 分)。期待の待ち時間と sync.spec の時間の窓は広げず、下の 1・2・3・5 で原因を直した。4 は持ち時間を一時だけ延ばしたもので、#179 を取り込んだあとで既定に戻した。
 
 1. **e2e のサーバーの偽の Store が、読み取りを 1 つずつ行っていた**(`internal/app/apptest/stores.go`)。サーバーの CPU は 10 コアのうち約 1.3 しか使っていないのに、`store.mu` の待ちの合計が 1 回の実行で約 4,500 秒あった。どのタブも、どのテストの保存のたびに一覧(ワークスペースの数だけの `listProjects`)とアイテム(読むたびに Store 全体を読む `blockedSet`)を読み直すので、読み取りが列に並んでいた。Read どうしは読み取りのロックで同時に行い、Write は Read と重ねない形にした(待ちの合計は約 260 秒)。
 2. **偽の Store の `projects.List` が、ワークスペースごとに全プロジェクトを作り直していた**(`stores_read.go`)。`blockedSet` はワークスペースの数だけ `LiveProjects` を呼ぶので、ワークスペースの数 × プロジェクトの数の解決になっていた。アイテムの `places` と同じく、同じ view で読んだプロジェクトのワークスペースを覚え、別のワークスペースのものは作り直さない(照合テスト「project list follows a move in the same write」を足した)。develop の #179 も同じものを gitstore と偽物に足していたので、マージで develop の形にした。
