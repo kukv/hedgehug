@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/repairing"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -78,5 +79,18 @@ func TestRenumberStopsWithoutProgress(t *testing.T) {
 	w.F.Ours = ours
 	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "進みません") {
 		t.Errorf("Run error = %v", err)
+	}
+}
+
+// 削除済みのアイテムも、番号が重なれば振り直される。
+func TestRenumberDeletedItem(t *testing.T) {
+	e := newEnv(t)
+	parent := apptest.SampleEpic
+	it := item.Item{ID: dupTask, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 2}, Kind: item.Task, Rank: "b", Title: "重なった", Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium}
+	ours := e.appendItem(taro, dupTask, item.Create(it), change.NewDeleteEntity(true))
+	wantOps(t, e.run(ours, nil), "HH-2 を HH-3 に振り直し")
+	got := e.item(dupTask)
+	if got.Place.Number != 3 || got.Deleted == nil {
+		t.Errorf("item = number %d deleted %v, want 3 deleted", got.Place.Number, got.Deleted)
 	}
 }

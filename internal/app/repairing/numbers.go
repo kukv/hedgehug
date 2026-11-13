@@ -112,16 +112,11 @@ func readNumbers(w port.RepairWriter, ws workspace.ID, kind numbering.Kind) (ren
 
 // listNumbered は、ワークスペース ws の kind の連番を持つもの(削除済みを含む)を、作成の行つきで読む。
 func listNumbered(r port.Reader, ws workspace.ID, kind numbering.Kind) ([]numbered, error) {
-	wss, err := r.Workspaces().List()
+	w, err := r.Workspaces().Get(ws)
 	if err != nil {
 		return nil, err
 	}
-	var prefix string
-	for _, x := range wss {
-		if x.ID == ws {
-			prefix = x.Prefix
-		}
-	}
+	prefix := w.Prefix
 	ps, err := r.Projects().List(ws)
 	if err != nil {
 		return nil, err
