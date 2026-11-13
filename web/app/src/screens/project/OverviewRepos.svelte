@@ -80,6 +80,7 @@
   {:else}
     <ul class="repos" aria-label="リポジトリ">
       {#each p.repos as repo (repo)}
+        {@const failure = failureOf(repo)}
         <li class="repo">
           <div class="repo-line">
             <code>{repo}</code>
@@ -93,8 +94,8 @@
               >×</IconButton
             >
           </div>
-          {#if failureOf(repo) !== ""}
-            <p class="error scan-failed">{scanFailedText(failureOf(repo))}</p>
+          {#if failure !== ""}
+            <p class="error scan-failed">{scanFailedText(failure)}</p>
           {/if}
         </li>
       {/each}

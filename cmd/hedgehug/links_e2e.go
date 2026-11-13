@@ -119,25 +119,44 @@ func putPull(q url.Values) error {
 
 // missApp は、owner のリポジトリを App 未導入にする(missing=0 で戻す)。
 func missApp(q url.Values) error {
+	on, err := flag(q, "missing")
+	if err != nil {
+		return err
+	}
 	if q.Get("owner") == "" {
 		return errors.New("owner is required")
 	}
-	e2eGitHub.MissApp(q.Get("owner"), q.Get("missing") == "1")
+	e2eGitHub.MissApp(q.Get("owner"), on)
 	return nil
 }
 
 // unreadableRepo は、リポジトリ全体を読めなくする(unreadable=0 で戻す)。
 func unreadableRepo(q url.Values) error {
+	on, err := flag(q, "unreadable")
+	if err != nil {
+		return err
+	}
 	repo := q.Get("repo")
 	if repo == "" {
 		return errors.New("repo is required")
 	}
-	var err error
-	if q.Get("unreadable") == "1" {
-		err = &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
+	var fail error
+	if on {
+		fail = &ghcall.Failure{Kind: ghcall.RepoUnreadable, Repo: repo}
 	}
-	e2eGitHub.Fail(repo, 0, err)
+	e2eGitHub.Fail(repo, 0, fail)
 	return nil
+}
+
+// flag は、q の name が "1" なら真、"0" なら偽。ほかの値はエラー(打ち間違いで戻さない)。
+func flag(q url.Values, name string) (bool, error) {
+	switch q.Get(name) {
+	case "1":
+		return true, nil
+	case "0":
+		return false, nil
+	}
+	return false, errors.New(name + " must be 1 or 0")
 }
 
 // e2eGitHubEvery は、e2e の入口の読み取りに渡す「GitHub を読む間隔」(既定の 5 分。D4a-7)。

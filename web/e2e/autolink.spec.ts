@@ -1,4 +1,4 @@
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import {
   addRepo,
@@ -31,6 +31,15 @@ async function openItem(page: Page, id: string) {
   return { panel, github: panel.getByRole("region", { name: "GitHub" }) };
 }
 
+// autoLinkedBy は、詳細パネルの履歴の「{repo}#{n} を自動でリンク」の行の、実行者の欄。
+function autoLinkedBy(panel: Locator, ref: string) {
+  return panel
+    .getByRole("region", { name: "履歴" })
+    .getByRole("listitem")
+    .filter({ hasText: `${ref} を自動でリンク` })
+    .locator(".who");
+}
+
 test("リポジトリを足すと PR が自動でリンクされる", async ({ page }, info) => {
   const { prefix, id, repo } = await setup(page, info);
   await githubPull(page.request, {
@@ -45,12 +54,7 @@ test("リポジトリを足すと PR が自動でリンクされる", async ({ p
   await expect(github.getByRole("link", { name: `${repo}#12 — ログイン画面` })).toBeVisible();
   await expect(github.getByText("PR Open")).toBeVisible();
   // アクティビティの文は「{ID} に {repo}#{n} を自動でリンク」。アイテムの履歴では、そのアイテムの「{ID} に」を出さない
-  await expect(
-    panel
-      .getByRole("region", { name: "履歴" })
-      .getByRole("listitem")
-      .filter({ hasText: `${repo}#12 を自動でリンク` }),
-  ).toContainText("GitHub");
+  await expect(autoLinkedBy(panel, `${repo}#12`)).toHaveText("GitHub");
 });
 
 test("2 回目からはマージのルールが動く", async ({ page }, info) => {
@@ -77,9 +81,13 @@ test("2 回目からはマージのルールが動く", async ({ page }, info) =
     state: "merged",
   });
   await addRepo(page, prefix, repo);
+  await expect(
+    (await openItem(page, id)).github.getByRole("link", { name: `${repo}#1 — 一本目` }),
+  ).toBeVisible();
+  // リンクを書いた保存のあとで開き直し、その保存の履歴の行が出てからステータスを見る(読み直す前の Todo を見ない)
   const { panel, github } = await openItem(page, id);
   const props = panel.getByRole("region", { name: "プロパティ" });
-  await expect(github.getByRole("link", { name: `${repo}#1 — 一本目` })).toBeVisible();
+  await expect(autoLinkedBy(panel, `${repo}#1`)).toHaveText("GitHub");
   await expect(props.getByRole("button", { name: "ステータス: Todo" })).toBeVisible();
   // 2 回目からは、付けたマージ済みの PR でルールが動く(タイトルの ID で付く)
   await githubPull(page.request, {

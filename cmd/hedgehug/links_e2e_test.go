@@ -168,3 +168,32 @@ func TestE2EGitHubReadHandler(t *testing.T) {
 		}
 	}
 }
+
+// /e2e/github-app の missing と /e2e/github-repo の unreadable は、1 か 0 だけを受ける(打ち間違いで戻さない)。
+func TestE2EPullsHandlerFlags(t *testing.T) {
+	h := pullsHandler("tok", http.NotFoundHandler())
+	t.Cleanup(func() {
+		e2eGitHub.MissApp("org-flag", false)
+		e2eGitHub.Fail("org-flag/web", 0, nil)
+	})
+	cases := []struct {
+		target string
+		want   int
+	}{
+		{"/e2e/github-app?owner=org-flag&missing=1", http.StatusNoContent},
+		{"/e2e/github-app?owner=org-flag&missing=0", http.StatusNoContent},
+		{"/e2e/github-app?owner=org-flag&missing=true", http.StatusBadRequest},
+		{"/e2e/github-app?owner=org-flag", http.StatusBadRequest},
+		{"/e2e/github-repo?repo=org-flag/web&unreadable=1", http.StatusNoContent},
+		{"/e2e/github-repo?repo=org-flag/web&unreadable=yes", http.StatusBadRequest},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest(http.MethodPost, c.target, nil)
+		r.Header.Set("Authorization", "Bearer tok")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != c.want {
+			t.Errorf("%s: %d, want %d", c.target, w.Code, c.want)
+		}
+	}
+}
