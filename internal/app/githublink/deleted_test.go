@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
@@ -143,5 +144,41 @@ func TestReadOnceSkipsDeletedProject(t *testing.T) {
 	}
 	if got := f.reads.failures[linkStore]; len(got) != 0 {
 		t.Errorf("failures = %v, want none", got)
+	}
+}
+
+// 読んだあと書くまでのあいだに削除されたアイテムのリンクは、何も書かずに飛ばし、残りのリンクは書く。
+func TestReadOnceItemDeletedMeanwhile(t *testing.T) {
+	f := newRead(t)
+	ctx := t.Context()
+	f.withRules(t, statusRule(ruleMerged, "マージで完了", automation.TriggerPRMerged, apptest.SampleStatusDone))
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.linkIn(t, linkStore, linkEpic, readPR("org/web", 2, itemlink.Open))
+	f.gh.Put("org/web", readPR("org/web", 1, itemlink.Merged))
+	f.gh.Put("org/web", readPR("org/web", 2, itemlink.Merged))
+	var before int
+	// GitHub から読んだあと、最初の書き込みの前に HH-2 が削除される
+	f.stores.before = func() {
+		if err := apptest.DeleteItems(ctx, f.stores.Stores, linkStore, linkTask); err != nil {
+			t.Error(err)
+		}
+		before = len(f.taskLog(t))
+	}
+	f.read(t, every, false)
+	rows, err := f.links.List(ctx, linkStore, linkEpic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].State != itemlink.Merged {
+		t.Errorf("rows = %+v, want #2 Merged", rows)
+	}
+	if after := len(f.taskLog(t)); after != before {
+		t.Errorf("deleted item's log grew by %d", after-before)
+	}
+	if got := f.reads.failures[linkStore]; len(got) != 0 {
+		t.Errorf("failures = %v, want none", got)
+	}
+	if ns := f.inbox.Notices(); len(ns) != 1 {
+		t.Errorf("notices = %+v, want 1", ns)
 	}
 }
