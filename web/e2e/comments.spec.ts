@@ -50,6 +50,7 @@ test("posts, edits and deletes a comment, adds a mention, and toggles watching",
   const first = comments.first();
   await first.getByRole("button", { name: "編集" }).click();
   await first.getByRole("button", { name: "保存" }).click();
+  await expect(first.getByRole("textbox", { name: "コメントを編集" })).toBeHidden();
   await expect(first).not.toContainText("(編集済み)");
   await first.getByRole("button", { name: "編集" }).click();
   await first.getByRole("textbox", { name: "コメントを編集" }).fill("確認しました");
