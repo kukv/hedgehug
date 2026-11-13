@@ -1,5 +1,5 @@
 import { createItemActionsPort } from "@hedgehug/api";
-import { createItemDelete, createItemRefresh } from "@hedgehug/core";
+import { createItemDelete, createItemMove, createItemRefresh } from "@hedgehug/core";
 import { drafts } from "./drafts";
 import { catalog, detail, navigation, projectScreen, relations, toasts } from "./wire";
 
@@ -20,7 +20,16 @@ export const itemDelete = createItemDelete({
   drafts,
 });
 
-// 画面を移ったら、出している確認ダイアログを閉じる(01「画面の移り方」)。
+// 「移動…」の候補のメニュー(02「同じワークスペースの中での移動」)。開くのは itemMove.open(item, x, y)。
+export const itemMove = createItemMove({
+  actions: itemActions,
+  catalog,
+  toasts,
+  refresh: itemRefresh,
+});
+
+// 画面を移ったら、出している確認ダイアログと候補のメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
   itemDelete.cancel();
+  itemMove.close();
 });

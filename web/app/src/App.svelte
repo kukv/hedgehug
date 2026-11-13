@@ -4,6 +4,7 @@
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
   import DeleteItemDialog from "./screens/item/DeleteItemDialog.svelte";
   import DetailPanel from "./screens/item/DetailPanel.svelte";
+  import MoveMenu from "./screens/item/MoveMenu.svelte";
   import DiscardDialog from "./screens/notes/DiscardDialog.svelte";
   import CreateProjectDialog from "./screens/project/CreateProjectDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
@@ -84,5 +85,6 @@
 <CreateWorkspaceDialog />
 <CreateItemDialog />
 <DeleteItemDialog />
+<MoveMenu />
 <DiscardDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

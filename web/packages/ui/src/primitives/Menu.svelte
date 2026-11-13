@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import type { MenuItem } from "../types";
 
   interface Props {
@@ -8,9 +9,11 @@
     items: MenuItem[];
     onselect: (id: string) => void;
     onclose: () => void;
+    // head は、項目の上に置く欄(「移動…」の検索欄など)。項目をスクロールしても上に残る。
+    head?: Snippet;
   }
 
-  let { open, x, y, items, onselect, onclose }: Props = $props();
+  let { open, x, y, items, onselect, onclose, head }: Props = $props();
   let element: HTMLDivElement | undefined = $state();
   let innerHeight = $state(0);
   let height = $state(0);
@@ -35,6 +38,9 @@
 
 {#if open}
   <div class="menu-pop" role="menu" style:left="{x}px" style:top="{top}px" bind:this={element}>
+    {#if head}
+      <div class="menu-head">{@render head()}</div>
+    {/if}
     {#each items as item, i (i)}
       {#if "separator" in item}
         <hr class="menu-sep">
@@ -73,6 +79,14 @@
     flex-direction: column;
     max-height: 420px;
     overflow-y: auto;
+  }
+  .menu-head {
+    position: sticky;
+    top: -4px;
+    z-index: 1;
+    min-width: 260px;
+    padding: 2px 2px 6px;
+    background: var(--raised);
   }
   .menu-item {
     display: flex;

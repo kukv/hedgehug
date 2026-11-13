@@ -18,6 +18,15 @@ export {
   type MenuEntry,
   menuReasons,
 } from "./features/items/menu";
+export {
+  createItemMove,
+  type ItemMove,
+  type ItemMoveDeps,
+  type MoveMenuState,
+  movedToProjectMessage,
+  movedUnderMessage,
+  moveFailedMessage,
+} from "./features/items/move";
 export { filterMoveCandidates } from "./features/items/moveCandidates";
 export {
   createItemRefresh,
