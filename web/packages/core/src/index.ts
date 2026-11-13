@@ -202,6 +202,7 @@ export {
   workflowHelp,
   workflowRows,
 } from "./features/workspaces/workflow";
+export * from "./githubIndex";
 export { NotFound, Refused } from "./model/errors";
 export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";

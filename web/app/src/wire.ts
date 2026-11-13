@@ -201,7 +201,9 @@ async function reflect(kinds: SyncEventKind[]) {
         ),
     );
   }
-  jobs.push(...[...reloads].map((reload) => reload()));
+  if (kinds.includes("store") || kinds.includes("github")) {
+    jobs.push(...[...reloads].map((reload) => reload()));
+  }
   await Promise.allSettled(jobs);
 }
 
