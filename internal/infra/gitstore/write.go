@@ -45,6 +45,12 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 		return err
 	}
 	defer unlock()
+	return s.runTx(root, op, fn)
+}
+
+// runTx は、Write の中身(fn を動かし、行か説明があれば 1 つのコミットにする)。Store のロックは呼んだ側が持つ
+// (Sync の中の修復も、ロックを取り直さずにこれで書く)。
+func (s *Stores) runTx(root string, op port.Operation, fn func(port.Tx) error) error {
 	t := &tx{
 		view: view{root: root, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
