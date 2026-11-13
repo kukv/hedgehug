@@ -89,8 +89,8 @@ func TestLookupHiddenByMissingApp(t *testing.T) {
 	wantAppMissing(t, "installation of another org", err)
 }
 
-// 導入の一覧に owner がなくても、owner のアカウントがなければ(打ち間違い)App 未導入にしない。アカウントを
-// 確かめられないとき(404 以外の失敗)も、リポジトリを読めないのまま(D4b 最終レビュー I-2)。
+// 導入の一覧に owner がなくても、owner のアカウントがなければ(打ち間違い)App 未導入にしない。アカウントの確かめが
+// 403・404 以外で失敗したら、その失敗を返す(D4b 最終レビュー I-2・R-2)。
 func TestLookupHiddenOwnerMustExist(t *testing.T) {
 	c, _ := newClient(t, githubServer(notFoundJSON, installationsOf("other", "all"), nil))
 	_, err := c.Lookup(context.Background(), fakeToken, "no-such-org/web", 1)
@@ -106,8 +106,42 @@ func TestLookupHiddenOwnerMustExist(t *testing.T) {
 		base(w, r)
 	})
 	_, err = c.Lookup(context.Background(), fakeToken, "example-org/web", 1)
-	if !ghcall.Is(err, ghcall.RepoUnreadable) {
-		t.Errorf("users fails: err = %v, want RepoUnreadable", err)
+	if !ghcall.Is(err, ghcall.Unreachable) {
+		t.Errorf("users fails: err = %v, want Unreachable", err)
+	}
+}
+
+// 確かめる問い合わせ(改名・導入の一覧・選んだリポジトリの一覧・owner のアカウント)が 403・404 以外で失敗したら、
+// リポジトリを読めないとせず、その失敗を返す(「再確認」が記録を消さないように。D4b 最終レビュー R-2)。
+func TestExplainProbeFailures(t *testing.T) {
+	selected := `{"repositories":[{"name":"api"}]}`
+	cases := []struct {
+		name, path, installations string
+		code                      int
+		want                      ghcall.Kind
+	}{
+		{"installations 500", "/user/installations", installationsOf("other", "all"), http.StatusInternalServerError, ghcall.Unreachable},
+		{"installations 429", "/user/installations", installationsOf("other", "all"), http.StatusTooManyRequests, ghcall.RateLimited},
+		{"installations 401", "/user/installations", installationsOf("other", "all"), http.StatusUnauthorized, ghcall.TokenRejected},
+		{"selected 502", "/user/installations/1/repositories", installationsOf("example-org", "selected"), http.StatusBadGateway, ghcall.Unreachable},
+		{"users 500", "/users/example-org", installationsOf("other", "all"), http.StatusInternalServerError, ghcall.Unreachable},
+		{"rename 500", "/repos/example-org/web", installationsOf("other", "all"), http.StatusInternalServerError, ghcall.Unreachable},
+	}
+	for _, cs := range cases {
+		base := githubServer(notFoundJSON, cs.installations, &selected)
+		c, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == cs.path {
+				http.Error(w, "x", cs.code)
+				return
+			}
+			base(w, r)
+		})
+		if _, err := c.Lookup(context.Background(), fakeToken, "example-org/web", 1); !ghcall.Is(err, cs.want) {
+			t.Errorf("%s: Lookup err = %v, want %s", cs.name, err, cs.want)
+		}
+		if err := c.CheckRepo(context.Background(), fakeToken, "example-org/web"); !ghcall.Is(err, cs.want) {
+			t.Errorf("%s: CheckRepo err = %v, want %s", cs.name, err, cs.want)
+		}
 	}
 }
 

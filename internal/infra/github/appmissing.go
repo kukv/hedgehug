@@ -38,13 +38,17 @@ func appMissing(repo string) *ghcall.Failure {
 }
 
 // attempt は、once を repo で呼び、リポジトリを読めなければ、改名・移管を確かめて 1 回だけ新しい名前で呼び直す。
-// なお読めなければ、App 未導入かを確かめる(explain)。
+// なお読めなければ、App 未導入かを確かめる(explain)。確かめる問い合わせが 403・404 以外で失敗したら、その失敗を返す。
 func attempt[T any](ctx context.Context, c *Client, token, repo string, once func(repo string) (T, error)) (T, error) {
 	v, err := once(repo)
 	if !ghcall.Is(err, ghcall.RepoUnreadable) {
 		return v, err
 	}
-	if moved, ok := c.renamed(ctx, token, repo); ok {
+	moved, ok, perr := c.renamed(ctx, token, repo)
+	if perr != nil {
+		return v, perr
+	}
+	if ok {
 		repo = moved
 		v, err = once(repo)
 	}
@@ -53,16 +57,28 @@ func attempt[T any](ctx context.Context, c *Client, token, repo string, once fun
 
 // explain は、リポジトリを読めない失敗 err を、App 未導入なら AppNotInstalled に置き換える(D4b-11 の (3))。
 // GitHub は App が入っていない非公開のリポジトリを 404 で隠す。確かめる問い合わせ(導入の一覧・選んだリポジトリの
-// 一覧・owner のアカウント)の失敗は、種類を問わず(App のトークンでない 403・404、トークンの拒否、利用上限、
-// 接続できない)握りつぶし、App 未導入とは言えないので err(RepoUnreadable)のまま返す。トークンの拒否と利用上限は、
-// 次の問い合わせで同じ失敗として返る。
+// 一覧・owner のアカウント)が 403・404 で断られたら(App のトークンでない・ない)、App 未導入とは言えないので
+// err(RepoUnreadable)のまま返す。それ以外の失敗(接続できない・利用上限・トークンの拒否)は、その失敗を返す
+// (読めないと言えないのに読めないとすると、「再確認」が記録を消してしまう。D4b 最終レビュー R-2)。
 func (c *Client) explain(ctx context.Context, token, repo string, err error) error {
 	if !ghcall.Is(err, ghcall.RepoUnreadable) || !wellFormed(repo) {
 		return err
 	}
 	owner, name, _ := strings.Cut(repo, "/")
-	if c.appNotInstalled(ctx, token, owner, name) {
+	missing, perr := c.appNotInstalled(ctx, token, owner, name)
+	switch {
+	case perr != nil:
+		return perr
+	case missing:
 		return appMissing(repo)
+	}
+	return err
+}
+
+// probeErr は、確かめる問い合わせの失敗 err のうち、呼び手に返すもの。成功と 403・404 は nil。
+func probeErr(err error) error {
+	if err == nil || ghcall.Is(err, ghcall.Forbidden) || ghcall.Is(err, ghcall.NotFound) {
+		return nil
 	}
 	return err
 }
@@ -86,7 +102,8 @@ type repositoryList struct {
 }
 
 // appNotInstalled は、token の App の導入に owner がない、または導入が選んだリポジトリだけで name を含まないとき真。
-func (c *Client) appNotInstalled(ctx context.Context, token, owner, name string) bool {
+// 確かめる問い合わせの失敗は probeErr で返す(403・404 なら偽で nil)。
+func (c *Client) appNotInstalled(ctx context.Context, token, owner, name string) (bool, error) {
 	var found *installation
 	err := paged(ctx, c, token, "/user/installations", func(p installationList) int {
 		for i := range p.Installations {
@@ -97,13 +114,13 @@ func (c *Client) appNotInstalled(ctx context.Context, token, owner, name string)
 		return len(p.Installations)
 	})
 	if err != nil {
-		return false
+		return false, probeErr(err)
 	}
 	if found == nil {
 		return c.accountExists(ctx, token, owner)
 	}
 	if found.RepositorySelection != "selected" {
-		return false
+		return false, nil
 	}
 	listed := false
 	err = paged(ctx, c, token, "/user/installations/"+strconv.FormatInt(found.ID, 10)+"/repositories", func(p repositoryList) int {
@@ -112,16 +129,20 @@ func (c *Client) appNotInstalled(ctx context.Context, token, owner, name string)
 		}
 		return len(p.Repositories)
 	})
-	return err == nil && !listed
+	if err != nil {
+		return false, probeErr(err)
+	}
+	return !listed, nil
 }
 
 // accountExists は、owner のアカウント(ユーザーか組織)があるか。打ち間違えた owner を App 未導入にしないため
-// (D4b 最終レビュー I-2)。404 も、ほかの失敗も、あるとは言えないので偽。
-func (c *Client) accountExists(ctx context.Context, token, owner string) bool {
+// (D4b 最終レビュー I-2)。403・404 なら、あるとは言えないので偽。ほかの失敗は probeErr で返す。
+func (c *Client) accountExists(ctx context.Context, token, owner string) (bool, error) {
 	var u struct {
 		Login string `json:"login"`
 	}
-	return c.get(ctx, token, "/users/"+url.PathEscape(owner), &u) == nil
+	err := c.get(ctx, token, "/users/"+url.PathEscape(owner), &u)
+	return err == nil, probeErr(err)
 }
 
 // paged は、100 件ずつの一覧を、page が受け取った件数が 100 に満たなくなるまでめくる。

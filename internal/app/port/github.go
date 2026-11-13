@@ -23,7 +23,8 @@ type GitHub interface {
 	// 利用上限で断られたら RateLimited。
 	ReadMany(ctx context.Context, token, repo string, numbers []int) (Batch, error)
 	// CheckRepo は、repo を読めるかを確かめる(「再確認」)。読めれば nil。失敗は Lookup と同じ種類
-	// (読めなければ RepoUnreadable、GitHub App が入っていなければ AppNotInstalled)。
+	// (読めなければ RepoUnreadable、GitHub App が入っていなければ AppNotInstalled。App 未導入かを確かめる問い合わせが
+	// 通信の失敗や利用上限で断られたら、その種類)。
 	CheckRepo(ctx context.Context, token, repo string) error
 	// ReadPulls は repo の PR を更新の新しい順に読む。since がゼロなら最初の 100 件だけ、そうでなければ
 	// UpdatedAt が since 以上のものを最後まで(100 件ずつめくる)。改名・移管は Lookup と同じに追う。

@@ -130,20 +130,21 @@ func answerFailure(a lookupAnswer, repo string, number int, reset time.Time) *gh
 
 // renamed は、repo が改名・移管されていれば、いまの名前を返す(REST はリダイレクトで移動先を返す)。
 // repo が owner/name の形でなければ問い合わせない。いまの名前が owner/name の形でなければ、改名とみなさない。
-func (c *Client) renamed(ctx context.Context, token, repo string) (string, bool) {
+// 問い合わせの失敗は probeErr で返す(403・404 なら改名なしで nil)。
+func (c *Client) renamed(ctx context.Context, token, repo string) (string, bool, error) {
 	if !wellFormed(repo) {
-		return "", false
+		return "", false, nil
 	}
 	var r struct {
 		FullName string `json:"full_name"`
 	}
-	if err := c.get(ctx, token, "/repos/"+repo, &r); err != nil || r.FullName == "" || strings.EqualFold(r.FullName, repo) {
-		return "", false
+	if err := c.get(ctx, token, "/repos/"+repo, &r); err != nil {
+		return "", false, probeErr(err)
 	}
-	if !wellFormed(r.FullName) {
-		return "", false
+	if r.FullName == "" || strings.EqualFold(r.FullName, repo) || !wellFormed(r.FullName) {
+		return "", false, nil
 	}
-	return r.FullName, true
+	return r.FullName, true, nil
 }
 
 // wellFormed は、repo が前後の空白なしで owner/name の形か。

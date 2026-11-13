@@ -185,6 +185,8 @@ func TestLookupDoesNotFollowAMalformedRename(t *testing.T) {
 				asked = append(asked, owner+"/"+name)
 				return `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"]}]}`
 			})(w, r)
+		default: // App の導入の一覧など: App のトークンでない
+			http.NotFound(w, r)
 		}
 	})
 	_, err := c.Lookup(context.Background(), fakeToken, "old/web", 41)
