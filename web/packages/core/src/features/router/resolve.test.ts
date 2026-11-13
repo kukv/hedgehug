@@ -19,14 +19,29 @@ describe("resolveRoute", () => {
     expect(r).toEqual({ name: "project", storeId: "S2", projectId: "S2-P2", tab: "tree" });
   });
 
-  it("looks in the other stores when the named store has no such ID", async () => {
+  // アドレスの Store にその ID がなければ、ほかの Store のいまの ID より先に、アドレスの Store の旧 ID を見る
+  // (Store 名の Store を優先。01「画面のアドレス」)。どちらもサーバーの locate が決める。
+  it("asks locate instead of the other stores when the named store has no such ID", async () => {
+    transfers.located = { kind: "found", storeId: "S2", projectId: "S2-P1", itemId: "S2-I12" };
     const r = await resolveRoute(
       { name: "item", store: "work", item: "HH-12" },
       await stores(),
       itemsIn("S2"),
       transfers,
     );
+    expect(transfers.calls).toEqual(["locate work HH-12"]);
     expect(r).toEqual({ name: "item", storeId: "S2", projectId: "S2-P1", itemId: "S2-I12" });
+  });
+
+  it("does not open a current ID of another store when locate finds an old ID of the named store", async () => {
+    transfers.located = { kind: "found", storeId: "S1", projectId: "S1-P3", itemId: "S1-I30" };
+    const r = await resolveRoute(
+      { name: "item", store: "work", item: "HH-12" },
+      await stores(),
+      itemsIn("S2"),
+      transfers,
+    );
+    expect(r).toEqual({ name: "item", storeId: "S1", projectId: "S1-P3", itemId: "S1-I30" });
   });
 
   it("resolves a workspace by its prefix", async () => {

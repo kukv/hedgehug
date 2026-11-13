@@ -15,8 +15,8 @@ import {
 // アドレス(Store 名と画面の ID)を内部 ID にする(01「画面のアドレス」、A2 の計画の決定 7)。
 // アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す。
 // いまの ID・接頭辞で見つからないときだけ、旧いものをたどる。ワークスペースとプロジェクトは、一覧の旧い接頭辞
-// (oldPrefixes。A5a-21)で探す。アイテムは、サーバーの locate(旧 ID・旧い接頭辞・転送の記録。A5a-15)に聞く。
-// どれでも見つからなければホーム。
+// (oldPrefixes。A5a-21)で探す。アイテムは、アドレスの Store のいまの ID で見つからなければ、サーバーの locate に
+// 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。どれでも見つからなければホーム。
 
 export type Resolved =
   | { name: "home"; gone?: Gone }
@@ -68,9 +68,9 @@ async function findItem(
 ): Promise<Resolved> {
   const d = parseDisplayId(id);
   if (d?.kind !== "item") return home;
-  for (const s of inOrder(stores, store)) {
-    const w = s.workspaces.find((x) => x.prefix === d.prefix);
-    if (!w) continue;
+  const s = stores.find((x) => x.name === store);
+  const w = s?.workspaces.find((x) => x.prefix === d.prefix);
+  if (s && w) {
     try {
       const it = await items.findByNumber(s.id, w.id, d.number);
       return { name: "item", storeId: s.id, projectId: it.projectId, itemId: it.id };

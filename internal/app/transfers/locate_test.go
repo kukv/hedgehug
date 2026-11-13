@@ -249,3 +249,68 @@ func TestOldIDs(t *testing.T) {
 		t.Errorf("いまの ID: %+v, %v", got, err)
 	}
 }
+
+// teamHH は、team(S2)に接頭辞 HH のワークスペース Web2 と、その HH-2(main の HH-2 とは無関係なアイテム)を足す。
+func teamHH(t *testing.T, f fixture) item.Item {
+	t.Helper()
+	addWorkspace(t, f.rec, store2, workspace.Workspace{ID: "01TESTWS000000000000000020", Name: "Web2", Prefix: "HH"}, "01TESTPR000000000000000020", "01TESTIT000000000000000021", nil)
+	return addItem(t, f.rec, store2, item.Item{ID: "01TESTIT000000000000000022", Place: item.Place{Workspace: "01TESTWS000000000000000020", Project: "01TESTPR000000000000000020", Parent: ptr("01TESTIT000000000000000021"), Number: 2}, Kind: item.Task, Rank: "V", Title: "別の HH-2"})
+}
+
+// Store 名の Store の旧 ID(転送記録)は、ほかの Store のいまの ID より先に選ぶ。main の HH-2 を移したあと、
+// /main の HH-2 は移したアイテムを開き、team の無関係な HH-2 を開かない。/team の HH-2 は team のいまの ID。
+// 別の Store への移動と、同じ Store の中の移動のどちらでも同じ。
+func TestLocateOldIDOfTheNamedStoreBeatsACurrentIDOfAnotherStore(t *testing.T) {
+	for _, to := range []transfers.MoveInput{toTeam(), toMobile()} {
+		f := newFixture(t)
+		other := teamHH(t, f)
+		moved, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := locate(t, f, "main", "HH-2")
+		if !got.Found || got.Store != to.ToStore || got.Item != apptest.SampleTask || got.MovedFrom == nil || got.MovedFrom.Display != moved.Display {
+			t.Errorf("main の HH-2(%s へ): %+v", moved.Display, got)
+		}
+		if got := locate(t, f, "team", "HH-2"); got.Item != other.ID || got.MovedFrom != nil {
+			t.Errorf("team の HH-2: %+v", got)
+		}
+	}
+}
+
+// Store 名の Store の転送記録で開けない(移した先で削除済み)ときも、ほかの Store の同じ ID を開かず、理由を返す。
+func TestLocateGoneInTheNamedStoreBeatsACurrentIDOfAnotherStore(t *testing.T) {
+	f := newFixture(t)
+	teamHH(t, f)
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteItems(t.Context(), f.rec, store1, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	if got := locate(t, f, "main", "HH-2"); got.Found || got.Gone == nil || got.Gone.Reason != "deleted" {
+		t.Errorf("main の HH-2: %+v", got)
+	}
+}
+
+// 接頭辞を変えた(HH → WEB)あとに移したアイテム(記録の旧 ID は WEB-2)は、変える前の ID(HH-2)からも辿れる。
+// 移したあとにさらに接頭辞を変えても(WEB → WEB2)、HH-2・WEB-2 のどちらからも辿れる。
+func TestLocateFollowsARecordWrittenAfterThePrefixChanged(t *testing.T) {
+	f := newFixture(t)
+	setPrefix := func(from, to string) {
+		write(t, f.rec, store1, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet("prefix", from, to))
+		})
+	}
+	setPrefix("HH", "WEB")
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	setPrefix("WEB", "WEB2")
+	for _, id := range []string{"HH-2", "WEB-2"} {
+		got := locate(t, f, "main", id)
+		if !got.Found || got.Item != apptest.SampleTask || got.MovedFrom == nil || got.MovedFrom.Old != "WEB-2" || got.MovedFrom.Display != "MB-2" {
+			t.Errorf("%s: %+v", id, got)
+		}
+	}
+}

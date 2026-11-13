@@ -57,9 +57,10 @@ type OldID struct {
 	Item  item.ID
 }
 
-// Locate は、画面のアドレスの ID display を解決する(A5a-15)。順は (a) いまの ID(Store 名 storeName の Store を
-// 先に、残りはサイドバーの並び)、(b) 旧い接頭辞、(c) 表示中のすべての Store の転送記録。どれでも開けず、記録から
-// 理由が分かれば Gone を返す。理由もない・ID が読めないなら port.ErrNotFound。
+// Locate は、画面のアドレスの ID display を解決する(A5a-15)。Store 名 storeName の Store を先に、残りの Store
+// (サイドバーの並び)をそのあとに、それぞれ (a) いまの ID、(b) 旧い接頭辞と (c) 転送記録の順で探す。Store 名の Store の
+// 転送記録で旧 ID が一致したのに開けず、理由が分かるときは、ほかの Store を探さずに Gone を返す。どこでも開けず、
+// 表示中のすべての Store の記録から理由が分かれば Gone を返す。理由もない・ID が読めないなら port.ErrNotFound。
 func (s Service) Locate(ctx context.Context, storeName, display string) (Located, error) {
 	prefix, n, ok := parseDisplay(display)
 	if !ok {
@@ -69,34 +70,65 @@ func (s Service) Locate(ctx context.Context, storeName, display string) (Located
 	if err != nil {
 		return Located{}, err
 	}
-	if h, ok := currentID(namedFirst(snaps, storeName), prefix, n); ok {
-		return h.located(nil), nil
+	named, others := splitNamed(snaps, storeName)
+	if l, ok := findIn(named, snaps, prefix, n, display); ok {
+		return l, nil
 	}
-	recs := matching(snaps, display)
-	if hits := oldHits(snaps, prefix, n, recs); len(hits) > 0 {
-		h := hits[0]
-		if !h.byRecord {
-			return h.located(nil), nil
+	if recs := matching(named, prefix, n, display); len(recs) > 0 {
+		if l, ok, err := s.gone(ctx, snaps, recs[0]); ok || err != nil {
+			return l, err
 		}
-		return h.located(&MovedFrom{Old: recs[0].Old, At: recs[0].At, Display: recs[0].New, Current: h.current}), nil
 	}
+	if l, ok := findIn(others, snaps, prefix, n, display); ok {
+		return l, nil
+	}
+	recs := matching(snaps, prefix, n, display)
 	if len(recs) == 0 {
 		return Located{}, port.ErrNotFound
 	}
-	g, to, ok := whyGone(snaps, recs[0])
-	if !ok {
-		return Located{}, port.ErrNotFound
+	l, ok, err := s.gone(ctx, snaps, recs[0])
+	if !ok && err == nil {
+		err = port.ErrNotFound
 	}
-	if to != nil {
-		if g.StoreName, err = s.storeName(ctx, *to); err != nil {
-			return Located{}, err
-		}
-	}
-	return Located{Gone: &g}, nil
+	return l, err
 }
 
-// OldIDs は、旧 ID display に当たる削除されていないアイテムを、Locate の (b)・(c) と同じ規則と順ですべて返す
-// (いまの ID で見つかるものは含めない。Locate は、いまの ID でなければ、この先頭を開く)。display が
+// findIn は、Store の集まり scope で (a) いまの ID、(b) 旧い接頭辞、(c) scope の転送記録の順に探す。記録の内部 ID は、
+// 表示中のすべての Store all から探す。
+func findIn(scope, all []snapshot, prefix string, n int, display string) (Located, bool) {
+	if h, ok := currentID(scope, prefix, n); ok {
+		return h.located(nil), true
+	}
+	recs := matching(scope, prefix, n, display)
+	hits := oldHits(scope, all, prefix, n, recs)
+	if len(hits) == 0 {
+		return Located{}, false
+	}
+	h := hits[0]
+	if !h.byRecord {
+		return h.located(nil), true
+	}
+	return h.located(&MovedFrom{Old: recs[0].Old, At: recs[0].At, Display: recs[0].New, Current: h.current}), true
+}
+
+// gone は、旧 ID が一致した最初の記録 rec から、開けない理由を Located にする。理由がなければ ok=false。
+func (s Service) gone(ctx context.Context, snaps []snapshot, rec transfer.Record) (Located, bool, error) {
+	g, to, ok := whyGone(snaps, rec)
+	if !ok {
+		return Located{}, false, nil
+	}
+	if to != nil {
+		var err error
+		if g.StoreName, err = s.storeName(ctx, *to); err != nil {
+			return Located{}, false, err
+		}
+	}
+	return Located{Gone: &g}, true, nil
+}
+
+// OldIDs は、旧 ID display に当たる削除されていないアイテムを、Locate の (b)・(c) と同じ規則で、表示中のすべての
+// Store について(旧い接頭辞は Store の並び → ワークスペースの並び、続いて記録の新しい順)すべて返す(いまの ID で
+// 見つかるものは含めない。Locate は Store 名の Store を先に探すので、Locate が開くものが先頭とは限らない)。display が
 // 「接頭辞-番号」として読めなければ、当たるものはないので nil, nil を返す(検索は、ID でない語でも呼ぶ)。
 func (s Service) OldIDs(ctx context.Context, display string) ([]OldID, error) {
 	prefix, n, ok := parseDisplay(display)
@@ -108,7 +140,7 @@ func (s Service) OldIDs(ctx context.Context, display string) ([]OldID, error) {
 		return nil, err
 	}
 	var out []OldID
-	for _, h := range oldHits(snaps, prefix, n, matching(snaps, display)) {
+	for _, h := range oldHits(snaps, snaps, prefix, n, matching(snaps, prefix, n, display)) {
 		out = append(out, OldID{Store: h.store, Item: h.it.ID})
 	}
 	return out, nil
@@ -128,14 +160,16 @@ func parseDisplay(display string) (string, int, bool) {
 	return prefix, n, err == nil
 }
 
-// namedFirst は、名前が name の Store を先頭にした並び。
-func namedFirst(snaps []snapshot, name string) []snapshot {
-	i := slices.IndexFunc(snaps, func(s snapshot) bool { return s.info.Name == name })
-	if i <= 0 {
-		return snaps
+// splitNamed は、名前が name の Store(なければ空)と、残りの Store(並びのまま)に分ける。
+func splitNamed(snaps []snapshot, name string) (named, others []snapshot) {
+	for _, snap := range snaps {
+		if named == nil && snap.info.Name == name {
+			named = []snapshot{snap}
+		} else {
+			others = append(others, snap)
+		}
 	}
-	out := append([]snapshot{snaps[i]}, snaps[:i]...)
-	return append(out, snaps[i+1:]...)
+	return named, others
 }
 
 // currentID は、(a) いまの接頭辞と番号が一致する、削除されていないアイテム。
@@ -154,22 +188,22 @@ type oldHit struct {
 	byRecord bool
 }
 
-// oldHits は、(b) 旧い接頭辞で見つかるもの(Store の並び → ワークスペースの並び)、続いて (c) 記録 recs(新しい順)の
-// 内部 ID の削除されていないもの。同じアイテムは 1 度だけ。
-func oldHits(snaps []snapshot, prefix string, n int, recs []transfer.Record) []oldHit {
+// oldHits は、(b) scope で旧い接頭辞で見つかるもの(Store の並び → ワークスペースの並び)、続いて (c) 記録 recs
+// (新しい順)の内部 ID の削除されていないもの(表示中のすべての Store all から探す)。同じアイテムは 1 度だけ。
+func oldHits(scope, all []snapshot, prefix string, n int, recs []transfer.Record) []oldHit {
 	var out []oldHit
 	add := func(h hit, byRecord bool) {
 		if !slices.ContainsFunc(out, func(o oldHit) bool { return o.store == h.store && o.it.ID == h.it.ID }) {
 			out = append(out, oldHit{h, byRecord})
 		}
 	}
-	for _, snap := range snaps {
+	for _, snap := range scope {
 		for _, h := range snap.numbered(n, func(w wsEntry) bool { return slices.Contains(w.old, prefix) }) {
 			add(h, false)
 		}
 	}
 	for _, r := range recs {
-		for _, snap := range snaps {
+		for _, snap := range all {
 			if h, ok := snap.live(r.Target); ok {
 				add(h, true)
 				break
@@ -179,16 +213,33 @@ func oldHits(snaps []snapshot, prefix string, n int, recs []transfer.Record) []o
 	return out
 }
 
-// matching は、表示中のすべての Store の転送記録のうち、アイテムの旧 ID が display の行を、at の新しい順で返す。
-func matching(snaps []snapshot, display string) []transfer.Record {
+// matching は、snaps の転送記録のうち、アイテムの旧 ID が display の行を、at の新しい順で返す。Store の中に、display の
+// 接頭辞を旧い接頭辞に持つワークスペースがあれば、その Store の記録は、そのワークスペースのいまの接頭辞・ほかの旧い
+// 接頭辞で書いた同じ番号の ID(HH-2 なら WEB-2)でも一致させる(接頭辞を変えたあとに移したもの)。
+func matching(snaps []snapshot, prefix string, n int, display string) []transfer.Record {
 	var out []transfer.Record
 	for _, snap := range snaps {
+		ids := snap.aliases(prefix, n, display)
 		for _, r := range snap.records {
-			if r.Entity == transfer.EntityItem && r.Old == display {
+			if r.Entity == transfer.EntityItem && slices.Contains(ids, r.Old) {
 				out = append(out, r)
 			}
 		}
 	}
 	slices.SortStableFunc(out, func(a, b transfer.Record) int { return b.At.Compare(a.At) })
 	return out
+}
+
+// aliases は、display と、接頭辞 prefix を旧い接頭辞に持つワークスペースの、いまの接頭辞・旧い接頭辞で書いた番号 n の ID。
+func (snap snapshot) aliases(prefix string, n int, display string) []string {
+	ids := []string{display}
+	for _, w := range snap.workspaces {
+		if !slices.Contains(w.old, prefix) {
+			continue
+		}
+		for _, p := range append([]string{w.ws.Prefix}, w.old...) {
+			ids = append(ids, p+"-"+strconv.Itoa(n))
+		}
+	}
+	return ids
 }
