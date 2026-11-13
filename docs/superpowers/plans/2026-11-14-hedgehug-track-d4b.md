@@ -19,8 +19,8 @@
 
 ## 始める前に
 
-- **トラック A4b(PR #177)が develop に入ってから実装を始める**(ユーザーの決定、2026-11-14)。D4b は A4b が足す削除済みでない読み手 `port.LiveProjects(r, ws)`・`port.LiveItems(r, p)` を使う(D4b-6)。始めるときに `git fetch && git rebase origin/develop`(このブランチには計画のコミットしかない)。
-- A4b が D4a の「A4b が入ったときに足すもの」(`fire` の削除済みの判定、`collectProject` の読み手)を入れている前提。入っていなければ、その節のとおりに足してから Task 7 に入る(この PR の範囲に含める)。
+- トラック A4b(PR #177)は develop に入った(2026-11-14)。D4b は A4b の削除済みでない読み手 `port.LiveItem`・`port.LiveProjects`・`port.LiveItems` を使う(D4b-6)。
+- A4b は D4a の計画の末尾「A4b が入ったときに足すもの」の 3 行のうち、`readItem` を削除済みで 404 にする行だけを入れた(A4b-4)。残りの 2 行(`fire` と `collectProject` の削除済みの判定)は、この計画の Task 0 で入れる。
 
 ## Global Constraints
 
@@ -93,6 +93,44 @@ web/app/src/screens/settings/AccountItem.svelte・AccountsSection.svelte・AppMi
 web/packages/core/src/features/github/(変更)リポジトリの失敗の文言
 web/app/src/screens/project/OverviewRepos.svelte (変更)「PR を探せませんでした: 」
 web/e2e/autolink.spec.ts・accounts.spec.ts   e2e
+```
+
+---
+
+### Task 0: D4a の削除済みの判定を入れる(D4a の計画の末尾「A4b が入ったときに足すもの」)
+
+**Files:**
+- Modify: `internal/app/githublink/fire.go:66-80`、`internal/app/githublink/read_collect.go:60-97`
+- Test: `internal/app/githublink/fire_test.go`、`internal/app/githublink/read_test.go`(いまのテストのファイルに足す)
+
+**Interfaces:**
+- Consumes: `port.LiveItem`・`port.LiveProject`・`port.LiveProjects`・`port.LiveItems`(A4b)
+- Produces: `fire` は、アイテムかそのプロジェクトが削除済みなら、ルールを動かさずに `nil, nil` を返す(リンクの値の保存は呼び出し側のまま)。`collect` は削除済みのプロジェクトとアイテムのリンクを集めない。
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+- `TestFireSkipsDeletedItem`: 「リンクした PR がマージされたとき → ステータスを Done」のルール。Open の PR をリンクしたアイテムを削除し(A4b の削除)、ReadOnce の前に PR を Merged にする → ReadOnce のあとも、削除済みのアイテムのリンクの値は変わらず(取り直さない)、ステータスも変わらない。`fire` を直接呼ぶテスト(保存の中で削除済みのアイテムに対して呼ぶ)では、自動化の行が書かれず、エラーもない(03「削除済みのアイテムには動かない」)。
+- `TestReadOnceSkipsDeletedItems`: 削除済みのアイテムだけがリンクしている番号は `ReadMany` に頼まず(`ReadManyCalls == 0`)、文言も置かない。削除済みのプロジェクトのアイテムも同じ。
+
+- [ ] **Step 2: テストが落ちることを確かめる**
+
+Run: `go test ./internal/app/githublink/ -run 'TestFireSkipsDeletedItem|TestReadOnceSkipsDeletedItems'`
+Expected: FAIL
+
+- [ ] **Step 3: 直す**
+
+`fire` は `tx.Items().Get` の代わりに `port.LiveItem` と、そのアイテムのプロジェクトの `port.LiveProject` で読み、`port.ErrNotFound` なら `nil, nil`。`collect` は `port.LiveProjects`、`collectProject` は `port.LiveItems`。「A4b が足す」のコメントを消す。
+
+- [ ] **Step 4: テストが通ることを確かめる**
+
+Run: `go test ./internal/app/githublink/`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/app/githublink
+git commit -m "fix: 削除済みのアイテムでリンクのきっかけを動かさず、取り直しも頼まない(D4b Task 0)"
 ```
 
 ---
