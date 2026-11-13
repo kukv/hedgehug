@@ -197,8 +197,8 @@ importers:
         specifier: 9.3.1
         version: 9.3.1(svelte@5.57.3)
       '@tanstack/svelte-virtual':
-        specifier: 3.13.51
-        version: 3.13.51(svelte@5.57.3)
+        specifier: 3.13.52
+        version: 3.13.52(svelte@5.57.3)
       codemirror:
         specifier: 6.0.2
         version: 6.0.2
@@ -870,8 +870,8 @@ packages:
     peerDependencies:
       svelte: ^5.0.0
 
-  '@tanstack/svelte-virtual@3.13.51':
-    resolution: {integrity: sha512-3aCcED13kO2bvL9EL4Ksqt5X7imxsw2Ur+RC8+cfuc11fSfnqiWcGF2c4QEd++advkHgPVJvjgeMZ0oCfYoIyA==}
+  '@tanstack/svelte-virtual@3.13.52':
+    resolution: {integrity: sha512-GBP08+GfuAtrcfCEkhZ8qg7At0m1ty82WTVC92YDjmYuU9yU+XD9LoCGUbrwl5m0V05ySgDS6JzmxqwoVdlt5Q==}
     peerDependencies:
       svelte: ^3.48.0 || ^4.0.0 || ^5.0.0
 
@@ -879,8 +879,8 @@ packages:
     resolution: {integrity: sha512-zQvlxSNi2qGM3L4jh85Z6hqMfdIR5qOfD9KHOU32nuKFJGN0RlJ7UvV1lsPb1fPVhpFYI0VP3jJGxLdLDpTKjQ==}
     engines: {node: '>=20'}
 
-  '@tanstack/virtual-core@3.19.10':
-    resolution: {integrity: sha512-/ltpH0qUCs5XQYE7fIhgA+aqgC5NzSfLTDQkC+N1wOOdvIYx1FH/kz2LGfSeanNbekqy3WBu6mNIbqXhxE/pew==}
+  '@tanstack/virtual-core@3.19.11':
+    resolution: {integrity: sha512-/5iHb0RHBvj8Di59FDs4ESNm45jls33aZAi4zccVXZjc/6ZvwQP6nzEYeT6weXjTf9E6/vrp2JhYWRyO+ZP13A==}
 
   '@testing-library/dom@10.4.2':
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
@@ -2249,16 +2249,16 @@ snapshots:
       '@tanstack/table-core': 9.3.1
       svelte: 5.57.3
 
-  '@tanstack/svelte-virtual@3.13.51(svelte@5.57.3)':
+  '@tanstack/svelte-virtual@3.13.52(svelte@5.57.3)':
     dependencies:
-      '@tanstack/virtual-core': 3.19.10
+      '@tanstack/virtual-core': 3.19.11
       svelte: 5.57.3
 
   '@tanstack/table-core@9.3.1':
     dependencies:
       '@tanstack/store': 0.11.2
 
-  '@tanstack/virtual-core@3.19.10': {}
+  '@tanstack/virtual-core@3.19.11': {}
 
   '@testing-library/dom@10.4.2':
     dependencies:
