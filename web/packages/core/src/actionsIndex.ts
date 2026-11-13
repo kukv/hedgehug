@@ -59,6 +59,18 @@ export {
 } from "./features/items/refresh";
 export { visibleNeighbors, visibleRows } from "./features/items/siblings";
 export {
+  createTreeFocus,
+  type TreeFocus,
+  type TreeFocusState,
+  type TreeMove,
+} from "./features/items/treeFocus";
+export {
+  type KeyInput,
+  type ReadKeyAction,
+  type TreeKeyAction,
+  treeKeyAction,
+} from "./features/items/treeKeys";
+export {
   createProjectDelete,
   type DeleteTarget,
   type LeaveDeletedDeps,

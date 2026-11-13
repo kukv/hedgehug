@@ -2,7 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 // e2e 用にビルドしたサーバー(bin/hedgehug-e2e。口に apptest の偽物とサンプルデータを差し込んだもの)を、
 // 決めた番号とトークンで起動する。幅は、スマホ・タブレット・デスクトップの 3 つ(設計書 6 節)。
-const addr = "127.0.0.1:4173";
+// 番号は 4173 が既定。別の worktree が同じ番号で動かしていると、reuseExistingServer のせいでそちらのサーバーを黙って使うので、
+// 並べて動かすときは HEDGEHUG_E2E_PORT で別の番号にする。
+const addr = `127.0.0.1:${process.env.HEDGEHUG_E2E_PORT ?? "4173"}`;
 
 export default defineConfig({
   testDir: "e2e",

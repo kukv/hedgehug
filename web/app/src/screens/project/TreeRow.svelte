@@ -18,7 +18,9 @@
     node: TreeNode;
     prefix: string;
     depth: number;
-    collapsed: Set<string>;
+    collapsed: ReadonlySet<string>;
+    // focusedId は、キーのフォーカスのある行(04「ツリーのキー操作」)。
+    focusedId: string | null;
     readOnly: boolean;
     ontoggle: (id: string) => void;
     // onadd は、行の「+」(その行を親にした作成ダイアログ)。
@@ -40,6 +42,7 @@
     prefix,
     depth,
     collapsed,
+    focusedId,
     readOnly,
     ontoggle,
     onadd,
@@ -59,7 +62,13 @@
   const member = $derived(members.find((x) => x.login.toLowerCase() === it.assignee.toLowerCase()));
 </script>
 
-<li class="tree-row" style:--d={depth}>
+<li
+  class="tree-row"
+  class:focused={focusedId === it.id}
+  data-row={it.id}
+  aria-current={focusedId === it.id ? "true" : undefined}
+  style:--d={depth}
+>
   {#if node.children.length > 0}
     <button
       type="button"
@@ -117,6 +126,7 @@
       {prefix}
       depth={depth + 1}
       {collapsed}
+      {focusedId}
       {readOnly}
       {ontoggle}
       {onadd}

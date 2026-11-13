@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import type { MenuItem } from "../types";
+  import { menuFocus } from "./menuFocus";
 
   interface Props {
     open: boolean;
@@ -37,7 +38,14 @@
 <svelte:window {onkeydown} {onpointerdown} bind:innerHeight />
 
 {#if open}
-  <div class="menu-pop" role="menu" style:left="{x}px" style:top="{top}px" bind:this={element}>
+  <div
+    class="menu-pop"
+    role="menu"
+    style:left="{x}px"
+    style:top="{top}px"
+    bind:this={element}
+    use:menuFocus
+  >
     {#if head}
       <div class="menu-head">{@render head()}</div>
     {/if}

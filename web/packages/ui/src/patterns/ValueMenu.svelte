@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { menuFocus } from "../primitives/menuFocus";
   import type { ValueOption } from "../types";
 
   // 値を選ぶメニュー(02「入力の方法と保存」)。いまの値にチェックを付け、7 件以上で検索欄を出す。
@@ -57,6 +58,7 @@
     style:left="{x}px"
     style:top="{top}px"
     bind:this={element}
+    use:menuFocus
   >
     {#if options.length >= 7}
       <!-- 「検索」は読み上げの名前で、画面に出る文言ではない -->
