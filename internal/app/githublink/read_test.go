@@ -419,3 +419,42 @@ func TestReadOnceSaveFailureKeepsOtherStores(t *testing.T) {
 		t.Errorf("other store row = %+v", r)
 	}
 }
+
+func TestReadOnceValuesChangedMeanwhile(t *testing.T) {
+	f := newRead(t)
+	f.withRules(t, statusRule(ruleOpen, "PR が Open で In Progress", automation.TriggerPROpen, apptest.SampleStatusInProgress))
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	// GitHub から Open(題が変わった)を読んだあと、書く前に、別のところが Merged を書いた
+	retitled := readPR("org/web", 1, itemlink.Open)
+	retitled.Title = "PR v2"
+	f.gh.Put("org/web", retitled)
+	f.storeMeanwhile(t, linkStore, 1, readPR("org/web", 1, itemlink.Merged).Values)
+	since := len(f.taskLog(t))
+	f.read(t, every, false)
+	f.noGitHubWrites(t, since)
+	if r := f.row(t, linkStore, 1); r.State != itemlink.Merged || r.Title != "PR" {
+		t.Errorf("row = %+v, want the newer value kept", r)
+	}
+}
+
+func TestReadOnceAllMergedCountsValueStoredMeanwhile(t *testing.T) {
+	f := newRead(t)
+	r := statusRule(ruleMerged, "すべてマージで完了", automation.TriggerPRMerged, apptest.SampleStatusDone)
+	r.AllMerged = true
+	f.withRules(t, r)
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 1, itemlink.Open))
+	f.linkIn(t, linkStore, linkTask, readPR("org/web", 2, itemlink.Open))
+	retitled := readPR("org/web", 1, itemlink.Open)
+	retitled.Title = "PR v2"
+	f.gh.Put("org/web", retitled)
+	f.gh.Put("org/web", readPR("org/web", 2, itemlink.Merged))
+	// #1 は読んだあとでマージされ、別のところが Merged を書いた。#1 の古い値(Open)では数えない
+	f.storeMeanwhile(t, linkStore, 1, readPR("org/web", 1, itemlink.Merged).Values)
+	f.read(t, every, false)
+	if rows := ruleRows(f.taskLog(t)); len(rows) != 1 || len(f.inbox.Notices()) != 1 {
+		t.Errorf("rule rows = %+v, notices = %+v", rows, f.inbox.Notices())
+	}
+	if it := f.taskItem(t); it.Status != apptest.SampleStatusDone {
+		t.Errorf("status = %s", it.Status)
+	}
+}

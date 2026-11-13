@@ -13,14 +13,25 @@ import (
 )
 
 // pass は、1 回の読み取り(D4a-14)。同じアイテムの同じきっかけを 1 回だけ起こすために、起こしたものを覚える。
-// fetched は、今回 GitHub から読んだ値(Ref.Key() から引く)。AllMerged をまだ書いていないリンクも含めて数えるのに使う。
+// fetched は、今回 GitHub から読んだ値(アイテムとリンクから引く。put・valueOf)。AllMerged をまだ書いていない
+// リンクも含めて数えるのに使う。
 type pass struct {
 	fired   map[item.ID]map[automation.Trigger]bool
-	fetched map[string]itemlink.Values
+	fetched map[string]fetchedValue
 }
 
+// fetchedValue は、GitHub から読む前のリンクの値(was)と、読んだ値(now)。
+type fetchedValue struct{ was, now itemlink.Values }
+
 func newPass() *pass {
-	return &pass{fired: map[item.ID]map[automation.Trigger]bool{}, fetched: map[string]itemlink.Values{}}
+	return &pass{fired: map[item.ID]map[automation.Trigger]bool{}, fetched: map[string]fetchedValue{}}
+}
+
+func fetchKey(id item.ID, r itemlink.Ref) string { return string(id) + " " + r.Key() }
+
+// put は、アイテム id のリンク l(読む前の値)について、GitHub から読んだ値 v を覚える。
+func (p *pass) put(id item.ID, l itemlink.Link, v itemlink.Values) {
+	p.fetched[fetchKey(id, l.Ref)] = fetchedValue{was: l.Values, now: v}
 }
 
 // fresh は、ts のうち、この読み取りでまだ id に起こしていないきっかけ。返したものは起こしたと覚える。
@@ -110,20 +121,25 @@ func fireInputs(tx port.Tx, it item.Item, p *pass) ([]automation.Rule, workspace
 	}
 	links := itemlink.FromLog(ilog).Links
 	for i, l := range links {
-		if v, ok := p.valueOf(l.Ref); ok {
+		if v, ok := p.valueOf(it.ID, l); ok {
 			links[i].Values = v
 		}
 	}
 	return automation.FromLog(wlog), st, automation.AllMerged(links), nil
 }
 
-// valueOf は、今回 GitHub から読んだ r の値。p が nil なら読んでいない。
-func (p *pass) valueOf(r itemlink.Ref) (itemlink.Values, bool) {
+// valueOf は、今回 GitHub から読んだ、アイテム id のリンク l(いま保存してある値)の値。p が nil なら読んでいない。
+// 読む前の値から、いま保存してある値が変わっていれば、読んだあとで同期や別の取り直しが新しい値を書いたので、
+// 読んだ値(古い)は使わない(writeRefresh もそのリンクを書かない)。
+func (p *pass) valueOf(id item.ID, l itemlink.Link) (itemlink.Values, bool) {
 	if p == nil {
 		return itemlink.Values{}, false
 	}
-	v, ok := p.fetched[r.Key()]
-	return v, ok
+	f, ok := p.fetched[fetchKey(id, l.Ref)]
+	if !ok || f.was != l.Values {
+		return itemlink.Values{}, false
+	}
+	return f.now, true
 }
 
 // memberNames は、メンバーの表示名を引く関数(app/items の editContext と同じ)。

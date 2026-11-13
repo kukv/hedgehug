@@ -118,7 +118,7 @@ func (rd *reading) fetch(ctx context.Context, s port.StoreGitHubInfo, r *repoLin
 	}
 	for _, t := range r.targets {
 		if found, ok := b.Found[t.link.Number]; ok {
-			p.fetched[t.link.Key()] = found.Values
+			p.put(t.item, t.link, found.Values)
 		}
 	}
 	rec = ghread.Record{Attempt: rd.now, Limit: b.Rate.Limit, Remaining: b.Rate.Remaining, ResetAt: b.Rate.ResetAt}

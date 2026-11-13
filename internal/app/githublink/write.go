@@ -55,6 +55,8 @@ type foundWrite struct {
 
 // writeRefresh は、link を値 values で(repo が違えば改名して)実行者「GitHub」で保存し、同じ保存の中で
 // きっかけを動かす。値が同じなら保存しない。取り直すあいだに外された・書き換えられたリンクなら何もせず false。
+// 読んだあとで同期や別の取り直しがリンクの値を変えていたら(いまの値が読む前の w.link.Values と違う)、読んだ値は
+// それより古いことがあるので、書かずにきっかけも動かさず false(次の取り直しで合わせる)。
 // 改名先が、保存の中で同じアイテムの別のリンクと重なれば errRenameTaken(何も保存しない)。
 func (l Links) writeRefresh(ctx context.Context, store port.StoreID, w foundWrite) (bool, []fired, error) {
 	summary := itemlink.RefreshSummary(w.display, w.link, w.repo, w.values)
@@ -71,7 +73,7 @@ func (l Links) writeRefresh(ctx context.Context, store port.StoreID, w foundWrit
 			return err
 		}
 		now, ok := cur.links.Find(w.link.Ref)
-		if !ok || now.Repo != w.link.Repo || now.Kind != w.link.Kind {
+		if !ok || now.Repo != w.link.Repo || now.Kind != w.link.Kind || now.Values != w.link.Values {
 			return nil
 		}
 		kept = true

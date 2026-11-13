@@ -279,6 +279,67 @@ func TestRefreshUnlinkedMeanwhile(t *testing.T) {
 	}
 }
 
+// storeMeanwhile は、GitHub から読んだあと、書く前に、ほかのマシンの同期か別の取り直しが、store の HH-2 の
+// n 番のリンクに値 v を書いたことにする(次の保存の前に 1 回だけ)。
+func (f *linkFixture) storeMeanwhile(t *testing.T, store port.StoreID, n int, v itemlink.Values) {
+	t.Helper()
+	f.stores.before = func() {
+		err := f.stores.Stores.Write(t.Context(), store, port.Operation{Actor: change.User("jiro"), Summary: "同期"}, func(tx port.Tx) error {
+			log, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: linkTask})
+			if err != nil {
+				return err
+			}
+			s := itemlink.FromLog(log)
+			for _, l := range s.Links {
+				if l.Number == n {
+					return tx.WriteItems().Append(linkTask, s.Refresh(l, v)...)
+				}
+			}
+			return errors.New("no link")
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// noGitHubWrites は、log の since からあとに、取り直しの行もルールの行もなく、通知もないこと。
+func (f *linkFixture) noGitHubWrites(t *testing.T, since int) {
+	t.Helper()
+	for _, r := range f.taskLog(t)[since:] {
+		if r.Actor.Kind == change.ActorGitHub || r.Actor.Rule != "" {
+			t.Errorf("wrote %+v over the newer value", r)
+		}
+	}
+	if ns := f.inbox.Notices(); len(ns) != 0 {
+		t.Errorf("notices = %+v", ns)
+	}
+}
+
+func TestRefreshValuesChangedMeanwhile(t *testing.T) {
+	f := newLinks(t)
+	if err := f.add(t, linkStore, linkTask, itemlink.PR, "org/web", "41", false); err != nil {
+		t.Fatal(err)
+	}
+	f.withRules(t, statusRule(ruleOpen, "PR が Open で In Progress", automation.TriggerPROpen, apptest.SampleStatusInProgress))
+	// GitHub から Open(レビューは承認済み)を読んだあと、書く前に、別のところが Merged を書いた
+	approved := pr41
+	approved.Review = itemlink.Approved
+	f.gh.Put("org/web", approved)
+	merged := pr41.Values
+	merged.State = itemlink.Merged
+	f.storeMeanwhile(t, linkStore, 41, merged)
+	since := len(f.taskLog(t))
+	rows := f.refresh(t)
+	f.noGitHubWrites(t, since)
+	if rows[0].State != itemlink.Merged {
+		t.Errorf("row = %+v, want the newer Merged kept", rows[0])
+	}
+	if it := f.taskItem(t); it.Status == apptest.SampleStatusInProgress {
+		t.Errorf("status = %s", it.Status)
+	}
+}
+
 func TestRefreshStoppedNotifies(t *testing.T) {
 	f := newLinks(t)
 	f.withRules(t, statusRule(ruleMerged, "マージで完了", automation.TriggerPRMerged, apptest.SampleStatusDone))

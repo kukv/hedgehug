@@ -43,7 +43,7 @@ func (l Links) Refresh(ctx context.Context, store port.StoreID, id item.ID) ([]L
 // 置き、取り直せた行の文言は消す(D4a-11)。チェックの結果か失敗の文言が変わったら true。
 func (l Links) refreshAll(ctx context.Context, store port.StoreID, id item.ID, v itemView) (bool, error) {
 	p := newPass()
-	found := l.lookupAll(ctx, store, v.links.Links, p)
+	found := l.lookupAll(ctx, store, id, v.links.Links, p)
 	changed := false
 	for i, link := range v.links.Links {
 		if found[i].text == "" {
@@ -68,9 +68,9 @@ type lookupResult struct {
 	text  string
 }
 
-// lookupAll は、links を 1 本ずつ読み、読めた値を p.fetched に入れる。利用上限に当たったら、残りのリンクは
+// lookupAll は、アイテム id の links を 1 本ずつ読み、読めた値を p に覚える。利用上限に当たったら、残りのリンクは
 // 問い合わせず、同じ文言にする。
-func (l Links) lookupAll(ctx context.Context, store port.StoreID, links []itemlink.Link, p *pass) []lookupResult {
+func (l Links) lookupAll(ctx context.Context, store port.StoreID, id item.ID, links []itemlink.Link, p *pass) []lookupResult {
 	out := make([]lookupResult, len(links))
 	limited := ""
 	for i, link := range links {
@@ -87,7 +87,7 @@ func (l Links) lookupAll(ctx context.Context, store port.StoreID, links []itemli
 			continue
 		}
 		out[i].found = f
-		p.fetched[link.Key()] = f.Values
+		p.put(id, link, f.Values)
 	}
 	return out
 }
