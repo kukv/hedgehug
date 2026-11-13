@@ -216,30 +216,54 @@ func contractListFollowsMove(t *testing.T, s port.Stores, id port.StoreID) {
 	})
 }
 
-// contractProjectListFollowsMove は、Projects().List で一度読んだプロジェクトを同じ Tx で別のワークスペースへ動かすと、
-// そのあとの List が動いた先で返すことを確かめる(実装がプロジェクトのワークスペースを覚えていても)。
+// wantProjects は、tx.Projects().List(ws) の ID が want と同じ(順番も)であることを確かめる。
+func wantProjects(t *testing.T, tx port.Tx, label string, ws workspace.ID, want ...project.ID) {
+	t.Helper()
+	ps, err := tx.Projects().List(ws)
+	if err != nil {
+		t.Errorf("%s: %v", label, err)
+		return
+	}
+	got := make([]project.ID, 0, len(ps))
+	for _, p := range ps {
+		got = append(got, p.ID)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("%s = %v, want %v", label, got, want)
+	}
+}
+
+// contractProjectListFollowsMove は、Projects().List で一度読んだプロジェクトを同じ Tx で別のワークスペースへ
+// 動かすと、そのあとの List が動いた先で返すこと、同じ Tx で作ったプロジェクトも返すことを確かめる
+// (実装がプロジェクトのワークスペースを覚えていても)。
 func contractProjectListFollowsMove(t *testing.T, s port.Stores, id port.StoreID) {
-	const other workspace.ID = "01CONTRACTWS00000000000009"
+	const (
+		otherID   workspace.ID = "01CONTRACTWS00000000000009"
+		createdID project.ID   = "01CONTRACTPR00000000000008"
+	)
 	mustWrite(t, s, id, taro, writeFixture)
 	mustWrite(t, s, id, taro, func(tx port.Tx) error {
-		if ps, err := tx.Projects().List(other); err != nil || len(ps) != 0 {
-			t.Errorf("other before = %+v, %v", ps, err)
-		}
-		before, err := tx.Projects().List(cWorkspace.ID)
-		if err != nil || len(before) != 1 {
-			t.Fatalf("before = %+v, %v", before, err)
-		}
-		place := before[0].Place
-		place.Workspace = other
-		if err := tx.WriteProjects().Append(cProject.ID, change.NewSet("place", before[0].Place, place)); err != nil {
+		d, err := workspace.Create(workspace.Workspace{ID: otherID, Name: "Other", Prefix: "OT"})
+		if err != nil {
 			return err
 		}
-		if ps, err := tx.Projects().List(other); err != nil || len(ps) != 1 || ps[0].ID != cProject.ID {
-			t.Errorf("other after = %+v, %v", ps, err)
+		if err := tx.WriteWorkspaces().Append(otherID, d); err != nil {
+			return err
 		}
-		if ps, err := tx.Projects().List(cWorkspace.ID); err != nil || len(ps) != 0 {
-			t.Errorf("left = %+v, %v", ps, err)
+		wantProjects(t, tx, "other before", otherID)
+		wantProjects(t, tx, "before", cWorkspace.ID, cProject.ID)
+		moved := cProject.Place
+		moved.Workspace = otherID
+		if err := tx.WriteProjects().Append(cProject.ID, change.NewSet("place", cProject.Place, moved)); err != nil {
+			return err
 		}
+		wantProjects(t, tx, "other after", otherID, cProject.ID)
+		wantProjects(t, tx, "left", cWorkspace.ID)
+		created := project.Project{ID: createdID, Place: project.Place{Workspace: cWorkspace.ID, Number: 2}, Rank: "W", Title: "新規", Status: project.Todo}
+		if err := tx.WriteProjects().Append(createdID, project.Create(created)); err != nil {
+			return err
+		}
+		wantProjects(t, tx, "created", cWorkspace.ID, createdID)
 		return nil
 	})
 }

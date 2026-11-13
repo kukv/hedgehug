@@ -2,17 +2,75 @@ package apptest
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"strings"
 	"sync"
+	"testing"
 
-	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
+	"github.com/kukv/hedgehug/internal/domain/itemlink"
 )
 
 // GitHub は port.GitHub の偽物。Users はトークンからログイン名への対応。Err があれば、どの問い合わせもそれを返す。
+// Items は Lookup の答え(キーは小文字のリポジトリ名と番号。Put で入れる)。LookupErr は同じキーの失敗。
+// Lookups は Lookup を呼んだ回数。
 type GitHub struct {
-	mu    sync.Mutex
-	Users map[string]string
-	Err   error
+	mu        sync.Mutex
+	Users     map[string]string
+	Err       error
+	Items     map[string]port.Found
+	LookupErr map[string]error
+	Lookups   int
+}
+
+func itemKey(repo string, number int) string {
+	return fmt.Sprintf("%s#%d", strings.ToLower(repo), number)
+}
+
+// Put は、repo(引くときの名前)の f.Number を f にする。f.Repo が repo と違えば、改名・移管のあとの名前。
+func (g *GitHub) Put(repo string, f port.Found) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.Items == nil {
+		g.Items = map[string]port.Found{}
+	}
+	g.Items[itemKey(repo, f.Number)] = f
+}
+
+// Fail は、repo の number を引くと err を返すようにする(nil で戻す)。
+func (g *GitHub) Fail(repo string, number int, err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.LookupErr == nil {
+		g.LookupErr = map[string]error{}
+	}
+	if err == nil {
+		delete(g.LookupErr, itemKey(repo, number))
+		return
+	}
+	g.LookupErr[itemKey(repo, number)] = err
+}
+
+func (g *GitHub) Lookup(_ context.Context, token, repo string, number int) (port.Found, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.Lookups++
+	if g.Err != nil {
+		return port.Found{}, g.Err
+	}
+	if _, ok := g.Users[token]; !ok {
+		return port.Found{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
+	}
+	if err := g.LookupErr[itemKey(repo, number)]; err != nil {
+		return port.Found{}, err
+	}
+	f, ok := g.Items[itemKey(repo, number)]
+	if !ok {
+		return port.Found{}, &ghcall.Failure{Kind: ghcall.NotFound, Repo: repo, Number: number}
+	}
+	return f, nil
 }
 
 func (g *GitHub) Viewer(_ context.Context, token string) (string, error) {
@@ -38,64 +96,64 @@ func (g *GitHub) AddUser(token, login string) {
 	g.Users[token] = login
 }
 
-// Secrets は port.Secrets の偽物。Tokens はログイン名からトークンへの対応。ない、または Err があれば失敗する。
-// Device はデバイスフローのトークンの組(ログイン名から)。NoKeychain なら、デバイスフローのトークンを読めず、置けない。
-// DeleteErr があれば、DeleteDeviceToken は消さずにそれを返す(NoKeychain では消す処理を失敗させない)。
-type Secrets struct {
-	mu                sync.Mutex
-	Tokens            map[string]string
-	Device            map[string]account.DeviceToken
-	NoKeychain        bool
-	NoKeychainForSave bool // 読めるが置けない(取り直したトークンを置けないとき)
-	DeleteErr         error
-	Err               error
+// Checks は port.Checks の偽物。
+type Checks struct {
+	mu   sync.Mutex
+	rows map[port.StoreID]map[string]itemlink.Checks
 }
 
-func (s *Secrets) Token(_ context.Context, a account.Account) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.Err != nil {
-		return "", s.Err
-	}
-	tok, ok := s.Tokens[a.Login]
-	if !ok {
-		return "", &ghcall.Failure{Kind: ghcall.KeychainMissing, Login: a.Login}
-	}
-	return tok, nil
+func NewChecks() *Checks { return &Checks{rows: map[port.StoreID]map[string]itemlink.Checks{}} }
+
+func (c *Checks) Read(_ context.Context, store port.StoreID) (map[string]itemlink.Checks, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return maps.Clone(c.rows[store]), nil
 }
 
-func (s *Secrets) DeviceToken(_ context.Context, login string) (account.DeviceToken, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.NoKeychain {
-		return account.DeviceToken{}, &ghcall.Failure{Kind: ghcall.KeychainUnavailable}
+func (c *Checks) Save(_ context.Context, store port.StoreID, key string, v itemlink.Checks) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rows[store] == nil {
+		c.rows[store] = map[string]itemlink.Checks{}
 	}
-	t, ok := s.Device[login]
-	if !ok {
-		return account.DeviceToken{}, &ghcall.Failure{Kind: ghcall.TokenRejected}
+	if c.rows[store][key] == v {
+		return false, nil
 	}
-	return t, nil
+	if v == itemlink.NoChecks {
+		delete(c.rows[store], key)
+	} else {
+		c.rows[store][key] = v
+	}
+	return true, nil
 }
 
-func (s *Secrets) SaveDeviceToken(_ context.Context, login string, t account.DeviceToken) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.NoKeychain || s.NoKeychainForSave {
-		return &ghcall.Failure{Kind: ghcall.KeychainUnavailable}
-	}
-	if s.Device == nil {
-		s.Device = map[string]account.DeviceToken{}
-	}
-	s.Device[login] = t
-	return nil
-}
-
-func (s *Secrets) DeleteDeviceToken(_ context.Context, login string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.DeleteErr != nil {
-		return s.DeleteErr
-	}
-	delete(s.Device, login)
-	return nil
+// RunChecksContract は、port.Checks の実装が守ること(偽物と state.db で同じテストを流す)。
+func RunChecksContract(t *testing.T, open func(t *testing.T) port.Checks) {
+	t.Run("save, read, change and clear", func(t *testing.T) {
+		c, ctx := open(t), t.Context()
+		if got, err := c.Read(ctx, "S1"); err != nil || len(got) != 0 {
+			t.Fatalf("empty Read = %v, %v", got, err)
+		}
+		mustSave := func(key string, v itemlink.Checks, want bool) {
+			t.Helper()
+			if changed, err := c.Save(ctx, "S1", key, v); err != nil || changed != want {
+				t.Fatalf("Save(%s, %q) = %v, %v; want changed %v", key, v, changed, err, want)
+			}
+		}
+		mustSave("pr:org/web#1", itemlink.Running, true)
+		mustSave("pr:org/web#1", itemlink.Running, false)
+		mustSave("pr:org/web#1", itemlink.Success, true)
+		mustSave("pr:org/web#2", itemlink.Failure, true)
+		if got, _ := c.Read(ctx, "S1"); len(got) != 2 || got["pr:org/web#1"] != itemlink.Success || got["pr:org/web#2"] != itemlink.Failure {
+			t.Errorf("Read = %v", got)
+		}
+		if got, _ := c.Read(ctx, "S2"); len(got) != 0 {
+			t.Errorf("another store sees %v", got)
+		}
+		mustSave("pr:org/web#2", itemlink.NoChecks, true)
+		mustSave("pr:org/web#2", itemlink.NoChecks, false)
+		if got, _ := c.Read(ctx, "S1"); len(got) != 1 {
+			t.Errorf("after clearing: %v", got)
+		}
+	})
 }

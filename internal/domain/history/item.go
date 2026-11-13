@@ -9,11 +9,12 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // ItemRows は、アイテムの履歴を新しい順で返す(02「履歴」の表)。出すのは、作成・説明の変更・タイトル・種類・親・
-// プロパティの変更(関連システムと複数選択の追加・取り除きを含む)だけで、コメント・作業時間・関連・ウォッチ・削除と、知らない種類の行は出さない。
+// プロパティの変更(関連システムと複数選択の追加・取り除きを含む)と、実行者「GitHub」のリンクの値の変更・改名・自動リンク(D3-12)だけで、コメント・作業時間・関連・ウォッチ・削除と、知らない種類の行は出さない。
 func ItemRows(log []change.Record, c Context) []Row {
 	log = byPrev(log)
 	var rows []Row
@@ -30,6 +31,9 @@ func ItemRows(log []change.Record, c Context) []Row {
 
 func itemText(log []change.Record, i int, c Context) (string, bool) {
 	r := log[i]
+	if r.Actor.Kind == change.ActorGitHub && (r.F == itemlink.LinksField || strings.HasPrefix(r.F, itemlink.LinksField+"/")) {
+		return linkText(log, i)
+	}
 	switch r.T {
 	case change.Create:
 		return "作成", true

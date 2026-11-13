@@ -136,7 +136,7 @@ func (r projects) Get(id project.ID) (project.Project, error) {
 func (r projects) List(ws workspace.ID) ([]project.Project, error) {
 	var out []project.Project
 	for _, id := range r.v.ids(change.KindProject) {
-		if w, ok := r.v.projectPlaces[id]; ok && w != ws {
+		if q, ok := r.v.projectPlaces[id]; ok && q != ws {
 			continue
 		}
 		p, err := r.Get(id)

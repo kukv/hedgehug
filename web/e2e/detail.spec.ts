@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { tokenUrl, unique } from "./helpers";
 
 test("the item entry opens the project's tree with the panel", async ({ page }) => {

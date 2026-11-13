@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { newTask } from "./helpers";
 
 test("the history shows the creation and a title change, newest first", async ({ page }, info) => {

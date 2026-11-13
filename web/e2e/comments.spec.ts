@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
-// コメント・ウォッチの通しのテスト(A4a)。ワークスペースは毎回作る(サーバーは 3 つの幅で共有)。
+// コメント・ウォッチの通しのテスト(A4a)。ワークスペースは毎回作る(サーバーは同じ worker のほかのテストと共有)。
 
 const placeholder = "コメントを書く。@ログイン名 でメンション。Ctrl+Enter で送信";
 

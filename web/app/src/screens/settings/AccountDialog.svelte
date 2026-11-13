@@ -1,7 +1,7 @@
 <script lang="ts">
   import { type AuthMethod, askingText, methodChoices } from "@hedgehug/core";
   import { Button, ConfirmDialog, Dialog, Input, Select } from "@hedgehug/ui";
-  import { accountForm } from "../../wire";
+  import { accountForm } from "../../accounts";
 
   // 「アカウントを追加」「アカウントを編集」(07「登録」「編集」)と「アカウントを変更」の確認。
   // 確認を出しているあいだは、編集のダイアログを隠す(D2 画面の計画の決定 S16)。

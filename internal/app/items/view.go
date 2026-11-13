@@ -69,18 +69,14 @@ func (ec editContext) property(id change.ID) (workspace.Property, error) {
 
 // blockedSet は、Store のブロック中のアイテムの内部 ID(A4a-13)。関連はワークスペースをまたぐので、
 // ワークスペース → プロジェクト → アイテムの順にすべて読む。ステータスの分類は、そのアイテムのワークスペースの設定で決める。
+// 設定が要るのはブロックしているアイテムの完了の判定だけなので、そのワークスペースの設定を、初めて要るときに 1 回だけ読む。
 func blockedSet(r port.Reader) (map[item.ID]bool, error) {
 	wss, err := r.Workspaces().List()
 	if err != nil {
 		return nil, err
 	}
 	var all []item.Item
-	finished := map[item.ID]bool{}
 	for _, w := range wss {
-		st, err := r.Workspaces().Settings(w.ID)
-		if err != nil && !errors.Is(err, port.ErrNotFound) {
-			return nil, err
-		}
 		ps, err := port.LiveProjects(r, w.ID)
 		if err != nil {
 			return nil, err
@@ -90,11 +86,23 @@ func blockedSet(r port.Reader) (map[item.ID]bool, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, it := range its {
-				finished[it.ID] = st.Finished(it.Status)
-			}
 			all = append(all, its...)
 		}
 	}
-	return relation.BlockedSet(all, func(it item.Item) bool { return finished[it.ID] }), nil
+	settings := map[workspace.ID]workspace.Settings{}
+	var firstErr error
+	set := relation.BlockedSet(all, func(it item.Item) bool {
+		w := it.Place.Workspace
+		st, ok := settings[w]
+		if !ok {
+			var err error
+			st, err = r.Workspaces().Settings(w)
+			if err != nil && !errors.Is(err, port.ErrNotFound) && firstErr == nil {
+				firstErr = err
+			}
+			settings[w] = st
+		}
+		return st.Finished(it.Status)
+	})
+	return set, firstErr
 }

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { tokenUrl, unique } from "./helpers";
 
 test("creates an Epic, a Task under it and a Step from the project screen", async ({

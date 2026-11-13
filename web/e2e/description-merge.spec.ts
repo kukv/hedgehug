@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./helpers";
 
 // 説明の Markdown・メンションの表示と、別のタブと同じ行を変えたときの保存の通しのテスト(A4a)。
-// 書き方・破棄の確認は description.spec.ts が通す。ワークスペースは毎回作る(サーバーは 3 つの幅で共有)。
+// 書き方・破棄の確認は description.spec.ts が通す。ワークスペースは毎回作る(サーバーは同じ worker のほかのテストと共有)。
 
 test("renders Markdown with mentions of members only, and keeps both when two tabs change a line", async ({
   page,

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button, ConfirmDialog } from "@hedgehug/ui";
   import { onMount } from "svelte";
-  import { accountForm, accountList } from "../../wire";
+  import { accountForm, accountList } from "../../accounts";
   import AccountDialog from "./AccountDialog.svelte";
   import AccountItem from "./AccountItem.svelte";
   import SignInDialog from "./SignInDialog.svelte";

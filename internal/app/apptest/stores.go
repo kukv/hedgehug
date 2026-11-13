@@ -159,7 +159,7 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	case change.KindItem:
 		delete(t.places, ref.ID) // 動いたかもしれない
 	case change.KindProject:
-		delete(t.projectPlaces, ref.ID)
+		delete(t.projectPlaces, ref.ID) // 動いたかもしれない
 	}
 	return nil
 }

@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import {
   addEpic,
   createWorkspace,
@@ -12,7 +13,7 @@ import {
 } from "./helpers";
 
 // ツリーの行のメニューから行う、並べ替え・複製・移動・種類の変更・削除の通しのテスト(A4b)。
-// サーバーは 3 つの幅で共有で、Store が大きいと sync.spec の時間の窓が足りなくなるので、
+// サーバーは worker ごとで、同じ worker のほかのテストと Store を共有する。Store を大きくしないよう、
 // ワークスペースを 1 つだけ作り、1 つのテストの中で順に確かめる(足すアイテムは 7 件)。サンプルは書き換えない。
 
 // 行のメニューのボタン(読み上げの名前は「{ID} のメニュー」。詳細パネルの「メニュー」と取り違えない)。

@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, prefixOf, projectWithEpic, sidebar, tokenUrl, unique } from "./helpers";
 
-// プロジェクトの設定タブからの削除の通しのテスト(A4b)。ワークスペースは毎回作る(サーバーは 3 つの幅で共有)。
+// プロジェクトの設定タブからの削除の通しのテスト(A4b)。ワークスペースは毎回作る(サンプルは同じ worker のほかのテストが使う)。
 
 test("deletes a project from its settings tab and goes back to the workspace", async ({
   page,

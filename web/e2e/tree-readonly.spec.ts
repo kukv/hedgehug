@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { tokenUrl, treeRow, treeTitles } from "./helpers";
 
 // 閲覧のみの Store のツリー(A4b)。書き込みのキーと、メニューの変更系の項目は何もしない・無効で、
@@ -71,7 +72,8 @@ test("a read-only store's tree ignores the write keys and disables the menu's wr
 test("pressing a row below an off-screen first row focuses that row and does not scroll", async ({
   page,
   browser,
-}, info) => {
+  baseURL,
+}) => {
   const pressSecond = async (p: Page, press: (code: Locator) => Promise<void>) => {
     const tree = await openTree(p);
     // 先頭の行を高くして、2 行目だけが見える位置にする。
@@ -91,8 +93,11 @@ test("pressing a row below an off-screen first row focuses that row and does not
   await test.step("with a mouse click", () => pressSecond(page, (code) => code.click()));
 
   await test.step("with a touch tap", async () => {
-    const { viewport, baseURL } = info.project.use;
-    const touch = await browser.newContext({ viewport, baseURL, hasTouch: true });
+    const touch = await browser.newContext({
+      viewport: page.viewportSize(),
+      baseURL,
+      hasTouch: true,
+    });
     try {
       await pressSecond(await touch.newPage(), (code) => code.tap());
     } finally {

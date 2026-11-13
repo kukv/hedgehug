@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	commentlog "github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/worklog"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -17,6 +18,7 @@ import (
 // itemToYAML は、item.yaml の中身。status・priority・systems・fields の行末に、値の名前を注釈で書く(B2-19)。
 // 名前が分からない値(消した値、設定のログがないワークスペース)には注釈を付けない。
 func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML {
+	links := itemlink.FromLog(log)
 	var st workspace.Settings
 	if settings != nil {
 		st, _ = settings(it.Place.Workspace)
@@ -32,6 +34,8 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 		Systems:   systemsNode(it.Systems, st),
 		Fields:    fieldsNode(it, log, st),
 		Relations: relationsNode(it.Relations),
+		Links:     linksNode(links.Links),
+		LinksOff:  offNode(links.Off),
 		Watchers:  it.Watchers,
 		Comments:  commentsNode(commentlog.FromLog(log)),
 		Worklogs:  worklogsNode(worklog.FromLog(log)),
@@ -175,4 +179,35 @@ func worklogsNode(es []worklog.Entry) *yaml.Node {
 		)
 	}
 	return seqOf(rows)
+}
+
+// linksNode は、PR・Issue のリンクを、リンクした順に 1 件 1 行で書く(保存形式 103〜106 行)。Issue は review を書かない。
+func linksNode(ls []itemlink.Link) *yaml.Node {
+	rows := make([]*yaml.Node, len(ls))
+	for i, l := range ls {
+		kv := []*yaml.Node{
+			key("kind"), strNode(string(l.Kind)), key("repo"), strNode(l.Repo), key("number"), intNode(l.Number),
+			key("title"), strNode(l.Title), key("state"), strNode(string(l.State)),
+		}
+		if l.Kind == itemlink.PR {
+			kv = append(kv, key("review"), strNode(string(l.Review)))
+		}
+		rows[i] = mapping(true, kv...)
+	}
+	return seqOf(rows)
+}
+
+// offNode は、解除した PR の記録を 1 件 1 行で書く。
+func offNode(rs []itemlink.Ref) *yaml.Node {
+	rows := make([]*yaml.Node, len(rs))
+	for i, r := range rs {
+		rows[i] = mapping(true, key("kind"), strNode(string(r.Kind)), key("repo"), strNode(r.Repo), key("number"), intNode(r.Number))
+	}
+	return seqOf(rows)
+}
+
+func intNode(n int) *yaml.Node {
+	v := &yaml.Node{}
+	_ = v.Encode(n)
+	return v
 }

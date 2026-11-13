@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -94,6 +95,7 @@ func TestItemRowsNewestFirst(t *testing.T) {
 	)
 	rows := history.ItemRows(log, ctx())
 	want := []string{
+		"GitHub: org/web#1 の状態を Merged に変更",
 		"太郎: ステータスを InProgress → (削除された値)",
 		"太郎: 開始日を なし → 11/20",
 		"太郎: 担当者を なし → 太郎",
@@ -108,7 +110,7 @@ func TestItemRowsNewestFirst(t *testing.T) {
 	if got := texts(rows); !slices.Equal(got, want) {
 		t.Errorf("rows =\n%q\nwant\n%q", got, want)
 	}
-	if !rows[0].At.Equal(at(11)) || !rows[len(rows)-1].At.Equal(at(0)) {
+	if !rows[0].At.Equal(at(14)) || !rows[len(rows)-1].At.Equal(at(0)) {
 		t.Errorf("At = %v ... %v", rows[0].At, rows[len(rows)-1].At)
 	}
 }
@@ -247,5 +249,50 @@ func TestPlaceRowIsHiddenWhenTheSameOpChangesTheKind(t *testing.T) {
 	want := []string{"太郎: 親を変更", "太郎: 種類を Step から Story に変更"}
 	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
+
+func TestItemRowsShowGitHubLinkRows(t *testing.T) {
+	gh := change.Actor{Kind: change.ActorGitHub}
+	pr := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	moved := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web2", Number: 41}
+	log := logOf(
+		step{"O1", at(0), taro, item.Create(item.Item{ID: "T", Place: item.Place{Workspace: "W", Project: "P", Number: 1}, Kind: item.Task, Rank: "V", Title: "画面"})},
+		step{"O2", at(1), taro, change.NewAdd("links", pr)},                                   // 手でのリンク: 出さない
+		step{"O2", at(1), taro, change.NewSet(itemlink.ValueField(pr, "state"), nil, "open")}, // 初めの値: 出さない
+		step{"O3", at(2), gh, change.NewSet(itemlink.ValueField(pr, "review"), "none", "approved")},
+		step{"O4", at(3), gh, change.NewSet(itemlink.ValueField(pr, "title"), "A", "B")},
+		step{"O5", at(4), gh, change.NewRemove("links", pr)},
+		step{"O5", at(4), gh, change.NewAdd("links", moved)},
+		step{"O5", at(4), gh, change.NewSet(itemlink.ValueField(moved, "title"), "B", "B")},
+		step{"O5", at(4), gh, change.NewSet(itemlink.ValueField(moved, "state"), "open", "closed")},
+		step{"O6", at(5), gh, change.NewAdd("links", itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 50})},
+		step{"O7", at(6), taro, change.NewRemove("links", moved)}, // 手での解除: 出さない
+		step{"O8", at(7), gh, change.NewSet(itemlink.ValueField(moved, "state"), "open", "open")},
+	)
+	want := []string{
+		"GitHub: org/web#50 を自動でリンク",
+		"GitHub: org/web2#41 の状態を Closed に変更",
+		"GitHub: リンクを org/web#41 から org/web2#41 に更新",
+		"GitHub: org/web#41 のタイトルを「B」に変更",
+		"GitHub: org/web#41 のレビューを 承認済み に変更",
+		"太郎: 作成",
+	}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestItemRowsGitHubLinkTitleIsOneLineAndOnlyLinksFields(t *testing.T) {
+	gh := change.Actor{Kind: change.ActorGitHub}
+	pr := itemlink.Ref{Kind: itemlink.PR, Repo: "org/web", Number: 41}
+	log := logOf(
+		step{"O1", at(0), taro, item.Create(item.Item{ID: "T", Place: item.Place{Workspace: "W", Project: "P", Number: 1}, Kind: item.Task, Rank: "V", Title: "画面"})},
+		step{"O2", at(1), gh, change.NewSet(itemlink.ValueField(pr, "title"), "A", "B\n  C")},
+		step{"O3", at(2), gh, change.NewSet("linksX/pr:org/web#41/state", "open", "merged")}, // links の項目ではない
+	)
+	want := []string{"GitHub: org/web#41 のタイトルを「B C」に変更", "太郎: 作成"}
+	if got := texts(history.ItemRows(log, ctx())); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
 	}
 }

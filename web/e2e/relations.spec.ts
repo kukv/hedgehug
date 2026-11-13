@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { newTask } from "./helpers";
 
 test("adds a blocked by relation, shows Blocked in the panel and the tree, and removes it", async ({

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createWorkspace, openSettings, prefixOf, projectWithEpic, saved, unique } from "./helpers";
 
 // 作成ダイアログの説明の欄と、テンプレートの説明の当てはめの通しのテスト(A4a)。

@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import {
   createWorkspace,
   newTaskUnder,
@@ -9,7 +10,7 @@ import {
   unique,
 } from "./helpers";
 
-// テンプレートでまとめて作る・遷移の制約の通しのテスト(A3b)。サーバーは 3 つの幅で共有なので、
+// テンプレートでまとめて作る・遷移の制約の通しのテスト(A3b)。サーバーは同じ worker のほかのテストと共有なので、
 // 名前と接頭辞は毎回変える。
 
 // restrictTodo は、ワークフローのタブで Todo から移れる先を InProgress だけにする。

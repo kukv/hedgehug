@@ -87,7 +87,7 @@ func Register(api huma.API, h *Hub) {
 	huma.Register(api, huma.Operation{
 		OperationID: "watch-events", Method: http.MethodGet, Path: "/api/events",
 		Summary: "Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける",
-		Description: "出来事ごとに `event: store` または `event: sync` の行と、" +
+		Description: "出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、" +
 			"`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。",
 		Responses: map[string]*huma.Response{
 			"200": {
@@ -135,8 +135,11 @@ func stream(ctx huma.Context, h *Hub) {
 // writeFrame は、出来事を 1 つの Server-Sent Events のフレームとして書く。
 func writeFrame(w io.Writer, e port.Event) error {
 	kind := "store"
-	if e.Kind == port.EventSync {
+	switch e.Kind {
+	case port.EventSync:
 		kind = "sync"
+	case port.EventGitHub:
+		kind = "github"
 	}
 	data, _ := json.Marshal(map[string]string{"store": string(e.Store)})
 	_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", kind, data)
