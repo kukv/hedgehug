@@ -76,3 +76,110 @@ func contractSettings(t *testing.T, s port.Stores, id port.StoreID) {
 		return nil
 	})
 }
+
+// wantDescription は、説明の読み取りの結果が、エラーなしで want であることを確かめる。
+func wantDescription(t *testing.T, label, got string, err error, want string) {
+	t.Helper()
+	if err != nil || got != want {
+		t.Errorf("%s = %q, %v; want %q", label, got, err, want)
+	}
+}
+
+// contractDescription は、説明(アイテムとプロジェクト)が、書いたとおりに読め、空にすると消えることを確かめる。
+func contractDescription(t *testing.T, s port.Stores, id port.StoreID) {
+	const body = "## 手順\n1. 確認\n"
+	mustWrite(t, s, id, taro, writeFixture)
+	mustRead(t, s, id, func(r port.Reader) error {
+		got, err := r.Items().Description(cItem.ID)
+		wantDescription(t, "a new item's description", got, err, "")
+		return nil
+	})
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if err := tx.WriteItems().Describe(cItem.ID, body); err != nil {
+			return err
+		}
+		got, err := tx.Items().Description(cItem.ID)
+		wantDescription(t, "a tx must see its own description", got, err, body)
+		return errors.Join(
+			tx.WriteItems().Append(cItem.ID, change.NewDesc()),
+			tx.WriteProjects().Describe(cProject.ID, "概要"),
+			tx.WriteProjects().Append(cProject.ID, change.NewDesc()),
+		)
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		got, err := r.Items().Description(cItem.ID)
+		wantDescription(t, "item description", got, err, body)
+		got, err = r.Projects().Description(cProject.ID)
+		wantDescription(t, "project description", got, err, "概要")
+		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+		if err != nil || log[len(log)-1].T != change.Desc {
+			t.Errorf("item log = %+v, %v", log, err)
+		}
+		return nil
+	})
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Describe(cItem.ID, ""), tx.WriteItems().Append(cItem.ID, change.NewDesc()))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		got, err := r.Items().Description(cItem.ID)
+		wantDescription(t, "an emptied description", got, err, "")
+		got, err = r.Projects().Description(cProject.ID)
+		wantDescription(t, "the other description must stay", got, err, "概要")
+		return nil
+	})
+}
+
+// contractDescriptionRollback は、失敗した Write が説明を残さず、同じ Write の中で書いて戻した説明も残さないことを確かめる。
+func contractDescriptionRollback(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	boom := errors.New("boom")
+	err := s.Write(t.Context(), id, taro, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Describe(cItem.ID, "消える"), boom)
+	})
+	if !errors.Is(err, boom) {
+		t.Fatalf("Write = %v", err)
+	}
+	// 書いてから同じ説明(空)に戻した Write は、何も残さず、Summary も確かめない。
+	mustWrite(t, s, id, port.Operation{Actor: taro.Actor}, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Describe(cItem.ID, "一時"), tx.WriteItems().Describe(cItem.ID, ""))
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		got, err := r.Items().Description(cItem.ID)
+		wantDescription(t, "description", got, err, "")
+		return nil
+	})
+}
+
+// contractDescriptionRules は、ないアイテムと使えない ID、Summary のない説明の書き換えを断ることを確かめる。
+func contractDescriptionRules(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	const missing = "01CONTRACTNO00000000000001"
+	mustRead(t, s, id, func(r port.Reader) error {
+		if _, err := r.Items().Description(missing); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("unknown item: %v", err)
+		}
+		if _, err := r.Projects().Description("../x"); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("malformed id: %v", err)
+		}
+		return nil
+	})
+	err := s.Write(t.Context(), id, taro, func(tx port.Tx) error { return tx.WriteItems().Describe(missing, "x") })
+	if !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Describe unknown = %v", err)
+	}
+	err = s.Write(t.Context(), id, taro, func(tx port.Tx) error { return tx.WriteItems().Describe("../x", "x") })
+	if !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Describe malformed = %v", err)
+	}
+	err = s.Write(t.Context(), id, port.Operation{Actor: taro.Actor}, func(tx port.Tx) error {
+		return tx.WriteItems().Describe(cItem.ID, "要約なし")
+	})
+	if !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("Describe without a summary = %v", err)
+	}
+	mustRead(t, s, id, func(r port.Reader) error {
+		got, err := r.Items().Description(cItem.ID)
+		wantDescription(t, "a refused write must leave the description", got, err, "")
+		return nil
+	})
+}

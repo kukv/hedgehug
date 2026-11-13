@@ -107,3 +107,25 @@ func appendLog(root string, ref change.Ref, recs []change.Record) error {
 	}
 	return f.Close()
 }
+
+// descriptionPath は、エンティティの説明のファイル(Store の根からの相対パス)。
+func descriptionPath(ref change.Ref) (string, error) {
+	d, err := dirOf(ref)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "description.md"), nil
+}
+
+// readDescription は、作業ツリーの説明を読む。ファイルがなければ ""。
+func readDescription(root string, ref change.Ref) (string, error) {
+	p, err := descriptionPath(ref)
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(filepath.Join(root, p)) //nolint:gosec // G304: パスは Store の根と dirOf で検査済みの ID から作る
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	return string(b), err
+}

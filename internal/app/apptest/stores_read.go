@@ -20,6 +20,9 @@ import (
 type view struct {
 	base    map[change.Ref][]change.Record
 	pending map[change.Ref][]change.Record
+	// baseTexts は保存済みの説明、texts は同じ Tx で書いた説明(ない説明は "")。
+	baseTexts map[change.Ref]string
+	texts     map[change.Ref]string
 }
 
 // log は、呼び出し側が変えても保存済みのログが変わらないように、行を深く写して返す。
@@ -44,6 +47,17 @@ func cloneRecord(r change.Record) change.Record {
 		r.Root = &root
 	}
 	return r
+}
+
+// description は、エンティティの説明を返す。ログがなければ port.ErrNotFound。
+func (v *view) description(ref change.Ref) (string, error) {
+	if len(v.log(ref)) == 0 {
+		return "", port.ErrNotFound
+	}
+	if text, ok := v.texts[ref]; ok {
+		return text, nil
+	}
+	return v.baseTexts[ref], nil
 }
 
 func (v *view) ids(kind change.Kind) []change.ID {
@@ -139,6 +153,14 @@ func (r items) List(p project.ID) ([]item.Item, error) {
 	}
 	slices.SortFunc(out, func(a, b item.Item) int { return cmp.Compare(a.Place.Number, b.Place.Number) })
 	return out, nil
+}
+
+func (r projects) Description(id project.ID) (string, error) {
+	return r.v.description(change.Ref{Kind: change.KindProject, ID: id})
+}
+
+func (r items) Description(id item.ID) (string, error) {
+	return r.v.description(change.Ref{Kind: change.KindItem, ID: id})
 }
 
 type members struct{ v *view }

@@ -38,6 +38,9 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"projects and items are listed", contractLists},
 		{"workspace settings round trip", contractSettings},
 		{"item values and deletes round trip", contractItemValues},
+		{"descriptions round trip", contractDescription},
+		{"a failed write leaves the description", contractDescriptionRollback},
+		{"describing needs an existing entity and a summary", contractDescriptionRules},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -24,6 +24,8 @@ type Stores struct {
 type store struct {
 	mu   sync.Mutex
 	logs map[change.Ref][]change.Record
+	// texts は、説明の本文(ない説明は入れない)。
+	texts map[change.Ref]string
 	// writes は、保存が成功した回数(Versions の印)。
 	writes int
 }
@@ -40,7 +42,7 @@ func (s *Stores) AddStore(id port.StoreID) {
 	if _, ok := s.stores[id]; ok {
 		panic(fmt.Sprintf("apptest: AddStore: store %q already exists", id))
 	}
-	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}}
+	s.stores[id] = &store{logs: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}}
 }
 
 // open は、Store のロックを取って返す。呼んだ側が st.mu.Unlock する。
@@ -61,7 +63,7 @@ func (s *Stores) Read(_ context.Context, id port.StoreID, fn func(r port.Reader)
 		return err
 	}
 	defer st.mu.Unlock()
-	return fn(&view{base: st.logs})
+	return fn(&view{base: st.logs, baseTexts: st.texts})
 }
 
 func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
@@ -72,14 +74,14 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	defer st.mu.Unlock()
 	logs := st.logs
 	t := &tx{
-		view: view{base: logs, pending: map[change.Ref][]change.Record{}},
+		view: view{base: logs, baseTexts: st.texts, pending: map[change.Ref][]change.Record{}, texts: map[change.Ref]string{}},
 		meta: change.Meta{Op: s.ids.New(), At: s.clock.Now(), Actor: op.Actor},
 		ids:  s.ids,
 	}
 	if err := fn(t); err != nil {
 		return err
 	}
-	if len(t.pending) == 0 {
+	if len(t.pending) == 0 && len(t.texts) == 0 {
 		return nil
 	}
 	if err := op.Check(); err != nil {
@@ -87,6 +89,13 @@ func (s *Stores) Write(_ context.Context, id port.StoreID, op port.Operation, fn
 	}
 	for ref, recs := range t.pending {
 		logs[ref] = append(logs[ref], recs...)
+	}
+	for ref, text := range t.texts {
+		if text == "" {
+			delete(st.texts, ref)
+		} else {
+			st.texts[ref] = text
+		}
 	}
 	st.writes++
 	return nil
@@ -128,6 +137,22 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	return nil
 }
 
+// describe は、説明を書く。保存してある説明と同じなら何もしない。
+func (t *tx) describe(ref change.Ref, text string) error {
+	if !ref.Valid() {
+		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, ref.ID)
+	}
+	if len(t.log(ref)) == 0 {
+		return port.ErrNotFound
+	}
+	if text == t.baseTexts[ref] {
+		delete(t.texts, ref)
+		return nil
+	}
+	t.texts[ref] = text
+	return nil
+}
+
 func (t *tx) WriteWorkspaces() port.WorkspaceWriter { return idWriter{t, change.KindWorkspace} }
 func (t *tx) WriteProjects() port.ProjectWriter     { return idWriter{t, change.KindProject} }
 func (t *tx) WriteItems() port.ItemWriter           { return idWriter{t, change.KindItem} }
@@ -140,6 +165,10 @@ type idWriter struct {
 
 func (w idWriter) Append(id change.ID, drafts ...change.Draft) error {
 	return w.t.append(change.Ref{Kind: w.kind, ID: id}, drafts)
+}
+
+func (w idWriter) Describe(id change.ID, text string) error {
+	return w.t.describe(change.Ref{Kind: w.kind, ID: id}, text)
 }
 
 type membersWriter struct{ t *tx }

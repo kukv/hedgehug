@@ -22,6 +22,8 @@ import (
 type view struct {
 	root    string
 	pending map[change.Ref][]change.Record
+	// texts は、同じ Tx で書いた説明(ない説明は "")。いまの作業ツリーと同じ説明は入れない。
+	texts map[change.Ref]string
 }
 
 // log は、呼び出し側が変えてもまだ書いていない行(pending)が変わらないように、pending の行を深く写して返す。
@@ -71,6 +73,21 @@ func (v *view) Projects() port.ProjectReader     { return projects{v} }
 func (v *view) Items() port.ItemReader           { return items{v} }
 func (v *view) Members() port.MemberReader       { return members{v} }
 func (v *view) Changes() port.ChangeReader       { return changes{v} }
+
+// description は、エンティティの説明を返す。ログがなければ port.ErrNotFound。同じ Tx で書いた説明(texts)を含む。
+func (v *view) description(ref change.Ref) (string, error) {
+	log, err := v.log(ref)
+	if err != nil {
+		return "", err
+	}
+	if len(log) == 0 {
+		return "", port.ErrNotFound
+	}
+	if text, ok := v.texts[ref]; ok {
+		return text, nil
+	}
+	return readDescription(v.root, ref)
+}
 
 // get は、ログを読んで from で値にする。作成の行がなければ port.ErrNotFound。
 func get[T any](v *view, ref change.Ref, from func([]change.Record) (T, bool)) (T, error) {
@@ -161,6 +178,14 @@ func list[T any](v *view, kind change.Kind, get func(change.ID) (T, error), keep
 		}
 	}
 	return out, nil
+}
+
+func (r projects) Description(id project.ID) (string, error) {
+	return r.v.description(change.Ref{Kind: change.KindProject, ID: id})
+}
+
+func (r items) Description(id item.ID) (string, error) {
+	return r.v.description(change.Ref{Kind: change.KindItem, ID: id})
 }
 
 type members struct{ v *view }
