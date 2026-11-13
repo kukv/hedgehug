@@ -100,6 +100,7 @@ func checkDatePair(it item.Item, p workspace.Property, to json.RawMessage) error
 }
 
 // writeValue は、保存の中でいまのアイテムを読み直し、drafts が返す行を 1 回で保存する。行がなければ何も残さない。
+// 別の画面で削除された(root: true)アイテムは、行を書くときだけ削除を取り消し、行がなければ port.ErrNotFound で断る。
 // drafts が断ったら何も保存しない。after は、行を書いたときだけ同じ保存の中で呼ぶ(before は書く前のアイテム)。
 // nil なら呼ばない。
 func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID, summary string,
@@ -111,19 +112,15 @@ func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID,
 	}
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		it, err := port.LiveItem(tx, id)
+		it, ds, err := reviveAndDraft(ctx, tx, id, drafts)
 		if err != nil {
 			return err
 		}
-		ds, err := drafts(tx, it)
-		if err != nil {
-			return err
+		if len(ds) == 0 {
+			return nil // 行がなければ何も残さない
 		}
-		if err := tx.WriteItems().Append(id, ds...); err != nil {
+		if err := tx.WriteItems().Append(id, ds...); err != nil || after == nil {
 			return err
-		}
-		if len(ds) == 0 || after == nil {
-			return nil
 		}
 		return after(tx, it)
 	})
@@ -131,4 +128,30 @@ func (s Service) writeValue(ctx context.Context, store port.StoreID, id item.ID,
 		return item.Item{}, err
 	}
 	return s.Get(ctx, store, id)
+}
+
+// reviveAndDraft は、保存の中で最初に、削除済み(root: true)なら削除を取り消してから、いまのアイテムを読み直し、
+// drafts が返す行を返す。行がなければ、削除の印があれば port.ErrNotFound で断る(決定 S4・S10)。
+func reviveAndDraft(ctx context.Context, tx port.Tx, id item.ID,
+	drafts func(tx port.Tx, it item.Item) ([]change.Draft, error),
+) (item.Item, []change.Draft, error) {
+	editable, err := port.EditableItem(tx, id)
+	if err != nil {
+		return item.Item{}, nil, err
+	}
+	if err := port.ReviveItem(ctx, tx, id); err != nil {
+		return item.Item{}, nil, err
+	}
+	it, err := port.LiveItem(tx, id)
+	if err != nil {
+		return item.Item{}, nil, err
+	}
+	ds, err := drafts(tx, it)
+	if err != nil {
+		return item.Item{}, nil, err
+	}
+	if len(ds) == 0 {
+		return it, nil, port.Unchanged(editable.Deleted)
+	}
+	return it, ds, nil
 }

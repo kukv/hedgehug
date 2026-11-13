@@ -274,3 +274,17 @@ func TestReviveItemUnderDeletedParentDoesNothing(t *testing.T) {
 		t.Errorf("Revived = %v, task deleted = %v", got, deletedOf(t, s, apptest.SampleTask) != nil)
 	}
 }
+
+// 削除されていないアイテムは、祖先が削除済みでも読める(祖先を確かめるのは、削除済みのアイテムだけ)。
+func TestEditableItemLiveItemUnderDeletedParent(t *testing.T) {
+	s := reviveStores(t)
+	deleteIn(t, s, map[item.ID]bool{apptest.SampleEpic: true}, nil)
+	if err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+		if it, err := port.EditableItem(r, apptest.SampleTask); err != nil || it.Deleted != nil {
+			t.Errorf("task = %+v, %v", it.Deleted, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

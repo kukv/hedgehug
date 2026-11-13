@@ -25,9 +25,8 @@ func TestDeletedItemIsHiddenAndCannotBeChanged(t *testing.T) {
 	}
 	_, getErr := svc.Get(ctx, store, apptest.SampleTask)
 	_, findErr := svc.FindByNumber(ctx, store, apptest.SampleWorkspace, 2)
-	_, setErr := svc.SetProperty(ctx, store, apptest.SampleTask, "assignee", raw(`"taro"`))
 	_, stepErr := svc.AddStep(ctx, store, apptest.SampleTask, "下書き")
-	for name, err := range map[string]error{"Get": getErr, "FindByNumber": findErr, "SetProperty": setErr, "AddStep": stepErr} {
+	for name, err := range map[string]error{"Get": getErr, "FindByNumber": findErr, "AddStep": stepErr} {
 		if !errors.Is(err, port.ErrNotFound) {
 			t.Errorf("%s of a deleted item: %v, want port.ErrNotFound", name, err)
 		}

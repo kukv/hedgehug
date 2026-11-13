@@ -14,14 +14,17 @@ import (
 // 下の関数は、その取り消しの口。呼ぶ側は、先に EditableItem・EditableProject で断るものを断ってから Write に入る。
 
 // EditableItem は、利用者が変更を保存できるアイテムを返す。削除されていないか、利用者が選んで削除した
-// (Deleted.Root が true)アイテム。ないか、親と一緒に削除された(root: false)か、祖先のアイテム
+// (Deleted.Root が true)アイテム。ないか、親と一緒に削除された(root: false)か、削除済みで祖先のアイテム
 // (Place.Parent をたどる)かプロジェクトが削除済みなら ErrNotFound(決定 S9)。
 func EditableItem(r Reader, id item.ID) (item.Item, error) {
 	it, err := r.Items().Get(id)
 	if err != nil {
 		return item.Item{}, err
 	}
-	if it.Deleted != nil && !it.Deleted.Root {
+	if it.Deleted == nil {
+		return it, nil // 削除されていないものは、祖先が削除済みでも、いままでどおり変更できる(03「実行の規則」の Step など)
+	}
+	if !it.Deleted.Root {
 		return item.Item{}, ErrNotFound
 	}
 	if err := aliveAbove(r, it); err != nil {
