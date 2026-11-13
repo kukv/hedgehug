@@ -14,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
@@ -364,4 +365,54 @@ func TestMoveAcrossStoresRollsBackASaveThatWasNotDiscarded(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	assertRolledBack(t, f, srcBefore, membersBefore)
+}
+
+// retried は、最初の Deliver だけ、fn を一度呼んで保存を捨て(送信が重なった)、between を保存してから、もう一度 inner で
+// 保存する Delivery(SyncSave が fn を呼び直す場面)。
+type retried struct {
+	inner   transfers.Delivery
+	stores  port.Stores
+	between func(tx port.Tx) error
+	done    *bool
+}
+
+var errConflict = errors.New("conflict")
+
+func (d retried) Deliver(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error) {
+	if !*d.done {
+		*d.done = true
+		err := d.stores.Write(ctx, id, op, func(tx port.Tx) error { return errors.Join(fn(tx), errConflict) })
+		if !errors.Is(err, errConflict) {
+			return "", err
+		}
+		if err := d.stores.Write(ctx, id, port.Operation{Actor: change.User("taro"), Summary: "ほかの人の更新"}, d.between); err != nil {
+			return "", err
+		}
+	}
+	return d.inner.Deliver(ctx, id, op, fn)
+}
+
+// fn が呼び直されたら、番号とメンバーは呼び直しの tx から決め、戻しは最後の呼び出しで足した人だけを外す。
+// あいだにほかの人が TM-2 を使い hanako を足したので、移したものは TM-3 になり、hanako は足さず、戻しても外さない。
+func TestMoveAcrossStoresDecidesNumbersAndPeopleFromTheLastCall(t *testing.T) {
+	f := crossFixture(t)
+	f.svc.Stores = failWrite{Stores: f.rec, store: store1}
+	f.svc.Delivery = retried{inner: f.deliver, stores: f.rec, done: new(bool), between: func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(teamWS, numbering.Draft(numbering.Items, 2)),
+			tx.WriteMembers().Append(member.Join("hanako")),
+		)
+	}}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if s := f.rec.summaries(store2); s[len(s)-1] != "TM-3 の移動を取り消し" {
+		t.Errorf("移動先のアクティビティ = %q", s)
+	}
+	if got := loginsOf(t, f.rec); !slices.Equal(got, []string{"Taro", "hanako"}) {
+		t.Errorf("移動先のメンバー = %v(ほかの人が足した hanako は外さない)", got)
+	}
+	if exists(t, f.rec, store2, apptest.SampleTask) {
+		t.Error("移動先に Task が残っている")
+	}
 }
