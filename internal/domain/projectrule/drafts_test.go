@@ -224,3 +224,17 @@ func TestResetDraftsPerSection(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// 外した印が残ったまま初期ステータスになった Pending は、戻す操作は通り、外す操作は同じ状態で行なし。
+func TestStatusUseHiddenAndNowInitial(t *testing.T) {
+	s := sample()
+	s.InitialStatus = pending
+	r := projectrule.Rules{Hidden: []change.ID{pending}}
+	ds, err := projectrule.StatusUseDrafts(s, r, p, pending, true, nil)
+	if err != nil || !reflect.DeepEqual(ds, []change.Draft{change.NewRemove(projectrule.HiddenField(p), pending)}) {
+		t.Fatalf("%v %v", ds, err)
+	}
+	if ds, err = projectrule.StatusUseDrafts(s, r, p, pending, false, nil); ds != nil || err != nil {
+		t.Fatalf("%v %v", ds, err)
+	}
+}
