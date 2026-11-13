@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/ghread"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/prlink"
@@ -89,4 +90,35 @@ type GitHubReads interface {
 	Failures(ctx context.Context, store StoreID) (map[string]string, error)
 	// SetFailure は、文言を置く。空なら消す。前と変わったら changed。
 	SetFailure(ctx context.Context, store StoreID, key, text string) (changed bool, err error)
+}
+
+// ScanRecord は、Store のリポジトリ 1 つの、PR を探した記録(D4b-4)。ゼロ値は「まだ探していない」。
+type ScanRecord struct {
+	Read    bool      // 一度でも探し終えた
+	Since   time.Time // 見た PR の updatedAt の最大(GitHub の時刻)
+	Failure string    // 前回の失敗の文言(07 の表の文。空なら成功)
+}
+
+// PRScans は、PR を探した記録の口(D4b-4)。実装は infra/statedb。
+type PRScans interface {
+	// Scans は、Store のリポジトリ(小文字)から引く記録を返す。
+	Scans(ctx context.Context, store StoreID) (map[string]ScanRecord, error)
+	// SaveScan は、repo の記録を置く。前と変わったら changed。
+	SaveScan(ctx context.Context, store StoreID, repo string, r ScanRecord) (changed bool, err error)
+}
+
+// MissingOrg は、App 未導入の組織の記録(D4b-12)。
+type MissingOrg struct {
+	Org  string // 表示する組織名(最初に断られたリポジトリの owner の書き方)
+	Repo string // 断られたリポジトリ(「再確認」で読む)
+}
+
+// AppMissing は、GitHub App 未導入の組織の記録の口(D4b-12)。実装は infra/statedb。
+type AppMissing interface {
+	// List は、アカウントごとの記録を、記録した順で返す。
+	List(ctx context.Context) (map[account.ID][]MissingOrg, error)
+	// Put は記録する。同じ組織(小文字)なら Repo だけ置き換え、changed は false。
+	Put(ctx context.Context, a account.ID, m MissingOrg) (changed bool, err error)
+	// Clear は記録を消す。org は大文字と小文字を区別しない。
+	Clear(ctx context.Context, a account.ID, org string) (changed bool, err error)
 }
