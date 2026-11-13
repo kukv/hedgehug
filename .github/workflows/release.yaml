@@ -28,7 +28,7 @@ jobs:
           cache: false
 
       # .goreleaser.yaml の before.hooks が make web で GUI を作る。Node と pnpm が要る。
-      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           install_args: node pnpm
           # リリースの成果物を作るジョブなので、キャッシュを使わない（cache poisoning の対策。zizmor）。
