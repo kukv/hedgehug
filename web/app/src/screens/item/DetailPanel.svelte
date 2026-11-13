@@ -7,6 +7,7 @@
   import DetailChildren from "./DetailChildren.svelte";
   import DetailHeader from "./DetailHeader.svelte";
   import DetailProperties from "./DetailProperties.svelte";
+  import WorklogSection from "./WorklogSection.svelte";
 
   // アイテムの詳細パネル(02「詳細パネル」のうち A2 の分。A2 の計画の決定 18)。
   const view = detail.view;
@@ -103,6 +104,7 @@
       <h3>GitHub</h3>
       <p class="muted">リンクはありません</p>
     </section>
+    <WorklogSection {v} />
     <CommentsSection
       target={{ kind: "item", storeId: v.store.id, id: v.item.id }}
       readonly={v.readOnly}

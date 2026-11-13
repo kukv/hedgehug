@@ -29,6 +29,7 @@ import {
   createSystemInfo,
   createTabSignals,
   createToasts,
+  createWorklogs,
   createWorkspaceDialog,
   createWorkspaceMover,
   createWorkspaceSettings,
@@ -131,6 +132,7 @@ export const projectComments = createComments({
   drafts,
   scope: "project",
 });
+export const worklogs = createWorklogs({ notes, toasts, now: () => new Date() });
 export const screen = createScreen({
   navigation,
   catalog,
@@ -220,8 +222,7 @@ async function reflect(kinds: SyncEventKind[]) {
           Promise.all([
             projectScreen.reload(),
             detail.reload(),
-            itemComments.reload(),
-            projectComments.reload(),
+            ...[itemComments, projectComments, worklogs].map((section) => section.reload()),
           ]),
         ),
     );
