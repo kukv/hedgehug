@@ -57,9 +57,7 @@ export function createDrafts(): Drafts {
   let waiting = null as ((discard: boolean) => void) | null;
   let asking: Promise<boolean> | null = null;
   const dirtyKeys = (only?: string | ((key: string) => boolean)) =>
-    [...entries]
-      .filter(([key, e]) => picks(only, key) && e.dirty())
-      .map(([key]) => key);
+    [...entries].filter(([key, e]) => picks(only, key) && e.dirty()).map(([key]) => key);
 
   return {
     register(key, dirty, held = dirty) {
