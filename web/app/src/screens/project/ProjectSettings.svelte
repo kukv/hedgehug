@@ -67,7 +67,6 @@
   </section>
   <RulesStatuses {view} />
   <RulesWorkflow {view} />
-  <!-- テンプレート・自動化・別のワークスペースへ移動の区画は、ここに並ぶ(この順で、削除の前)。 -->
   <section class="sec danger">
     <h2>削除</h2>
     {#if $note?.projectId === p.id}

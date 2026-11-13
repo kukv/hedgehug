@@ -14,16 +14,25 @@
   const rows = $derived(projectWorkflowRows(view.settings, view.project.id));
   const empty = $derived(!hasRules(rulesOf(view.settings, view.project.id), "workflow"));
 
-  function change(from: string, to: string, allowed: boolean) {
+  // 断られたとき、チェックを保存済みの値に戻すため、操作のたびに表を作り直す(値が変わらないと DOM が戻らない)。
+  let round = $state(0);
+  async function change(from: string, to: string, allowed: boolean) {
     const p = view.project;
-    void rulesEditor.run(() => projectsPort.setTransition(p.storeId, p.id, from, to, allowed));
+    await rulesEditor.run(() => projectsPort.setTransition(p.storeId, p.id, from, to, allowed));
+    round += 1;
   }
 </script>
 
 <section class="sec">
   <h2 id="rules-workflow" tabindex="-1">ワークフローの制約</h2>
   <p class="help">ワークスペースの制約に追加することだけできます(緩めることはできません)</p>
-  <WorkflowTable {rows} readOnly={view.store.readOnly} onchange={change} />
+  {#key round}
+    <WorkflowTable
+      {rows}
+      readOnly={view.store.readOnly}
+      onchange={(f, t, c) => void change(f, t, c)}
+    />
+  {/key}
   <ResetRulesButton {view} section="workflow" label="ワークフローの制約" {empty} />
 </section>
 
