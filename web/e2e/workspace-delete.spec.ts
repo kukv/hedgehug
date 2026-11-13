@@ -9,7 +9,7 @@ test("deletes a workspace from the general settings after typing its name", asyn
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  const name = unique(info, "削除");
+  const name = unique(info, "設定から削除");
   await createWorkspace(page, info, name, prefix);
   await projectWithEpic(page, info, prefix);
 
