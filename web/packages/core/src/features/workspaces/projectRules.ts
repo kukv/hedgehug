@@ -206,6 +206,8 @@ export function hasRules(r: ProjectRules, section: RuleSection): boolean {
   }
 }
 
+export const rulesProjectsLabel = "プロジェクト別のルールがあるプロジェクト: ";
+
 // rulesProjects は、サブタブの区画に設定を持つプロジェクトの 1 行(03「一覧」)。ルールが空のプロジェクトと、
 // projects にない(削除済みの)プロジェクトは除く。自動化の区画は、専用ルール(rules の scope)を持つプロジェクトも
 // 数える。なければ null。
@@ -224,7 +226,7 @@ export function rulesProjects(
   const names = found.map((p) => `${p.display} ${p.title}`).join("・");
   return {
     projects: found,
-    text: `プロジェクト別のルールがあるプロジェクト: ${names}(${found.length} 件)`,
+    text: `${rulesProjectsLabel}${names}(${found.length} 件)`,
   };
 }
 

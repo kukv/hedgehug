@@ -43,4 +43,24 @@ describe("navigation", () => {
       tab: "overview",
     });
   });
+
+  it("hands the section to open only once", () => {
+    const nav = createNavigation(fakeHistory("/").history);
+    nav.go(
+      { name: "project", store: "work", project: "HH-P1", tab: "settings" },
+      "rules-templates",
+    );
+    expect(nav.takeSection()).toBe("rules-templates");
+    expect(nav.takeSection()).toBeNull();
+  });
+
+  it("forgets a section when the next move names none", () => {
+    const nav = createNavigation(fakeHistory("/").history);
+    nav.go(
+      { name: "project", store: "work", project: "HH-P1", tab: "settings" },
+      "rules-templates",
+    );
+    nav.go({ name: "home" });
+    expect(nav.takeSection()).toBeNull();
+  });
 });

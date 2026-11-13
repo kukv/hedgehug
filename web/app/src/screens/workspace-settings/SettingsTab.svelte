@@ -1,10 +1,17 @@
 <script lang="ts">
-  import { readOnlyBand, type WorkspaceSettingsTab, workspaceSettingsTabs } from "@hedgehug/core";
+  import {
+    type RuleProject,
+    type RuleSection,
+    readOnlyBand,
+    type WorkspaceSettingsTab,
+    workspaceSettingsTabs,
+  } from "@hedgehug/core";
   import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
-  import { workspaceSettings } from "../../wire";
+  import { catalog, workspaceSettings } from "../../wire";
   import AutomationPanel from "./AutomationPanel.svelte";
   import GeneralPanel from "./GeneralPanel.svelte";
   import PropertiesPanel from "./PropertiesPanel.svelte";
+  import RulesProjectsLine from "./RulesProjectsLine.svelte";
   import TemplatesPanel from "./TemplatesPanel.svelte";
   import ValuesPanel from "./ValuesPanel.svelte";
   import WorkflowPanel from "./WorkflowPanel.svelte";
@@ -19,6 +26,21 @@
   let { storeId, workspaceId, storeName }: Props = $props();
 
   const settings = workspaceSettings.state;
+  const stores = catalog.stores;
+  // 削除済みでないプロジェクト(カタログにあるもの)。削除済みは出さず数えない(B5a-15)。
+  const projects = $derived<RuleProject[]>(
+    (
+      $stores.find((x) => x.id === storeId)?.workspaces.find((w) => w.id === workspaceId)
+        ?.projects ?? []
+    ).map((p) => ({ id: p.id, display: p.displayId, title: p.title })),
+  );
+  const ruleSections: Partial<Record<WorkspaceSettingsTab, RuleSection>> = {
+    statuses: "statuses",
+    workflow: "workflow",
+    templates: "templates",
+    automation: "automation",
+  };
+  const section = $derived($settings ? ruleSections[$settings.tab] : undefined);
   // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(入力の途中を消さないため)。
   const sid = $derived(storeId);
   const wid = $derived(workspaceId);
@@ -39,6 +61,14 @@
     {#if $settings.readOnly}
       <ReadOnlyBand text={readOnlyBand(storeName)} />
     {/if}
+    {#if section}
+      <RulesProjectsLine
+        state={$settings}
+        {section}
+        {projects}
+        rules={$settings.automation?.rules}
+      />
+    {/if}
     {#if $settings.tab === "general"}
       <GeneralPanel state={$settings} />
     {:else if $settings.tab === "properties"}
@@ -52,9 +82,9 @@
     {:else if $settings.tab === "workflow"}
       <WorkflowPanel state={$settings} />
     {:else if $settings.tab === "templates"}
-      <TemplatesPanel state={$settings} />
+      <TemplatesPanel state={$settings} {projects} />
     {:else if $settings.tab === "automation"}
-      <AutomationPanel state={$settings} />
+      <AutomationPanel state={$settings} {projects} />
     {/if}
   </div>
 {/if}

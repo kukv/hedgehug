@@ -18,6 +18,7 @@ export {
   rulesHeading,
   rulesOf,
   rulesProjects,
+  rulesProjectsLabel,
   templateDeleteLines,
   type UsedStatusRow,
   unusedRefusal,

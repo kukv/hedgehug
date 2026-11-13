@@ -8,7 +8,7 @@ import type {
   WorkspaceSettings,
 } from "../../model/workspace";
 import { relativeTime } from "../dates/relative";
-import { rulesOf } from "./projectRules";
+import { type RuleProject, rulesOf } from "./projectRules";
 
 // 自動化のタブ(03「自動化」)。文言は 03 の文字どおり。
 
@@ -73,18 +73,25 @@ export interface RuleRow {
   name: string;
   summary: string;
   enabled: boolean;
+  // 削除済みのプロジェクトの専用ルールに付く印(B5a-15)。ルール名にプロジェクトは添えない。
+  deleted?: string;
 }
 
+export const deletedMark = "(削除済み)";
+
+// ruleRows の live は、削除済みでないプロジェクト。scope がここになければ、削除済みのプロジェクトの専用ルール。
 export function ruleRows(
   a: WorkspaceAutomation,
   s: WorkspaceSettings,
   members: Member[],
+  live: readonly RuleProject[],
 ): RuleRow[] {
   return a.rules.map((r) => ({
     id: r.id,
     name: r.name,
     summary: ruleSummary(s, members, r),
     enabled: r.enabled,
+    ...(r.scope && !live.some((p) => p.id === r.scope) ? { deleted: deletedMark } : {}),
   }));
 }
 

@@ -1,8 +1,9 @@
 <script lang="ts">
   import { type ProjectView, readOnlyNote, rulesHeading } from "@hedgehug/core";
   import { Button, Input } from "@hedgehug/ui";
-  import { untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { projectEditor } from "../../projectEditor";
+  import { navigation } from "../../wire";
   import { projectDelete } from "../../wireActions";
   import RulesAutomation from "./RulesAutomation.svelte";
   import RulesStatuses from "./RulesStatuses.svelte";
@@ -40,6 +41,14 @@
   function onkeydown(event: KeyboardEvent) {
     if (event.key === "Enter" && !event.isComposing) (event.currentTarget as HTMLElement).blur();
   }
+
+  // ワークスペースの設定の 1 行から来たときは、一度だけ読む「開く区画」の見出しまでスクロールしてフォーカスする。
+  onMount(() => {
+    const id = navigation.takeSection();
+    const el = id ? document.getElementById(id) : null;
+    el?.scrollIntoView?.({ block: "start" });
+    el?.focus();
+  });
 
   // 「削除」の区画の説明の件数と保持日数は、サーバーの予告から読む。別のプロジェクトになったときと、アイテムの数が
   // 変わったときだけ読み直す(p は読み直しのたびに新しいオブジェクトになるので、値で比べる $derived を見る)。

@@ -144,7 +144,7 @@ describe("the list", () => {
         },
       ],
     };
-    expect(ruleRows(a, settings, members)[0]).toEqual({
+    expect(ruleRows(a, settings, members, [])[0]).toEqual({
       id: "R1",
       name: "PR マージで完了",
       summary: "リンクした PR がマージされたとき → ステータスを Done に",
@@ -152,6 +152,24 @@ describe("the list", () => {
     });
     expect(recentRows(a, new Date("2026-11-13T09:00:00Z"))).toEqual([
       { display: "HH-2", text: "「PR マージで完了」でステータスを Done に変更", time: "5 分前" },
+    ]);
+  });
+
+  it("marks dedicated rules of deleted projects", () => {
+    const base = { ...newRuleForm(settings), enabled: true };
+    const a = {
+      rules: [
+        { ...base, id: "R1", name: "全体" },
+        { ...base, id: "R2", name: "生きている", scope: "P1" },
+        { ...base, id: "R3", name: "消えた", scope: "P9" },
+      ],
+      recent: [],
+    };
+    const live = [{ id: "P1", display: "HH-P1", title: "A" }];
+    expect(ruleRows(a, settings, members, live).map((r) => r.deleted)).toEqual([
+      undefined,
+      undefined,
+      "(削除済み)",
     ]);
   });
 });
