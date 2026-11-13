@@ -9,7 +9,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 // Stores は port.Stores のメモリ上の偽物。同じ Store の Read と Write は 1 つずつ順に行い、
@@ -139,7 +138,7 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	recs := change.Stamp(t.log(ref), drafts, t.meta, t.ids.New)
 	t.pending[ref] = append(t.pending[ref], recs...)
 	if ref.Kind == change.KindItem {
-		delete(t.places, item.ID(ref.ID)) // 動いたかもしれない
+		delete(t.places, ref.ID) // 動いたかもしれない
 	}
 	return nil
 }

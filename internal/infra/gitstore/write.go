@@ -6,7 +6,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 // open は、Store のロックを取り、途中で止まった保存が残っていれば戻す。
@@ -88,7 +87,7 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	}
 	t.pending[ref] = append(t.pending[ref], change.Stamp(log, drafts, t.meta, t.ids.New)...)
 	if ref.Kind == change.KindItem {
-		delete(t.places, item.ID(ref.ID)) // 動いたかもしれない
+		delete(t.places, ref.ID) // 動いたかもしれない
 	}
 	return nil
 }
