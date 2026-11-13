@@ -165,6 +165,19 @@ export interface AutomationRun {
   text: string;
 }
 
+export type ChangeKindKind = typeof ChangeKindKind[keyof typeof ChangeKindKind];
+
+
+export const ChangeKindKind = {
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+} as const;
+
+export interface ChangeKind {
+  kind: ChangeKindKind;
+}
+
 export interface ChangeWorkspacePrefix {
   prefix: string;
 }
@@ -1844,6 +1857,47 @@ export const getItemHistory = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getChangeItemKindUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/kind`
+}
+
+/**
+ * @summary アイテムの種類を変える
+ */
+export const changeItemKind = async (store: string,
+    item: string,
+    changeKind: ChangeKind, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getChangeItemKindUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changeKind)
   }
 );}
 

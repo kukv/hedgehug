@@ -207,6 +207,18 @@ components:
         - display
         - text
       type: object
+    ChangeKind:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - Story
+            - Task
+            - Bug
+          type: string
+      required:
+        - kind
+      type: object
     ChangeWorkspacePrefix:
       additionalProperties: false
       properties:
@@ -2381,6 +2393,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムの履歴を新しい順で返す
+  /api/stores/{store}/items/{item}/kind:
+    put:
+      operationId: change-item-kind
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeKind"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムの種類を変える
   /api/stores/{store}/items/{item}/move:
     post:
       operationId: move-item
