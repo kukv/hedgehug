@@ -84,6 +84,40 @@ export {
   stackPaths,
   ticks,
 } from "./features/reports/chart";
+export {
+  diffText,
+  emptyEstimates,
+  hoursText,
+  perPointText,
+  pointsText,
+  sprintScopeNote,
+} from "./features/reports/estimates";
+export {
+  checkPeriod,
+  defaultPeriod,
+  periodLabel,
+} from "./features/reports/flowPeriod";
+export {
+  type ActiveReports,
+  type ActiveReportsState,
+  createActiveReports,
+  createReports,
+  type Reports,
+  type ReportsState,
+} from "./features/reports/reports";
+export {
+  addedText,
+  amount,
+  averageText,
+  burnStatus,
+  burnTotals,
+  committedNote,
+  durationLines,
+  fallbackNote,
+  notStarted,
+  pointsCard,
+  unitLabel,
+} from "./features/reports/texts";
 export type {
   PlanningOverview,
   PlanRow,
