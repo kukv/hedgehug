@@ -362,3 +362,28 @@ App のテスト(または `palette.ts` の関数のテスト)で: 入力欄に�
 - [ ] **Step 2: `make check` が通る**。
 - [ ] **Step 3: コミット** — `docs: パレットの仕様の文言と、他のトラックに渡すものを書き足す`
 - [ ] **Step 4: PR を出す** — develop 向け。本文に範囲・回した先・計画から変えたこと。末尾に `🤖 Generated with [Claude Code](https://claude.com/claude-code)`。
+
+---
+
+## 他のトラックに渡すもの
+
+A5c は群の順と上限の枠を作り、空の群は出さない。渡す先は、行き先の画面を作るトラックが、次の場所に足す。
+
+| 渡す先 | 足すもの | 足す場所 |
+|---|---|---|
+| E | 「このクエリで」の群、ビューの群、コマンド「検索を開く」「マイタスクを開く」、テーブルの選択(`selection.provide(2, …)`) | `web/packages/core/src/features/palette/actions.ts`・`destinations.ts`・`candidates.ts`、`selection.ts` |
+| F2 | バックログの選択(`selection.provide(2, …)`) | `web/packages/core/src/features/palette/selection.ts` |
+| C4 | コマンド「受信箱を開く」「アクティビティを開く」 | `actions.ts`・`destinations.ts`・`candidates.ts` のコマンドの群 |
+| G | 「設定: Store」「設定: 削除済み」「設定: 診断と修復」。ワークスペースを追加の Store の初期値を既定の Store にする | `actions.ts`・`destinations.ts`・`candidates.ts` の設定の群 |
+
+G への注意: 本物の組み立てでは、`StoreList` と `SyncTargets` がまだ仮の実装(空を返すもの)なので、最近開いたものは G が本物の Store をつなぐまで、覚えても出ない(見つからないものとして忘れる)。G は `SyncTargets` を `StoreList` と一緒につなぐこと。
+
+## 実装で計画から変えたこと
+
+- 部品は `web/app/src/palette/` でなく `web/packages/ui/src/patterns` に置いた(app には単体テストの実行環境がないため)。Ctrl+K は ui の部品が受ける。
+- `buildRows` に `head`(群ごとの見出し)を引数として足した。
+- `Navigation.go` は `Promise<boolean>` を返す(書きかけの確認で「入力を破棄」を選ばなかったときは false)。
+- 行き先をまとめた `web/packages/core/src/features/palette/destinations.ts` を足した。
+- `palette.Service` の最近開いたものの口のフィールド名は `RecentItems`(計画の `Recent` から変えた)。
+- パレットを閉じたら、開く前にフォーカスのあった場所へ戻す。
+- スプリント・リリースの作成は、閲覧のみの Store のワークスペースではダイアログを開かずトーストを出し、タブへ移る確認で「入力を破棄」を選ばなかったときは何もしない。
