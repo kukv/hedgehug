@@ -73,6 +73,7 @@ func showProperty(p workspace.Property, v json.RawMessage, st workspace.Settings
 		}
 	}
 	slices.Sort(extra)
+	extra = slices.Compact(extra)
 	var ordered []change.ID
 	for _, x := range vals {
 		if slices.Contains(ids, x.ID) {
@@ -81,7 +82,7 @@ func showProperty(p workspace.Property, v json.RawMessage, st workspace.Settings
 	}
 	ordered = append(ordered, extra...)
 	withDeleted := slices.Clone(vals)
-	for _, id := range slices.Compact(extra) {
+	for _, id := range extra {
 		if name := workspace.NameOfDeleted(log, prefix+string(id)); name != "" {
 			withDeleted = append(withDeleted, workspace.Value{ID: id, Name: name})
 		}

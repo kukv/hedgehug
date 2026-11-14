@@ -132,6 +132,29 @@ func TestShowPlan(t *testing.T) {
 	}
 }
 
+func TestShowPropertyDeletedChoice(t *testing.T) {
+	cust := workspace.Property{
+		ID: "01PROP0000000000000000000A", Key: "customer", Name: "顧客", Type: workspace.TypeMulti,
+		Kinds: []string{"Story", "Task"}, Rank: "z",
+	}
+	l := workspace.List{Kind: workspace.ListChoices, Property: cust.ID}
+	a := workspace.Value{ID: "01CHOICE00000000000000000A", Name: "A社", Color: "gray", Rank: "V"}
+	b := workspace.Value{ID: "01CHOICE00000000000000000B", Name: "B社", Color: "slate", Rank: "W"}
+	drafts := workspace.PropertyDrafts(cust)
+	drafts = append(drafts, workspace.ValueDrafts(l, a)...)
+	drafts = append(drafts, workspace.ValueDrafts(l, b)...)
+	drafts = append(drafts, change.NewDelete(l.Ref(b.ID)))
+	st, log := revertSettings(t, drafts...)
+	p, ok := st.Property(cust.ID)
+	if !ok {
+		t.Fatal("no property")
+	}
+	got := showProperty(p, json.RawMessage(`["`+string(b.ID)+`","`+string(a.ID)+`"]`), st, log, memberNames(nil), revertNow)
+	if got != "A社, B社" {
+		t.Errorf("show = %q, want %q", got, "A社, B社")
+	}
+}
+
 func TestShowProject(t *testing.T) {
 	names := memberNames([]member.Member{{Login: "hanako", Name: "花子"}})
 	tests := []struct{ f, v, want string }{
