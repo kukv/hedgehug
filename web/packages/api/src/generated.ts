@@ -1910,12 +1910,39 @@ export type SearchAssignee = {
   name: string | null;
 } | null;
 
+export interface SearchCell {
+  text: string;
+  type: string;
+}
+
+export interface SearchColumn {
+  key: string;
+  name: string;
+  sortable: boolean;
+  /** 追加プロパティの型。固定の列は空 */
+  type: string;
+}
+
 /**
  * @nullable
  */
 export type SearchDeleted = {
   /** 完全に削除されるまでの日数。0 以下なら保持日数を過ぎている */
   daysLeft: number;
+} | null;
+
+export interface SearchGroup {
+  label: string;
+  rows: number[];
+}
+
+/**
+ * @nullable
+ */
+export type SearchParent = {
+  display: string;
+  itemId: string;
+  title: string;
 } | null;
 
 /**
@@ -1925,9 +1952,26 @@ export type SearchPriority = {
   name: string;
 } | null;
 
+export interface SearchProject {
+  display: string;
+  title: string;
+}
+
+/**
+ * @nullable
+ */
+export type SearchSort = {
+  desc: boolean;
+  key: string;
+} | null;
+
 export interface SearchQuery {
+  /** テーブルの「グループ」の設定。none か空なら設定なし */
+  group?: string;
   /** クエリの文字列(04「検索」)。空なら絞り込まない */
   query: string;
+  /** 列見出しの並べ替え。あれば sort: の代わりに使う */
+  sort?: SearchSort | null;
 }
 
 /**
@@ -1938,38 +1982,74 @@ export type SearchStatus = {
   name: string;
 } | null;
 
+/**
+ * 追加プロパティの列の鍵 → 値
+ */
+export type SearchRowCustom = {[key: string]: SearchCell};
+
 export interface SearchRow {
   assignee: SearchAssignee | null;
+  /** 作成の時刻(RFC 3339) */
+  created: string;
+  /** 追加プロパティの列の鍵 → 値 */
+  custom: SearchRowCustom;
   /** 削除済みの行だけ */
   deleted: SearchDeleted | null;
   /** いまの ID(HH-12) */
   display: string;
   /** 終了日(YYYY-MM-DD)。なければ空 */
   end: string;
+  /**
+     * 見積もり時間
+     * @nullable
+     */
+  estimate: number | null;
   itemId: string;
   kind: string;
   /** 旧 ID だけで一致した(画面は「旧 ID」と添える) */
   oldIdHit: boolean;
+  parent: SearchParent | null;
   /** @nullable */
   points: number | null;
   priority: SearchPriority | null;
+  project: SearchProject;
   projectId: string;
   readOnly: boolean;
+  /** リリースの名前。なければ空 */
+  release: string;
+  /** 「(削除された値)」にする列の鍵 */
+  removed: string[];
+  /** スプリントの名前。なければ空 */
+  sprint: string;
+  /** 開始日(YYYY-MM-DD)。なければ空 */
+  start: string;
   status: SearchStatus | null;
   storeColor: string;
   storeId: string;
   storeName: string;
+  /** 関連システムの名前。一覧にない値は「(削除された値)」 */
+  systems: string[];
   title: string;
+  /** 「—」にする列の鍵 */
+  unused: string[];
+  /** 更新の時刻(RFC 3339) */
+  updated: string;
   workspaceId: string;
 }
 
 export interface SearchResult {
+  /** テーブルの列(クエリのエラーでも返す) */
+  columns: SearchColumn[];
   /** is:deleted の検索か */
   deleted: boolean;
   /** クエリのエラー(1 語 1 行) */
   errors: string[];
-  /** group: の値(グループ分けは画面が行う)。なければ空 */
+  /** group: の値(解析したもの)。使ったまとめ方は groupBy。なければ空 */
   group: string;
+  /** 使ったまとめ方。なければ空 */
+  groupBy: string;
+  /** グループ(rows の位置)。分けないときは空 */
+  groups: SearchGroup[];
   /** キーのある語が 1 つ以上あるか */
   hasKey: boolean;
   rows: SearchRow[];

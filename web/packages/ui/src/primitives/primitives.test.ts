@@ -24,6 +24,13 @@ describe("Button", () => {
     expect(button).toHaveAttribute("title", "閲覧のみの Store です");
   });
 
+  it("calls onpointerdown", async () => {
+    const onpointerdown = vi.fn();
+    render(Button, { props: { onpointerdown, children: text("表示する列") } });
+    await fireEvent.pointerDown(screen.getByRole("button", { name: "表示する列" }));
+    expect(onpointerdown).toHaveBeenCalledOnce();
+  });
+
   it("reports a pressed state only when given one", () => {
     render(Button, { props: { pressed: true, children: text("ウォッチ中") } });
     render(Button, { props: { children: text("ほか") } });

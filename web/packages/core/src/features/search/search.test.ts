@@ -1,57 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ScreenStatesPort, SearchPort } from "../../port/search";
 import { get } from "../../reactive/store";
-import { createScreenStates } from "../screenstate/screenStates";
-import { createToasts, type Timer } from "../toasts/toasts";
-import { createSearch } from "./search";
+import { kindBugBody, newBody, noTable, result, setup } from "./fixtures.test-util";
 import type { SearchResult } from "./types";
-
-// core の lib は ES2023 だけで setTimeout の型がないため、ここで宣言する。
-declare function setTimeout(fn: () => void, ms: number): unknown;
-declare function clearTimeout(handle: unknown): void;
-
-const timer: Timer = {
-  set: (fn, ms) => setTimeout(fn, ms),
-  clear: (h) => clearTimeout(h),
-};
-
-const result = (...ids: string[]): SearchResult => ({
-  errors: [],
-  hasKey: true,
-  group: "",
-  deleted: false,
-  rows: ids.map((id) => ({
-    storeId: "s1",
-    storeName: "main",
-    storeColor: "#000",
-    workspaceId: "w1",
-    projectId: "p1",
-    itemId: id,
-    display: id,
-    title: id,
-    kind: "task",
-    status: null,
-    assignee: null,
-    priority: null,
-    end: "",
-    points: null,
-    oldIdHit: false,
-    readOnly: false,
-    deleted: null,
-  })),
-});
-
-function setup(saved: string | null = null) {
-  const search = vi.fn(async (q: string) => result(q));
-  const port: SearchPort = { search };
-  const sp: ScreenStatesPort = {
-    get: vi.fn(async () => saved),
-    put: vi.fn(async () => {}),
-  };
-  const toasts = createToasts(timer);
-  const s = createSearch({ port, screenStates: createScreenStates(sp), timer, toasts });
-  return { s, search, sp, toasts };
-}
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -67,7 +17,7 @@ describe("createSearch (E1-19)", () => {
     expect(t.search).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(t.search).toHaveBeenCalledTimes(1);
-    expect(t.search).toHaveBeenCalledWith("abc");
+    expect(t.search).toHaveBeenCalledWith("abc", noTable);
     expect(get(t.s.state).result?.rows[0]?.itemId).toBe("abc");
     expect(get(t.s.state).loading).toBe(false);
   });
@@ -76,7 +26,7 @@ describe("createSearch (E1-19)", () => {
     const t = setup();
     t.s.setQuery("kind:bug");
     await vi.advanceTimersByTimeAsync(0);
-    expect(t.sp.put).toHaveBeenCalledWith("search", '{"query":"kind:bug"}');
+    expect(t.sp.put).toHaveBeenCalledWith("search", kindBugBody);
   });
 
   it("drops a slow old answer that comes after a newer one", async () => {
@@ -100,7 +50,7 @@ describe("createSearch (E1-19)", () => {
   it("open searches with the saved query", async () => {
     const t = setup('{"query":"status:done"}');
     await t.s.open();
-    expect(t.search).toHaveBeenCalledWith("status:done");
+    expect(t.search).toHaveBeenCalledWith("status:done", noTable);
     expect(get(t.s.state)).toMatchObject({ query: "status:done", loading: false });
     expect(get(t.s.state).result).not.toBeNull();
   });
@@ -108,7 +58,7 @@ describe("createSearch (E1-19)", () => {
   it("open with nothing saved searches with an empty query", async () => {
     const t = setup();
     await t.s.open();
-    expect(t.search).toHaveBeenCalledWith("");
+    expect(t.search).toHaveBeenCalledWith("", noTable);
   });
 
   it("replaceQuery searches at once and cancels a waiting search", async () => {
@@ -116,11 +66,11 @@ describe("createSearch (E1-19)", () => {
     t.s.setQuery("old");
     await t.s.replaceQuery("new");
     expect(t.search).toHaveBeenCalledTimes(1);
-    expect(t.search).toHaveBeenCalledWith("new");
+    expect(t.search).toHaveBeenCalledWith("new", noTable);
     expect(get(t.s.state).query).toBe("new");
     await vi.advanceTimersByTimeAsync(500);
     expect(t.search).toHaveBeenCalledTimes(1);
-    expect(t.sp.put).toHaveBeenLastCalledWith("search", '{"query":"new"}');
+    expect(t.sp.put).toHaveBeenLastCalledWith("search", newBody);
   });
 
   it("prepareQuery writes the query without searching, and the next open searches it once", async () => {
@@ -130,10 +80,10 @@ describe("createSearch (E1-19)", () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(t.search).not.toHaveBeenCalled();
     expect(get(t.s.state).query).toBe("kind:bug");
-    expect(t.sp.put).toHaveBeenLastCalledWith("search", '{"query":"kind:bug"}');
+    expect(t.sp.put).toHaveBeenLastCalledWith("search", kindBugBody);
     await t.s.open();
     expect(t.search).toHaveBeenCalledTimes(1);
-    expect(t.search).toHaveBeenCalledWith("kind:bug");
+    expect(t.search).toHaveBeenCalledWith("kind:bug", noTable);
   });
 
   it("reload searches again with the current query and keeps the rows on a failure", async () => {
@@ -171,7 +121,7 @@ describe("createSearch (E1-19)", () => {
     await vi.advanceTimersByTimeAsync(150);
     expect(get(t.s.state).query).toBe("typed");
     expect(t.search).toHaveBeenCalledTimes(1);
-    expect(t.search).toHaveBeenCalledWith("typed");
+    expect(t.search).toHaveBeenCalledWith("typed", noTable);
   });
 
   it("keeps a query set by replaceQuery while open is still reading", async () => {
@@ -180,13 +130,13 @@ describe("createSearch (E1-19)", () => {
     const replacing = t.s.replaceQuery("palette");
     await Promise.all([opening, replacing]);
     expect(get(t.s.state).query).toBe("palette");
-    expect(t.search).not.toHaveBeenCalledWith("saved");
+    expect(t.search).not.toHaveBeenCalledWith("saved", noTable);
   });
 
   it("opens with an empty query when the saved body is JSON null", async () => {
     const t = setup("null");
     await t.s.open();
-    expect(t.search).toHaveBeenCalledWith("");
+    expect(t.search).toHaveBeenCalledWith("", noTable);
   });
 
   it("shows the error as a toast and keeps the previous rows when a search fails", async () => {

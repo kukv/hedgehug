@@ -9,6 +9,8 @@
     title?: string;
     pressed?: boolean;
     onclick?: (event: MouseEvent) => void;
+    // onpointerdown は、メニューを開くボタンが、押した時点でメニューが開いていたかを覚えるため。
+    onpointerdown?: (event: PointerEvent) => void;
     children: Snippet;
   }
 
@@ -20,6 +22,7 @@
     title,
     pressed,
     onclick,
+    onpointerdown,
     children,
   }: Props = $props();
 
@@ -36,6 +39,7 @@
   {title}
   aria-pressed={pressed}
   onclick={guarded}
+  {onpointerdown}
 >
   {@render children()}
 </button>

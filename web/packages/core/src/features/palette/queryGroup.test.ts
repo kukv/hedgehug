@@ -24,6 +24,58 @@ describe("このクエリで(E1-21)", () => {
     expect(get(palette.state)).toBeNull();
   });
 
+  test("「検索で開く」の次に「{N} 件をまとめて変更…」を出す。選ぶと閉じて bulkChangeAll", async () => {
+    const { palette, calls, timer } = await setup({ search: async () => found(3) });
+    await palette.open();
+    palette.input("kind:bug");
+    timer.fire();
+    await flush();
+    expect(labels(palette).slice(0, 3)).toEqual([
+      "# このクエリで",
+      "検索で開く",
+      "3 件をまとめて変更…",
+    ]);
+    await pick(palette, "3 件をまとめて変更…");
+    expect(named(calls, "bulkChangeAll")).toEqual([
+      { name: "bulkChangeAll", args: ["kind:bug"], open: false },
+    ]);
+    expect(get(palette.state)).toBeNull();
+  });
+
+  test.each([
+    ["0 件", () => found(0), "0 件をまとめて変更…", "一致するアイテムがありません"],
+    [
+      "すべて閲覧のみ",
+      () => {
+        const r = found(2);
+        return { ...r, rows: r.rows.map(() => ({ readOnly: true }) as (typeof r.rows)[number]) };
+      },
+      "2 件をまとめて変更…",
+      "閲覧のみの Store です",
+    ],
+    [
+      "is:deleted",
+      () => ({ ...found(2), deleted: true }),
+      "2 件をまとめて変更…",
+      "削除済みのアイテムは変更できません",
+    ],
+    [
+      "is:deleted の 0 件",
+      () => ({ ...found(0), deleted: true }),
+      "0 件をまとめて変更…",
+      "削除済みのアイテムは変更できません",
+    ],
+  ])("まとめて変更は %s のとき無効にして理由を添える", async (_n, result, label, reason) => {
+    const { palette, timer } = await setup({ search: async () => result() });
+    await palette.open();
+    palette.input("kind:bug");
+    timer.fire();
+    await flush();
+    expect(labels(palette)).toContain(`x ${label}`);
+    const row = get(palette.state)?.rows.find((r) => r.kind === "candidate" && r.c.label === label);
+    expect(row?.kind === "candidate" && row.c.reason).toBe(reason);
+  });
+
   test("キーの形の語がなければ、待たずサーバーにも聞かない", async () => {
     const { palette, timer, searched } = await setup({ search: async () => found(1) });
     await palette.open();
@@ -111,7 +163,9 @@ describe("このクエリで(E1-21)", () => {
     await without.palette.open();
     without.palette.input("todo:認証");
     expect(
-      labels(withGroup.palette).filter((l) => l !== "# このクエリで" && l !== "検索で開く"),
+      labels(withGroup.palette).filter(
+        (l) => l !== "# このクエリで" && l !== "検索で開く" && !l.endsWith("件をまとめて変更…"),
+      ),
     ).toEqual(labels(without.palette));
   });
 });

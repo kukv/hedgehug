@@ -426,7 +426,7 @@ git commit -m "test(e2e): バックログの選択と一括削除を通しで確
 
 ## E に求めること
 
-- 検索のテーブルの行の先頭のチェックは ui の `RowCheck`(`label` は「{ID} を選択」、`checked` は `isSelected`、`onchange` で `toggle`。バックログの行と同じ)を使う。見出しの「すべて選択」(04 の 717 行)は E で決める。どちらも `createRowSelection` でつなぎ、テーブルの読み直しのたびに `prune`(並べ替えたあとの順、同じアイテムは 1 回)、画面を離れたら `clear`。
-- テーブルの上に `SelectionBar`(`text` は `selectedText`、すべて閲覧のみのときだけ `readOnlyNote` に core の `readOnlyNote` を渡す)と、一括削除は `bulkDelete.open(selection, 読み直し)`。複数の Store の保持日数と閲覧のみの数え方はサーバー(F2b1-10)が返す。
-- パレットの `selection.provide(2, …)` をテーブルにも登録する(ちょうど 1 件のとき)。「{N} 件をまとめて変更…」は F2b2 の一括変更のダイアログを開く。
-- 一括変更のダイアログは `bulkChange.open(selection, { after: 読み直し })` で開く(検索のテーブルの `SelectionBar` の `onchange` から)。
+- 検索のテーブルの行の先頭のチェックは ui の `RowCheck`(`label` は「{ID} を選択」、`checked` は `isSelected`、`onchange` で `toggle`。バックログの行と同じ)を使う。見出しの「すべて選択」(04 の 717 行)は E で決める。どちらも `createRowSelection` でつなぎ、テーブルの読み直しのたびに `prune`(並べ替えたあとの順、同じアイテムは 1 回)、画面を離れたら `clear`。(E2a で足した)
+- テーブルの上に `SelectionBar`(`text` は `selectedText`、すべて閲覧のみのときだけ `readOnlyNote` に core の `readOnlyNote` を渡す)と、一括削除は `bulkDelete.open(selection, 読み直し)`。複数の Store の保持日数と閲覧のみの数え方はサーバー(F2b1-10)が返す。(E2a で足した)
+- パレットの `selection.provide(2, …)` をテーブルにも登録する(ちょうど 1 件のとき)。「{N} 件をまとめて変更…」は F2b2 の一括変更のダイアログを開く。(E2a で足した)
+- 一括変更のダイアログは `bulkChange.open(selection, { after: 読み直し })` で開く(検索のテーブルの `SelectionBar` の `onchange` から)。(E2a で足した)

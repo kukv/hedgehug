@@ -10,7 +10,11 @@ export {
   filterCandidates,
 } from "./features/search/candidates";
 export { type CaretTerm, caretTerm } from "./features/search/caret";
+export { type CellView, cellView, updatedHint } from "./features/search/cells";
+export { type ChangeAllDeps, createChangeAll } from "./features/search/changeAll";
 export { searchHelp } from "./features/search/help";
+export { rowMenuContext } from "./features/search/rowMenu";
+export { type RowStatusDeps, setRowStatus } from "./features/search/rowStatus";
 export {
   createSearch,
   type Search,
@@ -19,13 +23,29 @@ export {
   searchScreen,
   searchWaitMs,
 } from "./features/search/search";
+export {
+  columnChoices,
+  defaultTable,
+  groupChoices,
+  headerCheck,
+  nextSort,
+  readTable,
+  selectable,
+  shownColumns,
+  type TableSettings,
+  tableRequest,
+  toggleColumn,
+} from "./features/search/table";
 export type {
   SearchAssignee,
+  SearchColumn,
   SearchDeleted,
+  SearchGroup,
   SearchPriority,
   SearchResult,
   SearchRow,
   SearchStatus,
+  SearchTableRequest,
 } from "./features/search/types";
 export {
   assigneeText,

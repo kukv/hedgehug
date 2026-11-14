@@ -85,6 +85,9 @@ export const noKey: SearchResult = {
   group: "",
   deleted: false,
   rows: [],
+  columns: [],
+  groupBy: "",
+  groups: [],
 };
 export function found(n: number): SearchResult {
   const row = {} as SearchResult["rows"][number];
@@ -197,7 +200,11 @@ export async function setup(o: Opts = {}) {
         return (o.search ?? (async () => noKey))(q);
       },
     },
-    openSearch: async (...a) => rec("openSearch")(...a),
+    openSearch: async (...a) => {
+      rec("openSearch")(...a);
+      return true;
+    },
+    bulkChangeAll: async (...a) => rec("bulkChangeAll")(...a),
   });
   return { palette, calls, toasts, route, planRequest, catalog, timer, searched };
 }

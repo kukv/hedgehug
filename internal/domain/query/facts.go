@@ -28,6 +28,7 @@ type Facts struct {
 	Project        Ref
 	ProjectTitle   string
 	Parent         *Ref
+	ParentTitle    string
 	Ancestors      []Ref
 	// Relations は、関連のキー(blocks・blocked_by・relates_to など)→ 相手。削除済みの相手を除く。
 	// relates_to は向きがないので、作る側が両方向を入れる。

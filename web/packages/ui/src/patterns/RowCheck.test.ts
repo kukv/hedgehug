@@ -21,4 +21,13 @@ describe("RowCheck", () => {
     await fireEvent.click(box);
     expect(onchange).toHaveBeenCalledWith(false);
   });
+
+  it("does not call onchange when disabled", async () => {
+    const onchange = vi.fn();
+    render(RowCheck, { props: { label: "HH-4 を選択", checked: false, disabled: true, onchange } });
+    const box = screen.getByRole("checkbox", { name: "HH-4 を選択" });
+    expect(box).toBeDisabled();
+    await fireEvent.click(box);
+    expect(onchange).not.toHaveBeenCalled();
+  });
 });

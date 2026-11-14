@@ -1,6 +1,6 @@
 import type { Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { prefixOf, sidebar, tokenUrl } from "./helpers";
+import { prefixOf, resetSearchScreen, sidebar, tokenUrl } from "./helpers";
 
 // 検索の画面の通しのテスト(E1。04「検索」)。Store の変更は API で作り、作ったアイテムのタイトルに
 // テストごとの印を入れて、サンプルや同じサーバーを使うほかのテストの件数に頼らない。
@@ -59,6 +59,8 @@ async function seed(page: Page, info: TestInfo) {
 }
 
 async function openSearch(page: Page, info: TestInfo) {
+  // テーブルの設定は画面の状態に残るので、ほかのテスト(search-table.spec.ts)が変えた列やグループを戻してから開く。
+  await resetSearchScreen(page.request);
   await page.goto(tokenUrl());
   const side = await sidebar(page, info);
   // 開いたときの、保存した絞り込みの読み込みを待ってから打つ(テストの手順を決まった順にする)。
@@ -227,5 +229,7 @@ test("shows the read-only band for an item of a read-only store", async ({ page 
     ),
   ).toBeVisible();
   await expect(page.getByText("1 件", { exact: true })).toBeVisible();
-  await expect(page.getByRole("row", { name: /^readonly HH-2 ログイン画面を作る/ })).toBeVisible();
+  await expect(
+    page.getByRole("row", { name: /^HH-2 を選択 readonly HH-2 ログイン画面を作る/ }),
+  ).toBeVisible();
 });

@@ -17,7 +17,7 @@ import (
 
 func searchOf(t *testing.T, f fixture, text string) Result {
 	t.Helper()
-	res, err := f.svc.Search(t.Context(), text)
+	res, err := f.svc.Search(t.Context(), text, TableOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

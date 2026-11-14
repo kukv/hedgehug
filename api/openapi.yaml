@@ -2846,6 +2846,35 @@ components:
         - login
         - name
       type: object
+    SearchCell:
+      additionalProperties: false
+      properties:
+        text:
+          type: string
+        type:
+          type: string
+      required:
+        - text
+        - type
+      type: object
+    SearchColumn:
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        sortable:
+          type: boolean
+        type:
+          description: 追加プロパティの型。固定の列は空
+          type: string
+      required:
+        - key
+        - name
+        - type
+        - sortable
+      type: object
     SearchDeleted:
       additionalProperties: false
       nullable: true
@@ -2857,6 +2886,35 @@ components:
       required:
         - daysLeft
       type: object
+    SearchGroup:
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+        rows:
+          items:
+            format: int64
+            type: integer
+          type: array
+      required:
+        - label
+        - rows
+      type: object
+    SearchParent:
+      additionalProperties: false
+      nullable: true
+      properties:
+        display:
+          type: string
+        itemId:
+          type: string
+        title:
+          type: string
+      required:
+        - itemId
+        - display
+        - title
+      type: object
     SearchPriority:
       additionalProperties: false
       nullable: true
@@ -2866,18 +2924,40 @@ components:
       required:
         - name
       type: object
+    SearchProject:
+      additionalProperties: false
+      properties:
+        display:
+          type: string
+        title:
+          type: string
+      required:
+        - display
+        - title
+      type: object
     SearchQuery:
       additionalProperties: false
       properties:
+        group:
+          description: テーブルの「グループ」の設定。none か空なら設定なし
+          type: string
         query:
           description: クエリの文字列(04「検索」)。空なら絞り込まない
           type: string
+        sort:
+          $ref: "#/components/schemas/SearchSort"
+          description: "列見出しの並べ替え。あれば sort: の代わりに使う"
       required:
         - query
       type: object
     SearchResult:
       additionalProperties: false
       properties:
+        columns:
+          description: テーブルの列(クエリのエラーでも返す)
+          items:
+            $ref: "#/components/schemas/SearchColumn"
+          type: array
         deleted:
           description: is:deleted の検索か
           type: boolean
@@ -2887,8 +2967,16 @@ components:
             type: string
           type: array
         group:
-          description: "group: の値(グループ分けは画面が行う)。なければ空"
+          description: "group: の値(解析したもの)。使ったまとめ方は groupBy。なければ空"
           type: string
+        groupBy:
+          description: 使ったまとめ方。なければ空
+          type: string
+        groups:
+          description: グループ(rows の位置)。分けないときは空
+          items:
+            $ref: "#/components/schemas/SearchGroup"
+          type: array
         hasKey:
           description: キーのある語が 1 つ以上あるか
           type: boolean
@@ -2902,12 +2990,23 @@ components:
         - group
         - deleted
         - rows
+        - columns
+        - groupBy
+        - groups
       type: object
     SearchRow:
       additionalProperties: false
       properties:
         assignee:
           $ref: "#/components/schemas/SearchAssignee"
+        created:
+          description: 作成の時刻(RFC 3339)
+          type: string
+        custom:
+          additionalProperties:
+            $ref: "#/components/schemas/SearchCell"
+          description: 追加プロパティの列の鍵 → 値
+          type: object
         deleted:
           $ref: "#/components/schemas/SearchDeleted"
           description: 削除済みの行だけ
@@ -2917,6 +3016,11 @@ components:
         end:
           description: 終了日(YYYY-MM-DD)。なければ空
           type: string
+        estimate:
+          description: 見積もり時間
+          format: double
+          nullable: true
+          type: number
         itemId:
           type: string
         kind:
@@ -2924,16 +3028,34 @@ components:
         oldIdHit:
           description: 旧 ID だけで一致した(画面は「旧 ID」と添える)
           type: boolean
+        parent:
+          $ref: "#/components/schemas/SearchParent"
         points:
           format: double
           nullable: true
           type: number
         priority:
           $ref: "#/components/schemas/SearchPriority"
+        project:
+          $ref: "#/components/schemas/SearchProject"
         projectId:
           type: string
         readOnly:
           type: boolean
+        release:
+          description: リリースの名前。なければ空
+          type: string
+        removed:
+          description: 「(削除された値)」にする列の鍵
+          items:
+            type: string
+          type: array
+        sprint:
+          description: スプリントの名前。なければ空
+          type: string
+        start:
+          description: 開始日(YYYY-MM-DD)。なければ空
+          type: string
         status:
           $ref: "#/components/schemas/SearchStatus"
         storeColor:
@@ -2942,7 +3064,20 @@ components:
           type: string
         storeName:
           type: string
+        systems:
+          description: 関連システムの名前。一覧にない値は「(削除された値)」
+          items:
+            type: string
+          type: array
         title:
+          type: string
+        unused:
+          description: 「—」にする列の鍵
+          items:
+            type: string
+          type: array
+        updated:
+          description: 更新の時刻(RFC 3339)
           type: string
         workspaceId:
           type: string
@@ -2964,6 +3099,30 @@ components:
         - end
         - points
         - deleted
+        - start
+        - estimate
+        - systems
+        - sprint
+        - release
+        - project
+        - parent
+        - created
+        - updated
+        - unused
+        - removed
+        - custom
+      type: object
+    SearchSort:
+      additionalProperties: false
+      nullable: true
+      properties:
+        desc:
+          type: boolean
+        key:
+          type: string
+      required:
+        - key
+        - desc
       type: object
     SearchStatus:
       additionalProperties: false

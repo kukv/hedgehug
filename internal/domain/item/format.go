@@ -39,7 +39,7 @@ func Display(p workspace.Property, v json.RawMessage, st workspace.Settings, nam
 	case workspace.TypeUser:
 		return names(str(v))
 	case workspace.TypeDate:
-		return dateText(str(v), today)
+		return DateText(str(v), today)
 	case workspace.TypeCheck:
 		var b bool
 		_ = json.Unmarshal(v, &b)
@@ -88,8 +88,8 @@ func joinNames(vs []workspace.Value, v json.RawMessage) string {
 	return strings.Join(names, ", ")
 }
 
-// dateText は、01「日付と時刻」の表示(今年なら M/D、ほかの年は YYYY/MM/DD)。
-func dateText(s string, today time.Time) string {
+// DateText は、01「日付と時刻」の表示(今年なら M/D、ほかの年は YYYY/MM/DD)。
+func DateText(s string, today time.Time) string {
 	d, err := time.Parse(time.DateOnly, s)
 	if err != nil {
 		return s

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func newAPIWithStores(t *testing.T) (humatest.TestAPI, *apptest.Stores) {
 	bug := item.Item{
 		ID: bugID, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 3},
 		Kind: item.Bug, Rank: "V", Title: "落ちる", Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium,
-		Assignee: "hanako", End: "2026-11-30",
+		Assignee: "hanako", End: "2026-11-30", Start: "2026-11-20", Systems: []change.ID{apptest.SampleSystemWeb},
 	}
 	ghost := item.Item{
 		ID: ghostID, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 4},
@@ -215,5 +216,100 @@ func TestScreenStateAPI(t *testing.T) {
 	}
 	if res := api.Put("/api/screen-states/search", map[string]string{"body": strings.Repeat("a", 64*1024)}); res.Code != 204 {
 		t.Errorf("65536 bytes: %d", res.Code)
+	}
+}
+
+type tableBody struct {
+	GroupBy string
+	Columns []struct {
+		Key, Name, Type string
+		Sortable        bool
+	}
+	Groups []struct {
+		Label string
+		Rows  []int
+	}
+	Rows []struct {
+		Kind, Title, Start, Created, Updated string
+		Systems, Unused, Removed             []string
+		Estimate                             *float64
+		Sprint, Release                      string
+		Project                              struct{ Display, Title string }
+		Parent                               *struct{ ItemID, Display, Title string }
+		Custom                               map[string]struct{ Text, Type string }
+	}
+}
+
+func tableOf(t *testing.T, api humatest.TestAPI, body any) (tableBody, string) {
+	t.Helper()
+	res := api.Post("/api/search", body)
+	var got tableBody
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil {
+		t.Fatalf("%d %s", res.Code, res.Body)
+	}
+	return got, res.Body.String()
+}
+
+func TestSearchAPITable(t *testing.T) {
+	got, _ := tableOf(t, newAPI(t), map[string]any{"query": "", "sort": map[string]any{"key": "title", "desc": true}, "group": "kind"})
+	if got.GroupBy != "kind" || len(got.Groups) == 0 {
+		t.Fatalf("groupBy=%q groups=%+v", got.GroupBy, got.Groups)
+	}
+	for _, g := range got.Groups {
+		for _, i := range g.Rows {
+			if got.Rows[i].Kind != g.Label {
+				t.Errorf("group %q の行 %d は %q", g.Label, i, got.Rows[i].Kind)
+			}
+		}
+	}
+	if len(got.Columns) < 3 {
+		t.Fatalf("columns = %+v", got.Columns)
+	}
+	for i, k := range []string{"id", "kind", "title"} {
+		if got.Columns[i].Key != k {
+			t.Errorf("columns[%d] = %q, want %q", i, got.Columns[i].Key, k)
+		}
+	}
+}
+
+// 列見出しの並べ替えはタイトルの降順で並べる。sort が null の本文も通る。
+func TestSearchAPISort(t *testing.T) {
+	got, _ := tableOf(t, newAPI(t), map[string]any{"query": "", "sort": map[string]any{"key": "title", "desc": true}})
+	titles := make([]string, 0, len(got.Rows))
+	for _, r := range got.Rows {
+		titles = append(titles, r.Title)
+	}
+	if len(titles) < 2 || !slices.IsSortedFunc(titles, func(a, b string) int { return strings.Compare(b, a) }) {
+		t.Errorf("タイトルの降順でない: %v", titles)
+	}
+	if got, _ := tableOf(t, newAPI(t), map[string]any{"query": "", "sort": nil}); len(got.Rows) == 0 {
+		t.Error("sort が null で行がない")
+	}
+}
+
+func TestSearchAPIRowValues(t *testing.T) {
+	got, _ := tableOf(t, newAPI(t), map[string]string{"query": "kind:bug"})
+	if len(got.Rows) != 1 {
+		t.Fatalf("rows = %d", len(got.Rows))
+	}
+	r := got.Rows[0]
+	if r.Start != "2026-11-20" || len(r.Systems) != 1 || r.Systems[0] != "Web" || r.Created == "" || r.Updated == "" || r.Project.Display == "" || r.Project.Title != "ログイン" {
+		t.Errorf("bug = %+v", r)
+	}
+	if _, err := time.Parse(time.RFC3339, r.Created); err != nil {
+		t.Errorf("created = %q", r.Created)
+	}
+	got, _ = tableOf(t, newAPI(t), map[string]string{"query": "kind:task"})
+	p := got.Rows[0].Parent
+	if p == nil || p.Display != "HH-1" || p.Title != "認証" || p.ItemID != string(apptest.SampleEpic) {
+		t.Errorf("parent = %+v", p)
+	}
+}
+
+// E1 の本文のままでも通る。グループは空の配列、groupBy は空。
+func TestSearchAPIWithoutTable(t *testing.T) {
+	_, raw := tableOf(t, newAPI(t), map[string]string{"query": "kind:bug"})
+	if !strings.Contains(raw, `"groups":[]`) || !strings.Contains(raw, `"groupBy":""`) || !strings.Contains(raw, `"columns":[`) {
+		t.Errorf("raw: %s", raw)
 	}
 }

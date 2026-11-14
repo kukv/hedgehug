@@ -76,6 +76,28 @@ describe("rowSelection", () => {
     expect(runs).toBe(3);
   });
 
+  it("set replaces the selection and notifies once", () => {
+    const sel = createRowSelection();
+    let runs = 0;
+    sel.rows.subscribe(() => {
+      runs += 1;
+    });
+    runs = 0;
+    sel.set([row("s1", "a"), row("s1", "b"), row("s1", "c")]);
+    expect(get(sel.rows)).toHaveLength(3);
+    expect(runs).toBe(1);
+    sel.set([row("s1", "a"), row("s1", "b"), row("s1", "c")]);
+    expect(runs).toBe(1);
+    sel.set([]);
+    expect(get(sel.rows)).toEqual([]);
+  });
+
+  it("set keeps one row for duplicates", () => {
+    const sel = createRowSelection();
+    sel.set([row("s1", "a"), row("s1", "a")]);
+    expect(get(sel.rows)).toHaveLength(1);
+  });
+
   it("texts", () => {
     expect(selectedText(3)).toBe("3 件を選択中");
     expect(allReadOnly([])).toBe(false);

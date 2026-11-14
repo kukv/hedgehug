@@ -22,6 +22,18 @@ function row(storeName: string, readOnly: boolean): SearchRow {
     oldIdHit: false,
     readOnly,
     deleted: null,
+    start: "",
+    estimate: null,
+    systems: [],
+    sprint: "",
+    release: "",
+    project: { display: "HH-P1", title: "p" },
+    parent: null,
+    created: "",
+    updated: "",
+    unused: [],
+    removed: [],
+    custom: {},
   };
 }
 
