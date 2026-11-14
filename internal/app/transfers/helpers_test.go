@@ -270,15 +270,16 @@ func addRelation(t *testing.T, s port.Stores, from, to item.ID, typ string) {
 	})
 }
 
-// newBarrier は、n 回目に呼ばれるまで、呼んだものをすべて待たせる。そろったあとの呼び出しは待たない(1 回きり)。
-func newBarrier(n int) func(port.StoreID) {
+// newBarrier は、2 回目に呼ばれるまで、呼んだものをすべて待たせる(向きの逆の 2 つの移動を揃える)。そろったあとの呼び出しは
+// 待たない(1 回きり)。
+func newBarrier() func(port.StoreID) {
 	var mu sync.Mutex
 	arrived := 0
 	all := make(chan struct{})
 	return func(port.StoreID) {
 		mu.Lock()
 		arrived++
-		if arrived == n {
+		if arrived == 2 {
 			close(all)
 		}
 		mu.Unlock()

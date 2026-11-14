@@ -296,7 +296,7 @@ func TestMoveProjectRevivesDeletedElsewhere(t *testing.T) {
 }
 
 // 移動元が閲覧のみなら断る。移動先が同じワークスペース・削除済みのワークスペース・閲覧のみの Store なら ErrNotFound、表示中でない
-// Store なら ErrStoreNotFound。別の Store は Task 6 まで ErrUnsupported。どれも何も保存しない。
+// Store なら ErrStoreNotFound。どれも何も保存しない。
 func TestMoveProjectRefusals(t *testing.T) {
 	f := newFixture(t)
 	const oldWS workspace.ID = "01TESTWS000000000000000005"
@@ -314,7 +314,6 @@ func TestMoveProjectRefusals(t *testing.T) {
 		{"ないワークスペース", projectTo(store1, "01TESTWS000000000000000099"), port.ErrNotFound},
 		{"閲覧のみの Store", projectTo(store3, archiveWS), port.ErrNotFound},
 		{"表示中でない Store", projectTo("S9", mobileWS), port.ErrStoreNotFound},
-		{"別の Store", projectTo(store2, teamWS), errors.ErrUnsupported},
 	}
 	before := len(f.rec.summaries())
 	for _, c := range cases {

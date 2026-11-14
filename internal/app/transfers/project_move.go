@@ -30,7 +30,7 @@ type ProjectMoved struct {
 
 // MoveProject は、プロジェクト id を、すべてのアイテム(削除済みを含む)ごと別のワークスペースへ移す(02「名前の変更・移動・削除」
 // の **移動**)。同じ Store の中は 1 回の保存で、プロジェクトとアイテムの番号を振り直し、値を引き直し、プロジェクト別のルールと
-// 専用ルールを移動先へ引き継ぎ、転送記録を残す(A5b-11)。自動化は動かさない(03「自動化」)。移動元の Store が閲覧のみなら
+// 専用ルールを移動先へ引き継ぎ、転送記録を残す(A5b-11)。別の Store へは moveProjectAcross(A5b-12)。自動化は動かさない(03「自動化」)。移動元の Store が閲覧のみなら
 // 「閲覧のみの Store です」、移動先に同じ名前のプロジェクト・ルールがあれば断る(A5b-9)。移動先の Store が表示中でないなら
 // port.ErrStoreNotFound、閲覧のみ・自分のワークスペース・削除済みのワークスペースなら port.ErrNotFound。
 func (s Service) MoveProject(ctx context.Context, store port.StoreID, id project.ID, in ProjectMoveInput) (ProjectMoved, error) {
@@ -45,7 +45,7 @@ func (s Service) MoveProject(ctx context.Context, store port.StoreID, id project
 		return ProjectMoved{}, err
 	}
 	if in.ToStore != store {
-		return ProjectMoved{}, errors.ErrUnsupported // 別の Store への移動は Task 6 で足す
+		return s.moveProjectAcross(ctx, store, id, in)
 	}
 	// 断るものはここでも断る(断る移動のアクティビティの文を作らない)。保存の中でも読み直して断る。
 	var summary string

@@ -127,7 +127,7 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 	add, people := transfer.People(m.src.settings, m.src.items(), m.src.logList(), nil, m.src.members, toMembers)
 	numbers := transfer.Number(root, m.src.set.Below, dst.next)
 	remaps := map[item.ID]transfer.RemapResult{}
-	errs := []error{m.join(tx, add)}
+	errs := []error{join(tx, add)}
 	for _, it := range m.src.items() {
 		remaps[it.ID] = transfer.Remap(it, m.src.settings, dst.settings, dst.rules, people, m.in.StatusChoices)
 		lines := placeLines(it, it.ID == root.ID, dst, m.in.ToParent, numbers[it.ID], newRank)
@@ -152,7 +152,7 @@ func (m *crossMove) reviveItem(tx port.Tx, id item.ID) error {
 }
 
 // join は、移動先のメンバーに add を足す。表示名がログイン名と違えば、表示名も書く。
-func (m *crossMove) join(tx port.Tx, add []member.Member) error {
+func join(tx port.Tx, add []member.Member) error {
 	var ds []change.Draft
 	for _, p := range add {
 		ds = append(ds, member.Join(p.Login))

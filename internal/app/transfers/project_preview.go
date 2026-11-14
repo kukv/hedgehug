@@ -64,11 +64,16 @@ func readProjectSource(r port.Reader, id project.ID, get func(port.Reader, proje
 	if err != nil {
 		return projectSource{}, err
 	}
-	own := slices.DeleteFunc(automation.FromLog(log), func(rl automation.Rule) bool { return rl.Scope != id })
+	rules, own := projectRulesOf(log, id)
 	return projectSource{
-		project: p, ws: ws, settings: st, set: transfer.CollectProject(id, all),
-		rules: projectrule.FromLog(log).Of(id), own: own,
+		project: p, ws: ws, settings: st, set: transfer.CollectProject(id, all), rules: rules, own: own,
 	}, nil
+}
+
+// projectRulesOf は、ワークスペースのログ log の、プロジェクト id のプロジェクト別のルールと専用ルール。
+func projectRulesOf(log []change.Record, id project.ID) (projectrule.Rules, []automation.Rule) {
+	own := slices.DeleteFunc(automation.FromLog(log), func(rl automation.Rule) bool { return rl.Scope != id })
+	return projectrule.FromLog(log).Of(id), own
 }
 
 // carry は、src のルールを移動先の設定 to へ引き継ぐ結果(transfer.CarryRules)。choice はステータスの置き換え先、
