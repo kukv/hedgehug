@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Item } from "../../model/item";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
@@ -8,7 +9,7 @@ import { createDetail } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 import { fakeWorkspaces } from "./settings.test-util";
 
-async function setup() {
+async function setup(onPropertySaved?: (storeId: string, item: Item) => void) {
   const catalogPort = fakeCatalogPort();
   const catalog = createCatalog(catalogPort);
   await catalog.load();
@@ -34,6 +35,7 @@ async function setup() {
     workspaces,
     catalogPort,
     onChanged: () => void changed++,
+    onPropertySaved,
   });
   return {
     detail,
@@ -129,6 +131,19 @@ describe("createDetail", () => {
     expect(await detail.setProperty(epic.id, "estimate", "7")).toBe(false);
     expect(await detail.setProperty(s1.id, "status", "st2")).toBe(true);
     expect([items.calls, get(toasts.list)]).toEqual([[`setProperty ${s1.id} status "st2"`], []]);
+  });
+
+  it("tells onPropertySaved the store and the saved item once, not on a refusal", async () => {
+    const saved: [string, Item][] = [];
+    const { detail, items, task, s1 } = await setup((storeId, item) => void saved.push([storeId, item]));
+    await detail.open("S1", task.id);
+    items.refuseNext("ポイントは 0 以上の数で入力してください");
+    await detail.setProperty(task.id, "points", "-1");
+    expect(saved).toEqual([]);
+    await detail.setProperty(s1.id, "status", "st2");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.[0]).toBe("S1");
+    expect(saved[0]?.[1].id).toBe(s1.id);
   });
 
   it("shows a refusal as an error toast", async () => {
