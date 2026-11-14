@@ -1,6 +1,19 @@
 // スプリントとリリース(05)の core の export。index.ts が全部を再公開する(index.ts の行数を抑えるため分けた)。
 
 export {
+  type Backlog,
+  type BacklogDeps,
+  type BacklogState,
+  createBacklog,
+} from "./features/planning/backlog";
+export {
+  type Drop,
+  dropPlacement,
+  goneText,
+  moveDown,
+  moveUp,
+} from "./features/planning/backlogDrop";
+export {
   asOptions,
   chosen,
   type PlanChoice,
