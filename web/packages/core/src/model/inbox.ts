@@ -66,6 +66,16 @@ export interface InboxAction {
   statusName: string;
 }
 
+// InboxOverwrite は、上書きの通知の「あなたの値 → 残った値」と「自分の値に戻す」の状態(C4c2-11)。result が空でなければ、ボタンの代わりに結果を出す。
+export interface InboxOverwrite {
+  mine: string;
+  kept: string;
+  visible: boolean;
+  enabled: boolean;
+  note: string;
+  result: "" | "applied";
+}
+
 export interface InboxRow {
   id: number;
   // at は、通知を作った時刻(RFC 3339、ナノ秒まで)。続きの印にそのまま渡す。
@@ -79,6 +89,7 @@ export interface InboxRow {
   store: InboxStore;
   target: InboxTarget;
   action?: InboxAction;
+  overwrite?: InboxOverwrite;
 }
 
 export type InboxCounts = Record<InboxTab, number>;

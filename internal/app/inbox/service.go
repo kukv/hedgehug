@@ -53,6 +53,10 @@ type Service struct {
 	Stores port.Stores
 	List   port.StoreList
 	Events port.Events
+	// Identity は、「自分の値に戻す」の保存の実行者(あなた)を引く。
+	Identity port.Identity
+	// Clock は、上書きの行の値の表示(日付の年)に使う今。
+	Clock port.Clock
 	// ApplyIgnoringWorkflow は、止まった通知の「制約を無視して…」の保存。cmd が automations.Service.ApplyIgnoringWorkflow を渡す
 	// (app の機能どうしを import しない)。
 	ApplyIgnoringWorkflow func(ctx context.Context, store port.StoreID, id item.ID, rule, from, status change.ID) error

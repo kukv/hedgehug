@@ -48,7 +48,7 @@ func setup(t *testing.T) *fixture {
 	f := &fixture{book: &apptest.Inbox{Clock: at}, events: &apptest.Events{}}
 	_, f.api = humatest.New(t)
 	inbox.Register(f.api, appinbox.Service{
-		Book: f.book, Stores: st, Events: f.events,
+		Book: f.book, Stores: st, Events: f.events, Identity: apptest.Identity{Login: "taro"}, Clock: clock,
 		List: &apptest.StoreList{Stores: []port.StoreInfo{{ID: s1, Name: "web", Color: "sky"}}},
 		ApplyIgnoringWorkflow: func(context.Context, port.StoreID, item.ID, change.ID, change.ID, change.ID) error {
 			return f.applyErr
@@ -121,6 +121,14 @@ type page struct {
 			Note         string `json:"note"`
 			Result       string `json:"result"`
 		} `json:"action"`
+		Overwrite *struct {
+			Mine    string `json:"mine"`
+			Kept    string `json:"kept"`
+			Visible bool   `json:"visible"`
+			Enabled bool   `json:"enabled"`
+			Note    string `json:"note"`
+			Result  string `json:"result"`
+		} `json:"overwrite"`
 	} `json:"rows"`
 	More   bool           `json:"more"`
 	Unread map[string]int `json:"unread"`
@@ -285,5 +293,49 @@ func TestKeep(t *testing.T) {
 	}
 	if res := f.api.Post("/api/inbox/1/keep"); res.Code != http.StatusBadRequest {
 		t.Errorf("keep not stopped: %d %s", res.Code, res.Body)
+	}
+}
+
+// overwritten は、s1 の Task HH-2 のステータスが、あなたの値 mine から kept に上書きされた通知。
+func overwritten(mine, kept change.ID) port.Notice {
+	return port.Notice{
+		Kind: port.NoticeOverwrite, Store: s1, Workspace: apptest.SampleWorkspace, Item: apptest.SampleTask,
+		Text: "上書きされました", Display: "HH-2", Field: "status", Mine: change.Value(mine), Kept: change.Value(kept),
+	}
+}
+
+func TestRevertRoute(t *testing.T) {
+	f := setup(t)
+	// Sample の HH-2 はいま Todo。残った値が Todo なので、Done に戻せる
+	f.add(t, overwritten(apptest.SampleStatusDone, apptest.SampleStatusTodo))
+	o := f.list(t, "tab=overwrite").Rows[0].Overwrite
+	if o == nil || o.Mine != "Done" || o.Kept != "Todo" || !o.Visible || !o.Enabled || o.Result != "" {
+		t.Fatalf("overwrite = %+v", o)
+	}
+	if res := f.api.Post("/api/inbox/1/revert"); res.Code != http.StatusNoContent {
+		t.Fatalf("revert: %d %s", res.Code, res.Body)
+	}
+	if r := f.row(t, 1); r.Result != port.NoticeApplied || !r.Read {
+		t.Errorf("row = %+v", r)
+	}
+	if o = f.list(t, "tab=overwrite").Rows[0].Overwrite; o == nil || o.Result != "applied" {
+		t.Errorf("overwrite = %+v", o)
+	}
+}
+
+func TestRevertRefusal(t *testing.T) {
+	f := setup(t)
+	// いまは Todo だが、残った値は Done と書いてある(先に変更された)
+	f.add(t, overwritten(apptest.SampleStatusTodo, apptest.SampleStatusDone))
+	res := f.api.Post("/api/inbox/1/revert")
+	if res.Code != http.StatusUnprocessableEntity {
+		t.Errorf("revert: %d %s", res.Code, res.Body)
+	}
+	if r := f.row(t, 1); r.Result != "" || r.Read {
+		t.Errorf("row = %+v", r)
+	}
+	f.add(t, changed("1"))
+	if res = f.api.Post("/api/inbox/2/revert"); res.Code != http.StatusBadRequest {
+		t.Errorf("revert not overwrite: %d %s", res.Code, res.Body)
 	}
 }

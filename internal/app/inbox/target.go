@@ -3,6 +3,7 @@ package inbox
 import (
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -50,8 +51,8 @@ type Action struct {
 	Result       port.NoticeResult // 空でなければ、ボタンの代わりに結果を出す
 }
 
-// resolve は、通知 n を行にする。r は n の Store の読み取り。
-func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) {
+// resolve は、通知 n を行にする。r は n の Store の読み取り、now は値の表示に使う今。
+func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow, now time.Time) (Row, error) {
 	row := Row{ID: n.ID, Kind: n.Kind, At: n.At, Read: n.Read, Text: n.Text, Reason: n.Reason, Sender: n.Sender, Store: info}
 	var it *item.Item
 	var err error
@@ -74,6 +75,11 @@ func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) 
 			return Row{}, err
 		}
 		row.Action = &a
+	}
+	if n.Kind == port.NoticeOverwrite {
+		if row.Overwrite, err = overwriteOf(r, info, n, now); err != nil {
+			return Row{}, err
+		}
 	}
 	return row, nil
 }

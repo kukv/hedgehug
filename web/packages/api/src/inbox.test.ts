@@ -65,18 +65,20 @@ describe("createInboxPort", () => {
     expect(urlOf(fetch).pathname).toBe("/api/inbox/unread");
   });
 
-  it("sends read, read-all, apply and keep", async () => {
+  it("sends read, read-all, apply, keep and revert", async () => {
     const fetch = respond(204, undefined);
     const port = createInboxPort();
     await port.setRead(3, false);
     await port.readAll("mention");
     await port.apply(4);
     await port.keep(5);
+    await port.revert(7);
     expect(fetch.mock.calls.map((c) => [String(c[0]), c[1]?.method, c[1]?.body])).toEqual([
       ["/api/inbox/3/read", "PUT", JSON.stringify({ read: false })],
       ["/api/inbox/read-all", "POST", JSON.stringify({ tab: "mention" })],
       ["/api/inbox/4/apply", "POST", undefined],
       ["/api/inbox/5/keep", "POST", undefined],
+      ["/api/inbox/7/revert", "POST", undefined],
     ]);
   });
 

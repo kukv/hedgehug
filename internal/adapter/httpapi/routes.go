@@ -149,7 +149,8 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	autoSvc := appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}
 	automations.Register(api, autoSvc)
 	inbox.Register(api, appinbox.Service{
-		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
+		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, Identity: deps.Identity, Clock: deps.Clock,
+		ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
 	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})

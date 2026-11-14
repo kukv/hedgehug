@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/inbox"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -185,4 +186,87 @@ func TestOverwriteScenarioDescription(t *testing.T) {
 			wantOverwrite(t, b, "desc", descConflict, "hanako")
 		})
 	}
+}
+
+// inboxOf は、m の受信箱と Store の上の受信箱の usecase(login を「あなた」にする)。本物の組み立て(routes.go)と同じ形。
+func inboxOf(m machine, login string) inbox.Service {
+	return inbox.Service{
+		Book: m.inbox, Stores: m.stores, Events: &apptest.Events{},
+		List:     apptest.StoreList{Stores: []port.StoreInfo{{ID: m.id, Name: "main"}}},
+		Identity: apptest.Identity{Login: login}, Clock: apptest.NewClock(scenarioStart),
+	}
+}
+
+// overwriteOf は、受信箱の上書きのタブの、通知 id の行の値とボタンの状態(行がなければ失敗)。
+func overwriteOf(t *testing.T, svc inbox.Service, id port.NoticeID) *inbox.Overwrite {
+	t.Helper()
+	page, err := svc.Page(t.Context(), inbox.TabOverwrite, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range page.Rows {
+		if r.ID == id {
+			return r.Overwrite
+		}
+	}
+	t.Fatalf("no overwrite row %d in %+v", id, page.Rows)
+	return nil
+}
+
+// A(hanako)が InProgress、B(taro)が同時に(あとの時刻で)Done にして、A に上書きの行が届く。A が「自分の値に戻す」と、
+// HH-2 は InProgress に戻り、同期で B も InProgress。戻しは新しい保存なので、B に上書きの行は出ず、A の行も増えない。
+func TestRevertOverwrite(t *testing.T) {
+	remote, a, b, _ := overwriteTrio(t, scenarioStart.Add(time.Hour))
+	setStatusAs(t, a, "hanako", apptest.SampleStatusInProgress)
+	setStatusAs(t, b, "taro", apptest.SampleStatusDone)
+	syncOrder(t, remote, true, a, b)
+	wantOverwrite(t, a, "status", statusOverwritten, "taro")
+	svc := inboxOf(a, "hanako")
+	id := a.notices(t, port.NoticeOverwrite)[0].ID
+	if o := overwriteOf(t, svc, id); o == nil || o.Mine != "InProgress" || o.Kept != "Done" || !o.Visible || !o.Enabled || o.Note != "" {
+		t.Fatalf("overwrite of the row = %+v, want InProgress → Done and enabled", o)
+	}
+	if err := svc.Revert(t.Context(), id); err != nil {
+		t.Fatal(err)
+	}
+	wantStatus(t, a, apptest.SampleStatusInProgress)
+	if o := overwriteOf(t, svc, id); o == nil || o.Result != port.NoticeApplied {
+		t.Errorf("overwrite after revert = %+v, want applied", o)
+	}
+	a.sync(t, remote)
+	b.sync(t, remote)
+	wantStatus(t, b, apptest.SampleStatusInProgress)
+	wantNoOverwrite(t, b)
+	a.sync(t, remote)
+	wantStatus(t, a, apptest.SampleStatusInProgress)
+	wantOverwrite(t, a, "status", statusOverwritten, "taro")
+}
+
+// B の時計が A より進んでいる。A が戻したあと、B が(A の戻しを受け取る前に)HH-2 をまた Cancel に変えて同期すると、
+// A の戻しはまた負け、A に 2 行目の上書きが届く。1 行目は「自分の値に戻しました」のまま(Review Focus 1)。
+func TestRevertLosesAgain(t *testing.T) {
+	remote, a, b, _ := overwriteTrio(t, scenarioStart.Add(time.Hour))
+	setStatusAs(t, a, "hanako", apptest.SampleStatusInProgress)
+	setStatusAs(t, b, "taro", apptest.SampleStatusDone)
+	syncOrder(t, remote, true, a, b)
+	svc := inboxOf(a, "hanako")
+	first := a.notices(t, port.NoticeOverwrite)[0].ID
+	if err := svc.Revert(t.Context(), first); err != nil {
+		t.Fatal(err)
+	}
+	b.writeAs(t, "taro", "ステータスを変更", setTask(change.NewSet("status", apptest.SampleStatusDone, apptest.SampleStatusCancel)))
+	syncOrder(t, remote, true, a, b)
+	wantStatus(t, a, apptest.SampleStatusCancel)
+	wantStatus(t, b, apptest.SampleStatusCancel)
+	rows := a.notices(t, port.NoticeOverwrite)
+	if len(rows) != 2 || rows[1].ID != first || rows[0].Field != "status" || rows[0].Sender != "taro" {
+		t.Fatalf("overwrite rows on A = %+v, want a second row from taro", rows)
+	}
+	if o := overwriteOf(t, svc, first); o == nil || o.Result != port.NoticeApplied {
+		t.Errorf("first row = %+v, want applied", o)
+	}
+	if o := overwriteOf(t, svc, rows[0].ID); o == nil || o.Mine != "InProgress" || o.Kept != "Cancel" || !o.Enabled || o.Result != "" {
+		t.Errorf("second row = %+v, want InProgress → Cancel and enabled", o)
+	}
+	wantNoOverwrite(t, b)
 }
