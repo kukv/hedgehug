@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -58,6 +59,17 @@ func TestWorkspacePreview(t *testing.T) {
 	if err := apptest.DeleteItems(t.Context(), f.rec, store1, gone.ID); err != nil {
 		t.Fatal(err)
 	}
+	// 削除済みのアイテムの担当者(shiro)と、削除済みのプロジェクトのオーナー(jiro)も数える(B5c-7)。
+	addMobileProject(t, f, "01TESTPR000000000000000010", 2)
+	if err := apptest.DeleteProject(t.Context(), f.rec, store1, "01TESTPR000000000000000010"); err != nil {
+		t.Fatal(err)
+	}
+	write(t, f.rec, store1, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteItems().Append(gone.ID, change.NewSet("assignee", nil, "shiro")),
+			tx.WriteProjects().Append("01TESTPR000000000000000010", change.NewSet("owner", "taro", "jiro")),
+		)
+	})
 	write(t, f.rec, store1, func(tx port.Tx) error {
 		return errors.Join(
 			tx.WriteProjects().Append(mobileProject, change.NewSet("owner", "taro", "goro")),
@@ -68,13 +80,13 @@ func TestWorkspacePreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Source != "main" || got.Destination != "team" || got.Counts != (transfer.Counts{Projects: 1, Items: 1, Deleted: 1}) {
+	if got.Source != "main" || got.Destination != "team" || got.Counts != (transfer.Counts{Projects: 1, Items: 1, Deleted: 2}) {
 		t.Errorf("preview = %+v", got)
 	}
 	if !got.RemoteNotice || got.DestinationHasRemote {
 		t.Errorf("remote = %+v", got)
 	}
-	if want := []member.Member{{Login: "goro", Name: "goro"}}; !slices.Equal(got.People, want) {
+	if want := []member.Member{{Login: "goro", Name: "goro"}, {Login: "jiro", Name: "jiro"}, {Login: "shiro", Name: "shiro"}}; !slices.Equal(got.People, want) {
 		t.Errorf("people = %+v, want %+v", got.People, want)
 	}
 }
@@ -135,4 +147,15 @@ func TestWorkspacePreviewNotFound(t *testing.T) {
 	if _, err := f.svc.WorkspacePreview(t.Context(), store1, mobileWS, store2); err != nil {
 		t.Errorf("deleted elsewhere: err = %v", err)
 	}
+	write(t, f.rec, store1, func(tx port.Tx) error { return tx.WriteWorkspaces().Remove(mobileWS) })
+	if _, err := f.svc.WorkspacePreview(t.Context(), store1, mobileWS, store2); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("purged: err = %v", err)
+	}
+}
+
+// addMobileProject は、Mobile にプロジェクト(番号 n)を足す。
+func addMobileProject(t *testing.T, f fixture, id project.ID, n int) {
+	t.Helper()
+	p := project.Project{ID: id, Place: project.Place{Workspace: mobileWS, Number: n}, Rank: "W", Title: "別", Status: project.Todo}
+	write(t, f.rec, store1, func(tx port.Tx) error { return tx.WriteProjects().Append(id, project.Create(p)) })
 }

@@ -148,12 +148,16 @@ func (s Service) WorkspacePreview(ctx context.Context, store port.StoreID, id wo
 		return WorkspacePreview{}, port.ErrNotFound
 	}
 	var src workspaceGathered
-	if err := s.Stores.Read(ctx, store, func(r port.Reader) (err error) { src, err = gatherWorkspace(r, id); return }); err != nil {
+	err := s.Stores.Read(ctx, store, func(r port.Reader) (err error) {
+		src, err = gatherWorkspace(r, id)
+		return err
+	})
+	if err != nil {
 		return WorkspacePreview{}, err
 	}
 	var live []workspace.Workspace
 	var toMembers []member.Member
-	err := s.Stores.Read(ctx, to, func(r port.Reader) (err error) {
+	err = s.Stores.Read(ctx, to, func(r port.Reader) (err error) {
 		if live, err = port.LiveWorkspaces(r); err != nil {
 			return err
 		}
