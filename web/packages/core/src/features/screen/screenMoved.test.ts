@@ -30,7 +30,7 @@ async function setup(start: string) {
     items: fakeItemsPort(),
     transfers,
     toasts: createToasts({ set: () => 0, clear: () => undefined }),
-    now: () => new Date(),
+    now: () => new Date(2026, 10, 14, 12, 0),
     openItem: () => {},
   });
   return { screen, navigation, catalog, stack, renumber, transfers };
@@ -38,7 +38,7 @@ async function setup(start: string) {
 
 const moved = {
   old: "HH-P7",
-  at: "2026-11-13T00:05:00.000Z",
+  at: new Date(2026, 10, 13, 9, 5).toISOString(),
   display: "HH-P2",
   current: "HH-P2",
 };
@@ -66,10 +66,31 @@ describe("createScreen with a moved project", () => {
       projectId: "S1-P2",
       tab: "tree",
       moved,
+      // 文は、core の now() の時刻で作る(詳細パネルの 1 行と同じ)。
+      text: "HH-P7 は 11/13 09:05 に HH-P2 へ移動しました",
     });
     navigation.go({ name: "project", store: "work", project: "HH-P2", tab: "overview" });
     await flush();
     expect(get(screen.current)).toMatchObject({ projectId: "S1-P2", tab: "overview" });
+    expect(get(screen.projectMoved)).toBeNull();
+  });
+
+  // サーバー経由でほかの Store のプロジェクトが見つかったとき(Store の名前を変えたあとのブックマークなど)は、
+  // アドレスを解決した Store の名前の形に替える。替えないと、次の一覧の読み直しで消えたと見られる。
+  it("replaces the address with the Store name of the project found through locateProject, and keeps it after a reload", async () => {
+    const { screen, catalog, stack, transfers } = await setup("/s/nope/p/HH-P2/tree");
+    transfers.locatedProject = { kind: "found", storeId: "S1", projectId: "S1-P2" };
+    screen.start();
+    await flush();
+    await catalog.load();
+    await flush();
+    expect(stack).toEqual(["/s/work/p/HH-P2/tree"]);
+    expect(get(screen.current)).toEqual({
+      name: "project",
+      storeId: "S1",
+      projectId: "S1-P2",
+      tab: "tree",
+    });
     expect(get(screen.projectMoved)).toBeNull();
   });
 

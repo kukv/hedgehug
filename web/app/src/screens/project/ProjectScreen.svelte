@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    movedLine,
     type ProjectTab,
     projectCategory,
     projectTabOf,
@@ -33,7 +32,7 @@
       $projectMoved.storeId === storeId &&
       $projectMoved.projectId === projectId &&
       $projectMoved.tab === tab
-      ? movedLine($projectMoved.moved, new Date())
+      ? $projectMoved.text
       : null,
   );
   $effect(() => {

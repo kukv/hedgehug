@@ -7,7 +7,7 @@ import type { Navigation } from "../router/navigation";
 import { type Resolved, resolveRoute, routeOfProject, routeOfWorkspace } from "../router/resolve";
 import type { ProjectTab } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
-import { goneText } from "../transfers/movedText";
+import { goneText, movedLine } from "../transfers/movedText";
 
 // いま出す画面。アドレスを一覧の状態で内部 ID にする(A2 の計画の決定 7)。
 // アイテムの入口は、そのアイテムのプロジェクトの「ツリー」に替え(履歴に積まない)、詳細パネルを開く(01)。
@@ -21,6 +21,8 @@ export interface ProjectMoved {
   projectId: string;
   tab: ProjectTab;
   moved: MovedFrom;
+  // text は、見出しの下に出す 1 行(movedLine。時刻は deps.now() で、開いたときに作る)。
+  text: string;
 }
 
 export interface Screen {
@@ -113,12 +115,19 @@ export function createScreen(deps: ScreenDeps): Screen {
     }
     if (r.name === "project" && r.movedFrom) {
       const { movedFrom: moved, storeId, projectId, tab } = r;
-      projectMoved.set({ storeId, projectId, tab, moved });
+      projectMoved.set({ storeId, projectId, tab, moved, text: movedLine(moved, deps.now()) });
       // 一覧がまだ古くても開けるよう、アドレスはサーバーが返したいまの ID で作る。
       const s = stores.find((x) => x.id === storeId);
       return deps.navigation.replace(
         s ? { name: "project", store: s.name, project: moved.current, tab } : { name: "home" },
       );
+    }
+    // サーバーがほかの Store で見つけたとき(Store の名前を変えたあとのブックマークなど)は、アドレスを見つけた Store の
+    // 名前の形に替える(履歴に積まない)。替えないと、次の一覧の読み直しで、出していたプロジェクトが消えたと見られる。
+    // 一覧にまだないとき(移した直後)は替えない。
+    if (r.name === "project" && route.name === "project") {
+      const to = routeOfProject(stores, r.storeId, r.projectId, r.tab);
+      if (to.name === "project" && to.store !== route.store) return deps.navigation.replace(to);
     }
     if (r.name === "item") {
       deps.navigation.replace(routeOfProject(stores, r.storeId, r.projectId, "tree"));
