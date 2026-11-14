@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/planning"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projectrules"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/reports"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
@@ -35,6 +36,7 @@ import (
 	appprojectrules "github.com/kukv/hedgehug/internal/app/projectrules"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
+	appreports "github.com/kukv/hedgehug/internal/app/reports"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
 	apptransfers "github.com/kukv/hedgehug/internal/app/transfers"
@@ -87,6 +89,8 @@ type Deps struct {
 
 	// コマンドパレット(A5c)。最近開いたものは state.db に覚える。
 	Recent port.RecentItems
+	// レポートの選択の保存先(F3。state.db)
+	Reports appreports.Selections
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -134,6 +138,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
+	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})

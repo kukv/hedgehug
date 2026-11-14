@@ -125,6 +125,28 @@ func TestFromLogClose(t *testing.T) {
 	}
 }
 
+func TestSprintClosing(t *testing.T) {
+	log := stampOp(base(), "o1", planning.SprintDrafts(planning.Sprint{}, sprint1())...)
+	if got := planning.FromLog(log).Sprints[0].Closing; got != nil {
+		t.Fatalf("完了していなければ nil: %+v", got)
+	}
+	c := planning.Confirmed{Committed: planning.Totals{Points: 8, Count: 3}}
+	closed := stampOp(log, "o2", planning.CloseDraft("S1", c))
+	row := closed[len(closed)-1]
+	if got := planning.FromLog(closed).Sprints[0].Closing; got == nil || got.Op != "o2" || !got.At.Equal(row.At) {
+		t.Fatalf("Closing = %+v, want op o2 at %v", got, row.At)
+	}
+	// prev でつながらない完了の行が 2 つ(同時の完了)。Confirmed と同じ、あとの行の At と Op。
+	a := stampOp(log, "oa", planning.CloseDraft("S1", c))
+	b := stampOp(log, "ob", planning.CloseDraft("S1", c))
+	a[len(log)].At = time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)
+	b[len(log)].At = time.Date(2026, 11, 14, 11, 0, 0, 0, time.UTC)
+	merged := append(append([]change.Record{}, a...), b[len(log)])
+	if got := planning.FromLog(merged).Sprints[0].Closing; got == nil || got.Op != "ob" || !got.At.Equal(b[len(log)].At) {
+		t.Fatalf("あとの行の At と Op: %+v", got)
+	}
+}
+
 func TestPlanFieldsWorkWithRepair(t *testing.T) {
 	log := stampOp(base(), "o1", planning.SprintDrafts(planning.Sprint{}, sprint1())...)
 	if got := workspace.NameOfDeleted(stampOp(log, "o2", planning.DeleteSprint("S1")), "sprints/S1"); got != "Sprint 1" {

@@ -10,6 +10,7 @@
   import { tick } from "svelte";
   import { planRequest } from "../../palette";
   import { sprints } from "../../planning";
+  import { activeReports, reloadActiveOnDayChange } from "../../reports";
   import { planning, syncNow } from "../../wire";
   import SprintCard from "./SprintCard.svelte";
 
@@ -25,6 +26,7 @@
     onclose: (card: Card) => void;
     onedit: (card: Card) => void;
     ondelete: (card: Card) => void;
+    onburndown: (card: Card) => void;
   }
 
   let {
@@ -37,9 +39,10 @@
     onclose,
     onedit,
     ondelete,
+    onburndown,
   }: Props = $props();
 
-  // タブを開いているあいだだけ読む。Store の出来事で読み直す(planning.ts)。
+  // タブを開いているあいだだけ読む。Store の出来事で読み直す(planning.ts、reports.ts)。
   // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(開き直すとカードが消え、
   // 開いているダイアログが閉じる)。
   const sid = $derived(storeId);
@@ -54,7 +57,18 @@
   $effect(() => {
     if ($request && planRequest.take(wid, "sprint")) void tick().then(oncreate);
   });
+  $effect(() => {
+    void activeReports.open(sid, wid);
+    return () => activeReports.close();
+  });
   const loaded = sprints.state;
+  const loadedActive = activeReports.state;
+  // 別のワークスペースの数字は出さない。
+  const activeNow = $derived(
+    $loadedActive && $loadedActive.storeId === storeId && $loadedActive.workspaceId === workspaceId
+      ? $loadedActive.active
+      : null,
+  );
   const overview = planning.state;
   const view = $derived(
     $loaded && $loaded.storeId === storeId && $loaded.workspaceId === workspaceId ? $loaded : null,
@@ -72,6 +86,8 @@
   // 日付は、時刻の更新(30 秒ごと)で読み直す。日付が変わると「残り N 日」が変わる(01「日付と時刻」)。
   const today = $derived(dayOf($syncNow));
   const thisYear = $derived($syncNow.getFullYear());
+  // 日付が変わったら、小さいバーンダウンも読み直す(F3-19)。
+  $effect(reloadActiveOnDayChange);
   const note = $derived(readOnly ? readOnlyNote : undefined);
 </script>
 
@@ -96,6 +112,7 @@
         {#each sec.cards as card (card.sprint.id)}
           <SprintCard
             {card}
+            active={activeNow}
             {storeId}
             {storeName}
             settings={view.settings}
@@ -108,6 +125,7 @@
             {onclose}
             {onedit}
             {ondelete}
+            {onburndown}
           />
         {/each}
       </section>

@@ -1706,6 +1706,422 @@ components:
       required:
         - failures
       type: object
+    ReportActive:
+      additionalProperties: false
+      properties:
+        added:
+          description: 途中で追加した量
+          format: double
+          type: number
+        burndown:
+          $ref: "#/components/schemas/ReportBurndown"
+        done:
+          $ref: "#/components/schemas/ReportTotals"
+        sprint:
+          $ref: "#/components/schemas/ReportSprintOrNull"
+          description: 実行中のスプリント。なければ null
+        total:
+          $ref: "#/components/schemas/ReportTotals"
+        unit:
+          enum:
+            - points
+            - count
+          type: string
+      required:
+        - sprint
+        - unit
+        - burndown
+        - added
+        - done
+        - total
+      type: object
+    ReportBurnDay:
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+        ideal:
+          description: 理想の線の値。小数第 2 位を四捨五入した小数第 1 位まで
+          format: double
+          type: number
+        remaining:
+          format: double
+          nullable: true
+          type: number
+        total:
+          format: double
+          type: number
+      required:
+        - date
+        - total
+        - remaining
+        - ideal
+      type: object
+    ReportBurndown:
+      additionalProperties: false
+      properties:
+        committed:
+          description: 完了したスプリントで総量が確定の計画と違うときだけ、その確定の計画
+          format: double
+          nullable: true
+          type: number
+        days:
+          items:
+            $ref: "#/components/schemas/ReportBurnDay"
+          type: array
+        shown:
+          description: 表示する日の数
+          format: int64
+          type: integer
+      required:
+        - days
+        - shown
+        - committed
+      type: object
+    ReportConfirmed:
+      additionalProperties: false
+      nullable: true
+      properties:
+        committed:
+          $ref: "#/components/schemas/ReportTotals"
+        completed:
+          $ref: "#/components/schemas/ReportTotals"
+      required:
+        - committed
+        - completed
+      type: object
+    ReportDurations:
+      additionalProperties: false
+      properties:
+        median:
+          format: double
+          nullable: true
+          type: number
+        "n":
+          format: int64
+          type: integer
+        p85:
+          format: double
+          nullable: true
+          type: number
+        skipped:
+          description: 数えなかった件数
+          format: int64
+          type: integer
+      required:
+        - "n"
+        - median
+        - p85
+        - skipped
+      type: object
+    ReportEstimate:
+      additionalProperties: false
+      properties:
+        diff:
+          format: int64
+          nullable: true
+          type: integer
+        display:
+          type: string
+        estimate:
+          format: int64
+          nullable: true
+          type: integer
+        id:
+          type: string
+        perPoint:
+          format: double
+          nullable: true
+          type: number
+        points:
+          format: double
+          nullable: true
+          type: number
+        title:
+          type: string
+        worked:
+          format: int64
+          type: integer
+      required:
+        - id
+        - display
+        - title
+        - points
+        - estimate
+        - worked
+        - diff
+        - perPoint
+      type: object
+    ReportEstimateTotal:
+      additionalProperties: false
+      properties:
+        diff:
+          format: int64
+          nullable: true
+          type: integer
+        estimate:
+          format: int64
+          nullable: true
+          type: integer
+        points:
+          format: double
+          nullable: true
+          type: number
+        worked:
+          format: int64
+          type: integer
+      required:
+        - points
+        - estimate
+        - worked
+        - diff
+      type: object
+    ReportFlowDay:
+      additionalProperties: false
+      properties:
+        counts:
+          items:
+            format: int64
+            type: integer
+          type: array
+        date:
+          type: string
+      required:
+        - date
+        - counts
+      type: object
+    ReportLayer:
+      additionalProperties: false
+      properties:
+        color:
+          type: string
+        key:
+          type: string
+        name:
+          type: string
+      required:
+        - key
+        - name
+        - color
+      type: object
+    ReportPeriod:
+      additionalProperties: false
+      properties:
+        from:
+          description: YYYY-MM-DD
+          type: string
+        to:
+          description: YYYY-MM-DD
+          type: string
+      required:
+        - from
+        - to
+      type: object
+    ReportSelection:
+      additionalProperties: false
+      properties:
+        estimate:
+          description: 見積もりと実績の対象のスプリントの内部 ID。空はすべて
+          type: string
+        layers:
+          enum:
+            - category
+            - status
+          type: string
+        sprint:
+          description: バーンダウンのスプリントの内部 ID。空は未選択
+          type: string
+        unit:
+          enum:
+            - points
+            - count
+          type: string
+      required:
+        - unit
+        - sprint
+        - layers
+        - estimate
+      type: object
+    ReportSelectionPatch:
+      additionalProperties: false
+      properties:
+        estimate:
+          description: 見積もりと実績の対象のスプリントの内部 ID。空はすべて
+          type: string
+        layers:
+          description: category か status。違う値は 400
+          type: string
+        sprint:
+          description: バーンダウンのスプリントの内部 ID。空は選んでいない
+          type: string
+        unit:
+          description: points か count。違う値は 400(enum にすると 422 になるので付けない)
+          type: string
+      type: object
+    ReportSprint:
+      additionalProperties: false
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/ReportConfirmed"
+          description: 完了で確定した値。完了していなければ null
+        end:
+          type: string
+        goal:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          type: string
+        state:
+          enum:
+            - planned
+            - active
+            - closed
+          type: string
+      required:
+        - id
+        - name
+        - state
+        - start
+        - end
+        - goal
+        - confirmed
+      type: object
+    ReportSprintOrNull:
+      additionalProperties: false
+      nullable: true
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/ReportConfirmed"
+          description: 完了で確定した値。完了していなければ null
+        end:
+          type: string
+        goal:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          type: string
+        state:
+          enum:
+            - planned
+            - active
+            - closed
+          type: string
+      required:
+        - id
+        - name
+        - state
+        - start
+        - end
+        - goal
+        - confirmed
+      type: object
+    ReportTotals:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          type: integer
+        points:
+          format: double
+          type: number
+      required:
+        - points
+        - count
+      type: object
+    ReportVelocity:
+      additionalProperties: false
+      properties:
+        done:
+          format: double
+          type: number
+        planned:
+          format: double
+          type: number
+        sprint:
+          $ref: "#/components/schemas/ReportSprint"
+      required:
+        - sprint
+        - planned
+        - done
+      type: object
+    ReportView:
+      additionalProperties: false
+      properties:
+        average:
+          description: 完了した直近 3 スプリントの平均。なければ null
+          format: double
+          nullable: true
+          type: number
+        burn:
+          $ref: "#/components/schemas/ReportSprintOrNull"
+          description: バーンダウンのスプリント。未選択なら null
+        burndown:
+          $ref: "#/components/schemas/ReportBurndown"
+        cycle:
+          $ref: "#/components/schemas/ReportDurations"
+        estimateTotal:
+          $ref: "#/components/schemas/ReportEstimateTotal"
+        estimates:
+          items:
+            $ref: "#/components/schemas/ReportEstimate"
+          type: array
+        fallback:
+          description: ポイントを選んでいるが件数で数えたか
+          type: boolean
+        flow:
+          items:
+            $ref: "#/components/schemas/ReportFlowDay"
+          type: array
+        layers:
+          items:
+            $ref: "#/components/schemas/ReportLayer"
+          type: array
+        lead:
+          $ref: "#/components/schemas/ReportDurations"
+        period:
+          $ref: "#/components/schemas/ReportPeriod"
+        selection:
+          $ref: "#/components/schemas/ReportSelection"
+        sprints:
+          description: バーンダウンと見積もりと実績の選択肢
+          items:
+            $ref: "#/components/schemas/ReportSprint"
+          type: array
+        unit:
+          description: 実際に数えた単位
+          enum:
+            - points
+            - count
+          type: string
+        velocity:
+          items:
+            $ref: "#/components/schemas/ReportVelocity"
+          type: array
+      required:
+        - selection
+        - unit
+        - fallback
+        - sprints
+        - burn
+        - burndown
+        - velocity
+        - average
+        - period
+        - layers
+        - flow
+        - cycle
+        - lead
+        - estimates
+        - estimateTotal
+      type: object
     SaveItemAsTemplate:
       additionalProperties: false
       properties:
@@ -7026,6 +7442,108 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: リリースの状態を変える
+  /api/stores/{store}/workspaces/{workspace}/reports:
+    get:
+      operationId: get-report
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - description: 累積フロー図の開始日(YYYY-MM-DD)。to と両方なければ直近 21 日
+          explode: false
+          in: query
+          name: from
+          schema:
+            description: 累積フロー図の開始日(YYYY-MM-DD)。to と両方なければ直近 21 日
+            pattern: ^(\d{4}-\d{2}-\d{2})?$
+            type: string
+        - description: 累積フロー図の終了日(YYYY-MM-DD)。今日以前
+          explode: false
+          in: query
+          name: to
+          schema:
+            description: 累積フロー図の終了日(YYYY-MM-DD)。今日以前
+            pattern: ^(\d{4}-\d{2}-\d{2})?$
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: レポートの数字
+  /api/stores/{store}/workspaces/{workspace}/reports/active:
+    get:
+      operationId: get-report-active
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportActive"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 実行中のスプリントの小さいバーンダウン・途中で追加した量・進捗
+  /api/stores/{store}/workspaces/{workspace}/reports/selection:
+    put:
+      operationId: put-report-selection
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportSelectionPatch"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: レポートの選択を保存(送った項目だけ変える。Store には書かない)
   /api/stores/{store}/workspaces/{workspace}/sprints:
     get:
       operationId: list-sprint-cards

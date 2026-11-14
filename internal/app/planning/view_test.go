@@ -228,6 +228,40 @@ func TestOverview(t *testing.T) {
 	}
 }
 
+// 同期で実行中が 2 つ届いたとき、見出しの実行中は名前順ではなく、レポートと同じ開始日の早い方にする。
+func TestOverviewActiveEarliestStart(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	alpha, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Alpha"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	beta, err := svc.CreateSprint(ctx, store, apptest.SampleWorkspace, planning.SprintInput{Name: "Beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, beta.ID, "2026-11-13", "2026-11-27"); err != nil {
+		t.Fatal(err)
+	}
+	// Alpha は、サービスが拒む 2 つ目の実行中を、同期で届いたものとして直に書く。
+	late := alpha
+	late.State, late.Start, late.End = dp.Active, "2026-11-20", "2026-12-04"
+	op := port.Operation{Actor: change.User("taro"), Summary: "同期で実行中が届く"}
+	err = svc.Stores.Write(ctx, store, op, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, dp.SprintDrafts(alpha, late)...)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ov, err := svc.Overview(ctx, store, apptest.SampleWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ov.Active == nil || ov.Active.ID != beta.ID {
+		t.Errorf("Active = %+v, want Beta(開始日が早い)", ov.Active)
+	}
+}
+
 func TestOverviewNoActive(t *testing.T) {
 	svc, rec := setup(t)
 	rec.Stores.(*apptest.Stores).SetRetentionDays(store, 14)

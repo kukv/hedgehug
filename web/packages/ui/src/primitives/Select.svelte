@@ -32,7 +32,7 @@
   onchange={(event) => onchange?.(event.currentTarget.value)}
 >
   {#each options as option (option.value)}
-    <option value={option.value}>{option.label}</option>
+    <option value={option.value} disabled={option.disabled}>{option.label}</option>
   {/each}
 </select>
 

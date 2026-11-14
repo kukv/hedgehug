@@ -9,6 +9,7 @@ export { createNotesPort } from "./notes";
 export { createPalettePort } from "./palette";
 export { createPlanningPort } from "./planning";
 export { createProjectsPort } from "./projects";
+export { createReportsPort } from "./reports";
 export { createSyncPort } from "./sync";
 export { createSystemPort } from "./system";
 export { newTabUrl, rememberToken, tokenFromHash } from "./token";

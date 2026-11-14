@@ -1,6 +1,8 @@
 export interface SelectOption {
   value: string;
   label: string;
+  // disabled は、表示はするが選べない選択肢(未選択を表す「—」など)。
+  disabled?: boolean;
 }
 
 export interface Tab {
