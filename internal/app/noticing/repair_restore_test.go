@@ -336,6 +336,56 @@ func TestCascadeNotLastWriter(t *testing.T) {
 	f.wantNone()
 }
 
+// concurrentMerge は、taro が HH-1 と子 HH-2(root: false)を同じ op で削除し、writer が HH-2 のタイトルを変えた
+// あとの、まだ判定していない合わせ(修復の保存はない)。
+func concurrentMerge(f *fixture, writer string) (port.ReceivedSave, change.ID) {
+	f.t.Helper()
+	del := f.save(user("taro"), func(tx port.Tx) error {
+		return errors.Join(appendRef(epicRef, change.NewDeleteEntity(true))(tx), appendRef(taskRef, change.NewDeleteEntity(false))(tx))
+	})
+	edit := f.save(user(writer), appendRef(taskRef, change.NewSet("title", "ログイン画面を作る", "ログイン画面")))
+	var deleted []change.Record
+	for _, e := range del.Entities {
+		if e.Ref == taskRef {
+			deleted = e.Rows
+		}
+	}
+	return port.ReceivedSave{
+		Key: port.SaveKey{Version: "merge"}, Merge: true,
+		Concurrent: []port.ConcurrentRows{{Ref: taskRef, Deleted: deleted, Changed: edit.Entities[0].Rows}},
+	}, del.Key.Op
+}
+
+func TestCascadeFromMerge(t *testing.T) {
+	t.Run("changer", func(t *testing.T) {
+		f := setupAs(t, "hanako")
+		m, op := concurrentMerge(f, "hanako")
+		f.judge(m)
+		want := port.Notice{
+			Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Item: apptest.SampleTask,
+			Text: "HH-1 が削除されたため、HH-2 も削除済みに入りました", Display: "HH-2",
+			Source: "repair:cascade:" + string(apptest.SampleTask) + ":" + string(op),
+		}
+		if n := f.wantOne(); n != want {
+			t.Errorf("notice = %+v, want %+v", n, want)
+		}
+	})
+	t.Run("other changer", func(t *testing.T) {
+		f := setupAs(t, "hanako")
+		m, _ := concurrentMerge(f, "jiro")
+		f.judge(m)
+		f.wantNone()
+	})
+	t.Run("read only", func(t *testing.T) {
+		f := setupAs(t, "hanako")
+		m, _ := concurrentMerge(f, "hanako")
+		if err := f.judgeReceived(port.Received{Saves: []port.ReceivedSave{m}, ReadOnly: true}); err != nil {
+			t.Fatal(err)
+		}
+		f.wantNone()
+	})
+}
+
 func TestRepairSkipsReadOnly(t *testing.T) {
 	f := setupAs(t, "taro")
 	s, _ := itemDeleted().run(f, "taro")

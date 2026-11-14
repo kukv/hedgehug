@@ -94,6 +94,18 @@ type ReceivedSave struct {
 	Merge bool
 	// Removed は、その保存か合わせでフォルダごと消えたエンティティ。修復の保存と合わせのときだけ持つ。
 	Removed []RemovedEntity
+	// Concurrent は、合わせのときだけ、片側で親と一緒に削除され、もう片側で人が変えたエンティティ(決定 C4b2-17)。
+	Concurrent []ConcurrentRows
+}
+
+// ConcurrentRows は、合わせの結果に残るエンティティ 1 つで、片側の共通の祖先にない行に root: false の削除があり、
+// もう片側の共通の祖先にない行に人の変更(削除・取り消し以外)があるもの(決定 C4b2-17)。
+type ConcurrentRows struct {
+	Ref change.Ref
+	// Deleted は、削除した側の、共通の祖先にない root: false の削除の行。
+	Deleted []change.Record
+	// Changed は、変えた側の、共通の祖先にない人の変更の行。
+	Changed []change.Record
 }
 
 // RemovedEntity は、保存か合わせで消えたエンティティ 1 つ(決定 C4b2-3)。

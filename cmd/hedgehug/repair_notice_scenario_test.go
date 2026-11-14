@@ -121,17 +121,34 @@ func TestRepairNoticeRestoreTwoMachinesSameLogin(t *testing.T) {
 	wantNoRepair(t, b)
 }
 
-// A が Epic HH-1 を削除して同期し、B が(受け取る前に)子 HH-2 を変えて同期すると、B のマシンが HH-2 を削除済みに
-// 入れ、B に親の削除の 1 行。A には作らない。A の削除は HH-1 だけに書く(HH-2 に root: false の削除を書くと、
-// 削除済みの親の下に削除されていない子が残らず、修復しない)。
+// A が Epic HH-1 をアプリの削除のとおり(子 HH-2 に root: false の削除も書いて)削除して同期し、B が(受け取る前に)
+// HH-2 を変えて同期すると、HH-2 は削除済みのままで修復の保存は書かれないが、合わせから B に親の削除の 1 行
+// (決定 C4b2-17)。A には作らない。
 func TestRepairNoticeCascade(t *testing.T) {
 	remote, a, b := noticePair(t)
-	deleteEpicAs(t, a, "taro")
+	deleteEpicAs(t, a, "taro", apptest.SampleTask)
 	a.sync(t, remote)
 	titleAs(t, b, "hanako", apptest.SampleTask, "B のタイトル")
 	b.sync(t, remote)
 	wantLive(t, b, false, apptest.SampleEpic, apptest.SampleTask)
 	const want = "HH-1 が削除されたため、HH-2 も削除済みに入りました"
+	wantRepair(t, b, want)
+	b.sync(t, remote)
+	wantRepair(t, b, want)
+	a.sync(t, remote)
+	wantNoRepair(t, a)
+}
+
+// A が HH-1 を(HH-2 と一緒に)削除して同期し、B が(受け取る前に)HH-1 の下に Task HH-3 を足して同期すると、B の
+// マシンが HH-3 を削除済みに入れる修復の保存を書き、B に親の削除の 1 行。A には作らない。
+func TestRepairNoticeCascadeAdded(t *testing.T) {
+	remote, a, b := noticePair(t)
+	deleteEpicAs(t, a, "taro", apptest.SampleTask)
+	a.sync(t, remote)
+	newTaskAs(t, b, "hanako", taskB)
+	b.sync(t, remote)
+	wantLive(t, b, false, apptest.SampleEpic, taskB)
+	const want = "HH-1 が削除されたため、HH-3 も削除済みに入りました"
 	wantRepair(t, b, want)
 	b.sync(t, remote)
 	wantRepair(t, b, want)

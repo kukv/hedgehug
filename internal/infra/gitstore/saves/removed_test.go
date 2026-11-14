@@ -162,3 +162,51 @@ func TestOwnRepairPassed(t *testing.T) {
 		t.Errorf("saves = %+v", got)
 	}
 }
+
+// entityDelete は、taro のエンティティの削除の行。root は、利用者が選んだものか。
+func entityDelete(id, op string, at time.Time, root bool) change.Record {
+	r := rec(id, op, at, change.Delete, change.DeletedField)
+	r.Root = &root
+	return r
+}
+
+// 片側が親と子を同じ op で削除し(子は root: false)、もう片側で hanako が子のタイトルを変えた合わせは、Concurrent に
+// 子の Ref、Deleted に root: false の削除、Changed にタイトルの行を持つ。子を変えていなければ、合わせは渡さない。
+func TestConcurrentInMerge(t *testing.T) {
+	const epicLog = "items/01ITEM00000000000000000009/log.jsonl"
+	create := rec("R1", "OP0", t0, change.Create, "")
+	epic := rec("E1", "OP0", t0, change.Create, "")
+	del := entityDelete("R2", "OP1", t0.Add(time.Minute), false)
+	epicDel := entityDelete("E2", "OP1", t0.Add(time.Minute), true)
+	title := recBy("R3", "OP2", t0.Add(2*time.Minute), change.User("hanako"), "title")
+	for _, changed := range []bool{true, false} {
+		r := newRepo(t)
+		j, known := judged(t)
+		c0 := r.save(map[string]string{itemLog: logOf(t, create), epicLog: logOf(t, epic)}, "taro", t0, "OP0")
+		s1 := r.save(map[string]string{itemLog: logOf(t, create, del), epicLog: logOf(t, epic, epicDel)}, "taro", t0.Add(time.Minute), "OP1")
+		r.reset(c0)
+		files := map[string]string{"members/log.jsonl": logOf(t, rec("M1", "OP2", t0, change.Create, ""))}
+		merged := []change.Record{create, del}
+		if changed {
+			files[itemLog] = logOf(t, create, title)
+			merged = append(merged, title)
+		}
+		s2 := r.save(files, "hanako", t0.Add(2*time.Minute), "OP2")
+		m := r.save(map[string]string{itemLog: logOf(t, merged...), epicLog: logOf(t, epic, epicDel)}, BotName, t0.Add(3*time.Minute), "", s2, s1)
+		r.mark(j, c0)
+		s, ok := pending(t, r, m, m, known)[m.String()]
+		if !changed {
+			if ok {
+				t.Errorf("merge = %+v, want none", s)
+			}
+			continue
+		}
+		if !ok || !s.Merge || len(s.Removed) != 0 || len(s.Concurrent) != 1 {
+			t.Fatalf("merge = %+v, want one concurrent entity", s)
+		}
+		c := s.Concurrent[0]
+		if c.Ref != itemRef || len(c.Deleted) != 1 || c.Deleted[0].ID != "R2" || len(c.Changed) != 1 || c.Changed[0].ID != "R3" {
+			t.Errorf("concurrent = %+v", c)
+		}
+	}
+}

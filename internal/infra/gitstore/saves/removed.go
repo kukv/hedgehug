@@ -22,7 +22,8 @@ const BotName = change.BotLogin
 // Pending は、判定の差し込み口に渡すもの(決定 C4b2-2)を古い順に返す。辿り方と並べ方は Unjudged と同じ。
 // (a) remote の先端 theirs から辿れる、判定していない保存(Hedgehug-Op を持つもの)。
 // (b) 自分の先端 head から辿れて theirs から辿れない、判定していない同期の修復の保存。ほかのこのマシンの保存は返さない。
-// (c) theirs・head から辿れる、判定していない合わせのうち、消えたエンティティに共通の祖先にない行があるもの。
+// (c) theirs・head から辿れる、判定していない合わせのうち、消えたエンティティに共通の祖先にない行があるものと、
+// 親と一緒の削除と人の変更が重なったエンティティがあるもの(決定 C4b2-17)。
 func Pending(repo *git.Repository, theirs, head plumbing.Hash, known func(port.SaveKey) (port.Match, error)) ([]port.ReceivedSave, error) {
 	received, err := walk(repo, theirs, known)
 	if err != nil {
@@ -59,11 +60,11 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if n.c.NumParents() != 2 {
 		return port.ReceivedSave{}, false, nil // 最初の保存
 	}
-	removed, err := mergeRemoved(n.c)
-	if err != nil || !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 }) {
+	removed, concurrent, err := mergeRemoved(n.c)
+	if err != nil || (len(concurrent) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })) {
 		return port.ReceivedSave{}, false, err
 	}
-	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed}, true, nil
+	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent}, true, nil
 }
 
 // saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティも読む。
@@ -100,36 +101,38 @@ func isRepair(c *object.Commit, es []port.EntityRows) bool {
 }
 
 // mergeRemoved は、合わせ c の 2 つの親のそれぞれについて、親にあって c にないエンティティ。New は、その親の
-// ログの行のうち、共通の祖先(1 つ目。同期の合わせと同じ)の同じエンティティのログにない行。
-func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, error) {
+// ログの行のうち、共通の祖先(1 つ目。同期の合わせと同じ)の同じエンティティのログにない行。あわせて、同じ共通の
+// 祖先から、親と一緒の削除と人の変更が重なったエンティティ(concurrentIn)も返す。
+func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
 	ours, err := c.Parent(0)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	theirs, err := c.Parent(1)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	bases, err := ours.MergeBase(theirs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(bases) == 0 {
-		return nil, nil // 同期は、共通の祖先のない合わせを作らない
+		return nil, nil, nil // 同期は、共通の祖先のない合わせを作らない
 	}
 	base, err := bases[0].Tree()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var out []port.RemovedEntity
 	for _, p := range []*object.Commit{ours, theirs} {
 		es, err := removedFrom(p, c, base)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, es...)
 	}
-	return out, nil
+	concurrent, err := concurrentIn(c, ours, theirs, base)
+	return out, concurrent, err
 }
 
 // removedFrom は、from にあって to にない log.jsonl のエンティティと、from でのログ。base が nil でなければ
@@ -149,9 +152,8 @@ func removedFrom(from, to *object.Commit, base *object.Tree) ([]port.RemovedEnti
 	}
 	var out []port.RemovedEntity
 	for _, ch := range changes {
-		dir, name := path.Split(ch.From.Name)
-		ref, ok := RefOf(strings.TrimSuffix(dir, "/"))
-		if ch.To.Name != "" || name != "log.jsonl" || !ok || !ref.Valid() {
+		ref, ok := logRef(ch.From.Name)
+		if ch.To.Name != "" || !ok {
 			continue
 		}
 		e, err := removedEntity(ref, ch, base)
@@ -160,10 +162,32 @@ func removedFrom(from, to *object.Commit, base *object.Tree) ([]port.RemovedEnti
 		}
 		out = append(out, e)
 	}
-	slices.SortFunc(out, func(a, b port.RemovedEntity) int {
-		return cmp.Or(strings.Compare(string(a.Ref.Kind), string(b.Ref.Kind)), strings.Compare(string(a.Ref.ID), string(b.Ref.ID)))
-	})
+	slices.SortFunc(out, func(a, b port.RemovedEntity) int { return compareRef(a.Ref, b.Ref) })
 	return out, nil
+}
+
+// logRef は、エンティティの log.jsonl のパス name のエンティティ。ほかのファイルなら false。
+func logRef(name string) (change.Ref, bool) {
+	dir, file := path.Split(name)
+	ref, ok := RefOf(strings.TrimSuffix(dir, "/"))
+	return ref, ok && file == "log.jsonl" && ref.Valid()
+}
+
+// compareRef は、Ref の順(種類、ID)。
+func compareRef(a, b change.Ref) int {
+	return cmp.Or(strings.Compare(string(a.Kind), string(b.Kind)), strings.Compare(string(a.ID), string(b.ID)))
+}
+
+// fileIn は、t の name のファイル。t が nil か、ファイルがなければ nil。
+func fileIn(t *object.Tree, name string) (*object.File, error) {
+	if t == nil {
+		return nil, nil
+	}
+	f, err := t.File(name)
+	if errors.Is(err, object.ErrFileNotFound) {
+		return nil, nil
+	}
+	return f, err
 }
 
 // removedEntity は、消えた log.jsonl の変更 ch から、消える前のログと、base があれば New を読む。
@@ -180,10 +204,7 @@ func removedEntity(ref change.Ref, ch *object.Change, base *object.Tree) (port.R
 	if base == nil {
 		return e, nil
 	}
-	old, err := base.File(ch.From.Name)
-	if errors.Is(err, object.ErrFileNotFound) {
-		old, err = nil, nil
-	}
+	old, err := fileIn(base, ch.From.Name)
 	if err != nil {
 		return port.RemovedEntity{}, err
 	}
