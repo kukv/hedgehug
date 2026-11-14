@@ -146,30 +146,24 @@ export function createScreen(deps: ScreenDeps): Screen {
         workspaceId,
       };
     }
-    shownWorkspace =
-      r.name === "workspace" && route.name === "workspace"
-        ? { store: route.store, prefix: route.prefix }
-        : null;
+    shownWorkspace = null;
     if (r.name === "workspace" && route.name === "workspace") {
       const { storeId, workspaceId, tab, movedFrom: moved } = r;
-      const s = stores.find((x) => x.id === storeId);
-      if (moved) {
+      if (moved)
         workspaceMoved.set({
           storeId,
           workspaceId,
           tab,
           text: workspaceMovedLine(moved, deps.now()),
         });
-        // 一覧がまだ古くても開けるよう、Store 名はサーバーが返したいまの名前で作る。接頭辞は一覧にあればいまのもの、
-        // なければ古いアドレスのもの(サーバーが旧い接頭辞でも解決する)。
-        const prefix = s?.workspaces.find((w) => w.id === workspaceId)?.prefix ?? route.prefix;
-        return deps.navigation.replace(
-          s ? { name: "workspace", store: moved.current, prefix, tab } : { name: "home" },
-        );
-      }
-      // サーバーがほかの Store で見つけたときは、アドレスを見つけた Store の名前の形に替える(プロジェクトと同じ)。
+      // アドレスは、見つけた Store の名前といまの接頭辞(どちらも一覧から)の形に替える(履歴に積まない)。古いアドレスの
+      // 接頭辞は使わない(移動先の別のワークスペースのいまの接頭辞と同じことがある)。一覧にまだないとき(移した直後)は
+      // 替えず、shownWorkspace も置かない。次の一覧の読み直しでサーバーに聞き直し、一覧の接頭辞で替える。
       const to = routeOfWorkspace(stores, storeId, workspaceId, tab);
-      if (to.name === "workspace" && to.store !== route.store) return deps.navigation.replace(to);
+      if (to.name === "workspace") {
+        if (moved || to.store !== route.store) return deps.navigation.replace(to);
+        shownWorkspace = { store: route.store, prefix: route.prefix };
+      }
     }
     if (r.name === "project" && r.movedFrom) {
       const { movedFrom: moved, storeId, projectId, tab } = r;

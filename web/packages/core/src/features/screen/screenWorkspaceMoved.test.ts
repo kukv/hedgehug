@@ -74,6 +74,30 @@ describe("createScreen with a moved workspace", () => {
     expect(get(screen.workspaceMoved)).toBeNull();
   });
 
+  // 移した直後で一覧にまだないときは、アドレスを替えない(古いアドレスの接頭辞で替えると、移動先の別のワークスペースの
+  // いまの接頭辞と同じことがある)。一覧を読み直したら、サーバーに聞き直し、一覧の接頭辞で替える。
+  it("does not rewrite the address while the catalog lacks the moved workspace, and rewrites it with the catalog prefix after a reload", async () => {
+    const { screen, catalog, stack, transfers, goneWorkspaces } = await setup("/s/ro/w/XX/sprints");
+    goneWorkspaces.add("S1-W1");
+    await catalog.load();
+    transfers.locatedWorkspace = {
+      kind: "found",
+      storeId: "S1",
+      workspaceId: "S1-W1",
+      movedFrom: moved,
+    };
+    screen.start();
+    await flush();
+    expect(stack).toEqual(["/s/ro/w/XX/sprints"]);
+    expect(get(screen.current)).toMatchObject({ name: "workspace", workspaceId: "S1-W1" });
+    expect(get(screen.workspaceMoved)).toMatchObject({ workspaceId: "S1-W1", tab: "sprints" });
+    goneWorkspaces.delete("S1-W1");
+    await catalog.load();
+    await flush();
+    expect(stack).toEqual(["/s/work/w/HH/sprints"]);
+    expect(get(screen.workspaceMoved)).not.toBeNull();
+  });
+
   it("clears the line when another screen opens", async () => {
     const { screen, navigation, transfers } = await setup("/s/gone/w/XX/overview");
     transfers.locatedWorkspace = {

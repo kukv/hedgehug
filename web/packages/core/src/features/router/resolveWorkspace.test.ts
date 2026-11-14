@@ -81,4 +81,11 @@ describe("resolveRoute of a workspace not in the catalog", () => {
     ).toEqual({ name: "home" });
     expect(transfers.calls).toEqual([]);
   });
+
+  it("passes through an error that is not NotFound", async () => {
+    transfers.failNext();
+    await expect(
+      resolveRoute(wRoute("XX"), await stores(), itemsIn("S1"), transfers),
+    ).rejects.toThrow("network");
+  });
 });
