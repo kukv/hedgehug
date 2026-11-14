@@ -53,6 +53,7 @@
 | C4b2-11 | 完全な削除のために反映されなかった通知(鍵が `repair:purged:` のもの)は、受信箱を開いて `Prune` しても消さない。`Item`(または `Project`)は消えたものの内部 ID で、行の位置に作ったときの ID を出し、クリックで旧 ID のアドレスを開く(別の Store へ移ったものと同じ `moved`・`moved_project` の出し方。行き先の画面が「完全に削除されました」と出す)。消えたものを指すほかの通知は、いまのとおり消す。仕様 06 `:455` にこの文を足す | ユーザーの決定(2026-11-14)。受信箱は開くたびに `purged.jsonl` にあるものの通知を消す(C4a)ので、そのままでは完全な削除を知らせる通知が出たとたんに消える |
 | C4b2-12 | 合わせで消えたものの原因は、いまの Store で、消えたもの自身、親、プロジェクト、ワークスペースの順に、`purged.jsonl` の target と、`transfers.jsonl` の別の Store への行(`to_store` がこの Store でない)を探し、最初に見つかったもの。完全な削除なら {ID} はその行の `display`。別の Store なら {旧 ID}・{新 ID}・{移動した人}・{移動先の Store 名} は転送記録の `old`・`new`・`by`・`to_store_name`(空なら `to_store`)。消えたもの自身でなく祖先の転送記録なら子の文の末尾を足す。{子の ID} は消えたもののログから作り、接頭辞はいまのワークスペースのもの(なければ内部 ID)、{タイトル} はログのタイトル。どれも見つからなければ作らない | 保存形式 `:183`(どちらだったかは purged.jsonl と transfers.jsonl で見分ける)。祖先が移ったときは、その下のものも転送記録を持つ(一緒に動く)ので、近い方から探せば足りる |
 | C4b2-13 | 他のタブの取り消し(C3c の R1〜R12。人の保存が書く `restore` の行)からは通知を作らない。通知は同期の修復の保存(C4b2-2 の見分け方)からだけ作る | 06 `:185` は他のタブの重なりにトーストだけを定めている。人の保存の `restore` は「復元」(G)と見分けられない |
+| C4b2-15 | 合わせた結果が自分の版と同じになる同期(相手が自分の完全に削除したものだけに書いていたとき)で、合わせの保存が空として断られ、その Store を同期できなくなる既存の不具合を、この計画で直す(Task 2b)。中身が変わらない合わせも保存する | ユーザーの決定(2026-11-15)。Task 2 の実装で見つかった。完全な削除のために反映されなかった通知の場面そのもの |
 | C4b2-14 | e2e は足さない。2 台の場面は `cmd/hedgehug` の本物の gitstore と state.db で確かめる。完全な削除と別の Store への移動は、`cmd/hedgehug` から書く口がない(完全な削除は G、別の Store への移動は 2 つの Store が要る)ので、gitstore のテスト(`purgeForTest` と、フォルダを消して転送記録を書く移動の手助け)で `Removed` の中身を確かめ、`noticing` のテストで本文と宛先を確かめる | C4b1-17 と同じ。`purgeForTest` は gitstore のテストの中にしかない |
 
 ## Review Focus
@@ -135,6 +136,20 @@ git commit -m "feat(inbox): 同じ鍵の通知を 1 回だけ足す口と、開�
 git add internal/app/port/replicator.go internal/infra/gitstore internal/app/noticing
 git commit -m "feat(sync): 自分の修復の保存と、消えたものがある合わせも判定に渡す(C4b2)"
 ```
+
+---
+
+### Task 2b: 中身が変わらない合わせも保存する(C4b2-15)
+
+**Files:**
+- Modify: `internal/infra/gitstore/replicator.go`(`merge` の保存で空の合わせを許す)
+- Test: `internal/infra/gitstore/sync_judge_repair_test.go`(`TestRemovedInOthersMerge` を、A がアイテムだけに書く場面に戻す)、`internal/infra/gitstore/sync_purge_test.go`(`TestSyncAfterPurgeOnlyOthersWrote`)
+
+- [ ] **Step 1: 失敗するテストを書く** — `TestSyncAfterPurgeOnlyOthersWrote`: B がアイテムを `purgeForTest`、A がそのアイテムだけに 1 行足して同期 → B の同期がエラーにならず、2 回目の同期も通り、A と B の中身が同じ。`TestRemovedInOthersMerge` から Epic への書き込みを外す
+- [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/infra/gitstore/ -run 'PurgeOnlyOthersWrote|RemovedInOthersMerge'` Expected: FAIL(`cannot create empty commit`)
+- [ ] **Step 3: 実装する**(合わせの保存に `AllowEmptyCommits: true`)
+- [ ] **Step 4: 通ることを確かめる** — Run: `go test ./internal/infra/gitstore/...` Expected: PASS
+- [ ] **Step 5: コミット** — `fix(sync): 合わせた結果が自分の版と同じでも合わせを保存し、同期が止まらないようにする(C4b2)`
 
 ---
 
