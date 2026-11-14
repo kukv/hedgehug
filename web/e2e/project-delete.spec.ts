@@ -7,7 +7,7 @@ test("deletes a project from its settings tab and goes back to the workspace", a
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "削除"), prefix);
+  await createWorkspace(page, info, unique(info, `削除 ${prefix}`), prefix);
   // プロジェクト(接頭辞-P1)と Epic(接頭辞-1)。削除されていないアイテムが 1 件ある。
   await projectWithEpic(page, info, prefix);
   const projectTitle = unique(info, `計画 ${prefix} 1`);

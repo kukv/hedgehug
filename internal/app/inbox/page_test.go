@@ -39,7 +39,7 @@ func setup(t *testing.T) fixture {
 	}
 	list := &apptest.StoreList{Stores: []port.StoreInfo{{ID: s1, Name: "web", Color: "sky"}, {ID: s2, Name: "team", Color: "grass"}}}
 	book := &apptest.Inbox{}
-	return fixture{svc: inbox.Service{Book: book, Stores: st, List: list}, stores: st, book: book, list: list}
+	return fixture{svc: inbox.Service{Book: book, Stores: st, List: list, Identity: apptest.Identity{Login: "taro"}, Clock: clock}, stores: st, book: book, list: list}
 }
 
 // changed は、s1 の Task HH-2 を自動化が変えた通知。

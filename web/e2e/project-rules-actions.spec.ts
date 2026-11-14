@@ -24,7 +24,7 @@ test("unchecking a status a project-only rule uses is refused and reverts", asyn
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "外せない"), prefix);
+  await createWorkspace(page, info, unique(info, `外せない ${prefix}`), prefix);
   await newProject(page, info, prefix);
   await settingsOf(page, prefix);
   await createOwnRule(page, "保留で外す", async (dialog) => {
@@ -76,7 +76,7 @@ test("moving an epic to a project that does not use its status asks for a replac
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "移動"), prefix);
+  await createWorkspace(page, info, unique(info, `移動 ${prefix}`), prefix);
   const panel = await projectWithEpic(page, info, prefix);
   const t2 = await newProject(page, info, prefix, 2);
   await settingsOf(page, prefix, 2);
@@ -126,7 +126,7 @@ test("moving an epic to a project that does not use its status asks for a replac
 test("deleting a template shows its effect on a project's rules", async ({ page }, info) => {
   const prefix = prefixOf(info);
   const name = unique(info, "消す雛形");
-  await createWorkspace(page, info, unique(info, "テンプレートの削除"), prefix);
+  await createWorkspace(page, info, unique(info, `テンプレートの削除 ${prefix}`), prefix);
   await createTemplate(page, prefix, name);
   await newProject(page, info, prefix);
   await settingsOf(page, prefix);

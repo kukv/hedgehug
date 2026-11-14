@@ -665,6 +665,29 @@ export interface InboxCounts {
   watch: number;
 }
 
+/**
+ * 空でなければ、ボタンの代わりに結果を出す
+ */
+export type InboxOverwriteResult = typeof InboxOverwriteResult[keyof typeof InboxOverwriteResult];
+
+
+export const InboxOverwriteResult = {
+  '': '',
+  applied: 'applied',
+} as const;
+
+export interface InboxOverwrite {
+  /** 「自分の値に戻す」を押せる */
+  enabled: boolean;
+  kept: string;
+  mine: string;
+  note: string;
+  /** 空でなければ、ボタンの代わりに結果を出す */
+  result: InboxOverwriteResult;
+  /** ボタンを出す */
+  visible: boolean;
+}
+
 export type InboxRowKind = typeof InboxRowKind[keyof typeof InboxRowKind];
 
 
@@ -713,6 +736,7 @@ export const InboxTargetKind = {
   project: 'project',
   moved_project: 'moved_project',
   deleted_project: 'deleted_project',
+  store: 'store',
 } as const;
 
 export interface InboxTarget {
@@ -738,6 +762,8 @@ export interface InboxRow {
   at: string;
   id: number;
   kind: InboxRowKind;
+  /** 上書きの行で、値を出す項目だけ */
+  overwrite?: InboxOverwrite;
   read: boolean;
   reason: string;
   /** 差出人のログイン名。空は「hedgehug」 */
@@ -3395,6 +3421,30 @@ return fetcher<void>(getSetInboxReadUrl(notice),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setInboxReadBody)
+  }
+);}
+
+
+
+export const getRevertInboxNoticeUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/revert`
+}
+
+/**
+ * @summary 上書きされた値を自分の値に戻す
+ */
+export const revertInboxNotice = async (notice: number, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getRevertInboxNoticeUrl(notice),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 

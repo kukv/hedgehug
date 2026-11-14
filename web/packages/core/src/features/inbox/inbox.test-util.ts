@@ -75,6 +75,9 @@ export function setup(fn: MakeSpy, initial: InboxRow[]) {
     keep: fn(async (id: number) => {
       all = all.map((r) => (r.id === id ? { ...r, read: true } : r));
     }),
+    revert: fn(async (id: number) => {
+      all = all.map((r) => (r.id === id ? { ...r, read: true } : r));
+    }),
   };
   const toasts = createToasts({ set: () => 0, clear: () => {} });
   const inbox = createInbox({ port, toasts });

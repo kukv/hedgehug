@@ -27,7 +27,7 @@ type InboxStore struct {
 
 // InboxTarget は、行の対象。いまの値で出す。
 type InboxTarget struct {
-	Kind          string `json:"kind" enum:"item,moved,deleted_item,workspace,deleted_workspace,project,moved_project,deleted_project"`
+	Kind          string `json:"kind" enum:"item,moved,deleted_item,workspace,deleted_workspace,project,moved_project,deleted_project,store"`
 	Item          string `json:"item" doc:"アイテムの内部 ID。workspace・deleted_workspace では空"`
 	Project       string `json:"project" doc:"プロジェクトの内部 ID。project・moved_project・deleted_project のとき。ほかは空"`
 	ItemKind      string `json:"itemKind" enum:",Epic,Story,Task,Bug,Step" doc:"item のときのアイテムの種類。ほかは空"`
@@ -49,18 +49,29 @@ type InboxAction struct {
 	Result       string `json:"result" enum:",applied,kept" doc:"空でなければ、ボタンの代わりに結果を出す"`
 }
 
+// InboxOverwrite は、上書きの通知の「あなたの値 → 残った値」と「自分の値に戻す」ボタンの状態。
+type InboxOverwrite struct {
+	Mine    string `json:"mine"`
+	Kept    string `json:"kept"`
+	Visible bool   `json:"visible" doc:"ボタンを出す"`
+	Enabled bool   `json:"enabled" doc:"「自分の値に戻す」を押せる"`
+	Note    string `json:"note"`
+	Result  string `json:"result" enum:",applied" doc:"空でなければ、ボタンの代わりに結果を出す"`
+}
+
 // InboxRow は、受信箱の 1 行。
 type InboxRow struct {
-	ID     int64        `json:"id"`
-	Kind   string       `json:"kind" enum:"automation,automation_stopped,mention,assign,watch,overwrite,repair"`
-	At     time.Time    `json:"at"`
-	Read   bool         `json:"read"`
-	Text   string       `json:"text"`
-	Reason string       `json:"reason"`
-	Sender string       `json:"sender" doc:"差出人のログイン名。空は「hedgehug」"`
-	Store  InboxStore   `json:"store"`
-	Target InboxTarget  `json:"target"`
-	Action *InboxAction `json:"action,omitempty" doc:"止まった通知だけ"`
+	ID        int64           `json:"id"`
+	Kind      string          `json:"kind" enum:"automation,automation_stopped,mention,assign,watch,overwrite,repair"`
+	At        time.Time       `json:"at"`
+	Read      bool            `json:"read"`
+	Text      string          `json:"text"`
+	Reason    string          `json:"reason"`
+	Sender    string          `json:"sender" doc:"差出人のログイン名。空は「hedgehug」"`
+	Store     InboxStore      `json:"store"`
+	Target    InboxTarget     `json:"target"`
+	Action    *InboxAction    `json:"action,omitempty" doc:"止まった通知だけ"`
+	Overwrite *InboxOverwrite `json:"overwrite,omitempty" doc:"上書きの行で、値を出す項目だけ"`
 }
 
 // InboxPage は、受信箱の一覧の 1 回分。
@@ -114,6 +125,11 @@ func toRow(r appinbox.Row) InboxRow {
 		row.Action = &InboxAction{
 			Status: string(a.Status), StatusName: a.StatusName, Visible: a.Visible, ApplyEnabled: a.ApplyEnabled,
 			KeepEnabled: a.KeepEnabled, Note: a.Note, Result: string(a.Result),
+		}
+	}
+	if o := r.Overwrite; o != nil {
+		row.Overwrite = &InboxOverwrite{
+			Mine: o.Mine, Kept: o.Kept, Visible: o.Visible, Enabled: o.Enabled, Note: o.Note, Result: string(o.Result),
 		}
 	}
 	return row

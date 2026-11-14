@@ -96,6 +96,8 @@ type ReceivedSave struct {
 	Removed []RemovedEntity
 	// Concurrent は、合わせのときだけ、片側で親と一緒に削除され、もう片側で人が変えたエンティティ(決定 C4b2-17)。
 	Concurrent []ConcurrentRows
+	// Conflicts は、合わせのときだけ、説明の同じ箇所を両側が変えて、両方の版が残ったエンティティ(決定 C4c1-12)。
+	Conflicts []DescConflict
 	// DroppedPlan は、合わせのときだけ、合わせで取り除かれた(完全に削除した)スプリント・リリースの行(決定 C5a-8)。
 	DroppedPlan []DroppedPlan
 	// DroppedRules は、合わせのときだけ、合わせで取り除かれた、完全に削除したプロジェクトのルールの行(決定 C5b1-6)。
@@ -107,6 +109,13 @@ type ReceivedSave struct {
 	// いちばん近い合わせで、共通の祖先にない行の ID を、その合わせの 2 つの側に分けたもの。見るのは、その保存が
 	// 書いたエンティティのログだけ。合わせに届かなければ空(決定 C4b2-9)。
 	Sides repair.Facts
+}
+
+// DescConflict は、合わせで説明の同じ箇所を両側が変えて、両方の版が残ったエンティティ 1 つ(決定 C4c1-12)。
+type DescConflict struct {
+	Ref change.Ref
+	// Sides は、2 つの親それぞれの側で、共通の祖先のログにない desc の行。順は合わせの親の順(自分、remote)。
+	Sides [2][]change.Record
 }
 
 // ConcurrentRows は、合わせの結果に残るエンティティ 1 つで、片側の共通の祖先にない行に root: false の削除があり、
@@ -168,6 +177,9 @@ type RemovedEntity struct {
 type Received struct {
 	Saves    []ReceivedSave
 	ReadOnly bool
+	// Own は、op がこのマシンで作った保存のものか(決定 C4c1-4)。まだ送っていない保存と、前に覚えた保存。
+	// 閲覧のみの同期では常に false。nil なら、どれも違う。
+	Own func(op change.ID) (bool, error)
 }
 
 // JudgeFunc は、同期の最後に、受け取った保存・このマシンの修復の保存・合わせから通知を判定する差し込み口

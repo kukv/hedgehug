@@ -3,6 +3,7 @@ package descriptions_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ func setup(t *testing.T) (descriptions.Service, *recorder) {
 		t.Fatal(err)
 	}
 	rec := &recorder{Stores: s}
-	return descriptions.Service{Stores: rec, Identity: apptest.Identity{Login: "hanako"}}, rec
+	return descriptions.Service{Stores: rec, Identity: apptest.Identity{Login: "hanako"}, Inbox: &apptest.Inbox{}}, rec
 }
 
 func logTypes(t *testing.T, s port.Stores, ref change.Ref) []change.Type {
@@ -188,5 +189,144 @@ func TestUnknownIDsAreNotFound(t *testing.T) {
 	}
 	if _, err := svc.SaveProject(t.Context(), store, missing, "", "x"); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("SaveProject = %v", err)
+	}
+}
+
+const conflictText = "説明の同じ箇所が同時に編集されたため、両方を残しました"
+
+// 同じ箇所が重なって両方を残した保存は、保存した本人の受信箱に 1 行。差出人は、保存の中で読んだいまの説明の
+// 最後の desc の行の人(C4c1-13)。重ならない保存では作らない。
+func TestSaveConflictNotifies(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	inbox := svc.Inbox.(*apptest.Inbox)
+	taro := svc
+	taro.Identity = apptest.Identity{Login: "taro"}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taro.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\nx\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := inbox.Notices(); len(got) != 0 {
+		t.Fatalf("no conflict: notices = %+v", got)
+	}
+	res, err := svc.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n")
+	if err != nil || !res.Conflict {
+		t.Fatalf("SaveItem = %+v, %v", res, err)
+	}
+	want := port.Notice{
+		Kind: port.NoticeOverwrite, Store: store, Workspace: apptest.SampleWorkspace, Item: apptest.SampleTask,
+		Text: conflictText, Display: "HH-2", Sender: "taro", Field: "desc",
+	}
+	if got := inbox.Notices(); len(got) != 1 || !reflect.DeepEqual(got[0], want) {
+		t.Errorf("notices = %+v, want %+v", got, want)
+	}
+}
+
+// 作成のあと desc の行がないプロジェクトでは、差出人は作成の行の人。
+func TestSaveProjectConflictNotifiesTheCreator(t *testing.T) {
+	svc, rec := setup(t)
+	const id = "01CONFLICT0000000000000000"
+	p := project.Project{ID: id, Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2}, Rank: "W", Title: "計画", Owner: "taro", Status: project.Todo}
+	op := port.Operation{Actor: change.User("taro"), Summary: "プロジェクトを作成"}
+	if err := rec.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return errors.Join(tx.WriteProjects().Append(p.ID, project.Create(p)), tx.WriteProjects().Describe(p.ID, "a\nx\n"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveProject(t.Context(), store, id, "a\nb\n", "a\ny\n"); err != nil {
+		t.Fatal(err)
+	}
+	want := port.Notice{
+		Kind: port.NoticeOverwrite, Store: store, Workspace: apptest.SampleWorkspace, Project: id,
+		Text: conflictText, Display: "HH-P2", Sender: "taro", Field: "desc",
+	}
+	if got := svc.Inbox.(*apptest.Inbox).Notices(); len(got) != 1 || !reflect.DeepEqual(got[0], want) {
+		t.Errorf("notices = %+v, want %+v", got, want)
+	}
+}
+
+// 最後の desc の行が自動化の行なら、差出人は空(「hedgehug」)。
+func TestSaveConflictAutomationSender(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "自動化"}
+	if err := rec.Write(ctx, store, op, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Describe(apptest.SampleTask, "a\nx\n"),
+			tx.WriteItems().Append(apptest.SampleTask, change.NewDesc().ByRule("01RULE0000000000000000001")))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Inbox.(*apptest.Inbox).Notices(); len(got) != 1 || got[0].Sender != "" {
+		t.Errorf("notices = %+v, want one from hedgehug", got)
+	}
+}
+
+// failing は、fn のあとに Write を失敗させる Stores。
+type failing struct {
+	port.Stores
+	err error
+}
+
+func (f failing) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	return f.Stores.Write(ctx, id, op, func(tx port.Tx) error {
+		if err := fn(tx); err != nil {
+			return err
+		}
+		return f.err
+	})
+}
+
+// 重なった保存の書き込みが失敗したら、受信箱に行を足さない。
+func TestSaveConflictWriteFailsAddsNothing(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	taro := svc
+	taro.Identity = apptest.Identity{Login: "taro"}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taro.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\nx\n"); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("boom")
+	broken := svc
+	broken.Stores = failing{Stores: svc.Stores, err: boom}
+	if _, err := broken.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n"); !errors.Is(err, boom) {
+		t.Fatalf("SaveItem err = %v, want %v", err, boom)
+	}
+	if got := svc.Inbox.(*apptest.Inbox).Notices(); len(got) != 0 {
+		t.Errorf("notices = %+v, want none", got)
+	}
+}
+
+// 書き込みが済んだあとに受信箱へ足せなくても、保存は成功として合わせた結果を返す(失敗にすると、同じ入力の
+// やり直しで両方を残す区切りがもう一度入る)。
+func TestSaveConflictInboxFailureStillSucceeds(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	taro := svc
+	taro.Identity = apptest.Identity{Login: "taro"}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taro.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\nx\n"); err != nil {
+		t.Fatal(err)
+	}
+	svc.Inbox = &apptest.Inbox{Err: errors.New("inbox down")}
+	res, err := svc.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n")
+	if err != nil || !res.Conflict {
+		t.Fatalf("SaveItem = %+v, %v, want conflict result and nil error", res, err)
+	}
+	got, err := svc.GetItem(ctx, store, apptest.SampleTask)
+	if err != nil || got != res.Text {
+		t.Errorf("GetItem = %q, %v, want %q", got, err, res.Text)
 	}
 }

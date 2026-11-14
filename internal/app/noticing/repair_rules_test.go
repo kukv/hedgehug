@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -56,7 +57,7 @@ func TestOrphanRulesMovedStore(t *testing.T) {
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Project: webP, Display: "HH-P1",
 		Text: movedWeb, Source: "repair:moved:" + string(webP) + ":" + f.lastTransfer(),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -81,7 +82,7 @@ func TestOrphanRulesPurged(t *testing.T) {
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Project: p3, Display: "HH-P3",
 		Text: "HH-P3 は完全に削除されたため、あなたの変更は反映されませんでした", Source: "repair:purged:" + string(p3),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -300,7 +301,7 @@ func TestDroppedRulesNotice(t *testing.T) {
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Project: webP, Display: "HH-P1",
 		Text: "HH-P1 は完全に削除されたため、あなたの変更は反映されませんでした", Source: "repair:purged:" + string(webP),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -376,7 +377,7 @@ func TestMovedRulesNotice(t *testing.T) {
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Project: webP, Display: "HH-P1",
 		Text: movedWeb, Source: "repair:moved:" + string(webP) + ":" + f.lastTransfer(),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }

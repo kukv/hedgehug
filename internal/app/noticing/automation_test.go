@@ -3,6 +3,7 @@ package noticing_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -55,7 +56,7 @@ func TestAutomationFromStatusDelete(t *testing.T) {
 		Kind: port.NoticeAutomation, Store: store, Workspace: apptest.SampleWorkspace, Rule: ruleID,
 		Text: automation.RewrittenText("レビューへ", "Review", automation.PartTrigger, "InProgress"),
 	}
-	if n != want {
+	if !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 

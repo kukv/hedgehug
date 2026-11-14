@@ -8,6 +8,7 @@ export {
   type InboxState,
   inboxAppliedMessage,
   inboxEmptyTitle,
+  inboxRevertedMessage,
   inboxTabs,
   pillOf,
 } from "./features/inbox/inbox";
@@ -15,6 +16,7 @@ export { goneTextOf, projectRouteOf, workspaceRouteOf } from "./features/inbox/t
 export type {
   InboxAction,
   InboxCounts,
+  InboxOverwrite,
   InboxPage,
   InboxRow,
   InboxRowKind,

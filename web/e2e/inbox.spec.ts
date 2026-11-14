@@ -206,14 +206,3 @@ test("another tab receives the unread count", async ({ page }, info) => {
   await expectCount((await badge(other, info)).count, n.before);
   await other.close();
 });
-
-test("the overwrite tab shows the empty message and its note", async ({ page }) => {
-  await page.goto(tokenUrl("/inbox"));
-  await page.getByRole("tab", { name: /^上書き/ }).click();
-  await expect(page.getByText("お知らせはありません")).toBeVisible();
-  await expect(
-    page.getByText(
-      "このマシンで変えた値が、同期であとから届いた変更に負けると、ここに出ます。試すには、値を変えてからサイドバーの同期ボタンを押してください。",
-    ),
-  ).toBeVisible();
-});

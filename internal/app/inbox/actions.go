@@ -68,11 +68,16 @@ func (s Service) Apply(ctx context.Context, id port.NoticeID) error {
 // stopped は、ボタンを押せる止まった通知を返す。種類が違えば ErrInvalidOperation、結果があるか閲覧のみの Store なら断る(C4a-10・C4a-12)。
 // 表示中でない Store の通知は ErrNotFound(一覧に出ない)。
 func (s Service) stopped(ctx context.Context, id port.NoticeID) (port.NoticeRow, error) {
+	return s.pending(ctx, id, port.NoticeAutomationStopped)
+}
+
+// pending は、ボタンを押せる種類 kind の通知を返す。検査の順は、種類 → 結果 → 表示中 → 閲覧のみ。
+func (s Service) pending(ctx context.Context, id port.NoticeID, kind port.NoticeKind) (port.NoticeRow, error) {
 	n, err := s.Book.Get(ctx, id)
 	if err != nil {
 		return port.NoticeRow{}, err
 	}
-	if n.Kind != port.NoticeAutomationStopped {
+	if n.Kind != kind {
 		return port.NoticeRow{}, port.ErrInvalidOperation
 	}
 	if n.Result != "" {

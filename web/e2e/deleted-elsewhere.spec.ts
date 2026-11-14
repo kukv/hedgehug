@@ -23,7 +23,7 @@ test("saving a description of an item deleted in another tab restores it", async
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "別で削除 アイテム"), prefix);
+  await createWorkspace(page, info, unique(info, `別で削除 アイテム ${prefix}`), prefix);
   const panel = await newTaskUnder(page, info, prefix);
   const section = panel.getByRole("region", { name: "説明", exact: true });
   await section.getByRole("button", { name: "説明を追加" }).click();
@@ -67,7 +67,7 @@ test("saving a description of a project deleted in another tab restores it", asy
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "別で削除 プロジェクト"), prefix);
+  await createWorkspace(page, info, unique(info, `別で削除 プロジェクト ${prefix}`), prefix);
   await newProject(page, info, prefix);
   const section = page.getByRole("region", { name: "説明", exact: true });
   await section.getByRole("button", { name: "説明を追加" }).click();
@@ -100,7 +100,7 @@ test("saving a description of a project deleted in another tab restores it", asy
 
 test("renaming a status deleted in another tab restores it", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "別で削除 ステータス"), prefix);
+  await createWorkspace(page, info, unique(info, `別で削除 ステータス ${prefix}`), prefix);
   const rowOf = (p: Page, value: string) =>
     p.locator(".row").filter({ has: p.getByRole("button", { name: `${value}の色` }) });
   const openStatuses = async (p: Page) => {
@@ -144,7 +144,7 @@ test("renaming a status deleted in another tab restores it", async ({ page }, in
 
 test("editing a comment deleted in another tab restores it", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "別で削除 コメント"), prefix);
+  await createWorkspace(page, info, unique(info, `別で削除 コメント ${prefix}`), prefix);
   const panel = await newTaskUnder(page, info, prefix);
   const section = panel.getByRole("region", { name: "コメント", exact: true });
   await section.getByPlaceholder(commentPlaceholder).fill("削除される前の本文");
@@ -236,7 +236,7 @@ test("changing a setting of a workspace deleted in another tab restores it", asy
 
 test("editing a sprint deleted in another tab restores it", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "別で削除 スプリント"), prefix);
+  await createWorkspace(page, info, unique(info, `別で削除 スプリント ${prefix}`), prefix);
   const sprintsTab = tokenUrl(`/s/e2e/w/${prefix}/sprints`);
   const card = (p: Page) => p.getByRole("article", { name: "Sprint 1" });
   await page.goto(sprintsTab);

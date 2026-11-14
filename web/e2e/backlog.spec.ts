@@ -31,7 +31,7 @@ async function dragHandle(page: Page, handle: Locator, target: Locator) {
 
 test("creates, reorders and plans items on the backlog", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "計画"), prefix);
+  await createWorkspace(page, info, unique(info, `計画 ${prefix}`), prefix);
   // プロジェクト(接頭辞-P1)、Epic(接頭辞-1)、Story(接頭辞-2・-3・-4)。
   await projectWithEpic(page, info, prefix);
   for (const title of ["検索", "通知", "設定"]) {

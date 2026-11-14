@@ -21,6 +21,8 @@ type judgeRecorder struct {
 	titles   []string // 呼ばれたときに read で読んだサンプルのタスクのタイトル(完全に削除したあとは空)
 	err      error
 	judged   *apptest.JudgedSaves
+	ask      []change.ID          // 呼ばれたときに in.Own で尋ねる op
+	own      []map[change.ID]bool // 呼び出しごとの、ask の op への in.Own の答え(nil なら false)
 }
 
 // withJudge は、m の同期に判定の差し込み口と、判定済みの記録(空)を付ける。
@@ -33,6 +35,18 @@ func withJudge(m machine) *judgeRecorder {
 		}
 		j.calls = append(j.calls, in.Saves)
 		j.readOnly = append(j.readOnly, in.ReadOnly)
+		answers := map[change.ID]bool{}
+		for _, op := range j.ask {
+			if in.Own == nil {
+				continue
+			}
+			ok, err := in.Own(op)
+			if err != nil {
+				return err
+			}
+			answers[op] = ok
+		}
+		j.own = append(j.own, answers)
 		err := read(func(r port.Reader) error {
 			it, err := r.Items().Get(apptest.SampleTask)
 			j.titles = append(j.titles, it.Title)

@@ -3,6 +3,7 @@ package apptest_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -51,7 +52,7 @@ func TestInboxKeepsNotices(t *testing.T) {
 	if err := in.Add(t.Context(), n); err != nil {
 		t.Fatal(err)
 	}
-	if got := in.Notices(); len(got) != 1 || got[0] != n {
+	if got := in.Notices(); len(got) != 1 || !reflect.DeepEqual(got[0], n) {
 		t.Errorf("Notices = %+v", got)
 	}
 	in.Err = errors.New("full")

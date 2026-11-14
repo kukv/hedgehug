@@ -1,6 +1,7 @@
 package apptest
 
 import (
+	"encoding/json"
 	"errors"
 	"maps"
 	"slices"
@@ -176,6 +177,18 @@ func TestFakeInboxProjectColumnsAndPrune(t *testing.T) {
 	_ = b.Prune(t.Context(), "s1", []change.ID{"p1"})
 	if got := fakeList(t, b, "s1"); len(got) != 1 || got[0].Item != "i1" {
 		t.Errorf("after prune = %+v", got)
+	}
+}
+
+func TestFakeInboxOverwriteValues(t *testing.T) {
+	b := &Inbox{}
+	n := port.Notice{Kind: port.NoticeOverwrite, Store: "s1", Item: "i1", Field: "status", Mine: json.RawMessage(`"A"`), Kept: json.RawMessage(`"B"`), Source: "o1"}
+	if _, err := b.AddOnce(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	got, err := b.Get(t.Context(), 1)
+	if err != nil || got.Field != "status" || string(got.Mine) != `"A"` || string(got.Kept) != `"B"` {
+		t.Errorf("get = %+v, %v", got, err)
 	}
 }
 

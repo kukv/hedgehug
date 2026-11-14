@@ -3,6 +3,7 @@ package statedb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -35,6 +36,9 @@ func init() {
 	ALTER TABLE inbox ADD COLUMN source TEXT NOT NULL DEFAULT '';
 	CREATE INDEX inbox_by_source ON inbox (store, source)`)
 	register("inbox/003", `ALTER TABLE inbox ADD COLUMN section TEXT NOT NULL DEFAULT ''`)
+	register("inbox/004", `ALTER TABLE inbox ADD COLUMN field TEXT NOT NULL DEFAULT '';
+	ALTER TABLE inbox ADD COLUMN mine TEXT NOT NULL DEFAULT '';
+	ALTER TABLE inbox ADD COLUMN kept TEXT NOT NULL DEFAULT ''`)
 }
 
 // Inbox は、このマシンの受信箱(port.InboxBook)。時刻は Add のときに clock で刻む。
@@ -50,7 +54,7 @@ const inboxTimeLayout = "2006-01-02T15:04:05.000000000Z"
 
 func inboxTime(t time.Time) string { return t.UTC().Format(inboxTimeLayout) }
 
-const inboxColumns = `id, store, workspace, project, section, kind, item, rule, text, reason, status, from_status, display, sender, source, at, read, result`
+const inboxColumns = `id, store, workspace, project, section, field, mine, kept, kind, item, rule, text, reason, status, from_status, display, sender, source, at, read, result`
 
 func (b inbox) Add(ctx context.Context, n port.Notice) error {
 	return b.insert(ctx, n, b.clock.Now())
@@ -58,14 +62,14 @@ func (b inbox) Add(ctx context.Context, n port.Notice) error {
 
 func (b inbox) insert(ctx context.Context, n port.Notice, at time.Time) error {
 	_, err := b.db.ExecContext(ctx, `INSERT INTO inbox
-		(store, workspace, project, section, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, noticeArgs(n, at)...)
+		(store, workspace, project, section, field, mine, kept, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, noticeArgs(n, at)...)
 	return err
 }
 
 func noticeArgs(n port.Notice, at time.Time) []any {
 	return []any{
-		string(n.Store), string(n.Workspace), string(n.Project), n.Section, string(n.Kind), string(n.Item), string(n.Rule), n.Text, n.Reason,
+		string(n.Store), string(n.Workspace), string(n.Project), n.Section, n.Field, string(n.Mine), string(n.Kept), string(n.Kind), string(n.Item), string(n.Rule), n.Text, n.Reason,
 		string(n.Status), string(n.From), n.Display, n.Sender, n.Source, inboxTime(at),
 	}
 }
@@ -76,8 +80,8 @@ func (b inbox) AddOnce(ctx context.Context, n port.Notice) (bool, error) {
 		return false, port.ErrInvalidOperation
 	}
 	res, err := b.db.ExecContext(ctx, `INSERT INTO inbox
-		(store, workspace, project, section, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
-		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		(store, workspace, project, section, field, mine, kept, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		WHERE NOT EXISTS (SELECT 1 FROM inbox WHERE store = ? AND source = ?)`,
 		append(noticeArgs(n, b.clock.Now()), string(n.Store), n.Source)...)
 	if err != nil {
@@ -161,17 +165,26 @@ func (b inbox) List(ctx context.Context, q port.NoticeQuery) ([]port.NoticeRow, 
 
 func scanNotice(s interface{ Scan(...any) error }) (port.NoticeRow, error) {
 	var r port.NoticeRow
-	var store, workspace, project, kind, itemID, rule, status, from, result, at string
+	var store, workspace, project, mine, kept, kind, itemID, rule, status, from, result, at string
 	var read int
-	err := s.Scan(&r.ID, &store, &workspace, &project, &r.Section, &kind, &itemID, &rule, &r.Text, &r.Reason, &status, &from, &r.Display, &r.Sender, &r.Source, &at, &read, &result)
+	err := s.Scan(&r.ID, &store, &workspace, &project, &r.Section, &r.Field, &mine, &kept, &kind, &itemID, &rule, &r.Text, &r.Reason, &status, &from, &r.Display, &r.Sender, &r.Source, &at, &read, &result)
 	if err != nil {
 		return r, err
 	}
 	r.Store, r.Workspace, r.Kind, r.Item, r.Rule = port.StoreID(store), change.ID(workspace), port.NoticeKind(kind), change.ID(itemID), change.ID(rule)
 	r.Project = change.ID(project)
+	r.Mine, r.Kept = rawJSON(mine), rawJSON(kept)
 	r.Status, r.From, r.Read, r.Result = change.ID(status), change.ID(from), read != 0, port.NoticeResult(result)
 	r.At, err = parseTime(at)
 	return r, err
+}
+
+// rawJSON は、列の文字列を JSON に戻す。空(値がない・列を足す前の行)は nil。
+func rawJSON(s string) json.RawMessage {
+	if s == "" {
+		return nil
+	}
+	return json.RawMessage(s)
 }
 
 func (b inbox) Unread(ctx context.Context, stores []port.StoreID) (map[port.NoticeKind]int, error) {

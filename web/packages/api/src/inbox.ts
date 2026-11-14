@@ -6,6 +6,7 @@ import {
   keepInboxNotice,
   listInbox,
   readAllInbox,
+  revertInboxNotice,
   setInboxRead,
 } from "./generated";
 
@@ -24,5 +25,6 @@ export function createInboxPort(): InboxPort {
     readAll: (tab) => call(() => readAllInbox({ tab })),
     apply: (id) => call(() => applyInboxNotice(id)),
     keep: (id) => call(() => keepInboxNotice(id)),
+    revert: (id) => call(() => revertInboxNotice(id)),
   };
 }

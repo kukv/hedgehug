@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -80,7 +81,7 @@ func TestActiveNotice(t *testing.T) {
 		Text:   "実行中のスプリントが 2 つになったため、「Sprint 2」を計画中に戻しました",
 		Source: "repair:active:" + string(sprintB) + ":" + start,
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -185,7 +186,7 @@ func TestClosedNotice(t *testing.T) {
 		Text:   "スプリント「Sprint 24」は完了しているため、HH-9 をバックログに戻しました",
 		Source: "repair:closed:" + string(item9) + ":" + row,
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -265,7 +266,7 @@ func TestPlanRefNotices(t *testing.T) {
 				Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Item: item4, Display: "HH-4",
 				Text: c.want, Source: "repair:planref:" + string(item4) + ":" + c.field + ":" + row,
 			}
-			if n := f.wantOne(); n != want {
+			if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 				t.Errorf("notice = %+v, want %+v", n, want)
 			}
 		})

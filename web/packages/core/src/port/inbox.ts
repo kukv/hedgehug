@@ -16,4 +16,6 @@ export interface InboxPort {
   // apply は「制約を無視して…」、keep は「変更しない」。
   apply(id: number): Promise<void>;
   keep(id: number): Promise<void>;
+  // revert は、上書きの通知の「自分の値に戻す」。
+  revert(id: number): Promise<void>;
 }

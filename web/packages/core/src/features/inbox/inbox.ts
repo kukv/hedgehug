@@ -45,6 +45,7 @@ export function emptyOf(tab: InboxTab): { title: string; note?: string } {
 }
 
 export const inboxAppliedMessage = "適用しました";
+export const inboxRevertedMessage = "上書き前の値に戻しました";
 
 export interface InboxState {
   tab: InboxTab;
@@ -72,6 +73,8 @@ export interface Inbox {
   // apply は「制約を無視して…」、keep は「変更しない」。
   apply(row: InboxRow): Promise<void>;
   keep(row: InboxRow): Promise<void>;
+  // revert は、上書きの通知の「自分の値に戻す」。
+  revert(row: InboxRow): Promise<void>;
   // reload は、画面への反映(出来事 inbox)と操作のあと。出していた件数を覆うまで読み直す。
   reload(): Promise<void>;
   reloadUnread(): Promise<void>;
@@ -209,6 +212,11 @@ export function createInbox(deps: InboxDeps): Inbox {
         () => deps.toasts.show(inboxAppliedMessage),
       ),
     keep: (row) => write(() => deps.port.keep(row.id)),
+    revert: (row) =>
+      write(
+        () => deps.port.revert(row.id),
+        () => deps.toasts.show(inboxRevertedMessage),
+      ),
     // 画面への反映は失敗を出さない(A2 の決定 29)。
     reload: () => again().catch(() => {}),
     async reloadUnread() {

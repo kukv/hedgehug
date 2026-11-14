@@ -3,6 +3,7 @@ package inbox
 import (
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -23,6 +24,7 @@ const (
 	TargetProject          TargetKind = "project"           // 生きているプロジェクト。概要を開く
 	TargetMovedProject     TargetKind = "moved_project"     // Store にない(別の Store へ移った)。旧 ID のアドレスを開く
 	TargetDeletedProject   TargetKind = "deleted_project"   // 削除されたプロジェクト(リンクなし)
+	TargetStore            TargetKind = "store"             // アイテム・プロジェクト・ワークスペースのどれも指さない(メンバーの表示名)。Store の点と Store 名を出す(リンクなし)
 )
 
 // Target は、行の対象。いまの値(接頭辞・タイトル・ワークスペース名)で出す。
@@ -49,8 +51,8 @@ type Action struct {
 	Result       port.NoticeResult // 空でなければ、ボタンの代わりに結果を出す
 }
 
-// resolve は、通知 n を行にする。r は n の Store の読み取り。
-func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) {
+// resolve は、通知 n を行にする。r は n の Store の読み取り、now は値の表示に使う今。
+func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow, now time.Time) (Row, error) {
 	row := Row{ID: n.ID, Kind: n.Kind, At: n.At, Read: n.Read, Text: n.Text, Reason: n.Reason, Sender: n.Sender, Store: info}
 	var it *item.Item
 	var err error
@@ -59,6 +61,8 @@ func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) 
 		row.Target, it, err = itemTarget(r, n)
 	case n.Project != "":
 		row.Target, err = projectTarget(r, n)
+	case n.Workspace == "":
+		row.Target = Target{Kind: TargetStore}
 	default:
 		row.Target, err = workspaceTarget(r, n.Workspace, n.Section)
 	}
@@ -71,6 +75,11 @@ func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) 
 			return Row{}, err
 		}
 		row.Action = &a
+	}
+	if n.Kind == port.NoticeOverwrite {
+		if row.Overwrite, err = overwriteOf(r, info, n, now); err != nil {
+			return Row{}, err
+		}
 	}
 	return row, nil
 }

@@ -133,7 +133,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: notifier})
 	notes.Register(api, notes.Services{
-		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity},
+		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity, Inbox: notifier},
 		Comments:     appcomments.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity},
 		Worklogs:     appworklogs.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock},
 		Relations:    apprelations.Service{Stores: deps.Stores, Identity: deps.Identity},
@@ -149,7 +149,8 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	autoSvc := appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}
 	automations.Register(api, autoSvc)
 	inbox.Register(api, appinbox.Service{
-		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
+		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, Identity: deps.Identity, Clock: deps.Clock,
+		ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
 	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})

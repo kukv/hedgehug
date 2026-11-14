@@ -82,6 +82,11 @@ type JudgedSaves interface {
 	Known(ctx context.Context, store StoreID, k SaveKey) (Match, error)
 	// Mark は、keys をまとめて 1 回で記録する。すでにあるものは重ねない。
 	Mark(ctx context.Context, store StoreID, keys []SaveKey) error
+	// MarkOwn は、keys を Mark と同じく記録し、このマシンで作った保存として覚える(すでにある記録も
+	// このマシンの保存にする。決定 C4c1-4)。
+	MarkOwn(ctx context.Context, store StoreID, keys []SaveKey) error
+	// Own は、op の記録のどれかが、このマシンで作った保存として覚えたものか。op が空なら false。
+	Own(ctx context.Context, store StoreID, op change.ID) (bool, error)
 	// ForgetStore は、store の記録をすべて消す。
 	ForgetStore(ctx context.Context, store StoreID) error
 }

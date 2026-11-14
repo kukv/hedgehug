@@ -214,9 +214,12 @@ func (i *Inbox) ForgetStore(_ context.Context, store port.StoreID) error {
 type JudgedSaves struct {
 	mu    sync.Mutex
 	saves map[port.StoreID][]port.SaveKey
+	own   map[port.StoreID]map[change.ID]bool // MarkOwn で覚えた op
 }
 
-func NewJudgedSaves() *JudgedSaves { return &JudgedSaves{saves: map[port.StoreID][]port.SaveKey{}} }
+func NewJudgedSaves() *JudgedSaves {
+	return &JudgedSaves{saves: map[port.StoreID][]port.SaveKey{}, own: map[port.StoreID]map[change.ID]bool{}}
+}
 
 func (j *JudgedSaves) Started(_ context.Context, id port.StoreID) (bool, error) {
 	j.mu.Lock()
@@ -250,9 +253,33 @@ func (j *JudgedSaves) Mark(_ context.Context, id port.StoreID, keys []port.SaveK
 	return nil
 }
 
+func (j *JudgedSaves) MarkOwn(ctx context.Context, id port.StoreID, keys []port.SaveKey) error {
+	if err := j.Mark(ctx, id, keys); err != nil {
+		return err
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.own[id] == nil {
+		j.own[id] = map[change.ID]bool{}
+	}
+	for _, k := range keys {
+		if k.Op != "" {
+			j.own[id][k.Op] = true
+		}
+	}
+	return nil
+}
+
+func (j *JudgedSaves) Own(_ context.Context, id port.StoreID, op change.ID) (bool, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return op != "" && j.own[id][op], nil
+}
+
 func (j *JudgedSaves) ForgetStore(_ context.Context, id port.StoreID) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	delete(j.saves, id)
+	delete(j.own, id)
 	return nil
 }

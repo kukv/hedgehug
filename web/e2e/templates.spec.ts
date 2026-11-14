@@ -6,7 +6,7 @@ import { createWorkspace, openSettings, prefixOf, tokenUrl, unique } from "./hel
 
 test("the workflow tab restricts and frees a status's transitions", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "ワークフロー"), prefix);
+  await createWorkspace(page, info, unique(info, `ワークフロー ${prefix}`), prefix);
   await openSettings(page, prefix, "ワークフロー");
 
   const cell = page.getByRole("checkbox", { name: "Todo から InProgress", exact: true });
@@ -30,7 +30,7 @@ test("the workflow tab restricts and frees a status's transitions", async ({ pag
 test("creates, defaults, re-kinds and deletes a template", async ({ page }, info) => {
   const prefix = prefixOf(info);
   const name = unique(info, `調査 ${Math.floor(Math.random() * 1e5)}`);
-  await createWorkspace(page, info, unique(info, "テンプレート"), prefix);
+  await createWorkspace(page, info, unique(info, `テンプレート ${prefix}`), prefix);
   await openSettings(page, prefix, "テンプレート");
   await expect(page.getByText("テンプレートはありません")).toBeVisible();
 

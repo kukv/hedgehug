@@ -44,6 +44,10 @@ var opts = change.Options{
 	},
 }
 
+// Valid は、メンバーの一覧のログの行が、いまの値を決めるのに使える行か(Resolve の手順 0 と同じ検査。
+// 上書きの判定が、いまの値と同じ行を見るため)。
+func Valid(r change.Record) bool { return opts.Valid(r) }
+
 // FromLog は、メンバーの一覧のログから、ログイン名(小文字)の順の一覧を作る。
 // 大文字と小文字だけが違うログイン名は同じメンバーとし、先に追加した綴りを残す。
 func FromLog(log []change.Record) []Member {

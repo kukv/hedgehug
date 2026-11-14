@@ -13,6 +13,7 @@
   import { links, syncNow } from "../../wire";
   import InboxAction from "./InboxAction.svelte";
   import InboxDot from "./InboxDot.svelte";
+  import InboxOverwrite from "./InboxOverwrite.svelte";
 
   // 受信箱の 1 行(06「並びと行の表示」)。点・ピル・対象・相対時間・差出人と本文を出す。
   interface Props {
@@ -51,6 +52,11 @@
       {/snippet}
       {#if gone}
         <span class="gone">{gone}</span>
+      {:else if t.kind === "store"}
+        <span class="target">
+          {@render storeDot()}
+          <span>{row.store.name}</span>
+        </span>
       {:else if link}
         <a
           class="target"
@@ -79,6 +85,8 @@
     </div>
     {#if row.kind === "automation_stopped"}
       <InboxAction {row} />
+    {:else if row.overwrite}
+      <InboxOverwrite {row} />
     {/if}
   </div>
 </li>

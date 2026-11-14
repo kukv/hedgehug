@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func TestMentionInComment(t *testing.T) {
 		Kind: port.NoticeMention, Store: store, Workspace: apptest.SampleWorkspace, Item: apptest.SampleTask,
 		Text: "@hanako 見てください", Display: "HH-2", Sender: "taro", Source: "comment:" + string(commentID), At: s.Key.At,
 	}
-	if n != want {
+	if !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }

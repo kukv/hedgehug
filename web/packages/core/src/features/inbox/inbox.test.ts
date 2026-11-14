@@ -96,6 +96,32 @@ describe("createInbox (06「受信箱」)", () => {
     expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([["適用しました", false]]);
   });
 
+  it("shows 上書き前の値に戻しました after revert and reads the rows again", async () => {
+    const t = setup(vi.fn, [row(1, "overwrite")]);
+    await t.inbox.open();
+    const r = get(t.inbox.state).rows[0];
+    if (!r) throw new Error("no row");
+    await t.inbox.revert(r);
+    expect(t.port.revert).toHaveBeenCalledWith(1);
+    expect(get(t.inbox.state).rows[0]?.read).toBe(true);
+    expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([
+      ["上書き前の値に戻しました", false],
+    ]);
+  });
+
+  it("shows a refusal of revert as an error toast and reads the rows again", async () => {
+    const t = setup(vi.fn, [row(1, "overwrite")]);
+    await t.inbox.open();
+    const r = get(t.inbox.state).rows[0];
+    if (!r) throw new Error("no row");
+    const refusal = "HH-2 は先に変更されたため、適用しませんでした";
+    t.port.revert.mockRejectedValueOnce(new Refused(refusal));
+    t.change([{ ...r, read: true }]);
+    await t.inbox.revert(r);
+    expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([[refusal, true]]);
+    expect(get(t.inbox.state).rows[0]?.read).toBe(true);
+  });
+
   it("shows a refusal as an error toast and reads the rows again", async () => {
     const t = setup(vi.fn, [row(1, "automation_stopped")]);
     await t.inbox.open();

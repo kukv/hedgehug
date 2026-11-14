@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -60,7 +61,7 @@ func TestDroppedPlanNotice(t *testing.T) {
 				Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Section: c.section,
 				Text: c.text, Source: "repair:purged:" + string(c.target),
 			}
-			if n := f.wantOne(); n != want {
+			if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 				t.Errorf("notice = %+v, want %+v", n, want)
 			}
 		})

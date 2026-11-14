@@ -23,7 +23,7 @@ const BotName = change.BotLogin
 // (a) remote の先端 theirs から辿れる、判定していない保存(Hedgehug-Op を持つもの)。
 // (b) 自分の先端 head から辿れて theirs から辿れない、判定していない同期の修復の保存。ほかのこのマシンの保存は返さない。
 // (c) theirs・head から辿れる、判定していない合わせのうち、消えたエンティティに共通の祖先にない行があるものと、
-// 親と一緒の削除と人の変更が重なったエンティティがあるもの(決定 C4b2-17)。
+// 親と一緒の削除と人の変更が重なったエンティティがあるもの(決定 C4b2-17)と、説明の同じ箇所が重なったもの(決定 C4c1-12)。
 func Pending(repo *git.Repository, theirs, head plumbing.Hash, known func(port.SaveKey) (port.Match, error)) ([]port.ReceivedSave, error) {
 	received, err := walk(repo, theirs, known)
 	if err != nil {
@@ -60,17 +60,32 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if n.c.NumParents() != 2 {
 		return port.ReceivedSave{}, false, nil // 最初の保存
 	}
-	base := baseOf(n.c)
+	base := baseOf(n.c) // 3 つの判定で同じ共通の祖先を使い、探すのも 1 回にする
 	removed, concurrent, err := mergeRemoved(n.c, base)
 	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	dropped, rules, moved, err := droppedAndMoved(n.c, base)
-	if err != nil || (len(concurrent) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 }) && !hasNewPlan(dropped) &&
-		!hasNewRules(rules) && len(moved) == 0) {
+	conflicts, err := mergeConflicts(n.c, base)
+	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, DroppedPlan: dropped, DroppedRules: rules, MovedRules: moved}, true, nil
+	dropped, rules, moved, err := droppedAndMoved(n.c, base)
+	s := port.ReceivedSave{
+		Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, Conflicts: conflicts,
+		DroppedPlan: dropped, DroppedRules: rules, MovedRules: moved,
+	}
+	if err != nil || !mergeToJudge(s) {
+		return port.ReceivedSave{}, false, err
+	}
+	return s, true, nil
+}
+
+// mergeToJudge は、合わせ s を判定に渡すか。消えたものに共通の祖先にない行があるか、削除と変更が重なったか、
+// 説明が重なったか、完全に削除した計画・プロジェクトのルールに共通の祖先にない行があるか、別の Store へ移した
+// プロジェクトのルールを同時に変えたとき。
+func mergeToJudge(s port.ReceivedSave) bool {
+	return len(s.Concurrent) > 0 || len(s.Conflicts) > 0 || hasNewPlan(s.DroppedPlan) || hasNewRules(s.DroppedRules) ||
+		len(s.MovedRules) > 0 || slices.ContainsFunc(s.Removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })
 }
 
 // saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティと Sides も読む。

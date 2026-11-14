@@ -34,6 +34,15 @@ describe("行の対象のプロジェクト (06「並びと行の表示」)", ()
   });
 });
 
+describe("Store を指す行 (06「並びと行の表示」)", () => {
+  it("is neither gone nor a project, so the row shows the Store name without a link", () => {
+    const r = withTarget("store", "");
+    expect(r.target.kind).toBe("store");
+    expect(goneTextOf("store")).toBeNull();
+    expect(projectRouteOf(r)).toBeNull();
+  });
+});
+
 describe("ワークスペースを指す行の開く区画 (06「並びと行の表示」)", () => {
   it("opens the Sprints and Releases tabs without a section", () => {
     expect(workspaceRouteOf("sprints")).toEqual({ tab: "sprints" });

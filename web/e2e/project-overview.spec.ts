@@ -18,7 +18,7 @@ test("edits the overview's properties, one save per item, and shows the history"
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "概要"), prefix);
+  await createWorkspace(page, info, unique(info, `概要 ${prefix}`), prefix);
   await newProject(page, info, prefix);
   const other = await newProject(page, info, prefix, 2);
   await page.goto(overview(prefix));
@@ -92,7 +92,7 @@ test("edits the description, posts a comment and edits repositories on the overv
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "概要の説明"), prefix);
+  await createWorkspace(page, info, unique(info, `概要の説明 ${prefix}`), prefix);
   await newProject(page, info, prefix);
   const description = page.getByRole("region", { name: "説明", exact: true });
   await description.getByRole("button", { name: "説明を追加" }).click();
@@ -152,7 +152,7 @@ test("an Epic row shows its progress and changes status from the row", async ({ 
   // Task を 2 件作るので、全部を並列で回すときに 30 秒を超えることがある。
   test.slow();
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "Epic の行"), prefix);
+  await createWorkspace(page, info, unique(info, `Epic の行 ${prefix}`), prefix);
   // Epic(接頭辞-1)の下に Task(接頭辞-2)を 1 件作り、その Task を Done にする。
   const panel = await newTaskUnder(page, info, prefix);
   await panel
