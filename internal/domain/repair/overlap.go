@@ -61,28 +61,42 @@ func Changer(log []change.Record, d change.Record) string {
 	return ""
 }
 
-// LastChange は、削除の行 d と重なった変更のうち最もあとの行。hasChange と同じ数え方を、片側の見分けなしで当てる:
-// d の op でない、人が書いた変更の行(delete・restore を除く)のうち、d の f(deleted ならすべての f、ほかは f と
-// その下の f)を変えたもので、at が最もあとの行(同じなら ID の大きい行)。作成と moved_in の行は、削除より前に
-// しかない(削除と同時にはできない)ので数えない。
+// LastChange は、削除の行 d と重なった変更のうち最もあとの行(決定 C4b2-9)。hasChange と同じ数え方を、片側の
+// 見分けなしで当てる: d の op でない、人が書いた変更の行(delete・restore を除く)のうち、d の f が deleted なら
+// すべての行、ほかは f の下の f(d.F+"/" で始まるもの)の行。作成と moved_in の行は、削除より前にしかない(削除と
+// 同時にはできない)ので数えない。削除した人(d.By。大文字と小文字を区別しない)でない人の行のうち at が最もあとの
+// 行(同じなら ID の大きい行)を返し、削除した人の行しかなければ、その中で最もあとの行を返す。
 func LastChange(log []change.Record, d change.Record) (change.Record, bool) {
-	var w *change.Record
+	var other, own *change.Record
 	for i := range log {
 		c := &log[i]
 		if c.Op == d.Op || c.Actor.Kind != change.ActorUser || slices.Contains(notChanges, c.T) {
 			continue
 		}
-		if d.F != change.DeletedField && c.F != d.F && !strings.HasPrefix(c.F, d.F+"/") {
+		if d.F != change.DeletedField && !strings.HasPrefix(c.F, d.F+"/") {
 			continue
 		}
-		if w == nil || c.At.After(w.At) || (c.At.Equal(w.At) && c.ID > w.ID) {
-			w = c
+		if strings.EqualFold(c.By, d.By) {
+			own = later(own, c)
+		} else {
+			other = later(other, c)
 		}
 	}
-	if w == nil {
-		return change.Record{}, false
+	switch {
+	case other != nil:
+		return *other, true
+	case own != nil:
+		return *own, true
 	}
-	return *w, true
+	return change.Record{}, false
+}
+
+// later は、w と c のうち at があとの行(同じなら ID の大きい行)。w が nil なら c。
+func later(w, c *change.Record) *change.Record {
+	if w == nil || c.At.After(w.At) || (c.At.Equal(w.At) && c.ID > w.ID) {
+		return c
+	}
+	return w
 }
 
 // hasChange は、d と重なる変更が、side の側にあるか。

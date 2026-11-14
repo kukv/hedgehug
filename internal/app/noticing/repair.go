@@ -75,24 +75,25 @@ func lastSaver(log []change.Record, field string) string {
 	return w.By
 }
 
-// nameOf は、login の Store のメンバーの表示名。メンバーにいないか、メンバーを読めなければログイン名。
-func nameOf(r port.Reader, login string) string {
+// nameOf は、login の Store のメンバーの表示名。メンバーにいないか、メンバーの一覧がない(ErrNotFound)なら
+// ログイン名。ほかの読み取りの失敗はエラー(C4b1-5)。
+func nameOf(r port.Reader, login string) (string, error) {
 	ms, err := r.Members().List()
 	if err != nil {
-		return login
+		return login, notFoundIsSkip(err)
 	}
 	for _, m := range ms {
 		if same(m.Login, login) {
-			return oneLine(m.Name)
+			return oneLine(m.Name), nil
 		}
 	}
-	return login
+	return login, nil
 }
 
 // memberName は、{変更した人} の名前。空なら「不明なユーザー」。
-func memberName(r port.Reader, login string) string {
+func memberName(r port.Reader, login string) (string, error) {
 	if login == "" {
-		return unknownUser
+		return unknownUser, nil
 	}
 	return nameOf(r, login)
 }

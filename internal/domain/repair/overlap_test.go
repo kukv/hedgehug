@@ -159,7 +159,15 @@ func TestChanger(t *testing.T) {
 			at(row("c7", "op3", change.Set, "statuses/XY/name", user), "jiro", 6),
 			at(row("c8", "op4", change.Set, "name", user), "jiro", 7),
 		}, valueDel, "hanako"},
-		{"same f", []change.Record{at(row("c9", "op2", change.Comment, "statuses/X", user), "hanako", 1), valueDel}, valueDel, "hanako"},
+		{"same f not counted", []change.Record{at(row("c9", "op2", change.Comment, "statuses/X", user), "hanako", 1), valueDel}, valueDel, ""},
+		{"deleter's later change skipped", []change.Record{
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1), itemDel,
+			at(row("c12", "op3", change.Set, "status", user), "Taro", 7),
+		}, itemDel, "hanako"},
+		{"only the deleter changed", []change.Record{
+			at(row("c12", "op3", change.Set, "status", user), "taro", 7), itemDel,
+			at(row("c13", "op4", change.Set, "title", user), "taro", 2),
+		}, itemDel, "taro"},
 		{"create and moved_in not counted", []change.Record{
 			at(row("c10", "op0", change.Create, "", user), "jiro", 0),
 			at(row("c11", "op8", change.MovedIn, "", user), "jiro", 0), itemDel,

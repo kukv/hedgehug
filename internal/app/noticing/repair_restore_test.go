@@ -146,7 +146,7 @@ func TestRestoreVariants(t *testing.T) {
 				ref: epicRef, prep: []change.Draft{change.NewComment("CM1", nil, comment.Value("やあ"))},
 				del: change.Draft{T: change.Delete, F: "CM1"}, edit: change.NewComment("CM1", comment.Value("やあ"), comment.Value("やあ!")),
 			},
-			"HH-1 のコメントは 花子 が同時に変更したため、削除を取り消しました",
+			"HH-1 のコメントは 不明なユーザー が同時に変更したため、削除を取り消しました",
 			func(n port.Notice) bool { return n.Item == apptest.SampleEpic && n.Display == "HH-1" }, "",
 		},
 		{
@@ -155,7 +155,7 @@ func TestRestoreVariants(t *testing.T) {
 				ref: epicRef, prep: []change.Draft{change.NewWorklog("WL1", nil, worklog.Value(100, "", "2026-11-14"))},
 				del: change.Draft{T: change.Delete, F: "WL1"}, edit: change.NewWorklog("WL1", worklog.Value(100, "", "2026-11-14"), worklog.Value(200, "", "2026-11-14")),
 			},
-			"HH-1 の作業時間は 花子 が同時に変更したため、削除を取り消しました",
+			"HH-1 の作業時間は 不明なユーザー が同時に変更したため、削除を取り消しました",
 			func(n port.Notice) bool { return n.Item == apptest.SampleEpic }, "",
 		},
 	}
@@ -223,6 +223,22 @@ func TestRestoreTwoDeletesInOneOp(t *testing.T) {
 	f.save(user("hanako"), appendRef(wsRef, change.NewSet("sprints/SP2/goal", "", "目標")))
 	f.judge(undoAll(f, op, wsRef))
 	if n := f.wantOne(); n.Text != "「Sprint 2」は hanako が同時に変更したため、削除を取り消しました" {
+		t.Errorf("text = %q", n.Text)
+	}
+}
+
+// 削除した人(taro)が、hanako の変更よりあとに自分でも変えた: {変更した人} は hanako。
+func TestRestoreChangerNotDeleter(t *testing.T) {
+	f := setupAs(t, "taro")
+	s := itemDeleted()
+	f.save(user("hanako"), func(tx port.Tx) error {
+		return tx.WriteMembers().Append(member.Rename("hanako", "hanako", "花子"))
+	})
+	f.save(user("hanako"), appendRef(epicRef, s.edit))
+	op := f.save(user("taro"), appendRef(epicRef, s.del)).Key.Op
+	f.save(user("Taro"), appendRef(epicRef, change.NewSet("title", "認証2", "認証3")))
+	f.judge(undoAll(f, op, epicRef))
+	if n := f.wantOne(); n.Text != "HH-1 は 花子 が同時に変更したため、削除を取り消しました" {
 		t.Errorf("text = %q", n.Text)
 	}
 }
