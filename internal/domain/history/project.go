@@ -12,8 +12,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// ProjectContext は、プロジェクトの履歴の文を作る材料。WorkspaceName は、この Store のワークスペースの名前(削除済み・
-// ないものは空。nil なら引けないものとする)。
+// ProjectContext は、プロジェクトの履歴の文を作る材料。WorkspaceName は、この Store のワークスペース(削除済みを含む)の
+// 名前(Store にないものは空。nil なら引けないものとする)。
 type ProjectContext struct {
 	Names         item.Names
 	Today         time.Time
@@ -59,10 +59,16 @@ func projectText(log []change.Record, r change.Record, c ProjectContext) (string
 const projectMovedFormat = "%s から移動"
 
 // projectMovedText は、同じ Store の中でワークスペースが変わる場所の set の行の文(A5b-21)。番号だけが変わるものと、
-// 同じ操作に moved_in の行がある(別の Store から。そちらが文を持つ)ものは出さない。
+// 同じ操作に moved_in の行がある(別の Store から。そちらが文を持つ)ものは出さない。前にいた Store の中の移動(写した行)は、
+// アイテムと同じく、その Store を出た moved_in の moves の名前で作る(A5a-2)。それ以外はこの Store の WorkspaceName で引く。
 func projectMovedText(log []change.Record, r change.Record, c ProjectContext) (string, bool) {
 	if !changesWorkspace(r) || slices.ContainsFunc(log, func(x change.Record) bool { return x.Op == r.Op && x.T == change.MovedIn }) {
 		return "", false
+	}
+	for _, m := range transfer.MovedInOf(log) {
+		if j := slices.IndexFunc(m.Moves, func(mv transfer.Move) bool { return mv.Op == r.Op }); j >= 0 {
+			return fmt.Sprintf(projectMovedFormat, orDeleted(m.Moves[j].FromWorkspaceName)), true
+		}
 	}
 	from, _, _ := places(r)
 	name := ""

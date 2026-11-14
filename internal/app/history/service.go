@@ -133,7 +133,7 @@ func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID)
 		if err != nil {
 			return err
 		}
-		names, err := liveWorkspaceNames(r)
+		names, err := workspaceNames(r)
 		if err != nil {
 			return err
 		}
@@ -145,9 +145,9 @@ func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID)
 	return rows, err
 }
 
-// liveWorkspaceNames は、削除されていないワークスペースの名前(A5b-21: 削除済みのワークスペースは「(削除された値)」に出す)。
-func liveWorkspaceNames(r port.Reader) (map[workspace.ID]string, error) {
-	wss, err := port.LiveWorkspaces(r)
+// workspaceNames は、この Store のすべてのワークスペース(削除済みを含む。アイテムの履歴の readOrigin と同じ)の名前。
+func workspaceNames(r port.Reader) (map[workspace.ID]string, error) {
+	wss, err := r.Workspaces().List()
 	if err != nil {
 		return nil, err
 	}

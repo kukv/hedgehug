@@ -19,16 +19,18 @@ import (
 )
 
 // projectGathered は、別の Store へ移すときに prepare で移動元から読むもの。projectLog・projectDesc はプロジェクトの行と
-// 説明、logs・descs・moves はアイテムごとの行・説明・前に同じ Store の中で移した記録、vocab は moved_in の names を引く設定。
+// 説明、projectMoves・moves はプロジェクト・アイテムごとの前に同じ Store の中で移した記録、logs・descs はアイテムごとの行・
+// 説明、vocab は moved_in の names を引く設定。
 type projectGathered struct {
 	projectSource
-	projectLog  []change.Record
-	projectDesc string
-	logs        map[item.ID][]change.Record
-	descs       map[item.ID]string
-	moves       map[item.ID][]transfer.Move
-	members     []member.Member
-	vocab       []workspace.Settings
+	projectLog   []change.Record
+	projectDesc  string
+	projectMoves []transfer.Move
+	logs         map[item.ID][]change.Record
+	descs        map[item.ID]string
+	moves        map[item.ID][]transfer.Move
+	members      []member.Member
+	vocab        []workspace.Settings
 }
 
 // crossProjectMove は、別の Store への 1 回のプロジェクトの移動。src は prepare で移動元から読んだもの。plan・added は、
@@ -141,6 +143,9 @@ func gatherProject(r port.Reader, id project.ID) (projectGathered, error) {
 	if err != nil {
 		return projectGathered{}, err
 	}
+	if g.projectMoves, err = earlierMoves(r, transfer.EntityProject, id, g.projectLog, recs); err != nil {
+		return projectGathered{}, err
+	}
 	for _, it := range src.set.Items() {
 		if g.logs[it.ID], err = r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID}); err != nil {
 			return projectGathered{}, err
@@ -148,7 +153,7 @@ func gatherProject(r port.Reader, id project.ID) (projectGathered, error) {
 		if g.descs[it.ID], err = r.Items().Description(it.ID); err != nil {
 			return projectGathered{}, err
 		}
-		if g.moves[it.ID], err = earlierMoves(r, it.ID, g.logs[it.ID], recs); err != nil {
+		if g.moves[it.ID], err = earlierMoves(r, transfer.EntityItem, it.ID, g.logs[it.ID], recs); err != nil {
 			return projectGathered{}, err
 		}
 	}
@@ -209,14 +214,14 @@ func (m *crossProjectMove) writeDestination(tx port.Tx) error {
 	return errors.Join(errs...)
 }
 
-// importProject は、プロジェクトのフォルダ(行と説明)をそのまま写し、moved_in(FromProject はプロジェクト自身、names は空)、
+// importProject は、プロジェクトのフォルダ(行と説明)をそのまま写し、moved_in(FromProject はプロジェクト自身、names は空、moves は前の移動)、
 // place と rank、オーナーの綴りが移動先で変わるなら owner、別の画面での削除の取り消しを続けて書く。
 func (m *crossProjectMove) importProject(tx port.Tx, people transfer.PeopleMap) error {
 	pr := m.src.project
 	if err := tx.WriteProjects().Import(pr.ID, m.src.projectLog, m.src.projectDesc); err != nil {
 		return err
 	}
-	drafts := []change.Draft{m.movedIn(m.old(), nil, nil)}
+	drafts := []change.Draft{m.movedIn(m.old(), nil, m.src.projectMoves)}
 	drafts = append(drafts, m.plan.projectLines()...)
 	if to, ok := people[strings.ToLower(pr.Owner)]; ok && to != pr.Owner {
 		drafts = append(drafts, change.NewSet("owner", pr.Owner, to))

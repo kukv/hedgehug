@@ -129,7 +129,7 @@ func projectHistory(t *testing.T, f fixture, store port.StoreID, id project.ID) 
 
 // A5b-21: MoveProject が書いた行で、同じ Store の中の移動(Web → Mobile)は「Web から移動」、別の Store(team)への移動は
 // moved_in の「Mobile から移動」(同じ操作の場所の set は出さない)。team に写した main の中の移動の場所の set は、
-// team のワークスペースの名前で引けないので「(削除された値) から移動」(A5b-21 の文どおり)。
+// アイテムと同じく moved_in の Moves の名前で「Web から移動」。
 func TestProjectHistoryOfMoves(t *testing.T) {
 	f := newFixture(t)
 	moveProject(t, f, apptest.SampleProject, projectTo(store1, mobileWS))
@@ -138,7 +138,7 @@ func TestProjectHistoryOfMoves(t *testing.T) {
 	}
 	moveProject(t, f, apptest.SampleProject, toTeamWS())
 	// team のメンバーは Taro と綴るので、オーナーの置き換え(set owner)もほかの変更と同じく出る。
-	want := []string{"hanako: オーナーを Taro に変更", "hanako: Mobile から移動", "hanako: (削除された値) から移動", "taro: 作成"}
+	want := []string{"hanako: オーナーを Taro に変更", "hanako: Mobile から移動", "hanako: Web から移動", "taro: 作成"}
 	if got := projectHistory(t, f, store2, apptest.SampleProject); !slices.Equal(got, want) {
 		t.Errorf("別の Store: %q, want %q", got, want)
 	}

@@ -45,7 +45,7 @@ func TestProjectRows(t *testing.T) {
 }
 
 // A5b-21: 同じ Store の中でワークスペースが変わる場所の set と、別の Store からの moved_in は「{移動元のワークスペース名} から移動」。
-// moved_in と同じ操作の場所の set、番号だけが変わる場所の set は出さない。名前が引けない(削除済み・ない)ワークスペースと、
+// moved_in と同じ操作の場所の set、番号だけが変わる場所の set は出さない。名前が引けない(Store にない)ワークスペースと、
 // moved_in の名前が空のときは「(削除された値)」。
 func TestProjectRowsMoved(t *testing.T) {
 	base := project.Project{ID: "P", Place: project.Place{Workspace: "W", Number: 1}, Rank: "V", Title: "ログイン", Status: project.Todo}
@@ -60,7 +60,7 @@ func TestProjectRowsMoved(t *testing.T) {
 		step{"O6", at(5), taro, change.NewSet("place", project.Place{Workspace: "W9", Number: 5}, project.Place{Workspace: "W3", Number: 6})},
 		step{"O7", at(6), taro, transfer.NewMovedIn(transfer.MovedInInfo{Old: "TM-P6", FromStore: "S2", FromStoreName: "team", FromWorkspace: "W3", At: at(6)})},
 	)
-	wsNames := map[workspace.ID]string{"W": "Web", "W3": "Team"} // W9 はない(削除済みを含む)
+	wsNames := map[workspace.ID]string{"W": "Web", "W3": "Team"} // W9 は Store にない
 	rows := history.ProjectRows(log, history.ProjectContext{Names: names, Today: at(0), WorkspaceName: func(id workspace.ID) string { return wsNames[id] }})
 	want := []string{
 		"太郎: (削除された値) から移動", // O7: moved_in の名前が空
@@ -70,6 +70,28 @@ func TestProjectRowsMoved(t *testing.T) {
 		"太郎: Web から移動",      // O2: W から。O3 は番号だけなので出さない
 		"太郎: 作成",
 	}
+	if got := texts(rows); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// 移動元の Store の中で別のワークスペースへ移した場所の set(写した行)は、アイテムと同じく moved_in の Moves の
+// ワークスペース名で「{ワークスペース名} から移動」(A5a-2。この Store の WorkspaceName では引けない)。Moves の名前が
+// 空なら「(削除された値)」。
+func TestProjectRowsMovedWithinThePreviousStore(t *testing.T) {
+	base := project.Project{ID: "P", Place: project.Place{Workspace: "WA", Number: 1}, Rank: "V", Title: "ログイン", Status: project.Todo}
+	log := logOf(
+		step{"O1", at(0), taro, project.Create(base)},
+		step{"O2", at(1), taro, change.NewSet("place", base.Place, project.Place{Workspace: "WB", Number: 2})},
+		step{"O3", at(2), taro, change.NewSet("place", project.Place{Workspace: "WB", Number: 2}, project.Place{Workspace: "WC", Number: 3})},
+		step{"O4", at(3), taro, transfer.NewMovedIn(transfer.MovedInInfo{
+			Old: "MX-P3", FromStore: "S1", FromStoreName: "main", FromWorkspace: "WC", FromWorkspaceName: "Mobile", FromProject: "P", FromProjectTitle: "ログイン", At: at(3),
+			Moves: []transfer.Move{{Op: "O2", Old: "HH-P1", FromWorkspaceName: "Web"}, {Op: "O3", Old: "MB-P2"}},
+		})},
+		step{"O4", at(3), taro, change.NewSet("place", project.Place{Workspace: "WC", Number: 3}, project.Place{Workspace: "WT", Number: 2})},
+	)
+	rows := history.ProjectRows(log, history.ProjectContext{Names: names, Today: at(0), WorkspaceName: func(workspace.ID) string { return "" }})
+	want := []string{"太郎: Mobile から移動", "太郎: (削除された値) から移動", "太郎: Web から移動", "太郎: 作成"}
 	if got := texts(rows); !slices.Equal(got, want) {
 		t.Errorf("rows =\n%q\nwant\n%q", got, want)
 	}

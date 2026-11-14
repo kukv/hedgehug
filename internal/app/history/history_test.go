@@ -97,7 +97,7 @@ func TestProjectHistory(t *testing.T) {
 }
 
 // A5b-21: 同じ Store の中でワークスペースが変わった場所の set は「{移動元のワークスペース名} から移動」。名前はこの Store の
-// ワークスペースから引き、削除済みのワークスペースは「(削除された値)」。
+// ワークスペース(アイテムの履歴と同じく削除済みを含む)から引き、Store にないワークスペースだけ「(削除された値)」。
 func TestProjectHistoryMovedWithinStore(t *testing.T) {
 	svc, s := setup(t)
 	const goneWS workspace.ID = "01TESTWS000000000000000009"
@@ -115,13 +115,17 @@ func TestProjectHistoryMovedWithinStore(t *testing.T) {
 	})
 	write(t, s, "taro", func(tx port.Tx) error {
 		return tx.WriteProjects().Append(apptest.SampleProject, change.NewSet("place",
-			project.Place{Workspace: goneWS, Number: 1}, project.Place{Workspace: apptest.SampleWorkspace, Number: 2}))
+			project.Place{Workspace: goneWS, Number: 1}, project.Place{Workspace: "01TESTWS000000000000000099", Number: 2}))
+	})
+	write(t, s, "taro", func(tx port.Tx) error { // Store にないワークスペースから
+		return tx.WriteProjects().Append(apptest.SampleProject, change.NewSet("place",
+			project.Place{Workspace: "01TESTWS000000000000000099", Number: 2}, project.Place{Workspace: apptest.SampleWorkspace, Number: 3}))
 	})
 	rows, err := svc.Project(t.Context(), store, apptest.SampleProject)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"taro: (削除された値) から移動", "taro: Web から移動", "taro: 作成"}
+	want := []string{"taro: (削除された値) から移動", "taro: Old から移動", "taro: Web から移動", "taro: 作成"}
 	if got := texts(rows); !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q", got, want)
 	}
