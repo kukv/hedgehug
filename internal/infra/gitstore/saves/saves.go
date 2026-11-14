@@ -18,13 +18,13 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
-// opTrailer は、保存のコミットのメッセージで操作の ID を示すトレーラー(gitstore の commit と同じ)。
-const opTrailer = "\nHedgehug-Op: "
+// OpTrailer は、保存のコミットのメッセージで操作の ID を示すトレーラー(gitstore の commit・同期もこれを使う)。
+const OpTrailer = "\nHedgehug-Op: "
 
 // KeyOf は、コミットの見分け方。作者はコミットの作者名、時刻は作者の時刻、Op はトレーラー(なければ空)。
 func KeyOf(c *object.Commit) port.SaveKey {
 	var op change.ID
-	if _, rest, ok := strings.Cut(c.Message, opTrailer); ok {
+	if _, rest, ok := strings.Cut(c.Message, OpTrailer); ok {
 		line, _, _ := strings.Cut(rest, "\n")
 		op = change.ID(strings.TrimSpace(line))
 	}
