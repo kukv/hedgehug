@@ -1,14 +1,24 @@
 <script lang="ts">
-  import { type SearchColumn, type TableSettings, updatedHint } from "@hedgehug/core";
+  import {
+    type RowSelection,
+    type SearchColumn,
+    type SearchRow,
+    type TableSettings,
+    updatedHint,
+  } from "@hedgehug/core";
+  import SelectAllCheck from "./SelectAllCheck.svelte";
 
   // テーブルの見出しの行(04「並べ替え」、E2a-12)。並べ替えられる列はボタンで、押すと onsort(昇順 → 降順 → なし)。
+  // 先頭は「すべて選択」、末尾は行の「⋯」の列の空の見出し(E2a-16・17)。
   interface Props {
+    rows: SearchRow[];
+    selection: RowSelection;
     columns: SearchColumn[];
     sort: TableSettings["sort"];
     onsort: (key: string) => void;
   }
 
-  let { columns, sort, onsort }: Props = $props();
+  let { rows, selection, columns, sort, onsort }: Props = $props();
 
   function ariaSort(key: string) {
     if (sort?.key !== key) return "none";
@@ -18,6 +28,7 @@
 
 <thead>
   <tr>
+    <th class="edge"><SelectAllCheck {rows} {selection} /></th>
     {#each columns as column (column.key)}
       <th
         scope="col"
@@ -36,6 +47,7 @@
         {/if}
       </th>
     {/each}
+    <th class="edge"></th>
   </tr>
 </thead>
 
@@ -52,6 +64,9 @@
     white-space: nowrap;
     padding: 6px 8px;
     border-bottom: 1px solid var(--line);
+  }
+  .edge {
+    width: 1%;
   }
   .sort {
     border: 0;

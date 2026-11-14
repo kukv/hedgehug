@@ -8,19 +8,25 @@
     type SearchColumn,
     type SearchRow,
   } from "@hedgehug/core";
-  import { Avatar, KindIcon, type KindName, StatusDot } from "@hedgehug/ui";
+  import { Avatar, IconButton, KindIcon, type KindName, RowCheck, StatusDot } from "@hedgehug/ui";
   import { detail, links } from "../../wire";
   import TableCell from "./TableCell.svelte";
+  import TableIdCell from "./TableIdCell.svelte";
 
   // テーブルの 1 行(04「テーブル」「セル」、E1-8・E2a-12)。ID・種類・タイトル・ステータス・担当者・親はここで描き、
   // ほかの列は TableCell が cellView で描く。削除済みの行は薄く出し、タイトルを押せない文字にする。
+  // 先頭は選択のチェック、末尾は 02 のアイテムのメニューを開く「⋯」(E2a-16・17)。削除済みの行はどちらも押せない。
   interface Props {
     row: SearchRow;
     columns: SearchColumn[];
     now: Date;
+    checked: boolean;
+    oncheck: (on: boolean) => void;
+    // onmenu の rect は「⋯」の getBoundingClientRect()。
+    onmenu: (rect: DOMRect) => void;
   }
 
-  let { row, columns, now }: Props = $props();
+  let { row, columns, now, checked, oncheck, onmenu }: Props = $props();
 
   const category = $derived(row.status?.category as Category | undefined);
   const who = $derived(assigneeText(row.assignee));
@@ -28,23 +34,17 @@
 </script>
 
 <tr class="row" class:deleted={row.deleted !== null}>
+  <td class="edge">
+    <RowCheck
+      label={`${row.display} を選択`}
+      {checked}
+      onchange={oncheck}
+      disabled={row.deleted !== null}
+    />
+  </td>
   {#each columns as column (column.key)}
     {#if column.key === "id"}
-      <td>
-        <span class="with-icon">
-          <i
-            class="sdot"
-            style:background="var(--t-{row.storeColor}-fg)"
-            role="img"
-            aria-label={row.storeName}
-            title={row.storeName}
-          ></i>
-          <code class="id">{row.display}</code>
-          {#if row.oldIdHit}
-            <span class="old">旧 ID</span>
-          {/if}
-        </span>
-      </td>
+      <TableIdCell {row} />
     {:else if column.key === "kind"}
       <td>
         <span class="with-icon"><KindIcon kind={row.kind as KindName} />{row.kind}</span>
@@ -101,6 +101,15 @@
       <TableCell view={cellView(row, column, now)} {column} />
     {/if}
   {/each}
+  <td class="edge">
+    <IconButton
+      label="{row.display} のメニュー"
+      size="xs"
+      disabled={row.deleted !== null}
+      onclick={(e) => onmenu((e.currentTarget as HTMLElement).getBoundingClientRect())}
+      >⋯</IconButton
+    >
+  </td>
 </tr>
 
 <style>
@@ -113,13 +122,9 @@
   .deleted :global(td) {
     opacity: 0.55;
   }
-  .sdot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex: none;
+  .edge {
+    width: 1%;
   }
-  .id,
   .parent {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -133,10 +138,6 @@
   }
   .parent:hover {
     text-decoration: underline;
-  }
-  .old {
-    font-size: 11px;
-    color: var(--muted);
   }
   .faint {
     color: var(--muted);

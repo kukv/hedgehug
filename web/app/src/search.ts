@@ -8,19 +8,60 @@ import {
   filterCandidates,
   get,
   type Member,
+  menuAt,
   type PaletteItem,
+  rowMenuContext,
+  type SearchRow,
+  type SelectedItem,
 } from "@hedgehug/core";
 import { reloads } from "./reloads";
-import { catalog, listMembers, navigation } from "./wire";
+import { catalog, itemsPort, listMembers, navigation } from "./wire";
+import { itemMenuHost } from "./wireActions";
 import { palettePort, timer, toasts } from "./wireBase";
 
 // 検索の画面(04「検索」、E1)。wire.ts が 300 行なので、ここで作る。
 export const screenStates = createScreenStates(createScreenStatesPort());
 // searchPort は、パレットの「このクエリで」も使う。
 export const searchPort = createSearchPort();
-export const search = createSearch({ port: searchPort, screenStates, timer, toasts });
-// searchSelection は、検索の画面の選んでいる行(E2a-16)。
+// searchSelection は、検索の画面の選んでいる行(E2a-16)。結果が変わるたびに、search が選べる行で整理する。
 export const searchSelection = createRowSelection();
+export const search = createSearch({
+  port: searchPort,
+  screenStates,
+  timer,
+  toasts,
+  selection: searchSelection,
+});
+
+// openRowMenu は、テーブルの行末の「…」で、行のアイテムのメニュー(02)を開く(E2a-17)。rect は「…」の
+// getBoundingClientRect()。プロジェクトのアイテムを読めない・アイテムがないときは何もしない。
+export async function openRowMenu(
+  row: SearchRow,
+  rect: { left: number; bottom: number },
+): Promise<void> {
+  const items = await itemsPort.list(row.storeId, row.projectId).catch(() => null);
+  const found = items && rowMenuContext(items, row.itemId);
+  if (!found) return;
+  const { x, y } = menuAt(rect);
+  itemMenuHost.open(found.item, found.ctx, x, y);
+}
+
+// selectedOne は、パレットの「選んでいるアイテム」(E2a-18)。検索のテーブルでちょうど 1 行を選んでいるときだけ返す。
+export function selectedOne(): SelectedItem | null {
+  const rows = get(searchSelection.rows);
+  const only = rows.length === 1 ? rows[0] : undefined;
+  if (!only) return null;
+  const { storeId, itemId } = only;
+  return {
+    storeId,
+    itemId,
+    source: "table",
+    setStatus: async (statusId) => {
+      await itemsPort.setProperty(storeId, itemId, "status", statusId);
+      await search.reload();
+    },
+  };
+}
 
 // refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;

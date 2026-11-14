@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    allReadOnly,
     applyCandidate,
     type CaretTerm,
     candidateSource,
@@ -8,12 +9,22 @@
     type FilterCandidate,
     nextSort,
     readOnlyBands,
+    readOnlyNote,
+    selectedText,
     shownColumns,
   } from "@hedgehug/core";
-  import { Button, FilterInput, PageHead, ReadOnlyBand } from "@hedgehug/ui";
+  import { Button, FilterInput, PageHead, ReadOnlyBand, SelectionBar } from "@hedgehug/ui";
   import { onMount, tick } from "svelte";
-  import { createCandidates, search, searchSelection } from "../../search";
+  import { selection } from "../../palette";
+  import {
+    createCandidates,
+    openRowMenu,
+    search,
+    searchSelection,
+    selectedOne,
+  } from "../../search";
   import { itemDialog } from "../../wire";
+  import { bulkChange, bulkDelete } from "../../wireActions";
   import ItemTable from "../table/ItemTable.svelte";
   import TableToolbar from "../table/TableToolbar.svelte";
   import SearchHelp from "./SearchHelp.svelte";
@@ -34,6 +45,9 @@
   // 最初の検索が終わるまでは、空の表示を出さない(開いた直後に「まだ何もありません」がちらつかない)。
   const empty = $derived($view.result ? emptyText($view.query, rows.length, errors) : null);
   let help = $state(false);
+  const picked = searchSelection.rows;
+  // パレットの「選んでいるアイテム」は、ちょうど 1 行を選んでいるときの行(E2a-18)。
+  $effect(() => selection.provide(2, selectedOne));
 
   // 候補は、入力と、候補の元が読み終わったときだけ作り直す(FilterInput は候補の配列が替わると選びを先頭に戻す)。
   // term は、candidates を作った語(選んだときに置き換える範囲)。
@@ -45,9 +59,13 @@
   });
   let filter = $state<HTMLElement>();
 
+  // 選択は画面ごとに持つので、画面を離れたら解除する(04「選択」)。
   onMount(() => {
     void search.open();
-    return sources.stop;
+    return () => {
+      sources.stop();
+      searchSelection.clear();
+    };
   });
 
   // pick は、カーソルの位置の語で候補を作り直す。入力のときも、カーソルだけが動いたときも呼ぶ。
@@ -103,6 +121,15 @@
   table={$view.table}
   onchange={(next) => search.setTable(next)}
 />
+{#if $picked.length > 0}
+  <SelectionBar
+    text={selectedText($picked.length)}
+    readOnlyNote={allReadOnly($picked) ? readOnlyNote : undefined}
+    onchange={() => void bulkChange.open(searchSelection, { after: () => search.reload() })}
+    ondelete={() => void bulkDelete.open(searchSelection, () => search.reload())}
+    onclear={() => searchSelection.clear()}
+  />
+{/if}
 <div class="content">
   {#if empty}
     <div class="empty">
@@ -124,7 +151,7 @@
       sort={$view.table.sort}
       onsort={(key) => search.setTable(nextSort($view.table, key))}
       selection={searchSelection}
-      onmenu={() => {}}
+      onmenu={(row, rect) => void openRowMenu(row, rect)}
     />
   {/if}
 </div>

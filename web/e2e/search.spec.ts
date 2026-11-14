@@ -229,5 +229,7 @@ test("shows the read-only band for an item of a read-only store", async ({ page 
     ),
   ).toBeVisible();
   await expect(page.getByText("1 件", { exact: true })).toBeVisible();
-  await expect(page.getByRole("row", { name: /^readonly HH-2 ログイン画面を作る/ })).toBeVisible();
+  await expect(
+    page.getByRole("row", { name: /^HH-2 を選択 readonly HH-2 ログイン画面を作る/ }),
+  ).toBeVisible();
 });
