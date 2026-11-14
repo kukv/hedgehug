@@ -214,6 +214,11 @@ describe("applyCandidate inside a quoted value", () => {
     expect(apply('parent:"HH|xx",HH-3')).toEqual({ text: "parent:HH-12,HH-3", caret: 12 });
   });
 
+  it("keeps the quotes and the next values when a comma follows inside the quotes", () => {
+    expect(apply('parent:"HH|xx,HH-3"')).toEqual({ text: 'parent:"HH-12,HH-3"', caret: 13 });
+    expect(apply('parent:"HH|xx,HH-3')).toEqual({ text: 'parent:"HH-12,HH-3', caret: 13 });
+  });
+
   it("replaces to the end when the quote is not closed", () => {
     expect(apply('parent:"HH|xx')).toEqual({ text: "parent:HH-12", caret: 12 });
   });

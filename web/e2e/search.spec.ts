@@ -140,6 +140,11 @@ test("completes a project by a part of its Japanese name", async ({ page }, info
 test("completes an item created after the screen was opened", async ({ page }, info) => {
   const { mark, projectId } = await seed(page, info);
   const filter = await openSearch(page, info);
+  const options = page.getByRole("listbox", { name: "候補" }).getByRole("option");
+  // 開いたときの索引を読み終えたことを、前からあるアイテムの候補で確かめる(読み直しの応答と取り違えない)。
+  await filter.fill("");
+  await filter.pressSequentially(`parent:${mark}の件`);
+  await expect(options).toHaveCount(1);
   // 画面を開いたあとに作ったアイテムも、Store が変わった知らせで候補の元(パレットの索引)を読み直して出す。
   // 欄にフォーカスがあるあいだは反映を待つ(06)ので、フォーカスを外したまま作り、読み直しを待つ。
   await page.getByRole("main").getByRole("heading", { name: "検索", level: 1 }).click();
@@ -154,7 +159,7 @@ test("completes an item created after the screen was opened", async ({ page }, i
   await reread;
   await filter.fill("");
   await filter.pressSequentially(`parent:${mark}の後から`);
-  await expect(page.getByRole("listbox", { name: "候補" }).getByRole("option")).toHaveCount(1);
+  await expect(options).toHaveCount(1);
 });
 
 test("moves to the filter with the slash key, and opens and closes the search help", async ({

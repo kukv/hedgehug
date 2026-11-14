@@ -157,15 +157,20 @@ export function filterCandidates(
   return found.slice(0, limit);
 }
 
-// replacedEnd は、置き換える部分の終わり。打った値が開き引用符から始まり、カーソルが引用符の中にあるときは、
-// 閉じ引用符まで(なければ末尾まで。閉じていない引用符は末尾までを 1 つの語にする)を置き換える。
-// 残すと、カーソルの後ろの文字と引用符が値の後ろに残る。
-function replacedEnd(text: string, term: CaretTerm): number {
-  if (text[term.start] !== '"') return term.end;
+// replaced は、置き換える部分 [start, end)。ふつうは打った値の部分。打った値が開き引用符から始まり、カーソルが
+// 引用符の中にあるときは、カーソルの後ろの文字も値の続きなので置き換える(残すと値の後ろに残る):
+// - 引用符の中で `,` が先に来れば、引用符を残し、`,` の前までを置き換える(後ろの値はそのまま)。
+// - でなければ、閉じ引用符まで(なければ末尾まで。閉じていない引用符は末尾までを 1 つの語にする)を置き換える。
+function replaced(text: string, term: CaretTerm): { start: number; end: number } {
+  const plain = { start: term.start, end: term.end };
+  if (text[term.start] !== '"') return plain;
   const quotes = text.slice(term.start, term.end).split('"').length - 1;
-  if (quotes % 2 === 0) return term.end;
+  if (quotes % 2 === 0) return plain;
   const close = text.indexOf('"', term.end);
-  return close < 0 ? text.length : close + 1;
+  const stop = close < 0 ? text.length : close;
+  const comma = text.indexOf(",", term.end);
+  if (comma >= 0 && comma < stop) return { start: term.start + 1, end: comma };
+  return { start: term.start, end: close < 0 ? text.length : close + 1 };
 }
 
 // applyCandidate は、打った値の部分を入れるものに置き換え、カーソルをその直後に置く。
@@ -174,9 +179,9 @@ export function applyCandidate(
   term: CaretTerm,
   c: FilterCandidate,
 ): { text: string; caret: number } {
-  const end = replacedEnd(text, term);
+  const { start, end } = replaced(text, term);
   return {
-    text: text.slice(0, term.start) + c.insert + text.slice(end),
-    caret: term.start + c.insert.length,
+    text: text.slice(0, start) + c.insert + text.slice(end),
+    caret: start + c.insert.length,
   };
 }
