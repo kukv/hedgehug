@@ -57,20 +57,21 @@ const heads: Record<GroupId, string> = {
   workspace: "ワークスペース",
   view: "ビュー",
 };
-// limits は群の上限。アイテムは、全体の 40 から shared の群が出した件数を引いた残り(最低 17)。
-const limits: Record<GroupId, number> = {
+// limits は、アイテム以外の群の上限。アイテムは、全体の total から shared の群が出した件数を引いた残り(最低 minItems)。
+const limits: Record<Exclude<GroupId, "item">, number> = {
   command: 8,
   query: 3,
   selected: 4,
   create: 3,
   settings: 6,
   recent: 8,
-  item: 40,
   project: 5,
   workspace: 5,
   view: 5,
 };
-const shared: GroupId[] = ["command", "project", "workspace", "view"];
+const total = 40;
+const minItems = 17;
+const shared = ["command", "project", "workspace", "view"] as const;
 // typedOnly は入力があるときだけ、emptyOnly は入力が空のときだけ出す群。
 const typedOnly: GroupId[] = [
   "query",
@@ -98,7 +99,7 @@ export function buildRows(
   const shown = (g: GroupId) =>
     (empty ? !typedOnly.includes(g) : !emptyOnly.includes(g)) ? (groups[g] ?? []) : [];
   const used = shared.reduce((n, g) => n + Math.min(shown(g).length, limits[g]), 0);
-  const limitOf = (g: GroupId) => (g === "item" ? Math.max(17, limits.item - used) : limits[g]);
+  const limitOf = (g: GroupId) => (g === "item" ? Math.max(minItems, total - used) : limits[g]);
   const rows: Row[] = [];
   for (const g of order) {
     const list = shown(g);
