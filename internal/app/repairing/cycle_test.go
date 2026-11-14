@@ -103,7 +103,7 @@ func TestCycleRepairEpicIDPurged(t *testing.T) {
 	purged := map[change.ID]bool{repairEpicID(): true}
 	e.reparent(apptest.SampleEpic, apptest.SampleTask, change.NewSet("kind", item.Epic, item.Story))
 	for i, want := range [][]string{{"HH-2 を HH-3 の下へ移動(親の循環)", "HH-1 を HH-3 の下へ移動(親の循環)"}, nil} {
-		w := &apptest.RepairWriter{Stores: e.s, Store: store, PurgedIDs: purged}
+		w := &apptest.RepairWriter{Stores: e.s, StoreID: store, PurgedIDs: purged}
 		if err := repairing.Run(e.ctx, w); err != nil {
 			t.Fatalf("Run %d: %v", i, err)
 		}
@@ -162,7 +162,7 @@ func TestCycleSkipsUnreadableProject(t *testing.T) {
 	})
 	e.reparent(apptest.SampleEpic, apptest.SampleTask, change.NewSet("kind", item.Epic, item.Story))
 	for i, want := range [][]string{{"HH-2 を HH-5 の下へ移動(親の循環)", "HH-1 を HH-5 の下へ移動(親の循環)"}, nil} {
-		w := hiddenProject{RepairWriter: &apptest.RepairWriter{Stores: e.s, Store: store}, hidden: project2}
+		w := hiddenProject{RepairWriter: &apptest.RepairWriter{Stores: e.s, StoreID: store}, hidden: project2}
 		if err := repairing.Run(e.ctx, w); err != nil {
 			t.Fatalf("Run %d: %v", i, err)
 		}
@@ -177,7 +177,7 @@ func TestCycleSkipsUnreadableProject(t *testing.T) {
 func TestCycleStopsWithoutProgress(t *testing.T) {
 	e := newEnv(t)
 	e.reparent(apptest.SampleEpic, apptest.SampleTask, change.NewSet("kind", item.Epic, item.Story))
-	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, StoreID: store}}
 	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "進みません") {
 		t.Errorf("Run error = %v", err)
 	}

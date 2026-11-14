@@ -5,6 +5,7 @@ package numbering
 
 import (
 	"encoding/json"
+	"slices"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -23,6 +24,15 @@ const (
 // Draft は、番号 n を使った行。
 func Draft(k Kind, n int) change.Draft {
 	return change.Draft{T: Type, F: string(k), To: change.Value(n)}
+}
+
+// Drafts は、使った番号 ns ごとの行(番号の小さい順)。
+func Drafts(k Kind, ns []int) []change.Draft {
+	lines := make([]change.Draft, 0, len(ns))
+	for _, n := range slices.Sorted(slices.Values(ns)) {
+		lines = append(lines, Draft(k, n))
+	}
+	return lines
 }
 
 // Next は、ワークスペースのログから、次に振る番号を返す。

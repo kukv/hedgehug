@@ -87,7 +87,7 @@ func TestRepairWriterRecordsOpsThatLeftRows(t *testing.T) {
 	if err := apptest.Sample(ctx, s, "S1"); err != nil {
 		t.Fatal(err)
 	}
-	w := &apptest.RepairWriter{Stores: s, Store: "S1", F: repair.Facts{Ours: map[change.ID]bool{"o": true}}}
+	w := &apptest.RepairWriter{Stores: s, StoreID: "S1", F: repair.Facts{Ours: map[change.ID]bool{"o": true}}}
 	var _ port.RepairWriter = w
 	if w.Facts().Side("o") != 1 {
 		t.Errorf("facts = %+v", w.Facts())
