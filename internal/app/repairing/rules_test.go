@@ -78,6 +78,10 @@ func TestDropOrphanRulesTitleFallback(t *testing.T) {
 			})
 			e.s.AddPurged(store, port.Purged{Entity: "project", Target: gone, Display: "HH-P4"})
 		}, "プロジェクト「HH-P3" + orphanTail},
+		"transfer with empty old": {func(e *env) {
+			e.write(taro, func(tx port.Tx) error { return tx.WriteTransfers().Append(tr) })
+			e.s.AddPurged(store, port.Purged{Entity: "project", Target: gone, Display: "HH-P4"})
+		}, "プロジェクト「HH-P4" + orphanTail},
 		"purged display": {func(e *env) {
 			e.s.AddPurged(store, port.Purged{Entity: "project", Target: gone, Display: "HH-P4"})
 		}, "プロジェクト「HH-P4" + orphanTail},
@@ -112,4 +116,24 @@ func TestDropOrphanRulesAfterPlan(t *testing.T) {
 	e.addOrphanRules(webProject)
 	e.appendItem(taro, apptest.SampleTask, change.NewSet(item.SprintField, nil, sprint9))
 	wantOps(t, e.run(nil, nil), "HH-2 をバックログに戻す(スプリントが完全に削除)", orphanWebOp)
+}
+
+// ルールを外す保存は、ワークスペースの内部 ID の順、同じワークスペースではプロジェクトの内部 ID の順に書く。
+func TestDropOrphanRulesOrder(t *testing.T) {
+	const (
+		a project.ID = "01SAMPLEPR000000000000000A"
+		b project.ID = "01SAMPLEPR000000000000000B"
+		c project.ID = "01SAMPLEPR000000000000000C"
+	)
+	e := newEnv(t)
+	addMobile(e)
+	hide := func(ws change.ID, p project.ID) {
+		e.write(taro, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(ws, change.NewAdd(projectrule.HiddenField(p), review))
+		})
+	}
+	hide(mobileWS, a)
+	hide(apptest.SampleWorkspace, c)
+	hide(apptest.SampleWorkspace, b)
+	wantOps(t, e.run(nil, nil), "プロジェクト「"+string(b)+orphanTail, "プロジェクト「"+string(c)+orphanTail, "プロジェクト「"+string(a)+orphanTail)
 }

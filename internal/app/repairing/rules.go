@@ -81,7 +81,7 @@ func orphansOf(r port.Reader, ws workspace.ID) (wsOrphans, error) {
 	return wsOrphans{ws: ws, rules: repair.Orphans(log, in)}, nil
 }
 
-// projectTitle は、なくなったプロジェクト id の名前(決定 C5b1-4)。読めるプロジェクトの名前、最後の転送記録の
+// projectTitle は、なくなったプロジェクト id の名前(決定 C5b1-4)。読めるプロジェクトの名前、最後の(old が空でない)転送記録の
 // old、purged.jsonl の display、内部 ID の順。
 func projectTitle(r port.Reader, id project.ID) (string, error) {
 	p, err := r.Projects().Get(id)
@@ -96,7 +96,7 @@ func projectTitle(r port.Reader, id project.ID) (string, error) {
 		return "", err
 	}
 	for _, t := range slices.Backward(trs) {
-		if t.Target == id {
+		if t.Target == id && t.Old != "" {
 			return t.Old, nil
 		}
 	}
