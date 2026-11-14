@@ -3,7 +3,7 @@ import { writable } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import type { Route } from "../router/route";
-import { createLeaveMoved } from "./leaveMoved";
+import { createLeaveMoved, createLeaveWorkspaceMoved } from "./leaveMoved";
 
 // 自分でプロジェクトを移したあとの移り先(A5b-19)。新しいアドレスの「設定」タブへ replace し、そのあとで一覧を
 // 読み直す。新しいアドレスは、読み直す前の一覧にないので、移動の結果(Store の内部 ID と新しい ID)から作る。
@@ -37,7 +37,13 @@ async function setup(loadFails = false) {
       },
     },
   };
-  return { leave: createLeaveMoved(deps), route, events, routes };
+  return {
+    leave: createLeaveMoved(deps),
+    leaveWorkspace: createLeaveWorkspaceMoved(deps),
+    route,
+    events,
+    routes,
+  };
 }
 
 const result = { toStore: "S1", projectId: "S1-P9", display: "TM-P3", destination: "work / Tm" };
@@ -68,5 +74,30 @@ describe("createLeaveMoved", () => {
     const { leave, routes } = await setup();
     await leave()({ ...result, toStore: "S9" });
     expect(routes).toEqual([{ name: "home" }]);
+  });
+});
+
+const moved = { toStore: "S3", toStoreName: "team", workspaceId: "S1-W1", prefix: "HH" };
+
+describe("createLeaveWorkspaceMoved (B5c-17)", () => {
+  it("replaces to the settings tab of the workspace in the destination Store, then reloads", async () => {
+    const { leaveWorkspace, events, routes } = await setup();
+    await leaveWorkspace()(moved);
+    expect(events).toEqual(["replace", "load"]);
+    expect(routes).toEqual([{ name: "workspace", store: "team", prefix: "HH", tab: "settings" }]);
+  });
+
+  it("only reloads when the screen changed after pressing", async () => {
+    const { leaveWorkspace, route, events } = await setup();
+    const done = leaveWorkspace();
+    route.set({ name: "home" });
+    await done(moved);
+    expect(events).toEqual(["load"]);
+  });
+
+  it("does not throw when the reload fails", async () => {
+    const { leaveWorkspace, events } = await setup(true);
+    await expect(leaveWorkspace()(moved)).resolves.toBeUndefined();
+    expect(events).toEqual(["replace", "load"]);
   });
 });

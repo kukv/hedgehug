@@ -144,3 +144,43 @@ export interface ProjectTransferResult {
 export type LocatedProject =
   | { kind: "found"; storeId: string; projectId: string; movedFrom?: MovedFrom }
   | ({ kind: "gone" } & Gone);
+
+// ここから、ワークスペースの別の Store への移動(03「別の Store へ移動」、トラック B5c)。
+
+// WorkspaceTransferTarget は、ワークスペースを移す先の Store 1 つ(並びは Store の並び。B5c-15)。
+export interface WorkspaceTransferTarget {
+  storeId: string;
+  storeName: string;
+}
+// WorkspaceTransferTargets は、移す先の候補。hiddenOnly は、候補が 0 件で、非表示の Store なら移せるとき true。
+export interface WorkspaceTransferTargets {
+  targets: WorkspaceTransferTarget[];
+  hiddenOnly: boolean;
+}
+// WorkspaceTransferPerson は、移動先のメンバーに足す人。
+export interface WorkspaceTransferPerson {
+  login: string;
+  name: string; // 表示名
+}
+// WorkspaceTransferPreview は、確認ダイアログの予告(B5c-20)。
+export interface WorkspaceTransferPreview {
+  source: string; // 移動元の Store 名
+  destination: string; // 移動先の Store 名
+  projects: number;
+  items: number; // 削除されていないアイテムの数 I
+  deleted: number; // 削除済みの数 M
+  people: WorkspaceTransferPerson[]; // 足す人(小文字のログイン名の順)
+  remoteNotice: boolean;
+  destinationHasRemote: boolean; // オフラインの判断に使う
+}
+// WorkspaceTransferResult は、移したワークスペース(内部 ID は変わらない)と、移動先の Store 名・接頭辞。
+export interface WorkspaceTransferResult {
+  toStore: string;
+  toStoreName: string;
+  workspaceId: string;
+  prefix: string;
+}
+// LocatedWorkspace は、画面のアドレスの Store 名と接頭辞の解決の結果。
+export type LocatedWorkspace =
+  | { kind: "found"; storeId: string; workspaceId: string; movedFrom?: MovedFrom }
+  | ({ kind: "gone" } & Gone);

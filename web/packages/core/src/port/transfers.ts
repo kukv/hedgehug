@@ -1,6 +1,7 @@
 import type {
   Located,
   LocatedProject,
+  LocatedWorkspace,
   ProjectTransferInput,
   ProjectTransferPreview,
   ProjectTransferResult,
@@ -10,6 +11,9 @@ import type {
   TransferPreview,
   TransferResult,
   TransferTarget,
+  WorkspaceTransferPreview,
+  WorkspaceTransferResult,
+  WorkspaceTransferTargets,
 } from "../model/transfer";
 
 // 別のワークスペース・別の Store への移動(A5a・A5b)の口。実装は api パッケージにある。
@@ -38,4 +42,20 @@ export interface TransfersPort {
   ): Promise<ProjectTransferResult>;
   // locateProject は、アドレスの Store 名とプロジェクトの ID(旧 ID でもよい)をいまの場所にする。ないものは NotFound。
   locateProject(storeName: string, id: string): Promise<LocatedProject>;
+  // workspaceTargets は、ワークスペースを移す先の Store の候補(B5c-15)。
+  workspaceTargets(storeId: string, workspaceId: string): Promise<WorkspaceTransferTargets>;
+  // workspacePreview は、ワークスペースの移動の確認ダイアログの予告(B5c-20)。断りは Refused。
+  workspacePreview(
+    storeId: string,
+    workspaceId: string,
+    toStoreId: string,
+  ): Promise<WorkspaceTransferPreview>;
+  // transferWorkspace は、ワークスペースをまるごと移す。取り消しもできなかったときは TransferUndoFailed。
+  transferWorkspace(
+    storeId: string,
+    workspaceId: string,
+    toStoreId: string,
+  ): Promise<WorkspaceTransferResult>;
+  // locateWorkspace は、アドレスの Store 名と接頭辞(旧い接頭辞でもよい)をいまの場所にする。ないものは NotFound。
+  locateWorkspace(storeName: string, prefix: string): Promise<LocatedWorkspace>;
 }

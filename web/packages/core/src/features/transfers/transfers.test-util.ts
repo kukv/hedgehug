@@ -2,19 +2,23 @@ import { NotFound, Refused, TransferUndoFailed } from "../../model/errors";
 import type {
   Located,
   LocatedProject,
+  LocatedWorkspace,
   ProjectTransferPreview,
   ProjectTransferResult,
   ProjectTransferTarget,
   TransferPreview,
   TransferResult,
   TransferTarget,
+  WorkspaceTransferPreview,
+  WorkspaceTransferResult,
+  WorkspaceTransferTargets,
 } from "../../model/transfer";
 import type { TransfersPort } from "../../port/transfers";
 import { gate } from "../items/fixtures.test-util";
 
 // テスト用の移動の口。呼び出しを calls に残し、答えはテストが決める。
 // どの操作も、refuseNext の断り・undoFailNext の取り消しの失敗・failNext の失敗・missing に入れた ID の NotFound を受けられる。
-// holdNext は、次の preview・transfer・projectTargets・projectPreview・transferProject を待たせる。
+// holdNext は、次の preview・transfer・project 系・workspace 系(locate 以外)を待たせる。
 
 export interface FakeTransfers extends TransfersPort {
   // calls は `targets {id}`・`preview {id} {store}/{workspace}/{project}`・`transfer {id} {JSON}`・`locate {store} {id}`。
@@ -32,6 +36,13 @@ export interface FakeTransfers extends TransfersPort {
   defaultProjectPreview: ProjectTransferPreview;
   projectResult: ProjectTransferResult;
   locatedProject: LocatedProject;
+  // ワークスペースの移動(B5c)。calls は `workspaceTargets {id}`・`workspacePreview {id} {toStore}`・
+  // `transferWorkspace {id} {toStore}`・`locateWorkspace {store} {prefix}`。workspacePreviewOf のキーは移動先の Store の ID。
+  workspaceTargetList: WorkspaceTransferTargets;
+  workspacePreviewOf: Record<string, WorkspaceTransferPreview>;
+  defaultWorkspacePreview: WorkspaceTransferPreview;
+  workspaceResult: WorkspaceTransferResult;
+  locatedWorkspace: LocatedWorkspace;
   // refuseNext は、次の操作を、この文言の断りにする(1 回だけ)。failNext は、断りでない失敗にする。
   refuseNext(message: string): void;
   failNext(): void;
@@ -106,6 +117,20 @@ export function fakeTransfers(): FakeTransfers {
     },
     projectResult: { toStore: "S1", projectId: "S1-P1", display: "MB-P2", destination: "Mobile" },
     locatedProject: { kind: "found", storeId: "S1", projectId: "S1-P1" },
+    workspaceTargetList: { targets: [], hiddenOnly: false },
+    workspacePreviewOf: {},
+    defaultWorkspacePreview: {
+      source: "work",
+      destination: "team",
+      projects: 0,
+      items: 0,
+      deleted: 0,
+      people: [],
+      remoteNotice: false,
+      destinationHasRemote: false,
+    },
+    workspaceResult: { toStore: "S3", toStoreName: "team", workspaceId: "S1-W1", prefix: "HH" },
+    locatedWorkspace: { kind: "found", storeId: "S1", workspaceId: "S1-W1" },
     missing,
     refuseNext(message) {
       refusal = message;
@@ -155,6 +180,23 @@ export function fakeTransfers(): FakeTransfers {
     async locateProject(store, id) {
       await answer(id, `locateProject ${store} ${id}`, false);
       return self.locatedProject;
+    },
+    async workspaceTargets(_s, id) {
+      const list = self.workspaceTargetList;
+      await answer(id, `workspaceTargets ${id}`, true);
+      return list;
+    },
+    async workspacePreview(_s, id, to) {
+      await answer(id, `workspacePreview ${id} ${to}`, true);
+      return self.workspacePreviewOf[to] ?? self.defaultWorkspacePreview;
+    },
+    async transferWorkspace(_s, id, to) {
+      await answer(id, `transferWorkspace ${id} ${to}`, true);
+      return self.workspaceResult;
+    },
+    async locateWorkspace(store, prefix) {
+      await answer(prefix, `locateWorkspace ${store} ${prefix}`, false);
+      return self.locatedWorkspace;
     },
   };
   return self;
