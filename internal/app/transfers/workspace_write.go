@@ -137,9 +137,9 @@ func (m *crossWorkspaceMove) undoDeletion(log []change.Record) []change.Draft {
 
 // writeSource は、移動元の保存の fn(B5c-8): アイテム・プロジェクト・ワークスペースのフォルダを消し、外のアイテムが持つ関連
 // (tx から集め直したもの。prepare のあとに足された関連も含む)を remove し、ワークスペースの転送記録を 1 行書く。
-// ワークスペースがもうなければ port.ErrNotFound で、保存しない。
+// ワークスペースがもうなければ port.ErrNotFound、移すものが prepare と違えば errSourceChanged で、保存しない(B5c-9)。
 func (m *crossWorkspaceMove) writeSource(tx port.Tx) error {
-	now, err := gatherWorkspace(tx, m.src.ws.ID)
+	now, err := m.checkSource(tx)
 	if err != nil {
 		return err
 	}
@@ -157,10 +157,10 @@ func (m *crossWorkspaceMove) writeSource(tx port.Tx) error {
 		return err
 	}
 	inside := map[item.ID]bool{}
-	for _, it := range now.set.Items {
+	for _, it := range now.Items {
 		inside[it.ID] = true
 	}
-	for _, c := range now.set.Outside {
+	for _, c := range now.Outside {
 		if inside[c.From] {
 			continue
 		}

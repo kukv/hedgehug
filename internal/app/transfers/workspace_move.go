@@ -2,6 +2,7 @@ package transfers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ type crossWorkspaceMove struct {
 // 移動元を読み、移動先を Delivery.Deliver で保存して送り、移動元を Stores.Write で保存する。片方の Store のロックを持ったまま、
 // もう片方に触らない。送れなければ *SendError で、どちらの Store も変えない。移動元が閲覧のみなら refusal、移動先が閲覧のみか
 // 移動元と同じなら port.ErrNotFound、表示中でなければ port.ErrStoreNotFound。移動先に同じ接頭辞・名前があれば refusal(B5c-5)。
+// 移動元の保存が失敗したら移動先を戻す(戻せなければ *UndoError)。
 func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, id workspace.ID, to port.StoreID) (WorkspaceMoved, error) {
 	info, err := s.storeInfo(ctx, store)
 	if err != nil {
@@ -60,6 +62,8 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, id works
 	op := port.Operation{Actor: change.User(m.meTo), Summary: fmt.Sprintf("ワークスペース「%s」を %s から移動", m.name(), m.from.Name)}
 	reason, err := s.Delivery.Deliver(ctx, to, op, m.writeDestination)
 	switch {
+	case errors.Is(err, port.ErrSaveNotDiscarded):
+		return WorkspaceMoved{}, s.rollbackWorkspace(ctx, m, err) // 保存されたかもしれない。移動元は保存しない
 	case err != nil:
 		return WorkspaceMoved{}, err
 	case reason != "":
@@ -67,7 +71,7 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, id works
 	}
 	op = port.Operation{Actor: change.User(m.meFrom), Summary: fmt.Sprintf("ワークスペース「%s」を %s へ移動", m.name(), m.to.Name)}
 	if err := s.Stores.Write(ctx, store, op, m.writeSource); err != nil {
-		return WorkspaceMoved{}, err
+		return WorkspaceMoved{}, s.rollbackWorkspace(ctx, m, err)
 	}
 	if m.revive != "" {
 		port.NoteRevived(ctx, port.Revival{Kind: port.RevivedName, Text: m.name()})
