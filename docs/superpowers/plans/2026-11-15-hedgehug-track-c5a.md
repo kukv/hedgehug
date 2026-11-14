@@ -40,9 +40,9 @@
 | # | 決めたこと | 根拠 |
 |---|---|---|
 | C5a-1 | 範囲: 修復 (6)・(7)・(8)、`purged.jsonl` にあるスプリント・リリースの行の合わせでの取り除き、その通知 4 種((6)・(7)・(8)・取り除いた行の「反映されませんでした」)。プロジェクト別のルールの行の取り除き(保存形式 `:183` の残り)は、修復 (9) と同じ持ち主の規則なので C5b。(9)〜(10) は C5b、(11) は C5c、時計のずれは C5d | ユーザーの決定(2026-11-15、C5 を 4 本に分ける) |
-| C5a-2 | 修復の順: `steps` の (5)(`matchProjects`)のあとに `stopExtraActive`((6))→ `backlogClosed`((7))→ `clearDanglingPlan`((8))。保存形式の表の番号と「順の指定なし」の行は 06 `:350` に合わせて書き直す(Task 8) | 06 `:350`((7) は実行中・完了の区別に使うので (6) が先)。保存形式の表は 06 より古い |
+| C5a-2 | 修復の順: `steps` の (5)(`matchProjects`)のあとに `stopExtraActive`((6))→ `backlogClosed`((7))→ `clearDanglingPlan`((8))。保存形式の表の番号と「順の指定なし」の行は 06 `:350` に合わせて書き直し、古い番号を参照している計画(トラック B の計画 `:17`、B5a の計画 `:59`)も直す(Task 8) | 06 `:350` が (1)〜(11) の順と理由((7) は実行中・完了の区別に使うので (6) が先)を明記している。保存形式の表は同じ修復を「順の指定なし」と (6)〜(9) の別の番号で書いていて、06 と食い違う |
 | C5a-3 | (6): 削除済みでないスプリントのうち状態が実行中のものが 2 つ以上なら、開始日(`Start` の文字列)、開始の行(`sprints/<ID>/state` の、いまの値の行。`change.Current`)の `at`、その行の `by`(小文字)、その行の ID の順に比べ、先頭以外を `set sprints/<ID>/state` で計画中にする(`planning.SprintDrafts`)。スプリント 1 つを 1 回の保存にする。削除済みのスプリントは数えない | 06 `:247`。実行中は削除できず(05 `:76`)、削除と開始が重なれば削除が取り消される(C3a)ので、削除済みの実行中は残らない |
-| C5a-4 | (7): ワークスペースの作業項目(`planning.IsWork`)で削除済みでなく、ステータスの分類が未着手か進行中で、スプリントが完了(`State == Closed`。削除済みのスプリントも含む)のもののうち、完了の op の行(ワークスペースのログで `Op == Closing.Op` の行)のどれかと、アイテムのスプリントの欄かステータスの欄のいまの値の行のどれかが、`Facts` の別々の側にあるものを `set sprint null` にする。完了したあとに再オープンしたものは直さない | ユーザーの決定(2026-11-15)。06 `:336`「同期で入ってきたとき」。削除済みは存在するものとして扱う(06 `:340`) |
+| C5a-4 | (7): ワークスペースの作業項目(`planning.IsWork`)で削除済みでなく、ステータスの分類が未着手か進行中で、スプリントが完了(`State == Closed`。削除済みのスプリントも含む)のもののうち、完了の op の行(ワークスペースのログで `Op == Closing.Op` の行)のどれかと、アイテムのスプリントの欄かステータスの欄のいまの値の行のどれかが、`Facts` の別々の側にあるものを `set sprint null` にする。「欄のいまの値の行」は、その欄の `set` の行があれば `change.Current(log, change.Set, 欄, …)` の行、なければ作成の行(作成のときにスプリントを選んだアイテム)。完了したあとに(完了を受け取ってから)再オープンしたものは直さない。06 `:336` と 05 `:171` にこの対象を書く(Task 8) | ユーザーの決定(2026-11-15)。06 `:336`「同期で入ってきたとき」。削除済みは存在するものとして扱う(06 `:340`) |
 | C5a-5 | (8): 削除済みでないアイテムの `sprint`・`release` が、アイテムのワークスペースの `planning.FromLog` のスプリント・リリース(削除済みを含む)にないものを、欄ごとに 1 回の保存で `set sprint null`・`set release null` にする。完全に削除された・定義がない・別のワークスペースのもの、のどれも同じ。件名は、どれかのワークスペースの計画にあれば「ワークスペースにない」、なければ「完全に削除」の文。06 の表はスプリントのワークスペース違いとリリースのワークスペース違いの文と本文を持たないので、同じ形で足す(Task 8 で 06 に書く) | 06 `:338-342`。完全に削除したものは行が消える(合わせでも C5a-7 で消える)ので、計画にないことで見分けられる |
 | C5a-6 | `purged.jsonl` のスプリント・リリースの行の `display` は名前にする(G に求める)。(8) の通知の名前は、`purged.jsonl` にあればその `display`、どれかのワークスペースの計画にあればその名前、どちらもなければ「削除されたスプリント」「削除されたリリース」 | 06 `:342`(名前は共通の祖先から読む)。完全に削除したときに名前を残すのは `purged.jsonl` だけで、共通の祖先と同じ名前になる |
 | C5a-7 | 合わせ(`mergeTrees`)の最後に、`purged.jsonl` の `entity` が `sprint`・`release` の行の target について、すべての `workspaces/<ID>/log.jsonl` から `planning.IsPlanRow` で、`planning.PlanTarget` がその target の行を取り除く。そのあとで YAML を作り直す | 保存形式 `:183`、トラック C の決定 9 |
@@ -50,11 +50,12 @@
 | C5a-9 | 通知の宛先と鍵: (6) は開始の行の `by`、鍵 `repair:active:{スプリントの ID}:{開始の行の ID}`。(7)・(8) は修復の直前のアイテムのログで、その欄(`sprint`・`release`)を最後に保存した人(作成の行を含む。C4b2-7 の `lastSaver`)、鍵 `repair:closed:{アイテムの内部 ID}:{その欄の行の ID}`・`repair:planref:{アイテムの内部 ID}:{sprint|release}:{その欄の行の ID}`。取り除いた行は `New` の人の行の `by`(1 人に 1 件)、鍵 `repair:purged:{target}` | C4b2-6・C4b2-7 と同じ作り方。欄の行の ID は、同じ人がもう一度入れて同じ修復が起きたときに 2 件目を出すため |
 | C5a-10 | 修復の種類の見分け(C4b2-8 に足す): ワークスペースのログの `set sprints/<ID>/state`(from `active`、to `planned`)→ (6)。アイテムの `set sprint`・`set release`(to null)で、同じ保存に `place` の行がないもの → スプリントがアイテムのワークスペースの計画にあり完了なら (7)、ほかは (8)。(8) の理由は、`purged.jsonl` にあれば完全な削除、どれかのワークスペースの計画にあればワークスペース違い、なければ完全な削除 | 修復 (5) の別のワークスペースへの移動(C3b)も `set sprint null` を書くが、同じ保存に `place` の行がある |
 | C5a-11 | 開く先: (6)・スプリントの取り除いた行は `Workspace` と `Section: "sprints"`、リリースの取り除いた行は `Section: "releases"`。(7)・(8) は `Item`(C4b2-10) | 06 `:455` |
+| C5a-13 | C4c1(ブランチ feat/track-c4c、別の worktree)も `port.ReceivedSave` と `saves` の `pendingOf` に足す。C5a は `removed.go` の `pendingOf` には条件の呼び出しを 1 つ足すだけにし、中身は `saves/plan.go` に置く。develop にあとから入る方が合わせる | 2 本の PR が同じ所を変えるため |
 | C5a-12 | e2e は足さない。2 台の場面は `cmd/hedgehug` の本物の gitstore と state.db で確かめる((6)・(7)・再オープン)。完全な削除は書く口がない(G)ので、gitstore のテストの手助け `purgePlanForTest` で確かめる | C4b2-14 と同じ |
 
 ## Review Focus
 
-1. **完了のあとの再オープン:** Sprint 24 を完了して同期したあと、花子さんが Done の HH-7 を In Progress に戻し、別の保存との合わせが起きても、HH-7 は Sprint 24 に残り、通知も出ない(Task 1 の `TestClosedSprintItemsNeedsConcurrency`、Task 7 の `TestRepairNoticeReopenStays`)。
+1. **完了のあとの再オープン:** Sprint 24(HH-7 が Done で入っている)を太郎さんが完了して同期し、花子さんがそれを同期で受け取ってから Done の HH-7 を In Progress に戻し、別の保存との合わせが起きても、HH-7 は Sprint 24 に残り、通知も出ない(Task 1 の `TestClosedSprintItemsNeedsConcurrency`、Task 7 の `TestRepairNoticeReopenStays`)。
 2. **別のワークスペースへの移動の修復と混ぜない:** 修復 (5) の移動の保存の `set sprint null` からは、(8) の通知を作らない(Task 5 の `TestPlanRefSkipsPlaceRepair`)。
 3. **2 台が同じ修復をした:** 2 台が同じスプリントを計画中に戻しても、受信箱は 1 行(Task 5 の `TestActiveOnceAcrossMachines`)。
 4. **スプリントとリリースが両方ない:** 同じアイテムのスプリントとリリースが両方とも存在しないとき、保存は 2 つ、通知も 2 行(Task 2 の `TestDanglingBothFields`、Task 5 の `TestPlanRefBothFields`)。
@@ -81,7 +82,7 @@
   - `TestPlanTarget`(表): `set sprints/S1/name` → S1、`delete sprints/S1` → S1、`close_sprint` `sprints/S1/close` → S1、`set releases/R1/state` → R1、アイテムの `set sprint` → false
   - `TestExtraActive`: 実行中 S1(開始日 2026-11-16)・S2(2026-11-17)→ [S2]。開始日が同じなら開始の行の `at` が早い方を残す。`at` も同じなら `by` を小文字で比べ(`Hanako` と `taro` → `Hanako` の方を残す)、それも同じなら行の ID。実行中が 1 つ → 空。削除済みの実行中は数えない
   - `TestClosedSprintItems`: S1 を完了した保存の行(`close_sprint`・`set state`)が `Ours`、HH-9(Task・分類が未着手)の `set sprint S1` が `Theirs` → [HH-9]。分類が完了 → 空。Epic → 空。削除済み → 空。スプリントが計画中 → 空
-  - `TestClosedSprintItemsNeedsConcurrency`: 完了の行も HH-7 のスプリントの行も `Facts` にない(HH-7 のステータスの行だけが `Ours`)→ 空。完了の行が `Ours`、HH-7 のステータスを In Progress に戻す行が `Theirs` → [HH-7]。完了の行と HH-9 のスプリントの行が両方 `Ours` → 空
+  - `TestClosedSprintItemsNeedsConcurrency`: 完了の行も HH-7 のスプリントの行も `Facts` にない(HH-7 のステータスの行だけが `Ours`)→ 空。完了の行が `Ours`、HH-7 のステータスを In Progress に戻す行が `Theirs` → [HH-7]。完了の行と HH-9 のスプリントの行が両方 `Ours` → 空。完了の行が `Ours`、スプリント S1 を選んで作った HH-10 の作成の行(`set sprint` の行はない)が `Theirs` → [HH-10]
   - `TestDanglingPlanRefs`: ワークスペース W1 の計画にない S9 を指す HH-1 → `{HH-1, sprint, S9}`。W1 の削除済みのスプリントを指す → 空。W2 の S2 を指す W1 の HH-3 → `{HH-3, sprint, S2}`。アーカイブのリリース → 空。削除済みのアイテム → 空
   - `TestDanglingBothFields`: スプリントもリリースもない HH-4 → `[{HH-4, sprint, …}, {HH-4, release, …}]`
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/domain/planning/ ./internal/domain/repair/` Expected: FAIL(`undefined: PlanTarget` ほか)
@@ -110,10 +111,10 @@ git commit -m "feat(repair): スプリントの実行中の重なり・完了し
 - [ ] **Step 1: 失敗するテストを書く**(`newEnv`・`e.write`・`e.run` で、合わせの 2 つの側を作る)
   - `TestStopExtraActive`: taro が S1(開始日 2026-11-16)、hanako が S2(2026-11-17)を同時に開始 → 修復の保存 1 つ、件名「スプリント「Sprint 2」を計画中に戻す」、S2 が計画中、S1 は実行中。もう一度 `Run` → 何も書かない
   - `TestBacklogClosed`: taro が S1 を完了、hanako が同時に HH-2(未着手)を S1 に入れた → 件名「HH-2 をバックログに戻す」、HH-2 のスプリントが空、S1 の確定値は変わらない
-  - `TestBacklogClosedKeepsReopened`: 完了を送ったあとで(合わせの片側だけに)HH-2 を In Progress に戻した → 何も書かない
+  - `TestBacklogClosedKeepsReopened`: taro の完了を受け取ったあと(完了の行が共通の祖先にある)、hanako が Done の HH-2 を In Progress に戻した → 何も書かない
   - `TestClearDanglingSprint`: HH-2 が計画にない S9 を指す → 件名「HH-2 をバックログに戻す(スプリントが完全に削除)」。別のワークスペースのスプリントを指す → 「HH-2 をバックログに戻す(スプリントがワークスペースにない)」。リリースは「HH-2 のリリースを外す(リリースが完全に削除)」
   - `TestDanglingBothFields`: スプリントもリリースもない → 保存 2 つ
-  - `TestPlanRepairOrder`: 実行中が 2 つ(S1 は完了した S0 のあと)で、(6) のあとに (7) が S0 を完了として見る順で動く(`steps` の並びを確かめる)
+  - `TestPlanRepairOrder`: 1 回の `Run` で (6)・(7)・(8) がすべて要る場面(S1・S2 が同時に開始、S0 の完了と同時に HH-2 を S0 へ、HH-3 が計画にない S9)→ 修復の保存の件名が「スプリント「Sprint 2」を計画中に戻す」「HH-2 をバックログに戻す」「HH-3 をバックログに戻す(スプリントが完全に削除)」の順
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/app/repairing/` Expected: FAIL
 - [ ] **Step 3: 実装する**
 - [ ] **Step 4: 通ることを確かめる** — Run: `go test ./internal/app/repairing/ ./internal/infra/gitstore/...` Expected: PASS
@@ -197,6 +198,7 @@ git commit -m "feat(sync): 合わせで取り除いたスプリント・リリ�
   - `TestActiveNotice`: hanako が開始した Sprint 2 を計画中に戻した修復の保存 → 本文「実行中のスプリントが 2 つになったため、「Sprint 2」を計画中に戻しました」・`Workspace`・`Section == "sprints"`・`Source == "repair:active:{S2}:{開始の行の ID}"`。開始したのが taro → 作らない
   - `TestActiveOnceAcrossMachines`: 同じスプリントを戻した 2 つの修復の保存 → 受信箱は 1 行
   - `TestClosedNotice`: hanako が HH-9 を入れた完了の Sprint 24 から戻した修復 → 「スプリント「Sprint 24」は完了しているため、HH-9 をバックログに戻しました」・`Item`・`Source == "repair:closed:{HH-9}:{スプリントの行の ID}"`
+  - `TestClosedNoticeToAdder`: HH-7 を Sprint 24 に入れたのは hanako、完了と同時に Done から In Progress に戻したのは taro → hanako に作る(戻した人ではなく入れた人)。あなたが taro なら作らない
   - `TestPlanRefNotices`(表): `purged.jsonl` に `display: Sprint 3` → 「スプリント「Sprint 3」は完全に削除されたため、HH-4 をバックログに戻しました」。リリース → 「リリース「v2」は完全に削除されたため、HH-4 のリリースを外しました」。別のワークスペース W2 の Sprint 5 → 「スプリント「Sprint 5」は HH-4 のワークスペースにないため、HH-4 をバックログに戻しました」。リリースの同じ場合 → 「リリース「v3」は HH-4 のワークスペースにないため、HH-4 のリリースを外しました」。どこにもない → 「スプリント「削除されたスプリント」は完全に削除されたため…」
   - `TestPlanRefBothFields`: スプリントとリリースの 2 つの修復の保存 → 2 行(鍵が違う)
   - `TestPlanRefSkipsPlaceRepair`: 修復 (5) の移動の保存(`set place` と `set sprint null`)→ (8) の通知を作らない
@@ -251,7 +253,7 @@ git commit -m "feat(noticing): 完全に削除したスプリント・リリー�
 - [ ] **Step 1: 場面テストを書く**(A = taro、B = hanako。本物の gitstore とテストごとの state.db)
   - `TestRepairNoticeTwoActive`: A が Sprint 1・Sprint 2 を作って同期、B が clone。A が Sprint 1(開始日 2026-11-16)、B が Sprint 2(2026-11-17)を開始 → A が同期、B が同期 → B に「実行中のスプリントが 2 つになったため、「Sprint 2」を計画中に戻しました」が 1 行。A が同期 → A のスプリントも Sprint 1 だけが実行中、A には作らない
   - `TestRepairNoticeClosedSprint`: A が Sprint 1 を完了、B が同時に HH-2 を Sprint 1 に入れる → A が同期、B が同期 → B に「スプリント「Sprint 1」は完了しているため、HH-2 をバックログに戻しました」、HH-2 のスプリントが空
-  - `TestRepairNoticeReopenStays`: A が完了した Sprint 1 を同期したあと、B が Done の HH-2 を未着手に戻して保存、A が別のアイテムのタイトルを変える → A が同期、B が同期(合わせ)→ HH-2 は Sprint 1 のまま、どちらにも同期の修復の通知がない
+  - `TestRepairNoticeReopenStays`: HH-2 が Done で入っている Sprint 1 を A が完了して同期 → B が同期して完了を受け取る → B が HH-2 を未着手に戻して保存、A が同時に別のアイテムのタイトルを変える → A が同期、B が同期(合わせ)→ HH-2 は Sprint 1 のまま、どちらにも同期の修復の通知がない
 - [ ] **Step 2: 流して、足りない組み立てを直す** — Run: `go test ./cmd/hedgehug/ -run 'RepairNotice(TwoActive|ClosedSprint|ReopenStays)'` Expected: PASS
 - [ ] **Step 3: 全体を確かめる** — Run: `go test ./... && golangci-lint run ./... && golangci-lint run --build-tags e2e ./...` Expected: PASS・指摘なし
 - [ ] **Step 4: コミット**
@@ -268,11 +270,13 @@ git commit -m "test(sync): 2 台の場面で計画の同期の修復と通知を
 **Files:**
 - Modify: `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/06-sync-notifications.md` `:342`(リリースのワークスペース違いの本文)、`:532` のあと(ワークスペース違いのアクティビティの文 2 行)
 - Modify: `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md` `:193-218`(表の番号と順、(7) の見つけ方)、`:245`(スプリント・リリースの `display` は名前。「上の表の(1)・(6)」を「(1)・(8)」に)
-- Modify: `docs/superpowers/plans/2026-11-12-hedgehug-track-c.md`(C5 の行を C5a〜C5d に分け、漏れの表、G への申し送り)
+- Modify: `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/05-planning-reports.md` `:171`
+- Modify: `docs/superpowers/plans/2026-11-12-hedgehug-track-c.md`(C5 の行を C5a〜C5d に分け、漏れの表、G への申し送り)、`2026-11-12-hedgehug-track-b.md` `:17`、`2026-11-14-hedgehug-track-b5a.md` `:59`(保存形式の表の番号)
 
 - [ ] **Step 1: 仕様と保存形式を書き直す**
+  - 06 `:336` の「同期で未完了のアイテムが入ってきたときは」を「同期で未完了のアイテムが入ってきたとき(完了と同時に、別のマシンでアイテムを入れた、または未完了に戻したとき)は」にし、段落の末尾に「完了を受け取ったあとで未完了に戻したアイテムは、完了したスプリントに残す」を足す。05 `:171` も同じ対象に書き直す
   - 06 `:342` の本文の列に「「リリース「{名前}」は {ID} のワークスペースにないため、{ID} のリリースを外しました」」を足す。アクティビティの表の「存在しないリリースを外した」の行のあとに、「同期で、ワークスペースにないスプリントを外した | 同期 | {ID} をバックログに戻す(スプリントがワークスペースにない)」「同期で、ワークスペースにないリリースを外した | 同期 | {ID} のリリースを外す(リリースがワークスペースにない)」を足す
-  - 保存形式の表: 番号を 06 `:350` の (1)〜(11) にそろえる((6) 実行中のスプリントが 2 つ、(7) 完了したスプリント、(8) 存在しないスプリント・リリース、(9) なくなったプロジェクトのルール、(10) 削除された値を指す設定・ルール・既定のテンプレート・自動化と初期ステータスの分類、(11) 1 つしかないもの)。「順の指定なし」は削除と変更の重なりだけを残し、「06 が順を決めていない」の文を「削除と変更の重なりは (1) の前に行う」にする。(7) の見つけ方を「完了したスプリントに、未完了のアイテムがあり、完了の行と、アイテムのスプリントかステータスの行が、合わせの別々の側にある(完了のあとに未完了に戻したものは直さない)」にする。`purged.jsonl` の段落に「スプリント・リリースの `display` は名前」を足す
+  - 保存形式の表: 番号を 06 `:350` の (1)〜(11) にそろえる((6) 実行中のスプリントが 2 つ、(7) 完了したスプリント、(8) 存在しないスプリント・リリース、(9) なくなったプロジェクトのルール、(10) 削除された値を指す設定・ルール・既定のテンプレート・自動化と初期ステータスの分類、(11) 1 つしかないもの)。「順の指定なし」は削除と変更の重なりだけを残し、「06 が順を決めていない」の文を「削除と変更の重なりは (1) の前に行う」にする。(7) の見つけ方を「完了したスプリントに、未完了のアイテムがあり、完了の行と、アイテムのスプリントかステータスの行が、合わせの別々の側にある(完了のあとに未完了に戻したものは直さない)」にする。`purged.jsonl` の段落に「スプリント・リリースの `display` は名前」を足し、「上の表の(1)・(6)」を「(1)・(8)」にする。トラック B の計画 `:17` の「(7)〜(9)」を「(8)〜(11)」に、B5a の計画 `:59` の「(7)・(8)」を「(9)・(10)」にする。`grep -rn '同期の修復」の表の\|同期の修復」の (' docs internal` で、ほかに古い番号の参照がないことを確かめる
 - [ ] **Step 2: トラック C の計画を書き直す**
   - C5 の行を 4 行にする: C5a(この計画のファイル名と C5a-1 の範囲)、C5b 設定の修復((9)・(10)、プロジェクト別のルールの行の合わせでの取り除き)、C5c 重複の修復((11)、B5b のワークスペースの削除の取り消しとの重なり)、C5d 時計のずれの警告(C5a〜C5c と並行可)
   - 漏れの表の C5 を、節ごとに C5a〜C5d に書き分ける
