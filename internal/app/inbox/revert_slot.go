@@ -18,7 +18,8 @@ import (
 type slotState int
 
 const (
-	slotNone  slotState = iota // 本文だけ(値もボタンも出さない)
+	slotNone  slotState = iota // 値の項目でない(本文だけ)
+	slotGone                   // 値の項目だが、エンティティが Store にない・プロパティがいまのワークスペースにない(本文だけ)
 	slotShown                  // 値だけ出す(ボタンを出さない)
 	slotLive                   // 戻せる相手がある(有効か無効かは reason と、いまの値と Kept の比べで決める)
 )
@@ -112,7 +113,7 @@ func viewOf(r port.Reader, id workspace.ID) (wsView, error) {
 func itemSlot(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotState, error) {
 	it, err := r.Items().Get(n.Item)
 	if errors.Is(err, port.ErrNotFound) {
-		return slot{}, slotNone, nil
+		return slot{}, slotGone, nil
 	}
 	if err != nil {
 		return slot{}, slotNone, err
@@ -123,7 +124,7 @@ func itemSlot(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotState
 	}
 	f, ok := fieldOf(cur.st, n.Field)
 	if !ok {
-		return slot{}, slotNone, nil
+		return slot{}, slotGone, nil
 	}
 	from, err := noticeView(r, n, cur)
 	if err != nil {
@@ -161,7 +162,7 @@ func projectSlot(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotSt
 	}
 	p, err := r.Projects().Get(n.Project)
 	if errors.Is(err, port.ErrNotFound) {
-		return slot{}, slotNone, nil
+		return slot{}, slotGone, nil
 	}
 	if err != nil {
 		return slot{}, slotNone, err

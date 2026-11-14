@@ -3,6 +3,7 @@ package inbox_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -199,7 +200,7 @@ func TestRevertSprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := lastOp(f.logOf(t, change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}))
-	if len(got) != 2 || got[0] != `set sprint null "`+string(sprintS)+`"` || got[1][:9] != "set rank " {
+	if len(got) != 2 || got[0] != `set sprint null "`+string(sprintS)+`"` || !strings.HasPrefix(got[1], "set rank ") {
 		t.Errorf("last op = %q, want set sprint and set rank", got)
 	}
 }
@@ -256,7 +257,17 @@ func TestRevertRefusals(t *testing.T) {
 		{"削除されたステータス", func(f reverter, _ port.NoticeID) {
 			f.writeWorkspace(t, change.NewDelete("statuses/"+string(apptest.SampleStatusTodo)))
 		}, status(), "「Todo」は削除されています", nil},
-		{"本文だけの項目", func(reverter, port.NoticeID) {}, overwritten("project_rules/x", "a", "b"), "", port.ErrInvalidOperation},
+		{"Store にないアイテム", func(reverter, port.NoticeID) {}, func() port.Notice {
+			n := status()
+			n.Item = "01SAMPLEIT0000000000000009"
+			return n
+		}(), "HH-2 は先に変更されたため、適用しませんでした", nil},
+		{"削除した追加プロパティ", func(f reverter, _ port.NoticeID) {
+			prop := workspace.Property{ID: textProperty, Name: "メモ", Type: workspace.TypeText, Kinds: workspace.Kinds, Rank: "z"}
+			f.writeWorkspace(t, workspace.PropertyDrafts(prop)...)
+			f.writeWorkspace(t, change.NewDelete("properties/"+string(textProperty)))
+		}, overwritten(item.FieldKey(textProperty), "a", "b"), "HH-2 は先に変更されたため、適用しませんでした", nil},
+		{"本文だけの項目", func(reverter, port.NoticeID) {}, projectOverwritten("project_rules/x", "a", "b"), "", port.ErrInvalidOperation},
 		{"上書きでない通知", func(reverter, port.NoticeID) {}, changed("自動化"), "", port.ErrInvalidOperation},
 		{"表示中でない Store", func(f reverter, _ port.NoticeID) { f.list.Stores = f.list.Stores[1:] }, status(), "", port.ErrNotFound},
 	}
@@ -266,12 +277,16 @@ func TestRevertRefusals(t *testing.T) {
 		id := f.notice(t, c.notice)
 		c.prepare(f, id)
 		rows := len(f.logOf(t, change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}))
+		resultBefore := f.row(t, id).Result
 		err := f.svc.Revert(t.Context(), id)
 		switch {
 		case c.err != nil && !errors.Is(err, c.err):
 			t.Errorf("%s: err = %v, want %v", c.name, err, c.err)
 		case c.err == nil && refusalText(err) != c.text:
 			t.Errorf("%s: err = %v, want refusal %q", c.name, err, c.text)
+		}
+		if got := f.row(t, id).Result; got != resultBefore {
+			t.Errorf("%s: result = %q, want %q (unchanged)", c.name, got, resultBefore)
 		}
 		if len(f.events.List()) != 0 {
 			t.Errorf("%s: events = %v, want none", c.name, f.events.List())
