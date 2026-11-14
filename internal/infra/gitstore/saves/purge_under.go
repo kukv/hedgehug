@@ -36,7 +36,7 @@ func ancestorGone(tree *object.Tree, ref change.Ref, log []change.Record) (bool,
 			return false, nil
 		}
 		seen[next] = true
-		f, err := fileIn(tree, Dirs[next.Kind]+"/"+string(next.ID)+"/log.jsonl")
+		f, err := fileIn(tree, logPath(next))
 		if err != nil || f == nil {
 			return err == nil, err
 		}

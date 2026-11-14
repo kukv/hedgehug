@@ -65,10 +65,18 @@ func Changer(log []change.Record, d change.Record, f Facts) string {
 // 人が書いた変更の行(delete・restore を除く)のうち、d の f が deleted ならすべての行、ほかは f の下の f(d.F+"/" で
 // 始まるもの)の行。作成と moved_in の行は、削除より前にしかない(削除と同時にはできない)ので数えない。f で d が
 // 片側にあれば、もう片側の行だけを数える(同時に変えた人。共通の祖先にある変更は数えない)。d がどちらの側にも
-// なければ(f が空のときも)、側を見ない。削除した人(d.By。大文字と小文字を区別しない)でない人の行のうち at が
+// なければ(f が空のときも)、側を見ない。d が片側にあって、もう片側に数える行が 1 つもないときも、側を見ない。削除した人(d.By。大文字と小文字を区別しない)でない人の行のうち at が
 // 最もあとの行(同じなら ID の大きい行)を返し、削除した人の行しかなければ、その中で最もあとの行を返す。
 func LastChange(log []change.Record, d change.Record, f Facts) (change.Record, bool) {
 	side := f.Side(d.ID)
+	if c, ok := lastChangeIn(log, d, f, side); ok || side == 0 {
+		return c, ok
+	}
+	return lastChangeIn(log, d, f, 0)
+}
+
+// lastChangeIn は、LastChange の数え方を、side が 0 でなければ反対の側の行だけに絞って行う。
+func lastChangeIn(log []change.Record, d change.Record, f Facts, side int) (change.Record, bool) {
 	var other, own *change.Record
 	for i := range log {
 		c := &log[i]

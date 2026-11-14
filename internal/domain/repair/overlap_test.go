@@ -204,6 +204,7 @@ func TestChangerConcurrentSide(t *testing.T) {
 		"反対の側":       {sides, "hanako"},
 		"側の見分けなし":    {repair.Facts{}, "jiro"},
 		"削除がどちらにもない": {repair.Facts{Ours: map[change.ID]bool{"c1": true}}, "jiro"},
+		"反対の側に変更がない": {repair.Facts{Ours: map[change.ID]bool{"c1": true, "c2": true, "d1": true}}, "jiro"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := repair.Changer(log, d, c.f); got != c.want {
