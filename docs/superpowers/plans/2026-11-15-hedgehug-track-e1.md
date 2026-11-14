@@ -798,3 +798,38 @@ Expected: PASS
 git add web/e2e docs
 git commit -m "test(e2e): 検索の画面を通しで確かめ、設計書の索引を書き換える(E1 Task 14)"
 ```
+
+## 他の小計画・トラックに渡すもの
+
+E1 で作ったものと、それぞれの小計画・トラックが足すものの境目。
+
+### E2(テーブル)
+
+- 検索の画面のテーブルは、E1 で初めの 7 列(ID・タイトル・ステータス・担当者・優先度・終了日・ポイント)を読むだけで出した(E1-18)。`web/app/src/screens/search/SearchTable.svelte` と `SearchRow.svelte` がそれで、列の見出しは `SearchTable.svelte` の `columns` に決め打ちしてある。E2 は、列の選択・並べ替え・幅、セルの編集、行の選択と「まとめて変更」、グループ分けをここに足す。
+- グループ分けの元は、応答の `group`(`POST /api/search`。E1-9、E1-24)。E1 は解析して返すだけで、画面は使っていない。
+- 削除済みの行(`is:deleted`)は、E1 では薄く出してタイトルを押せない文字にしただけ(`SearchRow.svelte` の `row.deleted`)。E2 は、ステータスのボタン・セル・選択のチェックボックス・アイテムのメニューを無効にし、「すべて選択」に含めない(04 の 312 行)。
+- 「このクエリで」の群(`web/packages/core/src/features/palette/queryGroup.ts`)に、E2 が「{N} 件をまとめて変更…」を足す(E1-21)。
+- 画面の状態は `screen_states` の表を使う(E1-16)。テーブルの設定は、`search` の鍵の `{"query": …}` に足すか、別の鍵にする。
+
+### E3(保存したビュー)
+
+- 「このクエリで」の群に「ビューとして保存…」を足す(E1-21)。
+- 検索の画面に、レイアウトの切り替え(テーブル・ボード・カレンダーなど)と、レイアウトごとの注記を足す。E1 の画面(`web/app/src/screens/search/SearchScreen.svelte`)の `.toolbar` に件数だけがあり、切り替えの置き場所を空けてある。
+- 保存したビューを開くときは、`web/app/src/search.ts` の `search.setQuery` で絞り込みを入れ替え、`/search` を開く(パレットの「検索で開く」と同じ道)。
+
+### E4(マイタスクなど)
+
+- 日付が変わったときに `today`・`-7d` のクエリを計算し直す仕組み(04 の 42 行)は E4 が作る。E1 は検索を出すたびにその時点の今日で計算する(E1-11、E1-23)。
+- `web/packages/core/src/features/search/candidates.ts` の `CandidateScope` は、E1 では `{ kind: "all" }` だけを使う。E4 は `{ kind: "workspace"; storeId; workspaceId }` で、ワークスペースの範囲の候補を使う。範囲を絞る処理は `scopedStores` と `itemEntries`・`memberEntries` に書いてあり、E1 のテスト(`candidates.test.ts`)で確かめてある。
+
+### E7(ツリー)
+
+- ツリーの絞り込み欄は、E1 の `FilterInput`(`web/packages/ui/src/patterns/FilterInput.svelte`)と `caret.ts`・`candidates.ts` をそのまま使う。クエリの解析と一致の判定はサーバーの `domain/query` にだけある(E1-1)ので、画面で判定を書き直さない。範囲は `CandidateScope` の `workspace` か、プロジェクトの範囲を足す。
+
+### G(診断と設定)
+
+- 診断の「無効なアイテム」は、E1 で作った `repair.ItemProblems`(`internal/domain/repair/problems.go`)を使う。`is:invalid` と食い違わないため、別の判定を作らない(E1-7)。
+- 設定の「削除済み」の残り日数は `change.Deletion.DaysLeft`(`internal/domain/change/`)を使う。検索の行の「あと N 日で完全に削除」と同じ数になる(E1-8)。
+- 削除済みの行のタイトルを押したら、設定の「削除済み」を開き、そのアイテムの行を選んだ状態にする(04 の 312 行)。E1 は押せない文字で出しているだけ(`SearchRow.svelte`)。
+- Store の名前を変えるとき、検索の画面の状態(`screen_states` の `search` の鍵の `query`)にある `store:旧名` を新しい名前に書き換える(E1-22)。
+- 診断の「検索で開く」は、`screen_states` の `search` を書いて `/search` を開く(E1-22)。
