@@ -54,26 +54,47 @@ func restoredOps(s port.ReceivedSave) []change.ID {
 }
 
 // deletionOf は、i 番目の保存のエンティティのうち、保存の直前のログに、op の取り消しの対象の削除の行
-// (root: true のエンティティの削除か、deleted でない f の削除)があるものと、その行。同じログに複数あれば f の
-// 辞書順で最初のもの(repair.Overlaps と同じ)。
+// (root: true のエンティティの削除か、deleted でない f の削除)があるものと、その行。1 つの op で複数を削除して
+// いたら(テンプレートの子など)、重なった変更(repair.LastChange)が最もあとのものを取る(重なった変更があった方が
+// 取り消しの理由。repair.Overlaps は片側の見分けで選ぶが、ここにはその材料がない)。同じなら f の辞書順で最初のもの。
 func deletionOf(b batch, i int, op change.ID) (change.Ref, change.Record, bool) {
+	var best *restoreCandidate
 	for _, e := range b.saves[i].Entities {
-		var d *change.Record
 		before := b.beforeSave(e.Ref, i)
-		for j := range before {
-			c := &before[j]
+		for _, c := range before {
 			if c.T != change.Delete || c.Op != op || (c.F == change.DeletedField && (c.Root == nil || !*c.Root)) {
 				continue
 			}
-			if d == nil || c.F < d.F {
-				d = c
+			w, changed := repair.LastChange(before, c)
+			cand := restoreCandidate{e.Ref, c, w, changed}
+			if best == nil || cand.better(*best) {
+				best = &cand
 			}
 		}
-		if d != nil {
-			return e.Ref, *d, true
-		}
 	}
-	return change.Ref{}, change.Record{}, false
+	if best == nil {
+		return change.Ref{}, change.Record{}, false
+	}
+	return best.ref, best.d, true
+}
+
+// restoreCandidate は、取り消しの対象の候補の削除の行と、それと重なった最もあとの変更。
+type restoreCandidate struct {
+	ref     change.Ref
+	d       change.Record
+	w       change.Record
+	changed bool
+}
+
+// better は、c が o より取り消しの対象らしいか。重なった変更があり、それがあとのもの。同じなら f の辞書順。
+func (c restoreCandidate) better(o restoreCandidate) bool {
+	if c.changed != o.changed {
+		return c.changed
+	}
+	if c.changed && !c.w.At.Equal(o.w.At) {
+		return c.w.At.After(o.w.At)
+	}
+	return c.d.F < o.d.F
 }
 
 // restoreTarget は、取り消した削除 d の {対象} と下地(C4b2-9・C4b2-10)。エンティティの削除はその ID か

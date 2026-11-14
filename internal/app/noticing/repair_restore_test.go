@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -175,6 +176,54 @@ func TestRestoreVariants(t *testing.T) {
 				t.Errorf("notice = %+v, wrong target", n)
 			}
 		})
+	}
+}
+
+// undoAll は、op の行があるログすべてに change.Undo の行を書く修復の保存。
+func undoAll(f *fixture, op change.ID, refs ...change.Ref) port.ReceivedSave {
+	return f.repairSave(func(tx port.Tx) error {
+		for _, ref := range refs {
+			log, err := tx.Changes().Of(ref)
+			if err != nil {
+				return err
+			}
+			if err := appendRef(ref, change.Undo(log, op)...)(tx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func TestRestoreWorkspaceOnePerOp(t *testing.T) {
+	f := setupAs(t, "taro")
+	op := f.save(user("taro"), func(tx port.Tx) error {
+		return errors.Join(
+			appendRef(wsRef, change.NewDeleteEntity(true))(tx),
+			appendRef(projectRef, change.NewDeleteEntity(false))(tx),
+			appendRef(epicRef, change.NewDeleteEntity(false))(tx),
+			appendRef(taskRef, change.NewDeleteEntity(false))(tx),
+		)
+	}).Key.Op
+	f.save(user("hanako"), appendRef(wsRef, change.NewSet("name", "Web", "Web2")))
+	f.judge(undoAll(f, op, wsRef, projectRef, epicRef, taskRef))
+	n := f.wantOne()
+	if n.Text != "ワークスペース「Web2」は hanako が同時に変更したため、削除を取り消しました" || n.Item != "" || n.Project != "" || n.Section != "general" {
+		t.Errorf("notice = %+v", n)
+	}
+}
+
+// 1 つの op で 2 つを削除し、片方だけが変更された: 変更された方を対象にし、{変更した人} はその変更の人。
+func TestRestoreTwoDeletesInOneOp(t *testing.T) {
+	f := setupAs(t, "taro")
+	f.save(user("taro"), appendRef(wsRef, append(
+		planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: "SP1", Name: "Sprint 1"}),
+		planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: "SP2", Name: "Sprint 2"})...)...))
+	op := f.save(user("taro"), appendRef(wsRef, planning.DeleteSprint("SP1"), planning.DeleteSprint("SP2"))).Key.Op
+	f.save(user("hanako"), appendRef(wsRef, change.NewSet("sprints/SP2/goal", "", "目標")))
+	f.judge(undoAll(f, op, wsRef))
+	if n := f.wantOne(); n.Text != "「Sprint 2」は hanako が同時に変更したため、削除を取り消しました" {
+		t.Errorf("text = %q", n.Text)
 	}
 }
 

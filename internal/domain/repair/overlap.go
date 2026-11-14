@@ -53,11 +53,19 @@ func deletesTarget(d change.Record) bool {
 // notChanges は、Changer が変更に数えない行の種類。
 var notChanges = []change.Type{change.Delete, change.Restore, change.Create, change.MovedIn}
 
-// Changer は、削除の行 d と重なった変更をした人のログイン名(決定 C4b2-9)。hasChange と同じ数え方を、
-// 片側の見分けなしで当てる: d の op でない、人が書いた変更の行(delete・restore を除く)のうち、d の f
-// (deleted ならすべての f、ほかは f とその下の f)を変えたもので、at が最もあとの行(同じなら ID の大きい行)の by。
-// 作成と moved_in の行は、削除より前にしかない(削除と同時にはできない)ので数えない。見つからなければ空。
+// Changer は、削除の行 d と重なった変更をした人のログイン名(決定 C4b2-9)。LastChange の行の by。見つからなければ空。
 func Changer(log []change.Record, d change.Record) string {
+	if w, ok := LastChange(log, d); ok {
+		return w.By
+	}
+	return ""
+}
+
+// LastChange は、削除の行 d と重なった変更のうち最もあとの行。hasChange と同じ数え方を、片側の見分けなしで当てる:
+// d の op でない、人が書いた変更の行(delete・restore を除く)のうち、d の f(deleted ならすべての f、ほかは f と
+// その下の f)を変えたもので、at が最もあとの行(同じなら ID の大きい行)。作成と moved_in の行は、削除より前に
+// しかない(削除と同時にはできない)ので数えない。
+func LastChange(log []change.Record, d change.Record) (change.Record, bool) {
 	var w *change.Record
 	for i := range log {
 		c := &log[i]
@@ -72,9 +80,9 @@ func Changer(log []change.Record, d change.Record) string {
 		}
 	}
 	if w == nil {
-		return ""
+		return change.Record{}, false
 	}
-	return w.By
+	return *w, true
 }
 
 // hasChange は、d と重なる変更が、side の側にあるか。
