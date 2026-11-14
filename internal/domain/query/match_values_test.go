@@ -15,6 +15,7 @@ func ptr(f float64) *float64 { return &f }
 func TestParseDate(t *testing.T) {
 	cases := map[string]string{
 		"today": "2026-11-15", "+3d": "2026-11-18", "3d": "2026-11-18", "-7d": "2026-11-08",
+		"+3D": "2026-11-18", "TODAY": "2026-11-15",
 		"2026-12-01": "2026-12-01", "abc": "", "2026-13-01": "", "d": "", "99999999999d": "",
 	}
 	for in, want := range cases {
@@ -67,6 +68,12 @@ func TestSprintRelease(t *testing.T) {
 	next := facts(t, func(f *query.Facts) { f.SprintName, f.SprintNext = "Sprint 4", true })
 	check(t, next, map[string]bool{"sprint:next": true, "sprint:current": false, "release:none": true})
 	check(t, facts(t), map[string]bool{"sprint:none": true, "release:none": true, "sprint:current": false})
+	// 否定は、値のないアイテムを一致する側に入れる。
+	check(t, cur, map[string]bool{
+		"-sprint:current": false, `-sprint:"Sprint 3"`: false, "-sprint:next": true, "-sprint:none": true,
+		"-release:v2.0.0": false, "-release:v3": true, "-release:none": true,
+	})
+	check(t, facts(t), map[string]bool{"-sprint:current": true, "-sprint:none": false, "-release:v2.0.0": true, "-release:none": false})
 }
 
 func TestIsHas(t *testing.T) {
@@ -83,6 +90,12 @@ func TestIsHas(t *testing.T) {
 	check(t, facts(t, func(f *query.Facts) { f.Item.End = today }), map[string]bool{"is:overdue": false, "is:blocked": false})
 	check(t, facts(t, func(f *query.Facts) { f.Item.End, f.Item.Status = "2026-11-01", "s2" }), map[string]bool{"is:overdue": false})
 	check(t, facts(t, func(f *query.Facts) { f.Item.End = "" }), map[string]bool{"is:overdue": false})
+	// 中止(canceled)は終わったものなので、期限切れにしない。
+	canceled := facts(t, func(f *query.Facts) {
+		f.Settings.Statuses = append(f.Settings.Statuses, workspace.Value{ID: "s9", Name: "中止", Category: workspace.CategoryCanceled})
+		f.Item.End, f.Item.Status = "2026-11-01", "s9"
+	})
+	check(t, canceled, map[string]bool{"is:overdue": false, "-is:overdue": true})
 }
 
 func TestIsAndHasUnknownKeepsNegation(t *testing.T) {
@@ -104,6 +117,10 @@ func TestMentions(t *testing.T) {
 		map[string]bool{"mentions:none": true, "mentions:@me": false})
 	check(t, facts(t, func(f *query.Facts) { f.Description = "mail@example.com" }), map[string]bool{"mentions:none": false})
 	check(t, facts(t, func(f *query.Facts) { f.Me, f.Description = "", "@x" }), map[string]bool{"mentions:@me": false})
+	// キーワードは `@me` と `none` だけ。`me` はログイン名 me、`@none` はログイン名 none。
+	check(t, f, map[string]bool{"mentions:me": false})
+	check(t, facts(t, func(f *query.Facts) { f.Me, f.Description = "suzuki", "@me @none" }),
+		map[string]bool{"mentions:me": true, "mentions:@me": false, "mentions:@none": true, "mentions:none": false})
 }
 
 func raw(v any) json.RawMessage {

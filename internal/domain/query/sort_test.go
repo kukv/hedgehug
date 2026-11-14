@@ -138,6 +138,72 @@ func TestOrderCustomProperties(t *testing.T) {
 	}
 }
 
+// TestOrderCustomByType は、ユーザー(表示名)・チェック(オンだけが値)・日付・複数選択(定義順に並べ直して先頭から)の並び。
+func TestOrderCustomByType(t *testing.T) {
+	field := func(p workspace.Property, v string) func(*query.Facts) {
+		return func(f *query.Facts) {
+			f.Settings.Properties = []workspace.Property{p}
+			if v != "" {
+				f.Item.Fields = map[change.ID]json.RawMessage{p.ID: json.RawMessage(v)}
+			}
+		}
+	}
+	user := workspace.Property{ID: "u", Key: "reviewer", Type: workspace.TypeUser}
+	names := func(f *query.Facts) { f.Names = map[string]string{"zed": "Aida", "amy": "Yamada"} }
+	rows := []row{
+		mk(t, "amy", field(user, `"amy"`), names),
+		mk(t, "none", field(user, "")),
+		mk(t, "zed", field(user, `"zed"`), names),
+	}
+	if got := order(rows, sortOf(t, "sort:reviewer")); got != "zed amy none" {
+		t.Errorf("user = %s", got)
+	}
+	check := workspace.Property{ID: "k", Key: "ok", Type: workspace.TypeCheck}
+	rows = []row{
+		mk(t, "off", field(check, "false")),
+		mk(t, "on", field(check, "true")),
+		mk(t, "unset", field(check, "")),
+	}
+	if got := order(rows, sortOf(t, "sort:-ok")); got != "on off unset" {
+		t.Errorf("check = %s", got)
+	}
+	date := workspace.Property{ID: "d", Key: "due", Type: workspace.TypeDate}
+	rows = []row{
+		mk(t, "dec", field(date, `"2026-12-01"`)),
+		mk(t, "none", field(date, "")),
+		mk(t, "nov", field(date, `"2026-11-02"`)),
+	}
+	if got := order(rows, sortOf(t, "sort:due")); got != "nov dec none" {
+		t.Errorf("date = %s", got)
+	}
+	if got := order(rows, sortOf(t, "sort:-due")); got != "dec nov none" {
+		t.Errorf("date desc = %s", got)
+	}
+}
+
+func TestOrderCustomMulti(t *testing.T) {
+	multi := workspace.Property{
+		ID: "m", Key: "tags", Type: workspace.TypeMulti,
+		Choices: []workspace.Value{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}, {ID: "c", Name: "C"}},
+	}
+	chosen := func(ids ...change.ID) func(*query.Facts) {
+		return func(f *query.Facts) {
+			f.Settings.Properties = []workspace.Property{multi}
+			f.Item.Choices = map[change.ID][]change.ID{"m": ids}
+		}
+	}
+	rows := []row{
+		mk(t, "c", chosen("c")),
+		mk(t, "none", chosen()),
+		mk(t, "b-a", chosen("b", "a")), // 定義順に並べ直して A, B
+		mk(t, "a", chosen("a")),
+		mk(t, "b", chosen("b")),
+	}
+	if got := order(rows, sortOf(t, "sort:tags")); got != "a b-a b c none" {
+		t.Errorf("multi = %s", got)
+	}
+}
+
 func TestOrderEmptyLast(t *testing.T) {
 	mkRows := func() []row {
 		return []row{

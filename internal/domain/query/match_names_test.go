@@ -72,7 +72,15 @@ func TestStatusAndCategory(t *testing.T) {
 		"category:doing":         true,
 		"category:done,canceled": false,
 		"-status:Done":           true,
+		"status:none":            false,
 	})
+	// status には none の書き方がない(04)。「none」という名前のステータスも探せる。
+	named := facts(t, func(f *query.Facts) {
+		f.Settings.Statuses = append(f.Settings.Statuses, workspace.Value{ID: "s3", Name: "none"})
+		f.Item.Status = "s3"
+	})
+	check(t, named, map[string]bool{"status:none": true, "status:None": true})
+	check(t, facts(t, func(f *query.Facts) { f.Item.Status = "" }), map[string]bool{"status:none": false})
 }
 
 func TestKindSystemPriorityWorkspaceStore(t *testing.T) {
@@ -107,6 +115,11 @@ func TestAssigneeWatching(t *testing.T) {
 	check(t, facts(t, func(f *query.Facts) { f.Me = "" }), map[string]bool{"assignee:@me": false, "-assignee:@me": true})
 	check(t, facts(t, func(f *query.Facts) { f.Item.Assignee = ""; f.Item.Watchers = nil }),
 		map[string]bool{"assignee:none": true, "watching:none": true, "assignee:@me": false})
+	// キーワードは `@me` と `none` だけ。`me` はログイン名 me、`@none` はログイン名 none(04)。
+	check(t, facts(t), map[string]bool{"assignee:me": false, "assignee:@ME": true})
+	check(t, facts(t, func(f *query.Facts) { f.Item.Assignee = "me" }), map[string]bool{"assignee:me": true, "assignee:@me": false})
+	check(t, facts(t, func(f *query.Facts) { f.Item.Assignee = "none" }), map[string]bool{"assignee:@none": true, "assignee:none": false})
+	check(t, facts(t, func(f *query.Facts) { f.Item.Assignee = "" }), map[string]bool{"assignee:@none": false})
 }
 
 func TestIDKeys(t *testing.T) {

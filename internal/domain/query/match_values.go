@@ -163,9 +163,8 @@ func has(f Facts, v string) bool {
 
 // mentions は、説明と(削除されていない)コメントのメンションを判定する(E1-14)。none はどこにもない。
 func mentions(f Facts, v string) bool {
-	login := strings.TrimPrefix(v, "@")
 	bodies := append([]string{f.Description}, f.Comments...)
-	if isNone(login) {
+	if isNone(v) {
 		for _, b := range bodies {
 			if mention.Any(b) {
 				return false
@@ -173,9 +172,7 @@ func mentions(f Facts, v string) bool {
 		}
 		return true
 	}
-	if strings.EqualFold(login, "me") {
-		login = f.Me
-	}
+	login := loginOf(v, f)
 	for _, b := range bodies {
 		if mention.Has(b, login) {
 			return true

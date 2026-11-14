@@ -110,6 +110,8 @@ func (v valueCheck) missingPerson(it item.Item, set workspace.Settings) bool {
 }
 
 // missingPlan は、スプリントかリリースが、ワークスペースの計画(削除済みを含む)にないか。
+// 呼ぶ側は、読めたすべてのワークスペースの計画を Plans に入れる(設定と違い、ログから作るので読めないことがない)。
+// なので Plans にワークスペースがないのは、そのワークスペースがないときで、スプリント・リリースも本当にない。
 func (v valueCheck) missingPlan(it item.Item) bool {
 	ws := it.Place.Workspace
 	return (it.Sprint != "" && !v.sprints[ws][it.Sprint]) ||

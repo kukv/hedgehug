@@ -110,6 +110,17 @@ func TestMissingPlan(t *testing.T) {
 	check(t, s, map[item.ID][]repair.Problem{"sprint": bad, "release": bad})
 }
 
+// 設定が分からないワークスペースのアイテムは、ステータス・値・人を判定しない。計画は判定する。
+func TestMissingSettingsSkipValueChecks(t *testing.T) {
+	s := valueState(nil, planning.Plan{},
+		leaf("x", 2, func(it *item.Item) {
+			it.Status, it.Priority, it.Assignee, it.Sprint = "", "gone", "bob", "gone"
+		}),
+	)
+	s.Settings = map[workspace.ID]workspace.Settings{}
+	check(t, s, map[item.ID][]repair.Problem{"x": {repair.ProblemMissingPlan}})
+}
+
 func TestDanglingRelation(t *testing.T) {
 	rel := func(to string) func(*item.Item) {
 		return func(it *item.Item) { it.Relations = []item.Relation{{Type: "relates", To: item.ID(to)}} }

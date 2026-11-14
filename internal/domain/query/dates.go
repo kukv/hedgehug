@@ -9,9 +9,9 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/planning"
 )
 
-var relativeDate = regexp.MustCompile(`^([+-]?)([0-9]{1,6})d$`)
+var relativeDate = regexp.MustCompile(`^([+-]?)([0-9]{1,6})[dD]$`)
 
-// ParseDate は、日付の値(`2026-12-01`・`today`・`+3d`・`3d`・`-7d`)を YYYY-MM-DD にする。
+// ParseDate は、日付の値(`2026-12-01`・`today`・`+3d`・`3d`・`-7d`)を YYYY-MM-DD にする。大文字と小文字は区別しない。
 // today は今日の YYYY-MM-DD。読めなければ false。
 func ParseDate(v, today string) (string, bool) {
 	if _, err := time.Parse(time.DateOnly, today); err != nil {

@@ -71,11 +71,8 @@ var relationKeys = map[string]bool{
 	"duplicated_by": true, "relates_to": true, "clones": true, "cloned_by": true,
 }
 
-// named は、値 ID が指す名前が v と等しいか。`none` は値なし。
+// named は、値 ID が指す名前が v と等しいか。`none` を値なしとして読むかは、呼ぶ側がキーごとに決める。
 func named(values []workspace.Value, id change.ID, v string) bool {
-	if isNone(v) {
-		return id == ""
-	}
 	for _, x := range values {
 		if x.ID == id {
 			return strings.EqualFold(x.Name, v)
@@ -105,9 +102,9 @@ func system(f Facts, v string) bool {
 	return false
 }
 
-// person は、ログイン名の値 v が logins のどれかと等しいか。先頭の `@` は除く。`@me` は Facts.Me(空なら一致しない)。
+// person は、ログイン名の値 v が logins のどれかと等しいか。`none` は値なし。それ以外は先頭の `@` を除いて比べ、
+// `@me` は Facts.Me(空なら一致しない)。`me`・`@none` はログイン名として比べる(04)。
 func person(v string, f Facts, logins ...string) bool {
-	v = strings.TrimPrefix(v, "@")
 	if isNone(v) {
 		for _, l := range logins {
 			if l != "" {
@@ -116,11 +113,9 @@ func person(v string, f Facts, logins ...string) bool {
 		}
 		return true
 	}
-	if strings.EqualFold(v, "me") {
-		if f.Me == "" {
-			return false
-		}
-		v = f.Me
+	v = loginOf(v, f)
+	if v == "" {
+		return false
 	}
 	for _, l := range logins {
 		if l != "" && strings.EqualFold(l, v) {
@@ -128,6 +123,14 @@ func person(v string, f Facts, logins ...string) bool {
 		}
 	}
 	return false
+}
+
+// loginOf は、ログイン名の値 v の、先頭の `@` を除いたもの。`@me` は Facts.Me(空なら空)。
+func loginOf(v string, f Facts) string {
+	if strings.EqualFold(v, "@me") {
+		return f.Me
+	}
+	return strings.TrimPrefix(v, "@")
 }
 
 func refIs(r Ref, v string) bool {
