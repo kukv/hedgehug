@@ -41,11 +41,12 @@ func ItemProblems(s StoreState) map[item.ID][]Problem {
 	tree := newTreeCheck(s.Items)
 	overlap := overlappingNumbers(s.Items)
 	twice := issueTwice(s)
+	values := newValueCheck(s)
 	out := map[item.ID][]Problem{}
 	for _, it := range item.Live(s.Items) {
 		var ps []Problem
 		ps = tree.problems(it, ps)
-		// ProblemNoStatus〜ProblemDateOrder の値の判定は、Task 5b で足す。
+		ps = values.problems(it, ps)
 		if overlap[numberKey{it.Place.Workspace, it.Place.Number}] {
 			ps = append(ps, ProblemNumberOverlap)
 		}
@@ -53,6 +54,7 @@ func ItemProblems(s StoreState) map[item.ID][]Problem {
 			ps = append(ps, ProblemIssueTwice)
 		}
 		if len(ps) > 0 {
+			orderProblems(ps)
 			out[it.ID] = ps
 		}
 	}
