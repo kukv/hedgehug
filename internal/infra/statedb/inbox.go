@@ -182,6 +182,9 @@ func (b inbox) ReadAll(ctx context.Context, stores []port.StoreID, kinds []port.
 
 // Resolve は、結果がまだ空の行にだけ書く。書けなかったときに、ない行と処理済みの行を区別する。
 func (b inbox) Resolve(ctx context.Context, id port.NoticeID, r port.NoticeResult) error {
+	if r != port.NoticeApplied && r != port.NoticeKept {
+		return port.ErrInvalidOperation
+	}
 	res, err := b.db.ExecContext(ctx, `UPDATE inbox SET read = 1, result = ? WHERE id = ? AND result = ''`, string(r), int64(id))
 	if err != nil {
 		return err

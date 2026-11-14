@@ -142,6 +142,12 @@ func TestInboxResolve(t *testing.T) {
 	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
 	_ = b.Add(t.Context(), inboxNotice("s1", port.NoticeAutomationStopped))
 	id := inboxList(t, b, "s1")[0].ID
+	if err := b.Resolve(t.Context(), id, ""); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("resolve empty = %v", err)
+	}
+	if got, _ := b.Get(t.Context(), id); got.Read || got.Result != "" {
+		t.Errorf("after invalid resolve = %+v", got)
+	}
 	if err := b.Resolve(t.Context(), id, port.NoticeApplied); err != nil {
 		t.Fatal(err)
 	}
@@ -158,6 +164,22 @@ func TestInboxResolve(t *testing.T) {
 	}
 	if _, err := b.Get(t.Context(), 999); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("get missing = %v", err)
+	}
+}
+
+func TestInboxOrdersSubSecond(t *testing.T) {
+	clock := apptest.NewClock(inboxT0)
+	clock.Step = 500 * time.Millisecond
+	b := openTemp(t).Inbox(clock)
+	_ = b.Add(t.Context(), inboxNotice("s1", port.NoticeAutomation)) // 10:00:00.000
+	_ = b.Add(t.Context(), inboxNotice("s1", port.NoticeAutomation)) // 10:00:00.500
+	rows := inboxList(t, b, "s1")
+	if len(rows) != 2 || !rows[0].At.Equal(inboxT0.Add(500*time.Millisecond)) {
+		t.Fatalf("rows = %+v", rows)
+	}
+	before, err := b.List(t.Context(), port.NoticeQuery{Stores: []port.StoreID{"s1"}, Limit: 300, Before: &port.NoticeCursor{At: rows[0].At, ID: rows[0].ID}})
+	if err != nil || len(before) != 1 || !before[0].At.Equal(inboxT0) {
+		t.Errorf("before = %+v, %v", before, err)
 	}
 }
 

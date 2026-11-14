@@ -1,6 +1,7 @@
 package apptest
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"sync"
@@ -69,7 +70,7 @@ func (i *Inbox) List(_ context.Context, q port.NoticeQuery) ([]port.NoticeRow, e
 		if c := b.At.Compare(a.At); c != 0 {
 			return c
 		}
-		return int(b.ID - a.ID)
+		return cmp.Compare(b.ID, a.ID)
 	})
 	if q.Limit > 0 && len(out) > q.Limit {
 		out = out[:q.Limit]
@@ -131,6 +132,9 @@ func (i *Inbox) ReadAll(_ context.Context, stores []port.StoreID, kinds []port.N
 }
 
 func (i *Inbox) Resolve(_ context.Context, id port.NoticeID, res port.NoticeResult) error {
+	if res != port.NoticeApplied && res != port.NoticeKept {
+		return port.ErrInvalidOperation
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	k, err := i.find(id)

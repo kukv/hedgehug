@@ -85,6 +85,12 @@ func TestFakeInboxResolve(t *testing.T) {
 	b := &Inbox{}
 	_ = b.Add(t.Context(), fakeNotice("s1", port.NoticeAutomationStopped))
 	id := fakeList(t, b, "s1")[0].ID
+	if err := b.Resolve(t.Context(), id, ""); !errors.Is(err, port.ErrInvalidOperation) {
+		t.Errorf("resolve empty = %v", err)
+	}
+	if got, _ := b.Get(t.Context(), id); got.Read || got.Result != "" {
+		t.Errorf("after invalid resolve = %+v", got)
+	}
 	if err := b.Resolve(t.Context(), id, port.NoticeApplied); err != nil {
 		t.Fatal(err)
 	}
