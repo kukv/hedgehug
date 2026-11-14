@@ -69,8 +69,9 @@ func (cells *Cells) builtin(f query.Facts, c Column) {
 	case "priority":
 		cells.removedIf(c.Key, missing(st.Priorities, it.Priority))
 	case "systems":
-		cells.Systems, _ = namesIn(st.Systems, it.Systems)
-		cells.removedIf(c.Key, slices.Contains(cells.Systems, removedValue))
+		var removed bool
+		cells.Systems, removed = namesIn(st.Systems, it.Systems)
+		cells.removedIf(c.Key, removed)
 	}
 }
 

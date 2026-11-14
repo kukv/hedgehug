@@ -135,10 +135,16 @@ func TestColumnsSameKeyDifferentType(t *testing.T) {
 
 func TestColumnsBuiltinSpelling(t *testing.T) {
 	f := newFixture(t)
-	addWorkspace(t, f, store1, "01TESTWS0000000000000000A", "a", withProp("status", "別のステータス", workspace.TypeText))
+	addWorkspace(t, f, store1, "01TESTWS0000000000000000A", "a", func(s *workspace.Settings) {
+		withProp("status", "別のステータス", workspace.TypeText)(s)
+		withProp("title", "別のタイトル", workspace.TypeText)(s)
+	})
 	cols := columnsFor(t, f)
 	if c := columnByKey(t, cols, "p:status"); c.Sortable {
 		t.Errorf("p:status は並べ替えられない: %+v", c)
+	}
+	if c := columnByKey(t, cols, "p:title"); c.Sortable {
+		t.Errorf("p:title は並べ替えられない(固定の列の鍵と同じ綴り): %+v", c)
 	}
 	if !columnByKey(t, cols, "status").Sortable {
 		t.Errorf("固定の status は並べ替えられる")

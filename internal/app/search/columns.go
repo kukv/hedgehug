@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/query"
@@ -72,7 +73,7 @@ func customColumns(spaces []*space) []Column {
 			if !ok {
 				i = len(cols)
 				index[lower] = i
-				cols = append(cols, Column{Key: "p:" + lower, Name: p.Key, Type: p.Type, Sortable: !query.Builtin(lower)})
+				cols = append(cols, Column{Key: "p:" + lower, Name: p.Key, Type: p.Type, Sortable: sortableCustom(lower)})
 				names = append(names, nil)
 			}
 			names[i] = append(names[i], p.Name)
@@ -84,6 +85,12 @@ func customColumns(spaces []*space) []Column {
 		}
 	}
 	return cols
+}
+
+// sortableCustom は、追加プロパティのキー lower(小文字)の列を並べ替えられるか。組み込みのキーや固定の列の鍵と
+// 同じ綴りなら、並べ替えのキーが組み込みの値を指すので並べ替えられない。
+func sortableCustom(lower string) bool {
+	return !query.Builtin(lower) && !slices.ContainsFunc(fixedColumns, func(f fixedColumn) bool { return f.key == lower })
 }
 
 // namesOf は、spaces の組み込みのプロパティ key の名前。

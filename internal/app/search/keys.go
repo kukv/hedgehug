@@ -3,10 +3,12 @@ package search
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // catalog は、追加プロパティのキー(小文字。このマシンのすべての Store、非表示を含む、削除されていないワークスペース。
@@ -28,16 +30,17 @@ func (s Service) catalog(ctx context.Context) (map[string]bool, []Column, error)
 	keys := map[string]bool{}
 	shown := make([][]*space, len(infos))
 	for _, t := range targets {
-		var spaces []*space
-		if err := s.Stores.Read(ctx, t.ID, func(r port.Reader) (err error) {
-			spaces, err = readLiveSpaces(r)
+		i, ok := order[t.ID]
+		if err := s.Stores.Read(ctx, t.ID, func(r port.Reader) error {
+			if !ok {
+				return addHiddenKeys(r, keys)
+			}
+			spaces, err := readLiveSpaces(r)
+			shown[i] = spaces
+			addCustomKeys(spaces, keys)
 			return err
 		}); err != nil {
 			return nil, nil, err
-		}
-		addCustomKeys(spaces, keys)
-		if i, ok := order[t.ID]; ok {
-			shown[i] = spaces
 		}
 	}
 	return keys, columnsOf(slices.Concat(shown...)), nil
@@ -46,10 +49,38 @@ func (s Service) catalog(ctx context.Context) (map[string]bool, []Column, error)
 // addCustomKeys は、spaces の追加プロパティのキー(小文字)を keys に足す。
 func addCustomKeys(spaces []*space, keys map[string]bool) {
 	for _, sp := range spaces {
-		for _, p := range sp.settings.Properties {
-			if !p.Builtin {
-				keys[strings.ToLower(p.Key)] = true
-			}
+		addKeys(sp.settings, keys)
+	}
+}
+
+// addHiddenKeys は、非表示の Store r の削除されていないワークスペースの追加プロパティのキーを keys に足す。
+// 列に要らないので、ワークスペースのログは読まず設定だけ読む。
+func addHiddenKeys(r port.Reader, keys map[string]bool) error {
+	wss, err := r.Workspaces().List()
+	if err != nil {
+		return err
+	}
+	for _, w := range wss {
+		if w.Deleted != nil {
+			continue
+		}
+		st, err := r.Workspaces().Settings(w.ID)
+		if errors.Is(err, port.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		addKeys(st, keys)
+	}
+	return nil
+}
+
+// addKeys は、設定 st の追加プロパティのキー(小文字)を keys に足す。
+func addKeys(st workspace.Settings, keys map[string]bool) {
+	for _, p := range st.Properties {
+		if !p.Builtin {
+			keys[strings.ToLower(p.Key)] = true
 		}
 	}
 }

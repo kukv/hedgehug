@@ -101,6 +101,29 @@ func TestCellsRemoved(t *testing.T) {
 	}
 }
 
+// ステータスの ID と単一選択の ID が一覧にないときも「(削除された値)」にする。名前がちょうど「(削除された値)」の
+// 関連システムは、一覧にある値なので Removed に入れない。
+func TestCellsRemovedStatusSingleAndNamedSystem(t *testing.T) {
+	st := defaults()
+	cust := custom("cust", workspace.TypeSingle)
+	cust.Choices = []workspace.Value{{ID: "01A", Name: "A社"}}
+	st.Properties = append(st.Properties, cust)
+	it := item.Item{Kind: item.Task, Status: gone, Choices: map[change.ID][]change.ID{cust.ID: {gone}}}
+	cells := cellsOf(cellFacts(st, it), columnsOf([]*space{{settings: st}}))
+	if want := []string{"status", "p:cust"}; !reflect.DeepEqual(cells.Removed, want) {
+		t.Errorf("Removed = %v, want %v", cells.Removed, want)
+	}
+	if got := cells.Custom["p:cust"].Text; got != "(削除された値)" {
+		t.Errorf("p:cust = %q", got)
+	}
+	st.Systems[0].Name = "(削除された値)"
+	it = item.Item{Kind: item.Task, Systems: []change.ID{st.Systems[0].ID}}
+	cells = cellsOf(cellFacts(st, it), columnsOf([]*space{{settings: st}}))
+	if slices.Contains(cells.Removed, "system") {
+		t.Errorf("一覧にある関連システムが Removed に入っている: %v", cells.Removed)
+	}
+}
+
 func TestCellsCustomText(t *testing.T) {
 	st := defaults()
 	single := custom("cust", workspace.TypeSingle)
