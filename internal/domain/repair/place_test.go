@@ -165,6 +165,7 @@ func TestDeletedBelowFollowsOnlyDeleted(t *testing.T) {
 
 // 削除済みの親が輪になっていても止まる。t と b が互いの親(t は輪の中)で、a は b の子。
 // t から b、a の順に届き、b から t に戻るところで止まる。a・b は 1 回ずつ、t 自身は含まない。
+// 実際の呼び出しでは child は削除されていないので輪には届かない。seen は守りとして確かめる。
 func TestDeletedBelowStopsOnCycle(t *testing.T) {
 	items := []item.Item{
 		wsAt("t", "w1", "p1", 1, "b", true),

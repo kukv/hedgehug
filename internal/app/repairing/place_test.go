@@ -1,10 +1,12 @@
 package repairing_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
@@ -89,5 +91,14 @@ func TestProjectMismatchMovesChildren(t *testing.T) {
 		if p.Project != project2 || p.Number != n || p.Parent == nil {
 			t.Errorf("%s place = %+v, want project %s number %d with parent", id, p, project2, n)
 		}
+	}
+}
+
+// 書いても移らず、同じ子が残り続けるときは、止まらずに止めてエラーを返す。
+func TestMatchProjectsStopsWithoutProgress(t *testing.T) {
+	e := movedEnv(t, apptest.SampleStatusTodo)
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, StoreID: store}}
+	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "親とプロジェクトが違う子の修復が進みません") {
+		t.Errorf("Run error = %v", err)
 	}
 }

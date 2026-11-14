@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
@@ -212,6 +213,35 @@ func TestMatchWorkspacesMovesDeletedBelow(t *testing.T) {
 	}
 	if rec := e.transfers(); len(rec) != 2 || rec[1].Old != "HH-3" || rec[1].New != "MB-4" {
 		t.Errorf("transfers = %+v, want two with HH-3 -> MB-4 last", rec)
+	}
+}
+
+// 直す子の下の削除済みの Step が、すでに移動先の Mobile にあるときは、番号を変えず、転送記録も増やさない。
+func TestMatchWorkspacesKeepsDeletedAlreadyInDestination(t *testing.T) {
+	e := newEnv(t)
+	addStep(e)
+	if err := apptest.DeleteItems(e.ctx, e.s, store, step); err != nil {
+		t.Fatal(err)
+	}
+	addMobile(e)
+	moveEpicToMobile(e)
+	e.moveToMobile(step, 3)
+	wantOps(t, e.run(nil, nil), "HH-2 を MB-4 に移動(親に合わせる)")
+	wantMobilePlace(t, e.item(apptest.SampleTask), 4)
+	wantMobilePlace(t, e.item(step), 3)
+	if rec := e.transfers(); len(rec) != 1 || rec[0].Old != "HH-2" {
+		t.Errorf("transfers = %+v, want only HH-2", rec)
+	}
+}
+
+// 書いても移らず、同じ子が残り続けるときは、止まらずに止めてエラーを返す。
+func TestMatchWorkspacesStopsWithoutProgress(t *testing.T) {
+	e := newEnv(t)
+	addMobile(e)
+	moveEpicToMobile(e)
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, StoreID: store}}
+	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "親とワークスペースが違う子の修復が進みません") {
+		t.Errorf("Run error = %v", err)
 	}
 }
 

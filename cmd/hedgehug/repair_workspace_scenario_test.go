@@ -89,8 +89,9 @@ func TestRepairScenarioWorkspaceMismatch(t *testing.T) {
 		newTask(t, m, taskB)
 	}
 	bothOrders(t, writeA, writeB, func(t *testing.T, s scenario, _ bool) {
-		want := transfer.Record{Entity: transfer.EntityItem, Target: taskB, Old: "HH-3", New: "MB-4"}
 		for _, m := range s.machines() {
+			want := transfer.Record{Entity: transfer.EntityItem, Target: taskB, Old: "HH-3", New: "MB-4", ToStore: string(m.id)}
+			wantMovedNumbers(t, m)
 			p := m.item(t, taskB).Place
 			if p.Workspace != mobileWS || p.Project != mobileProject || p.Number != 4 {
 				t.Errorf("new task on %s: place %+v, want Mobile / MB-P1 / 4", m.dir, p)
@@ -102,7 +103,17 @@ func TestRepairScenarioWorkspaceMismatch(t *testing.T) {
 	})
 }
 
-// hasTransfer は、転送記録に、want の Entity・Target・Old・New と合う行があるか。
+// wantMovedNumbers は、m で HH-1・HH-2 が Mobile の番号 2・3 のままであることを確かめる。
+func wantMovedNumbers(t *testing.T, m machine) {
+	t.Helper()
+	for id, n := range map[item.ID]int{apptest.SampleEpic: 2, apptest.SampleTask: 3} {
+		if p := m.item(t, id).Place; p.Workspace != mobileWS || p.Number != n {
+			t.Errorf("%s on %s: place %+v, want Mobile / %d", id, m.dir, p, n)
+		}
+	}
+}
+
+// hasTransfer は、転送記録に、want の Entity・Target・Old・New・ToStore と合う行があるか。
 func hasTransfer(t *testing.T, m machine, want transfer.Record) bool {
 	t.Helper()
 	var recs []transfer.Record
@@ -115,7 +126,7 @@ func hasTransfer(t *testing.T, m machine, want transfer.Record) bool {
 		t.Fatal(err)
 	}
 	for _, r := range recs {
-		if r.Entity == want.Entity && r.Target == want.Target && r.Old == want.Old && r.New == want.New {
+		if r.Entity == want.Entity && r.Target == want.Target && r.Old == want.Old && r.New == want.New && r.ToStore == want.ToStore {
 			return true
 		}
 	}

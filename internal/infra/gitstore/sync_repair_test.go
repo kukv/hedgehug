@@ -58,6 +58,9 @@ func TestRepairWriterStore(t *testing.T) {
 	if got != "01STORE0000000000000000001" {
 		t.Errorf("Store() = %q, want 01STORE0000000000000000001", got)
 	}
+	if _, err := (repairWriter{root: t.TempDir()}).Store(); !errors.Is(err, ErrNotStore) {
+		t.Errorf("Store() without store.yaml error = %v, want ErrNotStore", err)
+	}
 }
 
 func TestRepairRunsBeforeSendAndIsPushed(t *testing.T) {

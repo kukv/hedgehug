@@ -57,8 +57,8 @@ type strayMove struct {
 	project project.ID
 }
 
-// readStrayMove は、子 id の移動の材料を、1 回の読みで r から読む。移動先は親の場所から決める。
-// 移動先は、親の場所を Get で読む(削除済みの移動先でも断らない。決定 C3b-9)。
+// readStrayMove は、子 id の移動の材料を、1 回の読みで r から読む。移動先は親の場所を Get で読んで決める
+// (削除済みの移動先でも断らない。決定 C3b-9)。一緒に移す削除済みのもののうち、すでに移動先のワークスペースにあるものは移さない。
 func readStrayMove(r port.Reader, id item.ID) (strayMove, error) {
 	m := strayMove{from: map[workspace.ID]workspace.Workspace{}, froms: map[workspace.ID]workspace.Settings{}}
 	child, err := r.Items().Get(id)
@@ -85,7 +85,7 @@ func readStrayMove(r port.Reader, id item.ID) (strayMove, error) {
 	if err != nil {
 		return m, err
 	}
-	deleted := repair.DeletedBelow(child.ID, all)
+	deleted := slices.DeleteFunc(repair.DeletedBelow(child.ID, all), func(it item.Item) bool { return it.Place.Workspace == m.dst.ID })
 	m.numbers = repair.NumberByOld(child, deleted, numbering.Next(log, numbering.Items))
 	m.items = append([]item.Item{child}, deleted...)
 	slices.SortFunc(m.items, func(a, b item.Item) int { return m.numbers[a.ID] - m.numbers[b.ID] })
