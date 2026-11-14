@@ -118,6 +118,9 @@ func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows
 	if err != nil {
 		return nil, nil, err
 	}
+	if need, err := needsBase(c); err != nil || !need {
+		return nil, nil, err
+	}
 	bases, err := ours.MergeBase(theirs)
 	if err != nil {
 		return nil, nil, err
@@ -139,6 +142,51 @@ func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows
 	}
 	concurrent, err := concurrentIn(c, ours, theirs, base)
 	return out, concurrent, err
+}
+
+// needsBase は、合わせ c に、結果から消えた log.jsonl か、両方の親の版と違う log.jsonl があるか。どちらもなければ、
+// 消えたものも、同時の削除と変更(両側で変わったログ)もないので、共通の祖先を探さない(長い履歴を辿らないため)。
+// 結果にあって親にないログも、その親の版と違うものに数える。
+func needsBase(c *object.Commit) (bool, error) {
+	merged, err := c.Tree()
+	if err != nil {
+		return false, err
+	}
+	seen := map[string]bool{}
+	for i := range c.NumParents() {
+		p, err := c.Parent(i)
+		if err != nil {
+			return false, err
+		}
+		t, err := p.Tree()
+		if err != nil {
+			return false, err
+		}
+		if need, err := logsDiffer(t, merged, seen); err != nil || need {
+			return need, err
+		}
+	}
+	return false, nil
+}
+
+// logsDiffer は、親の版 parent と合わせの結果 merged で違う log.jsonl を seen に足す。結果から消えたログか、
+// 前の親でも違ったログ(seen にある)があれば true。
+func logsDiffer(parent, merged *object.Tree, seen map[string]bool) (bool, error) {
+	changes, err := object.DiffTree(parent, merged)
+	if err != nil {
+		return false, err
+	}
+	for _, ch := range changes {
+		name := cmp.Or(ch.To.Name, ch.From.Name)
+		if _, ok := logRef(name); !ok {
+			continue
+		}
+		if ch.To.Name == "" || seen[name] {
+			return true, nil
+		}
+		seen[name] = true
+	}
+	return false, nil
 }
 
 // removedFrom は、from にあって to にない log.jsonl のエンティティと、from でのログ。base が nil でなければ

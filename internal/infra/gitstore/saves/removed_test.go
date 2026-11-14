@@ -90,7 +90,7 @@ func createUnder(t *testing.T, rid string, id, parent item.ID) change.Record {
 func TestRemovedOnRepairPurge(t *testing.T) {
 	r := newRepo(t)
 	j, known := judged(t)
-	create := createUnder(t, "R1", item.ID(task), gone)
+	create := createUnder(t, "R1", task, gone)
 	assign := rec("R2", "OP1", t0.Add(time.Minute), change.Set, "assignee")
 	c0 := r.save(map[string]string{itemLog: logOf(t, create, assign), itemDesc: "本文"}, "taro", t0, "OP0")
 	s1 := r.save(map[string]string{itemLog: "", itemDesc: "", "purged.jsonl": "{}\n"}, BotName, t0.Add(time.Minute), "OP1")
@@ -119,7 +119,7 @@ func TestRowlessBotSaveRepair(t *testing.T) {
 		want       bool
 	}{
 		"親と一緒に消した": {"", []string{epicDir, childLog, itemLog}, false},
-		"祖先が前にない":   {gone, []string{itemLog}, true},
+		"祖先が前にない":  {gone, []string{itemLog}, true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := newRepo(t)
@@ -127,7 +127,7 @@ func TestRowlessBotSaveRepair(t *testing.T) {
 			c0 := r.save(map[string]string{
 				epicDir:  logOf(t, createUnder(t, "E1", epicID, c.epicParent)),
 				childLog: logOf(t, createUnder(t, "C1", childID, epicID)),
-				itemLog:  logOf(t, createUnder(t, "R1", item.ID(task), childID)),
+				itemLog:  logOf(t, createUnder(t, "R1", task, childID)),
 				wsLog:    logOf(t, rec("W1", "OP0", t0, change.Create, "")),
 			}, "taro", t0, "OP0")
 			files := map[string]string{"purged.jsonl": "{}\n"}
@@ -284,5 +284,38 @@ func concurrentInMerge(t *testing.T, changerFirst bool) {
 		if c.Ref != itemRef || len(c.Deleted) != 1 || c.Deleted[0].ID != "R2" || len(c.Changed) != 1 || c.Changed[0].ID != "R3" {
 			t.Errorf("concurrent = %+v", c)
 		}
+	}
+}
+
+// 合わせの結果から消えた log.jsonl も、両側の版と違う log.jsonl もない合わせは、共通の祖先を探さない(消えたものも、
+// 同時の削除と変更もない)。片側だけで変わったログは、合わせの結果がその側の版と同じになる。
+func TestMergeNeedsBase(t *testing.T) {
+	create := rec("R1", "OP0", t0, change.Create, "")
+	other := "items/" + string(childID) + "/log.jsonl"
+	ours := rec("R2", "OP1", t0.Add(time.Minute), change.Set, "title")
+	theirs := rec("R3", "OP2", t0.Add(2*time.Minute), change.Set, "assignee")
+	for name, c := range map[string]struct {
+		theirs map[string]string
+		merged map[string]string
+		want   bool
+	}{
+		"別のログ":  {map[string]string{other: logOf(t, theirs)}, map[string]string{other: logOf(t, theirs)}, false},
+		"同じログ":  {map[string]string{itemLog: logOf(t, create, theirs)}, map[string]string{itemLog: logOf(t, create, ours, theirs)}, true},
+		"消えたログ": {map[string]string{itemLog: "", "purged.jsonl": "{}\n"}, map[string]string{itemLog: ""}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRepo(t)
+			c0 := r.save(map[string]string{itemLog: logOf(t, create)}, "taro", t0, "OP0")
+			s1 := r.save(map[string]string{itemLog: logOf(t, create, ours)}, "taro", t0.Add(time.Minute), "OP1")
+			r.reset(c0)
+			s2 := r.save(c.theirs, "hanako", t0.Add(2*time.Minute), "OP2")
+			r.reset(s1)
+			m := r.save(c.merged, BotName, t0.Add(3*time.Minute), "", s1, s2)
+			c, ok := r.commit(m), c.want
+			got, err := needsBase(c)
+			if err != nil || got != ok {
+				t.Errorf("needsBase = %v, %v, want %v", got, err, ok)
+			}
+		})
 	}
 }
