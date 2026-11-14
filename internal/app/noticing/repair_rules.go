@@ -15,7 +15,7 @@ import (
 
 // orphanRules は、i 番目の修復の保存が、ワークスペースにないプロジェクトのルールを外した修復 (9) なら、その通知
 // (06「同期の修復」。C5b1-7・C5b1-8・C5b1-10・C5b1-11)。ワークスペースのログの行を持ち主のプロジェクト P ごとに
-// まとめ、P が保存のあとでそのワークスペースになく、外したものを入れた人にあなたがいれば、P ごとに 1 件。
+// まとめ、P が保存のあとでこの Store になく、外したものを入れた人にあなたがいれば、P ごとに 1 件。
 func orphanRules(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
 	if !b.saves[i].Repair {
 		return nil, nil
@@ -38,11 +38,11 @@ func orphanRules(r port.Reader, b batch, i int, me string) ([]port.Notice, error
 func orphansIn(r port.Reader, b batch, i int, e port.EntityRows, me string) ([]port.Notice, error) {
 	var out []port.Notice
 	for _, p := range ownersFor(b.beforeSave(e.Ref, i), e.Rows, me) {
-		in, err := inWorkspace(r, b, e.Ref.ID, p)
+		in, err := inStore(r, b, p)
 		if err != nil {
 			return nil, err
 		}
-		if in {
+		if in { // そのワークスペースにある(C5b2 の形)か、同じ Store の別のワークスペースへ移った
 			continue
 		}
 		n, ok, err := orphanNotice(r, b, e.Ref.ID, p)
@@ -70,14 +70,15 @@ func ownersFor(before, rows []change.Record, me string) []project.ID {
 	return out
 }
 
-// inWorkspace は、プロジェクト id(削除済みを含む)がいまワークスペース ws にあるか。
-func inWorkspace(r port.Reader, b batch, ws workspace.ID, id project.ID) (bool, error) {
+// inStore は、プロジェクト id(削除済みを含む)をいまこの Store で読めるか。読めるなら、別の Store への古い転送記録が
+// あっても原因に数えない(06「同期の修復」の (9): 同じ Store の中の移動は知らせない)。
+func inStore(r port.Reader, b batch, id project.ID) (bool, error) {
 	log, err := logOf(r, b, change.Ref{Kind: change.KindProject, ID: id})
 	if err != nil {
 		return false, err
 	}
-	p, ok := project.FromLog(log)
-	return ok && p.Place.Workspace == ws, nil
+	_, ok := project.FromLog(log)
+	return ok, nil
 }
 
 // putter は、修復の行 row が外したものを入れた人(人の行だけ。C5b1-8)。log は修復の直前のログ。
@@ -90,7 +91,7 @@ func putter(log []change.Record, row change.Record) string {
 			return c.T == change.Add && c.F == row.F && sameValue(c.To, row.From)
 		}), "")
 	case row.T == change.Set && change.Absent(row.To) && strings.Contains(row.F, "/template_default/"):
-		return lastSaver(log, row.F)
+		return lastSaver(rowsWhere(log, func(c change.Record) bool { return c.F == row.F }), "")
 	case row.T == change.Delete && strings.HasPrefix(row.F, "rules/"):
 		return lastSaver(rowsWhere(log, func(c change.Record) bool {
 			return c.F == row.F || strings.HasPrefix(c.F, row.F+"/")

@@ -107,6 +107,18 @@ func TestOrphanRulesSameStoreNoNotice(t *testing.T) {
 	f.wantNone()
 }
 
+// プロジェクト「アプリ」がいまこの Store のワークスペース「Mobile」にあれば、別の Store への古い転送記録があっても
+// 作らない(同じ Store の中で移った)。
+func TestOrphanRulesInStoreIgnoresOldTransfer(t *testing.T) {
+	f := setup(t)
+	if err := apptest.SampleMobile(t.Context(), f.stores, store); err != nil {
+		t.Fatal(err)
+	}
+	movingWeb(f, apptest.SampleMobileProject)
+	f.judge(hideReview(f, apptest.SampleMobileProject))
+	f.wantNone()
+}
+
 func TestOrphanRulesRecipient(t *testing.T) {
 	tdField := projectrule.TemplateDefaultField(webP, "Task")
 	rule := automation.Rule{ID: ownRule, Name: "完了で閉じる", Trigger: automation.TriggerPRMerged, Action: automation.ActionStatus, Value: string(apptest.SampleStatusDone), Enabled: true, Scope: webP}
@@ -128,6 +140,16 @@ func TestOrphanRulesRecipient(t *testing.T) {
 			wsRules(f, "hanako", automation.Drafts(automation.Rule{}, rule)...)
 			wsRules(f, "taro", automation.Drafts(rule, renamed)...)
 		}, []change.Draft{automation.DeleteDraft(ownRule)}, false},
+		"null にした既定のテンプレートを最後に選んだのが taro": {func(f *fixture) {
+			wsRules(f, "hanako", change.NewSet(tdField, nil, projectrule.None))
+			wsRules(f, "taro", change.NewSet(tdField, projectrule.None, template))
+		}, []change.Draft{change.NewSet(tdField, template, nil)}, false},
+		"外した値の最後の add が自動化で、その前の人の add が hanako": {func(f *fixture) {
+			wsRules(f, "hanako", change.NewAdd(projectrule.HiddenField(webP), reviewSt))
+			f.save(change.Actor{Kind: change.ActorAutomation, Login: "taro", Rule: ownRule}, func(tx port.Tx) error {
+				return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(webP), reviewSt))
+			})
+		}, []change.Draft{change.NewRemove(projectrule.HiddenField(webP), reviewSt)}, true},
 		"null にした既定のテンプレートを最後に選んだのが hanako": {func(f *fixture) {
 			wsRules(f, "taro", change.NewSet(tdField, nil, projectrule.None))
 			wsRules(f, "hanako", change.NewSet(tdField, projectrule.None, template))
