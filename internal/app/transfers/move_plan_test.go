@@ -58,20 +58,45 @@ func inSprint1(t *testing.T, f fixture) int {
 // 別のワークスペース(同じ Store)と別の Store へ移すと、スプリントとリリースを外す(02「移動先で変わること」)。
 // 移動先の履歴に「スプリントを変更」「リリースを変更」が残り、移動元のスプリントは数えなくなる。
 func TestMoveToAnotherWorkspaceUnsetsSprintAndRelease(t *testing.T) {
-	t.Run("same store", func(t *testing.T) { checkMoveUnsetsPlan(t, toMobile(), store1, mobileWS) })
-	t.Run("other store", func(t *testing.T) { checkMoveUnsetsPlan(t, toTeam(), store2, teamWS) })
+	t.Run("same store", func(t *testing.T) { checkMoveUnsetsPlan(t, moveTask(toMobile()), store1, mobileWS) })
+	t.Run("other store", func(t *testing.T) { checkMoveUnsetsPlan(t, moveTask(toTeam()), store2, teamWS) })
 }
 
-// checkMoveUnsetsPlan は、スプリントとリリースに入った HH-2 を in で移し、Store store のワークスペース ws に
-// 外して移ったことを確かめる。
-func checkMoveUnsetsPlan(t *testing.T, in transfers.MoveInput, store port.StoreID, ws workspace.ID) {
+// プロジェクトを別のワークスペース(同じ Store)と別の Store へ移しても、下のアイテムのスプリントとリリースを外す
+// (02「移動先で変わること」。プロジェクトの移動も transfer.Remap を通る。A5b の「持ち場と境目」)。
+func TestMoveProjectUnsetsSprintAndRelease(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		store port.StoreID
+		ws    workspace.ID
+	}{{"same store", store1, mobileWS}, {"other store", store2, teamWS}} {
+		t.Run(c.name, func(t *testing.T) {
+			checkMoveUnsetsPlan(t, func(t *testing.T, f fixture) error {
+				_, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, projectTo(c.store, c.ws))
+				return err
+			}, c.store, c.ws)
+		})
+	}
+}
+
+// moveTask は、HH-2 を in で移す。
+func moveTask(in transfers.MoveInput) func(t *testing.T, f fixture) error {
+	return func(t *testing.T, f fixture) error {
+		_, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, in)
+		return err
+	}
+}
+
+// checkMoveUnsetsPlan は、スプリントとリリースに入った HH-2 を move で移し(HH-2 だけか、プロジェクトごと)、
+// Store store のワークスペース ws に外して移ったことを確かめる。
+func checkMoveUnsetsPlan(t *testing.T, move func(t *testing.T, f fixture) error, store port.StoreID, ws workspace.ID) {
 	t.Helper()
 	f := newFixture(t)
 	withPlan(t, f)
 	if n := inSprint1(t, f); n != 1 {
 		t.Fatalf("移す前に Sprint 1 に入っている数 = %d, want 1", n)
 	}
-	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, in); err != nil {
+	if err := move(t, f); err != nil {
 		t.Fatal(err)
 	}
 	if it := itemOf(t, f.rec, store, apptest.SampleTask); it.Sprint != "" || it.Release != "" {
