@@ -502,6 +502,73 @@ git commit -m "docs(plans): F2a で決めた並び順を F1・A5a の計画に�
 
 ---
 
+### Task 11: 順位の末尾の値を短く保つ(`rank.After` の繰り上げ)
+
+最終レビューで見つけ、ユーザーの決定(2026-11-14)で F2a に入れた。F2a-5・F2a-6 で作業項目の順位がワークスペース全体の末尾に続くようになり、今の `After`(最後の文字を進め、`z` なら `V` を足す)では順位の文字列が約 31 件ごとに 1 文字伸びる。
+
+**Files:**
+- Modify: `internal/domain/rank/rank.go`(`After`)
+- Test: `internal/domain/rank/rank_test.go`
+
+**Interfaces:**
+- Produces: `func After(s string) string` — 署名は変えない。末尾から見て `z` でない最後の文字を 1 つ進め、それより後ろを捨てた値を返す(`"Vz"` → `"W"`、`"Az"` → `"B"`、`"V"` → `"W"`)。すべて `z` なら `s + First`(`"z"` → `"zV"`)。空なら `First`。結果は常に `s` より大きく、`'0'` で終わらない
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+- `TestAfterCarries`: `After("Vz") == "W"`、`After("Az") == "B"`、`After("zz") == "zzV"`、`After("z") == "zV"`、`After("") == "V"`。
+- `TestAfterStaysShort`: `""` から `After` を 10,000 回続けた値の長さが 4 以下で、各回の値が前の値より大きい。
+- `TestBetweenWithCarry`: `Between("VAz", "W")` が `"VAz"` より大きく `"W"` より小さい(`Between` の内側の `After(rest)` も繰り上げる)。
+
+- [ ] **Step 2: 失敗を確かめる**
+
+Run: `go test ./internal/domain/rank/`
+Expected: FAIL
+
+- [ ] **Step 3: `After` を書き直す**
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./...`
+Expected: PASS(順位の値をそのまま見ている既存のテストがあれば、新しい値に直し、差分に「Task 11」と書く)
+
+- [ ] **Step 5: コミット**
+
+---
+
+### Task 12: ツリーの「上へ移動」「下へ移動」で、同じ順位の兄弟があっても動かす
+
+最終レビューで見つけ、ユーザーの決定(2026-11-14)で F2a に入れた。F1-11 の `SetSprint` は順位を `rank.After(枠の末尾)` にするので、兄弟と同じ順位がふつうに生まれる。ツリーの `items.Reorder` の `gap` は前後の順位が同じだと何もしない(例: Epic の下の Story A(V)・B(W)・C を同じスプリントに入れて C が W になると、C の「上へ移動」が動かない)。
+
+**Files:**
+- Modify: `internal/domain/rank/rank.go`(`Around` を足す)、`internal/domain/planning/backlog.go`(`Placement` が `Around` を使う)、`internal/app/items/reorder.go`(`gap` が `Around` を使う)
+- Test: `internal/domain/rank/rank_test.go`、`internal/app/items/reorder_test.go`
+
+**Interfaces:**
+- Produces: `func Around(sorted []string, j int, after bool) string` — 昇順の順位の列 `sorted` の `j` 番目の直前(`after` なら直後)に入る値。直前なら `hi = sorted[j]`、`lo` は `j` より前で `hi` より小さい最も近い値(なければ空)。直後なら `lo = sorted[j]`、`hi` は `j` より後ろで `lo` より大きい最も近い値(なければ `After(lo)`)。F2a-2 と同じ規則
+- `planning.Placement` と `items.gap` は、この関数で値を作る(同じ規則を 2 か所に書かない)。`gap` の「すでにその位置なら何もしない」は今のまま
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+- `TestAround`: `["V","W","W","X"]` の 2 番目の直前 → `Between("V","W")`、1 番目の直後 → `Between("W","X")`、3 番目の直後 → `After("X")`。
+- `TestReorderTies`: 兄弟 A(V)・B(W、作成が早い)・C(W)。C を B の直前へ → C が A と B の間に入り、並びが A・C・B になる。保存は `set rank` の 1 行。
+- 既存の `TestPlacement`・`TestPlacementTies` はそのまま通る。
+
+- [ ] **Step 2: 失敗を確かめる**
+
+Run: `go test ./internal/domain/rank/ ./internal/app/items/ -run 'Around|Reorder'`
+Expected: FAIL
+
+- [ ] **Step 3: `Around` を書き、`Placement` と `gap` を置き換える**
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./...` と `golangci-lint run ./...`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+---
+
 ## 最後に
 
 - 最終レビュー(superpowers:requesting-code-review)で、ブランチ全体を仕様 05「バックログ」と照らす。
