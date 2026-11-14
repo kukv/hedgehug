@@ -114,6 +114,13 @@ func wantMobilePlace(t *testing.T, got item.Item, n int) {
 	}
 }
 
+func wantParent(t *testing.T, got item.Item, parent item.ID) {
+	t.Helper()
+	if got.Place.Parent == nil || *got.Place.Parent != parent {
+		t.Errorf("%s parent = %v, want %s", got.ID, got.Place.Parent, parent)
+	}
+}
+
 // hasNumber は、log に項目の番号 n の行があるか。
 func hasNumber(log []change.Record, n int) bool {
 	want := change.Value(n)
@@ -127,12 +134,14 @@ func TestMatchWorkspacesMovesChild(t *testing.T) {
 	e := newEnv(t)
 	addMobile(e)
 	moveEpicToMobile(e)
+	before := map[change.Ref]int{}
+	for _, ref := range []change.Ref{{Kind: change.KindItem, ID: apptest.SampleTask}, {Kind: change.KindWorkspace, ID: mobileWS}} {
+		before[ref] = len(e.logOf(ref))
+	}
 	wantOps(t, e.run(nil, nil), "HH-2 を MB-3 に移動(親に合わせる)")
 	got := e.item(apptest.SampleTask)
 	wantMobilePlace(t, got, 3)
-	if *got.Place.Parent != apptest.SampleEpic {
-		t.Errorf("parent = %s, want %s", *got.Place.Parent, apptest.SampleEpic)
-	}
+	wantParent(t, got, apptest.SampleEpic)
 	if got.Status != e.mobileDoing() {
 		t.Errorf("status = %q, want mobile's doing default %q", got.Status, e.mobileDoing())
 	}
@@ -145,11 +154,12 @@ func TestMatchWorkspacesMovesChild(t *testing.T) {
 		t.Error("mobile log has no number 3")
 	}
 	ops := map[change.ID]bool{}
-	for _, ref := range []change.Ref{{Kind: change.KindItem, ID: apptest.SampleTask}, {Kind: change.KindWorkspace, ID: mobileWS}} {
-		for _, r := range e.logOf(ref) {
-			if r.Actor.Kind == change.ActorSync {
-				ops[r.Op] = true
+	for ref, n := range before {
+		for _, r := range e.logOf(ref)[n:] {
+			if r.Actor.Kind != change.ActorSync {
+				t.Errorf("repair row %+v is not by sync", r)
 			}
+			ops[r.Op] = true
 		}
 	}
 	if len(ops) != 1 {
@@ -166,6 +176,7 @@ func TestMatchWorkspacesMovesStep(t *testing.T) {
 	e.moveToMobile(apptest.SampleTask, 3)
 	wantOps(t, e.run(nil, nil), "HH-3 を MB-4 に移動(親に合わせる)")
 	wantMobilePlace(t, e.item(step), 4)
+	wantParent(t, e.item(step), apptest.SampleTask)
 }
 
 // 子を直したあと、その下の孫も次の保存で直る。
@@ -177,6 +188,7 @@ func TestMatchWorkspacesMovesChildThenGrandchild(t *testing.T) {
 	wantOps(t, e.run(nil, nil), "HH-2 を MB-3 に移動(親に合わせる)", "HH-3 を MB-4 に移動(親に合わせる)")
 	wantMobilePlace(t, e.item(apptest.SampleTask), 3)
 	wantMobilePlace(t, e.item(step), 4)
+	wantParent(t, e.item(step), apptest.SampleTask)
 }
 
 // 直す子の下の削除済みのものは、同じ保存で続きの番号に移る。削除済みのまま。
@@ -192,6 +204,9 @@ func TestMatchWorkspacesMovesDeletedBelow(t *testing.T) {
 	wantMobilePlace(t, e.item(apptest.SampleTask), 3)
 	deleted := e.item(step)
 	wantMobilePlace(t, deleted, 4)
+	if !strings.HasPrefix(string(deleted.Status), "01SAMPLEM9V") {
+		t.Errorf("deleted step status = %q, want a mobile status", deleted.Status)
+	}
 	if deleted.Deleted == nil {
 		t.Error("HH-3 was restored")
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
@@ -37,7 +38,7 @@ func matchWorkspaces(ctx context.Context, w port.RepairWriter) error {
 			return errors.New("親とワークスペースが違う子の修復が進みません")
 		}
 		prev = s
-		if err := moveToWorkspace(w, s, all); err != nil {
+		if err := moveToWorkspace(w, s); err != nil {
 			return err
 		}
 	}
@@ -53,13 +54,14 @@ type strayMove struct {
 	dst     workspace.Workspace
 	to      workspace.Settings
 	rules   projectrule.Rules
+	project project.ID
 }
 
-// readStrayMove は、s の移動の材料を r から読む。all は、直す子の下の削除済みのものを探すための全アイテム。
+// readStrayMove は、子 id の移動の材料を、1 回の読みで r から読む。移動先は親の場所から決める。
 // 移動先は、親の場所を Get で読む(削除済みの移動先でも断らない。決定 C3b-9)。
-func readStrayMove(r port.Reader, s repair.Stray, all []item.Item) (strayMove, error) {
+func readStrayMove(r port.Reader, id item.ID) (strayMove, error) {
 	m := strayMove{from: map[workspace.ID]workspace.Workspace{}, froms: map[workspace.ID]workspace.Settings{}}
-	child, err := r.Items().Get(s.Child)
+	child, err := r.Items().Get(id)
 	if err != nil {
 		return m, err
 	}
@@ -77,7 +79,12 @@ func readStrayMove(r port.Reader, s repair.Stray, all []item.Item) (strayMove, e
 	if err != nil {
 		return m, err
 	}
-	m.rules = projectrule.FromLog(log).Of(s.Project)
+	m.project = parent.Place.Project
+	m.rules = projectrule.FromLog(log).Of(m.project)
+	all, err := allItemsOf(r)
+	if err != nil {
+		return m, err
+	}
 	deleted := repair.DeletedBelow(child.ID, all)
 	m.numbers = repair.NumberByOld(child, deleted, numbering.Next(log, numbering.Items))
 	m.items = append([]item.Item{child}, deleted...)
@@ -108,11 +115,11 @@ func (m strayMove) newID(it item.Item) string {
 
 // moveToWorkspace は、s.Child と、その下の削除済みのものを、親のワークスペースの次の番号へ移す修復を 1 回保存する。
 // 行は transfers の同じ Store の中の移動(writeWithin)と同じ形。親と順位は変えない。
-func moveToWorkspace(w port.RepairWriter, s repair.Stray, all []item.Item) error {
+func moveToWorkspace(w port.RepairWriter, s repair.Stray) error {
 	var m strayMove
 	err := w.Read(func(r port.Reader) error {
 		var err error
-		m, err = readStrayMove(r, s, all)
+		m, err = readStrayMove(r, s.Child)
 		return err
 	})
 	if err != nil {
@@ -127,12 +134,12 @@ func moveToWorkspace(w port.RepairWriter, s repair.Stray, all []item.Item) error
 	return w.Write(op, func(tx port.Tx) error {
 		var errs []error
 		for _, it := range m.items {
-			to := item.Place{Workspace: m.dst.ID, Project: s.Project, Parent: it.Place.Parent, Number: m.numbers[it.ID]}
+			to := item.Place{Workspace: m.dst.ID, Project: m.project, Parent: it.Place.Parent, Number: m.numbers[it.ID]}
 			rm := transfer.Remap(it, m.froms[it.Place.Workspace], m.to, m.rules, nil, nil)
 			ds := append([]change.Draft{change.NewSet(placeField, it.Place, to)}, rm.Drafts...)
 			errs = append(errs, tx.WriteItems().Append(it.ID, ds...))
 		}
-		errs = append(errs, tx.WriteWorkspaces().Append(m.dst.ID, numberLines(m.numbers)...))
+		errs = append(errs, tx.WriteWorkspaces().Append(m.dst.ID, numbering.Drafts(numbering.Items, slices.Collect(maps.Values(m.numbers)))...))
 		for _, it := range m.items {
 			errs = append(errs, tx.WriteTransfers().Append(transfer.Record{
 				Entity: transfer.EntityItem, Target: it.ID, Old: m.oldID(it), New: m.newID(it), ToStore: string(store),
@@ -140,14 +147,4 @@ func moveToWorkspace(w port.RepairWriter, s repair.Stray, all []item.Item) error
 		}
 		return errors.Join(errs...)
 	})
-}
-
-// numberLines は、使った番号ごとの number の行(番号の順)。
-func numberLines(numbers map[item.ID]int) []change.Draft {
-	used := slices.Sorted(maps.Values(numbers))
-	lines := make([]change.Draft, 0, len(used))
-	for _, n := range used {
-		lines = append(lines, numbering.Draft(numbering.Items, n))
-	}
-	return lines
 }
