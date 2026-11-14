@@ -15,6 +15,7 @@
   import ProjectTransferDialog from "./screens/project/ProjectTransferDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import DeleteWorkspaceDialog from "./screens/workspace-settings/DeleteWorkspaceDialog.svelte";
+  import WorkspaceTransferDialog from "./screens/workspace-settings/WorkspaceTransferDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
   import {
@@ -100,5 +101,6 @@
 <DeleteProjectDialog />
 <ProjectTransferDialog />
 <DeleteWorkspaceDialog />
+<WorkspaceTransferDialog />
 <DiscardDialog />
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />
