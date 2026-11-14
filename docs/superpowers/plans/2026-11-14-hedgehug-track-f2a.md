@@ -82,7 +82,8 @@ web/packages/core/src/features/planning/backlogDrop.ts   dropPlacement・moveUp�
 web/packages/core/src/features/items/detail.ts           (変更)onPropertySaved
 web/packages/core/src/features/router/route.ts           (変更)WorkspaceTab に backlog
 web/packages/api/src/planning.ts                         (変更)
-web/app/src/screens/planning/BacklogTab.svelte・BacklogFrame.svelte・BacklogRow.svelte・PointsInput.svelte・dragRows.ts
+web/app/src/screens/planning/BacklogTab.svelte・BacklogFrame.svelte・BacklogRow.svelte・PointsInput.svelte
+web/packages/ui/src/patterns/dragRows.ts          ポインターのドラッグ(Svelte の action)
 web/app/src/screens/planning/StartSprintDialog.svelte・SprintDialogs.svelte (変更)card の型
 web/app/src/screens/workspace/WorkspaceScreen.svelte     (変更)タブとダイアログ
 web/app/src/planning.ts・wire.ts                         (変更)backlog と読み直し
@@ -248,7 +249,6 @@ git commit -m "feat(transfers): 別のワークスペースへ移した作業項
 - `TestPlaceItemTies`(Review Focus 1): Task 1 の `TestPlacementTies` の並びで、保存のあとの `WorkOrder` が期待どおり。
 - `TestPlaceItemClosedSprint`(Review Focus 4): 完了済みのスプリントへは `refusal` の「完了したスプリントには入れられません」。Epic は `port.ErrInvalidOperation`。基準が別の枠・削除済みなら `port.ErrNotFound`。
 - `TestPlaceItemRevives`: 別の画面で削除された(root: true)アイテムを並べ替えると、同じ保存で削除を取り消す(`assign` のテストと同じ形)。
-- 閲覧のみの Store では `port.ErrReadOnly`(既存の `Stores.Write` の断り)。
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -290,7 +290,7 @@ git commit -m "feat(planning): バックログの枠を読み、行の位置と�
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- Go: `get-backlog` が枠を返す。ないワークスペースは 404。`place-item` の断りは 422 で本文に「完了したスプリントには入れられません」、基準がないと 404、閲覧のみは 403(既存の `apierr` の対応どおり)。
+- Go: `get-backlog` が枠を返す。ないワークスペースは 404。`place-item` の断りは 422 で本文に「完了したスプリントには入れられません」、基準がないと 404(既存の `apierr` の対応どおり)。
 - api: `backlog` が `null` の一覧を空の配列にする。`placeItem` が本文 `{sprint, anchor, after}` を送る。
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -406,7 +406,7 @@ git commit -m "feat(core): 詳細パネルのプロパティの保存を知ら�
 ### Task 8: バックログのタブの画面
 
 **Files:**
-- Create: `web/app/src/screens/planning/BacklogTab.svelte`、`BacklogFrame.svelte`、`BacklogRow.svelte`、`PointsInput.svelte`、`dragRows.ts`、`dragRows.test.ts`
+- Create: `web/app/src/screens/planning/BacklogTab.svelte`、`BacklogFrame.svelte`、`BacklogRow.svelte`、`PointsInput.svelte`、`web/packages/ui/src/patterns/dragRows.ts`・`dragRows.test.ts`(`@hedgehug/app` にはテストの仕組みがないので、jsdom のテストがある ui に置き、`index.ts` から公開する)
 - Modify: `web/packages/core/src/features/router/route.ts`(`WorkspaceTab` に `backlog`、`workspaceTabs` の 2 番目)、`route.test.ts`、`web/app/src/screens/workspace/WorkspaceScreen.svelte`(タブ・描画・ダイアログを出すタブ)、`StartSprintDialog.svelte`・`SprintDialogs.svelte`(`card` の型、F2a-15)、`web/app/src/planning.ts`(`backlog` を作る)、`web/app/src/wire.ts`(`reflect` に `backlog.reload()`、`detail` の `onPropertySaved` を `backlog.noticeDetail` へ)
 
 **Interfaces:**
@@ -422,7 +422,7 @@ git commit -m "feat(core): 詳細パネルのプロパティの保存を知ら�
 
 - [ ] **Step 2: 失敗を確かめる**
 
-Run: `pnpm -C web --filter @hedgehug/core test -- route && pnpm -C web --filter @hedgehug/app test -- dragRows`
+Run: `pnpm -C web --filter @hedgehug/core test -- route && pnpm -C web --filter @hedgehug/ui test -- dragRows`
 Expected: FAIL
 
 - [ ] **Step 3: 画面を書く**
@@ -443,7 +443,7 @@ Expected: PASS
 - [ ] **Step 5: コミット**
 
 ```bash
-git add web/packages/core/src/features/router web/app/src
+git add web/packages/core/src/features/router web/packages/ui/src web/app/src
 git commit -m "feat(web): バックログのタブを足す(枠・行の操作・ドラッグ・開始と作成)(F2a)"
 ```
 
