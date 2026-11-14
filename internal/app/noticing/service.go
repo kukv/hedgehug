@@ -30,7 +30,7 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received
 	}
 	var notices, autos, reps []port.Notice
 	if err := read(func(r port.Reader) error {
-		b, err := newBatch(r, in.Saves)
+		b, err := newBatch(r, store, in.Saves)
 		if err != nil {
 			return err
 		}
@@ -99,13 +99,13 @@ type batch struct {
 	judged map[change.ID]bool
 	refs   []change.Ref // saves に出てくるエンティティ(最初に出た順)
 	logs   map[change.Ref][]change.Record
-	store  port.StoreID // 判定する Store(repairs が埋める。同じ Store の中の転送記録を見分ける)
+	store  port.StoreID // 判定する Store(同じ Store の中の転送記録を見分ける)
 }
 
-// newBatch は、saves のエンティティのいまのログを読む。もうないエンティティ(ErrNotFound)はログを持たない。
-// ほかの読み取りの失敗はエラー。
-func newBatch(r port.Reader, saves []port.ReceivedSave) (batch, error) {
-	b := batch{saves: saves, judged: map[change.ID]bool{}, logs: map[change.Ref][]change.Record{}}
+// newBatch は、Store store の saves のエンティティのいまのログを読む。もうないエンティティ(ErrNotFound)はログを
+// 持たない。ほかの読み取りの失敗はエラー。
+func newBatch(r port.Reader, store port.StoreID, saves []port.ReceivedSave) (batch, error) {
+	b := batch{saves: saves, judged: map[change.ID]bool{}, logs: map[change.Ref][]change.Record{}, store: store}
 	for _, s := range saves {
 		for _, e := range s.Entities {
 			for _, row := range e.Rows {

@@ -229,7 +229,7 @@ func (m placeMove) workspaceText(r port.Reader, b batch, i int) (string, string,
 	if m.to.Parent == nil {
 		return "", "", false, nil
 	}
-	parent, ok, err := movedParentID(r, b, *m.to.Parent)
+	parent, ok, err := movedParentID(r, b, i, *m.to.Parent)
 	if !ok {
 		return "", "", false, err
 	}
@@ -254,15 +254,17 @@ func (m placeMove) workspaceText(r port.Reader, b batch, i int) (string, string,
 }
 
 // movedParentID は、親と別のワークスペースの本文の {親の ID}。親が移動先のワークスペースへ入る前の ID で、
-// {旧 ID} と対になる。同じ Store の中の、親の最後の転送記録の old を使い、なければ親のいまの表示。
-func movedParentID(r port.Reader, b batch, parent item.ID) (string, bool, error) {
+// {旧 ID} と対になる。同じ Store の中の、親の転送記録のうち、i 番目の修復の保存の時刻までの最後のものの old を
+// 使い(同じ判定のあとの保存の移動は見ない)、なければ親のいまの表示。
+func movedParentID(r port.Reader, b batch, i int, parent item.ID) (string, bool, error) {
 	recs, err := r.Transfers().List()
 	if err = notFoundIsSkip(err); err != nil {
 		return "", false, err
 	}
+	at := b.saves[i].Key.At
 	for j := len(recs) - 1; j >= 0; j-- {
 		c := recs[j]
-		if c.Entity == transfer.EntityItem && c.Target == parent && c.ToStore == string(b.store) && c.Old != "" {
+		if c.Entity == transfer.EntityItem && c.Target == parent && c.ToStore == string(b.store) && c.Old != "" && !c.At.After(at) {
 			return c.Old, true, nil
 		}
 	}

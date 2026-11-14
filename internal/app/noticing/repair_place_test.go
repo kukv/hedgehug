@@ -327,6 +327,22 @@ func TestPlaceWorkspaceNoticeNoTransferRecord(t *testing.T) {
 	}
 }
 
+// 修復のあと、同じ判定の中で親がまた移った: そのあとの転送記録は使わない。
+func TestPlaceWorkspaceNoticeLaterRecord(t *testing.T) {
+	f := setupAs(t, "taro")
+	straying(f, true)
+	s := strayRepair(f)
+	later := f.save(user("hanako"), func(tx port.Tx) error {
+		return tx.WriteTransfers().Append(transfer.Record{
+			Entity: transfer.EntityItem, Target: apptest.SampleTask, Old: "DOC-3", New: "HH-9", ToStore: string(store),
+		})
+	})
+	f.judge(s, later)
+	if n := f.wantOne(); !strings.HasPrefix(n.Text, "HH-2 が Docs へ") {
+		t.Errorf("text = %q", n.Text)
+	}
+}
+
 // 別の Store への転送記録は、親の移動の記録に使わない。
 func TestPlaceWorkspaceNoticeOtherStoreRecord(t *testing.T) {
 	f := setupAs(t, "taro")
@@ -342,7 +358,7 @@ func TestPlaceWorkspaceNoticeOtherStoreRecord(t *testing.T) {
 	}
 }
 
-// 2 台が同じ移動をした: 2 つ目の修復の保存の行は、前も後も移動先(合わせたあと同じ値になる)。
+// 2 台が同じ移動をした: 2 つ目の修復の保存は、同じ移動(Web の HH-6 → DOC-4)の set place の行を、もう一度書く。
 func TestPlaceOnceAcrossMachines(t *testing.T) {
 	f := setupAs(t, "taro")
 	straying(f, true)

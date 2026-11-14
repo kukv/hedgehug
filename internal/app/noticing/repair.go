@@ -19,7 +19,6 @@ const unknownUser = "不明なユーザー"
 // 修復の種類は、保存の行で見分ける(C4b2-8)。差出人は空(「hedgehug」)。読み取りの失敗(ないもの以外)はエラー。
 func repairs(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
 	var out []port.Notice
-	b.store = store
 	for i, s := range b.saves {
 		if !s.Repair {
 			continue
