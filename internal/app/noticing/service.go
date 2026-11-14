@@ -19,20 +19,20 @@ type Service struct {
 
 // Judge は、saves(古い順)から割り当て・プロジェクトのオーナー・メンションの通知を作る。
 // 「あなた」を決められない Store では何も作らない(C4b1-15)。1 回の read の中で前と後を作って通知を決め、
-// 書くのは read のあと。判定できない中身(ないエンティティ、読めない行)は飛ばし、エラーを返すのは受信箱に
-// 書けないときだけ(C4b1-5)。
+// 書くのは read のあと。判定できない中身(ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの
+// 読み書きの失敗(Store を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
 func (s Service) Judge(ctx context.Context, store port.StoreID, saves []port.ReceivedSave, read func(fn func(r port.Reader) error) error) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil || me == "" {
 		return nil
 	}
 	var notices []port.Notice
-	if read(func(r port.Reader) error {
+	if err := read(func(r port.Reader) error {
 		b := newBatch(r, saves)
 		notices = append(assigns(r, b, store, me), mentions(r, b, store, me)...)
 		return nil
-	}) != nil {
-		return nil // 読めなければ判定できない中身と同じく飛ばす(C4b1-5)
+	}); err != nil {
+		return err
 	}
 	for _, n := range notices {
 		write := s.Inbox.Add
