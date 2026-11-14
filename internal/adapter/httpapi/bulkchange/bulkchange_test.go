@@ -80,6 +80,17 @@ func TestBulkChangeChoicesAPI(t *testing.T) {
 	}
 }
 
+// 名前でステータスを変えるとき、category は空文字で送られてくる。
+func TestBulkChangeEmptyCategory(t *testing.T) {
+	api := newAPI(t)
+	for _, path := range []string{"/api/bulk-change/preview", "/api/bulk-change"} {
+		res := api.Post(path, body(map[string]any{"field": "status", "value": "Done", "values": []string{}, "category": ""}, both...))
+		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"changed":2`) {
+			t.Errorf("%s: %d %s", path, res.Code, res.Body)
+		}
+	}
+}
+
 func TestBulkChangeAPIRejects(t *testing.T) {
 	api := newAPI(t)
 	for _, path := range []string{"/api/bulk-change", "/api/bulk-change/preview", "/api/bulk-change/choices"} {

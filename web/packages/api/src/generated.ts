@@ -373,7 +373,7 @@ export type ChangeRequestCategory = typeof ChangeRequestCategory[keyof typeof Ch
 
 
 export const ChangeRequestCategory = {
-  '""': '""',
+  '': '',
   todo: 'todo',
   doing: 'doing',
   done: 'done',

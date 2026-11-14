@@ -33,7 +33,7 @@ type ChangeRequest struct {
 	Field    string         `json:"field" enum:"status,assignee,priority,sprint,release,systemsAdd,systemsRemove,points,estimate,start,end" doc:"変える項目"`
 	Value    string         `json:"value,omitempty" doc:"新しい値。空は値なし。ステータスを分類で変えるときは空"`
 	Values   []string       `json:"values,omitempty" nullable:"false" doc:"関連システムの名前(systemsAdd・systemsRemove のとき)"`
-	Category string         `json:"category,omitempty" enum:"\"\",todo,doing,done,canceled" doc:"ステータスを分類で変えるときの分類。名前で変えるときは空"`
+	Category string         `json:"category,omitempty" enum:",todo,doing,done,canceled" doc:"ステータスを分類で変えるときの分類。名前で変えるときは空"`
 }
 
 // ChoiceMember は、担当者の選択肢。

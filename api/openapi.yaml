@@ -529,7 +529,7 @@ components:
         category:
           description: ステータスを分類で変えるときの分類。名前で変えるときは空
           enum:
-            - "\"\""
+            - ""
             - todo
             - doing
             - done
