@@ -15,15 +15,18 @@ import (
 // unknownUser は、{変更した人} を決められないときの名前(C4b2-9)。
 const unknownUser = "不明なユーザー"
 
-// repairs は、同期の修復の保存(Repair が真のもの。C4b2-13)からの「同期の修復」の通知(06「同期の修復」)。
+// repairs は、同期の修復の保存(Repair が真のもの。C4b2-13)と合わせからの「同期の修復」の通知(06「同期の修復」)。
 // 修復の種類は、保存の行で見分ける(C4b2-8)。差出人は空(「hedgehug」)。読み取りの失敗(ないもの以外)はエラー。
 func repairs(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
 	var out []port.Notice
 	for i, s := range b.saves {
-		if !s.Repair {
+		if !s.Repair && !s.Merge {
 			continue
 		}
-		for _, kind := range []func(port.Reader, batch, int, string) ([]port.Notice, error){restores, cascades, places} {
+		kinds := []func(port.Reader, batch, int, string) ([]port.Notice, error){
+			restores, cascades, places, purgedUnder, purgedRelations, droppedEntities,
+		}
+		for _, kind := range kinds {
 			ns, err := kind(r, b, i, me)
 			if err != nil {
 				return nil, err
