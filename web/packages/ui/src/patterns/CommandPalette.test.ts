@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import Dialog from "../primitives/Dialog.svelte";
 import { text } from "../test-snippet";
@@ -31,8 +32,17 @@ function setup(state: PaletteView | null = palette(), mac = false) {
     onchoose: vi.fn(),
     onclose: vi.fn(),
   };
-  render(CommandPalette, { props });
-  return props;
+  const r = render(CommandPalette, { props });
+  return { ...props, rerender: r.rerender };
+}
+
+// opener は、パレットを開く前にフォーカスのある入力欄。
+function opener() {
+  const input = document.createElement("input");
+  input.setAttribute("aria-label", "開く前");
+  document.body.append(input);
+  input.focus();
+  return input;
 }
 
 describe("CommandPalette", () => {
@@ -127,7 +137,50 @@ describe("CommandPalette", () => {
   });
 });
 
+describe("CommandPalette のフォーカスと Esc", () => {
+  it("Esc で閉じたら開く前の入力欄にフォーカスが戻る", async () => {
+    const before = opener();
+    const p = setup(null);
+    await p.rerender({ view: palette() });
+    expect(screen.getByRole("combobox")).toHaveFocus();
+    await fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+    expect(p.onclose).toHaveBeenCalledOnce();
+    await p.rerender({ view: null });
+    await tick();
+    expect(before).toHaveFocus();
+    before.remove();
+  });
+
+  it("閉じたときに別のダイアログ([aria-modal=true])が開いていればフォーカスを戻さない", async () => {
+    const before = opener();
+    const p = setup(null);
+    await p.rerender({ view: palette() });
+    render(Dialog, { props: { open: true, title: "作成", onclose: vi.fn(), children: text("x") } });
+    await p.rerender({ view: null });
+    await tick();
+    expect(before).not.toHaveFocus();
+    before.remove();
+  });
+
+  it("Esc はパレットだけが受け、ほかの Esc の受け手(詳細パネルなど)へ届けない", async () => {
+    const other = vi.fn();
+    window.addEventListener("keydown", other);
+    const p = setup();
+    await fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+    window.removeEventListener("keydown", other);
+    expect(p.onclose).toHaveBeenCalledOnce();
+    expect(other).not.toHaveBeenCalled();
+  });
+});
+
 describe("CommandPalette の Ctrl+K", () => {
+  it("Ctrl+Shift+K・Ctrl+Alt+K では開かない", async () => {
+    const p = setup(null);
+    await fireEvent.keyDown(window, { key: "K", ctrlKey: true, shiftKey: true });
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true, altKey: true });
+    expect(p.onopen).not.toHaveBeenCalled();
+  });
+
   it("入力欄にフォーカスがあっても Ctrl+K で開く", async () => {
     const p = setup(null);
     const input = document.createElement("input");

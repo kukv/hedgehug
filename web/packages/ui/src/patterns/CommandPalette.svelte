@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { PaletteView } from "../types";
   import PaletteRow from "./PaletteRow.svelte";
 
@@ -27,7 +28,14 @@
 
   // Ctrl+K(Cmd+K)は入力中でも使える。ダイアログ(パレット自身を含む)を開いているときは使えない(01 キーボード)。
   // capture の段階で受けるので、入力欄やツリーが先に止めても届く。
+  // 開いているあいだの Esc もここで受けて止め、ほかの Esc の受け手(詳細パネルなど)へ届けない(01「Esc」の順)。
   function onkeydowncapture(event: KeyboardEvent) {
+    if (open && event.key === "Escape" && !composing(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      onclose();
+      return;
+    }
     if (event.key.toLowerCase() !== "k" || !modKey(event) || event.altKey || event.shiftKey) return;
     if (document.querySelector('[aria-modal="true"]')) return;
     event.preventDefault();
@@ -42,9 +50,6 @@
     } else if (event.key === "Enter" && !composing(event)) {
       event.preventDefault();
       onchoose(undefined, modKey(event));
-    } else if (event.key === "Escape" && !composing(event)) {
-      event.preventDefault();
-      onclose();
     }
   }
 
@@ -53,9 +58,20 @@
     if (event.target === event.currentTarget) onclose();
   }
 
-  // 開いたら入力欄にフォーカスを置く。
+  // 開いたら入力欄にフォーカスを置き、閉じたら開く前の場所に戻す(メニューと同じ。menuFocus)。候補が別の
+  // ダイアログを開いたとき、画面を移って元の場所がなくなったとき、ほかの場所にフォーカスが移ったときは戻さない。
   $effect(() => {
-    if (open) input?.focus();
+    if (!open) return;
+    const before = document.activeElement;
+    input?.focus();
+    return () => {
+      void tick().then(() => {
+        if (!(before instanceof HTMLElement) || !before.isConnected) return;
+        if (document.querySelector('[aria-modal="true"]')) return;
+        const lost = document.activeElement === null || document.activeElement === document.body;
+        if (lost) before.focus({ preventScroll: true });
+      });
+    };
   });
 
   // 選んでいる行が見えるようにスクロールする。
@@ -70,7 +86,8 @@
 {#if view}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="scrim" {onmousedown}>
-    <div class="palette" role="dialog" aria-modal="true" aria-label="コマンドパレット">
+    <!-- data-palette は、ツリーがフォーカスの戻り先を覚えるための印(treeKeyboard の inMenu) -->
+    <div class="palette" role="dialog" aria-modal="true" aria-label="コマンドパレット" data-palette>
       <input
         bind:this={input}
         class="field"
