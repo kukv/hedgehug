@@ -26,6 +26,9 @@
 |---|---|---|
 | 1 | C4c2-6 に「プロジェクトのタイトルは、同じワークスペースに同じ名前の生きているプロジェクトがあれば `project.CheckRename` の断りの文」を足す | 通常の保存(`projects.Rename`)が同じ名前を断るので、戻す保存だけが同じ名前を作れる経路にしない |
 | 2 | `revert_slot.go` が 300 行を超えるので、戻す行の組み立てを `revert_drafts.go` に分けた。Task 2 で `internal/adapter/httpapi/inbox/inbox_test.go` の setup に Clock を足した | ファイルの大きさの上限。受信箱の行の表示に時計を使うため |
+| 3 | Task 3 で `slotOf` に状態 `slotGone` を足した。Store にないエンティティ・いまのワークスペースにないプロパティは本文だけとし、押したときは「{ID} は先に変更されたため、適用しませんでした」と断る。本文だけの項目は項目名だけで `slotNone` に決め、`ErrInvalidOperation` にする | 消えた対象を「戻せる」と見せず、押した瞬間の重なりと同じ断りにするため |
+| 4 | 断りの HTTP の状態は 409 ではなく、止まった通知と同じ `apierr.From` の 422 にした | 止まった通知の断りと画面側の扱いを揃えるため |
+| 5 | `make generate` のあと `pnpm --dir web gen` で `generated.ts` を作り直す | API の型が変わると画面の型が古くなるため |
 
 ## Global Constraints
 
