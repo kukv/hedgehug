@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -117,8 +119,11 @@ func TestShowPlan(t *testing.T) {
 		change.NewSet("sprints/01SPR0000000000000000000B/name", nil, "Sprint 24"),
 		change.NewDelete("sprints/01SPR0000000000000000000B"),
 		change.NewSet("releases/01REL0000000000000000000A/name", nil, "v1.0"),
+		change.NewSet("sprints/01SPR0000000000000000000C/name", nil, "Sprint  25"),
+		change.NewDelete("sprints/01SPR0000000000000000000C"),
 	)
 	tests := []struct{ v, prefix, want string }{
+		{`"01SPR0000000000000000000C"`, "sprints/", "Sprint 25"},
 		{`"01SPR0000000000000000000A"`, "sprints/", "Sprint 25"},
 		{`"01SPR0000000000000000000B"`, "sprints/", "Sprint 24"},
 		{`"01REL0000000000000000000A"`, "releases/", "v1.0"},
@@ -170,5 +175,15 @@ func TestShowProject(t *testing.T) {
 		if got := showProject(tt.f, json.RawMessage(tt.v), names, revertNow); got != tt.want {
 			t.Errorf("showProject(%s, %s) = %q, want %q", tt.f, tt.v, got, tt.want)
 		}
+	}
+}
+
+func TestSprintReasonCollapsesName(t *testing.T) {
+	sp := planning.Sprint{ID: "01SPR0000000000000000000D", Name: "Sprint  25", State: planning.Closed}
+	_, log := revertSettings(t, planning.SprintDrafts(planning.Sprint{}, sp)...)
+	it := item.Item{Kind: item.Task}
+	got := sprintReason(it, planning.FromLog(log), log, json.RawMessage(`"`+string(sp.ID)+`"`))
+	if want := "スプリント「Sprint 25」は完了しています"; got != want {
+		t.Errorf("reason = %q, want %q", got, want)
 	}
 }

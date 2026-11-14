@@ -139,7 +139,7 @@ func showPlan(v json.RawMessage, log []change.Record, prefix string) string {
 		return "なし"
 	}
 	if name := workspace.NameOfDeleted(log, prefix+id); name != "" {
-		return name
+		return oneLine(name)
 	}
 	return deletedValueText
 }

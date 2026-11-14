@@ -38,7 +38,7 @@ func sprintReason(it item.Item, p planning.Plan, log []change.Record, mine json.
 			return deletedReason(showPlan(mine, log, "sprints/"))
 		}
 		if sp.State == planning.Closed && it.Sprint != id {
-			return "スプリント「" + sp.Name + "」は完了しています"
+			return "スプリント「" + oneLine(sp.Name) + "」は完了しています"
 		}
 	}
 	if !planning.IsWork(it.Kind) {
@@ -55,7 +55,7 @@ func releaseReason(it item.Item, p planning.Plan, log []change.Record, mine json
 			return deletedReason(showPlan(mine, log, "releases/"))
 		}
 		if rel.State == planning.Archived && it.Release != id {
-			return "リリース「" + rel.Name + "」はアーカイブされています"
+			return "リリース「" + oneLine(rel.Name) + "」はアーカイブされています"
 		}
 	}
 	if it.Kind == item.Step {
