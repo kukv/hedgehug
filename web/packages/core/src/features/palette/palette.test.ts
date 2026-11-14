@@ -49,7 +49,7 @@ describe("createPalette", () => {
   });
 
   test("1 文字ごとに候補を作り直し、選択を先頭の押せる行に戻す。↑↓ は端で止まり、見出しと「ほか N 件」を飛ばす", async () => {
-    const { palette } = await setup();
+    const { palette, calls } = await setup();
     await palette.open();
     palette.move("down");
     palette.move("down");
@@ -80,6 +80,8 @@ describe("createPalette", () => {
     expect(labels(palette)).toEqual(["~ 一致するものはありません"]);
     expect(get(palette.state)?.selected).toBe(-1);
     await palette.choose();
+    expect(calls).toEqual([]);
+    expect(get(palette.state)?.input).toBe("zzz");
   });
 
   test("索引を読む前の入力は、読んだあとに絞り直す。読めなかったらアイテム・プロジェクトを出さない", async () => {
@@ -128,10 +130,9 @@ describe("createPalette", () => {
       "x Done",
       "x Cancel",
     ]);
+    const reason = "ワークフローの制約: Todo から Done には変更できません(InProgress のみ)";
     const done = s?.rows[3];
-    expect(done?.kind === "candidate" && done.c.hint).toBe(
-      done?.kind === "candidate" && done.c.reason,
-    );
+    expect(done?.kind === "candidate" && [done.c.hint, done.c.reason]).toEqual([reason, reason]);
     const todo = s?.rows[1];
     expect(todo?.kind === "candidate" && [todo.c.checked, todo.c.hint]).toEqual([true, "未着手"]);
     palette.input("prog");
@@ -144,6 +145,15 @@ describe("createPalette", () => {
     expect(named(calls, "setStatus")).toEqual([]);
     await pick(palette, "InProgress");
     expect(named(calls, "setStatus").map((c) => c.args)).toEqual([["st2"]]);
+    expect(get(palette.state)).toBeNull();
+  });
+
+  test("ステータスの一覧で、いまのステータスを選び直したら保存せずに閉じる(ステータスのメニューと同じ)", async () => {
+    const { palette, calls } = await setup();
+    await palette.open();
+    await pick(palette, "ステータスを変更…");
+    await pick(palette, "Todo");
+    expect(named(calls, "setStatus")).toEqual([]);
     expect(get(palette.state)).toBeNull();
   });
 

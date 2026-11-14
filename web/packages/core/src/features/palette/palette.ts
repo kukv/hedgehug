@@ -106,7 +106,9 @@ export function createPalette(deps: PaletteDeps): Palette {
       checked: o.checked,
       ...(o.disabled ? { disabled: true, reason: o.reason, hint: o.reason } : {}),
       ...(!o.disabled && o.hint ? { hint: o.hint } : {}),
+      // いまのステータスを選び直したときは、保存せずに閉じる(ステータスのメニューと同じ。StatusButton)。
       run: async () => {
+        if (o.checked) return close();
         const p = picked.sel.setStatus(o.id);
         close();
         await p;
