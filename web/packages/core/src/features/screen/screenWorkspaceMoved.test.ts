@@ -156,9 +156,8 @@ describe("createScreen with a moved workspace", () => {
   // ときも、移った先を開かずにホームへ移る(B5c-17)。アドレスもホームに替えるので、次の一覧の読み直しでもサーバーに
   // 聞かず、移った先へひとりでに移らない。
   it("goes home without asking locateWorkspace when reloads no longer find the shown workspace", async () => {
-    const { screen, catalog, stack, transfers, goneWorkspaces } = await setup(
-      "/s/work/w/HH/overview",
-    );
+    const { screen, catalog, stack, transfers, goneWorkspaces } =
+      await setup("/s/work/w/HH/overview");
     screen.start();
     await flush();
     transfers.locatedWorkspace = {
