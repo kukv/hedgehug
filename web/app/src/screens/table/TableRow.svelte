@@ -91,6 +91,7 @@
             type="button"
             class="parent"
             title={parent.title}
+            disabled={row.deleted !== null}
             onclick={() => void detail.open(row.storeId, parent.itemId)}
           >
             {parent.display}
@@ -129,14 +130,15 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--muted);
-  }
-  .parent {
     border: 0;
     background: none;
     padding: 0;
     cursor: pointer;
   }
-  .parent:hover {
+  .parent:disabled {
+    cursor: default;
+  }
+  .parent:enabled:hover {
     text-decoration: underline;
   }
   .faint {

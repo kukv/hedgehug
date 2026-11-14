@@ -122,6 +122,18 @@ test("a deleted row cannot be checked or open its menu", async ({ page }, info) 
   await type(page, `is:deleted ${mark}`);
   await expect(check(page, `${prefix}-2`)).toBeDisabled();
   await expect(menuOf(page, `${prefix}-2`)).toBeDisabled();
+  // 選べる行が 0 件なので、見出しの「すべて選択」も押せない。
+  await expect(selectAll(page)).toBeDisabled();
+  // 削除済みの行の「親」のセルも押せない。
+  await page.getByRole("button", { name: "表示する列", exact: true }).click();
+  await page
+    .getByRole("menu", { name: "表示する列" })
+    .getByRole("menuitemcheckbox", { name: "親" })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect(
+    rowOf(page, `${mark} B`).getByRole("button", { name: `${prefix}-1`, exact: true }),
+  ).toBeDisabled();
 });
 
 test("the row menu opens the details and deletes the row", async ({ page }, info) => {
