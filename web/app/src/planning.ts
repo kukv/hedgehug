@@ -1,7 +1,13 @@
 import { createWorkspacesPort } from "@hedgehug/api";
-import { createBacklog, createReleases, createSprints, runSprintAction } from "@hedgehug/core";
+import {
+  createBacklog,
+  createReleases,
+  createRowSelection,
+  createSprints,
+  runSprintAction,
+} from "@hedgehug/core";
 import { propertySaved, reloads } from "./reloads";
-import { detail, itemsPort, listMembers, planning, planningPort, toasts } from "./wire";
+import { catalog, detail, itemsPort, listMembers, planning, planningPort, toasts } from "./wire";
 
 // スプリントの画面(05「スプリントの画面」)。wire.ts が 300 行なので、ここで作る。
 // カードはタブを開いているあいだだけ読み、Store の出来事で読み直す(wire.ts の reflect が reloads を呼ぶ)。
@@ -12,6 +18,9 @@ export const sprints = createSprints({
 });
 reloads.add(() => sprints.reload());
 
+// backlogSelection は、バックログの画面で選んでいる行(F2b1)。
+export const backlogSelection = createRowSelection();
+
 // バックログの画面(05「バックログ」)。読み方はスプリントの画面と同じ。詳細パネルの保存の応答で、
 // この画面から開いたアイテムが消えるときのトーストを出す(F2a-10・F2a-11)。
 export const backlog = createBacklog({
@@ -21,6 +30,8 @@ export const backlog = createBacklog({
   listMembers,
   toasts,
   openDetail: (storeId, itemId) => void detail.open(storeId, itemId),
+  selection: backlogSelection,
+  isReadOnly: (id) => catalog.store(id)?.readOnly ?? false,
 });
 reloads.add(() => backlog.reload());
 propertySaved.add((storeId, propertyId, item) => backlog.noticeDetail(storeId, propertyId, item));

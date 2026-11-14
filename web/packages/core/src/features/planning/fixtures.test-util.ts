@@ -7,6 +7,7 @@ import type {
   Sprint,
 } from "../../model/planning";
 import type { PlanningPort } from "../../port/planning";
+import { createRowSelection } from "../selection/rowSelection";
 
 // スプリントとリリースのテストの部品。
 
@@ -125,3 +126,6 @@ export function fakePlanningPort(overviews: Record<string, PlanningOverview> = {
     deleteRelease: unused,
   };
 }
+
+// noSelection は、バックログの deps の選択まわり(選んでいる行の入れ物、閲覧のみの Store はない)。
+export const noSelection = () => ({ selection: createRowSelection(), isReadOnly: () => false });

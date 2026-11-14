@@ -121,7 +121,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}, scan)
 	projectrules.Register(api, appprojectrules.Service{Stores: deps.Stores, Identity: deps.Identity})
 	notifier := appinbox.Notifier{Inbox: deps.Inbox, Events: hub}
-	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: notifier}
+	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: notifier, StoreList: deps.StoreList}
 	items.Register(api, itemsSvc)
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: notifier})

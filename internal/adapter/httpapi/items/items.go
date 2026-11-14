@@ -115,6 +115,7 @@ func Register(api huma.API, svc appitems.Service) {
 	registerCreateRead(api, svc)
 	registerEdit(api, svc)
 	registerDelete(api, svc)
+	registerBulk(api, svc)
 	registerNumbers(api, svc)
 	registerValues(api, svc)
 	registerMove(api, svc)

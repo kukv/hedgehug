@@ -273,6 +273,37 @@ export interface Backlog {
   frames: BacklogFrame[];
 }
 
+export interface BulkDeletePreview {
+  /** 閲覧のみの Store にあるため削除しない、選んだ件数 */
+  readOnly: number;
+  /** Store が 1 つのとき、その Store の削除済みの保持日数。ほかは 0 */
+  retentionDays: number;
+  /** 削除するアイテムのある Store の数 */
+  stores: number;
+}
+
+export interface BulkTarget {
+  /** アイテムの内部 ID */
+  item: string;
+  /** Store の ID */
+  store: string;
+}
+
+export interface BulkDeleteRequest {
+  /**
+     * 選んだアイテム。複数の Store にまたがってよい
+     * @minItems 1
+     */
+  items: BulkTarget[];
+}
+
+export interface BulkDeleted {
+  /** 書いた削除の行の数(下のものを含む) */
+  deleted: number;
+  /** 閲覧のみの Store にあるため削除しなかった、選んだ件数 */
+  readOnly: number;
+}
+
 export type ChangeKindKind = typeof ChangeKindKind[keyof typeof ChangeKindKind];
 
 
@@ -2747,6 +2778,82 @@ export const recheckAccount = async (id: string, options?: Parameters<typeof fet
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export const getBulkDeleteUrl = () => {
+
+
+
+
+  return `/api/bulk-delete`
+}
+
+/**
+ * @summary 選んだアイテムを、その下のものごと Store ごとに削除する
+ */
+export const bulkDelete = async (bulkDeleteRequest: BulkDeleteRequest, options?: Parameters<typeof fetcher>[1]): Promise<BulkDeleted> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<BulkDeleted>(getBulkDeleteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bulkDeleteRequest)
+  }
+);}
+
+
+
+export const getPreviewBulkDeleteUrl = () => {
+
+
+
+
+  return `/api/bulk-delete/preview`
+}
+
+/**
+ * @summary 選んだアイテムを一括削除するときの確認の中身を返す
+ */
+export const previewBulkDelete = async (bulkDeleteRequest: BulkDeleteRequest, options?: Parameters<typeof fetcher>[1]): Promise<BulkDeletePreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<BulkDeletePreview>(getPreviewBulkDeleteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bulkDeleteRequest)
   }
 );}
 

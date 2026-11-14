@@ -12,6 +12,8 @@ export { default as Markdown } from "./patterns/Markdown.svelte";
 export { default as OfflineBand } from "./patterns/OfflineBand.svelte";
 export { default as ProgressBar } from "./patterns/ProgressBar.svelte";
 export { default as ReadOnlyBand } from "./patterns/ReadOnlyBand.svelte";
+export { default as RowCheck } from "./patterns/RowCheck.svelte";
+export { default as SelectionBar } from "./patterns/SelectionBar.svelte";
 export { default as StatusDot } from "./patterns/StatusDot.svelte";
 export { default as StoreBadge } from "./patterns/StoreBadge.svelte";
 export { default as SyncCard } from "./patterns/SyncCard.svelte";

@@ -10,11 +10,12 @@ import (
 
 // Service は、アイテムの操作が使う口。
 type Service struct {
-	Stores   port.Stores
-	IDs      port.IDs
-	Identity port.Identity
-	Clock    port.Clock
-	Inbox    port.Inbox // 自動化の通知(B4)
+	Stores    port.Stores
+	StoreList port.StoreList // 一括削除が、表示中の Store と閲覧のみの印を読む
+	IDs       port.IDs
+	Identity  port.Identity
+	Clock     port.Clock
+	Inbox     port.Inbox // 自動化の通知(B4)
 }
 
 // withID は、アイテムと、その画面の ID(HH-12)を返す。アクティビティの 1 行に ID を書く操作が使う。

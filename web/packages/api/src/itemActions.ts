@@ -1,6 +1,7 @@
-import type { ItemActionsPort, Kind } from "@hedgehug/core";
+import type { ItemActionsPort, ItemRef, Kind } from "@hedgehug/core";
 import { call } from "./errors";
 import {
+  bulkDelete,
   changeItemKind,
   deleteItem,
   deleteProject,
@@ -9,8 +10,13 @@ import {
   getProjectDeletePreview,
   listMoveCandidates,
   moveItem,
+  previewBulkDelete,
   previewItemMove,
 } from "./generated";
+
+const bulkBody = (items: ItemRef[]) => ({
+  items: items.map((i) => ({ store: i.storeId, item: i.itemId })),
+});
 
 // アイテムとプロジェクトの操作(A4b)。変更の応答は使わないので、どれも値を返さない(duplicate だけ新しい ID)。
 // 生成物の型名は import しない(Go の出力型の名前に左右されないため)。null の一覧は空にする。
@@ -67,6 +73,16 @@ export function createItemActionsPort(): ItemActionsPort {
         await changeItemKind(storeId, itemId, {
           kind: kind as Parameters<typeof changeItemKind>[2]["kind"],
         });
+      }),
+    bulkDeletePreview: (items) =>
+      call(async () => {
+        const p = await previewBulkDelete(bulkBody(items));
+        return { stores: p.stores, retentionDays: p.retentionDays, readOnly: p.readOnly };
+      }),
+    bulkDelete: (items) =>
+      call(async () => {
+        const r = await bulkDelete(bulkBody(items));
+        return { deleted: r.deleted, readOnly: r.readOnly };
       }),
     duplicate: (storeId, itemId) => call(async () => (await duplicateItem(storeId, itemId)).id),
   };

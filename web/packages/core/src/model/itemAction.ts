@@ -46,3 +46,23 @@ export interface MovePreview {
 
 // MoveTarget は、移動の移し先。Epic は project、ほかは parent のどちらか一方。
 export type MoveTarget = { parent: string } | { project: string };
+
+// ItemRef は、一括削除の対象 1 件(内部 ID は Store の中でだけ一意なので Store と組で持つ)。
+export interface ItemRef {
+  storeId: string;
+  itemId: string;
+}
+
+// BulkDeletePreview は、一括削除の確認ダイアログの中身。stores は対象の Store の数、retentionDays は保持日数
+// (Store が 2 つ以上のときは文に出さない)、readOnly は閲覧のみの Store の件数(削除しない)。
+export interface BulkDeletePreview {
+  stores: number;
+  retentionDays: number;
+  readOnly: number;
+}
+
+// BulkDeleted は、一括削除の結果。deleted は削除した件数、readOnly は閲覧のみの Store のため残した件数。
+export interface BulkDeleted {
+  deleted: number;
+  readOnly: number;
+}

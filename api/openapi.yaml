@@ -354,6 +354,66 @@ components:
         - goal
         - confirmed
       type: object
+    BulkDeletePreview:
+      additionalProperties: false
+      properties:
+        readOnly:
+          description: 閲覧のみの Store にあるため削除しない、選んだ件数
+          format: int64
+          type: integer
+        retentionDays:
+          description: Store が 1 つのとき、その Store の削除済みの保持日数。ほかは 0
+          format: int64
+          type: integer
+        stores:
+          description: 削除するアイテムのある Store の数
+          format: int64
+          type: integer
+      required:
+        - stores
+        - retentionDays
+        - readOnly
+      type: object
+    BulkDeleteRequest:
+      additionalProperties: false
+      properties:
+        items:
+          description: 選んだアイテム。複数の Store にまたがってよい
+          items:
+            $ref: "#/components/schemas/BulkTarget"
+          minItems: 1
+          type: array
+      required:
+        - items
+      type: object
+    BulkDeleted:
+      additionalProperties: false
+      properties:
+        deleted:
+          description: 書いた削除の行の数(下のものを含む)
+          format: int64
+          type: integer
+        readOnly:
+          description: 閲覧のみの Store にあるため削除しなかった、選んだ件数
+          format: int64
+          type: integer
+      required:
+        - deleted
+        - readOnly
+      type: object
+    BulkTarget:
+      additionalProperties: false
+      properties:
+        item:
+          description: アイテムの内部 ID
+          type: string
+        store:
+          description: Store の ID
+          type: string
+      required:
+        - store
+        - item
+      type: object
     ChangeKind:
       additionalProperties: false
       properties:
@@ -4088,6 +4148,52 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: GitHub App 未導入の組織を読み直し、読めたものの記録を消す
+  /api/bulk-delete:
+    post:
+      operationId: bulk-delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeleteRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeleted"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 選んだアイテムを、その下のものごと Store ごとに削除する
+  /api/bulk-delete/preview:
+    post:
+      operationId: preview-bulk-delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeleteRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeletePreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 選んだアイテムを一括削除するときの確認の中身を返す
   /api/events:
     get:
       description: "出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"

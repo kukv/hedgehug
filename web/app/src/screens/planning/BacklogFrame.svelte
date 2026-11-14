@@ -18,6 +18,7 @@
   interface Props {
     frame: BacklogFrame;
     frames: BacklogFrame[];
+    storeId: string;
     storeName: string;
     settings: WorkspaceSettings;
     members: Member[];
@@ -38,6 +39,7 @@
   let {
     frame,
     frames,
+    storeId,
     storeName,
     settings,
     members,
@@ -113,6 +115,7 @@
           {row}
           sprint={key}
           {frames}
+          {storeId}
           {storeName}
           {settings}
           {members}

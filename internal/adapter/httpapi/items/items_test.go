@@ -27,7 +27,10 @@ func newAPI(t *testing.T, setup ...func(t *testing.T, s port.Stores)) humatest.T
 		f(t, s)
 	}
 	_, api := humatest.New(t)
-	items.Register(api, appitems.Service{Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))})
+	items.Register(api, appitems.Service{
+		Stores: s, IDs: ids, Identity: apptest.Identity{Login: "taro"}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)),
+		StoreList: apptest.StoreList{Stores: []port.StoreInfo{{ID: "S1", Name: "S1"}}},
+	})
 	return api
 }
 

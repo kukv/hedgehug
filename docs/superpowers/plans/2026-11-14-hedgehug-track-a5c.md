@@ -372,7 +372,7 @@ A5c は群の順と上限の枠を作り、空の群は出さない。渡す先�
 | 渡す先 | 足すもの | 足す場所 |
 |---|---|---|
 | E | 「このクエリで」の群、ビューの群、コマンド「検索を開く」「マイタスクを開く」、テーブルの選択(`selection.provide(2, …)`) | `web/packages/core/src/features/palette/actions.ts`・`destinations.ts`・`candidates.ts`、`selection.ts` |
-| F2 | バックログの選択(`selection.provide(2, …)`) | `web/packages/core/src/features/palette/selection.ts` |
+| F2 | バックログの選択(`selection.provide(2, …)`)(F2b1 で足した) | `web/packages/core/src/features/palette/selection.ts` |
 | C4 | コマンド「受信箱を開く」「アクティビティを開く」 | `actions.ts`・`destinations.ts`・`candidates.ts` のコマンドの群 |
 | G | 「設定: Store」「設定: 削除済み」「設定: 診断と修復」。ワークスペースを追加の Store の初期値を既定の Store にする | `actions.ts`・`destinations.ts`・`candidates.ts` の設定の群 |
 
