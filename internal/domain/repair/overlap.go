@@ -1,6 +1,7 @@
 package repair
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -47,6 +48,65 @@ func deletesTarget(d change.Record) bool {
 		return true
 	}
 	return d.Root != nil && *d.Root
+}
+
+// notChanges は、Changer が変更に数えない行の種類。
+var notChanges = []change.Type{change.Delete, change.Restore, change.Create, change.MovedIn}
+
+// Changer は、削除の行 d と重なった変更をした人のログイン名(決定 C4b2-9)。LastChange の行の by。見つからなければ空。
+func Changer(log []change.Record, d change.Record, f Facts) string {
+	if w, ok := LastChange(log, d, f); ok {
+		return w.By
+	}
+	return ""
+}
+
+// LastChange は、削除の行 d と重なった変更のうち最もあとの行(決定 C4b2-9)。hasChange と同じ数え方: d の op でない、
+// 人が書いた変更の行(delete・restore を除く)のうち、d の f が deleted ならすべての行、ほかは f の下の f(d.F+"/" で
+// 始まるもの)の行。作成と moved_in の行は、削除より前にしかない(削除と同時にはできない)ので数えない。f で d が
+// 片側にあれば、もう片側の行だけを数える(同時に変えた人。共通の祖先にある変更は数えない)。d がどちらの側にも
+// なければ(f が空のときも)、側を見ない。d が片側にあって、もう片側に数える行が 1 つもないときも、側を見ない。削除した人(d.By。大文字と小文字を区別しない)でない人の行のうち at が
+// 最もあとの行(同じなら ID の大きい行)を返し、削除した人の行しかなければ、その中で最もあとの行を返す。
+func LastChange(log []change.Record, d change.Record, f Facts) (change.Record, bool) {
+	side := f.Side(d.ID)
+	if c, ok := lastChangeIn(log, d, f, side); ok || side == 0 {
+		return c, ok
+	}
+	return lastChangeIn(log, d, f, 0)
+}
+
+// lastChangeIn は、LastChange の数え方を、side が 0 でなければ反対の側の行だけに絞って行う。
+func lastChangeIn(log []change.Record, d change.Record, f Facts, side int) (change.Record, bool) {
+	var other, own *change.Record
+	for i := range log {
+		c := &log[i]
+		if c.Op == d.Op || c.Actor.Kind != change.ActorUser || slices.Contains(notChanges, c.T) {
+			continue
+		}
+		if (d.F != change.DeletedField && !strings.HasPrefix(c.F, d.F+"/")) || (side != 0 && f.Side(c.ID) != 3-side) {
+			continue
+		}
+		if strings.EqualFold(c.By, d.By) {
+			own = later(own, c)
+		} else {
+			other = later(other, c)
+		}
+	}
+	switch {
+	case other != nil:
+		return *other, true
+	case own != nil:
+		return *own, true
+	}
+	return change.Record{}, false
+}
+
+// later は、w と c のうち at があとの行(同じなら ID の大きい行)。w が nil なら c。
+func later(w, c *change.Record) *change.Record {
+	if w == nil || c.At.After(w.At) || (c.At.Equal(w.At) && c.ID > w.ID) {
+		return c
+	}
+	return w
 }
 
 // hasChange は、d と重なる変更が、side の側にあるか。

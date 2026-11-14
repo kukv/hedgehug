@@ -284,3 +284,31 @@ func TestNotifierMentionPublishes(t *testing.T) {
 		t.Error("a failed Mention must not publish")
 	}
 }
+
+func TestNotifierAddOnce(t *testing.T) {
+	book := &apptest.Inbox{}
+	events := &apptest.Events{}
+	n := inbox.Notifier{Inbox: book, Events: events}
+	notice := port.Notice{Kind: port.NoticeRepair, Store: s1, Source: "repair:restore:op1", Text: "直した"}
+	added, err := n.AddOnce(t.Context(), notice)
+	if err != nil || !added {
+		t.Fatalf("first AddOnce = %v, %v", added, err)
+	}
+	if got := events.List(); !slices.Equal(got, []port.Event{{Kind: port.EventInbox, Store: s1}}) {
+		t.Errorf("events = %v", got)
+	}
+	added, err = n.AddOnce(t.Context(), notice)
+	if err != nil || added {
+		t.Fatalf("second AddOnce = %v, %v", added, err)
+	}
+	if len(events.List()) != 1 || len(book.Notices()) != 1 {
+		t.Error("a duplicate must neither add nor publish")
+	}
+	book.Err = errors.New("broken")
+	if _, err = n.AddOnce(t.Context(), port.Notice{Kind: port.NoticeRepair, Store: s1, Source: "k2"}); err == nil {
+		t.Error("want the error")
+	}
+	if len(events.List()) != 1 {
+		t.Error("a failed AddOnce must not publish")
+	}
+}

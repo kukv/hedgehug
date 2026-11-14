@@ -11,7 +11,7 @@ export {
   inboxTabs,
   pillOf,
 } from "./features/inbox/inbox";
-export { goneTextOf, projectRouteOf } from "./features/inbox/target";
+export { goneTextOf, projectRouteOf, workspaceRouteOf } from "./features/inbox/target";
 export type {
   InboxAction,
   InboxCounts,

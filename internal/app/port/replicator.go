@@ -83,17 +83,56 @@ type EntityRows struct {
 	Description *string
 }
 
-// ReceivedSave は、同期で受け取った、通知の判定をまだしていない保存 1 件。
+// ReceivedSave は、通知の判定をまだしていない保存か合わせ 1 件(決定 C4b2-2)。受け取った保存と、このマシンが
+// 書いた同期の修復の保存と、消えたエンティティに共通の祖先にない行がある合わせ。
 type ReceivedSave struct {
 	Key      SaveKey
 	Entities []EntityRows
+	// Repair は、同期の修復の保存(作者が hedgehug の bot で、足した行がすべて実行者 sync か、行がない)。
+	Repair bool
+	// Merge は、合わせ(2 つの版を合わせたもの)。Entities は空で、Key.Op も空。
+	Merge bool
+	// Removed は、その保存か合わせでフォルダごと消えたエンティティ。修復の保存と合わせのときだけ持つ。
+	Removed []RemovedEntity
+	// Concurrent は、合わせのときだけ、片側で親と一緒に削除され、もう片側で人が変えたエンティティ(決定 C4b2-17)。
+	Concurrent []ConcurrentRows
+	// Sides は、restore の行を書いた同期の修復の保存のときだけ、その保存の前を(ほかの修復の保存を通って)辿った
+	// いちばん近い合わせで、共通の祖先にない行の ID を、その合わせの 2 つの側に分けたもの。見るのは、その保存が
+	// 書いたエンティティのログだけ。合わせに届かなければ空(決定 C4b2-9)。
+	Sides repair.Facts
 }
 
-// JudgeFunc は、同期の最後に、受け取った保存から通知を判定する差し込み口(決定 C4b1-2)。saves は古い順
-// (前の版が先。同じ深さは時刻、版の印の順)。read は、同期が持っている Store のロックの中で、Store のいまの
-// 状態を読む(Stores.Read を中から呼ぶと止まるので、こちらを使う)。エラーを返すと、渡した保存を判定済みに
+// ConcurrentRows は、合わせの結果に残るエンティティ 1 つで、片側の共通の祖先にない行に root: false の削除があり、
+// もう片側の共通の祖先にない行に人の変更(削除・取り消し以外)があるもの(決定 C4b2-17)。
+type ConcurrentRows struct {
+	Ref change.Ref
+	// Deleted は、削除した側の、共通の祖先にない root: false の削除の行。
+	Deleted []change.Record
+	// Changed は、変えた側の、共通の祖先にない人の変更の行。
+	Changed []change.Record
+}
+
+// RemovedEntity は、保存か合わせで消えたエンティティ 1 つ(決定 C4b2-3)。
+type RemovedEntity struct {
+	Ref change.Ref
+	// Log は、消える前のログ。保存なら前の版の、合わせならその側の版の。
+	Log []change.Record
+	// New は、合わせのときだけ、その側の行のうち、共通の祖先の同じエンティティのログにない行。
+	New []change.Record
+}
+
+// Received は、判定の差し込み口に渡すもの。Saves は古い順(前の版が先。同じ深さは時刻、版の印の順)。
+// ReadOnly は、閲覧のみの同期(受け取るだけで送らない)のとき。
+type Received struct {
+	Saves    []ReceivedSave
+	ReadOnly bool
+}
+
+// JudgeFunc は、同期の最後に、受け取った保存・このマシンの修復の保存・合わせから通知を判定する差し込み口
+// (決定 C4b1-2・C4b2-2)。read は、同期が持っている Store のロックの中で、Store のいまの状態を読む
+// (Stores.Read を中から呼ぶと止まるので、こちらを使う)。エラーを返すと、渡した保存と合わせを判定済みに
 // しない(同期の結果は変えない)。
-type JudgeFunc func(ctx context.Context, store StoreID, saves []ReceivedSave, read func(fn func(r Reader) error) error) error
+type JudgeFunc func(ctx context.Context, store StoreID, in Received, read func(fn func(r Reader) error) error) error
 
 // SyncResult は、送った保存と受け取った保存の数(06「同期の結果」)と、今回受け取った位置。
 // Seen は、次の同期の Remote.Seen に渡す。remote が空のまま終わったら空。

@@ -19,7 +19,7 @@ import (
 
 const store port.StoreID = "S1"
 
-// fixture は、サンプルの Store と偽物の受信箱。あなたは hanako。
+// fixture は、サンプルの Store と偽物の受信箱。あなたは hanako(setupAs で変えられる)。
 type fixture struct {
 	t       *testing.T
 	stores  *apptest.Stores
@@ -30,6 +30,12 @@ type fixture struct {
 
 func setup(t *testing.T) *fixture {
 	t.Helper()
+	return setupAs(t, "hanako")
+}
+
+// setupAs は、あなたが me の fixture。
+func setupAs(t *testing.T, me string) *fixture {
+	t.Helper()
 	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
 	s.AddStore(store)
 	if err := apptest.Sample(t.Context(), s, store); err != nil {
@@ -38,7 +44,7 @@ func setup(t *testing.T) *fixture {
 	inbox := &apptest.Inbox{}
 	return &fixture{t: t, stores: s, inbox: inbox, svc: noticing.Service{
 		Inbox:    inbox,
-		Identity: apptest.Identity{Login: "hanako"},
+		Identity: apptest.Identity{Login: me},
 		List:     apptest.StoreList{Stores: []port.StoreInfo{{ID: store, Name: "main"}}},
 	}}
 }
@@ -146,6 +152,14 @@ func (f *fixture) save(actor change.Actor, fn func(tx port.Tx) error) port.Recei
 	return s
 }
 
+// repairSave は、同期の修復(実行者 sync)で fn を保存し、その保存を同期の修復の保存にする。
+func (f *fixture) repairSave(fn func(tx port.Tx) error) port.ReceivedSave {
+	f.t.Helper()
+	s := f.save(change.Actor{Kind: change.ActorSync}, fn)
+	s.Repair = true
+	return s
+}
+
 // judge は、saves を判定する。偽物の read は Stores.Read。
 func (f *fixture) judge(saves ...port.ReceivedSave) {
 	f.t.Helper()
@@ -155,8 +169,13 @@ func (f *fixture) judge(saves ...port.ReceivedSave) {
 }
 
 func (f *fixture) judgeErr(saves ...port.ReceivedSave) error {
+	return f.judgeReceived(port.Received{Saves: saves})
+}
+
+// judgeReceived は、in を判定する。
+func (f *fixture) judgeReceived(in port.Received) error {
 	ctx := f.t.Context()
-	return f.svc.Judge(ctx, store, saves, func(fn func(r port.Reader) error) error {
+	return f.svc.Judge(ctx, store, in, func(fn func(r port.Reader) error) error {
 		return f.stores.Read(ctx, store, fn)
 	})
 }
@@ -239,7 +258,7 @@ func (m failingMembers) List() ([]member.Member, error) { return nil, m.err }
 // judgeFailing は、kind の読み取りが err を返す Reader で saves を判定する。
 func (f *fixture) judgeFailing(kind string, err error, saves ...port.ReceivedSave) error {
 	ctx := f.t.Context()
-	return f.svc.Judge(ctx, store, saves, func(fn func(r port.Reader) error) error {
+	return f.svc.Judge(ctx, store, port.Received{Saves: saves}, func(fn func(r port.Reader) error) error {
 		return f.stores.Read(ctx, store, func(r port.Reader) error { return fn(failing{r, kind, err}) })
 	})
 }

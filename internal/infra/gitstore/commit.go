@@ -240,7 +240,7 @@ func author(a change.Actor, at time.Time) *object.Signature {
 	if a.Kind == change.ActorUser {
 		return signature(a.Login, a.Login+"@hedgehug.invalid", at)
 	}
-	return signature(botName, botEmail, at)
+	return signature(saves.BotName, botEmail, at)
 }
 
 // rollback は、作業ツリーとインデックスを head に戻し、head にないファイルとフォルダを消す。

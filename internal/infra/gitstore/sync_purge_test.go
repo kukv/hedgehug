@@ -430,3 +430,18 @@ func TestRepairWriterPurged(t *testing.T) {
 		t.Errorf("Purged = %v, %v, want %s", got, err, apptest.SampleTask)
 	}
 }
+
+// B が完全に削除したアイテムにだけ A が行を足して送っていたら、B の合わせた結果は B の版と同じになる。
+// それでも合わせを保存し、同期は失敗しない(決定 C4b2-15)。次の同期も通り、2 台は同じになる。
+func TestSyncAfterPurgeOnlyOthersWrote(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0)
+	b.purgeForTest(t, apptest.SampleTask)
+	a.write(t, "a", set("title", "ログイン画面を作る", "ログイン"))
+	a.sync(t, remote)
+	b.sync(t, remote)
+	b.sync(t, remote)
+	a.sync(t, remote)
+	sameFiles(t, a, b)
+}

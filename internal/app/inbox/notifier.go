@@ -29,3 +29,13 @@ func (n Notifier) Mention(ctx context.Context, notice port.Notice) error {
 	n.Events.Publish(port.Event{Kind: port.EventInbox, Store: notice.Store})
 	return nil
 }
+
+// AddOnce は、同じ鍵の行がなくて足したときだけ受信箱の出来事を出す。重なったときと失敗したときは出さない。
+func (n Notifier) AddOnce(ctx context.Context, notice port.Notice) (bool, error) {
+	added, err := n.Inbox.AddOnce(ctx, notice)
+	if err != nil || !added {
+		return false, err
+	}
+	n.Events.Publish(port.Event{Kind: port.EventInbox, Store: notice.Store})
+	return true, nil
+}

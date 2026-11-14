@@ -12,6 +12,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // Format は、この hedgehug が書く Store の形式の版。
@@ -88,7 +89,7 @@ func writeFirstCommit(dir string, id port.StoreID, at time.Time) error {
 	if _, err := wt.Add(storeFile); err != nil {
 		return fmt.Errorf("add %s: %w", storeFile, err)
 	}
-	sig := signature(botName, botEmail, at)
+	sig := signature(saves.BotName, botEmail, at)
 	if _, err := wt.Commit("Store を作成\n", &git.CommitOptions{Author: sig, Committer: sig}); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
