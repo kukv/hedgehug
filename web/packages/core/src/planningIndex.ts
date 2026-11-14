@@ -127,6 +127,8 @@ export {
   unitLabel,
 } from "./features/reports/texts";
 export type {
+  BacklogFrame,
+  BacklogRow,
   PlanningOverview,
   PlanRow,
   Release,

@@ -1,4 +1,6 @@
 import type {
+  BacklogFrame,
+  BacklogRow,
   PlanningOverview,
   PlanningPort,
   PlanRow,
@@ -9,6 +11,8 @@ import type {
 } from "@hedgehug/core";
 import { call } from "./errors";
 import {
+  type BacklogFrame as ApiBacklogFrame,
+  type BacklogRow as ApiBacklogRow,
   type PlanningOverview as ApiOverview,
   type Release as ApiRelease,
   type ReleaseCard as ApiReleaseCard,
@@ -20,9 +24,11 @@ import {
   createSprint,
   deleteRelease,
   deleteSprint,
+  getBacklog,
   getPlanning,
   listReleaseCards,
   listSprintCards,
+  placeItem,
   setItemRelease,
   setItemSprint,
   setReleaseState,
@@ -38,6 +44,14 @@ import {
 const toSprint = (s: ApiSprint): Sprint => s;
 const toRelease = (r: ApiRelease): Release => r;
 const toRow = (r: ApiRow): PlanRow => r;
+
+const toBacklogRow = (r: ApiBacklogRow): BacklogRow => r;
+
+const toBacklogFrame = (f: ApiBacklogFrame): BacklogFrame => ({
+  sprint: f.sprint ? toSprint(f.sprint) : null,
+  total: f.total,
+  rows: (f.rows ?? []).map(toBacklogRow),
+});
 
 const toOverview = (o: ApiOverview): PlanningOverview => ({
   active: o.active ?? null,
@@ -64,6 +78,8 @@ export function createPlanningPort(): PlanningPort {
       call(async () => ((await listSprintCards(s, w)) ?? []).map(toSprintCard)),
     releaseCards: (s, w) =>
       call(async () => ((await listReleaseCards(s, w)) ?? []).map(toReleaseCard)),
+    backlog: (s, w) =>
+      call(async () => ((await getBacklog(s, w)).frames ?? []).map(toBacklogFrame)),
     createSprint: (s, w, input) => call(async () => toSprint(await createSprint(s, w, input))),
     updateSprint: (s, w, id, input) => call(() => updateSprint(s, w, id, input)),
     startSprint: (s, w, id, start, end) => call(() => startSprint(s, w, id, { start, end })),
@@ -75,5 +91,7 @@ export function createPlanningPort(): PlanningPort {
     deleteRelease: (s, w, id) => call(() => deleteRelease(s, w, id)),
     setItemSprint: (s, item, sprint) => call(() => setItemSprint(s, item, { sprint })),
     setItemRelease: (s, item, release) => call(() => setItemRelease(s, item, { release })),
+    placeItem: (s, item, sprint, anchor, after) =>
+      call(() => placeItem(s, item, { sprint, anchor, after })),
   };
 }

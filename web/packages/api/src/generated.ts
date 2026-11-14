@@ -216,6 +216,68 @@ export interface AutomationRun {
   text: string;
 }
 
+export type BacklogRowKind = typeof BacklogRowKind[keyof typeof BacklogRowKind];
+
+
+export const BacklogRowKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export interface BacklogRow {
+  /** ログイン名。空は未割り当て */
+  assignee: string;
+  display: string;
+  id: string;
+  kind: BacklogRowKind;
+  /** @nullable */
+  points: number | null;
+  /** 作業項目の順位 */
+  priority: string;
+  /** 所属プロジェクトの内部 ID */
+  project: string;
+  /** ステータスの内部 ID。空は値なし */
+  status: string;
+  title: string;
+}
+
+export type BacklogSprintState = typeof BacklogSprintState[keyof typeof BacklogSprintState];
+
+
+export const BacklogSprintState = {
+  planned: 'planned',
+  active: 'active',
+  closed: 'closed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type BacklogSprint = {
+  /** 完了で確定した値。完了していなければ null */
+  confirmed: SprintConfirmed | null;
+  end: string;
+  goal: string;
+  id: string;
+  name: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  state: BacklogSprintState;
+} | null;
+
+export interface BacklogFrame {
+  rows: BacklogRow[];
+  sprint: BacklogSprint | null;
+  total: SprintTotals;
+}
+
+export interface Backlog {
+  frames: BacklogFrame[];
+}
+
 export type ChangeKindKind = typeof ChangeKindKind[keyof typeof ChangeKindKind];
 
 
@@ -747,6 +809,21 @@ export interface MoveWorkspaceItem {
 
 export interface NextNumber {
   number: number;
+}
+
+export interface PlaceItem {
+  /** true は基準の直後、false は直前 */
+  after: boolean;
+  /**
+     * 基準のアイテムの内部 ID。null は枠の末尾
+     * @nullable
+     */
+  anchor: string | null;
+  /**
+     * 移動先の枠のスプリントの内部 ID。null はバックログ
+     * @nullable
+     */
+  sprint: string | null;
 }
 
 export interface SprintDefaults {
@@ -3294,6 +3371,47 @@ export const previewItemMove = async (store: string,
 
 
 
+export const getPlaceItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/plan-position`
+}
+
+/**
+ * @summary アイテムを枠の中の位置に置く
+ */
+export const placeItem = async (store: string,
+    item: string,
+    placeItemBody: PlaceItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getPlaceItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(placeItemBody)
+  }
+);}
+
+
+
 export const getSetItemPropertyUrl = (store: string,
     item: string,
     property: string,) => {
@@ -5367,6 +5485,32 @@ return fetcher<void>(getSetAutomationRuleEnabledUrl(store,workspace,rule),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setAutomationRuleEnabledBody)
+  }
+);}
+
+
+
+export const getGetBacklogUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/backlog`
+}
+
+/**
+ * @summary バックログの画面の枠(スプリントの枠とバックログの枠)
+ */
+export const getBacklog = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<Backlog> => {
+
+  return fetcher<Backlog>(getGetBacklogUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

@@ -1,4 +1,5 @@
 import type {
+  BacklogFrame,
   PlanningOverview,
   Release,
   ReleaseCard,
@@ -14,6 +15,7 @@ export interface PlanningPort {
   overview(storeId: string, workspaceId: string): Promise<PlanningOverview>;
   sprintCards(storeId: string, workspaceId: string): Promise<SprintCard[]>;
   releaseCards(storeId: string, workspaceId: string): Promise<ReleaseCard[]>;
+  backlog(storeId: string, workspaceId: string): Promise<BacklogFrame[]>;
   createSprint(storeId: string, workspaceId: string, input: SprintInput): Promise<Sprint>;
   updateSprint(
     storeId: string,
@@ -53,4 +55,13 @@ export interface PlanningPort {
   // アイテムの所属は、API がアイテムの宛先で受ける。null はバックログ・「なし」。
   setItemSprint(storeId: string, itemId: string, sprintId: string | null): Promise<void>;
   setItemRelease(storeId: string, itemId: string, releaseId: string | null): Promise<void>;
+  // 作業項目を枠の中の位置に置く。sprint は移動先の枠(null はバックログ)、anchor は基準の行
+  // (null は枠の末尾)。after が true なら基準の直後、false なら直前。
+  placeItem(
+    storeId: string,
+    itemId: string,
+    sprintId: string | null,
+    anchorId: string | null,
+    after: boolean,
+  ): Promise<void>;
 }

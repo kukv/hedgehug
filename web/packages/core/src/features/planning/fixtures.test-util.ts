@@ -75,6 +75,8 @@ export function fakePlanningPort(overviews: Record<string, PlanningOverview> = {
     },
     sprintCards: unused,
     releaseCards: unused,
+    backlog: unused,
+    placeItem: unused,
     createSprint: unused,
     updateSprint: unused,
     startSprint: unused,
