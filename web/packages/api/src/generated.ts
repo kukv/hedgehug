@@ -55,6 +55,43 @@ export interface AccountRow {
   status: AccountRowStatus;
 }
 
+export type ActiveSprintState = typeof ActiveSprintState[keyof typeof ActiveSprintState];
+
+
+export const ActiveSprintState = {
+  planned: 'planned',
+  active: 'active',
+  closed: 'closed',
+} as const;
+
+export interface SprintTotals {
+  count: number;
+  points: number;
+}
+
+/**
+ * @nullable
+ */
+export type SprintConfirmed = {
+  committed: SprintTotals;
+  completed: SprintTotals;
+} | null;
+
+/**
+ * @nullable
+ */
+export type ActiveSprint = {
+  /** 完了で確定した値。完了していなければ null */
+  confirmed: SprintConfirmed | null;
+  end: string;
+  goal: string;
+  id: string;
+  name: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  state: ActiveSprintState;
+} | null;
+
 export interface AddStep {
   title: string;
 }
@@ -200,6 +237,14 @@ export interface CheckStep {
   done: boolean;
 }
 
+export interface CloseSprint {
+  /**
+     * 未完了のアイテムの移動先(計画中のスプリントの内部 ID)。null はバックログ
+     * @nullable
+     */
+  destination: string | null;
+}
+
 export interface Comment {
   /** 投稿した時刻(RFC 3339) */
   at: string;
@@ -240,6 +285,11 @@ export interface CreateItem {
   parent?: string;
   /** 空はプロジェクトを選んでいない */
   project: string;
+  /**
+     * 入れるスプリントの内部 ID。null と空はバックログ
+     * @nullable
+     */
+  sprint?: string | null;
   /** 一緒に作るテンプレートの内部 ID。空は「なし」 */
   template?: string;
   title: string;
@@ -414,6 +464,10 @@ export interface Item {
   priority: string;
   project: string;
   rank: string;
+  /** リリースの内部 ID。空は「なし」 */
+  release: string;
+  /** スプリントの内部 ID。空はバックログ */
+  sprint: string;
   /** YYYY-MM-DD。空は値なし */
   start: string;
   /** ステータスの内部 ID。空は値なし */
@@ -654,6 +708,83 @@ export interface NextNumber {
   number: number;
 }
 
+export interface SprintDefaults {
+  end: string;
+  name: string;
+  start: string;
+}
+
+export type ReleaseState = typeof ReleaseState[keyof typeof ReleaseState];
+
+
+export const ReleaseState = {
+  unreleased: 'unreleased',
+  released: 'released',
+  archived: 'archived',
+} as const;
+
+export interface Release {
+  date: string;
+  description: string;
+  id: string;
+  name: string;
+  state: ReleaseState;
+}
+
+export type SprintState = typeof SprintState[keyof typeof SprintState];
+
+
+export const SprintState = {
+  planned: 'planned',
+  active: 'active',
+  closed: 'closed',
+} as const;
+
+export interface Sprint {
+  /** 完了で確定した値。完了していなければ null */
+  confirmed: SprintConfirmed | null;
+  end: string;
+  goal: string;
+  id: string;
+  name: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  state: SprintState;
+}
+
+export interface PlanningOverview {
+  active: ActiveSprint | null;
+  defaults: SprintDefaults;
+  releases: Release[];
+  /** その Store の削除済みの保持日数 */
+  retentionDays: number;
+  sprints: Sprint[];
+}
+
+export type PlanningRowKind = typeof PlanningRowKind[keyof typeof PlanningRowKind];
+
+
+export const PlanningRowKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export interface PlanningRow {
+  /** ログイン名。空は未割り当て */
+  assignee: string;
+  display: string;
+  id: string;
+  kind: PlanningRowKind;
+  /** @nullable */
+  points: number | null;
+  /** ステータスの内部 ID。空は値なし */
+  status: string;
+  title: string;
+}
+
 export type ProjectStatus = typeof ProjectStatus[keyof typeof ProjectStatus];
 
 
@@ -821,6 +952,24 @@ export interface RelationRow {
   workspaceName: string;
 }
 
+export interface ReleaseCard {
+  done: number;
+  items: PlanningRow[];
+  release: Release;
+  target: number;
+  undone: number;
+}
+
+export interface ReleaseInput {
+  /**
+     * YYYY-MM-DD。空は値なし
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  date: string;
+  description: string;
+  name: string;
+}
+
 export interface RenameItem {
   title: string;
 }
@@ -895,6 +1044,22 @@ export interface SetItemProperty {
   value: unknown;
 }
 
+export interface SetItemRelease {
+  /**
+     * リリースの内部 ID。null は「なし」
+     * @nullable
+     */
+  release: string | null;
+}
+
+export interface SetItemSprint {
+  /**
+     * スプリントの内部 ID。null はバックログ
+     * @nullable
+     */
+  sprint: string | null;
+}
+
 export type SetProjectDateField = typeof SetProjectDateField[keyof typeof SetProjectDateField];
 
 
@@ -951,6 +1116,19 @@ export interface SetProjectTemplateUsed {
 
 export interface SetProjectTransition {
   allowed: boolean;
+}
+
+export type SetReleaseStateState = typeof SetReleaseStateState[keyof typeof SetReleaseStateState];
+
+
+export const SetReleaseStateState = {
+  unreleased: 'unreleased',
+  released: 'released',
+  archived: 'archived',
+} as const;
+
+export interface SetReleaseState {
+  state: SetReleaseStateState;
 }
 
 export interface SetWatch {
@@ -1056,6 +1234,44 @@ export interface SignInResult {
   interval: number;
   message: string;
   state: SignInResultState;
+}
+
+export interface SprintCard {
+  canceled: number;
+  done: SprintTotals;
+  items: PlanningRow[];
+  sprint: Sprint;
+  total: SprintTotals;
+  /** 未着手・進行中の件数 */
+  undone: number;
+}
+
+export interface SprintInput {
+  /**
+     * YYYY-MM-DD。空は値なし
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  end: string;
+  goal: string;
+  name: string;
+  /**
+     * YYYY-MM-DD。空は値なし
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  start: string;
+}
+
+export interface StartSprint {
+  /**
+     * YYYY-MM-DD
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  end: string;
+  /**
+     * YYYY-MM-DD
+     * @pattern ^(\d{4}-\d{2}-\d{2})?$
+     */
+  start: string;
 }
 
 export interface StoreInfo {
@@ -2921,6 +3137,47 @@ return fetcher<void>(getRemoveRelationUrl(store,item),
 
 
 
+export const getSetItemReleaseUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/release`
+}
+
+/**
+ * @summary アイテムのリリースを変える
+ */
+export const setItemRelease = async (store: string,
+    item: string,
+    setItemReleaseBody: SetItemRelease, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetItemReleaseUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setItemReleaseBody)
+  }
+);}
+
+
+
 export const getReorderItemUrl = (store: string,
     item: string,) => {
 
@@ -2998,6 +3255,47 @@ return fetcher<WorkspaceTemplate>(getSaveItemAsTemplateUrl(store,item),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(saveItemAsTemplateBody)
+  }
+);}
+
+
+
+export const getSetItemSprintUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/sprint`
+}
+
+/**
+ * @summary アイテムのスプリントを変える
+ */
+export const setItemSprint = async (store: string,
+    item: string,
+    setItemSprintBody: SetItemSprint, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetItemSprintUrl(store,item),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setItemSprintBody)
   }
 );}
 
@@ -5073,6 +5371,32 @@ export const nextItemNumber = async (store: string,
 
 
 
+export const getGetPlanningUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/planning`
+}
+
+/**
+ * @summary スプリントとリリースの選択肢、実行中のスプリント、作成の既定
+ */
+export const getPlanning = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<PlanningOverview> => {
+
+  return fetcher<PlanningOverview>(getGetPlanningUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export const getChangeWorkspacePrefixUrl = (store: string,
     workspace: string,) => {
 
@@ -5417,6 +5741,467 @@ return fetcher<void>(getRenameWorkspacePropertyUrl(store,workspace,property),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(renameWorkspacePropertyBody)
+  }
+);}
+
+
+
+export const getListReleaseCardsUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/releases`
+}
+
+/**
+ * @summary リリースのカード
+ */
+export const listReleaseCards = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<ReleaseCard[] | null> => {
+
+  return fetcher<ReleaseCard[] | null>(getListReleaseCardsUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getCreateReleaseUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/releases`
+}
+
+/**
+ * @summary リリースを作成
+ */
+export const createRelease = async (store: string,
+    workspace: string,
+    releaseInput: ReleaseInput, options?: Parameters<typeof fetcher>[1]): Promise<Release> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Release>(getCreateReleaseUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(releaseInput)
+  }
+);}
+
+
+
+export const getDeleteReleaseUrl = (store: string,
+    workspace: string,
+    release: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/releases/${encodeURIComponent(String(release))}`
+}
+
+/**
+ * @summary リリースを削除
+ */
+export const deleteRelease = async (store: string,
+    workspace: string,
+    release: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteReleaseUrl(store,workspace,release),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getUpdateReleaseUrl = (store: string,
+    workspace: string,
+    release: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/releases/${encodeURIComponent(String(release))}`
+}
+
+/**
+ * @summary リリースを編集
+ */
+export const updateRelease = async (store: string,
+    workspace: string,
+    release: string,
+    releaseInput: ReleaseInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getUpdateReleaseUrl(store,workspace,release),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(releaseInput)
+  }
+);}
+
+
+
+export const getRestoreReleaseUrl = (store: string,
+    workspace: string,
+    release: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/releases/${encodeURIComponent(String(release))}/restore`
+}
+
+/**
+ * @summary 削除したリリースを復元
+ */
+export const restoreRelease = async (store: string,
+    workspace: string,
+    release: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getRestoreReleaseUrl(store,workspace,release),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getSetReleaseStateUrl = (store: string,
+    workspace: string,
+    release: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/releases/${encodeURIComponent(String(release))}/state`
+}
+
+/**
+ * @summary リリースの状態を変える
+ */
+export const setReleaseState = async (store: string,
+    workspace: string,
+    release: string,
+    setReleaseStateBody: SetReleaseState, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetReleaseStateUrl(store,workspace,release),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setReleaseStateBody)
+  }
+);}
+
+
+
+export const getListSprintCardsUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints`
+}
+
+/**
+ * @summary スプリントのカード
+ */
+export const listSprintCards = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<SprintCard[] | null> => {
+
+  return fetcher<SprintCard[] | null>(getListSprintCardsUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getCreateSprintUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints`
+}
+
+/**
+ * @summary スプリントを作成
+ */
+export const createSprint = async (store: string,
+    workspace: string,
+    sprintInput: SprintInput, options?: Parameters<typeof fetcher>[1]): Promise<Sprint> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<Sprint>(getCreateSprintUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(sprintInput)
+  }
+);}
+
+
+
+export const getDeleteSprintUrl = (store: string,
+    workspace: string,
+    sprint: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints/${encodeURIComponent(String(sprint))}`
+}
+
+/**
+ * @summary スプリントを削除
+ */
+export const deleteSprint = async (store: string,
+    workspace: string,
+    sprint: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteSprintUrl(store,workspace,sprint),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getUpdateSprintUrl = (store: string,
+    workspace: string,
+    sprint: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints/${encodeURIComponent(String(sprint))}`
+}
+
+/**
+ * @summary スプリントを編集
+ */
+export const updateSprint = async (store: string,
+    workspace: string,
+    sprint: string,
+    sprintInput: SprintInput, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getUpdateSprintUrl(store,workspace,sprint),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(sprintInput)
+  }
+);}
+
+
+
+export const getCloseSprintUrl = (store: string,
+    workspace: string,
+    sprint: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints/${encodeURIComponent(String(sprint))}/close`
+}
+
+/**
+ * @summary 実行中のスプリントを完了し、未完了のアイテムを移す
+ */
+export const closeSprint = async (store: string,
+    workspace: string,
+    sprint: string,
+    closeSprintBody: CloseSprint, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getCloseSprintUrl(store,workspace,sprint),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(closeSprintBody)
+  }
+);}
+
+
+
+export const getRestoreSprintUrl = (store: string,
+    workspace: string,
+    sprint: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints/${encodeURIComponent(String(sprint))}/restore`
+}
+
+/**
+ * @summary 削除したスプリントを復元
+ */
+export const restoreSprint = async (store: string,
+    workspace: string,
+    sprint: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getRestoreSprintUrl(store,workspace,sprint),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getStartSprintUrl = (store: string,
+    workspace: string,
+    sprint: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/sprints/${encodeURIComponent(String(sprint))}/start`
+}
+
+/**
+ * @summary 計画中のスプリントを開始
+ */
+export const startSprint = async (store: string,
+    workspace: string,
+    sprint: string,
+    startSprintBody: StartSprint, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getStartSprintUrl(store,workspace,sprint),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(startSprintBody)
   }
 );}
 

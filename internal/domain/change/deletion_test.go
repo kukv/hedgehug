@@ -84,6 +84,29 @@ func TestDeletionOfTieBreak(t *testing.T) {
 	}
 }
 
+func TestDeletionOfField(t *testing.T) {
+	at := func(h int) time.Time { return time.Date(2026, 11, 13, h, 0, 0, 0, jst) }
+	row := func(id, op string, typ change.Type, f string, h int, to string) change.Record {
+		r := change.Record{ID: change.ID(id), Op: change.ID(op), At: at(h), By: "taro", Actor: change.User("taro"), T: typ, F: f}
+		if to != "" {
+			r.To = change.Value(to)
+		}
+		return r
+	}
+	del := row("d1", "o1", change.Delete, "sprints/S1", 9, "")
+	if got := change.DeletionOfField([]change.Record{del}, "sprints/S2"); got != nil {
+		t.Errorf("別の f = %+v", got)
+	}
+	if got := change.DeletionOfField([]change.Record{del}, "sprints/S1"); got == nil || got.Op != "o1" || got.Root {
+		t.Errorf("deleted = %+v", got)
+	}
+	// 取り消された削除の行は飛ばす。
+	restore := row("r1", "o2", change.Restore, "sprints/S1", 10, "o1")
+	if got := change.DeletionOfField([]change.Record{del, restore}, "sprints/S1"); got != nil {
+		t.Errorf("restored = %+v", got)
+	}
+}
+
 func TestNewRestore(t *testing.T) {
 	d := change.NewRestore(change.DeletedField, "op1")
 	if d.T != change.Restore || d.F != change.DeletedField || d.From != nil || d.Root != nil || string(d.To) != `"op1"` {

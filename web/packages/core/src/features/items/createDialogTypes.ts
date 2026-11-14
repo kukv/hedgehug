@@ -2,6 +2,7 @@ import type { Item, Kind } from "../../model/item";
 import type { WorkspaceSettings } from "../../model/workspace";
 import type { CatalogPort } from "../../port/catalog";
 import type { ItemsPort } from "../../port/items";
+import type { PlanningPort } from "../../port/planning";
 import type { WorkspacesPort } from "../../port/workspaces";
 import type { Readable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
@@ -28,6 +29,8 @@ export interface ItemForm {
   // description は説明の欄。templateDescription は、いま当てはめているテンプレートの説明(なければ空)。
   description: string;
   templateDescription: string;
+  // sprint は、入れるスプリント。空は「バックログ」。Story・Task・Bug のときだけ送る(F1-21)。
+  sprint: string;
 }
 
 export interface ItemDialogState {
@@ -45,6 +48,8 @@ export interface ItemDialogState {
   templates: Option[];
   // structure は「一緒に作るもの」。テンプレートが「なし」、または子も Step もないときは null。
   structure: { heading: string; rows: StructureRow[] } | null;
+  // sprints は、スプリントのセレクトの選択肢(「バックログ」と完了していないスプリント)。
+  sprints: Option[];
   settings: WorkspaceSettings;
   error: string;
 }
@@ -62,6 +67,7 @@ export interface ItemDialogDeps {
   items: ItemsPort;
   workspaces: WorkspacesPort;
   catalogPort: CatalogPort;
+  planning: PlanningPort;
   toasts: Toasts;
   here(): Here;
   openProjectDialog(workspaceId: string): void;

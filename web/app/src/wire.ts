@@ -2,6 +2,7 @@ import {
   createCatalogPort,
   createItemsPort,
   createNotesPort,
+  createPlanningPort,
   createProjectsPort,
   createSyncPort,
   createSystemPort,
@@ -17,6 +18,7 @@ import {
   createItemDialog,
   createMovedNotice,
   createNavigation,
+  createPlanning,
   createProjectDialog,
   createProjectScreen,
   createReflection,
@@ -104,6 +106,9 @@ export const workspaceDialog = createWorkspaceDialog({
   onCreated: (storeId, workspace) =>
     navigation.go(routeOfWorkspace(get(catalog.stores), storeId, workspace.id, "overview")),
 });
+// スプリントとリリースの口と、開いているワークスペースの概要(見出しの「実行中」)。
+export const planningPort = createPlanningPort();
+export const planning = createPlanning(planningPort);
 export const workspaceMover = createWorkspaceMover({ catalog, port: workspacesPort, toasts });
 const saveAsTemplateCore = createSaveAsTemplate({ port: workspacesPort, toasts });
 // 保存できたら、開いている設定の画面を読み直す(開いていなければ何もしない)。
@@ -119,6 +124,7 @@ export const detail = createDetail({
   items: itemsPort,
   workspaces: workspacesPort,
   catalogPort,
+  planning: planningPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
@@ -162,6 +168,7 @@ export const itemDialog = createItemDialog({
   items: itemsPort,
   workspaces: workspacesPort,
   catalogPort,
+  planning: planningPort,
   toasts,
   here: () => hereOf(screen, catalog),
   openProjectDialog: (workspaceId) => void projectDialog.open(workspaceId),
@@ -202,6 +209,7 @@ async function reflect(kinds: SyncEventKind[]) {
           Promise.all([
             projectScreen.reload(),
             detail.reload(),
+            planning.reload(),
             ...[itemComments, projectComments, worklogs, relations, ...lists].map((section) =>
               section.reload(),
             ),

@@ -2,18 +2,21 @@ import { describe, expect, it } from "vitest";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakePlanningPort, overviewOf, sprintOf } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createItemDialog } from "./createDialog";
+import { keptSprint } from "./createDialogOptions";
 import { fakeItemsPort, item } from "./fixtures.test-util";
-import { fakeWorkspaces, settings2 } from "./settings.test-util";
+import { fakeWorkspaces, settings, settings2 } from "./settings.test-util";
 
 // ワークスペースの切り替えと値の連動(02「ダイアログの中での連動」、決定 25)。S2-W1 は別の Store の設定 settings2。
 async function setupSwitch(members2: { login: string; name: string }[]) {
   const catalog = createCatalog(fakeCatalogPort());
   await catalog.load();
+  const items = fakeItemsPort([item("S1", "S1-P1", 1, "Epic", null, "認証")]);
   const dialog = createItemDialog({
     catalog,
-    items: fakeItemsPort([item("S1", "S1-P1", 1, "Epic", null, "認証")]),
+    items,
     toasts: createToasts({ set: () => 0, clear: () => {} }),
     here: () => ({ workspaceId: "S1-W1", projectId: "S1-P1" }),
     openProjectDialog: () => {},
@@ -22,10 +25,17 @@ async function setupSwitch(members2: { login: string; name: string }[]) {
       ...fakeCatalogPort(),
       listMembers: async (s) => (s === "S2" ? members2 : [{ login: "taro", name: "太郎" }]),
     },
+    planning: fakePlanningPort({
+      "S1-W1": overviewOf([
+        sprintOf({ id: "SP1", name: "Sprint 1", state: "active" }),
+        sprintOf({ id: "SP0", name: "Sprint 0", state: "closed" }),
+      ]),
+      "S2-W1": overviewOf([sprintOf({ id: "SP9", name: "Sprint 9" })]),
+    }),
     onCreated: () => {},
   });
   await dialog.open();
-  return dialog;
+  return Object.assign(dialog, { items });
 }
 
 const typed = {
@@ -73,5 +83,66 @@ describe("create dialog workspace switch", () => {
     await dialog.update({ values: typed });
     await switching;
     expect(get(dialog.state)?.form.values).toEqual(kept);
+  });
+});
+
+// スプリントの欄(02「ダイアログの項目」「ダイアログの中での連動」、F1-21)。
+describe("create dialog sprint", () => {
+  it("starts at the backlog with the sprints not closed of the workspace", async () => {
+    const dialog = await setupSwitch([]);
+    expect(get(dialog.state)?.form.sprint).toBe("");
+    expect(get(dialog.state)?.sprints).toEqual([
+      { value: "", label: "バックログ" },
+      { value: "SP1", label: "Sprint 1(実行中)" },
+    ]);
+  });
+
+  it("goes back to the backlog on Epic and stays there on Story", async () => {
+    const dialog = await setupSwitch([]);
+    await dialog.update({ sprint: "SP1" });
+    await dialog.update({ kind: "Bug" });
+    expect(get(dialog.state)?.form.sprint).toBe("SP1");
+    await dialog.update({ kind: "Epic" });
+    expect(get(dialog.state)?.form.sprint).toBe("");
+    await dialog.update({ kind: "Story" });
+    expect(get(dialog.state)?.form.sprint).toBe("");
+  });
+
+  it("goes back to the backlog when the workspace changes, even if picked while loading", async () => {
+    const dialog = await setupSwitch([{ login: "taro", name: "太郎" }]);
+    const switching = dialog.update({ workspaceId: "S2-W1" });
+    await dialog.update({ sprint: "SP1" });
+    await switching;
+    expect(get(dialog.state)?.form.sprint).toBe("");
+    expect(get(dialog.state)?.sprints.map((o) => o.value)).toEqual(["", "SP9"]);
+  });
+
+  it("keeps the sprint picked while the project reloads", async () => {
+    const dialog = await setupSwitch([]);
+    const reloading = dialog.update({ projectId: "S1-P2" });
+    await dialog.update({ sprint: "SP1" });
+    await reloading;
+    expect(get(dialog.state)?.form.sprint).toBe("SP1");
+  });
+
+  it("creates the item in the picked sprint", async () => {
+    const dialog = await setupSwitch([]);
+    await dialog.update({ title: "画面", sprint: "SP1" });
+    await dialog.submit();
+    expect(dialog.items.all.find((it) => it.title === "画面")?.sprint).toBe("SP1");
+  });
+});
+
+// 読み直したときのスプリント。ダイアログを開いているあいだ概要は覚えたものを使うので、ここでは関数を直接確かめる。
+describe("keptSprint", () => {
+  it("falls back to the backlog when the picked sprint was closed or deleted", () => {
+    const ctx = (sprints: ReturnType<typeof sprintOf>[]) => ({
+      settings,
+      people: { members: [], me: "" },
+      plan: overviewOf(sprints),
+    });
+    expect(keptSprint(ctx([sprintOf({ id: "SP1" })]), "SP1")).toBe("SP1");
+    expect(keptSprint(ctx([sprintOf({ id: "SP1", state: "closed" })]), "SP1")).toBe("");
+    expect(keptSprint(ctx([]), "SP1")).toBe("");
   });
 });

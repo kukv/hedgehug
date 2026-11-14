@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -255,5 +256,26 @@ func TestFindByNumberOfRecreatedWorkspace(t *testing.T) {
 	}
 	if _, err := svc.FindByNumber(ctx, store, apptest.SampleWorkspace, 1); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("FindByNumber(削除済み) error = %v, want ErrNotFound", err)
+	}
+}
+
+// 削除済みのワークスペースのスプリントを指定した作成は、スプリントを指定しない作成と同じく断る(B5b-4)。
+// ワークスペースの削除は中のプロジェクトも削除済みにする(B5b-1)ので、プロジェクトの確かめで断る。
+func TestCreateWithSprintInDeletedWorkspace(t *testing.T) {
+	svc := setup(t)
+	ctx := t.Context()
+	seedSprint(t, svc.Stores, apptest.SampleWorkspace, planning.Sprint{ID: "S1", Name: "Sprint 1", State: planning.Active}, false)
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteProject(ctx, svc.Stores, store, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	sprint := change.ID("S1")
+	for _, sp := range []*change.ID{nil, &sprint} {
+		in := items.CreateInput{Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: item.Task, Title: "新規", Sprint: sp}
+		if _, err := svc.Create(ctx, in); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("Create(sprint %v) = %v, want port.ErrNotFound", sp, err)
+		}
 	}
 }

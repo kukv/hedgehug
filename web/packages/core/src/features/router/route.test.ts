@@ -7,6 +7,7 @@ import {
   projectDisplayId,
   projectTabOf,
   type Route,
+  workspaceTabOf,
 } from "./route";
 
 describe("parseRoute and formatRoute", () => {
@@ -14,6 +15,8 @@ describe("parseRoute and formatRoute", () => {
     ["/", { name: "home" }],
     ["/s/work/w/HH/overview", { name: "workspace", store: "work", prefix: "HH", tab: "overview" }],
     ["/s/work/w/HH/settings", { name: "workspace", store: "work", prefix: "HH", tab: "settings" }],
+    ["/s/work/w/HH/sprints", { name: "workspace", store: "work", prefix: "HH", tab: "sprints" }],
+    ["/s/work/w/HH/releases", { name: "workspace", store: "work", prefix: "HH", tab: "releases" }],
     [
       "/s/work/p/HH-P1/overview",
       { name: "project", store: "work", project: "HH-P1", tab: "overview" },
@@ -58,6 +61,14 @@ describe("parseRoute and formatRoute", () => {
     expect(projectTabOf("tree")).toBe("tree");
     expect(projectTabOf("overview")).toBe("overview");
     expect(projectTabOf("kanban")).toBe("overview");
+  });
+
+  it("turns a tab ID into a workspace tab, falling back to the overview", () => {
+    expect(workspaceTabOf("sprints")).toBe("sprints");
+    expect(workspaceTabOf("releases")).toBe("releases");
+    expect(workspaceTabOf("settings")).toBe("settings");
+    expect(workspaceTabOf("overview")).toBe("overview");
+    expect(workspaceTabOf("kanban")).toBe("overview");
   });
 
   it("encodes and decodes each part", () => {

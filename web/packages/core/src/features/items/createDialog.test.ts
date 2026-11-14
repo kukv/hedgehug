@@ -3,6 +3,7 @@ import type { Item } from "../../model/item";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort, project } from "../catalog/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createItemDialog, type ItemDialog } from "./createDialog";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
@@ -18,6 +19,7 @@ async function setup(here = {}) {
   const projectDialogs: string[] = [];
   const created: [Item, boolean][] = [];
   const dialog = createItemDialog({
+    planning: fakePlanningPort(),
     catalog,
     items,
     workspaces: fakeWorkspaces(),
@@ -99,6 +101,7 @@ describe("createItemDialog", () => {
     const toasts = createToasts({ set: () => 0, clear: () => {} });
     const opened: string[] = [];
     const dialog = createItemDialog({
+      planning: fakePlanningPort(),
       catalog,
       items: fakeItemsPort(),
       toasts,
@@ -130,6 +133,7 @@ describe("createItemDialog", () => {
     await catalog.load();
     const epic = item("S1", "S1-P1", 1, "Epic", null, "認証");
     const dialog = createItemDialog({
+      planning: fakePlanningPort(),
       catalog,
       items: fakeItemsPort([epic]),
       toasts: createToasts({ set: () => 0, clear: () => {} }),

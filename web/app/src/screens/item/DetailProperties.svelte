@@ -1,5 +1,17 @@
 <script lang="ts">
-  import type { DetailView, PropertyInput, Route } from "@hedgehug/core";
+  import {
+    asOptions,
+    chosen,
+    type DetailView,
+    type PropertyInput,
+    type Route,
+    readOnlyNote,
+    releaseChoices,
+    showRelease,
+    showSprint,
+    sprintChoices,
+  } from "@hedgehug/core";
+  import { Select } from "@hedgehug/ui";
   import { detail, links } from "../../wire";
   import PropertyField from "./PropertyField.svelte";
 
@@ -17,6 +29,14 @@
     prefix: v.workspace.prefix,
     tab: "settings",
   });
+
+  // スプリント・リリースの選択肢(02「スプリント・リリース」)。使えない参照はバックログ・「なし」と出す(F1-5)。
+  const sprints = $derived(sprintChoices(v.plan, v.item.sprint));
+  const releases = $derived(releaseChoices(v.plan, v.item.release));
+  // assign は、スプリント・リリースを保存する。保存できなかったら、セレクトを保存済みの値に戻す。
+  async function assign(save: Promise<boolean>) {
+    if (!(await save)) version += 1;
+  }
 
   // at は、入力欄にフォーカスしたときのアイテム。開いているアイテムが変わっていたら、保存せずに入力を戻す。
   async function change(propertyId: string, value: PropertyInput, at = v.item.id) {
@@ -45,6 +65,34 @@
         />
       </dd>
     {/each}
+    {#key `${v.item.id}-${version}`}
+      {#if showSprint(v.item.kind)}
+        <dt>スプリント</dt>
+        <dd>
+          <Select
+            label="スプリント"
+            options={asOptions(sprints)}
+            value={chosen(sprints, v.item.sprint)}
+            disabled={v.readOnly}
+            title={v.readOnly ? readOnlyNote : undefined}
+            onchange={(id) => void assign(detail.setSprint(id))}
+          />
+        </dd>
+      {/if}
+      {#if showRelease(v.item.kind)}
+        <dt>リリース</dt>
+        <dd>
+          <Select
+            label="リリース"
+            options={asOptions(releases)}
+            value={chosen(releases, v.item.release)}
+            disabled={v.readOnly}
+            title={v.readOnly ? readOnlyNote : undefined}
+            onchange={(id) => void assign(detail.setRelease(id))}
+          />
+        </dd>
+      {/if}
+    {/key}
   </dl>
   <a
     class="props-link"

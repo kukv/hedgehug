@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/relation"
 )
@@ -18,7 +19,7 @@ import (
 // ワークスペースの初期ステータス(ワークフローの制約は検査しない)、ウォッチ中の人はあなただけ。
 // 複製元の関連・子・コメントなどは写さず、新しいアイテムから複製元へ clones の関連を 1 つ書く。
 // 作成と同じ 1 回の保存で書く。アクティビティは「{複製元の ID} を複製」。ないか削除済みなら port.ErrNotFound。
-// スプリントとリリースは Item の項目にないので写さない。
+// スプリントは、使えて計画中か実行中のときだけ、リリースは、使えてアーカイブでないときだけ写す(F1-22)。
 func (s Service) Duplicate(ctx context.Context, store port.StoreID, id item.ID) (item.ID, error) {
 	_, display, err := s.withID(ctx, store, id)
 	if err != nil {
@@ -83,6 +84,14 @@ func (s Service) copyOf(tx port.Tx, src item.Item, me string) (item.Item, error)
 	dup.Status = st.InitialStatus
 	dup.Relations, dup.Blocked, dup.Deleted = nil, false, nil
 	dup.Fields = fieldsOf(src)
+	plan := planning.FromLog(wsLog)
+	dup.Sprint, dup.Release = "", ""
+	if sp, ok := plan.UsableSprint(src.Sprint); ok && sp.State != planning.Closed {
+		dup.Sprint = sp.ID
+	}
+	if r, ok := plan.UsableRelease(src.Release); ok && r.State != planning.Archived {
+		dup.Release = r.ID
+	}
 	return dup, nil
 }
 

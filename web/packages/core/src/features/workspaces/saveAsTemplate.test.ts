@@ -5,6 +5,7 @@ import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { createDetail, type DetailView } from "../items/detail";
 import { fakeItemsPort, item } from "../items/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { fakeWorkspacesPort } from "./fixtures.test-util";
 import { createSaveAsTemplate, saveAsTemplateDialog } from "./saveAsTemplate";
@@ -19,6 +20,7 @@ async function viewOf(title: string, childTitles: string[]): Promise<DetailView>
   const task = item("S1", "S1-P1", 1, "Task", null, title);
   const steps = childTitles.map((t, i) => item("S1", "S1-P1", i + 2, "Step", task.id, t));
   const detail = createDetail({
+    planning: fakePlanningPort(),
     catalog,
     items: fakeItemsPort([task, ...steps]),
     workspaces: fakeWorkspacesPort(),

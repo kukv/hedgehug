@@ -96,7 +96,7 @@ func registerEdit(api huma.API, svc appprojects.Service, scan ScanFunc) {
 		})
 	huma.Register(api, huma.Operation{OperationID: "set-project-date", Method: http.MethodPut, Path: path + "/date", Summary: "プロジェクトの開始日か終了日を変える"},
 		func(ctx context.Context, in *dateInput) (*oneOutput, error) {
-			if err := checkDates(in.Body.Value); err != nil {
+			if err := apierr.CheckDates(in.Body.Value); err != nil {
 				return nil, err
 			}
 			return one(svc.SetDate(ctx, port.StoreID(in.Store), project.ID(in.Project), appprojects.DateField(in.Body.Field), in.Body.Value))

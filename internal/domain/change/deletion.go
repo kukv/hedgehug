@@ -32,12 +32,16 @@ type Deletion struct {
 // DeletionOf は、ログの削除の印を返す。t が delete で f が deleted の行がなければ nil。複数あれば、
 // いまの値の決め方(Resolve)と同じ順で最もあとの行(at → by → id)を取るので、行の並びによらない。
 // 同じ f で to が自分の op の restore がある行は飛ばす(C3a-7)。
-func DeletionOf(log []Record) *Deletion {
+func DeletionOf(log []Record) *Deletion { return DeletionOfField(log, DeletedField) }
+
+// DeletionOfField は、DeletionOf と同じ決め方で、f への削除の印を返す。ワークスペースのログの
+// sprints/<ID> のように、deleted でない f への削除に使う。
+func DeletionOfField(log []Record, f string) *Deletion {
 	var last *Record
 	restored := Restored(log)
 	for i := range log {
 		r := &log[i]
-		if r.T == Delete && r.F == DeletedField && !restored(*r) && (last == nil || later(*r, *last)) {
+		if r.T == Delete && r.F == f && !restored(*r) && (last == nil || later(*r, *last)) {
 			last = r
 		}
 	}

@@ -15,9 +15,10 @@ type Overlap struct {
 
 // Overlaps は、1 つのログから、削除と変更が重なったものを見つける(決定 C3a-9)。
 // 削除の行が Facts の片側にあり、もう片側に、人が書いた変更の行がある削除のうち、まだ restore がないもの。
-// incidental は、ほかのものへの操作で一緒に書いた行かを答える(nil なら、そういう行はない)。
+// incidental は、f(重なりを調べている delete の行の f)の削除にとって、ほかのものへの操作で一緒に書いた行かを
+// 答える(nil なら、そういう行はない)。
 // 結果は Op の辞書順で、同じ op は 1 つ。
-func Overlaps(log []change.Record, f Facts, incidental func(change.Record) bool) []Overlap {
+func Overlaps(log []change.Record, f Facts, incidental func(f string, c change.Record) bool) []Overlap {
 	restored := change.Restored(log)
 	byOp := map[change.ID]Overlap{}
 	for _, d := range log {
@@ -49,12 +50,12 @@ func deletesTarget(d change.Record) bool {
 }
 
 // hasChange は、d と重なる変更が、side の側にあるか。
-func hasChange(log []change.Record, d change.Record, side int, f Facts, incidental func(change.Record) bool) bool {
+func hasChange(log []change.Record, d change.Record, side int, f Facts, incidental func(f string, c change.Record) bool) bool {
 	for _, c := range log {
 		if f.Side(c.ID) != side || c.T == change.Delete || c.T == change.Restore || c.Op == d.Op {
 			continue
 		}
-		if c.Actor.Kind != change.ActorUser || (incidental != nil && incidental(c)) {
+		if c.Actor.Kind != change.ActorUser || (incidental != nil && incidental(d.F, c)) {
 			continue
 		}
 		if d.F == change.DeletedField || strings.HasPrefix(c.F, d.F+"/") {

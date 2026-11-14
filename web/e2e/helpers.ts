@@ -114,9 +114,9 @@ export async function projectWithEpic(page: Page, info: TestInfo, prefix: string
   return panel;
 }
 
-// createTaskFrom は、Epic の詳細パネルの「Task」から Task を作り、作った Task の詳細パネルが開くのを待つ。
-async function createTaskFrom(page: Page, panel: Locator, name: string) {
-  await panel.getByRole("button", { name: "Task" }).click();
+// createTaskFrom は、Epic の詳細パネルの「Task」(kind が Story なら「Story」)から作り、作ったものの詳細パネルが開くのを待つ。
+async function createTaskFrom(page: Page, panel: Locator, name: string, kind = "Task") {
+  await panel.getByRole("button", { name: kind }).click();
   const dialog = page.getByRole("dialog", { name: "新規作成" });
   await dialog.getByRole("textbox", { name: "タイトル" }).fill(name);
   await dialog.getByRole("textbox", { name: "タイトル" }).press("Enter");
@@ -135,6 +135,14 @@ export async function taskUnderEpic(page: Page, info: TestInfo, epicId: string, 
   await page.goto(tokenUrl(`/s/e2e/i/${epicId}`));
   const panel = page.getByRole("region", { name: "詳細パネル" });
   await createTaskFrom(page, panel, unique(info, title));
+  return panel;
+}
+
+// storyUnderEpic は、Epic(epicId は表示の ID)の詳細パネルを開き、その下に Story を作って、その詳細パネルを開いた状態にする。
+export async function storyUnderEpic(page: Page, info: TestInfo, epicId: string, title: string) {
+  await page.goto(tokenUrl(`/s/e2e/i/${epicId}`));
+  const panel = page.getByRole("region", { name: "詳細パネル" });
+  await createTaskFrom(page, panel, unique(info, title), "Story");
   return panel;
 }
 

@@ -39,6 +39,8 @@ export function toItem(storeId: string, it: ApiItem): Item {
     points: it.points ?? null,
     estimate: it.estimate ?? null,
     systems: it.systems ?? [],
+    sprint: it.sprint,
+    release: it.release,
     choices: Object.fromEntries(
       Object.entries(it.choices ?? {}).map(([id, ids]) => [id, ids ?? []]),
     ),
@@ -65,6 +67,7 @@ export function createItemsPort(): ItemsPort {
             values: input.values,
             ...(input.description ? { description: input.description } : {}),
             ...(input.templateId ? { template: input.templateId } : {}),
+            ...(input.sprint ? { sprint: input.sprint } : {}),
           }),
         ),
       ),
