@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/inbox"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 )
 
@@ -158,9 +159,10 @@ func TestOverwriteReasons(t *testing.T) {
 
 func TestOverwriteProject(t *testing.T) {
 	f := setup(t)
+	f.write(t, func(tx port.Tx) error { return tx.WriteMembers().Append(member.Rename("hanako", "hanako", "花子")) })
 	f.add(t, projectOverwritten("owner", "hanako", "taro"))
 	got := f.overwrite(t)
-	want := inbox.Overwrite{Mine: "hanako", Kept: "taro", Visible: true, Enabled: true}
+	want := inbox.Overwrite{Mine: "花子", Kept: "taro", Visible: true, Enabled: true}
 	if got == nil || *got != want {
 		t.Errorf("overwrite = %+v, want %+v", got, want)
 	}
