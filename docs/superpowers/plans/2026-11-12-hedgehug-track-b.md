@@ -14,7 +14,7 @@
 - 02「作成」(テンプレートの適用)、「名前の変更・移動・削除」「ステータスの置き換え」(プロジェクトの移動とルール)
 - 06「同時に編集したとき」「修復の決まり」(同期の修復はトラック C の持ち場。下の漏れの表)
 - `docs/superpowers/specs/2026-11-12-hedgehug-architecture-design.md`(パッケージ構成。8 節の持ち場と衝突を防ぐルール)
-- `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md`(「変更記録」の `f` の書き方、「同期の修復」の表の (8)〜(11)、「移動・番号・旧 ID」)
+- `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md`(「変更記録」の `f` の書き方、「同期の修復」の表の (9)〜(11)、「移動・番号・旧 ID」)
 - `docs/superpowers/plans/2026-11-12-hedgehug-foundation.md`(土台。型・口・関数名はこれに合わせる)
 
 **持ち場:** `internal/domain/workspace`(土台の既存の型と関数は変えず、足すだけ)、`internal/domain/automation`、`internal/domain/projectrule`、`internal/app/workspaces`、`internal/adapter/httpapi/workspaces`、`web/packages/core/src/features/workspaces`、`web/packages/api/src/workspaces.ts`、`web/app/src/screens/workspace-settings`。

@@ -5194,7 +5194,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		return httpapi.Deps{}, err
 	}
 	file := machineconfig.Open(cfg)
-	gh := github.New(nil) // 時計のずれはトラック C(C5)が受け取る(トラック D の計画の決定 3)
+	gh := github.New(nil) // 時計のずれはトラック C(C5d)が受け取る(トラック D の計画の決定 3)
 	secrets := secret.New()
 	session := ghapp.NewSession()
 	hub := events.NewHub()
@@ -5280,7 +5280,7 @@ git commit -m "feat(cmd): 同期の usecase・自動の同期・Store の見張�
 - **トラック G**: `port.SyncTargets` と `port.StoreGitHub` の本物(config.yaml の Store の一覧)。Store を clone で追加したら `refs/hedgehug/remote/<ブランチ>` を作る(決定 C2-14)。Store をこのマシンから削除したら、state.db の `sync_status`・`mirror_status` のその Store の行を消す(保存形式「このマシンに持つもの」。`SyncState` に消す関数を足す)。`Service.AfterSuccess` に完全な削除を差し込む。設定の「一般」の同期のタイミングの書き換え。
 - **C3a**: 同期の修復は、`Service.run` ではなく、`gitstore.Replicator.Sync` の中で、合わせたあと・送る前に書く(`port.RepairFunc`)。`NotifyWrites` を通らないので、修復で「書き込み後」の同期は起きない。
 - **C4**: アクティビティの同期の行は、`SyncState` に「成功した同期の行」を足して記録する(決定 C2-5)。受信箱の出来事は `port.EventKind` に `inbox` を足す。
-- **C5**: D の `github.New(onSkew)` に時計のずれの記録を差し込む。
+- **C5d**: D の `github.New(onSkew)` に時計のずれの記録を差し込む。
 - **トラック G(最終レビューの引き継ぎ)**:
   - `Sync` は、受け取り・送りのあいだ Store のロックを持つ(通信 1 回が最大 60 秒、やり直しを含めて最大 3 回)。ミラーはロックの外で通信するよう直したが、`Sync` は変えていない。本物の Store をつなぐ前に、受け取りをロックの外で行う形に組み替えるか、ロックの範囲を狭める。
   - remote の URL が SSH の形(`git@github.com:org/repo.git`。08 は受け付け、07 は SSH 鍵を使わないとしている)のとき、G の stores か `Service` が `https://host/path.git` に直してから `Replicator` へ渡す(通信の見張りも HTTP だけが対象)。

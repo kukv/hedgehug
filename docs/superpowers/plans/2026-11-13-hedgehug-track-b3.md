@@ -12,7 +12,7 @@
 - `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/03-workspace-settings.md`(正本): 冒頭の表のうち「遷移の制約」「テンプレートの作成・編集・削除」「種類ごとの既定」の行、名前の重複の規則(テンプレート)、「値の編集」の「削除」(テンプレートとワークフローの追従)、「プロパティ」の「削除」(テンプレートの値)、「ワークフロー」全節、「テンプレート」全節、「変更が及ぶ範囲」の遷移の制約の行
 - 02「アイテムの作成」(テンプレートの欄・一緒に作るもの・ダイアログの中での連動。適用の規則の関数が満たす振る舞い)、「詳細パネル」のメニューと閲覧のみ(「テンプレートとして保存…」)
 - 06「同時に編集したとき」(設定も項目ごとの後勝ち)
-- `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md`(「変更記録」の `f`、`add`・`remove` の対象に「ワークフローの遷移」、「同期の修復」の (8)(9))
+- `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md`(「変更記録」の `f`、`add`・`remove` の対象に「ワークフローの遷移」、「同期の修復」の (10)(11))
 - `docs/superpowers/plans/2026-11-12-hedgehug-track-b.md`(B の決定 1〜13 と小計画の一覧)、`docs/superpowers/plans/2026-11-13-hedgehug-track-b2.md`(B2-1〜B2-21。とくに B2-10・B2-12・B2-21)
 
 **持ち場:** `internal/domain/workspace`、`internal/app/workspaces`、`internal/adapter/httpapi/workspaces`、`internal/infra/gitstore/yaml_settings*.go`、`web/packages/core/src/features/workspaces`、`web/packages/core/src/model/workspace.ts`・`port/workspaces.ts`、`web/packages/api/src/workspaces.ts`、`web/app/src/screens/workspace-settings`。例外として、詳細パネルのメニュー(`web/app/src/screens/item/DetailHeader.svelte` にメニューのボタンを 1 つ)を作る(決定 B3-17)。
@@ -68,7 +68,7 @@
 |---|---|
 | 03 冒頭の表: 遷移の制約・テンプレートの作成・編集・削除・種類ごとの既定(文とトースト) | Task 4・5(文)、Task 11〜13(トースト) |
 | 03 名前の重複(テンプレート) | Task 3 |
-| 03 同期で同じ名前のテンプレートが 2 つ、削除されたテンプレートを指す既定の修復 | トラック C(B の決定 10。保存形式「同期の修復」(8)(9)) |
+| 03 同期で同じ名前のテンプレートが 2 つ、削除されたテンプレートを指す既定の修復 | トラック C(B の決定 10。保存形式「同期の修復」(10)(11)) |
 | 03 ワークフロー: 表、「どこへでも」「制限あり」、「—」、チェックのたびに保存、説明 | Task 1(判定)・Task 4(操作)・Task 11(画面) |
 | 同: 制約に反する変更の断りと文言 | Task 1(Go)・Task 11(core の `transitionRefusal`) |
 | 同: 断りの見せ方(メニューの無効、ドラッグ・セル・Step のチェック・Space キー、一括変更、自動化) | A3b(メニュー・Step のチェック)、E(ドラッグ・セル・一括変更・Space キー)、B4(自動化) |
