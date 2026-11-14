@@ -57,6 +57,18 @@
 | C4a-15 | ワークスペースの設定の「自動化」を外から開く: `navigation.go(routeOfWorkspace(…, "settings"), "automation")`。ワークスペースの設定の画面は、開いたあと `navigation.takeSection()` が `"automation"` なら `workspaceSettings.selectTab("automation")` を呼ぶ | いまの `open()` はワークスペースが変わるとタブを「全般」に戻し、外から「自動化」を開けない。区画の受け渡しはプロジェクトの設定(B5a-22)と同じ形 |
 | C4a-16 | コマンドパレットの「受信箱を開く」は A5c が C4 に渡したもの。A5c が develop に入っていれば Task 9 で足す。入っていなければ、A5c の計画の該当行に「C4a が先に入ったので A5c が足す」と書く(develop にあとから入る方が合わせる) | A5c の計画「行き先の画面がない候補は作るトラックに回す」。F1 Task 19 と同じ扱い |
 
+## 実装で計画から変えたこと
+
+下の各 Task の文より、この節を優先する。
+
+- `at` 列は固定幅の UTC 文字列(C4a-2 のとおり)で実装済み。
+- `inbox.Service` の関数のフィールド名は `ApplyIgnoringWorkflow`(メソッド `Apply` と名前が重なるため)。
+- 未読数の API は 7 つのタブを持つ構造体 `InboxCounts`。タブの一覧は `appinbox.Tabs()`。続きの印は `before_at`・`before_id` の両方で、片方だけは 400。
+- Route は `{ name: "inbox" }`(`kind` ではない)。C4a-15 は `workspaceSettings.open(store, ws, section)` が区画を受け取る形。
+- 画面: 左端の点は `InboxDot.svelte` に分けた。`createInbox` は `canReadAll` と `loaded` も返す。読み込み・書き込みの失敗は、404 なら黙って読み直し、それ以外は読み直してから `toasts.show(e.message, { error: true })`(新しい文言は作らない)。「さらに読み込む」のあとの読み直しは、出していた件数を覆うまで読む。
+- 止まった通知でアイテムがないときも `Action` は返し、`visible=false`。
+- C4a-16: A5c は develop に入っていない(ブランチ `feat/track-a5c` の計画が「受信箱を開く」を C4 に渡している)ので、パレットのコードは C4a で触らない。トラック C の計画の C4a の行に、A5c が C4a のあとに入るなら A5c が足すと書いた。
+
 ## Review Focus
 
 1. **非表示の Store の通知:** 非表示の Store の止まった通知は、一覧にも「すべて」と「自動化」の未読数にも入らず、「すべて既読にする」でも既読にならない。再表示で未読のまま戻る(Task 3 の `TestPageSkipsHiddenStore`、`TestReadAllSkipsHiddenStore`)。
