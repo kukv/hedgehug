@@ -16,9 +16,10 @@ import {
 // アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す。
 // いまの ID・接頭辞で見つからないときだけ、旧いものをたどる。ワークスペースとプロジェクトは、一覧の旧い接頭辞
 // (oldPrefixes。A5a-21)で探す。アイテムは、アドレスの Store のいまの ID で見つからなければ、サーバーの locate に
-// 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。プロジェクトは、一覧で
-// 見つからなければ、サーバーの locateProject に聞く(旧 ID と、一覧を読み直す前の移したばかりのいまの ID。A5b-24)。
-// どれでも見つからなければホーム。
+// 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。プロジェクトも、一覧では
+// アドレスの Store だけを(いまの接頭辞・旧い接頭辞で)探し、なければサーバーの locateProject に聞く(旧 ID・
+// ほかの Store のいまの ID・一覧を読み直す前の移したばかりのいまの ID。A5b-24)。一覧でほかの Store を探すと、
+// 別の Store へ移した直後に、ほかの Store の同じ ID のプロジェクトを開いてしまう。どれでも見つからなければホーム。
 
 export type Resolved =
   | { name: "home"; gone?: Gone }
@@ -143,7 +144,8 @@ export async function resolveRoute(
         tab: route.tab,
       }));
     case "project": {
-      const r = findProject(inOrder(stores, route.store), route.project, route.tab);
+      const named = stores.filter((s) => s.name === route.store);
+      const r = findProject(named, route.project, route.tab);
       if (r.name !== "home" || !askServer) return r;
       return askProject(route.store, route.project, route.tab, transfers);
     }

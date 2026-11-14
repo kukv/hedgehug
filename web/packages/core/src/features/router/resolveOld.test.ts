@@ -164,7 +164,9 @@ describe("resolveRoute with old prefixes", () => {
     });
   });
 
-  it("prefers the current prefix in another Store over an old prefix in the named Store", async () => {
+  // ワークスペースは、ほかの Store のいまの接頭辞を先に見る。プロジェクトは、一覧ではアドレスの Store だけを見る
+  // (ほかの Store はサーバーの locateProject が A5a-15 の順で見る)ので、アドレスの Store の旧い接頭辞が先。
+  it("prefers the current prefix in another Store for a workspace, and the named Store's old prefix for a project", async () => {
     const nodes = [
       storeOf("S1", "work", ws("S1", "W1", "WEB", ["HH"])),
       storeOf("S2", "other", ws("S2", "W2", "HH", [])),
@@ -174,9 +176,10 @@ describe("resolveRoute with old prefixes", () => {
       workspaceId: "W2",
     });
     expect(await resolveRoute(pRoute("HH-P1"), nodes, itemsIn("S1"), transfers)).toMatchObject({
-      storeId: "S2",
-      projectId: "W2-P1",
+      storeId: "S1",
+      projectId: "W1-P1",
     });
+    expect(transfers.calls).toEqual([]);
   });
 
   it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {

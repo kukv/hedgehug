@@ -109,6 +109,50 @@ describe("resolveRoute of a project not in the catalog", () => {
     ).rejects.toThrow("network");
   });
 
+  // 別の Store へ移した直後(一覧を読み直す前)は、移動先の Store の一覧にまだなく、ほかの Store に同じ ID がある。
+  // 一覧ではアドレスの Store だけを見るので、ほかの Store のものを開かずに、サーバーの結果を開く。
+  it("opens what locateProject finds instead of the same ID in another Store", async () => {
+    const node = (id: string, name: string, n: number) =>
+      ({
+        id,
+        name,
+        color: "teal",
+        readOnly: false,
+        workspaces: [
+          {
+            id: `${id}-W1`,
+            storeId: id,
+            name: "Web",
+            prefix: "HH",
+            oldPrefixes: [] as string[],
+            projects: [{ id: `${id}-P${n}`, number: n, displayId: `HH-P${n}` }],
+          } as WorkspaceNode,
+        ],
+      }) as StoreNode;
+    transfers.locatedProject = { kind: "found", storeId: "S2", projectId: "S2-P9" };
+    const r = await resolveRoute(
+      { name: "project", store: "ro", project: "HH-P5", tab: "settings" },
+      [node("S1", "work", 5), node("S2", "ro", 1)],
+      itemsIn("S1"),
+      transfers,
+    );
+    expect(transfers.calls).toEqual(["locateProject ro HH-P5"]);
+    expect(r).toEqual({ name: "project", storeId: "S2", projectId: "S2-P9", tab: "settings" });
+  });
+
+  // アドレスの Store にない ID も、サーバー経由で、ほかの Store のいまの ID で開ける。
+  it("opens the current ID of another Store through locateProject", async () => {
+    transfers.locatedProject = { kind: "found", storeId: "S1", projectId: "S1-P2" };
+    const r = await resolveRoute(
+      { name: "project", store: "nope", project: "HH-P2", tab: "overview" },
+      await stores(),
+      itemsIn("S1"),
+      transfers,
+    );
+    expect(transfers.calls).toEqual(["locateProject nope HH-P2"]);
+    expect(r).toEqual({ name: "project", storeId: "S1", projectId: "S1-P2", tab: "overview" });
+  });
+
   // 出していたプロジェクトのアドレスを読み直すときは、サーバーに聞かない(A5b-19)。
   it("does not ask locateProject when told not to", async () => {
     transfers.locatedProject = { kind: "found", storeId: "S1", projectId: "S1-P2", movedFrom };
