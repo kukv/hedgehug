@@ -14,6 +14,9 @@ import (
 // theirs から辿れない、Hedgehug-Op を持つ、同期の修復でない保存(まだ送っていない保存)。辿るのは theirs から
 // 辿れる保存で止め、判定済みかどうかでは止めない(最初の印付けが判定済みにした保存も数える)。
 func ownSaves(repo *git.Repository, theirs, head plumbing.Hash) (map[plumbing.Hash]port.SaveKey, error) {
+	if head == theirs {
+		return map[plumbing.Hash]port.SaveKey{}, nil // 送っていない保存はない(履歴を辿らない)
+	}
 	received, err := walk(repo, theirs, func(port.SaveKey) (port.Match, error) { return port.NotJudged, nil })
 	if err != nil {
 		return nil, err

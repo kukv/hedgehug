@@ -145,6 +145,21 @@ func TestOwnReadOnly(t *testing.T) {
 	wantAsked(t, j, map[change.ID]bool{sent: false, local: false})
 }
 
+// SyncSave で作って送った保存も、このマシンの保存として記録に残る。
+func TestOwnOnSyncSave(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	j := withJudge(a)
+	a.sync(t, remote)
+	b.write(t, "b", set("rank", "a", "b"))
+	b.sync(t, remote)
+	if _, err := a.rep.SyncSave(t.Context(), a.id, remote, saveOp, createMoved); err != nil {
+		t.Fatal(err)
+	}
+	wantOwn(t, j, a, opOf(t, a), true)
+}
+
 // 同期の修復の保存は、このマシンが書いても、このマシンの保存にしない。
 func TestOwnExcludesRepair(t *testing.T) {
 	remote := newRemote(t)
