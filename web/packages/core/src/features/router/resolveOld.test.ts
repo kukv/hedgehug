@@ -164,22 +164,41 @@ describe("resolveRoute with old prefixes", () => {
     });
   });
 
-  // ワークスペースは、ほかの Store のいまの接頭辞を先に見る。プロジェクトは、一覧ではアドレスの Store だけを見る
-  // (ほかの Store はサーバーの locateProject が A5a-15 の順で見る)ので、アドレスの Store の旧い接頭辞が先。
-  it("prefers the current prefix in another Store for a workspace, and the named Store's old prefix for a project", async () => {
+  // ワークスペースもプロジェクトも、アドレスの Store の旧い接頭辞を、ほかの Store のいまの接頭辞より先に見る
+  // (Store 名の Store を優先。01「画面のアドレス」、A5a-15)。プロジェクトは、一覧ではアドレスの Store だけを見る
+  // (ほかの Store はサーバーの locateProject が A5a-15 の順で見る)。
+  it("prefers the named Store's old prefix over the current prefix in another Store", async () => {
     const nodes = [
       storeOf("S1", "work", ws("S1", "W1", "WEB", ["HH"])),
       storeOf("S2", "other", ws("S2", "W2", "HH", [])),
     ];
     expect(await resolveRoute(wsRoute("HH"), nodes, itemsIn("S1"), transfers)).toMatchObject({
-      storeId: "S2",
-      workspaceId: "W2",
+      storeId: "S1",
+      workspaceId: "W1",
     });
     expect(await resolveRoute(pRoute("HH-P1"), nodes, itemsIn("S1"), transfers)).toMatchObject({
       storeId: "S1",
       projectId: "W1-P1",
     });
     expect(transfers.calls).toEqual([]);
+  });
+
+  // ワークスペースのアドレスは、Store 名の Store を(サイドバーで後ろにあっても)先に見て、そのあとをサイドバーの順に見る。
+  it("looks at the named Store first and then the others in the sidebar order for a workspace", async () => {
+    const nodes = [
+      storeOf("S1", "work", ws("S1", "W1", "HH", [])),
+      storeOf("S2", "other", ws("S2", "W2", "WEB", ["HH"])),
+      storeOf("S3", "third", ws("S3", "W3", "HH", [])),
+    ];
+    const at = (store: string) => ({ ...wsRoute("HH"), store });
+    expect(await resolveRoute(at("other"), nodes, itemsIn("S1"), transfers)).toMatchObject({
+      storeId: "S2",
+      workspaceId: "W2",
+    });
+    expect(await resolveRoute(at("nope"), nodes, itemsIn("S1"), transfers)).toMatchObject({
+      storeId: "S1",
+      workspaceId: "W1",
+    });
   });
 
   it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {

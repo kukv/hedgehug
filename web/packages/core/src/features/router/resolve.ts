@@ -34,14 +34,15 @@ function inOrder(stores: StoreNode[], name: string): StoreNode[] {
   return [...stores.filter((s) => s.name === name), ...stores.filter((s) => s.name !== name)];
 }
 
-// findWorkspace は、接頭辞 prefix のワークスペースを、いまの接頭辞ですべての Store を探してから、旧い接頭辞で探す。
+// findWorkspace は、接頭辞 prefix のワークスペースを、Store ごとに、いまの接頭辞で探してから旧い接頭辞で探す
+// (stores の順。Store 名の Store の旧い接頭辞を、ほかの Store のいまの接頭辞より先に見る。A5a-15)。
 function findWorkspace(
   stores: StoreNode[],
   prefix: string,
   pick: (s: StoreNode, w: WorkspaceNode) => Resolved | undefined,
 ): Resolved {
-  for (const old of [false, true]) {
-    for (const s of stores) {
+  for (const s of stores) {
+    for (const old of [false, true]) {
       for (const w of s.workspaces) {
         if (!(old ? w.oldPrefixes.includes(prefix) : w.prefix === prefix)) continue;
         const r = pick(s, w);
