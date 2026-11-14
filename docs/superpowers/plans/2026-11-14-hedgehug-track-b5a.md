@@ -56,7 +56,7 @@
 | B5a-22 | サブタブの上の 1 行の名前を押すと、プロジェクトの設定タブを開き、該当の区画(`id="rules-statuses"` などの見出し)までスクロールしてフォーカスする。区画の指定は、画面のアドレスに足さず、core の `navigation` に一度だけ読む「開く区画」を持たせる | 03「範囲と画面の構成」4 段落目。画面のアドレスの綴り(01)を増やさない |
 | B5a-23 | カンバン・コマンドパレット・一括変更・検索とビューのカンバンは develop にまだないので、この計画では作らない。それらを作るトラックは、ステータスの選択肢と断りに `projectrule`(サーバー)・core の `projectStatusOptions`(画面)を使い、変更は `items.SetProperty` を通す。トラック B の計画の漏れの表に持ち場(E・A5)を書く(Task 1) | 画面がないものに判定を足せない。判定の関数は B5a が用意する |
 | B5a-24 | `workspace.yaml` に `project_rules`(プロジェクト ID ごとに `hidden_statuses`・`workflow`・`templates`・`template_defaults`・`disabled_rules`。値は ID と行末の名前の注釈)を書き、ルールの行に `scope` を書く | 保存形式 42 行 |
-| B5a-25 | 同期で重なったときの「上書き」の通知(06 の 228 行)と、削除された値・なくなったプロジェクトを指すルールの修復(保存形式「同期の修復」の (7)・(8))はトラック C(C3・C4)の持ち場。B5a は手の操作と追従だけを作る | トラック B の計画の決定 10 |
+| B5a-25 | 同期で重なったときの「上書き」の通知(06 の 228 行)と、削除された値・なくなったプロジェクトを指すルールの修復(保存形式「同期の修復」の (9)・(10))はトラック C(C3・C4)の持ち場。B5a は手の操作と追従だけを作る | トラック B の計画の決定 10 |
 | B5a-26 | 別のワークスペース・別の Store への移動(A5a)で「移動先のプロジェクトが使うステータス」を決める `transfer.UsableStatuses`(`internal/domain/transfer/remap.go`)は、B5a の `projectrule.UsedStatuses` で決める。A5a が develop にあとから入ったので、A5a が合わせた: `UsableStatuses(to workspace.Settings, toRules projectrule.Rules)` が `UsedStatuses` を呼び、呼ぶ側の `Unmatched`・`Remap` も `projectrule.Rules` を受け取る(移動先のワークスペースのログから `projectrule.FromLog(log).Of(プロジェクト)` で読む)。テストは A5a の `domain/transfer/remap_test.go`・`app/transfers/projectrules_test.go` | A5a のセッションからの連絡(2026-11-14、ユーザー了承済み)。仕様 02「移す先の選び方」「値の引き直し」の「移動先のプロジェクトが使わないもの」 |
 
 ## Review Focus

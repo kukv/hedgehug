@@ -2,6 +2,7 @@ package gitstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -18,7 +19,10 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/filemerge"
 )
 
 // sampleStep は、B が HH-2 の下に作る Step(HH-3)。
@@ -444,4 +448,85 @@ func TestSyncAfterPurgeOnlyOthersWrote(t *testing.T) {
 	b.sync(t, remote)
 	a.sync(t, remote)
 	sameFiles(t, a, b)
+}
+
+// purgePlanForTest は、本物の「完全に削除」と同じく、ワークスペースのログからスプリント(releases/ ならリリース)id の
+// 行を除いて書き直し、purged.jsonl に entity と display = name の行を足して、1 つのコミットにする。
+func (m machine) purgePlanForTest(t *testing.T, ws workspace.ID, id change.ID, entity change.Kind, name string) {
+	t.Helper()
+	logPath := filepath.Join(m.dir, "workspaces", string(ws), "log.jsonl")
+	log, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logPath, filemerge.DropPurgedPlan(log, map[string]bool{string(id): true}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	line, err := json.Marshal(purgedLine{
+		ID: "01PURGEPLAN000000000000001", At: t0.Format(change.TimeLayout), By: "taro", Actor: "user",
+		Entity: entity, Target: id, Display: name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(m.dir, "purged.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := git.PlainOpen(m.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wt.AddWithOptions(&git.AddOptions{All: true}); err != nil {
+		t.Fatal(err)
+	}
+	sig := &object.Signature{Name: "taro", Email: "taro@example.invalid", When: t0}
+	if _, err := wt.Commit("完全に削除", &git.CommitOptions{Author: sig, Committer: sig}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// B がスプリントを完全に削除し、A が同時にその名前を変えても、合わせたあとのログに、そのスプリントの行は残らない。
+// settings の YAML にも載らず、次の同期も通り、2 台は同じになる。
+func TestSyncDropsPurgedSprintRows(t *testing.T) {
+	const s1 change.ID = "01SPRINT0000000000000000S1"
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	sprint := planning.Sprint{ID: s1, Name: "Sprint 1", State: planning.Planned}
+	a.write(t, "スプリント", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.SprintDrafts(planning.Sprint{}, sprint)...)
+	})
+	a.sync(t, remote)
+	b := cloneMachine(t, remote, "B", t0)
+	b.purgePlanForTest(t, apptest.SampleWorkspace, s1, "sprint", "Sprint 1")
+	renamed := sprint
+	renamed.Name = "Sprint 1 改"
+	a.write(t, "名前", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.SprintDrafts(sprint, renamed)...)
+	})
+	a.sync(t, remote)
+	b.sync(t, remote)
+	a.sync(t, remote)
+	b.sync(t, remote)
+	sameFiles(t, a, b)
+	wsDir := "workspaces/" + string(apptest.SampleWorkspace) + "/"
+	for _, m := range []machine{a, b} {
+		fs := files(t, m.dir)
+		if strings.Contains(fs[wsDir+"log.jsonl"], string(s1)) {
+			t.Errorf("%s: the log still has %s", m.dir, s1)
+		}
+		if strings.Contains(fs[wsDir+"workspace.yaml"], string(s1)) {
+			t.Errorf("%s: workspace.yaml still has %s", m.dir, s1)
+		}
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 )
 
 // repairOnce は、m の同期の修復を、最初に呼ばれたときだけ、実行者 sync で Epic に 1 行書くものにする
@@ -182,5 +183,50 @@ func TestJudgeGetsPurgeRepair(t *testing.T) {
 	}
 	if e := s.Removed[0]; e.Ref != step || len(e.Log) == 0 || e.Log[0].T != change.Create || len(e.New) != 0 {
 		t.Errorf("removed = %+v", e)
+	}
+}
+
+// B が完全に削除したスプリントを A が同時に改名していたとき、B の合わせは、A の同期の判定に、取り除かれたスプリントの
+// 行(A の改名が New)つきで 1 回だけ渡る。
+func TestDroppedPlanReachesJudge(t *testing.T) {
+	const s1 change.ID = "01SPRINT0000000000000000S1"
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	j := withJudge(a)
+	sprint := planning.Sprint{ID: s1, Name: "Sprint 1", State: planning.Planned}
+	a.write(t, "スプリント", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.SprintDrafts(planning.Sprint{}, sprint)...)
+	})
+	a.sync(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	b.rep.Repair = noRepair
+	b.purgePlanForTest(t, apptest.SampleWorkspace, s1, "sprint", "Sprint 1")
+	renamed := sprint
+	renamed.Name = "Sprint 1 改"
+	a.write(t, "名前", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, planning.SprintDrafts(sprint, renamed)...)
+	})
+	a.sync(t, remote)
+	b.sync(t, remote)
+	merge := headOf(t, b)
+	a.sync(t, remote)
+	got := 0
+	for _, calls := range j.calls {
+		for _, s := range calls {
+			if s.Key.Version != merge.String() {
+				continue
+			}
+			got++
+			if !s.Merge || len(s.DroppedPlan) != 1 {
+				t.Fatalf("merge = %+v", s)
+			}
+			d := s.DroppedPlan[0]
+			if d.Workspace != apptest.SampleWorkspace || d.Target != s1 || len(d.New) == 0 || len(d.Log) <= len(d.New) {
+				t.Errorf("DroppedPlan = %+v", d)
+			}
+		}
+	}
+	if got != 1 {
+		t.Errorf("the merge was passed %d times, want 1", got)
 	}
 }

@@ -20,6 +20,9 @@ var steps = []step{
 	breakCycles,        // 親の循環
 	matchWorkspaces,    // 親とワークスペースが違う子
 	matchProjects,      // 親とプロジェクトが違う子
+	stopExtraActive,    // 実行中のスプリントが 2 つ以上
+	backlogClosed,      // 完了したスプリントに入った未完了のアイテム
+	clearDanglingPlan,  // 存在しないスプリント・リリースの参照
 }
 
 // syncActor は、修復の保存の実行者。

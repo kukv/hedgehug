@@ -43,6 +43,22 @@ func IsPlanRow(r change.Record) bool {
 	return r.T == CloseSprint || strings.HasPrefix(r.F, sprintPrefix) || strings.HasPrefix(r.F, releasePrefix)
 }
 
+// PlanTarget は、IsPlanRow の行が指すスプリント・リリースの内部 ID(f の 2 つ目の区切り)。ほかの行は false。
+func PlanTarget(r change.Record) (change.ID, bool) {
+	if !IsPlanRow(r) {
+		return "", false
+	}
+	if !strings.HasPrefix(r.F, sprintPrefix) && !strings.HasPrefix(r.F, releasePrefix) {
+		return "", false
+	}
+	_, rest, _ := strings.Cut(r.F, "/")
+	id, _, _ := strings.Cut(rest, "/")
+	if id == "" {
+		return "", false
+	}
+	return change.ID(id), true
+}
+
 // Totals は、ポイントと件数の合計。
 type Totals struct {
 	Points float64 `json:"points"`
