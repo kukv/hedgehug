@@ -161,12 +161,12 @@ export function createSearch(deps: SearchDeps): Search {
     },
     setTable(next) {
       const prev = get(state).table;
-      touched += 1;
       state.update((s) => ({ ...s, table: next }));
       write();
       const same =
         prev.group === next.group && JSON.stringify(prev.sort) === JSON.stringify(next.sort);
       if (same) return;
+      touched += 1;
       cancel();
       void run();
     },

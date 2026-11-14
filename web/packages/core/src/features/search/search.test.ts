@@ -316,4 +316,41 @@ describe("createSearch (E1-19)", () => {
     expect(done).toBe(true);
     expect(get(t.s.state).result?.rows[0]?.itemId).toBe("kind:bug");
   });
+
+  it("a columns-only setTable while open is reading does not stop open's search", async () => {
+    const t = setup();
+    let release: (v: string | null) => void = () => {};
+    t.sp.get = vi.fn(() => new Promise<string | null>((r) => (release = r)));
+    const opening = t.s.open();
+    t.s.setTable({ ...defaultTable, columns: ["id", "title"] });
+    release('{"query":"x"}');
+    await opening;
+    expect(t.search).toHaveBeenCalledTimes(1);
+  });
+
+  it("settled still resolves when a search throws", async () => {
+    const t = setup();
+    t.search.mockRejectedValueOnce(new Error("down"));
+    t.s.setQuery("q");
+    let done = false;
+    void t.s.settled().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(150);
+    expect(done).toBe(true);
+  });
+
+  it("setTable does not search when sort and group are unchanged, and searches once for a sort-only change", async () => {
+    const t = setup();
+    await t.s.open();
+    t.search.mockClear();
+    t.s.setTable({ ...defaultTable });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.search).not.toHaveBeenCalled();
+    t.s.setTable({ ...defaultTable, sort: { key: "title", desc: false } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("", {
+      sort: { key: "title", desc: false },
+      group: "none",
+    });
+  });
 });
