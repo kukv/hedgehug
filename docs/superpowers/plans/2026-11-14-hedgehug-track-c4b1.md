@@ -48,7 +48,7 @@
 | C4b1-19 | 別の Store から移ってきたもの(判定する行に `moved_in` の行があるアイテム・プロジェクト)は、割り当て・メンション・ウォッチを作らない。写された行は移動元の古い行で、判定の前がないため | 02 `:296`・`:598`(移動では通知は出ない) |
 | C4b1-9 | ウォッチの対象: 判定の後のアイテムの `Watchers` にあなたがいて、判定の前にもアイテムがあったもの(判定の中で作られたアイテムは、前の値がないので作らない)。項目はタイトルとワークスペースのプロパティ(`workspace.Settings` のプロパティ。組み込みのステータス・担当者・優先度などを含む)。スプリント・リリース・種類・場所・順位・説明・リンク・関連・作業時間は作らない。コメントは、判定の中で初めて現れたコメント 1 件ごとに 1 行(編集・削除は作らない) | 06 `:382`・`:410-414`、02 `:487`(プロパティとタイトルとコメントの投稿だけ)。作成したアイテムをウォッチするのは作った本人なので、自分の変更 |
 | C4b1-10 | メンション: 本文の単位は、アイテムの説明・プロジェクトの説明・コメント 1 件。判定する保存を古い順に見て、その保存で本文が書かれ(説明は `desc` の行、コメントは本文のある `comment` の行)、本文に `@あなたのログイン名`(大文字と小文字を区別しない。`@` の前の文字は問わない。あなたが Store のメンバーにいるとき)があり、書いた人があなたでなければ、行を作るか書き換える。説明は、その保存で `description.md` が親と違えば書かれたものとする(作成・複製・テンプレートは `desc` の行を書かず本文だけを書く。A4a-4)。書いた人は、説明はその保存のエンティティの行の `by`(作成なら `create` の行)、コメントは `comment` の行の `by`。本文の鍵は `item:{ID}:desc`・`project:{ID}:desc`・`comment:{コメント ID}` | 06 `:374`・`:392-402`、02 `:405-406` |
-| C4b1-11 | メンションの書き換え: 同じ Store・同じ本文の鍵の行があれば、本文・差出人・時刻を書き換えて未読に戻す(結果は空のまま)。なければ足す。メンションの行の時刻は、足すときも書き換えるときも、本文を保存した時刻にする(行の時刻は「最後に書き換えた時刻」なので、書いた時刻でそろえる)。`inbox/002` で列 `project`・`source`(本文の鍵)を足し、索引 `(store, source)` を足す | 06 `:399`(時刻を保存した時刻に、未読に戻す)、`:451`(メンションの行は最後に書き換えた時刻)。C4a-2 の「C4b が要る列は新しい手順で足す」 |
+| C4b1-11 | メンションの書き換え: 同じ Store・同じ本文の鍵の行があれば、本文・差出人・時刻を書き換えて未読に戻す(結果は空のまま)。なければ足す。メンションの行の時刻は、足すときは受信箱の時計の時刻(受け取った時刻。`Add` と同じ)、書き換えるときは本文を保存した時刻(`n.At`)にする。`inbox/002` で列 `project`・`source`(本文の鍵)を足し、索引 `(store, source)` を足す | 06 `:399`(時刻を保存した時刻に書き換えて、未読に戻す)、`:441`(通知を作った時刻の新しい順)、ユーザーの決定(2026-11-14: 足す行は受け取った時刻、書き換える行は本文を保存した時刻)。C4a-2 の「C4b が要る列は新しい手順で足す」 |
 | C4b1-12 | プロジェクトを指す通知(オーナー・プロジェクトの説明とコメントへのメンション)は `Notice.Project` を持つ。受信箱の対象は、生きていれば `project`(プロジェクト名。クリックでプロジェクトの概要)、削除済みなら `deleted_project`「削除されたプロジェクト」(リンクなし)、Store にない(別の Store へ移った。完全な削除は `Prune` で消える)なら `moved_project`(作ったときの ID を出し、クリックで旧 ID のアドレス `/s/{Store 名}/p/{ID}` を開く)。仕様 06 `:455` に「プロジェクトが削除済みのときは「削除されたプロジェクト」と表示し、リンクにしない」を足す | 06 `:455` のアイテム・ワークスペースと同じ規則の当てはめ(06 はプロジェクトの削除済みの表示を書いていない)。旧 ID のアドレスの解決は A5b の `locate-project` |
 | C4b1-13 | `Prune` は、`item`・`project` が targets にある行と、アイテムもプロジェクトもない行のうち `workspace` が targets にあるものを消す | C4a-6 と同じ理由(作ったときのワークスペースでアイテム・プロジェクトの通知を消さない) |
 | C4b1-14 | ステータスの削除からの自動化: 判定する保存のうち、ワークスペースのログに `delete statuses/{ID}` の行を持つものごとに、同じ op の `set rules/{ルール ID}/trigger_status`・`set rules/{ルール ID}/value`・`set rules/{ルール ID}/enabled` の行から変わったルールを作り直し、`notifyRules` と同じ文で 1 ルール 1 件。きっかけとすることの両方なら「すること」。作るのは、Store が表示中で閲覧のみでないとき。削除した人があなたでも作る(あなたの別のマシンの削除) | 06 `:418`(書き込める全員のマシンが 1 台につき 1 件。閲覧のみ・非表示では作らない)。このマシンの削除は C4b1-2 で判定に入らないので、自分の操作の通知と重ならない。非表示のあいだに受け取った削除は判定済みになり、再表示しても作らない。作り直しは `automation.StatusDeleteDrafts` の Part の決め方と同じ |
@@ -120,12 +120,12 @@ git commit -m "feat(sync): 通知を判定した保存を state.db に覚える(
 **Interfaces:**
 - Produces(`port`):
   - `Notice` に `Project project.ID`(プロジェクトを指す通知の対象。アイテムの通知では空)・`Source string`(メンションの本文の鍵。C4b1-10)・`At time.Time`(メンションの行の時刻 = 本文を保存した時刻。`Add` は使わない)
-  - `Inbox` に `Mention(ctx, n Notice) error` — 同じ `Store`・`Source` の行があれば `text`・`sender`・`at = n.At` を書き換え `read = 0`。なければ `at = n.At` で足す(C4b1-11)。`n.Source` が空ならエラー
+  - `Inbox` に `Mention(ctx, n Notice) error` — 同じ `Store`・`Source` の行があれば `text`・`sender`・`at = n.At` を書き換え `read = 0`。なければ受信箱の時計の時刻(`Add` と同じ)で足す(C4b1-11)。`n.Source` が空ならエラー
   - `Prune` は C4b1-13
 - `inbox/002`: `ALTER TABLE inbox ADD COLUMN project TEXT NOT NULL DEFAULT ''`、`ADD COLUMN source TEXT NOT NULL DEFAULT ''`、`CREATE INDEX inbox_by_source ON inbox (store, source)`
 
 - [ ] **Step 1: 失敗するテストを書く(statedb と apptest の両方)**
-  - `TestInboxMentionUpsert`: `Mention(Source: "comment:c1", Text: "@hanako 見て", Sender: "taro", At: 09:00)` → 1 行、`At` は 09:00。既読にする。`Mention(同じ Source, Text: "@hanako 直した", Sender: "jiro", At: 09:30)` → 行は 1 つのまま、本文と差出人が変わり、`At` は 09:30、`Read == false`。別の Store の同じ `Source` は別の行
+  - `TestInboxMentionUpsert`: `Mention(Source: "comment:c1", Text: "@hanako 見て", Sender: "taro", At: 09:00)` → 1 行、`At` は受信箱の時計の時刻(`n.At` の 09:00 ではない)。既読にする。`Mention(同じ Source, Text: "@hanako 直した", Sender: "jiro", At: 09:30)` → 行は 1 つのまま、本文と差出人が変わり、`At` は 09:30、`Read == false`。別の Store の同じ `Source` は別の行
   - `TestInboxProjectColumns`: `Add(Project: p1, Display: "HH-P1")` → `List` で `Project`・`Display` が戻る
   - `TestInboxPruneProject`: `Prune(s1, [p1])` で `Project == p1` の行が消え、`Workspace == p1` と同じ値でもアイテムの行は残る
   - `TestNotifierMentionPublishes`: `Notifier.Mention` で `EventInbox` が 1 回
