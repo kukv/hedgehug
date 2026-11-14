@@ -7,6 +7,8 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 func TestProjectRows(t *testing.T) {
@@ -27,6 +29,7 @@ func TestProjectRows(t *testing.T) {
 	)
 	rows := history.ProjectRows(log, history.ProjectContext{Names: names, Today: at(0)})
 	want := []string{
+		"太郎: (削除された値) から移動", // ワークスペースの名前を引けない(WorkspaceName がない)
 		"太郎: 説明を変更",
 		"太郎: 終了日を なし に変更",
 		"太郎: 開始日を 12/1 に変更",
@@ -34,6 +37,37 @@ func TestProjectRows(t *testing.T) {
 		"不明なユーザー: オーナーを 太郎 に変更",
 		"太郎: ステータスを InProgress に変更",
 		"太郎: タイトルを 認証 に変更",
+		"太郎: 作成",
+	}
+	if got := texts(rows); !slices.Equal(got, want) {
+		t.Errorf("rows =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// A5b-21: 同じ Store の中でワークスペースが変わる場所の set と、別の Store からの moved_in は「{移動元のワークスペース名} から移動」。
+// moved_in と同じ操作の場所の set、番号だけが変わる場所の set は出さない。名前が引けない(削除済み・ない)ワークスペースと、
+// moved_in の名前が空のときは「(削除された値)」。
+func TestProjectRowsMoved(t *testing.T) {
+	base := project.Project{ID: "P", Place: project.Place{Workspace: "W", Number: 1}, Rank: "V", Title: "ログイン", Status: project.Todo}
+	at2 := project.Place{Workspace: "W2", Number: 3}
+	log := logOf(
+		step{"O1", at(0), taro, project.Create(base)},
+		step{"O2", at(1), taro, change.NewSet("place", base.Place, at2)},
+		step{"O3", at(2), taro, change.NewSet("place", at2, project.Place{Workspace: "W2", Number: 4})},
+		step{"O4", at(3), taro, transfer.NewMovedIn(transfer.MovedInInfo{Old: "MB-P4", FromStore: "S1", FromStoreName: "main", FromWorkspace: "W2", FromWorkspaceName: "Web", FromProject: "P", FromProjectTitle: "ログイン", At: at(3)})},
+		step{"O4", at(3), taro, change.NewSet("place", project.Place{Workspace: "W2", Number: 4}, project.Place{Workspace: "W3", Number: 2})},
+		step{"O5", at(4), taro, change.NewSet("place", project.Place{Workspace: "W3", Number: 2}, project.Place{Workspace: "W9", Number: 5})},
+		step{"O6", at(5), taro, change.NewSet("place", project.Place{Workspace: "W9", Number: 5}, project.Place{Workspace: "W3", Number: 6})},
+		step{"O7", at(6), taro, transfer.NewMovedIn(transfer.MovedInInfo{Old: "TM-P6", FromStore: "S2", FromStoreName: "team", FromWorkspace: "W3", At: at(6)})},
+	)
+	wsNames := map[workspace.ID]string{"W": "Web", "W3": "Team"} // W9 はない(削除済みを含む)
+	rows := history.ProjectRows(log, history.ProjectContext{Names: names, Today: at(0), WorkspaceName: func(id workspace.ID) string { return wsNames[id] }})
+	want := []string{
+		"太郎: (削除された値) から移動", // O7: moved_in の名前が空
+		"太郎: (削除された値) から移動", // O6: W9 から
+		"太郎: Team から移動",     // O5: W3 から
+		"太郎: Web から移動",      // O4: moved_in の FromWorkspaceName。同じ操作の場所の set は出さない
+		"太郎: Web から移動",      // O2: W から。O3 は番号だけなので出さない
 		"太郎: 作成",
 	}
 	if got := texts(rows); !slices.Equal(got, want) {

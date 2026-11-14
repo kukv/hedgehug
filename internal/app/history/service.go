@@ -133,8 +133,27 @@ func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID)
 		if err != nil {
 			return err
 		}
-		rows = dhistory.ProjectRows(log, dhistory.ProjectContext{Names: dhistory.NamesOf(ms), Today: s.Clock.Now()})
+		names, err := liveWorkspaceNames(r)
+		if err != nil {
+			return err
+		}
+		rows = dhistory.ProjectRows(log, dhistory.ProjectContext{
+			Names: dhistory.NamesOf(ms), Today: s.Clock.Now(), WorkspaceName: func(id workspace.ID) string { return names[id] },
+		})
 		return nil
 	})
 	return rows, err
+}
+
+// liveWorkspaceNames は、削除されていないワークスペースの名前(A5b-21: 削除済みのワークスペースは「(削除された値)」に出す)。
+func liveWorkspaceNames(r port.Reader) (map[workspace.ID]string, error) {
+	wss, err := port.LiveWorkspaces(r)
+	if err != nil {
+		return nil, err
+	}
+	names := map[workspace.ID]string{}
+	for _, w := range wss {
+		names[w.ID] = w.Name
+	}
+	return names, nil
 }

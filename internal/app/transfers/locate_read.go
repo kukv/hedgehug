@@ -3,10 +3,11 @@ package transfers
 import (
 	"context"
 	"slices"
+	"strconv"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -15,7 +16,8 @@ import (
 type snapshot struct {
 	info       port.StoreInfo
 	workspaces []wsEntry // サイドバーの並び(rank の昇順、同じなら内部 ID の順)
-	items      []itemEntry
+	items      []entry
+	projects   []entry
 	records    []transfer.Record
 	purged     []port.Purged
 }
@@ -25,12 +27,27 @@ type wsEntry struct {
 	old []string // 旧い接頭辞
 }
 
-// itemEntry は、アイテム(削除済みを含む)。live は、アイテムもプロジェクトもワークスペースも削除されていないこと
-// (画面のアドレスの解決 items.FindByNumber と同じく、削除済みのプロジェクト・ワークスペース(B5b)のアイテムは開かない)。
-type itemEntry struct {
-	it   item.Item
-	live bool
+// entry は、アイテムかプロジェクト(削除済みを含む)。project は、アイテムならそのプロジェクト、プロジェクトなら自身。
+// live は、それ自身もプロジェクトもワークスペースも削除されていないこと(画面のアドレスの解決 items.FindByNumber・
+// port.LiveProject と同じく、削除済みのプロジェクト・ワークスペース(B5b)のものは開かない)。
+type entry struct {
+	id      change.ID
+	ws      workspace.ID
+	project project.ID
+	number  int
+	live    bool
 }
+
+// kind は、旧 ID で探すものの種類。entity は転送記録の Entity、sep は画面の ID の接頭辞と番号のあいだ(HH-12・HH-P1)。
+type kind struct{ entity, sep string }
+
+var (
+	itemKind    = kind{entity: transfer.EntityItem, sep: "-"}
+	projectKind = kind{entity: transfer.EntityProject, sep: "-P"}
+)
+
+// display は、接頭辞 prefix・番号 n の画面の ID。
+func (k kind) display(prefix string, n int) string { return prefix + k.sep + strconv.Itoa(n) }
 
 // snapshots は、表示中のすべての Store を、サイドバーの並びで 1 つずつ読む(読み取りを入れ子にしない)。
 func (s Service) snapshots(ctx context.Context) ([]snapshot, error) {
@@ -66,7 +83,7 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 		}
 		ranks[w.ID] = workspace.RankOf(log)
 		snap.workspaces = append(snap.workspaces, wsEntry{ws: w, old: workspace.OldPrefixes(log)})
-		if snap.items, err = appendItems(r, w, snap.items); err != nil {
+		if err := snap.appendEntries(r, w); err != nil {
 			return snap, err
 		}
 	}
@@ -78,34 +95,44 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 	return snap, err
 }
 
-// appendItems は、ワークスペース ws のすべてのプロジェクト(削除済みを含む)のアイテムを足す。
-func appendItems(r port.Reader, ws workspace.Workspace, out []itemEntry) ([]itemEntry, error) {
+// appendEntries は、ワークスペース ws のすべてのプロジェクトと、そのアイテム(どちらも削除済みを含む)を足す。
+func (snap *snapshot) appendEntries(r port.Reader, ws workspace.Workspace) error {
 	ps, err := r.Projects().List(ws.ID)
 	if err != nil {
-		return out, err
+		return err
 	}
 	for _, p := range ps {
+		live := p.Deleted == nil && ws.Deleted == nil
+		snap.projects = append(snap.projects, entry{id: p.ID, ws: p.Place.Workspace, project: p.ID, number: p.Place.Number, live: live})
 		its, err := r.Items().List(p.ID)
 		if err != nil {
-			return out, err
+			return err
 		}
 		for _, it := range its {
-			out = append(out, itemEntry{it: it, live: it.Deleted == nil && p.Deleted == nil && ws.Deleted == nil})
+			snap.items = append(snap.items, entry{id: it.ID, ws: it.Place.Workspace, project: it.Place.Project, number: it.Place.Number, live: live && it.Deleted == nil})
 		}
 	}
-	return out, nil
+	return nil
 }
 
-// numbered は、接頭辞が合う(match)ワークスペースごとの、番号 n の削除されていないアイテムを、ワークスペースの並びで返す。
-func (snap snapshot) numbered(n int, match func(wsEntry) bool) []hit {
+// entries は、転送記録の Entity が entity のもの(アイテムかプロジェクト)。
+func (snap snapshot) entries(entity string) []entry {
+	if entity == transfer.EntityProject {
+		return snap.projects
+	}
+	return snap.items
+}
+
+// numbered は、接頭辞が合う(match)ワークスペースごとの、種類 k・番号 n の削除されていないものを、ワークスペースの並びで返す。
+func (snap snapshot) numbered(k kind, n int, match func(wsEntry) bool) []hit {
 	var out []hit
 	for _, w := range snap.workspaces {
 		if !match(w) {
 			continue
 		}
-		for _, e := range snap.items {
-			if e.live && e.it.Place.Workspace == w.ws.ID && e.it.Place.Number == n {
-				out = append(out, snap.hit(e.it))
+		for _, e := range snap.entries(k.entity) {
+			if e.live && e.ws == w.ws.ID && e.number == n {
+				out = append(out, snap.hit(k, e))
 				break
 			}
 		}
@@ -113,42 +140,40 @@ func (snap snapshot) numbered(n int, match func(wsEntry) bool) []hit {
 	return out
 }
 
-// live は、内部 ID id の削除されていないアイテム。
-func (snap snapshot) live(id item.ID) (hit, bool) {
-	for _, e := range snap.items {
-		if e.live && e.it.ID == id {
-			return snap.hit(e.it), true
+// live は、種類 k・内部 ID id の削除されていないもの。
+func (snap snapshot) live(k kind, id change.ID) (hit, bool) {
+	for _, e := range snap.entries(k.entity) {
+		if e.live && e.id == id {
+			return snap.hit(k, e), true
 		}
 	}
 	return hit{}, false
 }
 
-// hasDeleted は、内部 ID id のアイテムが、削除済み(アイテム・プロジェクト・ワークスペースのどれかが削除済み)であるか。
-func (snap snapshot) hasDeleted(id item.ID) bool {
-	return slices.ContainsFunc(snap.items, func(e itemEntry) bool { return !e.live && e.it.ID == id })
+// hasDeleted は、転送記録の Entity が entity・内部 ID id のものが、削除済み(それ自身・プロジェクト・ワークスペースの
+// どれかが削除済み)であるか。
+func (snap snapshot) hasDeleted(entity string, id change.ID) bool {
+	return slices.ContainsFunc(snap.entries(entity), func(e entry) bool { return !e.live && e.id == id })
 }
 
 func (snap snapshot) hasPurged(id change.ID) bool {
 	return slices.ContainsFunc(snap.purged, func(p port.Purged) bool { return p.Target == id })
 }
 
-// hit は、旧 ID から見つかったアイテムと、そのいまの ID。
+// hit は、旧 ID から見つかったもの(アイテムかプロジェクト)と、そのいまの ID。
 type hit struct {
 	store   port.StoreID
-	it      item.Item
+	id      change.ID
+	project project.ID
 	current string
 }
 
-func (snap snapshot) hit(it item.Item) hit {
+func (snap snapshot) hit(k kind, e entry) hit {
 	prefix := ""
 	for _, w := range snap.workspaces {
-		if w.ws.ID == it.Place.Workspace {
+		if w.ws.ID == e.ws {
 			prefix = w.ws.Prefix
 		}
 	}
-	return hit{store: snap.info.ID, it: it, current: it.DisplayID(prefix)}
-}
-
-func (h hit) located(m *MovedFrom) Located {
-	return Located{Found: true, Store: h.store, Project: h.it.Place.Project, Item: h.it.ID, MovedFrom: m}
+	return hit{store: snap.info.ID, id: e.id, project: e.project, current: k.display(prefix, e.number)}
 }
