@@ -19,11 +19,12 @@ const unknownUser = "不明なユーザー"
 // 修復の種類は、保存の行で見分ける(C4b2-8)。差出人は空(「hedgehug」)。読み取りの失敗(ないもの以外)はエラー。
 func repairs(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
 	var out []port.Notice
+	b.store = store
 	for i, s := range b.saves {
 		if !s.Repair {
 			continue
 		}
-		for _, kind := range []func(port.Reader, batch, int, string) ([]port.Notice, error){restores, cascades} {
+		for _, kind := range []func(port.Reader, batch, int, string) ([]port.Notice, error){restores, cascades, places} {
 			ns, err := kind(r, b, i, me)
 			if err != nil {
 				return nil, err
@@ -38,7 +39,16 @@ func repairs(r port.Reader, b batch, store port.StoreID, me string) ([]port.Noti
 }
 
 // beforeSave は、i 番目の保存の直前の ref のログ(いまのログから、saves[i:] の行を除いたもの。C4b2-7)。
-func (b batch) beforeSave(ref change.Ref, i int) []change.Record {
+func (b batch) beforeSave(ref change.Ref, i int) []change.Record { return b.without(b.logs[ref], i) }
+
+// beforeRead は、判定の中にないものも読む beforeSave。ないものは nil。
+func beforeRead(r port.Reader, b batch, ref change.Ref, i int) ([]change.Record, error) {
+	log, err := logOf(r, b, ref)
+	return b.without(log, i), err
+}
+
+// without は、log から saves[i:] の行を除いたもの。
+func (b batch) without(log []change.Record, i int) []change.Record {
 	later := map[change.ID]bool{}
 	for _, s := range b.saves[i:] {
 		for _, e := range s.Entities {
@@ -48,7 +58,7 @@ func (b batch) beforeSave(ref change.Ref, i int) []change.Record {
 		}
 	}
 	var out []change.Record
-	for _, row := range b.logs[ref] {
+	for _, row := range log {
 		if !later[row.ID] {
 			out = append(out, row)
 		}
@@ -57,12 +67,12 @@ func (b batch) beforeSave(ref change.Ref, i int) []change.Record {
 }
 
 // lastSaver は、log で最後に保存した人(実行者が人の行のうち、at が最もあとの行。同じなら ID の大きい行の by。
-// C4b2-7)。field が空ならすべての項目、ほかは f が field の行だけを見る。なければ空。
+// C4b2-7)。field が空ならすべての項目、ほかは f が field の行と、作成の行(すべての項目を書く)だけを見る。なければ空。
 func lastSaver(log []change.Record, field string) string {
 	var w *change.Record
 	for i := range log {
 		c := &log[i]
-		if c.Actor.Kind != change.ActorUser || (field != "" && c.F != field) {
+		if c.Actor.Kind != change.ActorUser || (field != "" && c.F != field && c.T != change.Create) {
 			continue
 		}
 		if w == nil || c.At.After(w.At) || (c.At.Equal(w.At) && c.ID > w.ID) {

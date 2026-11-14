@@ -99,6 +99,7 @@ type batch struct {
 	judged map[change.ID]bool
 	refs   []change.Ref // saves に出てくるエンティティ(最初に出た順)
 	logs   map[change.Ref][]change.Record
+	store  port.StoreID // 判定する Store(repairs が埋める。同じ Store の中の転送記録を見分ける)
 }
 
 // newBatch は、saves のエンティティのいまのログを読む。もうないエンティティ(ErrNotFound)はログを持たない。
