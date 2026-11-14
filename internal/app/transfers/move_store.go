@@ -125,7 +125,8 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 		return err
 	}
 	add, people := transfer.People(m.src.settings, m.src.items(), m.src.logList(), nil, m.src.members, toMembers)
-	numbers := transfer.Number(root, m.src.set.Below, dst.next)
+	// 削除を取り消すものは、削除されていないものとして番号を振る(同じ Store の移動は、取り消してから振る)。
+	numbers := transfer.Number(root, revivedAs(m.src.set.Below, m.revive), dst.next)
 	remaps := map[item.ID]transfer.RemapResult{}
 	errs := []error{join(tx, add)}
 	for _, it := range m.src.items() {
@@ -149,6 +150,21 @@ func (m *crossMove) reviveItem(tx port.Tx, id item.ID) error {
 		return nil
 	}
 	return tx.WriteItems().Append(id, change.Undo(log, m.revive)...)
+}
+
+// revivedAs は、items の写しのうち、操作 op で削除されたもの(移動先で削除を取り消すもの)を削除されていないものにした写し。
+// op が空なら items のまま。
+func revivedAs(items []item.Item, op change.ID) []item.Item {
+	if op == "" {
+		return items
+	}
+	out := slices.Clone(items)
+	for i := range out {
+		if out[i].Deleted != nil && out[i].Deleted.Op == op {
+			out[i].Deleted = nil
+		}
+	}
+	return out
 }
 
 // join は、移動先のメンバーに add を足す。表示名がログイン名と違えば、表示名も書く。

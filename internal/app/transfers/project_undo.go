@@ -118,10 +118,5 @@ func revivedSet(r port.Reader, src projectSource) (transfer.ProjectSet, error) {
 	if err != nil {
 		return transfer.ProjectSet{}, err
 	}
-	for i := range all {
-		if all[i].Deleted != nil && all[i].Deleted.Op == d.Op {
-			all[i].Deleted = nil
-		}
-	}
-	return transfer.CollectProject(src.project.ID, all), nil
+	return transfer.CollectProject(src.project.ID, revivedAs(all, d.Op)), nil
 }
