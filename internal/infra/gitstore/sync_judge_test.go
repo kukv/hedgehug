@@ -3,6 +3,7 @@ package gitstore
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -187,7 +188,8 @@ func TestJudgeRetriedAfterFailedPush(t *testing.T) {
 	only(t, j.last(), headOf(t, b))
 }
 
-// 判定がエラーを返しても同期は成功し、判定済みにしない。次の同期でもう一度渡る。
+// 判定がエラーを返しても同期は成功し、受け取った保存を判定済みにしない。次の同期でもう一度渡る。
+// このマシンが送った保存は判定済みにするので、次の同期で渡らない。
 func TestJudgeErrorKeepsSync(t *testing.T) {
 	remote := newRemote(t)
 	a := firstMachine(t, remote)
@@ -197,13 +199,18 @@ func TestJudgeErrorKeepsSync(t *testing.T) {
 	b.write(t, "b", set("rank", "a", "b"))
 	b.sync(t, remote)
 	bs := headOf(t, b)
+	a.write(t, "a", set("title", "ログイン画面を作る", "ログイン"))
+	as := headOf(t, a)
 	j.err = errors.New("通知を書けない")
-	if res := a.sync(t, remote); res != (port.SyncResult{Received: 1}) {
-		t.Errorf("sync = %+v, want Received 1", res)
+	if res := a.sync(t, remote); res != (port.SyncResult{Sent: 1, Received: 1}) {
+		t.Errorf("sync = %+v, want Sent 1, Received 1", res)
 	}
 	only(t, j.last(), bs)
 	if j.known(t, a, bs) != port.NotJudged {
 		t.Error("the save was marked although judging failed")
+	}
+	if j.known(t, a, as) != port.SameVersion {
+		t.Error("own sent save was not marked")
 	}
 	j.err = nil
 	a.sync(t, remote)
@@ -249,5 +256,27 @@ func TestJudgeOnSyncSave(t *testing.T) {
 	only(t, j.last(), headOf(t, b))
 	if j.known(t, a, headOf(t, a)) != port.SameVersion {
 		t.Error("own save was not marked")
+	}
+}
+
+// SyncSave で判定がエラーを返しても、受け取った保存は次の同期で渡る(受け取ったあとの保存を判定済みにして、
+// 受け取った保存に辿れなくなることがない)。
+func TestJudgeErrorOnSyncSaveKeepsReceived(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	j := withJudge(a)
+	a.sync(t, remote)
+	b.write(t, "b", set("rank", "a", "b"))
+	b.sync(t, remote)
+	bs := headOf(t, b)
+	j.err = errors.New("通知を書けない")
+	if _, err := a.rep.SyncSave(t.Context(), a.id, remote, saveOp, createMoved); err != nil {
+		t.Fatal(err)
+	}
+	j.err = nil
+	a.sync(t, remote)
+	if len(j.calls) != 2 || !slices.Contains(j.last(), bs.String()) {
+		t.Errorf("calls = %d, last = %v, want the received save %s again", len(j.calls), j.last(), bs)
 	}
 }

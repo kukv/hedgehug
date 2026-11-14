@@ -200,8 +200,8 @@ func entities(c *object.Commit) ([]port.EntityRows, error) {
 func addChange(byRef map[change.Ref]*port.EntityRows, tree *object.Tree, ch *object.Change) error {
 	name := cmp.Or(ch.To.Name, ch.From.Name)
 	dir, base := path.Split(name)
-	ref, ok := refOf(strings.TrimSuffix(dir, "/"))
-	if !ok || (base != "log.jsonl" && base != "description.md") {
+	ref, ok := RefOf(strings.TrimSuffix(dir, "/"))
+	if !ok || !ref.Valid() || (base != "log.jsonl" && base != "description.md") {
 		return nil
 	}
 	from, to, err := ch.Files()
@@ -271,16 +271,16 @@ func parseLog(s string) []change.Record {
 	return out
 }
 
-// refOf は、エンティティのフォルダ(members、items/<ID> など)の Ref。gitstore の kindOfDir と同じ規則。
-func refOf(dir string) (change.Ref, bool) {
-	top, id, _ := strings.Cut(dir, "/")
+// RefOf は、フォルダ(members、items/<ID> など)の種類と ID。members はそのフォルダちょうどのときだけ。
+// ID が使えるものかは確かめない(ログを指せるかは Ref.Valid で確かめる)。
+func RefOf(dir string) (change.Ref, bool) {
+	top, id, sub := strings.Cut(dir, "/")
 	kinds := map[string]change.Kind{
 		"members": change.KindMembers, "workspaces": change.KindWorkspace, "projects": change.KindProject, "items": change.KindItem,
 	}
 	kind, ok := kinds[top]
-	if !ok {
+	if !ok || (kind == change.KindMembers && sub) {
 		return change.Ref{}, false
 	}
-	ref := change.Ref{Kind: kind, ID: change.ID(id)}
-	return ref, ref.Valid()
+	return change.Ref{Kind: kind, ID: change.ID(id)}, true
 }
