@@ -105,13 +105,13 @@ func TestMoveAcrossStoresKeepsNamesOfValuesSetAtCreation(t *testing.T) {
 }
 
 // projectHistory は、Store store のプロジェクト id の履歴の行を「実行者: 文」で返す。ワークスペースの名前はその Store の
-// 削除されていないワークスペースから引く(app/history.Project と同じ)。
+// ワークスペース(削除済みを含む)から引く(app/history.Project と同じ)。
 func projectHistory(t *testing.T, f fixture, store port.StoreID, id project.ID) []string {
 	t.Helper()
 	log := logOf(t, f.rec, store, change.Ref{Kind: change.KindProject, ID: id})
 	names := map[workspace.ID]string{}
 	if err := f.rec.Read(t.Context(), store, func(r port.Reader) error {
-		wss, err := port.LiveWorkspaces(r)
+		wss, err := r.Workspaces().List()
 		for _, w := range wss {
 			names[w.ID] = w.Name
 		}

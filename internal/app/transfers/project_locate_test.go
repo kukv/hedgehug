@@ -112,34 +112,35 @@ func TestLocateProjectGone(t *testing.T) {
 	nineAM := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
 	toMobileWS := func(t *testing.T, f fixture) { moveProject(t, f, apptest.SampleProject, projectTo(store1, mobileWS)) }
 	cases := []struct {
-		name  string
-		setup func(t *testing.T, f fixture)
-		want  transfers.Gone
+		name   string
+		target project.ID // 日時を取る main の記録のプロジェクト
+		setup  func(t *testing.T, f fixture)
+		want   transfers.Gone
 	}{
-		{"移したあと削除", func(t *testing.T, f fixture) {
+		{"移したあと削除", apptest.SampleProject, func(t *testing.T, f fixture) {
 			toMobileWS(t, f)
 			if err := apptest.DeleteProject(t.Context(), f.rec, store1, apptest.SampleProject); err != nil {
 				t.Fatal(err)
 			}
 		}, transfers.Gone{Reason: "deleted", Old: "HH-P1", At: nineAM, NewDisplay: "MB-P2"}},
-		{"移したあとワークスペースを削除", func(t *testing.T, f fixture) {
+		{"移したあとワークスペースを削除", apptest.SampleProject, func(t *testing.T, f fixture) {
 			toMobileWS(t, f)
 			if err := apptest.DeleteWorkspace(t.Context(), f.rec, store1, mobileWS); err != nil {
 				t.Fatal(err)
 			}
 		}, transfers.Gone{Reason: "deleted", Old: "HH-P1", At: nineAM, NewDisplay: "MB-P2"}},
-		{"完全に削除", func(t *testing.T, f fixture) {
+		{"完全に削除", goneProject, func(t *testing.T, f fixture) {
 			if err := apptest.DeleteProject(t.Context(), f.rec, store1, apptest.SampleProject); err != nil { // HH-P1 を空ける
 				t.Fatal(err)
 			}
 			putProjectRecord(t, f, store1, goneProject, "HH-P1", "TM-P5", store2, "team")
 			f.rec.AddPurged(store2, port.Purged{Entity: "project", Target: goneProject, Display: "TM-P5", At: time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)})
 		}, transfers.Gone{Reason: "purged", Old: "HH-P1", At: nineAM, NewDisplay: "TM-P5"}},
-		{"移動先の Store が非表示", func(t *testing.T, f fixture) {
+		{"移動先の Store が非表示", apptest.SampleProject, func(t *testing.T, f fixture) {
 			moveProject(t, f, apptest.SampleProject, toTeamWS())
 			f.list.Stores = []port.StoreInfo{f.list.Stores[0], f.list.Stores[2]}
 		}, transfers.Gone{Reason: "hidden", Old: "HH-P1", At: nineAM.AddDate(0, 0, 1), NewDisplay: "TM-P2", StoreName: "team"}}, // 別の Store への移動の記録は Service の時計
-		{"そのあと非表示の Store へ移した", func(t *testing.T, f fixture) {
+		{"そのあと非表示の Store へ移した", apptest.SampleProject, func(t *testing.T, f fixture) {
 			toMobileWS(t, f)
 			moveProject(t, f, apptest.SampleProject, toTeamWS())
 			f.list.Stores = []port.StoreInfo{f.list.Stores[0], f.list.Stores[2]}
@@ -149,13 +150,7 @@ func TestLocateProjectGone(t *testing.T) {
 		f := newFixture(t)
 		c.setup(t, f)
 		got, err := f.svc.LocateProject(t.Context(), "main", "HH-P1")
-		at := projectRecord(t, f, store1, func() project.ID {
-			if c.name == "完全に削除" {
-				return goneProject
-			}
-			return apptest.SampleProject
-		}(), 0).At
-		checkGone(t, c.name, transfers.Located{Found: got.Found, Gone: got.Gone}, err, c.want, at)
+		checkGone(t, c.name, transfers.Located{Found: got.Found, Gone: got.Gone}, err, c.want, projectRecord(t, f, store1, c.target, 0).At)
 	}
 }
 
