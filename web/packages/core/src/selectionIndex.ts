@@ -1,6 +1,15 @@
 // 一覧の行の選択(F2b1)の core の export。index.ts が全部を再公開する。
 
 export {
+  type BulkChange,
+  type BulkChangeConfirm,
+  type BulkChangeDeps,
+  type BulkChangeForm,
+  type BulkChangeOpen,
+  canSubmit,
+  createBulkChange,
+} from "./features/selection/bulkChange";
+export {
   type BulkOption,
   bulkFields,
   changeButton,
