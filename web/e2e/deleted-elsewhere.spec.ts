@@ -11,7 +11,7 @@ import {
 } from "./helpers";
 
 // 別のタブで削除されたものに、このタブから保存したときの通しのテスト(C3a-screen・C3c)。
-// このタブは説明・設定の値の名前・コメントを編集しているあいだ(06「反映を待つとき」)なので、
+// このタブは説明・設定の値の名前・コメントを編集しているあいだやダイアログのあいだ(06「反映を待つとき」)なので、
 // 別のタブの削除が反映されず、画面が開いたまま保存できる。
 
 const commentPlaceholder = "コメントを書く。@ログイン名 でメンション。Ctrl+Enter で送信";
@@ -229,6 +229,55 @@ test("changing a setting of a workspace deleted in another tab restores it", asy
     await other.goto(tokenUrl());
     const side = await sidebar(other, info);
     await expect(side.getByRole("link", { name: renamed, exact: true })).toBeVisible();
+  } finally {
+    await other.close();
+  }
+});
+
+test("editing a sprint deleted in another tab restores it", async ({ page }, info) => {
+  const prefix = prefixOf(info);
+  await createWorkspace(page, info, unique(info, "別で削除 スプリント"), prefix);
+  const sprintsTab = tokenUrl(`/s/e2e/w/${prefix}/sprints`);
+  const card = (p: Page) => p.getByRole("article", { name: "Sprint 1" });
+  await page.goto(sprintsTab);
+  // 既定の名前(Sprint 1)のまま作る。
+  await page.getByRole("button", { name: "スプリントを作成" }).first().click();
+  const create = page.getByRole("dialog", { name: "スプリントを作成" });
+  await expect(create.getByRole("textbox", { name: "名前" })).toHaveValue("Sprint 1");
+  await create.getByRole("button", { name: "作成", exact: true }).click();
+  await expect(page.getByText("Sprint 1 を作成しました")).toBeVisible();
+  // 編集のダイアログでゴールを入力し、保存はまだしない(ダイアログのあいだ反映を待つ)。
+  await card(page).getByRole("button", { name: "Sprint 1 のメニュー" }).click();
+  await page.getByRole("menuitem", { name: "編集…" }).click();
+  const edit = page.getByRole("dialog", { name: "スプリントを編集" });
+  await edit.getByRole("textbox", { name: "ゴール" }).fill("別のタブで削除されたあとのゴール");
+
+  const other = await page.context().newPage();
+  try {
+    // 別のタブで、カードのメニューから同じスプリントを削除する。
+    await other.goto(sprintsTab);
+    await card(other).getByRole("button", { name: "Sprint 1 のメニュー" }).click();
+    await other.getByRole("menuitem", { name: "削除…" }).click();
+    await other
+      .getByRole("dialog", { name: "スプリントを削除" })
+      .getByRole("button", { name: "削除", exact: true })
+      .click();
+    await expect(other.getByText("スプリントを削除しました", { exact: true })).toBeVisible();
+    await expect(card(other)).toHaveCount(0);
+
+    // このタブで保存すると、削除が取り消され、トーストにスプリントの名前が出る。
+    await edit.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(
+      page.getByText(
+        "「Sprint 1」は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(edit).toBeHidden();
+
+    // 別のタブで開き直すと、スプリントのカードが新しいゴールで戻っている。
+    await other.reload();
+    await expect(card(other)).toContainText("ゴール: 別のタブで削除されたあとのゴール");
   } finally {
     await other.close();
   }
