@@ -36,14 +36,13 @@ export function offBacklogText(r: BulkChangeResult): string {
 }
 
 // bulkChangeToast は、実行したあとのトースト。すべて変わったとき以外はエラーの色にする。
-// suffix は、変わったものがあるときだけ、末尾に付ける。
+// suffix は、変わったものがあるときだけ、末尾に付ける(バックログの画面は offBacklogText を渡す)。
 export function bulkChangeToast(
   r: BulkChangeResult,
   rows: SelectedRow[],
   suffix: string,
 ): { text: string; error: boolean } {
   const kept = r.kept.length + r.failed.reduce((n, f) => n + f.count, 0);
-  const tail = offBacklogText(r) + suffix;
   if (r.changed === 0) {
     const list = reasonList(r, rows);
     return {
@@ -52,8 +51,8 @@ export function bulkChangeToast(
     };
   }
   if (r.kept.length === 0 && r.failed.length === 0) {
-    return { text: `${r.changed} 件を変えました${tail}`, error: false };
+    return { text: `${r.changed} 件を変えました${suffix}`, error: false };
   }
   const head = `${r.changed} 件を変えました。${kept} 件はそのままです: ${reasonList(r, rows)}`;
-  return { text: head + tail, error: true };
+  return { text: head + suffix, error: true };
 }

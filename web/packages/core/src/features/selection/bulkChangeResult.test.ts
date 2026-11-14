@@ -83,9 +83,10 @@ describe("toast", () => {
       "変わるものはありません",
     );
   });
-  it("off backlog follows the main text", () => {
+  it("off backlog text is not added unless passed as suffix", () => {
     const r = { ...base, offBacklog: { done: 1, canceled: 0 } };
-    expect(bulkChangeToast(r, rows, "").text).toBe(
+    expect(bulkChangeToast(r, rows, "").text).toBe("2 件を変えました");
+    expect(bulkChangeToast(r, rows, offBacklogText(r)).text).toBe(
       "2 件を変えました。1 件は完了のため、バックログには表示されません",
     );
   });
