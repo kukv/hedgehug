@@ -18,9 +18,10 @@ export const sprints = createSprints({
 });
 reloads.add(() => sprints.reload());
 
+// backlogSelection は、バックログの画面で選んでいる行(F2b1)。
+export const backlogSelection = createRowSelection();
 // バックログの画面(05「バックログ」)。読み方はスプリントの画面と同じ。詳細パネルの保存の応答で、
 // この画面から開いたアイテムが消えるときのトーストを出す(F2a-10・F2a-11)。
-export const backlogSelection = createRowSelection();
 export const backlog = createBacklog({
   port: planningPort,
   items: itemsPort,

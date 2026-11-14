@@ -2,6 +2,7 @@
   import { hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
   import { AppFrame, CommandPalette, OfflineBand, Toasts } from "@hedgehug/ui";
   import { palette } from "./palette";
+  import BulkDeleteDialog from "./screens/item/BulkDeleteDialog.svelte";
   import ChangeKindDialog from "./screens/item/ChangeKindDialog.svelte";
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
   import DeleteItemDialog from "./screens/item/DeleteItemDialog.svelte";
@@ -96,6 +97,7 @@
 <CreateWorkspaceDialog />
 <CreateItemDialog />
 <DeleteItemDialog />
+<BulkDeleteDialog />
 <MoveStatusDialog />
 <MoveMenu />
 <ChangeKindDialog />

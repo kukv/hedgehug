@@ -1,11 +1,21 @@
 <script lang="ts">
-  import { dropPlacement, type Sprint, startDisabledReason, type Totals } from "@hedgehug/core";
-  import type { DropTarget } from "@hedgehug/ui";
+  import {
+    allReadOnly,
+    dropPlacement,
+    type Sprint,
+    selectedText,
+    startDisabledReason,
+    type Totals,
+  } from "@hedgehug/core";
+  import { type DropTarget, SelectionBar } from "@hedgehug/ui";
+  import { selection } from "../../palette";
   import { backlog } from "../../planning";
   import { itemDialog, planning, syncNow } from "../../wire";
+  import { bulkDelete } from "../../wireActions";
   import BacklogFrame from "./BacklogFrame.svelte";
 
   // ワークスペースの「バックログ」のタブ(05「バックログ」)。上にスプリントの枠、下にバックログの枠を並べる。
+  // 行を選んでいるあいだは、枠より上に選択バーを出す(F2b1-5)。
   // スプリントの作成と開始のダイアログは親が出す(F2a-15)。
   interface Props {
     storeId: string;
@@ -45,6 +55,9 @@
     ),
   );
   const thisYear = $derived($syncNow.getFullYear());
+  const rows = backlog.selection.rows;
+  // パレットの「選んでいるアイテム」は、詳細パネル・ツリーがなければ、ちょうど 1 件を選んでいるときの行(F2b1-14)。
+  $effect(() => selection.provide(2, () => backlog.selectedOne()));
 
   // hover は、ドラッグ中のドロップ先。同じ位置など、保存しない先では印を出さない(F2a-12)。
   let hover = $state<DropTarget | null>(null);
@@ -60,10 +73,19 @@
 </script>
 
 {#if view}
+  {#if $rows.length > 0}
+    <SelectionBar
+      text={selectedText($rows.length)}
+      readOnly={allReadOnly($rows)}
+      ondelete={() => void bulkDelete.open(backlog.selection, () => backlog.reload())}
+      onclear={() => backlog.selection.clear()}
+    />
+  {/if}
   {#each view.frames as frame (frame.sprint?.id ?? "")}
     <BacklogFrame
       {frame}
       frames={view.frames}
+      {storeId}
       {storeName}
       settings={view.settings}
       members={view.members}

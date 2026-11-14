@@ -1,31 +1,31 @@
 <script lang="ts">
   import {
-    asOptions,
     type BacklogFrame,
     type BacklogRow,
-    chosen,
     deletedValue,
+    isSelected,
     type Member,
     moveDown,
     moveUp,
     type PlanningOverview,
     readOnlyNote,
-    sprintChoices,
     type WorkspaceSettings,
   } from "@hedgehug/core";
-  import { Avatar, type DropTarget, dragRows, IconButton, KindIcon, Select } from "@hedgehug/ui";
+  import { Avatar, type DropTarget, dragRows, IconButton, KindIcon } from "@hedgehug/ui";
   import { backlog } from "../../planning";
   import { links } from "../../wire";
   import StatusButton from "../item/StatusButton.svelte";
   import PointsInput from "./PointsInput.svelte";
+  import RowSprintSelect from "./RowSprintSelect.svelte";
 
-  // バックログの画面の行(05「行」、F2a-8・F2a-16)。持ち手・種類・ID・タイトル・優先度・ステータス・ポイント・
-  // 担当者・スプリント・「上へ」「下へ」。閲覧のみの Store では、タイトル以外の操作を無効にする。
+  // バックログの画面の行(05「行」、F2a-8・F2a-16)。選択のチェック・持ち手・種類・ID・タイトル・優先度・ステータス・
+  // ポイント・担当者・スプリント・「上へ」「下へ」。閲覧のみの Store では、タイトルと選択のチェック以外の操作を無効にする(F2b1-4)。
   interface Props {
     row: BacklogRow;
     // sprint は、行のある枠のスプリントの ID(バックログは空)。
     sprint: string;
     frames: BacklogFrame[];
+    storeId: string;
     storeName: string;
     settings: WorkspaceSettings;
     members: Member[];
@@ -41,6 +41,7 @@
     row,
     sprint,
     frames,
+    storeId,
     storeName,
     settings,
     members,
@@ -61,23 +62,22 @@
       ? members.find((m) => m.login.toLowerCase() === row.assignee.toLowerCase())
       : undefined,
   );
-  // スプリントの選択肢は、「バックログ」と完了していないスプリント(概要を読むまでは出さない)。
-  const choices = $derived(overview ? sprintChoices(overview, sprint) : []);
-  const current = $derived(chosen(choices, sprint));
-  let selected = $state("");
-  $effect(() => {
-    selected = current;
-  });
-  // 保存のあとは、いまの値に戻す(断られて読み直しても値が変わらないと、上の $effect は走り直さない)。
-  async function pickSprint(id: string) {
-    await backlog.setSprint(row, id);
-    selected = current;
-  }
+  const rows = backlog.selection.rows;
   const up = $derived(moveUp(frames, row.id));
   const down = $derived(moveDown(frames, row.id));
 </script>
 
 <li class="row" class:marked data-row={row.id}>
+  <input
+    type="checkbox"
+    aria-label={`${row.display} を選択`}
+    checked={isSelected($rows, storeId, row.id)}
+    onchange={(e) =>
+      backlog.selection.toggle(
+        { storeId, itemId: row.id, display: row.display, readOnly },
+        e.currentTarget.checked,
+      )}
+  >
   <button
     type="button"
     class="handle"
@@ -113,15 +113,7 @@
         <Avatar name={member?.name ?? ""} title={member?.name ?? "不明なユーザー"} />
       {/if}
     </span>
-    <Select
-      label="スプリント"
-      size="sm"
-      disabled={readOnly || !overview}
-      title={note}
-      options={asOptions(choices)}
-      bind:value={selected}
-      onchange={(id) => void pickSprint(id)}
-    />
+    <RowSprintSelect {row} {sprint} {overview} {readOnly} />
     <IconButton
       label="上へ"
       size="sm"
