@@ -20,13 +20,23 @@ export type InboxRowKind =
   | "overwrite"
   | "repair";
 
-// InboxTargetKind は、行の対象。moved は別の Store へ移ったアイテム(display は通知を作ったときの ID)。
-export type InboxTargetKind = "item" | "moved" | "deleted_item" | "workspace" | "deleted_workspace";
+// InboxTargetKind は、行の対象。moved・moved_project は別の Store へ移ったアイテム・プロジェクト(display は通知を作ったときの ID)。
+export type InboxTargetKind =
+  | "item"
+  | "moved"
+  | "deleted_item"
+  | "workspace"
+  | "deleted_workspace"
+  | "project"
+  | "moved_project"
+  | "deleted_project";
 
 export interface InboxTarget {
   kind: InboxTargetKind;
   // item は、アイテムの内部 ID。display は、画面に出す ID(HH-12)。itemKind は、item のときのアイテムの種類。
   item: string;
+  // project は、プロジェクトの内部 ID(project・moved_project・deleted_project のとき)。
+  project: string;
   display: string;
   itemKind: string;
   title: string;

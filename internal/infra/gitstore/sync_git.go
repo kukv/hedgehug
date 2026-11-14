@@ -17,6 +17,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // remotePrefix は、受け取った remote のブランチを置く場所。利用者の git の remote の設定には触らない。
@@ -261,7 +262,7 @@ func countSaves(repo *git.Repository, from, exclude plumbing.Hash) (int, error) 
 	}
 	n := 0
 	err := walk(repo, from, func(c *object.Commit) {
-		if !seen[c.Hash] && strings.Contains(c.Message, "\nHedgehug-Op: ") {
+		if !seen[c.Hash] && strings.Contains(c.Message, saves.OpTrailer) {
 			n++
 		}
 	})

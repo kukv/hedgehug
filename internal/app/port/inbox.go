@@ -6,6 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -27,19 +28,26 @@ type Notice struct {
 	Kind      NoticeKind
 	Store     StoreID
 	Workspace workspace.ID
-	Item      item.ID   // 対象のアイテム。ルールが変わった通知では空(開く先は設定の「自動化」)
-	Rule      change.ID // 自動化のルール
-	Text      string    // 06 の本文
-	Reason    string    // 止まった理由(NoticeAutomationStopped だけ)
-	Status    change.ID // 止まった実行が変えようとしたステータス(「制約を無視して…」に使う)
-	From      change.ID // 止まったときのステータス
-	Display   string    // 作ったときのアイテムの ID。アイテムがなければ空
-	Sender    string    // 差出人のログイン名。空は「hedgehug」
+	Project   project.ID // プロジェクトを指す通知の対象。アイテムの通知では空
+	Item      item.ID    // 対象のアイテム。ルールが変わった通知では空(開く先は設定の「自動化」)
+	Rule      change.ID  // 自動化のルール
+	Text      string     // 06 の本文
+	Reason    string     // 止まった理由(NoticeAutomationStopped だけ)
+	Status    change.ID  // 止まった実行が変えようとしたステータス(「制約を無視して…」に使う)
+	From      change.ID  // 止まったときのステータス
+	Display   string     // 作ったときのアイテムの ID。アイテムがなければ空
+	Sender    string     // 差出人のログイン名。空は「hedgehug」
+	Source    string     // メンションの本文の鍵。メンション以外は空
+	At        time.Time  // Mention が既存の行を書き換えるときに刻む時刻(本文を保存した時刻)。足すときと Add は使わない(受信箱の時計)
 }
 
-// Inbox は、受信箱の口(B4-12)。通知を足すだけを持つ。
+// Inbox は、受信箱の口(B4-12)。通知を足す。
 type Inbox interface {
 	Add(ctx context.Context, n Notice) error
+	// Mention は、同じ Store・Source の行があれば text・sender・at(n.At)を書き換えて未読に戻し、
+	// なければ Add と同じ受信箱の時計の時刻(受け取った時刻)で足す。
+	// n.Source が空ならエラー。
+	Mention(ctx context.Context, n Notice) error
 }
 
 // NoticeID は、通知 1 件の番号(受信箱の中で一意)。
@@ -57,7 +65,7 @@ const (
 type NoticeRow struct {
 	ID NoticeID
 	Notice
-	At     time.Time // Add が刻んだ時刻
+	At     time.Time // Add と Mention が足したときに刻んだ時刻。Mention が書き換えた行は n.At(Notice.At を隠す)
 	Read   bool
 	Result NoticeResult
 }
@@ -91,8 +99,9 @@ type InboxBook interface {
 	ReadAll(ctx context.Context, stores []StoreID, kinds []NoticeKind) error
 	// Resolve は、既読にして結果を書く。なければ ErrNotFound、結果がすでにあれば断り。
 	Resolve(ctx context.Context, id NoticeID, r NoticeResult) error
-	// Prune は、アイテムが targets にある通知と、アイテムのない通知のうちワークスペースが targets にあるものを消す。
-	// 通知のワークスペースは作ったときの値なので、アイテムの通知はワークスペースでは消さない(移ったアイテムの通知を残す)。
+	// Prune は、アイテムが targets にある通知と、プロジェクトが targets にある通知と、
+	// アイテムもプロジェクトもない通知のうちワークスペースが targets にあるものを消す。
+	// 通知のワークスペースは作ったときの値なので、アイテムとプロジェクトの通知はワークスペースでは消さない(移ったアイテムの通知を残す)。
 	Prune(ctx context.Context, store StoreID, targets []change.ID) error
 	// ForgetStore は、Store の通知をすべて消す。
 	ForgetStore(ctx context.Context, store StoreID) error

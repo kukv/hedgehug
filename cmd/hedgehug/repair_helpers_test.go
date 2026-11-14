@@ -25,6 +25,7 @@ import (
 	"github.com/go-git/go-git/v5/storage/filesystem"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/noticing"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -33,6 +34,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/infra/gitstore"
+	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
 // 場面テストの remote は、一時フォルダの bare リポジトリをパスで渡す(決定 C3a-20)。go-git のファイルの通信は
@@ -121,11 +123,13 @@ func (g *letterIDs) New() change.ID {
 }
 
 // machine は、1 台のマシンの Store。同期は本物の gitstore で、修復は repairing.Run。
+// inbox は、noticed で通知の判定を付けたマシンの受信箱(付けていなければ nil)。
 type machine struct {
 	stores *gitstore.Stores
 	rep    *gitstore.Replicator
 	id     port.StoreID
 	dir    string
+	inbox  port.InboxBook
 }
 
 func newMachine(t *testing.T, dir, letter string, start time.Time) machine {
@@ -178,9 +182,44 @@ func (m machine) sync(t *testing.T, remote port.Remote) port.SyncResult {
 
 func (m machine) write(t *testing.T, summary string, fn func(tx port.Tx) error) {
 	t.Helper()
-	if err := m.stores.Write(t.Context(), m.id, port.Operation{Actor: scenarioUser, Summary: summary}, fn); err != nil {
+	m.writeAs(t, scenarioUser.By(), summary, fn)
+}
+
+// writeAs は、ログイン名 login の操作として保存する。
+func (m machine) writeAs(t *testing.T, login, summary string, fn func(tx port.Tx) error) {
+	t.Helper()
+	if err := m.stores.Write(t.Context(), m.id, port.Operation{Actor: change.User(login), Summary: summary}, fn); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// noticed は、m の同期に、テストの一時フォルダの state.db の受信箱と判定の記録と、login を「あなた」にした判定
+// (Store を表示中で書き込める)を付ける。本物の組み立て(wire.go)と同じ形。
+func noticed(t *testing.T, m machine, login string) machine {
+	t.Helper()
+	db, err := statedb.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	m.inbox = db.Inbox(apptest.NewClock(scenarioStart))
+	svc := noticing.Service{
+		Inbox:    m.inbox,
+		Identity: apptest.Identity{Login: login},
+		List:     apptest.StoreList{Stores: []port.StoreInfo{{ID: m.id, Name: "main"}}},
+	}
+	m.rep.Judge, m.rep.Judged = svc.Judge, db.JudgedSaves()
+	return m
+}
+
+// notices は、受信箱の kinds(空はすべて)の行を新しい順に返す。
+func (m machine) notices(t *testing.T, kinds ...port.NoticeKind) []port.NoticeRow {
+	t.Helper()
+	rows, err := m.inbox.List(t.Context(), port.NoticeQuery{Stores: []port.StoreID{m.id}, Kinds: kinds})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows
 }
 
 func (m machine) item(t *testing.T, id item.ID) item.Item {

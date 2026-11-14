@@ -7,6 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -19,14 +20,18 @@ const (
 	TargetDeletedItem      TargetKind = "deleted_item"      // 削除されたアイテム(リンクなし)
 	TargetWorkspace        TargetKind = "workspace"         // アイテムのない通知。ワークスペースの設定の区画を開く
 	TargetDeletedWorkspace TargetKind = "deleted_workspace" // 削除されたワークスペース(リンクなし)
+	TargetProject          TargetKind = "project"           // 生きているプロジェクト。概要を開く
+	TargetMovedProject     TargetKind = "moved_project"     // Store にない(別の Store へ移った)。旧 ID のアドレスを開く
+	TargetDeletedProject   TargetKind = "deleted_project"   // 削除されたプロジェクト(リンクなし)
 )
 
 // Target は、行の対象。いまの値(接頭辞・タイトル・ワークスペース名)で出す。
 type Target struct {
 	Kind          TargetKind
 	Item          item.ID
+	Project       project.ID // project・moved_project・deleted_project のとき
 	ItemKind      item.Kind
-	Display       string // アイテムの ID(HH-12)。moved は通知を作ったときの ID
+	Display       string // アイテム・プロジェクトの ID(HH-12・HH-P1)。moved・moved_project は通知を作ったときの ID
 	Title         string
 	Workspace     workspace.ID
 	WorkspaceName string
@@ -49,9 +54,12 @@ func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) 
 	row := Row{ID: n.ID, Kind: n.Kind, At: n.At, Read: n.Read, Text: n.Text, Reason: n.Reason, Sender: n.Sender, Store: info}
 	var it *item.Item
 	var err error
-	if n.Item != "" {
+	switch {
+	case n.Item != "":
 		row.Target, it, err = itemTarget(r, n)
-	} else {
+	case n.Project != "":
+		row.Target, err = projectTarget(r, n)
+	default:
 		row.Target, err = workspaceTarget(r, n.Workspace)
 	}
 	if err != nil {
@@ -86,6 +94,31 @@ func itemTarget(r port.Reader, n port.NoticeRow) (Target, *item.Item, error) {
 		Kind: TargetItem, Item: it.ID, ItemKind: it.Kind, Display: it.DisplayID(ws.Prefix), Title: it.Title,
 		Workspace: ws.ID, WorkspaceName: ws.Name,
 	}, &it, nil
+}
+
+// projectTarget は、プロジェクトを指す通知の対象。
+func projectTarget(r port.Reader, n port.NoticeRow) (Target, error) {
+	p, err := r.Projects().Get(n.Project)
+	switch {
+	case errors.Is(err, port.ErrNotFound):
+		return Target{Kind: TargetMovedProject, Project: n.Project, Display: n.Display}, nil
+	case err != nil:
+		return Target{}, err
+	case p.Deleted != nil:
+		return Target{Kind: TargetDeletedProject, Project: n.Project}, nil
+	}
+	// ワークスペースが削除済みなら、その中のプロジェクトも削除済みとして出す
+	ws, err := port.LiveWorkspace(r, p.Place.Workspace)
+	if errors.Is(err, port.ErrNotFound) {
+		return Target{Kind: TargetDeletedProject, Project: n.Project}, nil
+	}
+	if err != nil {
+		return Target{}, err
+	}
+	return Target{
+		Kind: TargetProject, Project: p.ID, Display: p.DisplayID(ws.Prefix), Title: p.Title,
+		Workspace: ws.ID, WorkspaceName: ws.Name,
+	}, nil
 }
 
 // workspaceTarget は、アイテムのない通知の対象(ワークスペースの設定の「自動化」)。

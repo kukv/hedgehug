@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // mirrorPrefix は、ミラーから受け取ったブランチを置く場所。ミラーの URL ごとに分け、remote のもの
@@ -183,6 +185,7 @@ func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.
 		return port.SyncResult{}, err
 	}
 	defer unlock()
+	s.baseline(ctx)
 	for range maxSendTries {
 		res, err := s.saveOnce(ctx, op, fn)
 		if errors.Is(err, errRejected) {
@@ -227,7 +230,7 @@ func (s syncRun) saveOnce(ctx context.Context, op port.Operation, fn func(tx por
 		}
 		return port.SyncResult{}, err
 	}
-	return s.result(theirs, now, true)
+	return s.finish(ctx, theirs, now, true)
 }
 
 // discard は、先端を base に戻し、作業ツリーとインデックスを合わせる(base にないファイルとフォルダを消す)。
@@ -238,4 +241,60 @@ func (s syncRun) discard(base plumbing.Hash) error {
 		return err
 	}
 	return s.guarded(func() error { return rollback(wt, base) })
+}
+
+// result は、送った保存(remote の先端 theirs になかったもの)と、受け取った保存(始めたときの自分になかったもの)を
+// 数える。now は同期のあとに remote が持つ先端(Seen になる)。sent が false なら、送った数は 0。
+func (s syncRun) result(theirs, now plumbing.Hash, sent bool) (port.SyncResult, error) {
+	var res port.SyncResult
+	if !now.IsZero() {
+		res.Seen = now.String()
+	}
+	if sent {
+		head, err := s.repo.Head()
+		if err != nil {
+			return port.SyncResult{}, err
+		}
+		if res.Sent, err = countSaves(s.repo, head.Hash(), theirs); err != nil {
+			return port.SyncResult{}, err
+		}
+	}
+	received, err := countSaves(s.repo, theirs, s.start)
+	if err != nil {
+		return port.SyncResult{}, err
+	}
+	res.Received = received
+	return res, nil
+}
+
+// baseline は、判定の記録がない Store なら、同期を始めたときの自分の先端から辿れる保存を、通知なしで判定済みに
+// する(決定 C4b1-3)。受け取る前に一度だけ呼ぶ。失敗はログに残すだけ(記録がなければ judge が渡さない)。
+func (s syncRun) baseline(ctx context.Context) {
+	if s.r.Judge == nil || s.r.Judged == nil {
+		return
+	}
+	if err := saves.Baseline(ctx, s.repo, s.id, s.r.Judged, s.start); err != nil {
+		slog.Warn("同期の前の保存を判定済みにできませんでした", "store", s.root, "error", err)
+	}
+}
+
+// finish は、受け取った保存を判定し(失敗はログに残すだけで、同期の結果は変えない。決定 C4b1-5)、結果を数える。
+func (s syncRun) finish(ctx context.Context, theirs, now plumbing.Hash, sent bool) (port.SyncResult, error) {
+	if err := s.judge(ctx, theirs); err != nil {
+		slog.Warn("受け取った保存を判定できませんでした", "store", s.root, "error", err)
+	}
+	return s.result(theirs, now, sent)
+}
+
+// judge は、remote の先端 theirs から受け取った保存を判定の差し込み口に渡し、自分の先端までを判定済みにする。
+func (s syncRun) judge(ctx context.Context, theirs plumbing.Hash) error {
+	if s.r.Judge == nil || s.r.Judged == nil {
+		return nil
+	}
+	head, err := s.repo.Head()
+	if err != nil {
+		return err
+	}
+	read := func(fn func(r port.Reader) error) error { return fn(&view{root: s.root}) }
+	return saves.Judge(ctx, s.repo, s.id, s.r.Judged, s.r.Judge, theirs, head.Hash(), read)
 }

@@ -264,3 +264,23 @@ func TestNotifierPublishes(t *testing.T) {
 		t.Error("a failed Add must not publish")
 	}
 }
+
+func TestNotifierMentionPublishes(t *testing.T) {
+	book := &apptest.Inbox{}
+	events := &apptest.Events{}
+	n := inbox.Notifier{Inbox: book, Events: events}
+	notice := port.Notice{Kind: port.NoticeMention, Store: s1, Source: "comment:c1", Text: "見て"}
+	if err := n.Mention(t.Context(), notice); err != nil {
+		t.Fatal(err)
+	}
+	if got := events.List(); !slices.Equal(got, []port.Event{{Kind: port.EventInbox, Store: s1}}) {
+		t.Errorf("events = %v", got)
+	}
+	book.Err = errors.New("broken")
+	if err := n.Mention(t.Context(), notice); err == nil {
+		t.Error("want the error")
+	}
+	if len(events.List()) != 1 {
+		t.Error("a failed Mention must not publish")
+	}
+}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // writeMarker は、保存の途中であることを示すファイル(.git の中)。ファイルを変える前に作り、
@@ -99,7 +100,7 @@ func (s *Stores) writeAndCommit(wt *git.Worktree, t *tx, op port.Operation) erro
 		return err
 	}
 	sig := author(op.Actor, t.meta.At)
-	_, err = wt.Commit(op.Summary+"\n\nHedgehug-Op: "+string(t.meta.Op)+"\n", &git.CommitOptions{Author: sig, Committer: sig})
+	_, err = wt.Commit(op.Summary+"\n"+saves.OpTrailer+string(t.meta.Op)+"\n", &git.CommitOptions{Author: sig, Committer: sig})
 	return err
 }
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/domain/automation"
+	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
 func TestStatusDeleteRewritesRules(t *testing.T) {
@@ -28,5 +29,68 @@ func TestStatusDeleteRewritesRules(t *testing.T) {
 	}
 	if len(ds) != 4 { // R1: trigger_status、R2: value、R3: value と enabled
 		t.Errorf("drafts = %+v", ds)
+	}
+}
+
+func TestStatusDeleteAlreadyDisabledRuleIsNotReportedDisabled(t *testing.T) {
+	r := rule("R1", automation.TriggerStatus, "TODO", automation.ActionStatus, "REVIEW")
+	r.Enabled = false
+	ds, changes := automation.StatusDeleteDrafts([]automation.Rule{r}, "REVIEW", "TODO")
+	if len(changes) != 1 || changes[0].Disabled || changes[0].Rule.Enabled {
+		t.Errorf("changes = %+v", changes)
+	}
+	if len(ds) != 1 { // value だけ。enabled の行は書かない
+		t.Errorf("drafts = %+v", ds)
+	}
+}
+
+func statusDeleteRows(extra ...change.Draft) []change.Record {
+	ds := append([]change.Draft{change.NewDelete("statuses/s1")}, extra...)
+	return change.Stamp(nil, ds, change.Meta{Op: "OP1"}, func() change.ID { return "R" })
+}
+
+func TestFollowedFromRowsRewritten(t *testing.T) {
+	rules := []automation.Rule{rule("r1", automation.TriggerStatus, "s2", automation.ActionAssignee, "taro")}
+	rows := statusDeleteRows(change.NewSet(automation.Field("r1", "trigger_status"), "s1", "s2"))
+	deleted, changes := automation.FollowedFromRows(rows, rules)
+	if deleted != "s1" || len(changes) != 1 {
+		t.Fatalf("deleted = %q, changes = %+v", deleted, changes)
+	}
+	if c := changes[0]; c.Part != "きっかけ" || c.Disabled || c.Rule.ID != "r1" {
+		t.Errorf("change = %+v", c)
+	}
+}
+
+func TestFollowedFromRowsDisabled(t *testing.T) {
+	rules := []automation.Rule{rule("r1", automation.TriggerStatus, "s2", automation.ActionStatus, "s2")}
+	rows := statusDeleteRows(
+		change.NewSet(automation.Field("r1", "value"), "s1", "s2"),
+		change.NewSet(automation.Field("r1", "enabled"), true, false),
+	)
+	_, changes := automation.FollowedFromRows(rows, rules)
+	if len(changes) != 1 || !changes[0].Disabled || changes[0].Part != "すること" {
+		t.Errorf("changes = %+v", changes)
+	}
+}
+
+func TestFollowedFromRowsBoth(t *testing.T) {
+	rules := []automation.Rule{rule("r1", automation.TriggerStatus, "s2", automation.ActionStatus, "s2")}
+	rows := statusDeleteRows(
+		change.NewSet(automation.Field("r1", "trigger_status"), "s1", "s2"),
+		change.NewSet(automation.Field("r1", "value"), "s1", "s2"),
+	)
+	_, changes := automation.FollowedFromRows(rows, rules)
+	if len(changes) != 1 || changes[0].Part != "すること" {
+		t.Errorf("changes = %+v", changes)
+	}
+}
+
+func TestFollowedFromRowsNoDelete(t *testing.T) {
+	rules := []automation.Rule{rule("r1", automation.TriggerStatus, "s2", automation.ActionAssignee, "taro")}
+	rows := change.Stamp(nil, []change.Draft{change.NewSet(automation.Field("r1", "trigger_status"), "s1", "s2")},
+		change.Meta{Op: "OP1"}, func() change.ID { return "R" })
+	deleted, changes := automation.FollowedFromRows(rows, rules)
+	if deleted != "" || len(changes) != 0 {
+		t.Errorf("deleted = %q, changes = %+v", deleted, changes)
 	}
 }

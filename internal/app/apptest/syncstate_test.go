@@ -10,3 +10,8 @@ import (
 func TestSyncStateContract(t *testing.T) {
 	apptest.RunSyncStateContract(t, func(*testing.T) port.SyncState { return apptest.NewSyncState() })
 }
+
+func TestJudgedSavesContract(t *testing.T) {
+	s := apptest.NewJudgedSaves()
+	apptest.RunJudgedSavesContract(t, func() port.JudgedSaves { return s })
+}

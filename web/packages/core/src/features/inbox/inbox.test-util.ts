@@ -35,6 +35,7 @@ export function row(id: number, kind: InboxRowKind = "automation", read = false)
     target: {
       kind: "item",
       item: `I${id}`,
+      project: "",
       display: `HH-${id}`,
       itemKind: "Task",
       title: "タイトル",

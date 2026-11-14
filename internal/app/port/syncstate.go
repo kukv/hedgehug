@@ -55,3 +55,33 @@ type SyncState interface {
 	// Mirrors は、Store のミラーごとの最後の結果を、URL の順で返す。
 	Mirrors(ctx context.Context, store StoreID) ([]MirrorRecord, error)
 }
+
+// SaveKey は、同期で受け取った保存 1 件の見分け方。
+type SaveKey struct {
+	Version string // 保存の版の印
+	Author  string
+	At      time.Time
+	Op      change.ID // 合わせ・最初の保存は空
+}
+
+// Match は、保存が通知の判定を済ませたものと合うか、の結果。
+type Match int
+
+const (
+	NotJudged   Match = iota // 判定していない
+	SameVersion              // 版の印が同じ。ここで辿るのを止める
+	SameSave                 // 操作・作者・時刻の組だけが同じ。この保存は外して辿り続ける
+)
+
+// JudgedSaves は、通知の判定を済ませた保存の記録(保存形式「このマシンに持つもの」)。
+type JudgedSaves interface {
+	// Started は、store の記録が 1 件でもあるか。
+	Started(ctx context.Context, store StoreID) (bool, error)
+	// Known は、k が記録のどれと合うかを返す。版の印が同じなら SameVersion。そうでなく Op が空でなく、
+	// 同じ Store で Op・Author・At が同じ記録があれば SameSave。
+	Known(ctx context.Context, store StoreID, k SaveKey) (Match, error)
+	// Mark は、keys をまとめて 1 回で記録する。すでにあるものは重ねない。
+	Mark(ctx context.Context, store StoreID, keys []SaveKey) error
+	// ForgetStore は、store の記録をすべて消す。
+	ForgetStore(ctx context.Context, store StoreID) error
+}
