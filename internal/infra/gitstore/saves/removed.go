@@ -60,11 +60,12 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if n.c.NumParents() != 2 {
 		return port.ReceivedSave{}, false, nil // 最初の保存
 	}
-	removed, concurrent, err := mergeRemoved(n.c)
+	base := baseOf(n.c)
+	removed, concurrent, err := mergeRemoved(n.c, base)
 	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	dropped, err := droppedPlan(n.c)
+	dropped, err := droppedPlan(n.c, base)
 	if err != nil || (len(concurrent) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 }) && !hasNewPlan(dropped)) {
 		return port.ReceivedSave{}, false, err
 	}
@@ -117,7 +118,7 @@ func isRepair(c *object.Commit, es []port.EntityRows) bool {
 // mergeRemoved は、合わせ c の 2 つの親のそれぞれについて、親にあって c にないエンティティ。New は、その親の
 // ログの行のうち、共通の祖先(1 つ目。同期の合わせと同じ)の同じエンティティのログにない行。あわせて、同じ共通の
 // 祖先から、親と一緒の削除と人の変更が重なったエンティティ(concurrentIn)も返す。
-func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
+func mergeRemoved(c *object.Commit, baseTree func() (*object.Tree, error)) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
 	ours, err := c.Parent(0)
 	if err != nil {
 		return nil, nil, err
@@ -129,16 +130,9 @@ func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows
 	if need, err := needsBase(c); err != nil || !need {
 		return nil, nil, err
 	}
-	bases, err := ours.MergeBase(theirs)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(bases) == 0 {
-		return nil, nil, nil // 同期は、共通の祖先のない合わせを作らない
-	}
-	base, err := bases[0].Tree()
-	if err != nil {
-		return nil, nil, err
+	base, err := baseTree()
+	if err != nil || base == nil {
+		return nil, nil, err // 共通の祖先がなければ nil。同期は、共通の祖先のない合わせを作らない
 	}
 	var out []port.RemovedEntity
 	for _, p := range []*object.Commit{ours, theirs} {

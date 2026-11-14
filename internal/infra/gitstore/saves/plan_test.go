@@ -52,3 +52,35 @@ func TestDroppedPlanNotRenamed(t *testing.T) {
 		t.Errorf("merge = %+v, want none", s)
 	}
 }
+
+// 両方の親がスプリント S1・S2 の行を持ち、合わせで取り除かれたときは、親ごとに target の順で 1 件ずつ。New は、
+// その側の共通の祖先にない行だけ。
+func TestDroppedPlanBothParents(t *testing.T) {
+	const purged = `{"id":"P1","at":"2026-11-12T09:00:00+09:00","entity":"sprint","target":"S1"}` + "\n" +
+		`{"id":"P2","at":"2026-11-12T09:00:00+09:00","entity":"sprint","target":"S2"}` + "\n"
+	keep := rec("R0", "OP0", t0, change.Set, "title")
+	c1 := rec("R1", "OP0", t0, change.Set, "sprints/S1/name")
+	c2 := rec("R2", "OP0", t0, change.Set, "sprints/S2/name")
+	r := newRepo(t)
+	j, known := judged(t)
+	c0 := r.save(map[string]string{wsLog: logOf(t, keep, c1, c2)}, "taro", t0, "OP0")
+	a1 := rec("RA1", "OP1", t0.Add(time.Minute), change.Set, "sprints/S1/name")
+	a2 := rec("RA2", "OP1", t0.Add(time.Minute), change.Set, "sprints/S2/name")
+	a := r.save(map[string]string{wsLog: logOf(t, keep, c1, c2, a1, a2)}, "taro", t0.Add(time.Minute), "OP1")
+	r.reset(c0)
+	b1 := rec("RB1", "OP2", t0.Add(2*time.Minute), change.Set, "sprints/S1/name")
+	b2 := rec("RB2", "OP2", t0.Add(2*time.Minute), change.Set, "sprints/S2/name")
+	b := r.save(map[string]string{wsLog: logOf(t, keep, c1, c2, b1, b2)}, "hanako", t0.Add(2*time.Minute), "OP2")
+	m := r.save(map[string]string{wsLog: logOf(t, keep), "purged.jsonl": purged}, BotName, t0.Add(3*time.Minute), "", a, b)
+	r.mark(j, c0)
+	s, ok := pending(t, r, m, m, known)[m.String()]
+	if !ok || len(s.DroppedPlan) != 4 {
+		t.Fatalf("merge = %+v, want 4 DroppedPlan", s)
+	}
+	for i, w := range []struct{ target, new string }{{"S1", "RA1"}, {"S2", "RA2"}, {"S1", "RB1"}, {"S2", "RB2"}} {
+		d := s.DroppedPlan[i]
+		if string(d.Target) != w.target || len(d.Log) != 2 || len(d.New) != 1 || d.New[0].ID != change.ID(w.new) {
+			t.Errorf("DroppedPlan[%d] = %+v, want target %s New %s", i, d, w.target, w.new)
+		}
+	}
+}
