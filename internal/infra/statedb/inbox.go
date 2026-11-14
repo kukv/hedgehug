@@ -254,7 +254,7 @@ func (b inbox) Prune(ctx context.Context, store port.StoreID, targets []change.I
 	args := append([]any{string(store)}, ids...)
 	args = append(args, ids...)
 	args = append(args, ids...)
-	_, err := b.db.ExecContext(ctx, `DELETE FROM inbox WHERE store = ? AND (item IN `+marks+` OR project IN `+marks+` OR (item = '' AND project = '' AND workspace IN `+marks+`)) AND NOT (kind = 'repair' AND substr(source, 1, 14) = 'repair:purged:')`, args...) //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
+	_, err := b.db.ExecContext(ctx, `DELETE FROM inbox WHERE store = ? AND (item IN `+marks+` OR project IN `+marks+` OR (item = '' AND project = '' AND workspace IN `+marks+`)) AND NOT (kind = 'repair' AND source LIKE 'repair:purged:%')`, args...) //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
 	return err
 }
 

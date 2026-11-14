@@ -214,8 +214,10 @@ func TestFakeInboxPruneKeepsPurgedRepair(t *testing.T) {
 	b := &Inbox{}
 	purged := port.Notice{Kind: port.NoticeRepair, Store: "s1", Item: "i1", Source: "repair:purged:i1"}
 	assign := port.Notice{Kind: port.NoticeAssign, Store: "s1", Item: "i1"}
+	restored := port.Notice{Kind: port.NoticeRepair, Store: "s1", Item: "i1", Source: "repair:restore:op1"}
 	_ = b.Add(t.Context(), purged)
 	_ = b.Add(t.Context(), assign)
+	_ = b.Add(t.Context(), restored)
 	_ = b.Prune(t.Context(), "s1", []change.ID{"i1"})
 	if got := fakeList(t, b, "s1"); len(got) != 1 || got[0].Source != "repair:purged:i1" {
 		t.Errorf("after prune = %+v", got)
