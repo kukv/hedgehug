@@ -246,3 +246,63 @@ func TestSaveProjectConflictNotifiesTheCreator(t *testing.T) {
 		t.Errorf("notices = %+v, want %+v", got, want)
 	}
 }
+
+// 最後の desc の行が自動化の行なら、差出人は空(「hedgehug」)。
+func TestSaveConflictAutomationSender(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "自動化"}
+	if err := rec.Write(ctx, store, op, func(tx port.Tx) error {
+		return errors.Join(tx.WriteItems().Describe(apptest.SampleTask, "a\nx\n"),
+			tx.WriteItems().Append(apptest.SampleTask, change.NewDesc().ByRule("01RULE0000000000000000001")))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Inbox.(*apptest.Inbox).Notices(); len(got) != 1 || got[0].Sender != "" {
+		t.Errorf("notices = %+v, want one from hedgehug", got)
+	}
+}
+
+// failing は、fn のあとに Write を失敗させる Stores。
+type failing struct {
+	port.Stores
+	err error
+}
+
+func (f failing) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	return f.Stores.Write(ctx, id, op, func(tx port.Tx) error {
+		if err := fn(tx); err != nil {
+			return err
+		}
+		return f.err
+	})
+}
+
+// 重なった保存の書き込みが失敗したら、受信箱に行を足さない。
+func TestSaveConflictWriteFailsAddsNothing(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	taro := svc
+	taro.Identity = apptest.Identity{Login: "taro"}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taro.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\nx\n"); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("boom")
+	broken := svc
+	broken.Stores = failing{Stores: svc.Stores, err: boom}
+	if _, err := broken.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n"); !errors.Is(err, boom) {
+		t.Fatalf("SaveItem err = %v, want %v", err, boom)
+	}
+	if got := svc.Inbox.(*apptest.Inbox).Notices(); len(got) != 0 {
+		t.Errorf("notices = %+v, want none", got)
+	}
+}

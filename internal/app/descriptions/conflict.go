@@ -23,19 +23,23 @@ func conflictNotice(r port.Reader, store port.StoreID, sl slot) (port.Notice, er
 	return n, nil
 }
 
-// describer は、ログ log の最後の desc の行の人。なければ create の行の人。
+// describer は、ログ log の最後の desc の行の人。なければ create の行の人。自動化の行は空(「hedgehug」。noticing の
+// 差出人と同じ規則。C4b1-8)。
 func describer(log []change.Record) string {
-	var desc, create string
-	for _, r := range log {
+	var desc, create *change.Record
+	for i, r := range log {
 		switch r.T {
 		case change.Desc:
-			desc = r.By
+			desc = &log[i]
 		case change.Create:
-			create = r.By
+			create = &log[i]
 		}
 	}
-	if desc != "" {
-		return desc
+	if desc == nil {
+		desc = create
 	}
-	return create
+	if desc == nil || desc.Actor.Kind == change.ActorAutomation {
+		return ""
+	}
+	return desc.By
 }
