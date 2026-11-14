@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 // recBy は、実行者 actor の行。
@@ -64,11 +65,32 @@ func TestRepairSaveFlag(t *testing.T) {
 	}
 }
 
+const (
+	epicID  item.ID = "01ITEM00000000000000000009"
+	childID item.ID = "01ITEM00000000000000000002"
+	epicDir         = "items/" + string(epicID) + "/log.jsonl"
+	gone    item.ID = "01ITEM00000000000000000008"
+	wsLog           = "workspaces/01WS000000000000000000001/log.jsonl"
+)
+
+// createUnder は、親 parent(空ならワークスペースの直下)の下にアイテム id を作る taro の行。
+func createUnder(t *testing.T, rid string, id, parent item.ID) change.Record {
+	t.Helper()
+	p := item.Place{Workspace: "01WS000000000000000000001", Number: 1}
+	if parent != "" {
+		p.Parent = &parent
+	}
+	r := rec(rid, "OP0", t0, change.Create, "")
+	r.To = item.Create(item.Item{ID: id, Place: p, Kind: item.Task, Rank: "V", Title: "t"}).To
+	return r
+}
+
 // アイテムのフォルダを消した修復の保存は、Removed にそのアイテムと消える前のログを持つ。New は空。
+// 親(gone)のフォルダは、前の版にもうない(完全に削除された親の下の修復 (1))。
 func TestRemovedOnRepairPurge(t *testing.T) {
 	r := newRepo(t)
 	j, known := judged(t)
-	create := rec("R1", "OP0", t0, change.Create, "")
+	create := createUnder(t, "R1", item.ID(task), gone)
 	assign := rec("R2", "OP1", t0.Add(time.Minute), change.Set, "assignee")
 	c0 := r.save(map[string]string{itemLog: logOf(t, create, assign), itemDesc: "本文"}, "taro", t0, "OP0")
 	s1 := r.save(map[string]string{itemLog: "", itemDesc: "", "purged.jsonl": "{}\n"}, BotName, t0.Add(time.Minute), "OP1")
@@ -83,6 +105,42 @@ func TestRemovedOnRepairPurge(t *testing.T) {
 	e := s.Removed[0]
 	if e.Ref != itemRef || len(e.Log) != 2 || e.Log[1].ID != "R2" || len(e.New) != 0 {
 		t.Errorf("removed = %+v", e)
+	}
+}
+
+// 行のない bot の保存が修復 (1) なのは、消したアイテムの祖先のどれかのフォルダが、前の版にもうないときだけ。
+// Epic とその下の子を一緒に消した保存(保持期間のあとの完全な削除など)は修復でない。祖先を辿るので、親が
+// まだあっても、その上が消えていれば修復(修復 (1) は内部 ID の順に 1 件ずつ消すので、孫が先に消えることがある)。
+func TestRowlessBotSaveRepair(t *testing.T) {
+	childLog := "items/" + string(childID) + "/log.jsonl"
+	for name, c := range map[string]struct {
+		epicParent item.ID
+		remove     []string
+		want       bool
+	}{
+		"親と一緒に消した": {"", []string{epicDir, childLog, itemLog}, false},
+		"祖先が前にない":   {gone, []string{itemLog}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRepo(t)
+			j, known := judged(t)
+			c0 := r.save(map[string]string{
+				epicDir:  logOf(t, createUnder(t, "E1", epicID, c.epicParent)),
+				childLog: logOf(t, createUnder(t, "C1", childID, epicID)),
+				itemLog:  logOf(t, createUnder(t, "R1", item.ID(task), childID)),
+				wsLog:    logOf(t, rec("W1", "OP0", t0, change.Create, "")),
+			}, "taro", t0, "OP0")
+			files := map[string]string{"purged.jsonl": "{}\n"}
+			for _, f := range c.remove {
+				files[f] = ""
+			}
+			s1 := r.save(files, BotName, t0.Add(time.Minute), "OP1")
+			r.mark(j, c0)
+			s, ok := pending(t, r, s1, s1, known)[s1.String()]
+			if !ok || s.Repair != c.want {
+				t.Errorf("passed %v, save = %+v, want repair %v", ok, s, c.want)
+			}
+		})
 	}
 }
 

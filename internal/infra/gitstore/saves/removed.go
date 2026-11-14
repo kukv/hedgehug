@@ -81,11 +81,17 @@ func saveOf(n node) (port.ReceivedSave, error) {
 	if err != nil {
 		return port.ReceivedSave{}, err
 	}
-	s.Removed, err = removedFrom(p, n.c, nil)
+	if s.Removed, err = removedFrom(p, n.c, nil); err != nil || len(es) > 0 {
+		return s, err
+	}
+	if s.Repair, err = underGone(p, s.Removed); !s.Repair {
+		s.Removed = nil
+	}
 	return s, err
 }
 
-// isRepair は、同期の修復の保存か。作者が bot で、足した行がすべて実行者 sync か、行がない(決定 C4b2-2)。
+// isRepair は、同期の修復の保存の形か。作者が bot で、足した行がすべて実行者 sync か、行がない(決定 C4b2-2)。
+// 行がない保存は、saveOf が消えたものの形(underGone)でも確かめる。
 func isRepair(c *object.Commit, es []port.EntityRows) bool {
 	if c.Author.Name != BotName {
 		return false
