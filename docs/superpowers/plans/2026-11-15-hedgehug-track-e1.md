@@ -45,7 +45,7 @@
 | E1-4 | 組み込みのキーは `status`・`category`・`kind`・`system`・`assignee`・`watching`・`mentions`・`priority`・`sprint`・`release`・`project`・`parent`・`epic`・関連の 9 個・`workspace`・`store`・`is`・`has`・`points`・`estimate`・`start`・`end`・`created`・`updated`・`sort`・`group`。追加プロパティが組み込みと同じ綴りなら組み込みの意味 | 04 の 189〜214・229 行 |
 | E1-5 | 比べ方: 名前・ログイン名・ID は大文字と小文字を区別しない完全一致(自由な語と、テキスト・URL の値だけ部分一致)。ログイン名の値の先頭の `@` は除く。`@me` はアイテムの Store の「あなた」(`port.Identity.Me`。読めない・空なら何にも一致しない)。否定は語の結果を反転する(値のないアイテム・キーを持たないワークスペースのアイテム・読めない日付と数は、否定で一致する側に入る) | 04 の 173・174・216・218・244 行 |
 | E1-6 | ID のキー(`project`・`parent`・`epic`・関連の 9 個)は、相手のいまの ID か旧 ID(移動前の ID、旧い接頭辞の ID)のどれかと等しければ一致。自由な語は、いまの ID・旧 ID・タイトル・説明のどれかに部分一致すれば一致し、いまの ID・タイトル・説明のどれにも一致せず旧 ID だけで一致した語があれば、その行に「旧 ID」と添える(`oldIdHit`) | 04 の 183・201〜203・459 行、02 の旧 ID の規則 |
-| E1-7 | `is:invalid` は、08「検出する項目」のアイテムを指す行の判定を作る G が、`query.Facts.Invalid` を埋める(G の計画で、診断と検索が同じ domain の関数を使う)。E1 では `Invalid` をいつも false にし、`is:invalid` は何にも一致しない(エラーにはしない) | 行き先(診断)を作るトラックがつなぐ規則(A5c の「他のトラックに渡すもの」と同じ)。判定を 2 か所に持たないため |
+| E1-7 | `is:invalid` は、08「検出する項目」のアイテムを指す 12 項目(親がない・種類に合わない親子・親の循環・ステータスがない・存在しない値・存在しない人・存在しないスプリント・リリース・宙づりの関連・親が別のワークスペース・プロジェクトにある・日付の逆転・番号の重なり・Issue の二重リンク)の判定を、E1 で `domain/repair` の 1 つの関数 `repair.ItemProblems` として作り、`query.Facts.Invalid` を埋める。G の診断は同じ関数を使う。調べるのは削除されていないアイテム(番号の重なりだけは削除済みも数える)。番号の重なりは、同じワークスペースで同じ番号を持つ削除されていないアイテムのどれにも付ける(どちらが番号を持ち続けるかは remote の情報が要り、修復のときに決める) | ユーザーの決定(2026-11-15。トラック E の決定 E-4)。08 の 403〜407 行。検索と診断で、1 つのアイテムが無効かどうかが食い違わないため(04 の 1080 行) |
 | E1-8 | `is:deleted`(否定でない語が 1 つでもある)のとき、対象は削除済みのアイテムのうち、ワークスペースが削除されていないもの(08 の一覧に行として出るもの)だけにする。行には「削除済み」のピルと「あと N 日で完全に削除」(N = 削除の日 + 保持日数 − 今日。0 未満なら「保持日数を過ぎています」)を出し、行を薄くする。タイトルは押せない文字で出す。タイトルを押して設定の「削除済み」の行を開くのは、その画面を作る G が足す | 04 の 306〜312 行、08 の 307〜320 行 |
 | E1-9 | `sort:` は E1 の行の並びに効かせる(テーブルの並び)。`group:` は解析だけして応答の `group` に返し、グループ分けは E2 が作る | 04 の 248・272 行。テーブルのグループは E2 |
 | E1-10 | 並び: `sort:` があれば全体を 1 本にしてそのキーで並べ、値が同じなら Store の並び・ワークスペースの並び・アイテムの並び順(`item.SortSiblings` と同じ比べ方)の順。`sort:` がなければ Store の並び、ワークスペースの並び、並び順。Store の並びは `port.StoreList` の順、ワークスペースの並びはサイドバーと同じ(`workspace.RankOf` の順、同じなら内部 ID) | 04 の 268 行、`app/workspaces/order.go` の `rankedInOrder` |
@@ -53,7 +53,7 @@
 | E1-12 | `updated` は `history.Updated(log, ctx)`: 履歴に出す行のうち実行者が人か自動化の、いちばん新しい行の時刻(作成を含む)。GitHub・同期の行と、履歴に出ない行(順位の変更など)は使わない | storage-design 328 行、04 の 211 行 |
 | E1-13 | `sprint:next` は、計画中(開始していない、完了していない、削除されていない)のスプリントのうち、開始日が最も早いもの。開始日のないものは最後、同じなら `planning.ScreenOrder` の順。新しい関数 `planning.NextSprint` に置く | 04 の 199 行 |
 | E1-14 | `mentions:` は、説明と、削除されていないコメントの本文に `mention.Has(body, login)` が真のもの(`@me` は Store の「あなた」)。`none` は説明にもコメントにも `@` のメンションがないもの(`mention` の抽出で 1 人もいない) | 04 の 197 行 |
-| E1-15 | 説明とコメントは、クエリに自由な語か `mentions:` があるときだけ読む(`Query.NeedsText`)。`is:overwritten` があるときだけ受信箱を読む | 1 回の検索で全アイテムの説明を読まないため(Store をその都度読むので) |
+| E1-15 | 説明とコメントは、クエリに自由な語か `mentions:` があるときだけ読む(`Query.NeedsText`)。`is:overwritten` があるときだけ受信箱を読む(`Query.NeedsInbox`)。`is:invalid` があるときだけ診断の判定をする(`Query.NeedsInvalid`) | 1 回の検索で全アイテムの説明を読まないため(Store をその都度読むので) |
 | E1-16 | 画面の状態は state.db の表 `screen_states(screen TEXT PRIMARY KEY, body TEXT NOT NULL)` に、画面ごとの JSON の文字列で置く。サーバーは中身を見ない(64 KiB まで)。検索の画面の鍵は `search`、中身は `{"query": "…"}`。画面はブラウザのタブで最初に読んだ値を覚え、以後はタブの中の値を使い、変えるたびに書く | 01 の 75・178 行。E2〜E7 の画面も同じ表を使う |
 | E1-17 | 画面のアドレスは `/search`。サイドバーのナビは「受信箱」の下に「検索」を置く(マイタスク・アクティビティは E4・C4d が上の位置に足す)。いまの画面なら強調する | 01 の 163 行、04 の 57〜64 行 |
 | E1-18 | 検索の画面の本体は、テーブルの初めの 7 列(ID・タイトル・ステータス・担当者・優先度・終了日・ポイント)を読むだけで出す。ID の前に Store の点(Store の色)をいつも出す。タイトルは押すと詳細パネルを開く。ステータスは色の点と名前、担当者はアバターと表示名(メンバーにいなければ「不明なユーザー」)、終了日は `dueLabel`。列の操作・セルの編集・選択・行末のメニュー・グループは E2 | 04 の 459・664 行、E の分け方 |
@@ -85,7 +85,7 @@
   - `type Op string`(`OpEq ":"`・`OpLt "<"`・`OpLe "<="`・`OpGt ">"`・`OpGe ">="`)
   - `type Term struct { Raw string; Not bool; Key string /* 小文字。自由な語は "" */; Op Op; Values []string }`
   - `type Sort struct { Key string; Desc bool }`
-  - `type Query struct { Terms []Term /* sort・group を除く */; Sort *Sort; Group string; Deleted bool; HasKey bool; NeedsText bool; NeedsInbox bool }`
+  - `type Query struct { Terms []Term /* sort・group を除く */; Sort *Sort; Group string; Deleted bool; HasKey bool; NeedsText bool; NeedsInbox bool; NeedsInvalid bool }`
   - `func Parse(text string, custom func(key string) bool) (Query, []string)` — 2 つ目はエラーの文(書いた順)。`custom` は小文字のキーが、どれかのワークスペースの追加プロパティにあるか
   - `func Builtin(key string) bool`(E1-4 の組み込み。`keys.go`)
 
@@ -115,7 +115,7 @@
 | `is:deleted,blocked` / `-is:deleted` | `Deleted` 真 / 偽 |
 | `foo` / `foo sort:id` | `HasKey` 偽 / 真 |
 | `foo` / `mentions:a` / `kind:bug` | `NeedsText` 真 / 真 / 偽 |
-| `is:overwritten` | `NeedsInbox` 真 |
+| `is:overwritten` / `-is:invalid` | `NeedsInbox` 真 / `NeedsInvalid` 真 |
 | `` | 語なし、エラーなし |
 
 - [ ] **Step 2: 落ちることを確かめる**
@@ -205,7 +205,7 @@ git commit -m "feat(query): 名前・ID・自由な語のキーで照合する(E
 - `TestCompare`: `points>=3`(3 で真・2.5 で偽・なしで偽)、`points:none`、`estimate<=2`、`end<today`(終了日なしは偽)、`start>-7d`、`end:abc`(何にも一致しない)、`kind>story`(`:` と同じ)、`created:today`・`updated>-7d`(時刻をこのマシンの時刻帯の日にして比べる)。
 - `TestMatchNegationKeepsEmpty`(Review Focus 1): 担当者なしに `-assignee:@me` 真、ポイントなしに `-points>3` 真、`-end:abc` 真。
 - `TestSprintRelease`: `sprint:current`(`SprintCurrent`)、`sprint:next`、`sprint:"Sprint 3"`、`sprint:none`、`release:v2.0.0`、`release:none`。
-- `TestIsHas`: `is:blocked`(`Item.Blocked`)、`is:overdue`(未完了で終了日が今日より前。今日は偽。完了は偽)、`is:overwritten`、`is:invalid`(`Invalid` が偽なら偽)、`has:end`、`has:sprint`、`has:release`、`has:pr`、チェックのプロパティはオンだけ `has:` 真。
+- `TestIsHas`: `is:blocked`(`Item.Blocked`)、`is:overdue`(未完了で終了日が今日より前。今日は偽。完了は偽)、`is:overwritten`、`is:invalid`(`Invalid`)、`has:end`、`has:sprint`、`has:release`、`has:pr`、チェックのプロパティはオンだけ `has:` 真。
 - `TestMentions`: 説明の `@tanaka`、削除されていないコメントの `@me`(`Me` が suzuki で本文に `@suzuki`)、`mentions:none`(どこにもメンションなし。`mail@example` だけの本文はメンションありとみなす)。
 - `internal/domain/mention/mention_test.go` の `TestAny`: `@hanako 見て`・`cc:@Hanako`・`mail@hanako`・`` `@hanako` ``(コードの中)は真、`hanako`・`@`・`@ 見て`・`@。` は偽。
 - `TestCustomProperties`: 単一選択・複数選択(選択肢の名前、`none`)、数値(比較)、日付(比較)、ユーザー(`@me`)、チェック(`true`、`false` はオフと未設定の両方)、テキスト・URL(部分一致、`none`)。キーを持たないワークスペースのアイテムは偽、否定で真。
@@ -317,6 +317,90 @@ git commit -m "feat: 最後に変わった時刻・次のスプリント・削�
 
 ---
 
+### Task 5a: 診断の判定(親子・番号・Issue)
+
+**Files:**
+- Create: `internal/domain/repair/problems.go`(型と `ItemProblems`)、`internal/domain/repair/problems_tree.go`
+- Test: `internal/domain/repair/problems_test.go`
+
+**Interfaces:**
+- Produces:
+  - `type Problem string`(`ProblemNoParent`・`ProblemBadParentKind`・`ProblemParentCycle`・`ProblemNoStatus`・`ProblemMissingValue`・`ProblemMissingPerson`・`ProblemMissingPlan`・`ProblemDanglingRelation`・`ProblemParentElsewhere`・`ProblemDateOrder`・`ProblemNumberOverlap`・`ProblemIssueTwice`)
+  - `type StoreState struct { Items []item.Item /* 削除済みを含む Store のすべて */; Settings map[workspace.ID]workspace.Settings; Plans map[workspace.ID]planning.Plan /* 削除済みを含む */; Members []member.Member; Issues map[item.ID][]string /* アイテムがリンクしている Issue の鍵(itemlink の Ref.Key) */ }`
+  - `func ItemProblems(s StoreState) map[item.ID][]Problem` — 削除されていないアイテムごとの問題(問題のないアイテムは入れない。並びは上の型の順)
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+- `TestNoParent`: 親のない Story、削除済みの親の Task、Store にない親の Step → `ProblemNoParent`。親のない Epic は問題なし。
+- `TestBadParentKind`: Story の下の Story、Epic の下の Step、親を持つ Epic(親が Store になくても)→ `ProblemBadParentKind`。
+- `TestParentCycle`: A → B → A の 2 件ともに `ProblemParentCycle`。輪の外から輪に入る C は付かない。
+- `TestParentElsewhere`: 親が別のワークスペース、または同じワークスペースの別のプロジェクトにある → `ProblemParentElsewhere`。
+- `TestNumberOverlap`: 同じワークスペースで番号 5 の削除されていないアイテム 2 件 → 2 件とも。番号 7 の削除されていないアイテムと削除済みのアイテム → 削除されていない方だけ(削除済みは結果に入れない)。別のワークスペースの同じ番号は問題なし。
+- `TestIssueTwice`: 1 つの Issue に 2 件がリンク → 2 件とも。1 件が 2 つの Issue にリンク → その 1 件。
+- 削除済みのアイテムは、どの問題があっても結果に入れない。
+
+- [ ] **Step 2: 落ちることを確かめる**
+
+Run: `go test ./internal/domain/repair/ -run 'Test(NoParent|BadParentKind|ParentCycle|ParentElsewhere|NumberOverlap|IssueTwice)'`
+Expected: FAIL
+
+- [ ] **Step 3: 型・`ItemProblems` と、親子・番号・Issue の判定を書く**
+
+種類と親の組は `item.CanPlace`、場所は `Item.Place`。Task 5b の判定は、まだ何も足さない分岐にしておく。
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./internal/domain/repair/`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/domain/repair
+git commit -m "feat(repair): 診断のアイテムの問題(親子・番号・Issue)を判定する(E1 Task 5a)"
+```
+
+---
+
+### Task 5b: 診断の判定(値・人・計画・関連・日付)
+
+**Files:**
+- Create: `internal/domain/repair/problems_values.go`
+- Test: `internal/domain/repair/problems_values_test.go`
+
+**Interfaces:**
+- Consumes: Task 5a の `StoreState`・`Problem`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+- `TestNoStatus`: ステータスがワークスペースのステータスにない(空を含む)→ `ProblemNoStatus`。
+- `TestMissingValue`: 優先度・関連システム・単一選択・複数選択の値がワークスペースの一覧にない → `ProblemMissingValue`。プロパティごと消えた選択式の値も同じ。
+- `TestMissingPerson`: 担当者・ユーザー型のプロパティのログイン名がメンバーにない(大文字と小文字を区別しない)→ `ProblemMissingPerson`。
+- `TestMissingPlan`: スプリントかリリースがワークスペースの計画にない → `ProblemMissingPlan`。削除済みのスプリントを指すものは問題なし。
+- `TestDanglingRelation`: 関連の相手が Store にない → `ProblemDanglingRelation`。相手が削除済みなら問題なし。
+- `TestDateOrder`: 終了日が開始日より前 → `ProblemDateOrder`。同じ日・片方だけは問題なし。
+
+- [ ] **Step 2: 落ちることを確かめる**
+
+Run: `go test ./internal/domain/repair/ -run 'Test(NoStatus|MissingValue|MissingPerson|MissingPlan|DanglingRelation|DateOrder)'`
+Expected: FAIL
+
+- [ ] **Step 3: 判定を書く**
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./internal/domain/repair/`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/domain/repair
+git commit -m "feat(repair): 診断のアイテムの問題(値・人・計画・関連・日付)を判定する(E1 Task 5b)"
+```
+
+---
+
 ### Task 6: Store を読んで照合の材料を作る
 
 **Files:**
@@ -324,7 +408,7 @@ git commit -m "feat: 最後に変わった時刻・次のスプリント・削�
 - Test: `internal/app/search/facts_test.go`(`apptest` の偽物の Store にアイテムを足して確かめる)
 
 **Interfaces:**
-- Consumes: Task 2 の `query.Facts`・`query.Ref`、Task 5 の `history.Updated`・`planning.NextSprint`、`port.Stores`・`port.StoreList`・`port.SyncTargets`・`port.Identity`・`port.InboxBook`・`port.Clock`
+- Consumes: Task 2 の `query.Facts`・`query.Ref`、Task 5 の `history.Updated`・`planning.NextSprint`・`change.Deletion.DaysLeft`、Task 5a の `repair.ItemProblems`・`repair.StoreState`、`port.Stores`・`port.StoreList`・`port.SyncTargets`・`port.Identity`・`port.InboxBook`・`port.Clock`
 - Produces:
   - `type Service struct { Stores port.Stores; StoreList port.StoreList; SyncTargets port.SyncTargets; Identity port.Identity; Inbox port.InboxBook; Clock port.Clock }`
   - `type entry struct { info port.StoreInfo; facts query.Facts; daysLeft *int /* 削除済みだけ。change.Deletion.DaysLeft */ }`(パッケージの中だけ)
@@ -334,6 +418,7 @@ git commit -m "feat: 最後に変わった時刻・次のスプリント・削�
 
 - `TestFactsBasic`: ステータス・担当者の表示名(`Names`)・プロジェクトの `Ref`(旧 ID を含む)・祖先・関連(削除済みの相手を除く)・スプリントの `SprintCurrent`・`SprintNext`・`HasPR`(PR のリンクだけ。Issue のリンクだけのアイテムは偽)・`Created`・`Updated`・`Me`・`Item.Blocked`。
 - `TestFactsTextOnlyWhenNeeded`: `NeedsText` が偽なら `Description`・`Comments` は空、真なら説明と削除されていないコメントの本文。
+- `TestFactsInvalid`: `is:invalid` のクエリで、終了日が開始日より前のアイテムだけ `Invalid` が真。`NeedsInvalid` が偽なら判定しない(どれも偽)。
 - `TestFactsOverwrittenOnlyWhenNeeded`: 受信箱に未読の「上書き」(`port.NoticeOverwrite`)があるアイテムだけ `Overwritten`。既読のもの・別のアイテムのものは偽。`NeedsInbox` が偽なら受信箱を読まない(偽物の受信箱が呼ばれたら失敗)。
 - `TestSearchOldPrefixReusedByAnother`(Review Focus 2): ワークスペース A の接頭辞を HH から WEB に変え、ワークスペース B が HH を使うとき、A のアイテムの `Aliases` に `HH-1` がある。
 - `TestEntriesDeleted`: `Deleted` のとき、削除済みのアイテムだけ。ワークスペースごと削除したものは出さない。`daysLeft` は Store の保持日数(`RetentionDays`)で `DaysLeft` を求めたもの。
@@ -346,7 +431,7 @@ Expected: FAIL
 
 - [ ] **Step 3: `Service`・`entries`・材料の作り方を書く**
 
-ワークスペースは `port.LiveWorkspaces`(B5b の取り決め)、並びは `workspace.RankOf` → 内部 ID(E1-10)。旧 ID は `transfer.Aliases`(パレットの `index.go` と同じ。すべての Store の転送記録を集めてから)。ブロック中は `relation.BlockedSet`(閉じたかは、ブロック元のワークスペースの設定の分類)。PR のリンクは `itemlink.FromLog` の `Links` のうち `Kind` が `itemlink.PR` のもの、コメントは `comment.FromLog`、スプリント・リリースは `planning.FromLog`(ワークスペースのログ)と `planning.ActiveSprint`・`planning.NextSprint`。受信箱は `Inbox.List` を `Kinds: []port.NoticeKind{port.NoticeOverwrite}` で最後まで読み、未読の `Item` を集める。
+ワークスペースは `port.LiveWorkspaces`(B5b の取り決め)、並びは `workspace.RankOf` → 内部 ID(E1-10)。旧 ID は `transfer.Aliases`(パレットの `index.go` と同じ。すべての Store の転送記録を集めてから)。ブロック中は `relation.BlockedSet`(閉じたかは、ブロック元のワークスペースの設定の分類)。PR のリンクは `itemlink.FromLog` の `Links` のうち `Kind` が `itemlink.PR` のもの、コメントは `comment.FromLog`、スプリント・リリースは `planning.FromLog`(ワークスペースのログ)と `planning.ActiveSprint`・`planning.NextSprint`。`Invalid` は、`NeedsInvalid` のとき Store ごとに `repair.StoreState`(すべてのアイテム・設定・計画・メンバー・Issue のリンク)を作って `repair.ItemProblems` を 1 回呼び、問題のあるアイテムを真にする。受信箱は `Inbox.List` を `Kinds: []port.NoticeKind{port.NoticeOverwrite}` で最後まで読み、未読の `Item` を集める。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -700,7 +785,7 @@ Expected: PASS
 
 - [ ] **Step 3: 文書を直し、この計画の末尾に「他の小計画・トラックに渡すもの」を書く**
 
-中身: E2(グループ・列・セル・選択・「まとめて変更」・削除済みの行の無効)、E3(「ビューとして保存…」・レイアウトの切り替え・注記)、E4(日付が変わったときの計算し直し・`CandidateScope` の `workspace`)、E7(ツリーの絞り込み欄)、G(`Facts.Invalid` を 08 の判定で埋める・削除済みの行のタイトルから設定の「削除済み」・`store:旧名` の書き換え・診断の「検索で開く」)。
+中身: E2(テーブルは E1 で初めの 7 列を読むだけで出した(E1-18)。グループ・列・セル・選択・「まとめて変更」・削除済みの行の無効)、E3(「ビューとして保存…」・レイアウトの切り替え・注記)、E4(日付が変わったときの計算し直し・`CandidateScope` の `workspace`)、E7(ツリーの絞り込み欄)、G(診断は `repair.ItemProblems` と `change.Deletion.DaysLeft` を使う・削除済みの行のタイトルから設定の「削除済み」・`store:旧名` の書き換え・診断の「検索で開く」)。
 
 - [ ] **Step 4: すべてを確かめる**
 
