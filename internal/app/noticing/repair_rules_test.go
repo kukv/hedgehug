@@ -94,9 +94,12 @@ func TestOrphanRulesEmptyDisplay(t *testing.T) {
 	f.wantNone()
 }
 
-// プロジェクト「Mobile」は同じ Store のワークスペース「Mobile」にある(同じ Store の中の転送記録は原因に数えない)。
+// プロジェクト「アプリ」は同じ Store のワークスペース「Mobile」へ移った(同じ Store の中の転送記録は原因に数えない)。
 func TestOrphanRulesSameStoreNoNotice(t *testing.T) {
 	f := setup(t)
+	if err := apptest.SampleMobile(t.Context(), f.stores, store); err != nil {
+		t.Fatal(err)
+	}
 	movingRecord(f, transfer.Record{
 		Entity: transfer.EntityProject, Target: apptest.SampleMobileProject, Old: "HH-P2", New: "MB-P1", ToStore: string(store),
 	})
