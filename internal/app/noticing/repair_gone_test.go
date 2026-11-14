@@ -201,6 +201,20 @@ func TestMovedDropped(t *testing.T) {
 	}
 }
 
+// 消えたもの自身の転送記録があれば、行の位置の ID はその old(移動したときの ID。いまの接頭辞と違っても)。
+func TestMovedOwnOldDisplay(t *testing.T) {
+	f := setup(t)
+	addItem(f, "taro", webItem(item5, 5, item.Task, apptest.SampleEpic))
+	edit := retitle(f, "hanako", item5)
+	movingRecord(f, transfer.Record{
+		Entity: transfer.EntityItem, Target: item5, Old: "WB-5", New: "WEB-12", ToStore: "S2", ToStoreName: "team-b",
+	})
+	f.judge(dropped(f, itemRefOf(item5), edit))
+	if n := f.wantOne(); n.Display != "WB-5" || n.Text != "WB-5 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-12 です" {
+		t.Errorf("notice = %+v", n)
+	}
+}
+
 // 同じ Store の中の転送記録は、別の Store への移動に数えない。
 func TestMovedSameStoreNotCounted(t *testing.T) {
 	f := setup(t)
@@ -293,7 +307,8 @@ func TestPurgedUnderNested(t *testing.T) {
 	}
 }
 
-// 完全に削除されたワークスペースのログがなければ、名前は記録の display。
+// 完全に削除されたワークスペースのログがなければ、名前は記録の display。ワークスペースのログを Store からも
+// 修復の保存からも読めないので、行の位置の ID は内部 ID。
 func TestPurgedUnderWorkspaceNoLog(t *testing.T) {
 	f := setup(t)
 	it := webItem(item7, 7, item.Task, "")
@@ -324,17 +339,53 @@ func TestMovedProjectDropped(t *testing.T) {
 	}
 }
 
+// goneWorkspaceLog は、別の Store「S9」に作ったワークスペース goneWS(Gone、接頭辞 GW)のログ。この Store には
+// ないワークスペースの、消える前のログにする。
+func goneWorkspaceLog(f *fixture) []change.Record {
+	f.t.Helper()
+	const other port.StoreID = "S9"
+	f.stores.AddStore(other)
+	ref := change.Ref{Kind: change.KindWorkspace, ID: goneWS}
+	err := f.stores.Write(f.t.Context(), other, port.Operation{Actor: user("taro"), Summary: "テスト"}, func(tx port.Tx) error {
+		d, err := workspace.CreateWithSettings(workspace.Workspace{ID: goneWS, Name: "Gone", Prefix: "GW"}, workspace.Settings{})
+		if err != nil {
+			return err
+		}
+		return tx.WriteWorkspaces().Append(goneWS, d)
+	})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var log []change.Record
+	if err := f.stores.Read(f.t.Context(), other, func(r port.Reader) (err error) {
+		log, err = r.Changes().Of(ref)
+		return err
+	}); err != nil {
+		f.t.Fatal(err)
+	}
+	return log
+}
+
 // ワークスペースが別の Store へ移った: 「ワークスペース「{名前}」」と書き、「。移動先は…です」を付けない。
+// ワークスペースは同じ合わせで消えて Store になく、{子の ID} と行の位置は、合わせの消える前のログの接頭辞で作る。
 func TestMovedWorkspaceChildDropped(t *testing.T) {
 	f := setup(t)
-	addItem(f, "taro", webItem(item5, 5, item.Task, apptest.SampleEpic))
-	edit := retitle(f, "hanako", item5)
+	wsLog := goneWorkspaceLog(f)
+	it := webItem(item5, 5, item.Task, "")
+	it.Place.Workspace, it.Place.Project = goneWS, ""
+	f.save(user("taro"), appendRef(itemRefOf(item5), item.Create(it)))
+	retitle(f, "hanako", item5)
 	movingRecord(f, transfer.Record{
-		Entity: transfer.EntityWorkspace, Target: apptest.SampleWorkspace, Old: "HH", New: "WEB", ToStore: "S2", ToStoreName: "team-b",
+		Entity: transfer.EntityWorkspace, Target: goneWS, Old: "GW", New: "GW", ToStore: "S2", ToStoreName: "team-b",
 	})
-	f.judge(dropped(f, itemRefOf(item5), edit))
-	if n := f.wantOne(); n.Text != "ワークスペース「Web」は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした(HH-5「直した」)" {
-		t.Errorf("text = %q", n.Text)
+	merge := dropped(f, itemRefOf(item5))
+	log := merge.Removed[0].Log
+	merge.Removed[0].New = log[len(log)-1:] // hanako のタイトルの行(この Store の一覧にないワークスペースなので、保存からは拾えない)
+	merge.Removed = append(merge.Removed, port.RemovedEntity{Ref: change.Ref{Kind: change.KindWorkspace, ID: goneWS}, Log: wsLog})
+	f.judge(merge)
+	n := f.wantOne()
+	if n.Text != "ワークスペース「Gone」は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした(GW-5「直した」)" || n.Display != "GW-5" {
+		t.Errorf("notice = %+v", n)
 	}
 }
 

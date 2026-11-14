@@ -44,7 +44,7 @@ func purgedUnderNotice(r port.Reader, b batch, removed []port.RemovedEntity, e p
 	if !ok || c.purged == nil {
 		return port.Notice{}, false, err
 	}
-	g, ok, err := goneOf(r, b, e.Ref, e.Log)
+	g, ok, err := goneOf(r, b, removed, e.Ref, e.Log)
 	if !ok {
 		return port.Notice{}, false, err
 	}
@@ -156,9 +156,12 @@ func droppedNotice(r port.Reader, b batch, removed []port.RemovedEntity, e port.
 	if !ok {
 		return port.Notice{}, false, err
 	}
-	g, ok, err := goneOf(r, b, e.Ref, e.Log)
+	g, ok, err := goneOf(r, b, removed, e.Ref, e.Log)
 	if !ok {
 		return port.Notice{}, false, err
+	}
+	if c.moved != nil && c.at == e.Ref && c.at.Kind != change.KindWorkspace && c.moved.Old != "" {
+		g.display, g.base.Display = c.moved.Old, c.moved.Old // 自身の転送記録の、移動したときの ID
 	}
 	n := g.base
 	if c.purged != nil {
@@ -192,23 +195,24 @@ type gone struct {
 	display, title string
 }
 
-// goneOf は、消える前のログ log の ref の下地。アイテム・プロジェクトは消える前の ID(接頭辞はいまの
-// ワークスペースのもの、なければ内部 ID)、ワークスペースはその内部 ID だけを持つ。作れなければ false。
-func goneOf(r port.Reader, b batch, ref change.Ref, log []change.Record) (gone, bool, error) {
+// goneOf は、消える前のログ log の ref の下地。アイテム・プロジェクトは消える前の ID(接頭辞は、ワークスペースが
+// 同じ保存か合わせ(removed)で消えたならその消える前のログの、ほかはいまのログのもの。どちらもなければ内部 ID)、
+// ワークスペースはその内部 ID だけを持つ。作れなければ false。
+func goneOf(r port.Reader, b batch, removed []port.RemovedEntity, ref change.Ref, log []change.Record) (gone, bool, error) {
 	switch ref.Kind {
 	case change.KindItem:
 		it, ok := item.FromLog(log)
 		if !ok {
 			return gone{}, false, nil
 		}
-		d, err := displayIn(r, b, it.Place.Workspace, string(it.ID), it.DisplayID)
+		d, err := displayIn(r, b, removed, it.Place.Workspace, string(it.ID), it.DisplayID)
 		return gone{port.Notice{Item: it.ID, Display: d}, d, it.Title}, err == nil, err
 	case change.KindProject:
 		p, ok := project.FromLog(log)
 		if !ok {
 			return gone{}, false, nil
 		}
-		d, err := displayIn(r, b, p.Place.Workspace, string(p.ID), p.DisplayID)
+		d, err := displayIn(r, b, removed, p.Place.Workspace, string(p.ID), p.DisplayID)
 		return gone{port.Notice{Project: p.ID, Display: d}, d, p.Title}, err == nil, err
 	case change.KindWorkspace:
 		w, ok := workspace.FromLog(log)
@@ -217,12 +221,14 @@ func goneOf(r port.Reader, b batch, ref change.Ref, log []change.Record) (gone, 
 	return gone{}, false, nil
 }
 
-// displayIn は、ワークスペース ws のいまの接頭辞で作る ID。ワークスペースがなければ内部 ID id。
-func displayIn(r port.Reader, b batch, ws workspace.ID, id string, display func(prefix string) string) (string, error) {
-	w, ok, err := workspaceOf(r, b, ws)
+// displayIn は、ワークスペース ws の接頭辞で作る ID。ワークスペースのログは removedOrCurrent で読む。
+// 読めなければ内部 ID id。
+func displayIn(r port.Reader, b batch, removed []port.RemovedEntity, ws workspace.ID, id string, display func(prefix string) string) (string, error) {
+	log, err := removedOrCurrent(r, b, removed, change.Ref{Kind: change.KindWorkspace, ID: ws})
 	if err != nil {
 		return "", err
 	}
+	w, ok := workspace.FromLog(log)
 	if !ok {
 		return id, nil
 	}
