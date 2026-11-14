@@ -22,6 +22,10 @@ type Replicator struct {
 
 	// Repair は、合わせたあと、送る前に呼ぶ修復(決定 C3a-2・C3a-3)。cmd が置く。nil なら呼ばない。Mirror では使わない。
 	Repair port.RepairFunc
+	// Judge は、同期の最後に、受け取った保存を渡す判定の差し込み口(決定 C4b1-2)。Judged は判定した保存の記録。
+	// cmd が置く。どちらかが nil なら判定しない。
+	Judge  port.JudgeFunc
+	Judged port.JudgedSaves
 
 	// beforeSend は、送る直前に呼ぶ。テストで、送信が他の人の更新と重なる場面を作るためのもの。
 	beforeSend func() error
@@ -36,6 +40,7 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 		return port.SyncResult{}, err
 	}
 	defer unlock()
+	s.baseline(ctx)
 	// 2 回目からの試みが失敗しても(断る理由のエラーでも、ErrSendConflict と同じく)、前の試みで作った
 	// 合わせたコミットはこのマシンに残る。それは受け取ったものを正しく合わせたもので、次の同期で続ける。
 	// 修復が失敗したときも(最初の試みでも)、合わせたコミットと、それまでに書いた修復は残る。合わせはまだ
@@ -75,7 +80,7 @@ func (r *Replicator) begin(id port.StoreID, remote port.Remote) (s syncRun, unlo
 		return syncRun{}, nil, err
 	}
 	return syncRun{
-		r: r, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash(),
+		r: r, id: id, repo: repo, root: root, link: newLink(repo, remote), branch: head.Name(), start: head.Hash(),
 		seen: parseSeen(remote.Seen), receiveOnly: remote.ReceiveOnly,
 	}, unlock, nil
 }
@@ -83,6 +88,7 @@ func (r *Replicator) begin(id port.StoreID, remote port.Remote) (s syncRun, unlo
 // syncRun は、1 回の Sync の状態。start は、同期を始めたときの自分の先端(受け取った数を数える基準)。
 type syncRun struct {
 	r      *Replicator
+	id     port.StoreID
 	repo   *git.Repository
 	root   string
 	link   link
@@ -101,7 +107,7 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 		return port.SyncResult{}, err
 	}
 	if s.receiveOnly {
-		return s.result(theirs, theirs, false)
+		return s.finish(ctx, theirs, theirs, false)
 	}
 	// 修復は送る前に書く。送ったあとに書くと、相手のマシンが修復していない合わせた結果を受け取る(決定 C3a-2)。
 	if err := s.repairUnsent(ctx, theirs); err != nil {
@@ -111,7 +117,7 @@ func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
 	if err != nil {
 		return port.SyncResult{}, err
 	}
-	return s.result(theirs, head, true)
+	return s.finish(ctx, theirs, head, true)
 }
 
 // receive は、remote から受け取り、自分の先端に取り込む。remote の先端 theirs を返す(空ならゼロ)。
@@ -269,28 +275,4 @@ func (s syncRun) apply(wt *git.Worktree, ours plumbing.Hash, from, to tree, fini
 		return errors.Join(errs...)
 	}
 	return nil
-}
-
-// result は、送った保存(remote の先端 theirs になかったもの)と、受け取った保存(始めたときの自分になかったもの)を
-// 数える。now は同期のあとに remote が持つ先端(Seen になる)。sent が false なら、送った数は 0。
-func (s syncRun) result(theirs, now plumbing.Hash, sent bool) (port.SyncResult, error) {
-	var res port.SyncResult
-	if !now.IsZero() {
-		res.Seen = now.String()
-	}
-	if sent {
-		head, err := s.repo.Head()
-		if err != nil {
-			return port.SyncResult{}, err
-		}
-		if res.Sent, err = countSaves(s.repo, head.Hash(), theirs); err != nil {
-			return port.SyncResult{}, err
-		}
-	}
-	received, err := countSaves(s.repo, theirs, s.start)
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	res.Received = received
-	return res, nil
 }
