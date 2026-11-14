@@ -61,10 +61,14 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 		return port.ReceivedSave{}, false, nil // 最初の保存
 	}
 	removed, concurrent, err := mergeRemoved(n.c)
-	if err != nil || (len(concurrent) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })) {
+	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent}, true, nil
+	dropped, err := droppedPlan(n.c)
+	if err != nil || (len(concurrent) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 }) && !hasNewPlan(dropped)) {
+		return port.ReceivedSave{}, false, err
+	}
+	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, DroppedPlan: dropped}, true, nil
 }
 
 // saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティと Sides も読む。

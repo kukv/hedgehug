@@ -96,6 +96,8 @@ type ReceivedSave struct {
 	Removed []RemovedEntity
 	// Concurrent は、合わせのときだけ、片側で親と一緒に削除され、もう片側で人が変えたエンティティ(決定 C4b2-17)。
 	Concurrent []ConcurrentRows
+	// DroppedPlan は、合わせのときだけ、合わせで取り除かれた(完全に削除した)スプリント・リリースの行(決定 C5a-8)。
+	DroppedPlan []DroppedPlan
 	// Sides は、restore の行を書いた同期の修復の保存のときだけ、その保存の前を(ほかの修復の保存を通って)辿った
 	// いちばん近い合わせで、共通の祖先にない行の ID を、その合わせの 2 つの側に分けたもの。見るのは、その保存が
 	// 書いたエンティティのログだけ。合わせに届かなければ空(決定 C4b2-9)。
@@ -110,6 +112,18 @@ type ConcurrentRows struct {
 	Deleted []change.Record
 	// Changed は、変えた側の、共通の祖先にない人の変更の行。
 	Changed []change.Record
+}
+
+// DroppedPlan は、合わせの片側のワークスペースのログにあって、合わせの結果では取り除かれたスプリント・リリース
+// 1 つの行(決定 C5a-8)。
+type DroppedPlan struct {
+	Workspace change.ID
+	// Target は、スプリント・リリースの内部 ID。
+	Target change.ID
+	// Log は、その側のその Target の行。
+	Log []change.Record
+	// New は、Log のうち、共通の祖先のログにない行。
+	New []change.Record
 }
 
 // RemovedEntity は、保存か合わせで消えたエンティティ 1 つ(決定 C4b2-3)。
