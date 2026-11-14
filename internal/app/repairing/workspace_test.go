@@ -234,6 +234,38 @@ func TestMatchWorkspacesKeepsDeletedAlreadyInDestination(t *testing.T) {
 	}
 }
 
+// 直す子の下の、移動先にある削除済みの X の下に、移動先にない削除済みの Y があるときは、X はそのままで、Y だけが X を通って一緒に移る。
+func TestMatchWorkspacesMovesDeletedBelowDeletedInDestination(t *testing.T) {
+	e := newEnv(t)
+	addStep(e)
+	x := step
+	y := item.ID("01SAMPLEIT0000000000000004")
+	it := item.Item{ID: y, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &x, Number: 4}, Kind: item.Step, Rank: "a", Title: "孫", Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium}
+	e.write(taro, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteItems().Append(it.ID, item.Create(it)),
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, numbering.Draft(numbering.Items, 4)),
+		)
+	})
+	if err := apptest.DeleteItems(e.ctx, e.s, store, x, y); err != nil {
+		t.Fatal(err)
+	}
+	addMobile(e)
+	moveEpicToMobile(e)
+	e.moveToMobile(x, 3)
+	wantOps(t, e.run(nil, nil), "HH-2 を MB-4 に移動(親に合わせる)")
+	wantMobilePlace(t, e.item(apptest.SampleTask), 4)
+	wantMobilePlace(t, e.item(x), 3)
+	wantMobilePlace(t, e.item(y), 5)
+	if e.item(y).Deleted == nil {
+		t.Error("Y was restored")
+	}
+	rec := e.transfers()
+	if len(rec) != 2 || rec[0].Old != "HH-2" || rec[1].Old != "HH-4" || rec[1].New != "MB-5" {
+		t.Errorf("transfers = %+v, want HH-2 and HH-4 -> MB-5 only", rec)
+	}
+}
+
 // 書いても移らず、同じ子が残り続けるときは、止まらずに止めてエラーを返す。
 func TestMatchWorkspacesStopsWithoutProgress(t *testing.T) {
 	e := newEnv(t)
