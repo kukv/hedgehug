@@ -25,7 +25,7 @@ type Located struct {
 }
 
 // MovedFrom は、旧 ID から開いた印(A5a-16)。Old・At・Display は、旧 ID が一致した最初の記録(at が最も新しいもの)の
-// 旧 ID・日時・新 ID。Current は開くアイテムのいまの ID。文は画面が作る。
+// 旧 ID・日時・新 ID。Current は開くアイテム(LocateProject ではプロジェクト)のいまの ID。文は画面が作る。
 type MovedFrom struct {
 	Old     string
 	At      time.Time

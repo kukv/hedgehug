@@ -10,7 +10,9 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // teamHistory は、team(S2)に移したアイテム id の履歴の行を「実行者: 文」で返す(いまの設定は Team)。
@@ -99,5 +101,45 @@ func TestMoveAcrossStoresKeepsNamesOfValuesSetAtCreation(t *testing.T) {
 	}
 	if want := []string{"hanako: HH-2 から移動(main / Web / ログイン)", "taro: 作成"}; !slices.Equal(got, want) {
 		t.Errorf("移動先の履歴 = %q, want %q", got, want)
+	}
+}
+
+// projectHistory は、Store store のプロジェクト id の履歴の行を「実行者: 文」で返す。ワークスペースの名前はその Store の
+// 削除されていないワークスペースから引く(app/history.Project と同じ)。
+func projectHistory(t *testing.T, f fixture, store port.StoreID, id project.ID) []string {
+	t.Helper()
+	log := logOf(t, f.rec, store, change.Ref{Kind: change.KindProject, ID: id})
+	names := map[workspace.ID]string{}
+	if err := f.rec.Read(t.Context(), store, func(r port.Reader) error {
+		wss, err := port.LiveWorkspaces(r)
+		for _, w := range wss {
+			names[w.ID] = w.Name
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := history.ProjectContext{Names: func(login string) string { return login }, WorkspaceName: func(id workspace.ID) string { return names[id] }}
+	var got []string
+	for _, row := range history.ProjectRows(log, c) {
+		got = append(got, row.Who+": "+row.Text)
+	}
+	return got
+}
+
+// A5b-21: MoveProject が書いた行で、同じ Store の中の移動(Web → Mobile)は「Web から移動」、別の Store(team)への移動は
+// moved_in の「Mobile から移動」(同じ操作の場所の set は出さない)。team に写した main の中の移動の場所の set は、
+// team のワークスペースの名前で引けないので「(削除された値) から移動」(A5b-21 の文どおり)。
+func TestProjectHistoryOfMoves(t *testing.T) {
+	f := newFixture(t)
+	moveProject(t, f, apptest.SampleProject, projectTo(store1, mobileWS))
+	if got, want := projectHistory(t, f, store1, apptest.SampleProject), []string{"hanako: Web から移動", "taro: 作成"}; !slices.Equal(got, want) {
+		t.Errorf("同じ Store: %q, want %q", got, want)
+	}
+	moveProject(t, f, apptest.SampleProject, toTeamWS())
+	// team のメンバーは Taro と綴るので、オーナーの置き換え(set owner)もほかの変更と同じく出る。
+	want := []string{"hanako: オーナーを Taro に変更", "hanako: Mobile から移動", "hanako: (削除された値) から移動", "taro: 作成"}
+	if got := projectHistory(t, f, store2, apptest.SampleProject); !slices.Equal(got, want) {
+		t.Errorf("別の Store: %q, want %q", got, want)
 	}
 }
