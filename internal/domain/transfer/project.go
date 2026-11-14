@@ -59,12 +59,13 @@ func CollectProject(p project.ID, all []item.Item) ProjectSet {
 			s.Epics = append(s.Epics, set)
 		}
 	}
-	s.Outside = outsideOf(s, all)
+	s.Outside = cutsOutside(s.Contains, all)
 	return s
 }
 
-// outsideOf は、集まり全体の外のアイテムとの関連を、両方の側から数える(Collect と同じ並びと重複の除き方)。
-func outsideOf(s ProjectSet, all []item.Item) []Cut {
+// cutsOutside は、contains が真のもの全体と、外の(all にいる)アイテムとの関連を、両方の側から数える
+// (Collect と同じ並びと重複の除き方)。ProjectSet と WorkspaceSet が共有する。
+func cutsOutside(contains func(item.ID) bool, all []item.Item) []Cut {
 	present := map[item.ID]bool{}
 	for _, it := range all {
 		present[it.ID] = true
@@ -72,7 +73,7 @@ func outsideOf(s ProjectSet, all []item.Item) []Cut {
 	var out []Cut
 	for _, it := range all {
 		for _, rel := range it.Relations {
-			if present[rel.To] && s.Contains(it.ID) != s.Contains(rel.To) {
+			if present[rel.To] && contains(it.ID) != contains(rel.To) {
 				out = append(out, Cut{From: it.ID, To: rel.To, Type: rel.Type})
 			}
 		}
