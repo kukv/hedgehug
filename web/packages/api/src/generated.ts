@@ -1028,6 +1028,234 @@ export interface RepoFailures {
   failures: RepoFailure[];
 }
 
+export type ReportActiveUnit = typeof ReportActiveUnit[keyof typeof ReportActiveUnit];
+
+
+export const ReportActiveUnit = {
+  points: 'points',
+  count: 'count',
+} as const;
+
+export interface ReportBurnDay {
+  date: string;
+  ideal: number;
+  /** @nullable */
+  remaining: number | null;
+  total: number;
+}
+
+export interface ReportBurndown {
+  /**
+     * 完了したスプリントで総量が確定の計画と違うときだけ、その確定の計画
+     * @nullable
+     */
+  committed: number | null;
+  days: ReportBurnDay[];
+  /** 表示する日の数 */
+  shown: number;
+}
+
+export interface ReportTotals {
+  count: number;
+  points: number;
+}
+
+/**
+ * @nullable
+ */
+export type ReportConfirmed = {
+  committed: ReportTotals;
+  completed: ReportTotals;
+} | null;
+
+export type ReportSprintOrNullState = typeof ReportSprintOrNullState[keyof typeof ReportSprintOrNullState];
+
+
+export const ReportSprintOrNullState = {
+  planned: 'planned',
+  active: 'active',
+  closed: 'closed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ReportSprintOrNull = {
+  /** 完了で確定した値。完了していなければ null */
+  confirmed: ReportConfirmed | null;
+  end: string;
+  goal: string;
+  id: string;
+  name: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  state: ReportSprintOrNullState;
+} | null;
+
+export interface ReportActive {
+  /** 途中で追加した量 */
+  added: number;
+  burndown: ReportBurndown;
+  done: ReportTotals;
+  /** 実行中のスプリント。なければ null */
+  sprint: ReportSprintOrNull | null;
+  total: ReportTotals;
+  unit: ReportActiveUnit;
+}
+
+export interface ReportDurations {
+  /** @nullable */
+  median: number | null;
+  n: number;
+  /** @nullable */
+  p85: number | null;
+  /** 数えなかった件数 */
+  skipped: number;
+}
+
+export interface ReportEstimate {
+  /** @nullable */
+  diff: number | null;
+  display: string;
+  /** @nullable */
+  estimate: number | null;
+  id: string;
+  /** @nullable */
+  perPoint: number | null;
+  /** @nullable */
+  points: number | null;
+  title: string;
+  worked: number;
+}
+
+export interface ReportEstimateTotal {
+  /** @nullable */
+  diff: number | null;
+  /** @nullable */
+  estimate: number | null;
+  /** @nullable */
+  points: number | null;
+  worked: number;
+}
+
+export interface ReportFlowDay {
+  counts: number[];
+  date: string;
+}
+
+export interface ReportLayer {
+  color: string;
+  key: string;
+  name: string;
+}
+
+export interface ReportPeriod {
+  /** YYYY-MM-DD */
+  from: string;
+  /** YYYY-MM-DD */
+  to: string;
+}
+
+export type ReportSelectionLayers = typeof ReportSelectionLayers[keyof typeof ReportSelectionLayers];
+
+
+export const ReportSelectionLayers = {
+  category: 'category',
+  status: 'status',
+} as const;
+
+export type ReportSelectionUnit = typeof ReportSelectionUnit[keyof typeof ReportSelectionUnit];
+
+
+export const ReportSelectionUnit = {
+  points: 'points',
+  count: 'count',
+} as const;
+
+export interface ReportSelection {
+  /** 見積もりと実績の対象のスプリントの内部 ID。空はすべて */
+  estimate: string;
+  layers: ReportSelectionLayers;
+  /** バーンダウンのスプリントの内部 ID。空は未選択 */
+  sprint: string;
+  unit: ReportSelectionUnit;
+}
+
+export interface ReportSelectionPatch {
+  /** 見積もりと実績の対象のスプリントの内部 ID。空はすべて */
+  estimate?: string;
+  /** category か status。違う値は 400 */
+  layers?: string;
+  /** バーンダウンのスプリントの内部 ID。空は選んでいない */
+  sprint?: string;
+  /** points か count。違う値は 400(enum にすると 422 になるので付けない) */
+  unit?: string;
+}
+
+export type ReportSprintState = typeof ReportSprintState[keyof typeof ReportSprintState];
+
+
+export const ReportSprintState = {
+  planned: 'planned',
+  active: 'active',
+  closed: 'closed',
+} as const;
+
+export interface ReportSprint {
+  /** 完了で確定した値。完了していなければ null */
+  confirmed: ReportConfirmed | null;
+  end: string;
+  goal: string;
+  id: string;
+  name: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  state: ReportSprintState;
+}
+
+export interface ReportVelocity {
+  done: number;
+  planned: number;
+  sprint: ReportSprint;
+}
+
+/**
+ * 実際に数えた単位
+ */
+export type ReportViewUnit = typeof ReportViewUnit[keyof typeof ReportViewUnit];
+
+
+export const ReportViewUnit = {
+  points: 'points',
+  count: 'count',
+} as const;
+
+export interface ReportView {
+  /**
+     * 完了した直近 3 スプリントの平均。なければ null
+     * @nullable
+     */
+  average: number | null;
+  /** バーンダウンのスプリント。未選択なら null */
+  burn: ReportSprintOrNull | null;
+  burndown: ReportBurndown;
+  cycle: ReportDurations;
+  estimateTotal: ReportEstimateTotal;
+  estimates: ReportEstimate[];
+  /** ポイントを選んでいるが件数で数えたか */
+  fallback: boolean;
+  flow: ReportFlowDay[];
+  layers: ReportLayer[];
+  lead: ReportDurations;
+  period: ReportPeriod;
+  selection: ReportSelection;
+  /** バーンダウンと見積もりと実績の選択肢 */
+  sprints: ReportSprint[];
+  /** 実際に数えた単位 */
+  unit: ReportViewUnit;
+  velocity: ReportVelocity[];
+}
+
 export interface SaveItemAsTemplate {
   name: string;
   /** 子と Step を含める */
@@ -1758,6 +1986,19 @@ export type GetTransferPreviewParams = {
 export type DeleteWorkspaceValueParams = {
   /** 代わりに使う値の ID。省略すると、使っているアイテムは、ステータス・優先度では初期値に、単一選択では「なし」になる。関連システムと複数選択では指定できず(404)、使っているアイテムから値が外れる */
   replacement?: string;
+};
+
+export type GetReportParams = {
+  /**
+   * 累積フロー図の開始日(YYYY-MM-DD)。to と両方なければ直近 21 日
+   * @pattern ^(\d{4}-\d{2}-\d{2})?$
+   */
+  from?: string;
+  /**
+   * 累積フロー図の終了日(YYYY-MM-DD)。今日以前
+   * @pattern ^(\d{4}-\d{2}-\d{2})?$
+   */
+  to?: string;
 };
 
 export const getListAccountsUrl = () => {
@@ -5950,6 +6191,108 @@ return fetcher<void>(getSetReleaseStateUrl(store,workspace,release),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setReleaseStateBody)
+  }
+);}
+
+
+
+export const getGetReportUrl = (store: string,
+    workspace: string,
+    params?: GetReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/reports?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/reports`
+}
+
+/**
+ * @summary レポートの数字
+ */
+export const getReport = async (store: string,
+    workspace: string,
+    params?: GetReportParams, options?: Parameters<typeof fetcher>[1]): Promise<ReportView> => {
+
+  return fetcher<ReportView>(getGetReportUrl(store,workspace,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getGetReportActiveUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/reports/active`
+}
+
+/**
+ * @summary 実行中のスプリントの小さいバーンダウン・途中で追加した量・進捗
+ */
+export const getReportActive = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<ReportActive> => {
+
+  return fetcher<ReportActive>(getGetReportActiveUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPutReportSelectionUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/reports/selection`
+}
+
+/**
+ * @summary レポートの選択を保存(送った項目だけ変える。Store には書かない)
+ */
+export const putReportSelection = async (store: string,
+    workspace: string,
+    reportSelectionPatch: ReportSelectionPatch, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getPutReportSelectionUrl(store,workspace),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reportSelectionPatch)
   }
 );}
 

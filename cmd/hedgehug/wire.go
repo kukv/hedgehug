@@ -81,6 +81,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHubReads:   db.GitHubReads(),
 		PRScans:       db.PRScans(),
 		AppMissing:    db.AppMissing(),
+		Reports:       db.ReportSelections(),
 		Clock:         clock,
 		Sync:          svc,
 		Auto:          auto,
