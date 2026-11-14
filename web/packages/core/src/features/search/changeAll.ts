@@ -1,6 +1,6 @@
 import type { RowSelection } from "../selection/rowSelection";
-import { selectable } from "./table";
 import type { SearchState } from "./search";
+import { selectable } from "./table";
 
 export interface ChangeAllDeps {
   // openSearch は、パレットの「検索で開く」と同じもの(検索の画面を、絞り込みを入れ替えて開く)。
