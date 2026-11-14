@@ -27,6 +27,8 @@ const (
 	liveSprint    change.ID    = "01TESTSP000000000000000001"
 	goneSprint    change.ID    = "01TESTSP000000000000000002"
 	teamDeletedWS workspace.ID = "01TESTWS000000000000000020"
+
+	teamRemote = "https://example.invalid/team.git"
 )
 
 // webAt は、Store store のワークスペース「Web」(削除済みを含む)。なければ ok=false。
@@ -82,6 +84,9 @@ func withWorkspaceContents(t *testing.T, f fixture) {
 // + moved_in)、rank、足した人の join。移動元はフォルダが消え、転送記録が 1 行。アクティビティは Store ごとの文。
 func TestMoveWorkspaceWritesBothStores(t *testing.T) {
 	f := newFixture(t)
+	f.svc.SyncTargets = &apptest.SyncTargets{Targets: []port.SyncTarget{
+		{ID: store1, Name: "main"}, {ID: store2, Name: "team", Remote: teamRemote}, {ID: store3, Name: "readonly", ReadOnly: true},
+	}}
 	withWorkspaceContents(t, f)
 	write(t, f.rec, store1, func(tx port.Tx) error {
 		return tx.WriteItems().Append(apptest.SampleEpic, change.NewSet("assignee", nil, "shiro"))
@@ -108,13 +113,13 @@ func TestMoveWorkspaceWritesBothStores(t *testing.T) {
 			t.Errorf("%v remains in the source (%v)", ref, err)
 		}
 	}
-	want := transfer.Record{Entity: transfer.EntityWorkspace, Target: apptest.SampleWorkspace, Old: "HH", New: "HH", ToStore: string(store2), ToStoreName: "team"}
+	want := transfer.Record{Entity: transfer.EntityWorkspace, Target: apptest.SampleWorkspace, Old: "HH", New: "HH", ToStore: string(store2), ToStoreName: "team", ToRemote: teamRemote}
 	recs := recordsOf(t, f.rec, store1)
 	if len(recs) != 1 || !recs[0].At.Equal(at) {
 		t.Fatalf("records = %+v", recs)
 	}
 	if r := recs[0]; r.Entity != want.Entity || r.Target != want.Target || r.Old != want.Old || r.New != want.New ||
-		r.ToStore != want.ToStore || r.ToStoreName != want.ToStoreName || r.ToRemote != "" {
+		r.ToStore != want.ToStore || r.ToStoreName != want.ToStoreName || r.ToRemote != want.ToRemote {
 		t.Errorf("record = %+v", r)
 	}
 	if got := f.rec.summaries(store1); got[len(got)-1] != "ワークスペース「Web」を team へ移動" {
@@ -396,4 +401,49 @@ func TestMoveWorkspaceRefuses(t *testing.T) {
 		t.Error("the destination was written")
 	}
 	assertWorkspaceUntouched(t, f)
+}
+
+// B5c-6: 説明はそのまま移り、前に同じ Store の別のワークスペース(Mobile)から移したアイテムの moved_in は、その移動(旧 ID
+// MB-1)と、Mobile の値の名前を持つ。
+func TestMoveWorkspaceCarriesDescriptionsAndEarlierMoves(t *testing.T) {
+	f := newFixture(t)
+	todo := valueID(t, f.rec, "status", "Todo")
+	write(t, f.rec, store1, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteItems().Append(mobileEpic, change.NewSet("status", nil, todo)),
+			tx.WriteProjects().Describe(apptest.SampleProject, "プロジェクトの説明"),
+			tx.WriteItems().Describe(apptest.SampleEpic, "Epic の説明"),
+		)
+	})
+	in := transfers.MoveInput{ToStore: store1, ToWorkspace: apptest.SampleWorkspace, ToProject: apptest.SampleProject}
+	if _, err := f.svc.Move(t.Context(), store1, mobileEpic, in); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.MoveWorkspace(t.Context(), store1, apptest.SampleWorkspace, store2); err != nil {
+		t.Fatal(err)
+	}
+	var pd, id string
+	if err := f.rec.Read(t.Context(), store2, func(r port.Reader) (err error) {
+		if pd, err = r.Projects().Description(apptest.SampleProject); err != nil {
+			return err
+		}
+		id, err = r.Items().Description(apptest.SampleEpic)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if pd != "プロジェクトの説明" || id != "Epic の説明" {
+		t.Errorf("descriptions = %q / %q", pd, id)
+	}
+	mi := transfer.MovedInOf(logOf(t, f.rec, store2, change.Ref{Kind: change.KindItem, ID: mobileEpic}))
+	if len(mi) == 0 {
+		t.Fatal("no moved_in")
+	}
+	last := mi[len(mi)-1]
+	if len(last.Moves) != 1 || last.Moves[0].Old != "MB-1" || last.Moves[0].FromWorkspaceName != "Mobile" {
+		t.Errorf("moves = %+v", last.Moves)
+	}
+	if last.Names[todo] != "Todo" {
+		t.Errorf("names = %+v, want %s: Todo", last.Names, todo)
+	}
 }
