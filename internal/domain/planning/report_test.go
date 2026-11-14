@@ -137,8 +137,10 @@ func TestEffectiveUnit(t *testing.T) {
 }
 
 func TestRound1(t *testing.T) {
+	// 実行時の積(定数の計算は正確になるので、変数に通す)。3 * 0.35 は 1.0499999999999998 で、x*10 を直接丸めると 1.0 になる。
+	third, share := 3.0, 0.35
 	for _, c := range []struct{ in, want float64 }{
-		{3.55, 3.6}, {6.4, 6.4}, {3 + 0.55*(4-3), 3.6}, {0.05, 0.1}, {2.25, 2.3}, {0, 0},
+		{3.55, 3.6}, {6.4, 6.4}, {3 + 0.55*(4-3), 3.6}, {0.05, 0.1}, {2.25, 2.3}, {0, 0}, {third * share, 1.1},
 	} {
 		if got := planning.Round1(c.in); got != c.want {
 			t.Errorf("Round1(%v) = %v, want %v", c.in, got, c.want)
@@ -197,7 +199,7 @@ func TestSteps(t *testing.T) {
 	skew := created(jst(10, 9, 0), item.Item{Status: "Todo"})
 	skew = setStatus(skew, jst(10, 12, 0), "Todo", "Doing")
 	skew = setStatus(skew, jst(10, 11, 0), "Doing", "Done")
-	if vs, _ := values(skew); len(vs) == 0 || vs[len(vs)-1] != "Done" {
+	if vs, _ := values(skew); !slices.Equal(vs, []change.ID{"Todo", "Done"}) {
 		t.Errorf("あとの行の値が最後の点: %v", vs)
 	}
 	// 作成の行がなければ空。
