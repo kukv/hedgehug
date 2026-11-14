@@ -172,7 +172,25 @@ func entityDelete(id, op string, at time.Time, root bool) change.Record {
 
 // 片側が親と子を同じ op で削除し(子は root: false)、もう片側で hanako が子のタイトルを変えた合わせは、Concurrent に
 // 子の Ref、Deleted に root: false の削除、Changed にタイトルの行を持つ。子を変えていなければ、合わせは渡さない。
+// 変えた側が 1 つ目の親の合わせ(変えたマシンが合わせた)と、2 つ目の親の合わせ(削除したマシンが合わせた)の両方。
 func TestConcurrentInMerge(t *testing.T) {
+	for _, changerFirst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "changer merges", false: "deleter merges"}[changerFirst], func(t *testing.T) {
+			concurrentInMerge(t, changerFirst)
+		})
+	}
+}
+
+// ordered2 は、first なら a, b、そうでなければ b, a。
+func ordered2(first bool, a, b plumbing.Hash) []plumbing.Hash {
+	if first {
+		return []plumbing.Hash{a, b}
+	}
+	return []plumbing.Hash{b, a}
+}
+
+// concurrentInMerge は、TestConcurrentInMerge の 1 つの向き。changerFirst なら、変えた側の保存を 1 つ目の親にする。
+func concurrentInMerge(t *testing.T, changerFirst bool) {
 	const epicLog = "items/01ITEM00000000000000000009/log.jsonl"
 	create := rec("R1", "OP0", t0, change.Create, "")
 	epic := rec("E1", "OP0", t0, change.Create, "")
@@ -192,7 +210,7 @@ func TestConcurrentInMerge(t *testing.T) {
 			merged = append(merged, title)
 		}
 		s2 := r.save(files, "hanako", t0.Add(2*time.Minute), "OP2")
-		m := r.save(map[string]string{itemLog: logOf(t, merged...), epicLog: logOf(t, epic, epicDel)}, BotName, t0.Add(3*time.Minute), "", s2, s1)
+		m := r.save(map[string]string{itemLog: logOf(t, merged...), epicLog: logOf(t, epic, epicDel)}, BotName, t0.Add(3*time.Minute), "", ordered2(changerFirst, s2, s1)...)
 		r.mark(j, c0)
 		s, ok := pending(t, r, m, m, known)[m.String()]
 		if !changed {

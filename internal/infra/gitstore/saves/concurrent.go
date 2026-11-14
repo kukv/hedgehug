@@ -30,18 +30,22 @@ func concurrentIn(c, ours, theirs *object.Commit, base *object.Tree) ([]port.Con
 	if err != nil {
 		return nil, err
 	}
-	var out []port.ConcurrentRows
-	for name, ref := range changed[0] {
-		if _, ok := changed[1][name]; !ok {
-			continue
+	var names []string
+	for name := range changed[0] {
+		if _, ok := changed[1][name]; ok {
+			names = append(names, name)
 		}
-		rows, err := concurrentOf(ref, name, merged, base, sides)
+	}
+	// Ref の順に読み、同じ Ref の中は concurrentOf の向きの順(ours が削除した側、theirs が削除した側)にする。
+	slices.SortFunc(names, func(a, b string) int { return compareRef(changed[0][a], changed[0][b]) })
+	var out []port.ConcurrentRows
+	for _, name := range names {
+		rows, err := concurrentOf(changed[0][name], name, merged, base, sides)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, rows...)
 	}
-	slices.SortFunc(out, func(a, b port.ConcurrentRows) int { return compareRef(a.Ref, b.Ref) })
 	return out, nil
 }
 

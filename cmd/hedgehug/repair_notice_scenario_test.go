@@ -139,6 +139,23 @@ func TestRepairNoticeCascade(t *testing.T) {
 	wantNoRepair(t, a)
 }
 
+// 逆向き: B が HH-2 を変えて同期し、A が(受け取る前に)HH-1 を(HH-2 と一緒に)削除して同期すると、合わせを作る
+// のは A のマシンで、修復の保存は書かれない。B がその合わせを受け取ると、B に親の削除の 1 行。A には作らない。
+func TestRepairNoticeCascadeDeleterMerges(t *testing.T) {
+	remote, a, b := noticePair(t)
+	titleAs(t, b, "hanako", apptest.SampleTask, "B のタイトル")
+	b.sync(t, remote)
+	deleteEpicAs(t, a, "taro", apptest.SampleTask)
+	a.sync(t, remote)
+	wantNoRepair(t, a)
+	b.sync(t, remote)
+	wantLive(t, b, false, apptest.SampleEpic, apptest.SampleTask)
+	const want = "HH-1 が削除されたため、HH-2 も削除済みに入りました"
+	wantRepair(t, b, want)
+	b.sync(t, remote)
+	wantRepair(t, b, want)
+}
+
 // A が HH-1 を(HH-2 と一緒に)削除して同期し、B が(受け取る前に)HH-1 と HH-2 を変えて同期すると、B のマシンが
 // 削除を取り消し、HH-2 も削除済みでなくなるので、B に親の削除の行は作らない。A には取り消しの 1 行。
 func TestRepairNoticeCascadeRestored(t *testing.T) {
