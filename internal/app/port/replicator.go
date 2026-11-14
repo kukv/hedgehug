@@ -126,6 +126,9 @@ type RemovedEntity struct {
 type Received struct {
 	Saves    []ReceivedSave
 	ReadOnly bool
+	// Own は、op がこのマシンで作った保存のものか(決定 C4c1-4)。まだ送っていない保存と、前に覚えた保存。
+	// 閲覧のみの同期では常に false。nil なら、どれも違う。
+	Own func(op change.ID) (bool, error)
 }
 
 // JudgeFunc は、同期の最後に、受け取った保存・このマシンの修復の保存・合わせから通知を判定する差し込み口
