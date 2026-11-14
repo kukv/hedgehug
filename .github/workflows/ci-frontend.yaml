@@ -60,10 +60,9 @@ jobs:
         run: pnpm build
 
   # 実際のバイナリ（GUI を埋め込んだもの）をブラウザで動かす。
-  # テストが 3 つの幅 × 全画面で多く、1 台では 9 分ほどかかるので、Playwright の --shard で複数のジョブに分けて並べる。
-  # 分ける数は matrix の shard と total の 2 か所で決まる。
-  e2e-shard:
-    name: e2e (${{ matrix.shard }}/${{ matrix.total }})
+  # テストが 3 つの幅 × 全画面で多く、1 台では 9 分ほどかかるので、幅（playwright.config.ts の project）ごとにジョブを分けて並べる。
+  e2e-width:
+    name: e2e (${{ matrix.project }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -72,8 +71,7 @@ jobs:
       # 1 つが落ちても、ほかの分の結果は最後まで見る。
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-        total: [3]
+        project: [phone, tablet, desktop]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,7 +87,7 @@ jobs:
           install_args: node pnpm
 
       # Go のビルドキャッシュとモジュールキャッシュを復元する。保存は main への push だけ（backend と同じ）。
-      # 分けたジョブはキーが同じなので、保存は 1 つ目だけが行う（ブラウザのキャッシュも同じ）。
+      # 分けたジョブはキーが同じなので、保存は phone のジョブだけが行う（ブラウザのキャッシュも同じ）。
       - name: Locate Go caches
         id: go-env
         shell: bash
@@ -135,18 +133,18 @@ jobs:
       - name: Allow the Chromium sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      # make e2e と同じことを、受け持ちの分だけ流す（ブラウザは上で入れてある）。
+      # make e2e と同じことを、受け持ちの幅だけ流す（ブラウザは上で入れてある）。
       - name: Build the e2e binary
         run: make e2e-bin
 
       - name: E2E
         working-directory: web
         env:
-          SHARD: ${{ matrix.shard }}/${{ matrix.total }}
-        run: pnpm e2e --shard="$SHARD"
+          PROJECT: ${{ matrix.project }}
+        run: pnpm e2e --project="$PROJECT"
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'push' && matrix.shard == 1 && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.project == 'phone' && steps.go-cache.outputs.cache-hit != 'true'
         with:
           path: |
             ${{ steps.go-env.outputs.gocache }}
@@ -154,7 +152,7 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'push' && matrix.shard == 1 && steps.browser-cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.project == 'phone' && steps.browser-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browser-cache.outputs.cache-primary-key }}
@@ -163,7 +161,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: e2e-traces-${{ matrix.shard }}
+          name: e2e-traces-${{ matrix.project }}
           path: |
             web/test-results
             web/playwright-report
@@ -174,12 +172,12 @@ jobs:
   # needs だけだと、分けたジョブが落ちたときにこのジョブが skipped になり、必須のチェックとしては通ってしまう。
   e2e:
     if: always()
-    needs: e2e-shard
+    needs: e2e-width
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     steps:
-      - name: Check the shards
+      - name: Check every width
         env:
-          RESULT: ${{ needs.e2e-shard.result }}
+          RESULT: ${{ needs.e2e-width.result }}
         run: test "$RESULT" = success
