@@ -126,22 +126,27 @@ describe("watch", () => {
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer tok");
   });
 
-  it("passes github events and ignores unknown ones", async () => {
+  it("passes github and inbox events and ignores unknown ones", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
         async () =>
-          new Response(streamOf(["event: github\ndata: {}\n\nevent: other\ndata: {}\n\n"]), {
-            status: 200,
-            headers: { "Content-Type": "text/event-stream" },
-          }),
+          new Response(
+            streamOf([
+              "event: github\ndata: {}\n\nevent: other\ndata: {}\n\nevent: inbox\ndata: {}\n\n",
+            ]),
+            {
+              status: 200,
+              headers: { "Content-Type": "text/event-stream" },
+            },
+          ),
       ),
     );
     setToken("tok");
     const seen: string[] = [];
     await createSyncPort().watch({ open: () => seen.push("open"), event: (k) => seen.push(k) })
       .done;
-    expect(seen).toEqual(["open", "github"]);
+    expect(seen).toEqual(["open", "github", "inbox"]);
   });
 
   it("throws when the server refuses", async () => {
