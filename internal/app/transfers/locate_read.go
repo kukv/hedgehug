@@ -16,6 +16,7 @@ import (
 type snapshot struct {
 	info       port.StoreInfo
 	workspaces []wsEntry // サイドバーの並び(rank の昇順、同じなら内部 ID の順)
+	wsEntries  []entry   // ワークスペース(削除済みを含む)を番号 0 の entry にしたもの(B5c-13)
 	items      []entry
 	projects   []entry
 	records    []transfer.Record
@@ -90,6 +91,7 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 		}
 		ranks[w.ID] = workspace.RankOf(log)
 		snap.workspaces = append(snap.workspaces, wsEntry{ws: w, old: workspace.OldPrefixes(log)})
+		snap.wsEntries = append(snap.wsEntries, entry{id: w.ID, ws: w.ID, live: w.Deleted == nil})
 		if err := snap.appendEntries(r, w); err != nil {
 			return snap, err
 		}
@@ -129,11 +131,7 @@ func (snap snapshot) entries(entity string) []entry {
 	case transfer.EntityProject:
 		return snap.projects
 	case transfer.EntityWorkspace:
-		out := make([]entry, 0, len(snap.workspaces))
-		for _, w := range snap.workspaces {
-			out = append(out, entry{id: w.ws.ID, ws: w.ws.ID, live: w.ws.Deleted == nil})
-		}
-		return out
+		return snap.wsEntries
 	}
 	return snap.items
 }
@@ -202,7 +200,9 @@ func (snap snapshot) hit(k kind, e entry) hit {
 // 接頭辞を旧い接頭辞に持つワークスペースがあれば、その Store の記録は、そのワークスペースのいまの接頭辞・ほかの旧い
 // 接頭辞で書いた同じ番号の ID(HH-2 なら WEB-2)でも一致させる(接頭辞を変えたあとに移したもの)。ワークスペースの記録は、
 // 記録の内部 ID のワークスペースを表示中のすべての Store all から探し、そのいまの接頭辞・旧い接頭辞が prefix でも一致させる
-// (接頭辞を変えてから別の Store へ移したもの。B5c-13)。
+// (接頭辞を変えてから別の Store へ移したもの。B5c-13)。探すのは表示中の Store だけなので、移動先の Store が非表示なら、
+// 接頭辞を変える前の接頭辞は記録の old と一致せず、その記録には当たらない(ほかの Store の同じ接頭辞のものを開く)。
+// 非表示の Store の中身はこのマシンの表示に使わない(01「画面のアドレス」は表示中の Store を探す)ため。
 func matching(k kind, scope, all []snapshot, prefix string, n int, display string) []transfer.Record {
 	var out []transfer.Record
 	for _, snap := range scope {

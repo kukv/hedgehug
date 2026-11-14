@@ -48,7 +48,8 @@ func parseProjectDisplay(display string) (string, int, bool) {
 }
 
 // LocatedWorkspace は、画面のアドレスのワークスペースの接頭辞を解決した結果(B5c-13)。Found なら Store・Workspace を開く。
-// 転送記録で見つかったときは MovedFrom を添える(Display は記録の移動先の Store 名、Current はいまの Store 名)。見つからず
+// 転送記録で見つかったときは MovedFrom を添える(Old は画面の接頭辞(Gone の Old と同じ。接頭辞を変えてから移しても記録の
+// old ではない)、Display は記録の移動先の Store 名、Current はいまの Store 名)。見つからず
 // 理由があれば Found は false で Gone を持つ(Old は画面の接頭辞、NewDisplay は記録の移動先の Store 名)。
 type LocatedWorkspace struct {
 	Found     bool
@@ -64,6 +65,9 @@ func (s Service) LocateWorkspace(ctx context.Context, storeName, prefix string) 
 	f, err := s.find(ctx, workspaceKind, storeName, prefix, 0, prefix)
 	if err != nil || f.gone != nil {
 		return LocatedWorkspace{Gone: f.gone}, err
+	}
+	if f.moved != nil {
+		f.moved.Old = prefix
 	}
 	return LocatedWorkspace{Found: true, Store: f.store, Workspace: f.id, MovedFrom: f.moved}, nil
 }

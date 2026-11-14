@@ -118,14 +118,15 @@ func TestLocateWorkspaceNamedRecordFirst(t *testing.T) {
 }
 
 // B5c-13: 接頭辞を HH から WEB に変えてから移すと記録の old は WEB。変える前の HH でも、見つけたワークスペースの旧い接頭辞で
-// 記録に当て、zzz のいまの HH より先に開く。中のアイテム・プロジェクトも同じ。
+// 記録に当て、zzz のいまの HH より先に開く(MovedFrom.Old は画面の接頭辞 HH)。中のアイテム・プロジェクトも同じ。
+// 移動先の Store が非表示なら、旧い接頭辞は表示中の Store でしか引かないので記録に当たらず、zzz のいまの HH-1 を開く。
 func TestLocateWorkspaceRenamedBeforeMove(t *testing.T) {
 	f := newFixture(t)
 	withZZZ(t, f)
 	setWebPrefix(t, f, "HH", "WEB")
 	moveWeb(t, f, store1, store2)
 	got := locateWorkspace(t, f, "main", "HH")
-	if !got.Found || got.Store != store2 || got.Workspace != apptest.SampleWorkspace || got.MovedFrom == nil || got.MovedFrom.Old != "WEB" || got.MovedFrom.Display != "team" {
+	if !got.Found || got.Store != store2 || got.Workspace != apptest.SampleWorkspace || got.MovedFrom == nil || got.MovedFrom.Old != "HH" || got.MovedFrom.Display != "team" {
 		t.Errorf("LocateWorkspace(HH): %+v, %+v", got, got.MovedFrom)
 	}
 	if got, err := f.svc.Locate(t.Context(), "main", "HH-1"); err != nil || got.Store != store2 || got.Item != apptest.SampleEpic || got.MovedFrom != nil {
@@ -133,6 +134,27 @@ func TestLocateWorkspaceRenamedBeforeMove(t *testing.T) {
 	}
 	if got := locateProject(t, f, "main", "HH-P1"); got.Store != store2 || got.Project != apptest.SampleProject || got.MovedFrom != nil {
 		t.Errorf("LocateProject(HH-P1): %+v", got)
+	}
+	if got := locateWorkspace(t, f, "main", "WEB"); got.MovedFrom == nil || got.MovedFrom.Old != "WEB" {
+		t.Errorf("LocateWorkspace(WEB): %+v", got.MovedFrom)
+	}
+	f.list.Stores = slices.DeleteFunc(f.list.Stores, func(s port.StoreInfo) bool { return s.ID == store2 })
+	if got, err := f.svc.Locate(t.Context(), "main", "HH-1"); err != nil || !got.Found || got.Store != store5 || got.Item != zzzEpic {
+		t.Errorf("移動先が非表示の Locate(HH-1): %+v, %v", got, err)
+	}
+}
+
+// アイテムの種類の記録は、ワークスペースの記録より細かい。Store 名の Store で、HH-1 の種類の記録が一致して開けない(完全に
+// 削除)なら、ワークスペースの記録で移動先の HH-1 を開く前に、その理由を返す。
+func TestLocateItemRecordBeforeWorkspaceRecord(t *testing.T) {
+	f := newFixture(t)
+	moveWeb(t, f, store1, store2)
+	const gone item.ID = "01TESTIT000000000000000051"
+	putRecord(t, f, store1, gone, "HH-1", "TM-9", store2, "team")
+	f.rec.AddPurged(store2, port.Purged{Entity: transfer.EntityItem, Target: gone, Display: "TM-9", At: time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)})
+	got, err := f.svc.Locate(t.Context(), "main", "HH-1")
+	if err != nil || got.Found || got.Gone == nil || got.Gone.Reason != "purged" || got.Gone.Old != "HH-1" || got.Gone.NewDisplay != "TM-9" {
+		t.Errorf("Locate(HH-1): %+v, %+v, %v", got, got.Gone, err)
 	}
 }
 

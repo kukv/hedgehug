@@ -88,48 +88,25 @@ func (s Service) find(ctx context.Context, k kind, storeName, prefix string, n i
 		return found{}, err
 	}
 	named, others := splitNamed(snaps, storeName)
-	if f, ok := findIn(k, named, snaps, prefix, n, display); ok {
-		return s.withStoreName(ctx, f)
-	}
-	if f, ok, err := s.goneIn(ctx, k, named, snaps, prefix, n, display); ok || err != nil {
+	if f, ok, err := s.searchIn(ctx, k, named, named, snaps, prefix, n, display); ok || err != nil {
 		return f, err
 	}
-	if f, ok := findIn(k, others, snaps, prefix, n, display); ok {
-		return s.withStoreName(ctx, f)
-	}
-	f, ok, err := s.goneIn(ctx, k, snaps, snaps, prefix, n, display)
+	f, ok, err := s.searchIn(ctx, k, others, snaps, snaps, prefix, n, display)
 	if !ok && err == nil {
 		err = port.ErrNotFound
 	}
 	return f, err
 }
 
-// findIn は、Store の集まり scope で (a) いまの ID、(b) 旧い接頭辞、(c) scope の転送記録の順に、種類 k のものを探す。
-// 記録の内部 ID は、表示中のすべての Store all から探す。アイテム・プロジェクトは、(c) の種類の記録で見つからなければ、
-// ワークスペースの記録で探す(B5c-13。MovedFrom は付けない)。
-func findIn(k kind, scope, all []snapshot, prefix string, n int, display string) (found, bool) {
-	if h, ok := currentID(k, scope, prefix, n); ok {
-		return found{hit: h}, true
+// searchIn は、Store の集まり scope で、種類 k のものを findIn で探し、なければ記録の集まり recScope の種類の記録から開けない
+// 理由を探す。アイテム・プロジェクトは、そのあとでワークスペースの記録(B5c-13)で探し、なければその記録から理由を探す。
+// 種類の記録はワークスペースの記録より細かいので、種類の記録が一致して開けないなら、その理由を先に返す。どれもなければ ok=false。
+func (s Service) searchIn(ctx context.Context, k kind, scope, recScope, all []snapshot, prefix string, n int, display string) (found, bool, error) {
+	if f, ok := findIn(k, scope, all, prefix, n, display); ok {
+		f, err := s.withStoreName(ctx, f)
+		return f, true, err
 	}
-	recs := matching(k, scope, all, prefix, n, display)
-	hits := oldHits(k, scope, all, prefix, n, recs)
-	if len(hits) == 0 {
-		if k == workspaceKind {
-			return found{}, false
-		}
-		return viaWorkspace(k, scope, all, prefix, n)
-	}
-	h := hits[0]
-	if !h.byRecord {
-		return found{hit: h.hit}, true
-	}
-	return found{hit: h.hit, moved: &MovedFrom{Old: recs[0].Old, At: recs[0].At, Display: recs[0].New, Current: h.current}, rec: recs[0]}, true
-}
-
-// goneIn は、scope の転送記録のうち、種類 k の画面の ID が一致した最初の記録から、開けない理由を found にする。種類の記録で
-// 理由がなければ、アイテム・プロジェクトはワークスペースの記録(B5c-13)で見る。理由がなければ ok=false。
-func (s Service) goneIn(ctx context.Context, k kind, scope, all []snapshot, prefix string, n int, display string) (found, bool, error) {
-	if recs := matching(k, scope, all, prefix, n, display); len(recs) > 0 {
+	if recs := matching(k, recScope, all, prefix, n, display); len(recs) > 0 {
 		if f, ok, err := s.gone(ctx, k, all, recs[0], n, display); ok || err != nil {
 			return f, ok, err
 		}
@@ -137,10 +114,31 @@ func (s Service) goneIn(ctx context.Context, k kind, scope, all []snapshot, pref
 	if k == workspaceKind {
 		return found{}, false, nil
 	}
-	if recs := matching(workspaceKind, scope, all, prefix, 0, prefix); len(recs) > 0 {
+	if f, ok := viaWorkspace(k, scope, all, prefix, n); ok {
+		return f, true, nil
+	}
+	if recs := matching(workspaceKind, recScope, all, prefix, 0, prefix); len(recs) > 0 {
 		return s.gone(ctx, k, all, recs[0], n, display)
 	}
 	return found{}, false, nil
+}
+
+// findIn は、Store の集まり scope で (a) いまの ID、(b) 旧い接頭辞、(c) scope の転送記録の順に、種類 k のものを探す。
+// 記録の内部 ID は、表示中のすべての Store all から探す。
+func findIn(k kind, scope, all []snapshot, prefix string, n int, display string) (found, bool) {
+	if h, ok := currentID(k, scope, prefix, n); ok {
+		return found{hit: h}, true
+	}
+	recs := matching(k, scope, all, prefix, n, display)
+	hits := oldHits(k, scope, all, prefix, n, recs)
+	if len(hits) == 0 {
+		return found{}, false
+	}
+	h := hits[0]
+	if !h.byRecord {
+		return found{hit: h.hit}, true
+	}
+	return found{hit: h.hit, moved: &MovedFrom{Old: recs[0].Old, At: recs[0].At, Display: recs[0].New, Current: h.current}, rec: recs[0]}, true
 }
 
 // gone は、画面の ID display(種類 k・番号 n)が一致した最初の記録 rec から、開けない理由を found にする。理由がなければ ok=false。
