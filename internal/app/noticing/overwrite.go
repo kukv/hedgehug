@@ -99,7 +99,8 @@ func lossesOf(b batch, ref change.Ref, m *mineRows) ([]change.Loss, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	ls = slices.DeleteFunc(ls, func(l change.Loss) bool { return !noticed(l) || movedRank(ls, l) })
+	moved := placeOps(ls)
+	ls = slices.DeleteFunc(ls, func(l change.Loss) bool { return !noticed(l) || movedRank(moved, l) })
 	slices.SortStableFunc(ls, func(a, c change.Loss) int {
 		if d := strings.Compare(a.F, c.F); d != 0 {
 			return d
@@ -130,11 +131,21 @@ func noticed(l change.Loss) bool {
 	return k != change.ActorGitHub && k != change.ActorSync && l.F != "watchers" && (l.T != change.Set || !strings.HasPrefix(l.F, "links/"))
 }
 
+// placeOps は、場所の負けの、勝った行の op の集まり。
+func placeOps(ls []change.Loss) map[change.ID]bool {
+	out := map[change.ID]bool{}
+	for _, l := range ls {
+		if l.T == change.Set && l.F == "place" {
+			out[l.Winner.Op] = true
+		}
+	}
+	return out
+}
+
 // movedRank は、l が順位の負けで、同じ op の行に場所も負けているか(移動は場所の 1 行だけにする。C4c1-6)。
-func movedRank(ls []change.Loss, l change.Loss) bool {
-	return l.T == change.Set && l.F == "rank" && slices.ContainsFunc(ls, func(o change.Loss) bool {
-		return o.T == change.Set && o.F == "place" && o.Winner.Op == l.Winner.Op
-	})
+// moved は placeOps。
+func movedRank(moved map[change.ID]bool, l change.Loss) bool {
+	return l.T == change.Set && l.F == "rank" && moved[l.Winner.Op]
 }
 
 // laterFirst は、a が c よりあとの行なら負(時刻、ID の順に比べる)。
@@ -158,7 +169,7 @@ func fieldOf(l change.Loss) string {
 
 // overwriteNotice は、ref の項目 field の負け l の通知。項目名を決められない項目と、ないエンティティは false。
 func overwriteNotice(r port.Reader, b batch, ref change.Ref, field string, l change.Loss) (port.Notice, bool, error) {
-	name, ok, err := fieldName(r, ref, field)
+	name, ok, err := fieldName(r, b, ref, field)
 	if err != nil || !ok {
 		return port.Notice{}, false, err
 	}

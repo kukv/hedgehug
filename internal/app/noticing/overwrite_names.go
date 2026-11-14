@@ -90,13 +90,13 @@ func settingName(log []change.Record, f string) string {
 
 // fieldName は、エンティティ ref の項目 f(通知の Field)の {項目名}(決定 C4c1-9)。表にない項目は、アイテム・
 // プロジェクト・メンバーの一覧では false、ワークスペースでは「ワークスペースの設定」。読み取りの失敗(ないもの以外)はエラー。
-func fieldName(r port.Reader, ref change.Ref, f string) (name string, ok bool, err error) {
+func fieldName(r port.Reader, b batch, ref change.Ref, f string) (name string, ok bool, err error) {
 	switch ref.Kind {
 	case change.KindItem:
 		if name, ok := named(f, itemFields, itemRecords); ok {
 			return name, true, nil
 		}
-		return propertyName(r, ref, f)
+		return propertyName(r, b, ref, f)
 	case change.KindProject:
 		name, ok := named(f, projectFields, projectRecords)
 		return name, ok, nil
@@ -107,11 +107,11 @@ func fieldName(r port.Reader, ref change.Ref, f string) (name string, ok bool, e
 		login, ok := strings.CutPrefix(f, "name/")
 		return login + " の表示名", ok, nil
 	case change.KindWorkspace:
-		log, err := r.Changes().Of(ref)
-		if err = notFoundIsSkip(err); err != nil {
+		log, err := logOf(r, b, ref)
+		if err != nil {
 			return "", false, err
 		}
-		return workspaceFieldName(r, log, f)
+		return workspaceFieldName(r, b, log, f)
 	}
 	return "", false, nil
 }
@@ -131,10 +131,10 @@ func named(f string, fields, records map[string]string) (string, bool) {
 
 // propertyName は、アイテム ref のプロパティの項目 f の、アイテムのいまのワークスペースの設定の名前。削除済みの
 // 追加プロパティは削除の前の名前(引けなければ内部 ID)。プロパティの項目でなければ false。
-func propertyName(r port.Reader, ref change.Ref, f string) (string, bool, error) {
-	log, err := r.Changes().Of(ref)
+func propertyName(r port.Reader, b batch, ref change.Ref, f string) (string, bool, error) {
+	log, err := logOf(r, b, ref)
 	if err != nil {
-		return "", false, notFoundIsSkip(err)
+		return "", false, err
 	}
 	it, ok := item.FromLog(log)
 	if !ok {
@@ -153,15 +153,15 @@ func propertyName(r port.Reader, ref change.Ref, f string) (string, bool, error)
 	if !ok {
 		return "", false, nil
 	}
-	wsLog, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: it.Place.Workspace})
-	if err = notFoundIsSkip(err); err != nil {
+	wsLog, err := logOf(r, b, change.Ref{Kind: change.KindWorkspace, ID: it.Place.Workspace})
+	if err != nil {
 		return "", false, err
 	}
 	return settingName(wsLog, "properties/"+id), true, nil
 }
 
 // workspaceFieldName は、ワークスペースのログ log の項目 f の呼び方。表になければ「ワークスペースの設定」。
-func workspaceFieldName(r port.Reader, log []change.Record, f string) (string, bool, error) {
+func workspaceFieldName(r port.Reader, b batch, log []change.Record, f string) (string, bool, error) {
 	if name, ok := workspaceFields[f]; ok {
 		return name, true, nil
 	}
@@ -171,7 +171,7 @@ func workspaceFieldName(r port.Reader, log []change.Record, f string) (string, b
 		}
 	}
 	if id, ok := projectRuleOf(f); ok {
-		e, found, err := entityOf(r, batch{}, change.Ref{Kind: change.KindProject, ID: id})
+		e, found, err := entityOf(r, b, change.Ref{Kind: change.KindProject, ID: id})
 		if !found {
 			e.text = string(id)
 		}

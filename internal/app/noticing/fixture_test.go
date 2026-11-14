@@ -285,7 +285,8 @@ type concurrentChanges struct {
 }
 
 func (c concurrentChanges) Of(ref change.Ref) ([]change.Record, error) {
-	log, err := c.ChangeReader.Of(ref)
+	got, err := c.ChangeReader.Of(ref)
+	log := slices.Clone(got) // 読んだログの行は書き換えない
 	for i, r := range log {
 		var prev []change.ID
 		for _, p := range r.Prev {
