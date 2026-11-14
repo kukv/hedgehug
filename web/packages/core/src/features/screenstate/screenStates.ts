@@ -38,7 +38,8 @@ export function createScreenStates(port: ScreenStatesPort): ScreenStates {
     write<T>(screen: string, value: T) {
       const body = JSON.stringify(value);
       known.set(screen, body);
-      // 書けなかったときも、タブの中の値を使い続ける。
+      // 書けなくてもよい: 画面の状態は復元のための便宜で、タブの中の値を使い続けるため画面は困らない
+      // (次に書けたときに追いつく)。失敗を出すと、入力のたびにトーストが出てしまう。
       port.put(screen, body).catch(() => {});
     },
   };

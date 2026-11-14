@@ -13,6 +13,7 @@ export interface CaretTerm {
 }
 
 const keyPattern = /^([A-Za-z][A-Za-z0-9_]*)(:|<=|>=|<|>)/;
+// Go の unicode.IsSpace との違いは U+0085 と U+FEFF だけ(JS の \s は U+FEFF を空白にし、U+0085 は空白にしない)。
 const space = /\s/u;
 
 interface Word {

@@ -58,6 +58,20 @@ describe("createScreenStates (E1-16)", () => {
     expect(await s.read("b", 0)).toBe(0);
   });
 
+  it("keeps using the tab value after a failed write, so the next read does not go back", async () => {
+    const port: ScreenStatesPort = {
+      get: vi.fn(async () => '{"v":"server"}'),
+      put: vi.fn(async () => {
+        throw new Error("down");
+      }),
+    };
+    const s = createScreenStates(port);
+    s.write("a", { v: "tab" });
+    await Promise.resolve();
+    expect(await s.read("a", { v: "" })).toEqual({ v: "tab" });
+    expect(port.get).not.toHaveBeenCalled();
+  });
+
   it("shares one server read between reads made at the same time", async () => {
     const port = portOf('{"n":1}');
     const s = createScreenStates(port);

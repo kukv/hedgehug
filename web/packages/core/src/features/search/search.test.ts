@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScreenStatesPort, SearchPort } from "../../port/search";
 import { get } from "../../reactive/store";
 import { createScreenStates } from "../screenstate/screenStates";
-import type { Timer } from "../toasts/toasts";
+import { createToasts, type Timer } from "../toasts/toasts";
 import { createSearch } from "./search";
 import type { SearchResult } from "./types";
 
@@ -48,8 +48,9 @@ function setup(saved: string | null = null) {
     get: vi.fn(async () => saved),
     put: vi.fn(async () => {}),
   };
-  const s = createSearch({ port, screenStates: createScreenStates(sp), timer });
-  return { s, search, sp };
+  const toasts = createToasts(timer);
+  const s = createSearch({ port, screenStates: createScreenStates(sp), timer, toasts });
+  return { s, search, sp, toasts };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -131,5 +132,65 @@ describe("createSearch (E1-19)", () => {
     expect(get(t.s.state).loading).toBe(false);
     await t.s.reload();
     expect(t.search).toHaveBeenCalledTimes(3);
+  });
+
+  it("drops an in-flight answer of replaceQuery when setQuery comes after it", async () => {
+    const t = setup();
+    let resolveOld: (r: SearchResult) => void = () => {};
+    t.search.mockImplementationOnce(() => new Promise<SearchResult>((r) => (resolveOld = r)));
+    const replacing = t.s.replaceQuery("old");
+    t.s.setQuery("new");
+    expect(get(t.s.state).loading).toBe(true);
+    resolveOld(result("OLD"));
+    await replacing;
+    expect(get(t.s.state).result).toBeNull();
+    expect(get(t.s.state).loading).toBe(true);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(get(t.s.state).result?.rows[0]?.itemId).toBe("new");
+    expect(get(t.s.state).loading).toBe(false);
+  });
+
+  it("keeps a query typed while open is still reading the saved one", async () => {
+    const t = setup('{"query":"saved"}');
+    const opening = t.s.open();
+    t.s.setQuery("typed");
+    await opening;
+    await vi.advanceTimersByTimeAsync(150);
+    expect(get(t.s.state).query).toBe("typed");
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("typed");
+  });
+
+  it("keeps a query set by replaceQuery while open is still reading", async () => {
+    const t = setup('{"query":"saved"}');
+    const opening = t.s.open();
+    const replacing = t.s.replaceQuery("palette");
+    await Promise.all([opening, replacing]);
+    expect(get(t.s.state).query).toBe("palette");
+    expect(t.search).not.toHaveBeenCalledWith("saved");
+  });
+
+  it("opens with an empty query when the saved body is JSON null", async () => {
+    const t = setup("null");
+    await t.s.open();
+    expect(t.search).toHaveBeenCalledWith("");
+  });
+
+  it("shows the error as a toast and keeps the previous rows when a search fails", async () => {
+    const t = setup();
+    await t.s.replaceQuery("q");
+    t.search.mockRejectedValueOnce(new Error("接続できません"));
+    await t.s.replaceQuery("q2");
+    expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([["接続できません", true]]);
+    expect(get(t.s.state).result?.rows[0]?.itemId).toBe("q");
+    expect(get(t.s.state).loading).toBe(false);
+  });
+
+  it("does not toast a failed reload (the reflection of a change shows no failure)", async () => {
+    const t = setup();
+    await t.s.replaceQuery("q");
+    t.search.mockRejectedValueOnce(new Error("down"));
+    await t.s.reload();
+    expect(get(t.toasts.list)).toEqual([]);
   });
 });
