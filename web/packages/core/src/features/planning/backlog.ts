@@ -51,7 +51,7 @@ export interface Backlog {
   // openDetail は、行の詳細パネルを開き、開いたアイテムを覚える(noticeDetail が使う)。
   openDetail(row: BacklogRow): void;
   // noticeDetail は、詳細パネルの保存の応答 item を受け取る。この画面から開いたアイテムが、開いている枠の
-  // どのスプリントにも入っておらず完了・中止なら、消えるときのトーストを 1 回だけ出す(F2a-10 の(2))。
+  // どのスプリントにも入っておらず完了・中止なら、消えるときのトーストを出す(F2a-10 の(2))。
   noticeDetail(storeId: string, item: Item): void;
 }
 
@@ -70,8 +70,8 @@ export function createBacklog(deps: BacklogDeps): Backlog {
   let current: { storeId: string; workspaceId: string } | null = null;
   // 読み直しが重なったときは、最後に始めたものの結果だけを使う。
   let latest = 0;
-  // opened は、この画面の行から開いた詳細パネルのアイテム。
-  let opened: { id: string; display: string } | null = null;
+  // opened は、この画面の行から開いた詳細パネルのアイテム。gone は、最後の保存の応答でバックログから消えていたか。
+  let opened: { id: string; display: string; gone: boolean } | null = null;
 
   async function reload() {
     if (!current) return;
@@ -159,18 +159,17 @@ export function createBacklog(deps: BacklogDeps): Backlog {
     openDetail(row) {
       const s = get(state);
       if (!s) return;
-      opened = { id: row.id, display: row.display };
+      opened = { id: row.id, display: row.display, gone: false };
       deps.openDetail(s.storeId, row.id);
     },
     noticeDetail(storeId, item) {
       const s = get(state);
       if (!s || s.storeId !== storeId || opened?.id !== item.id) return;
-      if (s.frames.some((f) => f.sprint !== null && f.sprint.id === item.sprint)) return;
-      const c = goneCategory(s.settings, item.status);
-      if (!c) return;
-      deps.toasts.show(goneText(opened.display, c));
-      // 消えたあとのほかのプロパティの保存では、もう出さない。
-      opened = null;
+      const sprinted = s.frames.some((f) => f.sprint !== null && f.sprint.id === item.sprint);
+      const c = sprinted ? null : goneCategory(s.settings, item.status);
+      // 消えたままのほかのプロパティの保存では出さない。未完了に戻してからもう一度完了・中止にしたら出す。
+      if (c && !opened.gone) deps.toasts.show(goneText(opened.display, c));
+      opened.gone = c !== null;
     },
   };
 }
