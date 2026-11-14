@@ -309,7 +309,7 @@ components:
           nullable: true
           type: number
         priority:
-          description: 作業項目の順位
+          description: 優先度の値の内部 ID
           type: string
         project:
           description: 所属プロジェクトの内部 ID

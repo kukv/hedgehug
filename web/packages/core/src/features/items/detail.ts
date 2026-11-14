@@ -81,8 +81,8 @@ export interface DetailDeps {
   toasts: Toasts;
   // onChanged は、保存したあと(開いているプロジェクトの画面を読み直す)。
   onChanged(): void;
-  // onPropertySaved は、プロパティを保存できたとき、Store の ID と保存後のアイテムを知らせる(バックログの行を直す)。
-  onPropertySaved?: (storeId: string, item: Item) => void;
+  // onPropertySaved は、プロパティを保存できたとき、Store の ID・保存したプロパティの ID・保存後のアイテムを知らせる(バックログの行を直す)。
+  onPropertySaved?: (storeId: string, propertyId: string, item: Item) => void;
   // leave は、入力中のものがあるとき、捨ててよいかを聞く(別のアイテムを開く・パネルを閉じる)。ないときは常に true。
   leave?: () => Promise<boolean>;
 }
@@ -259,7 +259,7 @@ export function createDetail(deps: DetailDeps): Detail {
         refusedToast(e);
         return false;
       }
-      deps.onPropertySaved?.(v.store.id, result);
+      deps.onPropertySaved?.(v.store.id, propertyId, result);
       await saved(v.store.id, v.item.id);
       return true;
     },

@@ -9,7 +9,7 @@ import { createDetail } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 import { fakeWorkspaces } from "./settings.test-util";
 
-async function setup(onPropertySaved?: (storeId: string, item: Item) => void) {
+async function setup(onPropertySaved?: (storeId: string, propertyId: string, item: Item) => void) {
   const catalogPort = fakeCatalogPort();
   const catalog = createCatalog(catalogPort);
   await catalog.load();
@@ -123,14 +123,16 @@ describe("createDetail", () => {
     expect([items.calls, get(toasts.list)]).toEqual([[`setProperty ${s1.id} status "st2"`], []]);
   });
 
-  it("tells onPropertySaved the store and the saved item once, not on a refusal", async () => {
-    const saved: [string, string][] = [];
-    const { detail, items, task, s1 } = await setup((sid, it) => void saved.push([sid, it.id]));
+  it("tells onPropertySaved the store, the property and the saved item once, not on a refusal", async () => {
+    const saved: [string, string, string][] = [];
+    const { detail, items, task, s1 } = await setup(
+      (sid, pid, it) => void saved.push([sid, pid, it.id]),
+    );
     await detail.open("S1", task.id);
     items.refuseNext("ポイントは 0 以上の数で入力してください");
     await detail.setProperty(task.id, "points", "-1");
     await detail.setProperty(s1.id, "status", "st2");
-    expect(saved).toEqual([["S1", s1.id]]);
+    expect(saved).toEqual([["S1", "status", s1.id]]);
   });
 
   it("shows a refusal as an error toast", async () => {

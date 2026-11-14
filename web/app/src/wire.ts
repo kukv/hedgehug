@@ -127,8 +127,8 @@ export const detail = createDetail({
   planning: planningPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
-  onPropertySaved: (storeId, item) => {
-    for (const f of propertySaved) f(storeId, item);
+  onPropertySaved: (storeId, propertyId, item) => {
+    for (const f of propertySaved) f(storeId, propertyId, item);
   },
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: leaveItem,

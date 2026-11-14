@@ -7,4 +7,4 @@ export const reloads = new Set<() => Promise<unknown>>();
 export const githubReloads = new Set<() => Promise<unknown>>();
 // propertySaved は、詳細パネルでプロパティを保存できたときに呼ぶもの(バックログの消えるときのトースト。F2a-11)。
 // planning.ts は wire.ts を読むので、wire.ts から planning.ts を読まずに、ここに登録する。
-export const propertySaved = new Set<(storeId: string, item: Item) => void>();
+export const propertySaved = new Set<(storeId: string, propertyId: string, item: Item) => void>();

@@ -225,8 +225,8 @@ describe("createBacklog detail", () => {
   it("tells that the item opened from the screen disappears when it is done outside the sprints", async () => {
     const { backlog, shown } = await setup();
     backlog.openDetail(rowIn(backlog, 3));
-    backlog.noticeDetail("S1", done(3));
-    backlog.noticeDetail("S1", done(3));
+    backlog.noticeDetail("S1", "status", done(3));
+    backlog.noticeDetail("S1", "status", done(3));
     expect(shown()).toEqual([
       { text: "HH-3 は完了のため、バックログには表示されません", error: false },
     ]);
@@ -235,9 +235,9 @@ describe("createBacklog detail", () => {
   it("tells it again when the item comes back to the backlog and is done again", async () => {
     const { backlog, shown } = await setup();
     backlog.openDetail(rowIn(backlog, 3));
-    backlog.noticeDetail("S1", done(3));
-    backlog.noticeDetail("S1", { ...done(3), status: "st1" });
-    backlog.noticeDetail("S1", done(3));
+    backlog.noticeDetail("S1", "status", done(3));
+    backlog.noticeDetail("S1", "status", { ...done(3), status: "st1" });
+    backlog.noticeDetail("S1", "status", done(3));
     expect(shown()).toEqual([
       { text: "HH-3 は完了のため、バックログには表示されません", error: false },
       { text: "HH-3 は完了のため、バックログには表示されません", error: false },
@@ -247,23 +247,35 @@ describe("createBacklog detail", () => {
   it("tells it once after another property of the open item is saved first", async () => {
     const { backlog, shown } = await setup();
     backlog.openDetail(rowIn(backlog, 3));
-    backlog.noticeDetail("S1", { ...done(3), status: "st1", points: 3 });
-    backlog.noticeDetail("S1", done(3));
-    backlog.noticeDetail("S1", { ...done(3), points: 5 });
+    backlog.noticeDetail("S1", "status", { ...done(3), status: "st1", points: 3 });
+    backlog.noticeDetail("S1", "status", done(3));
+    backlog.noticeDetail("S1", "status", { ...done(3), points: 5 });
     expect(shown()).toEqual([
       { text: "HH-3 は完了のため、バックログには表示されません", error: false },
     ]);
   });
 
+  it("does not tell it for a save of a property other than the status", async () => {
+    const { backlog, shown } = await setup();
+    backlog.openDetail(rowIn(backlog, 3));
+    backlog.noticeDetail("S1", "points", { ...done(3), points: 5 });
+    backlog.noticeDetail("S1", "sprint", done(3));
+    expect(shown()).toEqual([]);
+    backlog.noticeDetail("S1", "status", done(3));
+    backlog.noticeDetail("S1", "points", { ...done(3), status: "st1" });
+    backlog.noticeDetail("S1", "points", done(3));
+    expect(shown()).toHaveLength(1);
+  });
+
   it("does not tell it for another item, an item in a sprint, an open item or after close", async () => {
     const { backlog, shown } = await setup();
     backlog.openDetail(rowIn(backlog, 3));
-    backlog.noticeDetail("S1", done(4));
-    backlog.noticeDetail("S1", done(3, "SP1"));
-    backlog.noticeDetail("S1", { ...done(3), status: "st2" });
+    backlog.noticeDetail("S1", "status", done(4));
+    backlog.noticeDetail("S1", "status", done(3, "SP1"));
+    backlog.noticeDetail("S1", "status", { ...done(3), status: "st2" });
     backlog.close();
     await backlog.open("S1", "S1-W1");
-    backlog.noticeDetail("S1", done(3));
+    backlog.noticeDetail("S1", "status", done(3));
     expect(shown()).toEqual([]);
   });
 });

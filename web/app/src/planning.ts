@@ -23,7 +23,7 @@ export const backlog = createBacklog({
   openDetail: (storeId, itemId) => void detail.open(storeId, itemId),
 });
 reloads.add(() => backlog.reload());
-propertySaved.add((storeId, item) => backlog.noticeDetail(storeId, item));
+propertySaved.add((storeId, propertyId, item) => backlog.noticeDetail(storeId, propertyId, item));
 
 // sprintAction は、スプリントのダイアログの保存(core の runSprintAction)。保存のあとは、カード・バックログの枠と
 // 概要(見出しの「実行中」、「開始」の理由、作成の既定)をすぐ読み直す。

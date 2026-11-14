@@ -15,7 +15,7 @@ import (
 // BacklogRow は、バックログの画面の枠の 1 行。
 type BacklogRow struct {
 	PlanningRow
-	Priority string `json:"priority" doc:"作業項目の順位"`
+	Priority string `json:"priority" doc:"優先度の値の内部 ID"`
 	Project  string `json:"project" doc:"所属プロジェクトの内部 ID"`
 }
 

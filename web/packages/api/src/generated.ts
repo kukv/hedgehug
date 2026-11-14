@@ -235,7 +235,7 @@ export interface BacklogRow {
   kind: BacklogRowKind;
   /** @nullable */
   points: number | null;
-  /** 作業項目の順位 */
+  /** 優先度の値の内部 ID */
   priority: string;
   /** 所属プロジェクトの内部 ID */
   project: string;

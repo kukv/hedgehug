@@ -64,6 +64,12 @@ test("creates, reorders and plans items on the backlog", async ({ page }, info) 
   await expect(
     sprint.getByText("バックログからここにドラッグ、または行の「スプリント」で選択"),
   ).toBeVisible();
+  // スプリントの枠を足しても、ページ全体が横にはみ出さない。
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
 
   // -4 を「上へ」: 並びが -2・-4・-3。
   await rowIn(backlog, s4).getByRole("button", { name: "上へ" }).click();

@@ -50,9 +50,9 @@ export interface Backlog {
   place(row: BacklogRow, drop: Drop): Promise<void>;
   // openDetail は、行の詳細パネルを開き、開いたアイテムを覚える(noticeDetail が使う)。
   openDetail(row: BacklogRow): void;
-  // noticeDetail は、詳細パネルの保存の応答 item を受け取る。この画面から開いたアイテムが、開いている枠の
-  // どのスプリントにも入っておらず完了・中止なら、消えるときのトーストを出す(F2a-10 の(2))。
-  noticeDetail(storeId: string, item: Item): void;
+  // noticeDetail は、詳細パネルの保存の応答 item を受け取る。ステータスの保存のとき、この画面から開いたアイテムが、
+  // 開いている枠のどのスプリントにも入っておらず完了・中止なら、消えるときのトーストを出す(F2a-10 の(2))。
+  noticeDetail(storeId: string, propertyId: string, item: Item): void;
 }
 
 // pointsToSend は、ポイントの入力欄を離れたときに送る文字列。打ち換えていなければ(フォーカスしたときの値
@@ -170,12 +170,12 @@ export function createBacklog(deps: BacklogDeps): Backlog {
       opened = { id: row.id, display: row.display, gone: false };
       deps.openDetail(s.storeId, row.id);
     },
-    noticeDetail(storeId, item) {
+    noticeDetail(storeId, propertyId, item) {
       const s = get(state);
-      if (!s || s.storeId !== storeId || opened?.id !== item.id) return;
+      if (propertyId !== "status" || !s || s.storeId !== storeId || opened?.id !== item.id) return;
       const sprinted = s.frames.some((f) => f.sprint !== null && f.sprint.id === item.sprint);
       const c = sprinted ? null : goneCategory(s.settings, item.status);
-      // 消えたままのほかのプロパティの保存では出さない。未完了に戻してからもう一度完了・中止にしたら出す。
+      // ステータス以外の保存では評価しない。消えたままのステータスの保存では出さない。未完了に戻してからもう一度完了・中止にしたら出す。
       if (c && !opened.gone) deps.toasts.show(goneText(opened.display, c));
       opened.gone = c !== null;
     },
