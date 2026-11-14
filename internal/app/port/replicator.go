@@ -100,6 +100,11 @@ type ReceivedSave struct {
 	Conflicts []DescConflict
 	// DroppedPlan は、合わせのときだけ、合わせで取り除かれた(完全に削除した)スプリント・リリースの行(決定 C5a-8)。
 	DroppedPlan []DroppedPlan
+	// DroppedRules は、合わせのときだけ、合わせで取り除かれた、完全に削除したプロジェクトのルールの行(決定 C5b1-6)。
+	DroppedRules []DroppedRules
+	// MovedRules は、合わせのときだけ、もう片側の操作で別の Store へ移したプロジェクトのルールに、その側で書いた行
+	// (決定 C5b1-17)。
+	MovedRules []MovedRules
 	// Sides は、restore の行を書いた同期の修復の保存のときだけ、その保存の前を(ほかの修復の保存を通って)辿った
 	// いちばん近い合わせで、共通の祖先にない行の ID を、その合わせの 2 つの側に分けたもの。見るのは、その保存が
 	// 書いたエンティティのログだけ。合わせに届かなければ空(決定 C4b2-9)。
@@ -132,6 +137,29 @@ type DroppedPlan struct {
 	// Log は、その側のその Target の行。
 	Log []change.Record
 	// New は、Log のうち、共通の祖先のログにない行。
+	New []change.Record
+}
+
+// DroppedRules は、合わせの片側のワークスペースのログにあって、合わせの結果では取り除かれた、完全に削除した
+// プロジェクト 1 つのルールの行(project_rules/<P>/… と、scope が P の専用ルールの行。決定 C5b1-6)。
+type DroppedRules struct {
+	Workspace change.ID
+	// Project は、完全に削除したプロジェクトの内部 ID。
+	Project change.ID
+	// Log は、その側のその Project のルールの行。
+	Log []change.Record
+	// New は、Log のうち、共通の祖先のログにない行。
+	New []change.Record
+}
+
+// MovedRules は、合わせの片側のワークスペースのログで、共通の祖先にない、プロジェクト 1 つのルールの行
+// (project_rules/<P>/… と、scope が P の専用ルールの行)。P は、もう片側の操作で別の Store へ移った(転送記録が
+// もう片側にだけあり、合わせの結果にプロジェクトがない。決定 C5b1-17)。
+type MovedRules struct {
+	Workspace change.ID
+	// Project は、別の Store へ移ったプロジェクトの内部 ID。
+	Project change.ID
+	// New は、その側の P のルールの行のうち、共通の祖先のログにない行。
 	New []change.Record
 }
 

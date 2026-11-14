@@ -10,8 +10,10 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 )
 
 // repairOnce は、m の同期の修復を、最初に呼ばれたときだけ、実行者 sync で Epic に 1 行書くものにする
@@ -223,6 +225,56 @@ func TestDroppedPlanReachesJudge(t *testing.T) {
 			d := s.DroppedPlan[0]
 			if d.Workspace != apptest.SampleWorkspace || d.Target != s1 || len(d.New) == 0 || len(d.Log) <= len(d.New) {
 				t.Errorf("DroppedPlan = %+v", d)
+			}
+		}
+	}
+	if got != 1 {
+		t.Errorf("the merge was passed %d times, want 1", got)
+	}
+}
+
+// B が完全に削除したプロジェクトに A が同時にルール(使わないステータス)を足していたとき、B の合わせは、A の同期の
+// 判定に、取り除かれたルールの行(A の足した行が New)つきで 1 回だけ渡る。
+func TestDroppedRulesReachJudge(t *testing.T) {
+	const (
+		review change.ID = "01STATUS000000000000REVIEW"
+		own    change.ID = "01RULE00000000000000000001"
+	)
+	p := apptest.SampleProject
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	j := withJudge(a)
+	rule := automation.Rule{
+		ID: own, Name: "専用", Trigger: automation.TriggerStatus, TriggerStatus: review,
+		Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: true, Scope: p,
+	}
+	a.write(t, "専用ルール", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, automation.Drafts(automation.Rule{}, rule)...)
+	})
+	a.sync(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour)) // 修復なし。B の同期の先端は合わせになる
+	b.purgeProjectForTest(t, apptest.SampleWorkspace, p, "Web")
+	a.write(t, "使わないステータス", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(p), review))
+	})
+	a.sync(t, remote)
+	b.sync(t, remote)
+	merge := headOf(t, b)
+	a.sync(t, remote)
+	got := 0
+	for _, calls := range j.calls {
+		for _, s := range calls {
+			if s.Key.Version != merge.String() {
+				continue
+			}
+			got++
+			if !s.Merge || len(s.DroppedRules) != 1 {
+				t.Fatalf("merge = %+v", s)
+			}
+			d := s.DroppedRules[0]
+			if d.Workspace != apptest.SampleWorkspace || d.Project != p || len(d.New) != 1 ||
+				d.New[0].F != projectrule.HiddenField(p) || len(d.Log) <= len(d.New) {
+				t.Errorf("DroppedRules = %+v", d)
 			}
 		}
 	}

@@ -10,7 +10,9 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -33,7 +35,11 @@ func restoreOverlaps(ctx context.Context, w port.RepairWriter) error {
 	if err != nil {
 		return err
 	}
-	for _, f := range overlaps(s, w.Facts()) {
+	moves, err := readMoves(w)
+	if err != nil {
+		return err
+	}
+	for _, f := range overlaps(s, w.Facts(), moves) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -45,11 +51,15 @@ func restoreOverlaps(ctx context.Context, w port.RepairWriter) error {
 }
 
 // overlaps は、すべてのログの重なりを、削除の op の辞書順に返す。同じ op は、最初に見つけたログのもの 1 つ。
-func overlaps(s snapshot, facts repair.Facts) []found {
+// プロジェクトの移動で外した専用ルールの削除(moves.ruleOfMove)は数えない(決定 C5b1-16)。
+func overlaps(s snapshot, facts repair.Facts, moves projectMoves) []found {
 	in := newIncidentals(s)
 	byOp := map[change.ID]found{}
 	for i, e := range s.entities {
 		for _, o := range repair.Overlaps(e.log, facts, in.of(e.ref)) {
+			if moves.ruleOfMove(e, o) {
+				continue
+			}
 			if _, ok := byOp[o.Op]; !ok {
 				byOp[o.Op] = found{Overlap: o, at: i}
 			}
@@ -166,4 +176,36 @@ func (in incidentals) of(ref change.Ref) func(f string, c change.Record) bool {
 		}
 		return len(in.placed[c.Op]) > 1 && !in.ranked[c.Op][ref.ID]
 	}
+}
+
+// projectMoves は、プロジェクトの移動の op と、その op が移したプロジェクト(転送記録の op と target)。
+type projectMoves map[change.ID][]project.ID
+
+// readMoves は、転送記録から、プロジェクトの移動の op を読む。同じ Store の中の移動も別の Store への移動も、
+// 転送記録を移動と同じ op で書く。
+func readMoves(w port.RepairWriter) (projectMoves, error) {
+	moves := projectMoves{}
+	err := w.Read(func(r port.Reader) error {
+		trs, err := r.Transfers().List()
+		for _, t := range trs {
+			if t.Entity == transfer.EntityProject {
+				moves[t.Op] = append(moves[t.Op], t.Target)
+			}
+		}
+		return err
+	})
+	return moves, err
+}
+
+// ruleOfMove は、ワークスペース e のログの重なり o が、プロジェクトの移動で外した専用ルールの削除か: o の f が
+// rules/<R> で、o の op が R の持ち主のプロジェクトを移した op。移動は、移動元のプロジェクト別のルールと専用ルールを
+// 同じ op で外す・削除する(03「移動・削除・復元」)ので、その削除を取り消すと移動そのものを取り消してしまう。
+// 残ったルールは修復 (9) が外す。
+func (m projectMoves) ruleOfMove(e entity, o repair.Overlap) bool {
+	id, ok := strings.CutPrefix(o.F, "rules/")
+	if e.ref.Kind != change.KindWorkspace || !ok || strings.Contains(id, "/") || len(m[o.Op]) == 0 {
+		return false
+	}
+	owner, ok := repair.RuleScopes(e.log)[change.ID(id)]
+	return ok && slices.Contains(m[o.Op], owner)
 }

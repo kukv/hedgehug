@@ -23,6 +23,7 @@ var steps = []step{
 	stopExtraActive,    // 実行中のスプリントが 2 つ以上
 	backlogClosed,      // 完了したスプリントに入った未完了のアイテム
 	clearDanglingPlan,  // 存在しないスプリント・リリースの参照
+	dropOrphanRules,    // ワークスペースにないプロジェクトのルール
 }
 
 // syncActor は、修復の保存の実行者。

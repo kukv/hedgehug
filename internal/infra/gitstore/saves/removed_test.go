@@ -352,3 +352,58 @@ func TestRepairSaveSides(t *testing.T) {
 		t.Errorf("sides = %+v", f)
 	}
 }
+
+// rulesMerge は、プロジェクト P1 のルールの行を片側で取り除いて purged.jsonl に足し、もう片側で row を足した合わせの
+// Pending の結果(合わせが渡されなければ false)。共通の祖先は、専用ルール RX(scope が P1)と P1 の使わないステータスを
+// 持つ。kept なら、row は合わせの結果に残る。
+func rulesMerge(t *testing.T, row change.Record, kept bool) (port.ReceivedSave, bool) {
+	t.Helper()
+	const purged = `{"id":"PG1","at":"2026-11-12T09:00:00+09:00","entity":"project","target":"P1"}` + "\n"
+	create := rec("R0", "OP0", t0, change.Create, "") // scope を読むのに、ワークスペースの作成の行が要る
+	create.To = []byte(`{}`)
+	scope := rec("R1", "OP0", t0, change.Set, "rules/RX/scope")
+	scope.To = []byte(`"P1"`)
+	hidden := rec("R2", "OP0", t0, change.Add, "project_rules/P1/hidden")
+	r := newRepo(t)
+	j, known := judged(t)
+	c0 := r.save(map[string]string{wsLog: logOf(t, create, scope, hidden)}, "taro", t0, "OP0")
+	drop := r.save(map[string]string{wsLog: logOf(t, create), "purged.jsonl": purged}, "taro", t0.Add(time.Minute), "OP1")
+	r.reset(c0)
+	other := r.save(map[string]string{wsLog: logOf(t, create, scope, hidden, row)}, "hanako", t0.Add(2*time.Minute), "OP2")
+	merged := []change.Record{create}
+	if kept {
+		merged = append(merged, row)
+	}
+	m := r.save(map[string]string{wsLog: logOf(t, merged...), "purged.jsonl": purged}, BotName, t0.Add(3*time.Minute), "", drop, other)
+	r.mark(j, c0)
+	s, ok := pending(t, r, m, m, known)[m.String()]
+	return s, ok
+}
+
+// 片側でプロジェクト P1 のルールの行を取り除いて purged.jsonl に足し、もう片側で P1 のルールを変えた合わせは、
+// DroppedRules に {W1, P1}(New はその側の共通の祖先にない 1 行)を持つ。専用ルール RX の scope の行は共通の祖先に
+// あり、その側のログから読む。
+func TestDroppedRulesInMerge(t *testing.T) {
+	for name, row := range map[string]change.Record{
+		"使わないステータスに足した": rec("R3", "OP2", t0.Add(2*time.Minute), change.Add, "project_rules/P1/hidden"),
+		"専用ルールの名前を変えた":  rec("R3", "OP2", t0.Add(2*time.Minute), change.Set, "rules/RX/name"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, ok := rulesMerge(t, row, false)
+			if !ok || !s.Merge || len(s.DroppedRules) != 1 {
+				t.Fatalf("merge = %+v, want one DroppedRules", s)
+			}
+			d := s.DroppedRules[0]
+			if d.Workspace != "01WS000000000000000000001" || d.Project != "P1" || len(d.Log) != 3 || len(d.New) != 1 || d.New[0].ID != "R3" {
+				t.Errorf("DroppedRules = %+v", d)
+			}
+		})
+	}
+}
+
+// P1 のルールを変えていなければ(共通の祖先にあるルールの行だけが取り除かれた)、合わせを渡さない。
+func TestDroppedRulesNotChanged(t *testing.T) {
+	if s, ok := rulesMerge(t, rec("R3", "OP2", t0.Add(2*time.Minute), change.Set, "title"), true); ok {
+		t.Errorf("merge = %+v, want none", s)
+	}
+}

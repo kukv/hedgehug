@@ -16,10 +16,13 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 	"github.com/kukv/hedgehug/internal/infra/gitstore/filemerge"
@@ -462,6 +465,12 @@ func (m machine) purgePlanForTest(t *testing.T, ws workspace.ID, id change.ID, e
 	if err := os.WriteFile(logPath, filemerge.DropPurgedPlan(log, map[string]bool{string(id): true}), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	m.recordPurgedForTest(t, entity, id, name)
+}
+
+// recordPurgedForTest は、purged.jsonl に entity・target = id・display の行を足して、作業ツリーの変更を 1 つのコミットにする。
+func (m machine) recordPurgedForTest(t *testing.T, entity change.Kind, id change.ID, name string) {
+	t.Helper()
 	line, err := json.Marshal(purgedLine{
 		ID: "01PURGEPLAN000000000000001", At: t0.Format(change.TimeLayout), By: "taro", Actor: "user",
 		Entity: entity, Target: id, Display: name,
@@ -527,6 +536,64 @@ func TestSyncDropsPurgedSprintRows(t *testing.T) {
 		}
 		if strings.Contains(fs[wsDir+"workspace.yaml"], string(s1)) {
 			t.Errorf("%s: workspace.yaml still has %s", m.dir, s1)
+		}
+	}
+}
+
+// purgeProjectForTest は、本物のプロジェクトの「完全に削除」と同じく、projects/<P> を消し、ワークスペースのログから
+// P のルールの行(project_rules/<P>/… と専用ルール)を除いて書き直し、purged.jsonl に entity: project の行を足して、
+// 1 つのコミットにする。
+func (m machine) purgeProjectForTest(t *testing.T, ws workspace.ID, p project.ID, display string) {
+	t.Helper()
+	if err := os.RemoveAll(filepath.Join(m.dir, "projects", string(p))); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(m.dir, "workspaces", string(ws), "log.jsonl")
+	log, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logPath, filemerge.DropPurgedRules(log, map[string]bool{string(p): true}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.recordPurgedForTest(t, "project", p, display)
+}
+
+// B がプロジェクトを完全に削除し、A が同時にそのプロジェクトのルールを足しても、合わせたあとのログに、そのプロジェクトの
+// ルールの行(project_rules/<P>/… と専用ルール)は残らない。次の同期も通り、2 台は同じになる。
+func TestSyncDropsPurgedProjectRules(t *testing.T) {
+	const (
+		review change.ID = "01STATUS000000000000REVIEW"
+		own    change.ID = "01RULE00000000000000000001"
+	)
+	p := apptest.SampleProject
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	rule := automation.Rule{
+		ID: own, Name: "専用", Trigger: automation.TriggerStatus, TriggerStatus: review,
+		Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: true, Scope: p,
+	}
+	a.write(t, "専用ルール", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, automation.Drafts(automation.Rule{}, rule)...)
+	})
+	a.sync(t, remote)
+	b := cloneMachine(t, remote, "B", t0)
+	b.purgeProjectForTest(t, apptest.SampleWorkspace, p, "Web")
+	a.write(t, "使わないステータス", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(p), review))
+	})
+	a.sync(t, remote)
+	b.sync(t, remote)
+	a.sync(t, remote)
+	b.sync(t, remote)
+	sameFiles(t, a, b)
+	log := "workspaces/" + string(apptest.SampleWorkspace) + "/log.jsonl"
+	for _, m := range []machine{a, b} {
+		got := files(t, m.dir)[log]
+		for _, s := range []string{"project_rules/" + string(p), string(own)} {
+			if strings.Contains(got, s) {
+				t.Errorf("%s: the log still has %s", m.dir, s)
+			}
 		}
 	}
 }

@@ -69,8 +69,11 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	dropped, err := droppedPlan(n.c, base)
-	s := port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, Conflicts: conflicts, DroppedPlan: dropped}
+	dropped, rules, moved, err := droppedAndMoved(n.c, base)
+	s := port.ReceivedSave{
+		Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, Conflicts: conflicts,
+		DroppedPlan: dropped, DroppedRules: rules, MovedRules: moved,
+	}
 	if err != nil || !mergeToJudge(s) {
 		return port.ReceivedSave{}, false, err
 	}
@@ -78,10 +81,11 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 }
 
 // mergeToJudge は、合わせ s を判定に渡すか。消えたものに共通の祖先にない行があるか、削除と変更が重なったか、
-// 説明が重なったか、完全に削除した計画に共通の祖先にない行があるとき。
+// 説明が重なったか、完全に削除した計画・プロジェクトのルールに共通の祖先にない行があるか、別の Store へ移した
+// プロジェクトのルールを同時に変えたとき。
 func mergeToJudge(s port.ReceivedSave) bool {
-	return len(s.Concurrent) > 0 || len(s.Conflicts) > 0 || hasNewPlan(s.DroppedPlan) ||
-		slices.ContainsFunc(s.Removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })
+	return len(s.Concurrent) > 0 || len(s.Conflicts) > 0 || hasNewPlan(s.DroppedPlan) || hasNewRules(s.DroppedRules) ||
+		len(s.MovedRules) > 0 || slices.ContainsFunc(s.Removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })
 }
 
 // saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティと Sides も読む。
