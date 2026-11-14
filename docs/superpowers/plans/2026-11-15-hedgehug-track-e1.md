@@ -580,31 +580,36 @@ git commit -m "feat(ui): 絞り込み欄の部品と / キーを足す(E1 Task 1
 ### Task 12: 検索の画面とサイドバーのナビ
 
 **Files:**
-- Create: `web/app/src/search.ts`(組み立てと `reloads` への登録)、`web/app/src/screens/search/SearchScreen.svelte`、`SearchTable.svelte`、`SearchRow.svelte`、`SearchHelp.svelte`
+- Create: `web/packages/core/src/features/search/view.ts`(画面に出す文と行の形)、`web/packages/core/src/features/search/help.ts`(検索ヘルプの説明文と表)、`web/app/src/search.ts`(組み立てと `reloads` への登録)、`web/app/src/screens/search/SearchScreen.svelte`、`SearchTable.svelte`、`SearchRow.svelte`、`SearchHelp.svelte`
 - Modify: `web/app/src/shell/Screen.svelte`(`search` の画面)、`web/app/src/shell/Sidebar.svelte`(ナビ「検索」)
-- Test: `web/app/src/screens/search/SearchScreen.test.ts`
+- Test: `web/packages/core/src/features/search/view.test.ts`(`web/app` には単体テストがないので、表示の中身は core で確かめ、描画は Task 14 の e2e で確かめる)
 
 **Interfaces:**
 - Consumes: Task 9 の `createSearch`・`createScreenStates`、Task 10 の `filterCandidates`・`applyCandidate`、Task 11 の `FilterInput`、core の `dueLabel`・`readOnlyNote`、ui の `ReadOnlyBand`・`Avatar`・`StatusDot`
+- Produces:
+  - `function emptyText(query: string, rows: number, errors: string[]): { title: string; body: string | null; create: boolean } | null` — 行があれば null
+  - `function readOnlyBands(rows: SearchRow[]): string[]` — 閲覧のみの Store ごとに 1 本(最初に出た順)
+  - `function deletedNote(daysLeft: number): string`
+  - `function assigneeText(a: SearchRow["assignee"]): string | null`
+  - `const searchHelp: { lead: string; rows: [string, string][] }`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- 見出し「検索」、補足「すべての Store のアイテムを、条件で絞り込んで見ます」。欄の案内「絞り込み 例: assignee:@me status:InProgress system:Web」。
-- ツールバーに「{N} 件」(行の数)。
-- エラーがあれば欄の下に赤字、本体は「一致するものはありません」「絞り込みを変えてみてください。」。
-- 0 件で絞り込みあり →「一致するものはありません」「絞り込みを変えてみてください。」。絞り込みが空で 0 件 →「まだ何もありません」と「作成」(押すと作成ダイアログ)。
-- 列の見出しは ID・タイトル・ステータス・担当者・優先度・終了日・ポイント。ID の前に Store の点。`oldIdHit` の行は ID の横に「旧 ID」。タイトルを押すと詳細パネルを開く。担当者の `name` が null なら「不明なユーザー」。終了日は `dueLabel`(期限切れ・今日の強調)。
-- 削除済みの行(`deleted`)は薄く、「削除済み」のピルと「あと N 日で完全に削除」(負なら「保持日数を過ぎています」)。タイトルは押せない。
-- 閲覧のみの Store の行があれば、その Store ごとに帯「{Store 名} は閲覧のみの Store です。閲覧はできますが、作成・変更・削除はできません。」を 1 本。
-- 「検索ヘルプ」で見出し「検索ヘルプ」・閉じるボタン「閉じる」のダイアログ。最初の説明文と表は 04 の 320〜352 行のとおり(全行)。
-- サイドバー: 「受信箱」の下に「検索」。`/search` を開いているとき強調(`aria-current="page"`)。
+`view.test.ts`:
+- `emptyText`: エラーあり →「一致するものはありません」「絞り込みを変えてみてください。」。0 件で絞り込みあり → 同じ。絞り込みが空(前後の空白だけを含む)で 0 件 →「まだ何もありません」、`body` null、`create` 真。
+- `readOnlyBands`: 閲覧のみの Store「team」の行が 2 件と「docs」の行が 1 件 →「team は閲覧のみの Store です。閲覧はできますが、作成・変更・削除はできません。」と docs の 1 本ずつ。閲覧のみの行がなければ空。
+- `deletedNote`: 16 →「あと 16 日で完全に削除」、0 →「あと 0 日で完全に削除」、-1 →「保持日数を過ぎています」。
+- `assigneeText`: `{login: "tanaka", name: "田中"}` →「田中」、`name` null →「不明なユーザー」、null → null。
+- `searchHelp`: 説明文が 04 の 320 行のとおり、表が 04 の 326〜352 行の 27 行と同じ順・同じ文。
+
+画面に出すもの(Task 14 の e2e で確かめる): 見出し「検索」、補足「すべての Store のアイテムを、条件で絞り込んで見ます」、欄の案内「絞り込み 例: assignee:@me status:InProgress system:Web」、ツールバーの「{N} 件」(行の数)、列の見出し ID・タイトル・ステータス・担当者・優先度・終了日・ポイント、ID の前の Store の点、`oldIdHit` の行の ID の横の「旧 ID」、タイトルで詳細パネル、終了日の `dueLabel`、削除済みの行の薄い表示と「削除済み」のピルと `deletedNote`(タイトルは押せない)、「作成」で作成ダイアログ、「検索ヘルプ」のダイアログ(見出し「検索ヘルプ」、閉じるボタン「閉じる」)、サイドバーの「受信箱」の下の「検索」(`/search` のとき `aria-current="page"`)。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `pnpm -C web --filter @hedgehug/app test -- search`
+Run: `pnpm -C web --filter @hedgehug/core test -- view`
 Expected: FAIL
 
-- [ ] **Step 3: 画面・ナビ・組み立てを書く**
+- [ ] **Step 3: 表示の関数・画面・ナビ・組み立てを書く**
 
 候補の元のアイテムはパレットの口 `index()` を、検索の画面を開いたときに 1 回読む。メンバーは最初に `assignee:` の候補を出すときに Store ごとに読む。
 
@@ -670,7 +675,9 @@ git commit -m "feat(palette): 「検索を開く」と「このクエリで」�
 - [ ] **Step 1: 通しのテストを書く**
 
 `search.spec.ts`(作ったアイテムのタイトルに日時を入れて、サンプルの件数に頼らない):
-- サイドバーの「検索」で開き、`/search` になる。作ったアイテムのタイトルの語を打つと、その行が出て「1 件」。
+- サイドバーの「検索」で開き、`/search` になり、ナビの「検索」が `aria-current="page"`。見出し「検索」・補足・欄の案内・列の見出し 7 つが出る。
+- 作ったアイテムのタイトルの語を打つと、その行(Store の点つき)が出て「1 件」。タイトルを押すと詳細パネルが開く。
+- `is:deleted` と削除したアイテムのタイトルで、その行に「削除済み」と「あと 30 日で完全に削除」が出て、タイトルが押せない。
 - `kind:` で「「kind:」に値がありません」が出て「0 件」。
 - `project:` に続けて日本語のプロジェクト名の一部を打つと候補が出て、Enter で `project:{ID}` が入る。
 - `/` で欄に移る。
