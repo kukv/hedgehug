@@ -71,10 +71,12 @@ async function stop(proc: ChildProcess) {
   clearTimeout(timer);
 }
 
-export const test = base.extend<object, { server: { url: string } }>({
+export const test = base.extend<object, { server: { url: string }; ownServer: boolean }>({
+  // ownServer は、ほかのテストの通知などが残っていないサーバーを使うか。test.use({ ownServer: true }) にした
+  // テストは、Playwright が別の worker(別のサーバー)で動かす(受信箱が空のときの表示などを確かめるため)。
+  ownServer: [false, { scope: "worker", option: true }],
   server: [
-    // biome-ignore lint/correctness/noEmptyPattern: Playwright は fixture の第 1 引数に分割代入の形を求める。
-    async ({}, use) => {
+    async ({ ownServer: _ownServer }, use) => {
       const { proc, url } = await start();
       try {
         await use({ url });
