@@ -120,7 +120,8 @@ func TestLocateWorkspaceNamedRecordFirst(t *testing.T) {
 
 // B5c-13: 接頭辞を HH から WEB に変えてから移すと記録の old は WEB。変える前の HH でも、見つけたワークスペースの旧い接頭辞で
 // 記録に当て、zzz のいまの HH より先に開く(MovedFrom.Old は画面の接頭辞 HH)。中のアイテム・プロジェクトも同じ。
-// 移動先の Store が非表示なら、旧い接頭辞は表示中の Store でしか引かないので記録に当たらず、zzz のいまの HH-1 を開く。
+// 移動先の Store が非表示なら、旧い接頭辞は表示中の Store でしか引かないので記録に当たらず、zzz のいまの HH・HH-1 を開く
+// (ほかにもなければ見つからない)。記録の old の WEB なら、非表示の理由を返す。
 func TestLocateWorkspaceRenamedBeforeMove(t *testing.T) {
 	f := newFixture(t)
 	withZZZ(t, f)
@@ -142,6 +143,16 @@ func TestLocateWorkspaceRenamedBeforeMove(t *testing.T) {
 	f.list.Stores = slices.DeleteFunc(f.list.Stores, func(s port.StoreInfo) bool { return s.ID == store2 })
 	if got, err := f.svc.Locate(t.Context(), "main", "HH-1"); err != nil || !got.Found || got.Store != store5 || got.Item != zzzEpic {
 		t.Errorf("移動先が非表示の Locate(HH-1): %+v, %v", got, err)
+	}
+	if got := locateWorkspace(t, f, "main", "HH"); got.Store != store5 || got.Workspace != zzzWS || got.MovedFrom != nil {
+		t.Errorf("移動先が非表示の LocateWorkspace(HH): %+v", got)
+	}
+	if got := locateWorkspace(t, f, "main", "WEB"); got.Found || got.Gone == nil || got.Gone.Reason != "hidden" {
+		t.Errorf("移動先が非表示の LocateWorkspace(WEB): %+v, %+v", got, got.Gone)
+	}
+	f.list.Stores = slices.DeleteFunc(f.list.Stores, func(s port.StoreInfo) bool { return s.ID == store5 })
+	if got, err := f.svc.LocateWorkspace(t.Context(), "main", "HH"); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("ほかにもないときの LocateWorkspace(HH): %+v, %v", got, err)
 	}
 }
 
