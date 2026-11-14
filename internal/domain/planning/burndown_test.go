@@ -98,7 +98,8 @@ func TestBurnDaysAndIdeal(t *testing.T) {
 	}
 	sameFloats(t, "Total", totals(got), []float64{8, 8, 8, 8})
 	sameFloats(t, "Remaining", remainings(got), []float64{8, 8, 3, -1})
-	sameFloats(t, "Ideal", ideals(got), []float64{8, 8 - 8.0/3, 8 - 16.0/3, 0})
+	// F3-22: 理想は Round1 で小数第 1 位にした値(8・5.3・2.7・0)。
+	sameFloats(t, "Ideal", ideals(got), []float64{8, 5.3, 2.7, 0})
 	if got.Committed != nil {
 		t.Fatalf("実行中は Committed なし: %v", *got.Committed)
 	}

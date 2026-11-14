@@ -56,7 +56,7 @@ type ReportBurnDay struct {
 	Date      string   `json:"date"`
 	Total     float64  `json:"total"`
 	Remaining *float64 `json:"remaining"`
-	Ideal     float64  `json:"ideal"`
+	Ideal     float64  `json:"ideal" doc:"理想の線の値。小数第 2 位を四捨五入した小数第 1 位まで"`
 }
 
 // ReportBurndown は、スプリントのバーンダウン。

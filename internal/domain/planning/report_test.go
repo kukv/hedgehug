@@ -83,6 +83,25 @@ func TestResolveSelection(t *testing.T) {
 	}
 }
 
+// 同期で実行中が 2 つ届いたときは、開始日の早い方(同じなら名前の昇順で先)。05 の 159 行と同じ。
+func TestActiveSprint(t *testing.T) {
+	two := []planning.Sprint{
+		{ID: "L", Name: "a", State: planning.Active, Start: "2026-11-12"},
+		{ID: "P", Name: "p", State: planning.Planned, Start: "2026-11-01"},
+		{ID: "E", Name: "b", State: planning.Active, Start: "2026-11-10"},
+		{ID: "T", Name: "a", State: planning.Active, Start: "2026-11-10"},
+	}
+	if got := planning.ActiveSprint(two); got == nil || got.ID != "T" {
+		t.Errorf("ActiveSprint = %+v, want T", got)
+	}
+	if got := planning.ResolveSelection(planning.Selection{}, false, two).Sprint; got != "T" {
+		t.Errorf("既定のバーンダウン = %q, want T", got)
+	}
+	if got := planning.ActiveSprint(two[1:2]); got != nil {
+		t.Errorf("実行中がなければ nil: %+v", got)
+	}
+}
+
 func TestReportSprints(t *testing.T) {
 	live := append(reportSprints(), planning.Sprint{ID: "F", Name: "0", State: planning.Closed, Start: "2026-10-27"})
 	var got []change.ID

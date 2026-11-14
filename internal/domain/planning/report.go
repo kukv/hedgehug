@@ -86,13 +86,27 @@ func ResolveSelection(saved Selection, found bool, live []Sprint) Selection {
 	return sel
 }
 
+// ActiveSprint は、削除済みでない実行中のスプリント(なければ nil)。同期で 2 つ以上届いたときは、05 の 159 行と同じく
+// 開始日の早いもの(同じなら名前の昇順で先)。
+func ActiveSprint(live []Sprint) *Sprint {
+	var best *Sprint
+	for i := range live {
+		s := &live[i]
+		if s.Deleted != nil || s.State != Active {
+			continue
+		}
+		if best == nil || s.Start < best.Start || (s.Start == best.Start && s.Name < best.Name) {
+			best = s
+		}
+	}
+	return best
+}
+
 // defaultSprint は、保存がないときのバーンダウンのスプリント。実行中、なければ終了日が最も遅い完了
 // (同じなら開始日が遅いもの、それも同じなら名前の昇順で先)、どちらもなければ空。options は ReportSprints の結果。
 func defaultSprint(options []Sprint) change.ID {
-	for _, s := range options {
-		if s.State == Active {
-			return s.ID
-		}
+	if a := ActiveSprint(options); a != nil {
+		return a.ID
 	}
 	var best *Sprint
 	for i := range options {

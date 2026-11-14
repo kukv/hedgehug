@@ -1038,6 +1038,7 @@ export const ReportActiveUnit = {
 
 export interface ReportBurnDay {
   date: string;
+  /** 理想の線の値。小数第 2 位を四捨五入した小数第 1 位まで */
   ideal: number;
   /** @nullable */
   remaining: number | null;

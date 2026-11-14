@@ -128,17 +128,18 @@ func inScope(w Work, s Sprint, t time.Time) bool {
 }
 
 // fillIdeal は、理想の線(開始日の総量から終了日に 0 へ。途中の増減では引き直さない)。
+// 値は Round1 で小数第 1 位にする(F3-22。表の値と図の点を同じ値にする)。
 func fillIdeal(days []BurnDay) {
 	if len(days) == 0 {
 		return
 	}
 	first := days[0].Total
 	if len(days) == 1 {
-		days[0].Ideal = first
+		days[0].Ideal = Round1(first)
 		return
 	}
 	for k := range days {
-		days[k].Ideal = first - first*float64(k)/float64(len(days)-1)
+		days[k].Ideal = Round1(first - first*float64(k)/float64(len(days)-1))
 	}
 }
 

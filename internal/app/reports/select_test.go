@@ -1,13 +1,17 @@
 package reports_test
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/reports"
 	dp "github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -81,5 +85,46 @@ func TestSelect(t *testing.T) {
 	}
 	if err := svc.Select(t.Context(), store, ws, reports.Patch{Unit: ptr(dp.UnitCount)}); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("削除済み: err = %v", err)
+	}
+}
+
+// slowSelections は、Get のあとに少し待つ Selections(Get と Put のあいだに、別の変更が割り込める)。
+type slowSelections struct {
+	mu   sync.Mutex
+	rows map[workspace.ID]dp.Selection
+}
+
+func (f *slowSelections) Get(_ context.Context, _ port.StoreID, ws workspace.ID) (dp.Selection, bool, error) {
+	f.mu.Lock()
+	sel, ok := f.rows[ws]
+	f.mu.Unlock()
+	time.Sleep(50 * time.Millisecond)
+	return sel, ok, nil
+}
+
+func (f *slowSelections) Put(_ context.Context, _ port.StoreID, ws workspace.ID, sel dp.Selection) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rows[ws] = sel
+	return nil
+}
+
+// 同時の 2 つの変更で、片方の項目が消えない。
+func TestSelectConcurrent(t *testing.T) {
+	svc, _, _ := setup(t)
+	slow := &slowSelections{rows: map[workspace.ID]dp.Selection{}}
+	svc.Selections = slow
+	ws := apptest.SampleWorkspace
+	var wg sync.WaitGroup
+	for _, p := range []reports.Patch{{Unit: ptr(dp.UnitCount)}, {Layers: ptr(dp.LayersStatus)}} {
+		wg.Go(func() {
+			if err := svc.Select(t.Context(), store, ws, p); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if got, want := slow.rows[ws], (dp.Selection{Unit: dp.UnitCount, Layers: dp.LayersStatus}); got != want {
+		t.Errorf("保存した行 = %+v, want %+v", got, want)
 	}
 }

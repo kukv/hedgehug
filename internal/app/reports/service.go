@@ -4,6 +4,7 @@ package reports
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -24,6 +25,9 @@ type Service struct {
 	Selections Selections
 	Clock      port.Clock
 }
+
+// selectMu は、選択の保存(Select の読んで重ねて書く間)を 1 つずつにする。
+var selectMu sync.Mutex
 
 // Patch は、選択の変更。nil の項目は変えない(F3-7)。
 type Patch struct {
@@ -119,6 +123,9 @@ func (s Service) Select(ctx context.Context, store port.StoreID, ws workspace.ID
 	if p.Layers != nil && *p.Layers != planning.LayersCategory && *p.Layers != planning.LayersStatus {
 		return fmt.Errorf("%w: layers %q", port.ErrInvalidOperation, *p.Layers)
 	}
+	// Get から Put までを排他にして、同時の 2 つの変更で片方の項目を消さない。
+	selectMu.Lock()
+	defer selectMu.Unlock()
 	sel, _, err := s.Selections.Get(ctx, store, ws)
 	if err != nil {
 		return err

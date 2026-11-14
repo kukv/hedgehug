@@ -8,7 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// Active は、実行中のスプリントの数字(F3-15)。Sprint は実行中のスプリント(なければ nil で、ほかは空)。
+// Active は、実行中のスプリントの数字(F3-15)。Sprint は実行中のスプリント(なければ nil で、単位はポイント、ほかは空)。
 // Done・Total は進捗(中止を除く)。
 type Active struct {
 	Sprint   *planning.Sprint
@@ -25,15 +25,9 @@ func (s Service) Active(ctx context.Context, store port.StoreID, ws workspace.ID
 	if err != nil {
 		return Active{}, err
 	}
-	var sp *planning.Sprint
-	for i := range sn.live {
-		if sn.live[i].State == planning.Active {
-			sp = &sn.live[i]
-			break
-		}
-	}
+	sp := planning.ActiveSprint(sn.live)
 	if sp == nil {
-		return Active{}, nil
+		return Active{Unit: planning.UnitPoints}, nil
 	}
 	now := s.Clock.Now()
 	unit, _ := planning.EffectiveUnit(sn.its, ws, sn.sel.Unit)

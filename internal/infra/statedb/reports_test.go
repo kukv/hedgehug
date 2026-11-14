@@ -48,6 +48,16 @@ func TestReportSelections(t *testing.T) {
 	if got, _, _ := r.Get(ctx, "S2", "W1"); got != other {
 		t.Errorf("S2: %+v, want %+v", got, other)
 	}
+	// 同じ Store の W2 に書いても W1 は変わらない。
+	if err := r.Put(ctx, "S1", "W2", other); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := r.Get(ctx, "S1", "W1"); got != want {
+		t.Errorf("W1 changed by W2: %+v", got)
+	}
+	if got, _, _ := r.Get(ctx, "S1", "W2"); got != other {
+		t.Errorf("W2: %+v, want %+v", got, other)
+	}
 }
 
 func TestReportSelectionsSurviveReopen(t *testing.T) {
