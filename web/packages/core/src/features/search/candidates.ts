@@ -89,9 +89,12 @@ function projectEntries(stores: StoreNode[], typed: string): Entry[] {
 }
 
 function workspaceEntries(stores: StoreNode[], typed: string): FilterCandidate[] {
+  // 接頭辞が同じなら `workspace:HH` はどちらにも一致するので、最初の 1 つだけを出す。
+  const seen = new Set<string>();
   return stores
     .flatMap((s) => s.workspaces)
     .filter((w) => hits(w.name, typed) || hits(w.prefix, typed))
+    .filter((w) => !seen.has(w.prefix.toLowerCase()) && seen.add(w.prefix.toLowerCase()))
     .map((w) => ({ label: w.name, insert: w.prefix }));
 }
 
@@ -151,8 +154,10 @@ export function applyCandidate(
   term: CaretTerm,
   c: FilterCandidate,
 ): { text: string; caret: number } {
+  // 開き引用符から入れ始めたときは、カーソルのすぐ後ろの閉じ引用符も置き換える(残すと引用符が閉じない)。
+  const end = text[term.start] === '"' && text[term.end] === '"' ? term.end + 1 : term.end;
   return {
-    text: text.slice(0, term.start) + c.insert + text.slice(term.end),
+    text: text.slice(0, term.start) + c.insert + text.slice(end),
     caret: term.start + c.insert.length,
   };
 }

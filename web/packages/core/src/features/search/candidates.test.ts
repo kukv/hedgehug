@@ -102,6 +102,15 @@ describe("filterCandidates", () => {
     expect(at("blocks:HH-1|").map((c) => c.insert)).toEqual(["HH-12", "HH-13"]);
   });
 
+  it("lists a prefix shared by two stores once", () => {
+    const two: CandidateSources = {
+      stores: [store("s1", "blue", "HH", []), store("s2", "red", "hh", [])],
+      items: [],
+      members: [],
+    };
+    expect(at("workspace:web|", two)).toEqual([{ label: "Web HH", insert: "HH" }]);
+  });
+
   it("finds workspaces by name and prefix", () => {
     const want = [{ label: "Web HH", insert: "HH" }];
     expect(at("workspace:we|")).toEqual(want);
@@ -177,5 +186,15 @@ describe("applyCandidate", () => {
     const term = caretTerm(text, text.length);
     if (!term) throw new Error("no term");
     expect(applyCandidate(text, term, { label: "", insert: "HH-12" }).text).toBe("parent:HH-12");
+  });
+
+  it("also replaces the closing quote right after the caret", () => {
+    const text = 'parent:"HH" kind:bug';
+    const term = caretTerm(text, 10);
+    if (!term) throw new Error("no term");
+    expect(applyCandidate(text, term, { label: "", insert: "HH-12" })).toEqual({
+      text: "parent:HH-12 kind:bug",
+      caret: 12,
+    });
   });
 });
