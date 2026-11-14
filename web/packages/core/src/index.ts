@@ -85,6 +85,7 @@ export {
   workspaceTabOf,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
+export { focusesFilter } from "./features/search/focusKey";
 export { createShell, type Shell } from "./features/shell/shell";
 export {
   hasSyncError,
@@ -178,5 +179,6 @@ export {
   type Writable,
   writable,
 } from "./reactive/store";
+export * from "./searchIndex";
 export * from "./selectionIndex";
 export * from "./workspacesIndex";

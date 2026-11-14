@@ -69,7 +69,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
-			{ID: teamStore, Name: "team", Color: "green"},
+			{ID: teamStore, Name: "team", Color: "teal"},
 		}},
 		Accounts:    accounts,
 		Checks:      apptest.NewChecks(),
@@ -77,6 +77,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		PRScans:     state.PRScans(),
 		AppMissing:  state.AppMissing(),
 		Reports:     state.ReportSelections(),
+		Screens:     state.ScreenStates(),
 		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
 		GitHub:      e2eGitHub,
 		DeviceFlow:  e2eDeviceFlow,

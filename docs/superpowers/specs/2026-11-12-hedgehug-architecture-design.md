@@ -44,7 +44,7 @@ internal/app/            usecase。1 つの操作を 1 ファイル 1 関数に�
 
 internal/infra/          口の実装。外部のライブラリを使ってよいのは infra と adapter と cmd だけ
   gitstore/              Store を git で持つ実装(log.jsonl・item.yaml、ファイルロック、同期の合わせ方)
-  statedb/               このマシンのデータ(SQLite。索引、受信箱、保存したビュー)
+  statedb/               このマシンのデータ(SQLite。受信箱、保存したビュー、画面の状態)
   machineconfig/         このマシンの設定(~/.config/hedgehug/config.yaml。ログイン名、同期のタイミング、Store の一覧、アカウント)
   github/                GitHub の API
   secret/                トークン(キーチェーン)
@@ -148,7 +148,6 @@ type Tx interface {
 
 | 口 | すること | 実装 |
 |---|---|---|
-| `Index` | Store をまたぐ検索と並べ替え | infra/statedb |
 | `Inbox` | 通知と既読 | infra/statedb |
 | `Views` | 保存したビュー | infra/statedb |
 | `MachineSettings` | 一般の設定、アカウントの一覧、Store の一覧(色・非表示・アカウントの割り当てを含む) | infra/machineconfig(`config.yaml` 1 つ。2026-11-12 決定) |

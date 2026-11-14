@@ -17,6 +17,16 @@ const RepairEpicTitle = "修復で作った Epic"
 // (保存形式「同期の修復」の (4)。決定 C3a-14)。輪が複数あれば、輪の中の最小の内部 ID が小さい輪を返す。
 // 削除済みの親や、ないアイテムに着いたら輪ではない。輪へ続く尾は輪に入れない。輪がなければ false。
 func Cycle(items []item.Item) (ring []item.ID, ok bool) {
+	rings := Rings(items)
+	if len(rings) == 0 {
+		return nil, false
+	}
+	return rings[0], true
+}
+
+// Rings は、Cycle と同じ決まりで見つかるすべての輪を、各輪を内部 ID の順にして、最小の内部 ID の小さい輪から返す。
+// 診断(ItemProblems)は、輪に入るすべてのアイテムを知るために使う。
+func Rings(items []item.Item) [][]item.ID {
 	live := item.Live(items)
 	parent := make(map[item.ID]item.ID, len(live))
 	ids := make([]item.ID, 0, len(live))
@@ -28,15 +38,23 @@ func Cycle(items []item.Item) (ring []item.ID, ok bool) {
 	}
 	slices.Sort(ids)
 	// 内部 ID の順に、自分に戻るかを見る。最初に見つかったものは、その輪の最小の内部 ID。
-	// 輪に入らないと分かったものは noRing に覚え、たどり直さない。
+	// 輪に入らないと分かったものは noRing に、見つけた輪のものは inRing に覚え、たどり直さない。
 	noRing := map[item.ID]bool{}
+	inRing := map[item.ID]bool{}
+	var rings [][]item.ID
 	for _, id := range ids {
+		if inRing[id] {
+			continue
+		}
 		if ring := ringFrom(id, parent, noRing); ring != nil {
 			slices.Sort(ring)
-			return ring, true
+			for _, m := range ring {
+				inRing[m] = true
+			}
+			rings = append(rings, ring)
 		}
 	}
-	return nil, false
+	return rings
 }
 
 // ringFrom は、start から親をたどって start に戻れば、通ったものを返す。戻らなければ nil。

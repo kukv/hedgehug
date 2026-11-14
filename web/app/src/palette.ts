@@ -1,5 +1,6 @@
-import { createPalette, createPlanRequest, createSelection } from "@hedgehug/core";
+import { createPalette, createPlanRequest, createSelection, get } from "@hedgehug/core";
 import { hereOf } from "./here";
+import { search, searchPort } from "./search";
 import { isMac } from "./tab";
 import {
   catalog,
@@ -16,7 +17,7 @@ import {
   workspacesPort,
 } from "./wire";
 import { itemTransfer } from "./wireActions";
-import { palettePort } from "./wireBase";
+import { palettePort, timer } from "./wireBase";
 
 // コマンドパレット(02「コマンドパレット」、A5c)。wire.ts が 300 行なので、ここで組み立てる。
 
@@ -59,4 +60,16 @@ export const palette = createPalette({
   route: navigation.route,
   openTab: (route) => links.openTab(route),
   now: () => new Date(),
+  search: searchPort,
+  timer,
+  // 検索の画面と同じ search で絞り込みを入れ替えて開く(E1-21)。検索は 1 回だけ: 検索の画面にいればその場で検索し、
+  // ほかの画面からは絞り込みを書いておき、開いた画面の open が検索する(同じ画面へは移らず open も呼ばれない)。
+  openSearch: async (query) => {
+    if (get(navigation.route).name === "search") {
+      await search.replaceQuery(query);
+      return;
+    }
+    search.prepareQuery(query);
+    await navigation.go({ name: "search" });
+  },
 });

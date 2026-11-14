@@ -90,3 +90,9 @@ export interface PaletteView {
   // selectedHead は、Store の点を頭に付ける見出し(storeColor はトークン --t-<色>-fg の色の名前)。
   selectedHead: { text: string; storeColor?: string } | null;
 }
+
+// FilterOption は、絞り込み欄の候補 1 つ(04「候補」)。dot は、頭に付ける Store の点の色(トークン --t-<色>-fg の色の名前)。
+export interface FilterOption {
+  label: string;
+  dot?: string;
+}

@@ -82,7 +82,6 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHubReads:   db.GitHubReads(),
 		PRScans:       db.PRScans(),
 		AppMissing:    db.AppMissing(),
-		Reports:       db.ReportSelections(),
 		Clock:         clock,
 		Sync:          svc,
 		Auto:          auto,
@@ -90,8 +89,9 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHubSession: session,
 		Delivery:      svc,
 		SyncTargets:   svc.Targets,
-		Recent:        db.Recent(),
 	}
+	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの)
+	deps.Reports, deps.Screens, deps.Recent = db.ReportSelections(), db.ScreenStates(), db.Recent()
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
 	return deps, nil
