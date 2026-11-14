@@ -16,12 +16,14 @@ import {
 // アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す。
 // いまの ID・接頭辞で見つからないときだけ、旧いものをたどる。ワークスペースとプロジェクトは、一覧の旧い接頭辞
 // (oldPrefixes。A5a-21)で探す。アイテムは、アドレスの Store のいまの ID で見つからなければ、サーバーの locate に
-// 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。どれでも見つからなければホーム。
+// 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。プロジェクトは、一覧で
+// 見つからなければ、サーバーの locateProject に聞く(旧 ID と、一覧を読み直す前の移したばかりのいまの ID。A5b-24)。
+// どれでも見つからなければホーム。
 
 export type Resolved =
   | { name: "home"; gone?: Gone }
   | { name: "workspace"; storeId: string; workspaceId: string; tab: WorkspaceTab }
-  | { name: "project"; storeId: string; projectId: string; tab: ProjectTab }
+  | { name: "project"; storeId: string; projectId: string; tab: ProjectTab; movedFrom?: MovedFrom }
   | { name: "item"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }
   | { name: "settings"; tab: SettingsTab };
 
@@ -57,6 +59,28 @@ function findProject(stores: StoreNode[], display: string, tab: ProjectTab): Res
     const p = w.projects.find((x) => projectDisplayId(d.prefix, x.number) === display);
     return p && { name: "project", storeId: s.id, projectId: p.id, tab };
   });
+}
+
+// askProject は、一覧にないプロジェクトの ID をサーバーに聞く。読めない ID は聞かない。
+async function askProject(
+  store: string,
+  id: string,
+  tab: ProjectTab,
+  transfers: Pick<TransfersPort, "locateProject">,
+): Promise<Resolved> {
+  if (parseDisplayId(id)?.kind !== "project") return home;
+  try {
+    const l = await transfers.locateProject(store, id);
+    if (l.kind === "gone") {
+      const { kind: _, ...gone } = l;
+      return { name: "home", gone };
+    }
+    const { storeId, projectId, movedFrom } = l;
+    return { name: "project", storeId, projectId, tab, ...(movedFrom ? { movedFrom } : {}) };
+  } catch (e) {
+    if (e instanceof NotFound) return home;
+    throw e;
+  }
 }
 
 async function findItem(
@@ -100,11 +124,13 @@ async function locate(
   }
 }
 
+// askServer が false のときは、プロジェクトを一覧だけで探す(出していたプロジェクトのアドレスの読み直し。A5b-19)。
 export async function resolveRoute(
   route: Route,
   stores: StoreNode[],
   items: ItemsPort,
-  transfers: Pick<TransfersPort, "locate">,
+  transfers: Pick<TransfersPort, "locate" | "locateProject">,
+  askServer = true,
 ): Promise<Resolved> {
   switch (route.name) {
     case "home":
@@ -116,8 +142,11 @@ export async function resolveRoute(
         workspaceId: w.id,
         tab: route.tab,
       }));
-    case "project":
-      return findProject(inOrder(stores, route.store), route.project, route.tab);
+    case "project": {
+      const r = findProject(inOrder(stores, route.store), route.project, route.tab);
+      if (r.name !== "home" || !askServer) return r;
+      return askProject(route.store, route.project, route.tab, transfers);
+    }
     case "item":
       return findItem(stores, route.store, route.item, items, transfers);
     case "settings":

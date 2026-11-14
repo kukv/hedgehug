@@ -180,6 +180,7 @@ describe("resolveRoute with old prefixes", () => {
   });
 
   it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
+    transfers.missing.add("HH-P9");
     const nodes = one(ws("S1", "W1", "WEB", ["HH"]));
     expect(await resolveRoute(wsRoute("ZZ"), nodes, itemsIn("S1"), transfers)).toEqual({
       name: "home",

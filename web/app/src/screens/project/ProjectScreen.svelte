@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    movedLine,
     type ProjectTab,
     projectCategory,
     projectTabOf,
@@ -8,7 +9,7 @@
     readOnlyNote,
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StatusDot, StoreBadge, Tabs } from "@hedgehug/ui";
-  import { itemDialog, links, navigation, projectScreen } from "../../wire";
+  import { itemDialog, links, navigation, projectScreen, screen } from "../../wire";
   import ProjectOverview from "./ProjectOverview.svelte";
   import ProjectSettings from "./ProjectSettings.svelte";
   import ProjectTree from "./ProjectTree.svelte";
@@ -25,6 +26,16 @@
   let { storeId, projectId, tab, ondrawer, alert }: Props = $props();
 
   const view = projectScreen.view;
+  // 旧 ID から開いたときの移動の 1 行は、出しているプロジェクトとタブが同じときだけ出す(A5b-2・A5b-24)。
+  const projectMoved = screen.projectMoved;
+  const moved = $derived(
+    $projectMoved &&
+      $projectMoved.storeId === storeId &&
+      $projectMoved.projectId === projectId &&
+      $projectMoved.tab === tab
+      ? movedLine($projectMoved.moved, new Date())
+      : null,
+  );
   $effect(() => {
     void projectScreen.load(storeId, projectId);
   });
@@ -91,6 +102,9 @@
       >
     {/snippet}
   </PageHead>
+  {#if moved}
+    <p class="moved">{moved}</p>
+  {/if}
   <Tabs {tabs} current={tab} onselect={select} />
   <div class="content">
     {#if $view.store.readOnly}
@@ -107,6 +121,12 @@
 {/if}
 
 <style>
+  .moved {
+    margin: 0;
+    padding: 0 24px 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
   .content {
     flex: 1;
     overflow: auto;

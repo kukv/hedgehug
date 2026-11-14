@@ -40,6 +40,7 @@ export {
 } from "./features/transfers/dialogText";
 export { createLeaveMoved } from "./features/transfers/leaveMoved";
 export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
+export { movedLine } from "./features/transfers/movedText";
 export { openMoved } from "./features/transfers/openMoved";
 export {
   createProjectTransfer,

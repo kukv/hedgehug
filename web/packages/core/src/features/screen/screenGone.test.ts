@@ -24,11 +24,14 @@ async function setup(start: string) {
     (await listWorkspaces(s)).filter((w) => !goneWorkspaces.has(w.id));
   const catalog = createCatalog(port);
   await catalog.load();
+  // HH-P9 は、どこにもないプロジェクト(サーバーの locateProject も NotFound)。
+  const transfers = fakeTransfers();
+  transfers.missing.add("HH-P9");
   const screen = createScreen({
     navigation,
     catalog,
     items: fakeItemsPort(),
-    transfers: fakeTransfers(),
+    transfers,
     toasts: createToasts({ set: () => 0, clear: () => undefined }),
     now: () => new Date(),
     openItem: () => {},
