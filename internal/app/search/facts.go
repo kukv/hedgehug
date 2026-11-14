@@ -34,6 +34,9 @@ func (s *snapshot) facts(it item.Item, records []transfer.Record, q query.Query,
 		}),
 	}
 	f.Parent, f.Ancestors = s.ancestors(it, records)
+	if f.Parent != nil {
+		f.ParentTitle = s.byID[*it.Place.Parent].Title
+	}
 	planFacts(&f, sp.plan, it)
 	if q.NeedsText {
 		f.Description = s.descs[it.ID]

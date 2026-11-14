@@ -113,7 +113,7 @@ func checkTask2(t *testing.T, got query.Facts, log []change.Record) {
 	if want := (query.Ref{Display: "HH-P1", Aliases: []string{"OLD-P3"}}); !reflect.DeepEqual(got.Project, want) || got.ProjectTitle != "ログイン" {
 		t.Errorf("Project = %+v %q", got.Project, got.ProjectTitle)
 	}
-	if !reflect.DeepEqual(got.Parent, &hh1) || !reflect.DeepEqual(got.Ancestors, []query.Ref{hh1}) {
+	if !reflect.DeepEqual(got.Parent, &hh1) || !reflect.DeepEqual(got.Ancestors, []query.Ref{hh1}) || got.ParentTitle != "認証" {
 		t.Errorf("Parent = %+v, Ancestors = %+v", got.Parent, got.Ancestors)
 	}
 	wantRel := map[string][]query.Ref{"blocks": {{Display: "HH-4"}}, "duplicated_by": {{Display: "HH-3"}}}

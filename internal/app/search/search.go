@@ -23,17 +23,29 @@ type Result struct {
 	Group   string
 	Deleted bool
 	Rows    []Row
+	// Columns は、テーブルの列(クエリのエラーでも返す)。GroupBy は使ったまとめ方(なければ "")、Groups は
+	// そのグループ(Rows の位置。E2a-6)。
+	Columns []Column
+	GroupBy string
+	Groups  []query.Group
 }
 
-// Search は、text を解析し、表示中のすべての Store のアイテムのうち一致するものを、sort: の並び(なければ
+// TableOptions は、テーブルの設定。Sort は列見出しの並べ替え(あれば sort: の代わりに使う)、Group はテーブルの
+// 「グループ」の設定(none か空なら設定なし)。
+type TableOptions struct {
+	Sort  *query.Sort
+	Group string
+}
+
+// Search は、text を解析し、表示中のすべての Store のアイテムのうち一致するものを、列見出しか sort: の並び(なければ
 // Store・ワークスペース・アイテムの並び順)で返す。追加プロパティのキーは、非表示の Store のものも知っているとする。
-func (s Service) Search(ctx context.Context, text string) (Result, error) {
-	keys, err := s.customKeys(ctx)
+func (s Service) Search(ctx context.Context, text string, opt TableOptions) (Result, error) {
+	keys, columns, err := s.catalog(ctx)
 	if err != nil {
 		return Result{}, err
 	}
 	q, errs := query.Parse(text, func(key string) bool { return keys[key] })
-	res := Result{Errors: errs, HasKey: q.HasKey, Group: q.Group, Deleted: q.Deleted}
+	res := Result{Errors: errs, HasKey: q.HasKey, Group: q.Group, Deleted: q.Deleted, Columns: columns}
 	if len(errs) > 0 {
 		return res, nil
 	}
@@ -49,10 +61,18 @@ func (s Service) Search(ctx context.Context, text string) (Result, error) {
 			rows = append(rows, &Row{Store: e.info, Facts: e.facts, OldID: hit.OldID, DaysLeft: e.daysLeft})
 		}
 	}
-	query.Order(rows, func(r *Row) *query.Facts { return &r.Facts }, q.Sort)
+	sortBy := q.Sort
+	if opt.Sort != nil {
+		sortBy = opt.Sort
+	}
+	query.Order(rows, func(r *Row) *query.Facts { return &r.Facts }, sortBy)
 	res.Rows = make([]Row, 0, len(rows))
+	facts := make([]*query.Facts, 0, len(rows))
 	for _, r := range rows {
 		res.Rows = append(res.Rows, *r)
+		facts = append(facts, &r.Facts)
 	}
+	res.GroupBy = query.GroupKey(opt.Group, q.Group)
+	res.Groups = query.Groups(facts, res.GroupBy, now)
 	return res, nil
 }

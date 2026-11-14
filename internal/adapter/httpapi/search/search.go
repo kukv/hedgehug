@@ -82,7 +82,7 @@ type searchOutput struct{ Body SearchResult }
 func Register(api huma.API, svc appsearch.Service, screens appsearch.ScreenStates) {
 	huma.Register(api, huma.Operation{OperationID: "search", Method: http.MethodPost, Path: "/api/search", Summary: "表示中のすべての Store のアイテムをクエリで検索する"},
 		func(ctx context.Context, in *searchInput) (*searchOutput, error) {
-			res, err := svc.Search(ctx, in.Body.Query)
+			res, err := svc.Search(ctx, in.Body.Query, appsearch.TableOptions{})
 			if err != nil {
 				return nil, apierr.From(err)
 			}
