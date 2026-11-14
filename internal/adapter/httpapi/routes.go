@@ -120,7 +120,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	})
 	transfers.Register(api, apptransfers.Service{
 		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Delivery: deps.Delivery,
-		Identity: deps.Identity, Clock: deps.Clock,
+		Identity: deps.Identity, Clock: deps.Clock, IDs: deps.IDs,
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))

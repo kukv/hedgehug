@@ -138,7 +138,7 @@ func newFixtureWith(t *testing.T, mobile func(*workspace.Settings)) fixture {
 	}}
 	deliver := &stubDelivery{stores: rec}
 	svc := transfers.Service{
-		Stores: rec, StoreList: list, Delivery: deliver, Identity: apptest.Identity{Login: "hanako"},
+		Stores: rec, StoreList: list, Delivery: deliver, Identity: apptest.Identity{Login: "hanako"}, IDs: ids,
 		Clock: apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)),
 		SyncTargets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: store1, Name: "main", Remote: "https://example.invalid/main.git"}, {ID: store2, Name: "team"}, {ID: store3, Name: "readonly", ReadOnly: true},

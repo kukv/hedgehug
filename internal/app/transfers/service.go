@@ -26,7 +26,8 @@ type Delivery interface {
 	Deliver(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error)
 }
 
-// Service は、移動の操作が使う口。SyncTargets は、移動先・移動元の remote の有無と URL を知るため。
+// Service は、移動の操作が使う口。SyncTargets は、移動先・移動元の remote の有無と URL を知るため。IDs は、プロジェクトの
+// 移動で移動先に作る専用ルールの新しい内部 ID(A5b-6)。
 type Service struct {
 	Stores      port.Stores
 	StoreList   port.StoreList
@@ -34,6 +35,7 @@ type Service struct {
 	Delivery    Delivery
 	Identity    port.Identity
 	Clock       port.Clock
+	IDs         port.IDs
 }
 
 // source は、移動元で移すもの。set は削除済みを含む。

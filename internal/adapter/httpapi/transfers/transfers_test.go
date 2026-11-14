@@ -73,7 +73,7 @@ func newEnv(t *testing.T) *env {
 	me := apptest.Identity{Login: "taro"}
 	e.deliver = &deliver{stores: s, reasons: e.reasons}
 	transfers.Register(e.api, apptransfers.Service{
-		Stores: failing{Stores: s, fail: &e.failS1}, Delivery: e.deliver, Identity: me, Clock: clock,
+		Stores: failing{Stores: s, fail: &e.failS1}, Delivery: e.deliver, Identity: me, Clock: clock, IDs: ids,
 		StoreList: e.list,
 		SyncTargets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: "S1", Name: "main", Remote: "https://example.invalid/main.git"}, {ID: "S2", Name: "team"},
