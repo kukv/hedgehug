@@ -224,6 +224,25 @@ func TestApplyNotStopped(t *testing.T) {
 	}
 }
 
+func TestKeepApplyHiddenStore(t *testing.T) {
+	a := withActions(t)
+	a.add(t, stopped())
+	a.list.Stores = a.list.Stores[1:] // web を非表示にする(止まった通知の Store)
+	if err := a.svc.Keep(t.Context(), 1); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("keep err = %v, want ErrNotFound", err)
+	}
+	if err := a.svc.Apply(t.Context(), 1); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("apply err = %v, want ErrNotFound", err)
+	}
+	if len(a.calls) != 0 {
+		t.Error("a hidden Store must not be applied")
+	}
+	if r := a.row(t, 1); r.Read || r.Result != "" {
+		t.Errorf("row = %+v, want unread and unhandled", r)
+	}
+	a.wantEvents(t)
+}
+
 func TestNotifierPublishes(t *testing.T) {
 	book := &apptest.Inbox{}
 	events := &apptest.Events{}

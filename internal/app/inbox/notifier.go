@@ -12,6 +12,7 @@ type Notifier struct {
 	Events port.Events
 }
 
+// Add は、通知を足してから受信箱の出来事を出す。足せなかったら出さない。
 func (n Notifier) Add(ctx context.Context, notice port.Notice) error {
 	if err := n.Inbox.Add(ctx, notice); err != nil {
 		return err
