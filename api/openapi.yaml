@@ -881,6 +881,46 @@ components:
       required:
         - kind
       type: object
+    LocatedWorkspace:
+      additionalProperties: false
+      properties:
+        at:
+          description: gone のとき。一致した記録の日時
+          type: string
+        kind:
+          enum:
+            - found
+            - gone
+          type: string
+        movedFrom:
+          $ref: "#/components/schemas/LocatedMovedFrom"
+          description: found で、転送記録から見つけたとき
+        newDisplay:
+          description: gone のとき。記録の移動先の Store 名
+          type: string
+        old:
+          description: gone のとき。画面の接頭辞
+          type: string
+        reason:
+          description: gone のとき
+          enum:
+            - deleted
+            - purged
+            - hidden
+            - elsewhere
+          type: string
+        storeId:
+          description: found のとき。開くワークスペースの Store
+          type: string
+        storeName:
+          description: gone の hidden・elsewhere のとき。表示中でない Store の名前
+          type: string
+        workspaceId:
+          description: found のとき
+          type: string
+      required:
+        - kind
+      type: object
     Me:
       additionalProperties: false
       properties:
@@ -2347,6 +2387,15 @@ components:
         - prefix
         - projects
       type: object
+    TransferWorkspaceBody:
+      additionalProperties: false
+      properties:
+        toStore:
+          description: 移動先の Store の ID
+          type: string
+      required:
+        - toStore
+      type: object
     ValuesBody:
       additionalProperties: false
       properties:
@@ -2704,6 +2753,109 @@ components:
         - id
         - title
         - assignee
+      type: object
+    WorkspaceTransferPerson:
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+        name:
+          description: 表示名
+          type: string
+      required:
+        - login
+        - name
+      type: object
+    WorkspaceTransferPreview:
+      additionalProperties: false
+      properties:
+        deleted:
+          description: 削除済みのアイテムの数
+          format: int64
+          type: integer
+        destination:
+          description: 移動先の Store 名
+          type: string
+        destinationHasRemote:
+          description: 移動先の Store に remote があるか
+          type: boolean
+        items:
+          description: 削除されていないアイテムの数
+          format: int64
+          type: integer
+        people:
+          description: 移動先のメンバーに足す人(小文字のログイン名の順)
+          items:
+            $ref: "#/components/schemas/WorkspaceTransferPerson"
+          nullable: true
+          type: array
+        projects:
+          description: プロジェクトの数
+          format: int64
+          type: integer
+        remoteNotice:
+          description: 移動先に remote がなく移動元にあるか
+          type: boolean
+        source:
+          description: 移動元の Store 名
+          type: string
+      required:
+        - source
+        - destination
+        - projects
+        - items
+        - deleted
+        - people
+        - remoteNotice
+        - destinationHasRemote
+      type: object
+    WorkspaceTransferResult:
+      additionalProperties: false
+      properties:
+        prefix:
+          description: 移したワークスペースの接頭辞
+          type: string
+        toStore:
+          description: 移動先の Store の ID
+          type: string
+        toStoreName:
+          description: 移動先の Store 名
+          type: string
+        workspaceId:
+          description: 移したワークスペースの内部 ID(変わらない)
+          type: string
+      required:
+        - toStore
+        - toStoreName
+        - workspaceId
+        - prefix
+      type: object
+    WorkspaceTransferTarget:
+      additionalProperties: false
+      properties:
+        storeId:
+          type: string
+        storeName:
+          type: string
+      required:
+        - storeId
+        - storeName
+      type: object
+    WorkspaceTransferTargets:
+      additionalProperties: false
+      properties:
+        hiddenOnly:
+          description: 候補が 0 件で、非表示の Store なら移せるか
+          type: boolean
+        targets:
+          description: 表示中で閲覧のみでなく自分でない Store(Store の並び)
+          items:
+            $ref: "#/components/schemas/WorkspaceTransferTarget"
+          nullable: true
+          type: array
+      required:
+        - targets
+        - hiddenOnly
       type: object
     WorkspaceUsage:
       additionalProperties: false
@@ -3140,6 +3292,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 画面のアドレスのプロジェクトの ID(旧 ID を含む)が指すプロジェクトを探す
+  /api/locate-workspace:
+    get:
+      operationId: locate-workspace
+      parameters:
+        - description: 画面のアドレスの Store 名
+          explode: false
+          in: query
+          name: store
+          required: true
+          schema:
+            description: 画面のアドレスの Store 名
+            type: string
+        - description: 画面のアドレスのワークスペースの接頭辞
+          explode: false
+          in: query
+          name: prefix
+          required: true
+          schema:
+            description: 画面のアドレスのワークスペースの接頭辞
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocatedWorkspace"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 画面のアドレスのワークスペースの接頭辞(旧い接頭辞・移動元のアドレスを含む)が指すワークスペースを探す
   /api/sign-ins:
     post:
       operationId: start-sign-in
@@ -7238,6 +7424,102 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: テンプレートを編集
+  /api/stores/{store}/workspaces/{workspace}/transfer:
+    post:
+      operationId: transfer-workspace
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferWorkspaceBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTransferResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースを中身ごと別の Store へ移す
+  /api/stores/{store}/workspaces/{workspace}/transfer-preview:
+    get:
+      operationId: get-workspace-transfer-preview
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: toStore
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTransferPreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースの移動の確認ダイアログの予告を返す
+  /api/stores/{store}/workspaces/{workspace}/transfer-targets:
+    get:
+      operationId: list-workspace-transfer-targets
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTransferTargets"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースの移す先の候補の Store を返す
   /api/stores/{store}/workspaces/{workspace}/usage:
     get:
       operationId: get-workspace-usage

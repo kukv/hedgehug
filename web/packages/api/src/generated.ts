@@ -669,6 +669,47 @@ export interface LocatedProject {
   storeName?: string;
 }
 
+export type LocatedWorkspaceKind = typeof LocatedWorkspaceKind[keyof typeof LocatedWorkspaceKind];
+
+
+export const LocatedWorkspaceKind = {
+  found: 'found',
+  gone: 'gone',
+} as const;
+
+/**
+ * gone のとき
+ */
+export type LocatedWorkspaceReason = typeof LocatedWorkspaceReason[keyof typeof LocatedWorkspaceReason];
+
+
+export const LocatedWorkspaceReason = {
+  deleted: 'deleted',
+  purged: 'purged',
+  hidden: 'hidden',
+  elsewhere: 'elsewhere',
+} as const;
+
+export interface LocatedWorkspace {
+  /** gone のとき。一致した記録の日時 */
+  at?: string;
+  kind: LocatedWorkspaceKind;
+  /** found で、転送記録から見つけたとき */
+  movedFrom?: LocatedMovedFrom;
+  /** gone のとき。記録の移動先の Store 名 */
+  newDisplay?: string;
+  /** gone のとき。画面の接頭辞 */
+  old?: string;
+  /** gone のとき */
+  reason?: LocatedWorkspaceReason;
+  /** found のとき。開くワークスペースの Store */
+  storeId?: string;
+  /** gone の hidden・elsewhere のとき。表示中でない Store の名前 */
+  storeName?: string;
+  /** found のとき */
+  workspaceId?: string;
+}
+
 export interface Me {
   login: string;
 }
@@ -1576,6 +1617,11 @@ export interface TransferTarget {
   workspaceName: string;
 }
 
+export interface TransferWorkspaceBody {
+  /** 移動先の Store の ID */
+  toStore: string;
+}
+
 /**
  * デバイスフローはサインインの API で登録・保存する
  */
@@ -1824,6 +1870,60 @@ export interface WorkspaceTemplateInput {
   values: WorkspaceTemplateInputValues;
 }
 
+export interface WorkspaceTransferPerson {
+  login: string;
+  /** 表示名 */
+  name: string;
+}
+
+export interface WorkspaceTransferPreview {
+  /** 削除済みのアイテムの数 */
+  deleted: number;
+  /** 移動先の Store 名 */
+  destination: string;
+  /** 移動先の Store に remote があるか */
+  destinationHasRemote: boolean;
+  /** 削除されていないアイテムの数 */
+  items: number;
+  /**
+     * 移動先のメンバーに足す人(小文字のログイン名の順)
+     * @nullable
+     */
+  people: WorkspaceTransferPerson[] | null;
+  /** プロジェクトの数 */
+  projects: number;
+  /** 移動先に remote がなく移動元にあるか */
+  remoteNotice: boolean;
+  /** 移動元の Store 名 */
+  source: string;
+}
+
+export interface WorkspaceTransferResult {
+  /** 移したワークスペースの接頭辞 */
+  prefix: string;
+  /** 移動先の Store の ID */
+  toStore: string;
+  /** 移動先の Store 名 */
+  toStoreName: string;
+  /** 移したワークスペースの内部 ID(変わらない) */
+  workspaceId: string;
+}
+
+export interface WorkspaceTransferTarget {
+  storeId: string;
+  storeName: string;
+}
+
+export interface WorkspaceTransferTargets {
+  /** 候補が 0 件で、非表示の Store なら移せるか */
+  hiddenOnly: boolean;
+  /**
+     * 表示中で閲覧のみでなく自分でない Store(Store の並び)
+     * @nullable
+     */
+  targets: WorkspaceTransferTarget[] | null;
+}
+
 /**
  * 追加プロパティの ID ごとの、値の入っているアイテムの数
  */
@@ -1862,6 +1962,13 @@ export type LocateProjectParams = {
   id: string;
 };
 
+export type LocateWorkspaceParams = {
+  /** 画面のアドレスの Store 名 */
+  store: string;
+  /** 画面のアドレスのワークスペースの接頭辞 */
+  prefix: string;
+};
+
 export type PreviewItemMoveParams = {
   /** 移し先のプロジェクトの内部 ID(Epic) */
   project?: string;
@@ -1888,6 +1995,10 @@ export type GetProjectTransferPreviewParams = {
 export type DeleteWorkspaceValueParams = {
   /** 代わりに使う値の ID。省略すると、使っているアイテムは、ステータス・優先度では初期値に、単一選択では「なし」になる。関連システムと複数選択では指定できず(404)、使っているアイテムから値が外れる */
   replacement?: string;
+};
+
+export type GetWorkspaceTransferPreviewParams = {
+  toStore: string;
 };
 
 export const getListAccountsUrl = () => {
@@ -2197,6 +2308,37 @@ export const getLocateProjectUrl = (params: LocateProjectParams,) => {
 export const locateProject = async (params: LocateProjectParams, options?: Parameters<typeof fetcher>[1]): Promise<LocatedProject> => {
 
   return fetcher<LocatedProject>(getLocateProjectUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getLocateWorkspaceUrl = (params: LocateWorkspaceParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locate-workspace?${stringifiedParams}` : `/api/locate-workspace`
+}
+
+/**
+ * @summary 画面のアドレスのワークスペースの接頭辞(旧い接頭辞・移動元のアドレスを含む)が指すワークスペースを探す
+ */
+export const locateWorkspace = async (params: LocateWorkspaceParams, options?: Parameters<typeof fetcher>[1]): Promise<LocatedWorkspace> => {
+
+  return fetcher<LocatedWorkspace>(getLocateWorkspaceUrl(params),
   {
     ...options,
     method: 'GET'
@@ -6663,6 +6805,108 @@ return fetcher<void>(getUpdateWorkspaceTemplateUrl(store,workspace,template),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(workspaceTemplateInput)
+  }
+);}
+
+
+
+export const getTransferWorkspaceUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer`
+}
+
+/**
+ * @summary ワークスペースを中身ごと別の Store へ移す
+ */
+export const transferWorkspace = async (store: string,
+    workspace: string,
+    transferWorkspaceBody: TransferWorkspaceBody, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTransferResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<WorkspaceTransferResult>(getTransferWorkspaceUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transferWorkspaceBody)
+  }
+);}
+
+
+
+export const getGetWorkspaceTransferPreviewUrl = (store: string,
+    workspace: string,
+    params: GetWorkspaceTransferPreviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer-preview?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer-preview`
+}
+
+/**
+ * @summary ワークスペースの移動の確認ダイアログの予告を返す
+ */
+export const getWorkspaceTransferPreview = async (store: string,
+    workspace: string,
+    params: GetWorkspaceTransferPreviewParams, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTransferPreview> => {
+
+  return fetcher<WorkspaceTransferPreview>(getGetWorkspaceTransferPreviewUrl(store,workspace,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListWorkspaceTransferTargetsUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer-targets`
+}
+
+/**
+ * @summary ワークスペースの移す先の候補の Store を返す
+ */
+export const listWorkspaceTransferTargets = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTransferTargets> => {
+
+  return fetcher<WorkspaceTransferTargets>(getListWorkspaceTransferTargetsUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

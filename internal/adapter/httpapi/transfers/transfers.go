@@ -108,6 +108,7 @@ func Register(api huma.API, svc apptransfers.Service) {
 	registerMove(api, svc)
 	registerLocate(api, svc)
 	registerProject(api, svc)
+	registerWorkspace(api, svc)
 }
 
 func toTarget(t apptransfers.Target) TransferTarget {
