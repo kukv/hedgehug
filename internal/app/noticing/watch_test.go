@@ -112,8 +112,13 @@ func TestWatchComment(t *testing.T) {
 		change.NewComment("01C2", nil, comment.Value("2 件目\nの本文")),
 	)))
 	got := f.notices()
-	if len(got) != 2 || got[0].Text != "コメント: 1 件目" || got[1].Text != "コメント: 2 件目 の本文" || got[0].Sender != "taro" {
-		t.Errorf("notices = %+v", got)
+	if len(got) != 2 || got[0].Text != "コメント: 1 件目" || got[1].Text != "コメント: 2 件目 の本文" {
+		t.Fatalf("notices = %+v", got)
+	}
+	for _, n := range got {
+		if n.Kind != port.NoticeWatch || n.Sender != "taro" || n.Item != apptest.SampleTask || n.Display != "HH-2" {
+			t.Errorf("notice = %+v", n)
+		}
 	}
 
 	g := setup(t)

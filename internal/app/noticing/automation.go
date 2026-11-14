@@ -60,7 +60,7 @@ func ruleNotice(st workspace.Settings, deleted change.ID, c automation.RuleChang
 		return n, true
 	}
 	to := c.Rule.TriggerStatus
-	if c.Part == "すること" {
+	if c.Part == automation.PartAction {
 		to = change.ID(c.Rule.Value)
 	}
 	from, okFrom := statusName(st, deleted)

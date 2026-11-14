@@ -53,7 +53,7 @@ func TestAutomationFromStatusDelete(t *testing.T) {
 	n := f.wantOne()
 	want := port.Notice{
 		Kind: port.NoticeAutomation, Store: store, Workspace: apptest.SampleWorkspace, Rule: ruleID,
-		Text: automation.RewrittenText("レビューへ", "Review", "きっかけ", "InProgress"),
+		Text: automation.RewrittenText("レビューへ", "Review", automation.PartTrigger, "InProgress"),
 	}
 	if n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -65,7 +65,7 @@ func TestAutomationFromStatusDelete(t *testing.T) {
 	a := setup(t)
 	a.prepareReview(action)
 	a.judge(a.save(user("taro"), appendWorkspace(deleteReview(action)...)))
-	if n := a.wantOne(); n.Text != automation.RewrittenText("レビューへ", "Review", "すること", "InProgress") {
+	if n := a.wantOne(); n.Text != automation.RewrittenText("レビューへ", "Review", automation.PartAction, "InProgress") {
 		t.Errorf("notice = %+v", n)
 	}
 

@@ -6,6 +6,12 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
+// ステータスの削除で書き換えた側(RuleChange.Part。通知の文にそのまま入る)。
+const (
+	PartTrigger = "きっかけ"
+	PartAction  = "すること"
+)
+
 // RuleChange は、ステータスの削除で変わったルール(通知の材料)。
 type RuleChange struct {
 	Rule     Rule   // 変えたあと
@@ -21,10 +27,10 @@ func StatusDeleteDrafts(rules []Rule, id, repl change.ID) ([]change.Draft, []Rul
 	for _, r := range rules {
 		n, part := r, ""
 		if n.Trigger == TriggerStatus && n.TriggerStatus == id {
-			n.TriggerStatus, part = repl, "きっかけ"
+			n.TriggerStatus, part = repl, PartTrigger
 		}
 		if n.Action == ActionStatus && n.Value == string(id) {
-			n.Value, part = string(repl), "すること"
+			n.Value, part = string(repl), PartAction
 		}
 		if part == "" {
 			continue
@@ -69,9 +75,9 @@ func FollowedFromRows(rows []change.Record, rules []Rule) (change.ID, []RuleChan
 		part := ""
 		switch {
 		case f["value"]:
-			part = "すること"
+			part = PartAction
 		case f["trigger_status"]:
-			part = "きっかけ"
+			part = PartTrigger
 		}
 		if part != "" {
 			changes = append(changes, RuleChange{Rule: rule, Disabled: f["enabled"], Part: part})
