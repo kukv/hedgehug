@@ -20,47 +20,51 @@ type SearchQuery struct {
 
 // SearchStatus は、行のステータス。
 type SearchStatus struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
-	Color    string `json:"color"`
+	_        struct{} `nullable:"true"`
+	Name     string   `json:"name"`
+	Category string   `json:"category"`
+	Color    string   `json:"color"`
 }
 
 // SearchAssignee は、行の担当者。name が null はメンバーにいない人。
 type SearchAssignee struct {
-	Login string  `json:"login"`
-	Name  *string `json:"name" required:"true" nullable:"true" doc:"表示名。メンバーにいない人は null"`
+	_     struct{} `nullable:"true"`
+	Login string   `json:"login"`
+	Name  *string  `json:"name" required:"true" nullable:"true" doc:"表示名。メンバーにいない人は null"`
 }
 
 // SearchPriority は、行の優先度。
 type SearchPriority struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	_     struct{} `nullable:"true"`
+	Name  string   `json:"name"`
+	Color string   `json:"color"`
 }
 
 // SearchDeleted は、削除済みの行の印。
 type SearchDeleted struct {
-	DaysLeft int `json:"daysLeft" doc:"完全に削除されるまでの日数。保持日数を過ぎていれば負"`
+	_        struct{} `nullable:"true"`
+	DaysLeft int      `json:"daysLeft" doc:"完全に削除されるまでの日数。保持日数を過ぎていれば負"`
 }
 
 // SearchRow は、検索の結果の 1 行。
 type SearchRow struct {
-	StoreID     string                   `json:"storeId"`
-	StoreName   string                   `json:"storeName"`
-	StoreColor  string                   `json:"storeColor"`
-	ReadOnly    bool                     `json:"readOnly"`
-	WorkspaceID string                   `json:"workspaceId"`
-	ProjectID   string                   `json:"projectId"`
-	ItemID      string                   `json:"itemId"`
-	Display     string                   `json:"display" doc:"いまの ID(HH-12)"`
-	OldIDHit    bool                     `json:"oldIdHit" doc:"旧 ID だけで一致した(画面は「旧 ID」と添える)"`
-	Title       string                   `json:"title"`
-	Kind        string                   `json:"kind"`
-	Status      Nullable[SearchStatus]   `json:"status"`
-	Assignee    Nullable[SearchAssignee] `json:"assignee"`
-	Priority    Nullable[SearchPriority] `json:"priority"`
-	End         string                   `json:"end" doc:"終了日(YYYY-MM-DD)。なければ空"`
-	Points      *float64                 `json:"points" required:"true" nullable:"true"`
-	Deleted     Nullable[SearchDeleted]  `json:"deleted" doc:"削除済みの行だけ"`
+	StoreID     string          `json:"storeId"`
+	StoreName   string          `json:"storeName"`
+	StoreColor  string          `json:"storeColor"`
+	ReadOnly    bool            `json:"readOnly"`
+	WorkspaceID string          `json:"workspaceId"`
+	ProjectID   string          `json:"projectId"`
+	ItemID      string          `json:"itemId"`
+	Display     string          `json:"display" doc:"いまの ID(HH-12)"`
+	OldIDHit    bool            `json:"oldIdHit" doc:"旧 ID だけで一致した(画面は「旧 ID」と添える)"`
+	Title       string          `json:"title"`
+	Kind        string          `json:"kind"`
+	Status      *SearchStatus   `json:"status"`
+	Assignee    *SearchAssignee `json:"assignee"`
+	Priority    *SearchPriority `json:"priority"`
+	End         string          `json:"end" doc:"終了日(YYYY-MM-DD)。なければ空"`
+	Points      *float64        `json:"points" required:"true" nullable:"true"`
+	Deleted     *SearchDeleted  `json:"deleted" doc:"削除済みの行だけ"`
 }
 
 // SearchResult は、検索の結果。エラーがあれば rows は空。件数は rows の数。
@@ -107,37 +111,37 @@ func toRow(r appsearch.Row) SearchRow {
 		Status: toStatus(f), Assignee: toAssignee(f), Priority: toPriority(f), End: it.End, Points: it.Points,
 	}
 	if r.DaysLeft != nil {
-		row.Deleted = nullable(SearchDeleted{DaysLeft: *r.DaysLeft})
+		row.Deleted = &SearchDeleted{DaysLeft: *r.DaysLeft}
 	}
 	return row
 }
 
-func toStatus(f query.Facts) Nullable[SearchStatus] {
+func toStatus(f query.Facts) *SearchStatus {
 	for _, v := range f.Settings.Statuses {
 		if f.Item.Status != "" && v.ID == f.Item.Status {
-			return nullable(SearchStatus{Name: v.Name, Category: string(v.Category), Color: string(v.Color)})
+			return &SearchStatus{Name: v.Name, Category: string(v.Category), Color: string(v.Color)}
 		}
 	}
-	return Nullable[SearchStatus]{}
+	return nil
 }
 
-func toPriority(f query.Facts) Nullable[SearchPriority] {
+func toPriority(f query.Facts) *SearchPriority {
 	for _, v := range f.Settings.Priorities {
 		if f.Item.Priority != "" && v.ID == f.Item.Priority {
-			return nullable(SearchPriority{Name: v.Name, Color: string(v.Color)})
+			return &SearchPriority{Name: v.Name, Color: string(v.Color)}
 		}
 	}
-	return Nullable[SearchPriority]{}
+	return nil
 }
 
-func toAssignee(f query.Facts) Nullable[SearchAssignee] {
+func toAssignee(f query.Facts) *SearchAssignee {
 	login := f.Item.Assignee
 	if login == "" {
-		return Nullable[SearchAssignee]{}
+		return nil
 	}
-	a := SearchAssignee{Login: login}
+	a := &SearchAssignee{Login: login}
 	if name, ok := f.Names[strings.ToLower(login)]; ok {
 		a.Name = &name
 	}
-	return nullable(a)
+	return a
 }

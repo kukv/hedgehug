@@ -2801,6 +2801,7 @@ components:
       type: object
     SearchAssignee:
       additionalProperties: false
+      nullable: true
       properties:
         login:
           type: string
@@ -2814,6 +2815,7 @@ components:
       type: object
     SearchDeleted:
       additionalProperties: false
+      nullable: true
       properties:
         daysLeft:
           description: 完全に削除されるまでの日数。保持日数を過ぎていれば負
@@ -2824,6 +2826,7 @@ components:
       type: object
     SearchPriority:
       additionalProperties: false
+      nullable: true
       properties:
         color:
           type: string
@@ -2874,16 +2877,10 @@ components:
       additionalProperties: false
       properties:
         assignee:
-          nullable: true
-          oneOf:
-            - $ref: "#/components/schemas/SearchAssignee"
-          type: object
+          $ref: "#/components/schemas/SearchAssignee"
         deleted:
+          $ref: "#/components/schemas/SearchDeleted"
           description: 削除済みの行だけ
-          nullable: true
-          oneOf:
-            - $ref: "#/components/schemas/SearchDeleted"
-          type: object
         display:
           description: いまの ID(HH-12)
           type: string
@@ -2902,19 +2899,13 @@ components:
           nullable: true
           type: number
         priority:
-          nullable: true
-          oneOf:
-            - $ref: "#/components/schemas/SearchPriority"
-          type: object
+          $ref: "#/components/schemas/SearchPriority"
         projectId:
           type: string
         readOnly:
           type: boolean
         status:
-          nullable: true
-          oneOf:
-            - $ref: "#/components/schemas/SearchStatus"
-          type: object
+          $ref: "#/components/schemas/SearchStatus"
         storeColor:
           type: string
         storeId:
@@ -2946,6 +2937,7 @@ components:
       type: object
     SearchStatus:
       additionalProperties: false
+      nullable: true
       properties:
         category:
           type: string

@@ -39,6 +39,12 @@ const (
 // newAPI は、S1「main」にサンプルと、Bug の HH-3(担当者 hanako・Medium)、Story の HH-4(メンバーにいない ghost・ステータスなし)を入れた API。
 func newAPI(t *testing.T) humatest.TestAPI {
 	t.Helper()
+	api, _ := newAPIWithStores(t)
+	return api
+}
+
+func newAPIWithStores(t *testing.T) (humatest.TestAPI, *apptest.Stores) {
+	t.Helper()
 	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
 	s.AddStore("S1")
 	if err := apptest.Sample(t.Context(), s, "S1"); err != nil {
@@ -73,7 +79,7 @@ func newAPI(t *testing.T) humatest.TestAPI {
 		Clock:       apptest.NewClock(time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)),
 	}
 	apisearch.Register(api, svc, &memScreens{m: map[string]string{}})
-	return api
+	return api, s
 }
 
 type searchBody struct {
@@ -143,6 +149,27 @@ func TestSearchAPINulls(t *testing.T) {
 	}
 	if !strings.Contains(raw, `"name":null`) || !strings.Contains(raw, `"status":null`) {
 		t.Errorf("null で出す: %s", raw)
+	}
+}
+
+// 削除済みの行は deleted: {daysLeft}(削除の日 + 保持日数 - 今日)。
+func TestSearchAPIDeleted(t *testing.T) {
+	api, s := newAPIWithStores(t)
+	if err := apptest.DeleteItems(t.Context(), s, "S1", ghostID); err != nil {
+		t.Fatal(err)
+	}
+	s.SetRetentionDays("S1", 10)
+	got, raw := searchOf(t, api, "is:deleted")
+	if !got.Deleted || len(got.Rows) != 1 || got.Rows[0].ItemID != string(ghostID) {
+		t.Fatalf("rows = %+v: %s", got.Rows, raw)
+	}
+	d := got.Rows[0].Deleted
+	if d == nil || d.DaysLeft < 0 || d.DaysLeft > 10 {
+		t.Errorf("deleted = %+v", d)
+	}
+	// 削除されていない行の deleted は null。
+	if live, raw := searchOf(t, api, "kind:bug"); len(live.Rows) != 1 || live.Rows[0].Deleted != nil || !strings.Contains(raw, `"deleted":null`) {
+		t.Errorf("live: %s", raw)
 	}
 }
 

@@ -1872,43 +1872,51 @@ export interface ScreenStateBody {
   body: string;
 }
 
-export interface SearchAssignee {
+/**
+ * @nullable
+ */
+export type SearchAssignee = {
   login: string;
   /**
      * 表示名。メンバーにいない人は null
      * @nullable
      */
   name: string | null;
-}
+} | null;
 
-export interface SearchDeleted {
+/**
+ * @nullable
+ */
+export type SearchDeleted = {
   /** 完全に削除されるまでの日数。保持日数を過ぎていれば負 */
   daysLeft: number;
-}
+} | null;
 
-export interface SearchPriority {
+/**
+ * @nullable
+ */
+export type SearchPriority = {
   color: string;
   name: string;
-}
+} | null;
 
 export interface SearchQuery {
   /** クエリの文字列(04「検索」)。空なら絞り込まない */
   query: string;
 }
 
-export interface SearchStatus {
+/**
+ * @nullable
+ */
+export type SearchStatus = {
   category: string;
   color: string;
   name: string;
-}
+} | null;
 
 export interface SearchRow {
-  /** @nullable */
   assignee: SearchAssignee | null;
-  /**
-     * 削除済みの行だけ
-     * @nullable
-     */
+  /** 削除済みの行だけ */
   deleted: SearchDeleted | null;
   /** いまの ID(HH-12) */
   display: string;
@@ -1920,11 +1928,9 @@ export interface SearchRow {
   oldIdHit: boolean;
   /** @nullable */
   points: number | null;
-  /** @nullable */
   priority: SearchPriority | null;
   projectId: string;
   readOnly: boolean;
-  /** @nullable */
   status: SearchStatus | null;
   storeColor: string;
   storeId: string;
