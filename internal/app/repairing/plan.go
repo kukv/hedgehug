@@ -153,22 +153,22 @@ func clearDanglingPlan(_ context.Context, w port.RepairWriter) error {
 
 // danglingSummary は、ref を空にする保存の件名。display はアイテムの画面の ID、plans はすべてのワークスペースの計画。
 func danglingSummary(display string, ref repair.PlanRef, plans []planning.Plan) string {
-	if ref.Field == item.SprintField {
-		reason := "完全に削除"
-		if slices.ContainsFunc(plans, func(p planning.Plan) bool {
-			return slices.ContainsFunc(p.Sprints, func(s planning.Sprint) bool { return s.ID == ref.Target })
-		}) {
-			reason = "ワークスペースにない"
-		}
-		return display + " をバックログに戻す(スプリントが" + reason + ")"
-	}
 	reason := "完全に削除"
-	if slices.ContainsFunc(plans, func(p planning.Plan) bool {
-		return slices.ContainsFunc(p.Releases, func(r planning.Release) bool { return r.ID == ref.Target })
-	}) {
+	if slices.ContainsFunc(plans, func(p planning.Plan) bool { return inPlan(p, ref) }) {
 		reason = "ワークスペースにない"
 	}
+	if ref.Field == item.SprintField {
+		return display + " をバックログに戻す(スプリントが" + reason + ")"
+	}
 	return display + " のリリースを外す(リリースが" + reason + ")"
+}
+
+// inPlan は、ref の欄がスプリントなら p のスプリント、リリースなら p のリリース(どちらも削除済みを含む)に ref.Target があるか。
+func inPlan(p planning.Plan, ref repair.PlanRef) bool {
+	if ref.Field == item.SprintField {
+		return slices.ContainsFunc(p.Sprints, func(s planning.Sprint) bool { return s.ID == ref.Target })
+	}
+	return slices.ContainsFunc(p.Releases, func(r planning.Release) bool { return r.ID == ref.Target })
 }
 
 // writeCleared は、アイテム it の欄 field(いまの値 from)を空にする行を 1 回保存する。
