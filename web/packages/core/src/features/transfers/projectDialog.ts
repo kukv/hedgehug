@@ -58,8 +58,9 @@ export interface ProjectTransferDeps {
   catalog: Pick<Catalog, "store" | "load">;
   toasts: Toasts;
   online(): boolean;
-  // afterMoved は、移せたあと。app が、新しいアドレスの設定タブへ移り、サイドバーの一覧を読み直す(A5b-19)。
-  afterMoved(result: ProjectTransferResult, project: ProjectTransferSubject): Promise<void>;
+  // afterMoved は、移せたあとの移り先と読み直し。「移動」を押したときに呼び、移せたら返った関数に結果を渡す。
+  // app が、押したときから画面を移っていなければ新しいアドレスの設定タブへ移り、サイドバーの一覧を読み直す(A5b-19)。
+  afterMoved(project: ProjectTransferSubject): (result: ProjectTransferResult) => Promise<void>;
 }
 
 export interface ProjectTransfer {
@@ -160,6 +161,7 @@ export function createProjectTransfer(deps: ProjectTransferDeps): ProjectTransfe
     }
     c.busy = true;
     render();
+    const after = deps.afterMoved(c.project);
     let result: ProjectTransferResult;
     try {
       result = await deps.transfers.transferProject(c.project.storeId, c.project.id, {
@@ -179,7 +181,7 @@ export function createProjectTransfer(deps: ProjectTransferDeps): ProjectTransfe
     c.busy = false;
     if (cur === c) close();
     deps.toasts.show(projectMovedMessage(result.destination));
-    await deps.afterMoved(result, c.project);
+    await after(result);
   }
 
   return {

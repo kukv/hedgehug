@@ -26,17 +26,21 @@ export async function setupProject() {
   ];
   const toastList = createToasts({ set: () => 0, clear: () => {} });
   const moved: string[] = [];
+  const pressed: string[] = [];
   const transfer = createProjectTransfer({
     transfers: fake,
     catalog: reloading,
     toasts: toastList,
     online: () => env.online,
-    afterMoved: async (result, project) => {
-      moved.push(`${project.id} → ${result.toStore}/${result.display}`);
+    afterMoved: (project) => {
+      pressed.push(project.id);
+      return async (result) => {
+        moved.push(`${project.id} → ${result.toStore}/${result.display}`);
+      };
     },
   });
   const project = { id: "S1-P1", storeId: "S1", title: "決済基盤" };
   const roProject = { id: "S2-P1", storeId: "S2", title: "決済基盤" };
   const toasts = () => get(toastList.list).map((t) => ({ text: t.text, error: t.error }));
-  return { transfer, fake, env, moved, project, roProject, toasts };
+  return { transfer, fake, env, moved, pressed, project, roProject, toasts };
 }

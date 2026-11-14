@@ -49,6 +49,18 @@ describe("project transfer dialog: sending (02 **移動**、A5b-20)", () => {
     expect(get(transfer.dialog)).toBeNull();
   });
 
+  it("asks afterMoved when「移動」is pressed, and passes the result only after the move", async () => {
+    const { transfer, fake, moved, pressed } = await opened();
+    const h = fake.holdNext();
+    const sending = transfer.submit();
+    await flush();
+    expect(pressed).toEqual(["S1-P1"]);
+    expect(moved).toEqual([]);
+    h.release();
+    await sending;
+    expect(moved).toHaveLength(1);
+  });
+
   it("sends once while sending, and shows busy", async () => {
     const { transfer, fake } = await opened();
     const h = fake.holdNext();

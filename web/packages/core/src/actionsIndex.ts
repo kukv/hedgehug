@@ -38,7 +38,7 @@ export {
   transferIntro,
   transferredMessage,
 } from "./features/transfers/dialogText";
-export { leaveMovedProject } from "./features/transfers/leaveMoved";
+export { createLeaveMoved } from "./features/transfers/leaveMoved";
 export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
 export { openMoved } from "./features/transfers/openMoved";
 export {

@@ -8,13 +8,13 @@ import {
   createItemMenuHost,
   createItemMove,
   createItemRefresh,
+  createLeaveMoved,
   createProjectDelete,
   createProjectTransfer,
   createTransferDialog,
   createWorkspaceDelete,
   leaveDeletedProject,
   leaveDeletedWorkspace,
-  leaveMovedProject,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
 import { online as isOnline } from "./tab";
@@ -120,14 +120,15 @@ export const projectDelete = createProjectDelete({
 });
 
 // プロジェクトの別のワークスペースへの移動(02「名前の変更・移動・削除」の移動)。設定タブの「別のワークスペースへ移動」の
-// 区画が読み、「移動」が確認ダイアログを開く。移せたあとの移り先(新しいアドレスの設定タブへ replace、そのあと一覧を
-// 読み直す。A5b-19)は core の leaveMovedProject。
+// 区画が読み、「移動」が確認ダイアログを開く。移せたあとの移り先(押したときから画面を移っていなければ新しいアドレスの
+// 設定タブへ replace、そのあと一覧を読み直す。A5b-19・A5a-18)は core の createLeaveMoved。
+const leaveMoved = createLeaveMoved({ navigation, catalog });
 export const projectTransfer = createProjectTransfer({
   transfers: transfersPort,
   catalog,
   toasts,
   online: isOnline,
-  afterMoved: (result) => leaveMovedProject({ navigation, catalog }, result),
+  afterMoved: () => leaveMoved(),
 });
 
 // ワークスペースの削除(03「削除」)。「一般」の「ワークスペースを削除…」とサイドバーのメニューの「削除…」が開く。
