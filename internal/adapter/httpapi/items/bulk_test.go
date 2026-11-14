@@ -51,6 +51,9 @@ func TestBulkDeleteAPIRejects(t *testing.T) {
 		if res := api.Post(path, map[string]any{"items": []map[string]string{}}); res.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s empty: %d %s", path, res.Code, res.Body)
 		}
+		if res := api.Post(path, map[string]any{"items": nil}); res.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s null: %d %s", path, res.Code, res.Body)
+		}
 		if res := api.Post(path, bulkBody("NOPE", string(apptest.SampleTask))); res.Code != http.StatusNotFound {
 			t.Errorf("%s unknown store: %d %s", path, res.Code, res.Body)
 		}

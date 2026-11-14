@@ -293,9 +293,8 @@ export interface BulkDeleteRequest {
   /**
      * 選んだアイテム。複数の Store にまたがってよい
      * @minItems 1
-     * @nullable
      */
-  items: BulkTarget[] | null;
+  items: BulkTarget[];
 }
 
 export interface BulkDeleted {

@@ -382,7 +382,6 @@ components:
           items:
             $ref: "#/components/schemas/BulkTarget"
           minItems: 1
-          nullable: true
           type: array
       required:
         - items

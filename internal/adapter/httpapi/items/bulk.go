@@ -20,7 +20,7 @@ type BulkTarget struct {
 
 // BulkDeleteRequest は、一括削除の予告と実行の本文。
 type BulkDeleteRequest struct {
-	Items []BulkTarget `json:"items" minItems:"1" doc:"選んだアイテム。複数の Store にまたがってよい"`
+	Items []BulkTarget `json:"items" minItems:"1" nullable:"false" doc:"選んだアイテム。複数の Store にまたがってよい"`
 }
 
 // BulkDeletePreview は、一括削除の確認ダイアログの中身(F2b1-10)。

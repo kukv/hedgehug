@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 )
 
 // DeletePreview は、削除の確認ダイアログの中身(02「削除」。A4b-7)。Count は、下にある削除されていないものの数。
@@ -145,28 +146,34 @@ type rootDelete struct {
 	below []item.Item
 }
 
-// bulkPlan は、1 つの Store で選んだ ids から、書く root を作る。削除済み・存在しないものは飛ばす。
-// ほかの選んだアイテムの下にあるものは root にしない(F2b1-7)。n は書く削除の行の数。
+// bulkPlan は、1 つの Store で選んだ ids(重ならない。bulkGroups)から、書く root を作る。削除済み・存在しないものは
+// 飛ばす。ほかの選んだアイテムの下にあるものは root にしない(F2b1-7)。n は書く削除の行の数。
+// プロジェクトの一覧は 1 回だけ読み、root かどうかは下にあるものの ID の印で決める。
 func bulkPlan(r port.Reader, ids []item.ID) (roots []rootDelete, n int, err error) {
 	var all []rootDelete
+	lists, under := map[project.ID][]item.Item{}, map[item.ID]bool{}
 	for _, id := range ids {
-		if slices.ContainsFunc(all, func(d rootDelete) bool { return d.id == id }) {
-			continue
-		}
-		_, below, err := liveBelow(r, id)
+		it, err := port.LiveItem(r, id)
 		if errors.Is(err, port.ErrNotFound) {
 			continue
 		}
 		if err != nil {
 			return nil, 0, err
 		}
+		p := it.Place.Project
+		if _, ok := lists[p]; !ok {
+			if lists[p], err = r.Items().List(p); err != nil {
+				return nil, 0, err
+			}
+		}
+		below := item.Live(item.Descendants(id, lists[p]))
+		for _, b := range below {
+			under[b.ID] = true
+		}
 		all = append(all, rootDelete{id, below})
 	}
 	for _, d := range all {
-		underOther := slices.ContainsFunc(all, func(o rootDelete) bool {
-			return slices.ContainsFunc(o.below, func(b item.Item) bool { return b.ID == d.id })
-		})
-		if !underOther {
+		if !under[d.id] {
 			roots = append(roots, d)
 			n += 1 + len(d.below)
 		}
@@ -181,13 +188,18 @@ type bulkStore struct {
 }
 
 // bulkGroups は、targets を Store ごとに最初に出てきた順で束ね、閲覧のみの Store の選んだ件数を数える。
-// 表示中でない Store を含むときは、何も読み書きせず port.ErrStoreNotFound(F2b1-6)。
+// 同じ (Store, ID) は 2 回目を飛ばす。表示中でない Store を含むときは、何も読み書きせず port.ErrStoreNotFound(F2b1-6)。
 func (s Service) bulkGroups(ctx context.Context, targets []BulkTarget) (groups []bulkStore, readOnly int, err error) {
 	infos, err := s.StoreList.List(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
+	seen := map[BulkTarget]bool{}
 	for _, t := range targets {
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
 		i := slices.IndexFunc(infos, func(x port.StoreInfo) bool { return x.ID == t.Store })
 		if i < 0 {
 			return nil, 0, port.ErrStoreNotFound

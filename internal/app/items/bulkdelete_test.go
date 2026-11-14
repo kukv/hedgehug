@@ -156,3 +156,31 @@ func TestBulkDeletePreview(t *testing.T) {
 		}
 	}
 }
+
+func TestBulkDeleteDuplicates(t *testing.T) {
+	svc, _, s := setupBulk(t)
+	_, steps := deleteTree(t, svc)
+	task := items.BulkTarget{Store: store, ID: apptest.SampleTask}
+	ro := items.BulkTarget{Store: store3, ID: apptest.SampleTask}
+	got, err := svc.BulkDelete(t.Context(), []items.BulkTarget{task, ro, task, ro})
+	if err != nil || got != (items.BulkDeleted{Deleted: 3, ReadOnly: 1}) {
+		t.Fatalf("BulkDelete = %+v, %v", got, err)
+	}
+	for _, id := range []item.ID{apptest.SampleTask, steps[0].ID, steps[1].ID} {
+		if rows := rowsIn(t, s, store, id); len(rows) != 1 {
+			t.Errorf("%s: rows %+v, want one", id, rows)
+		}
+	}
+}
+
+func TestBulkDeleteGrandchildWithAncestor(t *testing.T) {
+	svc, _, s := setupBulk(t)
+	_, steps := deleteTree(t, svc)
+	got, err := svc.BulkDelete(t.Context(), []items.BulkTarget{{Store: store, ID: steps[0].ID}, {Store: store, ID: apptest.SampleEpic}})
+	if err != nil || got != (items.BulkDeleted{Deleted: 5}) {
+		t.Fatalf("BulkDelete = %+v, %v", got, err)
+	}
+	if rows := rowsIn(t, s, store, steps[0].ID); len(rows) != 1 || rows[0].Root == nil || *rows[0].Root {
+		t.Errorf("step: rows %+v, want one with root false", rows)
+	}
+}
