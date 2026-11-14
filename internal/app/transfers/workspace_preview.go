@@ -27,15 +27,18 @@ type WorkspacePreview struct {
 	RemoteNotice, DestinationHasRemote bool
 }
 
-// workspaceGathered は、ワークスペースを移すときに移動元から読むもの。set は削除済みを含む。logs はワークスペース・
-// プロジェクト・アイテムのすべての行(人を数えるため)。
+// workspaceGathered は、ワークスペースを移すときに移動元から読むもの。set は削除済みを含む。logs・descs・moves は、
+// プロジェクトとアイテムごとの行・説明・前に同じ Store の中で移した記録。vocab は moved_in の names を引く設定。
 type workspaceGathered struct {
 	ws       workspace.Workspace
 	settings workspace.Settings
 	set      transfer.WorkspaceSet
 	wsLog    []change.Record
-	logs     [][]change.Record
+	logs     map[change.ID][]change.Record
+	descs    map[change.ID]string
+	moves    map[change.ID][]transfer.Move
 	members  []member.Member
+	vocab    []workspace.Settings
 }
 
 // gatherWorkspace は、移動元からワークスペース id を読む。別の画面で削除されたものも読む(B5c-10)。ないときは port.ErrNotFound。
@@ -45,7 +48,7 @@ func gatherWorkspace(r port.Reader, id workspace.ID) (workspaceGathered, error) 
 	if err != nil {
 		return workspaceGathered{}, err
 	}
-	g := workspaceGathered{ws: ws}
+	g := workspaceGathered{ws: ws, logs: map[change.ID][]change.Record{}, descs: map[change.ID]string{}, moves: map[change.ID][]transfer.Move{}}
 	if g.settings, err = r.Workspaces().Settings(id); err != nil {
 		return workspaceGathered{}, err
 	}
@@ -61,23 +64,63 @@ func gatherWorkspace(r port.Reader, id workspace.ID) (workspaceGathered, error) 
 		return workspaceGathered{}, err
 	}
 	g.set = transfer.CollectWorkspace(id, projects, all)
-	g.logs = [][]change.Record{g.wsLog}
+	if err := g.readRows(r); err != nil {
+		return workspaceGathered{}, err
+	}
+	if g.members, err = r.Members().List(); err != nil {
+		return workspaceGathered{}, err
+	}
+	g.vocab, err = vocabOf(r, g.settings, g.allLogs())
+	return g, err
+}
+
+// readRows は、プロジェクトとアイテムごとの行・説明・前の移動を読む。
+func (g *workspaceGathered) readRows(r port.Reader) error {
+	recs, err := r.Transfers().List()
+	if err != nil {
+		return err
+	}
 	for _, p := range g.set.Projects {
-		log, err := r.Changes().Of(change.Ref{Kind: change.KindProject, ID: p.ID})
-		if err != nil {
-			return workspaceGathered{}, err
+		if err := g.readRow(r, change.Ref{Kind: change.KindProject, ID: p.ID}, transfer.EntityProject, recs); err != nil {
+			return err
 		}
-		g.logs = append(g.logs, log)
 	}
 	for _, it := range g.set.Items {
-		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: it.ID})
-		if err != nil {
-			return workspaceGathered{}, err
+		if err := g.readRow(r, change.Ref{Kind: change.KindItem, ID: it.ID}, transfer.EntityItem, recs); err != nil {
+			return err
 		}
-		g.logs = append(g.logs, log)
 	}
-	g.members, err = r.Members().List()
-	return g, err
+	return nil
+}
+
+// readRow は、ref の行・説明・前の移動(転送記録 recs のうち種類 entity のもの)を読む。
+func (g *workspaceGathered) readRow(r port.Reader, ref change.Ref, entity string, recs []transfer.Record) error {
+	var err error
+	if g.logs[ref.ID], err = r.Changes().Of(ref); err != nil {
+		return err
+	}
+	if ref.Kind == change.KindProject {
+		g.descs[ref.ID], err = r.Projects().Description(ref.ID)
+	} else {
+		g.descs[ref.ID], err = r.Items().Description(ref.ID)
+	}
+	if err != nil {
+		return err
+	}
+	g.moves[ref.ID], err = earlierMoves(r, entity, ref.ID, g.logs[ref.ID], recs)
+	return err
+}
+
+// allLogs は、ワークスペース・プロジェクト・アイテム(set の順)のすべての行(人を数えるため)。
+func (g workspaceGathered) allLogs() [][]change.Record {
+	out := [][]change.Record{g.wsLog}
+	for _, p := range g.set.Projects {
+		out = append(out, g.logs[p.ID])
+	}
+	for _, it := range g.set.Items {
+		out = append(out, g.logs[it.ID])
+	}
+	return out
 }
 
 // people は、移動先のメンバー toMembers に足す人と、人の綴りの対応(B5c-7)。items はすべてのアイテム、logs はすべての行、
@@ -87,7 +130,7 @@ func (g workspaceGathered) people(toMembers []member.Member) ([]member.Member, t
 	for _, p := range g.set.Projects {
 		extra = append(extra, p.Owner)
 	}
-	return transfer.People(g.settings, g.set.Items, g.logs, extra, g.members, toMembers)
+	return transfer.People(g.settings, g.set.Items, g.allLogs(), extra, g.members, toMembers)
 }
 
 // refuseWorkspaceMove は、ワークスペース w を、削除されていないワークスペース dst のある Store(名前 storeName)へ移せないとき
