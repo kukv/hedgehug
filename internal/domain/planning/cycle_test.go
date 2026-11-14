@@ -3,6 +3,7 @@ package planning_test
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
@@ -108,20 +109,17 @@ func TestCycleNoStart(t *testing.T) {
 	wantDays(t, "lead", lead, 1, pt(2))
 }
 
-// 時計のずれで at が前後しても、負の日数は出ない(Doing の行の at が、あとの Done の行より後)。
+// 時計のずれで、完了の行の at が作成以前でも、0 日として数える(prev が作成の行を指す)。
 func TestCycleNegative(t *testing.T) {
 	localTokyo(t)
-	log := created(jst(1, 9, 0), item.Item{ID: "A", Status: "Todo"})
-	log = setStatus(log, jst(1, 12, 0), "Todo", "Doing")
-	log = setStatus(log, jst(1, 11, 0), "Doing", "Done")
+	for name, doneAt := range map[string]time.Time{"before": jst(1, 8, 0), "equal": jst(1, 9, 0)} {
+		log := created(jst(1, 9, 0), item.Item{ID: "A", Status: "Doing"})
+		log = setStatus(log, doneAt, "Doing", "Done")
 
-	cycle, lead := cycleOf(t, log)
+		cycle, lead := cycleOf(t, log)
 
-	if lead.N != 1 || lead.Median == nil || *lead.Median < 0 {
-		t.Errorf("lead = %+v", lead)
-	}
-	if cycle.Median != nil && *cycle.Median < 0 {
-		t.Errorf("cycle = %+v", cycle)
+		wantDays(t, name+" cycle", cycle, 1, pt(0))
+		wantDays(t, name+" lead", lead, 1, pt(0))
 	}
 }
 

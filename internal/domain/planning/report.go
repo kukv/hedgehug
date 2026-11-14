@@ -159,15 +159,16 @@ type step struct {
 	Created bool
 }
 
-// steps は、アイテムのログの項目 f(内部 ID の値)の変遷(F3-13)。作成の行の時刻を最初の点にして、
+// steps は、アイテムのログの項目 f(内部 ID の値)の変遷(F3-13)。作成の行の時刻を最初の点(値は作成の行だけのもの)にして、
 // あとの行は At の順(同じなら ID の順)に、各行の At の直後の値(ValueAt)を点にする。同じ値が続く点はまとめる。
+// 作成以前の At の行(時計のずれ)は、作成の時刻に寄せた点にする。
 // 時計がずれて at が前後しても、change.Resolve が prev で決めた値になる。作成の行がなければ空。
 func steps(log []change.Record, f string) []step {
 	created := change.Resolve(log, change.Options{}).Created
 	if created == nil {
 		return nil
 	}
-	out := []step{{At: created.At, Value: idAt(log, f, created.At.Add(time.Nanosecond)), Created: true}}
+	out := []step{{At: created.At, Value: idAt([]change.Record{*created}, f, created.At.Add(time.Nanosecond)), Created: true}}
 	rows := slices.Clone(log)
 	slices.SortFunc(rows, func(a, b change.Record) int {
 		if c := a.At.Compare(b.At); c != 0 {
@@ -176,12 +177,16 @@ func steps(log []change.Record, f string) []step {
 		return strings.Compare(string(a.ID), string(b.ID))
 	})
 	for _, r := range rows {
-		if !r.At.After(created.At) {
+		if r.ID == created.ID {
 			continue
 		}
-		v := idAt(log, f, r.At.Add(time.Nanosecond))
+		at := r.At
+		if at.Before(created.At) {
+			at = created.At
+		}
+		v := idAt(log, f, at.Add(time.Nanosecond))
 		if v != out[len(out)-1].Value {
-			out = append(out, step{At: r.At, Value: v})
+			out = append(out, step{At: at, Value: v})
 		}
 	}
 	return out

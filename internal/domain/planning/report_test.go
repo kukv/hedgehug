@@ -202,6 +202,13 @@ func TestSteps(t *testing.T) {
 	if vs, _ := values(skew); !slices.Equal(vs, []change.ID{"Todo", "Done"}) {
 		t.Errorf("あとの行の値が最後の点: %v", vs)
 	}
+	// 作成以前の at の行は、作成の時刻に寄せた点になる(作成の点の値は作成の行だけのもの)。
+	early := created(jst(10, 9, 0), item.Item{Status: "Doing"})
+	early = setStatus(early, jst(10, 8, 0), "Doing", "Done")
+	ss := planning.Steps(early, "status")
+	if vs, _ := values(early); !slices.Equal(vs, []change.ID{"Doing", "Done"}) || !ss[1].At.Equal(jst(10, 9, 0)) {
+		t.Errorf("作成以前の行は作成の時刻の点: %v %+v", vs, ss)
+	}
 	// 作成の行がなければ空。
 	if got := planning.Steps(log[1:], "status"); len(got) != 0 {
 		t.Errorf("作成の行がなければ空: %+v", got)
