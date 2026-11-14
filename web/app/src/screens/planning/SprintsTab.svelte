@@ -7,6 +7,8 @@
     startDisabledReason,
   } from "@hedgehug/core";
   import { Button } from "@hedgehug/ui";
+  import { tick } from "svelte";
+  import { planRequest } from "../../palette";
   import { sprints } from "../../planning";
   import { planning, syncNow } from "../../wire";
   import SprintCard from "./SprintCard.svelte";
@@ -45,6 +47,12 @@
   $effect(() => {
     void sprints.open(sid, wid);
     return () => sprints.close();
+  });
+  // パレットの「スプリントを作成」の要求が、このワークスペースのものなら作成ダイアログを開く(A5c-11)。
+  // 画面を移って出たばかりのときは、親(WorkspaceScreen)が概要を開く前なので、描き終わってから開く。
+  const request = planRequest.request;
+  $effect(() => {
+    if ($request && planRequest.take(wid, "sprint")) void tick().then(oncreate);
   });
   const loaded = sprints.state;
   const overview = planning.state;

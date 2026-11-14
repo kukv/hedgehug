@@ -50,7 +50,7 @@ import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
 import { githubReloads, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
-import { toasts } from "./wireBase";
+import { palettePort, toasts } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 
@@ -129,6 +129,8 @@ export const detail = createDetail({
   onChanged: () => void projectScreen.reload(),
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: leaveItem,
+  // 開けたアイテムを「最近開いたもの」に記録する(A5c-13。失敗は無視)。
+  onOpened: (s, i) => void palettePort.opened(s, i).catch(() => {}),
 });
 // 旧 ID から開いたときの詳細パネルの上部の 1 行(A5a-16)。
 export const movedNotice = createMovedNotice({ detail, now: () => new Date() });
