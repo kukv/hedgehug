@@ -1,5 +1,6 @@
 import type { Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { tokenUrl } from "./helpers";
 import { base, openWith, rowOf, seed, send, type } from "./search-table-helpers";
 
 // 検索のテーブルの選択・選択バー・一括変更と一括削除・行末のメニューの通しのテスト(E2a。04「選択」)。
@@ -15,13 +16,13 @@ const selectAll = (page: Page) => page.getByRole("checkbox", { name: "すべて�
 // seedThree は、seed の 2 件に、Epic の下の Story「{mark} C」(接頭辞-3)を足す。
 async function seedThree(page: Page, info: TestInfo) {
   const s = await seed(page, info);
-  const c = await send(page, "post", `${base}/items`, {
+  await send(page, "post", `${base}/items`, {
     project: s.projectId,
     kind: "Story",
     parent: s.epicId,
     title: `${s.mark} C`,
   });
-  return { ...s, cId: c.id as string };
+  return s;
 }
 
 test("a row shown under two groups is one selection", async ({ page }, info) => {
@@ -44,6 +45,12 @@ test("a row shown under two groups is one selection", async ({ page }, info) => 
   await expect(story.nth(0)).toBeChecked();
   await expect(story.nth(1)).toBeChecked();
   await expect(bar(page, 1)).toBeVisible();
+  // 「すべて選択」も、2 つの見出しの下の行を 1 回だけ数える(Epic と Story の 2 件)。
+  await story.first().uncheck();
+  await selectAll(page).check();
+  await expect(bar(page, 2)).toBeVisible();
+  await selectAll(page).uncheck();
+  await story.first().check();
 
   // 1 行だけ選んでいるときは、パレットの「選んでいるアイテム」になる(E2a-18)。
   await page.keyboard.press("ControlOrMeta+k");
@@ -82,13 +89,25 @@ test("bulk changes keep the selection, and bulk deletes clear it", async ({ page
 });
 
 test("select all picks every row, and removes a row deleted elsewhere", async ({ page }, info) => {
-  const { mark, cId } = await seedThree(page, info);
+  const { mark, prefix } = await seedThree(page, info);
   await openWith(page, info, mark);
   await selectAll(page).check();
   await expect(bar(page, 3)).toBeVisible();
 
-  // 別のプログラムの保存で 1 件を削除すると、Store の変更の知らせで読み直し、選択から外す。
-  await send(page, "delete", `${base}/items/${cId}`, undefined);
+  // 別のタブで 1 件(接頭辞-3)を削除すると、Store の変更の知らせで読み直し、選択から外す。
+  const other = await page.context().newPage();
+  try {
+    await other.goto(tokenUrl(`/s/e2e/i/${prefix}-3`));
+    await panelOf(other).getByRole("button", { name: "メニュー", exact: true }).click();
+    await other.getByRole("menuitem", { name: /^削除…/ }).click();
+    await other
+      .getByRole("dialog", { name: "Story を削除" })
+      .getByRole("button", { name: "削除", exact: true })
+      .click();
+    await expect(other.getByText(`${prefix}-3 を削除しました`, { exact: true })).toBeVisible();
+  } finally {
+    await other.close();
+  }
   await expect(bar(page, 2)).toBeVisible();
   await expect(selectAll(page)).toBeChecked();
 
