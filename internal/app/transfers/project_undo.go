@@ -105,3 +105,23 @@ func projectItemIDs(s transfer.ProjectSet) []item.ID {
 	slices.Sort(ids)
 	return ids
 }
+
+// revivedSet は、移すもの src.set を、別の画面でのプロジェクトの削除(A5b-15)を取り消したものとして集め直す。移動先でその
+// 削除の操作の行を取り消すので、番号はその操作で削除されたものを削除されていないものとして振る(同じ Store の移動は、取り消して
+// から集める)。プロジェクトが削除されていなければ src.set のまま。
+func revivedSet(r port.Reader, src projectSource) (transfer.ProjectSet, error) {
+	d := src.project.Deleted
+	if d == nil {
+		return src.set, nil
+	}
+	all, err := storeItems(r)
+	if err != nil {
+		return transfer.ProjectSet{}, err
+	}
+	for i := range all {
+		if all[i].Deleted != nil && all[i].Deleted.Op == d.Op {
+			all[i].Deleted = nil
+		}
+	}
+	return transfer.CollectProject(src.project.ID, all), nil
+}

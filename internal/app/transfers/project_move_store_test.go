@@ -81,6 +81,9 @@ func TestMoveProjectAcrossWritesBothStores(t *testing.T) {
 		t.Errorf("moved = %+v, want %+v", got, want)
 	}
 	at := assertProjectDestination(t, f, srcLog)
+	if w := itemOf(t, f.rec, store2, apptest.SampleEpic).Watchers; !slices.Equal(w, []string{"Taro"}) {
+		t.Errorf("epic watchers = %v, want the destination spelling", w)
+	}
 	rules, own := rulesAt(t, f.rec, store2, teamWS)
 	if len(rules.Hidden) != 1 || rules.TemplateDefaults["Bug"] != projectrule.None || len(own) != 1 || own[0].ID == old.ID || own[0].Name != old.Name {
 		t.Errorf("destination rules = %+v / %+v", rules, own)

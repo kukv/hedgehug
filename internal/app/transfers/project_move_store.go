@@ -121,6 +121,9 @@ func gatherProject(r port.Reader, id project.ID) (projectGathered, error) {
 	if err != nil {
 		return projectGathered{}, err
 	}
+	if src.set, err = revivedSet(r, src); err != nil {
+		return projectGathered{}, err
+	}
 	g := projectGathered{projectSource: src, logs: map[item.ID][]change.Record{}, descs: map[item.ID]string{}, moves: map[item.ID][]transfer.Move{}}
 	if g.projectLog, err = r.Changes().Of(change.Ref{Kind: change.KindProject, ID: id}); err != nil {
 		return projectGathered{}, err

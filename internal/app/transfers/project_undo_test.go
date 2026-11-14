@@ -129,11 +129,14 @@ func TestMoveProjectAcrossRulesChanged(t *testing.T) {
 	}
 }
 
-// deleteSampleProject は、別の画面で Web のプロジェクト「ログイン」を削除した状態にする(Epic は同じ操作で削除、Task はその前に
-// 別の操作で削除)。
+const earlierEpic item.ID = "01TESTIT000000000000000020"
+
+// deleteSampleProject は、別の画面で Web のプロジェクト「ログイン」を削除した状態にする(Epic は同じ操作で削除、Task と、
+// 順位が前の Epic HH-3 はその前に別の操作で削除)。
 func deleteSampleProject(t *testing.T, f fixture) {
 	t.Helper()
-	if err := apptest.DeleteItems(t.Context(), f.rec, store1, apptest.SampleTask); err != nil {
+	addItem(t, f.rec, store1, item.Item{ID: earlierEpic, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 3}, Kind: item.Epic, Rank: "A", Title: "前"})
+	if err := apptest.DeleteItems(t.Context(), f.rec, store1, apptest.SampleTask, earlierEpic); err != nil {
 		t.Fatal(err)
 	}
 	write(t, f.rec, store1, func(tx port.Tx) error {
@@ -145,7 +148,7 @@ func deleteSampleProject(t *testing.T, f fixture) {
 }
 
 // A5b-15: 別の画面で削除されたプロジェクトは、移動先で削除を取り消し(同じ操作で削除された Epic も)、両方の保存のあとで旧 ID
-// を積む。移動元の保存が失敗したら積まない。
+// を積む。番号は、取り消した Epic を削除されていないものとして振る(同じ Store の移動と同じ)。移動元の保存が失敗したら積まない。
 func TestMoveProjectAcrossRevives(t *testing.T) {
 	f := newFixture(t)
 	deleteSampleProject(t, f)
@@ -164,6 +167,11 @@ func TestMoveProjectAcrossRevives(t *testing.T) {
 	}
 	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-P1"}) {
 		t.Errorf("revived = %v", got)
+	}
+	for id, n := range map[item.ID]int{apptest.SampleEpic: 2, apptest.SampleTask: 3, earlierEpic: 4} {
+		if got := itemOf(t, f.rec, store2, id).Place.Number; got != n {
+			t.Errorf("%s number = %d, want %d", id, got, n)
+		}
 	}
 
 	f = newFixture(t)
@@ -209,5 +217,10 @@ func TestMoveProjectAcrossOppositeDirections(t *testing.T) {
 	}
 	if p, ok := projectAt(t, f.rec, store1, teamProject); !ok || p.Place.Workspace != apptest.SampleWorkspace {
 		t.Errorf("アプリ in main = %+v (%v)", p, ok)
+	}
+	for _, r := range recordsOf(t, f.rec, store2) {
+		if r.ToStoreName != "main" || r.ToRemote != "https://example.invalid/main.git" {
+			t.Errorf("team record = %+v", r)
+		}
 	}
 }
