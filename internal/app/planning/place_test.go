@@ -107,6 +107,27 @@ func TestPlaceItemEmptyArea(t *testing.T) {
 	}
 }
 
+// スプリントの枠でも、基準なしで同じ枠なら末尾へ。
+func TestPlaceItemEmptyAreaInSprint(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	s1, _ := activeSprint(t, svc)
+	addWorks(t, svc, []work{{itemY, 3, "Y", todo, s1.ID, 1}, {itemZ, 4, "Z", todo, s1.ID, 1}})
+	if err := svc.PlaceItem(ctx, store, itemY, &s1.ID, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if lastSummary(rec) != "HH-3 の順位を変更" {
+		t.Errorf("summary = %q", lastSummary(rec))
+	}
+	it, log := getItem(t, svc, itemY)
+	if it.Sprint != s1.ID || it.Rank != rank.After("Z") {
+		t.Errorf("S1 の末尾へ: %s/%s", it.Sprint, it.Rank)
+	}
+	if got := lastOp(log); len(got) != 1 || got[0] != "rank" {
+		t.Errorf("1 回の保存の行 = %v", got)
+	}
+}
+
 // 同じ枠で、基準が次の行への直前・前の行への直後・自分自身なら何もしない。
 func TestPlaceItemSamePosition(t *testing.T) {
 	svc, rec := setup(t)
@@ -145,17 +166,22 @@ func TestPlaceItemTies(t *testing.T) {
 	if got := backlogRows(t, svc); !sameIDs(got, apptest.SampleTask, itemB, itemC, itemD) {
 		t.Fatalf("はじめの並び = %v", got)
 	}
-	if err := svc.PlaceItem(ctx, store, apptest.SampleTask, nil, ref(itemC), true); err != nil {
-		t.Fatal(err)
-	}
-	if got := backlogRows(t, svc); !sameIDs(got, itemB, itemC, apptest.SampleTask, itemD) {
-		t.Errorf("HH-2 を C の直後 = %v", got)
-	}
+	// F を C の直前: 群の手前で、V と W の間。
 	if err := svc.PlaceItem(ctx, store, itemD, nil, ref(itemC), false); err != nil {
 		t.Fatal(err)
 	}
-	if got := backlogRows(t, svc); !sameIDs(got, itemD, itemB, itemC, apptest.SampleTask) {
+	if it, _ := getItem(t, svc, itemD); it.Rank != rank.Between("V", "W") {
+		t.Errorf("F の rank = %q, want %q", it.Rank, rank.Between("V", "W"))
+	}
+	if got := backlogRows(t, svc); !sameIDs(got, apptest.SampleTask, itemD, itemB, itemC) {
 		t.Errorf("F を C の直前 = %v", got)
+	}
+	// HH-2 を C の直後: 群の後ろ。
+	if err := svc.PlaceItem(ctx, store, apptest.SampleTask, nil, ref(itemC), true); err != nil {
+		t.Fatal(err)
+	}
+	if got := backlogRows(t, svc); !sameIDs(got, itemD, itemB, itemC, apptest.SampleTask) {
+		t.Errorf("HH-2 を C の直後 = %v", got)
 	}
 }
 
@@ -163,6 +189,7 @@ func TestPlaceItemClosedSprint(t *testing.T) {
 	svc, rec := setup(t)
 	ctx := t.Context()
 	s1, s2 := activeSprint(t, svc)
+	addWorks(t, svc, []work{{itemY, 6, "Y", apptest.SampleStatusDone, s1.ID, 1}}) // 完了で S1 に残る
 	if err := svc.CloseSprint(ctx, store, apptest.SampleWorkspace, s1.ID, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -195,6 +222,14 @@ func TestPlaceItemClosedSprint(t *testing.T) {
 	}
 	if len(rec.summaries) != n {
 		t.Errorf("断ったのに保存した: %v", rec.summaries[n:])
+	}
+	// 完了したスプリントに残る作業項目は、SetSprint と同じく、そのスプリントを枠とみなす。バックログの行の直前へ置くと、
+	// スプリントをバックログに変える(順位だけ変えると、完了したスプリントに残ってどの枠にも出ない)。
+	if err := svc.PlaceItem(ctx, store, itemY, nil, ref(itemA), false); err != nil {
+		t.Fatal(err)
+	}
+	if it, log := getItem(t, svc, itemY); it.Sprint != "" || len(lastOp(log)) != 2 {
+		t.Errorf("完了したスプリントから: sprint %q 行 %v", it.Sprint, lastOp(log))
 	}
 }
 
