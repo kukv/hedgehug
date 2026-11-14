@@ -147,6 +147,51 @@ func TestReadErrorReturned(t *testing.T) {
 	f.wantNone()
 }
 
+// 口の読み取りの失敗(ないもの以外)は、飛ばさずに Judge のエラーにする(C4b1-5)。
+func TestReaderErrorReturned(t *testing.T) {
+	for _, kind := range []string{"changes", "workspaces", "members"} {
+		t.Run(kind, func(t *testing.T) {
+			f := setup(t)
+			s := f.save(user("taro"), writeComment("", "@hanako 見てください"))
+			want := errors.New("ファイルを読めない")
+			if err := f.judgeFailing(kind, want, s); !errors.Is(err, want) {
+				t.Errorf("Judge = %v, want %v", err, want)
+			}
+			f.wantNone()
+		})
+	}
+}
+
+// ないもの(ErrNotFound)は飛ばし、エラーにしない。
+func TestReaderNotFoundSkipped(t *testing.T) {
+	for _, kind := range []string{"changes", "workspaces"} {
+		t.Run(kind, func(t *testing.T) {
+			f := setup(t)
+			s := f.save(user("taro"), setTask(assign("hanako")))
+			if err := f.judgeFailing(kind, port.ErrNotFound, s); err != nil {
+				t.Errorf("Judge = %v, want nil", err)
+			}
+			f.wantNone()
+		})
+	}
+}
+
+func TestOwnerByOwnChangeOrAutomation(t *testing.T) {
+	setOwner := func(d change.Draft) func(tx port.Tx) error {
+		return func(tx port.Tx) error { return tx.WriteProjects().Append(apptest.SampleProject, d) }
+	}
+	f := setup(t)
+	f.judge(f.save(user("Hanako"), setOwner(change.NewSet("owner", "taro", "hanako"))))
+	f.wantNone()
+
+	g := setup(t)
+	g.judge(g.save(user("taro"), setOwner(change.NewSet("owner", "taro", "hanako").ByRule("r1"))))
+	n := g.wantOne()
+	if n.Kind != port.NoticeAssign || n.Project != apptest.SampleProject || n.Sender != "" {
+		t.Errorf("notice = %+v, want owner from hedgehug", n)
+	}
+}
+
 func TestSkipsMissingEntity(t *testing.T) {
 	f := setup(t)
 	s := f.save(user("taro"), setTask(assign("hanako"), change.NewComment("01C1", nil, map[string]string{"body": "@hanako"})))

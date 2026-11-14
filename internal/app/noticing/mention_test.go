@@ -66,6 +66,27 @@ func TestMentionInDescription(t *testing.T) {
 	}
 }
 
+func TestMentionInProjectComment(t *testing.T) {
+	f := setup(t)
+	f.judge(f.save(user("taro"), func(tx port.Tx) error {
+		return tx.WriteProjects().Append(apptest.SampleProject, change.NewComment(commentID, nil, comment.Value("@hanako 進め方の相談")))
+	}))
+	n := f.wantOne()
+	if n.Kind != port.NoticeMention || n.Project != apptest.SampleProject || n.Item != "" || n.Display != "HH-P1" ||
+		n.Source != "comment:"+string(commentID) || n.Sender != "taro" {
+		t.Errorf("notice = %+v", n)
+	}
+}
+
+func TestMentionByAutomation(t *testing.T) {
+	f := setup(t)
+	f.judge(f.save(user("taro"), setTask(change.NewComment(commentID, nil, comment.Value("@hanako 自動化のコメント")).ByRule("r1"))))
+	n := f.wantOne()
+	if n.Kind != port.NoticeMention || n.Sender != "" {
+		t.Errorf("notice = %+v, want mention from hedgehug", n)
+	}
+}
+
 func TestMentionRewrite(t *testing.T) {
 	f := setup(t)
 	f.judge(f.save(user("taro"), writeComment("", "@hanako 見てください")))

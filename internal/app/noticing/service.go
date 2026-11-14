@@ -28,9 +28,16 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, saves []port.Rec
 	}
 	var notices []port.Notice
 	if err := read(func(r port.Reader) error {
-		b := newBatch(r, saves)
-		notices = append(assigns(r, b, store, me), mentions(r, b, store, me)...)
-		return nil
+		b, err := newBatch(r, saves)
+		if err != nil {
+			return err
+		}
+		if notices, err = assigns(r, b, store, me); err != nil {
+			return err
+		}
+		ms, err := mentions(r, b, store, me)
+		notices = append(notices, ms...)
+		return err
 	}); err != nil {
 		return err
 	}
@@ -54,8 +61,9 @@ type batch struct {
 	logs   map[change.Ref][]change.Record
 }
 
-// newBatch は、saves のエンティティのいまのログを読む。読めないエンティティ(もうない)はログを持たない。
-func newBatch(r port.Reader, saves []port.ReceivedSave) batch {
+// newBatch は、saves のエンティティのいまのログを読む。もうないエンティティ(ErrNotFound)はログを持たない。
+// ほかの読み取りの失敗はエラー。
+func newBatch(r port.Reader, saves []port.ReceivedSave) (batch, error) {
 	b := batch{saves: saves, judged: map[change.ID]bool{}, logs: map[change.Ref][]change.Record{}}
 	for _, s := range saves {
 		for _, e := range s.Entities {
@@ -66,12 +74,22 @@ func newBatch(r port.Reader, saves []port.ReceivedSave) batch {
 				continue
 			}
 			b.refs = append(b.refs, e.Ref)
-			if log, err := r.Changes().Of(e.Ref); err == nil {
-				b.logs[e.Ref] = log
+			if err := b.read(r, e.Ref); err != nil {
+				return batch{}, err
 			}
 		}
 	}
-	return b
+	return b, nil
+}
+
+// read は、ref のいまのログを覚える。ないもの(ErrNotFound)は覚えずに nil。
+func (b batch) read(r port.Reader, ref change.Ref) error {
+	log, err := r.Changes().Of(ref)
+	if err != nil {
+		return notFoundIsSkip(err)
+	}
+	b.logs[ref] = log
+	return nil
 }
 
 // after は、判定の後のログ。

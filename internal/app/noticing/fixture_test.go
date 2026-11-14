@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/noticing"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -189,6 +190,59 @@ func (f *fixture) wantOne() port.Notice {
 }
 
 func user(login string) change.Actor { return change.User(login) }
+
+// failing は、口 kind の読み取りが err を返す Reader(ほかは r のまま)。kind は changes・workspaces・members。
+type failing struct {
+	port.Reader
+	kind string
+	err  error
+}
+
+func (f failing) Changes() port.ChangeReader {
+	if f.kind == "changes" {
+		return failingChanges{f.err}
+	}
+	return f.Reader.Changes()
+}
+
+func (f failing) Workspaces() port.WorkspaceReader {
+	if f.kind == "workspaces" {
+		return failingWorkspaces{f.Reader.Workspaces(), f.err}
+	}
+	return f.Reader.Workspaces()
+}
+
+func (f failing) Members() port.MemberReader {
+	if f.kind == "members" {
+		return failingMembers{f.err}
+	}
+	return f.Reader.Members()
+}
+
+type failingChanges struct{ err error }
+
+func (c failingChanges) Of(change.Ref) ([]change.Record, error) { return nil, c.err }
+
+type failingWorkspaces struct {
+	port.WorkspaceReader
+	err error
+}
+
+func (w failingWorkspaces) Get(workspace.ID) (workspace.Workspace, error) {
+	return workspace.Workspace{}, w.err
+}
+
+type failingMembers struct{ err error }
+
+func (m failingMembers) List() ([]member.Member, error) { return nil, m.err }
+
+// judgeFailing は、kind の読み取りが err を返す Reader で saves を判定する。
+func (f *fixture) judgeFailing(kind string, err error, saves ...port.ReceivedSave) error {
+	ctx := f.t.Context()
+	return f.svc.Judge(ctx, store, saves, func(fn func(r port.Reader) error) error {
+		return f.stores.Read(ctx, store, func(r port.Reader) error { return fn(failing{r, kind, err}) })
+	})
+}
 
 // noIdentity は、「あなた」を決められない Identity。
 type noIdentity struct{}
