@@ -82,7 +82,9 @@ func EndRank(siblingEnd string, its []item.Item, ws workspace.ID, kind item.Kind
 func Placement(its []item.Item, ws workspace.ID, moving, anchor item.ID, after bool) (string, bool) {
 	works := workItems(its, ws, moving)
 	at := -1
+	ranks := make([]string, len(works))
 	for i, it := range works {
+		ranks[i] = it.Rank
 		if it.ID == anchor {
 			at = i
 		}
@@ -90,21 +92,7 @@ func Placement(its []item.Item, ws workspace.ID, moving, anchor item.ID, after b
 	if at < 0 {
 		return "", false
 	}
-	r := works[at].Rank
-	if after {
-		for _, it := range works[at+1:] {
-			if it.Rank > r {
-				return rank.Between(r, it.Rank), true
-			}
-		}
-		return rank.After(r), true
-	}
-	for i := at - 1; i >= 0; i-- {
-		if works[i].Rank < r {
-			return rank.Between(works[i].Rank, r), true
-		}
-	}
-	return rank.Between("", r), true
+	return rank.Around(ranks, at, after), true
 }
 
 // AppendWorks は、moved の作業項目を WorkOrder の順に、start から rank.After を続けた順位(F2a-6)。作業項目でないものは入らない。

@@ -8,6 +8,26 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/rank"
 )
 
+// 同じ順位の群の中には入らず、群の手前(after なら後ろ)に入る。
+func TestAround(t *testing.T) {
+	sorted := []string{"V", "W", "W", "X"}
+	cases := []struct {
+		j     int
+		after bool
+		want  string
+	}{
+		{2, false, rank.Between("V", "W")},
+		{1, true, rank.Between("W", "X")},
+		{3, true, rank.After("X")},
+		{0, false, rank.Between("", "V")},
+	}
+	for _, c := range cases {
+		if got := rank.Around(sorted, c.j, c.after); got != c.want {
+			t.Errorf("Around(%v, %d, %v) = %q, want %q", sorted, c.j, c.after, got, c.want)
+		}
+	}
+}
+
 func TestAfter(t *testing.T) {
 	for in, want := range map[string]string{"": "V", "V": "W", "a0V": "a0W", "9": "A", "Z": "a", "z": "zV", "zz": "zzV", "zV": "zW", "zy": "zz01", "y": "z01", "Vz": "W1", "azz": "b01"} {
 		if got := rank.After(in); got != want {
