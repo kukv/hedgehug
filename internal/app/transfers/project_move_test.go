@@ -265,18 +265,11 @@ func TestMoveProjectWithoutItems(t *testing.T) {
 }
 
 // A5b-15: 別の画面で削除したプロジェクト(root: true)を移すと、プロジェクトと、同じ操作で削除された下のアイテムの削除を
-// 取り消して移す。前に別の操作で削除したアイテムは削除済みのまま。取り消したのは移動前の ID。
+// 取り消して移す。前に別の操作で削除したアイテムは削除済みのまま。取り消したのは移動前の ID。番号は、取り消した Epic を
+// 削除されていないものとして振る(別の Store の移動と同じ)。
 func TestMoveProjectRevivesDeletedElsewhere(t *testing.T) {
 	f := newFixture(t)
-	if err := apptest.DeleteItems(t.Context(), f.rec, store1, apptest.SampleTask); err != nil {
-		t.Fatal(err)
-	}
-	write(t, f.rec, store1, func(tx port.Tx) error {
-		return errors.Join(
-			tx.WriteProjects().Append(apptest.SampleProject, change.NewDeleteEntity(true)),
-			tx.WriteItems().Append(apptest.SampleEpic, change.NewDeleteEntity(false)),
-		)
-	})
+	deleteSampleProject(t, f)
 	ctx := port.WithRevived(t.Context())
 	if _, err := f.svc.MoveProject(ctx, store1, apptest.SampleProject, projectTo(store1, mobileWS)); err != nil {
 		t.Fatal(err)
@@ -292,6 +285,11 @@ func TestMoveProjectRevivesDeletedElsewhere(t *testing.T) {
 	}
 	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-P1"}) {
 		t.Errorf("revived = %v", got)
+	}
+	for id, n := range map[item.ID]int{apptest.SampleEpic: 2, apptest.SampleTask: 3, earlierEpic: 4} {
+		if got := itemOf(t, f.rec, store1, id).Place.Number; got != n {
+			t.Errorf("%s number = %d, want %d", id, got, n)
+		}
 	}
 }
 
