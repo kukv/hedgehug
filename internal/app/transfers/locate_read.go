@@ -39,15 +39,22 @@ type entry struct {
 }
 
 // kind は、旧 ID で探すものの種類。entity は転送記録の Entity、sep は画面の ID の接頭辞と番号のあいだ(HH-12・HH-P1)。
+// ワークスペースは番号を持たず(0 として扱う)、画面の ID は接頭辞そのもの。
 type kind struct{ entity, sep string }
 
 var (
-	itemKind    = kind{entity: transfer.EntityItem, sep: "-"}
-	projectKind = kind{entity: transfer.EntityProject, sep: "-P"}
+	itemKind      = kind{entity: transfer.EntityItem, sep: "-"}
+	projectKind   = kind{entity: transfer.EntityProject, sep: "-P"}
+	workspaceKind = kind{entity: transfer.EntityWorkspace}
 )
 
-// display は、接頭辞 prefix・番号 n の画面の ID。
-func (k kind) display(prefix string, n int) string { return prefix + k.sep + strconv.Itoa(n) }
+// display は、接頭辞 prefix・番号 n の画面の ID。ワークスペースは接頭辞。
+func (k kind) display(prefix string, n int) string {
+	if k == workspaceKind {
+		return prefix
+	}
+	return prefix + k.sep + strconv.Itoa(n)
+}
 
 // snapshots は、表示中のすべての Store を、サイドバーの並びで 1 つずつ読む(読み取りを入れ子にしない)。
 func (s Service) snapshots(ctx context.Context) ([]snapshot, error) {
@@ -115,10 +122,18 @@ func (snap *snapshot) appendEntries(r port.Reader, ws workspace.Workspace) error
 	return nil
 }
 
-// entries は、転送記録の Entity が entity のもの(アイテムかプロジェクト)。
+// entries は、転送記録の Entity が entity のもの(アイテム・プロジェクト・ワークスペース)。ワークスペースは、削除済みを
+// 含めて、番号 0 のものとして返す。
 func (snap snapshot) entries(entity string) []entry {
-	if entity == transfer.EntityProject {
+	switch entity {
+	case transfer.EntityProject:
 		return snap.projects
+	case transfer.EntityWorkspace:
+		out := make([]entry, 0, len(snap.workspaces))
+		for _, w := range snap.workspaces {
+			out = append(out, entry{id: w.ws.ID, ws: w.ws.ID, live: w.ws.Deleted == nil})
+		}
+		return out
 	}
 	return snap.items
 }
@@ -160,7 +175,8 @@ func (snap snapshot) hasPurged(id change.ID) bool {
 	return slices.ContainsFunc(snap.purged, func(p port.Purged) bool { return p.Target == id })
 }
 
-// hit は、旧 ID から見つかったもの(アイテムかプロジェクト)と、そのいまの ID。
+// hit は、旧 ID から見つかったもの(アイテム・プロジェクト・ワークスペース)と、そのいまの ID(ワークスペースはいまの Store 名。
+// MovedFrom の Current になる。B5c-13)。
 type hit struct {
 	store   port.StoreID
 	id      change.ID
@@ -175,5 +191,45 @@ func (snap snapshot) hit(k kind, e entry) hit {
 			prefix = w.ws.Prefix
 		}
 	}
-	return hit{store: snap.info.ID, id: e.id, project: e.project, current: k.display(prefix, e.number)}
+	current := k.display(prefix, e.number)
+	if k == workspaceKind {
+		current = snap.info.Name
+	}
+	return hit{store: snap.info.ID, id: e.id, project: e.project, current: current}
+}
+
+// matching は、scope の転送記録のうち、種類 k(Entity)の旧 ID が display の行を、at の新しい順で返す。Store の中に、display の
+// 接頭辞を旧い接頭辞に持つワークスペースがあれば、その Store の記録は、そのワークスペースのいまの接頭辞・ほかの旧い
+// 接頭辞で書いた同じ番号の ID(HH-2 なら WEB-2)でも一致させる(接頭辞を変えたあとに移したもの)。ワークスペースの記録は、
+// 記録の内部 ID のワークスペースを表示中のすべての Store all から探し、そのいまの接頭辞・旧い接頭辞が prefix でも一致させる
+// (接頭辞を変えてから別の Store へ移したもの。B5c-13)。
+func matching(k kind, scope, all []snapshot, prefix string, n int, display string) []transfer.Record {
+	var out []transfer.Record
+	for _, snap := range scope {
+		ids := snap.aliases(k, prefix, n, display)
+		for _, r := range snap.records {
+			if r.Entity != k.entity {
+				continue
+			}
+			if slices.Contains(ids, r.Old) || k == workspaceKind && slices.Contains(prefixesOf(all, r.Target), prefix) {
+				out = append(out, r)
+			}
+		}
+	}
+	slices.SortStableFunc(out, func(a, b transfer.Record) int { return b.At.Compare(a.At) })
+	return out
+}
+
+// aliases は、display と、接頭辞 prefix を旧い接頭辞に持つワークスペースの、いまの接頭辞・旧い接頭辞で書いた種類 k・番号 n の ID。
+func (snap snapshot) aliases(k kind, prefix string, n int, display string) []string {
+	ids := []string{display}
+	for _, w := range snap.workspaces {
+		if !slices.Contains(w.old, prefix) {
+			continue
+		}
+		for _, p := range append([]string{w.ws.Prefix}, w.old...) {
+			ids = append(ids, k.display(p, n))
+		}
+	}
+	return ids
 }

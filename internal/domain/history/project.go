@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -45,7 +46,7 @@ func projectText(log []change.Record, r change.Record, c ProjectContext) (string
 		return "説明を変更", true
 	case change.MovedIn:
 		if ms := transfer.MovedInOf([]change.Record{r}); len(ms) == 1 {
-			return fmt.Sprintf(projectMovedFormat, orDeleted(ms[0].FromWorkspaceName)), true
+			return projectMovedInText(log, r.Op, ms[0]), true
 		}
 	case change.Set:
 		if name, ok := projectFields[r.F]; ok {
@@ -57,6 +58,22 @@ func projectText(log []change.Record, r change.Record, c ProjectContext) (string
 }
 
 const projectMovedFormat = "%s から移動"
+
+// projectMovedInText は、別の Store からの moved_in の行の文。ワークスペースと一緒に移った(FromWorkspace が、その操作 op を
+// 終えたときのワークスペースと同じ)なら「{移動元の Store 名} から移動」(B5c-12)、それ以外は「{移動元のワークスペース名}
+// から移動」(A5b-21)。あとで同じ Store の中で別のワークスペースへ移しても、この行は変わらない。
+func projectMovedInText(log []change.Record, op change.ID, m transfer.MovedInInfo) string {
+	end := 0
+	for i, x := range log {
+		if x.Op == op {
+			end = i + 1
+		}
+	}
+	if p, ok := project.FromLog(log[:end]); ok && p.Place.Workspace == m.FromWorkspace {
+		return fmt.Sprintf(projectMovedFormat, orDeleted(m.FromStoreName))
+	}
+	return fmt.Sprintf(projectMovedFormat, orDeleted(m.FromWorkspaceName))
+}
 
 // projectMovedText は、同じ Store の中でワークスペースが変わる場所の set の行の文(A5b-21)。番号だけが変わるものと、
 // 同じ操作に moved_in の行がある(別の Store から。そちらが文を持つ)ものは出さない。前にいた Store の中の移動(写した行)は、
