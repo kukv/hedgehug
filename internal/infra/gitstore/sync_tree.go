@@ -28,10 +28,24 @@ func mergeTrees(base, a, b tree) (tree, error) {
 		}
 	}
 	removeDirs(out, underTransferred(out))
+	dropPurgedPlan(out)
 	if err := rebuildYAML(out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// dropPurgedPlan は、purged.jsonl の完全に削除したスプリント・リリースの行を、すべてのワークスペースのログから取り除く。
+func dropPurgedPlan(t tree) {
+	targets := filemerge.PurgedPlanTargets(t["purged.jsonl"])
+	if len(targets) == 0 {
+		return
+	}
+	for p, v := range t {
+		if path.Base(p) == "log.jsonl" && strings.HasPrefix(p, "workspaces/") {
+			t[p] = filemerge.DropPurgedPlan(v, targets)
+		}
+	}
 }
 
 // entityDir は、p が入っているエンティティのフォルダ(items/<ID> など)。エンティティのファイルでなければ空。
