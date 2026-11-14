@@ -66,10 +66,33 @@ func TestRepairRulesMovedStoreRename(t *testing.T) {
 			wantNoRepair(t, a)
 			for _, m := range []machine{a, b} {
 				wantNoWebRules(t, m)
-				if n := subjectCount(t, m.dir, orphanWebOp); n != 0 {
-					t.Errorf("%s: %d commits %q, want none", m.dir, n, orphanWebOp)
+				if n := subjectCount(t, m.dir, orphanMovedWebOp); n != 0 {
+					t.Errorf("%s: %d commits %q, want none", m.dir, n, orphanMovedWebOp)
 				}
 			}
 		})
+	}
+}
+
+// orphanMovedWebOp は、別の Store へ移った「Web」のルールを外す修復 (9) の件名({タイトル} は転送記録の old。C5b1-4)。
+const orphanMovedWebOp = "プロジェクト「HH-P1」のルールを削除(プロジェクトがない)"
+
+// A が「Web」を別の Store「team-b」へ移し、B が同時に「メイン」で「Web」の使わないステータスに「Review」を足す。B の
+// 合わせの通知と、残った行を外す修復 (9) の通知は同じ鍵なので、B の受信箱は 1 行。A には何も届かない。
+func TestRepairRulesMovedStoreHidden(t *testing.T) {
+	remote, a, b := rulesPair(t)
+	moveWebToStoreAs(t, a, "taro")
+	hideReviewAs(t, b, "hanako")
+	a.sync(t, remote)
+	b.sync(t, remote)
+	a.sync(t, remote)
+	sameFiles(t, a, b)
+	wantRepair(t, b, "HH-P1 は taro が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-P2 です")
+	wantNoRepair(t, a)
+	for _, m := range []machine{a, b} {
+		wantNoWebRules(t, m)
+		if n := subjectCount(t, m.dir, orphanMovedWebOp); n != 1 {
+			t.Errorf("%s: %d commits %q, want 1", m.dir, n, orphanMovedWebOp)
+		}
 	}
 }
