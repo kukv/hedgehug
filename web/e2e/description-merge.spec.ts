@@ -58,4 +58,17 @@ test("renders Markdown with mentions of members only, and keeps both when two ta
   await expect(section).toContainText("2行目 (A)");
   await expect(section).toContainText("2行目 (B)");
   await other.close();
+
+  // 両方を残した保存は、保存した本人の受信箱の「上書き」に 1 行出る(C4c1-13)。サーバーは同じ worker のほかの
+  // テストと共有するので、このテストのアイテムの行で数える。
+  await page.goto(tokenUrl("/inbox"));
+  const overwrite = page.getByRole("tab", { name: /^上書き/ });
+  await overwrite.click();
+  await expect(overwrite).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page
+      .getByRole("listitem")
+      .filter({ hasText: "説明の同じ箇所が同時に編集されたため、両方を残しました" })
+      .filter({ has: page.getByText(`${prefix}-2`, { exact: true }) }),
+  ).toHaveCount(1);
 });
