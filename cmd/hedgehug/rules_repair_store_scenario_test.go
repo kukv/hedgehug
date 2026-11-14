@@ -48,16 +48,22 @@ func rulesPairAt(t *testing.T, bStart time.Time) (port.Remote, machine, machine)
 // A が「Web」(HH-P1)を別の Store「team-b」へ移し、B が同時に「メイン」で「Web」の専用ルールの名前を変える。移動の
 // 専用ルールの削除は削除と変更の重なりに数えないので、取り消しも修復 (9) の保存もない。A・B・A の順に同期すると、
 // B(名前を変えた人)に移動の通知が 1 行だけ届き、A(移動した人)には何も届かない。移動の時刻が名前の変更より前でも
-// あとでも同じ。
+// あとでも同じ。B の時計は A より 1 時間進めるか遅らせて、2 つの時刻の順をはっきり分け、書いたあとで確かめる。
 func TestRepairRulesMovedStoreRename(t *testing.T) {
-	for name, bStart := range map[string]time.Time{
-		"移動が先":  scenarioStart.Add(time.Hour),
-		"移動があと": scenarioStart,
+	for name, c := range map[string]struct {
+		bStart     time.Time
+		moverFirst bool
+	}{
+		"移動が先":  {scenarioStart.Add(time.Hour), true},
+		"移動があと": {scenarioStart.Add(-time.Hour), false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			remote, a, b := rulesPairAt(t, bStart)
+			remote, a, b := rulesPairAt(t, c.bStart)
 			moveWebToStoreAs(t, a, "taro")
 			renameOwnRuleAs(t, b, "hanako")
+			if moved, renamed := lastAt(t, a), lastAt(t, b); moved.Before(renamed) != c.moverFirst {
+				t.Fatalf("move at %s, rename at %s, want mover first: %v", moved, renamed, c.moverFirst)
+			}
 			a.sync(t, remote)
 			b.sync(t, remote)
 			a.sync(t, remote)
@@ -72,6 +78,13 @@ func TestRepairRulesMovedStoreRename(t *testing.T) {
 			}
 		})
 	}
+}
+
+// lastAt は、m の「メイン」のログの最後の行の時刻。
+func lastAt(t *testing.T, m machine) time.Time {
+	t.Helper()
+	log := m.wsLog(t, mainWS)
+	return log[len(log)-1].At
 }
 
 // orphanMovedWebOp は、別の Store へ移った「Web」のルールを外す修復 (9) の件名({タイトル} は転送記録の old。C5b1-4)。
