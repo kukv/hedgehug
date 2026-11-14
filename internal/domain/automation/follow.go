@@ -1,6 +1,10 @@
 package automation
 
-import "github.com/kukv/hedgehug/internal/domain/change"
+import (
+	"strings"
+
+	"github.com/kukv/hedgehug/internal/domain/change"
+)
 
 // RuleChange は、ステータスの削除で変わったルール(通知の材料)。
 type RuleChange struct {
@@ -33,4 +37,45 @@ func StatusDeleteDrafts(rules []Rule, id, repl change.ID) ([]change.Draft, []Rul
 		changes = append(changes, RuleChange{Rule: n, Disabled: disabled, Part: part})
 	}
 	return ds, changes
+}
+
+// FollowedFromRows は、1 つの保存がワークスペースのログに足した行 rows から、削除したステータスの ID と、
+// それに合わせて書き換わったルール(通知の材料)を読む。rules は書き換えたあとのルール。
+// ステータスの削除の行がなければ、削除したステータスは空。
+func FollowedFromRows(rows []change.Record, rules []Rule) (change.ID, []RuleChange) {
+	var deleted change.ID
+	fields := map[change.ID]map[string]bool{}
+	for _, r := range rows {
+		if id, ok := strings.CutPrefix(r.F, "statuses/"); ok && r.T == change.Delete && !strings.Contains(id, "/") {
+			deleted = change.ID(id)
+			continue
+		}
+		parts := strings.Split(r.F, "/")
+		if len(parts) != 3 || parts[0]+"/" != prefix || r.T != change.Set {
+			continue
+		}
+		id := change.ID(parts[1])
+		if fields[id] == nil {
+			fields[id] = map[string]bool{}
+		}
+		fields[id][parts[2]] = true
+	}
+	if deleted == "" {
+		return "", nil
+	}
+	var changes []RuleChange
+	for _, rule := range rules {
+		f := fields[rule.ID]
+		part := ""
+		switch {
+		case f["value"]:
+			part = "すること"
+		case f["trigger_status"]:
+			part = "きっかけ"
+		}
+		if part != "" {
+			changes = append(changes, RuleChange{Rule: rule, Disabled: f["enabled"], Part: part})
+		}
+	}
+	return deleted, changes
 }
