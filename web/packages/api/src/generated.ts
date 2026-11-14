@@ -1877,20 +1877,20 @@ export interface WorkspaceTransferPerson {
 }
 
 export interface WorkspaceTransferPreview {
-  /** 削除済みのアイテムの数 */
+  /** 削除済みのプロジェクトと、それ以外のアイテム(自分が削除済みか、削除済みのプロジェクトの下)の数 */
   deleted: number;
   /** 移動先の Store 名 */
   destination: string;
   /** 移動先の Store に remote があるか */
   destinationHasRemote: boolean;
-  /** 削除されていないアイテムの数 */
+  /** 削除されていないプロジェクトの、削除されていないアイテムの数 */
   items: number;
   /**
      * 移動先のメンバーに足す人(小文字のログイン名の順)
      * @nullable
      */
   people: WorkspaceTransferPerson[] | null;
-  /** プロジェクトの数 */
+  /** 削除されていないプロジェクトの数 */
   projects: number;
   /** 移動先に remote がなく移動元にあるか */
   remoteNotice: boolean;

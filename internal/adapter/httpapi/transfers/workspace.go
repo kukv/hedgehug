@@ -35,9 +35,9 @@ type WorkspaceTransferPerson struct {
 type WorkspaceTransferPreview struct {
 	Source               string                    `json:"source" doc:"移動元の Store 名"`
 	Destination          string                    `json:"destination" doc:"移動先の Store 名"`
-	Projects             int                       `json:"projects" doc:"プロジェクトの数"`
-	Items                int                       `json:"items" doc:"削除されていないアイテムの数"`
-	Deleted              int                       `json:"deleted" doc:"削除済みのアイテムの数"`
+	Projects             int                       `json:"projects" doc:"削除されていないプロジェクトの数"`
+	Items                int                       `json:"items" doc:"削除されていないプロジェクトの、削除されていないアイテムの数"`
+	Deleted              int                       `json:"deleted" doc:"削除済みのプロジェクトと、それ以外のアイテム(自分が削除済みか、削除済みのプロジェクトの下)の数"`
 	People               []WorkspaceTransferPerson `json:"people" doc:"移動先のメンバーに足す人(小文字のログイン名の順)"`
 	RemoteNotice         bool                      `json:"remoteNotice" doc:"移動先に remote がなく移動元にあるか"`
 	DestinationHasRemote bool                      `json:"destinationHasRemote" doc:"移動先の Store に remote があるか"`

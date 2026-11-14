@@ -2770,7 +2770,7 @@ components:
       additionalProperties: false
       properties:
         deleted:
-          description: 削除済みのアイテムの数
+          description: 削除済みのプロジェクトと、それ以外のアイテム(自分が削除済みか、削除済みのプロジェクトの下)の数
           format: int64
           type: integer
         destination:
@@ -2780,7 +2780,7 @@ components:
           description: 移動先の Store に remote があるか
           type: boolean
         items:
-          description: 削除されていないアイテムの数
+          description: 削除されていないプロジェクトの、削除されていないアイテムの数
           format: int64
           type: integer
         people:
@@ -2790,7 +2790,7 @@ components:
           nullable: true
           type: array
         projects:
-          description: プロジェクトの数
+          description: 削除されていないプロジェクトの数
           format: int64
           type: integer
         remoteNotice:
