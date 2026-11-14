@@ -123,11 +123,11 @@ test("a stopped notice shows in the inbox and applies ignoring the workflow", as
   await row.getByRole("button", { name: "制約を無視して Done にする" }).click();
   const toast = page.getByRole("status").filter({ hasText: "適用しました" });
   await expect(toast).toBeVisible();
-  await expect(toast).not.toHaveClass(/error/);
+  await expect(page.locator(".toast.error")).toHaveCount(0);
   await expect(row.getByText("適用しました", { exact: true })).toBeVisible();
   await expect(row.getByRole("button", { name: /^制約を無視して/ })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "未読にする" })).toBeVisible();
-  expect(await n.statusOf()).toBe(n.status("Done"));
+  await expect.poll(() => n.statusOf()).toBe(n.status("Done"));
   await expectCount((await badge(page, info)).count, n.before);
 });
 
@@ -138,7 +138,7 @@ test("keeping a stopped notice leaves the status as it is", async ({ page }, inf
   await expect(row.getByText("このままにしました", { exact: true })).toBeVisible();
   await expect(row.getByRole("button", { name: "変更しない" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "未読にする" })).toBeVisible();
-  expect(await n.statusOf()).toBe(n.status("InProgress"));
+  await expect.poll(() => n.statusOf()).toBe(n.status("InProgress"));
   await expectCount((await badge(page, info)).count, n.before);
 });
 
