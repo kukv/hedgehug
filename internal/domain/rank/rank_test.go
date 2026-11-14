@@ -18,7 +18,7 @@ func TestAfter(t *testing.T) {
 
 // 前の作りが書いた値(z の並びに First を足した値など)からも、後ろの値を作れる。
 func TestAfterFromAnyValue(t *testing.T) {
-	for _, in := range []string{"z", "zz", "zV", "zzzW", "Vz", "Az", "azz", "yz", "yzz", "zyzz", "a0V", strings.Repeat("z", 30)} {
+	for _, in := range []string{"z", "zz", "zV", "zzzW", "Vz", "Az", "azz", "yz", "yzz", "zyzz", "a0V", "V_", "V-z", strings.Repeat("z", 30)} {
 		got := rank.After(in)
 		if got <= in || strings.HasSuffix(got, "0") {
 			t.Errorf("After(%q) = %q, want a later value not ending in 0", in, got)

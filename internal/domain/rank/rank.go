@@ -12,7 +12,7 @@ const First = "V"
 // 値は「先頭の z の並び(段) + 数え(先頭は z でない、決まった桁数の 62 進数)」と見る。
 // 数えを 1 つ進め(桁数は変えない、'0' で終わるなら '1' にする)、数えが尽きたら z を 1 つ増やし、
 // 1 桁広い数えの最初の値にする。末尾に続けても、62 倍ごとに 2 文字しか伸びない。
-// 数えがない値(z だけの値)には First を足す。
+// 数えがない値(z だけの値)と、digits にない文字を含む値には First を足す。
 func After(s string) string {
 	k := len(s) - len(strings.TrimLeft(s, "z"))
 	if k == len(s) {
@@ -21,6 +21,9 @@ func After(s string) string {
 	count := []byte(s[k:])
 	for i := len(count) - 1; i >= 0; i-- {
 		d := strings.IndexByte(digits, count[i])
+		if d < 0 { // digits にない文字(手での書き換え)。後ろに足せば必ずあとになる。
+			return s + First
+		}
 		if d < len(digits)-1 {
 			count[i] = digits[d+1]
 			break
