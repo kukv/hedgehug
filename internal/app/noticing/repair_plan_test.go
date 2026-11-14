@@ -3,6 +3,7 @@ package noticing_test
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -129,6 +130,30 @@ func TestActiveNoticeRestarted(t *testing.T) {
 		if !slices.Contains(sources, "repair:active:"+string(sprintB)+":"+start) {
 			t.Errorf("sources = %v, want one keyed by %s", sources, start)
 		}
+	}
+}
+
+// 時計が戻った(マシンの時計のずれ): もう一度の開始の行は、1 つ目の開始の行より at が古い。
+// それでも、修復の行から prev をたどるので、2 つ目の通知はもう一度の開始の行が鍵になる。
+func TestActiveNoticeRestartedClockBack(t *testing.T) {
+	f := setup(t)
+	twoActive(f, "hanako")
+	ws := change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace}
+	field := "sprints/" + string(sprintB) + "/state"
+	first := f.lastRow(ws, field)
+	f.judge(stopRepair(f))
+	f.clock.Step = -time.Hour
+	f.clock.Now() // Step は次の呼び出しから効くので、1 回進めて時計を戻す
+	writePlan(f, "hanako", apptest.SampleWorkspace, change.NewSet(field, planning.Planned, planning.Active))
+	again := f.lastRow(ws, field)
+	f.judge(stopRepair(f))
+	got := f.notices()
+	if len(got) != 2 || again == first {
+		t.Fatalf("notices = %+v, first = %s, again = %s", got, first, again)
+	}
+	sources := []string{got[0].Source, got[1].Source}
+	if !slices.Contains(sources, "repair:active:"+string(sprintB)+":"+again) {
+		t.Errorf("sources = %v, want one keyed by %s", sources, again)
 	}
 }
 
