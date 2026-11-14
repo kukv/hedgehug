@@ -146,11 +146,15 @@ components:
     ApplyAutomationIgnoringWorkflow:
       additionalProperties: false
       properties:
+        from:
+          description: 止まったときのステータスの ID(通知の From)。いまの値が違えば断る
+          type: string
         status:
           description: 変えるステータスの ID(通知の Status)
           type: string
       required:
         - status
+        - from
       type: object
     AutomationRule:
       additionalProperties: false

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 )
 
 // Tab は、受信箱のタブ。
@@ -50,6 +51,9 @@ type Service struct {
 	Stores port.Stores
 	List   port.StoreList
 	Events port.Events
+	// ApplyIgnoringWorkflow は、止まった通知の「制約を無視して…」の保存。cmd が automations.Service.ApplyIgnoringWorkflow を渡す
+	// (app の機能どうしを import しない)。
+	ApplyIgnoringWorkflow func(ctx context.Context, store port.StoreID, id item.ID, rule, from, status change.ID) error
 }
 
 // Counts は、タブごとの未読数。7 つのタブすべての鍵を持つ。

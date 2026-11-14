@@ -131,6 +131,8 @@ export interface AddWorkspaceValue {
 }
 
 export interface ApplyAutomationIgnoringWorkflow {
+  /** 止まったときのステータスの ID(通知の From)。いまの値が違えば断る */
+  from: string;
   /** 変えるステータスの ID(通知の Status) */
   status: string;
 }

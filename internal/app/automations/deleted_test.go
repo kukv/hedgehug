@@ -26,7 +26,7 @@ func TestApplyIgnoringWorkflowRefusesADeletedItem(t *testing.T) {
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleEpic, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); !errors.Is(err, port.ErrNotFound) {
+	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusTodo, apptest.SampleStatusDone); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v, want port.ErrNotFound", err)
 	}
 	err = rec.Read(ctx, store, func(rd port.Reader) error {
@@ -85,7 +85,7 @@ func TestApplyIgnoringWorkflowRevivesADeletedItem(t *testing.T) {
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); err != nil {
+	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusTodo, apptest.SampleStatusDone); err != nil {
 		t.Fatal(err)
 	}
 	err = rec.Read(ctx, store, func(rd port.Reader) error {
@@ -120,7 +120,7 @@ func TestApplyIgnoringWorkflowSameStatusOnADeletedItemIsNotFound(t *testing.T) {
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, status); !errors.Is(err, port.ErrNotFound) {
+	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusTodo, status); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v, want port.ErrNotFound", err)
 	}
 }

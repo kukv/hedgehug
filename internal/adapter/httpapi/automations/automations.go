@@ -115,6 +115,6 @@ func registerEdits(api huma.API, svc appautomations.Service) {
 		DefaultStatus: http.StatusNoContent,
 	},
 		func(ctx context.Context, in *applyInput) (*struct{}, error) {
-			return nil, apierr.From(svc.ApplyIgnoringWorkflow(ctx, port.StoreID(in.Store), item.ID(in.Item), change.ID(in.Rule), change.ID(in.Body.Status)))
+			return nil, apierr.From(svc.ApplyIgnoringWorkflow(ctx, port.StoreID(in.Store), item.ID(in.Item), change.ID(in.Rule), change.ID(in.Body.From), change.ID(in.Body.Status)))
 		})
 }
