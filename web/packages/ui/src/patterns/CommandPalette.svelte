@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from "svelte";
   import type { PaletteView } from "../types";
   import PaletteRow from "./PaletteRow.svelte";
 
@@ -54,18 +53,9 @@
     if (event.target === event.currentTarget) onclose();
   }
 
-  // 開いたら入力欄にフォーカスを置き、閉じたらフォーカスを開く前の場所に戻す(候補が開いたダイアログなどが
-  // フォーカスを持っていれば動かさない)。
+  // 開いたら入力欄にフォーカスを置く。
   $effect(() => {
-    if (!open) return;
-    const opener = document.activeElement;
-    input?.focus();
-    return () => {
-      void tick().then(() => {
-        const lost = document.activeElement === null || document.activeElement === document.body;
-        if (lost && opener instanceof HTMLElement && opener.isConnected) opener.focus();
-      });
-    };
+    if (open) input?.focus();
   });
 
   // 選んでいる行が見えるようにスクロールする。
