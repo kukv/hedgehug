@@ -304,6 +304,48 @@ export interface BulkDeleted {
   readOnly: number;
 }
 
+export interface ChoiceMember {
+  /** GitHub のログイン名 */
+  login: string;
+  /** 表示名 */
+  name: string;
+}
+
+export interface ChangeChoices {
+  /** 選んだアイテムの種類 */
+  kinds: string[];
+  /** 担当者にできるメンバー */
+  members: ChoiceMember[];
+  /** 優先度の名前 */
+  priorities: string[];
+  /** リリースの名前 */
+  releases: string[];
+  /** スプリントの名前 */
+  sprints: string[];
+  /** ステータスの名前 */
+  statuses: string[];
+  /** 関連システムの名前 */
+  systems: string[];
+}
+
+export interface ChangeFailed {
+  /** 変わるはずだった件数 */
+  count: number;
+  /** Store の名前 */
+  name: string;
+  /** Store の ID */
+  store: string;
+}
+
+export interface ChangeKept {
+  /** アイテムの内部 ID */
+  item: string;
+  /** 変えなかった理由 */
+  reason: string;
+  /** Store の ID */
+  store: string;
+}
+
 export type ChangeKindKind = typeof ChangeKindKind[keyof typeof ChangeKindKind];
 
 
@@ -317,12 +359,97 @@ export interface ChangeKind {
   kind: ChangeKindKind;
 }
 
+export interface ChangeOffBacklog {
+  /** 分類が中止のもの */
+  canceled: number;
+  /** 分類が完了のもの */
+  done: number;
+}
+
+/**
+ * ステータスを分類で変えるときの分類。名前で変えるときは空
+ */
+export type ChangeRequestCategory = typeof ChangeRequestCategory[keyof typeof ChangeRequestCategory];
+
+
+export const ChangeRequestCategory = {
+  '""': '""',
+  todo: 'todo',
+  doing: 'doing',
+  done: 'done',
+  canceled: 'canceled',
+} as const;
+
+/**
+ * 変える項目
+ */
+export type ChangeRequestField = typeof ChangeRequestField[keyof typeof ChangeRequestField];
+
+
+export const ChangeRequestField = {
+  status: 'status',
+  assignee: 'assignee',
+  priority: 'priority',
+  sprint: 'sprint',
+  release: 'release',
+  systemsAdd: 'systemsAdd',
+  systemsRemove: 'systemsRemove',
+  points: 'points',
+  estimate: 'estimate',
+  start: 'start',
+  end: 'end',
+} as const;
+
+export interface ChangeTarget {
+  /** アイテムの内部 ID */
+  item: string;
+  /** Store の ID */
+  store: string;
+}
+
+export interface ChangeRequest {
+  /** ステータスを分類で変えるときの分類。名前で変えるときは空 */
+  category?: ChangeRequestCategory;
+  /** 変える項目 */
+  field: ChangeRequestField;
+  /**
+     * 選んだアイテム。複数の Store にまたがってよい
+     * @minItems 1
+     */
+  items: ChangeTarget[];
+  /** 新しい値。空は値なし。ステータスを分類で変えるときは空 */
+  value?: string;
+  /** 関連システムの名前(systemsAdd・systemsRemove のとき) */
+  values?: string[];
+}
+
+export interface ChangeResult {
+  /** 変えた(予告では変わる)件数 */
+  changed: number;
+  /** 保存できなかった Store */
+  failed: ChangeFailed[];
+  /** 変えずに残したアイテム。選んだ順 */
+  kept: ChangeKept[];
+  /** バックログに表示されなくなった件数 */
+  offBacklog: ChangeOffBacklog;
+  /** 確認の本文に出す値の文字列 */
+  valueText: string;
+}
+
 export interface ChangeWorkspacePrefix {
   prefix: string;
 }
 
 export interface CheckStep {
   done: boolean;
+}
+
+export interface ChoicesRequest {
+  /**
+     * 選んだアイテム。複数の Store にまたがってよい
+     * @minItems 1
+     */
+  items: ChangeTarget[];
 }
 
 export interface CloseSprint {
@@ -2778,6 +2905,120 @@ export const recheckAccount = async (id: string, options?: Parameters<typeof fet
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export const getBulkChangeUrl = () => {
+
+
+
+
+  return `/api/bulk-change`
+}
+
+/**
+ * @summary 選んだアイテムの項目を、Store ごとに一括変更する
+ */
+export const bulkChange = async (changeRequest: ChangeRequest, options?: Parameters<typeof fetcher>[1]): Promise<ChangeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<ChangeResult>(getBulkChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changeRequest)
+  }
+);}
+
+
+
+export const getBulkChangeChoicesUrl = () => {
+
+
+
+
+  return `/api/bulk-change/choices`
+}
+
+/**
+ * @summary 選んだアイテムを一括変更するときの値の選択肢を返す
+ */
+export const bulkChangeChoices = async (choicesRequest: ChoicesRequest, options?: Parameters<typeof fetcher>[1]): Promise<ChangeChoices> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<ChangeChoices>(getBulkChangeChoicesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(choicesRequest)
+  }
+);}
+
+
+
+export const getPreviewBulkChangeUrl = () => {
+
+
+
+
+  return `/api/bulk-change/preview`
+}
+
+/**
+ * @summary 選んだアイテムの項目を一括変更するときの確認の中身を返す(保存しない)
+ */
+export const previewBulkChange = async (changeRequest: ChangeRequest, options?: Parameters<typeof fetcher>[1]): Promise<ChangeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<ChangeResult>(getPreviewBulkChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changeRequest)
   }
 );}
 
