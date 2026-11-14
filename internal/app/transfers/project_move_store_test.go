@@ -282,3 +282,15 @@ func assertProjectUntouched(t *testing.T, f fixture) {
 		t.Errorf("source rules = %+v / %+v", rules, own)
 	}
 }
+
+// F2a-6: 別の Store へのプロジェクトの移動でも、作業項目は移動元の並び順のまま移動先の作業項目の末尾に続く。
+func TestMoveProjectAcrossAppendsItsWorksToTheDestinationWorkOrder(t *testing.T) {
+	f := newFixture(t)
+	withSteps(t, f)
+	withStoryA(t, f)
+	withWorkEnd(t, f, store2, teamWS, teamProject, teamEpic)
+	if _, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, toTeamWS()); err != nil {
+		t.Fatal(err)
+	}
+	assertWorksAppended(t, f, store2)
+}

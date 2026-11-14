@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
@@ -500,4 +501,20 @@ func TestMoveAcrossStoresDecidesNumbersAndPeopleFromTheLastCall(t *testing.T) {
 	if exists(t, f.rec, store2, apptest.SampleTask) {
 		t.Error("移動先に Task が残っている")
 	}
+}
+
+// F2a-6: 別の Store への移動でも、下の作業項目は移動元の並び順のまま移動先の作業項目の末尾に続く。
+func TestMoveEpicAcrossStoresAppendsItsWorksToTheDestinationWorkOrder(t *testing.T) {
+	f := newFixture(t)
+	withSteps(t, f)
+	withStoryA(t, f)
+	withWorkEnd(t, f, store2, teamWS, teamProject, teamEpic)
+	in := transfers.MoveInput{ToStore: store2, ToWorkspace: teamWS, ToProject: teamProject}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleEpic, in); err != nil {
+		t.Fatal(err)
+	}
+	if got := itemOf(t, f.rec, store2, apptest.SampleEpic).Rank; got != rank.After(rank.First) {
+		t.Errorf("Epic の順位 = %q, want %q", got, rank.After(rank.First))
+	}
+	assertWorksAppended(t, f, store2)
 }

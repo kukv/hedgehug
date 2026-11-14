@@ -94,7 +94,7 @@ func (s Service) prepare(ctx context.Context, store port.StoreID, id item.ID, in
 	}
 	var dst destination
 	if err := s.Stores.Read(ctx, in.ToStore, func(r port.Reader) (err error) {
-		dst, _, err = target(r, m.src.set.Root, in)
+		dst, _, err = target(r, m.src.set.Root, m.src.items(), in)
 		return
 	}); err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (s Service) prepare(ctx context.Context, store port.StoreID, id item.ID, in
 // 関連の remove、番号ごとの number の行を、1 つの操作で書く。
 func (m *crossMove) writeDestination(tx port.Tx) error {
 	root := m.src.set.Root
-	dst, newRank, err := target(tx, root, m.in)
+	dst, ranks, err := target(tx, root, m.src.items(), m.in)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 	errs := []error{join(tx, add)}
 	for _, it := range m.src.items() {
 		remaps[it.ID] = transfer.Remap(it, m.src.settings, dst.settings, dst.rules, people, m.in.StatusChoices)
-		lines := placeLines(it, it.ID == root.ID, dst, m.in.ToParent, numbers[it.ID], newRank)
+		lines := placeLines(it, it.ID == root.ID, dst, m.in.ToParent, numbers[it.ID], ranks)
 		errs = append(errs, m.importItem(tx, it, append(lines, remaps[it.ID].Drafts...)))
 		errs = append(errs, m.reviveItem(tx, it.ID))
 	}
