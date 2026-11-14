@@ -8,6 +8,7 @@
   } from "@hedgehug/core";
   import { Button, Select, ValueMenu } from "@hedgehug/ui";
   import type { Snippet } from "svelte";
+  import { pressWhileOpen } from "../item/pressWhileOpen";
 
   // テーブルのツールバー(04「列」「グループ」、E2a-14・E2a-15)。左から「表示する列」・「グループ」・件数。
   interface Props {
@@ -22,16 +23,28 @@
 
   let { count, columns, table, onchange, children }: Props = $props();
   let menu = $state<{ x: number; y: number } | null>(null);
+  // メニューは外を押すと閉じる(ボタンも含む)。開いているときにボタンを押したら、開き直さず閉じたままにする。
+  let wasOpen = false;
   const groups = groupChoices.map((g) => ({ value: g.id, label: g.label }));
 
   function open(event: MouseEvent) {
+    if (wasOpen) {
+      wasOpen = false;
+      menu = null;
+      return;
+    }
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
     menu = { x: r.left, y: r.bottom + 4 };
   }
 </script>
 
 <div class="toolbar">
-  <Button size="sm" onclick={open}>表示する列</Button>
+  <Button
+    size="sm"
+    onpointerdown={() => pressWhileOpen(menu !== null, (v) => (wasOpen = v))}
+    onclick={open}
+    >表示する列</Button
+  >
   <Select
     size="sm"
     label="グループ"

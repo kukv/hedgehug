@@ -1,5 +1,9 @@
 // 検索の流れ(createSearch)のテストの材料。search.test.ts と searchTable.test.ts で使う。
-import type { Timer } from "../toasts/toasts";
+import { vi } from "vitest";
+import type { ScreenStatesPort, SearchPort } from "../../port/search";
+import { createScreenStates } from "../screenstate/screenStates";
+import { createToasts, type Timer } from "../toasts/toasts";
+import { createSearch } from "./search";
 import { defaultTable } from "./table";
 import type { SearchResult } from "./types";
 
@@ -57,3 +61,22 @@ export const result = (...ids: string[]): SearchResult => ({
   groupBy: "",
   groups: [],
 });
+
+export function setup(saved: string | null = null) {
+  const prune = vi.fn();
+  const search = vi.fn(async (q: string) => result(q));
+  const port: SearchPort = { search };
+  const sp: ScreenStatesPort = {
+    get: vi.fn(async () => saved),
+    put: vi.fn(async () => {}),
+  };
+  const toasts = createToasts(timer);
+  const s = createSearch({
+    port,
+    screenStates: createScreenStates(sp),
+    timer,
+    toasts,
+    selection: { prune },
+  });
+  return { s, search, sp, toasts, prune };
+}

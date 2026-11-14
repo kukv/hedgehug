@@ -28,7 +28,7 @@
           <button type="button" class="sort" onclick={() => onsort(column.key)}>
             {column.name}
             {#if sort?.key === column.key}
-              <span class="arrow">{sort.desc ? "↓" : "↑"}</span>
+              <span class="arrow" aria-hidden="true">{sort.desc ? "↓" : "↑"}</span>
             {/if}
           </button>
         {:else}

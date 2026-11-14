@@ -82,6 +82,10 @@ test("shows a column chosen in the menu at the right end, and keeps it after a r
     "true",
   );
 
+  // 開いているときにボタンを押すと、閉じたままになる(開き直さない)。
+  await page.getByRole("button", { name: "表示する列", exact: true }).click();
+  await expect(menu).toBeHidden();
+
   await page.reload();
   await expect(headers(page).last()).toHaveText("開始日");
 });
@@ -89,7 +93,8 @@ test("shows a column chosen in the menu at the right end, and keeps it after a r
 test("sorts by the title header: ascending, descending, then none", async ({ page }, info) => {
   const { mark } = await seed(page, info);
   await openWith(page, info, mark);
-  const title = headers(page).filter({ hasText: "タイトル" });
+  // 矢印は読み上げに含めないので、並べ替えても見出しの名前は「タイトル」のまま(向きは aria-sort)。
+  const title = page.getByRole("main").getByRole("columnheader", { name: "タイトル", exact: true });
   const rows = rowOf(page, mark);
 
   await title.getByRole("button").click();

@@ -1,30 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ScreenStatesPort, SearchPort } from "../../port/search";
 import { get } from "../../reactive/store";
-import { createScreenStates } from "../screenstate/screenStates";
-import { createToasts } from "../toasts/toasts";
-import { result, timer } from "./fixtures.test-util";
-import { createSearch } from "./search";
+import { result, setup } from "./fixtures.test-util";
 import { defaultTable, selectable } from "./table";
-
-function setup(saved: string | null = null) {
-  const prune = vi.fn();
-  const search = vi.fn(async (q: string) => result(q));
-  const port: SearchPort = { search };
-  const sp: ScreenStatesPort = {
-    get: vi.fn(async () => saved),
-    put: vi.fn(async () => {}),
-  };
-  const toasts = createToasts(timer);
-  const s = createSearch({
-    port,
-    screenStates: createScreenStates(sp),
-    timer,
-    toasts,
-    selection: { prune },
-  });
-  return { s, search, sp, toasts, prune };
-}
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

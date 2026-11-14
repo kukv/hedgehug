@@ -1,6 +1,6 @@
-// 画面のパッケージの依存の向き(設計書 6 節の表)。テストのファイルと、ui の設定ファイル(vitest・svelte)、api の orval の設定ファイルは開発用の道具を使うので、from から外す。
+// 画面のパッケージの依存の向き(設計書 6 節の表)。テストのファイル(*.test.ts と、その材料の *.test-util.ts)と、ui の設定ファイル(vitest・svelte)、api の orval の設定ファイルは開発用の道具を使うので、from から外す。
 const notTest =
-  "\\.test\\.ts$|^packages/ui/(vitest\\.(config|setup)\\.ts|svelte\\.config\\.js)$|^packages/api/orval\\.config\\.ts$";
+  "\\.test(-util)?\\.ts$|^packages/ui/(vitest\\.(config|setup)\\.ts|svelte\\.config\\.js)$|^packages/api/orval\\.config\\.ts$";
 const svelte = "(^|/)node_modules/svelte/";
 
 module.exports = {

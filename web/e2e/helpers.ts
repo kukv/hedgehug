@@ -225,6 +225,7 @@ export async function addRepo(page: Page, prefix: string, repo: string) {
 // resetSearchScreen は、検索の画面の状態(絞り込みとテーブルの設定)を初めの値に戻す。画面の状態はサーバーに残るので、
 // 同じサーバーを使うほかのテスト(worker ごとに 1 つ。fixtures.ts)が変えた列やグループを引き継がないようにする。
 export async function resetSearchScreen(request: APIRequestContext) {
+  // 中身は core の defaultTable(features/search/table.ts)と同じ。e2e は core を読まないので書き写している。
   const table = {
     columns: ["id", "title", "status", "assignee", "priority", "end", "points"],
     group: "none",
