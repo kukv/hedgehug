@@ -15,6 +15,7 @@
   import DeleteReleaseDialog from "./DeleteReleaseDialog.svelte";
   import ReleaseCard from "./ReleaseCard.svelte";
   import ReleaseDialog from "./ReleaseDialog.svelte";
+  import ReleasesEmpty from "./ReleasesEmpty.svelte";
 
   // ワークスペースの「リリース」のタブ(05「リリース」)。作成・編集・削除・状態の変更のダイアログもここで出す。
   interface Props {
@@ -115,10 +116,7 @@
 </div>
 {#if view}
   {#if view.cards.length === 0}
-    <div class="empty">
-      <p class="title">リリースはまだありません</p>
-      <p>バージョンを作って Epic・Story・Task・Bug をまとめると、何が残っているかが見えます。</p>
-    </div>
+    <ReleasesEmpty />
   {:else}
     <div class="cards">
       {#each view.cards as c (c.release.id)}
@@ -184,21 +182,5 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-  }
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 48px 16px;
-    text-align: center;
-    color: var(--muted);
-  }
-  .empty p {
-    margin: 0;
-  }
-  .empty .title {
-    font-size: 15px;
-    color: var(--ink);
   }
 </style>
