@@ -7,7 +7,7 @@
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree" | "settings";
-export type WorkspaceTab = "overview" | "sprints" | "releases" | "reports" | "settings";
+export type WorkspaceTab = "overview" | "backlog" | "sprints" | "releases" | "reports" | "settings";
 
 export type SettingsTab = "accounts";
 
@@ -19,8 +19,10 @@ export type Route =
   | { name: "settings"; tab: SettingsTab };
 
 const projectTabs: readonly string[] = ["overview", "tree", "settings"] satisfies ProjectTab[];
-const workspaceTabs: readonly string[] = [
+// workspaceTabs は、ワークスペースのタブ。画面のタブの並びと同じ順(F2a-13)。
+export const workspaceTabs: readonly string[] = [
   "overview",
+  "backlog",
   "sprints",
   "releases",
   "reports",

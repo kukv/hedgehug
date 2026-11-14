@@ -16,6 +16,7 @@
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
   import { selectReport } from "../../reports";
   import { navigation, planning, projectDialog, syncNow, toasts } from "../../wire";
+  import BacklogTab from "../planning/BacklogTab.svelte";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
@@ -23,7 +24,7 @@
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
   import OverviewTab from "./OverviewTab.svelte";
 
-  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「レポート」「設定」。
+  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「バックログ」「スプリント」「リリース」「レポート」「設定」。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;
@@ -37,6 +38,7 @@
   // タブは作ったものだけ(B2 の計画の決定 15、F1-20)。履歴に積む(01)。
   const tabs = [
     { id: "overview", label: "概要" },
+    { id: "backlog", label: "バックログ" },
     { id: "sprints", label: "スプリント" },
     { id: "releases", label: "リリース" },
     { id: "reports", label: "レポート" },
@@ -83,17 +85,24 @@
   // スプリントのダイアログ(05)。開いたワークスペースのものだけ出す(別のワークスペースへ移ったら出さない)。
   // 作成・完了・削除は概要(既定・移動先・保持日数)を使うので、読み直してから出す(overviewFirst)。
   // 読み直しても読めなければ出さない(概要の読み込みは断りを出さない。A2 の決定 29)。
-  let dialog = $state<{ kind: SprintDialogKind; card: SprintCard | null; wid: string } | null>(
-    null,
-  );
-  async function openSprint(kind: SprintDialogKind, card: SprintCard | null = null) {
+  // 開くのは「スプリント」と「バックログ」のタブで、開いたタブにいるあいだだけ出す。バックログの「開始」は
+  // スプリントの枠を渡す(F2a-15)。
+  type Card = Pick<SprintCard, "sprint" | "total">;
+  let dialog = $state<{
+    kind: SprintDialogKind;
+    card: Card | null;
+    wid: string;
+    tab: string;
+  } | null>(null);
+  async function openSprint(kind: SprintDialogKind, card: Card | null = null) {
     const opening = wid;
+    const from = tab;
     const needs = kind !== "edit" && kind !== "start";
     if (overviewFirst(kind, ov !== null)) await planning.reload();
-    if (opening === wid && (!needs || ov)) dialog = { kind, card, wid: opening };
+    if (opening === wid && (!needs || ov)) dialog = { kind, card, wid: opening, tab: from };
   }
   const closeSprint = () => (dialog = null);
-  const shown = $derived(dialog && dialog.wid === wid && tab === "sprints" ? dialog : null);
+  const shown = $derived(dialog && dialog.wid === wid && dialog.tab === tab ? dialog : null);
   // タブやワークスペースを離れたら閉じる(戻ったときに古いカードで出し直さない)。
   $effect(() => {
     if (dialog && !shown) dialog = null;
@@ -126,6 +135,15 @@
   {/if}
   {#if tab === "overview"}
     <OverviewTab storeId={store.id} workspaceId={workspace.id} />
+  {:else if tab === "backlog"}
+    <BacklogTab
+      storeId={store.id}
+      storeName={store.name}
+      workspaceId={workspace.id}
+      readOnly={store.readOnly}
+      oncreate={() => void openSprint("create")}
+      onstart={(f) => void openSprint("start", f)}
+    />
   {:else if tab === "sprints"}
     <SprintsTab
       storeId={store.id}

@@ -40,7 +40,7 @@ export interface PlanRow {
   points: number | null;
 }
 
-// BacklogRow は、バックログの画面の枠の行。priority は作業項目の順位、project はステータスのメニューを絞るのに使う。
+// BacklogRow は、バックログの画面の枠の行。priority は優先度の値の ID、project はステータスのメニューを絞るのに使う。
 export interface BacklogRow extends PlanRow {
   priority: string;
   project: string;

@@ -48,7 +48,7 @@ import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { githubReloads, reloads } from "./reloads";
+import { githubReloads, propertySaved, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
 import { toasts } from "./wireBase";
 
@@ -127,6 +127,9 @@ export const detail = createDetail({
   planning: planningPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
+  onPropertySaved: (storeId, item) => {
+    for (const f of propertySaved) f(storeId, item);
+  },
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: leaveItem,
 });
