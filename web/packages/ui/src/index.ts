@@ -7,6 +7,7 @@ export { default as BlockedBadge } from "./patterns/BlockedBadge.svelte";
 export { default as CommandPalette } from "./patterns/CommandPalette.svelte";
 export { default as ConfirmDialog } from "./patterns/ConfirmDialog.svelte";
 export { type DragRowsOptions, type DropTarget, dragRows } from "./patterns/dragRows";
+export { default as FilterInput } from "./patterns/FilterInput.svelte";
 export { default as KindIcon } from "./patterns/KindIcon.svelte";
 export { default as Markdown } from "./patterns/Markdown.svelte";
 export { default as OfflineBand } from "./patterns/OfflineBand.svelte";
@@ -31,6 +32,7 @@ export { default as Textarea } from "./primitives/Textarea.svelte";
 export { default as Toasts } from "./primitives/Toasts.svelte";
 export type {
   Category,
+  FilterOption,
   KindName,
   MarkdownBlock,
   MarkdownInline,

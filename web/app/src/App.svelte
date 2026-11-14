@@ -65,12 +65,21 @@
     return () => window.removeEventListener("keydown", onSyncKey, { capture: true });
   });
 
-  // C キーで作成ダイアログを開く。入力中とダイアログを開いているときは使えない(02「開き方と初期値」)。
+  // C キーで作成ダイアログを開く(02「開き方と初期値」)。/ キーで絞り込み欄に移る(01 キーボード)。
+  // どちらも、入力中とダイアログを開いているときは使えない。/ は、絞り込み欄のない画面では何もしない。
   function onkeydown(event: KeyboardEvent) {
-    if (event.key.toLowerCase() !== "c" || event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if ((key !== "c" && key !== "/") || event.ctrlKey || event.metaKey || event.altKey) return;
     const t = event.target as HTMLElement | null;
     const typing = t?.closest("input, textarea, select, [contenteditable='true']");
     if (typing || document.querySelector('[aria-modal="true"]')) return;
+    if (key === "/") {
+      const field = document.querySelector<HTMLElement>("[data-filter-input]");
+      if (!field) return;
+      event.preventDefault();
+      field.focus();
+      return;
+    }
     event.preventDefault();
     void itemDialog.open();
   }
