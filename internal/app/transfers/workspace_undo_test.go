@@ -86,6 +86,10 @@ func TestMoveWorkspaceUndoFails(t *testing.T) {
 		if !errors.As(err, &ue) || ue.Old != "Web" || ue.Store != "team" || ue.NewDisplay != "" || !errors.Is(err, errBoom) {
 			t.Fatalf("err = %#v", err)
 		}
+		const want = "ワークスペース「Web」を team へ移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください"
+		if ue.Error() != want {
+			t.Errorf("文 = %q", ue.Error())
+		}
 		if _, ok := webAt(t, f.rec, store2); !ok {
 			t.Error("the destination workspace was removed")
 		}

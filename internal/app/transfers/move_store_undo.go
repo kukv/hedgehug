@@ -14,6 +14,7 @@ import (
 
 // UndoError は、別の Store への移動で、移動先の保存のあとに失敗し、移動先の保存の取り消しもできなかったこと(移したアイテムが
 // 移動先と移動元の両方にある。02「保存」)。Old は旧 ID、Store は移動先の Store 名、NewDisplay は移動先の新 ID。
+// ワークスペースの移動では、Old はワークスペースの名前で NewDisplay は空(B5c-14 の文になる)。
 // Cause は取り消しの前の失敗(errors.Is で辿れる)、Undo は取り消しの失敗(送れなかったときは *SendError)。
 type UndoError struct {
 	Old, Store, NewDisplay string
@@ -21,6 +22,10 @@ type UndoError struct {
 }
 
 func (e *UndoError) Error() string {
+	if e.NewDisplay == "" {
+		return fmt.Sprintf("ワークスペース「%s」を %s へ移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください",
+			e.Old, e.Store)
+	}
 	return fmt.Sprintf("%s を %s の %s に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください",
 		e.Old, e.Store, e.NewDisplay)
 }
