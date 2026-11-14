@@ -10,7 +10,7 @@
 
 **Spec:**
 - `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/06-sync-notifications.md`「他の書き手との重なり」(トーストの文)、「同時に編集したとき」の表の最後の行、「親が削除されたとき」、「反映を待つとき」
-- `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md`「同期の修復」の「順の指定なし: 削除と変更が重なった」の行(`root: false` は対象にしない・op 全体の `restore`)、「テスト」の「親と一緒の削除」、「削除・復元・完全に削除」の「復元」
+- `docs/superpowers/specs/2026-11-12-hedgehug-storage-design.md`「同期の修復」の「順は(1)の前: 削除と変更が重なった」の行(`root: false` は対象にしない・op 全体の `restore`)、「テスト」の「親と一緒の削除」、「削除・復元・完全に削除」の「復元」
 - 08「復元の単位」(一緒に削除された子も戻る)
 - `docs/superpowers/plans/2026-11-14-hedgehug-track-c3a.md` の決定 C3a-7(`restore` の行)・C3a-8(`change.Undo`)・C3a-9(変更に数える行)
 - `docs/superpowers/plans/2026-11-12-hedgehug-track-c.md` の C3a-screen の行(完成の条件)
