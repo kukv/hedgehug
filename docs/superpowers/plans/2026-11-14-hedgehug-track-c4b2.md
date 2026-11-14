@@ -55,6 +55,7 @@
 | C4b2-13 | 他のタブの取り消し(C3c の R1〜R12。人の保存が書く `restore` の行)からは通知を作らない。通知は同期の修復の保存(C4b2-2 の見分け方)からだけ作る | 06 `:185` は他のタブの重なりにトーストだけを定めている。人の保存の `restore` は「復元」(G)と見分けられない |
 | C4b2-15 | 合わせた結果が自分の版と同じになる同期(相手が自分の完全に削除したものだけに書いていたとき)で、合わせの保存が空として断られ、その Store を同期できなくなる既存の不具合を、この計画で直す(Task 2b)。中身が変わらない合わせも保存する | ユーザーの決定(2026-11-15)。Task 2 の実装で見つかった。完全な削除のために反映されなかった通知の場面そのもの |
 | C4b2-16 | 親と別のワークスペースの本文の {親の ID} は、親が移動先へ入る前の ID(同じ Store の転送記録のうち、修復の保存の時刻までの親の最後の行の `old`。なければいまの ID)。プロジェクトだけのときは、親の ID は変わらないのでいまの ID。番号・循環・移動の宛先の「場所を最後に保存した人」には、作成の行も数える(子の追加) | {旧 ID} と並べて、子を作った人が知っている呼び方にする。移動先は {新 ID} で分かる。06 `:314` の「子の追加」。Task 4 の実装で決めた |
+| C4b2-17 | 親の削除と同時に既存の子を変えたとき(子は親と一緒の `root: false` の削除で削除済みのまま、修復の保存は書かれない)も、子を変えた人に「{親の ID} が削除されたため、{子の ID} も削除済みに入りました」を作る。見つけ方: まだ判定していない合わせで、同じエンティティのログに、片側の共通の祖先にない行に `root: false` の削除があり、もう片側の共通の祖先にない行に人の変更(削除・取り消し以外)がある。宛先はその変更の行の `by`(最後のもの)。親は同じ op の `root: true` の削除があるエンティティ。鍵は親の削除の修復と同じ `repair:cascade:{子の内部 ID}:{削除の op}` | ユーザーの決定(2026-11-15)。06 `:324`(子を変更した・追加した人に作る)。Task 7 の場面テストで見つかった。保存の中身は変えない |
 | C4b2-14 | e2e は足さない。2 台の場面は `cmd/hedgehug` の本物の gitstore と state.db で確かめる。完全な削除と別の Store への移動は、`cmd/hedgehug` から書く口がない(完全な削除は G、別の Store への移動は 2 つの Store が要る)ので、gitstore のテスト(`purgeForTest` と、フォルダを消して転送記録を書く移動の手助け)で `Removed` の中身を確かめ、`noticing` のテストで本文と宛先を確かめる | C4b1-17 と同じ。`purgeForTest` は gitstore のテストの中にしかない |
 
 ## Review Focus
@@ -299,6 +300,22 @@ git commit -m "feat(inbox): 同期の修復の通知から設定の区画・ス�
 git add cmd/hedgehug
 git commit -m "test(sync): 2 台の場面で同期の修復の通知が 1 回だけ出ることを確かめる(C4b2)"
 ```
+
+---
+
+### Task 7b: 親の削除と同時に変えた既存の子の通知(C4b2-17)
+
+**Files:**
+- Modify: `internal/app/port/replicator.go`(`ReceivedSave.Concurrent []ConcurrentRows`、`ConcurrentRows{Ref; Deleted []change.Record; Changed []change.Record}`)
+- Modify: `internal/infra/gitstore/saves/removed.go`(合わせで、片側の新しい行に `root: false` の削除、もう片側の新しい行に変更があるエンティティを集め、合わせを渡す条件に足す)、Test: `internal/infra/gitstore/saves/removed_test.go`
+- Create or Modify: `internal/app/noticing/repair_restore.go` か新しいファイル(合わせの `Concurrent` から親の削除の通知を作る)、Test: `internal/app/noticing/repair_restore_test.go`
+- Modify: `cmd/hedgehug/repair_notice_scenario_test.go`(`TestRepairNoticeCascade` を、アプリの削除のとおり子にも `root: false` の削除を書く場面に戻し、子を追加する場面も足す)
+
+- [ ] **Step 1: 失敗するテストを書く** — saves: `TestConcurrentInMerge`(片側が親と子を削除、もう片側が子のタイトルを変えた合わせ → `Concurrent` に子の `Ref`、`Deleted` に `root: false` の削除、`Changed` にタイトルの行。変更がなければ合わせを渡さない)。noticing: `TestCascadeFromMerge`(hanako が変えた子 → 「HH-1 が削除されたため、HH-2 も削除済みに入りました」・`Item == HH-2`・鍵 `repair:cascade:{HH-2}:{op}`。変えたのが jiro → 作らない。閲覧のみ → 作らない)。場面: `TestRepairNoticeCascade`(既存の子を変える)・`TestRepairNoticeCascadeAdded`(子を追加する)
+- [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/infra/gitstore/... ./internal/app/noticing/ ./cmd/hedgehug/ -run 'Concurrent|CascadeFromMerge|RepairNoticeCascade'` Expected: FAIL
+- [ ] **Step 3: 実装する**
+- [ ] **Step 4: 通ることを確かめる** — Run: `go test ./... && golangci-lint run ./...` Expected: PASS
+- [ ] **Step 5: コミット** — `feat(noticing): 親の削除と同時に変えた既存の子にも、同期の修復の通知を作る(C4b2)`
 
 ---
 
