@@ -8,16 +8,16 @@ import (
 )
 
 // matchNames は、名前・ログイン名・ID のキーを判定する。2 つ目は、このキーを扱ったか。
-// 比べ方は大文字と小文字を区別しない完全一致(E1-5)。`:` 以外の演算子は、これらのキーでは一致しない。
+// 比べ方は大文字と小文字を区別しない完全一致(E1-5)。`:` 以外の演算子は `:` として読む(04 の 233 行)。
 func matchNames(t Term, f Facts) (bool, bool) {
 	if idKey(t.Key) {
-		return t.Op == OpEq && anyValue(t, func(v string) bool { return matchID(t.Key, v, f) }), true
+		return anyValue(t, func(v string) bool { return matchID(t.Key, v, f) }), true
 	}
 	eq := nameMatcher(t.Key, f)
 	if eq == nil {
 		return false, false
 	}
-	return t.Op == OpEq && anyValue(t, eq), true
+	return anyValue(t, eq), true
 }
 
 // nameMatcher は、名前のキーの 1 つの値の判定を返す。名前のキーでなければ nil。

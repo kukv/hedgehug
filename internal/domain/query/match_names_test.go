@@ -170,3 +170,13 @@ func TestEmptyFreeWordIsNoCondition(t *testing.T) {
 		t.Error("空の語は条件にしない")
 	}
 }
+
+func TestNonColonOperatorReadAsColon(t *testing.T) {
+	check(t, facts(t), map[string]bool{
+		"status<inprogress":  true,
+		"-status<inprogress": false,
+		"kind>=story":        true,
+		"project<hh-p1":      true,
+		"blocked_by<HH-3":    true,
+	})
+}
