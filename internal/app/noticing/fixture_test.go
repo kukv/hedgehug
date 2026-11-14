@@ -269,3 +269,62 @@ type noIdentity struct{}
 func (noIdentity) Me(context.Context, port.StoreID) (string, error) {
 	return "", errors.New("no identity")
 }
+
+// concurrent は、mine の行を見ずに書いたものとして、ほかの行の prev にある mine の行を、その行の prev に
+// 置き換える Reader(偽物の Store は順に書くので、同時の保存をこれで作る)。
+type concurrent struct {
+	port.Reader
+	prev map[change.ID][]change.ID // mine の行の ID と、その行の prev
+}
+
+func (c concurrent) Changes() port.ChangeReader { return concurrentChanges{c.Reader.Changes(), c.prev} }
+
+type concurrentChanges struct {
+	port.ChangeReader
+	prev map[change.ID][]change.ID
+}
+
+func (c concurrentChanges) Of(ref change.Ref) ([]change.Record, error) {
+	log, err := c.ChangeReader.Of(ref)
+	for i, r := range log {
+		var prev []change.ID
+		for _, p := range r.Prev {
+			if mp, ok := c.prev[p]; ok {
+				prev = append(prev, mp...)
+			} else {
+				prev = append(prev, p)
+			}
+		}
+		log[i].Prev = prev
+	}
+	return log, err
+}
+
+// ownOp は、mine の op だけをこのマシンの保存とする Received.Own。
+func ownOp(mine port.ReceivedSave) func(change.ID) (bool, error) {
+	return func(op change.ID) (bool, error) { return op == mine.Key.Op, nil }
+}
+
+// judgeOver は、in の保存を、mine(このマシンの保存)を見ずに同時に書いたものとして判定する。
+func (f *fixture) judgeOver(mine port.ReceivedSave, in port.Received) {
+	f.t.Helper()
+	prev := map[change.ID][]change.ID{}
+	for _, e := range mine.Entities {
+		for _, r := range e.Rows {
+			prev[r.ID] = r.Prev
+		}
+	}
+	ctx := f.t.Context()
+	err := f.svc.Judge(ctx, store, in, func(fn func(r port.Reader) error) error {
+		return f.stores.Read(ctx, store, func(r port.Reader) error { return fn(concurrent{r, prev}) })
+	})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// overwrite は、mine をこのマシンの保存として、それと同時に書いた theirs を判定する。
+func (f *fixture) overwrite(mine port.ReceivedSave, theirs ...port.ReceivedSave) {
+	f.t.Helper()
+	f.judgeOver(mine, port.Received{Saves: theirs, Own: ownOp(mine)})
+}

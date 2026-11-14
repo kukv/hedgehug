@@ -21,7 +21,7 @@ type Service struct {
 // 自動化の通知と、同期の修復の保存からの「同期の修復」の通知を作る。「あなた」を決められない Store では何も作らない
 // (C4b1-15)。1 回の read の中で前と後を作って通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみで
 // ないときだけ(C4b1-14)。同期の修復は、閲覧のみでなければ非表示の Store でも作り、同じ鍵の行があれば足さない
-// (C4b2-4・C4b2-6)。判定できない中身(ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの
+// (C4b2-4・C4b2-6)。上書きも、閲覧のみでなければ作り、同じ鍵の行があれば足さない(C4c1-5・C4c1-11)。判定できない中身(ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの
 // 読み書きの失敗(Store・表示中の Store の一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
 func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received, read func(fn func(r port.Reader) error) error) error {
 	me, err := s.Identity.Me(ctx, store)
@@ -44,7 +44,7 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received
 		}
 		autos = automations(b, store)
 		if !in.ReadOnly {
-			reps, err = repairs(r, b, store, me)
+			reps, err = onceNotices(r, b, store, me, in.Own)
 		}
 		return err
 	}); err != nil {
@@ -79,6 +79,19 @@ func (s Service) write(ctx context.Context, notices, reps []port.Notice) error {
 		}
 	}
 	return nil
+}
+
+// onceNotices は、同じ鍵の行があれば足さない通知(同期の修復と上書き。C4b2-6・C4c1-11)を、この順に決める。
+func onceNotices(r port.Reader, b batch, store port.StoreID, me string, own func(change.ID) (bool, error)) ([]port.Notice, error) {
+	reps, err := repairs(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	ovs, err := overwrites(r, b, store, me, own)
+	if err != nil {
+		return nil, err
+	}
+	return append(reps, ovs...), nil
 }
 
 // judgeIn は、割り当て・オーナー・メンション・ウォッチの通知を、この順に決める。

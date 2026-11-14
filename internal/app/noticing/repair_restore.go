@@ -128,7 +128,7 @@ func recordName(log []change.Record, f string) string {
 	return "コメント"
 }
 
-// sections は、ワークスペースのログの f の頭と、開く区画(C4b2-10)。
+// sections は、ワークスペースのログの f の頭と、開く区画(C4b2-10・C4c1-8)。
 var sections = []struct{ prefix, section string }{
 	{"statuses/", "statuses"},
 	{"priorities/", "priorities"},
@@ -138,6 +138,12 @@ var sections = []struct{ prefix, section string }{
 	{"rules/", "automation"},
 	{"sprints/", "sprints"},
 	{"releases/", "releases"},
+	{"workflow/", "workflow"},
+	{"choices/", "properties"},
+	{"initial_status", "statuses"},
+	{"category_default/", "statuses"},
+	{"initial_priority", "priorities"},
+	{"template_default/", "templates"},
 }
 
 // section は、ワークスペースのログの f を開く区画。どれでもなければ general。
