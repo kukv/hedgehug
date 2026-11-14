@@ -14,6 +14,8 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	"github.com/kukv/hedgehug/internal/app/githublink"
+	appinbox "github.com/kukv/hedgehug/internal/app/inbox"
+	"github.com/kukv/hedgehug/internal/app/noticing"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/repairing"
 	"github.com/kukv/hedgehug/internal/app/syncing"
@@ -51,8 +53,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Session: session, Accounts: file.Accounts(), Secrets: secrets, GitHub: gh, Device: gh,
 		Hosts: file.Hosts(), Stores: noStoreGitHub{}, Clock: clock,
 	}
-	rep := gitstore.NewReplicator(stores)
-	rep.Repair = repairing.Run // 合わせたあと、送る前の修復(C3a の決定 C3a-3)
+	rep := newReplicator(stores, db, clock, hub)
 	svc := &syncing.Service{
 		Targets: noSyncTargets{}, Tokens: conn,
 		Replicator: rep, State: db.SyncState(), Events: hub, Clock: clock,
@@ -94,6 +95,16 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
 	return deps, nil
+}
+
+// newReplicator は、合わせたあと、送る前に修復し(C3a の決定 C3a-3)、同期の最後に受け取った保存から通知を作る
+// (決定 C4b1-2)同期。「あなた」と表示中の Store は G までないので、本物のビルドではまだ通知は出ない(C4b1-15)。
+func newReplicator(stores *gitstore.Stores, db *statedb.DB, clock port.Clock, events port.Events) *gitstore.Replicator {
+	rep := gitstore.NewReplicator(stores)
+	rep.Repair = repairing.Run
+	notices := noticing.Service{Inbox: appinbox.Notifier{Inbox: db.Inbox(clock), Events: events}, Identity: noIdentity{}, List: noStores{}}
+	rep.Judge, rep.Judged = notices.Judge, db.JudgedSaves()
+	return rep
 }
 
 // noStores は、表示する Store を返さない。
