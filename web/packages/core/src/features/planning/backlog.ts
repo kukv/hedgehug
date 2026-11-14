@@ -6,6 +6,8 @@ import type { WorkspaceSettings } from "../../model/workspace";
 import type { ItemsPort } from "../../port/items";
 import type { PlanningPort } from "../../port/planning";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
+import type { SelectedItem } from "../palette/selection";
+import type { RowSelection, SelectedRow } from "../selection/rowSelection";
 import type { Toasts } from "../toasts/toasts";
 import { type Drop, goneText } from "./backlogDrop";
 import { sprintSaveFailed } from "./sprintDialogs";
@@ -30,6 +32,9 @@ export interface BacklogDeps {
   listMembers: SprintsDeps["listMembers"];
   toasts: Toasts;
   openDetail(storeId: string, itemId: string): void;
+  // selection は選んでいる行(F2b1)。isReadOnly は、その Store が閲覧のみか(行の readOnly に入れる)。
+  selection: RowSelection;
+  isReadOnly(storeId: string): boolean;
 }
 
 // Backlog は、開いているワークスペースのバックログの画面。タブを開いたら読み、保存のあとと Store の出来事で読み直す。
@@ -53,6 +58,9 @@ export interface Backlog {
   // noticeDetail は、詳細パネルの保存の応答 item を受け取る。ステータスの保存のとき、この画面から開いたアイテムが、
   // 開いている枠のどのスプリントにも入っておらず完了・中止なら、消えるときのトーストを出す(F2a-10 の(2))。
   noticeDetail(storeId: string, propertyId: string, item: Item): void;
+  selection: RowSelection;
+  // selectedOne は、ちょうど 1 行を選んでいるときだけ、パレットに渡すアイテム(F2b1-14)。
+  selectedOne(): SelectedItem | null;
 }
 
 // pointsToSend は、ポイントの入力欄を離れたときに送る文字列。打ち換えていなければ(フォーカスしたときの値
@@ -73,6 +81,9 @@ function goneCategory(settings: WorkspaceSettings, statusId: string) {
 const inSprint = (s: BacklogState, row: BacklogRow): boolean =>
   s.frames.some((f) => f.sprint !== null && f.rows.some((r) => r.id === row.id));
 
+const rowById = (s: BacklogState, id: string): BacklogRow | undefined =>
+  s.frames.flatMap((f) => f.rows).find((r) => r.id === id);
+
 export function createBacklog(deps: BacklogDeps): Backlog {
   const state = writable<BacklogState | null>(null);
   let current: { storeId: string; workspaceId: string } | null = null;
@@ -80,6 +91,17 @@ export function createBacklog(deps: BacklogDeps): Backlog {
   let latest = 0;
   // opened は、この画面の行から開いた詳細パネルのアイテム。gone は、最後の保存の応答でバックログから消えていたか。
   let opened: { id: string; display: string; gone: boolean } | null = null;
+
+  // visibleRows は、全枠の行を上から。読み直しのあと、選択をこれに絞る。
+  const visibleRows = (s: BacklogState): SelectedRow[] =>
+    s.frames.flatMap((f) =>
+      f.rows.map((r) => ({
+        storeId: s.storeId,
+        itemId: r.id,
+        display: r.display,
+        readOnly: deps.isReadOnly(s.storeId),
+      })),
+    );
 
   async function reload() {
     if (!current) return;
@@ -92,8 +114,11 @@ export function createBacklog(deps: BacklogDeps): Backlog {
         deps.workspaces.get(storeId, workspaceId),
         deps.listMembers(storeId),
       ]);
-      if (mine === latest)
-        state.set({ storeId, workspaceId, frames, settings: ws.settings, members });
+      if (mine === latest) {
+        const next = { storeId, workspaceId, frames, settings: ws.settings, members };
+        state.set(next);
+        deps.selection.prune(visibleRows(next));
+      }
     } catch {
       // 読めなければ前のまま(別のワークスペースなら出さない)。
     }
@@ -120,12 +145,20 @@ export function createBacklog(deps: BacklogDeps): Backlog {
     return ok;
   }
 
+  async function setStatus(row: BacklogRow, statusId: string) {
+    await save(async (s) => {
+      const saved = await deps.items.setProperty(s.storeId, row.id, "status", statusId);
+      if (!inSprint(s, row)) gone(s, row.display, saved.status);
+    });
+  }
+
   return {
     state: readonly(state),
     async open(storeId, workspaceId) {
       if (current?.storeId !== storeId || current.workspaceId !== workspaceId) {
         state.set(null);
         opened = null;
+        deps.selection.clear();
       }
       current = { storeId, workspaceId };
       await reload();
@@ -136,13 +169,9 @@ export function createBacklog(deps: BacklogDeps): Backlog {
       latest += 1;
       opened = null;
       state.set(null);
+      deps.selection.clear();
     },
-    async setStatus(row, statusId) {
-      await save(async (s) => {
-        const saved = await deps.items.setProperty(s.storeId, row.id, "status", statusId);
-        if (!inSprint(s, row)) gone(s, row.display, saved.status);
-      });
-    },
+    setStatus,
     async setPoints(row, text) {
       if (text === (row.points === null ? "" : pt(row.points))) return true;
       return save(async (s) => {
@@ -163,6 +192,20 @@ export function createBacklog(deps: BacklogDeps): Backlog {
         await deps.port.placeItem(s.storeId, row.id, drop.sprint, drop.anchor, drop.after);
         if (drop.sprint === null && inSprint(s, row)) gone(s, row.display, row.status);
       });
+    },
+    selection: deps.selection,
+    selectedOne() {
+      const rows = get(deps.selection.rows);
+      const s = get(state);
+      const only = rows.length === 1 ? rows[0] : undefined;
+      const found = only && s?.storeId === only.storeId ? rowById(s, only.itemId) : undefined;
+      if (!only || !found) return null;
+      return {
+        storeId: only.storeId,
+        itemId: only.itemId,
+        source: "backlog",
+        setStatus: (statusId) => setStatus(found, statusId),
+      };
     },
     openDetail(row) {
       const s = get(state);

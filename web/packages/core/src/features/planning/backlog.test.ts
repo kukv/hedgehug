@@ -6,7 +6,7 @@ import { fakeItemsPort, gate, item } from "../items/fixtures.test-util";
 import { fakeWorkspaces, settings } from "../items/settings.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createBacklog, pointsToSend } from "./backlog";
-import { fakePlanningPort, frameOf, rowOf, sprintOf } from "./fixtures.test-util";
+import { fakePlanningPort, frameOf, noSelection, rowOf, sprintOf } from "./fixtures.test-util";
 
 // バックログの画面の状態と保存(05「バックログ」、F2a-8・F2a-9・F2a-10)。
 // 行の ID は、偽物のアイテムの口の ID(S1-I{番号})。表示の ID は HH-{番号}。
@@ -36,6 +36,7 @@ async function setup() {
     listMembers: async () => members,
     toasts,
     openDetail: (s, id) => void opened.push(`${s}/${id}`),
+    ...noSelection(),
   });
   await backlog.open("S1", "S1-W1");
   planning.calls.length = 0;
