@@ -97,52 +97,57 @@
     onauxclick={(e) => links.click(e, route)}
     >{row.title}</a
   >
-  <span class="priority" class:deleted={priority === deletedValue}>{priority}</span>
-  <StatusButton
-    status={row.status}
-    {settings}
-    project={row.project}
-    disabled={readOnly}
-    onchange={(id) => void backlog.setStatus(row, id)}
-  />
-  <PointsInput {row} disabled={readOnly} />
-  <span class="assignee">
-    {#if row.assignee}
-      <Avatar name={member?.name ?? ""} title={member?.name ?? "不明なユーザー"} />
-    {/if}
+  <!-- 狭い幅では、操作の並びを持ち手・種類・ID・タイトルの下に折り返す。 -->
+  <span class="controls">
+    <span class="priority" class:deleted={priority === deletedValue}>{priority}</span>
+    <StatusButton
+      status={row.status}
+      {settings}
+      project={row.project}
+      disabled={readOnly}
+      onchange={(id) => void backlog.setStatus(row, id)}
+    />
+    <PointsInput {row} disabled={readOnly} />
+    <span class="assignee">
+      {#if row.assignee}
+        <Avatar name={member?.name ?? ""} title={member?.name ?? "不明なユーザー"} />
+      {/if}
+    </span>
+    <Select
+      label="スプリント"
+      size="sm"
+      disabled={readOnly || !overview}
+      title={note}
+      options={asOptions(choices)}
+      bind:value={selected}
+      onchange={(id) => void pickSprint(id)}
+    />
+    <IconButton
+      label="上へ"
+      size="sm"
+      disabled={readOnly || !up}
+      title={note ?? "上へ"}
+      onclick={() => up && void backlog.place(row, up)}
+      >↑</IconButton
+    >
+    <IconButton
+      label="下へ"
+      size="sm"
+      disabled={readOnly || !down}
+      title={note ?? "下へ"}
+      onclick={() => down && void backlog.place(row, down)}
+      >↓</IconButton
+    >
   </span>
-  <Select
-    label="スプリント"
-    size="sm"
-    disabled={readOnly || !overview}
-    title={note}
-    options={asOptions(choices)}
-    bind:value={selected}
-    onchange={(id) => void pickSprint(id)}
-  />
-  <IconButton
-    label="上へ"
-    size="sm"
-    disabled={readOnly || !up}
-    title={note ?? "上へ"}
-    onclick={() => up && void backlog.place(row, up)}
-    >↑</IconButton
-  >
-  <IconButton
-    label="下へ"
-    size="sm"
-    disabled={readOnly || !down}
-    title={note ?? "下へ"}
-    onclick={() => down && void backlog.place(row, down)}
-    >↓</IconButton
-  >
 </li>
 
 <style>
   .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 4px 8px;
+    padding: 4px 0;
     min-height: 36px;
     border-top: 2px solid transparent;
     border-bottom: 1px solid var(--line);
@@ -168,11 +173,18 @@
     color: var(--muted);
   }
   .row-title {
-    flex: 1;
+    flex: 1 1 160px;
     min-width: 0;
     color: var(--ink);
     text-decoration: none;
     overflow-wrap: anywhere;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-left: auto;
   }
   .priority {
     font-size: 12px;

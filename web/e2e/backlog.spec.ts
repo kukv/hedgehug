@@ -20,8 +20,6 @@ const ids = (frame: Locator) => frame.locator("[data-row] code.id").allTextConte
 
 // dragHandle は、行の持ち手を、別の行の上までマウスで運んで離す。
 async function dragHandle(page: Page, handle: Locator, target: Locator) {
-  // 狭い幅では、行が枠からはみ出して横にスクロールしている。持ち手を画面の中に出してから位置を読む。
-  await handle.scrollIntoViewIfNeeded();
   const from = await handle.boundingBox();
   const to = await target.boundingBox();
   if (!from || !to) throw new Error("dragHandle: 要素の位置を読めません");
@@ -47,6 +45,8 @@ test("creates, reorders and plans items on the backlog", async ({ page }, info) 
     backlog.getByText("3 件 · 0 pt · スプリントに入っていない未完了の Story・Task・Bug"),
   ).toBeVisible();
   await expect.poll(() => ids(backlog)).toEqual([s2, s3, s4]);
+  // どの幅でも、行は枠からはみ出さない(狭い幅では操作の並びを折り返す)。
+  expect(await backlog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 
   // スプリントを作る。空の枠に案内が出る。
   await backlog.getByRole("button", { name: "スプリントを作成" }).click();
