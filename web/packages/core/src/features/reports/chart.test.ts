@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bars, linePoints, niceMax, pathOf, stackPaths, ticks } from "./chart";
+import { type Bar, bars, linePoints, niceMax, pathOf, stackPaths, ticks } from "./chart";
 
 const frame = { width: 200, height: 100 };
 
@@ -36,6 +36,11 @@ describe("linePoints", () => {
 
   it("null の点は飛ばし、点が 1 つなら x は 0", () => {
     expect(linePoints([8, null], 8, frame)).toEqual([{ x: 0, y: 0 }]);
+    expect(linePoints([8], 8, frame)).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it("x は null を含めた配列の位置で決める", () => {
+    expect(linePoints([null, 8], 8, frame)).toEqual([{ x: 200, y: 0 }]);
   });
 });
 
@@ -65,10 +70,12 @@ describe("stackPaths", () => {
       { width: 100, height: 100 },
     );
     expect(paths).toHaveLength(2);
-    // 面は「上端を左から右」「下端を右から左」の順で、先頭 2 点が上端。
-    const tops = (d: string) => (d.match(/-?\d+(\.\d+)? -?\d+(\.\d+)?/g) ?? []).slice(0, 2);
-    expect(tops(paths[0] ?? "")).toEqual(["0 75", "100 75"]);
-    expect(tops(paths[1] ?? "")).toEqual(["0 25", "100 75"]);
+    // 面は「上端を左から右」「下端を右から左」の順に点を並べ、Z で閉じる。
+    const points = (d: string) => d.match(/-?\d+(\.\d+)? -?\d+(\.\d+)?/g) ?? [];
+    expect(points(paths[0] ?? "")).toEqual(["0 75", "100 75", "100 100", "0 100"]);
+    // 上の層の下端は、下の層の上端(y=75)をなぞる。
+    expect(points(paths[1] ?? "")).toEqual(["0 25", "100 75", "100 75", "0 75"]);
+    for (const d of paths) expect(d.endsWith(" Z")).toBe(true);
   });
 });
 
@@ -99,9 +106,12 @@ describe("bars", () => {
       1,
       frame,
     );
-    const [a, b] = got[0] ?? [];
-    const next = got[1]?.[0];
-    expect((a?.x ?? 0) + (a?.width ?? 0)).toBeLessThanOrEqual(b?.x ?? 0);
-    expect((b?.x ?? 0) + (b?.width ?? 0)).toBeLessThanOrEqual(next?.x ?? 0);
+    expect(got).toHaveLength(2);
+    expect(got[0]).toHaveLength(2);
+    expect(got[1]).toHaveLength(2);
+    const [a, b] = got[0] as [Bar, Bar];
+    const [next] = got[1] as [Bar, Bar];
+    expect(a.x + a.width).toBeLessThanOrEqual(b.x);
+    expect(b.x + b.width).toBeLessThanOrEqual(next.x);
   });
 });

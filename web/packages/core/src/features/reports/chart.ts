@@ -17,11 +17,12 @@ export function ticks(max: number): number[] {
   return [0, max / 2, max];
 }
 
+// max は 0 より大きい前提(呼び出し側は niceMax の値を渡す)。
 const yOf = (value: number, max: number, f: Frame): number => f.height - (value / max) * f.height;
 
 const xOf = (i: number, n: number, f: Frame): number => (n <= 1 ? 0 : (i / (n - 1)) * f.width);
 
-// null の点は飛ばす。x は null も含めた位置で決める。
+// values は 1 日 1 値。x は null も含めた配列の位置で決め(1 要素なら 0)、null の点は飛ばす。
 export function linePoints(values: (number | null)[], max: number, f: Frame): Point[] {
   const points: Point[] = [];
   values.forEach((v, i) => {
@@ -48,11 +49,14 @@ export function stackPaths(layers: number[][], max: number, f: Frame): string[] 
   });
 }
 
-// 群ごとに棒を並べる。群の幅の 7 割を棒に使い、残りは群の間の余白にする。
+// 群の幅のうち棒が使う割合。残りは群の間の余白にする。
+const BAR_RATIO = 0.7;
+
+// 群ごとに棒を並べる。max は 0 より大きい前提。
 export function bars(groups: number[][], max: number, f: Frame): Bar[][] {
   const slot = f.width / groups.length;
   return groups.map((group, g) => {
-    const inner = slot * 0.7;
+    const inner = slot * BAR_RATIO;
     const width = inner / group.length;
     const left = g * slot + (slot - inner) / 2;
     return group.map((v, i) => {
