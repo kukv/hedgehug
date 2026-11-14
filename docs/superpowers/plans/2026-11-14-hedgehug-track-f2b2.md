@@ -128,7 +128,7 @@ web/e2e/backlog-bulk-change.spec.ts
 
 組み立て(`setup(t)`)は F2b1 の `items/bulkdelete_test.go` の `setupBulk` と同じ形: S1 = `apptest.Sample` + `apptest.SampleMobile`、S2 = `apptest.Sample`、S3 = `apptest.Sample`(閲覧のみ)、`apptest.StoreList` は main・team・readonly。
 
-- `TestChoicesMerge`: S1 の HH-2(Web)と MB-1(Mobile)を渡す → `Statuses` は Web のステータスの順に Mobile にしかない名前を続けたもの、`Kinds` は `["Epic", "Task"]`、`Members` は `[{taro, taro}, {hanako, hanako}]`。
+- `TestChoicesMerge`: S1 の HH-2(Web)と MB-1(Mobile)を渡す → `Statuses` は Web のステータスの順に Mobile にしかない名前を続けたもの、`Kinds` は `["Epic", "Task"]`、`Members` は `[{hanako, hanako}, {taro, taro}]`。
 - `TestChoicesIgnoreCase`: S2 のステータス Done の名前を "done" に変え(`workspaces` の値の名前の書き換えの行を直接書く)、S1 の HH-2 と S2 の HH-2 → `Statuses` に "Done" が 1 回だけ(表記は先に出た S1 のもの)。
 - `TestChoicesSkipReadOnlyAndUnused`: S3 の HH-2 だけ → 一覧はどれも空(`Kinds` も空)。S1 の HH-2 のプロジェクトで Pending を使わない(プロジェクト別のルールの行を書く)→ `Statuses` に Pending がない。
 - `TestChoicesSprints`: S1 のワークスペースに計画中のスプリント「S-1」・完了したスプリント「S-0」、アーカイブのリリース「R-0」・計画中の「R-1」→ `Sprints` は `["S-1"]`、`Releases` は `["R-1"]`。
