@@ -80,10 +80,15 @@ func byOther(log []change.Record, f, me string) (change.Record, bool) {
 		}
 		w = *c
 	}
-	if w.Actor.Kind == change.ActorGitHub || w.Actor.Kind == change.ActorSync || same(w.By, me) {
+	if !fromOther(w, me) {
 		return change.Record{}, false
 	}
 	return w, true
+}
+
+// fromOther は、行 w が他の人の変更か。あなたの変更、GitHub の操作、同期の修復なら false(C4b1-7)。
+func fromOther(w change.Record, me string) bool {
+	return w.Actor.Kind != change.ActorGitHub && w.Actor.Kind != change.ActorSync && !same(w.By, me)
 }
 
 // itemTarget は、判定の後のアイテムと、それを指す通知の下地(ワークスペース・アイテム・表示用の ID)。

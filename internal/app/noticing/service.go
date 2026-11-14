@@ -17,29 +17,36 @@ type Service struct {
 	List     port.StoreList
 }
 
-// Judge は、saves(古い順)から割り当て・プロジェクトのオーナー・メンションの通知を作る。
-// 「あなた」を決められない Store では何も作らない(C4b1-15)。1 回の read の中で前と後を作って通知を決め、
-// 書くのは read のあと。判定できない中身(ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの
-// 読み書きの失敗(Store を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
+// Judge は、saves(古い順)から割り当て・プロジェクトのオーナー・メンション・ウォッチと、ステータスの削除からの
+// 自動化の通知を作る。「あなた」を決められない Store では何も作らない(C4b1-15)。1 回の read の中で前と後を作って
+// 通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみでないときだけ(C4b1-14)。判定できない中身
+// (ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの読み書きの失敗(Store・表示中の Store の
+// 一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
 func (s Service) Judge(ctx context.Context, store port.StoreID, saves []port.ReceivedSave, read func(fn func(r port.Reader) error) error) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil || me == "" {
 		return nil
 	}
-	var notices []port.Notice
+	var notices, autos []port.Notice
 	if err := read(func(r port.Reader) error {
 		b, err := newBatch(r, saves)
 		if err != nil {
 			return err
 		}
-		if notices, err = assigns(r, b, store, me); err != nil {
-			return err
-		}
-		ms, err := mentions(r, b, store, me)
-		notices = append(notices, ms...)
+		notices, err = judgeIn(r, b, store, me)
+		autos = automations(b, store)
 		return err
 	}); err != nil {
 		return err
+	}
+	if len(autos) > 0 {
+		ok, err := s.writable(ctx, store)
+		if err != nil {
+			return err
+		}
+		if ok {
+			notices = append(notices, autos...)
+		}
 	}
 	for _, n := range notices {
 		write := s.Inbox.Add
@@ -51,6 +58,23 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, saves []port.Rec
 		}
 	}
 	return nil
+}
+
+// judgeIn は、割り当て・オーナー・メンション・ウォッチの通知を、この順に決める。
+func judgeIn(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
+	out, err := assigns(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	ms, err := mentions(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	ws, err := watches(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(out, ms...), ws...), nil
 }
 
 // batch は、1 回の判定の前と後(C4b1-6)。後はいまのログ、前はいまのログから判定する行を除いたもの。
