@@ -234,6 +234,10 @@ type ChangeReader interface {
 
 type WorkspaceWriter interface {
 	Append(id workspace.ID, drafts ...change.Draft) error
+	// Import と Remove は、ItemWriter と同じ(対象がワークスペースのフォルダ。説明はないので Import は取らない)。
+	// Remove は、下のプロジェクト・アイテムのフォルダは消さない(呼ぶ側が 1 つずつ消す)。
+	Import(id workspace.ID, log []change.Record) error
+	Remove(id workspace.ID) error
 }
 
 type ProjectWriter interface {

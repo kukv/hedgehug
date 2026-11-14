@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // ReplicatorCall は、Replicator の偽物が受けた 1 回の呼び出し。
@@ -146,7 +147,7 @@ type rowsTx struct {
 }
 
 func (t rowsTx) WriteWorkspaces() port.WorkspaceWriter {
-	return rowsIDs{append: t.Tx.WriteWorkspaces().Append, rows: t.rows}
+	return rowsWorkspaces{WorkspaceWriter: t.Tx.WriteWorkspaces(), rows: t.rows}
 }
 
 func (t rowsTx) WriteProjects() port.ProjectWriter {
@@ -161,13 +162,22 @@ func (t rowsTx) WriteMembers() port.MemberWriter {
 	return rowsMembers{w: t.Tx.WriteMembers(), rows: t.rows}
 }
 
-type rowsIDs struct {
-	append func(id change.ID, drafts ...change.Draft) error
-	rows   *bool
+// rowsWorkspaces は、rowsItems と同じく、ワークスペースの Append・Import・Remove の印を付ける。
+type rowsWorkspaces struct {
+	port.WorkspaceWriter
+	rows *bool
 }
 
-func (w rowsIDs) Append(id change.ID, drafts ...change.Draft) error {
-	return mark(w.rows, len(drafts) > 0, w.append(id, drafts...))
+func (w rowsWorkspaces) Append(id change.ID, drafts ...change.Draft) error {
+	return mark(w.rows, len(drafts) > 0, w.WorkspaceWriter.Append(id, drafts...))
+}
+
+func (w rowsWorkspaces) Import(id workspace.ID, log []change.Record) error {
+	return mark(w.rows, true, w.WorkspaceWriter.Import(id, log))
+}
+
+func (w rowsWorkspaces) Remove(id workspace.ID) error {
+	return mark(w.rows, true, w.WorkspaceWriter.Remove(id))
 }
 
 type rowsMembers struct {

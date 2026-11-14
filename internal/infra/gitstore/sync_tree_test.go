@@ -310,3 +310,18 @@ func TestMergeTreesTransferOfProjectOrWorkspaceDropsChildren(t *testing.T) {
 		t.Errorf("workspace transfer: %v", keys(got))
 	}
 }
+
+func TestUnderTransferredWorkspace(t *testing.T) {
+	// a はワークスペース W1 を別の Store へ移した(フォルダを消し、転送記録を足した)。b は同時に W1 の下にプロジェクト P9 と
+	// アイテム I9 を作った。どちらも合わせたあとに消える(祖先のワークスペースが移っているため)。
+	ws := workspaceCreate(t)
+	p9 := rec(t, "p9", change.Create, project.Create(project.Project{ID: "P9", Place: project.Place{Workspace: "W1", Number: 9}, Rank: "a", Title: "New", Status: "active"}), at(3))
+	i9 := rec(t, "i9", change.Create, item.Create(item.Item{ID: "I9", Place: item.Place{Workspace: "W1", Project: "P9", Number: 1}, Kind: item.Epic, Rank: "a", Title: "t"}), at(4))
+	base := tree{"workspaces/W1/log.jsonl": []byte(ws)}
+	a := tree{"transfers.jsonl": transferLine("W1")}
+	b := tree{"workspaces/W1/log.jsonl": []byte(ws), "projects/P9/log.jsonl": []byte(p9), "items/I9/log.jsonl": []byte(i9)}
+	got := mustMerge(t, base, a, b)
+	if got["projects/P9/log.jsonl"] != nil || got["items/I9/log.jsonl"] != nil || got["workspaces/W1/log.jsonl"] != nil {
+		t.Errorf("left after the workspace transfer: %v", keys(got))
+	}
+}
