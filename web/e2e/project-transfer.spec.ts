@@ -19,8 +19,12 @@ test("moves a project to another workspace and another Store, and follows the ol
   const prefix = prefixOf(info);
   // 移動先の接頭辞は、移動元の接頭辞の先頭の Z を Y に替えたもの(prefixOf の値は Z で始まるので重ならない)。
   const dest = `Y${prefix.slice(1)}`;
-  await createWorkspace(page, info, t("移動先"), dest);
-  await createWorkspace(page, info, t("移動元"), prefix);
+  // ワークスペースの名前は、同じ worker のサーバーで transfer.spec.ts が Store「e2e」に作る「移動元」と重ねない
+  // (Store の中で同じ名前のワークスペースは作れない)。
+  const from = t("プロジェクトの移動元");
+  const to = t("プロジェクトの移動先");
+  await createWorkspace(page, info, to, dest);
+  await createWorkspace(page, info, from, prefix);
   await projectWithEpic(page, info, prefix);
   await taskUnderEpic(page, info, `${prefix}-1`, "A");
   const title = t(`計画 ${prefix} 1`);
@@ -29,18 +33,18 @@ test("moves a project to another workspace and another Store, and follows the ol
     await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/settings`));
     await page
       .getByRole("combobox", { name: "移動先のワークスペース" })
-      .selectOption({ label: `e2e / ${t("移動先")}` });
+      .selectOption({ label: `e2e / ${to}` });
     await page.getByRole("button", { name: "移動", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "プロジェクトを移動" });
     await expect(
       dialog.getByText(
-        `「${title}」を ${t("移動元")} から ${t("移動先")} へ移動します。2 件のアイテムは ${dest} の番号になります。`,
+        `「${title}」を ${from} から ${to} へ移動します。2 件のアイテムは ${dest} の番号になります。`,
         { exact: true },
       ),
     ).toBeVisible();
     await dialog.getByRole("button", { name: "移動", exact: true }).click();
     await expect(
-      page.getByRole("status").getByText(`${t("移動先")} へ移動しました`, { exact: true }),
+      page.getByRole("status").getByText(`${to} へ移動しました`, { exact: true }),
     ).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/s/e2e/p/${dest}-P1/settings`));
     await expect(page.getByRole("heading", { name: `${dest}-P1 ${title}` })).toBeVisible();
@@ -55,7 +59,7 @@ test("moves a project to another workspace and another Store, and follows the ol
     await page.getByRole("button", { name: "移動", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "プロジェクトを移動" });
     await expect(
-      dialog.getByText(`「${title}」を e2e の ${t("移動先")} から team の Team へ移動します。`),
+      dialog.getByText(`「${title}」を e2e の ${to} から team の Team へ移動します。`),
     ).toBeVisible();
     await dialog.getByRole("button", { name: "移動", exact: true }).click();
     await expect(
