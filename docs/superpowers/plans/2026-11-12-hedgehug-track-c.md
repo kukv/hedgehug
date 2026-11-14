@@ -2047,6 +2047,7 @@ gh pr create --base develop --title "feat(gitstore): 同期の合わせ方(ト�
 |---|---|
 | Store をこのマシンから削除したとき | `InboxBook.ForgetStore(store)` を呼ぶ(C4a-7)。口とテストは C4a が作った。`state.db` の全部の表の Store ID の行を消す手順に含める |
 | 本物の `StoreList`・`Identity` | いまの本物のビルドは `noStores`(空)なので、本物のビルドの受信箱は何も出さない。G が本物の `StoreList` と `Identity` を組み立てると、本物のビルドの受信箱が出る(C4a-14) |
+| Store の非表示・再表示 | 非表示・再表示のあと、`store` の出来事(または同じ口)で受信箱の一覧と未読数が読み直されること。受信箱は表示中の Store の通知だけを出し、画面は `store`・`github`・`inbox` の出来事で読み直す(`web/app/src/inbox.ts`) |
 
 ## 未決の点
 

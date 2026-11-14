@@ -151,6 +151,16 @@ test("the apply button is disabled once the status changed first", async ({ page
   await expect(row.getByText("すでに変更されています(いまは Cancel)")).toBeVisible();
 });
 
+// 受信箱を開いたまま別の経路でステータスが変わると、Store の出来事で読み直し、開き直さずにボタンが無効になる。
+test("the open inbox follows a status changed elsewhere", async ({ page }, info) => {
+  const n = await stoppedNotice(page, info);
+  const row = await openInbox(page, n.rule);
+  await expect(row.getByRole("button", { name: "制約を無視して Done にする" })).toBeEnabled();
+  await n.setStatus("Cancel");
+  await expect(row.getByRole("button", { name: "制約を無視して Done にする" })).toBeDisabled();
+  await expect(row.getByText("すでに変更されています(いまは Cancel)")).toBeVisible();
+});
+
 test("toggles read with the dot and reads all in the automation tab", async ({ page }, info) => {
   const n = await stoppedNotice(page, info);
   const row = await openInbox(page, n.rule);

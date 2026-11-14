@@ -1,16 +1,24 @@
 import { createInboxPort } from "@hedgehug/api";
 import { createInbox, get, type InboxRow, type Route, routeOfWorkspace } from "@hedgehug/core";
-import { inboxReloads } from "./reloads";
+import { inboxReloads, reloads } from "./reloads";
 import { catalog, detail, navigation, toasts } from "./wire";
 
 // 受信箱(06「受信箱」)。wire.ts が 300 行なので、ここで作る。
 export const inbox = createInbox({ port: createInboxPort(), toasts });
 
 // inbox の知らせで、サイドバーの未読数と、受信箱を開いていれば一覧を読み直す(C4a-13)。
-inboxReloads.add(() => inbox.reloadUnread());
-inboxReloads.add(async () => {
-  if (get(navigation.route).name === "inbox") await inbox.reload();
-});
+// store・github の知らせでも同じく読み直す。行の対象(ID・タイトル・削除済み)とボタンの有効・無効はアイテムから引き、
+// 同期で受け取った完全な削除は読むときに通知を消すので、Store が変わると一覧も未読数も変わる。
+const reloadInbox = [
+  () => inbox.reloadUnread(),
+  async () => {
+    if (get(navigation.route).name === "inbox") await inbox.reload();
+  },
+];
+for (const reload of reloadInbox) {
+  inboxReloads.add(reload);
+  reloads.add(reload);
+}
 // サイドバーの「受信箱」の未読数は、どの画面から始めても出す。
 void inbox.reloadUnread();
 
