@@ -21,7 +21,7 @@ type Service struct {
 // 自動化の通知と、同期の修復の保存からの「同期の修復」の通知を作る。「あなた」を決められない Store では何も作らない
 // (C4b1-15)。1 回の read の中で前と後を作って通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみで
 // ないときだけ(C4b1-14)。同期の修復は、閲覧のみでなければ非表示の Store でも作り、同じ鍵の行があれば足さない
-// (C4b2-4・C4b2-6)。上書きも、閲覧のみでなければ作り、同じ鍵の行があれば足さない(C4c1-5・C4c1-11)。
+// (C4b2-4・C4b2-6)。上書きと説明の重なりも、閲覧のみでなければ作り、同じ鍵の行があれば足さない(C4c1-5・C4c1-11・C4c1-12)。
 // 判定できない中身(ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの読み書きの失敗(Store・
 // 表示中の Store の一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
 func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received, read func(fn func(r port.Reader) error) error) error {
@@ -33,34 +33,53 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received
 	if err != nil {
 		return err
 	}
-	var notices, autos, reps []port.Notice
+	var d decided
 	if err := read(func(r port.Reader) error {
-		b, err := newBatch(r, store, in.Saves)
-		if err != nil {
-			return err
-		}
-		b.storeNames = names
-		if notices, err = judgeIn(r, b, store, me); err != nil {
-			return err
-		}
-		autos = automations(b, store)
-		if !in.ReadOnly {
-			reps, err = onceNotices(r, b, store, me, in.Own)
-		}
+		var err error
+		d, err = decide(r, store, in, me, names)
 		return err
 	}); err != nil {
 		return err
 	}
-	if len(autos) > 0 {
+	notices := d.notices
+	if len(d.autos) > 0 {
 		ok, err := s.writable(ctx, store)
 		if err != nil {
 			return err
 		}
 		if ok {
-			notices = append(notices, autos...)
+			notices = append(notices, d.autos...)
 		}
 	}
-	return s.write(ctx, notices, reps)
+	return s.write(ctx, notices, d.reps)
+}
+
+// decided は、1 回の read の中で決めた通知: 割り当て・オーナー・メンション・ウォッチ、自動化、同じ鍵の行があれば
+// 足さないもの。
+type decided struct {
+	notices, autos, reps []port.Notice
+}
+
+// decide は、in.Saves の通知を決める。上書き(閲覧のみでないときだけ)を先に決めて、上書きを作った項目はウォッチの
+// 本文を作らない(C4c1-14)。names は、表示中の Store の名前。
+func decide(r port.Reader, store port.StoreID, in port.Received, me string, names map[port.StoreID]string) (decided, error) {
+	b, err := newBatch(r, store, in.Saves)
+	if err != nil {
+		return decided{}, err
+	}
+	b.storeNames = names
+	var d decided
+	done := overwritten{}
+	if !in.ReadOnly {
+		if d.reps, err = onceNotices(r, b, store, me, in.Own, done); err != nil {
+			return decided{}, err
+		}
+	}
+	if d.notices, err = judgeIn(r, b, store, me, done); err != nil {
+		return decided{}, err
+	}
+	d.autos = automations(b, store)
+	return d, nil
 }
 
 // write は、通知を受信箱に書く。メンションは同じ本文の行を書き換え、同期の修復は同じ鍵の行があれば足さない。
@@ -82,21 +101,26 @@ func (s Service) write(ctx context.Context, notices, reps []port.Notice) error {
 	return nil
 }
 
-// onceNotices は、同じ鍵の行があれば足さない通知(同期の修復と上書き。C4b2-6・C4c1-11)を、この順に決める。
-func onceNotices(r port.Reader, b batch, store port.StoreID, me string, own func(change.ID) (bool, error)) ([]port.Notice, error) {
+// onceNotices は、同じ鍵の行があれば足さない通知(同期の修復と、項目の上書きと、説明の重なり。C4b2-6・C4c1-11)を、
+// この順に決める。上書きを作った項目は done に足す。
+func onceNotices(r port.Reader, b batch, store port.StoreID, me string, own func(change.ID) (bool, error), done overwritten) ([]port.Notice, error) {
 	reps, err := repairs(r, b, store, me)
 	if err != nil {
 		return nil, err
 	}
-	ovs, err := overwrites(r, b, store, me, own)
+	ovs, err := overwrites(r, b, store, me, own, done)
 	if err != nil {
 		return nil, err
 	}
-	return append(reps, ovs...), nil
+	ds, err := descConflicts(r, b, store, me, own)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(reps, ovs...), ds...), nil
 }
 
-// judgeIn は、割り当て・オーナー・メンション・ウォッチの通知を、この順に決める。
-func judgeIn(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
+// judgeIn は、割り当て・オーナー・メンション・ウォッチの通知を、この順に決める。ウォッチは、done の項目を飛ばす。
+func judgeIn(r port.Reader, b batch, store port.StoreID, me string, done overwritten) ([]port.Notice, error) {
 	out, err := assigns(r, b, store, me)
 	if err != nil {
 		return nil, err
@@ -105,7 +129,7 @@ func judgeIn(r port.Reader, b batch, store port.StoreID, me string) ([]port.Noti
 	if err != nil {
 		return nil, err
 	}
-	ws, err := watches(r, b, store, me)
+	ws, err := watches(r, b, store, me, done)
 	if err != nil {
 		return nil, err
 	}

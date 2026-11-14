@@ -216,3 +216,22 @@ func TestWatchByAutomation(t *testing.T) {
 }
 
 func ptr(id item.ID) *item.ID { return &id }
+
+// 同じ判定で上書きの通知を作った項目(ステータス)は、ウォッチの本文を作らない。負けずに変わったタイトルは作る(C4c1-14)。
+func TestOverwriteSkipsWatch(t *testing.T) {
+	f := setup(t)
+	f.watchTask()
+	lose(f, taskRef, []change.Draft{setStatus(apptest.SampleStatusTodo, apptest.SampleStatusInProgress)}, user("taro"),
+		[]change.Draft{setStatus(apptest.SampleStatusTodo, apptest.SampleStatusDone), change.NewSet("title", "ログイン画面を作る", "新しい名前")})
+	got := map[port.NoticeKind][]string{}
+	for _, n := range f.notices() {
+		got[n.Kind] = append(got[n.Kind], n.Text)
+	}
+	want := map[port.NoticeKind][]string{
+		port.NoticeOverwrite: {"ステータスが上書きされました"},
+		port.NoticeWatch:     {"タイトルを「新しい名前」に変更"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("notices = %q, want %q", got, want)
+	}
+}

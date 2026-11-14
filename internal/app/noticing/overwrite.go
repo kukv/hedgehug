@@ -27,10 +27,10 @@ func (o overwritten) add(ref change.Ref, f string) bool {
 }
 
 // overwrites は、判定する行に、このマシンの値が負けた項目ごとの「{項目名}が上書きされました」(決定 C4c1-2〜C4c1-11)。
-// own は、op がこのマシンで作った保存のものか(nil は「どれも違う」)。own の失敗と、読み取りの失敗(ないもの以外)はエラー。
-func overwrites(r port.Reader, b batch, store port.StoreID, me string, own func(change.ID) (bool, error)) ([]port.Notice, error) {
+// own は、op がこのマシンで作った保存のものか(nil は「どれも違う」)。作った項目は done に足す(ウォッチを飛ばす。
+// C4c1-14)。own の失敗と、読み取りの失敗(ないもの以外)はエラー。
+func overwrites(r port.Reader, b batch, store port.StoreID, me string, own func(change.ID) (bool, error), done overwritten) ([]port.Notice, error) {
 	m := &mineRows{me: me, own: own, ops: map[change.ID]bool{}}
-	done := overwritten{}
 	var out []port.Notice
 	for _, ref := range b.refs {
 		if b.movedIn(ref) {
