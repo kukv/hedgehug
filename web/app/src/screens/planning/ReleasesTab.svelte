@@ -27,8 +27,12 @@
   let { storeId, storeName, workspaceId, readOnly }: Props = $props();
 
   // タブを開いているあいだだけ読む。Store の出来事で読み直す(planning.ts)。
+  // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(開き直すとカードが消え、
+  // 開いているダイアログが閉じる)。
+  const sid = $derived(storeId);
+  const wid = $derived(workspaceId);
   $effect(() => {
-    void releases.open(storeId, workspaceId);
+    void releases.open(sid, wid);
     return () => releases.close();
   });
   const loaded = releases.state;
