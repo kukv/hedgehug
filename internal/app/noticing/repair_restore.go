@@ -180,26 +180,28 @@ func cascade(r port.Reader, b batch, i int, child change.Ref, op change.ID, me s
 }
 
 // concurrentCascades は、i 番目の合わせの、親の削除と同時に変えた既存の子の通知(決定 C4b2-17)。子は親と一緒の
-// root: false の削除で削除済みのままなので修復の保存はない。宛先は、子への最後の人の変更の行の by。
+// root: false の削除で削除済みのままなので修復の保存はない。宛先は、子への最後の人の変更の行の by。削除の op は
+// 子のいまの削除の印の op で、それが Deleted の行の op でなければ(取り消しの修復で削除済みでなくなったなど)作らない。
 func concurrentCascades(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
 	var out []port.Notice
 	for _, c := range b.saves[i].Concurrent {
 		if !same(lastSaver(c.Changed, ""), me) {
 			continue
 		}
-		var ops []change.ID
-		for _, d := range c.Deleted {
-			if slices.Contains(ops, d.Op) {
-				continue
-			}
-			ops = append(ops, d.Op)
-			n, ok, err := cascadeNotice(r, b, c.Ref, d.Op)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				out = append(out, n)
-			}
+		log, err := logOf(r, b, c.Ref)
+		if err != nil {
+			return nil, err
+		}
+		del := change.DeletionOf(log)
+		if del == nil || !slices.ContainsFunc(c.Deleted, func(d change.Record) bool { return d.Op == del.Op }) {
+			continue
+		}
+		n, ok, err := cascadeNotice(r, b, c.Ref, del.Op)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, n)
 		}
 	}
 	return out, nil

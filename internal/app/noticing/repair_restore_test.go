@@ -376,6 +376,13 @@ func TestCascadeFromMerge(t *testing.T) {
 		f.judge(m)
 		f.wantNone()
 	})
+	t.Run("restored", func(t *testing.T) {
+		f := setupAs(t, "hanako")
+		m, op := concurrentMerge(f, "hanako")
+		undoAll(f, op, epicRef, taskRef)
+		f.judge(m)
+		f.wantNone()
+	})
 	t.Run("read only", func(t *testing.T) {
 		f := setupAs(t, "hanako")
 		m, _ := concurrentMerge(f, "hanako")
