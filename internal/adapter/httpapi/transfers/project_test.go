@@ -228,12 +228,12 @@ func TestLocateProjectAPI(t *testing.T) {
 	}
 	e.hide("S2")
 	res = e.api.Get("/api/locate-project?store=main&id=HH-P1")
+	if res.Code != 200 || !strings.Contains(res.Body.String(), `"kind":"gone","reason":"hidden","old":"HH-P1"`) || !strings.Contains(res.Body.String(), `"storeName":"team"`) {
+		t.Errorf("gone: %d %s", res.Code, res.Body)
+	}
 	var gone struct{ At, NewDisplay string }
 	if json.Unmarshal(res.Body.Bytes(), &gone) != nil || gone.NewDisplay != "TM-P2" || !strings.HasPrefix(gone.At, "2026-11-13T09:00:") {
 		t.Errorf("gone の at・newDisplay: %s", res.Body)
-	}
-	if res.Code != 200 || !strings.Contains(res.Body.String(), `"kind":"gone","reason":"hidden","old":"HH-P1"`) || !strings.Contains(res.Body.String(), `"storeName":"team"`) {
-		t.Errorf("gone: %d %s", res.Code, res.Body)
 	}
 	if res := e.api.Get("/api/locate-project?store=main&id=ZZ-P9"); res.Code != 404 {
 		t.Errorf("見つからない: %d", res.Code)
