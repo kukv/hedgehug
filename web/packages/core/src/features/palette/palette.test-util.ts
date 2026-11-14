@@ -68,6 +68,8 @@ export interface Opts {
   recent?: () => Promise<RecentItem[]>;
   target?: { storeId: string; itemId: string } | null;
   settings?: WorkspaceSettings;
+  // settingsRead は、ステータスの一覧の設定を読む前に待つもの(待たせる・失敗させるため)。
+  settingsRead?: () => Promise<void>;
   catalogPort?: CatalogPort;
   mac?: boolean;
 }
@@ -117,14 +119,17 @@ export async function setup(o: Opts = {}) {
       },
     },
     workspaces: {
-      get: async (storeId, id) => ({
-        id,
-        storeId,
-        name: "Web",
-        prefix: "HH",
-        oldPrefixes: [],
-        settings: o.settings ?? settings,
-      }),
+      get: async (storeId, id) => {
+        await o.settingsRead?.();
+        return {
+          id,
+          storeId,
+          name: "Web",
+          prefix: "HH",
+          oldPrefixes: [],
+          settings: o.settings ?? settings,
+        };
+      },
     },
     selection: {
       current: () =>

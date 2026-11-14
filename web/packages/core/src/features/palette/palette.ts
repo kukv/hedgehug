@@ -12,14 +12,16 @@ import {
   type ActionDeps,
   commandCandidates,
   createCandidates,
+  selectedCandidates,
+  settingsCandidates,
+} from "./actions";
+import { buildRows, type Candidate, noMatch, type Row } from "./candidates";
+import {
   itemCandidates,
   projectCandidates,
   recentCandidates,
-  selectedCandidates,
-  settingsCandidates,
   workspaceCandidates,
-} from "./actions";
-import { buildRows, type Candidate, noMatch, type Row } from "./candidates";
+} from "./destinations";
 import { byName, matchItems, matchProjects, matchWorkspaces } from "./match";
 import type { SelectedItem, Selection } from "./selection";
 

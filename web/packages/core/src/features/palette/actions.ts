@@ -1,5 +1,4 @@
 import type { Item } from "../../model/item";
-import type { PaletteItem, PaletteProject, RecentItem } from "../../model/palette";
 import { get, type Readable } from "../../reactive/store";
 import { type StoreNode, type WorkspaceNode, writableWorkspaces } from "../catalog/catalog";
 import { readOnlyNote } from "../catalog/readonly";
@@ -16,10 +15,10 @@ import type { Toasts } from "../toasts/toasts";
 import type { TransferDialog } from "../transfers/dialog";
 import type { WorkspaceDialog } from "../workspaces/createDialog";
 import type { Candidate, GroupId } from "./candidates";
-import type { Matched } from "./match";
 import type { PlanKind, PlanRequest } from "./planRequest";
 
 // コマンドパレットの候補と、選んだときの動き(02「コマンドパレット」の実行の表、A5c-10〜A5c-12・A5c-14)。
+// アイテム・最近開いたもの・プロジェクト・ワークスペースの候補は destinations.ts。
 // ダイアログを開く候補・画面を移す候補は、先にパレットを閉じてから呼ぶ(A5c-16)。
 
 export interface ActionDeps {
@@ -41,7 +40,7 @@ export interface ActionDeps {
 }
 
 // closing は、パレットを閉じてから f を呼ぶ実行。
-const closing =
+export const closing =
   (d: ActionDeps, f: () => unknown): (() => Promise<void>) =>
   async () => {
     d.close();
@@ -49,7 +48,7 @@ const closing =
   };
 
 // moveTo は、画面を移す候補(Ctrl+Enter では同じ行き先を新しいタブで開く。A5c-12)。
-function moveTo(d: ActionDeps, key: string, group: GroupId, label: string, route: Route) {
+export function moveTo(d: ActionDeps, key: string, group: GroupId, label: string, route: Route) {
   return { key, group, label, route, run: closing(d, () => d.navigation.go(route)) };
 }
 
@@ -233,61 +232,4 @@ export function selectedCandidates(
     });
   }
   return list;
-}
-
-// openItem は、詳細パネルを開く候補(アイテム・最近開いたもの)。Ctrl+Enter では /s/{Store 名}/i/{いまの ID}。
-function openItem(
-  d: ActionDeps,
-  stores: StoreNode[],
-  group: GroupId,
-  x: { storeId: string; itemId: string; display: string; title: string },
-  hint: string,
-): Candidate {
-  const store = stores.find((s) => s.id === x.storeId);
-  return {
-    key: `${group}:${x.storeId}/${x.itemId}`,
-    group,
-    label: `${x.display} ${x.title}`,
-    hint,
-    ...(store ? { route: { name: "item", store: store.name, item: x.display } as Route } : {}),
-    run: closing(d, () => d.detail.open(x.storeId, x.itemId)),
-  };
-}
-
-export function itemCandidates(d: ActionDeps, matched: Matched<PaletteItem>[]): Candidate[] {
-  const stores = get(d.catalog.stores);
-  return matched.map((m) => openItem(d, stores, "item", m.c, m.hint));
-}
-
-export function recentCandidates(d: ActionDeps, recent: RecentItem[]): Candidate[] {
-  const stores = get(d.catalog.stores);
-  return recent.map((r) => openItem(d, stores, "recent", r, r.projectTitle));
-}
-
-export function projectCandidates(d: ActionDeps, matched: Matched<PaletteProject>[]): Candidate[] {
-  const stores = get(d.catalog.stores);
-  return matched.map(({ c, hint }) => ({
-    ...moveTo(
-      d,
-      `project:${c.storeId}/${c.projectId}`,
-      "project",
-      `${c.display} ${c.title}`,
-      routeOfProject(stores, c.storeId, c.projectId, "overview"),
-    ),
-    hint,
-  }));
-}
-
-export function workspaceCandidates(d: ActionDeps, matched: Matched<WorkspaceNode>[]): Candidate[] {
-  const stores = get(d.catalog.stores);
-  return matched.map(({ c, hint }) => ({
-    ...moveTo(
-      d,
-      `workspace:${c.storeId}/${c.id}`,
-      "workspace",
-      c.name,
-      routeOfWorkspace(stores, c.storeId, c.id),
-    ),
-    hint,
-  }));
 }

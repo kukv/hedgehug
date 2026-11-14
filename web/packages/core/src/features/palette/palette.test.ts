@@ -147,6 +147,27 @@ describe("createPalette", () => {
     expect(get(palette.state)).toBeNull();
   });
 
+  test("ステータスの設定を読めなければ一覧に切り替えない。閉じて開き直したあとに読み終わっても、いまのパレットを変えない", async () => {
+    const failed = await setup({ settingsRead: () => Promise.reject(new Error("offline")) });
+    await failed.palette.open();
+    const before = labels(failed.palette);
+    await pick(failed.palette, "ステータスを変更…");
+    expect(get(failed.palette.state)?.mode).toBe("main");
+    expect(labels(failed.palette)).toEqual(before);
+
+    const g = gate();
+    const { palette } = await setup({ settingsRead: () => g.wait });
+    await palette.open();
+    const switching = pick(palette, "ステータスを変更…");
+    palette.close();
+    await palette.open();
+    palette.move("down");
+    g.release();
+    await switching;
+    expect(get(palette.state)?.mode).toBe("main");
+    expect(get(palette.state)?.selected).toBe(2);
+  });
+
   test("ルートが変わったら閉じる", async () => {
     const { palette, route } = await setup();
     await palette.open();
