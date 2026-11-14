@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Refused } from "../../model/errors";
+import { NotFound, Refused } from "../../model/errors";
 import type { InboxPage } from "../../model/inbox";
 import { get } from "../../reactive/store";
 import { emptyOf, inboxTabs, pillOf } from "./inbox";
@@ -107,6 +107,32 @@ describe("createInbox (06「受信箱」)", () => {
     await t.inbox.apply(r);
     expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([[refusal, true]]);
     expect(get(t.inbox.state).rows[0]?.read).toBe(true);
+  });
+
+  it("shows other failures as an error toast without throwing, and reads the rows again", async () => {
+    const t = setup(vi.fn, [row(1)]);
+    await t.inbox.open();
+    const r = get(t.inbox.state).rows[0];
+    if (!r) throw new Error("no row");
+    t.port.setRead.mockRejectedValueOnce(new Error("500 Internal Server Error"));
+    t.change([{ ...r, read: true }]);
+    await expect(t.inbox.toggle(r)).resolves.toBeUndefined();
+    expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([
+      ["500 Internal Server Error", true],
+    ]);
+    expect(get(t.inbox.state).rows[0]?.read).toBe(true);
+  });
+
+  it("reads the rows again without a toast when the notice is gone", async () => {
+    const t = setup(vi.fn, [row(2), row(1)]);
+    await t.inbox.open();
+    const r = get(t.inbox.state).rows[0];
+    if (!r) throw new Error("no row");
+    t.port.keep.mockRejectedValueOnce(new NotFound("not found"));
+    t.change([row(1)]);
+    await t.inbox.keep(r);
+    expect(get(t.toasts.list)).toEqual([]);
+    expect(ids(get(t.inbox.state))).toEqual([1]);
   });
 
   it("keeps without a toast and reads the rows again", async () => {

@@ -1,4 +1,4 @@
-import { NotFound, Refused } from "../../model/errors";
+import { NotFound } from "../../model/errors";
 import type { InboxCounts, InboxPage, InboxRow, InboxRowKind, InboxTab } from "../../model/inbox";
 import type { InboxPort } from "../../port/inbox";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
@@ -136,19 +136,17 @@ export function createInbox(deps: InboxDeps): Inbox {
     publishUnread(page.unread);
   }
 
-  // write は、書き込みのあとに読み直す。断りはその文言をエラーのトーストで出し、ないものは黙る。
+  // write は、書き込みのあとに読み直す。ないものは黙り、ほかの失敗(断りを含む)はその文言をエラーのトーストで
+  // 出す。画面に未処理の拒否を残さないため、投げない。
   async function write(fn: () => Promise<void>, done?: () => void) {
     try {
       await fn();
       done?.();
     } catch (e) {
-      if (e instanceof Refused) deps.toasts.show(e.message, { error: true });
-      else if (!(e instanceof NotFound)) {
-        await again().catch(() => {});
-        throw e;
-      }
+      if (!(e instanceof NotFound))
+        deps.toasts.show(e instanceof Error ? e.message : String(e), { error: true });
     }
-    await again();
+    await again().catch(() => {});
   }
 
   return {
