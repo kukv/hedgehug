@@ -102,7 +102,7 @@ func parse(t *testing.T, text string) query.Query {
 
 func entriesOf(t *testing.T, f fixture, text string) []entry {
 	t.Helper()
-	got, err := f.svc.entries(t.Context(), parse(t, text))
+	got, err := f.svc.entries(t.Context(), parse(t, text), f.svc.Clock.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

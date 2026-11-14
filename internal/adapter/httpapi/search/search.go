@@ -32,17 +32,16 @@ type SearchAssignee struct {
 	Name  *string  `json:"name" required:"true" nullable:"true" doc:"表示名。メンバーにいない人は null"`
 }
 
-// SearchPriority は、行の優先度。
+// SearchPriority は、行の優先度。色は返さない(画面は名前だけを出す)。
 type SearchPriority struct {
-	_     struct{} `nullable:"true"`
-	Name  string   `json:"name"`
-	Color string   `json:"color"`
+	_    struct{} `nullable:"true"`
+	Name string   `json:"name"`
 }
 
 // SearchDeleted は、削除済みの行の印。
 type SearchDeleted struct {
 	_        struct{} `nullable:"true"`
-	DaysLeft int      `json:"daysLeft" doc:"完全に削除されるまでの日数。保持日数を過ぎていれば負"`
+	DaysLeft int      `json:"daysLeft" doc:"完全に削除されるまでの日数。0 以下なら保持日数を過ぎている"`
 }
 
 // SearchRow は、検索の結果の 1 行。
@@ -127,7 +126,7 @@ func toStatus(f query.Facts) *SearchStatus {
 func toPriority(f query.Facts) *SearchPriority {
 	for _, v := range f.Settings.Priorities {
 		if f.Item.Priority != "" && v.ID == f.Item.Priority {
-			return &SearchPriority{Name: v.Name, Color: string(v.Color)}
+			return &SearchPriority{Name: v.Name}
 		}
 	}
 	return nil

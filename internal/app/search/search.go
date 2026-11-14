@@ -8,7 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/query"
 )
 
-// Row は、検索の結果の 1 行。DaysLeft は削除済みだけで、完全に削除されるまでの日数(保持日数を過ぎていれば負)。
+// Row は、検索の結果の 1 行。DaysLeft は削除済みだけで、完全に削除されるまでの日数(0 以下なら保持日数を過ぎている)。
 type Row struct {
 	Store    port.StoreInfo
 	Facts    query.Facts
@@ -37,11 +37,12 @@ func (s Service) Search(ctx context.Context, text string) (Result, error) {
 	if len(errs) > 0 {
 		return res, nil
 	}
-	es, err := s.entries(ctx, q)
+	now := s.Clock.Now()
+	es, err := s.entries(ctx, q, now)
 	if err != nil {
 		return Result{}, err
 	}
-	today := planning.Today(s.Clock.Now())
+	today := planning.Today(now)
 	var rows []*Row
 	for _, e := range es {
 		if hit := query.Match(q, e.facts, today); hit.Match {

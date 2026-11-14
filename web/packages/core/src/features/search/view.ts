@@ -32,9 +32,10 @@ export function readOnlyBands(rows: SearchRow[]): string[] {
   return [...seen.values()];
 }
 
-// deletedNote は、削除済みの行に添える文(08「削除済み」)。daysLeft が負なら保持日数を過ぎている。
+// deletedNote は、削除済みの行に添える文(08「削除済み」)。daysLeft が 0 以下なら保持日数を過ぎている
+// (「あと 0 日」とは出さない)。
 export function deletedNote(daysLeft: number): string {
-  return daysLeft < 0 ? "保持日数を過ぎています" : `あと ${daysLeft} 日で完全に削除`;
+  return daysLeft <= 0 ? "保持日数を過ぎています" : `あと ${daysLeft} 日で完全に削除`;
 }
 
 // assigneeText は、担当者の表示名。メンバーにいなければ「不明なユーザー」(01)、担当者がなければ null。

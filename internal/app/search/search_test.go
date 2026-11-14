@@ -125,6 +125,29 @@ func TestSearchKeyOfHiddenStoreIsKnown(t *testing.T) {
 	}
 }
 
+// 削除済みのワークスペースにだけある追加プロパティのキーは、知らないキーとして断る。
+func TestSearchKeyOfDeletedWorkspaceIsUnknown(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	settings := workspace.DefaultSettings(func() change.ID { return "01TESTVAL00000000000000000" })
+	settings.Properties = append(settings.Properties, workspace.Property{
+		ID: "01TESTPROP00000000000000001", Key: "Customer", Name: "顧客", Type: workspace.TypeText, Kinds: workspace.Kinds, Rank: "z",
+	})
+	ws := workspace.Workspace{ID: "01TESTWS00000000000000009", Name: "Old", Prefix: "OLD"}
+	d, err := workspace.CreateWithSettings(ws, settings)
+	must(t, err)
+	write(t, f.stores, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(ws.ID, d, numbering.Draft(numbering.Projects, 1))
+	})
+	if res := searchOf(t, f, "customer:acme"); len(res.Errors) != 0 {
+		t.Fatalf("削除する前 Errors = %v", res.Errors)
+	}
+	must(t, apptest.DeleteWorkspace(t.Context(), f.stores, store1, ws.ID))
+	if res := searchOf(t, f, "customer:acme"); len(res.Errors) != 1 {
+		t.Errorf("削除したあと Errors = %v", res.Errors)
+	}
+}
+
 // 削除済みは、保持日数 30・11/01 に削除・今日 11/15 で、あと 16 日。
 func TestSearchDeletedDaysLeft(t *testing.T) {
 	f := newFixture(t)
@@ -147,6 +170,25 @@ func TestSearchDeletedDaysLeft(t *testing.T) {
 	}
 	if live := searchOf(t, f, ""); live.Rows[0].DaysLeft != nil {
 		t.Errorf("削除済みでなければ DaysLeft はない")
+	}
+}
+
+type countingClock struct {
+	now   time.Time
+	calls int
+}
+
+func (c *countingClock) Now() time.Time { c.calls++; return c.now }
+
+// 1 回の検索は、時計を 1 回だけ読む(照合の今日と、材料・残り日数の時刻をそろえる)。
+func TestSearchReadsClockOnce(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	clock := &countingClock{now: clockStart}
+	f.svc.Clock = clock
+	searchOf(t, f, "is:deleted")
+	if clock.calls != 1 {
+		t.Errorf("Now の呼び出し = %d, want 1", clock.calls)
 	}
 }
 

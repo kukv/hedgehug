@@ -14,10 +14,9 @@ export interface SearchAssignee {
 
 export interface SearchPriority {
   name: string;
-  color: string;
 }
 
-// SearchDeleted は、削除済みの行だけ。daysLeft は完全に削除されるまでの日数で、保持日数を過ぎていれば負。
+// SearchDeleted は、削除済みの行だけ。daysLeft は完全に削除されるまでの日数で、0 以下なら保持日数を過ぎている。
 export interface SearchDeleted {
   daysLeft: number;
 }
@@ -49,7 +48,7 @@ export interface SearchResult {
   // errors はクエリのエラー(1 語 1 行)。hasKey はキーのある語が 1 つ以上あるか。
   errors: string[];
   hasKey: boolean;
-  // group は `group:` の値(グループ分けは E2)。なければ空。deleted は `is:deleted` の検索か。
+  // group は `group:` の値。なければ空。deleted は `is:deleted` の検索か。
   group: string;
   deleted: boolean;
   rows: SearchRow[];

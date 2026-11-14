@@ -53,7 +53,7 @@ func DeletionOfField(log []Record, f string) *Deletion {
 }
 
 // DaysLeft は、完全に削除されるまでの残り日数。削除した日(このマシンの時刻帯)に保持日数 retention を足した日から、
-// 今日 today(YYYY-MM-DD)までの日数で、負なら保持日数を過ぎている。
+// 今日 today(YYYY-MM-DD)までの日数で、0 以下なら保持日数を過ぎている。
 func (d Deletion) DaysLeft(retention int, today string) int {
 	t, err := time.ParseInLocation(time.DateOnly, today, time.Local)
 	if err != nil {

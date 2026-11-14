@@ -64,7 +64,9 @@ describe("readOnlyBands", () => {
 describe("deletedNote", () => {
   it("残りの日数か、過ぎたこと", () => {
     expect(deletedNote(16)).toBe("あと 16 日で完全に削除");
-    expect(deletedNote(0)).toBe("あと 0 日で完全に削除");
+    expect(deletedNote(1)).toBe("あと 1 日で完全に削除");
+    // 08: 保持日数を過ぎて残っている行は「あと 0 日」ではなく「保持日数を過ぎています」。
+    expect(deletedNote(0)).toBe("保持日数を過ぎています");
     expect(deletedNote(-1)).toBe("保持日数を過ぎています");
   });
 });

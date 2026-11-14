@@ -4,6 +4,7 @@ package search
 
 import (
 	"context"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/planning"
@@ -30,13 +31,12 @@ type entry struct {
 
 // entries は、表示中の Store を StoreList の順に 1 つずつ読み(読み取りを入れ子にしない)、アイテムごとの材料を返す。
 // q.Deleted なら削除済みのアイテム(ワークスペースが削除されていないもの)、でなければ削除されていないアイテム。
-// 旧 ID は、すべての Store の転送記録を集めてから探す(別の Store へ移しても内部 ID は変わらない)。
-func (s Service) entries(ctx context.Context, q query.Query) ([]entry, error) {
+// 旧 ID は、すべての Store の転送記録を集めてから探す(別の Store へ移しても内部 ID は変わらない)。now は検索の時刻。
+func (s Service) entries(ctx context.Context, q query.Query, now time.Time) ([]entry, error) {
 	infos, err := s.StoreList.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	now := s.Clock.Now()
 	snaps := make([]*snapshot, 0, len(infos))
 	var records []transfer.Record
 	for i, info := range infos {

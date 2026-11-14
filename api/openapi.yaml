@@ -2818,7 +2818,7 @@ components:
       nullable: true
       properties:
         daysLeft:
-          description: 完全に削除されるまでの日数。保持日数を過ぎていれば負
+          description: 完全に削除されるまでの日数。0 以下なら保持日数を過ぎている
           format: int64
           type: integer
       required:
@@ -2828,13 +2828,10 @@ components:
       additionalProperties: false
       nullable: true
       properties:
-        color:
-          type: string
         name:
           type: string
       required:
         - name
-        - color
       type: object
     SearchQuery:
       additionalProperties: false

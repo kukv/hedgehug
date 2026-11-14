@@ -98,7 +98,7 @@ type searchBody struct {
 			Login string
 			Name  *string
 		}
-		Priority *struct{ Name, Color string }
+		Priority *struct{ Name string }
 		Points   *float64
 		Deleted  *struct{ DaysLeft int }
 	}
@@ -129,12 +129,12 @@ func TestSearchAPI(t *testing.T) {
 	if r.Status == nil || r.Status.Name != "Todo" || r.Status.Category != "todo" {
 		t.Errorf("status = %+v", r.Status)
 	}
-	// ステータスの色は画面で使わない(点は分類で色を決める)ので、応答に含めない。
+	// ステータス・優先度の色は画面で使わない(ステータスの点は分類で色を決める)ので、応答に含めない。
 	var keys struct {
-		Rows []struct{ Status map[string]any }
+		Rows []struct{ Status, Priority map[string]any }
 	}
-	if err := json.Unmarshal([]byte(raw), &keys); err != nil || len(keys.Rows) != 1 || len(keys.Rows[0].Status) != 2 {
-		t.Errorf("status keys = %+v (%v)", keys, err)
+	if err := json.Unmarshal([]byte(raw), &keys); err != nil || len(keys.Rows) != 1 || len(keys.Rows[0].Status) != 2 || len(keys.Rows[0].Priority) != 1 {
+		t.Errorf("status・priority keys = %+v (%v)", keys, err)
 	}
 	if r.Priority == nil || r.Priority.Name != "Medium" {
 		t.Errorf("priority = %+v", r.Priority)
@@ -159,7 +159,7 @@ func TestSearchAPINulls(t *testing.T) {
 	}
 }
 
-// 削除済みの行は deleted: {daysLeft}(削除の日 + 保持日数 - 今日)。
+// 削除済みの行は deleted: {daysLeft}(削除の日 + 保持日数 - 今日)。11/12 に削除・保持日数 10・今日 11/14 で 8。
 func TestSearchAPIDeleted(t *testing.T) {
 	api, s := newAPIWithStores(t)
 	if err := apptest.DeleteItems(t.Context(), s, "S1", ghostID); err != nil {
@@ -171,7 +171,7 @@ func TestSearchAPIDeleted(t *testing.T) {
 		t.Fatalf("rows = %+v: %s", got.Rows, raw)
 	}
 	d := got.Rows[0].Deleted
-	if d == nil || d.DaysLeft < 0 || d.DaysLeft > 10 {
+	if d == nil || d.DaysLeft != 8 {
 		t.Errorf("deleted = %+v", d)
 	}
 	// 削除されていない行の deleted は null。

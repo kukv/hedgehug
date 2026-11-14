@@ -46,7 +46,7 @@
 | E1-5 | 比べ方: 名前・ログイン名・ID は大文字と小文字を区別しない完全一致(自由な語と、テキスト・URL の値だけ部分一致)。ログイン名の値の先頭の `@` は除く。`@me` はアイテムの Store の「あなた」(`port.Identity.Me`。読めない・空なら何にも一致しない)。否定は語の結果を反転する(値のないアイテム・キーを持たないワークスペースのアイテム・読めない日付と数は、否定で一致する側に入る) | 04 の 173・174・216・218・244 行 |
 | E1-6 | ID のキー(`project`・`parent`・`epic`・関連の 9 個)は、相手のいまの ID か旧 ID(移動前の ID、旧い接頭辞の ID)のどれかと等しければ一致。自由な語は、いまの ID・旧 ID・タイトル・説明のどれかに部分一致すれば一致し、いまの ID・タイトル・説明のどれにも一致せず旧 ID だけで一致した語があれば、その行に「旧 ID」と添える(`oldIdHit`) | 04 の 183・201〜203・459 行、02 の旧 ID の規則 |
 | E1-7 | `is:invalid` は、08「検出する項目」のアイテムを指す 12 項目(親がない・種類に合わない親子・親の循環・ステータスがない・存在しない値・存在しない人・存在しないスプリント・リリース・宙づりの関連・親が別のワークスペース・プロジェクトにある・日付の逆転・番号の重なり・Issue の二重リンク)の判定を、E1 で `domain/repair` の 1 つの関数 `repair.ItemProblems` として作り、`query.Facts.Invalid` を埋める。G の診断は同じ関数を使う。調べるのは削除されていないアイテム(番号の重なりだけは削除済みも数える)。番号の重なりは、同じワークスペースで同じ番号を持つ削除されていないアイテムのどれにも付ける(どちらが番号を持ち続けるかは remote の情報が要り、修復のときに決める) | ユーザーの決定(2026-11-15。トラック E の決定 E-4)。08 の 403〜407 行。検索と診断で、1 つのアイテムが無効かどうかが食い違わないため(04 の 1080 行) |
-| E1-8 | `is:deleted`(否定でない語が 1 つでもある)のとき、対象は削除済みのアイテムのうち、ワークスペースが削除されていないもの(08 の一覧に行として出るもの)だけにする。行には「削除済み」のピルと「あと N 日で完全に削除」(N = 削除の日 + 保持日数 − 今日。0 未満なら「保持日数を過ぎています」)を出し、行を薄くする。タイトルは押せない文字で出す。タイトルを押して設定の「削除済み」の行を開くのは、その画面を作る G が足す | 04 の 306〜312 行、08 の 307〜320 行 |
+| E1-8 | `is:deleted`(否定でない語が 1 つでもある)のとき、対象は削除済みのアイテムのうち、ワークスペースが削除されていないもの(08 の一覧に行として出るもの)だけにする。行には「削除済み」のピルと「あと N 日で完全に削除」(N = 削除の日 + 保持日数 − 今日。0 以下なら「あと 0 日」ではなく「保持日数を過ぎています」。08 の一覧と同じ)を出し、行を薄くする。タイトルは押せない文字で出す。タイトルを押して設定の「削除済み」の行を開くのは、その画面を作る G が足す | 04 の 306〜312 行、08 の 307〜320 行 |
 | E1-9 | `sort:` は E1 の行の並びに効かせる(テーブルの並び)。`group:` は解析だけして応答の `group` に返し、グループ分けは E2 が作る | 04 の 248・272 行。テーブルのグループは E2 |
 | E1-10 | 並び: `sort:` があれば全体を 1 本にしてそのキーで並べ、値が同じなら Store の並び・ワークスペースの並び・アイテムの並び順(`item.SortSiblings` と同じ比べ方)の順。`sort:` がなければ Store の並び、ワークスペースの並び、並び順。Store の並びは `port.StoreList` の順、ワークスペースの並びはサイドバーと同じ(`workspace.RankOf` の順、同じなら内部 ID) | 04 の 268 行、`app/workspaces/order.go` の `rankedInOrder` |
 | E1-11 | 今日の日付は、サーバーの `port.Clock` の時刻をこのマシンの時刻帯にした日(`planning.Today`)。`created`・`updated` も、このマシンの時刻帯の日付で比べる | 01 の日付の規則、04 の 211・244 行 |
@@ -286,7 +286,7 @@ git commit -m "feat(query): 並べ替えのキーと既定の並びを決める(
 - Produces:
   - `func Updated(log []change.Record, c Context) time.Time` — E1-12。履歴の行を作る仕組み(`ItemRows`)と同じ規則で行に出る記録だけを見る
   - `func NextSprint(live []Sprint) *Sprint` — E1-13。なければ nil
-  - `func (d Deletion) DaysLeft(retention int, today string) int` — 削除した日(このマシンの時刻帯)+ 保持日数 − 今日の日数。負なら保持日数を過ぎている(E1-8。G の設定の「削除済み」も同じ関数を使う)
+  - `func (d Deletion) DaysLeft(retention int, today string) int` — 削除した日(このマシンの時刻帯)+ 保持日数 − 今日の日数。0 以下なら保持日数を過ぎている(E1-8。G の設定の「削除済み」も同じ関数を使う)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -456,7 +456,7 @@ git commit -m "feat(search): 表示中の Store を読んで照合の材料を�
 **Interfaces:**
 - Consumes: Task 1〜4 の `query.Parse`・`Match`・`Order`、Task 6 の `entries`
 - Produces:
-  - `type Row struct { Store port.StoreInfo; Facts query.Facts; OldID bool; DaysLeft *int /* 削除済みだけ。保持日数を過ぎていれば負 */ }`
+  - `type Row struct { Store port.StoreInfo; Facts query.Facts; OldID bool; DaysLeft *int /* 削除済みだけ。0 以下なら保持日数を過ぎている */ }`
   - `type Result struct { Errors []string; HasKey bool; Group string; Deleted bool; Rows []Row }`
   - `func (s Service) Search(ctx context.Context, text string) (Result, error)` — 先にすべての Store(非表示を含む)のワークスペースの設定を読んで追加プロパティのキーを集め、`Parse` する。エラーがあれば `Rows` は空で、アイテムは読まない
 
@@ -505,7 +505,7 @@ git commit -m "feat(search): クエリで絞り込み、並べた結果を返す
   - `type ScreenStates interface { Get(ctx context.Context, screen string) (string, bool, error); Put(ctx context.Context, screen, body string) error }`(`app/search`。`port` は 20 個で満杯)
   - `func (d *DB) ScreenStates() ScreenStates`(`statedb` の型。移行 `screens/001`。`ReportSelections` と同じ形)
   - API(E1-24): `POST /api/search`(operationId `search`)、`GET /api/screen-states/{screen}`(`screen-state-get`)、`PUT /api/screen-states/{screen}`(`screen-state-put`)
-  - 本文の型 `SearchResult { errors, hasKey, group, deleted, rows }`、`SearchRow { storeId, storeName, storeColor, readOnly, workspaceId, projectId, itemId, display, oldIdHit, title, kind, status: {name, category, color} | null, assignee: {login, name: string|null} | null, priority: {name, color} | null, end: string, points: number|null, deleted: {daysLeft: number} | null }`(`name` が null はメンバーにいない人)、`ScreenState { body: string|null }`
+  - 本文の型 `SearchResult { errors, hasKey, group, deleted, rows }`、`SearchRow { storeId, storeName, storeColor, readOnly, workspaceId, projectId, itemId, display, oldIdHit, title, kind, status: {name, category} | null, assignee: {login, name: string|null} | null, priority: {name} | null, end: string, points: number|null, deleted: {daysLeft: number} | null }`(`name` が null はメンバーにいない人)、`ScreenState { body: string|null }`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -689,7 +689,7 @@ git commit -m "feat(ui): 絞り込み欄の部品と / キーを足す(E1 Task 1
 `view.test.ts`:
 - `emptyText`: エラーあり →「一致するものはありません」「絞り込みを変えてみてください。」。0 件で絞り込みあり → 同じ。絞り込みが空(前後の空白だけを含む)で 0 件 →「まだ何もありません」、`body` null、`create` 真。
 - `readOnlyBands`: 閲覧のみの Store「team」の行が 2 件と「docs」の行が 1 件 →「team は閲覧のみの Store です。閲覧はできますが、作成・変更・削除はできません。」と docs の 1 本ずつ。閲覧のみの行がなければ空。
-- `deletedNote`: 16 →「あと 16 日で完全に削除」、0 →「あと 0 日で完全に削除」、-1 →「保持日数を過ぎています」。
+- `deletedNote`: 16 →「あと 16 日で完全に削除」、1 →「あと 1 日で完全に削除」、0 と -1 →「保持日数を過ぎています」。
 - `assigneeText`: `{login: "tanaka", name: "田中"}` →「田中」、`name` null →「不明なユーザー」、null → null。
 - `searchHelp`: 説明文が 04 の 320 行のとおり、表が 04 の 326〜352 行の 27 行と同じ順・同じ文。
 

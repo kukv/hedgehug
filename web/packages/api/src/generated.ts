@@ -1888,7 +1888,7 @@ export type SearchAssignee = {
  * @nullable
  */
 export type SearchDeleted = {
-  /** 完全に削除されるまでの日数。保持日数を過ぎていれば負 */
+  /** 完全に削除されるまでの日数。0 以下なら保持日数を過ぎている */
   daysLeft: number;
 } | null;
 
@@ -1896,7 +1896,6 @@ export type SearchDeleted = {
  * @nullable
  */
 export type SearchPriority = {
-  color: string;
   name: string;
 } | null;
 
