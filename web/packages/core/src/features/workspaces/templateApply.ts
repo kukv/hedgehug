@@ -75,6 +75,7 @@ export function templateStructure(
   t: WorkspaceTemplate,
   parentAssignee: string,
   members: Member[],
+  settings: WorkspaceSettings,
 ): { heading: string; rows: StructureRow[] } | null {
   const summary = templateSummary(t);
   if (summary === "") return null;
@@ -95,7 +96,10 @@ export function templateStructure(
     }));
   const rows: StructureRow[] = [];
   for (const c of t.children) {
-    const a = typeof c.values.assignee === "string" ? c.values.assignee : "";
+    // 子の担当者は、保存と同じく、非表示・その種類で使わないプロパティの値を捨てる(サーバーの TemplateValuesFor)。
+    const prop = settings.properties.find((p) => p.id === "assignee");
+    const usable = prop !== undefined && !prop.hidden && prop.kinds.includes(c.kind);
+    const a = usable && typeof c.values.assignee === "string" ? c.values.assignee : "";
     rows.push({ depth: 0, kind: c.kind, title: c.title, assignee: name(a) });
     rows.push(...stepRows(c.steps, a, 1));
   }
