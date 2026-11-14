@@ -163,3 +163,50 @@ func (i *Inbox) ForgetStore(_ context.Context, store port.StoreID) error {
 	i.rows = slices.DeleteFunc(i.rows, func(r port.NoticeRow) bool { return r.Store == store })
 	return nil
 }
+
+// JudgedSaves は port.JudgedSaves の偽物。
+type JudgedSaves struct {
+	mu    sync.Mutex
+	saves map[port.StoreID][]port.SaveKey
+}
+
+func NewJudgedSaves() *JudgedSaves { return &JudgedSaves{saves: map[port.StoreID][]port.SaveKey{}} }
+
+func (j *JudgedSaves) Started(_ context.Context, id port.StoreID) (bool, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return len(j.saves[id]) > 0, nil
+}
+
+func (j *JudgedSaves) Known(_ context.Context, id port.StoreID, k port.SaveKey) (port.Match, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	m := port.NotJudged
+	for _, s := range j.saves[id] {
+		if s.Version == k.Version {
+			return port.SameVersion, nil
+		}
+		if k.Op != "" && s.Op == k.Op && s.Author == k.Author && s.At.Equal(k.At) {
+			m = port.SameSave
+		}
+	}
+	return m, nil
+}
+
+func (j *JudgedSaves) Mark(_ context.Context, id port.StoreID, keys []port.SaveKey) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for _, k := range keys {
+		if !slices.ContainsFunc(j.saves[id], func(s port.SaveKey) bool { return s.Version == k.Version }) {
+			j.saves[id] = append(j.saves[id], k)
+		}
+	}
+	return nil
+}
+
+func (j *JudgedSaves) ForgetStore(_ context.Context, id port.StoreID) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	delete(j.saves, id)
+	return nil
+}
