@@ -535,7 +535,7 @@ Task 13・14 は、develop を取り込んだあと(F1 のスプリント・リ�
 
 **Files:**
 - Modify: `internal/app/planning/service.go`(`writePlanFrom` に取り消しを足す)、`sprints.go`、`releases.go`、`close.go`(必要なら)
-- Test: `internal/app/planning/deleted_test.go`
+- Test: `internal/app/planning/revive_test.go`(新規。`deleted_test.go` の 404 の表から、R12 で取り消す側に変わった操作を外す)
 
 **Interfaces:**
 - Consumes: Task 1 の `port.ReviveSetting`(項目名 `sprints/<ID>`・`releases/<ID>`)、Task 10 の `port.EditableWorkspace`・`port.ReviveWorkspace`、Task 2 の「取り消したのに行がなければ `port.ErrNotFound`」の形(`internal/app/workspaces/edit.go`)
@@ -558,7 +558,7 @@ Expected: FAIL
 
 - [ ] **Step 3: 書く**
 
-`writePlanFrom` に、取り消す項目名(`sprints/<ID>`・`releases/<ID>`。作成・削除・復元・完了・アイテムへの割り当ては空)と、ワークスペースを取り消すか(削除・復元・割り当て以外)を渡せるようにする。保存の前の読みは `EditableWorkspace` と、取り消す削除の行を除いたログ(`workspace.WithoutCovering`)で作った計画。tx の最初で `ReviveWorkspace`・`ReviveSetting`、そのあと計画を読み直す。取り消したのに行がなければ `port.ErrNotFound`。行を書いたあとに、取り消したスプリント・リリースの名前の重なりを確かめる(08 の文言)。
+`writePlanFrom` に、取り消す項目名(`sprints/<ID>`・`releases/<ID>`。作成・削除・復元・完了・アイテムへの割り当ては空)と、ワークスペースを取り消すか(削除・復元・割り当て以外)を渡せるようにする。保存の前の読みは `EditableWorkspace` と、取り消す削除の行を除いたログ(`workspace.WithoutCovering`)で作った計画。tx の最初で `ReviveWorkspace`・`ReviveSetting`、そのあと計画を読み直す。取り消したのに行がなければ `port.ErrNotFound`。取り消したスプリント・リリースの名前の重なりは、取り消した直後(行を書く前)に変更後の名前で確かめる(08 の文言)。行を書いたあとに確かめると、`CheckSprint`・`CheckRelease` が先に 05 の文言「同じ名前のスプリントがあります」で断り、08 の文言が出ないため。名前が空なら、その前に 05 の「名前を入力してください」で断る。
 
 - [ ] **Step 4: 通ることを確かめる**
 
