@@ -17,6 +17,13 @@ func recentItems(t *testing.T, r port.RecentItems) []port.Recent {
 	return got
 }
 
+func mustTouch(t *testing.T, r port.RecentItems, store port.StoreID, item change.ID, at time.Time, keep int) {
+	t.Helper()
+	if err := r.Touch(t.Context(), store, item, at, keep); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRecentTouchKeepsNewestAndMovesToTop(t *testing.T) {
 	r := openTemp(t).Recent()
 	base := time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)
@@ -45,8 +52,8 @@ func TestRecentTouchKeepsNewestAndMovesToTop(t *testing.T) {
 func TestRecentOrdersByTimeNotText(t *testing.T) {
 	r := openTemp(t).Recent()
 	base := time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)
-	_ = r.Touch(t.Context(), "S1", "a", base.Add(500*time.Millisecond), 5)
-	_ = r.Touch(t.Context(), "S1", "b", base.Add(time.Second), 5)
+	mustTouch(t, r, "S1", "a", base.Add(500*time.Millisecond), 5)
+	mustTouch(t, r, "S1", "b", base.Add(time.Second), 5)
 	got := recentItems(t, r)
 	if len(got) != 2 || got[0].Item != "b" {
 		t.Fatalf("got %v", got)
@@ -56,8 +63,8 @@ func TestRecentOrdersByTimeNotText(t *testing.T) {
 func TestRecentTouchUpdatesStore(t *testing.T) {
 	r := openTemp(t).Recent()
 	base := time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)
-	_ = r.Touch(t.Context(), "S1", "a", base, 5)
-	_ = r.Touch(t.Context(), "S2", "a", base.Add(time.Minute), 5)
+	mustTouch(t, r, "S1", "a", base, 5)
+	mustTouch(t, r, "S2", "a", base.Add(time.Minute), 5)
 	got := recentItems(t, r)
 	if len(got) != 1 || got[0].Store != "S2" {
 		t.Fatalf("got %v", got)
@@ -68,7 +75,7 @@ func TestRecentForgetRemovesRows(t *testing.T) {
 	r := openTemp(t).Recent()
 	base := time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)
 	for i, id := range []change.ID{"a", "b", "c"} {
-		_ = r.Touch(t.Context(), "S1", id, base.Add(time.Duration(i)*time.Minute), 5)
+		mustTouch(t, r, "S1", id, base.Add(time.Duration(i)*time.Minute), 5)
 	}
 	if err := r.Forget(t.Context(), []change.ID{"a", "c", "zzz"}); err != nil {
 		t.Fatal(err)
