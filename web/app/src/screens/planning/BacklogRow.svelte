@@ -122,7 +122,7 @@
   />
   <IconButton
     label="上へ"
-    size="xs"
+    size="sm"
     disabled={readOnly || !up}
     title={note ?? "上へ"}
     onclick={() => up && void backlog.place(row, up)}
@@ -130,7 +130,7 @@
   >
   <IconButton
     label="下へ"
-    size="xs"
+    size="sm"
     disabled={readOnly || !down}
     title={note ?? "下へ"}
     onclick={() => down && void backlog.place(row, down)}

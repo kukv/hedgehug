@@ -37,7 +37,9 @@ export function dragRows(handle: HTMLElement, options: DragRowsOptions) {
 
   function move(event: PointerEvent) {
     if (event.pointerId !== pointer) return;
-    target = targetAt(event.clientX, event.clientY);
+    const next = targetAt(event.clientX, event.clientY);
+    if (next?.frame === target?.frame && next?.row === target?.row) return;
+    target = next;
     opts.onhover(target);
   }
   function stop(drop: boolean) {

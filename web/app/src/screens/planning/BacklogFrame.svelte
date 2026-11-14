@@ -61,7 +61,12 @@
   const startWhy = $derived(readOnly ? readOnlyNote : startReason);
 </script>
 
-<section class="frame" class:tail={here !== null && here.row === null} data-frame={key}>
+<section
+  class="frame"
+  class:tail={here !== null && here.row === null}
+  aria-label={s?.name ?? "バックログ"}
+  data-frame={key}
+>
   {#if s}
     <header class="head">
       <h3>{s.name}</h3>

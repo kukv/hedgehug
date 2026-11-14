@@ -74,9 +74,25 @@ describe("dragRows", () => {
     expect(ondrop).toHaveBeenCalledExactlyOnceWith({ frame: "s1", row: null });
   });
 
+  it("tells the hover only when the target changes", async () => {
+    const { handle, q, onhover } = setup();
+    await fireEvent.pointerDown(handle, { pointerId: 1, button: 0 });
+    pointAt(q(".r2-title"));
+    await fireEvent.pointerMove(handle, { pointerId: 1 });
+    await fireEvent.pointerMove(handle, { pointerId: 1 });
+    pointAt(q(".s1-empty"));
+    await fireEvent.pointerMove(handle, { pointerId: 1 });
+    expect(onhover.mock.calls).toEqual([
+      [{ frame: "s1", row: "r2" }],
+      [{ frame: "s1", row: null }],
+    ]);
+  });
+
   it("does not drop outside any frame", async () => {
     const { handle, q, ondrop, onhover } = setup();
     await fireEvent.pointerDown(handle, { pointerId: 1, button: 0 });
+    pointAt(q(".r2-title"));
+    await fireEvent.pointerMove(handle, { pointerId: 1 });
     pointAt(q(".outside"));
     await fireEvent.pointerMove(handle, { pointerId: 1 });
     expect(onhover).toHaveBeenLastCalledWith(null);
