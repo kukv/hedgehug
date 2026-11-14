@@ -135,6 +135,18 @@ describe("パレットの候補の実行", () => {
     expect(get(planRequest.request)).toBeNull();
   });
 
+  test("スプリントを作成: 「入力を破棄」の確認で断られて移らなかったら、作成の要求を置かない", async () => {
+    const { palette, calls, planRequest } = await setup({
+      here: { workspaceId: "S1-W1" },
+      moved: false,
+    });
+    await palette.open();
+    palette.input("スプリント");
+    await pick(palette, "スプリントを作成");
+    expect(named(calls, "go")).toHaveLength(1);
+    expect(get(planRequest.request)).toBeNull();
+  });
+
   test("プロジェクトを作成: 書き込めるワークスペースがなければ A5c-14 の文", async () => {
     const base = fakeCatalogPort();
     const roOnly = await setup({

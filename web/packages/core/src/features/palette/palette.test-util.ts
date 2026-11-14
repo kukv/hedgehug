@@ -72,6 +72,8 @@ export interface Opts {
   settingsRead?: () => Promise<void>;
   catalogPort?: CatalogPort;
   mac?: boolean;
+  // moved は、navigation.go の結果(「入力を破棄」の確認で断られたら false)。
+  moved?: boolean;
 }
 
 // Call は、呼ばれた口の記録。open は、呼ばれたときにパレットが開いていたか。
@@ -97,7 +99,12 @@ export async function setup(o: Opts = {}) {
   const sel = o.selected === undefined ? epic : o.selected;
   palette = createPalette({
     catalog,
-    navigation: { go: rec("go") },
+    navigation: {
+      go: async (...a) => {
+        rec("go")(...a);
+        return o.moved ?? true;
+      },
+    },
     itemDialog: { open: async (...a) => rec("itemDialog.open")(...a) },
     projectDialog: { open: async (...a) => rec("projectDialog.open")(...a) },
     workspaceDialog: { open: rec("workspaceDialog.open") },
