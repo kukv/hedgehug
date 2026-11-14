@@ -1,5 +1,7 @@
 import { NotFound, Refused } from "../../model/errors";
 import type {
+  BulkDeleted,
+  BulkDeletePreview,
   DeletePreview,
   MoveCandidate,
   MovePreview,
@@ -20,6 +22,9 @@ export interface FakeItemActions extends ItemActionsPort {
   candidates: MoveCandidate[];
   // movePreviewResult は、移動の予告の答え。
   movePreviewResult: MovePreview;
+  // bulkPreview・bulkResult は、一括削除の予告と結果の答え。
+  bulkPreview: BulkDeletePreview;
+  bulkResult: BulkDeleted;
   // refuseNext は、次の書く操作を、この文言の断りにする(1 回だけ)。failNext は、断りでない失敗にする。
   refuseNext(message: string): void;
   failNext(): void;
@@ -63,6 +68,8 @@ export function fakeItemActions(): FakeItemActions {
     projectPreview: { items: 0, retentionDays: 30 },
     candidates: [],
     movePreviewResult: { below: 0, statuses: [] },
+    bulkPreview: { stores: 1, retentionDays: 30, readOnly: 0 },
+    bulkResult: { deleted: 0, readOnly: 0 },
     missing,
     refuseNext(message) {
       refusal = message;
@@ -103,6 +110,14 @@ export function fakeItemActions(): FakeItemActions {
         `move ${id} ${JSON.stringify(to)}${statuses ? ` ${JSON.stringify(statuses)}` : ""}`,
       ),
     changeKind: (_s, id, kind) => write(id, `changeKind ${id} ${kind}`),
+    async bulkDeletePreview(items) {
+      calls.push(`bulkDeletePreview ${items.map((i) => `${i.storeId}/${i.itemId}`).join(",")}`);
+      return self.bulkPreview;
+    },
+    async bulkDelete(items) {
+      await write("", `bulkDelete ${items.map((i) => `${i.storeId}/${i.itemId}`).join(",")}`);
+      return self.bulkResult;
+    },
     async duplicate(storeId, id) {
       await write(id, `duplicate ${id}`);
       return `${storeId}-copy-of-${id}`;

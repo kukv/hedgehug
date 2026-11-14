@@ -1,6 +1,9 @@
 import type { Kind } from "../model/item";
 import type {
+  BulkDeleted,
+  BulkDeletePreview,
   DeletePreview,
+  ItemRef,
   MoveCandidate,
   MovePreview,
   MoveTarget,
@@ -30,6 +33,10 @@ export interface ItemActionsPort {
     statuses?: Record<string, string>,
   ): Promise<void>;
   changeKind(storeId: string, itemId: string, kind: Kind): Promise<void>;
+  // bulkDeletePreview は、複数のアイテムの一括削除の確認ダイアログの中身(閲覧のみの Store のものも含めて送る)。
+  bulkDeletePreview(items: ItemRef[]): Promise<BulkDeletePreview>;
+  // bulkDelete は、Store ごとに、アイテムと下にあるものを消す。閲覧のみの Store のものは消さずに数える。
+  bulkDelete(items: ItemRef[]): Promise<BulkDeleted>;
   // duplicate は、新しいアイテムの内部 ID を返す。
   duplicate(storeId: string, itemId: string): Promise<string>;
 }
