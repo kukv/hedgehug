@@ -178,5 +178,6 @@ export {
   type Writable,
   writable,
 } from "./reactive/store";
+export * from "./searchIndex";
 export * from "./selectionIndex";
 export * from "./workspacesIndex";
