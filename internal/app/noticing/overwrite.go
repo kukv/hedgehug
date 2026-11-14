@@ -57,14 +57,14 @@ func overwritesOf(r port.Reader, b batch, ref change.Ref, m *mineRows, done over
 	var out []port.Notice
 	for _, l := range losses {
 		field := fieldOf(l)
-		if !done.add(ref, field) {
+		if done[ref][field] {
 			continue
 		}
 		n, ok, err := overwriteNotice(r, b, ref, field, l)
 		if err != nil {
 			return nil, err
 		}
-		if ok {
+		if ok && done.add(ref, field) {
 			out = append(out, n)
 		}
 	}

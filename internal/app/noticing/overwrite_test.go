@@ -2,6 +2,7 @@ package noticing_test
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -250,4 +251,36 @@ func TestOverwriteOnce(t *testing.T) {
 	f.overwrite(m, w)
 	f.overwrite(m, w)
 	f.wantOne()
+}
+
+// 自分の値を見て書いた変更(prev に自分の行がある)は、同時ではないので上書きではない。
+func TestOverwriteSequentialSkipped(t *testing.T) {
+	f := setup(t)
+	m := f.save(user("hanako"), appendRef(epicRef, change.NewSet("title", "認証", "a")))
+	w := f.save(user("taro"), appendRef(epicRef, change.NewSet("title", "a", "b")))
+	if err := f.judgeReceived(port.Received{Saves: []port.ReceivedSave{w}, Own: ownOp(m)}); err != nil {
+		t.Fatal(err)
+	}
+	f.wantNone()
+}
+
+// あなたの別のマシンの値に負けたら、差出人はあなた(C4c1-7)。
+func TestOverwriteByMyOtherMachine(t *testing.T) {
+	f := setup(t)
+	lose(f, epicRef, []change.Draft{change.NewSet("title", "認証", "a")}, user("hanako"), []change.Draft{change.NewSet("title", "認証", "b")})
+	if n := f.wantOne(); n.Sender != "hanako" {
+		t.Errorf("notice = %+v", n)
+	}
+}
+
+func TestOverwriteOwnError(t *testing.T) {
+	f := setup(t)
+	f.save(user("hanako"), appendRef(epicRef, change.NewSet("title", "認証", "a")))
+	w := f.save(user("taro"), appendRef(epicRef, change.NewSet("title", "認証", "b")))
+	boom := errors.New("boom")
+	in := port.Received{Saves: []port.ReceivedSave{w}, Own: func(change.ID) (bool, error) { return false, boom }}
+	if err := f.judgeReceived(in); !errors.Is(err, boom) {
+		t.Errorf("err = %v, want %v", err, boom)
+	}
+	f.wantNone()
 }
