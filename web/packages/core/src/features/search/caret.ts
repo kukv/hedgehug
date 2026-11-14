@@ -43,15 +43,26 @@ function words(text: string): Word[] {
   return out;
 }
 
+// keyOf は、語 raw の頭の `-`(否定。`-` だけの語は否定にしない)と、「キー + 演算子」の一致。キーの形でなければ null。
+function keyOf(raw: string): { not: boolean; m: RegExpExecArray } | null {
+  const not = raw.length > 1 && raw.startsWith("-");
+  const m = keyPattern.exec(not ? raw.slice(1) : raw);
+  return m ? { not, m } : null;
+}
+
+// hasKeyTerm は、キーの形の語が 1 つ以上あるか(サーバーの解析で「キーのある語」になるもの)。
+export function hasKeyTerm(text: string): boolean {
+  return words(text).some((w) => keyOf(text.slice(w.start, w.end)) !== null);
+}
+
 // caretTerm は、カーソルの位置の語が「キー + 演算子」で始まり、カーソルがその演算子のあとにあるとき、その
 // キーと打った値を返す。それ以外(自由な語・空白の上・キーの綴りの途中)は null。
 export function caretTerm(text: string, caret: number): CaretTerm | null {
   const word = words(text).find((w) => w.start <= caret && caret <= w.end);
   if (!word) return null;
-  const raw = text.slice(word.start, word.end);
-  const not = raw.length > 1 && raw.startsWith("-");
-  const m = keyPattern.exec(not ? raw.slice(1) : raw);
-  if (!m) return null;
+  const key = keyOf(text.slice(word.start, word.end));
+  if (!key) return null;
+  const { not, m } = key;
   const valuesFrom = word.start + (not ? 1 : 0) + m[0].length;
   if (caret < valuesFrom) return null;
   const before = text.slice(valuesFrom, caret);

@@ -2,7 +2,7 @@
   import type { SearchRow as Row } from "@hedgehug/core";
   import SearchRow from "./SearchRow.svelte";
 
-  // 検索のテーブル(04「テーブル」、E1-18)。初めの 7 列を読むだけで出す。列の操作・選択・グループは E2。
+  // 検索のテーブル(04「テーブル」、E1-18)。初めの 7 列を読むだけで出す(列の操作・選択・グループはない)。
   interface Props {
     rows: Row[];
   }

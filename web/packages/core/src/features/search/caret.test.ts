@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { caretTerm } from "./caret";
+import { caretTerm, hasKeyTerm } from "./caret";
 
 // at は、`|` をカーソルとして、その位置の語を読む。
 const at = (marked: string) => {
@@ -73,4 +73,20 @@ describe("caretTerm", () => {
   it("treats the space inside an open quote as part of the same term", () => {
     expect(at('release:"v2.0 be|ta')).toMatchObject({ key: "release", typed: "v2.0 be" });
   });
+});
+
+describe("hasKeyTerm", () => {
+  it.each([["kind:bug"], ["認証 -status:done"], ["http://x"], ['release:"v2 beta'], ["Points>=3"]])(
+    "is true for %s",
+    (text) => {
+      expect(hasKeyTerm(text)).toBe(true);
+    },
+  );
+
+  it.each([["認証"], ["C++>11"], ["- foo"], ['"status:x"'], ['"ガント 表"'], [""], ["  "]])(
+    "is false for %s",
+    (text) => {
+      expect(hasKeyTerm(text)).toBe(false);
+    },
+  );
 });

@@ -3,7 +3,7 @@ import { get } from "../../reactive/store";
 import { flush, gate, item } from "../items/fixtures.test-util";
 import { settings } from "../items/settings.test-util";
 import { paletteFooter } from "./palette";
-import { found, index, labels, named, noKey, pick, setup } from "./palette.test-util";
+import { found, index, labels, named, noKey, pi, pick, setup } from "./palette.test-util";
 
 // パレットの状態(02「コマンドパレット」、A5c-2・A5c-9・A5c-15・A5c-16)。
 
@@ -217,10 +217,22 @@ describe("createPalette", () => {
       expect(get(palette.state)).toBeNull();
     });
 
+    test("キーの形の語がなければ、待たずサーバーにも聞かない", async () => {
+      const { palette, timer, searched } = await setup({ search: async () => found(1) });
+      await palette.open();
+      for (const text of ["認証", "HH-1 ログイン", '"status:x"', "- foo", "C++>11"]) {
+        palette.input(text);
+        expect(timer.count()).toBe(0);
+      }
+      await flush();
+      expect(searched).toEqual([]);
+      expect(labels(palette)).not.toContain("# このクエリで");
+    });
+
     test("キーなし・エラーのときは群を出さない", async () => {
       const a = await setup({ search: async () => noKey });
       await a.palette.open();
-      a.palette.input("foo");
+      a.palette.input("foo:");
       a.timer.fire();
       await flush();
       expect(labels(a.palette)).not.toContain("# このクエリで");
@@ -276,14 +288,18 @@ describe("createPalette", () => {
     });
 
     test("アイテムの候補は群があってもなくても変わらない", async () => {
-      const withGroup = await setup({ search: async () => found(1) });
+      // キーの形の語でもアイテムに一致するよう、タイトルが「todo:認証」のアイテムを足す。
+      const withTodo = async () => ({ ...index, items: [...index.items, pi("S1", 3, "todo:認証")] });
+      const withGroup = await setup({ search: async () => found(1), index: withTodo });
       await withGroup.palette.open();
-      withGroup.palette.input("認証");
+      withGroup.palette.input("todo:認証");
       withGroup.timer.fire();
       await flush();
-      const without = await setup();
+      expect(labels(withGroup.palette)).toContain("# このクエリで");
+      expect(labels(withGroup.palette)).toContain("HH-3 todo:認証");
+      const without = await setup({ index: withTodo });
       await without.palette.open();
-      without.palette.input("認証");
+      without.palette.input("todo:認証");
       expect(
         labels(withGroup.palette).filter((l) => l !== "# このクエリで" && l !== "検索で開く"),
       ).toEqual(labels(without.palette));

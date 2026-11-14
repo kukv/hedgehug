@@ -1,9 +1,11 @@
 import type { SearchPort } from "../../port/search";
+import { hasKeyTerm } from "../search/caret";
 import type { Timer } from "../toasts/toasts";
 import type { Candidate } from "./candidates";
 
-// 「このクエリで」の群(02「コマンドパレット」、E1-21)。入力を 150ms 待ってサーバーで解析し、いまの入力の応答が
-// 「キーが 1 つ以上あってエラーがない」ときだけ「検索で開く」を出す。
+// 「このクエリで」の群(02「コマンドパレット」、E1-21)。キーの形の語がある入力だけを、150ms 待ってサーバーで解析し、
+// いまの入力の応答が「キーが 1 つ以上あってエラーがない」ときだけ「検索で開く」を出す。キーの形の語がなければ、
+// サーバーの答えも「キーなし」なので聞かない。
 
 export const queryWait = 150;
 
@@ -43,7 +45,7 @@ export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
     reset,
     input(text) {
       reset();
-      if (text.trim() === "") return;
+      if (!hasKeyTerm(text)) return;
       current = text;
       pending = deps.timer.set(() => {
         pending = undefined;
@@ -54,7 +56,7 @@ export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
             shown = r.hasKey && r.errors.length === 0 ? r.rows.length : null;
             deps.changed();
           },
-          // 解析できなければ、群を出さないだけ(入力はそのまま続けられる)。
+          // 検索の要求が届かなければ(通信の失敗)、群を出さないだけ(入力はそのまま続けられる)。
           () => {},
         );
       }, queryWait);

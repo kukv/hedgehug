@@ -17,7 +17,7 @@ export interface CandidateSources {
   members: { storeId: string; login: string; name: string }[];
 }
 
-// E1 は all だけを使う。E4・E7 が workspace(そのワークスペースの範囲)を使う。
+// CandidateScope は、候補を出す範囲。all は表示中のすべての Store、workspace はそのワークスペースだけ。
 export type CandidateScope =
   | { kind: "all" }
   | { kind: "workspace"; storeId: string; workspaceId: string };
@@ -88,14 +88,15 @@ function projectEntries(stores: StoreNode[], typed: string): Entry[] {
   );
 }
 
+// workspaceEntries は、「名前 接頭辞」(Web HH)のラベルで探す。
 function workspaceEntries(stores: StoreNode[], typed: string): FilterCandidate[] {
   // 接頭辞が同じなら `workspace:HH` はどちらにも一致するので、最初の 1 つだけを出す。
   const seen = new Set<string>();
   return stores
     .flatMap((s) => s.workspaces)
-    .filter((w) => hits(w.name, typed) || hits(w.prefix, typed))
-    .filter((w) => !seen.has(w.prefix.toLowerCase()) && seen.add(w.prefix.toLowerCase()))
-    .map((w) => ({ label: w.name, insert: w.prefix }));
+    .map((w) => ({ label: `${w.name} ${w.prefix}`, insert: w.prefix }))
+    .filter((c) => hits(c.label, typed))
+    .filter((c) => !seen.has(c.insert.toLowerCase()) && seen.add(c.insert.toLowerCase()));
 }
 
 function itemEntries(src: CandidateSources, scope: CandidateScope, typed: string): Entry[] {
@@ -156,14 +157,24 @@ export function filterCandidates(
   return found.slice(0, limit);
 }
 
-// applyCandidate は、打った値の部分([start, end))だけを入れるものに置き換え、カーソルをその直後に置く。
+// replacedEnd は、置き換える部分の終わり。打った値が開き引用符から始まり、カーソルが引用符の中にあるときは、
+// 閉じ引用符まで(なければ末尾まで。閉じていない引用符は末尾までを 1 つの語にする)を置き換える。
+// 残すと、カーソルの後ろの文字と引用符が値の後ろに残る。
+function replacedEnd(text: string, term: CaretTerm): number {
+  if (text[term.start] !== '"') return term.end;
+  const quotes = text.slice(term.start, term.end).split('"').length - 1;
+  if (quotes % 2 === 0) return term.end;
+  const close = text.indexOf('"', term.end);
+  return close < 0 ? text.length : close + 1;
+}
+
+// applyCandidate は、打った値の部分を入れるものに置き換え、カーソルをその直後に置く。
 export function applyCandidate(
   text: string,
   term: CaretTerm,
   c: FilterCandidate,
 ): { text: string; caret: number } {
-  // 開き引用符から入れ始めたときは、カーソルのすぐ後ろの閉じ引用符も置き換える(残すと引用符が閉じない)。
-  const end = text[term.start] === '"' && text[term.end] === '"' ? term.end + 1 : term.end;
+  const end = replacedEnd(text, term);
   return {
     text: text.slice(0, term.start) + c.insert + text.slice(end),
     caret: term.start + c.insert.length,

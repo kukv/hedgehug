@@ -46,7 +46,7 @@ export const recent: RecentItem[] = [
   },
 ];
 
-function pi(storeId: string, n: number, title: string) {
+export function pi(storeId: string, n: number, title: string) {
   return {
     storeId,
     workspaceId: `${storeId}-W1`,

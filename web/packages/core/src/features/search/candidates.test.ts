@@ -20,7 +20,7 @@ function store(id: string, color: string, prefix: string, projects: [string, str
       {
         id: `w-${id}`,
         storeId: id,
-        name: `Web ${prefix}`,
+        name: "Web",
         prefix,
         oldPrefixes: [],
         projects: projects.map(([displayId, title], i) => ({
@@ -112,10 +112,11 @@ describe("filterCandidates", () => {
     expect(at("workspace:web|", two)).toEqual([{ label: "Web HH", insert: "HH" }]);
   });
 
-  it("finds workspaces by name and prefix", () => {
+  it("finds workspaces by name and prefix, labelled 「名前 接頭辞」", () => {
     const want = [{ label: "Web HH", insert: "HH" }];
     expect(at("workspace:we|")).toEqual(want);
     expect(at("workspace:hh|")).toEqual(want);
+    expect(at('workspace:"web h|')).toEqual(want);
   });
 
   it("returns nothing without a match, without a typed value, or for other keys", () => {
@@ -197,6 +198,28 @@ describe("applyCandidate", () => {
       text: "parent:HH-12 kind:bug",
       caret: 12,
     });
+  });
+});
+
+describe("applyCandidate inside a quoted value", () => {
+  const apply = (marked: string) => {
+    const text = marked.replace("|", "");
+    const term = caretTerm(text, marked.indexOf("|"));
+    if (!term) throw new Error("no term");
+    return applyCandidate(text, term, { label: "", insert: "HH-12" });
+  };
+
+  it("replaces through the closing quote when the caret is inside the quotes", () => {
+    expect(apply('parent:"HH|xx" kind:bug')).toEqual({ text: "parent:HH-12 kind:bug", caret: 12 });
+    expect(apply('parent:"HH|xx",HH-3')).toEqual({ text: "parent:HH-12,HH-3", caret: 12 });
+  });
+
+  it("replaces to the end when the quote is not closed", () => {
+    expect(apply('parent:"HH|xx')).toEqual({ text: "parent:HH-12", caret: 12 });
+  });
+
+  it("keeps what follows a quote that is already closed before the caret", () => {
+    expect(apply('parent:"HH"| kind:"a b"')).toEqual({ text: 'parent:HH-12 kind:"a b"', caret: 12 });
   });
 });
 
