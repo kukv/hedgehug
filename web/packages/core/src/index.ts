@@ -159,6 +159,7 @@ export {
   stepParent,
 } from "./model/workspace";
 export * from "./notesIndex";
+export * from "./paletteIndex";
 export * from "./planningIndex";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
