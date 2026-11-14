@@ -70,6 +70,17 @@ describe("ValueMenu", () => {
     expect(onclose).toHaveBeenCalledTimes(2);
   });
 
+  it("stops a handled Escape before it reaches other window listeners (a dialog around the menu)", async () => {
+    const onclose = vi.fn();
+    const outer = vi.fn();
+    window.addEventListener("keydown", outer);
+    render(ValueMenu, { props: { ...base, options: opts(2), onselect: vi.fn(), onclose } });
+    await fireEvent.keyDown(window, { key: "Escape" });
+    window.removeEventListener("keydown", outer);
+    expect(onclose).toHaveBeenCalledTimes(1);
+    expect(outer).not.toHaveBeenCalled();
+  });
+
   it("disables an option and shows its reason", async () => {
     const onselect = vi.fn();
     const reason = "ワークフローの制約: Todo から Done には変更できません(InProgress のみ)";

@@ -1,6 +1,14 @@
-import type { ItemActionsPort, ItemRef, Kind } from "@hedgehug/core";
+import type {
+  BulkChangeInput,
+  BulkChangeResult,
+  ItemActionsPort,
+  ItemRef,
+  Kind,
+} from "@hedgehug/core";
 import { call } from "./errors";
 import {
+  bulkChange,
+  bulkChangeChoices,
   bulkDelete,
   changeItemKind,
   deleteItem,
@@ -10,12 +18,30 @@ import {
   getProjectDeletePreview,
   listMoveCandidates,
   moveItem,
+  previewBulkChange,
   previewBulkDelete,
   previewItemMove,
 } from "./generated";
 
 const bulkBody = (items: ItemRef[]) => ({
   items: items.map((i) => ({ store: i.storeId, item: i.itemId })),
+});
+
+const changeBody = (items: ItemRef[], input: BulkChangeInput) => ({
+  ...bulkBody(items),
+  field: input.field,
+  value: input.value,
+  values: input.values,
+  category: input.category,
+});
+
+// toResult は、予告と実行の応答(null の一覧は空にする)。
+const toResult = (r: Awaited<ReturnType<typeof bulkChange>>): BulkChangeResult => ({
+  changed: r.changed,
+  kept: (r.kept ?? []).map((k) => ({ store: k.store, item: k.item, reason: k.reason })),
+  failed: (r.failed ?? []).map((f) => ({ store: f.store, name: f.name, count: f.count })),
+  offBacklog: { done: r.offBacklog.done, canceled: r.offBacklog.canceled },
+  valueText: r.valueText,
 });
 
 // アイテムとプロジェクトの操作(A4b)。変更の応答は使わないので、どれも値を返さない(duplicate だけ新しい ID)。
@@ -84,6 +110,23 @@ export function createItemActionsPort(): ItemActionsPort {
         const r = await bulkDelete(bulkBody(items));
         return { deleted: r.deleted, readOnly: r.readOnly };
       }),
+    bulkChangeChoices: (items) =>
+      call(async () => {
+        const c = await bulkChangeChoices(bulkBody(items));
+        return {
+          kinds: c.kinds ?? [],
+          statuses: c.statuses ?? [],
+          priorities: c.priorities ?? [],
+          sprints: c.sprints ?? [],
+          releases: c.releases ?? [],
+          systems: c.systems ?? [],
+          members: (c.members ?? []).map((m) => ({ login: m.login, name: m.name })),
+        };
+      }),
+    bulkChangePreview: (items, input) =>
+      call(async () => toResult(await previewBulkChange(changeBody(items, input)))),
+    bulkChange: (items, input) =>
+      call(async () => toResult(await bulkChange(changeBody(items, input)))),
     duplicate: (storeId, itemId) => call(async () => (await duplicateItem(storeId, itemId)).id),
   };
 }

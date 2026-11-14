@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/automations"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/bulkchange"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/inbox"
@@ -24,6 +25,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/transfers"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
+	appbulkchange "github.com/kukv/hedgehug/internal/app/bulkchange"
 	appcomments "github.com/kukv/hedgehug/internal/app/comments"
 	appdescriptions "github.com/kukv/hedgehug/internal/app/descriptions"
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
@@ -123,6 +125,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	notifier := appinbox.Notifier{Inbox: deps.Inbox, Events: hub}
 	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: notifier, StoreList: deps.StoreList}
 	items.Register(api, itemsSvc)
+	bulkchange.Register(api, appbulkchange.Service{Stores: deps.Stores, StoreList: deps.StoreList, Identity: deps.Identity, Clock: deps.Clock, Inbox: notifier})
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
 	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: notifier})
 	notes.Register(api, notes.Services{

@@ -9,6 +9,8 @@
     step?: string;
     min?: string;
     placeholder?: string;
+    // inputmode は、スマホの入力キーボードの種類(数の欄に decimal など)。
+    inputmode?: "decimal" | "numeric";
     size?: "md" | "sm";
     mono?: boolean;
     // heading は、詳細パネルのタイトルのような、枠のない大きな 1 行の入力欄にする。
@@ -35,6 +37,7 @@
     step,
     min,
     placeholder,
+    inputmode,
     size = "md",
     mono = false,
     heading = false,
@@ -58,6 +61,7 @@
     min,
     id,
     placeholder,
+    inputmode,
     disabled,
     title,
     onfocus,
