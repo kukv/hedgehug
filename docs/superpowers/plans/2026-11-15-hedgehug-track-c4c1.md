@@ -37,6 +37,7 @@
 | 9 | `overwritten` は `Judge` が作り、上書き → ウォッチの順に渡す | C4c1-14 |
 | 10 | e2e: 受信箱の「上書き」タブが空であることを確かめるテストを `web/e2e/inbox-empty.spec.ts` に分け、`fixtures.ts` の worker 単位の `ownServer` で専用のサーバーで流す | `description-merge.spec.ts` が上書きの行を残すため。空のタブはサーバー全体の受信箱で決まるので、専用のサーバーでしか確かめられない |
 | 11 | 上書きの開く区画の頭(`workflow/`・`choices/`・`initial_status`・`category_default/`・`initial_priority`・`template_default/`)は、同期の修復の通知の開く区画にも効く | 06 :455 に合う |
+| 12 | このマシンの説明の保存が成功したあとに受信箱へ書けなかったときは、`slog.Warn` に残して保存の結果を返す(エラーにしない) | 説明の合わせはやり直すと両方の版の塊がもう一度入る(冪等でない)。受信箱に書けないのは state.db に書けないときだけ |
 
 ## Global Constraints
 
