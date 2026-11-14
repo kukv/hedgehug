@@ -37,18 +37,8 @@ async function setup(onPropertySaved?: (storeId: string, item: Item) => void) {
     onChanged: () => void changed++,
     onPropertySaved,
   });
-  return {
-    detail,
-    items,
-    toasts,
-    task,
-    epic,
-    s1,
-    s2,
-    catalogPort,
-    fetched,
-    changed: () => changed,
-  };
+  const counts = { fetched, changed: () => changed };
+  return { detail, items, toasts, task, epic, s1, s2, catalogPort, ...counts };
 }
 
 describe("createDetail", () => {
@@ -134,16 +124,13 @@ describe("createDetail", () => {
   });
 
   it("tells onPropertySaved the store and the saved item once, not on a refusal", async () => {
-    const saved: [string, Item][] = [];
-    const { detail, items, task, s1 } = await setup((storeId, item) => void saved.push([storeId, item]));
+    const saved: [string, string][] = [];
+    const { detail, items, task, s1 } = await setup((sid, it) => void saved.push([sid, it.id]));
     await detail.open("S1", task.id);
     items.refuseNext("ポイントは 0 以上の数で入力してください");
     await detail.setProperty(task.id, "points", "-1");
-    expect(saved).toEqual([]);
     await detail.setProperty(s1.id, "status", "st2");
-    expect(saved).toHaveLength(1);
-    expect(saved[0]?.[0]).toBe("S1");
-    expect(saved[0]?.[1].id).toBe(s1.id);
+    expect(saved).toEqual([["S1", s1.id]]);
   });
 
   it("shows a refusal as an error toast", async () => {
