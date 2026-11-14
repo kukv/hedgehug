@@ -1,12 +1,16 @@
 package bulkchange
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -135,4 +139,38 @@ func parseDate(s string) (string, error) {
 		return "", err
 	}
 	return s, nil
+}
+
+// valueText は、確認の本文の {値}(F2b2-16)。名前は送った名前、担当者は first のメンバーのうち最初に一致した
+// ものの表示名、空は「なし」(スプリントは「バックログ」)。分類で変えるときは空。now は日付の表示の年を決める。
+func valueText(in parsed, first itemContext, now time.Time) string {
+	switch in.field {
+	case FieldStatus:
+		if in.category != "" {
+			return ""
+		}
+	case FieldAssignee:
+		i := slices.IndexFunc(first.members, func(m member.Member) bool { return sameName(m.Login, in.text) })
+		if in.text != "" && i >= 0 {
+			return first.members[i].Name
+		}
+	case FieldSprint:
+		return cmp.Or(in.text, "バックログ")
+	case FieldSystemsAdd, FieldSystemsRemove:
+		return strings.Join(in.names, ", ")
+	case FieldPoints:
+		if in.points != nil {
+			return strconv.FormatFloat(*in.points, 'f', -1, 64)
+		}
+	case FieldEstimate:
+		if in.estimate != nil {
+			return item.Hours(in.estimate) + " 時間"
+		}
+	case FieldStart, FieldEnd:
+		if in.date != "" {
+			raw, _ := json.Marshal(in.date)
+			return item.Display(workspace.Property{Type: workspace.TypeDate}, raw, workspace.Settings{}, nil, now)
+		}
+	}
+	return cmp.Or(in.text, "なし")
 }

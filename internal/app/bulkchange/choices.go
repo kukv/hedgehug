@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
@@ -33,11 +34,14 @@ type wsKey struct {
 	ws    workspace.ID
 }
 
-// wsChoices は、1 つのワークスペースから読んだ、選択肢の材料。projects は、選んだアイテムのプロジェクト。
+// wsChoices は、1 つのワークスペースから読んだ、選択肢と判定の材料。projects は、選んだアイテムのプロジェクト。
+// autos(自動化のルール)と prefix(接頭辞)は、一括変更の保存で使う。
 type wsChoices struct {
 	settings workspace.Settings
 	plan     planning.Plan
 	rules    projectrule.Set
+	autos    []automation.Rule
+	prefix   string
 	projects []project.ID
 	deleted  bool // ワークスペースが削除済み。ほかの項目は読まない
 }
@@ -116,12 +120,14 @@ func (l loaded) add(r port.Reader, store port.StoreID, t Target, it item.Item) e
 	return nil
 }
 
-// readWorkspace は、ワークスペースの設定・スプリントとリリース・プロジェクト別のルールを読む。
+// readWorkspace は、ワークスペースの設定・スプリントとリリース・プロジェクト別のルール・自動化のルールを読む。
 // スプリントとリリースの読み方は app/planning の planOf と同じ(app の機能どうしは import しない)。
 func readWorkspace(r port.Reader, ws workspace.ID) (*wsChoices, error) {
-	if _, err := port.LiveWorkspace(r, ws); errors.Is(err, port.ErrNotFound) {
+	w, err := port.LiveWorkspace(r, ws)
+	if errors.Is(err, port.ErrNotFound) {
 		return &wsChoices{deleted: true}, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return nil, err
 	}
 	st, err := r.Workspaces().Settings(ws)
@@ -132,7 +138,9 @@ func readWorkspace(r port.Reader, ws workspace.ID) (*wsChoices, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &wsChoices{settings: st, plan: planning.FromLog(log), rules: projectrule.FromLog(log)}, nil
+	return &wsChoices{
+		settings: st, plan: planning.FromLog(log), rules: projectrule.FromLog(log), autos: automation.FromLog(log), prefix: w.Prefix,
+	}, nil
 }
 
 // build は、選んだ順(targets)にワークスペースとメンバーを見て、まだ出ていない名前を足していく。
