@@ -1107,6 +1107,7 @@ components:
             - project
             - moved_project
             - deleted_project
+            - store
           type: string
         project:
           description: プロジェクトの内部 ID。project・moved_project・deleted_project のとき。ほかは空

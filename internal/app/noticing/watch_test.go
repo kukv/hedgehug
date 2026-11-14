@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -40,7 +41,7 @@ func TestWatchStatusChanged(t *testing.T) {
 		Kind: port.NoticeWatch, Store: store, Workspace: apptest.SampleWorkspace, Item: apptest.SampleTask,
 		Text: "ステータスを Done に変更", Display: "HH-2", Sender: "taro",
 	}
-	if n != want {
+	if !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }

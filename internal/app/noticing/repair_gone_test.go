@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -85,7 +86,7 @@ func TestPurgedUnderNotice(t *testing.T) {
 		Text:   "HH-1 は完全に削除されたため、あなたの変更は反映されませんでした",
 		Source: "repair:purged:" + string(item7),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -129,7 +130,7 @@ func TestPurgedRelationNotice(t *testing.T) {
 		Text:   "HH-9 は完全に削除されたため、あなたの変更は反映されませんでした",
 		Source: "repair:relation:" + string(apptest.SampleTask) + ":" + string(item9),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -152,7 +153,7 @@ func TestPurgedDropped(t *testing.T) {
 		Text:   "HH-5 は完全に削除されたため、あなたの変更は反映されませんでした",
 		Source: "repair:purged:" + string(item5),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -212,7 +213,7 @@ func TestMovedDropped(t *testing.T) {
 		Text:   "HH-5 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-12 です",
 		Source: "repair:moved:" + string(item5) + ":" + f.lastTransfer(),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -254,7 +255,7 @@ func TestMovedChildDropped(t *testing.T) {
 		Text:   "HH-5 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-12 です(HH-31「リリースノート」)",
 		Source: "repair:moved:" + string(item31) + ":" + f.lastTransfer(),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -290,7 +291,7 @@ func TestDroppedProjectAndWorkspace(t *testing.T) {
 			Text: "ワークスペース「ウェブ」は完全に削除されたため、あなたの変更は反映されませんでした", Source: "repair:purged:" + string(apptest.SampleWorkspace),
 		},
 	}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+	if len(got) != len(want) || !reflect.DeepEqual(got[0], want[0]) || !reflect.DeepEqual(got[1], want[1]) {
 		t.Errorf("notices = %+v, want %+v", got, want)
 	}
 }
@@ -350,7 +351,7 @@ func TestMovedProjectDropped(t *testing.T) {
 		Text:   "HH-P1 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-P3 です",
 		Source: "repair:moved:" + string(apptest.SampleProject) + ":" + f.lastTransfer(),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }

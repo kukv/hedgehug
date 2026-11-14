@@ -713,6 +713,7 @@ export const InboxTargetKind = {
   project: 'project',
   moved_project: 'moved_project',
   deleted_project: 'deleted_project',
+  store: 'store',
 } as const;
 
 export interface InboxTarget {

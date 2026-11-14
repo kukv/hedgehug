@@ -2,6 +2,7 @@ package noticing_test
 
 import (
 	"errors"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -85,7 +86,7 @@ func TestRestoreItem(t *testing.T) {
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Item: apptest.SampleEpic,
 		Text: "HH-1 は 花子 が同時に変更したため、削除を取り消しました", Display: "HH-1", Source: "repair:restore:" + string(op),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -335,7 +336,7 @@ func TestCascadeNotice(t *testing.T) {
 		Text: "HH-1 が削除されたため、HH-2 も削除済みに入りました", Display: "HH-2",
 		Source: "repair:cascade:" + string(apptest.SampleTask) + ":" + string(op),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -388,7 +389,7 @@ func TestCascadeFromMerge(t *testing.T) {
 			Text: "HH-1 が削除されたため、HH-2 も削除済みに入りました", Display: "HH-2",
 			Source: "repair:cascade:" + string(apptest.SampleTask) + ":" + string(op),
 		}
-		if n := f.wantOne(); n != want {
+		if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 			t.Errorf("notice = %+v, want %+v", n, want)
 		}
 	})

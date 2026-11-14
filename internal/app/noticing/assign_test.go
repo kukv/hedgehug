@@ -2,6 +2,7 @@ package noticing_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -26,7 +27,7 @@ func TestAssignToMe(t *testing.T) {
 		Kind: port.NoticeAssign, Store: store, Workspace: apptest.SampleWorkspace, Item: apptest.SampleTask,
 		Text: "あなたに割り当てました", Display: "HH-2", Sender: "taro",
 	}
-	if n != want {
+	if !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -112,7 +113,7 @@ func TestOwnerToMe(t *testing.T) {
 		Kind: port.NoticeAssign, Store: store, Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject,
 		Text: "プロジェクト「ログイン」のオーナーになりました", Display: "HH-P1", Sender: "taro",
 	}
-	if n != want {
+	if !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }

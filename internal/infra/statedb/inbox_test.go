@@ -1,9 +1,11 @@
 package statedb
 
 import (
+	"encoding/json"
 	"errors"
 	"maps"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -47,7 +49,7 @@ func TestInboxAddAndList(t *testing.T) {
 		if !r.At.Equal(want) || r.Read {
 			t.Errorf("row %d: at=%v read=%v", i, r.At, r.Read)
 		}
-		if r.Notice != inboxNotice("s1", port.NoticeAutomationStopped) {
+		if !reflect.DeepEqual(r.Notice, inboxNotice("s1", port.NoticeAutomationStopped)) {
 			t.Errorf("row %d: notice = %+v", i, r.Notice)
 		}
 	}
@@ -380,6 +382,33 @@ func TestInboxSection(t *testing.T) {
 		if err != nil || got.Section != "sprints" {
 			t.Errorf("get = %+v, %v", got, err)
 		}
+	}
+}
+
+func TestInboxOverwriteValues(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	n := port.Notice{Kind: port.NoticeOverwrite, Store: "s1", Workspace: "w1", Item: "i1", Field: "status", Mine: json.RawMessage(`"A"`), Kept: json.RawMessage(`"B"`), Source: "overwrite:1"}
+	if _, err := b.AddOnce(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	n.Source = "x"
+	n.Field, n.Mine, n.Kept = "", nil, nil
+	if err := b.Add(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	rows := inboxList(t, b, "s1")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if r := rows[1]; r.Field != "status" || string(r.Mine) != `"A"` || string(r.Kept) != `"B"` {
+		t.Errorf("overwrite row = %+v", r)
+	}
+	if r := rows[0]; r.Field != "" || r.Mine != nil || r.Kept != nil {
+		t.Errorf("plain row = %+v, want empty field and nil values", r)
+	}
+	got, err := b.Get(t.Context(), rows[1].ID)
+	if err != nil || got.Field != "status" || string(got.Mine) != `"A"` || string(got.Kept) != `"B"` {
+		t.Errorf("get = %+v, %v", got, err)
 	}
 }
 

@@ -51,6 +51,11 @@
       {/snippet}
       {#if gone}
         <span class="gone">{gone}</span>
+      {:else if t.kind === "store"}
+        <span class="target">
+          {@render storeDot()}
+          <span>{row.store.name}</span>
+        </span>
       {:else if link}
         <a
           class="target"

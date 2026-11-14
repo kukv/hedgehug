@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -28,18 +29,21 @@ type Notice struct {
 	Kind      NoticeKind
 	Store     StoreID
 	Workspace workspace.ID
-	Project   project.ID // プロジェクトを指す通知の対象。アイテムの通知では空
-	Item      item.ID    // 対象のアイテム。ルールが変わった通知では空(開く先は設定の「自動化」)
-	Rule      change.ID  // 自動化のルール
-	Text      string     // 06 の本文
-	Reason    string     // 止まった理由(NoticeAutomationStopped だけ)
-	Status    change.ID  // 止まった実行が変えようとしたステータス(「制約を無視して…」に使う)
-	From      change.ID  // 止まったときのステータス
-	Display   string     // 作ったときのアイテムの ID。アイテムがなければ空
-	Sender    string     // 差出人のログイン名。空は「hedgehug」
-	Section   string     // ワークスペースを指す通知の開く区画(設定のサブタブ・スプリント・リリース)。空は自動化(automation)
-	Source    string     // メンションの本文・同期の修復の鍵。ほかは空
-	At        time.Time  // Mention が既存の行を書き換えるときに刻む時刻(本文を保存した時刻)。足すときと Add は使わない(受信箱の時計)
+	Project   project.ID      // プロジェクトを指す通知の対象。アイテムの通知では空
+	Item      item.ID         // 対象のアイテム。ルールが変わった通知では空(開く先は設定の「自動化」)
+	Rule      change.ID       // 自動化のルール
+	Text      string          // 06 の本文
+	Reason    string          // 止まった理由(NoticeAutomationStopped だけ)
+	Status    change.ID       // 止まった実行が変えようとしたステータス(「制約を無視して…」に使う)
+	From      change.ID       // 止まったときのステータス
+	Display   string          // 作ったときのアイテムの ID。アイテムがなければ空
+	Sender    string          // 差出人のログイン名。空は「hedgehug」
+	Section   string          // ワークスペースを指す通知の開く区画(設定のサブタブ・スプリント・リリース)。空は自動化(automation)
+	Field     string          // 上書き(overwrite)だけ。上書きされた項目(ログの f。コメント・作業時間は comment:<ID>・worklog:<ID>)
+	Mine      json.RawMessage // 上書きだけ。判定の前の値(ログに書く形の JSON)。なければ nil
+	Kept      json.RawMessage // 上書きだけ。判定の後の値(ログに書く形の JSON)。なければ nil
+	Source    string          // メンションの本文・同期の修復の鍵。ほかは空
+	At        time.Time       // Mention が既存の行を書き換えるときに刻む時刻(本文を保存した時刻)。足すときと Add は使わない(受信箱の時計)
 }
 
 // Inbox は、受信箱の口(B4-12)。通知を足す。
