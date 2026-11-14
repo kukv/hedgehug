@@ -106,14 +106,17 @@ func RowsByItem(all []item.Item) map[item.ID][]Row {
 		}
 	}
 	for _, rows := range out {
-		slices.SortFunc(rows, func(a, b Row) int {
-			if c := slices.Index(Labels, a.Label) - slices.Index(Labels, b.Label); c != 0 {
-				return c
-			}
-			return strings.Compare(string(a.Other), string(b.Other))
-		})
+		slices.SortFunc(rows, compareRows)
 	}
 	return out
+}
+
+// compareRows は、一覧の順(表記の順、同じ表記では相手の内部 ID の順)。
+func compareRows(a, b Row) int {
+	if c := slices.Index(Labels, a.Label) - slices.Index(Labels, b.Label); c != 0 {
+		return c
+	}
+	return strings.Compare(string(a.Other), string(b.Other))
 }
 
 // Has は、a と b のあいだに種類 typ の関連があるか。向きは問わない(02「関連」の「追加」。種類ごとに 1 つまで)。

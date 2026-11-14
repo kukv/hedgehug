@@ -17,28 +17,9 @@ func TestProblemOrderHasEveryProblem(t *testing.T) {
 	}
 	var declared []Problem
 	for _, d := range file.Decls {
-		g, ok := d.(*ast.GenDecl)
-		if !ok || g.Tok != token.CONST {
-			continue
-		}
-		for _, spec := range g.Specs {
-			v, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			if id, ok := v.Type.(*ast.Ident); !ok || id.Name != "Problem" {
-				continue
-			}
-			for _, val := range v.Values {
-				lit, ok := val.(*ast.BasicLit)
-				if !ok {
-					t.Fatalf("Problem の値が文字列でない: %T", val)
-				}
-				s, err := strconv.Unquote(lit.Value)
-				if err != nil {
-					t.Fatal(err)
-				}
-				declared = append(declared, Problem(s))
+		if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.CONST {
+			for _, spec := range g.Specs {
+				declared = append(declared, problemsOf(t, spec)...)
 			}
 		}
 	}
@@ -48,4 +29,29 @@ func TestProblemOrderHasEveryProblem(t *testing.T) {
 	if !slices.Equal(problemOrder, declared) {
 		t.Errorf("problemOrder = %v, want %v", problemOrder, declared)
 	}
+}
+
+// problemsOf は、宣言 spec が Problem の定数なら、その値。
+func problemsOf(t *testing.T, spec ast.Spec) []Problem {
+	t.Helper()
+	v, ok := spec.(*ast.ValueSpec)
+	if !ok {
+		return nil
+	}
+	if id, ok := v.Type.(*ast.Ident); !ok || id.Name != "Problem" {
+		return nil
+	}
+	var out []Problem
+	for _, val := range v.Values {
+		lit, ok := val.(*ast.BasicLit)
+		if !ok {
+			t.Fatalf("Problem の値が文字列でない: %T", val)
+		}
+		s, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, Problem(s))
+	}
+	return out
 }
