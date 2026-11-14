@@ -18,12 +18,11 @@ type SearchQuery struct {
 	Query string `json:"query" doc:"クエリの文字列(04「検索」)。空なら絞り込まない"`
 }
 
-// SearchStatus は、行のステータス。
+// SearchStatus は、行のステータス。色は返さない(画面の点は分類で色を決める)。
 type SearchStatus struct {
 	_        struct{} `nullable:"true"`
 	Name     string   `json:"name"`
 	Category string   `json:"category"`
-	Color    string   `json:"color"`
 }
 
 // SearchAssignee は、行の担当者。name が null はメンバーにいない人。
@@ -119,7 +118,7 @@ func toRow(r appsearch.Row) SearchRow {
 func toStatus(f query.Facts) *SearchStatus {
 	for _, v := range f.Settings.Statuses {
 		if f.Item.Status != "" && v.ID == f.Item.Status {
-			return &SearchStatus{Name: v.Name, Category: string(v.Category), Color: string(v.Color)}
+			return &SearchStatus{Name: v.Name, Category: string(v.Category)}
 		}
 	}
 	return nil

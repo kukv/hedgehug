@@ -2,6 +2,7 @@
   import {
     applyCandidate,
     type CaretTerm,
+    candidateSource,
     caretTerm,
     emptyText,
     type FilterCandidate,
@@ -34,16 +35,23 @@
   // term は、candidates を作った語(選んだときに置き換える範囲)。
   let term = $state<CaretTerm | null>(null);
   let candidates = $state<FilterCandidate[]>([]);
-  const sources = createCandidates(() => {
-    if (term) candidates = sources.list(term);
+  // 読み終えた元が、いまの語のキーの候補に使うものなら作り直す。
+  const sources = createCandidates((source) => {
+    if (term && candidateSource(term.key) === source) candidates = sources.list(term);
   });
+  let filter = $state<HTMLElement>();
 
   onMount(() => void search.open());
 
-  function oninput(text: string, caret: number) {
-    search.setQuery(text);
+  // pick は、カーソルの位置の語で候補を作り直す。入力のときも、カーソルだけが動いたときも呼ぶ。
+  function pick(text: string, caret: number) {
     term = caretTerm(text, caret);
     candidates = sources.list(term);
+  }
+
+  function oninput(text: string, caret: number) {
+    search.setQuery(text);
+    pick(text, caret);
   }
 
   async function onchoose(index: number) {
@@ -55,8 +63,8 @@
     candidates = [];
     // 欄の値が入れ替わるとカーソルが末尾に移るので、入れたものの直後に戻す。
     await tick();
-    document
-      .querySelector<HTMLInputElement>("[data-filter-input]")
+    filter
+      ?.querySelector<HTMLInputElement>("[data-filter-input]")
       ?.setSelectionRange(next.caret, next.caret);
   }
 </script>
@@ -70,19 +78,22 @@
 {#each bands as band (band)}
   <ReadOnlyBand text={band} />
 {/each}
-<div class="filter">
+<div class="filter" bind:this={filter}>
   <FilterInput
     value={$view.query}
     placeholder="絞り込み 例: assignee:@me status:InProgress system:Web"
     options={candidates}
     {errors}
     {oninput}
+    oncaret={pick}
     onchoose={(i) => void onchoose(i)}
     onhelp={() => (help = true)}
   />
 </div>
 <div class="toolbar">
-  <span class="count">{rows.length} 件</span>
+  {#if $view.result}
+    <span class="count">{rows.length} 件</span>
+  {/if}
 </div>
 <div class="content">
   {#if empty}

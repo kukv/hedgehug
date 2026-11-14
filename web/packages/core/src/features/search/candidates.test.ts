@@ -5,6 +5,7 @@ import {
   applyCandidate,
   type CandidateScope,
   type CandidateSources,
+  candidateSource,
   filterCandidates,
 } from "./candidates";
 import { caretTerm } from "./caret";
@@ -196,5 +197,17 @@ describe("applyCandidate", () => {
       text: "parent:HH-12 kind:bug",
       caret: 12,
     });
+  });
+});
+
+describe("candidateSource", () => {
+  it("キーの候補が、どの元(読み込みのあるもの)を使うか", () => {
+    expect(candidateSource("assignee")).toBe("members");
+    for (const key of ["parent", "epic", "blocked_by", "relates_to", "cloned_by"]) {
+      expect(candidateSource(key)).toBe("items");
+    }
+    expect(candidateSource("project")).toBe("catalog");
+    expect(candidateSource("workspace")).toBe("catalog");
+    expect(candidateSource("status")).toBeNull();
   });
 });

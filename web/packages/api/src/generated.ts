@@ -1910,7 +1910,6 @@ export interface SearchQuery {
  */
 export type SearchStatus = {
   category: string;
-  color: string;
   name: string;
 } | null;
 

@@ -5,6 +5,7 @@ export {
   applyCandidate,
   type CandidateScope,
   type CandidateSources,
+  candidateSource,
   type FilterCandidate,
   filterCandidates,
 } from "./features/search/candidates";

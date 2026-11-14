@@ -16,6 +16,7 @@ function setup(over: Record<string, unknown> = {}) {
     options,
     errors: [] as string[],
     oninput: vi.fn(),
+    oncaret: vi.fn(),
     onchoose: vi.fn(),
     onhelp: vi.fn(),
     ...over,
@@ -32,6 +33,39 @@ describe("FilterInput", () => {
     expect(box()).toHaveAttribute("placeholder", "絞り込み");
     await fireEvent.input(box(), { target: { value: "sta" } });
     expect(p.oninput).toHaveBeenCalledWith("sta", expect.any(Number));
+  });
+
+  it("入力せずにカーソルを動かしたら(クリック・←→)、文字とカーソル位置を oncaret で渡す", async () => {
+    const p = setup({ value: "status:Todo" });
+    const input = box() as HTMLInputElement;
+    input.setSelectionRange(3, 3);
+    await fireEvent.click(input);
+    expect(p.oncaret).toHaveBeenLastCalledWith("status:Todo", 3);
+    input.setSelectionRange(2, 2);
+    await fireEvent.keyUp(input, { key: "ArrowLeft" });
+    expect(p.oncaret).toHaveBeenLastCalledWith("status:Todo", 2);
+    expect(p.oncaret).toHaveBeenCalledTimes(2);
+  });
+
+  it("カーソルが動いていなければ oncaret を呼ばない(↑↓ で候補を選ぶあいだ、選びを戻さない)", async () => {
+    const p = setup({ value: "status:Todo" });
+    const input = box() as HTMLInputElement;
+    input.setSelectionRange(3, 3);
+    await fireEvent.click(input);
+    await fireEvent.keyUp(input, { key: "ArrowDown" });
+    await fireEvent.click(input);
+    expect(p.oncaret).toHaveBeenCalledTimes(1);
+  });
+
+  it("入力のあとのキーを離したときは、oninput で渡したので oncaret を呼ばない", async () => {
+    const p = setup({ value: "" });
+    const input = box() as HTMLInputElement;
+    input.value = "s";
+    input.setSelectionRange(1, 1);
+    await fireEvent.input(input);
+    await fireEvent.keyUp(input, { key: "s" });
+    expect(p.oninput).toHaveBeenCalledWith("s", 1);
+    expect(p.oncaret).not.toHaveBeenCalled();
   });
 
   it("候補はフォーカスがあるあいだだけ出る", async () => {

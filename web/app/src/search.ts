@@ -29,8 +29,8 @@ export interface SearchCandidates {
 
 // createCandidates は、絞り込み欄の候補の元を持つ(E1-20)。画面を開くたびに作る。アイテムはパレットの索引を
 // 作ったときに 1 回読み、メンバーは最初に assignee: の候補を出すときに Store ごとに読む。
-// 読み終わったら changed を呼ぶ(画面はいまの語で候補を出し直す)。
-export function createCandidates(changed: () => void): SearchCandidates {
+// 読み終わったら、読んだ元を添えて changed を呼ぶ(画面は、いまの語がその元を使うなら候補を出し直す)。
+export function createCandidates(changed: (source: "items" | "members") => void): SearchCandidates {
   let items: PaletteItem[] = [];
   const members = new Map<string, Member[]>();
   // asked は、読み込み中か読めた Store。失敗した Store は外し、次の assignee: で読み直す。
@@ -39,7 +39,7 @@ export function createCandidates(changed: () => void): SearchCandidates {
     .index()
     .then((index) => {
       items = index.items;
-      changed();
+      changed("items");
     })
     .catch(() => {});
 
@@ -50,7 +50,7 @@ export function createCandidates(changed: () => void): SearchCandidates {
       listMembers(s.id)
         .then((m) => {
           members.set(s.id, m);
-          changed();
+          changed("members");
         })
         .catch(() => asked.delete(s.id));
     }

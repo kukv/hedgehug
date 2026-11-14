@@ -93,7 +93,7 @@ type searchBody struct {
 		WorkspaceID, ProjectID, ItemID string
 		Display, Title, Kind, End      string
 		OldIDHit                       bool
-		Status                         *struct{ Name, Category, Color string }
+		Status                         *struct{ Name, Category string }
 		Assignee                       *struct {
 			Login string
 			Name  *string
@@ -116,7 +116,7 @@ func searchOf(t *testing.T, api humatest.TestAPI, text string) (searchBody, stri
 }
 
 func TestSearchAPI(t *testing.T) {
-	got, _ := searchOf(t, newAPI(t), "kind:bug")
+	got, raw := searchOf(t, newAPI(t), "kind:bug")
 	if len(got.Rows) != 1 || !got.HasKey {
 		t.Fatalf("rows = %d hasKey=%v", len(got.Rows), got.HasKey)
 	}
@@ -126,8 +126,15 @@ func TestSearchAPI(t *testing.T) {
 		r.WorkspaceID != string(apptest.SampleWorkspace) || r.ProjectID != string(apptest.SampleProject) {
 		t.Errorf("row = %+v", r)
 	}
-	if r.Status == nil || r.Status.Name != "Todo" || r.Status.Category != "todo" || r.Status.Color == "" {
+	if r.Status == nil || r.Status.Name != "Todo" || r.Status.Category != "todo" {
 		t.Errorf("status = %+v", r.Status)
+	}
+	// ステータスの色は画面で使わない(点は分類で色を決める)ので、応答に含めない。
+	var keys struct {
+		Rows []struct{ Status map[string]any }
+	}
+	if err := json.Unmarshal([]byte(raw), &keys); err != nil || len(keys.Rows) != 1 || len(keys.Rows[0].Status) != 2 {
+		t.Errorf("status keys = %+v (%v)", keys, err)
 	}
 	if r.Priority == nil || r.Priority.Name != "Medium" {
 		t.Errorf("priority = %+v", r.Priority)

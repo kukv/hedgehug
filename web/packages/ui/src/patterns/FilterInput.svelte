@@ -10,11 +10,13 @@
     errors: string[];
     // oninput は、入力した文字とカーソルの位置を渡す。
     oninput: (text: string, caret: number) => void;
+    // oncaret は、入力せずにカーソルだけが動いたとき(クリック・←→ など)に、文字とカーソルの位置を渡す。
+    oncaret: (text: string, caret: number) => void;
     onchoose: (index: number) => void;
     onhelp: () => void;
   }
 
-  let { value, placeholder, options, errors, oninput, onchoose, onhelp }: Props = $props();
+  let { value, placeholder, options, errors, oninput, oncaret, onchoose, onhelp }: Props = $props();
   const ids = $props.id();
   let focused = $state(false);
   // closed は、Esc で候補を閉じたあいだ。入力するかフォーカスを入れ直すと開く。
@@ -24,6 +26,15 @@
   const open = $derived(focused && !closed && options.length > 0);
   // 日本語入力の変換中の Enter・Esc は、変換の確定・取り消しに使う(01「Esc」「Enter」)。
   const composing = (e: KeyboardEvent) => e.isComposing || e.keyCode === 229;
+  // caret は、最後に渡したカーソルの位置。動いていなければ oncaret を呼ばない(↑↓ で選ぶあいだ、候補を作り直させない)。
+  let caret = -1;
+
+  function moved(e: { currentTarget: HTMLInputElement }) {
+    const at = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
+    if (at === caret) return;
+    caret = at;
+    oncaret(e.currentTarget.value, at);
+  }
 
   // 候補が変わったら選びを先頭に戻し、選んでいる行が見えるようにスクロールする。
   $effect(() => {
@@ -79,11 +90,11 @@
       oninput={(e) => {
         closed = false;
         selected = 0;
-        oninput(
-          e.currentTarget.value,
-          e.currentTarget.selectionStart ?? e.currentTarget.value.length,
-        );
+        caret = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
+        oninput(e.currentTarget.value, caret);
       }}
+      onclick={moved}
+      onkeyup={moved}
       {onkeydown}
     >
     <button type="button" class="help" onclick={onhelp}>検索ヘルプ</button>

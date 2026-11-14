@@ -1,8 +1,8 @@
 // 検索の結果(04「検索」)。サーバーの POST /api/search の応答を core の型にしたもの。
 
+// SearchStatus は、行のステータス。点の色は分類(category)で決める。
 export interface SearchStatus {
   name: string;
-  color: string;
   category: string;
 }
 

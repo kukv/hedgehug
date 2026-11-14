@@ -2941,14 +2941,11 @@ components:
       properties:
         category:
           type: string
-        color:
-          type: string
         name:
           type: string
       required:
         - name
         - category
-        - color
       type: object
     SetAutomationRuleEnabled:
       additionalProperties: false

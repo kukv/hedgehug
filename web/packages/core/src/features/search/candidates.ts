@@ -132,6 +132,14 @@ function memberEntries(
   return out;
 }
 
+// candidateSource は、キーの候補が使う元。items はパレットの索引、members は Store のメンバー、catalog は
+// プロジェクト・ワークスペースの一覧。候補のないキーは null。元を読み終えたとき、候補を作り直すかを決めるのに使う。
+export function candidateSource(key: string): "items" | "members" | "catalog" | null {
+  if (key === "assignee") return "members";
+  if (key === "project" || key === "workspace") return "catalog";
+  return itemKeys.has(key) ? "items" : null;
+}
+
 // filterCandidates は、打った値を含むラベルを元の並びのまま 10 件まで返す。打った値が空のときは出さない。
 export function filterCandidates(
   term: CaretTerm,
