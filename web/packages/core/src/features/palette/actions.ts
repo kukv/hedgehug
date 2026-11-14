@@ -102,7 +102,8 @@ function createProject(d: ActionDeps, stores: StoreNode[], here: Here) {
 }
 
 // plan は、スプリント・リリースのタブへ移り、作成ダイアログを開く要求を置く。閲覧のみの Store では置かずに断る(A5c-11)。
-// 「入力を破棄」の確認で断られて移らなかったときは、要求を置かない(残った要求が、あとでタブを開いたときに働かないように)。
+// 「入力を破棄」の確認で断られて移らなかったときは、要求もトーストも出さない(残った要求が、あとでタブを開いたときに
+// 働かないように)。
 async function plan(
   d: ActionDeps,
   stores: StoreNode[],
@@ -113,8 +114,9 @@ async function plan(
   const moved = await d.navigation.go(
     routeOfWorkspace(stores, store.id, ws.id, kind === "sprint" ? "sprints" : "releases"),
   );
+  if (!moved) return;
   if (store.readOnly) d.toasts.show(readOnlyNote);
-  else if (moved) d.planRequest.ask({ workspaceId: ws.id, kind });
+  else d.planRequest.ask({ workspaceId: ws.id, kind });
 }
 
 // createCandidates は、作成の群。スプリント・リリースは、ワークスペース・プロジェクトの画面のときだけ。

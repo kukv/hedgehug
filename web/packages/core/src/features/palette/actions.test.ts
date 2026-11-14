@@ -147,6 +147,18 @@ describe("パレットの候補の実行", () => {
     expect(get(planRequest.request)).toBeNull();
   });
 
+  test("スプリントを作成: 閲覧のみの Store で、確認で断られて移らなかったら「閲覧のみの Store です」を出さない", async () => {
+    const { palette, calls, toasts } = await setup({
+      here: { workspaceId: "S2-W1" },
+      moved: false,
+    });
+    await palette.open();
+    palette.input("スプリント");
+    await pick(palette, "スプリントを作成");
+    expect(named(calls, "go")).toHaveLength(1);
+    expect(toasts).toEqual([]);
+  });
+
   test("プロジェクトを作成: 書き込めるワークスペースがなければ A5c-14 の文", async () => {
     const base = fakeCatalogPort();
     const roOnly = await setup({
