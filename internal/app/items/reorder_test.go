@@ -212,20 +212,44 @@ func TestReorderRefuses(t *testing.T) {
 	}
 }
 
-// 隣どうしの順位が同じで間の値が作れないとき(同期で重なったとき)は何も保存しない。重なりは直さない。
-func TestReorderBetweenEqualRanksSavesNothing(t *testing.T) {
+// tiedSteps は、Step a(V)・b(W)・c を足し、c の順位を b と同じにする(スプリントに入れたときの rank.After などで生まれる)。
+func tiedSteps(t *testing.T) (items.Service, *recorder, []item.Item) {
+	t.Helper()
 	svc, rec := setupRec(t)
-	st := addSteps(t, svc, "x", "y", "z")
+	st := addSteps(t, svc, "a", "b", "c")
 	op := port.Operation{Actor: change.User("taro"), Summary: "順位を重ねる"}
 	err := rec.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
-		return tx.WriteItems().Append(st[1].ID, change.NewSet("rank", st[1].Rank, st[0].Rank))
+		return tx.WriteItems().Append(st[2].ID, change.NewSet("rank", st[2].Rank, st[1].Rank))
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := logLen(t, rec, st[2].ID)
-	// z を y の直前に置く: 前は x、後ろは y で、2 つの順位が同じ。
-	if err := svc.Reorder(t.Context(), store, st[2].ID, st[1].ID, false); err != nil || logLen(t, rec, st[2].ID) != before {
-		t.Errorf("Reorder = %v; log %d → %d", err, before, logLen(t, rec, st[2].ID))
+	return svc, rec, st
+}
+
+// 兄弟と同じ順位があっても動かす。同じ順位の群の中には入らず、群の手前(直後に置くなら後ろ)に入る。
+func TestReorderTies(t *testing.T) {
+	// c を b(作成が早い)の直前へ: a と b の間に入る。
+	svc, rec, st := tiedSteps(t)
+	before := rankRows(t, rec, st[2].ID)
+	if err := svc.Reorder(t.Context(), store, st[2].ID, st[1].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := order(t, svc); !slices.Equal(got, []string{"a", "c", "b"}) {
+		t.Errorf("before b: order = %v", got)
+	}
+	if rankRows(t, rec, st[2].ID) != before+1 {
+		t.Error("before b: c must get one set rank row")
+	}
+	// a を b の直後へ: 直後の c も b と同じ順位なので、群の後ろに入る。
+	svc, rec, st = tiedSteps(t)
+	if err := svc.Reorder(t.Context(), store, st[0].ID, st[1].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := order(t, svc); !slices.Equal(got, []string{"b", "c", "a"}) {
+		t.Errorf("after b: order = %v", got)
+	}
+	if rankRows(t, rec, st[0].ID) != 1 || rankRows(t, rec, st[1].ID) != 0 {
+		t.Error("after b: only a must be written")
 	}
 }

@@ -96,7 +96,14 @@ export {
 } from "./features/workspaces/delete";
 export type { TemplateSubject } from "./features/workspaces/saveAsTemplate";
 export { deleteMenuItem } from "./features/workspaces/sidebarMenu";
-export type { MoveCandidate, MovePreview, MovePreviewStatus } from "./model/itemAction";
+export type {
+  BulkDeleted,
+  BulkDeletePreview,
+  ItemRef,
+  MoveCandidate,
+  MovePreview,
+  MovePreviewStatus,
+} from "./model/itemAction";
 export type {
   Gone,
   GoneReason,

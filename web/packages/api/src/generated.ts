@@ -211,6 +211,99 @@ export interface AutomationRun {
   text: string;
 }
 
+export type BacklogRowKind = typeof BacklogRowKind[keyof typeof BacklogRowKind];
+
+
+export const BacklogRowKind = {
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export interface BacklogRow {
+  /** ログイン名。空は未割り当て */
+  assignee: string;
+  display: string;
+  id: string;
+  kind: BacklogRowKind;
+  /** @nullable */
+  points: number | null;
+  /** 優先度の値の内部 ID */
+  priority: string;
+  /** 所属プロジェクトの内部 ID */
+  project: string;
+  /** ステータスの内部 ID。空は値なし */
+  status: string;
+  title: string;
+}
+
+export type BacklogSprintState = typeof BacklogSprintState[keyof typeof BacklogSprintState];
+
+
+export const BacklogSprintState = {
+  planned: 'planned',
+  active: 'active',
+  closed: 'closed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type BacklogSprint = {
+  /** 完了で確定した値。完了していなければ null */
+  confirmed: SprintConfirmed | null;
+  end: string;
+  goal: string;
+  id: string;
+  name: string;
+  /** YYYY-MM-DD。空は値なし */
+  start: string;
+  state: BacklogSprintState;
+} | null;
+
+export interface BacklogFrame {
+  rows: BacklogRow[];
+  sprint: BacklogSprint | null;
+  total: SprintTotals;
+}
+
+export interface Backlog {
+  frames: BacklogFrame[];
+}
+
+export interface BulkDeletePreview {
+  /** 閲覧のみの Store にあるため削除しない、選んだ件数 */
+  readOnly: number;
+  /** Store が 1 つのとき、その Store の削除済みの保持日数。ほかは 0 */
+  retentionDays: number;
+  /** 削除するアイテムのある Store の数 */
+  stores: number;
+}
+
+export interface BulkTarget {
+  /** アイテムの内部 ID */
+  item: string;
+  /** Store の ID */
+  store: string;
+}
+
+export interface BulkDeleteRequest {
+  /**
+     * 選んだアイテム。複数の Store にまたがってよい
+     * @minItems 1
+     */
+  items: BulkTarget[];
+}
+
+export interface BulkDeleted {
+  /** 書いた削除の行の数(下のものを含む) */
+  deleted: number;
+  /** 閲覧のみの Store にあるため削除しなかった、選んだ件数 */
+  readOnly: number;
+}
+
 export type ChangeKindKind = typeof ChangeKindKind[keyof typeof ChangeKindKind];
 
 
@@ -969,6 +1062,21 @@ export interface PaletteIndex {
   items: PaletteItem[] | null;
   /** @nullable */
   projects: PaletteProject[] | null;
+}
+
+export interface PlaceItem {
+  /** true は基準の直後、false は直前 */
+  after: boolean;
+  /**
+     * 基準のアイテムの内部 ID。null は枠の末尾
+     * @nullable
+     */
+  anchor: string | null;
+  /**
+     * 移動先の枠のスプリントの内部 ID。null はバックログ
+     * @nullable
+     */
+  sprint: string | null;
 }
 
 export interface SprintDefaults {
@@ -2680,6 +2788,82 @@ export const recheckAccount = async (id: string, options?: Parameters<typeof fet
 
 
 
+export const getBulkDeleteUrl = () => {
+
+
+
+
+  return `/api/bulk-delete`
+}
+
+/**
+ * @summary 選んだアイテムを、その下のものごと Store ごとに削除する
+ */
+export const bulkDelete = async (bulkDeleteRequest: BulkDeleteRequest, options?: Parameters<typeof fetcher>[1]): Promise<BulkDeleted> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<BulkDeleted>(getBulkDeleteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bulkDeleteRequest)
+  }
+);}
+
+
+
+export const getPreviewBulkDeleteUrl = () => {
+
+
+
+
+  return `/api/bulk-delete/preview`
+}
+
+/**
+ * @summary 選んだアイテムを一括削除するときの確認の中身を返す
+ */
+export const previewBulkDelete = async (bulkDeleteRequest: BulkDeleteRequest, options?: Parameters<typeof fetcher>[1]): Promise<BulkDeletePreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<BulkDeletePreview>(getPreviewBulkDeleteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bulkDeleteRequest)
+  }
+);}
+
+
+
 export const getWatchEventsUrl = () => {
 
 
@@ -3861,6 +4045,47 @@ export const previewItemMove = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getPlaceItemUrl = (store: string,
+    item: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/plan-position`
+}
+
+/**
+ * @summary アイテムを枠の中の位置に置く
+ */
+export const placeItem = async (store: string,
+    item: string,
+    placeItemBody: PlaceItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getPlaceItemUrl(store,item),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(placeItemBody)
   }
 );}
 
@@ -5939,6 +6164,32 @@ return fetcher<void>(getSetAutomationRuleEnabledUrl(store,workspace,rule),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(setAutomationRuleEnabledBody)
+  }
+);}
+
+
+
+export const getGetBacklogUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/backlog`
+}
+
+/**
+ * @summary バックログの画面の枠(スプリントの枠とバックログの枠)
+ */
+export const getBacklog = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<Backlog> => {
+
+  return fetcher<Backlog>(getGetBacklogUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

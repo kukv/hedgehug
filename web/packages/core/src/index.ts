@@ -12,6 +12,7 @@ export {
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
 export { dayOf, formatDateTime, formatDay } from "./features/dates/date";
 export { olderThanADay, relativeTime } from "./features/dates/relative";
+export { copiedMessage, copyFailedMessage } from "./features/items/copyId";
 export { type CreateContext, childKindOf, type Here } from "./features/items/createDefaults";
 export {
   createItemDialog,
@@ -21,8 +22,6 @@ export {
   kinds,
 } from "./features/items/createDialog";
 export {
-  copiedMessage,
-  copyFailedMessage,
   createDetail,
   type Detail,
   type DetailView,
@@ -179,4 +178,5 @@ export {
   type Writable,
   writable,
 } from "./reactive/store";
+export * from "./selectionIndex";
 export * from "./workspacesIndex";

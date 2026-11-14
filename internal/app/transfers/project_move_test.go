@@ -89,7 +89,8 @@ func moveProject(t *testing.T, f fixture, p project.ID, in transfers.ProjectMove
 }
 
 // 02 **移動**・A5b-11: 同じ Store の中は 1 回の保存。プロジェクトは移動先の次の番号と末尾の順位、アイテムはワークスペースと
-// 番号だけが変わり、移動先に番号の行、転送記録はプロジェクトとアイテムごと。
+// 番号が変わり(作業項目の順位は移動先の作業項目の末尾に続く。ここでは移動先に作業項目がなく rank.First)、移動先に番号の行、
+// 転送記録はプロジェクトとアイテムごと。
 func TestMoveProjectWithinStoreWritesOneSave(t *testing.T) {
 	f := newFixture(t)
 	before := len(f.rec.summaries())
@@ -416,4 +417,17 @@ func TestMoveProjectKeepsDeletedItemsDeleted(t *testing.T) {
 			t.Errorf("%s deleted = %+v, want %+v", id, it.Deleted, d)
 		}
 	}
+}
+
+// F2a-6: プロジェクトの作業項目は、移動元の並び順のまま移動先の作業項目の末尾に続く。Epic と Step の順位は変えない。
+func TestMoveProjectAppendsItsWorksToTheDestinationWorkOrder(t *testing.T) {
+	f := newFixture(t)
+	withSteps(t, f)
+	withStoryA(t, f)
+	withWorkEnd(t, f, store1, mobileWS, mobileProject, mobileEpic)
+	moveProject(t, f, apptest.SampleProject, projectTo(store1, mobileWS))
+	if got := itemOf(t, f.rec, store1, apptest.SampleEpic).Rank; got != rank.First {
+		t.Errorf("Epic の順位 = %q, want %q", got, rank.First)
+	}
+	assertWorksAppended(t, f, store1)
 }

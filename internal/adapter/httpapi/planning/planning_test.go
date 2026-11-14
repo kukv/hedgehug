@@ -182,3 +182,30 @@ func TestCreateItemInSprint(t *testing.T) {
 	check(t, "close", api.Post(base+"/sprints/"+sp+"/close", map[string]any{"destination": nil}), http.StatusNoContent, "")
 	check(t, "closed", create(map[string]any{"kind": "Story", "sprint": sp}), http.StatusUnprocessableEntity, "完了したスプリントには入れられません")
 }
+
+func TestBacklogAPI(t *testing.T) {
+	api := newAPI(t)
+	check(t, "frames", api.Get(base+"/backlog"), http.StatusOK, `"frames":[{"sprint":null,"total":{"points":`)
+	check(t, "row", api.Get(base+"/backlog"), http.StatusOK, `"display":"HH-2","kind":"Task","title":"ログイン画面を作る"`)
+	check(t, "row priority", api.Get(base+"/backlog"), http.StatusOK, `"priority":"`)
+	check(t, "row project", api.Get(base+"/backlog"), http.StatusOK, `"project":"`+string(apptest.SampleProject)+`"`)
+	sp := idOf(t, api.Post(base+"/sprints", map[string]any{"name": "Sprint 1", "start": "", "end": "", "goal": ""}))
+	check(t, "sprint frame", api.Get(base+"/backlog"), http.StatusOK, `"sprint":{"id":"`+sp+`"`)
+	check(t, "unknown workspace", api.Get("/api/stores/S1/workspaces/01NOPE0000000000000000000/backlog"), http.StatusNotFound, "")
+}
+
+func TestPlaceItemAPI(t *testing.T) {
+	api := newAPI(t)
+	task := itemBase + string(apptest.SampleTask) + "/plan-position"
+	none := map[string]any{"sprint": nil, "anchor": nil, "after": false}
+	sp := idOf(t, api.Post(base+"/sprints", map[string]any{"name": "Sprint 1", "start": "", "end": "", "goal": ""}))
+	check(t, "to sprint", api.Post(task, map[string]any{"sprint": sp, "anchor": nil, "after": false}), http.StatusNoContent, "")
+	check(t, "moved", api.Get(itemBase+string(apptest.SampleTask)), http.StatusOK, `"sprint":"`+sp+`"`)
+	check(t, "back to backlog", api.Post(task, none), http.StatusNoContent, "")
+	check(t, "unknown anchor", api.Post(task, map[string]any{"sprint": nil, "anchor": "01NOPE0000000000000000000", "after": false}), http.StatusNotFound, "")
+	check(t, "unknown item", api.Post(itemBase+"01NOPE0000000000000000000/plan-position", none), http.StatusNotFound, "")
+	check(t, "epic", api.Post(itemBase+string(apptest.SampleEpic)+"/plan-position", map[string]any{"sprint": sp, "anchor": nil, "after": false}), http.StatusBadRequest, "")
+	check(t, "start", api.Post(base+"/sprints/"+sp+"/start", map[string]any{"start": "2026-11-13", "end": "2026-11-26"}), http.StatusNoContent, "")
+	check(t, "close", api.Post(base+"/sprints/"+sp+"/close", map[string]any{"destination": nil}), http.StatusNoContent, "")
+	check(t, "closed", api.Post(task, map[string]any{"sprint": sp, "anchor": nil, "after": false}), http.StatusUnprocessableEntity, "完了したスプリントには入れられません")
+}

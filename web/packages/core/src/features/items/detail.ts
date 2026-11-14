@@ -81,6 +81,8 @@ export interface DetailDeps {
   toasts: Toasts;
   // onChanged は、保存したあと(開いているプロジェクトの画面を読み直す)。
   onChanged(): void;
+  // onPropertySaved は、プロパティを保存できたとき、Store の ID・保存したプロパティの ID・保存後のアイテムを知らせる(バックログの行を直す)。
+  onPropertySaved?: (storeId: string, propertyId: string, item: Item) => void;
   // leave は、入力中のものがあるとき、捨ててよいかを聞く(別のアイテムを開く・パネルを閉じる)。ないときは常に true。
   leave?: () => Promise<boolean>;
   // onOpened は、open でアイテムを開けたあとに 1 回呼ぶ(最近開いたアイテムの記録)。見つからなかったときと、読み直しでは呼ばない。
@@ -91,10 +93,6 @@ export interface DetailDeps {
 export function normalizeTitle(s: string): string {
   return s.split(/\s+/).filter(Boolean).join(" ");
 }
-
-export const copiedMessage = (id: string) => `コピーしました: ${id}`;
-export const copyFailedMessage = (id: string) =>
-  `コピーできませんでした。${id} を選択してコピーしてください`;
 
 export function createDetail(deps: DetailDeps): Detail {
   const view = writable<DetailView | null>(null);
@@ -258,12 +256,14 @@ export function createDetail(deps: DetailDeps): Detail {
       const v = get(view);
       // 開いているアイテムとその子のほかは保存しない(入力中に開くアイテムが変わったときの、前の入力)。
       if (!v || (itemId !== v.item.id && !v.children.some((c) => c.id === itemId))) return false;
+      let result: Item;
       try {
-        await deps.items.setProperty(v.store.id, itemId, propertyId, value);
+        result = await deps.items.setProperty(v.store.id, itemId, propertyId, value);
       } catch (e) {
         refusedToast(e);
         return false;
       }
+      deps.onPropertySaved?.(v.store.id, propertyId, result);
       await saved(v.store.id, v.item.id);
       return true;
     },

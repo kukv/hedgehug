@@ -84,6 +84,45 @@ describe("planning port: reads", () => {
   });
 });
 
+describe("planning port: backlog", () => {
+  it("reads the frames, with null lists as empty and a null sprint for the backlog", async () => {
+    const totals = { count: 1, points: 3 };
+    const backlogRow = { ...row, priority: "a0", project: "P1" };
+    const fetch = respond(200, {
+      frames: [
+        { sprint, total: totals, rows: [backlogRow] },
+        { sprint: null, total: { count: 0, points: 0 }, rows: null },
+      ],
+    });
+    expect(await createPlanningPort().backlog("S1", "W1")).toEqual([
+      { sprint, total: totals, rows: [backlogRow] },
+      { sprint: null, total: { count: 0, points: 0 }, rows: [] },
+    ]);
+    expect(call(fetch).url).toBe(`${base}/backlog`);
+    respond(200, { frames: null });
+    expect(await createPlanningPort().backlog("S1", "W1")).toEqual([]);
+  });
+
+  it("sends the sprint, anchor and after of a placement", async () => {
+    const fetch = respond(204, undefined);
+    const p = createPlanningPort();
+    await p.placeItem("S1", "I1", null, null, false);
+    await p.placeItem("S1", "I1", "SP4", "I2", true);
+    expect(fetch.mock.calls.map((_, i) => call(fetch, i))).toEqual([
+      {
+        url: "/api/stores/S1/items/I1/plan-position",
+        method: "POST",
+        body: { sprint: null, anchor: null, after: false },
+      },
+      {
+        url: "/api/stores/S1/items/I1/plan-position",
+        method: "POST",
+        body: { sprint: "SP4", anchor: "I2", after: true },
+      },
+    ]);
+  });
+});
+
 describe("planning port: writes", () => {
   it("creates, updates, starts, closes and deletes a sprint", async () => {
     const input = { name: "Sprint 5", goal: "", start: "2026-11-16", end: "2026-11-29" };

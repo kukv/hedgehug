@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { copiedMessage, copyFailedMessage, normalizeTitle } from "./detail";
+import { copiedMessage, copyFailedMessage } from "./copyId";
+import { normalizeTitle } from "./detail";
 
 // detail.test.ts が 300 行の上限を超えたので、文言の検査をここに分けた。
 

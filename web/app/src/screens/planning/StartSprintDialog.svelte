@@ -8,7 +8,8 @@
   interface Props {
     storeId: string;
     workspaceId: string;
-    card: SprintCard;
+    // card は、スプリントの画面のカードか、バックログの画面のスプリントの枠(F2a-15)。
+    card: Pick<SprintCard, "sprint" | "total">;
     // today は、このマシンの時刻帯での今日(YYYY-MM-DD)。
     today: string;
     onclose: () => void;

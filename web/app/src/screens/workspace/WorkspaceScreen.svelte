@@ -4,7 +4,6 @@
     dayOf,
     overviewFirst,
     readOnlyBand,
-    readOnlyNote,
     type SprintCard,
     type SprintDialogKind,
     type StoreNode,
@@ -13,17 +12,19 @@
     type WorkspaceTab,
     workspaceTabOf,
   } from "@hedgehug/core";
-  import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
+  import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
   import { selectReport } from "../../reports";
-  import { navigation, planning, projectDialog, screen, syncNow, toasts } from "../../wire";
+  import { navigation, planning, syncNow, toasts } from "../../wire";
+  import BacklogTab from "../planning/BacklogTab.svelte";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
   import ReportsTab from "../reports/ReportsTab.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
   import OverviewTab from "./OverviewTab.svelte";
+  import WorkspaceHead from "./WorkspaceHead.svelte";
 
-  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「レポート」「設定」。
+  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「バックログ」「スプリント」「リリース」「レポート」「設定」。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;
@@ -37,6 +38,7 @@
   // タブは作ったものだけ(B2 の計画の決定 15、F1-20)。履歴に積む(01)。
   const tabs = [
     { id: "overview", label: "概要" },
+    { id: "backlog", label: "バックログ" },
     { id: "sprints", label: "スプリント" },
     { id: "releases", label: "リリース" },
     { id: "reports", label: "レポート" },
@@ -50,15 +52,6 @@
       tab: workspaceTabOf(id),
     });
   }
-
-  // 古いアドレスから開いたときの移動の 1 行は、出しているワークスペースとタブが同じときだけ出す(B5c-2)。
-  const workspaceMoved = screen.workspaceMoved;
-  const moved = $derived.by(() => {
-    const m = $workspaceMoved;
-    return m?.storeId === store.id && m.workspaceId === workspace.id && m.tab === tab
-      ? m.text
-      : null;
-  });
 
   // 「バーンダウンを見る」(F3-16)。そのスプリントを選んで保存してから、レポートのタブへ移る。
   // 保存できなければ移らない。
@@ -92,43 +85,31 @@
   // スプリントのダイアログ(05)。開いたワークスペースのものだけ出す(別のワークスペースへ移ったら出さない)。
   // 作成・完了・削除は概要(既定・移動先・保持日数)を使うので、読み直してから出す(overviewFirst)。
   // 読み直しても読めなければ出さない(概要の読み込みは断りを出さない。A2 の決定 29)。
-  let dialog = $state<{ kind: SprintDialogKind; card: SprintCard | null; wid: string } | null>(
-    null,
-  );
-  async function openSprint(kind: SprintDialogKind, card: SprintCard | null = null) {
+  // 開くのは「スプリント」と「バックログ」のタブで、開いたタブにいるあいだだけ出す。バックログの「開始」は
+  // スプリントの枠を渡す(F2a-15)。
+  type Card = Pick<SprintCard, "sprint" | "total">;
+  let dialog = $state<{
+    kind: SprintDialogKind;
+    card: Card | null;
+    wid: string;
+    tab: string;
+  } | null>(null);
+  async function openSprint(kind: SprintDialogKind, card: Card | null = null) {
     const opening = wid;
+    const from = tab;
     const needs = kind !== "edit" && kind !== "start";
     if (overviewFirst(kind, ov !== null)) await planning.reload();
-    if (opening === wid && (!needs || ov)) dialog = { kind, card, wid: opening };
+    if (opening === wid && (!needs || ov)) dialog = { kind, card, wid: opening, tab: from };
   }
   const closeSprint = () => (dialog = null);
-  const shown = $derived(dialog && dialog.wid === wid && tab === "sprints" ? dialog : null);
+  const shown = $derived(dialog && dialog.wid === wid && dialog.tab === tab ? dialog : null);
   // タブやワークスペースを離れたら閉じる(戻ったときに古いカードで出し直さない)。
   $effect(() => {
     if (dialog && !shown) dialog = null;
   });
 </script>
 
-<PageHead title={workspace.name} {ondrawer} {alert}>
-  {#snippet crumbs()}
-    <StoreBadge name={store.name} color={store.color} />
-    <code class="prefix">{workspace.prefix}</code>
-    {#if active}
-      <span class="running">{active}</span>
-    {/if}
-  {/snippet}
-  {#snippet actions()}
-    <Button
-      disabled={store.readOnly}
-      title={store.readOnly ? readOnlyNote : undefined}
-      onclick={() => void projectDialog.open(workspace.id)}
-      >プロジェクト</Button
-    >
-  {/snippet}
-</PageHead>
-{#if moved}
-  <p class="moved">{moved}</p>
-{/if}
+<WorkspaceHead {store} {workspace} {tab} {active} {ondrawer} {alert} />
 <Tabs {tabs} current={tab} onselect={select} />
 <div class="content">
   {#if tab === "settings"}
@@ -138,6 +119,15 @@
   {/if}
   {#if tab === "overview"}
     <OverviewTab storeId={store.id} workspaceId={workspace.id} />
+  {:else if tab === "backlog"}
+    <BacklogTab
+      storeId={store.id}
+      storeName={store.name}
+      workspaceId={workspace.id}
+      readOnly={store.readOnly}
+      oncreate={() => void openSprint("create")}
+      onstart={(f) => void openSprint("start", f)}
+    />
   {:else if tab === "sprints"}
     <SprintsTab
       storeId={store.id}
@@ -180,20 +170,5 @@
     overflow: auto;
     padding: 16px 24px 40px;
     min-height: 0;
-  }
-  .moved {
-    margin: 0;
-    padding: 0 24px 8px;
-    font-size: 12.5px;
-    color: var(--muted);
-  }
-  .prefix {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .running {
-    font-size: 12px;
-    color: var(--muted);
   }
 </style>

@@ -80,6 +80,7 @@ func Register(api huma.API, svc appplanning.Service) {
 	registerReleases(api, svc)
 	registerReleaseStates(api, svc)
 	registerItems(api, svc)
+	registerBacklog(api, svc)
 }
 
 func registerReads(api huma.API, svc appplanning.Service) {

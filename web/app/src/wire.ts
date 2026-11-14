@@ -48,9 +48,9 @@ import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { githubReloads, inboxReloads, reloads } from "./reloads";
+import { githubReloads, inboxReloads, propertySaved, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
-import { palettePort, toasts } from "./wireBase";
+import { palettePort, timer, toasts } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 
@@ -127,6 +127,9 @@ export const detail = createDetail({
   planning: planningPort,
   toasts,
   onChanged: () => void projectScreen.reload(),
+  onPropertySaved: (storeId, propertyId, item) => {
+    for (const f of propertySaved) f(storeId, propertyId, item);
+  },
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: leaveItem,
   // 開けたアイテムを「最近開いたもの」に記録する(A5c-13。失敗は無視)。
@@ -231,10 +234,7 @@ async function reflect(kinds: SyncEventKind[]) {
 
 export const reflection = createReflection({
   port: syncPort,
-  timer: {
-    set: (fn, ms) => setTimeout(fn, ms),
-    clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
-  },
+  timer,
   held,
   visible,
   apply: reflect,

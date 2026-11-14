@@ -881,7 +881,7 @@ PR の説明に、`port.StoreList` の本物と `members` への追加はトラ�
   - `(Service) FindByNumber(ctx, store, ws workspace.ID, number int) (item.Item, error)`: なければ `port.ErrNotFound`
   - 見つからないアイテムは、どの操作も `port.ErrNotFound`
 
-**決め方:** アクティビティの 1 行(`Operation.Summary`)は保存の前に決めるので、ID を書く操作は、まず `withID` でアイテムとワークスペースの接頭辞を読む。保存しない場合(同じタイトル、先頭の「上へ」)は、行のない `Write` にする(`port.Stores.Write` の約束で何も残らない)。「上へ」で直前の兄弟と並び順の値が同じとき(同期で重なったとき)は、入れ替えても並びが変わらないので保存しない(重なりの修復はトラック C)。
+**決め方:** アクティビティの 1 行(`Operation.Summary`)は保存の前に決めるので、ID を書く操作は、まず `withID` でアイテムとワークスペースの接頭辞を読む。保存しない場合(同じタイトル、先頭の「上へ」)は、行のない `Write` にする(`port.Stores.Write` の約束で何も残らない)。「上へ」で直前の兄弟と並び順の値が同じとき(同期で重なったとき)は、入れ替えても並びが変わらないので保存しない(重なりの修復はトラック C)。F2a Task 12 で変更: `MoveUp` はトラック A4b で `items.Reorder` に置き換わり、順位が同じでも `rank.Around` で動かし、同じ順位の群の中には入らず群の外に置く(例: A(V)・B(W)・C(W) で A の「下へ移動」は B・C・A になる)。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
