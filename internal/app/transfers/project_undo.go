@@ -21,15 +21,7 @@ import (
 // *UndoError(Old はプロジェクトの旧 ID、NewDisplay はプロジェクトの新 ID)。
 func (s Service) rollbackProject(ctx context.Context, m *crossProjectMove, cause error) error {
 	display := m.plan.display()
-	op := port.Operation{Actor: change.User(m.meTo), Summary: display + " の移動を取り消し"}
-	reason, err := s.Delivery.Deliver(ctx, m.in.ToStore, op, m.undo)
-	if err == nil && reason != "" {
-		err = &SendError{Store: m.to.Name, Reason: reason}
-	}
-	if err != nil {
-		return &UndoError{Old: m.old(), Store: m.to.Name, NewDisplay: display, Cause: cause, Undo: err}
-	}
-	return cause
+	return s.deliverUndo(ctx, m.to, m.meTo, display+" の移動を取り消し", m.undo, cause, UndoError{Old: m.old(), NewDisplay: display})
 }
 
 // undo は、戻しの保存の fn。移動の操作(移動先のプロジェクトの最後の moved_in の行の操作)を引いて、足した人を外す行と

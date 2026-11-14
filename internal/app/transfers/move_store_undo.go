@@ -14,15 +14,16 @@ import (
 
 // UndoError は、別の Store への移動で、移動先の保存のあとに失敗し、移動先の保存の取り消しもできなかったこと(移したアイテムが
 // 移動先と移動元の両方にある。02「保存」)。Old は旧 ID、Store は移動先の Store 名、NewDisplay は移動先の新 ID。
-// ワークスペースの移動では、Old はワークスペースの名前で NewDisplay は空(B5c-14 の文になる)。
+// Workspace はワークスペースの移動で、そのとき Old はワークスペースの名前、NewDisplay は空(B5c-14 の文になる)。
 // Cause は取り消しの前の失敗(errors.Is で辿れる)、Undo は取り消しの失敗(送れなかったときは *SendError)。
 type UndoError struct {
 	Old, Store, NewDisplay string
+	Workspace              bool
 	Cause, Undo            error
 }
 
 func (e *UndoError) Error() string {
-	if e.NewDisplay == "" {
+	if e.Workspace {
 		return fmt.Sprintf("ワークスペース「%s」を %s へ移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください",
 			e.Old, e.Store)
 	}
@@ -33,18 +34,26 @@ func (e *UndoError) Error() string {
 // Unwrap は、取り消しの前の失敗だけを返す(取り消しの *SendError を、移動の送信の失敗として読ませない)。
 func (e *UndoError) Unwrap() error { return e.Cause }
 
+// deliverUndo は、戻しの保存 fn を、実行者 me・アクティビティ summary で移動先 to へ送る。送れたら cause を返す。
+// 送れなかった・失敗したら、e に移動先の Store 名・cause・戻しの失敗(送れなかったときは *SendError)を入れた *UndoError。
+func (s Service) deliverUndo(ctx context.Context, to port.StoreInfo, me, summary string, fn func(tx port.Tx) error, cause error, e UndoError) error {
+	op := port.Operation{Actor: change.User(me), Summary: summary}
+	reason, err := s.Delivery.Deliver(ctx, to.ID, op, fn)
+	if err == nil && reason != "" {
+		err = &SendError{Store: to.Name, Reason: reason}
+	}
+	if err != nil {
+		e.Store, e.Cause, e.Undo = to.Name, cause, err
+		return &e
+	}
+	return cause
+}
+
 // rollback は、移動先の保存を戻す(A5a-6): 写したフォルダを消し、足したメンバーを外す。number の行は戻さない。
 // 戻せたら cause を返す。戻しが送れなかった・失敗したら *UndoError。
 func (s Service) rollback(ctx context.Context, m *crossMove, cause error) error {
-	op := port.Operation{Actor: change.User(m.meTo), Summary: m.moved.Display + " の移動を取り消し"}
-	reason, err := s.Delivery.Deliver(ctx, m.in.ToStore, op, m.undo)
-	if err == nil && reason != "" {
-		err = &SendError{Store: m.to.Name, Reason: reason}
-	}
-	if err != nil {
-		return &UndoError{Old: m.src.set.Root.DisplayID(m.src.ws.Prefix), Store: m.to.Name, NewDisplay: m.moved.Display, Cause: cause, Undo: err}
-	}
-	return cause
+	return s.deliverUndo(ctx, m.to, m.meTo, m.moved.Display+" の移動を取り消し", m.undo, cause,
+		UndoError{Old: m.src.set.Root.DisplayID(m.src.ws.Prefix), NewDisplay: m.moved.Display})
 }
 
 // undo は、戻しの保存の fn。足した人を外す行を決めてから、写したフォルダを消す(消すと、移動の操作を引く moved_in の行も

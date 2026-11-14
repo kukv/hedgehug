@@ -73,6 +73,23 @@ func TestMoveWorkspaceRollsBack(t *testing.T) {
 	assertWorkspaceRolledBack(t, f, before)
 }
 
+// 移動元の保存の前に、移動先で移したワークスペースの中にアイテムが作られていても、戻しはそれも消す(移動先に、ない
+// ワークスペースのアイテムを残さない)。
+func TestMoveWorkspaceRollbackRemovesItemsAddedAtTheDestination(t *testing.T) {
+	const added item.ID = "01TESTIT000000000000000013"
+	f := newFixture(t)
+	f.svc.Stores = failWrite{Stores: f.rec, store: store1, before: func() {
+		addItem(t, f.rec, store2, item.Item{ID: added, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 9}, Kind: item.Epic, Rank: "X", Title: "移動先で"})
+	}}
+	if _, err := f.svc.MoveWorkspace(t.Context(), store1, apptest.SampleWorkspace, store2); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if exists(t, f.rec, store2, added) {
+		t.Error("the item added at the destination remains")
+	}
+	assertWorkspaceUntouched(t, f)
+}
+
 // 戻しも送れなかった(理由)・失敗した(エラー)ときは *UndoError(Old はワークスペースの名前、NewDisplay は空)。
 // 移動先にはワークスペースが残る。
 func TestMoveWorkspaceUndoFails(t *testing.T) {
@@ -112,8 +129,8 @@ func failMoveWithChangeMeanwhile(t *testing.T, mutate func(fixture)) fixture {
 			mutate(f)
 		}
 	}
-	if _, err := f.svc.MoveWorkspace(t.Context(), store1, apptest.SampleWorkspace, store2); err == nil {
-		t.Fatal("the move succeeded")
+	if _, err := f.svc.MoveWorkspace(t.Context(), store1, apptest.SampleWorkspace, store2); !errors.Is(err, transfers.ErrSourceChanged) {
+		t.Fatalf("err = %v, want the source-changed error", err)
 	}
 	assertWorkspaceUntouched(t, f)
 	if got := loginsOf(t, f.rec); !slices.Equal(got, []string{"Taro"}) {

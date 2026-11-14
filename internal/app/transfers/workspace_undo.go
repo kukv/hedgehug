@@ -8,28 +8,24 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 // rollbackWorkspace は、ワークスペースの移動先の保存を戻す: 写したフォルダを消し、足したメンバーを外す。戻せたら cause を
 // 返す。戻しが送れなかった・失敗したら *UndoError(Old はワークスペースの名前、NewDisplay は空)。
 func (s Service) rollbackWorkspace(ctx context.Context, m *crossWorkspaceMove, cause error) error {
-	op := port.Operation{Actor: change.User(m.meTo), Summary: fmt.Sprintf("ワークスペース「%s」の移動を取り消し", m.name())}
-	reason, err := s.Delivery.Deliver(ctx, m.to.ID, op, m.undo)
-	if err == nil && reason != "" {
-		err = &SendError{Store: m.to.Name, Reason: reason}
-	}
-	if err != nil {
-		return &UndoError{Old: m.name(), Store: m.to.Name, Cause: cause, Undo: err}
-	}
-	return cause
+	summary := fmt.Sprintf("ワークスペース「%s」の移動を取り消し", m.name())
+	return s.deliverUndo(ctx, m.to, m.meTo, summary, m.undo, cause, UndoError{Old: m.name(), Workspace: true})
 }
 
 // undo は、戻しの保存の fn。移動の操作(移動先のワークスペースの最後の moved_in の行の操作)を引いて、足した人を外す行を
-// 決めてから、写したフォルダを消す(消すと moved_in の行も読めなくなる)。移動先に移動が保存されていなければ(moved_in が
-// ない)、メンバーの行は書かない。保存されなかったフォルダは飛ばす。
+// 決めてから、移動先のワークスペースの中のプロジェクトとアイテムのフォルダ(tx から読む。移動のあとに移動先で作られたものも)
+// と、ワークスペースのフォルダを消す(消すと moved_in の行も読めなくなる)。移動先に移動が保存されていなければ(moved_in が
+// ない)、メンバーの行は書かない。保存されなかったワークスペースのフォルダは飛ばす。
 func (m *crossWorkspaceMove) undo(tx port.Tx) error {
-	op, err := lastMovedIn(tx, change.Ref{Kind: change.KindWorkspace, ID: m.src.ws.ID})
+	id := m.src.ws.ID
+	op, err := lastMovedIn(tx, change.Ref{Kind: change.KindWorkspace, ID: id})
 	if err != nil {
 		return err
 	}
@@ -39,20 +35,33 @@ func (m *crossWorkspaceMove) undo(tx port.Tx) error {
 			return err
 		}
 	}
-	for _, it := range m.src.set.Items {
-		if err := tx.WriteItems().Remove(it.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
+	projects, err := tx.Projects().List(id)
+	if err != nil {
+		return err
+	}
+	for _, p := range projects {
+		if err := removeProjectFolders(tx, p.ID); err != nil {
 			return err
 		}
 	}
-	for _, p := range m.src.set.Projects {
-		if err := tx.WriteProjects().Remove(p.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
-			return err
-		}
-	}
-	if err := tx.WriteWorkspaces().Remove(m.src.ws.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
+	if err := tx.WriteWorkspaces().Remove(id); err != nil && !errors.Is(err, port.ErrNotFound) {
 		return err
 	}
 	return tx.WriteMembers().Append(members...)
+}
+
+// removeProjectFolders は、プロジェクト p の下のアイテム(削除済みを含む)と p のフォルダを消す。
+func removeProjectFolders(tx port.Tx, p project.ID) error {
+	items, err := tx.Items().List(p)
+	if err != nil {
+		return err
+	}
+	for _, it := range items {
+		if err := tx.WriteItems().Remove(it.ID); err != nil {
+			return err
+		}
+	}
+	return tx.WriteProjects().Remove(p)
 }
 
 // logMark は、1 つのログの行数と最後の行の id。

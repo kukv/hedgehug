@@ -82,6 +82,10 @@ func TestMoveProjectAcrossReportsAnUndoThatFailed(t *testing.T) {
 		if !errors.As(err, &ue) || ue.Old != "HH-P1" || ue.Store != "team" || ue.NewDisplay != "TM-P2" || !errors.Is(err, errBoom) {
 			t.Fatalf("err = %#v", err)
 		}
+		const want = "HH-P1 を team の TM-P2 に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください"
+		if ue.Error() != want {
+			t.Errorf("文 = %q", ue.Error())
+		}
 		if _, ok := projectAt(t, f.rec, store2, apptest.SampleProject); !ok {
 			t.Error("the destination project was removed")
 		}
