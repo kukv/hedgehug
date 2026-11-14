@@ -153,6 +153,22 @@ describe("structureOf and othersOf", () => {
     ]);
   });
 
+  it.each([
+    ["hidden", { hidden: true }],
+    ["not used by the form's kind", { kinds: ["Story", "Bug"] }],
+  ])("gives the root's 親と同じ Step 未割り当て when the assignee field is %s", (_, extra) => {
+    const s: WorkspaceSettings = {
+      ...withTemplates,
+      properties: withTemplates.properties.map((p) =>
+        p.id === "assignee" ? { ...p, ...extra } : p,
+      ),
+    };
+    const out = structureOf(s, form({ templateId: "T2", values: { assignee: "taro" } }), [
+      { login: "taro", name: "太郎" },
+    ]);
+    expect(out?.rows[0]).toEqual({ depth: 0, kind: "Step", title: "準備", assignee: "未割り当て" });
+  });
+
   it("counts the other templates", () => {
     expect(othersOf(withTemplates, "E1")).toBe(3);
     expect(othersOf(withTemplates, "")).toBe(0);

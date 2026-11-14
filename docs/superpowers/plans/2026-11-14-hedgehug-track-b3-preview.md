@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** アイテムの作成ダイアログの「一緒に作るもの」で、子の担当者を、保存のとき(`workspace.TemplateValuesFor`)と同じ規則で出す。担当者のプロパティが非表示か、子の種類で使わないときは、子とその子の「親と同じ」の Step を「未割り当て」と出す。
+**Goal:** アイテムの作成ダイアログの「一緒に作るもの」で、子の担当者を、保存のとき(`workspace.TemplateValuesFor`)と同じ規則で出す。担当者のプロパティが非表示か、子の種類で使わないときは、子とその子の「親と同じ」の Step を「未割り当て」と出す。もとになるアイテムの「親と同じ」の Step も、担当者の欄が表示中でないときは「未割り当て」と出す。
 
 **Architecture:** core の `templateStructure`(`web/packages/core/src/features/workspaces/templateApply.ts`)に `settings` を渡し、子の値 `assignee` を、プロパティ `assignee` があり・子の種類で使い・表示中のときだけ使う。呼び出し元は `structureOf`(`web/packages/core/src/features/items/createTemplate.ts`)の 1 か所。サーバーは変えない。
 
@@ -25,7 +25,7 @@
 |---|---|---|
 | B3P-1 | 子の担当者は、テンプレートの子の値 `assignee` のうち、`settings.properties` に ID `assignee` のプロパティがあり、その `kinds` に子の種類があり、`hidden` でないときだけ使う。ほかは「未割り当て」。空文字も「未割り当て」 | サーバーの `TemplateValuesFor`(`keepValues` は `slices.Contains(p.Kinds, kind)`・`HoldsTemplateValue`・空でない値、続けて `!p.Hidden`。担当者は `validValue` で常に正しい) |
 | B3P-2 | 子の Step の「親と同じ」は、B3P-1 で決めた子の担当者を使う | サーバーの `expander.steps` は親のアイテムの担当者(`applyValues` のあと)を使う |
-| B3P-3 | もとになるアイテムの Step の「親と同じ」と、Step の担当者の直接の指定は、いまのまま | サーバーはもとになるアイテムに入力の値を使い、Step の直接の指定を絞り込まない |
+| B3P-3 | もとになるアイテムの Step の「親と同じ」は、入力の担当者を、そのアイテムの種類で担当者の欄が表示中のときだけ使う。表示中でなければ「未割り当て」。Step の担当者の直接の指定は絞り込まず、いまのまま | 02「作成」を押した時点で、表示している欄の値だけを保存する(`shownValues`)。サーバーはもとになるアイテムに、その保存された値を使う。Step の直接の指定は絞り込まない |
 
 ## Task 1: プレビューの子の担当者を保存と同じ規則で出す
 

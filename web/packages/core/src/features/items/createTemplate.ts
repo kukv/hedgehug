@@ -119,7 +119,9 @@ export function structureOf(
 ): { heading: string; rows: StructureRow[] } | null {
   const t = find(settings, form.templateId);
   if (!t) return null;
-  const assignee = typeof form.values.assignee === "string" ? form.values.assignee : "";
+  // 保存は表示している欄の値だけを送る(shownValues)ので、担当者の欄が出ていなければ「親と同じ」は未割り当て。
+  const shown = visibleProperties(settings, form.kind).some((p) => p.id === "assignee");
+  const assignee = shown && typeof form.values.assignee === "string" ? form.values.assignee : "";
   return templateStructure(t, assignee, members, settings);
 }
 
