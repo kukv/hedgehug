@@ -17,9 +17,10 @@
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
+  import ReportsTab from "../reports/ReportsTab.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
 
-  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「設定」。
+  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「レポート」「設定」。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;
@@ -35,6 +36,7 @@
     { id: "overview", label: "概要" },
     { id: "sprints", label: "スプリント" },
     { id: "releases", label: "リリース" },
+    { id: "reports", label: "レポート" },
     { id: "settings", label: "設定" },
   ];
   function select(id: string) {
@@ -126,6 +128,8 @@
       workspaceId={workspace.id}
       readOnly={store.readOnly}
     />
+  {:else if tab === "reports"}
+    <ReportsTab storeId={store.id} workspaceId={workspace.id} />
   {/if}
   {#if shown}
     <SprintDialogs
