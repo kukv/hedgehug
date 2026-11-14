@@ -18,6 +18,7 @@ var steps = []step{
 	cascadeDeleted,     // 削除済みの親の下の子
 	renumberCollisions, // 同じワークスペースで重なった番号
 	breakCycles,        // 親の循環
+	matchWorkspaces,    // 親とワークスペースが違う子
 	matchProjects,      // 親とプロジェクトが違う子
 }
 
