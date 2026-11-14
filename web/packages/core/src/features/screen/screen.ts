@@ -147,6 +147,9 @@ export function createScreen(deps: ScreenDeps): Screen {
       };
     }
     shownWorkspace = null;
+    // 出していたワークスペースが読み直しで見つからなくなったときは、アドレスもホームに替える(履歴に積まない)。替えないと、
+    // 次の一覧の読み直しでサーバーに聞き、ほかの書き手が移した先へひとりでに移る(B5c-17)。
+    if (rereadWorkspace && r.name === "home") return deps.navigation.replace({ name: "home" });
     if (r.name === "workspace" && route.name === "workspace") {
       const { storeId, workspaceId, tab, movedFrom: moved } = r;
       if (moved)

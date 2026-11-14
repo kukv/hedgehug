@@ -153,17 +153,30 @@ describe("createScreen with a moved workspace", () => {
   });
 
   // 出していたワークスペースのアドレスを読み直すときは、サーバーに聞かない(A5b-19 と同じ)。ほかの書き手が移した
-  // ときも、移った先を開かずに、いまの扱い(出していたワークスペースがなくなれば画面がなくなる)のまま。
-  it("does not ask locateWorkspace when a reload no longer finds the shown workspace", async () => {
-    const { screen, catalog, transfers, goneWorkspaces } = await setup("/s/work/w/HH/overview");
+  // ときも、移った先を開かずにホームへ移る(B5c-17)。アドレスもホームに替えるので、次の一覧の読み直しでもサーバーに
+  // 聞かず、移った先へひとりでに移らない。
+  it("goes home without asking locateWorkspace when reloads no longer find the shown workspace", async () => {
+    const { screen, catalog, stack, transfers, goneWorkspaces } = await setup(
+      "/s/work/w/HH/overview",
+    );
     screen.start();
     await flush();
-    transfers.locatedWorkspace = { kind: "found", storeId: "S2", workspaceId: "S2-W1" };
+    transfers.locatedWorkspace = {
+      kind: "found",
+      storeId: "S2",
+      workspaceId: "S2-W1",
+      movedFrom: moved,
+    };
     goneWorkspaces.add("S1-W1");
-    goneWorkspaces.add("S2-W1");
     await catalog.load();
     await flush();
     expect(transfers.calls).toEqual([]);
     expect(get(screen.current)).toEqual({ name: "home" });
+    expect(stack).toEqual(["/"]);
+    await catalog.load();
+    await flush();
+    expect(transfers.calls).toEqual([]);
+    expect(stack).toEqual(["/"]);
+    expect(get(screen.workspaceMoved)).toBeNull();
   });
 });
