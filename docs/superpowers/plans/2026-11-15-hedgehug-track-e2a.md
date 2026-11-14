@@ -49,7 +49,7 @@ E1 の計画の Global Constraints をすべて引き継ぐ。加えて次を守
 | E2a-11 | 「(削除された値)」にする列(`removed`): ステータス・優先度・単一選択で ID が一覧にないとき、関連システム・複数選択で ID のどれかが一覧にないとき(詳細パネルの `choiceRow` と同じ。文字は「(削除された値)」だけを薄く出す) | 04 の 713 行、core の `properties.ts` の `choiceRow` |
 | E2a-12 | 画面での表示: ID は Store の点・ID・「旧 ID」(E1 のまま)、種類は種類のアイコンと名前、タイトルは詳細パネル(削除済みは E1 のまま押せない)、ステータスは点と名前、担当者・ユーザーはアバターと表示名、優先度・単一選択・複数選択・関連システム・スプリント・リリース・テキスト・数値はそのままの文字、見積もり時間は「{N} 時間」(`item.Hours` と同じ丸め。core の `hoursText`)、開始日と日付は 01 の日付の表示(`formatDay`)、終了日は `dueLabel`、プロジェクトはタイトル、親は ID(押すと親の詳細パネル、`title` に親のタイトル)、作成日・更新日は `relativeTime`、チェックは押せないチェックボックス、URL はリンク(新しいタブ)。列「更新日」の見出しの `title` は「GitHub と同期による変更は含みません」。セルの編集の部品は E2b が置き換える | 04 の 697〜713 行、01 の 136〜145 行 |
 | E2a-13 | テーブルの設定は、画面の状態 `search` の中身を `{query, table: {columns, group, sort}}` にして持つ。`columns` は出す列の鍵の並び(左から)、`group` は `none` か 10 項目の鍵、`sort` は `{key, desc}`(列の鍵)か null。初めは `columns` が `["id","title","status","assignee","priority","end","points"]`、`group` が `none`、`sort` が null。E1 の `{query}` だけの中身・形の合わない値は、その項目だけ初めの値にする | 04 の 469・664 行、E1-16 |
-| E2a-14 | 「表示する列」は ui の `ValueMenu`(`multi`、7 件以上で検索欄)で、対象の列すべてを列の並び(E2a-1・E2a-2)で出し、出している列にチェック。タイトルは選べない項目(`disabled`)。出すと `columns` の末尾に足し、隠すと外す。いまの対象にない列の鍵は `columns` に残したまま表示しない(Store を表示に戻すと出る)。列を隠しても、その列の並べ替えは残す | 04 の 665・666 行 |
+| E2a-14 | 「表示する列」は ui の `ValueMenu`(`multi`、7 件以上で検索欄)で、対象の列すべてを列の並び(E2a-1・E2a-2)で出し、出している列にチェック。タイトルは選べない項目(`disabled`)。出すと `columns` の末尾に足し、隠すと外す。いまの対象にない列の鍵は `columns` に残したまま表示しない(Store を表示に戻すと出る)。並べ替えに使っている列を隠すと、列見出しの並べ替えも解除する(クエリの `sort:` か並び順に戻る) | 04 の 665・666 行。並べ替えを隠した列のことはユーザーの決定(2026-11-15。見えない列で並び続けると、なぜその順なのか画面から分からないため) |
 | E2a-15 | 「グループ」は ui の `Select`(名前「グループ」)。選択肢は「なし」「ステータス」「担当者」「プロジェクト」「親」「種類」「優先度」「スプリント」「関連システム」「作成日」「更新日」(04 の 678 行の表の順) | 04 の 676〜689 行 |
 | E2a-16 | 選択: 検索の画面の選択は `web/app/src/search.ts` の `searchSelection`(`createRowSelection`)。結果が変わるたびに、選べる行(削除済みでない行。並べ替えたあとの順に 1 回ずつ)で `prune` する(core の `createSearch` が行う)。検索の画面を離れたら `clear`。「すべて選択」は見出しの行の先頭のチェック(ui の `RowCheck`、名前「すべて選択」)で、選べる行がすべて選ばれていればチェック済み。押すと、チェック済みなら選択をすべて外し、そうでなければ選べる行をすべて選ぶ(`RowSelection` に足す `set` で 1 回で入れる)。削除済みの行のチェックは無効 | 04 の 717・820〜823 行、312 行 |
 | E2a-17 | 行末の「…」(ui の `IconButton`、名前「{ID} のメニュー」)は、押すとそのアイテムのプロジェクトのアイテムを `itemsPort.list` で読み、`itemMenuHost.open(item, { rows: 兄弟の並び(compareSiblings), children, row: true }, x, y)` で 02 のアイテムのメニューを開く(メニューの操作のあとは、Store の変更の知らせ(`syncing/watch.go`。書き手を問わない)で検索が読み直す)(ツリーの行と同じ項目。閲覧のみの Store の変更系の項目は host が無効にする)。読めない・アイテムがないときは何もしない。削除済みの行の「…」は無効 | 04 の 717・1059 行、482 行 |
@@ -279,7 +279,7 @@ git commit -m "feat(search): 検索の API にテーブルの設定と、列・�
   - `const groupChoices: { id: string; label: string }[]`(E2a-15 の 11 個)
   - `function shownColumns(t: TableSettings, columns: SearchColumn[]): SearchColumn[]` — `t.columns` の順で、対象にあるものだけ
   - `function columnChoices(t: TableSettings, columns: SearchColumn[]): { id: string; label: string; checked: boolean; disabled?: boolean }[]` — 対象の列の並び。タイトルは `disabled`
-  - `function toggleColumn(t: TableSettings, key: string): TableSettings` — タイトルは何もしない。出すと末尾
+  - `function toggleColumn(t: TableSettings, key: string): TableSettings` — タイトルは何もしない。出すと末尾。並べ替えに使っている列を隠すと `sort` を null にする
   - `function nextSort(t: TableSettings, key: string): TableSettings` — 昇順 → 降順 → なし。別の列なら昇順から
   - `function tableRequest(t: TableSettings): SearchTableRequest` — `p:` を外して小文字のキーにする
   - `function selectable(rows: SearchRow[]): SelectedRow[]` — 削除済みを除き、行の順に 1 回ずつ
@@ -290,7 +290,7 @@ git commit -m "feat(search): 検索の API にテーブルの設定と、列・�
 
 `table.test.ts`:
 - `readTable`: `undefined` → `defaultTable`。`{columns: "x", group: "kind", sort: {key: 1}}` → `columns` は初めの値、`group` は `kind`、`sort` は null。`{group: "bogus"}` → `none`。
-- `toggleColumn`: 初めの値に `start` → 末尾に `start`。`priority` → 外れる。`title` → 変わらない。
+- `toggleColumn`: 初めの値に `start` → 末尾に `start`。`priority` → 外れる。`title` → 変わらない。`sort` が `{points, true}` のときに `points` を隠すと `sort` が null、`priority` を隠しても `sort` はそのまま。
 - `nextSort`: null →`{title, false}` →`{title, true}` → null。`{title, true}` で `points` →`{points, false}`。
 - `tableRequest`: `{sort: {key: "p:Customer", desc: true}, group: "none"}` → `{sort: {key: "customer", desc: true}, group: "none"}`。
 - `shownColumns`: `columns` に対象にない `p:gone` があっても出さず、`t.columns` の順。
