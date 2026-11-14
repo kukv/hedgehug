@@ -219,7 +219,10 @@ describe("applyCandidate inside a quoted value", () => {
   });
 
   it("keeps what follows a quote that is already closed before the caret", () => {
-    expect(apply('parent:"HH"| kind:"a b"')).toEqual({ text: 'parent:HH-12 kind:"a b"', caret: 12 });
+    expect(apply('parent:"HH"| kind:"a b"')).toEqual({
+      text: 'parent:HH-12 kind:"a b"',
+      caret: 12,
+    });
   });
 });
 
