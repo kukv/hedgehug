@@ -37,7 +37,8 @@ type Notice struct {
 	From      change.ID  // 止まったときのステータス
 	Display   string     // 作ったときのアイテムの ID。アイテムがなければ空
 	Sender    string     // 差出人のログイン名。空は「hedgehug」
-	Source    string     // メンションの本文の鍵。メンション以外は空
+	Section   string     // ワークスペースを指す通知の開く区画(設定のサブタブ・スプリント・リリース)。空は自動化(automation)
+	Source    string     // メンションの本文・同期の修復の鍵。ほかは空
 	At        time.Time  // Mention が既存の行を書き換えるときに刻む時刻(本文を保存した時刻)。足すときと Add は使わない(受信箱の時計)
 }
 
@@ -48,6 +49,9 @@ type Inbox interface {
 	// なければ Add と同じ受信箱の時計の時刻(受け取った時刻)で足す。
 	// n.Source が空ならエラー。
 	Mention(ctx context.Context, n Notice) error
+	// AddOnce は、同じ Store・Source の行がなければ Add と同じく足して true を返す。
+	// あれば何もせず(既読・未読も変えない)false を返す。n.Source が空ならエラー。
+	AddOnce(ctx context.Context, n Notice) (bool, error)
 }
 
 // NoticeID は、通知 1 件の番号(受信箱の中で一意)。
@@ -102,6 +106,7 @@ type InboxBook interface {
 	// Prune は、アイテムが targets にある通知と、プロジェクトが targets にある通知と、
 	// アイテムもプロジェクトもない通知のうちワークスペースが targets にあるものを消す。
 	// 通知のワークスペースは作ったときの値なので、アイテムとプロジェクトの通知はワークスペースでは消さない(移ったアイテムの通知を残す)。
+	// 種類が repair で Source が repair:purged: で始まる通知(完全な削除で反映されなかった知らせ)は消さない。
 	Prune(ctx context.Context, store StoreID, targets []change.ID) error
 	// ForgetStore は、Store の通知をすべて消す。
 	ForgetStore(ctx context.Context, store StoreID) error

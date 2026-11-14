@@ -326,3 +326,78 @@ func TestInboxPruneProject(t *testing.T) {
 		t.Error("an item notice must stay")
 	}
 }
+
+func TestInboxAddOnce(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	n := port.Notice{Kind: port.NoticeRepair, Store: "s1", Workspace: "w1", Source: "repair:restore:op1", Text: "HH-1 は hanako が同時に変更したため、削除を取り消しました"}
+	added, err := b.AddOnce(t.Context(), n)
+	if err != nil || !added {
+		t.Fatalf("first AddOnce = %v, %v", added, err)
+	}
+	rows := inboxList(t, b, "s1")
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if err := b.SetRead(t.Context(), rows[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	added, err = b.AddOnce(t.Context(), n)
+	if err != nil || added {
+		t.Fatalf("second AddOnce = %v, %v", added, err)
+	}
+	if rows = inboxList(t, b, "s1"); len(rows) != 1 || !rows[0].Read {
+		t.Errorf("rows = %+v, want one read row", rows)
+	}
+	other := n
+	other.Store = "s2"
+	if added, err = b.AddOnce(t.Context(), other); err != nil || !added {
+		t.Errorf("another store AddOnce = %v, %v", added, err)
+	}
+	if _, err = b.AddOnce(t.Context(), port.Notice{Kind: port.NoticeRepair, Store: "s1"}); err == nil {
+		t.Error("an empty Source must be an error")
+	}
+}
+
+func TestInboxSection(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	n := port.Notice{Kind: port.NoticeRepair, Store: "s1", Workspace: "w1", Section: "sprints", Source: "repair:restore:op1"}
+	if _, err := b.AddOnce(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	n.Source = "x"
+	if err := b.Add(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	rows := inboxList(t, b, "s1")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	for _, r := range rows {
+		if r.Section != "sprints" {
+			t.Errorf("row = %+v, want Section sprints", r)
+		}
+		got, err := b.Get(t.Context(), r.ID)
+		if err != nil || got.Section != "sprints" {
+			t.Errorf("get = %+v, %v", got, err)
+		}
+	}
+}
+
+func TestInboxPruneKeepsPurgedRepair(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	purged := port.Notice{Kind: port.NoticeRepair, Store: "s1", Workspace: "w1", Item: "i1", Source: "repair:purged:i1"}
+	assign := port.Notice{Kind: port.NoticeAssign, Store: "s1", Workspace: "w1", Item: "i1"}
+	restored := port.Notice{Kind: port.NoticeRepair, Store: "s1", Workspace: "w1", Item: "i1", Source: "repair:restore:op1"}
+	for _, n := range []port.Notice{purged, assign, restored} {
+		if err := b.Add(t.Context(), n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.Prune(t.Context(), "s1", []change.ID{"i1"}); err != nil {
+		t.Fatal(err)
+	}
+	got := inboxList(t, b, "s1")
+	if len(got) != 1 || got[0].Source != "repair:purged:i1" {
+		t.Fatalf("after prune = %+v", got)
+	}
+}

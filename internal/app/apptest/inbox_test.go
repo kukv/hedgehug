@@ -178,3 +178,46 @@ func TestFakeInboxProjectColumnsAndPrune(t *testing.T) {
 		t.Errorf("after prune = %+v", got)
 	}
 }
+
+func TestFakeInboxAddOnce(t *testing.T) {
+	b := &Inbox{}
+	n := port.Notice{Kind: port.NoticeRepair, Store: "s1", Section: "sprints", Source: "repair:restore:op1", Text: "本文"}
+	if added, err := b.AddOnce(t.Context(), n); err != nil || !added {
+		t.Fatalf("first AddOnce = %v, %v", added, err)
+	}
+	rows := fakeList(t, b, "s1")
+	if len(rows) != 1 || rows[0].Section != "sprints" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	_ = b.SetRead(t.Context(), rows[0].ID, true)
+	if added, err := b.AddOnce(t.Context(), n); err != nil || added {
+		t.Fatalf("second AddOnce = %v, %v", added, err)
+	}
+	if rows = fakeList(t, b, "s1"); len(rows) != 1 || !rows[0].Read {
+		t.Errorf("rows = %+v, want one read row", rows)
+	}
+	other := n
+	other.Store = "s2"
+	if added, err := b.AddOnce(t.Context(), other); err != nil || !added {
+		t.Errorf("another store AddOnce = %v, %v", added, err)
+	}
+	if _, err := b.AddOnce(t.Context(), port.Notice{Kind: port.NoticeRepair, Store: "s1"}); err == nil {
+		t.Error("an empty Source must be an error")
+	}
+	b.Err = errors.New("broken")
+	if _, err := b.AddOnce(t.Context(), port.Notice{Kind: port.NoticeRepair, Store: "s3", Source: "k"}); err == nil {
+		t.Error("want the error")
+	}
+}
+
+func TestFakeInboxPruneKeepsPurgedRepair(t *testing.T) {
+	b := &Inbox{}
+	purged := port.Notice{Kind: port.NoticeRepair, Store: "s1", Item: "i1", Source: "repair:purged:i1"}
+	assign := port.Notice{Kind: port.NoticeAssign, Store: "s1", Item: "i1"}
+	_ = b.Add(t.Context(), purged)
+	_ = b.Add(t.Context(), assign)
+	_ = b.Prune(t.Context(), "s1", []change.ID{"i1"})
+	if got := fakeList(t, b, "s1"); len(got) != 1 || got[0].Source != "repair:purged:i1" {
+		t.Errorf("after prune = %+v", got)
+	}
+}
