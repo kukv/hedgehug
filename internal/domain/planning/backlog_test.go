@@ -118,8 +118,14 @@ func TestPlacementTies(t *testing.T) {
 	if got, ok := planning.Placement(its, "W", "C", "A", false); !ok || got != rank.Between("", "V") {
 		t.Errorf("C を A の直前 = %q, %v", got, ok)
 	}
-	if got, ok := planning.Placement(its, "W", "A", "C", true); !ok || got != rank.After("W") {
+	// 群の後ろに続きがないとき(F を除く)は rank.After(W)。
+	if got, ok := planning.Placement([]item.Item{wi("A", "V"), b, c}, "W", "A", "C", true); !ok || got != rank.After("W") {
 		t.Errorf("A を C の直後 = %q, %v, want %q", got, ok, rank.After("W"))
+	}
+	// 群の後ろに Z の行があるときは、B・C の群の後ろで Z の手前。
+	withZ := []item.Item{wi("A", "V"), b, c, wi("F", "Z")}
+	if got, ok := planning.Placement(withZ, "W", "A", "C", true); !ok || got != rank.Between("W", "Z") || got <= "W" || got >= "Z" {
+		t.Errorf("Z があるときの A を C の直後 = %q, %v, want %q", got, ok, rank.Between("W", "Z"))
 	}
 	got, ok := planning.Placement(its, "W", "F", "C", false)
 	if !ok || got != rank.Between("V", "W") || got <= "V" || got >= "W" {
