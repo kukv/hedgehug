@@ -1,0 +1,40 @@
+// 検索ヘルプの説明文と表(04「検索ヘルプ」)。`…` で囲んだところは、画面でコードの書体にする。
+
+export const searchHelp: { lead: string; rows: [string, string][] } = {
+  lead: "語をスペースで区切ると、すべてに一致するものだけが残ります。`-` を前に付けると否定、`,` で区切るとどれか 1 つに一致します。",
+  rows: [
+    ["`status:InProgress`", "ステータスの名前"],
+    ["`category:done`", "ステータスの分類(todo / doing / done / canceled)"],
+    ["`kind:story,bug`", "種類(epic / story / task / bug / step)"],
+    ["`assignee:@me` / `assignee:none`", "担当者(ログイン名、@me、none)"],
+    ["`watching:@me`", "ウォッチしている人(ログイン名、@me、none)"],
+    ["`mentions:@me`", "説明やコメントで呼ばれている人(ログイン名、@me、none)。いまの本文から探す"],
+    ["`system:API`", "関連システムの名前"],
+    ["`priority:high`", "優先度の名前"],
+    ["`sprint:current` / `sprint:none`", "スプリント(current / next / none / 名前)"],
+    ["`release:v2.0.0`", "リリースの名前"],
+    ["`project:HH-P1`", "プロジェクトの ID(日本語で打つと候補が出る)"],
+    ["`parent:HH-1`", "祖先の ID(親、親の親も含む)"],
+    [
+      "`blocked_by:HH-1` / `relates_to:HH-1`",
+      "関連(blocks・blocked_by・causes・caused_by・duplicates・duplicated_by・relates_to・clones・cloned_by)。ブロック中かどうかは `is:blocked`(終わっていないブロッカーがあるもの)で書く",
+    ],
+    ["`workspace:HH` / `store:team-b`", "ワークスペースの名前か接頭辞、Store の名前"],
+    ["`is:blocked` / `is:overdue`", "状態(ブロック中・期限切れ)"],
+    ["`is:invalid`", "診断で直せるデータの問題があるもの(理由と直し方は設定の「診断と修復」)"],
+    ["`is:deleted`", "削除済みのアイテム(テーブルで表示。復元は設定の「削除済み」)"],
+    ["`is:overwritten`", "このマシンの受信箱に、未読の「上書き」の通知があるもの"],
+    ["`points>=3` / `end<today` / `start>-7d`", "数値と日付の比較(today、+3d、-7d も使用できます)"],
+    ["`estimate<=2`", "見積もり時間(時間)の比較"],
+    ["`updated>-7d` / `created:today`", "変更した日、作成した日の比較"],
+    ["`sort:-updated`", "最近変わった順(`created` も使える)"],
+    ["`has:end` / `has:pr`", "値があるもの"],
+    ["`customer:サンプル`", "ワークスペースで追加したプロパティのキー"],
+    ["`sort:-priority`", "並び順(- で降順。テーブルとカンバンで使われる)"],
+    ["`group:kind`", "まとめ方(テーブルとカンバン。項目はテーブルの「グループ」と同じ)"],
+    [
+      '`ガント` / `"ガント 表"`',
+      "語だけを書くと、ID・タイトル・説明に含む語。空白を含むときは引用符で囲む",
+    ],
+  ],
+};

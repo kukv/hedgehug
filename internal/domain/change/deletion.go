@@ -2,6 +2,7 @@ package change
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 )
 
@@ -49,4 +50,16 @@ func DeletionOfField(log []Record, f string) *Deletion {
 		return nil
 	}
 	return &Deletion{Op: last.Op, At: last.At, Root: last.Root != nil && *last.Root}
+}
+
+// DaysLeft は、完全に削除されるまでの残り日数。削除した日(このマシンの時刻帯)に保持日数 retention を足した日から、
+// 今日 today(YYYY-MM-DD)までの日数で、0 以下なら保持日数を過ぎている。
+func (d Deletion) DaysLeft(retention int, today string) int {
+	t, err := time.ParseInLocation(time.DateOnly, today, time.Local)
+	if err != nil {
+		return 0
+	}
+	y, m, day := d.At.Local().Date()
+	due := time.Date(y, m, day+retention, 0, 0, 0, 0, time.Local)
+	return int(math.Round(due.Sub(t).Hours() / 24))
 }

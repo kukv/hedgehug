@@ -22,6 +22,7 @@
   const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
   const inboxRoute: Route = { name: "inbox" };
+  const searchRoute: Route = { name: "search" };
   const unread = inbox.unread;
 
   // 開閉は、このタブのあいだだけ覚える。
@@ -67,6 +68,15 @@
     {#if $unread.all > 0}
       <span class="badge" role="img" aria-label="未読 {$unread.all} 件">{$unread.all}</span>
     {/if}
+  </a>
+  <a
+    class="nav-row"
+    href={links.href(searchRoute)}
+    aria-current={current?.name === "search" ? "page" : undefined}
+    onclick={(e) => links.click(e, searchRoute)}
+    onauxclick={(e) => links.click(e, searchRoute)}
+  >
+    <span>検索</span>
   </a>
 </nav>
 {#each stores as store (store.id)}

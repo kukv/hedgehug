@@ -159,3 +159,18 @@ func TestRestored(t *testing.T) {
 		t.Error("a non-delete row must not be reported")
 	}
 }
+
+func TestDaysLeft(t *testing.T) {
+	at := func(m time.Month, d int) change.Deletion {
+		return change.Deletion{At: time.Date(2026, m, d, 23, 30, 0, 0, time.Local)}
+	}
+	if got := at(11, 1).DaysLeft(30, "2026-11-15"); got != 16 {
+		t.Errorf("11/01 = %d, want 16", got)
+	}
+	if got := at(10, 1).DaysLeft(30, "2026-11-15"); got != -15 {
+		t.Errorf("10/01 = %d, want -15", got)
+	}
+	if got := at(11, 15).DaysLeft(0, "2026-11-15"); got != 0 {
+		t.Errorf("same day = %d, want 0", got)
+	}
+}

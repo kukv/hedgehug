@@ -19,6 +19,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projectrules"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/reports"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/search"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
@@ -41,6 +42,7 @@ import (
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
 	appreports "github.com/kukv/hedgehug/internal/app/reports"
+	appsearch "github.com/kukv/hedgehug/internal/app/search"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
 	apptransfers "github.com/kukv/hedgehug/internal/app/transfers"
@@ -95,6 +97,8 @@ type Deps struct {
 	Recent port.RecentItems
 	// レポートの選択の保存先(F3。state.db)
 	Reports appreports.Selections
+	// 画面の状態の保存先(E1。state.db)
+	Screens appsearch.ScreenStates
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -149,6 +153,9 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})
+	search.Register(api, appsearch.Service{
+		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Identity: deps.Identity, Inbox: deps.Inbox, Clock: deps.Clock,
+	}, deps.Screens)
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})

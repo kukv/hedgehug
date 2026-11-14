@@ -6,6 +6,28 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/mention"
 )
 
+func TestAny(t *testing.T) {
+	cases := []struct {
+		body string
+		want bool
+	}{
+		{"@hanako 見て", true},
+		{"cc:@Hanako", true},
+		{"mail@hanako", true},
+		{"`@hanako`", true},
+		{"hanako", false},
+		{"@", false},
+		{"@ 見て", false},
+		{"@。", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := mention.Any(c.body); got != c.want {
+			t.Errorf("Any(%q) = %v, want %v", c.body, got, c.want)
+		}
+	}
+}
+
 func TestHas(t *testing.T) {
 	cases := []struct {
 		body string

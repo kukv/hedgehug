@@ -133,4 +133,10 @@ describe("resolveRoute settings", () => {
       name: "inbox",
     });
   });
+
+  it("resolves search without any store", async () => {
+    expect(await resolveRoute({ name: "search" }, [], itemsIn("none"), transfers)).toEqual({
+      name: "search",
+    });
+  });
 });

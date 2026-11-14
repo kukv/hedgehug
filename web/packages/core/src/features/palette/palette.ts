@@ -2,12 +2,14 @@ import type { Item } from "../../model/item";
 import type { PaletteIndex, RecentItem } from "../../model/palette";
 import type { ItemsPort } from "../../port/items";
 import type { PalettePort } from "../../port/palette";
+import type { SearchPort } from "../../port/search";
 import type { WorkspacesPort } from "../../port/workspaces";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { StoreNode } from "../catalog/catalog";
 import type { ValueOption } from "../items/properties";
 import { statusOptions } from "../items/properties";
 import { itemDisplayId, type Route } from "../router/route";
+import type { Timer } from "../toasts/toasts";
 import {
   type ActionDeps,
   commandCandidates,
@@ -23,6 +25,7 @@ import {
   workspaceCandidates,
 } from "./destinations";
 import { byName, matchItems, matchProjects, matchWorkspaces } from "./match";
+import { createQueryGroup } from "./queryGroup";
 import type { SelectedItem, Selection } from "./selection";
 
 // コマンドパレットの状態(02「コマンドパレット」、A5c-2・A5c-9・A5c-15・A5c-16)。
@@ -60,6 +63,10 @@ export interface PaletteDeps extends Omit<ActionDeps, "close"> {
   route: Readable<Route>;
   openTab(route: Route): void;
   now(): Date;
+  // search・timer は「このクエリで」の解析(150ms 待つ)。openSearch は、検索の絞り込みを入れ替えて /search を開く。
+  search: Pick<SearchPort, "search">;
+  timer: Timer;
+  openSearch(query: string): Promise<void>;
 }
 
 export function paletteFooter(mac: boolean): string {
@@ -93,10 +100,18 @@ export function createPalette(deps: PaletteDeps): Palette {
   let session: Session | null = null;
 
   function close() {
+    query.reset();
     session = null;
     state.set(null);
   }
   const a: ActionDeps = { ...deps, close };
+  const query = createQueryGroup({
+    search: deps.search,
+    timer: deps.timer,
+    openSearch: deps.openSearch,
+    close,
+    changed: () => render(true),
+  });
 
   function statusRows(s: Session, picked: Picked, options: ValueOption[]): Row[] {
     const list: Candidate[] = options.map((o) => ({
@@ -131,6 +146,7 @@ export function createPalette(deps: PaletteDeps): Palette {
     return buildRows(
       {
         command: byName(commandCandidates(a), s.input),
+        query: query.candidates(),
         selected: p
           ? byName(selectedCandidates(a, p.item, p.store.readOnly, toStatus), s.input)
           : [],
@@ -182,6 +198,7 @@ export function createPalette(deps: PaletteDeps): Palette {
     if (!detail || session !== s) return;
     s.options = statusOptions(detail.settings, p.item.status, true, p.item.projectId);
     s.input = "";
+    query.input("");
     render(false);
   }
 
@@ -213,6 +230,7 @@ export function createPalette(deps: PaletteDeps): Palette {
     async open() {
       const s: Session = { input: "", index: null, recent: [], picked: null, options: null };
       session = s;
+      query.reset();
       render(false);
       const sel = deps.selection.current();
       await Promise.all([
@@ -233,6 +251,7 @@ export function createPalette(deps: PaletteDeps): Palette {
     input(text) {
       if (!session) return;
       session.input = text;
+      query.input(text);
       render(false);
     },
     move(dir) {

@@ -167,6 +167,25 @@ func TestPlanFieldsWorkWithRepair(t *testing.T) {
 	}
 }
 
+func TestPlanTarget(t *testing.T) {
+	for _, c := range []struct {
+		r    change.Record
+		want change.ID
+		ok   bool
+	}{
+		{change.Record{T: change.Set, F: "sprints/S1/name"}, "S1", true},
+		{change.Record{T: change.Delete, F: "sprints/S1"}, "S1", true},
+		{change.Record{T: planning.CloseSprint, F: "sprints/S1/close"}, "S1", true},
+		{change.Record{T: change.Set, F: "releases/R1/state"}, "R1", true},
+		{change.Record{T: change.Set, F: "sprint"}, "", false},
+	} {
+		got, ok := planning.PlanTarget(c.r)
+		if got != c.want || ok != c.ok {
+			t.Errorf("PlanTarget(%+v) = %q %v, want %q %v", c.r, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 func TestIsPlanRow(t *testing.T) {
 	for _, c := range []struct {
 		r    change.Record

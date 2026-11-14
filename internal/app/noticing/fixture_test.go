@@ -22,6 +22,7 @@ const store port.StoreID = "S1"
 // fixture は、サンプルの Store と偽物の受信箱。あなたは hanako(setupAs で変えられる)。
 type fixture struct {
 	t       *testing.T
+	clock   *apptest.Clock
 	stores  *apptest.Stores
 	inbox   *apptest.Inbox
 	svc     noticing.Service
@@ -36,13 +37,14 @@ func setup(t *testing.T) *fixture {
 // setupAs は、あなたが me の fixture。
 func setupAs(t *testing.T, me string) *fixture {
 	t.Helper()
-	s := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)), apptest.NewIDs())
+	clock := apptest.NewClock(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC))
+	s := apptest.NewStores(clock, apptest.NewIDs())
 	s.AddStore(store)
 	if err := apptest.Sample(t.Context(), s, store); err != nil {
 		t.Fatal(err)
 	}
 	inbox := &apptest.Inbox{}
-	return &fixture{t: t, stores: s, inbox: inbox, svc: noticing.Service{
+	return &fixture{t: t, clock: clock, stores: s, inbox: inbox, svc: noticing.Service{
 		Inbox:    inbox,
 		Identity: apptest.Identity{Login: me},
 		List:     apptest.StoreList{Stores: []port.StoreInfo{{ID: store, Name: "main"}}},

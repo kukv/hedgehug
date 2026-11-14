@@ -60,16 +60,28 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if n.c.NumParents() != 2 {
 		return port.ReceivedSave{}, false, nil // 最初の保存
 	}
-	base := lazyBase(n.c) // 2 つの判定で同じ共通の祖先を使い、探すのも 1 回にする
+	base := baseOf(n.c) // 3 つの判定で同じ共通の祖先を使い、探すのも 1 回にする
 	removed, concurrent, err := mergeRemoved(n.c, base)
 	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
 	conflicts, err := mergeConflicts(n.c, base)
-	if err != nil || (len(concurrent) == 0 && len(conflicts) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })) {
+	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, Conflicts: conflicts}, true, nil
+	dropped, err := droppedPlan(n.c, base)
+	s := port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent, Conflicts: conflicts, DroppedPlan: dropped}
+	if err != nil || !mergeToJudge(s) {
+		return port.ReceivedSave{}, false, err
+	}
+	return s, true, nil
+}
+
+// mergeToJudge は、合わせ s を判定に渡すか。消えたものに共通の祖先にない行があるか、削除と変更が重なったか、
+// 説明が重なったか、完全に削除した計画に共通の祖先にない行があるとき。
+func mergeToJudge(s port.ReceivedSave) bool {
+	return len(s.Concurrent) > 0 || len(s.Conflicts) > 0 || hasNewPlan(s.DroppedPlan) ||
+		slices.ContainsFunc(s.Removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })
 }
 
 // saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティと Sides も読む。
@@ -118,7 +130,7 @@ func isRepair(c *object.Commit, es []port.EntityRows) bool {
 // mergeRemoved は、合わせ c の 2 つの親のそれぞれについて、親にあって c にないエンティティ。New は、その親の
 // ログの行のうち、共通の祖先(1 つ目。同期の合わせと同じ)の同じエンティティのログにない行。あわせて、同じ共通の
 // 祖先から、親と一緒の削除と人の変更が重なったエンティティ(concurrentIn)も返す。
-func mergeRemoved(c *object.Commit, base baseFunc) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
+func mergeRemoved(c *object.Commit, baseTree func() (*object.Tree, error)) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
 	ours, err := c.Parent(0)
 	if err != nil {
 		return nil, nil, err
@@ -130,19 +142,19 @@ func mergeRemoved(c *object.Commit, base baseFunc) ([]port.RemovedEntity, []port
 	if need, err := needsBase(c); err != nil || !need {
 		return nil, nil, err
 	}
-	baseTree, err := base()
-	if err != nil || baseTree == nil {
-		return nil, nil, err
+	base, err := baseTree()
+	if err != nil || base == nil {
+		return nil, nil, err // 共通の祖先がなければ nil。同期は、共通の祖先のない合わせを作らない
 	}
 	var out []port.RemovedEntity
 	for _, p := range []*object.Commit{ours, theirs} {
-		es, err := removedFrom(p, c, baseTree)
+		es, err := removedFrom(p, c, base)
 		if err != nil {
 			return nil, nil, err
 		}
 		out = append(out, es...)
 	}
-	concurrent, err := concurrentIn(c, ours, theirs, baseTree)
+	concurrent, err := concurrentIn(c, ours, theirs, base)
 	return out, concurrent, err
 }
 

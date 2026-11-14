@@ -1860,6 +1860,96 @@ export interface SaveItemAsTemplate {
   title: string;
 }
 
+export interface ScreenState {
+  /**
+     * 保存した文字列。まだなければ null
+     * @nullable
+     */
+  body: string | null;
+}
+
+export interface ScreenStateBody {
+  /** 画面の状態の JSON の文字列。64 KiB まで */
+  body: string;
+}
+
+/**
+ * @nullable
+ */
+export type SearchAssignee = {
+  login: string;
+  /**
+     * 表示名。メンバーにいない人は null
+     * @nullable
+     */
+  name: string | null;
+} | null;
+
+/**
+ * @nullable
+ */
+export type SearchDeleted = {
+  /** 完全に削除されるまでの日数。0 以下なら保持日数を過ぎている */
+  daysLeft: number;
+} | null;
+
+/**
+ * @nullable
+ */
+export type SearchPriority = {
+  name: string;
+} | null;
+
+export interface SearchQuery {
+  /** クエリの文字列(04「検索」)。空なら絞り込まない */
+  query: string;
+}
+
+/**
+ * @nullable
+ */
+export type SearchStatus = {
+  category: string;
+  name: string;
+} | null;
+
+export interface SearchRow {
+  assignee: SearchAssignee | null;
+  /** 削除済みの行だけ */
+  deleted: SearchDeleted | null;
+  /** いまの ID(HH-12) */
+  display: string;
+  /** 終了日(YYYY-MM-DD)。なければ空 */
+  end: string;
+  itemId: string;
+  kind: string;
+  /** 旧 ID だけで一致した(画面は「旧 ID」と添える) */
+  oldIdHit: boolean;
+  /** @nullable */
+  points: number | null;
+  priority: SearchPriority | null;
+  projectId: string;
+  readOnly: boolean;
+  status: SearchStatus | null;
+  storeColor: string;
+  storeId: string;
+  storeName: string;
+  title: string;
+  workspaceId: string;
+}
+
+export interface SearchResult {
+  /** is:deleted の検索か */
+  deleted: boolean;
+  /** クエリのエラー(1 語 1 行) */
+  errors: string[];
+  /** group: の値(グループ分けは画面が行う)。なければ空 */
+  group: string;
+  /** キーのある語が 1 つ以上あるか */
+  hasKey: boolean;
+  rows: SearchRow[];
+}
+
 export interface SetAutomationRuleEnabled {
   enabled: boolean;
 }
@@ -3485,6 +3575,107 @@ return fetcher<void>(getOpenRecentItemUrl(),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(openedItem)
+  }
+);}
+
+
+
+export const getScreenStateGetUrl = (screen: string,) => {
+
+
+
+
+  return `/api/screen-states/${encodeURIComponent(String(screen))}`
+}
+
+/**
+ * @summary 画面の状態を返す
+ */
+export const screenStateGet = async (screen: string, options?: Parameters<typeof fetcher>[1]): Promise<ScreenState> => {
+
+  return fetcher<ScreenState>(getScreenStateGetUrl(screen),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getScreenStatePutUrl = (screen: string,) => {
+
+
+
+
+  return `/api/screen-states/${encodeURIComponent(String(screen))}`
+}
+
+/**
+ * @summary 画面の状態を置く
+ */
+export const screenStatePut = async (screen: string,
+    screenStateBody: ScreenStateBody, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getScreenStatePutUrl(screen),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(screenStateBody)
+  }
+);}
+
+
+
+export const getSearchUrl = () => {
+
+
+
+
+  return `/api/search`
+}
+
+/**
+ * @summary 表示中のすべての Store のアイテムをクエリで検索する
+ */
+export const search = async (searchQuery: SearchQuery, options?: Parameters<typeof fetcher>[1]): Promise<SearchResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<SearchResult>(getSearchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(searchQuery)
   }
 );}
 

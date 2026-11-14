@@ -151,3 +151,14 @@ describe("inbox (06「受信箱」)", () => {
     expect(parseRoute("/inbox/mention")).toEqual({ name: "home" });
   });
 });
+
+describe("search (04「検索」)", () => {
+  it("reads /search and writes it back", () => {
+    expect(parseRoute("/search")).toEqual({ name: "search" });
+    expect(formatRoute({ name: "search" })).toBe("/search");
+  });
+
+  it("goes home for a path below /search", () => {
+    expect(parseRoute("/search/x")).toEqual({ name: "home" });
+  });
+});

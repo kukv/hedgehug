@@ -17,9 +17,9 @@ const descFile = "description.md"
 // mergeConflicts は、合わせ c の 2 つの親で説明(description.md)の同じ箇所が重なったエンティティ(決定 C4c1-12)。
 // 共通の祖先は mergeRemoved と同じく 1 つ目。説明は同期と同じ textmerge.Merge で合わせ直し、conflict が真のものを
 // 返す。Sides は、親ごとの、共通の祖先のログにない desc の行。Ref の順。説明が親どうしで違わなければ祖先を探さない。
-func mergeConflicts(c *object.Commit, base baseFunc) ([]port.DescConflict, error) {
+func mergeConflicts(c *object.Commit, base func() (*object.Tree, error)) ([]port.DescConflict, error) {
 	if base == nil {
-		base = lazyBase(c)
+		base = baseOf(c)
 	}
 	trees, err := parentTrees(c)
 	if err != nil {

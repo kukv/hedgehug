@@ -75,6 +75,47 @@ func TestRowsShowBothSidesInLabelOrder(t *testing.T) {
 	}
 }
 
+// RowsByItem は、アイテムごとの一覧を 1 回で返す。Rows はその 1 件。
+func TestRowsByItem(t *testing.T) {
+	all := []item.Item{
+		{ID: "A", Relations: []item.Relation{rel("blocks", "B"), rel("relates", "C"), rel("clones", "D"), rel("relates", "A")}},
+		{ID: "B", Relations: []item.Relation{rel("blocks", "A")}},
+		{ID: "C", Relations: []item.Relation{rel("relates", "A")}},
+		{ID: "D"},
+		{ID: "E", Relations: []item.Relation{rel("blocks", "A"), rel("friends", "A"), rel("causes", "E")}},
+		{ID: "F", Relations: []item.Relation{rel("blocks", "GONE")}},
+	}
+	want := map[item.ID][]relation.Row{
+		// 両方向(B は blocks と blocked by)、自分への relates は 1 行、C の relates は重ねない、知らない種類は出さない
+		"A": {
+			{Label: relation.Blocks, Other: "B"},
+			{Label: relation.BlockedBy, Other: "B"},
+			{Label: relation.BlockedBy, Other: "E"},
+			{Label: relation.RelatesTo, Other: "A"},
+			{Label: relation.RelatesTo, Other: "C"},
+			{Label: relation.Clones, Other: "D"},
+		},
+		"B": {{Label: relation.Blocks, Other: "A"}, {Label: relation.BlockedBy, Other: "A"}},
+		"C": {{Label: relation.RelatesTo, Other: "A"}},
+		"D": {{Label: relation.ClonedBy, Other: "A"}},
+		// 自分への causes は caused by を足さず 1 行
+		"E": {{Label: relation.Blocks, Other: "A"}, {Label: relation.Causes, Other: "E"}},
+		// 相手が all にいない関連は、持つ側には出ない。いない id の側には、いる相手からの関連が出る
+		"F":    nil,
+		"GONE": {{Label: relation.BlockedBy, Other: "F"}},
+		"NONE": nil,
+	}
+	got := relation.RowsByItem(all)
+	for id, w := range want {
+		if !slices.Equal(got[id], w) {
+			t.Errorf("RowsByItem[%s] = %+v, want %+v", id, got[id], w)
+		}
+		if r := relation.Rows(id, all); !slices.Equal(r, w) {
+			t.Errorf("Rows(%s) = %+v, want %+v", id, r, w)
+		}
+	}
+}
+
 func TestHasIgnoresDirection(t *testing.T) {
 	all := []item.Item{{ID: "A", Relations: []item.Relation{rel("blocks", "B")}}, {ID: "B"}}
 	if !relation.Has("A", "B", "blocks", all) || !relation.Has("B", "A", "blocks", all) {

@@ -18,18 +18,33 @@ import (
 // 別のワークスペースからの移動(A5a-17)だけで、コメント・作業時間・関連・ウォッチ・削除と、知らない種類の行は出さない。
 // 値の名前は、行を書いたときにアイテムがいたワークスペースの定義で引く。
 func ItemRows(log []change.Record, c Context) []Row {
+	var rows []Row
+	for _, e := range emitted(log, c) {
+		rows = append(rows, Row{Who: Who(e.rec.Actor, c.Names), Text: e.text, At: e.rec.At})
+	}
+	return newestFirst(rows)
+}
+
+// emittedRow は、履歴に行を出す記録と、その行の文。
+type emittedRow struct {
+	rec  change.Record
+	text string
+}
+
+// emitted は、履歴に行を出す記録を、prev の順(byPrev)で返す。行を出すかどうかの決め方は、ItemRows と Updated で共有する。
+func emitted(log []change.Record, c Context) []emittedRow {
 	log = byPrev(log)
 	t := newTrail(log)
-	var rows []Row
+	var out []emittedRow
 	for i, r := range log {
 		if c.Hidden[r.Op] {
 			continue
 		}
 		if text, ok := itemText(log, i, c, t); ok {
-			rows = append(rows, Row{Who: Who(r.Actor, c.Names), Text: text, At: r.At})
+			out = append(out, emittedRow{rec: r, text: text})
 		}
 	}
-	return newestFirst(rows)
+	return out
 }
 
 func itemText(log []change.Record, i int, c Context, t trail) (string, bool) {
