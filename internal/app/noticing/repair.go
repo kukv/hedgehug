@@ -68,9 +68,17 @@ func (b batch) without(log []change.Record, i int) []change.Record {
 	return out
 }
 
-// lastSaver は、log で最後に保存した人(実行者が人の行のうち、at が最もあとの行。同じなら ID の大きい行の by。
-// C4b2-7)。field が空ならすべての項目、ほかは f が field の行と、作成の行(すべての項目を書く)だけを見る。なければ空。
+// lastSaver は、log で最後に保存した人(lastSaved の行の by。C4b2-7)。なければ空。
 func lastSaver(log []change.Record, field string) string {
+	if w := lastSaved(log, field); w != nil {
+		return w.By
+	}
+	return ""
+}
+
+// lastSaved は、log で最後に保存した行(実行者が人の行のうち、at が最もあとの行。同じなら ID の大きい行)。
+// field が空ならすべての項目、ほかは f が field の行と、作成の行(すべての項目を書く)だけを見る。なければ nil。
+func lastSaved(log []change.Record, field string) *change.Record {
 	var w *change.Record
 	for i := range log {
 		c := &log[i]
@@ -81,10 +89,7 @@ func lastSaver(log []change.Record, field string) string {
 			w = c
 		}
 	}
-	if w == nil {
-		return ""
-	}
-	return w.By
+	return w
 }
 
 // nameOf は、login の Store のメンバーの表示名。メンバーにいないか、メンバーの一覧がない(ErrNotFound)なら

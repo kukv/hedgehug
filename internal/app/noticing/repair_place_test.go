@@ -62,6 +62,18 @@ func setPlace(f *fixture, actor change.Actor, id item.ID, to func(p item.Place) 
 	})
 }
 
+// placed は、id のログで、場所を最後に保存した人の行(作成を含む)の ID(親の循環・親と別の場所の通知の鍵の末尾)。
+func (f *fixture) placed(id item.ID) string {
+	f.t.Helper()
+	var w change.Record
+	for _, c := range f.logOfRef(itemRefOf(id)) {
+		if c.Actor.Kind == change.ActorUser && (c.F == "place" || c.T == change.Create) && !c.At.Before(w.At) {
+			w = c
+		}
+	}
+	return string(w.ID)
+}
+
 func number(n int) func(item.Place) item.Place {
 	return func(p item.Place) item.Place { p.Number = n; return p }
 }
@@ -138,7 +150,7 @@ func TestCycleNotice(t *testing.T) {
 	want := port.Notice{
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Item: item5,
 		Text: "親が循環したため、HH-5 を HH-1 の下へ移しました", Display: "HH-5",
-		Source: "repair:cycle:" + string(item5) + ":" + string(apptest.SampleEpic),
+		Source: "repair:cycle:" + string(item5) + ":" + string(apptest.SampleEpic) + ":" + f.placed(item5),
 	}
 	if n := f.wantOne(); n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -169,7 +181,7 @@ func TestCycleNoticeToProject(t *testing.T) {
 	cycling(f, "taro")
 	f.judge(setPlace(f, syncActor, item5, func(p item.Place) item.Place { p.Parent = nil; return p }))
 	n := f.wantOne()
-	if n.Text != "親が循環したため、HH-5 を HH-P1 の下へ移しました" || n.Source != "repair:cycle:"+string(item5)+":"+string(apptest.SampleProject) {
+	if n.Text != "親が循環したため、HH-5 を HH-P1 の下へ移しました" || n.Source != "repair:cycle:"+string(item5)+":"+string(apptest.SampleProject)+":"+f.placed(item5) {
 		t.Errorf("notice = %+v", n)
 	}
 }
@@ -216,7 +228,7 @@ func TestPlaceProjectNotice(t *testing.T) {
 	want := port.Notice{
 		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Item: item6,
 		Text: "HH-2 が プロジェクト「サイト」へ移動したため、HH-6 をそのプロジェクトに移しました", Display: "HH-6",
-		Source: "repair:place:" + string(item6) + ":" + string(apptest.SampleWorkspace) + ":" + string(proj2),
+		Source: "repair:place:" + string(item6) + ":" + string(apptest.SampleWorkspace) + ":" + string(proj2) + ":" + f.placed(item6),
 	}
 	if n := f.wantOne(); n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -310,7 +322,7 @@ func TestPlaceWorkspaceNotice(t *testing.T) {
 	want := port.Notice{
 		Kind: port.NoticeRepair, Store: store, Workspace: docsWS, Item: item6,
 		Text:    "HH-2 が Docs へ移動したため、HH-6 を DOC-4 に移動しました。合う値がなく空になった項目: 優先度・関連システム",
-		Display: "DOC-4", Source: "repair:place:" + string(item6) + ":" + string(docsWS) + ":" + string(docsProj),
+		Display: "DOC-4", Source: "repair:place:" + string(item6) + ":" + string(docsWS) + ":" + string(docsProj) + ":" + f.placed(item6),
 	}
 	if n := f.wantOne(); n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -376,5 +388,41 @@ func TestPlaceOnceAcrossMachines(t *testing.T) {
 	f.judge(s, other)
 	if rows := f.rows(); len(rows) != 1 {
 		t.Errorf("rows = %+v, want one", rows)
+	}
+}
+
+// 同じ修復がもう一度起きた: 1 回目のあと、taro が場所を戻し、また同じ修復が起きたら、2 件目を作る。同じ修復の
+// 保存を 2 台から受け取っても(同じ判定を 2 回)、それぞれ 1 件のまま。
+func TestPlaceRepairAgain(t *testing.T) {
+	cases := map[string]struct {
+		prep func(f *fixture)
+		back func(item.Place) item.Place
+		item item.ID
+		to   func(item.Place) item.Place
+	}{
+		"循環": {
+			prep: func(f *fixture) { cycling(f, "taro") }, item: item5,
+			back: parentTo(apptest.SampleTask), to: parentTo(apptest.SampleEpic),
+		},
+		"親と別のプロジェクト": {
+			prep: func(f *fixture) { siteProject(f, "taro") }, item: item6,
+			back: func(p item.Place) item.Place { p.Project = apptest.SampleProject; return p }, to: toSite,
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := setupAs(t, "taro")
+			c.prep(f)
+			first := setPlace(f, syncActor, c.item, c.to)
+			f.judge(first)
+			f.judge(first)
+			setPlace(f, user("taro"), c.item, c.back)
+			second := setPlace(f, syncActor, c.item, c.to)
+			f.judge(second)
+			f.judge(second)
+			if rows := f.rows(); len(rows) != 2 {
+				t.Errorf("rows = %+v, want two", rows)
+			}
+		})
 	}
 }

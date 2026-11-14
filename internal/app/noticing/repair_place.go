@@ -3,15 +3,11 @@ package noticing
 import (
 	"encoding/json"
 	"strconv"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
-	"github.com/kukv/hedgehug/internal/domain/projectrule"
-	"github.com/kukv/hedgehug/internal/domain/transfer"
-	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // placeKind は、場所を変えた修復の種類(C4b2-8)。
@@ -181,7 +177,7 @@ func (m placeMove) cycleText(r port.Reader, b batch, self string) (string, strin
 	if m.toTask() {
 		text += "。Step は Task になりました"
 	}
-	return text, "repair:cycle:" + string(m.ref.ID) + ":" + string(dest.ID), true, nil
+	return text, "repair:cycle:" + string(m.ref.ID) + ":" + string(dest.ID) + ":" + string(m.placed()), true, nil
 }
 
 // toTask は、同じ保存で Step を Task にしたか。
@@ -198,7 +194,16 @@ func (m placeMove) toTask() bool {
 
 // placeKey は、親と別のワークスペース・プロジェクトの鍵(C4b2-6)。
 func (m placeMove) placeKey() string {
-	return "repair:place:" + string(m.ref.ID) + ":" + string(m.to.Workspace) + ":" + string(m.to.Project)
+	return "repair:place:" + string(m.ref.ID) + ":" + string(m.to.Workspace) + ":" + string(m.to.Project) + ":" + string(m.placed())
+}
+
+// placed は、修復の直前に場所を最後に保存した人の行(lastSaver と同じ選び方)の ID。同じ修復がもう一度起きたときに
+// 鍵を変え、2 台が同じ修復をしたときには同じになる(修復の行は人の行でないので数えない。C4b2-6)。
+func (m placeMove) placed() change.ID {
+	if w := lastSaved(m.before, "place"); w != nil {
+		return w.ID
+	}
+	return ""
 }
 
 // projectText は、親と別のプロジェクトの本文と鍵(C4b2-9 の空白)。
@@ -221,79 +226,4 @@ func (m placeMove) projectText(r port.Reader, b batch, self string) (string, str
 	text := withParticle(parent.text, "が") + " プロジェクト「" + oneLine(p.Title) + "」へ移動したため、" +
 		withParticle(self, "を") + "そのプロジェクトに移しました"
 	return text, m.placeKey(), true, nil
-}
-
-// workspaceText は、親と別のワークスペースの本文と鍵。{旧 ID} は移動元、{新 ID} は移動先の、いまの接頭辞。
-// 空になった項目があれば末尾に足す。
-func (m placeMove) workspaceText(r port.Reader, b batch, i int) (string, string, bool, error) {
-	if m.to.Parent == nil {
-		return "", "", false, nil
-	}
-	parent, ok, err := movedParentID(r, b, i, *m.to.Parent)
-	if !ok {
-		return "", "", false, err
-	}
-	src, ok, err := workspaceOf(r, b, m.from.Workspace)
-	if !ok {
-		return "", "", false, err
-	}
-	dst, ok, err := workspaceOf(r, b, m.to.Workspace)
-	if !ok {
-		return "", "", false, err
-	}
-	emptied, err := m.emptied(r, b, i)
-	if err != nil {
-		return "", "", false, err
-	}
-	text := withParticle(parent, "が") + " " + withParticle(oneLine(dst.Name), "へ") + "移動したため、" +
-		withParticle(m.display(src.Prefix, m.from.Number), "を") + " " + withParticle(m.display(dst.Prefix, m.to.Number), "に") + "移動しました"
-	if len(emptied) > 0 {
-		text += "。合う値がなく空になった項目: " + strings.Join(emptied, "・")
-	}
-	return text, m.placeKey(), true, nil
-}
-
-// movedParentID は、親と別のワークスペースの本文の {親の ID}。親が移動先のワークスペースへ入る前の ID で、
-// {旧 ID} と対になる。同じ Store の中の、親の転送記録のうち、i 番目の修復の保存の時刻までの最後のものの old を
-// 使い(同じ判定のあとの保存の移動は見ない)、なければ親のいまの表示。
-func movedParentID(r port.Reader, b batch, i int, parent item.ID) (string, bool, error) {
-	recs, err := r.Transfers().List()
-	if err = notFoundIsSkip(err); err != nil {
-		return "", false, err
-	}
-	at := b.saves[i].Key.At
-	for j := len(recs) - 1; j >= 0; j-- {
-		c := recs[j]
-		if c.Entity == transfer.EntityItem && c.Target == parent && c.ToStore == string(b.store) && c.Old != "" && !c.At.After(at) {
-			return c.Old, true, nil
-		}
-	}
-	e, ok, err := entityOf(r, b, change.Ref{Kind: change.KindItem, ID: parent})
-	return e.text, ok, err
-}
-
-// emptied は、修復の直前のアイテムに、移動元・移動先の修復の直前の設定と、移動先のプロジェクトのルールで
-// transfer.Remap をかけ直した、空になった項目(C3b-7)。設定を作れなければなし。
-func (m placeMove) emptied(r port.Reader, b batch, i int) ([]string, error) {
-	it, ok := item.FromLog(m.before)
-	if !ok {
-		return nil, nil
-	}
-	fromLog, err := beforeRead(r, b, change.Ref{Kind: change.KindWorkspace, ID: m.from.Workspace}, i)
-	if err != nil {
-		return nil, err
-	}
-	toLog, err := beforeRead(r, b, change.Ref{Kind: change.KindWorkspace, ID: m.to.Workspace}, i)
-	if err != nil {
-		return nil, err
-	}
-	from, ok := workspace.SettingsFromLog(fromLog)
-	if !ok {
-		return nil, nil
-	}
-	to, ok := workspace.SettingsFromLog(toLog)
-	if !ok {
-		return nil, nil
-	}
-	return transfer.Remap(it, from, to, projectrule.FromLog(toLog).Of(m.to.Project), nil, nil).Emptied, nil
 }

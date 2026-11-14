@@ -180,7 +180,7 @@ func droppedNotice(r port.Reader, b batch, removed []port.RemovedEntity, e port.
 	if c.at != e.Ref {
 		n.Text += "(" + g.display + "「" + oneLine(g.title) + "」)"
 	}
-	n.Source = "repair:moved:" + string(e.Ref.ID)
+	n.Source = "repair:moved:" + string(e.Ref.ID) + ":" + string(c.moved.ID) // 移動ごとに 1 件(C4b2-6)
 	return n, true, nil
 }
 

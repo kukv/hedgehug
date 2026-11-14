@@ -166,6 +166,22 @@ func TestDroppedOnlyNewRows(t *testing.T) {
 	f.wantNone()
 }
 
+// lastTransfer は、transfers.jsonl の最後の行の ID(別の Store への移動の通知の鍵の末尾)。
+func (f *fixture) lastTransfer() string {
+	f.t.Helper()
+	var id string
+	if err := f.stores.Read(f.t.Context(), store, func(r port.Reader) error {
+		recs, err := r.Transfers().List()
+		if len(recs) > 0 {
+			id = string(recs[len(recs)-1].ID)
+		}
+		return err
+	}); err != nil {
+		f.t.Fatal(err)
+	}
+	return id
+}
+
 // moving は、taro(表示名 太郎)が HH-5 を Store「team-b」の WEB-12 へ移した転送記録を書く。
 func moving(f *fixture, toStore string) {
 	f.t.Helper()
@@ -194,7 +210,7 @@ func TestMovedDropped(t *testing.T) {
 	want := port.Notice{
 		Kind: port.NoticeRepair, Store: store, Item: item5, Display: "HH-5",
 		Text:   "HH-5 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-12 です",
-		Source: "repair:moved:" + string(item5),
+		Source: "repair:moved:" + string(item5) + ":" + f.lastTransfer(),
 	}
 	if n := f.wantOne(); n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -236,7 +252,7 @@ func TestMovedChildDropped(t *testing.T) {
 	want := port.Notice{
 		Kind: port.NoticeRepair, Store: store, Item: item31, Display: "HH-31",
 		Text:   "HH-5 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-12 です(HH-31「リリースノート」)",
-		Source: "repair:moved:" + string(item31),
+		Source: "repair:moved:" + string(item31) + ":" + f.lastTransfer(),
 	}
 	if n := f.wantOne(); n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -332,7 +348,7 @@ func TestMovedProjectDropped(t *testing.T) {
 	want := port.Notice{
 		Kind: port.NoticeRepair, Store: store, Project: apptest.SampleProject, Display: "HH-P1",
 		Text:   "HH-P1 は 太郎 が team-b へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-P3 です",
-		Source: "repair:moved:" + string(apptest.SampleProject),
+		Source: "repair:moved:" + string(apptest.SampleProject) + ":" + f.lastTransfer(),
 	}
 	if n := f.wantOne(); n != want {
 		t.Errorf("notice = %+v, want %+v", n, want)
@@ -453,5 +469,22 @@ func TestCausesReadOnce(t *testing.T) {
 	}
 	if len(f.notices()) != 3 || np != 1 || nt != 1 {
 		t.Errorf("notices = %d, purged reads = %d, transfer reads = %d, want 3, 1, 1", len(f.notices()), np, nt)
+	}
+}
+
+// HH-5 が別の Store へ移り、戻ってきてまた移った: 転送記録ごとに 1 件。同じ合わせを 2 回判定しても増えない。
+func TestMovedAgain(t *testing.T) {
+	f := setup(t)
+	addItem(f, "taro", webItem(item5, 5, item.Task, apptest.SampleEpic))
+	edit := retitle(f, "hanako", item5)
+	moving(f, "S2")
+	first := dropped(f, itemRefOf(item5), edit)
+	f.judge(first)
+	f.judge(first)
+	again := retitle(f, "hanako", item5)
+	moving(f, "S2")
+	f.judge(dropped(f, itemRefOf(item5), again))
+	if rows := f.rows(); len(rows) != 2 {
+		t.Errorf("rows = %+v, want two", rows)
 	}
 }
