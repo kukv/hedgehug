@@ -51,7 +51,7 @@ export interface Backlog {
   // openDetail は、行の詳細パネルを開き、開いたアイテムを覚える(noticeDetail が使う)。
   openDetail(row: BacklogRow): void;
   // noticeDetail は、詳細パネルの保存の応答 item を受け取る。この画面から開いたアイテムが、開いている枠の
-  // どのスプリントにも入っておらず完了・中止なら、消えるときのトーストを出す(F2a-10 の(2))。
+  // どのスプリントにも入っておらず完了・中止なら、消えるときのトーストを 1 回だけ出す(F2a-10 の(2))。
   noticeDetail(storeId: string, item: Item): void;
 }
 
@@ -166,7 +166,11 @@ export function createBacklog(deps: BacklogDeps): Backlog {
       const s = get(state);
       if (!s || s.storeId !== storeId || opened?.id !== item.id) return;
       if (s.frames.some((f) => f.sprint !== null && f.sprint.id === item.sprint)) return;
-      gone(s, opened.display, item.status);
+      const c = goneCategory(s.settings, item.status);
+      if (!c) return;
+      deps.toasts.show(goneText(opened.display, c));
+      // 消えたあとのほかのプロパティの保存では、もう出さない。
+      opened = null;
     },
   };
 }

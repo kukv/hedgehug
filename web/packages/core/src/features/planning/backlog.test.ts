@@ -226,6 +226,7 @@ describe("createBacklog detail", () => {
     const { backlog, shown } = await setup();
     backlog.openDetail(rowIn(backlog, 3));
     backlog.noticeDetail("S1", done(3));
+    backlog.noticeDetail("S1", done(3));
     expect(shown()).toEqual([
       { text: "HH-3 は完了のため、バックログには表示されません", error: false },
     ]);
