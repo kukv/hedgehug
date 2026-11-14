@@ -4,7 +4,7 @@
 
 **Goal:** 同期で合わせたあと、削除されていない子が親と別のワークスペースにあれば、その子を親のワークスペースとプロジェクトへ 1 件ずつ移す(その子の下の削除済みのものは同じ保存で一緒に移す)。番号は親のワークスペースの次の番号に振り直し、値を引き直し、転送記録を残す(修復 (5) の 1 つ目の箇条)。
 
-**Architecture:** `internal/domain/repair` に、直す子を 1 件選ぶ `WorkspaceMismatch`、一緒に移す削除済みのものを集める `DeletedBelow`、新しい番号を振る `NumberByOld` を足す。`internal/app/repairing` に段 `matchWorkspaces` を足し、C3a の `matchProjects` の前に置く。行は A5a の同じ Store の別のワークスペースへの移動(`internal/app/transfers/move.go` の `writeWithin`)と同じ形で書く。値の引き直しは `transfer.Remap`、転送記録は `transfer.Record` を使う。転送記録の `to_store` に自分の Store ID を書くため、`port.RepairWriter` に `Store()` を足す。
+**Architecture:** `internal/domain/repair` に、直す子を 1 件選ぶ `WorkspaceMismatch`、一緒に移す削除済みのものを集める `DeletedBelow`、新しい番号を振る `NumberByOld` を足す。`internal/app/repairing` に段 `matchWorkspaces` を足し、C3a の `matchProjects` の前に置く。行は A5a の同じ Store の別のワークスペースへの移動(`internal/app/transfers/move.go` の `writeWithin`)と同じ形で書く。値の引き直しは `transfer.Remap`、転送記録は `transfer.Record` を使う。転送記録の `to_store` に自分の Store ID を書くため、`port.RepairWriter` に `Store()` を足す。番号の行は `numbering.Drafts`(番号の順の `number` の行。A5a の transfers と共用し、transfers の動きは変わらない)で書く。
 
 **Tech Stack:** Go 1.27.3。依存ライブラリは足さない。
 
@@ -30,11 +30,11 @@
 
 | # | 決めたこと | 根拠 |
 |---|---|---|
-| C3b-1 | 1 回の修復で、削除されていない子 1 件を、1 回の保存で移す。孫は、子を移したあとに読み直したとき、親(移した子)とワークスペースが違う子として次の保存で移す。直す子がなくなるまで繰り返す(C3a の `matchProjects` と同じ形)。その子の下の削除済みのもの(削除済みのものだけをたどって届くもの。`repair.DeletedBelow`)は、同じ保存で一緒に移す。例: HH-1 を Mobile へ移した人と、HH-1 の下に Task HH-3・その下に Step HH-4 を作った人が同期すると、「HH-3 を MB-3 に移動(親に合わせる)」「HH-4 を MB-4 に移動(親に合わせる)」の 2 回の保存になる | ユーザーの決定(2026-11-14)。保存形式 `:327`(子に `set place` を書き、`transfers.jsonl` に 1 行足す)と C3a の `matchProjects`、決定 C3a-18(1 コミットが通知 1 件・アクティビティ 1 行)にそろえる。削除済みのものは (5) の直す対象ではない(06「削除されていない子」)が、残すと復元したときに親とワークスペースが違う子になるので、いちばん近い削除されていない祖先と一緒に移す。削除されていない子の下の削除されていないものは、(2) のあとなので削除済みのものの下にはいない |
+| C3b-1 | 1 回の修復で、削除されていない子 1 件を、1 回の保存で移す。孫は、子を移したあとに読み直したとき、親(移した子)とワークスペースが違う子として次の保存で移す。直す子がなくなるまで繰り返す(C3a の `matchProjects` と同じ形)。その子の下の削除済みのもの(削除済みのものだけをたどって届くもの。`repair.DeletedBelow`)は、同じ保存で一緒に移す。例: HH-1 を Mobile へ移した人と、HH-1 の下に Task HH-3・その下に Step HH-4 を作った人が同期すると、「HH-3 を MB-3 に移動(親に合わせる)」「HH-4 を MB-4 に移動(親に合わせる)」の 2 回の保存になる | ユーザーの決定(2026-11-14)。保存形式 `:327`(子に `set place` を書き、`transfers.jsonl` に 1 行足す)と C3a の `matchProjects`、決定 C3a-18(1 コミットが通知 1 件・アクティビティ 1 行)にそろえる。削除済みのものは (5) の直す対象ではない(06「削除されていない子」)が、残すと復元したときに親とワークスペースが違う子になるので、いちばん近い削除されていない祖先と一緒に移す。削除されていない子の下の削除されていないものは、(2) のあとなので削除済みのものの下にはいない。生きている親の直下で子そのものが削除済みのとき(送る前に作って削除した子など)は移さない。06 は直す対象を「削除されていない子」とし、復元したあとに残ったずれは診断(06「修復の決まり」2 つ目、08)が同期と同じ直し方で直す。一緒に移す削除済みのもののうち、すでに移動先のワークスペースにあるものは移さない |
 | C3b-2 | 直す子の選び方: 削除されていない子で、親も削除されておらず、親とワークスペースが違うもの。深さの浅い順、同じなら旧い番号の小さい順、同じなら内部 ID の辞書順の最初の 1 件 | 06「親から順に」と「旧い番号の小さい順、同じなら内部 ID の辞書順」。深さは C3a の `depthOf` と同じ数え方 |
 | C3b-3 | 番号: 直す子に親のワークスペースの次の番号(`numbering.Next`)を振り、一緒に移す削除済みのものに、旧い番号の小さい順(同じなら内部 ID の辞書順)で続きの番号を振る。`transfer.Number`(兄弟の順の深さ優先)は使わない。トラック C の計画の C3b の行の「番号は `transfer.Number`」は、この決定に合わせて直す(Task 4) | 06:314 と保存形式 `:206` が順を「旧い番号の小さい順」と定めている。直す子どうしの順は C3b-2 で決まる。`transfer.Number` は利用者の移動(02)の順 |
 | C3b-4 | 行は A5a の `writeWithin` と同じ形にする。アイテムごとに `set place`(ワークスペースとプロジェクトを親のものにし、番号を新しい番号にする。親と順位は変えない)と `transfer.Remap` の行、親のワークスペースに番号ごとの `number` の行、アイテムごとに転送記録(`entity: item`、`to_store` は自分の Store ID)。`Remap` の移動元の設定は、そのアイテムのいまのワークスペースのもの。移動先のルールは、親のプロジェクトのプロジェクト別のルール。`people` と `statusChoice` は nil を渡す | 06「ステータスは、確認ダイアログを出せないので…同じ分類の、移動先の既定のステータスに置き換える」(`Remap` は `statusChoice` が nil なら分類の既定にする)。同じ Store なので担当者とウォッチはそのまま。スプリントとリリースは `Remap` が外す(F1) |
-| C3b-5 | `port.RepairWriter` に `Store() (port.StoreID, error)` を足す。gitstore は `.hedgehug/store.yaml` の Store ID を読む(`readStoreYAML`)。apptest は `RepairWriter.Store` を返す | 転送記録の `to_store` が空だと `TransferWriter.Append` が断る。同じ Store への移動は自分の Store ID を書く(保存形式「移動・番号・旧 ID」、`transferTargets`) |
+| C3b-5 | `port.RepairWriter` に `Store() (port.StoreID, error)` を足す。gitstore は `.hedgehug/store.yaml` の Store ID を読む(`readStoreYAML`)。apptest は、Store ID のフィールドを `StoreID` に改名し(メソッド `Store` と同名にできないため)、`w.StoreID, nil` を返す | 転送記録の `to_store` が空だと `TransferWriter.Append` が断る。同じ Store への移動は自分の Store ID を書く(保存形式「移動・番号・旧 ID」、`transferTargets`) |
 | C3b-6 | 段の順は `matchWorkspaces` → `matchProjects`。親のワークスペースへ移すときはプロジェクトも親のものになるので、ワークスペースが違う子は `matchProjects` に残らない | 06「修復の決まり」は (5) の中の順を定めていない。どの順でも結果は同じで、先にワークスペースを直すほうが行が少ない |
 | C3b-7 | 通知の「合う値がなく空になった項目: A・B」は C3b では記録しない。C4 が、修復のコミットの直前の状態に `transfer.Remap` をかけ直して `Emptied` を得る。トラック C の計画の C4 の行に書く(Task 4) | 決定 C3a-18(通知は修復のコミットの件名・行と、対象のログから作る。材料を別に記録しない) |
 | C3b-8 | 直す子が Step でもよい(Step が親の Task と別のワークスペースに残ったとき)。`transfer.Collect`(Step を断る)は使わない | 02 の利用者の移動は Step を単独で移せないが、修復は子を親に合わせるもので、Step も子に含まれる |
@@ -72,7 +72,7 @@ Expected: FAIL(`Store` が定義されていない)
 
 - [ ] **Step 3: 実装する**
 
-`port.RepairWriter` に `Store() (StoreID, error)` を足す(コメント: 「修復を書いている Store の ID。転送記録の to_store に書く」)。gitstore の `repairWriter.Store` は `readStoreYAML(w.root)` の `Store`。apptest の `RepairWriter.Store` は `w.Store, nil`。
+`port.RepairWriter` に `Store() (StoreID, error)` を足す(コメント: 「修復を書いている Store の ID。転送記録の to_store に書く」)。gitstore の `repairWriter.Store` は `readStoreYAML(w.root)` の `Store`。apptest の `RepairWriter` は、Store ID のフィールドを `StoreID` に改名し(メソッド `Store` と同名にできないため)、`w.StoreID, nil` を返す。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -245,4 +245,4 @@ git commit -m "test: 親とワークスペースが違う子の修復を 2 台�
 
 ## このあと
 
-最終レビュー(superpowers:requesting-code-review)のあと、develop 向けに PR を 1 本出す。PR の本文には、決定 C3b-1〜C3b-8 と、トラック C の計画で直した 2 か所を書く。
+最終レビュー(superpowers:requesting-code-review)のあと、develop 向けに PR を 1 本出す。PR の本文には、決定 C3b-1〜C3b-9 と、トラック C の計画で直した 2 か所を書く。
