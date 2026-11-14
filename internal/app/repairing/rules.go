@@ -24,23 +24,9 @@ func dropOrphanRules(_ context.Context, w port.RepairWriter) error {
 	var found []wsOrphans
 	titles := map[project.ID]string{}
 	err := w.Read(func(r port.Reader) error {
-		wss, err := r.Workspaces().List()
-		if err != nil {
-			return err
-		}
-		for _, ws := range wss {
-			o, err := orphansOf(r, ws.ID)
-			if err != nil {
-				return err
-			}
-			for _, or := range o.rules {
-				if titles[or.Project], err = projectTitle(r, or.Project); err != nil {
-					return err
-				}
-			}
-			found = append(found, o)
-		}
-		return nil
+		var err error
+		found, err = readOrphans(r, titles)
+		return err
 	})
 	if err != nil {
 		return err
@@ -55,6 +41,28 @@ func dropOrphanRules(_ context.Context, w port.RepairWriter) error {
 		}
 	}
 	return nil
+}
+
+// readOrphans は、すべてのワークスペースの外すルールを、ワークスペースの順に読む。titles に、それぞれのプロジェクトの名前を入れる。
+func readOrphans(r port.Reader, titles map[project.ID]string) ([]wsOrphans, error) {
+	wss, err := r.Workspaces().List()
+	if err != nil {
+		return nil, err
+	}
+	var out []wsOrphans
+	for _, ws := range wss {
+		o, err := orphansOf(r, ws.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, or := range o.rules {
+			if titles[or.Project], err = projectTitle(r, or.Project); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, o)
+	}
+	return out, nil
 }
 
 // orphansOf は、ワークスペース ws のログにある、ws にないプロジェクトのルール。ws のプロジェクトは削除済みを含む。
@@ -88,7 +96,7 @@ func projectTitle(r port.Reader, id project.ID) (string, error) {
 		return "", err
 	}
 	for _, t := range slices.Backward(trs) {
-		if t.Target == change.ID(id) {
+		if t.Target == id {
 			return t.Old, nil
 		}
 	}
@@ -97,7 +105,7 @@ func projectTitle(r port.Reader, id project.ID) (string, error) {
 		return "", err
 	}
 	for _, pg := range purged {
-		if pg.Target == change.ID(id) && pg.Display != "" {
+		if pg.Target == id && pg.Display != "" {
 			return pg.Display, nil
 		}
 	}

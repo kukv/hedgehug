@@ -63,7 +63,7 @@ func TestDropOrphanRulesMovedWithinStore(t *testing.T) {
 // プロジェクトを読めないときの {タイトル} は、転送記録の old、purged.jsonl の display、内部 ID の順。
 func TestDropOrphanRulesTitleFallback(t *testing.T) {
 	const gone project.ID = "01SAMPLEPR000000000000000B"
-	tr := transfer.Record{Entity: transfer.EntityProject, Target: change.ID(gone), ToStore: "S2"}
+	tr := transfer.Record{Entity: transfer.EntityProject, Target: gone, ToStore: "S2"}
 	for name, tc := range map[string]struct {
 		prepare func(e *env)
 		want    string
@@ -76,10 +76,10 @@ func TestDropOrphanRulesTitleFallback(t *testing.T) {
 			e.write(taro, func(tx port.Tx) error {
 				return errors.Join(tx.WriteTransfers().Append(old), tx.WriteTransfers().Append(last))
 			})
-			e.s.AddPurged(store, port.Purged{Entity: "project", Target: change.ID(gone), Display: "HH-P4"})
+			e.s.AddPurged(store, port.Purged{Entity: "project", Target: gone, Display: "HH-P4"})
 		}, "プロジェクト「HH-P3" + orphanTail},
 		"purged display": {func(e *env) {
-			e.s.AddPurged(store, port.Purged{Entity: "project", Target: change.ID(gone), Display: "HH-P4"})
+			e.s.AddPurged(store, port.Purged{Entity: "project", Target: gone, Display: "HH-P4"})
 		}, "プロジェクト「HH-P4" + orphanTail},
 		"internal id": {func(*env) {}, "プロジェクト「" + string(gone) + orphanTail},
 	} {
