@@ -67,7 +67,7 @@ func gather(r port.Reader, id item.ID) (crossSource, error) {
 		if c.descs[it.ID], err = r.Items().Description(it.ID); err != nil {
 			return crossSource{}, err
 		}
-		if c.moves[it.ID], err = earlierMoves(r, it.ID, c.logs[it.ID], recs); err != nil {
+		if c.moves[it.ID], err = earlierMoves(r, transfer.EntityItem, it.ID, c.logs[it.ID], recs); err != nil {
 			return crossSource{}, err
 		}
 	}
@@ -75,14 +75,15 @@ func gather(r port.Reader, id item.ID) (crossSource, error) {
 	return c, err
 }
 
-// earlierMoves は、アイテム id の行 log の、ワークスペースが変わる場所の set のうち、同じ操作の id の転送記録が recs に
-// あるもの(この Store の中で別のワークスペースへ移したとき)の、旧 ID と移動元の名前。名前が引けなければ空にする。
-func earlierMoves(r port.Reader, id item.ID, log []change.Record, recs []transfer.Record) ([]transfer.Move, error) {
+// earlierMoves は、転送記録の Entity が entity(アイテムかプロジェクト)・内部 ID id の行 log の、ワークスペースが変わる
+// 場所の set のうち、同じ操作の id の転送記録が recs にあるもの(この Store の中で別のワークスペースへ移したとき)の、
+// 旧 ID と移動元の名前。名前が引けなければ空にする。プロジェクトの場所はプロジェクトを持たないので、題名は空。
+func earlierMoves(r port.Reader, entity string, id change.ID, log []change.Record, recs []transfer.Record) ([]transfer.Move, error) {
 	var out []transfer.Move
 	for _, row := range log {
 		from, to, ok := placesOf(row)
 		i := slices.IndexFunc(recs, func(t transfer.Record) bool {
-			return t.Op == row.Op && t.Entity == transfer.EntityItem && t.Target == id
+			return t.Op == row.Op && t.Entity == entity && t.Target == id
 		})
 		if !ok || from.Workspace == to.Workspace || i < 0 {
 			continue
@@ -92,11 +93,14 @@ func earlierMoves(r port.Reader, id item.ID, log []change.Record, recs []transfe
 		if err != nil && !errors.Is(err, port.ErrNotFound) {
 			return nil, err
 		}
-		pr, err := r.Projects().Get(from.Project)
-		if err != nil && !errors.Is(err, port.ErrNotFound) {
-			return nil, err
+		mv.FromWorkspaceName = ws.Name
+		if from.Project != "" {
+			pr, err := r.Projects().Get(from.Project)
+			if err != nil && !errors.Is(err, port.ErrNotFound) {
+				return nil, err
+			}
+			mv.FromProjectTitle = pr.Title
 		}
-		mv.FromWorkspaceName, mv.FromProjectTitle = ws.Name, pr.Title
 		out = append(out, mv)
 	}
 	return out, nil

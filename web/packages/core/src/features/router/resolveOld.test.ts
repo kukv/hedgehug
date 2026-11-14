@@ -164,22 +164,56 @@ describe("resolveRoute with old prefixes", () => {
     });
   });
 
-  it("prefers the current prefix in another Store over an old prefix in the named Store", async () => {
+  // ワークスペースもプロジェクトも、アドレスの Store の旧い接頭辞を、ほかの Store のいまの接頭辞より先に見る
+  // (Store 名の Store を優先。01「画面のアドレス」、A5a-15)。プロジェクトは、一覧ではアドレスの Store だけを見る
+  // (ほかの Store はサーバーの locateProject が A5a-15 の順で見る)。
+  it("prefers the named Store's old prefix over the current prefix in another Store", async () => {
     const nodes = [
       storeOf("S1", "work", ws("S1", "W1", "WEB", ["HH"])),
       storeOf("S2", "other", ws("S2", "W2", "HH", [])),
     ];
     expect(await resolveRoute(wsRoute("HH"), nodes, itemsIn("S1"), transfers)).toMatchObject({
+      storeId: "S1",
+      workspaceId: "W1",
+    });
+    expect(await resolveRoute(pRoute("HH-P1"), nodes, itemsIn("S1"), transfers)).toMatchObject({
+      storeId: "S1",
+      projectId: "W1-P1",
+    });
+    expect(transfers.calls).toEqual([]);
+  });
+
+  // ワークスペースのアドレスは、Store 名の Store を(サイドバーで後ろにあっても)先に見て、そのあとをサイドバーの順に見る。
+  it("looks at the named Store first and then the others in the sidebar order for a workspace", async () => {
+    const nodes = [
+      storeOf("S1", "work", ws("S1", "W1", "HH", [])),
+      storeOf("S2", "other", ws("S2", "W2", "WEB", ["HH"])),
+      storeOf("S3", "third", ws("S3", "W3", "HH", [])),
+    ];
+    const at = (store: string) => ({ ...wsRoute("HH"), store });
+    expect(await resolveRoute(at("other"), nodes, itemsIn("S1"), transfers)).toMatchObject({
       storeId: "S2",
       workspaceId: "W2",
     });
-    expect(await resolveRoute(pRoute("HH-P1"), nodes, itemsIn("S1"), transfers)).toMatchObject({
-      storeId: "S2",
-      projectId: "W2-P1",
+    expect(await resolveRoute(at("nope"), nodes, itemsIn("S1"), transfers)).toMatchObject({
+      storeId: "S1",
+      workspaceId: "W1",
     });
   });
 
+  // ほかの Store は、すべてのいまの接頭辞を見てから、すべての旧い接頭辞を見る(サーバーのアイテム・プロジェクトの解決と同じ)。
+  it("looks at the current prefixes of all the other Stores before their old prefixes", async () => {
+    const nodes = [
+      storeOf("S1", "work", ws("S1", "W1", "WEB", ["HH"])),
+      storeOf("S2", "other", ws("S2", "W2", "HH", [])),
+    ];
+    expect(
+      await resolveRoute({ ...wsRoute("HH"), store: "nope" }, nodes, itemsIn("S1"), transfers),
+    ).toMatchObject({ storeId: "S2", workspaceId: "W2" });
+  });
+
   it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
+    transfers.missing.add("HH-P9");
     const nodes = one(ws("S1", "W1", "WEB", ["HH"]));
     expect(await resolveRoute(wsRoute("ZZ"), nodes, itemsIn("S1"), transfers)).toEqual({
       name: "home",

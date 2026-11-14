@@ -124,10 +124,11 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 	if err != nil {
 		return err
 	}
-	add, people := transfer.People(m.src.settings, m.src.items(), m.src.logList(), m.src.members, toMembers)
-	numbers := transfer.Number(root, m.src.set.Below, dst.next)
+	add, people := transfer.People(m.src.settings, m.src.items(), m.src.logList(), nil, m.src.members, toMembers)
+	// 削除を取り消すものは、削除されていないものとして番号を振る(同じ Store の移動は、取り消してから振る)。
+	numbers := transfer.Number(root, revivedAs(m.src.set.Below, m.revive), dst.next)
 	remaps := map[item.ID]transfer.RemapResult{}
-	errs := []error{m.join(tx, add)}
+	errs := []error{join(tx, add)}
 	for _, it := range m.src.items() {
 		remaps[it.ID] = transfer.Remap(it, m.src.settings, dst.settings, dst.rules, people, m.in.StatusChoices)
 		lines := placeLines(it, it.ID == root.ID, dst, m.in.ToParent, numbers[it.ID], newRank)
@@ -151,8 +152,23 @@ func (m *crossMove) reviveItem(tx port.Tx, id item.ID) error {
 	return tx.WriteItems().Append(id, change.Undo(log, m.revive)...)
 }
 
+// revivedAs は、items の写しのうち、操作 op で削除されたもの(移動先で削除を取り消すもの)を削除されていないものにした写し。
+// op が空なら items のまま。
+func revivedAs(items []item.Item, op change.ID) []item.Item {
+	if op == "" {
+		return items
+	}
+	out := slices.Clone(items)
+	for i := range out {
+		if out[i].Deleted != nil && out[i].Deleted.Op == op {
+			out[i].Deleted = nil
+		}
+	}
+	return out
+}
+
 // join は、移動先のメンバーに add を足す。表示名がログイン名と違えば、表示名も書く。
-func (m *crossMove) join(tx port.Tx, add []member.Member) error {
+func join(tx port.Tx, add []member.Member) error {
 	var ds []change.Draft
 	for _, p := range add {
 		ds = append(ds, member.Join(p.Login))

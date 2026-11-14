@@ -33,7 +33,7 @@ func TestPeopleAddsEachMissingPersonOnce(t *testing.T) {
 	fromMembers := []member.Member{{Login: "hanako", Name: "花子"}, {Login: "jiro", Name: "次郎"}, {Login: "Taro", Name: "太郎"}, {Login: "goro", Name: "五郎"}}
 	toMembers := []member.Member{{Login: "taro", Name: "taro"}, {Login: "jiro", Name: "jiro"}}
 
-	add, people := transfer.People(from, []item.Item{it}, logs, fromMembers, toMembers)
+	add, people := transfer.People(from, []item.Item{it}, logs, nil, fromMembers, toMembers)
 
 	wantAdd := []member.Member{{Login: "goro", Name: "五郎"}, {Login: "hanako", Name: "花子"}, {Login: "saburo", Name: "saburo"}, {Login: "shiro", Name: "shiro"}}
 	if !reflect.DeepEqual(add, wantAdd) {
@@ -47,7 +47,7 @@ func TestPeopleAddsEachMissingPersonOnce(t *testing.T) {
 
 func TestPeopleWithNobodyMissing(t *testing.T) {
 	it := item.Item{ID: "I1", Assignee: "taro", Created: item.Stamp{By: "taro"}}
-	add, people := transfer.People(workspace.Settings{}, []item.Item{it}, nil,
+	add, people := transfer.People(workspace.Settings{}, []item.Item{it}, nil, nil,
 		[]member.Member{{Login: "taro", Name: "太郎"}}, []member.Member{{Login: "Taro", Name: "Taro"}})
 	if len(add) != 0 || people["taro"] != "Taro" {
 		t.Errorf("add = %+v, map = %v", add, people)
@@ -57,7 +57,7 @@ func TestPeopleWithNobodyMissing(t *testing.T) {
 // 移動元のメンバーにいない人が複数の綴りで現れたら、辞書順で先頭の綴りで足す。
 func TestPeopleSpellsAnUnknownPersonWithTheFirstInDictionaryOrder(t *testing.T) {
 	it := item.Item{ID: "I1", Assignee: "shiro", Watchers: []string{"Shiro"}}
-	add, people := transfer.People(workspace.Settings{}, []item.Item{it}, nil, nil, nil)
+	add, people := transfer.People(workspace.Settings{}, []item.Item{it}, nil, nil, nil, nil)
 	want := []member.Member{{Login: "Shiro", Name: "Shiro"}}
 	if !reflect.DeepEqual(add, want) || people["shiro"] != "Shiro" {
 		t.Errorf("add = %+v, map = %v", add, people)
@@ -68,8 +68,21 @@ func TestPeopleSpellsAnUnknownPersonWithTheFirstInDictionaryOrder(t *testing.T) 
 func TestPeopleIgnoresBuiltinUserProperties(t *testing.T) {
 	from := workspace.Settings{Properties: []workspace.Property{{ID: "PA", Key: "assignee", Type: workspace.TypeUser, Builtin: true}}}
 	it := item.Item{ID: "I1", Fields: map[change.ID]json.RawMessage{"PA": json.RawMessage(`"ghost"`)}}
-	add, people := transfer.People(from, []item.Item{it}, nil, nil, nil)
+	add, people := transfer.People(from, []item.Item{it}, nil, nil, nil, nil)
 	if len(add) != 0 || len(people) != 0 {
 		t.Errorf("add = %+v, map = %v", add, people)
+	}
+}
+
+// プロジェクトのオーナーや専用ルールの担当者(extra)も人として数える。ログイン名に使えない値と空は数えない。
+func TestPeopleCountsExtra(t *testing.T) {
+	toMembers := []member.Member{{Login: "taro", Name: "taro"}}
+	add, people := transfer.People(workspace.Settings{}, nil, nil, []string{"Hanako", "@none", ""}, nil, toMembers)
+	want := []member.Member{{Login: "Hanako", Name: "Hanako"}}
+	if !reflect.DeepEqual(add, want) {
+		t.Errorf("add = %+v, want %+v", add, want)
+	}
+	if !reflect.DeepEqual(people, transfer.PeopleMap{"hanako": "Hanako"}) {
+		t.Errorf("map = %v (@none と空の人は入らない)", people)
 	}
 }

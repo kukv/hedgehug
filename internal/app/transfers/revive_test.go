@@ -78,3 +78,28 @@ func TestMoveRefusesAnItemDeletedWithItsParent(t *testing.T) {
 		}
 	}
 }
+
+// 別の画面で削除されたアイテムを別の Store へ移すと、同じ削除の操作で消えた下のもの(順位が前の Step)は、削除を取り消す
+// ので、削除されていない Step と一緒に並び順で番号を振る(同じ Store の移動と同じ)。
+func TestMoveAcrossStoresNumbersRevivedChildrenInOrder(t *testing.T) {
+	f := newFixture(t)
+	const first, second item.ID = "01TESTIT000000000000000014", "01TESTIT000000000000000015"
+	parent := apptest.SampleTask
+	for i, s := range []struct {
+		id   item.ID
+		rank string
+	}{{first, "A"}, {second, "V"}} {
+		addItem(t, f.rec, store1, item.Item{ID: s.id, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 3 + i}, Kind: item.Step, Rank: s.rank, Title: "s"})
+	}
+	if err := apptest.DeleteItems(t.Context(), f.rec, store1, apptest.SampleTask, first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Move(port.WithRevived(t.Context()), store1, apptest.SampleTask, toTeam()); err != nil {
+		t.Fatal(err)
+	}
+	for id, n := range map[item.ID]int{apptest.SampleTask: 2, first: 3, second: 4} {
+		if it := itemOf(t, f.rec, store2, id); it.Place.Number != n || it.Deleted != nil {
+			t.Errorf("%s number = %d (deleted %v), want %d", id, it.Place.Number, it.Deleted != nil, n)
+		}
+	}
+}

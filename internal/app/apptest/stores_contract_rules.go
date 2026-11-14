@@ -281,3 +281,19 @@ func contractOpRows(t *testing.T, s port.Stores, id port.StoreID) {
 	badOp := func(tx port.Tx) error { return tx.WriteItems().Append(cItem.ID, row.InOp("bad id!")) }
 	refuseWrite(t, s, id, "malformed op", port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "同期の修復"}, badOp, true)
 }
+
+// checkRemoved は、消したアイテムが、どの読み方でももうなく、プロジェクトは残っていることを確かめる。
+func checkRemoved(t *testing.T, r port.Reader) {
+	_, getErr := r.Items().Get(cItem.ID)
+	_, logErr := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
+	_, descErr := r.Items().Description(cItem.ID)
+	if !errors.Is(getErr, port.ErrNotFound) || !errors.Is(logErr, port.ErrNotFound) || !errors.Is(descErr, port.ErrNotFound) {
+		t.Errorf("Get = %v, Changes().Of = %v, Description = %v, want ErrNotFound", getErr, logErr, descErr)
+	}
+	if its, err := r.Items().List(cProject.ID); err != nil || len(its) != 0 {
+		t.Errorf("List = %+v, %v", its, err)
+	}
+	if _, err := r.Projects().Get(cProject.ID); err != nil {
+		t.Errorf("the project went too: %v", err)
+	}
+}

@@ -5,12 +5,14 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -60,6 +62,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"remove deletes an item folder", contractRemove},
 		{"remove and import refuse in the same write", contractRemoveImportRules},
 		{"op rows are for sync operations only", contractOpRows},
+		{"remove deletes a project folder", contractProjectRemove},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -71,10 +74,12 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		s, a, b := newStores(t)
 		contractNestedStores(t, s, a, b)
 	})
-	t.Run("import copies an item folder between stores", func(t *testing.T) {
-		s, a, b := newStores(t)
-		contractImport(t, s, a, b)
-	})
+	for _, k := range entityKinds {
+		t.Run("import copies a "+k.name+" folder between stores", func(t *testing.T) {
+			s, a, b := newStores(t)
+			k.contractImport(t, s, a, b)
+		})
+	}
 }
 
 // 照合テストの準備のデータ。
@@ -160,111 +165,134 @@ func contractRemove(t *testing.T, s port.Stores, id port.StoreID) {
 	}
 }
 
-// checkRemoved は、消したアイテムが、どの読み方でももうなく、プロジェクトは残っていることを確かめる。
-func checkRemoved(t *testing.T, r port.Reader) {
-	if _, err := r.Items().Get(cItem.ID); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("Get = %v", err)
-	}
-	if _, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID}); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("Changes().Of = %v", err)
-	}
-	if _, err := r.Items().Description(cItem.ID); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("Description = %v", err)
-	}
-	if its, err := r.Items().List(cProject.ID); err != nil || len(its) != 0 {
-		t.Errorf("List = %+v, %v", its, err)
-	}
-	if _, err := r.Projects().Get(cProject.ID); err != nil {
-		t.Errorf("the project went too: %v", err)
-	}
+// entityWriter は、ItemWriter と ProjectWriter に共通の口(Import・Remove を同じ照合で確かめる)。
+type entityWriter interface {
+	Append(id change.ID, drafts ...change.Draft) error
+	Describe(id change.ID, text string) error
+	Import(id change.ID, log []change.Record, description string) error
+	Remove(id change.ID) error
 }
 
-// Import は、別の Store のアイテムの行と説明を、行を変えずに写す。続けて書く行は、写した行の先端につながる。
-func contractImport(t *testing.T, s port.Stores, a, b port.StoreID) {
-	ref := change.Ref{Kind: change.KindItem, ID: cItem.ID}
+// entityKind は、アイテムとプロジェクトの違い(Import・Remove の照合を、両方で回す)。
+type entityKind struct {
+	name      string
+	kind      change.Kind
+	id, newID change.ID // 準備のデータにある ID と、まだない ID
+	write     func(tx port.Tx) entityWriter
+	create    func(id change.ID) change.Draft
+	desc      func(r port.Reader) (string, error)
+	count     func(r port.Reader) (int, error) // 準備のデータの親の下にある数
+	then      []change.Draft                   // 写したあとに同じ Tx で足す行
+	applied   func(r port.Reader) bool         // then の行が読み取りに効いている
+}
+
+var (
+	movedPlace  = project.Place{Workspace: cWorkspace.ID, Number: 2}
+	movedIn     = transfer.NewMovedIn(transfer.MovedInInfo{Old: "HH-P1", FromStore: "other", At: time.Unix(0, 0).UTC()})
+	entityKinds = []entityKind{{
+		name: "item", kind: change.KindItem, id: cItem.ID, newID: "01CONTRACTIT00000000000002",
+		write:  func(tx port.Tx) entityWriter { return tx.WriteItems() },
+		create: func(id change.ID) change.Draft { c := cItem; c.ID = id; return item.Create(c) },
+		desc:   func(r port.Reader) (string, error) { return r.Items().Description(cItem.ID) },
+		count:  func(r port.Reader) (int, error) { l, err := r.Items().List(cProject.ID); return len(l), err },
+		then:   []change.Draft{change.NewSet("title", "認証", "移動先で変えた")},
+		applied: func(r port.Reader) bool {
+			it, err := r.Items().Get(cItem.ID)
+			return err == nil && it.Title == "移動先で変えた"
+		},
+	}, {
+		name: "project", kind: change.KindProject, id: cProject.ID, newID: "01CONTRACTPR00000000000002",
+		write:  func(tx port.Tx) entityWriter { return tx.WriteProjects() },
+		create: func(id change.ID) change.Draft { c := cProject; c.ID = id; return project.Create(c) },
+		desc:   func(r port.Reader) (string, error) { return r.Projects().Description(cProject.ID) },
+		count:  func(r port.Reader) (int, error) { l, err := r.Projects().List(cWorkspace.ID); return len(l), err },
+		then:   []change.Draft{movedIn, change.NewSet("place", cProject.Place, movedPlace)},
+		applied: func(r port.Reader) bool {
+			p, err := r.Projects().Get(cProject.ID)
+			return err == nil && p.Place == movedPlace
+		},
+	}}
+)
+
+// contractImport は、別の Store のフォルダの行と説明を、行を変えずに写す。続けて書く行は、写した行の先端につながる。
+func (k entityKind) contractImport(t *testing.T, s port.Stores, a, b port.StoreID) {
+	ref := change.Ref{Kind: k.kind, ID: k.id}
 	mustWrite(t, s, a, taro, writeFixture)
-	mustWrite(t, s, a, taro, func(tx port.Tx) error { return tx.WriteItems().Describe(cItem.ID, "説明") })
+	mustWrite(t, s, a, taro, func(tx port.Tx) error { return k.write(tx).Describe(k.id, "説明") })
 	var log []change.Record
 	var text string
-	mustRead(t, s, a, func(r port.Reader) error {
-		var err error
-		if log, err = r.Changes().Of(ref); err != nil {
-			return err
+	mustRead(t, s, a, func(r port.Reader) (err error) {
+		if log, err = r.Changes().Of(ref); err == nil {
+			text, err = k.desc(r)
 		}
-		text, err = r.Items().Description(cItem.ID)
-		return err
+		return
 	})
 	mustWrite(t, s, b, taro, func(tx port.Tx) error {
-		if err := tx.WriteItems().Import(cItem.ID, log, text); err != nil {
+		w := k.write(tx)
+		if err := w.Import(k.id, log, text); err != nil {
 			return err
 		}
-		return tx.WriteItems().Append(cItem.ID, change.NewSet("title", "認証", "移動先で変えた"))
+		return w.Append(k.id, k.then...)
 	})
-	mustRead(t, s, b, func(r port.Reader) error { checkImported(t, r, log); return nil })
-	for name, call := range map[string]func(tx port.Tx) error{
-		"existing folder": func(tx port.Tx) error { return tx.WriteItems().Import(cItem.ID, log, "") },
-		"empty log":       func(tx port.Tx) error { return tx.WriteItems().Import("01CONTRACTIT00000000000009", nil, "") },
-		"bad id":          func(tx port.Tx) error { return tx.WriteItems().Import("bad id", log, "") },
-	} {
-		if err := s.Write(t.Context(), b, taro, call); !errors.Is(err, port.ErrInvalidOperation) {
-			t.Errorf("Import (%s) = %v, want ErrInvalidOperation", name, err)
+	mustRead(t, s, b, func(r port.Reader) error {
+		got, err := r.Changes().Of(ref)
+		d, _ := k.desc(r)
+		if err != nil || len(got) != len(log)+len(k.then) || d != "説明" || !k.applied(r) || !slices.Equal(got[len(log)].Prev, []change.ID{log[len(log)-1].ID}) {
+			t.Fatalf("%s: rows %d (want %d), %v, description %q, applied %v", k.name, len(got), len(log)+len(k.then), err, d, k.applied(r))
 		}
-	}
-}
-
-// checkImported は、写した行が元の行と同じで、続けて書いた 1 行が写した行の先端につながっていることを確かめる。
-func checkImported(t *testing.T, r port.Reader, log []change.Record) {
-	got, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
-	if err != nil || len(got) != len(log)+1 {
-		t.Fatalf("rows = %d, %v, want %d", len(got), err, len(log)+1)
-	}
-	for i, w := range log {
-		g := got[i]
-		if g.ID != w.ID || g.Op != w.Op || !g.At.Equal(w.At) || g.By != w.By || g.Actor != w.Actor || g.T != w.T || g.F != w.F ||
-			string(g.From) != string(w.From) || string(g.To) != string(w.To) || !slices.Equal(g.Prev, w.Prev) {
-			t.Errorf("row %d = %+v, want %+v (行は変えずに写す)", i, g, w)
-		}
-	}
-	if last := got[len(got)-1]; !slices.Equal(last.Prev, []change.ID{log[0].ID}) {
-		t.Errorf("the row after the import has prev %v, want [%s]", last.Prev, log[0].ID)
-	}
-	it, err := r.Items().Get(cItem.ID)
-	if d, _ := r.Items().Description(cItem.ID); err != nil || it.Title != "移動先で変えた" || d != "説明" {
-		t.Errorf("item = %+v (%v), description %q", it, err, d)
-	}
-}
-
-// Remove だけの Write も Summary が要る。同じ Tx で行を足してから消しても、もうない。同じ Tx で作ったものには Import できない。
-func contractRemoveImportRules(t *testing.T, s port.Stores, id port.StoreID) {
-	mustWrite(t, s, id, taro, writeFixture)
-	noSummary := port.Operation{Actor: change.User("taro")}
-	if err := s.Write(t.Context(), id, noSummary, func(tx port.Tx) error { return tx.WriteItems().Remove(cItem.ID) }); !errors.Is(err, port.ErrInvalidOperation) {
-		t.Errorf("Remove without a summary = %v, want ErrInvalidOperation", err)
-	}
-	mustWrite(t, s, id, taro, func(tx port.Tx) error {
-		if err := tx.WriteItems().Append(cItem.ID, change.NewSet("title", "認証", "消す前")); err != nil {
-			return err
-		}
-		if err := tx.WriteItems().Remove(cItem.ID); err != nil {
-			return err
-		}
-		if _, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID}); !errors.Is(err, port.ErrNotFound) {
-			t.Errorf("Changes().Of after Append and Remove = %v, want ErrNotFound", err)
-		}
-		if its, err := tx.Items().List(cProject.ID); err != nil || len(its) != 0 {
-			t.Errorf("List after Append and Remove = %+v, %v", its, err)
+		for i, w := range log {
+			if !sameRow(got[i], w) {
+				t.Errorf("%s: row %d = %+v, want %+v (行は変えずに写す)", k.name, i, got[i], w)
+			}
 		}
 		return nil
 	})
-	created := cItem
-	created.ID = "01CONTRACTIT00000000000002"
-	err := s.Write(t.Context(), id, taro, func(tx port.Tx) error {
-		if err := tx.WriteItems().Append(created.ID, item.Create(created)); err != nil {
-			return err
+	for name, call := range map[string]func(w entityWriter) error{
+		"existing folder": func(w entityWriter) error { return w.Import(k.id, log, "") },
+		"empty log":       func(w entityWriter) error { return w.Import(k.newID, nil, "") },
+		"bad id":          func(w entityWriter) error { return w.Import("bad id", log, "") },
+	} {
+		if err := s.Write(t.Context(), b, taro, func(tx port.Tx) error { return call(k.write(tx)) }); !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("Import %s (%s) = %v, want ErrInvalidOperation", k.name, name, err)
 		}
-		return tx.WriteItems().Import(created.ID, []change.Record{{ID: "x"}}, "")
-	})
-	if !errors.Is(err, port.ErrInvalidOperation) {
-		t.Errorf("Import after Append in the same write = %v, want ErrInvalidOperation", err)
 	}
+}
+
+// Remove だけの Write も Summary が要る。同じ Tx で行を足してから消しても、もうない。消したものにも、同じ Tx で作ったものにも
+// Import できない。アイテムとプロジェクトの両方で確かめる。
+func contractRemoveImportRules(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	bad := func(k entityKind, what string, err error) {
+		if !errors.Is(err, port.ErrInvalidOperation) {
+			t.Errorf("%s: %s = %v, want ErrInvalidOperation", k.name, what, err)
+		}
+	}
+	for _, k := range entityKinds {
+		noSummary := port.Operation{Actor: change.User("taro")}
+		bad(k, "Remove without a summary", s.Write(t.Context(), id, noSummary, func(tx port.Tx) error { return k.write(tx).Remove(k.id) }))
+		mustWrite(t, s, id, taro, func(tx port.Tx) error {
+			w := k.write(tx)
+			if err := errors.Join(w.Append(k.id, k.then[len(k.then)-1]), w.Remove(k.id)); err != nil {
+				return err
+			}
+			if _, err := tx.Changes().Of(change.Ref{Kind: k.kind, ID: k.id}); !errors.Is(err, port.ErrNotFound) {
+				t.Errorf("%s: Changes().Of after Append and Remove = %v, want ErrNotFound", k.name, err)
+			}
+			if n, err := k.count(tx); err != nil || n != 0 {
+				t.Errorf("%s: List after Append and Remove = %d, %v", k.name, n, err)
+			}
+			bad(k, "Import after Remove", w.Import(k.id, []change.Record{{ID: "x"}}, ""))
+			return nil
+		})
+		bad(k, "Import after Append in the same write", s.Write(t.Context(), id, taro, func(tx port.Tx) error {
+			w := k.write(tx)
+			return errors.Join(w.Append(k.newID, k.create(k.newID)), w.Import(k.newID, []change.Record{{ID: "x"}}, ""))
+		}))
+	}
+}
+
+// sameRow は、写した行が元の行と、全部の項目で同じことを確かめる。
+func sameRow(g, w change.Record) bool {
+	return g.ID == w.ID && g.Op == w.Op && g.At.Equal(w.At) && g.By == w.By && g.Actor == w.Actor && g.T == w.T && g.F == w.F &&
+		string(g.From) == string(w.From) && string(g.To) == string(w.To) && slices.Equal(g.Prev, w.Prev)
 }

@@ -16,11 +16,11 @@ import (
 type PeopleMap map[string]string
 
 // People は、移すアイテムに出てくる人を数え、移動先のメンバーに足す人(小文字のログイン名の順)と、数えた全員の対応を返す。
-// 数えるのは、担当者・ユーザー型の値・ウォッチ・作成者・logs の行の by。空・hedgehug[bot]・ログイン名に使えない文字の人は数えない。
+// 数えるのは、担当者・ユーザー型の値・ウォッチ・作成者・logs の行の by・extra(プロジェクトのオーナーや専用ルールの担当者など)。空・hedgehug[bot]・ログイン名に使えない文字の人は数えない。
 // 大文字小文字だけが違う人は同じ人。移動先にいる人は移動先の綴りに置き換え、いない人は足す。
 // 足す人の綴りは、移動元のメンバーにいればその綴り、いなければ見つけた綴りのうち辞書順で先頭。表示名は移動元のメンバーの表示名(いなければログイン名)。
-func People(from workspace.Settings, items []item.Item, logs [][]change.Record, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap) {
-	found := mentioned(from, items, logs)
+func People(from workspace.Settings, items []item.Item, logs [][]change.Record, extra []string, fromMembers, toMembers []member.Member) ([]member.Member, PeopleMap) {
+	found := mentioned(from, items, logs, extra)
 
 	people := PeopleMap{}
 	var add []member.Member
@@ -37,7 +37,7 @@ func People(from workspace.Settings, items []item.Item, logs [][]change.Record, 
 }
 
 // mentioned は、数える人を、小文字のログイン名ごとに、見つけた綴りにまとめる。
-func mentioned(from workspace.Settings, items []item.Item, logs [][]change.Record) map[string][]string {
+func mentioned(from workspace.Settings, items []item.Item, logs [][]change.Record, extra []string) map[string][]string {
 	found := map[string][]string{} // 小文字 → 見つけた綴り
 	count := func(login string) {
 		if login != "" && login != change.BotLogin && member.ValidLogin(login) {
@@ -58,6 +58,9 @@ func mentioned(from workspace.Settings, items []item.Item, logs [][]change.Recor
 				count(login)
 			}
 		}
+	}
+	for _, login := range extra {
+		count(login)
 	}
 	for _, log := range logs {
 		for _, r := range log {

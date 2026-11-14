@@ -8,7 +8,9 @@ import {
   createItemMenuHost,
   createItemMove,
   createItemRefresh,
+  createLeaveMoved,
   createProjectDelete,
+  createProjectTransfer,
   createTransferDialog,
   createWorkspaceDelete,
   leaveDeletedProject,
@@ -117,6 +119,18 @@ export const projectDelete = createProjectDelete({
   afterDelete: (project) => leaveDeletedProject({ navigation, catalog }, project),
 });
 
+// プロジェクトの別のワークスペースへの移動(02「名前の変更・移動・削除」の移動)。設定タブの「別のワークスペースへ移動」の
+// 区画が読み、「移動」が確認ダイアログを開く。移せたあとの移り先(押したときから画面を移っていなければ新しいアドレスの
+// 設定タブへ replace、そのあと一覧を読み直す。A5b-19・A5a-18)は core の createLeaveMoved。
+const leaveMoved = createLeaveMoved({ navigation, catalog });
+export const projectTransfer = createProjectTransfer({
+  transfers: transfersPort,
+  catalog,
+  toasts,
+  online: isOnline,
+  afterMoved: leaveMoved,
+});
+
 // ワークスペースの削除(03「削除」)。「一般」の「ワークスペースを削除…」とサイドバーのメニューの「削除…」が開く。
 // 削除できたあとの移り先(ホームへ replace、詳細パネルを閉じ、一覧を読み直す)は core の leaveDeletedWorkspace。
 export const workspaceDelete = createWorkspaceDelete({
@@ -129,6 +143,7 @@ export const workspaceDelete = createWorkspaceDelete({
 // 画面を移ったら、出している確認ダイアログとメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
   projectDelete.cancel();
+  projectTransfer.cancel();
   workspaceDelete.cancel();
   itemDelete.cancel();
   itemMove.close();

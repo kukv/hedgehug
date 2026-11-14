@@ -70,17 +70,26 @@ func StatusUseDrafts(s workspace.Settings, r Rules, p project.ID, status change.
 	return []change.Draft{change.NewAdd(HiddenField(p), status)}, nil
 }
 
+// IsFixedStatus は、使わないことにできないステータス(初期ステータスか、分類ごとの既定)か。
+// checkCanHide の断りと、プロジェクトの移動での引き継ぎ(transfer.CarryRules)が同じ判定を使う。
+func IsFixedStatus(s workspace.Settings, status change.ID) bool {
+	_, isDefault := s.DefaultCategory(status)
+	return s.InitialStatus == status || isDefault
+}
+
 func checkCanHide(s workspace.Settings, status change.ID, own []ScopedRule) error {
-	initial := s.InitialStatus == status
-	cat, isDefault := s.DefaultCategory(status)
-	label := workspace.CategoryName(cat)
-	switch {
-	case initial && isDefault:
-		return refusal.New("初期ステータスで、" + label + "の既定でもあるため外せません")
-	case initial:
-		return refusal.New("初期ステータスのため外せません")
-	case isDefault:
-		return refusal.New(label + "の既定のため外せません")
+	if IsFixedStatus(s, status) {
+		initial := s.InitialStatus == status
+		cat, isDefault := s.DefaultCategory(status)
+		label := workspace.CategoryName(cat)
+		switch {
+		case initial && isDefault:
+			return refusal.New("初期ステータスで、" + label + "の既定でもあるため外せません")
+		case initial:
+			return refusal.New("初期ステータスのため外せません")
+		default:
+			return refusal.New(label + "の既定のため外せません")
+		}
 	}
 	for _, rule := range own {
 		if slices.Contains(rule.Statuses, status) {

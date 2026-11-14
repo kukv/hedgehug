@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 )
 
@@ -149,8 +150,7 @@ func (t rowsTx) WriteWorkspaces() port.WorkspaceWriter {
 }
 
 func (t rowsTx) WriteProjects() port.ProjectWriter {
-	w := t.Tx.WriteProjects()
-	return rowsIDs{append: w.Append, describe: w.Describe, rows: t.rows}
+	return rowsProjects{ProjectWriter: t.Tx.WriteProjects(), rows: t.rows}
 }
 
 func (t rowsTx) WriteItems() port.ItemWriter {
@@ -162,16 +162,13 @@ func (t rowsTx) WriteMembers() port.MemberWriter {
 }
 
 type rowsIDs struct {
-	append   func(id change.ID, drafts ...change.Draft) error
-	describe func(id change.ID, text string) error
-	rows     *bool
+	append func(id change.ID, drafts ...change.Draft) error
+	rows   *bool
 }
 
 func (w rowsIDs) Append(id change.ID, drafts ...change.Draft) error {
 	return mark(w.rows, len(drafts) > 0, w.append(id, drafts...))
 }
-
-func (w rowsIDs) Describe(id change.ID, text string) error { return w.describe(id, text) }
 
 type rowsMembers struct {
 	w    port.MemberWriter
@@ -197,6 +194,24 @@ func (w rowsItems) Import(id item.ID, log []change.Record, description string) e
 }
 
 func (w rowsItems) Remove(id item.ID) error { return mark(w.rows, true, w.ItemWriter.Remove(id)) }
+
+// rowsProjects は、rowsItems と同じく、プロジェクトの Append・Import・Remove の印を付ける。
+type rowsProjects struct {
+	port.ProjectWriter
+	rows *bool
+}
+
+func (w rowsProjects) Append(id change.ID, drafts ...change.Draft) error {
+	return mark(w.rows, len(drafts) > 0, w.ProjectWriter.Append(id, drafts...))
+}
+
+func (w rowsProjects) Import(id project.ID, log []change.Record, description string) error {
+	return mark(w.rows, true, w.ProjectWriter.Import(id, log, description))
+}
+
+func (w rowsProjects) Remove(id project.ID) error {
+	return mark(w.rows, true, w.ProjectWriter.Remove(id))
+}
 
 // mark は、err が nil で wrote なら rows を true にし、err をそのまま返す。
 func mark(rows *bool, wrote bool, err error) error {

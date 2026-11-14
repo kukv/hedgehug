@@ -88,3 +88,59 @@ export type Gone =
 export type Located =
   | { kind: "found"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }
   | ({ kind: "gone" } & Gone);
+
+// ここから、プロジェクトの別のワークスペース・別の Store への移動(02 **移動**、トラック A5b)。
+
+// ProjectTransferTarget は、プロジェクトを移す先の候補のワークスペース 1 つ(並びはサーバーが決める。A5b-16)。
+export interface ProjectTransferTarget {
+  storeId: string;
+  storeName: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+// NotCarriedKind は、「移らないもの」の種類(A5b-8)。
+export type NotCarriedKind =
+  | "hidden"
+  | "hiddenFixed"
+  | "workflow"
+  | "template"
+  | "templateDefault"
+  | "disabled";
+// NotCarried は、移動先に引き継げないプロジェクト別のルール 1 つ(文は画面が作る。A5b-8)。
+export interface NotCarried {
+  kind: NotCarriedKind;
+  name: string;
+  missing: string[]; // 移動先にない名前(workflow は From・To の順、templateDefault はテンプレート名)
+  count: number; // disabled の件数
+}
+// ProjectTransferPreview は、確認ダイアログの予告(A5b-23)。
+export interface ProjectTransferPreview {
+  items: number; // 削除されていないアイテムの数 N
+  deleted: number; // 削除済みのアイテムの数 M
+  prefix: string; // 移動先の接頭辞
+  source: string; // {移動元} の文(A5b-10)
+  destination: string; // {移動先} の文(A5b-10)
+  crossStore: boolean;
+  remoteNotice: boolean;
+  destinationHasRemote: boolean; // オフラインの判断に使う
+  hasRules: boolean; // プロジェクト別のルールか専用ルールがあるか
+  notCarried: NotCarried[];
+  replacements: StatusReplacement[]; // 移動元のワークスペースのステータスの並び。ルールだけが使うものは count が 0
+}
+// ProjectTransferInput は、プロジェクトの移動の送信の本文(A5b-22)。
+export interface ProjectTransferInput {
+  toStore: string;
+  toWorkspace: string;
+  statusChoices: Record<string, string>; // 元のステータスの内部 ID → 移動先のステータスの内部 ID
+}
+// ProjectTransferResult は、移したプロジェクト(内部 ID は変わらない)と、{移動先} の文(トーストに使う)。
+export interface ProjectTransferResult {
+  toStore: string;
+  projectId: string;
+  display: string;
+  destination: string;
+}
+// LocatedProject は、画面のアドレスの Store 名とプロジェクトの ID の解決の結果。
+export type LocatedProject =
+  | { kind: "found"; storeId: string; projectId: string; movedFrom?: MovedFrom }
+  | ({ kind: "gone" } & Gone);

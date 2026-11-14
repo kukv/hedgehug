@@ -14,7 +14,7 @@ import (
 func whyGone(snaps []snapshot, rec transfer.Record) (Gone, *transfer.Record, bool) {
 	g := Gone{Old: rec.Old, At: rec.At, NewDisplay: rec.New}
 	switch {
-	case slices.ContainsFunc(snaps, func(s snapshot) bool { return s.hasDeleted(rec.Target) }):
+	case slices.ContainsFunc(snaps, func(s snapshot) bool { return s.hasDeleted(rec.Entity, rec.Target) }):
 		g.Reason = GoneDeleted
 	case slices.ContainsFunc(snaps, func(s snapshot) bool { return s.hasPurged(rec.Target) }):
 		g.Reason = GonePurged

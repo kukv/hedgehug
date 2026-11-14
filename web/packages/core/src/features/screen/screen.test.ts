@@ -110,7 +110,10 @@ describe("createScreen", () => {
   });
 
   it("shows home for an address it cannot resolve", async () => {
-    const { screen } = await setup("/s/work/p/HH-P9/overview");
+    const { screen, transfers } = await setup("/s/work/p/HH-P9/overview", false);
+    transfers.missing.add("HH-P9");
+    screen.start();
+    await flush();
     expect(get(screen.current)).toEqual({ name: "home" });
   });
 
