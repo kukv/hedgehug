@@ -484,6 +484,6 @@ git commit -m "test(e2e): バックログの一括変更を通しで確かめ、
 
 ## E に求めること
 
-- 検索のテーブルの `SelectionBar` に `onchange={() => bulkChange.open(selection, { after: 読み直し })}` を渡す(`suffix` は渡さない。バックログだけの末尾のため)。
-- パレットの「{N} 件をまとめて変更…」は、検索のテーブルを開いてすべての行を選んでから `bulkChange.open` を呼ぶ(04 の 822 行)。
-- 選択肢・判定・Store ごとの保存は、テーブルが Store・ワークスペースをまたいでもサーバー(F2b2-3・F2b2-12)が扱う。
+- 検索のテーブルの `SelectionBar` に `onchange={() => bulkChange.open(selection, { after: 読み直し })}` を渡す(`suffix` は渡さない。バックログだけの末尾のため)。(E2a で足した)
+- パレットの「{N} 件をまとめて変更…」は、検索のテーブルを開いてすべての行を選んでから `bulkChange.open` を呼ぶ(04 の 822 行)。(E2a で足した)
+- 選択肢・判定・Store ごとの保存は、テーブルが Store・ワークスペースをまたいでもサーバー(F2b2-3・F2b2-12)が扱う。(E2a で足した)

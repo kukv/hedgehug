@@ -600,15 +600,19 @@ git commit -m "docs: トラック E の分け方を E2a・E2b・E2c と E7 の�
 
 ### E2b(セルの編集)
 
-- セルは `web/app/src/screens/table/TableCell.svelte`(と `TableRow.svelte` のステータス・担当者)が `cellView` で読むだけで描いている。E2b は、04 の 693〜713 行の編集の部品に置き換える。保存は詳細パネルと同じ口(`itemsPort.setProperty`・`addValue`・`removeValue`、スプリントは計画の口)を使い、アクティビティ・割り当ての通知・自動化・02 の規則はサーバーの既存の処理に任せる。
+- テーブルの部品は `web/app/src/screens/table/` の `ItemTable`・`TableHead`・`TableRow`・`TableIdCell`・`TableCell`・`TableToolbar`・`SelectAllCheck`。セルは `TableCell.svelte`(と `TableRow.svelte` のステータス・担当者)が core の `cellView` で読むだけで描いている。URL のセルは、値が http(s) のときだけリンクにする(`javascript:` などは文字のまま。計画にない足し)。見積もり時間は、新しい `hoursText` を作らず core の `hoursOf`(Go の `item.Hours` と同じ丸め)で出している。E2b は、04 の 693〜713 行の編集の部品に置き換える。保存は詳細パネルと同じ口(`itemsPort.setProperty`・`addValue`・`removeValue`、スプリントは計画の口)を使い、アクティビティ・割り当ての通知・自動化・02 の規則はサーバーの既存の処理に任せる。
 - 選択肢(ステータス・優先度・単一選択・複数選択・関連システム・メンバー・スプリント・リリース)は、セルを押したときにそのアイテムのワークスペースの設定を読む(テーブルは複数のワークスペースにまたがる)。
 - 列の型(`SearchColumn.type`)とアイテムのワークスペースのプロパティの型(`custom[鍵].type`)が違うセルの編集をどうするかは、E2b で決める(E2a はアイテム自身の型で表示している。E2a-9)。
 - 閲覧のみの Store の行と削除済みの行のセルを無効にし、閲覧のみは「閲覧のみの Store です」と添える(04 の 482・312 行)。
 - `unused` の列は「—」のまま編集できない(03 の 246 行)。
+- 「表示する列」のボタンは `pressWhileOpen` を使う。そのため ui の `Button` に `onpointerdown` の props を足した。セルを編集中に開く部品も、同じ仕組みで外を押したときの閉じ方がぶつからないようにする。
+- 行のステータスの変更(パレットの「ステータスを変更」を含む)は core の `setRowStatus` を通り、失敗はバックログと同じくエラーのトーストに出す。セルの編集の保存の失敗も、この口に合わせる。
+- e2e は `web/e2e/search-table.spec.ts`・`search-table-select.spec.ts`・`search-table-helpers.ts`。`web/e2e/helpers.ts` の `resetSearchScreen` が、サーバー側の検索の画面の状態をテストの間に戻す。E2b・E2c の e2e も、同じ Store を使うテストの前に呼ぶ。
+- `web/.dependency-cruiser.cjs` は `*.test-util.ts` をテスト専用として扱う。テストの材料の共有はこの名前で置く。
 
 ### E2c(ワークスペース・プロジェクトの「テーブル」タブ)
 
-- テーブルの部品は `web/app/src/screens/table/` にある(`ItemTable`・`TableToolbar` など)。検索の画面と同じものを使う。
+- テーブルの部品は `web/app/src/screens/table/` にある(`ItemTable`・`TableHead`・`TableRow`・`TableIdCell`・`TableCell`・`TableToolbar`・`SelectAllCheck`)。検索の画面と同じものを使う。選択の部品(`createRowSelection`・`SelectionBar`・`selection.provide(2, …)`)も同じものを画面ごとにつなぐ。
 - 検索の API(`POST /api/search`)に、範囲(Store とワークスペース、またはプロジェクト)を足す。対象のワークスペース(列の決め方。E2a-2)も、ワークスペースの画面はそのワークスペース、プロジェクトの画面はそのプロジェクトのワークスペースにする(04 の 660 行)。
 - 画面の状態は、ワークスペースごと・プロジェクトごと・タブごとに別の鍵にする(04 の 474 行)。E1 の鍵の規則は `^[a-z0-9:_/-]{1,200}$` で、内部 ID(大文字を含む)をそのまま入れられない。鍵の作り方か規則のどちらかを E2c で決める。
 - 選択は画面ごとに持ち、別の画面に移ると解除する(04 の 822 行)。タブを移ったときも解除する。
