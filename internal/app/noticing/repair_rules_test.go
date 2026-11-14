@@ -357,3 +357,67 @@ func TestDroppedRulesSharesPurgedKey(t *testing.T) {
 		t.Errorf("rows = %+v, want one with repair:purged:%s", got, webP)
 	}
 }
+
+// movedRulesMerge は、別の Store へ移った webP のルールに、その側で newRows を書いた合わせ。
+func movedRulesMerge(newRows []change.Record) port.ReceivedSave {
+	return port.ReceivedSave{
+		Key: port.SaveKey{Version: "merge"}, Merge: true,
+		MovedRules: []port.MovedRules{{Workspace: apptest.SampleWorkspace, Project: webP, New: newRows}},
+	}
+}
+
+// 合わせで、別の Store へ移った「Web」のルールに hanako が書いた行があれば、移動の通知を作る(C5b1-17)。
+func TestMovedRulesNotice(t *testing.T) {
+	f := setup(t)
+	rows := hiddenByHanako(f)
+	movingWeb(f, webP)
+	f.judge(movedRulesMerge(rows))
+	want := port.Notice{
+		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Project: webP, Display: "HH-P1",
+		Text: movedWeb, Source: "repair:moved:" + string(webP) + ":" + f.lastTransfer(),
+	}
+	if n := f.wantOne(); n != want {
+		t.Errorf("notice = %+v, want %+v", n, want)
+	}
+}
+
+// 書いたのがあなたでなければ作らない。
+func TestMovedRulesOthers(t *testing.T) {
+	f := setup(t)
+	rows := planRows(f, "jiro", []change.Draft{change.NewAdd(projectrule.HiddenField(webP), reviewSt)})
+	movingWeb(f, webP)
+	f.judge(movedRulesMerge(rows))
+	f.wantNone()
+}
+
+// 合わせで残った「Web」の使わないステータスの行を修復 (9) が外しても、合わせの通知と (9) の通知は同じ鍵なので、
+// 受信箱は 1 行。
+func TestMovedRulesSharesKeyWithOrphan(t *testing.T) {
+	f := setup(t)
+	movingWeb(f, webP)
+	wsRules(f, "hanako", change.NewAdd(projectrule.HiddenField(webP), reviewSt))
+	var rows []change.Record
+	if err := f.stores.Read(t.Context(), store, func(r port.Reader) (err error) {
+		rows, err = r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	merge := movedRulesMerge(rows[len(rows)-1:])
+	f.judge(merge, wsRepair(f, change.NewRemove(projectrule.HiddenField(webP), reviewSt)))
+	if got := f.rows(); len(got) != 1 || got[0].Text != movedWeb {
+		t.Errorf("rows = %+v, want one", got)
+	}
+}
+
+// 移動先の Store が表示中なら、合わせの MovedRules だけでも、このマシンでの名前を使う。
+func TestMovedRulesShownStoreName(t *testing.T) {
+	f := setup(t)
+	f.svc.List = apptest.StoreList{Stores: []port.StoreInfo{{ID: store, Name: "main"}, {ID: "S2", Name: "team-local"}}}
+	rows := hiddenByHanako(f)
+	movingWeb(f, webP)
+	f.judge(movedRulesMerge(rows))
+	if n := f.wantOne(); n.Text != "HH-P1 は 太郎 が team-local へ移動したため、あなたの変更は反映されませんでした。移動先は WEB-P2 です" {
+		t.Errorf("text = %q", n.Text)
+	}
+}

@@ -204,3 +204,35 @@ func droppedRules(r port.Reader, b batch, i int, me string) ([]port.Notice, erro
 	}
 	return out, nil
 }
+
+// movedRules は、i 番目が合わせなら、もう片側の操作で別の Store へ移したプロジェクトのルールに、その側で書いた行に
+// あなたの行がある、プロジェクトごとの移動の通知(06「プロジェクトがなくなったときのルール」。C5b1-17)。本文・鍵・
+// Workspace・Project・Display は修復 (9) の通知(orphanNotice)と同じなので、同じプロジェクトで両方が出ても受信箱は
+// 1 行。いまこの Store で読めるプロジェクトなら作らない。
+func movedRules(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
+	s := b.saves[i]
+	if !s.Merge {
+		return nil, nil
+	}
+	var out []port.Notice
+	for _, d := range s.MovedRules {
+		if !wroteBy(d.New, me) {
+			continue
+		}
+		in, err := inStore(r, b, d.Project)
+		if err != nil {
+			return nil, err
+		}
+		if in {
+			continue
+		}
+		n, ok, err := orphanNotice(r, b, d.Workspace, d.Project)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}

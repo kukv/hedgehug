@@ -38,12 +38,13 @@ func (b batch) causes(r port.Reader) (causes, error) {
 	return cs, nil
 }
 
-// storeNames は、合わせで消えたものか、ワークスペースの行を持つ修復の保存(修復 (9) のことがある)があるときだけ
-// 読む、表示中の Store の名前(C4b2-12・C5b1-7 の移動先の Store 名)。閲覧のみの同期では通知を作らないので読まない。
+// storeNames は、合わせで消えたものか、別の Store へ移ったプロジェクトのルールの行(C5b1-17)か、ワークスペースの
+// 行を持つ修復の保存(修復 (9) のことがある)があるときだけ読む、表示中の Store の名前(C4b2-12・C5b1-7 の移動先の
+// Store 名)。閲覧のみの同期では通知を作らないので読まない。
 func (s Service) storeNames(ctx context.Context, in port.Received) (map[port.StoreID]string, error) {
 	need := false
 	for _, sv := range in.Saves {
-		need = need || (sv.Merge && len(sv.Removed) > 0) ||
+		need = need || (sv.Merge && (len(sv.Removed) > 0 || len(sv.MovedRules) > 0)) ||
 			(sv.Repair && slices.ContainsFunc(sv.Entities, func(e port.EntityRows) bool { return e.Ref.Kind == change.KindWorkspace }))
 	}
 	if !need || in.ReadOnly {
