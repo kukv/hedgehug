@@ -23,7 +23,7 @@
   let list = $state<HTMLElement>();
   const open = $derived(view !== null);
   const modKey = (e: KeyboardEvent) => (mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
-  // 日本語入力の変換中の Enter・Esc は、変換の確定・取り消しに使う(01「Esc」)。
+  // 日本語入力の変換中の ↑↓・Enter・Esc は、候補の選択・変換の確定・取り消しに使う(01「Esc」)。
   const composing = (e: KeyboardEvent) => e.isComposing || e.keyCode === 229;
 
   // Ctrl+K(Cmd+K)は入力中でも使える。ダイアログ(パレット自身を含む)を開いているときは使えない(01 キーボード)。
@@ -43,11 +43,11 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
-    if (!open) return;
+    if (!open || composing(event)) return;
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       event.preventDefault();
       onmove(event.key === "ArrowUp" ? "up" : "down");
-    } else if (event.key === "Enter" && !composing(event)) {
+    } else if (event.key === "Enter") {
       event.preventDefault();
       onchoose(undefined, modKey(event));
     }

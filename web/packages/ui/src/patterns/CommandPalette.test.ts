@@ -126,6 +126,13 @@ describe("CommandPalette", () => {
     expect(p.onclose).not.toHaveBeenCalled();
   });
 
+  it("変換中の ↑↓ では選択を動かさない", async () => {
+    const p = setup();
+    await fireEvent.keyDown(window, { key: "ArrowDown", isComposing: true });
+    await fireEvent.keyDown(window, { key: "ArrowUp", keyCode: 229 });
+    expect(p.onmove).not.toHaveBeenCalled();
+  });
+
   it("Esc・背景のクリックで閉じる", async () => {
     const p = setup();
     await fireEvent.keyDown(window, { key: "Escape" });

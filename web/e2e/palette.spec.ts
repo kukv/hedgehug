@@ -100,6 +100,17 @@ test("finds items, recent items, old IDs and commands from the palette", async (
     await expect(current).toContainText(`${prefix}-1`);
     await page.keyboard.press("ArrowDown");
     await expect(current).toContainText(`${prefix}-3`);
+    // ツリーの外へフォーカスを移すと、ツリーの行は選んでいるアイテムにならない(02「ツリーでフォーカスのある行」)。
+    // 選んでいるアイテムと並べて読む「最近開いたもの」が出るまで待ってから確かめる。
+    await page.getByRole("main").getByRole("heading", { level: 1 }).click();
+    await expect(tree).not.toBeFocused();
+    const outside = await openPalette(page);
+    await expect(outside.getByText("最近開いたもの", { exact: true })).toBeVisible();
+    await expect(outside.getByText(/ に対して$/)).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(outside).toBeHidden();
+    await treeRow(tree, `${prefix}-3`).locator("code").click();
+    await expect(current).toContainText(`${prefix}-3`);
     const palette = await openPalette(page);
     await expect(palette.getByText(`${prefix}-3 に対して`, { exact: true })).toBeVisible();
     await palette.getByRole("combobox").fill("ステータスを変更");

@@ -42,10 +42,13 @@
   $effect.pre(() => keyboard.focus.setTree(view.tree));
   $effect(() => () => keyboard.destroy());
   // パレットの「選んでいるアイテム」は、詳細パネルがなければ、フォーカスのある行のアイテム(A5c-9)。
+  // currentId はツリーからフォーカスが出ても残るので、ツリーがフォーカスを持っているときだけ返す。
+  // core の palette.open() は、パレットの入力欄へフォーカスが移る(部品の effect)より前に、同期で
+  // selection.current() を呼ぶので、この時点のフォーカスはまだ開く前の場所にある。
   $effect(() =>
     selection.provide(1, () => {
       const id = get(keyboard.focus.state).currentId;
-      if (!id) return null;
+      if (!id || !list?.contains(document.activeElement)) return null;
       const setStatus = (statusId: string) => projectScreen.setStatus(id, statusId);
       return { storeId: view.store.id, itemId: id, source: "tree", setStatus };
     }),
