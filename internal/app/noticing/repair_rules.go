@@ -10,7 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
-	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -165,11 +164,11 @@ func droppedRules(r port.Reader, b batch, i int, me string) ([]port.Notice, erro
 		if err != nil {
 			return nil, err
 		}
-		j := slices.IndexFunc(cs.purged, func(p port.Purged) bool { return p.Target == d.Project && p.Entity == transfer.EntityProject })
-		if j < 0 || oneLine(cs.purged[j].Display) == "" {
+		c, ok := cs.of(d.Project)
+		if !ok || c.purged == nil || oneLine(c.purged.Display) == "" {
 			continue
 		}
-		display := cs.purged[j].Display
+		display := c.purged.Display
 		out = append(out, port.Notice{
 			Workspace: d.Workspace, Project: d.Project, Display: display,
 			Text: purgedText(display), Source: "repair:purged:" + string(d.Project),

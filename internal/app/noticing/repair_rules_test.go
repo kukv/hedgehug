@@ -301,3 +301,18 @@ func TestDroppedRulesOnce(t *testing.T) {
 		t.Errorf("rows after prune = %+v, want one", got)
 	}
 }
+
+// 1 回の判定で、同じ合わせに、消えた「Web」に hanako が書いた行(Removed)と、取り除かれた「Web」のルールに hanako が
+// 足した行(DroppedRules)があっても、同じ鍵 repair:purged:{P} なので受信箱は 1 行。
+func TestDroppedRulesSharesPurgedKey(t *testing.T) {
+	f := setup(t)
+	log := goneProjectLog(f)
+	rows := hiddenByHanako(f)
+	f.purge(transfer.EntityProject, webP, "HH-P1")
+	merge := droppedRulesMerge(rows, rows)
+	merge.Removed = []port.RemovedEntity{{Ref: change.Ref{Kind: change.KindProject, ID: webP}, Log: log, New: log[len(log)-1:]}}
+	f.judge(merge)
+	if got := f.rows(); len(got) != 1 || got[0].Source != "repair:purged:"+string(webP) {
+		t.Errorf("rows = %+v, want one with repair:purged:%s", got, webP)
+	}
+}

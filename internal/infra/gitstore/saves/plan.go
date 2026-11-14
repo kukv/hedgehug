@@ -26,42 +26,55 @@ type droppedRows struct {
 // 決めるのに読む、その版のログ全体。
 type grouping func(log, rows []change.Record, targets map[string]bool) map[change.ID][]change.Record
 
-// droppedPlan は、合わせ c の 2 つの親のそれぞれについて、c の purged.jsonl のスプリント・リリースの target のうち、
-// c のワークスペースのログに行がなく、親のログに行があるもの(決定 C5a-8)。New は、そのうち共通の祖先(1 つ目。
-// 同期の合わせと同じ。base で、要るときだけ求める)のログにない行。並びは 1 つ目の親、2 つ目の親、ワークスペース・
-// target の内部 ID の順。
-func droppedPlan(c *object.Commit, base func() (*object.Tree, error)) ([]port.DroppedPlan, error) {
-	ds, err := droppedBy(c, base, filemerge.PurgedPlanTargets, byPlanTarget)
-	if err != nil {
-		return nil, err
-	}
-	var out []port.DroppedPlan
-	for _, d := range ds {
-		out = append(out, port.DroppedPlan(d))
-	}
-	return out, nil
+// drop は、取り除く対象の 1 種類。targets は purged.jsonl から読んだ内部 ID、group はその行のまとめ方。
+type drop struct {
+	targets map[string]bool
+	group   grouping
 }
 
-// droppedBy は、合わせ c の 2 つの親のそれぞれについて、c の purged.jsonl から targetsOf で読んだ対象のうち、
-// c のワークスペースのログに行がなく、親のログに行があるもの。行は group で対象ごとに分ける。並びは droppedPlan と同じ。
-func droppedBy(c *object.Commit, base func() (*object.Tree, error), targetsOf func([]byte) map[string]bool, group grouping) ([]droppedRows, error) {
+// droppedOf は、合わせ c の 2 つの親のそれぞれについて、c の purged.jsonl の対象のうち、c のワークスペースのログに
+// 行がなく、親のログに行があるもの。対象は、スプリント・リリース(決定 C5a-8)と、完全に削除したプロジェクトの
+// ルール(決定 C5b1-6。持ち主はその版のログの scope で決める)。New は、そのうち共通の祖先(1 つ目。同期の合わせと
+// 同じ。base で、要るときだけ求める)のログにない行。並びは 1 つ目の親、2 つ目の親、ワークスペース・対象の内部 ID の順。
+// purged.jsonl と、親ごとの違いとログは、両方の種類で 1 回だけ読む。
+func droppedOf(c *object.Commit, base func() (*object.Tree, error)) ([]port.DroppedPlan, []port.DroppedRules, error) {
 	merged, err := c.Tree()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	f, err := fileIn(merged, "purged.jsonl")
 	if err != nil || f == nil {
-		return nil, err
+		return nil, nil, err
 	}
 	text, err := f.Contents()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	targets := targetsOf([]byte(text))
-	if len(targets) == 0 {
-		return nil, nil
+	drops := []drop{
+		{filemerge.PurgedPlanTargets([]byte(text)), byPlanTarget},
+		{filemerge.PurgedProjects([]byte(text)), byRuleOwner},
 	}
-	var out []droppedRows
+	if len(drops[0].targets) == 0 && len(drops[1].targets) == 0 {
+		return nil, nil, nil
+	}
+	ds, err := droppedBy(c, merged, base, drops)
+	if err != nil {
+		return nil, nil, err
+	}
+	var plan []port.DroppedPlan
+	for _, d := range ds[0] {
+		plan = append(plan, port.DroppedPlan(d))
+	}
+	var rules []port.DroppedRules
+	for _, d := range ds[1] {
+		rules = append(rules, port.DroppedRules{Workspace: d.Workspace, Project: d.Target, Log: d.Log, New: d.New})
+	}
+	return plan, rules, nil
+}
+
+// droppedBy は、合わせ c(木は merged)の 2 つの親のそれぞれについて、drops の種類ごとの取り除かれた行。
+func droppedBy(c *object.Commit, merged *object.Tree, base func() (*object.Tree, error), drops []drop) ([][]droppedRows, error) {
+	out := make([][]droppedRows, len(drops))
 	for i := range 2 {
 		p, err := c.Parent(i)
 		if err != nil {
@@ -71,42 +84,48 @@ func droppedBy(c *object.Commit, base func() (*object.Tree, error), targetsOf fu
 		if err != nil {
 			return nil, err
 		}
-		ds, err := droppedFrom(t, merged, base, targets, group)
+		ds, err := droppedFrom(t, merged, base, drops)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ds...)
+		for k := range drops {
+			out[k] = append(out[k], ds[k]...)
+		}
 	}
 	return out, nil
 }
 
-// droppedFrom は、親の版 side にあって merged にない、targets の対象の行。
-func droppedFrom(side, merged *object.Tree, base func() (*object.Tree, error), targets map[string]bool, group grouping) ([]droppedRows, error) {
+// droppedFrom は、親の版 side にあって merged にない、drops の種類ごとの対象の行。
+func droppedFrom(side, merged *object.Tree, base func() (*object.Tree, error), drops []drop) ([][]droppedRows, error) {
 	changes, err := object.DiffTree(side, merged)
 	if err != nil {
 		return nil, err
 	}
-	var out []droppedRows
+	out := make([][]droppedRows, len(drops))
 	for _, ch := range changes {
 		ref, ok := logRef(ch.From.Name)
 		if !ok || ref.Kind != change.KindWorkspace || ch.To.Name == "" {
 			continue
 		}
-		ds, err := droppedIn(ref.ID, ch.From.Name, side, merged, base, targets, group)
+		ds, err := droppedIn(ref.ID, ch.From.Name, side, merged, base, drops)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ds...)
+		for k := range drops {
+			out[k] = append(out[k], ds[k]...)
+		}
 	}
-	slices.SortFunc(out, func(a, b droppedRows) int {
-		return cmp.Or(strings.Compare(string(a.Workspace), string(b.Workspace)), strings.Compare(string(a.Target), string(b.Target)))
-	})
+	for k := range out {
+		slices.SortFunc(out[k], func(a, b droppedRows) int {
+			return cmp.Or(strings.Compare(string(a.Workspace), string(b.Workspace)), strings.Compare(string(a.Target), string(b.Target)))
+		})
+	}
 	return out, nil
 }
 
-// droppedIn は、ワークスペース ws のログ name について、merged に行がなく side に行がある対象ごとの行。
-// 共通の祖先は、そのような対象があるときだけ求める。共通の祖先がなければ何も返さない。
-func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func() (*object.Tree, error), targets map[string]bool, group grouping) ([]droppedRows, error) {
+// droppedIn は、ワークスペース ws のログ name について、drops の種類ごとに、merged に行がなく side に行がある
+// 対象ごとの行。共通の祖先は、そのような対象があるときだけ求める。共通の祖先がなければ何も返さない。
+func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func() (*object.Tree, error), drops []drop) ([][]droppedRows, error) {
 	sf, sideLog, err := logIn(side, name)
 	if err != nil {
 		return nil, err
@@ -115,19 +134,19 @@ func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func()
 	if err != nil {
 		return nil, err
 	}
-	sideRows, mergedRows := group(sideLog, sideLog, targets), group(mergedLog, mergedLog, targets)
-	var gone []change.ID
-	for target := range sideRows {
-		if _, kept := mergedRows[target]; !kept {
-			gone = append(gone, target)
-		}
+	sideRows := make([]map[change.ID][]change.Record, len(drops))
+	gone := make([][]change.ID, len(drops))
+	found := false
+	for k, d := range drops {
+		sideRows[k], gone[k] = goneIn(d, sideLog, mergedLog)
+		found = found || len(gone[k]) > 0
 	}
-	if len(gone) == 0 {
-		return nil, nil
+	if !found {
+		return make([][]droppedRows, len(drops)), nil
 	}
 	bt, err := base()
 	if err != nil || bt == nil {
-		return nil, err
+		return make([][]droppedRows, len(drops)), err
 	}
 	bf, err := fileIn(bt, name)
 	if err != nil {
@@ -137,12 +156,26 @@ func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func()
 	if err != nil {
 		return nil, err
 	}
-	newRows := group(sideLog, fresh, targets)
-	out := make([]droppedRows, 0, len(gone))
-	for _, target := range gone {
-		out = append(out, droppedRows{Workspace: ws, Target: target, Log: sideRows[target], New: newRows[target]})
+	out := make([][]droppedRows, len(drops))
+	for k, d := range drops {
+		newRows := d.group(sideLog, fresh, d.targets)
+		for _, target := range gone[k] {
+			out[k] = append(out[k], droppedRows{Workspace: ws, Target: target, Log: sideRows[k][target], New: newRows[target]})
+		}
 	}
 	return out, nil
+}
+
+// goneIn は、d の対象ごとの、その側のログ sideLog の行と、そのうち合わせの結果のログ mergedLog に行がない対象。
+func goneIn(d drop, sideLog, mergedLog []change.Record) (map[change.ID][]change.Record, []change.ID) {
+	sideRows, mergedRows := d.group(sideLog, sideLog, d.targets), d.group(mergedLog, mergedLog, d.targets)
+	var gone []change.ID
+	for target := range sideRows {
+		if _, kept := mergedRows[target]; !kept {
+			gone = append(gone, target)
+		}
+	}
+	return sideRows, gone
 }
 
 // logIn は、t の name のファイルと、その行。ファイルがなければ nil。

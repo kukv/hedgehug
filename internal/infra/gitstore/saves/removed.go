@@ -65,11 +65,7 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	rules, err := droppedRules(n.c, base)
-	if err != nil {
-		return port.ReceivedSave{}, false, err
-	}
-	dropped, err := droppedPlan(n.c, base)
+	dropped, rules, err := droppedOf(n.c, base)
 	if err != nil || (len(concurrent) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 }) && !hasNewPlan(dropped) &&
 		!hasNewRules(rules)) {
 		return port.ReceivedSave{}, false, err
