@@ -21,7 +21,7 @@
 土台・トラック C・C4a の計画の Global Constraints をすべて引き継ぐ。加えて次を守る。
 
 - 大きさの上限: Go ファイル 300 行(テスト 600 行)、関数 60 行、認知的複雑度 15、パッケージのテスト以外のファイル 20 個(`internal/archtest/size.go`)。`internal/infra/gitstore`・`internal/app/port`・`internal/app/apptest` は 20 個で満杯なので、ファイルを足さない。gitstore の新しい処理は下のパッケージ `internal/infra/gitstore/saves` に置き、gitstore 本体には呼び出しだけを足す。`gitstore/replicator.go` は 296 行なので、足す分は `replicator_mirror.go`(241 行)に置く。web は .svelte 200 行、.ts 300 行。
-- 口は git の言葉を使わない(`port` の型の名前とコメントに「コミット」「ブランチ」を書かない。`SaveKey.Commit` は「保存の印」と説明する)。
+- 口は git の言葉を使わない(`port` の型の名前とコメントに「コミット」「ブランチ」を書かない。`SaveKey.Version` は「保存の版の印」と説明する)。
 - app の機能どうしは import しない。判定の差し込み口は `cmd` で組む(`rep.Repair = repairing.Run` と同じ形)。
 - 依存ライブラリは足さない。足す必要が出たら、`go get <module>@vX.Y.Z`・`pnpm add -E <pkg>@X.Y.Z` のように版を明記し、公開から 7 日以上たった版だけを使う(Go は `go list -m -json <module>@<ver>` の Time で確かめる)。
 - 計画とテストに、トークンらしい値(`ghp_` などで始まる文字列)を書かない。
@@ -38,19 +38,20 @@
 | # | 決めたこと | 根拠 |
 |---|---|---|
 | C4b1-1 | 範囲: 判定した保存の記録、受け取った保存を読む口、差し込み口、割り当て・プロジェクトのオーナー・メンション・ウォッチ・受け取ったステータスの削除からの自動化。受信箱のメンションの書き換えとプロジェクトの対象。同期の修復の通知(修復 (1)〜(5)・削除の取り消し・別の Store や完全な削除と重なって反映されなかったとき)は C4b2、上書きは C4c | ユーザーの決定(2026-11-14) |
-| C4b1-2 | 「受け取った保存」は、同期で受け取った remote の先端から辿れて、判定済みでない保存(`Hedgehug-Op` を持つもの)。判定は 1 回の同期の最後に 1 回: 送る同期は送ったあと、閲覧のみは受け取ったあと、`SyncSave` は送ったあと。判定のあと、自分の先端から辿れる保存(合わせ・修復・自分の保存を含む)をすべて判定済みにする。判定済みは祖先について閉じているので、辿るのは判定済みに当たったところで止める | 06 `:375`(受け取った保存ごとに 1 回)。`SyncResult.Received` は始めたときの自分の先端から数えるので、合わせたあと送れずに失敗すると次の回で 0 になり使えない。自分の保存は、remote に届く前に判定済みになるので、自分の操作の通知(`notifyRules`)と重ならない |
-| C4b1-3 | 判定済みの記録がない Store(clone した直後、この版にしてから初めての同期)は、同期を始めたときの自分の先端から辿れる保存を、通知を作らずに判定済みにしてから判定する | 06 `:372`(Store を追加したときに取得した、それ以前の変更からは作らない)。トラック C の決定 14 は G の追加の処理で覚えるとしたが、G がまだないので同期の側で始めの印を付ける。clone して数日後に初めて同期したときに、そのあいだの変更は通知になる |
-| C4b1-4 | 判定済みの照合は、保存の印(`Commit`)が同じか、`Op` が空でなく作者・時刻・`Op` の組が同じとき。表は `judged/001`: `store`・`commit`・`author`・`at`(C4a の固定幅の UTC)・`op`。索引は `(store, commit)` と `(store, op, author, at)` | 保存形式 `:232`・`:282`(書き換えのあとは作者・時刻・`Hedgehug-Op` で照合する) |
-| C4b1-5 | 判定の差し込み口が失敗したら、判定済みにせず、同期を失敗にする(このマシンの状態を読み書きできないときの扱い)。次の同期で同じ保存をもう一度判定する | `syncing.run` の「エラーは、このマシンの状態を読み書きできないときだけ返す」。判定済みを先に書くと通知が消えたままになる |
+| C4b1-2 | 「受け取った保存」は、同期で受け取った remote の先端から辿れて、判定済みでない保存(`Hedgehug-Op` を持つもの)。判定は 1 回の同期の最後に 1 回: 送る同期は送ったあと、閲覧のみは受け取ったあと、`SyncSave` は送ったあと。判定のあと、自分の先端から辿れる保存(合わせ・修復・自分の保存を含む)をすべて判定済みにする。辿るのは、印(`Version`)が判定済みの保存に当たったところで止める(判定済みは祖先について閉じている)。作者・時刻・op の組だけが合う保存(書き換えのあとの履歴)は、その保存を外して、親へ辿り続ける | 06 `:375`(受け取った保存ごとに 1 回)。`SyncResult.Received` は始めたときの自分の先端から数えるので、合わせたあと送れずに失敗すると次の回で 0 になり使えない。自分の保存は、remote に届く前に判定済みになるので、自分の操作の通知(`notifyRules`)と重ならない |
+| C4b1-3 | 判定済みの記録がない Store(clone した直後、この版にしてから初めての同期)は、同期を始めたとき(受け取る前)に、自分の先端から辿れる保存を、通知を作らずに判定済みにする。同期がそのあと失敗しても、この印は残り、受け取った保存は次の同期で判定する | 06 `:372`(Store を追加したときに取得した、それ以前の変更からは作らない)。トラック C の決定 14 は G の追加の処理で覚えるとしたが、G がまだないので同期の側で始めの印を付ける。clone して数日後に初めて同期したときに、そのあいだの変更は通知になる |
+| C4b1-4 | 判定済みの照合は、保存の版の印(`Version`)が同じか、`Op` が空でなく作者・時刻・`Op` の組が同じとき。表は `judged/001`: `store`・`version`・`author`・`at`(C4a の固定幅の UTC)・`op`。索引は `(store, version)` と `(store, op, author, at)` | 保存形式 `:232`・`:282`(書き換えのあとは作者・時刻・`Hedgehug-Op` で照合する) |
+| C4b1-5 | 判定の差し込み口がエラーを返すのは、受信箱(state.db)に書けないときだけ。そのときは判定済みにせず、同期は成功のまま(送信は済んでいる)にし、`slog.Warn` に残す。次の同期で同じ保存をもう一度判定する。判定できない中身(対象のアイテム・プロジェクトがもうない、読めない行、名前の引けないルール)は、通知を作らずに飛ばし、エラーにしない | 判定は送ったあとに動くので、同期を失敗にすると `remoteReason` が「remote に接続できません」と出してしまい、ミラーと記録も飛ぶ。中身でエラーにすると、毎回の同期で同じ失敗を繰り返す |
 | C4b1-6 | 「判定の前」の状態は、いまのログ(合わせ・修復のあと)から、判定する保存が足した行を除いて作る(`item.FromLog`・`project.FromLog`・`comment.FromLog` に行を減らしたログを渡す)。「判定の後」はいまのログ | 06 `:381-382`(判定の前と後を比べる)。ログは行の和なので、前の木を読み直さなくてよい |
 | C4b1-7 | 「自分の変更」は行の `by` で決める(大文字と小文字を区別しない)。項目の後の値を決めた行(`change.Current` の勝ち)の `by` があなたなら作らない。`actor` が `github` の行からは割り当て・ウォッチを作らない。`actor` が `sync`(同期の修復)の行からも割り当て・ウォッチを作らない(修復は「同期の修復」の通知で知らせ、06 の「他の人が変えた」に当たらない) | 06 `:370`・`:384`、保存形式 `:322`。自動化の保存はコミットの作者が bot で、操作した人は行の `by` にだけ残る |
 | C4b1-8 | 差出人: 割り当て・ウォッチは、勝った行の `by`。その行の `actor` が自動化なら空(「hedgehug」)。メンションは本文を保存した行の `by`。自動化は空 | 06 `:390`(自動化のときは「hedgehug」)、`:382`(最後に変えた人)、`:418` |
+| C4b1-19 | 別の Store から移ってきたもの(判定する行に `moved_in` の行があるアイテム・プロジェクト)は、割り当て・メンション・ウォッチを作らない。写された行は移動元の古い行で、判定の前がないため | 02 `:296`・`:598`(移動では通知は出ない) |
 | C4b1-9 | ウォッチの対象: 判定の後のアイテムの `Watchers` にあなたがいて、判定の前にもアイテムがあったもの(判定の中で作られたアイテムは、前の値がないので作らない)。項目はタイトルとワークスペースのプロパティ(`workspace.Settings` のプロパティ。組み込みのステータス・担当者・優先度などを含む)。スプリント・リリース・種類・場所・順位・説明・リンク・関連・作業時間は作らない。コメントは、判定の中で初めて現れたコメント 1 件ごとに 1 行(編集・削除は作らない) | 06 `:382`・`:410-414`、02 `:487`(プロパティとタイトルとコメントの投稿だけ)。作成したアイテムをウォッチするのは作った本人なので、自分の変更 |
-| C4b1-10 | メンション: 本文の単位は、アイテムの説明・プロジェクトの説明・コメント 1 件。判定する保存を古い順に見て、その保存で本文が書かれ(説明は `desc` の行、コメントは本文のある `comment` の行)、本文に `@あなたのログイン名`(大文字と小文字を区別しない。`@` の前の文字は問わない。あなたが Store のメンバーにいるとき)があり、書いた行の `by` があなたでなければ、行を作るか書き換える。説明の本文は、その保存の時点の `description.md`(受け取った保存が持つ)。本文の鍵は `item:{ID}:desc`・`project:{ID}:desc`・`comment:{コメント ID}` | 06 `:374`・`:392-402`、02 `:405-406` |
-| C4b1-11 | メンションの書き換え: 同じ Store・同じ本文の鍵の行があれば、本文・差出人・時刻(その保存の時刻)を書き換えて未読に戻す(結果は空のまま)。なければ足す(時刻は受信箱の時計。C4a-3)。`inbox/002` で列 `project`・`source`(本文の鍵)を足し、索引 `(store, source)` を足す | 06 `:399`(時刻を保存した時刻に、未読に戻す)、`:451`(作った時刻)。C4a-2 の「C4b が要る列は新しい手順で足す」 |
+| C4b1-10 | メンション: 本文の単位は、アイテムの説明・プロジェクトの説明・コメント 1 件。判定する保存を古い順に見て、その保存で本文が書かれ(説明は `desc` の行、コメントは本文のある `comment` の行)、本文に `@あなたのログイン名`(大文字と小文字を区別しない。`@` の前の文字は問わない。あなたが Store のメンバーにいるとき)があり、書いた人があなたでなければ、行を作るか書き換える。説明は、その保存で `description.md` が親と違えば書かれたものとする(作成・複製・テンプレートは `desc` の行を書かず本文だけを書く。A4a-4)。書いた人は、説明はその保存のエンティティの行の `by`(作成なら `create` の行)、コメントは `comment` の行の `by`。本文の鍵は `item:{ID}:desc`・`project:{ID}:desc`・`comment:{コメント ID}` | 06 `:374`・`:392-402`、02 `:405-406` |
+| C4b1-11 | メンションの書き換え: 同じ Store・同じ本文の鍵の行があれば、本文・差出人・時刻を書き換えて未読に戻す(結果は空のまま)。なければ足す。メンションの行の時刻は、足すときも書き換えるときも、本文を保存した時刻にする(行の時刻は「最後に書き換えた時刻」なので、書いた時刻でそろえる)。`inbox/002` で列 `project`・`source`(本文の鍵)を足し、索引 `(store, source)` を足す | 06 `:399`(時刻を保存した時刻に、未読に戻す)、`:451`(メンションの行は最後に書き換えた時刻)。C4a-2 の「C4b が要る列は新しい手順で足す」 |
 | C4b1-12 | プロジェクトを指す通知(オーナー・プロジェクトの説明とコメントへのメンション)は `Notice.Project` を持つ。受信箱の対象は、生きていれば `project`(プロジェクト名。クリックでプロジェクトの概要)、削除済みなら `deleted_project`「削除されたプロジェクト」(リンクなし)、Store にない(別の Store へ移った。完全な削除は `Prune` で消える)なら `moved_project`(作ったときの ID を出し、クリックで旧 ID のアドレス `/s/{Store 名}/p/{ID}` を開く)。仕様 06 `:455` に「プロジェクトが削除済みのときは「削除されたプロジェクト」と表示し、リンクにしない」を足す | 06 `:455` のアイテム・ワークスペースと同じ規則の当てはめ(06 はプロジェクトの削除済みの表示を書いていない)。旧 ID のアドレスの解決は A5b の `locate-project` |
 | C4b1-13 | `Prune` は、`item`・`project` が targets にある行と、アイテムもプロジェクトもない行のうち `workspace` が targets にあるものを消す | C4a-6 と同じ理由(作ったときのワークスペースでアイテム・プロジェクトの通知を消さない) |
-| C4b1-14 | ステータスの削除からの自動化: 判定する保存のうち、ワークスペースのログに `delete statuses/{ID}` の行を持つものごとに、同じ op の `set rules/{ルール ID}/trigger_status`・`set rules/{ルール ID}/value`・`set rules/{ルール ID}/enabled` の行から変わったルールを作り直し、`notifyRules` と同じ文で 1 ルール 1 件。きっかけとすることの両方なら「すること」。作るのは、Store が表示中で閲覧のみでなく、削除の行の `by` があなたでないとき | 06 `:418`(書き込める全員のマシン。閲覧のみ・非表示では作らない。削除した人のマシンは自分の操作で作る)。非表示のあいだに受け取った削除は判定済みになり、再表示しても作らない。作り直しは `automation.StatusDeleteDrafts` の Part の決め方と同じ |
+| C4b1-14 | ステータスの削除からの自動化: 判定する保存のうち、ワークスペースのログに `delete statuses/{ID}` の行を持つものごとに、同じ op の `set rules/{ルール ID}/trigger_status`・`set rules/{ルール ID}/value`・`set rules/{ルール ID}/enabled` の行から変わったルールを作り直し、`notifyRules` と同じ文で 1 ルール 1 件。きっかけとすることの両方なら「すること」。作るのは、Store が表示中で閲覧のみでないとき。削除した人があなたでも作る(あなたの別のマシンの削除) | 06 `:418`(書き込める全員のマシンが 1 台につき 1 件。閲覧のみ・非表示では作らない)。このマシンの削除は C4b1-2 で判定に入らないので、自分の操作の通知と重ならない。非表示のあいだに受け取った削除は判定済みになり、再表示しても作らない。作り直しは `automation.StatusDeleteDrafts` の Part の決め方と同じ |
 | C4b1-15 | 「あなた」(`port.Identity.Me`)を決められない Store では、通知を作らずに判定済みにする | 06 は「あなた宛て」だけを作る。本物のビルドは G まで `noIdentity`(C4a-14 と同じく、本物のビルドでは G まで出ない) |
 | C4b1-16 | 判定済みの記録の後始末: Store をこのマシンから削除したら `JudgedSaves.ForgetStore` を呼ぶ。呼ぶのは G(C4a-7 と同じ)。トラック C の計画の G への申し送りに書く | 保存形式 `:285`、06 `:375`(Store とともに消す) |
 | C4b1-17 | e2e は足さない。通知は git の同期でしか生まれず、e2e のビルドは偽の Replicator でメモリ上のデータを使うため。2 台の場面は `cmd/hedgehug` の本物の gitstore と state.db のテストで確かめ、画面の対象の出し分けは vitest で確かめる | `wire_e2e.go` の `apptest.Replicator`。手元の検証は 1 回で足りる |
@@ -58,11 +59,13 @@
 
 ## Review Focus
 
-1. **同期が送れずに失敗したあと:** 受け取って合わせたあと送信が 3 回重なって失敗すると、判定はされず判定済みにもならない。次の同期で同じ保存から通知が 1 回だけ出る(Task 3 の `TestJudgeRetriedAfterFailedPush`)。
-2. **自分の保存がのちに remote から戻ってくる:** このマシンでステータスを削除して同期した保存は、別のマシンが合わせて送り返してきても、自動化の通知を 2 件目にしない(Task 3 の `TestOwnSaveNeverJudged`、Task 7 の場面テスト)。
-3. **閲覧のみ・非表示の Store:** 閲覧のみの Store は割り当て・メンション・ウォッチを作り、自動化は作らない。非表示の Store は通知を作るが(受信箱には出ない)、自動化は作らない。再表示しても自動化は出ない(Task 6 の `TestAutomationSkipsReadOnlyAndHidden`)。
-4. **同じ判定の中で担当者が往復する:** 太郎がアイテムを花子にし、続けて次郎にした 2 つの保存をまとめて受け取ると、花子には割り当てを作らない(Task 5 の `TestAssignOnlyWhenAfterIsMe`)。
-5. **メンションの書き換え:** 同じコメントを 2 回の同期で編集して届くと、行は 1 つのまま本文と時刻が変わり未読に戻る。本文からログイン名が消えた編集では、行は書き換わらない(Task 2 の `TestInboxMentionUpsert`、Task 5 の `TestMentionRewrite`)。
+1. **判定できない中身で同期が止まらない:** 受け取った行の対象がもうない(完全に削除された・別の Store へ移った)、行が読めないときは、通知を作らずに判定済みになり、同期は毎回成功する(Task 5 の `TestSkipsMissingEntity`、Task 3 の `TestJudgeErrorKeepsSync`)。
+2. **別の Store から移ってきたアイテム:** 移動先の Store で、写された担当者・説明・コメントから割り当て・メンションを作らない(Task 5 の `TestMovedInSkipped`)。
+3. **同期が送れずに失敗したあと:** 受け取って合わせたあと送信が 3 回重なって失敗すると、判定はされず判定済みにもならない。次の同期で同じ保存から通知が 1 回だけ出る(Task 3 の `TestJudgeRetriedAfterFailedPush`)。
+4. **自分の保存がのちに remote から戻ってくる:** このマシンでステータスを削除して同期した保存は、別のマシンが合わせて送り返してきても、自動化の通知を 2 件目にしない(Task 3 の `TestOwnSaveNeverJudged`、Task 7 の場面テスト)。
+5. **閲覧のみ・非表示の Store:** 閲覧のみの Store は割り当て・メンション・ウォッチを作り、自動化は作らない。非表示の Store は通知を作るが(受信箱には出ない)、自動化は作らない。再表示しても自動化は出ない(Task 6 の `TestAutomationSkipsReadOnlyAndHidden`)。
+6. **同じ判定の中で担当者が往復する:** 太郎がアイテムを花子にし、続けて次郎にした 2 つの保存をまとめて受け取ると、花子には割り当てを作らない(Task 5 の `TestAssignOnlyWhenAfterIsMe`)。
+7. **メンションの書き換え:** 同じコメントを 2 回の同期で編集して届くと、行は 1 つのまま本文と時刻が変わり未読に戻る。本文からログイン名が消えた編集では、行は書き換わらない(Task 2 の `TestInboxMentionUpsert`、Task 5 の `TestMentionRewrite`)。
 
 ---
 
@@ -77,10 +80,10 @@
 
 **Interfaces:**
 - Produces(`port`):
-  - `type SaveKey struct { Commit string /* 保存の印 */; Author string; At time.Time; Op change.ID /* 合わせ・最初の保存は空 */ }`
+  - `type SaveKey struct { Version string /* 保存の版の印 */; Author string; At time.Time; Op change.ID /* 合わせ・最初の保存は空 */ }`
   - `type JudgedSaves interface {`
     - `Started(ctx, store StoreID) (bool, error)` — その Store の行が 1 つでもあるか
-    - `Known(ctx, store StoreID, k SaveKey) (bool, error)` — C4b1-4 の照合
+    - `Known(ctx, store StoreID, k SaveKey) (Match, error)` — C4b1-4 の照合。`type Match int`: `NotJudged`・`SameVersion`(印が同じ。ここで辿るのを止める)・`SameSave`(組だけが同じ。この保存は外して辿り続ける)
     - `Mark(ctx, store StoreID, keys []SaveKey) error` — 1 つの取引でまとめて書く。すでにあるものは重ねない
     - `ForgetStore(ctx, store StoreID) error`
   - `}`
@@ -89,7 +92,7 @@
 
 - [ ] **Step 1: 契約のテストを書く(`RunJudgedSavesContract`)**
   - `Started` は空の Store で false、`Mark` のあと true。別の Store は false のまま
-  - `Known`: 同じ `Commit` で true。`Commit` が違っても `Op`・`Author`・`At` が同じなら true。`Op` が空なら `Commit` だけで照合し、`Author`・`At` が同じでも false
+  - `Known`: 同じ `Version` で `SameVersion`。`Version` が違っても `Op`・`Author`・`At` が同じなら `SameSave`。`Op` が空なら `Version` だけで照合し、`Author`・`At` が同じでも `NotJudged`
   - `Mark` を同じ鍵で 2 回呼んでもエラーにならない
   - `ForgetStore(s1)` で s1 だけ `Started` が false
   - statedb だけ: `Close`・`Open` のあとも残る
@@ -116,13 +119,13 @@ git commit -m "feat(sync): 通知を判定した保存を state.db に覚える(
 
 **Interfaces:**
 - Produces(`port`):
-  - `Notice` に `Project project.ID`(プロジェクトを指す通知の対象。アイテムの通知では空)・`Source string`(メンションの本文の鍵。C4b1-10)・`At time.Time`(メンションの書き換えに使う保存の時刻。`Add` は使わない)
-  - `Inbox` に `Mention(ctx, n Notice) error` — 同じ `Store`・`Source` の行があれば `text`・`sender`・`at = n.At` を書き換え `read = 0`。なければ `Add` と同じく足す(時刻は時計)。`n.Source` が空ならエラー
+  - `Notice` に `Project project.ID`(プロジェクトを指す通知の対象。アイテムの通知では空)・`Source string`(メンションの本文の鍵。C4b1-10)・`At time.Time`(メンションの行の時刻 = 本文を保存した時刻。`Add` は使わない)
+  - `Inbox` に `Mention(ctx, n Notice) error` — 同じ `Store`・`Source` の行があれば `text`・`sender`・`at = n.At` を書き換え `read = 0`。なければ `at = n.At` で足す(C4b1-11)。`n.Source` が空ならエラー
   - `Prune` は C4b1-13
 - `inbox/002`: `ALTER TABLE inbox ADD COLUMN project TEXT NOT NULL DEFAULT ''`、`ADD COLUMN source TEXT NOT NULL DEFAULT ''`、`CREATE INDEX inbox_by_source ON inbox (store, source)`
 
 - [ ] **Step 1: 失敗するテストを書く(statedb と apptest の両方)**
-  - `TestInboxMentionUpsert`: 時計 10:00 で `Mention(Source: "comment:c1", Text: "@hanako 見て", Sender: "taro")` → 1 行、`At` は 10:00。既読にする。`Mention(同じ Source, Text: "@hanako 直した", Sender: "jiro", At: 09:30)` → 行は 1 つのまま、本文と差出人が変わり、`At` は 09:30、`Read == false`。別の Store の同じ `Source` は別の行
+  - `TestInboxMentionUpsert`: `Mention(Source: "comment:c1", Text: "@hanako 見て", Sender: "taro", At: 09:00)` → 1 行、`At` は 09:00。既読にする。`Mention(同じ Source, Text: "@hanako 直した", Sender: "jiro", At: 09:30)` → 行は 1 つのまま、本文と差出人が変わり、`At` は 09:30、`Read == false`。別の Store の同じ `Source` は別の行
   - `TestInboxProjectColumns`: `Add(Project: p1, Display: "HH-P1")` → `List` で `Project`・`Display` が戻る
   - `TestInboxPruneProject`: `Prune(s1, [p1])` で `Project == p1` の行が消え、`Workspace == p1` と同じ値でもアイテムの行は残る
   - `TestNotifierMentionPublishes`: `Notifier.Mention` で `EventInbox` が 1 回
@@ -150,23 +153,23 @@ git commit -m "feat(inbox): メンションの行の書き換えと、プロジ�
 **Interfaces:**
 - Consumes: Task 1 の `port.JudgedSaves`・`port.SaveKey`
 - Produces(`port`):
-  - `type EntityRows struct { Ref change.Ref; Rows []change.Record /* その保存が足した行 */; Description *string /* その保存に desc の行があれば、保存の時点の説明 */ }`
+  - `type EntityRows struct { Ref change.Ref; Rows []change.Record /* その保存が足した行 */; Description *string /* その保存で description.md が親と違えば(新しく作られたときを含む)、保存の時点の説明 */ }`
   - `type ReceivedSave struct { Key SaveKey; Entities []EntityRows }`
   - `type JudgeFunc func(ctx context.Context, store StoreID, saves []ReceivedSave, read func(fn func(r Reader) error) error) error` — saves は古い順(親が先。同じ深さは時刻、印の順)。read は同期のロックの中で Store のいまの状態を読む(`repairWriter.Read` と同じ)
 - Produces(`gitstore`): `Replicator` のフィールド `Judge port.JudgeFunc` と `Judged port.JudgedSaves`。どちらかが nil なら判定しない
 - Produces(`saves`):
-  - `func Unjudged(repo *git.Repository, from plumbing.Hash, known func(port.SaveKey) (bool, error)) ([]port.ReceivedSave, error)` — from から親を辿り、判定済みに当たったら止める。`Hedgehug-Op` のない保存(合わせ・最初の保存)は返さない
-  - `func Reachable(repo *git.Repository, from plumbing.Hash, known func(port.SaveKey) (bool, error)) ([]port.SaveKey, error)` — 判定済みでないものすべて(合わせ・最初の保存を含む)
+  - `func Unjudged(repo *git.Repository, from plumbing.Hash, known func(port.SaveKey) (port.Match, error)) ([]port.ReceivedSave, error)` — from から親を辿り、`SameVersion` に当たったら止め、`SameSave` は外して辿り続ける(C4b1-2)。`Hedgehug-Op` のない保存(合わせ・最初の保存)は返さない
+  - `func Reachable(repo *git.Repository, from plumbing.Hash, known func(port.SaveKey) (port.Match, error)) ([]port.SaveKey, error)` — 判定済みでないものすべて(合わせ・最初の保存を含む)
   - `func KeyOf(c *object.Commit) port.SaveKey`(作者はコミットの作者名、時刻は作者の時刻、`Op` はトレーラー)
   - 足した行は、保存の木と最初の親の木の `log.jsonl` を比べ、親にない `id` の行。エンティティの `Ref` はフォルダから(`kindOfDir` と同じ規則。`saves` から gitstore は import できないので、規則を `saves` に置いて gitstore から使うか、gitstore が `func(path string) (change.Ref, bool)` を渡す)
 - `syncRun.judge(ctx, theirs plumbing.Hash) error` の手順(C4b1-2・C4b1-3・C4b1-5):
-  1. `Judged.Started` が false なら、`Reachable(s.start)` を `Mark`(通知なし)
-  2. `Unjudged(theirs)` を `Judge` に渡す(空なら呼ばない)。エラーなら返す(判定済みにしない)
-  3. `Reachable(HEAD)` を `Mark`
+  0. 同期を始めたとき(`begin` のあと、受け取る前)に `syncRun.baseline`: `Judged.Started` が false なら、`Reachable(s.start)` を `Mark`(通知なし。C4b1-3)
+  1. 同期の最後に `Unjudged(theirs)` を `Judge` に渡す(空なら呼ばない)。エラーなら `slog.Warn` に残して終える(判定済みにしない。Sync の結果は変えない。C4b1-5)
+  2. `Reachable(HEAD)` を `Mark`
 
 - [ ] **Step 1: 失敗するテストを書く**
-  - saves: `TestUnjudgedStopsAtKnown`(3 つの保存のうち 1 つ目を判定済みにすると 2 件、古い順)・`TestUnjudgedSkipsMerge`・`TestRowsAddedBySave`(アイテムの `set assignee` を書いた保存の `Entities` がそのアイテムの `Ref` と 1 行)・`TestDescriptionAtSave`(説明を 2 回変えた 2 つの保存の `Description` がそれぞれの時点の本文)・`TestKnownByOpAfterRewrite`(作者・時刻・op が同じ別の印の保存は判定済み)
-  - gitstore(`sync_helpers_test.go` の 2 台): `TestJudgeReceivesOthersSave`(B の保存を A が同期 → `Judge` が B の保存 1 件で呼ばれる。もう一度同期しても呼ばれない)・`TestJudgeBaselineOnFirstSync`(記録のない A に、clone より前の保存は渡らず、clone のあとの B の保存だけが渡る)・`TestOwnSaveNeverJudged`(A の保存を送り、B が合わせて送り返したあと、A の同期で A の保存は渡らない)・`TestJudgeRetriedAfterFailedPush`(送信の失敗で Sync がエラー → 判定済みにならず、次の成功した同期で同じ保存が渡る)・`TestJudgeErrorFailsSync`(Judge がエラー → Sync がエラー、次の同期でもう一度渡る)・`TestJudgeReceiveOnly`(閲覧のみでも渡る)・`TestJudgeOnSyncSave`(`SyncSave` で受け取った保存も渡る)
+  - saves: `TestUnjudgedStopsAtKnown`(3 つの保存のうち 1 つ目を判定済みにすると 2 件、古い順)・`TestUnjudgedSkipsMerge`・`TestRowsAddedBySave`(アイテムの `set assignee` を書いた保存の `Entities` がそのアイテムの `Ref` と 1 行)・`TestDescriptionAtSave`(説明を 2 回変えた 2 つの保存の `Description` がそれぞれの時点の本文)・`TestKnownByOpAfterRewrite`(作者・時刻・op が同じ別の印の保存は外れ、その親の判定していない保存は返る)
+  - gitstore(`sync_helpers_test.go` の 2 台): `TestJudgeReceivesOthersSave`(B の保存を A が同期 → `Judge` が B の保存 1 件で呼ばれる。もう一度同期しても呼ばれない)・`TestJudgeBaselineOnFirstSync`(記録のない A に、clone より前の保存は渡らず、clone のあとの B の保存だけが渡る)・`TestBaselineSurvivesFailedFirstSync`(記録のない A の最初の同期が送信で失敗 → 次の同期で B の保存が渡る)・`TestOwnSaveNeverJudged`(A の保存を送り、B が合わせて送り返したあと、A の同期で A の保存は渡らない)・`TestJudgeRetriedAfterFailedPush`(送信の失敗で Sync がエラー → 判定済みにならず、次の成功した同期で同じ保存が渡る)・`TestJudgeErrorKeepsSync`(Judge がエラー → Sync は成功し、判定済みにならず、次の同期でもう一度渡る)・`TestJudgeReceiveOnly`(閲覧のみでも渡る)・`TestJudgeOnSyncSave`(`SyncSave` で受け取った保存も渡る)
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/infra/gitstore/...` Expected: FAIL
 - [ ] **Step 3: 実装する**
 - [ ] **Step 4: 通ることを確かめる** — Run: `go test ./internal/infra/gitstore/... && golangci-lint run ./internal/infra/...` Expected: PASS・指摘なし
@@ -230,11 +233,14 @@ git commit -m "feat(domain): メンション・ステータス削除のルール
   - `TestAssignByOwnChange`: by が `Hanako`(大文字) → 作らない
   - `TestAssignByAutomation`: 自動化の行(`actor: automation:r1`、by taro)で hanako → 作り、`Sender == ""`。by が hanako の自動化 → 作らない
   - `TestAssignSkipsGithubAndSync`: `actor: github`・`sync` の行 → 作らない
-  - `TestAssignOnCreate`: taro が担当者 hanako のアイテムを作成した保存 → 作る(作成・複製・Step・テンプレートは `create` の行の値)
+  - `TestAssignOnCreate`: taro が担当者 hanako のアイテムを作成した保存 → 作り、`Sender == "taro"`(作成・複製・Step・テンプレートは `create` の行の値と `by`)
   - `TestOwnerToMe`: プロジェクトのオーナーを hanako → 本文「プロジェクト「{タイトル}」のオーナーになりました」・`Project`・`Display == "HH-P1"`・`Item == ""`
   - `TestMentionInComment`: taro のコメント「@hanako 見てください」 → `mention`・本文はコメント全体・`Source == "comment:{ID}"`・`Sender == "taro"`・`Item`
   - `TestMentionInDescription`: 説明に `@hanako`(`Description` がその本文) → `Source == "item:{ID}:desc"`。プロジェクトの説明 → `Project`・`Source == "project:{ID}:desc"`
   - `TestMentionRewrite`: 同じコメントの編集を 2 回の `Judge` で → 偽物の受信箱の行が 1 つ、本文が新しい方、`At` が 2 回目の保存の時刻、未読。2 回目の本文に `@hanako` がない → 書き換わらない
+  - `TestMentionInDescriptionOnCreate`: taro が説明に `@hanako` のあるアイテムを作成した保存(`desc` の行なし、`Description` あり) → 作り、`Sender == "taro"`
+  - `TestMovedInSkipped`: 別の Store から移ってきたアイテム(`moved_in` の行と、担当者 hanako・説明に `@hanako`・コメントのある写した行) → 何も作らない
+  - `TestSkipsMissingEntity`: 行の対象のアイテムがいまの Store にない → 作らず、エラーにしない
   - `TestMentionOwnOrNonMember`: hanako 自身が書いた本文、hanako がメンバーにいない Store → 作らない
   - `TestNoIdentity`: `Identity` がエラー → 何も作らず nil
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/app/noticing/` Expected: FAIL
@@ -269,7 +275,7 @@ git commit -m "feat(noticing): 受け取った保存から割り当て・オー�
   - `TestWatchByAutomation`: 自動化の行 → 作り、`Sender == ""`
   - `TestAutomationFromStatusDelete`: taro がステータス Review を削除し、ルール「レビューへ」のきっかけを InProgress に書き換えた保存 → `automation`・本文が `automation.RewrittenText("レビューへ", "Review", "きっかけ", "InProgress")`・`Rule`・`Workspace`・`Item == ""`。無効にした → `DisabledByDeleteText`。ルールが変わらない削除 → 作らない
   - `TestAutomationSkipsReadOnlyAndHidden`: `StoreList` に閲覧のみの印 → 自動化は作らず、割り当ては作る。`StoreList` にない(非表示) → 自動化は作らず、割り当ては作る
-  - `TestAutomationOwnDelete`: 削除の行の by が hanako → 作らない
+  - `TestAutomationFromOwnOtherMachine`: 削除の行の by が hanako(hanako の別のマシン) → 作る
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/app/noticing/` Expected: FAIL
 - [ ] **Step 3: 実装する**
 - [ ] **Step 4: 通ることを確かめる** — Run: `go test ./internal/app/...` Expected: PASS
@@ -347,6 +353,7 @@ git commit -m "feat(inbox): プロジェクトを指す通知を受信箱で開�
 
 - [ ] **Step 1: トラック C の計画を書き直す**
   - C4b の行を C4b1(この計画。範囲は C4b1-1、完成の条件は「2 つのクローンの場面で、受け取った側の受信箱に割り当て・メンション・ウォッチ・自動化の行が 06 の文言どおり 1 回だけ出る」)と C4b2(同期の修復の通知: 修復 (1)〜(5)、削除の取り消し(R11・R12 を含む)、別の Store への移動・完全な削除と重なって反映されなかったとき。修復 (2) の親がワークスペースのときの「ワークスペース「{名前}」」(B5b)、(5) の「。合う値がなく空になった項目: A・B」(C3b-7)。C4b1 の `port.JudgeFunc` に、このマシンが書いた修復の保存と、合わせで捨てた自分の行を足して作る)に分ける
+  - 決定 14 の行に「C4b1-3 で、判定の記録がない Store の最初の同期が始めの印を付ける形に変えた。G の追加の処理は印を付けなくてよい」と書く
   - C4c の行に C4b1-18(上書きを作った項目はウォッチを飛ばす)を足す
   - 漏れの表の「割り当て / メンション / ウォッチ / 同期の修復」を「C4b1(割り当て・メンション・ウォッチ)、C4b2(同期の修復)」に、「自動化」を「C4a・C4b1」にする
   - G への申し送りに「Store をこのマシンから削除したら `JudgedSaves.ForgetStore` を呼ぶ(C4b1-16)。Store を追加したら、その時点の保存を判定済みにする必要はない(C4b1-3 で最初の同期が印を付ける)」を足す
