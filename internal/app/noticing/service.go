@@ -18,23 +18,29 @@ type Service struct {
 }
 
 // Judge は、in.Saves(古い順)から割り当て・プロジェクトのオーナー・メンション・ウォッチと、ステータスの削除からの
-// 自動化の通知を作る。「あなた」を決められない Store では何も作らない(C4b1-15)。1 回の read の中で前と後を作って
-// 通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみでないときだけ(C4b1-14)。判定できない中身
-// (ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの読み書きの失敗(Store・表示中の Store の
-// 一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
+// 自動化の通知と、同期の修復の保存からの「同期の修復」の通知を作る。「あなた」を決められない Store では何も作らない
+// (C4b1-15)。1 回の read の中で前と後を作って通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみで
+// ないときだけ(C4b1-14)。同期の修復は、閲覧のみでなければ非表示の Store でも作り、同じ鍵の行があれば足さない
+// (C4b2-4・C4b2-6)。判定できない中身(ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの
+// 読み書きの失敗(Store・表示中の Store の一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
 func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received, read func(fn func(r port.Reader) error) error) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil || me == "" {
 		return nil
 	}
-	var notices, autos []port.Notice
+	var notices, autos, reps []port.Notice
 	if err := read(func(r port.Reader) error {
 		b, err := newBatch(r, in.Saves)
 		if err != nil {
 			return err
 		}
-		notices, err = judgeIn(r, b, store, me)
+		if notices, err = judgeIn(r, b, store, me); err != nil {
+			return err
+		}
 		autos = automations(b, store)
+		if !in.ReadOnly {
+			reps, err = repairs(r, b, store, me)
+		}
 		return err
 	}); err != nil {
 		return err
@@ -48,12 +54,22 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received
 			notices = append(notices, autos...)
 		}
 	}
+	return s.write(ctx, notices, reps)
+}
+
+// write は、通知を受信箱に書く。メンションは同じ本文の行を書き換え、同期の修復は同じ鍵の行があれば足さない。
+func (s Service) write(ctx context.Context, notices, reps []port.Notice) error {
 	for _, n := range notices {
 		write := s.Inbox.Add
 		if n.Kind == port.NoticeMention {
 			write = s.Inbox.Mention
 		}
 		if err := write(ctx, n); err != nil {
+			return err
+		}
+	}
+	for _, n := range reps {
+		if _, err := s.Inbox.AddOnce(ctx, n); err != nil {
 			return err
 		}
 	}

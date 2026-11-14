@@ -1,6 +1,7 @@
 package repair
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -47,6 +48,33 @@ func deletesTarget(d change.Record) bool {
 		return true
 	}
 	return d.Root != nil && *d.Root
+}
+
+// notChanges は、Changer が変更に数えない行の種類。
+var notChanges = []change.Type{change.Delete, change.Restore, change.Create, change.MovedIn}
+
+// Changer は、削除の行 d と重なった変更をした人のログイン名(決定 C4b2-9)。hasChange と同じ数え方を、
+// 片側の見分けなしで当てる: d の op でない、人が書いた変更の行(delete・restore を除く)のうち、d の f
+// (deleted ならすべての f、ほかは f とその下の f)を変えたもので、at が最もあとの行(同じなら ID の大きい行)の by。
+// 作成と moved_in の行は、削除より前にしかない(削除と同時にはできない)ので数えない。見つからなければ空。
+func Changer(log []change.Record, d change.Record) string {
+	var w *change.Record
+	for i := range log {
+		c := &log[i]
+		if c.Op == d.Op || c.Actor.Kind != change.ActorUser || slices.Contains(notChanges, c.T) {
+			continue
+		}
+		if d.F != change.DeletedField && c.F != d.F && !strings.HasPrefix(c.F, d.F+"/") {
+			continue
+		}
+		if w == nil || c.At.After(w.At) || (c.At.Equal(w.At) && c.ID > w.ID) {
+			w = c
+		}
+	}
+	if w == nil {
+		return ""
+	}
+	return w.By
 }
 
 // hasChange は、d と重なる変更が、side の側にあるか。
