@@ -17,7 +17,8 @@ export interface SearchState {
   table: TableSettings;
   // result は、まだ一度も検索できていないあいだ null。検索に失敗したときは前の結果を残す。
   result: SearchResult | null;
-  // resultQuery は、いまの result がどの絞り込みへの答えか(result が null なら null)。
+  // resultQuery は、いまの result がどの絞り込みへの答えか。result が null のときと、最後の検索が失敗して前の結果を
+  // 残しているときは null。
   resultQuery: string | null;
   loading: boolean;
 }
@@ -110,7 +111,7 @@ export function createSearch(deps: SearchDeps): Search {
     state.update((s) => ({
       ...s,
       result: result ?? s.result,
-      resultQuery: result ? query : s.resultQuery,
+      resultQuery: result ? query : null,
       loading: false,
     }));
     if (result) deps.selection?.prune(selectable(result.rows));

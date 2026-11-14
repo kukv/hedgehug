@@ -75,6 +75,18 @@ describe("createChangeAll with createSearch", () => {
     expect(t.bulk).not.toHaveBeenCalled();
   });
 
+  it("does nothing when the same query once succeeded and its new search fails", async () => {
+    const t = withSearch();
+    await t.s.replaceQuery("kind:bug");
+    t.search.mockRejectedValueOnce(new Error("down"));
+    const running = t.changeAll("kind:bug");
+    await t.s.open();
+    await running;
+    expect(get(t.s.state).result?.rows[0]?.itemId).toBe("kind:bug");
+    expect(t.set).not.toHaveBeenCalled();
+    expect(t.bulk).not.toHaveBeenCalled();
+  });
+
   it("does nothing when the move is declined, and a later open does not open the dialog", async () => {
     const t = withSearch(false);
     await t.changeAll("kind:bug");
