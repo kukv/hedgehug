@@ -48,11 +48,12 @@ type wsChoices struct {
 
 // picked は、選んだアイテム 1 つの、選択肢に要る部分。
 type picked struct {
-	kind item.Kind
-	key  wsKey
+	kind     item.Kind
+	key      wsKey
+	readOnly bool // 閲覧のみの Store のアイテム。種類にだけ数え、値の選択肢には使わない
 }
 
-// Choices は、targets から選択肢を作る。閲覧のみの Store のもの・削除済みのもの・存在しないものは見ない。
+// Choices は、targets から選択肢を作る。閲覧のみの Store のアイテムは種類にだけ数え、値の選択肢には使わない。削除済みのもの・存在しないものは見ない。
 // 一覧にない Store があれば、何も読まずに port.ErrStoreNotFound。
 func (s Service) Choices(ctx context.Context, targets []Target) (Choices, error) {
 	groups, err := s.groups(ctx, targets)
@@ -61,9 +62,6 @@ func (s Service) Choices(ctx context.Context, targets []Target) (Choices, error)
 	}
 	l := loaded{byTarget: map[Target]picked{}, wss: map[wsKey]*wsChoices{}, members: map[port.StoreID][]member.Member{}}
 	for _, g := range groups {
-		if g.readOnly {
-			continue
-		}
 		if err := s.Stores.Read(ctx, g.id, func(r port.Reader) error { return l.read(r, g) }); err != nil {
 			return Choices{}, err
 		}
@@ -80,11 +78,13 @@ type loaded struct {
 
 // read は、Store g の選んだアイテムと、そのワークスペース・メンバーを読む。
 func (l loaded) read(r port.Reader, g storeGroup) error {
-	ms, err := r.Members().List()
-	if err != nil {
-		return err
+	if !g.readOnly {
+		ms, err := r.Members().List()
+		if err != nil {
+			return err
+		}
+		l.members[g.id] = ms
 	}
-	l.members[g.id] = ms
 	for _, t := range g.targets {
 		it, err := port.LiveItem(r, t.ID)
 		if errors.Is(err, port.ErrNotFound) {
@@ -93,7 +93,7 @@ func (l loaded) read(r port.Reader, g storeGroup) error {
 		if err != nil {
 			return err
 		}
-		if err := l.add(r, g.id, t, it); err != nil {
+		if err := l.add(r, g, t, it); err != nil {
 			return err
 		}
 	}
@@ -101,8 +101,8 @@ func (l loaded) read(r port.Reader, g storeGroup) error {
 }
 
 // add は、アイテム it を材料に足す。ワークスペースは初めて出たときに読む。
-func (l loaded) add(r port.Reader, store port.StoreID, t Target, it item.Item) error {
-	key := wsKey{store, it.Place.Workspace}
+func (l loaded) add(r port.Reader, g storeGroup, t Target, it item.Item) error {
+	key := wsKey{g.id, it.Place.Workspace}
 	if l.wss[key] == nil {
 		w, err := readWorkspace(r, key.ws)
 		if err != nil {
@@ -113,10 +113,10 @@ func (l loaded) add(r port.Reader, store port.StoreID, t Target, it item.Item) e
 	if l.wss[key].deleted {
 		return nil // ワークスペースが削除済み(アイテムは残っている)。削除済みのアイテムと同じに見ない
 	}
-	if p := it.Place.Project; !slices.Contains(l.wss[key].projects, p) {
+	if p := it.Place.Project; !g.readOnly && !slices.Contains(l.wss[key].projects, p) {
 		l.wss[key].projects = append(l.wss[key].projects, p)
 	}
-	l.byTarget[t] = picked{kind: it.Kind, key: key}
+	l.byTarget[t] = picked{kind: it.Kind, key: key, readOnly: g.readOnly}
 	return nil
 }
 
@@ -155,6 +155,9 @@ func build(targets []Target, l loaded) Choices {
 			continue
 		}
 		kinds[p.kind] = true
+		if p.readOnly {
+			continue
+		}
 		if !seenStore[p.key.store] {
 			seenStore[p.key.store] = true
 			out.Members = addMembers(out.Members, l.members[p.key.store])

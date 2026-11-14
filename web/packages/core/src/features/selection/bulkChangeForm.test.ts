@@ -111,6 +111,10 @@ describe("summary", () => {
   it("count and kinds", () => {
     expect(summaryText(3, ["Story", "Task"])).toBe("3 件(Story・Task)");
   });
+
+  it("no kinds: no parentheses", () => {
+    expect(summaryText(2, [])).toBe("2 件");
+  });
 });
 
 describe("confirm lines", () => {

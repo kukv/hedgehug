@@ -120,8 +120,11 @@ func TestChoicesSkipReadOnlyAndUnused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := len(got.Kinds) + len(got.Statuses) + len(got.Priorities) + len(got.Sprints) + len(got.Releases) + len(got.Systems) + len(got.Members); n != 0 {
-		t.Errorf("read-only item gave choices: %+v", got)
+	if n := len(got.Statuses) + len(got.Priorities) + len(got.Sprints) + len(got.Releases) + len(got.Systems) + len(got.Members); n != 0 {
+		t.Errorf("read-only item gave value choices: %+v", got)
+	}
+	if !slices.Equal(got.Kinds, []string{"Task"}) {
+		t.Errorf("Kinds = %q, want read-only kinds to count", got.Kinds)
 	}
 	writeWs(t, s, s1, apptest.SampleWorkspace, change.NewAdd(projectrule.HiddenField(apptest.SampleProject), string(apptest.SampleStatusPending)))
 	got, err = svc.Choices(t.Context(), []Target{{s1, apptest.SampleTask}})
@@ -130,6 +133,24 @@ func TestChoicesSkipReadOnlyAndUnused(t *testing.T) {
 	}
 	if slices.Contains(got.Statuses, "Pending") || !slices.Contains(got.Statuses, "Done") {
 		t.Errorf("Statuses = %q", got.Statuses)
+	}
+}
+
+func TestChoicesKindsIncludeReadOnly(t *testing.T) {
+	svc, _ := setup(t)
+	got, err := svc.Choices(t.Context(), []Target{{s3, apptest.SampleEpic}, {s1, apptest.SampleTask}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got.Kinds, []string{"Epic", "Task"}) {
+		t.Errorf("Kinds = %q", got.Kinds)
+	}
+	only, err := svc.Choices(t.Context(), []Target{{s1, apptest.SampleTask}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got.Statuses, only.Statuses) || !slices.Equal(got.Members, only.Members) {
+		t.Errorf("read-only item changed value choices: %+v vs %+v", got, only)
 	}
 }
 

@@ -91,7 +91,7 @@ export function inputOf(field: BulkField, option: string): BulkChangeInput {
 
 // summaryText は、ダイアログの概要。
 export function summaryText(n: number, kinds: string[]): string {
-  return `${n} 件(${kinds.join("・")})`;
+  return kinds.length === 0 ? `${n} 件` : `${n} 件(${kinds.join("・")})`;
 }
 
 const typed: BulkField[] = ["points", "estimate", "start", "end"];
