@@ -38,7 +38,10 @@ function custom(value: { text: string; type: string }, now: Date): CellView {
     case "check":
       return { kind: "check", checked: value.text === "true" };
     case "url":
-      return { kind: "url", href: value.text };
+      // リンクにするのは http(s) だけ(Markdown と同じ)。javascript: のような値は、ただの文字にする。
+      return /^https?:\/\//i.test(value.text)
+        ? { kind: "url", href: value.text }
+        : { kind: "text", text: value.text };
     default:
       return { kind: "text", text: value.text };
   }

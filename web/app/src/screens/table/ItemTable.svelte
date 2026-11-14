@@ -24,8 +24,11 @@
   }
 
   let { rows, columns, groups, sort, onsort }: Props = $props();
-  // 終了日の「期限切れ」「今日」と相対時間は、画面を開いたときの時刻で決める(ツリーと同じ)。
-  const now = new Date();
+  // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときの時刻で決める(読み直した行の「N 分前」がずれない)。
+  const now = $derived.by(() => {
+    void rows;
+    return new Date();
+  });
 </script>
 
 <table class="table">

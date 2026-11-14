@@ -137,4 +137,13 @@ describe("cellView", () => {
     });
     expect(cellView(row(), col("p:none", "text"), now)).toEqual({ kind: "empty" });
   });
+
+  it("links only an http(s) URL, and shows any other value as text", () => {
+    const now = new Date(2026, 10, 15);
+    const site = col("p:site", "url");
+    const bad = row({ custom: { "p:site": { text: "javascript:alert(1)", type: "url" } } });
+    expect(cellView(bad, site, now)).toEqual({ kind: "text", text: "javascript:alert(1)" });
+    const http = row({ custom: { "p:site": { text: "HTTP://example.com", type: "url" } } });
+    expect(cellView(http, site, now)).toEqual({ kind: "url", href: "HTTP://example.com" });
+  });
 });
