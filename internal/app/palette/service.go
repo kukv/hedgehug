@@ -15,7 +15,7 @@ type Service struct {
 	Stores      port.Stores
 	StoreList   port.StoreList
 	SyncTargets port.SyncTargets
-	Recent      port.RecentItems
+	RecentItems port.RecentItems
 	Clock       port.Clock
 }
 
