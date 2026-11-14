@@ -69,7 +69,7 @@ export async function type(page: Page, query: string) {
 }
 
 export const headers = (page: Page) => page.getByRole("main").getByRole("columnheader");
-// lastHeader は、いちばん右の列の見出し。末尾の「⋯」の列の見出しは空なので数えない。
-export const lastHeader = (page: Page) => headers(page).filter({ hasText: /\S/ }).last();
+// lastHeader は、いちばん右の列の見出し。末尾の「⋯」の列の見出し(読み上げだけの「メニュー」)は数えない。
+export const lastHeader = (page: Page) => headers(page).nth(-2);
 export const rowOf = (page: Page, title: string) =>
   page.getByRole("row", { name: new RegExp(title) });

@@ -13,6 +13,7 @@ import {
   rowMenuContext,
   type SearchRow,
   type SelectedItem,
+  setRowStatus,
 } from "@hedgehug/core";
 import { reloads } from "./reloads";
 import { catalog, itemsPort, listMembers, navigation } from "./wire";
@@ -56,10 +57,13 @@ export function selectedOne(): SelectedItem | null {
     storeId,
     itemId,
     source: "table",
-    setStatus: async (statusId) => {
-      await itemsPort.setProperty(storeId, itemId, "status", statusId);
-      await search.reload();
-    },
+    setStatus: (statusId) =>
+      setRowStatus(
+        { items: itemsPort, toasts, reload: () => search.reload() },
+        storeId,
+        itemId,
+        statusId,
+      ),
   };
 }
 

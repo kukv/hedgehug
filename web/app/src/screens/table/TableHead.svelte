@@ -9,7 +9,7 @@
   import SelectAllCheck from "./SelectAllCheck.svelte";
 
   // テーブルの見出しの行(04「並べ替え」、E2a-12)。並べ替えられる列はボタンで、押すと onsort(昇順 → 降順 → なし)。
-  // 先頭は「すべて選択」、末尾は行の「⋯」の列の空の見出し(E2a-16・17)。
+  // 先頭は「すべて選択」、末尾は行の「⋯」の列の見出し(読み上げだけの「メニュー」)(E2a-16・17)。
   interface Props {
     rows: SearchRow[];
     selection: RowSelection;
@@ -28,7 +28,7 @@
 
 <thead>
   <tr>
-    <th class="edge"><SelectAllCheck {rows} {selection} /></th>
+    <th scope="col" class="edge"><SelectAllCheck {rows} {selection} /></th>
     {#each columns as column (column.key)}
       <th
         scope="col"
@@ -47,7 +47,7 @@
         {/if}
       </th>
     {/each}
-    <th class="edge"></th>
+    <th scope="col" class="edge"><span class="sr-only">メニュー</span></th>
   </tr>
 </thead>
 
@@ -67,6 +67,14 @@
   }
   .edge {
     width: 1%;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .sort {
     border: 0;
