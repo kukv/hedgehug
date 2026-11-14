@@ -61,7 +61,8 @@ func multiDrafts(field string, now, mine json.RawMessage) []change.Draft {
 	return ds
 }
 
-// orNull は、アイテムに書く値。なし・空文字は null(チェックの false はそのまま)。
+// orNull は、アイテムに書く値。なし・空文字は null(チェックの false はそのまま)。タイトルの "" も null になるが、
+// タイトルが空の Mine は Store のファイルを手で書き換えたときだけ起きる。
 func orNull(v json.RawMessage) json.RawMessage {
 	if len(v) == 0 || string(v) == `""` {
 		return json.RawMessage("null")

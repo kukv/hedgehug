@@ -39,15 +39,16 @@ type slot struct {
 }
 
 // slotOf は、上書きの通知 n の戻す相手を、通知の対象と Field の組で決める(C4c2-3)。閲覧のみは見ない。
-func slotOf(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotState, error) {
+// today は値の表示(日付の年)に使う今。
+func slotOf(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotState, error) {
 	if n.Kind != port.NoticeOverwrite {
 		return slot{}, slotNone, nil
 	}
 	switch {
 	case n.Item != "" && n.Project == "":
-		return itemSlot(r, n, now)
+		return itemSlot(r, n, today)
 	case n.Project != "" && !strings.HasPrefix(n.Field, "project_rules/"):
-		return projectSlot(r, n, now)
+		return projectSlot(r, n, today)
 	}
 	return slot{}, slotNone, nil
 }
@@ -108,7 +109,7 @@ func viewOf(r port.Reader, id workspace.ID) (wsView, error) {
 }
 
 // itemSlot は、アイテムの項目の戻す相手。Store にないか、項目がいまのワークスペースにないなら本文だけ。
-func itemSlot(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotState, error) {
+func itemSlot(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotState, error) {
 	it, err := r.Items().Get(n.Item)
 	if errors.Is(err, port.ErrNotFound) {
 		return slot{}, slotNone, nil
@@ -132,7 +133,7 @@ func itemSlot(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotState, 
 	if err != nil {
 		return slot{}, slotNone, err
 	}
-	show := func(w wsView, v json.RawMessage) string { return showItem(f, w, v, memberNames(ms), now) }
+	show := func(w wsView, v json.RawMessage) string { return showItem(f, w, v, memberNames(ms), today) }
 	s := slot{display: it.DisplayID(cur.ws.Prefix), label: f.label, now: itemValue(it, f)}
 	s.summary = s.display + " の" + s.label + "を上書き前の値に戻す"
 	s.mine, s.kept, s.current = show(from, n.Mine), show(from, n.Kept), show(cur, s.now)
@@ -153,7 +154,7 @@ func itemSlot(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotState, 
 var projectLabels = map[string]string{"title": "タイトル", "status": "ステータス", "owner": "オーナー", "start": "開始日", "end": "終了日"}
 
 // projectSlot は、プロジェクトの項目の戻す相手。Store にないか、値を出す項目でなければ本文だけ。
-func projectSlot(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotState, error) {
+func projectSlot(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotState, error) {
 	label, ok := projectLabels[n.Field]
 	if !ok {
 		return slot{}, slotNone, nil
@@ -177,7 +178,7 @@ func projectSlot(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotStat
 		if n.Field == "title" {
 			return oneLine(textOf(v))
 		}
-		return showProject(n.Field, v, memberNames(ms), now)
+		return showProject(n.Field, v, memberNames(ms), today)
 	}
 	cur, mine := projectValue(p, n.Field), textOf(n.Mine)
 	s := slot{display: p.DisplayID(ws.Prefix), label: label, now: change.Value(cur)}
@@ -197,7 +198,9 @@ func projectSlot(r port.Reader, n port.NoticeRow, now time.Time) (slot, slotStat
 	case err != nil:
 		return slot{}, slotNone, err
 	}
-	s.reason = projectReason(p, n.Field, mine, ms)
+	if s.reason, err = projectReason(r, p, n.Field, mine, ms); err != nil {
+		return slot{}, slotNone, err
+	}
 	return s, slotLive, nil
 }
 
@@ -214,7 +217,7 @@ func noticeView(r port.Reader, n port.NoticeRow, cur wsView) (wsView, error) {
 }
 
 // showItem は、アイテムの項目 f の値 v の表示。w は値の名前を引くワークスペース。
-func showItem(f itemField, w wsView, v json.RawMessage, names item.Names, now time.Time) string {
+func showItem(f itemField, w wsView, v json.RawMessage, names item.Names, today time.Time) string {
 	switch f.kind {
 	case fieldTitle:
 		return oneLine(textOf(v))
@@ -223,7 +226,7 @@ func showItem(f itemField, w wsView, v json.RawMessage, names item.Names, now ti
 	case fieldRelease:
 		return showPlan(v, w.log, "releases/")
 	}
-	return showProperty(f.prop, v, w.st, w.log, names, now)
+	return showProperty(f.prop, v, w.st, w.log, names, today)
 }
 
 // itemValue は、アイテムの項目 f のいまの値(ログに書く形)。

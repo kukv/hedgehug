@@ -3,7 +3,9 @@ package inbox
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
@@ -113,13 +115,20 @@ func checkItemDates(it item.Item, p workspace.Property, v string) error {
 	return nil
 }
 
-// projectReason は、プロジェクト p の項目 f を mine に戻せない理由。オーナーがメンバーにいない・開始日と終了日が合わない。
-func projectReason(p project.Project, f, mine string, ms []member.Member) string {
+// projectReason は、プロジェクト p の項目 f を mine に戻せない理由。タイトルは通常の保存と同じ検査(同じワークスペースの
+// 生きているプロジェクトと同じ名前・空)、オーナーはメンバーにいない、日付は開始日と終了日が合わない。
+func projectReason(r port.Reader, p project.Project, f, mine string, ms []member.Member) (string, error) {
 	var err error
 	switch f {
+	case "title":
+		siblings, rerr := port.LiveProjects(r, p.Place.Workspace)
+		if rerr != nil {
+			return "", rerr
+		}
+		err = project.CheckRename(strings.TrimSpace(mine), p.ID, siblings)
 	case "owner":
 		if mine != "" && !isMember(ms, mine) {
-			return "オーナー " + mine + " はこの Store のメンバーにいません"
+			return "オーナー " + mine + " はこの Store のメンバーにいません", nil
 		}
 	case "start":
 		err = project.CheckDates(mine, p.End)
@@ -127,7 +136,7 @@ func projectReason(p project.Project, f, mine string, ms []member.Member) string
 		err = project.CheckDates(p.Start, mine)
 	}
 	if err != nil {
-		return err.Error()
+		return err.Error(), nil
 	}
-	return ""
+	return "", nil
 }

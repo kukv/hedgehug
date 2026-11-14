@@ -16,8 +16,8 @@ type Overwrite struct {
 }
 
 // overwriteOf は、上書きの通知 n の値とボタンの状態を上から順に決める(C4c2-4)。値を出さない項目は nil。
-func overwriteOf(r port.Reader, info port.StoreInfo, n port.NoticeRow, now time.Time) (*Overwrite, error) {
-	s, state, err := slotOf(r, n, now)
+func overwriteOf(r port.Reader, info port.StoreInfo, n port.NoticeRow, today time.Time) (*Overwrite, error) {
+	s, state, err := slotOf(r, n, today)
 	if err != nil || state == slotNone {
 		return nil, err
 	}

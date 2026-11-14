@@ -7,11 +7,19 @@ import (
 	"github.com/kukv/hedgehug/internal/app/inbox"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-const closedSprint change.ID = "01SAMPLESPRINT000000000025"
+const (
+	closedSprint change.ID  = "01SAMPLESPRINT000000000025"
+	release      change.ID  = "01SAMPLERELEASE00000000001"
+	otherProject project.ID = "01SAMPLEPR0000000000000009"
+	textProperty change.ID  = "01SAMPLEPROP00000000000001"
+)
 
 // overwritten は、s1 の Task HH-2 の項目 field が上書きされた通知。mine と kept は値(nil は null)。
 func overwritten(field string, mine, kept any) port.Notice {
@@ -32,6 +40,12 @@ func projectOverwritten(field string, mine, kept any) port.Notice {
 func (f fixture) setTask(t *testing.T, ds ...change.Draft) {
 	t.Helper()
 	f.write(t, func(tx port.Tx) error { return tx.WriteItems().Append(apptest.SampleTask, ds...) })
+}
+
+// writeWorkspace は、Sample のワークスペースに行を書く。
+func (f fixture) writeWorkspace(t *testing.T, ds ...change.Draft) {
+	t.Helper()
+	f.write(t, func(tx port.Tx) error { return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...) })
 }
 
 func (f fixture) overwrite(t *testing.T) *inbox.Overwrite {
@@ -79,6 +93,42 @@ func TestOverwriteDeleted(t *testing.T) {
 	want := inbox.Overwrite{Mine: "Todo", Kept: "Done"}
 	if got == nil || *got != want {
 		t.Errorf("overwrite = %+v, want %+v", got, want)
+	}
+}
+
+// 追加プロパティを削除すると、項目を引けないので本文だけ(C4c2-5)。
+func TestOverwriteDeletedProperty(t *testing.T) {
+	f := setup(t)
+	prop := workspace.Property{ID: textProperty, Name: "メモ", Type: workspace.TypeText, Kinds: workspace.Kinds, Rank: "z"}
+	f.writeWorkspace(t, workspace.PropertyDrafts(prop)...)
+	f.add(t, overwritten(item.FieldKey(textProperty), "a", "b"))
+	if got := f.overwrite(t); got == nil || got.Mine != "a" || got.Kept != "b" {
+		t.Fatalf("overwrite before the delete = %+v, want a → b", got)
+	}
+	f.writeWorkspace(t, change.NewDelete("properties/"+string(textProperty)))
+	if got := f.overwrite(t); got != nil {
+		t.Errorf("overwrite = %+v, want nil", got)
+	}
+}
+
+// ワークスペースやプロジェクトが削除済みなら、値だけ出してボタンを出さない(C4c2-4 の (2))。
+func TestOverwriteDeletedContainer(t *testing.T) {
+	f := setup(t)
+	f.setTask(t, change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusDone))
+	if err := apptest.DeleteWorkspace(t.Context(), f.stores, s1, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	f.add(t, overwritten("status", apptest.SampleStatusTodo, apptest.SampleStatusDone))
+	if got, want := f.overwrite(t), (inbox.Overwrite{Mine: "Todo", Kept: "Done"}); got == nil || *got != want {
+		t.Errorf("deleted workspace: overwrite = %+v, want %+v", got, want)
+	}
+	f = setup(t)
+	if err := apptest.DeleteProject(t.Context(), f.stores, s1, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	f.add(t, projectOverwritten("owner", "hanako", "taro"))
+	if got, want := f.overwrite(t), (inbox.Overwrite{Mine: "hanako", Kept: "taro"}); got == nil || *got != want {
+		t.Errorf("deleted project: overwrite = %+v, want %+v", got, want)
 	}
 }
 
@@ -136,6 +186,41 @@ func TestOverwriteReasons(t *testing.T) {
 			},
 			notice: overwritten("sprint", closedSprint, nil),
 			want:   "スプリント「Sprint 25」は完了しています",
+		},
+		{
+			name: "削除されたスプリント",
+			prepare: func(f fixture) {
+				f.writeWorkspace(t, planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: closedSprint, Name: "Sprint 9", State: planning.Planned})...)
+				f.writeWorkspace(t, planning.DeleteSprint(closedSprint))
+			},
+			notice: overwritten("sprint", closedSprint, nil),
+			want:   "「Sprint 9」は削除されています",
+		},
+		{
+			name: "削除されたリリース",
+			prepare: func(f fixture) {
+				f.writeWorkspace(t, planning.ReleaseDrafts(planning.Release{}, planning.Release{ID: release, Name: "v1", State: planning.Unreleased})...)
+				f.writeWorkspace(t, planning.DeleteRelease(release))
+			},
+			notice: overwritten("release", release, nil),
+			want:   "「v1」は削除されています",
+		},
+		{
+			name: "アーカイブのリリース",
+			prepare: func(f fixture) {
+				f.writeWorkspace(t, planning.ReleaseDrafts(planning.Release{}, planning.Release{ID: release, Name: "v0", State: planning.Archived})...)
+			},
+			notice: overwritten("release", release, nil),
+			want:   "リリース「v0」はアーカイブされています",
+		},
+		{
+			name: "同じ名前のプロジェクト",
+			prepare: func(f fixture) {
+				other := project.Project{ID: otherProject, Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2}, Rank: "W", Title: "決済", Status: project.Todo}
+				f.write(t, func(tx port.Tx) error { return tx.WriteProjects().Append(other.ID, project.Create(other)) })
+			},
+			notice: projectOverwritten("title", "決済", "ログイン"),
+			want:   "このワークスペースには同じ名前のプロジェクトがあります",
 		},
 		{
 			name:    "終了日よりあとの開始日",
