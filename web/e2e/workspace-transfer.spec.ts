@@ -46,8 +46,6 @@ test("moves a workspace to the Store team, and follows its old addresses", async
       page.getByRole("status").getByText("team へ移動しました", { exact: true }),
     ).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/s/team/w/${prefix}/settings`));
-    // 自分で移したあとの新しいアドレスでは、見出しの下の 1 行は出ない。
-    await expect(page.getByText("このワークスペースは ")).toHaveCount(0);
   });
 
   await test.step("shows the workspace under team in the sidebar, and not under e2e", async () => {
@@ -58,6 +56,8 @@ test("moves a workspace to the Store team, and follows its old addresses", async
     await expect(
       side.getByRole("region", { name: "e2e" }).getByRole("link", { name, exact: true }),
     ).toHaveCount(0);
+    // 自分で移したあとの新しいアドレスでは、見出しの下の 1 行は出ない(画面とサイドバーが移動先を出してから確かめる)。
+    await expect(page.getByText("このワークスペースは ")).toHaveCount(0);
   });
 
   await test.step("opens the old address on the same tab, with the line only there", async () => {
