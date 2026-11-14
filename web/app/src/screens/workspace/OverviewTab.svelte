@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { dayOf } from "@hedgehug/core";
-  import { activeReports } from "../../reports";
-  import { syncNow } from "../../wire";
+  import { activeReports, reloadActiveOnDayChange } from "../../reports";
   import SprintPointsCard from "./SprintPointsCard.svelte";
 
   // ワークスペースの「概要」のタブ。統計のカードの並び(04「統計」)の場所で、F3 は完了ポイントだけを置く。
@@ -25,14 +23,7 @@
     $loaded && $loaded.storeId === sid && $loaded.workspaceId === wid ? $loaded : null,
   );
 
-  // 日付が変わったら読み直す(01「日付と時刻」、F3-19)。
-  const today = $derived(dayOf($syncNow));
-  let seen = dayOf($syncNow);
-  $effect(() => {
-    if (today === seen) return;
-    seen = today;
-    void activeReports.reload();
-  });
+  $effect(reloadActiveOnDayChange);
 </script>
 
 <div class="stats">

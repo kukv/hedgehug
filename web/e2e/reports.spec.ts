@@ -119,4 +119,19 @@ test("sprint card and overview", async ({ page }, info) => {
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}`));
   await expect(page.getByText("Sprint 1 の完了ポイント")).toBeVisible();
   await expect(page.getByText("3 / 5 pt")).toBeVisible();
+
+  // タブをクリックで行き来しても、概要のカードと実行中のカードの数字が出る(activeReports の開閉の受け渡し)。
+  const tabs = page.getByRole("tablist");
+  await tabs.getByRole("tab", { name: "スプリント" }).click();
+  await s1.getByText("表で見る").click();
+  await expect(
+    s1.getByRole("table", { name: "バーンダウンの表" }).getByRole("row").nth(1),
+  ).toBeVisible();
+  await tabs.getByRole("tab", { name: "概要" }).click();
+  await expect(page.getByText("3 / 5 pt")).toBeVisible();
+  await tabs.getByRole("tab", { name: "スプリント" }).click();
+  await s1.getByText("表で見る").click();
+  await expect(
+    s1.getByRole("table", { name: "バーンダウンの表" }).getByRole("row").nth(1),
+  ).toBeVisible();
 });

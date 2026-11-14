@@ -3,14 +3,13 @@
     burnStatus,
     burnTotals,
     committedNote,
-    formatDay,
     notStarted,
     type Report,
     type ReportSelection,
   } from "@hedgehug/core";
   import { Select } from "@hedgehug/ui";
   import DataTable from "./DataTable.svelte";
-  import { heading, num } from "./format";
+  import { burndownTable } from "./format";
   import LineChart from "./LineChart.svelte";
 
   // バーンダウン(05「レポート」)。スプリントを選んでいないときと、表示する日がないときは、図も表も出さない。
@@ -31,20 +30,7 @@
     ...report.sprints.map((s) => ({ value: s.id, label: s.name })),
   ]);
   const totals = $derived(burnTotals(b, unit));
-  const columns = $derived([
-    "日付",
-    heading("総量", unit),
-    heading("残り", unit),
-    heading("理想", unit),
-  ]);
-  const rows = $derived(
-    b.days.map((d) => [
-      formatDay(d.date, thisYear),
-      num(d.total, unit),
-      d.remaining === null ? "—" : num(d.remaining, unit),
-      num(d.ideal, unit),
-    ]),
-  );
+  const table = $derived(burndownTable(b.days, unit, thisYear));
 </script>
 
 <section aria-label="バーンダウン">
@@ -70,7 +56,7 @@
     {#if b.committed !== null}
       <p class="empty">{committedNote(b.committed, unit)}</p>
     {/if}
-    <DataTable caption="バーンダウンの表" {columns} {rows} />
+    <DataTable caption="バーンダウンの表" columns={table.columns} rows={table.rows} />
   {/if}
 </section>
 

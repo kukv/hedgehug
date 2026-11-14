@@ -8,7 +8,7 @@
   } from "@hedgehug/core";
   import { Button } from "@hedgehug/ui";
   import { sprints } from "../../planning";
-  import { activeReports } from "../../reports";
+  import { activeReports, reloadActiveOnDayChange } from "../../reports";
   import { planning, syncNow } from "../../wire";
   import SprintCard from "./SprintCard.svelte";
 
@@ -75,12 +75,7 @@
   const today = $derived(dayOf($syncNow));
   const thisYear = $derived($syncNow.getFullYear());
   // 日付が変わったら、小さいバーンダウンも読み直す(F3-19)。
-  let seen = dayOf($syncNow);
-  $effect(() => {
-    if (today === seen) return;
-    seen = today;
-    void activeReports.reload();
-  });
+  $effect(reloadActiveOnDayChange);
   const note = $derived(readOnly ? readOnlyNote : undefined);
 </script>
 

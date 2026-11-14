@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { addedText, formatDay, notStarted, type ReportActive } from "@hedgehug/core";
+  import { addedText, notStarted, type ReportActive } from "@hedgehug/core";
   import DataTable from "../reports/DataTable.svelte";
-  import { heading, num } from "../reports/format";
+  import { burndownTable } from "../reports/format";
   import LineChart from "../reports/LineChart.svelte";
 
   // 実行中のスプリントのカードの小さいバーンダウン・「途中で追加」・「表で見る」(05)。
@@ -16,20 +16,7 @@
 
   const b = $derived(active.burndown);
   const unit = $derived(active.unit);
-  const columns = $derived([
-    "日付",
-    heading("総量", unit),
-    heading("残り", unit),
-    heading("理想", unit),
-  ]);
-  const rows = $derived(
-    b.days.map((d) => [
-      formatDay(d.date, thisYear),
-      num(d.total, unit),
-      d.remaining === null ? "—" : num(d.remaining, unit),
-      num(d.ideal, unit),
-    ]),
-  );
+  const table = $derived(burndownTable(b.days, unit, thisYear));
 </script>
 
 {#if b.shown === 0}
@@ -39,7 +26,7 @@
     <p class="note">{addedText(active.added, unit)}</p>
   {/if}
   <LineChart days={b.days} {unit} {thisYear} compact />
-  <DataTable caption="バーンダウンの表" {columns} {rows} />
+  <DataTable caption="バーンダウンの表" columns={table.columns} rows={table.rows} />
 {/if}
 
 <style>
