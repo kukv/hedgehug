@@ -24,6 +24,8 @@
 
 | # | 変えたこと | 理由 |
 |---|---|---|
+| 1 | C4c2-6 に「プロジェクトのタイトルは、同じワークスペースに同じ名前の生きているプロジェクトがあれば `project.CheckRename` の断りの文」を足す | 通常の保存(`projects.Rename`)が同じ名前を断るので、戻す保存だけが同じ名前を作れる経路にしない |
+| 2 | `revert_slot.go` が 300 行を超えるので、戻す行の組み立てを `revert_drafts.go` に分けた。Task 2 で `internal/adapter/httpapi/inbox/inbox_test.go` の setup に Clock を足した | ファイルの大きさの上限。受信箱の行の表示に時計を使うため |
 
 ## Global Constraints
 
