@@ -29,7 +29,7 @@ func Lost(log []Record, fresh func(Record) bool, mine func(Record) bool) []Loss 
 	seen := map[string]bool{}
 	var out []Loss
 	for _, r := range log {
-		if k := key(r); r.T != Create && lostType(r.T) && !seen[k] {
+		if k := key(r); lostType(r.T) && !seen[k] {
 			seen[k] = true
 			if l, ok := lostIn(r, gOld, gNew, fresh, mine); ok {
 				out = append(out, l)
@@ -55,6 +55,7 @@ func lostIn(r Record, gOld, gNew groups, fresh, mine func(Record) bool) (Loss, b
 	m := pickWinner(r.T, tipsOf(itemRows(r.T, gOld, k)))
 	tips := tipsOf(itemRows(r.T, gNew, k))
 	w := pickWinner(r.T, tips)
+	// 作成の行は、誰かの値を上書きしたものではないので、M にも W にもしない。
 	if m == nil || w == nil || m.T == Create || w.T == Create || m.ID == w.ID || !mine(*m) || !fresh(*w) {
 		return Loss{}, false
 	}

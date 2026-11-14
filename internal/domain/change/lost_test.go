@@ -1,6 +1,7 @@
 package change_test
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -87,6 +88,33 @@ func TestLostComment(t *testing.T) {
 	theirDel := note("w", 2, "taro", text("a"), nil, "p")
 	if got := change.Lost([]change.Record{p, m, theirDel}, isFresh("w"), byHanako); len(got) != 0 {
 		t.Errorf("their delete: Lost = %+v; want none", got)
+	}
+}
+
+func TestLostWorklog(t *testing.T) {
+	wl := func(id string, minute int, by string, to any, prev ...change.ID) change.Record {
+		return rec(id, at(minute), by, change.NewWorklog("W1", nil, to), prev...)
+	}
+	p := wl("p", 0, "taro", text("a"), "c")
+	m := wl("m", 1, "hanako", text("x"), "p")
+	w := wl("w", 2, "taro", text("y"), "p")
+	got := change.Lost([]change.Record{p, m, w}, isFresh("w"), byHanako)
+	if len(got) != 1 || got[0].T != change.Worklog || got[0].F != "W1" || got[0].Mine.ID != "m" || got[0].Winner.ID != "w" {
+		t.Errorf("Lost = %+v", got)
+	}
+}
+
+func TestLostIgnoresRowOrder(t *testing.T) {
+	log := []change.Record{
+		create(nil), setRow("m", 0, "hanako", "A", "c"), setRow("w", 1, "taro", "B", "c"),
+		rec("m2", at(0), "hanako", change.NewSet("z", nil, "1"), "c"), rec("w2", at(1), "taro", change.NewSet("z", nil, "2"), "c"),
+	}
+	reversed := slices.Clone(log)
+	slices.Reverse(reversed)
+	a := change.Lost(log, isFresh("w", "w2"), byHanako)
+	b := change.Lost(reversed, isFresh("w", "w2"), byHanako)
+	if len(a) != 2 || !reflect.DeepEqual(a, b) {
+		t.Errorf("Lost = %+v, reversed = %+v", a, b)
 	}
 }
 
