@@ -15,6 +15,7 @@ import {
 // コマンドパレットの通しのテスト(A5c。02「コマンドパレット」)。mac は Cmd+K、ほかは Ctrl+K なので ControlOrMeta を使う。
 // ワークスペースを作り、Epic(-1)と Task A(-2)・B(-3)を足して、順に確かめる。
 
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const paletteOf = (page: Page) => page.getByRole("dialog", { name: "コマンドパレット" });
 const panelOf = (page: Page) => page.getByRole("region", { name: "詳細パネル" });
 
@@ -29,6 +30,11 @@ async function openPalette(page: Page) {
 test("finds items, recent items, old IDs and commands from the palette", async ({ page }, info) => {
   const t = (s: string) => unique(info, s);
   const prefix = prefixOf(info);
+  // 移動先は、このテストで作るワークスペース(サンプルの Mobile は transfer.spec.ts が ID を決め打ちで使う)。
+  const destName = unique(info, "パレット移動先");
+  const destPrefix = prefixOf(info);
+  await createWorkspace(page, info, destName, destPrefix);
+  await projectWithEpic(page, info, destPrefix);
   await createWorkspace(page, info, unique(info, "パレット用"), prefix);
   await projectWithEpic(page, info, prefix);
   await taskUnderEpic(page, info, `${prefix}-1`, "A");
@@ -38,7 +44,7 @@ test("finds items, recent items, old IDs and commands from the palette", async (
     await page.goto(tokenUrl(`/s/e2e/p/${prefix}-P1/tree`));
     const palette = await openPalette(page);
     await palette.getByRole("combobox").fill(`${prefix}-3`.toLowerCase());
-    const option = palette.getByRole("option", { name: new RegExp(`${prefix}-3 ${t("B")}`) });
+    const option = palette.getByRole("option", { name: new RegExp(`${prefix}-3 ${esc(t("B"))}`) });
     await expect(option).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(palette).toBeHidden();
@@ -49,7 +55,7 @@ test("finds items, recent items, old IDs and commands from the palette", async (
     const again = await openPalette(page);
     await expect(again.getByText("最近開いたもの", { exact: true })).toBeVisible();
     await expect(
-      again.getByRole("option", { name: new RegExp(`${prefix}-3 ${t("B")}`) }),
+      again.getByRole("option", { name: new RegExp(`${prefix}-3 ${esc(t("B"))}`) }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(again).toBeHidden();
@@ -62,11 +68,13 @@ test("finds items, recent items, old IDs and commands from the palette", async (
     const dialog = page.getByRole("dialog", { name: "別のワークスペースへ移動" });
     await dialog
       .getByRole("combobox", { name: "移動先のワークスペース" })
-      .selectOption({ label: "e2e / Mobile" });
+      .selectOption({ label: `e2e / ${destName}` });
     await expect(dialog.getByRole("heading", { name: "移動先で変わること" })).toBeVisible();
     await dialog.getByRole("button", { name: "移動", exact: true }).click();
     await expect(
-      page.getByRole("status").getByText(new RegExp(`^${prefix}-2 は MB-\\d+ になりました$`)),
+      page
+        .getByRole("status")
+        .getByText(new RegExp(`^${prefix}-2 は ${destPrefix}-\\d+ になりました$`)),
     ).toBeVisible();
     await expect(dialog).toBeHidden();
 
@@ -74,12 +82,14 @@ test("finds items, recent items, old IDs and commands from the palette", async (
     const palette = await openPalette(page);
     await palette.getByRole("combobox").fill(`${prefix}-2`);
     const moved = palette.getByRole("option", {
-      name: new RegExp(`${t("A")}.*・旧 ID・.+ に移動$`),
+      name: new RegExp(`${esc(t("A"))}.*・旧 ID・.+ に移動$`),
     });
     await expect(moved).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(palette).toBeHidden();
-    await expect(panelOf(page).locator("code", { hasText: /^MB-\d+$/ })).toBeVisible();
+    await expect(
+      panelOf(page).locator("code", { hasText: new RegExp(`^${destPrefix}-\\d+$`) }),
+    ).toBeVisible();
     await expect(panelOf(page).getByRole("textbox", { name: "タイトル" })).toHaveValue(t("A"));
   });
 
