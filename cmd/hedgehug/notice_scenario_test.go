@@ -44,11 +44,11 @@ func TestNoticeScenarioAssignOnce(t *testing.T) {
 		t.Fatalf("assign rows on B = %+v, want one for HH-2 from taro", rows)
 	}
 	b.sync(t, remote)
-	if rows := b.notices(t, port.NoticeAssign); len(rows) != 1 {
-		t.Errorf("assign rows on B after sync again = %+v, want one", rows)
+	if again := b.notices(t, port.NoticeAssign); len(again) != 1 {
+		t.Errorf("assign rows on B after sync again = %+v, want one", again)
 	}
-	if rows := a.notices(t); len(rows) != 0 {
-		t.Errorf("rows on A = %+v, want none", rows)
+	if onA := a.notices(t); len(onA) != 0 {
+		t.Errorf("rows on A = %+v, want none", onA)
 	}
 }
 
@@ -100,7 +100,7 @@ const (
 var scenarioStatuses = workspace.List{Kind: workspace.ListStatuses}
 
 // A がルールのきっかけにしたステータスを削除して同期すると、B に自動化の 1 行。A の受信箱は A の操作の 1 行だけ。
-// B が何か保存して同期し、A がもう一度同期しても、A の自動化の通知は 1 行のまま(Review Focus 2)。
+// B が何か保存して同期し、A がもう一度同期しても、A の受信箱は自動化の 1 行のまま(Review Focus 2)。
 func TestNoticeScenarioStatusDelete(t *testing.T) {
 	remote, a, b := noticePair(t)
 	review := workspace.Value{ID: scenarioReview, Name: "Review", Color: "blue", Category: workspace.CategoryDoing, Rank: "Z"}
@@ -126,15 +126,16 @@ func TestNoticeScenarioStatusDelete(t *testing.T) {
 	if len(rows) != 1 || rows[0].Rule != scenarioRule || rows[0].Text != want || rows[0].Sender != "" {
 		t.Errorf("automation rows on B = %+v, want one %q", rows, want)
 	}
-	if rows := a.notices(t); len(rows) != 1 || rows[0].Kind != port.NoticeAutomation || rows[0].Text != want {
-		t.Fatalf("rows on A = %+v, want only the one of A's own delete", rows)
+	if onA := a.notices(t); len(onA) != 1 || onA[0].Kind != port.NoticeAutomation || onA[0].Text != want {
+		t.Fatalf("rows on A = %+v, want only the one of A's own delete", onA)
 	}
 
-	b.writeAs(t, "hanako", "タイトルを変更", setTask(change.NewSet("title", "ログイン画面を作る", "ログイン画面")))
+	// A への通知にならない保存(taro は HH-2 をウォッチしているので、タイトルやプロパティの変更はウォッチの通知になる)
+	b.writeAs(t, "hanako", "ウォッチ", setTask(change.NewAdd("watchers", "hanako")))
 	b.sync(t, remote)
 	a.sync(t, remote)
-	if rows := a.notices(t, port.NoticeAutomation); len(rows) != 1 {
-		t.Errorf("automation rows on A after B's save = %+v, want one", rows)
+	if onA := a.notices(t); len(onA) != 1 || onA[0].Kind != port.NoticeAutomation {
+		t.Errorf("rows on A after B's save = %+v, want only the one automation row", onA)
 	}
 }
 
