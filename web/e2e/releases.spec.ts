@@ -13,7 +13,7 @@ import {
 
 test("releases with an unfinished item and archives the release", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "出荷"), prefix);
+  await createWorkspace(page, info, unique(info, `出荷 ${prefix}`), prefix);
   // プロジェクト(接頭辞-P1)、Epic(接頭辞-1)、Story 2 つ(接頭辞-2・接頭辞-3)。
   await projectWithEpic(page, info, prefix);
   await storyUnderEpic(page, info, `${prefix}-1`, "書き出し");

@@ -24,7 +24,7 @@ async function restrictTodo(page: Page, prefix: string) {
 
 test("creates a task with its template's steps in one go", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "テンプレートで作る"), prefix);
+  await createWorkspace(page, info, unique(info, `テンプレートで作る ${prefix}`), prefix);
   // テンプレート「手順つき」: 種類 Task、書き出し「手順: 」、Step「準備」(親と同じ)・「記録」(未割り当て)。Task の既定にする。
   await openSettings(page, prefix, "テンプレート");
   await page.getByRole("button", { name: "テンプレートを作成" }).click();
@@ -79,7 +79,7 @@ test("the status menu disables a status the workflow forbids and tells why", asy
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "制約"), prefix);
+  await createWorkspace(page, info, unique(info, `制約 ${prefix}`), prefix);
   await restrictTodo(page, prefix);
   // プロジェクト・Epic・Task(Todo)を作り、詳細パネルのステータスのボタンを押す。
   const panel = await newTaskUnder(page, info, prefix);
@@ -98,7 +98,7 @@ test("checking a step the workflow forbids shows the refusal and changes nothing
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "Step の制約"), prefix);
+  await createWorkspace(page, info, unique(info, `Step の制約 ${prefix}`), prefix);
   await restrictTodo(page, prefix);
   // プロジェクト・Epic・Task を作り、詳細パネルで Step「確認」を足す。
   const panel = await newTaskUnder(page, info, prefix);

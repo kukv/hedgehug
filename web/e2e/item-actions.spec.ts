@@ -35,7 +35,7 @@ test("moves, duplicates, changes the kind of and deletes items from the tree's r
 }, info) => {
   const t = (s: string) => unique(info, s);
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "操作"), prefix);
+  await createWorkspace(page, info, unique(info, `操作 ${prefix}`), prefix);
   // Epic -1 の下に Task A(-2。Step「手順」を -3 に持つ)・B(-4)・C(-5)、もう 1 つの Epic(-6)。
   await projectWithEpic(page, info, prefix);
   const panel = await taskUnderEpic(page, info, `${prefix}-1`, "A");

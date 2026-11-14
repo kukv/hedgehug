@@ -8,7 +8,7 @@ test("renders Markdown with mentions of members only, and keeps both when two ta
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "説明の Markdown"), prefix);
+  await createWorkspace(page, info, unique(info, `説明の Markdown ${prefix}`), prefix);
   const panel = await newTaskUnder(page, info, prefix);
   const section = panel.getByRole("region", { name: "説明", exact: true });
   await section.getByRole("button", { name: "説明を追加" }).click();
