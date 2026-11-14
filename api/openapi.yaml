@@ -2780,6 +2780,184 @@ components:
         - title
         - structure
       type: object
+    ScreenState:
+      additionalProperties: false
+      properties:
+        body:
+          description: 保存した文字列。まだなければ null
+          nullable: true
+          type: string
+      required:
+        - body
+      type: object
+    ScreenStateBody:
+      additionalProperties: false
+      properties:
+        body:
+          description: 画面の状態の JSON の文字列。64 KiB まで
+          type: string
+      required:
+        - body
+      type: object
+    SearchAssignee:
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+        name:
+          description: 表示名。メンバーにいない人は null
+          nullable: true
+          type: string
+      required:
+        - login
+        - name
+      type: object
+    SearchDeleted:
+      additionalProperties: false
+      properties:
+        daysLeft:
+          description: 完全に削除されるまでの日数。保持日数を過ぎていれば負
+          format: int64
+          type: integer
+      required:
+        - daysLeft
+      type: object
+    SearchPriority:
+      additionalProperties: false
+      properties:
+        color:
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - color
+      type: object
+    SearchQuery:
+      additionalProperties: false
+      properties:
+        query:
+          description: クエリの文字列(04「検索」)。空なら絞り込まない
+          type: string
+      required:
+        - query
+      type: object
+    SearchResult:
+      additionalProperties: false
+      properties:
+        deleted:
+          description: is:deleted の検索か
+          type: boolean
+        errors:
+          description: クエリのエラー(1 語 1 行)
+          items:
+            type: string
+          type: array
+        group:
+          description: "group: の値(グループ分けは画面が行う)。なければ空"
+          type: string
+        hasKey:
+          description: キーのある語が 1 つ以上あるか
+          type: boolean
+        rows:
+          items:
+            $ref: "#/components/schemas/SearchRow"
+          type: array
+      required:
+        - errors
+        - hasKey
+        - group
+        - deleted
+        - rows
+      type: object
+    SearchRow:
+      additionalProperties: false
+      properties:
+        assignee:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/SearchAssignee"
+          type: object
+        deleted:
+          description: 削除済みの行だけ
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/SearchDeleted"
+          type: object
+        display:
+          description: いまの ID(HH-12)
+          type: string
+        end:
+          description: 終了日(YYYY-MM-DD)。なければ空
+          type: string
+        itemId:
+          type: string
+        kind:
+          type: string
+        oldIdHit:
+          description: 旧 ID だけで一致した(画面は「旧 ID」と添える)
+          type: boolean
+        points:
+          format: double
+          nullable: true
+          type: number
+        priority:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/SearchPriority"
+          type: object
+        projectId:
+          type: string
+        readOnly:
+          type: boolean
+        status:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/SearchStatus"
+          type: object
+        storeColor:
+          type: string
+        storeId:
+          type: string
+        storeName:
+          type: string
+        title:
+          type: string
+        workspaceId:
+          type: string
+      required:
+        - storeId
+        - storeName
+        - storeColor
+        - readOnly
+        - workspaceId
+        - projectId
+        - itemId
+        - display
+        - oldIdHit
+        - title
+        - kind
+        - status
+        - assignee
+        - priority
+        - end
+        - points
+        - deleted
+      type: object
+    SearchStatus:
+      additionalProperties: false
+      properties:
+        category:
+          type: string
+        color:
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - category
+        - color
+      type: object
     SetAutomationRuleEnabled:
       additionalProperties: false
       properties:
@@ -4797,6 +4975,82 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムを開いたと、このマシンに覚える
+  /api/screen-states/{screen}:
+    get:
+      operationId: screen-state-get
+      parameters:
+        - description: 画面の鍵(search など)
+          in: path
+          name: screen
+          required: true
+          schema:
+            description: 画面の鍵(search など)
+            pattern: ^[a-z0-9:_/-]{1,200}$
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreenState"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 画面の状態を返す
+    put:
+      operationId: screen-state-put
+      parameters:
+        - description: 画面の鍵(search など)
+          in: path
+          name: screen
+          required: true
+          schema:
+            description: 画面の鍵(search など)
+            pattern: ^[a-z0-9:_/-]{1,200}$
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScreenStateBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 画面の状態を置く
+  /api/search:
+    post:
+      operationId: search
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 表示中のすべての Store のアイテムをクエリで検索する
   /api/sign-ins:
     post:
       operationId: start-sign-in

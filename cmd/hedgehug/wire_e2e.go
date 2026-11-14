@@ -77,6 +77,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		PRScans:     state.PRScans(),
 		AppMissing:  state.AppMissing(),
 		Reports:     state.ReportSelections(),
+		Screens:     state.ScreenStates(),
 		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
 		GitHub:      e2eGitHub,
 		DeviceFlow:  e2eDeviceFlow,
