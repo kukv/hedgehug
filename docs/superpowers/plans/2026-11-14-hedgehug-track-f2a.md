@@ -502,7 +502,7 @@ git commit -m "docs(plans): F2a で決めた並び順を F1・A5a の計画に�
 
 ---
 
-### Task 11: 順位の末尾の値を短く保つ(`rank.After` の繰り上げ)
+### Task 11: 順位の末尾の値を短く保つ(`rank.After` を段と数えで作る)
 
 最終レビューで見つけ、ユーザーの決定(2026-11-14)で F2a に入れた。F2a-5・F2a-6 で作業項目の順位がワークスペース全体の末尾に続くようになり、今の `After`(最後の文字を進め、`z` なら `V` を足す)では順位の文字列が約 31 件ごとに 1 文字伸びる。
 
@@ -511,13 +511,14 @@ git commit -m "docs(plans): F2a で決めた並び順を F1・A5a の計画に�
 - Test: `internal/domain/rank/rank_test.go`
 
 **Interfaces:**
-- Produces: `func After(s string) string` — 署名は変えない。末尾から見て `z` でない最後の文字を 1 つ進め、それより後ろを捨てた値を返す(`"Vz"` → `"W"`、`"Az"` → `"B"`、`"V"` → `"W"`)。すべて `z` なら `s + First`(`"z"` → `"zV"`)。空なら `First`。結果は常に `s` より大きく、`'0'` で終わらない
+- Produces: `func After(s string) string` — 署名は変えない。値を「先頭の `z` の並び(段) + 数え(先頭が `z` でない、決まった桁数の 62 進数)」と見て、数えを 1 つ進める(桁数は変えない。`'0'` で終わるなら `'1'` にする。`"V"` → `"W"`、`"Vz"` → `"W1"`、`"azz"` → `"b01"`)。数えが尽きたら(先頭が `z` になる)、`z` を 1 つ増やして 1 桁広い数えの最初の値にする(`"y"` → `"z01"`、`"zy"` → `"zz01"`)。`z` だけの値は `s + First`(`"z"` → `"zV"`)。空なら `First`。結果は常に `s` より大きく、`'0'` で終わらない。前の作りが書いた値(`"zV"`・`"zzzW"` など)からも続けられる。末尾の繰り上げだけ(`"Vz"` → `"W"`)では、`z` だけの並びの後ろに続けるときに約 31 件ごとに 1 文字伸びるままなので、この形にした(62 倍ごとに 2 文字)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- `TestAfterCarries`: `After("Vz") == "W"`、`After("Az") == "B"`、`After("zz") == "zzV"`、`After("z") == "zV"`、`After("") == "V"`。
-- `TestAfterStaysShort`: `""` から `After` を 10,000 回続けた値の長さが 4 以下で、各回の値が前の値より大きい。
-- `TestBetweenWithCarry`: `Between("VAz", "W")` が `"VAz"` より大きく `"W"` より小さい(`Between` の内側の `After(rest)` も繰り上げる)。
+- `TestAfter`: 上の例の値。`TestAfterFromAnyValue`: `"z"`・`"zz"`・`"zV"`・`"zzzW"`・`"Vz"`・`"Az"`・`"azz"`・長い `z` の並びなどから、`s` より大きく `'0'` で終わらない値を作る。
+- `TestAfterStaysShort`: `""` から `After` を 10,000 回続けた値の長さが 6 以下、`"zzzzzzzzzz"` から 1,000 回続けた値の長さが 14 以下で、各回の値が前の値より大きい。
+- `TestBetweenWithCarry`: `Between("VAz", "W")` が `"VAz"` より大きく `"W"` より小さい(`Between` の内側の `After(rest)` も新しい作りで進める)。
+- `TestBetweenAfterProperty`: 決まった種の乱数の値 `a` で、`Between(a, After(a))` が `a` と `After(a)` の間にある。
 
 - [ ] **Step 2: 失敗を確かめる**
 

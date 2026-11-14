@@ -8,16 +8,32 @@ const digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 // First は、兄弟がないときの値。
 const First = "V"
 
-// After は、s よりあとに並ぶ値を返す。s が空なら First。最後の文字を 1 つ進め、進められなければ First を足す。
+// After は、s よりあとに並ぶ値を返す。s が空なら First。
+// 値は「先頭の z の並び(段) + 数え(先頭は z でない、決まった桁数の 62 進数)」と見る。
+// 数えを 1 つ進め(桁数は変えない、'0' で終わるなら '1' にする)、数えが尽きたら z を 1 つ増やし、
+// 1 桁広い数えの最初の値にする。末尾に続けても、62 倍ごとに 2 文字しか伸びない。
+// 数えがない値(z だけの値)には First を足す。
 func After(s string) string {
-	if s == "" {
-		return First
+	k := len(s) - len(strings.TrimLeft(s, "z"))
+	if k == len(s) {
+		return s + First
 	}
-	i := strings.IndexByte(digits, s[len(s)-1])
-	if i >= 0 && i < len(digits)-1 {
-		return s[:len(s)-1] + string(digits[i+1])
+	count := []byte(s[k:])
+	for i := len(count) - 1; i >= 0; i-- {
+		d := strings.IndexByte(digits, count[i])
+		if d < len(digits)-1 {
+			count[i] = digits[d+1]
+			break
+		}
+		count[i] = digits[0]
 	}
-	return s + First
+	if count[0] == 'z' { // 数えが尽きた(先頭が z になる)ので、次の段へ。
+		return s[:k] + "z" + strings.Repeat("0", len(count)) + "1"
+	}
+	if count[len(count)-1] == '0' {
+		count[len(count)-1] = '1'
+	}
+	return s[:k] + string(count)
 }
 
 // Between は、a < 値 < b の値。a が空なら b より前のどこか、b が空なら After(a)。
