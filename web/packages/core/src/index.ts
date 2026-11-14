@@ -85,6 +85,7 @@ export {
   workspaceTabOf,
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
+export { focusesFilter } from "./features/search/focusKey";
 export { createShell, type Shell } from "./features/shell/shell";
 export {
   hasSyncError,

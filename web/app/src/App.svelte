@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
+  import { focusesFilter, hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
   import { AppFrame, CommandPalette, OfflineBand, Toasts } from "@hedgehug/ui";
   import { palette } from "./palette";
   import BulkChangeDialog from "./screens/item/BulkChangeDialog.svelte";
@@ -68,18 +68,28 @@
   // C キーで作成ダイアログを開く(02「開き方と初期値」)。/ キーで絞り込み欄に移る(01 キーボード)。
   // どちらも、入力中とダイアログを開いているときは使えない。/ は、絞り込み欄のない画面では何もしない。
   function onkeydown(event: KeyboardEvent) {
-    const key = event.key.toLowerCase();
-    if ((key !== "c" && key !== "/") || event.ctrlKey || event.metaKey || event.altKey) return;
     const t = event.target as HTMLElement | null;
-    const typing = t?.closest("input, textarea, select, [contenteditable='true']");
-    if (typing || document.querySelector('[aria-modal="true"]')) return;
-    if (key === "/") {
-      const field = document.querySelector<HTMLElement>("[data-filter-input]");
-      if (!field) return;
+    const typing = !!t?.closest("input, textarea, select, [contenteditable='true']");
+    const dialogOpen = !!document.querySelector('[aria-modal="true"]');
+    const field = document.querySelector<HTMLElement>("[data-filter-input]");
+    if (
+      field &&
+      focusesFilter({
+        key: event.key,
+        ctrl: event.ctrlKey,
+        meta: event.metaKey,
+        alt: event.altKey,
+        typing,
+        dialogOpen,
+        hasField: true,
+      })
+    ) {
       event.preventDefault();
       field.focus();
       return;
     }
+    if (event.key.toLowerCase() !== "c" || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (typing || dialogOpen) return;
     event.preventDefault();
     void itemDialog.open();
   }

@@ -20,9 +20,20 @@
   // closed は、Esc で候補を閉じたあいだ。入力するかフォーカスを入れ直すと開く。
   let closed = $state(false);
   let selected = $state(0);
+  let list = $state<HTMLElement>();
   const open = $derived(focused && !closed && options.length > 0);
   // 日本語入力の変換中の Enter・Esc は、変換の確定・取り消しに使う(01「Esc」「Enter」)。
   const composing = (e: KeyboardEvent) => e.isComposing || e.keyCode === 229;
+
+  // 候補が変わったら選びを先頭に戻し、選んでいる行が見えるようにスクロールする。
+  $effect(() => {
+    void options;
+    selected = 0;
+  });
+  $effect(() => {
+    void selected;
+    list?.querySelector(".selected")?.scrollIntoView?.({ block: "nearest" });
+  });
 
   function onkeydown(event: KeyboardEvent) {
     if (composing(event)) return;
@@ -53,7 +64,7 @@
       role="combobox"
       aria-label="絞り込み"
       aria-expanded={open}
-      aria-controls="{ids}-list"
+      aria-controls={open ? `${ids}-list` : undefined}
       aria-activedescendant={open ? `${ids}-${Math.min(selected, options.length - 1)}` : undefined}
       aria-invalid={errors.length > 0 ? "true" : undefined}
       data-filter-input
@@ -77,7 +88,7 @@
     >
     <button type="button" class="help" onclick={onhelp}>検索ヘルプ</button>
     {#if open}
-      <div class="list" role="listbox" id="{ids}-list" aria-label="候補">
+      <div class="list" role="listbox" id="{ids}-list" aria-label="候補" bind:this={list}>
         {#each options as option, i (i)}
           <!-- フォーカスは入力欄に置いたまま。選択は aria-activedescendant で示す -->
           <button

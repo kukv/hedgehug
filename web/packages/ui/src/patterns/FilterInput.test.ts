@@ -20,8 +20,8 @@ function setup(over: Record<string, unknown> = {}) {
     onhelp: vi.fn(),
     ...over,
   };
-  render(FilterInput, { props });
-  return props;
+  const r = render(FilterInput, { props });
+  return { ...props, rerender: r.rerender };
 }
 const box = () => screen.getByRole("combobox");
 
@@ -125,5 +125,29 @@ describe("FilterInput", () => {
     const alerts = screen.getAllByRole("alert");
     expect(alerts).toHaveLength(2);
     expect(alerts[0]).toHaveTextContent("「foo」というキーはありません");
+  });
+
+  it("候補が変わったら選びを先頭に戻す", async () => {
+    const p = setup();
+    await fireEvent.focus(box());
+    await fireEvent.keyDown(box(), { key: "ArrowDown" });
+    await p.rerender({ options: [{ label: "x" }, { label: "y" }] });
+    expect(screen.getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("候補を閉じているあいだは aria-controls を付けない", async () => {
+    setup();
+    expect(box()).not.toHaveAttribute("aria-controls");
+    await fireEvent.focus(box());
+    expect(box()).toHaveAttribute("aria-controls");
+  });
+
+  it("選んでいる候補が見えるようにスクロールする", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    setup();
+    await fireEvent.focus(box());
+    await fireEvent.keyDown(box(), { key: "ArrowDown" });
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
   });
 });
