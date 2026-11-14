@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // maxSendTries は、送信が他の人の更新と重なったときに、受け取りからやり直す最大の回数(06「同期のエラー」)。
@@ -22,7 +23,7 @@ type Replicator struct {
 
 	// Repair は、合わせたあと、送る前に呼ぶ修復(決定 C3a-2・C3a-3)。cmd が置く。nil なら呼ばない。Mirror では使わない。
 	Repair port.RepairFunc
-	// Judge は、同期の最後に、受け取った保存を渡す判定の差し込み口(決定 C4b1-2)。Judged は判定した保存の記録。
+	// Judge は、同期の最後に、受け取った保存・修復の保存・合わせを渡す判定の差し込み口(決定 C4b1-2・C4b2-2)。Judged は判定した保存の記録。
 	// cmd が置く。どちらかが nil なら判定しない。
 	Judge  port.JudgeFunc
 	Judged port.JudgedSaves
@@ -251,8 +252,10 @@ func (s syncRun) merge(wt *git.Worktree, base, ours, theirs plumbing.Hash) error
 		return err
 	}
 	return s.apply(wt, ours, trees[1], merged, func() error {
-		sig := signature(botName, botEmail, s.r.stores.clock.Now())
-		_, err := wt.Commit("remote と合わせる\n", &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}})
+		sig := signature(saves.BotName, botEmail, s.r.stores.clock.Now())
+		// 結果が自分の版と同じ(相手が書いたのが、こちらで完全に削除したものだけ)でも、合わせを保存する(決定 C4b2-15)。
+		opts := &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}, AllowEmptyCommits: true}
+		_, err := wt.Commit("remote と合わせる\n", opts)
 		return err
 	})
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { InboxTarget, InboxTargetKind } from "../../model/inbox";
 import { row } from "./inbox.test-util";
-import { goneTextOf, projectRouteOf } from "./target";
+import { goneTextOf, projectRouteOf, workspaceRouteOf } from "./target";
 
 const withTarget = (kind: InboxTargetKind, display: string) => {
   const r = row(1, "assign");
@@ -31,5 +31,17 @@ describe("行の対象のプロジェクト (06「並びと行の表示」)", ()
     expect(goneTextOf("deleted_item")).toBe("削除されたアイテム");
     expect(goneTextOf("deleted_workspace")).toBe("削除されたワークスペース");
     expect(goneTextOf("project")).toBeNull();
+  });
+});
+
+describe("ワークスペースを指す行の開く区画 (06「並びと行の表示」)", () => {
+  it("opens the Sprints and Releases tabs without a section", () => {
+    expect(workspaceRouteOf("sprints")).toEqual({ tab: "sprints" });
+    expect(workspaceRouteOf("releases")).toEqual({ tab: "releases" });
+  });
+
+  it("opens the settings sub-tab, automation when the section is empty", () => {
+    expect(workspaceRouteOf("statuses")).toEqual({ tab: "settings", section: "statuses" });
+    expect(workspaceRouteOf("")).toEqual({ tab: "settings", section: "automation" });
   });
 });

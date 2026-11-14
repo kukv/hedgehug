@@ -20,25 +20,25 @@ func Baseline(ctx context.Context, repo *git.Repository, store port.StoreID, jud
 	return mark(ctx, repo, store, judged, from)
 }
 
-// Judge は、remote の先端 theirs から辿れて判定していない保存を judge に渡し、そのあと自分の先端 head から
-// 辿れる保存をすべて判定済みにする(決定 C4b1-2)。judge がエラーを返したら、受け取った保存は判定済みにせず
-// (決定 C4b1-5)、このマシンの保存だけを判定済みにする(markOwn)。
+// Judge は、Pending が返す保存と合わせ(決定 C4b2-2)を judge に渡し、そのあと自分の先端 head から辿れる保存を
+// すべて判定済みにする(決定 C4b1-2)。readOnly は閲覧のみの同期か(決定 C4b2-4)。judge がエラーを返したら、
+// 渡したものは判定済みにせず(決定 C4b1-5・C4b2-5)、ほかのこのマシンの保存だけを判定済みにする(markOwn)。
 // 記録がまだない(Baseline が失敗した)ときは、judge に渡さずに判定済みにだけする(履歴のすべてを渡さないため)。
 func Judge(ctx context.Context, repo *git.Repository, store port.StoreID, judged port.JudgedSaves, judge port.JudgeFunc,
-	theirs, head plumbing.Hash, read func(fn func(r port.Reader) error) error,
+	theirs, head plumbing.Hash, readOnly bool, read func(fn func(r port.Reader) error) error,
 ) error {
 	started, err := judged.Started(ctx, store)
 	if err != nil {
 		return err
 	}
 	if started {
-		received, err := Unjudged(repo, theirs, knownIn(ctx, store, judged))
+		passed, err := Pending(repo, theirs, head, knownIn(ctx, store, judged))
 		if err != nil {
 			return err
 		}
-		if len(received) > 0 {
-			if err := judge(ctx, store, received, read); err != nil {
-				return errors.Join(err, markOwn(ctx, repo, store, judged, theirs, head))
+		if len(passed) > 0 {
+			if err := judge(ctx, store, port.Received{Saves: passed, ReadOnly: readOnly}, read); err != nil {
+				return errors.Join(err, markOwn(ctx, repo, store, judged, theirs, head, passed))
 			}
 		}
 	}
@@ -54,15 +54,21 @@ func mark(ctx context.Context, repo *git.Repository, store port.StoreID, judged 
 	return judged.Mark(ctx, store, keys)
 }
 
-// markOwn は、head から辿れて theirs から辿れない、Hedgehug-Op を持つ保存(このマシンの保存と修復)を判定済みに
+// markOwn は、head から辿れて theirs から辿れない、Hedgehug-Op を持つ保存(このマシンの保存)を判定済みに
 // する。送ったあとに remote から戻ってきても judge に渡さないため。合わせは判定済みにしない(次に辿るとき、合わせを
-// 通り抜けて、判定していない受け取った保存へ届く)。判定していない受け取った保存より後の保存も判定済みにしない
-// (そこで辿るのが止まり、受け取った保存へ届かなくなるため)。
-func markOwn(ctx context.Context, repo *git.Repository, store port.StoreID, judged port.JudgedSaves, theirs, head plumbing.Hash) error {
+// 通り抜けて、判定していない受け取った保存へ届く)。judge に渡した保存(passed。このマシンの修復の保存を含む)と、
+// 判定していない受け取った保存と、それらより後の保存も判定済みにしない(渡したものを次の同期でもう一度渡すため。
+// 後の保存を判定済みにすると、そこで辿るのが止まり、届かなくなる。決定 C4b2-5)。
+func markOwn(ctx context.Context, repo *git.Repository, store port.StoreID, judged port.JudgedSaves, theirs, head plumbing.Hash,
+	passed []port.ReceivedSave,
+) error {
 	known := knownIn(ctx, store, judged)
 	pending, err := walk(repo, theirs, known) // 判定していない受け取った保存(と、その合わせ)
 	if err != nil {
 		return err
+	}
+	for _, s := range passed {
+		pending[plumbing.NewHash(s.Key.Version)] = node{}
 	}
 	mine, err := walk(repo, head, known)
 	if err != nil {

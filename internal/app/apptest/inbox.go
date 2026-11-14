@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +62,23 @@ func (i *Inbox) Mention(_ context.Context, n port.Notice) error {
 	r := &i.rows[k]
 	r.Text, r.Sender, r.At, r.Read = n.Text, n.Sender, n.At, false
 	return nil
+}
+
+// AddOnce は、同じ Store・Source の行がなければ Add と同じ時計の時刻で足して true を返す。あれば何もせず false を返す。
+func (i *Inbox) AddOnce(_ context.Context, n port.Notice) (bool, error) {
+	if n.Source == "" {
+		return false, port.ErrInvalidOperation
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.Err != nil {
+		return false, i.Err
+	}
+	if slices.ContainsFunc(i.rows, func(r port.NoticeRow) bool { return r.Store == n.Store && r.Source == n.Source }) {
+		return false, nil
+	}
+	i.append(n)
+	return true, nil
 }
 
 // Notices は、足した通知を足した順に返す。
@@ -177,6 +195,9 @@ func (i *Inbox) Prune(_ context.Context, store port.StoreID, targets []change.ID
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.rows = slices.DeleteFunc(i.rows, func(r port.NoticeRow) bool {
+		if r.Kind == port.NoticeRepair && strings.HasPrefix(r.Source, "repair:purged:") {
+			return false
+		}
 		return r.Store == store && (slices.Contains(targets, r.Item) || slices.Contains(targets, r.Project) || (r.Item == "" && r.Project == "" && slices.Contains(targets, r.Workspace)))
 	})
 	return nil

@@ -125,6 +125,27 @@ func TestTargetMovedProject(t *testing.T) {
 	}
 }
 
+func TestTargetWorkspaceSection(t *testing.T) {
+	f := setup(t)
+	f.add(t, port.Notice{Kind: port.NoticeRepair, Store: s1, Workspace: apptest.SampleWorkspace, Text: "sprint", Section: "sprints", Source: "repair:sprint"})
+	if got := f.first(t).Target; got.Kind != inbox.TargetWorkspace || got.Section != "sprints" {
+		t.Errorf("target = %+v, want workspace sprints", got)
+	}
+}
+
+// 完全な削除で反映されなかった修復の通知は、アイテムが Store になくても moved で、作ったときの ID を出す。
+func TestTargetPurgedRepairIsMoved(t *testing.T) {
+	f := setup(t)
+	n := port.Notice{
+		Kind: port.NoticeRepair, Store: s1, Workspace: apptest.SampleWorkspace, Text: "purged",
+		Item: "01SAMPLEIT0000000000000009", Display: "HH-9", Source: "repair:purged:x",
+	}
+	f.add(t, n)
+	if got := f.first(t).Target; got.Kind != inbox.TargetMoved || got.Display != "HH-9" || got.Item != n.Item {
+		t.Errorf("target = %+v, want moved HH-9", got)
+	}
+}
+
 func TestTargetRuleNotice(t *testing.T) {
 	f := setup(t)
 	f.add(t, port.Notice{Kind: port.NoticeAutomation, Store: s1, Workspace: apptest.SampleWorkspace, Rule: rule, Text: "rule"})

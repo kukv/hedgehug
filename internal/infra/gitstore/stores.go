@@ -12,13 +12,10 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/kukv/hedgehug/internal/app/port"
-	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
-const (
-	botName  = change.BotLogin
-	botEmail = "bot@hedgehug.invalid"
-)
+// botEmail は、人でない実行者の保存と、合わせの作者のメールアドレス。名前は saves.BotName。
+const botEmail = "bot@hedgehug.invalid"
 
 // Stores は、取り付けた Store を git のリポジトリとして読み書きする。
 type Stores struct {

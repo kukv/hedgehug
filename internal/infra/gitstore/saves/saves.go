@@ -1,4 +1,4 @@
-// Package saves は、同期で受け取った保存のうち、通知の判定をまだしていないものを読む(決定 C4b1-2)。
+// Package saves は、通知の判定をまだしていない保存と合わせ(受け取ったもの・このマシンの修復)を読む(決定 C4b1-2・C4b2-2)。
 // gitstore の同期が、判定の差し込み口に渡すために使う。
 package saves
 
@@ -44,11 +44,11 @@ func Unjudged(repo *git.Repository, from plumbing.Hash, known func(port.SaveKey)
 		if n.match != port.NotJudged || n.key.Op == "" {
 			continue
 		}
-		es, err := entities(n.c)
+		s, err := saveOf(n)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, port.ReceivedSave{Key: n.key, Entities: es})
+		out = append(out, s)
 	}
 	return out, nil
 }

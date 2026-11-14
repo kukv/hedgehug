@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/repair"
@@ -108,6 +109,106 @@ func TestOverlaps(t *testing.T) {
 			got := repair.Overlaps(tt.log, repair.Facts{Ours: tt.ours, Theirs: tt.theirs}, tt.incidental)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Overlaps = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestChanger(t *testing.T) {
+	at := func(r change.Record, by string, sec int) change.Record {
+		r.By, r.At = by, time.Date(2026, 11, 14, 9, 0, sec, 0, time.UTC)
+		return r
+	}
+	user := change.ActorUser
+	itemDel := at(del("d1", "op1", "deleted", true), "taro", 5)
+	valueDel := at(del("d2", "op1", "statuses/X", true), "taro", 5)
+	tests := []struct {
+		name string
+		log  []change.Record
+		d    change.Record
+		want string
+	}{
+		{"last human row", []change.Record{
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1), itemDel,
+			at(row("c2", "op3", change.Set, "status", user), "jiro", 3),
+		}, itemDel, "jiro"},
+		{"later by at, not by order", []change.Record{
+			at(row("c2", "op3", change.Set, "status", user), "jiro", 3),
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1), itemDel,
+		}, itemDel, "jiro"},
+		{"same at: larger id", []change.Record{
+			at(row("c2", "op3", change.Set, "status", user), "jiro", 3),
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 3), itemDel,
+		}, itemDel, "jiro"},
+		{"same op not counted", []change.Record{
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1),
+			at(row("c3", "op1", change.Set, "rank", user), "taro", 5), itemDel,
+		}, itemDel, "hanako"},
+		{"sync and automation not counted", []change.Record{
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1), itemDel,
+			at(row("c4", "op4", change.Set, "status", change.ActorAutomation), "jiro", 7),
+			at(row("c5", "op5", change.Set, "place", change.ActorSync), "hedgehug", 8),
+		}, itemDel, "hanako"},
+		{"delete and restore not counted", []change.Record{
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1), itemDel,
+			at(row("r1", "op6", change.Restore, "deleted", user), "jiro", 9),
+			at(del("d9", "op7", "deleted", true), "jiro", 9),
+		}, itemDel, "hanako"},
+		{"value: f and below only", []change.Record{
+			at(row("c6", "op2", change.Set, "statuses/X/name", user), "hanako", 1), valueDel,
+			at(row("c7", "op3", change.Set, "statuses/XY/name", user), "jiro", 6),
+			at(row("c8", "op4", change.Set, "name", user), "jiro", 7),
+		}, valueDel, "hanako"},
+		{"same f not counted", []change.Record{at(row("c9", "op2", change.Comment, "statuses/X", user), "hanako", 1), valueDel}, valueDel, ""},
+		{"deleter's later change skipped", []change.Record{
+			at(row("c1", "op2", change.Set, "title", user), "hanako", 1), itemDel,
+			at(row("c12", "op3", change.Set, "status", user), "Taro", 7),
+		}, itemDel, "hanako"},
+		{"only the deleter changed", []change.Record{
+			at(row("c12", "op3", change.Set, "status", user), "taro", 7), itemDel,
+			at(row("c13", "op4", change.Set, "title", user), "taro", 2),
+		}, itemDel, "taro"},
+		{"create and moved_in not counted", []change.Record{
+			at(row("c10", "op0", change.Create, "", user), "jiro", 0),
+			at(row("c11", "op8", change.MovedIn, "", user), "jiro", 0), itemDel,
+		}, itemDel, ""},
+		{"none", []change.Record{itemDel}, itemDel, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := repair.Changer(tt.log, tt.d, repair.Facts{}); got != tt.want {
+				t.Errorf("Changer = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// 月曜に hanako がオフラインで HH-1 を変え、水曜に jiro が変えて同期し、木曜に taro(jiro の変更を持つ)が削除した。
+// 金曜に hanako が同期して削除を取り消す: 同時に変えたのは、削除と反対の側の hanako(jiro は共通の祖先にある)。
+// 片側の見分けがない(Facts が空)か、削除の行がどちらの側にもなければ、側を見ないいまの数え方。
+func TestChangerConcurrentSide(t *testing.T) {
+	at := func(r change.Record, by string, day int) change.Record {
+		r.By, r.At = by, time.Date(2026, 11, 9+day, 9, 0, 0, 0, time.UTC)
+		return r
+	}
+	user := change.ActorUser
+	hanako := at(row("c1", "op1", change.Set, "title", user), "hanako", 0)
+	jiro := at(row("c2", "op2", change.Set, "status", user), "jiro", 2)
+	d := at(del("d1", "op3", "deleted", true), "taro", 3)
+	log := []change.Record{hanako, jiro, d}
+	sides := repair.Facts{Ours: map[change.ID]bool{"c1": true}, Theirs: map[change.ID]bool{"d1": true}}
+	for name, c := range map[string]struct {
+		f    repair.Facts
+		want string
+	}{
+		"反対の側":       {sides, "hanako"},
+		"側の見分けなし":    {repair.Facts{}, "jiro"},
+		"削除がどちらにもない": {repair.Facts{Ours: map[change.ID]bool{"c1": true}}, "jiro"},
+		"反対の側に変更がない": {repair.Facts{Ours: map[change.ID]bool{"c1": true, "c2": true, "d1": true}}, "jiro"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := repair.Changer(log, d, c.f); got != c.want {
+				t.Errorf("Changer = %q, want %q", got, c.want)
 			}
 		})
 	}

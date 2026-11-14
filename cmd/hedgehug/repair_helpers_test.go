@@ -340,6 +340,12 @@ func sameFiles(t *testing.T, a, b machine) {
 // newTask は、生の行で、HH-1 の下に番号 3 の Task を作る(番号の行も書く)。手元の HH-1 のプロジェクトに作る。
 func newTask(t *testing.T, m machine, id item.ID) {
 	t.Helper()
+	newTaskAs(t, m, scenarioUser.By(), id)
+}
+
+// newTaskAs は、ログイン名 login の操作として newTask と同じ Task を作る。
+func newTaskAs(t *testing.T, m machine, login string, id item.ID) {
+	t.Helper()
 	const n = 3
 	parent := apptest.SampleEpic
 	p := m.item(t, parent).Place
@@ -349,7 +355,7 @@ func newTask(t *testing.T, m machine, id item.ID) {
 		Kind:  item.Task, Rank: rank.After(rank.First), Title: "新しい Task",
 		Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium,
 	}
-	m.write(t, "アイテムを作成", func(tx port.Tx) error {
+	m.writeAs(t, login, "アイテムを作成", func(tx port.Tx) error {
 		return errors.Join(
 			tx.WriteWorkspaces().Append(p.Workspace, numbering.Draft(numbering.Items, n)),
 			tx.WriteItems().Append(id, item.Create(it)),

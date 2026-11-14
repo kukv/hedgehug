@@ -6,6 +6,7 @@ import {
   projectRouteOf,
   type Route,
   routeOfWorkspace,
+  workspaceRouteOf,
 } from "@hedgehug/core";
 import { inboxReloads, reloads } from "./reloads";
 import { catalog, detail, navigation, toasts } from "./wire";
@@ -70,13 +71,14 @@ export function linkOf(row: InboxRow): InboxLink | null {
       };
     }
     case "workspace": {
-      // ワークスペースの設定の区画(「自動化」)を開く(C4a-15)。
-      const route = routeOfWorkspace(get(catalog.stores), row.store.id, t.workspace, "settings");
+      // 区画に応じて、スプリント・リリースのタブか、設定のサブタブを開く(C4a-15、C4b2-10)。
+      const { tab, section } = workspaceRouteOf(t.section);
+      const route = routeOfWorkspace(get(catalog.stores), row.store.id, t.workspace, tab);
       return {
         route,
         action: () => {
           read();
-          navigation.go(route, t.section);
+          navigation.go(route, section);
         },
       };
     }

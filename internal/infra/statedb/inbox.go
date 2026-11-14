@@ -34,6 +34,7 @@ func init() {
 	register("inbox/002", `ALTER TABLE inbox ADD COLUMN project TEXT NOT NULL DEFAULT '';
 	ALTER TABLE inbox ADD COLUMN source TEXT NOT NULL DEFAULT '';
 	CREATE INDEX inbox_by_source ON inbox (store, source)`)
+	register("inbox/003", `ALTER TABLE inbox ADD COLUMN section TEXT NOT NULL DEFAULT ''`)
 }
 
 // Inbox は、このマシンの受信箱(port.InboxBook)。時刻は Add のときに clock で刻む。
@@ -49,7 +50,7 @@ const inboxTimeLayout = "2006-01-02T15:04:05.000000000Z"
 
 func inboxTime(t time.Time) string { return t.UTC().Format(inboxTimeLayout) }
 
-const inboxColumns = `id, store, workspace, project, kind, item, rule, text, reason, status, from_status, display, sender, source, at, read, result`
+const inboxColumns = `id, store, workspace, project, section, kind, item, rule, text, reason, status, from_status, display, sender, source, at, read, result`
 
 func (b inbox) Add(ctx context.Context, n port.Notice) error {
 	return b.insert(ctx, n, b.clock.Now())
@@ -57,11 +58,33 @@ func (b inbox) Add(ctx context.Context, n port.Notice) error {
 
 func (b inbox) insert(ctx context.Context, n port.Notice, at time.Time) error {
 	_, err := b.db.ExecContext(ctx, `INSERT INTO inbox
-		(store, workspace, project, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		string(n.Store), string(n.Workspace), string(n.Project), string(n.Kind), string(n.Item), string(n.Rule), n.Text, n.Reason,
-		string(n.Status), string(n.From), n.Display, n.Sender, n.Source, inboxTime(at))
+		(store, workspace, project, section, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, noticeArgs(n, at)...)
 	return err
+}
+
+func noticeArgs(n port.Notice, at time.Time) []any {
+	return []any{
+		string(n.Store), string(n.Workspace), string(n.Project), n.Section, string(n.Kind), string(n.Item), string(n.Rule), n.Text, n.Reason,
+		string(n.Status), string(n.From), n.Display, n.Sender, n.Source, inboxTime(at),
+	}
+}
+
+// AddOnce は、同じ Store・Source の行がなければ clock の時刻で足して true を返す。あれば何もせず false を返す(既読・未読も変えない)。
+func (b inbox) AddOnce(ctx context.Context, n port.Notice) (bool, error) {
+	if n.Source == "" {
+		return false, port.ErrInvalidOperation
+	}
+	res, err := b.db.ExecContext(ctx, `INSERT INTO inbox
+		(store, workspace, project, section, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE NOT EXISTS (SELECT 1 FROM inbox WHERE store = ? AND source = ?)`,
+		append(noticeArgs(n, b.clock.Now()), string(n.Store), n.Source)...)
+	if err != nil {
+		return false, err
+	}
+	c, err := res.RowsAffected()
+	return c > 0, err
 }
 
 // Mention は、同じ Store・Source の行があれば本文・差出人・時刻(n.At)を書き換えて未読に戻す。
@@ -140,7 +163,7 @@ func scanNotice(s interface{ Scan(...any) error }) (port.NoticeRow, error) {
 	var r port.NoticeRow
 	var store, workspace, project, kind, itemID, rule, status, from, result, at string
 	var read int
-	err := s.Scan(&r.ID, &store, &workspace, &project, &kind, &itemID, &rule, &r.Text, &r.Reason, &status, &from, &r.Display, &r.Sender, &r.Source, &at, &read, &result)
+	err := s.Scan(&r.ID, &store, &workspace, &project, &r.Section, &kind, &itemID, &rule, &r.Text, &r.Reason, &status, &from, &r.Display, &r.Sender, &r.Source, &at, &read, &result)
 	if err != nil {
 		return r, err
 	}
@@ -231,7 +254,7 @@ func (b inbox) Prune(ctx context.Context, store port.StoreID, targets []change.I
 	args := append([]any{string(store)}, ids...)
 	args = append(args, ids...)
 	args = append(args, ids...)
-	_, err := b.db.ExecContext(ctx, `DELETE FROM inbox WHERE store = ? AND (item IN `+marks+` OR project IN `+marks+` OR (item = '' AND project = '' AND workspace IN `+marks+`))`, args...) //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
+	_, err := b.db.ExecContext(ctx, `DELETE FROM inbox WHERE store = ? AND (item IN `+marks+` OR project IN `+marks+` OR (item = '' AND project = '' AND workspace IN `+marks+`)) AND NOT (kind = 'repair' AND source LIKE 'repair:purged:%')`, args...) //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
 	return err
 }
 
