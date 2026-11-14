@@ -172,16 +172,23 @@ func droppedNotice(r port.Reader, b batch, removed []port.RemovedEntity, e port.
 	if err != nil {
 		return port.Notice{}, false, err
 	}
-	n.Text = withParticle(c.text, "は") + " " + who + " が " + withParticle(oneLine(b.storeName(*c.moved)), "へ") +
-		"移動したため、あなたの変更は反映されませんでした"
-	if c.at.Kind != change.KindWorkspace {
-		n.Text += "。移動先は " + withParticle(c.moved.New, "です")
-	}
+	n.Text = movedText(b, c, who)
 	if c.at != e.Ref {
 		n.Text += "(" + g.display + "「" + oneLine(g.title) + "」)"
 	}
 	n.Source = "repair:moved:" + string(e.Ref.ID) + ":" + string(c.moved.ID) // 移動ごとに 1 件(C4b2-6)
 	return n, true, nil
+}
+
+// movedText は、別の Store への移動 c のために反映されなかった本文。who は移動した人の名前。ワークスペースでなければ
+// 「。移動先は {新 ID} です」を付ける。
+func movedText(b batch, c cause, who string) string {
+	text := withParticle(c.text, "は") + " " + who + " が " + withParticle(oneLine(b.storeName(*c.moved)), "へ") +
+		"移動したため、あなたの変更は反映されませんでした"
+	if c.at.Kind != change.KindWorkspace {
+		text += "。移動先は " + withParticle(c.moved.New, "です")
+	}
+	return text
 }
 
 // purgedText は、完全な削除のために反映されなかった本文。
