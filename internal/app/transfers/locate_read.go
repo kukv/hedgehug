@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -24,8 +25,9 @@ type snapshot struct {
 }
 
 type wsEntry struct {
-	ws  workspace.Workspace
-	old []string // 旧い接頭辞
+	ws    workspace.Workspace
+	old   []string             // 旧い接頭辞
+	since map[string]time.Time // 接頭辞(いまのものと旧いもの)ごとの、ログに最初に出た日時
 }
 
 // entry は、アイテムかプロジェクト(削除済みを含む)。project は、アイテムならそのプロジェクト、プロジェクトなら自身。
@@ -90,7 +92,7 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 			return snap, err
 		}
 		ranks[w.ID] = workspace.RankOf(log)
-		snap.workspaces = append(snap.workspaces, wsEntry{ws: w, old: workspace.OldPrefixes(log)})
+		snap.workspaces = append(snap.workspaces, wsEntry{ws: w, old: workspace.OldPrefixes(log), since: workspace.PrefixTimes(log)})
 		snap.wsEntries = append(snap.wsEntries, entry{id: w.ID, ws: w.ID, live: w.Deleted == nil})
 		if err := snap.appendEntries(r, w); err != nil {
 			return snap, err
@@ -199,8 +201,9 @@ func (snap snapshot) hit(k kind, e entry) hit {
 // matching は、scope の転送記録のうち、種類 k(Entity)の旧 ID が display の行を、at の新しい順で返す。Store の中に、display の
 // 接頭辞を旧い接頭辞に持つワークスペースがあれば、その Store の記録は、そのワークスペースのいまの接頭辞・ほかの旧い
 // 接頭辞で書いた同じ番号の ID(HH-2 なら WEB-2)でも一致させる(接頭辞を変えたあとに移したもの)。ワークスペースの記録は、
-// 記録の内部 ID のワークスペースを表示中のすべての Store all から探し、そのいまの接頭辞・旧い接頭辞が prefix でも一致させる
-// (接頭辞を変えてから別の Store へ移したもの。B5c-13)。探すのは表示中の Store だけなので、移動先の Store が非表示なら、
+// 記録の内部 ID のワークスペースを表示中のすべての Store all から探し、記録の日時までに使っていた接頭辞が prefix でも一致させる
+// (接頭辞を変えてから別の Store へ移したもの。B5c-13)。移したあとで移動先で使い始めた接頭辞は、移動元のアドレスに一度も
+// なかったので一致させない。探すのは表示中の Store だけなので、移動先の Store が非表示なら、
 // 接頭辞を変える前の接頭辞は記録の old と一致せず、その記録には当たらない(ほかの Store の同じ接頭辞のものを開く)。
 // 非表示の Store の中身はこのマシンの表示に使わない(01「画面のアドレス」は表示中の Store を探す)ため。
 func matching(k kind, scope, all []snapshot, prefix string, n int, display string) []transfer.Record {
@@ -211,7 +214,7 @@ func matching(k kind, scope, all []snapshot, prefix string, n int, display strin
 			if r.Entity != k.entity {
 				continue
 			}
-			if slices.Contains(ids, r.Old) || k == workspaceKind && slices.Contains(prefixesOf(all, r.Target), prefix) {
+			if slices.Contains(ids, r.Old) || k == workspaceKind && slices.Contains(prefixesOf(all, r.Target, r.At), prefix) {
 				out = append(out, r)
 			}
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/transfers"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
@@ -141,6 +142,26 @@ func TestLocateWorkspaceRenamedBeforeMove(t *testing.T) {
 	f.list.Stores = slices.DeleteFunc(f.list.Stores, func(s port.StoreInfo) bool { return s.ID == store2 })
 	if got, err := f.svc.Locate(t.Context(), "main", "HH-1"); err != nil || !got.Found || got.Store != store5 || got.Item != zzzEpic {
 		t.Errorf("移動先が非表示の Locate(HH-1): %+v, %v", got, err)
+	}
+}
+
+// B5c-13: 移したあとに移動先で接頭辞を HH から APP に変えても、移動元の古いアドレスは記録の old(HH)で当たる。移動元に一度も
+// なかった APP は、記録に当てない(移動先のいまの接頭辞として、移動の 1 行なしで開く)。
+func TestLocateWorkspaceRenamedAfterMove(t *testing.T) {
+	f := newFixture(t)
+	moveWeb(t, f, store1, store2)
+	// 移したあと(svc.Clock の移動の日時より後)に書く。
+	f.clock.Step = 48 * time.Hour
+	f.clock.Now()
+	f.clock.Step = time.Millisecond
+	write(t, f.rec, store2, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet("prefix", "HH", "APP"))
+	})
+	if got := locateWorkspace(t, f, "main", "HH"); got.Store != store2 || got.Workspace != apptest.SampleWorkspace || got.MovedFrom == nil || got.MovedFrom.Old != "HH" {
+		t.Errorf("LocateWorkspace(HH): %+v, %+v", got, got.MovedFrom)
+	}
+	if got := locateWorkspace(t, f, "main", "APP"); !got.Found || got.Store != store2 || got.Workspace != apptest.SampleWorkspace || got.MovedFrom != nil {
+		t.Errorf("LocateWorkspace(APP): %+v, %+v", got, got.MovedFrom)
 	}
 }
 

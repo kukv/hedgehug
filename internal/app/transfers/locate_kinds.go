@@ -3,6 +3,7 @@ package transfers
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -108,13 +109,21 @@ func deletedIn(snaps []snapshot, k kind, ws workspace.ID, n int) bool {
 	return false
 }
 
-// prefixesOf は、表示中のすべての Store snaps の中の、内部 ID id のワークスペース(削除済みを含む)のいまの接頭辞と旧い接頭辞。
-func prefixesOf(snaps []snapshot, id change.ID) []string {
+// prefixesOf は、表示中のすべての Store snaps の中の、内部 ID id のワークスペース(削除済みを含む)の接頭辞のうち、日時 at
+// までにログに出たもの。
+func prefixesOf(snaps []snapshot, id change.ID, at time.Time) []string {
+	var out []string
 	for _, snap := range snaps {
 		for _, w := range snap.workspaces {
-			if w.ws.ID == id {
-				return append([]string{w.ws.Prefix}, w.old...)
+			if w.ws.ID != id {
+				continue
 			}
+			for p, since := range w.since {
+				if !since.After(at) {
+					out = append(out, p)
+				}
+			}
+			return out
 		}
 	}
 	return nil
