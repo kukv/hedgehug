@@ -21,20 +21,26 @@ async function put(req: APIRequestContext, path: string, data: unknown) {
   if (!res.ok()) throw new Error(`${path}: ${res.status()} ${await res.text()}`);
 }
 
-// unreadAll は、受信箱の「すべて」の未読数(サーバーの値)。
-async function unreadAll(req: APIRequestContext) {
+// unread は、受信箱のタブごとの未読数(サーバーの値)。
+async function unread(req: APIRequestContext) {
   const res = await req.get("/api/inbox/unread", { headers: auth });
-  return (await res.json()).counts.all as number;
+  return (await res.json()).counts as { all: number; automation: number };
 }
 
+// tabName は、未読数 n のタブの名前。0 なら数字を出さない。
+const tabName = (label: string, n: number) => (n === 0 ? label : `${label} ${n}`);
+
 // stoppedNotice は、新しいワークスペースでルールを制約で止め、受信箱に止まった通知を 1 件作る。
-// 作る前の「すべて」の未読数(before)も返す。
+// 作る前の「すべて」と「自動化」の未読数(before・automationBefore)も返す。
 async function stoppedNotice(page: Page, info: TestInfo) {
   const req = page.request;
-  const before = await unreadAll(req);
+  const { all: before, automation: automationBefore } = await unread(req);
   const prefix = prefixOf(info);
   const base = `/api/stores/${e2eStore}`;
-  const ws = await post(req, `${base}/workspaces`, { name: unique(info, "受信箱"), prefix });
+  const ws = await post(req, `${base}/workspaces`, {
+    name: unique(info, `受信箱 ${prefix}`),
+    prefix,
+  });
   const detail = await (await req.get(`${base}/workspaces/${ws.id}`, { headers: auth })).json();
   const status = (name: string) =>
     detail.settings.statuses.find((v: { name: string }) => v.name === name).id as string;
@@ -68,7 +74,7 @@ async function stoppedNotice(page: Page, info: TestInfo) {
     (await (await req.get(`${base}/items/${task.id}`, { headers: auth })).json()).status as string;
   const setStatus = (name: string) =>
     put(req, `${base}/items/${task.id}/properties/status`, { value: status(name) });
-  return { before, rule, status, statusOf, setStatus };
+  return { before, automationBefore, rule, status, statusOf, setStatus };
 }
 
 // badge は、サイドバーの「受信箱」の未読数のバッジ。860px 以下の幅では引き出しを開く。
@@ -149,23 +155,28 @@ test("toggles read with the dot and reads all in the automation tab", async ({ p
   const n = await stoppedNotice(page, info);
   const row = await openInbox(page, n.rule);
   const all = page.getByRole("tab", { name: /^すべて/ });
-  await expect(all).toHaveAccessibleName(`すべて ${n.before + 1}`);
+  await expect(all).toHaveAccessibleName(tabName("すべて", n.before + 1));
 
   await row.getByRole("button", { name: "既読にする" }).click();
   await expect(row.getByRole("button", { name: "未読にする" })).toBeVisible();
-  await expect(all).toHaveAccessibleName(n.before === 0 ? "すべて" : `すべて ${n.before}`);
+  await expect(all).toHaveAccessibleName(tabName("すべて", n.before));
   await row.getByRole("button", { name: "未読にする" }).click();
   await expect(row.getByRole("button", { name: "既読にする" })).toBeVisible();
-  await expect(all).toHaveAccessibleName(`すべて ${n.before + 1}`);
+  await expect(all).toHaveAccessibleName(tabName("すべて", n.before + 1));
 
-  await page.getByRole("tab", { name: /^自動化/ }).click();
-  await expect(page.getByRole("tab", { name: /^自動化/ })).toHaveAttribute("aria-selected", "true");
+  // 「自動化」のタブの「すべて既読にする」は、前のテストの自動化の通知も既読にする。ほかのタブの未読は残る。
+  const automation = page.getByRole("tab", { name: /^自動化/ });
+  await expect(automation).toHaveAccessibleName(tabName("自動化", n.automationBefore + 1));
+  await automation.click();
+  await expect(automation).toHaveAttribute("aria-selected", "true");
   const readAll = page.getByRole("button", { name: "すべて既読にする" });
   await readAll.click();
   await expect(row.getByRole("button", { name: "未読にする" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "自動化", exact: true })).toBeVisible();
+  await expect(automation).toHaveAccessibleName("自動化");
   await expect(readAll).toBeDisabled();
-  await expectCount((await badge(page, info)).count, 0);
+  const rest = n.before - n.automationBefore;
+  await expect(all).toHaveAccessibleName(tabName("すべて", rest));
+  await expectCount((await badge(page, info)).count, rest);
 });
 
 test("another tab receives the unread count", async ({ page }, info) => {
@@ -174,14 +185,14 @@ test("another tab receives the unread count", async ({ page }, info) => {
   const otherRow = await openInbox(other, n.rule);
   await expect(otherRow.getByRole("button", { name: "既読にする" })).toBeVisible();
   const otherAll = other.getByRole("tab", { name: /^すべて/ });
-  await expect(otherAll).toHaveAccessibleName(`すべて ${n.before + 1}`);
+  await expect(otherAll).toHaveAccessibleName(tabName("すべて", n.before + 1));
 
   const row = await openInbox(page, n.rule);
   await row.getByRole("button", { name: "既読にする" }).click();
   await expect(row.getByRole("button", { name: "未読にする" })).toBeVisible();
 
   await expect(otherRow.getByRole("button", { name: "未読にする" })).toBeVisible();
-  await expect(otherAll).toHaveAccessibleName(n.before === 0 ? "すべて" : `すべて ${n.before}`);
+  await expect(otherAll).toHaveAccessibleName(tabName("すべて", n.before));
   await expectCount((await badge(other, info)).count, n.before);
   await other.close();
 });
