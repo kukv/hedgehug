@@ -59,7 +59,7 @@ export interface Inbox {
   // unread は、タブごとの未読数。canReadAll は、いまのタブの未読が 1 以上か(「すべて既読にする」を押せるか)。
   unread: Readable<InboxCounts>;
   canReadAll: Readable<boolean>;
-  // open は、画面を開いたときに、いまのタブの行を読む。
+  // open は、画面を開いたときに、いまのタブの行を読む。open・select・more は、読めなかったらエラーのトーストを出し、投げない。
   open(): Promise<void>;
   select(tab: InboxTab): Promise<void>;
   more(): Promise<void>;
@@ -102,6 +102,14 @@ export function createInbox(deps: InboxDeps): Inbox {
     canReadAll.set(counts[get(state).tab] > 0);
   };
 
+  // failed は、読み込みの失敗をエラーのトーストで出す。画面に未処理の拒否を残さないため、投げない。
+  // 古い読み込みの失敗は、いまの表示と関係ないので出さない。
+  function failed(mine: number, e: unknown) {
+    if (mine !== loads) return;
+    state.update((s) => ({ ...s, loading: false }));
+    deps.toasts.show(e instanceof Error ? e.message : String(e), { error: true });
+  }
+
   // first は、タブの最初の 300 件を読む。
   async function first(tab: InboxTab) {
     loads += 1;
@@ -114,8 +122,7 @@ export function createInbox(deps: InboxDeps): Inbox {
       state.set({ tab, rows: page.rows, more: page.more, loading: false });
       publishUnread(page.unread);
     } catch (e) {
-      if (mine === loads) state.update((s) => ({ ...s, loading: false }));
-      throw e;
+      failed(mine, e);
     }
   }
 
@@ -168,8 +175,7 @@ export function createInbox(deps: InboxDeps): Inbox {
         state.set({ tab: s.tab, rows: [...s.rows, ...page.rows], more: page.more, loading: false });
         publishUnread(page.unread);
       } catch (e) {
-        if (mine === loads) state.update((x) => ({ ...x, loading: false }));
-        throw e;
+        failed(mine, e);
       }
     },
     toggle: (row) => write(() => deps.port.setRead(row.id, !row.read)),

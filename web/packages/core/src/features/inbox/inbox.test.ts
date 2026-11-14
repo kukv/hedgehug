@@ -156,6 +156,24 @@ describe("createInbox (06「受信箱」)", () => {
     expect(get(t.inbox.state).rows).toHaveLength(600);
   });
 
+  it("shows a failure to read as an error toast without throwing", async () => {
+    const t = setup(vi.fn, rows(301));
+    t.port.list.mockRejectedValueOnce(new Error("500 Internal Server Error"));
+    await expect(t.inbox.open()).resolves.toBeUndefined();
+    expect(get(t.inbox.state).loading).toBe(false);
+    await t.inbox.open();
+    t.port.list.mockRejectedValueOnce(new Error("通信できません"));
+    await expect(t.inbox.more()).resolves.toBeUndefined();
+    t.port.list.mockRejectedValueOnce(new Error("通信できません"));
+    await expect(t.inbox.select("mention")).resolves.toBeUndefined();
+    expect(get(t.toasts.list).map((x) => [x.text, x.error])).toEqual([
+      ["500 Internal Server Error", true],
+      ["通信できません", true],
+      ["通信できません", true],
+    ]);
+    expect(get(t.inbox.state)).toMatchObject({ tab: "mention", loading: false });
+  });
+
   it("reloads the unread counts alone", async () => {
     const t = setup(vi.fn, [row(1)]);
     await t.inbox.reloadUnread();

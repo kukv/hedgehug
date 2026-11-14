@@ -2,6 +2,7 @@
   import { type Resolved, type Route, type StoreNode, syncAllHint, syncCard } from "@hedgehug/core";
   import { Brand, Button, SyncCard } from "@hedgehug/ui";
   import { SvelteSet } from "svelte/reactivity";
+  import { inbox } from "../inbox";
   import type { Links } from "../links";
   import { isMac } from "../tab";
   import { itemDialog, sync, syncNow } from "../wire";
@@ -20,6 +21,8 @@
   const card = $derived(syncCard($status, $syncNow));
   const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
+  const inboxRoute: Route = { name: "inbox" };
+  const unread = inbox.unread;
 
   // 開閉は、このタブのあいだだけ覚える。
   const collapsed = new SvelteSet<string>();
@@ -52,6 +55,20 @@
 <Button variant="primary" onclick={() => void itemDialog.open()}>
   新規作成 <kbd class="kbd">C</kbd>
 </Button>
+<nav class="nav" aria-label="ナビ">
+  <a
+    class="nav-row"
+    href={links.href(inboxRoute)}
+    aria-current={current?.name === "inbox" ? "page" : undefined}
+    onclick={(e) => links.click(e, inboxRoute)}
+    onauxclick={(e) => links.click(e, inboxRoute)}
+  >
+    <span>受信箱</span>
+    {#if $unread.all > 0}
+      <span class="badge">{$unread.all}</span>
+    {/if}
+  </a>
+</nav>
 {#each stores as store (store.id)}
   <SidebarStore {store} {current} {links} {collapsed} ontoggle={toggle} />
 {/each}
@@ -89,6 +106,36 @@
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  .nav {
+    display: flex;
+    flex-direction: column;
+    padding-top: 8px;
+  }
+  .nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .nav-row:hover,
+  .nav-row[aria-current="page"] {
+    background: var(--hover);
+  }
+  .nav-row[aria-current="page"] {
+    font-weight: 500;
+  }
+  .badge {
+    font-size: 11px;
+    background: var(--accent);
+    color: var(--on-accent);
+    border-radius: 999px;
+    padding: 0 6px;
+    font-variant-numeric: tabular-nums;
   }
   .kbd {
     font-family: var(--font-mono);
