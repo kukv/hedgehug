@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -124,6 +125,15 @@ func TestNoIdentity(t *testing.T) {
 		t.Fatalf("Judge = %v, want nil", err)
 	}
 	f.wantNone()
+}
+
+func TestInboxErrorReturned(t *testing.T) {
+	f := setup(t)
+	f.inbox.Err = errors.New("state.db に書けない")
+	s := f.save(user("taro"), setTask(assign("hanako")))
+	if err := f.judgeErr(s); !errors.Is(err, f.inbox.Err) {
+		t.Errorf("Judge = %v, want %v", err, f.inbox.Err)
+	}
 }
 
 func TestSkipsMissingEntity(t *testing.T) {
