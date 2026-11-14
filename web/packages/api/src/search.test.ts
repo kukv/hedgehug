@@ -37,6 +37,18 @@ const row = {
   oldIdHit: false,
   readOnly: false,
   deleted: null,
+  start: "",
+  estimate: null,
+  systems: null,
+  sprint: "",
+  release: "",
+  project: { display: "HH-P1", title: "p" },
+  parent: null,
+  created: "2026-11-12T09:00:00Z",
+  updated: "2026-11-12T09:00:00Z",
+  unused: null,
+  removed: null,
+  custom: {},
 };
 
 describe("createSearchPort", () => {
@@ -59,6 +71,30 @@ describe("createSearchPort", () => {
       assignee: { login: "a", name: null },
       points: 3,
     });
+  });
+
+  it("sends sort and group only with a table, and maps columns and groups", async () => {
+    const fetch = respond(200, {
+      errors: [],
+      hasKey: false,
+      group: "",
+      deleted: false,
+      rows: [row],
+      columns: [{ key: "id", name: "ID", type: "", sortable: true }],
+      groupBy: "kind",
+      groups: [{ label: "task", rows: [0] }],
+    });
+    const r = await createSearchPort().search("", {
+      sort: { key: "title", desc: true },
+      group: "kind",
+    });
+    expect(fetch.mock.calls[0]?.[1]?.body).toBe(
+      JSON.stringify({ query: "", sort: { key: "title", desc: true }, group: "kind" }),
+    );
+    expect(r.columns).toEqual([{ key: "id", name: "ID", type: "", sortable: true }]);
+    expect(r.groupBy).toBe("kind");
+    expect(r.groups).toEqual([{ label: "task", rows: [0] }]);
+    expect(r.rows[0]).toMatchObject({ systems: [], unused: [], removed: [], parent: null });
   });
 
   it("maps a null list of rows to an empty one", async () => {

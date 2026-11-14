@@ -21,11 +21,14 @@ export {
 } from "./features/search/search";
 export type {
   SearchAssignee,
+  SearchColumn,
   SearchDeleted,
+  SearchGroup,
   SearchPriority,
   SearchResult,
   SearchRow,
   SearchStatus,
+  SearchTableRequest,
 } from "./features/search/types";
 export {
   assigneeText,

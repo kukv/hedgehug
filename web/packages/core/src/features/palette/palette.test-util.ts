@@ -85,6 +85,9 @@ export const noKey: SearchResult = {
   group: "",
   deleted: false,
   rows: [],
+  columns: [],
+  groupBy: "",
+  groups: [],
 };
 export function found(n: number): SearchResult {
   const row = {} as SearchResult["rows"][number];

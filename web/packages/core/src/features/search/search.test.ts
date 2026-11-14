@@ -38,7 +38,22 @@ const result = (...ids: string[]): SearchResult => ({
     oldIdHit: false,
     readOnly: false,
     deleted: null,
+    start: "",
+    estimate: null,
+    systems: [],
+    sprint: "",
+    release: "",
+    project: { display: "HH-P1", title: "p" },
+    parent: null,
+    created: "",
+    updated: "",
+    unused: [],
+    removed: [],
+    custom: {},
   })),
+  columns: [],
+  groupBy: "",
+  groups: [],
 });
 
 function setup(saved: string | null = null) {
