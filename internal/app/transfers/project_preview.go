@@ -41,13 +41,14 @@ type projectSource struct {
 	own      []automation.Rule
 }
 
-// readProjectSource は、プロジェクト id を get で読んで、移すものを読む。
+// readProjectSource は、プロジェクト id を get で読んで、移すものを読む。外との関連は、ほかのプロジェクトのアイテムとの
+// 関連なので、Store のすべてのアイテムから集める。
 func readProjectSource(r port.Reader, id project.ID, get func(port.Reader, project.ID) (project.Project, error)) (projectSource, error) {
 	p, err := get(r, id)
 	if err != nil {
 		return projectSource{}, err
 	}
-	all, err := r.Items().List(id)
+	all, err := storeItems(r)
 	if err != nil {
 		return projectSource{}, err
 	}

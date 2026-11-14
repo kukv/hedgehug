@@ -20,12 +20,12 @@ const (
 	blockedStatus change.ID = "VALMBBLOCKED"
 )
 
-// withReviewAndBlocked は、Mobile のステータスの最後に Review(進行中)・Blocked(未着手)を足す。main の Web にはない。
+// withReviewAndBlocked は、Mobile のステータスの最後に Blocked(未着手)・Review(進行中)の順で足す。main の Web にはない。
 func withReviewAndBlocked(st *workspace.Settings) {
 	last := st.Statuses[len(st.Statuses)-1].Rank
 	st.Statuses = append(st.Statuses,
-		workspace.Value{ID: reviewStatus, Name: "Review", Color: "blue", Category: workspace.CategoryDoing, Rank: last + "V"},
-		workspace.Value{ID: blockedStatus, Name: "Blocked", Color: "gray", Category: workspace.CategoryTodo, Rank: last + "W"})
+		workspace.Value{ID: blockedStatus, Name: "Blocked", Color: "gray", Category: workspace.CategoryTodo, Rank: last + "V"},
+		workspace.Value{ID: reviewStatus, Name: "Review", Color: "blue", Category: workspace.CategoryDoing, Rank: last + "W"})
 }
 
 // mobileItem は、Mobile のプロジェクト「アプリ」の Epic「iOS」の下に、ステータス status の Task(番号 n)を足す。
@@ -88,8 +88,8 @@ func TestProjectPreviewRefusesUnselectableDestinations(t *testing.T) {
 }
 
 // アイテムが Review(2 件、うち 1 件は削除済み)と Todo、専用ルールが Blocked を使い、移動先(Web)に Review・Blocked がない
-// → 行は移動元の並びで Review(2)・Blocked(0)。選択肢は、プロジェクトが使わないことにしていて一緒に移る Pending を除いた
-// 移動先のステータス。初めの値は同じ分類の移動先の既定。
+// → 行は移動元の並びで Blocked(0)・Review(2)(ルールだけが使うものも同じ並びに入る)。選択肢は、プロジェクトが
+// 使わないことにしていて一緒に移る Pending を除いた移動先のステータス。初めの値は同じ分類の移動先の既定。
 func TestProjectPreviewReplacements(t *testing.T) {
 	f := newFixtureWith(t, withReviewAndBlocked)
 	mobileItem(t, f, "01TESTIT000000000000000010", 2, reviewStatus)
@@ -108,7 +108,7 @@ func TestProjectPreviewReplacements(t *testing.T) {
 	if len(got.Replacements) != 2 {
 		t.Fatalf("rows = %+v", got.Replacements)
 	}
-	review, blocked := got.Replacements[0], got.Replacements[1]
+	blocked, review := got.Replacements[0], got.Replacements[1]
 	if review.Status != reviewStatus || review.Name != "Review" || review.Count != 2 || review.Default != apptest.SampleStatusInProgress {
 		t.Errorf("Review = %+v", review)
 	}

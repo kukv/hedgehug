@@ -52,6 +52,11 @@ func TestProjectTargetsRefuseUnknownProject(t *testing.T) {
 	if _, err := f.svc.ProjectTargets(t.Context(), store1, project.ID("01TESTPR000000000000000099")); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("ない: %v", err)
 	}
+	// ワークスペースの削除で一緒に削除済みになったもの(root: false)。
+	write(t, f.rec, store2, func(tx port.Tx) error { return tx.WriteProjects().Append(teamProject, change.NewDeleteEntity(false)) })
+	if _, err := f.svc.ProjectTargets(t.Context(), store2, teamProject); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("削除済み(root: false): %v", err)
+	}
 	if err := apptest.DeleteProject(t.Context(), f.rec, store1, mobileProject); err != nil {
 		t.Fatal(err)
 	}
