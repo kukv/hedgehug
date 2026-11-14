@@ -16,12 +16,6 @@ import (
 
 const base = "/api/inbox"
 
-// tabs は、受け付けるタブ。
-var tabs = []appinbox.Tab{
-	appinbox.TabAll, appinbox.TabMention, appinbox.TabAssign, appinbox.TabWatch,
-	appinbox.TabOverwrite, appinbox.TabAutomation, appinbox.TabRepair,
-}
-
 type listInput struct {
 	Tab      string `query:"tab" doc:"all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400"`
 	BeforeAt string `query:"before_at" doc:"続きを読むとき、前の一覧の最後の行の at(RFC 3339、ナノ秒まで)。before_id と一緒に渡す"`
@@ -118,16 +112,22 @@ func registerActions(api huma.API, svc appinbox.Service) {
 
 // tabOf は、7 つのタブのどれかを返す。ほかは 400(huma の検査は 422 になるため、手で確かめる)。
 func tabOf(s string) (appinbox.Tab, error) {
-	if t := appinbox.Tab(s); slices.Contains(tabs, t) {
+	if t := appinbox.Tab(s); slices.Contains(appinbox.Tabs(), t) {
 		return t, nil
 	}
 	return "", huma.Error400BadRequest("unknown tab: " + s)
 }
 
-// cursorOf は、続きの位置。before_at がなければ先頭から(nil)。
+// cursorOf は、続きの位置。どちらもなければ先頭から(nil)。片方だけは 400。
 func cursorOf(in *listInput) (*port.NoticeCursor, error) {
 	if in.BeforeAt == "" {
+		if in.BeforeID != 0 {
+			return nil, huma.Error400BadRequest("before_id needs before_at")
+		}
 		return nil, nil
+	}
+	if in.BeforeID == 0 {
+		return nil, huma.Error400BadRequest("before_at needs before_id")
 	}
 	at, err := time.Parse(time.RFC3339Nano, in.BeforeAt)
 	if err != nil {

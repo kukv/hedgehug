@@ -3,6 +3,7 @@ package inbox_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -217,5 +218,12 @@ func TestRowSender(t *testing.T) {
 	r := f.page(t, inbox.TabAll, nil).Rows[0]
 	if r.Sender != "" || r.Action != nil || r.Kind != port.NoticeAutomation || r.Store.ID != s1 {
 		t.Errorf("row = %+v, want sender empty and no action", r)
+	}
+}
+
+func TestTabs(t *testing.T) {
+	want := []inbox.Tab{"all", "mention", "assign", "watch", "overwrite", "automation", "repair"}
+	if got := inbox.Tabs(); !slices.Equal(got, want) {
+		t.Errorf("Tabs() = %v, want %v", got, want)
 	}
 }

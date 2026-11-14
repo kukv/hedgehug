@@ -23,8 +23,10 @@ const (
 	TabRepair     Tab = "repair"
 )
 
-// tabs は、すべてのタブ。
-var tabs = []Tab{TabAll, TabMention, TabAssign, TabWatch, TabOverwrite, TabAutomation, TabRepair}
+// Tabs は、すべてのタブを並び順に返す。
+func Tabs() []Tab {
+	return []Tab{TabAll, TabMention, TabAssign, TabWatch, TabOverwrite, TabAutomation, TabRepair}
+}
 
 // KindsOf は、タブに出す通知の種類。すべては nil。
 func KindsOf(t Tab) []port.NoticeKind {
@@ -102,8 +104,8 @@ func (s Service) prune(ctx context.Context, store port.StoreID) error {
 
 // counts は、stores の未読数をタブごとに数える。
 func (s Service) counts(ctx context.Context, stores []port.StoreID) (map[Tab]int, error) {
-	out := make(map[Tab]int, len(tabs))
-	for _, t := range tabs {
+	out := make(map[Tab]int, len(Tabs()))
+	for _, t := range Tabs() {
 		out[t] = 0
 	}
 	if len(stores) == 0 {

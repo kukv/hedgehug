@@ -211,7 +211,7 @@ func TestListInboxCursor(t *testing.T) {
 
 func TestListInboxBadTab(t *testing.T) {
 	f := setup(t)
-	for _, q := range []string{"tab=nope", "", "tab=all&before_at=yesterday&before_id=1"} {
+	for _, q := range []string{"tab=nope", "", "tab=all&before_at=yesterday&before_id=1", "tab=all&before_id=1", "tab=all&before_at=2026-01-01T00:00:00Z"} {
 		if res := f.api.Get("/api/inbox?" + q); res.Code != http.StatusBadRequest {
 			t.Errorf("%q: %d %s", q, res.Code, res.Body)
 		}
