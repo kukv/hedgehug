@@ -43,7 +43,7 @@ func (s Service) CreateSprint(ctx context.Context, store port.StoreID, ws worksp
 // UpdateSprint は、スプリントの名前・日付・目標を直す。状態は変えない。
 func (s Service) UpdateSprint(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, in SprintInput) error {
 	name := planning.NormalizeName(in.Name)
-	return s.editPlan(ctx, store, ws, revival{workspace: true, field: sprintField(id), name: name},
+	return s.editPlan(ctx, store, ws, revival{workspace: true, kind: sprintKind, id: id, name: &name},
 		func(p planning.Plan) (string, error) {
 			if _, ok := p.UsableSprint(id); !ok {
 				return "", port.ErrNotFound
@@ -66,7 +66,7 @@ func (s Service) UpdateSprint(ctx context.Context, store port.StoreID, ws worksp
 
 // StartSprint は、計画中のスプリントを実行中にする。計画中以外は ErrNotFound。
 func (s Service) StartSprint(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, start, end string) error {
-	return s.editPlan(ctx, store, ws, revival{workspace: true, field: sprintField(id)},
+	return s.editPlan(ctx, store, ws, revival{workspace: true, kind: sprintKind, id: id},
 		func(p planning.Plan) (string, error) {
 			old, ok := p.UsableSprint(id)
 			if !ok || old.State != planning.Planned {

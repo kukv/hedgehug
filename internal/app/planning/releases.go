@@ -50,7 +50,7 @@ func (s Service) CreateRelease(ctx context.Context, store port.StoreID, ws works
 // UpdateRelease は、リリースの名前・予定日・説明を直す。状態は変えない。
 func (s Service) UpdateRelease(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, in ReleaseInput) error {
 	name := planning.NormalizeName(in.Name)
-	return s.editPlan(ctx, store, ws, revival{workspace: true, field: releaseField(id), name: name},
+	return s.editPlan(ctx, store, ws, revival{workspace: true, kind: releaseKind, id: id, name: &name},
 		func(p planning.Plan) (string, error) {
 			if _, ok := p.UsableRelease(id); !ok {
 				return "", port.ErrNotFound
@@ -77,7 +77,7 @@ func (s Service) SetReleaseState(ctx context.Context, store port.StoreID, ws wor
 	if !known {
 		return fmt.Errorf("%w: release state %q", port.ErrInvalidOperation, to)
 	}
-	err := s.editPlan(ctx, store, ws, revival{workspace: true, field: releaseField(id)},
+	err := s.editPlan(ctx, store, ws, revival{workspace: true, kind: releaseKind, id: id},
 		func(p planning.Plan) (string, error) {
 			old, ok := p.UsableRelease(id)
 			if !ok {

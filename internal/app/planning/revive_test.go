@@ -337,3 +337,112 @@ func TestUpdateSprintInDeletedWorkspaceRevives(t *testing.T) {
 		t.Error("戻っていない")
 	}
 }
+
+// planFixture は、ワークスペースを削除する前に作った、計画中のスプリントとリリース(と、あれば実行中のスプリント)。
+type planFixture struct {
+	planned, active dp.Sprint
+	release         dp.Release
+}
+
+// 削除済みのワークスペースでも、スプリント・リリースの作成と変更、実行中のスプリントの完了は、ワークスペースの削除を
+// 取り消して保存する(決定 R12・R11)。
+func TestDeletedWorkspaceRevivesOnPlanChange(t *testing.T) {
+	ws := apptest.SampleWorkspace
+	for _, c := range []struct {
+		name   string
+		active bool // 実行中のスプリントを作っておく
+		run    func(ctx context.Context, svc planning.Service, f planFixture) error
+	}{
+		{"CreateRelease", false, func(ctx context.Context, svc planning.Service, _ planFixture) error {
+			_, err := svc.CreateRelease(ctx, store, ws, planning.ReleaseInput{Name: "v2"})
+			return err
+		}},
+		{"UpdateRelease", false, func(ctx context.Context, svc planning.Service, f planFixture) error {
+			return svc.UpdateRelease(ctx, store, ws, f.release.ID, planning.ReleaseInput{Name: "v9"})
+		}},
+		{"SetReleaseState", false, func(ctx context.Context, svc planning.Service, f planFixture) error {
+			return svc.SetReleaseState(ctx, store, ws, f.release.ID, dp.Released)
+		}},
+		{"StartSprint", false, func(ctx context.Context, svc planning.Service, f planFixture) error {
+			return svc.StartSprint(ctx, store, ws, f.planned.ID, "2026-11-13", "2026-11-26")
+		}},
+		{"CloseSprint", true, func(ctx context.Context, svc planning.Service, f planFixture) error {
+			return svc.CloseSprint(ctx, store, ws, f.active.ID, nil)
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			svc, _ := setup(t)
+			f := deletedWorkspaceFixture(t, svc, c.active)
+			ctx := port.WithRevived(t.Context())
+			if err := c.run(ctx, svc, f); err != nil {
+				t.Fatal(err)
+			}
+			if !workspaceLive(t, svc) {
+				t.Error("ワークスペースが戻っていない")
+			}
+			revivedName(ctx, t, "Web")
+		})
+	}
+}
+
+// deletedWorkspaceFixture は、計画中のスプリント・リリース(active なら実行中のスプリントも)を作ってから、
+// ワークスペースを削除する。
+func deletedWorkspaceFixture(t *testing.T, svc planning.Service, active bool) planFixture {
+	t.Helper()
+	ctx := t.Context()
+	ws := apptest.SampleWorkspace
+	var f planFixture
+	var err error
+	if f.planned, err = svc.CreateSprint(ctx, store, ws, planning.SprintInput{Name: "Sprint 1"}); err != nil {
+		t.Fatal(err)
+	}
+	if f.release, err = svc.CreateRelease(ctx, store, ws, planning.ReleaseInput{Name: "v1"}); err != nil {
+		t.Fatal(err)
+	}
+	if active {
+		if f.active, err = svc.CreateSprint(ctx, store, ws, planning.SprintInput{Name: "Sprint A"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.StartSprint(ctx, store, ws, f.active.ID, "2026-11-13", "2026-11-26"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, ws); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// 削除済みのスプリント・リリースの編集で名前が空なら、08 の判定より先に名前の入力を求める。
+func TestUpdateDeletedEmptyName(t *testing.T) {
+	const want = "名前を入力してください"
+	svc, rec := setup(t)
+	ctx := t.Context()
+	ws := apptest.SampleWorkspace
+	s1 := plannedWorks(t, svc)
+	r1, err := svc.CreateRelease(ctx, store, ws, planning.ReleaseInput{Name: "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteSprint(ctx, store, ws, s1.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteRelease(ctx, store, ws, r1.ID); err != nil {
+		t.Fatal(err)
+	}
+	// 削除の前と同じ名前のものを作る(空の名前をいまの名前と取り違えると、08 の文言になる)。
+	if _, err := svc.CreateSprint(ctx, store, ws, planning.SprintInput{Name: "Sprint 1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateRelease(ctx, store, ws, planning.ReleaseInput{Name: "v1"}); err != nil {
+		t.Fatal(err)
+	}
+	n := len(rec.summaries)
+	if err := svc.UpdateSprint(ctx, store, ws, s1.ID, planning.SprintInput{Name: " "}); message(err) != want {
+		t.Errorf("UpdateSprint = %v", err)
+	}
+	if err := svc.UpdateRelease(ctx, store, ws, r1.ID, planning.ReleaseInput{Name: ""}); message(err) != want {
+		t.Errorf("UpdateRelease = %v", err)
+	}
+	notRevived(t, svc, rec, n, s1.ID)
+}

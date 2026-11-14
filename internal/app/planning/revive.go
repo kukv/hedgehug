@@ -1,10 +1,8 @@
 package planning
 
 import (
-	"cmp"
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -23,17 +21,35 @@ const (
 // errNoRows は、保存で書く行がないことを伝える。取り消すものがあれば ErrNotFound(決定 R3)、なければ何もしない。
 var errNoRows = errors.New("書く行がない")
 
+// planKind は、削除を取り消すものの種類。
+type planKind int
+
+const (
+	noPlan      planKind = iota // スプリント・リリースは取り消さない
+	sprintKind                  // スプリント
+	releaseKind                 // リリース
+)
+
 // revival は、保存で取り消すもの。ゼロ値は何も取り消さず、削除済みのワークスペースを ErrNotFound で断る。
 type revival struct {
-	workspace bool   // 削除済みのワークスペースの削除を取り消す
-	field     string // 削除を取り消すスプリント・リリースの項目名(sprints/<ID>・releases/<ID>)。空なら取り消さない
-	name      string // field の保存のあとの名前。空なら、いまの名前
+	workspace bool      // 削除済みのワークスペースの削除を取り消す
+	kind      planKind  // 削除を取り消すものの種類
+	id        change.ID // 削除を取り消すスプリント・リリースの ID
+	name      *string   // 保存のあとの名前(正規化済み)。nil なら、いまの名前
 }
 
-func sprintField(id change.ID) string  { return "sprints/" + string(id) }
-func releaseField(id change.ID) string { return "releases/" + string(id) }
+// field は、削除を取り消すものの項目名(sprints/<ID>・releases/<ID>)。取り消さないなら空。
+func (rv revival) field() string {
+	switch rv.kind {
+	case sprintKind:
+		return "sprints/" + string(rv.id)
+	case releaseKind:
+		return "releases/" + string(rv.id)
+	}
+	return ""
+}
 
-// plan は、保存の前と中で読む計画。field を覆う削除の行は、ないものとして読む。
+// plan は、保存の前と中で読む計画。rv.field() を覆う削除の行は、ないものとして読む。
 func (rv revival) plan(r port.Reader, ws workspace.ID) (planning.Plan, error) {
 	if rv.workspace {
 		if _, err := port.EditableWorkspace(r, ws); err != nil {
@@ -46,13 +62,13 @@ func (rv revival) plan(r port.Reader, ws workspace.ID) (planning.Plan, error) {
 	if err != nil {
 		return planning.Plan{}, err
 	}
-	if rv.field != "" {
-		log = workspace.WithoutCovering(log, rv.field)
+	if rv.field() != "" {
+		log = workspace.WithoutCovering(log, rv.field())
 	}
 	return planning.FromLog(log), nil
 }
 
-// pending は、保存すれば取り消すもの(削除済みのワークスペースか field)があるか。
+// pending は、保存すれば取り消すもの(削除済みのワークスペースかスプリント・リリース)があるか。
 func (rv revival) pending(r port.Reader, ws workspace.ID) (bool, error) {
 	if rv.workspace {
 		w, err := r.Workspaces().Get(ws)
@@ -60,14 +76,14 @@ func (rv revival) pending(r port.Reader, ws workspace.ID) (bool, error) {
 			return err == nil, err
 		}
 	}
-	if rv.field == "" {
+	if rv.field() == "" {
 		return false, nil
 	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: ws})
-	return len(workspace.Covering(log, rv.field)) > 0, err
+	return len(workspace.Covering(log, rv.field())) > 0, err
 }
 
-// revive は、書く Tx の中で、ワークスペースと field の削除を取り消す。取り消したら true。field を取り消して
+// revive は、書く Tx の中で、ワークスペースとスプリント・リリースの削除を取り消す。取り消したら true。スプリント・リリースを取り消して
 // 名前が削除されていないものと重なるなら、08「復元」の文言で断る(行を書く前に、保存のあとの名前で判定する)。
 func (rv revival) revive(ctx context.Context, tx port.Tx, ws workspace.ID) (bool, error) {
 	var wsRevived bool
@@ -77,10 +93,10 @@ func (rv revival) revive(ctx context.Context, tx port.Tx, ws workspace.ID) (bool
 			return false, err
 		}
 	}
-	if rv.field == "" {
+	if rv.field() == "" {
 		return wsRevived, nil
 	}
-	ok, err := port.ReviveSetting(ctx, tx, ws, rv.field)
+	ok, err := port.ReviveSetting(ctx, tx, ws, rv.field())
 	if err != nil || !ok {
 		return wsRevived, err
 	}
@@ -88,7 +104,7 @@ func (rv revival) revive(ctx context.Context, tx port.Tx, ws workspace.ID) (bool
 	if err != nil {
 		return false, err
 	}
-	return true, checkRevivedName(p, rv.field, rv.name)
+	return true, checkRevivedName(p, rv)
 }
 
 // write は、writePlanFrom の書く Tx の中身。最初に削除を取り消し、読み直した計画で write を呼ぶ。
@@ -114,30 +130,55 @@ func (rv revival) write(ctx context.Context, tx port.Tx, ws workspace.ID,
 	return nil
 }
 
-// checkRevivedName は、取り消したスプリント・リリース f の名前(name が空なら、いまの名前)が、
-// 削除されていないほかのものと重なれば断る。
-func checkRevivedName(p planning.Plan, f, name string) error {
-	kind, id, _ := strings.Cut(f, "/")
-	if kind == "sprints" {
-		for _, sp := range p.Sprints {
-			if sp.ID == change.ID(id) && nameTaken(sp.ID, cmp.Or(name, sp.Name), p.LiveSprints(), func(s planning.Sprint) (change.ID, string) { return s.ID, s.Name }) {
-				return refusal.New(sprintNameTaken)
-			}
-		}
-		return nil
+// checkRevivedName は、取り消したスプリント・リリースの保存のあとの名前が、空なら入力を求め、削除されていない
+// ほかのものと重なれば 08 の文言で断る。p は取り消したあとの計画。
+func checkRevivedName(p planning.Plan, rv revival) error {
+	if rv.name != nil && *rv.name == "" {
+		return refusal.New("名前を入力してください")
 	}
-	for _, r := range p.Releases {
-		if r.ID == change.ID(id) && nameTaken(r.ID, cmp.Or(name, r.Name), p.LiveReleases(), func(r planning.Release) (change.ID, string) { return r.ID, r.Name }) {
+	switch rv.kind {
+	case sprintKind:
+		sp, ok := p.UsableSprint(rv.id)
+		if ok && nameTaken(rv.id, rv.nameOr(sp.Name), sprintNames(p.LiveSprints())) {
+			return refusal.New(sprintNameTaken)
+		}
+	case releaseKind:
+		r, ok := p.UsableRelease(rv.id)
+		if ok && nameTaken(rv.id, rv.nameOr(r.Name), releaseNames(p.LiveReleases())) {
 			return refusal.New(releaseNameTaken)
 		}
 	}
 	return nil
 }
 
-// nameTaken は、live のうち id でないものに、名前 name と同じものがあるか。
-func nameTaken[T any](id change.ID, name string, live []T, of func(T) (change.ID, string)) bool {
-	for _, o := range live {
-		if oid, oname := of(o); oid != id && planning.NormalizeName(oname) == planning.NormalizeName(name) {
+// nameOr は、保存のあとの名前。名前を変えない保存なら current。
+func (rv revival) nameOr(current string) string {
+	if rv.name != nil {
+		return *rv.name
+	}
+	return current
+}
+
+func sprintNames(live []planning.Sprint) map[change.ID]string {
+	names := make(map[change.ID]string, len(live))
+	for _, s := range live {
+		names[s.ID] = s.Name
+	}
+	return names
+}
+
+func releaseNames(live []planning.Release) map[change.ID]string {
+	names := make(map[change.ID]string, len(live))
+	for _, r := range live {
+		names[r.ID] = r.Name
+	}
+	return names
+}
+
+// nameTaken は、names(ID ごとの名前)のうち id でないものに、名前 name と同じものがあるか。
+func nameTaken(id change.ID, name string, names map[change.ID]string) bool {
+	for oid, oname := range names {
+		if oid != id && planning.NormalizeName(oname) == planning.NormalizeName(name) {
 			return true
 		}
 	}
