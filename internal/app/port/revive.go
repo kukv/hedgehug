@@ -118,10 +118,6 @@ func ReviveProjectAs(ctx context.Context, tx Tx, id project.ID, title string) er
 	if err != nil {
 		return err
 	}
-	ws, err := tx.Workspaces().Get(p.Place.Workspace)
-	if err != nil {
-		return err
-	}
 	live, err := LiveProjects(tx, p.Place.Workspace)
 	if err != nil {
 		return err
@@ -131,6 +127,28 @@ func ReviveProjectAs(ctx context.Context, tx Tx, id project.ID, title string) er
 	}
 	if err := project.CheckRevive(title, live); err != nil {
 		return err // 同じ名前の削除されていないプロジェクトがあれば、取り消さない(決定 S11)
+	}
+	return reviveProject(ctx, tx, p)
+}
+
+// ReviveMovingProject は、ReviveProject の、同じ名前の判定をしない版。別のワークスペースへ移す保存が使う(プロジェクトは
+// 移動先へ行くので、名前は移動先で判定する。決定 S11)。
+func ReviveMovingProject(ctx context.Context, tx Tx, id project.ID) error {
+	p, err := EditableProject(tx, id)
+	if errors.Is(err, ErrNotFound) || (err == nil && p.Deleted == nil) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return reviveProject(ctx, tx, p)
+}
+
+// reviveProject は、削除済みのプロジェクト p の削除の操作の行を、プロジェクト自身とそのアイテムのログから取り消す。
+func reviveProject(ctx context.Context, tx Tx, p project.Project) error {
+	ws, err := tx.Workspaces().Get(p.Place.Workspace)
+	if err != nil {
+		return err
 	}
 	log, err := tx.Changes().Of(change.Ref{Kind: change.KindProject, ID: p.ID})
 	if err != nil {

@@ -293,6 +293,24 @@ func TestMoveProjectRevivesDeletedElsewhere(t *testing.T) {
 	}
 }
 
+// 決定 S11: 別の画面で削除したプロジェクトの名前は、移動先で判定する(移動元に同じ名前の新しいプロジェクトがあっても移す)。
+// 移動先に同じ名前があれば、移動先の名前で断る(別の Store の移動と同じ)。
+func TestMoveProjectRevivesWithSourceSameName(t *testing.T) {
+	f := newFixture(t)
+	deleteSampleProject(t, f)
+	addProject(t, f.rec, apptest.SampleWorkspace, "01TESTPR000000000000000007", 3, "ログイン")
+	addProject(t, f.rec, mobileWS, "01TESTPR000000000000000008", 2, "ログイン")
+	_, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, projectTo(store1, mobileWS))
+	wantRefusal(t, err, "Mobile には同じ名前のプロジェクトがあります")
+	write(t, f.rec, store1, func(tx port.Tx) error {
+		return tx.WriteProjects().Append("01TESTPR000000000000000008", change.NewDeleteEntity(true))
+	})
+	moveProject(t, f, apptest.SampleProject, projectTo(store1, mobileWS))
+	if p := projectOf(t, f.rec, apptest.SampleProject); p.Deleted != nil || p.Place.Workspace != mobileWS {
+		t.Errorf("project = %+v", p)
+	}
+}
+
 // 移動元が閲覧のみなら断る。移動先が同じワークスペース・削除済みのワークスペース・閲覧のみの Store なら ErrNotFound、表示中でない
 // Store なら ErrStoreNotFound。どれも何も保存しない。
 func TestMoveProjectRefusals(t *testing.T) {

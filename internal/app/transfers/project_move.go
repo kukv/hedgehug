@@ -67,8 +67,9 @@ func (s Service) MoveProject(ctx context.Context, store port.StoreID, id project
 	var moved ProjectMoved
 	op := port.Operation{Actor: change.User(me), Summary: summary}
 	err = s.Stores.Write(ctx, store, op, func(tx port.Tx) error {
-		// 別の画面で削除されていたら、削除を取り消してから移す(06「他の書き手との重なり」、A5b-15)。
-		if err := port.ReviveProject(ctx, tx, id); err != nil {
+		// 別の画面で削除されていたら、削除を取り消してから移す(06「他の書き手との重なり」、A5b-15)。名前は移動元では判定せず、
+		// 移動先で判定する(決定 S11。planProjectWithin の refuseProjectMove)。
+		if err := port.ReviveMovingProject(ctx, tx, id); err != nil {
 			return err
 		}
 		p, err := planProjectWithin(tx, id, in, port.LiveProject, s.IDs.New)
