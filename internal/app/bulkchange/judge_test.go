@@ -111,7 +111,7 @@ func TestJudgeKinds(t *testing.T) {
 
 func TestJudgeNameIgnoresCase(t *testing.T) {
 	c := jctx(item.Task)
-	wantDrafts(t, judge(c, parsed{field: FieldStatus, text: "done"}),
+	wantDrafts(t, judge(c, parsed{field: FieldStatus, text: " done "}),
 		change.NewSet("status", c.it.Status, valueID(c.settings.Statuses, "Done")))
 	wantReason(t, judge(c, parsed{field: FieldStatus, text: "Closed"}), "値がない")
 }
@@ -190,6 +190,25 @@ func TestJudgeSprintRelease(t *testing.T) {
 	wantReason(t, judge(c, parsed{field: FieldRelease, text: "Nope"}), "値がない")
 	c.it.Release = "R9"
 	wantSame(t, judge(c, parsed{field: FieldRelease}))
+}
+
+func TestJudgeArchivedRelease(t *testing.T) {
+	c := jctx(item.Task)
+	wantReason(t, judge(c, parsed{field: FieldRelease, text: "R-2"}), "値がない")
+	c.it.Release = "R2"
+	wantSame(t, judge(c, parsed{field: FieldRelease, text: "R-2"}))
+	wantDrafts(t, judge(c, parsed{field: FieldRelease}), change.NewSet(item.ReleaseField, "R2", nil))
+}
+
+func TestJudgeClosedSprint(t *testing.T) {
+	c := jctx(item.Task)
+	c.it.Sprint = "SP2"
+	wantSame(t, judge(c, parsed{field: FieldSprint, text: "S-2"}))
+	got := judge(c, parsed{field: FieldSprint})
+	wantDrafts(t, got, change.NewSet(item.SprintField, "SP2", nil))
+	if got.sprint == nil || *got.sprint != "" {
+		t.Fatalf("sprint = %v", got.sprint)
+	}
 }
 
 func TestJudgeDates(t *testing.T) {
