@@ -306,3 +306,27 @@ func TestSaveConflictWriteFailsAddsNothing(t *testing.T) {
 		t.Errorf("notices = %+v, want none", got)
 	}
 }
+
+// 書き込みが済んだあとに受信箱へ足せなくても、保存は成功として合わせた結果を返す(失敗にすると、同じ入力の
+// やり直しで両方を残す区切りがもう一度入る)。
+func TestSaveConflictInboxFailureStillSucceeds(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	taro := svc
+	taro.Identity = apptest.Identity{Login: "taro"}
+	if _, err := svc.SaveItem(ctx, store, apptest.SampleTask, "", "a\nb\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taro.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\nx\n"); err != nil {
+		t.Fatal(err)
+	}
+	svc.Inbox = &apptest.Inbox{Err: errors.New("inbox down")}
+	res, err := svc.SaveItem(ctx, store, apptest.SampleTask, "a\nb\n", "a\ny\n")
+	if err != nil || !res.Conflict {
+		t.Fatalf("SaveItem = %+v, %v, want conflict result and nil error", res, err)
+	}
+	got, err := svc.GetItem(ctx, store, apptest.SampleTask)
+	if err != nil || got != res.Text {
+		t.Errorf("GetItem = %q, %v, want %q", got, err, res.Text)
+	}
+}

@@ -30,8 +30,10 @@ func descConflicts(r port.Reader, b batch, store port.StoreID, me string, own fu
 			if !found {
 				continue
 			}
+			// 相手側に desc の行がない(作成・複製など)ときは、差出人を空(「hedgehug」)にするのが意図。
 			n := e.base
 			n.Kind, n.Store, n.Text, n.Field, n.Sender = port.NoticeOverwrite, store, descConflictText, "desc", latestSender(other)
+			// 内部の ID は ULID なので、エンティティの ID がそのまま desc になることはなく、field の Source と衝突しない。
 			n.Source = "overwrite:desc:" + string(c.Ref.ID) + ":" + s.Key.Version
 			out = append(out, n)
 		}

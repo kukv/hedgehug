@@ -25,16 +25,19 @@ func mergeConflicts(c *object.Commit, base baseFunc) ([]port.DescConflict, error
 	if err != nil {
 		return nil, err
 	}
+	merged, err := c.Tree()
+	if err != nil {
+		return nil, err
+	}
 	names, err := differingDescs(trees[0], trees[1])
 	if err != nil || len(names) == 0 {
 		return nil, err
 	}
-	baseTree, err := base()
-	if err != nil || baseTree == nil {
+	if names, err = overlapping(names, merged, trees); err != nil || len(names) == 0 {
 		return nil, err
 	}
-	merged, err := c.Tree()
-	if err != nil {
+	baseTree, err := base()
+	if err != nil || baseTree == nil {
 		return nil, err
 	}
 	var out []port.DescConflict
@@ -48,6 +51,30 @@ func mergeConflicts(c *object.Commit, base baseFunc) ([]port.DescConflict, error
 		}
 	}
 	slices.SortFunc(out, func(a, b port.DescConflict) int { return compareRef(a.Ref, b.Ref) })
+	return out, nil
+}
+
+// overlapping は、names のうち、合わせの結果 merged の説明が両方の親 sides の説明と違うもの。重なった説明は
+// 両方を残した区切りが入り、どちらの親とも違う。片側だけの変更は祖先を探さずに外す。
+func overlapping(names []string, merged *object.Tree, sides []*object.Tree) ([]string, error) {
+	var out []string
+	for _, name := range names {
+		text, err := textIn(merged, name)
+		if err != nil {
+			return nil, err
+		}
+		differs := true
+		for _, t := range sides {
+			side, err := textIn(t, name)
+			if err != nil {
+				return nil, err
+			}
+			differs = differs && side != text
+		}
+		if differs {
+			out = append(out, name)
+		}
+	}
 	return out, nil
 }
 

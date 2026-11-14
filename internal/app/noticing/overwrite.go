@@ -182,6 +182,7 @@ func overwriteNotice(r port.Reader, b batch, ref change.Ref, field string, l cha
 	if l.T == change.Add {
 		n.Mine, n.Kept = listOf(validRows(ref, b.before(ref)), l.F), listOf(validRows(ref, b.after(ref)), l.F)
 	}
+	// 内部の ID は ULID なので、エンティティの ID がそのまま desc になることはなく、desc の Source と衝突しない。
 	n.Source = "overwrite:" + string(ref.ID) + ":" + field + ":" + string(l.Winner.ID)
 	return n, true, nil
 }

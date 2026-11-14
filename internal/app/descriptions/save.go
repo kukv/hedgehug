@@ -2,6 +2,7 @@ package descriptions
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -43,7 +44,8 @@ func (s Service) save(ctx context.Context, store port.StoreID, summary, base, te
 	}
 	if notice != nil {
 		if err := s.Inbox.Add(ctx, *notice); err != nil {
-			return Result{}, err
+			// 書き込みは済んでいる。失敗にすると、同じ入力のやり直しで両方を残す区切りがもう一度入る。
+			slog.Warn("説明の重なりの通知を受信箱に足せませんでした", "store", store, "error", err)
 		}
 	}
 	return res, nil

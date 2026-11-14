@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -137,6 +138,24 @@ func TestMergeNoConflict(t *testing.T) {
 func TestMergeOneSide(t *testing.T) {
 	_, _, m, r := descMerge(t, "a\nb\nc", [2]string{"a\nx\nc", "a\nb\nc"}, false)
 	if got, err := mergeConflicts(r.commit(m), nil); err != nil || len(got) != 0 {
+		t.Errorf("conflicts = %+v, %v, want none", got, err)
+	}
+}
+
+// 説明が片側だけで変わった合わせは、結果の説明が片方の親と同じで重ならないので、共通の祖先を探さない。
+func TestMergeOneSideSkipsBase(t *testing.T) {
+	s0, s1, _, r := descMerge(t, "a\nb\nc", [2]string{"a\nx\nc", "a\nb\nc"}, false)
+	create := rec("R1", "OP0", t0, change.Create, "")
+	d0 := rec("D0", "OP1", t0.Add(time.Minute), change.Desc, "")
+	d1 := rec("D1", "OP2", t0.Add(2*time.Minute), change.Desc, "")
+	d1.By, d1.Actor = "hanako", change.User("hanako")
+	r.reset(s0)
+	m := r.save(map[string]string{itemLog: logOf(t, create, d0, d1), itemDesc: "a\nx\nc"}, BotName, t0.Add(4*time.Minute), "", s0, s1)
+	base := func() (*object.Tree, error) {
+		t.Error("base was called")
+		return nil, nil
+	}
+	if got, err := mergeConflicts(r.commit(m), base); err != nil || len(got) != 0 {
 		t.Errorf("conflicts = %+v, %v, want none", got, err)
 	}
 }
