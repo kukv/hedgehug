@@ -3,16 +3,20 @@
   import { reports } from "../../reports";
   import { syncNow, toasts } from "../../wire";
   import BurndownSection from "./BurndownSection.svelte";
+  import CycleSection from "./CycleSection.svelte";
+  import EstimatesSection from "./EstimatesSection.svelte";
+  import FlowSection from "./FlowSection.svelte";
   import ReportHead from "./ReportHead.svelte";
   import VelocitySection from "./VelocitySection.svelte";
 
   // ワークスペースの「レポート」のタブ(05「レポート」)。選択は Store に書かないので、閲覧のみの Store でも変えられる(F3-7)。
   interface Props {
     storeId: string;
+    storeName: string;
     workspaceId: string;
   }
 
-  let { storeId, workspaceId }: Props = $props();
+  let { storeId, storeName, workspaceId }: Props = $props();
 
   // タブを開いているあいだだけ読む。Store の出来事で読み直す(reports.ts)。
   // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(開き直すと「表で見る」が閉じる)。
@@ -50,4 +54,12 @@
   <ReportHead report={view.report} onselect={choose} />
   <BurndownSection report={view.report} {today} {thisYear} onselect={choose} />
   <VelocitySection report={view.report} />
+  <FlowSection
+    report={view.report}
+    {today}
+    {thisYear}
+    onlayers={(layers) => void choose({ layers })}
+  />
+  <CycleSection report={view.report} />
+  <EstimatesSection report={view.report} {storeId} {storeName} onselect={choose} />
 {/if}

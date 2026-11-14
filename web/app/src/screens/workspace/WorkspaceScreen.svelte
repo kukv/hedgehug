@@ -129,7 +129,7 @@
       readOnly={store.readOnly}
     />
   {:else if tab === "reports"}
-    <ReportsTab storeId={store.id} workspaceId={workspace.id} />
+    <ReportsTab storeId={store.id} storeName={store.name} workspaceId={workspace.id} />
   {/if}
   {#if shown}
     <SprintDialogs
