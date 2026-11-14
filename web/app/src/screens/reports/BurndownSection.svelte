@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    burndownTable,
     burnStatus,
     burnTotals,
     committedNote,
@@ -9,7 +10,6 @@
   } from "@hedgehug/core";
   import { Select } from "@hedgehug/ui";
   import DataTable from "./DataTable.svelte";
-  import { burndownTable } from "./format";
   import LineChart from "./LineChart.svelte";
 
   // バーンダウン(05「レポート」)。スプリントを選んでいないときと、表示する日がないときは、図も表も出さない。
@@ -26,7 +26,8 @@
   const b = $derived(report.burndown);
   const unit = $derived(report.unit);
   const options = $derived([
-    ...(burn ? [] : [{ value: "", label: "—" }]),
+    // 「—」は未選択のときだけ出し、選べない。
+    ...(burn ? [] : [{ value: "", label: "—", disabled: true }]),
     ...report.sprints.map((s) => ({ value: s.id, label: s.name })),
   ]);
   const totals = $derived(burnTotals(b, unit));
@@ -54,7 +55,7 @@
     <p class="totals"><span>{totals.total}</span><span>{totals.remaining}</span></p>
     <LineChart days={b.days} {unit} {thisYear} />
     {#if b.committed !== null}
-      <p class="empty">{committedNote(b.committed, unit)}</p>
+      <p class="note">{committedNote(b.committed, unit)}</p>
     {/if}
     <DataTable caption="バーンダウンの表" columns={table.columns} rows={table.rows} />
   {/if}
@@ -83,7 +84,8 @@
     margin: 12px 0 0;
     font-size: 14px;
   }
-  .empty {
+  .empty,
+  .note {
     margin: 12px 0 0;
     font-size: 12.5px;
     color: var(--muted);

@@ -1,14 +1,12 @@
 <script lang="ts">
-  import { bars, niceMax, type ReportUnit, ticks, type VelocityBar } from "@hedgehug/core";
-  import { num } from "./format";
+  import { bars, niceMax, pt, ticks, type VelocityBar } from "@hedgehug/core";
 
   // ベロシティの棒(群ごとに「計画」「完了」)。棒に値を書き、凡例も文字で書く(色だけに頼らない)。
   interface Props {
     items: VelocityBar[];
-    unit: ReportUnit;
   }
 
-  let { items, unit }: Props = $props();
+  let { items }: Props = $props();
 
   const W = 600;
   const H = 220;
@@ -41,7 +39,7 @@
             height={bar.height}
           />
           <text class="value" x={bar.x + bar.width / 2} y={bar.y - 4} text-anchor="middle">
-            {num(groups[g]?.[i] ?? 0, unit)}
+            {pt(groups[g]?.[i] ?? 0)}
           </text>
         {/each}
         <text class="axis" x={slot * g + slot / 2} y={frame.height + 18} text-anchor="middle">

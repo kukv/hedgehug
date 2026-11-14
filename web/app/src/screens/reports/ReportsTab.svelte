@@ -56,6 +56,7 @@
   <VelocitySection report={view.report} />
   <FlowSection
     report={view.report}
+    period={view.period}
     {today}
     {thisYear}
     onlayers={(layers) => void choose({ layers })}

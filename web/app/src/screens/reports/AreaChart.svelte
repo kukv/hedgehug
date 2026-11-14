@@ -3,6 +3,7 @@
     type FlowDay,
     type FlowLayer,
     formatDay,
+    layerFill,
     linePoints,
     niceMax,
     stackPaths,
@@ -23,14 +24,6 @@
   const pad = { left: 44, right: 16, top: 14, bottom: 28 };
   const frame = { width: W - pad.left - pad.right, height: H - pad.top - pad.bottom };
 
-  // 分類の層は色が空で、分類の token で塗る。ステータスの層はステータスの色。一覧にない値の層は灰色。
-  const fillOf = (l: FlowLayer): string =>
-    l.color !== ""
-      ? `var(--c-${l.color}-fg)`
-      : l.key === "deleted"
-        ? "var(--muted-2)"
-        : `var(--cat-${l.key})`;
-
   // FlowDay.counts は日ごとなので、stackPaths が受ける層ごとの並びに入れ替える。
   const series = $derived(layers.map((_, i) => flow.map((d) => d.counts[i] ?? 0)));
   const peak = $derived(Math.max(0, ...flow.map((d) => d.counts.reduce((a, b) => a + b, 0))));
@@ -49,7 +42,7 @@
         </text>
       {/each}
       {#each layers as layer, i (layer.key)}
-        <path d={paths[i]} fill={fillOf(layer)} />
+        <path d={paths[i]} fill={layerFill(layer)} />
       {/each}
       <text class="axis" x="0" y={frame.height + 18}>
         {formatDay(flow[0]?.date ?? "", thisYear)}
@@ -61,7 +54,7 @@
   </svg>
   <figcaption>
     {#each layers as layer (layer.key)}
-      <span><i class="key" style="background: {fillOf(layer)}"></i>{layer.name}</span>
+      <span><i class="key" style="background: {layerFill(layer)}"></i>{layer.name}</span>
     {/each}
   </figcaption>
 </figure>

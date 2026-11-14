@@ -19,6 +19,16 @@ test("reports burndown and velocity", async ({ page }, info) => {
   await expect(page.getByText("総量 5 pt")).toBeVisible();
   await expect(page.getByText("残り 2 pt")).toBeVisible();
 
+  // バーンダウンの「表で見る」: 今日より後の行は残りが「—」なので、「—」のない最後の行が今日の行。
+  const burndown = page.getByRole("region", { name: "バーンダウン" });
+  await burndown.getByText("表で見る").click();
+  const todayRow = burndown
+    .getByRole("table", { name: "バーンダウンの表" })
+    .getByRole("row")
+    .filter({ hasNotText: "—" })
+    .last();
+  await expect(todayRow.getByRole("cell").nth(2)).toHaveText("2");
+
   const velocity = page.getByRole("region", { name: "ベロシティ" });
   await velocity.getByText("表で見る").click();
   const row = velocity.getByRole("row", { name: /Sprint 1/ });
@@ -75,7 +85,9 @@ test("reports flow, cycle and estimates", async ({ page }, info) => {
   const table = page.getByRole("region", { name: "見積もりと実績" });
   const a = table.getByRole("row", { name: new RegExp(`${prefix}-2`) });
   await expect(a.getByRole("cell").nth(4)).toHaveText("-0.5 時間");
-  await expect(table.getByRole("row", { name: /合計/ })).toBeVisible();
+  const total = table.getByRole("row", { name: /合計/ });
+  await expect(total.getByRole("cell").nth(2)).toHaveText("1.5 時間");
+  await expect(total.getByRole("cell").nth(3)).toHaveText("-0.5 時間");
 
   await table.getByRole("combobox", { name: "対象" }).selectOption({ label: "Sprint 1" });
   await expect(
@@ -127,6 +139,7 @@ test("sprint card and overview", async ({ page }, info) => {
   await expect(
     s1.getByRole("table", { name: "バーンダウンの表" }).getByRole("row").nth(1),
   ).toBeVisible();
+  await expect(today.getByRole("cell").nth(2)).toHaveText("2");
   await tabs.getByRole("tab", { name: "概要" }).click();
   await expect(page.getByText("3 / 5 pt")).toBeVisible();
   await tabs.getByRole("tab", { name: "スプリント" }).click();
@@ -134,4 +147,5 @@ test("sprint card and overview", async ({ page }, info) => {
   await expect(
     s1.getByRole("table", { name: "バーンダウンの表" }).getByRole("row").nth(1),
   ).toBeVisible();
+  await expect(today.getByRole("cell").nth(2)).toHaveText("2");
 });

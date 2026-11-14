@@ -20,10 +20,10 @@
     <p class="line">
       <span class="label">{line.label}</span>
       <strong>{line.value}</strong>
-      {#if line.p85}
-        <span class="p85">{line.p85}</span>
-      {/if}
     </p>
+    {#if line.p85}
+      <p class="p85">{line.p85}</p>
+    {/if}
   {/each}
 </section>
 
@@ -43,9 +43,13 @@
     margin: 8px 0 0;
     font-size: 13px;
   }
-  .label,
-  .p85 {
+  .label {
     font-size: 12.5px;
+    color: var(--muted);
+  }
+  .p85 {
+    margin: 2px 0 0;
+    font-size: 12px;
     color: var(--muted);
   }
 </style>

@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { averageText, type Report } from "@hedgehug/core";
+  import { averageText, type Report, velocityTable } from "@hedgehug/core";
   import BarChart from "./BarChart.svelte";
   import DataTable from "./DataTable.svelte";
-  import { heading, num } from "./format";
 
   // ベロシティ(05「レポート」)。開始したスプリントがなければ、図も表も出さない。
   interface Props {
@@ -12,10 +11,7 @@
   let { report }: Props = $props();
 
   const unit = $derived(report.unit);
-  const columns = $derived(["スプリント", heading("計画", unit), heading("完了", unit)]);
-  const rows = $derived(
-    report.velocity.map((v) => [v.sprint.name, num(v.planned, unit), num(v.done, unit)]),
-  );
+  const table = $derived(velocityTable(report.velocity, unit));
 </script>
 
 <section aria-label="ベロシティ">
@@ -24,8 +20,8 @@
     <p class="empty">開始したスプリントがありません</p>
   {:else}
     <p class="average">{averageText(report.average, unit)}</p>
-    <BarChart items={report.velocity} {unit} />
-    <DataTable caption="ベロシティの表" {columns} {rows} />
+    <BarChart items={report.velocity} />
+    <DataTable caption="ベロシティの表" columns={table.columns} rows={table.rows} />
   {/if}
 </section>
 

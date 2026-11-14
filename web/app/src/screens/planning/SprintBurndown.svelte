@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { addedText, notStarted, type ReportActive } from "@hedgehug/core";
+  import { addedText, burndownTable, notStarted, type ReportActive } from "@hedgehug/core";
   import DataTable from "../reports/DataTable.svelte";
-  import { burndownTable } from "../reports/format";
   import LineChart from "../reports/LineChart.svelte";
 
   // 実行中のスプリントのカードの小さいバーンダウン・「途中で追加」・「表で見る」(05)。

@@ -15,19 +15,17 @@
   // 累積フロー図(05「累積フロー図」)。期間は保存しない。入力が合わないときは理由を出し、図は前の期間のまま。
   interface Props {
     report: Report;
+    // period は、report を求めた期間(null は初めの期間)。日付が変わった直後も、読み直しが届くまでは古い report の基準で出す。
+    period: { from: string; to: string } | null;
     today: string;
     thisYear: number;
     onlayers: (layers: ReportLayers) => void;
   }
 
-  let { report, today, thisYear, onlayers }: Props = $props();
+  let { report, period, today, thisYear, onlayers }: Props = $props();
 
   // 表示している期間(読み込んだ report.period)が初めの期間でなければ、その期間を見出しの横に出す。
-  const custom = $derived.by(() => {
-    const first = defaultPeriod(today);
-    const p = report.period;
-    return p.from === first.from && p.to === first.to ? null : p;
-  });
+  const custom = $derived(period === null ? null : report.period);
   // 入力欄は、検査に落ちた値も残す。読み込んだ期間が変わったときだけ合わせ直し、検査に落ちた入力があるあいだは触らない。
   let from = $state("");
   let to = $state("");
@@ -68,26 +66,8 @@
     <h2>累積フロー図</h2>
     <span class="label">{periodLabel(custom, thisYear)}</span>
     <div class="controls">
-      <Input
-        type="date"
-        label="開始"
-        size="sm"
-        value={from}
-        oninput={(v) => {
-          from = v;
-          void change();
-        }}
-      />
-      <Input
-        type="date"
-        label="終了"
-        size="sm"
-        value={to}
-        oninput={(v) => {
-          to = v;
-          void change();
-        }}
-      />
+      <Input type="date" label="開始" size="sm" bind:value={from} onchange={() => void change()} />
+      <Input type="date" label="終了" size="sm" bind:value={to} onchange={() => void change()} />
       <Button
         size="sm"
         pressed={report.selection.layers === "category"}
