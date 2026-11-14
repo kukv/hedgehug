@@ -201,6 +201,17 @@ describe("resolveRoute with old prefixes", () => {
     });
   });
 
+  // ほかの Store は、すべてのいまの接頭辞を見てから、すべての旧い接頭辞を見る(サーバーのアイテム・プロジェクトの解決と同じ)。
+  it("looks at the current prefixes of all the other Stores before their old prefixes", async () => {
+    const nodes = [
+      storeOf("S1", "work", ws("S1", "W1", "WEB", ["HH"])),
+      storeOf("S2", "other", ws("S2", "W2", "HH", [])),
+    ];
+    expect(
+      await resolveRoute({ ...wsRoute("HH"), store: "nope" }, nodes, itemsIn("S1"), transfers),
+    ).toMatchObject({ storeId: "S2", workspaceId: "W2" });
+  });
+
   it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
     transfers.missing.add("HH-P9");
     const nodes = one(ws("S1", "W1", "WEB", ["HH"]));

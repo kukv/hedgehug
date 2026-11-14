@@ -13,7 +13,8 @@ import {
 } from "./route";
 
 // アドレス(Store 名と画面の ID)を内部 ID にする(01「画面のアドレス」、A2 の計画の決定 7)。
-// アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す。
+// アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す(ワークスペースは、ほかの
+// Store のすべてのいまの接頭辞を見てから、すべての旧い接頭辞を見る)。
 // いまの ID・接頭辞で見つからないときだけ、旧いものをたどる。ワークスペースとプロジェクトは、一覧の旧い接頭辞
 // (oldPrefixes。A5a-21)で探す。アイテムは、アドレスの Store のいまの ID で見つからなければ、サーバーの locate に
 // 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。プロジェクトも、一覧では
@@ -30,23 +31,26 @@ export type Resolved =
 
 const home = { name: "home" } as const;
 
-function inOrder(stores: StoreNode[], name: string): StoreNode[] {
-  return [...stores.filter((s) => s.name === name), ...stores.filter((s) => s.name !== name)];
+// inOrder は、Store 名 name の Store と、ほかの Store(サイドバーの並び)の 2 つの組。
+function inOrder(stores: StoreNode[], name: string): StoreNode[][] {
+  return [stores.filter((s) => s.name === name), stores.filter((s) => s.name !== name)];
 }
 
-// findWorkspace は、接頭辞 prefix のワークスペースを、Store ごとに、いまの接頭辞で探してから旧い接頭辞で探す
-// (stores の順。Store 名の Store の旧い接頭辞を、ほかの Store のいまの接頭辞より先に見る。A5a-15)。
+// findWorkspace は、接頭辞 prefix のワークスペースを、組ごとに、組のすべての Store のいまの接頭辞で探してから旧い接頭辞で
+// 探す(groups の順。Store 名の Store の旧い接頭辞を、ほかの Store のいまの接頭辞より先に見る。サーバーの解決と同じ。A5a-15)。
 function findWorkspace(
-  stores: StoreNode[],
+  groups: StoreNode[][],
   prefix: string,
   pick: (s: StoreNode, w: WorkspaceNode) => Resolved | undefined,
 ): Resolved {
-  for (const s of stores) {
+  for (const stores of groups) {
     for (const old of [false, true]) {
-      for (const w of s.workspaces) {
-        if (!(old ? w.oldPrefixes.includes(prefix) : w.prefix === prefix)) continue;
-        const r = pick(s, w);
-        if (r) return r;
+      for (const s of stores) {
+        for (const w of s.workspaces) {
+          if (!(old ? w.oldPrefixes.includes(prefix) : w.prefix === prefix)) continue;
+          const r = pick(s, w);
+          if (r) return r;
+        }
       }
     }
   }
@@ -57,7 +61,7 @@ function findWorkspace(
 function findProject(stores: StoreNode[], display: string, tab: ProjectTab): Resolved {
   const d = parseDisplayId(display);
   if (d?.kind !== "project") return home;
-  return findWorkspace(stores, d.prefix, (s, w) => {
+  return findWorkspace([stores], d.prefix, (s, w) => {
     const p = w.projects.find((x) => projectDisplayId(d.prefix, x.number) === display);
     return p && { name: "project", storeId: s.id, projectId: p.id, tab };
   });
