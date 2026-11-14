@@ -269,3 +269,25 @@ func checkWsGone(t *testing.T, name string, got *transfers.Gone, err error, want
 		t.Errorf("%s: Gone = %+v, want %+v", name, *got, want)
 	}
 }
+
+// ほかの Store を探すときも、種類の記録の理由をワークスペースの記録より先に返す。アドレスの Store 名の Store がなく、main に
+// 接頭辞 QQ のワークスペースの記録(team の Team を指す。Team の接頭辞の履歴に QQ はないので (a)(b) では見つからない)が
+// あると、QQ-1 は記録で team の TM-1 を開く。readonly に QQ-1 の種類の記録(完全に削除したもの)もあれば、TM-1 ではなく
+// purged を返す。実際の MoveWorkspace の記録では、移したワークスペースが記録の old をいまの接頭辞か旧い接頭辞に持つので、
+// ほかの Store では (a)(b) が先に当たる。そのため記録を直接書いて順を確かめる。
+func TestLocateItemRecordBeforeWorkspaceRecordInOtherStores(t *testing.T) {
+	f := newFixture(t)
+	write(t, f.rec, store1, func(tx port.Tx) error {
+		return tx.WriteTransfers().Append(transfer.Record{Entity: transfer.EntityWorkspace, Target: teamWS, Old: "QQ", New: "QQ", ToStore: string(store2), ToStoreName: "team"})
+	})
+	if got, err := f.svc.Locate(t.Context(), "nope", "QQ-1"); err != nil || !got.Found || got.Store != store2 || got.Item != teamEpic {
+		t.Fatalf("ワークスペースの記録だけ: %+v, %v", got, err)
+	}
+	const gone item.ID = "01TESTIT000000000000000052"
+	putRecord(t, f, store3, gone, "QQ-1", "AR-9", store2, "team")
+	f.rec.AddPurged(store2, port.Purged{Entity: transfer.EntityItem, Target: gone, Display: "AR-9", At: time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)})
+	got, err := f.svc.Locate(t.Context(), "nope", "QQ-1")
+	if err != nil || got.Found || got.Gone == nil || got.Gone.Reason != "purged" || got.Gone.Old != "QQ-1" || got.Gone.NewDisplay != "AR-9" {
+		t.Errorf("種類の記録もある: %+v, %+v, %v", got, got.Gone, err)
+	}
+}
