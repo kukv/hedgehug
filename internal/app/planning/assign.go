@@ -18,7 +18,7 @@ var errSameRef = errors.New("アイテムの参照は変わらない")
 
 // assignment は、アイテムのスプリントかリリースを変える保存の中身。
 type assignment struct {
-	label  string // 「スプリント」か「リリース」
+	label  string // 「スプリント」か「リリース」。空なら順位の変更(アクティビティの文は「{ID} の順位を変更」)
 	name   string // 移動先の名前、または「バックログ」「なし」
 	drafts []change.Draft
 }
@@ -28,19 +28,13 @@ type assignment struct {
 // バックログと同じ値として扱い、書き換えない(F1-5。スプリントを戻せばアイテムも戻る)。
 func (s Service) SetSprint(ctx context.Context, store port.StoreID, id item.ID, sprint *change.ID) error {
 	return s.assign(ctx, store, id, func(r port.Reader, it item.Item, p planning.Plan) (assignment, error) {
-		if !planning.IsWork(it.Kind) {
-			return assignment{}, fmt.Errorf("%w: %s はスプリントに入れられない", port.ErrInvalidOperation, it.Kind)
+		a := assignment{label: "スプリント"}
+		to, name, err := sprintTarget(it, p, sprint)
+		if err != nil {
+			return assignment{}, err
 		}
-		a := assignment{label: "スプリント", name: "バックログ"}
-		var to change.ID
-		if sprint != nil {
-			sp, err := planning.AssignableSprint(p, *sprint, it.Kind, it.Sprint)
-			if err != nil {
-				return assignment{}, sprintErr(err)
-			}
-			to, a.name = sp.ID, oneLine(sp.Name)
-		}
-		if _, ok := p.UsableSprint(it.Sprint); to == it.Sprint || to == "" && !ok {
+		a.name = name
+		if sameFrame(it, p, to) {
 			return assignment{}, errSameRef
 		}
 		end, err := frameEnd(r, it, to, p)
@@ -82,6 +76,27 @@ func (s Service) SetRelease(ctx context.Context, store port.StoreID, id item.ID,
 	})
 }
 
+// sprintTarget は、作業項目 it を入れる先のスプリント(sprint が nil ならバックログ。ID は空)の ID と名前。
+func sprintTarget(it item.Item, p planning.Plan, sprint *change.ID) (change.ID, string, error) {
+	if !planning.IsWork(it.Kind) {
+		return "", "", fmt.Errorf("%w: %s はスプリントに入れられない", port.ErrInvalidOperation, it.Kind)
+	}
+	if sprint == nil {
+		return "", "バックログ", nil
+	}
+	sp, err := planning.AssignableSprint(p, *sprint, it.Kind, it.Sprint)
+	if err != nil {
+		return "", "", sprintErr(err)
+	}
+	return sp.ID, oneLine(sp.Name), nil
+}
+
+// sameFrame は、アイテム it のスプリントが to(空ならバックログ)と同じか。使えないスプリントへの参照はバックログと同じ(F1-5)。
+func sameFrame(it item.Item, p planning.Plan, to change.ID) bool {
+	_, ok := p.UsableSprint(it.Sprint)
+	return to == it.Sprint || to == "" && !ok
+}
+
 // sprintErr は、planning.AssignableSprint の断りでないエラーを、保存の口のエラーにする。
 func sprintErr(err error) error {
 	switch {
@@ -116,7 +131,7 @@ func refValue(id change.ID) any {
 	return id
 }
 
-// assign は、decide が決めた変更を、アクティビティの文「{ID} の {label} を {name} に変更」で 1 回保存する。
+// assign は、decide が決めた変更を、アクティビティの文「{ID} の {label} を {name} に変更」(label が空なら「{ID} の順位を変更」)で 1 回保存する。
 // decide は保存の前と保存の中の両方で、そのときのアイテムと計画を見て呼ぶ。同じ値なら何も保存しない。
 // 別の画面で削除された(root: true)アイテムは、保存するときだけ削除を取り消す(C3a-screen S1)。
 func (s Service) assign(ctx context.Context, store port.StoreID, id item.ID,
@@ -190,6 +205,9 @@ func assignmentOf(r port.Reader, it item.Item,
 	a, err := decide(r, it, p)
 	if err != nil {
 		return "", nil, err
+	}
+	if a.label == "" {
+		return it.DisplayID(w.Prefix) + " の順位を変更", a.drafts, nil
 	}
 	return fmt.Sprintf("%s の %s を %s に変更", it.DisplayID(w.Prefix), a.label, a.name), a.drafts, nil
 }
