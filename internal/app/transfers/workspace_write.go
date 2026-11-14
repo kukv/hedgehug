@@ -160,15 +160,16 @@ func (m *crossWorkspaceMove) writeSource(tx port.Tx) error {
 	for _, it := range now.set.Items {
 		inside[it.ID] = true
 	}
-	var errs []error
 	for _, c := range now.set.Outside {
-		if !inside[c.From] {
-			errs = append(errs, tx.WriteItems().Append(c.From, change.NewRemove("relations", item.Relation{Type: c.Type, To: c.To})))
+		if inside[c.From] {
+			continue
+		}
+		if err := tx.WriteItems().Append(c.From, change.NewRemove("relations", item.Relation{Type: c.Type, To: c.To})); err != nil {
+			return err
 		}
 	}
-	errs = append(errs, tx.WriteTransfers().Append(transfer.Record{
+	return tx.WriteTransfers().Append(transfer.Record{
 		Entity: transfer.EntityWorkspace, Target: m.src.ws.ID, Old: m.src.ws.Prefix, New: m.src.ws.Prefix,
 		ToStore: string(m.to.ID), ToStoreName: m.to.Name, ToRemote: m.remote, At: m.at,
-	}))
-	return errors.Join(errs...)
+	})
 }

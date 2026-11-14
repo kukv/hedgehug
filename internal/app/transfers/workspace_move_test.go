@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
@@ -106,6 +107,11 @@ func TestMoveWorkspaceWritesBothStores(t *testing.T) {
 	assertWorkspaceContents(t, f, srcLogs)
 	if got := loginsOf(t, f.rec); !slices.Equal(got, []string{"Taro", "shiro"}) {
 		t.Errorf("destination members = %v", got)
+	}
+	wsLog := logOf(t, f.rec, store2, change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace})
+	movedIn := slices.IndexFunc(wsLog, func(r change.Record) bool { return r.T == change.MovedIn })
+	if members := logOf(t, f.rec, store2, change.Ref{Kind: change.KindMembers}); movedIn < 0 || members[len(members)-1].Op != wsLog[movedIn].Op {
+		t.Error("the join of shiro is not in the same operation as the move")
 	}
 	for _, ref := range webRefs() {
 		err := f.rec.Read(t.Context(), store1, func(r port.Reader) error { _, err := r.Changes().Of(ref); return err })
@@ -297,6 +303,28 @@ func TestMoveWorkspaceReadsTxOnRetry(t *testing.T) {
 			t.Errorf("rank = %q, want Y (after the workspace added between the calls)", r)
 		}
 	})
+}
+
+// Review Focus 1: 足す人と綴りの対応も呼び直しの tx から決める。1 回目の呼び出しでは移動先に jiro がいないので足すが、
+// あいだに Jiro が足されたら、2 回目は jiro を足さずに担当者を Jiro へ書き直す(fixture の team には Taro が初めからいるので、
+// jiro で確かめる)。
+func TestMoveWorkspaceReadsTxOnRetryForPeople(t *testing.T) {
+	f := newFixture(t)
+	write(t, f.rec, store1, func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("assignee", nil, "jiro"))
+	})
+	f.svc.Delivery = retried{inner: f.deliver, stores: f.rec, done: new(bool), between: func(tx port.Tx) error {
+		return tx.WriteMembers().Append(member.Join("Jiro"))
+	}}
+	if _, err := f.svc.MoveWorkspace(t.Context(), store1, apptest.SampleWorkspace, store2); err != nil {
+		t.Fatal(err)
+	}
+	if got := loginsOf(t, f.rec); !slices.Equal(got, []string{"Jiro", "Taro"}) {
+		t.Errorf("destination members = %v", got)
+	}
+	if a := itemOf(t, f.rec, store2, apptest.SampleTask).Assignee; a != "Jiro" {
+		t.Errorf("assignee = %q, want Jiro", a)
+	}
 }
 
 // 送れない → *SendError で、移動先に何も残らず、移動元もそのまま。

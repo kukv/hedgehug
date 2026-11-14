@@ -53,7 +53,7 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, id works
 	if to == store {
 		return WorkspaceMoved{}, port.ErrNotFound
 	}
-	m, err := s.prepareWorkspace(ctx, store, id, to)
+	m, err := s.prepareWorkspace(ctx, info, id, to)
 	if err != nil {
 		return WorkspaceMoved{}, err
 	}
@@ -75,14 +75,12 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, id works
 	return WorkspaceMoved{ToStore: to, ToStoreName: m.to.Name, Workspace: id, Prefix: m.src.ws.Prefix}, nil
 }
 
-// prepareWorkspace は、移動元を読み(ロックは読むあいだだけ)、続けて移動先を読んで断り(B5c-5)を調べ、実行者を決める。
+// prepareWorkspace は、移動元(Store from)を読み(ロックは読むあいだだけ)、続けて移動先を読んで断り(B5c-5)を調べ、実行者を決める。
 // 移動先から読んだものは断りのほかに使わない(fn の中で tx から読み直す)。
-func (s Service) prepareWorkspace(ctx context.Context, store port.StoreID, id workspace.ID, to port.StoreID) (*crossWorkspaceMove, error) {
-	m := &crossWorkspaceMove{at: s.Clock.Now()}
+func (s Service) prepareWorkspace(ctx context.Context, from port.StoreInfo, id workspace.ID, to port.StoreID) (*crossWorkspaceMove, error) {
+	store := from.ID
+	m := &crossWorkspaceMove{from: from, at: s.Clock.Now()}
 	var err error
-	if m.from, err = s.storeInfo(ctx, store); err != nil {
-		return nil, err
-	}
 	if m.to, err = s.storeInfo(ctx, to); err != nil {
 		return nil, err
 	}
