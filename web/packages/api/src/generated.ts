@@ -130,11 +130,6 @@ export interface AddWorkspaceValue {
   name: string;
 }
 
-export interface ApplyAutomationIgnoringWorkflow {
-  /** 変えるステータスの ID(通知の Status) */
-  status: string;
-}
-
 export type AutomationRuleAction = typeof AutomationRuleAction[keyof typeof AutomationRuleAction];
 
 
@@ -476,6 +471,132 @@ export interface ImpactOutputBody {
 }
 
 /**
+ * 空でなければ、ボタンの代わりに結果を出す
+ */
+export type InboxActionResult = typeof InboxActionResult[keyof typeof InboxActionResult];
+
+
+export const InboxActionResult = {
+  '': '',
+  applied: 'applied',
+  kept: 'kept',
+} as const;
+
+export interface InboxAction {
+  /** 「制約を無視して…」を押せる */
+  applyEnabled: boolean;
+  /** 「変更しない」を押せる */
+  keepEnabled: boolean;
+  note: string;
+  /** 空でなければ、ボタンの代わりに結果を出す */
+  result: InboxActionResult;
+  /** 変える先のステータスの ID */
+  status: string;
+  statusName: string;
+  /** ボタンを出す */
+  visible: boolean;
+}
+
+export interface InboxCounts {
+  all: number;
+  assign: number;
+  automation: number;
+  mention: number;
+  overwrite: number;
+  repair: number;
+  watch: number;
+}
+
+export type InboxRowKind = typeof InboxRowKind[keyof typeof InboxRowKind];
+
+
+export const InboxRowKind = {
+  automation: 'automation',
+  automation_stopped: 'automation_stopped',
+  mention: 'mention',
+  assign: 'assign',
+  watch: 'watch',
+  overwrite: 'overwrite',
+  repair: 'repair',
+} as const;
+
+export interface InboxStore {
+  /** 画面のトークン --t-<色> の名前 */
+  color: string;
+  id: string;
+  name: string;
+  readOnly: boolean;
+}
+
+/**
+ * item のときのアイテムの種類。ほかは空
+ */
+export type InboxTargetItemKind = typeof InboxTargetItemKind[keyof typeof InboxTargetItemKind];
+
+
+export const InboxTargetItemKind = {
+  '': '',
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export type InboxTargetKind = typeof InboxTargetKind[keyof typeof InboxTargetKind];
+
+
+export const InboxTargetKind = {
+  item: 'item',
+  moved: 'moved',
+  deleted_item: 'deleted_item',
+  workspace: 'workspace',
+  deleted_workspace: 'deleted_workspace',
+} as const;
+
+export interface InboxTarget {
+  /** アイテムの ID(HH-12)。moved は通知を作ったときの ID */
+  display: string;
+  /** アイテムの内部 ID。workspace・deleted_workspace では空 */
+  item: string;
+  /** item のときのアイテムの種類。ほかは空 */
+  itemKind: InboxTargetItemKind;
+  kind: InboxTargetKind;
+  /** workspace のとき、開くワークスペースの設定の区画 */
+  section: string;
+  title: string;
+  workspace: string;
+  workspaceName: string;
+}
+
+export interface InboxRow {
+  /** 止まった通知だけ */
+  action?: InboxAction;
+  at: string;
+  id: number;
+  kind: InboxRowKind;
+  read: boolean;
+  reason: string;
+  /** 差出人のログイン名。空は「hedgehug」 */
+  sender: string;
+  store: InboxStore;
+  target: InboxTarget;
+  text: string;
+}
+
+export interface InboxPage {
+  /** 続きがある */
+  more: boolean;
+  /** @nullable */
+  rows: InboxRow[] | null;
+  unread: InboxCounts;
+}
+
+export interface InboxUnread {
+  counts: InboxCounts;
+}
+
+/**
  * 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)
  */
 export type ItemChoices = {[key: string]: string[] | null};
@@ -731,6 +852,47 @@ export interface LocatedProject {
   storeName?: string;
 }
 
+export type LocatedWorkspaceKind = typeof LocatedWorkspaceKind[keyof typeof LocatedWorkspaceKind];
+
+
+export const LocatedWorkspaceKind = {
+  found: 'found',
+  gone: 'gone',
+} as const;
+
+/**
+ * gone のとき
+ */
+export type LocatedWorkspaceReason = typeof LocatedWorkspaceReason[keyof typeof LocatedWorkspaceReason];
+
+
+export const LocatedWorkspaceReason = {
+  deleted: 'deleted',
+  purged: 'purged',
+  hidden: 'hidden',
+  elsewhere: 'elsewhere',
+} as const;
+
+export interface LocatedWorkspace {
+  /** gone のとき。一致した記録の日時 */
+  at?: string;
+  kind: LocatedWorkspaceKind;
+  /** found で、転送記録から見つけたとき */
+  movedFrom?: LocatedMovedFrom;
+  /** gone のとき。記録の移動先の Store 名 */
+  newDisplay?: string;
+  /** gone のとき。画面の接頭辞 */
+  old?: string;
+  /** gone のとき */
+  reason?: LocatedWorkspaceReason;
+  /** found のとき。開くワークスペースの Store */
+  storeId?: string;
+  /** gone の hidden・elsewhere のとき。表示中でない Store の名前 */
+  storeName?: string;
+  /** found のとき */
+  workspaceId?: string;
+}
+
 export interface Me {
   login: string;
 }
@@ -809,6 +971,61 @@ export interface MoveWorkspaceItem {
 
 export interface NextNumber {
   number: number;
+}
+
+export interface OpenedItem {
+  itemId: string;
+  storeId: string;
+}
+
+export interface PaletteAlias {
+  /**
+     * 移動した日時。旧い接頭辞から作ったものは null
+     * @nullable
+     */
+  at: string | null;
+  /** 旧 ID(HH-12) */
+  id: string;
+}
+
+export interface PaletteItem {
+  /**
+     * 旧 ID(いまの ID と同じものを除く)
+     * @nullable
+     */
+  aliases: PaletteAlias[] | null;
+  /** いまの ID(HH-12) */
+  display: string;
+  itemId: string;
+  /** ワークスペースの中の番号(並びに使う) */
+  number: number;
+  projectId: string;
+  projectTitle: string;
+  storeId: string;
+  title: string;
+  workspaceId: string;
+}
+
+export interface PaletteProject {
+  /**
+     * 旧 ID(いまの ID と同じものを除く)
+     * @nullable
+     */
+  aliases: PaletteAlias[] | null;
+  /** いまの ID(HH-P1) */
+  display: string;
+  projectId: string;
+  storeId: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+
+export interface PaletteIndex {
+  /** @nullable */
+  items: PaletteItem[] | null;
+  /** @nullable */
+  projects: PaletteProject[] | null;
 }
 
 export interface PlaceItem {
@@ -1106,6 +1323,19 @@ export interface ProjectTransferTarget {
   storeName: string;
   workspaceId: string;
   workspaceName: string;
+}
+
+export interface ReadAllInbox {
+  /** all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400 */
+  tab: string;
+}
+
+export interface RecentItem {
+  display: string;
+  itemId: string;
+  projectTitle: string;
+  storeId: string;
+  title: string;
 }
 
 export interface RecheckOutputBody {
@@ -1468,6 +1698,10 @@ export interface SaveItemAsTemplate {
 
 export interface SetAutomationRuleEnabled {
   enabled: boolean;
+}
+
+export interface SetInboxRead {
+  read: boolean;
 }
 
 export interface SetItemProperty {
@@ -1882,6 +2116,11 @@ export interface TransferTarget {
   workspaceName: string;
 }
 
+export interface TransferWorkspaceBody {
+  /** 移動先の Store の ID */
+  toStore: string;
+}
+
 /**
  * デバイスフローはサインインの API で登録・保存する
  */
@@ -2130,6 +2369,60 @@ export interface WorkspaceTemplateInput {
   values: WorkspaceTemplateInputValues;
 }
 
+export interface WorkspaceTransferPerson {
+  login: string;
+  /** 表示名 */
+  name: string;
+}
+
+export interface WorkspaceTransferPreview {
+  /** 削除済みのプロジェクトと、それ以外のアイテム(自分が削除済みか、削除済みのプロジェクトの下)の数 */
+  deleted: number;
+  /** 移動先の Store 名 */
+  destination: string;
+  /** 移動先の Store に remote があるか */
+  destinationHasRemote: boolean;
+  /** 削除されていないプロジェクトの、削除されていないアイテムの数 */
+  items: number;
+  /**
+     * 移動先のメンバーに足す人(小文字のログイン名の順)
+     * @nullable
+     */
+  people: WorkspaceTransferPerson[] | null;
+  /** 削除されていないプロジェクトの数 */
+  projects: number;
+  /** 移動先に remote がなく移動元にあるか */
+  remoteNotice: boolean;
+  /** 移動元の Store 名 */
+  source: string;
+}
+
+export interface WorkspaceTransferResult {
+  /** 移したワークスペースの接頭辞 */
+  prefix: string;
+  /** 移動先の Store の ID */
+  toStore: string;
+  /** 移動先の Store 名 */
+  toStoreName: string;
+  /** 移したワークスペースの内部 ID(変わらない) */
+  workspaceId: string;
+}
+
+export interface WorkspaceTransferTarget {
+  storeId: string;
+  storeName: string;
+}
+
+export interface WorkspaceTransferTargets {
+  /** 候補が 0 件で、非表示の Store なら移せるか */
+  hiddenOnly: boolean;
+  /**
+     * 表示中で閲覧のみでなく自分でない Store(Store の並び)
+     * @nullable
+     */
+  targets: WorkspaceTransferTarget[] | null;
+}
+
 /**
  * 追加プロパティの ID ごとの、値の入っているアイテムの数
  */
@@ -2154,6 +2447,15 @@ export type AccountEditImpactParams = {
   login?: string;
 };
 
+export type ListInboxParams = {
+  /** all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400 */
+  tab?: string;
+  /** 続きを読むとき、前の一覧の最後の行の at(RFC 3339、ナノ秒まで)。before_id と一緒に渡す */
+  before_at?: string;
+  /** 続きを読むとき、前の一覧の最後の行の id */
+  before_id?: number;
+};
+
 export type LocateItemParams = {
   /** 画面のアドレスの Store 名 */
   store: string;
@@ -2166,6 +2468,13 @@ export type LocateProjectParams = {
   store: string;
   /** 画面のアドレスのプロジェクトの ID(HH-P1) */
   id: string;
+};
+
+export type LocateWorkspaceParams = {
+  /** 画面のアドレスの Store 名 */
+  store: string;
+  /** 画面のアドレスのワークスペースの接頭辞 */
+  prefix: string;
 };
 
 export type PreviewItemMoveParams = {
@@ -2207,6 +2516,10 @@ export type GetReportParams = {
    * @pattern ^(\d{4}-\d{2}-\d{2})?$
    */
   to?: string;
+};
+
+export type GetWorkspaceTransferPreviewParams = {
+  toStore: string;
 };
 
 export const getListAccountsUrl = () => {
@@ -2448,7 +2761,7 @@ export const getWatchEventsUrl = () => {
 }
 
 /**
- * 出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
+ * 出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
  * @summary Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
  */
 export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
@@ -2459,6 +2772,186 @@ export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Pro
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListInboxUrl = (params?: ListInboxParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/inbox?${stringifiedParams}` : `/api/inbox`
+}
+
+/**
+ * @summary 受信箱のタブの通知を、新しい順に 300 件
+ */
+export const listInbox = async (params?: ListInboxParams, options?: Parameters<typeof fetcher>[1]): Promise<InboxPage> => {
+
+  return fetcher<InboxPage>(getListInboxUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getReadAllInboxUrl = () => {
+
+
+
+
+  return `/api/inbox/read-all`
+}
+
+/**
+ * @summary 表示中の Store の、タブの通知をすべて既読にする
+ */
+export const readAllInbox = async (readAllInboxBody: ReadAllInbox, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getReadAllInboxUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(readAllInboxBody)
+  }
+);}
+
+
+
+export const getInboxUnreadUrl = () => {
+
+
+
+
+  return `/api/inbox/unread`
+}
+
+/**
+ * @summary 受信箱のタブごとの未読数
+ */
+export const inboxUnread = async ( options?: Parameters<typeof fetcher>[1]): Promise<InboxUnread> => {
+
+  return fetcher<InboxUnread>(getInboxUnreadUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getApplyInboxNoticeUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/apply`
+}
+
+/**
+ * @summary 止まった自動化の変更を、制約を無視して適用
+ */
+export const applyInboxNotice = async (notice: number, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getApplyInboxNoticeUrl(notice),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getKeepInboxNoticeUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/keep`
+}
+
+/**
+ * @summary 止まった自動化の変更をしない
+ */
+export const keepInboxNotice = async (notice: number, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getKeepInboxNoticeUrl(notice),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getSetInboxReadUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/read`
+}
+
+/**
+ * @summary 通知を既読・未読にする
+ */
+export const setInboxRead = async (notice: number,
+    setInboxReadBody: SetInboxRead, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetInboxReadUrl(notice),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setInboxReadBody)
   }
 );}
 
@@ -2521,6 +3014,123 @@ export const locateProject = async (params: LocateProjectParams, options?: Param
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getLocateWorkspaceUrl = (params: LocateWorkspaceParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locate-workspace?${stringifiedParams}` : `/api/locate-workspace`
+}
+
+/**
+ * @summary 画面のアドレスのワークスペースの接頭辞(旧い接頭辞・移動元のアドレスを含む)が指すワークスペースを探す
+ */
+export const locateWorkspace = async (params: LocateWorkspaceParams, options?: Parameters<typeof fetcher>[1]): Promise<LocatedWorkspace> => {
+
+  return fetcher<LocatedWorkspace>(getLocateWorkspaceUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getPaletteIndexUrl = () => {
+
+
+
+
+  return `/api/palette-index`
+}
+
+/**
+ * @summary パレットのアイテム・プロジェクトの候補を返す
+ */
+export const paletteIndex = async ( options?: Parameters<typeof fetcher>[1]): Promise<PaletteIndex> => {
+
+  return fetcher<PaletteIndex>(getPaletteIndexUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListRecentItemsUrl = () => {
+
+
+
+
+  return `/api/recent-items`
+}
+
+/**
+ * @summary 最近開いたアイテムを新しい順に返す
+ */
+export const listRecentItems = async ( options?: Parameters<typeof fetcher>[1]): Promise<RecentItem[] | null> => {
+
+  return fetcher<RecentItem[] | null>(getListRecentItemsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getOpenRecentItemUrl = () => {
+
+
+
+
+  return `/api/recent-items`
+}
+
+/**
+ * @summary アイテムを開いたと、このマシンに覚える
+ */
+export const openRecentItem = async (openedItem: OpenedItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getOpenRecentItemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(openedItem)
   }
 );}
 
@@ -2722,49 +3332,6 @@ export const getItem = async (store: string,
     method: 'GET'
 
 
-  }
-);}
-
-
-
-export const getApplyAutomationIgnoringWorkflowUrl = (store: string,
-    item: string,
-    rule: string,) => {
-
-
-
-
-  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/automation/${encodeURIComponent(String(rule))}/apply`
-}
-
-/**
- * @summary 止まった自動化の変更を、制約を無視して適用
- */
-export const applyAutomationIgnoringWorkflow = async (store: string,
-    item: string,
-    rule: string,
-    applyAutomationIgnoringWorkflowBody: ApplyAutomationIgnoringWorkflow, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<void>(getApplyAutomationIgnoringWorkflowUrl(store,item,rule),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(applyAutomationIgnoringWorkflowBody)
   }
 );}
 
@@ -7151,6 +7718,108 @@ return fetcher<void>(getUpdateWorkspaceTemplateUrl(store,workspace,template),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(workspaceTemplateInput)
+  }
+);}
+
+
+
+export const getTransferWorkspaceUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer`
+}
+
+/**
+ * @summary ワークスペースを中身ごと別の Store へ移す
+ */
+export const transferWorkspace = async (store: string,
+    workspace: string,
+    transferWorkspaceBody: TransferWorkspaceBody, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTransferResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<WorkspaceTransferResult>(getTransferWorkspaceUrl(store,workspace),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transferWorkspaceBody)
+  }
+);}
+
+
+
+export const getGetWorkspaceTransferPreviewUrl = (store: string,
+    workspace: string,
+    params: GetWorkspaceTransferPreviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer-preview?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer-preview`
+}
+
+/**
+ * @summary ワークスペースの移動の確認ダイアログの予告を返す
+ */
+export const getWorkspaceTransferPreview = async (store: string,
+    workspace: string,
+    params: GetWorkspaceTransferPreviewParams, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTransferPreview> => {
+
+  return fetcher<WorkspaceTransferPreview>(getGetWorkspaceTransferPreviewUrl(store,workspace,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListWorkspaceTransferTargetsUrl = (store: string,
+    workspace: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/workspaces/${encodeURIComponent(String(workspace))}/transfer-targets`
+}
+
+/**
+ * @summary ワークスペースの移す先の候補の Store を返す
+ */
+export const listWorkspaceTransferTargets = async (store: string,
+    workspace: string, options?: Parameters<typeof fetcher>[1]): Promise<WorkspaceTransferTargets> => {
+
+  return fetcher<WorkspaceTransferTargets>(getListWorkspaceTransferTargetsUrl(store,workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

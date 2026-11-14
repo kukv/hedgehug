@@ -72,7 +72,7 @@
 ```
 internal/domain/planning/backlog.go        BacklogFrames・WorkEnd・EndRank・Placement・AppendWorks
 internal/app/items/create.go・createtemplate.go・duplicate.go・changekind.go・move.go (変更)F2a-5
-internal/app/transfers/move.go・project_move.go・(新規)worksrank.go  (変更)F2a-6
+internal/app/transfers/move.go・project_move.go (変更)F2a-6(パッケージのファイル数の上限 20 のため、順位の関数は move.go に置く)
 internal/app/planning/backlog.go           Backlog(読み取り)
 internal/app/planning/place.go             PlaceItem(保存)
 internal/adapter/httpapi/planning/backlog.go  API
@@ -186,7 +186,7 @@ git commit -m "feat(items): 作業項目の作成と移動で、ワークスペ�
 ### Task 3: 別のワークスペースへの移動で、作業項目を移動先の並びの末尾に続ける(`app/transfers`)
 
 **Files:**
-- Create: `internal/app/transfers/worksrank.go`
+- Modify: `internal/app/transfers/move.go`(順位の関数 `workRanks`・`workspaceItems`・`rankLine` を末尾に足す。パッケージのファイル数の上限 20 のため新しいファイルは作らない)
 - Modify: `internal/app/transfers/move.go:120-145,213-224`、`project_move.go`(順位の行を書く箇所)
 - Test: `internal/app/transfers/move_test.go`・`project_move_test.go`(追記。別の Store の場合の既存テストのファイルにも 1 件)
 
@@ -207,7 +207,7 @@ git commit -m "feat(items): 作業項目の作成と移動で、ワークスペ�
 Run: `go test ./internal/app/transfers/ -run 'Rank|Order'`
 Expected: FAIL
 
-- [ ] **Step 3: `worksrank.go` を書き、`placeLines` が移す作業項目にも `set rank` を書くようにする**
+- [ ] **Step 3: `move.go` に順位の関数を書き、`placeLines` が移す作業項目にも `set rank` を書くようにする**
 
 順位が今と同じアイテムには行を書かない(既存の「順位が変わるなら rank も書く」と同じ)。
 

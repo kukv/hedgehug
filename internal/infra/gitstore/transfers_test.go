@@ -206,3 +206,49 @@ func TestProjectImportAndRemoveWriteTheFolder(t *testing.T) {
 		t.Errorf("worktree is not clean:\n%s", st)
 	}
 }
+
+// ワークスペースの Import は workspaces/<ID>/ に行と workspace.yaml を 1 つのコミットで作り、moved_in を足しても
+// workspace.yaml は変わらない。Remove は 1 つのコミットでフォルダごと消す(下のプロジェクトとアイテムのフォルダは残る)。
+func TestWorkspaceImportAndRemoveWriteTheFolder(t *testing.T) {
+	src, srcID, srcDir := newStore(t)
+	if err := apptest.Sample(t.Context(), src, srcID); err != nil {
+		t.Fatal(err)
+	}
+	ref := change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace}
+	var log []change.Record
+	if err := src.Read(t.Context(), srcID, func(r port.Reader) (err error) { log, err = r.Changes().Of(ref); return }); err != nil {
+		t.Fatal(err)
+	}
+	dst, dstID, dstDir := newStore(t)
+	before := headCount(t, dstDir)
+	if err := dst.Write(t.Context(), dstID, moveOp, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Import(apptest.SampleWorkspace, log)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := "workspaces/" + string(apptest.SampleWorkspace) + "/"
+	got, want := files(t, dstDir), files(t, srcDir)
+	if headCount(t, dstDir) != before+1 || got[p+"log.jsonl"] != want[p+"log.jsonl"] || got[p+"workspace.yaml"] != want[p+"workspace.yaml"] || got[p+"workspace.yaml"] == "" {
+		t.Errorf("commits %d (want %d), files:\n%v", headCount(t, dstDir), before+1, got)
+	}
+	if err := dst.Write(t.Context(), dstID, moveOp, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, transfer.NewMovedIn(transfer.MovedInInfo{Old: "HH", FromStore: "S"}))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if after := files(t, dstDir); after[p+"workspace.yaml"] != want[p+"workspace.yaml"] || after[p+"log.jsonl"] == want[p+"log.jsonl"] {
+		t.Errorf("moved_in changed workspace.yaml or did not reach the log:\n%v", after[p+"workspace.yaml"])
+	}
+	if err := src.Write(t.Context(), srcID, moveOp, func(tx port.Tx) error { return tx.WriteWorkspaces().Remove(apptest.SampleWorkspace) }); err != nil {
+		t.Fatal(err)
+	}
+	for dir, id := range map[string]change.ID{"workspaces": apptest.SampleWorkspace, "projects": apptest.SampleProject, "items": apptest.SampleTask} {
+		_, err := os.Stat(filepath.Join(srcDir, dir, string(id)))
+		if gone := errors.Is(err, os.ErrNotExist); gone != (dir == "workspaces") {
+			t.Errorf("%s folder gone = %v (%v)", dir, gone, err)
+		}
+	}
+	if st := worktreeStatus(t, srcDir); !st.IsClean() {
+		t.Errorf("worktree is not clean:\n%s", st)
+	}
+}

@@ -1,10 +1,8 @@
 package transfer
 
 import (
-	"cmp"
 	"errors"
 	"slices"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/item"
 )
@@ -48,20 +46,6 @@ func Collect(root item.ID, all []item.Item) (Set, error) {
 		return Set{}, ErrStep
 	}
 	s := Set{Root: all[i], Below: item.Descendants(root, all)}
-	present := map[item.ID]bool{}
-	for _, it := range all {
-		present[it.ID] = true
-	}
-	for _, it := range all {
-		for _, rel := range it.Relations {
-			if present[rel.To] && s.Contains(it.ID) != s.Contains(rel.To) {
-				s.Outside = append(s.Outside, Cut{From: it.ID, To: rel.To, Type: rel.Type})
-			}
-		}
-	}
-	slices.SortFunc(s.Outside, func(a, b Cut) int {
-		return cmp.Or(strings.Compare(string(a.From), string(b.From)), strings.Compare(string(a.To), string(b.To)), strings.Compare(a.Type, b.Type))
-	})
-	s.Outside = slices.Compact(s.Outside)
+	s.Outside = cutsOutside(s.Contains, all)
 	return s, nil
 }

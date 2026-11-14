@@ -7,7 +7,8 @@ import { formatRoute, parseRoute, type Route } from "./route";
 // guard があり、書きかけがあるときは、go と戻る・進むは「入力を破棄」の確認が「破棄」のときだけ移る(02「説明」)。
 export interface Navigation {
   route: Readable<Route>;
-  go(route: Route, section?: string): void;
+  // go は、移ったか、すでにその画面だったら true、「入力を破棄」の確認で断られたら false を返す。
+  go(route: Route, section?: string): Promise<boolean>;
   replace(route: Route): void;
   // takeSection は、go で渡された「開く区画」(見出しの id)を一度だけ返す。2 回目は null(B5a-22)。
   takeSection(): string | null;
@@ -32,19 +33,18 @@ export function createNavigation(history: HistoryPort, guard?: LeaveGuard): Navi
       section = null;
       return s;
     },
-    go(next, open) {
+    async go(next, open) {
       const path = formatRoute(next);
       // いまと同じ画面へは移らない(履歴を積まず、画面を移ったときの動きもしない)。
-      if (path === history.path()) return;
+      if (path === history.path()) return true;
       const move = () => {
         section = open ?? null;
         history.push(path);
         show(path);
+        return true;
       };
       if (!guard?.anyDirty()) return move();
-      void guard.confirmLeave().then((ok) => {
-        if (ok) move();
-      });
+      return (await guard.confirmLeave()) && move();
     },
     replace(next) {
       section = null;

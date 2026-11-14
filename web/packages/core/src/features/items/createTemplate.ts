@@ -119,8 +119,10 @@ export function structureOf(
 ): { heading: string; rows: StructureRow[] } | null {
   const t = find(settings, form.templateId);
   if (!t) return null;
-  const assignee = typeof form.values.assignee === "string" ? form.values.assignee : "";
-  return templateStructure(t, assignee, members);
+  // 保存は表示している欄の値だけを送る(shownValues)ので、担当者の欄が出ていなければ「親と同じ」は未割り当て。
+  const shown = visibleProperties(settings, form.kind).some((p) => p.id === "assignee");
+  const assignee = shown && typeof form.values.assignee === "string" ? form.values.assignee : "";
+  return templateStructure(t, assignee, members, settings);
 }
 
 // othersOf は、一緒に作る子と Step の数(トーストの「ほか N 件」。A3b-16)。

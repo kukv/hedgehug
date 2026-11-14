@@ -8,11 +8,13 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
 // ApplyIgnoringWorkflow は、止まった自動化の通知の「制約を無視して {ステータス名} にする」(03「制約で止まったとき」)。
 // 遷移の制約を検査せず、ルールが行った変更(by は押した人)として 1 回で保存する。自動化は動かさない(B4-11)。
-func (s Service) ApplyIgnoringWorkflow(ctx context.Context, store port.StoreID, id item.ID, rule, status change.ID) error {
+// いまのステータスが from(止まったときのステータス)でなければ、何も書かずに断る(C4a-11)。
+func (s Service) ApplyIgnoringWorkflow(ctx context.Context, store port.StoreID, id item.ID, rule, from, status change.ID) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil {
 		return err
@@ -22,7 +24,7 @@ func (s Service) ApplyIgnoringWorkflow(ctx context.Context, store port.StoreID, 
 		return err
 	}
 	op := port.Operation{Actor: change.User(me), Summary: automation.IgnoreText(oneLine(name))}
-	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error { return applyStatus(ctx, tx, id, rule, status) })
+	return s.Stores.Write(ctx, store, op, func(tx port.Tx) error { return applyStatus(tx, id, rule, from, status) })
 }
 
 // ruleName は、ワークスペースの変更記録から引いたルール名。消したルールの名前も引ける。
@@ -48,11 +50,20 @@ func (s Service) ruleName(ctx context.Context, store port.StoreID, id item.ID, r
 }
 
 // applyStatus は、アイテムのステータスを status にする行を、ルール rule の変更として足す。同じ値なら何も足さない。
-// 別の画面で削除された(root: true)アイテムは、行を書くときだけ削除を取り消す(決定 S10)。
-func applyStatus(ctx context.Context, tx port.Tx, id item.ID, rule, status change.ID) error {
+// いまのステータスが from でないか、別の画面で削除された(root: true)アイテムなら、削除を取り消さずに断る(C4a-11)。
+// 受信箱だけの規則(06「受信箱」の「アイテムが削除済みのときは、2 つのボタンを出さない」)を、一般の規則(06「他の書き手
+// との重なり」の削除の取り消し)より先に当てる。
+func applyStatus(tx port.Tx, id item.ID, rule, from, status change.ID) error {
 	it, err := port.EditableItem(tx, id)
 	if err != nil {
 		return err
+	}
+	if it.Deleted != nil || it.Status != from {
+		ws, err := tx.Workspaces().Get(it.Place.Workspace)
+		if err != nil {
+			return err
+		}
+		return refusal.New(it.DisplayID(ws.Prefix) + " は先に変更されたため、適用しませんでした")
 	}
 	st, err := tx.Workspaces().Settings(it.Place.Workspace)
 	if err != nil {
@@ -66,12 +77,9 @@ func applyStatus(ctx context.Context, tx port.Tx, id item.ID, rule, status chang
 	if err != nil {
 		return port.ErrNotFound
 	}
-	from := item.Current(it, p)
-	if bytes.Equal(from, to) {
-		return port.Unchanged(it.Deleted)
+	now := item.Current(it, p)
+	if bytes.Equal(now, to) {
+		return nil
 	}
-	if err := port.ReviveItem(ctx, tx, id); err != nil {
-		return err
-	}
-	return tx.WriteItems().Append(id, change.NewSet(item.Field(p), from, to).ByRule(rule))
+	return tx.WriteItems().Append(id, change.NewSet(item.Field(p), now, to).ByRule(rule))
 }

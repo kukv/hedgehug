@@ -2,6 +2,7 @@ import {
   type Gone,
   type Located,
   type LocatedProject,
+  type LocatedWorkspace,
   type NotCarriedKind,
   type TransfersPort,
   TransferUndoFailed,
@@ -11,12 +12,16 @@ import { ApiError } from "./fetcher";
 import {
   getProjectTransferPreview,
   getTransferPreview,
+  getWorkspaceTransferPreview,
   listProjectTransferTargets,
   listTransferTargets,
+  listWorkspaceTransferTargets,
   locateItem,
   locateProject,
+  locateWorkspace,
   transferItem,
   transferProject,
+  transferWorkspace,
 } from "./generated";
 
 // 別のワークスペース・別の Store への移動(A5a)。生成物の型名は import しない(Go の出力型の名前に左右されないため)。
@@ -25,6 +30,7 @@ import {
 // Answer・ProjectAnswer は、locate-item・locate-project の応答(OpenAPI では kind 以外がどれも省略できる)。
 type Answer = Awaited<ReturnType<typeof locateItem>>;
 type ProjectAnswer = Awaited<ReturnType<typeof locateProject>>;
+type WorkspaceAnswer = Awaited<ReturnType<typeof locateWorkspace>>;
 
 const reasons: readonly string[] = ["deleted", "purged", "hidden", "elsewhere"];
 
@@ -52,7 +58,10 @@ function located(a: Answer): Located {
 }
 
 // gone は、gone の応答に要る値が揃っているかを確かめる(アイテムとプロジェクトで同じ形)。
-function gone(a: Answer | ProjectAnswer, bad: () => Error): { kind: "gone" } & Gone {
+function gone(
+  a: Answer | ProjectAnswer | WorkspaceAnswer,
+  bad: () => Error,
+): { kind: "gone" } & Gone {
   if (!a.reason || !reasons.includes(a.reason) || !a.old || !a.at || !a.newDisplay) throw bad();
   const base = { kind: "gone", old: a.old, at: a.at, newDisplay: a.newDisplay } as const;
   // hidden・elsewhere は文に Store 名を書くので、storeName のない応答は不正とする。
@@ -70,6 +79,22 @@ function locatedProject(a: ProjectAnswer): LocatedProject {
   if (a.kind === "found") {
     if (!a.storeId || !a.projectId) throw bad();
     const f: LocatedProject = { kind: "found", storeId: a.storeId, projectId: a.projectId };
+    if (a.movedFrom) {
+      const { old, at, display, current } = a.movedFrom;
+      f.movedFrom = { old, at, display, current };
+    }
+    return f;
+  }
+  if (a.kind === "gone") return gone(a, bad);
+  throw bad();
+}
+
+// locatedWorkspace は、locate-workspace の応答を found・gone に分ける(located のワークスペース版)。
+function locatedWorkspace(a: WorkspaceAnswer): LocatedWorkspace {
+  const bad = () => badResponse("locate-workspace");
+  if (a.kind === "found") {
+    if (!a.storeId || !a.workspaceId) throw bad();
+    const f: LocatedWorkspace = { kind: "found", storeId: a.storeId, workspaceId: a.workspaceId };
     if (a.movedFrom) {
       const { old, at, display, current } = a.movedFrom;
       f.movedFrom = { old, at, display, current };
@@ -199,5 +224,41 @@ export function createTransfersPort(): TransfersPort {
       ),
     locateProject: (storeName, id) =>
       call(async () => locatedProject(await locateProject({ store: storeName, id }))),
+    workspaceTargets: (storeId, workspaceId) =>
+      call(async () => {
+        const r = await listWorkspaceTransferTargets(storeId, workspaceId);
+        return {
+          targets: (r.targets ?? []).map((t) => ({ storeId: t.storeId, storeName: t.storeName })),
+          hiddenOnly: r.hiddenOnly,
+        };
+      }),
+    workspacePreview: (storeId, workspaceId, toStoreId) =>
+      call(async () => {
+        const p = await getWorkspaceTransferPreview(storeId, workspaceId, { toStore: toStoreId });
+        return {
+          source: p.source,
+          destination: p.destination,
+          projects: p.projects,
+          items: p.items,
+          deleted: p.deleted,
+          people: (p.people ?? []).map((m) => ({ login: m.login, name: m.name })),
+          remoteNotice: p.remoteNotice,
+          destinationHasRemote: p.destinationHasRemote,
+        };
+      }),
+    transferWorkspace: (storeId, workspaceId, toStoreId) =>
+      call(() =>
+        undoFailed(async () => {
+          const r = await transferWorkspace(storeId, workspaceId, { toStore: toStoreId });
+          return {
+            toStore: r.toStore,
+            toStoreName: r.toStoreName,
+            workspaceId: r.workspaceId,
+            prefix: r.prefix,
+          };
+        }),
+      ),
+    locateWorkspace: (storeName, prefix) =>
+      call(async () => locatedWorkspace(await locateWorkspace({ store: storeName, prefix }))),
   };
 }

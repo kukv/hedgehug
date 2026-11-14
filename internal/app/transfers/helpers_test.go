@@ -112,6 +112,7 @@ type fixture struct {
 	rec     *recorder
 	list    *apptest.StoreList
 	deliver *stubDelivery
+	clock   *apptest.Clock // Store に書く行の時計(svc.Clock とは別。svc.Clock は 1 日あと)
 }
 
 func newFixture(t *testing.T) fixture { return newFixtureWith(t, nil) }
@@ -120,7 +121,8 @@ func newFixture(t *testing.T) fixture { return newFixtureWith(t, nil) }
 func newFixtureWith(t *testing.T, mobile func(*workspace.Settings)) fixture {
 	t.Helper()
 	ids := apptest.NewIDs()
-	stores := apptest.NewStores(apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)), ids)
+	clock := apptest.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC))
+	stores := apptest.NewStores(clock, ids)
 	rec := &recorder{Stores: stores}
 	for _, id := range []port.StoreID{store1, store2, store3} {
 		stores.AddStore(id)
@@ -144,7 +146,7 @@ func newFixtureWith(t *testing.T, mobile func(*workspace.Settings)) fixture {
 			{ID: store1, Name: "main", Remote: "https://example.invalid/main.git"}, {ID: store2, Name: "team"}, {ID: store3, Name: "readonly", ReadOnly: true},
 		}},
 	}
-	return fixture{svc: svc, rec: rec, list: list, deliver: deliver}
+	return fixture{svc: svc, rec: rec, list: list, deliver: deliver, clock: clock}
 }
 
 // write は、taro の操作として 1 回保存する。

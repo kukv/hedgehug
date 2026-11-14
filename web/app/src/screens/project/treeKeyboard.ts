@@ -64,9 +64,10 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
   let pressing = false;
   // refocusing は、行の中のボタンにフォーカスがあるときの移動のキーで、フォーカスを `<ul>` へ移しているあいだ。
   let refocusing = false;
-  // data-menu は ui の Menu の浮いた枠(head の検索欄も含む)。
+  // data-menu は ui の Menu の浮いた枠(head の検索欄も含む)。data-palette はコマンドパレット(閉じるとフォーカスを
+  // 戻すので、メニューと同じく、戻ったときにいまの行を動かさない)。
   const inMenu = (el: EventTarget | null) =>
-    el instanceof Element && el.closest("[role='menu'], [data-menu]") !== null;
+    el instanceof Element && el.closest("[role='menu'], [data-menu], [data-palette]") !== null;
   const inTree = (el: EventTarget | null) =>
     el instanceof Node && deps.list()?.contains(el) === true;
 

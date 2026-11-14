@@ -4,7 +4,6 @@
     dayOf,
     overviewFirst,
     readOnlyBand,
-    readOnlyNote,
     type SprintCard,
     type SprintDialogKind,
     type StoreNode,
@@ -13,9 +12,9 @@
     type WorkspaceTab,
     workspaceTabOf,
   } from "@hedgehug/core";
-  import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
+  import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
   import { selectReport } from "../../reports";
-  import { navigation, planning, projectDialog, syncNow, toasts } from "../../wire";
+  import { navigation, planning, syncNow, toasts } from "../../wire";
   import BacklogTab from "../planning/BacklogTab.svelte";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
@@ -23,6 +22,7 @@
   import ReportsTab from "../reports/ReportsTab.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
   import OverviewTab from "./OverviewTab.svelte";
+  import WorkspaceHead from "./WorkspaceHead.svelte";
 
   // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「バックログ」「スプリント」「リリース」「レポート」「設定」。
   interface Props {
@@ -109,23 +109,7 @@
   });
 </script>
 
-<PageHead title={workspace.name} {ondrawer} {alert}>
-  {#snippet crumbs()}
-    <StoreBadge name={store.name} color={store.color} />
-    <code class="prefix">{workspace.prefix}</code>
-    {#if active}
-      <span class="running">{active}</span>
-    {/if}
-  {/snippet}
-  {#snippet actions()}
-    <Button
-      disabled={store.readOnly}
-      title={store.readOnly ? readOnlyNote : undefined}
-      onclick={() => void projectDialog.open(workspace.id)}
-      >プロジェクト</Button
-    >
-  {/snippet}
-</PageHead>
+<WorkspaceHead {store} {workspace} {tab} {active} {ondrawer} {alert} />
 <Tabs {tabs} current={tab} onselect={select} />
 <div class="content">
   {#if tab === "settings"}
@@ -186,14 +170,5 @@
     overflow: auto;
     padding: 16px 24px 40px;
     min-height: 0;
-  }
-  .prefix {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .running {
-    font-size: 12px;
-    color: var(--muted);
   }
 </style>

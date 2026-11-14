@@ -230,11 +230,13 @@ func (t *tx) describe(ref change.Ref, text string) error {
 	return nil
 }
 
-func (t *tx) WriteWorkspaces() port.WorkspaceWriter { return idWriter{t, change.KindWorkspace} }
-func (t *tx) WriteProjects() port.ProjectWriter     { return idWriter{t, change.KindProject} }
-func (t *tx) WriteItems() port.ItemWriter           { return idWriter{t, change.KindItem} }
-func (t *tx) WriteMembers() port.MemberWriter       { return membersWriter{t} }
-func (t *tx) WriteTransfers() port.TransferWriter   { return transferWriter{t} }
+func (t *tx) WriteWorkspaces() port.WorkspaceWriter {
+	return workspaceWriter{idWriter{t, change.KindWorkspace}}
+}
+func (t *tx) WriteProjects() port.ProjectWriter   { return idWriter{t, change.KindProject} }
+func (t *tx) WriteItems() port.ItemWriter         { return idWriter{t, change.KindItem} }
+func (t *tx) WriteMembers() port.MemberWriter     { return membersWriter{t} }
+func (t *tx) WriteTransfers() port.TransferWriter { return transferWriter{t} }
 
 type idWriter struct {
 	t    *tx
@@ -281,6 +283,13 @@ func (w idWriter) Remove(id change.ID) error {
 	w.t.forgetPlace(ref)
 	w.t.removed[ref] = true
 	return nil
+}
+
+// workspaceWriter は、idWriter の Import から説明をなくした口(ワークスペースに説明はない)。
+type workspaceWriter struct{ idWriter }
+
+func (w workspaceWriter) Import(id change.ID, log []change.Record) error {
+	return w.idWriter.Import(id, log, "")
 }
 
 type membersWriter struct{ t *tx }

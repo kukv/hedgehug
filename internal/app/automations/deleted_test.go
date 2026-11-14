@@ -26,7 +26,7 @@ func TestApplyIgnoringWorkflowRefusesADeletedItem(t *testing.T) {
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleEpic, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); !errors.Is(err, port.ErrNotFound) {
+	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusTodo, apptest.SampleStatusDone); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("err = %v, want port.ErrNotFound", err)
 	}
 	err = rec.Read(ctx, store, func(rd port.Reader) error {
@@ -74,8 +74,19 @@ func TestViewOfDeletedWorkspace(t *testing.T) {
 	}
 }
 
-// 削除済み(root: true)のアイテムへの「制約を無視して適用」は、変更を残して削除を取り消す(06「他の書き手との重なり」)。
-func TestApplyIgnoringWorkflowRevivesADeletedItem(t *testing.T) {
+// 削除済み(root: true)のアイテムへの「制約を無視して…」は、削除を取り消さず、何も書かずに断る。同じステータスでも
+// 断る(C4a-11。06「受信箱」の「アイテムが削除済みのときは、2 つのボタンを出さない」と「押した瞬間に…値が
+// 変わっていたときは、保存せず、エラーのトースト」)。
+func TestApplyIgnoringWorkflowRefusesARootDeletedItem(t *testing.T) {
+	for name, status := range map[string]change.ID{"other": apptest.SampleStatusDone, "same": apptest.SampleStatusTodo} {
+		t.Run(name, func(t *testing.T) { refusesRootDeleted(t, status) })
+	}
+}
+
+// refusesRootDeleted は、削除済み(root: true)のアイテムを status にする「制約を無視して…」が断られ、何も書かず、
+// 削除も取り消さないことを確かめる。
+func refusesRootDeleted(t *testing.T, status change.ID) {
+	t.Helper()
 	svc, rec := setup(t)
 	ctx := port.WithRevived(t.Context())
 	r, err := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
@@ -85,43 +96,22 @@ func TestApplyIgnoringWorkflowRevivesADeletedItem(t *testing.T) {
 	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusDone); err != nil {
-		t.Fatal(err)
+	err = svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, apptest.SampleStatusTodo, status)
+	if got := message(err); got != "HH-2 は先に変更されたため、適用しませんでした" {
+		t.Errorf("err = %v", err)
 	}
 	err = rec.Read(ctx, store, func(rd port.Reader) error {
-		it, err := rd.Items().Get(apptest.SampleTask)
-		if err != nil || it.Deleted != nil || it.Status != apptest.SampleStatusDone {
-			t.Errorf("item = %+v, %v", it, err)
+		log, err := rd.Changes().Of(change.Ref{Kind: change.KindItem, ID: apptest.SampleTask})
+		if err == nil && log[len(log)-1].T != change.Delete {
+			t.Errorf("a refused apply wrote %+v", log[len(log)-1])
 		}
-		return nil
+		return err
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := port.Revived(ctx); !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
+	if got := port.Revived(ctx); len(got) != 0 {
 		t.Errorf("Revived = %v", got)
-	}
-}
-
-// 同じステータスなら何も保存せず、削除済みのまま 404 になる(決定 S4)。
-func TestApplyIgnoringWorkflowSameStatusOnADeletedItemIsNotFound(t *testing.T) {
-	svc, rec := setup(t)
-	ctx := t.Context()
-	r, err := svc.Create(ctx, store, apptest.SampleWorkspace, doneRule())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var status change.ID
-	_ = rec.Read(ctx, store, func(rd port.Reader) error {
-		it, _ := rd.Items().Get(apptest.SampleTask)
-		status = it.Status
-		return nil
-	})
-	if err := apptest.DeleteItems(ctx, rec.Stores, store, apptest.SampleTask); err != nil {
-		t.Fatal(err)
-	}
-	if err := svc.ApplyIgnoringWorkflow(ctx, store, apptest.SampleTask, r.ID, status); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("err = %v, want port.ErrNotFound", err)
 	}
 }
 

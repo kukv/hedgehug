@@ -9,10 +9,12 @@ import {
   createItemMove,
   createItemRefresh,
   createLeaveMoved,
+  createLeaveWorkspaceMoved,
   createProjectDelete,
   createProjectTransfer,
   createTransferDialog,
   createWorkspaceDelete,
+  createWorkspaceTransfer,
   leaveDeletedProject,
   leaveDeletedWorkspace,
 } from "@hedgehug/core";
@@ -140,11 +142,23 @@ export const workspaceDelete = createWorkspaceDelete({
   afterDelete: (ws) => leaveDeletedWorkspace({ navigation, catalog, detail }, ws),
 });
 
+// ワークスペースの別の Store への移動(03「別の Store へ移動」)。「一般」の区画が読み、「移動…」が確認ダイアログを開く。
+// 移せたあとの移り先(押したときから画面を移っていなければ移動先のワークスペースの設定タブへ replace、そのあと
+// 一覧を読み直す。B5c-17)は core の createLeaveWorkspaceMoved。
+export const workspaceTransfer = createWorkspaceTransfer({
+  transfers: transfersPort,
+  catalog,
+  toasts,
+  online: isOnline,
+  afterMoved: createLeaveWorkspaceMoved({ navigation, catalog }),
+});
+
 // 画面を移ったら、出している確認ダイアログとメニューを閉じる(01「画面の移り方」)。
 navigation.route.subscribe(() => {
   projectDelete.cancel();
   projectTransfer.cancel();
   workspaceDelete.cancel();
+  workspaceTransfer.cancel();
   itemDelete.cancel();
   itemMove.close();
   itemMove.cancelMove();

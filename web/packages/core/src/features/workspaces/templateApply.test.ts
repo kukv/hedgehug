@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceTemplate } from "../../model/workspace";
+import type {
+  WorkspaceProperty,
+  WorkspaceSettings,
+  WorkspaceTemplate,
+} from "../../model/workspace";
+import { settings as baseSettings } from "../items/settings.test-util";
 import { applyTemplate, nextDescription, templateStructure } from "./templateApply";
 
 const tpl = (id: string, extra: Partial<WorkspaceTemplate>): WorkspaceTemplate => ({
@@ -80,6 +85,11 @@ describe("apply template", () => {
 });
 
 describe("template structure", () => {
+  const withAssignee = (extra: Partial<WorkspaceProperty>): WorkspaceSettings => ({
+    ...baseSettings,
+    properties: baseSettings.properties.map((p) => (p.id === "assignee" ? { ...p, ...extra } : p)),
+  });
+  const shown = withAssignee({});
   const members = [
     { login: "taro", name: "田中" },
     { login: "hanako", name: "佐藤" },
@@ -103,7 +113,7 @@ describe("template structure", () => {
         { id: "c2", kind: "Task", title: "本番", description: "", values: {}, steps: [] },
       ],
     });
-    expect(templateStructure(epic, "taro", members)).toEqual({
+    expect(templateStructure(epic, "taro", members, shown)).toEqual({
       heading: "一緒に作るもの: 子 2 件・Step 2 件",
       rows: [
         { depth: 0, kind: "Story", title: "QA", assignee: "佐藤" },
@@ -116,9 +126,54 @@ describe("template structure", () => {
 
   it("uses the dialog's assignee for a Task's 親と同じ", () => {
     const t = tpl("t", { steps: [{ id: "s1", title: "再現", assignee: "@parent" }] });
-    expect(templateStructure(t, "taro", members)?.rows).toEqual([
+    expect(templateStructure(t, "taro", members, shown)?.rows).toEqual([
       { depth: 0, kind: "Step", title: "再現", assignee: "田中" },
     ]);
-    expect(templateStructure(tpl("n", {}), "taro", members)).toBeNull();
+    expect(templateStructure(tpl("n", {}), "taro", members, shown)).toBeNull();
+  });
+
+  it.each([
+    ["担当者が非表示", withAssignee({ hidden: true })],
+    ["担当者がその種類で使われない", withAssignee({ kinds: ["Task", "Bug"] })],
+    ["担当者がどの種類でも使われない", withAssignee({ kinds: [] })],
+  ])("shows 未割り当て for a child and its 親と同じ Step when %s", (_, s) => {
+    const epic = tpl("epic", {
+      kind: "Epic",
+      children: [
+        {
+          id: "c1",
+          kind: "Story",
+          title: "QA",
+          description: "",
+          values: { assignee: "hanako" },
+          steps: [{ id: "s1", title: "確認", assignee: "@parent" }],
+        },
+      ],
+    });
+    expect(templateStructure(epic, "taro", members, s)?.rows).toEqual([
+      { depth: 0, kind: "Story", title: "QA", assignee: "未割り当て" },
+      { depth: 1, kind: "Step", title: "確認", assignee: "未割り当て" },
+    ]);
+  });
+
+  it("shows 未割り当て for a child when the workspace has no assignee property", () => {
+    const none: WorkspaceSettings = {
+      ...baseSettings,
+      properties: baseSettings.properties.filter((p) => p.id !== "assignee"),
+    };
+    const epic = tpl("epic", {
+      kind: "Epic",
+      children: [
+        {
+          id: "c1",
+          kind: "Story",
+          title: "QA",
+          description: "",
+          values: { assignee: "hanako" },
+          steps: [],
+        },
+      ],
+    });
+    expect(templateStructure(epic, "taro", members, none)?.rows[0]?.assignee).toBe("未割り当て");
   });
 });

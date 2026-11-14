@@ -48,9 +48,9 @@ import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { githubReloads, propertySaved, reloads } from "./reloads";
+import { githubReloads, inboxReloads, propertySaved, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
-import { toasts } from "./wireBase";
+import { palettePort, timer, toasts } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 
@@ -132,6 +132,8 @@ export const detail = createDetail({
   },
   // 別のアイテムを開く・パネルを閉じるとき、アイテムの書きかけがあれば「入力を破棄」を出す(02「説明」)。
   leave: leaveItem,
+  // 開けたアイテムを「最近開いたもの」に記録する(A5c-13。失敗は無視)。
+  onOpened: (s, i) => void palettePort.opened(s, i).catch(() => {}),
 });
 // 旧 ID から開いたときの詳細パネルの上部の 1 行(A5a-16)。
 export const movedNotice = createMovedNotice({ detail, now: () => new Date() });
@@ -199,7 +201,7 @@ navigation.route.subscribe(() => {
 
 const syncPort = createSyncPort();
 
-// 画面への反映(06「画面への反映」)。store は一覧・開いているプロジェクト・詳細パネル、sync は同期の状態。
+// 画面への反映(06「画面への反映」)。store は一覧・開いているプロジェクト・詳細パネル、sync は同期の状態、inbox は受信箱。
 // 失敗は出さない(A2 の決定 29)。
 // 同期の状態は、どちらの種類でも読み直す(保存で未送信の数が変わる。決定 S10)。
 async function reflect(kinds: SyncEventKind[]) {
@@ -226,15 +228,13 @@ async function reflect(kinds: SyncEventKind[]) {
   if (kinds.includes("github")) {
     jobs.push(...[...githubReloads].map((reload) => reload()));
   }
+  if (kinds.includes("inbox")) jobs.push(...[...inboxReloads].map((reload) => reload()));
   await Promise.allSettled(jobs);
 }
 
 export const reflection = createReflection({
   port: syncPort,
-  timer: {
-    set: (fn, ms) => setTimeout(fn, ms),
-    clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
-  },
+  timer,
   held,
   visible,
   apply: reflect,

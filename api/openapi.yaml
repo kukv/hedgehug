@@ -143,15 +143,6 @@ components:
       required:
         - name
       type: object
-    ApplyAutomationIgnoringWorkflow:
-      additionalProperties: false
-      properties:
-        status:
-          description: 変えるステータスの ID(通知の Status)
-          type: string
-      required:
-        - status
-      type: object
     AutomationRule:
       additionalProperties: false
       properties:
@@ -667,6 +658,210 @@ components:
       required:
         - lines
       type: object
+    InboxAction:
+      additionalProperties: false
+      properties:
+        applyEnabled:
+          description: 「制約を無視して…」を押せる
+          type: boolean
+        keepEnabled:
+          description: 「変更しない」を押せる
+          type: boolean
+        note:
+          type: string
+        result:
+          description: 空でなければ、ボタンの代わりに結果を出す
+          enum:
+            - ""
+            - applied
+            - kept
+          type: string
+        status:
+          description: 変える先のステータスの ID
+          type: string
+        statusName:
+          type: string
+        visible:
+          description: ボタンを出す
+          type: boolean
+      required:
+        - status
+        - statusName
+        - visible
+        - applyEnabled
+        - keepEnabled
+        - note
+        - result
+      type: object
+    InboxCounts:
+      additionalProperties: false
+      properties:
+        all:
+          format: int64
+          type: integer
+        assign:
+          format: int64
+          type: integer
+        automation:
+          format: int64
+          type: integer
+        mention:
+          format: int64
+          type: integer
+        overwrite:
+          format: int64
+          type: integer
+        repair:
+          format: int64
+          type: integer
+        watch:
+          format: int64
+          type: integer
+      required:
+        - all
+        - mention
+        - assign
+        - watch
+        - overwrite
+        - automation
+        - repair
+      type: object
+    InboxPage:
+      additionalProperties: false
+      properties:
+        more:
+          description: 続きがある
+          type: boolean
+        rows:
+          items:
+            $ref: "#/components/schemas/InboxRow"
+          nullable: true
+          type: array
+        unread:
+          $ref: "#/components/schemas/InboxCounts"
+      required:
+        - rows
+        - more
+        - unread
+      type: object
+    InboxRow:
+      additionalProperties: false
+      properties:
+        action:
+          $ref: "#/components/schemas/InboxAction"
+          description: 止まった通知だけ
+        at:
+          format: date-time
+          type: string
+        id:
+          format: int64
+          type: integer
+        kind:
+          enum:
+            - automation
+            - automation_stopped
+            - mention
+            - assign
+            - watch
+            - overwrite
+            - repair
+          type: string
+        read:
+          type: boolean
+        reason:
+          type: string
+        sender:
+          description: 差出人のログイン名。空は「hedgehug」
+          type: string
+        store:
+          $ref: "#/components/schemas/InboxStore"
+        target:
+          $ref: "#/components/schemas/InboxTarget"
+        text:
+          type: string
+      required:
+        - id
+        - kind
+        - at
+        - read
+        - text
+        - reason
+        - sender
+        - store
+        - target
+      type: object
+    InboxStore:
+      additionalProperties: false
+      properties:
+        color:
+          description: 画面のトークン --t-<色> の名前
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        readOnly:
+          type: boolean
+      required:
+        - id
+        - name
+        - color
+        - readOnly
+      type: object
+    InboxTarget:
+      additionalProperties: false
+      properties:
+        display:
+          description: アイテムの ID(HH-12)。moved は通知を作ったときの ID
+          type: string
+        item:
+          description: アイテムの内部 ID。workspace・deleted_workspace では空
+          type: string
+        itemKind:
+          description: item のときのアイテムの種類。ほかは空
+          enum:
+            - ""
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        kind:
+          enum:
+            - item
+            - moved
+            - deleted_item
+            - workspace
+            - deleted_workspace
+          type: string
+        section:
+          description: workspace のとき、開くワークスペースの設定の区画
+          type: string
+        title:
+          type: string
+        workspace:
+          type: string
+        workspaceName:
+          type: string
+      required:
+        - kind
+        - item
+        - itemKind
+        - display
+        - title
+        - workspace
+        - workspaceName
+        - section
+      type: object
+    InboxUnread:
+      additionalProperties: false
+      properties:
+        counts:
+          $ref: "#/components/schemas/InboxCounts"
+      required:
+        - counts
+      type: object
     Item:
       additionalProperties: false
       properties:
@@ -984,6 +1179,46 @@ components:
       required:
         - kind
       type: object
+    LocatedWorkspace:
+      additionalProperties: false
+      properties:
+        at:
+          description: gone のとき。一致した記録の日時
+          type: string
+        kind:
+          enum:
+            - found
+            - gone
+          type: string
+        movedFrom:
+          $ref: "#/components/schemas/LocatedMovedFrom"
+          description: found で、転送記録から見つけたとき
+        newDisplay:
+          description: gone のとき。記録の移動先の Store 名
+          type: string
+        old:
+          description: gone のとき。画面の接頭辞
+          type: string
+        reason:
+          description: gone のとき
+          enum:
+            - deleted
+            - purged
+            - hidden
+            - elsewhere
+          type: string
+        storeId:
+          description: found のとき。開くワークスペースの Store
+          type: string
+        storeName:
+          description: gone の hidden・elsewhere のとき。表示中でない Store の名前
+          type: string
+        workspaceId:
+          description: found のとき
+          type: string
+      required:
+        - kind
+      type: object
     Me:
       additionalProperties: false
       properties:
@@ -1102,6 +1337,118 @@ components:
           type: integer
       required:
         - number
+      type: object
+    OpenedItem:
+      additionalProperties: false
+      properties:
+        itemId:
+          type: string
+        storeId:
+          type: string
+      required:
+        - storeId
+        - itemId
+      type: object
+    PaletteAlias:
+      additionalProperties: false
+      properties:
+        at:
+          description: 移動した日時。旧い接頭辞から作ったものは null
+          nullable: true
+          type: string
+        id:
+          description: 旧 ID(HH-12)
+          type: string
+      required:
+        - id
+        - at
+      type: object
+    PaletteIndex:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/PaletteItem"
+          nullable: true
+          type: array
+        projects:
+          items:
+            $ref: "#/components/schemas/PaletteProject"
+          nullable: true
+          type: array
+      required:
+        - items
+        - projects
+      type: object
+    PaletteItem:
+      additionalProperties: false
+      properties:
+        aliases:
+          description: 旧 ID(いまの ID と同じものを除く)
+          items:
+            $ref: "#/components/schemas/PaletteAlias"
+          nullable: true
+          type: array
+        display:
+          description: いまの ID(HH-12)
+          type: string
+        itemId:
+          type: string
+        number:
+          description: ワークスペースの中の番号(並びに使う)
+          format: int64
+          type: integer
+        projectId:
+          type: string
+        projectTitle:
+          type: string
+        storeId:
+          type: string
+        title:
+          type: string
+        workspaceId:
+          type: string
+      required:
+        - storeId
+        - workspaceId
+        - projectId
+        - itemId
+        - number
+        - display
+        - title
+        - projectTitle
+        - aliases
+      type: object
+    PaletteProject:
+      additionalProperties: false
+      properties:
+        aliases:
+          description: 旧 ID(いまの ID と同じものを除く)
+          items:
+            $ref: "#/components/schemas/PaletteAlias"
+          nullable: true
+          type: array
+        display:
+          description: いまの ID(HH-P1)
+          type: string
+        projectId:
+          type: string
+        storeId:
+          type: string
+        title:
+          type: string
+        workspaceId:
+          type: string
+        workspaceName:
+          type: string
+      required:
+        - storeId
+        - workspaceId
+        - projectId
+        - display
+        - title
+        - workspaceName
+        - aliases
       type: object
     PlaceItem:
       additionalProperties: false
@@ -1458,6 +1805,35 @@ components:
         - storeName
         - workspaceId
         - workspaceName
+      type: object
+    ReadAllInbox:
+      additionalProperties: false
+      properties:
+        tab:
+          description: all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400
+          type: string
+      required:
+        - tab
+      type: object
+    RecentItem:
+      additionalProperties: false
+      properties:
+        display:
+          type: string
+        itemId:
+          type: string
+        projectTitle:
+          type: string
+        storeId:
+          type: string
+        title:
+          type: string
+      required:
+        - storeId
+        - itemId
+        - display
+        - title
+        - projectTitle
       type: object
     RecheckOutputBody:
       additionalProperties: false
@@ -2134,6 +2510,14 @@ components:
           type: boolean
       required:
         - enabled
+      type: object
+    SetInboxRead:
+      additionalProperties: false
+      properties:
+        read:
+          type: boolean
+      required:
+        - read
       type: object
     SetItemProperty:
       additionalProperties: false
@@ -2885,6 +3269,15 @@ components:
         - prefix
         - projects
       type: object
+    TransferWorkspaceBody:
+      additionalProperties: false
+      properties:
+        toStore:
+          description: 移動先の Store の ID
+          type: string
+      required:
+        - toStore
+      type: object
     ValuesBody:
       additionalProperties: false
       properties:
@@ -3243,6 +3636,109 @@ components:
         - title
         - assignee
       type: object
+    WorkspaceTransferPerson:
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+        name:
+          description: 表示名
+          type: string
+      required:
+        - login
+        - name
+      type: object
+    WorkspaceTransferPreview:
+      additionalProperties: false
+      properties:
+        deleted:
+          description: 削除済みのプロジェクトと、それ以外のアイテム(自分が削除済みか、削除済みのプロジェクトの下)の数
+          format: int64
+          type: integer
+        destination:
+          description: 移動先の Store 名
+          type: string
+        destinationHasRemote:
+          description: 移動先の Store に remote があるか
+          type: boolean
+        items:
+          description: 削除されていないプロジェクトの、削除されていないアイテムの数
+          format: int64
+          type: integer
+        people:
+          description: 移動先のメンバーに足す人(小文字のログイン名の順)
+          items:
+            $ref: "#/components/schemas/WorkspaceTransferPerson"
+          nullable: true
+          type: array
+        projects:
+          description: 削除されていないプロジェクトの数
+          format: int64
+          type: integer
+        remoteNotice:
+          description: 移動先に remote がなく移動元にあるか
+          type: boolean
+        source:
+          description: 移動元の Store 名
+          type: string
+      required:
+        - source
+        - destination
+        - projects
+        - items
+        - deleted
+        - people
+        - remoteNotice
+        - destinationHasRemote
+      type: object
+    WorkspaceTransferResult:
+      additionalProperties: false
+      properties:
+        prefix:
+          description: 移したワークスペースの接頭辞
+          type: string
+        toStore:
+          description: 移動先の Store の ID
+          type: string
+        toStoreName:
+          description: 移動先の Store 名
+          type: string
+        workspaceId:
+          description: 移したワークスペースの内部 ID(変わらない)
+          type: string
+      required:
+        - toStore
+        - toStoreName
+        - workspaceId
+        - prefix
+      type: object
+    WorkspaceTransferTarget:
+      additionalProperties: false
+      properties:
+        storeId:
+          type: string
+        storeName:
+          type: string
+      required:
+        - storeId
+        - storeName
+      type: object
+    WorkspaceTransferTargets:
+      additionalProperties: false
+      properties:
+        hiddenOnly:
+          description: 候補が 0 件で、非表示の Store なら移せるか
+          type: boolean
+        targets:
+          description: 表示中で閲覧のみでなく自分でない Store(Store の並び)
+          items:
+            $ref: "#/components/schemas/WorkspaceTransferTarget"
+          nullable: true
+          type: array
+      required:
+        - targets
+        - hiddenOnly
+      type: object
     WorkspaceUsage:
       additionalProperties: false
       properties:
@@ -3594,7 +4090,7 @@ paths:
       summary: GitHub App 未導入の組織を読み直し、読めたものの記録を消す
   /api/events:
     get:
-      description: "出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"
+      description: "出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"
       operationId: watch-events
       responses:
         "200":
@@ -3610,6 +4106,148 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
+  /api/inbox:
+    get:
+      operationId: list-inbox
+      parameters:
+        - description: all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400
+          explode: false
+          in: query
+          name: tab
+          schema:
+            description: all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400
+            type: string
+        - description: 続きを読むとき、前の一覧の最後の行の at(RFC 3339、ナノ秒まで)。before_id と一緒に渡す
+          explode: false
+          in: query
+          name: before_at
+          schema:
+            description: 続きを読むとき、前の一覧の最後の行の at(RFC 3339、ナノ秒まで)。before_id と一緒に渡す
+            type: string
+        - description: 続きを読むとき、前の一覧の最後の行の id
+          explode: false
+          in: query
+          name: before_id
+          schema:
+            description: 続きを読むとき、前の一覧の最後の行の id
+            format: int64
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxPage"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 受信箱のタブの通知を、新しい順に 300 件
+  /api/inbox/read-all:
+    post:
+      operationId: read-all-inbox
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadAllInbox"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 表示中の Store の、タブの通知をすべて既読にする
+  /api/inbox/unread:
+    get:
+      operationId: inbox-unread
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxUnread"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 受信箱のタブごとの未読数
+  /api/inbox/{notice}/apply:
+    post:
+      operationId: apply-inbox-notice
+      parameters:
+        - in: path
+          name: notice
+          required: true
+          schema:
+            format: int64
+            type: integer
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 止まった自動化の変更を、制約を無視して適用
+  /api/inbox/{notice}/keep:
+    post:
+      operationId: keep-inbox-notice
+      parameters:
+        - in: path
+          name: notice
+          required: true
+          schema:
+            format: int64
+            type: integer
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 止まった自動化の変更をしない
+  /api/inbox/{notice}/read:
+    put:
+      operationId: set-inbox-read
+      parameters:
+        - in: path
+          name: notice
+          required: true
+          schema:
+            format: int64
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetInboxRead"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 通知を既読・未読にする
   /api/locate:
     get:
       operationId: locate-item
@@ -3678,6 +4316,95 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 画面のアドレスのプロジェクトの ID(旧 ID を含む)が指すプロジェクトを探す
+  /api/locate-workspace:
+    get:
+      operationId: locate-workspace
+      parameters:
+        - description: 画面のアドレスの Store 名
+          explode: false
+          in: query
+          name: store
+          required: true
+          schema:
+            description: 画面のアドレスの Store 名
+            type: string
+        - description: 画面のアドレスのワークスペースの接頭辞
+          explode: false
+          in: query
+          name: prefix
+          required: true
+          schema:
+            description: 画面のアドレスのワークスペースの接頭辞
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocatedWorkspace"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 画面のアドレスのワークスペースの接頭辞(旧い接頭辞・移動元のアドレスを含む)が指すワークスペースを探す
+  /api/palette-index:
+    get:
+      operationId: palette-index
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaletteIndex"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: パレットのアイテム・プロジェクトの候補を返す
+  /api/recent-items:
+    get:
+      operationId: list-recent-items
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RecentItem"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 最近開いたアイテムを新しい順に返す
+    post:
+      operationId: open-recent-item
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenedItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを開いたと、このマシンに覚える
   /api/sign-ins:
     post:
       operationId: start-sign-in
@@ -3866,41 +4593,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムを返す
-  /api/stores/{store}/items/{item}/automation/{rule}/apply:
-    post:
-      operationId: apply-automation-ignoring-workflow
-      parameters:
-        - in: path
-          name: store
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: item
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: rule
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ApplyAutomationIgnoringWorkflow"
-        required: true
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: 止まった自動化の変更を、制約を無視して適用
   /api/stores/{store}/items/{item}/check:
     post:
       operationId: check-step
@@ -7936,6 +8628,102 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: テンプレートを編集
+  /api/stores/{store}/workspaces/{workspace}/transfer:
+    post:
+      operationId: transfer-workspace
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferWorkspaceBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTransferResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースを中身ごと別の Store へ移す
+  /api/stores/{store}/workspaces/{workspace}/transfer-preview:
+    get:
+      operationId: get-workspace-transfer-preview
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: toStore
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTransferPreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースの移動の確認ダイアログの予告を返す
+  /api/stores/{store}/workspaces/{workspace}/transfer-targets:
+    get:
+      operationId: list-workspace-transfer-targets
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTransferTargets"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ワークスペースの移す先の候補の Store を返す
   /api/stores/{store}/workspaces/{workspace}/usage:
     get:
       operationId: get-workspace-usage

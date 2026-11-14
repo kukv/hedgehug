@@ -4,8 +4,26 @@ import (
 	"context"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
+
+// Recent は、最近開いたアイテム 1 件(どの Store のどのアイテムを、いつ開いたか)。
+type Recent struct {
+	Store StoreID
+	Item  change.ID
+	At    time.Time
+}
+
+// RecentItems は、このマシンで最近開いたアイテム(保存形式「このマシンに持つもの」)。
+type RecentItems interface {
+	// Touch は、item を開いたと記録する(すでにあれば Store と時刻を替える)。At の新しい順で keep 件を超えた記録は消す。
+	Touch(ctx context.Context, store StoreID, item change.ID, at time.Time, keep int) error
+	// List は、記録を At の新しい順で返す。
+	List(ctx context.Context) ([]Recent, error)
+	// Forget は、items の記録を消す。なければ何もしない。
+	Forget(ctx context.Context, items []change.ID) error
+}
 
 // SyncRecord は、1 つの Store の、このマシンでの同期の記録。
 type SyncRecord struct {

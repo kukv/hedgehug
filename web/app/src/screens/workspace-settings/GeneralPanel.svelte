@@ -12,6 +12,7 @@
   import { catalog, navigation, workspaceSettings } from "../../wire";
   import { workspaceDelete } from "../../wireActions";
   import PrefixDialog from "./PrefixDialog.svelte";
+  import WorkspaceTransfer from "./WorkspaceTransfer.svelte";
 
   // 「一般」の名前と接頭辞(03「名前」「接頭辞」)。入力の途中の値だけを持ち、操作は core の run に渡す。
   interface Props {
@@ -112,6 +113,7 @@
     </p>
     <p class="hint">{prefixHelp}</p>
   </div>
+  <WorkspaceTransfer state={s} />
   <div class="field danger-zone">
     <Button variant="danger" disabled={s.readOnly} {title} onclick={askDelete}>
       ワークスペースを削除…

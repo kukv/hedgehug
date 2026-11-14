@@ -142,7 +142,7 @@ export async function leaveDeletedWorkspace(
 ): Promise<void> {
   const route = get(deps.navigation.route);
   const store = get(deps.catalog.stores).find((s) => s.id === ws.storeId);
-  if (store && route.name !== "home" && route.name !== "settings" && route.store === store.name) {
+  if (store && "store" in route && route.store === store.name) {
     const inside =
       route.name === "workspace"
         ? route.prefix === ws.prefix

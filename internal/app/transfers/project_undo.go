@@ -2,7 +2,6 @@ package transfers
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,20 +20,13 @@ import (
 // *UndoError(Old はプロジェクトの旧 ID、NewDisplay はプロジェクトの新 ID)。
 func (s Service) rollbackProject(ctx context.Context, m *crossProjectMove, cause error) error {
 	display := m.plan.display()
-	op := port.Operation{Actor: change.User(m.meTo), Summary: display + " の移動を取り消し"}
-	reason, err := s.Delivery.Deliver(ctx, m.in.ToStore, op, m.undo)
-	if err == nil && reason != "" {
-		err = &SendError{Store: m.to.Name, Reason: reason}
-	}
-	if err != nil {
-		return &UndoError{Old: m.old(), Store: m.to.Name, NewDisplay: display, Cause: cause, Undo: err}
-	}
-	return cause
+	return s.deliverUndo(ctx, m.to, m.meTo, display+" の移動を取り消し", m.undo, cause, UndoError{Old: m.old(), NewDisplay: display})
 }
 
 // undo は、戻しの保存の fn。移動の操作(移動先のプロジェクトの最後の moved_in の行の操作)を引いて、足した人を外す行と
-// ルールを戻す行を決めてから、写したフォルダを消す(消すと moved_in の行も読めなくなる)。移動先に移動が保存されていなければ
-// (moved_in がない)、行は書かない。保存されなかったフォルダは飛ばす。
+// ルールを戻す行を決めてから、移動先のプロジェクトの中のアイテムのフォルダ(tx から読む。移動のあとに移動先で作られたものも)
+// と、プロジェクトのフォルダを消す(消すと moved_in の行も読めなくなる)。移動先に移動が保存されていなければ(moved_in が
+// ない)、行は書かない。保存されなかったフォルダは飛ばす。
 func (m *crossProjectMove) undo(tx port.Tx) error {
 	op, err := lastMovedIn(tx, change.Ref{Kind: change.KindProject, ID: m.src.project.ID})
 	if err != nil {
@@ -47,12 +39,7 @@ func (m *crossProjectMove) undo(tx port.Tx) error {
 		}
 		rules = inverseRules(m.plan.carried, m.src.project.ID)
 	}
-	for _, it := range m.src.set.Items() {
-		if err := tx.WriteItems().Remove(it.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
-			return err
-		}
-	}
-	if err := tx.WriteProjects().Remove(m.src.project.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
+	if err := removeProjectFolders(tx, m.src.project.ID); err != nil {
 		return err
 	}
 	if len(rules) > 0 {

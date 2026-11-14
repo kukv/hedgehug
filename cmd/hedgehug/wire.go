@@ -69,7 +69,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Stores:        notified,
 		IDs:           ids,
 		Identity:      noIdentity{},
-		Inbox:         noInbox{},
+		Inbox:         db.Inbox(clock),
 		StoreList:     noStores{},
 		Accounts:      file.Accounts(),
 		Secrets:       secrets,
@@ -89,6 +89,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHubSession: session,
 		Delivery:      svc,
 		SyncTargets:   svc.Targets,
+		Recent:        db.Recent(),
 	}
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
@@ -106,11 +107,6 @@ type noIdentity struct{}
 func (noIdentity) Me(context.Context, port.StoreID) (string, error) {
 	return "", errors.New("このマシンのログイン名が未設定です")
 }
-
-// noInbox は、通知を捨てる(B4-12)。
-type noInbox struct{}
-
-func (noInbox) Add(context.Context, port.Notice) error { return nil }
 
 // tokenAndAddr は、起動ごとのトークンと、127.0.0.1 の空いた番号を返す。
 func tokenAndAddr() (token, addr string) { return newToken(), "127.0.0.1:0" }

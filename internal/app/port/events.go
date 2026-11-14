@@ -9,6 +9,8 @@ const (
 	// EventGitHub は、このマシンが読んだ GitHub の値(チェックの結果・取り直しの失敗の文言)が変わったこと。
 	// Store が空なら、認証エラーから確かめ直しで戻ったアカウントがあったこと(設定の「アカウントとメンバー」が読み直す)。
 	EventGitHub EventKind = "github"
+	// EventInbox は、受信箱の通知が増えたか、既読・結果が変わったこと(C4a-13)。Store が空なら、すべて既読。
+	EventInbox EventKind = "inbox"
 )
 
 // Event は、画面に知らせる出来事。

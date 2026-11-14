@@ -13,10 +13,9 @@ import {
 } from "./route";
 
 // アドレス(Store 名と画面の ID)を内部 ID にする(01「画面のアドレス」、A2 の計画の決定 7)。
-// アドレスの Store 名の Store を先に探し、なければサイドバーの並びの順にほかの Store を探す(ワークスペースは、ほかの
-// Store のすべてのいまの接頭辞を見てから、すべての旧い接頭辞を見る)。
 // いまの ID・接頭辞で見つからないときだけ、旧いものをたどる。ワークスペースとプロジェクトは、一覧の旧い接頭辞
-// (oldPrefixes。A5a-21)で探す。アイテムは、アドレスの Store のいまの ID で見つからなければ、サーバーの locate に
+// (oldPrefixes。A5a-21)で探す。ワークスペースも、一覧ではアドレスの Store だけを(いまの接頭辞・旧い接頭辞で)
+// 探し、なければサーバーの locateWorkspace に聞く(B5c-13。プロジェクトと同じ)。アイテムは、アドレスの Store のいまの ID で見つからなければ、サーバーの locate に
 // 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。プロジェクトも、一覧では
 // アドレスの Store だけを(いまの接頭辞・旧い接頭辞で)探し、なければサーバーの locateProject に聞く(旧 ID・
 // ほかの Store のいまの ID・一覧を読み直す前の移したばかりのいまの ID。A5b-24)。一覧でほかの Store を探すと、
@@ -24,33 +23,32 @@ import {
 
 export type Resolved =
   | { name: "home"; gone?: Gone }
-  | { name: "workspace"; storeId: string; workspaceId: string; tab: WorkspaceTab }
+  | {
+      name: "workspace";
+      storeId: string;
+      workspaceId: string;
+      tab: WorkspaceTab;
+      movedFrom?: MovedFrom;
+    }
   | { name: "project"; storeId: string; projectId: string; tab: ProjectTab; movedFrom?: MovedFrom }
   | { name: "item"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }
-  | { name: "settings"; tab: SettingsTab };
+  | { name: "settings"; tab: SettingsTab }
+  | { name: "inbox" };
 
 const home = { name: "home" } as const;
 
-// inOrder は、Store 名 name の Store と、ほかの Store(サイドバーの並び)の 2 つの組。
-function inOrder(stores: StoreNode[], name: string): StoreNode[][] {
-  return [stores.filter((s) => s.name === name), stores.filter((s) => s.name !== name)];
-}
-
-// findWorkspace は、接頭辞 prefix のワークスペースを、組ごとに、組のすべての Store のいまの接頭辞で探してから旧い接頭辞で
-// 探す(groups の順。Store 名の Store の旧い接頭辞を、ほかの Store のいまの接頭辞より先に見る。サーバーの解決と同じ。A5a-15)。
+// findWorkspace は、接頭辞 prefix のワークスペースを、stores のいまの接頭辞で探してから旧い接頭辞で探す。
 function findWorkspace(
-  groups: StoreNode[][],
+  stores: StoreNode[],
   prefix: string,
   pick: (s: StoreNode, w: WorkspaceNode) => Resolved | undefined,
 ): Resolved {
-  for (const stores of groups) {
-    for (const old of [false, true]) {
-      for (const s of stores) {
-        for (const w of s.workspaces) {
-          if (!(old ? w.oldPrefixes.includes(prefix) : w.prefix === prefix)) continue;
-          const r = pick(s, w);
-          if (r) return r;
-        }
+  for (const old of [false, true]) {
+    for (const s of stores) {
+      for (const w of s.workspaces) {
+        if (!(old ? w.oldPrefixes.includes(prefix) : w.prefix === prefix)) continue;
+        const r = pick(s, w);
+        if (r) return r;
       }
     }
   }
@@ -61,10 +59,31 @@ function findWorkspace(
 function findProject(stores: StoreNode[], display: string, tab: ProjectTab): Resolved {
   const d = parseDisplayId(display);
   if (d?.kind !== "project") return home;
-  return findWorkspace([stores], d.prefix, (s, w) => {
+  return findWorkspace(stores, d.prefix, (s, w) => {
     const p = w.projects.find((x) => projectDisplayId(d.prefix, x.number) === display);
     return p && { name: "project", storeId: s.id, projectId: p.id, tab };
   });
+}
+
+// askWorkspace は、一覧にないワークスペースのアドレスをサーバーに聞く(B5c-13)。
+async function askWorkspace(
+  store: string,
+  prefix: string,
+  tab: WorkspaceTab,
+  transfers: Pick<TransfersPort, "locateWorkspace">,
+): Promise<Resolved> {
+  try {
+    const l = await transfers.locateWorkspace(store, prefix);
+    if (l.kind === "gone") {
+      const { kind: _, ...gone } = l;
+      return { name: "home", gone };
+    }
+    const { storeId, workspaceId, movedFrom } = l;
+    return { name: "workspace", storeId, workspaceId, tab, ...(movedFrom ? { movedFrom } : {}) };
+  } catch (e) {
+    if (e instanceof NotFound) return home;
+    throw e;
+  }
 }
 
 // askProject は、一覧にないプロジェクトの ID をサーバーに聞く。読めない ID は聞かない。
@@ -135,19 +154,23 @@ export async function resolveRoute(
   route: Route,
   stores: StoreNode[],
   items: ItemsPort,
-  transfers: Pick<TransfersPort, "locate" | "locateProject">,
+  transfers: Pick<TransfersPort, "locate" | "locateProject" | "locateWorkspace">,
   askServer = true,
 ): Promise<Resolved> {
   switch (route.name) {
     case "home":
       return home;
-    case "workspace":
-      return findWorkspace(inOrder(stores, route.store), route.prefix, (s, w) => ({
+    case "workspace": {
+      const named = stores.filter((s) => s.name === route.store);
+      const r = findWorkspace(named, route.prefix, (s, w) => ({
         name: "workspace",
         storeId: s.id,
         workspaceId: w.id,
         tab: route.tab,
       }));
+      if (r.name !== "home" || !askServer) return r;
+      return askWorkspace(route.store, route.prefix, route.tab, transfers);
+    }
     case "project": {
       const named = stores.filter((s) => s.name === route.store);
       const r = findProject(named, route.project, route.tab);
@@ -158,6 +181,8 @@ export async function resolveRoute(
       return findItem(stores, route.store, route.item, items, transfers);
     case "settings":
       return { name: "settings", tab: route.tab };
+    case "inbox":
+      return { name: "inbox" };
   }
 }
 

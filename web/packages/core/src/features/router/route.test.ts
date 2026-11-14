@@ -140,3 +140,14 @@ describe("settings", () => {
     expect(formatRoute({ name: "settings", tab: "accounts" })).toBe("/settings/accounts");
   });
 });
+
+describe("inbox (06「受信箱」)", () => {
+  it("reads /inbox and writes it back", () => {
+    expect(parseRoute("/inbox")).toEqual({ name: "inbox" });
+    expect(formatRoute({ name: "inbox" })).toBe("/inbox");
+  });
+
+  it("goes home for a path below /inbox", () => {
+    expect(parseRoute("/inbox/mention")).toEqual({ name: "home" });
+  });
+});

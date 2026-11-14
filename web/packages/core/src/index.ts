@@ -12,6 +12,7 @@ export {
 export { readOnlyBand, readOnlyNote } from "./features/catalog/readonly";
 export { dayOf, formatDateTime, formatDay } from "./features/dates/date";
 export { olderThanADay, relativeTime } from "./features/dates/relative";
+export { copiedMessage, copyFailedMessage } from "./features/items/copyId";
 export { type CreateContext, childKindOf, type Here } from "./features/items/createDefaults";
 export {
   createItemDialog,
@@ -21,8 +22,6 @@ export {
   kinds,
 } from "./features/items/createDialog";
 export {
-  copiedMessage,
-  copyFailedMessage,
   createDetail,
   type Detail,
   type DetailView,
@@ -114,9 +113,17 @@ export {
   type Toasts,
 } from "./features/toasts/toasts";
 export * from "./githubIndex";
+export * from "./inboxIndex";
 export { NotFound, Refused, TransferUndoFailed } from "./model/errors";
 export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";
+export type {
+  PaletteAlias,
+  PaletteIndex,
+  PaletteItem,
+  PaletteProject,
+  RecentItem,
+} from "./model/palette";
 export type { NewProject, Project, ProjectStatus } from "./model/project";
 export type { StoreInfo } from "./model/store";
 export type {
@@ -152,10 +159,12 @@ export {
   stepParent,
 } from "./model/workspace";
 export * from "./notesIndex";
+export * from "./paletteIndex";
 export * from "./planningIndex";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
+export type { PalettePort } from "./port/palette";
 export type { ProjectsPort, RulesSection } from "./port/projects";
 export type { SyncPort, Watching } from "./port/sync";
 export type { SystemPort } from "./port/system";

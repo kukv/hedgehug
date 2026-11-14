@@ -73,10 +73,11 @@ func (s Service) Locate(ctx context.Context, storeName, display string) (Located
 	return Located{Found: true, Store: f.store, Project: f.project, Item: f.id, MovedFrom: f.moved}, nil
 }
 
-// found は、旧 ID の解決の結果。gone がなければ hit を開く(転送記録で見つかったら moved を添える)。
+// found は、旧 ID の解決の結果。gone がなければ hit を開く(転送記録で見つかったら moved を添え、rec はその記録)。
 type found struct {
 	hit
 	moved *MovedFrom
+	rec   transfer.Record
 	gone  *Gone
 }
 
@@ -87,26 +88,39 @@ func (s Service) find(ctx context.Context, k kind, storeName, prefix string, n i
 		return found{}, err
 	}
 	named, others := splitNamed(snaps, storeName)
-	if f, ok := findIn(k, named, snaps, prefix, n, display); ok {
-		return f, nil
+	if f, ok, err := s.searchIn(ctx, k, named, named, snaps, prefix, n, display); ok || err != nil {
+		return f, err
 	}
-	if recs := matching(k, named, prefix, n, display); len(recs) > 0 {
-		if f, ok, err := s.gone(ctx, snaps, recs[0]); ok || err != nil {
-			return f, err
-		}
-	}
-	if f, ok := findIn(k, others, snaps, prefix, n, display); ok {
-		return f, nil
-	}
-	recs := matching(k, snaps, prefix, n, display)
-	if len(recs) == 0 {
-		return found{}, port.ErrNotFound
-	}
-	f, ok, err := s.gone(ctx, snaps, recs[0])
+	f, ok, err := s.searchIn(ctx, k, others, snaps, snaps, prefix, n, display)
 	if !ok && err == nil {
 		err = port.ErrNotFound
 	}
 	return f, err
+}
+
+// searchIn は、Store の集まり scope で、種類 k のものを findIn で探し、なければ記録の集まり recScope の種類の記録から開けない
+// 理由を探す。アイテム・プロジェクトは、そのあとでワークスペースの記録(B5c-13)で探し、なければその記録から理由を探す。
+// 種類の記録はワークスペースの記録より細かいので、種類の記録が一致して開けないなら、その理由を先に返す。どれもなければ ok=false。
+func (s Service) searchIn(ctx context.Context, k kind, scope, recScope, all []snapshot, prefix string, n int, display string) (found, bool, error) {
+	if f, ok := findIn(k, scope, all, prefix, n, display); ok {
+		f, err := s.withStoreName(ctx, f)
+		return f, true, err
+	}
+	if recs := matching(k, recScope, all, prefix, n, display); len(recs) > 0 {
+		if f, ok, err := s.gone(ctx, k, all, recs[0], n, display); ok || err != nil {
+			return f, ok, err
+		}
+	}
+	if k == workspaceKind {
+		return found{}, false, nil
+	}
+	if f, ok := viaWorkspace(k, scope, all, prefix, n); ok {
+		return f, true, nil
+	}
+	if recs := matching(workspaceKind, recScope, all, prefix, 0, prefix); len(recs) > 0 {
+		return s.gone(ctx, k, all, recs[0], n, display)
+	}
+	return found{}, false, nil
 }
 
 // findIn は、Store の集まり scope で (a) いまの ID、(b) 旧い接頭辞、(c) scope の転送記録の順に、種類 k のものを探す。
@@ -115,7 +129,7 @@ func findIn(k kind, scope, all []snapshot, prefix string, n int, display string)
 	if h, ok := currentID(k, scope, prefix, n); ok {
 		return found{hit: h}, true
 	}
-	recs := matching(k, scope, prefix, n, display)
+	recs := matching(k, scope, all, prefix, n, display)
 	hits := oldHits(k, scope, all, prefix, n, recs)
 	if len(hits) == 0 {
 		return found{}, false
@@ -124,18 +138,27 @@ func findIn(k kind, scope, all []snapshot, prefix string, n int, display string)
 	if !h.byRecord {
 		return found{hit: h.hit}, true
 	}
-	return found{hit: h.hit, moved: &MovedFrom{Old: recs[0].Old, At: recs[0].At, Display: recs[0].New, Current: h.current}}, true
+	return found{hit: h.hit, moved: &MovedFrom{Old: recs[0].Old, At: recs[0].At, Display: recs[0].New, Current: h.current}, rec: recs[0]}, true
 }
 
-// gone は、旧 ID が一致した最初の記録 rec から、開けない理由を found にする。理由がなければ ok=false。
-func (s Service) gone(ctx context.Context, snaps []snapshot, rec transfer.Record) (found, bool, error) {
+// gone は、画面の ID display(種類 k・番号 n)が一致した最初の記録 rec から、開けない理由を found にする。理由がなければ ok=false。
+func (s Service) gone(ctx context.Context, k kind, snaps []snapshot, rec transfer.Record, n int, display string) (found, bool, error) {
 	g, to, ok := whyGone(snaps, rec)
+	if !ok && rec.Entity == transfer.EntityWorkspace && k != workspaceKind && deletedIn(snaps, k, rec.Target, n) {
+		g, ok = Gone{Reason: GoneDeleted, At: rec.At}, true
+	}
 	if !ok {
 		return found{}, false, nil
 	}
+	var err error
 	if to != nil {
-		var err error
 		if g.StoreName, err = s.storeName(ctx, *to); err != nil {
+			return found{}, false, err
+		}
+	}
+	if rec.Entity == transfer.EntityWorkspace {
+		g.Old = display
+		if g.NewDisplay, err = s.storeName(ctx, rec); err != nil {
 			return found{}, false, err
 		}
 	}
@@ -156,7 +179,7 @@ func (s Service) OldIDs(ctx context.Context, display string) ([]OldID, error) {
 		return nil, err
 	}
 	var out []OldID
-	for _, h := range oldHits(itemKind, snaps, snaps, prefix, n, matching(itemKind, snaps, prefix, n, display)) {
+	for _, h := range oldHits(itemKind, snaps, snaps, prefix, n, matching(itemKind, snaps, snaps, prefix, n, display)) {
 		out = append(out, OldID{Store: h.store, Item: h.id})
 	}
 	return out, nil
@@ -227,35 +250,4 @@ func oldHits(k kind, scope, all []snapshot, prefix string, n int, recs []transfe
 		}
 	}
 	return out
-}
-
-// matching は、snaps の転送記録のうち、種類 k(Entity)の旧 ID が display の行を、at の新しい順で返す。Store の中に、display の
-// 接頭辞を旧い接頭辞に持つワークスペースがあれば、その Store の記録は、そのワークスペースのいまの接頭辞・ほかの旧い
-// 接頭辞で書いた同じ番号の ID(HH-2 なら WEB-2)でも一致させる(接頭辞を変えたあとに移したもの)。
-func matching(k kind, snaps []snapshot, prefix string, n int, display string) []transfer.Record {
-	var out []transfer.Record
-	for _, snap := range snaps {
-		ids := snap.aliases(k, prefix, n, display)
-		for _, r := range snap.records {
-			if r.Entity == k.entity && slices.Contains(ids, r.Old) {
-				out = append(out, r)
-			}
-		}
-	}
-	slices.SortStableFunc(out, func(a, b transfer.Record) int { return b.At.Compare(a.At) })
-	return out
-}
-
-// aliases は、display と、接頭辞 prefix を旧い接頭辞に持つワークスペースの、いまの接頭辞・旧い接頭辞で書いた種類 k・番号 n の ID。
-func (snap snapshot) aliases(k kind, prefix string, n int, display string) []string {
-	ids := []string{display}
-	for _, w := range snap.workspaces {
-		if !slices.Contains(w.old, prefix) {
-			continue
-		}
-		for _, p := range append([]string{w.ws.Prefix}, w.old...) {
-			ids = append(ids, k.display(p, n))
-		}
-	}
-	return ids
 }

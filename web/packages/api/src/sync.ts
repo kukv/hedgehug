@@ -14,7 +14,7 @@ import {
 // (決定 C2-20、C2 の引き継ぎ)。
 
 const kindOf = (name: string): SyncEventKind | null =>
-  name === "store" || name === "sync" || name === "github" ? name : null;
+  name === "store" || name === "sync" || name === "github" || name === "inbox" ? name : null;
 
 async function read(on: Parameters<SyncPort["watch"]>[0], signal: AbortSignal): Promise<void> {
   let res: Response;

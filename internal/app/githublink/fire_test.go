@@ -367,6 +367,9 @@ func TestRefreshStoppedNotifies(t *testing.T) {
 		ns[0].Reason != "ワークフローの制約: Todo から Done には変更できません(Pending のみ)" || ns[0].Status != apptest.SampleStatusDone {
 		t.Errorf("notices = %+v", ns)
 	}
+	if ns[0].From != apptest.SampleStatusTodo || ns[0].Display != "HH-2" {
+		t.Errorf("From = %q, Display = %q", ns[0].From, ns[0].Display)
+	}
 }
 
 // プロジェクトが「動かさない」と指定したルールは、リンクのきっかけでも動かない。
