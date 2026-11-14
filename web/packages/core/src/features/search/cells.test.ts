@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellView, hoursText } from "./cells";
+import { cellView } from "./cells";
 import type { SearchColumn, SearchRow } from "./types";
 
 const now = new Date(2026, 10, 15, 12, 0, 0);
@@ -81,7 +81,11 @@ describe("cellView", () => {
     expect(cellView(row({ points: 3 }), col("points"), now)).toEqual({ kind: "text", text: "3" });
     expect(cellView(row({ estimate: 1.255 }), col("estimate"), now)).toEqual({
       kind: "text",
-      text: "1.26 時間",
+      text: "1.25 時間",
+    });
+    expect(cellView(row({ estimate: 1.005 }), col("estimate"), now)).toEqual({
+      kind: "text",
+      text: "1 時間",
     });
     expect(cellView(row({ estimate: 2 }), col("estimate"), now)).toEqual({
       kind: "text",
@@ -132,13 +136,5 @@ describe("cellView", () => {
       href: "https://example.com",
     });
     expect(cellView(row(), col("p:none", "text"), now)).toEqual({ kind: "empty" });
-  });
-});
-
-describe("hoursText", () => {
-  it("rounds to 2 decimals and drops trailing zeros", () => {
-    expect(hoursText(0.5)).toBe("0.5");
-    expect(hoursText(1.005)).toBe("1.01");
-    expect(hoursText(3)).toBe("3");
   });
 });

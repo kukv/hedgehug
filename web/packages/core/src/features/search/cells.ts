@@ -2,6 +2,7 @@ import type { Category } from "../../model/workspace";
 import { formatDay } from "../dates/date";
 import { relativeTime } from "../dates/relative";
 import { dueLabel } from "../items/progress";
+import { hoursOf } from "../notes/hours";
 import type { SearchColumn, SearchRow } from "./types";
 
 // テーブルのセルの表示の中身(E2a-12)。ID・種類・タイトル・ステータス・担当者・親は呼ぶ側(部品)が描くので、それ以外の列。
@@ -19,12 +20,6 @@ export type CellView =
 
 // updatedHint は、列「更新日」の見出しの title。
 export const updatedHint = "GitHub と同期による変更は含みません";
-
-// hoursText は、見積もり時間の数字。小数第 2 位で丸め、末尾の 0 を省く(item.Hours と同じ)。
-// 1.005 のような 2 進数の誤差で丸めが逆にならないよう、15 桁に整えてから丸める。
-export function hoursText(n: number): string {
-  return String(Math.round(Number((n * 100).toPrecision(15))) / 100);
-}
 
 const text = (t: string): CellView => (t === "" ? { kind: "empty" } : { kind: "text", text: t });
 
@@ -65,7 +60,7 @@ export function cellView(row: SearchRow, column: SearchColumn, now: Date): CellV
     case "points":
       return row.points === null ? { kind: "empty" } : text(String(row.points));
     case "estimate":
-      return row.estimate === null ? { kind: "empty" } : text(`${hoursText(row.estimate)} 時間`);
+      return row.estimate === null ? { kind: "empty" } : text(`${hoursOf(row.estimate)} 時間`);
     case "system":
       return text(row.systems.join(", "));
     case "sprint":
