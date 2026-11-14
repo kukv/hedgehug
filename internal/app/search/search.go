@@ -14,6 +14,7 @@ type Row struct {
 	Facts    query.Facts
 	OldID    bool
 	DaysLeft *int
+	Cells    Cells
 }
 
 // Result は、検索の結果。Errors があれば Rows は空(アイテムは読まない)。
@@ -58,7 +59,7 @@ func (s Service) Search(ctx context.Context, text string, opt TableOptions) (Res
 	var rows []*Row
 	for _, e := range es {
 		if hit := query.Match(q, e.facts, today); hit.Match {
-			rows = append(rows, &Row{Store: e.info, Facts: e.facts, OldID: hit.OldID, DaysLeft: e.daysLeft})
+			rows = append(rows, &Row{Store: e.info, Facts: e.facts, OldID: hit.OldID, DaysLeft: e.daysLeft, Cells: cellsOf(e.facts, res.Columns)})
 		}
 	}
 	sortBy := q.Sort
