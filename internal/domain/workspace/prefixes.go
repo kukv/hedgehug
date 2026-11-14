@@ -3,6 +3,7 @@ package workspace
 import (
 	"encoding/json"
 	"slices"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -24,6 +25,21 @@ func OldPrefixes(log []change.Record) []string {
 		}
 	}
 	slices.Sort(out)
+	return out
+}
+
+// PrefixTimes は、ログの create と set prefix の行に出た、使える形の接頭辞ごとの、最初に出た行の日時。
+func PrefixTimes(log []change.Record) map[string]time.Time {
+	out := map[string]time.Time{}
+	for _, r := range log {
+		p := prefixOf(r)
+		if !ValidPrefix(p) {
+			continue
+		}
+		if t, ok := out[p]; !ok || r.At.Before(t) {
+			out[p] = r.At
+		}
+	}
 	return out
 }
 

@@ -143,3 +143,15 @@ func TestProjectHistoryOfMoves(t *testing.T) {
 		t.Errorf("別の Store: %q, want %q", got, want)
 	}
 }
+
+// B5c-12: MoveWorkspace でワークスペースと一緒に移ったプロジェクトの履歴は、移動先で「{移動元の Store 名} から移動」。
+func TestProjectHistoryOfWorkspaceMove(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.MoveWorkspace(t.Context(), store1, apptest.SampleWorkspace, store2); err != nil {
+		t.Fatal(err)
+	}
+	got := projectHistory(t, f, store2, apptest.SampleProject)
+	if !slices.Contains(got, "hanako: main から移動") || slices.Contains(got, "hanako: Web から移動") {
+		t.Errorf("移動先の履歴 = %q", got)
+	}
+}

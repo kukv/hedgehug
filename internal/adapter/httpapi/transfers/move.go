@@ -2,12 +2,10 @@ package transfers
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/adapter/httpapi/apierr"
 	"github.com/kukv/hedgehug/internal/app/port"
 	apptransfers "github.com/kukv/hedgehug/internal/app/transfers"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -45,15 +43,8 @@ func registerMove(api huma.API, svc apptransfers.Service) {
 	huma.Register(api, huma.Operation{OperationID: "transfer-item", Method: http.MethodPost, Path: "/api/stores/{store}/items/{item}/transfer", Summary: "アイテムを別のワークスペース・別の Store へ移す"},
 		func(ctx context.Context, in *transferInput) (*transferOutput, error) {
 			m, err := svc.Move(ctx, port.StoreID(in.Store), item.ID(in.Item), toMoveInput(in.Body))
-			// 取り消しもできなかった(両方の Store に残る)は、送れなかったより先に見る(この API だけの扱い。02「保存」の文の全文)。
-			if ue := (*apptransfers.UndoError)(nil); errors.As(err, &ue) {
-				return nil, huma.Error409Conflict(ue.Error())
-			}
-			if se := (*apptransfers.SendError)(nil); errors.As(err, &se) {
-				return nil, huma.Error422UnprocessableEntity(se.Error()) // この API だけの扱い(A5a-12 の文の全文)
-			}
 			if err != nil {
-				return nil, apierr.From(err)
+				return nil, moveError(err)
 			}
 			emptied := m.Emptied
 			if emptied == nil {

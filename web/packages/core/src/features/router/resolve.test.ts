@@ -46,7 +46,7 @@ describe("resolveRoute", () => {
 
   it("resolves a workspace by its prefix", async () => {
     const r = await resolveRoute(
-      { name: "workspace", store: "nope", prefix: "HH", tab: "overview" },
+      { name: "workspace", store: "work", prefix: "HH", tab: "overview" },
       await stores(),
       itemsIn("S1"),
       transfers,
@@ -74,6 +74,7 @@ describe("resolveRoute", () => {
     transfers.missing.add("HH-P9");
     transfers.missing.add("HH-13");
     transfers.missing.add("XX-12");
+    transfers.missing.add("XX");
     expect(await resolveRoute(route, await stores(), itemsIn("S1"), transfers)).toEqual({
       name: "home",
     });

@@ -16,6 +16,7 @@
   import ProjectTransferDialog from "./screens/project/ProjectTransferDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import DeleteWorkspaceDialog from "./screens/workspace-settings/DeleteWorkspaceDialog.svelte";
+  import WorkspaceTransferDialog from "./screens/workspace-settings/WorkspaceTransferDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
   import { isMac } from "./tab";
@@ -103,6 +104,7 @@
 <DeleteProjectDialog />
 <ProjectTransferDialog />
 <DeleteWorkspaceDialog />
+<WorkspaceTransferDialog />
 <DiscardDialog />
 <!-- Ctrl+K(Cmd+K)で開くコマンドパレット。キーは部品が受ける(02「コマンドパレット」) -->
 <CommandPalette

@@ -82,6 +82,10 @@ func TestMoveProjectAcrossReportsAnUndoThatFailed(t *testing.T) {
 		if !errors.As(err, &ue) || ue.Old != "HH-P1" || ue.Store != "team" || ue.NewDisplay != "TM-P2" || !errors.Is(err, errBoom) {
 			t.Fatalf("err = %#v", err)
 		}
+		const want = "HH-P1 を team の TM-P2 に移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください"
+		if ue.Error() != want {
+			t.Errorf("文 = %q", ue.Error())
+		}
 		if _, ok := projectAt(t, f.rec, store2, apptest.SampleProject); !ok {
 			t.Error("the destination project was removed")
 		}
@@ -314,4 +318,22 @@ func TestMoveProjectAcrossUndoWritesNothingWithoutMovedIn(t *testing.T) {
 		t.Errorf("destination member rows %d → %d", membersBefore, n)
 	}
 	assertProjectUntouched(t, f)
+}
+
+// 移動元の保存の前に、移動先で移したプロジェクトにアイテムが作られていても、戻しはそれも消す(移動先に、ないプロジェクトの
+// アイテムを残さない)。
+func TestMoveProjectAcrossRollbackRemovesItemsAddedAtTheDestination(t *testing.T) {
+	const added item.ID = "01TESTIT000000000000000013"
+	f := newFixture(t)
+	withRules(t, f)
+	f.svc.Stores = failWrite{Stores: f.rec, store: store1, before: func() {
+		addItem(t, f.rec, store2, item.Item{ID: added, Place: item.Place{Workspace: teamWS, Project: apptest.SampleProject, Number: 9}, Kind: item.Epic, Rank: "X", Title: "移動先で"})
+	}}
+	if _, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, toTeamWS()); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if exists(t, f.rec, store2, added) {
+		t.Error("the item added at the destination remains")
+	}
+	assertProjectRolledBack(t, f)
 }

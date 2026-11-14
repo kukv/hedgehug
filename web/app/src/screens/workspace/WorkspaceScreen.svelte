@@ -15,7 +15,7 @@
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
   import { selectReport } from "../../reports";
-  import { navigation, planning, projectDialog, syncNow, toasts } from "../../wire";
+  import { navigation, planning, projectDialog, screen, syncNow, toasts } from "../../wire";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
@@ -50,6 +50,15 @@
       tab: workspaceTabOf(id),
     });
   }
+
+  // 古いアドレスから開いたときの移動の 1 行は、出しているワークスペースとタブが同じときだけ出す(B5c-2)。
+  const workspaceMoved = screen.workspaceMoved;
+  const moved = $derived.by(() => {
+    const m = $workspaceMoved;
+    return m?.storeId === store.id && m.workspaceId === workspace.id && m.tab === tab
+      ? m.text
+      : null;
+  });
 
   // 「バーンダウンを見る」(F3-16)。そのスプリントを選んで保存してから、レポートのタブへ移る。
   // 保存できなければ移らない。
@@ -117,6 +126,9 @@
     >
   {/snippet}
 </PageHead>
+{#if moved}
+  <p class="moved">{moved}</p>
+{/if}
 <Tabs {tabs} current={tab} onselect={select} />
 <div class="content">
   {#if tab === "settings"}
@@ -168,6 +180,12 @@
     overflow: auto;
     padding: 16px 24px 40px;
     min-height: 0;
+  }
+  .moved {
+    margin: 0;
+    padding: 0 24px 8px;
+    font-size: 12.5px;
+    color: var(--muted);
   }
   .prefix {
     font-family: var(--font-mono);

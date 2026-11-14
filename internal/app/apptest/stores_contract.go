@@ -74,6 +74,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		s, a, b := newStores(t)
 		contractNestedStores(t, s, a, b)
 	})
+	runWorkspaceContract(t, newStores)
 	for _, k := range entityKinds {
 		t.Run("import copies a "+k.name+" folder between stores", func(t *testing.T) {
 			s, a, b := newStores(t)

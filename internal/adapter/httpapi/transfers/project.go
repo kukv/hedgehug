@@ -2,7 +2,6 @@ package transfers
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -130,15 +129,8 @@ func registerProject(api huma.API, svc apptransfers.Service) {
 	huma.Register(api, huma.Operation{OperationID: "transfer-project", Method: http.MethodPost, Path: "/api/stores/{store}/projects/{project}/transfer", Summary: "プロジェクトをアイテムごと別のワークスペース・別の Store へ移す"},
 		func(ctx context.Context, in *projectTransferInput) (*projectTransferOutput, error) {
 			m, err := svc.MoveProject(ctx, port.StoreID(in.Store), project.ID(in.Project), toProjectMoveInput(in.Body))
-			// 取り消しもできなかった(両方の Store に残る)は、送れなかったより先に見る。
-			if ue := (*apptransfers.UndoError)(nil); errors.As(err, &ue) {
-				return nil, huma.Error409Conflict(ue.Error())
-			}
-			if se := (*apptransfers.SendError)(nil); errors.As(err, &se) {
-				return nil, huma.Error422UnprocessableEntity(se.Error())
-			}
 			if err != nil {
-				return nil, apierr.From(err)
+				return nil, moveError(err)
 			}
 			return &projectTransferOutput{Body: ProjectTransferResult{ToStore: string(m.ToStore), ProjectID: string(m.Project), Display: m.Display, Destination: m.Destination}}, nil
 		})

@@ -33,6 +33,7 @@ type env struct {
 	reasons map[port.StoreID]syncstatus.Reason
 	failS1  bool
 	deliver *deliver
+	targets *apptest.SyncTargets
 }
 
 // failing は、*fail が true のあいだ、Store S1 への Write を失敗させる。
@@ -68,16 +69,17 @@ func newEnv(t *testing.T) *env {
 		stores: s, reasons: map[port.StoreID]syncstatus.Reason{},
 		list: &apptest.StoreList{Stores: []port.StoreInfo{{ID: "S1", Name: "main"}, {ID: "S2", Name: "team"}}},
 	}
+	e.targets = &apptest.SyncTargets{Targets: []port.SyncTarget{
+		{ID: "S1", Name: "main", Remote: "https://example.invalid/main.git"}, {ID: "S2", Name: "team"},
+	}}
 	_, e.api = humatest.New(t)
 	clock := apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))
 	me := apptest.Identity{Login: "taro"}
 	e.deliver = &deliver{stores: s, reasons: e.reasons}
 	transfers.Register(e.api, apptransfers.Service{
 		Stores: failing{Stores: s, fail: &e.failS1}, Delivery: e.deliver, Identity: me, Clock: clock, IDs: ids,
-		StoreList: e.list,
-		SyncTargets: &apptest.SyncTargets{Targets: []port.SyncTarget{
-			{ID: "S1", Name: "main", Remote: "https://example.invalid/main.git"}, {ID: "S2", Name: "team"},
-		}},
+		StoreList:   e.list,
+		SyncTargets: e.targets,
 	})
 	items.Register(e.api, appitems.Service{Stores: s, IDs: ids, Identity: me, Clock: clock})
 	return e

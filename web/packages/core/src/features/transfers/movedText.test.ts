@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { goneText, movedLine } from "./movedText";
+import { goneText, movedLine, workspaceGoneText, workspaceMovedLine } from "./movedText";
 
 const now = new Date(2026, 10, 14, 12, 0);
 
@@ -45,5 +45,42 @@ describe("movedLine (02「移した日時の表示」)", () => {
     expect(movedLine({ old: "HH-5", at, display: "TM-4", current: "AR-7" }, now)).toBe(
       "HH-5 は 11/13 09:05 に TM-4 へ移動し、その後 AR-7 へ移動しました",
     );
+  });
+});
+
+// ワークスペースの旧アドレスの文(B5c-2・B5c-14)。旧 ID を「このワークスペース」に、新 ID を Store 名にしたもの。
+describe("workspaceMovedLine", () => {
+  const at = new Date(2026, 10, 13, 9, 5).toISOString();
+  it("says where it moved, and where it moved after that", () => {
+    expect(workspaceMovedLine({ old: "HH", at, display: "team", current: "team" }, now)).toBe(
+      "このワークスペースは 11/13 09:05 に team へ移動しました",
+    );
+    expect(workspaceMovedLine({ old: "HH", at, display: "team", current: "other" }, now)).toBe(
+      "このワークスペースは 11/13 09:05 に team へ移動し、その後 other へ移動しました",
+    );
+  });
+});
+
+describe("workspaceGoneText", () => {
+  const at = new Date(2026, 10, 12, 9, 0).toISOString();
+  it.each([
+    [
+      { reason: "deleted", newDisplay: "team" },
+      "このワークスペースは 11/12 09:00 に team へ移動しましたが、削除されています。設定の「削除済み」から復元できます",
+    ],
+    [
+      { reason: "purged", newDisplay: "team" },
+      "このワークスペースは 11/12 09:00 に team へ移動しましたが、完全に削除されました",
+    ],
+    [
+      { reason: "hidden", newDisplay: "team", storeName: "team" },
+      "このワークスペースは 11/12 09:00 に team へ移動しました。この Store はいま表示できません",
+    ],
+    [
+      { reason: "elsewhere", newDisplay: "team", storeName: "other" },
+      "このワークスペースは 11/12 09:00 に team へ移動し、その後 other へ移動しました。この Store はいま表示できません",
+    ],
+  ] as const)("%j", (g, want) => {
+    expect(workspaceGoneText({ ...g, old: "HH", at }, now)).toBe(want);
   });
 });

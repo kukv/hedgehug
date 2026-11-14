@@ -38,7 +38,11 @@ export {
   transferIntro,
   transferredMessage,
 } from "./features/transfers/dialogText";
-export { createLeaveMoved } from "./features/transfers/leaveMoved";
+export {
+  createLeaveMoved,
+  createLeaveWorkspaceMoved,
+  type LeaveWorkspaceMoved,
+} from "./features/transfers/leaveMoved";
 export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
 export { openMoved } from "./features/transfers/openMoved";
 export {
@@ -63,6 +67,27 @@ export {
   replacementSelectLabel,
 } from "./features/transfers/projectDialogText";
 export {
+  createWorkspaceTransfer,
+  type WorkspaceTransfer,
+  type WorkspaceTransferDeps,
+  type WorkspaceTransferDialogState,
+  type WorkspaceTransferSection,
+  type WorkspaceTransferSubject,
+} from "./features/transfers/workspaceDialog";
+export {
+  noWorkspaceTargetsHiddenMessage,
+  noWorkspaceTargetsMessage,
+  workspaceMovedMessage,
+  workspaceTargetLabel,
+  workspaceTransferButton,
+  workspaceTransferCancel,
+  workspaceTransferLines,
+  workspaceTransferNameLabel,
+  workspaceTransferNote,
+  workspaceTransferOk,
+  workspaceTransferTitle,
+} from "./features/transfers/workspaceDialogText";
+export {
   createWorkspaceDelete,
   type DeleteWorkspaceTarget,
   leaveDeletedWorkspace,
@@ -77,6 +102,7 @@ export type {
   GoneReason,
   Located,
   LocatedProject,
+  LocatedWorkspace,
   MovedFrom,
   NotCarried,
   NotCarriedKind,
@@ -93,6 +119,11 @@ export type {
   TransferProject,
   TransferResult,
   TransferTarget,
+  WorkspaceTransferPerson,
+  WorkspaceTransferPreview,
+  WorkspaceTransferResult,
+  WorkspaceTransferTarget,
+  WorkspaceTransferTargets,
 } from "./model/transfer";
 export type { ItemActionsPort } from "./port/itemActions";
 export type { TransfersPort } from "./port/transfers";

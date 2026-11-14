@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/transfers"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
 
@@ -73,4 +74,23 @@ func TestMoveAcrossStoresReportsAnUndoThatFailedAfterASaveThatWasNotDiscarded(t 
 	f.svc.Delivery = notDiscarded{inner: undoFails{inner: f.deliver, err: errUndo, calls: new(int)}, done: new(bool)}
 	_, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam())
 	assertBothKept(t, f, err)
+}
+
+// 移動元の保存の前に、移動先で移した Epic の下に子が作られていても、戻しはそれも消す(移動先に、親のないアイテムを残さない)。
+func TestMoveAcrossStoresRollbackRemovesChildrenAddedAtTheDestination(t *testing.T) {
+	const added item.ID = "01TESTIT000000000000000013"
+	f := newFixture(t)
+	f.svc.Stores = failWrite{Stores: f.rec, store: store1, before: func() {
+		addItem(t, f.rec, store2, item.Item{ID: added, Place: item.Place{Workspace: teamWS, Project: teamProject, Parent: ptr(apptest.SampleEpic), Number: 9}, Kind: item.Task, Rank: "X", Title: "移動先で"})
+	}}
+	in := transfers.MoveInput{ToStore: store2, ToWorkspace: teamWS, ToProject: teamProject}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleEpic, in); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if exists(t, f.rec, store2, added) {
+		t.Error("the child added at the destination remains")
+	}
+	if exists(t, f.rec, store2, apptest.SampleEpic) || !exists(t, f.rec, store1, apptest.SampleEpic) {
+		t.Error("the Epic was not rolled back")
+	}
 }
