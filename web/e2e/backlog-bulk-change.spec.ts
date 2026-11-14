@@ -61,7 +61,8 @@ test("nothing to change", async ({ page }, info) => {
   const [, , s4] = await openBacklog(page, info);
   await page.getByLabel(`${s4} を選択`).check();
   const dialog = await openDialog(page, "ステータス");
-  // 値の初期選択は先頭のステータスで、新しいアイテムのいまのステータスと同じ。
+  // 値の初期選択は先頭のステータスで、新しいアイテムのいまのステータスと同じ。値が入るまで待つ。
+  await expect(dialog.getByLabel("値")).toHaveValue(/.+/);
   await dialog.getByRole("button", { name: "ステータスを変更" }).click();
 
   await expect(page.getByText("変わるものはありません")).toBeVisible();
