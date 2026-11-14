@@ -22,6 +22,22 @@
 - C4b2 が入ったら、実装の前に次の名前と番号を develop のコードと突き合わせ、違えばこの計画を直す: `port.Received`・`ReceivedSave.Merge`・`saves.Pending`・`pendingOf`・`markOwn` の引数・`noticing.section`/`sections`・`Inbox.AddOnce`・`Notice.Section`、表の手順の番号(`inbox/003` の次が `inbox/004`、`judged/001` の次が `judged/002`)。`docs/superpowers/plans/2026-11-12-hedgehug-track-c.md` は両方のブランチが直しているので、取り込みで重なったら両方の行を残す。
 - 実装で計画から変えたことは、この節の下に表で足す。
 
+### 実装で計画から変えたこと
+
+| # | 変えたこと | 理由 |
+|---|---|---|
+| 1 | Task 2 の表の名前は `judged_saves`(計画の `judged` は誤り) | statedb の実際の表の名前 |
+| 2 | 判定がエラーのとき、受け取った未判定の保存より後のこのマシンの保存は `own = 0` のまま(次の同期で受け取った保存として判定される) | `MarkOwn` は判定済みと own を一緒に書くため、C4b2-5 の「後の保存は判定済みにしない」と両立しない。判定のエラーは state.db に書けないときだけで、C4c1-4 の「送った直後に止まった」と同じ扱い |
+| 3 | remote が空のときは、自分の先端から辿れる保存をすべて `own = 1` にする | いちばんふつうの場面(このマシンで作った Store を初めて空のリポジトリへ送る)で正しい。別の remote で受け取った保存がある Store を空のリポジトリへ付け替えたときだけ、他のマシンの保存が own になる |
+| 4 | 説明の重なりは、合わせの結果に `log.jsonl` が残るエンティティだけを見る(同期が消したもの・別の Store へ移ったものの下は見ない) | 同期の `removedEntities`・`underTransferred` と同じ範囲にする。消えたものに通知を出さない |
+| 5 | 共通の祖先は合わせごとに 1 回だけ求め、`mergeRemoved` と `mergeConflicts` で共有する(`saves/base.go`) | 両方が同じ祖先を使う |
+| 6 | `workspace.Valid`・`member.Valid` を domain に足し、負けの判定の前に手順 0 の検査で行を落とす | いまの値の決め方が捨てる行で負けを判定しないため |
+| 7 | `fieldName(r, b, ref, f)` に判定の batch を渡す | 読み済みのログを読み直さない |
+| 8 | 1 つの保存で複数の値に負けた複数の値の項目は、最後の勝ちの行の `Source`・差出人で 1 行 | 06 :221(差出人は上書きした人) |
+| 9 | `overwritten` は `Judge` が作り、上書き → ウォッチの順に渡す | C4c1-14 |
+| 10 | e2e: 受信箱の「上書き」タブが空であることを確かめるテストを `web/e2e/inbox-empty.spec.ts` に分け、`fixtures.ts` の worker 単位の `ownServer` で専用のサーバーで流す | `description-merge.spec.ts` が上書きの行を残すため。空のタブはサーバー全体の受信箱で決まるので、専用のサーバーでしか確かめられない |
+| 11 | 上書きの開く区画の頭(`workflow/`・`choices/`・`initial_status`・`category_default/`・`initial_priority`・`template_default/`)は、同期の修復の通知の開く区画にも効く | 06 :455 に合う |
+
 ## Global Constraints
 
 土台・トラック C・C4a・C4b1・C4b2 の計画の Global Constraints をすべて引き継ぐ。加えて次を守る。
