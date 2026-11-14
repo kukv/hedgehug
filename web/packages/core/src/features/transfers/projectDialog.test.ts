@@ -225,6 +225,34 @@ describe("project transfer dialog: opening (02 **移動**)", () => {
     expect(get(transfer.dialog)).not.toBeNull();
   });
 
+  it("shows the preview of the reopened read when the read before cancel returns first", async () => {
+    const { transfer, fake, project } = await setupProject();
+    fake.projectPreviewOf["S3/S3-W1"] = {
+      ...fake.defaultProjectPreview,
+      destination: "team の Team",
+    };
+    await transfer.load(project);
+    const before = fake.holdNext();
+    const first = transfer.open();
+    await flush();
+    transfer.cancel();
+    transfer.choose("S3/S3-W1");
+    const after = fake.holdNext();
+    const second = transfer.open();
+    await flush();
+    expect(fake.calls.filter((c) => c.startsWith("projectPreview"))).toEqual([
+      "projectPreview S1-P1 S1/S1-W2",
+      "projectPreview S1-P1 S3/S3-W1",
+    ]);
+    // 前の読み込みが先に返っても、ダイアログには出さない。
+    before.release();
+    await first;
+    expect(get(transfer.dialog)).toBeNull();
+    after.release();
+    await second;
+    expect(get(transfer.dialog)?.intro).toContain("Web から team の Team へ移動します。");
+  });
+
   it("drops a preview read before cancel", async () => {
     const { transfer, fake, project } = await setupProject();
     await transfer.load(project);
