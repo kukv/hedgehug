@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/palette"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/planning"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projectrules"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
@@ -28,6 +29,7 @@ import (
 	apphistory "github.com/kukv/hedgehug/internal/app/history"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
+	apppalette "github.com/kukv/hedgehug/internal/app/palette"
 	appplanning "github.com/kukv/hedgehug/internal/app/planning"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojectrules "github.com/kukv/hedgehug/internal/app/projectrules"
@@ -82,6 +84,9 @@ type Deps struct {
 	// SyncTargets は、移動先・移動元の remote の有無と URL を知るため。
 	Delivery    apptransfers.Delivery
 	SyncTargets port.SyncTargets
+
+	// コマンドパレット(A5c)。最近開いたものは state.db に覚える。
+	Recent port.RecentItems
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -123,6 +128,9 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	transfers.Register(api, apptransfers.Service{
 		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Delivery: deps.Delivery,
 		Identity: deps.Identity, Clock: deps.Clock, IDs: deps.IDs,
+	})
+	palette.Register(api, apppalette.Service{
+		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, RecentItems: deps.Recent, Clock: deps.Clock,
 	})
 	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})

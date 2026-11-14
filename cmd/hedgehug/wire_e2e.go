@@ -89,6 +89,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Events:      hub,
 		Delivery:    syncSvc,
 		SyncTargets: syncSvc.Targets,
+		Recent:      state.Recent(),
 	}), nil
 }
 
