@@ -17,9 +17,9 @@
 ## Global Constraints
 
 - 依存は追加しない(足すときは `go get <module>@vX.Y.Z`・`pnpm add -E <pkg>@X.Y.Z` で版を明記し、公開から 7 日以上の版だけ。Go は `go list -m -json <module>@<ver>` の Time で確かめる)。
-- 大きさの上限: Go ファイル 300 行(テスト 600 行)・関数 60 行・認知的複雑度 15・パッケージ 20 ファイル(テストを除いて数える)、Svelte 200 行、TS 300 行。超えたら分ける。いまの数: `internal/app/transfers` 17(Task 3 で `project_targets.go` を `targets.go` にまとめて 16 にしてから 4 つ足し 20)、`internal/domain/transfer` 9、`internal/app/apptest` 20(新しいファイルを足さない)、`internal/infra/gitstore` 19(足さない)、`internal/adapter/httpapi/transfers` 4。
+- 大きさの上限: Go ファイル 300 行(テスト 600 行)・関数 60 行・認知的複雑度 15・パッケージ 20 ファイル(テストを除いて数える)、Svelte 200 行、TS 300 行。超えたら分ける。いまの数: `internal/app/transfers` 17(Task 3 で `project_targets.go` を `targets.go` に、`project_locate.go` を `locate_kinds.go` にまとめて 15 にしてから 4 つ足し 19)、`internal/domain/transfer` 9、`internal/app/apptest` 20(新しいファイルを足さない)、`internal/infra/gitstore` 19(足さない)、`internal/adapter/httpapi/transfers` 4。
 - 向き: adapter→app→domain、infra→app/port。app の機能どうしは import しない(テストも)。`app/transfers` は `app/workspaces`・`app/projects`・`app/items` を import しない。
-- 画面の文言は仕様の文字どおり。仕様にない文言は B5c-14 の文を使い、Task 10 で仕様に書き足す。モックの動きは写さない。
+- 画面の文言は仕様の文字どおり。仕様にない文言は B5c-14 の文を使い、Task 12 で仕様に書き足す。モックの動きは写さない。
 - 通知は作らない。自動化は動かさない。保存したビューは変えない(03「変更が及ぶ範囲」)。
 - 閲覧のみの Store のワークスペースでは、「別の Store へ移動」の区画のセレクトと「移動…」を無効にし「閲覧のみの Store です」を添える。閲覧のみの Store は移動先の候補に出さない。
 - 各タスクは TDD(失敗するテスト → 失敗を確かめる → 実装 → 通す → コミット)。タスクごとにレビューする。
@@ -33,11 +33,11 @@
 
 ## Review Focus
 
-1. **`SyncSave` の試み直しで古い値を使う**: 移動先の保存の `fn` は、送信が重なると最大 3 回呼び直される(A5a-5)。移動先の同じ接頭辞・同じ名前の断り、ワークスペースの順位、足すメンバーと綴りの対応は、毎回 `fn` の `Tx` から読んで決める。テストは Task 4(偽の `Delivery` が `fn` を 2 回呼び、2 回目の前に移動先へ同じ接頭辞のワークスペースを足すと断る)。
-2. **移動元で、あいだに足された・変えられたもの**: `prepare` で読んだあと、移動元の保存までのあいだに、同じマシンの別のタブがワークスペースの中にアイテムを作る・設定を変えると、移動先に写っていないものが移動元から消える。移動元の保存の直前に読み直し、違えば失敗して移動先を戻す(B5c-9)。テストは Task 5。
-3. **削除済みのものも一緒に移る**: 削除済みのプロジェクト・アイテム・スプリント・リリース(ワークスペースのログの中)が、削除済みのまま元の削除日時で移り、移動元の「削除済み」に残らない。削除済みのプロジェクトの下のアイテムも移す。テストは Task 1(集まり)と Task 4(移動先で削除済みとして読める)。
-4. **古いアドレスで、ほかの Store に同じ接頭辞がある**: 移動元 Store「work」の `WEB` を Store「team」へ移したあと、Store「other」にも `WEB` があるとき、`/s/work/w/WEB/overview` と `/s/work/i/WEB-12` は Store「team」のものを開く(Store 名の Store の転送記録を、ほかの Store のいまの接頭辞より先に見る。01「画面のアドレス」)。テストは Task 6。
-5. **移したあとの画面**: 自分で移したときは、移動先の Store のワークスペースの「設定」タブへ移り、サイドバーの移動元からワークスペースが消え、移動先に出る。古いアドレスの 1 行は、タブを変えると消える。テストは Task 8・9 と Task 10 の e2e。
+1. **`SyncSave` の試み直しで古い値を使う**: 移動先の保存の `fn` は、送信が重なると最大 3 回呼び直される(A5a-5)。移動先の同じ接頭辞・同じ名前の断り、ワークスペースの順位、足すメンバーと綴りの対応は、毎回 `fn` の `Tx` から読んで決める。テストは Task 5(偽の `Delivery` が `fn` を 2 回呼び、2 回目の前に移動先へ同じ接頭辞のワークスペースを足すと断る)。
+2. **移動元で、あいだに足された・変えられたもの**: `prepare` で読んだあと、移動元の保存までのあいだに、同じマシンの別のタブがワークスペースの中にアイテムを作る・設定を変えると、移動先に写っていないものが移動元から消える。移動元の保存の直前に読み直し、違えば失敗して移動先を戻す(B5c-9)。テストは Task 6。
+3. **削除済みのものも一緒に移る**: 削除済みのプロジェクト・アイテム・スプリント・リリース(ワークスペースのログの中)が、削除済みのまま元の削除日時で移り、移動元の「削除済み」に残らない。削除済みのプロジェクトの下のアイテムも移す。テストは Task 1(集まり)と Task 5(移動先で削除済みとして読める)。
+4. **古いアドレスで、ほかの Store に同じ接頭辞がある**: 移動元 Store「work」の `WEB` を Store「team」へ移したあと、Store「other」にも `WEB` があるとき、`/s/work/w/WEB/overview` と `/s/work/i/WEB-12` は Store「team」のものを開く(Store 名の Store の転送記録を、ほかの Store のいまの接頭辞より先に見る。01「画面のアドレス」)。テストは Task 7。
+5. **移したあとの画面**: 自分で移したときは、移動先の Store のワークスペースの「設定」タブへ移り、サイドバーの移動元からワークスペースが消え、移動先に出る。古いアドレスの 1 行は、タブを変えると消える。テストは Task 9・11 と Task 12 の e2e。
 
 ---
 
@@ -66,7 +66,7 @@
 | # | 決定 | 根拠 |
 |---|---|---|
 | B5c-1 | 1 本の計画・1 本の PR(サーバーと画面を分けない) | A5b-1 と同じ。トラック B の計画の B5c の行 |
-| B5c-2 | 移動元の古いアドレス(`/s/{移動元}/w/{接頭辞}/{タブ}`)から開いたときは、開いたタブのまま移動先のワークスペースを開き、ワークスペースの見出しの下(タブの上)に「このワークスペースは {日時} に {Store 名} へ移動しました」を出す(そのあとさらに別の Store へ移したときは「このワークスペースは {日時} に {B の Store 名} へ移動し、その後 {いまの Store 名} へ移動しました」)。タブを変える・別の画面を開くと消える。普通に開いたときは出さない。リンクは出さない(もう移動先を開いているため)。仕様 03 の「表示して、移動先へのリンクを出す」を直す(Task 10) | ユーザーの決定(2026-11-14)。01「画面のアドレス」の「移動したものは、いまある場所を開く」と A5b-2 に揃える |
+| B5c-2 | 移動元の古いアドレス(`/s/{移動元}/w/{接頭辞}/{タブ}`)から開いたときは、開いたタブのまま移動先のワークスペースを開き、ワークスペースの見出しの下(タブの上)に「このワークスペースは {日時} に {Store 名} へ移動しました」を出す(そのあとさらに別の Store へ移したときは「このワークスペースは {日時} に {B の Store 名} へ移動し、その後 {いまの Store 名} へ移動しました」)。タブを変える・別の画面を開くと消える。普通に開いたときは出さない。リンクは出さない(もう移動先を開いているため)。仕様 03 の「表示して、移動先へのリンクを出す」を直す(Task 12) | ユーザーの決定(2026-11-14)。01「画面のアドレス」の「移動したものは、いまある場所を開く」と A5b-2 に揃える |
 | B5c-3 | 移すものは `transfer.CollectWorkspace(ws workspace.ID, projects []project.Project, items []item.Item) WorkspaceSet`: ワークスペースのすべてのプロジェクトとアイテム(削除済みを含む。削除済みのプロジェクトの下のアイテムも)。「外」は、`items` のうち集まりにいないアイテム(移動元の Store のほかのワークスペースのもの)との関連(両方の側。A5a の `Cut`)。スプリント・リリース・プロジェクト別のルール・専用ルール・旧い接頭辞・`number` の行はワークスペースのログにあるので、ワークスペースのフォルダを写せば移る | 03「移動すると」の 1・3 つ目の点、保存形式「ファイル構成」 |
 | B5c-4 | 件数: P = 削除されていないプロジェクト、I = 削除されていないプロジェクトの削除されていないアイテム、M = 削除済みのプロジェクトと、それ以外のアイテム(自分が削除済みか、削除済みのプロジェクトの下)。スプリント・リリースは数えない(本文が「プロジェクト {P} 件・アイテム {I} 件」の続きのため) | 03 の確認ダイアログの 2 つ目の点 |
 | B5c-5 | 断り(移動先の Store の削除されていないワークスペースと比べる。B5b-4 と同じく削除済みは除く): 同じ接頭辞 → 「{移動先の Store 名}: この Store には同じ接頭辞のワークスペースがあります」、同じ名前 → 「{移動先の Store 名}: この Store には同じ名前のワークスペースがあります」(`workspace.PrefixTaken`・`NameTaken`。接頭辞を先に調べる。仕様の並び)。サーバーが Store 名を付けた文で `refusal.New` を返す。予告(区画の「移動…」)と送る前の `prepare` と移動先の保存の `fn` の中(`Tx` から読み直して)の 3 か所で調べる | 03 の 2 段落目、Review Focus 1 |
@@ -77,13 +77,14 @@
 | B5c-10 | 別の画面で利用者が削除したワークスペース(`port.EditableWorkspace` を通るもの)を移すときは、削除を取り消してから移す。移動先の同じ保存で、写した行のその削除の操作を `change.Undo` で取り消し(ワークスペース・プロジェクト・アイテムのログすべて)、両方の保存が済んでから `port.NoteRevived(Revival{Kind: RevivedName, Text: 名前})`。名前と接頭辞の重なりは B5c-5 の移動先の検査で済む | 06「他の書き手との重なり」、A5b-15、`port.ReviveWorkspace` と同じ取り消しの範囲 |
 | B5c-11 | アクティビティ: 移動元「ワークスペース「{名前}」を {移動先の Store 名} へ移動」(03 の表)、移動先「ワークスペース「{名前}」を {移動元の Store 名} から移動」(03「移動先にワークスペースの追加として残る」の文)。戻しは「ワークスペース「{名前}」の移動を取り消し」。トースト「{移動先の Store 名} へ移動しました」 | 03 の操作の表と「保存」の点、02「保存」の戻し |
 | B5c-12 | プロジェクトの履歴は、`moved_in` の `FromWorkspace` がいまのワークスペースと同じ(ワークスペースと一緒に移った)とき、「{移動元の Store 名} から移動」と出す(A5b-21 の「{移動元のワークスペース名} から移動」では同じ名前が出て、何が起きたか分からないため)。アイテムの履歴は A5a のまま(「{旧 ID} から移動」と移動元の Store・ワークスペース・プロジェクト) | 02「履歴」、A5b-21 |
-| B5c-13 | 古いアドレスの解決。ワークスペース: `transfers.Service.LocateWorkspace(ctx, storeName, prefix)`。Store 名の Store を先に (a) いまの接頭辞、(b) 旧い接頭辞、(c) その Store の転送記録の `entity: workspace` で `old` が一致する行を `at` の新しい順に、`target` を表示中のすべての Store から探す。見つからなければ、ほかの Store で (a)(b)(c) を順に(A5b の `find` と同じ順)。削除済みのワークスペースは開かない。(c) で見つかったら `MovedFrom{Old: 接頭辞, At, Display: 記録の移動先の Store 名, Current: いまの Store 名}`(Store 名は `storeName` と同じくこのマシンの名前を優先)。見つからないときの `Gone` は A5a-15 の 4 つで、`NewDisplay` は記録の移動先の Store 名。アイテム・プロジェクト: `find` の (c) で、種類の記録に加えて、`entity: workspace` の記録のうち `old` が画面の ID の接頭辞と一致するものを見て、`target` のワークスペースを表示中のすべての Store から探し、その中の同じ番号の削除されていないもの。この経路で見つかったときは `MovedFrom` を付けない(ID が変わっていないため)。開けないときの `Gone` は `Old` を画面の ID、`NewDisplay` を記録の移動先の Store 名にする(トーストは「{旧 ID} は {日時} に {Store 名} へ移動しましたが、削除されています…」と読める) | B5c-2、01「画面のアドレス」、02「見つからないとき」、Review Focus 4 |
-| B5c-14 | 仕様にない文言: 区画のセレクトの名前「移動先の Store」、ボタン「移動…」、確認ダイアログのボタン「移動」「キャンセル」、名前の入力欄「確認のため、ワークスペースの名前を入力してください」(削除と同じ)、外との関連の点「ワークスペースの外にあるアイテムとの関連は、種類を問わず解除されます。ワークスペースの中のアイテム同士の関連は残ります。」、人の点「{表示名}さん・…の {N} 人が、移動先のメンバーに追加されます」(0 人なら出さない)、移動先のアクティビティ(B5c-11)、戻しのアクティビティ(B5c-11)、ワークスペースの見出しの下の 1 行の「その後」の形(B5c-2)、ワークスペースの古いアドレスのトースト(下)、失敗のトースト(A5a-12 と同じ: 「{移動先の Store 名} に送信できないため移動できません: {理由}」「オフラインのため {移動先の Store 名} へ移動できません」「移動できませんでした」、取り消しもできなかったとき「ワークスペース「{名前}」を {移動先の Store 名} へ移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください」)。ワークスペースの古いアドレスで開けないときのトーストは、02「見つからないとき」の文の {旧 ID} を「このワークスペース」に、{新 ID} を {Store 名} にしたもの(例: 「このワークスペースは {日時} に team へ移動しましたが、削除されています。設定の「削除済み」から復元できます」)。Task 10 で仕様 03 に書き足し、PR の本文に一覧で出す | A5b-18 と同じ扱い |
+| B5c-13 | 古いアドレスの解決。ワークスペース: `transfers.Service.LocateWorkspace(ctx, storeName, prefix)`。Store 名の Store を先に (a) いまの接頭辞、(b) 旧い接頭辞、(c) その Store の転送記録の `entity: workspace` の行を `at` の新しい順に見て、`target` を表示中のすべての Store から探し、記録の `old` か、見つけたワークスペースのいまの接頭辞・旧い接頭辞のどれかが画面の接頭辞と一致すれば当たり(接頭辞を HH から WEB に変えてから移すと記録の `old` は WEB なので、`/s/work/w/HH` は見つけたワークスペースの旧い接頭辞で当てる。仕様 03「ワークスペースは旧い接頭辞で転送の記録をたどり」。A5a の `aliases` と同じ考え)。見つからなければ、ほかの Store で (a)(b)(c) を順に(A5b の `find` と同じ順)。削除済みのワークスペースは開かない。(c) で見つかったら `MovedFrom{Old: 接頭辞, At, Display: 記録の移動先の Store 名, Current: いまの Store 名}`(Store 名は `storeName` と同じくこのマシンの名前を優先)。見つからないときの `Gone` は A5a-15 の 4 つで、`NewDisplay` は記録の移動先の Store 名。アイテム・プロジェクト: `find` の (c) で、種類の記録に加えて、`entity: workspace` の記録を上と同じ一致の規則(記録の `old` か、`target` のワークスペースのいまの接頭辞・旧い接頭辞)で見て、`target` のワークスペースの中の同じ番号の削除されていないもの。この経路で見つかったときは `MovedFrom` を付けない(ID が変わっていないため)。開けないときの `Gone` は `Old` を画面の ID、`NewDisplay` を記録の移動先の Store 名にする(トーストは「{旧 ID} は {日時} に {Store 名} へ移動しましたが、削除されています…」と読める) | B5c-2、01「画面のアドレス」、02「見つからないとき」、Review Focus 4 |
+| B5c-14 | 仕様にない文言: 区画のセレクトの名前「移動先の Store」、ボタン「移動…」、確認ダイアログのボタン「移動」「キャンセル」、名前の入力欄「確認のため、ワークスペースの名前を入力してください」(削除と同じ)、外との関連の点「ワークスペースの外にあるアイテムとの関連は、種類を問わず解除されます。ワークスペースの中のアイテム同士の関連は残ります。」、人の点「{表示名}さん・…の {N} 人が、移動先のメンバーに追加されます」(0 人なら出さない)、移動先のアクティビティ(B5c-11)、戻しのアクティビティ(B5c-11)、ワークスペースの見出しの下の 1 行の「その後」の形(B5c-2)、ワークスペースの古いアドレスのトースト(下)、失敗のトースト(A5a-12 と同じ: 「{移動先の Store 名} に送信できないため移動できません: {理由}」「オフラインのため {移動先の Store 名} へ移動できません」「移動できませんでした」、取り消しもできなかったとき「ワークスペース「{名前}」を {移動先の Store 名} へ移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください」)。ワークスペースの古いアドレスで開けないときのトーストは、02「見つからないとき」の文の {旧 ID} を「このワークスペース」に、{新 ID} を {Store 名} にしたもの(例: 「このワークスペースは {日時} に team へ移動しましたが、削除されています。設定の「削除済み」から復元できます」)。Task 12 で仕様 03 に書き足し、PR の本文に一覧で出す | A5b-18 と同じ扱い |
 | B5c-15 | 候補は `WorkspaceTargets`: 表示中の Store(`StoreList`)のうち閲覧のみでなく自分でないもの(Store の並び)。`HiddenOnly` は、候補が 0 件で、`SyncTargets` に非表示・閲覧のみでない・自分でない Store があるとき true。画面は、候補があればセレクト(初めの値は先頭)、0 件なら `HiddenOnly` で「移せる Store がありません(非表示の Store は、設定の「Store」で表示に戻してください)」か「移せる Store がありません」を出し「移動…」を無効にする | 03 の 1 段落目 |
 | B5c-16 | 区画の流れ: 「移動…」を押すと予告を取り、断り(B5c-5)ならエラーのトーストを出してダイアログを開かない。断りでなければ確認ダイアログを開く。名前の照合は画面だけで行う(削除と同じ。`nameMismatch`)。「移動」は、入力が名前と一致しないあいだ「名前が一致しません」を出して送らない | 03 の 3・4 段落目、B5b の削除と同じ |
 | B5c-17 | 移したあと、「移動」を押したときからアドレスが変わっていなければ、画面は移動先のワークスペースの「設定」タブのアドレス(`{ name: "workspace", store: 移動先の Store 名, prefix, tab: "settings" }`)へ移り(履歴に積まない `replace`)、そのあとでサイドバーの一覧を読み直す。押したあとに画面を移っていたら、一覧を読み直すだけにする。ほかの書き手(同期・別のタブ)が移したときは、いまの扱い(出していたワークスペースがなくなればマイタスク。01)のまま。`createLeaveMoved` と同じ形で `createLeaveWorkspaceMoved` を作る | A5b-19 |
 | B5c-18 | 失敗の扱いは A5a-12・A5b-20 と同じ: 送れない・オフライン・断り・それ以外はトーストを出してダイアログを開いたまま。`NotFound` と取り消しもできなかったときは、ダイアログを閉じて画面を読み直す。オフラインは、移動先に remote があり `navigator.onLine === false` のとき画面が決める | A5a-12 |
 | B5c-19 | API(`/api/…`): `GET stores/{store}/workspaces/{workspace}/transfer-targets` → `{targets: [{storeId, storeName}], hiddenOnly}`、`GET stores/{store}/workspaces/{workspace}/transfer-preview?toStore=` → B5c-20(断りは 422 の refusal。A5b の断りと同じ形)、`POST stores/{store}/workspaces/{workspace}/transfer`(本文 `{toStore}` → 200 `{toStore, toStoreName, workspaceId, prefix}`)。送れなかったときは 422、取り消しもできなかったときは 409(A5a-19 と同じ)。`GET locate-workspace?store=&prefix=` → `{kind: "found", storeId, workspaceId, movedFrom?}` か `{kind: "gone", …}` か 404 | A5b-22 に合わせる |
+| B5c-21 | このマシンの `state.db` の GitHub の行(`github_checks`・`github_link_failures`・`github_scans`・`github_renames`。どれも Store ID が鍵)は移動先へ付け替えない。どれも GitHub から読んだものの覚えで、移動先の Store の次の読み取りで作り直される。A5a・A5b と同じ扱い | 03「変更が及ぶ範囲」(このマシンのものは影響なし) |
 | B5c-20 | 予告 `WorkspacePreview`: `source`(移動元の Store 名)・`destination`(移動先の Store 名)・`projects`・`items`・`deleted`(B5c-4)・`people`(`[{login, name}]`。足す人、小文字のログイン名の順)・`remoteNotice`(移動先に remote がなく移動元にある)・`destinationHasRemote`。空の配列は `[]` | 03 の確認ダイアログの点 |
 
 ---
@@ -96,9 +97,9 @@
 | `internal/domain/transfer/people_remap.go` | 新規 | `SettingsPeople`・`RemapPeople`・`RemapSettingsPeople` |
 | `internal/domain/transfer/remap_fields.go` | 変更 | 人の置き換え(`assignee`・`person`・`watchers`)を `RemapPeople` と共有 |
 | `internal/app/port/stores.go` | 変更 | `WorkspaceWriter.Import`・`Remove` |
-| `internal/infra/gitstore/write.go`・`internal/app/apptest/stores.go`・`sync.go`・`stores_contract_rules.go` | 変更 | 上の口の実装と契約テスト(`idWriter` を共有。新しいファイルを足さない) |
-| `internal/app/transfers/targets.go` | 変更 | `project_targets.go` をまとめる(中身は変えない) |
-| `internal/app/transfers/workspace_preview.go`・`workspace_move.go`・`workspace_undo.go`・`workspace_locate.go` | 新規 | 候補と予告・移動・戻しと読み直し・古いアドレス |
+| `internal/infra/gitstore/write.go`・`sync_tree_test.go`・`internal/app/apptest/stores.go`・`sync.go`・`stores_contract_revive.go` | 変更 | 上の口の実装と契約テスト(`idWriter` を共有。新しいファイルを足さない。契約テストのほかのファイルは 300 行に近い)、同期のワークスペースの記録のテスト |
+| `internal/app/transfers/targets.go`・`locate_kinds.go` | 変更・新規 | `project_targets.go` をまとめる、`project_locate.go` を `LocateWorkspace` と一緒に置く(中身は変えない) |
+| `internal/app/transfers/workspace_preview.go`・`workspace_move.go`・`workspace_write.go`・`workspace_undo.go` | 新規 | 候補と予告・移動の流れ・両方の保存の行・戻しと読み直し |
 | `internal/app/transfers/locate.go`・`locate_read.go`・`locate_gone.go` | 変更 | ワークスペースの記録をアイテム・プロジェクトの (c) に足す、スナップショットに削除済みのワークスペース |
 | `internal/domain/history/project.go` | 変更 | B5c-12 |
 | `internal/adapter/httpapi/transfers/workspace.go` | 新規 | 4 つの API |
@@ -114,14 +115,16 @@
 |---|---|---|
 | 1 | `domain/transfer`: `CollectWorkspace`・`Counts` | — |
 | 2 | `domain/transfer`: `SettingsPeople`・`RemapPeople`・`RemapSettingsPeople` | — |
-| 3 | 口と保存: `WorkspaceWriter.Import`・`Remove`、`project_targets.go` のまとめ | — |
-| 4 | `app/transfers`: `WorkspaceTargets`・`WorkspacePreview`・`MoveWorkspace`(断り・両方の保存・削除の取り消し) | 1〜3 |
-| 5 | `app/transfers`: 戻しと移動元の読み直し | 4 |
-| 6 | `LocateWorkspace`・アイテムとプロジェクトのワークスペースの記録からの解決・プロジェクトの履歴 | 4 |
-| 7 | API と配線 | 4〜6 |
-| 8 | 画面の口と区画・ダイアログのモデル(core)、区画とダイアログの部品(app) | 7 |
-| 9 | ワークスペースの古いアドレスと見出しの下の 1 行 | 7 |
-| 10 | 通しのテスト(e2e)・仕様の文言・PR | すべて |
+| 3 | 口と保存: `WorkspaceWriter.Import`・`Remove`、ワークスペースの `moved_in`、同期のワークスペースの記録、ファイルのまとめ | — |
+| 4 | `app/transfers`: `WorkspaceTargets`・`WorkspacePreview`(断りを含む) | 1〜3 |
+| 5 | `app/transfers`: `MoveWorkspace`(両方の保存・試み直し・削除の取り消し) | 4 |
+| 6 | `app/transfers`: 戻しと移動元の読み直し | 5 |
+| 7 | `LocateWorkspace`・アイテムとプロジェクトのワークスペースの記録からの解決・プロジェクトの履歴 | 5 |
+| 8 | API と配線 | 4〜7 |
+| 9 | 画面の口と区画・ダイアログのモデル(core) | 8 |
+| 10 | 区画・ダイアログの部品と、移したあとの移り先(app) | 9 |
+| 11 | ワークスペースの古いアドレスと見出しの下の 1 行 | 9 |
+| 12 | 通しのテスト(e2e)・仕様の文言・PR | すべて |
 
 ## タスク間の名前
 
@@ -138,8 +141,9 @@
 | `transfers.WorkspaceTargets`・`(Service) WorkspaceTargets` | `internal/app/transfers/workspace_preview.go` | `type WorkspaceTargets struct { Stores []port.StoreInfo; HiddenOnly bool }`、`WorkspaceTargets(ctx, store port.StoreID, id workspace.ID) (WorkspaceTargets, error)` |
 | `transfers.WorkspacePreview`・`(Service) WorkspacePreview` | 同上 | `type WorkspacePreview struct { Source, Destination string; Counts transfer.Counts; People []member.Member; RemoteNotice, DestinationHasRemote bool }`、`WorkspacePreview(ctx, store port.StoreID, id workspace.ID, to port.StoreID) (WorkspacePreview, error)`(断りは refusal) |
 | `transfers.WorkspaceMoved`・`(Service) MoveWorkspace` | `internal/app/transfers/workspace_move.go` | `type WorkspaceMoved struct { ToStore port.StoreID; ToStoreName string; Workspace workspace.ID; Prefix string }`、`MoveWorkspace(ctx, store port.StoreID, id workspace.ID, to port.StoreID) (WorkspaceMoved, error)`。失敗は A5a の `*SendError`・`*UndoError`(`UndoError.Old` はワークスペース名、`NewDisplay` は空) |
+| `crossWorkspaceMove`・`writeDestination`・`writeSource` | `internal/app/transfers/workspace_move.go`・`workspace_write.go` | 内部。Task 5 |
 | `rollbackWorkspace`・`sourceStamp` | `internal/app/transfers/workspace_undo.go` | 内部。B5c-9 |
-| `transfers.LocatedWorkspace`・`(Service) LocateWorkspace` | `internal/app/transfers/workspace_locate.go` | `type LocatedWorkspace struct { Found bool; Store port.StoreID; Workspace workspace.ID; MovedFrom *MovedFrom; Gone *Gone }`、`LocateWorkspace(ctx, storeName, prefix string) (LocatedWorkspace, error)` |
+| `transfers.LocatedWorkspace`・`(Service) LocateWorkspace` | `internal/app/transfers/locate_kinds.go` | `type LocatedWorkspace struct { Found bool; Store port.StoreID; Workspace workspace.ID; MovedFrom *MovedFrom; Gone *Gone }`、`LocateWorkspace(ctx, storeName, prefix string) (LocatedWorkspace, error)` |
 
 ### HTTP API
 
@@ -156,8 +160,8 @@
 |---|---|---|
 | `WorkspaceTransferTargets`・`WorkspaceTransferPreview`・`WorkspaceTransferResult`・`LocatedWorkspace` | `web/packages/core/src/model/transfer.ts` | API の形のまま |
 | `TransfersPort` に足すもの | `web/packages/core/src/port/transfers.ts` | `workspaceTargets(storeId, workspaceId)`・`workspacePreview(storeId, workspaceId, toStoreId)`・`transferWorkspace(storeId, workspaceId, toStoreId)`・`locateWorkspace(storeName, prefix)` |
-| `createWorkspaceTransfer` | `web/packages/core/src/features/transfers/workspaceDialog.ts` | 区画(候補・選んだ移動先)と確認ダイアログ(予告・名前の照合・送信)。Task 8 |
-| `workspaceTransferLines`・`workspaceMovedMessage` | `web/packages/core/src/features/transfers/workspaceDialogText.ts` | Task 8 |
+| `createWorkspaceTransfer` | `web/packages/core/src/features/transfers/workspaceDialog.ts` | 区画(候補・選んだ移動先)と確認ダイアログ(予告・名前の照合・送信)。Task 9 |
+| `workspaceTransferLines`・`workspaceMovedMessage` | `web/packages/core/src/features/transfers/workspaceDialogText.ts` | Task 9 |
 | `createLeaveWorkspaceMoved` | `web/packages/core/src/features/transfers/leaveMoved.ts` | B5c-17 |
 | `workspaceMovedLine`・`workspaceGoneText` | `web/packages/core/src/features/transfers/movedText.ts` | `movedLine`・`goneText` の旧 ID を「このワークスペース」にしたもの(B5c-2・B5c-14) |
 | `workspaceTransfer` | `web/app/src/wireActions.ts` | `createWorkspaceTransfer` の組み立て |
@@ -244,27 +248,29 @@ git commit -m "feat: ワークスペースの設定とアイテムの人の値�
 
 ---
 
-### Task 3: 口と保存: `WorkspaceWriter.Import`・`Remove`、`project_targets.go` のまとめ
+### Task 3: 口と保存: `WorkspaceWriter.Import`・`Remove`、ワークスペースの `moved_in`、同期のワークスペースの記録、ファイルのまとめ
 
 **Files:**
-- Modify: `internal/app/port/stores.go`、`internal/infra/gitstore/write.go`、`internal/app/apptest/stores.go`・`sync.go`・`stores_contract_rules.go`、`internal/app/transfers/targets.go`
-- Delete: `internal/app/transfers/project_targets.go`(中身を `targets.go` へ)
+- Modify: `internal/app/port/stores.go`、`internal/infra/gitstore/write.go`・`sync_tree_test.go`、`internal/app/apptest/stores.go`・`sync.go`・`stores_contract_revive.go`、`internal/app/transfers/targets.go`
+- Create: `internal/app/transfers/locate_kinds.go`(`project_locate.go` の中身)
+- Delete: `internal/app/transfers/project_targets.go`(中身を `targets.go` へ)・`project_locate.go`
 
 **Interfaces:**
 - Produces: `WorkspaceWriter.Import(id workspace.ID, log []change.Record) error`、`Remove(id workspace.ID) error`
 
-- [ ] **Step 1: 契約テストを書く**
+- [ ] **Step 1: テストを書く**
 
-`stores_contract_rules.go` の `checkRemoved`(A5b)の並びに足す: `checkWorkspaceImport`(ほかの Store のワークスペースの行を `Import` して読み戻すと、`id`・`op`・`at`・`by`・`actor`・`prev` が変わらず、`Workspaces().Get` と `Settings` で読める。同じ ID があれば `ErrInvalidOperation`)、`checkWorkspaceRemove`(`Remove` のあと `Get` が `ErrNotFound`、下のプロジェクトのフォルダは残る、同じ Tx で書いた行も捨てる)。gitstore と apptest の両方で流す。
+- 契約テスト(`stores_contract_revive.go`。gitstore と apptest の両方で流す): `checkWorkspaceImport`(ほかの Store のワークスペースの行を `Import` して読み戻すと、`id`・`op`・`at`・`by`・`actor`・`prev` が変わらず、`Workspaces().Get` と `Settings` で読める。同じ ID があれば `ErrInvalidOperation`)、`checkWorkspaceRemove`(`Remove` のあと `Get` が `ErrNotFound`、下のプロジェクトのフォルダは残る、同じ Tx で書いた行も捨てる)、`checkWorkspaceMovedIn`(ワークスペースのログに `transfer.NewMovedIn`(`FromProject` は空)を足しても、`Get`・`Settings` と `workspace.yaml` の中身が足す前と同じ)。
+- `sync_tree_test.go` の `TestUnderTransferredWorkspace`: 片方の `transfers.jsonl` に `entity: workspace`・`target: W1`・ほかの Store の `to_store` の行があり `workspaces/W1` がない。他方が W1 に作ったプロジェクト P9 とアイテム I9 のフォルダは、合わせたあとに消える(C1 の `underTransferred` がワークスペースを祖先に含めていることの確認。通らなければ直す)。
 
 - [ ] **Step 2: 失敗を確かめる**
 
-Run: `go test ./internal/infra/gitstore/ ./internal/app/apptest/ -run Contract`
-Expected: FAIL(コンパイルエラー)
+Run: `go test ./internal/infra/gitstore/ ./internal/app/apptest/ -run 'Contract|UnderTransferredWorkspace'`
+Expected: FAIL(コンパイルエラー)。`TestUnderTransferredWorkspace` は先に通ってもよい
 
 - [ ] **Step 3: 実装する**
 
-gitstore は `idWriter` の `Import`・`Remove` を `workspaces/<id>` に使う(説明はないので空を渡す)。apptest は既存の `ProjectWriter` と同じ持ち方。`targets.go` に `project_targets.go` の中身を移す(中身は変えない)。
+gitstore は `idWriter` の `Import`・`Remove` を `workspaces/<id>` に使う(説明はないので空を渡す)。apptest は既存の `ProjectWriter` と同じ持ち方。`targets.go`・`locate_kinds.go` へのまとめは中身を変えない。
 
 - [ ] **Step 4: 通す**
 
@@ -280,39 +286,77 @@ git commit -m "feat: ワークスペースのフォルダを別の Store から�
 
 ---
 
-### Task 4: `app/transfers`: 候補・予告・別の Store への移動
+### Task 4: `app/transfers`: 候補と予告
 
 **Files:**
-- Create: `internal/app/transfers/workspace_preview.go`・`workspace_move.go`
-- Test: `internal/app/transfers/workspace_preview_test.go`・`workspace_move_test.go`
+- Create: `internal/app/transfers/workspace_preview.go`
+- Test: `internal/app/transfers/workspace_preview_test.go`
 
 **Interfaces:**
-- Consumes: Task 1〜3、A5a・A5b の `Delivery`・`SendError`・`earlierMoves`・`vocabOf`・`namesOf`・`storeInfo`・`remoteOf`、`transfer.People`・`NewMovedIn`、`port.EditableWorkspace`・`LiveWorkspaces`、`workspace.PrefixTaken`・`NameTaken`
-- Produces: `WorkspaceTargets`・`WorkspacePreview`・`MoveWorkspace`(タスク間の名前)、内部の `crossWorkspaceMove`(Task 5 が戻しを足す)
+- Consumes: Task 1〜3、A5a・A5b の `storeInfo`・`remoteOf`、`transfer.People`、`port.EditableWorkspace`・`LiveWorkspaces`、`workspace.PrefixTaken`・`NameTaken`
+- Produces: `WorkspaceTargets`・`WorkspacePreview`(タスク間の名前)、内部の `refuseWorkspaceMove(dst []workspace.Workspace, w workspace.Workspace, storeName string) error`(B5c-5。Task 5 が `fn` の中でも呼ぶ)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-A5a の `move_store_test.go` の偽の `Delivery` と Store ごとのロックを使う。Store「e2e」(remote あり)のワークスペース「Web」(`WEB`)を Store「team」へ移す。
+Store「e2e」(remote あり)のワークスペース「Web」(`WEB`)を Store「team」へ移す。
 
-- `TestWorkspaceTargets`: 表示中の Store が e2e・team・ro(閲覧のみ)・hid(非表示、`SyncTargets` だけにある)→ `Stores` は team だけ、`HiddenOnly` は false。team がないと `Stores` は空で `HiddenOnly` は true。hid も閲覧のみなら false。
-- `TestWorkspacePreview`: `Counts` が B5c-4 のとおり、`People` が移動先にいない人(表示名は移動元のメンバー)、移動先に remote がないとき `RemoteNotice` が true、`Source` が「e2e」・`Destination` が「team」。
-- `TestWorkspacePreviewRefuses`: team に接頭辞 `WEB` の削除されていないワークスペース → `refusal`「team: この Store には同じ接頭辞のワークスペースがあります」。接頭辞は違い名前「Web」が同じ → 「team: この Store には同じ名前のワークスペースがあります」。削除済みのワークスペースとの重なりは断らない(B5b-4)。
-- `TestMoveWorkspaceWritesBothStores`: 移動先に、ワークスペース・プロジェクト・アイテム(削除済みを含む)のフォルダ(行はそのまま + `moved_in`)、ワークスペースの `set rank`(team のワークスペースの後ろ)、足した人の `join`。移動先で `Workspaces().Get` の名前・接頭辞・スプリント・プロジェクト別のルールが移動元と同じで、削除済みのアイテムは元の削除日時で削除済み。移動元は、3 種類のフォルダが消え、転送記録が 1 行(`entity: workspace`・`old`/`new` が `WEB`・`to_store_name` が「team」・`to_remote`)。アクティビティは移動元「ワークスペース「Web」を team へ移動」、移動先「ワークスペース「Web」を e2e から移動」。
-- `TestMoveWorkspaceCutsOutsideRelations`: 移動元のほかのワークスペースのアイテムとの関連が両方の側から消え、ワークスペースの中の関連は残る。
-- `TestMoveWorkspaceRespellsPeople`: 移動先のメンバーに `Taro` がいて、移動元の担当者・ルールの担当者の値・プロジェクトのオーナーが `taro` → 移動先で `Taro` に書き直され、`taro` は `join` されない。
-- `TestMoveWorkspaceReadsTxOnRetry`: 偽の `Delivery` が `fn` を 2 回呼び、2 回目の前に team へ接頭辞 `WEB` のワークスペースを足すと断る(Review Focus 1)。
-- `TestMoveWorkspaceSendFails`: 送れない → `*SendError`、移動元は変わらない。
-- `TestMoveWorkspaceRevives`: 別の画面で削除されたワークスペースは、移動先で削除が取り消され(ワークスペース・その削除で一緒に削除されたプロジェクトとアイテム)、別に削除していたアイテムは削除済みのまま。両方の保存のあとで名前が積まれる。
-- `TestMoveWorkspaceNotFound`: 削除済みでない・`EditableWorkspace` が通らないワークスペースは `port.ErrNotFound`、移動先が閲覧のみ・自分の Store なら `port.ErrNotFound`。
+- `TestWorkspaceTargets`: 表示中の Store が e2e・team・ro(閲覧のみ)で、`SyncTargets` だけに hid(非表示)がある → `Stores` は team だけ、`HiddenOnly` は false。team がないと `Stores` は空で `HiddenOnly` は true。hid も閲覧のみなら false。
+- `TestWorkspacePreview`: `Counts` が B5c-4 のとおり、`People` が移動先にいない人(表示名は移動元のメンバー。綴りだけ違う人は入らない)、移動先に remote がないとき `RemoteNotice` が true、`Source` が「e2e」・`Destination` が「team」。
+- `TestWorkspacePreviewRefuses`: team に接頭辞 `WEB` の削除されていないワークスペース → `refusal`「team: この Store には同じ接頭辞のワークスペースがあります」。接頭辞は違い名前「Web」が同じ → 「team: この Store には同じ名前のワークスペースがあります」。両方なら接頭辞の文。削除済みのワークスペースとの重なりは断らない(B5b-4)。
+- `TestWorkspacePreviewNotFound`: ないワークスペース・完全に削除したワークスペースは `port.ErrNotFound`。別の画面で削除された(`EditableWorkspace` が通る)ワークスペースは予告を返す。移動先が閲覧のみ・非表示・自分の Store なら `port.ErrNotFound`。
 
 - [ ] **Step 2: 失敗を確かめる**
 
-Run: `go test ./internal/app/transfers/ -run 'WorkspaceTargets|WorkspacePreview|MoveWorkspace'`
+Run: `go test ./internal/app/transfers/ -run 'WorkspaceTargets|WorkspacePreview'`
 Expected: FAIL
 
 - [ ] **Step 3: 実装する**
 
-`crossProjectMove` と同じ形(`prepare` で移動元を読み、移動先を読んで断りを調べ、`Delivery.Deliver(writeDestination)` → `Stores.Write(writeSource)`)。`writeDestination` は B5c-5・B5c-6・B5c-7・B5c-10 を毎回 `Tx` から決める。`writeSource` は B5c-8。戻しは Task 5 で足すので、ここでは移動元の保存が失敗したらそのエラーを返す(Task 5 のテストが戻しを求める)。
+移動元を読んでから移動先を読む(読み取りを入れ子にしない)。
+
+- [ ] **Step 4: 通す**
+
+Run: `go test ./internal/app/transfers/`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/app/transfers
+git commit -m "feat: ワークスペースを移せる Store の候補と、移動の確認の予告を返す"
+```
+
+---
+
+### Task 5: `app/transfers`: 別の Store への移動
+
+**Files:**
+- Create: `internal/app/transfers/workspace_move.go`・`workspace_write.go`
+- Test: `internal/app/transfers/workspace_move_test.go`
+
+**Interfaces:**
+- Consumes: Task 4、A5a・A5b の `Delivery`・`SendError`・`earlierMoves`・`vocabOf`・`namesOf`、`transfer.NewMovedIn`・`RemapPeople`・`RemapSettingsPeople`
+- Produces: `MoveWorkspace`(タスク間の名前)、内部の `crossWorkspaceMove`(Task 6 が戻しを足す)
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+A5a の `move_store_test.go` の偽の `Delivery` と Store ごとのロックを使う。
+
+- `TestMoveWorkspaceWritesBothStores`: 移動先に、ワークスペース・プロジェクト・アイテム(削除済みを含む)のフォルダ(行はそのまま + `moved_in`)、ワークスペースの `set rank`(team のワークスペースの後ろ)、足した人の `join`。移動先で名前・接頭辞・スプリント・プロジェクト別のルールが移動元と同じで、削除済みのプロジェクト・アイテム・スプリントは元の削除日時で削除済み(Review Focus 3)。移動元は、3 種類のフォルダが消え、転送記録が 1 行(`entity: workspace`・`old`/`new` が `WEB`・`to_store_name` が「team」・`to_remote`・`at` は移動先の `moved_in` と同じ)。アクティビティは移動元「ワークスペース「Web」を team へ移動」、移動先「ワークスペース「Web」を e2e から移動」。
+- `TestMoveWorkspaceCutsOutsideRelations`: 移動元のほかのワークスペースのアイテムとの関連が両方の側から消え、ワークスペースの中の関連は残る。
+- `TestMoveWorkspaceRespellsPeople`: 移動先のメンバーに `Taro` がいて、移動元の担当者・ルールの担当者の値・プロジェクトのオーナーが `taro` → 移動先で `Taro` に書き直され、`taro` は `join` されない。
+- `TestMoveWorkspaceReadsTxOnRetry`: 偽の `Delivery` が `fn` を 2 回呼び、2 回目の前に team へ接頭辞 `WEB` のワークスペースを足すと断る(Review Focus 1)。別の場合として、2 回目の前に team へワークスペースを足すと、`set rank` はその後ろ。
+- `TestMoveWorkspaceSendFails`: 送れない → `*SendError`、移動元は変わらない。
+- `TestMoveWorkspaceRevives`: 別の画面で削除されたワークスペースは、移動先で削除が取り消され(ワークスペース・その削除で一緒に削除されたプロジェクトとアイテム)、別に削除していたアイテムは削除済みのまま。両方の保存のあとで名前が積まれる。
+
+- [ ] **Step 2: 失敗を確かめる**
+
+Run: `go test ./internal/app/transfers/ -run MoveWorkspace`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`crossProjectMove` と同じ形(`prepare` で移動元を読み、移動先を読んで断りを調べ、`Delivery.Deliver(writeDestination)` → `Stores.Write(writeSource)`)。`writeDestination` は B5c-5・B5c-6・B5c-7・B5c-10 を毎回 `Tx` から決める。`writeSource` は B5c-8。戻しは Task 6 で足すので、ここでは移動元の保存が失敗したらそのエラーを返す。
 
 - [ ] **Step 4: 通す**
 
@@ -328,14 +372,14 @@ git commit -m "feat: ワークスペースを別の Store へ移し、移動元�
 
 ---
 
-### Task 5: `app/transfers`: 戻しと移動元の読み直し
+### Task 6: `app/transfers`: 戻しと移動元の読み直し
 
 **Files:**
 - Create: `internal/app/transfers/workspace_undo.go`
 - Test: `internal/app/transfers/workspace_undo_test.go`
 
 **Interfaces:**
-- Consumes: Task 4 の `crossWorkspaceMove`、A5a の `UndoError`・`errSourceChanged`・`unjoinDrafts`・`lastMovedIn`、`port.ErrSaveNotDiscarded`
+- Consumes: Task 5 の `crossWorkspaceMove`、A5a の `UndoError`・`errSourceChanged`・`unjoinDrafts`・`lastMovedIn`、`port.ErrSaveNotDiscarded`
 - Produces: `rollbackWorkspace`、`sourceStamp`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -369,21 +413,21 @@ git commit -m "feat: ワークスペースの移動で移動元の保存が失�
 
 ---
 
-### Task 6: 古いアドレスの解決とプロジェクトの履歴
+### Task 7: 古いアドレスの解決とプロジェクトの履歴
 
 **Files:**
-- Create: `internal/app/transfers/workspace_locate.go`
-- Modify: `internal/app/transfers/locate.go`・`locate_read.go`・`locate_gone.go`、`internal/domain/history/project.go`
+- Modify: `internal/app/transfers/locate_kinds.go`・`locate.go`・`locate_read.go`・`locate_gone.go`、`internal/domain/history/project.go`
 - Test: `internal/app/transfers/workspace_locate_test.go`、`internal/domain/history/project_test.go`
 
 **Interfaces:**
-- Consumes: Task 4(テストで移すため)、A5a の `find`・`snapshots`・`whyGone`・`storeName`
+- Consumes: Task 5(テストで移すため)、A5a の `find`・`snapshots`・`whyGone`・`storeName`
 - Produces: `LocateWorkspace`(タスク間の名前)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - `TestLocateWorkspaceMoved`: e2e の `WEB` を team へ移したあと、`LocateWorkspace(ctx, "e2e", "WEB")` は team のワークスペースで、`MovedFrom{Old: "WEB", Display: "team", Current: "team"}`。続けて team から other へ移すと `Display: "team", Current: "other"`。
 - `TestLocateWorkspaceNamedRecordFirst`: e2e の `WEB` を team へ移し、Store「zzz」(サイドバーで team より前)にも `WEB` がある → team のもの(Review Focus 4)。`LocateWorkspace(ctx, "zzz", "WEB")` は zzz のもの(いまの接頭辞、`MovedFrom` なし)。
+- `TestLocateWorkspaceRenamedBeforeMove`: e2e の `HH` を `WEB` に変えてから team へ移し、Store「zzz」にも `HH` がある → `LocateWorkspace(ctx, "e2e", "HH")` と `Locate(ctx, "e2e", "HH-1")` は team のもの(B5c-13 の一致の規則)。
 - `TestLocateWorkspaceGone`: 移動先の Store を非表示 → `Gone{Reason: hidden, Old: "WEB", NewDisplay: "team", StoreName: "team"}`。移動先で削除 → `deleted`。
 - `TestLocateItemViaWorkspaceRecord`: e2e の `WEB` を team へ移し、zzz にも `WEB` と `WEB-1` がある → `Locate(ctx, "e2e", "WEB-1")` は team の `WEB-1` で `MovedFrom` なし。`LocateProject(ctx, "e2e", "WEB-P1")` も同じ。移動先の Store を非表示 → `Gone{Reason: hidden, Old: "WEB-1", NewDisplay: "team"}`。
 - `TestProjectHistoryMovedWithWorkspace`: `moved_in` の `FromWorkspace` がいまのワークスペースと同じ → 「e2e から移動」。違えば A5b-21 のまま「{ワークスペース名} から移動」。
@@ -411,7 +455,7 @@ git commit -m "feat: 別の Store へ移したワークスペースと、その�
 
 ---
 
-### Task 7: API と配線
+### Task 8: API と配線
 
 **Files:**
 - Create: `internal/adapter/httpapi/transfers/workspace.go`
@@ -419,7 +463,7 @@ git commit -m "feat: 別の Store へ移したワークスペースと、その�
 - Test: `internal/adapter/httpapi/transfers/workspace_test.go`
 
 **Interfaces:**
-- Consumes: Task 4〜6
+- Consumes: Task 4〜7
 - Produces: B5c-19 の 4 つの API(タスク間の名前の表)
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -449,16 +493,16 @@ git commit -m "feat: ワークスペースの別の Store への移動と古い�
 
 ---
 
-### Task 8: 区画と確認ダイアログ(core と app)
+### Task 9: 画面の口と区画・ダイアログのモデル(core)
 
 **Files:**
-- Create: `web/packages/core/src/features/transfers/workspaceDialog.ts`・`workspaceDialogText.ts`、`web/app/src/screens/workspace-settings/WorkspaceTransfer.svelte`・`WorkspaceTransferDialog.svelte`
-- Modify: `web/packages/core/src/model/transfer.ts`・`port/transfers.ts`・`features/transfers/leaveMoved.ts`、`web/packages/api/src/transfers.ts`、`web/app/src/screens/workspace-settings/GeneralPanel.svelte`(接頭辞と削除のあいだに区画)、`web/app/src/wireActions.ts`、`web/packages/core/src/actionsIndex.ts`
+- Create: `web/packages/core/src/features/transfers/workspaceDialog.ts`・`workspaceDialogText.ts`
+- Modify: `web/packages/core/src/model/transfer.ts`・`port/transfers.ts`・`features/transfers/leaveMoved.ts`・`actionsIndex.ts`、`web/packages/api/src/transfers.ts`
 - Test: `workspaceDialog.test.ts`・`workspaceDialogText.test.ts`・`leaveMoved.test.ts`
 
 **Interfaces:**
-- Consumes: Task 7 の API、`nameMismatch`(`features/workspaces/delete.ts`)、`readOnlyNote`
-- Produces: `createWorkspaceTransfer`・`createLeaveWorkspaceMoved`・`workspaceTransfer`(タスク間の名前)
+- Consumes: Task 8 の API、`nameMismatch`(`features/workspaces/delete.ts`)、`readOnlyNote`
+- Produces: `createWorkspaceTransfer`・`createLeaveWorkspaceMoved`・`TransfersPort` の 4 つ(タスク間の名前)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -473,7 +517,7 @@ Expected: FAIL
 
 - [ ] **Step 3: 実装する**
 
-`createProjectTransfer` と `workspaceDelete` の形を合わせる(区画の状態・予告・名前の照合)。部品は `ProjectTransfer.svelte`・`DeleteWorkspaceDialog.svelte` と同じ作り。ボタン「移動」は危険操作の見た目にしない。
+`createProjectTransfer` と `workspaceDelete` の形を合わせる(区画の状態・予告・名前の照合)。
 
 - [ ] **Step 4: 通す**
 
@@ -484,19 +528,49 @@ Expected: PASS
 
 ```bash
 git add web
+git commit -m "feat: ワークスペースの別の Store への移動の区画と確認ダイアログのモデルを足す"
+```
+
+---
+
+### Task 10: 区画・ダイアログの部品と、移したあとの移り先(app)
+
+**Files:**
+- Create: `web/app/src/screens/workspace-settings/WorkspaceTransfer.svelte`・`WorkspaceTransferDialog.svelte`
+- Modify: `web/app/src/screens/workspace-settings/GeneralPanel.svelte`(接頭辞と削除のあいだに区画)、`web/app/src/wireActions.ts`
+
+**Interfaces:**
+- Consumes: Task 9
+- Produces: `workspaceTransfer`(`wireActions.ts`)
+
+app の部品にはテストの置き場がない(A5b の `ProjectTransfer.svelte` と同じ)。動きは Task 9 のモデルのテストと Task 12 の e2e で確かめる。
+
+- [ ] **Step 1: 部品を作る**
+
+区画: 説明文・「移動先の Store」のセレクト・「移動…」、閲覧のみで無効と「閲覧のみの Store です」、候補がないときの文。ダイアログ: 本文の行・名前の入力欄・ボタン「キャンセル」「移動」(危険操作の見た目にしない)。`ProjectTransfer.svelte`・`DeleteWorkspaceDialog.svelte` と同じ作り。`afterMoved` に `createLeaveWorkspaceMoved` をそのまま渡す。
+
+- [ ] **Step 2: 型と lint を通す**
+
+Run: `pnpm -C web test && pnpm -C web check`
+Expected: PASS
+
+- [ ] **Step 3: コミット**
+
+```bash
+git add web
 git commit -m "feat: ワークスペースの設定の「一般」に、別の Store への移動の区画と確認ダイアログを足す"
 ```
 
 ---
 
-### Task 9: ワークスペースの古いアドレスと見出しの下の 1 行
+### Task 11: ワークスペースの古いアドレスと見出しの下の 1 行
 
 **Files:**
 - Modify: `web/packages/core/src/features/router/resolve.ts`・`features/screen/screen.ts`・`features/transfers/movedText.ts`、`web/app/src/screens/workspace/WorkspaceScreen.svelte`
 - Test: `resolve.test.ts`・`screen.test.ts`・`movedText.test.ts`
 
 **Interfaces:**
-- Consumes: Task 7・8 の `locateWorkspace`
+- Consumes: Task 8・9 の `locateWorkspace`
 - Produces: `Screen.workspaceMoved`、`workspaceMovedLine`・`workspaceGoneText`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -528,7 +602,7 @@ git commit -m "feat: 別の Store へ移したワークスペースの古いア�
 
 ---
 
-### Task 10: 通しのテスト(e2e)・仕様の文言・PR
+### Task 12: 通しのテスト(e2e)・仕様の文言・PR
 
 **Files:**
 - Create: `web/e2e/workspace-transfer.spec.ts`
