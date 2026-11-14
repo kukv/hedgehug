@@ -1,6 +1,7 @@
 package search
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/query"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
 const project2 project.ID = "01TESTPR000000000000000002"
@@ -108,5 +110,38 @@ func TestEntriesWorkspaceOrder(t *testing.T) {
 	}
 	if mb, hh := factsOf(t, es, store1, "MB-1"), factsOf(t, es, store1, "HH-1"); mb.WorkspaceOrder != 0 || hh.WorkspaceOrder != 1 {
 		t.Errorf("WorkspaceOrder: MB-1 %d, HH-1 %d", mb.WorkspaceOrder, hh.WorkspaceOrder)
+	}
+}
+
+// 削除済みのアイテムの親が一緒に削除されていても、親と祖先は Store のすべてのアイテムでたどる。
+func TestFactsDeletedParent(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	must(t, apptest.DeleteItems(t.Context(), f.stores, store1, apptest.SampleEpic, apptest.SampleTask))
+
+	got := factsOf(t, entriesOf(t, f, "is:deleted"), store1, "HH-2")
+	if got.Parent == nil || got.Parent.Display != "HH-1" || !reflect.DeepEqual(got.Ancestors, []query.Ref{{Display: "HH-1"}}) {
+		t.Errorf("HH-2 Parent = %+v, Ancestors = %+v", got.Parent, got.Ancestors)
+	}
+}
+
+// 同じ Store の別のワークスペースへの移動の行も、updated に数える(詳細の履歴に出る行。app/history と同じ材料)。
+func TestFactsUpdatedCountsMoveInStore(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	must(t, apptest.SampleMobile(t.Context(), f.stores, store1))
+	from := item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 3}
+	addItem(t, f.stores, task(item3, 3, item.Task, nil, "移すもの"))
+	to := item.Place{Workspace: apptest.SampleMobileWorkspace, Project: apptest.SampleMobileProject, Number: 2}
+	write(t, f.stores, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteItems().Append(item3, change.NewSet("place", from, to)),
+			tx.WriteTransfers().Append(transfer.Record{Entity: transfer.EntityItem, Target: item3, Old: "HH-3", New: "MB-2", ToStore: string(store1)}),
+		)
+	})
+
+	got := factsOf(t, entriesOf(t, f, ""), store1, "MB-2")
+	if want := atOf(logOf(t, f.stores, store1, item3), "place").At; !got.Updated.Equal(want) {
+		t.Errorf("MB-2 Updated = %v, want %v(移動の行)", got.Updated, want)
 	}
 }

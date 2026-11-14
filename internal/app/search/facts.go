@@ -9,8 +9,10 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/query"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // facts は、アイテム it の照合の材料。records は、すべての表示中の Store の転送記録(旧 ID)。now は検索の時刻。
@@ -27,7 +29,9 @@ func (s *snapshot) facts(it item.Item, records []transfer.Record, q query.Query,
 		Me:        s.me, Names: s.names, HasPR: hasPR(log),
 		Overwritten: s.overwritten[it.ID], Invalid: s.invalid[it.ID],
 		Created: it.Created.At,
-		Updated: history.Updated(log, history.Context{Settings: sp.settings, Names: s.whoNames, Hidden: sp.hidden, Today: now}),
+		Updated: history.Updated(log, history.Context{
+			Settings: sp.settings, Names: s.whoNames, Hidden: sp.hidden, Today: now, Origin: s.origin(it.ID),
+		}),
 	}
 	f.Parent, f.Ancestors = s.ancestors(it, records)
 	planFacts(&f, sp.plan, it)
@@ -38,6 +42,36 @@ func (s *snapshot) facts(it item.Item, records []transfer.Record, q query.Query,
 		}
 	}
 	return f
+}
+
+// origin は、同じ Store の中の移動の行の材料(app/history の readOrigin と同じ): すべてのワークスペースの設定と名前、
+// すべてのプロジェクト(削除済みを含む)の名前、この Store の転送記録のうちアイテム id のもの。
+func (s *snapshot) origin(id item.ID) history.Origin {
+	var mine []transfer.Record
+	for _, rec := range s.records {
+		if rec.Entity == transfer.EntityItem && rec.Target == id {
+			mine = append(mine, rec)
+		}
+	}
+	return history.Origin{
+		Settings: func(w workspace.ID) (workspace.Settings, bool) {
+			sp, ok := s.spaces[w]
+			if !ok || !sp.hasSettings {
+				return workspace.Settings{}, false
+			}
+			return sp.settings, true
+		},
+		WorkspaceName: func(w workspace.ID) (string, bool) {
+			sp, ok := s.spaces[w]
+			if !ok {
+				return "", false
+			}
+			return sp.ws.Name, true
+		},
+		ProjectTitle: func(p project.ID) (string, bool) { pr, ok := s.projects[p]; return pr.Title, ok },
+		StoreName:    s.info.Name,
+		Transfers:    mine,
+	}
 }
 
 // planFacts は、スプリント・リリースの名前と、実行中・次のスプリントか。削除済みのスプリント・リリースは名前を出さない。

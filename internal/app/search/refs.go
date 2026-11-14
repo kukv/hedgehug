@@ -43,14 +43,14 @@ func aliasIDs(all []transfer.Alias, current string) []string {
 	return out
 }
 
-// ancestors は、親と、親から上へたどった祖先(親を含む、近い順)。画面に出るものだけをたどり、
-// 画面に出ない親か、一度通ったアイテム(親の循環)で止める。
+// ancestors は、親と、親から上へたどった祖先(親を含む、近い順)。削除済みかを問わず Store のすべてのアイテムでたどり
+// (削除済みのアイテムの、一緒に削除された親も parent: で引ける)、ない親か、一度通ったアイテム(親の循環)で止める。
 func (s *snapshot) ancestors(it item.Item, records []transfer.Record) (*query.Ref, []query.Ref) {
 	var out []query.Ref
 	seen := map[item.ID]bool{it.ID: true}
 	for cur := it; cur.Place.Parent != nil; {
 		p, ok := s.byID[*cur.Place.Parent]
-		if !ok || seen[p.ID] || !s.isShown(p) {
+		if !ok || seen[p.ID] {
 			break
 		}
 		seen[p.ID] = true

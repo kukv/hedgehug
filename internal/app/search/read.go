@@ -49,7 +49,7 @@ type space struct {
 	order       int
 	old         []string
 	settings    workspace.Settings
-	hasSettings bool
+	hasSettings bool // 設定を読めなかった(作成の行がない壊れたデータ)ときだけ偽。診断は値の判定を飛ばす
 	plan        planning.Plan
 	hidden      map[change.ID]bool
 }

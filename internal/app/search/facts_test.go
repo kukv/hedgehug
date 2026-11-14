@@ -195,6 +195,13 @@ func TestFactsInvalid(t *testing.T) {
 	good := task(item4, 4, item.Task, ptr(apptest.SampleEpic), "日付が順")
 	good.Start, good.End = "2026-11-01", "2026-11-10"
 	addItem(t, f.stores, good)
+	// HH-5・HH-6: 同じ Issue をリンクする(Issue の二重リンク。Issues はこのパッケージがログから作る)。
+	issue := itemlink.Ref{Kind: itemlink.Issue, Repo: "kukv/web", Number: 9}
+	v := itemlink.Values{Title: "t", State: itemlink.Open, Review: itemlink.NoReview}
+	for i, id := range []item.ID{item5, item6} {
+		addItem(t, f.stores, task(id, 5+i, item.Task, ptr(apptest.SampleEpic), "同じ Issue"))
+		write(t, f.stores, func(tx port.Tx) error { return tx.WriteItems().Append(id, itemlink.Set{}.Attach(issue, v)...) })
+	}
 
 	var invalid []string
 	for _, e := range entriesOf(t, f, "is:invalid") {
@@ -202,8 +209,8 @@ func TestFactsInvalid(t *testing.T) {
 			invalid = append(invalid, e.facts.Display)
 		}
 	}
-	if !reflect.DeepEqual(invalid, []string{"HH-3"}) {
-		t.Errorf("is:invalid の Invalid = %v, want [HH-3]", invalid)
+	if want := []string{"HH-3", "HH-5", "HH-6"}; !reflect.DeepEqual(invalid, want) {
+		t.Errorf("is:invalid の Invalid = %v, want %v", invalid, want)
 	}
 	for _, e := range entriesOf(t, f, "status:todo") {
 		if e.facts.Invalid {
