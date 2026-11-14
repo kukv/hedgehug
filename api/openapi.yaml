@@ -841,6 +841,46 @@ components:
         - display
         - current
       type: object
+    LocatedProject:
+      additionalProperties: false
+      properties:
+        at:
+          description: gone のとき。旧 ID が一致した記録の日時
+          type: string
+        kind:
+          enum:
+            - found
+            - gone
+          type: string
+        movedFrom:
+          $ref: "#/components/schemas/LocatedMovedFrom"
+          description: found で、転送記録から見つけたとき
+        newDisplay:
+          description: gone のとき。旧 ID が一致した記録の新 ID
+          type: string
+        old:
+          description: gone のとき。旧 ID
+          type: string
+        projectId:
+          description: found のとき
+          type: string
+        reason:
+          description: gone のとき
+          enum:
+            - deleted
+            - purged
+            - hidden
+            - elsewhere
+          type: string
+        storeId:
+          description: found のとき。開くプロジェクトの Store
+          type: string
+        storeName:
+          description: gone の hidden・elsewhere のとき。表示中でない Store の名前
+          type: string
+      required:
+        - kind
+      type: object
     Me:
       additionalProperties: false
       properties:
@@ -1130,6 +1170,31 @@ components:
         - checks
         - error
       type: object
+    ProjectNotCarried:
+      additionalProperties: false
+      properties:
+        count:
+          description: 引き継げないルールの数
+          format: int64
+          type: integer
+        kind:
+          description: ルールの種類
+          type: string
+        missing:
+          description: 移動先にない名前
+          items:
+            type: string
+          nullable: true
+          type: array
+        name:
+          description: ルールの名前
+          type: string
+      required:
+        - kind
+        - name
+        - missing
+        - count
+      type: object
     ProjectRepo:
       additionalProperties: false
       properties:
@@ -1176,6 +1241,101 @@ components:
         - templates
         - templateDefaults
         - disabledRules
+      type: object
+    ProjectTransferPreview:
+      additionalProperties: false
+      properties:
+        crossStore:
+          description: 別の Store への移動か
+          type: boolean
+        deleted:
+          description: 削除済みのアイテムの数
+          format: int64
+          type: integer
+        destination:
+          description: 移動先の文
+          type: string
+        destinationHasRemote:
+          description: 移動先の Store に remote があるか
+          type: boolean
+        hasRules:
+          description: プロジェクト別のルールか専用ルールがあるか
+          type: boolean
+        items:
+          description: 削除されていないアイテムの数
+          format: int64
+          type: integer
+        notCarried:
+          description: 移動先に引き継げないルール
+          items:
+            $ref: "#/components/schemas/ProjectNotCarried"
+          nullable: true
+          type: array
+        prefix:
+          description: 移動先の接頭辞
+          type: string
+        remoteNotice:
+          description: 別の Store で、移動先に remote がなく移動元にあるか
+          type: boolean
+        replacements:
+          description: 行の並びは移動元のワークスペースのステータスの並び
+          items:
+            $ref: "#/components/schemas/TransferReplacement"
+          nullable: true
+          type: array
+        source:
+          description: 移動元の文
+          type: string
+      required:
+        - items
+        - deleted
+        - prefix
+        - source
+        - destination
+        - crossStore
+        - remoteNotice
+        - destinationHasRemote
+        - hasRules
+        - notCarried
+        - replacements
+      type: object
+    ProjectTransferResult:
+      additionalProperties: false
+      properties:
+        destination:
+          description: 移動先の文
+          type: string
+        display:
+          description: 移したプロジェクトの新しい ID(MB-P2)
+          type: string
+        projectId:
+          description: 移したプロジェクトの内部 ID(変わらない)
+          type: string
+        toStore:
+          description: 移動先の Store の ID
+          type: string
+      required:
+        - toStore
+        - projectId
+        - display
+        - destination
+      type: object
+    ProjectTransferTarget:
+      additionalProperties: false
+      properties:
+        storeId:
+          type: string
+        storeName:
+          type: string
+        workspaceId:
+          type: string
+        workspaceName:
+          type: string
+      required:
+        - storeId
+        - storeName
+        - workspaceId
+        - workspaceName
       type: object
     RecheckOutputBody:
       additionalProperties: false
@@ -2505,6 +2665,25 @@ components:
         - title
         - epics
       type: object
+    TransferProjectBody:
+      additionalProperties: false
+      properties:
+        statusChoices:
+          additionalProperties:
+            type: string
+          description: ステータスの置き換え(移動元のステータスの内部 ID → 移動先のステータスの内部 ID)
+          type: object
+        toStore:
+          description: 移動先の Store の ID
+          type: string
+        toWorkspace:
+          description: 移動先のワークスペースの内部 ID
+          type: string
+      required:
+        - toStore
+        - toWorkspace
+        - statusChoices
+      type: object
     TransferReplacement:
       additionalProperties: false
       properties:
@@ -3343,6 +3522,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 画面のアドレスの ID(旧 ID を含む)が指すアイテムを探す
+  /api/locate-project:
+    get:
+      operationId: locate-project
+      parameters:
+        - description: 画面のアドレスの Store 名
+          explode: false
+          in: query
+          name: store
+          required: true
+          schema:
+            description: 画面のアドレスの Store 名
+            type: string
+        - description: 画面のアドレスのプロジェクトの ID(HH-P1)
+          explode: false
+          in: query
+          name: id
+          required: true
+          schema:
+            description: 画面のアドレスのプロジェクトの ID(HH-P1)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocatedProject"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 画面のアドレスのプロジェクトの ID(旧 ID を含む)が指すプロジェクトを探す
   /api/sign-ins:
     post:
       operationId: start-sign-in
@@ -5670,6 +5883,111 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトのタイトルを変える
+  /api/stores/{store}/projects/{project}/transfer:
+    post:
+      operationId: transfer-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferProjectBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectTransferResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトをアイテムごと別のワークスペース・別の Store へ移す
+  /api/stores/{store}/projects/{project}/transfer-preview:
+    get:
+      operationId: get-project-transfer-preview
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: toStore
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: toWorkspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectTransferPreview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの移動のダイアログの予告を返す
+  /api/stores/{store}/projects/{project}/transfer-targets:
+    get:
+      operationId: list-project-transfer-targets
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/ProjectTransferTarget"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトの移す先の候補のワークスペースを返す
   /api/stores/{store}/sync:
     post:
       operationId: sync-store

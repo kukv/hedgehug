@@ -6,6 +6,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -85,18 +86,24 @@ func replacements(src source, dst destination) []StatusRow {
 			present = append(present, v.ID)
 		}
 	}
+	return statusRows(present, counts, src.settings, dst.settings, dst.rules, dst.rules)
+}
+
+// statusRows は、present(移動元のステータス。行の並び)のうち、移動先で matchRules のもとで使えないもの
+// (transfer.Unmatched)の行を返す。選択肢は移動先で choiceRules のもとで使うステータス、件数は counts。
+func statusRows(present []change.ID, counts map[change.ID]int, from, to workspace.Settings, matchRules, choiceRules projectrule.Rules) []StatusRow {
 	var choices []workspace.Value
-	for _, id := range transfer.UsableStatuses(dst.settings, dst.rules) {
-		if v, ok := valueOf(dst.settings.Statuses, id); ok {
+	for _, id := range transfer.UsableStatuses(to, choiceRules) {
+		if v, ok := valueOf(to.Statuses, id); ok {
 			choices = append(choices, v)
 		}
 	}
 	var rows []StatusRow
-	for _, id := range transfer.Unmatched(present, src.settings, dst.settings, dst.rules) {
-		v, _ := valueOf(src.settings.Statuses, id)
-		def := dst.settings.CategoryDefaults[v.Category]
+	for _, id := range transfer.Unmatched(present, from, to, matchRules) {
+		v, _ := valueOf(from.Statuses, id)
+		def := to.CategoryDefaults[v.Category]
 		if def == "" {
-			def = dst.settings.InitialStatus // Remap と同じく、分類の既定がなければ初期ステータス
+			def = to.InitialStatus // Remap と同じく、分類の既定がなければ初期ステータス
 		}
 		rows = append(rows, StatusRow{Status: id, Name: v.Name, Count: counts[id], Choices: choices, Default: def})
 	}

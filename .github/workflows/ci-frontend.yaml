@@ -60,11 +60,18 @@ jobs:
         run: pnpm build
 
   # 実際のバイナリ（GUI を埋め込んだもの）をブラウザで動かす。
-  e2e:
+  # テストが 3 つの幅 × 全画面で多く、1 台では 9 分ほどかかるので、幅（playwright.config.ts の project）ごとにジョブを分けて並べる。
+  e2e-width:
+    name: e2e (${{ matrix.project }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
+    strategy:
+      # 1 つが落ちても、ほかの分の結果は最後まで見る。
+      fail-fast: false
+      matrix:
+        project: [phone, tablet, desktop]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,6 +87,7 @@ jobs:
           install_args: node pnpm
 
       # Go のビルドキャッシュとモジュールキャッシュを復元する。保存は main への push だけ（backend と同じ）。
+      # 分けたジョブはキーが同じなので、保存は phone のジョブだけが行う（ブラウザのキャッシュも同じ）。
       - name: Locate Go caches
         id: go-env
         shell: bash
@@ -110,7 +118,6 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
 
       # ブラウザが無いときはブラウザと共有ライブラリ（apt）を入れる。キャッシュがあるときは共有ライブラリだけ。
-      # make e2e の playwright install chromium は、取得済みのブラウザなら何も取りに行かない。
       - name: Install the browser
         working-directory: web
         env:
@@ -126,11 +133,18 @@ jobs:
       - name: Allow the Chromium sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
+      # make e2e と同じことを、受け持ちの幅だけ流す（ブラウザは上で入れてある）。
+      - name: Build the e2e binary
+        run: make e2e-bin
+
       - name: E2E
-        run: make e2e
+        working-directory: web
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: pnpm e2e --project="$PROJECT"
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.project == 'phone' && steps.go-cache.outputs.cache-hit != 'true'
         with:
           path: |
             ${{ steps.go-env.outputs.gocache }}
@@ -138,7 +152,7 @@ jobs:
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'push' && steps.browser-cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.project == 'phone' && steps.browser-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browser-cache.outputs.cache-primary-key }}
@@ -147,9 +161,23 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: e2e-traces
+          name: e2e-traces-${{ matrix.project }}
           path: |
             web/test-results
             web/playwright-report
           retention-days: 1
           if-no-files-found: ignore
+
+  # 必須のチェック「e2e」は、分けたジョブがすべて通ったときだけ通す。
+  # needs だけだと、分けたジョブが落ちたときにこのジョブが skipped になり、必須のチェックとしては通ってしまう。
+  e2e:
+    if: always()
+    needs: e2e-width
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check every width
+        env:
+          RESULT: ${{ needs.e2e-width.result }}
+        run: test "$RESULT" = success

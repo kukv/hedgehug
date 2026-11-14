@@ -112,12 +112,12 @@ func (e *env) appendItem(actor change.Actor, id item.ID, ds ...change.Draft) map
 // run は、ours と theirs を Facts にして Run を 2 回行い、1 回目の保存を返す。2 回目は何も書かないことを確かめる。
 func (e *env) run(ours, theirs map[change.ID]bool) []port.Operation {
 	e.t.Helper()
-	w := &apptest.RepairWriter{Stores: e.s, Store: store, F: repair.Facts{Ours: ours, Theirs: theirs}}
+	w := &apptest.RepairWriter{Stores: e.s, StoreID: store, F: repair.Facts{Ours: ours, Theirs: theirs}}
 	if err := repairing.Run(e.ctx, w); err != nil {
 		e.t.Fatal(err)
 	}
 	n := len(e.rows())
-	again := &apptest.RepairWriter{Stores: e.s, Store: store, F: w.F}
+	again := &apptest.RepairWriter{Stores: e.s, StoreID: store, F: w.F}
 	if err := repairing.Run(e.ctx, again); err != nil {
 		e.t.Fatal(err)
 	}

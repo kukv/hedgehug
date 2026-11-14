@@ -242,6 +242,10 @@ type ProjectWriter interface {
 	// 履歴の desc の行は書かない(Append で change.NewDesc を足す)。ないプロジェクトは ErrNotFound、
 	// change.ValidID でない ID は ErrInvalidOperation を包んだエラー。ほかの Append と同じ 1 回の Write で残る。
 	Describe(id project.ID, text string) error
+	// Import と Remove は、ItemWriter と同じ(対象がプロジェクトのフォルダ)。Remove は、下のアイテムのフォルダは
+	// 消さない(呼ぶ側がアイテムごとに消す)。
+	Import(id project.ID, log []change.Record, description string) error
+	Remove(id project.ID) error
 }
 
 type ItemWriter interface {

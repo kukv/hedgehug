@@ -61,7 +61,7 @@ func TestCascadeStopsWithoutProgress(t *testing.T) {
 	if err := apptest.DeleteProject(e.ctx, e.s, store, apptest.SampleProject); err != nil {
 		t.Fatal(err)
 	}
-	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, StoreID: store}}
 	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "進みません") {
 		t.Errorf("Run error = %v", err)
 	}
@@ -73,7 +73,7 @@ func TestCascadeStopsWithoutProgressUnderDeletedWorkspace(t *testing.T) {
 	if err := apptest.DeleteWorkspace(e.ctx, e.s, store, apptest.SampleWorkspace); err != nil {
 		t.Fatal(err)
 	}
-	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, StoreID: store}}
 	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "削除済みの親の下の子の修復が進みません") {
 		t.Errorf("Run error = %v", err)
 	}

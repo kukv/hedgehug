@@ -628,6 +628,47 @@ export interface Located {
   storeName?: string;
 }
 
+export type LocatedProjectKind = typeof LocatedProjectKind[keyof typeof LocatedProjectKind];
+
+
+export const LocatedProjectKind = {
+  found: 'found',
+  gone: 'gone',
+} as const;
+
+/**
+ * gone のとき
+ */
+export type LocatedProjectReason = typeof LocatedProjectReason[keyof typeof LocatedProjectReason];
+
+
+export const LocatedProjectReason = {
+  deleted: 'deleted',
+  purged: 'purged',
+  hidden: 'hidden',
+  elsewhere: 'elsewhere',
+} as const;
+
+export interface LocatedProject {
+  /** gone のとき。旧 ID が一致した記録の日時 */
+  at?: string;
+  kind: LocatedProjectKind;
+  /** found で、転送記録から見つけたとき */
+  movedFrom?: LocatedMovedFrom;
+  /** gone のとき。旧 ID が一致した記録の新 ID */
+  newDisplay?: string;
+  /** gone のとき。旧 ID */
+  old?: string;
+  /** found のとき */
+  projectId?: string;
+  /** gone のとき */
+  reason?: LocatedProjectReason;
+  /** found のとき。開くプロジェクトの Store */
+  storeId?: string;
+  /** gone の hidden・elsewhere のとき。表示中でない Store の名前 */
+  storeName?: string;
+}
+
 export interface Me {
   login: string;
 }
@@ -878,6 +919,20 @@ export interface ProjectLinkRow {
   title: string;
 }
 
+export interface ProjectNotCarried {
+  /** 引き継げないルールの数 */
+  count: number;
+  /** ルールの種類 */
+  kind: string;
+  /**
+     * 移動先にない名前
+     * @nullable
+     */
+  missing: string[] | null;
+  /** ルールの名前 */
+  name: string;
+}
+
 export interface ProjectRepo {
   /** owner/name。前後の空白は除く */
   repo: string;
@@ -904,6 +959,76 @@ export interface ProjectRules {
   templates: string[];
   /** From のステータス ID → このプロジェクトで変更できる To。制限のない From は入れない */
   workflow: ProjectRulesWorkflow;
+}
+
+export interface TransferChoice {
+  id: string;
+  name: string;
+}
+
+export interface TransferReplacement {
+  /**
+     * 移動先のプロジェクトが使うステータス
+     * @nullable
+     */
+  choices: TransferChoice[] | null;
+  /** そのステータスの移すアイテム(下のもの・削除済みを含む)の数 */
+  count: number;
+  /** 同じ分類の移動先の既定 */
+  default: string;
+  /** 移動元のステータスの名前 */
+  name: string;
+  /** 移動元のステータスの内部 ID */
+  status: string;
+}
+
+export interface ProjectTransferPreview {
+  /** 別の Store への移動か */
+  crossStore: boolean;
+  /** 削除済みのアイテムの数 */
+  deleted: number;
+  /** 移動先の文 */
+  destination: string;
+  /** 移動先の Store に remote があるか */
+  destinationHasRemote: boolean;
+  /** プロジェクト別のルールか専用ルールがあるか */
+  hasRules: boolean;
+  /** 削除されていないアイテムの数 */
+  items: number;
+  /**
+     * 移動先に引き継げないルール
+     * @nullable
+     */
+  notCarried: ProjectNotCarried[] | null;
+  /** 移動先の接頭辞 */
+  prefix: string;
+  /** 別の Store で、移動先に remote がなく移動元にあるか */
+  remoteNotice: boolean;
+  /**
+     * 行の並びは移動元のワークスペースのステータスの並び
+     * @nullable
+     */
+  replacements: TransferReplacement[] | null;
+  /** 移動元の文 */
+  source: string;
+}
+
+export interface ProjectTransferResult {
+  /** 移動先の文 */
+  destination: string;
+  /** 移したプロジェクトの新しい ID(MB-P2) */
+  display: string;
+  /** 移したプロジェクトの内部 ID(変わらない) */
+  projectId: string;
+  /** 移動先の Store の ID */
+  toStore: string;
+}
+
+export interface ProjectTransferTarget {
+  storeId: string;
+  storeName: string;
+  workspaceId: string;
+  workspaceName: string;
 }
 
 export interface RecheckOutputBody {
@@ -1587,11 +1712,6 @@ export interface SystemInfo {
   version: string;
 }
 
-export interface TransferChoice {
-  id: string;
-  name: string;
-}
-
 export interface TransferEpic {
   /** 画面の ID(MB-1) */
   display: string;
@@ -1615,22 +1735,6 @@ export interface TransferItem {
   toStore: string;
   /** 移動先のワークスペースの内部 ID */
   toWorkspace: string;
-}
-
-export interface TransferReplacement {
-  /**
-     * 移動先のプロジェクトが使うステータス
-     * @nullable
-     */
-  choices: TransferChoice[] | null;
-  /** そのステータスの移すアイテム(下のもの・削除済みを含む)の数 */
-  count: number;
-  /** 同じ分類の移動先の既定 */
-  default: string;
-  /** 移動元のステータスの名前 */
-  name: string;
-  /** 移動元のステータスの内部 ID */
-  status: string;
 }
 
 export interface TransferPreview {
@@ -1661,6 +1765,20 @@ export interface TransferProject {
   epics: TransferEpic[] | null;
   id: string;
   title: string;
+}
+
+/**
+ * ステータスの置き換え(移動元のステータスの内部 ID → 移動先のステータスの内部 ID)
+ */
+export type TransferProjectBodyStatusChoices = {[key: string]: string};
+
+export interface TransferProjectBody {
+  /** ステータスの置き換え(移動元のステータスの内部 ID → 移動先のステータスの内部 ID) */
+  statusChoices: TransferProjectBodyStatusChoices;
+  /** 移動先の Store の ID */
+  toStore: string;
+  /** 移動先のワークスペースの内部 ID */
+  toWorkspace: string;
 }
 
 export interface TransferResult {
@@ -1966,6 +2084,13 @@ export type LocateItemParams = {
   id: string;
 };
 
+export type LocateProjectParams = {
+  /** 画面のアドレスの Store 名 */
+  store: string;
+  /** 画面のアドレスのプロジェクトの ID(HH-P1) */
+  id: string;
+};
+
 export type PreviewItemMoveParams = {
   /** 移し先のプロジェクトの内部 ID(Epic) */
   project?: string;
@@ -1982,6 +2107,11 @@ export type GetTransferPreviewParams = {
   toStore: string;
   toWorkspace: string;
   toProject: string;
+};
+
+export type GetProjectTransferPreviewParams = {
+  toStore: string;
+  toWorkspace: string;
 };
 
 export type DeleteWorkspaceValueParams = {
@@ -2278,6 +2408,37 @@ export const getLocateItemUrl = (params: LocateItemParams,) => {
 export const locateItem = async (params: LocateItemParams, options?: Parameters<typeof fetcher>[1]): Promise<Located> => {
 
   return fetcher<Located>(getLocateItemUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getLocateProjectUrl = (params: LocateProjectParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/locate-project?${stringifiedParams}` : `/api/locate-project`
+}
+
+/**
+ * @summary 画面のアドレスのプロジェクトの ID(旧 ID を含む)が指すプロジェクトを探す
+ */
+export const locateProject = async (params: LocateProjectParams, options?: Parameters<typeof fetcher>[1]): Promise<LocatedProject> => {
+
+  return fetcher<LocatedProject>(getLocateProjectUrl(params),
   {
     ...options,
     method: 'GET'
@@ -4784,6 +4945,108 @@ return fetcher<Project>(getRenameProjectUrl(store,project),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(renameProjectBody)
+  }
+);}
+
+
+
+export const getTransferProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/transfer`
+}
+
+/**
+ * @summary プロジェクトをアイテムごと別のワークスペース・別の Store へ移す
+ */
+export const transferProject = async (store: string,
+    project: string,
+    transferProjectBody: TransferProjectBody, options?: Parameters<typeof fetcher>[1]): Promise<ProjectTransferResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<ProjectTransferResult>(getTransferProjectUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transferProjectBody)
+  }
+);}
+
+
+
+export const getGetProjectTransferPreviewUrl = (store: string,
+    project: string,
+    params: GetProjectTransferPreviewParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/transfer-preview?${stringifiedParams}` : `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/transfer-preview`
+}
+
+/**
+ * @summary プロジェクトの移動のダイアログの予告を返す
+ */
+export const getProjectTransferPreview = async (store: string,
+    project: string,
+    params: GetProjectTransferPreviewParams, options?: Parameters<typeof fetcher>[1]): Promise<ProjectTransferPreview> => {
+
+  return fetcher<ProjectTransferPreview>(getGetProjectTransferPreviewUrl(store,project,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListProjectTransferTargetsUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/transfer-targets`
+}
+
+/**
+ * @summary プロジェクトの移す先の候補のワークスペースを返す
+ */
+export const listProjectTransferTargets = async (store: string,
+    project: string, options?: Parameters<typeof fetcher>[1]): Promise<ProjectTransferTarget[] | null> => {
+
+  return fetcher<ProjectTransferTarget[] | null>(getListProjectTransferTargetsUrl(store,project),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

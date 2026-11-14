@@ -168,3 +168,41 @@ func TestFailedWriteRestoresImportedAndRemovedFolders(t *testing.T) {
 		t.Errorf("worktree is not clean:\n%s", st)
 	}
 }
+
+// プロジェクトの Import は projects/<ID>/ に行・説明・project.yaml を 1 つのコミットで作り、Remove は 1 つのコミットで
+// フォルダごと消す(下のアイテムのフォルダは残る)。
+func TestProjectImportAndRemoveWriteTheFolder(t *testing.T) {
+	src, srcID, srcDir := newStore(t)
+	if err := apptest.Sample(t.Context(), src, srcID); err != nil {
+		t.Fatal(err)
+	}
+	ref := change.Ref{Kind: change.KindProject, ID: apptest.SampleProject}
+	var log []change.Record
+	if err := src.Read(t.Context(), srcID, func(r port.Reader) (err error) { log, err = r.Changes().Of(ref); return }); err != nil {
+		t.Fatal(err)
+	}
+	dst, dstID, dstDir := newStore(t)
+	before := headCount(t, dstDir)
+	if err := dst.Write(t.Context(), dstID, moveOp, func(tx port.Tx) error {
+		return tx.WriteProjects().Import(apptest.SampleProject, log, "説明")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := "projects/" + string(apptest.SampleProject) + "/"
+	got, want := files(t, dstDir), files(t, srcDir)
+	if headCount(t, dstDir) != before+1 || got[p+"log.jsonl"] != want[p+"log.jsonl"] || got[p+"description.md"] != "説明" || !strings.Contains(got[p+"project.yaml"], "ログイン") {
+		t.Errorf("commits %d (want %d), files:\n%v", headCount(t, dstDir), before+1, got)
+	}
+	if err := src.Write(t.Context(), srcID, moveOp, func(tx port.Tx) error { return tx.WriteProjects().Remove(apptest.SampleProject) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(srcDir, "projects", string(apptest.SampleProject))); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the project folder is still there: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(srcDir, "items", string(apptest.SampleTask))); err != nil {
+		t.Errorf("the item folder went too: %v", err)
+	}
+	if st := worktreeStatus(t, srcDir); !st.IsClean() {
+		t.Errorf("worktree is not clean:\n%s", st)
+	}
+}

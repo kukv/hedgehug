@@ -41,12 +41,16 @@
   }: Props = $props();
 
   // タブを開いているあいだだけ読む。Store の出来事で読み直す(planning.ts、reports.ts)。
+  // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(開き直すとカードが消え、
+  // 開いているダイアログが閉じる)。
+  const sid = $derived(storeId);
+  const wid = $derived(workspaceId);
   $effect(() => {
-    void sprints.open(storeId, workspaceId);
+    void sprints.open(sid, wid);
     return () => sprints.close();
   });
   $effect(() => {
-    void activeReports.open(storeId, workspaceId);
+    void activeReports.open(sid, wid);
     return () => activeReports.close();
   });
   const loaded = sprints.state;

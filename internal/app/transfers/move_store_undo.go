@@ -58,14 +58,23 @@ func (m *crossMove) undo(tx port.Tx) error {
 }
 
 // unjoin は、この移動で足した人を外す行と、書いた表示名をログイン名に戻す行。移動の操作は、移動先の移したアイテムの最後の
-// moved_in の行の操作。移動先に移動が保存されていなければ何もしない。移動のあとに別の操作が同じ人を足していれば外さない。
+// moved_in の行の操作。移動先に移動が保存されていなければ何もしない。
 func (m *crossMove) unjoin(tx port.Tx) ([]change.Draft, error) {
-	log, err := tx.Changes().Of(change.Ref{Kind: change.KindItem, ID: m.src.set.Root.ID})
+	op, err := lastMovedIn(tx, change.Ref{Kind: change.KindItem, ID: m.src.set.Root.ID})
+	if err != nil || op == "" {
+		return nil, err
+	}
+	return unjoinDrafts(tx, op, m.added)
+}
+
+// lastMovedIn は、移動先の ref のログの最後の moved_in の行の操作。ログがないか moved_in がなければ空。
+func lastMovedIn(tx port.Tx, ref change.Ref) (change.ID, error) {
+	log, err := tx.Changes().Of(ref)
 	if errors.Is(err, port.ErrNotFound) {
-		return nil, nil
+		return "", nil
 	}
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	var op change.ID
 	for _, r := range log {
@@ -73,15 +82,18 @@ func (m *crossMove) unjoin(tx port.Tx) ([]change.Draft, error) {
 			op = r.Op
 		}
 	}
-	if op == "" {
-		return nil, nil
-	}
+	return op, nil
+}
+
+// unjoinDrafts は、移動の操作 op で足した人 added を外す行と、書いた表示名をログイン名に戻す行。移動のあとに別の操作が
+// 同じ人を足していれば外さない。
+func unjoinDrafts(tx port.Tx, op change.ID, added []member.Member) ([]change.Draft, error) {
 	members, err := tx.Changes().Of(change.Ref{Kind: change.KindMembers})
 	if err != nil {
 		return nil, err
 	}
 	var ds []change.Draft
-	for _, p := range m.added {
+	for _, p := range added {
 		if joinedLater(members, op, p.Login) {
 			continue
 		}

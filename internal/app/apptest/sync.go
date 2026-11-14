@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 )
 
@@ -111,9 +112,9 @@ func (r *Replicator) Calls() []ReplicatorCall {
 // Write が行を 1 つ以上残したときだけ、その op を Ops に足す(修復の件名を確かめるため)。行を残したかは、
 // fn の中で 1 つ以上の行を渡した Append が成功し、Write もエラーを返さなかったことで見る。
 type RepairWriter struct {
-	Stores port.Stores
-	Store  port.StoreID
-	F      repair.Facts
+	Stores  port.Stores
+	StoreID port.StoreID
+	F       repair.Facts
 	// PurgedIDs は、完全に削除したものとして Purged が返す内部 ID。
 	PurgedIDs map[change.ID]bool
 	Ops       []port.Operation
@@ -123,13 +124,15 @@ func (w *RepairWriter) Facts() repair.Facts { return w.F }
 
 func (w *RepairWriter) Purged() (map[change.ID]bool, error) { return w.PurgedIDs, nil }
 
+func (w *RepairWriter) Store() (port.StoreID, error) { return w.StoreID, nil }
+
 func (w *RepairWriter) Read(fn func(r port.Reader) error) error {
-	return w.Stores.Read(context.Background(), w.Store, fn)
+	return w.Stores.Read(context.Background(), w.StoreID, fn)
 }
 
 func (w *RepairWriter) Write(op port.Operation, fn func(tx port.Tx) error) error {
 	rows := false
-	err := w.Stores.Write(context.Background(), w.Store, op, func(tx port.Tx) error {
+	err := w.Stores.Write(context.Background(), w.StoreID, op, func(tx port.Tx) error {
 		return fn(rowsTx{Tx: tx, rows: &rows})
 	})
 	if err == nil && rows {
@@ -149,8 +152,7 @@ func (t rowsTx) WriteWorkspaces() port.WorkspaceWriter {
 }
 
 func (t rowsTx) WriteProjects() port.ProjectWriter {
-	w := t.Tx.WriteProjects()
-	return rowsIDs{append: w.Append, describe: w.Describe, rows: t.rows}
+	return rowsProjects{ProjectWriter: t.Tx.WriteProjects(), rows: t.rows}
 }
 
 func (t rowsTx) WriteItems() port.ItemWriter {
@@ -162,16 +164,13 @@ func (t rowsTx) WriteMembers() port.MemberWriter {
 }
 
 type rowsIDs struct {
-	append   func(id change.ID, drafts ...change.Draft) error
-	describe func(id change.ID, text string) error
-	rows     *bool
+	append func(id change.ID, drafts ...change.Draft) error
+	rows   *bool
 }
 
 func (w rowsIDs) Append(id change.ID, drafts ...change.Draft) error {
 	return mark(w.rows, len(drafts) > 0, w.append(id, drafts...))
 }
-
-func (w rowsIDs) Describe(id change.ID, text string) error { return w.describe(id, text) }
 
 type rowsMembers struct {
 	w    port.MemberWriter
@@ -197,6 +196,24 @@ func (w rowsItems) Import(id item.ID, log []change.Record, description string) e
 }
 
 func (w rowsItems) Remove(id item.ID) error { return mark(w.rows, true, w.ItemWriter.Remove(id)) }
+
+// rowsProjects は、rowsItems と同じく、プロジェクトの Append・Import・Remove の印を付ける。
+type rowsProjects struct {
+	port.ProjectWriter
+	rows *bool
+}
+
+func (w rowsProjects) Append(id change.ID, drafts ...change.Draft) error {
+	return mark(w.rows, len(drafts) > 0, w.ProjectWriter.Append(id, drafts...))
+}
+
+func (w rowsProjects) Import(id project.ID, log []change.Record, description string) error {
+	return mark(w.rows, true, w.ProjectWriter.Import(id, log, description))
+}
+
+func (w rowsProjects) Remove(id project.ID) error {
+	return mark(w.rows, true, w.ProjectWriter.Remove(id))
+}
 
 // mark は、err が nil で wrote なら rows を true にし、err をそのまま返す。
 func mark(rows *bool, wrote bool, err error) error {

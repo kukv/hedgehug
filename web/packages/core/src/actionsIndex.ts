@@ -38,8 +38,30 @@ export {
   transferIntro,
   transferredMessage,
 } from "./features/transfers/dialogText";
+export { createLeaveMoved } from "./features/transfers/leaveMoved";
 export { createMovedNotice, type MovedNotice } from "./features/transfers/movedNotice";
 export { openMoved } from "./features/transfers/openMoved";
+export {
+  createProjectTransfer,
+  type ProjectTransfer,
+  type ProjectTransferDeps,
+  type ProjectTransferDialogState,
+  type ProjectTransferSection,
+  type ProjectTransferSubject,
+} from "./features/transfers/projectDialog";
+export {
+  noProjectTargetsMessage,
+  notCarriedHeading,
+  notCarriedLine,
+  projectMovedMessage,
+  projectTargetLabel,
+  projectTransferIntro,
+  projectTransferNote,
+  projectTransferOk,
+  projectTransferTitle,
+  replacementLabel,
+  replacementSelectLabel,
+} from "./features/transfers/projectDialogText";
 export {
   createWorkspaceDelete,
   type DeleteWorkspaceTarget,
@@ -54,7 +76,14 @@ export type {
   Gone,
   GoneReason,
   Located,
+  LocatedProject,
   MovedFrom,
+  NotCarried,
+  NotCarriedKind,
+  ProjectTransferInput,
+  ProjectTransferPreview,
+  ProjectTransferResult,
+  ProjectTransferTarget,
   StatusChoice,
   StatusReplacement,
   TransferDestination,
