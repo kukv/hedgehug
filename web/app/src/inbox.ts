@@ -1,5 +1,12 @@
 import { createInboxPort } from "@hedgehug/api";
-import { createInbox, get, type InboxRow, type Route, routeOfWorkspace } from "@hedgehug/core";
+import {
+  createInbox,
+  get,
+  type InboxRow,
+  projectRouteOf,
+  type Route,
+  routeOfWorkspace,
+} from "@hedgehug/core";
 import { inboxReloads, reloads } from "./reloads";
 import { catalog, detail, navigation, toasts } from "./wire";
 
@@ -28,7 +35,7 @@ export interface InboxLink {
   action: () => void;
 }
 
-// linkOf は、行の対象のリンク(C4a-8)。削除されたアイテム・ワークスペースはリンクにしない(null)。
+// linkOf は、行の対象のリンク(C4a-8)。削除されたアイテム・ワークスペース・プロジェクトはリンクにしない(null)。
 export function linkOf(row: InboxRow): InboxLink | null {
   const t = row.target;
   const read = () => void inbox.markRead(row);
@@ -46,6 +53,19 @@ export function linkOf(row: InboxRow): InboxLink | null {
         action: () => {
           read();
           open();
+        },
+      };
+    }
+    case "project":
+    case "moved_project": {
+      // プロジェクトの概要を開く。旧 ID のアドレスは、プロジェクトの画面がいまの場所を探す(C4b1-12)。
+      const route = projectRouteOf(row);
+      if (!route) return null;
+      return {
+        route,
+        action: () => {
+          read();
+          navigation.go(route);
         },
       };
     }

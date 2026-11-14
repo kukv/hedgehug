@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    goneTextOf,
     type InboxRow,
     isMemberOf,
     type Member,
@@ -47,10 +48,8 @@
           title={row.store.name}
         ></i>
       {/snippet}
-      {#if t.kind === "deleted_item"}
-        <span class="gone">削除されたアイテム</span>
-      {:else if t.kind === "deleted_workspace"}
-        <span class="gone">削除されたワークスペース</span>
+      {#if goneTextOf(t.kind)}
+        <span class="gone">{goneTextOf(t.kind)}</span>
       {:else if link}
         <a
           class="target"

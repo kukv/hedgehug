@@ -27,10 +27,11 @@ type InboxStore struct {
 
 // InboxTarget は、行の対象。いまの値で出す。
 type InboxTarget struct {
-	Kind          string `json:"kind" enum:"item,moved,deleted_item,workspace,deleted_workspace"`
+	Kind          string `json:"kind" enum:"item,moved,deleted_item,workspace,deleted_workspace,project,moved_project,deleted_project"`
 	Item          string `json:"item" doc:"アイテムの内部 ID。workspace・deleted_workspace では空"`
+	Project       string `json:"project" doc:"プロジェクトの内部 ID。project・moved_project・deleted_project のとき。ほかは空"`
 	ItemKind      string `json:"itemKind" enum:",Epic,Story,Task,Bug,Step" doc:"item のときのアイテムの種類。ほかは空"`
-	Display       string `json:"display" doc:"アイテムの ID(HH-12)。moved は通知を作ったときの ID"`
+	Display       string `json:"display" doc:"アイテム・プロジェクトの ID(HH-12・HH-P1)。moved・moved_project は通知を作ったときの ID"`
 	Title         string `json:"title"`
 	Workspace     string `json:"workspace"`
 	WorkspaceName string `json:"workspaceName"`
@@ -105,7 +106,7 @@ func toRow(r appinbox.Row) InboxRow {
 		ID: int64(r.ID), Kind: string(r.Kind), At: r.At, Read: r.Read, Text: r.Text, Reason: r.Reason, Sender: r.Sender,
 		Store: InboxStore{ID: string(r.Store.ID), Name: r.Store.Name, Color: r.Store.Color, ReadOnly: r.Store.ReadOnly},
 		Target: InboxTarget{
-			Kind: string(t.Kind), Item: string(t.Item), ItemKind: string(t.ItemKind), Display: t.Display, Title: t.Title,
+			Kind: string(t.Kind), Item: string(t.Item), Project: string(t.Project), ItemKind: string(t.ItemKind), Display: t.Display, Title: t.Title,
 			Workspace: string(t.Workspace), WorkspaceName: t.WorkspaceName, Section: t.Section,
 		},
 	}

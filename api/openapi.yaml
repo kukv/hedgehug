@@ -709,7 +709,7 @@ components:
       additionalProperties: false
       properties:
         display:
-          description: アイテムの ID(HH-12)。moved は通知を作ったときの ID
+          description: アイテム・プロジェクトの ID(HH-12・HH-P1)。moved・moved_project は通知を作ったときの ID
           type: string
         item:
           description: アイテムの内部 ID。workspace・deleted_workspace では空
@@ -731,6 +731,12 @@ components:
             - deleted_item
             - workspace
             - deleted_workspace
+            - project
+            - moved_project
+            - deleted_project
+          type: string
+        project:
+          description: プロジェクトの内部 ID。project・moved_project・deleted_project のとき。ほかは空
           type: string
         section:
           description: workspace のとき、開くワークスペースの設定の区画
@@ -744,6 +750,7 @@ components:
       required:
         - kind
         - item
+        - project
         - itemKind
         - display
         - title

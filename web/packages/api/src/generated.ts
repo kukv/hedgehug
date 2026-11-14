@@ -490,16 +490,21 @@ export const InboxTargetKind = {
   deleted_item: 'deleted_item',
   workspace: 'workspace',
   deleted_workspace: 'deleted_workspace',
+  project: 'project',
+  moved_project: 'moved_project',
+  deleted_project: 'deleted_project',
 } as const;
 
 export interface InboxTarget {
-  /** アイテムの ID(HH-12)。moved は通知を作ったときの ID */
+  /** アイテム・プロジェクトの ID(HH-12・HH-P1)。moved・moved_project は通知を作ったときの ID */
   display: string;
   /** アイテムの内部 ID。workspace・deleted_workspace では空 */
   item: string;
   /** item のときのアイテムの種類。ほかは空 */
   itemKind: InboxTargetItemKind;
   kind: InboxTargetKind;
+  /** プロジェクトの内部 ID。project・moved_project・deleted_project のとき。ほかは空 */
+  project: string;
   /** workspace のとき、開くワークスペースの設定の区画 */
   section: string;
   title: string;

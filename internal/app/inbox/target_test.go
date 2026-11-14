@@ -67,6 +67,53 @@ func TestTargetMoved(t *testing.T) {
 	}
 }
 
+// assigned は、s1 のプロジェクト「ログイン」(HH-P1)のオーナーの割り当ての通知。
+func assigned() port.Notice {
+	return port.Notice{Kind: port.NoticeAssign, Store: s1, Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Text: "a", Display: "HH-P1"}
+}
+
+func TestTargetProject(t *testing.T) {
+	f := setup(t)
+	f.add(t, assigned())
+	got := f.first(t).Target
+	want := inbox.Target{
+		Kind: inbox.TargetProject, Project: apptest.SampleProject, Display: "HH-P1", Title: "ログイン",
+		Workspace: apptest.SampleWorkspace, WorkspaceName: "Web",
+	}
+	if got != want {
+		t.Errorf("target = %+v, want %+v", got, want)
+	}
+	f.write(t, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet("prefix", "HH", "WEB"))
+	})
+	if got := f.first(t).Target.Display; got != "WEB-P1" {
+		t.Errorf("display after the prefix change = %q, want WEB-P1", got)
+	}
+}
+
+func TestTargetDeletedProject(t *testing.T) {
+	f := setup(t)
+	f.add(t, assigned())
+	if err := apptest.DeleteProject(t.Context(), f.stores, s1, apptest.SampleProject); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.first(t).Target; got.Kind != inbox.TargetDeletedProject || got.Project != apptest.SampleProject {
+		t.Errorf("target = %+v, want deleted_project", got)
+	}
+}
+
+func TestTargetMovedProject(t *testing.T) {
+	f := setup(t)
+	n := assigned()
+	n.Project, n.Display = "01SAMPLEPR0000000000000009", "HH-P9"
+	f.add(t, n)
+	got := f.first(t).Target
+	want := inbox.Target{Kind: inbox.TargetMovedProject, Project: n.Project, Display: "HH-P9"}
+	if got != want {
+		t.Errorf("target = %+v, want %+v", got, want)
+	}
+}
+
 func TestTargetRuleNotice(t *testing.T) {
 	f := setup(t)
 	f.add(t, port.Notice{Kind: port.NoticeAutomation, Store: s1, Workspace: apptest.SampleWorkspace, Rule: rule, Text: "rule"})
