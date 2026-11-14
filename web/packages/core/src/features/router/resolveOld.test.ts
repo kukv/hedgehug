@@ -183,8 +183,9 @@ describe("resolveRoute with old prefixes", () => {
     expect(transfers.calls).toEqual([]);
   });
 
-  // ワークスペースのアドレスは、Store 名の Store を(サイドバーで後ろにあっても)先に見て、そのあとをサイドバーの順に見る。
-  it("looks at the named Store first and then the others in the sidebar order for a workspace", async () => {
+  // ワークスペースのアドレスは、一覧ではアドレスの Store だけを(サイドバーで後ろにあっても)見る。ほかの Store は
+  // サーバーの locateWorkspace が見る(B5c-13。別の Store へ移した直後に、ほかの Store の同じ接頭辞を開かないため)。
+  it("looks only at the named Store in the catalog and leaves the others to locateWorkspace", async () => {
     const nodes = [
       storeOf("S1", "work", ws("S1", "W1", "HH", [])),
       storeOf("S2", "other", ws("S2", "W2", "WEB", ["HH"])),
@@ -195,25 +196,18 @@ describe("resolveRoute with old prefixes", () => {
       storeId: "S2",
       workspaceId: "W2",
     });
+    expect(transfers.calls).toEqual([]);
+    transfers.locatedWorkspace = { kind: "found", storeId: "S3", workspaceId: "W3" };
     expect(await resolveRoute(at("nope"), nodes, itemsIn("S1"), transfers)).toMatchObject({
-      storeId: "S1",
-      workspaceId: "W1",
+      storeId: "S3",
+      workspaceId: "W3",
     });
-  });
-
-  // ほかの Store は、すべてのいまの接頭辞を見てから、すべての旧い接頭辞を見る(サーバーのアイテム・プロジェクトの解決と同じ)。
-  it("looks at the current prefixes of all the other Stores before their old prefixes", async () => {
-    const nodes = [
-      storeOf("S1", "work", ws("S1", "W1", "WEB", ["HH"])),
-      storeOf("S2", "other", ws("S2", "W2", "HH", [])),
-    ];
-    expect(
-      await resolveRoute({ ...wsRoute("HH"), store: "nope" }, nodes, itemsIn("S1"), transfers),
-    ).toMatchObject({ storeId: "S2", workspaceId: "W2" });
+    expect(transfers.calls).toEqual(["locateWorkspace nope HH"]);
   });
 
   it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
     transfers.missing.add("HH-P9");
+    transfers.missing.add("ZZ");
     const nodes = one(ws("S1", "W1", "WEB", ["HH"]));
     expect(await resolveRoute(wsRoute("ZZ"), nodes, itemsIn("S1"), transfers)).toEqual({
       name: "home",

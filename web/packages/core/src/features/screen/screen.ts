@@ -5,15 +5,16 @@ import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog } from "../catalog/catalog";
 import type { Navigation } from "../router/navigation";
 import { type Resolved, resolveRoute, routeOfProject, routeOfWorkspace } from "../router/resolve";
-import type { ProjectTab } from "../router/route";
+import type { ProjectTab, WorkspaceTab } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
-import { goneText, movedLine } from "../transfers/movedText";
+import { goneText, movedLine, workspaceGoneText, workspaceMovedLine } from "../transfers/movedText";
 
 // いま出す画面。アドレスを一覧の状態で内部 ID にする(A2 の計画の決定 7)。
 // アイテムの入口は、そのアイテムのプロジェクトの「ツリー」に替え(履歴に積まない)、詳細パネルを開く(01)。
 // 旧 ID で開けないもの(削除済み・完全に削除・見えない Store)は、理由をトーストで出してホームに替える(02)。
 // プロジェクトの旧 ID で開いたときは、アドレスを移したプロジェクトの同じタブに替え(履歴に積まない)、移動の印を
-// projectMoved に置く(A5b-2・A5b-24)。
+// projectMoved に置く(A5b-2・A5b-24)。ワークスペースの旧いアドレスも同じく、見つけた Store の名前の形に替え
+// (履歴に積まない)、workspaceMoved に置く(B5c-2・B5c-13)。
 
 // ProjectMoved は、旧 ID から開いたプロジェクトの画面と、その移動の印。
 export interface ProjectMoved {
@@ -25,11 +26,21 @@ export interface ProjectMoved {
   text: string;
 }
 
+// WorkspaceMoved は、古いアドレスから開いたワークスペースの画面と、その移動の 1 行(ProjectMoved と同じ持ち方)。
+export interface WorkspaceMoved {
+  storeId: string;
+  workspaceId: string;
+  tab: WorkspaceTab;
+  text: string;
+}
+
 export interface Screen {
   // current は、出す画面。アドレスを解決しているあいだは、前の画面のまま。最初の解決までは null。
   current: Readable<Resolved | null>;
   // projectMoved は、旧 ID から開いたプロジェクトの移動の印。そのあと出す画面が別のプロジェクトか別のタブになったら null。
   projectMoved: Readable<ProjectMoved | null>;
+  // workspaceMoved は、古いアドレスから開いたワークスペースの移動の 1 行。別のワークスペースか別のタブになったら null。
+  workspaceMoved: Readable<WorkspaceMoved | null>;
   // start は、アドレスと一覧の変化を受け始め、止める関数を返す。一覧を読んだあとで呼ぶ。
   start(): () => void;
 }
@@ -38,7 +49,7 @@ export interface ScreenDeps {
   navigation: Navigation;
   catalog: Catalog;
   items: ItemsPort;
-  transfers: Pick<TransfersPort, "locate" | "locateProject">;
+  transfers: Pick<TransfersPort, "locate" | "locateProject" | "locateWorkspace">;
   toasts: Toasts;
   now(): Date;
   // openItem は、アイテムの入口で開いたアイテムの詳細パネルを開く。旧 ID から開いたときは movedFrom を添える。
@@ -55,6 +66,12 @@ interface ShownProject {
   workspaceId: string;
 }
 
+// ShownWorkspace は、いま出しているワークスペースの画面のアドレス。
+interface ShownWorkspace {
+  store: string;
+  prefix: string;
+}
+
 function sameScreen(a: Resolved | null, b: Resolved): boolean {
   return a !== null && JSON.stringify(a) === JSON.stringify(b);
 }
@@ -62,6 +79,7 @@ function sameScreen(a: Resolved | null, b: Resolved): boolean {
 export function createScreen(deps: ScreenDeps): Screen {
   const current = writable<Resolved | null>(null);
   const projectMoved = writable<ProjectMoved | null>(null);
+  const workspaceMoved = writable<WorkspaceMoved | null>(null);
   // 解決が重なったときは、始めた順に結果を使い、後から始めたものをもう使っていれば、前のものは捨てる。アドレスが
   // 変わっていたら捨てる。最後に始めたものだけを使うと、一覧の読み直し(画面への反映)が解決より短い間隔で続いたとき、
   // いつまでも画面が出ない。
@@ -69,6 +87,8 @@ export function createScreen(deps: ScreenDeps): Screen {
   let applied = 0;
   // shown は、前の解決で出したプロジェクトの画面。同じアドレスがそのプロジェクトに解決しなくなったら、消えたと見る。
   let shown: ShownProject | null = null;
+  // shownWorkspace は、前の解決で出したワークスペースのアドレス。読み直しではサーバーに聞かない。
+  let shownWorkspace: ShownWorkspace | null = null;
 
   async function resolve() {
     latest += 1;
@@ -82,12 +102,25 @@ export function createScreen(deps: ScreenDeps): Screen {
       route.name === "project" &&
       route.store === shown.store &&
       route.project === shown.project;
-    const r = await resolveRoute(route, stores, deps.items, deps.transfers, !reread);
+    // 出していたワークスペースのアドレスも同じ(ほかの書き手が移したときは、移った先を開かない。B5c-17)。
+    const rereadWorkspace =
+      shownWorkspace !== null &&
+      route.name === "workspace" &&
+      route.store === shownWorkspace.store &&
+      route.prefix === shownWorkspace.prefix;
+    const r = await resolveRoute(
+      route,
+      stores,
+      deps.items,
+      deps.transfers,
+      !reread && !rereadWorkspace,
+    );
     if (mine < applied || get(deps.navigation.route) !== route) return;
     applied = mine;
     // 置き換えたホームの解決は gone を持たないので、同じトーストを 2 度出さない。
     if (r.name === "home" && r.gone) {
-      deps.toasts.show(goneText(r.gone, deps.now()));
+      const text = route.name === "workspace" ? workspaceGoneText : goneText;
+      deps.toasts.show(text(r.gone, deps.now()));
       return deps.navigation.replace({ name: "home" });
     }
     // 出していたプロジェクトが、同期・別のタブ・別のプログラムで削除されたときは、ワークスペースの概要へ移る
@@ -112,6 +145,31 @@ export function createScreen(deps: ScreenDeps): Screen {
         projectId: r.projectId,
         workspaceId,
       };
+    }
+    shownWorkspace =
+      r.name === "workspace" && route.name === "workspace"
+        ? { store: route.store, prefix: route.prefix }
+        : null;
+    if (r.name === "workspace" && route.name === "workspace") {
+      const { storeId, workspaceId, tab, movedFrom: moved } = r;
+      const s = stores.find((x) => x.id === storeId);
+      if (moved) {
+        workspaceMoved.set({
+          storeId,
+          workspaceId,
+          tab,
+          text: workspaceMovedLine(moved, deps.now()),
+        });
+        // 一覧がまだ古くても開けるよう、Store 名はサーバーが返したいまの名前で作る。接頭辞は一覧にあればいまのもの、
+        // なければ古いアドレスのもの(サーバーが旧い接頭辞でも解決する)。
+        const prefix = s?.workspaces.find((w) => w.id === workspaceId)?.prefix ?? route.prefix;
+        return deps.navigation.replace(
+          s ? { name: "workspace", store: moved.current, prefix, tab } : { name: "home" },
+        );
+      }
+      // サーバーがほかの Store で見つけたときは、アドレスを見つけた Store の名前の形に替える(プロジェクトと同じ)。
+      const to = routeOfWorkspace(stores, storeId, workspaceId, tab);
+      if (to.name === "workspace" && to.store !== route.store) return deps.navigation.replace(to);
     }
     if (r.name === "project" && r.movedFrom) {
       const { movedFrom: moved, storeId, projectId, tab } = r;
@@ -145,6 +203,17 @@ export function createScreen(deps: ScreenDeps): Screen {
       )
     )
       projectMoved.set(null);
+    const wm = get(workspaceMoved);
+    if (
+      wm &&
+      !(
+        r.name === "workspace" &&
+        r.storeId === wm.storeId &&
+        r.workspaceId === wm.workspaceId &&
+        r.tab === wm.tab
+      )
+    )
+      workspaceMoved.set(null);
     // 前と同じ画面なら出し直さない(出し直すと、画面が作り直されて入力中の文字やスクロールが消える)。
     if (!sameScreen(get(current), r)) current.set(r);
   }
@@ -152,6 +221,7 @@ export function createScreen(deps: ScreenDeps): Screen {
   return {
     current: readonly(current),
     projectMoved: readonly(projectMoved),
+    workspaceMoved: readonly(workspaceMoved),
     start() {
       // どちらの subscribe も、いまの値ですぐに 1 回呼ぶ。2 回目の解決が 1 回目に勝つので、結果は同じ。
       const stopRoute = deps.navigation.route.subscribe(() => void resolve());

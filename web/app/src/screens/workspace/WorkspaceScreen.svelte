@@ -13,7 +13,7 @@
     workspaceTabOf,
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
-  import { navigation, planning, projectDialog, syncNow } from "../../wire";
+  import { navigation, planning, projectDialog, screen, syncNow } from "../../wire";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
@@ -45,6 +45,17 @@
       tab: workspaceTabOf(id),
     });
   }
+
+  // 古いアドレスから開いたときの移動の 1 行は、出しているワークスペースとタブが同じときだけ出す(B5c-2)。
+  const workspaceMoved = screen.workspaceMoved;
+  const moved = $derived(
+    $workspaceMoved &&
+      $workspaceMoved.storeId === store.id &&
+      $workspaceMoved.workspaceId === workspace.id &&
+      $workspaceMoved.tab === tab
+      ? $workspaceMoved.text
+      : null,
+  );
 
   // 見出しの「実行中」は、実行中のスプリントがあるときだけ出す(05)。Store の出来事で読み直す(wire.ts)。
   // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない。
@@ -100,6 +111,9 @@
     >
   {/snippet}
 </PageHead>
+{#if moved}
+  <p class="moved">{moved}</p>
+{/if}
 <Tabs {tabs} current={tab} onselect={select} />
 <div class="content">
   {#if tab === "settings"}
@@ -146,6 +160,12 @@
     overflow: auto;
     padding: 16px 24px 40px;
     min-height: 0;
+  }
+  .moved {
+    margin: 0;
+    padding: 0 24px 8px;
+    font-size: 12.5px;
+    color: var(--muted);
   }
   .prefix {
     font-family: var(--font-mono);
