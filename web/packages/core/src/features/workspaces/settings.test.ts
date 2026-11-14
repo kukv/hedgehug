@@ -87,6 +87,21 @@ describe("workspace settings", () => {
     expect(get(screen.state)?.tab).toBe("general");
   });
 
+  it("opens on the sub tab handed as the section, reading the automation once (C4a-15)", async () => {
+    const { screen, port } = await setup();
+    await screen.open("S1", "S1-W1");
+    await screen.open("S1", "S1-W2", "automation");
+    expect(get(screen.state)?.tab).toBe("automation");
+    expect(get(screen.state)?.automation).toEqual({ rules: [], recent: [] });
+    expect(port.calls.filter((c) => c === "automation")).toHaveLength(1);
+  });
+
+  it("ignores a section that is not a sub tab", async () => {
+    const { screen } = await setup();
+    await screen.open("S1", "S1-W1", "rules-templates");
+    expect(get(screen.state)?.tab).toBe("general");
+  });
+
   it("shows a refusal as an error toast and reloads", async () => {
     const { screen, port, toasts } = await setup();
     await screen.open("S1", "S1-W1");

@@ -3,3 +3,5 @@
 export const reloads = new Set<() => Promise<unknown>>();
 // githubReloads は、github の知らせのときだけ読み直すもの(アカウントの一覧。認証エラーの確かめ直しで戻る。D4a-18)。
 export const githubReloads = new Set<() => Promise<unknown>>();
+// inboxReloads は、inbox の知らせのときだけ読み直すもの(受信箱の未読数と一覧。C4a-13)。
+export const inboxReloads = new Set<() => Promise<unknown>>();

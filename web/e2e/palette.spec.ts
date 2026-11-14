@@ -185,3 +185,12 @@ test("creates a sprint from the palette, from another screen and from the sprint
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Sprint 1 を作成しました")).toBeVisible();
 });
+
+test("opens the inbox from the palette command", async ({ page }, info) => {
+  await createWorkspace(page, info, unique(info, "パレット受信箱"), prefixOf(info));
+  const palette = await openPalette(page);
+  await palette.getByRole("combobox").fill("受信箱を開く");
+  await palette.getByRole("option", { name: /^受信箱を開く/ }).click();
+  await expect(palette).toBeHidden();
+  await expect(page).toHaveURL(/\/inbox$/);
+});

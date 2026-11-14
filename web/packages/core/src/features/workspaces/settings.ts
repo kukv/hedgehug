@@ -53,7 +53,8 @@ export interface WorkspaceSettingsScreen {
   state: Readable<SettingsState | null>;
   // 同じワークスペースなら、サブタブと state はそのままで読み直す(戻ったときに件数と ID の例を新しくする)。
   // 別のワークスペースなら、サブタブは一般にして、state を消してから読み込む。
-  open(storeId: string, workspaceId: string): Promise<void>;
+  // section がサブタブの ID なら、そのサブタブで開く(受信箱の行から「自動化」を開く。C4a-15)。
+  open(storeId: string, workspaceId: string, section?: string | null): Promise<void>;
   // 履歴に積まない(01)。
   selectTab(tab: WorkspaceSettingsTab): void;
   reload(): Promise<void>;
@@ -129,12 +130,14 @@ export function createWorkspaceSettings(deps: {
 
   return {
     state: readonly(state),
-    async open(storeId, workspaceId) {
+    async open(storeId, workspaceId, section) {
       if (current?.storeId !== storeId || current.workspaceId !== workspaceId) {
         tab = "general";
         // 古いワークスペースを、新しいアドレスの下に出さない。
         state.set(null);
       }
+      const asked = workspaceSettingsTabs.find((t) => t.id === section);
+      if (asked) tab = asked.id;
       current = { storeId, workspaceId };
       await reload();
     },

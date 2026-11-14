@@ -130,11 +130,6 @@ export interface AddWorkspaceValue {
   name: string;
 }
 
-export interface ApplyAutomationIgnoringWorkflow {
-  /** 変えるステータスの ID(通知の Status) */
-  status: string;
-}
-
 export type AutomationRuleAction = typeof AutomationRuleAction[keyof typeof AutomationRuleAction];
 
 
@@ -411,6 +406,132 @@ export interface HistoryRow {
 export interface ImpactOutputBody {
   /** @nullable */
   lines: string[] | null;
+}
+
+/**
+ * 空でなければ、ボタンの代わりに結果を出す
+ */
+export type InboxActionResult = typeof InboxActionResult[keyof typeof InboxActionResult];
+
+
+export const InboxActionResult = {
+  '': '',
+  applied: 'applied',
+  kept: 'kept',
+} as const;
+
+export interface InboxAction {
+  /** 「制約を無視して…」を押せる */
+  applyEnabled: boolean;
+  /** 「変更しない」を押せる */
+  keepEnabled: boolean;
+  note: string;
+  /** 空でなければ、ボタンの代わりに結果を出す */
+  result: InboxActionResult;
+  /** 変える先のステータスの ID */
+  status: string;
+  statusName: string;
+  /** ボタンを出す */
+  visible: boolean;
+}
+
+export interface InboxCounts {
+  all: number;
+  assign: number;
+  automation: number;
+  mention: number;
+  overwrite: number;
+  repair: number;
+  watch: number;
+}
+
+export type InboxRowKind = typeof InboxRowKind[keyof typeof InboxRowKind];
+
+
+export const InboxRowKind = {
+  automation: 'automation',
+  automation_stopped: 'automation_stopped',
+  mention: 'mention',
+  assign: 'assign',
+  watch: 'watch',
+  overwrite: 'overwrite',
+  repair: 'repair',
+} as const;
+
+export interface InboxStore {
+  /** 画面のトークン --t-<色> の名前 */
+  color: string;
+  id: string;
+  name: string;
+  readOnly: boolean;
+}
+
+/**
+ * item のときのアイテムの種類。ほかは空
+ */
+export type InboxTargetItemKind = typeof InboxTargetItemKind[keyof typeof InboxTargetItemKind];
+
+
+export const InboxTargetItemKind = {
+  '': '',
+  Epic: 'Epic',
+  Story: 'Story',
+  Task: 'Task',
+  Bug: 'Bug',
+  Step: 'Step',
+} as const;
+
+export type InboxTargetKind = typeof InboxTargetKind[keyof typeof InboxTargetKind];
+
+
+export const InboxTargetKind = {
+  item: 'item',
+  moved: 'moved',
+  deleted_item: 'deleted_item',
+  workspace: 'workspace',
+  deleted_workspace: 'deleted_workspace',
+} as const;
+
+export interface InboxTarget {
+  /** アイテムの ID(HH-12)。moved は通知を作ったときの ID */
+  display: string;
+  /** アイテムの内部 ID。workspace・deleted_workspace では空 */
+  item: string;
+  /** item のときのアイテムの種類。ほかは空 */
+  itemKind: InboxTargetItemKind;
+  kind: InboxTargetKind;
+  /** workspace のとき、開くワークスペースの設定の区画 */
+  section: string;
+  title: string;
+  workspace: string;
+  workspaceName: string;
+}
+
+export interface InboxRow {
+  /** 止まった通知だけ */
+  action?: InboxAction;
+  at: string;
+  id: number;
+  kind: InboxRowKind;
+  read: boolean;
+  reason: string;
+  /** 差出人のログイン名。空は「hedgehug」 */
+  sender: string;
+  store: InboxStore;
+  target: InboxTarget;
+  text: string;
+}
+
+export interface InboxPage {
+  /** 続きがある */
+  more: boolean;
+  /** @nullable */
+  rows: InboxRow[] | null;
+  unread: InboxCounts;
+}
+
+export interface InboxUnread {
+  counts: InboxCounts;
 }
 
 /**
@@ -1086,6 +1207,11 @@ export interface ProjectTransferTarget {
   workspaceName: string;
 }
 
+export interface ReadAllInbox {
+  /** all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400 */
+  tab: string;
+}
+
 export interface RecentItem {
   display: string;
   itemId: string;
@@ -1454,6 +1580,10 @@ export interface SaveItemAsTemplate {
 
 export interface SetAutomationRuleEnabled {
   enabled: boolean;
+}
+
+export interface SetInboxRead {
+  read: boolean;
 }
 
 export interface SetItemProperty {
@@ -2140,6 +2270,15 @@ export type AccountEditImpactParams = {
   login?: string;
 };
 
+export type ListInboxParams = {
+  /** all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400 */
+  tab?: string;
+  /** 続きを読むとき、前の一覧の最後の行の at(RFC 3339、ナノ秒まで)。before_id と一緒に渡す */
+  before_at?: string;
+  /** 続きを読むとき、前の一覧の最後の行の id */
+  before_id?: number;
+};
+
 export type LocateItemParams = {
   /** 画面のアドレスの Store 名 */
   store: string;
@@ -2434,7 +2573,7 @@ export const getWatchEventsUrl = () => {
 }
 
 /**
- * 出来事ごとに `event: store`・`event: sync`・`event: github` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
+ * 出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
  * @summary Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
  */
 export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
@@ -2445,6 +2584,186 @@ export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Pro
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListInboxUrl = (params?: ListInboxParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/inbox?${stringifiedParams}` : `/api/inbox`
+}
+
+/**
+ * @summary 受信箱のタブの通知を、新しい順に 300 件
+ */
+export const listInbox = async (params?: ListInboxParams, options?: Parameters<typeof fetcher>[1]): Promise<InboxPage> => {
+
+  return fetcher<InboxPage>(getListInboxUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getReadAllInboxUrl = () => {
+
+
+
+
+  return `/api/inbox/read-all`
+}
+
+/**
+ * @summary 表示中の Store の、タブの通知をすべて既読にする
+ */
+export const readAllInbox = async (readAllInboxBody: ReadAllInbox, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getReadAllInboxUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(readAllInboxBody)
+  }
+);}
+
+
+
+export const getInboxUnreadUrl = () => {
+
+
+
+
+  return `/api/inbox/unread`
+}
+
+/**
+ * @summary 受信箱のタブごとの未読数
+ */
+export const inboxUnread = async ( options?: Parameters<typeof fetcher>[1]): Promise<InboxUnread> => {
+
+  return fetcher<InboxUnread>(getInboxUnreadUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getApplyInboxNoticeUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/apply`
+}
+
+/**
+ * @summary 止まった自動化の変更を、制約を無視して適用
+ */
+export const applyInboxNotice = async (notice: number, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getApplyInboxNoticeUrl(notice),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getKeepInboxNoticeUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/keep`
+}
+
+/**
+ * @summary 止まった自動化の変更をしない
+ */
+export const keepInboxNotice = async (notice: number, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getKeepInboxNoticeUrl(notice),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getSetInboxReadUrl = (notice: number,) => {
+
+
+
+
+  return `/api/inbox/${encodeURIComponent(String(notice))}/read`
+}
+
+/**
+ * @summary 通知を既読・未読にする
+ */
+export const setInboxRead = async (notice: number,
+    setInboxReadBody: SetInboxRead, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetInboxReadUrl(notice),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setInboxReadBody)
   }
 );}
 
@@ -2794,49 +3113,6 @@ export const getItem = async (store: string,
     method: 'GET'
 
 
-  }
-);}
-
-
-
-export const getApplyAutomationIgnoringWorkflowUrl = (store: string,
-    item: string,
-    rule: string,) => {
-
-
-
-
-  return `/api/stores/${encodeURIComponent(String(store))}/items/${encodeURIComponent(String(item))}/automation/${encodeURIComponent(String(rule))}/apply`
-}
-
-/**
- * @summary 止まった自動化の変更を、制約を無視して適用
- */
-export const applyAutomationIgnoringWorkflow = async (store: string,
-    item: string,
-    rule: string,
-    applyAutomationIgnoringWorkflowBody: ApplyAutomationIgnoringWorkflow, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return fetcher<void>(getApplyAutomationIgnoringWorkflowUrl(store,item,rule),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(applyAutomationIgnoringWorkflowBody)
   }
 );}
 

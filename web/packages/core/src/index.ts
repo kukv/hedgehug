@@ -114,6 +114,7 @@ export {
   type Toasts,
 } from "./features/toasts/toasts";
 export * from "./githubIndex";
+export * from "./inboxIndex";
 export { NotFound, Refused, TransferUndoFailed } from "./model/errors";
 export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";

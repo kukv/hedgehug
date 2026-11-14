@@ -7,7 +7,7 @@
     workspaceSettingsTabs,
   } from "@hedgehug/core";
   import { ReadOnlyBand, Tabs } from "@hedgehug/ui";
-  import { catalog, workspaceSettings } from "../../wire";
+  import { catalog, navigation, workspaceSettings } from "../../wire";
   import AutomationPanel from "./AutomationPanel.svelte";
   import GeneralPanel from "./GeneralPanel.svelte";
   import PropertiesPanel from "./PropertiesPanel.svelte";
@@ -42,10 +42,11 @@
   };
   const section = $derived($settings ? ruleSections[$settings.tab] : undefined);
   // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない(入力の途中を消さないため)。
+  // 受信箱の行から来たときは、一度だけ読む「開く区画」のサブタブで開く(C4a-15)。
   const sid = $derived(storeId);
   const wid = $derived(workspaceId);
   $effect(() => {
-    void workspaceSettings.open(sid, wid);
+    void workspaceSettings.open(sid, wid, navigation.takeSection());
   });
 </script>
 

@@ -27,7 +27,8 @@ export type Resolved =
   | { name: "workspace"; storeId: string; workspaceId: string; tab: WorkspaceTab }
   | { name: "project"; storeId: string; projectId: string; tab: ProjectTab; movedFrom?: MovedFrom }
   | { name: "item"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }
-  | { name: "settings"; tab: SettingsTab };
+  | { name: "settings"; tab: SettingsTab }
+  | { name: "inbox" };
 
 const home = { name: "home" } as const;
 
@@ -158,6 +159,8 @@ export async function resolveRoute(
       return findItem(stores, route.store, route.item, items, transfers);
     case "settings":
       return { name: "settings", tab: route.tab };
+    case "inbox":
+      return { name: "inbox" };
   }
 }
 

@@ -2,6 +2,7 @@ export { createAccountsPort } from "./accounts";
 export { createCatalogPort } from "./catalog";
 export type { Restored } from "./fetcher";
 export { ApiError, onRestored, setToken } from "./fetcher";
+export { createInboxPort } from "./inbox";
 export { createItemActionsPort } from "./itemActions";
 export { createItemsPort } from "./items";
 export { createLinksPort } from "./links";

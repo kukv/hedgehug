@@ -126,4 +126,10 @@ describe("resolveRoute settings", () => {
       tab: "accounts",
     });
   });
+
+  it("resolves the inbox without any store", async () => {
+    expect(await resolveRoute({ name: "inbox" }, [], itemsIn("none"), transfers)).toEqual({
+      name: "inbox",
+    });
+  });
 });

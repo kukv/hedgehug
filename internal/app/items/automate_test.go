@@ -65,7 +65,7 @@ func TestStatusChangeRunsRulesInTheSameSave(t *testing.T) {
 	}
 	ns := inbox.Notices()
 	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomation || ns[0].Item != apptest.SampleTask ||
-		ns[0].Text != "「ルール01RULE1」で担当者を taro に変更しました" {
+		ns[0].Text != "「ルール01RULE1」で担当者を taro に変更しました" || ns[0].Display != "HH-2" {
 		t.Errorf("notices = %+v", ns)
 	}
 }
@@ -100,6 +100,9 @@ func TestStoppedRuleNotifiesWithTheReason(t *testing.T) {
 	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomationStopped || ns[0].Text != "「ルール01RULE1」が制約で止まりました" ||
 		ns[0].Reason != "ワークフローの制約: InProgress から Done には変更できません(Pending のみ)" || ns[0].Status != apptest.SampleStatusDone {
 		t.Errorf("notices = %+v", ns)
+	}
+	if ns[0].From != apptest.SampleStatusInProgress || ns[0].Display != "HH-2" {
+		t.Errorf("From = %q, Display = %q", ns[0].From, ns[0].Display)
 	}
 	if recs := records(t, rec.Stores, apptest.SampleTask); recs[len(recs)-1].Actor.Kind == change.ActorAutomation {
 		t.Error("a stopped run saves nothing")

@@ -46,14 +46,18 @@ func TestEventsStreamsPublishedEvents(t *testing.T) {
 	hub.Publish(port.Event{Kind: port.EventStore, Store: "S1"})
 	hub.Publish(port.Event{Kind: port.EventSync, Store: "S2"})
 	hub.Publish(port.Event{Kind: port.EventGitHub, Store: "S3"})
+	hub.Publish(port.Event{Kind: port.EventInbox, Store: "S4"})
 	var lines []string
 	sc := bufio.NewScanner(res.Body)
-	for sc.Scan() && len(lines) < 6 {
+	for sc.Scan() && len(lines) < 8 {
 		if l := sc.Text(); l != "" {
 			lines = append(lines, l)
 		}
 	}
-	want := []string{"event: store", `data: {"store":"S1"}`, "event: sync", `data: {"store":"S2"}`, "event: github", `data: {"store":"S3"}`}
+	want := []string{
+		"event: store", `data: {"store":"S1"}`, "event: sync", `data: {"store":"S2"}`, "event: github", `data: {"store":"S3"}`,
+		"event: inbox", `data: {"store":"S4"}`,
+	}
 	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Errorf("stream =\n%s", strings.Join(lines, "\n"))
 	}

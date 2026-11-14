@@ -32,5 +32,5 @@ export interface SyncAllResult {
 }
 
 // 画面への反映の出来事の種類。store は Store の変化、sync は同期の状態の変化、github はこのマシンが読んだ
-// GitHub の値(チェックの結果)の変化。
-export type SyncEventKind = "store" | "sync" | "github";
+// GitHub の値(チェックの結果)の変化、inbox は受信箱の通知と既読の変化(C4a-13)。
+export type SyncEventKind = "store" | "sync" | "github" | "inbox";

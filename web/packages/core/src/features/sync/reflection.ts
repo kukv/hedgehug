@@ -29,7 +29,7 @@ export interface Reflection {
 const retryMs = 500;
 const firstBackoff = 1000;
 const maxBackoff = 10_000;
-const order: SyncEventKind[] = ["store", "sync", "github"];
+const order: SyncEventKind[] = ["store", "sync", "github", "inbox"];
 
 export function createReflection(deps: ReflectionDeps): Reflection {
   const pending = new Set<SyncEventKind>();

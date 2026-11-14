@@ -107,7 +107,7 @@ describe("createReflection (06「画面への反映」)", () => {
     t.r.start();
     t.s.open();
     await t.advance(0);
-    expect(t.applied).toEqual([["store", "sync", "github"]]);
+    expect(t.applied).toEqual([["store", "sync", "github", "inbox"]]);
   });
 
   it("applies an event at once when nothing holds", async () => {
@@ -134,7 +134,7 @@ describe("createReflection (06「画面への反映」)", () => {
     t.hold(false);
     await t.advance(500);
     expect(t.applied).toEqual([
-      ["store", "sync", "github"],
+      ["store", "sync", "github", "inbox"],
       ["store", "sync"],
     ]);
   });
@@ -147,6 +147,16 @@ describe("createReflection (06「画面への反映」)", () => {
     t.s.send("github");
     await t.advance(0);
     expect(t.applied.at(-1)).toEqual(["github"]);
+  });
+
+  it("applies an inbox event (C4a-13)", async () => {
+    const t = setup();
+    t.r.start();
+    t.s.open();
+    await t.advance(0);
+    t.s.send("inbox");
+    await t.advance(0);
+    expect(t.applied.at(-1)).toEqual(["inbox"]);
   });
 
   it("drops the stream while hidden and reloads everything when shown (決定 S22)", async () => {
@@ -167,8 +177,8 @@ describe("createReflection (06「画面への反映」)", () => {
     t.s.open();
     await t.advance(0);
     expect(t.applied).toEqual([
-      ["store", "sync", "github"],
-      ["store", "sync", "github"],
+      ["store", "sync", "github", "inbox"],
+      ["store", "sync", "github", "inbox"],
     ]);
   });
 
@@ -187,7 +197,7 @@ describe("createReflection (06「画面への反映」)", () => {
     await t.advance(0);
     t.hold(true);
     await t.r.now();
-    expect(t.applied.at(-1)).toEqual(["store", "sync", "github"]);
+    expect(t.applied.at(-1)).toEqual(["store", "sync", "github", "inbox"]);
   });
 
   it("reconnects after 1 second, doubling up to 10 seconds", async () => {
