@@ -100,6 +100,9 @@ func (l loaded) add(r port.Reader, store port.StoreID, t Target, it item.Item) e
 	key := wsKey{store, it.Place.Workspace}
 	if l.wss[key] == nil {
 		w, err := readWorkspace(r, key.ws)
+		if errors.Is(err, port.ErrNotFound) {
+			return nil // ワークスペースが削除済み(アイテムは残っている)。削除済みのアイテムと同じに見ない
+		}
 		if err != nil {
 			return err
 		}

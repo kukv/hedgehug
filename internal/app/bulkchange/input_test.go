@@ -45,6 +45,10 @@ func TestParseInputValues(t *testing.T) {
 	if err != nil || p.estimate == nil || *p.estimate != 1.5 {
 		t.Errorf("estimate = %+v, %v", p, err)
 	}
+	p, err = parseInput(Input{Field: FieldStart, Value: ""})
+	if err != nil || p.date != "" {
+		t.Errorf("empty date = %+v, %v", p, err)
+	}
 	p, err = parseInput(Input{Field: FieldEnd, Value: "2026-11-14"})
 	if err != nil || p.date != "2026-11-14" {
 		t.Errorf("date = %+v, %v", p, err)

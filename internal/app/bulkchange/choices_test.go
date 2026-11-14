@@ -171,3 +171,15 @@ func TestGroupsFirstSeenOrder(t *testing.T) {
 		t.Errorf("group 1 = %+v", got[1])
 	}
 }
+
+func TestChoicesSkipDeletedWorkspace(t *testing.T) {
+	svc, s := setup(t)
+	writeWs(t, s, s1, apptest.SampleMobileWorkspace, change.NewDeleteEntity(true))
+	got, err := svc.Choices(t.Context(), []Target{{s1, apptest.SampleMobileEpic}, {s1, apptest.SampleTask}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got.Kinds, []string{"Task"}) || len(got.Statuses) == 0 {
+		t.Errorf("Kinds = %q, Statuses = %q", got.Kinds, got.Statuses)
+	}
+}

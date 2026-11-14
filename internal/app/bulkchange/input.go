@@ -28,6 +28,11 @@ const (
 	FieldEnd           Field = "end"
 )
 
+// categories は、分類の一覧。
+var categories = []workspace.Category{
+	workspace.CategoryTodo, workspace.CategoryDoing, workspace.CategoryDone, workspace.CategoryCanceled,
+}
+
 // Input は、変える項目と値。値は名前で送る(担当者はログイン名。F2b2-2)。Category は、ステータスを分類で
 // 変えるときの分類(Value とどちらか一方)。
 type Input struct {

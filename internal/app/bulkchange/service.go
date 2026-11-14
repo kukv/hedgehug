@@ -8,7 +8,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/item"
-	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // Service は、一括変更が使う口。
@@ -91,9 +90,4 @@ func (s Service) groups(ctx context.Context, targets []Target) ([]storeGroup, er
 		out[g].targets = append(out[g].targets, t)
 	}
 	return out, nil
-}
-
-// categories は、分類の一覧。
-var categories = []workspace.Category{
-	workspace.CategoryTodo, workspace.CategoryDoing, workspace.CategoryDone, workspace.CategoryCanceled,
 }
