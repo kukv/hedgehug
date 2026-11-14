@@ -253,7 +253,9 @@ func (s syncRun) merge(wt *git.Worktree, base, ours, theirs plumbing.Hash) error
 	}
 	return s.apply(wt, ours, trees[1], merged, func() error {
 		sig := signature(saves.BotName, botEmail, s.r.stores.clock.Now())
-		_, err := wt.Commit("remote と合わせる\n", &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}})
+		// 結果が自分の版と同じ(相手が書いたのが、こちらで完全に削除したものだけ)でも、合わせを保存する(決定 C4b2-15)。
+		opts := &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}, AllowEmptyCommits: true}
+		_, err := wt.Commit("remote と合わせる\n", opts)
 		return err
 	})
 }

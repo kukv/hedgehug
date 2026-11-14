@@ -95,17 +95,13 @@ func TestJudgeGetsOwnRepair(t *testing.T) {
 }
 
 // A が書いた行のあるアイテムを、B が完全に削除してから合わせて送ると、A の同期で、その合わせが、消えた
-// アイテムと A の行を持って渡る。A は Epic にも書く(合わせの結果が B の版と同じにならないように)。
+// アイテムと A の行を持って渡る。
 func TestRemovedInOthersMerge(t *testing.T) {
 	remote := newRemote(t)
 	a := firstMachine(t, remote)
 	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
 	j := withJudge(a)
-	a.write(t, "a", func(tx port.Tx) error {
-		return errors.Join(
-			tx.WriteItems().Append(apptest.SampleTask, change.NewSet("title", "ログイン画面を作る", "ログイン")),
-			tx.WriteItems().Append(apptest.SampleEpic, change.NewSet("rank", "a", "b")))
-	})
+	a.write(t, "a", set("title", "ログイン画面を作る", "ログイン"))
 	a.sync(t, remote)
 	b.purgeForTest(t, apptest.SampleTask)
 	b.sync(t, remote)
