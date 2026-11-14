@@ -1,5 +1,11 @@
 import { Refused } from "../../model/errors";
-import type { PlanningOverview, Release, Sprint } from "../../model/planning";
+import type {
+  BacklogFrame,
+  BacklogRow,
+  PlanningOverview,
+  Release,
+  Sprint,
+} from "../../model/planning";
 import type { PlanningPort } from "../../port/planning";
 
 // スプリントとリリースのテストの部品。
@@ -32,17 +38,40 @@ export const overviewOf = (sprints: Sprint[] = [], releases: Release[] = []): Pl
   retentionDays: 30,
 });
 
+// rowOf は、バックログの画面の枠の行。
+export const rowOf = (over: Partial<BacklogRow> = {}): BacklogRow => ({
+  id: "I1",
+  display: "HH-1",
+  kind: "Task",
+  title: "アイテム",
+  status: "st1",
+  assignee: "",
+  points: null,
+  priority: "pr2",
+  project: "P1",
+  ...over,
+});
+
+// frameOf は、バックログの画面の枠(sprint が null ならバックログの枠)。合計は数えない。
+export const frameOf = (sprint: Sprint | null, rows: BacklogRow[]): BacklogFrame => ({
+  sprint,
+  total: { count: rows.length, points: 0 },
+  rows,
+});
+
 export interface FakePlanning extends PlanningPort {
   calls: string[];
   // overviews は、ワークスペースの ID → 概要(ないワークスペースは空の概要)。書き換えると次の読み込みに出る。
   overviews: Record<string, PlanningOverview>;
-  // refuseNext は、次の setItemSprint か setItemRelease を、この文言の断りにする(1 回だけ)。
+  // backlogs は、ワークスペースの ID → バックログの画面の枠(ないワークスペースは枠なし)。
+  backlogs: Record<string, BacklogFrame[]>;
+  // refuseNext は、次の setItemSprint・setItemRelease・placeItem を、この文言の断りにする(1 回だけ)。
   refuseNext(message: string): void;
-  // failNext は、次の setItemSprint か setItemRelease を、断りでない失敗 e にする(1 回だけ)。
+  // failNext は、次の setItemSprint・setItemRelease・placeItem を、断りでない失敗 e にする(1 回だけ)。
   failNext(e: Error): void;
 }
 
-// fakePlanningPort は、概要とアイテムの所属だけを答える口。ほかの操作は呼ばれたら失敗する。
+// fakePlanningPort は、概要・バックログの枠・アイテムの所属と位置だけを答える口。ほかの操作は呼ばれたら失敗する。
 export function fakePlanningPort(overviews: Record<string, PlanningOverview> = {}): FakePlanning {
   const calls: string[] = [];
   let failure: Error | null = null;
@@ -52,9 +81,11 @@ export function fakePlanningPort(overviews: Record<string, PlanningOverview> = {
     if (e) throw e;
   };
   const unused = () => Promise.reject(new Error("not used"));
+  const backlogs: Record<string, BacklogFrame[]> = {};
   return {
     calls,
     overviews,
+    backlogs,
     refuseNext(m) {
       failure = new Refused(m);
     },
@@ -75,6 +106,14 @@ export function fakePlanningPort(overviews: Record<string, PlanningOverview> = {
     },
     sprintCards: unused,
     releaseCards: unused,
+    async backlog(_s, w) {
+      calls.push(`backlog ${w}`);
+      return backlogs[w] ?? [];
+    },
+    async placeItem(_s, item, sprint, anchor, after) {
+      take();
+      calls.push(`place ${item} ${sprint} ${anchor} ${after}`);
+    },
     createSprint: unused,
     updateSprint: unused,
     startSprint: unused,

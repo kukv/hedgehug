@@ -8,8 +8,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
-	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
@@ -165,6 +165,10 @@ func writeMove(tx port.Tx, it item.Item, to destination, picks map[change.ID]cha
 	if err != nil {
 		return err
 	}
+	wsItems, err := workspaceItems(tx, to.project.Place.Workspace)
+	if err != nil {
+		return err
+	}
 	place := it.Place
 	place.Project, place.Parent = to.project.ID, nil
 	if to.parent != nil {
@@ -173,7 +177,7 @@ func writeMove(tx port.Tx, it item.Item, to destination, picks map[change.ID]cha
 	errs := []error{
 		tx.WriteItems().Append(it.ID,
 			change.NewSet("place", it.Place, place),
-			change.NewSet("rank", it.Rank, rank.After(lastRank(siblings, place.Parent)))),
+			change.NewSet("rank", it.Rank, planning.EndRank(lastRank(siblings, place.Parent), wsItems, to.project.Place.Workspace, it.Kind))),
 	}
 	for _, d := range below {
 		moved := d.Place

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Item } from "../../model/item";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
@@ -8,7 +9,7 @@ import { createDetail } from "./detail";
 import { fakeItemsPort, flush, gate, item } from "./fixtures.test-util";
 import { fakeWorkspaces } from "./settings.test-util";
 
-async function setup() {
+async function setup(onPropertySaved?: (storeId: string, propertyId: string, item: Item) => void) {
   const catalogPort = fakeCatalogPort();
   const catalog = createCatalog(catalogPort);
   await catalog.load();
@@ -34,19 +35,10 @@ async function setup() {
     workspaces,
     catalogPort,
     onChanged: () => void changed++,
+    onPropertySaved,
   });
-  return {
-    detail,
-    items,
-    toasts,
-    task,
-    epic,
-    s1,
-    s2,
-    catalogPort,
-    fetched,
-    changed: () => changed,
-  };
+  const counts = { fetched, changed: () => changed };
+  return { detail, items, toasts, task, epic, s1, s2, catalogPort, ...counts };
 }
 
 describe("createDetail", () => {
@@ -129,6 +121,18 @@ describe("createDetail", () => {
     expect(await detail.setProperty(epic.id, "estimate", "7")).toBe(false);
     expect(await detail.setProperty(s1.id, "status", "st2")).toBe(true);
     expect([items.calls, get(toasts.list)]).toEqual([[`setProperty ${s1.id} status "st2"`], []]);
+  });
+
+  it("tells onPropertySaved the store, the property and the saved item once, not on a refusal", async () => {
+    const saved: [string, string, string][] = [];
+    const { detail, items, task, s1 } = await setup(
+      (sid, pid, it) => void saved.push([sid, pid, it.id]),
+    );
+    await detail.open("S1", task.id);
+    items.refuseNext("ポイントは 0 以上の数で入力してください");
+    await detail.setProperty(task.id, "points", "-1");
+    await detail.setProperty(s1.id, "status", "st2");
+    expect(saved).toEqual([["S1", "status", s1.id]]);
   });
 
   it("shows a refusal as an error toast", async () => {

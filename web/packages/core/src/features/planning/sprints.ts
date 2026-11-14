@@ -68,7 +68,7 @@ export function periodText(s: Sprint, thisYear: number): string {
 // 概要 o をまだ読めていない(null)あいだは、見えているカードで決める。
 export function startDisabledReason(
   o: PlanningOverview | null,
-  cards: SprintCard[] = [],
+  cards: Pick<SprintCard, "sprint">[] = [],
 ): string | null {
   const running = o ? o.active !== null : cards.some((c) => c.sprint.state === "active");
   return running ? "実行中のスプリントを先に完了してください" : null;

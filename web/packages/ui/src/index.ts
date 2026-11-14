@@ -6,6 +6,7 @@ export { default as Avatar } from "./patterns/Avatar.svelte";
 export { default as BlockedBadge } from "./patterns/BlockedBadge.svelte";
 export { default as CommandPalette } from "./patterns/CommandPalette.svelte";
 export { default as ConfirmDialog } from "./patterns/ConfirmDialog.svelte";
+export { type DragRowsOptions, type DropTarget, dragRows } from "./patterns/dragRows";
 export { default as KindIcon } from "./patterns/KindIcon.svelte";
 export { default as Markdown } from "./patterns/Markdown.svelte";
 export { default as OfflineBand } from "./patterns/OfflineBand.svelte";

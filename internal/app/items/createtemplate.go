@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -84,9 +85,18 @@ func (s Service) withTemplate(tx port.Tx, in CreateInput, t *workspace.Template,
 	}
 	e := expander{st: st, me: me, newID: s.IDs.New, next: root.Place.Number, out: []item.Item{root}}
 	e.steps(root, t.Steps)
+	wsItems, err := workspaceItems(tx, root.Place.Workspace)
+	if err != nil {
+		return nil, nil, err
+	}
+	wsItems = append(wsItems, root) // もとになるアイテムはまだ書かれていない(F2a-5)
 	r := ""
-	for _, c := range t.Children {
-		r = rank.After(r)
+	for i, c := range t.Children {
+		if i == 0 {
+			r = planning.EndRank("", wsItems, root.Place.Workspace, item.Kind(c.Kind))
+		} else {
+			r = rank.After(r)
+		}
 		child := e.add(item.Kind(c.Kind), root, c.Title, r, workspace.TemplateValuesFor(st, c.Kind, c.Values))
 		texts.set(child.ID, c.Description)
 		e.steps(child, c.Steps)

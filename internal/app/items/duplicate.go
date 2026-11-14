@@ -10,7 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/planning"
-	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/relation"
 )
 
@@ -75,10 +74,14 @@ func (s Service) copyOf(tx port.Tx, src item.Item, me string) (item.Item, error)
 	if err != nil {
 		return item.Item{}, err
 	}
+	wsItems, err := workspaceItems(tx, src.Place.Workspace)
+	if err != nil {
+		return item.Item{}, err
+	}
 	dup := src
 	dup.ID = s.IDs.New()
 	dup.Place.Number = numbering.Next(wsLog, numbering.Items)
-	dup.Rank = rank.After(lastRank(live, src.Place.Parent))
+	dup.Rank = planning.EndRank(lastRank(live, src.Place.Parent), wsItems, src.Place.Workspace, src.Kind)
 	dup.Title = src.Title + " のコピー"
 	dup.Watchers = []string{me}
 	dup.Status = st.InitialStatus

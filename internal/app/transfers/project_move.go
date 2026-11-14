@@ -108,10 +108,11 @@ func planProjectWithin(r port.Reader, id project.ID, in ProjectMoveInput, get fu
 }
 
 // projectTarget は、プロジェクトの移動先のワークスペースと、断り・番号・順位に使うもの。live は削除されていないプロジェクト、
-// rules は削除されていない自動化のルール、nextProject・nextItem は次の番号。
+// items はワークスペースのアイテム(削除済みも含む)、rules は削除されていない自動化のルール、nextProject・nextItem は次の番号。
 type projectTarget struct {
 	projectDestination
 	live                  []project.Project
+	items                 []item.Item
 	rules                 []automation.Rule
 	nextProject, nextItem int
 }
@@ -126,19 +127,23 @@ func readProjectTarget(r port.Reader, ws workspace.ID) (projectTarget, error) {
 	if err != nil {
 		return projectTarget{}, err
 	}
+	its, err := workspaceItems(r, d.ws.ID)
+	if err != nil {
+		return projectTarget{}, err
+	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: d.ws.ID})
 	if err != nil {
 		return projectTarget{}, err
 	}
 	return projectTarget{
-		projectDestination: d, live: live, rules: automation.FromLog(log),
+		projectDestination: d, live: live, items: its, rules: automation.FromLog(log),
 		nextProject: numbering.Next(log, numbering.Projects), nextItem: numbering.Next(log, numbering.Items),
 	}, nil
 }
 
 // projectPlan は、プロジェクトの移動の材料(同じ Store と別の Store で共有)。srcName・dstName は {移動元}・{移動先} の文、
-// number・rank は移動先でのプロジェクトの番号と順位、numbers はアイテムの番号、remaps はアイテムの引き直し、carried は
-// ルールの引き継ぎ。
+// number・rank は移動先でのプロジェクトの番号と順位、numbers はアイテムの番号、ranks は作業項目の順位(workRanks)、remaps は
+// アイテムの引き直し、carried はルールの引き継ぎ。
 type projectPlan struct {
 	src              projectSource
 	dst              projectTarget
@@ -146,6 +151,7 @@ type projectPlan struct {
 	number           int
 	rank             string
 	numbers          map[item.ID]int
+	ranks            map[item.ID]string
 	remaps           map[item.ID]transfer.RemapResult
 	carried          transfer.Carried
 }
@@ -162,7 +168,8 @@ func newProjectPlan(src projectSource, dst projectTarget, srcName, dstName strin
 	p := projectPlan{
 		src: src, dst: dst, srcName: srcName, dstName: dstName,
 		number: dst.nextProject, rank: rank.After(lastProjectRank(dst.live)),
-		numbers: transfer.NumberProject(src.set, dst.nextItem), remaps: map[item.ID]transfer.RemapResult{},
+		numbers: transfer.NumberProject(src.set, dst.nextItem), ranks: workRanks(dst.ws.ID, dst.items, src.set.Items(), nil, ""),
+		remaps:  map[item.ID]transfer.RemapResult{},
 		carried: src.carry(dst.settings, choice, people, newID),
 	}
 	for _, it := range src.set.Items() {
@@ -226,11 +233,13 @@ func (p projectPlan) projectLines() []change.Draft {
 	return drafts
 }
 
-// itemLines は、アイテム it を移動先のワークスペースと番号へ置く行と引き直しの行。プロジェクト・親・順位は変えない。
+// itemLines は、アイテム it を移動先のワークスペースと番号へ置く行、作業項目なら移動先の作業項目の末尾に続ける順位の行
+// (F2a-6。今と同じなら書かない)、引き直しの行。プロジェクト・親と、作業項目でないものの順位は変えない。
 func (p projectPlan) itemLines(it item.Item) []change.Draft {
 	place := it.Place
 	place.Workspace, place.Number = p.dst.ws.ID, p.numbers[it.ID]
-	return append([]change.Draft{change.NewSet("place", it.Place, place)}, p.remaps[it.ID].Drafts...)
+	drafts := append([]change.Draft{change.NewSet("place", it.Place, place)}, rankLine(it, p.ranks)...)
+	return append(drafts, p.remaps[it.ID].Drafts...)
 }
 
 // records は、プロジェクトとアイテムごとの転送記録。toStore は移動先の Store。

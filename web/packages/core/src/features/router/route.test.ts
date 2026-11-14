@@ -8,6 +8,7 @@ import {
   projectTabOf,
   type Route,
   workspaceTabOf,
+  workspaceTabs,
 } from "./route";
 
 describe("parseRoute and formatRoute", () => {
@@ -15,6 +16,7 @@ describe("parseRoute and formatRoute", () => {
     ["/", { name: "home" }],
     ["/s/work/w/HH/overview", { name: "workspace", store: "work", prefix: "HH", tab: "overview" }],
     ["/s/work/w/HH/settings", { name: "workspace", store: "work", prefix: "HH", tab: "settings" }],
+    ["/s/work/w/HH/backlog", { name: "workspace", store: "work", prefix: "HH", tab: "backlog" }],
     ["/s/work/w/HH/sprints", { name: "workspace", store: "work", prefix: "HH", tab: "sprints" }],
     ["/s/work/w/HH/releases", { name: "workspace", store: "work", prefix: "HH", tab: "releases" }],
     ["/s/work/w/HH/reports", { name: "workspace", store: "work", prefix: "HH", tab: "reports" }],
@@ -65,12 +67,24 @@ describe("parseRoute and formatRoute", () => {
   });
 
   it("turns a tab ID into a workspace tab, falling back to the overview", () => {
+    expect(workspaceTabOf("backlog")).toBe("backlog");
     expect(workspaceTabOf("sprints")).toBe("sprints");
     expect(workspaceTabOf("releases")).toBe("releases");
     expect(workspaceTabOf("reports")).toBe("reports");
     expect(workspaceTabOf("settings")).toBe("settings");
     expect(workspaceTabOf("overview")).toBe("overview");
     expect(workspaceTabOf("kanban")).toBe("overview");
+  });
+
+  it("lists the workspace tabs in the order of the screen", () => {
+    expect(workspaceTabs).toEqual([
+      "overview",
+      "backlog",
+      "sprints",
+      "releases",
+      "reports",
+      "settings",
+    ]);
   });
 
   it("encodes and decodes each part", () => {

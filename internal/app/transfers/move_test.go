@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/transfers"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
@@ -234,5 +235,88 @@ func TestMoveDoesNotWriteAnUnchangedRank(t *testing.T) {
 		if r.T == change.Set && r.F == "rank" {
 			t.Errorf("rank の行を書いた: %+v", r)
 		}
+	}
+}
+
+const (
+	storyAID  item.ID = "01TESTIT000000000000000030"
+	dstWorkID item.ID = "01TESTIT000000000000000031"
+	dstGoneID item.ID = "01TESTIT000000000000000032"
+	dstEpicID item.ID = "01TESTIT000000000000000033"
+)
+
+// withWorkEnd は、移動先のワークスペース ws の Epic epic の下に、生きている Task(順位 X)と削除済みの Task(順位 Z)を置く。
+// ワークスペースの作業項目の末尾は X(削除済みは数えない)。
+func withWorkEnd(t *testing.T, f fixture, store port.StoreID, ws workspace.ID, p project.ID, epic item.ID) {
+	t.Helper()
+	for i, w := range []struct {
+		id item.ID
+		r  string
+	}{{dstWorkID, "X"}, {dstGoneID, "Z"}} {
+		addItem(t, f.rec, store, item.Item{ID: w.id, Place: item.Place{Workspace: ws, Project: p, Parent: &epic, Number: 2 + i}, Kind: item.Task, Rank: w.r, Title: "w"})
+	}
+	if err := apptest.DeleteItems(t.Context(), f.rec, store, dstGoneID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// withStoryA は、Epic HH-1 の下に Story A(順位 U)を足す。作った順・内部 ID の順では HH-2 が先だが、並び順は
+// 順位 U の A が先、順位 V の Task HH-2 があと。
+func withStoryA(t *testing.T, f fixture) {
+	t.Helper()
+	addItem(t, f.rec, store1, item.Item{ID: storyAID, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Number: 5}, Kind: item.Story, Rank: "U", Title: "a"})
+}
+
+// assertWorksAppended は、移した作業項目が、移動元の並び順(A → HH-2)のまま移動先の作業項目の末尾 X に続き、
+// Step の順位は変わらないことを確かめる。
+func assertWorksAppended(t *testing.T, f fixture, store port.StoreID) {
+	t.Helper()
+	for id, want := range map[item.ID]string{storyAID: rank.After("X"), apptest.SampleTask: rank.After(rank.After("X")), stepLiveID: "V"} {
+		if got := itemOf(t, f.rec, store, id).Rank; got != want {
+			t.Errorf("%s の順位 = %q, want %q", id, got, want)
+		}
+	}
+}
+
+// F2a-6: Epic を移すと、Epic はプロジェクトの直下の末尾、下の作業項目は移動元の並び順のまま移動先の作業項目の末尾に続く。
+func TestMoveEpicAppendsItsWorksToTheDestinationWorkOrder(t *testing.T) {
+	f := newFixture(t)
+	withSteps(t, f)
+	withStoryA(t, f)
+	withWorkEnd(t, f, store1, mobileWS, mobileProject, mobileEpic)
+	in := transfers.MoveInput{ToStore: store1, ToWorkspace: mobileWS, ToProject: mobileProject}
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleEpic, in); err != nil {
+		t.Fatal(err)
+	}
+	if got := itemOf(t, f.rec, store1, apptest.SampleEpic).Rank; got != rank.After(rank.First) {
+		t.Errorf("Epic の順位 = %q, want %q(プロジェクトの直下の末尾)", got, rank.After(rank.First))
+	}
+	assertWorksAppended(t, f, store1)
+}
+
+// F2a-5・F2a-6: 作業項目を移すと、その順位は親の子の末尾と移動先の作業項目の末尾の大きい方の後ろ。
+func TestMoveTaskRanksAfterTheDestinationWorkEnd(t *testing.T) {
+	f := newFixture(t)
+	addItem(t, f.rec, store1, item.Item{ID: dstEpicID, Place: item.Place{Workspace: mobileWS, Project: mobileProject, Number: 4}, Kind: item.Epic, Rank: "W", Title: "e"})
+	withWorkEnd(t, f, store1, mobileWS, mobileProject, dstEpicID) // 別の Epic の下。移動先の親(Mobile の Epic)の子はない
+	if _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := itemOf(t, f.rec, store1, apptest.SampleTask).Rank, rank.After("X"); got != want {
+		t.Errorf("rank = %q, want %q", got, want)
+	}
+}
+
+// F2a-5・F2a-6: Story を移すと、その順位は EndRank(移動先の親の子の末尾 X, 移動先, Story) = rank.After("X")。
+// 移動先の削除済みの Task(順位 Z)は数えない。
+func TestMoveStoryRanksAtTheDestinationEndRank(t *testing.T) {
+	f := newFixture(t)
+	withStoryA(t, f)
+	withWorkEnd(t, f, store1, mobileWS, mobileProject, mobileEpic)
+	if _, err := f.svc.Move(t.Context(), store1, storyAID, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := itemOf(t, f.rec, store1, storyAID).Rank, rank.After("X"); got != want {
+		t.Errorf("rank = %q, want %q", got, want)
 	}
 }

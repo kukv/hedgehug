@@ -35,7 +35,7 @@ export const currentSprintCard = (cards: SprintCard[] | undefined, id: string): 
   cards?.find((c) => c.sprint.id === id) ?? null;
 
 // startBody は、開始のダイアログの本文。件数とポイントは中止を除く(API が除いて数えている)。
-export function startBody(c: SprintCard): string {
+export function startBody(c: Pick<SprintCard, "total">): string {
   return `${c.total.count} 件・${pt(c.total.points)} pt で始めます。`;
 }
 

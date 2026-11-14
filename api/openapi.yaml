@@ -251,6 +251,109 @@ components:
         - display
         - text
       type: object
+    Backlog:
+      additionalProperties: false
+      properties:
+        frames:
+          items:
+            $ref: "#/components/schemas/BacklogFrame"
+          type: array
+      required:
+        - frames
+      type: object
+    BacklogFrame:
+      additionalProperties: false
+      properties:
+        rows:
+          items:
+            $ref: "#/components/schemas/BacklogRow"
+          type: array
+        sprint:
+          $ref: "#/components/schemas/BacklogSprint"
+        total:
+          $ref: "#/components/schemas/SprintTotals"
+      required:
+        - sprint
+        - total
+        - rows
+      type: object
+    BacklogRow:
+      additionalProperties: false
+      properties:
+        assignee:
+          description: ログイン名。空は未割り当て
+          type: string
+        display:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        points:
+          format: double
+          nullable: true
+          type: number
+        priority:
+          description: 優先度の値の内部 ID
+          type: string
+        project:
+          description: 所属プロジェクトの内部 ID
+          type: string
+        status:
+          description: ステータスの内部 ID。空は値なし
+          type: string
+        title:
+          type: string
+      required:
+        - priority
+        - project
+        - id
+        - display
+        - kind
+        - title
+        - points
+        - status
+        - assignee
+      type: object
+    BacklogSprint:
+      additionalProperties: false
+      nullable: true
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/SprintConfirmed"
+          description: 完了で確定した値。完了していなければ null
+        end:
+          type: string
+        goal:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          type: string
+        state:
+          enum:
+            - planned
+            - active
+            - closed
+          type: string
+      required:
+        - id
+        - name
+        - state
+        - start
+        - end
+        - goal
+        - confirmed
+      type: object
     ChangeKind:
       additionalProperties: false
       properties:
@@ -1346,6 +1449,25 @@ components:
         - title
         - workspaceName
         - aliases
+      type: object
+    PlaceItem:
+      additionalProperties: false
+      properties:
+        after:
+          description: true は基準の直後、false は直前
+          type: boolean
+        anchor:
+          description: 基準のアイテムの内部 ID。null は枠の末尾
+          nullable: true
+          type: string
+        sprint:
+          description: 移動先の枠のスプリントの内部 ID。null はバックログ
+          nullable: true
+          type: string
+      required:
+        - sprint
+        - anchor
+        - after
       type: object
     PlanningOverview:
       additionalProperties: false
@@ -5038,6 +5160,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 移動の確認ダイアログに出す件数を返す(保存しない)
+  /api/stores/{store}/items/{item}/plan-position:
+    post:
+      operationId: place-item
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを枠の中の位置に置く
   /api/stores/{store}/items/{item}/properties/{property}:
     put:
       operationId: set-item-property
@@ -6980,6 +7132,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: ルールを有効・無効にする
+  /api/stores/{store}/workspaces/{workspace}/backlog:
+    get:
+      operationId: get-backlog
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backlog"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: バックログの画面の枠(スプリントの枠とバックログの枠)
   /api/stores/{store}/workspaces/{workspace}/category-defaults/{category}:
     put:
       operationId: set-workspace-category-default
