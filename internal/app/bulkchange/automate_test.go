@@ -1,6 +1,8 @@
 package bulkchange
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -145,5 +147,74 @@ func TestBulkAutomationStopped(t *testing.T) {
 	}
 	if log := itemLog(t, s, apptest.SampleTask); log[len(log)-1].Actor.Kind == change.ActorAutomation {
 		t.Error("a stopped run saves nothing")
+	}
+}
+
+func TestBulkStepsDoneStoppedOnce(t *testing.T) {
+	svc, s, inbox := setupAuto(t, rule(automation.TriggerStepsDone, "", automation.ActionStatus, string(apptest.SampleStatusDone)))
+	// 親は Pending。Pending からは Todo にだけ行ける(Step の Todo → Done は禁じない)
+	writeWs(t, s, s1, apptest.SampleWorkspace, change.NewAdd("workflow/"+string(apptest.SampleStatusPending), apptest.SampleStatusTodo))
+	story := work(hh3, 3, item.Story, "C", "")
+	story.Status = apptest.SampleStatusPending
+	its := []item.Item{story}
+	var targets []Target
+	for i, id := range []item.ID{"01SAMPLEIT0000000000000021", "01SAMPLEIT0000000000000022", "01SAMPLEIT0000000000000023"} {
+		st := work(id, 21+i, item.Step, string(rune('a'+i)), "")
+		st.Place.Parent = &story.ID
+		its = append(its, st)
+		targets = append(targets, Target{s1, id})
+	}
+	addItems(t, s, its...)
+	if _, err := svc.Run(t.Context(), targets, done); err != nil {
+		t.Fatal(err)
+	}
+	ns := inbox.Notices()
+	if len(ns) != 1 || ns[0].Kind != port.NoticeAutomationStopped || ns[0].Item != story.ID {
+		t.Errorf("notices = %+v", ns)
+	}
+	if it := get(t, s, s1, story.ID); it.Status != apptest.SampleStatusPending {
+		t.Errorf("story = %q", it.Status)
+	}
+}
+
+func TestBulkNoticeFailureGoesOn(t *testing.T) {
+	svc, s, inbox := setupAuto(t, rule(automation.TriggerStatus, apptest.SampleStatusDone, automation.ActionAssignee, "taro"))
+	inbox.Err = errors.New("inbox")
+	got, err := svc.Run(t.Context(), []Target{{s1, apptest.SampleTask}, {s2, apptest.SampleTask}}, done)
+	if !errors.Is(err, inbox.Err) || got.Changed != 2 {
+		t.Errorf("Run = %+v, %v", got, err)
+	}
+	for _, st := range []port.StoreID{s1, s2} {
+		if it := get(t, s, st, apptest.SampleTask); it.Status != apptest.SampleStatusDone {
+			t.Errorf("%s: status = %q", st, it.Status)
+		}
+	}
+}
+
+// canceling は、Store S1 の保存で ctx を取り消して失敗する。
+type canceling struct {
+	port.Stores
+	cancel context.CancelFunc
+}
+
+func (c canceling) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	if id == s1 {
+		c.cancel()
+		return ctx.Err()
+	}
+	return c.Stores.Write(ctx, id, op, fn)
+}
+
+func TestRunStopsWhenCanceled(t *testing.T) {
+	svc, s := setup(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	svc.Stores = canceling{Stores: s, cancel: cancel}
+	_, err := svc.Run(ctx, []Target{{s1, apptest.SampleTask}, {s2, apptest.SampleTask}}, done)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v", err)
+	}
+	if it := get(t, s, s2, apptest.SampleTask); it.Status != apptest.SampleStatusTodo {
+		t.Errorf("S2 was saved after the cancel: %q", it.Status)
 	}
 }

@@ -35,7 +35,9 @@ func (s Service) Run(ctx context.Context, targets []Target, in Input) (Result, e
 	return s.apply(ctx, targets, in, true)
 }
 
-// apply は、入力を検査し、全部の Store を読んで判定してから、write なら Store ごとに保存する。
+// apply は、入力を検査し、全部の Store を読んで判定してから、write なら Store ごとに保存する。保存のあとの
+// 通知・読み直しのエラーは集めて次の Store へ進み、最後にまとめて返す(Store ごとの保存は互いに独立。F2b2-13)。
+// ctx が取り消されたら、後ろの Store を処理せずに打ち切る。
 func (s Service) apply(ctx context.Context, targets []Target, in Input, write bool) (Result, error) {
 	p, err := parseInput(in)
 	if err != nil {
@@ -51,17 +53,20 @@ func (s Service) apply(ctx context.Context, targets []Target, in Input, write bo
 	}
 	res := Result{ValueText: valueText(p, firstContext(p, before), s.Clock.Now())}
 	kept := map[Target]string{}
+	var errs []error
 	for i, g := range groups {
 		js := before[i]
 		if write && changed(js) > 0 {
-			if js, err = s.commit(ctx, g, js, p, &res); err != nil {
-				return Result{}, err
+			js, err = s.commit(ctx, g, js, p, &res)
+			if ctx.Err() != nil {
+				return Result{}, errors.Join(append(errs, ctx.Err())...)
 			}
+			errs = append(errs, err)
 		}
 		tally(&res, kept, js)
 	}
 	res.Kept = keptInOrder(targets, kept)
-	return res, nil
+	return res, errors.Join(errs...)
 }
 
 // judgeStores は、保存の前に、すべての Store の選んだアイテムを読んで判定する。閲覧のみの Store は読まない。
@@ -96,17 +101,14 @@ func tally(res *Result, kept map[Target]string, js []judged) {
 
 // commit は、Store g を保存する。保存できなければ、保存の前の判定 before で変わるはずだった数を Failed に足し
 // (F2b2-13)、ほかの理由で残したものだけを返す。保存できたら、自動化の通知を出し、OffBacklog を足して、
-// 保存の中の判定を返す。通知・読み直しのエラーは返す。
+// 保存の中の判定を返す。エラーは保存のあとの通知・読み直しのもの(保存は済んでいる)。
 func (s Service) commit(ctx context.Context, g storeGroup, before []judged, p parsed, res *Result) ([]judged, error) {
 	js, fs, err := s.save(ctx, g, p)
 	if err != nil {
 		res.Failed = append(res.Failed, Failed{Store: g.id, Name: g.name, Count: changed(before)})
 		return slices.DeleteFunc(slices.Clone(before), judged.changes), nil
 	}
-	if err := s.notify(ctx, g.id, fs); err != nil {
-		return nil, err
-	}
-	return js, s.offBacklog(ctx, g.id, js, &res.OffBacklog)
+	return js, errors.Join(s.notify(ctx, g.id, fs), s.offBacklog(ctx, g.id, js, &res.OffBacklog))
 }
 
 // readOnly は、閲覧のみの Store のアイテムの判定(読まない)。
