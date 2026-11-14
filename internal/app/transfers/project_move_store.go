@@ -100,8 +100,11 @@ func (s Service) prepareProject(ctx context.Context, store port.StoreID, id proj
 			return err
 		}
 		p, err := newProjectPlan(m.src.projectSource, dst, m.srcName(), placeName(m.to, dst.ws, true), nil, nil, noID)
+		if err != nil {
+			return err
+		}
 		m.summary = p.summary()
-		return err
+		return nil
 	}); err != nil {
 		return nil, err
 	}

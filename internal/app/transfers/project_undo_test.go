@@ -1,8 +1,10 @@
 package transfers_test
 
 import (
+	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
 
@@ -223,4 +226,92 @@ func TestMoveProjectAcrossOppositeDirections(t *testing.T) {
 			t.Errorf("team record = %+v", r)
 		}
 	}
+}
+
+// ruleRows は、team(S2)のワークスペース Team のログの、専用ルールを消す行の項目名と、作成の行があるルールの項目名。
+func ruleRows(t *testing.T, f fixture) (deleted []string, created map[string]bool) {
+	t.Helper()
+	created = map[string]bool{}
+	for _, r := range logOf(t, f.rec, store2, change.Ref{Kind: change.KindWorkspace, ID: teamWS}) {
+		switch {
+		case r.T == change.Delete && strings.HasPrefix(r.F, "rules/"):
+			deleted = append(deleted, r.F)
+		case r.T == change.Set && strings.HasPrefix(r.F, "rules/") && strings.HasSuffix(r.F, "/name"):
+			created[strings.TrimSuffix(r.F, "/name")] = true
+		}
+	}
+	return deleted, created
+}
+
+// Review Focus 1・2: fn が呼び直されたあとに移動元の保存が失敗したら、戻しは最後の試みで作った専用ルールを消し、捨てられた
+// 1 回目の試みの ID の行は書かない。
+func TestMoveProjectAcrossRollsBackTheLastAttempt(t *testing.T) {
+	f := newFixture(t)
+	withRules(t, f)
+	f.svc.Stores = failWrite{Stores: f.rec, store: store1}
+	f.svc.Delivery = retried{inner: f.deliver, stores: f.rec, done: new(bool), between: func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(teamWS, numbering.Draft(numbering.Items, 2))
+	}}
+	if _, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, toTeamWS()); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if rules, own := rulesAt(t, f.rec, store2, teamWS); !rules.Empty() || len(own) != 0 {
+		t.Errorf("destination rules = %+v / %+v", rules, own)
+	}
+	if deleted, created := ruleRows(t, f); len(deleted) != 1 || !created[deleted[0]] {
+		t.Errorf("rule deletes = %v, created = %v (only the last attempt's rule)", deleted, created)
+	}
+}
+
+// Review Focus 1・A5b-9: あいだに移動先へ専用ルールと同じ名前のルールができたら、呼び直しの tx から読んで断る。
+func TestMoveProjectAcrossReadsTxOnRetryForRuleRefusal(t *testing.T) {
+	f := newFixture(t)
+	withRules(t, f)
+	twin := statusRule("01TESTRULE0000000000000008", "マージで完了", "", statusIn(t, f.rec, store2, teamWS, "Done"))
+	f.svc.Delivery = retried{inner: f.deliver, stores: f.rec, done: new(bool), between: func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(teamWS, automation.Drafts(automation.Rule{}, twin)...)
+	}}
+	_, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, toTeamWS())
+	wantRefusal(t, err, "team の Team には同じ名前のルールがあります: マージで完了。先にルールの名前を変えてください")
+	assertProjectUntouched(t, f)
+}
+
+// lostSave は、最初の Deliver だけ、fn の保存を捨てたうえで「送れず、保存を捨てられなかった」を返す Delivery
+// (実際には保存されていない)。2 回目からは inner に渡す。
+type lostSave struct {
+	inner  transfers.Delivery
+	stores port.Stores
+	done   *bool
+}
+
+func (d lostSave) Deliver(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error) {
+	if *d.done {
+		return d.inner.Deliver(ctx, id, op, fn)
+	}
+	*d.done = true
+	err := d.stores.Write(ctx, id, op, func(tx port.Tx) error { return errors.Join(fn(tx), errConflict) })
+	if !errors.Is(err, errConflict) {
+		return "", err
+	}
+	return "", errors.Join(errNotSentKept, port.ErrSaveNotDiscarded)
+}
+
+// A5b-14: 移動先に移動が保存されていなければ(moved_in がない)、戻しはルールの行もメンバーの行も書かない。
+func TestMoveProjectAcrossUndoWritesNothingWithoutMovedIn(t *testing.T) {
+	f := newFixture(t)
+	withRules(t, f)
+	withNewcomer(t, f)
+	wsBefore := len(logOf(t, f.rec, store2, change.Ref{Kind: change.KindWorkspace, ID: teamWS}))
+	membersBefore := len(logOf(t, f.rec, store2, change.Ref{Kind: change.KindMembers}))
+	f.svc.Delivery = lostSave{inner: f.deliver, stores: f.rec, done: new(bool)}
+	if _, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, toTeamWS()); !errors.Is(err, port.ErrSaveNotDiscarded) {
+		t.Fatalf("err = %v", err)
+	}
+	if n := len(logOf(t, f.rec, store2, change.Ref{Kind: change.KindWorkspace, ID: teamWS})); n != wsBefore {
+		t.Errorf("destination workspace rows %d → %d", wsBefore, n)
+	}
+	if n := len(logOf(t, f.rec, store2, change.Ref{Kind: change.KindMembers})); n != membersBefore {
+		t.Errorf("destination member rows %d → %d", membersBefore, n)
+	}
+	assertProjectUntouched(t, f)
 }

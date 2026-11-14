@@ -52,14 +52,23 @@ func writeAs(t *testing.T, s port.Stores, login string, fn func(tx port.Tx) erro
 	}
 }
 
-// withRules は、Web のプロジェクト「ログイン」に、使わないステータス Pending、Bug の既定のテンプレート「なし」、
-// 専用ルール「マージで完了」を足す。
+// withRules は、Web と Team にテンプレート「バグ報告」を作り、Web のプロジェクト「ログイン」に、使わないステータス Pending、
+// 遷移のチェック Todo → Done、使うテンプレート「バグ報告」、Bug の既定のテンプレート「なし」、専用ルール「マージで完了」を足す。
 func withRules(t *testing.T, f fixture) automation.Rule {
 	t.Helper()
+	const webTpl, teamTpl change.ID = "01TESTTPL00000000000000001", "01TESTTPL00000000000000003"
+	addTemplate(t, f.rec, apptest.SampleWorkspace, webTpl)
+	write(t, f.rec, store2, func(tx port.Tx) error {
+		tpl := workspace.Template{ID: teamTpl, Name: "バグ報告", Kind: "Bug", Title: "[bug] "}
+		return tx.WriteWorkspaces().Append(teamWS, workspace.TemplateDrafts(workspace.Template{}, tpl)...)
+	})
 	hideStatus(t, f.rec, store1, apptest.SampleWorkspace, apptest.SampleProject, "Pending")
+	p := apptest.SampleProject
 	write(t, f.rec, store1, func(tx port.Tx) error {
 		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace,
-			change.NewSet(projectrule.TemplateDefaultField(apptest.SampleProject, "Bug"), nil, projectrule.None))
+			change.NewAdd(projectrule.WorkflowField(p, apptest.SampleStatusTodo), apptest.SampleStatusDone),
+			change.NewAdd(projectrule.TemplatesField(p), webTpl),
+			change.NewSet(projectrule.TemplateDefaultField(p, "Bug"), nil, projectrule.None))
 	})
 	r := statusRule("01TESTRULE0000000000000001", "マージで完了", apptest.SampleProject, apptest.SampleStatusDone)
 	addRule(t, f.rec, apptest.SampleWorkspace, r)
@@ -85,7 +94,7 @@ func TestMoveProjectAcrossWritesBothStores(t *testing.T) {
 		t.Errorf("epic watchers = %v, want the destination spelling", w)
 	}
 	rules, own := rulesAt(t, f.rec, store2, teamWS)
-	if len(rules.Hidden) != 1 || rules.TemplateDefaults["Bug"] != projectrule.None || len(own) != 1 || own[0].ID == old.ID || own[0].Name != old.Name {
+	if len(rules.Hidden) != 1 || len(rules.Workflow) != 1 || len(rules.Templates) != 1 || rules.TemplateDefaults["Bug"] != projectrule.None || len(own) != 1 || own[0].ID == old.ID || own[0].Name != old.Name {
 		t.Errorf("destination rules = %+v / %+v", rules, own)
 	}
 	if rules, own := rulesAt(t, f.rec, store1, apptest.SampleWorkspace); !rules.Empty() || len(own) != 0 {
