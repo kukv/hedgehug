@@ -6,14 +6,17 @@
     caretTerm,
     emptyText,
     type FilterCandidate,
+    nextSort,
     readOnlyBands,
+    shownColumns,
   } from "@hedgehug/core";
   import { Button, FilterInput, PageHead, ReadOnlyBand } from "@hedgehug/ui";
   import { onMount, tick } from "svelte";
-  import { createCandidates, search } from "../../search";
+  import { createCandidates, search, searchSelection } from "../../search";
   import { itemDialog } from "../../wire";
+  import ItemTable from "../table/ItemTable.svelte";
+  import TableToolbar from "../table/TableToolbar.svelte";
   import SearchHelp from "./SearchHelp.svelte";
-  import SearchTable from "./SearchTable.svelte";
 
   // 検索の画面(04「検索」「画面の構成」、E1-17〜E1-20)。絞り込み欄・件数・テーブルを出す。
   interface Props {
@@ -26,6 +29,7 @@
   const view = search.state;
   const rows = $derived($view.result?.rows ?? []);
   const errors = $derived($view.result?.errors ?? []);
+  const columns = $derived($view.result?.columns ?? []);
   const bands = $derived(readOnlyBands(rows));
   // 最初の検索が終わるまでは、空の表示を出さない(開いた直後に「まだ何もありません」がちらつかない)。
   const empty = $derived($view.result ? emptyText($view.query, rows.length, errors) : null);
@@ -93,11 +97,12 @@
     onhelp={() => (help = true)}
   />
 </div>
-<div class="toolbar">
-  {#if $view.result}
-    <span class="count">{rows.length} 件</span>
-  {/if}
-</div>
+<TableToolbar
+  count={$view.result ? rows.length : null}
+  {columns}
+  table={$view.table}
+  onchange={(next) => search.setTable(next)}
+/>
 <div class="content">
   {#if empty}
     <div class="empty">
@@ -112,7 +117,15 @@
       {/if}
     </div>
   {:else if rows.length > 0}
-    <SearchTable {rows} />
+    <ItemTable
+      {rows}
+      columns={shownColumns($view.table, columns)}
+      groups={$view.result?.groups ?? []}
+      sort={$view.table.sort}
+      onsort={(key) => search.setTable(nextSort($view.table, key))}
+      selection={searchSelection}
+      onmenu={() => {}}
+    />
   {/if}
 </div>
 <SearchHelp open={help} onclose={() => (help = false)} />
@@ -120,17 +133,6 @@
 <style>
   .filter {
     padding: 12px 24px 0;
-  }
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 24px;
-  }
-  .count {
-    color: var(--muted);
-    font-size: 12.5px;
-    font-variant-numeric: tabular-nums;
   }
   .content {
     flex: 1;
@@ -157,7 +159,6 @@
   }
   @container frame (max-width: 860px) {
     .filter,
-    .toolbar,
     .content {
       padding-left: max(16px, env(safe-area-inset-left, 0px));
       padding-right: max(16px, env(safe-area-inset-right, 0px));

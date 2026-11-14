@@ -1,6 +1,7 @@
 import { createScreenStatesPort, createSearchPort } from "@hedgehug/api";
 import {
   type CaretTerm,
+  createRowSelection,
   createScreenStates,
   createSearch,
   type FilterCandidate,
@@ -18,6 +19,8 @@ export const screenStates = createScreenStates(createScreenStatesPort());
 // searchPort は、パレットの「このクエリで」も使う。
 export const searchPort = createSearchPort();
 export const search = createSearch({ port: searchPort, screenStates, timer, toasts });
+// searchSelection は、検索の画面の選んでいる行(E2a-16)。
+export const searchSelection = createRowSelection();
 
 // refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
