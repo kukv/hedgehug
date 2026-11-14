@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { resetSearchScreen, tokenUrl } from "./helpers";
 import {
   base,
   headers,
@@ -116,4 +117,24 @@ test("leaves the systems cell empty, and shows — for a property the kind does 
   await expect(epic.getByRole("cell").nth(systems)).toHaveText("");
   await expect(epic.getByRole("cell").nth(priority)).toHaveText("—");
   await expect(story.getByRole("cell").nth(priority)).not.toHaveText("—");
+});
+
+test("the palette's bulk change opens the table with every row selected and the dialog open", async ({
+  page,
+}, info) => {
+  const { mark } = await seed(page, info);
+  await resetSearchScreen(page.request);
+  // 検索でない画面(ホーム)から開く。
+  await page.goto(tokenUrl());
+  await expect(page.getByRole("main")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "コマンドパレット" });
+  const query = `${mark} kind:Story`;
+  await palette.getByRole("combobox").fill(query);
+  await palette.getByRole("option", { name: /^1 件をまとめて変更…/ }).click();
+  await expect(palette).toBeHidden();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByRole("combobox", { name: "絞り込み" })).toHaveValue(query);
+  await expect(page.getByText("1 件を選択中", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "選択したアイテムを一括変更" })).toBeVisible();
 });

@@ -67,6 +67,8 @@ export interface PaletteDeps extends Omit<ActionDeps, "close"> {
   search: Pick<SearchPort, "search">;
   timer: Timer;
   openSearch(query: string): Promise<void>;
+  // bulkChangeAll は、「{N} 件をまとめて変更…」(E2a-19)。
+  bulkChangeAll(query: string): Promise<void>;
 }
 
 export function paletteFooter(mac: boolean): string {
@@ -109,6 +111,7 @@ export function createPalette(deps: PaletteDeps): Palette {
     search: deps.search,
     timer: deps.timer,
     openSearch: deps.openSearch,
+    bulkChangeAll: deps.bulkChangeAll,
     close,
     changed: () => render(true),
   });

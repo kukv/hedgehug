@@ -1,6 +1,7 @@
 import { createScreenStatesPort, createSearchPort } from "@hedgehug/api";
 import {
   type CaretTerm,
+  createChangeAll,
   createRowSelection,
   createScreenStates,
   createSearch,
@@ -17,7 +18,7 @@ import {
 } from "@hedgehug/core";
 import { reloads } from "./reloads";
 import { catalog, itemsPort, listMembers, navigation } from "./wire";
-import { itemMenuHost } from "./wireActions";
+import { bulkChange, itemMenuHost } from "./wireActions";
 import { palettePort, timer, toasts } from "./wireBase";
 
 // 検索の画面(04「検索」、E1)。wire.ts が 300 行なので、ここで作る。
@@ -153,3 +154,23 @@ export function createCandidates(changed: (source: "items" | "members") => void)
     },
   };
 }
+
+// openSearch は、パレットの「検索で開く」(E1-21)。検索は 1 回だけ: 検索の画面にいればその場で検索し、ほかの画面からは
+// 絞り込みを書いておき、開いた画面の open が検索する(同じ画面へは移らず open も呼ばれない)。
+export async function openSearch(query: string): Promise<void> {
+  if (get(navigation.route).name === "search") {
+    await search.replaceQuery(query);
+    return;
+  }
+  search.prepareQuery(query);
+  await navigation.go({ name: "search" });
+}
+
+// bulkChangeAll は、パレットの「{N} 件をまとめて変更…」(E2a-19)。
+export const bulkChangeAll = createChangeAll({
+  openSearch,
+  settled: () => search.settled(),
+  result: () => get(search.state).result,
+  selection: searchSelection,
+  openBulkChange: () => bulkChange.open(searchSelection, { after: () => search.reload() }),
+});

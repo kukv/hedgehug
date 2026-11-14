@@ -1,4 +1,5 @@
 import type { SearchPort } from "../../port/search";
+import { readOnlyNote } from "../catalog/readonly";
 import { hasKeyTerm } from "../search/caret";
 import type { Timer } from "../toasts/toasts";
 import type { Candidate } from "./candidates";
@@ -14,6 +15,8 @@ export interface QueryGroupDeps {
   timer: Timer;
   // openSearch は、検索の画面の絞り込みを入れ替えて /search を開く。
   openSearch(query: string): Promise<void>;
+  // bulkChangeAll は、検索をテーブルで開き、すべての行を選んで、一括変更のダイアログを開く(E2a-19)。
+  bulkChangeAll(query: string): Promise<void>;
   // close は、パレットを閉じる。changed は、応答が着いて群が変わったとき。
   close(): void;
   changed(): void;
@@ -31,8 +34,8 @@ export interface QueryGroup {
 export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
   let pending: unknown;
   let current = "";
-  // shown は、current の応答で出せるときの件数。
-  let shown: number | null = null;
+  // shown は、current の応答で出せるときの件数・`is:deleted`・すべて閲覧のみ。
+  let shown: { count: number; deleted: boolean; readOnly: boolean } | null = null;
 
   function reset() {
     if (pending !== undefined) deps.timer.clear(pending);
@@ -53,7 +56,14 @@ export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
           (r) => {
             // 入力が変わった・閉じたあとの応答は捨てる。
             if (current !== text) return;
-            shown = r.hasKey && r.errors.length === 0 ? r.rows.length : null;
+            shown =
+              r.hasKey && r.errors.length === 0
+                ? {
+                    count: r.rows.length,
+                    deleted: r.deleted,
+                    readOnly: r.rows.length > 0 && r.rows.every((x) => x.readOnly),
+                  }
+                : null;
             deps.changed();
           },
           // 検索の要求が届かなければ(通信の失敗)、群を出さないだけ(入力はそのまま続けられる)。
@@ -64,15 +74,32 @@ export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
     candidates() {
       if (shown === null) return [];
       const query = current;
+      const reason = shown.deleted
+        ? "削除済みのアイテムは変更できません"
+        : shown.count === 0
+          ? "一致するアイテムがありません"
+          : shown.readOnly
+            ? readOnlyNote
+            : "";
       return [
         {
           key: "query:open",
           group: "query",
           label: "検索で開く",
-          hint: `${shown} 件`,
+          hint: `${shown.count} 件`,
           run: async () => {
             deps.close();
             await deps.openSearch(query);
+          },
+        },
+        {
+          key: "query:changeAll",
+          group: "query",
+          label: `${shown.count} 件をまとめて変更…`,
+          ...(reason ? { disabled: true, reason, hint: reason } : {}),
+          run: async () => {
+            deps.close();
+            await deps.bulkChangeAll(query);
           },
         },
       ];

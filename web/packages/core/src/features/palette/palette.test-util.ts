@@ -201,6 +201,7 @@ export async function setup(o: Opts = {}) {
       },
     },
     openSearch: async (...a) => rec("openSearch")(...a),
+    bulkChangeAll: async (...a) => rec("bulkChangeAll")(...a),
   });
   return { palette, calls, toasts, route, planRequest, catalog, timer, searched };
 }
