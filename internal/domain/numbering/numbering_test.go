@@ -31,3 +31,15 @@ func TestNextIsMaxPlusOne(t *testing.T) {
 		t.Errorf("Next(empty) = %d, want 1", got)
 	}
 }
+
+func TestDraftsAreInNumberOrder(t *testing.T) {
+	got := numbering.Drafts(numbering.Items, []int{5, 3, 4})
+	if len(got) != 3 {
+		t.Fatalf("drafts = %v", got)
+	}
+	for i, n := range []int{3, 4, 5} {
+		if want := numbering.Draft(numbering.Items, n); string(got[i].To) != string(want.To) || got[i].F != want.F {
+			t.Errorf("draft %d = %+v, want %+v", i, got[i], want)
+		}
+	}
+}

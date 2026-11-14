@@ -3,6 +3,7 @@ package transfers
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -209,7 +210,7 @@ func (m *crossProjectMove) writeDestination(tx port.Tx) error {
 	for _, it := range m.src.set.Items() {
 		errs = append(errs, m.importItem(tx, it))
 	}
-	ws := append([]change.Draft{numbering.Draft(numbering.Projects, p.number)}, numberLines(p.numbers)...)
+	ws := append([]change.Draft{numbering.Draft(numbering.Projects, p.number)}, numbering.Drafts(numbering.Items, slices.Collect(maps.Values(p.numbers)))...)
 	errs = append(errs, tx.WriteWorkspaces().Append(dst.ws.ID, append(ws, p.carried.Destination...)...))
 	return errors.Join(errs...)
 }

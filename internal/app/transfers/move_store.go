@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
@@ -135,7 +137,7 @@ func (m *crossMove) writeDestination(tx port.Tx) error {
 		errs = append(errs, m.importItem(tx, it, append(lines, remaps[it.ID].Drafts...)))
 		errs = append(errs, m.reviveItem(tx, it.ID))
 	}
-	errs = append(errs, tx.WriteWorkspaces().Append(dst.ws.ID, numberLines(numbers)...))
+	errs = append(errs, tx.WriteWorkspaces().Append(dst.ws.ID, numbering.Drafts(numbering.Items, slices.Collect(maps.Values(numbers)))...))
 	m.numbers, m.prefix = numbers, dst.ws.Prefix
 	m.added = add
 	m.moved = Moved{ToStore: m.in.ToStore, Item: root.ID, Display: displayID(dst.ws.Prefix, numbers[root.ID]), Emptied: emptiedOf(remaps, m.src.settings)}
