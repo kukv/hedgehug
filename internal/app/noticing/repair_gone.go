@@ -49,7 +49,7 @@ func purgedUnderNotice(r port.Reader, b batch, removed []port.RemovedEntity, e p
 		return port.Notice{}, false, err
 	}
 	n := g.base
-	n.Text, n.Source = purgedText(c.purged.Display), "repair:purged:"+string(e.Ref.ID)
+	n.Text, n.Source = purgedText(c.text), "repair:purged:"+string(e.Ref.ID)
 	return n, true, nil
 }
 
@@ -78,7 +78,7 @@ func purgedRelations(r port.Reader, b batch, i int, me string) ([]port.Notice, e
 
 // relationNotice は、持ち主 owner から完全に削除された to への関連を外した通知。to の記録か持ち主がなければ false。
 func relationNotice(r port.Reader, b batch, owner change.Ref, to item.ID) (port.Notice, bool, error) {
-	cs, err := readCauses(r, b.store)
+	cs, err := b.causes(r)
 	if err != nil {
 		return port.Notice{}, false, err
 	}
@@ -162,19 +162,18 @@ func droppedNotice(r port.Reader, b batch, removed []port.RemovedEntity, e port.
 	}
 	n := g.base
 	if c.purged != nil {
-		n.Text, n.Source = purgedText(c.purged.Display), "repair:purged:"+string(e.Ref.ID)
+		n.Text, n.Source = purgedText(c.text), "repair:purged:"+string(e.Ref.ID)
 		return n, true, nil
 	}
 	who, err := nameOf(r, c.moved.By)
 	if err != nil {
 		return port.Notice{}, false, err
 	}
-	to := c.moved.ToStoreName
-	if to == "" {
-		to = c.moved.ToStore
+	n.Text = withParticle(c.text, "は") + " " + who + " が " + withParticle(oneLine(b.storeName(*c.moved)), "へ") +
+		"移動したため、あなたの変更は反映されませんでした"
+	if c.at.Kind != change.KindWorkspace {
+		n.Text += "。移動先は " + withParticle(c.moved.New, "です")
 	}
-	n.Text = withParticle(c.moved.Old, "は") + " " + who + " が " + withParticle(oneLine(to), "へ") +
-		"移動したため、あなたの変更は反映されませんでした。移動先は " + withParticle(c.moved.New, "です")
 	if c.at != e.Ref {
 		n.Text += "(" + g.display + "「" + oneLine(g.title) + "」)"
 	}

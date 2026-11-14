@@ -28,12 +28,17 @@ func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received
 	if err != nil || me == "" {
 		return nil
 	}
+	names, err := s.storeNames(ctx, in)
+	if err != nil {
+		return err
+	}
 	var notices, autos, reps []port.Notice
 	if err := read(func(r port.Reader) error {
 		b, err := newBatch(r, store, in.Saves)
 		if err != nil {
 			return err
 		}
+		b.storeNames = names
 		if notices, err = judgeIn(r, b, store, me); err != nil {
 			return err
 		}
@@ -100,12 +105,15 @@ type batch struct {
 	refs   []change.Ref // saves に出てくるエンティティ(最初に出た順)
 	logs   map[change.Ref][]change.Record
 	store  port.StoreID // 判定する Store(同じ Store の中の転送記録を見分ける)
+	// records は、完全な削除の記録と転送記録(1 回の判定で 1 回だけ読む)。storeNames は、表示中の Store の名前。
+	records    *records
+	storeNames map[port.StoreID]string
 }
 
 // newBatch は、Store store の saves のエンティティのいまのログを読む。もうないエンティティ(ErrNotFound)はログを
 // 持たない。ほかの読み取りの失敗はエラー。
 func newBatch(r port.Reader, store port.StoreID, saves []port.ReceivedSave) (batch, error) {
-	b := batch{saves: saves, judged: map[change.ID]bool{}, logs: map[change.Ref][]change.Record{}, store: store}
+	b := batch{saves: saves, judged: map[change.ID]bool{}, logs: map[change.Ref][]change.Record{}, store: store, records: &records{}}
 	for _, s := range saves {
 		for _, e := range s.Entities {
 			for _, row := range e.Rows {
