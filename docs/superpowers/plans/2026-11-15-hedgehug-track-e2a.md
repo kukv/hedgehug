@@ -24,7 +24,7 @@
 
 E1 の計画の Global Constraints をすべて引き継ぐ。加えて次を守る。
 
-- 大きさの上限: Go ファイル 300 行(テスト 600 行)、関数 60 行、認知的複雑度 15、パッケージのテスト以外のファイル 20 個、Svelte 200 行、TS 300 行。いまの数: `internal/domain/query` 12 個、`internal/app/search` 9 個、`internal/adapter/httpapi/search/search.go` 145 行、`web/app/src/screens/search/SearchScreen.svelte` 166 行、`SearchRow.svelte` 153 行、`web/app/src/search.ts` 107 行、`web/app/src/palette.ts` 75 行、`web/app/src/wire.ts` 298 行(足さない)、`web/packages/core/src/features/palette/queryGroup.ts` 約 85 行。
+- 大きさの上限: Go ファイル 300 行(テスト 600 行)、関数 60 行、認知的複雑度 15、パッケージのテスト以外のファイル 20 個、Svelte 200 行、TS 300 行。いまの数: `internal/domain/query` 11 個、`internal/app/search` 9 個、`internal/adapter/httpapi/search/search.go` 145 行、`web/app/src/screens/search/SearchScreen.svelte` 166 行、`SearchRow.svelte` 153 行、`web/app/src/search.ts` 107 行、`web/app/src/palette.ts` 75 行、`web/app/src/wire.ts` 298 行(足さない)、`web/packages/core/src/features/palette/queryGroup.ts` 約 85 行。
 - 画面のパッケージの依存の向き: ui は core を import しない。ui の部品の props の型は ui の中で宣言する。
 - 依存ライブラリは足さない。足す必要が出たら、`go get <module>@vX.Y.Z`・`pnpm add -E <pkg>@X.Y.Z` のように版を明記し、公開から 7 日以上たった版だけを使う(Go は `go list -m -json <module>@<ver>` の Time で確かめる)。
 - トークンらしい値(`ghp_` などで始まる文字列)を、計画にもテストにも書かない。
@@ -51,20 +51,20 @@ E1 の計画の Global Constraints をすべて引き継ぐ。加えて次を守
 | E2a-13 | テーブルの設定は、画面の状態 `search` の中身を `{query, table: {columns, group, sort}}` にして持つ。`columns` は出す列の鍵の並び(左から)、`group` は `none` か 10 項目の鍵、`sort` は `{key, desc}`(列の鍵)か null。初めは `columns` が `["id","title","status","assignee","priority","end","points"]`、`group` が `none`、`sort` が null。E1 の `{query}` だけの中身・形の合わない値は、その項目だけ初めの値にする | 04 の 469・664 行、E1-16 |
 | E2a-14 | 「表示する列」は ui の `ValueMenu`(`multi`、7 件以上で検索欄)で、対象の列すべてを列の並び(E2a-1・E2a-2)で出し、出している列にチェック。タイトルは選べない項目(`disabled`)。出すと `columns` の末尾に足し、隠すと外す。いまの対象にない列の鍵は `columns` に残したまま表示しない(Store を表示に戻すと出る)。列を隠しても、その列の並べ替えは残す | 04 の 665・666 行 |
 | E2a-15 | 「グループ」は ui の `Select`(名前「グループ」)。選択肢は「なし」「ステータス」「担当者」「プロジェクト」「親」「種類」「優先度」「スプリント」「関連システム」「作成日」「更新日」(04 の 678 行の表の順) | 04 の 676〜689 行 |
-| E2a-16 | 選択: 検索の画面の選択は `web/app/src/search.ts` の `searchSelection`(`createRowSelection`)。結果が変わるたびに、選べる行(削除済みでない行。並べ替えたあとの順に 1 回ずつ)で `prune` する(core の `createSearch` が行う)。検索の画面を離れたら `clear`。「すべて選択」は見出しの行の先頭のチェック(ui の `RowCheck`、名前「すべて選択」)で、選べる行がすべて選ばれていればチェック済み。押すと、チェック済みなら選択をすべて外し、そうでなければ選べる行をすべて選ぶ。削除済みの行のチェックは無効 | 04 の 717・820〜823 行、312 行 |
-| E2a-17 | 行末の「…」(ui の `IconButton`、名前「{ID} のメニュー」)は、押すとそのアイテムのプロジェクトのアイテムを `itemsPort.list` で読み、`itemMenuHost.open(item, { rows: 兄弟の並び(compareSiblings), children, row: true }, x, y)` で 02 のアイテムのメニューを開く(ツリーの行と同じ項目。閲覧のみの Store の変更系の項目は host が無効にする)。読めない・アイテムがないときは何もしない。削除済みの行の「…」は無効 | 04 の 717・1059 行、482 行 |
+| E2a-16 | 選択: 検索の画面の選択は `web/app/src/search.ts` の `searchSelection`(`createRowSelection`)。結果が変わるたびに、選べる行(削除済みでない行。並べ替えたあとの順に 1 回ずつ)で `prune` する(core の `createSearch` が行う)。検索の画面を離れたら `clear`。「すべて選択」は見出しの行の先頭のチェック(ui の `RowCheck`、名前「すべて選択」)で、選べる行がすべて選ばれていればチェック済み。押すと、チェック済みなら選択をすべて外し、そうでなければ選べる行をすべて選ぶ(`RowSelection` に足す `set` で 1 回で入れる)。削除済みの行のチェックは無効 | 04 の 717・820〜823 行、312 行 |
+| E2a-17 | 行末の「…」(ui の `IconButton`、名前「{ID} のメニュー」)は、押すとそのアイテムのプロジェクトのアイテムを `itemsPort.list` で読み、`itemMenuHost.open(item, { rows: 兄弟の並び(compareSiblings), children, row: true }, x, y)` で 02 のアイテムのメニューを開く(メニューの操作のあとは、Store の変更の知らせ(`syncing/watch.go`。書き手を問わない)で検索が読み直す)(ツリーの行と同じ項目。閲覧のみの Store の変更系の項目は host が無効にする)。読めない・アイテムがないときは何もしない。削除済みの行の「…」は無効 | 04 の 717・1059 行、482 行 |
 | E2a-18 | パレットの「選んでいるアイテム」に、検索のテーブルで 1 行だけ選んでいるときのアイテムを rank 2(バックログと同じ。同時には出ない)、`source: "table"` で渡す。`setStatus` は `itemsPort.setProperty(storeId, itemId, "status", statusId)` のあと検索を読み直す | F2b1 の「E に求めること」、A5c-9 |
-| E2a-19 | パレットの「このクエリで」の群に「{N} 件をまとめて変更…」を「検索で開く」の次に足す(E3 が「ビューとして保存…」をあいだに入れる)。N は応答の行の数。無効の理由は、`is:deleted` の検索なら「削除済みのアイテムは変更できません」、0 件なら「一致するアイテムがありません」、行がすべて閲覧のみの Store のものなら「閲覧のみの Store です」(この順で最初の 1 つ)。選ぶと、パレットを閉じ、「検索で開く」と同じ道で検索の画面を開いて検索が終わるのを待ち、選べる行をすべて選んでから `bulkChange.open(searchSelection, { after: () => search.reload() })` | 02 の 631・664 行、04 の 822 行 |
+| E2a-19 | パレットの「このクエリで」の群に「{N} 件をまとめて変更…」を「検索で開く」の次に足す(E3 が「ビューとして保存…」をあいだに入れる)。N は応答の行の数。無効の理由は、`is:deleted` の検索なら「削除済みのアイテムは変更できません」、0 件なら「一致するアイテムがありません」、行がすべて閲覧のみの Store のものなら「閲覧のみの Store です」(この順で最初の 1 つ)。選ぶと、パレットを閉じ、「検索で開く」と同じ道で検索の画面を開いて検索が終わるのを待ち(ほかの画面からは、画面の `open` の検索が終わるまで待つ。`settled`)、選べる行をすべて選んでから `bulkChange.open(searchSelection, { after: () => search.reload() })` | 02 の 631・664 行、04 の 822 行 |
 | E2a-20 | 一括変更・一括削除の `after` は `search.reload()`。一括変更のあとは選択を残し、一括削除のあとは解除する(F2b の部品がそうしている) | 04 の 897 行、F2b2 の「E に求めること」 |
 | E2a-21 | API: `POST /api/search` の本文に `sort`(`{key, desc}` か null。列見出しの並べ替え。追加プロパティは `p:` を付けない小文字のキー)と `group`(テーブルの「グループ」の設定。`none` か空なら設定なし)を足す。応答に `columns`(`{key, name, type, sortable}`。固定の列の `type` は空)、`groupBy`、`groups` と、行の値(E2a-9)を足す。パレットはどちらも送らない | E1-24 |
 
 ## Review Focus
 
-1. **関連システムで分けると、同じアイテムが 2 回数えられる。** Web と API を持つアイテムは「Web」と「API」の両方の見出しの下に出て、見出しの件数にはそれぞれ数えるが、ツールバーの「{N} 件」、「{N} 件を選択中」、「すべて選択」は 1 回だけ数える。片方の見出しの下でチェックすると、もう片方の行もチェック済みになる(04 の 691 行)。Task 1 の `TestGroupsSystemsMultiple` と Task 5 の `selectable counts an item once` に入れる。
+1. **関連システムで分けると、同じアイテムが 2 回数えられる。** Web と API を持つアイテムは「Web」と「API」の両方の見出しの下に出て、見出しの件数にはそれぞれ数えるが、ツールバーの「{N} 件」、「{N} 件を選択中」、「すべて選択」は 1 回だけ数える。片方の見出しの下でチェックすると、もう片方の行もチェック済みになる(04 の 691 行)。Task 1 の `TestGroupsSystemsMultiple` と Task 9 の e2e に入れる。
 2. **列見出しの並べ替えを「並べ替えなし」に戻すと、`sort:` が効かなくなる。** `sort:-points` のクエリで「タイトル」の見出しを 3 回押すと、ポイントの降順に戻る(04 の 672 行)。Task 2 の `TestSearchHeaderSortOverridesQuery` に入れる。
 3. **同じキーで型が違う追加プロパティで、表示が崩れる。** ワークスペース A の `due`(日付)と B の `due`(テキスト「来週」)は 1 列(型は日付)にまとまり、B のアイテムのセルは「来週」と出る(日付として読もうとして空や「Invalid Date」にならない。04 の 663 行)。Task 2 の `TestColumnsSameKeyDifferentType`、Task 3 の `TestCellsOwnType`、Task 7 の `cellView uses the cell's own type` に入れる。
 4. **削除済みの行が「すべて選択」に入る。** `is:deleted` の検索では、「すべて選択」を押しても 0 件のまま、行のチェックと「…」は押せない。パレットの「{N} 件をまとめて変更…」は「削除済みのアイテムは変更できません」で無効(04 の 312 行、02 の 664 行)。Task 5 の `selectable leaves out deleted rows`、Task 10 の `bulk change is disabled for is:deleted` に入れる。
-5. **選択中のアイテムが一覧から消えても、選択に残る。** 3 件を選んだあと、別のブラウザのタブで 1 件を削除すると「2 件を選択中」になる。絞り込みを変えて一覧から外れたものも外れる(04 の 823 行)。Task 6 の `prunes the selection with each result` と Task 11 の e2e に入れる。
+5. **選択中のアイテムが一覧から消えても、選択に残る。** 3 件を選んだあと、別のブラウザのタブで 1 件を削除すると「2 件を選択中」になる。絞り込みを変えて一覧から外れたものも外れる(04 の 823 行)。Task 6 の `prunes the selection with each result` と Task 9 の e2e に入れる。
 
 ---
 
@@ -123,7 +123,7 @@ git commit -m "feat(query): テーブルのグループ分けの規則を足す(
 
 **Files:**
 - Create: `internal/app/search/columns.go`
-- Modify: `internal/app/search/keys.go`(`customKeys` を、キーの一覧と列を 1 回で集める `catalog` にする)、`internal/app/search/search.go`(`TableOptions`・`Result` の足し)、`internal/app/search/facts.go`(`ParentTitle` を埋める)、`internal/adapter/httpapi/search/search.go`(`svc.Search(ctx, q, appsearch.TableOptions{})` に合わせるだけ。本文の足しは Task 4)、`internal/app/palette` などほかに `Search` を呼ぶところがあれば同じく
+- Modify: `internal/app/search/keys.go`(`customKeys` を、キーの一覧と列を 1 回で集める `catalog` にする)、`internal/app/search/search.go`(`TableOptions`・`Result` の足し)、`internal/app/search/facts.go`(`ParentTitle` を埋める)、`internal/adapter/httpapi/search/search.go`(`svc.Search(ctx, q, appsearch.TableOptions{})` に合わせるだけ。本文の足しは Task 4。`Search` を呼ぶのはここだけ)
 - Test: `internal/app/search/columns_test.go`、`internal/app/search/search_test.go`
 
 **Interfaces:**
@@ -268,8 +268,8 @@ git commit -m "feat(search): 検索の API にテーブルの設定と、列・�
 
 **Files:**
 - Create: `web/packages/core/src/features/search/table.ts`
-- Modify: `web/packages/core/src/index.ts`
-- Test: `web/packages/core/src/features/search/table.test.ts`
+- Modify: `web/packages/core/src/index.ts`、`web/packages/core/src/features/selection/rowSelection.ts`(`set`)
+- Test: `web/packages/core/src/features/search/table.test.ts`、`web/packages/core/src/features/selection/rowSelection.test.ts`
 
 **Interfaces:**
 - Consumes: Task 4 の `SearchColumn`・`SearchRow`・`SearchTableRequest`、selection の `SelectedRow`
@@ -284,6 +284,7 @@ git commit -m "feat(search): 検索の API にテーブルの設定と、列・�
   - `function tableRequest(t: TableSettings): SearchTableRequest` — `p:` を外して小文字のキーにする
   - `function selectable(rows: SearchRow[]): SelectedRow[]` — 削除済みを除き、行の順に 1 回ずつ
   - `function headerCheck(rows: SearchRow[], selected: SelectedRow[]): boolean` — 選べる行が 1 件以上あり、すべて選ばれているか
+  - `RowSelection.set(rows: SelectedRow[]): void` — 選択を rows に入れ替える(同じ行は 1 つ。変わらなければ知らせない)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -295,15 +296,15 @@ git commit -m "feat(search): 検索の API にテーブルの設定と、列・�
 - `shownColumns`: `columns` に対象にない `p:gone` があっても出さず、`t.columns` の順。
 - `columnChoices`: タイトルの行が `disabled`、出している列が `checked`、並びは対象の列の並び。
 - `selectable leaves out deleted rows`(Review Focus 4): 削除済みの行は入らない。
-- `selectable counts an item once`(Review Focus 1): 同じ `storeId`・`itemId` の行が 2 つあっても 1 つ。
 - `headerCheck`: 選べる行 2 件のうち 2 件選択で真、1 件で偽、選べる行 0 件で偽。
+- `rowSelection.test.ts`: `set` で 3 件を入れると `rows` が 3 件で、知らせは 1 回。同じ 3 件をもう一度 `set` しても知らせない。`set([])` で空。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `pnpm -C web --filter @hedgehug/core test -- table`
+Run: `pnpm -C web --filter @hedgehug/core test -- table rowSelection`
 Expected: FAIL
 
-- [ ] **Step 3: `table.ts` を書く**
+- [ ] **Step 3: `table.ts` と `set` を書く**
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -314,7 +315,7 @@ Expected: PASS
 
 ```bash
 git add web/packages/core
-git commit -m "feat(core): テーブルの設定と選べる行を足す(E2a Task 5)"
+git commit -m "feat(core): テーブルの設定と選べる行、選択の入れ替えを足す(E2a Task 5)"
 ```
 
 ---
@@ -331,7 +332,7 @@ git commit -m "feat(core): テーブルの設定と選べる行を足す(E2a Tas
   - `createSearch` の deps に `selection?: Pick<RowSelection, "prune">`
   - `SearchState` に `table: TableSettings`
   - `setTable(next: TableSettings): void` — 画面の状態に書く。`sort` か `group` が変わったときだけ、待たずに検索する(列の出し入れでは検索しない)
-  - `settled(): Promise<void>` — 待ちと飛んでいる検索がなくなったら解ける(なければすぐ)
+  - `settled(): Promise<void>` — 待ち・飛んでいる検索・`prepareQuery` で入れ替えてまだ検索していない絞り込みがなくなったら解ける(どれもなければすぐ)。`prepareQuery` のあとは、`open` の検索の応答で解ける
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -340,7 +341,7 @@ git commit -m "feat(core): テーブルの設定と選べる行を足す(E2a Tas
 - `setTable` で `columns` だけ変えると、画面の状態に書くが検索しない。`group` を変えると、`port.search` が `("x", {sort: null, group: "kind"})` で 1 回呼ばれる。
 - `setQuery` の検索にも、いまの `tableRequest` が添えられる。
 - `prunes the selection with each result`(Review Focus 5): 応答が着くたびに `selection.prune` が `selectable(rows)` で呼ばれる。エラーの応答(行なし)では空で呼ばれる。
-- `settled`: `setQuery` の直後に呼ぶと、150ms の待ちと応答のあとで解ける。何もなければすぐ解ける。
+- `settled`: `setQuery` の直後に呼ぶと、150ms の待ちと応答のあとで解ける。何もなければすぐ解ける。`prepareQuery("kind:bug")` のあとに呼ぶと、`open` を呼ぶまで解けず、`open` の検索の応答で解ける(そのときの `result` は `kind:bug` の応答)。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
@@ -375,7 +376,7 @@ git commit -m "feat(core): 検索の流れにテーブルの設定と選択の�
 **Interfaces:**
 - Consumes: Task 4 の `SearchRow`・`SearchColumn`、core の `dueLabel`・`formatDay`・`relativeTime`・`deletedValue`・`unknownUser`
 - Produces:
-  - `type CellView = { kind: "empty" } | { kind: "unused" } | { kind: "removed" } | { kind: "text"; text: string } | { kind: "due"; text: string; emphasis: "overdue" | "today" | null } | { kind: "check"; checked: boolean } | { kind: "url"; href: string } | { kind: "relative"; text: string }`
+  - `type CellView = { kind: "empty" } | { kind: "unused" } | { kind: "removed" } | { kind: "text"; text: string } | { kind: "due"; text: string; emphasis: "overdue" | "today" | null } | { kind: "check"; checked: boolean } | { kind: "url"; href: string } | { kind: "relative"; text: string } | { kind: "person"; name: string }`
   - `function cellView(row: SearchRow, column: SearchColumn, now: Date): CellView` — ID・種類・タイトル・ステータス・担当者・親は呼ぶ側(部品)が描くので、それ以外の列。`unused` が先、次に `removed`
   - `function hoursText(n: number): string` — 小数第 2 位で丸め、末尾の 0 を省く(`item.Hours` と同じ)
   - `const updatedHint = "GitHub と同期による変更は含みません"`
@@ -390,7 +391,7 @@ git commit -m "feat(core): 検索の流れにテーブルの設定と選択の�
 - `system` → 名前を「, 」でつなぐ。`sprint` 空 → `{empty}`。
 - `created` が 3 時間前 → `{relative, "3 時間前"}`。
 - `p:due`(列の型は日付)で `custom` が `{text: "来週", type: "text"}` → `{text, "来週"}`(`cellView uses the cell's own type`、Review Focus 3)。`{text: "2026-12-01", type: "date"}` → `{text, "12/1"}`。
-- `p:done` `{text: "true", type: "check"}` → `{check, true}`。`p:site` `{text: "https://example.com", type: "url"}` → `{url}`。
+- `p:owner` `{text: "田中", type: "user"}` → `{person, "田中"}`(アバターと表示名)。`p:done` `{text: "true", type: "check"}` → `{check, true}`。`p:site` `{text: "https://example.com", type: "url"}` → `{url}`。
 - `hoursText`: 0.5 →「0.5」、1.005 →「1.01」、3 →「3」。
 
 `RowCheck.test.ts`: `disabled` なら押しても `onchange` を呼ばない。
@@ -421,8 +422,9 @@ git commit -m "feat(core): テーブルのセルの表示の中身を足し、�
 **Files:**
 - Create: `web/app/src/screens/table/ItemTable.svelte`(見出しの行・グループの見出しの行・行の並び)、`web/app/src/screens/table/TableHead.svelte`(列見出し。並べ替えのボタンと ↑↓、`aria-sort`)、`web/app/src/screens/table/TableRow.svelte`(`SearchRow.svelte` を移して、列ごとに描く)、`web/app/src/screens/table/TableCell.svelte`(`cellView` の描き分け)、`web/app/src/screens/table/TableToolbar.svelte`(「表示する列」・「グループ」・件数)
 - Delete: `web/app/src/screens/search/SearchTable.svelte`、`web/app/src/screens/search/SearchRow.svelte`
-- Modify: `web/app/src/screens/search/SearchScreen.svelte`(ツールバーとテーブルを差し替え、`search.setTable` をつなぐ)
-- Test: なし(`web/app` には単体テストがない。中身は Task 5・7 の core のテスト、描画は Task 11 の e2e)
+- Modify: `web/app/src/screens/search/SearchScreen.svelte`(ツールバーとテーブルを差し替え、`search.setTable` をつなぐ)、`web/e2e/search.spec.ts`(E1 の「列の見出し 7 つ」の確かめを、この Task 以降の形に合わせる)
+- Create: `web/e2e/search-table.spec.ts`
+- Test: `web/e2e/search-table.spec.ts`(`web/app` には単体テストがない。中身は Task 5・7 の core のテスト)
 
 **Interfaces:**
 - Consumes: Task 5 の `shownColumns`・`columnChoices`・`toggleColumn`・`nextSort`・`groupChoices`、Task 6 の `search.setTable`、Task 7 の `cellView`・`updatedHint`、ui の `ValueMenu`・`Select`・`Button`・`KindIcon`・`StatusDot`・`Avatar`
@@ -435,23 +437,31 @@ git commit -m "feat(core): テーブルのセルの表示の中身を足し、�
 - ツールバーは左から「表示する列」(ボタン。押すと `ValueMenu` を `multi` で開き、選ぶたびに `toggleColumn`)、「グループ」(`Select`)、件数「{N} 件」(E1 のまま)。
 - 列見出しは、`sortable` ならボタンで、押すと `nextSort`。いまの並べ替えの列に「↑」(昇順)か「↓」(降順)、`aria-sort` は `ascending`・`descending`・`none`。`sortable` が偽なら押せない文字。「更新日」の見出しの `title` は `updatedHint`。
 - グループがあるときは、`groups` の順に、見出しの行(`<th colspan>` に見出しと件数)と、その `rows` の位置の行を描く。同じアイテムが複数の見出しの下に出るので、`each` の鍵はグループの位置と行の位置を合わせたものにする。
-- セルは E2a-12 のとおり。ID・種類・タイトル・ステータス・担当者・親は `TableRow` で描き、ほかは `TableCell` が `cellView` で描く(「—」は `unused`、「(削除された値)」は薄い字)。親は押すと `detail.open(row.storeId, row.parent.itemId)`。
+- セルは E2a-12 のとおり。ID・種類・タイトル・ステータス・担当者・親は `TableRow` で描き、ほかは `TableCell` が `cellView` で描く(「—」は `unused`、「(削除された値)」は薄い字)。`TableRow` も、担当者が `unused` なら「—」、ステータスが `removed` なら「(削除された値)」にする。親は押すと `detail.open(row.storeId, row.parent.itemId)`。
 - `SearchScreen.svelte` は 200 行以内に収める(ツールバーとテーブルを部品に出した分で足りる)。
 
-- [ ] **Step 2: 型と lint と大きさを確かめる**
+- [ ] **Step 2: 通しのテストを書く**
+
+`search-table.spec.ts`(作ったアイテムのタイトルに日時を入れて、サンプルの件数に頼らない):
+- 「表示する列」で「開始日」を選ぶと、列が右端に付き、メニューは開いたまま。「タイトル」は選べない。再読み込みしても「開始日」の列が残る。
+- 「タイトル」の見出しを押すと ↑、もう一度で ↓、もう一度で印が消える。
+- 「グループ」を「種類」にすると、見出しの行「Story {N}」などが出る。「なし」に戻して `group:kind` を打っても同じ。「グループ」を「担当者」にすると、`group:kind` があっても担当者で分かれる。
+- 関連システムを持たないアイテムの「関連システム」の列を出すと空、優先度を使わない種類(サンプルの設定で使わない種類があればそれ、なければ設定で外してから)の行の「優先度」は「—」。
+
+- [ ] **Step 3: 流して確かめる**
+
+Run: `make e2e-bin && pnpm -C web exec playwright test e2e/search-table.spec.ts e2e/search.spec.ts`
+Expected: PASS
+
+- [ ] **Step 4: 型と lint と大きさを確かめる**
 
 Run: `pnpm -C web check && pnpm -C web lint && pnpm -C web size`
 Expected: PASS
 
-- [ ] **Step 3: 手で 1 回見る**
-
-Run: `make e2e-bin && HEDGEHUG_TOKEN=dev HEDGEHUG_ADDR=127.0.0.1:4180 ./bin/hedgehug-e2e`
-Expected: 検索の画面で、「表示する列」から「開始日」を出すと右端に付き、「グループ」を「種類」にすると見出しの行が出て、「タイトル」の見出しを押すと ↑ が付く。
-
-- [ ] **Step 4: コミット**
+- [ ] **Step 5: コミット**
 
 ```bash
-git add web/app
+git add web/app web/e2e
 git commit -m "feat(web): 検索のテーブルに列・表示する列・列見出しの並べ替え・グループ・セルの表示を足す(E2a Task 8)"
 ```
 
@@ -460,32 +470,54 @@ git commit -m "feat(web): 検索のテーブルに列・表示する列・列見
 ### Task 9: 選択・選択バー・一括・行末のメニュー
 
 **Files:**
-- Create: `web/app/src/screens/table/SelectAllCheck.svelte`(見出しの行の「すべて選択」)
-- Modify: `web/app/src/screens/table/ItemTable.svelte`・`TableRow.svelte`(先頭のチェックの列と末尾の「…」の列)、`web/app/src/screens/search/SearchScreen.svelte`(`SelectionBar`・パレットの登録・離れたときの解除)、`web/app/src/search.ts`(`searchSelection`・`openRowMenu`・`createSearch` に `selection` を渡す)
-- Test: なし(core の部品は F2b1・F2b2 と Task 5・6 で確かめてある。描画と流れは Task 11 の e2e)
+- Create: `web/packages/core/src/features/search/rowMenu.ts`、`web/app/src/screens/table/SelectAllCheck.svelte`(見出しの行の「すべて選択」)
+- Modify: `web/packages/core/src/index.ts`、`web/app/src/screens/table/ItemTable.svelte`・`TableRow.svelte`(先頭のチェックの列と末尾の「…」の列)、`web/app/src/screens/search/SearchScreen.svelte`(`SelectionBar`・パレットの登録・離れたときの解除)、`web/app/src/search.ts`(`searchSelection`・`openRowMenu`・`createSearch` に `selection` を渡す)、`web/e2e/search-table.spec.ts`
+- Test: `web/packages/core/src/features/search/rowMenu.test.ts`、`web/e2e/search-table.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 5 の `selectable`・`headerCheck`、F2b1 の `createRowSelection`・`isSelected`・`selectedText`・`allReadOnly`・ui の `RowCheck`・`SelectionBar`、`wireActions` の `bulkChange`・`bulkDelete`・`itemMenuHost`、core の `menuAt`・`compareSiblings`、`palette.ts` の `selection`
+- Consumes: Task 5 の `selectable`・`headerCheck`・`RowSelection.set`、F2b1 の `createRowSelection`・`isSelected`・`selectedText`・`allReadOnly`・ui の `RowCheck`・`SelectionBar`、`wireActions` の `bulkChange`・`bulkDelete`・`itemMenuHost`、core の `menuAt`・`compareSiblings`、`palette.ts` の `selection`
 - Produces:
-  - `export const searchSelection: RowSelection`(`web/app/src/search.ts`)
-  - `export async function openRowMenu(row: SearchRow, rect: { left: number; bottom: number }): Promise<void>`(E2a-17)
+  - `function rowMenuContext(items: Item[], itemId: string): { item: Item; ctx: ItemMenuHostContext } | null`(core。E2a-17。`ctx.rows` は `compareSiblings` で並べたプロジェクトのアイテム、`ctx.children` は親が `itemId` のもの、`ctx.row` は true。アイテムがなければ null)
+  - `export const searchSelection: RowSelection`、`export async function openRowMenu(row: SearchRow, rect: { left: number; bottom: number }): Promise<void>`(`web/app/src/search.ts`。`itemsPort.list` → `rowMenuContext` → `itemMenuHost.open`。読めなければ何もしない)
 
-- [ ] **Step 1: 書く**
+- [ ] **Step 1: 失敗するテストを書く**
 
-- 行の先頭は `RowCheck`(名前「{ID} を選択」、`checked` は `isSelected`、`disabled` は削除済みの行)。見出しの行の先頭は「すべて選択」(E2a-16)。
+`rowMenu.test.ts`:
+- 兄弟 3 件(順位 b・a・c)と子 1 件のプロジェクトで、`ctx.rows` が順位の順(a・b・c)、`ctx.children` が子 1 件、`ctx.row` が真。
+- 一覧にない `itemId` → null。
+
+- [ ] **Step 2: 落ちることを確かめる**
+
+Run: `pnpm -C web --filter @hedgehug/core test -- rowMenu`
+Expected: FAIL
+
+- [ ] **Step 3: `rowMenuContext` と画面を書く**
+
+- 行の先頭は `RowCheck`(名前「{ID} を選択」、`checked` は `isSelected`、`disabled` は削除済みの行)。見出しの行の先頭は「すべて選択」(E2a-16。外すときは `clear`、選ぶときは `set(selectable(rows))`)。
 - テーブルの上に、1 件以上選んでいるときだけ `SelectionBar`(`text` は `selectedText`、すべて閲覧のみなら `readOnlyNote`、`onchange` は `bulkChange.open(searchSelection, { after: () => search.reload() })`、`ondelete` は `bulkDelete.open(searchSelection, () => search.reload())`、`onclear` は `searchSelection.clear()`)。
 - 行の末尾は「…」(`IconButton`、名前「{ID} のメニュー」、削除済みの行は無効)。押すと `openRowMenu(row, ボタンの getBoundingClientRect())`。
 - `SearchScreen.svelte` で `selection.provide(2, …)`(E2a-18)を `$effect` で登録し、画面を離れるとき(`onMount` の戻り値)に `searchSelection.clear()`。
 
-- [ ] **Step 2: 型と lint と大きさを確かめる**
+- [ ] **Step 4: 通しのテストを足す**
 
-Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size`
+`search-table.spec.ts` に足す:
+- 関連システムを 2 つ持つアイテムを作り、「グループ」を「関連システム」にすると、2 つの見出しの下に出る。片方でチェックすると両方チェック済みで「1 件を選択中」(Review Focus 1)。
+- 2 件をチェックすると「2 件を選択中」のバー。「一括変更…」で「選択したアイテムを一括変更」が開き、優先度を変えるとトーストが出て、行の優先度が変わり、選択は残る。「一括削除…」で削除すると行が消え、バーが閉じる。
+- 3 件を選んだあと、別のページ(新しいタブ)でそのうち 1 件を削除すると「2 件を選択中」になる(Review Focus 5)。
+- 「すべて選択」で全件が選ばれ、もう一度で外れる。
+- `is:deleted` で、行のチェックと「…」が押せない(Review Focus 4)。
+- 行の「…」で 02 のアイテムのメニューが開き、「詳細を開く」で詳細パネルが開く。「…」の「削除…」で削除すると、その行が消える(Store の変更の知らせで読み直す)。
+- 閲覧のみの Store の行だけを選ぶと、「一括変更…」「一括削除…」が無効。
+
+- [ ] **Step 5: 通ることを確かめる**
+
+Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/search-table.spec.ts`
 Expected: PASS
 
-- [ ] **Step 3: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
-git add web/app
+git add web
 git commit -m "feat(web): 検索のテーブルに行の選択・選択バー・一括変更と一括削除・行末のメニューを足す(E2a Task 9)"
 ```
 
@@ -494,15 +526,23 @@ git commit -m "feat(web): 検索のテーブルに行の選択・選択バー・
 ### Task 10: パレットの「{N} 件をまとめて変更…」
 
 **Files:**
-- Modify: `web/packages/core/src/features/palette/queryGroup.ts`(応答から件数・`is:deleted`・すべて閲覧のみを控え、2 つ目の候補を出す)、`web/packages/core/src/features/palette/palette.ts`(deps に `bulkChangeAll(query: string): Promise<void>` を足し、群に渡すだけ)、`web/app/src/palette.ts`、`web/app/src/search.ts`(`bulkChangeAll` の中身)
-- Test: `web/packages/core/src/features/palette/queryGroup.test.ts`(なければ `palette.test.ts` の「このクエリで」のテストのファイル)
+- Create: `web/packages/core/src/features/search/changeAll.ts`
+- Modify: `web/packages/core/src/features/palette/queryGroup.ts`(応答から件数・`is:deleted`・すべて閲覧のみを控え、2 つ目の候補を出す)、`web/packages/core/src/features/palette/palette.ts`(deps に `bulkChangeAll(query: string): Promise<void>` を足し、群に渡すだけ)、`web/packages/core/src/index.ts`、`web/app/src/palette.ts`、`web/app/src/search.ts`(`bulkChangeAll` の組み立て)、`web/e2e/search-table.spec.ts`
+- Test: `web/packages/core/src/features/search/changeAll.test.ts`、`web/packages/core/src/features/palette/queryGroup.test.ts`(なければ `palette.test.ts` の「このクエリで」のテストのファイル)、`web/e2e/search-table.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 6 の `settled`、Task 9 の `searchSelection`、Task 5 の `selectable`
-- Produces: `export async function bulkChangeAll(query: string): Promise<void>`(`web/app/src/search.ts`。E2a-19)
+- Consumes: Task 6 の `settled`、Task 9 の `searchSelection`、Task 5 の `selectable`・`RowSelection.set`
+- Produces:
+  - `function createChangeAll(deps: { openSearch(query: string): Promise<void>; settled(): Promise<void>; result(): SearchResult | null; selection: Pick<RowSelection, "set">; openBulkChange(): Promise<void> }): (query: string) => Promise<void>`(core。E2a-19)
+  - `export const bulkChangeAll: (query: string) => Promise<void>`(`web/app/src/search.ts`。`openSearch` はパレットの「検索で開く」と同じもの、`openBulkChange` は `bulkChange.open(searchSelection, { after: () => search.reload() })`)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
+`changeAll.test.ts`:
+- `openSearch("kind:bug")` → `settled` → `selection.set(selectable(rows))` → `openBulkChange` の順に 1 回ずつ呼ぶ。
+- `settled` のあとの結果が 0 件・エラーなら `set([])` だけで、`openBulkChange` を呼ばない。
+
+`queryGroup.test.ts`:
 - `kind:bug`(3 件、閲覧のみでない)で、「検索で開く」の次に「3 件をまとめて変更…」。選ぶとパレットを閉じて `bulkChangeAll("kind:bug")`。
 - 0 件 →「0 件をまとめて変更…」が無効で理由「一致するアイテムがありません」。
 - 行がすべて閲覧のみ → 理由「閲覧のみの Store です」。
@@ -511,19 +551,21 @@ git commit -m "feat(web): 検索のテーブルに行の選択・選択バー・
 
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `pnpm -C web --filter @hedgehug/core test -- palette queryGroup`
+Run: `pnpm -C web --filter @hedgehug/core test -- changeAll palette queryGroup`
 Expected: FAIL
 
 - [ ] **Step 3: 書く**
 
-`bulkChangeAll` は、E1 の `openSearch` と同じ道で絞り込みを入れ替えて検索の画面を開き(検索は 1 回)、`await search.settled()` のあと、`get(search.state).result` の `selectable(rows)` を `searchSelection` にすべて入れ(先に `clear`)、1 件以上なら `bulkChange.open(searchSelection, { after: () => search.reload() })`。
+- [ ] **Step 4: 通しのテストを足す**
 
-- [ ] **Step 4: 通ることを確かめる**
+`search-table.spec.ts` に足す: マイタスクなど検索でない画面でパレットを開き、`kind:bug` を打って「{N} 件をまとめて変更…」を選ぶと、検索の画面の欄が `kind:bug` で、「{N} 件を選択中」になり、一括変更のダイアログが開いている。
 
-Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size`
+- [ ] **Step 5: 通ることを確かめる**
+
+Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/search-table.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
 git add web
@@ -532,47 +574,26 @@ git commit -m "feat(palette): 「このクエリで」に「{N} 件をまとめ�
 
 ---
 
-### Task 11: 通しのテストと文書
+### Task 11: 文書と、すべての確かめ
 
 **Files:**
-- Create: `web/e2e/search-table.spec.ts`
-- Modify: `web/e2e/search.spec.ts`(E1 の「列の見出し 7 つ」の確かめを、チェックの列と「…」の列が増えた形に合わせる)、`docs/superpowers/plans/2026-11-15-hedgehug-track-e.md`(下記)、`docs/superpowers/plans/2026-11-15-hedgehug-track-e1.md`(末尾「E2(テーブル)」の各行に「E2a で足した」または「E2b・E2c に回した」を添える)、`docs/superpowers/plans/2026-11-14-hedgehug-track-f2b1.md`・`2026-11-14-hedgehug-track-f2b2.md`(末尾「E に求めること」の各行に「E2a で足した」を添える)、この計画の末尾「E2b・E2c に渡すもの」
+- Modify: `docs/superpowers/plans/2026-11-15-hedgehug-track-e.md`(下記)、`docs/superpowers/plans/2026-11-15-hedgehug-track-e1.md`(末尾「E2(テーブル)」の各行に「E2a で足した」または「E2b・E2c に回した」を添える)、`docs/superpowers/plans/2026-11-14-hedgehug-track-f2b1.md`・`2026-11-14-hedgehug-track-f2b2.md`(末尾「E に求めること」の各行に「E2a で足した」を添える)、この計画の末尾「E2b・E2c に渡すもの」
 
-- [ ] **Step 1: 通しのテストを書く**
-
-`search-table.spec.ts`(作ったアイテムのタイトルに日時を入れて、サンプルの件数に頼らない):
-- 「表示する列」で「開始日」を選ぶと、列が右端に付き、メニューは開いたまま。「タイトル」は選べない。再読み込みしても「開始日」の列が残る。
-- 「タイトル」の見出しを押すと ↑、もう一度で ↓、もう一度で印が消える。
-- 「グループ」を「種類」にすると、見出しの行「Story {N}」などが出る。`group:kind` を打っても同じ。「グループ」を「担当者」にすると、`group:kind` があっても担当者で分かれる。
-- 関連システムを 2 つ持つアイテムを作り、「グループ」を「関連システム」にすると、2 つの見出しの下に出る。片方でチェックすると両方チェック済みで「1 件を選択中」(Review Focus 1)。
-- 2 件をチェックすると「2 件を選択中」のバー。「一括変更…」で「選択したアイテムを一括変更」が開き、優先度を変えるとトーストが出て、行の優先度が変わり、選択は残る。「一括削除…」で削除すると行が消え、バーが閉じる。
-- 3 件を選んだあと、別のページ(新しいタブ)でそのうち 1 件を削除すると「2 件を選択中」になる(Review Focus 5)。
-- 「すべて選択」で全件が選ばれ、もう一度で外れる。
-- `is:deleted` で、行のチェックと「…」が押せない(Review Focus 4)。
-- 行の「…」で 02 のアイテムのメニューが開き、「詳細を開く」で詳細パネルが開く。
-- パレットで `kind:bug` を打ち「{N} 件をまとめて変更…」を選ぶと、検索の画面の欄が `kind:bug` で、全件が選ばれ、一括変更のダイアログが開いている。
-- 閲覧のみの Store の行だけを選ぶと、「一括変更…」「一括削除…」が無効。
-
-- [ ] **Step 2: 流して確かめる**
-
-Run: `make e2e-bin && pnpm -C web exec playwright test e2e/search-table.spec.ts e2e/search.spec.ts`
-Expected: PASS
-
-- [ ] **Step 3: 文書を直す**
+- [ ] **Step 1: 文書を直す**
 
 - トラック E の分け方(`2026-11-15-hedgehug-track-e.md`): 決めたことの表に「E-5 E2 は 3 本に分ける(E2a・E2b・E2c)。ユーザーの決定(2026-11-15)」と「E-6 ワークスペースの画面の「ツリー」タブ(プロジェクトの行・プロジェクトのメニュー)は E7。ユーザーの決定(2026-11-15)」を足す。小計画の一覧の E2 の行を E2a(この計画の Goal の中身)・E2b(04「セル」の編集の部品、閲覧のみ・削除済みの行のセルの無効)・E2c(ワークスペース・プロジェクトの「テーブル」タブ、待つものは E2a)の 3 行にし、E3 の待つものを E2a にする。E7 の行の中身に「ワークスペースの画面の「ツリー」タブ・プロジェクトの行・プロジェクトのメニュー(A4b の計画の E に回した行)」を足す。「ほかのトラックから回された項目の行き先」の E2 を E2a・E2c に直す(A2 の決定 15 のテーブル → E2c、F2b1・F2b2 → E2a)。
-- この計画の末尾に「E2b・E2c に渡すもの」を書く(下の節の中身を、実装で変えたことに合わせて直す)。
+- この計画の末尾「E2b・E2c に渡すもの」を、実装で変えたことに合わせて直す。
 
-- [ ] **Step 4: すべてを確かめる**
+- [ ] **Step 2: すべてを確かめる**
 
-Run: `make check`
+Run: `make check && make e2e-bin && pnpm -C web exec playwright test e2e/search-table.spec.ts e2e/search.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 3: コミット**
 
 ```bash
-git add web/e2e docs
-git commit -m "test(e2e): 検索のテーブルを通しで確かめ、トラック E の分け方を書き換える(E2a Task 11)"
+git add docs
+git commit -m "docs: トラック E の分け方を E2a・E2b・E2c と E7 のワークスペースのツリーに書き換える(E2a Task 11)"
 ```
 
 ## E2b・E2c に渡すもの
