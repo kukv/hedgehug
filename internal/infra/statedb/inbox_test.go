@@ -249,3 +249,79 @@ func TestInboxSurvivesReopen(t *testing.T) {
 		t.Errorf("after reopen: %+v", rows)
 	}
 }
+
+func TestInboxMentionUpsert(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	at9, at930 := inboxT0.Add(-time.Hour), inboxT0.Add(-30*time.Minute)
+	first := port.Notice{Kind: port.NoticeMention, Store: "s1", Workspace: "w1", Item: "i1", Source: "comment:c1", Text: "@hanako 見て", Sender: "taro", At: at9}
+	if err := b.Mention(t.Context(), first); err != nil {
+		t.Fatal(err)
+	}
+	rows := inboxList(t, b, "s1")
+	if len(rows) != 1 || !rows[0].At.Equal(at9) || rows[0].Source != "comment:c1" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if err := b.SetRead(t.Context(), rows[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.Text, second.Sender, second.At = "@hanako 直した", "jiro", at930
+	if err := b.Mention(t.Context(), second); err != nil {
+		t.Fatal(err)
+	}
+	other := first
+	other.Store = "s2"
+	if err := b.Mention(t.Context(), other); err != nil {
+		t.Fatal(err)
+	}
+	rows = inboxList(t, b, "s1")
+	if len(rows) != 1 || rows[0].Text != "@hanako 直した" || rows[0].Sender != "jiro" || !rows[0].At.Equal(at930) || rows[0].Read || rows[0].Result != "" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if got := inboxList(t, b, "s2"); len(got) != 1 || got[0].Text != "@hanako 見て" {
+		t.Errorf("s2 = %+v", got)
+	}
+	if err := b.Mention(t.Context(), port.Notice{Kind: port.NoticeMention, Store: "s1"}); err == nil {
+		t.Error("an empty Source must be an error")
+	}
+}
+
+func TestInboxProjectColumns(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	n := port.Notice{Kind: port.NoticeAssign, Store: "s1", Workspace: "w1", Project: "p1", Display: "HH-P1"}
+	if err := b.Add(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	rows := inboxList(t, b, "s1")
+	if len(rows) != 1 || rows[0].Project != "p1" || rows[0].Display != "HH-P1" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	got, err := b.Get(t.Context(), rows[0].ID)
+	if err != nil || got.Project != "p1" {
+		t.Errorf("get = %+v, %v", got, err)
+	}
+}
+
+func TestInboxPruneProject(t *testing.T) {
+	b := openTemp(t).Inbox(apptest.NewClock(inboxT0))
+	byProject := port.Notice{Kind: port.NoticeAssign, Store: "s1", Workspace: "w1", Project: "p1"}
+	otherProject := byProject
+	otherProject.Project = "p2"
+	itemSameID := inboxNotice("s1", port.NoticeMention)
+	itemSameID.Item, itemSameID.Workspace = "i1", "p1"
+	for _, n := range []port.Notice{byProject, otherProject, itemSameID} {
+		if err := b.Add(t.Context(), n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.Prune(t.Context(), "s1", []change.ID{"p1"}); err != nil {
+		t.Fatal(err)
+	}
+	got := inboxList(t, b, "s1")
+	if len(got) != 2 || slices.ContainsFunc(got, func(r port.NoticeRow) bool { return r.Project == "p1" }) {
+		t.Fatalf("after prune = %+v", got)
+	}
+	if !slices.ContainsFunc(got, func(r port.NoticeRow) bool { return r.Item == "i1" }) {
+		t.Error("an item notice must stay")
+	}
+}

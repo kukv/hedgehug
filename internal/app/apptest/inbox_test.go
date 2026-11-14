@@ -132,3 +132,48 @@ func TestFakeInboxPrune(t *testing.T) {
 		t.Errorf("s2 = %d", len(got))
 	}
 }
+
+func TestFakeInboxMentionUpsert(t *testing.T) {
+	b := &Inbox{}
+	at9, at930 := time.Unix(9*3600, 0), time.Unix(9*3600+1800, 0)
+	first := port.Notice{Kind: port.NoticeMention, Store: "s1", Item: "i1", Source: "comment:c1", Text: "見て", Sender: "taro", At: at9}
+	_ = b.Mention(t.Context(), first)
+	rows := fakeList(t, b, "s1")
+	if len(rows) != 1 || !rows[0].At.Equal(at9) {
+		t.Fatalf("rows = %+v", rows)
+	}
+	_ = b.SetRead(t.Context(), rows[0].ID, true)
+	second := first
+	second.Text, second.Sender, second.At = "直した", "jiro", at930
+	_ = b.Mention(t.Context(), second)
+	other := first
+	other.Store = "s2"
+	_ = b.Mention(t.Context(), other)
+	rows = fakeList(t, b, "s1")
+	if len(rows) != 1 || rows[0].Text != "直した" || rows[0].Sender != "jiro" || !rows[0].At.Equal(at930) || rows[0].Read {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if len(fakeList(t, b, "s2")) != 1 {
+		t.Error("another store must keep its own row")
+	}
+	if err := b.Mention(t.Context(), port.Notice{Kind: port.NoticeMention, Store: "s1"}); err == nil {
+		t.Error("an empty Source must be an error")
+	}
+}
+
+func TestFakeInboxProjectColumnsAndPrune(t *testing.T) {
+	b := &Inbox{}
+	byProject := port.Notice{Kind: port.NoticeAssign, Store: "s1", Workspace: "w1", Project: "p1", Display: "HH-P1"}
+	itemSameID := fakeNotice("s1", port.NoticeMention)
+	itemSameID.Item, itemSameID.Workspace = "i1", "p1"
+	_ = b.Add(t.Context(), byProject)
+	_ = b.Add(t.Context(), itemSameID)
+	rows := fakeList(t, b, "s1")
+	if rows[1].Project != "p1" || rows[1].Display != "HH-P1" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	_ = b.Prune(t.Context(), "s1", []change.ID{"p1"})
+	if got := fakeList(t, b, "s1"); len(got) != 1 || got[0].Item != "i1" {
+		t.Errorf("after prune = %+v", got)
+	}
+}

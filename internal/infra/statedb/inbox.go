@@ -31,6 +31,9 @@ func init() {
 		result      TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX inbox_by_at ON inbox (store, at, id)`)
+	register("inbox/002", `ALTER TABLE inbox ADD COLUMN project TEXT NOT NULL DEFAULT '';
+	ALTER TABLE inbox ADD COLUMN source TEXT NOT NULL DEFAULT '';
+	CREATE INDEX inbox_by_source ON inbox (store, source)`)
 }
 
 // Inbox は、このマシンの受信箱(port.InboxBook)。時刻は Add のときに clock で刻む。
@@ -46,15 +49,36 @@ const inboxTimeLayout = "2006-01-02T15:04:05.000000000Z"
 
 func inboxTime(t time.Time) string { return t.UTC().Format(inboxTimeLayout) }
 
-const inboxColumns = `id, store, workspace, kind, item, rule, text, reason, status, from_status, display, sender, at, read, result`
+const inboxColumns = `id, store, workspace, project, kind, item, rule, text, reason, status, from_status, display, sender, source, at, read, result`
 
 func (b inbox) Add(ctx context.Context, n port.Notice) error {
+	return b.insert(ctx, n, b.clock.Now())
+}
+
+func (b inbox) insert(ctx context.Context, n port.Notice, at time.Time) error {
 	_, err := b.db.ExecContext(ctx, `INSERT INTO inbox
-		(store, workspace, kind, item, rule, text, reason, status, from_status, display, sender, at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		string(n.Store), string(n.Workspace), string(n.Kind), string(n.Item), string(n.Rule), n.Text, n.Reason,
-		string(n.Status), string(n.From), n.Display, n.Sender, inboxTime(b.clock.Now()))
+		(store, workspace, project, kind, item, rule, text, reason, status, from_status, display, sender, source, at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		string(n.Store), string(n.Workspace), string(n.Project), string(n.Kind), string(n.Item), string(n.Rule), n.Text, n.Reason,
+		string(n.Status), string(n.From), n.Display, n.Sender, n.Source, inboxTime(at))
 	return err
+}
+
+// Mention は、同じ Store・Source の行があれば本文・差出人・時刻を書き換えて未読に戻す。なければ足す。
+// 結果は触らない。
+func (b inbox) Mention(ctx context.Context, n port.Notice) error {
+	if n.Source == "" {
+		return port.ErrInvalidOperation
+	}
+	res, err := b.db.ExecContext(ctx, `UPDATE inbox SET text = ?, sender = ?, at = ?, read = 0 WHERE store = ? AND source = ?`,
+		n.Text, n.Sender, inboxTime(n.At), string(n.Store), n.Source)
+	if err != nil {
+		return err
+	}
+	if c, err := res.RowsAffected(); err != nil || c > 0 {
+		return err
+	}
+	return b.insert(ctx, n, n.At)
 }
 
 // inClause は、件数ぶんの ? と値を返す。
@@ -114,13 +138,14 @@ func (b inbox) List(ctx context.Context, q port.NoticeQuery) ([]port.NoticeRow, 
 
 func scanNotice(s interface{ Scan(...any) error }) (port.NoticeRow, error) {
 	var r port.NoticeRow
-	var store, workspace, kind, itemID, rule, status, from, result, at string
+	var store, workspace, project, kind, itemID, rule, status, from, result, at string
 	var read int
-	err := s.Scan(&r.ID, &store, &workspace, &kind, &itemID, &rule, &r.Text, &r.Reason, &status, &from, &r.Display, &r.Sender, &at, &read, &result)
+	err := s.Scan(&r.ID, &store, &workspace, &project, &kind, &itemID, &rule, &r.Text, &r.Reason, &status, &from, &r.Display, &r.Sender, &r.Source, &at, &read, &result)
 	if err != nil {
 		return r, err
 	}
 	r.Store, r.Workspace, r.Kind, r.Item, r.Rule = port.StoreID(store), change.ID(workspace), port.NoticeKind(kind), change.ID(itemID), change.ID(rule)
+	r.Project = change.ID(project)
 	r.Status, r.From, r.Read, r.Result = change.ID(status), change.ID(from), read != 0, port.NoticeResult(result)
 	r.At, err = parseTime(at)
 	return r, err
@@ -205,7 +230,8 @@ func (b inbox) Prune(ctx context.Context, store port.StoreID, targets []change.I
 	marks, ids := inClause(targets)
 	args := append([]any{string(store)}, ids...)
 	args = append(args, ids...)
-	_, err := b.db.ExecContext(ctx, `DELETE FROM inbox WHERE store = ? AND (item IN `+marks+` OR (item = '' AND workspace IN `+marks+`))`, args...) //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
+	args = append(args, ids...)
+	_, err := b.db.ExecContext(ctx, `DELETE FROM inbox WHERE store = ? AND (item IN `+marks+` OR project IN `+marks+` OR (item = '' AND project = '' AND workspace IN `+marks+`))`, args...) //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
 	return err
 }
 

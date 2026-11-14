@@ -38,6 +38,27 @@ func (i *Inbox) Add(_ context.Context, n port.Notice) error {
 	return nil
 }
 
+// Mention は、同じ Store・Source の行があれば本文・差出人・時刻を書き換えて未読に戻し、なければ n.At で足す。
+func (i *Inbox) Mention(_ context.Context, n port.Notice) error {
+	if n.Source == "" {
+		return port.ErrInvalidOperation
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.Err != nil {
+		return i.Err
+	}
+	k := slices.IndexFunc(i.rows, func(r port.NoticeRow) bool { return r.Store == n.Store && r.Source == n.Source })
+	if k < 0 {
+		i.next++
+		i.rows = append(i.rows, port.NoticeRow{ID: i.next, Notice: n, At: n.At})
+		return nil
+	}
+	r := &i.rows[k]
+	r.Text, r.Sender, r.At, r.Read = n.Text, n.Sender, n.At, false
+	return nil
+}
+
 // Notices は、足した通知を足した順に返す。
 func (i *Inbox) Notices() []port.Notice {
 	i.mu.Lock()
@@ -152,7 +173,7 @@ func (i *Inbox) Prune(_ context.Context, store port.StoreID, targets []change.ID
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.rows = slices.DeleteFunc(i.rows, func(r port.NoticeRow) bool {
-		return r.Store == store && (slices.Contains(targets, r.Item) || (r.Item == "" && slices.Contains(targets, r.Workspace)))
+		return r.Store == store && (slices.Contains(targets, r.Item) || slices.Contains(targets, r.Project) || (r.Item == "" && r.Project == "" && slices.Contains(targets, r.Workspace)))
 	})
 	return nil
 }
