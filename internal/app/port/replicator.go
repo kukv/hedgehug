@@ -96,10 +96,19 @@ type ReceivedSave struct {
 	Removed []RemovedEntity
 	// Concurrent は、合わせのときだけ、片側で親と一緒に削除され、もう片側で人が変えたエンティティ(決定 C4b2-17)。
 	Concurrent []ConcurrentRows
+	// Conflicts は、合わせのときだけ、説明の同じ箇所を両側が変えて、両方の版が残ったエンティティ(決定 C4c1-12)。
+	Conflicts []DescConflict
 	// Sides は、restore の行を書いた同期の修復の保存のときだけ、その保存の前を(ほかの修復の保存を通って)辿った
 	// いちばん近い合わせで、共通の祖先にない行の ID を、その合わせの 2 つの側に分けたもの。見るのは、その保存が
 	// 書いたエンティティのログだけ。合わせに届かなければ空(決定 C4b2-9)。
 	Sides repair.Facts
+}
+
+// DescConflict は、合わせで説明の同じ箇所を両側が変えて、両方の版が残ったエンティティ 1 つ(決定 C4c1-12)。
+type DescConflict struct {
+	Ref change.Ref
+	// Sides は、2 つの親それぞれの側で、共通の祖先のログにない desc の行。順は合わせの親の順(自分、remote)。
+	Sides [2][]change.Record
 }
 
 // ConcurrentRows は、合わせの結果に残るエンティティ 1 つで、片側の共通の祖先にない行に root: false の削除があり、
