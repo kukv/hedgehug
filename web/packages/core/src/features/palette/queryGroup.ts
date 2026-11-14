@@ -54,6 +54,7 @@ export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
             shown = r.hasKey && r.errors.length === 0 ? r.rows.length : null;
             deps.changed();
           },
+          // 解析できなければ、群を出さないだけ(入力はそのまま続けられる)。
           () => {},
         );
       }, queryWait);

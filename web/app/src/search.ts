@@ -15,7 +15,9 @@ import { palettePort, timer, toasts } from "./wireBase";
 
 // 検索の画面(04「検索」、E1)。wire.ts が 300 行なので、ここで作る。
 export const screenStates = createScreenStates(createScreenStatesPort());
-export const search = createSearch({ port: createSearchPort(), screenStates, timer, toasts });
+// searchPort は、パレットの「このクエリで」も使う。
+export const searchPort = createSearchPort();
+export const search = createSearch({ port: searchPort, screenStates, timer, toasts });
 
 // Store が変わった知らせで、検索の画面を開いていれば読み直す(E1-19)。
 reloads.add(async () => {

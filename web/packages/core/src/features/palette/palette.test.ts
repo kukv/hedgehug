@@ -249,7 +249,7 @@ describe("createPalette", () => {
       expect(labels(palette)).not.toContain("# このクエリで");
     });
 
-    test("入力を変えると前の群を消す。閉じたあとの応答は無視する", async () => {
+    test("入力を変えると前の群を消し、閉じると待ちを捨てる", async () => {
       const { palette, timer } = await setup({ search: async () => found(1) });
       await palette.open();
       palette.input("kind:bug");
@@ -260,6 +260,19 @@ describe("createPalette", () => {
       expect(labels(palette)).not.toContain("# このクエリで");
       palette.close();
       expect(timer.count()).toBe(0);
+    });
+
+    test("閉じて開き直したあとに返った応答は群にしない", async () => {
+      const g = gate();
+      const { palette, timer } = await setup({ search: () => g.wait.then(() => found(2)) });
+      await palette.open();
+      palette.input("kind:bug");
+      timer.fire();
+      palette.close();
+      await palette.open();
+      g.release();
+      await flush();
+      expect(labels(palette)).not.toContain("# このクエリで");
     });
 
     test("アイテムの候補は群があってもなくても変わらない", async () => {

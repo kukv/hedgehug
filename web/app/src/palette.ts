@@ -1,7 +1,6 @@
-import { createSearchPort } from "@hedgehug/api";
 import { createPalette, createPlanRequest, createSelection } from "@hedgehug/core";
 import { hereOf } from "./here";
-import { search } from "./search";
+import { search, searchPort } from "./search";
 import { isMac } from "./tab";
 import {
   catalog,
@@ -61,7 +60,7 @@ export const palette = createPalette({
   route: navigation.route,
   openTab: (route) => links.openTab(route),
   now: () => new Date(),
-  search: createSearchPort(),
+  search: searchPort,
   timer,
   // 検索の画面と同じ search で絞り込みを入れ替えてから開く(E1-21)。
   openSearch: async (query) => {
