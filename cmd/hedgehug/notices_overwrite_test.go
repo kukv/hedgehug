@@ -107,7 +107,7 @@ func TestOverwriteScenarioStatus(t *testing.T) {
 }
 
 // A の値が送られたあと、C(hanako の別のマシン)が A の値を受け取り、そのあと同時の B の値(勝つ)を受け取る。
-// C で作った値ではないので C には作らず、A にだけ 1 行(Review Focus 1)。
+// C で作った値ではないので C には作らず(C がもう一度同期しても)、A にだけ 1 行(Review Focus 1)。
 func TestOverwriteScenarioSameLoginOtherMachine(t *testing.T) {
 	remote, a, b, c := overwriteTrio(t, scenarioStart.Add(time.Hour))
 	setStatusAs(t, a, "hanako", apptest.SampleStatusInProgress)
@@ -123,10 +123,12 @@ func TestOverwriteScenarioSameLoginOtherMachine(t *testing.T) {
 	wantStatus(t, a, apptest.SampleStatusDone)
 	wantOverwrite(t, a, "status", statusOverwritten, "taro")
 	wantNoOverwrite(t, b)
+	c.sync(t, remote)
+	wantNoOverwrite(t, c)
 }
 
 // A の時計が B より進んでいて、A の値(InProgress)が勝つ。どちらが先に送っても、B に 1 行(差出人は hanako)、
-// A には 0 行(Review Focus 5)。
+// A には 0 行。もう一度同期しても変わらない(Review Focus 5)。
 func TestOverwriteScenarioClockAhead(t *testing.T) {
 	for _, tc := range overwriteOrders {
 		t.Run(tc.name, func(t *testing.T) {
@@ -136,6 +138,10 @@ func TestOverwriteScenarioClockAhead(t *testing.T) {
 			syncOrder(t, remote, tc.aFirst, a, b)
 			wantStatus(t, a, apptest.SampleStatusInProgress)
 			wantStatus(t, b, apptest.SampleStatusInProgress)
+			wantOverwrite(t, b, "status", statusOverwritten, "hanako")
+			wantNoOverwrite(t, a)
+			a.sync(t, remote)
+			b.sync(t, remote)
 			wantOverwrite(t, b, "status", statusOverwritten, "hanako")
 			wantNoOverwrite(t, a)
 		})
