@@ -48,7 +48,7 @@ func setup(t *testing.T) *fixture {
 	f := &fixture{book: &apptest.Inbox{Clock: at}, events: &apptest.Events{}}
 	_, f.api = humatest.New(t)
 	inbox.Register(f.api, appinbox.Service{
-		Book: f.book, Stores: st, Events: f.events,
+		Book: f.book, Stores: st, Events: f.events, Identity: apptest.Identity{Login: "taro"}, Clock: clock,
 		List: &apptest.StoreList{Stores: []port.StoreInfo{{ID: s1, Name: "web", Color: "sky"}}},
 		ApplyIgnoringWorkflow: func(context.Context, port.StoreID, item.ID, change.ID, change.ID, change.ID) error {
 			return f.applyErr

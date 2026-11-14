@@ -29,6 +29,8 @@ type Row struct {
 	Store  port.StoreInfo
 	Target Target
 	Action *Action // 止まった通知だけ
+	// Overwrite は、上書きの通知で、値を出す項目のとき(C4c2-3)。エンティティかプロパティを引けなければ nil(本文だけ)
+	Overwrite *Overwrite
 }
 
 // Page は、タブの通知を新しい順に、before より古いものから 300 件返す。before が nil なら先頭から。
@@ -61,6 +63,7 @@ func (s Service) Page(ctx context.Context, tab Tab, before *port.NoticeCursor) (
 // rows は、通知を行にする。通知のある Store だけ、Store ごとに 1 回読む。
 func (s Service) rows(ctx context.Context, infos []port.StoreInfo, notices []port.NoticeRow) ([]Row, error) {
 	out := make([]Row, len(notices))
+	now := s.Clock.Now()
 	has := make(map[port.StoreID]bool, len(infos))
 	for _, n := range notices {
 		has[n.Store] = true
@@ -70,7 +73,7 @@ func (s Service) rows(ctx context.Context, infos []port.StoreInfo, notices []por
 			continue
 		}
 		err := s.Stores.Read(ctx, info.ID, func(r port.Reader) error {
-			return fill(r, info, notices, out)
+			return fill(r, info, notices, out, now)
 		})
 		if err != nil {
 			return nil, err
@@ -79,13 +82,13 @@ func (s Service) rows(ctx context.Context, infos []port.StoreInfo, notices []por
 	return out, nil
 }
 
-// fill は、info の Store の通知を行にして out の同じ位置に入れる。
-func fill(r port.Reader, info port.StoreInfo, notices []port.NoticeRow, out []Row) error {
+// fill は、info の Store の通知を行にして out の同じ位置に入れる。now は値の表示に使う今。
+func fill(r port.Reader, info port.StoreInfo, notices []port.NoticeRow, out []Row, now time.Time) error {
 	for k, n := range notices {
 		if n.Store != info.ID {
 			continue
 		}
-		row, err := resolve(r, info, n)
+		row, err := resolve(r, info, n, now)
 		if err != nil {
 			return err
 		}
