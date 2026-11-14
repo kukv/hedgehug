@@ -87,4 +87,21 @@ export type {
   SprintState,
   Totals,
 } from "./model/planning";
+export type {
+  BurnDay,
+  Burndown,
+  Durations,
+  EstimateRow,
+  EstimateTotal,
+  FlowDay,
+  FlowLayer,
+  Report,
+  ReportActive,
+  ReportLayers,
+  ReportSelection,
+  ReportSprint,
+  ReportUnit,
+  VelocityBar,
+} from "./model/report";
 export type { PlanningPort } from "./port/planning";
+export type { ReportsPort } from "./port/reports";
