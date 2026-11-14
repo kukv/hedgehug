@@ -51,8 +51,11 @@ func (s Service) MoveProject(ctx context.Context, store port.StoreID, id project
 	var summary string
 	err = s.Stores.Read(ctx, store, func(r port.Reader) error {
 		p, err := planProjectWithin(r, id, in, port.EditableProject, noID)
+		if err != nil {
+			return err
+		}
 		summary = p.summary()
-		return err
+		return nil
 	})
 	if err != nil {
 		return ProjectMoved{}, err
@@ -170,7 +173,7 @@ func newProjectPlan(src projectSource, dst projectTarget, srcName, dstName strin
 // refuseProjectMove は、移動先 dst に、移すプロジェクトと同じ名前の削除されていないプロジェクト、移す専用ルールと同じ名前の
 // 削除されていないルールがあれば断る(A5b-9。順はプロジェクト → ルール、ルールは移動元の並びで最初の 1 つ)。
 func refuseProjectMove(src projectSource, dst projectTarget, dstName string) error {
-	if slices.ContainsFunc(dst.live, func(p project.Project) bool { return p.ID != src.project.ID && p.Title == src.project.Title }) {
+	if slices.ContainsFunc(dst.live, func(p project.Project) bool { return p.Title == src.project.Title }) {
 		return refusal.New(dstName + " には同じ名前のプロジェクトがあります")
 	}
 	for _, r := range src.own {

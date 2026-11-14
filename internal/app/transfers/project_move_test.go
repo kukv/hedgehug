@@ -238,6 +238,16 @@ func TestMoveProjectRefusesSameNameRule(t *testing.T) {
 	moveProject(t, f, apptest.SampleProject, projectTo(store1, mobileWS))
 }
 
+// A5b-9 の順: 移動先にプロジェクトとルールの両方で同じ名前があれば、プロジェクトの断りを出す。
+func TestMoveProjectRefusesSameNameProjectBeforeRule(t *testing.T) {
+	f := newFixture(t)
+	addProject(t, f.rec, mobileWS, "01TESTPR000000000000000005", 2, "ログイン")
+	addRule(t, f.rec, apptest.SampleWorkspace, statusRule("01TESTRULE0000000000000001", "レビュー待ち", apptest.SampleProject, apptest.SampleStatusDone))
+	addRule(t, f.rec, mobileWS, statusRule("01TESTRULE0000000000000002", "レビュー待ち", "", valueID(t, f.rec, "status", "Done")))
+	_, err := f.svc.MoveProject(t.Context(), store1, apptest.SampleProject, projectTo(store1, mobileWS))
+	wantRefusal(t, err, "Mobile には同じ名前のプロジェクトがあります")
+}
+
 // Review Focus 4: アイテムが 0 件のプロジェクトも移せる。番号の行はプロジェクトの分だけ。
 func TestMoveProjectWithoutItems(t *testing.T) {
 	f := newFixture(t)
