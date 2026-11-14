@@ -17,19 +17,19 @@ type Service struct {
 	List     port.StoreList
 }
 
-// Judge は、saves(古い順)から割り当て・プロジェクトのオーナー・メンション・ウォッチと、ステータスの削除からの
+// Judge は、in.Saves(古い順)から割り当て・プロジェクトのオーナー・メンション・ウォッチと、ステータスの削除からの
 // 自動化の通知を作る。「あなた」を決められない Store では何も作らない(C4b1-15)。1 回の read の中で前と後を作って
 // 通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみでないときだけ(C4b1-14)。判定できない中身
 // (ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの読み書きの失敗(Store・表示中の Store の
 // 一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
-func (s Service) Judge(ctx context.Context, store port.StoreID, saves []port.ReceivedSave, read func(fn func(r port.Reader) error) error) error {
+func (s Service) Judge(ctx context.Context, store port.StoreID, in port.Received, read func(fn func(r port.Reader) error) error) error {
 	me, err := s.Identity.Me(ctx, store)
 	if err != nil || me == "" {
 		return nil
 	}
 	var notices, autos []port.Notice
 	if err := read(func(r port.Reader) error {
-		b, err := newBatch(r, saves)
+		b, err := newBatch(r, in.Saves)
 		if err != nil {
 			return err
 		}

@@ -140,7 +140,7 @@ func TestReadErrorReturned(t *testing.T) {
 	f := setup(t)
 	s := f.save(user("taro"), setTask(assign("hanako")))
 	want := errors.New("Store を読めない")
-	err := f.svc.Judge(t.Context(), store, []port.ReceivedSave{s}, func(func(r port.Reader) error) error { return want })
+	err := f.svc.Judge(t.Context(), store, port.Received{Saves: []port.ReceivedSave{s}}, func(func(r port.Reader) error) error { return want })
 	if !errors.Is(err, want) {
 		t.Errorf("Judge = %v, want %v", err, want)
 	}

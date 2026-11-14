@@ -156,7 +156,7 @@ func (f *fixture) judge(saves ...port.ReceivedSave) {
 
 func (f *fixture) judgeErr(saves ...port.ReceivedSave) error {
 	ctx := f.t.Context()
-	return f.svc.Judge(ctx, store, saves, func(fn func(r port.Reader) error) error {
+	return f.svc.Judge(ctx, store, port.Received{Saves: saves}, func(fn func(r port.Reader) error) error {
 		return f.stores.Read(ctx, store, fn)
 	})
 }
@@ -239,7 +239,7 @@ func (m failingMembers) List() ([]member.Member, error) { return nil, m.err }
 // judgeFailing は、kind の読み取りが err を返す Reader で saves を判定する。
 func (f *fixture) judgeFailing(kind string, err error, saves ...port.ReceivedSave) error {
 	ctx := f.t.Context()
-	return f.svc.Judge(ctx, store, saves, func(fn func(r port.Reader) error) error {
+	return f.svc.Judge(ctx, store, port.Received{Saves: saves}, func(fn func(r port.Reader) error) error {
 		return f.stores.Read(ctx, store, func(r port.Reader) error { return fn(failing{r, kind, err}) })
 	})
 }

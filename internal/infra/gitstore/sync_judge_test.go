@@ -16,24 +16,29 @@ import (
 
 // judgeRecorder は、判定の差し込み口に渡された保存を覚える。err を返すと判定の失敗になる。
 type judgeRecorder struct {
-	calls  [][]port.ReceivedSave
-	titles []string // 呼ばれたときに read で読んだサンプルのタスクのタイトル
-	err    error
-	judged *apptest.JudgedSaves
+	calls    [][]port.ReceivedSave
+	readOnly []bool   // 呼び出しごとの ReadOnly
+	titles   []string // 呼ばれたときに read で読んだサンプルのタスクのタイトル(完全に削除したあとは空)
+	err      error
+	judged   *apptest.JudgedSaves
 }
 
 // withJudge は、m の同期に判定の差し込み口と、判定済みの記録(空)を付ける。
 func withJudge(m machine) *judgeRecorder {
 	j := &judgeRecorder{judged: apptest.NewJudgedSaves()}
 	m.rep.Judged = j.judged
-	m.rep.Judge = func(_ context.Context, store port.StoreID, saves []port.ReceivedSave, read func(fn func(r port.Reader) error) error) error {
+	m.rep.Judge = func(_ context.Context, store port.StoreID, in port.Received, read func(fn func(r port.Reader) error) error) error {
 		if store != m.id {
 			return errors.New("wrong store")
 		}
-		j.calls = append(j.calls, saves)
+		j.calls = append(j.calls, in.Saves)
+		j.readOnly = append(j.readOnly, in.ReadOnly)
 		err := read(func(r port.Reader) error {
 			it, err := r.Items().Get(apptest.SampleTask)
 			j.titles = append(j.titles, it.Title)
+			if errors.Is(err, port.ErrNotFound) {
+				return nil
+			}
 			return err
 		})
 		if err != nil {
