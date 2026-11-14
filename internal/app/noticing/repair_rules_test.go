@@ -154,6 +154,30 @@ func TestOrphanRulesRecipient(t *testing.T) {
 			wsRules(f, "taro", change.NewSet(tdField, nil, projectrule.None))
 			wsRules(f, "hanako", change.NewSet(tdField, projectrule.None, template))
 		}, []change.Draft{change.NewSet(tdField, template, nil)}, true},
+		"移動した taro の削除と修復 (1) の取り消しのあと、専用ルールの名前を変えたのが hanako": {func(f *fixture) {
+			wsRules(f, "taro", automation.Drafts(automation.Rule{}, rule)...)
+			wsRules(f, "hanako", automation.Drafts(rule, renamed)...)
+			movedThenRestored(f, "taro", automation.DeleteDraft(ownRule))
+		}, []change.Draft{automation.DeleteDraft(ownRule)}, true},
+		"移動した hanako の削除と修復 (1) の取り消しのあと、専用ルールの名前を変えたのが taro": {func(f *fixture) {
+			wsRules(f, "hanako", automation.Drafts(automation.Rule{}, rule)...)
+			wsRules(f, "taro", automation.Drafts(rule, renamed)...)
+			movedThenRestored(f, "hanako", automation.DeleteDraft(ownRule))
+		}, []change.Draft{automation.DeleteDraft(ownRule)}, false},
+		"外した値の最後の add が修復 (1) の取り消し": {func(f *fixture) {
+			wsRules(f, "hanako", change.NewAdd(projectrule.HiddenField(webP), reviewSt))
+			movedThenRestored(f, "taro", change.NewRemove(projectrule.HiddenField(webP), reviewSt))
+		}, []change.Draft{change.NewRemove(projectrule.HiddenField(webP), reviewSt)}, false},
+		"修復 (1) の取り消しのあとに hanako が外した値を足した": {func(f *fixture) {
+			wsRules(f, "taro", change.NewAdd(projectrule.HiddenField(webP), reviewSt))
+			movedThenRestored(f, "taro", change.NewRemove(projectrule.HiddenField(webP), reviewSt))
+			wsRules(f, "hanako", change.NewRemove(projectrule.HiddenField(webP), reviewSt))
+			wsRules(f, "hanako", change.NewAdd(projectrule.HiddenField(webP), reviewSt))
+		}, []change.Draft{change.NewRemove(projectrule.HiddenField(webP), reviewSt)}, true},
+		"移動した taro の null と修復 (1) の取り消しのあと、既定のテンプレートを選んだのが hanako": {func(f *fixture) {
+			wsRules(f, "hanako", change.NewSet(tdField, nil, template))
+			movedThenRestored(f, "taro", change.NewSet(tdField, template, nil))
+		}, []change.Draft{change.NewSet(tdField, template, nil)}, true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := setup(t)
@@ -165,6 +189,23 @@ func TestOrphanRulesRecipient(t *testing.T) {
 			}
 		})
 	}
+}
+
+// movedThenRestored は、mover が移動として ds をワークスペース「Web」のログに書き、同期の修復 (1) がその op を
+// 取り消す(実行者 sync の change.Undo の行)。
+func movedThenRestored(f *fixture, mover string, ds ...change.Draft) {
+	f.t.Helper()
+	s := f.save(user(mover), func(tx port.Tx) error { return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...) })
+	var log []change.Record
+	if err := f.stores.Read(f.t.Context(), store, func(r port.Reader) (err error) {
+		log, err = r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace})
+		return err
+	}); err != nil {
+		f.t.Fatal(err)
+	}
+	f.repairSave(func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.Undo(log, s.Key.Op)...)
+	})
 }
 
 // 外したものを足した人が 2 回あなたでも、プロジェクトごとに 1 件。

@@ -81,23 +81,51 @@ func inStore(r port.Reader, b batch, id project.ID) (bool, error) {
 	return ok, nil
 }
 
-// putter は、修復の行 row が外したものを入れた人(人の行だけ。C5b1-8)。log は修復の直前のログ。
-// remove はその値を最後に足した人、null にした template_default はその項目を最後に保存した人、専用ルールの削除は
-// そのルールの行を最後に保存した人。決められなければ空。
+// putter は、修復の行 row が外したものを入れた人(人の行だけ。C5b1-8・C5b1-15)。log は修復の直前のログ。
+// 移動の行と、修復 (1) が取り消しで書いた行(実行者が同期)では、移動した人を入れた人にしない。
+//   - remove: その値を足した行を at の順にたどり、人の add なら入れた人をその人に、同期の add なら空に戻す(自動化などの
+//     行は飛ばす)。
+//   - null にした template_default: その項目を、row の from の値にした人の set のうち最後の行の人。
+//   - 専用ルールの削除: そのルールの行(delete・restore を除く)を最後に保存した人。
+//
+// 決められなければ空。
 func putter(log []change.Record, row change.Record) string {
 	switch {
 	case row.T == change.Remove:
-		return lastSaver(rowsWhere(log, func(c change.Record) bool {
+		return lastAdder(rowsWhere(log, func(c change.Record) bool {
 			return c.T == change.Add && c.F == row.F && sameValue(c.To, row.From)
-		}), "")
+		}))
 	case row.T == change.Set && change.Absent(row.To) && strings.Contains(row.F, "/template_default/"):
-		return lastSaver(rowsWhere(log, func(c change.Record) bool { return c.F == row.F }), "")
+		return lastSaver(rowsWhere(log, func(c change.Record) bool {
+			return c.T == change.Set && c.F == row.F && sameValue(c.To, row.From)
+		}), "")
 	case row.T == change.Delete && strings.HasPrefix(row.F, "rules/"):
 		return lastSaver(rowsWhere(log, func(c change.Record) bool {
-			return c.F == row.F || strings.HasPrefix(c.F, row.F+"/")
+			return c.T != change.Delete && c.T != change.Restore && (c.F == row.F || strings.HasPrefix(c.F, row.F+"/"))
 		}), "")
 	}
 	return ""
+}
+
+// lastAdder は、add の行 adds を at の順(同じなら ID の順)にたどった、最後の人の add の人。そのあとに同期の add が
+// あれば空。
+func lastAdder(adds []change.Record) string {
+	slices.SortStableFunc(adds, func(a, b change.Record) int {
+		if c := a.At.Compare(b.At); c != 0 {
+			return c
+		}
+		return strings.Compare(string(a.ID), string(b.ID))
+	})
+	who := ""
+	for _, c := range adds {
+		switch c.Actor.Kind {
+		case change.ActorUser:
+			who = c.By
+		case change.ActorSync:
+			who = ""
+		}
+	}
+	return who
 }
 
 // rowsWhere は、log のうち keep が真の行。
