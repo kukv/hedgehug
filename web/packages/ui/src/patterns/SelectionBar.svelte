@@ -5,7 +5,7 @@
   interface Props {
     // text は、件数の文(core の selectedText が作る)。
     text: string;
-    // readOnlyNote は、選んだ行がすべて閲覧のみの Store のものときに渡す文(core の readOnlyNote)。
+    // readOnlyNote は、選んだ行がすべて閲覧のみの Store のもののときに渡す文(core の readOnlyNote)。
     // 渡したら「一括削除…」だけを無効にして、title に出す(F2b1-4)。
     readOnlyNote?: string;
     ondelete: () => void;
