@@ -21,6 +21,8 @@ export interface Candidate {
   hint?: string;
   disabled?: boolean;
   reason?: string;
+  // checked は、ステータスの一覧のいまのステータス(チェックを付ける。02 実行の表)。
+  checked?: boolean;
   // route は、Ctrl+Enter で新しいタブに開く行き先(A5c-12)。ないものは Enter と同じ。
   route?: Route;
   run: () => void | Promise<void>;

@@ -14,6 +14,13 @@ export {
   matchWorkspaces,
 } from "./features/palette/match";
 export {
+  createPalette,
+  type Palette,
+  type PaletteDeps,
+  type PaletteState,
+  paletteFooter,
+} from "./features/palette/palette";
+export {
   createPlanRequest,
   type PlanAsk,
   type PlanKind,
