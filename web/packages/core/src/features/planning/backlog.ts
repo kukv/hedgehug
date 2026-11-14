@@ -55,6 +55,14 @@ export interface Backlog {
   noticeDetail(storeId: string, item: Item): void;
 }
 
+// pointsToSend は、ポイントの入力欄を離れたときに送る文字列。打ち換えていなければ(フォーカスしたときの値
+// base のまま)null で、保存しない(編集中にほかの書き手が変えた値を、古い値で上書きしない。06)。
+// 数でない文字(bad、入力欄の badInput)は "x" にして、サーバーに断らせる(02 のポイントの規則)。
+export function pointsToSend(value: string, bad: boolean, base: string): string | null {
+  if (bad) return "x";
+  return value === base ? null : value;
+}
+
 // goneCategory は、ステータスの分類が完了・中止ならその分類。ほか(ないステータスは未着手)は null。
 function goneCategory(settings: WorkspaceSettings, statusId: string) {
   const c = settings.statuses.find((s) => s.id === statusId)?.category;

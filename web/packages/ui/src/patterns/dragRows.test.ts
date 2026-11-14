@@ -122,6 +122,18 @@ describe("dragRows", () => {
     expect(ondrop).not.toHaveBeenCalled();
   });
 
+  it("keeps Escape from reaching other listeners while dragging, and not after", async () => {
+    const { handle } = setup();
+    const other = vi.fn();
+    document.addEventListener("keydown", other);
+    await fireEvent.pointerDown(handle, { pointerId: 1, button: 0 });
+    const stopped = !(await fireEvent.keyDown(document, { key: "Escape" }));
+    expect([stopped, other.mock.calls.length]).toEqual([true, 0]);
+    await fireEvent.keyDown(document, { key: "Escape" });
+    expect(other).toHaveBeenCalledOnce();
+    document.removeEventListener("keydown", other);
+  });
+
   it("does not start while disabled", async () => {
     const { handle, q, ondrop, onhover } = setup(true);
     await fireEvent.pointerDown(handle, { pointerId: 1, button: 0 });

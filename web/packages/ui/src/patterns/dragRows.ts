@@ -47,7 +47,7 @@ export function dragRows(handle: HTMLElement, options: DragRowsOptions) {
     handle.removeEventListener("pointermove", move);
     handle.removeEventListener("pointerup", up);
     handle.removeEventListener("pointercancel", cancel);
-    window.removeEventListener("keydown", key);
+    window.removeEventListener("keydown", key, true);
     if (handle.hasPointerCapture?.(pointer)) handle.releasePointerCapture(pointer);
     const dropped = target;
     pointer = null;
@@ -61,8 +61,12 @@ export function dragRows(handle: HTMLElement, options: DragRowsOptions) {
   function cancel(event: PointerEvent) {
     if (event.pointerId === pointer) stop(false);
   }
+  // Esc は、ドラッグをやめるだけにする(詳細パネルなどを閉じない)。ほかより先に受けるよう、window の捕捉で聞く。
   function key(event: KeyboardEvent) {
-    if (event.key === "Escape") stop(false);
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    stop(false);
   }
   function down(event: PointerEvent) {
     if (opts.disabled || pointer !== null || event.button !== 0) return;
@@ -72,7 +76,7 @@ export function dragRows(handle: HTMLElement, options: DragRowsOptions) {
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
     handle.addEventListener("pointercancel", cancel);
-    window.addEventListener("keydown", key);
+    window.addEventListener("keydown", key, true);
   }
 
   handle.addEventListener("pointerdown", down);

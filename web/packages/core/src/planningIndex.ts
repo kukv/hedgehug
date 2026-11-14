@@ -5,6 +5,7 @@ export {
   type BacklogDeps,
   type BacklogState,
   createBacklog,
+  pointsToSend,
 } from "./features/planning/backlog";
 export {
   type Drop,

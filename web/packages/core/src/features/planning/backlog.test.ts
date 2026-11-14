@@ -5,7 +5,7 @@ import { get } from "../../reactive/store";
 import { fakeItemsPort, gate, item } from "../items/fixtures.test-util";
 import { fakeWorkspaces, settings } from "../items/settings.test-util";
 import { createToasts } from "../toasts/toasts";
-import { createBacklog } from "./backlog";
+import { createBacklog, pointsToSend } from "./backlog";
 import { fakePlanningPort, frameOf, rowOf, sprintOf } from "./fixtures.test-util";
 
 // バックログの画面の状態と保存(05「バックログ」、F2a-8・F2a-9・F2a-10)。
@@ -265,5 +265,22 @@ describe("createBacklog detail", () => {
     await backlog.open("S1", "S1-W1");
     backlog.noticeDetail("S1", done(3));
     expect(shown()).toEqual([]);
+  });
+});
+
+describe("pointsToSend", () => {
+  it("sends nothing when the field keeps the value it had on focus", () => {
+    // 編集中にほかの書き手が値を変えても、打ち換えずに離れたら古い値で上書きしない。
+    expect(pointsToSend("3", false, "3")).toBeNull();
+    expect(pointsToSend("", false, "")).toBeNull();
+  });
+
+  it("sends the typed text, and an empty text to remove the value", () => {
+    expect(pointsToSend("5", false, "3")).toBe("5");
+    expect(pointsToSend("", false, "3")).toBe("");
+  });
+
+  it("sends a text the server refuses when the field holds non-numbers", () => {
+    expect(pointsToSend("", true, "")).toBe("x");
   });
 });
