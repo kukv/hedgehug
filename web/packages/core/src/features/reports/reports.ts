@@ -11,6 +11,8 @@ export interface ReportsState {
   storeId: string;
   workspaceId: string;
   report: Report;
+  // report を求めた累積フロー図の期間。null は初めの期間(読み込んだときの今日までの直近 21 日)。
+  period: Period | null;
 }
 
 export interface Reports {
@@ -35,6 +37,8 @@ export function createReports(port: ReportsPort): Reports {
   let current: Target | null = null;
   // 期間は保存しない。close したら初めの期間(null)に戻す。
   let period: Period | null = null;
+  // 読み込み中の期間。setPeriod の読み込み中に reload が来ても、新しい期間で読む。
+  let requested: Period | null = null;
   // 読み直しが重なったときは、最後に始めたものの結果だけを使う。
   let latest = 0;
 
@@ -43,17 +47,19 @@ export function createReports(port: ReportsPort): Reports {
     const { storeId, workspaceId } = current;
     latest += 1;
     const mine = latest;
+    requested = next;
     try {
       const report = await port.report(storeId, workspaceId, next);
       if (mine !== latest) return;
       period = next;
-      state.set({ storeId, workspaceId, report });
+      state.set({ storeId, workspaceId, report, period: next });
     } catch {
       // 読めなければ前のまま(期間も変えない)。
+      if (mine === latest) requested = period;
     }
   }
 
-  const reload = () => load(period);
+  const reload = () => load(requested);
 
   return {
     state: readonly(state),
@@ -61,6 +67,7 @@ export function createReports(port: ReportsPort): Reports {
       if (!same(current, storeId, workspaceId)) {
         state.set(null);
         period = null;
+        requested = null;
       }
       current = { storeId, workspaceId };
       await reload();
@@ -69,6 +76,7 @@ export function createReports(port: ReportsPort): Reports {
     close() {
       current = null;
       period = null;
+      requested = null;
       latest += 1;
       state.set(null);
     },

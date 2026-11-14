@@ -78,6 +78,18 @@ describe("createReports", () => {
     expect(reads[3]?.period).toBeNull();
   });
 
+  it("state.period は、読み込んだ report を求めた期間(null は初めの期間)", async () => {
+    const { port } = portOf();
+    const r = createReports(port);
+    await r.open("a", "w1");
+    expect(get(r.state)?.period).toBeNull();
+    const p = { from: "2026-11-01", to: "2026-11-10" };
+    await r.setPeriod(p);
+    expect(get(r.state)?.period).toEqual(p);
+    await r.setPeriod(null);
+    expect(get(r.state)?.period).toBeNull();
+  });
+
   it("setPeriod(null) で初めの期間に戻す", async () => {
     const { port, reads } = portOf();
     const r = createReports(port);
@@ -96,6 +108,36 @@ describe("createReports", () => {
     fail.report = false;
     await r.reload();
     expect(reads[reads.length - 1]?.period).toBeNull();
+  });
+
+  it("setPeriod の読み込み中に reload が来ても、新しい期間で読む", async () => {
+    const reads: Period[] = [];
+    const waits: (() => void)[] = [];
+    const port: ReportsPort = {
+      async report(_s, _w, period) {
+        reads.push(period);
+        await new Promise<void>((resolve) => waits.push(resolve));
+        return reportOf(JSON.stringify(period));
+      },
+      active: async () => activeOf(""),
+      select: async () => {},
+    };
+    const r = createReports(port);
+    const opened = r.open("a", "w1");
+    waits.shift()?.();
+    await opened;
+    const p = { from: "2026-11-01", to: "2026-11-10" };
+    const setting = r.setPeriod(p);
+    const reloading = r.reload();
+    for (const w of waits.splice(0)) w();
+    await Promise.all([setting, reloading]);
+    expect(reads).toEqual([null, p, p]);
+    expect(get(r.state)?.report.selection.sprint).toBe(JSON.stringify(p));
+    // そのあとの reload も新しい期間のまま。
+    const again = r.reload();
+    waits.shift()?.();
+    await again;
+    expect(reads[3]).toEqual(p);
   });
 
   it("reload の失敗では前の state のまま", async () => {

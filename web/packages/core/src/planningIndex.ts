@@ -64,6 +64,7 @@ export {
   pill,
   progressRatio,
   progressText,
+  pt,
   type SprintMenuEntry,
   type SprintSection,
   type Sprints,
@@ -77,6 +78,7 @@ export {
   type Bar,
   bars,
   type Frame,
+  layerFill,
   linePoints,
   niceMax,
   type Point,
@@ -105,6 +107,12 @@ export {
   type Reports,
   type ReportsState,
 } from "./features/reports/reports";
+export {
+  burndownTable,
+  heading,
+  type Table,
+  velocityTable,
+} from "./features/reports/tables";
 export {
   addedText,
   amount,

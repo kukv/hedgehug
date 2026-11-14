@@ -1,3 +1,5 @@
+import type { FlowLayer } from "../../model/report";
+
 export type Frame = { width: number; height: number };
 export type Point = { x: number; y: number };
 export type Bar = { x: number; y: number; width: number; height: number };
@@ -20,9 +22,11 @@ export function ticks(max: number): number[] {
 // max は 0 より大きい前提(呼び出し側は niceMax の値を渡す)。
 const yOf = (value: number, max: number, f: Frame): number => f.height - (value / max) * f.height;
 
-const xOf = (i: number, n: number, f: Frame): number => (n <= 1 ? 0 : (i / (n - 1)) * f.width);
+// 1 日だけの図の点は横幅の中央に置く。
+const xOf = (i: number, n: number, f: Frame): number =>
+  n <= 1 ? f.width / 2 : (i / (n - 1)) * f.width;
 
-// values は 1 日 1 値。x は null も含めた配列の位置で決め(1 要素なら 0)、null の点は飛ばす。
+// values は 1 日 1 値。x は null も含めた配列の位置で決め(1 要素なら横幅の中央)、null の点は飛ばす。
 export function linePoints(values: (number | null)[], max: number, f: Frame): Point[] {
   const points: Point[] = [];
   values.forEach((v, i) => {
@@ -36,14 +40,20 @@ export function pathOf(points: Point[]): string {
   return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 }
 
+// 面の x。1 日だけなら、その日の値を左端と右端に置いて横幅いっぱいに描く。
+const edgeOf = (values: number[], max: number, f: Frame): Point[] =>
+  values.length === 1
+    ? [0, f.width].map((x) => ({ x, y: yOf(values[0] ?? 0, max, f) }))
+    : values.map((v, d) => ({ x: xOf(d, values.length, f), y: yOf(v, max, f) }));
+
 // layers[層][日]。下の層から、層ごとの面の d を返す。
 export function stackPaths(layers: number[][], max: number, f: Frame): string[] {
   const days = layers[0]?.length ?? 0;
   let lower = new Array<number>(days).fill(0);
   return layers.map((layer) => {
     const upper = lower.map((base, d) => base + (layer[d] ?? 0));
-    const top = upper.map((v, d) => ({ x: xOf(d, days, f), y: yOf(v, max, f) }));
-    const bottom = lower.map((v, d) => ({ x: xOf(d, days, f), y: yOf(v, max, f) })).reverse();
+    const top = edgeOf(upper, max, f);
+    const bottom = edgeOf(lower, max, f).reverse();
     lower = upper;
     return `${pathOf([...top, ...bottom])} Z`;
   });
@@ -53,9 +63,12 @@ export function stackPaths(layers: number[][], max: number, f: Frame): string[] 
 const BAR_RATIO = 0.7;
 
 // 群ごとに棒を並べる。max は 0 より大きい前提。
+// 群が 0 個なら空、空の群は棒なし(幅を 0 で割らない)。
 export function bars(groups: number[][], max: number, f: Frame): Bar[][] {
+  if (groups.length === 0) return [];
   const slot = f.width / groups.length;
   return groups.map((group, g) => {
+    if (group.length === 0) return [];
     const inner = slot * BAR_RATIO;
     const width = inner / group.length;
     const left = g * slot + (slot - inner) / 2;
@@ -64,4 +77,14 @@ export function bars(groups: number[][], max: number, f: Frame): Bar[][] {
       return { x: left + i * width, y: f.height - height, width, height };
     });
   });
+}
+
+// 分類の層のキー。分類の token(--cat-*)で塗る。
+const categoryKeys = new Set(["done", "doing", "todo", "canceled"]);
+
+// layerFill は、累積フロー図の層の色。ステータスの層はステータスの色、分類の層は分類の token、
+// 色のないステータスの層と一覧にない値の層(deleted)は灰色。
+export function layerFill(l: FlowLayer): string {
+  if (l.color !== "") return `var(--c-${l.color}-fg)`;
+  return categoryKeys.has(l.key) ? `var(--cat-${l.key})` : "var(--muted-2)";
 }

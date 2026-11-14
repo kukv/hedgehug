@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Bar, bars, linePoints, niceMax, pathOf, stackPaths, ticks } from "./chart";
+import { type Bar, bars, layerFill, linePoints, niceMax, pathOf, stackPaths, ticks } from "./chart";
 
 const frame = { width: 200, height: 100 };
 
@@ -34,9 +34,12 @@ describe("linePoints", () => {
     ]);
   });
 
-  it("null の点は飛ばし、点が 1 つなら x は 0", () => {
+  it("null の点は飛ばす", () => {
     expect(linePoints([8, null], 8, frame)).toEqual([{ x: 0, y: 0 }]);
-    expect(linePoints([8], 8, frame)).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it("1 日だけなら、点は横幅の中央", () => {
+    expect(linePoints([8], 8, frame)).toEqual([{ x: 100, y: 0 }]);
   });
 
   it("x は null を含めた配列の位置で決める", () => {
@@ -77,6 +80,12 @@ describe("stackPaths", () => {
     expect(points(paths[1] ?? "")).toEqual(["0 25", "100 75", "100 75", "0 75"]);
     for (const d of paths) expect(d.endsWith(" Z")).toBe(true);
   });
+
+  it("1 日だけなら、面は横幅いっぱい", () => {
+    const [d] = stackPaths([[2]], 4, { width: 100, height: 100 });
+    const points = d?.match(/-?\d+(\.\d+)? -?\d+(\.\d+)?/g) ?? [];
+    expect(points).toEqual(["0 50", "100 50", "100 100", "0 100"]);
+  });
 });
 
 describe("bars", () => {
@@ -113,5 +122,23 @@ describe("bars", () => {
     const [next] = got[1] as [Bar, Bar];
     expect(a.x + a.width).toBeLessThanOrEqual(b.x);
     expect(b.x + b.width).toBeLessThanOrEqual(next.x);
+  });
+
+  it("群が 0 個なら空、空の群は棒なし。値に Infinity・NaN を出さない", () => {
+    expect(bars([], 1, frame)).toEqual([]);
+    const got = bars([[], [1]], 1, frame);
+    expect(got[0]).toEqual([]);
+    for (const b of got.flat()) {
+      for (const v of [b.x, b.y, b.width, b.height]) expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+});
+
+describe("layerFill", () => {
+  it("分類の層は分類の token、ステータスの層はその色、色のない層と削除された値は灰色", () => {
+    expect(layerFill({ key: "done", name: "完了", color: "" })).toBe("var(--cat-done)");
+    expect(layerFill({ key: "S1", name: "レビュー", color: "blue" })).toBe("var(--c-blue-fg)");
+    expect(layerFill({ key: "S2", name: "色なし", color: "" })).toBe("var(--muted-2)");
+    expect(layerFill({ key: "deleted", name: "(削除された値)", color: "" })).toBe("var(--muted-2)");
   });
 });

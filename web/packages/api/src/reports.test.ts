@@ -109,6 +109,20 @@ describe("reports port", () => {
     expect(active.total).toEqual({ count: 4, points: 8 });
   });
 
+  it("keeps a null active sprint as null", async () => {
+    respond(200, {
+      sprint: null,
+      unit: "points",
+      burndown: { days: [], shown: 0, committed: null },
+      added: 0,
+      done: { count: 0, points: 0 },
+      total: { count: 0, points: 0 },
+    });
+    const active = await createReportsPort().active("S1", "W1");
+    expect(active.sprint).toBeNull();
+    expect(active.unit).toBe("points");
+  });
+
   it("sends only the given fields when selecting", async () => {
     const fetch = respond(204, undefined);
     await createReportsPort().select("S1", "W1", { unit: "count" });
