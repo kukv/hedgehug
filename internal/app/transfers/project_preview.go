@@ -144,7 +144,10 @@ func (s Service) ProjectPreview(ctx context.Context, store port.StoreID, id proj
 	if err != nil {
 		return ProjectPreview{}, err
 	}
-	carried := src.carry(dst.settings, nil, nil, func() change.ID { return "" }) // 予告は内部 ID を出さない
+	// 予告は移らないもの(NotCarried)と一緒に移る使わないステータス(Hidden)だけを使い、専用ルールの担当者の人の対応も
+	// 新しい内部 ID も出さないので、people は nil(同じ Store の扱い)、newID は空でよい。移動の保存ではこの呼び方を使わず、
+	// 別の Store なら transfer.People の対応と本物の newID を渡すこと。
+	carried := src.carry(dst.settings, nil, nil, func() change.ID { return "" })
 	p.Prefix = dst.ws.Prefix
 	p.HasRules = !src.rules.Empty() || len(src.own) > 0
 	p.NotCarried = carried.NotCarried

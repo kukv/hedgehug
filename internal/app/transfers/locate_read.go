@@ -1,10 +1,8 @@
 package transfers
 
 import (
-	"cmp"
 	"context"
 	"slices"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -72,9 +70,7 @@ func readSnapshot(r port.Reader, info port.StoreInfo) (snapshot, error) {
 			return snap, err
 		}
 	}
-	slices.SortStableFunc(snap.workspaces, func(a, b wsEntry) int {
-		return cmp.Or(strings.Compare(ranks[a.ws.ID], ranks[b.ws.ID]), strings.Compare(string(a.ws.ID), string(b.ws.ID)))
-	})
+	sortByWorkspaceRank(snap.workspaces, ranks, func(e wsEntry) workspace.ID { return e.ws.ID })
 	if snap.records, err = r.Transfers().List(); err != nil {
 		return snap, err
 	}

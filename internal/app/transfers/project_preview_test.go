@@ -73,11 +73,15 @@ func TestProjectPreviewCounts(t *testing.T) {
 	}
 }
 
-// 自分のワークスペース・削除済みのワークスペース・閲覧のみの Store は移動先に選べない。
+// 自分のワークスペース・削除済みのワークスペース・閲覧のみの Store・ないワークスペースは移動先に選べない。
 func TestProjectPreviewRefusesUnselectableDestinations(t *testing.T) {
 	f := newFixture(t)
+	if err := apptest.DeleteWorkspace(t.Context(), f.rec, store2, teamWS); err != nil {
+		t.Fatal(err)
+	}
 	for name, in := range map[string]transfers.ProjectMoveInput{
 		"自分":    projectTo(store1, mobileWS),
+		"削除済み":  projectTo(store2, teamWS),
 		"閲覧のみ":  projectTo(store3, archiveWS),
 		"ないワーク": projectTo(store1, "01TESTWS000000000000000099"),
 	} {

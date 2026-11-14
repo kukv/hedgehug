@@ -3,8 +3,11 @@
 package transfers
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -158,6 +161,15 @@ func (s Service) remoteOf(ctx context.Context, id port.StoreID) (string, error) 
 		}
 	}
 	return "", nil
+}
+
+// sortByWorkspaceRank は、s をワークスペースの並び(ranks の昇順、同じなら内部 ID の順。A5a-13)に並べる。
+// wsOf は要素のワークスペース。
+func sortByWorkspaceRank[T any](s []T, ranks map[workspace.ID]string, wsOf func(T) workspace.ID) {
+	slices.SortStableFunc(s, func(a, b T) int {
+		x, y := wsOf(a), wsOf(b)
+		return cmp.Or(strings.Compare(ranks[x], ranks[y]), strings.Compare(string(x), string(y)))
+	})
 }
 
 // displayID は、接頭辞と番号の画面の ID(HH-12)。書式は item.Item.DisplayID の 1 か所に持つ。

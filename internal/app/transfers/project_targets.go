@@ -1,10 +1,7 @@
 package transfers
 
 import (
-	"cmp"
 	"context"
-	"slices"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -76,8 +73,6 @@ func (s Service) projectStoreTargets(ctx context.Context, info port.StoreInfo, s
 		}
 		return nil
 	})
-	slices.SortFunc(out, func(a, b ProjectTarget) int {
-		return cmp.Or(strings.Compare(ranks[a.Workspace.ID], ranks[b.Workspace.ID]), strings.Compare(string(a.Workspace.ID), string(b.Workspace.ID)))
-	})
+	sortByWorkspaceRank(out, ranks, func(t ProjectTarget) workspace.ID { return t.Workspace.ID })
 	return out, err
 }
