@@ -10,7 +10,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
@@ -201,13 +200,18 @@ func (t *tx) append(ref change.Ref, drafts []change.Draft) error {
 	}
 	recs := change.Stamp(t.log(ref), drafts, t.meta, t.ids.New)
 	t.pending[ref] = append(t.pending[ref], recs...)
+	t.forgetPlace(ref) // 動いたかもしれない
+	return nil
+}
+
+// forgetPlace は、アイテムかプロジェクトの、読んで覚えた置き場所を忘れる(List が別の置き場所を見ないように)。
+func (t *tx) forgetPlace(ref change.Ref) {
 	switch ref.Kind {
 	case change.KindItem:
-		delete(t.places, ref.ID) // 動いたかもしれない
+		delete(t.places, ref.ID)
 	case change.KindProject:
-		delete(t.projectPlaces, ref.ID) // 動いたかもしれない
+		delete(t.projectPlaces, ref.ID)
 	}
-	return nil
 }
 
 // describe は、説明を書く。保存してある説明と同じなら何もしない。
@@ -228,7 +232,7 @@ func (t *tx) describe(ref change.Ref, text string) error {
 
 func (t *tx) WriteWorkspaces() port.WorkspaceWriter { return idWriter{t, change.KindWorkspace} }
 func (t *tx) WriteProjects() port.ProjectWriter     { return idWriter{t, change.KindProject} }
-func (t *tx) WriteItems() port.ItemWriter           { return itemWriter{idWriter{t, change.KindItem}} }
+func (t *tx) WriteItems() port.ItemWriter           { return idWriter{t, change.KindItem} }
 func (t *tx) WriteMembers() port.MemberWriter       { return membersWriter{t} }
 func (t *tx) WriteTransfers() port.TransferWriter   { return transferWriter{t} }
 
@@ -245,26 +249,18 @@ func (w idWriter) Describe(id change.ID, text string) error {
 	return w.t.describe(change.Ref{Kind: w.kind, ID: id}, text)
 }
 
-type membersWriter struct{ t *tx }
-
-func (w membersWriter) Append(drafts ...change.Draft) error {
-	return w.t.append(change.Ref{Kind: change.KindMembers}, drafts)
-}
-
-type itemWriter struct{ idWriter }
-
 // Import は、行を写して pending にする。説明があれば texts にする。
-func (w itemWriter) Import(id item.ID, log []change.Record, description string) error {
-	ref := change.Ref{Kind: change.KindItem, ID: id}
+func (w idWriter) Import(id change.ID, log []change.Record, description string) error {
+	ref := change.Ref{Kind: w.kind, ID: id}
 	if !ref.Valid() || len(log) == 0 || w.t.removed[ref] || len(w.t.log(ref)) > 0 {
-		return fmt.Errorf("%w: cannot import item %q", port.ErrInvalidOperation, id)
+		return fmt.Errorf("%w: cannot import %s %q", port.ErrInvalidOperation, w.kind, id)
 	}
 	recs := make([]change.Record, 0, len(log))
 	for _, r := range log {
 		recs = append(recs, cloneRecord(r))
 	}
 	w.t.pending[ref] = recs
-	delete(w.t.places, id)
+	w.t.forgetPlace(ref)
 	if description != "" {
 		w.t.texts[ref] = description
 	}
@@ -272,8 +268,8 @@ func (w itemWriter) Import(id item.ID, log []change.Record, description string) 
 }
 
 // Remove は、同じ Tx で書いた行と説明を捨て、フォルダを消す印を付ける。
-func (w itemWriter) Remove(id item.ID) error {
-	ref := change.Ref{Kind: change.KindItem, ID: id}
+func (w idWriter) Remove(id change.ID) error {
+	ref := change.Ref{Kind: w.kind, ID: id}
 	if !ref.Valid() {
 		return fmt.Errorf("%w: id %q", port.ErrInvalidOperation, id)
 	}
@@ -282,7 +278,13 @@ func (w itemWriter) Remove(id item.ID) error {
 	}
 	delete(w.t.pending, ref)
 	delete(w.t.texts, ref)
-	delete(w.t.places, id)
+	w.t.forgetPlace(ref)
 	w.t.removed[ref] = true
 	return nil
+}
+
+type membersWriter struct{ t *tx }
+
+func (w membersWriter) Append(drafts ...change.Draft) error {
+	return w.t.append(change.Ref{Kind: change.KindMembers}, drafts)
 }

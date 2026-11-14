@@ -3,8 +3,11 @@
 package transfers
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -23,7 +26,8 @@ type Delivery interface {
 	Deliver(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) (syncstatus.Reason, error)
 }
 
-// Service は、移動の操作が使う口。SyncTargets は、移動先・移動元の remote の有無と URL を知るため。
+// Service は、移動の操作が使う口。SyncTargets は、移動先・移動元の remote の有無と URL を知るため。IDs は、プロジェクトの
+// 移動で移動先に作る専用ルールの新しい内部 ID(A5b-6)。
 type Service struct {
 	Stores      port.Stores
 	StoreList   port.StoreList
@@ -31,6 +35,7 @@ type Service struct {
 	Delivery    Delivery
 	Identity    port.Identity
 	Clock       port.Clock
+	IDs         port.IDs
 }
 
 // source は、移動元で移すもの。set は削除済みを含む。
@@ -158,6 +163,15 @@ func (s Service) remoteOf(ctx context.Context, id port.StoreID) (string, error) 
 		}
 	}
 	return "", nil
+}
+
+// sortByWorkspaceRank は、s をワークスペースの並び(ranks の昇順、同じなら内部 ID の順。A5a-13)に並べる。
+// wsOf は要素のワークスペース。
+func sortByWorkspaceRank[T any](s []T, ranks map[workspace.ID]string, wsOf func(T) workspace.ID) {
+	slices.SortStableFunc(s, func(a, b T) int {
+		x, y := wsOf(a), wsOf(b)
+		return cmp.Or(strings.Compare(ranks[x], ranks[y]), strings.Compare(string(x), string(y)))
+	})
 }
 
 // displayID は、接頭辞と番号の画面の ID(HH-12)。書式は item.Item.DisplayID の 1 か所に持つ。

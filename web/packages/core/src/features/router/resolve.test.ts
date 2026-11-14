@@ -71,6 +71,7 @@ describe("resolveRoute", () => {
     { name: "item", store: "work", item: "XX-12" },
     { name: "workspace", store: "work", prefix: "XX", tab: "overview" },
   ] as const)("goes home when %o is not found", async (route) => {
+    transfers.missing.add("HH-P9");
     transfers.missing.add("HH-13");
     transfers.missing.add("XX-12");
     expect(await resolveRoute(route, await stores(), itemsIn("S1"), transfers)).toEqual({

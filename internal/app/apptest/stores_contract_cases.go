@@ -267,3 +267,31 @@ func contractProjectListFollowsMove(t *testing.T, s port.Stores, id port.StoreID
 		return nil
 	})
 }
+
+// Remove は、プロジェクトのフォルダを消す。コミットのあと読めず、List に出ない。下のアイテムは消さない。
+// ないものは ErrNotFound。
+func contractProjectRemove(t *testing.T, s port.Stores, id port.StoreID) {
+	mustWrite(t, s, id, taro, writeFixture)
+	mustWrite(t, s, id, taro, func(tx port.Tx) error {
+		if err := tx.WriteProjects().Remove(cProject.ID); err != nil {
+			return err
+		}
+		if _, err := tx.Projects().Get(cProject.ID); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("Get in the tx = %v", err)
+		}
+		return nil
+	})
+	mustRead(t, s, id, func(r port.Reader) error {
+		ps, err := r.Projects().List(cWorkspace.ID)
+		if _, gerr := r.Projects().Get(cProject.ID); !errors.Is(gerr, port.ErrNotFound) || err != nil || len(ps) != 0 {
+			t.Errorf("Get = %v, List = %+v, %v", gerr, ps, err)
+		}
+		if _, err := r.Items().Get(cItem.ID); err != nil {
+			t.Errorf("the item went too: %v", err)
+		}
+		return nil
+	})
+	if err := s.Write(t.Context(), id, taro, func(tx port.Tx) error { return tx.WriteProjects().Remove(cProject.ID) }); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("Remove of a missing project = %v, want ErrNotFound", err)
+	}
+}

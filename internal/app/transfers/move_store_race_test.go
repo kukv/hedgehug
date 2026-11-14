@@ -18,8 +18,8 @@ import (
 // 変わったとして失敗して元のままになり、Task の移動は成功する(片方が失敗してもよいが、止まらない)。
 func TestOppositeMovesBetweenTwoStoresDoNotStall(t *testing.T) {
 	f := newFixture(t)
-	f.deliver.gate = newBarrier(2)   // 2 つの移動が両方 Deliver に入るまで待つ
-	f.deliver.inside = newBarrier(2) // 2 つの移動が両方、移動先のロックを持って fn に入るまで待つ
+	f.deliver.gate = newBarrier()   // 2 つの移動が両方 Deliver に入るまで待つ
+	f.deliver.inside = newBarrier() // 2 つの移動が両方、移動先のロックを持って fn に入るまで待つ
 	toWeb := transfers.MoveInput{ToStore: store1, ToWorkspace: apptest.SampleWorkspace, ToProject: apptest.SampleProject}
 	taskDone, epicDone := make(chan error, 1), make(chan error, 1)
 	go func() { _, err := f.svc.Move(t.Context(), store1, apptest.SampleTask, toTeam()); taskDone <- err }()

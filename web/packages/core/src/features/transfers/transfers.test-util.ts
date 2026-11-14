@@ -1,6 +1,10 @@
 import { NotFound, Refused, TransferUndoFailed } from "../../model/errors";
 import type {
   Located,
+  LocatedProject,
+  ProjectTransferPreview,
+  ProjectTransferResult,
+  ProjectTransferTarget,
   TransferPreview,
   TransferResult,
   TransferTarget,
@@ -10,7 +14,7 @@ import { gate } from "../items/fixtures.test-util";
 
 // テスト用の移動の口。呼び出しを calls に残し、答えはテストが決める。
 // どの操作も、refuseNext の断り・undoFailNext の取り消しの失敗・failNext の失敗・missing に入れた ID の NotFound を受けられる。
-// holdNext は、次の preview か transfer を待たせる。
+// holdNext は、次の preview・transfer・projectTargets・projectPreview・transferProject を待たせる。
 
 export interface FakeTransfers extends TransfersPort {
   // calls は `targets {id}`・`preview {id} {store}/{workspace}/{project}`・`transfer {id} {JSON}`・`locate {store} {id}`。
@@ -21,6 +25,13 @@ export interface FakeTransfers extends TransfersPort {
   defaultPreview: TransferPreview;
   result: TransferResult;
   located: Located;
+  // プロジェクトの移動(A5b)。calls は `projectTargets {id}`・`projectPreview {id} {store}/{workspace}`・
+  // `transferProject {id} {JSON}`・`locateProject {store} {id}`。projectPreviewOf のキーは `{store}/{workspace}`。
+  projectTargetList: ProjectTransferTarget[];
+  projectPreviewOf: Record<string, ProjectTransferPreview>;
+  defaultProjectPreview: ProjectTransferPreview;
+  projectResult: ProjectTransferResult;
+  locatedProject: LocatedProject;
   // refuseNext は、次の操作を、この文言の断りにする(1 回だけ)。failNext は、断りでない失敗にする。
   refuseNext(message: string): void;
   failNext(): void;
@@ -28,7 +39,7 @@ export interface FakeTransfers extends TransfersPort {
   undoFailNext(message: string): void;
   // missing に入れた ID の操作は NotFound になる(locate は引数の ID で見る)。
   missing: Set<string>;
-  // holdNext は、release を呼ぶまで、次の preview か transfer を待たせる。
+  // holdNext は、release を呼ぶまで、次の preview・transfer・projectTargets・projectPreview・transferProject を待たせる。
   holdNext(): { release: () => void };
 }
 
@@ -78,6 +89,23 @@ export function fakeTransfers(): FakeTransfers {
     },
     result: { toStore: "S1", itemId: "S1-I9", display: "MB-2", emptied: [] },
     located: { kind: "found", storeId: "S1", projectId: "S1-P1", itemId: "S1-I1" },
+    projectTargetList: [],
+    projectPreviewOf: {},
+    defaultProjectPreview: {
+      items: 0,
+      deleted: 0,
+      prefix: "MB",
+      source: "Web",
+      destination: "Mobile",
+      crossStore: false,
+      remoteNotice: false,
+      destinationHasRemote: false,
+      hasRules: false,
+      notCarried: [],
+      replacements: [],
+    },
+    projectResult: { toStore: "S1", projectId: "S1-P1", display: "MB-P2", destination: "Mobile" },
+    locatedProject: { kind: "found", storeId: "S1", projectId: "S1-P1" },
     missing,
     refuseNext(message) {
       refusal = message;
@@ -109,6 +137,24 @@ export function fakeTransfers(): FakeTransfers {
     async locate(store, id) {
       await answer(id, `locate ${store} ${id}`, false);
       return self.located;
+    },
+    async projectTargets(_s, id) {
+      const list = self.projectTargetList;
+      await answer(id, `projectTargets ${id}`, true);
+      return list;
+    },
+    async projectPreview(_s, id, to) {
+      const key = `${to.storeId}/${to.workspaceId}`;
+      await answer(id, `projectPreview ${id} ${key}`, true);
+      return self.projectPreviewOf[key] ?? self.defaultProjectPreview;
+    },
+    async transferProject(_s, id, input) {
+      await answer(id, `transferProject ${id} ${JSON.stringify(input)}`, true);
+      return self.projectResult;
+    },
+    async locateProject(store, id) {
+      await answer(id, `locateProject ${store} ${id}`, false);
+      return self.locatedProject;
     },
   };
   return self;

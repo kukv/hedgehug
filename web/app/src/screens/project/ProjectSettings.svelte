@@ -5,6 +5,7 @@
   import { projectEditor } from "../../projectEditor";
   import { navigation } from "../../wire";
   import { projectDelete } from "../../wireActions";
+  import ProjectTransfer from "./ProjectTransfer.svelte";
   import RulesAutomation from "./RulesAutomation.svelte";
   import RulesStatuses from "./RulesStatuses.svelte";
   import RulesTemplates from "./RulesTemplates.svelte";
@@ -80,6 +81,7 @@
   <RulesWorkflow {view} />
   <RulesTemplates {view} />
   <RulesAutomation {view} />
+  <ProjectTransfer {view} />
   <section class="sec danger">
     <h2>削除</h2>
     {#if $note?.projectId === p.id}
