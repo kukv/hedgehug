@@ -96,6 +96,7 @@
 | `cmd/hedgehug/wire.go`・`wire_e2e.go` | 変更 | 組み立て |
 | `web/packages/api/src/palette.ts`・`index.ts` | 新規・変更 | `createPalettePort` |
 | `web/packages/core/src/model/palette.ts`・`port/palette.ts` | 新規 | 型と口 |
+| `web/packages/core/src/paletteIndex.ts` | 新規 | core のパレットの公開(既存の `notesIndex` などと同じ形) |
 | `web/packages/core/src/features/palette/match.ts`・`candidates.ts`・`selection.ts`・`palette.ts`・`actions.ts`・`planRequest.ts` | 新規 | 一致と並び・群と上限・選んでいるアイテム・状態・実行・スプリント/リリースの作成の要求 |
 | `web/packages/core/src/features/items/detail.ts` | 変更 | `DetailDeps.onOpened` |
 | `web/app/src/palette.ts`・`web/app/src/palette/CommandPalette.svelte`・`PaletteRow.svelte` | 新規 | 組み立てと部品 |
@@ -109,7 +110,7 @@
 - Go: `palette.Service.Index(ctx) (palette.Index, error)`、`Opened(ctx, store port.StoreID, item change.ID) error`、`Recent(ctx) ([]palette.RecentItem, error)`。`palette.Index{Items []IndexItem; Projects []IndexProject}`。
 - TS core: `PaletteIndex`・`PaletteItem`・`PaletteProject`・`PaletteAlias{ id: string; at: string | null }`・`RecentItem`(A5c-17 の形)、`PalettePort{ index(): Promise<PaletteIndex>; recent(): Promise<RecentItem[]>; opened(storeId: string, itemId: string): Promise<void> }`。
 - TS core: `Candidate`(`{ key: string; group: GroupId; label: string; hint?: string; disabled?: boolean; reason?: string; route?: Route; run: () => void | Promise<void> }`)、`Row = { kind: "head"; text: string } | { kind: "more"; text: string } | { kind: "candidate"; c: Candidate }`、`GroupId = "command" | "query" | "selected" | "create" | "settings" | "recent" | "item" | "project" | "workspace" | "view"`。
-- TS core: `buildRows(groups: Partial<Record<GroupId, Candidate[]>>, input: string): Row[]`(上限・見出し・「ほか N 件」・「一致するものはありません」)。
+- TS core: `buildRows(groups: Partial<Record<GroupId, Candidate[]>>, input: string, head: Partial<Record<GroupId, string>> = {}): Row[]`(上限・見出し・「ほか N 件」・「一致するものはありません」。選んでいるアイテムの見出し「{ID} に対して」は `head.selected` で渡す。「一致するものはありません」は `kind: "more"` の行)。
 - TS core: `createSelection(): Selection`、`Selection{ provide(rank: number, get: () => SelectedItem | null): () => void; current(): SelectedItem | null }`、`SelectedItem{ storeId: string; itemId: string; source: "detail" | "tree" | string; setStatus(statusId: string): Promise<void> }`。
 - TS core: `createPlanRequest(): PlanRequest`、`PlanRequest{ request: Readable<{ workspaceId: string; kind: "sprint" | "release" } | null>; ask(r): void; take(workspaceId: string, kind): boolean }`。
 - TS core: `createPalette(deps: PaletteDeps): Palette`、`Palette{ state: Readable<PaletteState | null>; open(): Promise<void>; close(): void; input(text: string): void; move(dir: "up" | "down"): void; choose(index?: number, newTab?: boolean): Promise<void> }`。
