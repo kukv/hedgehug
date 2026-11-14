@@ -91,7 +91,8 @@ type InboxBook interface {
 	ReadAll(ctx context.Context, stores []StoreID, kinds []NoticeKind) error
 	// Resolve は、既読にして結果を書く。なければ ErrNotFound、結果がすでにあれば断り。
 	Resolve(ctx context.Context, id NoticeID, r NoticeResult) error
-	// Prune は、アイテムかワークスペースが targets にある通知を消す。
+	// Prune は、アイテムが targets にある通知と、アイテムのない通知のうちワークスペースが targets にあるものを消す。
+	// 通知のワークスペースは作ったときの値なので、アイテムの通知はワークスペースでは消さない(移ったアイテムの通知を残す)。
 	Prune(ctx context.Context, store StoreID, targets []change.ID) error
 	// ForgetStore は、Store の通知をすべて消す。
 	ForgetStore(ctx context.Context, store StoreID) error

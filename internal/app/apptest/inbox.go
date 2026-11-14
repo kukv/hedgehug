@@ -152,7 +152,7 @@ func (i *Inbox) Prune(_ context.Context, store port.StoreID, targets []change.ID
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.rows = slices.DeleteFunc(i.rows, func(r port.NoticeRow) bool {
-		return r.Store == store && (slices.Contains(targets, r.Item) || slices.Contains(targets, r.Workspace))
+		return r.Store == store && (slices.Contains(targets, r.Item) || (r.Item == "" && slices.Contains(targets, r.Workspace)))
 	})
 	return nil
 }

@@ -3,6 +3,7 @@ package apptest
 import (
 	"errors"
 	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -113,15 +114,18 @@ func TestFakeInboxPrune(t *testing.T) {
 	byWorkspace.Item = ""
 	other := fakeNotice("s1", port.NoticeAssign)
 	other.Item, other.Workspace = "i9", "w9"
-	for _, n := range []port.Notice{fakeNotice("s1", port.NoticeMention), byWorkspace, other, fakeNotice("s2", port.NoticeMention)} {
+	// 移ったアイテムの通知は、元のワークスペースを持ったまま残る。ワークスペースの削除では消さない。
+	moved := fakeNotice("s1", port.NoticeMention)
+	moved.Item = "i8"
+	for _, n := range []port.Notice{fakeNotice("s1", port.NoticeMention), byWorkspace, other, fakeNotice("s2", port.NoticeMention), moved} {
 		_ = b.Add(t.Context(), n)
 	}
 	_ = b.Prune(t.Context(), "s1", []change.ID{"i1"})
-	if got := fakeList(t, b, "s1"); len(got) != 2 {
+	if got := fakeList(t, b, "s1"); len(got) != 3 {
 		t.Fatalf("after item prune = %d", len(got))
 	}
 	_ = b.Prune(t.Context(), "s1", []change.ID{"w1"})
-	if got := fakeList(t, b, "s1"); len(got) != 1 || got[0].Kind != port.NoticeAssign {
+	if got := fakeList(t, b, "s1"); len(got) != 2 || !slices.ContainsFunc(got, func(r port.NoticeRow) bool { return r.Item == "i8" }) {
 		t.Fatalf("after workspace prune = %+v", got)
 	}
 	if got := fakeList(t, b, "s2"); len(got) != 1 {

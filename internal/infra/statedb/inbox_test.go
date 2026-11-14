@@ -4,6 +4,7 @@ import (
 	"errors"
 	"maps"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -191,7 +192,10 @@ func TestInboxPrune(t *testing.T) {
 	other := inboxNotice("s1", port.NoticeAssign)
 	other.Item, other.Workspace = "i9", "w9"
 	otherStore := inboxNotice("s2", port.NoticeMention)
-	for _, n := range []port.Notice{byItem, byWorkspace, other, otherStore} {
+	// 移ったアイテムの通知は、元のワークスペースを持ったまま残る。ワークスペースの削除では消さない。
+	moved := inboxNotice("s1", port.NoticeMention)
+	moved.Item = "i8"
+	for _, n := range []port.Notice{byItem, byWorkspace, other, otherStore, moved} {
 		if err := b.Add(t.Context(), n); err != nil {
 			t.Fatal(err)
 		}
@@ -199,13 +203,13 @@ func TestInboxPrune(t *testing.T) {
 	if err := b.Prune(t.Context(), "s1", []change.ID{"i1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := inboxList(t, b, "s1"); len(got) != 2 {
+	if got := inboxList(t, b, "s1"); len(got) != 3 {
 		t.Fatalf("after item prune = %d", len(got))
 	}
 	if err := b.Prune(t.Context(), "s1", []change.ID{"w1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := inboxList(t, b, "s1"); len(got) != 1 || got[0].Kind != port.NoticeAssign {
+	if got := inboxList(t, b, "s1"); len(got) != 2 || !slices.ContainsFunc(got, func(r port.NoticeRow) bool { return r.Item == "i8" }) {
 		t.Fatalf("after workspace prune = %+v", got)
 	}
 	if got := inboxList(t, b, "s2"); len(got) != 1 {

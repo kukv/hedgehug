@@ -174,6 +174,9 @@ func TestPagePrunesPurged(t *testing.T) {
 	if _, err := f.book.Get(t.Context(), 1); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("purged row: err = %v, want port.ErrNotFound", err)
 	}
+	// ワークスペースを完全に削除したときは、下のアイテムも 1 つずつ載る。アイテムの行はアイテムの ID で消え、
+	// アイテムのない行はワークスペースで消える。
+	f.stores.AddPurged(s1, port.Purged{Entity: "item", Target: apptest.SampleEpic, Display: "HH-1"})
 	f.stores.AddPurged(s1, port.Purged{Entity: "workspace", Target: apptest.SampleWorkspace, Display: "Web"})
 	if p := f.page(t, inbox.TabAll, nil); len(p.Rows) != 0 || p.Unread[inbox.TabAll] != 0 {
 		t.Errorf("rows = %v, unread = %v, want none", texts(p), p.Unread)
