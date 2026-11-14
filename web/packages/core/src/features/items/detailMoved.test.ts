@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { get } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createToasts } from "../toasts/toasts";
 import { createDetail } from "./detail";
 import { fakeItemsPort, item } from "./fixtures.test-util";
@@ -21,6 +22,7 @@ async function setup() {
     toasts: createToasts({ set: () => 0, clear: () => {} }),
     workspaces: fakeWorkspaces(),
     catalogPort,
+    planning: fakePlanningPort(),
     onChanged: () => {},
     // 確認を出す口。出したら失敗にする(閉じるときに確認してはいけない)。
     leave: async () => {

@@ -37,14 +37,14 @@ func TestOverlaps(t *testing.T) {
 	otherFRestore.To = json.RawMessage(`"op1"`)
 	var overlapNone []repair.Overlap
 	wsDel := del("d3", "op1", "statuses/X", true)
-	always := func(change.Record) bool { return true }
+	always := func(string, change.Record) bool { return true }
 	overlap1 := []repair.Overlap{{Op: "op1", F: "deleted"}}
 	tests := []struct {
 		name       string
 		log        []change.Record
 		ours       map[change.ID]bool
 		theirs     map[change.ID]bool
-		incidental func(change.Record) bool
+		incidental func(string, change.Record) bool
 		want       []repair.Overlap
 	}{
 		{"delete ours, change theirs", []change.Record{itemDel, title}, idSet("d1"), idSet("c1"), nil, overlap1},

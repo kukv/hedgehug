@@ -61,6 +61,39 @@ components:
         - reason
         - orgs
       type: object
+    ActiveSprint:
+      additionalProperties: false
+      nullable: true
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/SprintConfirmed"
+          description: 完了で確定した値。完了していなければ null
+        end:
+          type: string
+        goal:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          type: string
+        state:
+          enum:
+            - planned
+            - active
+            - closed
+          type: string
+      required:
+        - id
+        - name
+        - state
+        - start
+        - end
+        - goal
+        - confirmed
+      type: object
     AddStep:
       additionalProperties: false
       properties:
@@ -255,6 +288,16 @@ components:
       required:
         - done
       type: object
+    CloseSprint:
+      additionalProperties: false
+      properties:
+        destination:
+          description: 未完了のアイテムの移動先(計画中のスプリントの内部 ID)。null はバックログ
+          nullable: true
+          type: string
+      required:
+        - destination
+      type: object
     Comment:
       additionalProperties: false
       properties:
@@ -308,6 +351,10 @@ components:
           type: string
         project:
           description: 空はプロジェクトを選んでいない
+          type: string
+        sprint:
+          description: 入れるスプリントの内部 ID。null と空はバックログ
+          nullable: true
           type: string
         template:
           description: 一緒に作るテンプレートの内部 ID。空は「なし」
@@ -576,6 +623,12 @@ components:
           type: string
         rank:
           type: string
+        release:
+          description: リリースの内部 ID。空は「なし」
+          type: string
+        sprint:
+          description: スプリントの内部 ID。空はバックログ
+          type: string
         start:
           description: YYYY-MM-DD。空は値なし
           type: string
@@ -613,6 +666,8 @@ components:
         - assignee
         - start
         - end
+        - sprint
+        - release
         - points
         - estimate
         - systems
@@ -944,6 +999,68 @@ components:
           type: integer
       required:
         - number
+      type: object
+    PlanningOverview:
+      additionalProperties: false
+      properties:
+        active:
+          $ref: "#/components/schemas/ActiveSprint"
+        defaults:
+          $ref: "#/components/schemas/SprintDefaults"
+        releases:
+          items:
+            $ref: "#/components/schemas/Release"
+          type: array
+        retentionDays:
+          description: その Store の削除済みの保持日数
+          format: int64
+          type: integer
+        sprints:
+          items:
+            $ref: "#/components/schemas/Sprint"
+          type: array
+      required:
+        - sprints
+        - releases
+        - active
+        - defaults
+        - retentionDays
+      type: object
+    PlanningRow:
+      additionalProperties: false
+      properties:
+        assignee:
+          description: ログイン名。空は未割り当て
+          type: string
+        display:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - Epic
+            - Story
+            - Task
+            - Bug
+            - Step
+          type: string
+        points:
+          format: double
+          nullable: true
+          type: number
+        status:
+          description: ステータスの内部 ID。空は値なし
+          type: string
+        title:
+          type: string
+      required:
+        - id
+        - display
+        - kind
+        - title
+        - points
+        - status
+        - assignee
       type: object
     Project:
       additionalProperties: false
@@ -1306,6 +1423,71 @@ components:
         - statusName
         - statusColor
       type: object
+    Release:
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+        description:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        state:
+          enum:
+            - unreleased
+            - released
+            - archived
+          type: string
+      required:
+        - id
+        - name
+        - date
+        - description
+        - state
+      type: object
+    ReleaseCard:
+      additionalProperties: false
+      properties:
+        done:
+          format: int64
+          type: integer
+        items:
+          items:
+            $ref: "#/components/schemas/PlanningRow"
+          type: array
+        release:
+          $ref: "#/components/schemas/Release"
+        target:
+          format: int64
+          type: integer
+        undone:
+          format: int64
+          type: integer
+      required:
+        - release
+        - target
+        - done
+        - undone
+        - items
+      type: object
+    ReleaseInput:
+      additionalProperties: false
+      properties:
+        date:
+          description: YYYY-MM-DD。空は値なし
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        description:
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - date
+        - description
+      type: object
     RenameItem:
       additionalProperties: false
       properties:
@@ -1423,6 +1605,26 @@ components:
       required:
         - value
       type: object
+    SetItemRelease:
+      additionalProperties: false
+      properties:
+        release:
+          description: リリースの内部 ID。null は「なし」
+          nullable: true
+          type: string
+      required:
+        - release
+      type: object
+    SetItemSprint:
+      additionalProperties: false
+      properties:
+        sprint:
+          description: スプリントの内部 ID。null はバックログ
+          nullable: true
+          type: string
+      required:
+        - sprint
+      type: object
     SetProjectDate:
       additionalProperties: false
       properties:
@@ -1502,6 +1704,18 @@ components:
           type: boolean
       required:
         - allowed
+      type: object
+    SetReleaseState:
+      additionalProperties: false
+      properties:
+        state:
+          enum:
+            - unreleased
+            - released
+            - archived
+          type: string
+      required:
+        - state
       type: object
     SetWatch:
       additionalProperties: false
@@ -1657,6 +1871,141 @@ components:
         - state
         - message
         - interval
+      type: object
+    Sprint:
+      additionalProperties: false
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/SprintConfirmed"
+          description: 完了で確定した値。完了していなければ null
+        end:
+          type: string
+        goal:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          type: string
+        state:
+          enum:
+            - planned
+            - active
+            - closed
+          type: string
+      required:
+        - id
+        - name
+        - state
+        - start
+        - end
+        - goal
+        - confirmed
+      type: object
+    SprintCard:
+      additionalProperties: false
+      properties:
+        canceled:
+          format: int64
+          type: integer
+        done:
+          $ref: "#/components/schemas/SprintTotals"
+        items:
+          items:
+            $ref: "#/components/schemas/PlanningRow"
+          type: array
+        sprint:
+          $ref: "#/components/schemas/Sprint"
+        total:
+          $ref: "#/components/schemas/SprintTotals"
+        undone:
+          description: 未着手・進行中の件数
+          format: int64
+          type: integer
+      required:
+        - sprint
+        - total
+        - done
+        - undone
+        - canceled
+        - items
+      type: object
+    SprintConfirmed:
+      additionalProperties: false
+      nullable: true
+      properties:
+        committed:
+          $ref: "#/components/schemas/SprintTotals"
+        completed:
+          $ref: "#/components/schemas/SprintTotals"
+      required:
+        - committed
+        - completed
+      type: object
+    SprintDefaults:
+      additionalProperties: false
+      properties:
+        end:
+          type: string
+        name:
+          type: string
+        start:
+          type: string
+      required:
+        - name
+        - start
+        - end
+      type: object
+    SprintInput:
+      additionalProperties: false
+      properties:
+        end:
+          description: YYYY-MM-DD。空は値なし
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        goal:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD。空は値なし
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+      required:
+        - name
+        - start
+        - end
+        - goal
+      type: object
+    SprintTotals:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          type: integer
+        points:
+          format: double
+          type: number
+      required:
+        - points
+        - count
+      type: object
+    StartSprint:
+      additionalProperties: false
+      properties:
+        end:
+          description: YYYY-MM-DD
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+        start:
+          description: YYYY-MM-DD
+          pattern: ^(\d{4}-\d{2}-\d{2})?$
+          type: string
+      required:
+        - start
+        - end
       type: object
     StoreInfo:
       additionalProperties: false
@@ -3826,6 +4175,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 関連を外す
+  /api/stores/{store}/items/{item}/release:
+    put:
+      operationId: set-item-release
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetItemRelease"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのリリースを変える
   /api/stores/{store}/items/{item}/reorder:
     post:
       operationId: reorder-item
@@ -3890,6 +4269,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: アイテムをテンプレートとして保存
+  /api/stores/{store}/items/{item}/sprint:
+    put:
+      operationId: set-item-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: item
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetItemSprint"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムのスプリントを変える
   /api/stores/{store}/items/{item}/steps:
     post:
       operationId: add-step
@@ -5914,6 +6323,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: ワークスペースで次に作るアイテムの番号を返す
+  /api/stores/{store}/workspaces/{workspace}/planning:
+    get:
+      operationId: get-planning
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanningOverview"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: スプリントとリリースの選択肢、実行中のスプリント、作成の既定
   /api/stores/{store}/workspaces/{workspace}/prefix:
     put:
       operationId: change-workspace-prefix
@@ -6211,6 +6648,423 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロパティの名前を変更
+  /api/stores/{store}/workspaces/{workspace}/releases:
+    get:
+      operationId: list-release-cards
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/ReleaseCard"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: リリースのカード
+    post:
+      operationId: create-release
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseInput"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: リリースを作成
+  /api/stores/{store}/workspaces/{workspace}/releases/{release}:
+    delete:
+      operationId: delete-release
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: release
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: リリースを削除
+    put:
+      operationId: update-release
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: release
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: リリースを編集
+  /api/stores/{store}/workspaces/{workspace}/releases/{release}/restore:
+    post:
+      operationId: restore-release
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: release
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 削除したリリースを復元
+  /api/stores/{store}/workspaces/{workspace}/releases/{release}/state:
+    put:
+      operationId: set-release-state
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: release
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetReleaseState"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: リリースの状態を変える
+  /api/stores/{store}/workspaces/{workspace}/sprints:
+    get:
+      operationId: list-sprint-cards
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/SprintCard"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: スプリントのカード
+    post:
+      operationId: create-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SprintInput"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sprint"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: スプリントを作成
+  /api/stores/{store}/workspaces/{workspace}/sprints/{sprint}:
+    delete:
+      operationId: delete-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: sprint
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: スプリントを削除
+    put:
+      operationId: update-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: sprint
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SprintInput"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: スプリントを編集
+  /api/stores/{store}/workspaces/{workspace}/sprints/{sprint}/close:
+    post:
+      operationId: close-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: sprint
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseSprint"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 実行中のスプリントを完了し、未完了のアイテムを移す
+  /api/stores/{store}/workspaces/{workspace}/sprints/{sprint}/restore:
+    post:
+      operationId: restore-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: sprint
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 削除したスプリントを復元
+  /api/stores/{store}/workspaces/{workspace}/sprints/{sprint}/start:
+    post:
+      operationId: start-sprint
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: sprint
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartSprint"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 計画中のスプリントを開始
   /api/stores/{store}/workspaces/{workspace}/statuses/{value}/category:
     put:
       operationId: set-workspace-status-category

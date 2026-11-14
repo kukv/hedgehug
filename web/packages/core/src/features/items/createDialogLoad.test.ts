@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
+import { fakePlanningPort } from "../planning/fixtures.test-util";
 import { createContextLoader } from "./createDialogLoad";
 import { fakeWorkspaces } from "./settings.test-util";
 
@@ -12,7 +13,7 @@ describe("createContextLoader", () => {
       if (fail) throw new Error("down");
       return get(s, w);
     };
-    const load = createContextLoader(workspaces, fakeCatalogPort());
+    const load = createContextLoader(workspaces, fakeCatalogPort(), fakePlanningPort());
     await expect(load("S1", "S1-W1")).rejects.toThrow("down");
     fail = false;
     await expect(load("S1", "S1-W1")).resolves.toMatchObject({ people: { me: "taro" } });

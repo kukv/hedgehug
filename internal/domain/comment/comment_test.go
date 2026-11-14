@@ -72,3 +72,27 @@ func TestFind(t *testing.T) {
 		t.Error("Find of an unknown comment")
 	}
 }
+
+func TestFindDeleted(t *testing.T) {
+	posted := row("k1p", "K1", 1, "hanako", nil, comment.Value("消す前"), "c")
+	deleted := row("k1d", "K1", 2, "hanako", comment.Value("消す前"), nil, "k1p")
+	got, ok := comment.FindDeleted([]change.Record{posted, deleted}, "K1")
+	want := comment.Comment{ID: "K1", By: "hanako", At: at(1), Body: "消す前"}
+	if !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("FindDeleted = %+v, %v\nwant %+v", got, ok, want)
+	}
+	if _, ok := comment.FindDeleted([]change.Record{posted}, "K1"); ok {
+		t.Error("削除されていないコメントが見つかった")
+	}
+	if _, ok := comment.FindDeleted([]change.Record{posted, deleted}, "K9"); ok {
+		t.Error("ないコメントが見つかった")
+	}
+	edited := row("k1e", "K1", 3, "taro", comment.Value("消す前"), comment.Value("編集"), "k1p")
+	log := []change.Record{posted, deleted, edited}
+	if _, ok := comment.Find(log, "K1"); !ok {
+		t.Error("削除と並んだ編集の行があるのに Find で見つからない")
+	}
+	if _, ok := comment.FindDeleted(log, "K1"); ok {
+		t.Error("削除と編集が並んでいるのに FindDeleted が見つけた")
+	}
+}

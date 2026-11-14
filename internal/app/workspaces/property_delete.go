@@ -12,7 +12,7 @@ import (
 
 // DeleteProperty は、追加プロパティを消す(03「プロパティ」の「削除」)。値の入っているアイテムから値を外す。
 func (s Service) DeleteProperty(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.edit(ctx, store, ws,
+	return s.remove(ctx, store, ws,
 		func(st workspace.Settings) (string, error) {
 			p, ok := st.Property(id)
 			if !ok || p.Builtin {

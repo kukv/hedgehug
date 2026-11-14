@@ -54,6 +54,16 @@ describe("resolveRoute", () => {
     expect(r).toEqual({ name: "workspace", storeId: "S1", workspaceId: "S1-W1", tab: "overview" });
   });
 
+  it.each(["sprints", "releases"] as const)("keeps the %s tab of a workspace", async (tab) => {
+    const r = await resolveRoute(
+      { name: "workspace", store: "work", prefix: "HH", tab },
+      await stores(),
+      itemsIn("S1"),
+      transfers,
+    );
+    expect(r).toEqual({ name: "workspace", storeId: "S1", workspaceId: "S1-W1", tab });
+  });
+
   it.each([
     { name: "project", store: "work", project: "HH-P9", tab: "overview" },
     { name: "project", store: "work", project: "HH-9", tab: "overview" },
@@ -101,6 +111,7 @@ describe("routes of internal IDs", () => {
       tab: "overview",
     });
     expect(routeOfWorkspace(s, "S1", "S1-W1", "settings")).toMatchObject({ tab: "settings" });
+    expect(routeOfWorkspace(s, "S1", "S1-W1", "sprints")).toMatchObject({ tab: "sprints" });
     expect(routeOfProject(s, "S1", "nope", "tree")).toEqual({ name: "home" });
     expect(routeOfWorkspace(s, "S9", "S1-W1")).toEqual({ name: "home" });
   });

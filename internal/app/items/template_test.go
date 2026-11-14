@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -142,5 +143,38 @@ func TestCreateWithAMissingOrMismatchedTemplate(t *testing.T) {
 	_, err := svc.Create(t.Context(), items.CreateInput{Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: "Task", Title: " ", Template: &missing})
 	if message(err) != "タイトルを入力してください" {
 		t.Errorf("empty title = %v", err)
+	}
+}
+
+// スプリントはもとになるアイテムだけに入れ、テンプレートの子と Step には入れない(03)。
+func TestCreateFromATemplateSprintOnlyOnTheRoot(t *testing.T) {
+	svc, rec := setupRec(t)
+	seedSprint(t, rec, apptest.SampleWorkspace, planning.Sprint{ID: "S1", Name: "Sprint 1", State: planning.Active}, false)
+	tp := saveTemplate(t, svc, rec, workspace.Template{
+		Name: "調査", Kind: "Story", Title: "調査",
+		Steps: []workspace.TemplateStep{{Title: "手順"}},
+		Children: []workspace.TemplateChild{
+			{Kind: "Task", Title: "子", Steps: []workspace.TemplateStep{{Title: "子の手順"}}},
+		},
+	})
+	sprint := change.ID("S1")
+	root, err := svc.Create(t.Context(), items.CreateInput{
+		Store: store, Project: apptest.SampleProject, Parent: ptr(apptest.SampleEpic), Kind: item.Story, Title: "調査",
+		Template: &tp.ID, Sprint: &sprint,
+	})
+	if err != nil || root.Sprint != "S1" {
+		t.Fatalf("root = %q, %v", root.Sprint, err)
+	}
+	n := 0
+	for _, it := range byNumber(t, svc) {
+		if it.Place.Number > root.Place.Number {
+			n++
+			if it.Sprint != "" {
+				t.Errorf("%s にスプリント %q", it.Title, it.Sprint)
+			}
+		}
+	}
+	if n != 3 {
+		t.Errorf("子と Step = %d", n)
 	}
 }

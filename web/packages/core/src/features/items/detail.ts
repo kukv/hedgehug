@@ -1,13 +1,17 @@
 import { NotFound, Refused } from "../../model/errors";
 import type { Item, PropertyInput } from "../../model/item";
+import type { PlanningOverview } from "../../model/planning";
 import type { WorkspaceSettings } from "../../model/workspace";
 import type { CatalogPort } from "../../port/catalog";
 import type { ItemsPort } from "../../port/items";
+import type { PlanningPort } from "../../port/planning";
 import type { WorkspacesPort } from "../../port/workspaces";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
 import type { Catalog, ProjectNode, StoreNode, WorkspaceNode } from "../catalog/catalog";
 import { itemDisplayId } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
+import { createContexts } from "./detailContext";
+import { assignPlan } from "./detailPlan";
 import { type People, type PropertyRow, propertyRows, valueOf as valueOfItem } from "./properties";
 import { ancestorsOf, compareSiblings } from "./tree";
 
@@ -30,6 +34,8 @@ export interface DetailView {
   settings: WorkspaceSettings;
   people: People;
   rows: PropertyRow[];
+  // plan は、ワークスペースのスプリントとリリースの概要(スプリント・リリースの選択肢)。
+  plan: PlanningOverview;
 }
 
 export interface Detail {
@@ -54,6 +60,10 @@ export interface Detail {
   toggleValue(propertyId: string, valueId: string, on: boolean): Promise<void>;
   // checkStep は、Step のチェックを入れ切りする(ステータスが変わる)。
   checkStep(stepId: string, done: boolean): Promise<void>;
+  // setSprint・setRelease は、開いているアイテムのスプリント・リリースを保存する(空はバックログ・「なし」)。
+  // 表示している値と同じなら何もしない。false なら、セレクトを保存済みの値に戻す。
+  setSprint(id: string): Promise<boolean>;
+  setRelease(id: string): Promise<boolean>;
   // reload は、開いているアイテムを読み直す(画面への反映)。開いていなければ何もしない。
   // なくなっていたら、パネルを閉じる(06「反映で変わる画面」)。
   reload(): Promise<void>;
@@ -67,6 +77,7 @@ export interface DetailDeps {
   items: ItemsPort;
   workspaces: WorkspacesPort;
   catalogPort: CatalogPort;
+  planning: PlanningPort;
   toasts: Toasts;
   // onChanged は、保存したあと(開いているプロジェクトの画面を読み直す)。
   onChanged(): void;
@@ -90,34 +101,14 @@ export function createDetail(deps: DetailDeps): Detail {
   // target は、開いている(開こうとしている)アイテム。reload が、開いている途中の別のアイテムを古い表示で上書きしないために持つ。
   let target: { storeId: string; itemId: string } | null = null;
 
-  // context は、ワークスペースごとの設定とメンバー。一度読んだら使い回し、画面への反映(reload)と
-  // 詳細パネルを閉じたときに読み直す(A3 前半の決定 29)。
-  type Context = { settings: WorkspaceSettings; people: People };
-  let contexts = new Map<string, Promise<Context>>();
-  function contextOf(storeId: string, workspaceId: string, refresh: boolean): Promise<Context> {
-    const key = `${storeId}/${workspaceId}`;
-    const cached = contexts.get(key);
-    if (cached && !refresh) return cached;
-    const read = (async () => {
-      const [ws, members, me] = await Promise.all([
-        deps.workspaces.get(storeId, workspaceId),
-        deps.catalogPort.listMembers(storeId).catch(() => []),
-        // me が決まらないときは空(A2 の決定 3)。
-        deps.catalogPort.me(storeId).catch(() => ""),
-      ]);
-      return { settings: ws.settings, people: { members, me } };
-    })();
-    contexts.set(key, read);
-    // 読めなかったら、次のときに読み直せるよう残さない。
-    read.catch(() => contexts.get(key) === read && contexts.delete(key));
-    return read;
-  }
+  // contexts は、ワークスペースごとの設定・メンバー・スプリントとリリースの概要。
+  let contexts = createContexts(deps);
 
   // shut は、パネルを閉じる(確認なし)。全画面も解除する。close と、読み直しでアイテムやプロジェクトがなくなっていたときの閉じ方が同じ。
   function shut() {
     latest += 1;
     target = null;
-    contexts = new Map();
+    contexts = createContexts(deps);
     view.set(null);
     full.set(false);
   }
@@ -135,9 +126,9 @@ export function createDetail(deps: DetailDeps): Detail {
         if (mine === latest) shut();
         return;
       }
-      const [all, { settings, people }] = await Promise.all([
+      const [all, { settings, people, plan }] = await Promise.all([
         deps.items.list(storeId, item.projectId),
-        contextOf(storeId, item.workspaceId, refresh),
+        contexts.of(storeId, item.workspaceId, refresh),
       ]);
       const store = deps.catalog.store(storeId);
       const project = deps.catalog.project(storeId, item.projectId);
@@ -163,6 +154,7 @@ export function createDetail(deps: DetailDeps): Detail {
           people,
           item.projectId,
         ),
+        plan,
       });
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
@@ -182,6 +174,15 @@ export function createDetail(deps: DetailDeps): Detail {
   function refusedToast(e: unknown) {
     if (!(e instanceof Refused)) throw e;
     deps.toasts.show(e.message, { error: true });
+  }
+
+  // assign は、スプリント・リリースを保存し、保存したら読み直す。表示している値と同じなら何もせずに true。
+  async function assign(key: "sprint" | "release", id: string) {
+    const v = get(view);
+    if (!v) return false;
+    const done = await assignPlan(deps, v.store.id, v.item, v.plan, key, id);
+    if (done) await saved(v.store.id, v.item.id);
+    return done !== false;
   }
 
   return {
@@ -281,6 +282,8 @@ export function createDetail(deps: DetailDeps): Detail {
       }
       await saved(v.store.id, v.item.id);
     },
+    setSprint: (id) => assign("sprint", id),
+    setRelease: (id) => assign("release", id),
     async reload() {
       if (target) await load(target.storeId, target.itemId, true);
     },

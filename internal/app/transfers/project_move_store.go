@@ -74,7 +74,7 @@ func (s Service) moveProjectAcross(ctx context.Context, store port.StoreID, id p
 		return ProjectMoved{}, s.rollbackProject(ctx, m, err)
 	}
 	if m.revive != "" {
-		port.NoteRevived(ctx, m.old())
+		port.NoteRevived(ctx, port.Revival{Kind: port.RevivedID, Text: m.old()})
 	}
 	return ProjectMoved{ToStore: in.ToStore, Project: id, Display: m.plan.display(), Destination: m.plan.dstName}, nil
 }

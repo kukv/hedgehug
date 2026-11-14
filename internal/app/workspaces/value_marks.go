@@ -20,7 +20,7 @@ func (s Service) SetStatusCategory(ctx context.Context, store port.StoreID, ws w
 	if !slices.Contains(workspace.Categories, c) {
 		return port.ErrNotFound
 	}
-	return s.editValue(ctx, store, ws, statusList, id,
+	return s.changeValue(ctx, store, ws, statusList, id,
 		func(_ workspace.Settings, v workspace.Value) string {
 			return fmt.Sprintf("ステータス「%s」の分類を変更", oneLine(v.Name))
 		},

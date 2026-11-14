@@ -55,6 +55,8 @@ export function item(
     blocked: false,
     createdAt: `2026-11-13T09:00:${String(n).padStart(2, "0")}.000Z`,
     createdBy: "taro",
+    sprint: "",
+    release: "",
     ...initialValues,
   };
 }
@@ -185,6 +187,8 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
         blocked: false,
         createdAt: new Date(Date.UTC(2026, 10, 13, 10, 0, all.length)).toISOString(),
         createdBy: "taro",
+        sprint: input.sprint ?? "",
+        release: "",
       });
     },
     async rename(_s, id, title) {
@@ -209,6 +213,8 @@ export function fakeItemsPort(initial: Item[] = []): FakeItems {
         blocked: false,
         createdAt: new Date(Date.UTC(2026, 10, 13, 10, 0, all.length)).toISOString(),
         createdBy: "taro",
+        sprint: "",
+        release: "",
       });
     },
     async reorder(_s, id, anchorId, after) {

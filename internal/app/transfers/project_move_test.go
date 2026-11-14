@@ -283,7 +283,7 @@ func TestMoveProjectRevivesDeletedElsewhere(t *testing.T) {
 	if task := itemOf(t, f.rec, store1, apptest.SampleTask); task.Deleted == nil {
 		t.Error("the task deleted by another operation was revived")
 	}
-	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-P1"}) {
+	if got := port.Revived(ctx); !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-P1"}}) {
 		t.Errorf("revived = %v", got)
 	}
 	for id, n := range map[item.ID]int{apptest.SampleEpic: 2, apptest.SampleTask: 3, earlierEpic: 4} {

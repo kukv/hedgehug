@@ -1,13 +1,16 @@
 package port
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // 別の画面で削除されたものへの保存は、変更を残して削除を取り消す(06「他の書き手との重なり」)。
@@ -98,7 +101,7 @@ func ReviveItem(ctx context.Context, tx Tx, id item.ID) error {
 	if err := reviveItemsOf(tx, it.Place.Project, it.Deleted.Op); err != nil {
 		return err
 	}
-	noteRevived(ctx, it.DisplayID(ws.Prefix))
+	NoteRevived(ctx, Revival{Kind: RevivedID, Text: it.DisplayID(ws.Prefix)})
 	return nil
 }
 
@@ -160,7 +163,7 @@ func reviveProject(ctx context.Context, tx Tx, p project.Project) error {
 	if err := reviveItemsOf(tx, p.ID, p.Deleted.Op); err != nil {
 		return err
 	}
-	noteRevived(ctx, p.DisplayID(ws.Prefix))
+	NoteRevived(ctx, Revival{Kind: RevivedID, Text: p.DisplayID(ws.Prefix)})
 	return nil
 }
 
@@ -185,32 +188,110 @@ func reviveItemsOf(tx Tx, p project.ID, op change.ID) error {
 	return nil
 }
 
-type revivedKey struct{}
-
-// revived は、取り消したものの表示 ID を、積んだ順に持つ。
-type revived struct{ ids []string }
-
-// WithRevived は、取り消したものの表示 ID を積む入れ物を置いた context を返す。
-func WithRevived(ctx context.Context) context.Context {
-	return context.WithValue(ctx, revivedKey{}, &revived{})
+// ReviveWorkspace は、tx の中で読み直し、削除済みのワークスペースなら、その削除の操作の行を、その行がある
+// ログ(ワークスペース、そのプロジェクトとアイテム)すべてで取り消し、削除の前の名前を WithRevived の入れ物に積んで
+// true を返す。名前 name・接頭辞 prefix(空なら、いまの値)が削除されていないワークスペースと重なれば断る(決定 R11)。
+// 削除されていなければ何もせず false。
+func ReviveWorkspace(ctx context.Context, tx Tx, id workspace.ID, name, prefix string) (bool, error) {
+	w, err := tx.Workspaces().Get(id)
+	if err != nil || w.Deleted == nil {
+		return false, err
+	}
+	next := workspace.Workspace{ID: id, Name: cmp.Or(name, w.Name), Prefix: cmp.Or(prefix, w.Prefix)}
+	live, err := LiveWorkspaces(tx)
+	if err != nil {
+		return false, err
+	}
+	if err := workspace.CheckRevive(next, live); err != nil {
+		return false, err
+	}
+	refs, err := workspaceRefs(tx, id)
+	if err != nil {
+		return false, err
+	}
+	refs = append([]change.Ref{{Kind: change.KindWorkspace, ID: id}}, refs...)
+	if err := undoAcross(tx, refs, w.Deleted.Op); err != nil {
+		return false, err
+	}
+	NoteRevived(ctx, Revival{Kind: RevivedName, Text: strings.Join(strings.Fields(w.Name), " ")})
+	return true, nil
 }
 
-// Revived は、入れ物に積んだ表示 ID を、積んだ順に返す。入れ物がなければ nil。
-func Revived(ctx context.Context) []string {
-	v, _ := ctx.Value(revivedKey{}).(*revived)
-	if v == nil {
-		return nil
+// ReviveSetting は、tx の中でワークスペース ws のログを読み直し、項目名 f を覆う削除の行(workspace.Covering)の
+// op ごとに、その op の行があるログ(ワークスペース、そのプロジェクトとアイテム)へ取り消しの行を書く
+// (値の削除で置き換えたアイテムの値も、先端なら戻る)。名前は WithRevived の入れ物に積む。
+// 取り消したものがあれば true。
+func ReviveSetting(ctx context.Context, tx Tx, ws workspace.ID, f string) (bool, error) {
+	wref := change.Ref{Kind: change.KindWorkspace, ID: ws}
+	log, err := tx.Changes().Of(wref)
+	if err != nil {
+		return false, err
 	}
-	return slices.Clone(v.ids)
+	covering := workspace.Covering(log, f)
+	if len(covering) == 0 {
+		return false, nil
+	}
+	refs, err := workspaceRefs(tx, ws)
+	if err != nil {
+		return false, err
+	}
+	refs = append([]change.Ref{wref}, refs...)
+	done := map[change.ID]bool{}
+	for _, d := range covering {
+		if done[d.Op] {
+			continue
+		}
+		done[d.Op] = true
+		if err := undoAcross(tx, refs, d.Op); err != nil {
+			return false, err
+		}
+		NoteRevived(ctx, Revival{Kind: RevivedName, Text: strings.Join(strings.Fields(workspace.NameOfDeleted(log, d.F)), " ")})
+	}
+	return true, nil
 }
 
-// NoteRevived は、ReviveItem を通さずに削除を取り消したものの表示 ID を積む(別の Store への移動は、写した行の削除を
-// 移動先の保存で取り消し、移動元と移動先の両方の保存が済んでから積む)。
-func NoteRevived(ctx context.Context, display string) { noteRevived(ctx, display) }
-
-// noteRevived は、入れ物に表示 ID を積む(同じ ID は 1 つ)。入れ物がなければ捨てる。
-func noteRevived(ctx context.Context, display string) {
-	if v, _ := ctx.Value(revivedKey{}).(*revived); v != nil && !slices.Contains(v.ids, display) {
-		v.ids = append(v.ids, display)
+// workspaceRefs は、ワークスペースのプロジェクトとアイテム(削除済みも含む)のログを指す Ref。
+func workspaceRefs(tx Tx, ws workspace.ID) ([]change.Ref, error) {
+	ps, err := tx.Projects().List(ws)
+	if err != nil {
+		return nil, err
 	}
+	var refs []change.Ref
+	for _, p := range ps {
+		refs = append(refs, change.Ref{Kind: change.KindProject, ID: p.ID})
+		its, err := tx.Items().List(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range its {
+			refs = append(refs, change.Ref{Kind: change.KindItem, ID: it.ID})
+		}
+	}
+	return refs, nil
+}
+
+// undoAcross は、refs のログのうち操作 op の行があるものへ、読み直したログで、その取り消しの行を書く。
+func undoAcross(tx Tx, refs []change.Ref, op change.ID) error {
+	for _, ref := range refs {
+		log, err := tx.Changes().Of(ref)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(log, func(r change.Record) bool { return r.Op == op }) {
+			continue
+		}
+		drafts := change.Undo(log, op)
+		switch ref.Kind {
+		case change.KindWorkspace:
+			err = tx.WriteWorkspaces().Append(ref.ID, drafts...)
+		case change.KindProject:
+			err = tx.WriteProjects().Append(ref.ID, drafts...)
+		default:
+			err = tx.WriteItems().Append(ref.ID, drafts...)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
