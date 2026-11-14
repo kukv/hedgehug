@@ -163,16 +163,21 @@ func TestDeletedBelowFollowsOnlyDeleted(t *testing.T) {
 	}
 }
 
-// 削除済みの親が輪になっていても止まる。
+// 削除済みの親が輪になっていても止まる。t と b が互いの親(t は輪の中)で、a は b の子。
+// t から b、a の順に届き、b から t に戻るところで止まる。a・b は 1 回ずつ、t 自身は含まない。
 func TestDeletedBelowStopsOnCycle(t *testing.T) {
 	items := []item.Item{
-		wsAt("t", "w1", "p1", 1, "", false),
-		wsAt("a", "w1", "p1", 2, "t", true),
-		wsAt("b", "w1", "p1", 3, "a", true),
+		wsAt("t", "w1", "p1", 1, "b", true),
+		wsAt("b", "w1", "p1", 2, "t", true),
+		wsAt("a", "w1", "p1", 3, "b", true),
 	}
-	items[1].Place.Parent = &items[2].ID
-	if got := repair.DeletedBelow("t", items); len(got) != 0 {
-		t.Errorf("DeletedBelow = %v, want none", got)
+	var ids []item.ID
+	for _, it := range repair.DeletedBelow("t", items) {
+		ids = append(ids, it.ID)
+	}
+	slices.Sort(ids)
+	if !slices.Equal(ids, []item.ID{"a", "b"}) {
+		t.Errorf("DeletedBelow = %v, want [a b]", ids)
 	}
 }
 
