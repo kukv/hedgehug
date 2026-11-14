@@ -73,6 +73,17 @@ export {
   sprintMenu,
   startDisabledReason,
 } from "./features/planning/sprints";
+export {
+  type Bar,
+  bars,
+  type Frame,
+  linePoints,
+  niceMax,
+  type Point,
+  pathOf,
+  stackPaths,
+  ticks,
+} from "./features/reports/chart";
 export type {
   PlanningOverview,
   PlanRow,
