@@ -63,7 +63,6 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		{"remove and import refuse in the same write", contractRemoveImportRules},
 		{"op rows are for sync operations only", contractOpRows},
 		{"remove deletes a project folder", contractProjectRemove},
-		{"remove deletes a workspace folder", contractWorkspaceRemove},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -75,7 +74,7 @@ func RunStoresContract(t *testing.T, newStores func(t *testing.T) (s port.Stores
 		s, a, b := newStores(t)
 		contractNestedStores(t, s, a, b)
 	})
-	t.Run("import copies a workspace folder between stores", func(t *testing.T) { s, a, b := newStores(t); contractWorkspaceImport(t, s, a, b) })
+	runWorkspaceContract(t, newStores)
 	for _, k := range entityKinds {
 		t.Run("import copies a "+k.name+" folder between stores", func(t *testing.T) {
 			s, a, b := newStores(t)

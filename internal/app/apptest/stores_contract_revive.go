@@ -139,6 +139,18 @@ func reviveSettingTwice(t *testing.T, tx port.Tx, f string, v change.ID) {
 	}
 }
 
+// runWorkspaceContract は、ワークスペースのフォルダの Import・Remove の照合を、空の Store で回す。
+func runWorkspaceContract(t *testing.T, newStores func(t *testing.T) (s port.Stores, id, other port.StoreID)) {
+	t.Run("remove deletes a workspace folder", func(t *testing.T) {
+		s, id, _ := newStores(t)
+		contractWorkspaceRemove(t, s, id)
+	})
+	t.Run("import copies a workspace folder between stores", func(t *testing.T) {
+		s, a, b := newStores(t)
+		contractWorkspaceImport(t, s, a, b)
+	})
+}
+
 // contractWorkspaceImport は、別の Store のワークスペースの行を、行を変えずに写すことと、写せない場合の断りを確かめる。
 // 写したワークスペースは、Get と Settings で読める。
 func contractWorkspaceImport(t *testing.T, s port.Stores, a, b port.StoreID) {
