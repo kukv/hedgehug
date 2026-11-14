@@ -33,7 +33,6 @@
 - API を変えたら `make generate` で `api/openapi.yaml` と `web/packages/api/src/generated.ts` を作り直してコミットする(CI が差分を見る)。
 - e2e のビルドも CI で lint する。本物の組み立てだけで使う関数は `//go:build !e2e` のファイルに置く。e2e は Playwright の worker ごとに `bin/hedgehug-e2e` を空いた番号で起動する(`web/e2e/fixtures.ts`)。
 - 手元の検証は 1 回で足りる(CI でも流れる)。
-- push は `https://github.com/kukv/hedgehug.git` に行う(このマシンの SSH の鍵の署名が通らない)。
 
 ## この計画で決めたこと
 
@@ -41,11 +40,11 @@
 |---|---|---|
 | F3-1 | 数え方はすべて `domain/planning` に置く。新しいファイルは `report.go`(単位・選択・丸め)、`burndown.go`、`velocity.go`、`flow.go`、`cycle.go`、`estimate.go`(計 13 個)。非公開の `counted`・`idAt`・`ValueAt` をそのまま使い、確定値とバーンダウンの数え方をそろえる | 05 の 338 行の注記は「総量(開始日)と確定の計画が違うとき」だけ出す。数え方がずれると、手を入れていない完了スプリントでも注記が出る |
 | F3-2 | 完了の記録の時刻と op を `planning.Sprint.Closing`(`*Closing{At time.Time; Op change.ID}`)で持つ。`confirmedOf` が使う `close_sprint` の行(`change.Current` が決めた 1 行)の `At` と `Op` | 完了による持ち越し(05 の 320 行)と、表示する日の上限(05 の 332 行の「完了した日」)に要る |
-| F3-3 | 完了による持ち越し: バーンダウンのスプリントの範囲は、アイテムのログから `Op` がそのスプリントの `Closing.Op` の行を除いてから `ValueAt` で求める。完了の保存は、未完了のアイテムの `set sprint` を同じ op で書く(F1 の `close.go`)ので、完了で移したアイテムは完了した日の終わりまで範囲に残る。表示する日は完了した日までなので、除いた行がそれより後の日に効くことはない | 05 の 320・332 行 |
+| F3-3 | 完了による持ち越し: アイテムのログに、`Op` がそのスプリントの `Closing.Op` の `set sprint` の行(完了で移した行)があれば、そのアイテムのスプリントの範囲は、日の終わりとその行の `At` のうち早い方の時点の値で求める(その行より前の行だけで `ValueAt`)。分類は日の終わりの時点のまま。表示する日は完了した日までなので、完了で移したアイテムは完了した日の終わりまで範囲に残る。完了の行をログから除いて求める形にはしない(同じ日にさらに別の枠へ移した行の `prev` が除いた行を指し、`change.Resolve` があとの行を先端に選んで、範囲から消えるため) | 05 の 320・332 行。F1 の `close.go` は、移す行を完了と同じ op で書く |
 | F3-4 | 単位は `planning.Unit`(`points`・`count`)。ポイントを選んでいても、ワークスペースの削除済みでない作業項目に `Points` のあるものが 1 件もなければ件数で数え、`Fallback` を真にする(画面は「ポイントのあるアイテムがないため、件数で数えています」)。単位はバーンダウン・ベロシティ・スプリントのカードの小さいバーンダウンと「途中で追加」に効く。累積フロー図は件数、サイクルタイムと見積もりと実績は単位によらない。概要の完了ポイントは常にポイント | 05 の 193・296・305〜307 行 |
-| F3-5 | レポートの選択は `planning.Selection{Unit; Sprint change.ID; Layers; Estimate change.ID}`(`Layers` は `category`・`status`、`Estimate` の空は「すべて」)。`state.db` の表 `report_selections`(Store ID・ワークスペース ID ごとに 1 行)に置く。読むときに直す: 選択がなければ単位はポイント・層は分類・対象はすべて。読めない単位・層は既定に戻す。バーンダウンのスプリントは、選択肢(F3-6)にあればそれ、なければ 05 の 310〜312 行の順(実行中 → 終了日が最も遅い完了、同じ終了日は開始日が遅いもの、それも同じなら名前の昇順で先 → 未選択)。見積もりと実績の対象は、選択肢にあればそれ、なければ「すべて」。2 つのスプリントは別々に確かめる(片方が消えても、もう片方の選択は残す) | 05 の 309〜312 行。保存形式 282 行。05 の 309 行の「保存したスプリント」は、選択ごとに確かめるのが利用者の選んだものを最も残すため |
+| F3-5 | レポートの選択は `planning.Selection{Unit; Sprint change.ID; Layers; Estimate change.ID}`(`Layers` は `category`・`status`、`Estimate` の空は「すべて」)。`state.db` の表 `report_selections`(Store ID・ワークスペース ID ごとに 1 行)に、利用者が選んだ項目だけを置く(選んでいない項目は空のまま。単位だけ変えた人の行のスプリントは空なので、次のスプリントを開始すると、バーンダウンは新しい実行中のスプリントになる)。読むときに直す: 選択がなければ単位はポイント・層は分類・対象はすべて。読めない単位・層は既定に戻す。バーンダウンのスプリントは、選択肢(F3-6)にあればそれ、なければ 05 の 310〜312 行の順(実行中 → 終了日が最も遅い完了、同じ終了日は開始日が遅いもの、それも同じなら名前の昇順で先 → 未選択)。見積もりと実績の対象は、選択肢にあればそれ、なければ「すべて」。2 つのスプリントは別々に確かめる(片方が消えても、もう片方の選択は残す) | 05 の 309〜312 行。保存形式 282 行。05 の 309 行の「保存したスプリント」は、選択ごとに確かめるのが利用者の選んだものを最も残すため |
 | F3-6 | レポートのスプリントの選択肢(バーンダウンと、見積もりと実績の対象)は、削除済みでない実行中と完了のスプリントを開始日の新しい順。同じ開始日は名前の昇順 | 05 の 154・308・387 行。同じ日付の並びは F1 の画面の並びと同じく名前の昇順(05 の 453 行) |
-| F3-7 | 選択の保存は Store に書かない(`Stores.Write` を通さない)ので、閲覧のみの Store でも変えられる。ワークスペースがないか削除済みなら `port.ErrNotFound`。単位・層が読めない値なら `port.ErrInvalidOperation`(400)。スプリントの ID は確かめずに残す(読むときに F3-5 で直す) | 05 の 309・362 行 |
+| F3-7 | 選択の保存は、送られた項目だけを state.db の行(読むときに直す前の値)に重ねる。Store に書かない(`Stores.Write` を通さない)ので、閲覧のみの Store でも変えられる。ワークスペースがないか削除済みなら `port.ErrNotFound`。単位・層が読めない値なら `port.ErrInvalidOperation`(400)。スプリントの ID は確かめずに残す(読むときに F3-5 で直す) | 05 の 309・362 行 |
 | F3-8 | 「小数第 2 位を四捨五入して小数第 1 位まで」は Go の `planning.Round1(x float64) float64` だけで行い、API は丸めた数を返す。画面は `toFixed(1)` で常に小数第 1 位まで書く(`3` は「3.0」)。`Round1` は、浮動小数点の誤差を消すために小数第 3 位で一度丸めてから、小数第 1 位に四捨五入する(`3.55` → `3.6`、`6.4` → `6.4`、`0.05` → `0.1`) | 05 の 351・380・390 行。丸める場所を 1 つにして、仕様の例(3.55 → 3.6)を Go のテストで確かめる |
 | F3-9 | バーンダウンの表の「総量」は、表示する日より後の日も、その日の終わり時点で求めた値(いまの状態と同じ)を出す。「残り」だけ「—」 | 05 の 401 行(「—」にするのは「残り」だけと書いてある) |
 | F3-10 | 「表示する日」が 0 日(開始日が今日より後)のときは、バーンダウンの図と表の代わりに「開始日({日付})から表示します」を出す。小さいバーンダウンも同じで、「途中で追加」も出さない | 05 の 192・193・332・405 行 |
@@ -66,8 +65,8 @@
 1. **完了で移したアイテムが、完了した日の残りから消える。** 実行中に未完了 2 件(5 pt)のまま完了してバックログへ移したスプリントで、完了した日の「残り」が 5 pt のまま残る(F3-3)。Task 2 の `TestBurnCarryOver` に入れる。
 2. **手を入れていない完了スプリントに、確定の計画の注記が出る。** 開始日に入れて完了まで何も変えなかったスプリントで、`Committed` が nil になる。途中で足したアイテムがあっても同じ(計画にも総量(開始日)にも入らない)(F3-1)。Task 2 の `TestBurnCommittedNote` に入れる。
 3. **再び開いて完了したアイテムのサイクルタイムが、最初の着手から数えられる。** 完了 → 進行中 → 完了のアイテムは、再び開いた時刻から数える。完了の分類どうし(Done → Released)の移動では到達の時刻が延びない(05 の 375・376 行)。Task 5 のテストに入れる。
-4. **選んだスプリントを削除したら、レポートの画面が空になる。** 保存したバーンダウンのスプリントが削除済み・計画中・存在しないとき、既定の順で選び直す。見積もりと実績の対象は「すべて」に戻すが、バーンダウンの選択は残す(F3-5)。Task 3 の `TestResolveSelection` と Task 8 のテストに入れる。
-5. **ポイントのないワークスペースで、図が 0 のまま。** ポイントが 1 件もないワークスペースでは件数で数え、注記を出す。スプリントのカードの小さいバーンダウンも件数になる(F3-4)。Task 3 の `TestEffectiveUnit` と Task 8 のテストに入れる。
+4. **選んだスプリントを削除したら、レポートの画面が空になる。** 保存したバーンダウンのスプリントが削除済み・計画中・存在しないとき、既定の順で選び直す。見積もりと実績の対象は「すべて」に戻すが、バーンダウンの選択は残す(F3-5)。Task 1 の `TestResolveSelection` と Task 8 のテストに入れる。
+5. **ポイントのないワークスペースで、図が 0 のまま。** ポイントが 1 件もないワークスペースでは件数で数え、注記を出す。スプリントのカードの小さいバーンダウンも件数になる(F3-4)。Task 1 の `TestEffectiveUnit` と Task 8 のテストに入れる。
 
 ---
 
@@ -175,7 +174,7 @@ git commit -m "feat(planning): レポートの単位・選択・丸めと、完�
 
 - `TestBurnDaysAndIdeal`: 11/1 に S1 に入れた A(3 pt)・B(5 pt)。B を 11/3 に完了。今日 11/4、実行中。`Days` は 11/02〜11/05 の 4 件、`Shown` は 3。総量は 8・8・8・8、残りは 8・8・3・nil、理想は 8・5.333…・2.666…・0(`8 - 8*k/3`)。
 - `TestBurnScopeChange`: 11/3 に C(2 pt)を足す → 11/3 から総量 10。11/4 に A を中止 → 11/4 から総量 7(中止を除く)。11/3 に外した D は 11/3 から総量に入らない。理想は開始日の総量から引き、引き直さない。
-- `TestBurnCarryOver`(Review Focus 1): 11/4 15:00 に完了し、未完了の A(3 pt)・C(2 pt)をバックログへ移す(完了の行と同じ op の `set sprint null`)。今日 11/6。`Shown` は 3(11/02〜11/04)、11/04 の残りは 5。
+- `TestBurnCarryOver`(Review Focus 1): 11/4 15:00 に完了し、未完了の A(3 pt)・C(2 pt)を S2 へ移す(完了の行と同じ op の `set sprint`)。今日 11/6。`Shown` は 3(11/02〜11/04)、11/04 の残りは 5。A を同じ 11/4 の 16:00 にバックログへ移しても(その行の `prev` は完了で移した行)、11/04 の残りは 5 のまま。11/4 の 14:00(完了の前)に S1 から外した B は、11/04 の範囲に入らない。
 - `TestBurnCommittedNote`(Review Focus 2): 開始日に入れて何も変えずに完了したスプリントは `Committed` が nil。途中(11/3)に足したアイテムがあっても nil。完了のあとに開始日からあったアイテムを削除したら、`Committed` が確定の計画の値。件数の単位では、件数の確定値で比べる。
 - `TestBurnFutureStart`: 開始日が明日なら `Shown` は 0、すべての `Remaining` は nil。
 - `TestBurnUnitCount`: 件数の単位では、ポイントのないアイテムも 1 件。
@@ -190,7 +189,7 @@ Expected: FAIL
 
 - [ ] **Step 3: 書く**
 
-範囲の判定は `idAt(withoutOp(w.Log, s.Closing.Op), item.SprintField, EndOfDay(d, time.Local)) == s.ID`(`Closing` が nil なら除かない)。分類は同じ時点の `idAt(…, "status", …)` を `Category` に渡す。量は `Measure(w.Item, u)`(いまの値)。表示する日の最後は、終了日・今日・(`Closing` があれば)`Today(Closing.At)` のうち最も早い日。`Committed` を出すかの比べ方は、両方を `strconv.FormatFloat(v, 'g', 12, 64)` で 12 桁の文字列にしてから比べる(画面の `pt` と同じ桁。0.1 + 0.2 の誤差で注記を出さない)。
+範囲の判定は `idAt(w.Log, item.SprintField, at) == s.ID`。`at` は `EndOfDay(d, time.Local)` と、そのアイテムの完了で移した行(F3-3)の `At` のうち早い方。分類は `EndOfDay(d, time.Local)` の時点の `idAt(…, "status", …)` を `Category` に渡す。量は `Measure(w.Item, u)`(いまの値)。表示する日の最後は、終了日・今日・(`Closing` があれば)`Today(Closing.At)` のうち最も早い日。`Committed` を出すかの比べ方は、両方を `strconv.FormatFloat(v, 'g', 12, 64)` で 12 桁の文字列にしてから比べる(画面の `pt` と同じ桁。0.1 + 0.2 の誤差で注記を出さない)。
 
 - [ ] **Step 4: テストが通ることを確かめる**
 
@@ -418,7 +417,8 @@ git commit -m "feat(statedb): レポートの選択をワークスペースご�
   - `func (s Service) Report(ctx context.Context, store port.StoreID, ws workspace.ID, p Period) (Report, error)` — 期間が合わなければ `CheckPeriod` の断り(422)
   - `type Active struct { Sprint *planning.Sprint; Unit planning.Unit; Burndown planning.Burndown; Added float64; Done, Total planning.Totals }` — `Sprint` は実行中(なければ nil で、ほかは空)。`Done`・`Total` は `Progress`
   - `func (s Service) Active(ctx context.Context, store port.StoreID, ws workspace.ID) (Active, error)`
-  - `func (s Service) Select(ctx context.Context, store port.StoreID, ws workspace.ID, sel planning.Selection) error` — F3-7
+  - `type Patch struct { Unit *planning.Unit; Sprint *change.ID; Layers *planning.Layers; Estimate *change.ID }` — nil の項目は変えない
+  - `func (s Service) Select(ctx context.Context, store port.StoreID, ws workspace.ID, p Patch) error` — F3-7。`Selections.Get` の生の行に重ねて `Put` する
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -430,6 +430,7 @@ git commit -m "feat(statedb): レポートの選択をワークスペースご�
 - `TestReportPeriodRefusal`: 終了日が今日より後 → 「終了日は今日以前にしてください」の断り。
 - `TestReportGoneWorkspace`: 削除済みのワークスペース → `port.ErrNotFound`。
 - `TestActive`: 実行中のスプリントがない → `Sprint` が nil。あれば `Done`・`Total` は中止を除いたポイント、`Added` は単位に合わせる。
+- `TestSelectPatch`: 単位だけ `count` にしたあと、別のスプリントを開始すると、`Report` のバーンダウンは新しい実行中のスプリント(保存した行の `Sprint` は空のまま)。バーンダウンのスプリントだけを送ると、前に保存した単位は残る。
 - `TestSelect`: 閲覧のみの Store でも保存できる(Store にコミットが増えない)。単位 `"hours"` → `port.ErrInvalidOperation`。削除済みのワークスペース → `port.ErrNotFound`。
 
 - [ ] **Step 2: テストが落ちることを確かめる**
@@ -465,13 +466,13 @@ git commit -m "feat(reports): レポートと実行中のスプリントの数�
 - Produces(パスの頭は `/api/stores/{store}/workspaces/{workspace}`。本文の型の名前は `Report` で始める):
   - `GET …/reports?from=&to=`(`get-report`)→ `ReportView`。日付は `YYYY-MM-DD` か空でなければ 422
   - `GET …/reports/active`(`get-report-active`)→ `ReportActive`
-  - `PUT …/reports/selection`(`put-report-selection`)本文 `ReportSelection{unit, sprint, layers, estimate}` → 204
+  - `PUT …/reports/selection`(`put-report-selection`)本文 `ReportSelectionPatch{unit?, sprint?, layers?, estimate?}`(どれも省略可。省略した項目は変えない)→ 204
   - DTO: スプリントは F1 の `Sprint` の DTO と同じ項目の `ReportSprint`(OpenAPI のスキーマ名が重ならないよう別の型にする)。`Burndown{days[{date, total, remaining(null可), ideal}], shown, committed(null可)}`、`velocity[{sprint, planned, done}]`、`average(null可)`、`period{from, to}`、`layers[{key, name, color}]`、`flow[{date, counts[]}]`、`cycle`・`lead{n, median, p85, skipped}`、`estimates[{id, display, title, points, estimate, worked, diff, perPoint}]`、`estimateTotal{points, estimate, worked, diff}`、`unit`、`fallback`、`selection`、`sprints[]`、`burn(null可)`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - `TestGetReport`: サンプルのワークスペースで 200、`unit` が `points`、`period` が直近 21 日。`from=2026-13-01` → 422。`to` が明日 → 422 で本文に「終了日は今日以前にしてください」。
-- `TestPutSelection`: 204 のあと `GET` の `selection.unit` が `count`。`unit: "x"` → 400。ないワークスペース → 404。
+- `TestPutSelection`: `{unit: "count"}` で 204 のあと `GET` の `selection.unit` が `count`。`unit: "x"` → 400。ないワークスペース → 404。
 - `TestGetActive`: 実行中のスプリントがなければ `sprint` が null。
 
 - [ ] **Step 2: テストが落ちることを確かめる**
@@ -507,7 +508,7 @@ git commit -m "feat(api): レポートの読み取りと選択の保存の API �
 - Consumes: Task 9 の生成された関数 `getReport`・`getReportActive`・`putReportSelection`
 - Produces:
   - core の型: `ReportUnit = "points" | "count"`、`ReportLayers = "category" | "status"`、`ReportSelection{unit; sprint: string; layers; estimate: string}`、`ReportSprint`(F1 の `Sprint` と同じ形。`type ReportSprint = Sprint`)、`BurnDay{date; total; remaining: number | null; ideal}`、`Burndown{days; shown; committed: number | null}`、`VelocityBar{sprint: ReportSprint; planned; done}`、`FlowLayer{key; name; color}`、`FlowDay{date; counts: number[]}`、`Durations{n; median: number | null; p85: number | null; skipped}`、`EstimateRow{id; display; title; points: number | null; estimate: number | null; worked; diff: number | null; perPoint: number | null}`、`EstimateTotal{points: number | null; estimate: number | null; worked; diff: number | null}`、`Report{selection; unit; fallback; sprints; burn: ReportSprint | null; burndown; velocity; average: number | null; period: {from; to}; layers; flow; cycle; lead; estimates; estimateTotal}`、`ReportActive{sprint: ReportSprint | null; unit; burndown; added; done: Totals; total: Totals}`
-  - `interface ReportsPort { report(storeId: string, workspaceId: string, period: { from: string; to: string } | null): Promise<Report>; active(storeId: string, workspaceId: string): Promise<ReportActive>; select(storeId: string, workspaceId: string, sel: ReportSelection): Promise<void> }`
+  - `interface ReportsPort { report(storeId: string, workspaceId: string, period: { from: string; to: string } | null): Promise<Report>; active(storeId: string, workspaceId: string): Promise<ReportActive>; select(storeId: string, workspaceId: string, patch: Partial<ReportSelection>): Promise<void> }`
   - `function createReportsPort(): ReportsPort`(空の一覧が null で届いたら空にする。F1 の `planning.ts` と同じ)
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -585,7 +586,7 @@ git commit -m "feat(web): 図の縦軸と座標を求める(F3 Task 11)"
 **Interfaces:**
 - Consumes: Task 10 の `ReportsPort`、F1 の `pill`・`pt`、`formatDay`、`formatHours`
 - Produces:
-  - `reports.ts`: `interface ReportsState { storeId; workspaceId; report: Report }`、`interface Reports { state: Readable<ReportsState | null>; open(storeId, workspaceId): Promise<void>; reload(): Promise<void>; close(): void; select(patch: Partial<ReportSelection>): Promise<void>; setPeriod(p: { from: string; to: string } | null): Promise<void> }`、`createReports(port: ReportsPort): Reports`。`select` は保存してから読み直す(保存に失敗したらエラーのトースト「保存できませんでした」を出せるよう、投げる)。期間は `Reports` の中だけに持ち、`open` で別のワークスペースを開いたら初めの期間に戻す(05 の 362 行)
+  - `reports.ts`: `interface ReportsState { storeId; workspaceId; report: Report }`、`interface Reports { state: Readable<ReportsState | null>; open(storeId, workspaceId): Promise<void>; reload(): Promise<void>; close(): void; select(patch: Partial<ReportSelection>): Promise<void>; setPeriod(p: { from: string; to: string } | null): Promise<void> }`、`createReports(port: ReportsPort): Reports`。`select` は変えた項目だけを保存してから読み直す(保存に失敗したらエラーのトースト「保存できませんでした」を出せるよう、投げる)。期間は `Reports` の中だけに持ち、`close` したら(画面を離れたら)初めの期間に戻す(05 の 362 行)
   - `interface ActiveReports { state: Readable<{ storeId; workspaceId; active: ReportActive } | null>; open; reload; close }`、`createActiveReports(port): ActiveReports`(スプリントの画面と概要が使う)
   - `texts.ts`:
     - `unitLabel(u: ReportUnit): "pt" | "件"`
@@ -604,7 +605,7 @@ git commit -m "feat(web): 図の縦軸と座標を求める(F3 Task 11)"
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- `reports.test.ts`: `open` で読み、別のワークスペースを開くと前の state を消す。`select({unit: "count"})` で `port.select` に直した選択の全体(いまの `selection` に `unit` だけ変えたもの)を渡してから読み直す。`setPeriod` で期間を付けて読み直し、`open` し直すと期間なしで読む。`reload` の失敗では前の state のまま。
+- `reports.test.ts`: `open` で読み、別のワークスペースを開くと前の state を消す。`select({unit: "count"})` で `port.select` に `{unit: "count"}` だけを渡してから読み直す。`setPeriod` で期間を付けて読み直し、`close` して `open` し直すと期間なしで読む。`reload` の失敗では前の state のまま。
 - `texts.test.ts`: 上の文を仕様の例で(`averageText(3.3, "points")` →「完了した直近 3 スプリントの平均 3.3 pt」、`averageText(4, "count")` →「… 4.0 件」、`durationLines({n: 5, median: 3, p85: 6.4, skipped: 2}, "cycle")` のラベルに「着手を経ていない 2 件を除く」、値「3.0 日」、「85% は 6.4 日以内」。0 件は「—」で 85% は null)。`pointsCard` の 2 つの場合。
 - `flowPeriod.test.ts`: `defaultPeriod("2026-11-14")` → `2026-10-25`〜`2026-11-14`。`checkPeriod` の 4 つの文。`periodLabel(null)` →「直近 21 日・件数」。
 - `estimates.test.ts`: `diffText(100)` →「+1 時間」で `over` 真、`diffText(-25)` →「-0.25 時間」、`diffText(0)` →「0 時間」で `over` 偽、`diffText(null)` →「—」。
@@ -634,10 +635,11 @@ git commit -m "feat(web): レポートの画面の状態と文を持つ(F3 Task 
 **Files:**
 - Create: `web/app/src/screens/reports/ReportsTab.svelte`、`ReportHead.svelte`(冒頭の文・単位・注記)、`BurndownSection.svelte`、`LineChart.svelte`(バーンダウンの折れ線。小さいバーンダウンも使う)、`VelocitySection.svelte`、`BarChart.svelte`、`DataTable.svelte`(「表で見る」の折りたたみと表)
 - Modify: `web/app/src/screens/workspace/WorkspaceScreen.svelte`(タブ「レポート」、F3-17)、`web/app/src/wire.ts`(`reports`・`activeReports` を作り、`reflect` で読み直す、F3-19)
-- Test: `web/e2e/reports.spec.ts`(Task 16 で書く。ここでは `pnpm -C web check` とコンポーネントの確認で足りる)
+- Test: `web/e2e/reports.spec.ts`
 
 **Interfaces:**
 - Consumes: Task 11・12
+- Produces: `web/e2e/reports.spec.ts` の準備の関数 `startedSprint(page, info)` — ワークスペース・プロジェクト・Epic と Story A(3 pt)・Story B(2 pt)を作り、Sprint 1 に入れて開始し、A を InProgress → Done にする(`sprints.spec.ts` の helpers `createWorkspace`・`projectWithEpic`・`storyUnderEpic` を使う)。Task 14・15 の e2e も使う
 
 画面の中身(上から):
 - 「git 履歴から集計しています。」
@@ -646,24 +648,29 @@ git commit -m "feat(web): レポートの画面の状態と文を持つ(F3 Task 
 - ベロシティ: 見出し「ベロシティ」と `averageText`、`BarChart`(棒に値、凡例「計画」「完了」)、`DataTable`(「スプリント」「計画 ({単位})」「完了 ({単位})」)。棒がなければ「開始したスプリントがありません」で、表も出さない。
 - 図の上の値・凡例・表の文字は、色だけに頼らない(凡例は文字で書く)。`DataTable` の開閉は保存しない(初めは閉じる)。
 
-- [ ] **Step 1: 書く**
+- [ ] **Step 1: 失敗する e2e を書く**
 
-選択の変更は `reports.select(...)`。失敗したらエラーのトースト「保存できませんでした」。閲覧のみの Store でもセレクトを無効にしない(F3-7)。読み直しは `ReportsTab` の `$effect` で `reports.open(sid, wid)`、`dayOf($syncNow)` が変わったら `reports.reload()`。
+- `reports burndown and velocity`: `startedSprint` のあと、レポートのタブに「git 履歴から集計しています。」「総量 5 pt」「残り 2 pt」、ベロシティの「表で見る」を開くと Sprint 1 の行(計画 5・完了 3)、「完了した直近 3 スプリントの平均 —」。単位を「件数」にすると「総量 2 件」、再読み込みしても単位のセレクトが「件数」。
+- `points fallback`: ポイントのない Story だけのワークスペースで「ポイントのあるアイテムがないため、件数で数えています」。
 
-- [ ] **Step 2: 型と大きさを確かめる**
+- [ ] **Step 2: 落ちることを確かめる**
 
-Run: `make web-check`
+Run: `make e2e-bin && pnpm -C web exec playwright test reports`
+Expected: FAIL(タブ「レポート」がない)
+
+- [ ] **Step 3: 書く**
+
+選択の変更は `reports.select(...)`(変えた項目だけ)。失敗したらエラーのトースト「保存できませんでした」。閲覧のみの Store でもセレクトを無効にしない(F3-7)。読み直しは `ReportsTab` の `$effect` で `reports.open(sid, wid)`(離れたら `close`)、`dayOf($syncNow)` が変わったら `reports.reload()`。
+
+- [ ] **Step 4: 通ることと型・大きさを確かめる**
+
+Run: `make e2e-bin && pnpm -C web exec playwright test reports && make web-check`
 Expected: PASS(Svelte 200 行・TS 300 行の上限を含む)
 
-- [ ] **Step 3: 手で確かめる**
-
-Run: `make e2e-bin && HEDGEHUG_TOKEN=t HEDGEHUG_ADDR=127.0.0.1:4180 ./bin/hedgehug-e2e`
-Expected: サンプルのワークスペースのレポートのタブに、バーンダウン・ベロシティが出て、単位を「件数」にすると値の単位が「件」になり、再読み込みしても「件数」のまま
-
-- [ ] **Step 4: コミット**
+- [ ] **Step 5: コミット**
 
 ```bash
-git add web/app
+git add web/app web/e2e
 git commit -m "feat(web): レポートのタブに単位・バーンダウン・ベロシティと表を出す(F3 Task 13)"
 ```
 
@@ -672,26 +679,36 @@ git commit -m "feat(web): レポートのタブに単位・バーンダウン・
 **Files:**
 - Create: `web/app/src/screens/reports/FlowSection.svelte`、`AreaChart.svelte`、`CycleSection.svelte`、`EstimatesSection.svelte`
 - Modify: `web/app/src/screens/reports/ReportsTab.svelte`
+- Test: `web/e2e/reports.spec.ts`(追記)
 
 **Interfaces:**
-- Consumes: Task 11・12
+- Consumes: Task 11・12、Task 13 の `startedSprint`・`DataTable`
 
 画面の中身:
 - 累積フロー図: 見出し「累積フロー図」と `periodLabel`。右に「開始」「終了」の日付入力と、「分類」「ステータス」の切り替え(押している方を `aria-pressed`)。初めの期間でないときは「直近 21 日に戻す」。入力が変わったら `checkPeriod` で確かめ、合わなければ日付入力の下に理由を出して図は前のまま(入力は残す)。合えば `reports.setPeriod`。`AreaChart`(層は下から積み、分類の層の色は分類の token、ステータスの層の色はステータスの色。凡例は層の名前)、`DataTable`(「日付」と層ごとの列)。
 - サイクルタイムとリードタイム: `durationLines` の 2 組(ラベル、値、85% の行)。
 - 見積もりと実績: 見出し「見積もりと実績」と「対象」のセレクト(「すべて」と `sprints`)。スプリントを選んでいるとき表の上に `sprintScopeNote`。表の列は「アイテム」(ID とタイトル。押すと詳細パネル)、「ポイント」「見積もり時間」「作業時間」「差」「時間/pt」、最後に「合計」の行(時間/pt は空)。差が正なら警告の色。行がなければ `emptyEstimates`。
 
-- [ ] **Step 1: 書く**
+- [ ] **Step 1: 失敗する e2e を書く**
 
-- [ ] **Step 2: 型と大きさを確かめる**
+- `reports flow, cycle and estimates`: `startedSprint` のあと、A の詳細パネルで見積もり 2 時間と作業時間 1.5 時間を記録する。レポートのタブで、累積フロー図の見出しの横に「直近 21 日・件数」。終了日を明日にすると「終了日は今日以前にしてください」。「ステータス」に切り替えると凡例に「Done」。サイクルタイムのラベルに「着手→完了・1 件」。見積もりと実績の表に A の行(差「-0.5 時間」)と「合計」の行。対象を Sprint 1 にすると「作業時間は、アイテムに付いた記録のすべてです(別のスプリントにいたあいだの記録も含みます)。」。
 
-Run: `make web-check`
+- [ ] **Step 2: 落ちることを確かめる**
+
+Run: `make e2e-bin && pnpm -C web exec playwright test reports`
+Expected: FAIL(累積フロー図がない)
+
+- [ ] **Step 3: 書く**
+
+- [ ] **Step 4: 通ることと型・大きさを確かめる**
+
+Run: `make e2e-bin && pnpm -C web exec playwright test reports && make web-check`
 Expected: PASS
 
-- [ ] **Step 3: コミット**
+- [ ] **Step 5: コミット**
 
 ```bash
-git add web/app
+git add web/app web/e2e
 git commit -m "feat(web): 累積フロー図・サイクルタイム・見積もりと実績を出す(F3 Task 14)"
 ```
 
@@ -700,18 +717,20 @@ git commit -m "feat(web): 累積フロー図・サイクルタイム・見積も
 **Files:**
 - Create: `web/app/src/screens/planning/SprintBurndown.svelte`(「途中で追加」・小さいバーンダウン・「表で見る」)、`web/app/src/screens/workspace/OverviewTab.svelte`(統計のカードの並び、F3-18)、`web/app/src/screens/workspace/SprintPointsCard.svelte`
 - Modify: `web/packages/core/src/features/planning/sprints.ts`(`sprintMenu` に `burndown`、F3-16)と `sprints.test.ts`、`web/app/src/screens/planning/SprintCard.svelte`(実行中のカードに `SprintBurndown`、メニューの「バーンダウンを見る」。200 行を超えるなら、メニューの部分を子に分ける)、`SprintsTab.svelte`(`activeReports` を開く)、`WorkspaceScreen.svelte`(概要のタブに `OverviewTab`)
+- Test: `web/e2e/reports.spec.ts`(追記)
 
 **Interfaces:**
-- Consumes: Task 12 の `ActiveReports`・`addedText`・`notStarted`・`pointsCard`、Task 13 の `LineChart`・`DataTable`
+- Consumes: Task 12 の `ActiveReports`・`addedText`・`notStarted`・`pointsCard`、Task 13 の `LineChart`・`DataTable`・`startedSprint`
 - Produces: `sprintMenu(s: Sprint, readOnly: boolean)` の戻りの `id` に `"burndown"` を足す。並びは「編集…」「バーンダウンを見る」「削除…」。「バーンダウンを見る」は閲覧のみの Store でも押せ、計画中は無効で `hint`「計画中のスプリントにはバーンダウンがありません」
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - `sprints.test.ts`: 計画中のスプリントの「バーンダウンを見る」は無効で上の文。閲覧のみの Store の実行中のスプリントでは「バーンダウンを見る」だけ押せる。
+- e2e `sprint card and overview`: `startedSprint` のあと、概要のタブに「Sprint 1 の完了ポイント」と「3 / 5 pt」。スプリントのタブの実行中のカードの「表で見る」を開くと今日の行の残りが「2」。(「途中で追加」は開始日の翌日から出るので、e2e では確かめず Task 2 の `TestAdded` で確かめる。)メニューの「バーンダウンを見る」でレポートのタブへ移り、「スプリントを選択」が Sprint 1。計画中の Sprint 2 のメニューの「バーンダウンを見る」は無効。
 
-- [ ] **Step 2: テストが落ちることを確かめる**
+- [ ] **Step 2: 落ちることを確かめる**
 
-Run: `pnpm -C web --filter @hedgehug/core test -- sprints`
+Run: `pnpm -C web --filter @hedgehug/core test -- sprints && make e2e-bin && pnpm -C web exec playwright test reports`
 Expected: FAIL
 
 - [ ] **Step 3: 書く**
@@ -720,9 +739,9 @@ Expected: FAIL
 - 「バーンダウンを見る」: `reports.select({ sprint: id })` のあとレポートのタブへ移る(`navigation.go`)。保存に失敗したらエラーのトースト「保存できませんでした」で移らない。
 - 概要のタブ: 統計の並びに `SprintPointsCard`(`pointsCard`)。
 
-- [ ] **Step 4: テストと型を確かめる**
+- [ ] **Step 4: 通ることと型・大きさを確かめる**
 
-Run: `pnpm -C web --filter @hedgehug/core test && make web-check`
+Run: `pnpm -C web --filter @hedgehug/core test && make e2e-bin && pnpm -C web exec playwright test reports && make web-check`
 Expected: PASS
 
 - [ ] **Step 5: コミット**
@@ -732,43 +751,25 @@ git add web
 git commit -m "feat(web): 実行中のスプリントのカードに小さいバーンダウンを、概要に完了ポイントを出す(F3 Task 15)"
 ```
 
-### Task 16: e2e と記録
+### Task 16: 記録と全体の確かめ
 
 **Files:**
-- Create: `web/e2e/reports.spec.ts`
-- Modify: `docs/superpowers/plans/2026-11-14-hedgehug-track-f1.md`(F1-19 の行の末尾に「F3 で済んだ」)
+- Modify: `docs/superpowers/plans/2026-11-14-hedgehug-track-f1.md`(F1-19 の行)
 
-- [ ] **Step 1: e2e を書く**
-
-`sprints.spec.ts` の helpers(`createWorkspace`・`projectWithEpic`・`storyUnderEpic`)で、ワークスペースと Story 2 件を作る。
-
-- `reports flow`: Story A に 3 pt、Story B に 2 pt を入れ、Sprint 1 に入れて開始。A を InProgress → Done にし、A に見積もり 2 時間と作業時間 1.5 時間を記録する。
-  - 概要のタブに「Sprint 1 の完了ポイント」と「3 / 5 pt」。
-  - スプリントのタブの実行中のカードに、小さいバーンダウン(「表で見る」を開くと今日の行の残りが「2」)。メニューの「バーンダウンを見る」でレポートのタブへ移り、「スプリントを選択」が Sprint 1。
-  - レポートのタブに「総量 5 pt」「残り 2 pt」、ベロシティの「表で見る」に Sprint 1 の行、「完了した直近 3 スプリントの平均 —」。単位を「件数」にすると「総量 2 件」、再読み込みしても「件数」。
-  - 累積フロー図の終了日を明日にすると「終了日は今日以前にしてください」。「ステータス」に切り替えると凡例に「Done」。
-  - サイクルタイムのラベルに「着手→完了・1 件」。見積もりと実績の表に A の行と「合計」の行、差が「-0.5 時間」。
-- `points fallback`: ポイントのない Story だけのワークスペースで「ポイントのあるアイテムがないため、件数で数えています」。
-
-- [ ] **Step 2: 流して通ることを確かめる**
-
-Run: `make e2e-bin && pnpm -C web exec playwright test reports`
-Expected: PASS
-
-- [ ] **Step 3: 記録を直す**
+- [ ] **Step 1: 記録を直す**
 
 F1 の計画の F1-19 の行に「(小さいバーンダウン・途中で追加・バーンダウンを見る・表で見るは F3 で済んだ)」を足す。ユーザーの記録(メモリの `project-rebuild-progress.md`)の状態の欄に、F3 の進み具合と F3-18(概要の残りの 3 枚は E)を書く。
 
-- [ ] **Step 4: 全体の確かめ**
+- [ ] **Step 2: 全体の確かめ**
 
 Run: `make check`
 Expected: PASS
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 3: コミット**
 
 ```bash
-git add web/e2e docs/superpowers/plans
-git commit -m "test(e2e): レポートとスプリントのカード・概要の完了ポイントを確かめる(F3 Task 16)"
+git add docs/superpowers/plans
+git commit -m "docs: F1 の計画に F3 で済んだものを書く(F3 Task 16)"
 ```
 
 ---
