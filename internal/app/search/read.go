@@ -14,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/query"
+	"github.com/kukv/hedgehug/internal/domain/relation"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -35,6 +36,7 @@ type snapshot struct {
 	byID        map[item.ID]item.Item
 	shown       []item.Item // 画面に出るアイテム(削除されておらず、プロジェクトも削除されていない。app/items と同じ)
 	targets     []item.Item // 材料を作るアイテム(ワークスペースの並び、プロジェクトの並び、番号の順)
+	rels        map[item.ID][]relation.Row
 	logs        map[item.ID][]change.Record
 	descs       map[item.ID]string
 	blocked     map[item.ID]bool
@@ -169,7 +171,10 @@ func (s *snapshot) isShown(it item.Item) bool {
 
 // pick は、画面に出るアイテムと、材料を作るアイテムを選ぶ。材料を作るのは、ワークスペースが削除されていないアイテムのうち、
 // deleted なら削除済みのもの(プロジェクトは削除済みでもよい。E1-8)、でなければ画面に出るもの。
+// 関連の一覧(rels)は、画面に出るアイテムと材料を作る削除済みのアイテムから 1 回で求める。削除済みのアイテムを入れるのは、
+// そのアイテム自身が持つ関連を見るため。削除済みどうしの関連もできるが、relations が画面に出ない相手を除く。
 func (s *snapshot) pick(deleted bool) {
+	var hidden []item.Item
 	for _, it := range s.items {
 		if s.isShown(it) {
 			s.shown = append(s.shown, it)
@@ -180,11 +185,15 @@ func (s *snapshot) pick(deleted bool) {
 		}
 		if (deleted && it.Deleted != nil) || (!deleted && s.isShown(it)) {
 			s.targets = append(s.targets, it)
+			if !s.isShown(it) {
+				hidden = append(hidden, it)
+			}
 		}
 	}
 	slices.SortStableFunc(s.targets, func(a, b item.Item) int {
 		return cmp.Compare(s.spaces[a.Place.Workspace].order, s.spaces[b.Place.Workspace].order)
 	})
+	s.rels = relation.RowsByItem(append(s.shown[:len(s.shown):len(s.shown)], hidden...))
 }
 
 // readLogs は、材料を作るアイテムのログ(と q.NeedsText なら説明)を読む。診断をするなら、Issue のリンクを見るため

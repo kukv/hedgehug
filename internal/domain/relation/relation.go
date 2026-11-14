@@ -72,38 +72,48 @@ type Row struct {
 // Rows は、self の関連を一覧の順(表記の順、同じ表記では相手の内部 ID の順)で返す。self が持つ関連は自分の側の
 // 表記、self を相手にした関連は逆向きの表記で出す。知らない種類と、相手が all にいない関連は出さない。
 func Rows(self item.ID, all []item.Item) []Row {
+	return RowsByItem(all)[self]
+}
+
+// RowsByItem は、all の関連を 1 回たどり、アイテムごとの Rows を返す(内部 ID → 一覧)。関連のないアイテムは入れない。
+// 自分への関連は、持つ側の表記の 1 行だけにする。
+func RowsByItem(all []item.Item) map[item.ID][]Row {
 	exists := make(map[item.ID]bool, len(all))
 	for _, it := range all {
 		exists[it.ID] = true
 	}
-	seen := map[Row]bool{}
-	var rows []Row
-	add := func(l Label, ok bool, other item.ID) {
+	seen := map[item.ID]map[Row]bool{}
+	out := map[item.ID][]Row{}
+	add := func(self item.ID, l Label, ok bool, other item.ID) {
 		r := Row{Label: l, Other: other}
-		if ok && exists[other] && !seen[r] {
-			seen[r] = true
-			rows = append(rows, r)
+		if !ok || !exists[other] || seen[self][r] {
+			return
 		}
+		if seen[self] == nil {
+			seen[self] = map[Row]bool{}
+		}
+		seen[self][r] = true
+		out[self] = append(out[self], r)
 	}
 	for _, it := range all {
 		for _, rel := range it.Relations {
-			switch self {
-			case it.ID:
-				l, ok := LabelOf(rel.Type, false)
-				add(l, ok, rel.To)
-			case rel.To:
-				l, ok := LabelOf(rel.Type, true)
-				add(l, ok, it.ID)
+			l, ok := LabelOf(rel.Type, false)
+			add(it.ID, l, ok, rel.To)
+			if rel.To != it.ID {
+				l, ok = LabelOf(rel.Type, true)
+				add(rel.To, l, ok, it.ID)
 			}
 		}
 	}
-	slices.SortStableFunc(rows, func(a, b Row) int {
-		if c := slices.Index(Labels, a.Label) - slices.Index(Labels, b.Label); c != 0 {
-			return c
-		}
-		return strings.Compare(string(a.Other), string(b.Other))
-	})
-	return rows
+	for _, rows := range out {
+		slices.SortFunc(rows, func(a, b Row) int {
+			if c := slices.Index(Labels, a.Label) - slices.Index(Labels, b.Label); c != 0 {
+				return c
+			}
+			return strings.Compare(string(a.Other), string(b.Other))
+		})
+	}
+	return out
 }
 
 // Has は、a と b のあいだに種類 typ の関連があるか。向きは問わない(02「関連」の「追加」。種類ごとに 1 つまで)。

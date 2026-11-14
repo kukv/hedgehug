@@ -75,6 +75,24 @@ func TestRowsShowBothSidesInLabelOrder(t *testing.T) {
 	}
 }
 
+// RowsByItem は、アイテムごとに Rows を呼ぶのと同じ答えを、1 回で返す。
+func TestRowsByItemMatchesRows(t *testing.T) {
+	all := []item.Item{
+		{ID: "A", Relations: []item.Relation{rel("blocks", "B"), rel("relates", "C"), rel("clones", "D"), rel("relates", "A")}},
+		{ID: "B", Relations: []item.Relation{rel("blocks", "A")}},
+		{ID: "C", Relations: []item.Relation{rel("relates", "A")}},
+		{ID: "D"},
+		{ID: "E", Relations: []item.Relation{rel("blocks", "A"), rel("friends", "A"), rel("causes", "E")}},
+		{ID: "F", Relations: []item.Relation{rel("blocks", "GONE")}},
+	}
+	got := relation.RowsByItem(all)
+	for _, it := range append(all, item.Item{ID: "GONE"}) {
+		if want := relation.Rows(it.ID, all); !slices.Equal(got[it.ID], want) {
+			t.Errorf("RowsByItem[%s] = %+v, want %+v", it.ID, got[it.ID], want)
+		}
+	}
+}
+
 func TestHasIgnoresDirection(t *testing.T) {
 	all := []item.Item{{ID: "A", Relations: []item.Relation{rel("blocks", "B")}}, {ID: "B"}}
 	if !relation.Has("A", "B", "blocks", all) || !relation.Has("B", "A", "blocks", all) {

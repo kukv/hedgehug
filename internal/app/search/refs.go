@@ -6,7 +6,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/query"
-	"github.com/kukv/hedgehug/internal/domain/relation"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
 )
 
@@ -65,14 +64,10 @@ func (s *snapshot) ancestors(it item.Item, records []transfer.Record) (*query.Re
 }
 
 // relations は、関連のキー(blocks・blocked_by など。表記の空白を _ にしたもの)→ 相手。両方向を入れ、
-// 画面に出ない相手(削除済み)は除く。it が画面に出ないもの(削除済み)なら、it 自身が持つ関連も見るため it を足して求める。
+// 画面に出ない相手(削除済み)は除く。一覧は pick が Store ごとに 1 回求めた rels から引く。
 func (s *snapshot) relations(it item.Item, records []transfer.Record) map[string][]query.Ref {
-	all := s.shown
-	if !s.isShown(it) {
-		all = append(all[:len(all):len(all)], it)
-	}
 	var out map[string][]query.Ref
-	for _, row := range relation.Rows(it.ID, all) {
+	for _, row := range s.rels[it.ID] {
 		other, ok := s.byID[row.Other]
 		if !ok || !s.isShown(other) {
 			continue
