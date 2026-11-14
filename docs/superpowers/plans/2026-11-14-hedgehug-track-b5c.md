@@ -645,3 +645,22 @@ gh pr create --base develop --head feat/track-b5c \
 ```
 
 本文は PR #208 の見出しに合わせる(「概要」「範囲」「ユーザーに決めてもらったこと」「仕様に足した文言」「計画から変えた主なもの」「develop の取り込み」「他のトラックへ渡すもの」「確かめたこと」)。末尾は `🤖 Generated with [Claude Code](https://claude.com/claude-code)`。「他のトラックへ渡すもの」には、C4 = アクティビティの絞り込みで移動元にないワークスペースを選択肢に出さないことと「メンバー {ログイン名} を追加」、A5c・E = 古いアドレスと同じ規則(`LocateWorkspace` とワークスペースの記録からのアイテム・プロジェクトの解決)、G = 移動先で復元するときの名前の重なり、を書く。
+
+## 実装で計画から変えたこと
+
+- **B5c-12 の「いまのワークスペース」は、その操作を終えたときのワークスペースで比べる。** 計画は「いまのワークスペースと同じ」としていたが、あとで同じ Store の中で別のワークスペースへ移すと、履歴の行が変わってしまうため。操作の最後の行までのログを `project.FromLog` に渡して求める(同じ操作の中の場所の set も反映される)。仕様 02「履歴」に書いた。
+- **ワークスペースの記録で辿れたが、その番号のアイテム・プロジェクトが削除済みなら `Gone deleted` を返す。** 計画に書いていない。これがないと、ほかの Store の同じ ID を開いてしまう。移動先のワークスペースが削除済みのときも同じ。
+- **検索の優先順を、種類の記録 → 種類の記録の理由 → ワークスペースの記録 → ワークスペースの記録の理由とした。** 計画の `find` の (c) は並列に読めたが、種類の記録が完全な削除を指しているのに、移動先の同じ ID を開かないようにするため。アドレスの Store 名の Store がないときも同じ順(`searchIn` に集約)。
+- **`MovedFrom.Old` は、記録の `old` ではなく画面の接頭辞にした。** `Gone.Old` と同じ意味に揃えたため。
+- **移動先の Store が非表示で、移す前に接頭辞を変えていたときは、旧い接頭辞でたどれない。** 旧い接頭辞は、表示中の Store の中でだけ照合する。仕様 03 に書いた。
+- **`UndoError` に `Workspace` の形を足し(`NewDisplay` が空のとき、B5c-14 の文を返す)、`deliverUndo`(引数 7 個のまま共通化)と `moveError`(409 の Undo・422 の Send・それ以外の振り分け。move.go・project.go・workspace.go が共有)のヘルパーを足した。** 計画はそれぞれのファイルに書く想定だった。
+- **ワークスペースの戻しは、移動先のワークスペースの下にあるすべてのフォルダ(ワークスペース・プロジェクト・アイテム。削除済みを含む)を `Remove` で消す。** `Remove` 自体は下のものを消さないので、`rollbackWorkspace` が順に消す。`ErrNotFound` は飛ばし、保存が実際には捨てられていた(`moved_in` がない)ときはメンバーの行を書かない。
+- **移動元の読み直しを `gatherWorkspace` の再実行から、`sourceStamp`(ログごとの行数と最後の行の id)の比較に絞った(B5c-9)。** 説明・設定・前の移動・メンバーは読まない。外のアイテムのログは比べず、読み直した `Outside` から外との関連だけを外す。
+- **ファイルのマージ。** `project_targets.go` を `targets.go` に、`project_locate.go` を `locate_kinds.go` に改め、`project_targets_test.go` を `targets_test.go` に統合した(transfers の非テストのファイルは 20 のまま)。`matching`・`aliases` は `locate.go` から `locate_read.go` に移した。`locate_kinds.go` の `withStoreName`・`viaWorkspace`・`deletedIn`・`prefixesOf` は計画の名前の一覧にない。契約テストの登録は `runWorkspaceContract` にまとめた(`stores_contract.go` を 300 行以内に保つため)。
+- **既存のテスト `TestProjectRowsMoved` の O7 に、同じ操作の中の場所の set(W3 → W4)を足した。** O7 の元の形(`FromWorkspace` が移動先のワークスペースと同じで場所の set がない)は、B5c-12 ではワークスペースごと移った形そのもので、期待が「team から移動」になるため。A5b の実際の行の形に合わせ、期待する文は変えていない。
+- **`createLeaveWorkspaceMoved` は、結果の移動先の Store 名と接頭辞から経路を作る(カタログを引かない)。** ホームへ落ちないようにするため。`createLeaveMoved` と共有する `leaving` ヘルパーを切り出した。オフラインの判定は `destinationHasRemote && !online` で、`crossStore` の項目は持たない(ワークスペースの移動は常に Store をまたぐ)。
+- **ワークスペースの古いアドレスは、カタログではアドレスに名前のある Store だけを探し、見つからなければ `locateWorkspace` を呼ぶ。** 書き換えるアドレスは、カタログの Store 名と接頭辞だけから作る(`route.prefix` は使わない)。カタログに当のワークスペースがないときはアドレスを書き換えず、次のカタログの読み込みでもう一度サーバーに聞く。
+- **e2e の「タブを変えると消える」は、ワークスペースのタブに「ツリー」がないため「スプリント」で確かめた。** 計画の文は「ツリー」だった。アイテムの古いアドレスは、移動先のプロジェクトのツリーと詳細パネルを開くので、パネルのタイトルで確かめた(アドレスは `/s/team/i/…` ではなく `/s/team/p/{接頭辞}-P1/…`)。
+- **Task 8 のテストは、実装と同時に書き、先に失敗させなかった(RED なし)。** 4 つの操作がプロジェクトの API と同じ形だったため。レビューで `moveError` の共通化、`hiddenOnly` の候補のテスト、取り消しもできなかったときの文の完全一致を足した。
+- **計画にないテストを足した。** `TestMoveWorkspaceIgnoresOutsideChanges`(あいだの外のアイテムの変更で止まらない)、`TestMoveWorkspaceOppositeDirections`(逆向きの同時移動)、`TestMoveWorkspaceSourceChanged` のアイテムの編集、`TestProjectHistoryOfWorkspaceMove`(app 層)、`TestLocateItemRecordBeforeWorkspaceRecord(InOtherStores)`。
+- **Task 10(部品)にはテストを足さず、検査と e2e で確かめた(計画どおり)。** 確認ダイアログと削除ダイアログの似た作り、Task 9 のプロジェクトのダイアログと似た送信の骨組みは、共通化しなかった。
