@@ -44,11 +44,14 @@ func droppedPlanNotice(r port.Reader, b batch, d port.DroppedPlan) (port.Notice,
 	if j := slices.IndexFunc(cs.purged, func(p port.Purged) bool {
 		return p.Target == d.Target && (p.Entity == "sprint" || p.Entity == "release")
 	}); j >= 0 {
-		name = cs.purged[j].Display
+		if d := cs.purged[j].Display; d != "" {
+			name = d
+		}
 	}
 	if oneLine(name) == "" {
 		return port.Notice{}, false, nil
 	}
+	// Log は d.Target の行だけなので、sprints/ の行があればスプリント、なければリリース。
 	section := "releases"
 	if slices.ContainsFunc(d.Log, func(row change.Record) bool { return strings.HasPrefix(row.F, sprintsPrefix) }) {
 		section = "sprints"
@@ -64,7 +67,7 @@ func droppedPlanNotice(r port.Reader, b batch, d port.DroppedPlan) (port.Notice,
 // 持たないので、planning.FromLog ではなく項目ごとに読む。なければ空。
 func logName(d port.DroppedPlan) string {
 	all := func(change.Record) bool { return true }
-	for _, prefix := range []string{sprintsPrefix, "releases/"} {
+	for _, prefix := range []string{sprintsPrefix, releasesPrefix} {
 		row, ok := change.Current(d.Log, change.Set, prefix+string(d.Target)+"/name", all)
 		var name string
 		if ok && json.Unmarshal(row.To, &name) == nil && name != "" {

@@ -45,6 +45,7 @@ func TestDroppedPlanNotice(t *testing.T) {
 			"release", "releases", "「v3」は完全に削除されたため、あなたの変更は反映されませんでした", "release", "v3", releaseA,
 			planning.ReleaseDrafts(planning.Release{}, planning.Release{ID: releaseA, Name: "v3", State: planning.Unreleased}),
 		},
+		{"purged display empty", "sprints", "「Sprint 3」は完全に削除されたため、あなたの変更は反映されませんでした", "sprint", "", sprintB, sprintDrafts("Sprint 3")},
 		{"log name", "sprints", "「Sprint x」は完全に削除されたため、あなたの変更は反映されませんでした", "", "", sprintB, sprintDrafts("Sprint\n x")},
 	}
 	for _, c := range cases {
@@ -78,6 +79,22 @@ func TestDroppedPlanOnlyNewRows(t *testing.T) {
 	f.purge("sprint", sprintB, "Sprint 3")
 	fresh := planRows(f, "jiro", []change.Draft{change.NewSet("sprints/"+string(sprintB)+"/name", "Sprint 3", "Sprint 4")})
 	f.judge(droppedPlan(sprintB, append(old, fresh...), fresh))
+	f.wantNone()
+}
+
+func TestDroppedPlanNotHuman(t *testing.T) {
+	f := setup(t)
+	rows := f.save(syncActor, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, sprintDrafts("Sprint 3")...)
+	}).Entities
+	var log []change.Record
+	for _, e := range rows {
+		if e.Ref.Kind == change.KindWorkspace {
+			log = e.Rows
+		}
+	}
+	f.purge("sprint", sprintB, "Sprint 3")
+	f.judge(droppedPlan(sprintB, log, log))
 	f.wantNone()
 }
 

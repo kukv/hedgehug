@@ -11,7 +11,10 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/planning"
 )
 
-const sprintsPrefix = "sprints/"
+const (
+	sprintsPrefix  = "sprints/"
+	releasesPrefix = "releases/"
+)
 
 // activeSprints は、i 番目の修復の保存の、実行中のスプリントを計画中に戻した修復 (6) の通知(06「同期の修復」)。
 // ワークスペースのログの set sprints/<ID>/state(active から planned)の行ごとに 1 件。宛先は開始の行(startRow)
