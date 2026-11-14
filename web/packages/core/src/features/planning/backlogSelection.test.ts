@@ -6,6 +6,7 @@ import { fakeWorkspaces } from "../items/settings.test-util";
 import { createRowSelection, type SelectedRow } from "../selection/rowSelection";
 import { createToasts } from "../toasts/toasts";
 import { createBacklog } from "./backlog";
+import { goneText } from "./backlogDrop";
 import { fakePlanningPort, frameOf, rowOf, sprintOf } from "./fixtures.test-util";
 
 // バックログの行の選択のつなぎ(F2b1-3・F2b1-14)。1 はスプリントの枠、2・3 はバックログの枠。
@@ -106,6 +107,15 @@ describe("createBacklog selectedOne", () => {
     expect(one).toMatchObject({ storeId: "S1", itemId: "S1-I2", source: "backlog" });
     await one?.setStatus("st3");
     expect((await items.get("S1", "S1-I2")).status).toBe("st3");
-    expect(shown()).toHaveLength(1);
+    expect(shown()).toEqual([goneText("HH-2", "done")]);
+  });
+
+  it("is null when the one row is not shown", async () => {
+    const { backlog, selection } = await setup();
+    selection.toggle(sel(9), true);
+    expect(backlog.selectedOne()).toBeNull();
+    selection.clear();
+    selection.toggle({ ...sel(2), storeId: "S2" }, true);
+    expect(backlog.selectedOne()).toBeNull();
   });
 });

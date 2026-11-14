@@ -144,7 +144,37 @@ describe("createBulkDelete", () => {
     expect(t.messages()).toEqual([`!${itemDeleteFailedMessage}`]);
     expect(get(t.bd.state)).toBeNull();
     expect(get(t.selection.rows)).toHaveLength(2);
+    expect(t.calls).toEqual(["reload", "after"]);
+  });
+
+  it("preview failure shows a toast and no dialog", async () => {
+    const t = setup();
+    t.actions.bulkDeletePreview = async () => {
+      throw new Error("boom");
+    };
+    await t.bd.open(t.selection, t.after);
+    expect(t.messages()).toEqual([`!${itemDeleteFailedMessage}`]);
+    expect(get(t.bd.state)).toBeNull();
+  });
+
+  it("nothing to delete at preview reloads without a dialog", async () => {
+    const t = setup();
+    t.actions.bulkPreview = { stores: 0, retentionDays: 0, readOnly: 0 };
+    await t.bd.open(t.selection, t.after);
+    expect(get(t.bd.state)).toBeNull();
     expect(t.calls).toEqual(["after"]);
+    expect(get(t.selection.rows)).toHaveLength(2);
+    expect(t.messages()).toEqual([]);
+  });
+
+  it("a read-only row open in the panel is not closed or asked about", async () => {
+    const t = setup(false);
+    t.actions.bulkResult = { deleted: 1, readOnly: 1 };
+    t.show("S2", "b");
+    await t.bd.open(t.selection, t.after);
+    expect(t.confirms).toHaveLength(0);
+    await t.bd.confirm();
+    expect(t.calls).not.toContain("close");
   });
 
   it("failure with a refusal shows its message", async () => {

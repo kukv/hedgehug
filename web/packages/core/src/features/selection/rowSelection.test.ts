@@ -61,6 +61,21 @@ describe("rowSelection", () => {
     expect(get(sel.rows)).toEqual([row("s1", "a", "HH-9", true)]);
   });
 
+  it("prune does not notify when nothing changes", () => {
+    const sel = createRowSelection();
+    let runs = 0;
+    sel.rows.subscribe(() => {
+      runs += 1;
+    });
+    sel.prune([row("s1", "a")]);
+    expect(runs).toBe(1);
+    sel.toggle(row("s1", "a", "HH-1"), true);
+    sel.prune([row("s1", "b"), row("s1", "a", "HH-1")]);
+    expect(runs).toBe(2);
+    sel.prune([row("s1", "a", "HH-2")]);
+    expect(runs).toBe(3);
+  });
+
   it("texts", () => {
     expect(selectedText(3)).toBe("3 件を選択中");
     expect(allReadOnly([])).toBe(false);

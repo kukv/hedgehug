@@ -1,11 +1,11 @@
 // パレットの「選んでいるアイテム」(02「コマンドパレット」、A5c-9)。画面の部品が rank を付けて登録し、
-// current は rank の小さい順に、最初に null でないものを返す(詳細パネル 0、ツリー 1)。
+// current は rank の小さい順に、最初に null でないものを返す(詳細パネル 0、ツリー 1、バックログ 2)。
 
 export interface SelectedItem {
   storeId: string;
   itemId: string;
-  // source は、どの部品が選んでいるか("detail"・"tree")。
-  source: "detail" | "tree" | string;
+  // source は、どの部品が選んでいるか("detail"・"tree"・"backlog")。
+  source: "detail" | "tree" | "backlog" | string;
   setStatus(statusId: string): Promise<void>;
 }
 

@@ -21,7 +21,7 @@ import { palettePort } from "./wireBase";
 // コマンドパレット(02「コマンドパレット」、A5c)。wire.ts が 300 行なので、ここで組み立てる。
 
 // selection は、パレットの「選んでいるアイテム」の出どころ(A5c-9)。詳細パネルは 0、ツリーは 1
-// (ProjectTree.svelte が出ているあいだ登録する)。
+// (ProjectTree.svelte が出ているあいだ登録する)、バックログは 2(BacklogTab.svelte が出ているあいだ登録する)。
 export const selection = createSelection();
 selection.provide(0, () => {
   const t = detail.target();

@@ -51,7 +51,7 @@ export interface BulkDelete {
   // state は、出している確認ダイアログ(出していなければ null)。
   state: Readable<BulkDeleteDialog | null>;
   // open は、開いているパネルの書きかけを聞き、予告を読んでから確認ダイアログを出す。出しているあいだ、対象は開いた時点の選択に固定する。
-  // after は、削除を試みたあと(成功も失敗も)に、画面を読み直すために呼ぶ。
+  // after は、削除を試みたあと(成功も失敗も)と、予告で削除するものがないときに、画面を読み直すために呼ぶ。
   open(selection: RowSelection, after: () => Promise<void>): Promise<void>;
   confirm(): Promise<void>;
   cancel(): void;
@@ -105,6 +105,11 @@ export function createBulkDelete(deps: BulkDeleteDeps): BulkDelete {
         return;
       }
       if (gen !== seq) return;
+      // 予告で削除するものがない(ほかで削除された)ときは、確認なしで読み直す(1 件の削除と同じ。F2b1-10)。
+      if (preview.stores === 0) {
+        await after();
+        return;
+      }
       opened = { selection, rows, after };
       state.set(bulkDeleteDialog(rows, preview));
     },
@@ -119,6 +124,7 @@ export function createBulkDelete(deps: BulkDeleteDeps): BulkDelete {
         state.set(null);
         opened = null;
         failed(e);
+        await deps.detail.reload();
         await o.after();
         return;
       } finally {
