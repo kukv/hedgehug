@@ -66,6 +66,8 @@ type RepairWriter interface {
 	// ログもフォルダもないので Read では見えない。同じ内部 ID で作り直すと、次の同期の (1) で消されてしまうため、
 	// 修復で内部 ID を決めるときに、これも使われているものとして扱う。
 	Purged() (map[change.ID]bool, error)
+	// Store は、修復を書いている Store の ID。転送記録の to_store に書く。
+	Store() (StoreID, error)
 	Read(fn func(r Reader) error) error
 	// Write の約束は Stores.Write と同じ(行も説明の書き換えもなければ何も残さない、op.Check、fn のエラーで何も残さない)。
 	// 1 回の Write が 1 つの保存になる。

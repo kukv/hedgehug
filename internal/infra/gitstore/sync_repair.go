@@ -249,6 +249,14 @@ func (w repairWriter) Facts() repair.Facts { return w.facts }
 
 func (w repairWriter) Purged() (map[change.ID]bool, error) { return purgedTargets(w.root) }
 
+func (w repairWriter) Store() (port.StoreID, error) {
+	y, err := readStoreYAML(w.root)
+	if err != nil {
+		return "", err
+	}
+	return port.StoreID(y.Store), nil
+}
+
 func (w repairWriter) Read(fn func(r port.Reader) error) error { return fn(&view{root: w.root}) }
 
 func (w repairWriter) Write(op port.Operation, fn func(tx port.Tx) error) error {

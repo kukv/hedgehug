@@ -46,6 +46,20 @@ func titleToR(calls *int) port.RepairFunc {
 	}
 }
 
+func TestRepairWriterStore(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "01STORE0000000000000000001", t0); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repairWriter{root: dir}.Store()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "01STORE0000000000000000001" {
+		t.Errorf("Store() = %q, want 01STORE0000000000000000001", got)
+	}
+}
+
 func TestRepairRunsBeforeSendAndIsPushed(t *testing.T) {
 	remote := newRemote(t)
 	a := firstMachine(t, remote)
