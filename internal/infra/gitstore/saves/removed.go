@@ -67,7 +67,7 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	return port.ReceivedSave{Key: n.key, Merge: true, Removed: removed, Concurrent: concurrent}, true, nil
 }
 
-// saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティも読む。
+// saveOf は、Hedgehug-Op を持つ保存 1 件の中身。同期の修復の保存なら、消えたエンティティと Sides も読む。
 func saveOf(n node) (port.ReceivedSave, error) {
 	es, err := entities(n.c)
 	if err != nil {
@@ -81,7 +81,11 @@ func saveOf(n node) (port.ReceivedSave, error) {
 	if err != nil {
 		return port.ReceivedSave{}, err
 	}
-	if s.Removed, err = removedFrom(p, n.c, nil); err != nil || len(es) > 0 {
+	if s.Removed, err = removedFrom(p, n.c, nil); err != nil {
+		return port.ReceivedSave{}, err
+	}
+	if len(es) > 0 {
+		s.Sides, err = sidesOf(n.c, es)
 		return s, err
 	}
 	if s.Repair, err = underGone(p, s.Removed); !s.Repair {

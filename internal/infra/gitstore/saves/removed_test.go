@@ -319,3 +319,36 @@ func TestMergeNeedsBase(t *testing.T) {
 		})
 	}
 }
+
+// 削除を取り消した修復の保存は、前のいちばん近い合わせ(間の修復の保存を通る)の両側の、共通の祖先にない行を
+// Sides に持つ。月曜の hanako の変更は 1 つ目の親の側、水曜の jiro の変更と木曜の taro の削除は 2 つ目の親の側。
+func TestRepairSaveSides(t *testing.T) {
+	r := newRepo(t)
+	j, known := judged(t)
+	create := rec("R1", "OP0", t0, change.Create, "")
+	hanako := recBy("H1", "OP1", t0.Add(time.Minute), change.User("hanako"), "title")
+	jiro := recBy("J1", "OP2", t0.Add(2*time.Minute), change.User("jiro"), "status")
+	del := entityDelete("D1", "OP3", t0.Add(3*time.Minute), true)
+	fix := recBy("F1", "OP4", t0.Add(4*time.Minute), syncActor, "rank")
+	undo := recBy("U1", "OP5", t0.Add(5*time.Minute), syncActor, "")
+	undo.T, undo.To = change.Restore, []byte(`"OP3"`)
+	c0 := r.save(map[string]string{itemLog: logOf(t, create)}, "taro", t0, "OP0")
+	s1 := r.save(map[string]string{itemLog: logOf(t, create, hanako)}, "hanako", t0.Add(time.Minute), "OP1")
+	r.reset(c0)
+	r.save(map[string]string{itemLog: logOf(t, create, jiro)}, "jiro", t0.Add(2*time.Minute), "OP2")
+	s3 := r.save(map[string]string{itemLog: logOf(t, create, jiro, del)}, "taro", t0.Add(3*time.Minute), "OP3")
+	r.reset(s1)
+	merged := []change.Record{create, hanako, jiro, del}
+	m := r.save(map[string]string{itemLog: logOf(t, merged...)}, BotName, t0.Add(4*time.Minute), "", s1, s3)
+	r.save(map[string]string{itemLog: logOf(t, append(merged, fix)...)}, BotName, t0.Add(4*time.Minute), "OP4")
+	rs := r.save(map[string]string{itemLog: logOf(t, append(merged, fix, undo)...)}, BotName, t0.Add(5*time.Minute), "OP5")
+	r.mark(j, c0)
+	s, ok := pending(t, r, s3, rs, known)[rs.String()]
+	if !ok || !s.Repair {
+		t.Fatalf("save = %+v, want a repair (merge %s)", s, m)
+	}
+	f := s.Sides
+	if f.Side("H1") != 1 || f.Side("D1") != 2 || f.Side("J1") != 2 || f.Side("R1") != 0 || f.Side("F1") != 0 {
+		t.Errorf("sides = %+v", f)
+	}
+}

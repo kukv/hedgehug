@@ -176,8 +176,38 @@ func TestChanger(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := repair.Changer(tt.log, tt.d); got != tt.want {
+			if got := repair.Changer(tt.log, tt.d, repair.Facts{}); got != tt.want {
 				t.Errorf("Changer = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// 月曜に hanako がオフラインで HH-1 を変え、水曜に jiro が変えて同期し、木曜に taro(jiro の変更を持つ)が削除した。
+// 金曜に hanako が同期して削除を取り消す: 同時に変えたのは、削除と反対の側の hanako(jiro は共通の祖先にある)。
+// 片側の見分けがない(Facts が空)か、削除の行がどちらの側にもなければ、側を見ないいまの数え方。
+func TestChangerConcurrentSide(t *testing.T) {
+	at := func(r change.Record, by string, day int) change.Record {
+		r.By, r.At = by, time.Date(2026, 11, 9+day, 9, 0, 0, 0, time.UTC)
+		return r
+	}
+	user := change.ActorUser
+	hanako := at(row("c1", "op1", change.Set, "title", user), "hanako", 0)
+	jiro := at(row("c2", "op2", change.Set, "status", user), "jiro", 2)
+	d := at(del("d1", "op3", "deleted", true), "taro", 3)
+	log := []change.Record{hanako, jiro, d}
+	sides := repair.Facts{Ours: map[change.ID]bool{"c1": true}, Theirs: map[change.ID]bool{"d1": true}}
+	for name, c := range map[string]struct {
+		f    repair.Facts
+		want string
+	}{
+		"反対の側":       {sides, "hanako"},
+		"側の見分けなし":    {repair.Facts{}, "jiro"},
+		"削除がどちらにもない": {repair.Facts{Ours: map[change.ID]bool{"c1": true}}, "jiro"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := repair.Changer(log, d, c.f); got != c.want {
+				t.Errorf("Changer = %q, want %q", got, c.want)
 			}
 		})
 	}

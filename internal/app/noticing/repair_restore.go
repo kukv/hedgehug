@@ -30,7 +30,7 @@ func restores(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
 		if !ok {
 			continue
 		}
-		who, err := memberName(r, repair.Changer(before, d))
+		who, err := memberName(r, repair.Changer(before, d, b.saves[i].Sides))
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +60,7 @@ func restoredOps(s port.ReceivedSave) []change.ID {
 // deletionOf は、i 番目の保存のエンティティのうち、保存の直前のログに、op の取り消しの対象の削除の行
 // (root: true のエンティティの削除か、deleted でない f の削除)があるものと、その行。1 つの op で複数を削除して
 // いたら(テンプレートの子など)、重なった変更(repair.LastChange)が最もあとのものを取る(重なった変更があった方が
-// 取り消しの理由。repair.Overlaps は片側の見分けで選ぶが、ここにはその材料がない)。同じなら f の辞書順で最初のもの。
+// 取り消しの理由。重なった変更は、保存の Sides で、削除と反対の側のものだけを数える)。同じなら f の辞書順で最初のもの。
 func deletionOf(b batch, i int, op change.ID) (change.Ref, change.Record, bool) {
 	var best *restoreCandidate
 	for _, e := range b.saves[i].Entities {
@@ -69,7 +69,7 @@ func deletionOf(b batch, i int, op change.ID) (change.Ref, change.Record, bool) 
 			if c.T != change.Delete || c.Op != op || (c.F == change.DeletedField && (c.Root == nil || !*c.Root)) {
 				continue
 			}
-			w, changed := repair.LastChange(before, c)
+			w, changed := repair.LastChange(before, c, b.saves[i].Sides)
 			cand := restoreCandidate{e.Ref, c, w, changed}
 			if best == nil || cand.better(*best) {
 				best = &cand

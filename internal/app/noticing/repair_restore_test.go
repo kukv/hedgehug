@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/planning"
+	"github.com/kukv/hedgehug/internal/domain/repair"
 	"github.com/kukv/hedgehug/internal/domain/worklog"
 )
 
@@ -238,6 +239,27 @@ func TestRestoreChangerNotDeleter(t *testing.T) {
 	op := f.save(user("taro"), appendRef(epicRef, s.del)).Key.Op
 	f.save(user("Taro"), appendRef(epicRef, change.NewSet("title", "認証2", "認証3")))
 	f.judge(undoAll(f, op, epicRef))
+	if n := f.wantOne(); n.Text != "HH-1 は 花子 が同時に変更したため、削除を取り消しました" {
+		t.Errorf("text = %q", n.Text)
+	}
+}
+
+// 月曜に hanako がオフラインで HH-1 を変え、水曜に jiro が変えて同期し、木曜に taro(jiro の変更を持つ)が削除した。
+// 金曜に hanako が同期して削除を取り消す: 修復の保存の Sides で、削除と反対の側の hanako を書く(jiro でない)。
+func TestRestoreChangerConcurrentSide(t *testing.T) {
+	f := setupAs(t, "taro")
+	f.save(user("hanako"), func(tx port.Tx) error {
+		return tx.WriteMembers().Append(member.Rename("hanako", "hanako", "花子"), member.Join("jiro"))
+	})
+	monday := f.save(user("hanako"), appendRef(epicRef, change.NewSet("title", "認証", "認証2")))
+	f.save(user("jiro"), appendRef(epicRef, change.NewSet("title", "認証2", "認証3")))
+	thursday := f.save(user("taro"), appendRef(epicRef, change.NewDeleteEntity(true)))
+	s := undoAll(f, thursday.Key.Op, epicRef)
+	s.Sides = repair.Facts{
+		Ours:   map[change.ID]bool{monday.Entities[0].Rows[0].ID: true},
+		Theirs: map[change.ID]bool{thursday.Entities[0].Rows[0].ID: true},
+	}
+	f.judge(s)
 	if n := f.wantOne(); n.Text != "HH-1 は 花子 が同時に変更したため、削除を取り消しました" {
 		t.Errorf("text = %q", n.Text)
 	}
