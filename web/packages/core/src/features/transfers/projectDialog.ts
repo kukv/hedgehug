@@ -188,7 +188,11 @@ export function createProjectTransfer(deps: ProjectTransferDeps): ProjectTransfe
       try {
         const targets = await deps.transfers.projectTargets(project.storeId, project.id);
         if (gen !== loadSeq) return;
-        sec = { project, targets, key: targets[0] ? keyOf(targets[0]) : "" };
+        // 同じプロジェクトを読み直したときは、選んでいた移動先が候補に残っていれば、それを選んだままにする。
+        const same = sec?.project.storeId === project.storeId && sec.project.id === project.id;
+        const kept = same ? targets.find((t) => keyOf(t) === sec?.key) : undefined;
+        const pick = kept ?? targets[0];
+        sec = { project, targets, key: pick ? keyOf(pick) : "" };
       } catch {
         // 読めなかったときは、区画の中身を出さない(次に設定タブを開いたときに読み直す)。
         if (gen !== loadSeq) return;

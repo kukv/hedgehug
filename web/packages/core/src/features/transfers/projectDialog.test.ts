@@ -78,6 +78,26 @@ describe("project transfer section (02「画面の見出しと構成」、A5b-16
     expect(get(transfer.section)).toMatchObject({ project: { id: "S1-P2" }, options: [] });
   });
 
+  it("keeps the chosen destination when the same project is read again", async () => {
+    const { transfer, fake, project } = await setupProject();
+    await transfer.load(project);
+    transfer.choose("S3/S3-W1");
+    await transfer.load(project);
+    expect(get(transfer.section)?.value).toBe("S3/S3-W1");
+    // 選んでいた移動先が候補から消えたら、先頭に戻す。
+    fake.projectTargetList = fake.projectTargetList.slice(0, 1);
+    await transfer.load(project);
+    expect(get(transfer.section)?.value).toBe("S1/S1-W2");
+    // 別のプロジェクトは先頭から。
+    fake.projectTargetList = [
+      { storeId: "S1", storeName: "work", workspaceId: "S1-W2", workspaceName: "Mobile" },
+      { storeId: "S3", storeName: "team", workspaceId: "S3-W1", workspaceName: "Team" },
+    ];
+    transfer.choose("S3/S3-W1");
+    await transfer.load({ ...project, id: "S1-P2" });
+    expect(get(transfer.section)?.value).toBe("S1/S1-W2");
+  });
+
   it("shows no section when the candidates cannot be read", async () => {
     const { transfer, fake, project } = await setupProject();
     fake.failNext();
