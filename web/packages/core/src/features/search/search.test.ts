@@ -123,6 +123,19 @@ describe("createSearch (E1-19)", () => {
     expect(t.sp.put).toHaveBeenLastCalledWith("search", '{"query":"new"}');
   });
 
+  it("prepareQuery writes the query without searching, and the next open searches it once", async () => {
+    const t = setup('{"query":"saved"}');
+    t.s.setQuery("typing");
+    t.s.prepareQuery("kind:bug");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.search).not.toHaveBeenCalled();
+    expect(get(t.s.state).query).toBe("kind:bug");
+    expect(t.sp.put).toHaveBeenLastCalledWith("search", '{"query":"kind:bug"}');
+    await t.s.open();
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("kind:bug");
+  });
+
   it("reload searches again with the current query and keeps the rows on a failure", async () => {
     const t = setup();
     await t.s.replaceQuery("q");

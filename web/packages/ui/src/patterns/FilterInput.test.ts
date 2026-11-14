@@ -177,11 +177,18 @@ describe("FilterInput", () => {
   });
 
   it("選んでいる候補が見えるようにスクロールする", async () => {
+    // jsdom には scrollIntoView がない(undefined)ことがあるので、元の値をそのまま戻す。
+    const original = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
-    setup();
-    await fireEvent.focus(box());
-    await fireEvent.keyDown(box(), { key: "ArrowDown" });
-    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    try {
+      setup();
+      await fireEvent.focus(box());
+      await fireEvent.keyDown(box(), { key: "ArrowDown" });
+      expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    } finally {
+      if (original) Object.defineProperty(Element.prototype, "scrollIntoView", original);
+      else delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
   });
 });

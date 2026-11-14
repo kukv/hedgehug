@@ -10,6 +10,23 @@ const auth = { Authorization: "Bearer e2e-token" };
 const base = `/api/stores/${e2eStore}`;
 
 const filterOf = (page: Page) => page.getByRole("combobox", { name: "絞り込み" });
+
+// searched は、絞り込み query の検索の応答を待つ。打つ前に呼ぶ。開いたときの検索や前の入力の検索が
+// まだ飛んでいても、それでは満たさない(件数を、打った絞り込みの結果で確かめるため)。
+const searched = (page: Page, query: string) =>
+  page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/search") &&
+      r.request().method() === "POST" &&
+      r.request().postDataJSON()?.query === query,
+  );
+
+// type は、絞り込みを query にして、その検索の応答を待つ。
+async function type(page: Page, query: string) {
+  const done = searched(page, query);
+  await filterOf(page).fill(query);
+  await done;
+}
 const panelOf = (page: Page) => page.getByRole("region", { name: "詳細パネル" });
 
 async function send(page: Page, method: "post" | "delete", path: string, data?: unknown) {
@@ -32,13 +49,19 @@ async function seed(page: Page, info: TestInfo) {
     kind: "Epic",
     title: `${mark}の件`,
   });
-  return { prefix, mark, item, projectDisplay: `${prefix}-P${project.number}` };
+  return {
+    prefix,
+    mark,
+    item,
+    projectId: project.id,
+    projectDisplay: `${prefix}-P${project.number}`,
+  };
 }
 
 async function openSearch(page: Page, info: TestInfo) {
   await page.goto(tokenUrl());
   const side = await sidebar(page, info);
-  // 前の値の読み込みが終わる前に打つと、読んだ値で上書きされるので、応答を待つ。
+  // 開いたときの、保存した絞り込みの読み込みを待ってから打つ(テストの手順を決まった順にする)。
   const loaded = page.waitForResponse(
     (r) => r.url().includes("/api/screen-states/search") && r.request().method() === "GET",
   );
@@ -71,8 +94,8 @@ test("opens the search screen from the sidebar and shows its frame", async ({ pa
 
 test("finds an item by a word of its title, and opens the detail panel", async ({ page }, info) => {
   const { mark } = await seed(page, info);
-  const filter = await openSearch(page, info);
-  await filter.fill(mark);
+  await openSearch(page, info);
+  await type(page, mark);
   await expect(page.getByText("1 件", { exact: true })).toBeVisible();
   const row = page.getByRole("row", { name: new RegExp(mark) });
   await expect(row.getByRole("img", { name: "e2e", exact: true })).toBeVisible();
@@ -85,10 +108,10 @@ test("lists a deleted item only with is:deleted, as a row that cannot be opened"
 }, info) => {
   const { mark, item } = await seed(page, info);
   await send(page, "delete", `${base}/items/${item.id}`);
-  const filter = await openSearch(page, info);
-  await filter.fill(mark);
+  await openSearch(page, info);
+  await type(page, mark);
   await expect(page.getByText("0 件", { exact: true })).toBeVisible();
-  await filter.fill(`is:deleted ${mark}`);
+  await type(page, `is:deleted ${mark}`);
   await expect(page.getByText("1 件", { exact: true })).toBeVisible();
   const row = page.getByRole("row", { name: new RegExp(mark) });
   await expect(row.getByText("削除済み", { exact: true })).toBeVisible();
@@ -97,8 +120,8 @@ test("lists a deleted item only with is:deleted, as a row that cannot be opened"
 });
 
 test("shows the error of a key without a value and a count of 0", async ({ page }, info) => {
-  const filter = await openSearch(page, info);
-  await filter.fill("kind:");
+  await openSearch(page, info);
+  await type(page, "kind:");
   await expect(page.getByRole("alert").getByText("「kind:」に値がありません")).toBeVisible();
   await expect(page.getByText("0 件", { exact: true })).toBeVisible();
 });
@@ -112,6 +135,26 @@ test("completes a project by a part of its Japanese name", async ({ page }, info
   await expect(page.getByRole("listbox", { name: "候補" }).getByRole("option")).toHaveCount(1);
   await page.keyboard.press("Enter");
   await expect(filter).toHaveValue(`project:${projectDisplay}`);
+});
+
+test("completes an item created after the screen was opened", async ({ page }, info) => {
+  const { mark, projectId } = await seed(page, info);
+  const filter = await openSearch(page, info);
+  // 画面を開いたあとに作ったアイテムも、Store が変わった知らせで候補の元(パレットの索引)を読み直して出す。
+  // 欄にフォーカスがあるあいだは反映を待つ(06)ので、フォーカスを外したまま作り、読み直しを待つ。
+  await page.getByRole("main").getByRole("heading", { name: "検索", level: 1 }).click();
+  const reread = page.waitForResponse(
+    (r) => r.url().includes("/api/palette-index") && r.request().method() === "GET",
+  );
+  await send(page, "post", `${base}/items`, {
+    project: projectId,
+    kind: "Epic",
+    title: `${mark}の後から`,
+  });
+  await reread;
+  await filter.fill("");
+  await filter.pressSequentially(`parent:${mark}の後から`);
+  await expect(page.getByRole("listbox", { name: "候補" }).getByRole("option")).toHaveCount(1);
 });
 
 test("moves to the filter with the slash key, and opens and closes the search help", async ({
@@ -146,18 +189,33 @@ test("keeps the filter after a reload", async ({ page }, info) => {
 
 test("opens the search with the query typed into the palette", async ({ page }) => {
   await page.goto(tokenUrl());
+  // 画面ができてから押す(Ctrl+K は、パレットの部品ができてから受ける)。
+  await expect(page.getByRole("main")).toBeVisible();
   await page.keyboard.press("ControlOrMeta+k");
   const palette = page.getByRole("dialog", { name: "コマンドパレット" });
   await palette.getByRole("combobox").fill("kind:bug");
-  await palette.getByRole("option", { name: /^検索で開く/ }).click();
+  const open = palette.getByRole("option", { name: /^検索で開く/ });
+  await expect(open).toBeVisible();
+  // 選んでも、移る前の画面では検索しない(絞り込みを書いておき、開いた検索の画面が 1 回だけ検索する)。
+  // 反映の知らせで検索の画面が読み直すこともあるので、回数ではなく、検索したときの画面を確かめる。
+  const at: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/search") && r.method() === "POST")
+      at.push(new URL(page.url()).pathname);
+  });
+  const done = searched(page, "kind:bug");
+  await open.click();
   await expect(palette).toBeHidden();
   await expect(page).toHaveURL(/\/search$/);
   await expect(filterOf(page)).toHaveValue("kind:bug");
+  await done;
+  expect(at.length).toBeGreaterThan(0);
+  expect(at.filter((path) => path !== "/search")).toEqual([]);
 });
 
 test("shows the read-only band for an item of a read-only store", async ({ page }, info) => {
-  const filter = await openSearch(page, info);
-  await filter.fill("store:readonly ログイン画面");
+  await openSearch(page, info);
+  await type(page, "store:readonly ログイン画面");
   await expect(
     page.getByText(
       "readonly は閲覧のみの Store です。閲覧はできますが、作成・変更・削除はできません。",

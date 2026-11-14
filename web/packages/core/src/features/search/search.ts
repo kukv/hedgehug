@@ -25,6 +25,9 @@ export interface Search {
   setQuery(text: string): void;
   // replaceQuery は、パレットなどから絞り込みを入れ替える。待たずに検索する。
   replaceQuery(text: string): Promise<void>;
+  // prepareQuery は、絞り込みを入れ替えて画面の状態に書くだけで、検索しない。ほかの画面から検索の画面を開くとき、
+  // 開いた画面の open が 1 回だけ検索する。
+  prepareQuery(text: string): void;
   // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
   reload(): Promise<void>;
 }
@@ -103,6 +106,10 @@ export function createSearch(deps: SearchDeps): Search {
       cancel();
       put(text);
       await run();
+    },
+    prepareQuery(text) {
+      cancel();
+      put(text);
     },
     reload() {
       cancel();

@@ -41,7 +41,10 @@
   });
   let filter = $state<HTMLElement>();
 
-  onMount(() => void search.open());
+  onMount(() => {
+    void search.open();
+    return sources.stop;
+  });
 
   // pick は、カーソルの位置の語で候補を作り直す。入力のときも、カーソルだけが動いたときも呼ぶ。
   function pick(text: string, caret: number) {
