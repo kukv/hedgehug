@@ -2054,7 +2054,7 @@ gh pr create --base develop --title "feat(gitstore): 同期の合わせ方(ト�
 | Store をこのマシンから削除したとき(判定済みの記録) | `JudgedSaves.ForgetStore` を呼ぶ(C4b1-16)。Store を追加したら、その時点の保存を判定済みにする必要はない(C4b1-3 で最初の同期が印を付ける) |
 | 同期の中で呼ばれる口 | `noticing.Service.Judge` は同期の Store のロックの中で `Identity.Me` と `StoreList.List` を呼ぶ。本物の `Identity`・`StoreList` は `Stores.Read`・`Write` を呼ばない(呼ぶとロックを待って止まる) |
 | 08 の診断での修復と、のせ直せなかった変更の通知 | `Notice.Kind = repair` で、鍵は `repair:diagnose:…`・`repair:rebase:…` のように C4b2-6 の形で作り、`AddOnce` で書く |
-| スプリント・リリースの完全な削除の `purged.jsonl` の行 | `display` は名前(C5a-6)。行の取り除きと参照の `set sprint null`・`set release null` は同じ保存で書く(保存形式) |
+| スプリント・リリースの完全な削除の `purged.jsonl` の行 | `display` は名前(C5a-6)。行の取り除きと参照の `set sprint null`・`set release null` は同じ保存で書く(保存形式)。完全な削除の書き口ができたら、テストで同じ形を手で書いている `cmd/hedgehug/plan_purge_scenario_test.go` の `purgeSprintAs` と `internal/infra/gitstore/sync_purge_test.go` の `purgePlanForTest` を、その書き口に置き換える |
 | Store の非表示・再表示 | 非表示・再表示のあと、`store` の出来事(または同じ口)で受信箱の一覧と未読数が読み直されること。受信箱は表示中の Store の通知だけを出し、画面は `store`・`github`・`inbox` の出来事で読み直す(`web/app/src/inbox.ts`) |
 
 ## 未決の点
