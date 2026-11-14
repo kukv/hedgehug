@@ -123,7 +123,8 @@ func (m machine) wsLog(t *testing.T, ws workspace.ID) []change.Record {
 }
 
 // moveWebAs は、login の操作として、「Web」を「サブ」の番号 1 へ移す: プロジェクトの set place と、「サブ」の番号の行と、
-// transfer.CarryRules の移動先の行を「サブ」に、移動元の行を「メイン」に書く。専用ルールの新しい内部 ID は webCarried。
+// transfer.CarryRules の移動先の行を「サブ」に、移動元の行を「メイン」に、転送記録(HH-P1 から SB-P1)を書く。専用ルールの
+// 新しい内部 ID は webCarried。
 func moveWebAs(t *testing.T, m machine, login string) {
 	t.Helper()
 	mainLog, subLog := m.wsLog(t, mainWS), m.wsLog(t, subWS)
@@ -140,8 +141,38 @@ func moveWebAs(t *testing.T, m machine, login string) {
 			tx.WriteProjects().Append(webPR, change.NewSet("place", old, project.Place{Workspace: subWS, Number: 1})),
 			tx.WriteWorkspaces().Append(subWS, append([]change.Draft{numbering.Draft(numbering.Projects, 1)}, carried.Destination...)...),
 			tx.WriteWorkspaces().Append(mainWS, carried.Source...),
+			tx.WriteTransfers().Append(transfer.Record{Entity: transfer.EntityProject, Target: webPR, Old: "HH-P1", New: "SB-P1", ToStore: string(m.id)}),
 		)
 	})
+}
+
+// renameOwnRuleAs は、login の操作として、「メイン」の「Web」の専用ルール「完了で閉じる」の名前を「完了なら閉じる」に変える。
+func renameOwnRuleAs(t *testing.T, m machine, login string) {
+	t.Helper()
+	i := slices.IndexFunc(automation.FromLog(m.wsLog(t, mainWS)), func(r automation.Rule) bool { return r.ID == webOwnRule })
+	if i < 0 {
+		t.Fatalf("%s: no own rule of Web", m.dir)
+	}
+	own := automation.FromLog(m.wsLog(t, mainWS))[i]
+	renamed := own
+	renamed.Name = "完了なら閉じる"
+	m.writeAs(t, login, "自動化のルールを変更", func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(mainWS, automation.Drafts(own, renamed)...)
+	})
+}
+
+// webPlace は、m の「Web」のワークスペース。
+func webPlace(t *testing.T, m machine) workspace.ID {
+	t.Helper()
+	var p project.Project
+	err := m.stores.Read(t.Context(), m.id, func(r port.Reader) (err error) {
+		p, err = r.Projects().Get(webPR)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p.Place.Workspace
 }
 
 // hideReviewAs は、login の操作として、「メイン」で「Web」の使わないステータスに「Review」を足す。
@@ -252,4 +283,24 @@ func TestRepairRulesPurgedProject(t *testing.T) {
 		}
 	}
 	wantNoRepair(t, a)
+}
+
+// A が「Web」を「サブ」へ移し、B が同時に「メイン」で「Web」の専用ルールの名前を変える。A・B・A の順に同期しても、移動の
+// 専用ルールの削除は削除と変更の重なりに数えないので、「Web」は「サブ」のまま。「メイン」に「Web」のルールはなく、2 台は
+// 同じで、どちらにも同期の修復の通知はない。
+func TestRepairRulesMovedWorkspaceRename(t *testing.T) {
+	remote, a, b := rulesPair(t)
+	moveWebAs(t, a, "taro")
+	renameOwnRuleAs(t, b, "hanako")
+	a.sync(t, remote)
+	b.sync(t, remote)
+	a.sync(t, remote)
+	sameFiles(t, a, b)
+	for _, m := range []machine{a, b} {
+		if ws := webPlace(t, m); ws != subWS {
+			t.Errorf("%s: Web is in %s, want サブ", m.dir, ws)
+		}
+		wantNoWebRules(t, m)
+		wantNoRepair(t, m)
+	}
 }
