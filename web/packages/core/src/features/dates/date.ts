@@ -9,10 +9,14 @@ export function formatDay(ymd: string, thisYear: number): string {
   return `${y}/${mo}/${d}`;
 }
 
-const two = (n: number) => String(n).padStart(2, "0");
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// dayOf は、このマシンの時刻帯での d の日付(YYYY-MM-DD)。
+export function dayOf(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 // formatDateTime は、日時を「日付 HH:MM」にする(日付は formatDay と同じ形)。どちらもこのマシンの時刻帯で見る。
 export function formatDateTime(at: Date, now: Date): string {
-  const ymd = `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
-  return `${formatDay(ymd, now.getFullYear())} ${two(at.getHours())}:${two(at.getMinutes())}`;
+  return `${formatDay(dayOf(at), now.getFullYear())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }

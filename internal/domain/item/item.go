@@ -60,7 +60,13 @@ type Relation struct {
 	To   ID     `json:"to"`
 }
 
-// Item は、アイテムの項目。スプリントとリリースは持たない。
+// ログの項目名(スプリントとリリースの値は内部 ID。なしは null。F1-4)。
+const (
+	SprintField  = "sprint"
+	ReleaseField = "release"
+)
+
+// Item は、アイテムの項目。
 type Item struct {
 	ID       ID
 	Place    Place
@@ -80,6 +86,8 @@ type Item struct {
 	// 値は内部 ID で指す(保存形式「アイテムの例」。B2-1)。
 	Status   change.ID                 // なければ空
 	Priority change.ID                 // なければ空
+	Sprint   change.ID                 // 入っているスプリント。なければ空
+	Release  change.ID                 // 入っているリリース。なければ空
 	Systems  []change.ID               // 関連システム
 	Choices  map[change.ID][]change.ID // 選択式の追加プロパティの値。単一選択は 1 つ。なければ nil
 
@@ -111,6 +119,8 @@ func Create(it Item) change.Draft {
 	}
 	put("status", it.Status, it.Status != "")
 	put("priority", it.Priority, it.Priority != "")
+	put(SprintField, it.Sprint, it.Sprint != "")
+	put(ReleaseField, it.Release, it.Release != "")
 	put("assignee", it.Assignee, it.Assignee != "")
 	put("start", it.Start, it.Start != "")
 	put("end", it.End, it.End != "")

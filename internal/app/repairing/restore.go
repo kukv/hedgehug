@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/repair"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -107,17 +108,20 @@ func oneLine(s string) string {
 // 合わせたいまの木には頼らない(もう片側が親を変えていることがある)。行と op だけで決める。
 type incidentals struct {
 	deleteOps map[change.ID]bool             // ワークスペースのログに delete の行を書いた op
+	closeOps  map[change.ID]bool             // ワークスペースのログにスプリントの完了の確定値の行を書いた op
 	placed    map[change.ID]map[item.ID]bool // op ごとの、set place を書いたアイテム
 	ranked    map[change.ID]map[item.ID]bool // op ごとの、set rank を書いたアイテム
 }
 
 func newIncidentals(s snapshot) incidentals {
-	in := incidentals{deleteOps: map[change.ID]bool{}, placed: map[change.ID]map[item.ID]bool{}, ranked: map[change.ID]map[item.ID]bool{}}
+	in := incidentals{deleteOps: map[change.ID]bool{}, closeOps: map[change.ID]bool{}, placed: map[change.ID]map[item.ID]bool{}, ranked: map[change.ID]map[item.ID]bool{}}
 	for _, e := range s.entities {
 		for _, r := range e.log {
 			switch {
 			case e.ref.Kind == change.KindWorkspace && r.T == change.Delete:
 				in.deleteOps[r.Op] = true
+			case e.ref.Kind == change.KindWorkspace && r.T == planning.CloseSprint:
+				in.closeOps[r.Op] = true
 			case e.ref.Kind == change.KindItem && r.T == change.Set && r.F == placeField:
 				mark(in.placed, r.Op, e.ref.ID)
 			case e.ref.Kind == change.KindItem && r.T == change.Set && r.F == rankField:
@@ -138,18 +142,23 @@ func mark(m map[change.ID]map[item.ID]bool, op change.ID, id item.ID) {
 // of は、ref のログの行が、ほかのものへの操作で一緒に書いた行かを答える関数。
 // (a) 値・プロパティの削除でほかのエンティティに書いた置き換え(アイテム・プロジェクトのログの行で、同じ op で
 // ワークスペースのログに delete の行がある)。ワークスペースのログの行はこの見方では数えない(テンプレートの
-// 保存は、名前の変更と子の削除を 1 回で書く)。ワークスペースのログでは、(c) を除き、削除の f の下の行かだけで重なりを決める。
+// 保存は、名前の変更と子の削除を 1 回で書く)。ワークスペースのログでは、(c)・(d) を除き、削除の f の下の行かだけで重なりを決める。
 // (b) 親の移動で一緒に運ばれた下のものの場所。アイテムの移動は、動かしたアイテムに place と rank を、
 // 一緒に運ぶ下のものに place だけを書く。そこで、同じ op がほかのアイテムにも set place を書き、
 // このアイテムには set rank を書いていない set place の行を、一緒に書いた行とする。
 // (c) ワークスペースのログの採番の行。プロジェクトやアイテムの作成で一緒に書く行で、子の追加は修復 (2) で
 // 削除済みに入れるので、ワークスペースの削除を取り消さない(決定 B5b-7)。
-func (in incidentals) of(ref change.Ref) func(change.Record) bool {
-	return func(c change.Record) bool {
-		if ref.Kind != change.KindWorkspace && in.deleteOps[c.Op] {
+// (d) ワークスペースのログのスプリント・リリースの行(完了の確定値の行を含む)。ワークスペースの中身なので、
+// ワークスペースの削除(f が deleted)は取り消さない(B5b-7 と同じ)。スプリント・リリース自身の削除
+// (f が sprints/<ID>・releases/<ID>)には、変更に数える(C3a-21・F1-2)。
+// (e) スプリントの完了で、未完了のアイテムに一緒に書いたスプリントと順位の行(同じ op でワークスペースのログに
+// 完了の確定値の行がある)。完了は削除済みのアイテムに触れない(05「完了」)ので、アイテムの削除は取り消さない。
+func (in incidentals) of(ref change.Ref) func(f string, c change.Record) bool {
+	return func(f string, c change.Record) bool {
+		if ref.Kind != change.KindWorkspace && in.deleteOps[c.Op] || ref.Kind == change.KindItem && in.closeOps[c.Op] {
 			return true
 		}
-		if ref.Kind == change.KindWorkspace && c.T == numbering.Type {
+		if ref.Kind == change.KindWorkspace && (c.T == numbering.Type || (f == change.DeletedField && planning.IsPlanRow(c))) {
 			return true
 		}
 		if ref.Kind != change.KindItem || c.T != change.Set || c.F != placeField {

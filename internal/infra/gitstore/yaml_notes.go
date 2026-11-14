@@ -15,14 +15,15 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// itemToYAML は、item.yaml の中身。status・priority・systems・fields の行末に、値の名前を注釈で書く(B2-19)。
-// 名前が分からない値(消した値、設定のログがないワークスペース)には注釈を付けない。
+// itemToYAML は、item.yaml の中身。status・priority・systems・sprint・release・fields の行末に、値の名前を注釈で書く(B2-19)。
+// 名前が分からない値(消した値、設定のログがないワークスペース)と、使えないスプリント・リリース(F1-5)には注釈を付けない。
 func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML {
 	links := itemlink.FromLog(log)
-	var st workspace.Settings
+	var info wsInfo
 	if settings != nil {
-		st, _ = settings(it.Place.Workspace)
+		info, _ = settings(it.Place.Workspace)
 	}
+	st := info.Settings
 	y := itemYAML{
 		ID: string(it.ID), Workspace: string(it.Place.Workspace), Project: string(it.Place.Project),
 		Number: it.Place.Number, Kind: string(it.Kind), Rank: it.Rank, Title: it.Title,
@@ -32,6 +33,8 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 		Assignee: optString(it.Assignee), Start: optString(it.Start), End: optString(it.End),
 		Points: it.Points, Estimate: it.Estimate,
 		Systems:   systemsNode(it.Systems, st),
+		Sprint:    idNode(it.Sprint),
+		Release:   idNode(it.Release),
 		Fields:    fieldsNode(it, log, st),
 		Relations: relationsNode(it.Relations),
 		Links:     linksNode(links.Links),
@@ -43,6 +46,12 @@ func itemToYAML(it item.Item, log []change.Record, settings settingsOf) itemYAML
 	}
 	y.Status.LineComment = comment(valueName(st.Statuses, it.Status))
 	y.Priority.LineComment = comment(valueName(st.Priorities, it.Priority))
+	if sp, ok := info.Plan.UsableSprint(it.Sprint); ok {
+		y.Sprint.LineComment = comment(sp.Name)
+	}
+	if r, ok := info.Plan.UsableRelease(it.Release); ok {
+		y.Release.LineComment = comment(r.Name)
+	}
 	if it.Place.Parent != nil {
 		p := string(*it.Place.Parent)
 		y.Parent = &p

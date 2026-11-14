@@ -4,7 +4,6 @@ package projects
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -35,16 +34,6 @@ func toAPI(p project.Project) Project {
 		Title: p.Title, Owner: p.Owner, Status: string(p.Status), Start: p.Start, End: p.End,
 		Repos: append([]string{}, p.Repos...),
 	}
-}
-
-// checkDates は、形(pattern)だけでは通る 2026-02-30 のような無い日付を、暦の上の日付かで断る。
-func checkDates(ds ...string) error {
-	for _, d := range ds {
-		if _, err := time.Parse(time.DateOnly, d); d != "" && err != nil {
-			return huma.Error422UnprocessableEntity("not a date: " + d)
-		}
-	}
-	return nil
 }
 
 type wsPath struct {
@@ -85,7 +74,7 @@ type ScanFunc func(ctx context.Context, store port.StoreID, repo string)
 func Register(api huma.API, svc appprojects.Service, scan ScanFunc) {
 	huma.Register(api, huma.Operation{OperationID: "create-project", Method: http.MethodPost, Path: "/api/stores/{store}/workspaces/{workspace}/projects", Summary: "プロジェクトを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
-			if err := checkDates(in.Body.Start, in.Body.End); err != nil {
+			if err := apierr.CheckDates(in.Body.Start, in.Body.End); err != nil {
 				return nil, err
 			}
 			p, err := svc.Create(ctx, appprojects.CreateInput{

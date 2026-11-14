@@ -36,6 +36,8 @@ type Item struct {
 	Assignee string                     `json:"assignee" doc:"ログイン名。空は未割り当て"`
 	Start    string                     `json:"start" doc:"YYYY-MM-DD。空は値なし"`
 	End      string                     `json:"end"`
+	Sprint   string                     `json:"sprint" doc:"スプリントの内部 ID。空はバックログ"`
+	Release  string                     `json:"release" doc:"リリースの内部 ID。空は「なし」"`
 	Points   *float64                   `json:"points"`
 	Estimate *float64                   `json:"estimate" doc:"時間"`
 	Systems  []string                   `json:"systems" nullable:"false"`
@@ -49,6 +51,7 @@ func toAPI(it item.Item) Item {
 		Number: it.Place.Number, Kind: string(it.Kind), Rank: it.Rank, Title: it.Title, Watchers: it.Watchers, Blocked: it.Blocked,
 		CreatedAt: it.Created.At.Format(change.TimeLayout), CreatedBy: it.Created.By,
 		Status: string(it.Status), Priority: string(it.Priority), Assignee: it.Assignee, Start: it.Start, End: it.End,
+		Sprint: string(it.Sprint), Release: string(it.Release),
 		Points: it.Points, Estimate: it.Estimate, Systems: []string{}, Choices: map[string][]string{}, Fields: map[string]json.RawMessage{},
 	}
 	for _, s := range it.Systems {
@@ -85,6 +88,7 @@ type CreateItem struct {
 	Description string                     `json:"description,omitempty" doc:"もとになるアイテムの説明(Markdown)。空は説明なし。子の説明はテンプレートのものを使う"`
 	Values      map[string]json.RawMessage `json:"values,omitempty" doc:"プロパティの値(キーはプロパティの内部 ID。組み込みはキー)"`
 	Template    string                     `json:"template,omitempty" doc:"一緒に作るテンプレートの内部 ID。空は「なし」"`
+	Sprint      *string                    `json:"sprint,omitempty" nullable:"true" doc:"入れるスプリントの内部 ID。null と空はバックログ"`
 }
 
 type createInput struct {
@@ -121,22 +125,7 @@ func Register(api huma.API, svc appitems.Service) {
 func registerCreateRead(api huma.API, svc appitems.Service) {
 	huma.Register(api, huma.Operation{OperationID: "create-item", Method: http.MethodPost, Path: "/api/stores/{store}/items", Summary: "アイテムを作成"},
 		func(ctx context.Context, in *createInput) (*oneOutput, error) {
-			req := appitems.CreateInput{Store: port.StoreID(in.Store), Project: project.ID(in.Body.Project), Kind: item.Kind(in.Body.Kind), Title: in.Body.Title, Description: in.Body.Description}
-			if len(in.Body.Values) > 0 {
-				req.Values = make(map[change.ID]json.RawMessage, len(in.Body.Values))
-				for k, v := range in.Body.Values {
-					req.Values[change.ID(k)] = v
-				}
-			}
-			if in.Body.Parent != "" {
-				p := item.ID(in.Body.Parent)
-				req.Parent = &p
-			}
-			if in.Body.Template != "" {
-				tid := change.ID(in.Body.Template)
-				req.Template = &tid
-			}
-			return one(svc.Create(ctx, req))
+			return one(svc.Create(ctx, createRequest(in)))
 		})
 	huma.Register(api, huma.Operation{OperationID: "get-item", Method: http.MethodGet, Path: "/api/stores/{store}/items/{item}", Summary: "アイテムを返す"},
 		func(ctx context.Context, in *getInput) (*oneOutput, error) {
@@ -158,4 +147,28 @@ func registerCreateRead(api huma.API, svc appitems.Service) {
 			}
 			return out, nil
 		})
+}
+
+// createRequest は、作成の本文を usecase の入力にする。空の ID は「選んでいない」。
+func createRequest(in *createInput) appitems.CreateInput {
+	req := appitems.CreateInput{Store: port.StoreID(in.Store), Project: project.ID(in.Body.Project), Kind: item.Kind(in.Body.Kind), Title: in.Body.Title, Description: in.Body.Description}
+	if len(in.Body.Values) > 0 {
+		req.Values = make(map[change.ID]json.RawMessage, len(in.Body.Values))
+		for k, v := range in.Body.Values {
+			req.Values[change.ID(k)] = v
+		}
+	}
+	if in.Body.Parent != "" {
+		p := item.ID(in.Body.Parent)
+		req.Parent = &p
+	}
+	if in.Body.Sprint != nil && *in.Body.Sprint != "" {
+		sp := change.ID(*in.Body.Sprint)
+		req.Sprint = &sp
+	}
+	if in.Body.Template != "" {
+		tid := change.ID(in.Body.Template)
+		req.Template = &tid
+	}
+	return req
 }

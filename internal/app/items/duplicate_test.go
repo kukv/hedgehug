@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -125,5 +126,49 @@ func TestDuplicateIgnoresDeletedSiblingsForTheLastRank(t *testing.T) {
 	// 削除済みの順位は比べず、残る子のあとに入る。比べていたら消した子より後ろに入る。
 	if dup := storedItem(t, rec, id); dup.Rank <= live.Rank || dup.Rank > gone.Rank {
 		t.Errorf("rank = %q (live %q, gone %q)", dup.Rank, live.Rank, gone.Rank)
+	}
+}
+
+// setPlan は、アイテムのスプリントとリリースを直接書く(完了のスプリントなどは作成では入れられないため)。
+func setPlan(t *testing.T, s port.Stores, id item.ID, sprint, release change.ID) {
+	t.Helper()
+	op := port.Operation{Actor: change.User("taro"), Summary: "割り当て"}
+	err := s.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(id,
+			change.NewSet(item.SprintField, nil, sprint), change.NewSet(item.ReleaseField, nil, release))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDuplicateSprintRelease(t *testing.T) {
+	svc, rec := setupRec(t)
+	ws := apptest.SampleWorkspace
+	seedSprint(t, rec, ws, planning.Sprint{ID: "S1", Name: "Sprint 1", State: planning.Active}, false)
+	seedSprint(t, rec, ws, planning.Sprint{ID: "S3", Name: "Sprint 3", State: planning.Planned}, false)
+	seedSprint(t, rec, ws, planning.Sprint{ID: "S0", Name: "Sprint 0", State: planning.Closed}, false)
+	seedSprint(t, rec, ws, planning.Sprint{ID: "S2", Name: "Sprint 2", State: planning.Planned}, true)
+	seedRelease(t, rec, planning.Release{ID: "R1", Name: "v1", State: planning.Unreleased}, false)
+	seedRelease(t, rec, planning.Release{ID: "R4", Name: "v4", State: planning.Released}, false)
+	seedRelease(t, rec, planning.Release{ID: "R0", Name: "v0", State: planning.Archived}, false)
+	seedRelease(t, rec, planning.Release{ID: "R2", Name: "v2", State: planning.Unreleased}, true)
+
+	for _, c := range []struct{ sprint, release, wantSprint, wantRelease change.ID }{
+		{"S1", "R1", "S1", "R1"},
+		{"S3", "R4", "S3", "R4"},
+		{"S0", "R0", "", ""},
+		{"S2", "R2", "", ""},
+		{"", "", "", ""},
+	} {
+		src := mustCreate(t, svc, apptest.SampleProject, ptr(apptest.SampleEpic), item.Task, "元")
+		setPlan(t, rec, src.ID, c.sprint, c.release)
+		id, err := svc.Duplicate(t.Context(), store, src.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dup := storedItem(t, rec, id); dup.Sprint != c.wantSprint || dup.Release != c.wantRelease {
+			t.Errorf("%s/%s の複製 = %s/%s, want %s/%s", c.sprint, c.release, dup.Sprint, dup.Release, c.wantSprint, c.wantRelease)
+		}
 	}
 }

@@ -26,6 +26,9 @@ export interface Item {
   // estimate は、見積もり時間(時間の数)。
   estimate: number | null;
   systems: string[];
+  // sprint・release は内部 ID。空はバックログ・「なし」。
+  sprint: string;
+  release: string;
   // choices は、選択肢の追加プロパティの値の ID(プロパティの ID ごと)。fields は、テキストなどの追加プロパティの値。
   choices: Record<string, string[]>;
   fields: Record<string, string | number | boolean | null>;
@@ -45,4 +48,6 @@ export interface NewItem {
   templateId?: string;
   // description は、作るアイテムの説明(空・なしは説明なし)。
   description?: string;
+  // sprint は、入れるスプリントの内部 ID(空・なしはバックログ)。
+  sprint?: string;
 }

@@ -6,6 +6,7 @@ export { createItemActionsPort } from "./itemActions";
 export { createItemsPort } from "./items";
 export { createLinksPort } from "./links";
 export { createNotesPort } from "./notes";
+export { createPlanningPort } from "./planning";
 export { createProjectsPort } from "./projects";
 export { createSyncPort } from "./sync";
 export { createSystemPort } from "./system";

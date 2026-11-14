@@ -1,6 +1,7 @@
 package item_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -93,5 +94,25 @@ func TestChoicesInCreate(t *testing.T) {
 	want := map[change.ID][]change.ID{fEnv: {vProd}, fTags: {vA}}
 	if it.Status != sTodo || !reflect.DeepEqual(it.Systems, []change.ID{yWeb}) || !reflect.DeepEqual(it.Choices, want) {
 		t.Errorf("item = %+v", it)
+	}
+}
+
+func TestSprintAndRelease(t *testing.T) {
+	base := item.Item{ID: "01ITEM0000000000000000000A", Kind: item.Task, Title: "x", Sprint: "S1"}
+	got, _ := item.FromLog(rows(item.Create(base), change.NewSet("release", nil, "R1")))
+	if got.Sprint != "S1" || got.Release != "R1" {
+		t.Errorf("Sprint, Release = %q, %q", got.Sprint, got.Release)
+	}
+	got, _ = item.FromLog(rows(item.Create(base), change.NewSet("sprint", "S1", nil)))
+	if got.Sprint != "" || got.Release != "" {
+		t.Errorf("外したあと: Sprint, Release = %q, %q", got.Sprint, got.Release)
+	}
+	var to map[string]any
+	_ = json.Unmarshal(item.Create(item.Item{ID: "I"}).To, &to)
+	if _, ok := to[item.SprintField]; ok {
+		t.Errorf("値のないスプリントを作成の行に書いた: %v", to)
+	}
+	if _, ok := to[item.ReleaseField]; ok {
+		t.Errorf("値のないリリースを作成の行に書いた: %v", to)
 	}
 }

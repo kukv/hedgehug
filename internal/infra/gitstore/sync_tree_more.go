@@ -159,14 +159,14 @@ func rebuildYAML(t tree) error {
 	return nil
 }
 
-// treeSettings は、木の workspaces/<ID>/log.jsonl から設定を引く(書く道と同じログから同じ設定になる)。
+// treeSettings は、木の workspaces/<ID>/log.jsonl から設定とスプリント・リリースを引く(書く道と同じログから同じ設定になる)。
 func treeSettings(t tree) settingsOf {
 	cache := map[workspace.ID]settingsEntry{}
-	return func(id workspace.ID) (workspace.Settings, bool) {
+	return func(id workspace.ID) (wsInfo, bool) {
 		if e, ok := cache[id]; ok {
 			return e.s, e.ok
 		}
-		s, ok := workspace.SettingsFromLog(parseLog(t["workspaces/"+string(id)+"/log.jsonl"]))
+		s, ok := wsInfoFromLog(parseLog(t["workspaces/"+string(id)+"/log.jsonl"]))
 		cache[id] = settingsEntry{s, ok}
 		return s, ok
 	}

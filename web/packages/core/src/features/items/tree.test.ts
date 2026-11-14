@@ -29,6 +29,8 @@ function item(
     points: null,
     estimate: null,
     systems: [],
+    sprint: "",
+    release: "",
     choices: {},
     fields: {},
     createdAt,

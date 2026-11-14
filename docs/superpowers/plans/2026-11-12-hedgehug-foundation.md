@@ -55,7 +55,7 @@
 | # | 決めたこと | 根拠 |
 |---|---|---|
 | 1 | 土台で定義する口は `Stores`・`Clock`・`IDs` だけ。`Replicator`・`StoreProvisioner`・`Index`・`Inbox`・`Views`・`MachineSettings`・`GitHub`・`Secrets`・`Events` は、使うトラックが自分の計画で足す(C: Replicator・Inbox・Events、D: GitHub・Secrets、E: Index・Views、G: StoreProvisioner・MachineSettings)。口は 1 つ 1 ファイル(`app/port/<口>.go`)、偽物は `app/apptest/<口>.go`、照合テストは `app/apptest/<口>_contract.go` に置く | 3 節「先回りして足さない」。1 口 1 ファイルなので、別々のトラックが足しても衝突しない |
-| 2 | `Reader`・`Tx` から `Planning()`・`WritePlanning()` を外す。トラック F が、口だけの小さな PR で足す | スプリント・リリースの型が土台にない。3 節「その機能が使うものだけを足していく」 |
+| 2 | `Reader`・`Tx` から `Planning()`・`WritePlanning()` を外す。トラック F が、口だけの小さな PR で足す。(トラック F1 の計画の F1-1 で、口は足さないことにした。スプリントとリリースはワークスペースのログにあり、自動化と同じく `Changes()` で読み `WriteWorkspaces().Append` で書く) | スプリント・リリースの型が土台にない。3 節「その機能が使うものだけを足していく」 |
 | 3 | 種類ごとの Reader は、土台では `Get`(と、ワークスペース・メンバーの `List`)だけ。Writer は `Append(id, drafts...)` の 1 つだけで、usecase は `change.Draft`(種類・項目・値)を渡す。ID・操作・時刻・実行者・`prev` は Stores の実装が `change.Stamp` で付ける | `prev` は「書いた時点の先端」なので、ログを持つ側でしか決められない(保存形式「変更記録」) |
 | 4 | いまの値の決め方(保存形式の手順 0〜3)は `domain/change.Resolve` に置き、偽物と gitstore が同じ関数を呼ぶ。土台が扱う変更の種類は `create`・`set`・`add`・`remove` だけ。ほかの種類(`delete`・`restore`・`desc`・`comment` など)は行として保存・読み出しはできるが、Resolve は無視する。各トラックが種類を足す | 偽物と本物がずれないため(3 節「テストのための仕組み」)。3 節の「項目ごとの後勝ちで合わせる処理は infra/gitstore」は、2 つのクローンの log.jsonl を合わせる同期の処理(トラック C)を指す。1 つのログからいまの値を決める規則は入出力のない規則なので domain に置く |
 | 5 | `*.yaml` の行末の注釈(値の名前・表示の ID)は土台では書かない。アイテム・プロジェクトの注釈はトラック A、ワークスペースの値の注釈はトラック B が足す | 注釈は名前の変更のたびの作り直しを伴い、その操作を持つトラックが決めるのが速い |
