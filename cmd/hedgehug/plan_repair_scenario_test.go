@@ -62,7 +62,7 @@ func statusChange(from, to change.ID) change.Draft {
 	return change.NewSet("status", string(from), string(to))
 }
 
-// wantSprintState は、m のワークスペースのスプリント id の状態が want なことを確かめる。
+// wantSprintState は、m のワークスペースにスプリント id があり、その状態が want なことを確かめる。
 func wantSprintState(t *testing.T, m machine, id change.ID, want planning.SprintState) {
 	t.Helper()
 	err := m.stores.Read(t.Context(), m.id, func(r port.Reader) error {
@@ -71,10 +71,14 @@ func wantSprintState(t *testing.T, m machine, id change.ID, want planning.Sprint
 			return err
 		}
 		for _, s := range planning.FromLog(log).Sprints {
-			if s.ID == id && s.State != want {
-				t.Errorf("sprint %s on %s: state = %s, want %s", id, m.dir, s.State, want)
+			if s.ID == id {
+				if s.State != want {
+					t.Errorf("sprint %s on %s: state = %s, want %s", id, m.dir, s.State, want)
+				}
+				return nil
 			}
 		}
+		t.Errorf("sprint %s on %s: not found", id, m.dir)
 		return nil
 	})
 	if err != nil {
@@ -123,6 +127,7 @@ func TestRepairNoticeClosedSprint(t *testing.T) {
 	b.sync(t, remote)
 	const want = "スプリント「Sprint 1」は完了しているため、HH-2 をバックログに戻しました"
 	wantRepair(t, b, want)
+	wantSprintState(t, b, sprintOne, planning.Closed)
 	if s := b.item(t, apptest.SampleTask).Sprint; s != "" {
 		t.Errorf("HH-2 sprint on B = %q, want empty", s)
 	}
@@ -152,6 +157,9 @@ func TestRepairNoticeReopenStays(t *testing.T) {
 	titleAs(t, a, "taro", apptest.SampleEpic, "A の Epic")
 	a.sync(t, remote)
 	b.sync(t, remote)
+	if got := b.item(t, apptest.SampleEpic).Title; got != "A の Epic" {
+		t.Errorf("HH-1 title on B = %q, want the title A saved", got)
+	}
 	a.sync(t, remote)
 	for _, m := range []machine{a, b} {
 		it := m.item(t, apptest.SampleTask)
