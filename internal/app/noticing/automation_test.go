@@ -59,6 +59,16 @@ func TestAutomationFromStatusDelete(t *testing.T) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 
+	// することのステータスを書き換えた
+	action := reviewRule(statusReview)
+	action.TriggerStatus = apptest.SampleStatusDone
+	a := setup(t)
+	a.prepareReview(action)
+	a.judge(a.save(user("taro"), appendWorkspace(deleteReview(action)...)))
+	if n := a.wantOne(); n.Text != automation.RewrittenText("レビューへ", "Review", "すること", "InProgress") {
+		t.Errorf("notice = %+v", n)
+	}
+
 	// きっかけと同じステータスへの変更になって無効にした
 	disabled := reviewRule(apptest.SampleStatusInProgress)
 	g := setup(t)

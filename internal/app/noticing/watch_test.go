@@ -92,6 +92,18 @@ func TestWatchListProperty(t *testing.T) {
 	g.wantNone()
 }
 
+// 取り除いて足し直した複数の値は、並びが変わっても同じ値なので作らない。
+func TestWatchListSameSet(t *testing.T) {
+	const api change.ID = "01SAMPLEVAL000000000000012"
+	f := setup(t)
+	f.watchTask()
+	f.save(user("taro"), setTask(change.NewAdd("systems", apptest.SampleSystemWeb), change.NewAdd("systems", api)))
+	a := f.save(user("taro"), setTask(change.NewRemove("systems", apptest.SampleSystemWeb)))
+	b := f.save(user("taro"), setTask(change.NewAdd("systems", apptest.SampleSystemWeb)))
+	f.judge(a, b)
+	f.wantNone()
+}
+
 func TestWatchComment(t *testing.T) {
 	f := setup(t)
 	f.watchTask()
