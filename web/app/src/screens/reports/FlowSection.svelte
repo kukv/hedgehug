@@ -22,30 +22,37 @@
 
   let { report, today, thisYear, onlayers }: Props = $props();
 
-  // custom は、初めの期間でない期間(null は直近 21 日)。入力欄は、検査に落ちた値も残す。
-  let custom: { from: string; to: string } | null = $state(null);
+  // 表示している期間(読み込んだ report.period)が初めの期間でなければ、その期間を見出しの横に出す。
+  const custom = $derived.by(() => {
+    const first = defaultPeriod(today);
+    const p = report.period;
+    return p.from === first.from && p.to === first.to ? null : p;
+  });
+  // 入力欄は、検査に落ちた値も残す。読み込んだ期間が変わったときだけ合わせ直し、検査に落ちた入力があるあいだは触らない。
   let from = $state("");
   let to = $state("");
   let problem: string | null = $state(null);
-
-  // 初めの期間のあいだは、読み込んだ期間(日付が変わって読み直した期間も)に入力欄を合わせる。
+  let applied = "";
   $effect(() => {
-    if (custom !== null) return;
+    const key = `${report.period.from} ${report.period.to}`;
+    if (key === applied) return;
+    applied = key;
+    if (problem !== null) return;
     from = report.period.from;
     to = report.period.to;
-    problem = null;
   });
 
   async function change() {
     problem = checkPeriod(from, to, today);
     if (problem !== null) return;
     const first = defaultPeriod(today);
-    custom = from === first.from && to === first.to ? null : { from, to };
-    await reports.setPeriod(custom);
+    await reports.setPeriod(from === first.from && to === first.to ? null : { from, to });
   }
 
   async function reset() {
-    custom = null;
+    const first = defaultPeriod(today);
+    from = first.from;
+    to = first.to;
     problem = null;
     await reports.setPeriod(null);
   }

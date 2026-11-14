@@ -48,50 +48,52 @@
   {#if report.estimates.length === 0}
     <p class="note">{emptyEstimates}</p>
   {:else}
-    <table>
-      <caption>
-        見積もりと実績の表
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">アイテム</th>
-          <th scope="col">ポイント</th>
-          <th scope="col">見積もり時間</th>
-          <th scope="col">作業時間</th>
-          <th scope="col">差</th>
-          <th scope="col">時間/pt</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each report.estimates as r (r.id)}
-          {@const diff = diffText(r.diff)}
+    <div class="scroll">
+      <table>
+        <caption>
+          見積もりと実績の表
+        </caption>
+        <thead>
           <tr>
-            <td>
-              <code class="id">{r.display}</code>
-              <a
-                href={links.href(route(r))}
-                onclick={(e) => links.click(e, route(r), () => void detail.open(storeId, r.id))}
-                onauxclick={(e) => links.click(e, route(r))}
-                >{r.title}</a
-              >
-            </td>
-            <td>{pointsText(r.points)}</td>
-            <td>{hoursText(r.estimate)}</td>
-            <td>{hoursText(r.worked)}</td>
-            <td class:over={diff.over}>{diff.text}</td>
-            <td>{perPointText(r.perPoint)}</td>
+            <th scope="col">アイテム</th>
+            <th scope="col">ポイント</th>
+            <th scope="col">見積もり時間</th>
+            <th scope="col">作業時間</th>
+            <th scope="col">差</th>
+            <th scope="col">時間/pt</th>
           </tr>
-        {/each}
-        <tr class="total">
-          <th scope="row">合計</th>
-          <td>{pointsText(total.points)}</td>
-          <td>{hoursText(total.estimate)}</td>
-          <td>{hoursText(total.worked)}</td>
-          <td class:over={totalDiff.over}>{totalDiff.text}</td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each report.estimates as r (r.id)}
+            {@const diff = diffText(r.diff)}
+            <tr>
+              <td>
+                <code class="id">{r.display}</code>
+                <a
+                  href={links.href(route(r))}
+                  onclick={(e) => links.click(e, route(r), () => void detail.open(storeId, r.id))}
+                  onauxclick={(e) => links.click(e, route(r))}
+                  >{r.title}</a
+                >
+              </td>
+              <td>{pointsText(r.points)}</td>
+              <td>{hoursText(r.estimate)}</td>
+              <td>{hoursText(r.worked)}</td>
+              <td class:over={diff.over}>{diff.text}</td>
+              <td>{perPointText(r.perPoint)}</td>
+            </tr>
+          {/each}
+          <tr class="total">
+            <th scope="row">合計</th>
+            <td>{pointsText(total.points)}</td>
+            <td>{hoursText(total.estimate)}</td>
+            <td>{hoursText(total.worked)}</td>
+            <td class:over={totalDiff.over}>{totalDiff.text}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   {/if}
 </section>
 
@@ -112,6 +114,9 @@
     margin: 8px 0 0;
     font-size: 12.5px;
     color: var(--muted);
+  }
+  .scroll {
+    overflow-x: auto;
   }
   table {
     border-collapse: collapse;
