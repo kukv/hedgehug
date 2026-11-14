@@ -49,6 +49,16 @@ type InboxAction struct {
 	Result       string `json:"result" enum:",applied,kept" doc:"空でなければ、ボタンの代わりに結果を出す"`
 }
 
+// InboxOverwrite は、上書きの通知の「あなたの値 → 残った値」と「自分の値に戻す」ボタンの状態。
+type InboxOverwrite struct {
+	Mine    string `json:"mine"`
+	Kept    string `json:"kept"`
+	Visible bool   `json:"visible" doc:"ボタンを出す"`
+	Enabled bool   `json:"enabled" doc:"「自分の値に戻す」を押せる"`
+	Note    string `json:"note"`
+	Result  string `json:"result" enum:",applied" doc:"空でなければ、ボタンの代わりに結果を出す"`
+}
+
 // InboxRow は、受信箱の 1 行。
 type InboxRow struct {
 	ID     int64        `json:"id"`
@@ -61,6 +71,8 @@ type InboxRow struct {
 	Store  InboxStore   `json:"store"`
 	Target InboxTarget  `json:"target"`
 	Action *InboxAction `json:"action,omitempty" doc:"止まった通知だけ"`
+
+	Overwrite *InboxOverwrite `json:"overwrite,omitempty" doc:"上書きの行で、値を出す項目だけ"`
 }
 
 // InboxPage は、受信箱の一覧の 1 回分。
@@ -114,6 +126,11 @@ func toRow(r appinbox.Row) InboxRow {
 		row.Action = &InboxAction{
 			Status: string(a.Status), StatusName: a.StatusName, Visible: a.Visible, ApplyEnabled: a.ApplyEnabled,
 			KeepEnabled: a.KeepEnabled, Note: a.Note, Result: string(a.Result),
+		}
+	}
+	if o := r.Overwrite; o != nil {
+		row.Overwrite = &InboxOverwrite{
+			Mine: o.Mine, Kept: o.Kept, Visible: o.Visible, Enabled: o.Enabled, Note: o.Note, Result: string(o.Result),
 		}
 	}
 	return row

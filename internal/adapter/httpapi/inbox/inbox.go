@@ -108,6 +108,13 @@ func registerActions(api huma.API, svc appinbox.Service) {
 		func(ctx context.Context, in *noticeInput) (*struct{}, error) {
 			return nil, apierr.From(svc.Keep(ctx, port.NoticeID(in.Notice)))
 		})
+	huma.Register(api, huma.Operation{
+		OperationID: "revert-inbox-notice", Method: http.MethodPost, Path: base + "/{notice}/revert",
+		Summary: "上書きされた値を自分の値に戻す", DefaultStatus: http.StatusNoContent,
+	},
+		func(ctx context.Context, in *noticeInput) (*struct{}, error) {
+			return nil, apierr.From(svc.Revert(ctx, port.NoticeID(in.Notice)))
+		})
 }
 
 // tabOf は、7 つのタブのどれかを返す。ほかは 400(huma の検査は 422 になるため、手で確かめる)。

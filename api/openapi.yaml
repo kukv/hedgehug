@@ -996,6 +996,35 @@ components:
         - automation
         - repair
       type: object
+    InboxOverwrite:
+      additionalProperties: false
+      properties:
+        enabled:
+          description: 「自分の値に戻す」を押せる
+          type: boolean
+        kept:
+          type: string
+        mine:
+          type: string
+        note:
+          type: string
+        result:
+          description: 空でなければ、ボタンの代わりに結果を出す
+          enum:
+            - ""
+            - applied
+          type: string
+        visible:
+          description: ボタンを出す
+          type: boolean
+      required:
+        - mine
+        - kept
+        - visible
+        - enabled
+        - note
+        - result
+      type: object
     InboxPage:
       additionalProperties: false
       properties:
@@ -1036,6 +1065,9 @@ components:
             - overwrite
             - repair
           type: string
+        overwrite:
+          $ref: "#/components/schemas/InboxOverwrite"
+          description: 上書きの行で、値を出す項目だけ
         read:
           type: boolean
         reason:
@@ -4805,6 +4837,26 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 通知を既読・未読にする
+  /api/inbox/{notice}/revert:
+    post:
+      operationId: revert-inbox-notice
+      parameters:
+        - in: path
+          name: notice
+          required: true
+          schema:
+            format: int64
+            type: integer
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 上書きされた値を自分の値に戻す
   /api/locate:
     get:
       operationId: locate-item
