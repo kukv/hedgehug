@@ -117,12 +117,19 @@ export function createBulkDelete(deps: BulkDeleteDeps): BulkDelete {
       const o = opened;
       if (!o || get(state) === null || busy) return;
       busy = true;
+      // 実行中に cancel・開き直しがあったら、ダイアログの後始末は前の実行のものではないので触らない。
+      // 削除そのものは済んでいるので、トースト・パネル・読み直しは行う。
+      const gen = seq;
+      const closeDialog = () => {
+        if (gen !== seq) return;
+        state.set(null);
+        opened = null;
+      };
       let result: BulkDeleted;
       try {
         result = await deps.actions.bulkDelete(o.rows.map(ref));
       } catch (e) {
-        state.set(null);
-        opened = null;
+        closeDialog();
         failed(e);
         await deps.detail.reload();
         await o.after();
@@ -130,8 +137,8 @@ export function createBulkDelete(deps: BulkDeleteDeps): BulkDelete {
       } finally {
         busy = false;
       }
-      state.set(null);
-      opened = null;
+      closeDialog();
+      // 削除したアイテムは、削除した側の選択(o.selection)から外す。
       o.selection.clear();
       if (result.deleted > 0) deps.toasts.show(bulkDeletedText(result));
       if (inPanel(o.rows, false)) deps.detail.close();
