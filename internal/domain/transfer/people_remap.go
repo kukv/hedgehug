@@ -65,13 +65,12 @@ func RemapPeople(it item.Item, s workspace.Settings, people PeopleMap) []change.
 	}
 	r := &remapper{it: it, from: s, to: s, people: people}
 	r.assignee()
-	for _, p := range s.Properties {
-		if p.Builtin || p.Type != workspace.TypeUser {
-			continue
-		}
-		raw := it.Fields[p.ID]
-		if login, ok := loginOf(raw); ok && r.login(login) != login {
-			r.draft(change.NewSet(item.FieldKey(p.ID), raw, r.login(login)))
+	for _, id := range userProperties(s) {
+		raw := it.Fields[id]
+		if login, ok := loginOf(raw); ok {
+			if to := r.login(login); to != login {
+				r.draft(change.NewSet(item.FieldKey(id), raw, to))
+			}
 		}
 	}
 	r.watchers()

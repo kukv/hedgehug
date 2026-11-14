@@ -77,15 +77,24 @@ func TestRemapSettingsPeople(t *testing.T) {
 	s.Templates = []workspace.Template{{
 		ID: "T1", Values: map[change.ID]json.RawMessage{"assignee": rawStr("taro"), "FP5": rawStr("jiro")},
 		Steps: []workspace.TemplateStep{{ID: "S1", Assignee: "taro"}, {ID: "S2", Assignee: workspace.StepParent}},
+		Children: []workspace.TemplateChild{{
+			ID: "C1", Values: map[change.ID]json.RawMessage{"assignee": rawStr("hanako"), "FP5": rawStr("hanako")},
+			Steps: []workspace.TemplateStep{{ID: "S3", Assignee: "hanako"}},
+		}},
 	}}
+	s.Templates[0].Values["FP5"] = rawStr("taro")
 	rules := []automation.Rule{
 		{ID: "R1", Action: automation.ActionAssignee, Value: "taro"},
 		{ID: "R2", Action: automation.ActionAssignee, Value: "jiro"},
 	}
-	got := showDrafts(transfer.RemapSettingsPeople(s, rules, transfer.PeopleMap{"taro": "Taro", "jiro": "jiro"}))
+	got := showDrafts(transfer.RemapSettingsPeople(s, rules, transfer.PeopleMap{"taro": "Taro", "jiro": "jiro", "hanako": "Hanako"}))
 	want := []string{
+		`set templates/T1/values/FP5 "taro">"Taro"`,
 		`set templates/T1/values/assignee "taro">"Taro"`,
+		`set templates/T1/children/C1/values/FP5 "hanako">"Hanako"`,
+		`set templates/T1/children/C1/values/assignee "hanako">"Hanako"`,
 		`set templates/T1/steps/S1/assignee "taro">"Taro"`,
+		`set templates/T1/steps/S3/assignee "hanako">"Hanako"`,
 		`set rules/R1/value "taro">"Taro"`,
 	}
 	if !slices.Equal(got, want) {

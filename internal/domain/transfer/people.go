@@ -1,7 +1,6 @@
 package transfer
 
 import (
-	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -53,8 +52,7 @@ func mentioned(from workspace.Settings, items []item.Item, logs [][]change.Recor
 		}
 		count(it.Created.By)
 		for _, id := range userProps {
-			var login string
-			if json.Unmarshal(it.Fields[id], &login) == nil {
+			if login, ok := loginOf(it.Fields[id]); ok {
 				count(login)
 			}
 		}

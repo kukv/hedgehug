@@ -112,8 +112,8 @@ func (r *remapper) assignee() {
 
 // person は、ユーザー型の値(JSON の文字列)を移動先の綴りに置き換える。文字列でなければそのまま。
 func (r *remapper) person(raw json.RawMessage) any {
-	var login string
-	if json.Unmarshal(raw, &login) != nil {
+	login, ok := loginOf(raw)
+	if !ok {
 		return raw
 	}
 	return r.login(login)
