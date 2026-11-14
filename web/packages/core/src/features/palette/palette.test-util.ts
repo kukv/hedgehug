@@ -9,6 +9,7 @@ import type { Here } from "../items/createDefaults";
 import { item } from "../items/fixtures.test-util";
 import { settings } from "../items/settings.test-util";
 import type { Route } from "../router/route";
+import type { SearchResult } from "../search/types";
 import { createPalette, type Palette } from "./palette";
 import { createPlanRequest } from "./planRequest";
 
@@ -74,6 +75,41 @@ export interface Opts {
   mac?: boolean;
   // moved は、navigation.go の結果(「入力を破棄」の確認で断られたら false)。
   moved?: boolean;
+  // search は、検索の解析の応答(「このクエリで」。省くとキーなし・エラーなしで 0 件)。
+  search?: (query: string) => Promise<SearchResult>;
+}
+
+export const noKey: SearchResult = {
+  errors: [],
+  hasKey: false,
+  group: "",
+  deleted: false,
+  rows: [],
+};
+export function found(n: number): SearchResult {
+  const row = {} as SearchResult["rows"][number];
+  return { ...noKey, hasKey: true, rows: Array.from({ length: n }, () => row) };
+}
+
+// manualTimer は、fire を呼ぶまで動かさないタイマー(入力を待つ 150ms をテストから進める)。
+export function manualTimer() {
+  const pending = new Map<number, { fn: () => void; ms: number }>();
+  let next = 0;
+  return {
+    set: (fn: () => void, ms: number) => {
+      pending.set(++next, { fn, ms });
+      return next;
+    },
+    clear: (h: unknown) => void pending.delete(h as number),
+    // fire は、待っているものを呼ぶ(待ち時間を返す)。
+    fire(): number[] {
+      const all = [...pending.values()];
+      pending.clear();
+      for (const t of all) t.fn();
+      return all.map((t) => t.ms);
+    },
+    count: () => pending.size,
+  };
 }
 
 // Call は、呼ばれた口の記録。open は、呼ばれたときにパレットが開いていたか。
@@ -96,6 +132,8 @@ export async function setup(o: Opts = {}) {
     (...args: unknown[]) => {
       calls.push({ name, args, open: palette !== null && get(palette.state) !== null });
     };
+  const timer = manualTimer();
+  const searched: string[] = [];
   const sel = o.selected === undefined ? epic : o.selected;
   palette = createPalette({
     catalog,
@@ -152,8 +190,16 @@ export async function setup(o: Opts = {}) {
     route,
     openTab: rec("openTab"),
     now: () => new Date("2026-11-14T00:00:00Z"),
+    timer,
+    search: {
+      search: async (q) => {
+        searched.push(q);
+        return (o.search ?? (async () => noKey))(q);
+      },
+    },
+    openSearch: async (...a) => rec("openSearch")(...a),
   });
-  return { palette, calls, toasts, route, planRequest, catalog };
+  return { palette, calls, toasts, route, planRequest, catalog, timer, searched };
 }
 
 // labels は、行を文字列にする(見出しは「# 」、押せない行は「~ 」、無効の候補は「x 」を頭に付ける)。

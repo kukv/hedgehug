@@ -1,5 +1,7 @@
+import { createSearchPort } from "@hedgehug/api";
 import { createPalette, createPlanRequest, createSelection } from "@hedgehug/core";
 import { hereOf } from "./here";
+import { search } from "./search";
 import { isMac } from "./tab";
 import {
   catalog,
@@ -16,7 +18,7 @@ import {
   workspacesPort,
 } from "./wire";
 import { itemTransfer } from "./wireActions";
-import { palettePort } from "./wireBase";
+import { palettePort, timer } from "./wireBase";
 
 // コマンドパレット(02「コマンドパレット」、A5c)。wire.ts が 300 行なので、ここで組み立てる。
 
@@ -59,4 +61,11 @@ export const palette = createPalette({
   route: navigation.route,
   openTab: (route) => links.openTab(route),
   now: () => new Date(),
+  search: createSearchPort(),
+  timer,
+  // 検索の画面と同じ search で絞り込みを入れ替えてから開く(E1-21)。
+  openSearch: async (query) => {
+    await search.replaceQuery(query);
+    await navigation.go({ name: "search" });
+  },
 });

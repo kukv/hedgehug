@@ -3,7 +3,7 @@ import { get } from "../../reactive/store";
 import { flush, gate, item } from "../items/fixtures.test-util";
 import { settings } from "../items/settings.test-util";
 import { paletteFooter } from "./palette";
-import { index, labels, named, pick, setup } from "./palette.test-util";
+import { found, index, labels, named, noKey, pick, setup } from "./palette.test-util";
 
 // パレットの状態(02「コマンドパレット」、A5c-2・A5c-9・A5c-15・A5c-16)。
 
@@ -11,6 +11,7 @@ const commands = [
   "# コマンド",
   "新規作成",
   "受信箱を開く",
+  "検索を開く",
   "設定を開く",
   "すべての Store を同期",
   "ワークスペースを追加",
@@ -195,5 +196,84 @@ describe("createPalette", () => {
     g.release();
     await opened;
     expect(get(palette.state)).toBeNull();
+  });
+
+  describe("このクエリで", () => {
+    test("150ms 待って解析し、キーがありエラーがなければ「検索で開く」を件数のヒントつきで出す。選ぶと閉じて openSearch", async () => {
+      const { palette, calls, timer, searched } = await setup({ search: async () => found(3) });
+      await palette.open();
+      palette.input("kind:bug");
+      expect(searched).toEqual([]);
+      expect(timer.fire()).toEqual([150]);
+      await flush();
+      expect(searched).toEqual(["kind:bug"]);
+      expect(labels(palette).slice(0, 2)).toEqual(["# このクエリで", "検索で開く"]);
+      const row = get(palette.state)?.rows[1];
+      expect(row?.kind === "candidate" && row.c.hint).toBe("3 件");
+      await pick(palette, "検索で開く");
+      expect(named(calls, "openSearch")).toEqual([
+        { name: "openSearch", args: ["kind:bug"], open: false },
+      ]);
+      expect(get(palette.state)).toBeNull();
+    });
+
+    test("キーなし・エラーのときは群を出さない", async () => {
+      const a = await setup({ search: async () => noKey });
+      await a.palette.open();
+      a.palette.input("foo");
+      a.timer.fire();
+      await flush();
+      expect(labels(a.palette)).not.toContain("# このクエリで");
+      const b = await setup({
+        search: async () => ({ ...found(1), errors: ["「status:」に値がありません"] }),
+      });
+      await b.palette.open();
+      b.palette.input("status:");
+      b.timer.fire();
+      await flush();
+      expect(labels(b.palette)).not.toContain("# このクエリで");
+    });
+
+    test("入力が変わったあとに返った古い応答は群にしない。入力のたびに待ち直す", async () => {
+      const g = gate();
+      const { palette, timer } = await setup({
+        search: (q) => (q === "kind:bug" ? g.wait.then(() => found(2)) : Promise.resolve(noKey)),
+      });
+      await palette.open();
+      palette.input("kind:bug");
+      timer.fire();
+      palette.input("kind:bu");
+      expect(timer.count()).toBe(1);
+      g.release();
+      await flush();
+      expect(labels(palette)).not.toContain("# このクエリで");
+    });
+
+    test("入力を変えると前の群を消す。閉じたあとの応答は無視する", async () => {
+      const { palette, timer } = await setup({ search: async () => found(1) });
+      await palette.open();
+      palette.input("kind:bug");
+      timer.fire();
+      await flush();
+      expect(labels(palette)).toContain("# このクエリで");
+      palette.input("kind:bugs");
+      expect(labels(palette)).not.toContain("# このクエリで");
+      palette.close();
+      expect(timer.count()).toBe(0);
+    });
+
+    test("アイテムの候補は群があってもなくても変わらない", async () => {
+      const withGroup = await setup({ search: async () => found(1) });
+      await withGroup.palette.open();
+      withGroup.palette.input("認証");
+      withGroup.timer.fire();
+      await flush();
+      const without = await setup();
+      await without.palette.open();
+      without.palette.input("認証");
+      expect(
+        labels(withGroup.palette).filter((l) => l !== "# このクエリで" && l !== "検索で開く"),
+      ).toEqual(labels(without.palette));
+    });
   });
 });
