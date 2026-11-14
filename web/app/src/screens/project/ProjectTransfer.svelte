@@ -24,9 +24,10 @@
     $section?.project.storeId === p.storeId && $section.project.id === p.id ? $section : null,
   );
 
-  // 候補は、別のプロジェクトになったときと、閲覧のみかが変わったときだけ読み直す(p は読み直しのたびに
-  // 新しいオブジェクトになるので、値で比べる $derived を見る)。
-  const projectKey = $derived(`${p.storeId}/${p.id}`);
+  // 候補は、別のプロジェクトになったときと、ワークスペースが変わったとき(同じ Store の中で移すと内部 ID も
+  // 画面も同じまま、いまのワークスペースが候補から外れる)と、閲覧のみかが変わったときだけ読み直す
+  // (p は読み直しのたびに新しいオブジェクトになるので、値で比べる $derived を見る)。
+  const projectKey = $derived(`${p.storeId}/${p.id}/${p.workspaceId}`);
   const readOnly = $derived(view.store.readOnly);
   $effect(() => {
     void projectKey;
