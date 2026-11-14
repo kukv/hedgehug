@@ -2018,7 +2018,7 @@ export interface SearchResult {
   deleted: boolean;
   /** クエリのエラー(1 語 1 行) */
   errors: string[];
-  /** group: の値(グループ分けは画面が行う)。なければ空 */
+  /** group: の値(解析したもの)。使ったまとめ方は groupBy。なければ空 */
   group: string;
   /** 使ったまとめ方。なければ空 */
   groupBy: string;

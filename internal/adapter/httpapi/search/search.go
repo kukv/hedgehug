@@ -84,7 +84,7 @@ type SearchRow struct {
 type SearchResult struct {
 	Errors  []string    `json:"errors" nullable:"false" doc:"クエリのエラー(1 語 1 行)"`
 	HasKey  bool        `json:"hasKey" doc:"キーのある語が 1 つ以上あるか"`
-	Group   string      `json:"group" doc:"group: の値(グループ分けは画面が行う)。なければ空"`
+	Group   string      `json:"group" doc:"group: の値(解析したもの)。使ったまとめ方は groupBy。なければ空"`
 	Deleted bool        `json:"deleted" doc:"is:deleted の検索か"`
 	Rows    []SearchRow `json:"rows" nullable:"false"`
 

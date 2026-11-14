@@ -2934,7 +2934,7 @@ components:
             type: string
           type: array
         group:
-          description: "group: の値(グループ分けは画面が行う)。なければ空"
+          description: "group: の値(解析したもの)。使ったまとめ方は groupBy。なければ空"
           type: string
         groupBy:
           description: 使ったまとめ方。なければ空

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -229,7 +230,7 @@ type tableBody struct {
 		Rows  []int
 	}
 	Rows []struct {
-		Kind, Start, Created, Updated string
+		Kind, Title, Start, Created, Updated string
 		Systems, Unused, Removed      []string
 		Estimate                      *float64
 		Sprint, Release               string
@@ -268,6 +269,21 @@ func TestSearchAPITable(t *testing.T) {
 		if got.Columns[i].Key != k {
 			t.Errorf("columns[%d] = %q, want %q", i, got.Columns[i].Key, k)
 		}
+	}
+}
+
+// 列見出しの並べ替えはタイトルの降順で並べる。sort が null の本文も通る。
+func TestSearchAPISort(t *testing.T) {
+	got, _ := tableOf(t, newAPI(t), map[string]any{"query": "", "sort": map[string]any{"key": "title", "desc": true}})
+	titles := make([]string, 0, len(got.Rows))
+	for _, r := range got.Rows {
+		titles = append(titles, r.Title)
+	}
+	if len(titles) < 2 || !slices.IsSortedFunc(titles, func(a, b string) int { return strings.Compare(b, a) }) {
+		t.Errorf("タイトルの降順でない: %v", titles)
+	}
+	if got, _ := tableOf(t, newAPI(t), map[string]any{"query": "", "sort": nil}); len(got.Rows) == 0 {
+		t.Error("sort が null で行がない")
 	}
 }
 
