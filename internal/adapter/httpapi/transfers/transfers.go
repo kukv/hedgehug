@@ -3,6 +3,7 @@ package transfers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -139,4 +140,16 @@ func toPreview(p apptransfers.Preview) TransferPreview {
 		out.Replacements = append(out.Replacements, row)
 	}
 	return out
+}
+
+// moveError は、移動の失敗を応答の誤りにする。取り消しもできなかった(両方の Store に残る)は、送れなかったより先に見て 409、
+// 送れなかったは 422(どちらも文の全文)、それ以外は apierr.From(A5a-12・A5a-19)。
+func moveError(err error) error {
+	if ue := (*apptransfers.UndoError)(nil); errors.As(err, &ue) {
+		return huma.Error409Conflict(ue.Error())
+	}
+	if se := (*apptransfers.SendError)(nil); errors.As(err, &se) {
+		return huma.Error422UnprocessableEntity(se.Error())
+	}
+	return apierr.From(err)
 }

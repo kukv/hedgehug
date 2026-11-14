@@ -25,6 +25,11 @@ func TestWorkspaceTransferTargets(t *testing.T) {
 	if res.Code != 200 || strings.TrimSpace(res.Body.String()) != `{"targets":[],"hiddenOnly":false}` {
 		t.Errorf("0 件: %d %s", res.Code, res.Body)
 	}
+	e.targets.Targets[0].Hidden = true
+	res = e.api.Get("/api/stores/S2/workspaces/" + string(apptest.SampleTeamWorkspace) + "/transfer-targets")
+	if res.Code != 200 || strings.TrimSpace(res.Body.String()) != `{"targets":[],"hiddenOnly":true}` {
+		t.Errorf("非表示の Store だけ: %d %s", res.Code, res.Body)
+	}
 	if res := e.api.Get("/api/stores/S1/workspaces/01NOSUCHWORKSPACE000000/transfer-targets"); res.Code != 404 {
 		t.Errorf("ないワークスペース: %d", res.Code)
 	}
@@ -96,7 +101,7 @@ func TestTransferWorkspaceWhoseUndoFailed(t *testing.T) {
 	e.failS1 = true
 	e.deliver.undo = syncstatus.Unreachable
 	res := e.api.Post(webWorkspace+"/transfer", map[string]any{"toStore": "S2"})
-	if res.Code != 409 || !strings.Contains(res.Body.String(), "取り消しもできませんでした") {
+	if res.Code != 409 || !strings.Contains(res.Body.String(), `"detail":"ワークスペース「Web」を team へ移しましたが、移動元から取り除けず、取り消しもできませんでした。どちらかを削除してください"`) {
 		t.Errorf("%d %s", res.Code, res.Body)
 	}
 }

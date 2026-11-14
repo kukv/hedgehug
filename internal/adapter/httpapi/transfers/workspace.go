@@ -2,7 +2,6 @@ package transfers
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -124,15 +123,8 @@ func registerWorkspace(api huma.API, svc apptransfers.Service) {
 	huma.Register(api, huma.Operation{OperationID: "transfer-workspace", Method: http.MethodPost, Path: "/api/stores/{store}/workspaces/{workspace}/transfer", Summary: "ワークスペースを中身ごと別の Store へ移す"},
 		func(ctx context.Context, in *workspaceTransferInput) (*workspaceTransferOutput, error) {
 			m, err := svc.MoveWorkspace(ctx, port.StoreID(in.Store), workspace.ID(in.Workspace), port.StoreID(in.Body.ToStore))
-			// 取り消しもできなかった(両方の Store に残る)は、送れなかったより先に見る。
-			if ue := (*apptransfers.UndoError)(nil); errors.As(err, &ue) {
-				return nil, huma.Error409Conflict(ue.Error())
-			}
-			if se := (*apptransfers.SendError)(nil); errors.As(err, &se) {
-				return nil, huma.Error422UnprocessableEntity(se.Error())
-			}
 			if err != nil {
-				return nil, apierr.From(err)
+				return nil, moveError(err)
 			}
 			return &workspaceTransferOutput{Body: WorkspaceTransferResult{ToStore: string(m.ToStore), ToStoreName: m.ToStoreName, WorkspaceID: string(m.Workspace), Prefix: m.Prefix}}, nil
 		})
