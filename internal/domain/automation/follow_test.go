@@ -32,6 +32,18 @@ func TestStatusDeleteRewritesRules(t *testing.T) {
 	}
 }
 
+func TestStatusDeleteAlreadyDisabledRuleIsNotReportedDisabled(t *testing.T) {
+	r := rule("R1", automation.TriggerStatus, "TODO", automation.ActionStatus, "REVIEW")
+	r.Enabled = false
+	ds, changes := automation.StatusDeleteDrafts([]automation.Rule{r}, "REVIEW", "TODO")
+	if len(changes) != 1 || changes[0].Disabled || changes[0].Rule.Enabled {
+		t.Errorf("changes = %+v", changes)
+	}
+	if len(ds) != 1 { // value だけ。enabled の行は書かない
+		t.Errorf("drafts = %+v", ds)
+	}
+}
+
 func statusDeleteRows(extra ...change.Draft) []change.Record {
 	ds := append([]change.Draft{change.NewDelete("statuses/s1")}, extra...)
 	return change.Stamp(nil, ds, change.Meta{Op: "OP1"}, func() change.ID { return "R" })

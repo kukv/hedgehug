@@ -29,8 +29,8 @@ func StatusDeleteDrafts(rules []Rule, id, repl change.ID) ([]change.Draft, []Rul
 		if part == "" {
 			continue
 		}
-		disabled := CheckSameStatus(n) != nil
-		if disabled {
+		disabled := CheckSameStatus(n) != nil && r.Enabled // もともと有効で、今回無効にしたときだけ
+		if CheckSameStatus(n) != nil {
 			n.Enabled = false
 		}
 		ds = append(ds, Drafts(r, n)...)
