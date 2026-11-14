@@ -50,7 +50,8 @@ func (m *crossWorkspaceMove) undo(tx port.Tx) error {
 	return tx.WriteMembers().Append(members...)
 }
 
-// removeProjectFolders は、プロジェクト p の下のアイテム(削除済みを含む)と p のフォルダを消す。
+// removeProjectFolders は、プロジェクト p の下のアイテム(削除済みを含む。tx から読む)と p のフォルダを消す。p のフォルダが
+// なければ(保存されなかった)飛ばす。
 func removeProjectFolders(tx port.Tx, p project.ID) error {
 	items, err := tx.Items().List(p)
 	if err != nil {
@@ -61,7 +62,10 @@ func removeProjectFolders(tx port.Tx, p project.ID) error {
 			return err
 		}
 	}
-	return tx.WriteProjects().Remove(p)
+	if err := tx.WriteProjects().Remove(p); err != nil && !errors.Is(err, port.ErrNotFound) {
+		return err
+	}
+	return nil
 }
 
 // logMark は、1 つのログの行数と最後の行の id。

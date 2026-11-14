@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 )
 
@@ -56,19 +57,42 @@ func (s Service) rollback(ctx context.Context, m *crossMove, cause error) error 
 		UndoError{Old: m.src.set.Root.DisplayID(m.src.ws.Prefix), NewDisplay: m.moved.Display})
 }
 
-// undo は、戻しの保存の fn。足した人を外す行を決めてから、写したフォルダを消す(消すと、移動の操作を引く moved_in の行も
-// 読めなくなる)。保存されなかった(port.ErrSaveNotDiscarded で、捨てられていた)フォルダは飛ばす。
+// undo は、戻しの保存の fn。足した人を外す行を決めてから、写したフォルダと、移動先でいま移したアイテムの下にあるもの
+// (移動のあとに移動先で作られたものも)のフォルダを消す(消すと、移動の操作を引く moved_in の行も読めなくなる)。
+// 保存されなかった(port.ErrSaveNotDiscarded で、捨てられていた)フォルダは飛ばす。
 func (m *crossMove) undo(tx port.Tx) error {
 	ds, err := m.unjoin(tx)
 	if err != nil {
 		return err
 	}
-	for _, it := range m.src.items() {
-		if err := tx.WriteItems().Remove(it.ID); err != nil && !errors.Is(err, port.ErrNotFound) {
+	ids, err := m.landed(tx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := tx.WriteItems().Remove(id); err != nil && !errors.Is(err, port.ErrNotFound) {
 			return err
 		}
 	}
 	return tx.WriteMembers().Append(ds...)
+}
+
+// landed は、戻しで消すアイテム: prepare で読んだ移すものと、移動先のプロジェクトでいま移したアイテムの下にあるもの
+// (削除済みを含む。tx から読む)。同じものは 1 度だけ。
+func (m *crossMove) landed(tx port.Tx) ([]item.ID, error) {
+	all, err := tx.Items().List(m.in.ToProject)
+	if err != nil {
+		return nil, err
+	}
+	var ids []item.ID
+	seen := map[item.ID]bool{}
+	for _, it := range append(m.src.items(), item.Descendants(m.src.set.Root.ID, all)...) {
+		if !seen[it.ID] {
+			seen[it.ID] = true
+			ids = append(ids, it.ID)
+		}
+	}
+	return ids, nil
 }
 
 // unjoin は、この移動で足した人を外す行と、書いた表示名をログイン名に戻す行。移動の操作は、移動先の移したアイテムの最後の
