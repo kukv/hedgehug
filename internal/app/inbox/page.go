@@ -58,26 +58,38 @@ func (s Service) Page(ctx context.Context, tab Tab, before *port.NoticeCursor) (
 	return p, nil
 }
 
-// rows は、通知を行にする。Store ごとに 1 回だけ読む。
+// rows は、通知を行にする。通知のある Store だけ、Store ごとに 1 回読む。
 func (s Service) rows(ctx context.Context, infos []port.StoreInfo, notices []port.NoticeRow) ([]Row, error) {
 	out := make([]Row, len(notices))
+	has := make(map[port.StoreID]bool, len(infos))
+	for _, n := range notices {
+		has[n.Store] = true
+	}
 	for _, info := range infos {
+		if !has[info.ID] {
+			continue
+		}
 		err := s.Stores.Read(ctx, info.ID, func(r port.Reader) error {
-			for k, n := range notices {
-				if n.Store != info.ID {
-					continue
-				}
-				row, err := resolve(r, info, n)
-				if err != nil {
-					return err
-				}
-				out[k] = row
-			}
-			return nil
+			return fill(r, info, notices, out)
 		})
 		if err != nil {
 			return nil, err
 		}
 	}
 	return out, nil
+}
+
+// fill は、info の Store の通知を行にして out の同じ位置に入れる。
+func fill(r port.Reader, info port.StoreInfo, notices []port.NoticeRow, out []Row) error {
+	for k, n := range notices {
+		if n.Store != info.ID {
+			continue
+		}
+		row, err := resolve(r, info, n)
+		if err != nil {
+			return err
+		}
+		out[k] = row
+	}
+	return nil
 }

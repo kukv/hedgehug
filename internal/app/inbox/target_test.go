@@ -83,6 +83,30 @@ func TestTargetRuleNotice(t *testing.T) {
 	}
 }
 
+func TestActionReadOnlyBeforeDeletedItem(t *testing.T) {
+	f := setup(t)
+	f.add(t, stopped())
+	f.list.Stores[0].ReadOnly = true
+	if err := apptest.DeleteItems(t.Context(), f.stores, s1, apptest.SampleTask); err != nil {
+		t.Fatal(err)
+	}
+	want := inbox.Action{Status: apptest.SampleStatusDone, StatusName: "Done", Visible: true, Note: "閲覧のみの Store です"}
+	if a := f.first(t).Action; a == nil || *a != want {
+		t.Errorf("action = %+v, want %+v", a, want)
+	}
+}
+
+func TestActionHiddenWhenItemMoved(t *testing.T) {
+	f := setup(t)
+	n := stopped()
+	n.Item, n.Display = "01SAMPLEIT0000000000000009", "HH-9"
+	f.add(t, n)
+	r := f.first(t)
+	if r.Target.Kind != inbox.TargetMoved || r.Action == nil || r.Action.Visible {
+		t.Errorf("target = %+v, action = %+v, want moved and not visible", r.Target, r.Action)
+	}
+}
+
 func TestActionStates(t *testing.T) {
 	cases := []struct {
 		name    string

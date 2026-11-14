@@ -184,6 +184,20 @@ func TestPagePrunesPurged(t *testing.T) {
 	}
 }
 
+func TestPagePrunesPurgedProject(t *testing.T) {
+	f := setup(t)
+	byProject := changed("project")
+	byProject.Item = apptest.SampleProject
+	f.add(t, changed("task"), byProject)
+	f.stores.AddPurged(s1, port.Purged{Entity: "project", Target: apptest.SampleProject, Display: "ログイン"})
+	if got := texts(f.page(t, inbox.TabAll, nil)); len(got) != 1 || got[0] != "task" {
+		t.Errorf("rows = %v, want [task]", got)
+	}
+	if _, err := f.book.Get(t.Context(), 2); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("purged row: err = %v, want port.ErrNotFound", err)
+	}
+}
+
 func TestCountsPrunesPurged(t *testing.T) {
 	f := setup(t)
 	f.add(t, changed("task"), stopped())
