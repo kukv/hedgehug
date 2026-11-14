@@ -25,6 +25,7 @@
 
   const t = $derived(row.target);
   const link = $derived(linkOf(row));
+  const gone = $derived(goneTextOf(t.kind));
   const member = $derived(members?.find((m) => m.login.toLowerCase() === row.sender.toLowerCase()));
   // 差出人がなければ「hedgehug」、メンバーにいなければ「不明なユーザー」と中身のないアバター(01)。
   const who = $derived(
@@ -48,8 +49,8 @@
           title={row.store.name}
         ></i>
       {/snippet}
-      {#if goneTextOf(t.kind)}
-        <span class="gone">{goneTextOf(t.kind)}</span>
+      {#if gone}
+        <span class="gone">{gone}</span>
       {:else if link}
         <a
           class="target"

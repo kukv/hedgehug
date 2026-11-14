@@ -107,7 +107,11 @@ func projectTarget(r port.Reader, n port.NoticeRow) (Target, error) {
 	case p.Deleted != nil:
 		return Target{Kind: TargetDeletedProject, Project: n.Project}, nil
 	}
-	ws, err := r.Workspaces().Get(p.Place.Workspace)
+	// ワークスペースが削除済みなら、その中のプロジェクトも削除済みとして出す
+	ws, err := port.LiveWorkspace(r, p.Place.Workspace)
+	if errors.Is(err, port.ErrNotFound) {
+		return Target{Kind: TargetDeletedProject, Project: n.Project}, nil
+	}
 	if err != nil {
 		return Target{}, err
 	}

@@ -102,6 +102,17 @@ func TestTargetDeletedProject(t *testing.T) {
 	}
 }
 
+func TestTargetProjectOfDeletedWorkspace(t *testing.T) {
+	f := setup(t)
+	f.add(t, assigned())
+	if err := apptest.DeleteWorkspace(t.Context(), f.stores, s1, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.first(t).Target; got.Kind != inbox.TargetDeletedProject || got.Project != apptest.SampleProject {
+		t.Errorf("target = %+v, want deleted_project", got)
+	}
+}
+
 func TestTargetMovedProject(t *testing.T) {
 	f := setup(t)
 	n := assigned()
