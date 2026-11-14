@@ -1,15 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { get } from "../../reactive/store";
 import { found } from "../palette/palette.test-util";
 import { createChangeAll } from "./changeAll";
+import { result, setup as setupSearch } from "./fixtures.test-util";
 import type { SearchResult } from "./types";
 
-function setup(result: SearchResult | null) {
+function setup(res: SearchResult | null) {
   const calls: string[] = [];
   const set = vi.fn((rows: unknown[]) => calls.push(`set:${rows.length}`));
   const changeAll = createChangeAll({
-    openSearch: async (q) => void calls.push(`open:${q}`),
+    openSearch: async (q) => {
+      calls.push(`open:${q}`);
+      return true;
+    },
     settled: async () => void calls.push("settled"),
-    result: () => result,
+    state: () => ({ result: res, resultQuery: res ? "kind:bug" : null }),
     selection: { set },
     openBulkChange: async () => void calls.push("bulk"),
   });
@@ -30,10 +35,79 @@ describe("createChangeAll", () => {
     await a.changeAll("kind:bug");
     expect(a.calls).toEqual(["open:kind:bug", "settled", "set:0"]);
     const b = setup({ ...found(0), errors: ["x"] });
-    await b.changeAll("status:");
-    expect(b.calls).toEqual(["open:status:", "settled", "set:0"]);
-    const c = setup(null);
-    await c.changeAll("kind:bug");
-    expect(c.calls).toEqual(["open:kind:bug", "settled", "set:0"]);
+    await b.changeAll("kind:bug");
+    expect(b.calls).toEqual(["open:kind:bug", "settled", "set:0"]);
+  });
+});
+
+// 検索の流れ(createSearch)と組み合わせて、結果が求めたクエリへの答えでないときは何もしないことを確かめる。
+describe("createChangeAll with createSearch", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function withSearch(moved = true) {
+    const t = setupSearch();
+    const set = vi.fn();
+    const bulk = vi.fn(async () => {});
+    const changeAll = createChangeAll({
+      openSearch: async (q) => {
+        t.s.prepareQuery(q);
+        if (!moved) t.s.cancelPrepare();
+        return moved;
+      },
+      settled: () => t.s.settled(),
+      state: () => get(t.s.state),
+      selection: { set },
+      openBulkChange: bulk,
+    });
+    return { ...t, set, bulk, changeAll };
+  }
+
+  it("does nothing when the search fails and the previous rows are left", async () => {
+    const t = withSearch();
+    await t.s.replaceQuery("old");
+    t.search.mockRejectedValueOnce(new Error("down"));
+    const running = t.changeAll("kind:bug");
+    await t.s.open();
+    await running;
+    expect(get(t.s.state).result?.rows[0]?.itemId).toBe("old");
+    expect(t.set).not.toHaveBeenCalled();
+    expect(t.bulk).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the move is declined, and a later open does not open the dialog", async () => {
+    const t = withSearch(false);
+    await t.changeAll("kind:bug");
+    await t.s.open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.set).not.toHaveBeenCalled();
+    expect(t.bulk).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the query is replaced while waiting", async () => {
+    const t = withSearch();
+    let resolve: (r: SearchResult) => void = () => {};
+    t.search.mockImplementationOnce(() => new Promise<SearchResult>((r) => (resolve = r)));
+    const running = t.changeAll("kind:bug");
+    const opening = t.s.open();
+    await vi.advanceTimersByTimeAsync(0);
+    t.s.setQuery("other");
+    resolve(result("kind:bug"));
+    await opening;
+    await vi.advanceTimersByTimeAsync(150);
+    await running;
+    expect(get(t.s.state).result?.rows[0]?.itemId).toBe("other");
+    expect(t.set).not.toHaveBeenCalled();
+    expect(t.bulk).not.toHaveBeenCalled();
+  });
+
+  it("sets resultQuery to the query the result answers", async () => {
+    const t = withSearch();
+    const running = t.changeAll("kind:bug");
+    await t.s.open();
+    await running;
+    expect(get(t.s.state).resultQuery).toBe("kind:bug");
+    expect(t.set).toHaveBeenCalledTimes(1);
+    expect(t.bulk).toHaveBeenCalledTimes(1);
   });
 });

@@ -157,20 +157,23 @@ export function createCandidates(changed: (source: "items" | "members") => void)
 
 // openSearch は、パレットの「検索で開く」(E1-21)。検索は 1 回だけ: 検索の画面にいればその場で検索し、ほかの画面からは
 // 絞り込みを書いておき、開いた画面の open が検索する(同じ画面へは移らず open も呼ばれない)。
-export async function openSearch(query: string): Promise<void> {
+// 移れたかを返す。「入力を破棄」の確認で断られたら、検索の準備を取り消して false。
+export async function openSearch(query: string): Promise<boolean> {
   if (get(navigation.route).name === "search") {
     await search.replaceQuery(query);
-    return;
+    return true;
   }
   search.prepareQuery(query);
-  await navigation.go({ name: "search" });
+  const moved = await navigation.go({ name: "search" });
+  if (!moved) search.cancelPrepare();
+  return moved;
 }
 
 // bulkChangeAll は、パレットの「{N} 件をまとめて変更…」(E2a-19)。
 export const bulkChangeAll = createChangeAll({
   openSearch,
   settled: () => search.settled(),
-  result: () => get(search.state).result,
+  state: () => get(search.state),
   selection: searchSelection,
   openBulkChange: () => bulkChange.open(searchSelection, { after: () => search.reload() }),
 });

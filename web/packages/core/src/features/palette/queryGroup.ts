@@ -13,8 +13,8 @@ export const queryWait = 150;
 export interface QueryGroupDeps {
   search: Pick<SearchPort, "search">;
   timer: Timer;
-  // openSearch は、検索の画面の絞り込みを入れ替えて /search を開く。
-  openSearch(query: string): Promise<void>;
+  // openSearch は、検索の画面の絞り込みを入れ替えて /search を開き、移れたかを返す。
+  openSearch(query: string): Promise<boolean>;
   // bulkChangeAll は、検索をテーブルで開き、すべての行を選んで、一括変更のダイアログを開く(E2a-19)。
   bulkChangeAll(query: string): Promise<void>;
   // close は、パレットを閉じる。changed は、応答が着いて群が変わったとき。

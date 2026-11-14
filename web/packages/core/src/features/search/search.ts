@@ -17,6 +17,8 @@ export interface SearchState {
   table: TableSettings;
   // result は、まだ一度も検索できていないあいだ null。検索に失敗したときは前の結果を残す。
   result: SearchResult | null;
+  // resultQuery は、いまの result がどの絞り込みへの答えか(result が null なら null)。
+  resultQuery: string | null;
   loading: boolean;
 }
 
@@ -31,6 +33,8 @@ export interface Search {
   // prepareQuery は、絞り込みを入れ替えて画面の状態に書くだけで、検索しない。ほかの画面から検索の画面を開くとき、
   // 開いた画面の open が 1 回だけ検索する。
   prepareQuery(text: string): void;
+  // cancelPrepare は、prepareQuery の印を取り消す(検索の画面へ移れなかったとき)。settled を待つものを解く。
+  cancelPrepare(): void;
   // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
   reload(): Promise<void>;
   // setTable は、テーブルの設定を画面の状態に書く。並べ替えかグループが変わったときだけ、待たずに検索する。
@@ -55,6 +59,7 @@ export function createSearch(deps: SearchDeps): Search {
     query: "",
     table: defaultTable,
     result: null,
+    resultQuery: null,
     loading: false,
   });
   // runs は、古い応答を捨てるための通し番号。pending は、待っている検索の印。
@@ -91,8 +96,8 @@ export function createSearch(deps: SearchDeps): Search {
     state.update((s) => ({ ...s, loading: true }));
     let result: SearchResult | null = null;
     let failure: Error | null = null;
+    const { query, table } = get(state);
     try {
-      const { query, table } = get(state);
       result = await deps.port.search(query, tableRequest(table));
     } catch (e) {
       failure = e instanceof Error ? e : new Error(String(e));
@@ -102,7 +107,12 @@ export function createSearch(deps: SearchDeps): Search {
       return;
     }
     flight = 0;
-    state.update((s) => ({ ...s, result: result ?? s.result, loading: false }));
+    state.update((s) => ({
+      ...s,
+      result: result ?? s.result,
+      resultQuery: result ? query : s.resultQuery,
+      loading: false,
+    }));
     if (result) deps.selection?.prune(selectable(result.rows));
     release();
     if (failure && report) deps.toasts.show(failure.message, { error: true });
@@ -154,6 +164,10 @@ export function createSearch(deps: SearchDeps): Search {
       cancel();
       put(text);
       prepared = true;
+    },
+    cancelPrepare() {
+      prepared = false;
+      release();
     },
     reload() {
       cancel();

@@ -63,10 +63,11 @@ export interface PaletteDeps extends Omit<ActionDeps, "close"> {
   route: Readable<Route>;
   openTab(route: Route): void;
   now(): Date;
-  // search・timer は「このクエリで」の解析(150ms 待つ)。openSearch は、検索の絞り込みを入れ替えて /search を開く。
+  // search・timer は「このクエリで」の解析(150ms 待つ)。openSearch は、検索の絞り込みを入れ替えて /search を開き、
+  // 移れたかを返す。
   search: Pick<SearchPort, "search">;
   timer: Timer;
-  openSearch(query: string): Promise<void>;
+  openSearch(query: string): Promise<boolean>;
   // bulkChangeAll は、「{N} 件をまとめて変更…」(E2a-19)。
   bulkChangeAll(query: string): Promise<void>;
 }
