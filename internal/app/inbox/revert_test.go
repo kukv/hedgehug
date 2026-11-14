@@ -233,6 +233,16 @@ func TestRevertChangedMeanwhile(t *testing.T) {
 	f.wantUntouched(t, id, rows)
 }
 
+// wantNoOverwrite は、本文だけの項目(ErrInvalidOperation)の行に、値の表示がないことを確かめる。
+func (r reverter) wantNoOverwrite(t *testing.T, name string, want error) {
+	t.Helper()
+	if errors.Is(want, port.ErrInvalidOperation) {
+		if got := r.first(t).Overwrite; got != nil {
+			t.Errorf("%s: overwrite = %+v, want nil", name, got)
+		}
+	}
+}
+
 func TestRevertRefusals(t *testing.T) {
 	status := func() port.Notice { return overwritten("status", apptest.SampleStatusTodo, apptest.SampleStatusDone) }
 	toDone := change.NewSet("status", apptest.SampleStatusTodo, apptest.SampleStatusDone)
@@ -267,6 +277,18 @@ func TestRevertRefusals(t *testing.T) {
 			f.writeWorkspace(t, workspace.PropertyDrafts(prop)...)
 			f.writeWorkspace(t, change.NewDelete("properties/"+string(textProperty)))
 		}, overwritten(item.FieldKey(textProperty), "a", "b"), "HH-2 は先に変更されたため、適用しませんでした", nil},
+		{"アイテムの本文だけの項目", func(reverter, port.NoticeID) {}, overwritten("place", "a", "b"), "", port.ErrInvalidOperation},
+		{"Store にないアイテムの本文だけの項目", func(reverter, port.NoticeID) {}, func() port.Notice {
+			n := overwritten("place", "a", "b")
+			n.Item = "01SAMPLEIT0000000000000009"
+			return n
+		}(), "", port.ErrInvalidOperation},
+		{"プロジェクトの本文だけの項目", func(reverter, port.NoticeID) {}, projectOverwritten("comment:x", "a", "b"), "", port.ErrInvalidOperation},
+		{"Store にないプロジェクトの本文だけの項目", func(reverter, port.NoticeID) {}, func() port.Notice {
+			n := projectOverwritten("comment:x", "a", "b")
+			n.Project = "01SAMPLEPR0000000000000009"
+			return n
+		}(), "", port.ErrInvalidOperation},
 		{"本文だけの項目", func(reverter, port.NoticeID) {}, projectOverwritten("project_rules/x", "a", "b"), "", port.ErrInvalidOperation},
 		{"上書きでない通知", func(reverter, port.NoticeID) {}, changed("自動化"), "", port.ErrInvalidOperation},
 		{"表示中でない Store", func(f reverter, _ port.NoticeID) { f.list.Stores = f.list.Stores[1:] }, status(), "", port.ErrNotFound},
@@ -285,6 +307,7 @@ func TestRevertRefusals(t *testing.T) {
 		case c.err == nil && refusalText(err) != c.text:
 			t.Errorf("%s: err = %v, want refusal %q", c.name, err, c.text)
 		}
+		f.wantNoOverwrite(t, c.name, c.err)
 		if got := f.row(t, id).Result; got != resultBefore {
 			t.Errorf("%s: result = %q, want %q (unchanged)", c.name, got, resultBefore)
 		}

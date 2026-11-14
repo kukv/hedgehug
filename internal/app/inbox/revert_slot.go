@@ -47,11 +47,24 @@ func slotOf(r port.Reader, n port.NoticeRow, today time.Time) (slot, slotState, 
 	}
 	switch {
 	case n.Item != "" && n.Project == "":
+		if !isItemValueField(n.Field) {
+			return slot{}, slotNone, nil
+		}
 		return itemSlot(r, n, today)
 	case n.Project != "" && !strings.HasPrefix(n.Field, "project_rules/"):
 		return projectSlot(r, n, today)
 	}
 	return slot{}, slotNone, nil
+}
+
+// isItemValueField は、ログの項目名 f がアイテムの値の項目か(C4c2-3)。place・rank・kind・relations・links・コメント・
+// 作業記録・本文などは本文だけ。エンティティやワークスペースを読む前に、項目名だけで決める。
+func isItemValueField(f string) bool {
+	switch f {
+	case "title", item.SprintField, item.ReleaseField, "status", "priority", "assignee", "start", "end", "points", "estimate", "systems":
+		return true
+	}
+	return strings.HasPrefix(f, "fields/")
 }
 
 // fieldKind は、アイテムの値を出す項目の種類。
