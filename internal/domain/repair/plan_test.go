@@ -82,6 +82,16 @@ func TestExtraActiveNeedsTwoLive(t *testing.T) {
 	}
 }
 
+func TestExtraActiveThree(t *testing.T) {
+	log := addSprint(addSprint(addSprint(wsBase(), "S1", "2026-11-18"), "S2", "2026-11-16"), "S3", "2026-11-17")
+	for _, id := range []string{"S1", "S2", "S3"} {
+		log = activate(log, id, day, "taro")
+	}
+	if got := repair.ExtraActive(log); !reflect.DeepEqual(got, []change.ID{"S1", "S3"}) {
+		t.Fatalf("開始日が最も早い S2 を残し、残りを内部 ID の順で戻す: %v", got)
+	}
+}
+
 var settings = workspace.Settings{Statuses: []workspace.Value{
 	{ID: "todo", Category: workspace.CategoryTodo},
 	{ID: "doing", Category: workspace.CategoryDoing},
@@ -149,6 +159,15 @@ func TestClosedSprintItems(t *testing.T) {
 		if got := repair.ClosedSprintItems(ws, settings, []repair.ItemLog{it}, f); len(got) != 0 {
 			t.Errorf("%s は戻さない: %v", name, got)
 		}
+	}
+}
+
+func TestClosedSprintItemsDeletedSprint(t *testing.T) {
+	ws := put(closedLog(), "d1", day, "taro", planning.DeleteSprint("S1"))
+	todo := itemLog("HH9", item.Task, "todo", change.NewSet(item.SprintField, nil, "S1"))
+	f := facts(closeRows(ws), []change.ID{rowOf(todo.Log, item.SprintField)})
+	if got := repair.ClosedSprintItems(ws, settings, []repair.ItemLog{todo}, f); !reflect.DeepEqual(got, []item.ID{"HH9"}) {
+		t.Errorf("削除済みの完了したスプリントも対象: %v", got)
 	}
 }
 
@@ -235,5 +254,13 @@ func TestDanglingBothFields(t *testing.T) {
 	want := []repair.PlanRef{{Item: "HH4", Field: item.SprintField, Target: "S9"}, {Item: "HH4", Field: item.ReleaseField, Target: "R9"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("DanglingPlanRefs = %v, want %v", got, want)
+	}
+}
+
+func TestDanglingUnknownWorkspace(t *testing.T) {
+	got := repair.DanglingPlanRefs([]item.Item{refItem("HH5", "S1", "R1")}, map[workspace.ID]planning.Plan{"W2": plan([]string{"S1"}, []string{"R1"}, false)})
+	want := []repair.PlanRef{{Item: "HH5", Field: item.SprintField, Target: "S1"}, {Item: "HH5", Field: item.ReleaseField, Target: "R1"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("計画のないワークスペースのアイテムは、スプリントもリリースもない扱い: %v, want %v", got, want)
 	}
 }

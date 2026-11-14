@@ -48,11 +48,15 @@ func PlanTarget(r change.Record) (change.ID, bool) {
 	if !IsPlanRow(r) {
 		return "", false
 	}
-	parts := strings.Split(r.F, "/")
-	if len(parts) < 2 || parts[1] == "" || (parts[0]+"/" != sprintPrefix && parts[0]+"/" != releasePrefix) {
+	if !strings.HasPrefix(r.F, sprintPrefix) && !strings.HasPrefix(r.F, releasePrefix) {
 		return "", false
 	}
-	return change.ID(parts[1]), true
+	_, rest, _ := strings.Cut(r.F, "/")
+	id, _, _ := strings.Cut(rest, "/")
+	if id == "" {
+		return "", false
+	}
+	return change.ID(id), true
 }
 
 // Totals は、ポイントと件数の合計。
