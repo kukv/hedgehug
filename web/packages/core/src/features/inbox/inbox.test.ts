@@ -183,6 +183,20 @@ describe("createInbox (06「受信箱」)", () => {
     expect(get(t.inbox.state)).toMatchObject({ rows: [], loaded: true });
   });
 
+  it("stops loading without a toast when a reload during the first read fails", async () => {
+    const t = setup(vi.fn, [row(1)]);
+    let release: (p: InboxPage) => void = () => {};
+    t.port.list.mockImplementationOnce(() => new Promise<InboxPage>((r) => (release = r)));
+    const opening = t.inbox.open();
+    t.port.list.mockRejectedValueOnce(new Error("通信できません"));
+    await t.inbox.reload();
+    expect(get(t.inbox.state)).toMatchObject({ loading: false, loaded: false });
+    expect(get(t.toasts.list)).toEqual([]);
+    release({ rows: [row(1)], more: false, unread: get(t.inbox.unread) });
+    await opening;
+    expect(get(t.inbox.state)).toMatchObject({ loading: false, loaded: false });
+  });
+
   it("reloads the unread counts alone", async () => {
     const t = setup(vi.fn, [row(1)]);
     await t.inbox.reloadUnread();

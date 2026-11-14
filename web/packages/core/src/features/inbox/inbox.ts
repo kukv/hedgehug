@@ -135,18 +135,24 @@ export function createInbox(deps: InboxDeps): Inbox {
   }
 
   // again は、いまのタブを、出していた件数を覆うまで読み直す(続きの行を出したまま位置を保つ)。
+  // 失敗したら、読み込み中の表示だけを戻して投げる(最初の読み込みの途中で失敗しても、読み込み中のまま残さない)。
   async function again() {
     loads += 1;
     const mine = loads;
     const { tab, rows: shown } = get(state);
     let rows: InboxRow[] = [];
     let page: InboxPage;
-    do {
-      const last = rows.at(-1);
-      page = await deps.port.list(tab, last && { at: last.at, id: last.id });
-      if (mine !== loads) return;
-      rows = [...rows, ...page.rows];
-    } while (page.more && rows.length < shown.length);
+    try {
+      do {
+        const last = rows.at(-1);
+        page = await deps.port.list(tab, last && { at: last.at, id: last.id });
+        if (mine !== loads) return;
+        rows = [...rows, ...page.rows];
+      } while (page.more && rows.length < shown.length);
+    } catch (e) {
+      if (mine === loads) state.update((s) => ({ ...s, loading: false }));
+      throw e;
+    }
     state.set({ tab, rows, more: page.more, loading: false, loaded: true });
     publishUnread(page.unread);
   }
