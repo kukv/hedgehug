@@ -89,4 +89,16 @@ describe("navigation with unsaved input", () => {
     await settle();
     expect(get(nav.route)).toEqual({ name: "home" });
   });
+
+  it("go resolves true when it moved or was already there, and false when the confirm was canceled", async () => {
+    const { history } = fakeHistory("/");
+    const guard = fakeGuard(true, false);
+    const nav = createNavigation(history, guard);
+    await expect(nav.go(tree)).resolves.toBe(false);
+    guard.answer = true;
+    await expect(nav.go(tree)).resolves.toBe(true);
+    await expect(nav.go(tree)).resolves.toBe(true);
+    guard.dirty = false;
+    await expect(nav.go({ name: "home" })).resolves.toBe(true);
+  });
 });

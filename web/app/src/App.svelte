@@ -1,6 +1,7 @@
 <script lang="ts">
   import { hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
-  import { AppFrame, OfflineBand, Toasts } from "@hedgehug/ui";
+  import { AppFrame, CommandPalette, OfflineBand, Toasts } from "@hedgehug/ui";
+  import { palette } from "./palette";
   import ChangeKindDialog from "./screens/item/ChangeKindDialog.svelte";
   import CreateItemDialog from "./screens/item/CreateItemDialog.svelte";
   import DeleteItemDialog from "./screens/item/DeleteItemDialog.svelte";
@@ -17,6 +18,7 @@
   import DeleteWorkspaceDialog from "./screens/workspace-settings/DeleteWorkspaceDialog.svelte";
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
+  import { isMac } from "./tab";
   import {
     catalog,
     itemDialog,
@@ -35,6 +37,7 @@
   const toastList = toasts.list;
   const stores = catalog.stores;
   const current = screen.current;
+  const paletteState = palette.state;
   system.load();
 
   const syncStatus = sync.status;
@@ -101,4 +104,14 @@
 <ProjectTransferDialog />
 <DeleteWorkspaceDialog />
 <DiscardDialog />
+<!-- Ctrl+K(Cmd+K)で開くコマンドパレット。キーは部品が受ける(02「コマンドパレット」) -->
+<CommandPalette
+  view={$paletteState}
+  mac={isMac()}
+  onopen={() => void palette.open()}
+  oninput={palette.input}
+  onmove={palette.move}
+  onchoose={(index, newTab) => void palette.choose(index, newTab)}
+  onclose={palette.close}
+/>
 <Toasts toasts={$toastList} ondismiss={toasts.dismiss} />

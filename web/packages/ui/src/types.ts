@@ -1,6 +1,8 @@
 export interface SelectOption {
   value: string;
   label: string;
+  // disabled は、表示はするが選べない選択肢(未選択を表す「—」など)。
+  disabled?: boolean;
 }
 
 export interface Tab {
@@ -67,3 +69,24 @@ export type MarkdownBlock =
   | { kind: "list"; ordered: boolean; items: MarkdownListItem[] }
   | { kind: "code"; text: string }
   | { kind: "paragraph"; inlines: MarkdownInline[] };
+
+// コマンドパレット(CommandPalette.svelte)に渡す形。core の PaletteState・Row と同じ形で、ui は core を import
+// できないのでここに持つ。app が core の状態をそのまま渡す。押せるのは candidate だけで、more は押せない 1 行
+// (「ほか N 件…」「一致するものはありません」)。
+export type PaletteRow =
+  | { kind: "head"; text: string }
+  | { kind: "more"; text: string }
+  | {
+      kind: "candidate";
+      c: { key: string; label: string; hint?: string; disabled?: boolean; checked?: boolean };
+    };
+
+export interface PaletteView {
+  input: string;
+  rows: PaletteRow[];
+  // selected は、選んでいる行の位置。押せる行がないときは -1。
+  selected: number;
+  footer: string;
+  // selectedHead は、Store の点を頭に付ける見出し(storeColor はトークン --t-<色>-fg の色の名前)。
+  selectedHead: { text: string; storeColor?: string } | null;
+}

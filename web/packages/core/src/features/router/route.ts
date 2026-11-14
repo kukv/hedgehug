@@ -8,7 +8,7 @@
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree" | "settings";
-export type WorkspaceTab = "overview" | "sprints" | "releases" | "settings";
+export type WorkspaceTab = "overview" | "sprints" | "releases" | "reports" | "settings";
 
 export type SettingsTab = "accounts";
 
@@ -25,6 +25,7 @@ const workspaceTabs: readonly string[] = [
   "overview",
   "sprints",
   "releases",
+  "reports",
   "settings",
 ] satisfies WorkspaceTab[];
 const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];

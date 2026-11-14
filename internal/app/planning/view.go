@@ -59,12 +59,7 @@ func (s Service) Overview(ctx context.Context, store port.StoreID, ws workspace.
 		live := p.LiveSprints()
 		ov.Sprints = planning.ScreenOrder(live)
 		ov.Releases = planning.ReleaseOrder(p.LiveReleases())
-		for _, sp := range ov.Sprints {
-			if sp.State == planning.Active {
-				ov.Active = &sp
-				break
-			}
-		}
+		ov.Active = planning.ActiveSprint(live)
 		name, start, end := planning.SprintDefaults(live, planning.Today(s.Clock.Now()))
 		ov.Defaults = SprintInput{Name: name, Start: start, End: end}
 		ov.RetentionDays, err = r.RetentionDays()

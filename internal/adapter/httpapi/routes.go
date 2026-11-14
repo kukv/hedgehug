@@ -13,9 +13,11 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/palette"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/planning"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projectrules"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/projects"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/reports"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
@@ -30,11 +32,13 @@ import (
 	appinbox "github.com/kukv/hedgehug/internal/app/inbox"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
+	apppalette "github.com/kukv/hedgehug/internal/app/palette"
 	appplanning "github.com/kukv/hedgehug/internal/app/planning"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appprojectrules "github.com/kukv/hedgehug/internal/app/projectrules"
 	appprojects "github.com/kukv/hedgehug/internal/app/projects"
 	apprelations "github.com/kukv/hedgehug/internal/app/relations"
+	appreports "github.com/kukv/hedgehug/internal/app/reports"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
 	apptransfers "github.com/kukv/hedgehug/internal/app/transfers"
@@ -84,6 +88,11 @@ type Deps struct {
 	// SyncTargets は、移動先・移動元の remote の有無と URL を知るため。
 	Delivery    apptransfers.Delivery
 	SyncTargets port.SyncTargets
+
+	// コマンドパレット(A5c)。最近開いたものは state.db に覚える。
+	Recent port.RecentItems
+	// レポートの選択の保存先(F3。state.db)
+	Reports appreports.Selections
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
@@ -127,12 +136,16 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Delivery: deps.Delivery,
 		Identity: deps.Identity, Clock: deps.Clock, IDs: deps.IDs,
 	})
+	palette.Register(api, apppalette.Service{
+		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, RecentItems: deps.Recent, Clock: deps.Clock,
+	})
 	autoSvc := appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}
 	automations.Register(api, autoSvc)
 	inbox.Register(api, appinbox.Service{
 		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
 	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
+	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})
