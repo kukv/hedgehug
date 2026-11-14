@@ -196,6 +196,8 @@ func TestSteps(t *testing.T) {
 		t.Errorf("同じ値はまとめる: %v", vs)
 	}
 	// 時計のずれ: あとの行(Done)の at が前の行(Doing)より前でも、prev でつながるので Done が最後。
+	// Doing は点に出ない。11:00 の直後は Done の行だけが見え(prev の Doing の行はまだ at の前)、Done になる。
+	// 12:00 の直後は両方の行が見えるが、Done の行の prev が Doing の行を指すので、先端は Done のまま変わらない。
 	skew := created(jst(10, 9, 0), item.Item{Status: "Todo"})
 	skew = setStatus(skew, jst(10, 12, 0), "Todo", "Doing")
 	skew = setStatus(skew, jst(10, 11, 0), "Doing", "Done")

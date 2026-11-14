@@ -29,7 +29,7 @@ type Burndown struct {
 // u は実際に数える単位(件数への切り替えは呼び出し側が EffectiveUnit で決める)。今日は now の、このマシンの時刻帯の日。
 func Burn(works []Work, ws workspace.ID, s Sprint, st workspace.Settings, u Unit, now time.Time) Burndown {
 	var b Burndown
-	for d := s.Start; d != "" && d <= s.End; d = AddDays(d, 1) {
+	for _, d := range daysBetween(s.Start, s.End) {
 		b.Days = append(b.Days, BurnDay{Date: d})
 	}
 	last := lastShown(s, now)
@@ -113,10 +113,11 @@ func lastShown(s Sprint, now time.Time) string {
 }
 
 // inScope は、時点 t(日の終わり)に、アイテム w がスプリント s に入っていたか。
-// 完了で移した行(完了の記録と同じ op の set sprint。F3-3)があれば、t とその行の時刻の早い方の時点の値で決める。
-// 完了による持ち越しを、完了した日の終わりまで範囲に残すため。同じ日にさらに別の枠へ移した行も、その行より前の行だけを見るので影響しない。
+// t が完了した日の終わり以前で、完了で移した行(完了の記録と同じ op の set sprint。F3-3)があれば、
+// t とその行の時刻の早い方の時点の値で決める。完了による持ち越しを、完了した日の終わりまで範囲に残すため
+// (それより後の日には残さない)。同じ日にさらに別の枠へ移した行も、その行より前の行だけを見るので影響しない。
 func inScope(w Work, s Sprint, t time.Time) bool {
-	if s.Closing != nil {
+	if s.Closing != nil && !t.After(EndOfDay(Today(s.Closing.At), time.Local)) {
 		for _, r := range w.Log {
 			if r.Op == s.Closing.Op && r.T == change.Set && r.F == item.SprintField && r.At.Before(t) {
 				t = r.At
@@ -132,11 +133,11 @@ func fillIdeal(days []BurnDay) {
 		return
 	}
 	first := days[0].Total
+	if len(days) == 1 {
+		days[0].Ideal = first
+		return
+	}
 	for k := range days {
-		if len(days) == 1 {
-			days[k].Ideal = first
-			continue
-		}
 		days[k].Ideal = first - first*float64(k)/float64(len(days)-1)
 	}
 }

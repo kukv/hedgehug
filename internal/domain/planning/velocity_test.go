@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -77,8 +78,8 @@ func TestVelocityAverage(t *testing.T) {
 	avg := func(done ...float64) *float64 {
 		live := []planning.Sprint{active}
 		for i, d := range done {
-			id := string(rune('a' + i))
-			live = append(live, closedWith(id, id, "2026-10-0"+string(rune('1'+i)), d))
+			id := fmt.Sprintf("c%02d", i)
+			live = append(live, closedWith(id, id, planning.AddDays("2026-10-01", i), d))
 		}
 		_, a := planning.Velocity(ws, "W", live, settings(), planning.UnitPoints, now)
 		return a
@@ -90,6 +91,7 @@ func TestVelocityAverage(t *testing.T) {
 		{[]float64{1, 2, 3, 5}, 3.3}, // 実行中(完了 100)を含めず、直近 3 件(2・3・5)
 		{[]float64{1, 2}, 1.5},
 		{[]float64{4}, 4},
+		{[]float64{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 1, 2, 6}, 3}, // 10 件以上でも直近 3 件
 	}
 	for _, c := range cases {
 		got := avg(c.done...)
@@ -99,6 +101,21 @@ func TestVelocityAverage(t *testing.T) {
 	}
 	if got := avg(); got != nil {
 		t.Fatalf("完了なしは nil: %v", *got)
+	}
+}
+
+// 実行中のスプリントが完了したスプリントより早く始まっても、平均には入らない。
+func TestVelocityAverageActiveFirst(t *testing.T) {
+	localTokyo(t)
+	active := planning.Sprint{ID: "A", Name: "Active", State: planning.Active, Start: "2026-09-01", End: "2026-11-25"}
+	ws := works(t, created(jst(1, 10, 0), item.Item{ID: "X", Sprint: "A", Status: "Done", Points: pt(100)}))
+	live := []planning.Sprint{closedWith("c1", "c1", "2026-10-01", 2), active, closedWith("c2", "c2", "2026-10-10", 4)}
+	bars, avg := planning.Velocity(ws, "W", live, settings(), planning.UnitPoints, jst(22, 12, 0))
+	if got := velocityIDs(bars); len(got) != 3 || got[0] != "A" {
+		t.Fatalf("棒は開始日の早い順で実行中が先: %v", got)
+	}
+	if avg == nil || *avg != 3 {
+		t.Fatalf("平均 = %v, want 3(実行中の完了 100 を含めない)", avg)
 	}
 }
 

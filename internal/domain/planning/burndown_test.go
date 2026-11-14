@@ -142,6 +142,46 @@ func TestBurnCarryOver(t *testing.T) {
 	if r[3] != -1 {
 		t.Fatalf("完了した日より後は残りなし: %v", r)
 	}
+	if got.Days[3].Total != 1 {
+		t.Fatalf("11/05 の総量 = %v, want 1(完了した日より後は、完了で移した A・C を数えない)", got.Days[3].Total)
+	}
+}
+
+// 開始日に完了し、完了の op で持ち越したアイテムがあっても、開始日の総量は確定の計画と同じなので注記を出さない。
+func TestBurnCarryOverOnStartDay(t *testing.T) {
+	localTokyo(t)
+	c, done := inS1("C", pt(2)), setStatus(inS1("E", pt(1)), jst(2, 10, 0), "Todo", "Done")
+	s := burnSprint()
+	s.State = planning.Closed
+	s.Closing = &planning.Closing{At: jst(2, 15, 0), Op: "close1"}
+	// F1 の完了と同じく、確定値は移す行を書く前のログで求める。
+	confirmed := planning.Confirm(works(t, c, done), "W", s, settings(), jst(2, 15, 0))
+	s.Confirmed = &confirmed
+	ws := works(t, closeRow(c, jst(2, 15, 0), "close1", change.NewSet(item.SprintField, "S1", "S2")), done)
+	got := planning.Burn(ws, "W", s, settings(), planning.UnitPoints, jst(6, 12, 0))
+	if got.Shown != 1 || got.Days[0].Total != 3 {
+		t.Fatalf("Shown = %d, Days = %+v, want 開始日だけ・総量 3", got.Shown, got.Days)
+	}
+	if got.Committed != nil {
+		t.Fatalf("開始日に完了した持ち越しで注記を出さない: %v", *got.Committed)
+	}
+}
+
+// 開始日か終了日が読めなければ、日を出さない(同期や手の書き換えで止まらない)。
+func TestBurnUnreadableDates(t *testing.T) {
+	localTokyo(t)
+	for _, c := range []struct{ start, end string }{
+		{"2026-11-02T00:00:00Z", "2026-11-05"},
+		{"2026-11-02", "2026-11-05T00:00:00Z"},
+		{"", "2026-11-05"},
+	} {
+		s := burnSprint()
+		s.Start, s.End = c.start, c.end
+		got := planning.Burn(works(t, inS1("A", pt(3))), "W", s, settings(), planning.UnitPoints, jst(4, 12, 0))
+		if len(got.Days) != 0 || got.Shown != 0 {
+			t.Fatalf("%q〜%q: Days = %+v, Shown = %d, want 空", c.start, c.end, got.Days, got.Shown)
+		}
+	}
 }
 
 func TestBurnCommittedNote(t *testing.T) {

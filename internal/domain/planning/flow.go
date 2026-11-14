@@ -21,6 +21,9 @@ type FlowDay struct {
 // deletedLayer は、設定の一覧にないステータスにいた分の層。
 var deletedLayer = Layer{Key: "deleted", Name: "(削除された値)"}
 
+// todoLayer は、categoryLayers の未着手の位置(分類の決まらないステータスの行き先。05 の 17 行)。
+const todoLayer = 2
+
 // categoryLayers は、分類の層。下から積む順。
 var categoryLayers = []struct {
 	Category workspace.Category
@@ -37,7 +40,7 @@ var categoryLayers = []struct {
 // ステータスの層には、一覧にないステータスにいた日が期間にあるときだけ、一番上に deletedLayer が付く。
 func Flow(works []Work, ws workspace.ID, st workspace.Settings, from, to string, l Layers) ([]Layer, []FlowDay) {
 	layers, slot := flowLayers(st, l)
-	dates := flowDates(from, to)
+	dates := daysBetween(from, to)
 	days := make([]FlowDay, len(dates))
 	for i, d := range dates {
 		days[i] = FlowDay{Date: d, Counts: make([]int, len(layers)+1)}
@@ -86,7 +89,7 @@ func flowLayers(st workspace.Settings, l Layers) ([]Layer, func(change.ID) int) 
 				return i
 			}
 		}
-		return 0
+		return todoLayer
 	}
 }
 
@@ -111,16 +114,19 @@ func statusLayers(st workspace.Settings) ([]Layer, func(change.ID) int) {
 	}
 }
 
-// flowDates は、from〜to のすべての日(YYYY-MM-DD)。読めない日付は空。
-func flowDates(from, to string) []string {
+// daysBetween は、from〜to のすべての日(YYYY-MM-DD)。どちらかが読めなければ空。
+func daysBetween(from, to string) []string {
 	d, err := time.Parse(time.DateOnly, from)
 	if err != nil {
 		return nil
 	}
+	end, err := time.Parse(time.DateOnly, to)
+	if err != nil {
+		return nil
+	}
 	var out []string
-	for ymd := d.Format(time.DateOnly); ymd <= to; ymd = d.Format(time.DateOnly) {
-		out = append(out, ymd)
-		d = d.AddDate(0, 0, 1)
+	for ; !d.After(end); d = d.AddDate(0, 0, 1) {
+		out = append(out, d.Format(time.DateOnly))
 	}
 	return out
 }

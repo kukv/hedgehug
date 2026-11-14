@@ -104,11 +104,36 @@ func TestEstimatesTotalNone(t *testing.T) {
 	sameEstimate(t, "行なし", total, planning.EstimateTotal{})
 }
 
+// 対象のスプリントは、いまそのスプリントに入っているものだけ。一度入っていて別へ移したものは、行にも合計にも入らない。
 func TestEstimatesSprint(t *testing.T) {
-	rows, total := planning.Estimates(estimateWorks(t), "W", "S1")
+	moved := setSprint(logged(numbered("M", 8, item.Item{Points: pt(5), Estimate: hours(3), Sprint: "S1"}), 1, 400), jst(3, 10, 0), "S1", "S2")
+	rows, total := planning.Estimates(append(estimateWorks(t), work(t, moved)), "W", "S1")
 
 	if len(rows) != 1 || rows[0].Item.ID != "A" {
 		t.Fatalf("rows = %+v, want A だけ", rows)
 	}
-	sameEstimate(t, "Worked", total.Worked, 500)
+	sameEstimate(t, "total", total, planning.EstimateTotal{Points: pt(3), Estimate: intp(400), Worked: 500, Diff: intp(100)})
+}
+
+// 別のワークスペースのアイテムは入らない。
+func TestEstimatesOtherWorkspace(t *testing.T) {
+	other := logged(created(jst(1, 10, 0), item.Item{ID: "O", Place: item.Place{Workspace: "W2", Number: 1}, Status: "Todo", Points: pt(2)}), 1, 100)
+	rows, total := planning.Estimates(works(t, other), "W", "")
+	if rows, _ := planning.Estimates(works(t, other), "W2", ""); len(rows) != 1 {
+		t.Fatalf("W2 では入る: %+v", rows)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("rows = %+v, want 空", rows)
+	}
+	sameEstimate(t, "total", total, planning.EstimateTotal{})
+}
+
+// 見積もり時間は 100 分の 1 時間に丸める(0.29 時間 → 29。浮動小数点の 28.999… を 28 にしない)。
+func TestEstimatesRoundEstimate(t *testing.T) {
+	rows, _ := planning.Estimates(works(t, logged(numbered("A", 1, item.Item{Estimate: hours(0.29)}), 1, 29)), "W", "")
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	sameEstimate(t, "Estimate", rows[0].Estimate, intp(29))
+	sameEstimate(t, "Diff", rows[0].Diff, intp(0))
 }
