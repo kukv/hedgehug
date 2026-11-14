@@ -3,7 +3,6 @@ package githublink_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -368,7 +367,7 @@ func TestRefreshStoppedNotifies(t *testing.T) {
 		ns[0].Reason != "ワークフローの制約: Todo から Done には変更できません(Pending のみ)" || ns[0].Status != apptest.SampleStatusDone {
 		t.Errorf("notices = %+v", ns)
 	}
-	if ns[0].From != apptest.SampleStatusTodo || !strings.HasPrefix(ns[0].Display, "HH-") {
+	if ns[0].From != apptest.SampleStatusTodo || ns[0].Display != "HH-2" {
 		t.Errorf("From = %q, Display = %q", ns[0].From, ns[0].Display)
 	}
 }
