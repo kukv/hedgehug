@@ -309,7 +309,7 @@ func TestRevertRoute(t *testing.T) {
 	// Sample の HH-2 はいま Todo。残った値が Todo なので、Done に戻せる
 	f.add(t, overwritten(apptest.SampleStatusDone, apptest.SampleStatusTodo))
 	o := f.list(t, "tab=overwrite").Rows[0].Overwrite
-	if o == nil || o.Mine == "" || o.Kept == "" || !o.Visible || !o.Enabled || o.Result != "" {
+	if o == nil || o.Mine != "Done" || o.Kept != "Todo" || !o.Visible || !o.Enabled || o.Result != "" {
 		t.Fatalf("overwrite = %+v", o)
 	}
 	if res := f.api.Post("/api/inbox/1/revert"); res.Code != http.StatusNoContent {

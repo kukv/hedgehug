@@ -61,17 +61,16 @@ type InboxOverwrite struct {
 
 // InboxRow は、受信箱の 1 行。
 type InboxRow struct {
-	ID     int64        `json:"id"`
-	Kind   string       `json:"kind" enum:"automation,automation_stopped,mention,assign,watch,overwrite,repair"`
-	At     time.Time    `json:"at"`
-	Read   bool         `json:"read"`
-	Text   string       `json:"text"`
-	Reason string       `json:"reason"`
-	Sender string       `json:"sender" doc:"差出人のログイン名。空は「hedgehug」"`
-	Store  InboxStore   `json:"store"`
-	Target InboxTarget  `json:"target"`
-	Action *InboxAction `json:"action,omitempty" doc:"止まった通知だけ"`
-
+	ID        int64           `json:"id"`
+	Kind      string          `json:"kind" enum:"automation,automation_stopped,mention,assign,watch,overwrite,repair"`
+	At        time.Time       `json:"at"`
+	Read      bool            `json:"read"`
+	Text      string          `json:"text"`
+	Reason    string          `json:"reason"`
+	Sender    string          `json:"sender" doc:"差出人のログイン名。空は「hedgehug」"`
+	Store     InboxStore      `json:"store"`
+	Target    InboxTarget     `json:"target"`
+	Action    *InboxAction    `json:"action,omitempty" doc:"止まった通知だけ"`
 	Overwrite *InboxOverwrite `json:"overwrite,omitempty" doc:"上書きの行で、値を出す項目だけ"`
 }
 
