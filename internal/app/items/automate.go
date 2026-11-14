@@ -15,6 +15,7 @@ import (
 type fired struct {
 	item     item.Item
 	outcomes []automation.Outcome
+	prefix   string // アイテムのワークスペースの接頭辞(通知のアイテムの ID に使う)
 }
 
 // automate は、利用者がアイテム id のステータスを from から変えたあとに、同じ保存の中で自動化を動かす
@@ -60,7 +61,11 @@ func runOn(tx port.Tx, st workspace.Settings, set projectrule.Set, rules []autom
 			ds = append(ds, *o.Draft)
 		}
 	}
-	return []fired{{item: it, outcomes: os}}, tx.WriteItems().Append(it.ID, ds...)
+	w, err := tx.Workspaces().Get(it.Place.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	return []fired{{item: it, outcomes: os, prefix: w.Prefix}}, tx.WriteItems().Append(it.ID, ds...)
 }
 
 // stepsOf は、it と同じ親の Step。it は利用者が変えた値で数える(自動化の変更を入れない。B4-8)。
@@ -86,10 +91,10 @@ func stepsOf(tx port.Tx, it item.Item) ([]item.Item, error) {
 func (s Service) notify(ctx context.Context, store port.StoreID, ec editContext, fs []fired) error {
 	for _, f := range fs {
 		for _, o := range f.outcomes {
-			n := port.Notice{Store: store, Workspace: f.item.Place.Workspace, Item: f.item.ID, Rule: o.Rule.ID}
+			n := port.Notice{Store: store, Workspace: f.item.Place.Workspace, Item: f.item.ID, Rule: o.Rule.ID, Display: f.item.DisplayID(f.prefix)}
 			if o.Draft == nil {
 				n.Kind, n.Text, n.Reason = port.NoticeAutomationStopped, automation.StoppedText(o.Rule.Name), o.Stopped
-				n.Status = change.ID(o.Rule.Value)
+				n.Status, n.From = change.ID(o.Rule.Value), o.From
 			} else {
 				value := item.Display(o.Prop, o.To, ec.settings, ec.names, s.Clock.Now())
 				n.Kind, n.Text = port.NoticeAutomation, automation.AppliedText(o.Rule.Name, automation.ChangeText(o.Prop.Name, value))

@@ -25,6 +25,7 @@ type Outcome struct {
 	To      json.RawMessage    // 変えたあと(止まったときは変えようとした)の値
 	Draft   *change.Draft      // ルールが書く行(Rule 付き)
 	Stopped string             // 止まった理由(03「制約で止まったとき」の文言)
+	From    change.ID          // 止まったとき(Draft == nil)の、検査に使ったいまのステータス。変えた実行では空
 }
 
 // Run は、it に起きた ev で、有効なルールを一覧の順に実行する(03「実行の規則」)。it は利用者の操作のあとの値。
@@ -87,7 +88,7 @@ func apply(s workspace.Settings, pr projectrule.Rules, r Rule, it *item.Item) (O
 			err = projectrule.CheckTransition(s, pr, it.Status, change.ID(value))
 		}
 		if err != nil {
-			o.Stopped = err.Error()
+			o.Stopped, o.From = err.Error(), it.Status
 			return o, true
 		}
 		it.Status = change.ID(value)

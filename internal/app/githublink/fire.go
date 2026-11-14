@@ -63,6 +63,7 @@ type fired struct {
 	outcomes []automation.Outcome
 	settings workspace.Settings
 	names    item.Names
+	prefix   string // アイテムのワークスペースの接頭辞(通知のアイテムの ID に使う)
 }
 
 // fire は、保存 tx の中で、アイテム id のリンクが before から after になったきっかけでルールを動かし、
@@ -102,7 +103,14 @@ func fire(tx port.Tx, id item.ID, before *itemlink.Link, after itemlink.Link, p 
 		return nil, err
 	}
 	names, err := memberNames(tx)
-	return []fired{{item: it, outcomes: os, settings: st, names: names}}, err
+	if err != nil {
+		return nil, err
+	}
+	w, err := tx.Workspaces().Get(it.Place.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	return []fired{{item: it, outcomes: os, settings: st, names: names, prefix: w.Prefix}}, nil
 }
 
 // fireInputs は、ルール・プロジェクト別のルール・ワークスペースの設定と、「すべてマージ済み」か(D4a-13・14)。リンクは tx の中で読む
@@ -165,10 +173,10 @@ func memberNames(r port.Reader) (item.Names, error) {
 func (l Links) notify(ctx context.Context, store port.StoreID, fs []fired) error {
 	for _, f := range fs {
 		for _, o := range f.outcomes {
-			n := port.Notice{Store: store, Workspace: f.item.Place.Workspace, Item: f.item.ID, Rule: o.Rule.ID}
+			n := port.Notice{Store: store, Workspace: f.item.Place.Workspace, Item: f.item.ID, Rule: o.Rule.ID, Display: f.item.DisplayID(f.prefix)}
 			if o.Draft == nil {
 				n.Kind, n.Text, n.Reason = port.NoticeAutomationStopped, automation.StoppedText(o.Rule.Name), o.Stopped
-				n.Status = change.ID(o.Rule.Value)
+				n.Status, n.From = change.ID(o.Rule.Value), o.From
 			} else {
 				value := item.Display(o.Prop, o.To, f.settings, f.names, l.now())
 				n.Kind, n.Text = port.NoticeAutomation, automation.AppliedText(o.Rule.Name, automation.ChangeText(o.Prop.Name, value))

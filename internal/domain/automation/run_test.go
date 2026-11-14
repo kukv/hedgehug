@@ -85,6 +85,31 @@ func TestRunStopsOnTheWorkflowAndGoesOn(t *testing.T) {
 	}
 }
 
+func TestRunStoppedFromIsAfterEarlierRule(t *testing.T) {
+	s := runSettings()
+	s.Workflow = map[change.ID][]change.ID{"DOING": {"CANCEL"}} // DOING からは Done に行けない
+	rules := []automation.Rule{
+		rule("R1", automation.TriggerPROpen, "", automation.ActionStatus, "DOING"),
+		rule("R2", automation.TriggerPROpen, "", automation.ActionStatus, "DONE"),
+	}
+	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
+	got := automation.Run(s, nil, rules, it, automation.Event{Trigger: automation.TriggerPROpen})
+	if len(got) != 2 || got[0].Draft == nil || got[0].From != "" || got[1].Draft != nil || got[1].From != "DOING" {
+		t.Errorf("Run = %+v", got)
+	}
+}
+
+func TestRunStoppedFromIsCurrent(t *testing.T) {
+	s := runSettings()
+	s.Workflow = map[change.ID][]change.ID{"TODO": {"DOING"}}
+	rules := []automation.Rule{rule("R1", automation.TriggerPROpen, "", automation.ActionStatus, "DONE")}
+	it := item.Item{ID: "T1", Kind: item.Task, Status: "TODO"}
+	got := automation.Run(s, nil, rules, it, automation.Event{Trigger: automation.TriggerPROpen})
+	if len(got) != 1 || got[0].Draft != nil || got[0].From != "TODO" {
+		t.Errorf("Run = %+v", got)
+	}
+}
+
 func TestRunMergedCondition(t *testing.T) {
 	s := runSettings()
 	r := rule("R1", automation.TriggerPRMerged, "", automation.ActionStatus, "DONE")
