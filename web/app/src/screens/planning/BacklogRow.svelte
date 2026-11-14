@@ -11,7 +11,7 @@
     readOnlyNote,
     type WorkspaceSettings,
   } from "@hedgehug/core";
-  import { Avatar, type DropTarget, dragRows, IconButton, KindIcon } from "@hedgehug/ui";
+  import { Avatar, type DropTarget, dragRows, IconButton, KindIcon, RowCheck } from "@hedgehug/ui";
   import { backlog } from "../../planning";
   import { links } from "../../wire";
   import StatusButton from "../item/StatusButton.svelte";
@@ -68,16 +68,12 @@
 </script>
 
 <li class="row" class:marked data-row={row.id}>
-  <input
-    type="checkbox"
-    aria-label={`${row.display} を選択`}
+  <RowCheck
+    label={`${row.display} を選択`}
     checked={isSelected($rows, storeId, row.id)}
-    onchange={(e) =>
-      backlog.selection.toggle(
-        { storeId, itemId: row.id, display: row.display, readOnly },
-        e.currentTarget.checked,
-      )}
-  >
+    onchange={(on) =>
+      backlog.selection.toggle({ storeId, itemId: row.id, display: row.display, readOnly }, on)}
+  />
   <button
     type="button"
     class="handle"

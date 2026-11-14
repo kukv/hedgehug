@@ -5,25 +5,19 @@
   interface Props {
     // text は、件数の文(core の selectedText が作る)。
     text: string;
-    // readOnly は、選んだ行がすべて閲覧のみの Store のもの。「一括削除…」だけを無効にする(F2b1-4)。
-    readOnly: boolean;
+    // readOnlyNote は、選んだ行がすべて閲覧のみの Store のものときに渡す文(core の readOnlyNote)。
+    // 渡したら「一括削除…」だけを無効にして、title に出す(F2b1-4)。
+    readOnlyNote?: string;
     ondelete: () => void;
     onclear: () => void;
   }
 
-  let { text, readOnly, ondelete, onclear }: Props = $props();
-
-  // ui は core を読めないので、core の readOnlyNote と同じ文をここに書く。
-  const readOnlyNote = "閲覧のみの Store です";
+  let { text, readOnlyNote, ondelete, onclear }: Props = $props();
 </script>
 
 <div class="bar">
   <span class="text">{text}</span>
-  <Button
-    size="sm"
-    disabled={readOnly}
-    title={readOnly ? readOnlyNote : undefined}
-    onclick={ondelete}
+  <Button size="sm" disabled={!!readOnlyNote} title={readOnlyNote} onclick={ondelete}
     >一括削除…</Button
   >
   <Button size="sm" onclick={onclear}>選択を解除</Button>

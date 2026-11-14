@@ -6,7 +6,7 @@ describe("SelectionBar", () => {
   it("shows the count and answers with the buttons", async () => {
     const ondelete = vi.fn();
     const onclear = vi.fn();
-    render(SelectionBar, { props: { text: "2 件を選択中", readOnly: false, ondelete, onclear } });
+    render(SelectionBar, { props: { text: "2 件を選択中", ondelete, onclear } });
     expect(screen.getByText("2 件を選択中")).toBeInTheDocument();
     const remove = screen.getByRole("button", { name: "一括削除…" });
     expect(remove).toBeEnabled();
@@ -17,10 +17,17 @@ describe("SelectionBar", () => {
     expect(onclear).toHaveBeenCalledOnce();
   });
 
-  it("disables only the bulk delete when every row is read-only", async () => {
+  it("disables only the bulk delete with the read-only note", async () => {
     const ondelete = vi.fn();
     const onclear = vi.fn();
-    render(SelectionBar, { props: { text: "1 件を選択中", readOnly: true, ondelete, onclear } });
+    render(SelectionBar, {
+      props: {
+        text: "1 件を選択中",
+        readOnlyNote: "閲覧のみの Store です",
+        ondelete,
+        onclear,
+      },
+    });
     const remove = screen.getByRole("button", { name: "一括削除…" });
     expect(remove).toBeDisabled();
     expect(remove).toHaveAttribute("title", "閲覧のみの Store です");

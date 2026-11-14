@@ -2,6 +2,7 @@
   import {
     allReadOnly,
     dropPlacement,
+    readOnlyNote,
     type Sprint,
     selectedText,
     startDisabledReason,
@@ -76,7 +77,7 @@
   {#if $rows.length > 0}
     <SelectionBar
       text={selectedText($rows.length)}
-      readOnly={allReadOnly($rows)}
+      readOnlyNote={allReadOnly($rows) ? readOnlyNote : undefined}
       ondelete={() => void bulkDelete.open(backlog.selection, () => backlog.reload())}
       onclear={() => backlog.selection.clear()}
     />

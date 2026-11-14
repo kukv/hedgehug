@@ -4,7 +4,7 @@
 
 **Goal:** 仕様 04「一括選択と一括変更・一括削除」のうち、選択(行のチェック・選択バー・選択から外す規則)と一括削除を、検索のテーブル(トラック E)でも使える共通の部品として作り、バックログのタブの行に付ける。コマンドパレットの「選んでいるアイテム」に、バックログでちょうど 1 件選んだアイテムを登録する。
 
-**Architecture:** サーバーは `app/items` の `delete.go` に、複数の Store にまたがる `BulkDeletePreview`・`BulkDelete` を足す(Store ごとに 1 回の保存、閲覧のみの Store は飛ばして数える)。API は `adapter/httpapi/items/bulk.go`。画面は core の新しい `features/selection/`(`rowSelection.ts` = 選択の状態、`bulkDelete.ts` = 確認ダイアログと実行)を、バックログ(`features/planning/backlog.ts`)がつなぐ。バーは ui の `SelectionBar.svelte`。E はテーブルに同じ部品を付けるだけにする。
+**Architecture:** サーバーは `app/items` の `delete.go` に、複数の Store にまたがる `BulkDeletePreview`・`BulkDelete` を足す(Store ごとに 1 回の保存、閲覧のみの Store は飛ばして数える)。API は `adapter/httpapi/items/bulk.go`。画面は core の新しい `features/selection/`(`rowSelection.ts` = 選択の状態、`bulkDelete.ts` = 確認ダイアログと実行)を、バックログ(`features/planning/backlog.ts`)がつなぐ。バーは ui の `SelectionBar.svelte`、行のチェックは ui の `RowCheck.svelte`。E はテーブルに同じ部品を付けるだけにする。
 
 **Tech Stack:** Go 1.27.3、huma v2。画面は Svelte 5(`web/app`・`web/packages/core`・`web/packages/ui`・`web/packages/api`、orval の生成)、e2e は Playwright。依存ライブラリは足さない。
 
@@ -48,7 +48,7 @@
 | F2b1-7 | 同じ Store で、選んだアイテムの祖先も選んでいるときは、そのアイテムは祖先の下のものとして `root: false` で 1 回だけ書く(1 件の削除で親と一緒に消えたのと同じ)。祖先を選んでいないアイテムは `root: true`。削除済みの一覧には `root: true` のものが出て、その「復元」で下のものと一緒に戻る | 08 の 330・334 行(同じ削除操作で消えた子孫は一緒に戻る)、保存形式の `root`(148 行)。両方を `root: true` にすると、同じ操作の行が削除済みの一覧に重なって出る |
 | F2b1-8 | Store ごとの件数 N は、その保存で書いた削除の行の数(下にあるものを含み、重ねて数えない)。アクティビティは「{N} 件を一括削除」。N が 0 の Store(全部がすでに削除済み)は保存しない。N は保存の前に読み取りで数え、保存の中でもう一度同じ計算をして書く(1 件の `Delete` の `deleteSummary` と同じ。数えてから保存までに同期で増減したときは合わないことがある) | 04 の 909・971 行、`delete.go` の `Delete` のコメント |
 | F2b1-9 | Store の保存に失敗したら、そこでやめてエラーを返す(先に保存した Store の削除は残る)。画面は「削除できませんでした」をエラーのトーストに出し、ダイアログを閉じて読み直す(選択は解除しない。消えたものは読み直しで外れる) | 01 の 108 行(途中の失敗)。Store をまたいで元に戻す手段がないので、1 件の削除の失敗の表示に合わせる |
-| F2b1-10 | 確認ダイアログの中身は、`POST /api/bulk-delete/preview` の応答(`stores` = 削除するアイテムのある Store の数、`retentionDays` = `stores` が 1 のときのその Store の保持日数、ほかは 0、`readOnly` = 閲覧のみの Store の選んだ件数)と、開いた時点の選択の行で作る。数えるのは閲覧のみでない、実行のときに削除されていない選んだアイテム。ダイアログを開いているあいだ、対象は開いた時点の選択に固定する | 04 の 905〜907 行。E のテーブルには計画の概要がないので、保持日数は Store ごとにサーバーから読む |
+| F2b1-10 | 確認ダイアログの中身は、`POST /api/bulk-delete/preview` の応答(`stores` = 削除するアイテムのある Store の数、`retentionDays` = `stores` が 1 のときのその Store の保持日数、ほかは 0、`readOnly` = 閲覧のみの Store の選んだ件数)と、開いた時点の選択の行で作る。数えるのは閲覧のみでない、実行のときに削除されていない選んだアイテム。ダイアログを開いているあいだ、対象は開いた時点の選択に固定する。予告の `stores` が 0(選んだものがほかで削除された)なら、ダイアログを出さずに、選択はそのままで読み直す(1 件の削除の予告が NotFound のときと同じ。読み直しの `prune` で消えたものが選択から外れる) | 04 の 905〜907 行。E のテーブルには計画の概要がないので、保持日数は Store ごとにサーバーから読む |
 | F2b1-11 | 確認ダイアログ: 見出し「一括削除」。本文の 1 段落目は「{ID}、{ID} と、その下にあるものを削除します。設定の「削除済み」から戻せます。{N} 日を過ぎると完全に削除されます。」(ID は閲覧のみでない選んだ行を画面の並びで先頭の 10 件まで「、」でつなぎ、11 件目からは「{ID}、…、{ID} ほか {K} 件 と、…」。`stores` が 2 以上なら最後の文を「保持日数を過ぎると完全に削除されます。」)。閲覧のみの行があれば 2 段落目に「閲覧のみの Store の {K} 件は削除しません。」。ボタンは「{N} 件を削除」(N は閲覧のみでない選んだ行の数、危険な操作の見た目) | 04 の 905〜907 行 |
 | F2b1-12 | 実行のあと: 選択を解除し、ダイアログを閉じ、開いている詳細パネルが選んだアイテムなら閉じ(下にあるものを開いていれば、詳細パネルの読み直しの 404 で閉じる)、画面を読み直す。トーストは「{M} 件を削除しました」、閲覧のみを残したら「{M} 件を削除しました。{K} 件は閲覧のみの Store のためそのままです」(M・K はサーバーの応答)。M が 0(全部がすでに消えていた)ならトーストを出さずに読み直す | 04 の 911 行。M が 0 のときは、1 件の削除の「すでに消えているのは、消した結果と同じなので、トーストなしで読み直す」に合わせる |
 | F2b1-13 | ダイアログを開く前に、開いている詳細パネルが選んだアイテムか、その下のもの(パネルの `ancestors` に選んだアイテムがある)なら、書きかけの確認(`drafts.confirmLeave(isItemDraft)`)を先に聞く。断ったら開かない | 1 件の削除(`features/items/delete.ts` の `open`)と同じ |
@@ -82,6 +82,7 @@ web/packages/core/src/selectionIndex.ts                    公開(index.ts か�
 web/packages/core/src/features/planning/backlog.ts         (変更)選択をつなぐ・selectedOne
 web/packages/core/src/features/planning/backlogSelection.test.ts  (backlog.test.ts は 298 行のため別のファイル)
 web/packages/ui/src/patterns/SelectionBar.svelte           バー
+web/packages/ui/src/patterns/RowCheck.svelte               行の選択のチェック(E のテーブルでも使う)
 web/app/src/screens/planning/RowSprintSelect.svelte        BacklogRow のスプリントのセレクトを切り出す(BacklogRow が 200 行のため)
 web/app/src/screens/planning/BacklogRow.svelte・BacklogTab.svelte  (変更)チェック・バー・パレット
 web/app/src/screens/item/BulkDeleteDialog.svelte           確認ダイアログ
@@ -333,20 +334,22 @@ git commit -m "feat(core): バックログの読み直しで選択から外し�
 ### Task 6: 選択バーと行のチェック・一括削除のダイアログ(画面)
 
 **Files:**
-- Create: `web/packages/ui/src/patterns/SelectionBar.svelte`、`web/app/src/screens/planning/RowSprintSelect.svelte`、`web/app/src/screens/item/BulkDeleteDialog.svelte`
+- Create: `web/packages/ui/src/patterns/SelectionBar.svelte`、`web/packages/ui/src/patterns/RowCheck.svelte`、`web/app/src/screens/planning/RowSprintSelect.svelte`、`web/app/src/screens/item/BulkDeleteDialog.svelte`
 - Modify: `web/packages/ui/src/index.ts`、`web/app/src/screens/planning/BacklogRow.svelte`・`BacklogTab.svelte`、`web/app/src/planning.ts`、`web/app/src/wireActions.ts`、`web/app/src/App.svelte`(`BulkDeleteDialog` を `DeleteItemDialog` の隣に置く)
-- Test: `web/packages/ui/src/patterns/SelectionBar.test.ts`(`web/app` には単体テストの仕組みがないので、行のチェックは Task 7 の e2e で確かめる)
+- Test: `web/packages/ui/src/patterns/SelectionBar.test.ts`・`RowCheck.test.ts`(`web/app` には単体テストの仕組みがないので、行のチェックは Task 7 の e2e で確かめる)
 
 **Interfaces:**
 - Consumes: Task 3 の `selectedText`・`allReadOnly`・`isSelected`・`createRowSelection`、Task 4 の `createBulkDelete`、Task 5 の `backlog.selection`・`backlog.selectedOne`、`selection`(`web/app/src/palette.ts`)
 - Produces:
-  - `SelectionBar` の Props: `{ text: string; readOnly: boolean; ondelete: () => void; onclear: () => void }`。ボタンは「一括削除…」「選択を解除」。`readOnly` なら「一括削除…」を無効にして `title` に `readOnlyNote`。F2b2 が `onchange` と「一括変更…」を先頭に足す
+  - `SelectionBar` の Props: `{ text: string; readOnlyNote?: string; ondelete: () => void; onclear: () => void }`。ボタンは「一括削除…」「選択を解除」。`readOnlyNote` を渡したら「一括削除…」を無効にして `title` にその文を出す(文は ui に書かず、呼ぶ側が core の `readOnlyNote` を渡す。ReadOnlyBand の `text` と同じ形)。F2b2 が `onchange` と「一括変更…」を先頭に足す
+  - `RowCheck` の Props: `{ label: string; checked: boolean; onchange: (checked: boolean) => void }`。行の先頭の選択のチェック。見える文字はなく、`label` は `aria-label`(「{ID} を選択」)。閲覧のみの Store でも選べるので無効にしない
   - `web/app/src/planning.ts` の `backlogSelection`、`web/app/src/wireActions.ts` の `bulkDelete`
   - `RowSprintSelect` の Props: `{ row: BacklogRow; sprint: string; overview: PlanningOverview | null; readOnly: boolean }`(`BacklogRow` のスプリントの `Select` と `pickSprint` をそのまま移す)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- `SelectionBar`: `text` 「2 件を選択中」が出る。「一括削除…」で `ondelete`、「選択を解除」で `onclear`。`readOnly` なら「一括削除…」が `disabled` で `title` が「閲覧のみの Store です」、「選択を解除」は押せる(Review Focus 4)。
+- `SelectionBar`: `text` 「2 件を選択中」が出る。「一括削除…」で `ondelete`、「選択を解除」で `onclear`。`readOnlyNote` に「閲覧のみの Store です」を渡したら「一括削除…」が `disabled` で `title` がその文、「選択を解除」は押せる(Review Focus 4)。
+- `RowCheck`: `label` の名前のチェックボックスで、押すと `onchange` に次の値(true・false)を渡す。無効にならない。
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -355,8 +358,8 @@ Expected: FAIL
 
 - [ ] **Step 3: 実装する**
 
-- `BacklogRow`: 先頭(持ち手の前)に `<input type="checkbox" aria-label={`${row.display} を選択`} checked={isSelected($rows, storeId, row.id)} onchange={(e) => backlog.selection.toggle({...}, e.currentTarget.checked)}>`。行の `storeId` は `BacklogTab` から渡す。スプリントのセレクトは `RowSprintSelect` に移して 200 行に収める。
-- `BacklogTab`: 枠の `{#each}` の上に、`$rows.length > 0` のとき `SelectionBar`(`text={selectedText($rows.length)}`・`readOnly={allReadOnly($rows)}`・`ondelete={() => void bulkDelete.open(backlog.selection, () => backlog.reload())}`・`onclear={() => backlog.selection.clear()}`)。`$effect` で `selection.provide(2, () => backlog.selectedOne())` を登録し、返す関数で外す。
+- `BacklogRow`: 先頭(持ち手の前)に `<RowCheck label={`${row.display} を選択`} checked={isSelected($rows, storeId, row.id)} onchange={(on) => backlog.selection.toggle({...}, on)} />`。行の `storeId` は `BacklogTab` から渡す。スプリントのセレクトは `RowSprintSelect` に移して 200 行に収める。
+- `BacklogTab`: 枠の `{#each}` の上に、`$rows.length > 0` のとき `SelectionBar`(`text={selectedText($rows.length)}`・`readOnlyNote={allReadOnly($rows) ? readOnlyNote : undefined}`(`readOnlyNote` は core から)・`ondelete={() => void bulkDelete.open(backlog.selection, () => backlog.reload())}`・`onclear={() => backlog.selection.clear()}`)。`$effect` で `selection.provide(2, () => backlog.selectedOne())` を登録し、返す関数で外す。
 - `planning.ts`: `export const backlogSelection = createRowSelection();` を作って `createBacklog` に `selection: backlogSelection, isReadOnly: (id) => catalog.store(id)?.readOnly ?? false` を渡す。
 - `wireActions.ts`: `export const bulkDelete = createBulkDelete({ actions: itemActionsPort, toasts, detail, drafts })`。画面を閉じるとき(既存の `itemDelete.cancel()` の並び)に `bulkDelete.cancel()` も呼ぶ。
 - `BulkDeleteDialog.svelte`: `DeleteItemDialog.svelte` と同じ形で `ConfirmDialog`(`danger`)。
@@ -416,13 +419,13 @@ git commit -m "test(e2e): バックログの選択と一括削除を通しで確
 
 ## F2b2 に渡すもの
 
-- 選択バーの「一括変更…」(`SelectionBar` の先頭に足し、`onchange` を受ける。閲覧のみの無効も同じ)と、ダイアログ「選択したアイテムを一括変更」から結果のトーストまで(04 の 827〜897 行)。
+- 選択バーの「一括変更…」(`SelectionBar` の先頭に足し、`onchange` を受ける。「一括削除…」と同じく、`readOnlyNote` を渡したら無効にして `title` にその文を出す)と、ダイアログ「選択したアイテムを一括変更」から結果のトーストまで(04 の 827〜897 行)。
 - 一括変更の対象は `RowSelection.rows` を開いた時点で固定し、変更のあとは選択を解除しない(04 の 897 行)。消えたものは `prune` で外れる。
 - バックログの一括変更のトーストの末尾「。{K} 件は完了のため、バックログには表示されません」(`goneText` と同じ分類の判定)。
 - Store ごとの保存と閲覧のみの数え方は、F2b1-6 の `BulkDelete` の束ね方に合わせる。
 
 ## E に求めること
 
-- 検索のテーブルの行の先頭のチェックと見出しの「すべて選択」(04 の 717 行)を `createRowSelection` でつなぎ、テーブルの読み直しのたびに `prune`(並べ替えたあとの順、同じアイテムは 1 回)、画面を離れたら `clear`。
-- テーブルの上に `SelectionBar` と、一括削除は `bulkDelete.open(selection, 読み直し)`。複数の Store の保持日数と閲覧のみの数え方はサーバー(F2b1-10)が返す。
+- 検索のテーブルの行の先頭のチェックは ui の `RowCheck`(`label` は「{ID} を選択」、`checked` は `isSelected`、`onchange` で `toggle`。バックログの行と同じ)を使う。見出しの「すべて選択」(04 の 717 行)は E で決める。どちらも `createRowSelection` でつなぎ、テーブルの読み直しのたびに `prune`(並べ替えたあとの順、同じアイテムは 1 回)、画面を離れたら `clear`。
+- テーブルの上に `SelectionBar`(`text` は `selectedText`、すべて閲覧のみのときだけ `readOnlyNote` に core の `readOnlyNote` を渡す)と、一括削除は `bulkDelete.open(selection, 読み直し)`。複数の Store の保持日数と閲覧のみの数え方はサーバー(F2b1-10)が返す。
 - パレットの `selection.provide(2, …)` をテーブルにも登録する(ちょうど 1 件のとき)。「{N} 件をまとめて変更…」は F2b2 の一括変更のダイアログを開く。
