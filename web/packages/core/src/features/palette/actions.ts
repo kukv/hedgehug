@@ -71,6 +71,7 @@ export function commandCandidates(d: ActionDeps): Candidate[] {
       hint: "C",
       run: closing(d, () => d.itemDialog.open()),
     },
+    moveTo(d, "command:inbox", g, "受信箱を開く", { name: "inbox" }),
     moveTo(d, "command:settings", g, "設定を開く", { name: "settings", tab: "accounts" }),
     {
       key: "command:sync",

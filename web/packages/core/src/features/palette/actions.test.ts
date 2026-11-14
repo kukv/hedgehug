@@ -202,6 +202,19 @@ describe("パレットの候補の実行", () => {
     expect(get(palette.state)).toBeNull();
   });
 
+  test("受信箱を開く は /inbox へ go する(Ctrl+Enter は新しいタブ)", async () => {
+    const { palette, calls } = await setup();
+    await palette.open();
+    palette.input("受信箱");
+    expect(labels(palette)).toEqual(["# コマンド", "受信箱を開く"]);
+    await palette.choose(1, true);
+    expect(named(calls, "openTab").map((c) => c.args)).toEqual([[{ name: "inbox" }]]);
+    await palette.open();
+    palette.input("受信箱");
+    await palette.choose(1, false);
+    expect(named(calls, "go").map((c) => c.args)).toEqual([[{ name: "inbox" }]]);
+  });
+
   test("設定: ワークスペース({名前}) はワークスペース・プロジェクトの画面だけで出し、その設定タブへ go", async () => {
     const home = await setup();
     await home.palette.open();
