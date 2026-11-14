@@ -1,4 +1,4 @@
-import { type Readable, readonly, writable } from "../../reactive/store";
+import { get, type Readable, readonly, writable } from "../../reactive/store";
 
 // スプリント・リリースの作成の要求(A5c-11)。パレットが ask し、そのワークスペースの計画の画面が take で受け取る。
 
@@ -17,14 +17,11 @@ export interface PlanRequest {
 
 export function createPlanRequest(): PlanRequest {
   const state = writable<PlanAsk | null>(null);
-  let current: PlanAsk | null = null;
-  state.subscribe((v) => {
-    current = v;
-  });
   return {
     request: readonly(state),
     ask: (r) => state.set(r),
     take(workspaceId, kind) {
+      const current = get(state);
       if (current?.workspaceId !== workspaceId || current.kind !== kind) return false;
       state.set(null);
       return true;
