@@ -41,7 +41,7 @@
 | # | 決めたこと | 根拠 |
 |---|---|---|
 | C4a-1 | 範囲: 通知の保存と既読、受信箱の画面とサイドバー、自動化の通知 2 種、止まった通知の 2 つのボタン。受け取った保存からの通知(割り当て・メンション・ウォッチ・同期の修復・受け取ったステータス削除からの自動化)と判定した保存の記録は C4b、上書きと「自分の値に戻す」は C4c、アクティビティは C4d | ユーザーの決定(2026-11-14) |
-| C4a-2 | 表は `inbox/001` の 1 つ。列は `id`(INTEGER PRIMARY KEY AUTOINCREMENT)・`store`・`workspace`・`kind`・`item`・`rule`・`text`・`reason`・`status`・`from_status`・`display`・`sender`・`at`(UTC の RFC3339Nano。`timeText`)・`read`(0/1)・`result`(''・'applied'・'kept')。索引は `(store, at, id)`。C4b・C4c が要る列は、そのとき新しい手順で足す | statedb の「機能/連番」の手順(`migrate.go`)。使わない列を先に作らない |
+| C4a-2 | 表は `inbox/001` の 1 つ。列は `id`(INTEGER PRIMARY KEY AUTOINCREMENT)・`store`・`workspace`・`kind`・`item`・`rule`・`text`・`reason`・`status`・`from_status`・`display`・`sender`・`at`(UTC の固定幅の時刻の文字列。ナノ秒 9 桁にそろえる。`timeText` は末尾の 0 を削り、文字列の比較で並びが狂うため使わない)・`read`(0/1)・`result`(''・'applied'・'kept')。索引は `(store, at, id)`。C4b・C4c が要る列は、そのとき新しい手順で足す | statedb の「機能/連番」の手順(`migrate.go`)。使わない列を先に作らない |
 | C4a-3 | 通知を作った時刻は、`statedb` の受信箱が `Add` のときに時計(`port.Clock`)で刻む。呼ぶ側は時刻を渡さない | `workspaces.Service` は時計を持たない。3 つの呼び出し元で同じ刻み方にする |
 | C4a-4 | 並びは `at` の新しい順、同じなら `id` の大きい順。続きは、最後の行の `(at, id)` を印にして、それより前の 300 件を読む。301 件目があれば「さらに読み込む」を出す | 06「並びと行の表示」「件数」。読み込むあいだに通知が増えても重ならない |
 | C4a-5 | 表示中の Store だけを読む: 一覧・未読数・すべて既読は、`port.StoreList.List` が返す Store の行だけを対象にする。非表示の Store の行は消さず、再表示すれば出る | 08 `:156-158`。`StoreList.List` は非表示を返さない |
