@@ -1,5 +1,5 @@
 import type { InboxRow, InboxTargetKind } from "../../model/inbox";
-import type { Route } from "../router/route";
+import type { Route, WorkspaceTab } from "../router/route";
 
 // goneTextOf は、削除済みの対象の表示(リンクにしない)。削除済みでなければ null。
 export function goneTextOf(kind: InboxTargetKind): string | null {
@@ -21,4 +21,10 @@ export function projectRouteOf(row: InboxRow): Route | null {
   const t = row.target;
   if (t.kind !== "project" && t.kind !== "moved_project") return null;
   return { name: "project", store: row.store.name, project: t.display, tab: "overview" };
+}
+
+// workspaceRouteOf は、ワークスペースを指す行の開く先。sprints・releases はそのタブ(区画なし)、ほかは設定タブとその区画(空は自動化)。
+export function workspaceRouteOf(section: string): { tab: WorkspaceTab; section?: string } {
+  if (section === "sprints" || section === "releases") return { tab: section };
+  return { tab: "settings", section: section === "" ? "automation" : section };
 }

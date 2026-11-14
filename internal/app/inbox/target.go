@@ -60,7 +60,7 @@ func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) 
 	case n.Project != "":
 		row.Target, err = projectTarget(r, n)
 	default:
-		row.Target, err = workspaceTarget(r, n.Workspace)
+		row.Target, err = workspaceTarget(r, n.Workspace, n.Section)
 	}
 	if err != nil {
 		return Row{}, err
@@ -121,8 +121,8 @@ func projectTarget(r port.Reader, n port.NoticeRow) (Target, error) {
 	}, nil
 }
 
-// workspaceTarget は、アイテムのない通知の対象(ワークスペースの設定の「自動化」)。
-func workspaceTarget(r port.Reader, id workspace.ID) (Target, error) {
+// workspaceTarget は、アイテムのない通知の対象。section は開く区画で、空なら設定の「自動化」。
+func workspaceTarget(r port.Reader, id workspace.ID, section string) (Target, error) {
 	ws, err := port.LiveWorkspace(r, id)
 	if errors.Is(err, port.ErrNotFound) {
 		return Target{Kind: TargetDeletedWorkspace, Workspace: id}, nil
@@ -130,7 +130,10 @@ func workspaceTarget(r port.Reader, id workspace.ID) (Target, error) {
 	if err != nil {
 		return Target{}, err
 	}
-	return Target{Kind: TargetWorkspace, Workspace: ws.ID, WorkspaceName: ws.Name, Section: "automation"}, nil
+	if section == "" {
+		section = "automation"
+	}
+	return Target{Kind: TargetWorkspace, Workspace: ws.ID, WorkspaceName: ws.Name, Section: section}, nil
 }
 
 // action は、止まった通知のボタンの状態を上から順に決める(C4a-10)。it は生きているアイテム(なければ nil)。
