@@ -8,9 +8,10 @@
     tokenize,
   } from "@hedgehug/core";
   import { Avatar, KindIcon, type KindName, Markdown } from "@hedgehug/ui";
-  import { inbox, linkOf } from "../../inbox";
+  import { linkOf } from "../../inbox";
   import { links, syncNow } from "../../wire";
   import InboxAction from "./InboxAction.svelte";
+  import InboxDot from "./InboxDot.svelte";
 
   // 受信箱の 1 行(06「並びと行の表示」)。点・ピル・対象・相対時間・差出人と本文を出す。
   interface Props {
@@ -33,13 +34,7 @@
 </script>
 
 <li class="row" class:unread={!row.read}>
-  <button
-    type="button"
-    class="dot"
-    aria-label={row.read ? "未読にする" : "既読にする"}
-    title={row.read ? "未読にする" : "既読にする"}
-    onclick={() => void inbox.toggle(row)}
-  ></button>
+  <InboxDot {row} />
   <div class="main">
     <div class="line">
       <span class="pill">{pillOf(row.kind)}</span>
@@ -94,31 +89,6 @@
     gap: 10px;
     padding: 10px 0;
     border-bottom: 1px solid var(--line);
-  }
-  .dot {
-    flex: none;
-    width: 18px;
-    height: 18px;
-    margin-top: 1px;
-    border: 0;
-    border-radius: 50%;
-    background: none;
-    cursor: pointer;
-    position: relative;
-  }
-  .dot::after {
-    content: "";
-    position: absolute;
-    inset: 5px;
-    border-radius: 50%;
-    border: 1px solid var(--line);
-  }
-  .unread .dot::after {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .dot:hover {
-    background: var(--hover);
   }
   .main {
     flex: 1;

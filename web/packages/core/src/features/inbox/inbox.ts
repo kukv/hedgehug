@@ -52,6 +52,8 @@ export interface InboxState {
   // more は、「さらに読み込む」を出すか。loading は、タブの最初の行か続きを読んでいるあいだ。
   more: boolean;
   loading: boolean;
+  // loaded は、いまのタブの一覧を読み込めたか。読み込みに失敗したままのときは false(空の表示を出さない)。
+  loaded: boolean;
 }
 
 export interface Inbox {
@@ -91,7 +93,13 @@ const zero: InboxCounts = {
 };
 
 export function createInbox(deps: InboxDeps): Inbox {
-  const state = writable<InboxState>({ tab: "all", rows: [], more: false, loading: false });
+  const state = writable<InboxState>({
+    tab: "all",
+    rows: [],
+    more: false,
+    loading: false,
+    loaded: false,
+  });
   const unread = writable<InboxCounts>(zero);
   const canReadAll = writable(false);
   // loads は、古い答えを捨てるための通し番号。
@@ -114,12 +122,12 @@ export function createInbox(deps: InboxDeps): Inbox {
   async function first(tab: InboxTab) {
     loads += 1;
     const mine = loads;
-    state.set({ tab, rows: [], more: false, loading: true });
+    state.set({ tab, rows: [], more: false, loading: true, loaded: false });
     canReadAll.set(get(unread)[tab] > 0);
     try {
       const page = await deps.port.list(tab);
       if (mine !== loads) return;
-      state.set({ tab, rows: page.rows, more: page.more, loading: false });
+      state.set({ tab, rows: page.rows, more: page.more, loading: false, loaded: true });
       publishUnread(page.unread);
     } catch (e) {
       failed(mine, e);
@@ -139,7 +147,7 @@ export function createInbox(deps: InboxDeps): Inbox {
       if (mine !== loads) return;
       rows = [...rows, ...page.rows];
     } while (page.more && rows.length < shown.length);
-    state.set({ tab, rows, more: page.more, loading: false });
+    state.set({ tab, rows, more: page.more, loading: false, loaded: true });
     publishUnread(page.unread);
   }
 
@@ -172,7 +180,13 @@ export function createInbox(deps: InboxDeps): Inbox {
       try {
         const page = await deps.port.list(s.tab, { at: last.at, id: last.id });
         if (mine !== loads) return;
-        state.set({ tab: s.tab, rows: [...s.rows, ...page.rows], more: page.more, loading: false });
+        state.set({
+          tab: s.tab,
+          rows: [...s.rows, ...page.rows],
+          more: page.more,
+          loading: false,
+          loaded: true,
+        });
         publishUnread(page.unread);
       } catch (e) {
         failed(mine, e);

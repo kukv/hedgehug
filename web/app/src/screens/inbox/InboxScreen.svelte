@@ -27,6 +27,7 @@
 
   // 差出人の名前とメンションの表示に使う、行の Store のメンバー。画面を開いているあいだ、Store ごとに 1 回読む。
   const members = new SvelteMap<string, Member[]>();
+  // asked は、読み込み中か読めた Store。失敗した Store は外し、次に受信箱を開いたときに読み直す。
   const asked = new Set<string>();
   $effect(() => {
     for (const r of $view.rows) {
@@ -35,7 +36,7 @@
       asked.add(id);
       listMembers(id)
         .then((m) => members.set(id, m))
-        .catch(() => {});
+        .catch(() => asked.delete(id));
     }
   });
 </script>
@@ -67,7 +68,7 @@
         </Button>
       </div>
     {/if}
-  {:else if !$view.loading}
+  {:else if $view.loaded && !$view.loading}
     <div class="empty">
       <p class="empty-title">{empty.title}</p>
       {#if empty.note}

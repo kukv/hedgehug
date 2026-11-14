@@ -174,6 +174,15 @@ describe("createInbox (06「受信箱」)", () => {
     expect(get(t.inbox.state)).toMatchObject({ tab: "mention", loading: false });
   });
 
+  it("is loaded only after the list was read", async () => {
+    const t = setup(vi.fn, []);
+    t.port.list.mockRejectedValueOnce(new Error("通信できません"));
+    await t.inbox.open();
+    expect(get(t.inbox.state)).toMatchObject({ rows: [], loaded: false });
+    await t.inbox.open();
+    expect(get(t.inbox.state)).toMatchObject({ rows: [], loaded: true });
+  });
+
   it("reloads the unread counts alone", async () => {
     const t = setup(vi.fn, [row(1)]);
     await t.inbox.reloadUnread();

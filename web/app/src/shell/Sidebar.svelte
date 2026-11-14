@@ -65,7 +65,7 @@
   >
     <span>受信箱</span>
     {#if $unread.all > 0}
-      <span class="badge">{$unread.all}</span>
+      <span class="badge" role="img" aria-label="未読 {$unread.all} 件">{$unread.all}</span>
     {/if}
   </a>
 </nav>
