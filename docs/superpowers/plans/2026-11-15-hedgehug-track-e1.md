@@ -25,7 +25,8 @@
 
 土台の計画の Global Constraints をすべて引き継ぐ。加えて次を守る。
 
-- 大きさの上限: Go ファイル 300 行(テスト 600 行)、関数 60 行、認知的複雑度 15、パッケージのテスト以外のファイル 20 個、Svelte 200 行、TS 300 行。`web/app/src/wire.ts` は満杯なので、検索の組み立ては新しい `web/app/src/search.ts` に置く(`inbox.ts` と同じ形)。
+- 大きさの上限: Go ファイル 300 行(テスト 600 行)、関数 60 行、認知的複雑度 15、パッケージのテスト以外のファイル 20 個、Svelte 200 行、TS 300 行。いまの数: `internal/app/port` は 20 個で満杯(画面の状態の口は `app/search` に置く。F3 の `appreports.Selections` と同じ)、`domain/planning` 14 個、`domain/history` 6 個、`domain/change` 8 個、`domain/mention` 1 個、`infra/statedb` 11 個。`web/packages/core/src/features/palette/palette.ts` は 259 行(「このクエリで」の群は新しい `queryGroup.ts` に置く)、`web/app/src/shell/Sidebar.svelte` 146 行、`web/app/src/App.svelte` 123 行。`web/app/src/wire.ts` は満杯なので、検索の組み立ては新しい `web/app/src/search.ts` に置く(`inbox.ts` と同じ形)。
+- 画面のパッケージの依存の向き(`web/.dependency-cruiser.cjs`): ui は Svelte だけを使い、core を import しない。ui の部品の props の型は ui の中で宣言する。
 - app の機能どうしは import しない(設計書 2 節)。`app/search` は domain と `app/port` だけを使う。読み方の前例は `internal/app/palette/read.go`(写してよい)。
 - 依存ライブラリは足さない。足す必要が出たら、`go get <module>@vX.Y.Z`・`pnpm add -E <pkg>@X.Y.Z` のように版を明記し、公開から 7 日以上たった版だけを使う(Go は `go list -m -json <module>@<ver>` の Time で確かめる)。
 - トークンらしい値(`ghp_` などで始まる文字列)を、計画にもテストにも書かない。
@@ -191,7 +192,8 @@ git commit -m "feat(query): 名前・ID・自由な語のキーで照合する(E
 
 **Files:**
 - Create: `internal/domain/query/dates.go`、`internal/domain/query/match_values.go`
-- Test: `internal/domain/query/match_values_test.go`
+- Modify: `internal/domain/mention/mention.go`(`Any`)
+- Test: `internal/domain/query/match_values_test.go`、`internal/domain/mention/mention_test.go`
 
 **Interfaces:**
 - Consumes: Task 2 の `Facts`・`Match`
@@ -204,27 +206,28 @@ git commit -m "feat(query): 名前・ID・自由な語のキーで照合する(E
 - `TestMatchNegationKeepsEmpty`(Review Focus 1): 担当者なしに `-assignee:@me` 真、ポイントなしに `-points>3` 真、`-end:abc` 真。
 - `TestSprintRelease`: `sprint:current`(`SprintCurrent`)、`sprint:next`、`sprint:"Sprint 3"`、`sprint:none`、`release:v2.0.0`、`release:none`。
 - `TestIsHas`: `is:blocked`(`Item.Blocked`)、`is:overdue`(未完了で終了日が今日より前。今日は偽。完了は偽)、`is:overwritten`、`is:invalid`(`Invalid` が偽なら偽)、`has:end`、`has:sprint`、`has:release`、`has:pr`、チェックのプロパティはオンだけ `has:` 真。
-- `TestMentions`: 説明の `@tanaka`、削除されていないコメントの `@me`(`Me` が suzuki で本文に `@suzuki`)、`mentions:none`(どこにもメンションなし)。
+- `TestMentions`: 説明の `@tanaka`、削除されていないコメントの `@me`(`Me` が suzuki で本文に `@suzuki`)、`mentions:none`(どこにもメンションなし。`mail@example` だけの本文はメンションありとみなす)。
+- `internal/domain/mention/mention_test.go` の `TestAny`: `@hanako 見て`・`cc:@Hanako`・`mail@hanako`・`` `@hanako` ``(コードの中)は真、`hanako`・`@`・`@ 見て`・`@。` は偽。
 - `TestCustomProperties`: 単一選択・複数選択(選択肢の名前、`none`)、数値(比較)、日付(比較)、ユーザー(`@me`)、チェック(`true`、`false` はオフと未設定の両方)、テキスト・URL(部分一致、`none`)。キーを持たないワークスペースのアイテムは偽、否定で真。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `go test ./internal/domain/query/ -run 'Test(ParseDate|Compare|MatchNegation|SprintRelease|IsHas|Mentions|CustomProperties)'`
+Run: `go test ./internal/domain/query/ ./internal/domain/mention/ -run 'Test(ParseDate|Compare|MatchNegation|SprintRelease|IsHas|Mentions|CustomProperties|Any)'`
 Expected: FAIL
 
 - [ ] **Step 3: `ParseDate` と、Task 2 で残したキーの判定を書く**
 
-追加プロパティの値は `Item.Choices`(選択式)と `Item.Fields`(ほかの型。ログの `set` の値のまま)から読む。メンションの抽出は `domain/mention`。
+追加プロパティの値は `Item.Choices`(選択式)と `Item.Fields`(ほかの型。ログの `set` の値のまま)から読む。メンションは `mention.Has`。`mentions:none` のために、`internal/domain/mention/mention.go` に `func Any(body string) bool`(`@` の直後に `member.ValidLogin` に合う 1 文字以上の並びがある。`@` の前の文字とコードの中かは問わない。`Has` と同じ読み方)を足す。
 
 - [ ] **Step 4: 通ることを確かめる**
 
-Run: `go test ./internal/domain/query/`
+Run: `go test ./internal/domain/query/ ./internal/domain/mention/`
 Expected: PASS
 
 - [ ] **Step 5: コミット**
 
 ```bash
-git add internal/domain/query
+git add internal/domain/query internal/domain/mention
 git commit -m "feat(query): 数・日付・状態・追加プロパティのキーで照合する(E1 Task 3)"
 ```
 
@@ -238,12 +241,12 @@ git commit -m "feat(query): 数・日付・状態・追加プロパティのキ�
 
 **Interfaces:**
 - Consumes: Task 1 の `Sort`、Task 2 の `Facts`
-- Produces: `func Order(rows []Facts, s *Sort)` — その場で並べ替える(E1-10)。表にないキーは `s` が nil と同じ
+- Produces: `func Order[T any](rows []T, facts func(T) *Facts, s *Sort)` — その場で並べ替える(E1-10。`app/search` は Store の情報や旧 ID の印を持つ行をそのまま並べる)。表にないキーは `s` が nil と同じ
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - `TestOrderDefault`: Store の順 → ワークスペースの順 → 並び順(`Rank` → 作成の時刻 → 内部 ID)。
-- `TestOrderKeys`: `id`(番号)、`title`(五十音順。`strings.Compare`)、`kind`(Epic・Story・Task・Bug・Step)、`status`・`priority`(ワークスペースの定義の順)、`assignee`(表示名の順)、`project`(プロジェクトのタイトル)、`parent`(親の ID)、`sprint`・`release`(名前)、`start`・`end`・`points`・`estimate`、`created`・`updated`(古いものが先)、降順。
+- `TestOrderKeys`: `id`(番号)、`title`(`cmp.Compare` の文字列の順。名前の並べ方は `planning.ScreenOrder` と同じ)、`kind`(Epic・Story・Task・Bug・Step)、`status`・`priority`(ワークスペースの定義の順)、`assignee`(表示名の順)、`project`(プロジェクトのタイトル)、`parent`(親の ID)、`sprint`・`release`(名前)、`start`・`end`・`points`・`estimate`、`created`・`updated`(古いものが先)、降順。
 - `TestOrderEmptyLast`: 値のないアイテムは昇順でも降順でも最後。
 - `TestOrderTieByPlace`: 値が同じものは Store の順・ワークスペースの順・並び順。
 - `TestOrderSystemsAcrossWorkspaces`: 関連システムは、各アイテムの値をワークスペースの定義の順に並べ直して先頭から比べ、値の数が少ない方が先。2 つのワークスペースで同じ名前は 1 つにし、(Store、ワークスペース)の順に、最初に現れた位置で順を決める(04 の 266 行の例を作る)。
@@ -276,37 +279,40 @@ git commit -m "feat(query): 並べ替えのキーと既定の並びを決める(
 
 **Files:**
 - Create: `internal/domain/history/updated.go`、`internal/domain/planning/next.go`
-- Test: `internal/domain/history/updated_test.go`、`internal/domain/planning/next_test.go`
+- Modify: `internal/domain/change/deletion.go`(`DaysLeft`)
+- Test: `internal/domain/history/updated_test.go`、`internal/domain/planning/next_test.go`、`internal/domain/change/deletion_test.go`
 
 **Interfaces:**
 - Produces:
   - `func Updated(log []change.Record, c Context) time.Time` — E1-12。履歴の行を作る仕組み(`ItemRows`)と同じ規則で行に出る記録だけを見る
   - `func NextSprint(live []Sprint) *Sprint` — E1-13。なければ nil
+  - `func (d Deletion) DaysLeft(retention int, today string) int` — 削除した日(このマシンの時刻帯)+ 保持日数 − 今日の日数。負なら保持日数を過ぎている(E1-8。G の設定の「削除済み」も同じ関数を使う)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - `TestUpdatedSkipsGitHubSyncAndRank`: 作成(人)→ 人のステータスの変更 → 自動化の変更 → GitHub のリンクの値の変更 → 同期の修復 → 順位の変更(`rank`)の順のログで、自動化の変更の時刻。
 - `TestUpdatedCreateOnly`: 作成だけなら作成の時刻。
 - `TestUpdatedHiddenValueDeletion`: `HiddenOps` に入る操作の行(値の削除で書いた行)は使わない。
+- `TestDaysLeft`: 11/01 に削除・保持日数 30・今日 11/15 → 16。10/01 に削除 → -15。
 - `TestNextSprint`: 計画中の 3 つ(開始日 12/01・なし・11/20)→ 11/20。実行中・完了・削除済みは選ばない。同じ開始日は `ScreenOrder` の順。計画中がなければ nil。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `go test ./internal/domain/history/ ./internal/domain/planning/ -run 'TestUpdated|TestNextSprint'`
+Run: `go test ./internal/domain/history/ ./internal/domain/planning/ ./internal/domain/change/ -run 'TestUpdated|TestNextSprint|TestDaysLeft'`
 Expected: FAIL
 
-- [ ] **Step 3: `Updated` と `NextSprint` を書く**
+- [ ] **Step 3: `Updated`・`NextSprint`・`DaysLeft` を書く**
 
 - [ ] **Step 4: 通ることを確かめる**
 
-Run: `go test ./internal/domain/history/ ./internal/domain/planning/`
+Run: `go test ./internal/domain/history/ ./internal/domain/planning/ ./internal/domain/change/`
 Expected: PASS
 
 - [ ] **Step 5: コミット**
 
 ```bash
-git add internal/domain/history internal/domain/planning
-git commit -m "feat: 最後に変わった時刻と次のスプリントを求める(E1 Task 5)"
+git add internal/domain/history internal/domain/planning internal/domain/change
+git commit -m "feat: 最後に変わった時刻・次のスプリント・削除済みの残り日数を求める(E1 Task 5)"
 ```
 
 ---
@@ -321,16 +327,16 @@ git commit -m "feat: 最後に変わった時刻と次のスプリントを求�
 - Consumes: Task 2 の `query.Facts`・`query.Ref`、Task 5 の `history.Updated`・`planning.NextSprint`、`port.Stores`・`port.StoreList`・`port.SyncTargets`・`port.Identity`・`port.InboxBook`・`port.Clock`
 - Produces:
   - `type Service struct { Stores port.Stores; StoreList port.StoreList; SyncTargets port.SyncTargets; Identity port.Identity; Inbox port.InboxBook; Clock port.Clock }`
-  - `type entry struct { info port.StoreInfo; facts query.Facts; retention int /* 保持日数 */ }`(パッケージの中だけ)
+  - `type entry struct { info port.StoreInfo; facts query.Facts; daysLeft *int /* 削除済みだけ。change.Deletion.DaysLeft */ }`(パッケージの中だけ)
   - `func (s Service) entries(ctx context.Context, q query.Query) ([]entry, error)` — 表示中の Store を `StoreList` の順に 1 つずつ読む(読み取りを入れ子にしない)。`q.Deleted` なら削除済みのアイテム(ワークスペースが削除されていないもの)、でなければ削除されていないアイテム
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- `TestFactsBasic`: ステータス・担当者の表示名(`Names`)・プロジェクトの `Ref`(旧 ID を含む)・祖先・関連(削除済みの相手を除く)・スプリントの `SprintCurrent`・`SprintNext`・`HasPR`・`Created`・`Updated`・`Me`・`Item.Blocked`。
+- `TestFactsBasic`: ステータス・担当者の表示名(`Names`)・プロジェクトの `Ref`(旧 ID を含む)・祖先・関連(削除済みの相手を除く)・スプリントの `SprintCurrent`・`SprintNext`・`HasPR`(PR のリンクだけ。Issue のリンクだけのアイテムは偽)・`Created`・`Updated`・`Me`・`Item.Blocked`。
 - `TestFactsTextOnlyWhenNeeded`: `NeedsText` が偽なら `Description`・`Comments` は空、真なら説明と削除されていないコメントの本文。
 - `TestFactsOverwrittenOnlyWhenNeeded`: 受信箱に未読の「上書き」(`port.NoticeOverwrite`)があるアイテムだけ `Overwritten`。既読のもの・別のアイテムのものは偽。`NeedsInbox` が偽なら受信箱を読まない(偽物の受信箱が呼ばれたら失敗)。
 - `TestSearchOldPrefixReusedByAnother`(Review Focus 2): ワークスペース A の接頭辞を HH から WEB に変え、ワークスペース B が HH を使うとき、A のアイテムの `Aliases` に `HH-1` がある。
-- `TestEntriesDeleted`: `Deleted` のとき、削除済みのアイテムだけ。ワークスペースごと削除したものは出さない。`retention` は Store の保持日数。
+- `TestEntriesDeleted`: `Deleted` のとき、削除済みのアイテムだけ。ワークスペースごと削除したものは出さない。`daysLeft` は Store の保持日数(`RetentionDays`)で `DaysLeft` を求めたもの。
 - `TestEntriesHiddenStoreLeftOut`: 非表示の Store のアイテムは出ない。
 
 - [ ] **Step 2: 落ちることを確かめる**
@@ -340,7 +346,7 @@ Expected: FAIL
 
 - [ ] **Step 3: `Service`・`entries`・材料の作り方を書く**
 
-ワークスペースは `port.LiveWorkspaces`(B5b の取り決め)、並びは `workspace.RankOf` → 内部 ID(E1-10)。旧 ID は `transfer.Aliases`(パレットの `index.go` と同じ。すべての Store の転送記録を集めてから)。ブロック中は `relation.BlockedSet`(閉じたかは、ブロック元のワークスペースの設定の分類)。PR のリンクは `itemlink.FromLog`、コメントは `comment.FromLog`、スプリント・リリースは `planning.FromLog`(ワークスペースのログ)と `planning.ActiveSprint`・`planning.NextSprint`。受信箱は `Inbox.List` を `Kinds: []port.NoticeKind{port.NoticeOverwrite}` で最後まで読み、未読の `Item` を集める。
+ワークスペースは `port.LiveWorkspaces`(B5b の取り決め)、並びは `workspace.RankOf` → 内部 ID(E1-10)。旧 ID は `transfer.Aliases`(パレットの `index.go` と同じ。すべての Store の転送記録を集めてから)。ブロック中は `relation.BlockedSet`(閉じたかは、ブロック元のワークスペースの設定の分類)。PR のリンクは `itemlink.FromLog` の `Links` のうち `Kind` が `itemlink.PR` のもの、コメントは `comment.FromLog`、スプリント・リリースは `planning.FromLog`(ワークスペースのログ)と `planning.ActiveSprint`・`planning.NextSprint`。受信箱は `Inbox.List` を `Kinds: []port.NoticeKind{port.NoticeOverwrite}` で最後まで読み、未読の `Item` を集める。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -367,14 +373,14 @@ git commit -m "feat(search): 表示中の Store を読んで照合の材料を�
 - Produces:
   - `type Row struct { Store port.StoreInfo; Facts query.Facts; OldID bool; DaysLeft *int /* 削除済みだけ。保持日数を過ぎていれば負 */ }`
   - `type Result struct { Errors []string; HasKey bool; Group string; Deleted bool; Rows []Row }`
-  - `func (s Service) Search(ctx context.Context, text string) (Result, error)` — エラーがあれば `Rows` は空で、Store を読まない
+  - `func (s Service) Search(ctx context.Context, text string) (Result, error)` — 先にすべての Store(非表示を含む)のワークスペースの設定を読んで追加プロパティのキーを集め、`Parse` する。エラーがあれば `Rows` は空で、アイテムは読まない
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 - `TestSearchMatchesAndOrders`: `kind:bug sort:-points` で Bug だけがポイントの降順。
-- `TestSearchErrorsReadNothing`: `status:` で `Errors` 1 行、`Rows` 空。
+- `TestSearchErrorsSkipItems`: `status:` で `Errors` 1 行、`Rows` 空。`port.Stores` を包んだ偽物で、`Items().List` が 1 回も呼ばれないことを確かめる。
 - `TestSearchKeyOfHiddenStoreIsKnown`(Review Focus 4): 非表示の Store(`SyncTargets` にあり `StoreList` にない)のワークスペースにだけある `customer` は、エラーにならず 0 件。
-- `TestSearchDeletedDaysLeft`: 保持日数 30、11/01 に削除、今日 11/15 → `DaysLeft` 16。10/01 に削除 → 負。
+- `TestSearchDeletedDaysLeft`: 保持日数 30、11/01 に削除、今日 11/15 → `DaysLeft` 16。
 - `TestSearchMeIsPerStore`: Store S1 の「あなた」が tanaka、S2 が suzuki のとき、`assignee:@me` は S1 の tanaka 担当と S2 の suzuki 担当の両方。
 - `TestSearchGroupAndHasKey`: `group:kind foo` で `Group` は `kind`、`HasKey` 真。
 
@@ -404,15 +410,15 @@ git commit -m "feat(search): クエリで絞り込み、並べた結果を返す
 ### Task 8: 画面の状態の保存と、検索・画面の状態の API
 
 **Files:**
-- Create: `internal/app/port/screenstates.go`、`internal/infra/statedb/screens.go`、`internal/adapter/httpapi/search/search.go`、`internal/adapter/httpapi/search/screens.go`
-- Modify: `internal/adapter/httpapi/routes.go`(`Deps.Screens port.ScreenStates`、`search.Register`)、`cmd/hedgehug/wire.go`・`cmd/hedgehug/wire_e2e.go`(`Screens: db.ScreenStates()`)、`api/openapi.yaml`・`web/packages/api/src/generated.ts`(`make generate`)
+- Create: `internal/app/search/screens.go`(口 `ScreenStates`)、`internal/infra/statedb/screens.go`、`internal/adapter/httpapi/search/search.go`、`internal/adapter/httpapi/search/screens.go`
+- Modify: `internal/adapter/httpapi/routes.go`(`Deps.Screens appsearch.ScreenStates`、`search.Register`)、`cmd/hedgehug/wire.go`・`cmd/hedgehug/wire_e2e.go`(`Screens: db.ScreenStates()`)、`api/openapi.yaml`・`web/packages/api/src/generated.ts`(`make generate`)
 - Test: `internal/infra/statedb/screens_test.go`、`internal/adapter/httpapi/search/search_test.go`
 
 **Interfaces:**
 - Consumes: Task 7 の `Service.Search`・`Result`・`Row`
 - Produces:
-  - `type ScreenStates interface { Get(ctx context.Context, screen string) (string, bool, error); Put(ctx context.Context, screen, body string) error }`(`port`)
-  - `func (d *DB) ScreenStates() port.ScreenStates`(移行 `screens/001`)
+  - `type ScreenStates interface { Get(ctx context.Context, screen string) (string, bool, error); Put(ctx context.Context, screen, body string) error }`(`app/search`。`port` は 20 個で満杯)
+  - `func (d *DB) ScreenStates() ScreenStates`(`statedb` の型。移行 `screens/001`。`ReportSelections` と同じ形)
   - API(E1-24): `POST /api/search`(operationId `search`)、`GET /api/screen-states/{screen}`(`screen-state-get`)、`PUT /api/screen-states/{screen}`(`screen-state-put`)
   - 本文の型 `SearchResult { errors, hasKey, group, deleted, rows }`、`SearchRow { storeId, storeName, storeColor, readOnly, workspaceId, projectId, itemId, display, oldIdHit, title, kind, status: {name, category, color} | null, assignee: {login, name: string|null} | null, priority: {name, color} | null, end: string, points: number|null, deleted: {daysLeft: number} | null }`(`name` が null はメンバーにいない人)、`ScreenState { body: string|null }`
 
@@ -460,7 +466,7 @@ git commit -m "feat(search): 検索と画面の状態の API を足す(E1 Task 8
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- `caret.test.ts`: Task 1 の表の入力について、語の始まりのキーの読み方が同じになる(`http://x` は `http`、`C++>11` は null、`- foo` は null)。`assignee:tanaka,すず|`(`|` はカーソル)→ `{key: "assignee", start: 15, typed: "すず"}`。`-parent:"HH|` → `{key: "parent", not: true, typed: "HH"}`。キーのない語・空白の上は null。
+- `caret.test.ts`: Task 1 の表の入力について、語の始まりのキーの読み方が同じになる(`http://x` は `http`、`C++>11` は null、`- foo` は null)。`assignee:tanaka,すず|`(`|` はカーソル)→ `{key: "assignee", start: 16, typed: "すず"}`。`-parent:"HH|` → `{key: "parent", not: true, typed: "HH"}`。キーのない語・空白の上は null。
 - `search.test.ts`: `setQuery` を 3 回続けて呼ぶと、150ms のあとに 1 回だけ検索する。遅れて返った古い応答は捨てる。`open` は画面の状態の `search` の `query` で検索する。`setQuery` で画面の状態に書く。
 - `screenStates.test.ts`: 2 回目の `read` はサーバーを読まない。`write` のあとの `read` は書いた値。
 - `route.test.ts`: `/search` ⇄ `{ name: "search" }`。`/search/x` はホーム。
@@ -543,12 +549,12 @@ git commit -m "feat(core): 絞り込み欄の候補を出す(E1 Task 10)"
 - Test: `web/packages/ui/src/patterns/FilterInput.test.ts`
 
 **Interfaces:**
-- Consumes: Task 10 の `FilterCandidate`
-- Produces: `FilterInput` の props `{ value: string; placeholder: string; candidates: FilterCandidate[]; errors: string[]; oninput(text: string, caret: number): void; onchoose(c: FilterCandidate): void; onhelp(): void }`。入力欄に `data-filter-input`
+- Consumes: なし(ui は core を import しない)
+- Produces: `FilterInput` の props `{ value: string; placeholder: string; options: FilterOption[]; errors: string[]; oninput(text: string, caret: number): void; onchoose(index: number): void; onhelp(): void }`、`FilterOption = { label: string; dot?: string }`(ui の中で宣言する。app が core の `FilterCandidate` を渡す)。入力欄に `data-filter-input`
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-- 候補は入力欄にフォーカスがあるあいだだけ出る。↑↓ で選び、Enter かクリックで `onchoose`。変換中(`isComposing` または keyCode 229)の Enter は何もしない。
+- 候補は入力欄にフォーカスがあるあいだだけ出る。↑↓ で選び、Enter かクリックで `onchoose(選んだ位置)`。変換中(`isComposing` または keyCode 229)の Enter は何もしない。
 - 候補が出ているときの Esc は候補だけを閉じ、イベントを外へ伝えない(詳細パネルが閉じない)。2 回目の Esc は外へ伝わる。
 - 右に「検索ヘルプ」のボタン。押すと `onhelp`。
 - `errors` は欄の下に 1 行ずつ赤字(`role="alert"`)。
@@ -630,7 +636,8 @@ git commit -m "feat(web): 検索の画面とサイドバーのナビを足す(E1
 ### Task 13: パレットの「検索を開く」と「このクエリで」
 
 **Files:**
-- Modify: `web/packages/core/src/features/palette/actions.ts`(コマンド)、`web/packages/core/src/features/palette/palette.ts`(「このクエリで」の群)、`PaletteDeps` に `search: Pick<SearchPort, "search">` と `openSearch(query: string): Promise<void>`、`web/app/src/palette.ts`(組み立て)
+- Create: `web/packages/core/src/features/palette/queryGroup.ts`(入力を待って解析を頼み、いまの入力の応答だけを群にする)
+- Modify: `web/packages/core/src/features/palette/actions.ts`(コマンド)、`web/packages/core/src/features/palette/palette.ts`(群を `buildRows` に渡すだけ。259 行なので流れは `queryGroup.ts` に置く)、`PaletteDeps` に `search: Pick<SearchPort, "search">` と `openSearch(query: string): Promise<void>`、`web/app/src/palette.ts`(組み立て)
 - Test: `actions.test.ts`・`palette.test.ts`
 
 **Interfaces:**
