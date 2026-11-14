@@ -30,9 +30,3 @@ func matchKey(t Term, f Facts, today string) bool {
 	}
 	return matchRest(t, f, today)
 }
-
-// matchRest は、Task 3 が作るキー(数・日付・スプリント・リリース・is・has・mentions・追加プロパティ)の入り口。
-// いまは一致しない。
-func matchRest(Term, Facts, string) bool {
-	return false
-}

@@ -24,6 +24,17 @@ func Has(body, login string) bool {
 	return false
 }
 
+// Any は、body に誰かへのメンションがあるか。`@` の直後にログイン名に使える文字が 1 文字以上続けばよい。
+// `@` の前の文字とコードの中かは問わない(Has と同じ読み方)。
+func Any(body string) bool {
+	for i := 0; i+1 < len(body); i++ {
+		if body[i] == '@' && loginChar(body[i+1]) {
+			return true
+		}
+	}
+	return false
+}
+
 func loginChar(b byte) bool {
 	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-'
 }
