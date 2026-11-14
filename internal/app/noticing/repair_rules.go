@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/repair"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -144,4 +145,35 @@ func orphanNotice(r port.Reader, b batch, ws workspace.ID, p project.ID) (port.N
 	}
 	n.Text, n.Source = movedText(b, c, who), "repair:moved:"+string(p)+":"+string(c.moved.ID)
 	return n, true, nil
+}
+
+// droppedRules は、i 番目が合わせなら、合わせで取り除かれた、完全に削除したプロジェクトのルールの行のうち、共通の
+// 祖先にない行(New)にあなたの行があるプロジェクトごとの通知(06「同期の修復」。C5b1-9・C5b1-10)。取り除く前の
+// ログ(Log)だけにある行は数えない。{ID} は purged.jsonl の display で、空なら作らない。鍵は、合わせでプロジェクトが
+// 消えたときと同じ repair:purged:{P}。
+func droppedRules(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
+	s := b.saves[i]
+	if !s.Merge {
+		return nil, nil
+	}
+	var out []port.Notice
+	for _, d := range s.DroppedRules {
+		if !wroteBy(d.New, me) {
+			continue
+		}
+		cs, err := b.causes(r)
+		if err != nil {
+			return nil, err
+		}
+		j := slices.IndexFunc(cs.purged, func(p port.Purged) bool { return p.Target == d.Project && p.Entity == transfer.EntityProject })
+		if j < 0 || oneLine(cs.purged[j].Display) == "" {
+			continue
+		}
+		display := cs.purged[j].Display
+		out = append(out, port.Notice{
+			Workspace: d.Workspace, Project: d.Project, Display: display,
+			Text: purgedText(display), Source: "repair:purged:" + string(d.Project),
+		})
+	}
+	return out, nil
 }

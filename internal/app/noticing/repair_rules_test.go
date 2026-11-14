@@ -233,3 +233,71 @@ func TestOrphanRulesSkipsValueRepair(t *testing.T) {
 	f.judge(hideReview(f, apptest.SampleProject))
 	f.wantNone()
 }
+
+// droppedRulesMerge は、完全に削除した webP のルールの行が取り除かれた合わせ。log はその側の行、newRows は共通の
+// 祖先にない行。
+func droppedRulesMerge(log, newRows []change.Record) port.ReceivedSave {
+	return port.ReceivedSave{
+		Key: port.SaveKey{Version: "merge"}, Merge: true,
+		DroppedRules: []port.DroppedRules{{Workspace: apptest.SampleWorkspace, Project: webP, Log: log, New: newRows}},
+	}
+}
+
+// hiddenByHanako は、hanako が webP の使わないステータスに「Review」を足した行。
+func hiddenByHanako(f *fixture) []change.Record {
+	f.t.Helper()
+	return planRows(f, "hanako", []change.Draft{change.NewAdd(projectrule.HiddenField(webP), reviewSt)})
+}
+
+// 合わせで取り除かれた「Web」のルールの行に、共通の祖先にない hanako の行があれば、完全な削除の通知を作る。
+func TestDroppedRulesNotice(t *testing.T) {
+	f := setup(t)
+	rows := hiddenByHanako(f)
+	f.purge(transfer.EntityProject, webP, "HH-P1")
+	f.judge(droppedRulesMerge(rows, rows))
+	want := port.Notice{
+		Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Project: webP, Display: "HH-P1",
+		Text: "HH-P1 は完全に削除されたため、あなたの変更は反映されませんでした", Source: "repair:purged:" + string(webP),
+	}
+	if n := f.wantOne(); n != want {
+		t.Errorf("notice = %+v, want %+v", n, want)
+	}
+}
+
+// purged.jsonl の display が空なら(手での書き換え)、作らない。
+func TestDroppedRulesEmptyDisplay(t *testing.T) {
+	f := setup(t)
+	rows := hiddenByHanako(f)
+	f.purge(transfer.EntityProject, webP, "")
+	f.judge(droppedRulesMerge(rows, rows))
+	f.wantNone()
+}
+
+// 取り除く前のログ(Log)だけにある hanako の行は数えない。
+func TestDroppedRulesOnlyNewRows(t *testing.T) {
+	f := setup(t)
+	old := hiddenByHanako(f)
+	f.purge(transfer.EntityProject, webP, "HH-P1")
+	fresh := planRows(f, "jiro", []change.Draft{change.NewAdd(projectrule.TemplatesField(webP), template)})
+	f.judge(droppedRulesMerge(append(old, fresh...), fresh))
+	f.wantNone()
+}
+
+// 同じ合わせを 2 回判定しても受信箱は 1 行で、受信箱を開いて Prune しても消えない。
+func TestDroppedRulesOnce(t *testing.T) {
+	f := setup(t)
+	rows := hiddenByHanako(f)
+	f.purge(transfer.EntityProject, webP, "HH-P1")
+	s := droppedRulesMerge(rows, rows)
+	f.judge(s)
+	f.judge(s)
+	if got := f.rows(); len(got) != 1 {
+		t.Fatalf("rows = %+v, want one", got)
+	}
+	if err := f.inbox.Prune(t.Context(), store, []change.ID{apptest.SampleWorkspace}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.rows(); len(got) != 1 {
+		t.Errorf("rows after prune = %+v, want one", got)
+	}
+}

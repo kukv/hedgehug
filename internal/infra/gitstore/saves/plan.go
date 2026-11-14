@@ -13,11 +13,38 @@ import (
 	"github.com/kukv/hedgehug/internal/infra/gitstore/filemerge"
 )
 
+// droppedRows は、合わせの片側のワークスペース Workspace のログにあって、合わせの結果では取り除かれた Target の行。
+// Log はその側の Target の行、New はそのうち共通の祖先のログにない行。
+type droppedRows struct {
+	Workspace change.ID
+	Target    change.ID
+	Log       []change.Record
+	New       []change.Record
+}
+
+// grouping は、ワークスペースのログの行 rows を、targets にある取り除く対象ごとに分けるまとめ方。log は、行の持ち主を
+// 決めるのに読む、その版のログ全体。
+type grouping func(log, rows []change.Record, targets map[string]bool) map[change.ID][]change.Record
+
 // droppedPlan は、合わせ c の 2 つの親のそれぞれについて、c の purged.jsonl のスプリント・リリースの target のうち、
 // c のワークスペースのログに行がなく、親のログに行があるもの(決定 C5a-8)。New は、そのうち共通の祖先(1 つ目。
 // 同期の合わせと同じ。base で、要るときだけ求める)のログにない行。並びは 1 つ目の親、2 つ目の親、ワークスペース・
 // target の内部 ID の順。
 func droppedPlan(c *object.Commit, base func() (*object.Tree, error)) ([]port.DroppedPlan, error) {
+	ds, err := droppedBy(c, base, filemerge.PurgedPlanTargets, byPlanTarget)
+	if err != nil {
+		return nil, err
+	}
+	var out []port.DroppedPlan
+	for _, d := range ds {
+		out = append(out, port.DroppedPlan(d))
+	}
+	return out, nil
+}
+
+// droppedBy は、合わせ c の 2 つの親のそれぞれについて、c の purged.jsonl から targetsOf で読んだ対象のうち、
+// c のワークスペースのログに行がなく、親のログに行があるもの。行は group で対象ごとに分ける。並びは droppedPlan と同じ。
+func droppedBy(c *object.Commit, base func() (*object.Tree, error), targetsOf func([]byte) map[string]bool, group grouping) ([]droppedRows, error) {
 	merged, err := c.Tree()
 	if err != nil {
 		return nil, err
@@ -30,11 +57,11 @@ func droppedPlan(c *object.Commit, base func() (*object.Tree, error)) ([]port.Dr
 	if err != nil {
 		return nil, err
 	}
-	targets := filemerge.PurgedPlanTargets([]byte(text))
+	targets := targetsOf([]byte(text))
 	if len(targets) == 0 {
 		return nil, nil
 	}
-	var out []port.DroppedPlan
+	var out []droppedRows
 	for i := range 2 {
 		p, err := c.Parent(i)
 		if err != nil {
@@ -44,7 +71,7 @@ func droppedPlan(c *object.Commit, base func() (*object.Tree, error)) ([]port.Dr
 		if err != nil {
 			return nil, err
 		}
-		ds, err := droppedFrom(t, merged, base, targets)
+		ds, err := droppedFrom(t, merged, base, targets, group)
 		if err != nil {
 			return nil, err
 		}
@@ -53,49 +80,42 @@ func droppedPlan(c *object.Commit, base func() (*object.Tree, error)) ([]port.Dr
 	return out, nil
 }
 
-// droppedFrom は、親の版 side にあって merged にない、targets のスプリント・リリースの行。
-func droppedFrom(side, merged *object.Tree, base func() (*object.Tree, error), targets map[string]bool) ([]port.DroppedPlan, error) {
+// droppedFrom は、親の版 side にあって merged にない、targets の対象の行。
+func droppedFrom(side, merged *object.Tree, base func() (*object.Tree, error), targets map[string]bool, group grouping) ([]droppedRows, error) {
 	changes, err := object.DiffTree(side, merged)
 	if err != nil {
 		return nil, err
 	}
-	var out []port.DroppedPlan
+	var out []droppedRows
 	for _, ch := range changes {
 		ref, ok := logRef(ch.From.Name)
 		if !ok || ref.Kind != change.KindWorkspace || ch.To.Name == "" {
 			continue
 		}
-		ds, err := droppedIn(ref.ID, ch.From.Name, side, merged, base, targets)
+		ds, err := droppedIn(ref.ID, ch.From.Name, side, merged, base, targets, group)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, ds...)
 	}
-	slices.SortFunc(out, func(a, b port.DroppedPlan) int {
+	slices.SortFunc(out, func(a, b droppedRows) int {
 		return cmp.Or(strings.Compare(string(a.Workspace), string(b.Workspace)), strings.Compare(string(a.Target), string(b.Target)))
 	})
 	return out, nil
 }
 
-// droppedIn は、ワークスペース ws のログ name について、merged に行がなく side に行がある target ごとの行。
-// 共通の祖先は、そのような target があるときだけ求める。共通の祖先がなければ何も返さない。
-func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func() (*object.Tree, error), targets map[string]bool) ([]port.DroppedPlan, error) {
-	sf, err := fileIn(side, name)
+// droppedIn は、ワークスペース ws のログ name について、merged に行がなく side に行がある対象ごとの行。
+// 共通の祖先は、そのような対象があるときだけ求める。共通の祖先がなければ何も返さない。
+func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func() (*object.Tree, error), targets map[string]bool, group grouping) ([]droppedRows, error) {
+	sf, sideLog, err := logIn(side, name)
 	if err != nil {
 		return nil, err
 	}
-	mf, err := fileIn(merged, name)
+	_, mergedLog, err := logIn(merged, name)
 	if err != nil {
 		return nil, err
 	}
-	sideRows, err := planRowsIn(sf, targets)
-	if err != nil {
-		return nil, err
-	}
-	mergedRows, err := planRowsIn(mf, targets)
-	if err != nil {
-		return nil, err
-	}
+	sideRows, mergedRows := group(sideLog, sideLog, targets), group(mergedLog, mergedLog, targets)
 	var gone []change.ID
 	for target := range sideRows {
 		if _, kept := mergedRows[target]; !kept {
@@ -117,25 +137,26 @@ func droppedIn(ws change.ID, name string, side, merged *object.Tree, base func()
 	if err != nil {
 		return nil, err
 	}
-	newRows := byPlanTarget(fresh, targets)
-	out := make([]port.DroppedPlan, 0, len(gone))
+	newRows := group(sideLog, fresh, targets)
+	out := make([]droppedRows, 0, len(gone))
 	for _, target := range gone {
-		out = append(out, port.DroppedPlan{Workspace: ws, Target: target, Log: sideRows[target], New: newRows[target]})
+		out = append(out, droppedRows{Workspace: ws, Target: target, Log: sideRows[target], New: newRows[target]})
 	}
 	return out, nil
 }
 
-// planRowsIn は、f のスプリント・リリースの行を、targets にある target ごとに分けたもの。f が nil なら空。
-func planRowsIn(f *object.File, targets map[string]bool) (map[change.ID][]change.Record, error) {
-	rows, err := added(nil, f)
+// logIn は、t の name のファイルと、その行。ファイルがなければ nil。
+func logIn(t *object.Tree, name string) (*object.File, []change.Record, error) {
+	f, err := fileIn(t, name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return byPlanTarget(rows, targets), nil
+	rows, err := added(nil, f)
+	return f, rows, err
 }
 
 // byPlanTarget は、rows のスプリント・リリースの行を、targets にある target ごとに分けたもの。
-func byPlanTarget(rows []change.Record, targets map[string]bool) map[change.ID][]change.Record {
+func byPlanTarget(_, rows []change.Record, targets map[string]bool) map[change.ID][]change.Record {
 	out := map[change.ID][]change.Record{}
 	for _, r := range rows {
 		if id, ok := planning.PlanTarget(r); ok && targets[string(id)] {

@@ -25,7 +25,7 @@ func repairs(r port.Reader, b batch, store port.StoreID, me string) ([]port.Noti
 		}
 		kinds := []func(port.Reader, batch, int, string) ([]port.Notice, error){
 			restores, cascades, concurrentCascades, places, purgedUnder, purgedRelations, droppedEntities,
-			activeSprints, planRefs, droppedPlans, orphanRules,
+			activeSprints, planRefs, droppedPlans, orphanRules, droppedRules,
 		}
 		for _, kind := range kinds {
 			ns, err := kind(r, b, i, me)
