@@ -13,7 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/projectrule"
-	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -114,6 +113,10 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 	if err != nil {
 		return item.Item{}, err
 	}
+	wsItems, err := workspaceItems(tx, p.Place.Workspace)
+	if err != nil {
+		return item.Item{}, err
+	}
 	vals, st, err := s.checkValues(tx, p, in.Values)
 	if err != nil {
 		return item.Item{}, err
@@ -130,7 +133,7 @@ func (s Service) build(tx port.Tx, in CreateInput, title, me string) (item.Item,
 		ID:       s.IDs.New(),
 		Place:    item.Place{Workspace: p.Place.Workspace, Project: p.ID, Parent: in.Parent, Number: numbering.Next(wsLog, numbering.Items)},
 		Kind:     in.Kind,
-		Rank:     rank.After(lastRank(all, in.Parent)),
+		Rank:     planning.EndRank(lastRank(all, in.Parent), wsItems, p.Place.Workspace, in.Kind),
 		Title:    title,
 		Watchers: []string{me},
 		Sprint:   sprint,
@@ -239,6 +242,23 @@ func kindOf(tx port.Tx, parent *item.ID, p project.ID) (*item.Kind, error) {
 		return nil, ErrParentElsewhere
 	}
 	return &it.Kind, nil
+}
+
+// workspaceItems は、ワークスペースの全プロジェクトのアイテム(削除済みも含む)。
+func workspaceItems(r port.Reader, ws workspace.ID) ([]item.Item, error) {
+	ps, err := r.Projects().List(ws)
+	if err != nil {
+		return nil, err
+	}
+	var all []item.Item
+	for _, p := range ps {
+		its, err := r.Items().List(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, its...)
+	}
+	return all, nil
 }
 
 // lastRank は、同じ親の子のうち、最後の並び順の値。親が nil なら、プロジェクトの直下(Epic)。

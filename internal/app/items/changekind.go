@@ -7,7 +7,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
-	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 )
 
 // ChangeKind は、アイテムの種類を変える(02「種類の変更」)。
@@ -48,7 +48,7 @@ func changeKind(ctx context.Context, tx port.Tx, id item.ID, kind item.Kind) err
 	}
 	drafts := []change.Draft{change.NewSet("kind", string(it.Kind), string(kind))}
 	if it.Kind == item.Step {
-		promote, err := promotion(tx, it)
+		promote, err := promotion(tx, it, kind)
 		if err != nil {
 			return err
 		}
@@ -58,7 +58,7 @@ func changeKind(ctx context.Context, tx port.Tx, id item.ID, kind item.Kind) err
 }
 
 // promotion は、Step を親の親(Epic)の子の末尾へ移す place と rank。
-func promotion(tx port.Tx, step item.Item) ([]change.Draft, error) {
+func promotion(tx port.Tx, step item.Item, kind item.Kind) ([]change.Draft, error) {
 	if step.Place.Parent == nil {
 		return nil, port.ErrNotFound
 	}
@@ -77,10 +77,14 @@ func promotion(tx port.Tx, step item.Item) ([]change.Draft, error) {
 	if err != nil {
 		return nil, err
 	}
+	wsItems, err := workspaceItems(tx, step.Place.Workspace)
+	if err != nil {
+		return nil, err
+	}
 	place := step.Place
 	place.Parent = &epic.ID
 	return []change.Draft{
 		change.NewSet("place", step.Place, place),
-		change.NewSet("rank", step.Rank, rank.After(lastRank(live, &epic.ID))),
+		change.NewSet("rank", step.Rank, planning.EndRank(lastRank(live, &epic.ID), wsItems, step.Place.Workspace, kind)),
 	}, nil
 }
