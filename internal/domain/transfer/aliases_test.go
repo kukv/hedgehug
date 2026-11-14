@@ -38,6 +38,25 @@ func TestAliasesDropsDuplicates(t *testing.T) {
 	}
 }
 
+func TestAliasesPrefixEqualToMoveOldKeepsMove(t *testing.T) {
+	at1 := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	recs := []transfer.Record{{Entity: "item", Target: "x1", Old: "W-7", At: at1}}
+	got := transfer.Aliases(recs, "item", "x1", []string{"W"}, 7, "-")
+	want := []transfer.Alias{{ID: "W-7", At: &at1}}
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("want %+v, got %+v", want, got)
+	}
+}
+
+func TestAliasesSkipsEmptyOld(t *testing.T) {
+	at1 := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	recs := []transfer.Record{{Entity: "item", Target: "x1", Old: "", At: at1}}
+	got := transfer.Aliases(recs, "item", "x1", nil, 1, "-")
+	if len(got) != 0 {
+		t.Fatalf("want none, got %+v", got)
+	}
+}
+
 func TestAliasesProjectUsesPSeparator(t *testing.T) {
 	got := transfer.Aliases(nil, "project", "p1", []string{"HH"}, 1, "-P")
 	want := []transfer.Alias{{ID: "HH-P1"}}

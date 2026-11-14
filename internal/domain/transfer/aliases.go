@@ -20,7 +20,7 @@ type Alias struct {
 func Aliases(records []Record, entity string, target change.ID, oldPrefixes []string, number int, sep string) []Alias {
 	var moves []Record
 	for _, r := range records {
-		if r.Entity == entity && r.Target == target {
+		if r.Entity == entity && r.Target == target && r.Old != "" {
 			moves = append(moves, r)
 		}
 	}
