@@ -84,3 +84,39 @@ test("reports flow, cycle and estimates", async ({ page }, info) => {
     ),
   ).toBeVisible();
 });
+
+test("sprint card and overview", async ({ page }, info) => {
+  const prefix = await startedSprint(page, info);
+  // 計画中の Sprint 2 を作る(「バーンダウンを見る」が無効なことを確かめる)。
+  await page.goto(tokenUrl(`/s/e2e/w/${prefix}/sprints`));
+  await page.getByRole("button", { name: "スプリントを作成" }).first().click();
+  const create = page.getByRole("dialog", { name: "スプリントを作成" });
+  await create.getByRole("button", { name: "作成", exact: true }).click();
+  await expect(create).toBeHidden();
+
+  const s1 = page.getByRole("article", { name: "Sprint 1" });
+  await s1.getByText("表で見る").click();
+  // 今日より後の行は残りが「—」なので、「—」のない最後の行が今日の行。
+  const today = s1
+    .getByRole("table", { name: "バーンダウンの表" })
+    .getByRole("row")
+    .filter({ hasNotText: "—" })
+    .last();
+  await expect(today.getByRole("cell").nth(2)).toHaveText("2");
+
+  const planned = page.getByRole("article", { name: "Sprint 2" });
+  await planned.getByRole("button", { name: "Sprint 2 のメニュー" }).click();
+  await expect(page.getByRole("menuitem", { name: "バーンダウンを見る" })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  await s1.getByRole("button", { name: "Sprint 1 のメニュー" }).click();
+  await page.getByRole("menuitem", { name: "バーンダウンを見る" }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${prefix}/reports$`));
+  await expect(
+    page.getByRole("combobox", { name: "スプリントを選択" }).locator("option:checked"),
+  ).toHaveText("Sprint 1");
+
+  await page.goto(tokenUrl(`/s/e2e/w/${prefix}`));
+  await expect(page.getByText("Sprint 1 の完了ポイント")).toBeVisible();
+  await expect(page.getByText("3 / 5 pt")).toBeVisible();
+});

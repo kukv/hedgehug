@@ -10,3 +10,7 @@ export const reports = createReports(port);
 export const activeReports = createActiveReports(port);
 reloads.add(() => reports.reload());
 reloads.add(() => activeReports.reload());
+
+// スプリントの画面からレポートを開く前に、バーンダウンのスプリントを保存する(F3-16)。
+// レポートのタブはまだ開いていないので、reports.select は使えず、口を直接呼ぶ。
+export const selectReport = port.select;

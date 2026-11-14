@@ -8,17 +8,20 @@
     type SprintCard,
     type SprintDialogKind,
     type StoreNode,
+    sprintSaveFailed,
     type WorkspaceNode,
     type WorkspaceTab,
     workspaceTabOf,
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
-  import { navigation, planning, projectDialog, syncNow } from "../../wire";
+  import { selectReport } from "../../reports";
+  import { navigation, planning, projectDialog, syncNow, toasts } from "../../wire";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
   import ReportsTab from "../reports/ReportsTab.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
+  import OverviewTab from "./OverviewTab.svelte";
 
   // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「レポート」「設定」。
   interface Props {
@@ -46,6 +49,18 @@
       prefix: workspace.prefix,
       tab: workspaceTabOf(id),
     });
+  }
+
+  // 「バーンダウンを見る」(F3-16)。そのスプリントを選んで保存してから、レポートのタブへ移る。
+  // 保存できなければ移らない。
+  async function showBurndown(card: SprintCard) {
+    try {
+      await selectReport(sid, wid, { sprint: card.sprint.id });
+    } catch {
+      toasts.show(sprintSaveFailed, { error: true });
+      return;
+    }
+    select("reports");
   }
 
   // 見出しの「実行中」は、実行中のスプリントがあるときだけ出す(05)。Store の出来事で読み直す(wire.ts)。
@@ -109,7 +124,9 @@
   {:else if store.readOnly}
     <ReadOnlyBand text={readOnlyBand(store.name)} />
   {/if}
-  {#if tab === "sprints"}
+  {#if tab === "overview"}
+    <OverviewTab storeId={store.id} workspaceId={workspace.id} />
+  {:else if tab === "sprints"}
     <SprintsTab
       storeId={store.id}
       storeName={store.name}
@@ -120,6 +137,7 @@
       onclose={(c) => void openSprint("close", c)}
       onedit={(c) => void openSprint("edit", c)}
       ondelete={(c) => void openSprint("delete", c)}
+      onburndown={(c) => void showBurndown(c)}
     />
   {:else if tab === "releases"}
     <ReleasesTab

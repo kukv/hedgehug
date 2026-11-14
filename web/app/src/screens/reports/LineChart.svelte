@@ -15,9 +15,11 @@
     days: BurnDay[];
     unit: ReportUnit;
     thisYear: number;
+    // compact は、スプリントのカードの小さいバーンダウン。
+    compact?: boolean;
   }
 
-  let { days, unit, thisYear }: Props = $props();
+  let { days, unit, thisYear, compact = false }: Props = $props();
 
   const W = 600;
   const H = 220;
@@ -47,7 +49,7 @@
   const last = $derived(remaining.at(-1));
 </script>
 
-<figure>
+<figure class:compact>
   <svg viewBox="0 0 {W} {H}" role="img" aria-label="バーンダウン">
     <g transform="translate({pad.left} {pad.top})">
       {#each ticks(max) as tick (tick)}
@@ -86,6 +88,9 @@
     width: 100%;
     max-width: 640px;
     height: auto;
+  }
+  .compact svg {
+    max-width: 360px;
   }
   .grid {
     stroke: var(--line);
