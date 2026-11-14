@@ -13,6 +13,8 @@ import (
 // moved の作業項目は、移動元の並び順のまま、移動先の作業項目の末尾に続く。root は移すアイテム(プロジェクトの移動は空)で、
 // siblingEnd は移動先の親の削除されていない子の末尾。root が作業項目なら、その順位は親の子の末尾も満たす(F2a-5 の値から
 // 続ける)。作業項目でない root(Epic)は親の子の末尾。ほかのもの(Step)は入らない。
+// moved の削除済みの作業項目にも順位を付ける。別の Store への移動は、別の画面で削除された root の順位を削除済みの写しで
+// 決め、移動先で削除を取り消すため。削除済みのものは表示されず、復元すると移動元の並び順のまま戻る。
 func workRanks(ws workspace.ID, dstItems, moved []item.Item, root *item.Item, siblingEnd string) map[item.ID]string {
 	start := planning.WorkEnd(dstItems, ws)
 	if root != nil && planning.IsWork(root.Kind) {

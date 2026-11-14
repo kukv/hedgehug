@@ -306,3 +306,17 @@ func TestMoveTaskRanksAfterTheDestinationWorkEnd(t *testing.T) {
 		t.Errorf("rank = %q, want %q", got, want)
 	}
 }
+
+// F2a-5・F2a-6: Story を移すと、その順位は EndRank(移動先の親の子の末尾 X, 移動先, Story) = rank.After("X")。
+// 移動先の削除済みの Task(順位 Z)は数えない。
+func TestMoveStoryRanksAtTheDestinationEndRank(t *testing.T) {
+	f := newFixture(t)
+	withStoryA(t, f)
+	withWorkEnd(t, f, store1, mobileWS, mobileProject, mobileEpic)
+	if _, err := f.svc.Move(t.Context(), store1, storyAID, toMobile()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := itemOf(t, f.rec, store1, storyAID).Rank, rank.After("X"); got != want {
+		t.Errorf("rank = %q, want %q", got, want)
+	}
+}

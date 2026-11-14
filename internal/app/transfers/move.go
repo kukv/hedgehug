@@ -39,7 +39,8 @@ type Moved struct {
 // Move は、アイテム id を、下のもの(削除済みを含む)ごと別のワークスペースへ移す(02「別のワークスペースと別の
 // Store への移動」、A5a-3)。同じ Store の中は 1 回の保存で、番号を振り直し、値を引き直し、転送記録を残す。
 // 移すアイテムは移動先の親(Epic ならプロジェクト)の削除されていない子の末尾に入り、移す作業項目は移動元の並び順の
-// まま移動先の作業項目の末尾に続く(F2a-6)。下のものの親子と Step の順位は変えない。自動化は動かさない(03「自動化」)。移動元の Store が閲覧のみなら「閲覧のみの Store です」で断る。
+// まま移動先の作業項目の末尾に続く(F2a-6)。下のものの親子と Step の順位は変えない。自動化は動かさない(03「自動化」)。
+// 移動元の Store が閲覧のみなら「閲覧のみの Store です」で断る。
 // 移動先の Store が表示中でないなら port.ErrStoreNotFound、閲覧のみ・選べない移すもの・移動先なら port.ErrNotFound。
 // 別の Store への移動は moveAcross。
 func (s Service) Move(ctx context.Context, store port.StoreID, id item.ID, in MoveInput) (Moved, error) {
@@ -196,8 +197,8 @@ func emptiedOf(remaps map[item.ID]transfer.RemapResult, from workspace.Settings)
 	return out
 }
 
-// writeWithin は、同じ Store の中の移動の行を書く(A5a-3・F2a-6): アイテムごとに place(移すアイテムと作業項目は rank も)と
-// 引き直しの行、移動先のワークスペースに番号ごとの number の行、アイテムごとに転送記録。
+// writeWithin は、同じ Store の中の移動の行を書く(A5a-3・F2a-6): アイテムごとに place(移すアイテムと作業項目は
+// rank も)と引き直しの行、移動先のワークスペースに番号ごとの number の行、アイテムごとに転送記録。
 func writeWithin(tx port.Tx, p movePlan, store port.StoreID) error {
 	var errs []error
 	for _, it := range p.src.items() {
