@@ -26,6 +26,7 @@ func TestParse(t *testing.T) {
 		{`release:"v2.0 beta"`, []want{{"release", false, ":", []string{"v2.0 beta"}}}, nil},
 		{`release:"v2.0 beta`, []want{{"release", false, ":", []string{"v2.0 beta"}}}, nil},
 		{`"ガント 表"`, []want{{"", false, "", []string{"ガント 表"}}}, nil},
+		{`"" " " foo`, []want{{"", false, "", []string{"foo"}}}, nil},
 		{"- foo", []want{{"", false, "", []string{"-"}}, {"", false, "", []string{"foo"}}}, nil},
 		{"points>=3 end<today", []want{{"points", false, ">=", []string{"3"}}, {"end", false, "<", []string{"today"}}}, nil},
 		{"http://x", []want{{"http", false, ":", []string{"//x"}}}, []string{"「http」というキーはありません"}},
@@ -108,6 +109,7 @@ func TestParseFlags(t *testing.T) {
 		{"is:overwritten", false, true, false, true, false},
 		{"-is:invalid", false, true, false, false, true},
 		{"", false, false, false, false, false},
+		{`"" " "`, false, false, false, false, false},
 	}
 	for _, c := range cases {
 		q, _ := query.Parse(c.in, nil)

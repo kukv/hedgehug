@@ -54,6 +54,9 @@ func Parse(text string, custom func(key string) bool) (Query, []string) {
 	var errs []string
 	for _, raw := range split(text) {
 		t := term(raw)
+		if t.Key == "" && strings.TrimSpace(t.Values[0]) == "" {
+			continue // 空の自由な語(`""`・`" "`)は条件にしない
+		}
 		if t.Key != "" {
 			q.HasKey = true
 		}
