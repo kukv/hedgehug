@@ -1,22 +1,26 @@
 <script lang="ts">
   import Button from "../primitives/Button.svelte";
 
-  // 一覧の上に出す、選んでいる行のバー(F2b1-5)。件数の文と「一括削除…」「選択を解除」。
+  // 一覧の上に出す、選んでいる行のバー(F2b1-5)。件数の文と「一括変更…」「一括削除…」「選択を解除」。
   interface Props {
     // text は、件数の文(core の selectedText が作る)。
     text: string;
     // readOnlyNote は、選んだ行がすべて閲覧のみの Store のもののときに渡す文(core の readOnlyNote)。
-    // 渡したら「一括削除…」だけを無効にして、title に出す(F2b1-4)。
+    // 渡したら「一括変更…」と「一括削除…」を無効にして、title に出す(F2b1-4・F2b2-23)。
     readOnlyNote?: string;
+    onchange: () => void;
     ondelete: () => void;
     onclear: () => void;
   }
 
-  let { text, readOnlyNote, ondelete, onclear }: Props = $props();
+  let { text, readOnlyNote, onchange, ondelete, onclear }: Props = $props();
 </script>
 
 <div class="bar">
   <span class="text">{text}</span>
+  <Button size="sm" disabled={!!readOnlyNote} title={readOnlyNote} onclick={onchange}
+    >一括変更…</Button
+  >
   <Button size="sm" disabled={!!readOnlyNote} title={readOnlyNote} onclick={ondelete}
     >一括削除…</Button
   >
