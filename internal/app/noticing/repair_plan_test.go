@@ -1,6 +1,7 @@
 package noticing_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
@@ -105,6 +106,29 @@ func TestActiveOnceAcrossMachines(t *testing.T) {
 	f.judge(other)
 	if rows := f.rows(); len(rows) != 1 {
 		t.Errorf("rows = %+v, want one", rows)
+	}
+}
+
+// hanako が開始 → 修復で計画中 → hanako がもう一度開始 → もう一度修復。2 つ目の通知は、もう一度の開始の行が鍵になる。
+func TestActiveNoticeRestarted(t *testing.T) {
+	f := setup(t)
+	twoActive(f, "hanako")
+	ws := change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace}
+	field := "sprints/" + string(sprintB) + "/state"
+	first := f.lastRow(ws, field)
+	f.judge(stopRepair(f))
+	writePlan(f, "hanako", apptest.SampleWorkspace, change.NewSet(field, planning.Planned, planning.Active))
+	again := f.lastRow(ws, field)
+	f.judge(stopRepair(f))
+	got := f.notices()
+	if len(got) != 2 || again == first {
+		t.Fatalf("notices = %+v, first = %s, again = %s", got, first, again)
+	}
+	sources := []string{got[0].Source, got[1].Source}
+	for _, start := range []string{first, again} {
+		if !slices.Contains(sources, "repair:active:"+string(sprintB)+":"+start) {
+			t.Errorf("sources = %v, want one keyed by %s", sources, start)
+		}
 	}
 }
 

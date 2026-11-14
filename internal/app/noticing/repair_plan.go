@@ -14,28 +14,40 @@ import (
 const sprintsPrefix = "sprints/"
 
 // activeSprints は、i 番目の修復の保存の、実行中のスプリントを計画中に戻した修復 (6) の通知(06「同期の修復」)。
-// ワークスペースのログの set sprints/<ID>/state(active から planned)の行ごとに 1 件。宛先は開始の行(修復の直前の
-// その欄のいまの値の行)の by(C5a-9・C5a-10)。
+// ワークスペースのログの set sprints/<ID>/state(active から planned)の行ごとに 1 件。宛先は開始の行(startRow)
+// の by(C5a-9・C5a-10)。
 func activeSprints(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
 	if !b.saves[i].Repair {
 		return nil, nil
 	}
 	var out []port.Notice
 	for _, e := range b.saves[i].Entities {
-		if e.Ref.Kind != change.KindWorkspace {
+		if e.Ref.Kind != change.KindWorkspace || !slices.ContainsFunc(e.Rows, stoppedRow) {
 			continue
 		}
-		for _, row := range e.Rows {
-			if !stoppedRow(row) {
-				continue
-			}
-			before, err := beforeRead(r, b, e.Ref, i)
-			if err != nil {
-				return nil, err
-			}
-			if n, ok := activeNotice(e.Ref, row, before, me); ok {
-				out = append(out, n)
-			}
+		ns, err := activeIn(r, b, i, e, me)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ns...)
+	}
+	return out, nil
+}
+
+// activeIn は、i 番目の保存のワークスペース e の行のうち、修復 (6) の行の通知。ログはワークスペースごとに 1 回読む。
+func activeIn(r port.Reader, b batch, i int, e port.EntityRows, me string) ([]port.Notice, error) {
+	log, err := logOf(r, b, e.Ref)
+	if err != nil {
+		return nil, err
+	}
+	before := b.without(log, i)
+	var out []port.Notice
+	for _, row := range e.Rows {
+		if !stoppedRow(row) {
+			continue
+		}
+		if n, ok := activeNotice(e.Ref, row, log, before, me); ok {
+			out = append(out, n)
 		}
 	}
 	return out, nil
@@ -49,11 +61,10 @@ func stoppedRow(row change.Record) bool {
 		from == planning.Active && to == planning.Planned
 }
 
-// activeNotice は、ワークスペース ws の修復の行 row の通知。開始の行は、修復の直前のログのうち人の行だけで求める
-// (2 台が同じ修復をしたとき、先に届いた修復の行ではなく、同じ開始の行を鍵にする)。宛先があなたでなければ false。
-func activeNotice(ws change.Ref, row change.Record, before []change.Record, me string) (port.Notice, bool) {
-	people := slices.DeleteFunc(slices.Clone(before), func(c change.Record) bool { return c.Actor.Kind != change.ActorUser })
-	start, ok := change.Current(people, change.Set, row.F, func(change.Record) bool { return true })
+// activeNotice は、ワークスペース ws の修復の行 row の通知。log はいまのログ、before は修復の直前のログ。
+// 宛先があなたでなければ false。
+func activeNotice(ws change.Ref, row change.Record, log, before []change.Record, me string) (port.Notice, bool) {
+	start, ok := startRow(log, before, row.F)
 	if !ok || !same(start.By, me) {
 		return port.Notice{}, false
 	}
@@ -69,6 +80,26 @@ func activeNotice(ws change.Ref, row change.Record, before []change.Record, me s
 		Text:   "実行中のスプリントが 2 つになったため、「" + oneLine(name) + "」を計画中に戻しました",
 		Source: "repair:active:" + string(id) + ":" + string(start.ID),
 	}, true
+}
+
+// startRow は、修復の直前のログ before で、欄 field を実行中にした人の行。before の field のいまの値の行から、
+// 実行者が人で to が active の行まで、いまのログ log の行の prev をたどる(2 台が同じ修復をしたとき、先に届いた
+// 修復の行ではなく同じ開始の行を鍵にする。先に届いた修復の行の prev が、まだ判定していない修復の行のこともある)。
+// たどれなければ false。
+func startRow(log, before []change.Record, field string) (change.Record, bool) {
+	all := func(change.Record) bool { return true }
+	cur, ok := change.Current(before, change.Set, field, all)
+	seen := map[change.ID]bool{}
+	for ok && !seen[cur.ID] {
+		var state planning.SprintState
+		if cur.Actor.Kind == change.ActorUser && json.Unmarshal(cur.To, &state) == nil && state == planning.Active {
+			return cur, true
+		}
+		seen[cur.ID] = true
+		prev := slices.DeleteFunc(slices.Clone(log), func(c change.Record) bool { return !slices.Contains(cur.Prev, c.ID) })
+		cur, ok = change.Current(prev, change.Set, field, all)
+	}
+	return change.Record{}, false
 }
 
 // planRefs は、i 番目の修復の保存の、アイテムのスプリント・リリースを空にした修復 (7)・(8) の通知(06「同期の修復」)。
@@ -101,10 +132,8 @@ func planRefs(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
 // clearedTarget は、row がアイテム ref の set sprint・set release(to null)の行なら、その前の値。
 func clearedTarget(ref change.Ref, row change.Record) (change.ID, bool) {
 	var target change.ID
-	var to *change.ID
-	cleared := len(row.To) == 0 || (json.Unmarshal(row.To, &to) == nil && to == nil)
 	if ref.Kind != change.KindItem || row.T != change.Set || (row.F != item.SprintField && row.F != item.ReleaseField) ||
-		!cleared || json.Unmarshal(row.From, &target) != nil {
+		!change.Absent(row.To) || json.Unmarshal(row.From, &target) != nil {
 		return "", false
 	}
 	return target, true
