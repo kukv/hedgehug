@@ -15,6 +15,8 @@ export interface RowSelection {
   rows: Readable<SelectedRow[]>;
   toggle(row: SelectedRow, on: boolean): void;
   clear(): void;
+  // set は、選択を rows に入れ替える(同じ行は 1 つ)。変わらなければ知らせない。
+  set(rows: SelectedRow[]): void;
   // prune は、visible の順に、選んでいる行だけを残す。display・readOnly は visible の値で置き換える。
   prune(visible: SelectedRow[]): void;
 }
@@ -46,6 +48,10 @@ export function createRowSelection(): RowSelection {
     },
     clear() {
       if (current.length > 0) put([]);
+    },
+    set(next) {
+      const unique = next.filter((r, i) => next.findIndex((o) => same(o, r)) === i);
+      if (!unchanged(current, unique)) put(unique);
     },
     prune(visible) {
       if (current.length === 0) return;
