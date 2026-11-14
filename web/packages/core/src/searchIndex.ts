@@ -10,6 +10,7 @@ export {
   filterCandidates,
 } from "./features/search/candidates";
 export { type CaretTerm, caretTerm } from "./features/search/caret";
+export { type CellView, cellView, updatedHint } from "./features/search/cells";
 export { searchHelp } from "./features/search/help";
 export {
   createSearch,
