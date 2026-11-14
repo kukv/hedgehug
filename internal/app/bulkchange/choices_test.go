@@ -49,10 +49,10 @@ func writeWs(t *testing.T, s port.Stores, st port.StoreID, ws workspace.ID, ds .
 	}
 }
 
-func settingsOf(t *testing.T, s port.Stores, st port.StoreID, ws workspace.ID) workspace.Settings {
+func settingsOf(t *testing.T, s port.Stores, ws workspace.ID) workspace.Settings {
 	t.Helper()
 	var out workspace.Settings
-	err := s.Read(t.Context(), st, func(r port.Reader) (err error) {
+	err := s.Read(t.Context(), s1, func(r port.Reader) (err error) {
 		out, err = r.Workspaces().Settings(ws)
 		return err
 	})
@@ -66,14 +66,14 @@ func TestChoicesMerge(t *testing.T) {
 	svc, s := setup(t)
 	// Mobile の既定のステータスは Web と同じ名前なので、1 つを Mobile にしかない名前にする。
 	l := workspace.List{Kind: workspace.ListStatuses}
-	mobileDone := settingsOf(t, s, s1, apptest.SampleMobileWorkspace).Statuses[2]
+	mobileDone := settingsOf(t, s, apptest.SampleMobileWorkspace).Statuses[2]
 	writeWs(t, s, s1, apptest.SampleMobileWorkspace, change.NewSet(l.Field(mobileDone.ID, "name"), mobileDone.Name, "Released"))
 	got, err := svc.Choices(t.Context(), []Target{{s1, apptest.SampleTask}, {s1, apptest.SampleMobileEpic}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	web := settingsOf(t, s, s1, apptest.SampleWorkspace)
-	mobile := settingsOf(t, s, s1, apptest.SampleMobileWorkspace)
+	web := settingsOf(t, s, apptest.SampleWorkspace)
+	mobile := settingsOf(t, s, apptest.SampleMobileWorkspace)
 	var want []string
 	for _, v := range append(slices.Clone(web.Statuses), mobile.Statuses...) {
 		if !slices.ContainsFunc(want, func(n string) bool { return sameName(n, v.Name) }) {
@@ -174,12 +174,15 @@ func TestGroupsFirstSeenOrder(t *testing.T) {
 
 func TestChoicesSkipDeletedWorkspace(t *testing.T) {
 	svc, s := setup(t)
+	l := workspace.List{Kind: workspace.ListStatuses}
+	mobileDone := settingsOf(t, s, apptest.SampleMobileWorkspace).Statuses[2]
+	writeWs(t, s, s1, apptest.SampleMobileWorkspace, change.NewSet(l.Field(mobileDone.ID, "name"), mobileDone.Name, "Released"))
 	writeWs(t, s, s1, apptest.SampleMobileWorkspace, change.NewDeleteEntity(true))
 	got, err := svc.Choices(t.Context(), []Target{{s1, apptest.SampleMobileEpic}, {s1, apptest.SampleTask}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(got.Kinds, []string{"Task"}) || len(got.Statuses) == 0 {
+	if !slices.Equal(got.Kinds, []string{"Task"}) || len(got.Statuses) == 0 || slices.Contains(got.Statuses, "Released") {
 		t.Errorf("Kinds = %q, Statuses = %q", got.Kinds, got.Statuses)
 	}
 }

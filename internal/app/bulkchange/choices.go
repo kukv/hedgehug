@@ -39,6 +39,7 @@ type wsChoices struct {
 	plan     planning.Plan
 	rules    projectrule.Set
 	projects []project.ID
+	deleted  bool // ワークスペースが削除済み。ほかの項目は読まない
 }
 
 // picked は、選んだアイテム 1 つの、選択肢に要る部分。
@@ -100,13 +101,13 @@ func (l loaded) add(r port.Reader, store port.StoreID, t Target, it item.Item) e
 	key := wsKey{store, it.Place.Workspace}
 	if l.wss[key] == nil {
 		w, err := readWorkspace(r, key.ws)
-		if errors.Is(err, port.ErrNotFound) {
-			return nil // ワークスペースが削除済み(アイテムは残っている)。削除済みのアイテムと同じに見ない
-		}
 		if err != nil {
 			return err
 		}
 		l.wss[key] = w
+	}
+	if l.wss[key].deleted {
+		return nil // ワークスペースが削除済み(アイテムは残っている)。削除済みのアイテムと同じに見ない
 	}
 	if p := it.Place.Project; !slices.Contains(l.wss[key].projects, p) {
 		l.wss[key].projects = append(l.wss[key].projects, p)
@@ -118,7 +119,9 @@ func (l loaded) add(r port.Reader, store port.StoreID, t Target, it item.Item) e
 // readWorkspace は、ワークスペースの設定・スプリントとリリース・プロジェクト別のルールを読む。
 // スプリントとリリースの読み方は app/planning の planOf と同じ(app の機能どうしは import しない)。
 func readWorkspace(r port.Reader, ws workspace.ID) (*wsChoices, error) {
-	if _, err := port.LiveWorkspace(r, ws); err != nil {
+	if _, err := port.LiveWorkspace(r, ws); errors.Is(err, port.ErrNotFound) {
+		return &wsChoices{deleted: true}, nil
+	} else if err != nil {
 		return nil, err
 	}
 	st, err := r.Workspaces().Settings(ws)
