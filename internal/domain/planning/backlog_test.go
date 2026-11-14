@@ -122,10 +122,10 @@ func TestPlacementTies(t *testing.T) {
 	if got, ok := planning.Placement([]item.Item{wi("A", "V"), b, c}, "W", "A", "C", true); !ok || got != rank.After("W") {
 		t.Errorf("A を C の直後 = %q, %v, want %q", got, ok, rank.After("W"))
 	}
-	// 群の後ろに Z の行があるときは、B・C の群の後ろで Z の手前。
-	withZ := []item.Item{wi("A", "V"), b, c, wi("F", "Z")}
-	if got, ok := planning.Placement(withZ, "W", "A", "C", true); !ok || got != rank.Between("W", "Z") || got <= "W" || got >= "Z" {
-		t.Errorf("Z があるときの A を C の直後 = %q, %v, want %q", got, ok, rank.Between("W", "Z"))
+	// 群の後ろに a の行があるときは、B・C の群の後ろで a の手前(After(W) と別の値になる)。
+	withZ := []item.Item{wi("A", "V"), b, c, wi("F", "a")}
+	if got, ok := planning.Placement(withZ, "W", "A", "C", true); !ok || got != rank.Between("W", "a") || got == rank.After("W") || got <= "W" || got >= "a" {
+		t.Errorf("a があるときの A を C の直後 = %q, %v, want %q(After(W) 以外)", got, ok, rank.Between("W", "a"))
 	}
 	got, ok := planning.Placement(its, "W", "F", "C", false)
 	if !ok || got != rank.Between("V", "W") || got <= "V" || got >= "W" {
