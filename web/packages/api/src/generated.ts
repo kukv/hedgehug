@@ -749,6 +749,61 @@ export interface NextNumber {
   number: number;
 }
 
+export interface OpenedItem {
+  itemId: string;
+  storeId: string;
+}
+
+export interface PaletteAlias {
+  /**
+     * 移動した日時。旧い接頭辞から作ったものは null
+     * @nullable
+     */
+  at: string | null;
+  /** 旧 ID(HH-12) */
+  id: string;
+}
+
+export interface PaletteItem {
+  /**
+     * 旧 ID(いまの ID と同じものを除く)
+     * @nullable
+     */
+  aliases: PaletteAlias[] | null;
+  /** いまの ID(HH-12) */
+  display: string;
+  itemId: string;
+  /** ワークスペースの中の番号(並びに使う) */
+  number: number;
+  projectId: string;
+  projectTitle: string;
+  storeId: string;
+  title: string;
+  workspaceId: string;
+}
+
+export interface PaletteProject {
+  /**
+     * 旧 ID(いまの ID と同じものを除く)
+     * @nullable
+     */
+  aliases: PaletteAlias[] | null;
+  /** いまの ID(HH-P1) */
+  display: string;
+  projectId: string;
+  storeId: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+
+export interface PaletteIndex {
+  /** @nullable */
+  items: PaletteItem[] | null;
+  /** @nullable */
+  projects: PaletteProject[] | null;
+}
+
 export interface SprintDefaults {
   end: string;
   name: string;
@@ -1029,6 +1084,14 @@ export interface ProjectTransferTarget {
   storeName: string;
   workspaceId: string;
   workspaceName: string;
+}
+
+export interface RecentItem {
+  display: string;
+  itemId: string;
+  projectTitle: string;
+  storeId: string;
+  title: string;
 }
 
 export interface RecheckOutputBody {
@@ -2444,6 +2507,92 @@ export const locateProject = async (params: LocateProjectParams, options?: Param
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getPaletteIndexUrl = () => {
+
+
+
+
+  return `/api/palette-index`
+}
+
+/**
+ * @summary パレットのアイテム・プロジェクトの候補を返す
+ */
+export const paletteIndex = async ( options?: Parameters<typeof fetcher>[1]): Promise<PaletteIndex> => {
+
+  return fetcher<PaletteIndex>(getPaletteIndexUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getListRecentItemsUrl = () => {
+
+
+
+
+  return `/api/recent-items`
+}
+
+/**
+ * @summary 最近開いたアイテムを新しい順に返す
+ */
+export const listRecentItems = async ( options?: Parameters<typeof fetcher>[1]): Promise<RecentItem[] | null> => {
+
+  return fetcher<RecentItem[] | null>(getListRecentItemsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getOpenRecentItemUrl = () => {
+
+
+
+
+  return `/api/recent-items`
+}
+
+/**
+ * @summary アイテムを開いたと、このマシンに覚える
+ */
+export const openRecentItem = async (openedItem: OpenedItem, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getOpenRecentItemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(openedItem)
   }
 );}
 

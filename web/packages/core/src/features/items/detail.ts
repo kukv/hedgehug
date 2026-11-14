@@ -83,6 +83,8 @@ export interface DetailDeps {
   onChanged(): void;
   // leave は、入力中のものがあるとき、捨ててよいかを聞く(別のアイテムを開く・パネルを閉じる)。ないときは常に true。
   leave?: () => Promise<boolean>;
+  // onOpened は、open でアイテムを開けたあとに 1 回呼ぶ(最近開いたアイテムの記録)。見つからなかったときと、読み直しでは呼ばない。
+  onOpened?(storeId: string, itemId: string): void;
 }
 
 // normalizeTitle は、連続する空白と改行を 1 つの空白にまとめ、前後の空白を取り除く(02「タイトル」)。
@@ -113,7 +115,8 @@ export function createDetail(deps: DetailDeps): Detail {
     full.set(false);
   }
 
-  async function load(storeId: string, itemId: string, refresh = false) {
+  // load は、開けて表示したときだけ true を返す。
+  async function load(storeId: string, itemId: string, refresh = false): Promise<boolean> {
     latest += 1;
     const mine = latest;
     target = { storeId, itemId };
@@ -124,7 +127,7 @@ export function createDetail(deps: DetailDeps): Detail {
       const moved = shown?.storeId === storeId && shown.id === item.id;
       if (refresh && moved && shown.workspaceId !== item.workspaceId) {
         if (mine === latest) shut();
-        return;
+        return false;
       }
       const [all, { settings, people, plan }] = await Promise.all([
         deps.items.list(storeId, item.projectId),
@@ -133,8 +136,11 @@ export function createDetail(deps: DetailDeps): Detail {
       const store = deps.catalog.store(storeId);
       const project = deps.catalog.project(storeId, item.projectId);
       const workspace = project && deps.catalog.workspace(storeId, project.workspaceId);
-      if (mine !== latest) return;
-      if (!store || !project || !workspace) return shut();
+      if (mine !== latest) return false;
+      if (!store || !project || !workspace) {
+        shut();
+        return false;
+      }
       view.set({
         store,
         workspace,
@@ -156,10 +162,12 @@ export function createDetail(deps: DetailDeps): Detail {
         ),
         plan,
       });
+      return true;
     } catch (e) {
       // 開いているアイテムがなくなったら、パネルを閉じる(02「詳細パネル」)。
       if (!(e instanceof NotFound)) throw e;
       if (mine === latest) shut();
+      return false;
     }
   }
 
@@ -192,7 +200,7 @@ export function createDetail(deps: DetailDeps): Detail {
       // 別のアイテムが開いているときは、入力中のものを捨ててよいかを先に聞く(02「説明」)。
       const other = target !== null && (target.storeId !== storeId || target.itemId !== itemId);
       if (other && deps.leave && !(await deps.leave())) return;
-      await load(storeId, itemId);
+      if (await load(storeId, itemId)) deps.onOpened?.(storeId, itemId);
     },
     close: shut,
     target: () => (target ? { ...target } : null),

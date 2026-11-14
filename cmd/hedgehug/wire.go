@@ -89,6 +89,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHubSession: session,
 		Delivery:      svc,
 		SyncTargets:   svc.Targets,
+		Recent:        db.Recent(),
 	}
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)

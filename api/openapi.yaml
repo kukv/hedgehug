@@ -1000,6 +1000,118 @@ components:
       required:
         - number
       type: object
+    OpenedItem:
+      additionalProperties: false
+      properties:
+        itemId:
+          type: string
+        storeId:
+          type: string
+      required:
+        - storeId
+        - itemId
+      type: object
+    PaletteAlias:
+      additionalProperties: false
+      properties:
+        at:
+          description: 移動した日時。旧い接頭辞から作ったものは null
+          nullable: true
+          type: string
+        id:
+          description: 旧 ID(HH-12)
+          type: string
+      required:
+        - id
+        - at
+      type: object
+    PaletteIndex:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/PaletteItem"
+          nullable: true
+          type: array
+        projects:
+          items:
+            $ref: "#/components/schemas/PaletteProject"
+          nullable: true
+          type: array
+      required:
+        - items
+        - projects
+      type: object
+    PaletteItem:
+      additionalProperties: false
+      properties:
+        aliases:
+          description: 旧 ID(いまの ID と同じものを除く)
+          items:
+            $ref: "#/components/schemas/PaletteAlias"
+          nullable: true
+          type: array
+        display:
+          description: いまの ID(HH-12)
+          type: string
+        itemId:
+          type: string
+        number:
+          description: ワークスペースの中の番号(並びに使う)
+          format: int64
+          type: integer
+        projectId:
+          type: string
+        projectTitle:
+          type: string
+        storeId:
+          type: string
+        title:
+          type: string
+        workspaceId:
+          type: string
+      required:
+        - storeId
+        - workspaceId
+        - projectId
+        - itemId
+        - number
+        - display
+        - title
+        - projectTitle
+        - aliases
+      type: object
+    PaletteProject:
+      additionalProperties: false
+      properties:
+        aliases:
+          description: 旧 ID(いまの ID と同じものを除く)
+          items:
+            $ref: "#/components/schemas/PaletteAlias"
+          nullable: true
+          type: array
+        display:
+          description: いまの ID(HH-P1)
+          type: string
+        projectId:
+          type: string
+        storeId:
+          type: string
+        title:
+          type: string
+        workspaceId:
+          type: string
+        workspaceName:
+          type: string
+      required:
+        - storeId
+        - workspaceId
+        - projectId
+        - display
+        - title
+        - workspaceName
+        - aliases
+      type: object
     PlanningOverview:
       additionalProperties: false
       properties:
@@ -1336,6 +1448,26 @@ components:
         - storeName
         - workspaceId
         - workspaceName
+      type: object
+    RecentItem:
+      additionalProperties: false
+      properties:
+        display:
+          type: string
+        itemId:
+          type: string
+        projectTitle:
+          type: string
+        storeId:
+          type: string
+        title:
+          type: string
+      required:
+        - storeId
+        - itemId
+        - display
+        - title
+        - projectTitle
       type: object
     RecheckOutputBody:
       additionalProperties: false
@@ -3556,6 +3688,61 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 画面のアドレスのプロジェクトの ID(旧 ID を含む)が指すプロジェクトを探す
+  /api/palette-index:
+    get:
+      operationId: palette-index
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaletteIndex"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: パレットのアイテム・プロジェクトの候補を返す
+  /api/recent-items:
+    get:
+      operationId: list-recent-items
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RecentItem"
+                nullable: true
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 最近開いたアイテムを新しい順に返す
+    post:
+      operationId: open-recent-item
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenedItem"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: アイテムを開いたと、このマシンに覚える
   /api/sign-ins:
     post:
       operationId: start-sign-in
