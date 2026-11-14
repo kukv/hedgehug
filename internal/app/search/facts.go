@@ -15,7 +15,7 @@ import (
 
 // facts は、アイテム it の照合の材料。records は、すべての表示中の Store の転送記録(旧 ID)。now は検索の時刻。
 func (s *snapshot) facts(it item.Item, records []transfer.Record, q query.Query, now time.Time) query.Facts {
-	sp := s.spaces[it.Place.Workspace]
+	sp := s.spaceOf(it.Place.Workspace)
 	p := s.projects[it.Place.Project]
 	log := s.logs[it.ID]
 	it.Blocked = s.blocked[it.ID]

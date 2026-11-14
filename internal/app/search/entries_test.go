@@ -6,6 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
@@ -89,5 +90,23 @@ func TestFactsParentCycleStops(t *testing.T) {
 	a := factsOf(t, entriesOf(t, f, "is:invalid"), store1, "HH-5")
 	if want := []query.Ref{{Display: "HH-6"}}; !reflect.DeepEqual(a.Ancestors, want) || !a.Invalid {
 		t.Errorf("HH-5 Ancestors = %+v, Invalid = %v", a.Ancestors, a.Invalid)
+	}
+}
+
+// ワークスペースの並びはサイドバーと同じ(rank の順、同じなら内部 ID。rank のないものは先頭。E1-10)。
+func TestEntriesWorkspaceOrder(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	must(t, apptest.SampleMobile(t.Context(), f.stores, store1))
+	write(t, f.stores, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewSet("rank", nil, "V"))
+	})
+
+	es := entriesOf(t, f, "")
+	if got, want := displays(es), []string{"S1/MB-1", "S1/HH-1", "S1/HH-2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("displays = %v, want %v", got, want)
+	}
+	if mb, hh := factsOf(t, es, store1, "MB-1"), factsOf(t, es, store1, "HH-1"); mb.WorkspaceOrder != 0 || hh.WorkspaceOrder != 1 {
+		t.Errorf("WorkspaceOrder: MB-1 %d, HH-1 %d", mb.WorkspaceOrder, hh.WorkspaceOrder)
 	}
 }

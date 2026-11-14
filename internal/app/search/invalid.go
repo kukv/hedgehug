@@ -13,7 +13,7 @@ import (
 // ブロックしているアイテムが閉じたかは、そのアイテムのワークスペースの設定の分類で決める。
 func (s *snapshot) blockedSet() map[item.ID]bool {
 	return relation.BlockedSet(s.shown, func(it item.Item) bool {
-		return s.spaces[it.Place.Workspace].settings.Finished(it.Status)
+		return s.spaceOf(it.Place.Workspace).settings.Finished(it.Status)
 	})
 }
 

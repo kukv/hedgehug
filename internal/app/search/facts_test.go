@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/comment"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/itemlink"
+	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/query"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
@@ -21,11 +22,13 @@ const (
 	sprintActive  change.ID = "01TESTSP000000000000000001"
 	sprintPlanned change.ID = "01TESTSP000000000000000002"
 	sprintLater   change.ID = "01TESTSP000000000000000003"
+	release2      change.ID = "01TESTRL000000000000000001"
 )
 
 // basicStore は、サンプルに次を足す。
 //   - スプリント: 実行中「Sprint 3」、計画中「Sprint 4」(開始 12/01)、計画中「Sprint 5」(開始日なし)
-//   - HH-2: hanako の担当、Sprint 3、PR のリンク、HH-4 をブロック、削除済みの HH-5 と関連。あとでタイトルと順位を変える
+//   - リリース「v2.0.0」。hanako の表示名を「花子」にする
+//   - HH-2: hanako の担当、Sprint 3、v2.0.0、PR のリンク、HH-4 をブロック、削除済みの HH-5 と関連。あとでタイトルと順位を変える
 //   - HH-3: HH-2 の下の Step、Sprint 4、Issue のリンクだけ、HH-2 と重複
 //   - プロジェクト HH-P1 の旧 ID「OLD-P3」(転送記録)
 func basicStore(t *testing.T, f fixture) {
@@ -43,8 +46,10 @@ func basicStore(t *testing.T, f fixture) {
 		ds = append(ds, planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: sprintActive, Name: "Sprint 3", State: planning.Active, Start: "2026-11-10"})...)
 		ds = append(ds, planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: sprintPlanned, Name: "Sprint 4", State: planning.Planned, Start: "2026-12-01"})...)
 		ds = append(ds, planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: sprintLater, Name: "Sprint 5", State: planning.Planned})...)
+		ds = append(ds, planning.ReleaseDrafts(planning.Release{}, planning.Release{ID: release2, Name: "v2.0.0", State: planning.Unreleased})...)
 		task2 := append([]change.Draft{
-			change.NewSet(item.SprintField, nil, sprintActive), change.NewSet("assignee", nil, "hanako"),
+			change.NewSet(item.SprintField, nil, sprintActive), change.NewSet(item.ReleaseField, nil, release2),
+			change.NewSet("assignee", nil, "hanako"),
 			change.NewAdd("relations", item.Relation{Type: "blocks", To: item4}),
 			change.NewAdd("relations", item.Relation{Type: "relates", To: item5}),
 		}, itemlink.Set{}.Attach(pr, v)...)
@@ -54,6 +59,7 @@ func basicStore(t *testing.T, f fixture) {
 		}, itemlink.Set{}.Attach(issue, v)...)
 		return errors.Join(
 			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...),
+			tx.WriteMembers().Append(member.Rename("hanako", "hanako", "花子")),
 			tx.WriteItems().Append(apptest.SampleTask, task2...),
 			tx.WriteItems().Append(item3, item3Drafts...),
 			tx.WriteTransfers().Append(transfer.Record{
@@ -101,8 +107,8 @@ func checkTask2(t *testing.T, got query.Facts, log []change.Record) {
 	if got.Item.Status != apptest.SampleStatusTodo || len(got.Settings.Statuses) == 0 || got.Item.Assignee != "hanako" {
 		t.Errorf("ステータス・担当者 = %q %q", got.Item.Status, got.Item.Assignee)
 	}
-	if _, ok := got.Names["hanako"]; !ok || len(got.Names) != 2 {
-		t.Errorf("Names = %v", got.Names)
+	if want := map[string]string{"taro": "taro", "hanako": "花子"}; !reflect.DeepEqual(got.Names, want) {
+		t.Errorf("Names = %v, want %v", got.Names, want)
 	}
 	if want := (query.Ref{Display: "HH-P1", Aliases: []string{"OLD-P3"}}); !reflect.DeepEqual(got.Project, want) || got.ProjectTitle != "ログイン" {
 		t.Errorf("Project = %+v %q", got.Project, got.ProjectTitle)
@@ -114,8 +120,8 @@ func checkTask2(t *testing.T, got query.Facts, log []change.Record) {
 	if !reflect.DeepEqual(got.Relations, wantRel) {
 		t.Errorf("Relations = %+v, want %+v", got.Relations, wantRel)
 	}
-	if got.SprintName != "Sprint 3" || !got.SprintCurrent || got.SprintNext {
-		t.Errorf("スプリント = %q %v %v", got.SprintName, got.SprintCurrent, got.SprintNext)
+	if got.SprintName != "Sprint 3" || !got.SprintCurrent || got.SprintNext || got.ReleaseName != "v2.0.0" {
+		t.Errorf("スプリント・リリース = %q %v %v %q", got.SprintName, got.SprintCurrent, got.SprintNext, got.ReleaseName)
 	}
 	if !got.HasPR || got.Me != "taro" || got.Item.Blocked {
 		t.Errorf("HasPR = %v, Me = %q, Blocked = %v", got.HasPR, got.Me, got.Item.Blocked)

@@ -119,16 +119,16 @@ func (s *snapshot) readWorkspaces(r port.Reader) error {
 
 // readSpace は、ワークスペース w の設定とログ(並び・旧い接頭辞・計画・履歴に出さない操作)を読む。
 func readSpace(r port.Reader, w workspace.Workspace) (*space, error) {
-	st, err := r.Workspaces().Settings(w.ID)
-	if err != nil && !errors.Is(err, port.ErrNotFound) {
-		return nil, err
+	st, stErr := r.Workspaces().Settings(w.ID)
+	if stErr != nil && !errors.Is(stErr, port.ErrNotFound) {
+		return nil, stErr
 	}
 	log, err := r.Changes().Of(change.Ref{Kind: change.KindWorkspace, ID: w.ID})
 	if err != nil {
 		return nil, err
 	}
 	return &space{
-		ws: w, rank: workspace.RankOf(log), old: workspace.OldPrefixes(log), settings: st, hasSettings: err == nil,
+		ws: w, rank: workspace.RankOf(log), old: workspace.OldPrefixes(log), settings: st, hasSettings: stErr == nil,
 		plan: planning.FromLog(log), hidden: history.HiddenOps(log),
 	}, nil
 }
@@ -151,6 +151,14 @@ func (s *snapshot) readItems(r port.Reader, ws workspace.ID) error {
 		s.items = append(s.items, its...)
 	}
 	return nil
+}
+
+// spaceOf は、ワークスペース id の材料。読めなかったワークスペース(壊れたデータの、ないワークスペースを指すアイテム)なら空。
+func (s *snapshot) spaceOf(id workspace.ID) *space {
+	if sp, ok := s.spaces[id]; ok {
+		return sp
+	}
+	return &space{}
 }
 
 // isShown は、アイテムが画面に出るか(削除されておらず、プロジェクトも削除されていない)。

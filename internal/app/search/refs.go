@@ -12,13 +12,13 @@ import (
 
 // display は、アイテムのいまの ID(HH-12)。
 func (s *snapshot) display(it item.Item) string {
-	return it.DisplayID(s.spaces[it.Place.Workspace].ws.Prefix)
+	return it.DisplayID(s.spaceOf(it.Place.Workspace).ws.Prefix)
 }
 
 // itemRef は、アイテムのいまの ID と旧 ID(app/palette の索引と同じ求め方。E1-6)。
 func (s *snapshot) itemRef(it item.Item, records []transfer.Record) query.Ref {
 	display := s.display(it)
-	old := s.spaces[it.Place.Workspace].old
+	old := s.spaceOf(it.Place.Workspace).old
 	return query.Ref{Display: display, Aliases: aliasIDs(transfer.Aliases(records, transfer.EntityItem, it.ID, old, it.Place.Number, "-"), display)}
 }
 
