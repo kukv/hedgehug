@@ -37,7 +37,11 @@
   });
 
   function onkeydown(event: KeyboardEvent) {
-    if (open && event.key === "Escape" && !event.isComposing) onclose();
+    if (open && event.key === "Escape" && !event.isComposing) {
+      // ダイアログの中で開いたときに、同じ Esc でダイアログまで閉じないよう、捕捉の段階で止める。
+      event.stopPropagation();
+      onclose();
+    }
   }
   function onpointerdown(event: PointerEvent) {
     if (open && element && !element.contains(event.target as Node)) onclose();
@@ -48,7 +52,7 @@
   }
 </script>
 
-<svelte:window {onkeydown} {onpointerdown} bind:innerHeight />
+<svelte:window onkeydowncapture={onkeydown} {onpointerdown} bind:innerHeight />
 
 {#if open}
   <!-- role="menu" の中に置けるのは項目だけなので、検索欄は同じ浮いた枠の中で、その外に置く(Menu と同じ。data-menu も) -->
