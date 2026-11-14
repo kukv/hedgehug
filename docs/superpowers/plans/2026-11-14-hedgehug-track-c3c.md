@@ -62,7 +62,7 @@
 | 作業時間 | 対象なし | 追加と削除しかなく、編集の経路がない(`internal/app/worklogs`) |
 | メンバーの表示名・保持日数 | 対象なし | 削除がない |
 | 削除済みのワークスペース(名前・接頭辞・並び・設定) | Task 10・11(決定 R11) | B5b が develop に先に入り、C3c に回した(ユーザーの決定、2026-11-14。B5b の計画「他のトラックとの合わせ」) |
-| スプリント・リリース | 対象なし | F1 がまだ develop にない。F1 はワークスペースのログに書く(F1 の計画)ので、develop にあとから入る方が、スプリント・リリースの編集の経路で `port.ReviveSetting` を呼ぶ(トーストは設定の値と同じ「「{名前}」は…」) |
+| スプリント・リリース | Task 13・14(決定 R12) | F1 が develop に先に入り、C3c に回した(ユーザーの決定、2026-11-14。F1 の計画) |
 
 ## この計画で決めたこと
 
@@ -79,6 +79,7 @@
 | R9 | 06:193 のほかのものは、上の表のとおり。 | 調べた結果 |
 | R10 | アクティビティの文は、操作のもの(例: 「ステータス「Review」の分類を変更」)のまま。保存の前の読みは、取り消す削除の行を除いたログから作った設定(`workspace.SettingsReviving`)で行う。 | C3a-screen S3。いまの前の読みは削除済みを持たず、名前を読めない |
 | R11 | 削除済みのワークスペース(B5b の削除。ワークスペースのログの `deleted` の行、root: true)に、ワークスペースのログへ人の行を書く変更(名前・接頭辞・並び、プロパティ・値・ワークフロー・テンプレート・自動化のルールの追加と変更、初期値と既定、プロジェクト別のルール)を保存すると、変更を残し、ワークスペースの削除の op を、その op の行があるログ(ワークスペース・プロジェクト・アイテム)すべてで戻す。トーストは設定の値と同じ形で `{名前}` はワークスペースの名前(`Revival{RevivedName, 名前}`)。削除の操作(値・プロパティ・テンプレート・ルールの削除、ワークスペースの削除)は取り消さず、いまのまま 404。行を書かない保存は R3 と同じく 404。取り消すと名前・接頭辞が削除されていないワークスペースと重なるなら、08「復元」の文言「同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください」「同じ接頭辞のワークスペースがあります。先にそのワークスペースの接頭辞を変更してください」で保存ごと断る(名前・接頭辞を変える保存は変更後の値で判定)。プロジェクト別のルールは、プロジェクトがワークスペースと一緒に削除された(root: false で、ワークスペースと同じ op)ときだけワークスペースを取り消し(プロジェクトも一緒に戻る)、プロジェクトが自分で削除された(root: true)ならいまのまま 404。アイテム・プロジェクトへの保存は C3a-screen S9 のまま 404 | R1(`repair.hasChange` は、エンティティの削除にはそのログの人の変更の行をすべて数える)。06 185 行。08「名前が重なるときの復元」。06「プロジェクト別のルールの変更は、プロジェクトへの変更に数えない」(プロジェクトの削除は取り消さない) |
+| R12 | 削除済みのスプリント・リリース(F1 の `delete` の行 `sprints/<ID>`・`releases/<ID>`)への変更(スプリントの編集・開始、リリースの編集・状態の変更)は、`port.ReviveSetting` で削除の op を戻してから保存する(削除で外したアイテムのスプリント・リリースも、先端なら戻る)。トーストは設定の値と同じ形で `{名前}` はスプリント・リリースの名前。行を書かない保存は R3 と同じく 404。取り消すと名前が削除されていないものと重なるなら、08「復元」の文言「同じ名前のスプリントがあります。先にそのスプリントの名前を変えてください」「同じ名前のリリースがあります。先にそのリリースの名前を変えてください」で保存ごと断る(名前を変える保存は変更後の名前で判定)。スプリントの完了は、削除済みのスプリントが実行中になれない(実行中は削除できない)ので、取り消しても完了できず 404 のまま。削除・復元、アイテムの詳細パネルでスプリント・リリースを選ぶ保存(アイテムのログに書き、スプリントの項目名の下に書かない)は、いまのまま 404。ワークスペースが削除済みなら、スプリント・リリースの作成と変更でもワークスペースの削除を取り消す(R11) | R1(`sprints/<ID>/…` の行を同期は重なりに数える)。R11。08「名前が重なるときの復元」と F1 の `RestoreSprint`・`RestoreRelease` の断り |
 
 ## Review Focus
 
@@ -527,3 +528,73 @@ git commit -m "feat: 別の画面で削除されたワークスペースの自�
 ### Task 12: 全体の検証(Task 10・11 のあと)
 
 - [ ] **Step 1:** `make lint && make test && golangci-lint run --build-tags e2e ./...`、`pnpm -C web test && pnpm -C web check && pnpm -C web lint` がすべて通る。
+
+Task 13・14 は、develop を取り込んだあと(F1 のスプリント・リリースが入った)に足した(決定 R12)。
+
+### Task 13: 削除済みのスプリント・リリースへの保存
+
+**Files:**
+- Modify: `internal/app/planning/service.go`(`writePlanFrom` に取り消しを足す)、`sprints.go`、`releases.go`、`close.go`(必要なら)
+- Test: `internal/app/planning/deleted_test.go`
+
+**Interfaces:**
+- Consumes: Task 1 の `port.ReviveSetting`(項目名 `sprints/<ID>`・`releases/<ID>`)、Task 10 の `port.EditableWorkspace`・`port.ReviveWorkspace`、Task 2 の「取り消したのに行がなければ `port.ErrNotFound`」の形(`internal/app/workspaces/edit.go`)
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+どれも `DeleteSprint`・`DeleteRelease`(または `workspaces.Service.Delete`)で削除してから、`port.WithRevived` の context で呼ぶ。
+- `TestUpdateDeletedSprintRevives`: 名前を変えると成功し、スプリントが戻り、削除で外したアイテムのスプリントも戻る(削除のあとに人が別のスプリントに入れたアイテムは戻らない)。`Revived` が削除の前の名前 1 つ。
+- `TestStartDeletedSprintRevives`: 計画中のスプリントを削除したあと開始すると、戻って実行中になる。
+- `TestUpdateDeletedReleaseRevives`・`TestSetStateDeletedReleaseRevives`。
+- `TestDeletedSprintUnchangedIsNotFound`: 削除の前と同じ内容での編集は `port.ErrNotFound`、削除済みのまま。
+- `TestCloseDeletedSprintIsNotFound`・`TestDeleteDeletedSprintIsNotFound`・`TestSetSprintToDeletedIsNotFound`(アイテムに削除済みのスプリントを選ぶ): どれも `port.ErrNotFound` で削除済みのまま、`restore` の行がない。
+- `TestUpdateDeletedSprintNameTaken`: 削除のあと同じ名前のスプリントを作ると、古い方の目標の変更は「同じ名前のスプリントがあります。先にそのスプリントの名前を変えてください」で断り、名前を変える保存は成功する。リリースも同じ。
+- `TestCreateSprintInDeletedWorkspaceRevives`・`TestUpdateSprintInDeletedWorkspaceRevives`: ワークスペースを削除したあと、スプリントの作成・編集でワークスペースが戻る。
+
+- [ ] **Step 2: 失敗を確かめる**
+
+Run: `go test ./internal/app/planning/ -run 'Deleted'`
+Expected: FAIL
+
+- [ ] **Step 3: 書く**
+
+`writePlanFrom` に、取り消す項目名(`sprints/<ID>`・`releases/<ID>`。作成・削除・復元・完了・アイテムへの割り当ては空)と、ワークスペースを取り消すか(削除・復元・割り当て以外)を渡せるようにする。保存の前の読みは `EditableWorkspace` と、取り消す削除の行を除いたログ(`workspace.WithoutCovering`)で作った計画。tx の最初で `ReviveWorkspace`・`ReviveSetting`、そのあと計画を読み直す。取り消したのに行がなければ `port.ErrNotFound`。行を書いたあとに、取り消したスプリント・リリースの名前の重なりを確かめる(08 の文言)。
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `go test ./internal/app/... && make lint`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/app/planning
+git commit -m "feat: 別の画面で削除されたスプリント・リリースを変更したら削除を取り消す"
+```
+
+### Task 14: スプリントの e2e・仕様の文・全体の検証
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-11-11-hedgehug-functional-spec/06-sync-notifications.md`(「設定の値(…)」の括弧にスプリント・リリースを足す)
+- Modify: `web/e2e/deleted-elsewhere.spec.ts`
+
+- [ ] **Step 1: テストを書く**
+
+`"editing a sprint deleted in another tab restores it"`: このタブでスプリントの画面からスプリントの編集ダイアログを開き、目標を入力する(保存はまだ)。別のタブで同じスプリントを削除する(操作は F1 の e2e のものを使う)。このタブで保存すると、トースト「「{スプリントの名前}」は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました」が完全一致で出る。別のタブで開き直すと、スプリントのカードがある。
+
+- [ ] **Step 2: 流して通ることを確かめる**
+
+Run: `make e2e-bin && pnpm -C web e2e e2e/deleted-elsewhere.spec.ts`
+Expected: 6 テスト × 3 幅が通る
+
+- [ ] **Step 3: 全体の検証**
+
+Run: `make lint && make test && golangci-lint run --build-tags e2e ./... && pnpm -C web test && pnpm -C web check && pnpm -C web lint`
+Expected: PASS
+
+- [ ] **Step 4: コミット**
+
+```bash
+git add docs/superpowers/specs web/e2e/deleted-elsewhere.spec.ts
+git commit -m "test: 別のタブで削除したスプリントへの保存を e2e で確かめる"
+```
