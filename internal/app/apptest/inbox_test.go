@@ -136,11 +136,12 @@ func TestFakeInboxPrune(t *testing.T) {
 func TestFakeInboxMentionUpsert(t *testing.T) {
 	b := &Inbox{}
 	at9, at930 := time.Unix(9*3600, 0), time.Unix(9*3600+1800, 0)
+	clockAt := time.Unix(0, 0) // 偽物の時計の最初の時刻(足すときはこの時刻。n.At ではない)
 	first := port.Notice{Kind: port.NoticeMention, Store: "s1", Item: "i1", Source: "comment:c1", Text: "見て", Sender: "taro", At: at9}
 	_ = b.Mention(t.Context(), first)
 	rows := fakeList(t, b, "s1")
-	if len(rows) != 1 || !rows[0].At.Equal(at9) {
-		t.Fatalf("rows = %+v", rows)
+	if len(rows) != 1 || !rows[0].At.Equal(clockAt) {
+		t.Fatalf("rows = %+v, want At %v", rows, clockAt)
 	}
 	_ = b.SetRead(t.Context(), rows[0].ID, true)
 	second := first

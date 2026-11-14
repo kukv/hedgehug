@@ -28,6 +28,12 @@ func (i *Inbox) Add(_ context.Context, n port.Notice) error {
 	if i.Err != nil {
 		return i.Err
 	}
+	i.append(n)
+	return nil
+}
+
+// append は、通知を時計の時刻で足す。呼ぶ側が mu を持つ。
+func (i *Inbox) append(n port.Notice) {
 	if i.Clock == nil {
 		c := NewClock(time.Unix(0, 0))
 		c.Step = time.Second
@@ -35,10 +41,9 @@ func (i *Inbox) Add(_ context.Context, n port.Notice) error {
 	}
 	i.next++
 	i.rows = append(i.rows, port.NoticeRow{ID: i.next, Notice: n, At: i.Clock.Now()})
-	return nil
 }
 
-// Mention は、同じ Store・Source の行があれば本文・差出人・時刻を書き換えて未読に戻し、なければ n.At で足す。
+// Mention は、同じ Store・Source の行があれば本文・差出人・時刻を書き換えて未読に戻し、なければ Add と同じ時計の時刻で足す。
 func (i *Inbox) Mention(_ context.Context, n port.Notice) error {
 	if n.Source == "" {
 		return port.ErrInvalidOperation
@@ -50,8 +55,7 @@ func (i *Inbox) Mention(_ context.Context, n port.Notice) error {
 	}
 	k := slices.IndexFunc(i.rows, func(r port.NoticeRow) bool { return r.Store == n.Store && r.Source == n.Source })
 	if k < 0 {
-		i.next++
-		i.rows = append(i.rows, port.NoticeRow{ID: i.next, Notice: n, At: n.At})
+		i.append(n)
 		return nil
 	}
 	r := &i.rows[k]

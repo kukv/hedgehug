@@ -258,8 +258,9 @@ func TestInboxMentionUpsert(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := inboxList(t, b, "s1")
-	if len(rows) != 1 || !rows[0].At.Equal(at9) || rows[0].Source != "comment:c1" {
-		t.Fatalf("rows = %+v", rows)
+	// 足すときの時刻は n.At(at9)ではなく、受信箱の時計の時刻(受け取った時刻)
+	if len(rows) != 1 || !rows[0].At.Equal(inboxT0) || rows[0].Source != "comment:c1" {
+		t.Fatalf("rows = %+v, want At %v", rows, inboxT0)
 	}
 	if err := b.SetRead(t.Context(), rows[0].ID, true); err != nil {
 		t.Fatal(err)

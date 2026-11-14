@@ -64,8 +64,8 @@ func (b inbox) insert(ctx context.Context, n port.Notice, at time.Time) error {
 	return err
 }
 
-// Mention は、同じ Store・Source の行があれば本文・差出人・時刻を書き換えて未読に戻す。なければ足す。
-// 結果は触らない。
+// Mention は、同じ Store・Source の行があれば本文・差出人・時刻(n.At)を書き換えて未読に戻す。
+// なければ clock の時刻(受け取った時刻。Add と同じ)で足す。結果は触らない。
 func (b inbox) Mention(ctx context.Context, n port.Notice) error {
 	if n.Source == "" {
 		return port.ErrInvalidOperation
@@ -78,7 +78,7 @@ func (b inbox) Mention(ctx context.Context, n port.Notice) error {
 	if c, err := res.RowsAffected(); err != nil || c > 0 {
 		return err
 	}
-	return b.insert(ctx, n, n.At)
+	return b.insert(ctx, n, b.clock.Now())
 }
 
 // inClause は、件数ぶんの ? と値を返す。

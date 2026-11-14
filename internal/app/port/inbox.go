@@ -38,13 +38,14 @@ type Notice struct {
 	Display   string     // 作ったときのアイテムの ID。アイテムがなければ空
 	Sender    string     // 差出人のログイン名。空は「hedgehug」
 	Source    string     // メンションの本文の鍵。メンション以外は空
-	At        time.Time  // Mention が刻む時刻(本文を保存した時刻)。Add は使わない
+	At        time.Time  // Mention が既存の行を書き換えるときに刻む時刻(本文を保存した時刻)。足すときと Add は使わない(受信箱の時計)
 }
 
 // Inbox は、受信箱の口(B4-12)。通知を足す。
 type Inbox interface {
 	Add(ctx context.Context, n Notice) error
-	// Mention は、同じ Store・Source の行があれば text・sender・at を書き換えて未読に戻し、なければ n.At の時刻で足す。
+	// Mention は、同じ Store・Source の行があれば text・sender・at(n.At)を書き換えて未読に戻し、
+	// なければ Add と同じ受信箱の時計の時刻(受け取った時刻)で足す。
 	// n.Source が空ならエラー。
 	Mention(ctx context.Context, n Notice) error
 }
@@ -64,7 +65,7 @@ const (
 type NoticeRow struct {
 	ID NoticeID
 	Notice
-	At     time.Time // Add が刻んだ時刻。メンションの行は Mention の n.At(Notice.At を隠す)
+	At     time.Time // Add と Mention が足したときに刻んだ時刻。Mention が書き換えた行は n.At(Notice.At を隠す)
 	Read   bool
 	Result NoticeResult
 }
