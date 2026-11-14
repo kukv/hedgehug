@@ -8,7 +8,7 @@ test("the template picker fills and clears the description, and create another e
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "作成の説明"), prefix);
+  await createWorkspace(page, info, unique(info, `作成の説明 ${prefix}`), prefix);
   // テンプレート「説明つき」: 種類 Task、説明「テンプレートの説明」。既定にはしない。
   await openSettings(page, prefix, "テンプレート");
   await page.getByRole("button", { name: "テンプレートを作成" }).click();

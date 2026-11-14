@@ -27,7 +27,7 @@ const selected = (select: Locator) => select.locator("option:checked");
 
 test("creates, starts, closes and deletes sprints", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "計画"), prefix);
+  await createWorkspace(page, info, unique(info, `計画 ${prefix}`), prefix);
   // プロジェクト(接頭辞-P1)、Epic(接頭辞-1)、Story(接頭辞-2)。
   await projectWithEpic(page, info, prefix);
   await storyUnderEpic(page, info, `${prefix}-1`, "検索");
@@ -98,7 +98,7 @@ test("creates, starts, closes and deletes sprints", async ({ page }, info) => {
 // 読み直したら、未完了の件数と移動先のセレクトが出る(開いたときのカードのままにしない)。
 test("the close dialog follows the cards read again while it is open", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "読み直し"), prefix);
+  await createWorkspace(page, info, unique(info, `読み直し ${prefix}`), prefix);
   await projectWithEpic(page, info, prefix);
   await storyUnderEpic(page, info, `${prefix}-1`, "検索");
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}/sprints`));

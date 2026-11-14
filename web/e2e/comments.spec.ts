@@ -9,7 +9,7 @@ test("posts, edits and deletes a comment, adds a mention, and toggles watching",
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "コメント"), prefix);
+  await createWorkspace(page, info, unique(info, `コメント ${prefix}`), prefix);
   const panel = await newTaskUnder(page, info, prefix);
   const section = panel.getByRole("region", { name: "コメント", exact: true });
   const box = section.getByPlaceholder(placeholder);

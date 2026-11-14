@@ -133,6 +133,15 @@ func TestTargetWorkspaceSection(t *testing.T) {
 	}
 }
 
+// アイテム・プロジェクト・ワークスペースのどれも指さない通知(メンバーの表示名)は、Store を対象にする。
+func TestTargetStore(t *testing.T) {
+	f := setup(t)
+	f.add(t, port.Notice{Kind: port.NoticeOverwrite, Store: s1, Text: "表示名", Source: "overwrite:member"})
+	if got := f.first(t).Target; got.Kind != inbox.TargetStore {
+		t.Errorf("target = %+v, want store", got)
+	}
+}
+
 // 完全な削除で反映されなかった修復の通知は、アイテムが Store になくても moved で、作ったときの ID を出す。
 func TestTargetPurgedRepairIsMoved(t *testing.T) {
 	f := setup(t)

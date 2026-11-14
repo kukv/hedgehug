@@ -17,7 +17,7 @@ const bar = (page: Page, n: number) => page.getByText(`${n} 件を選択中`);
 
 async function openBacklog(page: Page, info: TestInfo) {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "選択"), prefix);
+  await createWorkspace(page, info, unique(info, `選択 ${prefix}`), prefix);
   await projectWithEpic(page, info, prefix);
   for (const title of ["検索", "通知", "設定"]) {
     await storyUnderEpic(page, info, `${prefix}-1`, title);

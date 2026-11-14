@@ -39,7 +39,7 @@ async function moveStatus(page: Page, id: string, from: string, to: string) {
 // 作り、Sprint 1 に入れて開始し、A を InProgress → Done にする。接頭辞を返す。Task 14・15 の e2e も使う。
 export async function startedSprint(page: Page, info: TestInfo) {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "レポート"), prefix);
+  await createWorkspace(page, info, unique(info, `レポート ${prefix}`), prefix);
   await projectWithEpic(page, info, prefix);
   await storyUnderEpic(page, info, `${prefix}-1`, "A");
   await storyUnderEpic(page, info, `${prefix}-1`, "B");

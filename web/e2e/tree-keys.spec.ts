@@ -24,7 +24,7 @@ test("moves around, opens, changes and reorders the tree with the keyboard", asy
 }, info) => {
   const t = (s: string) => unique(info, s);
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "キー"), prefix);
+  await createWorkspace(page, info, unique(info, `キー ${prefix}`), prefix);
   // Epic -1 の下に Task A(-2)・B(-3)・C(-4)、もう 1 つの Epic(-5)。
   await projectWithEpic(page, info, prefix);
   for (const name of ["A", "B", "C"]) await taskUnderEpic(page, info, `${prefix}-1`, name);

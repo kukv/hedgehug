@@ -5,7 +5,7 @@ import { createWorkspace, newTaskUnder, prefixOf, tokenUrl, unique } from "./hel
 
 test("records, checks and deletes work time", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "作業時間"), prefix);
+  await createWorkspace(page, info, unique(info, `作業時間 ${prefix}`), prefix);
   const panel = await newTaskUnder(page, info, prefix);
   const section = panel.getByRole("region", { name: "作業時間", exact: true });
   const hours = section.getByLabel("時間", { exact: true });

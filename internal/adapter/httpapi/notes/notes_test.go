@@ -20,7 +20,7 @@ func newAPI(t *testing.T) humatest.TestAPI {
 	}
 	_, api := humatest.New(t)
 	notes.Register(api, notes.Services{
-		Descriptions: appdescriptions.Service{Stores: s, Identity: apptest.Identity{Login: "taro"}},
+		Descriptions: appdescriptions.Service{Stores: s, Identity: apptest.Identity{Login: "taro"}, Inbox: &apptest.Inbox{}},
 	})
 	return api
 }

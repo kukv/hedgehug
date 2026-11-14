@@ -27,7 +27,7 @@ type InboxStore struct {
 
 // InboxTarget は、行の対象。いまの値で出す。
 type InboxTarget struct {
-	Kind          string `json:"kind" enum:"item,moved,deleted_item,workspace,deleted_workspace,project,moved_project,deleted_project"`
+	Kind          string `json:"kind" enum:"item,moved,deleted_item,workspace,deleted_workspace,project,moved_project,deleted_project,store"`
 	Item          string `json:"item" doc:"アイテムの内部 ID。workspace・deleted_workspace では空"`
 	Project       string `json:"project" doc:"プロジェクトの内部 ID。project・moved_project・deleted_project のとき。ほかは空"`
 	ItemKind      string `json:"itemKind" enum:",Epic,Story,Task,Bug,Step" doc:"item のときのアイテムの種類。ほかは空"`

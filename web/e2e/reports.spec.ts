@@ -48,7 +48,7 @@ test("reports burndown and velocity", async ({ page }, info) => {
 
 test("points fallback", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "件数"), prefix);
+  await createWorkspace(page, info, unique(info, `件数 ${prefix}`), prefix);
   await projectWithEpic(page, info, prefix);
   await storyUnderEpic(page, info, `${prefix}-1`, "A");
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}/reports`));

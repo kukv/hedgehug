@@ -69,7 +69,7 @@ async function openAutomation(page: Page, prefix: string) {
 
 test("a rule runs on a status change and shows in recent runs", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "自動化"), prefix);
+  await createWorkspace(page, info, unique(info, `自動化 ${prefix}`), prefix);
   const { task, number, status } = await newTaskByApi(page, prefix);
   await openAutomation(page, prefix);
   await expect(page.getByText("ルールはありません")).toBeVisible();
@@ -110,7 +110,7 @@ test("a rule runs on a status change and shows in recent runs", async ({ page },
 
 test("refuses a duplicate name and switches a rule off", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "自動化の断り"), prefix);
+  await createWorkspace(page, info, unique(info, `自動化の断り ${prefix}`), prefix);
   await openAutomation(page, prefix);
   const open = async () => {
     await page.getByRole("button", { name: "ルールを作成" }).click();
@@ -132,7 +132,7 @@ test("refuses a duplicate name and switches a rule off", async ({ page }, info) 
 
 test("edits a rule's name from the dialog", async ({ page }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "自動化の編集"), prefix);
+  await createWorkspace(page, info, unique(info, `自動化の編集 ${prefix}`), prefix);
   await openAutomation(page, prefix);
   await page.getByRole("button", { name: "ルールを作成" }).click();
   const create = page.getByRole("dialog", { name: "ルールを作成" });

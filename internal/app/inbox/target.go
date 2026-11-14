@@ -23,6 +23,7 @@ const (
 	TargetProject          TargetKind = "project"           // 生きているプロジェクト。概要を開く
 	TargetMovedProject     TargetKind = "moved_project"     // Store にない(別の Store へ移った)。旧 ID のアドレスを開く
 	TargetDeletedProject   TargetKind = "deleted_project"   // 削除されたプロジェクト(リンクなし)
+	TargetStore            TargetKind = "store"             // アイテム・プロジェクト・ワークスペースのどれも指さない(メンバーの表示名)。Store の点と Store 名を出す(リンクなし)
 )
 
 // Target は、行の対象。いまの値(接頭辞・タイトル・ワークスペース名)で出す。
@@ -59,6 +60,8 @@ func resolve(r port.Reader, info port.StoreInfo, n port.NoticeRow) (Row, error) 
 		row.Target, it, err = itemTarget(r, n)
 	case n.Project != "":
 		row.Target, err = projectTarget(r, n)
+	case n.Workspace == "":
+		row.Target = Target{Kind: TargetStore}
 	default:
 		row.Target, err = workspaceTarget(r, n.Workspace, n.Section)
 	}

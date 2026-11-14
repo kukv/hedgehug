@@ -26,6 +26,10 @@ func TestJudgedSavesSurvivesReopen(t *testing.T) {
 	if err := d.JudgedSaves().Mark(ctx, "S1", []port.SaveKey{k}); err != nil {
 		t.Fatal(err)
 	}
+	own := port.SaveKey{Version: "v3", Author: "alice", At: k.At, Op: "op3"}
+	if err := d.JudgedSaves().MarkOwn(ctx, "S1", []port.SaveKey{own}); err != nil {
+		t.Fatal(err)
+	}
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -40,5 +44,8 @@ func TestJudgedSavesSurvivesReopen(t *testing.T) {
 	k.Version = "v2"
 	if m, err := d.JudgedSaves().Known(ctx, "S1", k); err != nil || m != port.SameSave {
 		t.Errorf("Known after reopen = %v, %v", m, err)
+	}
+	if ok, err := d.JudgedSaves().Own(ctx, "S1", "op3"); err != nil || !ok {
+		t.Errorf("Own after reopen = %v, %v", ok, err)
 	}
 }

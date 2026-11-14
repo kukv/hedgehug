@@ -35,7 +35,7 @@ test("finds items, recent items, old IDs and commands from the palette", async (
   const destPrefix = prefixOf(info);
   await createWorkspace(page, info, destName, destPrefix);
   await projectWithEpic(page, info, destPrefix);
-  await createWorkspace(page, info, unique(info, "パレット用"), prefix);
+  await createWorkspace(page, info, unique(info, `パレット用 ${prefix}`), prefix);
   await projectWithEpic(page, info, prefix);
   await taskUnderEpic(page, info, `${prefix}-1`, "A");
   await taskUnderEpic(page, info, `${prefix}-1`, "B");
@@ -161,7 +161,7 @@ test("creates a sprint from the palette, from another screen and from the sprint
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "パレット計画"), prefix);
+  await createWorkspace(page, info, unique(info, `パレット計画 ${prefix}`), prefix);
   await newProject(page, info, prefix);
 
   const dialog = page.getByRole("dialog", { name: "スプリントを作成" });
@@ -187,7 +187,8 @@ test("creates a sprint from the palette, from another screen and from the sprint
 });
 
 test("opens the inbox from the palette command", async ({ page }, info) => {
-  await createWorkspace(page, info, unique(info, "パレット受信箱"), prefixOf(info));
+  const prefix = prefixOf(info);
+  await createWorkspace(page, info, unique(info, `パレット受信箱 ${prefix}`), prefix);
   const palette = await openPalette(page);
   await palette.getByRole("combobox").fill("受信箱を開く");
   await palette.getByRole("option", { name: /^受信箱を開く/ }).click();

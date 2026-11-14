@@ -174,6 +174,7 @@ func RunJudgedSavesContract(t *testing.T, newSaves func() port.JudgedSaves) {
 	t.Run("started follows marks per store", func(t *testing.T) { judgedStarted(t, s) })
 	t.Run("known matches version then save", func(t *testing.T) { judgedKnown(t, s) })
 	t.Run("forget only that store", func(t *testing.T) { judgedForget(t, s) })
+	t.Run("own follows MarkOwn", func(t *testing.T) { judgedOwn(t, s) })
 }
 
 func judgedKey(version, op string) port.SaveKey {
@@ -229,6 +230,33 @@ func judgedForget(t *testing.T, s port.JudgedSaves) {
 	if ok, _ := s.Started(syncCtx, "F2"); !ok {
 		t.Error("F2 was forgotten")
 	}
+}
+
+func judgedOwn(t *testing.T, s port.JudgedSaves) {
+	must(t, s.MarkOwn(syncCtx, "O1", []port.SaveKey{judgedKey("v1", "own1")}))
+	must(t, s.Mark(syncCtx, "O1", []port.SaveKey{judgedKey("v2", "mark1"), judgedKey("v3", "both1"), judgedKey("v4", "both2")}))
+	must(t, s.MarkOwn(syncCtx, "O1", []port.SaveKey{judgedKey("v3", "both1")}))
+	must(t, s.MarkOwn(syncCtx, "O2", []port.SaveKey{judgedKey("v1", "own2")}))
+	must(t, s.Mark(syncCtx, "O2", []port.SaveKey{judgedKey("v1", "own2")}))
+	must(t, s.MarkOwn(syncCtx, "O3", []port.SaveKey{judgedKey("v1", "gone")}))
+	must(t, s.ForgetStore(syncCtx, "O3"))
+	if m, err := s.Known(syncCtx, "O1", judgedKey("v1", "own1")); err != nil || m != port.SameVersion {
+		t.Errorf("Known after MarkOwn = %v, %v", m, err)
+	}
+	own := func(store port.StoreID, op change.ID, want bool) {
+		t.Helper()
+		if got, err := s.Own(syncCtx, store, op); err != nil || got != want {
+			t.Errorf("Own(%s, %q) = %v, %v; want %v", store, op, got, err, want)
+		}
+	}
+	own("O1", "own1", true)
+	own("O1", "mark1", false)
+	own("O1", "both1", true) // Mark のあとに MarkOwn
+	own("O1", "both2", false)
+	own("O2", "own1", false) // 別の Store
+	own("O2", "own2", true)  // MarkOwn のあとに Mark
+	own("O1", "", false)
+	own("O3", "gone", false) // ForgetStore で消えた
 }
 
 // StoreVersions は port.StoreVersions の偽物。

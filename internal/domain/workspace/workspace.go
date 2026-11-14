@@ -73,6 +73,10 @@ func projectRuleList(f string) bool {
 	return false
 }
 
+// Valid は、ワークスペースのログの行が、いまの値を決めるのに使える行か(Resolve の手順 0 と同じ検査。
+// 上書きの判定が、いまの値と同じ行を見るため)。
+func Valid(r change.Record) bool { return valid(r) }
+
 func valid(r change.Record) bool {
 	switch {
 	case r.T == change.Set && r.F == "prefix":

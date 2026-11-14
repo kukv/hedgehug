@@ -3,6 +3,7 @@ package noticing_test
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -102,7 +103,7 @@ func TestNumberNotice(t *testing.T) {
 		Text: "2 台で同時に HH-3 が作られたため、あとから届いた方を HH-4 に振り直しました", Display: "HH-4",
 		Source: "repair:number:" + string(item3) + ":4",
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -124,7 +125,7 @@ func TestNumberNoticeProject(t *testing.T) {
 		Text: "2 台で同時に HH-P2 が作られたため、あとから届いた方を HH-P3 に振り直しました", Display: "HH-P3",
 		Source: "repair:number:" + string(proj2) + ":3",
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -152,7 +153,7 @@ func TestCycleNotice(t *testing.T) {
 		Text: "親が循環したため、HH-5 を HH-1 の下へ移しました", Display: "HH-5",
 		Source: "repair:cycle:" + string(item5) + ":" + string(apptest.SampleEpic) + ":" + f.placed(item5),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -230,7 +231,7 @@ func TestPlaceProjectNotice(t *testing.T) {
 		Text: "HH-2 が プロジェクト「サイト」へ移動したため、HH-6 をそのプロジェクトに移しました", Display: "HH-6",
 		Source: "repair:place:" + string(item6) + ":" + string(apptest.SampleWorkspace) + ":" + string(proj2) + ":" + f.placed(item6),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }
@@ -324,7 +325,7 @@ func TestPlaceWorkspaceNotice(t *testing.T) {
 		Text:    "HH-2 が Docs へ移動したため、HH-6 を DOC-4 に移動しました。合う値がなく空になった項目: 優先度・関連システム",
 		Display: "DOC-4", Source: "repair:place:" + string(item6) + ":" + string(docsWS) + ":" + string(docsProj) + ":" + f.placed(item6),
 	}
-	if n := f.wantOne(); n != want {
+	if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 		t.Errorf("notice = %+v, want %+v", n, want)
 	}
 }

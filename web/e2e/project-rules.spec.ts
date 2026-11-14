@@ -24,7 +24,7 @@ test("unchecking a status hides it from the tree's status menu without a reload"
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "使うステータス"), prefix);
+  await createWorkspace(page, info, unique(info, `使うステータス ${prefix}`), prefix);
   await newTaskUnder(page, info, prefix);
   await settingsOf(page, prefix);
   const statuses = section(page, "rules-statuses");
@@ -52,7 +52,7 @@ test("a project workflow restriction disables a status in the menu with its reas
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "プロジェクトの制約"), prefix);
+  await createWorkspace(page, info, unique(info, `プロジェクトの制約 ${prefix}`), prefix);
   await newTaskUnder(page, info, prefix);
   await settingsOf(page, prefix);
   const workflow = section(page, "rules-workflow");
@@ -74,7 +74,7 @@ test("using one template leaves only it and none in the create dialog", async ({
   const prefix = prefixOf(info);
   const a = unique(info, "雛形A");
   const b = unique(info, "雛形B");
-  await createWorkspace(page, info, unique(info, "使うテンプレート"), prefix);
+  await createWorkspace(page, info, unique(info, `使うテンプレート ${prefix}`), prefix);
   await createTemplate(page, prefix, a);
   await createTemplate(page, prefix, b);
   const panel = await projectWithEpic(page, info, prefix);
@@ -109,7 +109,7 @@ test("a project-only rule shows in the workspace automation tab and its line ope
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "専用ルール"), prefix);
+  await createWorkspace(page, info, unique(info, `専用ルール ${prefix}`), prefix);
   await newProject(page, info, prefix);
   await settingsOf(page, prefix);
   await section(page, "rules-statuses")
@@ -166,7 +166,7 @@ test("the statuses subtab lists the projects with rules and opens the statuses s
   page,
 }, info) => {
   const prefix = prefixOf(info);
-  await createWorkspace(page, info, unique(info, "ステータスの 1 行"), prefix);
+  await createWorkspace(page, info, unique(info, `ステータスの 1 行 ${prefix}`), prefix);
   const t1 = await newProject(page, info, prefix, 1);
   const t2 = await newProject(page, info, prefix, 2);
   const label = "プロジェクト別のルールがあるプロジェクト: ";

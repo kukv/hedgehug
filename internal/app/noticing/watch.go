@@ -13,15 +13,17 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// watched は、ウォッチの通知 1 行の本文と、それを決めた行(差出人と、自分の変更かを決める)。
+// watched は、ウォッチの通知 1 行の本文と、それを決めた行(差出人と、自分の変更かを決める)と、項目(上書きの
+// 通知の Field と同じもの。コメントは空)。
 type watched struct {
-	text string
-	row  change.Record
+	text  string
+	row   change.Record
+	field string
 }
 
 // watches は、あなたがウォッチ中のアイテムの、判定の前と後で値が違う項目と、判定の中で投稿されたコメントの通知
-// (C4b1-9)。読み取りの失敗(ないもの以外)はエラー。
-func watches(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
+// (C4b1-9)。同じ判定で上書きの通知を作った項目(done)は作らない(C4c1-14)。読み取りの失敗(ないもの以外)はエラー。
+func watches(r port.Reader, b batch, store port.StoreID, me string, done overwritten) ([]port.Notice, error) {
 	var out []port.Notice
 	for _, ref := range b.refs {
 		if ref.Kind != change.KindItem || b.movedIn(ref) {
@@ -35,7 +37,7 @@ func watches(r port.Reader, b batch, store port.StoreID, me string) ([]port.Noti
 			continue
 		}
 		for _, w := range ws {
-			if !fromOther(w.row, me) {
+			if !fromOther(w.row, me) || done[ref][w.field] {
 				continue
 			}
 			n := base
@@ -59,7 +61,7 @@ func watchTarget(r port.Reader, b batch, ref change.Ref, me string) ([]watched, 
 	var ws []watched
 	if before.Title != after.Title {
 		if w, ok := change.Current(b.after(ref), change.Set, "title", func(change.Record) bool { return true }); ok {
-			ws = append(ws, watched{fmt.Sprintf("タイトルを「%s」に変更", after.Title), w})
+			ws = append(ws, watched{fmt.Sprintf("タイトルを「%s」に変更", after.Title), w, "title"})
 		}
 	}
 	// 別のワークスペースへの移動は、値の定義が変わるので、プロパティを比べない(06「移動では通知しない」)
@@ -96,7 +98,7 @@ func propertyTexts(r port.Reader, b batch, ref change.Ref, before, after item.It
 		}
 		// 日付の年は、変えた行の日で決める(保存する日。item.Display)
 		c := history.Context{Settings: st, Names: names, Today: w.At}
-		out = append(out, watched{history.WatchText(p, v, c), w})
+		out = append(out, watched{history.WatchText(p, v, c), w, item.Field(p)})
 	}
 	return out, nil
 }
@@ -130,7 +132,7 @@ func commentTexts(b batch, ref change.Ref) []watched {
 			continue
 		}
 		if first, ok := change.First(b.after(ref), change.Comment, string(c.ID)); ok {
-			out = append(out, watched{history.CommentHead(c.Body), first})
+			out = append(out, watched{history.CommentHead(c.Body), first, ""})
 		}
 	}
 	return out

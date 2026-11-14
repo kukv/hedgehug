@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
 func init() {
@@ -18,6 +19,7 @@ func init() {
 		PRIMARY KEY (store, version)
 	);
 	CREATE INDEX judged_by_save ON judged_saves (store, op, author, at)`)
+	register("judged/002", "ALTER TABLE judged_saves ADD COLUMN own INTEGER NOT NULL DEFAULT 0")
 }
 
 // JudgedSaves は、通知を判定した保存の記録(port.JudgedSaves)。時刻は inboxTime の固定幅で書く。
@@ -54,18 +56,35 @@ func (j judged) Known(ctx context.Context, store port.StoreID, k port.SaveKey) (
 }
 
 func (j judged) Mark(ctx context.Context, store port.StoreID, keys []port.SaveKey) error {
+	return j.insert(ctx, store, keys, `INSERT OR IGNORE INTO judged_saves (store, version, op, author, at) VALUES (?, ?, ?, ?, ?)`)
+}
+
+// MarkOwn は、Mark と同じく書き、すでにある記録も own = 1 にする(決定 C4c1-4)。
+func (j judged) MarkOwn(ctx context.Context, store port.StoreID, keys []port.SaveKey) error {
+	return j.insert(ctx, store, keys, `INSERT INTO judged_saves (store, version, op, author, at, own) VALUES (?, ?, ?, ?, ?, 1)
+		ON CONFLICT (store, version) DO UPDATE SET own = 1`)
+}
+
+// insert は、keys のそれぞれを query で 1 回の書き込みにまとめて書く。
+func (j judged) insert(ctx context.Context, store port.StoreID, keys []port.SaveKey, query string) error {
 	tx, err := j.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, k := range keys {
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO judged_saves (store, version, op, author, at) VALUES (?, ?, ?, ?, ?)`,
-			string(store), k.Version, string(k.Op), k.Author, inboxTime(k.At)); err != nil {
+		if _, err := tx.ExecContext(ctx, query, string(store), k.Version, string(k.Op), k.Author, inboxTime(k.At)); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
+}
+
+func (j judged) Own(ctx context.Context, store port.StoreID, op change.ID) (bool, error) {
+	if op == "" {
+		return false, nil
+	}
+	return j.exists(ctx, `SELECT 1 FROM judged_saves WHERE store = ? AND op = ? AND own = 1 LIMIT 1`, string(store), string(op))
 }
 
 func (j judged) ForgetStore(ctx context.Context, store port.StoreID) error {
