@@ -233,7 +233,7 @@ func TestAddLinkDeletedItemRevives(t *testing.T) {
 	if f.taskItem(t).Deleted != nil || !f.taskRestored(t) {
 		t.Error("削除を取り消していない")
 	}
-	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-2"}) {
+	if got := port.Revived(ctx); !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 	if rows := f.list(t, linkStore, linkTask); len(rows) != 1 || rows[0].Number != 41 {
@@ -258,7 +258,7 @@ func TestRemoveLinkDeletedItemRevives(t *testing.T) {
 	if f.taskItem(t).Deleted != nil || !f.taskRestored(t) {
 		t.Error("削除を取り消していない")
 	}
-	if got := port.Revived(ctx); !slices.Equal(got, []string{"HH-2"}) {
+	if got := port.Revived(ctx); !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 	if rows := f.list(t, linkStore, linkTask); len(rows) != 0 {

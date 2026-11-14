@@ -343,3 +343,107 @@ func TestResetWithoutRulesIsNotFound(t *testing.T) {
 		t.Errorf("保存された: %v", rec.summaries)
 	}
 }
+
+// deleteWorkspace は、ワークスペースを削除する(B5b と同じく、プロジェクトは root: false で同じ op)。
+func deleteWorkspace(t *testing.T, svc projectrules.Service) {
+	t.Helper()
+	op := port.Operation{Actor: change.User("taro"), Summary: "ワークスペースを削除"}
+	if err := svc.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDeleteEntity(true)),
+			tx.WriteProjects().Append(p, change.NewDeleteEntity(false)),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// deleted は、ワークスペースとプロジェクトが削除済みかどうか。
+func deleted(t *testing.T, svc projectrules.Service) (ws, pr bool) {
+	t.Helper()
+	if err := svc.Stores.Read(t.Context(), store, func(r port.Reader) error {
+		w, err := r.Workspaces().Get(apptest.SampleWorkspace)
+		if err != nil {
+			return err
+		}
+		got, err := r.Projects().Get(p)
+		ws, pr = w.Deleted != nil, got.Deleted != nil
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return ws, pr
+}
+
+// ワークスペースの削除で一緒に削除されたプロジェクトのルールを変えると、変更を残してワークスペースとプロジェクトの
+// 削除を取り消す(決定 R11)。ワークスペースの設定に戻す(専用ルールの削除を含む)も、プロジェクト別のルールの変更なので同じ。
+func TestProjectRuleInDeletedWorkspaceRevives(t *testing.T) {
+	for name, tt := range map[string]struct {
+		change func(svc projectrules.Service, ctx context.Context) error
+		check  func(t *testing.T, got projectrule.Rules)
+	}{
+		"template": {
+			func(svc projectrules.Service, ctx context.Context) error {
+				return svc.SetTemplateUsed(ctx, store, p, tpl, true)
+			},
+			func(t *testing.T, got projectrule.Rules) {
+				t.Helper()
+				if !reflect.DeepEqual(got.Templates, []change.ID{tpl}) {
+					t.Errorf("Templates = %v", got.Templates)
+				}
+			},
+		},
+		"reset": {
+			func(svc projectrules.Service, ctx context.Context) error {
+				return svc.Reset(ctx, store, p, projectrule.SectionAutomation)
+			},
+			func(*testing.T, projectrule.Rules) {},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			svc, _ := setup(t)
+			deleteWorkspace(t, svc)
+			ctx := port.WithRevived(t.Context())
+			if err := tt.change(svc, ctx); err != nil {
+				t.Fatal(err)
+			}
+			if ws, pr := deleted(t, svc); ws || pr {
+				t.Errorf("deleted = %v/%v", ws, pr)
+			}
+			tt.check(t, rulesOf(t, svc))
+			if want := []port.Revival{{Kind: port.RevivedName, Text: "Web"}}; !reflect.DeepEqual(port.Revived(ctx), want) {
+				t.Errorf("Revived = %v, want %v", port.Revived(ctx), want)
+			}
+		})
+	}
+}
+
+// 行を書かない保存は、取り消さずに 404(決定 R3・R11)。
+func TestProjectRuleNoOpInDeletedWorkspaceIsNotFound(t *testing.T) {
+	svc, _ := setup(t)
+	deleteWorkspace(t, svc)
+	if err := svc.SetStatusUsed(t.Context(), store, p, apptest.SampleStatusDone, true); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("err = %v, want port.ErrNotFound", err)
+	}
+	if ws, pr := deleted(t, svc); !ws || !pr {
+		t.Errorf("deleted = %v/%v", ws, pr)
+	}
+}
+
+// プロジェクトが自分で削除された(root: true)なら、ワークスペースが削除済みでも取り消さずに 404。
+func TestProjectRuleOnDeletedProjectIsNotFound(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := t.Context()
+	if err := apptest.DeleteProject(ctx, svc.Stores, store, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := apptest.DeleteWorkspace(ctx, svc.Stores, store, apptest.SampleWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetTemplateUsed(ctx, store, p, tpl, true); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("err = %v, want port.ErrNotFound", err)
+	}
+	if ws, pr := deleted(t, svc); !ws || !pr {
+		t.Errorf("deleted = %v/%v", ws, pr)
+	}
+}

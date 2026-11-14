@@ -44,7 +44,7 @@ func TestWatchDeletedRevives(t *testing.T) {
 	if err := svc.Set(ctx, store, apptest.SampleTask, true); err != nil {
 		t.Fatal(err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if !hasRestore(t, rec) {

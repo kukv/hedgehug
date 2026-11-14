@@ -16,7 +16,7 @@ import (
 // 未完了のアイテムを移動先 dest(nil ならバックログ)の枠の末尾へ、いまの並び順のまま移す。
 // id が実行中でないか、dest が計画中のスプリントでなければ ErrNotFound。
 func (s Service) CloseSprint(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, dest *change.ID) error {
-	return s.writePlan(ctx, store, ws,
+	return s.writePlan(ctx, store, ws, revival{workspace: true},
 		func(p planning.Plan) (string, error) {
 			sp, err := closable(p, id, dest)
 			if err != nil {

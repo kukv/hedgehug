@@ -2,7 +2,9 @@
 package planning
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -74,30 +76,36 @@ func works(r port.Reader, ws workspace.ID) ([]planning.Work, error) {
 }
 
 // editPlan は、summary で決めた文で 1 回保存する。drafts は保存の中のいまの計画から行を作る。
-func (s Service) editPlan(ctx context.Context, store port.StoreID, ws workspace.ID,
+// rv のものが削除済みなら、保存で削除を取り消す。
+func (s Service) editPlan(ctx context.Context, store port.StoreID, ws workspace.ID, rv revival,
 	summary func(p planning.Plan) (string, error),
 	drafts func(p planning.Plan) ([]change.Draft, error),
 ) error {
-	return s.writePlan(ctx, store, ws, summary, func(tx port.Tx, p planning.Plan) error {
+	return s.writePlan(ctx, store, ws, rv, summary, func(tx port.Tx, p planning.Plan) error {
 		ds, err := drafts(p)
 		if err != nil {
 			return err
+		}
+		if len(ds) == 0 {
+			return errNoRows
 		}
 		return tx.WriteWorkspaces().Append(ws, ds...)
 	})
 }
 
 // writePlan は、summary で決めた文で 1 回保存する。write は保存の中のいまの計画を見て書く。
-func (s Service) writePlan(ctx context.Context, store port.StoreID, ws workspace.ID,
+// rv のものが削除済みなら、保存で削除を取り消す。
+func (s Service) writePlan(ctx context.Context, store port.StoreID, ws workspace.ID, rv revival,
 	summary func(p planning.Plan) (string, error),
 	write func(tx port.Tx, p planning.Plan) error,
 ) error {
-	return s.writePlanFrom(ctx, store, ws, planOf, summary, write)
+	return s.writePlanFrom(ctx, store, ws, rv.plan, rv, summary, write)
 }
 
-// writePlanFrom は、writePlan の、計画を plan で読む版。
+// writePlanFrom は、writePlan の、計画を plan で読む版。summary か write が errNoRows を返したら、取り消すものが
+// あれば ErrNotFound、なければ何も保存しない(summary が返したときは errNoRows をそのまま返す)。
 func (s Service) writePlanFrom(ctx context.Context, store port.StoreID, ws workspace.ID,
-	plan func(r port.Reader, ws workspace.ID) (planning.Plan, error),
+	plan func(r port.Reader, ws workspace.ID) (planning.Plan, error), rv revival,
 	summary func(p planning.Plan) (string, error),
 	write func(tx port.Tx, p planning.Plan) error,
 ) error {
@@ -111,17 +119,18 @@ func (s Service) writePlanFrom(ctx context.Context, store port.StoreID, ws works
 		if err != nil {
 			return err
 		}
-		text, err = summary(p)
+		if text, err = summary(p); !errors.Is(err, errNoRows) {
+			return err
+		}
+		if pending, perr := rv.pending(r, ws); perr != nil || pending {
+			return cmp.Or(perr, port.ErrNotFound)
+		}
 		return err
 	})
 	if err != nil {
 		return err
 	}
 	return s.Stores.Write(ctx, store, port.Operation{Actor: change.User(me), Summary: text}, func(tx port.Tx) error {
-		p, err := plan(tx, ws)
-		if err != nil {
-			return err
-		}
-		return write(tx, p)
+		return rv.write(ctx, tx, ws, plan, write)
 	})
 }

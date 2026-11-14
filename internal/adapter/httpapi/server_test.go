@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -212,6 +213,44 @@ func TestRestoredHeaderNotOnFailure(t *testing.T) {
 	h := serveRestored(t, revivingHandler(t, func(w http.ResponseWriter) { w.WriteHeader(http.StatusUnprocessableEntity) }))
 	if got := h.Values("Hedgehug-Restored"); len(got) != 0 {
 		t.Errorf("422: %v", got)
+	}
+	// 名前とコメントも、422 では付かない。
+	h = serveRestored(t, func(w http.ResponseWriter, r *http.Request) {
+		port.NoteRevived(r.Context(), port.Revival{Kind: port.RevivedName, Text: "Review"})
+		port.NoteRevived(r.Context(), port.Revival{Kind: port.RevivedComment, Text: "HH-2"})
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	})
+	for _, name := range []string{"Hedgehug-Restored-Name", "Hedgehug-Restored-Comment"} {
+		if got := h.Values(name); len(got) != 0 {
+			t.Errorf("422 %s: %v", name, got)
+		}
+	}
+}
+
+// 種類ごとに別のヘッダーに付く。名前は url.PathEscape で、コンマと空白を含まない。
+func TestRestoredHeaderKinds(t *testing.T) {
+	const name = "レビュー, 待ち 「A」"
+	h := serveRestored(t, func(w http.ResponseWriter, r *http.Request) {
+		port.NoteRevived(r.Context(), port.Revival{Kind: port.RevivedID, Text: "HH-1"})
+		port.NoteRevived(r.Context(), port.Revival{Kind: port.RevivedName, Text: name})
+		port.NoteRevived(r.Context(), port.Revival{Kind: port.RevivedComment, Text: "HH-2"})
+		w.WriteHeader(http.StatusOK)
+	})
+	if got := h.Values("Hedgehug-Restored"); !slices.Equal(got, []string{"HH-1"}) {
+		t.Errorf("Restored: %v", got)
+	}
+	if got := h.Values("Hedgehug-Restored-Comment"); !slices.Equal(got, []string{"HH-2"}) {
+		t.Errorf("Restored-Comment: %v", got)
+	}
+	got := h.Values("Hedgehug-Restored-Name")
+	if !slices.Equal(got, []string{url.PathEscape(name)}) {
+		t.Fatalf("Restored-Name: %v", got)
+	}
+	if strings.ContainsAny(got[0], ", ") {
+		t.Errorf("コンマか空白が残っている: %q", got[0])
+	}
+	if back, err := url.PathUnescape(got[0]); err != nil || back != name {
+		t.Errorf("戻らない: %q %v", back, err)
 	}
 }
 

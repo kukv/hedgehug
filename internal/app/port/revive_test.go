@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 const reviveStore port.StoreID = "team"
@@ -57,7 +58,7 @@ func deleteTree(t *testing.T, s port.Stores) {
 	deleteIn(t, s, map[item.ID]bool{apptest.SampleEpic: true, apptest.SampleTask: false}, nil)
 }
 
-func revive(t *testing.T, s port.Stores, fn func(ctx context.Context, tx port.Tx) error) []string {
+func revive(t *testing.T, s port.Stores, fn func(ctx context.Context, tx port.Tx) error) []port.Revival {
 	t.Helper()
 	ctx := port.WithRevived(context.Background())
 	if err := s.Write(ctx, reviveStore, user, func(tx port.Tx) error { return fn(ctx, tx) }); err != nil {
@@ -149,7 +150,7 @@ func TestReviveItemRestoresTheWholeOp(t *testing.T) {
 	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
 		return port.ReviveItem(ctx, tx, apptest.SampleEpic)
 	})
-	if !slices.Equal(got, []string{"HH-1"}) {
+	if !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-1"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 	for _, id := range []item.ID{apptest.SampleEpic, apptest.SampleTask} {
@@ -165,7 +166,7 @@ func TestReviveItemTwiceWritesOnce(t *testing.T) {
 	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
 		return errors.Join(port.ReviveItem(ctx, tx, apptest.SampleEpic), port.ReviveItem(ctx, tx, apptest.SampleEpic))
 	})
-	if !slices.Equal(got, []string{"HH-1"}) {
+	if !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-1"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 	if n := restoreRows(t, s, change.Ref{Kind: change.KindItem, ID: apptest.SampleEpic}); n != 1 {
@@ -194,7 +195,7 @@ func TestReviveProjectRestoresItems(t *testing.T) {
 	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
 		return port.ReviveProject(ctx, tx, apptest.SampleProject)
 	})
-	if !slices.Equal(got, []string{"HH-P1"}) {
+	if !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-P1"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 	for _, id := range []item.ID{apptest.SampleEpic, apptest.SampleTask} {
@@ -311,7 +312,7 @@ func TestReviveProjectWithSameNameDeletedProjectRevives(t *testing.T) {
 	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
 		return port.ReviveProject(ctx, tx, apptest.SampleProject)
 	})
-	if !slices.Equal(got, []string{"HH-P1"}) {
+	if !slices.Equal(got, []port.Revival{{Kind: port.RevivedID, Text: "HH-P1"}}) {
 		t.Errorf("Revived = %v", got)
 	}
 }
@@ -344,6 +345,159 @@ func TestReviveProjectWithSameNameLiveProjectIsRefused(t *testing.T) {
 	}
 	if n := restoreRows(t, s, change.Ref{Kind: change.KindProject, ID: apptest.SampleProject}); n != 0 {
 		t.Errorf("restore rows = %d, want 0", n)
+	}
+}
+
+// review は、サンプルのワークスペースに足すステータス「Review」。
+var review = workspace.Value{ID: "01REVIEW000000000000000001", Name: "Review", Color: "blue", Category: workspace.CategoryDoing, Rank: "a"}
+
+var statuses = workspace.ParseList("statuses")
+
+// writeAs は、利用者の 1 回の保存で fn を書く。
+func writeAs(t *testing.T, s port.Stores, fn func(tx port.Tx) error) {
+	t.Helper()
+	if err := s.Write(t.Context(), reviveStore, user, fn); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// deleteReview は、ステータス「Review」を足して Epic のステータスにしたあと、Epic のステータスを「Todo」に
+// 置き換える行と同じ操作で「Review」を削除する。
+func deleteReview(t *testing.T, s port.Stores) {
+	t.Helper()
+	writeAs(t, s, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, workspace.ValueDrafts(statuses, review)...),
+			tx.WriteItems().Append(apptest.SampleEpic, change.NewSet("status", apptest.SampleStatusTodo, review.ID)),
+		)
+	})
+	writeAs(t, s, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDelete(statuses.Ref(review.ID))),
+			tx.WriteItems().Append(apptest.SampleEpic, change.NewSet("status", review.ID, apptest.SampleStatusTodo)),
+		)
+	})
+}
+
+// reviveSetting は、取り消しの入れ物を置いた 1 回の保存で、fs のそれぞれに ReviveSetting を呼び、
+// 戻り値と積んだものを返す。
+func reviveSetting(t *testing.T, s port.Stores, fs ...string) ([]bool, []port.Revival) {
+	t.Helper()
+	var ok []bool
+	got := revive(t, s, func(ctx context.Context, tx port.Tx) error {
+		for _, f := range fs {
+			b, err := port.ReviveSetting(ctx, tx, apptest.SampleWorkspace, f)
+			if err != nil {
+				return err
+			}
+			ok = append(ok, b)
+		}
+		return nil
+	})
+	return ok, got
+}
+
+func settingsOf(t *testing.T, s port.Stores) workspace.Settings {
+	t.Helper()
+	var st workspace.Settings
+	err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+		var err error
+		st, err = r.Workspaces().Settings(apptest.SampleWorkspace)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func TestReviveSettingRestoresTheWholeOp(t *testing.T) {
+	s := reviveStores(t)
+	deleteReview(t, s)
+	ok, got := reviveSetting(t, s, statuses.Field(review.ID, "color"))
+	if !slices.Equal(ok, []bool{true}) {
+		t.Errorf("ReviveSetting = %v", ok)
+	}
+	if want := []port.Revival{{Kind: port.RevivedName, Text: "Review"}}; !slices.Equal(got, want) {
+		t.Errorf("Revived = %v, want %v", got, want)
+	}
+	if !slices.ContainsFunc(settingsOf(t, s).Statuses, func(v workspace.Value) bool { return v.ID == review.ID }) {
+		t.Error("Review is still deleted")
+	}
+	err := s.Read(t.Context(), reviveStore, func(r port.Reader) error {
+		it, err := r.Items().Get(apptest.SampleEpic)
+		if it.Status != review.ID {
+			t.Errorf("epic status = %s, want Review", it.Status)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReviveSettingTwiceWritesOnce(t *testing.T) {
+	s := reviveStores(t)
+	deleteReview(t, s)
+	f := statuses.Ref(review.ID)
+	if ok, _ := reviveSetting(t, s, f, f); !slices.Equal(ok, []bool{true, false}) {
+		t.Errorf("ReviveSetting = %v", ok)
+	}
+	if n := restoreRows(t, s, change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace}); n != 1 {
+		t.Errorf("restore rows = %d, want 1", n)
+	}
+}
+
+func TestReviveSettingOnLiveDoesNothing(t *testing.T) {
+	s := reviveStores(t)
+	ok, got := reviveSetting(t, s, statuses.Ref(apptest.SampleStatusTodo))
+	if !slices.Equal(ok, []bool{false}) || len(got) != 0 {
+		t.Errorf("ReviveSetting = %v, Revived = %v", ok, got)
+	}
+	if n := restoreRows(t, s, change.Ref{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace}); n != 0 {
+		t.Errorf("restore rows = %d, want 0", n)
+	}
+}
+
+// テンプレートの子を先に、テンプレートをあとで、別々に削除する。子への変更は両方を取り消し、ログの順に積む。
+func TestReviveSettingTemplateChild(t *testing.T) {
+	s := reviveStores(t)
+	const tid, cid change.ID = "01TEMPLATE0000000000000001", "01TEMPLATECHILD00000000001"
+	tpl := workspace.Template{ID: tid, Name: "機能開発", Kind: "Epic", Children: []workspace.TemplateChild{{ID: cid, Kind: "Task", Title: "設計", Rank: "V"}}}
+	writeAs(t, s, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, workspace.TemplateDrafts(workspace.Template{}, tpl)...)
+	})
+	child := workspace.TemplateField(tid, "children", string(cid))
+	for _, f := range []string{child, workspace.TemplateField(tid)} {
+		writeAs(t, s, func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDelete(f))
+		})
+	}
+	ok, got := reviveSetting(t, s, child)
+	if !slices.Equal(ok, []bool{true}) {
+		t.Errorf("ReviveSetting = %v", ok)
+	}
+	if want := []port.Revival{{Kind: port.RevivedName, Text: "設計"}, {Kind: port.RevivedName, Text: "機能開発"}}; !slices.Equal(got, want) {
+		t.Errorf("Revived = %v, want %v", got, want)
+	}
+	if back, found := settingsOf(t, s).Template(tid); !found || len(back.Children) != 1 {
+		t.Errorf("template = %+v, %v", back, found)
+	}
+}
+
+// 名前の改行と続いた空白は、1 つの空白にして積む。
+func TestReviveSettingNameIsOneLine(t *testing.T) {
+	s := reviveStores(t)
+	v := workspace.Value{ID: "01MULTILINE000000000000001", Name: "Re\n  view", Color: "blue", Category: workspace.CategoryDoing, Rank: "a"}
+	writeAs(t, s, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, workspace.ValueDrafts(statuses, v)...)
+	})
+	writeAs(t, s, func(tx port.Tx) error {
+		return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, change.NewDelete(statuses.Ref(v.ID)))
+	})
+	_, got := reviveSetting(t, s, statuses.Ref(v.ID))
+	if want := []port.Revival{{Kind: port.RevivedName, Text: "Re view"}}; !slices.Equal(got, want) {
+		t.Errorf("Revived = %+v, want %+v", got, want)
 	}
 }
 

@@ -54,7 +54,7 @@ func TestAddWorklogDeletedRevives(t *testing.T) {
 	if err != nil || v.Memo != "戻して記録" {
 		t.Fatalf("Add = %+v, %v", v, err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if !hasRestore(t, rec) {
@@ -77,7 +77,7 @@ func TestDeleteWorklogDeletedRevives(t *testing.T) {
 	if err := svc.Delete(ctx, store, apptest.SampleTask, w.ID); err != nil {
 		t.Fatal(err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if !hasRestore(t, rec) {

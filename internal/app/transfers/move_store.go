@@ -69,7 +69,7 @@ func (s Service) moveAcross(ctx context.Context, store port.StoreID, id item.ID,
 		return Moved{}, s.rollback(ctx, m, err)
 	}
 	if m.revive != "" {
-		port.NoteRevived(ctx, m.src.set.Root.DisplayID(m.src.ws.Prefix))
+		port.NoteRevived(ctx, port.Revival{Kind: port.RevivedID, Text: m.src.set.Root.DisplayID(m.src.ws.Prefix)})
 	}
 	return m.moved, nil
 }

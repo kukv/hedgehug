@@ -14,11 +14,12 @@ import (
 )
 
 // Create は、ルールを作る(03「ルールの一覧」の「ルールを作成」)。有効で始まる。in.Scope があれば、そのプロジェクトだけの
-// ルールで、プロジェクトはこのワークスペースの削除済みでないもの(B5a-10)。
+// ルールで、プロジェクトはこのワークスペースの削除済みでないもの(B5a-10)か、ワークスペースと一緒に削除されたもの
+// (保存でワークスペースと一緒に戻る。決定 R11)。
 func (s Service) Create(ctx context.Context, store port.StoreID, ws workspace.ID, in automation.Rule) (automation.Rule, error) {
 	in.ID, in.Enabled = s.IDs.New(), true
 	in = automation.Normalize(in)
-	err := s.edit(ctx, store, ws,
+	err := s.edit(ctx, store, ws, "",
 		func(r port.Reader, _ []automation.Rule) (string, error) {
 			if in.Scope != "" {
 				if err := liveScope(r, ws, in.Scope); err != nil {
@@ -52,7 +53,7 @@ func (s Service) Create(ctx context.Context, store port.StoreID, ws workspace.ID
 func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, in automation.Rule) error {
 	in.ID = id
 	in = automation.Normalize(in)
-	return s.edit(ctx, store, ws,
+	return s.edit(ctx, store, ws, ruleField(id),
 		func(r port.Reader, rules []automation.Rule) (string, error) {
 			old, err := find(rules, id)
 			if err != nil {
@@ -79,7 +80,7 @@ func (s Service) Update(ctx context.Context, store port.StoreID, ws workspace.ID
 
 // Delete は、ルールを消す。
 func (s Service) Delete(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.edit(ctx, store, ws,
+	return s.remove(ctx, store, ws,
 		func(rd port.Reader, rules []automation.Rule) (string, error) {
 			r, err := find(rules, id)
 			if err != nil {
@@ -101,7 +102,7 @@ func (s Service) SetEnabled(ctx context.Context, store port.StoreID, ws workspac
 	if on {
 		word = "有効"
 	}
-	return s.edit(ctx, store, ws,
+	return s.edit(ctx, store, ws, ruleField(id),
 		func(_ port.Reader, rules []automation.Rule) (string, error) {
 			r, err := find(rules, id)
 			return fmt.Sprintf("自動化「%s」を%sにする", oneLine(r.Name), word), err
@@ -120,11 +121,24 @@ func (s Service) SetEnabled(ctx context.Context, store port.StoreID, ws workspac
 		})
 }
 
+// ruleField は、ルール id の項目名の頭(削除の行の項目名。automation.DeleteDraft と同じ)。
+func ruleField(id change.ID) string { return automation.DeleteDraft(id).F }
+
 // liveScope は、専用ルールの範囲が、このワークスペースの削除済みでないプロジェクトであることを確かめる。
+// ワークスペースと一緒に削除されたプロジェクトは、保存でワークスペースと一緒に戻るので通す(決定 R11)。
 func liveScope(r port.Reader, ws workspace.ID, scope project.ID) error {
-	p, err := port.LiveProject(r, scope)
+	p, err := r.Projects().Get(scope)
 	if err != nil {
 		return err
+	}
+	if p.Deleted != nil {
+		ok, err := port.DeletedWithWorkspace(r, p)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return port.ErrNotFound
+		}
 	}
 	if p.Place.Workspace != ws {
 		return port.ErrNotFound

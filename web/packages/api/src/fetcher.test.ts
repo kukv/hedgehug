@@ -20,7 +20,7 @@ describe("fetcher の Hedgehug-Restored", () => {
     respond(200, { "Hedgehug-Restored": "HH-1" });
     await fetcher("/x");
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(["HH-1"]);
+    expect(listener).toHaveBeenCalledWith([{ kind: "id", text: "HH-1" }]);
   });
 
   it('複数あるときは ", " で分ける', async () => {
@@ -28,7 +28,49 @@ describe("fetcher の Hedgehug-Restored", () => {
     onRestored(listener);
     respond(200, { "Hedgehug-Restored": "HH-1, HH-2" });
     await fetcher("/x");
-    expect(listener).toHaveBeenCalledWith(["HH-1", "HH-2"]);
+    expect(listener).toHaveBeenCalledWith([
+      { kind: "id", text: "HH-1" },
+      { kind: "id", text: "HH-2" },
+    ]);
+  });
+
+  it("ID・名前・コメントのヘッダーをこの順に種類を付けて 1 回で渡す", async () => {
+    const listener = vi.fn();
+    onRestored(listener);
+    respond(200, {
+      "Hedgehug-Restored-Comment": "HH-2",
+      "Hedgehug-Restored-Name": encodeURIComponent("レビュー, 待ち 「A」"),
+      "Hedgehug-Restored": "HH-1",
+    });
+    await fetcher("/x");
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith([
+      { kind: "id", text: "HH-1" },
+      { kind: "name", text: "レビュー, 待ち 「A」" },
+      { kind: "comment", text: "HH-2" },
+    ]);
+  });
+
+  it('名前のヘッダーが 2 つ(fetch が ", " でつなぐ)でも 2 つに分かれる', async () => {
+    const listener = vi.fn();
+    onRestored(listener);
+    const headers = new Headers();
+    headers.append("Hedgehug-Restored-Name", "A");
+    headers.append("Hedgehug-Restored-Name", encodeURIComponent("B C"));
+    respond(200, Object.fromEntries(headers));
+    await fetcher("/x");
+    expect(listener).toHaveBeenCalledWith([
+      { kind: "name", text: "A" },
+      { kind: "name", text: "B C" },
+    ]);
+  });
+
+  it("不正な % の名前はそのまま渡し、保存の成功を失敗にしない", async () => {
+    const listener = vi.fn();
+    onRestored(listener);
+    respond(200, { "Hedgehug-Restored-Name": "100%" });
+    await expect(fetcher("/x")).resolves.toEqual({});
+    expect(listener).toHaveBeenCalledWith([{ kind: "name", text: "100%" }]);
   });
 
   it("ヘッダーがない応答では呼ばない", async () => {

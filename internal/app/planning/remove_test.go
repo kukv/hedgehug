@@ -81,15 +81,9 @@ func TestDeleteSprint(t *testing.T) {
 	if c, log := getItem(t, svc, itemC); c.Sprint != s1.ID || len(log) != len(cLog) {
 		t.Errorf("C に触れた: %s %d→%d", c.Sprint, len(cLog), len(log))
 	}
-	// 削除済みのスプリントは、もう一度の削除も編集も開始もできない。
+	// 削除済みのスプリントは、もう一度は削除できない(編集・開始は削除を取り消す。revive_test.go)。
 	if err := svc.DeleteSprint(ctx, store, apptest.SampleWorkspace, s1.ID); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("削除済みの削除: %v", err)
-	}
-	if err := svc.UpdateSprint(ctx, store, apptest.SampleWorkspace, s1.ID, planning.SprintInput{Name: "x"}); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("削除済みの編集: %v", err)
-	}
-	if err := svc.StartSprint(ctx, store, apptest.SampleWorkspace, s1.ID, "2026-11-13", "2026-11-27"); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("削除済みの開始: %v", err)
 	}
 	if err := svc.DeleteSprint(ctx, store, apptest.SampleWorkspace, unknownID); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("ないスプリント: %v", err)
@@ -273,10 +267,9 @@ func TestDeleteRelease(t *testing.T) {
 	if c, log := getItem(t, svc, itemC); c.Release != r1.ID || len(log) != len(cLog) {
 		t.Errorf("C に触れた: %s %d→%d", c.Release, len(cLog), len(log))
 	}
+	// 編集と状態の変更は削除を取り消す(revive_test.go)。
 	for name, err := range map[string]error{
 		"削除":   svc.DeleteRelease(ctx, store, apptest.SampleWorkspace, r1.ID),
-		"編集":   svc.UpdateRelease(ctx, store, apptest.SampleWorkspace, r1.ID, planning.ReleaseInput{Name: "x"}),
-		"状態":   svc.SetReleaseState(ctx, store, apptest.SampleWorkspace, r1.ID, dp.Archived),
 		"同じ状態": svc.SetReleaseState(ctx, store, apptest.SampleWorkspace, r1.ID, dp.Released),
 		"ない削除": svc.DeleteRelease(ctx, store, apptest.SampleWorkspace, unknownID),
 	} {

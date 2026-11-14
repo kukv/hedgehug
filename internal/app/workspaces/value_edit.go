@@ -13,7 +13,7 @@ import (
 // RenameValue は、値の名前を変える。同じ名前(完全一致)なら何もしない。
 func (s Service) RenameValue(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID, name string) error {
 	name = workspace.NormalizeName(name)
-	return s.editValue(ctx, store, ws, l, id,
+	return s.changeValue(ctx, store, ws, l, id,
 		func(st workspace.Settings, v workspace.Value) string {
 			return fmt.Sprintf("%s「%s」を「%s」に改名", st.Label(l), oneLine(v.Name), oneLine(name))
 		},
@@ -33,7 +33,7 @@ func (s Service) SetValueColor(ctx context.Context, store port.StoreID, ws works
 	if !slices.Contains(workspace.Colors, color) {
 		return port.ErrNotFound
 	}
-	return s.editValue(ctx, store, ws, l, id,
+	return s.changeValue(ctx, store, ws, l, id,
 		func(st workspace.Settings, v workspace.Value) string {
 			return fmt.Sprintf("%s「%s」の色を変更", st.Label(l), oneLine(v.Name))
 		},
@@ -47,7 +47,7 @@ func (s Service) SetValueColor(ctx context.Context, store port.StoreID, ws works
 
 // MoveValue は、値を 1 つ上(up)または下へ動かす。端なら何もしない。隣と rank を入れ替える。
 func (s Service) MoveValue(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id change.ID, up bool) error {
-	return s.editValue(ctx, store, ws, l, id,
+	return s.changeValue(ctx, store, ws, l, id,
 		func(st workspace.Settings, _ workspace.Value) string { return st.Label(l) + "の順番を変更" },
 		func(_ port.Tx, _ workspace.Settings, vs []workspace.Value, _ workspace.Value) ([]change.Draft, error) {
 			i := slices.IndexFunc(vs, func(v workspace.Value) bool { return v.ID == id })

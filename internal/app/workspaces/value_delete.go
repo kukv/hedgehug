@@ -18,7 +18,7 @@ import (
 func (s Service) DeleteValue(ctx context.Context, store port.StoreID, ws workspace.ID, l workspace.List, id, replacement change.ID) error {
 	var changes []automation.RuleChange
 	var names [2]string // 削除した値、置き換え先
-	err := s.editValue(ctx, store, ws, l, id,
+	err := s.removeValue(ctx, store, ws, l, id,
 		func(st workspace.Settings, v workspace.Value) string {
 			return fmt.Sprintf("%s「%s」を削除", st.Label(l), oneLine(v.Name))
 		},

@@ -15,7 +15,7 @@ import (
 // DeleteSprint は、スプリント id を削除済みにする(F1-13)。1 回の保存で、入っている削除済みでない
 // アイテム(完了・中止を含む)からスプリントを外す。rank は変えない。実行中は断る。
 func (s Service) DeleteSprint(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.writePlan(ctx, store, ws,
+	return s.writePlan(ctx, store, ws, revival{},
 		func(p planning.Plan) (string, error) {
 			sp, err := deletableSprint(p, id)
 			if err != nil {
@@ -49,7 +49,7 @@ func deletableSprint(p planning.Plan, id change.ID) (planning.Sprint, error) {
 // DeleteRelease は、リリース id を削除済みにする(F1-13)。どの状態でも消せる。1 回の保存で、
 // 入っている削除済みでないアイテムからリリースを外す。
 func (s Service) DeleteRelease(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.writePlan(ctx, store, ws,
+	return s.writePlan(ctx, store, ws, revival{},
 		func(p planning.Plan) (string, error) {
 			r, ok := p.UsableRelease(id)
 			if !ok {
@@ -88,7 +88,7 @@ func clearRefs(tx port.Tx, ws workspace.ID, f string, id change.ID, ref func(ite
 // RestoreSprint は、削除済みのスプリント id を戻す(F1-14)。削除済みでなければ ErrNotFound。
 // ワークスペースが削除済みか、削除済みでない同じ名前のスプリントがあれば断る。
 func (s Service) RestoreSprint(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.writePlanFrom(ctx, store, ws, restorePlan,
+	return s.writePlanFrom(ctx, store, ws, restorePlan, revival{},
 		func(p planning.Plan) (string, error) {
 			sp, err := restorableSprint(p, id)
 			if err != nil {
@@ -125,7 +125,7 @@ func restorableSprint(p planning.Plan, id change.ID) (planning.Sprint, error) {
 		}
 		for _, o := range p.LiveSprints() {
 			if planning.NormalizeName(o.Name) == planning.NormalizeName(sp.Name) {
-				return planning.Sprint{}, refusal.New("同じ名前のスプリントがあります。先にそのスプリントの名前を変えてください")
+				return planning.Sprint{}, refusal.New(sprintNameTaken)
 			}
 		}
 		return sp, nil
@@ -136,7 +136,7 @@ func restorableSprint(p planning.Plan, id change.ID) (planning.Sprint, error) {
 // RestoreRelease は、削除済みのリリース id を戻す(F1-14)。削除済みでなければ ErrNotFound。
 // ワークスペースが削除済みか、削除済みでない同じ名前のリリースがあれば断る。
 func (s Service) RestoreRelease(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID) error {
-	return s.writePlanFrom(ctx, store, ws, restorePlan,
+	return s.writePlanFrom(ctx, store, ws, restorePlan, revival{},
 		func(p planning.Plan) (string, error) {
 			r, err := restorableRelease(p, id)
 			if err != nil {
@@ -160,7 +160,7 @@ func restorableRelease(p planning.Plan, id change.ID) (planning.Release, error) 
 		}
 		for _, o := range p.LiveReleases() {
 			if planning.NormalizeName(o.Name) == planning.NormalizeName(r.Name) {
-				return planning.Release{}, refusal.New("同じ名前のリリースがあります。先にそのリリースの名前を変えてください")
+				return planning.Release{}, refusal.New(releaseNameTaken)
 			}
 		}
 		return r, nil

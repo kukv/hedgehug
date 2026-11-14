@@ -156,8 +156,8 @@ func TestDelete(t *testing.T) {
 	if err := svc.Delete(t.Context(), store, onTask, v.ID); !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("deleting twice: %v", err)
 	}
-	if _, err := svc.Edit(t.Context(), store, onTask, v.ID, "戻す"); !errors.Is(err, port.ErrNotFound) {
-		t.Errorf("editing a deleted comment: %v", err)
+	if _, err := svc.Edit(t.Context(), store, onTask, v.ID, "消す"); !errors.Is(err, port.ErrNotFound) {
+		t.Errorf("editing a deleted comment to the same body: %v", err)
 	}
 }
 

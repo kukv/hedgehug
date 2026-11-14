@@ -30,7 +30,7 @@ func TestRenameDeletedItemRevives(t *testing.T) {
 	if got.Deleted != nil || got.Title != "新しい" {
 		t.Errorf("Rename = %+v", got)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if n := len(slices.DeleteFunc(slices.Clone(rec.summaries), func(s string) bool { return s != "HH-2 のタイトルを変更" })); n != 1 {
@@ -91,7 +91,7 @@ func TestChangeKindDeletedItemRevives(t *testing.T) {
 	if got := storedItem(t, rec, apptest.SampleTask); got.Deleted != nil || got.Kind != item.Bug {
 		t.Errorf("item = %+v", got)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 }
@@ -107,7 +107,7 @@ func TestReorderDeletedItemRevives(t *testing.T) {
 	if got := storedItem(t, rec, apptest.SampleTask); got.Deleted != nil || got.Rank <= other.Rank {
 		t.Errorf("item = %+v (兄弟 %q のあとに戻る)", got, other.Rank)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 }
@@ -124,7 +124,7 @@ func TestMoveDeletedItemRevives(t *testing.T) {
 	if got.Deleted != nil || got.Place.Parent == nil || *got.Place.Parent != epic2.ID {
 		t.Errorf("item = %+v", got)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 }

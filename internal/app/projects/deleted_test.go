@@ -145,7 +145,7 @@ func checkRevives(t *testing.T, c reviveCase) {
 	if err != nil || got.Deleted != nil || !c.kept(got) {
 		t.Fatalf("保存 = %+v, %v", got, err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-P1"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-P1"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if p, e, task := restored(t, svc); !p || !e || !task {
@@ -186,7 +186,7 @@ func TestRenameDeletedProjectChecksNewTitle(t *testing.T) {
 	if err != nil || got.Deleted != nil || got.Title != "ログイン旧" {
 		t.Fatalf("Rename = %+v, %v", got, err)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-P1"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-P1"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if p, _, _ := restored(t, svc); !p {

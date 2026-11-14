@@ -98,3 +98,23 @@ func TestTakenIgnoresSelf(t *testing.T) {
 		t.Error("a workspace collided with itself")
 	}
 }
+
+func TestCheckRevive(t *testing.T) {
+	others := []workspace.Workspace{{ID: "A", Name: "Web", Prefix: "HH"}}
+	cases := []struct {
+		w   workspace.Workspace
+		msg string
+	}{
+		{workspace.Workspace{ID: "N", Name: "Web", Prefix: "WB"}, "同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください"},
+		{workspace.Workspace{ID: "N", Name: "API", Prefix: "HH"}, "同じ接頭辞のワークスペースがあります。先にそのワークスペースの接頭辞を変更してください"},
+		{workspace.Workspace{ID: "N", Name: "web", Prefix: "WB"}, ""},
+		{workspace.Workspace{ID: "A", Name: "Web", Prefix: "HH"}, ""}, // 自分自身とは比べない
+	}
+	for _, c := range cases {
+		t.Run(c.w.Name+"/"+c.w.Prefix, func(t *testing.T) {
+			if got := messageOf(workspace.CheckRevive(c.w, others)); got != c.msg {
+				t.Errorf("message = %q, want %q", got, c.msg)
+			}
+		})
+	}
+}

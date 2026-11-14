@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -21,9 +22,11 @@ func New(token string, static fs.FS, deps Deps) http.Handler {
 	return root
 }
 
-// restoredHeader は、別の画面で削除されたものへの保存で削除を取り消した成功の応答に、取り消したものの
-// 表示 ID を Hedgehug-Restored で付ける(画面がトーストを出す)。usecase は取り消したあとに断って
-// 巻き戻すことがあり、そのときも ID は残るので、付けるのは 2xx のときだけ。
+// restoredHeader は、別の画面で削除されたものへの保存で削除を取り消した成功の応答に、取り消したものを
+// 種類ごとのヘッダーで付ける(画面がトーストを出す)。アイテム・プロジェクトの表示 ID は Hedgehug-Restored、
+// 設定の値などの名前は Hedgehug-Restored-Name(url.PathEscape)、コメントの持ち主の表示 ID は
+// Hedgehug-Restored-Comment。usecase は取り消したあとに断って巻き戻すことがあり、そのときも記録は残るので、
+// 付けるのは 2xx のときだけ。
 func restoredHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := port.WithRevived(r.Context())
@@ -31,7 +34,7 @@ func restoredHeader(next http.Handler) http.Handler {
 	})
 }
 
-// restoredWriter は、最初の WriteHeader(Write が先なら 200 として)で、2xx なら表示 ID を Header に足す。
+// restoredWriter は、最初の WriteHeader(Write が先なら 200 として)で、2xx なら取り消したものを種類ごとの Header に足す。
 type restoredWriter struct {
 	http.ResponseWriter
 	ctx  context.Context //nolint:containedctx // 応答の間だけ生きる入れ物の context
@@ -42,8 +45,15 @@ func (w *restoredWriter) WriteHeader(status int) {
 	if !w.sent && status >= 200 { // 1xx は最終の応答ではないので、その後の応答に付ける
 		w.sent = true
 		if status < 300 {
-			for _, id := range port.Revived(w.ctx) {
-				w.Header().Add("Hedgehug-Restored", id)
+			for _, r := range port.Revived(w.ctx) {
+				switch r.Kind {
+				case port.RevivedID:
+					w.Header().Add("Hedgehug-Restored", r.Text)
+				case port.RevivedName: // 名前はコンマや空白を含みうるので、画面が decodeURIComponent で戻せる形にする
+					w.Header().Add("Hedgehug-Restored-Name", url.PathEscape(r.Text))
+				case port.RevivedComment:
+					w.Header().Add("Hedgehug-Restored-Comment", r.Text)
+				}
 			}
 		}
 	}

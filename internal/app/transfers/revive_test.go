@@ -23,7 +23,7 @@ func deletedElsewhere(t *testing.T, f fixture) {
 
 // wantRevivedMove は、移したあと、Task と同じ操作で削除された Step HH-4 は削除済みでなく、前に別の操作で削除した
 // Step HH-3 は削除済みのまま移っていること、取り消したのは移動前の ID(HH-2)であることを確かめる。
-func wantRevivedMove(t *testing.T, f fixture, store port.StoreID, revived []string) {
+func wantRevivedMove(t *testing.T, f fixture, store port.StoreID, revived []port.Revival) {
 	t.Helper()
 	for _, c := range []struct {
 		id      item.ID
@@ -33,8 +33,8 @@ func wantRevivedMove(t *testing.T, f fixture, store port.StoreID, revived []stri
 			t.Errorf("%s: Deleted = %+v, want deleted %v", c.id, got.Deleted, c.deleted)
 		}
 	}
-	if !slices.Equal(revived, []string{"HH-2"}) {
-		t.Errorf("revived = %v, want [HH-2]", revived)
+	if want := []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}; !slices.Equal(revived, want) {
+		t.Errorf("revived = %+v, want %+v", revived, want)
 	}
 }
 

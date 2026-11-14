@@ -30,7 +30,7 @@ func TestSetPropertyDeletedItemRevives(t *testing.T) {
 	if got.Deleted != nil || got.Assignee != "taro" {
 		t.Errorf("SetProperty = %+v", got)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 	if last(rec) != "HH-2 の担当者を taro に変更" {
@@ -88,7 +88,7 @@ func TestToggleValueDeletedItemRevives(t *testing.T) {
 	if got.Deleted != nil || !slices.Equal(got.Systems, []change.ID{apptest.SampleSystemWeb}) {
 		t.Errorf("AddValue = %+v", got)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 }
@@ -108,7 +108,7 @@ func TestRemoveValueDeletedItemRevives(t *testing.T) {
 	if got.Deleted != nil || len(got.Systems) != 0 {
 		t.Errorf("RemoveValue = %+v", got)
 	}
-	if r := port.Revived(ctx); !slices.Equal(r, []string{"HH-2"}) {
+	if r := port.Revived(ctx); !slices.Equal(r, []port.Revival{{Kind: port.RevivedID, Text: "HH-2"}}) {
 		t.Errorf("Revived = %v", r)
 	}
 }

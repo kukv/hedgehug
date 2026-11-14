@@ -10,7 +10,8 @@ import (
 	dp "github.com/kukv/hedgehug/internal/domain/planning"
 )
 
-// 削除済みのワークスペースのスプリント・リリースは、読み書きのどれもワークスペースがないときと同じ(B5b-4)。
+// 削除済みのワークスペースのスプリント・リリースは、読みと、削除・割り当て・できない完了・同じ状態への変更がワークスペースがないときと
+// 同じ(B5b-4)。作成と変更はワークスペースの削除を取り消す(決定 R12。revive_test.go)。
 func TestDeletedWorkspacePlanning(t *testing.T) {
 	svc, rec := setup(t)
 	ctx := t.Context()
@@ -32,21 +33,14 @@ func TestDeletedWorkspacePlanning(t *testing.T) {
 	_, overview := svc.Overview(ctx, store, ws)
 	_, sprintCards := svc.SprintCards(ctx, store, ws)
 	_, releaseCards := svc.ReleaseCards(ctx, store, ws)
-	_, createSprint := svc.CreateSprint(ctx, store, ws, planning.SprintInput{Name: "Sprint 2"})
-	_, createRelease := svc.CreateRelease(ctx, store, ws, planning.ReleaseInput{Name: "v2"})
 	errs := map[string]error{
 		"Overview":        overview,
 		"SprintCards":     sprintCards,
 		"ReleaseCards":    releaseCards,
-		"CreateSprint":    createSprint,
-		"UpdateSprint":    svc.UpdateSprint(ctx, store, ws, sp.ID, planning.SprintInput{Name: "Sprint 9"}),
-		"StartSprint":     svc.StartSprint(ctx, store, ws, sp.ID, "2026-11-13", "2026-11-26"),
 		"CloseSprint":     svc.CloseSprint(ctx, store, ws, sp.ID, nil),
 		"DeleteSprint":    svc.DeleteSprint(ctx, store, ws, sp.ID),
-		"CreateRelease":   createRelease,
-		"UpdateRelease":   svc.UpdateRelease(ctx, store, ws, r.ID, planning.ReleaseInput{Name: "v9"}),
-		"SetReleaseState": svc.SetReleaseState(ctx, store, ws, r.ID, dp.Released),
 		"DeleteRelease":   svc.DeleteRelease(ctx, store, ws, r.ID),
+		"SetReleaseState": svc.SetReleaseState(ctx, store, ws, r.ID, dp.Unreleased),
 		"SetSprint":       setSprint,
 		"SetRelease":      setRelease,
 	}

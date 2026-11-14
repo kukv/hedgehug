@@ -252,35 +252,3 @@ func wantDeletedWorkspace(t *testing.T, r port.Reader) {
 		t.Errorf("Workspaces().Settings(deleted) = %v", err)
 	}
 }
-
-// contractUserRestoreSeenInTx は、利用者の操作の中で書いた restore の行を、同じ Write の中の読み取りが見ることを
-// 確かめる。ReviveItem を 2 回呼んでも、restore の行は 1 つだけ書く(C3a-screen)。
-func contractUserRestoreSeenInTx(t *testing.T, s port.Stores, id port.StoreID) {
-	mustWrite(t, s, id, taro, writeFixture)
-	if err := DeleteItems(t.Context(), s, id, cItem.ID); err != nil {
-		t.Fatal(err)
-	}
-	mustWrite(t, s, id, taro, func(tx port.Tx) error {
-		ctx := port.WithRevived(t.Context())
-		if err := port.ReviveItem(ctx, tx, cItem.ID); err != nil {
-			return err
-		}
-		if got, err := tx.Items().Get(cItem.ID); err != nil || got.Deleted != nil {
-			t.Errorf("in the same write: Deleted = %+v, %v", got.Deleted, err)
-		}
-		return port.ReviveItem(ctx, tx, cItem.ID)
-	})
-	mustRead(t, s, id, func(r port.Reader) error {
-		log, err := r.Changes().Of(change.Ref{Kind: change.KindItem, ID: cItem.ID})
-		n := 0
-		for _, rec := range log {
-			if rec.T == change.Restore {
-				n++
-			}
-		}
-		if err != nil || n != 1 {
-			t.Errorf("restore rows = %d, %v", n, err)
-		}
-		return nil
-	})
-}

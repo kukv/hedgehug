@@ -57,6 +57,18 @@ func CheckPrefix(w Workspace, others []Workspace) error {
 	return nil
 }
 
+// CheckRevive は、削除済みのワークスペース w の削除を取り消してよいかの検査(08「名前が重なるときの復元」)。
+// w の名前と接頭辞は取り消したあとの値、others は同じ Store の削除されていないワークスペース。
+func CheckRevive(w Workspace, others []Workspace) error {
+	switch {
+	case NameTaken(w, others):
+		return refusal.New("同じ名前のワークスペースがあります。先にそのワークスペースの名前を変更してください")
+	case PrefixTaken(w, others):
+		return refusal.New("同じ接頭辞のワークスペースがあります。先にそのワークスペースの接頭辞を変更してください")
+	}
+	return nil
+}
+
 // CheckCreate は、ワークスペースの作成の検査(03「ワークスペースの作成」の表の順)。
 // w の名前と接頭辞は NormalizeName・NormalizePrefix を通した形、others は同じ Store のワークスペース。
 func CheckCreate(w Workspace, others []Workspace) error {

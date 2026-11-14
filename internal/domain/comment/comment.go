@@ -75,3 +75,19 @@ func Find(log []change.Record, id change.ID) (Comment, bool) {
 	first, _ := change.First(log, change.Comment, f)
 	return Comment{ID: id, By: first.By, At: first.At, Body: body, Edited: cur.ID != first.ID}, true
 }
+
+// FindDeleted は、いまの値が削除のコメントを、削除の行の from の本文で返す。By と At は最初の行のもの。
+// ないか、削除されていないか、本文を読めなければ false。
+func FindDeleted(log []change.Record, id change.ID) (Comment, bool) {
+	f := string(id)
+	cur, ok := change.Current(log, change.Comment, f, alive)
+	if !ok || !change.Absent(cur.To) {
+		return Comment{}, false
+	}
+	body, ok := bodyOf(cur.From)
+	if !ok {
+		return Comment{}, false
+	}
+	first, _ := change.First(log, change.Comment, f)
+	return Comment{ID: id, By: first.By, At: first.At, Body: body}, true
+}
