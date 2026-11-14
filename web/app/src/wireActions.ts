@@ -128,7 +128,7 @@ export const projectTransfer = createProjectTransfer({
   catalog,
   toasts,
   online: isOnline,
-  afterMoved: () => leaveMoved(),
+  afterMoved: leaveMoved,
 });
 
 // ワークスペースの削除(03「削除」)。「一般」の「ワークスペースを削除…」とサイドバーのメニューの「削除…」が開く。
