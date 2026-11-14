@@ -44,7 +44,7 @@ func descMerge(t *testing.T, base string, texts [2]string, swap bool) (s0, s1, m
 
 func TestMergeConflicts(t *testing.T) {
 	_, _, m, r := descMerge(t, "a\nb\nc", [2]string{"a\nx\nc", "a\ny\nc"}, false)
-	got, err := mergeConflicts(r.commit(m))
+	got, err := mergeConflicts(r.commit(m), nil)
 	if err != nil || len(got) != 1 {
 		t.Fatalf("conflicts = %+v, %v, want 1", got, err)
 	}
@@ -57,23 +57,86 @@ func TestMergeConflicts(t *testing.T) {
 func TestMergeConflictsOrderFree(t *testing.T) {
 	for _, swap := range []bool{false, true} {
 		_, _, m, r := descMerge(t, "a\nb\nc", [2]string{"a\nx\nc", "a\ny\nc"}, swap)
-		got, err := mergeConflicts(r.commit(m))
+		got, err := mergeConflicts(r.commit(m), nil)
 		if err != nil || len(got) != 1 {
+			t.Fatalf("swap=%v: conflicts = %+v, %v, want 1", swap, got, err)
+		}
+		want := [2]change.ID{"D0", "D1"} // 親 0 は taro の側 D0。入れ替えれば親 0 は D1
+		if swap {
+			want = [2]change.ID{"D1", "D0"}
+		}
+		for i, w := range want {
+			if len(got[0].Sides[i]) != 1 || got[0].Sides[i][0].ID != w {
+				t.Errorf("swap=%v: Sides[%d] = %+v, want %s", swap, i, got[0].Sides[i], w)
+			}
+		}
+	}
+}
+
+// 最後の desc の at が同じでも、親の順を入れ替えても同じく重なる(older/newer は同期と同じく本文の順で決める)。
+func TestMergeConflictsEqualAt(t *testing.T) {
+	for _, swap := range []bool{false, true} {
+		r := newRepo(t)
+		create := rec("R1", "OP0", t0, change.Create, "")
+		d0 := rec("D0", "OP1", t0.Add(time.Minute), change.Desc, "")
+		d1 := rec("D1", "OP2", t0.Add(time.Minute), change.Desc, "")
+		c0 := r.save(map[string]string{itemLog: logOf(t, create), itemDesc: "a\nb\nc"}, "taro", t0, "OP0")
+		s0 := r.save(map[string]string{itemLog: logOf(t, create, d0), itemDesc: "a\nx\nc"}, "taro", t0.Add(time.Minute), "OP1")
+		r.reset(c0)
+		s1 := r.save(map[string]string{itemLog: logOf(t, create, d1), itemDesc: "a\ny\nc"}, "hanako", t0.Add(time.Minute), "OP2")
+		parents := ordered2(!swap, s0, s1)
+		r.reset(parents[0])
+		m := r.save(map[string]string{itemLog: logOf(t, create, d0, d1), itemDesc: "a\nx\n-----\ny\nc"}, BotName, t0.Add(3*time.Minute), "", parents...)
+		if got, err := mergeConflicts(r.commit(m), nil); err != nil || len(got) != 1 {
 			t.Errorf("swap=%v: conflicts = %+v, %v, want 1", swap, got, err)
+		}
+	}
+}
+
+// removeItem は、作業ツリーからアイテムのフォルダ(ログと説明)を消す。
+func removeItem(t *testing.T, r *testRepo) {
+	t.Helper()
+	for _, p := range []string{itemDesc, itemLog} {
+		if _, err := r.wt.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// 片側がフォルダごと消し、もう片側が説明を変えた合わせは、同期が結果に残さないので重なりに数えない。
+// 別の Store へ移ったものの下で消されたエンティティも、結果にフォルダがないので同じ(合わせの結果で見る)。
+func TestMergeConflictsSkipsRemoved(t *testing.T) {
+	for _, swap := range []bool{false, true} {
+		r := newRepo(t)
+		create := rec("R1", "OP0", t0, change.Create, "")
+		d1 := rec("D1", "OP2", t0.Add(2*time.Minute), change.Desc, "")
+		c0 := r.save(map[string]string{itemLog: logOf(t, create), itemDesc: "a\nb\nc"}, "taro", t0, "OP0")
+		s1 := r.save(map[string]string{itemLog: logOf(t, create, d1), itemDesc: "a\ny\nc"}, "hanako", t0.Add(2*time.Minute), "OP2")
+		r.reset(c0)
+		removeItem(t, r)
+		s0 := r.save(map[string]string{"purged.jsonl": "{}\n"}, "taro", t0.Add(time.Minute), "OP1")
+		parents := ordered2(!swap, s0, s1)
+		if parents[0] == s1 { // 先端が説明を変えた側なら、合わせの結果で消す
+			r.reset(s1)
+			removeItem(t, r)
+		}
+		m := r.save(nil, BotName, t0.Add(3*time.Minute), "", parents...)
+		if got, err := mergeConflicts(r.commit(m), nil); err != nil || len(got) != 0 {
+			t.Errorf("swap=%v: conflicts = %+v, %v, want none", swap, got, err)
 		}
 	}
 }
 
 func TestMergeNoConflict(t *testing.T) {
 	_, _, m, r := descMerge(t, "a\nb\nc", [2]string{"x\nb\nc", "a\nb\ny"}, false)
-	if got, err := mergeConflicts(r.commit(m)); err != nil || len(got) != 0 {
+	if got, err := mergeConflicts(r.commit(m), nil); err != nil || len(got) != 0 {
 		t.Errorf("conflicts = %+v, %v, want none", got, err)
 	}
 }
 
 func TestMergeOneSide(t *testing.T) {
 	_, _, m, r := descMerge(t, "a\nb\nc", [2]string{"a\nx\nc", "a\nb\nc"}, false)
-	if got, err := mergeConflicts(r.commit(m)); err != nil || len(got) != 0 {
+	if got, err := mergeConflicts(r.commit(m), nil); err != nil || len(got) != 0 {
 		t.Errorf("conflicts = %+v, %v, want none", got, err)
 	}
 }
@@ -81,7 +144,7 @@ func TestMergeOneSide(t *testing.T) {
 // 祖先に説明がなく、両側が新しく書いた説明が重なる合わせも、重なりに数える(ない説明は空の本文)。
 func TestMergeConflictsNoBaseDescription(t *testing.T) {
 	_, _, m, r := descMerge(t, "", [2]string{"x", "y"}, false)
-	if got, err := mergeConflicts(r.commit(m)); err != nil || len(got) != 1 {
+	if got, err := mergeConflicts(r.commit(m), nil); err != nil || len(got) != 1 {
 		t.Errorf("conflicts = %+v, %v, want 1", got, err)
 	}
 }

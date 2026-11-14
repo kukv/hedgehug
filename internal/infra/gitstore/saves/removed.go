@@ -60,11 +60,12 @@ func pendingOf(n node, received bool) (port.ReceivedSave, bool, error) {
 	if n.c.NumParents() != 2 {
 		return port.ReceivedSave{}, false, nil // 最初の保存
 	}
-	removed, concurrent, err := mergeRemoved(n.c)
+	base := lazyBase(n.c) // 2 つの判定で同じ共通の祖先を使い、探すのも 1 回にする
+	removed, concurrent, err := mergeRemoved(n.c, base)
 	if err != nil {
 		return port.ReceivedSave{}, false, err
 	}
-	conflicts, err := mergeConflicts(n.c)
+	conflicts, err := mergeConflicts(n.c, base)
 	if err != nil || (len(concurrent) == 0 && len(conflicts) == 0 && !slices.ContainsFunc(removed, func(e port.RemovedEntity) bool { return len(e.New) > 0 })) {
 		return port.ReceivedSave{}, false, err
 	}
@@ -117,7 +118,7 @@ func isRepair(c *object.Commit, es []port.EntityRows) bool {
 // mergeRemoved は、合わせ c の 2 つの親のそれぞれについて、親にあって c にないエンティティ。New は、その親の
 // ログの行のうち、共通の祖先(1 つ目。同期の合わせと同じ)の同じエンティティのログにない行。あわせて、同じ共通の
 // 祖先から、親と一緒の削除と人の変更が重なったエンティティ(concurrentIn)も返す。
-func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
+func mergeRemoved(c *object.Commit, base baseFunc) ([]port.RemovedEntity, []port.ConcurrentRows, error) {
 	ours, err := c.Parent(0)
 	if err != nil {
 		return nil, nil, err
@@ -129,27 +130,53 @@ func mergeRemoved(c *object.Commit) ([]port.RemovedEntity, []port.ConcurrentRows
 	if need, err := needsBase(c); err != nil || !need {
 		return nil, nil, err
 	}
-	bases, err := ours.MergeBase(theirs)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(bases) == 0 {
-		return nil, nil, nil // 同期は、共通の祖先のない合わせを作らない
-	}
-	base, err := bases[0].Tree()
-	if err != nil {
+	baseTree, err := base()
+	if err != nil || baseTree == nil {
 		return nil, nil, err
 	}
 	var out []port.RemovedEntity
 	for _, p := range []*object.Commit{ours, theirs} {
-		es, err := removedFrom(p, c, base)
+		es, err := removedFrom(p, c, baseTree)
 		if err != nil {
 			return nil, nil, err
 		}
 		out = append(out, es...)
 	}
-	concurrent, err := concurrentIn(c, ours, theirs, base)
+	concurrent, err := concurrentIn(c, ours, theirs, baseTree)
 	return out, concurrent, err
+}
+
+// baseFunc は、合わせの共通の祖先(2 つの親の MergeBase の 1 つ目。同期の合わせと同じ)のツリー。祖先がなければ nil
+// (同期は、共通の祖先のない合わせを作らない)。
+type baseFunc func() (*object.Tree, error)
+
+// lazyBase は、最初に呼ばれたときだけ c の共通の祖先を探し、結果を覚える baseFunc。
+func lazyBase(c *object.Commit) baseFunc {
+	var (
+		done bool
+		tree *object.Tree
+		err  error
+	)
+	return func() (*object.Tree, error) {
+		if done {
+			return tree, err
+		}
+		done = true
+		var ours, theirs *object.Commit
+		if ours, err = c.Parent(0); err != nil {
+			return nil, err
+		}
+		if theirs, err = c.Parent(1); err != nil {
+			return nil, err
+		}
+		bases, merr := ours.MergeBase(theirs)
+		if merr != nil || len(bases) == 0 {
+			err = merr
+			return nil, err
+		}
+		tree, err = bases[0].Tree()
+		return tree, err
+	}
 }
 
 // needsBase は、合わせ c に、結果から消えた log.jsonl か、両方の親の版と違う log.jsonl があるか。どちらもなければ、

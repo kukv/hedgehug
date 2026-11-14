@@ -17,35 +17,29 @@ const descFile = "description.md"
 // mergeConflicts は、合わせ c の 2 つの親で説明(description.md)の同じ箇所が重なったエンティティ(決定 C4c1-12)。
 // 共通の祖先は mergeRemoved と同じく 1 つ目。説明は同期と同じ textmerge.Merge で合わせ直し、conflict が真のものを
 // 返す。Sides は、親ごとの、共通の祖先のログにない desc の行。Ref の順。説明が親どうしで違わなければ祖先を探さない。
-func mergeConflicts(c *object.Commit) ([]port.DescConflict, error) {
-	parents := make([]*object.Commit, 2)
-	trees := make([]*object.Tree, 2)
-	for i := range parents {
-		p, err := c.Parent(i)
-		if err != nil {
-			return nil, err
-		}
-		t, err := p.Tree()
-		if err != nil {
-			return nil, err
-		}
-		parents[i], trees[i] = p, t
+func mergeConflicts(c *object.Commit, base baseFunc) ([]port.DescConflict, error) {
+	if base == nil {
+		base = lazyBase(c)
+	}
+	trees, err := parentTrees(c)
+	if err != nil {
+		return nil, err
 	}
 	names, err := differingDescs(trees[0], trees[1])
 	if err != nil || len(names) == 0 {
 		return nil, err
 	}
-	bases, err := parents[0].MergeBase(parents[1])
-	if err != nil || len(bases) == 0 {
-		return nil, err // 同期は、共通の祖先のない合わせを作らない
+	baseTree, err := base()
+	if err != nil || baseTree == nil {
+		return nil, err
 	}
-	base, err := bases[0].Tree()
+	merged, err := c.Tree()
 	if err != nil {
 		return nil, err
 	}
 	var out []port.DescConflict
 	for _, name := range names {
-		dc, ok, err := descConflict(name, base, trees)
+		dc, ok, err := keptConflict(name, merged, baseTree, trees)
 		if err != nil {
 			return nil, err
 		}
@@ -54,6 +48,35 @@ func mergeConflicts(c *object.Commit) ([]port.DescConflict, error) {
 		}
 	}
 	slices.SortFunc(out, func(a, b port.DescConflict) int { return compareRef(a.Ref, b.Ref) })
+	return out, nil
+}
+
+// keptConflict は、説明 name のエンティティが合わせの結果 merged に残っていれば、descConflict。
+// 同期(gitstore の mergeTrees)は、祖先にあって片側で消えたエンティティ(removedEntities)と、別の Store へ
+// 移ったものの下のエンティティ(underTransferred)を結果に残さない。その規則を写さず、結果にログが
+// ないエンティティは重なりに数えない(同期が結果に残したものだけを見る)。
+func keptConflict(name string, merged, base *object.Tree, sides []*object.Tree) (port.DescConflict, bool, error) {
+	kept, err := fileIn(merged, path.Join(path.Dir(name), "log.jsonl"))
+	if err != nil || kept == nil {
+		return port.DescConflict{}, false, err
+	}
+	return descConflict(name, base, sides)
+}
+
+// parentTrees は、合わせ c の 2 つの親のツリー。
+func parentTrees(c *object.Commit) ([]*object.Tree, error) {
+	var out []*object.Tree
+	for i := range 2 {
+		p, err := c.Parent(i)
+		if err != nil {
+			return nil, err
+		}
+		t, err := p.Tree()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
 	return out, nil
 }
 
