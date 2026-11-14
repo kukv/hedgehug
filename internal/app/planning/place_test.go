@@ -259,3 +259,34 @@ func TestPlaceItemRevives(t *testing.T) {
 		t.Errorf("summary = %q", lastSummary(rec))
 	}
 }
+
+// 画面に出ない場所からは動かせない: 完了したスプリント(いま入っている)への移動と、同じ枠で枠の行にない
+// アイテム(スプリントなしの完了)は port.ErrNotFound。
+func TestPlaceItemNotOnScreen(t *testing.T) {
+	svc, rec := setup(t)
+	ctx := t.Context()
+	s1, _ := activeSprint(t, svc)
+	addWorks(t, svc, []work{{itemY, 3, "Y", apptest.SampleStatusDone, s1.ID, 1}}) // 完了で S1 に残る
+	if err := svc.CloseSprint(ctx, store, apptest.SampleWorkspace, s1.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	addWorks(t, svc, []work{{itemA, 4, "W", todo, "", 1}, {itemD, 5, "X", apptest.SampleStatusDone, "", 1}})
+	n := len(rec.summaries)
+	for name, c := range map[string]struct {
+		id     item.ID
+		sprint *change.ID
+		anchor *item.ID
+	}{
+		"いま入っている完了したスプリント(基準なし)": {itemY, &s1.ID, nil},
+		"いま入っている完了したスプリント(基準あり)": {itemY, &s1.ID, ref(itemY)},
+		"バックログの行にない完了(基準なし)":     {itemD, nil, nil},
+		"バックログの行にない完了(基準あり)":     {itemD, nil, ref(itemA)},
+	} {
+		if err := svc.PlaceItem(ctx, store, c.id, c.sprint, c.anchor, false); !errors.Is(err, port.ErrNotFound) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if len(rec.summaries) != n {
+		t.Errorf("保存した: %v", rec.summaries[n:])
+	}
+}

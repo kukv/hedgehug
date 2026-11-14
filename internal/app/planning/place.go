@@ -39,16 +39,10 @@ func placement(r port.Reader, it item.Item, p planning.Plan, sprint *change.ID, 
 	if anchor == nil && !same {
 		return assignment{}, errOtherFrame
 	}
-	ws := it.Place.Workspace
-	st, err := r.Workspaces().Settings(ws)
+	its, st, rows, err := screenFrame(r, it, p, to, same)
 	if err != nil {
 		return assignment{}, err
 	}
-	its, err := items(r, ws)
-	if err != nil {
-		return assignment{}, err
-	}
-	rows := frameRows(its, ws, p, st, to)
 	var at string
 	if anchor == nil {
 		at, err = frameTail(its, it, to, p, st, rows)
@@ -66,17 +60,46 @@ func placement(r port.Reader, it item.Item, p planning.Plan, sprint *change.ID, 
 	return a, nil
 }
 
-// frameRows は、バックログの画面の枠 to(空ならバックログ)の行の ID を、並び順に。枠がなければ空。
-func frameRows(its []item.Item, ws workspace.ID, p planning.Plan, st workspace.Settings, to change.ID) []item.ID {
-	var out []item.ID
+// screenFrame は、ワークスペースのアイテム・設定と、移動先の枠 to(空ならバックログ)の行の ID を並び順に返す。
+// 移すアイテム it は、削除済みでも削除されていないものとして数える(保存で削除を取り消すため)。
+// to が画面の枠(実行中・計画中のスプリントかバックログ)でないか、同じ枠(same)で it がその枠の行にないなら
+// port.ErrNotFound(画面から動かせない)。
+func screenFrame(r port.Reader, it item.Item, p planning.Plan, to change.ID, same bool) ([]item.Item, workspace.Settings, []item.ID, error) {
+	ws := it.Place.Workspace
+	st, err := r.Workspaces().Settings(ws)
+	if err != nil {
+		return nil, workspace.Settings{}, nil, err
+	}
+	its, err := items(r, ws)
+	if err != nil {
+		return nil, workspace.Settings{}, nil, err
+	}
+	live := it
+	live.Deleted = nil
+	for i := range its {
+		if its[i].ID == it.ID {
+			its[i] = live
+		}
+	}
+	rows, ok := frameRows(its, ws, p, st, to)
+	if !ok || same && !slices.Contains(rows, it.ID) {
+		return nil, workspace.Settings{}, nil, port.ErrNotFound
+	}
+	return its, st, rows, nil
+}
+
+// frameRows は、バックログの画面の枠 to(空ならバックログ)の行の ID を、並び順に。枠がなければ false。
+func frameRows(its []item.Item, ws workspace.ID, p planning.Plan, st workspace.Settings, to change.ID) ([]item.ID, bool) {
 	for _, f := range planning.BacklogFrames(its, ws, p, st) {
 		if f.Sprint == nil && to == "" || f.Sprint != nil && f.Sprint.ID == to {
+			var out []item.ID
 			for _, it := range f.Items {
 				out = append(out, it.ID)
 			}
+			return out, true
 		}
 	}
-	return out
+	return nil, false
 }
 
 // beside は、同じ枠 rows の行 anchor の直前(after なら直後)の順位(F2a-2)。同じ位置なら errSameRef、
@@ -110,15 +133,11 @@ func samePosition(rows []item.ID, id, anchor item.ID, after bool) bool {
 	return j == i+1
 }
 
-// frameTail は、同じ枠 to の末尾の順位(rank.After(自分を除いた FrameEnd))。すでに末尾か、ほかに行がなければ errSameRef。
+// frameTail は、同じ枠 to の末尾の順位(rank.After(自分を除いた FrameEnd))。it は枠の行 rows にいる。すでに末尾なら errSameRef。
 func frameTail(its []item.Item, it item.Item, to change.ID, p planning.Plan, st workspace.Settings, rows []item.ID) (string, error) {
-	if len(rows) > 0 && rows[len(rows)-1] == it.ID {
+	if rows[len(rows)-1] == it.ID {
 		return "", errSameRef
 	}
 	others := slices.DeleteFunc(slices.Clone(its), func(o item.Item) bool { return o.ID == it.ID })
-	end := planning.FrameEnd(others, it.Place.Workspace, to, p, st)
-	if end == "" {
-		return "", errSameRef
-	}
-	return rank.After(end), nil
+	return rank.After(planning.FrameEnd(others, it.Place.Workspace, to, p, st)), nil
 }
