@@ -187,4 +187,88 @@ describe("createBulkChange", () => {
     t.bc.toggleValue("Web");
     expect(canSubmit(t.form())).toBe(false);
   });
+
+  it("cancel while previewing", async () => {
+    const t = setup();
+    await t.bc.open(t.selection, { after: t.after });
+    const g = gate();
+    t.actions.bulkChangePreview = async () => {
+      await g.wait;
+      return result({ changed: 1 });
+    };
+    const p = t.bc.submit();
+    await flush();
+    t.bc.cancel();
+    g.release();
+    await p;
+    expect(get(t.bc.state)).toBeNull();
+  });
+
+  it("submit twice previews once", async () => {
+    const t = setup();
+    await t.bc.open(t.selection, { after: t.after });
+    const g = gate();
+    let n = 0;
+    t.actions.bulkChangePreview = async () => {
+      n += 1;
+      await g.wait;
+      return result({ changed: 1 });
+    };
+    const p1 = t.bc.submit();
+    const p2 = t.bc.submit();
+    g.release();
+    await Promise.all([p1, p2]);
+    expect(n).toBe(1);
+  });
+
+  it("preview failure closes and reloads", async () => {
+    const t = setup();
+    await t.bc.open(t.selection, { after: t.after });
+    t.actions.bulkChangePreview = async () => {
+      throw new Error("boom");
+    };
+    await t.bc.submit();
+    expect(t.messages()).toEqual(["!保存できませんでした"]);
+    expect(get(t.bc.state)).toBeNull();
+    expect(t.calls.filter((c) => c === "reload")).toHaveLength(1);
+    expect(t.calls.filter((c) => c === "after")).toHaveLength(1);
+  });
+
+  it("confirm twice runs once", async () => {
+    const t = setup();
+    t.actions.changePreview = result({ changed: 1 });
+    await t.bc.open(t.selection, { after: t.after });
+    await t.bc.submit();
+    const h = t.actions.holdNext();
+    const p1 = t.bc.confirm();
+    const p2 = t.bc.confirm();
+    await flush();
+    h.release();
+    await Promise.all([p1, p2]);
+    expect(t.actions.calls.filter((c) => c.startsWith("bulkChange "))).toHaveLength(1);
+  });
+
+  it("no options cannot submit", async () => {
+    const t = setup();
+    await t.bc.open(t.selection, { after: t.after });
+    t.bc.setField("priority");
+    expect(t.form().options).toEqual([]);
+    expect(canSubmit(t.form())).toBe(false);
+  });
+
+  it("cancel during run then reopen keeps the new form", async () => {
+    const t = setup();
+    t.actions.changePreview = result({ changed: 1 });
+    await t.bc.open(t.selection, { after: t.after });
+    await t.bc.submit();
+    const h = t.actions.holdNext();
+    const p = t.bc.confirm();
+    await flush();
+    t.bc.cancel();
+    await t.bc.open(t.selection, { after: t.after });
+    h.release();
+    await p;
+    expect(get(t.bc.state)?.stage).toBe("form");
+    expect(t.calls).toContain("after");
+  });
 });

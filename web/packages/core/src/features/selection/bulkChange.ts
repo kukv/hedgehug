@@ -220,12 +220,14 @@ export function createBulkChange(deps: BulkChangeDeps): BulkChange {
       const o = opened;
       if (!o || o.input === null || get(state)?.stage !== "confirm" || busy) return;
       busy = true;
+      // 実行中に閉じた・開き直したら、新しいダイアログは閉じない(保存は済んでいるので、トーストと読み直しはする)。
+      const gen = seq;
       try {
         const r = await deps.actions.bulkChange(o.rows.map(ref), o.input);
-        close();
+        if (gen === seq) close();
         notify(o, r);
       } catch (e) {
-        close();
+        if (gen === seq) close();
         failed(e);
       } finally {
         busy = false;
