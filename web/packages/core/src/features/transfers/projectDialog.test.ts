@@ -13,7 +13,17 @@ const review = {
   ],
   default: "st2",
 };
-const hold = { status: "st8", name: "Pending", count: 0, choices: [], default: "" };
+// pending は、ルールだけが使うステータス(0 件)の行。
+const pending = {
+  status: "st8",
+  name: "Pending",
+  count: 0,
+  choices: [
+    { id: "st1", name: "Todo" },
+    { id: "st2", name: "Doing" },
+  ],
+  default: "st1",
+};
 
 describe("project transfer section (02「画面の見出しと構成」、A5b-16)", () => {
   it("lists the candidates as「{Store 名} / {ワークスペース名}」and selects the first", async () => {
@@ -122,7 +132,7 @@ describe("project transfer dialog: opening (02 **移動**)", () => {
         { kind: "disabled", name: "", missing: [], count: 0 },
         { kind: "template", name: "Bug 報告", missing: [], count: 0 },
       ],
-      replacements: [review, hold],
+      replacements: [review, pending],
     };
     await transfer.load(project);
     transfer.choose("S3/S3-W1");
@@ -151,7 +161,16 @@ describe("project transfer dialog: opening (02 **移動**)", () => {
           ],
           value: "st2",
         },
-        { status: "st8", name: "Pending", label: "Pending", options: [], value: "" },
+        {
+          status: "st8",
+          name: "Pending",
+          label: "Pending",
+          options: [
+            { value: "st1", label: "Todo" },
+            { value: "st2", label: "Doing" },
+          ],
+          value: "st1",
+        },
       ],
       ok: "移動",
       busy: false,
@@ -191,6 +210,19 @@ describe("project transfer dialog: opening (02 **移動**)", () => {
     await transfer.open();
     expect(get(transfer.dialog)).toBeNull();
     expect(env.reloads).toBe(1);
+  });
+
+  it("reads the preview once when opened again while reading", async () => {
+    const { transfer, fake, project } = await setupProject();
+    await transfer.load(project);
+    const h = fake.holdNext();
+    const opening = transfer.open();
+    await flush();
+    await transfer.open();
+    h.release();
+    await opening;
+    expect(fake.calls.filter((c) => c.startsWith("projectPreview"))).toHaveLength(1);
+    expect(get(transfer.dialog)).not.toBeNull();
   });
 
   it("drops a preview read before cancel", async () => {

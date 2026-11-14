@@ -117,6 +117,8 @@ export function createProjectTransfer(deps: ProjectTransferDeps): ProjectTransfe
   // loadSeq は区画を読む世代、seq はダイアログを開く・閉じるの世代。古い結果は捨てる。
   let loadSeq = 0;
   let seq = 0;
+  // reading は、予告を読んでいる open の世代(読んでいなければ null)。読んでいるあいだの open は何もしない。
+  let reading: number | null = null;
 
   const readOnly = (s: Section) => deps.catalog.store(s.project.storeId)?.readOnly === true;
   const renderSection = () => {
@@ -208,8 +210,10 @@ export function createProjectTransfer(deps: ProjectTransferDeps): ProjectTransfe
     async open() {
       const s = sec;
       const target = s?.targets.find((t) => keyOf(t) === s.key);
-      if (!s || !target || readOnly(s) || cur !== null) return;
+      // cancel で世代が進んでいれば、前の読み込みは捨てるので、開き直せる。
+      if (!s || !target || readOnly(s) || cur !== null || reading === seq) return;
       const gen = ++seq;
+      reading = gen;
       let preview: ProjectTransferPreview;
       try {
         preview = await deps.transfers.projectPreview(s.project.storeId, s.project.id, {
@@ -217,11 +221,13 @@ export function createProjectTransfer(deps: ProjectTransferDeps): ProjectTransfe
           workspaceId: target.workspaceId,
         });
       } catch (e) {
+        if (reading === gen) reading = null;
         if (gen !== seq) return;
         failed(e);
         if (e instanceof NotFound) await reload();
         return;
       }
+      if (reading === gen) reading = null;
       if (gen !== seq) return;
       const choices = Object.fromEntries(preview.replacements.map((r) => [r.status, r.default]));
       cur = { project: s.project, target, preview, choices, busy: false };
