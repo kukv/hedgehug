@@ -82,18 +82,23 @@ describe("workspace transfer dialog: sending (B5c-16・B5c-18)", () => {
   });
 
   it("toasts「移動できませんでした」on another failure and keeps the dialog open", async () => {
-    const { transfer, fake, toasts } = await opened();
+    const { transfer, fake, moved, toasts } = await opened();
     fake.failNext();
     await transfer.submit("Web");
+    expect(moved).toEqual([]);
     expect(toasts()).toEqual([{ text: "移動できませんでした", error: true }]);
     expect(get(transfer.dialog)).not.toBeNull();
   });
 
   it("does not send to a Store with a remote while offline", async () => {
-    const { transfer, fake, env, toasts } = await opened("S3", { destinationHasRemote: true });
+    const { transfer, fake, env, moved, pressed, toasts } = await opened("S3", {
+      destinationHasRemote: true,
+    });
     env.online = false;
     await transfer.submit("Web");
     expect(sent(fake.calls)).toEqual([]);
+    expect(pressed).toEqual([]);
+    expect(moved).toEqual([]);
     expect(toasts()).toEqual([{ text: "オフラインのため team へ移動できません", error: true }]);
     expect(get(transfer.dialog)).not.toBeNull();
   });
@@ -106,9 +111,10 @@ describe("workspace transfer dialog: sending (B5c-16・B5c-18)", () => {
   });
 
   it("closes and reloads when the workspace is gone", async () => {
-    const { transfer, fake, env, toasts } = await opened();
+    const { transfer, fake, env, moved, toasts } = await opened();
     fake.missing.add("S1-W1");
     await transfer.submit("Web");
+    expect(moved).toEqual([]);
     expect(get(transfer.dialog)).toBeNull();
     expect(toasts()).toEqual([{ text: "移動できませんでした", error: true }]);
     expect(env.reloads).toBe(1);
@@ -123,6 +129,34 @@ describe("workspace transfer dialog: sending (B5c-16・B5c-18)", () => {
     expect(get(transfer.dialog)).toBeNull();
     expect(toasts()).toEqual([{ text, error: true }]);
     expect(env.reloads).toBe(1);
+    expect(moved).toEqual([]);
+  });
+
+  it("still toasts and calls afterMoved when cancelled while sending", async () => {
+    const { transfer, fake, moved, toasts } = await opened();
+    const h = fake.holdNext();
+    const sending = transfer.submit("Web");
+    await flush();
+    transfer.cancel();
+    expect(get(transfer.dialog)).toBeNull();
+    h.release();
+    await sending;
+    expect(get(transfer.dialog)).toBeNull();
+    expect(toasts()).toEqual([{ text: "team へ移動しました", error: false }]);
+    expect(moved).toEqual(["S1-W1 → team/HH"]);
+  });
+
+  it("keeps the dialog closed when cancelled while a send fails", async () => {
+    const { transfer, fake, moved, toasts } = await opened();
+    const h = fake.holdNext();
+    const sending = transfer.submit("Web");
+    await flush();
+    transfer.cancel();
+    fake.failNext();
+    h.release();
+    await sending;
+    expect(get(transfer.dialog)).toBeNull();
+    expect(toasts()).toEqual([{ text: "移動できませんでした", error: true }]);
     expect(moved).toEqual([]);
   });
 });
