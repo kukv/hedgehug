@@ -102,7 +102,4 @@ func TestAutomationAPI(t *testing.T) {
 	if res = api.Post(path+"/rules", bad); res.Code != http.StatusNotFound {
 		t.Errorf("unknown value: %d %s", res.Code, res.Body)
 	}
-	if res = api.Post("/api/stores/S1/items/nope/automation/nope/apply", map[string]any{"status": done, "from": done}); res.Code != http.StatusNotFound {
-		t.Errorf("apply unknown item: %d %s", res.Code, res.Body)
-	}
 }

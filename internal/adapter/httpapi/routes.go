@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/automations"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
 	ghapi "github.com/kukv/hedgehug/internal/adapter/httpapi/github"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/inbox"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/items"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/members"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/notes"
@@ -26,6 +27,7 @@ import (
 	ghapp "github.com/kukv/hedgehug/internal/app/github"
 	"github.com/kukv/hedgehug/internal/app/githublink"
 	apphistory "github.com/kukv/hedgehug/internal/app/history"
+	appinbox "github.com/kukv/hedgehug/internal/app/inbox"
 	appitems "github.com/kukv/hedgehug/internal/app/items"
 	appmembers "github.com/kukv/hedgehug/internal/app/members"
 	appplanning "github.com/kukv/hedgehug/internal/app/planning"
@@ -52,7 +54,7 @@ type Deps struct {
 	StoreList port.StoreList
 
 	// 自動化・通知
-	Inbox port.Inbox // 受信箱
+	Inbox port.InboxBook // 受信箱。機能には appinbox.Notifier で包んで渡す(足したら画面に知らせる。C4a-13)
 
 	// GitHub
 	Accounts    port.Accounts
@@ -109,10 +111,11 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	}
 	projects.Register(api, appprojects.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}, scan)
 	projectrules.Register(api, appprojectrules.Service{Stores: deps.Stores, Identity: deps.Identity})
-	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: deps.Inbox}
+	notifier := appinbox.Notifier{Inbox: deps.Inbox, Events: hub}
+	itemsSvc := appitems.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock, Inbox: notifier}
 	items.Register(api, itemsSvc)
 	items.RegisterWatch(api, itemsSvc, appwatching.Service{Stores: deps.Stores, Identity: deps.Identity})
-	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: deps.Inbox})
+	workspaces.Register(api, appworkspaces.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Inbox: notifier})
 	notes.Register(api, notes.Services{
 		Descriptions: appdescriptions.Service{Stores: deps.Stores, Identity: deps.Identity},
 		Comments:     appcomments.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity},
@@ -124,7 +127,11 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Delivery: deps.Delivery,
 		Identity: deps.Identity, Clock: deps.Clock, IDs: deps.IDs,
 	})
-	automations.Register(api, appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
+	autoSvc := appautomations.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock}
+	automations.Register(api, autoSvc)
+	inbox.Register(api, appinbox.Service{
+		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
+	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)

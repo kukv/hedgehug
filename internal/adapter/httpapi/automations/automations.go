@@ -11,7 +11,6 @@ import (
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -46,13 +45,6 @@ type enabledInput struct {
 	Workspace string `path:"workspace"`
 	Rule      string `path:"rule"`
 	Body      SetAutomationRuleEnabled
-}
-
-type applyInput struct {
-	Store string `path:"store"`
-	Item  string `path:"item"`
-	Rule  string `path:"rule"`
-	Body  ApplyAutomationIgnoringWorkflow
 }
 
 type (
@@ -108,13 +100,5 @@ func registerEdits(api huma.API, svc appautomations.Service) {
 	},
 		func(ctx context.Context, in *enabledInput) (*struct{}, error) {
 			return nil, apierr.From(svc.SetEnabled(ctx, port.StoreID(in.Store), workspace.ID(in.Workspace), change.ID(in.Rule), in.Body.Enabled))
-		})
-	huma.Register(api, huma.Operation{
-		OperationID: "apply-automation-ignoring-workflow", Method: http.MethodPost,
-		Path: "/api/stores/{store}/items/{item}/automation/{rule}/apply", Summary: "止まった自動化の変更を、制約を無視して適用",
-		DefaultStatus: http.StatusNoContent,
-	},
-		func(ctx context.Context, in *applyInput) (*struct{}, error) {
-			return nil, apierr.From(svc.ApplyIgnoringWorkflow(ctx, port.StoreID(in.Store), item.ID(in.Item), change.ID(in.Rule), change.ID(in.Body.From), change.ID(in.Body.Status)))
 		})
 }

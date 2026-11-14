@@ -60,11 +60,12 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	syncSvc := e2eSync(hub, stores)
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
+	clock := apptest.NewClock(time.Now())
 	return e2eWithLinks(httpapi.Deps{
 		Stores:   stores,
 		IDs:      ids,
 		Identity: apptest.Identity{Login: "taro"},
-		Inbox:    &apptest.Inbox{},
+		Inbox:    state.Inbox(clock),
 		StoreList: apptest.StoreList{Stores: []port.StoreInfo{
 			{ID: e2eStore, Name: "e2e", Color: "sky"},
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
@@ -83,7 +84,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
 			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
 		}},
-		Clock:       apptest.NewClock(time.Now()),
+		Clock:       clock,
 		Sync:        syncSvc,
 		Auto:        auto,
 		Events:      hub,
@@ -159,7 +160,7 @@ func tokenAndAddr() (token, addr string) {
 	return os.Getenv("HEDGEHUG_TOKEN"), os.Getenv("HEDGEHUG_ADDR")
 }
 
-// e2eReads は、GitHub の記録を持つ state.db を、使い捨ての場所に開く。止めるときに閉じて消す。
+// e2eReads は、GitHub の記録と受信箱を持つ state.db を、使い捨ての場所に開く。止めるときに閉じて消す。
 func e2eReads(ctx context.Context) (*statedb.DB, error) {
 	dir, err := os.MkdirTemp("", "hedgehug-e2e-state-")
 	if err != nil {

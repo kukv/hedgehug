@@ -48,12 +48,6 @@ type SetAutomationRuleEnabled struct {
 	Enabled bool `json:"enabled"`
 }
 
-// ApplyAutomationIgnoringWorkflow は、「制約を無視して…」の本文。
-type ApplyAutomationIgnoringWorkflow struct {
-	Status string `json:"status" doc:"変えるステータスの ID(通知の Status)"`
-	From   string `json:"from" doc:"止まったときのステータスの ID(通知の From)。いまの値が違えば断る"`
-}
-
 func fromInput(in AutomationRuleInput) automation.Rule {
 	return automation.Rule{
 		Name: in.Name, Trigger: automation.Trigger(in.Trigger), TriggerStatus: change.ID(in.TriggerStatus),
