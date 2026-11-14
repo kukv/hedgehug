@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    goneTextOf,
     type InboxRow,
     isMemberOf,
     type Member,
@@ -24,6 +25,7 @@
 
   const t = $derived(row.target);
   const link = $derived(linkOf(row));
+  const gone = $derived(goneTextOf(t.kind));
   const member = $derived(members?.find((m) => m.login.toLowerCase() === row.sender.toLowerCase()));
   // 差出人がなければ「hedgehug」、メンバーにいなければ「不明なユーザー」と中身のないアバター(01)。
   const who = $derived(
@@ -47,10 +49,8 @@
           title={row.store.name}
         ></i>
       {/snippet}
-      {#if t.kind === "deleted_item"}
-        <span class="gone">削除されたアイテム</span>
-      {:else if t.kind === "deleted_workspace"}
-        <span class="gone">削除されたワークスペース</span>
+      {#if gone}
+        <span class="gone">{gone}</span>
       {:else if link}
         <a
           class="target"

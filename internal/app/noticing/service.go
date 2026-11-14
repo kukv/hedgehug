@@ -1,0 +1,146 @@
+// Package noticing は、同期で受け取った保存から、あなた宛ての通知を判定する(06「通知」、決定 C4b1)。
+package noticing
+
+import (
+	"context"
+	"slices"
+	"strings"
+
+	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
+)
+
+// Service は、受け取った保存の判定。Judge が port.JudgeFunc になる。
+type Service struct {
+	Inbox    port.Inbox
+	Identity port.Identity
+	List     port.StoreList
+}
+
+// Judge は、saves(古い順)から割り当て・プロジェクトのオーナー・メンション・ウォッチと、ステータスの削除からの
+// 自動化の通知を作る。「あなた」を決められない Store では何も作らない(C4b1-15)。1 回の read の中で前と後を作って
+// 通知を決め、書くのは read のあと。自動化は、Store が表示中で閲覧のみでないときだけ(C4b1-14)。判定できない中身
+// (ないエンティティ、読めない行)は飛ばす。エラーを返すのは、このマシンの読み書きの失敗(Store・表示中の Store の
+// 一覧を読めない、受信箱に書けない)のときだけで、次の同期でやり直す(C4b1-5)。
+func (s Service) Judge(ctx context.Context, store port.StoreID, saves []port.ReceivedSave, read func(fn func(r port.Reader) error) error) error {
+	me, err := s.Identity.Me(ctx, store)
+	if err != nil || me == "" {
+		return nil
+	}
+	var notices, autos []port.Notice
+	if err := read(func(r port.Reader) error {
+		b, err := newBatch(r, saves)
+		if err != nil {
+			return err
+		}
+		notices, err = judgeIn(r, b, store, me)
+		autos = automations(b, store)
+		return err
+	}); err != nil {
+		return err
+	}
+	if len(autos) > 0 {
+		ok, err := s.writable(ctx, store)
+		if err != nil {
+			return err
+		}
+		if ok {
+			notices = append(notices, autos...)
+		}
+	}
+	for _, n := range notices {
+		write := s.Inbox.Add
+		if n.Kind == port.NoticeMention {
+			write = s.Inbox.Mention
+		}
+		if err := write(ctx, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// judgeIn は、割り当て・オーナー・メンション・ウォッチの通知を、この順に決める。
+func judgeIn(r port.Reader, b batch, store port.StoreID, me string) ([]port.Notice, error) {
+	out, err := assigns(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	ms, err := mentions(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	ws, err := watches(r, b, store, me)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(out, ms...), ws...), nil
+}
+
+// batch は、1 回の判定の前と後(C4b1-6)。後はいまのログ、前はいまのログから判定する行を除いたもの。
+type batch struct {
+	saves  []port.ReceivedSave
+	judged map[change.ID]bool
+	refs   []change.Ref // saves に出てくるエンティティ(最初に出た順)
+	logs   map[change.Ref][]change.Record
+}
+
+// newBatch は、saves のエンティティのいまのログを読む。もうないエンティティ(ErrNotFound)はログを持たない。
+// ほかの読み取りの失敗はエラー。
+func newBatch(r port.Reader, saves []port.ReceivedSave) (batch, error) {
+	b := batch{saves: saves, judged: map[change.ID]bool{}, logs: map[change.Ref][]change.Record{}}
+	for _, s := range saves {
+		for _, e := range s.Entities {
+			for _, row := range e.Rows {
+				b.judged[row.ID] = true
+			}
+			if slices.Contains(b.refs, e.Ref) {
+				continue
+			}
+			b.refs = append(b.refs, e.Ref)
+			if err := b.read(r, e.Ref); err != nil {
+				return batch{}, err
+			}
+		}
+	}
+	return b, nil
+}
+
+// read は、ref のいまのログを覚える。ないもの(ErrNotFound)は覚えずに nil。
+func (b batch) read(r port.Reader, ref change.Ref) error {
+	log, err := r.Changes().Of(ref)
+	if err != nil {
+		return notFoundIsSkip(err)
+	}
+	b.logs[ref] = log
+	return nil
+}
+
+// after は、判定の後のログ。
+func (b batch) after(ref change.Ref) []change.Record { return b.logs[ref] }
+
+// before は、判定の前のログ(いまのログから判定する行を除いたもの)。
+func (b batch) before(ref change.Ref) []change.Record {
+	var out []change.Record
+	for _, r := range b.logs[ref] {
+		if !b.judged[r.ID] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// movedIn は、判定する行に moved_in の行があるか(別の Store から移ってきた。C4b1-19)。
+func (b batch) movedIn(ref change.Ref) bool {
+	return slices.ContainsFunc(b.logs[ref], func(r change.Record) bool { return r.T == change.MovedIn && b.judged[r.ID] })
+}
+
+// sender は、行の差出人。自動化の行は空(「hedgehug」。C4b1-8)。
+func sender(r change.Record) string {
+	if r.Actor.Kind == change.ActorAutomation {
+		return ""
+	}
+	return r.By
+}
+
+func same(a, b string) bool { return strings.EqualFold(a, b) }

@@ -20,3 +20,12 @@ func (n Notifier) Add(ctx context.Context, notice port.Notice) error {
 	n.Events.Publish(port.Event{Kind: port.EventInbox, Store: notice.Store})
 	return nil
 }
+
+// Mention は、メンションの行を足すか書き換えてから受信箱の出来事を出す。失敗したら出さない。
+func (n Notifier) Mention(ctx context.Context, notice port.Notice) error {
+	if err := n.Inbox.Mention(ctx, notice); err != nil {
+		return err
+	}
+	n.Events.Publish(port.Event{Kind: port.EventInbox, Store: notice.Store})
+	return nil
+}

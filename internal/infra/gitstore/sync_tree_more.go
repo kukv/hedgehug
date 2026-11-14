@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/textmerge"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // mergeDescription は、説明を行ごとに合わせる。保存の古い版を先にする(この計画の決定 8)。
@@ -144,10 +145,11 @@ func rebuildYAML(t tree) error {
 			continue
 		}
 		dir := strings.TrimSuffix(p, "/log.jsonl")
-		kind, ok := kindOfDir(dir)
+		ref, ok := saves.RefOf(dir)
 		if !ok {
 			continue
 		}
+		kind := ref.Kind
 		y, err := renderYAML(kind, parseLog(t[p]), settings, projects)
 		if err != nil {
 			return err
@@ -177,15 +179,4 @@ func treeProjects(t tree) projectOf {
 	return func(id project.ID) (project.Project, bool) {
 		return project.FromLog(parseLog(t["projects/"+string(id)+"/log.jsonl"]))
 	}
-}
-
-// kindOfDir は、フォルダ(members、items/<ID> など)の種類。
-func kindOfDir(dir string) (change.Kind, bool) {
-	top, _, _ := strings.Cut(dir, "/")
-	for kind, k := range kindDirs {
-		if k.dir == top && (kind == change.KindMembers) == (dir == "members") {
-			return kind, true
-		}
-	}
-	return "", false
 }

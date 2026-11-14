@@ -17,14 +17,15 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/transfer"
+	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
-// kindDirs は、種類ごとのフォルダと、読む用の YAML の名前。
+// kindDirs は、種類ごとのフォルダ(名前は saves.Dirs が決める)と、読む用の YAML の名前。
 var kindDirs = map[change.Kind]struct{ dir, yaml string }{
-	change.KindMembers:   {"members", "members.yaml"},
-	change.KindWorkspace: {"workspaces", "workspace.yaml"},
-	change.KindProject:   {"projects", "project.yaml"},
-	change.KindItem:      {"items", "item.yaml"},
+	change.KindMembers:   {saves.Dirs[change.KindMembers], "members.yaml"},
+	change.KindWorkspace: {saves.Dirs[change.KindWorkspace], "workspace.yaml"},
+	change.KindProject:   {saves.Dirs[change.KindProject], "project.yaml"},
+	change.KindItem:      {saves.Dirs[change.KindItem], "item.yaml"},
 }
 
 // dirOf は、エンティティのフォルダ(Store の根からの相対パス)。ref が change.Ref.Valid でなければ

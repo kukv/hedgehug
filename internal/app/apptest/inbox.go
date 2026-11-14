@@ -28,6 +28,12 @@ func (i *Inbox) Add(_ context.Context, n port.Notice) error {
 	if i.Err != nil {
 		return i.Err
 	}
+	i.append(n)
+	return nil
+}
+
+// append は、通知を時計の時刻で足す。呼ぶ側が mu を持つ。
+func (i *Inbox) append(n port.Notice) {
 	if i.Clock == nil {
 		c := NewClock(time.Unix(0, 0))
 		c.Step = time.Second
@@ -35,6 +41,25 @@ func (i *Inbox) Add(_ context.Context, n port.Notice) error {
 	}
 	i.next++
 	i.rows = append(i.rows, port.NoticeRow{ID: i.next, Notice: n, At: i.Clock.Now()})
+}
+
+// Mention は、同じ Store・Source の行があれば本文・差出人・時刻を書き換えて未読に戻し、なければ Add と同じ時計の時刻で足す。
+func (i *Inbox) Mention(_ context.Context, n port.Notice) error {
+	if n.Source == "" {
+		return port.ErrInvalidOperation
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.Err != nil {
+		return i.Err
+	}
+	k := slices.IndexFunc(i.rows, func(r port.NoticeRow) bool { return r.Store == n.Store && r.Source == n.Source })
+	if k < 0 {
+		i.append(n)
+		return nil
+	}
+	r := &i.rows[k]
+	r.Text, r.Sender, r.At, r.Read = n.Text, n.Sender, n.At, false
 	return nil
 }
 
@@ -152,7 +177,7 @@ func (i *Inbox) Prune(_ context.Context, store port.StoreID, targets []change.ID
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.rows = slices.DeleteFunc(i.rows, func(r port.NoticeRow) bool {
-		return r.Store == store && (slices.Contains(targets, r.Item) || (r.Item == "" && slices.Contains(targets, r.Workspace)))
+		return r.Store == store && (slices.Contains(targets, r.Item) || slices.Contains(targets, r.Project) || (r.Item == "" && r.Project == "" && slices.Contains(targets, r.Workspace)))
 	})
 	return nil
 }
@@ -161,5 +186,52 @@ func (i *Inbox) ForgetStore(_ context.Context, store port.StoreID) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.rows = slices.DeleteFunc(i.rows, func(r port.NoticeRow) bool { return r.Store == store })
+	return nil
+}
+
+// JudgedSaves は port.JudgedSaves の偽物。
+type JudgedSaves struct {
+	mu    sync.Mutex
+	saves map[port.StoreID][]port.SaveKey
+}
+
+func NewJudgedSaves() *JudgedSaves { return &JudgedSaves{saves: map[port.StoreID][]port.SaveKey{}} }
+
+func (j *JudgedSaves) Started(_ context.Context, id port.StoreID) (bool, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return len(j.saves[id]) > 0, nil
+}
+
+func (j *JudgedSaves) Known(_ context.Context, id port.StoreID, k port.SaveKey) (port.Match, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	m := port.NotJudged
+	for _, s := range j.saves[id] {
+		if s.Version == k.Version {
+			return port.SameVersion, nil
+		}
+		if k.Op != "" && s.Op == k.Op && s.Author == k.Author && s.At.Equal(k.At) {
+			m = port.SameSave
+		}
+	}
+	return m, nil
+}
+
+func (j *JudgedSaves) Mark(_ context.Context, id port.StoreID, keys []port.SaveKey) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for _, k := range keys {
+		if !slices.ContainsFunc(j.saves[id], func(s port.SaveKey) bool { return s.Version == k.Version }) {
+			j.saves[id] = append(j.saves[id], k)
+		}
+	}
+	return nil
+}
+
+func (j *JudgedSaves) ForgetStore(_ context.Context, id port.StoreID) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	delete(j.saves, id)
 	return nil
 }

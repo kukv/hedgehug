@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
 
@@ -163,6 +164,70 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// RunJudgedSavesContract は、port.JudgedSaves が満たすべき振る舞いを確かめる。偽物と、本物の実装
+// (infra/statedb)の両方のテストから呼ぶ。ケースごとに Store 名を変えて、1 つの記録を使う。
+func RunJudgedSavesContract(t *testing.T, newSaves func() port.JudgedSaves) {
+	s := newSaves()
+	t.Run("started follows marks per store", func(t *testing.T) { judgedStarted(t, s) })
+	t.Run("known matches version then save", func(t *testing.T) { judgedKnown(t, s) })
+	t.Run("forget only that store", func(t *testing.T) { judgedForget(t, s) })
+}
+
+func judgedKey(version, op string) port.SaveKey {
+	return port.SaveKey{Version: version, Author: "alice", At: syncT1, Op: change.ID(op)}
+}
+
+func judgedStarted(t *testing.T, s port.JudgedSaves) {
+	if ok, _ := s.Started(syncCtx, "J1"); ok {
+		t.Error("Started before Mark")
+	}
+	must(t, s.Mark(syncCtx, "J1", []port.SaveKey{judgedKey("v1", "")}))
+	if ok, err := s.Started(syncCtx, "J1"); err != nil || !ok {
+		t.Errorf("Started after Mark = %v, %v", ok, err)
+	}
+	if ok, _ := s.Started(syncCtx, "J2"); ok {
+		t.Error("Started of another store")
+	}
+}
+
+func judgedKnown(t *testing.T, s port.JudgedSaves) {
+	keys := []port.SaveKey{judgedKey("v1", "op1"), judgedKey("v2", "")}
+	must(t, s.Mark(syncCtx, "K1", keys))
+	must(t, s.Mark(syncCtx, "K1", keys)) // 同じ鍵をもう一度書いてもエラーにならない
+	cases := []struct {
+		name  string
+		store port.StoreID
+		key   port.SaveKey
+		want  port.Match
+	}{
+		{"same version", "K1", judgedKey("v1", "op1"), port.SameVersion},
+		{"same version without op", "K1", judgedKey("v2", ""), port.SameVersion},
+		{"same op author at, other version", "K1", judgedKey("v9", "op1"), port.SameSave},
+		{"other op", "K1", judgedKey("v9", "op2"), port.NotJudged},
+		{"other author", "K1", port.SaveKey{Version: "v9", Author: "bob", At: syncT1, Op: "op1"}, port.NotJudged},
+		{"other time", "K1", port.SaveKey{Version: "v9", Author: "alice", At: syncT2, Op: "op1"}, port.NotJudged},
+		{"empty op matches by version only", "K1", judgedKey("v9", ""), port.NotJudged},
+		{"other store", "K2", judgedKey("v1", "op1"), port.NotJudged},
+	}
+	for _, c := range cases {
+		if got, err := s.Known(syncCtx, c.store, c.key); err != nil || got != c.want {
+			t.Errorf("%s: Known = %v, %v; want %v", c.name, got, err, c.want)
+		}
+	}
+}
+
+func judgedForget(t *testing.T, s port.JudgedSaves) {
+	must(t, s.Mark(syncCtx, "F1", []port.SaveKey{judgedKey("v1", "")}))
+	must(t, s.Mark(syncCtx, "F2", []port.SaveKey{judgedKey("v1", "")}))
+	must(t, s.ForgetStore(syncCtx, "F1"))
+	if ok, _ := s.Started(syncCtx, "F1"); ok {
+		t.Error("F1 still started")
+	}
+	if ok, _ := s.Started(syncCtx, "F2"); !ok {
+		t.Error("F2 was forgotten")
 	}
 }
 

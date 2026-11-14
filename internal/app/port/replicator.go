@@ -74,6 +74,27 @@ type RepairWriter interface {
 	Write(op Operation, fn func(tx Tx) error) error
 }
 
+// EntityRows は、受け取った保存 1 件が 1 つのエンティティに書いたもの。
+type EntityRows struct {
+	Ref change.Ref
+	// Rows は、その保存が足した行。
+	Rows []change.Record
+	// Description は、その保存で説明が前の版と違えば(新しく書いたときを含む)、保存の時点の説明。違わなければ nil。
+	Description *string
+}
+
+// ReceivedSave は、同期で受け取った、通知の判定をまだしていない保存 1 件。
+type ReceivedSave struct {
+	Key      SaveKey
+	Entities []EntityRows
+}
+
+// JudgeFunc は、同期の最後に、受け取った保存から通知を判定する差し込み口(決定 C4b1-2)。saves は古い順
+// (前の版が先。同じ深さは時刻、版の印の順)。read は、同期が持っている Store のロックの中で、Store のいまの
+// 状態を読む(Stores.Read を中から呼ぶと止まるので、こちらを使う)。エラーを返すと、渡した保存を判定済みに
+// しない(同期の結果は変えない)。
+type JudgeFunc func(ctx context.Context, store StoreID, saves []ReceivedSave, read func(fn func(r Reader) error) error) error
+
 // SyncResult は、送った保存と受け取った保存の数(06「同期の結果」)と、今回受け取った位置。
 // Seen は、次の同期の Remote.Seen に渡す。remote が空のまま終わったら空。
 type SyncResult struct {
