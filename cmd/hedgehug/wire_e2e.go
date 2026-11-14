@@ -75,6 +75,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		GitHubReads: state.GitHubReads(),
 		PRScans:     state.PRScans(),
 		AppMissing:  state.AppMissing(),
+		Reports:     state.ReportSelections(),
 		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
 		GitHub:      e2eGitHub,
 		DeviceFlow:  e2eDeviceFlow,
@@ -89,6 +90,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Events:      hub,
 		Delivery:    syncSvc,
 		SyncTargets: syncSvc.Targets,
+		Recent:      state.Recent(),
 	}), nil
 }
 

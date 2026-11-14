@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -254,7 +255,7 @@ func writeProjectWithin(tx port.Tx, p projectPlan, store port.StoreID) error {
 	for _, it := range p.src.set.Items() {
 		errs = append(errs, tx.WriteItems().Append(it.ID, p.itemLines(it)...))
 	}
-	dst := append([]change.Draft{numbering.Draft(numbering.Projects, p.number)}, numberLines(p.numbers)...)
+	dst := append([]change.Draft{numbering.Draft(numbering.Projects, p.number)}, numbering.Drafts(numbering.Items, slices.Collect(maps.Values(p.numbers)))...)
 	errs = append(errs, tx.WriteWorkspaces().Append(p.dst.ws.ID, append(dst, p.carried.Destination...)...))
 	if len(p.carried.Source) > 0 {
 		errs = append(errs, tx.WriteWorkspaces().Append(p.src.ws.ID, p.carried.Source...))

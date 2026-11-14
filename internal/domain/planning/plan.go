@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
@@ -62,7 +63,14 @@ type Sprint struct {
 	Start, End string
 	Goal       string
 	Confirmed  *Confirmed
+	Closing    *Closing // 完了の記録(完了していなければ nil)
 	Deleted    *change.Deletion
+}
+
+// Closing は、完了の記録の行の時刻と op(F3-2)。完了による持ち越しの行(同じ op の set sprint)を見つけるのに使う。
+type Closing struct {
+	At time.Time
+	Op change.ID
 }
 
 // Release は、リリース。
@@ -107,7 +115,7 @@ func FromLog(log []change.Record) Plan {
 			continue
 		}
 		s.Deleted = deletionOf(log, sprintPrefix+string(id))
-		s.Confirmed = confirmedOf(log, id)
+		s.Confirmed, s.Closing = confirmedOf(log, id)
 		p.Sprints = append(p.Sprints, *s)
 	}
 	for id, r := range releases {
@@ -168,17 +176,17 @@ func deletionOf(log []change.Record, f string) *change.Deletion {
 	return d
 }
 
-// confirmedOf は、スプリント id の完了の確定値。同時に 2 回完了していれば、change.Current が 1 つに決める。
-func confirmedOf(log []change.Record, id change.ID) *Confirmed {
+// confirmedOf は、スプリント id の完了の確定値と、その行の時刻と op。同時に 2 回完了していれば、change.Current が 1 つに決める。
+func confirmedOf(log []change.Record, id change.ID) (*Confirmed, *Closing) {
 	r, ok := change.Current(log, CloseSprint, sprintPrefix+string(id)+"/close", func(change.Record) bool { return true })
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	var c Confirmed
 	if json.Unmarshal(r.To, &c) != nil {
-		return nil
+		return nil, nil
 	}
-	return &c
+	return &c, &Closing{At: r.At, Op: r.Op}
 }
 
 // LiveSprints は、削除済みでないスプリント(内部 ID の順)。

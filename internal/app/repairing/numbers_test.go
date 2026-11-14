@@ -75,7 +75,7 @@ func TestRenumberStopsWithoutProgress(t *testing.T) {
 	parent := apptest.SampleEpic
 	it := item.Item{ID: dupTask, Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Parent: &parent, Number: 2}, Kind: item.Task, Rank: "b", Title: "重なった", Status: apptest.SampleStatusTodo, Priority: apptest.SamplePriorityMedium}
 	ours := e.appendItem(taro, dupTask, item.Create(it))
-	w := noopWriter{&apptest.RepairWriter{Stores: e.s, Store: store}}
+	w := noopWriter{&apptest.RepairWriter{Stores: e.s, StoreID: store}}
 	w.F.Ours = ours
 	if err := repairing.Run(e.ctx, w); err == nil || !strings.Contains(err.Error(), "進みません") {
 		t.Errorf("Run error = %v", err)

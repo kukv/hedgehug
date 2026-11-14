@@ -1,23 +1,26 @@
 <script lang="ts">
   import {
     type Member,
-    menuAt,
     periodText,
     pill,
     progressRatio,
     progressText,
+    type ReportActive,
     readOnlyNote,
     type SprintCard,
-    sprintMenu,
     type WorkspaceSettings,
   } from "@hedgehug/core";
-  import { Button, IconButton, Menu } from "@hedgehug/ui";
+  import { Button } from "@hedgehug/ui";
   import PlanItems from "./PlanItems.svelte";
+  import SprintBurndown from "./SprintBurndown.svelte";
+  import SprintMenu from "./SprintMenu.svelte";
 
-  // スプリントの画面のカード(05「スプリントの画面」の表)。F1 では、バーンダウン・「途中で追加」・
-  // 「バーンダウンを見る」・ボードを出さない(F1-19)。ボタンとメニューの動きは親が渡す。
+  // スプリントの画面のカード(05「スプリントの画面」の表)。ボードは出さない(F1-19)。
+  // ボタンとメニューの動きは親が渡す。
   interface Props {
     card: SprintCard;
+    // active は、実行中のスプリントの数字(F3-15)。まだ読めていなければ null。
+    active: ReportActive | null;
     storeId: string;
     storeName: string;
     settings: WorkspaceSettings;
@@ -32,10 +35,12 @@
     onclose: (card: SprintCard) => void;
     onedit: (card: SprintCard) => void;
     ondelete: (card: SprintCard) => void;
+    onburndown: (card: SprintCard) => void;
   }
 
   let {
     card,
+    active,
     storeId,
     storeName,
     settings,
@@ -48,6 +53,7 @@
     onclose,
     onedit,
     ondelete,
+    onburndown,
   }: Props = $props();
 
   const s = $derived(card.sprint);
@@ -55,19 +61,14 @@
   const progress = $derived(progressText(card));
   const percent = $derived(Math.round(progressRatio(card) * 100));
   const startWhy = $derived(readOnly ? readOnlyNote : startReason);
-  let menu = $state<{ x: number; y: number } | null>(null);
+  // 小さいバーンダウンは、読めた数字が、このカードの実行中のスプリントのものであるときだけ出す。
+  const burn = $derived(s.state === "active" && active?.sprint?.id === s.id ? active : null);
   // 実行中だけ開いておく。読み直しで開閉を戻さないよう、状態が変わったときだけ合わせる。
   const running = $derived(s.state === "active");
   let open = $state(false);
   $effect.pre(() => {
     open = running;
   });
-
-  function select(id: string) {
-    menu = null;
-    if (id === "edit") onedit(card);
-    else ondelete(card);
-  }
 </script>
 
 <article class="card" aria-label={s.name}>
@@ -95,12 +96,13 @@
           >完了…</Button
         >
       {/if}
-      <IconButton
-        label="{s.name} のメニュー"
-        size="sm"
-        onclick={(e) => (menu = menuAt((e.currentTarget as HTMLElement).getBoundingClientRect()))}
-        >⋯</IconButton
-      >
+      <SprintMenu
+        sprint={s}
+        {readOnly}
+        onedit={() => onedit(card)}
+        onburndown={() => onburndown(card)}
+        ondelete={() => ondelete(card)}
+      />
     </span>
   </header>
   {#if s.goal}
@@ -120,19 +122,14 @@
     </span>
     <span class="text">{progress}</span>
   </div>
+  {#if burn}
+    <SprintBurndown active={burn} start={s.start} {thisYear} />
+  {/if}
   <details bind:open>
     <summary>アイテム {card.items.length} 件</summary>
     <PlanItems rows={card.items} {storeId} {storeName} {settings} {members} />
   </details>
 </article>
-<Menu
-  open={menu !== null}
-  x={menu?.x ?? 0}
-  y={menu?.y ?? 0}
-  items={sprintMenu(s, readOnly)}
-  onselect={select}
-  onclose={() => (menu = null)}
-/>
 
 <style>
   .card {

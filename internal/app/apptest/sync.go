@@ -113,9 +113,9 @@ func (r *Replicator) Calls() []ReplicatorCall {
 // Write が行を 1 つ以上残したときだけ、その op を Ops に足す(修復の件名を確かめるため)。行を残したかは、
 // fn の中で 1 つ以上の行を渡した Append が成功し、Write もエラーを返さなかったことで見る。
 type RepairWriter struct {
-	Stores port.Stores
-	Store  port.StoreID
-	F      repair.Facts
+	Stores  port.Stores
+	StoreID port.StoreID
+	F       repair.Facts
 	// PurgedIDs は、完全に削除したものとして Purged が返す内部 ID。
 	PurgedIDs map[change.ID]bool
 	Ops       []port.Operation
@@ -125,13 +125,15 @@ func (w *RepairWriter) Facts() repair.Facts { return w.F }
 
 func (w *RepairWriter) Purged() (map[change.ID]bool, error) { return w.PurgedIDs, nil }
 
+func (w *RepairWriter) Store() (port.StoreID, error) { return w.StoreID, nil }
+
 func (w *RepairWriter) Read(fn func(r port.Reader) error) error {
-	return w.Stores.Read(context.Background(), w.Store, fn)
+	return w.Stores.Read(context.Background(), w.StoreID, fn)
 }
 
 func (w *RepairWriter) Write(op port.Operation, fn func(tx port.Tx) error) error {
 	rows := false
-	err := w.Stores.Write(context.Background(), w.Store, op, func(tx port.Tx) error {
+	err := w.Stores.Write(context.Background(), w.StoreID, op, func(tx port.Tx) error {
 		return fn(rowsTx{Tx: tx, rows: &rows})
 	})
 	if err == nil && rows {

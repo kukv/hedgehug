@@ -201,7 +201,7 @@ func writeWithin(tx port.Tx, p movePlan, store port.StoreID) error {
 		drafts = append(drafts, p.remaps[it.ID].Drafts...)
 		errs = append(errs, tx.WriteItems().Append(it.ID, drafts...))
 	}
-	errs = append(errs, tx.WriteWorkspaces().Append(p.dst.ws.ID, numberLines(p.numbers)...))
+	errs = append(errs, tx.WriteWorkspaces().Append(p.dst.ws.ID, numbering.Drafts(numbering.Items, slices.Collect(maps.Values(p.numbers)))...))
 	for _, it := range p.src.items() {
 		errs = append(errs, tx.WriteTransfers().Append(transfer.Record{
 			Entity: transfer.EntityItem, Target: it.ID, Old: it.DisplayID(p.src.ws.Prefix), New: p.display(it), ToStore: string(store),
@@ -221,14 +221,4 @@ func placeLines(it item.Item, root bool, dst destination, parent *item.ID, n int
 		drafts = append(drafts, change.NewSet("rank", it.Rank, newRank))
 	}
 	return drafts
-}
-
-// numberLines は、使った番号ごとの number の行(番号の順)。
-func numberLines(numbers map[item.ID]int) []change.Draft {
-	used := slices.Sorted(maps.Values(numbers))
-	lines := make([]change.Draft, 0, len(used))
-	for _, n := range used {
-		lines = append(lines, numbering.Draft(numbering.Items, n))
-	}
-	return lines
 }

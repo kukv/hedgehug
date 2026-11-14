@@ -117,6 +117,13 @@ export * from "./githubIndex";
 export { NotFound, Refused, TransferUndoFailed } from "./model/errors";
 export type { Item, Kind, NewItem, PropertyInput } from "./model/item";
 export type { Member } from "./model/member";
+export type {
+  PaletteAlias,
+  PaletteIndex,
+  PaletteItem,
+  PaletteProject,
+  RecentItem,
+} from "./model/palette";
 export type { NewProject, Project, ProjectStatus } from "./model/project";
 export type { StoreInfo } from "./model/store";
 export type {
@@ -152,10 +159,12 @@ export {
   stepParent,
 } from "./model/workspace";
 export * from "./notesIndex";
+export * from "./paletteIndex";
 export * from "./planningIndex";
 export type { CatalogPort } from "./port/catalog";
 export type { HistoryPort } from "./port/history";
 export type { ItemsPort } from "./port/items";
+export type { PalettePort } from "./port/palette";
 export type { ProjectsPort, RulesSection } from "./port/projects";
 export type { SyncPort, Watching } from "./port/sync";
 export type { SystemPort } from "./port/system";

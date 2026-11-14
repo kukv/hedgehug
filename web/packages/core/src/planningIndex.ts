@@ -64,6 +64,7 @@ export {
   pill,
   progressRatio,
   progressText,
+  pt,
   type SprintMenuEntry,
   type SprintSection,
   type Sprints,
@@ -73,6 +74,58 @@ export {
   sprintMenu,
   startDisabledReason,
 } from "./features/planning/sprints";
+export {
+  type Bar,
+  bars,
+  type Frame,
+  layerFill,
+  linePoints,
+  niceMax,
+  type Point,
+  pathOf,
+  stackPaths,
+  ticks,
+} from "./features/reports/chart";
+export {
+  diffText,
+  emptyEstimates,
+  hoursText,
+  perPointText,
+  pointsText,
+  sprintScopeNote,
+} from "./features/reports/estimates";
+export {
+  checkPeriod,
+  defaultPeriod,
+  periodLabel,
+} from "./features/reports/flowPeriod";
+export {
+  type ActiveReports,
+  type ActiveReportsState,
+  createActiveReports,
+  createReports,
+  type Reports,
+  type ReportsState,
+} from "./features/reports/reports";
+export {
+  burndownTable,
+  heading,
+  type Table,
+  velocityTable,
+} from "./features/reports/tables";
+export {
+  addedText,
+  amount,
+  averageText,
+  burnStatus,
+  burnTotals,
+  committedNote,
+  durationLines,
+  fallbackNote,
+  notStarted,
+  pointsCard,
+  unitLabel,
+} from "./features/reports/texts";
 export type {
   PlanningOverview,
   PlanRow,
@@ -87,4 +140,21 @@ export type {
   SprintState,
   Totals,
 } from "./model/planning";
+export type {
+  BurnDay,
+  Burndown,
+  Durations,
+  EstimateRow,
+  EstimateTotal,
+  FlowDay,
+  FlowLayer,
+  Report,
+  ReportActive,
+  ReportLayers,
+  ReportSelection,
+  ReportSprint,
+  ReportUnit,
+  VelocityBar,
+} from "./model/report";
 export type { PlanningPort } from "./port/planning";
+export type { ReportsPort } from "./port/reports";

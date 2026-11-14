@@ -22,6 +22,8 @@
     onfocus?: (event: FocusEvent) => void;
     // oninput は、入力のたびに、いまの値を渡す(候補を探すときなど)。
     oninput?: (value: string) => void;
+    // onchange は、値を確定したとき(日付を選び終えたとき・欄を離れたときなど)に、いまの値を渡す。
+    onchange?: (value: string) => void;
     onblur?: (event: FocusEvent) => void;
     onkeydown?: (event: KeyboardEvent) => void;
   }
@@ -42,6 +44,7 @@
     focusOnMount = false,
     onfocus,
     oninput,
+    onchange,
     onblur,
     onkeydown,
   }: Props = $props();
@@ -82,6 +85,7 @@
       value = event.currentTarget.value;
       oninput?.(value);
     }}
+    onchange={(event) => onchange?.(event.currentTarget.value)}
   >
 {:else}
   <input
@@ -92,6 +96,7 @@
     {...attrs}
     bind:value
     oninput={(event) => oninput?.(event.currentTarget.value)}
+    onchange={(event) => onchange?.(event.currentTarget.value)}
   >
 {/if}
 

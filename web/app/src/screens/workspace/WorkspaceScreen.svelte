@@ -8,18 +8,22 @@
     type SprintCard,
     type SprintDialogKind,
     type StoreNode,
+    sprintSaveFailed,
     type WorkspaceNode,
     type WorkspaceTab,
     workspaceTabOf,
   } from "@hedgehug/core";
   import { Button, PageHead, ReadOnlyBand, StoreBadge, Tabs } from "@hedgehug/ui";
-  import { navigation, planning, projectDialog, screen, syncNow } from "../../wire";
+  import { selectReport } from "../../reports";
+  import { navigation, planning, projectDialog, screen, syncNow, toasts } from "../../wire";
   import ReleasesTab from "../planning/ReleasesTab.svelte";
   import SprintDialogs from "../planning/SprintDialogs.svelte";
   import SprintsTab from "../planning/SprintsTab.svelte";
+  import ReportsTab from "../reports/ReportsTab.svelte";
   import SettingsTab from "../workspace-settings/SettingsTab.svelte";
+  import OverviewTab from "./OverviewTab.svelte";
 
-  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「設定」。
+  // ワークスペースの画面(A2 の計画の持ち場)。タブは「概要」「スプリント」「リリース」「レポート」「設定」。
   interface Props {
     store: StoreNode;
     workspace: WorkspaceNode;
@@ -35,6 +39,7 @@
     { id: "overview", label: "概要" },
     { id: "sprints", label: "スプリント" },
     { id: "releases", label: "リリース" },
+    { id: "reports", label: "レポート" },
     { id: "settings", label: "設定" },
   ];
   function select(id: string) {
@@ -48,14 +53,24 @@
 
   // 古いアドレスから開いたときの移動の 1 行は、出しているワークスペースとタブが同じときだけ出す(B5c-2)。
   const workspaceMoved = screen.workspaceMoved;
-  const moved = $derived(
-    $workspaceMoved &&
-      $workspaceMoved.storeId === store.id &&
-      $workspaceMoved.workspaceId === workspace.id &&
-      $workspaceMoved.tab === tab
-      ? $workspaceMoved.text
-      : null,
-  );
+  const moved = $derived.by(() => {
+    const m = $workspaceMoved;
+    return m?.storeId === store.id && m.workspaceId === workspace.id && m.tab === tab
+      ? m.text
+      : null;
+  });
+
+  // 「バーンダウンを見る」(F3-16)。そのスプリントを選んで保存してから、レポートのタブへ移る。
+  // 保存できなければ移らない。
+  async function showBurndown(card: SprintCard) {
+    try {
+      await selectReport(sid, wid, { sprint: card.sprint.id });
+    } catch {
+      toasts.show(sprintSaveFailed, { error: true });
+      return;
+    }
+    select("reports");
+  }
 
   // 見出しの「実行中」は、実行中のスプリントがあるときだけ出す(05)。Store の出来事で読み直す(wire.ts)。
   // 親が Store の読み直しで作り直した値を渡しても、ID が同じなら開き直さない。
@@ -121,7 +136,9 @@
   {:else if store.readOnly}
     <ReadOnlyBand text={readOnlyBand(store.name)} />
   {/if}
-  {#if tab === "sprints"}
+  {#if tab === "overview"}
+    <OverviewTab storeId={store.id} workspaceId={workspace.id} />
+  {:else if tab === "sprints"}
     <SprintsTab
       storeId={store.id}
       storeName={store.name}
@@ -132,6 +149,7 @@
       onclose={(c) => void openSprint("close", c)}
       onedit={(c) => void openSprint("edit", c)}
       ondelete={(c) => void openSprint("delete", c)}
+      onburndown={(c) => void showBurndown(c)}
     />
   {:else if tab === "releases"}
     <ReleasesTab
@@ -140,6 +158,8 @@
       workspaceId={workspace.id}
       readOnly={store.readOnly}
     />
+  {:else if tab === "reports"}
+    <ReportsTab storeId={store.id} storeName={store.name} workspaceId={workspace.id} />
   {/if}
   {#if shown}
     <SprintDialogs

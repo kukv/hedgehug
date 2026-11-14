@@ -249,22 +249,30 @@ func lastLiveRank(its []item.Item, parent *item.ID, self item.ID) string {
 func readAllItems(w port.RepairWriter) ([]item.Item, error) {
 	var all []item.Item
 	err := w.Read(func(r port.Reader) error {
-		wss, err := r.Workspaces().List()
-		if err != nil {
-			return err
-		}
-		for _, ws := range wss {
-			ps, err := r.Projects().List(ws.ID)
-			if err != nil {
-				return err
-			}
-			its, err := itemsOf(r, ps)
-			if err != nil {
-				return err
-			}
-			all = append(all, its...)
-		}
-		return nil
+		var err error
+		all, err = allItemsOf(r)
+		return err
 	})
 	return all, err
+}
+
+// allItemsOf は、r のすべてのワークスペースのアイテム(削除済みを含む)。
+func allItemsOf(r port.Reader) ([]item.Item, error) {
+	var all []item.Item
+	wss, err := r.Workspaces().List()
+	if err != nil {
+		return nil, err
+	}
+	for _, ws := range wss {
+		ps, err := r.Projects().List(ws.ID)
+		if err != nil {
+			return nil, err
+		}
+		its, err := itemsOf(r, ps)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, its...)
+	}
+	return all, nil
 }

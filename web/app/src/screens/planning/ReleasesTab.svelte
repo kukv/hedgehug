@@ -10,6 +10,8 @@
     releaseStateChanged,
   } from "@hedgehug/core";
   import { Button, ConfirmDialog } from "@hedgehug/ui";
+  import { untrack } from "svelte";
+  import { planRequest } from "../../palette";
   import { releaseAction, releases } from "../../planning";
   import { planning, planningPort, syncNow, toasts } from "../../wire";
   import DeleteReleaseDialog from "./DeleteReleaseDialog.svelte";
@@ -62,6 +64,11 @@
     if (opening === workspaceId && (kind !== "delete" || ov)) dialog = { kind, card, wid: opening };
   }
   const closeDialog = () => (dialog = null);
+  // パレットの「リリースを作成」の要求が、このワークスペースのものなら作成ダイアログを開く(A5c-11)。
+  const request = planRequest.request;
+  $effect(() => {
+    if ($request && planRequest.take(wid, "release")) untrack(() => void openDialog("create"));
+  });
   const shown = $derived(dialog && dialog.wid === workspaceId ? dialog : null);
   $effect(() => {
     if (dialog && !shown) dialog = null;

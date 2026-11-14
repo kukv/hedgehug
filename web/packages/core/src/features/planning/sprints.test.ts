@@ -176,15 +176,25 @@ describe("startDisabledReason", () => {
 });
 
 describe("sprintMenu", () => {
-  it("has 編集… and 削除…", () => {
-    expect(sprintMenu(sprint({ state: "planned" }), false)).toEqual([
+  it("has 編集…, バーンダウンを見る and 削除…", () => {
+    expect(sprintMenu(sprint({ state: "closed" }), false)).toEqual([
       { id: "edit", label: "編集…", disabled: false },
+      { id: "burndown", label: "バーンダウンを見る", disabled: false },
       { id: "delete", label: "削除…", disabled: false },
     ]);
   });
 
+  it("disables バーンダウンを見る of a planned sprint", () => {
+    expect(sprintMenu(sprint({ state: "planned" }), false)[1]).toEqual({
+      id: "burndown",
+      label: "バーンダウンを見る",
+      disabled: true,
+      hint: "計画中のスプリントにはバーンダウンがありません",
+    });
+  });
+
   it("disables 削除… of the running sprint", () => {
-    expect(sprintMenu(sprint(), false)[1]).toEqual({
+    expect(sprintMenu(sprint(), false)[2]).toEqual({
       id: "delete",
       label: "削除…",
       disabled: true,
@@ -192,9 +202,10 @@ describe("sprintMenu", () => {
     });
   });
 
-  it("disables both in a read-only store", () => {
+  it("keeps バーンダウンを見る enabled in a read-only store", () => {
     expect(sprintMenu(sprint(), true)).toEqual([
       { id: "edit", label: "編集…", disabled: true, hint: "閲覧のみの Store です" },
+      { id: "burndown", label: "バーンダウンを見る", disabled: false },
       { id: "delete", label: "削除…", disabled: true, hint: "閲覧のみの Store です" },
     ]);
   });

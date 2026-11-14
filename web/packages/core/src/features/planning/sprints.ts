@@ -75,7 +75,7 @@ export function startDisabledReason(
 }
 
 export interface SprintMenuEntry {
-  id: "edit" | "delete";
+  id: "edit" | "burndown" | "delete";
   label: string;
   disabled: boolean;
   hint?: string;
@@ -84,11 +84,17 @@ export interface SprintMenuEntry {
 const entry = (id: SprintMenuEntry["id"], label: string, why: string | null): SprintMenuEntry =>
   why ? { id, label, disabled: true, hint: why } : { id, label, disabled: false };
 
-// sprintMenu は、カードのメニュー(F1-19 で「編集…」「削除…」だけ)。閲覧のみの Store では、どちらも無効にする(01)。
+// sprintMenu は、カードのメニュー。閲覧のみの Store では「編集…」「削除…」を無効にする(01)。
+// 「バーンダウンを見る」は選択を Store に書かないので閲覧のみでも押せ、計画中は無効(F3-16)。
 export function sprintMenu(s: Sprint, readOnly: boolean): SprintMenuEntry[] {
   const ro = readOnly ? readOnlyNote : null;
   return [
     entry("edit", "編集…", ro),
+    entry(
+      "burndown",
+      "バーンダウンを見る",
+      s.state === "planned" ? "計画中のスプリントにはバーンダウンがありません" : null,
+    ),
     entry("delete", "削除…", ro ?? (s.state === "active" ? "実行中は削除できません" : null)),
   ];
 }
