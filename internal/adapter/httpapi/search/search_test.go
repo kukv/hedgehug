@@ -231,12 +231,12 @@ type tableBody struct {
 	}
 	Rows []struct {
 		Kind, Title, Start, Created, Updated string
-		Systems, Unused, Removed      []string
-		Estimate                      *float64
-		Sprint, Release               string
-		Project                       struct{ Display, Title string }
-		Parent                        *struct{ ItemID, Display, Title string }
-		Custom                        map[string]struct{ Text, Type string }
+		Systems, Unused, Removed             []string
+		Estimate                             *float64
+		Sprint, Release                      string
+		Project                              struct{ Display, Title string }
+		Parent                               *struct{ ItemID, Display, Title string }
+		Custom                               map[string]struct{ Text, Type string }
 	}
 }
 
