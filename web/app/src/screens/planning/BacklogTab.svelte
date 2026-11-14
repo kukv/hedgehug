@@ -2,6 +2,7 @@
   import {
     allReadOnly,
     dropPlacement,
+    offBacklogText,
     readOnlyNote,
     type Sprint,
     selectedText,
@@ -12,7 +13,7 @@
   import { selection } from "../../palette";
   import { backlog } from "../../planning";
   import { itemDialog, planning, syncNow } from "../../wire";
-  import { bulkDelete } from "../../wireActions";
+  import { bulkChange, bulkDelete } from "../../wireActions";
   import BacklogFrame from "./BacklogFrame.svelte";
 
   // ワークスペースの「バックログ」のタブ(05「バックログ」)。上にスプリントの枠、下にバックログの枠を並べる。
@@ -78,6 +79,11 @@
     <SelectionBar
       text={selectedText($rows.length)}
       readOnlyNote={allReadOnly($rows) ? readOnlyNote : undefined}
+      onchange={() =>
+        void bulkChange.open(backlog.selection, {
+          after: () => backlog.reload(),
+          suffix: offBacklogText,
+        })}
       ondelete={() => void bulkDelete.open(backlog.selection, () => backlog.reload())}
       onclear={() => backlog.selection.clear()}
     />

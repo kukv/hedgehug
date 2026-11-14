@@ -1,8 +1,10 @@
+import type { BulkChangeResult, BulkChoices } from "../../model/bulkChange";
 import { NotFound, Refused } from "../../model/errors";
 import type {
   BulkDeleted,
   BulkDeletePreview,
   DeletePreview,
+  ItemRef,
   MoveCandidate,
   MovePreview,
   ProjectDeletePreview,
@@ -25,6 +27,10 @@ export interface FakeItemActions extends ItemActionsPort {
   // bulkPreview・bulkResult は、一括削除の予告と結果の答え。
   bulkPreview: BulkDeletePreview;
   bulkResult: BulkDeleted;
+  // choices・changePreview・changeResult は、一括変更の選択肢・予告・結果の答え。
+  choices: BulkChoices;
+  changePreview: BulkChangeResult;
+  changeResult: BulkChangeResult;
   // refuseNext は、次の書く操作を、この文言の断りにする(1 回だけ)。failNext は、断りでない失敗にする。
   refuseNext(message: string): void;
   failNext(): void;
@@ -62,6 +68,7 @@ export function fakeItemActions(): FakeItemActions {
     }
     check(id);
   };
+  const refs = (items: ItemRef[]) => items.map((i) => `${i.storeId}/${i.itemId}`).join(",");
   const self: FakeItemActions = {
     calls,
     preview: { count: 0, kinds: [], retentionDays: 30 },
@@ -70,6 +77,29 @@ export function fakeItemActions(): FakeItemActions {
     movePreviewResult: { below: 0, statuses: [] },
     bulkPreview: { stores: 1, retentionDays: 30, readOnly: 0 },
     bulkResult: { deleted: 0, readOnly: 0 },
+    choices: {
+      kinds: [],
+      statuses: [],
+      priorities: [],
+      sprints: [],
+      releases: [],
+      systems: [],
+      members: [],
+    },
+    changePreview: {
+      changed: 0,
+      kept: [],
+      failed: [],
+      offBacklog: { done: 0, canceled: 0 },
+      valueText: "",
+    },
+    changeResult: {
+      changed: 0,
+      kept: [],
+      failed: [],
+      offBacklog: { done: 0, canceled: 0 },
+      valueText: "",
+    },
     missing,
     refuseNext(message) {
       refusal = message;
@@ -117,6 +147,18 @@ export function fakeItemActions(): FakeItemActions {
     async bulkDelete(items) {
       await write("", `bulkDelete ${items.map((i) => `${i.storeId}/${i.itemId}`).join(",")}`);
       return self.bulkResult;
+    },
+    async bulkChangeChoices(items) {
+      calls.push(`bulkChangeChoices ${refs(items)}`);
+      return self.choices;
+    },
+    async bulkChangePreview(items, input) {
+      calls.push(`bulkChangePreview ${refs(items)} ${JSON.stringify(input)}`);
+      return self.changePreview;
+    },
+    async bulkChange(items, input) {
+      await write("", `bulkChange ${refs(items)} ${JSON.stringify(input)}`);
+      return self.changeResult;
     },
     async duplicate(storeId, id) {
       await write(id, `duplicate ${id}`);

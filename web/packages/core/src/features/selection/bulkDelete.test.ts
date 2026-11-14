@@ -225,4 +225,32 @@ describe("createBulkDelete", () => {
     await opening;
     expect(get(t.bd.state)).toBeNull();
   });
+
+  it("削除の実行中に開き直した確認ダイアログを、前の実行の終わりで閉じない", async () => {
+    const t = setup();
+    t.actions.bulkResult = { deleted: 1, readOnly: 0 };
+    await t.bd.open(t.selection, t.after);
+    const g = gate();
+    const orig = t.actions.bulkDelete;
+    t.actions.bulkDelete = async (i) => {
+      await g.wait;
+      return orig(i);
+    };
+    const confirming = t.bd.confirm();
+    await flush();
+    // 画面を移ると cancel が呼ばれ、移った先で選び直して開く。
+    t.bd.cancel();
+    const next = createRowSelection();
+    next.toggle(row("S1", "z", "HH-9"), true);
+    await t.bd.open(next, t.after);
+    expect(get(t.bd.state)?.ok).toBe("1 件を削除");
+    g.release();
+    await confirming;
+    expect(get(t.bd.state)?.ok).toBe("1 件を削除");
+    expect(get(next.rows)).toHaveLength(1);
+    // 前の削除は済んでいるので、トースト・読み直しは行い、前の選択は空にする。
+    expect(t.messages()).toEqual(["1 件を削除しました"]);
+    expect(get(t.selection.rows)).toEqual([]);
+    expect(t.calls).toEqual(["reload", "after"]);
+  });
 });

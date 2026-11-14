@@ -414,6 +414,88 @@ components:
         - store
         - item
       type: object
+    ChangeChoices:
+      additionalProperties: false
+      properties:
+        kinds:
+          description: 選んだアイテムの種類
+          items:
+            type: string
+          type: array
+        members:
+          description: 担当者にできるメンバー
+          items:
+            $ref: "#/components/schemas/ChoiceMember"
+          type: array
+        priorities:
+          description: 優先度の名前
+          items:
+            type: string
+          type: array
+        releases:
+          description: リリースの名前
+          items:
+            type: string
+          type: array
+        sprints:
+          description: スプリントの名前
+          items:
+            type: string
+          type: array
+        statuses:
+          description: ステータスの名前
+          items:
+            type: string
+          type: array
+        systems:
+          description: 関連システムの名前
+          items:
+            type: string
+          type: array
+      required:
+        - kinds
+        - statuses
+        - priorities
+        - sprints
+        - releases
+        - systems
+        - members
+      type: object
+    ChangeFailed:
+      additionalProperties: false
+      properties:
+        count:
+          description: 変わるはずだった件数
+          format: int64
+          type: integer
+        name:
+          description: Store の名前
+          type: string
+        store:
+          description: Store の ID
+          type: string
+      required:
+        - store
+        - name
+        - count
+      type: object
+    ChangeKept:
+      additionalProperties: false
+      properties:
+        item:
+          description: アイテムの内部 ID
+          type: string
+        reason:
+          description: 変えなかった理由
+          type: string
+        store:
+          description: Store の ID
+          type: string
+      required:
+        - store
+        - item
+        - reason
+      type: object
     ChangeKind:
       additionalProperties: false
       properties:
@@ -425,6 +507,109 @@ components:
           type: string
       required:
         - kind
+      type: object
+    ChangeOffBacklog:
+      additionalProperties: false
+      properties:
+        canceled:
+          description: 分類が中止のもの
+          format: int64
+          type: integer
+        done:
+          description: 分類が完了のもの
+          format: int64
+          type: integer
+      required:
+        - done
+        - canceled
+      type: object
+    ChangeRequest:
+      additionalProperties: false
+      properties:
+        category:
+          description: ステータスを分類で変えるときの分類。名前で変えるときは空
+          enum:
+            - ""
+            - todo
+            - doing
+            - done
+            - canceled
+          type: string
+        field:
+          description: 変える項目
+          enum:
+            - status
+            - assignee
+            - priority
+            - sprint
+            - release
+            - systemsAdd
+            - systemsRemove
+            - points
+            - estimate
+            - start
+            - end
+          type: string
+        items:
+          description: 選んだアイテム。複数の Store にまたがってよい
+          items:
+            $ref: "#/components/schemas/ChangeTarget"
+          minItems: 1
+          type: array
+        value:
+          description: 新しい値。空は値なし。ステータスを分類で変えるときは空
+          type: string
+        values:
+          description: 関連システムの名前(systemsAdd・systemsRemove のとき)
+          items:
+            type: string
+          type: array
+      required:
+        - items
+        - field
+      type: object
+    ChangeResult:
+      additionalProperties: false
+      properties:
+        changed:
+          description: 変えた(予告では変わる)件数
+          format: int64
+          type: integer
+        failed:
+          description: 保存できなかった Store
+          items:
+            $ref: "#/components/schemas/ChangeFailed"
+          type: array
+        kept:
+          description: 変えずに残したアイテム。選んだ順
+          items:
+            $ref: "#/components/schemas/ChangeKept"
+          type: array
+        offBacklog:
+          $ref: "#/components/schemas/ChangeOffBacklog"
+          description: バックログに表示されなくなった件数
+        valueText:
+          description: 確認の本文に出す値の文字列
+          type: string
+      required:
+        - changed
+        - kept
+        - failed
+        - offBacklog
+        - valueText
+      type: object
+    ChangeTarget:
+      additionalProperties: false
+      properties:
+        item:
+          description: アイテムの内部 ID
+          type: string
+        store:
+          description: Store の ID
+          type: string
+      required:
+        - store
+        - item
       type: object
     ChangeWorkspacePrefix:
       additionalProperties: false
@@ -441,6 +626,31 @@ components:
           type: boolean
       required:
         - done
+      type: object
+    ChoiceMember:
+      additionalProperties: false
+      properties:
+        login:
+          description: GitHub のログイン名
+          type: string
+        name:
+          description: 表示名
+          type: string
+      required:
+        - login
+        - name
+      type: object
+    ChoicesRequest:
+      additionalProperties: false
+      properties:
+        items:
+          description: 選んだアイテム。複数の Store にまたがってよい
+          items:
+            $ref: "#/components/schemas/ChangeTarget"
+          minItems: 1
+          type: array
+      required:
+        - items
       type: object
     CloseSprint:
       additionalProperties: false
@@ -4155,6 +4365,75 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: GitHub App 未導入の組織を読み直し、読めたものの記録を消す
+  /api/bulk-change:
+    post:
+      operationId: bulk-change
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 選んだアイテムの項目を、Store ごとに一括変更する
+  /api/bulk-change/choices:
+    post:
+      operationId: bulk-change-choices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChoicesRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeChoices"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 選んだアイテムを一括変更するときの値の選択肢を返す
+  /api/bulk-change/preview:
+    post:
+      operationId: preview-bulk-change
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 選んだアイテムの項目を一括変更するときの確認の中身を返す(保存しない)
   /api/bulk-delete:
     post:
       operationId: bulk-delete

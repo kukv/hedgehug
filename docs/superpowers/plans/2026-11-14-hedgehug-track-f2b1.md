@@ -419,13 +419,14 @@ git commit -m "test(e2e): バックログの選択と一括削除を通しで確
 
 ## F2b2 に渡すもの
 
-- 選択バーの「一括変更…」(`SelectionBar` の先頭に足し、`onchange` を受ける。「一括削除…」と同じく、`readOnlyNote` を渡したら無効にして `title` にその文を出す)と、ダイアログ「選択したアイテムを一括変更」から結果のトーストまで(04 の 827〜897 行)。
-- 一括変更の対象は `RowSelection.rows` を開いた時点で固定し、変更のあとは選択を解除しない(04 の 897 行)。消えたものは `prune` で外れる。
-- バックログの一括変更のトーストの末尾「。{K} 件は完了のため、バックログには表示されません」(`goneText` と同じ分類の判定)。
-- Store ごとの保存と閲覧のみの数え方は、F2b1-6 の `BulkDelete` の束ね方に合わせる。
+- 選択バーの「一括変更…」(`SelectionBar` の先頭に足し、`onchange` を受ける。「一括削除…」と同じく、`readOnlyNote` を渡したら無効にして `title` にその文を出す)と、ダイアログ「選択したアイテムを一括変更」から結果のトーストまで(04 の 827〜897 行)。(F2b2 で足した)
+- 一括変更の対象は `RowSelection.rows` を開いた時点で固定し、変更のあとは選択を解除しない(04 の 897 行)。消えたものは `prune` で外れる。(F2b2 で足した)
+- バックログの一括変更のトーストの末尾「。{K} 件は完了のため、バックログには表示されません」(`goneText` と同じ分類の判定)。(F2b2 で足した)
+- Store ごとの保存と閲覧のみの数え方は、F2b1-6 の `BulkDelete` の束ね方に合わせる。(F2b2 で足した)
 
 ## E に求めること
 
 - 検索のテーブルの行の先頭のチェックは ui の `RowCheck`(`label` は「{ID} を選択」、`checked` は `isSelected`、`onchange` で `toggle`。バックログの行と同じ)を使う。見出しの「すべて選択」(04 の 717 行)は E で決める。どちらも `createRowSelection` でつなぎ、テーブルの読み直しのたびに `prune`(並べ替えたあとの順、同じアイテムは 1 回)、画面を離れたら `clear`。
 - テーブルの上に `SelectionBar`(`text` は `selectedText`、すべて閲覧のみのときだけ `readOnlyNote` に core の `readOnlyNote` を渡す)と、一括削除は `bulkDelete.open(selection, 読み直し)`。複数の Store の保持日数と閲覧のみの数え方はサーバー(F2b1-10)が返す。
 - パレットの `selection.provide(2, …)` をテーブルにも登録する(ちょうど 1 件のとき)。「{N} 件をまとめて変更…」は F2b2 の一括変更のダイアログを開く。
+- 一括変更のダイアログは `bulkChange.open(selection, { after: 読み直し })` で開く(検索のテーブルの `SelectionBar` の `onchange` から)。

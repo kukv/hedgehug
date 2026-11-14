@@ -1,3 +1,4 @@
+import type { BulkChangeInput, BulkChangeResult, BulkChoices } from "../model/bulkChange";
 import type { Kind } from "../model/item";
 import type {
   BulkDeleted,
@@ -37,6 +38,12 @@ export interface ItemActionsPort {
   bulkDeletePreview(items: ItemRef[]): Promise<BulkDeletePreview>;
   // bulkDelete は、Store ごとに、アイテムと下にあるものを消す。閲覧のみの Store のものは消さずに数える。
   bulkDelete(items: ItemRef[]): Promise<BulkDeleted>;
+  // bulkChangeChoices は、一括変更ダイアログの選択肢(選んだアイテムから作る)。
+  bulkChangeChoices(items: ItemRef[]): Promise<BulkChoices>;
+  // bulkChangePreview は、保存せずに、実行と同じ判定をして変わる件数と残すものを返す。
+  bulkChangePreview(items: ItemRef[], input: BulkChangeInput): Promise<BulkChangeResult>;
+  // bulkChange は、Store ごとに保存する。変えずに残したもの・保存できなかった Store は結果に入る。
+  bulkChange(items: ItemRef[], input: BulkChangeInput): Promise<BulkChangeResult>;
   // duplicate は、新しいアイテムの内部 ID を返す。
   duplicate(storeId: string, itemId: string): Promise<string>;
 }

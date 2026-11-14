@@ -1,6 +1,7 @@
 import { createItemActionsPort } from "@hedgehug/api";
 import {
   createAfterMoved,
+  createBulkChange,
   createBulkDelete,
   createCopyId,
   createItemDelete,
@@ -53,6 +54,9 @@ export const itemDelete = createItemDelete({
 
 // 一覧で選んだ行の一括削除の確認ダイアログ(F2b1)。開くのは bulkDelete.open(selection, 読み直し)。
 export const bulkDelete = createBulkDelete({ actions: itemActions, toasts, detail, drafts });
+
+// 一覧で選んだ行の一括変更のダイアログと確認(F2b2)。開くのは bulkChange.open(selection, { after, suffix })。
+export const bulkChange = createBulkChange({ actions: itemActions, toasts, detail });
 
 // 「移動…」の候補のメニュー(02「同じワークスペースの中での移動」)。開くのは itemMove.open(item, x, y)。
 export const itemMove = createItemMove({
@@ -165,6 +169,7 @@ navigation.route.subscribe(() => {
   workspaceTransfer.cancel();
   itemDelete.cancel();
   bulkDelete.cancel();
+  bulkChange.cancel();
   itemMove.close();
   itemMove.cancelMove();
   itemKind.cancel();
