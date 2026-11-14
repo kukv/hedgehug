@@ -5,6 +5,7 @@ package saves
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"path"
 	"slices"
 	"strings"
@@ -219,8 +220,10 @@ func addChange(byRef map[change.Ref]*port.EntityRows, tree *object.Tree, ch *obj
 	}
 	if to == nil {
 		// 説明を消した。エンティティごと消えた(完全に削除した)ときは説明の変更として扱わない。
-		if _, err := tree.File(dir + "log.jsonl"); err != nil {
-			return nil //nolint:nilerr // ログがなければ、エンティティがない
+		if _, err := tree.File(dir + "log.jsonl"); errors.Is(err, object.ErrFileNotFound) {
+			return nil
+		} else if err != nil {
+			return err
 		}
 		empty := ""
 		e.Description = &empty
@@ -271,16 +274,22 @@ func parseLog(s string) []change.Record {
 	return out
 }
 
+// Dirs は、種類ごとのエンティティのフォルダの名前(Store の根から。gitstore もこれを使う)。
+var Dirs = map[change.Kind]string{
+	change.KindMembers:   "members",
+	change.KindWorkspace: "workspaces",
+	change.KindProject:   "projects",
+	change.KindItem:      "items",
+}
+
 // RefOf は、フォルダ(members、items/<ID> など)の種類と ID。members はそのフォルダちょうどのときだけ。
 // ID が使えるものかは確かめない(ログを指せるかは Ref.Valid で確かめる)。
 func RefOf(dir string) (change.Ref, bool) {
 	top, id, sub := strings.Cut(dir, "/")
-	kinds := map[string]change.Kind{
-		"members": change.KindMembers, "workspaces": change.KindWorkspace, "projects": change.KindProject, "items": change.KindItem,
+	for kind, d := range Dirs {
+		if d == top && (kind != change.KindMembers || !sub) {
+			return change.Ref{Kind: kind, ID: change.ID(id)}, true
+		}
 	}
-	kind, ok := kinds[top]
-	if !ok || (kind == change.KindMembers && sub) {
-		return change.Ref{}, false
-	}
-	return change.Ref{Kind: kind, ID: change.ID(id)}, true
+	return change.Ref{}, false
 }

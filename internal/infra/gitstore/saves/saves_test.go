@@ -279,3 +279,30 @@ func TestKnownByOpAfterRewrite(t *testing.T) {
 		t.Errorf("Unjudged = %v, want %v", g, w)
 	}
 }
+
+// 説明を消した保存の Description は空文字。エンティティごと消えた(完全に削除した)保存では、説明の変更として扱わない。
+func TestDescriptionCleared(t *testing.T) {
+	r := newRepo(t)
+	j, known := judged(t)
+	create := rec("R1", "OP0", t0, change.Create, "")
+	d1 := rec("R2", "OP1", t0.Add(time.Minute), change.Desc, "")
+	d2 := rec("R3", "OP2", t0.Add(2*time.Minute), change.Desc, "")
+	c0 := r.save(map[string]string{itemLog: logOf(t, create), itemDesc: "本文"}, "taro", t0, "OP0")
+	s1 := r.save(map[string]string{itemLog: logOf(t, create, d1), itemDesc: ""}, "taro", t0.Add(time.Minute), "OP1")
+	s2 := r.save(map[string]string{itemLog: logOf(t, create, d1, d2), itemDesc: "もう一度"}, "taro", t0.Add(2*time.Minute), "OP2")
+	s3 := r.save(map[string]string{itemLog: "", itemDesc: "", "purged.jsonl": "{}\n"}, "taro", t0.Add(3*time.Minute), "OP3")
+	r.mark(j, c0)
+	got, err := Unjudged(r.repo, s3, known)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, w := versions(got), want(s1, s2, s3); strings.Join(g, ",") != strings.Join(w, ",") {
+		t.Fatalf("Unjudged = %v, want %v", g, w)
+	}
+	if es := got[0].Entities; len(es) != 1 || es[0].Description == nil || *es[0].Description != "" {
+		t.Errorf("cleared entities = %+v, want an empty description", es)
+	}
+	if es := got[2].Entities; len(es) != 0 {
+		t.Errorf("purged entities = %+v, want none", es)
+	}
+}
