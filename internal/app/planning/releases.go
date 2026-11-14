@@ -28,13 +28,10 @@ var releaseStateLabel = map[planning.ReleaseState]string{
 	planning.Archived:   "アーカイブ",
 }
 
-// errUnchanged は、状態がすでに同じで保存しないことを、保存の前に伝える。
-var errUnchanged = errors.New("リリースの状態は変わらない")
-
 // CreateRelease は、未リリースのリリースを作る。
 func (s Service) CreateRelease(ctx context.Context, store port.StoreID, ws workspace.ID, in ReleaseInput) (planning.Release, error) {
 	r := in.release(s.IDs.New(), planning.Unreleased)
-	err := s.editPlan(ctx, store, ws,
+	err := s.editPlan(ctx, store, ws, revival{workspace: true},
 		func(planning.Plan) (string, error) {
 			return fmt.Sprintf("リリース「%s」を作成", oneLine(r.Name)), nil
 		},
@@ -53,7 +50,7 @@ func (s Service) CreateRelease(ctx context.Context, store port.StoreID, ws works
 // UpdateRelease は、リリースの名前・予定日・説明を直す。状態は変えない。
 func (s Service) UpdateRelease(ctx context.Context, store port.StoreID, ws workspace.ID, id change.ID, in ReleaseInput) error {
 	name := planning.NormalizeName(in.Name)
-	return s.editPlan(ctx, store, ws,
+	return s.editPlan(ctx, store, ws, revival{workspace: true, field: releaseField(id), name: name},
 		func(p planning.Plan) (string, error) {
 			if _, ok := p.UsableRelease(id); !ok {
 				return "", port.ErrNotFound
@@ -80,14 +77,14 @@ func (s Service) SetReleaseState(ctx context.Context, store port.StoreID, ws wor
 	if !known {
 		return fmt.Errorf("%w: release state %q", port.ErrInvalidOperation, to)
 	}
-	err := s.editPlan(ctx, store, ws,
+	err := s.editPlan(ctx, store, ws, revival{workspace: true, field: releaseField(id)},
 		func(p planning.Plan) (string, error) {
 			old, ok := p.UsableRelease(id)
 			if !ok {
 				return "", port.ErrNotFound
 			}
 			if old.State == to {
-				return "", errUnchanged
+				return "", errNoRows
 			}
 			return fmt.Sprintf("リリース「%s」を%sにする", oneLine(old.Name), label), nil
 		},
@@ -103,7 +100,7 @@ func (s Service) SetReleaseState(ctx context.Context, store port.StoreID, ws wor
 			}
 			return planning.ReleaseDrafts(old, r), nil
 		})
-	if errors.Is(err, errUnchanged) {
+	if errors.Is(err, errNoRows) {
 		return nil
 	}
 	return err
