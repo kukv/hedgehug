@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"golang.org/x/sys/unix"
 
@@ -24,15 +25,19 @@ type Stores struct {
 
 	mu   sync.Mutex
 	dirs map[port.StoreID]string
+	// commits は、Commits が読んだ保存のコミット(SHA ごと。コミットは書き換わらないので覚えてよい)。mu で守る。
+	commits map[plumbing.Hash]port.Commit
 
 	// beforeCommit は、ファイルを書いたあと、コミットの前に呼ぶ。テストで失敗を起こすためのもの。
 	beforeCommit func() error
 	// afterEntity は、1 つのエンティティのファイルを書いてインデックスに足すたびに呼ぶ。テストで失敗を起こすためのもの。
 	afterEntity func() error
+	// duringCommits は、Commits がロックを手放してコミットを辿る直前に呼ぶ。テストで、辿るあいだに書けることを確かめるためのもの。
+	duringCommits func()
 }
 
 func New(clock port.Clock, ids port.IDs) *Stores {
-	return &Stores{clock: clock, ids: ids, dirs: map[port.StoreID]string{}}
+	return &Stores{clock: clock, ids: ids, dirs: map[port.StoreID]string{}, commits: map[plumbing.Hash]port.Commit{}}
 }
 
 // Attach は、dir の Store を開いて使えるようにし、その Store ID を返す。

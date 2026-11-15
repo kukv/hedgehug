@@ -1,4 +1,5 @@
 export { createAccountsPort } from "./accounts";
+export { createActivityPort } from "./activity";
 export { createCatalogPort } from "./catalog";
 export type { Restored } from "./fetcher";
 export { ApiError, onRestored, setToken } from "./fetcher";

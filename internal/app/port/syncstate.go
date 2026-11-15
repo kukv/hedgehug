@@ -90,3 +90,22 @@ type JudgedSaves interface {
 	// ForgetStore は、store の記録をすべて消す。
 	ForgetStore(ctx context.Context, store StoreID) error
 }
+
+// SyncLine は、送信か受信が 1 件以上あった、成功した同期 1 回の記録(アクティビティの同期の行。決定 C4d-13)。
+type SyncLine struct {
+	ID       int64 // 記録ごとに振る番号。消したあとも使い回さない
+	Store    StoreID
+	At       time.Time // 同期を終えた時刻
+	Sent     int
+	Received int
+}
+
+// SyncLog は、このマシンの同期の行の記録(保存形式「このマシンに持つもの」)。
+type SyncLog interface {
+	// Add は、store の同期の行を記録する。sent と received が両方 0 なら何もしない。
+	Add(ctx context.Context, store StoreID, at time.Time, sent, received int) error
+	// List は、store の同期の行を、At の新しい順(同じなら ID の大きい順)で返す。
+	List(ctx context.Context, store StoreID) ([]SyncLine, error)
+	// ForgetStore は、store の記録をすべて消す。
+	ForgetStore(ctx context.Context, store StoreID) error
+}

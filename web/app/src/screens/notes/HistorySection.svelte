@@ -38,6 +38,9 @@
         <li>
           <span class="who">{r.who}</span>
           <span class="text">{r.text}</span>
+          {#if r.received}
+            <span class="recv">同期で受信</span>
+          {/if}
           <time datetime={r.at} title={exact(r.at)}>{when(r.at)}</time>
         </li>
       {/each}
@@ -85,6 +88,11 @@
   .text {
     flex: 1;
     min-width: 0;
+  }
+  .recv {
+    flex: none;
+    color: var(--muted);
+    font-size: 11.5px;
   }
   time {
     flex: none;

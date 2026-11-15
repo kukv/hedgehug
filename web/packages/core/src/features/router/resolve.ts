@@ -34,7 +34,8 @@ export type Resolved =
   | { name: "item"; storeId: string; projectId: string; itemId: string; movedFrom?: MovedFrom }
   | { name: "settings"; tab: SettingsTab }
   | { name: "inbox" }
-  | { name: "search" };
+  | { name: "search" }
+  | { name: "activity" };
 
 const home = { name: "home" } as const;
 
@@ -186,6 +187,8 @@ export async function resolveRoute(
       return { name: "inbox" };
     case "search":
       return { name: "search" };
+    case "activity":
+      return { name: "activity" };
   }
 }
 

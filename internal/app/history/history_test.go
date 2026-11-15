@@ -10,7 +10,6 @@ import (
 	apphistory "github.com/kukv/hedgehug/internal/app/history"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	dhistory "github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -39,7 +38,7 @@ func write(t *testing.T, s port.Stores, login string, fn func(tx port.Tx) error)
 	}
 }
 
-func texts(rows []dhistory.Row) []string {
+func texts(rows []apphistory.Row) []string {
 	var out []string
 	for _, r := range rows {
 		out = append(out, r.Who+": "+r.Text)

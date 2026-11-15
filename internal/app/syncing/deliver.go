@@ -80,6 +80,7 @@ func (s *Service) deliverRemote(ctx context.Context, t port.SyncTarget, op port.
 	if err := s.State.Succeeded(ctx, t.ID, at, key, res.Seen); err != nil {
 		slog.Warn("送ったあとに同期の状態を記録できませんでした", "store", t.ID, "error", err)
 	}
+	s.logLine(ctx, t.ID, at, res)
 	if _, err := s.mirror(ctx, t, tok); err != nil {
 		slog.Warn("送ったあとにミラーの状態を記録できませんでした", "store", t.ID, "error", err)
 	}

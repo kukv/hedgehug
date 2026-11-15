@@ -162,3 +162,14 @@ describe("search (04「検索」)", () => {
     expect(parseRoute("/search/x")).toEqual({ name: "home" });
   });
 });
+
+describe("activity (06「アクティビティ」)", () => {
+  it("reads /activity and writes it back", () => {
+    expect(parseRoute("/activity")).toEqual({ name: "activity" });
+    expect(formatRoute({ name: "activity" })).toBe("/activity");
+  });
+
+  it("goes home for a path below /activity", () => {
+    expect(parseRoute("/activity/x")).toEqual({ name: "home" });
+  });
+});

@@ -3,4 +3,6 @@ export interface HistoryRow {
   who: string;
   text: string;
   at: string;
+  // 同期で受け取った保存か(サーバーが決める)。
+  received: boolean;
 }

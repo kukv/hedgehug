@@ -35,34 +35,39 @@ const (
 // トークンか待ち受けが空なら起動しない(空のトークンでは誰でも API を使え、空の待ち受けは全アドレスで待つため)。
 // 待ち受けがこのマシンの中(ループバック)でなければ起動しない(固定のトークンを外に見せないため)。
 // 自動の同期と同じく、GitHub の自動の読み取り(Reader)も動かさない。読み取りは入口 POST /e2e/github-read で行う(D4a-19)。
-func wire(ctx context.Context) (httpapi.Deps, error) {
-	if os.Getenv("HEDGEHUG_TOKEN") == "" || os.Getenv("HEDGEHUG_ADDR") == "" {
-		return httpapi.Deps{}, errors.New("e2e のビルドには HEDGEHUG_TOKEN と HEDGEHUG_ADDR が要る")
-	}
-	if err := checkLoopback(os.Getenv("HEDGEHUG_ADDR")); err != nil {
-		return httpapi.Deps{}, err
+// 2 つ目の戻り値は、入口 POST /e2e/receive が書く判定の記録で、履歴が読む Received と同じ state.db のもの。
+func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
+	if err := checkEnv(); err != nil {
+		return httpapi.Deps{}, nil, err
 	}
 	ids := apptest.NewIDs()
 	stores, err := e2eStores(ctx, ids)
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	accounts := apptest.NewAccounts()
 	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	state, err := e2eReads(ctx)
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	hub := events.NewHub()
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
-	syncSvc := e2eSync(hub, stores)
+	clock := apptest.NewClock(time.Now())
+	// 保存のコミットを覚える偽物。API からの保存と移動先への保存は、これを通して書く(C4d-17)。サンプルは起動のときに
+	// stores へ直に書くので、コミットにならない
+	commits := apptest.NewCommitLog(stores, clock)
+	syncSvc := e2eSync(hub, stores, commits, state.SyncLog())
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
 	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
-	clock := apptest.NewClock(time.Now())
 	return e2eWithLinks(httpapi.Deps{
-		Stores:   stores,
+		Stores:   commits,
+		Commits:  commits,
+		Versions: stores,
+		SyncLog:  state.SyncLog(),
+		Received: state,
 		IDs:      ids,
 		Identity: apptest.Identity{Login: "taro"},
 		Inbox:    state.Inbox(clock),
@@ -93,7 +98,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Delivery:    syncSvc,
 		SyncTargets: syncSvc.Targets,
 		Recent:      state.Recent(),
-	}), nil
+	}), state.JudgedSaves(), nil
 }
 
 // e2eStores は、e2e と readonly の Store にサンプル(e2e にはワークスペース Mobile も)、team の Store に Team の
@@ -117,9 +122,11 @@ func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
 }
 
 // e2eSync は、e2e と readonly の Store を偽の remote と同期する(手での同期の確かめに使う)。team の Store は remote が
-// ない。移動先への保存(Deliver)は stores に書く(remote があれば偽の Replicator が stores に書く)。stores は、ほかの機能と
+// ない。移動先への保存(Deliver)は written(コミットを覚える包み)に書く(remote があれば偽の Replicator が stores に書く)。written は、ほかの機能と
 // 同じく NotifyWrites で包まない(e2e のビルドは自動の同期を動かさず、画面への知らせは Watch が出す)。
-func e2eSync(hub *events.Hub, stores *apptest.Stores) *syncing.Service {
+// 偽の Replicator が受け取ったものとして stores に直に書く保存は、CommitLog を通らないのでコミットにならず、
+// アクティビティに出ない(本物の同期で受け取った保存は git のコミットなので出る)。
+func e2eSync(hub *events.Hub, stores *apptest.Stores, written port.Stores, syncLog port.SyncLog) *syncing.Service {
 	return &syncing.Service{
 		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{
 			{ID: e2eStore, Name: "e2e", Remote: "https://example.invalid/e2e.git", Account: e2eAccount},
@@ -128,8 +135,9 @@ func e2eSync(hub *events.Hub, stores *apptest.Stores) *syncing.Service {
 		}},
 		Tokens:     &apptest.SyncTokens{Tokens: map[port.StoreID]string{e2eStore: "e2e-gh-token", readonlyStore: "e2e-gh-token"}},
 		Replicator: &apptest.Replicator{Stores: stores},
-		Stores:     stores,
+		Stores:     written,
 		State:      apptest.NewSyncState(),
+		Log:        syncLog,
 		Events:     hub,
 		Clock:      apptest.NewClock(time.Now()),
 	}
@@ -143,6 +151,14 @@ func e2eWithLinks(d httpapi.Deps) httpapi.Deps {
 		Hosts: d.Hosts, Stores: d.StoreGitHub, Clock: d.Clock,
 	})
 	return d
+}
+
+// checkEnv は、トークンと待ち受けが空でなく、待ち受けがこのマシンの中(ループバック)であることを確かめる。
+func checkEnv() error {
+	if os.Getenv("HEDGEHUG_TOKEN") == "" || os.Getenv("HEDGEHUG_ADDR") == "" {
+		return errors.New("e2e のビルドには HEDGEHUG_TOKEN と HEDGEHUG_ADDR が要る")
+	}
+	return checkLoopback(os.Getenv("HEDGEHUG_ADDR"))
 }
 
 // checkLoopback は、addr の host が 127.0.0.1・::1・localhost でなければエラーを返す。

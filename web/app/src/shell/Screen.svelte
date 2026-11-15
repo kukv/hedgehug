@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Resolved, StoreNode } from "@hedgehug/core";
   import { PageHead } from "@hedgehug/ui";
+  import ActivityScreen from "../screens/activity/ActivityScreen.svelte";
   import InboxScreen from "../screens/inbox/InboxScreen.svelte";
   import ProjectScreen from "../screens/project/ProjectScreen.svelte";
   import SearchScreen from "../screens/search/SearchScreen.svelte";
@@ -34,6 +35,8 @@
     <SettingsScreen tab={current.tab} {ondrawer} {alert} />
   {:else if current?.name === "inbox"}
     <InboxScreen {ondrawer} {alert} />
+  {:else if current?.name === "activity"}
+    <ActivityScreen {ondrawer} {alert} />
   {:else if current?.name === "search"}
     <SearchScreen {ondrawer} {alert} />
   {:else if current?.name === "project"}

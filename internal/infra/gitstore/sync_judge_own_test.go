@@ -2,9 +2,11 @@ package gitstore
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
@@ -206,4 +208,48 @@ func TestOwnKeptOnJudgeError(t *testing.T) {
 	wantAsked(t, j, map[change.ID]bool{early: true, late: true})
 	wantOwn(t, j, a, early, true)
 	wantOwn(t, j, a, late, false)
+}
+
+// wantReceived は、m の判定の記録で、保存 k が同期で受け取ったもの(記録にあり、このマシンの保存でない。決定 C4d-16)
+// かが want であること。
+func wantReceived(t *testing.T, j *judgeRecorder, m machine, k port.SaveKey, want bool) {
+	t.Helper()
+	match, err := j.judged.Known(t.Context(), m.id, k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, err := j.judged.Own(t.Context(), m.id, k.Op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := match != port.NotJudged && !own; got != want {
+		t.Errorf("received(%s) = %v (known %v, own %v), want %v", k.Op, got, match, own, want)
+	}
+}
+
+// remote なしで作って保存した Store に、空の remote を付けて最初の同期をすると、その保存はこのマシンの保存として
+// 記録に残る(同期で受信にならない)。そのあと受け取ったほかのマシンの保存は、同期で受信になる(決定 C4d-16)。
+func TestOwnBeforeRemote(t *testing.T) {
+	remote := newRemote(t)
+	dir := filepath.Join(t.TempDir(), "a")
+	if err := Create(dir, "01STORE0000000000000000001", t0); err != nil {
+		t.Fatal(err)
+	}
+	a := newMachine(t, dir, "A", t0)
+	if err := apptest.Sample(t.Context(), a.stores, a.id); err != nil {
+		t.Fatal(err)
+	}
+	j := withJudge(a)
+	a.write(t, "a", set("title", "ログイン画面を作る", "ログイン"))
+	mine := saves.KeyOf(headCommit(t, a.dir))
+	a.sync(t, remote)
+	wantOwn(t, j, a, mine.Op, true)
+	wantReceived(t, j, a, mine, false)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	b.write(t, "b", set("rank", "a", "b"))
+	theirs := saves.KeyOf(headCommit(t, b.dir))
+	b.sync(t, remote)
+	a.sync(t, remote)
+	wantReceived(t, j, a, theirs, true)
+	wantReceived(t, j, a, mine, false)
 }

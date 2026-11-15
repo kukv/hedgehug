@@ -6,6 +6,7 @@
 //   /settings/{タブ}                設定(D2 画面の計画の決定 S3)
 //   /inbox                          受信箱(06)
 //   /search                         検索(04)
+//   /activity                       アクティビティ(06)
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree" | "settings";
@@ -20,7 +21,8 @@ export type Route =
   | { name: "item"; store: string; item: string }
   | { name: "settings"; tab: SettingsTab }
   | { name: "inbox" }
-  | { name: "search" };
+  | { name: "search" }
+  | { name: "activity" };
 
 const projectTabs: readonly string[] = ["overview", "tree", "settings"] satisfies ProjectTab[];
 // workspaceTabs は、ワークスペースのタブ。画面のタブの並びと同じ順(F2a-13)。
@@ -60,6 +62,7 @@ export function parseRoute(path: string): Route {
   if (segs.some((s) => s === null || s === "")) return { name: "home" };
   if (segs[0] === "inbox" && segs.length === 1) return { name: "inbox" };
   if (segs[0] === "search" && segs.length === 1) return { name: "search" };
+  if (segs[0] === "activity" && segs.length === 1) return { name: "activity" };
   if (segs[0] === "settings" && segs.length <= 2) {
     const t = segs[1] ?? "accounts";
     return settingsTabs.includes(t)
@@ -103,6 +106,8 @@ export function formatRoute(route: Route): string {
       return "/inbox";
     case "search":
       return "/search";
+    case "activity":
+      return "/activity";
   }
 }
 
