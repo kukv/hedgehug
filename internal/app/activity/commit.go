@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
@@ -35,7 +36,8 @@ func commitRows(r port.Reader, store port.StoreInfo, c port.Commit) ([]Row, erro
 func (v *view) rows(store port.StoreInfo, c port.Commit) ([]Row, error) {
 	recs := opRows(c)
 	actor := mainActor(recs, c.Author, c.Summary)
-	base := Row{At: c.At, Store: store, SHA: c.SHA[:min(len(c.SHA), 7)]}
+	// 時刻は、同期の行と同じく続きの印のミリ秒にそろえる(そろえないと、秒以下を持つコミットが次のページから抜ける)。
+	base := Row{At: c.At.Truncate(time.Millisecond), Store: store, SHA: c.SHA[:min(len(c.SHA), 7)]}
 	main := base
 	main.Text = c.Summary
 	setActor(&main, actor, v.names)

@@ -65,6 +65,7 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 	return e2eWithLinks(httpapi.Deps{
 		Stores:   commits,
 		Commits:  commits,
+		Versions: stores,
 		SyncLog:  state.SyncLog(),
 		Received: state,
 		IDs:      ids,

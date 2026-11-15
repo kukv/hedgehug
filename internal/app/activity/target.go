@@ -21,7 +21,8 @@ type ruleHome struct {
 }
 
 // view は、Store を 1 回読んで引く材料: メンバーの表示名、ワークスペース(削除済みを含む)とその設定、ルール、
-// 転送記録、完全に削除の記録。アイテムとプロジェクトは、行ごとに Reader から引く。
+// 転送記録、完全に削除の記録。アイテムとプロジェクトは、要るときに Reader から引き、ID ごとに覚える(1 回の作り直しで
+// 同じものを何度も引かない)。
 type view struct {
 	r          port.Reader
 	names      item.Names
@@ -30,6 +31,14 @@ type view struct {
 	rules      map[change.ID]ruleHome
 	transfers  []transfer.Record
 	purged     []port.Purged
+	items      map[item.ID]found[item.Item]
+	projects   map[project.ID]found[project.Project]
+}
+
+// found は、引いたものと、Store にあったか。
+type found[T any] struct {
+	v  T
+	ok bool
 }
 
 func readView(r port.Reader) (*view, error) {
@@ -52,6 +61,8 @@ func readView(r port.Reader) (*view, error) {
 		workspaces: map[workspace.ID]workspace.Workspace{},
 		settings:   map[workspace.ID]workspace.Settings{},
 		rules:      map[change.ID]ruleHome{},
+		items:      map[item.ID]found[item.Item]{},
+		projects:   map[project.ID]found[project.Project]{},
 	}
 	if err := v.readWorkspaces(); err != nil {
 		return nil, err
@@ -86,20 +97,27 @@ func (v *view) readWorkspaces() error {
 
 // item は、Store にあるアイテム(削除済みを含む)。なければ false。
 func (v *view) item(id item.ID) (item.Item, bool, error) {
-	it, err := v.r.Items().Get(id)
-	if errors.Is(err, port.ErrNotFound) {
-		return item.Item{}, false, nil
-	}
-	return it, err == nil, err
+	return lookup(v.items, id, v.r.Items().Get)
 }
 
 // project は、Store にあるプロジェクト(削除済みを含む)。なければ false。
 func (v *view) project(id project.ID) (project.Project, bool, error) {
-	p, err := v.r.Projects().Get(id)
-	if errors.Is(err, port.ErrNotFound) {
-		return project.Project{}, false, nil
+	return lookup(v.projects, id, v.r.Projects().Get)
+}
+
+// lookup は、memo に覚えた id のもの。なければ get で引いて覚える。port.ErrNotFound は「ない」として覚え、ほかの
+// エラーは覚えずに返す。
+func lookup[T any](memo map[change.ID]found[T], id change.ID, get func(change.ID) (T, error)) (T, bool, error) {
+	if f, ok := memo[id]; ok {
+		return f.v, f.ok, nil
 	}
-	return p, err == nil, err
+	got, err := get(id)
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
+		var zero T
+		return zero, false, err
+	}
+	memo[id] = found[T]{v: got, ok: err == nil}
+	return got, err == nil, nil
 }
 
 // place は、行の対象(C4d-7・C4d-8)とワークスペース(C4d-9)を refs から決める。storewide は、ワークスペースが

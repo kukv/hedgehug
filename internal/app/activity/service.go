@@ -36,6 +36,9 @@ type Service struct {
 	Commits port.StoreCommits
 	Log     port.SyncLog
 	List    port.StoreList
+	// Versions と Memo は、版が変わらない Store の行を作り直さないためのもの。どちらかが nil なら毎回作る。
+	Versions port.StoreVersions
+	Memo     *Memo
 }
 
 // Page は、q に合う行を、時刻の新しい順(同じなら鍵の辞書順の逆)に、q.Before の後ろから 300 件返す(C4d-14)。
@@ -49,12 +52,16 @@ func (s Service) Page(ctx context.Context, q Query) (Page, error) {
 	if err != nil {
 		return Page{}, err
 	}
+	versions, err := s.versions(ctx)
+	if err != nil {
+		return Page{}, err
+	}
 	var all []Row
 	for _, info := range infos {
 		if q.Store != "" && info.ID != q.Store {
 			continue
 		}
-		rows, err := s.storeRows(ctx, info)
+		rows, err := s.storeRows(ctx, info, versions)
 		if err != nil {
 			return Page{}, err
 		}
@@ -75,9 +82,57 @@ func (s Service) Page(ctx context.Context, q Query) (Page, error) {
 	return p, nil
 }
 
-// storeRows は、Store 1 つのコミットの行(重なりをまとめたもの)と同期の行。コミットは、Store を 1 回読むあいだに
-// 行にする(Commits は Store を読むので、その外で呼ぶ)。
-func (s Service) storeRows(ctx context.Context, info port.StoreInfo) ([]Row, error) {
+// versions は、いまの Store ごとの版の印。覚えないとき(Versions か Memo が nil)は nil。
+func (s Service) versions(ctx context.Context) (map[port.StoreID]string, error) {
+	if s.Versions == nil || s.Memo == nil {
+		return nil, nil
+	}
+	return s.Versions.Versions(ctx)
+}
+
+// storeRows は、Store 1 つのコミットの行(重なりをまとめたもの)と同期の行。同期の行は、版を変えずに足されることが
+// ある(送るだけの同期・e2e の入口)ので、覚えずに毎回読む。
+func (s Service) storeRows(ctx context.Context, info port.StoreInfo, versions map[port.StoreID]string) ([]Row, error) {
+	rows, err := s.commitRowsOf(ctx, info, versions)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := s.Log.List(ctx, info.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range lines {
+		rows = append(rows, syncRow(info, line))
+	}
+	return rows, nil
+}
+
+// commitRowsOf は、Store 1 つのコミットの行(重なりをまとめたもの)。版の印が覚えたものと同じなら、覚えた行の写しに
+// いまの Store 名と色を入れて返す。版は行を作る前に読んだものを覚える(作るあいだに保存されても、次の要求で
+// 版が違って作り直すだけ)。版の印にない Store は覚えない。
+func (s Service) commitRowsOf(ctx context.Context, info port.StoreInfo, versions map[port.StoreID]string) ([]Row, error) {
+	version, ok := versions[info.ID]
+	if ok {
+		if rows, hit := s.Memo.get(info.ID, version); hit {
+			for i := range rows {
+				rows[i].Store = info
+			}
+			return rows, nil
+		}
+	}
+	rows, err := s.buildRows(ctx, info)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		s.Memo.put(info.ID, version, rows)
+	}
+	return slices.Clone(rows), nil
+}
+
+// buildRows は、Store 1 つのコミットの行を作り、重なりをまとめる。コミットは、Store を 1 回読むあいだに行にする
+// (Commits は Store を読むので、その外で呼ぶ)。
+func (s Service) buildRows(ctx context.Context, info port.StoreInfo) ([]Row, error) {
 	commits, err := s.Commits.Commits(ctx, info.ID)
 	if err != nil {
 		return nil, err
@@ -100,15 +155,7 @@ func (s Service) storeRows(ctx context.Context, info port.StoreInfo) ([]Row, err
 	if err != nil {
 		return nil, err
 	}
-	rows = dedup(rows)
-	lines, err := s.Log.List(ctx, info.ID)
-	if err != nil {
-		return nil, err
-	}
-	for _, line := range lines {
-		rows = append(rows, syncRow(info, line))
-	}
-	return rows, nil
+	return dedup(rows), nil
 }
 
 // syncKeyPrefix は、同期の行の鍵の書き出し。

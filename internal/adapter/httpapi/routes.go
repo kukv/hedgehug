@@ -63,9 +63,11 @@ type Deps struct {
 	// Store の一覧
 	StoreList port.StoreList
 
-	// アクティビティ(C4d)。Commits は Store のコミット、SyncLog は同期の行
-	Commits port.StoreCommits
-	SyncLog port.SyncLog
+	// アクティビティ(C4d)。Commits は Store のコミット、SyncLog は同期の行。Versions は Store の版の印で、版が
+	// 変わらない Store の行を作り直さないために使う(nil なら毎回作る)
+	Commits  port.StoreCommits
+	SyncLog  port.SyncLog
+	Versions port.StoreVersions
 	// 履歴の「同期で受信」(C4d-16)。同期で受け取った保存の op を引く(state.db)。nil なら添えない
 	Received apphistory.ReceivedOps
 
@@ -160,7 +162,9 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, Identity: deps.Identity, Clock: deps.Clock,
 		ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
 	})
-	activity.Register(api, appactivity.Service{Stores: deps.Stores, Commits: deps.Commits, Log: deps.SyncLog, List: deps.StoreList})
+	activity.Register(api, appactivity.Service{
+		Stores: deps.Stores, Commits: deps.Commits, Log: deps.SyncLog, List: deps.StoreList, Versions: deps.Versions, Memo: &appactivity.Memo{},
+	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})
 	search.Register(api, appsearch.Service{
