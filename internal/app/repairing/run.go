@@ -27,6 +27,7 @@ var steps = []step{
 	restoreReferenced,    // 設定が指す値・0 個になる分類の値の同時の削除
 	dropDanglingRefs,     // 削除された値を指すルール・種類ごとの既定・自動化
 	resetFinishedInitial, // 完了・中止の分類にされた初期ステータス
+	renameDuplicates,     // 重なった名前・接頭辞・キー
 }
 
 // syncActor は、修復の保存の実行者。
