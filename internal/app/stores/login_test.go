@@ -79,6 +79,21 @@ func TestLoginSet(t *testing.T) {
 	}
 }
 
+// マシンのログイン名が空から値に変わるときも、「あなた」が決まるので知らせる(確認の行は出ない)。
+func TestLoginSetFromEmptyPublishes(t *testing.T) {
+	ctx := context.Background()
+	l, gh, ev := newLogin("")
+	if err := l.Set(ctx, "tarou"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gh.MachineLogin(ctx); got != "tarou" {
+		t.Errorf("login = %q", got)
+	}
+	if got := ev.List(); !slices.Equal(got, []port.Event{{Kind: port.EventStore, Store: "sa"}}) {
+		t.Errorf("events = %+v", got)
+	}
+}
+
 func TestLoginSetSameDoesNothing(t *testing.T) {
 	ctx := context.Background()
 	l, gh, ev := newLogin("taro")

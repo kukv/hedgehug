@@ -54,11 +54,12 @@ func (l Login) Set(ctx context.Context, login string) error {
 	if err != nil || from == to {
 		return err
 	}
-	if err := l.GitHub.SetMachineLogin(ctx, to); err != nil {
-		return err
-	}
+	// 知らせる先を保存の前に読む(読めなければ保存しない。保存したのに知らせない、をなくす)
 	uses, err := l.unassigned(ctx)
 	if err != nil {
+		return err
+	}
+	if err := l.GitHub.SetMachineLogin(ctx, to); err != nil {
 		return err
 	}
 	for _, u := range uses {
