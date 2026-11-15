@@ -73,10 +73,13 @@ func TestDanglingRefs(t *testing.T) {
 }
 
 func TestDanglingRefsSkipsDisabledRule(t *testing.T) {
+	var kinds []repair.RefKind
 	for _, r := range repair.DanglingRefs(deleteRefs(refLog(false))) {
-		if r.Kind == repair.RefRule {
-			t.Fatalf("無効のルールは入らない: %+v", r)
-		}
+		kinds = append(kinds, r.Kind)
+	}
+	want := []repair.RefKind{repair.RefProject, repair.RefProject, repair.RefTemplateDefault}
+	if !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("無効のルールだけが入らず、ほかは残る: got %v, want %v", kinds, want)
 	}
 }
 
@@ -102,7 +105,9 @@ func TestDanglingRefsRestored(t *testing.T) {
 }
 
 func TestDanglingRefsHiddenInitial(t *testing.T) {
-	log := put(refLog(true), "i1", day, "hanako", change.NewSet("initial_status", "s-todo", "s-review"))
+	log := put(refLog(true), "a1", day, "taro", status("s-old", "Old", workspace.CategoryTodo)...)
+	log = put(log, "i1", day, "hanako", change.NewSet("initial_status", "s-todo", "s-review"))
+	log = put(log, "d1", day, "jiro", change.NewDelete("statuses/s-old"))
 	if got := repair.DanglingRefs(log); len(got) != 0 {
 		t.Fatalf("使わないステータスが初期ステータスでも直さない: %+v", got)
 	}

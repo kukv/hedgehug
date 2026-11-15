@@ -122,6 +122,21 @@ func TestValueRestoresReferenced(t *testing.T) {
 	}
 }
 
+func TestValueRestoresKeepsPointedF(t *testing.T) {
+	// d2 は「Done」(完了の最後。指されていない)と「Review」(初期ステータス)を削除する。f の辞書順では「Done」が先。
+	log := put(valueLog(), "d1", day, "hanako",
+		change.NewSet("initial_status", "s-todo", "s-review"), change.NewSet("category_default/done", "s-done", "s-todo"))
+	log = put(log, "d2", day, "jiro", change.NewDelete("statuses/s-done"), change.NewDelete("statuses/s-review"))
+	want := []repair.Overlap{{Op: "d2", F: "statuses/s-review"}}
+	got := repair.ValueRestores(log, repair.Facts{})
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("1 つの op が 2 つの値を削除したら、取り消しの理由の先の f(指されている方): got %+v, want %+v", got, want)
+	}
+	if r, ok := repair.ReasonOf(log, got[0].F); !ok || r.Field != "initial_status" {
+		t.Fatalf("返した f の理由が読める: (%+v, %v)", r, ok)
+	}
+}
+
 func TestValueRestoresReferencedDeletedTwice(t *testing.T) {
 	log := put(valueLog(), "d1", day, "hanako", change.NewSet("initial_status", "s-todo", "s-review"))
 	log = put(log, "d3", day, "hanako", change.NewDelete("statuses/s-review"))

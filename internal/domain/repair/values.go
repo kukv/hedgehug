@@ -125,7 +125,8 @@ func ReasonOf(log []change.Record, f string) (RestoreReason, bool) {
 // ValueRestores は、取り消す値の削除(決定 C5b2-4)。指されている値は、それを覆う削除をすべて取り消す。
 // 0 個になる分類は、その分類の削除の行のうち、Facts の自分の側のもの(なければすべて)から at が最もあとの行
 // (同じなら ID の大きい行)を選び、その値を覆う削除をすべて取り消す。指されているものを先に数える
-// (指されている値は、その分類に残るものに数える)。結果は Op の辞書順で、同じ op は 1 つ(f の小さい方)。
+// (指されている値は、その分類に残るものに数える)。結果は Op の辞書順で、同じ op は 1 つ。
+// F は、その op を最初に取り消す理由にした値の f(ReasonOf がその理由を返す。指されているものが先)。
 func ValueRestores(log []change.Record, f Facts) []Overlap {
 	v, ok := readValues(log)
 	if !ok {
@@ -134,7 +135,7 @@ func ValueRestores(log []change.Record, f Facts) []Overlap {
 	byOp := map[change.ID]Overlap{}
 	add := func(fs string) {
 		for _, d := range v.deleted[fs] {
-			if cur, ok := byOp[d.Op]; !ok || d.F < cur.F {
+			if _, ok := byOp[d.Op]; !ok {
 				byOp[d.Op] = Overlap{Op: d.Op, F: d.F}
 			}
 		}
