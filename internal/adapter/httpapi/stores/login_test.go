@@ -13,11 +13,12 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
+	"github.com/kukv/hedgehug/internal/domain/account"
 )
 
 const loginRefusal = "英数字・ハイフン・アンダースコアのログイン名(39 文字以内)を入力してください"
 
-// newLoginAPI は、アカウントなしの team-a と、アカウントを割り当てた team-b を持ち、マシンのログイン名が taro の API。
+// newLoginAPI は、アカウントなしの team-a と、登録したアカウントを割り当てた team-b を持ち、マシンのログイン名が taro の API。
 func newLoginAPI(t *testing.T) (humatest.TestAPI, *apptest.StoreGitHub, *apptest.Events) {
 	t.Helper()
 	gh := &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
@@ -25,8 +26,12 @@ func newLoginAPI(t *testing.T) (humatest.TestAPI, *apptest.StoreGitHub, *apptest
 		{ID: "sb", Name: "team-b", Account: "a1"},
 	}}
 	ev := &apptest.Events{}
+	accounts := apptest.NewAccounts()
+	if err := accounts.Add(t.Context(), account.Account{ID: "a1", Name: "仕事", Login: "hanako", Method: account.GhCLI}); err != nil {
+		t.Fatal(err)
+	}
 	_, api := humatest.New(t)
-	stores.RegisterLogin(api, appstores.Login{GitHub: gh, Events: ev})
+	stores.RegisterLogin(api, appstores.Login{GitHub: gh, Accounts: accounts, Events: ev})
 	return api, gh, ev
 }
 

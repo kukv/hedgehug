@@ -10,19 +10,47 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/stores"
+	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 )
 
 const loginRefusal = "英数字・ハイフン・アンダースコアのログイン名(39 文字以内)を入力してください"
 
-// newLogin は、アカウントなしの team-a と、アカウントを割り当てた team-b を持ち、マシンのログイン名が login の Login。
+// newLogin は、アカウントなしの team-a と、登録したアカウントを割り当てた team-b を持ち、マシンのログイン名が login の Login。
 func newLogin(login string) (stores.Login, *apptest.StoreGitHub, *apptest.Events) {
 	gh := &apptest.StoreGitHub{Login: login, Stores: []port.StoreGitHubInfo{
 		{ID: "sa", Name: "team-a"},
 		{ID: "sb", Name: "team-b", Account: "a1"},
 	}}
 	ev := &apptest.Events{}
-	return stores.Login{GitHub: gh, Events: ev}, gh, ev
+	return stores.Login{GitHub: gh, Accounts: registered(), Events: ev}, gh, ev
+}
+
+// registered は、アカウント a1(ログイン名 hanako)だけを登録した Accounts。
+func registered() *apptest.Accounts {
+	accounts := apptest.NewAccounts()
+	if err := accounts.Add(context.Background(), account.Account{ID: "a1", Name: "仕事", Login: "hanako", Method: account.GhCLI}); err != nil {
+		panic(err)
+	}
+	return accounts
+}
+
+// 割り当てたアカウントが登録にない Store も、「あなた」はマシンのログイン名なので(Identity と同じ。G1-5)、確認と知らせの対象にする。
+func TestLoginIncludesStoresWithUnregisteredAccount(t *testing.T) {
+	ctx := context.Background()
+	l, gh, ev := newLogin("taro")
+	gh.Stores = append(gh.Stores, port.StoreGitHubInfo{ID: "sc", Name: "team-c", Account: "gone"})
+	got, err := l.Preview(ctx, "tarou")
+	want := []string{"team-a での あなた が @taro から tarou に変わります。", "team-c での あなた が @taro から tarou に変わります。"}
+	if err != nil || !slices.Equal(got, want) {
+		t.Errorf("Preview = %q, %v", got, err)
+	}
+	if err := l.Set(ctx, "tarou"); err != nil {
+		t.Fatal(err)
+	}
+	if got := ev.List(); !slices.Equal(got, []port.Event{{Kind: port.EventStore, Store: "sa"}, {Kind: port.EventStore, Store: "sc"}}) {
+		t.Errorf("events = %+v", got)
+	}
 }
 
 func TestLoginGet(t *testing.T) {
@@ -106,7 +134,7 @@ func TestLoginSetSavesNothingWhenTheListFails(t *testing.T) {
 	ctx := context.Background()
 	gh := &apptest.StoreGitHub{Login: "taro"}
 	ev := &apptest.Events{}
-	if err := (stores.Login{GitHub: listFails{gh}, Events: ev}).Set(ctx, "tarou"); err == nil {
+	if err := (stores.Login{GitHub: listFails{gh}, Accounts: registered(), Events: ev}).Set(ctx, "tarou"); err == nil {
 		t.Error("Set succeeded")
 	}
 	if got, _ := gh.MachineLogin(ctx); got != "taro" || len(ev.List()) != 0 {

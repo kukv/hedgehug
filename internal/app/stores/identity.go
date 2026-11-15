@@ -51,10 +51,16 @@ func (i Identity) accountLogin(ctx context.Context, id account.ID) (string, erro
 	if err != nil {
 		return "", err
 	}
+	return loginOf(accounts, id), nil
+}
+
+// loginOf は、登録 accounts のうちアカウント id のログイン名。id が空・登録にないときは空で、そのときの「あなた」は
+// マシンのログイン名になる(Identity と Login で同じ判定を使う)。
+func loginOf(accounts []account.Account, id account.ID) string {
 	for _, a := range accounts {
-		if a.ID == id {
-			return a.Login, nil
+		if id != "" && a.ID == id {
+			return a.Login
 		}
 	}
-	return "", nil
+	return ""
 }

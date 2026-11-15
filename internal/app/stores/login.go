@@ -12,8 +12,9 @@ import (
 
 // Login は、設定の「一般」のマシンの設定「ログイン名」を読み書きする(08。G1-15〜G1-17)。
 type Login struct {
-	GitHub port.StoreGitHub
-	Events port.Events
+	GitHub   port.StoreGitHub
+	Accounts port.Accounts
+	Events   port.Events
 }
 
 // Get は、いまのマシンのログイン名。
@@ -22,7 +23,7 @@ func (l Login) Get(ctx context.Context) (string, error) {
 }
 
 // Preview は、login(前後の空白を除く)に変えたときの確認の本文の行。空なら確認なしで保存する。
-// 対象はアカウントが「なし」の Store で、いまのログイン名が空なら行を出さない(G1-16)。使えない名前は断る。
+// 対象は「あなた」がマシンのログイン名になる Store(unassigned)で、いまのログイン名が空なら行を出さない(G1-16)。使えない名前は断る。
 func (l Login) Preview(ctx context.Context, login string) ([]string, error) {
 	to, err := validLogin(login)
 	if err != nil {
@@ -68,15 +69,20 @@ func (l Login) Set(ctx context.Context, login string) error {
 	return nil
 }
 
-// unassigned は、アカウントが「なし」の Store(非表示・閲覧のみを含む)。「あなた」がマシンのログイン名になる。
+// unassigned は、「あなた」がマシンのログイン名になる Store(非表示・閲覧のみを含む): アカウントが「なし」か、
+// 割り当てたアカウントが登録にない(Identity と同じ判定。G1-5)。
 func (l Login) unassigned(ctx context.Context) ([]port.StoreGitHubInfo, error) {
 	all, err := l.GitHub.List(ctx)
 	if err != nil {
 		return nil, err
 	}
+	accounts, err := l.Accounts.List(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []port.StoreGitHubInfo
 	for _, s := range all {
-		if s.Account == "" {
+		if loginOf(accounts, s.Account) == "" {
 			out = append(out, s)
 		}
 	}

@@ -133,7 +133,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
-	stores.RegisterLogin(api, appstores.Login{GitHub: deps.StoreGitHub, Events: hub})
+	stores.RegisterLogin(api, appstores.Login{GitHub: deps.StoreGitHub, Accounts: deps.Accounts, Events: hub})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
 	var scan projects.ScanFunc // Links がなければ(リンクの API を使わない組み立て)探さない
 	if deps.Links != (githublink.Links{}) {
