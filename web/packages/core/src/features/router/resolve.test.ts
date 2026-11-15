@@ -139,4 +139,10 @@ describe("resolveRoute settings", () => {
       name: "search",
     });
   });
+
+  it("resolves activity without any store", async () => {
+    expect(await resolveRoute({ name: "activity" }, [], itemsIn("none"), transfers)).toEqual({
+      name: "activity",
+    });
+  });
 });

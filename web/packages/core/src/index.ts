@@ -1,5 +1,6 @@
 export * from "./accountsIndex";
 export * from "./actionsIndex";
+export * from "./activityIndex";
 export * from "./automation";
 export {
   type Catalog,
