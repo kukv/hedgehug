@@ -56,7 +56,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	rep := newReplicator(stores, db, clock, hub)
 	svc := &syncing.Service{
 		Targets: noSyncTargets{}, Tokens: conn,
-		Replicator: rep, State: db.SyncState(), Events: hub, Clock: clock,
+		Replicator: rep, State: db.SyncState(), Log: db.SyncLog(), Events: hub, Clock: clock,
 	}
 	auto := syncing.NewAuto(svc, file.SyncSettings())
 	notified := syncing.NotifyWrites(stores, auto.Wrote)
@@ -90,8 +90,9 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Delivery:      svc,
 		SyncTargets:   svc.Targets,
 	}
-	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの)
+	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・同期の行)と、コミットの読み口
 	deps.Reports, deps.Screens, deps.Recent = db.ReportSelections(), db.ScreenStates(), db.Recent()
+	deps.SyncLog, deps.Commits = db.SyncLog(), stores
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
 	return deps, nil

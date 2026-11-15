@@ -6,6 +6,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/activity"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/automations"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/bulkchange"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/events"
@@ -25,6 +26,7 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/transfers"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
+	appactivity "github.com/kukv/hedgehug/internal/app/activity"
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
 	appbulkchange "github.com/kukv/hedgehug/internal/app/bulkchange"
 	appcomments "github.com/kukv/hedgehug/internal/app/comments"
@@ -60,6 +62,10 @@ type Deps struct {
 
 	// Store の一覧
 	StoreList port.StoreList
+
+	// アクティビティ(C4d)。Commits は Store のコミット、SyncLog は同期の行
+	Commits port.StoreCommits
+	SyncLog port.SyncLog
 
 	// 自動化・通知
 	Inbox port.InboxBook // 受信箱。機能には appinbox.Notifier で包んで渡す(足したら画面に知らせる。C4a-13)
@@ -152,6 +158,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		Book: deps.Inbox, Stores: deps.Stores, List: deps.StoreList, Events: hub, Identity: deps.Identity, Clock: deps.Clock,
 		ApplyIgnoringWorkflow: autoSvc.ApplyIgnoringWorkflow,
 	})
+	activity.Register(api, appactivity.Service{Stores: deps.Stores, Commits: deps.Commits, Log: deps.SyncLog, List: deps.StoreList})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})
 	search.Register(api, appsearch.Service{
