@@ -1,48 +1,25 @@
 import type { SearchPort } from "../../port/search";
-import { get, type Readable, readonly, writable } from "../../reactive/store";
+import { get, readonly, writable } from "../../reactive/store";
 import type { ScreenStates } from "../screenstate/screenStates";
 import type { RowSelection } from "../selection/rowSelection";
 import type { Timer, Toasts } from "../toasts/toasts";
-import { defaultTable, readTable, selectable, type TableSettings, tableRequest } from "./table";
+import {
+  readSearchState,
+  type Search,
+  type SearchLayout,
+  type SearchState,
+  savedSearch,
+} from "./layout";
+import { selectable, tableRequest } from "./table";
 import type { SearchResult } from "./types";
 
+export type { Search, SearchState } from "./layout";
+
 // 検索の画面の流れ(04「検索」、E1-16・E1-19)。絞り込みの文字列は画面の状態 `search` に
-// `{"query": "…", "table": {…}}` で置き、入力のたびに wait ms 待ってから検索し、古い応答は捨てる。
+// `{query, layout, table, tree}`(E3a-2)で置き、入力のたびに wait ms 待ってから検索し、古い応答は捨てる。
 
 export const searchScreen = "search";
 export const searchWaitMs = 150;
-
-export interface SearchState {
-  query: string;
-  table: TableSettings;
-  // result は、まだ一度も検索できていないあいだ null。検索に失敗したときは前の結果を残す。
-  result: SearchResult | null;
-  // resultQuery は、いまの result がどの絞り込みへの答えか。result が null のときと、最後の検索が失敗して前の結果を
-  // 残しているときは null。
-  resultQuery: string | null;
-  loading: boolean;
-}
-
-export interface Search {
-  state: Readable<SearchState>;
-  // open は、画面を開いたときに、保存した絞り込みで検索する。
-  open(): Promise<void>;
-  // setQuery は、入力のたびに呼ぶ。画面の状態に書き、wait ms 待ってから検索する。
-  setQuery(text: string): void;
-  // replaceQuery は、パレットなどから絞り込みを入れ替える。待たずに検索する。
-  replaceQuery(text: string): Promise<void>;
-  // prepareQuery は、絞り込みを入れ替えて画面の状態に書くだけで、検索しない。ほかの画面から検索の画面を開くとき、
-  // 開いた画面の open が 1 回だけ検索する。
-  prepareQuery(text: string): void;
-  // cancelPrepare は、prepareQuery の印を取り消す(検索の画面へ移れなかったとき)。settled を待つものを解く。
-  cancelPrepare(): void;
-  // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
-  reload(): Promise<void>;
-  // setTable は、テーブルの設定を画面の状態に書く。並べ替えかグループが変わったときだけ、待たずに検索する。
-  setTable(next: TableSettings): void;
-  // settled は、待ちの検索・飛んでいる検索・prepareQuery のあとのまだ検索していない絞り込みがなくなったら解ける。
-  settled(): Promise<void>;
-}
 
 export interface SearchDeps {
   port: SearchPort;
@@ -50,15 +27,14 @@ export interface SearchDeps {
   timer: Timer;
   toasts: Toasts;
   wait?: number;
-  // selection は、結果が変わるたびに選べる行で整理する(E2a-16)。
-  selection?: Pick<RowSelection, "prune">;
+  // selection は、結果が変わるたびに選べる行で整理し(E2a-16)、テーブルを離れるときに解除する(E3a-10)。
+  selection?: Pick<RowSelection, "prune" | "clear">;
 }
 
 export function createSearch(deps: SearchDeps): Search {
   const wait = deps.wait ?? searchWaitMs;
   const state = writable<SearchState>({
-    query: "",
-    table: defaultTable,
+    ...readSearchState(null),
     result: null,
     resultQuery: null,
     loading: false,
@@ -72,6 +48,10 @@ export function createSearch(deps: SearchDeps): Search {
   let flight = 0;
   let prepared = false;
   let waiters: (() => void)[] = [];
+  // loaded は、open が画面の状態を読み終えたか。読む前の印: queued は prepareQuery の絞り込み、toTable はテーブルにすること。
+  let loaded = false;
+  let queued: string | null = null;
+  let toTable = false;
 
   const busy = () => pending !== undefined || prepared || (flight !== 0 && flight === runs);
   const release = () => {
@@ -119,15 +99,20 @@ export function createSearch(deps: SearchDeps): Search {
     if (failure && report) deps.toasts.show(failure.message, { error: true });
   }
 
-  function write() {
-    const { query, table } = get(state);
-    deps.screenStates.write(searchScreen, { query, table });
-  }
+  const write = () => deps.screenStates.write(searchScreen, savedSearch(get(state)));
 
+  // put は、絞り込みを入れ替えて書く。読む前の prepareQuery の絞り込みより新しい。
   function put(query: string) {
     touched += 1;
+    queued = null;
     state.update((s) => ({ ...s, query }));
     write();
+  }
+
+  function setLayout(layout: SearchLayout) {
+    state.update((s) => ({ ...s, layout }));
+    write();
+    if (layout !== "table") deps.selection?.clear();
   }
 
   return {
@@ -135,14 +120,18 @@ export function createSearch(deps: SearchDeps): Search {
     async open() {
       cancel();
       const before = touched;
-      const saved = await deps.screenStates.read<{ query?: unknown; table?: unknown } | null>(
-        searchScreen,
-        null,
-      );
+      const saved = readSearchState(await deps.screenStates.read<unknown>(searchScreen, null));
+      loaded = true;
+      const query = queued;
+      const switched = toTable || query !== null;
+      queued = null;
+      toTable = false;
       // 読んでいるあいだに入力かパレットで絞り込みが入れ替わっていたら、新しいほうを使う。
       if (touched !== before) return;
-      const query = saved && typeof saved.query === "string" ? saved.query : "";
-      state.update((s) => ({ ...s, query, table: readTable(saved?.table) }));
+      if (query !== null) saved.query = query;
+      if (switched) saved.layout = "table";
+      state.update((s) => ({ ...s, ...saved }));
+      if (switched) write();
       await run();
     },
     setQuery(text) {
@@ -158,13 +147,30 @@ export function createSearch(deps: SearchDeps): Search {
     },
     async replaceQuery(text) {
       cancel();
+      state.update((s) => ({ ...s, layout: "table" }));
       put(text);
       await run();
     },
     prepareQuery(text) {
       cancel();
-      put(text);
       prepared = true;
+      if (loaded) {
+        state.update((s) => ({ ...s, layout: "table" }));
+        put(text);
+        return;
+      }
+      // まだ読んでいない: 書かずに印だけを付け、open が読んだ値の絞り込みを置き換える。
+      queued = text;
+      state.update((s) => ({ ...s, query: text }));
+    },
+    setLayout,
+    showTable() {
+      if (loaded) setLayout("table");
+      else toTable = true;
+    },
+    setCollapsed(collapsed) {
+      state.update((s) => ({ ...s, tree: { collapsed } }));
+      write();
     },
     cancelPrepare() {
       prepared = false;

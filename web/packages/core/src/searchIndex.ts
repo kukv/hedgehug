@@ -13,6 +13,12 @@ export { type CaretTerm, caretTerm } from "./features/search/caret";
 export { type CellView, cellView, updatedHint } from "./features/search/cells";
 export { type ChangeAllDeps, createChangeAll } from "./features/search/changeAll";
 export { searchHelp } from "./features/search/help";
+export {
+  layoutChoices,
+  readSearchState,
+  type SearchLayout,
+  type TreeSettings,
+} from "./features/search/layout";
 export { rowMenuContext } from "./features/search/rowMenu";
 export { type RowStatusDeps, setRowStatus } from "./features/search/rowStatus";
 export {

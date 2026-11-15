@@ -22,7 +22,12 @@ describe("createSearch with the table settings (E2a)", () => {
     expect(t.search).not.toHaveBeenCalled();
     expect(t.sp.put).toHaveBeenLastCalledWith(
       "search",
-      JSON.stringify({ query: "x", table: { ...defaultTable, columns: ["id", "title"] } }),
+      JSON.stringify({
+        query: "x",
+        layout: "table",
+        table: { ...defaultTable, columns: ["id", "title"] },
+        tree: { collapsed: [] },
+      }),
     );
     t.s.setTable({ columns: ["id", "title"], group: "kind", sort: null });
     await vi.advanceTimersByTimeAsync(0);

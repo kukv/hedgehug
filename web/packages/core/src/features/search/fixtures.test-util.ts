@@ -17,7 +17,8 @@ export const timer: Timer = {
 };
 
 export const noTable = { sort: null, group: "none" };
-const body = (query: string) => JSON.stringify({ query, table: defaultTable });
+const body = (query: string) =>
+  JSON.stringify({ query, layout: "table", table: defaultTable, tree: { collapsed: [] } });
 export const kindBugBody = body("kind:bug");
 export const newBody = body("new");
 
@@ -64,6 +65,7 @@ export const result = (...ids: string[]): SearchResult => ({
 
 export function setup(saved: string | null = null) {
   const prune = vi.fn();
+  const clear = vi.fn();
   const search = vi.fn(async (q: string) => result(q));
   const port: SearchPort = { search };
   const sp: ScreenStatesPort = {
@@ -76,7 +78,7 @@ export function setup(saved: string | null = null) {
     screenStates: createScreenStates(sp),
     timer,
     toasts,
-    selection: { prune },
+    selection: { prune, clear },
   });
-  return { s, search, sp, toasts, prune };
+  return { s, search, sp, toasts, prune, clear };
 }

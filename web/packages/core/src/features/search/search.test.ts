@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "../../reactive/store";
 import { kindBugBody, newBody, noTable, result, setup } from "./fixtures.test-util";
+import { defaultTable } from "./table";
 import type { SearchResult } from "./types";
 
 beforeEach(() => vi.useFakeTimers());
@@ -73,17 +74,25 @@ describe("createSearch (E1-19)", () => {
     expect(t.sp.put).toHaveBeenLastCalledWith("search", newBody);
   });
 
-  it("prepareQuery writes the query without searching, and the next open searches it once", async () => {
+  it("prepareQuery does not search, and the next open writes and searches it once", async () => {
     const t = setup('{"query":"saved"}');
     t.s.setQuery("typing");
     t.s.prepareQuery("kind:bug");
     await vi.advanceTimersByTimeAsync(500);
     expect(t.search).not.toHaveBeenCalled();
     expect(get(t.s.state).query).toBe("kind:bug");
-    expect(t.sp.put).toHaveBeenLastCalledWith("search", kindBugBody);
     await t.s.open();
+    expect(t.sp.put).toHaveBeenLastCalledWith("search", kindBugBody);
     expect(t.search).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledWith("kind:bug", noTable);
+  });
+
+  it("prepareQuery after the first open writes at once in table", async () => {
+    const t = setup('{"query":"a","layout":"tree"}');
+    await t.s.open();
+    t.s.prepareQuery("kind:bug");
+    expect(t.sp.put).toHaveBeenLastCalledWith("search", kindBugBody);
+    expect(get(t.s.state).layout).toBe("table");
   });
 
   it("reload searches again with the current query and keeps the rows on a failure", async () => {
@@ -155,5 +164,112 @@ describe("createSearch (E1-19)", () => {
     t.search.mockRejectedValueOnce(new Error("down"));
     await t.s.reload();
     expect(get(t.toasts.list)).toEqual([]);
+  });
+});
+
+describe("createSearch layout (E3a-2・9・10・22)", () => {
+  const savedTree = (query: string, table: object) =>
+    JSON.stringify({ query, layout: "tree", table, tree: { collapsed: ["s/1"] } });
+  const written = (t: ReturnType<typeof setup>) =>
+    JSON.parse(String(vi.mocked(t.sp.put).mock.lastCall?.[1]));
+
+  it("open keeps the saved layout", async () => {
+    const t = setup('{"query":"a","layout":"tree"}');
+    await t.s.open();
+    expect(get(t.s.state).layout).toBe("tree");
+  });
+
+  it("setLayout writes the state without searching", async () => {
+    const t = setup();
+    await t.s.open();
+    t.s.setLayout("tree");
+    expect(written(t)).toEqual({
+      query: "",
+      layout: "tree",
+      table: defaultTable,
+      tree: { collapsed: [] },
+    });
+    expect(t.search).toHaveBeenCalledTimes(1);
+  });
+
+  it("setLayout away from table clears the selection", async () => {
+    const t = setup();
+    await t.s.open();
+    t.s.setLayout("tree");
+    expect(t.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it("setCollapsed writes the collapsed keys without searching", async () => {
+    const t = setup();
+    await t.s.open();
+    t.s.setCollapsed(["s/1", "s/2"]);
+    expect(written(t).tree).toEqual({ collapsed: ["s/1", "s/2"] });
+    expect(get(t.s.state).tree).toEqual({ collapsed: ["s/1", "s/2"] });
+    expect(t.search).toHaveBeenCalledTimes(1);
+  });
+
+  it("showTable switches to table", async () => {
+    const t = setup('{"query":"a","layout":"tree"}');
+    await t.s.open();
+    t.s.showTable();
+    expect(get(t.s.state).layout).toBe("table");
+    expect(written(t).layout).toBe("table");
+  });
+
+  it("showTable before the first open keeps the saved state", async () => {
+    const table = { columns: ["id", "title"], group: "none", sort: null };
+    const t = setup(savedTree("kind:bug", table));
+    t.s.showTable();
+    expect(t.sp.put).not.toHaveBeenCalled();
+    await t.s.open();
+    const want = { query: "kind:bug", layout: "table", table, tree: { collapsed: ["s/1"] } };
+    expect(get(t.s.state)).toMatchObject(want);
+    expect(written(t)).toEqual(want);
+  });
+
+  it("showTable while open is reading switches to table after the read", async () => {
+    const t = setup('{"query":"a","layout":"tree"}');
+    const opening = t.s.open();
+    t.s.showTable();
+    await opening;
+    expect(get(t.s.state).layout).toBe("table");
+  });
+
+  it("replaceQuery opens in table", async () => {
+    const t = setup('{"query":"a","layout":"tree"}');
+    await t.s.open();
+    await t.s.replaceQuery("kind:bug");
+    expect(get(t.s.state).layout).toBe("table");
+    expect(t.sp.put).toHaveBeenLastCalledWith("search", kindBugBody);
+  });
+
+  it("prepareQuery before the first open keeps the saved table", async () => {
+    const table = {
+      columns: ["id", "title", "points"],
+      group: "kind",
+      sort: { key: "id", desc: true },
+    };
+    const t = setup(savedTree("a", table));
+    t.s.prepareQuery("kind:bug");
+    expect(t.sp.put).not.toHaveBeenCalled();
+    await t.s.open();
+    const want = { query: "kind:bug", layout: "table", table, tree: { collapsed: ["s/1"] } };
+    expect(get(t.s.state)).toMatchObject(want);
+    expect(written(t)).toEqual(want);
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("kind:bug", { sort: table.sort, group: "kind" });
+  });
+
+  it("prepareQuery while open is reading replaces the query after the read", async () => {
+    const table = { columns: ["id", "title"], group: "none", sort: null };
+    const t = setup(savedTree("a", table));
+    const opening = t.s.open();
+    t.s.prepareQuery("kind:bug");
+    await opening;
+    const want = { query: "kind:bug", layout: "table", table, tree: { collapsed: ["s/1"] } };
+    expect(written(t)).toEqual(want);
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("kind:bug", noTable);
+    await t.s.settled();
   });
 });
