@@ -122,4 +122,16 @@ describe("createViewScreen (E3b-4・E3b-9・E3b-12)", () => {
     s.screen.discard();
     expect(s.restored).toEqual([]);
   });
+  it("ignores save while a save is waiting for its answer", async () => {
+    const s = setup();
+    s.ready.set(true);
+    s.setQuery("kind:task");
+    const first = s.screen.save();
+    const second = s.screen.save();
+    await Promise.all([first, second]);
+    expect(s.savedWith).toHaveLength(1);
+    expect(s.shown).toEqual(["ビューを保存しました"]);
+    await s.screen.save();
+    expect(s.savedWith).toHaveLength(2);
+  });
 });

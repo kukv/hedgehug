@@ -86,10 +86,10 @@ export function propertyRows(settings: WorkspaceSettings): PropertyRow[] {
   });
 }
 
-// 確認ダイアログ「プロパティを削除」の本文(03「削除」)。
-// views が真なら、そのキーを使う保存したビューがあるので、末尾に添え書きを足す(E3b-18)。
 const viewsNote = "このキーを使う保存したビューの検索条件は、キーがなくなるためエラーになります。";
 
+// 確認ダイアログ「プロパティを削除」の本文(03「削除」)。
+// views が真なら、そのキーを使う保存したビューがあるので、末尾に添え書きを足す(E3b-18)。
 export function deletePropertyBody(name: string, count: number, views = false): string {
   const head = `「${name}」を削除します。`;
   const body = count > 0 ? `${head}値の入っている ${count} 件から値が消えます。` : head;

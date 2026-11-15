@@ -78,7 +78,14 @@ function setup(start: ViewDto[] = []) {
   const { port, fail } = fakePort(start);
   const toasts = createToasts({ set: () => 0, clear: () => undefined });
   const views = createViews({ port, toasts });
-  return { views, fail, toasts };
+  return { views, port, fail, toasts };
+}
+
+// deferred は、外から解ける Promise。
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
 }
 
 const bug: ViewDto = { id: idOf(1), name: "バグ", content };
@@ -152,6 +159,57 @@ describe("createViews", () => {
     await views.load();
     fail.add("list");
     await views.load();
+    expect(get(views.list).map((v) => v.name)).toEqual(["バグ"]);
+  });
+  it("keeps one row per id when a load lands before the write's answer", async () => {
+    // サーバーは応答を返す前に出来事を出すので、出来事で読み直した一覧(新しいビューを含む)が先に着くことがある。
+    for (const op of ["create", "duplicate"] as const) {
+      const { views, port } = setup([bug]);
+      await views.load();
+      const copy: ViewDto = { id: idOf(2), name: "バグ のコピー", content };
+      const answer = deferred<ViewDto>();
+      port[op] = () => answer.promise;
+      port.list = async () => [bug, copy];
+      const pending =
+        op === "create" ? views.create("バグ のコピー", content) : views.duplicate(bug.id);
+      await views.load();
+      // 書いたあとの読み直しは解けないままにして、patch だけの結果を見る。
+      port.list = () => new Promise(() => {});
+      answer.resolve(copy);
+      await pending;
+      expect(get(views.list).map((v) => v.id)).toEqual([bug.id, copy.id]);
+    }
+  });
+
+  it("drops a load that started before a write and lands after it", async () => {
+    const { views, port } = setup([bug]);
+    await views.load();
+    const old = deferred<ViewDto[]>();
+    const list = port.list;
+    port.list = () => old.promise;
+    const loading = views.load();
+    port.list = list;
+    await views.rename(bug.id, "BUG");
+    old.resolve([bug]);
+    await loading;
+    expect(get(views.list).map((v) => v.name)).toEqual(["BUG"]);
+  });
+
+  it("shows the refusal of save, duplicate and remove as an error toast", async () => {
+    const { views, port, toasts } = setup([bug]);
+    await views.load();
+    const refuse = async () => {
+      throw new Refused("ビューが見つかりません");
+    };
+    port.save = refuse;
+    port.duplicate = refuse;
+    port.remove = refuse;
+    expect(await views.save(bug.id, content)).toBeNull();
+    expect(await views.duplicate(bug.id)).toBeNull();
+    expect(await views.remove(bug.id)).toBe(false);
+    expect(get(toasts.list).map((t) => ({ text: t.text, error: t.error }))).toEqual(
+      Array(3).fill({ text: "ビューが見つかりません", error: true }),
+    );
     expect(get(views.list).map((v) => v.name)).toEqual(["バグ"]);
   });
 });

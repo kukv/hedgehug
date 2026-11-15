@@ -1,22 +1,19 @@
 <script lang="ts">
-  import { get, saveSummary, viewContent } from "@hedgehug/core";
+  import { saveSummary } from "@hedgehug/core";
   import { Button, Dialog, Input } from "@hedgehug/ui";
-  import { search } from "../../search";
-  import { saveView } from "../../views";
+  import { saveView, saveViewContent } from "../../views";
 
-  // 「ビューとして保存」のダイアログ(E3b-10)。確認の表示は、開いた時点の検索の内容。断りは入力欄の下に出す。
+  // 「ビューとして保存」のダイアログ(E3b-10)。確認の表示は、openSaveView に渡した保存する内容。断りは入力欄の下に出す。
   const dialog = saveView.state;
+  const content = saveViewContent;
 
+  const summary = $derived($content ? saveSummary($content) : null);
   let name = $state("");
-  // 確認の表示は、開いたときの内容で固定する(開いているあいだに検索の内容が変わっても、保存する内容と食い違わせない)。
-  let summary = $state(saveSummary(viewContent(get(search.state))));
+  // 名前は、開くたびに空にする。描く前に空にする($effect.pre)ので、前の名前が一瞬も出ない。
   let wasOpen = false;
-  $effect(() => {
+  $effect.pre(() => {
     const open = $dialog !== null;
-    if (open && !wasOpen) {
-      name = "";
-      summary = saveSummary(viewContent(get(search.state)));
-    }
+    if (open && !wasOpen) name = "";
     wasOpen = open;
   });
 
@@ -33,16 +30,18 @@
         <span>名前</span>
         <Input label="名前" focusOnMount {onkeydown} bind:value={name} />
       </div>
-      <p class="summary">
-        レイアウト: {summary.layout} ・ 条件:
-        {#if summary.query !== null}
-          <code>{summary.query}</code>
-        {:else}
-          (なし)
-        {/if}
-      </p>
       {#if $dialog.error}
         <p class="form-error" role="alert">{$dialog.error}</p>
+      {/if}
+      {#if summary}
+        <p class="summary">
+          レイアウト: {summary.layout} ・ 条件:
+          {#if summary.query !== null}
+            <code>{summary.query}</code>
+          {:else}
+            (なし)
+          {/if}
+        </p>
       {/if}
     </div>
     {#snippet footer()}

@@ -13,7 +13,7 @@ export interface ViewScreen {
   // discard は、画面の内容を保存した内容に戻す(ツリーの開閉はそのまま。確認はしない)。
   discard(): void;
   // save は、画面の内容を保存し、サーバーが返した内容で画面の内容を置き換えてからトーストを出す(E3b-9)。
-  // 失敗したら(エラーのトーストは views が出す)画面はそのまま。
+  // 応答を待つあいだの save は無視する。失敗したら(エラーのトーストは views が出す)画面はそのまま。
   save(): Promise<void>;
 }
 
@@ -26,6 +26,8 @@ export interface ViewScreenDeps {
 }
 
 export function createViewScreen(deps: ViewScreenDeps): ViewScreen {
+  // saving は、保存の応答を待っているあいだ。そのあいだの save は無視する(PUT とトーストを 2 回出さない)。
+  let saving = false;
   const savedContent = (): ViewContent | null =>
     get(deps.views.list).find((v) => v.id === deps.id)?.content ?? null;
 
@@ -62,7 +64,11 @@ export function createViewScreen(deps: ViewScreenDeps): ViewScreen {
       if (c) deps.search.restore(c);
     },
     async save() {
+      if (saving) return;
+      saving = true;
+      // views.save は投げない(失敗は null)。
       const v = await deps.views.save(deps.id, viewContent(get(deps.search.state)));
+      saving = false;
       if (!v) return;
       deps.search.restore(v.content);
       deps.toasts.show("ビューを保存しました");

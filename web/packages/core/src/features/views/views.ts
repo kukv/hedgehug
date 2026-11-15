@@ -69,13 +69,13 @@ export function createViews(deps: { port: ViewsPort; toasts: Toasts }): Views {
   }
 
   const replaceIn = (rows: SavedView[], v: SavedView) => rows.map((r) => (r.id === v.id ? v : r));
+  // append は、末尾に足す。出来事で読み直した一覧が書いた応答より先に着き、もう入っていることがあるので、
+  // 同じ識別子を除いてから足す。
+  const append = (rows: SavedView[], v: SavedView) => [...rows.filter((r) => r.id !== v.id), v];
   const failedOrRefused = (r: unknown): r is string | null => r === null || typeof r === "string";
 
   async function upsert(run: () => Promise<ViewDto>, add: boolean): Promise<SavedView | null> {
-    const r = await write(
-      async () => savedView(await run()),
-      (rows, v) => (add ? [...rows, v] : replaceIn(rows, v)),
-    );
+    const r = await write(async () => savedView(await run()), add ? append : replaceIn);
     if (typeof r === "string") deps.toasts.show(r, { error: true });
     return failedOrRefused(r) ? null : r.result;
   }
@@ -84,10 +84,7 @@ export function createViews(deps: { port: ViewsPort; toasts: Toasts }): Views {
     list: readonly(list),
     load,
     async create(name, c) {
-      const r = await write(
-        async () => savedView(await deps.port.create(name, c)),
-        (rows, v) => [...rows, v],
-      );
+      const r = await write(async () => savedView(await deps.port.create(name, c)), append);
       return failedOrRefused(r) ? r : r.result;
     },
     save: (id, c) => upsert(() => deps.port.save(id, c), false),

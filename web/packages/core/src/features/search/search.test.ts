@@ -271,4 +271,19 @@ describe("createSearch の画面の状態の鍵と復元 (E3b)", () => {
     expect(t.search).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledWith("x", { sort: { key: "id", desc: true }, group: "kind" });
   });
+  it("restore cancels a waiting search", async () => {
+    const t = await opened();
+    t.s.setQuery("p");
+    t.s.restore({ query: "x", layout: "table", table: content.table });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.search).not.toHaveBeenCalledWith("p", expect.anything());
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("x", noTable);
+  });
+
+  it("restore clears the selection when it leaves the table", async () => {
+    const t = await opened();
+    t.s.restore({ query: "x", layout: "tree", table: content.table });
+    expect(t.clear).toHaveBeenCalledTimes(1);
+  });
 });

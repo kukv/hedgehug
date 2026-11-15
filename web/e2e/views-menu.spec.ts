@@ -27,7 +27,7 @@ async function newView(page: Page, name: string) {
 const viewRow = (side: Locator, name: string) =>
   side.getByRole("region", { name: "保存したビュー" }).getByRole("link", { name, exact: true });
 
-// openMenu は、ビューの画面の見出しのメニューを開き、項目を選ぶ。
+// choose は、ビューの画面の見出しのメニューを開き、項目を選ぶ。
 async function choose(page: Page, name: string, item: string) {
   await page.getByRole("button", { name: `${name} のメニュー` }).click();
   await page.getByRole("menuitem", { name: item, exact: true }).click();
@@ -98,8 +98,21 @@ test("duplicate", async ({ page }, info) => {
   await expect(page.getByRole("heading", { name: `${copy} 2` })).toBeVisible();
 });
 
+// closeDrawer は、狭い幅で開いた引き出しを閉じる。暗くした背景の、引き出しに重ならない右上を押す(frame.spec.ts と同じ)。
+async function closeDrawer(page: Page, info: TestInfo) {
+  if (info.project.name === "desktop") return;
+  const width = page.viewportSize()?.width ?? 0;
+  await page
+    .getByRole("button", { name: "メニューを閉じる" })
+    .click({ position: { x: width - 10, y: 10 } });
+  await expect(page.getByRole("complementary")).not.toBeInViewport();
+}
+
 test("delete", async ({ page }, info) => {
   const { name, id } = await start(page, info);
+  // 削除する前は、サイドバーに行がある。
+  await expect(viewRow(await sidebar(page, info), name)).toBeVisible();
+  await closeDrawer(page, info);
 
   await choose(page, name, "削除…");
   const dialog = page.getByRole("dialog", { name: "ビューを削除" });

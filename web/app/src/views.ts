@@ -40,10 +40,14 @@ export function createViewSearch(id: string): Search {
   });
 }
 
-// ダイアログ「ビューとして保存」(E3b-10)。検索の画面のボタンとパレットが openSaveView で開く。
+// ダイアログ「ビューとして保存」(E3b-10)。検索の画面のボタンとパレットが openSaveView で開く。確認の表示は、保存する
+// 内容(saveViewContent)から組む。
 export const saveView = createNameDialog();
+const saveContent = writable<ViewContent | null>(null);
+export const saveViewContent = readonly(saveContent);
 
 export function openSaveView(content: ViewContent): void {
+  saveContent.set(content);
   saveView.open((name) => saveAsView({ views, toasts, open: openView }, name, content));
 }
 

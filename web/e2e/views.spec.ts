@@ -33,14 +33,20 @@ test.beforeEach(async ({ page }) => {
 test("saves the search as a view", async ({ page }) => {
   await page.goto(tokenUrl("/search"));
   await search(page, "kind:bug");
-  await page
-    .getByRole("group", { name: "レイアウト" })
-    .getByRole("button", { name: "ツリー", exact: true })
-    .click();
-
   const open = () => page.getByRole("button", { name: "ビューとして保存", exact: true }).click();
-  await open();
   const dialog = page.getByRole("dialog", { name: "ビューとして保存" });
+
+  // テーブルでもツリーでも出す(E3b-11)。
+  await open();
+  await expect(dialog).toContainText("レイアウト: テーブル");
+  await dialog.getByRole("textbox", { name: "名前" }).fill("途中");
+  await dialog.getByRole("button", { name: "キャンセル", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await layoutButton(page, "ツリー").click();
+
+  // 開き直すと、名前は空になる。
+  await open();
+  await expect(dialog.getByRole("textbox", { name: "名前" })).toHaveValue("");
   await expect(dialog).toContainText("レイアウト: ツリー");
   await expect(dialog.locator("code")).toHaveText("kind:bug");
 
