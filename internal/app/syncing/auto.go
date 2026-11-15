@@ -17,6 +17,9 @@ const holdFor = 30 * time.Second
 // タイマーを 1 分に 1 回ほどに間引くので、待つ条件より長くする。
 const offlineFor = 2 * time.Minute
 
+// lapsedKeep は、期限の切れたオフラインのタブを覚えておく時間。
+const lapsedKeep = 24 * time.Hour
+
 // Auto は、自動の同期(06「自動で同期する」)。契機は、間隔、アプリを開いたとき(作ったとき)、オンライン復帰
 // (Network)、書き込み後(Wrote)。見えているタブが待つ条件にあるあいだ(Hold)と、オフラインのタブがある
 // あいだ(Network)は始めない。結果は捨てる(自動の同期はトーストもアクティビティも出さない。決定 C2-24)。
@@ -29,7 +32,7 @@ type Auto struct {
 	wrote   map[port.StoreID]time.Time // Store ごとの最後の保存の時刻
 	holds   map[string]time.Time       // 待つ条件にあるタブと、知らせの期限
 	offline map[string]time.Time       // オフラインのタブと、知らせの期限
-	lapsed  map[string]bool            // オフラインの知らせが期限で消えたタブ(つながったら復帰の契機にする。決定 G1-12)
+	lapsed  map[string]time.Time       // オフラインの知らせが期限で消えたタブと、消えた時刻(つながったら復帰の契機にする。決定 G1-12)
 	tried   map[port.StoreID]time.Time // Store ごとの最後に試みた時刻(記録に失敗しても毎秒試みないため。決定 G1-11)
 }
 
@@ -38,7 +41,7 @@ func NewAuto(svc *Service, settings port.SyncSettings) *Auto {
 	return &Auto{
 		Service: svc, Settings: settings, all: true,
 		wrote: map[port.StoreID]time.Time{}, holds: map[string]time.Time{}, offline: map[string]time.Time{},
-		lapsed: map[string]bool{}, tried: map[port.StoreID]time.Time{},
+		lapsed: map[string]time.Time{}, tried: map[port.StoreID]time.Time{},
 	}
 }
 
@@ -53,7 +56,8 @@ func (a *Auto) Network(tab string, online bool) {
 		return
 	}
 	_, was := a.offline[tab]
-	if was || a.lapsed[tab] {
+	_, gone := a.lapsed[tab]
+	if was || gone {
 		delete(a.offline, tab)
 		delete(a.lapsed, tab)
 		a.all = true
@@ -175,14 +179,7 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 	for _, r := range records {
 		byStore[r.Store] = r
 	}
-	a.mu.Lock()
-	for id, at := range a.tried { // 記録とメモリの新しい方を渡す
-		if r := byStore[id]; at.After(r.LastAttempt) {
-			r.Store, r.LastAttempt = id, at
-			byStore[id] = r
-		}
-	}
-	a.mu.Unlock()
+	a.mergeTried(targets, byStore)
 	var picked []port.SyncTarget
 	for _, t := range targets {
 		if eligible(t) && (all || due(now, byStore[t.ID], wrote[t.ID], timing)) {
@@ -192,8 +189,28 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 	return picked, nil
 }
 
+// mergeTried は、記録とメモリの最後に試みた時刻の新しい方を byStore に入れる。targets にない Store の分は捨てる。
+func (a *Auto) mergeTried(targets []port.SyncTarget, byStore map[port.StoreID]port.SyncRecord) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	inTargets := make(map[port.StoreID]bool, len(targets))
+	for _, t := range targets {
+		inTargets[t.ID] = true
+	}
+	for id, at := range a.tried {
+		if !inTargets[id] {
+			delete(a.tried, id)
+			continue
+		}
+		if r := byStore[id]; at.After(r.LastAttempt) {
+			r.Store, r.LastAttempt = id, at
+			byStore[id] = r
+		}
+	}
+}
+
 // waiting は、期限の切れていない知らせが 1 つでもあるか。切れた知らせは消し、lapsed があればそこへ移す。
-func waiting(m map[string]time.Time, now time.Time, lapsed map[string]bool) bool {
+func waiting(m map[string]time.Time, now time.Time, lapsed map[string]time.Time) bool {
 	held := false
 	for tab, until := range m {
 		if now.Before(until) {
@@ -202,7 +219,12 @@ func waiting(m map[string]time.Time, now time.Time, lapsed map[string]bool) bool
 		}
 		delete(m, tab)
 		if lapsed != nil {
-			lapsed[tab] = true
+			lapsed[tab] = now
+		}
+	}
+	for tab, at := range lapsed { // 戻ってこないタブを覚え続けない
+		if now.Sub(at) > lapsedKeep {
+			delete(lapsed, tab)
 		}
 	}
 	return held

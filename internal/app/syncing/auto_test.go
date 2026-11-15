@@ -295,6 +295,40 @@ func TestAutoRemembersAttemptWhenRecordFails(t *testing.T) {
 	}
 }
 
+// 戻ってこないタブは、1 日を過ぎたら覚えておかない(つながっても復帰の契機にならない)。
+func TestAutoForgetsLapsedTabAfterADay(t *testing.T) {
+	f, a, settings := newAuto(t)
+	step(t, a)
+	settings.Value.Interval = 1000 * time.Hour
+	a.Network("tab-1", false)
+	f.clock.Advance(2*time.Minute + time.Second)
+	a.Waiting() // 期限切れで lapsed へ移る
+	f.clock.Advance(25 * time.Hour)
+	a.Waiting() // 1 日を過ぎた項目を消す
+	a.Network("tab-1", true)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 1 {
+		t.Errorf("forgotten tab triggered a sync: %v", n)
+	}
+}
+
+// Store が対象から消えたら、試みた時刻のメモリも捨てる(同じ ID が戻ったら、記録がなければ待たずに試す)。
+func TestAutoDropsAttemptOfRemovedStore(t *testing.T) {
+	f, a, _ := newAuto(t)
+	f.svc.State = recordFails{f.state}
+	all := f.targets.Targets
+	_ = a.Step(context.Background())
+	f.targets.Targets = all[1:2] // S1 を外す
+	f.clock.Advance(time.Second)
+	_ = a.Step(context.Background())
+	f.targets.Targets = all
+	f.clock.Advance(time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Errorf("S1 syncs = %d, want 2", n)
+	}
+}
+
 // 決定 G1-12: オフラインの知らせが期限で消えたあとに、そのタブからオンラインの知らせが来ても、復帰の契機にする。
 func TestAutoOnlineAfterOfflineLapsed(t *testing.T) {
 	f, a, _ := newAuto(t)

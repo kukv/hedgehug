@@ -50,6 +50,37 @@ describe("hold (決定 S3・C2-18)", () => {
   });
 });
 
+describe("hold release retry (決定 G1-12)", () => {
+  it("sends the release again on the next check until it succeeds", async () => {
+    const st = { held: true, now: 0, fail: true };
+    const port = fakeSyncPort({
+      hold: async (_tab, hold) => {
+        if (!hold && st.fail) throw new Error("down");
+      },
+    });
+    const s = createTabSignals({
+      port,
+      tab: "T",
+      held: () => st.held,
+      visible: () => true,
+      online: () => true,
+      now: () => st.now,
+    });
+    s.check();
+    st.held = false;
+    s.check(); // reject する
+    await settle();
+    s.check(); // もう一度送る。まだ reject する
+    await settle();
+    st.fail = false;
+    s.check(); // 届く
+    await settle();
+    s.check();
+    s.check();
+    expect(port.calls).toEqual(["hold T true", "hold T false", "hold T false", "hold T false"]);
+  });
+});
+
 describe("network (決定 S4・C2-18b)", () => {
   it("sends offline at once and every 10 seconds, even when hidden, and online once", () => {
     const { port, st, s } = setup();
