@@ -34,6 +34,7 @@ function setup(reload: () => Promise<void> = async () => {}) {
     create: async () => {
       throw new Error("unused");
     },
+    move: unused,
     rename: (s, p, title) => done(`rename ${s} ${p} ${title}`),
     setStatus: (s, p, status) => done(`setStatus ${s} ${p} ${status}`),
     setOwner: (s, p, owner) => done(`setOwner ${s} ${p} ${owner}`),

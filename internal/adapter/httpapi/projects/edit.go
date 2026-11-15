@@ -41,6 +41,11 @@ type ProjectRepo struct {
 	Repo string `json:"repo" doc:"owner/name。前後の空白は除く"`
 }
 
+// MoveProject は、プロジェクトの並べ替えの本文。
+type MoveProject struct {
+	Direction string `json:"direction" enum:"up,down"`
+}
+
 // 入力の型は、パスの項目を埋め込みにせず直接持つ(埋め込むと huma がパスの値を入れない)。
 type renameInput struct {
 	Store   string `path:"store"`
@@ -70,6 +75,12 @@ type repoInput struct {
 	Store   string `path:"store"`
 	Project string `path:"project"`
 	Body    ProjectRepo
+}
+
+type moveInput struct {
+	Store   string `path:"store"`
+	Project string `path:"project"`
+	Body    MoveProject
 }
 
 func one(p project.Project, err error) (*oneOutput, error) {
@@ -113,5 +124,9 @@ func registerEdit(api huma.API, svc appprojects.Service, scan ScanFunc) {
 	huma.Register(api, huma.Operation{OperationID: "remove-project-repo", Method: http.MethodPost, Path: path + "/repos/remove", Summary: "プロジェクトからリポジトリを外す"},
 		func(ctx context.Context, in *repoInput) (*oneOutput, error) {
 			return one(svc.RemoveRepo(ctx, port.StoreID(in.Store), project.ID(in.Project), in.Body.Repo))
+		})
+	huma.Register(api, huma.Operation{OperationID: "move-project", Method: http.MethodPost, Path: path + "/move", Summary: "プロジェクトを上へ・下へ移動", DefaultStatus: http.StatusNoContent},
+		func(ctx context.Context, in *moveInput) (*struct{}, error) {
+			return nil, apierr.From(svc.MoveProject(ctx, port.StoreID(in.Store), project.ID(in.Project), in.Body.Direction == "up"))
 		})
 }
