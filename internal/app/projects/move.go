@@ -33,66 +33,34 @@ func (s Service) MoveProject(ctx context.Context, store port.StoreID, id project
 		if (up && i == 0) || (!up && i == len(list)-1) {
 			return nil, nil
 		}
-		if err := fillProjectRanks(tx, list); err != nil {
+		ranks, err := fillProjectRanks(tx, list)
+		if err != nil {
 			return nil, err
 		}
-		return []change.Draft{change.NewSet("rank", list[i].Rank, movedRank(list, i, up))}, nil
+		return []change.Draft{change.NewSet("rank", ranks[i], rank.Moved(ranks, i, up))}, nil
 	})
 	return err
 }
 
-// movedRank は、list[i] を 1 つ上(up)か下へ動かしたときの rank。新しい隣どうしのあいだの値。
-func movedRank(list []project.Project, i int, up bool) string {
-	if up {
-		return rank.Between(rankAt(list, i-2), list[i-1].Rank)
-	}
-	return rank.Between(list[i+1].Rank, rankAt(list, i+2))
-}
-
-// rankAt は list[i] の rank。範囲の外なら空(端)。
-func rankAt(list []project.Project, i int) string {
-	if i < 0 || i >= len(list) {
-		return ""
-	}
-	return list[i].Rank
-}
-
-// fillProjectRanks は、rank が空か、前のもの以下(同じ値を含む)のプロジェクトだけに、表示の順を保つ rank を振り、
-// 同じ保存に書く。list の Rank も書き換える。空でなく厳密に増えている rank は変えない。
-// 変えるものの rank は、前に残るものと、次に残るもののあいだの値にする。
-func fillProjectRanks(tx port.Tx, list []project.Project) error {
-	keep := make([]bool, len(list))
-	prev := ""
+// fillProjectRanks は、rank が空か、前のもの以下(同じ値を含む)のプロジェクトだけに、表示の順を保つ rank を振り
+// (rank.Refill)、同じ保存に書く。振ったあとの並びを返す。
+func fillProjectRanks(tx port.Tx, list []project.Project) ([]string, error) {
+	ranks := make([]string, len(list))
 	for i, p := range list {
-		if p.Rank != "" && p.Rank > prev {
-			keep[i], prev = true, p.Rank
-		}
+		ranks[i] = p.Rank
 	}
-	prev = ""
-	for i := range list {
-		if keep[i] {
-			prev = list[i].Rank
+	out, changed := rank.Refill(ranks)
+	for i, p := range list {
+		if !changed[i] {
 			continue
 		}
 		var from any
-		if list[i].Rank != "" {
-			from = list[i].Rank
+		if p.Rank != "" {
+			from = p.Rank
 		}
-		list[i].Rank = rank.Between(prev, nextKept(list, keep, i))
-		prev = list[i].Rank
-		if err := tx.WriteProjects().Append(list[i].ID, change.NewSet("rank", from, list[i].Rank)); err != nil {
-			return err
+		if err := tx.WriteProjects().Append(p.ID, change.NewSet("rank", from, out[i])); err != nil {
+			return nil, err
 		}
 	}
-	return nil
-}
-
-// nextKept は、list[i] より後ろで最初に残るものの rank。なければ空。
-func nextKept(list []project.Project, keep []bool, i int) string {
-	for j := i + 1; j < len(list); j++ {
-		if keep[j] {
-			return list[j].Rank
-		}
-	}
-	return ""
+	return out, nil
 }
