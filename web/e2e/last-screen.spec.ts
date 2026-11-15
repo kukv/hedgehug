@@ -19,6 +19,12 @@ const written = (page: Page, path: string) =>
 // e2e のサーバーの Store「team」の内部 ID(cmd/hedgehug/wire_e2e.go)。
 const teamStore = "01E2ESTORE0000000000000003";
 
+// putLastScreen は、最後の画面を API で置く(null は、覚えていない)。
+const putLastScreen = (page: Page, path: string | null) =>
+  send(page, "put", "/api/screen-states/last-screen", {
+    body: JSON.stringify(path === null ? null : { path }),
+  });
+
 const myTasksHeading = (page: Page) => page.getByRole("heading", { name: "マイタスク", level: 1 });
 
 test("opens the last screen", async ({ page }) => {
@@ -37,26 +43,30 @@ test("opens the last screen", async ({ page }) => {
 });
 
 test("opens my tasks the first time", async ({ page }) => {
-  await send(page, "put", "/api/screen-states/last-screen", { body: "null" });
+  await putLastScreen(page, null);
   await page.goto(tokenUrl("/"));
   await expect(myTasksHeading(page)).toBeVisible();
   await expect(page).toHaveURL(/\/my-tasks$/);
 });
 
 // 最後の画面がもうないときは、止まらず・繰り返さずに、理由のトーストを 1 回出してマイタスクを開く(Review Focus 4)。
-// 理由のトーストは転送の記録で見つけたときだけ出る(01「画面のアドレス」)ので、team へ移してから削除する。
+// 理由のトーストは転送の記録で見つけたときだけ出る(01「画面のアドレス」)ので、team へ移してから削除する。開いたままだと、
+// 移した知らせで画面が解決し直して最後の画面をマイタスクに書き換えるので、アプリを離れてから移し、最後の画面を置き直す。
 test("opens my tasks when the last screen is gone", async ({ page }, info) => {
   const prefix = prefixOf(info);
   const name = unique(info, `最後の画面 ${prefix}`);
   const ws = await send(page, "post", `${base}/workspaces`, { name, prefix });
-  const done = written(page, `/s/e2e/w/${prefix}/overview`);
+  const path = `/s/e2e/w/${prefix}/overview`;
+  const done = written(page, path);
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}`));
   await expect(page.getByRole("heading", { name })).toBeVisible();
   await done;
+  await page.goto("about:blank");
   const moved = await send(page, "post", `${base}/workspaces/${ws.id}/transfer`, {
     toStore: teamStore,
   });
   await send(page, "delete", `/api/stores/${teamStore}/workspaces/${moved.workspaceId}`, undefined);
+  await putLastScreen(page, path);
 
   const toMyTasks = written(page, "/my-tasks");
   await page.goto(tokenUrl("/"));
