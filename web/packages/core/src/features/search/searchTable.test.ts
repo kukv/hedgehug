@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "../../reactive/store";
-import { result, setup } from "./fixtures.test-util";
+import { opened, result, setup } from "./fixtures.test-util";
 import { defaultTable, selectable } from "./table";
 
 beforeEach(() => vi.useFakeTimers());
@@ -22,7 +22,12 @@ describe("createSearch with the table settings (E2a)", () => {
     expect(t.search).not.toHaveBeenCalled();
     expect(t.sp.put).toHaveBeenLastCalledWith(
       "search",
-      JSON.stringify({ query: "x", table: { ...defaultTable, columns: ["id", "title"] } }),
+      JSON.stringify({
+        query: "x",
+        layout: "table",
+        table: { ...defaultTable, columns: ["id", "title"] },
+        tree: { collapsed: [] },
+      }),
     );
     t.s.setTable({ columns: ["id", "title"], group: "kind", sort: null });
     await vi.advanceTimersByTimeAsync(0);
@@ -48,10 +53,14 @@ describe("createSearch with the table settings (E2a)", () => {
     await t.s.replaceQuery("b");
     t.s.prepareQuery("c");
     expect(get(t.s.state).table.group).toBe("kind");
+    await t.s.open();
+    expect(get(t.s.state)).toMatchObject({ query: "c", layout: "table" });
+    expect(get(t.s.state).table.group).toBe("kind");
+    expect(JSON.parse(String(vi.mocked(t.sp.put).mock.lastCall?.[1])).table.group).toBe("kind");
   });
 
   it("prunes the selection with each result", async () => {
-    const t = setup();
+    const t = await opened();
     await t.s.replaceQuery("a");
     expect(t.prune).toHaveBeenLastCalledWith(selectable(result("a").rows));
     t.search.mockResolvedValueOnce({ ...result(), errors: ["bad"] });
@@ -65,7 +74,7 @@ describe("createSearch with the table settings (E2a)", () => {
   });
 
   it("settled waits for the debounce and the answer after setQuery", async () => {
-    const t = setup();
+    const t = await opened();
     t.s.setQuery("q");
     let done = false;
     void t.s.settled().then(() => (done = true));
@@ -101,7 +110,7 @@ describe("createSearch with the table settings (E2a)", () => {
   });
 
   it("settled still resolves when a search throws", async () => {
-    const t = setup();
+    const t = await opened();
     t.search.mockRejectedValueOnce(new Error("down"));
     t.s.setQuery("q");
     let done = false;

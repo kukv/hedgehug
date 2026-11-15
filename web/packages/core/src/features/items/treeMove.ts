@@ -1,17 +1,18 @@
-import type { Item } from "../../model/item";
 import type { MoveCandidate } from "../../model/itemAction";
 import type { WorkspaceSettings } from "../../model/workspace";
 import { categoryOf } from "./progress";
+import type { TreeRowLike } from "./tree";
 
 // ツリーの書き込みのキーが使う、純粋な決め方(04「ツリーのキー操作」)。
 
 export type Dir = "up" | "down";
 
 // reparentTarget は、Alt+Shift+↑↓ の新しい親。フォーカスのある行から、上(up)か下(down)へ見える行を順にたどり、
-// 最初に見つかった「移動…」の候補(アイテムのもの。プロジェクトの候補は見える行にない)を返す。自分の子孫の行は飛ばす。
+// 最初に見つかった「移動…」の候補(アイテムのもの、プロジェクトのもの。行の id で照らす)を返す。自分の子孫の行は飛ばす。
+// プロジェクトの画面の行はアイテムだけなので、Epic のプロジェクトの候補は見つからない(検索のツリーにはプロジェクトの行がある)。
 // candidates は API の候補(自分と子孫・いまの親・削除済みは、もともと入っていない)。見つからなければ null。
 export function reparentTarget(
-  rows: readonly Item[],
+  rows: readonly TreeRowLike[],
   id: string,
   dir: Dir,
   candidates: readonly MoveCandidate[],
@@ -19,16 +20,16 @@ export function reparentTarget(
   const at = rows.findIndex((r) => r.id === id);
   if (at < 0) return null;
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const inside = (r: Item): boolean => {
+  const inside = (r: TreeRowLike): boolean => {
     for (let p = r.parentId && byId.get(r.parentId); p; p = p.parentId && byId.get(p.parentId)) {
       if (p.id === id) return true;
     }
     return false;
   };
-  const items = new Map(candidates.filter((c) => c.kind === "item").map((c) => [c.id, c]));
+  const found = new Map(candidates.map((c) => [c.id, c]));
   const walk = dir === "up" ? rows.slice(0, at).reverse() : rows.slice(at + 1);
   for (const r of walk) {
-    const c = items.get(r.id);
+    const c = found.get(r.id);
     if (c && !inside(r)) return c;
   }
   return null;

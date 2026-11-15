@@ -17,6 +17,7 @@ export function createSearchPort(): SearchPort {
         return {
           errors: r.errors ?? [],
           hasKey: r.hasKey,
+          hasSort: r.hasSort,
           group: r.group,
           deleted: r.deleted,
           columns: (r.columns ?? []).map((c) => ({

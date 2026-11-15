@@ -86,6 +86,7 @@ func newAPIWithStores(t *testing.T) (humatest.TestAPI, *apptest.Stores) {
 type searchBody struct {
 	Errors  []string
 	HasKey  bool
+	HasSort bool
 	Group   string
 	Deleted bool
 	Rows    []struct {
@@ -311,5 +312,14 @@ func TestSearchAPIWithoutTable(t *testing.T) {
 	_, raw := tableOf(t, newAPI(t), map[string]string{"query": "kind:bug"})
 	if !strings.Contains(raw, `"groups":[]`) || !strings.Contains(raw, `"groupBy":""`) || !strings.Contains(raw, `"columns":[`) {
 		t.Errorf("raw: %s", raw)
+	}
+}
+
+func TestSearchAPIHasSort(t *testing.T) {
+	api := newAPI(t)
+	for text, want := range map[string]bool{"sort:id": true, "kind:bug": false, "-sort:id": true} {
+		if got, _ := searchOf(t, api, text); got.HasSort != want {
+			t.Errorf("%q: HasSort = %v, want %v", text, got.HasSort, want)
+		}
 	}
 }

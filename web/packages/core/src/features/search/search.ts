@@ -1,48 +1,28 @@
 import type { SearchPort } from "../../port/search";
-import { get, type Readable, readonly, writable } from "../../reactive/store";
+import { get, readonly, writable } from "../../reactive/store";
 import type { ScreenStates } from "../screenstate/screenStates";
 import type { RowSelection } from "../selection/rowSelection";
 import type { Timer, Toasts } from "../toasts/toasts";
-import { defaultTable, readTable, selectable, type TableSettings, tableRequest } from "./table";
+import {
+  initialSearchState,
+  readSearchState,
+  type SavedSearch,
+  type Search,
+  type SearchLayout,
+  type SearchState,
+  savedSearch,
+} from "./layout";
+import { selectable, tableRequest } from "./table";
 import type { SearchResult } from "./types";
 
+export type { Search, SearchState } from "./layout";
+
 // 検索の画面の流れ(04「検索」、E1-16・E1-19)。絞り込みの文字列は画面の状態 `search` に
-// `{"query": "…", "table": {…}}` で置き、入力のたびに wait ms 待ってから検索し、古い応答は捨てる。
+// `{query, layout, table, tree}`(E3a-2)で置き、入力のたびに wait ms 待ってから検索し、古い応答は捨てる。
+// タブで最初の open が読み終えるまでは書かずに積み、読んだ値に重ねて 1 回書く(E3a-23)。
 
 export const searchScreen = "search";
 export const searchWaitMs = 150;
-
-export interface SearchState {
-  query: string;
-  table: TableSettings;
-  // result は、まだ一度も検索できていないあいだ null。検索に失敗したときは前の結果を残す。
-  result: SearchResult | null;
-  // resultQuery は、いまの result がどの絞り込みへの答えか。result が null のときと、最後の検索が失敗して前の結果を
-  // 残しているときは null。
-  resultQuery: string | null;
-  loading: boolean;
-}
-
-export interface Search {
-  state: Readable<SearchState>;
-  // open は、画面を開いたときに、保存した絞り込みで検索する。
-  open(): Promise<void>;
-  // setQuery は、入力のたびに呼ぶ。画面の状態に書き、wait ms 待ってから検索する。
-  setQuery(text: string): void;
-  // replaceQuery は、パレットなどから絞り込みを入れ替える。待たずに検索する。
-  replaceQuery(text: string): Promise<void>;
-  // prepareQuery は、絞り込みを入れ替えて画面の状態に書くだけで、検索しない。ほかの画面から検索の画面を開くとき、
-  // 開いた画面の open が 1 回だけ検索する。
-  prepareQuery(text: string): void;
-  // cancelPrepare は、prepareQuery の印を取り消す(検索の画面へ移れなかったとき)。settled を待つものを解く。
-  cancelPrepare(): void;
-  // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
-  reload(): Promise<void>;
-  // setTable は、テーブルの設定を画面の状態に書く。並べ替えかグループが変わったときだけ、待たずに検索する。
-  setTable(next: TableSettings): void;
-  // settled は、待ちの検索・飛んでいる検索・prepareQuery のあとのまだ検索していない絞り込みがなくなったら解ける。
-  settled(): Promise<void>;
-}
 
 export interface SearchDeps {
   port: SearchPort;
@@ -50,28 +30,25 @@ export interface SearchDeps {
   timer: Timer;
   toasts: Toasts;
   wait?: number;
-  // selection は、結果が変わるたびに選べる行で整理する(E2a-16)。
-  selection?: Pick<RowSelection, "prune">;
+  // selection は、結果が変わるたびに選べる行で整理し(E2a-16)、テーブルを離れるときに解除する(E3a-10)。
+  selection?: Pick<RowSelection, "prune" | "clear">;
 }
 
 export function createSearch(deps: SearchDeps): Search {
   const wait = deps.wait ?? searchWaitMs;
-  const state = writable<SearchState>({
-    query: "",
-    table: defaultTable,
-    result: null,
-    resultQuery: null,
-    loading: false,
-  });
+  const state = writable<SearchState>(initialSearchState());
   // runs は、古い応答を捨てるための通し番号。pending は、待っている検索の印。
-  // touched は、絞り込みを入れ替えた回数(open が読んでいるあいだの入力を見分ける)。
   let runs = 0;
-  let touched = 0;
   let pending: unknown;
-  // flight は、いま飛んでいる最新の検索の番号(なければ 0)。prepared は、prepareQuery のあとまだ検索していない印。
+  // flight は、いま飛んでいる最新の検索の番号(なければ 0)。prepared は、検索を open に任せていてまだ検索していない印
+  // (prepareQuery のあと、読む前の入力など)。
   let flight = 0;
   let prepared = false;
   let waiters: (() => void)[] = [];
+  // loaded は open が読み終えたか。stash は読む前に変えた項目。queued は prepareQuery の印(次の open がテーブルにして重ねる)。
+  let loaded = false;
+  let stash: Partial<SavedSearch> = {};
+  let queued: string | null = null;
 
   const busy = () => pending !== undefined || prepared || (flight !== 0 && flight === runs);
   const release = () => {
@@ -119,38 +96,58 @@ export function createSearch(deps: SearchDeps): Search {
     if (failure && report) deps.toasts.show(failure.message, { error: true });
   }
 
-  function write() {
-    const { query, table } = get(state);
-    deps.screenStates.write(searchScreen, { query, table });
+  const write = () => deps.screenStates.write(searchScreen, savedSearch(get(state)));
+
+  // change は、項目を替えて書く。読む前は書かずに積む(読む前に書くと、保存した値を初めの値で上書きする)。
+  function change(patch: Partial<SavedSearch>) {
+    state.update((s) => ({ ...s, ...patch }));
+    if (loaded) write();
+    else stash = { ...stash, ...patch };
   }
 
-  function put(query: string) {
-    touched += 1;
-    state.update((s) => ({ ...s, query }));
-    write();
+  // put は、絞り込みを入れ替えて書く。prepareQuery の印より新しい。
+  function put(patch: Partial<SavedSearch> & { query: string }) {
+    queued = null;
+    change(patch);
+  }
+
+  // later は、読む前なら検索を open に任せる(settled は open の検索まで解けない)。
+  const later = () => {
+    if (!loaded) prepared = true;
+    return !loaded;
+  };
+
+  function setLayout(layout: SearchLayout) {
+    change({ layout });
+    if (layout !== "table") deps.selection?.clear();
   }
 
   return {
     state: readonly(state),
     async open() {
       cancel();
-      const before = touched;
-      const saved = await deps.screenStates.read<{ query?: unknown; table?: unknown } | null>(
-        searchScreen,
-        null,
-      );
-      // 読んでいるあいだに入力かパレットで絞り込みが入れ替わっていたら、新しいほうを使う。
-      if (touched !== before) return;
-      const query = saved && typeof saved.query === "string" ? saved.query : "";
-      state.update((s) => ({ ...s, query, table: readTable(saved?.table) }));
+      // 読んだ値には、読んでいるあいだに書いたものも入っている(screenStates)。待っていた検索は open の検索にまとめる。
+      const saved = readSearchState(await deps.screenStates.read<unknown>(searchScreen, null));
+      cancel();
+      loaded = true;
+      const next = { ...saved, ...stash };
+      if (queued !== null) Object.assign(next, { query: queued, layout: "table" });
+      const dirty = queued !== null || Object.keys(stash).length > 0;
+      stash = {};
+      queued = null;
+      state.update((s) => ({ ...s, ...next }));
+      // テーブル以外で開いたら、前にテーブルで選んでいた行を残さない(E3a-10)。
+      if (next.layout !== "table") deps.selection?.clear();
+      if (dirty) write();
       await run();
     },
     setQuery(text) {
       cancel();
-      put(text);
+      put({ query: text });
       // 飛んでいる検索の応答は古い絞り込みのものなので捨てる。
       runs += 1;
       state.update((s) => ({ ...s, loading: true }));
+      if (later()) return;
       pending = deps.timer.set(() => {
         pending = undefined;
         void run();
@@ -158,16 +155,27 @@ export function createSearch(deps: SearchDeps): Search {
     },
     async replaceQuery(text) {
       cancel();
-      put(text);
-      await run();
+      put({ query: text, layout: "table" });
+      if (!later()) await run();
     },
     prepareQuery(text) {
       cancel();
-      put(text);
       prepared = true;
+      queued = text;
+      if (!loaded) state.update((s) => ({ ...s, query: text }));
+    },
+    setLayout,
+    showTable() {
+      if (!loaded || get(state).layout !== "table") setLayout("table");
+    },
+    setCollapsed(collapsed) {
+      change({ tree: { collapsed } });
     },
     cancelPrepare() {
       prepared = false;
+      queued = null;
+      const typed = stash.query ?? initialSearchState().query;
+      if (!loaded) state.update((s) => ({ ...s, query: typed }));
       release();
     },
     reload() {
@@ -176,14 +184,12 @@ export function createSearch(deps: SearchDeps): Search {
     },
     setTable(next) {
       const prev = get(state).table;
-      state.update((s) => ({ ...s, table: next }));
-      write();
+      change({ table: next });
       const same =
         prev.group === next.group && JSON.stringify(prev.sort) === JSON.stringify(next.sort);
       if (same) return;
-      touched += 1;
       cancel();
-      void run();
+      if (!later()) void run();
     },
     settled() {
       if (!busy()) return Promise.resolve();

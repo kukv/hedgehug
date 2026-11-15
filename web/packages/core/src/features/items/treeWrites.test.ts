@@ -1,71 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NotFound } from "../../model/errors";
-import type { Item } from "../../model/item";
 import type { MoveCandidate } from "../../model/itemAction";
-import { flush, gate, item } from "./fixtures.test-util";
+import { flush, gate } from "./fixtures.test-util";
 import { moveFailedMessage } from "./move";
 import { settings } from "./settings.test-util";
-import { visibleNeighbors } from "./siblings";
-import { createTreeWrites, type TreeWritesDeps } from "./treeWrites";
-
-// 木: HH-1(Epic) ─ HH-2・HH-3・HH-4・HH-5(Task) / HH-6(Epic)。並べ替えのたびに読み直した並びを rows に入れる。
-const e1 = item("S1", "P1", 1, "Epic", null);
-const e6 = item("S1", "P1", 6, "Epic", null);
-const kids: Item[] = [2, 3, 4, 5].map((n) => item("S1", "P1", n, "Task", e1.id));
-const [a, b, c, d] = kids as [Item, Item, Item, Item];
-
-const candidate = (it: Item): MoveCandidate => ({
-  kind: "item",
-  id: it.id,
-  display: `HH-${it.number}`,
-  title: it.title,
-  projectId: it.projectId,
-  projectTitle: "ログイン",
-});
-
-// setup の reorder は、itemMenuHost.reorder と同じ約束の偽物: 見えている兄弟を基準に 1 件だけ動かし、読み直して、
-// 動かせたら true(基準の兄弟がない・閲覧のみは false)。
-function setup(over: Partial<TreeWritesDeps> = {}, readOnly = false) {
-  let order = [...kids];
-  let rows: Item[] = [e1, ...order, e6];
-  const log: string[] = [];
-  const toasts = { show: vi.fn() };
-  const deps: TreeWritesDeps = {
-    screen: () => ({ storeId: "S1", readOnly, settings, rows }),
-    reorder: async (it, seen, dir) => {
-      const { prev, next } = visibleNeighbors(seen, it.id);
-      const anchor = dir === "up" ? prev : next;
-      if (!anchor) return false;
-      log.push(`reorder ${it.id} ${anchor.id} ${dir === "down"}`);
-      order = order.filter((i) => i.id !== it.id);
-      order.splice(order.findIndex((i) => i.id === anchor.id) + (dir === "down" ? 1 : 0), 0, it);
-      rows = [e1, ...order, e6];
-      log.push("refresh");
-      return true;
-    },
-    moveCandidates: async (_s, id) => {
-      log.push(`candidates ${id}`);
-      return [candidate(e6)];
-    },
-    moveTo: async (it, cand) => {
-      log.push(`moveTo ${it.id} ${cand.id}`);
-      return true;
-    },
-    setStatus: async (id, status) => {
-      log.push(`status ${id} ${status}`);
-    },
-    afterChange: async () => {
-      log.push("refresh");
-    },
-    settled: async () => {},
-    expand: (id) => {
-      log.push(`expand ${id}`);
-    },
-    toasts,
-    ...over,
-  };
-  return { writes: createTreeWrites(deps), log, toasts, order: () => order.map((i) => i.id) };
-}
+import { a, b, c, candidate, d, e1, e6, setup } from "./treeWrites.test-util";
 
 describe("Alt+↑↓ (moveSibling)", () => {
   it("does not start the next step before the previous one is saved and reloaded", async () => {
@@ -166,18 +105,65 @@ describe("Alt+Shift+↑↓ (changeParent)", () => {
     expect(log).toEqual([`candidates ${c.id}`, `expand ${e6.id}`, `moveTo ${c.id} ${e6.id}`]);
   });
 
-  it("does nothing for an Epic, a read-only store, or when no candidate is visible that way", async () => {
-    const epic = setup();
+  it("does nothing for an Epic without a project row, a read-only store, or when no candidate is visible that way", async () => {
+    const epic = setup({
+      moveCandidates: async (_s, id) => {
+        epic.log.push(`candidates ${id}`);
+        return [{ ...candidate(e6), kind: "project", id: "P2" }];
+      },
+    });
     epic.writes.changeParent(e1.id, "down");
     const ro = setup({}, true);
     ro.writes.changeParent(c.id, "down");
     const none = setup();
     none.writes.changeParent(c.id, "up");
     await flush();
+    // プロジェクトの画面(order なし)の Epic は、候補も読まない(E3a-17)。
     expect(epic.log).toEqual([]);
     expect(ro.log).toEqual([]);
     expect(none.log).toEqual([`candidates ${c.id}`]);
     expect(none.toasts.show).not.toHaveBeenCalled();
+  });
+
+  it("changeParent moves an Epic under a visible project", async () => {
+    const p2 = { id: "P2", parentId: null };
+    const projectCandidate: MoveCandidate = {
+      kind: "project",
+      id: "P2",
+      display: "HH-P2",
+      title: "決済",
+      projectId: "P2",
+      projectTitle: "",
+    };
+    const { writes, log } = setup({
+      screen: () => ({
+        storeId: "S1",
+        readOnly: false,
+        settings,
+        rows: [e1, e6],
+        order: [p2, e1, e6],
+      }),
+      moveCandidates: async () => [projectCandidate],
+    });
+    writes.changeParent(e1.id, "up");
+    await flush();
+    expect(log).toEqual([`expand P2`, `moveTo ${e1.id} P2`]);
+  });
+
+  it("uses order when given", async () => {
+    const { writes, log } = setup({
+      screen: () => ({
+        storeId: "S1",
+        readOnly: false,
+        settings,
+        rows: [e1, a, e6],
+        order: [e1, e6, a],
+      }),
+    });
+    // rows だと a の上に e6 はないが、order では a の上に e6 がある。
+    writes.changeParent(a.id, "up");
+    await flush();
+    expect(log).toEqual([`candidates ${a.id}`, `expand ${e6.id}`, `moveTo ${a.id} ${e6.id}`]);
   });
 
   it("drops the waiting steps when the move is not done", async () => {
@@ -213,36 +199,5 @@ describe("Alt+Shift+↑↓ (changeParent)", () => {
     await flush();
     expect(gone.log).toEqual(["refresh"]);
     expect(gone.toasts.show).not.toHaveBeenCalled();
-  });
-});
-
-describe("Space (toggleDone)", () => {
-  it("goes to the default done status, and back to the default todo status", async () => {
-    const { writes, log } = setup();
-    await writes.toggleDone(a.id);
-    expect(log).toEqual([`status ${a.id} st3`]);
-    const doneRow: Item = { ...a, status: "st3" };
-    const again = setup({
-      screen: () => ({ storeId: "S1", readOnly: false, settings, rows: [doneRow] }),
-    });
-    await again.writes.toggleDone(a.id);
-    expect(again.log).toEqual([`status ${a.id} st1`]);
-  });
-
-  it("does nothing in a read-only store, for a row that is not visible, or without a default", async () => {
-    const ro = setup({}, true);
-    await ro.writes.toggleDone(a.id);
-    const missing = setup();
-    await missing.writes.toggleDone("nope");
-    const bare = setup({
-      screen: () => ({
-        storeId: "S1",
-        readOnly: false,
-        settings: { ...settings, categoryDefaults: {} },
-        rows: [a],
-      }),
-    });
-    await bare.writes.toggleDone(a.id);
-    expect([ro.log, missing.log, bare.log]).toEqual([[], [], []]);
   });
 });

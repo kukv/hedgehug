@@ -9,6 +9,9 @@ import type { Toasts } from "../toasts/toasts";
 export interface ProjectEditor {
   // 次の 4 つは、保存できたら true。false なら、画面は入力欄を保存済みの値に戻す(断りはトーストに出す)。
   rename(project: Project, title: string): Promise<boolean>;
+  // renameOrMessage は、rename と同じ検査と保存で、断りをトーストに出さずその文言で返す(保存できたら null)。
+  // 「名前を変更…」のダイアログが、入力欄の下に出す。
+  renameOrMessage(project: Project, title: string): Promise<string | null>;
   setStatus(project: Project, status: ProjectStatus): Promise<boolean>;
   setOwner(project: Project, owner: string): Promise<boolean>;
   setDate(project: Project, field: "start" | "end", value: string): Promise<boolean>;
@@ -69,10 +72,15 @@ export function createProjectEditor(deps: ProjectEditorDeps): ProjectEditor {
     return message === null;
   }
 
-  // setField は、値が前と同じなら送らず、違えば送る値を sent に足して保存する。断られた・失敗したら、その値を sent から
-  // 外す。
-  function setField(p: Project, field: Field, value: string, save: () => Promise<unknown>) {
-    if (same(p, field, value)) return Promise.resolve(true);
+  // setFieldOrMessage は、値が前と同じなら送らず、違えば送る値を sent に足して保存する。断られた・失敗したら、その値を
+  // sent から外す。断られたらその文言、保存できた(送らなかった)ときは null を返す。
+  function setFieldOrMessage(
+    p: Project,
+    field: Field,
+    value: string,
+    save: () => Promise<unknown>,
+  ) {
+    if (same(p, field, value)) return Promise.resolve(null);
     const key = keyOf(p, field);
     const entry = { value };
     const list = sent.get(key) ?? [];
@@ -85,13 +93,24 @@ export function createProjectEditor(deps: ProjectEditorDeps): ProjectEditor {
       if (rest.length > 0) sent.set(key, rest);
       else sent.delete(key);
     };
-    return attemptWithToast(save, undo);
+    return attempt(save, undo);
+  }
+
+  // setField は、setFieldOrMessage の断りをエラーのトーストで出す。保存できた(送らなかった)ら true。
+  async function setField(p: Project, field: Field, value: string, save: () => Promise<unknown>) {
+    const message = await setFieldOrMessage(p, field, value, save);
+    if (message !== null) deps.toasts.show(message, { error: true });
+    return message === null;
   }
 
   return {
     rename(p, title) {
       const next = title.trim();
       return setField(p, "title", next, () => deps.projects.rename(p.storeId, p.id, next));
+    },
+    renameOrMessage(p, title) {
+      const next = title.trim();
+      return setFieldOrMessage(p, "title", next, () => deps.projects.rename(p.storeId, p.id, next));
     },
     setStatus(p, status) {
       return setField(p, "status", status, () => deps.projects.setStatus(p.storeId, p.id, status));

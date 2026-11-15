@@ -1735,6 +1735,17 @@ components:
         - count
         - default
       type: object
+    MoveProject:
+      additionalProperties: false
+      properties:
+        direction:
+          enum:
+            - up
+            - down
+          type: string
+      required:
+        - direction
+      type: object
     MoveWorkspaceItem:
       additionalProperties: false
       properties:
@@ -3087,6 +3098,9 @@ components:
         hasKey:
           description: キーのある語が 1 つ以上あるか
           type: boolean
+        hasSort:
+          description: "sort: の語があるか(サーバーが決める。ツリー・ガントの注記に使う)"
+          type: boolean
         rows:
           items:
             $ref: "#/components/schemas/SearchRow"
@@ -3094,6 +3108,7 @@ components:
       required:
         - errors
         - hasKey
+        - hasSort
         - group
         - deleted
         - rows
@@ -7315,6 +7330,36 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: プロジェクトの下のアイテムのリンクを、アイテムの番号順に返す
+  /api/stores/{store}/projects/{project}/move:
+    post:
+      operationId: move-project
+      parameters:
+        - in: path
+          name: store
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: project
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveProject"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: プロジェクトを上へ・下へ移動
   /api/stores/{store}/projects/{project}/owner:
     put:
       operationId: set-project-owner

@@ -5,6 +5,7 @@ import type { WorkspaceSettings } from "../../model/workspace";
 import type { Toasts } from "../toasts/toasts";
 import { createKeyQueue } from "./keyQueue";
 import { moveFailedMessage } from "./move";
+import type { TreeRowLike } from "./tree";
 import { type Dir, doneToggleTarget, reparentTarget } from "./treeMove";
 
 // ツリーの書き込みのキーのうち、画面の部品を使わないもの(Space、Alt+↑↓、Alt+Shift+↑↓。04「ツリーのキー操作」)。
@@ -16,8 +17,10 @@ export interface TreeScreen {
   storeId: string;
   readOnly: boolean;
   settings: WorkspaceSettings;
-  // rows は、見えている行を上から順に並べたもの。
+  // rows は、見えている行を上から順に並べたもの(アイテムだけ)。
   rows: readonly Item[];
+  // order は、Alt+Shift+↑↓ でたどる、見えている行(プロジェクトの行を含んでよい)。なければ rows。
+  order?: readonly TreeRowLike[];
 }
 
 export interface TreeWritesDeps {
@@ -28,8 +31,8 @@ export interface TreeWritesDeps {
   moveCandidates(storeId: string, itemId: string): Promise<MoveCandidate[]>;
   // moveTo は、候補の下へ移す(「移動…」で選んだのと同じ。トースト・読み直しまで行う)。移せたら true。
   moveTo(item: Item, candidate: MoveCandidate): Promise<boolean>;
-  // setStatus は、ステータスを変えて読み直す。断りはトーストに出す(projectScreen.setStatus)。
-  setStatus(itemId: string, statusId: string): Promise<void>;
+  // setStatus は、行のアイテムのステータスを変えて読み直す。断りはトーストに出す(Store は item.storeId)。
+  setStatus(item: Item, statusId: string): Promise<void>;
   // afterChange は、並べ替えのあとのツリー・詳細パネルの読み直し(itemRefresh.afterChange)。
   afterChange(): Promise<void>;
   // settled は、読み直した結果が画面の状態に届くのを待つ(app は svelte の tick)。
@@ -51,11 +54,14 @@ export interface TreeWrites {
 export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
   const queue = createKeyQueue();
 
-  // writableRow は、書ける画面(閲覧のみでない)と、そこにある行 id を返す。
-  function writableRow(id: string) {
+  // writableRow は、書ける画面(閲覧のみでない)と、そこにある行 id を返す。storeId を渡したら、その Store の画面のときだけ
+  // (検索のツリーでは Store をまたいで同じ内部 ID が並ぶ。積んだときの Store と違う画面では、待っている分を実行しない)。
+  // null は、積んだときに画面がなかった印で、どの画面とも合わない。
+  function writableRow(id: string, storeId?: string | null) {
     const s = deps.screen();
     const row = s?.rows.find((r) => r.id === id);
-    return s && row && !s.readOnly ? { s, row } : null;
+    const same = storeId === undefined || s?.storeId === storeId;
+    return s && row && same && !s.readOnly ? { s, row } : null;
   }
 
   // failed は、候補を読めなかったとき、断られた(Refused)なら断りの文言を、すでに消えているなら読み直しを、
@@ -65,17 +71,17 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
     else deps.toasts.show(e instanceof Refused ? e.message : moveFailedMessage, { error: true });
   }
 
-  async function siblingStep(id: string, dir: Dir): Promise<boolean> {
-    const w = writableRow(id);
+  async function siblingStep(id: string, storeId: string | null, dir: Dir): Promise<boolean> {
+    const w = writableRow(id, storeId);
     if (!w || !(await deps.reorder(w.row, w.s.rows, dir))) return false;
     await deps.settled();
     return true;
   }
 
-  async function parentStep(id: string, dir: Dir): Promise<boolean> {
-    const w = writableRow(id);
-    // Epic の候補はプロジェクトで、ツリーの行にない(プロジェクトの行は E)ので、何もしない。
-    if (!w || w.row.kind === "Epic") return false;
+  async function parentStep(id: string, storeId: string | null, dir: Dir): Promise<boolean> {
+    const w = writableRow(id, storeId);
+    // プロジェクトの行のない画面(order なし。プロジェクトの画面)では、Epic の新しい親がないので何もしない(E3a-17)。
+    if (!w || (w.row.kind === "Epic" && !w.s.order)) return false;
     let candidates: MoveCandidate[];
     try {
       candidates = await deps.moveCandidates(w.s.storeId, id);
@@ -83,8 +89,8 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
       await failed(e);
       return false;
     }
-    const now = writableRow(id);
-    const target = now && reparentTarget(now.s.rows, id, dir, candidates);
+    const now = writableRow(id, storeId);
+    const target = now && reparentTarget(now.s.order ?? now.s.rows, id, dir, candidates);
     if (!now || !target) return false;
     // 新しい親が閉じていれば、移す前に開く(移した行が見えなくなって、フォーカスが次の行へ移るのを避ける)。
     deps.expand(target.id);
@@ -97,10 +103,17 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
     async toggleDone(id) {
       const w = writableRow(id);
       const status = w && doneToggleTarget(w.s.settings, w.row.status);
-      if (w && status && status !== w.row.status) await deps.setStatus(id, status);
+      if (w && status && status !== w.row.status) await deps.setStatus(w.row, status);
     },
-    moveSibling: (id, dir) => queue.push(() => siblingStep(id, dir)),
-    changeParent: (id, dir) => queue.push(() => parentStep(id, dir)),
+    // 積んだときの画面の Store を取っておく(実行の時点で別の Store の画面なら何もしない)。
+    moveSibling(id, dir) {
+      const storeId = deps.screen()?.storeId ?? null;
+      queue.push(() => siblingStep(id, storeId, dir));
+    },
+    changeParent(id, dir) {
+      const storeId = deps.screen()?.storeId ?? null;
+      queue.push(() => parentStep(id, storeId, dir));
+    },
     clear: () => queue.clear(),
   };
 }

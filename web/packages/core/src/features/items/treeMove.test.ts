@@ -23,6 +23,30 @@ const cand = (it: { id: string; number: number }): MoveCandidate => ({
   projectTitle: "ログイン",
 });
 
+describe("reparentTarget with project rows", () => {
+  const proj = (id: string) => ({ id, parentId: null });
+  const projectCand = (id: string): MoveCandidate => ({
+    kind: "project",
+    id,
+    display: id,
+    title: id,
+    projectId: id,
+    projectTitle: "",
+  });
+  const epic1 = { id: "E1", parentId: null };
+  const epic2 = { id: "E2", parentId: null };
+
+  it("finds a project row for an Epic", () => {
+    const seen = [proj("P1"), epic1, proj("P2"), epic2];
+    expect(reparentTarget(seen, "E1", "down", [projectCand("P2")])?.id).toBe("P2");
+    expect(reparentTarget(seen, "E1", "up", [projectCand("P2")])).toBeNull();
+  });
+
+  it("project candidates without project rows find nothing", () => {
+    expect(reparentTarget(rows, e2.id, "down", [projectCand("P2")])).toBeNull();
+  });
+});
+
 describe("reparentTarget", () => {
   // Task の移し先は Epic。いまの親(HH-2)と、Epic でないものは候補に入っていない。
   const forTask = [cand(e6), cand(e8)];
@@ -45,10 +69,8 @@ describe("reparentTarget", () => {
     expect(reparentTarget(rows, t3.id, "down", [])).toBeNull();
   });
 
-  it("skips the rows of the item's own subtree and the project candidates", () => {
+  it("skips the rows of the item's own subtree", () => {
     expect(reparentTarget(rows, t4.id, "down", [cand(s5), cand(e6)])?.display).toBe("HH-6");
-    const project: MoveCandidate = { ...cand(e6), kind: "project" };
-    expect(reparentTarget(rows, t3.id, "down", [project])).toBeNull();
   });
 
   it("returns null for a row that is not visible", () => {

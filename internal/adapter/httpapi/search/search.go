@@ -84,6 +84,7 @@ type SearchRow struct {
 type SearchResult struct {
 	Errors  []string    `json:"errors" nullable:"false" doc:"クエリのエラー(1 語 1 行)"`
 	HasKey  bool        `json:"hasKey" doc:"キーのある語が 1 つ以上あるか"`
+	HasSort bool        `json:"hasSort" doc:"sort: の語があるか(サーバーが決める。ツリー・ガントの注記に使う)"`
 	Group   string      `json:"group" doc:"group: の値(解析したもの)。使ったまとめ方は groupBy。なければ空"`
 	Deleted bool        `json:"deleted" doc:"is:deleted の検索か"`
 	Rows    []SearchRow `json:"rows" nullable:"false"`
@@ -112,7 +113,7 @@ func Register(api huma.API, svc appsearch.Service, screens appsearch.ScreenState
 
 func toResult(res appsearch.Result) SearchResult {
 	out := SearchResult{
-		Errors: append([]string{}, res.Errors...), HasKey: res.HasKey, Group: res.Group, Deleted: res.Deleted, Rows: []SearchRow{},
+		Errors: append([]string{}, res.Errors...), HasKey: res.HasKey, HasSort: res.HasSort, Group: res.Group, Deleted: res.Deleted, Rows: []SearchRow{},
 		Columns: toColumns(res.Columns), GroupBy: res.GroupBy, Groups: toGroups(res.Groups),
 	}
 	for _, r := range res.Rows {

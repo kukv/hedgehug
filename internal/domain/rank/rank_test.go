@@ -2,6 +2,7 @@ package rank_test
 
 import (
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 
@@ -124,5 +125,50 @@ func TestBetween(t *testing.T) {
 			t.Fatalf("Between(%q, %q) = %q", lo, hi, m)
 		}
 		hi = m
+	}
+}
+
+// Moved は、動かした 1 件の新しい隣どうしのあいだの値。端の外は空として扱う。
+func TestMoved(t *testing.T) {
+	ranks := []string{"V", "W", "X"}
+	cases := []struct {
+		i    int
+		up   bool
+		want string
+	}{
+		{1, true, rank.Between("", "V")},
+		{2, true, rank.Between("V", "W")},
+		{0, false, rank.Between("W", "X")},
+		{1, false, rank.After("X")},
+	}
+	for _, c := range cases {
+		if got := rank.Moved(ranks, c.i, c.up); got != c.want {
+			t.Errorf("Moved(%v, %d, %v) = %q, want %q", ranks, c.i, c.up, got, c.want)
+		}
+	}
+}
+
+// Refill は、空か前のもの以下の rank だけを、前後の残るもののあいだの値に振り直す。厳密に増えている rank は変えない。
+func TestRefill(t *testing.T) {
+	first := rank.Between("", "V")
+	cases := []struct {
+		in, want    []string
+		changedWant []bool
+	}{
+		{[]string{"V", "W", "X"}, []string{"V", "W", "X"}, []bool{false, false, false}},
+		{[]string{"", "", "V"}, []string{first, rank.Between(first, "V"), "V"}, []bool{true, true, false}},
+		{[]string{"V", "V"}, []string{"V", "W"}, []bool{false, true}},
+		{[]string{"V", "V", "X"}, []string{"V", "W", "X"}, []bool{false, true, false}},
+		{[]string{"W", "V", ""}, []string{"W", "X", "Y"}, []bool{false, true, true}},
+	}
+	for _, c := range cases {
+		in := slices.Clone(c.in)
+		got, changed := rank.Refill(in)
+		if !slices.Equal(got, c.want) || !slices.Equal(changed, c.changedWant) {
+			t.Errorf("Refill(%q) = %q, %v, want %q, %v", c.in, got, changed, c.want, c.changedWant)
+		}
+		if !slices.Equal(in, c.in) {
+			t.Errorf("Refill changed its input: %q", in)
+		}
 	}
 }

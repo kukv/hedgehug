@@ -13,6 +13,14 @@ export { type CaretTerm, caretTerm } from "./features/search/caret";
 export { type CellView, cellView, updatedHint } from "./features/search/cells";
 export { type ChangeAllDeps, createChangeAll } from "./features/search/changeAll";
 export { searchHelp } from "./features/search/help";
+export {
+  deletedTreeText,
+  layoutChoices,
+  layoutNote,
+  readSearchState,
+  type SearchLayout,
+  type TreeSettings,
+} from "./features/search/layout";
 export { rowMenuContext } from "./features/search/rowMenu";
 export { type RowStatusDeps, setRowStatus } from "./features/search/rowStatus";
 export {
@@ -23,6 +31,21 @@ export {
   searchScreen,
   searchWaitMs,
 } from "./features/search/search";
+export {
+  buildSearchTree,
+  type ProjectData,
+  rowKey,
+  type SearchTreeRow,
+  type SearchTreeSection,
+  type SearchTreeView,
+  screenFor,
+  treeScope,
+} from "./features/search/searchTree";
+export {
+  createSearchTreeData,
+  type SearchTreeData,
+  type SearchTreeDataDeps,
+} from "./features/search/searchTreeData";
 export {
   columnChoices,
   defaultTable,
@@ -53,5 +76,6 @@ export {
   type EmptyText,
   emptyText,
   readOnlyBands,
+  treeEmptyText,
 } from "./features/search/view";
 export type { ScreenStatesPort, SearchPort } from "./port/search";

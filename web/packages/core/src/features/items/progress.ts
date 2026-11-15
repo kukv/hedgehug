@@ -45,6 +45,15 @@ export function epicProgress(items: Item[], epicId: string, settings: WorkspaceS
   return childCount(found, settings);
 }
 
+// projectProgress は、プロジェクトの行の「完了/対象」(E3a-12)。items はプロジェクトのすべてのアイテムで、
+// Epic と Step を除き、中止は分母にも分子にも入れない。
+export function projectProgress(items: Item[], settings: WorkspaceSettings) {
+  return childCount(
+    items.filter((it) => it.kind !== "Epic" && it.kind !== "Step"),
+    settings,
+  );
+}
+
 // progressPercent は、進捗のパーセント(四捨五入。対象が 0 件なら 0。04「集計の定義」)。
 export function progressPercent(p: { done: number; total: number }): number {
   return p.total === 0 ? 0 : Math.round((p.done / p.total) * 100);

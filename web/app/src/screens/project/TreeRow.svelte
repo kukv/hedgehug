@@ -35,12 +35,18 @@
     onstatus: (item: Item, statusId: string) => void;
     // onmenu は、行の「⋯」(アイテムのメニュー)。
     onmenu: (event: MouseEvent, item: Item) => void;
+    // rowKey は、行の鍵(開閉・フォーカス・data-row)。初めは内部 ID。検索のツリーは `{storeId}/{内部 ID}`(E3a-5)。
+    rowKey?: (item: Item) => string;
+    // dim は、文字を薄くする行の鍵(検索のツリーの、絞り込みに一致しない祖先。E3a-18)。
+    dim?: ReadonlySet<string>;
+    // storeColor は、ID の前に出す Store の点の色(検索のツリー。E3a-18)。なければ点を出さない。
+    storeColor?: string;
   }
 
-  let {
-    node,
+  // 下の行へは、node と depth のほかを、そのまま渡す。
+  let { node, depth, ...rest }: Props = $props();
+  const {
     prefix,
-    depth,
     collapsed,
     focusedId,
     readOnly,
@@ -54,19 +60,23 @@
     today,
     onstatus,
     onmenu,
-  }: Props = $props();
+    dim,
+    storeColor,
+  } = $derived(rest);
 
   const it = $derived(node.item);
-  const open = $derived(!collapsed.has(it.id));
+  const key = $derived(rest.rowKey ? rest.rowKey(it) : it.id);
+  const open = $derived(!collapsed.has(key));
   const child = $derived(childKindOf(it.kind));
   const member = $derived(members.find((x) => x.login.toLowerCase() === it.assignee.toLowerCase()));
 </script>
 
 <li
   class="tree-row"
-  class:focused={focusedId === it.id}
-  data-row={it.id}
-  aria-current={focusedId === it.id ? "true" : undefined}
+  class:focused={focusedId === key}
+  class:dim={dim?.has(key)}
+  data-row={key}
+  aria-current={focusedId === key ? "true" : undefined}
   style:--d={depth}
 >
   {#if node.children.length > 0}
@@ -76,7 +86,7 @@
       class:open
       aria-label="開閉"
       aria-expanded={open}
-      onclick={() => ontoggle(it.id)}
+      onclick={() => ontoggle(key)}
     >
       ›
     </button>
@@ -84,6 +94,9 @@
     <span class="twisty-space"></span>
   {/if}
   <KindIcon kind={it.kind} />
+  {#if storeColor}
+    <i class="sdot" style:background="var(--t-{storeColor}-fg)" aria-hidden="true"></i>
+  {/if}
   <code class="id">{itemDisplayId(prefix, it.number)}</code>
   <a
     class="row-title"
@@ -121,25 +134,8 @@
   >
 </li>
 {#if open}
-  {#each node.children as c (c.item.id)}
-    <Self
-      node={c}
-      {prefix}
-      depth={depth + 1}
-      {collapsed}
-      {focusedId}
-      {readOnly}
-      {ontoggle}
-      {onadd}
-      {onopen}
-      {href}
-      {settings}
-      {members}
-      {items}
-      {today}
-      {onstatus}
-      {onmenu}
-    />
+  {#each node.children as c (rest.rowKey ? rest.rowKey(c.item) : c.item.id)}
+    <Self {...rest} node={c} depth={depth + 1} />
   {/each}
 {/if}
 
@@ -168,6 +164,12 @@
   .twisty.open {
     transform: rotate(90deg);
   }
+  .sdot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
   .id {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -181,5 +183,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .dim .row-title {
+    color: var(--muted);
   }
 </style>

@@ -1,6 +1,6 @@
 import { createPalette, createPlanRequest, createSelection } from "@hedgehug/core";
 import { hereOf } from "./here";
-import { bulkChangeAll, openSearch, searchPort } from "./search";
+import { bulkChangeAll, openSearch, search, searchPort } from "./search";
 import { isMac } from "./tab";
 import {
   catalog,
@@ -64,4 +64,5 @@ export const palette = createPalette({
   timer,
   openSearch,
   bulkChangeAll,
+  showSearchTable: () => search.showTable(),
 });

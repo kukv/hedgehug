@@ -21,6 +21,7 @@ import {
   leaveDeletedWorkspace,
 } from "@hedgehug/core";
 import { drafts } from "./drafts";
+import { itemChanges } from "./reloads";
 import { online as isOnline } from "./tab";
 import {
   catalog,
@@ -39,8 +40,12 @@ import {
 // 向きは wireActions.ts → wire.ts の一方向(wire.ts はここを import しない)。
 
 export const itemActions = createItemActionsPort();
-// 削除・移動・種類の変更・複製・並べ替えのあとに呼ぶ読み直し(ツリー・詳細パネル・関連の区画)。
-export const itemRefresh = createItemRefresh({ detail, projectScreen, sections: [relations] });
+// 削除・移動・種類の変更・複製・並べ替えのあとに呼ぶ読み直し(ツリー・詳細パネル・関連の区画・検索のツリー)。
+export const itemRefresh = createItemRefresh({
+  detail,
+  projectScreen,
+  sections: [relations, { reload: () => Promise.all([...itemChanges].map((r) => r())) }],
+});
 
 // アイテムの削除の確認ダイアログ(02「削除」)。開くのは itemDelete.open(item)。
 export const itemDelete = createItemDelete({

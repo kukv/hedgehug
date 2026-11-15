@@ -19,8 +19,10 @@ type Row struct {
 
 // Result は、検索の結果。Errors があれば Rows は空(アイテムは読まない)。
 type Result struct {
-	Errors  []string
-	HasKey  bool
+	Errors []string
+	HasKey bool
+	// HasSort は、クエリに sort: の語があるか(エラーのときも解析の結果から入れる)。
+	HasSort bool
 	Group   string
 	Deleted bool
 	Rows    []Row
@@ -46,7 +48,7 @@ func (s Service) Search(ctx context.Context, text string, opt TableOptions) (Res
 		return Result{}, err
 	}
 	q, errs := query.Parse(text, func(key string) bool { return keys[key] })
-	res := Result{Errors: errs, HasKey: q.HasKey, Group: q.Group, Deleted: q.Deleted, Columns: columns}
+	res := Result{Errors: errs, HasKey: q.HasKey, HasSort: q.Sort != nil, Group: q.Group, Deleted: q.Deleted, Columns: columns}
 	if len(errs) > 0 {
 		return res, nil
 	}

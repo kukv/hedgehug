@@ -111,3 +111,14 @@ describe("projects port: overview edits", () => {
     expect(project.repos).toEqual([]);
   });
 });
+
+describe("projects port: move", () => {
+  it("posts the direction to the move endpoint and resolves with nothing", async () => {
+    const fetch = respond(204, undefined);
+    await createProjectsPort().move("S1", "P1", "down");
+    const [url, init] = call(fetch);
+    expect(url).toBe("/api/stores/S1/projects/P1/move");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ direction: "down" });
+  });
+});

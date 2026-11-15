@@ -17,6 +17,7 @@ import {
   setRowStatus,
 } from "@hedgehug/core";
 import { reloads } from "./reloads";
+import { searchTreeData } from "./searchTree";
 import { catalog, itemsPort, listMembers, navigation } from "./wire";
 import { bulkChange, itemMenuHost } from "./wireActions";
 import { palettePort, timer, toasts } from "./wireBase";
@@ -71,9 +72,11 @@ export function selectedOne(): SelectedItem | null {
 // refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
 
-// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。
+// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。ツリーのデータは、
+// 取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
 reloads.add(async () => {
   if (get(navigation.route).name !== "search") return;
+  searchTreeData.reset();
   await Promise.all([search.reload(), refreshCandidates?.()]);
 });
 
@@ -156,8 +159,8 @@ export function createCandidates(changed: (source: "items" | "members") => void)
 }
 
 // openSearch は、パレットの「検索で開く」(E1-21)。検索は 1 回だけ: 検索の画面にいればその場で検索し、ほかの画面からは
-// 絞り込みを書いておき、開いた画面の open が検索する(同じ画面へは移らず open も呼ばれない)。
-// 移れたかを返す。「入力を破棄」の確認で断られたら、検索の準備を取り消して false。
+// 絞り込みの印を付けておき、開いた画面の open が書いて検索する(同じ画面へは移らず open も呼ばれない)。
+// 移れたかを返す。「入力を破棄」の確認で断られたら、印を消して(画面の状態は前のまま。E3a-23)false。
 export async function openSearch(query: string): Promise<boolean> {
   if (get(navigation.route).name === "search") {
     await search.replaceQuery(query);
@@ -167,6 +170,12 @@ export async function openSearch(query: string): Promise<boolean> {
   const moved = await navigation.go({ name: "search" });
   if (!moved) search.cancelPrepare();
   return moved;
+}
+
+// openSearchTable は、サイドバーの「検索」(テーブルで開く入口。E3a-9)。移れたら(すでに検索の画面でも)テーブルにする。
+// 「入力を破棄」の確認で断られたら切り替えない(残った切り替えが、あとで開いたときに働かないように)。
+export async function openSearchTable(): Promise<void> {
+  if (await navigation.go({ name: "search" })) search.showTable();
 }
 
 // bulkChangeAll は、パレットの「{N} 件をまとめて変更…」(E2a-19)。

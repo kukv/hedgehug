@@ -65,6 +65,7 @@ describe("createChangeAll with createSearch", () => {
 
   it("does nothing when the search fails and the previous rows are left", async () => {
     const t = withSearch();
+    await t.s.open();
     await t.s.replaceQuery("old");
     t.search.mockRejectedValueOnce(new Error("down"));
     const running = t.changeAll("kind:bug");
@@ -77,6 +78,7 @@ describe("createChangeAll with createSearch", () => {
 
   it("does nothing when the same query once succeeded and its new search fails", async () => {
     const t = withSearch();
+    await t.s.open();
     await t.s.replaceQuery("kind:bug");
     t.search.mockRejectedValueOnce(new Error("down"));
     const running = t.changeAll("kind:bug");

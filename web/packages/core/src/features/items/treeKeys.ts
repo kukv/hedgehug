@@ -72,6 +72,20 @@ export function treeKeyAction(
   return null;
 }
 
+// projectKeyAction は、検索のツリーのプロジェクトの行で押されたキーの操作(E3a-16)。↑↓→←・Enter・Ctrl+Enter・
+// C・Alt+↑↓・メニューキー。Space・S・K・Alt+Shift+↑↓ は null。C は "create-sibling" で、実行する側がプロジェクトの行では
+// 「その下に Epic」と読む。閲覧のみの Store での C・Alt+↑↓ は、実行する側が何もしない。
+export function projectKeyAction(event: KeyInput): TreeKeyAction | null {
+  const action = treeKeyAction(event, { kind: "Epic" });
+  return action === null ||
+    ["toggle-done", "status-menu", "change-kind"].includes(action) ||
+    isReparent(action)
+    ? null
+    : action;
+}
+
+const isReparent = (a: TreeKeyAction) => a === "reparent-up" || a === "reparent-down";
+
 // KeyTarget は、キーを受けた部品の種類。tree はツリー自身、button は行の中のボタン、other はそれ以外(タイトルのリンクなど)。
 // core は DOM の型を持たないので、app が決めて渡す。
 export type KeyTarget = "tree" | "button" | "other";
