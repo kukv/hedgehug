@@ -57,15 +57,18 @@ type idInput struct {
 	ID string `path:"id" pattern:"^[0-9a-z]{26}$" doc:"ビューの識別子"`
 }
 
+// CreateViewBody は、ビューを作る本文。
 type CreateViewBody struct {
 	Name    string      `json:"name" doc:"ビューの名前"`
 	Content ViewContent `json:"content"`
 }
 
+// SaveViewBody は、ビューの内容を保存する本文。
 type SaveViewBody struct {
 	Content ViewContent `json:"content"`
 }
 
+// RenameViewBody は、ビューの名前を変える本文。
 type RenameViewBody struct {
 	Name string `json:"name" doc:"新しい名前"`
 }
