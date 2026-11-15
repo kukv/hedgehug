@@ -57,6 +57,7 @@ E1・E2a の計画の Global Constraints をすべて引き継ぐ。加えて次
 | E3a-19 | 空のとき: 表示中の Store にプロジェクトが 1 つもなければ「プロジェクトはまだありません」と「ワークスペースにプロジェクトを作ると、ここに Epic・Story・Task・Bug・Step の木が並びます。」。行が 0 件なら「一致するものはありません」と「絞り込みを変えてみてください。」(書き方に誤りがあるときも同じ)。検索の画面には「作成」のボタンを置かない | 04 の 520〜523 行(「プロジェクトを作成」はワークスペースの画面だけ、「Epic を作成」はプロジェクトの画面だけ)、451 行 |
 | E3a-20 | パレットの「選んでいるアイテム」: ツリーにフォーカスがあり、フォーカスのある行がアイテムの行なら、そのアイテム(rank 1、`source: "tree"`。プロジェクトの画面のツリーと同じ)。ステータスの変更は core の `setRowStatus` で、検索を読み直す | A5c-9、E2a-18 |
 | E3a-21 | プロジェクトの画面とワークスペースの画面のツリーのタブの開閉を画面の状態に残すことは、そのタブの画面の状態の鍵を決める E2c・E7 のうち E7 が行う(トラック E の分け方に書く) | 04 の 474 行。タブの画面の状態の鍵は E2c で決める |
+| E3a-22 | 既存の不具合の直し: 新しいブラウザのタブで、パレットの「検索で開く」「{N} 件をまとめて変更…」から検索の画面を開くと、保存した列などの設定が初めの値で上書きされていた。`prepareQuery` を、画面の状態を読んでから絞り込みだけを置き換える形にする(Task 3) | ユーザーの決定(2026-11-15)。04 の 359 行(レイアウトの設定と列は変えない) |
 
 ## Review Focus
 
@@ -183,6 +184,7 @@ git commit -m "refactor(core): ツリーの部品を行の型で使えるよう�
   - `showTable(): void` — E3a-9 の入口が呼ぶ。そのブラウザのタブでまだ `open` が画面の状態を読んでいなければ、書かずに印だけを付け、`open` が読んだあとで `layout` を `table` にして書く(読む前に書くと、保存した絞り込み・列・開閉が初めの値で上書きされる)。読んだあとなら `setLayout("table")`
   - `setCollapsed(collapsed: string[]): void` — 書くだけ
   - `replaceQuery`・`prepareQuery` は、絞り込みを入れ替える前に `showTable()` を行う(パレットの「検索で開く」「{N} 件をまとめて変更…」の入口)
+  - E3a-22(既存の不具合の直し。ユーザーの決定、2026-11-15): `prepareQuery` も、そのタブでまだ画面の状態を読んでいなければ書かない。絞り込みを印として持ち、`open` が読んだあとで、読んだ値の `query` だけを置き換え、`layout` を `table` にして書く(列・グループ・並べ替え・開閉は読んだ値のまま。04 の 359 行「レイアウトの設定と列は変えない」)。`open` が読んでいるあいだに `prepareQuery` が来たときも同じ(読み終えたところで置き換える)。`settled` と `cancelPrepare` の働きは変えない
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -194,6 +196,7 @@ git commit -m "refactor(core): ツリーの部品を行の型で使えるよう�
 - `showTable switches to table`(Review Focus 5): `open` で `layout: "tree"` を読んだあと `showTable()` → `layout` が `table`。
 - `showTable before the first open keeps the saved state`: 保存が `{query: "kind:bug", layout: "tree", table: {columns: ["id","title"], …}, tree: {collapsed: ["s/1"]}}` で、`open` の前に `showTable()` → `open` のあとの状態と書いた値が `query: "kind:bug"`・`layout: "table"`・その `columns`・その `collapsed`。`open` の前には `screenStates.write` が呼ばれない。
 - `replaceQuery opens in table`: `layout: "tree"` の状態で `replaceQuery("kind:bug")` → `table`。
+- `prepareQuery before the first open keeps the saved table`(E3a-22): 保存が `{query: "a", layout: "tree", table: {columns: ["id","title","points"], group: "kind", sort: {key: "id", desc: true}}, tree: {collapsed: ["s/1"]}}` で、`open` の前に `prepareQuery("kind:bug")` → `open` のあとの状態と書いた値が `query: "kind:bug"`・`layout: "table"`・その `table`・その `collapsed`。`open` の前には `screenStates.write` が呼ばれない。検索は 1 回だけで、`kind:bug` で行う。
 - `open keeps the saved layout`: 保存が `tree` なら `open` のあと `tree`。
 
 - [ ] **Step 2: 落ちることを確かめる**
