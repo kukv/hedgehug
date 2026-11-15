@@ -30,6 +30,21 @@ export {
   searchWaitMs,
 } from "./features/search/search";
 export {
+  buildSearchTree,
+  type ProjectData,
+  rowKey,
+  type SearchTreeRow,
+  type SearchTreeSection,
+  type SearchTreeView,
+  screenFor,
+  treeScope,
+} from "./features/search/searchTree";
+export {
+  createSearchTreeData,
+  type SearchTreeData,
+  type SearchTreeDataDeps,
+} from "./features/search/searchTreeData";
+export {
   columnChoices,
   defaultTable,
   groupChoices,
