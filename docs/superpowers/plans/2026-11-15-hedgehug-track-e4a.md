@@ -4,7 +4,7 @@
 
 **Goal:** マイタスクの画面(絞り込み・まとめ方・行・空のとき)を作り、サイドバーのナビ「マイタスク」と件数のバッジ、パレットのコマンド「マイタスクを開く」を足す。仮のホームをなくし、画面を指さない URL(`/`)では最後に開いていた画面を開き、なければマイタスクを開く。日付が変わったときに、日付で決まる表示(期限の強調、マイタスクのグループとバッジ、`today` を含む検索の結果)を更新する。ワークスペースの概要は E4b で作る。
 
-**Architecture:** マイタスクの対象と絞り込みの一致は、サーバーの新しい `POST /api/my-tasks` が決める(クエリの解析はサーバーだけ。E1-1)。サーバーは対象の条件と絞り込みを AND にし、`sort:`・`group:` を使わずに既定の並びで返す。まとめ方(期限・プロジェクト・ワークスペース)は画面が作る。期限の区分は画面の「今日」で決めるので、日付が変わると描き直すだけで区分が替わる。日付の変わり目は、app の時計(`syncNow`)から作る `today`(日付が変わったときだけ値が替わる)で知らせる。日付が変わったら、Store が変わったときと同じ読み直し(`reflect(["store"])`)を 1 回走らせる。これで、サーバーが今日で計算するもの(`today` の検索・削除済みの残り日数・マイタスクとバッジ)も読み直される。最後に開いていた画面は、画面の状態の鍵 `last-screen` に、出した画面のアドレスを書いて覚える。
+**Architecture:** マイタスクの対象と絞り込みの一致は、サーバーの新しい `POST /api/my-tasks` が決める(クエリの解析はサーバーだけ。E1-1)。サーバーは対象の条件と絞り込みを AND にし、`sort:`・`group:` を使わずに既定の並びで返す。まとめ方(期限・プロジェクト・ワークスペース)は画面が作る。期限の区分は画面の「今日」で決めるので、日付が変わると描き直すだけで区分が替わる。日付の変わり目は、app の時計(`syncNow`)から作る `today`(日付が変わったときだけ値が替わる)で知らせる。日付が変わったら、Store が変わった出来事を 1 つ受けたのと同じに扱う(画面への反映の `reflection` に `store` を積む。入力中・ダイアログ中は、出来事と同じく済むまで待つ)。これで、サーバーが今日で計算するもの(`today` の検索・削除済みの残り日数・マイタスクとバッジ)も読み直される。最後に開いていた画面は、画面の状態の鍵 `last-screen` に、出した画面のアドレスを書いて覚える。
 
 **Tech Stack:** Go 1.27.3、huma v2。画面は Svelte 5(`web/app`・`web/packages/core`・`web/packages/ui`・`web/packages/api`、orval の生成)、e2e は Playwright。依存ライブラリは足さない。
 
@@ -51,9 +51,9 @@ E1・E2a・E3a の計画の Global Constraints をすべて引き継ぐ。加え
 | E4a-13 | マイタスクのアドレスは `/my-tasks`。`/` は「画面を指さない URL」で、開くと最後に開いていた画面へ移る(履歴に積まない)。最後の画面がないとき(初めて開いた)はマイタスクへ移る。最後の画面がもうないとき(削除・非表示など)は、ほかのアドレスと同じく、見つからない理由のトーストを出してマイタスクへ移る。解釈できないアドレスと、これまで仮のホームへ移していたところ(画面がなくなったとき、旧 ID で開けないとき、ワークスペースの削除のあと、移動の移り先がないとき)は、すべてマイタスクへ移す | 01 の 149・168・169 行、A2 の決定 6 |
 | E4a-14 | 最後の画面は、画面の状態の鍵 `last-screen` に `{path}`(`formatRoute` の形)で書く。書くのは、画面の解決が終わって出した画面ごと(`/` とアイテムの入口は書かない。アイテムの入口はツリーのアドレスに替わってから書く)。複数のブラウザのタブでは、あとに出した画面が残る | 01 の 149・175 行 |
 | E4a-15 | ホームにあった版の表示を画面から削除する。使われなくなる web の system の部品(core の `features/system`・`port/system.ts`、api の `system.ts`)と、サーバーの `GET /api/system`(`internal/adapter/httpapi/system`)も削除する。`hh --version` はそのまま | ユーザーの決定(2026-11-15)。仕様に版を画面に出す規定がない |
-| E4a-16 | 日付の変わり目: app の時計 `syncNow` は、30 秒ごとに加えて、画面に戻ったとき(`visibilitychange`・フォーカス)にも進める。core の `createToday(now)` は、`dayOf(now)` が替わったときだけ値が替わる。日付が替わったら(最初の値は除く)`reflect(["store"])` を 1 回走らせる。期限の強調は `today` で描く(プロジェクトのツリー・プロジェクトの概要・検索のツリー・検索のテーブル) | 01 の 132 行(1 分ごとの確認と、画面に戻ったとき・スリープから戻ったとき)、04 の 42 行、A3a の決定 22、E1-23 |
+| E4a-16 | 日付の変わり目: app の時計 `syncNow` は、30 秒ごとに加えて、画面に戻ったとき(`visibilitychange`・フォーカス)にも進める。core の `createToday(now)` は、`dayOf(now)` が替わったときだけ値が替わる。日付が替わったら(最初の値は除く)、core の `Reflection` に足す `queue(kind)` で `store` を積む。積んだものは、出来事と同じく、待つ条件(`held`。ダイアログ・メニュー・入力欄のフォーカスほか)になく見えているときに `reflect` される。期限の強調は `today` で描く(プロジェクトのツリー・プロジェクトの概要・検索のツリー・検索のテーブル) | 01 の 132 行(1 分ごとの確認と、画面に戻ったとき・スリープから戻ったとき)、04 の 42 行、A3a の決定 22、E1-23 |
 | E4a-17 | 01 の 132 行の更新の対象の持ち主: マイタスクのグループとバッジ・期限の強調と「期限切れ」「今日」・`today` などを含む検索の結果・検索の削除済みの行の「あと N 日」は E4a。概要の「期限切れ」カードは E4b(`reflect` で読み直す)。ガントの今日の線は E6。スプリントの「残り N 日」(F1)・アクティビティの「今日」「昨日」(C4d)・累積フロー図(F3)は `syncNow` で作ってある。設定の「削除済み」の「あと N 日」と自動の完全削除は G6 | 01 の 132 行、トラック G の分け方 |
-| E4a-18 | 入力中の欄と開いているダイアログは動かさない: 日付の変わり目の読み直しは Store の出来事と同じ道を通るので、06 の反映の規則のまま。マイタスクの絞り込み欄は、読み直しで中身を書き換えない(読み直しは、いまの絞り込みで問い合わせ直すだけ) | 01 の 132 行 |
+| E4a-18 | 入力中の欄と開いているダイアログは動かさない: 日付の変わり目の読み直しは `reflection.queue("store")` で Store の出来事と同じ待ち(`held`・`visible`)を通るので、06 の反映の規則のまま。`today` で描き直す期限の表示は、値を書き換えないので待たない。マイタスクの絞り込み欄は、読み直しで中身を書き換えない(読み直しは、いまの絞り込みで問い合わせ直すだけ) | 01 の 132 行 |
 | E4a-19 | パレットのコマンド「マイタスクを開く」を「新規作成」の次に置く。サイドバーのナビは、マイタスク・受信箱・アクティビティ・検索の順 | 02 の 621 行、04 の 57〜62 行 |
 | E4a-20 | e2e の `tokenUrl()` の初めのパスを `/my-tasks` にする。同じ worker のサーバーをほかのテストと共有するので、`/` で開くと前のテストの最後の画面が開くため。`/` のテストは、先に `PUT /api/screen-states/last-screen` で最後の画面を置いてから開く | `web/e2e/fixtures.ts`(worker ごとに 1 つのサーバー) |
 | E4a-21 | e2e のサーバーでは、閲覧のみの Store のサンプルの Task(HH-2「ログイン画面を作る」)の担当者を taro にする。閲覧のみの Store の行のステータスのボタンが無効になることを確かめるため(閲覧のみの Store には API で書けない) | 04 の 151 行 |
@@ -134,6 +134,7 @@ git commit -m "feat(search): マイタスクの API と、検索の行のステ�
 - `does not write home or item`: current が `home`・`item` のときは書かない。
 - `restore goes to the last screen`: `last-screen` が `{"path":"/inbox"}` のとき、route を `home` にすると `replace({name: "inbox"})`。
 - `restore goes to my tasks when empty`: 保存がない・`null`・壊れた JSON のとき `replace({name: "mytasks"})`。
+- `restore does not override a later move`: 画面の状態を読んでいるあいだに route が `inbox` に替わったら、読み終えても `replace` しない(読み終えたときに route がまだ `home` のときだけ移る)。
 - `restore goes to my tasks when gone`(Review Focus 4): `last-screen` が削除済みのワークスペースのアドレスで、screen の解決が `{name: "mytasks", gone}` を返すとき、トーストは 1 回だけで、移り先は `mytasks`(`screen.test.ts` の既存の gone のテストと同じ組み立てで、`createScreen` と `createLastScreen` を一緒に動かす)。
 
 `screen*.test.ts`・`resolve*.test.ts`・`leaveMoved`・`delete` の既存のテストの期待を `home` から `mytasks` に直す。
@@ -285,7 +286,7 @@ git commit -m "feat(core): マイタスクの状態・バッジの件数・候�
 
 `cmd/hedgehug/wire_e2e.go` に、閲覧のみの Store のサンプルの Task の担当者を taro にする関数を足し、`e2eStores` の並びに入れる(`readonlyProject` と同じ書き方)。
 
-`web/e2e/my-tasks.spec.ts`(アイテムは `send` で e2e の Store に作り、`PUT .../items/{id}/assignee` などで担当者・終了日・優先度を入れる。絞り込みはテストごとに一意の印(`unique`)を入れて、ほかのテストのアイテムを除く。初めに `PUT /api/screen-states/my-tasks` を `{"filter":"","groupBy":"due"}` に戻す):
+`web/e2e/my-tasks.spec.ts`(アイテムは `send` で `POST /api/stores/{e2eStore}/items`(サンプルのプロジェクト・Epic の下。`apiTask` と同じ本文)に作り、担当者・終了日・優先度・ステータスは `PUT /api/stores/{store}/items/{item}/properties/{property}`(本文 `{value}`。`property` は `assignee`・`end`・`priority`・`status`。優先度・ステータスの値は ID なので、`GET /api/stores/{store}/workspaces/{workspace}` の設定から名前で引く)で入れる。手順は `web/e2e/my-tasks-helpers.ts` にまとめる。絞り込みはテストごとに一意の印(`unique`)を入れて、ほかのテストのアイテムを除く。初めに `PUT /api/screen-states/my-tasks` を `{"filter":"","groupBy":"due"}` に戻す):
 - `groups my tasks by due`: 担当 taro の Task を、終了日が昨日・今日・なしの 3 つ作る。サイドバーの「マイタスク」→ 見出し「マイタスク」と「あなたが担当しているタスク」。印で絞り込むと、見出し「期限切れ 1」「今日 1」「期限なし 1」がこの順に出る。昨日の行の期限は「期限切れ {日付}」。
 - `switches grouping and keeps it`: まとめ方の「プロジェクト」(`getByRole("group", {name: "まとめ方"})` の中のボタン)を押すと、見出しがプロジェクトのタイトルになる。再読み込みしても「プロジェクト」が押された状態で、絞り込みも残る。
 - `shows filter errors and empty states`: 絞り込み `status:` → 赤字「「status:」に値がありません」と「一致するものはありません」。印に一致しない語 → 「一致するものはありません」と「絞り込みを変えてみてください。」。
@@ -301,13 +302,13 @@ Expected: FAIL(画面がない)
 - [ ] **Step 3: 画面を組む**
 
 - `MyTasksScreen.svelte`: `PageHead`(`myTasksTitle`・`myTasksNote`)、絞り込み欄(`FilterInput`。候補は `createCandidates` に `{kind: "myTasks", projects: myTaskProjects($base ?? [])}` を渡す。打ち方と候補の選び方は `SearchScreen.svelte` と同じ)、「検索ヘルプ」(`SearchHelp`)、まとめ方の切り替え(`LayoutSwitch` に `label="まとめ方"`・`myTasksGroupChoices`)、本体(`MyTaskGroups`)。`onMount` で `myTasks.open()`。
-- `MyTaskGroups.svelte`: `groupMyTasks($view.rows, $view.groupBy, dayOf($today), $stores)`(`today` は Task 7 で作る。この Task では `syncNow` から `dayOf` で作り、Task 7 で `today` に替える)。行が 0 件なら `myTasksEmpty($base?.length ?? 0)`。見出しは `<h2>` に名前と件数、`warn` なら警告の色、`store` があれば前に `StoreBadge`。
+- `MyTaskGroups.svelte`: `groupMyTasks($view.rows, $view.groupBy, dayOf($today), $stores)`(`today` は Task 7 で作る。この Task では `syncNow` から `dayOf` で作り、Task 7 で `today` に替える)。行が 0 件のときの空の表示は、マイタスクの状態が `loaded` で、バッジの行(`$myTaskBase`)が null でないときだけ `myTasksEmpty($myTaskBase.length)` で出す(読み込み中や読めないときに「担当しているタスクはありません」と出さない)。見出しは `<h2>` に名前と件数、`warn` なら警告の色、`store` があれば前に `StoreBadge`。
 - `MyTaskRow.svelte`: 種類のアイコン、ID、タイトル(`links.click(e, {name: "item", store, item: display}, () => void detail.open(storeId, itemId))`。削除済みの行はリンクにせず `deletedNote` を添える)、Store の点(`TableIdCell` と同じ書き方)とプロジェクトのタイトル、期限(`dueLabel(row.end, row.status?.category, $today)`)、優先度の名前、ステータスのボタン(`myTaskSettings` があれば `StatusButton`、なければ名前の文字。`disabled` は `row.readOnly || row.deleted !== undefined`)。ステータスを選ぶと `setRowStatus({items, toasts, reload: () => Promise.all([myTasks.reload(), myTaskBase.reload()])}, ...)`。
 - `Screen.svelte`: `current?.name === "mytasks"` で `MyTasksScreen`。
 
 - [ ] **Step 4: 通ることを確かめる**
 
-Run: `go test ./cmd/... && pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/my-tasks.spec.ts`
+Run: `go test ./cmd/... && pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/my-tasks.spec.ts e2e/tree-readonly.spec.ts e2e/notes-readonly.spec.ts e2e/detail.spec.ts e2e/project.spec.ts e2e/search-tree.spec.ts e2e/search-table.spec.ts`(閲覧のみの Store のサンプルを変えたため、それを開くテストも流す)
 Expected: PASS
 
 - [ ] **Step 5: コミット**
@@ -323,7 +324,7 @@ git commit -m "feat(web): マイタスクの画面を足す(E4a Task 5)"
 
 **Files:**
 - Create: `web/e2e/last-screen.spec.ts`、`web/app/src/lastScreen.ts`(`createLastScreen({navigation, current: screen.current, screenStates}).start()` をモジュールを読んだときに 1 回呼ぶ。`App.svelte` から import する。`wire.ts` は 299 行なので触らない。`/` から移るのは、一覧を読む前でもよい: アドレスを替えておけば、`screen.start()` のあとの解決がその画面を出す)
-- Modify: `web/app/src/shell/Sidebar.svelte`(ナビの先頭に「マイタスク」とバッジ)、`web/packages/core/src/features/palette/actions.ts`・`actions.test.ts`(「マイタスクを開く」)、`web/app/src/shell/Screen.svelte`(仮のホームと `version` をなくし、`home` のあいだは本文を空にする)、`web/app/src/App.svelte`(`system` と `version` をなくす)、削除: `web/packages/core/src/features/system/`・`web/packages/core/src/port/system.ts`・`web/packages/api/src/system.ts`(と公開の行)・`internal/adapter/httpapi/system/`(`routes.go` の登録と、ほかに使われなくなる `Deps.Version` も)、`api/openapi.yaml`・`generated.ts`(`make generate`)、`web/e2e/helpers.ts`(`tokenUrl` の初めのパス)、`web/e2e/frame.spec.ts`・`project-delete.spec.ts`・`workspace-delete.spec.ts`・`palette.spec.ts`(見出し「hedgehug」を「マイタスク」に)、`web/e2e/my-tasks.spec.ts`
+- Modify: `web/app/src/shell/Sidebar.svelte`(ナビの先頭に「マイタスク」とバッジ)、`web/packages/core/src/features/palette/actions.ts`・`actions.test.ts`(「マイタスクを開く」)、`web/app/src/shell/Screen.svelte`(仮のホームと `version` をなくし、`home` のあいだは本文を空にする)、`web/app/src/App.svelte`(`system` と `version` をなくす)、削除: `web/packages/core/src/features/system/`・`web/packages/core/src/port/system.ts`・`web/packages/api/src/system.ts`(と公開の行)・`internal/adapter/httpapi/system/`(`routes.go` の登録と、ほかに使われなくなる `Deps.Version` も)、`internal/adapter/httpapi/server_test.go`・`internal/archtest/rules_test.go`(下の Step 1)、`api/openapi.yaml`・`generated.ts`(`make generate`)、`web/e2e/helpers.ts`(`tokenUrl` の初めのパス)、`web/e2e/frame.spec.ts`・`project-delete.spec.ts`・`workspace-delete.spec.ts`・`palette.spec.ts`(見出し「hedgehug」を「マイタスク」に)、`web/e2e/my-tasks.spec.ts`
 
 **Interfaces:**
 - Consumes: Task 2 の `createLastScreen`・`lastScreenKey`、Task 3 の `myTasksBadge`、Task 5 の `myTaskBase`
@@ -342,7 +343,9 @@ git commit -m "feat(web): マイタスクの画面を足す(E4a Task 5)"
 - `badge counts all my tasks`(Review Focus 2): サイドバーの「マイタスク」のバッジ(`getByRole("img", {name: /^未完了 \d+ 件$/})`)の数を読み、担当 taro の Task を 1 つ作ると 1 増える。マイタスクで印に一致しない語で絞り込んでも、バッジの数は変わらない。
 - `palette opens my tasks`: 受信箱を開いてから Ctrl+K で「マイタスクを開く」を選ぶと、見出し「マイタスク」。
 
-`frame.spec.ts` の版「dev」の確かめを、見出し「マイタスク」が出ることに替える(トークンが合わなければマイタスクの読み込みが 401 で出ない)。
+`frame.spec.ts` は `"/#token=e2e-token"` をそのまま開いているので、`tokenUrl()`(`/my-tasks`)を開く形に替え、版「dev」の確かめを、見出し「マイタスク」が出ることに替える(トークンが合わなければマイタスクの読み込みが 401 で出ない)。同じファイルの再読み込みとアドレスのテストも、開くアドレスが `/my-tasks` になった前提で期待を直す。
+
+サーバー: `internal/adapter/httpapi/server_test.go` の `TestSystemNeedsToken` は `/api/system` でトークンを確かめているので、`TestAPINeedsToken` として `GET /api/stores` で確かめる形に替える(トークンなし・違うトークンは 401、正しいトークンは 200)。`internal/archtest/rules_test.go` の `internal/adapter/httpapi` → `internal/adapter/httpapi/system` の行は、`internal/adapter/httpapi/stores` に替える。
 
 - [ ] **Step 2: 失敗することを確かめる**
 
@@ -373,13 +376,15 @@ git commit -m "feat(web): ナビのマイタスクとバッジ・パレットの
 
 **Files:**
 - Create: `web/app/src/clock.ts`(`syncNow`・`today`・`tickClock` と 30 秒ごとの進め方を `wire.ts` から移す)、`web/e2e/day-change.spec.ts`
-- Modify: `web/app/src/wire.ts`(`clock.ts` を使い、`recheck` で `tickClock()`、`onDayChange(today, () => void reflect(["store"]))` を `startSync` に足す。`syncNow` は `clock.ts` から読み直して公開を保つ)、`web/app/src/screens/project/ProjectTree.svelte`・`ProjectOverview.svelte`・`web/app/src/screens/tree/SearchTreeBody.svelte`(`new Date()` を `$today` に)、`web/app/src/screens/table/ItemTable.svelte`(`now` を `rows` と `$today` で作り直す)、`web/app/src/screens/mytasks/MyTaskGroups.svelte`・`MyTaskRow.svelte`(Task 5 の仮の今日を `$today` に)
+- Modify: `web/packages/core/src/features/sync/reflection.ts`・`reflection.test.ts`(`Reflection` に `queue(kind: SyncEventKind): void` を足す。中の `add` と同じく積んで `flush` する)、`web/app/src/wire.ts`(`clock.ts` を使い、`recheck` で `tickClock()`、`onDayChange(today, () => reflection.queue("store"))` を `startSync` に足す。`syncNow` は `clock.ts` から読み直して公開を保つ)、`web/app/src/screens/project/ProjectTree.svelte`・`ProjectOverview.svelte`・`web/app/src/screens/tree/SearchTreeBody.svelte`(`new Date()` を `$today` に)、`web/app/src/screens/table/ItemTable.svelte`(`now` を `rows` と `$today` で作り直す)、`web/app/src/screens/mytasks/MyTaskGroups.svelte`・`MyTaskRow.svelte`(Task 5 の仮の今日を `$today` に)
 
 **Interfaces:**
 - Consumes: Task 3 の `createToday`・`onDayChange`
 - Produces: app の `today: Readable<Date>`(`clock.ts`)、`tickClock(): void`
 
 - [ ] **Step 1: 失敗するテストを書く**
+
+`reflection.test.ts`: `queue waits while held`: `held()` が true のあいだに `queue("store")` を呼んでも `apply` は呼ばれず、`held()` を false にして 0.5 秒進めると `apply(["store"])` が 1 回呼ばれる。`queue applies when free`: 待つ条件がなければ、すぐ `apply(["store"])`。
 
 `web/e2e/day-change.spec.ts`(Playwright の `page.clock`。`page.clock.install({ time: new Date() })` を `goto` の前に呼ぶ):
 - `my tasks regroup when the day changes`: 担当 taro・終了日が今日の Task を作り、印で絞り込んだマイタスクに「今日 1」が出る。`page.clock.fastForward("24:00:00")` のあと、入力欄の印はそのままで、見出しが「期限切れ 1」に替わる。
@@ -416,16 +421,20 @@ git commit -m "feat(web): 日付が変わったら、期限の表示とマイタ
 - [ ] **Step 1: 文書を直す**
 
 - トラック E の分け方: 決めたことの表に「E-8 E4 は 2 本に分ける(E4a・E4b)。E4b は E2c のあと。ユーザーの決定(2026-11-15)」を足す。小計画の一覧の E4 の行を、E4a(この計画の Goal の中身。待つものは E3a)と E4b(ワークスペースの概要の統計 3 枚・プロジェクトの一覧と行のプロジェクトのメニュー・最近の変更・「期限切れ」カードからテーブルのタブ。待つものは E2c)の 2 行にする。「ほかのトラックから回された項目の行き先」の A2(決定 6)・A3a(決定 22)・A5c の「マイタスクを開く」を E4a に、F3 を E4b にする。
-- この計画の末尾に「実装で計画から変えたこと」と「E4b に渡すもの」(概要の「期限切れ」カードの件数は `reflect(["store"])` で日付の変わり目にも読み直されること、`today` の場所、`LayoutSwitch` の `label`)を書く。
+- この計画の末尾に「実装で計画から変えたこと」と「E4b に渡すもの」(概要の「期限切れ」カードの件数は、日付の変わり目の `reflection.queue("store")` で `reloads` と同じく読み直されること、`today` の場所、`LayoutSwitch` の `label`)を書く。
 
-- [ ] **Step 2: すべてを確かめる**
+- [ ] **Step 2: develop を取り込み、「ホーム」への移り先が残っていないか確かめる**
+
+`{name: "home"}` は型としては残る(`/` の意味)ので、ほかのトラック(E3b はビューの削除のあとなどに `replace({name: "home"})` を足している)が「マイタスクへ移る」つもりで書いた `home` は、型の検査を通ったまま、最後の画面を開く動きに変わる。`git merge origin/develop` のあと、`grep -rn '"home"' web/packages/core/src web/app/src` で、`route.ts` の `/` の解釈・`resolve.ts` の `home` の解決・`lastScreen.ts` 以外に、移り先として `home` を使っているところがあれば `mytasks` に直し、そのテストの期待も直す。
+
+- [ ] **Step 3: すべてを確かめる**
 
 Run: `make check && make e2e-bin && pnpm -C web exec playwright test`
 Expected: PASS
 
-- [ ] **Step 3: コミット**
+- [ ] **Step 4: コミット**
 
 ```bash
-git add docs
+git add docs web
 git commit -m "docs: トラック E の分け方を E4a・E4b に書き換える(E4a Task 8)"
 ```
