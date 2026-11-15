@@ -8,9 +8,11 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/planning"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
@@ -206,4 +208,210 @@ func TestRenameDuplicatesRevivedWorkspace(t *testing.T) {
 			wantWorkspace(t, e.workspaceOf(devWS2), "開発 (2)", "WEB2")
 		})
 	}
+}
+
+const (
+	dupProp1   change.ID = "01DUPPROP0000000000000001"
+	dupProp2   change.ID = "01DUPPROP0000000000000002"
+	dupProp3   change.ID = "01DUPPROP0000000000000003"
+	dupValue1  change.ID = "01DUPVALUE000000000000001"
+	dupValue2  change.ID = "01DUPVALUE000000000000002"
+	dupValue3  change.ID = "01DUPVALUE000000000000003"
+	dupValue4  change.ID = "01DUPVALUE000000000000004"
+	dupTpl1    change.ID = "01DUPTPL00000000000000001"
+	dupTpl2    change.ID = "01DUPTPL00000000000000002"
+	dupRule1   change.ID = "01DUPRULE0000000000000001"
+	dupRule2   change.ID = "01DUPRULE0000000000000002"
+	dupSprint1 change.ID = "01DUPSPRINT00000000000001"
+	dupSprint2 change.ID = "01DUPSPRINT00000000000002"
+	dupRel1    change.ID = "01DUPRELEASE0000000000001"
+	dupRel2    change.ID = "01DUPRELEASE0000000000002"
+)
+
+// writeWS は、サンプルのワークスペースのログに ds を書き、足した行の ID を返す。
+func (e *env) writeWS(ds ...change.Draft) map[change.ID]bool {
+	return e.write(taro, func(tx port.Tx) error { return tx.WriteWorkspaces().Append(apptest.SampleWorkspace, ds...) })
+}
+
+// sampleSettings は、サンプルのワークスペースの設定。
+func (e *env) sampleSettings() workspace.Settings {
+	e.t.Helper()
+	s, _ := workspace.SettingsFromLog(e.logOf(wsRef(apptest.SampleWorkspace)))
+	return s
+}
+
+func propertyDrafts(id change.ID, key, name string, typ workspace.PropertyType) []change.Draft {
+	return workspace.PropertyDrafts(workspace.Property{ID: id, Key: key, Name: name, Type: typ, Kinds: []string{"Task"}, Rank: "z" + string(id)})
+}
+
+func valueDrafts(l workspace.List, id change.ID, name string) []change.Draft {
+	return workspace.ValueDrafts(l, workspace.Value{ID: id, Name: name, Color: "blue", Category: workspace.CategoryDoing, Rank: "z" + string(id)})
+}
+
+func choices(p change.ID) workspace.List {
+	return workspace.List{Kind: workspace.ListChoices, Property: p}
+}
+
+func templateDrafts(id change.ID, name string) []change.Draft {
+	return workspace.TemplateDrafts(workspace.Template{}, workspace.Template{ID: id, Name: name, Kind: "Bug"})
+}
+
+// ruleDrafts は、ルール「通知」の作成の行。
+func ruleDrafts(id change.ID, enabled bool, scope project.ID) []change.Draft {
+	r := automation.Rule{ID: id, Name: "通知", Trigger: automation.TriggerPRMerged, Action: automation.ActionStatus, Value: string(apptest.SampleStatusDone), Enabled: enabled, Scope: scope}
+	return automation.Drafts(automation.Rule{}, r)
+}
+
+// sprintDrafts は、スプリント「Sprint 1」の作成の行。
+func sprintDrafts(id change.ID, state planning.SprintState) []change.Draft {
+	return planning.SprintDrafts(planning.Sprint{}, planning.Sprint{ID: id, Name: "Sprint 1", State: state})
+}
+
+func releaseDrafts(id change.ID, name string, state planning.ReleaseState) []change.Draft {
+	return planning.ReleaseDrafts(planning.Release{}, planning.Release{ID: id, Name: name, State: state})
+}
+
+// wantSettingNames は、設定のプロパティの名前(鍵はプロパティの ID)・キー(鍵は「ID/key」)・選択肢の名前(鍵は値の ID)が want のとおりか確かめる。
+func wantSettingNames(t *testing.T, s workspace.Settings, want map[string]string) {
+	t.Helper()
+	got := map[string]string{}
+	for _, p := range s.Properties {
+		got[string(p.ID)], got[string(p.ID)+"/key"] = p.Name, p.Key
+		for _, v := range p.Choices {
+			got[string(v.ID)] = v.Name
+		}
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+// 同じワークスペースの設定・ルール・スプリント・リリースで重なった名前とプロパティのキーは、自分の側で足した方を直す。
+func TestRenameDuplicatesSettings(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		base         []change.Draft
+		theirs, ours []change.Draft
+		want         []string
+		names        map[string]string // wantSettingNames の want
+	}{
+		{
+			name:   "プロパティ",
+			theirs: propertyDrafts(dupProp1, "customer", "顧客", workspace.TypeText),
+			ours:   propertyDrafts(dupProp2, "customer", "顧客", workspace.TypeText),
+			want:   []string{"プロパティ「顧客」を「顧客 (2)」に変更", "プロパティのキー「customer」を「customer2」に変更"},
+			names: map[string]string{
+				string(dupProp2): "顧客 (2)", string(dupProp2) + "/key": "customer2",
+				string(dupProp1): "顧客", string(dupProp1) + "/key": "customer",
+			},
+		},
+		{
+			name:   "組み込みの名前の変更",
+			theirs: []change.Draft{change.NewSet("properties/assignee/name", "担当者", "Owner")},
+			ours:   propertyDrafts(dupProp2, "owner", "Owner", workspace.TypeText),
+			want:   []string{"プロパティ「Owner」を「Owner (2)」に変更"},
+			names:  map[string]string{"assignee": "Owner", string(dupProp2): "Owner (2)"},
+		},
+		{
+			name: "選択肢",
+			base: slices.Concat(propertyDrafts(dupProp1, "area", "領域", workspace.TypeSingle),
+				propertyDrafts(dupProp3, "team", "チーム", workspace.TypeMulti), valueDrafts(choices(dupProp3), dupValue3, "A")),
+			theirs: valueDrafts(choices(dupProp1), dupValue1, "A"),
+			ours:   valueDrafts(choices(dupProp1), dupValue2, "A"),
+			want:   []string{"選択肢「A」を「A (2)」に変更"},
+			names:  map[string]string{string(dupValue1): "A", string(dupValue2): "A (2)", string(dupValue3): "A"},
+		},
+		{
+			name:   "テンプレート",
+			theirs: templateDrafts(dupTpl1, "バグ報告"),
+			ours:   templateDrafts(dupTpl2, "バグ報告"),
+			want:   []string{"テンプレート「バグ報告」を「バグ報告 (2)」に変更"},
+		},
+		{
+			name:   "ルール",
+			theirs: ruleDrafts(dupRule1, true, ""),
+			ours:   ruleDrafts(dupRule2, true, ""),
+			want:   []string{"自動化「通知」を「通知 (2)」に変更"},
+		},
+		{
+			name:   "スプリント",
+			theirs: sprintDrafts(dupSprint1, planning.Closed),
+			ours:   sprintDrafts(dupSprint2, planning.Planned),
+			want:   []string{"スプリント「Sprint 1」を「Sprint 1 (2)」に変更"},
+		},
+		{
+			name:   "リリース",
+			theirs: releaseDrafts(dupRel1, "v1", planning.Archived),
+			ours:   releaseDrafts(dupRel2, "v1", planning.Unreleased),
+			want:   []string{"リリース「v1」を「v1 (2)」に変更"},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnv(t)
+			if c.base != nil {
+				e.writeWS(c.base...)
+			}
+			theirs := e.writeWS(c.theirs...)
+			ours := e.writeWS(c.ours...)
+			wantOps(t, e.run(ours, theirs), c.want...)
+			wantSettingNames(t, e.sampleSettings(), c.names)
+		})
+	}
+}
+
+// 値の名前は、同じ一覧の中で、大文字と小文字を区別せずに比べる。別の一覧の同じ名前は直さない。
+func TestRenameDuplicatesValuesFold(t *testing.T) {
+	e := newEnv(t)
+	ours := e.writeWS(slices.Concat(
+		valueDrafts(statuses, dupValue1, "review"),
+		valueDrafts(workspace.ParseList("priorities"), dupValue2, "high"),
+		valueDrafts(workspace.ParseList("systems"), dupValue3, "web"),
+		valueDrafts(workspace.ParseList("priorities"), dupValue4, "API"),
+	)...)
+	wantOps(t, e.run(ours, nil),
+		"ステータス「review」を「review (2)」に変更", "優先度「high」を「high (2)」に変更", "関連システム「web」を「web (2)」に変更")
+	s := e.sampleSettings()
+	if i := slices.IndexFunc(s.Priorities, func(v workspace.Value) bool { return v.ID == dupValue4 }); i < 0 || s.Priorities[i].Name != "API" {
+		t.Errorf("priorities = %+v", s.Priorities)
+	}
+}
+
+// 削除済みのスプリントとプロパティは数えない。
+func TestRenameDuplicatesSkipsDeleted(t *testing.T) {
+	e := newEnv(t)
+	theirs := e.writeWS(slices.Concat(
+		sprintDrafts(dupSprint1, planning.Planned),
+		[]change.Draft{planning.DeleteSprint(dupSprint1)},
+		propertyDrafts(dupProp1, "customer", "顧客A", workspace.TypeText),
+		[]change.Draft{change.NewDelete("properties/" + string(dupProp1))},
+	)...)
+	ours := e.writeWS(slices.Concat(
+		sprintDrafts(dupSprint2, planning.Planned),
+		propertyDrafts(dupProp2, "customer", "顧客B", workspace.TypeText),
+	)...)
+	wantOps(t, e.run(ours, theirs))
+}
+
+// 専用ルールとワークスペース全体のルールの名前の重なりも直す。無効のルールも数える。
+func TestRenameDuplicatesScopedRule(t *testing.T) {
+	e := newEnv(t)
+	theirs := e.writeWS(ruleDrafts(dupRule1, true, project2)...)
+	ours := e.writeWS(ruleDrafts(dupRule2, false, "")...)
+	wantOps(t, e.run(ours, theirs), "自動化「通知」を「通知 (2)」に変更")
+}
+
+// 1 回の Run で、ワークスペースの名前 → プロジェクト → 値 → スプリントの順に直す(C5c1-6)。
+func TestRenameDuplicatesOrder(t *testing.T) {
+	e := newEnv(t)
+	theirs := e.writeWS(sprintDrafts(dupSprint1, planning.Planned)...)
+	ours := union(
+		e.writeWS(slices.Concat(valueDrafts(statuses, dupValue1, "review"), sprintDrafts(dupSprint2, planning.Planned))...),
+		e.newProject(apptest.SampleWorkspace, webProject1, 3, "ログイン"),
+		e.newWorkspace(devWS2, "Web", "DEV"),
+	)
+	wantOps(t, e.run(ours, theirs),
+		"ワークスペース「Web」を「Web (2)」に変更", "プロジェクト「ログイン」を「ログイン (2)」に変更",
+		"ステータス「review」を「review (2)」に変更", "スプリント「Sprint 1」を「Sprint 1 (2)」に変更")
 }

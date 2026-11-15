@@ -67,11 +67,7 @@ func collectRenames(r port.Reader, facts repair.Facts) ([]renameFix, error) {
 		if err != nil {
 			return nil, err
 		}
-		ss, err := settingsRenames(r, ws.ID, logs[ws.ID])
-		if err != nil {
-			return nil, err
-		}
-		out = append(append(out, ps...), ss...)
+		out = append(append(out, ps...), settingsRenames(ws.ID, logs[ws.ID], facts)...)
 	}
 	return out, nil
 }
@@ -92,12 +88,6 @@ func projectRenames(r port.Reader, ws workspace.ID, facts repair.Facts) ([]renam
 		all = append(all, named(ref, "title", workspace.NormalizeName(p.Title), log))
 	}
 	return fixesOf("プロジェクト", repair.NameRenames(all, facts, false)), nil
-}
-
-// settingsRenames は、ワークスペース ws の設定(プロパティの名前・キー、値、テンプレート、ルール、
-// スプリント・リリース)の、重なった名前・キーの直し。
-func settingsRenames(_ port.Reader, _ workspace.ID, _ []change.Record) ([]renameFix, error) {
-	return nil, nil
 }
 
 // named は、ref のログ log の項目 f の値 v を、重なりを数える 1 つにする。
