@@ -60,6 +60,12 @@ export {
   tableRequest,
   toggleColumn,
 } from "./features/search/table";
+export {
+  type CellEdit,
+  createTableCells,
+  type TableCells,
+  type TableCellsDeps,
+} from "./features/search/tableCells";
 export type {
   SearchAssignee,
   SearchColumn,
