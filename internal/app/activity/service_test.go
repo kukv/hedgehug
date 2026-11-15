@@ -158,6 +158,10 @@ func TestPageMergesNonHumanDuplicates(t *testing.T) {
 	at := f.clock.Now()
 	f.commits.add(s1, port.Commit{SHA: strings.Repeat("b", 40), Summary: reset, Author: change.BotLogin, At: at.Add(time.Second)})
 	f.commits.add(s1, port.Commit{SHA: strings.Repeat("a", 40), Summary: reset, Author: change.BotLogin, At: at})
+	// 同じ時刻なら SHA の辞書順で前のものを残す。
+	const reset26 = "スプリント「Sprint 26」を計画中に戻す"
+	f.commits.add(s1, port.Commit{SHA: strings.Repeat("9", 40), Summary: reset26, Author: change.BotLogin, At: at})
+	f.commits.add(s1, port.Commit{SHA: strings.Repeat("8", 40), Summary: reset26, Author: change.BotLogin, At: at})
 	f.setItem(t, "HH-1 のタイトルを変更", apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証"))
 	f.setItem(t, "HH-1 のタイトルを変更", apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証"))
 
@@ -171,11 +175,11 @@ func TestPageMergesNonHumanDuplicates(t *testing.T) {
 		if r.Text == auto && r.SHA != first.SHA[:7] {
 			t.Errorf("automation row sha = %q, want the earliest %q", r.SHA, first.SHA[:7])
 		}
-		if r.Text == reset && r.SHA != "aaaaaaa" {
-			t.Errorf("reset row sha = %q, want the earliest", r.SHA)
+		if r.Text == reset && r.SHA != "aaaaaaa" || r.Text == reset26 && r.SHA != "8888888" {
+			t.Errorf("%s: sha = %q, want the earliest", r.Text, r.SHA)
 		}
 	}
-	if countText(rows, reset) != 1 || countText(rows, "HH-1 のタイトルを変更") != 2 {
+	if countText(rows, reset) != 1 || countText(rows, reset26) != 1 || countText(rows, "HH-1 のタイトルを変更") != 2 {
 		t.Errorf("reset rows = %d, title rows = %d; want 1 and 2", countText(rows, reset), countText(rows, "HH-1 のタイトルを変更"))
 	}
 	// まとめてから絞り込む: 「自動化だけ」でも 1 行。
@@ -249,6 +253,22 @@ func TestPageKindFilter(t *testing.T) {
 	}
 }
 
+// assertTexts は、rows の文が want をすべて含み、unwanted をどれも含まないことを確かめる。
+func assertTexts(t *testing.T, name string, rows []Row, want, unwanted []string) {
+	t.Helper()
+	got := texts(rows)
+	for _, w := range want {
+		if !slices.Contains(got, w) {
+			t.Errorf("%s rows %q lack %q", name, got, w)
+		}
+	}
+	for _, u := range unwanted {
+		if slices.Contains(got, u) {
+			t.Errorf("%s rows %q have %q", name, got, u)
+		}
+	}
+}
+
 func TestPageWorkspaceFilter(t *testing.T) {
 	f := newPageFixture(t)
 	f.setItem(t, "HH-1 のタイトルを変更", apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証"))
@@ -261,28 +281,30 @@ func TestPageWorkspaceFilter(t *testing.T) {
 			tx.WriteItems().Append(apptest.SampleMobileEpic, change.NewSet("title", "iPhone", "iOS")),
 		)
 	})
+	// 同期の修復の行は、同期の行と違い、ワークスペースで絞る。
+	f.write(t, change.Actor{Kind: change.ActorSync}, "MB-1 をバックログに戻す", func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleMobileEpic, change.NewSet("title", "iOS", "iPad"))
+	})
 	f.write(t, change.User("taro"), "メンバー jiro を追加", func(tx port.Tx) error { return tx.WriteMembers().Append(member.Join("jiro")) })
+	// ワークスペースも Store 全体の印も持たない行(別の Store へ移した記録など)は「すべて」にだけ出る。
+	f.commits.add(s1, port.Commit{SHA: strings.Repeat("d", 40), Summary: "どこにも属さない保存", Author: "taro", At: f.clock.Now()})
 	f.sync(t, s1, 1, 1)
 	f.sync(t, s2, 3, 0)
-	web := texts(f.page(t, Query{Store: s1, Workspace: apptest.SampleWorkspace}).Rows)
-	mobile := texts(f.page(t, Query{Store: s1, Workspace: apptest.SampleMobileWorkspace}).Rows)
-	for _, want := range []string{"HH-1 のタイトルを変更", "2 件のアイテムを変更", "メンバー jiro を追加", "origin と同期 (送信 1 件・受信 1 件)"} {
-		if !slices.Contains(web, want) {
-			t.Errorf("Web rows %q lack %q", web, want)
-		}
+	webRows := f.page(t, Query{Store: s1, Workspace: apptest.SampleWorkspace}).Rows
+	assertTexts(t, "Web", webRows,
+		[]string{"HH-1 のタイトルを変更", "2 件のアイテムを変更", "メンバー jiro を追加", "origin と同期 (送信 1 件・受信 1 件)"},
+		[]string{"MB-1 のタイトルを変更", "MB-1 をバックログに戻す", "どこにも属さない保存", "origin と同期 (送信 3 件・受信 0 件)"})
+	assertTexts(t, "Mobile", f.page(t, Query{Store: s1, Workspace: apptest.SampleMobileWorkspace}).Rows,
+		[]string{"2 件のアイテムを変更", "MB-1 のタイトルを変更", "MB-1 をバックログに戻す"},
+		[]string{"HH-1 のタイトルを変更", "どこにも属さない保存"})
+	all := f.page(t, Query{}).Rows
+	assertTexts(t, "all", all, []string{"どこにも属さない保存", "origin と同期 (送信 3 件・受信 0 件)"}, nil)
+	if !slices.ContainsFunc(all, func(r Row) bool { return r.Store.ID == s2 && r.SHA != "" }) {
+		t.Fatal("all rows lack the commits of S2")
 	}
-	for _, unwanted := range []string{"MB-1 のタイトルを変更", "origin と同期 (送信 3 件・受信 0 件)"} {
-		if slices.Contains(web, unwanted) {
-			t.Errorf("Web rows %q have %q", web, unwanted)
-		}
-	}
-	if !slices.Contains(mobile, "2 件のアイテムを変更") || !slices.Contains(mobile, "MB-1 のタイトルを変更") || slices.Contains(mobile, "HH-1 のタイトルを変更") {
-		t.Errorf("Mobile rows = %q", mobile)
-	}
-	for _, r := range f.page(t, Query{Store: s1}).Rows {
-		if r.Store.ID != s1 {
-			t.Errorf("rows of S1 have %+v", r)
-		}
+	store := f.page(t, Query{Store: s1}).Rows
+	if slices.ContainsFunc(append(webRows, store...), func(r Row) bool { return r.Store.ID != s1 }) {
+		t.Errorf("rows of S1 have rows of another store")
 	}
 	if _, err := f.svc.Page(t.Context(), Query{Workspace: apptest.SampleWorkspace}); !errors.Is(err, port.ErrInvalidOperation) {
 		t.Errorf("workspace without store: err = %v, want ErrInvalidOperation", err)
