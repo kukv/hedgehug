@@ -1,5 +1,4 @@
 import { expect, test } from "./fixtures";
-import { saved } from "./helpers";
 import {
   dayFrom,
   filterBy,
@@ -42,7 +41,12 @@ test("switches grouping and keeps it", async ({ page }, info) => {
   await filterBy(page, mark);
   const grouping = page.getByRole("group", { name: "まとめ方" });
   // 書き終える前に読み込み直すと、書き込みが届かないことがある。
-  const written = saved(page, "/api/screen-states/my-tasks");
+  const written = page.waitForResponse(
+    (r) =>
+      r.url().includes("/api/screen-states/my-tasks") &&
+      r.request().method() === "PUT" &&
+      (r.request().postData() ?? "").includes("project"),
+  );
   await grouping.getByRole("button", { name: "プロジェクト" }).click();
   await expect(groupHeadings(page)).toHaveText(["ログイン 1"]);
   await written;

@@ -11,7 +11,7 @@ import {
 } from "@hedgehug/core";
 import { itemChanges, reloads } from "./reloads";
 import { reloadCandidates, screenStates } from "./search";
-import { navigation, syncNow, workspacesPort } from "./wire";
+import { screen, syncNow, workspacesPort } from "./wire";
 import { timer, toasts } from "./wireBase";
 
 // マイタスクの画面(04「マイタスク」、E4a)の組み立て。wire.ts が 300 行なので、ここで作る。
@@ -62,12 +62,13 @@ function loadSettings(rows: SearchRow[]) {
 
 myTasks.state.subscribe((s) => loadSettings(s.rows));
 
-// Store が変わった知らせとアイテムを変えたあとに読み直す。絞り込みなしの行はいつも、画面の行・行のワークスペースの設定・
-// 絞り込み欄の候補の元は、マイタスクの画面を開いているときだけ(検索の reloads と同じ見分け)。
+// Store が変わった知らせとアイテムを変えたあとに読み直す。絞り込みなしの行はいつも、画面の行と絞り込み欄の候補の元は、
+// マイタスクの画面を出しているときだけ読み直す(検索の reloads と同じ見分け)。解決できないアドレスもマイタスクを出すので、
+// アドレスではなく出している画面で見る。行のワークスペースの設定は、いつも捨てる(画面を開くと読み直す)。
 async function refresh() {
-  if (get(navigation.route).name !== "mytasks") return myTaskBase.reload();
   round += 1;
   settings = new Map();
+  if (get(screen.current)?.name !== "mytasks") return myTaskBase.reload();
   await Promise.all([myTaskBase.reload(), myTasks.reload(), reloadCandidates()]);
 }
 reloads.add(refresh);
