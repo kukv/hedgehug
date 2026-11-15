@@ -29,6 +29,8 @@ type Auto struct {
 	wrote   map[port.StoreID]time.Time // Store ごとの最後の保存の時刻
 	holds   map[string]time.Time       // 待つ条件にあるタブと、知らせの期限
 	offline map[string]time.Time       // オフラインのタブと、知らせの期限
+	lapsed  map[string]bool            // オフラインの知らせが期限で消えたタブ(つながったら復帰の契機にする。決定 G1-12)
+	tried   map[port.StoreID]time.Time // Store ごとの最後に試みた時刻(記録に失敗しても毎秒試みないため。決定 G1-11)
 }
 
 // NewAuto は、「アプリを開いたとき」の契機を持った Auto を作る。
@@ -36,6 +38,7 @@ func NewAuto(svc *Service, settings port.SyncSettings) *Auto {
 	return &Auto{
 		Service: svc, Settings: settings, all: true,
 		wrote: map[port.StoreID]time.Time{}, holds: map[string]time.Time{}, offline: map[string]time.Time{},
+		lapsed: map[string]bool{}, tried: map[port.StoreID]time.Time{},
 	}
 }
 
@@ -49,8 +52,10 @@ func (a *Auto) Network(tab string, online bool) {
 		a.offline[tab] = now.Add(offlineFor)
 		return
 	}
-	if _, was := a.offline[tab]; was {
+	_, was := a.offline[tab]
+	if was || a.lapsed[tab] {
 		delete(a.offline, tab)
+		delete(a.lapsed, tab)
 		a.all = true
 	}
 }
@@ -81,7 +86,7 @@ func (a *Auto) Waiting() bool {
 	now := a.Service.Clock.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return waiting(a.holds, now) || waiting(a.offline, now) // take と同じ式(同じ知らせを消す)
+	return waiting(a.holds, now, nil) || waiting(a.offline, now, a.lapsed) // take と同じ式(同じ知らせを消す)
 }
 
 // Run は、ctx が終わるまで、1 秒ごとに Step を呼ぶ。Step の失敗は、ログに出して、次の Step でやり直す。
@@ -120,6 +125,11 @@ func (a *Auto) Step(ctx context.Context) error {
 		}
 		return err
 	}
+	a.mu.Lock()
+	for _, t := range picked {
+		a.tried[t.ID] = now
+	}
+	a.mu.Unlock()
 	var errs []error
 	for _, t := range picked {
 		if _, err := a.Service.once(ctx, t); err != nil {
@@ -141,7 +151,7 @@ func (a *Auto) take(now time.Time, auto bool) (all bool, wrote map[port.StoreID]
 		clear(a.wrote)
 		return false, nil, false
 	}
-	if waiting(a.holds, now) || waiting(a.offline, now) {
+	if waiting(a.holds, now, nil) || waiting(a.offline, now, a.lapsed) {
 		return false, nil, true
 	}
 	all, a.all = a.all, false
@@ -165,6 +175,14 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 	for _, r := range records {
 		byStore[r.Store] = r
 	}
+	a.mu.Lock()
+	for id, at := range a.tried { // 記録とメモリの新しい方を渡す
+		if r := byStore[id]; at.After(r.LastAttempt) {
+			r.Store, r.LastAttempt = id, at
+			byStore[id] = r
+		}
+	}
+	a.mu.Unlock()
 	var picked []port.SyncTarget
 	for _, t := range targets {
 		if eligible(t) && (all || due(now, byStore[t.ID], wrote[t.ID], timing)) {
@@ -174,8 +192,8 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 	return picked, nil
 }
 
-// waiting は、期限の切れていない知らせが 1 つでもあるか。切れた知らせは消す。
-func waiting(m map[string]time.Time, now time.Time) bool {
+// waiting は、期限の切れていない知らせが 1 つでもあるか。切れた知らせは消し、lapsed があればそこへ移す。
+func waiting(m map[string]time.Time, now time.Time, lapsed map[string]bool) bool {
 	held := false
 	for tab, until := range m {
 		if now.Before(until) {
@@ -183,6 +201,9 @@ func waiting(m map[string]time.Time, now time.Time) bool {
 			continue
 		}
 		delete(m, tab)
+		if lapsed != nil {
+			lapsed[tab] = true
+		}
 	}
 	return held
 }

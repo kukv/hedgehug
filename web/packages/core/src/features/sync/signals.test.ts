@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { fakeSyncPort } from "./fixtures.test-util";
 import { createTabSignals } from "./signals";
 
+// 送りの完了(then・catch・finally の連なり)が済むまで、マイクロタスクを回す。
+async function settle() {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
 function setup() {
   const port = fakeSyncPort();
   const st = { held: false, visible: true, online: true, now: 0 };
@@ -88,5 +93,39 @@ describe("network (決定 S4・C2-18b)", () => {
     st.now = 10_000;
     t.check();
     expect(failing.calls).toEqual(["network T false", "network T false"]);
+  });
+
+  it("sends online again on the next check until it succeeds (決定 G1-12)", async () => {
+    const st = { online: false, now: 0, fail: true };
+    const port = fakeSyncPort({
+      network: async (_tab, online) => {
+        if (online && st.fail) throw new Error("down");
+      },
+    });
+    const s = createTabSignals({
+      port,
+      tab: "T",
+      held: () => false,
+      visible: () => true,
+      online: () => st.online,
+      now: () => st.now,
+    });
+    s.check();
+    st.online = true;
+    s.check(); // reject する
+    await settle();
+    s.check(); // もう一度送る。まだ reject する
+    await settle();
+    st.fail = false;
+    s.check(); // 届く
+    await settle();
+    s.check();
+    s.check();
+    expect(port.calls).toEqual([
+      "network T false",
+      "network T true",
+      "network T true",
+      "network T true",
+    ]);
   });
 });
