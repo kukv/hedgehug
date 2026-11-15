@@ -124,3 +124,25 @@ test("view screen has no save-as button", async ({ page }, info) => {
   await expect(filterOf(page)).toHaveValue("kind:bug");
   await expect(page.getByRole("button", { name: "ビューとして保存", exact: true })).toHaveCount(0);
 });
+
+test("palette opens a view and saves the query as a view", async ({ page }, info) => {
+  const view = await newView(page, info);
+  await page.goto(tokenUrl("/search"));
+  const palette = page.getByRole("dialog", { name: "コマンドパレット" });
+  const input = palette.getByRole("combobox", { name: "コマンドパレット" });
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await input.fill(view.name);
+  await expect(palette.getByText("ビュー", { exact: true })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/views/${view.id}`));
+  await expect(filterOf(page)).toHaveValue("kind:bug");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await input.fill("kind:bug");
+  await palette.getByRole("option", { name: "ビューとして保存…" }).click();
+  await expect(page).toHaveURL(/\/search/);
+  const dialog = page.getByRole("dialog", { name: "ビューとして保存" });
+  await expect(dialog).toContainText("レイアウト: テーブル");
+  await expect(dialog.locator("code")).toHaveText("kind:bug");
+});

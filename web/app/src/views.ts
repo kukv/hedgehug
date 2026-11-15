@@ -1,5 +1,6 @@
 import {
   createNameDialog,
+  createSaveQueryAsView,
   createSearch,
   deleteView,
   duplicateView,
@@ -12,7 +13,7 @@ import {
   viewScreenKey,
   writable,
 } from "@hedgehug/core";
-import { screenStates, searchPort, searchSelection } from "./search";
+import { openSearch, screenStates, search, searchPort, searchSelection } from "./search";
 import { navigation } from "./wire";
 import { timer, toasts, views, viewsPort } from "./wireBase";
 
@@ -45,6 +46,14 @@ export const saveView = createNameDialog();
 export function openSaveView(content: ViewContent): void {
   saveView.open((name) => saveAsView({ views, toasts, open: openView }, name, content));
 }
+
+// saveQueryAsView は、パレットの「ビューとして保存…」(E3b-16)。
+export const saveQueryAsView = createSaveQueryAsView({
+  openSearch,
+  settled: () => search.settled(),
+  state: () => get(search.state),
+  openSave: openSaveView,
+});
 
 // ビューの画面の見出しのメニュー(E3b-13)。開いているあいだは、対象のビューと位置を持つ。
 export interface ViewTarget {

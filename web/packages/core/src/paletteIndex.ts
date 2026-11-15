@@ -27,3 +27,4 @@ export {
   type PlanRequest,
 } from "./features/palette/planRequest";
 export { createSelection, type SelectedItem, type Selection } from "./features/palette/selection";
+export { createSaveQueryAsView } from "./features/palette/views";
