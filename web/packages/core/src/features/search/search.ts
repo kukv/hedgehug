@@ -4,6 +4,7 @@ import type { ScreenStates } from "../screenstate/screenStates";
 import type { RowSelection } from "../selection/rowSelection";
 import type { Timer, Toasts } from "../toasts/toasts";
 import {
+  initialSearchState,
   readSearchState,
   type Search,
   type SearchLayout,
@@ -33,12 +34,7 @@ export interface SearchDeps {
 
 export function createSearch(deps: SearchDeps): Search {
   const wait = deps.wait ?? searchWaitMs;
-  const state = writable<SearchState>({
-    ...readSearchState(null),
-    result: null,
-    resultQuery: null,
-    loading: false,
-  });
+  const state = writable<SearchState>(initialSearchState());
   // runs は、古い応答を捨てるための通し番号。pending は、待っている検索の印。
   // touched は、絞り込みを入れ替えた回数(open が読んでいるあいだの入力を見分ける)。
   let runs = 0;
@@ -167,8 +163,8 @@ export function createSearch(deps: SearchDeps): Search {
     },
     setLayout,
     showTable() {
-      if (loaded) setLayout("table");
-      else toTable = true;
+      if (!loaded) toTable = true;
+      else if (get(state).layout !== "table") setLayout("table");
     },
     setCollapsed(collapsed) {
       state.update((s) => ({ ...s, tree: { collapsed } }));

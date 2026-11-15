@@ -199,6 +199,13 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     expect(t.clear).toHaveBeenCalledTimes(1);
   });
 
+  it("setLayout to table keeps the selection", async () => {
+    const t = setup();
+    await t.s.open();
+    t.s.setLayout("table");
+    expect(t.clear).not.toHaveBeenCalled();
+  });
+
   // 前にテーブルで選んだ行を、ツリーで開いたあとも残さない(パレットの「選んでいるアイテム」に出さない。E3a-10)。
   it("open with a saved tree clears the selection, and with a table keeps it", async () => {
     const tree = setup('{"query":"a","layout":"tree"}');
@@ -226,6 +233,14 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     expect(written(t).layout).toBe("table");
   });
 
+  it("showTable in table writes nothing", async () => {
+    const t = setup('{"query":"a","layout":"table"}');
+    await t.s.open();
+    t.s.showTable();
+    expect(t.sp.put).not.toHaveBeenCalled();
+    expect(t.clear).not.toHaveBeenCalled();
+  });
+
   it("showTable before the first open keeps the saved state", async () => {
     const table = { columns: ["id", "title"], group: "none", sort: null };
     const t = setup(savedTree("kind:bug", table));
@@ -244,6 +259,8 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     t.s.showTable();
     await opening;
     expect(get(t.s.state).layout).toBe("table");
+    expect(written(t).layout).toBe("table");
+    expect(t.sp.put).toHaveBeenCalledTimes(1);
   });
 
   it("replaceQuery opens in table", async () => {

@@ -71,6 +71,11 @@ export interface SearchState extends SavedSearch {
   loading: boolean;
 }
 
+// initialSearchState は、open が画面の状態を読む前の初めの状態(まだ検索していない)。
+export function initialSearchState(): SearchState {
+  return { ...readSearchState(null), result: null, resultQuery: null, loading: false };
+}
+
 export interface Search {
   state: Readable<SearchState>;
   // open は、画面を開いたときに、保存した絞り込みとレイアウトで検索する。
@@ -86,6 +91,7 @@ export interface Search {
   // setLayout は、レイアウトを書くだけで検索しない。テーブル以外にするときは選択を解除する(E3a-10)。
   setLayout(layout: SearchLayout): void;
   // showTable は、テーブルで開く入口(E3a-9)が呼ぶ。まだ open が読んでいなければ、読んだあとでテーブルにする。
+  // すでにテーブルなら何も書かない。
   showTable(): void;
   // setCollapsed は、ツリーの閉じている行の鍵を書くだけ(E3a-11)。
   setCollapsed(collapsed: string[]): void;
