@@ -2,7 +2,8 @@ import type { Readable } from "../../reactive/store";
 import { dayOf } from "./date";
 
 // createToday は、now を「日付が替わったときだけ」渡す今日の値にする。購読すると今の値をすぐ渡す。
-// 日付の変わり目に一覧を読み直す画面が使う(マイタスク・受信箱)。
+// 期限の表示(ツリー・表・概要・マイタスク)とマイタスクのまとめ方が描き直しに使い、日付の変わり目に日付で決まる結果を
+// 読み直す(wire.ts)のにも使う。
 export function createToday(now: Readable<Date>): Readable<Date> {
   return {
     subscribe(run) {

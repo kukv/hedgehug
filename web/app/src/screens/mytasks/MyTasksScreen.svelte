@@ -50,7 +50,8 @@
     if (term?.key === "project") candidates = sources.list(term);
   });
 
-  // 空の表示の見分けに、絞り込みなしの行を読む(アプリの開始で読むようになるまで、画面を開くたびに読む)。
+  // 空の表示の見分けに使う絞り込みなしの行を、画面を開くたびに読み直す(アプリの開始の読み込みが失敗していると、次の
+  // Store の知らせまで null のままで、行がなくても空の文が出ない)。
   onMount(() => {
     void myTasks.open();
     void myTaskBase.reload();

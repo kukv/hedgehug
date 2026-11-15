@@ -70,7 +70,7 @@ export function selectedOne(): SelectedItem | null {
   };
 }
 
-// refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
+// refreshCandidates は、開いている画面(検索・マイタスク)の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
 
 // Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。ツリーのデータは、
