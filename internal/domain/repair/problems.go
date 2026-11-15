@@ -32,7 +32,7 @@ type StoreState struct {
 	Settings map[workspace.ID]workspace.Settings
 	Plans    map[workspace.ID]planning.Plan // 削除済みを含む
 	Members  []member.Member
-	Issues   map[item.ID][]string // アイテムがリンクしている Issue の鍵(itemlink の Ref.SameKey)
+	Issues   map[item.ID][]string // アイテムのリンク 1 本につき 1 つの、Issue の鍵(itemlink の Ref.SameKey)
 }
 
 // ItemProblems は、削除されていないアイテムごとの問題を返す。問題のないアイテムは入れない。
