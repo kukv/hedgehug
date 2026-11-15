@@ -31,6 +31,7 @@ export {
   categoryOf,
   childCount,
   dueLabel,
+  projectProgress,
   stepProgress,
 } from "./features/items/progress";
 export {
@@ -45,7 +46,14 @@ export {
   valueOf,
   visibleProperties,
 } from "./features/items/properties";
-export { ancestorsOf, buildTree, compareSiblings, type TreeNode } from "./features/items/tree";
+export {
+  ancestorsOf,
+  buildTree,
+  compareSiblings,
+  type TreeNode,
+  type TreeNodeOf,
+  type TreeRowLike,
+} from "./features/items/tree";
 export {
   createProjectDialog,
   type Option,

@@ -51,8 +51,8 @@ function setup(over: Partial<TreeWritesDeps> = {}, readOnly = false) {
       log.push(`moveTo ${it.id} ${cand.id}`);
       return true;
     },
-    setStatus: async (id, status) => {
-      log.push(`status ${id} ${status}`);
+    setStatus: async (it, status) => {
+      log.push(`status ${it.id} ${status}`);
     },
     afterChange: async () => {
       log.push("refresh");
@@ -166,18 +166,64 @@ describe("Alt+Shift+↑↓ (changeParent)", () => {
     expect(log).toEqual([`candidates ${c.id}`, `expand ${e6.id}`, `moveTo ${c.id} ${e6.id}`]);
   });
 
-  it("does nothing for an Epic, a read-only store, or when no candidate is visible that way", async () => {
-    const epic = setup();
+  it("does nothing for an Epic without a project row, a read-only store, or when no candidate is visible that way", async () => {
+    const epic = setup({
+      moveCandidates: async (_s, id) => {
+        epic.log.push(`candidates ${id}`);
+        return [{ ...candidate(e6), kind: "project", id: "P2" }];
+      },
+    });
     epic.writes.changeParent(e1.id, "down");
     const ro = setup({}, true);
     ro.writes.changeParent(c.id, "down");
     const none = setup();
     none.writes.changeParent(c.id, "up");
     await flush();
-    expect(epic.log).toEqual([]);
+    expect(epic.log).toEqual([`candidates ${e1.id}`]);
     expect(ro.log).toEqual([]);
     expect(none.log).toEqual([`candidates ${c.id}`]);
     expect(none.toasts.show).not.toHaveBeenCalled();
+  });
+
+  it("changeParent moves an Epic under a visible project", async () => {
+    const p2 = { id: "P2", parentId: null };
+    const projectCandidate: MoveCandidate = {
+      kind: "project",
+      id: "P2",
+      display: "HH-P2",
+      title: "決済",
+      projectId: "P2",
+      projectTitle: "",
+    };
+    const { writes, log } = setup({
+      screen: () => ({
+        storeId: "S1",
+        readOnly: false,
+        settings,
+        rows: [e1, e6],
+        order: [p2, e1, e6],
+      }),
+      moveCandidates: async () => [projectCandidate],
+    });
+    writes.changeParent(e1.id, "up");
+    await flush();
+    expect(log).toEqual([`expand P2`, `moveTo ${e1.id} P2`]);
+  });
+
+  it("uses order when given", async () => {
+    const { writes, log } = setup({
+      screen: () => ({
+        storeId: "S1",
+        readOnly: false,
+        settings,
+        rows: [e1, a, e6],
+        order: [e1, e6, a],
+      }),
+    });
+    // rows だと a の上に e6 はないが、order では a の上に e6 がある。
+    writes.changeParent(a.id, "up");
+    await flush();
+    expect(log).toEqual([`candidates ${a.id}`, `expand ${e6.id}`, `moveTo ${a.id} ${e6.id}`]);
   });
 
   it("drops the waiting steps when the move is not done", async () => {

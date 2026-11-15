@@ -1,5 +1,5 @@
 import type { Item } from "../../model/item";
-import type { TreeNode } from "./tree";
+import type { TreeNodeOf, TreeRowLike } from "./tree";
 
 // 見えている兄弟(02「上から順の構成」、04「ツリー」の「行」)。「上へ移動」「下へ移動」は、いま画面に見えている兄弟の
 // 間で動かす。rows は、画面に見えている行を見えている順に並べたもの(ツリーなら、開いている行を上から順に。
@@ -20,9 +20,12 @@ export function visibleNeighbors(rows: readonly Item[], id: string): { prev?: It
 }
 
 // visibleRows は、ツリーの見えている行を、上から順に並べる(閉じている行の下は入れない)。collapsed は、閉じている行の ID。
-export function visibleRows(tree: readonly TreeNode[], collapsed: ReadonlySet<string>): Item[] {
-  const rows: Item[] = [];
-  const walk = (nodes: readonly TreeNode[]) => {
+export function visibleRows<T extends TreeRowLike>(
+  tree: readonly TreeNodeOf<T>[],
+  collapsed: ReadonlySet<string>,
+): T[] {
+  const rows: T[] = [];
+  const walk = (nodes: readonly TreeNodeOf<T>[]) => {
     for (const n of nodes) {
       rows.push(n.item);
       if (!collapsed.has(n.item.id)) walk(n.children);

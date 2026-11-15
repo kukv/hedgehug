@@ -7,6 +7,7 @@ import {
   dueLabel,
   epicProgress,
   progressPercent,
+  projectProgress,
   stepProgress,
 } from "./progress";
 import { settings } from "./settings.test-util";
@@ -65,6 +66,22 @@ describe("progress", () => {
     expect(epicProgress(items, "S1-I2", settings)).toEqual({ done: 1, total: 2 });
     expect(epicProgress(items, "S1-I8", settings)).toEqual({ done: 1, total: 1 });
     expect(epicProgress(items, "S1-I99", settings)).toEqual({ done: 0, total: 0 });
+  });
+
+  it("counts a project's items except Epics, Steps and canceled ones", () => {
+    const at = (n: number, kind: Kind, status: string) => ({
+      ...item("S1", "S1-P1", n, kind, null),
+      status,
+    });
+    const items = [
+      at(1, "Epic", "st3"),
+      at(2, "Task", "st3"),
+      at(3, "Story", "st1"),
+      at(4, "Bug", "st4"),
+      at(5, "Step", "st3"),
+    ];
+    expect(projectProgress(items, settings)).toEqual({ done: 1, total: 2 });
+    expect(projectProgress([], settings)).toEqual({ done: 0, total: 0 });
   });
 
   it("rounds the percent and gives 0 when there is nothing to count", () => {

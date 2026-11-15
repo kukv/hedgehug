@@ -112,7 +112,7 @@ export function createTreeKeyboard(deps: Deps): TreeKeyboard {
     reorder: (item, rows, dir) => itemMenuHost.reorder(item, rows, dir),
     moveCandidates: (store, id) => itemActions.moveCandidates(store, id),
     moveTo: (item, candidate) => itemMove.moveTo(item, candidate),
-    setStatus: (id, status) => projectScreen.setStatus(id, status),
+    setStatus: (item, status) => projectScreen.setStatus(item.id, status),
     afterChange: () => itemRefresh.afterChange(),
     settled: () => tick(),
     expand: (id) => focus.expand(id),
